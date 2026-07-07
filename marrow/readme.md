@@ -9,11 +9,6 @@ step, and **not a single image or sound file** — every texture, every wall,
 every scream is generated procedurally at runtime. Runs on desktop and mobile
 from a single static folder.
 
-![forest](docs/preview-forest.png)
-![mansion](docs/preview-mansion.png)
-![basement](docs/preview-basement.png)
-![the end](docs/preview-final.png)
-
 > Headphones strongly recommended. The soundtrack *is* the horror.
 
 ---

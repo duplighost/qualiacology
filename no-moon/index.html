@@ -25306,7 +25306,7 @@ function drawHudBossMiniStats(p, layout) {
   // === v35 — external background music asset pass ===
   (function installV35ExternalBackgroundMusic() {
     const V35_VERSION = 'qual.future-consequence.2026-04-30.v35';
-    const TRACK_URL = './no-moon-bg-v35.mp3';
+    const TRACK_URL = ''; // external BGM asset disabled (USE_EXTERNAL_TRACK:false) — No Moon uses synthesized audio
     if (typeof state === 'undefined' || !state) return;
     try { window.state = state; } catch (e) {}
 
