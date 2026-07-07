@@ -1,0 +1,74 @@
+/no-moon /no-moon/index.html 301!
+/no-moon.html /no-moon/index.html 301!
+
+/rift-wake /no-moon/ 301!
+/rift-wake.html /no-moon/ 301!
+/rift-wake/* /no-moon/ 301!
+
+/game /no-moon/ 302
+/play /no-moon/ 302
+/doopliss.html /doopliss/ 301!
+/psychopharmacology.html /psychopharmacology/ 301!
+
+# --- little toys ---
+/glide   /glide/index.html  301!
+/fly     /glide/            302
+/luma    /   302
+/visualizer /  302
+/dispensary /dispensary/index.html 301!
+/pharmacy /dispensary/      302
+/rx      /dispensary/       302
+
+# --- retired toys (links land home) ---
+/banana         /   302
+/banana.html    /   302
+/screaming-banana /  302
+/banana-dilemma /   302
+/luma/*         /   302
+/banana/*       /   302
+
+# --- Rocket Shoes ---
+/rocket-shoes       /rocket-shoes/index.html  301!
+/rocket-shoes.html  /rocket-shoes/            301!
+/rocketshoes        /rocket-shoes/            302
+/rockets            /rocket-shoes/            302
+/moon-boots         /rocket-shoes/            302
+/boon-moots         /rocket-shoes/            302
+
+# --- retired: Neon Breach -> Duskfall ---
+/neon-breach       /duskfall/  301!
+/neon-breach.html  /duskfall/  301!
+/neon-breach/*     /duskfall/  301!
+
+# --- Duskfall ---
+/duskfall      /duskfall/index.html  301!
+/duskfall.html /duskfall/            301!
+/dusk          /duskfall/            302
+
+# --- Marrow ---
+/marrow             /marrow/index.html        301!
+/marrow.html        /marrow/                  301!
+/horror             /marrow/                  302
+/the-house          /marrow/                  302
+
+# --- Vesperbane ---
+/vesperbane          /vesperbane/index.html       301!
+/vesperbane.html     /vesperbane/                 301!
+/vesper              /vesperbane/                 302
+
+# --- Galaxy Sandbox ---
+/galaxy-sandbox      /galaxy-sandbox/index.html   301!
+/galaxy-sandbox.html /galaxy-sandbox/             301!
+/galaxy              /galaxy-sandbox/             302
+/sandbox             /galaxy-sandbox/             302
+
+# --- Blackthorn Manor ---
+/blackthorn-manor       /blackthorn-manor/index.html  301!
+/blackthorn-manor.html  /blackthorn-manor/            301!
+/blackthorn             /blackthorn-manor/            302
+/manor                  /blackthorn-manor/            302
+
+# --- boss codex + record shelf ---
+/codex          /no-moon/codex/           302
+/music          /#music                   302
+/records        /#music                   302

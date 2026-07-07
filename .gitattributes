@@ -1,0 +1,15 @@
+# Normalize text files to LF in the repo (matches Netlify's Linux host)
+* text=auto eol=lf
+
+# Treat these as binary — never touch line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.mp3 binary
+*.mp4 binary
+*.woff binary
+*.woff2 binary
+*.ttf binary

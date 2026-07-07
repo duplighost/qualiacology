@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vesperbane | Qualiacology</title>
+<meta name="description" content="Vesperbane is a fast gothic action platformer: sprint, slash, wall-kick, dash, and ring the bell before the night eats you." />
+<meta name="theme-color" content="#07070f" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Qualiacology" />
+<meta property="og:title" content="Vesperbane | Qualiacology" />
+<meta property="og:description" content="A fast gothic action platformer: sprint, slash, wall-kick, dash, and ring the bell before the night eats you." />
+<meta property="og:url" content="https://qualiacology.com/vesperbane/" />
+<meta property="og:image" content="https://qualiacology.com/assets/games/vesperbane-card-clean.webp" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Vesperbane | Qualiacology" />
+<meta name="twitter:description" content="A fast gothic action platformer built for speed and blood-red momentum." />
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/vesperbane-card-clean.webp" />
+<link rel="canonical" href="https://qualiacology.com/vesperbane/" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #07070f;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #07070f;
+  }
+  .home-link {
+    position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 6;
+    color: rgba(244,242,250,.84); text-decoration: none; font: 800 11px/1.2 system-ui, sans-serif;
+    letter-spacing: .14em; text-transform: uppercase; padding: 8px 10px; border-radius: 999px;
+    background: rgba(8,8,20,.52); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(8px);
+  }
+  .home-link:focus-visible, .home-link:hover { outline: none; color: #fff; border-color: rgba(255,143,200,.55); }
+  #touchControls { display: none; position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+  .touch-cluster { position: absolute; display: grid; gap: 10px; pointer-events: auto; }
+  .touch-cluster.move { left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 58px); }
+  .touch-cluster.actions { right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); grid-template-columns: repeat(3, 58px); }
+  .touch-btn { width: 58px; height: 58px; border: 1px solid rgba(255,255,255,.26); border-radius: 16px; color: #f4f2fa;
+    background: rgba(12,12,28,.54); box-shadow: 0 10px 26px rgba(0,0,0,.35); font: 900 16px/1 system-ui, sans-serif; backdrop-filter: blur(8px); }
+  .touch-btn:active, .touch-btn.is-down { transform: translateY(1px); background: rgba(172,61,93,.72); }
+  .touch-btn[data-touch="up"] { grid-column: 2; grid-row: 1; }
+  .touch-btn[data-touch="left"] { grid-column: 1; grid-row: 2; }
+  .touch-btn[data-touch="down"] { grid-column: 2; grid-row: 2; }
+  .touch-btn[data-touch="right"] { grid-column: 3; grid-row: 2; }
+  @media (pointer: coarse), (max-width: 900px) { #touchControls { display: block; } }
+  @media (max-width: 560px) { .touch-cluster.move { grid-template-columns: repeat(3, 50px); grid-template-rows: repeat(2, 50px); } .touch-cluster.actions { grid-template-columns: repeat(3, 50px); } .touch-btn { width: 50px; height: 50px; border-radius: 14px; } }
+
+</style>
+</head>
+<body>
+<a class="home-link" href="/">Qualiacology</a>
+<canvas id="screen" aria-label="Vesperbane game screen"></canvas>
+<div id="touchControls">
+  <div class="touch-cluster move">
+    <button class="touch-btn" type="button" data-touch="up">↑</button>
+    <button class="touch-btn" type="button" data-touch="left">←</button>
+    <button class="touch-btn" type="button" data-touch="down">↓</button>
+    <button class="touch-btn" type="button" data-touch="right">→</button>
+  </div>
+  <div class="touch-cluster actions">
+    <button class="touch-btn" type="button" data-touch="jump">J</button>
+    <button class="touch-btn" type="button" data-touch="attack">A</button>
+    <button class="touch-btn" type="button" data-touch="dash">D</button>
+  </div>
+</div>
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/font.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/level.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Blackthorn Manor | Qualiacology</title>
+<meta name="description" content="Blackthorn Manor is a first-person haunted-house mystery in the browser: explore a Victorian manor, gather evidence, and solve the case." />
+<meta name="theme-color" content="#000000" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Qualiacology" />
+<meta property="og:title" content="Blackthorn Manor | Qualiacology" />
+<meta property="og:description" content="A first-person haunted-house mystery: explore a Victorian manor, gather evidence, and solve the case." />
+<meta property="og:url" content="https://qualiacology.com/blackthorn-manor/" />
+<meta property="og:image" content="https://qualiacology.com/assets/games/blackthorn-manor-card-clean.webp" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Blackthorn Manor | Qualiacology" />
+<meta name="twitter:description" content="Explore a Victorian manor, gather evidence, and solve the case." />
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/blackthorn-manor-card-clean.webp" />
+<link rel="canonical" href="https://qualiacology.com/blackthorn-manor/" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --parchment:#e8dcc0; --ink:#2a2118; --blood:#7a1f1f; --bone:#cfc6b0;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  body{font-family:Georgia,'Times New Roman',serif;color:var(--bone)}
+  canvas{display:block;touch-action:none}
+  .hidden{display:none!important}
+
+  .home-link{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));z-index:60;color:rgba(232,220,192,.78);text-decoration:none;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(0,0,0,.42);border:1px solid rgba(207,198,176,.24);backdrop-filter:blur(8px)}
+  .home-link:hover,.home-link:focus-visible{color:var(--parchment);border-color:rgba(232,220,192,.55);outline:0}
+  #touchControls{display:none;position:fixed;inset:0;z-index:18;pointer-events:none}
+  #lookPad{position:absolute;right:0;top:0;width:58vw;height:100%;pointer-events:auto;touch-action:none}
+  .bt-move{position:absolute;left:max(14px,env(safe-area-inset-left));bottom:max(14px,env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,56px);gap:10px;pointer-events:auto}
+  .bt-actions{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(3,58px);gap:10px;pointer-events:auto}
+  .bt-btn{width:58px;height:58px;border:1px solid rgba(207,198,176,.32);border-radius:16px;color:var(--parchment);background:rgba(0,0,0,.48);box-shadow:0 10px 28px rgba(0,0,0,.42);font:900 12px/1 system-ui,sans-serif;letter-spacing:.08em;backdrop-filter:blur(8px)}
+  .bt-move .bt-btn{width:56px;height:56px;font-size:17px}.bt-btn:active,.bt-btn.is-down{background:rgba(122,31,31,.65);transform:translateY(1px)}
+  .bt-btn[data-move="fwd"]{grid-column:2;grid-row:1}.bt-btn[data-move="left"]{grid-column:1;grid-row:2}.bt-btn[data-move="back"]{grid-column:2;grid-row:2}.bt-btn[data-move="right"]{grid-column:3;grid-row:2}
+  @media (pointer:coarse),(max-width:900px){#touchControls{display:block}.home-link{font-size:10px}#title h1{font-size:min(11vw,64px)}#title h2{font-size:min(4vw,18px);padding:0 18px}#title .hint{display:none}#prompt{top:55%;font-size:14px;max-width:92vw;white-space:normal;text-align:center}#prompt .key{display:none}#roomname{left:14px;bottom:96px;font-size:11px}#cluecount{right:14px;bottom:96px;font-size:11px}#journal .book{height:min(620px,80vh);width:min(900px,96vw)}#journal .tabs{width:128px}#journal .tabs div{padding:12px 14px;font-size:11px}#journal .page{padding:24px 20px}#paper .sheet{padding:38px 28px}.bt-actions{grid-template-columns:repeat(3,54px)}.bt-btn,.bt-move .bt-btn{width:54px;height:54px}}
+  @media (max-width:560px){.bt-move{grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,48px);gap:8px}.bt-actions{grid-template-columns:repeat(3,48px);gap:8px}.bt-btn,.bt-move .bt-btn{width:48px;height:48px;border-radius:14px;font-size:11px}.bt-move .bt-btn{font-size:16px}}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  #crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:6px;height:6px;border-radius:50%;background:rgba(207,198,176,.5);
+    box-shadow:0 0 6px rgba(0,0,0,.8);transition:all .15s}
+  #crosshair.active{background:rgba(232,220,192,.95);width:9px;height:9px}
+  #prompt{position:absolute;left:50%;top:58%;transform:translateX(-50%);
+    font-size:17px;letter-spacing:.06em;color:var(--parchment);
+    text-shadow:0 1px 3px #000,0 0 12px rgba(0,0,0,.9);white-space:nowrap}
+  #prompt .key{display:inline-block;border:1px solid var(--bone);border-radius:3px;
+    padding:0 7px;margin-right:8px;font-size:14px;opacity:.9}
+  #toast{position:absolute;left:50%;top:12%;transform:translateX(-50%);
+    font-size:19px;font-style:italic;letter-spacing:.08em;color:var(--parchment);
+    text-shadow:0 2px 6px #000;opacity:0;transition:opacity 1s;text-align:center;
+    max-width:70vw}
+  #roomname{position:absolute;left:32px;bottom:28px;font-size:15px;letter-spacing:.25em;
+    text-transform:uppercase;color:rgba(207,198,176,.55);text-shadow:0 1px 3px #000}
+  #cluecount{position:absolute;right:32px;bottom:28px;font-size:15px;letter-spacing:.12em;
+    color:rgba(207,198,176,.55);text-shadow:0 1px 3px #000}
+  #subtitle{position:absolute;left:50%;bottom:12%;transform:translateX(-50%);
+    font-size:19px;font-style:italic;color:#cdb9d8;text-shadow:0 1px 4px #000;
+    opacity:0;transition:opacity .8s;text-align:center;max-width:72vw}
+
+  /* ---------- full-screen fade ---------- */
+  #fade{position:fixed;inset:0;background:#000;z-index:35;opacity:1;
+    transition:opacity 2.2s ease;pointer-events:none}
+
+  /* ---------- Title screen ---------- */
+  #title{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;background:
+    radial-gradient(ellipse at 50% 35%, rgba(28,22,40,.55), rgba(0,0,0,.92) 75%)}
+  #title h1{font-size:min(7vw,86px);font-weight:normal;letter-spacing:.28em;
+    color:var(--parchment);text-shadow:0 0 30px rgba(120,90,160,.35),0 4px 12px #000;
+    margin-bottom:6px;text-align:center}
+  #title h2{font-size:min(2.2vw,20px);font-weight:normal;font-style:italic;
+    letter-spacing:.14em;color:rgba(207,198,176,.75);margin-bottom:54px;text-align:center}
+  #title .begin{font-size:22px;letter-spacing:.3em;padding:14px 46px;
+    border:1px solid rgba(207,198,176,.5);color:var(--parchment);cursor:pointer;
+    background:rgba(0,0,0,.35);transition:all .3s;text-transform:uppercase}
+  #title .begin:hover{background:rgba(122,31,31,.35);border-color:var(--parchment);
+    box-shadow:0 0 24px rgba(122,31,31,.4)}
+  #title .hint{margin-top:40px;font-size:14px;color:rgba(207,198,176,.45);
+    letter-spacing:.08em;line-height:1.9;text-align:center}
+  #loadstate{margin-top:18px;font-size:13px;color:rgba(160,140,190,.6);font-style:italic}
+
+  /* ---------- Paper / reading overlay ---------- */
+  #paper{position:fixed;inset:0;z-index:40;display:flex;align-items:center;
+    justify-content:center;background:rgba(0,0,0,.72)}
+  #paper .sheet{width:min(680px,88vw);max-height:82vh;overflow-y:auto;
+    background:linear-gradient(160deg,#efe4c8 0%,#e2d3ae 55%,#d8c79e 100%);
+    color:var(--ink);padding:56px 62px;box-shadow:0 20px 80px #000,inset 0 0 80px rgba(120,90,40,.25);
+    border:1px solid #b09a6a;position:relative}
+  #paper .sheet h3{font-size:22px;letter-spacing:.08em;margin-bottom:22px;
+    font-weight:normal;border-bottom:1px solid rgba(42,33,24,.35);padding-bottom:12px}
+  #paper .sheet .body{font-size:17px;line-height:1.85;white-space:pre-wrap}
+  #paper .sheet .body em{color:var(--blood)}
+  #paper .close{position:absolute;left:50%;bottom:4vh;transform:translateX(-50%);
+    font-size:14px;letter-spacing:.2em;color:rgba(207,198,176,.7)}
+  #paper .cluetag{margin-top:26px;font-size:14px;font-style:italic;color:var(--blood);
+    letter-spacing:.05em}
+
+  /* ---------- Journal ---------- */
+  #journal{position:fixed;inset:0;z-index:40;display:flex;align-items:center;
+    justify-content:center;background:rgba(0,0,0,.78)}
+  #journal .book{width:min(900px,92vw);height:min(620px,84vh);display:flex;
+    background:linear-gradient(150deg,#20180f,#171006);border:1px solid #4a3a20;
+    box-shadow:0 24px 90px #000}
+  #journal .tabs{width:190px;border-right:1px solid #4a3a20;padding:28px 0;flex-shrink:0}
+  #journal .tabs div{padding:13px 26px;font-size:15px;letter-spacing:.14em;cursor:pointer;
+    color:rgba(207,198,176,.55);text-transform:uppercase}
+  #journal .tabs div.sel{color:var(--parchment);background:rgba(122,31,31,.22);
+    border-right:2px solid var(--blood)}
+  #journal .page{flex:1;padding:34px 42px;overflow-y:auto}
+  #journal .page h3{font-weight:normal;letter-spacing:.2em;font-size:19px;
+    color:var(--parchment);margin-bottom:20px;text-transform:uppercase}
+  .clueitem{margin-bottom:18px;padding:14px 18px;background:rgba(232,220,192,.05);
+    border-left:2px solid var(--blood)}
+  .clueitem .t{font-size:16px;color:var(--parchment);margin-bottom:5px}
+  .clueitem .d{font-size:14px;line-height:1.6;color:rgba(207,198,176,.7);font-style:italic}
+  .keyitem{display:inline-block;margin:0 14px 14px 0;padding:10px 16px;
+    border:1px solid rgba(180,150,80,.5);color:#cbb26a;font-size:14px;letter-spacing:.06em}
+  .objitem{margin-bottom:14px;font-size:15px;line-height:1.6;color:rgba(207,198,176,.85)}
+  .objitem.done{opacity:.4;text-decoration:line-through}
+  .objitem::before{content:"✦  ";color:var(--blood)}
+
+  /* ---------- Accusation ---------- */
+  #accuse{position:fixed;inset:0;z-index:45;background:rgba(2,0,6,.9);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;overflow-y:auto}
+  #accuse h2{font-weight:normal;letter-spacing:.3em;font-size:30px;color:#cdb9d8;
+    text-shadow:0 0 20px rgba(140,100,190,.5);margin-bottom:8px;text-align:center}
+  #accuse .whisper{font-style:italic;color:rgba(205,185,216,.6);margin-bottom:36px;
+    font-size:16px;text-align:center}
+  #accuse .qs{display:flex;flex-direction:column;gap:26px;width:min(860px,92vw)}
+  #accuse .q .ql{font-size:15px;letter-spacing:.18em;text-transform:uppercase;
+    color:rgba(207,198,176,.6);margin-bottom:10px}
+  #accuse .opts{display:flex;flex-wrap:wrap;gap:10px}
+  #accuse .opt{padding:11px 20px;border:1px solid rgba(207,198,176,.3);cursor:pointer;
+    font-size:15px;color:var(--bone);transition:all .2s;background:rgba(0,0,0,.4)}
+  #accuse .opt:hover{border-color:var(--parchment)}
+  #accuse .opt.sel{background:rgba(122,31,31,.45);border-color:#c05050;color:#fff}
+  #accuse .declare{margin-top:40px;font-size:19px;letter-spacing:.28em;padding:15px 52px;
+    border:1px solid rgba(205,185,216,.5);color:#cdb9d8;cursor:pointer;background:transparent;
+    text-transform:uppercase;transition:all .3s;font-family:inherit}
+  #accuse .declare:disabled{opacity:.25;cursor:default}
+  #accuse .declare:not(:disabled):hover{background:rgba(140,100,190,.2);
+    box-shadow:0 0 30px rgba(140,100,190,.35)}
+
+  /* ---------- Ending ---------- */
+  #ending{position:fixed;inset:0;z-index:55;background:#000;display:flex;
+    align-items:center;justify-content:center}
+  #ending .txt{max-width:min(700px,86vw);font-size:19px;line-height:2.1;
+    color:var(--parchment);opacity:0;transition:opacity 3s;white-space:pre-wrap;
+    text-align:center;font-style:italic}
+
+  ::-webkit-scrollbar{width:10px}
+  ::-webkit-scrollbar-track{background:rgba(0,0,0,.4)}
+  ::-webkit-scrollbar-thumb{background:#3a2f1c}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <a class="home-link" href="/">Qualiacology</a>
+  <div id="fade"></div>
+
+  <div id="title">
+    <h1>BLACKTHORN&nbsp;MANOR</h1>
+    <h2>An Inquiry into the Events of All Hallows' Eve, 1899</h2>
+    <div class="begin" id="beginBtn">Enter the House</div>
+    <div class="hint">
+      W A S D — walk &nbsp;·&nbsp; SHIFT — hurry &nbsp;·&nbsp; E — examine &nbsp;·&nbsp; F — lantern<br>
+      TAB — case journal &nbsp;·&nbsp; ESC — release the mouse
+    </div>
+    <div id="loadstate">the house is waking…</div>
+  </div>
+
+  <div id="hud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="prompt"></div>
+    <div id="toast"></div>
+    <div id="subtitle"></div>
+    <div id="roomname"></div>
+    <div id="cluecount"></div>
+  </div>
+
+  <div id="paper" class="hidden">
+    <div class="sheet"><h3 id="paperTitle"></h3><div class="body" id="paperBody"></div>
+      <div class="cluetag" id="paperClue"></div></div>
+    <div class="close">E &nbsp;or&nbsp; ESC — put it down</div>
+  </div>
+
+  <div id="journal" class="hidden">
+    <div class="book">
+      <div class="tabs">
+        <div data-tab="clues" class="sel">Evidence</div>
+        <div data-tab="objectives">Inquiries</div>
+        <div data-tab="keys">Keys</div>
+        <div data-tab="people">Persons</div>
+      </div>
+      <div class="page" id="journalPage"></div>
+    </div>
+  </div>
+
+  <div id="accuse" class="hidden"></div>
+  <div id="ending" class="hidden"><div class="txt" id="endingTxt"></div></div>
+
+  <div id="touchControls" class="hidden">
+    <div id="lookPad"></div>
+    <div class="bt-move">
+      <button class="bt-btn" type="button" data-move="fwd">↑</button>
+      <button class="bt-btn" type="button" data-move="left">←</button>
+      <button class="bt-btn" type="button" data-move="back">↓</button>
+      <button class="bt-btn" type="button" data-move="right">→</button>
+    </div>
+    <div class="bt-actions">
+      <button class="bt-btn" type="button" data-action="use">USE</button>
+      <button class="bt-btn" type="button" data-action="lamp">LAMP</button>
+      <button class="bt-btn" type="button" data-action="journal">CASE</button>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
