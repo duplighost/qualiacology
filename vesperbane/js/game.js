@@ -14,15 +14,69 @@ const input = {
   clearPressed() { this.jumpPressed = this.attackPressed = this.dashPressed = this.anyPressed = false; },
 };
 
-const KEYMAP = {
-  ArrowLeft: 'left', KeyA: 'left',
-  ArrowRight: 'right', KeyD: 'right',
-  ArrowUp: 'up', KeyW: 'up',
-  ArrowDown: 'down', KeyS: 'down',
-  Space: 'jump', KeyZ: 'jump', KeyK: 'jump',
-  KeyX: 'attack', KeyJ: 'attack',
-  KeyC: 'dash', KeyL: 'dash', ShiftLeft: 'dash', ShiftRight: 'dash',
+// ── key bindings (rebindable, persisted) ─────────────────────────────
+// Default puts JUMP on the thumb (Space) and ATTACK on the index finger
+// (Z) — no cramped middle-finger reach. The alternates also spell out a
+// full two-handed WASD + J/K/L layout, so both schemes work untouched.
+const DEFAULT_BINDS = {
+  left:  ['ArrowLeft', 'KeyA'],
+  right: ['ArrowRight', 'KeyD'],
+  up:    ['ArrowUp', 'KeyW'],
+  down:  ['ArrowDown', 'KeyS'],
+  jump:  ['Space', 'KeyK'],
+  attack:['KeyZ', 'KeyJ'],
+  dash:  ['KeyC', 'ShiftLeft', 'ShiftRight', 'KeyL'],
 };
+// keys we never let the player steal for an action (movement + system)
+const RESERVED_KEYS = new Set([
+  'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyA', 'KeyS', 'KeyD',
+  'KeyM', 'KeyP', 'KeyR', 'F1', 'F2', 'Escape', 'Enter', 'Backspace',
+]);
+
+let BINDS = loadBinds();
+let KEYMAP = buildKeymap(BINDS);
+
+function loadBinds() {
+  try {
+    const s = JSON.parse(localStorage.getItem('vesperbane.binds'));
+    if (s && s.jump && s.attack && s.dash)
+      return Object.assign(JSON.parse(JSON.stringify(DEFAULT_BINDS)), s);
+  } catch (e) {}
+  return JSON.parse(JSON.stringify(DEFAULT_BINDS));
+}
+function saveBinds() { try { localStorage.setItem('vesperbane.binds', JSON.stringify(BINDS)); } catch (e) {} }
+function buildKeymap(b) {
+  const m = {};
+  for (const act of Object.keys(b)) for (const code of b[act]) if (!(code in m)) m[code] = act;
+  return m;
+}
+function rebindKey(action, code) {
+  for (const a of ['jump', 'attack', 'dash']) BINDS[a] = BINDS[a].filter(c => c !== code);
+  BINDS[action] = [code].concat(BINDS[action]).slice(0, 3);
+  KEYMAP = buildKeymap(BINDS);
+  saveBinds();
+}
+function resetBinds() {
+  BINDS = JSON.parse(JSON.stringify(DEFAULT_BINDS));
+  KEYMAP = buildKeymap(BINDS);
+  saveBinds();
+}
+function pk(action) { return keyLabel(BINDS[action][0]); }   // primary key label
+
+function keyLabel(code) {
+  if (!code) return '--';
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  const m = {
+    Space: 'SPACE', ShiftLeft: 'LSHIFT', ShiftRight: 'RSHIFT',
+    ControlLeft: 'LCTRL', ControlRight: 'RCTRL', AltLeft: 'LALT', AltRight: 'RALT',
+    Enter: 'ENTER', Backspace: 'BKSP', Tab: 'TAB', CapsLock: 'CAPS',
+    ArrowLeft: 'LEFT', ArrowRight: 'RIGHT', ArrowUp: 'UP', ArrowDown: 'DOWN',
+    Comma: 'COMMA', Period: 'PERIOD', Slash: 'SLASH', Semicolon: 'SEMI', Quote: 'QUOTE',
+    BracketLeft: 'LBRAK', BracketRight: 'RBRAK', Backslash: 'BSLASH', Minus: 'MINUS', Equal: 'EQUAL',
+  };
+  return m[code] || code.toUpperCase();
+}
 
 function setKey(code, isDown) {
   const name = KEYMAP[code];
@@ -40,7 +94,9 @@ function setKey(code, isDown) {
 class Game {
   constructor(level) {
     this.level = level;
-    this.state = 'title';      // title | play | dead | win | pause | gallery
+    this.state = 'title';      // title | play | dead | win | pause | gallery | controls
+    this.ctrlCursor = 0; this.ctrlListening = false; this.ctrlReturn = 'title';
+    this.ctrlFlash = 0; this.ctrlFlashMsg = '';
     this.camX = 0; this.camY = 0;
     this.time = 0;
     this.stateT = 0;
@@ -153,6 +209,7 @@ class Game {
     }
     if (this.state === 'pause') return;
     if (this.state === 'gallery') return;
+    if (this.state === 'controls') { if (this.ctrlFlash > 0) this.ctrlFlash -= dt; return; }
 
     if (this.state === 'dead') {
       this.stateT += dt;
@@ -303,9 +360,38 @@ class Game {
     this.camY = damp(this.camY, ty, 5, dt);
   }
 
+  // ── controls / rebinding menu ──────────────────────────────────────
+  openControls(from) {
+    this.ctrlReturn = (from === 'pause' || from === 'title') ? from : 'play';
+    this.ctrlCursor = 0; this.ctrlListening = false; this.ctrlFlash = 0;
+    this.state = 'controls';
+  }
+  closeControls() { this.state = this.ctrlReturn; this.ctrlListening = false; }
+
+  handleControlsKey(code) {
+    const rows = ['jump', 'attack', 'dash', 'reset'];
+    if (this.ctrlListening) {
+      if (code === 'Escape' || code === 'Enter') { this.ctrlListening = false; return; }
+      if (RESERVED_KEYS.has(code)) { this.ctrlFlash = 1.4; this.ctrlFlashMsg = 'KEY RESERVED'; return; }
+      rebindKey(rows[this.ctrlCursor], code);
+      this.ctrlListening = false;
+      this.ctrlFlash = 1.2; this.ctrlFlashMsg = keyLabel(code) + ' BOUND';
+      return;
+    }
+    if (code === 'ArrowUp' || code === 'KeyW') this.ctrlCursor = (this.ctrlCursor + rows.length - 1) % rows.length;
+    else if (code === 'ArrowDown' || code === 'KeyS') this.ctrlCursor = (this.ctrlCursor + 1) % rows.length;
+    else if (code === 'Enter' || code === 'Space') {
+      if (rows[this.ctrlCursor] === 'reset') { resetBinds(); this.ctrlFlash = 1.2; this.ctrlFlashMsg = 'DEFAULTS RESTORED'; }
+      else this.ctrlListening = true;
+    } else if (code === 'Escape' || code === 'Backspace' || code === 'F2') {
+      this.closeControls();
+    }
+  }
+
   // ── drawing ────────────────────────────────────────────────────────
   draw(ctx) {
     if (this.state === 'gallery') { this.drawGallery(ctx); return; }
+    if (this.state === 'controls') { this.drawControls(ctx); return; }
 
     const [shx, shy] = FX.shakeOffset();
     const camX = Math.round(this.camX + shx), camY = Math.round(this.camY + shy);
@@ -344,9 +430,43 @@ class Game {
     if (this.state === 'pause') {
       ctx.fillStyle = 'rgba(8,8,18,0.6)';
       ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-      drawTextShadowCentered(ctx, 'PAUSED', VIEW_W / 2, 126, 2, '#e8e4f0');
-      drawTextShadowCentered(ctx, 'P TO RESUME', VIEW_W / 2, 150, 1, '#8d94b3');
+      drawTextShadowCentered(ctx, 'PAUSED', VIEW_W / 2, 122, 2, '#e8e4f0');
+      drawTextShadowCentered(ctx, 'P TO RESUME', VIEW_W / 2, 148, 1, '#8d94b3');
+      drawTextShadowCentered(ctx, 'F2  REBIND CONTROLS', VIEW_W / 2, 162, 1, '#565d85');
     }
+  }
+
+  drawControls(ctx) {
+    const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+    g.addColorStop(0, '#0b0c1e'); g.addColorStop(1, '#232449');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.fillStyle = 'rgba(8,8,18,0.45)'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+    drawTextShadowCentered(ctx, 'CONTROLS', VIEW_W / 2, 26, 3, '#c22e46', '#4a0e1e');
+    const blink = Math.floor(performance.now() / 260) % 2 === 0;
+    const rows = [['JUMP', 'jump'], ['ATTACK', 'attack'], ['DASH', 'dash']];
+    let y = 84;
+    rows.forEach(([label, act], i) => {
+      const sel = this.ctrlCursor === i;
+      if (sel) drawText(ctx, '>', 92, y, 2, '#ffe27a');
+      drawTextShadow(ctx, label, 114, y, 2, sel ? '#ffe27a' : '#e8e4f0');
+      let keyStr, col = '#8d94b3';
+      if (sel && this.ctrlListening) { keyStr = blink ? 'PRESS A KEY' : 'PRESS A KEY.'; col = '#7fe9f5'; }
+      else keyStr = BINDS[act].slice(0, 3).map(keyLabel).join(' ');
+      drawTextShadow(ctx, keyStr, 250, y, 2, col);
+      y += 30;
+    });
+    const rsel = this.ctrlCursor === 3;
+    if (rsel) drawText(ctx, '>', 92, y, 2, '#ffe27a');
+    drawTextShadow(ctx, 'RESET TO DEFAULTS', 114, y, 2, rsel ? '#ffe27a' : '#8d94b3');
+
+    if (this.ctrlFlash > 0) {
+      ctx.globalAlpha = clamp(this.ctrlFlash, 0, 1);
+      drawTextShadowCentered(ctx, this.ctrlFlashMsg, VIEW_W / 2, VIEW_H - 58, 1, '#ffe27a');
+      ctx.globalAlpha = 1;
+    }
+    drawTextShadowCentered(ctx, 'UP/DOWN SELECT    ENTER REBIND    ESC BACK', VIEW_W / 2, VIEW_H - 40, 1, '#8d94b3');
+    drawTextShadowCentered(ctx, 'MOVEMENT IS ALWAYS ARROWS AND WASD', VIEW_W / 2, VIEW_H - 28, 1, '#565d85');
   }
 
   drawSky(ctx, camX, camY) {
@@ -505,11 +625,15 @@ class Game {
       drawTextShadowCentered(ctx, this.toast.text, VIEW_W / 2, 40, 2, '#e8e4f0');
       ctx.globalAlpha = 1;
     }
-    // controls hint
+    // controls hint (reflects current bindings)
     if (this.hintT > 0 && this.time < 30) {
       ctx.globalAlpha = clamp(this.hintT, 0, 1);
-      drawTextShadowCentered(ctx, 'ARROWS RUN   Z JUMP   X SLASH   C DASH', VIEW_W / 2, VIEW_H - 24, 1, '#8d94b3');
-      drawTextShadowCentered(ctx, 'DOWN+C SLIDE   DOWN+X IN AIR POGO', VIEW_W / 2, VIEW_H - 14, 1, '#565d85');
+      drawTextShadowCentered(ctx,
+        'ARROWS RUN   ' + pk('jump') + ' JUMP   ' + pk('attack') + ' SLASH   ' + pk('dash') + ' DASH',
+        VIEW_W / 2, VIEW_H - 24, 1, '#8d94b3');
+      drawTextShadowCentered(ctx,
+        'DOWN+' + pk('dash') + ' SLIDE   DOWN+' + pk('attack') + ' IN AIR POGO   F2 REBIND',
+        VIEW_W / 2, VIEW_H - 14, 1, '#565d85');
       ctx.globalAlpha = 1;
     }
   }
@@ -523,10 +647,13 @@ class Game {
     drawTextShadowCentered(ctx, 'THE NIGHT IS LONG. RUN IT DOWN.', VIEW_W / 2, 104, 1, '#8d94b3');
     if (Math.floor(this.stateT * 1.6) % 2 === 0)
       drawTextShadowCentered(ctx, 'PRESS ANY KEY', VIEW_W / 2, 148, 2, '#e8e4f0');
-    drawTextShadowCentered(ctx, 'ARROWS/WASD RUN   Z/SPACE JUMP   X SLASH   C/SHIFT DASH', VIEW_W / 2, 190, 1, '#565d85');
-    drawTextShadowCentered(ctx, 'SPEED FEEDS THE FLAME. THE FLAME FEEDS YOU.', VIEW_W / 2, 204, 1, '#565d85');
+    drawTextShadowCentered(ctx,
+      'ARROWS/WASD RUN   ' + pk('jump') + ' JUMP   ' + pk('attack') + ' SLASH   ' + pk('dash') + ' DASH',
+      VIEW_W / 2, 186, 1, '#565d85');
+    drawTextShadowCentered(ctx, 'SPEED FEEDS THE FLAME. THE FLAME FEEDS YOU.', VIEW_W / 2, 200, 1, '#565d85');
+    drawTextShadowCentered(ctx, 'F2  REBIND CONTROLS', VIEW_W / 2, 220, 1, '#8d94b3');
     if (!isNaN(this.best))
-      drawTextShadowCentered(ctx, 'BEST NIGHT ' + fmtTime(this.best), VIEW_W / 2, 232, 1, '#d1a854');
+      drawTextShadowCentered(ctx, 'BEST NIGHT ' + fmtTime(this.best), VIEW_W / 2, 240, 1, '#d1a854');
   }
 
   drawDeath(ctx) {
@@ -583,59 +710,6 @@ class Game {
   }
 }
 
-
-function pressTouchAction(name) {
-  if (!name) return;
-  audio.init();
-  input.anyPressed = true;
-  if (!input[name]) {
-    if (name === 'jump') input.jumpPressed = true;
-    if (name === 'attack') input.attackPressed = true;
-    if (name === 'dash') input.dashPressed = true;
-  }
-  input[name] = true;
-}
-
-function releaseTouchAction(name) {
-  if (!name) return;
-  input[name] = false;
-}
-
-function setupTouchControls(canvas) {
-  const controls = document.getElementById('touchControls');
-  if (!controls || !window.PointerEvent) return;
-  const active = new Map();
-  const clearPointer = (id) => {
-    const item = active.get(id);
-    if (!item) return;
-    releaseTouchAction(item.action);
-    item.el.classList.remove('is-down');
-    active.delete(id);
-  };
-
-  canvas.addEventListener('pointerdown', (e) => {
-    if (e.pointerType !== 'mouse') {
-      audio.init();
-      input.anyPressed = true;
-      e.preventDefault();
-    }
-  }, { passive: false });
-
-  controls.querySelectorAll('[data-touch]').forEach((button) => {
-    const action = button.dataset.touch;
-    button.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      button.setPointerCapture?.(e.pointerId);
-      active.set(e.pointerId, { action, el: button });
-      button.classList.add('is-down');
-      pressTouchAction(action);
-    }, { passive: false });
-    button.addEventListener('pointerup', (e) => { e.preventDefault(); clearPointer(e.pointerId); }, { passive: false });
-    button.addEventListener('pointercancel', (e) => { e.preventDefault(); clearPointer(e.pointerId); }, { passive: false });
-    button.addEventListener('lostpointercapture', (e) => clearPointer(e.pointerId));
-  });
-}
-
 // ── boot ─────────────────────────────────────────────────────────────
 let game = null;
 
@@ -650,18 +724,27 @@ function boot() {
   ctx.imageSmoothingEnabled = false;
 
   function fit() {
-    const raw = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
-    const s = raw >= 1 ? Math.floor(raw) : Math.max(0.5, raw);
-    canvas.style.width = Math.floor(VIEW_W * s) + 'px';
-    canvas.style.height = Math.floor(VIEW_H * s) + 'px';
+    const s = Math.max(1, Math.floor(Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H)));
+    canvas.style.width = VIEW_W * s + 'px';
+    canvas.style.height = VIEW_H * s + 'px';
   }
   fit();
   window.addEventListener('resize', fit);
 
   window.addEventListener('keydown', e => {
+    if (e.code === 'F1' || e.code === 'F2' || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+
+    // the rebinding menu swallows all keys
+    if (game.state === 'controls') {
+      if (!e.repeat) game.handleControlsKey(e.code);
+      return;
+    }
+    // F2 opens the menu from anywhere else
+    if (e.code === 'F2') { audio.init(); game.openControls(game.state); return; }
+
     if (e.repeat) { if (KEYMAP[e.code]) e.preventDefault(); return; }
     audio.init();
-    input.anyPressed = true;
+    if (e.code !== 'F1') input.anyPressed = true;   // F1 toggles the gallery, doesn't start a run
     if (setKey(e.code, true)) e.preventDefault();
     if (e.code === 'KeyM') audio.toggleMute();
     if (e.code === 'KeyP' || e.code === 'Escape') {
@@ -676,15 +759,12 @@ function boot() {
     }
     if (e.code === 'F1') {
       game.state = game.state === 'gallery' ? 'title' : 'gallery';
-      e.preventDefault();
     }
   });
   window.addEventListener('keyup', e => { setKey(e.code, false); });
   window.addEventListener('blur', () => {
     for (const k of ['left', 'right', 'up', 'down', 'jump', 'attack', 'dash']) input[k] = false;
   });
-
-  setupTouchControls(canvas);
 
   let last = performance.now();
   let acc = 0;

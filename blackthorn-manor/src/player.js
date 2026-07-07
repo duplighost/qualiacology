@@ -24,7 +24,6 @@ export class Player {
     this.bobPhase = 0;
     this.bobAmp = 0;
     this.onFootstep = null;     // (running, level) callback
-    this.touch = { fwd: 0, str: 0, run: false, active: false };
     this.speedWalk = 2.6;
     this.speedRun = 4.6;
     this.sens = 0.0023;
@@ -36,41 +35,26 @@ export class Player {
     document.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
     document.addEventListener('mousemove', (e) => {
       if (!this.enabled || this.frozen || document.pointerLockElement !== dom) return;
-      this.lookBy(e.movementX, e.movementY);
+      this.yaw -= e.movementX * this.sens;
+      this.pitch -= e.movementY * this.sens;
+      this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
     });
   }
 
-  lookBy(dx, dy) {
-    this.yaw -= dx * this.sens;
-    this.pitch -= dy * this.sens;
-    this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
-  }
-
-  setTouchMove(fwd, str, run = false) {
-    this.touch.fwd = fwd;
-    this.touch.str = str;
-    this.touch.run = !!run;
-    this.touch.active = true;
-  }
-
-  clearTouchMove() { this.setTouchMove(0, 0, false); }
-
-  lock() { try { this.dom.requestPointerLock?.(); } catch (e) {} }
+  lock() { this.dom.requestPointerLock(); }
   get locked() { return document.pointerLockElement === this.dom; }
 
   update(dt) {
     if (!this.enabled) return;
     const k = this.keys;
     let fwd = 0, str = 0;
-    if (!this.frozen && (this.locked || this.touch.active)) {
+    if (!this.frozen && this.locked) {
       if (k['KeyW'] || k['ArrowUp']) fwd += 1;
       if (k['KeyS'] || k['ArrowDown']) fwd -= 1;
       if (k['KeyA'] || k['ArrowLeft']) str -= 1;
       if (k['KeyD'] || k['ArrowRight']) str += 1;
-      fwd += this.touch.fwd;
-      str += this.touch.str;
     }
-    const running = (((k['ShiftLeft'] || k['ShiftRight']) && fwd > 0) || (this.touch.run && fwd > 0));
+    const running = (k['ShiftLeft'] || k['ShiftRight']) && fwd > 0;
     const speed = running ? this.speedRun : this.speedWalk;
     const dirX = -Math.sin(this.yaw), dirZ = -Math.cos(this.yaw);
     const rightX = Math.cos(this.yaw), rightZ = -Math.sin(this.yaw);

@@ -16,16 +16,24 @@ python -m http.server 8123
 
 ## Controls
 
+Two comfortable layouts work out of the box — a one-handed arrows scheme and
+a two-handed WASD scheme — and everything is rebindable in-game with **F2**
+(saved between sessions).
+
 | Input | Action |
 |---|---|
 | ← → / A D | Run |
-| Z / Space | Jump (hold for height; near a wall: wall-kick) |
-| X / J | Slash (cancels into anything) |
-| C / Shift | Dash (i-frames; kills refund it instantly) |
+| Space / K | Jump (hold for height; near a wall: wall-kick) |
+| Z / J | Slash (cancels into anything) |
+| C / Shift / L | Dash (i-frames; kills refund it instantly) |
 | ↓ + C on ground | Slide (fits under low gaps) |
-| ↓ + X in air | Pogo slash (bounce off enemies and candles) |
-| ↓ + Z on platform | Drop through |
+| ↓ + Z in air | Pogo slash (bounce off enemies and candles) |
+| ↓ + Space on platform | Drop through |
+| F2 | Rebind jump / attack / dash |
 | M / P / R | Mute / Pause / Restart run |
+
+*Prefer a two-handed grip?* WASD to run, **J** slash, **K** jump, **L** dash —
+it's already wired, no setup. Or press **F2** and bind whatever you like.
 
 ## How it wants to be played
 

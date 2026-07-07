@@ -69,12 +69,10 @@ function boot() {
   fx.onThunder = () => audio.thunder(0.5 + Math.random() * 0.5);
   player.onFootstep = (run, level) => audio.footstep(run, level);
 
-  const touchMode = matchMedia?.('(pointer: coarse)')?.matches || navigator.maxTouchPoints > 0;
-
   ui.onModalChange = (open) => {
     player.frozen = open;
     if (open) document.exitPointerLock?.();
-    else if (player.enabled && !touchMode) player.lock();
+    else if (player.enabled) player.lock();
   };
   ui.onDocClosed = (id) => { events.onDocClosed(id); save(); };
   ui.onAccuse = (correct) => events.onAccused(correct);
@@ -111,94 +109,6 @@ function boot() {
   const resumed = load();
   setInterval(save, 12000);
 
-  function handleUseAction() {
-    if (!player.enabled) return;
-    if (ui.modal === 'paper') { ui.closePaper(); return; }
-    if (ui.modal === 'journal') { ui.setModal(null); return; }
-    if (ui.modal === 'accuse') {
-      const b = document.getElementById('declareBtn');
-      if (b && !b.disabled) b.click();
-      return;
-    }
-    if (!ui.modal) interactions.use();
-  }
-
-  function handleJournalAction() {
-    if (!player.enabled) return;
-    if (ui.modal === 'journal') ui.setModal(null);
-    else if (!ui.modal) ui.openJournal();
-  }
-
-  function handleLampAction() {
-    if (!player.enabled || ui.modal) return;
-    fx.setLantern(!fx.lanternOn);
-    audio.unlock?.();
-  }
-
-  function setupTouchControls() {
-    const controls = document.getElementById('touchControls');
-    const lookPad = document.getElementById('lookPad');
-    if (!controls || !lookPad) return { show() {}, hide() {} };
-
-    const held = new Set();
-    const recomputeMove = () => {
-      const fwd = (held.has('fwd') ? 1 : 0) + (held.has('back') ? -1 : 0);
-      const str = (held.has('right') ? 1 : 0) + (held.has('left') ? -1 : 0);
-      player.setTouchMove(Math.max(-1, Math.min(1, fwd)), Math.max(-1, Math.min(1, str)), held.has('fwd'));
-    };
-
-    controls.querySelectorAll('[data-move]').forEach((button) => {
-      const action = button.dataset.move;
-      const release = (id) => {
-        held.delete(action);
-        button.classList.remove('is-down');
-        recomputeMove();
-      };
-      button.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        button.setPointerCapture?.(e.pointerId);
-        held.add(action);
-        button.classList.add('is-down');
-        recomputeMove();
-      }, { passive: false });
-      button.addEventListener('pointerup', (e) => { e.preventDefault(); release(e.pointerId); }, { passive: false });
-      button.addEventListener('pointercancel', (e) => { e.preventDefault(); release(e.pointerId); }, { passive: false });
-      button.addEventListener('lostpointercapture', (e) => release(e.pointerId));
-    });
-
-    controls.querySelector('[data-action="use"]')?.addEventListener('click', (e) => { e.preventDefault(); handleUseAction(); });
-    controls.querySelector('[data-action="lamp"]')?.addEventListener('click', (e) => { e.preventDefault(); handleLampAction(); });
-    controls.querySelector('[data-action="journal"]')?.addEventListener('click', (e) => { e.preventDefault(); handleJournalAction(); });
-
-    let lookId = null, lastX = 0, lastY = 0;
-    lookPad.addEventListener('pointerdown', (e) => {
-      if (!player.enabled || ui.modal || lookId !== null) return;
-      e.preventDefault();
-      lookId = e.pointerId;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      lookPad.setPointerCapture?.(e.pointerId);
-      player.touch.active = true;
-    }, { passive: false });
-    lookPad.addEventListener('pointermove', (e) => {
-      if (e.pointerId !== lookId || !player.enabled || ui.modal) return;
-      e.preventDefault();
-      player.lookBy(e.clientX - lastX, e.clientY - lastY);
-      lastX = e.clientX;
-      lastY = e.clientY;
-    }, { passive: false });
-    const clearLook = (e) => { if (!e || e.pointerId === lookId) lookId = null; };
-    lookPad.addEventListener('pointerup', clearLook);
-    lookPad.addEventListener('pointercancel', clearLook);
-
-    return {
-      show() { if (touchMode) { controls.classList.remove('hidden'); player.touch.active = true; } },
-      hide() { controls.classList.add('hidden'); held.clear(); player.clearTouchMove(); },
-    };
-  }
-
-  const touchControls = setupTouchControls();
-
   /* ---------- input ---------- */
   document.addEventListener('keydown', (e) => {
     if (!player.enabled) return;
@@ -215,15 +125,17 @@ function boot() {
     }
     if (e.code === 'Tab') {
       e.preventDefault();
-      handleJournalAction();
+      if (ui.modal === 'journal') ui.setModal(null);
+      else if (!ui.modal) ui.openJournal();
     }
-    if (e.code === 'KeyF') {
-      handleLampAction();
+    if (e.code === 'KeyF' && !ui.modal) {
+      fx.setLantern(!fx.lanternOn);
+      audio.unlock?.();
     }
   });
 
   renderer.domElement.addEventListener('click', () => {
-    if (!touchMode && player.enabled && !ui.modal && !player.locked) player.lock();
+    if (player.enabled && !ui.modal && !player.locked) player.lock();
   });
 
   addEventListener('resize', () => {
@@ -244,7 +156,7 @@ function boot() {
     document.getElementById('hud').classList.remove('hidden');
     document.getElementById('fade').style.opacity = 0;
     player.enabled = true;
-    if (touchMode) touchControls.show(); else player.lock();
+    player.lock();
     audio.thunder(0.8);
     if (!game.flags.introDone) events.start();
     else ui.toast('Blackthorn Manor. The house remembers you.');

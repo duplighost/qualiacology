@@ -1,10 +1,15 @@
 // Furnishing: every room dressed from a primitive-built Victorian prop kit,
 // and every clue, key and document placed into the world as an interactable.
 import * as THREE from 'three';
-import { makePortraitTexture } from './textures.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { makePortraitTexture, makeArtTextures } from './textures.js';
 import { LV } from './world.js';
 
 let M, W, CTX, S;
+let D;                       // shared decoration materials
+let ART;                     // shared small-painting materials
+let decoBuckets;             // Map<material, geometry[]> — merged at the end
+let artBuckets;              // geometry[] per ART texture
 const CANDLES = [];   // virtual candle lights {x,y,z,r,intensity,color}
 const FLAMES = [];    // flame meshes to flicker
 export function getCandles() { return CANDLES; }
@@ -375,12 +380,223 @@ function ropeBarrier(x, y, z, ry) {
   return g;
 }
 
+/* ==================== lived-in dressing kit ====================
+   Small props are batched: every little object is baked into a shared
+   geometry per material and merged once, so hundreds of teacups, books and
+   framed pictures cost only a dozen or so draw calls. */
+
+const std2 = (c, rough = 0.8, extra) => new THREE.MeshStandardMaterial({ color: c, roughness: rough, ...(extra || {}) });
+const BOOK_COLORS = ['#5a1e1e', '#25361f', '#2b2a48', '#6e5626', '#48202c', '#232a3c', '#5a4632', '#333036', '#704a22', '#1f3a34'];
+
+function makeDecoMats() {
+  return {
+    porcelain: std2('#e9e3d3', 0.35),
+    porcelainBlue: std2('#c6d2e2', 0.32),
+    cream: std2('#d8cfb4', 0.6),
+    gilt: M.brass, silver: M.silver, iron: M.iron,
+    wax: M.candleWax, leather: M.leather,
+    woodD: M.woodDark, woodM: M.woodMid,
+    frameWood: std2('#2e2013', 0.5, { metalness: 0.1 }),
+    glass: std2('#aebfca', 0.12, { transparent: true, opacity: 0.42, metalness: 0 }),
+    wine: std2('#3a1418', 0.35),
+    greenGlass: std2('#20361f', 0.3),
+    paper: std2('#d8ccaa', 0.9),
+    foliage: std2('#2c3a22', 1), foliageDry: std2('#6a5a33', 1),
+    redCloth: M.fabricRed, greenCloth: M.fabricGreen, darkCloth: M.fabricDark,
+    blueCloth: std2('#233a56', 1), goldCloth: std2('#7a5a24', 1),
+    books: BOOK_COLORS.map((c) => std2(c, 0.82)),
+    brassDark: std2('#5a4420', 0.5, { metalness: 0.6 }),
+    ink: std2('#0c0c10', 0.4),
+  };
+}
+
+function push(mat, g) { let a = decoBuckets.get(mat); if (!a) { a = []; decoBuckets.set(mat, a); } a.push(g); }
+function dBox(w, h, d, mat, x, y, z, rx = 0, ry = 0, rz = 0) { const g = new THREE.BoxGeometry(w, h, d); if (rz) g.rotateZ(rz); if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); g.translate(x, y, z); push(mat, g); }
+function dCyl(r0, r1, h, mat, x, y, z, rx = 0, ry = 0, rz = 0, seg = 8) { const g = new THREE.CylinderGeometry(r0, r1, h, seg); if (rz) g.rotateZ(rz); if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); g.translate(x, y, z); push(mat, g); }
+function dSph(r, mat, x, y, z, sx, sy, sz, seg = 8) { const g = new THREE.SphereGeometry(r, seg, seg); if (sx || sy || sz) g.scale(sx || 1, sy || 1, sz || 1); g.translate(x, y, z); push(mat, g); }
+
+function srng(seed) { let s = (seed >>> 0) || 1; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+function seedOf(str) { str = '' + str; let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+// a real flame light in world space (for lit floor/table candelabra)
+function litFlame(x, y, z, s = 1, opts = {}) {
+  const f = new THREE.Mesh(new THREE.SphereGeometry(0.028 * s, 6, 6), M.flame);
+  f.position.set(x, y, z); f.scale.y = 1.9; S.add(f); FLAMES.push(f);
+  candle(x, y - 0.02, z, { i: opts.i ?? 3.2, r: opts.r ?? 6, dy: 0 });
+}
+
+/* ---- clutter items: (x, top, z, r) build a small thing sitting on `top` ---- */
+function ciBooks(x, y, z, r) {
+  const n = 1 + Math.floor(r() * 3); let yy = y;
+  for (let i = 0; i < n; i++) { const w = 0.13 + r() * 0.06, d = 0.19 + r() * 0.05, h = 0.03 + r() * 0.015; dBox(w, h, d, D.books[Math.floor(r() * D.books.length)], x, yy + h / 2, z, 0, (r() - 0.5) * 0.7, 0); yy += h + 0.002; }
+}
+function ciBottle(x, y, z, r) { const m = r() < 0.5 ? D.wine : D.greenGlass; dCyl(0.028, 0.032, 0.16, m, x, y + 0.08, z); dCyl(0.011, 0.011, 0.07, m, x, y + 0.19, z); }
+function ciDecanter(x, y, z, r) { dCyl(0.032, 0.05, 0.12, D.glass, x, y + 0.06, z); dCyl(0.02, 0.02, 0.04, D.glass, x, y + 0.14, z); dSph(0.024, D.glass, x, y + 0.17, z); }
+function ciGlass(x, y, z, r) { dCyl(0.02, 0.024, 0.06, D.glass, x, y + 0.03, z); }
+function ciCup(x, y, z, r) { dCyl(0.05, 0.05, 0.008, D.porcelainBlue, x, y + 0.004, z); dCyl(0.03, 0.034, 0.038, D.porcelain, x, y + 0.028, z); }
+function ciTeapot(x, y, z, r) { dSph(0.062, D.porcelainBlue, x, y + 0.06, z, 1, 0.85, 1); dCyl(0.008, 0.013, 0.07, D.porcelainBlue, x + 0.07, y + 0.07, z, 0, 0, 0.9); dSph(0.02, D.porcelain, x, y + 0.11, z); }
+function ciPlate(x, y, z, r) { const n = 1 + Math.floor(r() * 3); for (let i = 0; i < n; i++) dCyl(0.085, 0.085, 0.008, i % 2 ? D.porcelain : D.porcelainBlue, x, y + 0.006 + i * 0.01, z); }
+function ciBowl(x, y, z, r) { dCyl(0.04, 0.07, 0.05, D.porcelain, x, y + 0.025, z); }
+function ciTureen(x, y, z, r) { dSph(0.09, D.porcelain, x, y + 0.06, z, 1, 0.65, 1); dCyl(0.092, 0.092, 0.012, D.porcelain, x, y + 0.06, z); dSph(0.028, D.porcelain, x, y + 0.11, z); }
+function ciVase(x, y, z, r) { const m = [D.porcelainBlue, D.porcelain, D.brassDark][Math.floor(r() * 3)]; dCyl(0.035, 0.05, 0.18, m, x, y + 0.09, z); const st = 3 + Math.floor(r() * 3); for (let i = 0; i < st; i++) { const a = (i / st) * Math.PI * 2; dCyl(0.004, 0.004, 0.22, r() < 0.4 ? D.foliage : D.foliageDry, x + Math.cos(a) * 0.04, y + 0.28, z + Math.sin(a) * 0.04, Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3); } }
+function ciInk(x, y, z, r) { dBox(0.11, 0.02, 0.07, D.woodD, x, y + 0.01, z); dCyl(0.02, 0.02, 0.03, D.ink, x - 0.02, y + 0.03, z); dCyl(0.002, 0.002, 0.12, D.frameWood, x + 0.02, y + 0.07, z, 0.3, 0, 0.3); }
+function ciCandle(x, y, z, r) { dCyl(0.03, 0.045, 0.05, D.gilt, x, y + 0.025, z); dCyl(0.015, 0.015, 0.13, D.wax, x, y + 0.11, z); }
+function ciClock(x, y, z, r) { dBox(0.16, 0.2, 0.1, D.woodD, x, y + 0.1, z); dCyl(0.06, 0.06, 0.012, D.cream, x, y + 0.12, z + 0.051, Math.PI / 2); dSph(0.03, D.gilt, x, y + 0.21, z); }
+function ciCandelabra(x, y, z, r) { dCyl(0.03, 0.05, 0.03, D.gilt, x, y + 0.015, z); dCyl(0.014, 0.014, 0.2, D.gilt, x, y + 0.12, z); for (let i = -1; i <= 1; i++) { dCyl(0.008, 0.008, 0.11, D.gilt, x + i * 0.06, y + 0.2, z, 0, 0, i * 0.5); dCyl(0.012, 0.012, 0.09, D.wax, x + i * 0.085, y + 0.26, z); } }
+function ciJar(x, y, z, r) { const m = r() < 0.5 ? D.glass : D.greenGlass; dCyl(0.035, 0.038, 0.11, m, x, y + 0.055, z); dCyl(0.03, 0.03, 0.012, D.woodD, x, y + 0.116, z); }
+const CLUT = { book: ciBooks, bottle: ciBottle, decanter: ciDecanter, glass: ciGlass, cup: ciCup, teapot: ciTeapot, plate: ciPlate, bowl: ciBowl, tureen: ciTureen, vase: ciVase, ink: ciInk, candle: ciCandle, clock: ciClock, candelabra: ciCandelabra, jar: ciJar };
+
+function tableClutter(cx, top, cz, w, d, seed, menu) {
+  const r = srng(seedOf(seed)); const items = menu || ['book', 'bottle', 'candle', 'cup', 'vase', 'bowl', 'ink'];
+  const n = 2 + Math.floor(r() * 3);
+  for (let i = 0; i < n; i++) { const kx = cx + (r() - 0.5) * Math.max(0.12, w - 0.34), kz = cz + (r() - 0.5) * Math.max(0.12, d - 0.34); (CLUT[items[Math.floor(r() * items.length)]] || ciBooks)(kx, top, kz, r); }
+}
+
+/* ---- wall paintings ---- */
+function painting(x, y, z, ry, seed) {
+  const r = srng(seedOf(seed));
+  const wv = [0.42, 0.55, 0.68, 0.82][Math.floor(r() * 4)]; const hv = wv * (0.72 + r() * 0.5);
+  dBox(wv + 0.08, hv + 0.08, 0.05, r() < 0.55 ? M.frameGold : D.frameWood, x, y, z, 0, ry, 0);
+  const ti = Math.floor(r() * ART.length);
+  const nx = Math.sin(ry), nz = Math.cos(ry);
+  const g = new THREE.PlaneGeometry(wv, hv); g.rotateY(ry); g.translate(x + nx * 0.028, y, z + nz * 0.028);
+  artBuckets[ti].push(g);
+}
+function blockedAt(px, pz, y) {
+  for (const d of W.doors) { if (Math.abs(d.center.y - (y - 1.0)) > 2.6) continue; if (Math.hypot(px - d.center.x, pz - d.center.z) < 1.25) return true; }
+  for (const w of W.windows) { if (Math.abs(LV[w.level].floor - (y - 1.95)) > 2) continue; if (Math.hypot(px - w.x, pz - w.z) < 1.05) return true; }
+  return false;
+}
+function hangWall(x0, z0, x1, z1, y, ry, seed, step = 2.1, maxN = 40) {
+  const len = Math.hypot(x1 - x0, z1 - z0); const n = Math.min(maxN, Math.max(1, Math.floor(len / step))); const r = srng(seedOf(seed));
+  for (let i = 1; i <= n; i++) { const t = i / (n + 1); const px = x0 + (x1 - x0) * t, pz = z0 + (z1 - z0) * t; if (blockedAt(px, pz, y)) continue; if (r() < 0.12) continue; painting(px, y + (r() - 0.5) * 0.14, pz, ry, seed + 'p' + i); }
+}
+function hangRoom(id, y, sides) {
+  const rm = W.roomById[id]; if (!rm) return; const ins = 0.17; const { wx0, wz0, wx1, wz1 } = rm;
+  if (sides.includes('N')) hangWall(wx0 + 0.7, wz0 + ins, wx1 - 0.7, wz0 + ins, y, 0, 'N' + id);
+  if (sides.includes('S')) hangWall(wx0 + 0.7, wz1 - ins, wx1 - 0.7, wz1 - ins, y, Math.PI, 'S' + id);
+  if (sides.includes('W')) hangWall(wx0 + ins, wz0 + 0.7, wx0 + ins, wz1 - 0.7, y, Math.PI / 2, 'W' + id);
+  if (sides.includes('E')) hangWall(wx1 - ins, wz0 + 0.7, wx1 - ins, wz1 - 0.7, y, -Math.PI / 2, 'E' + id);
+}
+
+/* ---- freestanding furniture (scene meshes + colliders, rotation-safe) ---- */
+function bedsideTable(x, z, y, ry = 0) { const g = grp(x, y, z, ry); bx(g, 0.44, 0.5, 0.4, M.woodDark, 0, 0.27, 0); bx(g, 0.47, 0.03, 0.42, M.woodMid, 0, 0.52, 0); collideBox(g, 0.5, 0.45, 0.55); return y + 0.54; }
+function washstand(x, z, y, ry = 0) {
+  const g = grp(x, y, z, ry);
+  bx(g, 0.85, 0.8, 0.45, M.woodMid, 0, 0.42, 0);
+  bx(g, 0.9, 0.04, 0.5, M.woodDark, 0, 0.84, 0);
+  bx(g, 0.9, 0.4, 0.03, M.woodMid, 0, 1.05, -0.22);      // splash-back
+  cyl(g, 0.014, 0.014, 0.78, M.brass, 0.5, 0.9, 0.12, 6); // towel rail post
+  // basin + ewer, as local meshes so rotation is free
+  cyl(g, 0.17, 0.13, 0.1, M.porcelain || M.linen, -0.16, 0.9, 0.02, 12);
+  cyl(g, 0.09, 0.11, 0.18, M.linen, 0.18, 0.94, 0.02, 10);
+  cyl(g, 0.03, 0.02, 0.1, M.linen, 0.24, 1.06, 0.02, 6);
+  collideBox(g, 0.9, 0.5, 0.9);
+  return y + 0.86;
+}
+function foldingScreen(x, z, y, ry = 0, mat) { const g = grp(x, y, z, ry); for (let i = -1; i <= 1; i++) { const p = bx(g, 0.5, 1.6, 0.03, mat || M.fabricGreen, i * 0.46, 0.8, Math.abs(i) * 0.12); p.rotation.y = i * 0.34; } collideBox(g, 1.5, 0.45, 1.65); return g; }
+function plantStand(x, z, y, dead = true) {
+  const g = grp(x, y, z);
+  cyl(g, 0.05, 0.08, 0.9, M.woodDark, 0, 0.45, 0, 8);
+  cyl(g, 0.16, 0.13, 0.18, M.iron, 0, 0.98, 0, 10);
+  const fol = new THREE.MeshStandardMaterial({ color: dead ? '#4a3a1e' : '#2c3a20', roughness: 1 });
+  for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const s = cyl(g, 0.006, 0.006, 0.55, fol, Math.cos(a) * 0.05, 1.25, Math.sin(a) * 0.05, 8); s.rotation.set(Math.cos(a) * 0.5, 0, -Math.sin(a) * 0.5); }
+  collideBox(g, 0.35, 0.35, 1.1); return g;
+}
+function teaTrolley(x, z, y, ry = 0) {
+  const g = grp(x, y, z, ry);
+  bx(g, 0.75, 0.03, 0.45, M.woodDark, 0, 0.72, 0);
+  bx(g, 0.75, 0.03, 0.45, M.woodDark, 0, 0.42, 0);
+  for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) cyl(g, 0.02, 0.02, 0.7, M.woodDark, lx * 0.34, 0.37, lz * 0.2, 6);
+  collideBox(g, 0.8, 0.5, 0.75);
+  return { top: y + 0.735, low: y + 0.435 };
+}
+function standCandelabra(x, z, y, lit) {
+  const g = grp(x, y, z);
+  cyl(g, 0.16, 0.2, 0.06, M.brass, 0, 0.03, 0, 10);
+  cyl(g, 0.03, 0.03, 1.3, M.brass, 0, 0.68, 0, 8);
+  for (let i = -1; i <= 1; i++) { bx(g, 0.4, 0.02, 0.02, M.brass, i * 0.16, 1.32, 0); cyl(g, 0.02, 0.02, 0.12, M.candleWax, i * 0.2, 1.4, 0, 6); if (lit) flameMesh(g, i * 0.2, 1.48, 0, 0.9); }
+  if (lit) candle(x, y + 1.45, z, { i: 5.5, r: 10, dy: 0 });
+  collideBox(g, 0.42, 0.42, 1.5); return g;
+}
+function pedestalBust(x, z, y) {
+  const g = grp(x, y, z);
+  bx(g, 0.34, 1.0, 0.34, M.stone, 0, 0.5, 0);
+  bx(g, 0.42, 0.06, 0.42, M.stone, 0, 1.03, 0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 12), M.marblePlain || M.stone); head.position.y = 1.28; head.scale.set(1, 1.2, 0.95); head.castShadow = true; g.add(head);
+  bx(g, 0.34, 0.22, 0.2, M.marblePlain || M.stone, 0, 1.12, 0);
+  collideBox(g, 0.42, 0.42, 1.5); return g;
+}
+function umbrellaStand(x, z, y) {
+  const g = grp(x, y, z);
+  cyl(g, 0.14, 0.15, 0.6, M.brassDark || M.iron, 0, 0.3, 0, 10);
+  for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2; const s = cyl(g, 0.018, 0.018, 0.95, i % 2 ? M.woodDark : M.iron, Math.cos(a) * 0.05, 0.55, Math.sin(a) * 0.05, 6); s.rotation.set(Math.cos(a) * 0.12, 0, -Math.sin(a) * 0.12); }
+  collideBox(g, 0.34, 0.34, 0.62); return g;
+}
+function wallShelf(x, y, z, ry, len = 1.0) {
+  const g = grp(x, y, z, ry);
+  bx(g, len, 0.03, 0.2, M.woodDark, 0, 0, 0);
+  for (const s of [-1, 1]) bx(g, 0.04, 0.14, 0.16, M.woodDark, s * (len / 2 - 0.05), -0.08, 0);
+  // a few things on the shelf, as local meshes
+  bx(g, 0.13, 0.06, 0.18, M.fabricRed, -len / 2 + 0.16, 0.045, 0);
+  bx(g, 0.12, 0.05, 0.17, M.fabricGreen, -len / 2 + 0.16, 0.095, 0.01);
+  cyl(g, 0.04, 0.05, 0.16, M.brass, len / 2 - 0.18, 0.1, 0, 8);
+  cyl(g, 0.05, 0.06, 0.12, M.silver, 0, 0.08, 0, 10);
+  return g;
+}
+function potRack(x, y, z, ry, len = 1.6) {
+  const g = grp(x, y, z, ry);
+  bx(g, len, 0.05, 0.05, M.iron, 0, 0, 0);
+  for (let i = 0; i < 5; i++) { const px = -len / 2 + 0.2 + i * (len - 0.4) / 4; cyl(g, 0.008, 0.008, 0.2, M.iron, px, -0.12, 0, 6); cyl(g, 0.07 + (i % 2) * 0.03, 0.06, 0.12, i % 2 ? M.brassDark || M.iron : M.iron, px, -0.26, 0, 10); }
+  return g;
+}
+function hangingHerbs(x, y, z) {
+  const r = srng(seedOf('herb' + x + z));
+  for (let i = 0; i < 3; i++) {
+    const dx = (i - 1) * 0.12;
+    dCyl(0.003, 0.003, 0.14, D.woodD, x + dx, y - 0.07, z, 0, 0, 0, 5);
+    for (let j = 0; j < 5; j++) {
+      const ox = (r() - 0.5) * 0.05, oz = (r() - 0.5) * 0.05;
+      dCyl(0.004, 0.001, 0.22, D.foliage, x + dx + ox, y - 0.24, z + oz, (r() - 0.5) * 0.5, 0, (r() - 0.5) * 0.5, 5);
+    }
+  }
+}
+function cushion(x, y, z, ry, mat) { dBox(0.4, 0.14, 0.4, mat, x, y + 0.07, z, 0, ry, 0); }
+function leanCanvas(x, y, z, ry, seed) { // an old picture propped against a wall (attic)
+  const r = srng(seedOf(seed)); const wv = 0.6 + r() * 0.4, hv = 0.8 + r() * 0.5;
+  const g = new THREE.BoxGeometry(wv, hv, 0.05); g.rotateX(0.14); g.rotateY(ry); g.translate(x, y + hv / 2 * 0.99, z); push(r() < 0.5 ? M.frameGold : D.frameWood, g);
+}
+
+function geoOk(g) {
+  g.computeBoundingBox();
+  const b = g.boundingBox;
+  return b && isFinite(b.min.x) && isFinite(b.max.x) && isFinite(b.min.y) &&
+    isFinite(b.max.y) && isFinite(b.min.z) && isFinite(b.max.z);
+}
+function flushDeco() {
+  const merge = (geos, mat) => {
+    const clean = geos.filter(geoOk);
+    if (clean.length !== geos.length) console.warn('deco: skipped', geos.length - clean.length, 'bad geometries');
+    if (!clean.length) return;
+    const m = new THREE.Mesh(mergeGeometries(clean, false), mat);
+    m.castShadow = false; m.receiveShadow = true;
+    S.add(m);
+  };
+  for (const [mat, geos] of decoBuckets) if (geos.length) merge(geos, mat);
+  ART.forEach((mat, i) => { if (artBuckets[i].length) merge(artBuckets[i], mat); });
+}
+
 /* ============================ furnishing ============================ */
 
 export function furnish(world, mats, ctx) {
   M = mats; W = world; CTX = ctx; S = world.scene;
   const R = (id) => world.roomById[id];
   const F = LV.first.floor, G = 0, B = LV.basement.floor, A = LV.attic.floor;
+
+  D = makeDecoMats();
+  ART = makeArtTextures().map((t) => new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 }));
+  decoBuckets = new Map();
+  artBuckets = ART.map(() => []);
 
   /* ------------ THE GRAND FOYER ------------ */
   {
@@ -979,6 +1195,157 @@ She was here. In the dark, under the house, for two days — while forty men dra
     ctx.doc(wl, 'wicksLetter', 'a paper, folded small, wedged in the stones');
     candle(4, B + 0.5, 16.5, { i: 2.5, r: 5, color: 0x8090c0 });
   }
+
+  /* ============================================================
+     LIVED-IN PASS — paintings on the walls and things on every
+     surface, so each room looks inhabited.
+     ============================================================ */
+
+  // --- paintings throughout ---
+  const artSkip = new Set(['foyerVoid', 'galleryW', 'galleryS', 'galleryE', 'ballVoid', 'chapVoid', 'conserv']);
+  for (const lvl of ['ground', 'first']) {
+    for (const rm of W.roomsByLevel[lvl]) {
+      if (rm.void || artSkip.has(rm.id)) continue;
+      const y = LV[lvl].floor + 1.95;
+      hangRoom(rm.id, y, ['N', 'S']);
+      if ((rm.wx1 - rm.wx0) >= 11 || rm.tall) hangRoom(rm.id, y, ['W', 'E']);
+    }
+  }
+  hangRoom('foyer', G + 4.8, ['W', 'E']);   // second, grander row in the hall
+  hangRoom('ballroom', G + 4.7, ['N', 'S']);
+
+  /* ---- GROUND FLOOR surfaces & extra furniture ---- */
+  // Foyer
+  tableClutter(25, 0.82, 36.8, 1.3, 1.3, 'foyerC', ['candle', 'vase', 'book']);
+  umbrellaStand(35, 38.6, G);
+  plantStand(35.5, 31.4, G);
+  // Long corridor consoles
+  for (const cx of [10, 26, 42]) tableClutter(cx, 0.79, 26.6, 0.9, 0.45, 'corrG' + cx, ['candle', 'vase', 'book']);
+  plantStand(2.4, 27, G); plantStand(57.6, 27, G);
+  plantStand(2.4, 13.2, G); plantStand(57.6, 13.2, G);
+  // Library
+  tableClutter(14.5, 1.34, 39.25, 1.5, 0.28, 'libM', ['clock', 'candle', 'candle', 'book']);
+  tableClutter(14.2, 0.82, 33.8, 0.8, 0.8, 'libR', ['book', 'candle', 'glass']);
+  tableClutter(10.5, 0.82, 36.5, 1.4, 0.7, 'libD', ['book', 'ink', 'candle']);
+  wallShelf(8.37, 1.9, 32, Math.PI / 2, 1.1); wallShelf(8.37, 1.9, 38, Math.PI / 2, 1.1);
+  plantStand(20.4, 31.2, G);
+  // Study
+  tableClutter(4, 0.82, 34, 1.5, 0.8, 'stdD', ['book', 'ink', 'candle']);
+  tableClutter(0.95, 1.34, 34, 0.28, 1.4, 'stdM', ['clock', 'candle', 'book']);
+  table(6.6, G, 38.4, 0.7, 0.5); tableClutter(6.6, 0.82, 38.4, 0.7, 0.5, 'stdS', ['book', 'candle']);
+  plantStand(1.2, 38.5, G);
+  // Dining
+  tableClutter(44, 0.82, 32.6, 1.4, 0.8, 'dinA', ['plate', 'cup', 'glass']);
+  tableClutter(44, 0.82, 34.8, 1.4, 0.8, 'dinB', ['tureen', 'decanter', 'plate']);
+  tableClutter(44, 0.82, 37, 1.4, 0.8, 'dinC', ['plate', 'cup', 'glass']);
+  tableClutter(39, 0.97, 30.75, 1.3, 0.45, 'dinDr1', ['plate', 'tureen', 'cup']);
+  tableClutter(49.25, 0.97, 37.8, 0.45, 1.3, 'dinDr2', ['plate', 'cup', 'candle']);
+  { const tt = teaTrolley(41, 38.6, G); tableClutter(41, tt.top, 38.6, 0.7, 0.4, 'dinTT', ['teapot', 'cup', 'cup']); }
+  standCandelabra(48.6, 31.4, G, true);
+  // Kitchen
+  tableClutter(55, 0.82, 35, 1.2, 3.0, 'kitT', ['bowl', 'plate', 'bottle', 'jar', 'book']);
+  potRack(55, 2.7, 33.6, 0, 1.8);
+  hangingHerbs(52.5, 2.7, 31.2); hangingHerbs(58, 2.7, 31.2);
+  tableClutter(58.55, 0.97, 36, 0.45, 1.3, 'kitDr', ['plate', 'cup', 'bowl', 'jar']);
+  // Ballroom
+  standCandelabra(2.4, 18, G, true); standCandelabra(2.4, 24, G, true);
+  standCandelabra(15.6, 18, G, true); standCandelabra(15.6, 24, G, true);
+  chair(1.2, G, 20, Math.PI / 2); chair(1.2, G, 22, Math.PI / 2);
+  // Billiards & smoking
+  { const t = table(26.6, G, 18, 0.7, 0.5); tableClutter(26.6, 0.79, 18, 0.7, 0.5, 'bilT', ['decanter', 'glass', 'glass']); }
+  wallShelf(18.4, 1.8, 21, Math.PI / 2, 1.0);
+  tableClutter(32, 0.82, 22.8, 1.05, 1.05, 'smkCards', ['glass', 'decanter', 'book']);
+  tableClutter(32, 0.79, 20.6, 0.9, 0.9, 'smkT', ['book', 'candle', 'glass']);
+  tableClutter(35.2, 1.34, 21, 0.28, 1.4, 'smkM', ['clock', 'candle']);
+  cushion(30.5, 0.62, 21.5, 1.4, D.redCloth); cushion(33.5, 0.62, 21.6, -1.4, D.darkCloth);
+  // Drawing room
+  tableClutter(47.2, 1.34, 17.6, 0.28, 1.6, 'drwM', ['clock', 'candle', 'vase']);
+  tableClutter(42, 0.82, 21.6, 1.1, 0.7, 'drwC', ['book', 'vase', 'cup']);
+  cushion(41.4, 0.62, 20, 0, D.goldCloth); cushion(42.6, 0.62, 20, 0, D.blueCloth);
+  { const t = table(38.4, G, 21.8, 0.5, 0.5); tableClutter(38.4, 0.79, 21.8, 0.5, 0.5, 'drwL1', ['candle']); }
+  { const t = table(45.6, G, 21.8, 0.5, 0.5); tableClutter(45.6, 0.79, 21.8, 0.5, 0.5, 'drwL2', ['candle']); }
+  { const tt = teaTrolley(44, 23.6, G); tableClutter(44, tt.top, 23.6, 0.7, 0.4, 'drwTT', ['teapot', 'cup', 'cup']); }
+  // Conservatory (no wall art — glass house)
+  plantStand(51, 18, G, false); plantStand(58, 18, G, false); plantStand(58, 24, G, false);
+  // Chapel
+  standCandelabra(2.2, 2.2, G, true); standCandelabra(10, 2.2, G, true);
+  for (let i = 0; i < 3; i++) { dBox(0.18, 0.05, 0.24, D.leather, 6, 0.5, 4.5 + i * 1.9, 0, 0.2); dBox(0.18, 0.05, 0.24, D.books[2], 9.5, 0.5, 4.5 + i * 1.9, 0, -0.3); }
+  // Music room
+  tableClutter(16, 0.98, 5.4, 0.8, 0.6, 'musP', ['candelabra', 'book']);
+  { const t = table(14, G, 9, 0.6, 0.5); tableClutter(14, 0.79, 9, 0.6, 0.5, 'musS', ['vase', 'candle']); }
+  // Portrait gallery
+  pedestalBust(26, 2.2, G); pedestalBust(34, 2.2, G); pedestalBust(26, 9.8, G); pedestalBust(34, 9.8, G);
+  standCandelabra(25, 6, G, true); standCandelabra(35, 6, G, true);
+  cushion(29, 0.55, 6, 0, D.redCloth); cushion(31, 0.55, 6, 0, D.goldCloth);
+  // Servants' hall / scullery / larder
+  tableClutter(41, 0.82, 5, 1.3, 1.4, 'srvT1', ['cup', 'teapot', 'plate']);
+  tableClutter(41, 0.82, 7.5, 1.3, 1.4, 'srvT2', ['bowl', 'cup', 'jar']);
+  tableClutter(44.5, 0.97, 0.95, 1.2, 0.45, 'srvDr', ['plate', 'cup', 'bowl']);
+  wallShelf(46.35, 1.6, 4, Math.PI / 2, 1.0);
+  hangingHerbs(54, 2.5, 1.6); hangingHerbs(57, 2.5, 1.6);
+  for (let i = 0; i < 4; i++) ciJar(53 + i * 0.5, 1.42, 6.5, srng(seedOf('lard' + i)));
+
+  /* ---- FIRST FLOOR surfaces & extra furniture ---- */
+  // Master bedroom
+  { const t = bedsideTable(42.3, 31, F); tableClutter(42.3, t, 31, 0.44, 0.4, 'mstB1', ['candle', 'book']); }
+  { const t = bedsideTable(45.7, 31, F); tableClutter(45.7, t, 31, 0.44, 0.4, 'mstB2', ['candle', 'glass']); }
+  washstand(40, 30.9, F, 0);
+  foldingScreen(48.5, 37.8, F, Math.PI / 2, M.fabricRed);
+  cushion(43.2, F + 0.66, 31.4, 0, D.cream); cushion(44.8, F + 0.66, 31.4, 0, D.cream);
+  // Lady Constance's room
+  { const t = bedsideTable(10.4, 31.5, F); tableClutter(10.4, t, 31.5, 0.44, 0.4, 'conB1', ['candle', 'vase']); }
+  { const t = bedsideTable(13.6, 31.5, F); tableClutter(13.6, t, 31.5, 0.44, 0.4, 'conB2', ['candle', 'book']); }
+  washstand(8.9, 37, F, Math.PI / 2);
+  foldingScreen(20, 38, F, 0, M.fabricGreen);
+  cushion(11.2, F + 0.66, 31.6, 0, D.cream); cushion(12.8, F + 0.66, 31.6, 0, D.cream);
+  // Victor's room
+  { const t = bedsideTable(24, 17.6, F); tableClutter(24, t, 17.6, 0.44, 0.4, 'vicB', ['bottle', 'glass']); }
+  tableClutter(24, F + 0.72, 21.5, 1.0, 0.7, 'vicT', ['bottle', 'glass', 'decanter']);
+  cushion(21, F + 0.62, 19, Math.PI / 2, D.greenCloth);
+  // Blue room
+  { const t = bedsideTable(32, 17.6, F); tableClutter(32, t, 17.6, 0.44, 0.4, 'blueB', ['candle', 'book']); }
+  washstand(34.6, 24.4, F, 0);
+  // Boudoir
+  tableClutter(2, F + 0.82, 37.5, 1.5, 0.8, 'boudD', ['book', 'ink', 'candle', 'vase']);
+  tableClutter(6, F + 0.82, 35, 0.8, 0.8, 'boudT', ['cup', 'teapot', 'vase']);
+  cushion(3.5, F + 0.62, 32, 0.3, D.blueCloth); cushion(3.9, F + 0.62, 32.2, 0.3, D.goldCloth);
+  // Nursery — toys
+  { const t = 45.5, top = F + 0.72; tableClutter(45.5, top, 17.3, 0.7, 0.5, 'nurToys', ['cup', 'book', 'bowl']); }
+  dSph(0.09, D.redCloth, 41.5, F + 0.09, 20.8, 0, 0, 0, 10);
+  for (let i = 0; i < 4; i++) dBox(0.09, 0.09, 0.09, D.books[i + 2], 42.3 + (i % 2) * 0.12, F + 0.045 + Math.floor(i / 2) * 0.09, 20.2, 0, i * 0.4, 0);
+  // Green room (a guest bedroom)
+  bed(18, F, 3.5, 0, false);
+  { const t = bedsideTable(20, 3.5, F); tableClutter(20, t, 3.5, 0.44, 0.4, 'grnB', ['candle', 'book']); }
+  wardrobe(13, F, 1.2, 0);
+  washstand(22.5, 1.1, F, 0);
+  cushion(17.4, F + 0.6, 3.4, Math.PI / 2, D.cream); cushion(18.6, F + 0.6, 3.4, Math.PI / 2, D.cream);
+  // Sewing room
+  { const st = table(30, F, 3, 1.4, 0.8); tableClutter(30, F + 0.82, 3, 1.4, 0.8, 'sewT', ['book', 'candle', 'bowl']); }
+  for (let i = 0; i < 4; i++) dCyl(0.03, 0.03, 0.06, D.books[i * 2], 29.4 + i * 0.3, F + 0.85, 3.2, Math.PI / 2, 0, 0); // spools
+  dBox(0.5, 0.3, 0.18, D.blueCloth, 33.5, F + 0.15, 4.4); dBox(0.5, 0.28, 0.17, D.redCloth, 33.5, F + 0.44, 4.4); // fabric bolts
+  dressForm(34.5, F, 2);
+  chair(30, F, 4.6, Math.PI);
+  // Sir Edmund's retreat (already story-furnished) — a little life
+  tableClutter(41.5, F + 0.82, 1.4, 1.5, 0.8, 'retD', ['book', 'ink', 'candle']);
+  { const t = bedsideTable(37, 3.5, F); tableClutter(37, t, 3.5, 0.44, 0.4, 'retB', ['candle', 'glass']); }
+  // Housekeeper's room
+  { const t = bedsideTable(48, 4, F); tableClutter(48, t, 4, 0.44, 0.4, 'gradB', ['candle', 'book']); }
+  washstand(24.5, 1.1, F, 0);   // (dressing help for the sewing corridor end)
+
+  /* ---- ATTIC — old canvases and lumber ---- */
+  for (let i = 0; i < 7; i++) leanCanvas(26 + i * 4.6, A, 6.6, Math.PI + (Math.random() - 0.5) * 0.2, 'atCanvas' + i);
+  crate(48, A, 12, 0.4); crate(49.4, A, 12.3, 1.1, 0.55); crate(48.6, A, 13.3, 0.6);
+  { const bc = grp(52, A, 6); cyl(bc, 0.16, 0.16, 0.6, M.iron, 0, 1.4, 0, 10); cyl(bc, 0.014, 0.014, 1.0, M.iron, 0, 0.65, 0, 6); }
+  chair(30, A, 4.5, 1.2);
+
+  /* ---- BASEMENT — cellar clutter ---- */
+  for (let i = 0; i < 5; i++) ciJar(51 + (i % 3) * 0.45, B + 0.86, 12 + Math.floor(i / 3) * 0.5, srng(seedOf('cel' + i)));
+  wallShelf(49.6, B + 1.6, 13, Math.PI / 2, 1.2);
+  leanCanvas(41, B, 22.6, 0.1, 'bC1'); leanCanvas(43, B, 22.6, -0.1, 'bC2');
+  dBox(0.5, 0.4, 0.5, D.ink, 34, B + 0.2, 15.5); // coal scuttle
+  cyl(grp(34.6, B, 15.5), 0.02, 0.02, 1.0, M.iron, 0, 0.5, 0, 6).rotation.z = 0.3; // shovel
+
+  flushDeco();
 
   /* ------------ curtains on some windows ------------ */
   for (const wdw of W.windows) {

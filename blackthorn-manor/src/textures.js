@@ -267,6 +267,135 @@ function bookRow(seed) {
   return c;
 }
 
+/* ---------------- small wall paintings ---------------- */
+// A shared set of little framed pictures reused across the whole house, so
+// hundreds of hung paintings cost only a handful of textures.
+
+function artFrameWear(ctx, w, h, r) {
+  // craquelure + dark varnish so every picture reads as old
+  ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+  ctx.lineWidth = 0.6;
+  for (let i = 0; i < 14; i++) {
+    ctx.beginPath();
+    let x = r() * w, y = r() * h;
+    ctx.moveTo(x, y);
+    for (let s = 0; s < 3; s++) { x += (r() - 0.5) * 26; y += (r() - 0.5) * 26; ctx.lineTo(x, y); }
+    ctx.stroke();
+  }
+  const vg = ctx.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.8);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(10,7,3,0.55)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, w, h);
+}
+
+const ART_PAINTERS = [
+  // 0 — moorland landscape under a low moon
+  (ctx, r, w, h) => {
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, '#3b4257'); sky.addColorStop(0.6, '#6b5f5a'); sky.addColorStop(1, '#8a7a5e');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#e8e2cf'; ctx.beginPath(); ctx.arc(w * 0.72, h * 0.26, w * 0.06, 0, 7); ctx.fill();
+    ctx.fillStyle = '#3a3a2e';
+    for (const [yy, c] of [[0.62, '#4a4636'], [0.72, '#3a3628'], [0.85, '#2a271c']]) {
+      ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(0, h * yy);
+      for (let x = 0; x <= w; x += 12) ctx.lineTo(x, h * yy + Math.sin(x * 0.1 + yy * 9) * 8 + r() * 4);
+      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.fill();
+    }
+  },
+  // 1 — a stormy seascape with a distant ship
+  (ctx, r, w, h) => {
+    const sky = ctx.createLinearGradient(0, 0, 0, h * 0.6);
+    sky.addColorStop(0, '#4a4e58'); sky.addColorStop(1, '#7c8088');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h * 0.6);
+    const sea = ctx.createLinearGradient(0, h * 0.6, 0, h);
+    sea.addColorStop(0, '#38434a'); sea.addColorStop(1, '#1c2428');
+    ctx.fillStyle = sea; ctx.fillRect(0, h * 0.6, w, h * 0.4);
+    ctx.strokeStyle = 'rgba(200,205,210,0.35)'; ctx.lineWidth = 1;
+    for (let y = h * 0.64; y < h; y += 7) { ctx.beginPath(); ctx.moveTo(0, y); for (let x = 0; x <= w; x += 10) ctx.lineTo(x, y + Math.sin(x * 0.3 + y) * 2); ctx.stroke(); }
+    ctx.strokeStyle = '#15100a'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(w * 0.6, h * 0.62); ctx.lineTo(w * 0.6, h * 0.42); ctx.moveTo(w * 0.66, h * 0.6); ctx.lineTo(w * 0.66, h * 0.46); ctx.stroke();
+    ctx.fillStyle = '#0e0a06'; ctx.fillRect(w * 0.56, h * 0.6, w * 0.14, h * 0.03);
+  },
+  // 2 — still life: bowl of fruit, bottle, drape
+  (ctx, r, w, h) => {
+    ctx.fillStyle = '#241b12'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#3a2a18'; ctx.fillRect(0, h * 0.7, w, h * 0.3);
+    ctx.fillStyle = '#5a1f1f'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w * 0.4, 0); ctx.lineTo(w * 0.15, h); ctx.lineTo(0, h); ctx.fill();
+    ctx.fillStyle = '#20180e'; ctx.beginPath(); ctx.ellipse(w * 0.5, h * 0.68, w * 0.28, h * 0.09, 0, 0, 7); ctx.fill();
+    for (const [dx, dy, c] of [[0, -0.02, '#8a3320'], [-0.12, 0, '#b06a1c'], [0.12, 0, '#6a7a24'], [-0.05, -0.06, '#9a2f2f'], [0.06, -0.05, '#c08a2a']]) {
+      ctx.fillStyle = c; ctx.beginPath(); ctx.arc(w * (0.5 + dx), h * (0.62 + dy), w * 0.06, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = '#12261a'; ctx.fillRect(w * 0.74, h * 0.34, w * 0.1, h * 0.34);
+    ctx.fillStyle = '#12261a'; ctx.fillRect(w * 0.77, h * 0.24, w * 0.04, h * 0.12);
+  },
+  // 3 — botanical study on cream
+  (ctx, r, w, h) => {
+    ctx.fillStyle = '#d8cdae'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#3a5024'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(w * 0.5, h); ctx.quadraticCurveTo(w * 0.42, h * 0.55, w * 0.5, h * 0.28); ctx.stroke();
+    ctx.fillStyle = '#40561f';
+    for (let i = 0; i < 4; i++) { const yy = h * (0.4 + i * 0.13), sd = i % 2 ? 1 : -1; ctx.beginPath(); ctx.ellipse(w * 0.5 + sd * w * 0.12, yy, w * 0.11, h * 0.05, sd * 0.5, 0, 7); ctx.fill(); }
+    ctx.fillStyle = '#8a3a5a'; for (let p = 0; p < 6; p++) { const a = p / 6 * 7; ctx.beginPath(); ctx.ellipse(w * 0.5 + Math.cos(a) * w * 0.09, h * 0.24 + Math.sin(a) * w * 0.09, w * 0.05, w * 0.03, a, 0, 7); ctx.fill(); }
+    ctx.fillStyle = '#caa42a'; ctx.beginPath(); ctx.arc(w * 0.5, h * 0.24, w * 0.04, 0, 7); ctx.fill();
+  },
+  // 4 — silhouette miniature in an oval
+  (ctx, r, w, h) => {
+    ctx.fillStyle = '#c8bd9e'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#efe8d2'; ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w * 0.34, h * 0.4, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#7a5a24'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = '#0c0a08'; ctx.beginPath();
+    ctx.ellipse(w / 2, h * 0.44, w * 0.15, h * 0.17, 0, 0, 7); ctx.fill();
+    ctx.fillRect(w * 0.36, h * 0.55, w * 0.28, h * 0.28);
+    ctx.beginPath(); ctx.arc(w * 0.63, h * 0.42, w * 0.05, 0, 7); ctx.fill();
+  },
+  // 5 — a stag in the mist
+  (ctx, r, w, h) => {
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#5a5c54'); g.addColorStop(1, '#2e322a');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#20241c'; ctx.fillRect(0, h * 0.72, w, h * 0.28);
+    ctx.fillStyle = '#100c08';
+    ctx.fillRect(w * 0.4, h * 0.5, w * 0.22, h * 0.14);
+    ctx.fillRect(w * 0.55, h * 0.4, w * 0.06, h * 0.14);
+    ctx.fillRect(w * 0.4, h * 0.62, w * 0.03, h * 0.14); ctx.fillRect(w * 0.58, h * 0.62, w * 0.03, h * 0.14);
+    ctx.strokeStyle = '#100c08'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(w * 0.58, h * 0.4); ctx.lineTo(w * 0.54, h * 0.28); ctx.moveTo(w * 0.58, h * 0.4); ctx.lineTo(w * 0.64, h * 0.28); ctx.moveTo(w * 0.6, h * 0.34); ctx.lineTo(w * 0.68, h * 0.3); ctx.stroke();
+  },
+  // 6 — needlework sampler
+  (ctx, r, w, h) => {
+    ctx.fillStyle = '#d9ccb0'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#7a1f1f'; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) ctx.strokeRect(6 + i * 5, 6 + i * 5, w - 12 - i * 10, h - 12 - i * 10);
+    ctx.fillStyle = '#3a2a4a';
+    for (let row = 0; row < 3; row++) for (let cix = 0; cix < 7; cix++) ctx.fillRect(w * 0.16 + cix * w * 0.1, h * 0.22 + row * h * 0.1, w * 0.05, h * 0.045);
+    ctx.fillStyle = '#3a5024'; ctx.beginPath(); ctx.moveTo(w * 0.5, h * 0.6); ctx.lineTo(w * 0.36, h * 0.85); ctx.lineTo(w * 0.64, h * 0.85); ctx.fill();
+    ctx.fillRect(w * 0.47, h * 0.82, w * 0.06, h * 0.08);
+  },
+  // 7 — the estate itself, in ink
+  (ctx, r, w, h) => {
+    ctx.fillStyle = '#cfc2a0'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#8a8468'; ctx.fillRect(0, h * 0.68, w, h * 0.32);
+    ctx.fillStyle = '#2a241a'; ctx.fillRect(w * 0.28, h * 0.4, w * 0.44, h * 0.3);
+    ctx.fillStyle = '#1a160f'; ctx.beginPath(); ctx.moveTo(w * 0.24, h * 0.4); ctx.lineTo(w * 0.5, h * 0.24); ctx.lineTo(w * 0.76, h * 0.4); ctx.fill();
+    ctx.fillStyle = '#c9a84a'; for (let wx = 0; wx < 3; wx++) for (let wy = 0; wy < 2; wy++) ctx.fillRect(w * (0.34 + wx * 0.12), h * (0.46 + wy * 0.1), w * 0.05, h * 0.06);
+    ctx.strokeStyle = '#2a241a'; ctx.lineWidth = 1; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.moveTo(0, h * (0.72 + i * 0.05)); ctx.lineTo(w, h * (0.72 + i * 0.05)); ctx.stroke(); }
+  },
+];
+
+export function makeArtTextures() {
+  return ART_PAINTERS.map((paint, i) => {
+    const [c, ctx] = canvas(128, 160);
+    const r = rng(700 + i * 31);
+    paint(ctx, r, 128, 160);
+    artFrameWear(ctx, 128, 160, r);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return t;
+  });
+}
+
 /* ---------------- material set ---------------- */
 
 export function makeMaterials() {
