@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>DUSKFALL — outdoor horde shooter</title>
+  <title>Duskfall | Qualiacology</title>
   <meta name="description" content="A realistic golden-hour outdoor horde survival FPS built with Three.js — smooth gunplay, arcade scoring, and detailed animated enemies." />
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌅</text></svg>" />
@@ -27,8 +27,13 @@
   <meta name="twitter:description" content="A golden-hour outdoor horde-survival FPS — hold the treeline against waves of the dead, with smooth gunplay and arcade scoring." />
   <meta name="twitter:image" content="https://qualiacology.com/duskfall/assets/card.jpg" />
   <link rel="canonical" href="https://qualiacology.com/duskfall/" />
+  <style>
+    .home-link{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));z-index:10000;color:rgba(244,242,250,.84);text-decoration:none;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(8,8,20,.52);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(8px)}
+    .home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(255,210,122,.55);outline:0}
+  </style>
 </head>
 <body>
+  <a class="home-link" href="/" onclick="event.stopPropagation()">Qualiacology</a>
   <canvas id="game"></canvas>
   <div id="hud"></div>
   <noscript>This game requires JavaScript and WebGL2.</noscript>
