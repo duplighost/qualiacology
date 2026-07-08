@@ -182,6 +182,7 @@
             <div id="start-screen" class="screen">
                 <h1 class="text-6xl font-bold mb-4 tracking-widest" style="color: #f22; text-shadow: 0 0 20px #f00;">BEHIND YOU</h1>
             <p class="stat-line">Best <span id="start-best">0.0000</span> / Hell Held <span class="achievement-target">666.6660</span></p>
+            <p id="desktop-note" class="stat-line hidden">Desktop with a mouse &amp; keyboard required.</p>
             <button id="start-btn">Click to Enter</button>
         </div>
 
@@ -211,7 +212,6 @@
         let isGameOver = false;
         let gameTime = 0;
         let lastTime = performance.now();
-        let spawnRate = 2000; // ms between spawns initially
         let lastSpawnTime = 0;
         const legacyBestTimeKey = 'demonShardsBestTime';
         const legacyDemonAchievementKey = 'demonShardsHellHeld';
@@ -232,6 +232,7 @@
         const shards = [];
         const particles = [];
         const floorGlows = [];
+        const glowLightPool = []; // reusable PointLights for floor glows (bounded, no per-kill alloc)
         
         // Player Physics/Stats
         const playerSpeed = 35.0;
@@ -251,7 +252,7 @@
         const baseFireRate = 80; // ms between shots
 
         // Audio Synths
-        let shootSynth, enemyDeathSynth, spawnerDeathSynth, diverDeathSynth, playerHitSynth, pickupSynth, enemyHum;
+        let shootSynth, enemyDeathSynth, spawnerDeathSynth, diverDeathSynth, playerHitSynth, pickupSynth;
         let nextSynthStart = 0;
         const audioMix = {
             shotVolume: -29,
@@ -285,7 +286,9 @@
 
         function nextSynthTime() {
             const now = Tone.now();
-            nextSynthStart = Math.max(now, nextSynthStart + 0.012);
+            // Space out triggers by 12ms, but never let the shared schedule run more than
+            // 50ms ahead of real time, so a burst of SFX can't add creeping latency.
+            nextSynthStart = Math.max(now, Math.min(nextSynthStart + 0.012, now + 0.05));
             return nextSynthStart;
         }
 
@@ -308,8 +311,12 @@
         function migrateLegacySaveData() {
             try {
                 if (localStorage.getItem(bestTimeKey) === null) {
-                    const oldBest = localStorage.getItem(legacyBestTimeKey);
-                    if (oldBest !== null) localStorage.setItem(bestTimeKey, oldBest);
+                    const rawOldBest = localStorage.getItem(legacyBestTimeKey);
+                    if (rawOldBest !== null) {
+                        // Normalize while migrating so the new key only ever holds a clean number.
+                        const oldBest = Number(rawOldBest);
+                        if (Number.isFinite(oldBest) && oldBest >= 0) localStorage.setItem(bestTimeKey, String(oldBest));
+                    }
                 }
                 const savedBest = Number(localStorage.getItem(bestTimeKey));
                 if (Number.isFinite(savedBest) && savedBest >= achievementTime && localStorage.getItem(achievementKey) === null) {
@@ -563,7 +570,7 @@
             const canvas = document.getElementById('game-canvas');
             renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio > 1 ? 1 : 1); // Keep res low for retro feel
+            renderer.setPixelRatio(1); // Keep res low for retro feel
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x050000); // Pitch black/very dark red
@@ -581,6 +588,15 @@
             const pointLight = new THREE.PointLight(0xff0000, 1, 50);
             camera.add(pointLight); // Light follows player
             scene.add(camera);
+
+            // Reusable glow lights (see createFloorGlow). Kept in the scene, toggled on demand,
+            // so kills reuse a fixed set instead of adding/removing a PointLight every time.
+            for (let i = 0; i < 8; i++) {
+                const glowLight = new THREE.PointLight(0xff2a00, 0, 14, 2.2);
+                glowLight.visible = false;
+                scene.add(glowLight);
+                glowLightPool.push({ light: glowLight, inUse: false });
+            }
 
             // Endless-looking arena tile. It recenters far outside the fog, so no edge is visible.
             infiniteArena = new THREE.Group();
@@ -609,6 +625,13 @@
             document.addEventListener('keyup', onKeyUp);
             document.addEventListener('mousedown', onMouseDown);
             document.addEventListener('mouseup', onMouseUp);
+            // Held keys are only cleared on keyup; a keyup delivered to another window while
+            // a key is down would otherwise leave the player auto-walking on the next lock.
+            window.addEventListener('blur', clearHeldInput);
+            document.addEventListener('pointerlockerror', onPointerLockError);
+            // If the GPU context is lost the canvas cannot render; forfeit rather than let the
+            // timer keep counting and enemies keep spawning while the player is blind.
+            canvas.addEventListener('webglcontextlost', onContextLost, false);
 
             // Setup UI Buttons
             document.getElementById('start-btn').addEventListener('click', startGame);
@@ -623,14 +646,9 @@
             });
 
             controls.addEventListener('unlock', function () {
-                if (isPlaying) {
-                    // Paused essentially, but let's just show start screen
-                    isPlaying = false;
-                    isShooting = false;
-                    document.getElementById('start-screen').classList.remove('hidden');
-                    document.getElementById('crosshair').style.display = 'none';
-                    document.getElementById('timer-display').style.display = 'none';
-                }
+                // Leaving the arena mid-run forfeits. Pausing must not be usable to freeze
+                // incoming threats (and the death check) and plan a risk-free escape.
+                if (isPlaying) triggerGameOver();
             });
             migrateLegacySaveData();
             updateBestDisplays();
@@ -669,6 +687,27 @@
 
         function onMouseUp(event) {
             if (event.button === 0) isShooting = false;
+        }
+
+        function clearHeldInput() {
+            keys.w = keys.a = keys.s = keys.d = false;
+            isShooting = false;
+        }
+
+        function onPointerLockError() {
+            // Lock request failed (unsupported, or a browser cooldown). Don't leave the player
+            // stuck on a hidden HUD with no way back in — restore the start screen.
+            if (!controls.isLocked && !isGameOver) {
+                isPlaying = false;
+                document.getElementById('start-screen').classList.remove('hidden');
+                document.getElementById('crosshair').style.display = 'none';
+                document.getElementById('timer-display').style.display = 'none';
+            }
+        }
+
+        function onContextLost(event) {
+            event.preventDefault(); // let Three.js restore the context on 'webglcontextrestored'
+            if (isPlaying) triggerGameOver();
         }
 
         function onWindowResize() {
@@ -746,7 +785,6 @@
         // Simple line particles for explosions
         const particleGeo = new THREE.BufferGeometry();
         particleGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0,0,0, 0,0,0]), 3));
-        const particleMat = new THREE.LineBasicMaterial({ color: 0xff5500, transparent: true });
         const floorGlowGeo = new THREE.CircleGeometry(1, 28);
         const floorGlowMat = new THREE.MeshBasicMaterial({
             color: 0xff4a00,
@@ -790,18 +828,31 @@
             glow.renderOrder = 4;
             scene.add(glow);
 
-            const light = new THREE.PointLight(0xff2a00, 0.9 * strength, 11 + strength * 3, 2.2);
-            light.position.set(position.x, 1.0, position.z);
-            scene.add(light);
+            // Borrow a pooled light if one is free (bounded); the additive glow mesh carries the
+            // effect regardless, so running out simply means this glow has no dynamic light.
+            let poolEntry = null;
+            for (let i = 0; i < glowLightPool.length; i++) {
+                if (!glowLightPool[i].inUse) { poolEntry = glowLightPool[i]; break; }
+            }
+            let maxIntensity = 0;
+            if (poolEntry) {
+                poolEntry.inUse = true;
+                const light = poolEntry.light;
+                light.distance = 11 + strength * 3;
+                light.intensity = 0.9 * strength;
+                light.position.set(position.x, 1.0, position.z);
+                light.visible = true;
+                maxIntensity = light.intensity;
+            }
 
             floorGlows.push({
                 mesh: glow,
-                light,
+                poolEntry,
                 baseScale: glow.scale.x,
                 life: 1.35,
                 maxLife: 1.35,
                 maxOpacity: 0.34 + strength * 0.2,
-                maxIntensity: light.intensity
+                maxIntensity
             });
 
             const splinterCount = 5 + Math.floor(strength * 2);
@@ -875,7 +926,7 @@
         }
 
         function decorateEnemy(enemy, type) {
-            const visual = { eyes: [], rings: [], glowParts: [enemy] };
+            const visual = { eyes: [], glowParts: [enemy] };
             enemy.userData.visual = visual;
 
             if (type === 'chaser' || type === 'spawner') {
@@ -917,12 +968,11 @@
         }
 
         function setEnemyGlow(root, intensity) {
-            root.traverse(obj => {
-                const mats = obj.material ? (Array.isArray(obj.material) ? obj.material : [obj.material]) : [];
-                mats.forEach(mat => {
-                    if (mat.emissive) mat.emissiveIntensity = intensity * (obj.userData.role === 'horn' ? 0.55 : 1);
-                });
-            });
+            // Iterate the emissive-material list cached at spawn (see spawnEnemy) instead of
+            // traversing + allocating a per-object array every frame.
+            const mats = root.userData.emissiveMats;
+            if (!mats) return;
+            for (let i = 0; i < mats.length; i++) mats[i].emissiveIntensity = intensity;
         }
 
         function animateEnemyVisual(enemyRecord, pulse, nearThreat, audioPanic, delta, playerPos) {
@@ -939,21 +989,10 @@
                     eye.scale.setScalar(eyeScale);
                     eye.material.opacity = 0.72 + pulse * 0.22 + nearThreat * 0.06 + emitCharge * 0.14;
                 });
-                visual.rings.forEach((ring, index) => {
-                    ring.rotation.z += delta * (index === 0 ? 1.2 : -1.45);
-                    ring.material.opacity = 0.28 + pulse * 0.18 + nearThreat * 0.24;
-                });
             } else if (enemyRecord.type === 'diver') {
                 const charge = enemyRecord.charge || 0;
                 root.lookAt(playerPos);
                 root.rotateZ(Math.sin(gameTime * 22 + enemyRecord.wobbleOffset) * (0.18 + audioPanic * 0.2 + charge * 0.16));
-                visual.rings.forEach(ring => {
-                    const trailScale = 1 + nearThreat * 0.55 + pulse * 0.2 + charge * 0.42;
-                    ring.scale.setScalar(trailScale);
-                    if (ring.material && ring.material.opacity !== undefined) {
-                        ring.material.opacity = 0.18 + nearThreat * 0.34 + audioPanic * 0.2 + charge * 0.42;
-                    }
-                });
                 visual.glowParts.forEach(part => {
                     if (part.material && part.material.opacity !== undefined) {
                         part.material.opacity = 0.82 + charge * 0.18;
@@ -1064,6 +1103,13 @@
             enemy.material.emissiveIntensity = 0.7;
             decorateEnemy(enemy, profile.type);
 
+            // Cache emissive materials once so setEnemyGlow doesn't traverse every frame.
+            enemy.userData.emissiveMats = [];
+            enemy.traverse(obj => {
+                const mats = obj.material ? (Array.isArray(obj.material) ? obj.material : [obj.material]) : [];
+                mats.forEach(mat => { if (mat.emissive) enemy.userData.emissiveMats.push(mat); });
+            });
+
             // Add 3D Positional Audio to the enemy
             let sound = null;
             let nearSound = null;
@@ -1129,6 +1175,8 @@
 
         }
 
+        const activeOneShots = [];
+
         function playOneShotAt(position, buffer, volume = 0.8, refDistance = 12, rolloff = 2) {
             if (!audioListener || !buffer || !scene) return;
             const carrier = new THREE.Object3D();
@@ -1138,15 +1186,28 @@
             sound.setRefDistance(refDistance);
             sound.setRolloffFactor(rolloff);
             sound.setDistanceModel('exponential');
+            sound.panner.panningModel = 'HRTF'; // match the enemy loops so this cue localizes as precisely
             setSpatialVolume(sound, volume);
             carrier.add(sound);
             scene.add(carrier);
             sound.play();
-            setTimeout(() => {
-                if (sound.isPlaying) sound.stop();
-                carrier.remove(sound);
-                scene.remove(carrier);
-            }, 700);
+            // Track it so a death/reset can cut the tail instead of it playing over the transition.
+            const entry = { sound, carrier, timer: null };
+            entry.timer = setTimeout(() => finishOneShot(entry), 700);
+            activeOneShots.push(entry);
+        }
+
+        function finishOneShot(entry) {
+            clearTimeout(entry.timer);
+            if (entry.sound.isPlaying) entry.sound.stop();
+            entry.carrier.remove(entry.sound);
+            scene.remove(entry.carrier);
+            const idx = activeOneShots.indexOf(entry);
+            if (idx !== -1) activeOneShots.splice(idx, 1);
+        }
+
+        function stopAllOneShots() {
+            for (let i = activeOneShots.length - 1; i >= 0; i--) finishOneShot(activeOneShots[i]);
         }
 
         function spawnShards(position, count) {
@@ -1172,8 +1233,7 @@
                     baseScale,
                     landed: false,
                     landPulse: 0,
-                    life: 8,
-                    maxLife: 8
+                    life: 8
                 });
             }
         }
@@ -1181,6 +1241,7 @@
         function collectShard(index) {
             const shard = shards[index];
             scene.remove(shard.mesh);
+            shard.mesh.material.dispose(); // shardGeo is shared; dispose only the per-shard cloned material
             shards.splice(index, 1);
             shardCount++;
             triggerSynth(pickupSynth, "C7", "64n");
@@ -1250,12 +1311,17 @@
             }
         }
 
+        // Reusable scratch vectors so the per-frame enemy loop allocates nothing.
+        const _cameraForward = new THREE.Vector3();
+        const _toEnemyFlat = new THREE.Vector3();
+        const _dir = new THREE.Vector3();
+        const _side = new THREE.Vector3();
+
         function updateEnemies(delta) {
             const playerPos = camera.position;
-            const cameraForward = new THREE.Vector3();
-            camera.getWorldDirection(cameraForward);
-            cameraForward.y = 0;
-            cameraForward.normalize();
+            camera.getWorldDirection(_cameraForward);
+            _cameraForward.y = 0;
+            _cameraForward.normalize();
 
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
@@ -1264,13 +1330,13 @@
                 const threat = smoothstep(1 - (distanceToPlayer - e.hitRadius) / (warningStart - e.hitRadius));
                 const nearThreat = smoothstep(1 - (distanceToPlayer - e.hitRadius) / (e.nearRadius - e.hitRadius));
                 const contactThreat = Math.pow(smoothstep(1 - (distanceToPlayer - e.hitRadius) / (5.5 - e.hitRadius)), 1.35);
-                const toEnemyFlat = e.mesh.position.clone().sub(playerPos);
-                toEnemyFlat.y = 0;
-                if (toEnemyFlat.lengthSq() > 0.0001) toEnemyFlat.normalize();
-                const rearThreat = clamp01(-cameraForward.dot(toEnemyFlat)) * nearThreat;
+                _toEnemyFlat.copy(e.mesh.position).sub(playerPos);
+                _toEnemyFlat.y = 0;
+                if (_toEnemyFlat.lengthSq() > 0.0001) _toEnemyFlat.normalize();
+                const rearThreat = clamp01(-_cameraForward.dot(_toEnemyFlat)) * nearThreat;
                 const audioPanic = clamp01(contactThreat + rearThreat * 0.45);
                  
-                const dir = new THREE.Vector3().subVectors(playerPos, e.mesh.position);
+                const dir = _dir.subVectors(playerPos, e.mesh.position);
                 if (e.type === 'chaser') dir.y *= 0.15;
                 dir.normalize();
                 if (e.type === 'spawner') {
@@ -1291,7 +1357,7 @@
                             playOneShotAt(e.mesh.position, oneShotAudioBuffers && oneShotAudioBuffers.diverCharge, 0.86, 20, 1.85);
                             e.chargePlayed = true;
                         }
-                        const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+                        const side = _side.set(-dir.z, 0, dir.x).normalize();
                         const drift = Math.sin((age / e.circleTime) * Math.PI) * 1.45 + 0.45;
                         e.mesh.position.addScaledVector(side, e.speed * drift * delta);
                         e.mesh.position.addScaledVector(dir, e.speed * 0.16 * delta);
@@ -1335,10 +1401,11 @@
                     return; // Stop processing to avoid errors after death
                 }
 
-                // Check collision with projectiles
+                // Check collision with projectiles (squared distance avoids a sqrt per test)
+                const hitRadiusSq = e.hitRadius * e.hitRadius;
                 for (let j = projectiles.length - 1; j >= 0; j--) {
                     const p = projectiles[j];
-                    if (e.mesh.position.distanceTo(p.mesh.position) < e.hitRadius) {
+                    if (e.mesh.position.distanceToSquared(p.mesh.position) < hitRadiusSq) {
                         e.health--;
                         createExplosion(p.mesh.position, e.hitColor || 0xff0000);
                         if (e.health <= 0) {
@@ -1377,9 +1444,19 @@
 
                 if (p.life <= 0) {
                     scene.remove(p.mesh);
+                    // Each particle owns a unique cloned/fresh geometry + material; free the GPU handles.
+                    p.mesh.geometry.dispose();
+                    p.mesh.material.dispose();
                     particles.splice(i, 1);
                 }
             }
+        }
+
+        function releaseGlowLight(poolEntry) {
+            if (!poolEntry) return;
+            poolEntry.light.visible = false;
+            poolEntry.light.intensity = 0;
+            poolEntry.inUse = false;
         }
 
         function updateFloorGlows(delta) {
@@ -1389,11 +1466,11 @@
                 const t = Math.max(0, glow.life / glow.maxLife);
                 glow.mesh.material.opacity = glow.maxOpacity * t;
                 glow.mesh.scale.setScalar(glow.baseScale * (1 + (1 - t) * 0.55));
-                glow.light.intensity = glow.maxIntensity * t * t;
+                if (glow.poolEntry) glow.poolEntry.light.intensity = glow.maxIntensity * t * t;
                 if (glow.life <= 0) {
                     scene.remove(glow.mesh);
-                    scene.remove(glow.light);
                     glow.mesh.material.dispose();
+                    releaseGlowLight(glow.poolEntry);
                     floorGlows.splice(i, 1);
                 }
             }
@@ -1440,6 +1517,7 @@
                 shard.mesh.material.opacity = Math.max(0, Math.min(0.96, 0.96 * fade));
                 if (shard.life <= 0) {
                     scene.remove(shard.mesh);
+                    shard.mesh.material.dispose();
                     shards.splice(i, 1);
                 }
             }
@@ -1455,6 +1533,7 @@
                 if (e.sound && e.sound.isPlaying) e.sound.stop();
                 if (e.nearSound && e.nearSound.isPlaying) e.nearSound.stop();
             });
+            stopAllOneShots();
         }
 
         function clearActiveRun() {
@@ -1462,13 +1541,21 @@
                 scene.remove(e.mesh);
                 disposeEnemyMaterials(e.mesh);
             });
+            // Projectiles share projGeometry + projMaterial/pierceProjMaterial, so never dispose those.
             projectiles.forEach(p => scene.remove(p.mesh));
-            shards.forEach(s => scene.remove(s.mesh));
-            particles.forEach(p => scene.remove(p.mesh));
+            shards.forEach(s => {
+                scene.remove(s.mesh);
+                s.mesh.material.dispose(); // shardGeo is shared; only the cloned material is per-shard
+            });
+            particles.forEach(p => {
+                scene.remove(p.mesh);
+                p.mesh.geometry.dispose(); // every particle geometry is a clone or a fresh BufferGeometry
+                p.mesh.material.dispose();
+            });
             floorGlows.forEach(g => {
                 scene.remove(g.mesh);
-                scene.remove(g.light);
                 if (g.mesh.material && g.mesh.material.dispose) g.mesh.material.dispose();
+                releaseGlowLight(g.poolEntry);
             });
 
             enemies.length = 0;
@@ -1517,11 +1604,32 @@
             }, 150);
         }
 
+        function isLikelyUnsupported() {
+            // This is a pointer-lock + mouse-look + WASD game. Touch devices and browsers
+            // without the Pointer Lock API (e.g. iOS Safari) cannot play it.
+            const noPointerLock = typeof document.body.requestPointerLock !== 'function';
+            const coarsePointer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+            return noPointerLock || coarsePointer;
+        }
+
+        function showUnsupportedMessage() {
+            const note = document.getElementById('desktop-note');
+            if (note) note.classList.remove('hidden');
+            const btn = document.getElementById('start-btn');
+            if (btn) btn.textContent = 'Desktop Only';
+        }
+
         function startGame() {
+            if (isLikelyUnsupported()) { showUnsupportedMessage(); return; }
             if(!shootSynth) initAudio(); // init on first user interaction
             lastTime = performance.now();
-            if (gameTime === 0) lastSpawnTime = lastTime;
-            controls.lock();
+            lastSpawnTime = lastTime; // start the spawn clock fresh on every run
+            try {
+                controls.lock();
+            } catch (err) {
+                // Older/mobile browsers can throw synchronously from requestPointerLock.
+                showUnsupportedMessage();
+            }
         }
 
         function resetGame() {
@@ -1546,7 +1654,6 @@
             gameTime = 0;
             shardCount = 0;
             shotCount = 0;
-            spawnRate = 2000;
             lastSpawnTime = performance.now();
             lastShotTime = 0;
             lastTime = performance.now();
@@ -1555,14 +1662,18 @@
             document.getElementById('new-best').classList.add('hidden');
             document.getElementById('achievement-line').classList.add('hidden');
             startGame();
-            isPlaying = true;
+            // isPlaying is set by the pointer-lock 'lock' handler once the lock is confirmed,
+            // matching startGame(); do not force it true here or a failed lock leaves us
+            // "playing" with the HUD hidden and no control.
         }
 
         function animate() {
             requestAnimationFrame(animate);
 
             const timeNow = performance.now();
-            const delta = (timeNow - lastTime) / 1000;
+            // Clamp the frame delta: a GC pause or hitch must not tunnel a lunging enemy
+            // straight through the player's hit test or blow up the friction integration.
+            const delta = Math.min((timeNow - lastTime) / 1000, 0.05);
             lastTime = timeNow;
 
             if (isPlaying) {
@@ -1570,9 +1681,9 @@
                 document.getElementById('timer-display').innerText = gameTime.toFixed(4);
 
                 // Handle Spawning - ramp up difficulty over time
-                spawnRate = currentSpawnInterval();
+                const spawnRate = currentSpawnInterval();
                 if (timeNow - lastSpawnTime > spawnRate) {
-                    spawnEnemy(chooseEnemyType());
+                    spawnEnemy(); // type defaults to chooseEnemyType()
                     lastSpawnTime = timeNow;
                 }
 
