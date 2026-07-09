@@ -84,7 +84,8 @@ function boot() {
                 return;
               }
               door.setOpen(!door.isOpen);
-              if (door.isOpen) audio.doorOpen(); else audio.doorClose();
+              if (door.isOpen) { audio.doorOpen(); ctx.scares?.maybeDoorReveal(door, player.pos); }
+              else audio.doorClose();
             },
           };
           interactions.targets.push(m);

@@ -301,6 +301,30 @@ export class AudioEngine {
     src.start(t);
   }
 
+  // "someone is right there" — a low sub-swell under a sharp breath-transient.
+  presence() {
+    if (!this.started) return;
+    const t = this.now();
+    // sub swell
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(72, t);
+    o.frequency.exponentialRampToValueAtTime(36, t + 0.9);
+    const g = this.ctx.createGain();
+    this.env(g, t, 0.02, 0.5, 0.95);
+    o.connect(g).connect(this.master);
+    o.start(t); o.stop(t + 1.2);
+    // sharp close transient (a caught breath)
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer(0.5);
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 3000; bp.Q.value = 1.6;
+    const g2 = this.ctx.createGain();
+    this.env(g2, t, 0.006, 0.14, 0.28);
+    src.connect(bp).connect(g2).connect(this.master);
+    src.start(t);
+  }
+
   ghostChord(vol = 0.14) {
     if (!this.started) return;
     const t = this.now();
