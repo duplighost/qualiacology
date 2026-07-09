@@ -176,8 +176,12 @@ export function drawFrame() {
 
   // combo "on fire" edge-glow — ambient heat that builds + shifts colour with your
   // score multiplier (the screen itself starts burning as you chain kills).
+  const redT = state.run?.redlineT || 0;
   const combo = state.run?.combo || 1;
-  if (combo > 2.2 && !reduced()) {
+  // Only one full-screen surge glow at a time: while REDLINE burns it owns the screen, so
+  // the combo edge-glow stands down. Stacking both (plus the soft-light grade) was the core
+  // of the "can't read the screen" haze.
+  if (combo > 2.2 && !reduced() && redT <= 0) {
     const k = Math.min(1, (combo - 2.2) / 8);
     const pulse = 0.7 + 0.3 * Math.sin(performance.now() / 1000 * 6);
     const col = combo > 9 ? '255,255,255' : combo > 5 ? '255,150,240' : '255,210,120';
@@ -189,8 +193,8 @@ export function drawFrame() {
   }
 
   // REDLINE surge: the screen goes electric — a pulsing hot edge + a thin top/bottom
-  // warning band. Hyperspeed made visible.
-  const redT = state.run?.redlineT || 0;
+  // warning band. Hyperspeed made visible. (redT is computed above so the combo glow can
+  // yield to it.)
   if (redT > 0 && !reduced()) {
     const now = performance.now() / 1000, pulse = 0.6 + 0.4 * Math.sin(now * 16);
     const fade = Math.min(1, redT / 0.6);
@@ -887,7 +891,9 @@ function drawCavernBackdrop(route, r, t, ux, uy, nx, ny, len, liftU, ptAt, vis) 
 
 // The express escape rail: an unmissable white-hot grind line from where you cleared
 // the room to the portal, with chevrons streaming toward the exit so the way home reads
-// instantly. Drawn over everything; lifts with the player's level so it's always visible.
+// instantly. Drawn over the world geometry (rails/surfaces/tiers) but UNDER the entities,
+// bullets and particles that follow; it lifts with the player's level. (It uses additive
+// 'lighter' compositing, so drawing it over sprites would wash them white — hence under.)
 function drawEscapeRail(room, pal, p) {
   const r = room.escapeRail;
   if (!r || r.used) return;
@@ -2031,12 +2037,12 @@ function drawBullets(room) {
       const hx = b.x + ux * b.r * 0.6, hy = b.y + uy * b.r * 0.6;
       ctx.lineCap = 'round';
       ctx.globalCompositeOperation = 'lighter';   // additive → neon
-      ctx.shadowColor = b.color; ctx.shadowBlur = 16;
+      ctx.shadowColor = b.color; ctx.shadowBlur = state.lowFx ? 0 : 16; // up to 210 player bolts — drop per-bolt blur under load
       ctx.globalAlpha = 0.38; ctx.strokeStyle = b.color; ctx.lineWidth = b.r * 2.7;
       ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
       ctx.globalAlpha = 0.95; ctx.lineWidth = b.r * 1.5;
       ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
-      ctx.shadowBlur = 8; ctx.globalAlpha = 1; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = b.r * 0.62;
+      ctx.shadowBlur = state.lowFx ? 0 : 8; ctx.globalAlpha = 1; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = b.r * 0.62;
       ctx.beginPath(); ctx.moveTo(b.x - ux * len * 0.6, b.y - uy * len * 0.6); ctx.lineTo(hx, hy); ctx.stroke();
       ctx.fillStyle = '#ffffff';
       ctx.beginPath(); ctx.arc(hx, hy, b.r * 0.7, 0, TAU); ctx.fill();
@@ -2046,7 +2052,7 @@ function drawBullets(room) {
     }
 
     // ── enemy / reflected shots: glowing orb (+ short streak) ──
-    ctx.fillStyle = b.color; ctx.shadowColor = b.color; ctx.shadowBlur = 13;
+    ctx.fillStyle = b.color; ctx.shadowColor = b.color; ctx.shadowBlur = state.lowFx ? 0 : 13; // up to 240 enemy bolts — drop per-bolt blur under load
     if (sp > 60) {
       ctx.globalAlpha = 0.4; ctx.strokeStyle = b.color; ctx.lineWidth = b.r * 1.1; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(b.x - ux * b.r * 3.2, b.y - uy * b.r * 3.2); ctx.lineTo(b.x, b.y); ctx.stroke();

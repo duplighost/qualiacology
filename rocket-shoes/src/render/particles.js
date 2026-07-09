@@ -53,13 +53,13 @@ export function drawParticles(ctx, room) {
       const rad = p.r + (1 - a) * p.grow;
       ctx.globalAlpha = a * 0.7;
       ctx.strokeStyle = p.color; ctx.lineWidth = 2.5;
-      ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+      ctx.shadowColor = p.color; ctx.shadowBlur = state.lowFx ? 0 : 8; // per-particle blur is pricey at scale — drop it under load
       ctx.beginPath(); ctx.ellipse(p.x, p.y, rad, rad * 0.5, 0, 0, TAU); ctx.stroke();
       continue;
     }
     ctx.globalAlpha = a;
     ctx.fillStyle = p.color;
-    ctx.shadowColor = p.color; ctx.shadowBlur = 10;
+    ctx.shadowColor = p.color; ctx.shadowBlur = state.lowFx ? 0 : 10; // per-particle blur is pricey at scale — drop it under load
     ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.1, p.r * a), 0, TAU); ctx.fill();
   }
   ctx.globalAlpha = 1; ctx.shadowBlur = 0;

@@ -155,7 +155,7 @@ export function rollRoom(run, round) {
     - (partitioned ? 2 : 0) - (landmark ? 2 : 0), partitioned ? 4 : 6, coverCap);
   const spots = LAYOUTS[layoutId](room, rng, count);
   for (const s of spots) {
-    if (dist(s.x, s.y, px, py) < ROOM.SPAWN_CLEAR) continue;
+    if (dist(s.x, s.y, px, py) < ROOM.SPAWN_CLEAR || dist(s.x, s.y, portalX, portalY) < 150) continue; // keep cover off the exit too (was spawn-only; a solid non-wall circle could land on the portal, which reachableFrom can't see)
     let o;
     if (s.rect) {
       const w = s.wide ? rand(rng, 155, 260) : s.tall ? rand(rng, 72, 112) : rand(rng, 105, 210);
@@ -174,7 +174,7 @@ export function rollRoom(run, round) {
       y: rand(rng, room.wall + 140, room.h - room.wall - 170),
       rad: rand(rng, 42, 66), style: biome.obstacleStyle,
     };
-    if (dist(o.x, o.y, px, py) < ROOM.SPAWN_CLEAR || !fits(room, o)) continue;
+    if (dist(o.x, o.y, px, py) < ROOM.SPAWN_CLEAR || dist(o.x, o.y, portalX, portalY) < 150 || !fits(room, o)) continue;
     room.obstacles.push(o);
   }
 
@@ -210,7 +210,7 @@ export function rollRoom(run, round) {
         rad: rand(rng, 18, 26), style: 'glassNode',
         breakable: true, species: 'volatileShard', hp: SPECIES.volatileShard.hp, volatile: true,
       };
-      if (dist(o.x, o.y, px, py) < 220 || !fits(room, o)) continue;
+      if (dist(o.x, o.y, px, py) < 220 || dist(o.x, o.y, portalX, portalY) < 150 || !fits(room, o)) continue;
       room.obstacles.push(o);
     }
   }
@@ -798,9 +798,13 @@ function ensureMinimumVerticality(room, rng, px, py, portalX, portalY) {
   seedOpenRooftopFallback(room, rng, px, py, portalX, portalY, minRoofs, cap);
   pruneUnreachableTiers(room, px, py);
   if (room.tiers.length > before || !room.vents?.length || !room.skyRails?.length) {
-    room.vents = [];
-    room.skyRails = [];
-    room._nextVentId = 1;
+    // Rebuild ONLY the ordinary tier-to-tier rails/vents. The special off-route rails
+    // (skyway / underground / spire) carry the whole secret — the jewel is collected via
+    // rail.route in the ride code — so clobbering all of skyRails here deleted them and
+    // orphaned room.offRoutes, making the off-map jewel permanently uncollectable. Filter,
+    // don't wipe. (Don't reset _nextVentId either — kept vents would collide with new ids.)
+    room.skyRails = (room.skyRails || []).filter(r => r.route || r.spiral || r.trunk);
+    room.vents = (room.vents || []).filter(v => v.kind !== 'updraft' && v.kind !== 'dropfan');
     if (room.tiers.length) {
       seedVents(room, rng, px, py, portalX, portalY);
       seedSkyRails(room, rng);
@@ -1395,6 +1399,7 @@ function buildAnnex(room, rng) {
     const shellBox = { type: 'rect', x: r.x - t, y: r.y - t, w: r.w + t * 2, h: r.h + t * 2 };
     if (nearProtectedFlowLane(room, shellBox, -70, 'annex')) continue;
     if (!fits(room, shellBox, 28)) continue;
+    if (!clearOfPoint(shellBox, room.w / 2, room.h * 0.20, 150)) continue;   // never drop the sealed box on the exit — the portal must not sit inside/against the vault
     const reach = reachableFrom(room, room.w / 2, room.h * 0.66);
     if (!reach.has(out.x, out.y)) continue;   // the door must be approachable from spawn
     rect = r;
@@ -1587,11 +1592,16 @@ function seedUnderground(room, rng, px, py, portalX, portalY) {
   // The pit sits in the lower city and the rail PLUNGES straight down off the bottom edge
   // into the cavern — world-down and screen-down (negative lift) agree, so it reads as a
   // real dive into a hole rather than fighting itself.
+  const reach = reachableFrom(room, px, py);
   for (let attempt = 0; attempt < 50; attempt++) {
     const ox = rand(rng, margin, room.w - margin);
     const oy = rand(rng, room.h * 0.60, room.h - margin);
     if (dist(ox, oy, px, py) < ROOM.SPAWN_CLEAR + 120 || dist(ox, oy, portalX, portalY) < 280) continue;
-    if (pointBlockedForSpawn(room, ox, oy, 150) || onTier(ox, oy)) continue;
+    // The pit's ground launch point must actually CONNECT to spawn. pointBlockedForSpawn only
+    // proves it's ~150px clear of obstacles — a pocket walled off by a floorplan/tier can be
+    // clear yet unreachable, stranding the whole underground secret. Its siblings (cloud run,
+    // skyway) validate reachability; this one didn't.
+    if (pointBlockedForSpawn(room, ox, oy, 150) || onTier(ox, oy) || !reach.has(ox, oy)) continue;
     let dx = rand(rng, -0.34, 0.34), dy = 1; const dn = Math.hypot(dx, dy); dx /= dn; dy /= dn; // steep plunge down
     buildOffRoute(room, rng, {
       kind: 'under', ex0: ox, ey0: oy, dx, dy, length: (room.h - oy) + rand(rng, 1500, 2100),

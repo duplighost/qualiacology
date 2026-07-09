@@ -25,7 +25,7 @@ export function spawnBullet(room, owner, x, y, vx, vy, r, damage, life, color, o
     : (view.mobile ? CAPS.PLAYER_BULLETS.mobile : CAPS.PLAYER_BULLETS.desktop);
   let count = 0;
   for (const b of room.bullets) if (b.owner === owner) count++;
-  if (count > cap) return null;
+  if (count >= cap) return null; // >= not >: the ceiling is `cap`, so cap+1 was slipping through
   const b = { owner, x, y, vx, vy, r, damage, life, max: life, color,
     pierce: opts.pierce || 0, bounces: opts.bounces || 0, level: opts.level || 0, hitIds: null, ...opts };
   // Freeze the bullet's drawn height at its muzzle's roof height so it doesn't teleport

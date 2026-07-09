@@ -121,11 +121,11 @@ export function tryBuyShop(pointer = null, opts = {}) {
 }
 
 function chooseShopItem(shop) {
-  const ids = (shop.stock && shop.stock.length ? shop.stock : [shop.itemId]).filter(Boolean);
-  const available = ids.map(itemById).filter(Boolean);
-  if (!available.length) return itemById(shop.itemId);
-  const rng = state.run?.rng || Math.random;
-  return available[Math.floor(rng() * available.length)] || available[0];
+  // Grant exactly the item the kiosk is ADVERTISING. The kiosk is drawn in itemById(shop.itemId)'s
+  // colour + core (draw.js), so rolling a random OTHER item from shop.stock at buy time both handed
+  // you the wrong item ~2/3 of the time AND consumed the seeded run RNG at a player-controlled
+  // moment — desyncing every later generation roll. shop.itemId is set to stock[0] at seed time.
+  return itemById(shop.itemId) || (shop.stock || []).map(itemById).find(Boolean) || null;
 }
 
 function dashTouchesShop(p, shop) {

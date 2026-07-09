@@ -194,8 +194,12 @@ export function updatePlayer(p, move, aim, room, dt) {
     // always grabs the rail home instead of getting bounced up a launcher.
     const tookExpress = room.escapeRail && !room.escapeRail.used && tryLatchEscapeRail(p, room, oldX, oldY);
     if (!tookExpress) {
-      maybeVentLaunch(p, room, oldX, oldY, true);
+      // Rails resolve BEFORE vents on a dash: a dash aimed at a grind rail should grind it,
+      // not get "eaten" by a launcher that merely sits near the path (vents caught within
+      // ~112px). The vent only fires if no rail latched, so a deliberate dash-hop off open
+      // ground still works.
       maybeLatchRail(p, room, oldX, oldY, p._dashStartLevel ?? oldLevel);
+      if (!p.rail && !p.air) maybeVentLaunch(p, room, oldX, oldY, true);
     }
     performDashCut(p, room, PLAYER.DASH_SWEEP_RANGE || PLAYER.DASH_HIT_RANGE); // cut enemies along the travel, not just at launch
   } else {
@@ -701,7 +705,11 @@ function tryLatchEscapeRail(p, room, x0, y0, requireToward = false) {
   // Auto-latch (just carrying speed, no dash) must only fire when you're actually
   // heading for the exit — otherwise crossing/backtracking near the line would yank
   // you home against your will. A deliberate dash skips this (the dash IS the intent).
-  if (requireToward) {
+  // A dash must also be heading portal-ward to grab the express rail. The dash-time caller
+  // (updatePlayer) didn't pass requireToward, so ANY dash near the long escape line — even
+  // dashing away to reposition or fight a straggler — used to yank you home. Treat a dash as
+  // an implicit "toward" gate here so it only latches when the dash actually points at the exit.
+  if (requireToward || p.dashT > 0) {
     const sp = Math.hypot(p.vx, p.vy) || 1;
     const tn = norm(r.x2 - p.x, r.y2 - p.y);
     if ((p.vx * tn.x + p.vy * tn.y) / sp < 0.4) return false; // not moving portal-ward

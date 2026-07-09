@@ -3,7 +3,7 @@
 
 export const TAU = Math.PI * 2;
 export const SAVE_KEY = 'oneRoomNoMoon.v1';
-export const VERSION = '2.6.0-breakneck-skyline';
+export const VERSION = '2.6.1-smooth-pass';
 
 // px a platform (level 1) rises; per-building height = TIER_LIFT * tier.rise. Shared by
 // the generator (roomRoller) and the renderer (draw) so building heights stay in sync.
@@ -37,9 +37,15 @@ export const PLAYER = {
   // Art-space gun offsets. firePlayer multiplies these by DRAW_SCALE so bullets leave the shrunken muzzle.
   EMITTER_Y: -16, EMITTER_LEN: 32,
   CRIT: 0.03, CRIT_MULT: 1.8,
-  // the dash is the centerpiece: long, far, invincible throughout, hits hard+wide.
-  // Reach + glide carried over from the faster "good speed / big rooms" fork.
-  DASH_IMPULSE: 1850, DASH_DUR: 0.38, DASH_CD: 0.16, DASH_IFRAMES: 0.62,
+  // the dash is the centerpiece: long, far, hits hard+wide. Reach + glide carried over
+  // from the faster "good speed / big rooms" fork.
+  // DASH_IFRAMES is deliberately SHORTER than DASH_DUR (0.34 < 0.38): the dash stays
+  // invincible for almost all of its travel, but a brief exposed window opens between
+  // back-to-back dashes so mashing dash can no longer grant PERMANENT invincibility.
+  // (Kills force dashCd to 0 in many places — combat/rail/vent/shop — so the i-frame
+  // length, not the cooldown, is the real gate. Bump toward 0.38 for a fuller invuln at
+  // the cost of reopening the mash-to-win exploit.)
+  DASH_IMPULSE: 1850, DASH_DUR: 0.38, DASH_CD: 0.16, DASH_IFRAMES: 0.34,
   DASH_GLIDE: 1.35, DASH_HIT_RANGE: 255, DASH_SWEEP_RANGE: 236, DASH_HIT_MULT: 1.75, DASH_KNOCK: 860,
   DASH_KILL_REFUND: 0.145,   // every kill feeds the dash loop a little
   // Slight aim-assist: when you dash with an enemy almost dead ahead, curve gently toward
@@ -105,8 +111,8 @@ export const FX = {
   HIT_PAUSE: { shot: 8, chain: 12, dash: 11, pulse: 24, kill: 18, dashKill: 26, boss: 48, hurt: 60 }, // ms
 };
 
-export const BLOOM = { ALPHA: 0.26, FILTER: 'blur(13px) saturate(1.26)' };
+// blur radius trimmed 13px→7px: a full-screen canvas-2D blur every frame is the render
+// loop's single biggest cost; the tighter radius keeps the neon bloom but eases the composite.
+export const BLOOM = { ALPHA: 0.26, FILTER: 'blur(7px) saturate(1.26)' };
 
 export const ANNEX = { CHANCE: 0.48, AMBUSH: 0.45 };
-
-export const STREAK_NAMES = ['', '', '×2', '×3', '', '×5', '', '', '×8'];

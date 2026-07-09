@@ -1,5 +1,5 @@
 // Combo, streaks, bonuses, bests.
-import { COMBO, SCORE, STREAK_NAMES, TIER_LIFT } from '../config.js';
+import { COMBO, SCORE, TIER_LIFT } from '../config.js';
 import { state, saveNow } from '../state.js';
 import { addFloat, burst, ripple } from '../render/particles.js';
 import { addFlash, addShake } from './juice.js';
@@ -23,40 +23,26 @@ function comboMilestone(tier, e) {
 
 
 function maybeComboHeal(room, tier) {
-  // Combo health is now early, loud, and deterministic: every fresh integer tier
-  // from ×2 upward visibly repairs 1 missing HP. At full health it banks a tiny
-  // one-hit guard instead, so the milestone still feels like it did something.
-  if (!Number.isFinite(tier) || tier < 2) return false;
+  // Combo healing is a light survival NUDGE, not an auto-repair. It fires only on milestone
+  // tiers (×4, ×8, ×12, ×16) and only restores missing HP — so the dedicated survival relics
+  // (bloodTithe / sutureEngine / riftCapacitor / siphonVane) still matter. It no longer banks
+  // a free shield at full HP, and its FX are quiet (one float + a soft ripple) instead of a
+  // flash + shake + big burst every few kills. Was: every integer tier from ×2 up, which
+  // deterministically topped you off each room and made those four items dead weight.
+  if (!Number.isFinite(tier) || tier < 4 || tier % 4 !== 0) return false;
   const p = state.run?.player;
   if (!p) return false;
   if (!(room.comboHealedTiers instanceof Set)) room.comboHealedTiers = new Set(room.comboHealedTiers || []);
   if (room.comboHealedTiers.has(tier)) return false;
   room.comboHealedTiers.add(tier);
   state.run.lastComboHealTier = tier;
+  if (p.hp >= p.maxHp) return false; // at full HP the milestone simply doesn't heal — overheal/shields belong to items now
+  p.hp = Math.min(p.maxHp, p.hp + 1);
   p.comboHealFx = Math.max(p.comboHealFx || 0, 1.15);
-
-  let didGain = false;
-  if (p.hp < p.maxHp) {
-    p.hp = Math.min(p.maxHp, p.hp + 1);
-    didGain = true;
-    addFloat(room, p.x, p.y - 64, `+1♥ ×${tier}`, '#7efab7', true, 0.98);
-  } else {
-    const guardCap = Math.max(1, p.shieldMax || 0);
-    if ((p.shield || 0) < guardCap) {
-      p.shield = Math.min(guardCap, (p.shield || 0) + 1);
-      didGain = true;
-      addFloat(room, p.x, p.y - 64, `◇ ×${tier}`, '#bdfcff', true, 0.86);
-    } else {
-      addFloat(room, p.x, p.y - 64, `×${tier}`, '#7efab7', true, 0.72);
-    }
-  }
-
-  addFlash(0.20);
-  addShake(0.42);
-  ripple(room, p.x, p.y, didGain ? '#7efab7' : '#bdfcff', 132, 0.38);
-  burst(room, p.x, p.y, didGain ? '#7efab7' : '#bdfcff', 26, 235, 0.48, 3.6);
+  addFloat(room, p.x, p.y - 64, `+1♥`, '#7efab7', true, 0.98);
+  ripple(room, p.x, p.y, '#7efab7', 120, 0.32);
   sfx('care');
-  return didGain;
+  return true;
 }
 
 
@@ -65,10 +51,6 @@ export function tickCombo(raw) {
   if (!run) return;
   run.comboT = Math.max(0, run.comboT - raw);
   if (run.comboT <= 0) run.combo = damp(run.combo, 1, 3, raw);
-  if (run.streakT > 0) {
-    run.streakT = Math.max(0, run.streakT - raw);
-    if (run.streakT <= 0) run.streak = 0;
-  }
 }
 
 // ── REDLINE: the flow surge. Dashing, grinding, flow-lanes and kills fill the meter; at
@@ -148,10 +130,8 @@ export function killScore(e) {
   run.kills++; run.roomKills++;
   state.save.lifetime.kills++;
   state.save.bestiary[e.type] = (state.save.bestiary[e.type] || 0) + 1;
-  run.streak++; run.streakT = 0.8;
-  if (run.streak < STREAK_NAMES.length && STREAK_NAMES[run.streak] && state.room) {
-    addFloat(state.room, e.x, e.y - 58, STREAK_NAMES[run.streak], state.room.biome?.pal.accent3 || '#ffd36e', true);
-  }
+  // (removed the kill-streak '×2/×3/×5/×8' floats: run.streak fed no score/multiplier/mechanic
+  // and only spammed a second, different '×N' in the same yellow as the real combo multiplier.)
   return pts;
 }
 

@@ -120,10 +120,19 @@ function frame(t) {
   last = t;
   state.frameTimes.push(raw);
   if (state.frameTimes.length > 120) state.frameTimes.shift();
-  // adaptive quality: sustained slow frames in play → shed bloom + particles (sticky)
-  if (!state.lowFx && state.mode === 'play' && state.frameTimes.length === 120) {
-    const avg = state.frameTimes.reduce((a, b) => a + b, 0) / 120;
-    if (avg > 0.024) state.lowFx = true;
+  // Adaptive quality: shed bloom + per-object glow when frames get slow, restore when they
+  // stay fast. Asymmetric on purpose — TRIP fast (~0.5s of >24ms frames) so an intense fight
+  // stops stuttering quickly, RECOVER slow (a full ~2s window comfortably under budget) so a
+  // single GC hitch or the bloom flicking back on can't make it oscillate.
+  if (state.mode === 'play') {
+    const ft = state.frameTimes, n = ft.length;
+    if (!state.lowFx && n >= 30) {
+      let s = 0; for (let i = n - 30; i < n; i++) s += ft[i];
+      if (s / 30 > 0.024) state.lowFx = true;
+    } else if (state.lowFx && n >= 120) {
+      const avg = ft.reduce((a, b) => a + b, 0) / n;
+      if (avg < 0.013) state.lowFx = false;
+    }
   }
 
   decayFx(raw);

@@ -49,9 +49,14 @@ function applyRoom(room) {
   p.level = 0;
   p.dashT = 0; p.dashCd = 0;
   p.rail = null; p.air = null; p.airZ = 0; p.ventT = 0; p.flowT = 0;
+  p.grindSpin = 0; p.grindSpinV = 0;   // else a mid-grind exit leaves the sprite visibly rotated for the new room's first frames
   p.brakeT = 0; p._ventCd = 0; p._railLatchCd = 0; p.comboHealFx = 0; p.comboTierFx = 0;
   p._enterPortalNow = false; p._ventExitX = null; p._ventExitY = null; p._ventExitLevel = null;
   state.run.lastComboHealTier = null;
+  // The kill-chain window compares room.time (resets to 0 each room) against run._lastKillAt
+  // (persists). Without resetting these, the first kill of a new room saw (0 - largePrev) < 0
+  // and CONTINUED the previous room's chain — a bogus RAMPAGE callout + inflated bestKillChain.
+  state.run._killChain = 0; state.run._lastKillAt = -99;
   p._dashStartLevel = null; p._dashHitIds = null;
   p._dashCutPrimed = false; p._dashFrameActive = false; p._lastX = p.x; p._lastY = p.y; p._dashLastX = p.x; p._dashLastY = p.y;
   p.inv = Math.max(p.inv, 0.9);
@@ -123,7 +128,8 @@ export function clearRoom(room) {
   ripple(room, p.x, p.y, '#ffffff', 220, 0.7);
   ripple(room, p.x, p.y, room.biome.pal.accent2, 320, 0.5);
   addFloat(room, p.x, p.y - 96, 'STAGE CLEAR', '#ffffff', true, 1.25);
-  addFloat(room, p.x, p.y - 60, '↯ dash the rail home', room.biome.pal.accent2, false, 1.1);
+  // (dropped the '↯ dash the rail home' hint float — one fewer label in the clear pile-up;
+  // the express rail draws its own bright launch pad + chevrons, so the way home is obvious.)
   // STYLE RANK — a character-action grade on how you cleared. Chase the S.
   const grade = roomGrade(room);
   const gcol = { S: '#fff1a8', A: '#7df9ff', B: '#7efab7', C: '#ffd36e', D: '#9eb0cc' }[grade] || '#fff';
@@ -147,8 +153,8 @@ export function clearRoom(room) {
   } else {
     state.run.rankStreak = 0;
   }
-  for (let i = 0; i < 50; i++) {
-    const a = (i / 50) * Math.PI * 2, rr = 40 + Math.random() * 170;
+  for (let i = 0; i < 16; i++) { // was 50 — the portal column reads just as well with far fewer motes
+    const a = (i / 16) * Math.PI * 2, rr = 40 + Math.random() * 170;
     burst(room, room.portal.x, room.portal.y, room.biome.pal.accent3, 1, rr * 1.7, 0.85, 3);
   }
   spawnEscapeRail(room, p);

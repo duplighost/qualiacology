@@ -88,7 +88,10 @@ export function drawPlayer(ctx, p, room) {
   // combo charged aura: at a high score multiplier the passenger runs hot — a pulsing
   // ring that intensifies + shifts colour with the combo (completes the power fantasy).
   const combo = state.run?.combo || 1;
-  if (combo > 2.4 && !reduced()) {
+  // Only one glow ring on the passenger at a time: while REDLINE burns, the redline ring
+  // below owns the sprite — stacking the combo aura on top was a big part of the "can't
+  // read the player" haze.
+  if (combo > 2.4 && !reduced() && (state.run?.redlineT || 0) <= 0) {
     const k = Math.min(1, (combo - 2.4) / 8), tt = performance.now() / 1000;
     const col = combo > 9 ? '#ffffff' : combo > 5 ? '#ff9bf5' : pal.accent3;
     const rr = (p.r + 12 + Math.sin(tt * 7) * 3) * (1 + k * 0.5);

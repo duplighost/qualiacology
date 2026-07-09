@@ -2,7 +2,8 @@
 // (source anchors game_inline.js:8906-9024). Scaling inputs come from the room:
 // room.idx (0-9 compressed depth) and room.stage (danger stage 0-5+).
 import { state } from '../state.js';
-import { TAU, DIRECTOR, HUNT } from '../config.js';
+import { TAU, DIRECTOR, HUNT, CAPS } from '../config.js';
+import { view } from '../render/camera.js';
 import { clamp, damp, dist, norm } from '../rng.js';
 import { particle, addFloat, burst, ripple } from '../render/particles.js';
 import { fireEnemyBurst, fireEnemyRing, fireEnemyShot } from './bullets.js';
@@ -67,13 +68,11 @@ export function updateEnemies(room, dt) {
     const to = norm(p.x - e.x, p.y - e.y);
     const d = to.m;
     let spd = e.speed * e.slowMul;
-    // City-scale arenas need hunter pressure: far enemies accelerate into the
-    // player's lane so the action comes to you, but close combat still uses the
-    // normal archetype movement.
-    if (!e.boss && d > HUNT.FAR) {
-      const hf = clamp((d - HUNT.FAR) / Math.max(1, HUNT.FULL - HUNT.FAR), 0, 1);
-      spd *= 1 + HUNT.SPEED_BONUS * hf;
-    }
+    // NOTE: the HUNT speed bonus for far enemies is applied exactly ONCE — in the HUNT
+    // override further down (the `chase` term). It must NOT also multiply into `spd` here.
+    // It used to do both, so the bonus double-counted through every archetype's steering and
+    // distant enemies rocketed at the player far faster than HUNT.SPEED_BONUS implies. Close
+    // combat and the archetype flavour keep the plain, un-boosted `spd`.
     let ax = 0, ay = 0, lambda = 6.2;
 
     if (!minIntro && e.stun <= 0 && (e.boss ? updateBoss(e, room, p, to, d, dt) : true)) {
@@ -415,9 +414,15 @@ function updateMinibossPattern(e, room, p, to, d, dt) {
 export { updateMinibossPattern };
 
 export function updateSpawnQueue(room, dt) {
+  // The enemy ceiling, enforced GLOBALLY. This is the one place queued spawns actually enter
+  // play; CAPS.ENEMIES used to be only a per-composition guard, so reinforcements + rooftop
+  // perches + captains + boss summons stacked room.enemies well past the cap. A due spawn now
+  // waits its turn until a slot frees — it stays queued, so the room still won't clear early.
+  const cap = view.mobile ? CAPS.ENEMIES.mobile : CAPS.ENEMIES.desktop;
   for (let i = room.spawnQueue.length - 1; i >= 0; i--) {
     const s = room.spawnQueue[i];
     if (room.time >= s.at) {
+      if (room.enemies.length >= cap) continue; // at the ceiling — hold this spawn until an enemy dies
       room.spawnQueue.splice(i, 1);
       const e = makeEnemy(s.type, s.x, s.y, room);
       e.level = s.level ?? levelAt(room, s.x, s.y); // spawned on a platform → high ground
