@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UNINVITED</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>
+  :root{ --ink:#e7e3da; --dim:rgba(231,227,218,.55); --amber:#e6b271; --thought:#9db2c8; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--ink)}
+  canvas{display:block;touch-action:none}
+  .hidden{display:none!important}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  #crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:5px;height:5px;border-radius:50%;background:rgba(231,227,218,.45);
+    box-shadow:0 0 6px rgba(0,0,0,.85);transition:all .15s}
+  #crosshair.active{background:rgba(255,255,255,.95);width:8px;height:8px}
+  #prompt{position:absolute;left:50%;top:57%;transform:translateX(-50%);
+    font-size:16px;letter-spacing:.05em;color:var(--ink);
+    text-shadow:0 1px 3px #000,0 0 12px rgba(0,0,0,.9);white-space:nowrap}
+  #prompt .key{display:inline-block;border:1px solid var(--dim);border-radius:4px;
+    padding:1px 8px;margin-right:8px;font-size:13px;opacity:.9}
+  #prompt .key.tap{font-size:11px;letter-spacing:.1em}
+  #toast{position:absolute;left:50%;top:11%;transform:translateX(-50%);
+    font-size:17px;letter-spacing:.06em;color:var(--dim);
+    text-shadow:0 2px 6px #000;opacity:0;transition:opacity 1s;text-align:center;max-width:80vw}
+
+  /* the player's inner voice — its own channel, reads as thought */
+  #monologue{position:absolute;left:50%;bottom:25%;transform:translateX(-50%);
+    font-size:19px;font-style:italic;color:var(--thought);letter-spacing:.01em;
+    text-shadow:0 1px 10px rgba(0,0,0,.95),0 0 22px rgba(60,80,110,.35);
+    opacity:0;transition:opacity 1s;text-align:center;max-width:74vw;line-height:1.5}
+  /* family speech — a name and a plain line */
+  #subtitle{position:absolute;left:50%;bottom:13%;transform:translateX(-50%);
+    font-size:18px;color:#efeee9;text-shadow:0 1px 5px #000;
+    opacity:0;transition:opacity .7s;text-align:center;max-width:76vw}
+  #subtitle .who{color:var(--amber);letter-spacing:.12em;text-transform:uppercase;
+    font-size:12px;display:block;margin-bottom:3px;opacity:.9}
+
+  #roomname{position:absolute;left:22px;bottom:22px;font-size:13px;letter-spacing:.28em;
+    text-transform:uppercase;color:rgba(231,227,218,.42);text-shadow:0 1px 3px #000}
+
+  /* ---------- mobile buttons (shown only on touch) ---------- */
+  .tbtn{position:absolute;pointer-events:auto;display:none;align-items:center;justify-content:center;
+    border:1px solid rgba(231,227,218,.35);border-radius:50%;background:rgba(10,12,16,.4);
+    color:var(--ink);font-size:12px;letter-spacing:.1em;backdrop-filter:blur(2px)}
+  body.touch .tbtn{display:flex}
+  #btnUse{right:26px;bottom:120px;width:74px;height:74px}
+  #btnLamp{right:34px;bottom:210px;width:56px;height:56px;font-size:11px}
+
+  /* ---------- full-screen fade ---------- */
+  #fade{position:fixed;inset:0;background:#000;z-index:35;opacity:1;
+    transition:opacity 2.4s ease;pointer-events:none}
+
+  /* ---------- Title ---------- */
+  #title{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;padding:24px;
+    background:radial-gradient(ellipse at 50% 40%, rgba(16,20,30,.5), rgba(0,0,0,.94) 76%)}
+  #title h1{font-size:min(12vw,74px);font-weight:600;letter-spacing:.2em;
+    color:var(--ink);text-shadow:0 0 34px rgba(70,90,130,.4),0 6px 16px #000;
+    margin-bottom:14px;text-align:center;padding-left:.2em;max-width:96vw}
+  #title h2{font-size:min(4vw,17px);font-weight:400;letter-spacing:.18em;
+    color:var(--dim);margin-bottom:52px;text-align:center;text-transform:lowercase}
+  #title .begin{font-size:18px;letter-spacing:.28em;padding:15px 44px;
+    border:1px solid rgba(231,227,218,.45);color:var(--ink);cursor:pointer;pointer-events:auto;
+    background:rgba(0,0,0,.35);transition:all .3s;text-transform:uppercase}
+  #title .begin:hover{background:rgba(60,80,110,.28);border-color:var(--ink);
+    box-shadow:0 0 26px rgba(60,80,110,.4)}
+  #title .hint{margin-top:38px;font-size:13px;color:rgba(231,227,218,.4);
+    letter-spacing:.06em;line-height:1.9;text-align:center}
+  #loadstate{margin-top:16px;font-size:12px;color:rgba(140,160,190,.55);font-style:italic}
+
+  /* ---------- Ending card ---------- */
+  #ending{position:fixed;inset:0;z-index:55;background:#000;display:flex;
+    align-items:center;justify-content:center;padding:28px}
+  #ending .txt{max-width:min(680px,88vw);font-size:18px;line-height:2;
+    color:var(--ink);opacity:0;transition:opacity 3s;white-space:pre-wrap;text-align:center}
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="fade"></div>
+
+  <div id="title">
+    <h1>UNINVITED</h1>
+    <h2>a quiet night · a big empty house · easy money</h2>
+    <div class="begin" id="beginBtn">Break In</div>
+    <div class="hint" id="hint">
+      W A S D — move &nbsp;·&nbsp; MOUSE — look &nbsp;·&nbsp; SHIFT — hurry &nbsp;·&nbsp; E — look closer &nbsp;·&nbsp; F — torch
+    </div>
+    <div id="loadstate">the house is dark</div>
+  </div>
+
+  <div id="hud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="prompt"></div>
+    <div id="toast"></div>
+    <div id="monologue"></div>
+    <div id="subtitle"></div>
+    <div id="roomname"></div>
+    <div class="tbtn" id="btnLamp">TORCH</div>
+    <div class="tbtn" id="btnUse">LOOK</div>
+  </div>
+
+  <div id="ending" class="hidden"><div class="txt" id="endingTxt"></div></div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
