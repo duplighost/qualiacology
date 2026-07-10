@@ -173,57 +173,50 @@ export function buildCave(scene) {
       blk.rotation.y = a; blk.castShadow = true; blk.receiveShadow = true;
       group.add(blk);
     }
-    // the archway: two leaning pillars + a lintel on the centre-facing side
+    // the archway: a trilithon (two uprights + a lintel resting ON them). Both
+    // pillars rise to ONE shared top height, so the lintel sits flush across
+    // them and it reads as a real gate — not two stones with a floating block.
+    const SPAN = 2.4;                             // half the gap between uprights
+    const gate = [];
     for (const s of [-1, 1]) {
-      const bx = e.x + cx * (rimR + 0.6) + px2 * s * 2.6;
-      const bz = e.z + cz * (rimR + 0.6) + pz2 * s * 2.6;
-      const gy = terrainHeight(bx, bz), ph = 5.4;
-      const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.0, ph, 6), portalStone);
+      gate.push({
+        x: e.x + cx * (rimR + 0.6) + px2 * s * SPAN,
+        z: e.z + cz * (rimR + 0.6) + pz2 * s * SPAN,
+      });
+    }
+    for (const p of gate) p.gy = terrainHeight(p.x, p.z);
+    const topY = Math.max(gate[0].gy, gate[1].gy) + 4.6;   // common upright height
+    for (const p of gate) {
+      const ph = topY - p.gy + 0.3;               // reach from its own ground to topY
+      const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.15, ph, 6), portalStone);
       _chip(pil.geometry, 0.16);
-      pil.position.set(bx, gy + ph / 2 - 0.3, bz);
-      pil.rotation.z = -s * 0.12;                // lean together
+      pil.position.set(p.x, topY - ph / 2 + 0.3, p.z);   // upright, top exactly at topY
       pil.castShadow = true; pil.receiveShadow = true;
       group.add(pil);
-      portalColliders.push({ x: bx, z: bz, r: 1.1 });
-      // a torch on each pillar (bright head + a warm light, always burning)
-      const th = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 0), torchHeadMat);
-      th.position.set(bx, gy + ph - 0.2, bz); group.add(th);
-      const tl = new THREE.PointLight(0xffb24a, 30, 16, 1.8);
-      tl.position.set(bx, gy + ph, bz);
-      tl.userData.rim = true; tl.userData.base = 30;
+      portalColliders.push({ x: p.x, z: p.z, r: 1.2 });
+      // a torch on top of each upright (bright head + a warm light, always lit)
+      const th = new THREE.Mesh(new THREE.IcosahedronGeometry(0.38, 0), torchHeadMat);
+      th.position.set(p.x, topY + 0.45, p.z); group.add(th);
+      const tl = new THREE.PointLight(0xffb24a, 32, 17, 1.8);
+      tl.position.set(p.x, topY + 0.7, p.z);
+      tl.userData.rim = true; tl.userData.base = 32;
       scene.add(tl); lights.push(tl);
     }
-    // the lintel bridging the pillars, overhead, with a glowing keystone rune
-    const lx = e.x + cx * (rimR + 0.6), lz = e.z + cz * (rimR + 0.6);
-    const lgy = terrainHeight(lx, lz);
-    const lintel = new THREE.Mesh(new THREE.BoxGeometry(6.4, 1.0, 1.4), portalDark);
+    // the lintel: a slab resting ACROSS the two upright tops, with a keystone rune
+    const lx = (gate[0].x + gate[1].x) / 2, lz = (gate[0].z + gate[1].z) / 2;
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(SPAN * 2 + 2.2, 0.9, 1.5), portalDark);
     _chip(lintel.geometry, 0.12);
-    lintel.position.set(lx, lgy + 5.0, lz);
+    lintel.position.set(lx, topY + 0.45, lz);     // bottom of the slab sits on the tops
     lintel.rotation.y = toC + Math.PI / 2;
     lintel.castShadow = true; group.add(lintel);
-    const glyph = new THREE.Mesh(new THREE.OctahedronGeometry(0.34, 0), glyphMat);
-    glyph.position.set(lx + cx * 0.75, lgy + 5.0, lz + cz * 0.75); group.add(glyph);
-    // descending stone steps on the centre-facing side, down into the mouth
-    const rimTopY = terrainHeight(e.x + cx * rimR, e.z + cz * rimR);
-    for (let i = 0; i < 4; i++) {
-      const t = 0.28 + i * 0.16;
-      const sx = e.x + cx * rimR * (1 - t), sz = e.z + cz * rimR * (1 - t);
-      const sy = lerp(rimTopY, TUNNEL_FLOOR + 1, t / 0.76);
-      const step = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.4, 1.3), i % 2 ? portalStone : portalDark);
-      step.position.set(sx, sy, sz);
-      step.rotation.y = toC + Math.PI / 2;
-      step.receiveShadow = true; group.add(step);
-    }
+    const glyph = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 0), glyphMat);
+    glyph.position.set(lx + cx * 0.8, topY + 0.45, lz + cz * 0.8); group.add(glyph);
   }
 
   // surface beacons: every crater rim is RINGED in fire so the way down reads
-  // from across the whole field — tall ember fangs, a warm rim light, and a
-  // soft amber column rising out of the hole like heat-glow off a furnace
-  const pillarMat = new THREE.MeshBasicMaterial({
-    color: 0xff9a4a, transparent: true, opacity: 0.13, blending: THREE.AdditiveBlending,
-    depthWrite: false, side: THREE.DoubleSide, fog: false,
-  });
-  const pillars = [];
+  // from across the whole field — tall ember fangs and a warm rim light. (The
+  // old giant glow column washed out the bowl from above; the archway + torches
+  // + fire ring carry the "doorway" read now.)
   for (const e of ENTRANCES) {
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2 + e.a;
@@ -236,11 +229,7 @@ export function buildCave(scene) {
       st.rotation.set(tall ? 0 : i, i * 2.1, tall ? 0.12 : 0);
       group.add(st);
     }
-    // the glow column out of the shaft
     const rimY = terrainHeight(e.x + ENTRANCE_CARVE, e.z);
-    const pil = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 4.2, 26, 10, 1, true), pillarMat.clone());
-    pil.position.set(e.x, rimY + 4, e.z);
-    group.add(pil); pillars.push(pil);
     // a warm light AT the mouth, always on — lights the bowl walls day + night
     const rl = new THREE.PointLight(0xff9a4a, 42, 26, 1.7);
     rl.position.set(e.x, rimY + 2.5, e.z);
@@ -258,10 +247,6 @@ export function buildCave(scene) {
         l.intensity = l.userData.base * (0.2 + 0.8 * u);
       }
     },
-    update(t) {
-      for (let i = 0; i < pillars.length; i++) {
-        pillars[i].material.opacity = 0.11 + Math.sin(t * 1.3 + i * 1.7) * 0.035;
-      }
-    },
+    update() {},   // (the pulsing glow columns are gone)
   };
 }
