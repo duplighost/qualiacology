@@ -5,76 +5,112 @@
 import * as THREE from 'three';
 import { LINES, FAMILY } from './story.js';
 
-function pivotLimb(mat, len, rad, sx) {
-  const p = new THREE.Group();
-  const m = new THREE.Mesh(new THREE.CapsuleGeometry(rad, len - rad * 2, 3, 6), mat);
-  m.position.y = -len / 2;
-  m.castShadow = true;
-  p.add(m);
-  return p;
-}
-
-// build a person out of primitives; returns a Group with limb pivots in userData
+// build a person out of primitives; returns a Group with limb pivots in userData.
+// spec: { skin, hair, color, legs, child, female, longHair, broad, police, h }
+// The figure faces its local -z. Pivot API (armL/armR/legL/legR) is stable — the
+// walk/activity animation in this file, scares.js and events.js all drive it.
 export function figure(M, spec) {
-  const s = spec.child ? 0.64 : 1;
+  const s = (spec.child ? 0.62 : 1) * (spec.h || 1);
+  const broad = spec.broad ? 1.14 : 1;
   const g = new THREE.Group();
   const skin = M[spec.skin] || M.skinLight;
   const hair = M[spec.hair] || M.hairDark;
   const cloth = M[spec.color] || M.clothNavy;
+  const legMat = M[spec.legs] || cloth;
+  const eyeMat = M.screenOff;                    // glossy near-black: catches the torch
 
-  const hipY = 0.9 * s, shoulderY = 1.4 * s, headY = 1.6 * s;
+  const hipY = 0.92 * s, shoulderY = 1.42 * s, headY = 1.62 * s;
+  const add = (mesh, x, y, z) => { mesh.position.set(x, y, z); mesh.castShadow = true; g.add(mesh); return mesh; };
 
-  // torso
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.2 * s, 0.42 * s, 4, 8), cloth);
-  torso.position.y = (hipY + shoulderY) / 2;
-  torso.scale.z = 0.7;
-  torso.castShadow = true;
-  g.add(torso);
-  // hips
-  const hips = new THREE.Mesh(new THREE.CapsuleGeometry(0.19 * s, 0.14 * s, 3, 8), cloth);
-  hips.position.y = hipY;
-  hips.scale.z = 0.7;
-  g.add(hips);
+  // hips + chest (shoulders slope in via the capsule taper)
+  const hips = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.165 * s, 0.1 * s, 4, 10), legMat), 0, hipY, 0);
+  hips.scale.set(1.05, 1, 0.72);
+  const chest = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.18 * s, 0.34 * s, 4, 10), cloth), 0, (hipY + shoulderY) / 2 + 0.02 * s, 0);
+  chest.scale.set(broad, 1, 0.64);
 
-  // legs
-  const legL = pivotLimb(cloth, 0.9 * s, 0.09 * s);
-  legL.position.set(-0.1 * s, hipY, 0);
-  const legR = pivotLimb(cloth, 0.9 * s, 0.09 * s);
-  legR.position.set(0.1 * s, hipY, 0);
-  g.add(legL, legR);
-
-  // arms (from shoulders)
-  const armL = pivotLimb(cloth, 0.62 * s, 0.07 * s);
-  armL.position.set(-0.26 * s, shoulderY, 0);
-  const armR = pivotLimb(cloth, 0.62 * s, 0.07 * s);
-  armR.position.set(0.26 * s, shoulderY, 0);
-  g.add(armL, armR);
-  // hands
-  for (const [arm, sx] of [[armL, -1], [armR, 1]]) {
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.06 * s, 6, 6), skin);
-    hand.position.y = -0.6 * s;
-    arm.add(hand);
+  // neck + head, with a face on the -z side
+  add(new THREE.Mesh(new THREE.CylinderGeometry(0.05 * s, 0.062 * s, 0.1 * s, 8), skin), 0, shoulderY + 0.05 * s, 0);
+  const headG = new THREE.Group();
+  headG.position.set(0, headY, 0);
+  g.add(headG);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.132 * s, 14, 12), skin);
+  head.scale.set(0.94, 1.06, 0.9);
+  head.castShadow = true;
+  headG.add(head);
+  for (const sx of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(spec.child ? 0.02 * s : 0.017 * s, 6, 6), eyeMat);
+    eye.position.set(sx * 0.047 * s, 0.012 * s, -0.108 * s);
+    headG.add(eye);
+  }
+  // hair: cap for everyone; long back fall + side strands for longHair
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.142 * s, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.58), hair);
+  cap.position.y = 0.022 * s;
+  cap.scale.z = 0.94;
+  headG.add(cap);
+  if (spec.longHair) {
+    const back = new THREE.Mesh(new THREE.CapsuleGeometry(0.085 * s, 0.24 * s, 3, 8), hair);
+    back.position.set(0, -0.12 * s, 0.1 * s);
+    back.scale.z = 0.6;
+    headG.add(back);
+    for (const sx of [-1, 1]) {
+      const strand = new THREE.Mesh(new THREE.CapsuleGeometry(0.035 * s, 0.2 * s, 3, 6), hair);
+      strand.position.set(sx * 0.115 * s, -0.1 * s, 0.03 * s);
+      headG.add(strand);
+    }
   }
 
-  // neck + head
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.135 * s, 12, 12), skin);
-  head.position.y = headY;
-  head.scale.z = 0.92;
-  head.castShadow = true;
-  g.add(head);
-  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.145 * s, 10, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), hair);
-  hairCap.position.y = headY + 0.02 * s;
-  g.add(hairCap);
+  // arms: pivot at the shoulder; upper arm + slightly bent forearm + hand
+  const arm = (sx) => {
+    const p = new THREE.Group();
+    p.position.set(sx * 0.245 * s * broad, shoulderY, 0);
+    g.add(p);
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.052 * s, 0.2 * s, 3, 8), cloth);
+    upper.position.y = -0.15 * s; upper.castShadow = true; p.add(upper);
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.044 * s, 0.17 * s, 3, 8), cloth);
+    fore.position.set(0, -0.42 * s, -0.025 * s); fore.rotation.x = 0.2; fore.castShadow = true; p.add(fore);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05 * s, 8, 8), skin);
+    hand.position.set(0, -0.56 * s, -0.05 * s); p.add(hand);
+    return p;
+  };
+  const armL = arm(-1), armR = arm(1);
+
+  // legs: pivot at the hip; thigh + shin + a foot pointing forward
+  const leg = (sx) => {
+    const p = new THREE.Group();
+    p.position.set(sx * 0.095 * s, hipY - 0.02 * s, 0);
+    g.add(p);
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.068 * s, 0.3 * s, 3, 8), legMat);
+    thigh.position.y = -0.2 * s; thigh.castShadow = true; p.add(thigh);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.054 * s, 0.3 * s, 3, 8), legMat);
+    shin.position.y = -0.62 * s; shin.castShadow = true; p.add(shin);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.09 * s, 0.055 * s, 0.18 * s), M.hairDark);
+    foot.position.set(0, -0.865 * s, -0.035 * s); p.add(foot);
+    return p;
+  };
+  const legL = leg(-1), legR = leg(1);
+
+  // a nightdress/robe silhouette over the legs
+  if (spec.female) {
+    const skirtMat = new THREE.MeshStandardMaterial({ color: cloth.color, roughness: 1, side: THREE.DoubleSide });
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.24 * s, 0.7 * s, 12, 1, true), skirtMat);
+    skirt.position.y = hipY - 0.28 * s;
+    skirt.castShadow = true;
+    g.add(skirt);
+  }
 
   if (spec.police) {
-    // hi-viz shoulders, a custodian cap, a torch
-    const vest = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.34, 4, 8), M.hiviz);
-    vest.position.y = (hipY + shoulderY) / 2 + 0.03; vest.scale.z = 0.72;
+    const vest = new THREE.Mesh(new THREE.CapsuleGeometry(0.2 * s, 0.3 * s, 4, 10), M.hiviz);
+    vest.position.y = (hipY + shoulderY) / 2 + 0.03 * s;
+    vest.scale.set(broad * 1.06, 1, 0.72);
     g.add(vest);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.14, 0.13, 12), M.copHat);
-    cap.position.y = headY + 0.14; g.add(cap);
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.03, 12), M.copHat);
-    brim.position.y = headY + 0.08; g.add(brim);
+    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.19 * s, 0.19 * s, 0.07 * s, 12), M.copHat);
+    belt.position.y = hipY + 0.05 * s; belt.scale.z = 0.75; g.add(belt);
+    const radio = new THREE.Mesh(new THREE.BoxGeometry(0.05 * s, 0.08 * s, 0.03 * s), M.copHat);
+    radio.position.set(0.12 * s, shoulderY - 0.04 * s, -0.13 * s); g.add(radio);
+    const cop = new THREE.Mesh(new THREE.CylinderGeometry(0.125 * s, 0.135 * s, 0.12 * s, 12), M.copHat);
+    cop.position.y = 0.12 * s; headG.add(cop);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.165 * s, 0.165 * s, 0.028 * s, 12), M.copHat);
+    brim.position.y = 0.06 * s; headG.add(brim);
   }
 
   g.userData = { armL, armR, legL, legR, phase: 0, s };
@@ -222,18 +258,18 @@ export class NPCs {
 
     for (const d of defs) {
       const fam = FAMILY[d.key];
-      const g = figure(M, { skin: fam.skin, hair: fam.hair, color: fam.color, child: d.child });
+      const g = figure(M, fam);
       g.position.set(d.start.x, d.floorY, d.start.z);
       S.add(g);
       // a phone in the father's hand
       if (d.activity === 'phone') {
         const phone = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.02), M.phoneGlow);
-        g.userData.armR.add(phone); phone.position.set(0, -0.58, 0.04);
+        g.userData.armR.add(phone); phone.position.set(0, -0.56, -0.07);
       }
-      // a doll for the girl
+      // a doll cradled by the girl (figures face -z)
       if (d.activity === 'doll') {
         const doll = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.12, 3, 6), M.clothMustard);
-        doll.position.set(0, 0.85, 0.22); g.add(doll);
+        doll.position.set(0, 0.8, -0.2); g.add(doll);
       }
       const npc = new NPC(ctx, { ...d, group: g, name: fam.name });
       this.list.push(npc);
@@ -242,7 +278,7 @@ export class NPCs {
     }
 
     // the officer — built, hidden until the finale
-    this.officer = figure(M, { skin: 'skinLight', hair: 'hairDark', color: 'uniform', police: true });
+    this.officer = figure(M, { skin: 'skinLight', hair: 'hairDark', color: 'uniform', legs: 'uniform', police: true, broad: true, h: 1.03 });
     this.officer.visible = false;
     S.add(this.officer);
   }

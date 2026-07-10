@@ -10,18 +10,18 @@
 // it is a dressmaker's form, and there is a police officer in the doorway.
 
 export const FAMILY = {
-  mother: { name: 'Claire',  color: 'robe',       skin: 'skinLight', hair: 'hairBrown'  },
-  father: { name: 'Mark',    color: 'clothNavy',  skin: 'skinMid',   hair: 'hairDark'   },
-  boy:    { name: 'Toby',    color: 'pjBlue',     skin: 'skinLight', hair: 'hairBrown'  },
-  girl:   { name: 'Lucy',    color: 'clothPink',  skin: 'skinMid',   hair: 'hairDark'   },
+  mother: { name: 'Claire', color: 'robe',      legs: 'robe',      skin: 'skinLight', hair: 'hairBrown', female: true, longHair: true, h: 0.97 },
+  father: { name: 'Mark',   color: 'clothNavy', legs: 'denim',     skin: 'skinMid',   hair: 'hairDark',  broad: true,  h: 1.04 },
+  boy:    { name: 'Toby',   color: 'pjBlue',    legs: 'pjBlue',    skin: 'skinLight', hair: 'hairBrown', child: true },
+  girl:   { name: 'Lucy',   color: 'clothPink', legs: 'clothPink', skin: 'skinMid',   hair: 'hairDark',  child: true, female: true, longHair: true, h: 0.93 },
 };
 
 // The player's paranoid inner voice. Keyed by trigger id (see events.js).
 // Each reads as dread now and as a guilty man talking himself up in hindsight.
 export const MONO = {
   intro: [
-    "They say nobody's set foot in this place for years. Rich, empty, rotting.",
-    "Easy money. So why are my hands shaking.",
+    "They say nobody's set foot in this place for years. Not since the lights went out.",
+    "So why does it feel like something knows I'm here.",
   ],
   foyer: [
     "The air in here is wrong. Thick. Like the house is holding its breath — waiting for me.",
@@ -37,7 +37,7 @@ export const MONO = {
     "Or telling it about me.",
   ],
   stairs: [
-    "Every bone in me says run. But the good stuff's always upstairs, isn't it. Up we go.",
+    "Every bone in me says leave. But whatever this house keeps, it keeps upstairs.",
   ],
   landing: [
     "Little shoes lined up by a door. Toys. No child has laughed in this house for a long time.",
@@ -57,20 +57,21 @@ export const MONO = {
   ],
 };
 
-// Family speech. Creepy through a prowler's ears; ordinary in hindsight.
+// Family speech. Heard as a haunting; in hindsight, a frightened family.
+// Nothing here may name the crime — the arrest does that.
 export const LINES = {
   mother: [
-    'Hello? Is somebody down here?',
-    'Mark? Is that you?',
-    "I can hear you. I've phoned the police.",
-    'Please — just take what you want and go.',
-    "Who's there?",
+    'Hello? Is somebody down there?',
+    'Mark? …That is not Mark.',
+    'I can hear you moving.',
+    'Please. Just go. Please.',
+    'Who is in my house?',
   ],
   father: [
     'Who is that. Show yourself.',
-    "I've got them on the phone. They're coming.",
+    'I told them where you are. They are coming.',
     'Get out of my house.',
-    "There's nothing here worth this, mate.",
+    'You do not belong here.',
     'I know you can hear me.',
   ],
   boy: [
@@ -82,7 +83,7 @@ export const LINES = {
   girl: [
     'Why are you in our house?',
     'Mummy said to hide.',
-    'Are you a burglar?',
+    "You're not allowed in here.",
     '…I want my mum.',
   ],
 };

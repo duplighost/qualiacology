@@ -165,7 +165,7 @@ export function furnish(world, mats, ctx) {
     sofa(4.5, 35, Math.PI / 2, 'sofaBlue');
     lowTable(9, 35, 'woodPale');
     const tv = tvUnit(9, 31.2, 0);
-    CTX.examine(tv, 'the television', "Big flat telly. That alone pays for tonight. If my hands would stop shaking.");
+    CTX.examine(tv, 'the television', "A dead television. My torch hangs in the screen like a face at a window.");
     armchair(15, 33, -Math.PI / 2, 'sofaGrey');
     framedPic(1.2, 1.9, 33, Math.PI / 2, pic(0), 0.7, 0.55);
     framedPic(1.2, 1.9, 37, Math.PI / 2, pic(3), 0.55, 0.68);

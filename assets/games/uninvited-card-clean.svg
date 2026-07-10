@@ -51,7 +51,7 @@
   <text x="96" y="366" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="118" font-weight="700"
         letter-spacing="18" fill="#e7e3da" style="text-shadow:0 0 30px rgba(70,90,130,.4)">UNINVITED</text>
   <text x="100" y="418" font-family="'Segoe UI', Helvetica, Arial, sans-serif" font-size="26" font-weight="400"
-        letter-spacing="5" fill="#8b93a2">a quiet night · a big empty house · easy money</text>
+        letter-spacing="5" fill="#8b93a2">they say it's been empty for years</text>
 
   <rect width="1280" height="720" fill="url(#vig)"/>
 </svg>

@@ -80,7 +80,7 @@ function boot() {
             action: () => {
               if (door.locked === 'never') {
                 audio.lockedRattle();
-                ui.monologue("The front door won't shift. You wedged it, coming in. Only way out is through.", 4200);
+                ui.monologue("It won't move. It let me in — it isn't letting me out.", 4200);
                 return;
               }
               door.setOpen(!door.isOpen);

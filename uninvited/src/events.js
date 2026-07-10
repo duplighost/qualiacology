@@ -15,7 +15,7 @@ export class Events {
   start() {
     const C = this.ctx;
     setTimeout(() => { this.monoSeq(MONO.intro, 3400); C.audio.ghostChord(0.07); }, 1200);
-    setTimeout(() => C.ui.objectiveFlash('Get in. Take what you came for. Get out.'), 9000);
+    setTimeout(() => C.ui.objectiveFlash('The house is dark. Find what it keeps.'), 9000);
   }
 
   // print an array of thoughts one after another on the monologue channel

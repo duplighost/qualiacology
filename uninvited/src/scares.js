@@ -32,8 +32,7 @@ export class Scares {
     // one reusable figure per family member — they turn up where they shouldn't
     this.people = {};
     for (const role of ['mother', 'father', 'boy', 'girl']) {
-      const f = FAMILY[role];
-      const g = figure(M, { skin: f.skin, hair: f.hair, color: f.color, child: role === 'boy' || role === 'girl' });
+      const g = figure(M, FAMILY[role]);
       g.visible = false; S.add(g);
       this.people[role] = g;
     }
