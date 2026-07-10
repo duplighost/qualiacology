@@ -90,9 +90,8 @@ export class Events {
     C.player.frozen = true;              // take the controls
     C.fx.flipAllLightsOn();              // the whole house, all at once
     C.audio.heartbeat(false);
-    C.audio.bell();
-    C.audio.unlock();
-    setTimeout(() => C.audio.dawn(), 250);   // the dread resolves upward — it was nothing
+    C.audio.lightsOn();                  // breaker thunk, relay clack, mains hum
+    setTimeout(() => C.audio.dawn(), 400);   // the dread resolves upward — it was nothing
 
     // the officer, already in the doorway behind you
     const off = C.npcs.officer;
@@ -149,7 +148,7 @@ export class Events {
     this.finale.phase = 'done';
     C.audio.lockedRattle();
     setTimeout(() => C.audio.metalDrop(), 350);
-    C.ui.say('', '“Hands behind your back. Slowly.”', 5000);
+    C.ui.say('', '“Hands where I can see them. Behind your back — slowly.”', 5000);
     // the realisation, spoken over the ordinary lit room
     setTimeout(() => this.monoSeq(MONO.after, 2400), 900);
     // then fade to black and the end cards

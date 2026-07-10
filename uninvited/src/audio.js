@@ -54,6 +54,7 @@ export class AudioEngine {
     lg.gain.value = 0.028;
     lfo.connect(lg).connect(g.gain);
     lfo.start();
+    this.windLfoGain = lg;   // dawn() must ramp this too, or the gusts outlive the wind
     const lfo2 = this.ctx.createOscillator();
     lfo2.frequency.value = 0.11;
     const lg2 = this.ctx.createGain();
@@ -64,9 +65,9 @@ export class AudioEngine {
   }
 
   startDrone() {
-    // a very low, slightly beating pad — the house breathing
+    // a very low, slightly beating pad — the house breathing. Kept subliminal.
     const g = this.ctx.createGain();
-    g.gain.value = 0.03;
+    g.gain.value = 0.016;
     for (const f of [55, 55.7, 82.4]) {
       const o = this.ctx.createOscillator();
       o.type = 'sine';
@@ -156,7 +157,33 @@ export class AudioEngine {
     }
   }
 
-  doorOpen() { this.creak(0.9); }
+  // a real hinge: a thin wavering squeak falling as the door swings, plus air
+  doorOpen() {
+    if (!this.started) return;
+    const t = this.now();
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(1150 + Math.random() * 250, t);
+    o.frequency.linearRampToValueAtTime(700 + Math.random() * 120, t + 0.5);
+    const vib = this.ctx.createOscillator();
+    vib.frequency.value = 13;
+    const vg = this.ctx.createGain();
+    vg.gain.value = 42;
+    vib.connect(vg).connect(o.frequency);
+    const g = this.ctx.createGain();
+    this.env(g, t, 0.05, 0.032, 0.55);
+    o.connect(g).connect(this.master);
+    o.start(t); o.stop(t + 0.7);
+    vib.start(t); vib.stop(t + 0.7);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer(0.6);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 380;
+    const g2 = this.ctx.createGain();
+    this.env(g2, t, 0.12, 0.045, 0.45);
+    src.connect(lp).connect(g2).connect(this.master);
+    src.start(t);
+  }
   doorClose() {
     if (!this.started) return;
     const t = this.now();
@@ -275,30 +302,96 @@ export class AudioEngine {
     src.start(t);
   }
 
-  // a pitched murmur to voice a character's line (pitch ~0.7 man .. 1.7 child)
+  // a voice through the walls — low, muffled, wordless. In hindsight: people
+  // talking. pitch ~0.7 (a man) .. 1.7 (a child).
   murmur(pitch = 1) {
     if (!this.started) return;
     const t = this.now();
-    const src = this.ctx.createBufferSource();
-    src.buffer = this.noiseBuffer(1.4);
-    const bp = this.ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    const base = 620 * pitch;
-    bp.frequency.setValueAtTime(base, t);
-    bp.frequency.linearRampToValueAtTime(base * 1.7, t + 0.4);
-    bp.frequency.linearRampToValueAtTime(base * 0.85, t + 1.1);
-    bp.Q.value = 6.5;
+    const f0 = 150 * pitch;
+    // two detuned voices through a heavy wall (lowpass)
+    const o1 = this.ctx.createOscillator(); o1.type = 'triangle';
+    const o2 = this.ctx.createOscillator(); o2.type = 'sine';
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 460; lp.Q.value = 0.7;
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    const syll = 3 + Math.floor(Math.random() * 4);
+    o1.frequency.setValueAtTime(f0, t);
+    o2.frequency.setValueAtTime(f0 * 2.01, t);
+    // syllables: gentle pitch drifts with swells, like speech heard from another room
+    const syll = 3 + Math.floor(Math.random() * 3);
+    let tt = t;
     for (let i = 0; i < syll; i++) {
-      const tt = t + i * 0.2;
-      g.gain.exponentialRampToValueAtTime(0.045, tt + 0.07);
-      g.gain.exponentialRampToValueAtTime(0.004, tt + 0.17);
+      const dur = 0.15 + Math.random() * 0.12;
+      const drift = f0 * (0.86 + Math.random() * 0.34);
+      o1.frequency.linearRampToValueAtTime(drift, tt + dur);
+      o2.frequency.linearRampToValueAtTime(drift * 2.01, tt + dur);
+      g.gain.exponentialRampToValueAtTime(0.042, tt + dur * 0.4);
+      g.gain.exponentialRampToValueAtTime(0.005, tt + dur);
+      tt += dur + 0.05;
     }
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
-    src.connect(bp).connect(g).connect(this.master);
+    // sentences fall at the end
+    o1.frequency.linearRampToValueAtTime(f0 * 0.78, tt + 0.16);
+    o2.frequency.linearRampToValueAtTime(f0 * 1.56, tt + 0.16);
+    g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.22);
+    o1.connect(lp); o2.connect(lp);
+    lp.connect(g).connect(this.master);
+    o1.start(t); o2.start(t);
+    o1.stop(tt + 0.3); o2.stop(tt + 0.3);
+  }
+
+  // a child's laugh, far away — three small falling notes, muffled
+  giggle() {
+    if (!this.started) return;
+    const t = this.now();
+    for (let i = 0; i < 3; i++) {
+      const tt = t + i * 0.14;
+      const o = this.ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(620 - i * 55, tt);
+      o.frequency.exponentialRampToValueAtTime(470 - i * 45, tt + 0.09);
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 900;
+      const g = this.ctx.createGain();
+      this.env(g, tt, 0.012, 0.032, 0.1);
+      o.connect(lp).connect(g).connect(this.master);
+      o.start(tt); o.stop(tt + 0.18);
+    }
+  }
+
+  // the whole house comes on at once: breaker THUNK, relay clack, mains hum
+  lightsOn() {
+    if (!this.started) return;
+    const t = this.now();
+    // breaker thunk
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(70, t);
+    o.frequency.exponentialRampToValueAtTime(40, t + 0.18);
+    const g = this.ctx.createGain();
+    this.env(g, t, 0.004, 0.6, 0.28);
+    o.connect(g).connect(this.master);
+    o.start(t); o.stop(t + 0.5);
+    // relay clack
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer(0.12);
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 1800;
+    const g2 = this.ctx.createGain();
+    this.env(g2, t, 0.001, 0.22, 0.07);
+    src.connect(hp).connect(g2).connect(this.master);
     src.start(t);
+    // mains hum swells in, then settles under everything
+    const hum = this.ctx.createOscillator();
+    hum.type = 'sawtooth'; hum.frequency.value = 100;
+    const hlp = this.ctx.createBiquadFilter();
+    hlp.type = 'lowpass'; hlp.frequency.value = 320;
+    const hg = this.ctx.createGain();
+    hg.gain.setValueAtTime(0.0001, t + 0.06);
+    hg.gain.exponentialRampToValueAtTime(0.04, t + 0.5);
+    hg.gain.exponentialRampToValueAtTime(0.011, t + 3.2);
+    hg.gain.exponentialRampToValueAtTime(0.0001, t + 6);
+    hum.connect(hlp).connect(hg).connect(this.master);
+    hum.start(t + 0.06); hum.stop(t + 6.1);
   }
 
   // "someone is right there" — a low sub-swell under a sharp breath-transient.
@@ -412,6 +505,7 @@ export class AudioEngine {
     if (!this.started) return;
     const t = this.now();
     this.windGain?.gain.linearRampToValueAtTime(0.008, t + 6);
+    this.windLfoGain?.gain.linearRampToValueAtTime(0.002, t + 6);  // still the gusts too
     this.droneGain?.gain.linearRampToValueAtTime(0.0, t + 8);
     clearTimeout(this._creakTimer);
     for (const [f, dt] of [[261.6, 0], [329.6, 1.2], [392, 2.4], [523.2, 4.0]]) {

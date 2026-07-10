@@ -172,7 +172,7 @@ export class Scares {
     } else if (r < 0.34) {                           // a knock from somewhere
       C.audio.creak(0.85); this.pulse(0.24);
     } else if (r < 0.48) {                           // one of the kids
-      C.audio.murmur(1.7); this.pulse(0.28);
+      C.audio.giggle(); this.pulse(0.28);
       if (C.game.once('gigglemono')) C.ui.monologue(MONO.giggle, 4500);
     } else if (r < 0.62) {                           // a door drifts open
       const d = this.nearestClosedDoor(p);
