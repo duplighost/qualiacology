@@ -232,7 +232,8 @@ export class World {
       if (!mat) continue;
       const merged = mergeGeometries(geos, false);
       const mesh = new THREE.Mesh(merged, mat);
-      mesh.castShadow = true;
+      // glass panes must not block the moon, or nothing streams through the windows
+      mesh.castShadow = mat !== this.M.windowGlow && mat !== this.M.glass;
       mesh.receiveShadow = true;
       this.scene.add(mesh);
     }
@@ -500,7 +501,8 @@ export class World {
 
   buildExterior() {
     const M = this.M, S = this.scene;
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#0d1206', roughness: 1 }));
+    // rain-slick ground: low roughness so lightning and the moon glint off it
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#0d1206', roughness: 0.5, metalness: 0.08 }));
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(30, -0.05, 20);
     ground.receiveShadow = true;
@@ -511,36 +513,55 @@ export class World {
     const starGeo = new THREE.BufferGeometry();
     const pts = [];
     for (let i = 0; i < 500; i++) {
+      // on a shell safely INSIDE the r=190 sky sphere, sharing its centre
       const a = Math.random() * Math.PI * 2, b = Math.random() * Math.PI * 0.45;
-      pts.push(30 + Math.cos(a) * Math.cos(b) * 185, 12 + Math.sin(b) * 185, 20 + Math.sin(a) * Math.cos(b) * 185);
+      pts.push(30 + Math.cos(a) * Math.cos(b) * 180, Math.sin(b) * 180, 20 + Math.sin(a) * Math.cos(b) * 180);
     }
     starGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    S.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: '#aab4cc', size: 0.5, sizeAttenuation: false })));
+    S.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: '#aab4cc', size: 0.5, sizeAttenuation: false, fog: false })));
     const moon = new THREE.Mesh(new THREE.SphereGeometry(7, 16, 16), M.moon);
     moon.position.set(-60, 70, -110);
     S.add(moon);
-    // a few dark trees around the plot
+    // the forest. A far wood, plus a close band that leans in around the house —
+    // visible through every window, silhouetted when the lightning goes.
     const trunkMat = new THREE.MeshStandardMaterial({ color: '#141310', roughness: 1 });
     const treeGeos = [];
     let seed = 9;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    for (let i = 0; i < 40; i++) {
-      const a = rnd() * Math.PI * 2;
-      const rr = 46 + rnd() * 90;
-      const tx = 30 + Math.cos(a) * rr, tz = 20 + Math.sin(a) * rr * 0.8;
-      const th = 6 + rnd() * 7;
-      const t = new THREE.CylinderGeometry(0.12, 0.42, th, 5);
+    const tree = (tx, tz, th, lean) => {
+      const t = new THREE.CylinderGeometry(0.12, 0.44, th, 5);
+      if (lean) t.rotateZ(lean);
+      if (lean) t.rotateY(rnd() * Math.PI * 2);
       t.translate(tx, th / 2, tz);
       treeGeos.push(t);
-      for (let brc = 0; brc < 4; brc++) {
-        const bl = 1.6 + rnd() * 2.4;
+      const branches = 4 + (rnd() * 3 | 0);
+      for (let brc = 0; brc < branches; brc++) {
+        const bl = 1.6 + rnd() * 2.6;
         const br = new THREE.CylinderGeometry(0.03, 0.1, bl, 4);
         br.translate(0, bl / 2, 0);
         br.rotateZ(0.6 + rnd() * 1.2);
         br.rotateY(rnd() * Math.PI * 2);
-        br.translate(tx, th * (0.55 + rnd() * 0.4), tz);
+        br.translate(tx, th * (0.5 + rnd() * 0.45), tz);
         treeGeos.push(br);
       }
+    };
+    // far wood
+    for (let i = 0; i < 40; i++) {
+      const a = rnd() * Math.PI * 2;
+      const rr = 46 + rnd() * 90;
+      tree(30 + Math.cos(a) * rr, 20 + Math.sin(a) * rr * 0.8, 6 + rnd() * 7, 0);
+    }
+    // close band, crowding the plot (kept off the footprint)
+    for (let i = 0; i < 60; i++) {
+      const a = rnd() * Math.PI * 2;
+      const rr = 36 + rnd() * 26;
+      const tx = 30 + Math.cos(a) * rr, tz = 20 + Math.sin(a) * rr * 0.85;
+      if (tx > -4 && tx < 64 && tz > -4 && tz < 44) continue;
+      tree(tx, tz, 7 + rnd() * 6, (rnd() - 0.5) * 0.16);
+    }
+    // the treeline the master window looks out on
+    for (let i = 0; i < 14; i++) {
+      tree(4 + rnd() * 52, -5 - rnd() * 14, 8 + rnd() * 5, (rnd() - 0.5) * 0.14);
     }
     const trees = new THREE.Mesh(mergeGeometries(treeGeos, false), trunkMat);
     trees.castShadow = true;

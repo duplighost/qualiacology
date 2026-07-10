@@ -121,6 +121,35 @@ export class Effects {
     }));
     scene.add(this.dust);
 
+    // rain outside the windows: slanted streaks in a band around the house,
+    // never inside the footprint. One LineSegments draw for the whole storm.
+    this.RAIN_N = 2200;
+    this.rainSpeed = new Float32Array(this.RAIN_N);
+    this.rainLen = new Float32Array(this.RAIN_N);
+    const rpos = new Float32Array(this.RAIN_N * 6);
+    for (let i = 0; i < this.RAIN_N; i++) {
+      let x = 0, z = 0;
+      do {
+        x = -45 + Math.random() * 150;
+        z = -35 + Math.random() * 110;
+      } while (x > -3 && x < 63 && z > -3 && z < 43);   // keep it out of the house
+      const y = -0.5 + Math.random() * 14.5;
+      const len = 0.35 + Math.random() * 0.3;
+      const b = i * 6;
+      rpos[b] = x; rpos[b + 1] = y; rpos[b + 2] = z;
+      rpos[b + 3] = x + 0.2 * len; rpos[b + 4] = y + len; rpos[b + 5] = z - 0.07 * len;
+      this.rainSpeed[i] = 9 + Math.random() * 5;
+      this.rainLen[i] = len;
+    }
+    const rainGeo = new THREE.BufferGeometry();
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rpos, 3));
+    this.rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({
+      color: 0x9fb2c8, transparent: true, opacity: 0.2,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    this.rain.frustumCulled = false;
+    scene.add(this.rain);
+
     // post stack
     this.composer = new EffectComposer(renderer);
     this.composer.addPass(new RenderPass(scene, camera));
@@ -183,6 +212,17 @@ export class Effects {
     this.fearTarget = 0;
     this._flash = 1.4;              // a hard electrical flash on the throw
     this.renderer.toneMappingExposure = 1.0;
+    // every bulb and shade in the house is a shared material — light them all
+    const M = this.world.M;
+    if (M.bulbOff) {
+      M.bulbOff.color.set('#fff2cc');
+      M.bulbOff.emissive.set('#ffe2a8');
+      M.bulbOff.emissiveIntensity = 2.4;
+    }
+    if (M.shadeWarm) {
+      M.shadeWarm.emissive.set('#d8a860');
+      M.shadeWarm.emissiveIntensity = 0.5;
+    }
   }
 
   update(dt, playerPos, camera) {
@@ -241,9 +281,10 @@ export class Effects {
         + Math.sin(this.time * 23 + p.position.z * 13.3) * 0.06 + Math.random() * 0.05);
     }
 
-    // lightning storms
+    // lightning storms — the sky settles once the lights are on; no strobing
+    // and no thunderclaps over the quiet ending
     this._boltT += dt;
-    if (this._boltT > this._nextBolt) {
+    if (!this.lightsOn && this._boltT > this._nextBolt) {
       this._boltT = 0;
       this._nextBolt = 9 + Math.random() * 20;
       this._flash = 1;
@@ -262,6 +303,17 @@ export class Effects {
     // dust drifts around the player
     this.dust.position.set(playerPos.x, playerPos.y, playerPos.z);
     this.dust.rotation.y += dt * 0.014;
+
+    // rain falls
+    const rp = this.rain.geometry.attributes.position.array;
+    for (let i = 0; i < this.RAIN_N; i++) {
+      const b = i * 6;
+      let y = rp[b + 1] - this.rainSpeed[i] * dt;
+      if (y < -0.5) y += 14.5;
+      rp[b + 1] = y;
+      rp[b + 4] = y + this.rainLen[i];
+    }
+    this.rain.geometry.attributes.position.needsUpdate = true;
 
     // ghost fade + hover
     this.ghostAlpha += (this.ghostTargetAlpha - this.ghostAlpha) * Math.min(1, dt * 2.4);

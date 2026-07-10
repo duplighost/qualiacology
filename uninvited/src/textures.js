@@ -451,7 +451,11 @@ export function makeMaterials() {
     color: '#9ab0c8', transmission: 0.65, opacity: 0.5, transparent: true,
     roughness: 0.15, ior: 1.5, side: THREE.DoubleSide, depthWrite: false,
   });
-  M.windowGlow = new THREE.MeshBasicMaterial({ color: '#26344e', side: THREE.DoubleSide });
+  // see-through panes: the night, the treeline and the rain show through them
+  M.windowGlow = new THREE.MeshBasicMaterial({
+    color: '#3d4c66', transparent: true, opacity: 0.22,
+    side: THREE.DoubleSide, depthWrite: false,
+  });
   M.mirror = std({ color: '#5a6068', roughness: 0.08, metalness: 0.95 });
 
   M.frameGold = std({ color: '#6a5220', roughness: 0.45, metalness: 0.6 });
@@ -462,8 +466,9 @@ export function makeMaterials() {
     blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
 
-  M.moon = new THREE.MeshBasicMaterial({ color: '#cdd8e8' });
-  M.night = new THREE.MeshBasicMaterial({ color: '#05070c', side: THREE.BackSide });
+  // fog:false — these live past the fog horizon and must not dissolve into it
+  M.moon = new THREE.MeshBasicMaterial({ color: '#cdd8e8', fog: false });
+  M.night = new THREE.MeshBasicMaterial({ color: '#05070c', side: THREE.BackSide, fog: false });
 
   /* ---------- UNINVITED: a lived-in family home (brighter than the manor) ---------- */
   // walls — soft modern paint / papered
@@ -518,6 +523,14 @@ export function makeMaterials() {
   // the "strange thing" — a dressmaker's form at the window
   M.mannequin = std({ color: '#b6b0a4', roughness: 0.9 });
   M.paleDress = std({ color: '#d6d2c6', roughness: 1, side: THREE.DoubleSide });
+  // light fixtures — dead all night; flipAllLightsOn() sets these glowing
+  M.bulbOff   = std({ color: '#c9c4b4', roughness: 0.35 });
+  M.shadeWarm = std({ color: '#b9a184', roughness: 0.9, side: THREE.DoubleSide });
+  // lived-in extras
+  M.curtainHome = std({ color: '#5d6878', roughness: 1, side: THREE.DoubleSide });
+  M.towel     = std({ color: '#7fa3ad', roughness: 1 });
+  M.terracotta= std({ color: '#9a5f3c', roughness: 0.9 });
+  M.pianoBlack= std({ color: '#101014', roughness: 0.25, metalness: 0.15 });
 
   return M;
 }

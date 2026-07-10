@@ -19,8 +19,32 @@ export class AudioEngine {
     this.master.gain.value = 0.85;
     this.master.connect(this.ctx.destination);
     this.startWind();
+    this.startRain();
     this.startDrone();
     this.scheduleCreaks();
+  }
+
+  startRain() {
+    // steady rain on the roof and windows — high hiss with a slow swell
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer(3);
+    src.loop = true;
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 1700;
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 6800;
+    const g = this.ctx.createGain();
+    g.gain.value = 0.02;
+    src.connect(hp).connect(lp).connect(g).connect(this.master);
+    src.start();
+    const lfo = this.ctx.createOscillator();
+    lfo.frequency.value = 0.05;
+    const lg = this.ctx.createGain();
+    lg.gain.value = 0.006;
+    lfo.connect(lg).connect(g.gain);
+    lfo.start();
+    this.rainGain = g;
+    this.rainLfoGain = lg;
   }
 
   now() { return this.ctx.currentTime; }
@@ -507,6 +531,9 @@ export class AudioEngine {
     this.windGain?.gain.linearRampToValueAtTime(0.008, t + 6);
     this.windLfoGain?.gain.linearRampToValueAtTime(0.002, t + 6);  // still the gusts too
     this.droneGain?.gain.linearRampToValueAtTime(0.0, t + 8);
+    // the rain stays — softer. The dread was never real; the rain always was.
+    this.rainGain?.gain.linearRampToValueAtTime(0.012, t + 6);
+    this.rainLfoGain?.gain.linearRampToValueAtTime(0.002, t + 6);
     clearTimeout(this._creakTimer);
     for (const [f, dt] of [[261.6, 0], [329.6, 1.2], [392, 2.4], [523.2, 4.0]]) {
       const o = this.ctx.createOscillator();

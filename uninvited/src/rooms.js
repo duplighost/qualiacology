@@ -6,6 +6,7 @@ import { LV } from './world.js';
 import { makeArtTextures } from './textures.js';
 
 let M, W, S, CTX;
+let FLOOR_Y = 0;   // floor height for group-based furniture; set per level in furnish()
 const CANDLES = [], FLAMES = [];
 let ART = [];
 export function getCandles() { return CANDLES; }
@@ -51,7 +52,7 @@ function framedPic(x, y, z, ry, tex, w = 0.52, h = 0.64) {
 
 /* ---------------- furniture ---------------- */
 function sofa(x, z, ry, m) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
   const add = (w, h, d, mm, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matOf(mm)); o.position.set(px, py, pz); o.castShadow = true; o.receiveShadow = true; g.add(o); };
   add(1.9, 0.4, 0.85, m, 0, 0.35, 0);
   add(1.9, 0.5, 0.2, m, 0, 0.65, -0.32);
@@ -61,14 +62,14 @@ function sofa(x, z, ry, m) {
   return g;
 }
 function armchair(x, z, ry, m) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
   const add = (w, h, d, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matOf(m)); o.position.set(px, py, pz); o.castShadow = true; g.add(o); };
   add(0.8, 0.4, 0.8, 0, 0.35, 0); add(0.8, 0.5, 0.18, 0, 0.65, -0.3);
   add(0.16, 0.4, 0.8, -0.4, 0.5, 0); add(0.16, 0.4, 0.8, 0.4, 0.5, 0);
   return g;
 }
 function lowTable(x, z, m, w = 1.1, d = 0.6) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); S.add(g);
   const top = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), matOf(m)); top.position.y = 0.42; top.castShadow = true; g.add(top);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const l = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), matOf(m)); l.position.set(sx * (w / 2 - 0.08), 0.21, sz * (d / 2 - 0.08)); g.add(l);
@@ -76,7 +77,7 @@ function lowTable(x, z, m, w = 1.1, d = 0.6) {
   return g;
 }
 function table(x, z, m, w = 1.6, d = 1.0, h = 0.78) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); S.add(g);
   const top = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), matOf(m)); top.position.y = h; top.castShadow = true; top.receiveShadow = true; g.add(top);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const l = new THREE.Mesh(new THREE.BoxGeometry(0.09, h, 0.09), matOf(m)); l.position.set(sx * (w / 2 - 0.12), h / 2, sz * (d / 2 - 0.12)); g.add(l);
@@ -84,14 +85,14 @@ function table(x, z, m, w = 1.6, d = 1.0, h = 0.78) {
   return g;
 }
 function chair(x, z, ry, m) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
   const a = (w, h, d, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matOf(m)); o.position.set(px, py, pz); o.castShadow = true; g.add(o); };
   a(0.42, 0.06, 0.42, 0, 0.46, 0); a(0.42, 0.5, 0.06, 0, 0.72, -0.18);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) a(0.05, 0.46, 0.05, sx * 0.17, 0.23, sz * 0.17);
   return g;
 }
 function bed(x, z, ry, sheet, w = 1.5, l = 2.0) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
   const a = (ww, h, d, mm, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(ww, h, d), matOf(mm)); o.position.set(px, py, pz); o.castShadow = true; o.receiveShadow = true; g.add(o); };
   a(w, 0.3, l, 'woodPale', 0, 0.3, 0);
   a(w, 0.18, l * 0.98, sheet, 0, 0.5, 0.02);
@@ -100,13 +101,13 @@ function bed(x, z, ry, sheet, w = 1.5, l = 2.0) {
   return g;
 }
 function wardrobe(x, z, ry, m = 'woodPale') {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
   const b = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.0, 0.6), matOf(m)); b.position.y = 1.0; b.castShadow = true; g.add(b);
   for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 6), M.brass); h.position.set(sx * 0.06, 1.05, 0.31); g.add(h); }
   return g;
 }
 function shelf(x, z, ry) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
   const b = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.0, 0.32), matOf('woodPale')); b.position.y = 1.0; b.castShadow = true; g.add(b);
   for (let i = 0; i < 4; i++) {
     const row = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.22, 0.26), M.bookRows[i % 3]); row.position.set(0, 0.4 + i * 0.44, 0.02); g.add(row);
@@ -114,24 +115,174 @@ function shelf(x, z, ry) {
   return g;
 }
 function counter(x, z, ry, len = 3.6) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
   const base = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.9, len), matOf('woodPale')); base.position.set(0, 0.45, 0); base.castShadow = true; base.receiveShadow = true; g.add(base);
   const top = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.06, len), matOf('marblePlain')); top.position.set(0, 0.93, 0); g.add(top);
   return g;
 }
 function appliance(x, z, ry, m = 'metalWhite', w = 0.7, h = 1.7, d = 0.7) { return box(w, h, d, m, x, h / 2, z, ry); }
 function tvUnit(x, z, ry) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
   const stand = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 0.4), matOf('woodPale')); stand.position.y = 0.2; stand.castShadow = true; g.add(stand);
   const tv = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.8, 0.06), matOf('screenOff')); tv.position.set(0, 0.95, 0); tv.castShadow = true; g.add(tv);
   return g;
 }
 function desk(x, z, ry) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; S.add(g);
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
   const top = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.07, 0.7), matOf('woodPale')); top.position.y = 0.75; top.castShadow = true; g.add(top);
-  box(0.5, 0.75, 0.6, 'woodPale', x + (ry ? 0 : 0.4), 0.375, z); // pedestal (approx)
+  const ped = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.75, 0.6), matOf('woodPale'));
+  ped.position.set(0.4, 0.375, 0); ped.castShadow = true; g.add(ped);
   return g;
 }
+/* ---------------- fixtures & life (dead until the finale lights them) ---------------- */
+function ceilingLight(x, ceilY, z) {
+  const g = new THREE.Group(); g.position.set(x, ceilY, z); S.add(g);
+  const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 6), matOf('iron'));
+  cord.position.y = -0.15; g.add(cord);
+  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.19, 0.16, 12, 1, true), matOf('shadeWarm'));
+  shade.position.y = -0.34; g.add(shade);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), matOf('bulbOff'));
+  bulb.position.y = -0.4; g.add(bulb);
+  return g;
+}
+function chandelier(x, y, z) {
+  const g = new THREE.Group(); g.position.set(x, y, z); S.add(g);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 6), matOf('brass'));
+  stem.position.y = 0.45; g.add(stem);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.03, 8, 20), matOf('brass'));
+  ring.rotation.x = Math.PI / 2; g.add(ring);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), matOf('bulbOff'));
+    bulb.position.set(Math.cos(a) * 0.42, 0.08, Math.sin(a) * 0.42);
+    g.add(bulb);
+  }
+  return g;
+}
+function floorLamp(x, z) {
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); S.add(g);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 1.5, 8), matOf('iron'));
+  pole.position.y = 0.75; pole.castShadow = true; g.add(pole);
+  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.28, 12, 1, true), matOf('shadeWarm'));
+  shade.position.y = 1.56; g.add(shade);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), matOf('bulbOff'));
+  bulb.position.y = 1.48; g.add(bulb);
+  return g;
+}
+function tableLamp(x, y, z) {
+  const g = new THREE.Group(); g.position.set(x, y, z); S.add(g);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.07, 0.24, 8), matOf('brass'));
+  base.position.y = 0.12; g.add(base);
+  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.16, 10, 1, true), matOf('shadeWarm'));
+  shade.position.y = 0.31; g.add(shade);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), matOf('bulbOff'));
+  bulb.position.y = 0.26; g.add(bulb);
+  return g;
+}
+function fireplace(x, z, ry) {
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
+  const a = (w, h, d, mm, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matOf(mm)); o.position.set(px, py, pz); o.castShadow = true; o.receiveShadow = true; g.add(o); return o; };
+  a(1.8, 1.2, 0.32, 'brick', 0, 0.6, 0);
+  a(0.9, 0.8, 0.36, 'stoneDark', 0, 0.45, 0.01);       // firebox
+  a(2.0, 0.1, 0.42, 'woodDark', 0, 1.24, 0.02);        // mantel
+  a(0.8, 0.05, 0.3, 'iron', 0, 0.08, 0.08);            // grate
+  return g;
+}
+function pianoUpright(x, z, ry) {
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
+  const a = (w, h, d, mm, px, py, pz) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matOf(mm)); o.position.set(px, py, pz); o.castShadow = true; g.add(o); return o; };
+  a(1.5, 1.3, 0.42, 'pianoBlack', 0, 0.65, 0);          // body
+  a(1.4, 0.05, 0.3, 'linen', 0, 0.78, -0.32);           // keys
+  a(1.5, 0.06, 0.34, 'pianoBlack', 0, 0.84, -0.3);      // key lid, open
+  a(0.9, 0.5, 0.3, 'pianoBlack', 0, 0.25, -0.75);       // stool
+  return g;
+}
+function plant(x, z, big) {
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); S.add(g);
+  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.28, 10), matOf('terracotta'));
+  pot.position.y = 0.14; pot.castShadow = true; g.add(pot);
+  const bush = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.38 : 0.26, 8, 6), matOf('clothGreen'));
+  bush.position.y = big ? 0.72 : 0.52; bush.scale.y = 1.5; bush.castShadow = true; g.add(bush);
+  return g;
+}
+function coatRack(x, z) {
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); S.add(g);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 1.7, 8), matOf('woodDark'));
+  pole.position.y = 0.85; pole.castShadow = true; g.add(pole);
+  for (const [ry, mm] of [[0.4, 'clothNavy'], [2.4, 'robe'], [4.4, 'clothTeal']]) {
+    const coat = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.62, 8, 1, true), matOf(mm));
+    coat.position.set(Math.cos(ry) * 0.12, 1.32, Math.sin(ry) * 0.12);
+    coat.castShadow = true; g.add(coat);
+  }
+  return g;
+}
+function shoeRow(x, z, ry, n) {
+  const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
+  const mats = ['iron', 'plasticRed', 'plasticBlue', 'hairBrown', 'clothPink', 'woodDark'];
+  for (let i = 0; i < n; i++) {
+    for (const sx of [-0.06, 0.06]) {
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, 0.24 - (i % 2) * 0.07), matOf(mats[i % mats.length]));
+      shoe.position.set(i * 0.28 + sx, 0.045, 0);
+      g.add(shoe);
+    }
+  }
+  return g;
+}
+function wallMirror(x, y, z, ry, w = 0.5, h = 0.8) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; S.add(g);
+  const fr = new THREE.Mesh(new THREE.BoxGeometry(w + 0.08, h + 0.08, 0.04), matOf('woodPale'));
+  g.add(fr);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), matOf('mirror'));
+  m.position.z = 0.025; g.add(m);
+  return g;
+}
+function clutterBooks(x, y, z, n) {
+  for (let i = 0; i < n; i++) {
+    const b = box(0.16, 0.035, 0.22, ['plasticRed', 'clothTeal', 'clothMustard', 'clothNavy'][i % 4], x + (i % 2) * 0.03, y + 0.02 + i * 0.037, z + (i % 3) * 0.02, (i % 3 - 1) * 0.2);
+    b.castShadow = false;
+  }
+}
+function teddy(x, y, z, ry) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; S.add(g);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), matOf('clothMustard'));
+  body.position.y = 0.08; body.scale.y = 1.2; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), matOf('clothMustard'));
+  head.position.y = 0.2; g.add(head);
+  for (const sx of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6), matOf('clothMustard'));
+    ear.position.set(sx * 0.045, 0.245, 0); g.add(ear);
+  }
+  return g;
+}
+// curtains framing the inside of the real window openings
+function curtainAll() {
+  const skip = new Set(['kitchen', 'bath', 'sunroom', 'laundry', 'pantry', 'bootroom', 'garage']);
+  for (const w of W.windows) {
+    if (skip.has(w.room)) continue;
+    const L = LV[w.level];
+    const rodY = w.y + 1.95, topY = w.y + 1.9, len = 2.1;
+    const inward = 0.24;                     // hang just inside the wall
+    // which side of the wall is indoors? nudge toward the house centre
+    const dx = w.isX ? 0 : (w.x < 30 ? inward : -inward);
+    const dz = w.isX ? (w.z < 20 ? inward : -inward) : 0;
+    const rod = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.015, 0.015, 2.0, 6), matOf('woodDark'));
+    rod.position.set(w.x + dx, rodY, w.z + dz);
+    if (w.isX) rod.rotation.z = Math.PI / 2; else rod.rotation.x = Math.PI / 2;
+    S.add(rod);
+    for (const side of [-1, 1]) {
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.42, len), matOf('curtainHome'));
+      panel.position.set(
+        w.x + dx + (w.isX ? side * 0.75 : 0),
+        topY - len / 2,
+        w.z + dz + (w.isX ? 0 : side * 0.75));
+      if (!w.isX) panel.rotation.y = Math.PI / 2;
+      panel.castShadow = true;
+      S.add(panel);
+    }
+  }
+}
+
 function dressForm(x, y, z, ry) {
   const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; S.add(g);
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.27, 0.05, 14), matOf('metalSteel')); base.position.y = 0.03; g.add(base);
@@ -149,16 +300,23 @@ export function furnish(world, mats, ctx) {
   const pic = (i) => ART[i % ART.length];
 
   /* ===== GROUND ===== */
-  // entrance hall — the way in, the stairs, a console with keys and post
+  FLOOR_Y = 0;
+  // entrance hall — the way in, the stairs, a chandelier dead overhead
   {
-    const r = R('foyer');
-    const console = box(1.3, 0.8, 0.4, 'woodPale', 24.6, 0.4, 36.5, Math.PI / 2);
-    framedPic(23.2, 2.0, 34, Math.PI / 2, pic(6), 0.6, 0.74);
-    const bowl = cyl(0.12, 0.1, 0.06, 12, 'brass', 24.6, 0.86, 36.5);
+    const console = box(1.3, 0.8, 0.4, 'woodPale', 22.62, 0.4, 37.3, Math.PI / 2);
+    framedPic(22.2, 2.0, 31.9, Math.PI / 2, pic(6), 0.6, 0.74);
+    cyl(0.12, 0.1, 0.06, 12, 'brass', 22.62, 0.86, 37.3);
     CTX.examine(console, 'the hall table', "Car keys in a bowl. Post on the mat. People who mean to come back.");
     torchGlow(30, 1.4, 37);   // the torch you brought, on the floor by the door
+    chandelier(30, 6.5, 35);
+    wallMirror(37.8, 1.8, 37.2, -Math.PI / 2, 0.6, 0.9);
+    coatRack(23.4, 38.6);
+    shoeRow(26, 39.3, 0, 4);
+    // big family portraits watching the stairs
+    framedPic(22.2, 5.4, 33, Math.PI / 2, pic(0), 0.7, 0.9);
+    framedPic(37.8, 5.4, 37, -Math.PI / 2, pic(5), 0.7, 0.9);
   }
-  // living room — sofa, telly, hearth, a warm candle
+  // living room — sofas, telly, a real hearth, the family piano
   {
     rug(9, 35, 4.4, 3, 'carpetWarm', 0);
     sofa(9, 37.6, Math.PI, 'sofaBlue');
@@ -167,28 +325,57 @@ export function furnish(world, mats, ctx) {
     const tv = tvUnit(9, 31.2, 0);
     CTX.examine(tv, 'the television', "A dead television. My torch hangs in the screen like a face at a window.");
     armchair(15, 33, -Math.PI / 2, 'sofaGrey');
-    framedPic(1.2, 1.9, 33, Math.PI / 2, pic(0), 0.7, 0.55);
-    framedPic(1.2, 1.9, 37, Math.PI / 2, pic(3), 0.55, 0.68);
+    framedPic(0.25, 1.9, 33, Math.PI / 2, pic(0), 0.7, 0.55);
+    framedPic(0.25, 1.9, 37, Math.PI / 2, pic(3), 0.55, 0.68);
     candle(9, 0.5, 35, 0xffb060, 5.5, 9);   // on the coffee table
+    const hearth = fireplace(14, 30.35, 0);   // on the north wall, clear of the doors
+    CTX.examine(hearth, 'the fireplace', 'Ash in the grate. Cold — but not old. Someone had a fire tonight.');
+    framedPic(14, 2.15, 30.16, 0, pic(1), 0.5, 0.6);
+    const piano = pianoUpright(16, 39.35, 0);
+    CTX.examine(piano, 'the piano', 'An upright piano, lid open. Sheet music still on the stand. Mid-song.');
+    floorLamp(16.6, 34.4);
+    plant(1.6, 30.9, true);
+    clutterBooks(8.8, 0.47, 34.8, 3);
+    teddy(7.7, 0.62, 37.5, 0.6);
+    ceilingLight(6, 3.9, 35);
   }
-  // dining room — table, chairs, sideboard, family photos
+  // dining room — table set for four, sideboard, family photos
   {
     table(44, 35, 'woodPale', 2.0, 1.0);
     for (const dx of [-0.7, 0, 0.7]) { chair(44 + dx, 33.6, 0, 'woodPale'); chair(44 + dx, 36.4, Math.PI, 'woodPale'); }
-    const side = box(2.0, 0.9, 0.5, 'woodPale', 44, 0.45, 39.4);
+    box(2.0, 0.9, 0.5, 'woodPale', 44, 0.45, 39.4);
     const fp = framedPic(44, 1.9, 39.7, Math.PI, pic(5), 0.6, 0.5);
     CTX.examine(fp, 'a photograph', "A family. All done up, squinting at the sun. Whoever they were. Long gone.");
-    candle(46, 0.86, 39.4, 0xffb060, 4.5, 8);
+    candle(44.5, 0.92, 39.4, 0xffb060, 4.5, 8);   // on the sideboard
+    // places still laid
+    for (const [px, pz] of [[43.4, 34.5], [44.6, 34.5], [43.4, 35.5], [44.6, 35.5]])
+      cyl(0.11, 0.11, 0.02, 12, 'linen', px, 0.83, pz);
+    ceilingLight(44, 3.9, 35);
+    plant(39.4, 39, false);
   }
-  // kitchen — counters along the outer wall, sink under the window (the mother works here)
+  // kitchen — counters, uppers, the sink under the window (the mother works here)
   {
-    counter(58.9, 34.5, Math.PI / 2, 6.6);   // east wall run
-    const sink = box(0.7, 0.12, 0.9, 'metalSteel', 58.6, 0.9, 33);
-    appliance(58.6, 38.6, 0, 'metalWhite');  // fridge
-    box(0.7, 0.6, 0.7, 'metalSteel', 58.6, 0.45, 37); // oven
+    counter(59.2, 34.5, 0, 6.6);             // east wall run, length along z
+    box(0.7, 0.12, 0.9, 'metalSteel', 59.2, 0.96, 33);   // sink, set into the counter
+    appliance(50.6, 38.6, 0, 'metalWhite');  // fridge, against the inner wall
+    box(0.72, 0.6, 0.72, 'metalSteel', 59.2, 0.45, 31.8); // oven in the run
+    // upper cabinets on the piers between the windows, + a kettle
+    box(0.45, 0.75, 2.6, 'woodPale', 59.55, 2.15, 33);
+    box(0.45, 0.75, 2.6, 'woodPale', 59.55, 2.15, 37);
+    cyl(0.09, 0.11, 0.2, 10, 'metalSteel', 59.2, 1.03, 34.6);
+    // the children's drawings on the fridge
+    for (const [py, pz] of [[1.55, 38.4], [1.25, 38.8]]) {
+      mesh(new THREE.PlaneGeometry(0.22, 0.28), M.paper, 50.97, py, pz, Math.PI / 2, false);
+      mesh(new THREE.BoxGeometry(0.012, 0.03, 0.03), M.plasticRed, 50.99, py + 0.12, pz, 0, false);
+    }
     table(53, 35, 'woodPale', 1.4, 0.9, 0.76);
     chair(53, 33.8, 0, 'woodPale'); chair(53, 36.2, Math.PI, 'woodPale');
-    candle(57, 0.98, 36, 0xffb060, 5, 8);    // her candle by the sink
+    // fruit bowl
+    cyl(0.15, 0.1, 0.07, 12, 'woodDark', 53, 0.85, 35);
+    for (const [fx, fm] of [[-0.05, 'plasticRed'], [0.05, 'plasticYel'], [0, 'plasticGrn']])
+      mesh(new THREE.SphereGeometry(0.045, 8, 8), M[fm], 53 + fx, 0.92, 35 + fx * 0.6, 0, false);
+    candle(59.1, 0.93, 36, 0xffb060, 5, 8);    // her candle on the counter by the sink
+    ceilingLight(55, 3.9, 35);
   }
   // study/den — the father paces here; a desk, shelves, his candle
   {
@@ -198,15 +385,43 @@ export function furnish(world, mats, ctx) {
     shelf(1.6, 24, Math.PI / 2);
     framedPic(6, 1.9, 16.3, 0, pic(7), 0.5, 0.6);
     candle(3, 0.82, 20, 0xffb060, 4.5, 8);
+    tableLamp(3, 0.79, 20.3);
+    clutterBooks(2.95, 0.8, 19.6, 2);
+    ceilingLight(6, 3.9, 21);
+    plant(10.5, 17, false);
   }
-  // family room — sofas, toys on the rug
+  // family room — sofas, toys on the rug, a toy chest
   {
     rug(20, 21, 4, 3, 'carpetGrey', 0);
     sofa(20, 24, Math.PI, 'sofaGrey');
     lowTable(20, 21, 'woodPale');
     box(0.3, 0.3, 0.3, 'plasticRed', 18.5, 0.15, 19.5);
     box(0.25, 0.25, 0.25, 'plasticBlue', 21.2, 0.13, 20);
+    box(0.9, 0.5, 0.5, 'plasticBlue', 25.5, 0.25, 17.5);   // toy chest
+    teddy(19, 0.02, 20, -0.8);
     candle(20, 0.5, 21, 0xffb060, 4, 7);
+    ceilingLight(20, 3.9, 21);
+    floorLamp(13.4, 24.6);
+  }
+  // the back rooms and halls — lights overhead, life in the corners
+  {
+    ceilingLight(33, 3.9, 21);            // back hall
+    ceilingLight(43, 3.9, 21);            // utility
+    cyl(0.22, 0.18, 0.4, 10, 'linen', 39, 0.2, 17.5);   // laundry basket
+    const pile = mesh(new THREE.SphereGeometry(0.18, 8, 6), M.robe, 39, 0.44, 17.5, 0, false);
+    pile.scale.y = 0.5;
+    ceilingLight(10, 3.9, 28); ceilingLight(30, 3.9, 28); ceilingLight(50, 3.9, 28);  // hall
+    plant(39.3, 26.7, false);
+    ceilingLight(26, 3.9, 7);             // pantry
+    ceilingLight(40, 3.9, 7);             // playroom
+    ceilingLight(54, 3.9, 7);             // boot room
+    ceilingLight(10, 3.9, 8);             // garage
+    // garage workbench, on the pier between the windows
+    box(2.2, 0.9, 0.6, 'woodDark', 5, 0.45, 1.2);
+    box(1.8, 1.0, 0.06, 'woodPale', 5, 1.8, 0.43);
+    // boot room: the family's coats and boots
+    coatRack(58.4, 2.4);
+    shoeRow(50.5, 1.6, 0, 5);
   }
   // sun room — wicker chairs, plants under the glass roof
   {
@@ -225,14 +440,19 @@ export function furnish(world, mats, ctx) {
     const train = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.18, 0.18), matOf('plasticRed')); train.position.set(41.1, 0.12, 6); train.castShadow = true; S.add(train);
     box(1.2, 1.2, 0.35, 'wallKidBlue', 33.2, 0.6, 4); // toy shelf
     box(0.4, 0.4, 0.4, 'plasticYel', 44, 0.2, 4);
+    box(0.9, 0.5, 0.5, 'plasticRed', 34, 0.25, 12);   // toy chest
+    teddy(42.5, 0.02, 8.5, 1.2);
+    // crayon drawings left on the rug
+    for (const [px, pz, rr] of [[38.5, 9.5, 0.4], [41, 10.2, -0.7], [39.6, 6.2, 1.9]])
+      mesh(new THREE.PlaneGeometry(0.24, 0.3), M.paper, px, 0.035, pz, rr, false).rotation.x = -Math.PI / 2;
     CTX.examine(train, 'a toy train', "Kid's train set, laid out on the floor. Left mid-game. Kids don't just… stop, do they.");
-    nightlight(46, 0.4, 12);
+    nightlight(46, 0.2, 12);
   }
-  // hall — a runner and a couple of pictures
+  // hall — a long runner and pictures at either end
   {
-    rug(30, 28, 1.6, 11, 'runner', 0);
-    framedPic(0.3, 2.0, 24, -Math.PI / 2, pic(1), 0.5, 0.62);
-    framedPic(59.7, 2.0, 24, Math.PI / 2, pic(2), 0.5, 0.62);
+    rug(30, 28, 36, 1.4, 'runner', 0);
+    framedPic(0.25, 2.0, 28, Math.PI / 2, pic(1), 0.5, 0.62);
+    framedPic(59.75, 2.0, 28.5, -Math.PI / 2, pic(2), 0.5, 0.62);
   }
   // garage / pantry / boot room — sparse, working spaces
   {
@@ -248,9 +468,13 @@ export function furnish(world, mats, ctx) {
   }
 
   /* ===== FIRST FLOOR ===== */
+  FLOOR_Y = 4.2;
   // the landing — a runner, a console, the girl drifts here (a nightlight for her)
   {
-    rug(30, 28, 1.6, 40, 'runner', 4.2);
+    ceilingLight(10, 7.4, 28); ceilingLight(30, 7.4, 28); ceilingLight(50, 7.4, 28);
+    ceilingLight(30, 7.4, 39);            // gallery over the stairs
+    plant(23, 39, false);
+    rug(30, 28, 40, 1.6, 'runner', 4.2);
     const con = box(1.1, 0.8, 0.35, 'woodPale', 4, 4.6, 27, 0);
     framedPic(4, 5.9, 26.3, 0, pic(4), 0.5, 0.6);
     nightlight(22, 4.4, 27);
@@ -269,9 +493,14 @@ export function furnish(world, mats, ctx) {
   {
     bed(4, 11, 0, 'pjBlue', 1.2, 1.9);
     wardrobe(2, 24, Math.PI / 2);
-    box(1.0, 1.0, 0.32, 'wallKidBlue', 12.6, 0.6 + 4.2, 22, -Math.PI / 2); // shelf
+    box(1.0, 1.0, 0.32, 'wallKidBlue', 13.68, 0.6 + 4.2, 22, -Math.PI / 2); // shelf on the east wall
     box(0.3, 0.3, 0.3, 'plasticGrn', 8, 4.35, 20);
+    teddy(4, 4.92, 10.4, 0.4);                      // on his pillow
+    framedPic(0.4, 6.0, 13, Math.PI / 2, pic(2), 0.5, 0.62);  // a poster, on the pier
+    for (const [px, pz] of [[6.5, 14], [7.4, 15]])
+      box(0.22, 0.22, 0.22, 'plasticRed', px, 4.31, pz, 0.5);
     nightlight(11, 4.4, 11);
+    ceilingLight(7, 7.4, 17);
   }
   // girl's room
   {
@@ -280,32 +509,69 @@ export function furnish(world, mats, ctx) {
     // a doll's house
     const dh = box(0.8, 0.9, 0.5, 'wallKidPink', 47, 4.65, 23);
     CTX.examine(dh, "a doll's house", "A doll's house, every little room lit up in my torch. Someone loves this kid.");
+    teddy(53, 4.92, 10.4, -0.4);
+    framedPic(59.6, 6.0, 13, -Math.PI / 2, pic(4), 0.5, 0.62);
+    rug(53, 17, 2, 1.6, 'carpetWarm', 4.2);
     nightlight(50, 4.4, 11);
+    ceilingLight(53, 7.4, 17);
   }
   // bathroom
   {
     box(0.7, 0.5, 1.5, 'tileWhite', 16, 4.45, 11);   // bath
     box(0.5, 0.4, 0.4, 'tileWhite', 26, 4.4, 11);    // sink
     box(0.4, 0.7, 0.5, 'tileWhite', 26, 4.55, 13);   // toilet
+    wallMirror(27.8, 5.8, 11, -Math.PI / 2, 0.5, 0.6);
+    box(0.06, 0.5, 0.4, 'towel', 27.85, 5.1, 14.5);  // towels on the rail
+    box(0.06, 0.46, 0.36, 'linen', 27.8, 5.08, 15.0);
+    rug(17.5, 13, 0.9, 0.6, 'linen', 4.2);           // bath mat
+    ceilingLight(21, 7.4, 17);
   }
   // parents' study upstairs
   {
     desk(39, 11, 0);
     shelf(45.4, 22, -Math.PI / 2);
     armchair(43, 22, Math.PI, 'sofaGrey');
+    tableLamp(39.4, 4.99, 10.9);
+    clutterBooks(38.5, 5.0, 11.1, 3);
+    ceilingLight(38, 7.4, 17);
   }
   // guest room + a spare bedroom flanking the master
   {
     bed(6, 4, 0, 'fabricCream', 1.4, 2.0);
     wardrobe(22, 6, -Math.PI / 2);
+    ceilingLight(11, 7.4, 4);
     bed(54, 4, 0, 'sofaGrey', 1.4, 2.0);
+    box(0.5, 0.5, 0.4, 'woodPale', 51.8, 4.45, 2.3);
+    tableLamp(51.8, 4.7, 2.3);
+    ceilingLight(48, 7.4, 4);
+    ceilingLight(29, 7.4, 17);              // the long hall's one dim pendant
   }
-  // the master bedroom — the far room. A bed, a wardrobe, and the shape at the window.
+  // the master bedroom — the far room. A bed, a dresser, a sewing corner,
+  // and the shape at the window.
   {
     bed(26, 5, 0, 'sofaBlue', 1.6, 2.1);
     wardrobe(34.5, 6, -Math.PI / 2);
     box(0.5, 0.5, 0.4, 'woodPale', 26, 4.45, 2.3);  // nightstand
-    // THE THING: a dressmaker's form at the north window, pale in the moonlight
-    dressForm(30, 4.2, 1.4, Math.PI);
+    tableLamp(26, 4.7, 2.3);
+    // dresser with a mirror on the pier above it
+    box(1.2, 0.9, 0.5, 'woodPale', 33.5, 4.65, 0.9);
+    wallMirror(33.5, 6.1, 0.26, 0, 0.7, 0.7);
+    // the end-of-bed bench, clothes over it
+    box(1.2, 0.45, 0.4, 'woodPale', 26, 4.42, 6.6);
+    const clothes = mesh(new THREE.SphereGeometry(0.25, 8, 6), M.robe, 26.3, 4.72, 6.6, 0, false);
+    clothes.scale.y = 0.4;
+    // the sewing corner — in hindsight, the whole ghost
+    const sew = box(0.9, 0.75, 0.5, 'woodPale', 27.6, 4.575, 1.0);
+    box(0.34, 0.3, 0.14, 'iron', 27.5, 5.1, 1.0);              // the machine
+    cyl(0.05, 0.05, 0.4, 8, 'clothPink', 27.85, 5.15, 0.9);    // fabric bolts, on the table
+    cyl(0.05, 0.05, 0.4, 8, 'clothTeal', 27.95, 5.15, 1.1);
+    CTX.examine(sew, 'a sewing table', 'A sewing machine. Pins, fabric, patterns. Somebody makes things here.');
+    ceilingLight(30, 7.4, 4.5);
+    // THE THING: a dressmaker's form squarely in the north window, framed by
+    // its curtains, pale against the treeline
+    dressForm(31, 4.2, 1.4, Math.PI);
   }
+
+  // curtains for every window in the lived-in rooms
+  curtainAll();
 }
