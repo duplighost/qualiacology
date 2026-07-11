@@ -22,11 +22,17 @@ export function figure(M, spec) {
   const hipY = 0.92 * s, shoulderY = 1.42 * s, headY = 1.62 * s;
   const add = (mesh, x, y, z) => { mesh.position.set(x, y, z); mesh.castShadow = true; g.add(mesh); return mesh; };
 
-  // hips + chest (shoulders slope in via the capsule taper)
-  const hips = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.165 * s, 0.1 * s, 4, 10), legMat), 0, hipY, 0);
-  hips.scale.set(1.05, 1, 0.72);
-  const chest = add(new THREE.Mesh(new THREE.CapsuleGeometry(0.18 * s, 0.34 * s, 4, 10), cloth), 0, (hipY + shoulderY) / 2 + 0.02 * s, 0);
-  chest.scale.set(broad, 1, 0.64);
+  // torso from stacked blocks: pelvis, tapered waist, broad chest + rounded
+  // shoulders — a clear human silhouette instead of one smooth tube
+  const blk = (w, h, d, mat, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.y = y; m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+  blk(0.34 * s, 0.2 * s, 0.23 * s, legMat, hipY - 0.02 * s);                 // pelvis
+  blk(0.3 * s * broad, 0.26 * s, 0.21 * s, cloth, hipY + 0.19 * s);          // waist
+  blk(0.44 * s * broad, 0.32 * s, 0.23 * s, cloth, shoulderY - 0.14 * s);    // chest + shoulders
+  for (const sx of [-1, 1]) {                                               // shoulder caps
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.092 * s, 10, 8), cloth);
+    cap.position.set(sx * 0.205 * s * broad, shoulderY - 0.03 * s, 0);
+    cap.castShadow = true; g.add(cap);
+  }
 
   // neck + head, with a face on the -z side
   add(new THREE.Mesh(new THREE.CylinderGeometry(0.05 * s, 0.062 * s, 0.1 * s, 8), skin), 0, shoulderY + 0.05 * s, 0);
@@ -62,14 +68,14 @@ export function figure(M, spec) {
   // arms: pivot at the shoulder; upper arm + slightly bent forearm + hand
   const arm = (sx) => {
     const p = new THREE.Group();
-    p.position.set(sx * 0.245 * s * broad, shoulderY, 0);
+    p.position.set(sx * 0.21 * s * broad, shoulderY - 0.02 * s, 0);
     g.add(p);
-    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.052 * s, 0.2 * s, 3, 8), cloth);
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.058 * s, 0.2 * s, 4, 8), cloth);
     upper.position.y = -0.15 * s; upper.castShadow = true; p.add(upper);
-    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.044 * s, 0.17 * s, 3, 8), cloth);
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.048 * s, 0.17 * s, 4, 8), cloth);
     fore.position.set(0, -0.42 * s, -0.025 * s); fore.rotation.x = 0.2; fore.castShadow = true; p.add(fore);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05 * s, 8, 8), skin);
-    hand.position.set(0, -0.56 * s, -0.05 * s); p.add(hand);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.052 * s, 8, 8), skin);
+    hand.position.set(0, -0.57 * s, -0.05 * s); p.add(hand);
     return p;
   };
   const armL = arm(-1), armR = arm(1);
@@ -79,9 +85,9 @@ export function figure(M, spec) {
     const p = new THREE.Group();
     p.position.set(sx * 0.095 * s, hipY - 0.02 * s, 0);
     g.add(p);
-    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.068 * s, 0.3 * s, 3, 8), legMat);
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.078 * s, 0.3 * s, 4, 8), legMat);
     thigh.position.y = -0.2 * s; thigh.castShadow = true; p.add(thigh);
-    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.054 * s, 0.3 * s, 3, 8), legMat);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.06 * s, 0.3 * s, 4, 8), legMat);
     shin.position.y = -0.62 * s; shin.castShadow = true; p.add(shin);
     const foot = new THREE.Mesh(new THREE.BoxGeometry(0.09 * s, 0.055 * s, 0.18 * s), M.hairDark);
     foot.position.set(0, -0.865 * s, -0.035 * s); p.add(foot);
@@ -99,9 +105,9 @@ export function figure(M, spec) {
   }
 
   if (spec.police) {
-    const vest = new THREE.Mesh(new THREE.CapsuleGeometry(0.2 * s, 0.3 * s, 4, 10), M.hiviz);
-    vest.position.y = (hipY + shoulderY) / 2 + 0.03 * s;
-    vest.scale.set(broad * 1.06, 1, 0.72);
+    const vest = new THREE.Mesh(new THREE.BoxGeometry(0.46 * s * broad, 0.5 * s, 0.25 * s), M.hiviz);
+    vest.position.y = shoulderY - 0.2 * s;
+    vest.castShadow = true;
     g.add(vest);
     const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.19 * s, 0.19 * s, 0.07 * s, 12), M.copHat);
     belt.position.y = hipY + 0.05 * s; belt.scale.z = 0.75; g.add(belt);
@@ -278,7 +284,7 @@ export class NPCs {
     }
 
     // the officer — built, hidden until the finale
-    this.officer = figure(M, { skin: 'skinLight', hair: 'hairDark', color: 'uniform', legs: 'uniform', police: true, broad: true, h: 1.03 });
+    this.officer = figure(M, { skin: 'skinLight', hair: 'hairDark', color: 'uniform', legs: 'uniform', police: true, broad: true, h: 0.95 });
     this.officer.visible = false;
     S.add(this.officer);
   }

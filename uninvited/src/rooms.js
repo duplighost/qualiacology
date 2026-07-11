@@ -50,6 +50,40 @@ function framedPic(x, y, z, ry, tex, w = 0.52, h = 0.64) {
   return g;
 }
 
+// hang art on a room's INTERIOR wall — facing + offset correct by construction.
+// side 'N'|'S'|'E'|'W'; along 0..1 along the wall; yc = centre height above the floor.
+function wallArt(roomId, side, along, texI, w = 0.5, h = 0.62, yc = 1.65) {
+  const r = W.roomById[roomId]; if (!r) return null;
+  const fy = LV[r.level].floor + yc, t = 0.15;
+  let x, z, ry;
+  if (side === 'N') { x = r.wx0 + (r.wx1 - r.wx0) * along; z = r.wz0 + t; ry = 0; }
+  else if (side === 'S') { x = r.wx0 + (r.wx1 - r.wx0) * along; z = r.wz1 - t; ry = Math.PI; }
+  else if (side === 'W') { x = r.wx0 + t; z = r.wz0 + (r.wz1 - r.wz0) * along; ry = Math.PI / 2; }
+  else { x = r.wx1 - t; z = r.wz0 + (r.wz1 - r.wz0) * along; ry = -Math.PI / 2; }
+  return framedPic(x, fy, z, ry, ART[texI % ART.length], w, h);
+}
+
+// small props for surfaces (topY = surface height)
+function mug(x, y, z, m) { mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.08, 8), m || M.tileWhite, x, y + 0.04, z, 0, false); }
+function bottle(x, y, z, m) {
+  mesh(new THREE.CylinderGeometry(0.032, 0.036, 0.15, 8), m || M.clothGreen, x, y + 0.075, z, 0, false);
+  mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.05, 6), m || M.clothGreen, x, y + 0.17, z, 0, false);
+}
+function vase(x, y, z, m) {
+  mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.2, 10), m || M.terracotta, x, y + 0.1, z, 0, false);
+  const b = mesh(new THREE.SphereGeometry(0.055, 6, 5), M.clothPink, x, y + 0.26, z, 0, false); b.scale.y = 1.4;
+}
+function standFrame(x, y, z, ry, ti) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; S.add(g);
+  const fr = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.02), M.brass); fr.position.y = 0.1; g.add(fr);
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.13),
+    new THREE.MeshStandardMaterial({ map: ART[(ti ?? ((x * 3) | 0)) % ART.length], roughness: 0.6 }));
+  pic.position.set(0, 0.1, 0.011); g.add(pic);
+  const leg = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.11, 0.02), M.brass); leg.position.set(0, 0.06, -0.05); leg.rotation.x = 0.42; g.add(leg);
+  return g;
+}
+function bowlOf(x, y, z, m) { mesh(new THREE.CylinderGeometry(0.11, 0.07, 0.06, 12), m || M.tileWhite, x, y + 0.03, z, 0, false); }
+
 /* ---------------- furniture ---------------- */
 function sofa(x, z, ry, m) {
   const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
@@ -571,6 +605,76 @@ export function furnish(world, mats, ctx) {
     // its curtains, pale against the treeline
     dressForm(31, 4.2, 1.4, Math.PI);
   }
+
+  /* ===== dressing pass: art on the walls, clutter on the surfaces, and life
+     in the rooms that were bare ===== */
+
+  // --- GROUND: art on interior walls ---
+  wallArt('living', 'N', 0.5, 0, 0.6, 0.74);
+  wallArt('living', 'N', 0.8, 3, 0.5, 0.62);
+  wallArt('dining', 'N', 0.22, 4);
+  wallArt('dining', 'N', 0.78, 6);
+  wallArt('dining', 'W', 0.16, 2, 0.44, 0.56);
+  wallArt('kitchen', 'N', 0.22, 1, 0.42, 0.42);
+  wallArt('study', 'E', 0.35, 7);
+  wallArt('study', 'E', 0.72, 2, 0.44, 0.56);
+  wallArt('family', 'S', 0.5, 3);
+  wallArt('family', 'E', 0.7, 1, 0.44, 0.56);
+  wallArt('foyer', 'E', 0.24, 6, 0.5, 0.62);
+  wallArt('backhall', 'N', 0.85, 5, 0.42, 0.52);   // 0.5 sat on the playroom door
+  wallArt('sunroom', 'N', 0.3, 0, 0.44, 0.56);
+
+  // --- GROUND: clutter on surfaces ---
+  clutterBooks(8.6, 0.46, 35.3, 3); mug(9.5, 0.46, 34.7, M.clothMaroon);
+  standFrame(21.35, 1.29, 34.6, -Math.PI / 2, 5); standFrame(21.35, 1.29, 35.5, -Math.PI / 2, 2);  // mantel
+  bowlOf(44, 0.83, 35, M.brass);
+  standFrame(44.6, 0.9, 39.4, Math.PI, 0); vase(43.3, 0.9, 39.4, M.terracotta);                    // sideboard
+  for (const kz of [32.6, 33.4, 36.6]) mug(59.0, 0.965, kz, [M.clothPink, M.clothTeal, M.clothMustard][(kz | 0) % 3]);
+  box(0.12, 0.18, 0.07, 'woodDark', 59.0, 1.05, 37.6);            // knife block
+  bottle(58.95, 0.965, 34.2, M.clothGreen);
+  mug(3.5, 0.79, 20.3, M.clothNavy); clutterBooks(2.7, 0.79, 20.4, 2);                              // study desk
+  clutterBooks(20, 0.46, 21.2, 3); mug(20.6, 0.46, 20.6, M.clothTeal);                              // family table
+  standFrame(22.62, 0.8, 37.4, Math.PI / 2, 4); standFrame(22.62, 0.8, 36.7, Math.PI / 2, 1);       // foyer console
+
+  // --- GROUND: fill the bare rooms (correct world bounds this time) ---
+  FLOOR_Y = 0;
+  // back hall (x28-38, z16-26) — a bench, a plant, a mirror; doors sit at x32-34
+  box(1.2, 0.42, 0.4, 'woodPale', 30, 0.21, 25); plant(36.4, 25, false);
+  wallMirror(28.2, 1.6, 20, Math.PI / 2, 0.4, 0.7);
+  // utility (x38-48, z16-26) — cabinet + detergents + a hanging rail (washer/dryer at ~40,24.6)
+  box(0.4, 1.8, 1.8, 'metalWhite', 38.4, 0.9, 18);
+  for (const [sz, sm] of [[17.4, 'clothTeal'], [18.0, 'clothPink'], [18.7, 'clothMustard']]) bottle(38.5, 1.85, sz, M[sm]);
+  const rail = cyl(0.02, 0.02, 2.6, 6, 'iron', 39, 1.9, 21); rail.rotation.x = Math.PI / 2;   // rail along z
+  for (const [hz, hm] of [[20.4, 'clothNavy'], [21.2, 'robe'], [22.0, 'clothTeal']]) mesh(new THREE.ConeGeometry(0.16, 0.6, 8, 1, true), M[hm], 39, 1.55, hz, 0, true);
+  // pantry (x20-32, z0-16) — W-wall shelving loaded with jars
+  box(0.35, 2.4, 5, 'woodPale', 20.4, 1.2, 8);
+  for (const py of [0.7, 1.2, 1.7, 2.1]) for (let j = 0; j < 5; j++) bottle(20.75, py, 6 + j * 0.9, [M.clothGreen, M.terracotta, M.clothMustard, M.brass, M.clothMaroon][j]);
+  // sun room (x48-60, z16-26) — more plants, a side table, a watering can
+  plant(50.5, 22, true); plant(58, 18, false);
+  lowTable(52, 24, 'woodPale'); mug(52, 0.46, 24, M.terracotta);
+  cyl(0.09, 0.12, 0.18, 8, 'metalSteel', 50, 0.29, 24);          // watering can
+  // garage (x0-20, z0-16) — W-wall shelving, paint tins, a spare wheel on the N wall
+  box(0.35, 1.8, 3, 'metalWhite', 0.4, 0.9, 8);
+  for (const gz of [7, 8.5, 9.8]) bottle(0.75, 1.05, gz, M.iron);
+  const wheel = cyl(0.4, 0.4, 0.06, 16, 'iron', 13, 1.4, 0.4); wheel.rotation.x = Math.PI / 2;   // on a pier (x13), not the window at x15
+
+  // --- FIRST FLOOR: art + clutter ---
+  FLOOR_Y = 4.2;
+  wallArt('master', 'W', 0.35, 5, 0.5, 0.62);
+  wallArt('master', 'E', 0.7, 0, 0.5, 0.62);
+  wallArt('boy', 'E', 0.4, 2);
+  wallArt('girl', 'W', 0.4, 4);
+  wallArt('guest', 'S', 0.75, 1);      // 0.3 sat on the boy's-room door
+  wallArt('parents', 'S', 0.3, 3);     // 0.7 sat on the girl's-room door
+  wallArt('studyUp', 'S', 0.5, 7);
+  wallArt('bath', 'N', 0.5, 4, 0.36, 0.36);
+  // clutter on the upstairs surfaces
+  mug(25.82, 4.71, 2.18, M.clothTeal); standFrame(26.18, 4.71, 2.2, -0.5, 1);   // master nightstand (clear of the lamp)
+  bottle(33.2, 5.1, 0.9, M.clothPink); standFrame(33.8, 5.1, 0.9, Math.PI, 4);  // master dresser
+  standFrame(39.4, 5.03, 11.1, 0, 2); mug(38.9, 5.03, 11.1, M.clothNavy);   // studyUp desk
+  standFrame(52.12, 4.71, 2.2, -0.4, 5);                                    // spare-room nightstand (offset from the lamp)
+  // fuller bookshelves upstairs
+  for (const bz of [21.6, 22.4]) clutterBooks(45.2, 5.0 + (bz === 22.4 ? 0.44 : 0), bz, 3);   // studyUp shelf top rows
 
   // curtains for every window in the lived-in rooms
   curtainAll();

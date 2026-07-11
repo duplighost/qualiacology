@@ -94,8 +94,9 @@ export class Events {
     setTimeout(() => C.audio.dawn(), 400);   // the dread resolves upward — it was nothing
 
     // the officer, already in the doorway behind you
+    C.world.doorById.masterDoor?.setOpen(true);   // he comes through an open door
     const off = C.npcs.officer;
-    off.position.set(29, 4.2, 8.4);
+    off.position.set(29, 4.2, 8.6);               // in the hall, at the threshold
     off.rotation.y = 0;
     off.visible = true;
     // turn to face wherever the officer actually is relative to you
@@ -125,15 +126,21 @@ export class Events {
       C.player.pitch += (0 - C.player.pitch) * Math.min(1, dt * 2.4);
       if (Math.abs(d) < 0.05) { f.phase = 'approach'; f.t = 0; }
     } else if (f.phase === 'approach') {
-      const dx = C.player.pos.x - off.position.x, dz = C.player.pos.z - off.position.z;
-      const dd = Math.hypot(dx, dz);
+      // walk THROUGH the doorway first (stay in the x≈29 door lane until inside
+      // the room), only then cross the open floor to the player — never through a wall
+      const throughDoor = off.position.z > 7.6;
+      const tx = throughDoor ? 29 : C.player.pos.x;
+      const tz = throughDoor ? 6.6 : C.player.pos.z;
+      const dx = tx - off.position.x, dz = tz - off.position.z;
+      const dd = Math.hypot(dx, dz) || 1;
       off.rotation.y = Math.atan2(-dx, -dz);
       off.userData.phase += dt * 6;
       const sw = Math.sin(off.userData.phase) * 0.5;
       off.userData.legL.rotation.x = sw; off.userData.legR.rotation.x = -sw;
       off.userData.armL.rotation.x = -sw * 0.6; off.userData.armR.rotation.x = sw * 0.6;
-      if (dd > 1.7) {
-        const st = Math.min(dd, 1.5 * dt);
+      const toPlayer = Math.hypot(C.player.pos.x - off.position.x, C.player.pos.z - off.position.z);
+      if (toPlayer > 1.7) {
+        const st = 1.5 * dt;
         off.position.x += dx / dd * st;
         off.position.z += dz / dd * st;
       } else if (!f.cuffed) {

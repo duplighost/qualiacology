@@ -10,10 +10,10 @@
 // it is a dressmaker's form, and there is a police officer in the doorway.
 
 export const FAMILY = {
-  mother: { name: 'Claire', color: 'robe',      legs: 'robe',      skin: 'skinLight', hair: 'hairBrown', female: true, longHair: true, h: 0.97 },
-  father: { name: 'Mark',   color: 'clothNavy', legs: 'denim',     skin: 'skinMid',   hair: 'hairDark',  broad: true,  h: 1.04 },
-  boy:    { name: 'Toby',   color: 'pjBlue',    legs: 'pjBlue',    skin: 'skinLight', hair: 'hairBrown', child: true },
-  girl:   { name: 'Lucy',   color: 'clothPink', legs: 'clothPink', skin: 'skinMid',   hair: 'hairDark',  child: true, female: true, longHair: true, h: 0.93 },
+  mother: { name: 'Claire', color: 'robe',      legs: 'robe',      skin: 'skinLight', hair: 'hairBrown', female: true, longHair: true, h: 0.88 },
+  father: { name: 'Mark',   color: 'clothNavy', legs: 'denim',     skin: 'skinMid',   hair: 'hairDark',  broad: true,  h: 0.95 },
+  boy:    { name: 'Toby',   color: 'pjBlue',    legs: 'pjBlue',    skin: 'skinLight', hair: 'hairBrown', child: true, h: 0.92 },
+  girl:   { name: 'Lucy',   color: 'clothPink', legs: 'clothPink', skin: 'skinMid',   hair: 'hairDark',  child: true, female: true, longHair: true, h: 0.9 },
 };
 
 // The player's paranoid inner voice. Keyed by trigger id (see events.js).
