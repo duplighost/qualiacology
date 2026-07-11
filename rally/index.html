@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RALLY</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<meta name="description" content="RALLY — a mouse-only tennis duel. Swing your hand through the ball; the swing is the shot. The music only lives while the ball does.">
+<meta property="og:title" content="RALLY">
+<meta property="og:description" content="Zero buttons. One swing. The score was never the song.">
+<style>
+  :root {
+    --cream: #f3e9d2;
+    --ink: #241a14;
+    --vermilion: #c73e2e;
+    --dusk: #2b2140;
+    --gold: #e8b23a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #1a1226; overflow: hidden; }
+  body {
+    font-family: Georgia, 'Palatino Linotype', 'Book Antiqua', serif;
+    color: var(--cream);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #stage { position: relative; }
+  canvas {
+    display: block;
+    cursor: none;
+    touch-action: none;
+    box-shadow: 0 12px 60px rgba(0,0,0,0.55);
+  }
+  /* ---------- letterpress scoreboard ---------- */
+  #scoreboard {
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--cream); color: var(--ink);
+    border: 3px solid var(--ink); outline: 1px solid var(--cream); outline-offset: -7px;
+    padding: 8px 26px 10px;
+    text-align: center; letter-spacing: 0.14em;
+    opacity: 0; transition: opacity 0.4s;
+    pointer-events: none;
+    min-width: 240px;
+  }
+  #scoreboard.on { opacity: 1; }
+  #sb-names { font-size: 13px; text-transform: uppercase; display: flex; justify-content: space-between; gap: 22px; }
+  #sb-score { font-size: 34px; font-weight: bold; letter-spacing: 0.08em; margin-top: 2px; }
+  #sb-left.flash, #sb-right.flash { animation: sbflash 0.7s ease-out; }
+  @keyframes sbflash { 0% { color: var(--vermilion); } 100% { color: var(--ink); } }
+  #scoreboard.burning { animation: burn 2.2s forwards steps(24); }
+  @keyframes burn {
+    0% { filter: none; transform: translateX(-50%); }
+    30% { filter: contrast(1.6) brightness(1.2); transform: translateX(-50.5%) rotate(0.4deg); }
+    55% { filter: contrast(2.5) brightness(0.8) sepia(0.8); transform: translateX(-49.4%) rotate(-0.7deg); }
+    80% { filter: contrast(3) brightness(0.4) sepia(1); transform: translateX(-50.6%) rotate(0.9deg); opacity: 0.7; }
+    100% { filter: brightness(0); opacity: 0; transform: translateX(-50%) rotate(0deg) scale(0.98); }
+  }
+  /* ---------- callouts ---------- */
+  #callouts {
+    position: absolute; top: 26%; left: 0; right: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    pointer-events: none;
+    z-index: 5;   /* above the card screens so pre-game callouts (mute toggle) show */
+  }
+  .callout {
+    font-size: 30px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--cream); text-shadow: 0 3px 0 rgba(0,0,0,0.35);
+    opacity: 0; transform: scale(1.6);
+  }
+  .callout.in { animation: pop 1.6s cubic-bezier(0.2, 1.6, 0.3, 1) forwards; }
+  .callout.big { font-size: 44px; color: var(--gold); }
+  .callout.warm { color: var(--gold); }
+  .callout.soft { font-size: 19px; letter-spacing: 0.12em; text-transform: lowercase; opacity: 0.9; }
+  @keyframes pop {
+    0% { opacity: 0; transform: scale(1.6); }
+    12% { opacity: 1; transform: scale(1); }
+    78% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  }
+  /* ---------- rival nameplate ---------- */
+  #rivalcard {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    background: radial-gradient(ellipse at 50% 50%, rgba(20, 13, 32, 0.28), rgba(20, 13, 32, 0.66));
+    opacity: 0; pointer-events: none; visibility: hidden;
+    transition: opacity 0.32s ease, visibility 0.32s;
+  }
+  #rivalcard.on { opacity: 1; pointer-events: auto; visibility: visible; }
+  #rc-name {
+    font-size: 76px; letter-spacing: 0.16em; text-indent: 0.16em; font-weight: bold;
+    color: var(--cream); text-shadow: 0 4px 0 rgba(0,0,0,0.4);
+    transform: translateY(14px); opacity: 0; transition: transform 0.5s ease, opacity 0.5s ease;
+  }
+  #rc-rule {
+    width: 0; height: 2px; background: rgba(243, 233, 210, 0.55);
+    transition: width 0.55s ease 0.12s;
+  }
+  #rc-title {
+    font-size: 20px; letter-spacing: 0.34em; text-indent: 0.34em;
+    font-variant: small-caps; font-style: italic;
+    color: rgba(243, 233, 210, 0.82);
+    transform: translateY(-10px); opacity: 0; transition: transform 0.5s ease 0.1s, opacity 0.5s ease 0.1s;
+  }
+  #rivalcard.on #rc-name { transform: translateY(0); opacity: 1; }
+  #rivalcard.on #rc-rule { width: 180px; }
+  #rivalcard.on #rc-title { transform: translateY(0); opacity: 1; }
+
+  /* ---------- hint ---------- */
+  #hint {
+    position: absolute; bottom: 44px; left: 0; right: 0; text-align: center;
+    font-size: 17px; letter-spacing: 0.1em; font-style: italic;
+    color: rgba(243, 233, 210, 0.85);
+    opacity: 0; transition: opacity 0.5s; pointer-events: none;
+  }
+  #hint.on { opacity: 1; }
+  /* ---------- song bar (finale) ---------- */
+  #songbar {
+    position: absolute; top: 24px; left: 50%; transform: translateX(-50%);
+    width: 320px; height: 6px; background: rgba(243, 233, 210, 0.18);
+    border-radius: 3px; overflow: hidden;
+    opacity: 0; transition: opacity 0.8s; pointer-events: none;
+  }
+  #songbar.on { opacity: 1; }
+  #songbar-fill { height: 100%; width: 0%; background: var(--gold); transition: width 0.5s; }
+  #duet-rally {
+    position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    font-size: 16px; letter-spacing: 0.16em; text-transform: lowercase;
+    color: rgba(243, 233, 210, 0.9);
+    opacity: 0; transition: opacity 0.5s; pointer-events: none;
+  }
+  #duet-rally.on { opacity: 1; }
+  /* ---------- dialogue ---------- */
+  #dialog {
+    position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%) translateY(20px);
+    width: min(720px, 88%);
+    background: var(--cream); color: var(--ink);
+    border: 3px solid var(--ink); outline: 1px solid var(--cream); outline-offset: -7px;
+    padding: 18px 26px 20px;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s;
+    cursor: pointer;
+  }
+  #dialog.on { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+  #dlg-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  #dlg-swatch { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ink); display: inline-block; }
+  #dlg-name { font-size: 15px; text-transform: uppercase; letter-spacing: 0.2em; font-weight: bold; }
+  #dlg-text { font-size: 19px; line-height: 1.5; }
+  #dlg-more { position: absolute; right: 16px; bottom: 10px; font-size: 12px; letter-spacing: 0.1em; opacity: 0.5; }
+  /* ---------- title & endcard ---------- */
+  .card-screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: radial-gradient(ellipse at 50% 60%, rgba(43, 33, 64, 0.5), rgba(20, 13, 32, 0.92));
+    opacity: 0; pointer-events: none; visibility: hidden;
+    transition: opacity 0.6s, visibility 0.6s;
+  }
+  .card-screen.on { opacity: 1; pointer-events: auto; visibility: visible; }
+  #title h1 {
+    font-size: 110px; letter-spacing: 0.3em; text-indent: 0.3em;
+    color: var(--cream); text-shadow: 0 5px 0 rgba(0,0,0,0.4);
+    font-weight: bold;
+  }
+  #title .sub {
+    font-size: 17px; font-style: italic; letter-spacing: 0.14em;
+    color: rgba(243, 233, 210, 0.75); margin-top: -6px;
+  }
+  .btn {
+    font-family: inherit; font-size: 19px; letter-spacing: 0.22em; text-transform: uppercase;
+    background: var(--cream); color: var(--ink);
+    border: 3px solid var(--ink); outline: 1px solid var(--cream); outline-offset: -6px;
+    padding: 12px 44px; cursor: pointer; margin-top: 18px;
+    transition: transform 0.12s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn.ghost { background: transparent; color: var(--cream); border-color: var(--cream); outline: none; display: none; }
+  .btn.ghost.on { display: inline-block; }
+  #title .foot { position: absolute; bottom: 26px; font-size: 13px; letter-spacing: 0.12em; color: rgba(243,233,210,0.5); }
+  #endcard h2 { font-size: 40px; letter-spacing: 0.14em; text-align: center; line-height: 1.4; max-width: 700px; }
+  #endcard .thesis { color: var(--gold); font-style: italic; font-size: 24px; letter-spacing: 0.1em; }
+  #end-rally { font-size: 17px; letter-spacing: 0.16em; color: rgba(243,233,210,0.8); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" width="1280" height="720"></canvas>
+
+  <div id="scoreboard">
+    <div id="sb-names"><span id="sb-left">you</span><span id="sb-right">pip</span></div>
+    <div id="sb-score">0 — 0</div>
+  </div>
+
+  <div id="songbar"><div id="songbar-fill"></div></div>
+  <div id="duet-rally"></div>
+  <div id="callouts"></div>
+  <div id="hint"></div>
+
+  <div id="rivalcard">
+    <div id="rc-name">PIP</div>
+    <div id="rc-rule"></div>
+    <div id="rc-title">the local optimist</div>
+  </div>
+
+  <div id="dialog">
+    <div id="dlg-head"><span id="dlg-swatch"></span><span id="dlg-name"></span></div>
+    <div id="dlg-text"></div>
+    <div id="dlg-more">click ▸</div>
+  </div>
+
+  <div id="title" class="card-screen">
+    <h1>RALLY</h1>
+    <div class="sub">swing your hand through the ball. the swing is the shot.</div>
+    <button id="title-play" class="btn">play</button>
+    <button id="title-duet" class="btn ghost">duet</button>
+    <div class="foot">a qualiacology game · mouse only · sound on (it matters)</div>
+  </div>
+
+  <div id="endcard" class="card-screen">
+    <h2 class="thesis">the score was never the song.</h2>
+    <div id="end-rally"></div>
+    <button id="end-duet" class="btn">duet — keep it alive</button>
+    <button id="end-again" class="btn ghost on">another summer</button>
+  </div>
+</div>
+
+<script>
+  // fit the 16:9 stage to the window by scaling the WHOLE stage (canvas + DOM HUD
+  // together), so the scoreboard/dialog keep their designed proportion to the court
+  (function fit() {
+    const stage = document.getElementById('stage');
+    stage.style.width = '1280px';
+    stage.style.height = '720px';
+    stage.style.transformOrigin = 'center center';
+    function resize() {
+      const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+      stage.style.transform = 'scale(' + s + ')';
+    }
+    window.addEventListener('resize', resize);
+    resize();
+  })();
+</script>
+<script src="js/config.js"></script>
+<script src="js/rivals.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

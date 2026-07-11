@@ -74,6 +74,12 @@
 /behindyou         /behind-you/             302
 /chased            /behind-you/             302
 
+# --- Rally ---
+/rally         /rally/index.html   301!
+/rally.html    /rally/             301!
+/tennis        /rally/             302
+/duel          /rally/             302
+
 # --- boss codex + record shelf ---
 /codex          /no-moon/codex/           302
 /music          /#music                   302
