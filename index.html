@@ -6,15 +6,16 @@
   <title>Qualiacology | Alexander Duncan Guitar</title>
   <meta
     name="description"
-    content="Qualiacology is Alexander Duncan Guitar's home for psychopharmacology, community, Doopliss music, Skyshard, Still, No Moon, Rocket Shoes, Marrow, Duskfall, Vesperbane, Galaxy Sandbox, Blackthorn Manor, and strange little browser games."
+    content="Qualiacology is Alexander Duncan Guitar's midnight lab for psychopharmacology, a 3,000-person community, Doopliss murder pop, and 14 original browser worlds."
   />
   <meta name="theme-color" content="#0d1020" />
+  <meta name="color-scheme" content="dark" />
   <meta name="robots" content="index, follow" />
 
   
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Qualiacology | Alexander Duncan Guitar" />
-  <meta property="og:description" content="Psychopharmacology, music, community, Skyshard, Still, No Moon, Rocket Shoes, Marrow, Duskfall, Vesperbane, Galaxy Sandbox, Blackthorn Manor, and strange little browser games hiding underneath the chemistry of being alive." />
+  <meta property="og:description" content="Psychopharmacology, a 3,000-person community, Doopliss murder pop, and 14 original browser worlds under one neon-damaged roof." />
   <meta property="og:url" content="https://qualiacology.com/" />
   <meta property="og:image" content="https://qualiacology.com/assets/og/qualiacology-og-v280.png" />
   <meta property="og:image:secure_url" content="https://qualiacology.com/assets/og/qualiacology-og-v280.png" />
@@ -23,10 +24,37 @@
   <meta property="og:image:alt" content="Qualiacology preview image" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Qualiacology | Alexander Duncan Guitar" />
-  <meta name="twitter:description" content="Psychopharmacology, music, community, Skyshard, Still, No Moon, Rocket Shoes, Marrow, Duskfall, Vesperbane, Galaxy Sandbox, Blackthorn Manor, and strange little browser games hiding underneath the chemistry of being alive." />
+  <meta name="twitter:description" content="Psychopharmacology, a 3,000-person community, Doopliss murder pop, and 14 original browser worlds under one neon-damaged roof." />
   <meta name="twitter:image" content="https://qualiacology.com/assets/og/twitter/qualiacology-twitter-v280.png" />
   <meta name="twitter:image:alt" content="Qualiacology preview image" />
   <link rel="canonical" href="https://qualiacology.com/" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Person",
+          "@id": "https://qualiacology.com/#alexander-duncan-guitar",
+          "name": "Alexander Duncan Guitar",
+          "url": "https://qualiacology.com/",
+          "jobTitle": "Psychopharmacology researcher and musician",
+          "sameAs": [
+            "https://www.instagram.com/alex_the_duncan/",
+            "https://www.tiktok.com/@duplighost",
+            "https://www.youtube.com/@Alexander_Duncan",
+            "https://suno.com/@doopliss"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://qualiacology.com/#website",
+          "name": "Qualiacology",
+          "url": "https://qualiacology.com/",
+          "author": { "@id": "https://qualiacology.com/#alexander-duncan-guitar" }
+        }
+      ]
+    }
+  </script>
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
   <link rel="apple-touch-icon" href="/assets/icon-192.png" />
   <link rel="manifest" href="/assets/site.webmanifest" />
@@ -2882,7 +2910,9 @@
 
   </style>
   <link rel="stylesheet" href="/assets/site-ambient.css?v=mobile-polish-20260611" />
-  <script src="/assets/site-ambient.js?v=mobile-polish-20260611" defer></script>
+  <link rel="stylesheet" href="/assets/qualiacology-v300.css?v=20260712c" />
+  <script src="/assets/site-ambient.js?v=opt-in-20260712b" defer></script>
+  <script src="/assets/qualiacology-v300.js?v=20260712b" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
@@ -2992,10 +3022,10 @@
                   <p>We study medication, help people, and chill with friends. 3,000+ members strong.</p>
                 </article>
 
-                <article class="map-node book">
+                <a class="map-node book" href="/book.html" aria-label="Read This Helped Someone">
                   <h3>This Helped Someone</h3>
                   <p>A puzzle-piece framework for finding what actually fits in psychiatric medicine — without pretending there’s one magic answer.</p>
-                </article>
+                </a>
 
                 <span class="map-line l1" aria-hidden="true"></span>
                 <span class="map-line l2" aria-hidden="true"></span>
@@ -3784,6 +3814,7 @@
       const progress = document.querySelector(".scroll-progress");
       const menuToggle = document.querySelector(".menu-toggle");
       const mobileMenu = document.getElementById("mobile-menu");
+      const pageShell = document.querySelector(".page-shell");
       const navLinks = Array.from(document.querySelectorAll(".nav-link"));
       const sectionTargets = Array.from(document.querySelectorAll("main section[id]"));
       const revealItems = Array.from(document.querySelectorAll(".reveal"));
@@ -3791,11 +3822,19 @@
       const headshot = document.querySelector("[data-headshot]");
       const portraitFallback = document.querySelector("[data-portrait-fallback]");
 
-      const closeMenu = () => {
+      const closeMenu = (restoreFocus = true) => {
         if (!mobileMenu || !menuToggle) return;
+        const wasOpen = mobileMenu.classList.contains("open");
         mobileMenu.classList.remove("open");
         menuToggle.setAttribute("aria-expanded", "false");
         document.body.classList.remove("menu-open");
+        if (pageShell) {
+          pageShell.removeAttribute("inert");
+          pageShell.removeAttribute("aria-hidden");
+        }
+        if (wasOpen && restoreFocus) {
+          setTimeout(() => menuToggle.focus(), 0);
+        }
       };
 
       const openMenu = () => {
@@ -3803,6 +3842,14 @@
         mobileMenu.classList.add("open");
         menuToggle.setAttribute("aria-expanded", "true");
         document.body.classList.add("menu-open");
+        if (pageShell) {
+          pageShell.setAttribute("inert", "");
+          pageShell.setAttribute("aria-hidden", "true");
+        }
+        setTimeout(() => {
+          const firstLink = mobileMenu.querySelector("a");
+          if (firstLink) firstLink.focus();
+        }, 120);
       };
 
       if (menuToggle && mobileMenu) {
@@ -3816,16 +3863,26 @@
         });
 
         navLinks.forEach((link) => {
-          link.addEventListener("click", () => {
+          link.addEventListener("click", (event) => {
             if (window.innerWidth < 900) {
-              closeMenu();
+              const hash = link.getAttribute("href") || "";
+              const isMobileLink = Boolean(link.closest("#mobile-menu"));
+              closeMenu(false);
+              if (isMobileLink && hash.startsWith("#")) {
+                event.preventDefault();
+                if (window.location.hash === hash) {
+                  document.querySelector(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                } else {
+                  window.location.hash = hash;
+                }
+              }
             }
           });
         });
 
         window.addEventListener("resize", () => {
           if (window.innerWidth >= 900) {
-            closeMenu();
+            closeMenu(false);
           }
         });
       }
@@ -3834,6 +3891,11 @@
         navLinks.forEach((link) => {
           const isMatch = link.getAttribute("href") === "#" + id;
           link.classList.toggle("active", isMatch);
+          if (isMatch) {
+            link.setAttribute("aria-current", "page");
+          } else {
+            link.removeAttribute("aria-current");
+          }
         });
       };
 

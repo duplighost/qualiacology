@@ -3,7 +3,7 @@
 
   const AUDIO_SRC = '/assets/audio/jelly-strobe-instrumental-v280.mp3';
   const STORAGE_KEY = 'qualiacologyAmbientAudioEnabled';
-  const QUIET_VOLUME = 0.45;
+  const QUIET_VOLUME = 0.28;
 
   const onReady = (fn) => {
     if (document.readyState === 'loading') {
@@ -38,8 +38,10 @@
       try { localStorage.setItem(STORAGE_KEY, value); } catch (_) {}
     };
 
-    let enabled = readPref() !== 'off';
+    // First visits are silent. A deliberate opt-in persists across the site.
+    let enabled = readPref() === 'on';
     let started = false;
+    let playbackBlocked = false;
     let lastUnlockAttempt = 0;
 
     const label = () => toggle.querySelector('[data-ambient-audio-label]');
@@ -71,8 +73,10 @@
         audio.volume = QUIET_VOLUME;
         await audio.play();
         started = true;
+        playbackBlocked = false;
         update('playing');
       } catch (error) {
+        playbackBlocked = true;
         update('blocked');
       }
     };
@@ -101,25 +105,31 @@
       event.stopPropagation();
       lastUnlockAttempt = 0;
 
-      if (enabled && audio.paused) {
+      if (!audio.paused || (enabled && playbackBlocked)) {
+        enabled = false;
+        playbackBlocked = false;
         persist();
-        playQuietly();
+        pauseQuietly();
         return;
       }
 
-      enabled = !enabled;
+      enabled = true;
       persist();
-      if (enabled) {
-        playQuietly();
-      } else {
-        pauseQuietly();
-      }
+      playQuietly();
     });
 
     audio.addEventListener('pause', () => update('paused'));
     audio.addEventListener('play', () => update('playing'));
     audio.addEventListener('volumechange', () => {
       if (audio.volume > QUIET_VOLUME) audio.volume = QUIET_VOLUME;
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && !audio.paused) {
+        audio.pause();
+      } else if (!document.hidden && enabled && started) {
+        playQuietly();
+      }
     });
 
     document.body.append(audio, toggle);

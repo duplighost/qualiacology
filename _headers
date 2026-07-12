@@ -43,6 +43,21 @@
 /assets/site-ambient.js
   Cache-Control: public, max-age=3600
 
+/assets/qualiacology-v300.css
+  Cache-Control: public, max-age=3600
+
+/assets/qualiacology-v300.js
+  Cache-Control: public, max-age=3600
+
+/uninvited/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/uninvited/src/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/uninvited/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /glide/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
