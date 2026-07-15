@@ -36,7 +36,8 @@ const ROOMS = {
     // middle band
     ['study',   'the study',           0,  8,  5, 12, { wall: 'wallWarmGrey', floor: 'carpetWarm' }],
     ['family',  'the family room',     6,  8, 13, 12, { wall: 'wallBlueLt',  floor: 'carpetGrey' }],
-    ['backhall','the back hall',      14,  8, 18, 12, { wall: 'wallCream',   floor: 'tileFloor' }],
+    ['backhall','the back hall',      16,  8, 18, 12, { wall: 'wallCream',   floor: 'tileFloor' }],
+    ['cellarStair','the cellar stairs', 14, 8, 15, 12, { wall: 'stoneDark', floor: 'stone' }],
     ['laundry', 'the utility room',   19,  8, 23, 12, { wall: 'tileWhite',   floor: 'tileFloor' }],
     ['sunroom', 'the sun room',       24,  8, 29, 12, { wall: 'wallCream',   floor: 'tileFloor', conservatory: true }],
     // north band — the working end of the house
@@ -66,6 +67,14 @@ const ROOMS = {
     // the two rooms flanking the master
     ['guest',    'the guest room',     0,  0, 11,  3, { wall: 'wallBlueLt',  floor: 'carpetGrey' }],
     ['parents',  'the bedroom',       18,  0, 29,  3, { wall: 'wallSage',    floor: 'carpetGrey' }],
+  ],
+  basement: [
+    // the cold cellar under the house — reached by the stair in the back hall.
+    // cellarLanding spans the WHOLE flight (cells 14-15, z8-12) so no interior
+    // wall crosses the descending stair, plus the landing below it.
+    ['cellarLanding', 'the cellar',      13,  8, 15, 13, { wall: 'stoneDark', floor: 'stone' }],
+    ['cellar',        'the cellar',       7, 12, 12, 15, { wall: 'brick',     floor: 'stone' }],
+    ['boiler',        'the boiler room', 13, 14, 15, 15, { wall: 'brick',     floor: 'stone' }],
   ],
 };
 
@@ -105,6 +114,10 @@ const DOORS = [
   ['first', 14,  4, 'N', { id: 'masterDoor', name: 'the bedroom' }],   // <-- the finale door
   ['first',  3,  4, 'N', { name: 'the guest room' }],
   ['first', 26,  4, 'N', { name: 'the bedroom' }],
+  // --- basement stair + cellar ---
+  ['ground', 14, 8, 'N', { id: 'cellarDoor', heavy: true, name: 'the cellar door' }],  // pantry -> cellar stairs
+  ['basement', 13, 12, 'W', { name: 'the cellar' }],           // landing -> storage cellar
+  ['basement', 13, 14, 'N', { name: 'the boiler room' }],      // landing -> boiler room
 ];
 
 // no wall-less room pairs
@@ -127,10 +140,14 @@ export const RAMPS = [
   { id: 'grandL', x0: 27, x1: 33, z0: 31, z1: 33, axis: 'z', y0: 2.1, y1: 2.1 },
   { id: 'grandW', x0: 24, x1: 27, z0: 31, z1: 33, axis: 'x', y0: 4.2, y1: 2.1 },
   { id: 'grandE', x0: 33, x1: 36, z0: 31, z1: 33, axis: 'x', y0: 2.1, y1: 4.2 },
+  // the cellar stair: descends from the ground (z16, y0) to the cellar (z26, y-3.2)
+  { id: 'cellar', x0: 28, x1: 32, z0: 16, z1: 26, axis: 'z', y0: 0, y1: -3.2 },
 ];
 
-const FLOOR_HOLES = [];   // the void room handles the stairwell opening
-const CEIL_HOLES = [];
+// the cellar-stair shaft has no ground floor (you descend through it), and the
+// cellar ceiling is open over the top of the flight so it isn't capped
+const FLOOR_HOLES = [['ground', 14, 8, 15, 12]];
+const CEIL_HOLES = [['basement', 14, 8, 15, 12]];   // open the whole flight, not just its top
 
 /* ------------------------------------------------------------------ */
 
@@ -223,6 +240,7 @@ export class World {
     this.fullHeightEdges = new Set();
     this.buildWallsFor('ground');
     this.buildWallsFor('first');
+    this.buildWallsFor('basement');
 
     this.buildStairs();
     this.buildRailings();

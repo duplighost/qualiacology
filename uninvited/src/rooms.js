@@ -681,9 +681,10 @@ export function furnish(world, mats, ctx) {
 
   // --- GROUND: fill the bare rooms (correct world bounds this time) ---
   FLOOR_Y = 0;
-  // back hall (x28-38, z16-26) — a bench, a plant, a mirror; doors sit at x32-34
-  box(1.2, 0.42, 0.4, 'woodPale', 30, 0.21, 25); plant(36.4, 25, false);
-  wallMirror(28.2, 1.6, 20, Math.PI / 2, 0.4, 0.7);
+  // back hall (now x32-38 — the west end became the cellar stairs) — a bench, plant, mirror
+  box(1.2, 0.42, 0.4, 'woodPale', 35, 0.21, 25); plant(36.6, 18, false);
+  wallMirror(37.8, 1.6, 20, -Math.PI / 2, 0.4, 0.7);
+  lightSwitch(32.2, 1.35, 21, Math.PI / 2);   // by the cellar door — also dead
   // utility (x38-48, z16-26) — cabinet + detergents + a hanging rail (washer/dryer at ~40,24.6)
   box(0.4, 1.8, 1.8, 'metalWhite', 38.4, 0.9, 18);
   for (const [sz, sm] of [[17.4, 'clothTeal'], [18.0, 'clothPink'], [18.7, 'clothMustard']]) bottle(38.5, 1.85, sz, M[sm]);
@@ -718,6 +719,50 @@ export function furnish(world, mats, ctx) {
   standFrame(52.12, 4.71, 2.2, -0.4, 5);                                    // spare-room nightstand (offset from the lamp)
   // fuller bookshelves upstairs
   for (const bz of [21.6, 22.4]) clutterBooks(45.2, 5.0 + (bz === 22.4 ? 0.44 : 0), bz, 3);   // studyUp shelf top rows
+
+  /* ===== BASEMENT: the cold cellar ===== */
+  FLOOR_Y = -3.2;
+  const bY = -3.2;
+  // storage cellar (x14-24, z24-32) — dust-sheeted furniture, boxes, a wine rack
+  for (const [sx, sz, sw, sd, sh] of [[17, 27, 1.5, 0.9, 1.0], [20.5, 30.5, 1.1, 1.1, 0.8], [16, 30.5, 1.0, 0.8, 1.1]]) {
+    const sheet = box(sw, sh, sd, 'sheet', sx, bY + sh / 2, sz);   // a shape under a dust sheet
+    CTX.examine(sheet, 'a dust sheet', '');
+  }
+  for (const [bx, bz, n] of [[22, 25, 3], [15, 25.4, 2], [22.5, 31, 2]])
+    for (let k = 0; k < n; k++) box(0.5, 0.4, 0.5, 'woodPale', bx, bY + 0.2 + k * 0.42, bz, k * 0.3);
+  // wine rack against the west wall
+  box(0.4, 1.3, 1.7, 'woodDark', 14.5, bY + 0.65, 28);
+  for (let r = 0; r < 4; r++) for (let cc = 0; cc < 3; cc++) {
+    const b = cyl(0.04, 0.045, 0.28, 7, 'clothGreen', 14.7, bY + 0.35 + r * 0.28, 27.4 + cc * 0.42); b.rotation.z = Math.PI / 2; b.castShadow = false;
+  }
+  // metal shelving with junk against the east wall
+  box(0.35, 1.9, 2.4, 'metalWhite', 23.6, bY + 0.95, 28);
+  for (const jz of [27.4, 28.4, 29.4]) bottle(23.2, bY + 1.05, jz, M.iron);
+  // an old bicycle
+  for (const wz of [24.7, 25.6]) { const w = cyl(0.32, 0.32, 0.05, 14, 'iron', 15.5, bY + 0.35, wz); w.rotation.x = Math.PI / 2; }
+  box(0.05, 0.6, 0.9, 'iron', 15.5, bY + 0.55, 25.1);
+
+  // boiler room (x26-32, z28-32) — boiler, hot-water tank, pipes, THE FUSE BOX
+  cyl(0.35, 0.35, 1.7, 12, 'iron', 30, bY + 0.85, 30.5);
+  cyl(0.05, 0.05, 1.3, 8, 'iron', 30, bY + 1.9, 30.5);          // flue
+  cyl(0.3, 0.3, 1.5, 12, 'metalSteel', 27.2, bY + 0.75, 30.8);  // hot-water tank
+  for (const py of [bY + 2.0, bY + 2.1]) { const p = cyl(0.03, 0.03, 4.5, 6, 'iron', 29, py, 29.4); p.rotation.z = Math.PI / 2; }
+  const fuse = box(0.32, 0.42, 0.13, 'metalWhite', 26.25, bY + 1.5, 30, Math.PI / 2);
+  box(0.05, 0.09, 0.04, 'woodDark', 26.4, bY + 1.42, 30);       // the main lever — thrown down, off
+  CTX.interact(fuse, 'the fuse box', () => {
+    CTX.audio.unlock();                                          // you try the main. dead. nothing.
+    CTX.fx.fearTarget = Math.max(CTX.fx.fearTarget, 0.22);
+    setTimeout(() => { if (!CTX.events.finale.active && CTX.fx.fearTarget <= 0.22) CTX.fx.fearTarget = 0; }, 1800);
+  });
+
+  // the landing — a dead bare bulb (lights at the breaker-throw), a broom, coal sack.
+  // NOTE: hang the bulb over the FLAT landing floor (x26-28), not over the ramp.
+  mesh(new THREE.SphereGeometry(0.05, 8, 8), M.bulbOff, 27, -0.82, 25);
+  const bulbCord = cyl(0.008, 0.008, 0.28, 6, 'iron', 27, -0.68, 25); bulbCord.castShadow = false;
+  box(0.05, 1.5, 0.05, 'woodDark', 31.2, bY + 0.75, 27.3, 0.15);   // broom leaning past the stair foot
+  const sack = mesh(new THREE.SphereGeometry(0.3, 8, 6), M.fabricDark, 27, bY + 0.28, 27, 0, true); sack.scale.y = 0.9;
+  // patch the exposed wall-gap band (y -0.7..0) on the open east face of the shaft
+  const patch = box(0.14, 0.74, 10, 'stoneDark', 31.95, -0.33, 21); patch.receiveShadow = true;
 
   // curtains for every window in the lived-in rooms
   curtainAll();
