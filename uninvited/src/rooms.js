@@ -84,6 +84,15 @@ function standFrame(x, y, z, ry, ti) {
 }
 function bowlOf(x, y, z, m) { mesh(new THREE.CylinderGeometry(0.11, 0.07, 0.06, 12), m || M.tileWhite, x, y + 0.03, z, 0, false); }
 
+// a dead light switch — you flick it, it clicks, nothing (the power is out)
+function lightSwitch(x, y, z, ry) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; S.add(g);
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.14, 0.015), matOf('tileWhite')); g.add(plate);
+  const toggle = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.05, 0.018), matOf('woodDark')); toggle.position.z = 0.014; g.add(toggle);
+  CTX.interact(g, 'the light switch', () => { CTX.audio.unlock(); });   // click. nothing.
+  return g;
+}
+
 /* ---------------- furniture ---------------- */
 function sofa(x, z, ry, m) {
   const g = new THREE.Group(); g.position.set(x, FLOOR_Y, z); g.rotation.y = ry; S.add(g);
@@ -357,7 +366,22 @@ export function furnish(world, mats, ctx) {
     sofa(4.5, 35, Math.PI / 2, 'sofaBlue');
     lowTable(9, 35, 'woodPale');
     const tv = tvUnit(9, 31.2, 0);
-    CTX.examine(tv, 'the television', "A dead television. My torch hangs in the screen like a face at a window.");
+    let tvScreen = null; tv.traverse(o => { if (o.isMesh && o.material === M.screenOff) tvScreen = o; });
+    CTX.interact(tv, 'switch on the television', () => {
+      if (!tvScreen || tv.userData.flickering) return;   // ignore repeat use mid-flicker
+      tv.userData.flickering = true;
+      CTX.audio.static(0.14, 1.2);
+      CTX.fx.fearTarget = Math.max(CTX.fx.fearTarget, 0.32);
+      let n = 0;
+      const iv = setInterval(() => {
+        tvScreen.material = (n % 2 ? M.screenGlow : M.screenOff);
+        if (++n > 8) {
+          clearInterval(iv); tvScreen.material = M.screenOff; tv.userData.flickering = false;
+          if (!CTX.events.finale.active && CTX.fx.fearTarget <= 0.32) CTX.fx.fearTarget = 0;
+        }
+      }, 135);
+    });
+    lightSwitch(0.22, 1.35, 33, Math.PI / 2);         // by the door — dead
     armchair(15, 33, -Math.PI / 2, 'sofaGrey');
     framedPic(0.25, 1.9, 33, Math.PI / 2, pic(0), 0.7, 0.55);
     framedPic(0.25, 1.9, 37, Math.PI / 2, pic(3), 0.55, 0.68);
@@ -366,7 +390,13 @@ export function furnish(world, mats, ctx) {
     CTX.examine(hearth, 'the fireplace', 'Ash in the grate. Cold — but not old. Someone had a fire tonight.');
     framedPic(14, 2.15, 30.16, 0, pic(1), 0.5, 0.6);
     const piano = pianoUpright(16, 39.35, 0);
-    CTX.examine(piano, 'the piano', 'An upright piano, lid open. Sheet music still on the stand. Mid-song.');
+    CTX.interact(piano, 'touch the keys', () => {
+      CTX.audio.pianoNote(233.1, 0.16);
+      setTimeout(() => CTX.audio.pianoNote(246.9, 0.13), 120);
+      setTimeout(() => CTX.audio.pianoNote(220.0, 0.11), 210);
+      CTX.fx.fearTarget = Math.max(CTX.fx.fearTarget, 0.24);
+      setTimeout(() => { if (!CTX.events.finale.active && CTX.fx.fearTarget <= 0.24) CTX.fx.fearTarget = 0; }, 1800);
+    });
     floorLamp(16.6, 34.4);
     plant(1.6, 30.9, true);
     clutterBooks(8.8, 0.47, 34.8, 3);
@@ -542,7 +572,14 @@ export function furnish(world, mats, ctx) {
     wardrobe(58, 24, -Math.PI / 2);
     // a doll's house
     const dh = box(0.8, 0.9, 0.5, 'wallKidPink', 47, 4.65, 23);
-    CTX.examine(dh, "a doll's house", "A doll's house, every little room lit up in my torch. Someone loves this kid.");
+    CTX.examine(dh, "the doll's house", '');
+    // the music box — wind it and the lullaby that drifts the house plays close
+    const mbox = box(0.2, 0.13, 0.15, 'brass', 47, 5.17, 23);
+    CTX.interact(mbox, 'wind the music box', () => {
+      CTX.audio.musicBox(0.34);
+      CTX.fx.fearTarget = Math.max(CTX.fx.fearTarget, 0.26);
+      setTimeout(() => { if (!CTX.events.finale.active && CTX.fx.fearTarget <= 0.26) CTX.fx.fearTarget = 0; }, 3200);
+    });
     teddy(53, 4.92, 10.4, -0.4);
     framedPic(59.6, 6.0, 13, -Math.PI / 2, pic(4), 0.5, 0.62);
     rug(53, 17, 2, 1.6, 'carpetWarm', 4.2);
@@ -604,6 +641,12 @@ export function furnish(world, mats, ctx) {
     // THE THING: a dressmaker's form squarely in the north window, framed by
     // its curtains, pale against the treeline
     dressForm(31, 4.2, 1.4, Math.PI);
+    // a cold, wrong glow that spills through the open door and down the whole
+    // hall — the pale blue light that pulls you toward the room
+    const draw = new THREE.PointLight(0xbcd4ff, 3.4, 17, 1.5);
+    draw.position.set(31, 5.2, 3.2);
+    S.add(draw);
+    CTX.props.masterGlow = draw;
   }
 
   /* ===== dressing pass: art on the walls, clutter on the surfaces, and life

@@ -47,18 +47,20 @@ export class Effects {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
 
-    scene.fog = new THREE.FogExp2(0x05060c, 0.024);
-    scene.background = new THREE.Color(0x02040a);
+    scene.fog = new THREE.FogExp2(0x05060c, 0.017);
+    scene.background = new THREE.Color(0x03050c);
 
-    // ambient bases — kept as fields so the finale can flip the whole house on
-    this.ambient = new THREE.AmbientLight(0x2a3348, 0.42);
+    // ambient bases — enough to read the furnished rooms as dim moonlit shapes
+    // (too low and the house reads as an empty black void); kept as fields so
+    // the finale can flip the whole house on.
+    this.ambient = new THREE.AmbientLight(0x38425c, 0.68);
     scene.add(this.ambient);
-    this.hemi = new THREE.HemisphereLight(0x232c42, 0x0d0906, 0.42);
+    this.hemi = new THREE.HemisphereLight(0x2c3852, 0x14100c, 0.55);
     scene.add(this.hemi);
     this.lightsOn = false;      // set once the arrest finale throws the breaker
 
     // moonlight through the windows
-    const moon = new THREE.DirectionalLight(0x7288b8, 1.1);
+    const moon = new THREE.DirectionalLight(0x8098c0, 1.3);
     moon.position.set(-40, 60, -60);
     moon.target.position.set(30, 0, 20);
     moon.castShadow = true;
@@ -83,7 +85,7 @@ export class Effects {
     this.onThunder = null;
 
     // player lantern
-    this.lantern = new THREE.SpotLight(0xffc078, 0, 16, 0.62, 0.45, 1.4);
+    this.lantern = new THREE.SpotLight(0xffc078, 0, 19, 0.74, 0.5, 1.3);
     this.lantern.castShadow = true;
     this.lantern.shadow.mapSize.set(1024, 1024);
     this.lantern.shadow.bias = -0.002;

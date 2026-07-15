@@ -382,6 +382,47 @@ export class AudioEngine {
     }
   }
 
+  // a television waking to static: stuttering hiss over a mains hum
+  static(vol = 0.13, dur = 1.0) {
+    if (!this.started) return;
+    const t = this.now();
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer(dur + 0.3);
+    const hp = this.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1300;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    for (let i = 0; i < 7; i++) {
+      const tt = t + i * (dur / 7);
+      g.gain.setValueAtTime(vol * (0.35 + Math.random() * 0.65), tt);
+      g.gain.exponentialRampToValueAtTime(0.003, tt + (dur / 7) * 0.85);
+    }
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(hp).connect(g).connect(this.master); src.start(t);
+    const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 100;
+    const olp = this.ctx.createBiquadFilter(); olp.type = 'lowpass'; olp.frequency.value = 260;
+    const og = this.ctx.createGain(); this.env(og, t, 0.02, vol * 0.5, dur);
+    o.connect(olp).connect(og).connect(this.master); o.start(t); o.stop(t + dur + 0.1);
+  }
+
+  // a music box, somewhere upstairs — a short, slightly out-of-tune lullaby in
+  // bell tones. Volume is set by the caller from distance to the far bedroom.
+  musicBox(vol = 0.15) {
+    if (!this.started || vol < 0.006) return;
+    const t = this.now();
+    const notes = [0, 3, 7, 5, 3, 0, -2, 0];      // minor-ish phrase, semitone offsets
+    const base = 523.25;                          // C5
+    notes.forEach((n, i) => {
+      const tt = t + i * 0.34;
+      const f = base * Math.pow(2, n / 12) * (1 + (Math.random() - 0.5) * 0.008);   // detune = wrong
+      for (const [mult, g0] of [[1, 1], [2.01, 0.4], [3.0, 0.16]]) {                 // bell partials
+        const o = this.ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f * mult;
+        const g = this.ctx.createGain();
+        this.env(g, tt, 0.004, vol * g0, 0.5);
+        o.connect(g).connect(this.master); o.start(tt); o.stop(tt + 0.65);
+      }
+    });
+  }
+
   // the whole house comes on at once: breaker THUNK, relay clack, mains hum
   lightsOn() {
     if (!this.started) return;

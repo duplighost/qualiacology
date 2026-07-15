@@ -1,7 +1,9 @@
-// Scripted beats: the player's paranoid inner monologue on room entry, and the
-// arrest finale — reach the far bedroom, the shape at the window, the lights come
-// up, the forced turn, the officer, the cuffs.
-import { MONO, ENDING } from './story.js';
+// Scripted atmosphere and the arrest finale. No on-screen text during play —
+// the house speaks only through sound and light. The one draw is a music box
+// drifting from the far bedroom, louder the closer you get, pulling you up and
+// down the long hall to the shape at the window. Then: the lights, the turn,
+// the officer, the cuffs. The only words are the end cards.
+import { ENDING } from './story.js';
 
 export class Events {
   constructor(ctx) {
@@ -9,62 +11,65 @@ export class Events {
     this.t = 0;
     this.triggers = this.buildTriggers();
     this.finale = { active: false, phase: '', t: 0, turnTo: Math.PI, cuffed: false };
-    this._seenStairs = false;
+    this.mbT = 5;   // music-box phrase timer
   }
 
   start() {
     const C = this.ctx;
-    setTimeout(() => { this.monoSeq(MONO.intro, 3400); C.audio.ghostChord(0.07); }, 1200);
-    setTimeout(() => C.ui.objectiveFlash('The house is dark. Find what it keeps.'), 9000);
-  }
-
-  // print an array of thoughts one after another on the monologue channel
-  monoSeq(lines, gap = 3200) {
-    lines.forEach((ln, i) => setTimeout(() => this.ctx.ui.monologue(ln, gap + 500), i * gap));
+    // the far bedroom door stands open — a little wrong light leaks down the hall
+    C.world.doorById.masterDoor?.setOpen(true);
+    setTimeout(() => C.audio.ghostChord(0.06), 1400);   // one low breath, then only the house
   }
 
   buildTriggers() {
     const t = [];
     const add = (id, x0, z0, x1, z1, level, fire) =>
       t.push({ id, x0, z0, x1, z1, level, fire, done: false });
-
-    // ground — the prowler talks himself through the dark
-    add('foyer',      24, 30, 36, 40, 'ground', () => this.monoSeq(MONO.foyer));
-    add('living',      0, 30, 21, 40, 'ground', () => this.monoSeq(MONO.living));
-    add('studySee',    0, 15, 12, 26, 'ground', () => this.monoSeq(MONO.studySee));
-    add('kitchenSee', 50, 30, 60, 40, 'ground', () => {
-      this.monoSeq(MONO.kitchenSee);
-      this.ctx.fx.fearTarget = 0.32; setTimeout(() => (this.ctx.fx.fearTarget = 0), 3200);
-    });
-    // upstairs
-    add('landing',     0, 25, 60, 30, 'first', () => this.monoSeq(MONO.landing));
+    // wordless beats — a cold pulse when you first glimpse someone, the heartbeat
+    // as you commit to the long hall, and the arrest at the end.
+    add('kitchenSee', 50, 30, 60, 40, 'ground', () => this.dread(0.34, 3200));
+    add('studySee',    0, 15, 12, 26, 'ground', () => this.dread(0.28, 3000));
+    add('landing',     0, 25, 60, 30, 'first', () => this.dread(0.3, 3000));
     add('longhall',   27,  9, 32, 25, 'first', () => {
-      this.monoSeq(MONO.longhall);
       this.ctx.audio.heartbeat(true);
-      this.ctx.fx.fearTarget = 0.4;
+      this.ctx.fx.fearTarget = 0.42;
     });
-    // the far bedroom — the end
     add('master',     24,  0, 36,  7, 'first', () => this.runArrest());
     return t;
   }
 
+  dread(v, ms) {
+    this.ctx.fx.fearTarget = Math.max(this.ctx.fx.fearTarget, v);
+    setTimeout(() => { if (!this.finale.active) this.ctx.fx.fearTarget = 0; }, ms);
+  }
+
   update(dt) {
     const C = this.ctx;
-    if (!C.player.enabled) return;   // no scripted beats until the break-in
+    if (!C.player.enabled) return;
     this.t += dt;
     const p = C.player.pos;
     const level = C.world.levelAt(p.y);
-
-    if (!this._seenStairs && p.y > 1.2 && p.y < 3.9) {
-      this._seenStairs = true;
-      this.monoSeq(MONO.stairs);
-    }
 
     for (const tr of this.triggers) {
       if (tr.done || tr.level !== level) continue;
       if (p.x < tr.x0 || p.x > tr.x1 || p.z < tr.z0 || p.z > tr.z1) continue;
       tr.done = true;
       tr.fire();
+    }
+
+    // the cold glow at the hall's end breathes, so the pull feels alive/wrong
+    if (C.props.masterGlow && !this.finale.active)
+      C.props.masterGlow.intensity = 3.3 + Math.sin(this.t * 1.6) * 0.7;
+
+    // the music box, from the far bedroom — louder the nearer you are, and much
+    // fainter on the wrong floor. This is the pull toward the final room.
+    if (!this.finale.active) {
+      this.mbT -= dt;
+      if (this.mbT <= 0) {
+        this.mbT = 8 + Math.random() * 5;
+        const d = Math.hypot(p.x - 30, p.z - 4) + Math.abs(p.y - 4.2) * 5;
+        C.audio.musicBox(0.03 + 0.17 * Math.max(0, 1 - d / 26));
+      }
     }
 
     if (this.finale.active) this.updateFinale(dt);
@@ -78,28 +83,25 @@ export class Events {
     C.game.arrested = true;
     this.finale.active = true;
     this.finale.phase = 'draw';
-    // the last, wrongest thought — spoken as he drifts toward the "figure"
-    this.monoSeq(MONO.masterEnter, 2600);
-    setTimeout(() => this.beginReveal(), 2300);
+    setTimeout(() => this.beginReveal(), 2300);   // a beat drifting toward the "figure"
   }
 
   beginReveal() {
     const C = this.ctx;
     this.finale.phase = 'stunned';
     this.finale.t = 0;
-    C.player.frozen = true;              // take the controls
-    C.fx.flipAllLightsOn();              // the whole house, all at once
+    C.player.frozen = true;
+    C.fx.flipAllLightsOn();
+    if (C.props.masterGlow) C.props.masterGlow.intensity = 0;   // the "wrong" light was never real
     C.audio.heartbeat(false);
-    C.audio.lightsOn();                  // breaker thunk, relay clack, mains hum
+    C.audio.lightsOn();
     setTimeout(() => C.audio.dawn(), 400);   // the dread resolves upward — it was nothing
 
-    // the officer, already in the doorway behind you
-    C.world.doorById.masterDoor?.setOpen(true);   // he comes through an open door
+    C.world.doorById.masterDoor?.setOpen(true);
     const off = C.npcs.officer;
-    off.position.set(29, 4.2, 8.6);               // in the hall, at the threshold
+    off.position.set(29, 4.2, 8.6);
     off.rotation.y = 0;
     off.visible = true;
-    // turn to face wherever the officer actually is relative to you
     const dx = off.position.x - C.player.pos.x, dz = off.position.z - C.player.pos.z;
     this.finale.turnTo = Math.atan2(-dx, -dz);
 
@@ -112,13 +114,10 @@ export class Events {
     const off = C.npcs.officer;
 
     if (f.phase === 'draw' || f.phase === 'stunned') {
-      // the last free moment — let them drift toward the "figure", but don't let
-      // them slip back out of the room and break the staged reveal
       if (C.player.pos.z > 7.2) C.player.pos.z = 7.2;
       return;
     }
     if (f.phase === 'turn') {
-      // force the camera around to the door
       let d = f.turnTo - C.player.yaw;
       while (d > Math.PI) d -= Math.PI * 2;
       while (d < -Math.PI) d += Math.PI * 2;
@@ -126,8 +125,6 @@ export class Events {
       C.player.pitch += (0 - C.player.pitch) * Math.min(1, dt * 2.4);
       if (Math.abs(d) < 0.05) { f.phase = 'approach'; f.t = 0; }
     } else if (f.phase === 'approach') {
-      // walk THROUGH the doorway first (stay in the x≈29 door lane until inside
-      // the room), only then cross the open floor to the player — never through a wall
       const throughDoor = off.position.z > 7.6;
       const tx = throughDoor ? 29 : C.player.pos.x;
       const tz = throughDoor ? 6.6 : C.player.pos.z;
@@ -155,12 +152,9 @@ export class Events {
     this.finale.phase = 'done';
     C.audio.lockedRattle();
     setTimeout(() => C.audio.metalDrop(), 350);
-    C.ui.say('', '“Hands where I can see them. Behind your back — slowly.”', 5000);
-    // the realisation, spoken over the ordinary lit room
-    setTimeout(() => this.monoSeq(MONO.after, 2400), 900);
-    // then fade to black and the end cards
-    setTimeout(() => { document.getElementById('fade').style.opacity = 1; }, 7600);
-    setTimeout(() => { C.ui.showEnding(ENDING.arrest); }, 9200);
-    setTimeout(() => { C.ui.swapEnding(ENDING.epilogue); C.game.won = true; }, 20000);
+    // fade to black, then the reveal is delivered on the end cards (the only text)
+    setTimeout(() => { document.getElementById('fade').style.opacity = 1; }, 3200);
+    setTimeout(() => { C.ui.showEnding(ENDING.arrest); }, 4800);
+    setTimeout(() => { C.ui.swapEnding(ENDING.epilogue); C.game.won = true; }, 15600);
   }
 }

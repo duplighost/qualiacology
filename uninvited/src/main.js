@@ -37,8 +37,12 @@ function boot() {
     game, world, ui, audio, player, fx, interactions,
     props: {},
     interact: (obj, label, fn) => interactions.add(obj, label, fn),
+    // examining a prop makes a small handling sound and a flicker of unease —
+    // no words. (The `text` arg is ignored now; kept so callers don't change.)
     examine: (obj, label, text) => interactions.add(obj, label ? `look at ${label}` : 'look', () => {
-      ui.monologue(text, 5200);
+      audio.creak(0.22);
+      fx.fearTarget = Math.max(fx.fearTarget, 0.1);
+      setTimeout(() => { if (!events.finale.active && fx.fearTarget <= 0.1) fx.fearTarget = 0; }, 1500);
     }),
     toastMsg: (t) => ui.toast(t),
   };

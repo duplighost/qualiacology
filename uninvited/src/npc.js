@@ -157,9 +157,8 @@ class NPC {
   }
 
   say(forced) {
-    const line = this.lines[this.li % this.lines.length];
-    this.li++;
-    this.ctx.ui.say(this.name, line);
+    // no subtitle — the family are heard as muffled voices through the house,
+    // never spelled out. The words only land, in hindsight, at the arrest.
     this.ctx.audio.murmur?.(this.def.voice ?? 1);
     this.ctx.fx.fearTarget = Math.max(this.ctx.fx.fearTarget, forced ? 0.34 : 0.2);
     clearTimeout(this._fclr);

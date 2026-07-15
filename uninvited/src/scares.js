@@ -7,22 +7,6 @@ import * as THREE from 'three';
 import { figure } from './npc.js';
 import { FAMILY } from './story.js';
 
-// role-specific monologue: creepy now, "…oh, that was the dad" in hindsight
-const WHO = {
-  mother: 'A woman. Just standing in the dark, watching me climb. Gone when I looked twice.',
-  father: 'A man down the hall — big, dead still. Then the dark had him and the hall was empty.',
-  boy: 'A boy. Bare feet on the boards. He looked right at me, then he ran, and the wall took him.',
-  girl: 'A little girl. She was there. She was looking at me. She was not there.',
-};
-const MONO = {
-  behind: [
-    "…There was someone behind me. Right at my shoulder. There is nothing behind me.",
-    'The back of my neck went cold. Someone was there. Was.',
-  ],
-  door: 'Someone was right there — the other side of the door, in the dark, waiting.',
-  giggle: "A child, laughing. Somewhere in the walls. Kids don't laugh in empty houses.",
-  draft: 'A door I never touched, drifting open. This house breathes.',
-};
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
 export class Scares {
@@ -111,7 +95,7 @@ export class Scares {
     fig.visible = true;
     for (let i = 0; i < 3; i++) setTimeout(() => C.audio.footstep(true, lvl), i * 150);
     this.pulse(0.34);
-    if (C.game.once('cross-' + role)) C.ui.monologue(WHO[role], 4600);
+    // (wordless — no monologue)
     return true;
   }
 
@@ -134,7 +118,7 @@ export class Scares {
     };
     C.audio.presence();
     this.pulse(0.44);
-    if (C.game.once('behindmono')) C.ui.monologue(pick(MONO.behind), 4400);
+    // (wordless)
     return true;
   }
 
@@ -162,7 +146,7 @@ export class Scares {
     this.doorCool = 24;
     C.audio.presence();
     this.pulse(0.52);
-    if (C.game.once('doorrevealmono')) C.ui.monologue(MONO.door, 4400);
+    // (wordless)
   }
 
   fireAmbient(p, lvl) {
@@ -173,11 +157,10 @@ export class Scares {
       C.audio.creak(0.85); this.pulse(0.24);
     } else if (r < 0.48) {                           // one of the kids
       C.audio.giggle(); this.pulse(0.28);
-      if (C.game.once('gigglemono')) C.ui.monologue(MONO.giggle, 4500);
+      // (wordless)
     } else if (r < 0.62) {                           // a door drifts open
       const d = this.nearestClosedDoor(p);
-      if (d) { d.setOpen(true); C.audio.doorOpen(); this.pulse(0.3);
-        if (C.game.once('draftmono')) C.ui.monologue(MONO.draft, 4200); }
+      if (d) { d.setOpen(true); C.audio.doorOpen(); this.pulse(0.3); }
       else if (!this.figureScare(p)) this.behindYou(p);
     } else if (r < 0.82) {                           // someone crossed ahead
       if (!this.figureScare(p)) this.behindYou(p);
