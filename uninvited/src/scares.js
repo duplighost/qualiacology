@@ -151,10 +151,10 @@ export class Scares {
 
   fireAmbient(p, lvl) {
     const C = this.ctx, r = Math.random();
-    if (r < 0.18) {                                  // the storm
-      C.fx._flash = 1.2; C.audio.thunder(0.7); this.pulse(0.3);
+    if (r < 0.18) {                                  // the storm — thunder lags the flash
+      C.fx._flash = 1.2; setTimeout(() => C.audio.thunder(0.7), 400 + Math.random() * 900); this.pulse(0.3);
     } else if (r < 0.34) {                           // a knock from somewhere
-      C.audio.creak(0.85); this.pulse(0.24);
+      C.audio.knock(); this.pulse(0.24);
     } else if (r < 0.48) {                           // one of the kids
       C.audio.giggle(); this.pulse(0.28);
       // (wordless)
@@ -165,7 +165,7 @@ export class Scares {
     } else if (r < 0.82) {                           // someone crossed ahead
       if (!this.figureScare(p)) this.behindYou(p);
     } else {                                          // someone behind you
-      if (!this.behindYou(p)) { C.fx._flash = 1.0; C.audio.thunder(0.6); this.pulse(0.28); }
+      if (!this.behindYou(p)) { C.fx._flash = 1.0; setTimeout(() => C.audio.thunder(0.6), 400 + Math.random() * 900); this.pulse(0.28); }
     }
   }
 

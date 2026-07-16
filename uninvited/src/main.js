@@ -47,7 +47,7 @@ function boot() {
     // examining a prop makes a small handling sound and a flicker of unease —
     // no words. (The `text` arg is ignored now; kept so callers don't change.)
     examine: (obj, label, text) => interactions.add(obj, label ? `look at ${label}` : 'look', () => {
-      audio.creak(0.22);
+      audio.creak(0.4);   // 0.22 was under the ambience floor — examining felt broken
       fx.fearTarget = Math.max(fx.fearTarget, 0.1);
       setTimeout(() => { if (!events.finale.active && fx.fearTarget <= 0.1) fx.fearTarget = 0; }, 1500);
     }),
@@ -88,7 +88,7 @@ function boot() {
             prompt: () => door.isOpen ? `close ${door.name}`
               : door.locked === 'never' ? `${door.name} — it won't open`
                 : (door.locked && !game.hasKey(door.locked)) ? `${door.name} — locked`
-                  : door.locked ? `unlock ${door.name}`
+                  : (door.locked && !door.unlockedOnce) ? `unlock ${door.name}`
                     : `open ${door.name}`,
             action: () => {
               // the front door is bolted from outside — it only rattles
@@ -98,8 +98,8 @@ function boot() {
               // first time through a keyed door, it reads as unlocking
               if (door.locked && !door.unlockedOnce) { door.unlockedOnce = true; audio.unlock?.(); }
               door.setOpen(!door.isOpen);
-              if (door.isOpen) { audio.doorOpen(); ctx.scares?.maybeDoorReveal(door, player.pos); }
-              else audio.doorClose();
+              if (door.isOpen) { audio.doorOpen(door.opts.heavy); ctx.scares?.maybeDoorReveal(door, player.pos); }
+              else audio.doorClose(door.opts.heavy);
             },
           };
           interactions.targets.push(m);

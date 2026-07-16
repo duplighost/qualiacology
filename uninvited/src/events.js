@@ -65,18 +65,25 @@ export class Events {
       tr.fire();
     }
 
-    // the cold glow at the hall's end breathes, so the pull feels alive/wrong
-    if (C.props.masterGlow && !this.finale.active)
-      C.props.masterGlow.intensity = 3.3 + Math.sin(this.t * 1.6) * 0.7;
+    // the cold glow at the hall's end breathes — but only once the key is found
+    // (earned foreshadowing), and only at full strength through an OPEN door;
+    // while it's shut just a sliver, like light under the door
+    if (C.props.masterGlow && !this.finale.active) {
+      const md = C.world.doorById.masterDoor;
+      const mul = C.game.hasKey('masterKey') ? (md?.isOpen ? 1 : 0.3) : 0;
+      C.props.masterGlow.intensity = (3.3 + Math.sin(this.t * 1.6) * 0.7) * mul;
+    }
 
-    // the music box, from the far bedroom — louder the nearer you are, and much
-    // fainter on the wrong floor. This is the pull toward the final room.
+    // the music box, from the far bedroom — louder the nearer you are, much
+    // fainter on the wrong floor, and muffled while the door is still shut.
+    // This is the pull toward the final room.
     if (!this.finale.active) {
       this.mbT -= dt;
       if (this.mbT <= 0) {
         this.mbT = 8 + Math.random() * 5;
         const d = Math.hypot(p.x - 30, p.z - 4) + Math.abs(p.y - 4.2) * 5;
-        C.audio.musicBox(0.03 + 0.17 * Math.max(0, 1 - d / 26));
+        const shut = !C.world.doorById.masterDoor?.isOpen;
+        C.audio.musicBox((0.03 + 0.17 * Math.max(0, 1 - d / 26)) * (shut ? 0.55 : 1));
       }
     }
 
@@ -88,7 +95,13 @@ export class Events {
   runArrest() {
     const C = this.ctx;
     if (this.finale.active || C.game.arrested) return;
-    if (!C.game.hasKey('masterKey')) return;   // the locked door blocks this anyway; belt and braces
+    if (!C.game.hasKey('masterKey')) {
+      // shouldn't be reachable (the locked door physically blocks the room),
+      // but if it ever fires keyless, re-arm so the real visit still ends the night
+      const tr = this.triggers.find(t => t.id === 'atFigure');
+      if (tr) tr.done = false;
+      return;
+    }
     C.game.arrested = true;
     this.finale.active = true;
     this.finale.phase = 'draw';

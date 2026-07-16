@@ -34,8 +34,8 @@ const ROOMS = {
     // the cross corridor
     ['hallG',   'the hall',            0, 13, 29, 14, { wall: 'wallCream',   floor: 'woodFloorLt' }],
     // middle band
-    ['study',   'the study',           0,  8,  5, 12, { wall: 'wallWarmGrey', floor: 'carpetWarm' }],
-    ['family',  'the family room',     6,  8, 13, 12, { wall: 'wallBlueLt',  floor: 'carpetGrey' }],
+    ['study',   'the study',           0,  8,  5, 12, { wall: 'wallWarmGrey', floor: 'carpetWarmFloor' }],
+    ['family',  'the family room',     6,  8, 13, 12, { wall: 'wallBlueLt',  floor: 'carpetGreyFloor' }],
     ['backhall','the back hall',      16,  8, 18, 12, { wall: 'wallCream',   floor: 'tileFloor' }],
     ['cellarStair','the cellar stairs', 14, 8, 15, 12, { wall: 'stoneDark', floor: 'stone' }],
     ['laundry', 'the utility room',   19,  8, 23, 12, { wall: 'tileWhite',   floor: 'tileFloor' }],
@@ -53,20 +53,20 @@ const ROOMS = {
     ['galleryS', 'the landing',       12, 19, 17, 19, { wall: 'wallCream',   floor: 'woodFloorLt' }],
     ['galleryE', 'the landing',       18, 15, 18, 19, { wall: 'wallCream',   floor: 'woodFloorLt' }],
     // the upstairs cross-landing
-    ['uphall',   'the landing',        0, 13, 29, 14, { wall: 'wallCream',   floor: 'carpetWarm' }],
+    ['uphall',   'the landing',        0, 13, 29, 14, { wall: 'wallCream',   floor: 'carpetWarmFloor' }],
     // the long central hall running north to the master bedroom (1 cell wide,
     // aligned with the arch below and the bedroom door above)
-    ['longhall', 'the upstairs hall', 14,  4, 14, 12, { wall: 'wallCream',   floor: 'carpetWarm' }],
+    ['longhall', 'the upstairs hall', 14,  4, 14, 12, { wall: 'wallCream',   floor: 'carpetWarmFloor' }],
     // the far room — the end of the night
-    ['master',   'the bedroom',       12,  0, 17,  3, { wall: 'wallSage',    floor: 'carpetGrey' }],
+    ['master',   'the bedroom',       12,  0, 17,  3, { wall: 'wallSage',    floor: 'carpetGreyFloor' }],
     // bedrooms and bathroom off the landing
-    ['boy',      "a child's room",     0,  4,  6, 12, { wall: 'wallKidBlue', floor: 'carpetGrey' }],
+    ['boy',      "a child's room",     0,  4,  6, 12, { wall: 'wallKidBlue', floor: 'carpetGreyFloor' }],
     ['bath',     'the bathroom',       7,  4, 13, 12, { wall: 'tileWhite',   floor: 'tileFloor' }],
-    ['studyUp',  'the study',         15,  4, 22, 12, { wall: 'wallWarmGrey', floor: 'carpetWarm' }],
-    ['girl',     "a child's room",    23,  4, 29, 12, { wall: 'wallKidPink', floor: 'carpetGrey' }],
+    ['studyUp',  'the study',         15,  4, 22, 12, { wall: 'wallWarmGrey', floor: 'carpetWarmFloor' }],
+    ['girl',     "a child's room",    23,  4, 29, 12, { wall: 'wallKidPink', floor: 'carpetGreyFloor' }],
     // the two rooms flanking the master
-    ['guest',    'the guest room',     0,  0, 11,  3, { wall: 'wallBlueLt',  floor: 'carpetGrey' }],
-    ['parents',  'the bedroom',       18,  0, 29,  3, { wall: 'wallSage',    floor: 'carpetGrey' }],
+    ['guest',    'the guest room',     0,  0, 11,  3, { wall: 'wallBlueLt',  floor: 'carpetGreyFloor' }],
+    ['parents',  'the bedroom',       18,  0, 29,  3, { wall: 'wallSage',    floor: 'carpetGreyFloor' }],
   ],
   basement: [
     // the cold cellar under the house — reached by the stair in the back hall.
@@ -241,6 +241,10 @@ export class World {
     this.buildWallsFor('ground');
     this.buildWallsFor('first');
     this.buildWallsFor('basement');
+    // curb along the cellar stair's open west lip (x28, upper flight z16-24) so
+    // the player can't step off the side mid-descent; the flat foot (z24-26)
+    // stays open onto the landing
+    aabb(this.colliders, 27.9, -0.7, 16, 28.1, 0, 24);
 
     this.buildStairs();
     this.buildRailings();
@@ -520,11 +524,16 @@ export class World {
   buildExterior() {
     const M = this.M, S = this.scene;
     // rain-slick ground: low roughness so lightning and the moon glint off it
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#0d1206', roughness: 0.5, metalness: 0.08 }));
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(30, -0.05, 20);
-    ground.receiveShadow = true;
-    S.add(ground);
+    // four strips around the house footprint (x0-60, z0-40) — a single full plane
+    // used to cross UNDER the house and showed through the cellar stair's floor hole
+    const gm = new THREE.MeshStandardMaterial({ color: '#0d1206', roughness: 0.5, metalness: 0.08 });
+    for (const [gw, gd, gx, gz] of [[170, 400, -85, 20], [170, 400, 145, 20], [60, 180, 30, -90], [60, 180, 30, 130]]) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), gm);
+      strip.rotation.x = -Math.PI / 2;
+      strip.position.set(gx, -0.05, gz);
+      strip.receiveShadow = true;
+      S.add(strip);
+    }
     const sky = new THREE.Mesh(new THREE.SphereGeometry(190, 16, 12), M.night);
     sky.position.set(30, 0, 20);
     S.add(sky);

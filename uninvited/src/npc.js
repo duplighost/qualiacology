@@ -254,7 +254,7 @@ export class NPCs {
     this.list = [];
 
     const defs = [
-      { key: 'mother', level: 'ground', floorY: 0, activity: 'wash', voice: 1.0,
+      { key: 'mother', level: 'ground', floorY: 0, activity: 'wash', voice: 1.25,
         start: { x: 57.5, z: 33 }, baseYaw: -Math.PI / 2, lines: LINES.mother },
       { key: 'father', level: 'ground', floorY: 0, activity: 'phone', voice: 0.7,
         start: { x: 6, z: 21 }, baseYaw: 0, zone: { x0: 3, z0: 18, x1: 9, z1: 24 }, lines: LINES.father },
@@ -283,7 +283,7 @@ export class NPCs {
       const npc = new NPC(ctx, { ...d, group: g, name: fam.name });
       this.list.push(npc);
       // optional: face-to-face interaction
-      ctx.interactions.add(g, () => `${fam.name}…`, () => npc.say(true));
+      ctx.interactions.add(g, '…', () => npc.say(true));   // no name — you've never met these people
     }
 
     // the officer — built, hidden until the finale

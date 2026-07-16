@@ -70,8 +70,13 @@ function bottle(x, y, z, m) {
   mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.05, 6), m || M.clothGreen, x, y + 0.17, z, 0, false);
 }
 function vase(x, y, z, m) {
+  // a pot with a few dried stems — the old pink bloom-ball read as a rude
+  // silhouette under torchlight
   mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.2, 10), m || M.terracotta, x, y + 0.1, z, 0, false);
-  const b = mesh(new THREE.SphereGeometry(0.055, 6, 5), M.clothPink, x, y + 0.26, z, 0, false); b.scale.y = 1.4;
+  for (const [ox, oz, tilt] of [[-0.012, 0.01, 0.14], [0.015, -0.008, -0.1], [0, 0.015, 0.04]]) {
+    const s = mesh(new THREE.CylinderGeometry(0.004, 0.006, 0.24, 5), M.woodDark, x + ox, y + 0.3, z + oz, 0, false);
+    s.rotation.z = tilt; s.rotation.x = tilt * 0.7;
+  }
 }
 function standFrame(x, y, z, ry, ti) {
   const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; S.add(g);
@@ -89,7 +94,7 @@ function lightSwitch(x, y, z, ry) {
   const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry || 0; S.add(g);
   const plate = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.14, 0.015), matOf('tileWhite')); g.add(plate);
   const toggle = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.05, 0.018), matOf('woodDark')); toggle.position.z = 0.014; g.add(toggle);
-  CTX.interact(g, 'the light switch', () => { CTX.audio.unlock(); });   // click. nothing.
+  CTX.interact(g, 'try the light switch', () => { CTX.audio.unlock(); });   // click. nothing.
   return g;
 }
 
@@ -641,9 +646,10 @@ export function furnish(world, mats, ctx) {
     // THE THING: a dressmaker's form squarely in the north window, framed by
     // its curtains, pale against the treeline
     dressForm(31, 4.2, 1.4, Math.PI);
-    // a cold, wrong glow that spills through the open door and down the whole
-    // hall — the pale blue light that pulls you toward the room
-    const draw = new THREE.PointLight(0xbcd4ff, 3.4, 17, 1.5);
+    // a cold, wrong glow around the dress form. DARK until the cellar key is
+    // found — events.update fades it in once the way up is earned, and fully
+    // only when the door stands open (no light bleeding through a shut door)
+    const draw = new THREE.PointLight(0xbcd4ff, 0, 17, 1.5);
     draw.position.set(31, 5.2, 3.2);
     S.add(draw);
     CTX.props.masterGlow = draw;
@@ -749,7 +755,7 @@ export function furnish(world, mats, ctx) {
   for (const py of [bY + 2.0, bY + 2.1]) { const p = cyl(0.03, 0.03, 4.5, 6, 'iron', 29, py, 29.4); p.rotation.z = Math.PI / 2; }
   const fuse = box(0.32, 0.42, 0.13, 'metalWhite', 26.25, bY + 1.5, 30, Math.PI / 2);
   box(0.05, 0.09, 0.04, 'woodDark', 26.4, bY + 1.42, 30);       // the main lever — thrown down, off
-  CTX.interact(fuse, 'the fuse box', () => {
+  CTX.interact(fuse, 'try the fuse box', () => {
     CTX.audio.unlock();                                          // you try the main. dead. nothing.
     CTX.fx.fearTarget = Math.max(CTX.fx.fearTarget, 0.22);
     setTimeout(() => { if (!CTX.events.finale.active && CTX.fx.fearTarget <= 0.22) CTX.fx.fearTarget = 0; }, 1800);
@@ -769,10 +775,9 @@ export function furnish(world, mats, ctx) {
     const ki = CTX.interact(keyG, 'take the brass key', () => {
       if (CTX.game.hasKey('masterKey')) return;
       CTX.game.giveKey('masterKey');
-      CTX.audio.lockedRattle();                     // a small jangle of metal
+      CTX.audio.metalDrop();                        // a small jangle of key metal
       keyG.visible = false; ki.enabled = false;
-      const md = CTX.world.doorById.masterDoor;      // the far door gives, and its glow now pulls
-      if (md) { md.locked = null; md.unlockedOnce = true; md.setOpen(true); }
+      // the door stays shut — YOU carry this upstairs and turn it in the lock
     });
   }
 
@@ -782,8 +787,10 @@ export function furnish(world, mats, ctx) {
   const bulbCord = cyl(0.008, 0.008, 0.28, 6, 'iron', 27, -0.68, 25); bulbCord.castShadow = false;
   box(0.05, 1.5, 0.05, 'woodDark', 31.2, bY + 0.75, 27.3, 0.15);   // broom leaning past the stair foot
   const sack = mesh(new THREE.SphereGeometry(0.3, 8, 6), M.fabricDark, 27, bY + 0.28, 27, 0, true); sack.scale.y = 0.9;
-  // patch the exposed wall-gap band (y -0.7..0) on the open east face of the shaft
+  // patch the exposed wall-gap band (y -0.7..0) on BOTH open faces of the shaft;
+  // the west one doubles as the visual for the stair-lip curb collider
   const patch = box(0.14, 0.74, 10, 'stoneDark', 31.95, -0.33, 21); patch.receiveShadow = true;
+  const patchW = box(0.14, 0.74, 10, 'stoneDark', 28.05, -0.33, 21); patchW.receiveShadow = true;
 
   // curtains for every window in the lived-in rooms
   curtainAll();
@@ -793,28 +800,37 @@ export function furnish(world, mats, ctx) {
      middle empty. Furniture has no collider, so these only avoid wall/window
      clipping, centred on the dead space. ===== */
   FLOOR_Y = 4.2;
-  // guest room (x0-24 z0-8) — was only a bed + wardrobe
-  rug(12, 4, 3.6, 2.8, 'carpetGrey', 4.2);
+  // guest room (x0-24 z0-8) — twin guest beds sharing a nightstand, reading chair
+  bed(9.2, 4, 0, 'fabricCream', 1.2, 2.0);                      // second twin bed
+  rug(12.5, 4, 3.6, 2.8, 'carpetGrey', 4.2);
   armchair(16, 3, -Math.PI / 2, 'sofaGrey');
-  box(0.5, 0.5, 0.4, 'woodPale', 8.6, 4.45, 3);                 // nightstand
-  tableLamp(8.6, 4.7, 3); clutterBooks(8.4, 4.7, 3.3, 2);
-  box(1.1, 0.42, 0.45, 'woodDark', 10, 4.41, 6.2);              // blanket chest at the foot
+  box(0.5, 0.5, 0.4, 'woodPale', 7.6, 4.45, 3);                 // nightstand between the twins
+  tableLamp(7.6, 4.7, 3); clutterBooks(7.45, 4.7, 3.05, 2);
+  box(1.1, 0.42, 0.45, 'woodDark', 6, 4.41, 5.35);              // blanket chest at the bed's foot
   plant(2.6, 6.6, false);
   wallArt('guest', 'E', 0.55, 5, 0.5, 0.62);
   // spare/parents' bedroom (x36-60 z0-8) — everything was jammed into the east
-  wardrobe(37.6, 6, Math.PI / 2);
+  wardrobe(36.75, 6, Math.PI / 2);                              // back against the west wall
   box(1.2, 0.9, 0.5, 'woodPale', 40.5, 4.65, 1.0);              // dresser
-  standFrame(40.2, 5.1, 1.0, Math.PI, 3); bowlOf(40.9, 5.13, 1.0, M.brass);
+  standFrame(40.2, 5.1, 1.0, Math.PI, 3); bowlOf(40.9, 5.1, 1.0, M.brass);
   rug(44, 4.2, 3.8, 3.0, 'carpetWarm', 4.2);
-  armchair(46, 6, Math.PI, 'fabricCream');
+  armchair(46, 6, Math.PI, 'sofaGrey');                         // cream read as a glowing white box in the dark
   plant(37.4, 2, false);
   wallArt('parents', 'W', 0.5, 6, 0.5, 0.62);
-  // bathroom (x14-28 z8-26) — fixtures all in the south third; fill the north half
+  // bathroom (x14-28 z8-26) — fixtures all in the near third; make the far half
+  // a proper laundry corner instead of a bare tile field
   box(0.44, 0.62, 0.42, 'woodPale', 16, 4.51, 22);             // laundry hamper
   const hampL = mesh(new THREE.SphereGeometry(0.22, 8, 6), M.linen, 16, 4.86, 22, 0, false); hampL.scale.y = 0.5;
   box(0.6, 1.7, 0.5, 'woodPale', 27.4, 5.05, 22, -Math.PI / 2); // tall storage cabinet on the east wall
-  box(1.0, 0.45, 0.4, 'woodDark', 20, 4.42, 24);               // a bench
-  rug(21, 20.5, 2.6, 1.8, 'linen', 4.2);
+  box(1.0, 0.45, 0.4, 'woodDark', 20, 4.425, 24);              // a bench
+  box(0.36, 0.13, 0.3, 'linen', 19.75, 4.71, 24);              // folded towels on it
+  box(0.3, 0.1, 0.26, 'towel', 20.35, 4.7, 24);
+  rug(20, 22, 2.6, 1.8, 'linen', 4.2);                          // under the bench zone
+  // a wooden drying rack with a towel over the rail
+  cyl(0.02, 0.02, 1.5, 6, 'woodDark', 24, 4.95, 21);
+  cyl(0.02, 0.02, 1.5, 6, 'woodDark', 24, 4.95, 22.2);
+  const rrail = cyl(0.015, 0.015, 1.3, 6, 'woodDark', 24, 5.6, 21.6); rrail.rotation.x = Math.PI / 2;
+  box(0.04, 0.5, 0.5, 'towel', 24, 5.35, 21.6);
   plant(16, 24.5, false);
   // studyUp (x30-46 z8-26) — furnished only round the edges; centre it
   rug(39, 18, 3.6, 3.2, 'carpetGrey', 4.2);
@@ -824,22 +840,23 @@ export function furnish(world, mats, ctx) {
   box(0.34, 0.34, 0.34, 'plasticGrn', 8.5, 4.37, 16, 0.3);     // a stray toy crate
 
   FLOOR_Y = 0;
-  // boot room (x48-60 z0-16) — everything hugged the south wall; fill the north
+  // boot room (x48-60 z0-16) — everything hugged one wall; spread the working end
   rug(54, 9, 3.0, 4.5, 'runner', 0);
-  box(1.4, 0.45, 0.4, 'woodDark', 52, 0.22, 8);                // a bench to pull boots off on
+  box(1.4, 0.45, 0.4, 'woodDark', 48.55, 0.225, 10, Math.PI / 2);  // bench, back to the west wall
   cyl(0.14, 0.16, 0.5, 10, 'metalSteel', 49, 0.25, 6.4);       // umbrella stand
   for (const [ux, uz, ur] of [[48.9, 6.4, 0.09], [49.12, 6.3, -0.07]]) { const u = cyl(0.012, 0.012, 0.7, 6, 'woodDark', ux, 0.6, uz); u.rotation.z = ur; }
-  const dogBed = box(0.9, 0.12, 0.66, 'fabricDark', 57, 0.06, 12); dogBed.receiveShadow = true;
-  const dogCush = mesh(new THREE.SphereGeometry(0.16, 8, 6), M.fabricDark, 57, 0.15, 12.2, 0, false); dogCush.scale.y = 0.5;
-  for (const [wx, wz] of [[50.4, 10.6], [50.86, 10.5]]) box(0.13, 0.24, 0.28, 'iron', wx, 0.12, wz);  // wellington boots
+  // the dog's basket — a wooden rim with a pale cushion so it reads at a glance
+  const dogRim = box(0.95, 0.2, 0.7, 'woodDark', 57, 0.1, 12); dogRim.receiveShadow = true;
+  const dogCush = mesh(new THREE.SphereGeometry(0.3, 8, 6), M.linen, 57, 0.18, 12, 0, false); dogCush.scale.set(1.3, 0.35, 1);
+  for (const [wx, wz] of [[50.4, 10.6], [50.86, 10.5]]) box(0.13, 0.24, 0.28, 'clothGreen', wx, 0.12, wz);  // wellington boots
   plant(58.4, 14, false);
   // the ground hall (x0-60 z26-30) — a 60m corridor bare at both ends
   rug(6, 28, 11, 1.3, 'runner', 0);
   rug(54, 28, 11, 1.3, 'runner', 0);
-  box(1.1, 0.8, 0.34, 'woodPale', 7, 0.4, 27);                 // west console table
-  standFrame(6.5, 0.83, 27, 0, 4); vase(7.7, 0.9, 27, M.terracotta);
-  box(1.1, 0.8, 0.34, 'woodPale', 53, 0.4, 27);               // east console table
-  bowlOf(52.6, 0.83, 27, M.brass); standFrame(53.7, 0.83, 27, 0, 1);
-  chair(15, 28.6, 0, 'woodPale');
+  box(1.1, 0.8, 0.34, 'woodPale', 7, 0.4, 26.35);              // west console, against the wall
+  standFrame(6.5, 0.8, 26.35, 0, 4); vase(7.4, 0.8, 26.35, M.terracotta);
+  box(1.1, 0.8, 0.34, 'woodPale', 57, 0.4, 26.35);             // east console, clear of the sunroom door
+  bowlOf(56.6, 0.8, 26.35, M.brass); standFrame(57.4, 0.8, 26.35, 0, 1);
+  chair(15, 29.55, Math.PI, 'woodPale');                       // backed to the south wall
   plant(3.5, 28.8, false); plant(57, 28.8, false);
 }

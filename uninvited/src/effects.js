@@ -85,7 +85,7 @@ export class Effects {
     this.onThunder = null;
 
     // player lantern
-    this.lantern = new THREE.SpotLight(0xffc078, 0, 19, 0.74, 0.5, 1.3);
+    this.lantern = new THREE.SpotLight(0xffc078, 0, 19, 0.74, 0.5, 1.55);
     this.lantern.castShadow = true;
     this.lantern.shadow.mapSize.set(1024, 1024);
     this.lantern.shadow.bias = -0.002;
@@ -155,7 +155,7 @@ export class Effects {
     // post stack
     this.composer = new EffectComposer(renderer);
     this.composer.addPass(new RenderPass(scene, camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.55, 0.82);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.55, 1.0);
     this.composer.addPass(this.bloom);
     // tone mapping + sRGB conversion happen here; grain runs display-referred
     this.composer.addPass(new OutputPass());
@@ -255,7 +255,7 @@ export class Effects {
     this.lantern.position.lerp(lp, Math.min(1, dt * 30));
     const tgt = camera.position.clone().addScaledVector(fwd, 8);
     this.lantern.target.position.lerp(tgt, Math.min(1, dt * 14));
-    const wantI = this.lanternOn ? 30 : 0;
+    const wantI = this.lanternOn ? 15 : 0;   // 30 blew out anything within 2m into sheet-white
     this.lantern.intensity += (wantI - this.lantern.intensity) * Math.min(1, dt * 8);
 
     // candle pool: every 0.4s pick nearest candles; every frame flicker

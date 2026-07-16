@@ -182,13 +182,19 @@ export class AudioEngine {
   }
 
   // a real hinge: a thin wavering squeak falling as the door swings, plus air
-  doorOpen() {
+  doorOpen(heavy) {
     if (!this.started) return;
     const t = this.now();
     const o = this.ctx.createOscillator();
     o.type = 'sine';
-    o.frequency.setValueAtTime(1150 + Math.random() * 250, t);
-    o.frequency.linearRampToValueAtTime(700 + Math.random() * 120, t + 0.5);
+    // a heavy door groans low and slow; an ordinary one squeaks high
+    if (heavy) {
+      o.frequency.setValueAtTime(420 + Math.random() * 90, t);
+      o.frequency.linearRampToValueAtTime(230 + Math.random() * 50, t + 0.8);
+    } else {
+      o.frequency.setValueAtTime(1150 + Math.random() * 250, t);
+      o.frequency.linearRampToValueAtTime(700 + Math.random() * 120, t + 0.5);
+    }
     const vib = this.ctx.createOscillator();
     vib.frequency.value = 13;
     const vg = this.ctx.createGain();
@@ -208,16 +214,31 @@ export class AudioEngine {
     src.connect(lp).connect(g2).connect(this.master);
     src.start(t);
   }
-  doorClose() {
+  doorClose(heavy) {
     if (!this.started) return;
     const t = this.now();
     const o = this.ctx.createOscillator();
     o.type = 'sine';
-    o.frequency.value = 55;
+    o.frequency.value = heavy ? 38 : 55;
     const g = this.ctx.createGain();
-    this.env(g, t, 0.004, 0.22, 0.18);
+    this.env(g, t, 0.004, heavy ? 0.38 : 0.22, heavy ? 0.26 : 0.18);
     o.connect(g).connect(this.master);
-    o.start(t); o.stop(t + 0.25);
+    o.start(t); o.stop(t + (heavy ? 0.45 : 0.25));
+  }
+  // two soft knuckle-thumps from somewhere in the house
+  knock() {
+    if (!this.started) return;
+    const t = this.now();
+    for (const dt of [0, 0.18]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(95, t + dt);
+      o.frequency.exponentialRampToValueAtTime(55, t + dt + 0.1);
+      const g = this.ctx.createGain();
+      this.env(g, t + dt, 0.003, 0.12, 0.22);
+      o.connect(g).connect(this.master);
+      o.start(t + dt); o.stop(t + dt + 0.16);
+    }
   }
   doorSlam() {
     if (!this.started) return;

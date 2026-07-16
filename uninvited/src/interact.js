@@ -50,52 +50,6 @@ export class Interactions {
     return inter;
   }
 
-  addDoors(ctx) {
-    for (const door of this.world.doors) {
-      if (door.secret) continue; // opened by its own trigger, not by hand
-      for (const p of door.panels) {
-        p.g.traverse((c) => {
-          if (c.isMesh) {
-            c.userData.inter = {
-              enabled: true,
-              prompt: () => door.isOpen ? `close ${door.name}` :
-                door.locked && !ctx.game.hasKey(door.locked) && door.locked !== 'never' ? `${door.name} — locked` :
-                door.locked === 'never' ? `${door.name} — it will not move` : `open ${door.name}`,
-              action: () => {
-                if (door.locked === 'never') {
-                  ctx.audio.lockedRattle();
-                  ctx.toastMsg('Bolted from without. Whatever happens tonight happens in here.');
-                  return;
-                }
-                if (door.locked && !ctx.game.hasKey(door.locked)) {
-                  ctx.audio.lockedRattle();
-                  const k = door.locked;
-                  ctx.toastMsg(k === 'chapelKey' ? 'Locked — cold iron, older than the house. The key must be somewhere.'
-                    : k === 'nurseryKey' ? 'Locked. A mother locked this door for a reason.'
-                    : k === 'eastwingKey' ? 'Sealed by Sir Edmund himself. There may be another way around — servants always have their own roads.'
-                    : 'Locked.');
-                  return;
-                }
-                if (door.locked && !door.unlockedOnce) {
-                  door.unlockedOnce = true;
-                  ctx.audio.unlock();
-                }
-                door.setOpen(!door.isOpen);
-                if (door.secret) ctx.audio.stoneGrind();
-                else if (door.isOpen) ctx.audio.doorOpen(); else ctx.audio.doorClose();
-                if (door.onFirstOpen && door.isOpen && !door.openedOnce) {
-                  door.openedOnce = true;
-                  door.onFirstOpen();
-                }
-              },
-            };
-            this.targets.push(c);
-          }
-        });
-      }
-    }
-  }
-
   update() {
     this.ray.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     const hits = this.ray.intersectObjects(this.targets, false);

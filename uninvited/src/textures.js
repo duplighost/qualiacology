@@ -122,6 +122,16 @@ function stone(w, h, base, seed) {
   return c;
 }
 
+// plain weave: base colour + noise only, for room floors (no rug borders)
+function plainCarpet(w, h, base, seed) {
+  const [c, ctx] = canvas(w, h);
+  const r = rng(seed);
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, w, h);
+  noiseFill(ctx, w, h, 0.09, r);
+  return c;
+}
+
 function carpetPattern(w, h, base, border, seed) {
   const [c, ctx] = canvas(w, h);
   const r = rng(seed);
@@ -484,6 +494,10 @@ export function makeMaterials() {
   M.tileFloor   = std({ map: tex(stone(512, 512, [196, 192, 182], 67), 3, 3), roughness: 0.5, metalness: 0.05 });
   M.carpetGrey  = std({ map: tex(carpetPattern(512, 512, '#4a4a52', '#65656e', 69), 1, 1), roughness: 1 });
   M.carpetWarm  = std({ map: tex(carpetPattern(512, 512, '#5a4636', '#7a6248', 70), 1, 1), roughness: 1 });
+  // plain (borderless) carpet for whole-room FLOORS — the bordered pattern above
+  // is a RUG texture; tiled across a room it reads as tape lines on a gym floor
+  M.carpetGreyFloor = std({ map: tex(plainCarpet(256, 256, '#4a4a52', 79), 4, 4), roughness: 1 });
+  M.carpetWarmFloor = std({ map: tex(plainCarpet(256, 256, '#5a4636', 80), 4, 4), roughness: 1 });
   M.tileWhite   = std({ color: '#dfe0dc', roughness: 0.35, metalness: 0.05 });
   // upholstery / furniture
   M.sofaBlue    = std({ color: '#3a4a63', roughness: 0.98 });
