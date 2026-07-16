@@ -107,13 +107,17 @@ A man was arrested in the early hours after breaking into the family home of Mar
 UNINVITED`,
 };
 
-// Minimal game state (no inventory — this is a short, linear night).
+// Minimal game state. One small inventory: the keys the prowler finds — the far
+// bedroom stays locked until the household key is taken from the cellar.
 export class GameState {
   constructor() {
     this.flags = {};
     this.seen = new Set();   // one-shot monologue / line ids
+    this.keys = new Set();   // keys the prowler is carrying
     this.arrested = false;
     this.won = false;
   }
   once(id) { if (this.seen.has(id)) return false; this.seen.add(id); return true; }
+  hasKey(id) { return this.keys.has(id); }
+  giveKey(id) { this.keys.add(id); }
 }

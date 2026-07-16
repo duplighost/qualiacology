@@ -20,6 +20,13 @@ function boot() {
   document.body.appendChild(renderer.domElement);
   const canvas = renderer.domElement;
 
+  // A heavy WebGL scene can lose its GPU context (driver hiccup, tab sleep, low
+  // VRAM). Without preventDefault the canvas black-screens for good — which reads
+  // as a crash. This lets the browser restore it, and we ease quality down on the
+  // way back so it doesn't happen again.
+  canvas.addEventListener('webglcontextlost', (e) => e.preventDefault(), false);
+  canvas.addEventListener('webglcontextrestored', () => { try { fx.setQuality(0); } catch (_) {} }, false);
+
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(71, innerWidth / innerHeight, 0.05, 300);
 
@@ -80,13 +87,16 @@ function boot() {
             enabled: true,
             prompt: () => door.isOpen ? `close ${door.name}`
               : door.locked === 'never' ? `${door.name} — it won't open`
-                : `open ${door.name}`,
+                : (door.locked && !game.hasKey(door.locked)) ? `${door.name} — locked`
+                  : door.locked ? `unlock ${door.name}`
+                    : `open ${door.name}`,
             action: () => {
-              if (door.locked === 'never') {
-                audio.lockedRattle();
-                ui.monologue("It won't move. It let me in — it isn't letting me out.", 4200);
-                return;
-              }
+              // the front door is bolted from outside — it only rattles
+              if (door.locked === 'never') { audio.lockedRattle(); return; }
+              // a keyed door won't budge until you're carrying its key
+              if (door.locked && !game.hasKey(door.locked)) { audio.lockedRattle(); return; }
+              // first time through a keyed door, it reads as unlocking
+              if (door.locked && !door.unlockedOnce) { door.unlockedOnce = true; audio.unlock?.(); }
               door.setOpen(!door.isOpen);
               if (door.isOpen) { audio.doorOpen(); ctx.scares?.maybeDoorReveal(door, player.pos); }
               else audio.doorClose();

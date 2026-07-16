@@ -162,7 +162,11 @@ class NPC {
     this.ctx.audio.murmur?.(this.def.voice ?? 1);
     this.ctx.fx.fearTarget = Math.max(this.ctx.fx.fearTarget, forced ? 0.34 : 0.2);
     clearTimeout(this._fclr);
-    this._fclr = setTimeout(() => { this.ctx.fx.fearTarget = 0; }, 2600);
+    const floor = forced ? 0.34 : 0.2;
+    this._fclr = setTimeout(() => {
+      // don't stomp the scripted dread ramp or the finale — only clear our own murmur unease
+      if (!this.ctx.events.finale.active && this.ctx.fx.fearTarget <= floor) this.ctx.fx.fearTarget = 0;
+    }, 2600);
   }
 
   update(dt, playerPos) {

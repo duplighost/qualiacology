@@ -34,7 +34,7 @@ export class Scares {
     this._pt = null;
   }
 
-  floorY(lvl) { return lvl === 'first' ? 4.2 : 0; }
+  floorY(lvl) { return lvl === 'first' ? 4.2 : lvl === 'basement' ? -3.2 : 0; }
   resetLimbs(g) {
     const u = g.userData;
     u.armL.rotation.set(0, 0, 0); u.armR.rotation.set(0, 0, 0);
@@ -171,8 +171,10 @@ export class Scares {
 
   nearestClosedDoor(p) {
     let best = null, bd = 64;
+    const plvl = this.ctx.world.levelAt(p.y);
     for (const d of this.ctx.world.doors) {
       if (d.secret || d.isOpen || d.locked === 'never' || d.id === 'masterDoor') continue;
+      if (this.ctx.world.levelAt(d.center.y) !== plvl) continue;   // same floor only — no phantom doors overhead
       const dx = d.center.x - p.x, dz = d.center.z - p.z, dd = dx * dx + dz * dz;
       if (dd < bd) { bd = dd; best = d; }
     }

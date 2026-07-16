@@ -16,8 +16,9 @@ export class Events {
 
   start() {
     const C = this.ctx;
-    // the far bedroom door stands open — a little wrong light leaks down the hall
-    C.world.doorById.masterDoor?.setOpen(true);
+    // the far bedroom is shut and locked. Nothing leaks down the hall yet — the
+    // only pull is the music box drifting from behind that door. You have to
+    // explore the house, find the key in the cellar, and open it yourself.
     setTimeout(() => C.audio.ghostChord(0.06), 1400);   // one low breath, then only the house
   }
 
@@ -34,7 +35,14 @@ export class Events {
       this.ctx.audio.heartbeat(true);
       this.ctx.fx.fearTarget = 0.42;
     });
-    add('master',     24,  0, 36,  7, 'first', () => this.runArrest());
+    // two beats now, so the end is a walk toward the shape, not a doorway snap:
+    // first, crossing into the room — the dread climbs as the pale figure resolves
+    add('masterEnter', 24, 3, 36, 7, 'first', () => {
+      this.ctx.fx.fearTarget = Math.max(this.ctx.fx.fearTarget, 0.6);
+      this.ctx.audio.heartbeat(true);
+    });
+    // then, only once you stand right in front of it at the window, the night ends
+    add('atFigure',    27, 0, 35, 3, 'first', () => this.runArrest());
     return t;
   }
 
@@ -80,6 +88,7 @@ export class Events {
   runArrest() {
     const C = this.ctx;
     if (this.finale.active || C.game.arrested) return;
+    if (!C.game.hasKey('masterKey')) return;   // the locked door blocks this anyway; belt and braces
     C.game.arrested = true;
     this.finale.active = true;
     this.finale.phase = 'draw';

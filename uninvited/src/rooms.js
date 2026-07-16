@@ -755,6 +755,27 @@ export function furnish(world, mats, ctx) {
     setTimeout(() => { if (!CTX.events.finale.active && CTX.fx.fearTarget <= 0.22) CTX.fx.fearTarget = 0; }, 1800);
   });
 
+  // THE KEY — a household key left on top of the hot-water tank beside the dead
+  // fuse box. It's the way into the locked bedroom upstairs: take it and the far
+  // door gives, and its cold light finally begins to pull down the top hall.
+  {
+    const keyMat = new THREE.MeshStandardMaterial({ color: 0xd9b24a, metalness: 0.9, roughness: 0.35, emissive: 0x6e4f10, emissiveIntensity: 0.5 });
+    const keyG = new THREE.Group(); keyG.position.set(27.2, -1.66, 30.8); keyG.rotation.y = 0.7; S.add(keyG);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.009, 8, 14), keyMat); ring.rotation.y = Math.PI / 2; ring.position.x = -0.06; keyG.add(ring);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.13, 6), keyMat); shaft.rotation.z = Math.PI / 2; keyG.add(shaft);
+    const bit1 = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.026, 0.008), keyMat); bit1.position.set(0.055, -0.02, 0); keyG.add(bit1);
+    const bit2 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.022, 0.008), keyMat); bit2.position.set(0.03, -0.019, 0); keyG.add(bit2);
+    keyG.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+    const ki = CTX.interact(keyG, 'take the brass key', () => {
+      if (CTX.game.hasKey('masterKey')) return;
+      CTX.game.giveKey('masterKey');
+      CTX.audio.lockedRattle();                     // a small jangle of metal
+      keyG.visible = false; ki.enabled = false;
+      const md = CTX.world.doorById.masterDoor;      // the far door gives, and its glow now pulls
+      if (md) { md.locked = null; md.unlockedOnce = true; md.setOpen(true); }
+    });
+  }
+
   // the landing — a dead bare bulb (lights at the breaker-throw), a broom, coal sack.
   // NOTE: hang the bulb over the FLAT landing floor (x26-28), not over the ramp.
   mesh(new THREE.SphereGeometry(0.05, 8, 8), M.bulbOff, 27, -0.82, 25);
@@ -766,4 +787,59 @@ export function furnish(world, mats, ctx) {
 
   // curtains for every window in the lived-in rooms
   curtainAll();
+
+  /* ===== DENSITY PASS (2026-07-15): fill the rooms the audit flagged as bare.
+     The failure mode was always the same — props hugged one wall and left the
+     middle empty. Furniture has no collider, so these only avoid wall/window
+     clipping, centred on the dead space. ===== */
+  FLOOR_Y = 4.2;
+  // guest room (x0-24 z0-8) — was only a bed + wardrobe
+  rug(12, 4, 3.6, 2.8, 'carpetGrey', 4.2);
+  armchair(16, 3, -Math.PI / 2, 'sofaGrey');
+  box(0.5, 0.5, 0.4, 'woodPale', 8.6, 4.45, 3);                 // nightstand
+  tableLamp(8.6, 4.7, 3); clutterBooks(8.4, 4.7, 3.3, 2);
+  box(1.1, 0.42, 0.45, 'woodDark', 10, 4.41, 6.2);              // blanket chest at the foot
+  plant(2.6, 6.6, false);
+  wallArt('guest', 'E', 0.55, 5, 0.5, 0.62);
+  // spare/parents' bedroom (x36-60 z0-8) — everything was jammed into the east
+  wardrobe(37.6, 6, Math.PI / 2);
+  box(1.2, 0.9, 0.5, 'woodPale', 40.5, 4.65, 1.0);              // dresser
+  standFrame(40.2, 5.1, 1.0, Math.PI, 3); bowlOf(40.9, 5.13, 1.0, M.brass);
+  rug(44, 4.2, 3.8, 3.0, 'carpetWarm', 4.2);
+  armchair(46, 6, Math.PI, 'fabricCream');
+  plant(37.4, 2, false);
+  wallArt('parents', 'W', 0.5, 6, 0.5, 0.62);
+  // bathroom (x14-28 z8-26) — fixtures all in the south third; fill the north half
+  box(0.44, 0.62, 0.42, 'woodPale', 16, 4.51, 22);             // laundry hamper
+  const hampL = mesh(new THREE.SphereGeometry(0.22, 8, 6), M.linen, 16, 4.86, 22, 0, false); hampL.scale.y = 0.5;
+  box(0.6, 1.7, 0.5, 'woodPale', 27.4, 5.05, 22, -Math.PI / 2); // tall storage cabinet on the east wall
+  box(1.0, 0.45, 0.4, 'woodDark', 20, 4.42, 24);               // a bench
+  rug(21, 20.5, 2.6, 1.8, 'linen', 4.2);
+  plant(16, 24.5, false);
+  // studyUp (x30-46 z8-26) — furnished only round the edges; centre it
+  rug(39, 18, 3.6, 3.2, 'carpetGrey', 4.2);
+  armchair(37, 18, 0, 'sofaGrey');
+  // boy's room (x0-14 z8-26) — a rug to hold the open middle
+  rug(6, 17, 2.8, 2.2, 'carpetGrey', 4.2);
+  box(0.34, 0.34, 0.34, 'plasticGrn', 8.5, 4.37, 16, 0.3);     // a stray toy crate
+
+  FLOOR_Y = 0;
+  // boot room (x48-60 z0-16) — everything hugged the south wall; fill the north
+  rug(54, 9, 3.0, 4.5, 'runner', 0);
+  box(1.4, 0.45, 0.4, 'woodDark', 52, 0.22, 8);                // a bench to pull boots off on
+  cyl(0.14, 0.16, 0.5, 10, 'metalSteel', 49, 0.25, 6.4);       // umbrella stand
+  for (const [ux, uz, ur] of [[48.9, 6.4, 0.09], [49.12, 6.3, -0.07]]) { const u = cyl(0.012, 0.012, 0.7, 6, 'woodDark', ux, 0.6, uz); u.rotation.z = ur; }
+  const dogBed = box(0.9, 0.12, 0.66, 'fabricDark', 57, 0.06, 12); dogBed.receiveShadow = true;
+  const dogCush = mesh(new THREE.SphereGeometry(0.16, 8, 6), M.fabricDark, 57, 0.15, 12.2, 0, false); dogCush.scale.y = 0.5;
+  for (const [wx, wz] of [[50.4, 10.6], [50.86, 10.5]]) box(0.13, 0.24, 0.28, 'iron', wx, 0.12, wz);  // wellington boots
+  plant(58.4, 14, false);
+  // the ground hall (x0-60 z26-30) — a 60m corridor bare at both ends
+  rug(6, 28, 11, 1.3, 'runner', 0);
+  rug(54, 28, 11, 1.3, 'runner', 0);
+  box(1.1, 0.8, 0.34, 'woodPale', 7, 0.4, 27);                 // west console table
+  standFrame(6.5, 0.83, 27, 0, 4); vase(7.7, 0.9, 27, M.terracotta);
+  box(1.1, 0.8, 0.34, 'woodPale', 53, 0.4, 27);               // east console table
+  bowlOf(52.6, 0.83, 27, M.brass); standFrame(53.7, 0.83, 27, 0, 1);
+  chair(15, 28.6, 0, 'woodPale');
+  plant(3.5, 28.8, false); plant(57, 28.8, false);
 }

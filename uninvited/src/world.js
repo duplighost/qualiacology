@@ -111,7 +111,7 @@ const DOORS = [
   ['first', 14, 13, 'N', { type: 'arch', w: 2.0, h: 2.4 }],            // landing -> long hall
   ['first', 19, 13, 'N', { name: 'the study' }],
   ['first', 26, 13, 'N', { name: "the child's room" }],
-  ['first', 14,  4, 'N', { id: 'masterDoor', name: 'the bedroom' }],   // <-- the finale door
+  ['first', 14,  4, 'N', { id: 'masterDoor', name: 'the bedroom', locked: 'masterKey' }],   // <-- the finale door; starts locked, opened by the cellar key
   ['first',  3,  4, 'N', { name: 'the guest room' }],
   ['first', 26,  4, 'N', { name: 'the bedroom' }],
   // --- basement stair + cellar ---
