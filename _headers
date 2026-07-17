@@ -133,15 +133,6 @@
 /galaxy-sandbox/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
-/blackthorn-manor/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/blackthorn-manor/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/blackthorn-manor/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
 /behind-you/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 

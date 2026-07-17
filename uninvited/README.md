@@ -38,7 +38,7 @@ finish it.
 
 ## Structure
 
-Plain ES modules, no build step, built on the same engine as `blackthorn-manor`:
+Plain ES modules, no build step, procedural art and audio (no asset files):
 
 - `src/world.js` — the house: a cell-grid floor plan compiled to walls/floors/stairs/colliders
 - `src/rooms.js` — furniture, the household candlelight, and the shape at the window

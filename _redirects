@@ -62,12 +62,6 @@
 /galaxy              /galaxy-sandbox/             302
 /sandbox             /galaxy-sandbox/             302
 
-# --- Blackthorn Manor ---
-/blackthorn-manor       /blackthorn-manor/index.html  301!
-/blackthorn-manor.html  /blackthorn-manor/            301!
-/blackthorn             /blackthorn-manor/            302
-/manor                  /blackthorn-manor/            302
-
 # --- Behind You ---
 /behind-you        /behind-you/index.html   301!
 /behind-you.html   /behind-you/             301!
