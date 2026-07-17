@@ -253,6 +253,10 @@
       font-family: "Space Grotesk", "Inter", sans-serif;
       line-height: 1.02;
       letter-spacing: -0.04em;
+      /* long single words (e.g. "Psychopharmacology") wrap/hyphenate inside their
+         column instead of overflowing under adjacent content */
+      overflow-wrap: break-word;
+      hyphens: auto;
     }
 
     h1 {
