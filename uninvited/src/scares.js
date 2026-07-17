@@ -39,6 +39,8 @@ export class Scares {
     const u = g.userData;
     u.armL.rotation.set(0, 0, 0); u.armR.rotation.set(0, 0, 0);
     u.legL.rotation.set(0, 0, 0); u.legR.rotation.set(0, 0, 0);
+    if (u.elbowL) { u.elbowL.rotation.set(-0.22, 0, 0); u.elbowR.rotation.set(-0.22, 0, 0); }
+    if (u.kneeL) { u.kneeL.rotation.set(0, 0, 0); u.kneeR.rotation.set(0, 0, 0); }
   }
   walk(g, dt) {
     const u = g.userData; u.phase += dt * 7.5;
@@ -84,11 +86,19 @@ export class Scares {
     const yaw = C.player.yaw, fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
     const cx = p.x + fx * dist, cz = p.z + fz * dist;
     const s = Math.random() < 0.5 ? 1 : -1;
+    // the whole crossing path must stay inside ONE room — a figure gliding
+    // through a wall reads as a rendering bug, not a fright
+    const midRoom = C.world.roomAt(cx, cz, p.y);
+    if (!midRoom) return false;
+    let span = 2.2;
+    const inRoom = (x, z) => C.world.roomAt(x, z, p.y) === midRoom;
+    while (span > 0.8 && (!inRoom(cx + rx * span, cz + rz * span) || !inRoom(cx - rx * span, cz - rz * span))) span *= 0.65;
+    if (span <= 0.8) return false;                       // no room to cross here
     const { role, fig } = this.pickPerson(lvl, opts);
     this.resetLimbs(fig);
     this.beat = {
       type: 'cross', fig, t: 0, dur: 1.3 + Math.random() * 0.5, y,
-      x0: cx + rx * 2.2 * s, z0: cz + rz * 2.2 * s, x1: cx - rx * 2.2 * s, z1: cz - rz * 2.2 * s,
+      x0: cx + rx * span * s, z0: cz + rz * span * s, x1: cx - rx * span * s, z1: cz - rz * span * s,
     };
     fig.position.set(this.beat.x0, y, this.beat.z0);
     fig.rotation.y = Math.atan2(-(this.beat.x1 - this.beat.x0), -(this.beat.z1 - this.beat.z0));
@@ -104,7 +114,8 @@ export class Scares {
     const C = this.ctx, lvl = C.world.levelAt(p.y), y = this.floorY(lvl);
     const yaw = C.player.yaw;
     const bx = p.x + Math.sin(yaw) * 3.3, bz = p.z + Math.cos(yaw) * 3.3;   // behind = -forward
-    if (!C.world.roomAt(bx, bz, p.y)) return false;
+    // must be the same room — never materialize someone beyond a wall
+    if (C.world.roomAt(bx, bz, p.y) !== C.world.roomAt(p.x, p.z, p.y)) return false;
     const { fig } = this.pickPerson(lvl, {});
     this.resetLimbs(fig);
     fig.position.set(bx, y, bz);

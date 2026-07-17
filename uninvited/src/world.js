@@ -114,6 +114,11 @@ const DOORS = [
   ['first', 14,  4, 'N', { id: 'masterDoor', name: 'the bedroom', locked: 'masterKey' }],   // <-- the finale door; starts locked, opened by the cellar key
   ['first',  3,  4, 'N', { name: 'the guest room' }],
   ['first', 26,  4, 'N', { name: 'the bedroom' }],
+  // --- secret passages (no interact prompt: each is opened by a hidden trigger
+  //     prop in rooms.js; the panel sinks into the floor with a stone-grind) ---
+  ['ground', 6, 8, 'W', { type: 'secret', mat: 'woodDark', id: 'secretStudy', name: 'the panel', w: 1.0, h: 2.05 }],   // study bookcase <-> family room
+  ['ground', 16, 3, 'W', { type: 'secret', mat: 'woodPale', id: 'secretPantry', name: 'the low door', w: 0.9, h: 2.0 }], // pantry <-> playroom
+  ['first', 23, 8, 'W', { type: 'secret', mat: 'woodPale', id: 'secretGirl', name: 'the loose panel', w: 0.9, h: 1.9 }], // girl's room <-> upstairs study
   // --- basement stair + cellar ---
   ['ground', 14, 8, 'N', { id: 'cellarDoor', heavy: true, name: 'the cellar door' }],  // pantry -> cellar stairs
   ['basement', 13, 12, 'W', { name: 'the cellar' }],           // landing -> storage cellar
@@ -551,8 +556,14 @@ export class World {
     S.add(moon);
     // the forest. A far wood, plus a close band that leans in around the house —
     // visible through every window, silhouetted when the lightning goes.
-    const trunkMat = new THREE.MeshStandardMaterial({ color: '#141310', roughness: 1 });
-    const treeGeos = [];
+    // Trunks alone read as nothing at night; each tree gets a moonlit CANOPY
+    // (faint self-glow stands in for moon-sheen so the wood shows through fog).
+    const trunkMat = new THREE.MeshStandardMaterial({ color: '#26211a', roughness: 1 });
+    const leafMat = new THREE.MeshStandardMaterial({
+      color: '#223a2c', roughness: 1,
+      emissive: '#16281e', emissiveIntensity: 2.1,   // tuned live: 1.35 vanished, 3.2 read radioactive
+    });
+    const treeGeos = [], leafGeos = [];
     let seed = 9;
     const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
     const tree = (tx, tz, th, lean) => {
@@ -570,6 +581,19 @@ export class World {
         br.rotateY(rnd() * Math.PI * 2);
         br.translate(tx, th * (0.5 + rnd() * 0.45), tz);
         treeGeos.push(br);
+      }
+      // canopy: 3-4 overlapping lobes hanging LOW on the trunk, so crowns fill
+      // a window's view band instead of floating above it
+      const lobes = 3 + (rnd() * 2 | 0);
+      for (let li = 0; li < lobes; li++) {
+        const lr = th * (0.26 + rnd() * 0.14);
+        const lob = new THREE.SphereGeometry(lr, 7, 6);
+        lob.scale(1, 0.8 + rnd() * 0.3, 1);
+        lob.translate(
+          tx + (rnd() - 0.5) * lr * 1.6,
+          th * (0.5 + rnd() * 0.4),
+          tz + (rnd() - 0.5) * lr * 1.6);
+        leafGeos.push(lob);
       }
     };
     // far wood
@@ -590,9 +614,20 @@ export class World {
     for (let i = 0; i < 14; i++) {
       tree(4 + rnd() * 52, -5 - rnd() * 14, 8 + rnd() * 5, (rnd() - 0.5) * 0.14);
     }
+    // window trees: a handful pressed close to each side of the house so every
+    // window frames branches, not empty dark
+    for (const [wx, wz] of [[10, 48], [26, 50], [44, 48], [56, 49],             // south lawn
+                            [14, -8], [38, -8.5], [50, -7.5],                    // north (with the master line)
+                            [-8.5, 8], [-8, 24], [-9, 34],                       // west
+                            [68, 6], [68.5, 20], [67.5, 33]]) {                  // east
+      tree(wx + (rnd() - 0.5) * 2, wz + (rnd() - 0.5) * 1.5, 9 + rnd() * 4, (rnd() - 0.5) * 0.18);
+    }
     const trees = new THREE.Mesh(mergeGeometries(treeGeos, false), trunkMat);
     trees.castShadow = true;
     S.add(trees);
+    const leaves = new THREE.Mesh(mergeGeometries(leafGeos, false), leafMat);
+    leaves.castShadow = true;
+    S.add(leaves);
     const roof = new THREE.Mesh(new THREE.BoxGeometry(62, 0.5, 42), new THREE.MeshStandardMaterial({ color: '#12100c', roughness: 1 }));
     roof.position.set(30, 10.6, 20);
     S.add(roof);
@@ -661,7 +696,7 @@ export class Door {
     const M = world.M;
     const hx = isX ? mid - w / 2 : plane;
     const hz = isX ? plane : mid - w / 2;
-    const mat = this.secret ? M.stoneDark : M.doorWood;
+    const mat = this.secret ? (M[opts.mat] || M.stoneDark) : M.doorWood;   // secrets can masquerade as paneling
 
     if (opts.type === 'double' || opts.type === 'front') {
       this.panels = [];

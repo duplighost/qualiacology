@@ -463,7 +463,7 @@ export function makeMaterials() {
   });
   // see-through panes: the night, the treeline and the rain show through them
   M.windowGlow = new THREE.MeshBasicMaterial({
-    color: '#3d4c66', transparent: true, opacity: 0.22,
+    color: '#3d4c66', transparent: true, opacity: 0.12,   // 0.22 washed out the forest beyond
     side: THREE.DoubleSide, depthWrite: false,
   });
   M.mirror = std({ color: '#5a6068', roughness: 0.08, metalness: 0.95 });

@@ -43,11 +43,28 @@ export function figure(M, spec) {
   head.scale.set(0.94, 1.06, 0.9);
   head.castShadow = true;
   headG.add(head);
+  // a real face: white eyes with dark pupils, brows, a nose, ears
+  const scleraMat = M.tileWhite || skin;
   for (const sx of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(spec.child ? 0.02 * s : 0.017 * s, 6, 6), eyeMat);
-    eye.position.set(sx * 0.047 * s, 0.012 * s, -0.108 * s);
-    headG.add(eye);
+    const sclera = new THREE.Mesh(new THREE.SphereGeometry(spec.child ? 0.024 * s : 0.021 * s, 7, 6), scleraMat);
+    sclera.position.set(sx * 0.047 * s, 0.012 * s, -0.104 * s);
+    sclera.scale.z = 0.55;
+    headG.add(sclera);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(spec.child ? 0.012 * s : 0.01 * s, 6, 5), eyeMat);
+    pupil.position.set(sx * 0.047 * s, 0.012 * s, -0.118 * s);
+    headG.add(pupil);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.045 * s, 0.012 * s, 0.014 * s), hair);
+    brow.position.set(sx * 0.049 * s, 0.052 * s, -0.112 * s);
+    brow.rotation.z = sx * -0.12;
+    headG.add(brow);
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.028 * s, 6, 5), skin);
+    ear.position.set(sx * 0.124 * s, -0.005 * s, -0.01 * s);
+    ear.scale.set(0.5, 1, 0.7);
+    headG.add(ear);
   }
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.026 * s, 0.045 * s, 0.03 * s), skin);
+  nose.position.set(0, -0.03 * s, -0.124 * s);
+  headG.add(nose);
   // hair: cap for everyone; long back fall + side strands for longHair
   const cap = new THREE.Mesh(new THREE.SphereGeometry(0.142 * s, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.58), hair);
   cap.position.y = 0.022 * s;
@@ -65,32 +82,44 @@ export function figure(M, spec) {
     }
   }
 
-  // arms: pivot at the shoulder; upper arm + slightly bent forearm + hand
+  // arms: shoulder pivot -> upper arm -> ELBOW pivot -> forearm + hand.
+  // The elbow is what lets poses read as human (hand to ear, cradling, scrubbing)
+  // instead of a rigid oar swinging from the shoulder.
   const arm = (sx) => {
     const p = new THREE.Group();
     p.position.set(sx * 0.21 * s * broad, shoulderY - 0.02 * s, 0);
     g.add(p);
     const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.058 * s, 0.2 * s, 4, 8), cloth);
     upper.position.y = -0.15 * s; upper.castShadow = true; p.add(upper);
-    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.048 * s, 0.17 * s, 4, 8), cloth);
-    fore.position.set(0, -0.42 * s, -0.025 * s); fore.rotation.x = 0.2; fore.castShadow = true; p.add(fore);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.052 * s, 8, 8), skin);
-    hand.position.set(0, -0.57 * s, -0.05 * s); p.add(hand);
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.3 * s;
+    p.add(elbow);
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.046 * s, 0.17 * s, 4, 8), cloth);
+    fore.position.y = -0.13 * s; fore.castShadow = true; elbow.add(fore);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05 * s, 8, 8), skin);
+    hand.scale.set(0.8, 1.1, 0.9);
+    hand.position.y = -0.27 * s; elbow.add(hand);
+    elbow.rotation.x = -0.22;                     // a natural resting bend
+    p.userData.elbow = elbow;
     return p;
   };
   const armL = arm(-1), armR = arm(1);
 
-  // legs: pivot at the hip; thigh + shin + a foot pointing forward
+  // legs: hip pivot -> thigh -> KNEE pivot -> shin + foot
   const leg = (sx) => {
     const p = new THREE.Group();
     p.position.set(sx * 0.095 * s, hipY - 0.02 * s, 0);
     g.add(p);
     const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.078 * s, 0.3 * s, 4, 8), legMat);
     thigh.position.y = -0.2 * s; thigh.castShadow = true; p.add(thigh);
-    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.06 * s, 0.3 * s, 4, 8), legMat);
-    shin.position.y = -0.62 * s; shin.castShadow = true; p.add(shin);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.09 * s, 0.055 * s, 0.18 * s), M.hairDark);
-    foot.position.set(0, -0.865 * s, -0.035 * s); p.add(foot);
+    const knee = new THREE.Group();
+    knee.position.y = -0.42 * s;
+    p.add(knee);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.058 * s, 0.28 * s, 4, 8), legMat);
+    shin.position.y = -0.18 * s; shin.castShadow = true; knee.add(shin);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.09 * s, 0.055 * s, 0.19 * s), M.hairDark);
+    foot.position.set(0, -0.43 * s, -0.045 * s); knee.add(foot);
+    p.userData.knee = knee;
     return p;
   };
   const legL = leg(-1), legR = leg(1);
@@ -119,7 +148,11 @@ export function figure(M, spec) {
     brim.position.y = 0.06 * s; headG.add(brim);
   }
 
-  g.userData = { armL, armR, legL, legR, phase: 0, s };
+  g.userData = {
+    armL, armR, legL, legR, phase: 0, s,
+    elbowL: armL.userData.elbow, elbowR: armR.userData.elbow,
+    kneeL: legL.userData.knee, kneeR: legR.userData.knee,
+  };
   return g;
 }
 
@@ -154,6 +187,17 @@ class NPC {
       z.x0 + Math.random() * (z.x1 - z.x0),
       this.floorY,
       z.z0 + Math.random() * (z.z1 - z.z0));
+  }
+
+  // people don't walk through walls: test a candidate step against the world's
+  // wall/door colliders (radius 0.26, torso band)
+  _blocked(x, z) {
+    const y0 = this.floorY + 0.25, y1 = this.floorY + 1.5, r = 0.26;
+    for (const cl of this.ctx.world.colliders) {
+      if (cl.max.y <= y0 || cl.min.y >= y1) continue;
+      if (x + r > cl.min.x && x - r < cl.max.x && z + r > cl.min.z && z - r < cl.max.z) return true;
+    }
+    return false;
   }
 
   say(forced) {
@@ -203,10 +247,15 @@ class NPC {
         if (this.wait <= 0) { this.target = this._pick(); this.wait = 1 + Math.random() * 3; }
       } else {
         const step = Math.min(td, this.speed * dt);
-        this.pos.x += (tx / td) * step;
-        this.pos.z += (tz / td) * step;
-        this.moving = true;
-        targetYaw = Math.atan2(-tx, -tz);
+        const nx = this.pos.x + (tx / td) * step, nz = this.pos.z + (tz / td) * step;
+        if (this._blocked(nx, nz)) {
+          // a wall (or a shut door) is in the way — give up on this spot
+          this.target = this._pick();
+        } else {
+          this.pos.x = nx; this.pos.z = nz;
+          this.moving = true;
+          targetYaw = Math.atan2(-tx, -tz);
+        }
       }
     }
 
@@ -223,20 +272,36 @@ class NPC {
       const sw = Math.sin(u.phase) * 0.5;
       u.legL.rotation.x = sw; u.legR.rotation.x = -sw;
       u.armL.rotation.x = -sw * 0.7; u.armR.rotation.x = sw * 0.7;
+      // knees flex on the back-swing, elbows relax — reads as a gait, not oars
+      if (u.kneeL) { u.kneeL.rotation.x = Math.max(0, -Math.sin(u.phase)) * 0.7; u.kneeR.rotation.x = Math.max(0, Math.sin(u.phase)) * 0.7; }
+      if (u.elbowL) {
+        u.elbowL.rotation.x = -0.35;
+        // a man pacing on a call keeps the phone half-raised
+        u.elbowR.rotation.x = this.def.activity === 'phone' ? -1.35 : -0.35;
+        if (this.def.activity === 'phone') u.armR.rotation.x = Math.min(u.armR.rotation.x, -0.15);
+      }
     } else {
       u.legL.rotation.x *= 0.85; u.legR.rotation.x *= 0.85;
-      // activity flourishes
+      if (u.kneeL) { u.kneeL.rotation.x *= 0.85; u.kneeR.rotation.x *= 0.85; }
+      // activity flourishes — all elbow-driven now, so the hands land where hands go
       const t = (this.ctx._t7 || 0);
       if (this.def.activity === 'wash') {
-        u.armL.rotation.x = -1.15 + Math.sin(t * 4) * 0.25;
-        u.armR.rotation.x = -1.15 + Math.sin(t * 4 + 1) * 0.25;
+        u.armL.rotation.x = -0.55 + Math.sin(t * 4) * 0.12;
+        u.armR.rotation.x = -0.55 + Math.sin(t * 4 + 1) * 0.12;
+        if (u.elbowL) { u.elbowL.rotation.x = -0.85 + Math.sin(t * 4) * 0.2; u.elbowR.rotation.x = -0.85 + Math.sin(t * 4 + 1) * 0.2; }
       } else if (this.def.activity === 'phone') {
-        u.armR.rotation.x = -0.2; u.armR.rotation.z = -2.4;   // hand to ear
+        // hand to the ear: upper arm slightly forward and tucked, forearm folded up
+        u.armR.rotation.x = -0.5; u.armR.rotation.z = -0.28;
+        if (u.elbowR) u.elbowR.rotation.x = -2.05;
         u.armL.rotation.x = Math.sin(t * 1.3) * 0.15;
+        if (u.elbowL) u.elbowL.rotation.x = -0.25;
       } else if (this.def.activity === 'doll') {
-        u.armL.rotation.x = -1.5; u.armR.rotation.x = -1.5;    // cradling
+        // cradling: both arms folded across the chest
+        u.armL.rotation.x = -0.65; u.armR.rotation.x = -0.65;
+        if (u.elbowL) { u.elbowL.rotation.x = -1.6; u.elbowR.rotation.x = -1.6; }
       } else if (this.def.activity === 'play') {
-        u.armR.rotation.x = -1.2 + Math.sin(t * 3.5) * 0.4;    // pushing a toy
+        u.armR.rotation.x = -0.7 + Math.sin(t * 3.5) * 0.3;    // pushing a toy
+        if (u.elbowR) u.elbowR.rotation.x = -0.5;
       } else {
         u.armL.rotation.x *= 0.9; u.armR.rotation.x *= 0.9;
       }
@@ -257,7 +322,7 @@ export class NPCs {
       { key: 'mother', level: 'ground', floorY: 0, activity: 'wash', voice: 1.25,
         start: { x: 57.5, z: 33 }, baseYaw: -Math.PI / 2, lines: LINES.mother },
       { key: 'father', level: 'ground', floorY: 0, activity: 'phone', voice: 0.7,
-        start: { x: 6, z: 21 }, baseYaw: 0, zone: { x0: 3, z0: 18, x1: 9, z1: 24 }, lines: LINES.father },
+        start: { x: 6, z: 21 }, baseYaw: 0, zone: { x0: 4.8, z0: 18.5, x1: 9, z1: 23 }, lines: LINES.father },   // clear of the desk + armchair
       { key: 'boy', level: 'ground', floorY: 0, activity: 'play', voice: 1.5, child: true,
         start: { x: 40, z: 7 }, baseYaw: Math.PI, lines: LINES.boy },
       { key: 'girl', level: 'first', floorY: 4.2, voice: 1.7, child: true,
@@ -270,10 +335,11 @@ export class NPCs {
       const g = figure(M, fam);
       g.position.set(d.start.x, d.floorY, d.start.z);
       S.add(g);
-      // a phone in the father's hand
+      // a phone in the father's hand — attached to the FOREARM so the elbow
+      // fold carries it to his ear, not into his skull
       if (d.activity === 'phone') {
         const phone = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.02), M.phoneGlow);
-        g.userData.armR.add(phone); phone.position.set(0, -0.56, -0.07);
+        g.userData.elbowR.add(phone); phone.position.set(-0.02, -0.28, -0.03);
       }
       // a doll cradled by the girl (figures face -z)
       if (d.activity === 'doll') {

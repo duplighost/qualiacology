@@ -792,6 +792,599 @@ export function furnish(world, mats, ctx) {
   const patch = box(0.14, 0.74, 10, 'stoneDark', 31.95, -0.33, 21); patch.receiveShadow = true;
   const patchW = box(0.14, 0.74, 10, 'stoneDark', 28.05, -0.33, 21); patchW.receiveShadow = true;
 
+  /* ===== ROOM PURPOSE PASS (2026-07-16): every room earns a visit ===== */
+  {
+    FLOOR_Y = 0;
+    // shared bits: find an existing prop by position, group + child builders,
+    // the standard fear pulse, and a decaying (or standing) sway animator
+    const at = (x, y, z, isGrp) => S.children.find(o => (isGrp ? o.isGroup : o.isMesh) &&
+      Math.abs(o.position.x - x) < 0.05 && Math.abs(o.position.y - y) < 0.05 && Math.abs(o.position.z - z) < 0.05);
+    const grp = (x, y, z, ry = 0) => { const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; S.add(g); return g; };
+    const part = (g, geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => {
+      const o = new THREE.Mesh(geo, matOf(m)); o.position.set(x, y, z); o.rotation.set(rx, ry, rz);
+      o.castShadow = true; o.receiveShadow = true; g.add(o); return o;
+    };
+    const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    const C = (rt, rb, h, seg) => new THREE.CylinderGeometry(rt, rb, h, seg);
+    const fear = (v, ms = 1800) => {
+      CTX.fx.fearTarget = Math.max(CTX.fx.fearTarget, v);
+      setTimeout(() => { if (!CTX.events.finale.active && CTX.fx.fearTarget <= v) CTX.fx.fearTarget = 0; }, ms);
+    };
+    const sway = (o, axis, amp, hz, dur) => {
+      const t0 = performance.now();
+      const iv = setInterval(() => {
+        const t = (performance.now() - t0) / 1000, k = dur ? Math.max(0, 1 - t / dur) : 1;
+        o.rotation[axis] = Math.sin(t * hz * Math.PI * 2) * amp * k;
+        if (dur && k <= 0) { clearInterval(iv); o.rotation[axis] = 0; }
+      }, 33);
+    };
+    const A = CTX.audio;
+
+    // living — the coals are still live; somebody's phone still gets messages
+    const poker = grp(12.8, 0.5, 30.45);
+    part(poker, C(0.015, 0.02, 1.0, 6), 'iron', 0, 0, 0, 0, 0, -0.12);
+    const coals = [[13.82, 0.14, 30.58], [13.94, 0.145, 30.6], [14.06, 0.14, 30.57], [14.18, 0.145, 30.59]]
+      .map(([x, y, z]) => mesh(new THREE.SphereGeometry(0.035, 6, 6), M.ember, x, y, z, 0, false));
+    CANDLES.push({ x: 14, y: 0.25, z: 30.58, color: 0xff5a1a, intensity: 2.2, r: 4 });
+    CTX.interact(poker, 'stir the embers', () => {
+      if (poker.userData.busy) return; poker.userData.busy = true;
+      A.metalDrop(); coals.forEach(c => c.scale.setScalar(1.5)); fear(0.18);
+      setTimeout(() => { coals.forEach(c => c.scale.setScalar(1)); poker.userData.busy = false; }, 2000);
+    });
+    const phone = grp(8.5, 0.627, 37.45);
+    part(phone, B(0.07, 0.012, 0.14), 'screenOff', 0, 0, 0);
+    const phFace = part(phone, B(0.065, 0.002, 0.13), 'screenOff', 0, 0.007, 0);
+    CTX.interact(phone, 'turn the phone over', () => {
+      if (phone.userData.busy) return; phone.userData.busy = true;
+      phFace.material = M.phoneGlow; A.static(0.04, 0.3); fear(0.2);
+      setTimeout(() => { phFace.material = M.screenOff; phone.userData.busy = false; }, 2500);
+    });
+
+    // foyer — a dead line, and the car keys that say nobody left
+    const wphone = box(0.14, 0.3, 0.07, 'woodDark', 37.82, 1.5, 38.4, -Math.PI / 2);
+    box(0.05, 0.16, 0.04, 'tileWhite', 37.78, 1.52, 38.4, -Math.PI / 2);
+    CTX.interact(wphone, 'lift the telephone receiver', () => { A.unlock(); fear(0.22); });
+    const keys = grp(22.62, 0.89, 37.3);
+    for (const [kx, kz, kr] of [[-0.02, 0.01, 0.5], [0.02, -0.01, -0.9], [0, 0.02, 2.1]])
+      part(keys, B(0.05, 0.008, 0.02), 'brass', kx, 0.01, kz, 0, kr, 0);
+    CTX.interact(keys, 'stir the keys in the bowl', () => { A.metalDrop(); });
+
+    // dining — voices through the serving hatch; cutlery in the sideboard
+    const hatch = box(0.7, 0.55, 0.06, 'woodPale', 49.85, 1.35, 31.5, -Math.PI / 2);
+    box(0.05, 0.06, 0.82, 'woodDark', 49.84, 1.655, 31.5);
+    box(0.05, 0.06, 0.82, 'woodDark', 49.84, 1.045, 31.5);
+    CTX.interact(hatch, 'listen at the serving hatch', () => { A.murmur(0.9); fear(0.3); });
+    const drawer = box(0.7, 0.22, 0.014, 'woodDark', 44, 0.62, 39.14);
+    mesh(new THREE.SphereGeometry(0.02, 8, 8), M.brass, 44, 0.62, 39.12, 0, false);
+    CTX.interact(drawer, 'slide the drawer open', () => {
+      if (drawer.userData.busy) return; drawer.userData.busy = true;
+      A.creak(0.3); fear(0.15);
+      setTimeout(() => { A.metalDrop(); drawer.userData.busy = false; }, 220);
+    });
+
+    // kitchen — live water, a dead kettle, and somebody's dog somewhere
+    const tap = grp(59.4, 1.12, 33);
+    part(tap, C(0.02, 0.02, 0.18, 6), 'metalSteel', 0.05, -0.01, 0);
+    part(tap, C(0.013, 0.013, 0.2, 6), 'metalSteel', -0.05, 0.07, 0, 0, 0, Math.PI / 2);
+    part(tap, new THREE.SphereGeometry(0.02, 8, 8), 'brass', 0.05, 0.1, 0);
+    CTX.interact(tap, 'turn the tap', () => { A.waterRun(); fear(0.12); });
+    const kettleSw = grp(59.1, 1.0, 34.6);
+    part(kettleSw, B(0.015, 0.02, 0.012), 'plasticRed', 0, -0.02, 0);
+    CTX.interact(kettleSw, 'press the kettle switch', () => { A.unlock(); });
+    const dogBowl = grp(51.6, 0.025, 31.4);
+    part(dogBowl, C(0.09, 0.07, 0.05, 10), 'metalSteel', 0, 0, 0);
+    part(dogBowl, C(0.07, 0.07, 0.01, 10), 'screenOff', 0, 0.018, 0);
+    part(dogBowl, C(0.09, 0.07, 0.05, 10), 'terracotta', 0.25, 0, 0);
+    CTX.interact(dogBowl, "nudge the dog's bowl", () => {
+      if (dogBowl.userData.busy) return; dogBowl.userData.busy = true;
+      A.metalDrop(); fear(0.35);
+      setTimeout(() => { A.whineDog(); dogBowl.userData.busy = false; }, 600);
+    });
+
+    // ground hall — the clock somebody winds; the needle sits hard on stormy
+    const gclock = box(0.55, 2.1, 0.32, 'woodDark', 12, 1.05, 29.78);
+    cyl(0.14, 0.14, 0.03, 16, 'brass', 12, 1.78, 29.6).rotation.x = Math.PI / 2;
+    box(0.3, 0.9, 0.02, 'screenOff', 12, 1.0, 29.61);
+    const gpend = grp(12, 1.3, 29.59);
+    part(gpend, C(0.01, 0.01, 0.5, 6), 'brass', 0, -0.25, 0);
+    part(gpend, C(0.05, 0.05, 0.015, 10), 'brass', 0, -0.48, 0, Math.PI / 2);
+    sway(gpend, 'z', 0.1, 0.45, 0);            // it never stopped
+    CTX.interact(gclock, 'open the clock case', () => {
+      if (gclock.userData.busy) return; gclock.userData.busy = true;
+      A.doorOpen(false); fear(0.25);
+      for (const d of [500, 1800, 3100]) setTimeout(() => A.tick(), d);
+      setTimeout(() => { gclock.userData.busy = false; }, 3600);
+    });
+    const baro = cyl(0.14, 0.14, 0.02, 16, 'brass', 25, 1.6, 26.18); baro.rotation.x = Math.PI / 2;
+    cyl(0.16, 0.16, 0.03, 16, 'woodDark', 25, 1.6, 26.155).rotation.x = Math.PI / 2;
+    const needle = box(0.01, 0.09, 0.01, 'woodDark', 25, 1.6, 26.195); needle.rotation.z = 0.7;
+    CTX.interact(baro, 'tap the barometer', () => { A.knock(); fear(0.12); });
+
+    // study — the chair someone only just left, a pipe with a live coal
+    const sbook = grp(8.15, 0.56, 24.05);
+    part(sbook, B(0.18, 0.015, 0.26), 'clothNavy', 0, 0, 0);
+    part(sbook, B(0.17, 0.02, 0.24), 'paper', -0.045, 0.014, 0, 0, 0, 0.08);
+    part(sbook, B(0.17, 0.02, 0.24), 'paper', 0.045, 0.014, 0, 0, 0, -0.08);
+    CTX.interact(sbook, 'leaf through the open book', () => { A.pageTurn(); fear(0.18); });
+    const cclock = grp(1.6, 2.08, 18);
+    part(cclock, B(0.09, 0.16, 0.14), 'brass', 0, 0, 0);
+    part(cclock, C(0.05, 0.05, 0.01, 10), 'linen', 0.05, 0.02, 0, 0, 0, Math.PI / 2);
+    CTX.interact(cclock, 'wind the carriage clock', () => {
+      if (cclock.userData.busy) return; cclock.userData.busy = true;
+      fear(0.14);
+      for (const d of [0, 1300, 2600, 3900]) setTimeout(() => A.tick(), d);
+      setTimeout(() => { cclock.userData.busy = false; }, 4400);
+    });
+    const dcord = cyl(0.006, 0.006, 0.1, 4, 'iron', 3.11, 0.99, 20.3);
+    CTX.interact(dcord, 'try the desk lamp', () => { A.unlock(); });
+    cyl(0.07, 0.05, 0.035, 10, 'brass', 3.2, 0.8, 19.9);          // ashtray
+    box(0.09, 0.015, 0.02, 'woodDark', 3.12, 0.825, 19.9);        // the pipe
+    mesh(new THREE.SphereGeometry(0.015, 8, 8), M.ember, 3.2, 0.84, 19.9, 0, false);
+    CANDLES.push({ x: 3.2, y: 0.9, z: 19.9, color: 0xff5a1a, intensity: 1.2, r: 3 });
+
+    // family room — the lid the children hear; the monitor that hears them back
+    const lidG = grp(25.5, 0.52, 17.27);
+    part(lidG, B(0.9, 0.04, 0.5), 'plasticBlue', 0, 0, 0.24);
+    CTX.interact(lidG, 'lift the toy chest lid', () => {
+      if (lidG.userData.busy) return; lidG.userData.busy = true;
+      A.creak(0.5); lidG.rotation.x = -0.55; fear(0.24);
+      setTimeout(() => { A.giggle(); lidG.userData.busy = false; }, 700);
+    });
+    const monitor = grp(19.7, 0.53, 21.1);
+    part(monitor, B(0.09, 0.14, 0.05), 'metalWhite', 0, 0, 0);
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 6),
+      new THREE.MeshStandardMaterial({ color: '#3f9a52', emissive: '#39ff70', emissiveIntensity: 1.4 }));
+    led.position.set(0, 0.055, 0.028); monitor.add(led);
+    CTX.interact(monitor, 'turn up the baby monitor', () => {
+      if (monitor.userData.busy) return; monitor.userData.busy = true;
+      A.static(0.05, 0.7); fear(0.3);
+      setTimeout(() => { A.murmur(1.6); monitor.userData.busy = false; }, 750);
+    });
+
+    // back hall — your own face, a dead line, a phone that dies when touched
+    const bmirror = at(37.8, 1.6, 20, true);
+    if (bmirror) CTX.interact(bmirror, 'look into the mirror', () => { A.presence(); fear(0.34); });
+    const bphone = box(0.06, 0.24, 0.14, 'plasticRed', 32.16, 1.42, 23);
+    box(0.05, 0.18, 0.05, 'plasticRed', 32.19, 1.46, 23);
+    cyl(0.006, 0.006, 0.2, 5, 'iron', 32.18, 1.22, 23.05);
+    CTX.interact(bphone, 'lift the telephone receiver', () => {
+      if (bphone.userData.busy) return; bphone.userData.busy = true;
+      A.unlock(); fear(0.2);
+      setTimeout(() => { A.static(0.03, 0.6); bphone.userData.busy = false; }, 300);
+    });
+    const mob = grp(34.7, 0.426, 25.05);
+    part(mob, B(0.075, 0.012, 0.15), 'screenOff', 0, 0, 0);
+    const mscr = part(mob, new THREE.PlaneGeometry(0.065, 0.13), 'phoneGlow', 0, 0.0075, 0, -Math.PI / 2);
+    const mlight = { x: 34.7, y: 0.7, z: 25.05, color: 0x8fb8d8, intensity: 1.6, r: 4 };
+    CANDLES.push(mlight);
+    CTX.interact(mob, 'turn the phone face-down', () => {
+      if (mob.userData.done) return; mob.userData.done = true;
+      A.knock(); mscr.material = M.screenOff; fear(0.22);
+      const i = CANDLES.indexOf(mlight); if (i >= 0) CANDLES.splice(i, 1);
+    });
+
+    // laundry — the wash that never finished; a lantern on the dryer
+    const lsink = box(0.66, 0.14, 0.55, 'metalSteel', 45, 0.87, 16.5);
+    box(0.6, 0.8, 0.5, 'metalWhite', 45, 0.4, 16.5);
+    cyl(0.02, 0.02, 0.16, 6, 'brass', 45.2, 1.02, 16.5);
+    cyl(0.012, 0.012, 0.14, 5, 'brass', 45.12, 1.08, 16.5).rotation.z = Math.PI / 2;
+    CTX.interact(lsink, 'turn the tap', () => { A.waterRun(); fear(0.16); });
+    const port = cyl(0.24, 0.24, 0.02, 14, 'glass', 40, 0.5, 24.23); port.rotation.x = Math.PI / 2;
+    CTX.interact(port, 'open the washing machine', () => {
+      if (port.userData.busy) return; port.userData.busy = true;
+      A.creak(0.5); fear(0.26);
+      setTimeout(() => { A.metalDrop(); port.userData.busy = false; }, 450);
+    });
+    const dbtn = grp(41, 0.75, 24.3);
+    part(dbtn, C(0.015, 0.015, 0.012, 8), 'plasticRed', 0, 0, -0.055, Math.PI / 2);
+    CTX.interact(dbtn, 'press the dryer button', () => { A.unlock(); });
+    cyl(0.09, 0.09, 0.22, 10, 'metalSteel', 41, 1.01, 24.6);
+    cyl(0.095, 0.095, 0.07, 10, 'windowGlow', 41, 1.03, 24.6);
+    CANDLES.push({ x: 41, y: 1.25, z: 24.6, color: 0xdfe8ff, intensity: 4, r: 7 });
+
+    // sun room — the draught moves things
+    const chime = grp(57, 2.72, 21);
+    part(chime, C(0.005, 0.005, 1.15, 5), 'iron', 0, 0.605, 0);
+    for (let i = 0; i < 5; i++)
+      part(chime, C(0.012, 0.012, 0.2 + i * 0.025, 6), 'brass', Math.cos(i * 1.26) * 0.035, -0.02 - i * 0.012, Math.sin(i * 1.26) * 0.035);
+    CTX.interact(chime, 'still the wind chimes', () => {
+      if (chime.userData.busy) return; chime.userData.busy = true;
+      for (const d of [0, 130, 300]) setTimeout(() => A.bell(), d);
+      fear(0.22); setTimeout(() => { chime.userData.busy = false; }, 900);
+    });
+    const rocker = armchair(55.5, 23.5, 0, 'fabricCream');
+    box(0.06, 0.05, 1.0, 'woodDark', 55.15, 0.03, 23.5);
+    box(0.06, 0.05, 1.0, 'woodDark', 55.85, 0.03, 23.5);
+    CTX.interact(rocker, 'steady the rocking chair', () => {
+      if (rocker.userData.busy) return; rocker.userData.busy = true;
+      sway(rocker, 'x', 0.05, 0.55, 1.6); A.creak(0.5); fear(0.28);
+      setTimeout(() => A.creak(0.3), 800);
+      setTimeout(() => { rocker.userData.busy = false; }, 1700);
+    });
+    const wcan = cyl(0.09, 0.12, 0.18, 8, 'metalSteel', 50.7, 0.09, 24.5);
+    CTX.interact(wcan, 'tip the watering can', () => { A.waterRun(0.5); fear(0.12); });
+
+    // garage — the engine is still warm; a working torch on the bench
+    const car = at(10, 0.7, 8);
+    if (car) CTX.interact(car, 'touch the car bonnet', () => {
+      if (car.userData.busy) return; car.userData.busy = true;
+      fear(0.3);
+      for (const d of [0, 1400, 3200]) setTimeout(() => A.tick(), d);
+      setTimeout(() => { car.userData.busy = false; }, 3800);
+    });
+    const torch = grp(4.25, 0.935, 1.2);
+    part(torch, C(0.028, 0.035, 0.2, 8), 'iron', 0, 0, 0, 0, 0, Math.PI / 2);
+    const thead = part(torch, C(0.038, 0.038, 0.02, 8), 'bulbOff', 0.11, 0, 0, 0, 0, Math.PI / 2);
+    CTX.interact(torch, 'switch on the torch', () => {
+      A.unlock();
+      if (!torch.userData.on) {
+        torch.userData.on = { x: 4.4, y: 1.0, z: 1.2, color: 0xdfe8ff, intensity: 5, r: 8 };
+        CANDLES.push(torch.userData.on); thead.material = M.phoneGlow;
+      } else {
+        const i = CANDLES.indexOf(torch.userData.on); if (i >= 0) CANDLES.splice(i, 1);
+        torch.userData.on = null; thead.material = M.bulbOff;
+      }
+    });
+
+    // pantry — the jars were never haunted; the trap was always set
+    const jar = grp(20.75, 1.27, 8.2);
+    part(jar, C(0.04, 0.04, 0.14, 8), 'clothGreen', 0, 0, 0);
+    CTX.interact(jar, 'steady the jars', () => { A.lockedRattle(); fear(0.22); });
+    const trap = grp(21.4, 0.006, 12);
+    part(trap, B(0.05, 0.012, 0.1), 'woodPale', 0, 0, 0);
+    const tbar = part(trap, B(0.04, 0.006, 0.01), 'brass', 0, 0.009, -0.04);
+    part(trap, new THREE.SphereGeometry(0.02, 6, 6), 'clothMustard', 0.02, 0.024, 0.04);
+    const ti = CTX.interact(trap, 'prod the mousetrap', () => {
+      A.metalDrop(); tbar.position.z = 0.03; fear(0.36); ti.enabled = false;
+    });
+
+    // playroom — every toy answers, and every answer is a child upstairs
+    const train = at(41.1, 0.12, 6);
+    if (train) {
+      train.userData.ang = 0;
+      CTX.interact(train, 'push the toy train', () => {
+        if (train.userData.busy) return; train.userData.busy = true;
+        A.metalDrop(); fear(0.26);
+        const from = train.userData.ang, t0 = performance.now();
+        const iv = setInterval(() => {
+          const k = Math.min(1, (performance.now() - t0) / 1200);
+          const a = from + k * Math.PI / 2;
+          train.position.set(40 + 1.1 * Math.cos(a), 0.12, 6 + 1.1 * Math.sin(a));
+          train.rotation.y = -a;
+          if (k === 1) { clearInterval(iv); train.userData.ang = a; }
+        }, 33);
+        setTimeout(() => { A.giggle(); train.userData.busy = false; }, 2300);
+      });
+    }
+    const jack = box(0.22, 0.22, 0.22, 'plasticYel', 33.2, 1.31, 4);
+    cyl(0.01, 0.01, 0.06, 6, 'brass', 33.33, 1.31, 4).rotation.z = Math.PI / 2;
+    const jneck = cyl(0.01, 0.01, 0.14, 5, 'iron', 33.2, 1.47, 4); jneck.visible = false;
+    const jhead = mesh(new THREE.SphereGeometry(0.05, 8, 8), M.clothPink, 33.2, 1.56, 4, 0, false); jhead.visible = false;
+    CTX.interact(jack, 'crank the jack-in-the-box', () => {
+      if (jack.userData.done) return; jack.userData.done = true;
+      A.musicBox(0.18);
+      setTimeout(() => { A.doorClose(false); jneck.visible = jhead.visible = true; fear(0.38); }, 1500);
+    });
+    const rh2 = grp(44.5, 0, 8.5);
+    part(rh2, B(0.05, 0.04, 0.9), 'woodDark', -0.12, 0.04, 0);
+    part(rh2, B(0.05, 0.04, 0.9), 'woodDark', 0.12, 0.04, 0);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) part(rh2, B(0.03, 0.25, 0.03), 'woodPale', sx * 0.12, 0.2, sz * 0.28);
+    part(rh2, B(0.16, 0.3, 0.5), 'woodPale', 0, 0.5, 0);
+    part(rh2, new THREE.SphereGeometry(0.09, 8, 8), 'woodPale', 0, 0.72, 0.28);
+    CTX.interact(rh2, 'rock the rocking horse', () => {
+      if (rh2.userData.busy) return; rh2.userData.busy = true;
+      sway(rh2, 'x', 0.08, 0.6, 2.2); A.creak(0.4); fear(0.24);
+      setTimeout(() => A.creak(0.28), 800);
+      setTimeout(() => { rh2.userData.busy = false; }, 2300);
+    });
+
+    // boot room — the coats are wet with tonight's rain
+    const blanket = box(0.3, 0.06, 0.24, 'towel', 57, 0.315, 12);
+    CTX.interact(blanket, "feel the dog's blanket", () => { A.whineDog(); fear(0.32); });
+    const rack = at(58.4, 0, 2.4, true);
+    if (rack) CTX.interact(rack, 'touch the wet raincoat', () => { A.waterRun(0.4); fear(0.24); });
+    cyl(0.036, 0.03, 0.2, 8, 'iron', 48.55, 0.55, 9.6);           // a torch stood on end
+    cyl(0.036, 0.036, 0.01, 8, 'windowGlow', 48.55, 0.655, 9.6);
+    torchGlow(48.55, 0.72, 9.6);
+
+    /* ---- first floor ---- */
+    FLOOR_Y = 4.2;
+    // galleries — a longcase clock, a dead cordless, one more dead switch
+    const scase = box(0.5, 2.1, 0.34, 'woodDark', 29, 5.25, 39.6);
+    box(0.56, 0.3, 0.38, 'woodDark', 29, 6.4, 39.6);
+    cyl(0.14, 0.14, 0.02, 16, 'linen', 29, 6.4, 39.4).rotation.x = Math.PI / 2;
+    mesh(new THREE.PlaneGeometry(0.4, 1.4), M.glass, 29, 5.3, 39.42, Math.PI, false);
+    const spend = grp(29, 5.9, 39.4);
+    part(spend, C(0.008, 0.008, 0.7, 5), 'brass', 0, -0.35, 0);
+    part(spend, C(0.06, 0.06, 0.02, 10), 'brass', 0, -0.66, 0, Math.PI / 2);
+    CTX.interact(scase, 'set the pendulum swinging', () => {
+      if (scase.userData.going) return; scase.userData.going = true;
+      sway(spend, 'z', 0.18, 0.8, 0); fear(0.2);
+      for (let i = 0; i < 10; i++) setTimeout(() => A.tick(), i * 1250);
+    });
+    const econsole = box(0.32, 0.8, 0.9, 'woodPale', 37.7, 4.6, 33);
+    box(0.14, 0.03, 0.1, 'screenOff', 37.7, 5.02, 33);
+    const ehand = box(0.045, 0.17, 0.05, 'screenOff', 37.7, 5.12, 33);
+    box(0.12, 0.004, 0.16, 'paper', 37.7, 5.017, 33.35);
+    CTX.interact(econsole, 'pick up the telephone', () => {
+      if (ehand.userData.busy) return; ehand.userData.busy = true;
+      A.unlock(); ehand.position.y += 0.1; ehand.rotation.x = 0.6; fear(0.1);
+      setTimeout(() => A.unlock(), 300);
+      setTimeout(() => { ehand.position.y -= 0.1; ehand.rotation.x = 0; ehand.userData.busy = false; }, 1200);
+    });
+    lightSwitch(22.2, 5.55, 32.6, Math.PI / 2);     // west gallery — dead, like the rest
+
+    // upstairs hall — a stopped clock, a landline with its own line power
+    const uclock = box(0.5, 2.0, 0.3, 'woodDark', 45, 5.2, 29.55);
+    box(0.34, 0.5, 0.05, 'linen', 45, 5.9, 29.38);
+    const upend = grp(45, 5.25, 29.36);
+    part(upend, C(0.03, 0.03, 0.7, 6), 'brass', 0, -0.35, 0);
+    CTX.interact(uclock, 'set the pendulum swinging', () => {
+      if (uclock.userData.going) return; uclock.userData.going = true;
+      sway(upend, 'z', 0.14, 0.8, 0); fear(0.22);
+      for (let i = 0; i < 16; i++) setTimeout(() => A.tick(), i * 1250);
+    });
+    box(0.2, 0.09, 0.14, 'plasticRed', 3.7, 5.045, 27);
+    const uhand = box(0.18, 0.045, 0.05, 'plasticRed', 3.7, 5.113, 27);
+    cyl(0.006, 0.006, 0.22, 5, 'iron', 3.62, 4.93, 27.1).rotation.x = 0.35;
+    CTX.interact(uhand, 'lift the telephone receiver', () => {
+      if (uhand.userData.busy) return; uhand.userData.busy = true;
+      uhand.position.y += 0.12; uhand.rotation.z = 0.3; A.static(0.05, 1.4); fear(0.2);
+      setTimeout(() => { uhand.position.y -= 0.12; uhand.rotation.z = 0; uhand.userData.busy = false; }, 1600);
+    });
+
+    // the long hall — the footsteps live under your own feet
+    const board = box(0.18, 0.035, 0.9, 'woodMid', 29.75, 4.222, 20); board.rotation.x = 0.02;
+    CTX.interact(board, 'press the loose floorboard', () => {
+      if (board.userData.busy) return; board.userData.busy = true;
+      A.creak(0.8); board.rotation.x = -0.012; fear(0.2);
+      setTimeout(() => { board.rotation.x = 0.02; board.userData.busy = false; }, 450);
+    });
+    const crooked = framedPic(29.84, 5.75, 23, -Math.PI / 2, pic(6), 0.42, 0.52); crooked.rotation.z = 0.12;
+    CTX.interact(crooked, 'straighten the picture frame', () => {
+      if (crooked.userData.done) return; crooked.userData.done = true;
+      crooked.rotation.z = 0; A.knock(); setTimeout(() => A.knock(), 260);
+    });
+
+    // boy's room — the squeak, and who heard it
+    const ted = at(4, 4.92, 10.4, true);
+    if (ted) CTX.interact(ted, 'squeeze the teddy bear', () => {
+      if (ted.userData.busy) return; ted.userData.busy = true;
+      A.unlock(); fear(0.28);
+      setTimeout(() => { A.giggle(); ted.userData.busy = false; }, 700);
+    });
+    const robot = grp(13.62, 5.3, 22.2);
+    part(robot, B(0.09, 0.13, 0.07), 'plasticBlue', 0, 0.065, 0);
+    part(robot, B(0.06, 0.05, 0.05), 'metalSteel', 0, 0.155, 0);
+    part(robot, B(0.01, 0.04, 0.01), 'brass', 0.05, 0.07, 0);
+    CTX.interact(robot, 'wind the tin robot', () => {
+      if (robot.userData.busy) return; robot.userData.busy = true;
+      for (const d of [0, 180, 360]) setTimeout(() => A.tick(), d);
+      sway(robot, 'y', 0.1, 7, 2);
+      setTimeout(() => { robot.userData.busy = false; }, 2100);
+    });
+
+    // bathroom — the pipes are the breathing in the walls
+    const btap = grp(26.2, 4.66, 11);
+    part(btap, C(0.018, 0.018, 0.1, 6), 'brass', 0, 0, 0);
+    part(btap, C(0.012, 0.012, 0.09, 5), 'brass', -0.06, 0.04, 0, 0, 0, Math.PI / 2);
+    part(btap, B(0.06, 0.015, 0.015), 'brass', 0, 0.06, 0);
+    CTX.interact(btap, 'turn the tap', () => { A.waterRun(3.5); fear(0.2); });
+    const bknob = grp(27.12, 5.05, 21.85);
+    part(bknob, new THREE.SphereGeometry(0.02, 8, 8), 'brass', 0, 0, 0);
+    CTX.interact(bknob, 'open the tall cabinet', () => {
+      if (bknob.userData.busy) return; bknob.userData.busy = true;
+      A.doorOpen(false); fear(0.2);
+      setTimeout(() => { A.metalDrop(); bknob.userData.busy = false; }, 350);
+    });
+    candle(25.85, 4.6, 11.15);            // a stub doubled in the dark mirror
+
+    // upstairs study — a book mid-chapter, batteries in the wireless
+    const upage = box(0.16, 0.015, 0.22, 'paper', 38.82, 4.995, 10.75); upage.rotation.z = 0.08;
+    box(0.16, 0.015, 0.22, 'paper', 38.98, 4.995, 10.75).rotation.z = -0.08;
+    box(0.02, 0.02, 0.22, 'clothMaroon', 38.9, 4.99, 10.75);
+    CTX.interact(upage, 'leaf through the open book', () => { A.pageTurn(); });
+    const ucord = cyl(0.006, 0.006, 0.12, 4, 'iron', 39.53, 5.22, 10.9);
+    CTX.interact(ucord, "pull the lamp's cord", () => { A.unlock(); });
+    box(0.45, 0.55, 0.45, 'woodDark', 44.3, 4.475, 21.6);
+    const radio = box(0.3, 0.17, 0.12, 'woodDark', 44.3, 4.835, 21.6);
+    box(0.1, 0.09, 0.012, 'linen', 44.24, 4.835, 21.535);
+    cyl(0.012, 0.012, 0.014, 8, 'brass', 44.38, 4.81, 21.533).rotation.x = Math.PI / 2;
+    CTX.interact(radio, 'switch on the wireless', () => {
+      if (radio.userData.busy) return; radio.userData.busy = true;
+      A.static(0.09, 1.6); fear(0.24);
+      const dial = { x: 44.3, y: 4.95, z: 21.5, color: 0xff9a5a, intensity: 1.5, r: 3 };
+      CANDLES.push(dial);
+      setTimeout(() => { const i = CANDLES.indexOf(dial); if (i >= 0) CANDLES.splice(i, 1); radio.userData.busy = false; }, 1900);
+    });
+
+    // girl's room — a lit, miniature copy of the dark house
+    const dh = at(47, 4.65, 23);
+    const dhinge = grp(47.42, 4.65, 22.79);
+    part(dhinge, B(0.03, 0.85, 0.42), 'wallKidPink', 0, 0, 0.21);
+    if (dh) CTX.interact(dh, "open the doll's house front", () => {
+      if (dh.userData.open) return; dh.userData.open = true;
+      A.creak(0.3); dhinge.rotation.y = 1.2; fear(0.22);
+    });
+    const rh = grp(55.5, 4.2, 15, 0.4);
+    part(rh, B(0.7, 0.03, 0.06), 'woodPale', 0, 0.03, -0.09);
+    part(rh, B(0.7, 0.03, 0.06), 'woodPale', 0, 0.03, 0.09);
+    part(rh, B(0.4, 0.22, 0.14), 'woodPale', 0, 0.17, 0);
+    part(rh, B(0.12, 0.18, 0.06), 'woodPale', 0.17, 0.35, 0);
+    part(rh, B(0.04, 0.12, 0.05), 'hairBrown', 0.11, 0.4, 0);
+    CTX.interact(rh, 'set the rocking horse rocking', () => {
+      if (rh.userData.busy) return; rh.userData.busy = true;
+      sway(rh, 'z', 0.12, 0.55, 6); fear(0.26);
+      for (const d of [0, 1200, 2500, 3900]) setTimeout(() => A.creak(0.25), d);
+      setTimeout(() => { rh.userData.busy = false; }, 6200);
+    });
+
+    // guest room — packed to arrive, not to leave
+    const scase2 = box(0.6, 0.14, 0.42, 'clothNavy', 9.2, 4.86, 4.4);
+    const sclothes = mesh(new THREE.SphereGeometry(0.16, 8, 6), M.linen, 9.2, 4.93, 4.4, 0, false); sclothes.scale.y = 0.3;
+    const slid = grp(9.2, 4.93, 4.19); slid.rotation.x = -1.1;
+    part(slid, B(0.6, 0.03, 0.42), 'clothNavy', 0, 0, 0.21);
+    CTX.interact(scase2, 'click the suitcase shut', () => {
+      if (scase2.userData.shut) return; scase2.userData.shut = true;
+      slid.rotation.x = 0; sclothes.visible = false; A.unlock();
+      setTimeout(() => A.unlock(), 250);
+    });
+    const gward = at(22, 4.2, 6, true);
+    if (gward) CTX.interact(gward, 'open the wardrobe', () => {
+      if (gward.userData.busy) return; gward.userData.busy = true;
+      A.doorOpen(false); fear(0.3);
+      setTimeout(() => A.metalDrop(), 250);
+      setTimeout(() => { A.murmur(0.75); gward.userData.busy = false; }, 1200);
+    });
+
+    // parents' room — the one door on the floor that answers back
+    const cup = box(0.9, 2.0, 0.09, 'doorWood', 48, 5.2, 7.825);
+    mesh(new THREE.SphereGeometry(0.045, 10, 10), M.brass, 48.35, 5.15, 7.745, 0, false);
+    box(0.06, 2.1, 0.04, 'woodDark', 47.5, 5.2, 7.85);
+    box(0.06, 2.1, 0.04, 'woodDark', 48.5, 5.2, 7.85);
+    box(1.06, 0.06, 0.04, 'woodDark', 48, 6.28, 7.85);
+    CTX.interact(cup, 'try the cupboard door', () => {
+      if (cup.userData.busy) return; cup.userData.busy = true;
+      A.lockedRattle(); cup.rotation.y = 0.012; fear(0.34);
+      setTimeout(() => { cup.rotation.y = 0; }, 200);
+      setTimeout(() => { A.whineDog(); cup.userData.busy = false; }, 800);
+    });
+    const aclock = grp(51.62, 4.76, 2.45);
+    part(aclock, C(0.06, 0.06, 0.04, 12), 'metalSteel', 0, 0, 0, Math.PI / 2);
+    part(aclock, C(0.05, 0.05, 0.008, 12), 'linen', 0, 0, 0.024, Math.PI / 2);
+    for (const sx of [-0.03, 0.03]) part(aclock, new THREE.SphereGeometry(0.015, 6, 6), 'brass', sx, 0.07, 0);
+    CTX.interact(aclock, 'pick up the alarm clock', () => {
+      if (aclock.userData.busy) return; aclock.userData.busy = true;
+      for (const d of [0, 1300, 2600]) setTimeout(() => A.tick(), d);
+      setTimeout(() => { A.metalDrop(); aclock.userData.busy = false; }, 3900);
+    });
+    const pcord = cyl(0.006, 0.006, 0.14, 4, 'iron', 51.93, 4.87, 2.3);
+    CTX.interact(pcord, "pull the lamp's cord", () => { A.unlock(); });
+
+    /* ---- basement ---- */
+    FLOOR_Y = -3.2;
+    // cellar landing — the lantern they left, the hatch that won't give
+    const pull = grp(27.35, -1.25, 25);
+    part(pull, C(0.004, 0.004, 0.75, 5), 'iron', 0, 0.175, 0);
+    part(pull, B(0.02, 0.04, 0.02), 'woodDark', 0, -0.24, 0);
+    CTX.interact(pull, 'pull the light cord', () => { A.unlock(); });
+    const hatch2 = box(0.08, 0.55, 0.6, 'iron', 26.25, -1.9, 19);
+    box(0.03, 0.06, 0.08, 'iron', 26.25, -1.6, 18.72);
+    box(0.03, 0.06, 0.08, 'iron', 26.25, -1.6, 19.28);
+    for (const [cx, cr, cz] of [[26.4, 0.05, 18.8], [26.55, 0.07, 19.1], [26.45, 0.06, 19.35], [26.6, 0.08, 18.95]])
+      mesh(new THREE.SphereGeometry(cr, 8, 6), M.fabricDark, cx, -3.2 + cr, cz);
+    CTX.interact(hatch2, 'try the coal hatch', () => {
+      if (hatch2.userData.busy) return; hatch2.userData.busy = true;
+      A.lockedRattle(); fear(0.15);
+      hatch2.rotation.x = 0.03; setTimeout(() => { hatch2.rotation.x = 0; }, 160);
+      setTimeout(() => { hatch2.rotation.x = 0.02; }, 320);
+      setTimeout(() => { hatch2.rotation.x = 0; hatch2.userData.busy = false; }, 460);
+    });
+    cyl(0.05, 0.05, 0.14, 8, 'metalSteel', 31.6, -1.7, 26.5);     // their camping lantern
+    CANDLES.push({ x: 31.6, y: -1.7, z: 26.5, color: 0xdfe8ff, intensity: 3, r: 7 });
+
+    // cellar — the crib under the sheet, the freewheel, the box of letters
+    const dsheet = at(17, -2.7, 27);
+    box(0.9, 0.5, 0.5, 'woodPale', 17, -2.9, 27);                 // the crib, sheeted
+    box(0.06, 0.05, 0.7, 'woodDark', 16.75, -3.175, 27);
+    box(0.06, 0.05, 0.7, 'woodDark', 17.25, -3.175, 27);
+    for (const px of [16.58, 17.42]) for (const pz of [26.78, 27.22]) cyl(0.02, 0.02, 0.6, 6, 'woodPale', px, -2.9, pz);
+    if (dsheet) {
+      const si = CTX.interact(dsheet, 'lift the dust sheet', () => {
+        A.creak(0.8); fear(0.3); si.enabled = false;
+        dsheet.position.set(18.3, -3.05, 27.8); dsheet.scale.y = 0.25;
+      });
+    }
+    const wg = grp(15.5, -2.85, 24.7);
+    part(wg, B(0.02, 0.58, 0.02), 'metalWhite', 0, 0, 0.04);
+    part(wg, B(0.58, 0.02, 0.02), 'metalWhite', 0, 0, 0.04);
+    part(wg, B(0.03, 0.03, 0.03), 'brass', 0.26, 0, 0.04);
+    CTX.interact(wg, 'spin the bicycle wheel', () => {
+      if (wg.userData.busy) return; wg.userData.busy = true;
+      fear(0.15);
+      for (const d of [0, 600, 1400, 2400, 3600]) setTimeout(() => A.tick(), d);
+      const t0 = performance.now();
+      const iv = setInterval(() => {
+        const t = (performance.now() - t0) / 1000;
+        if (t > 4) { clearInterval(iv); wg.userData.busy = false; return; }
+        wg.rotation.z += 0.26 * (1 - t / 4);
+      }, 33);
+    });
+    const blid = box(0.52, 0.04, 0.52, 'woodPale', 22, -1.94, 25, 0.6);
+    CTX.interact(blid, 'lift the box lid', () => {
+      A.pageTurn(); fear(0.1);
+      if (!blid.userData.open) { blid.userData.open = true; blid.position.set(22.18, -1.92, 25.12); blid.rotation.z = 0.12; }
+    });
+    candle(14.5, -1.9, 28.5, 0xffb060, 3.5, 6);   // fetched for the blackout, burnt low
+
+    // boiler room — the pilot burns without mains; the pipes explain the groans
+    const grate = grp(29.6, -2.5, 30.5);
+    part(grate, B(0.04, 0.1, 0.28), 'iron', 0.03, 0, 0);
+    const emberP = part(grate, new THREE.PlaneGeometry(0.22, 0.07), 'ember', 0, 0, 0, 0, -Math.PI / 2);
+    CANDLES.push({ x: 29.6, y: -2.5, z: 30.5, color: 0xff7a30, intensity: 1.6, r: 3.5 });
+    CTX.interact(grate, 'peer through the boiler grate', () => {
+      if (grate.userData.busy) return; grate.userData.busy = true;
+      fear(0.15);
+      for (const d of [0, 1300]) setTimeout(() => A.tick(), d);
+      emberP.scale.y = 0.6; setTimeout(() => { emberP.scale.y = 1.4; }, 350);
+      setTimeout(() => { emberP.scale.y = 1; grate.userData.busy = false; }, 900);
+    });
+    const stopc = grp(28.2, -1.45, 29.4);
+    part(stopc, C(0.025, 0.025, 0.3, 6), 'iron', 0, 0.13, 0);
+    const svalve = part(stopc, C(0.07, 0.07, 0.03, 10), 'brass', 0, 0, 0);
+    CTX.interact(stopc, 'turn the stopcock', () => {
+      if (stopc.userData.busy) return; stopc.userData.busy = true;
+      A.waterRun(2.5); fear(0.2);
+      const t0 = performance.now();
+      const iv = setInterval(() => {
+        if (performance.now() - t0 > 1500) { clearInterval(iv); stopc.userData.busy = false; return; }
+        svalve.rotation.y += 0.35;
+      }, 33);
+    });
+
+    FLOOR_Y = 0;
+  }
+
+  /* ===== SECRET PASSAGES: three hidden doors, each opened by a small trigger
+     prop nearby. The panels grind down into the floor (Door type 'secret'). ===== */
+  const openSecret = (id) => {
+    const d = W.doorById[id];
+    if (!d || d.isOpen) return false;
+    CTX.audio.stoneGrind();
+    d.setOpen(true);
+    CTX.fx.fearTarget = Math.max(CTX.fx.fearTarget, 0.3);
+    setTimeout(() => { if (!CTX.events.finale.active && CTX.fx.fearTarget <= 0.3) CTX.fx.fearTarget = 0; }, 2600);
+    return true;
+  };
+  // study -> family room: a brass candlestick on a little wall bracket beside
+  // the panelling; tilt it and the bookcase wall gives
+  {
+    const bracket = box(0.16, 0.05, 0.12, 'woodDark', 11.75, 1.32, 18.4);
+    const stick = cyl(0.025, 0.045, 0.24, 8, 'brass', 11.75, 1.47, 18.4);
+    candle(11.75, 1.6, 18.4);
+    CTX.interact(stick, 'tilt the candlestick', () => {
+      if (openSecret('secretStudy')) stick.rotation.z = 0.35;
+    });
+  }
+  // pantry -> playroom: a crooked little jar shelf against the east wall; pull
+  // it and a low door slides away (the children's secret, judging by the crayons)
+  {
+    const plank = box(0.7, 0.05, 0.22, 'woodPale', 31.6, 1.28, 5.2);
+    bottle(31.45, 1.3, 5.12, M.clothMustard); bottle(31.75, 1.3, 5.3, M.clothGreen);
+    CTX.interact(plank, 'pull the crooked shelf', () => {
+      if (openSecret('secretPantry')) plank.rotation.x = 0.12;
+    });
+    // crayon marks by the low door on the playroom side — the kids use this
+    box(0.5, 0.4, 0.02, 'wallKidBlue', 32.16, 0.8, 6.2, Math.PI / 2);
+  }
+  // girl's room -> upstairs study: a loose strip of panelling; press it
+  {
+    const seam = box(0.06, 1.1, 0.03, 'woodPale', 46.16, 4.2 + 0.9, 17.6);
+    CTX.interact(seam, 'press the loose panel', () => {
+      if (openSecret('secretGirl')) CTX.audio.giggle();   // somewhere, a child laughs — they know about this one
+    });
+  }
+
   // curtains for every window in the lived-in rooms
   curtainAll();
 

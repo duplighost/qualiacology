@@ -225,6 +225,84 @@ export class AudioEngine {
     o.connect(g).connect(this.master);
     o.start(t); o.stop(t + (heavy ? 0.45 : 0.25));
   }
+  // a tap running into a basin — filtered noise with a slow wobble
+  waterRun(dur = 1.4) {
+    if (!this.started) return;
+    const t = this.now();
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf || (this.noiseBuf = this.makeNoise?.() || null);
+    if (!src.buffer) {
+      const b = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this.noiseBuf = b; src.buffer = b;
+    }
+    src.loop = true;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 950; bp.Q.value = 1.1;
+    const lfo = this.ctx.createOscillator(); lfo.frequency.value = 6;
+    const lg = this.ctx.createGain(); lg.gain.value = 220;
+    lfo.connect(lg).connect(bp.frequency);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.08, t + 0.12);
+    g.gain.setValueAtTime(0.08, t + dur - 0.25);
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    src.connect(bp).connect(g).connect(this.master);
+    src.start(t); src.stop(t + dur + 0.05);
+    lfo.start(t); lfo.stop(t + dur + 0.05);
+  }
+  // a dog whining behind a door — thin sine sweeps with vibrato
+  whineDog() {
+    if (!this.started) return;
+    const t = this.now();
+    for (const [dt, f0, f1, dur] of [[0, 620, 880, 0.5], [0.75, 700, 520, 0.42]]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f0, t + dt);
+      o.frequency.linearRampToValueAtTime(f1, t + dt + dur);
+      const vib = this.ctx.createOscillator(); vib.frequency.value = 9;
+      const vg = this.ctx.createGain(); vg.gain.value = 22;
+      vib.connect(vg).connect(o.frequency);
+      const g = this.ctx.createGain();
+      this.env(g, t + dt, 0.06, dur * 0.7, 0.05);
+      o.connect(g).connect(this.master);
+      o.start(t + dt); o.stop(t + dt + dur + 0.1);
+      vib.start(t + dt); vib.stop(t + dt + dur + 0.1);
+    }
+  }
+  // one tick-tock pair of a hall clock
+  tick() {
+    if (!this.started) return;
+    const t = this.now();
+    for (const [dt, f] of [[0, 2100], [0.5, 1750]]) {
+      const o = this.ctx.createOscillator();
+      o.frequency.value = f;
+      const g = this.ctx.createGain();
+      this.env(g, t + dt, 0.001, 0.03, 0.07);
+      o.connect(g).connect(this.master);
+      o.start(t + dt); o.stop(t + dt + 0.06);
+    }
+  }
+  // a page turned — one soft high swish
+  pageTurn() {
+    if (!this.started) return;
+    const t = this.now();
+    if (!this.noiseBuf) {
+      const b = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this.noiseBuf = b;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 2400;
+    const g = this.ctx.createGain();
+    this.env(g, t, 0.02, 0.1, 0.05);
+    src.connect(hp).connect(g).connect(this.master);
+    src.start(t); src.stop(t + 0.18);
+  }
   // two soft knuckle-thumps from somewhere in the house
   knock() {
     if (!this.started) return;
