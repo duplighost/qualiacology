@@ -478,7 +478,10 @@ export function makeMaterials() {
 
   // fog:false — these live past the fog horizon and must not dissolve into it
   M.moon = new THREE.MeshBasicMaterial({ color: '#cdd8e8', fog: false });
-  M.night = new THREE.MeshBasicMaterial({ color: '#05070c', side: THREE.BackSide, fog: false });
+  // depthWrite:false so the sky never participates in the depth buffer — the star
+  // points sit ~10m in front of it at ~180m, where precision is too coarse to
+  // separate them, and they flickered against it. Walls still occlude both.
+  M.night = new THREE.MeshBasicMaterial({ color: '#05070c', side: THREE.BackSide, fog: false, depthWrite: false });
 
   /* ---------- UNINVITED: a lived-in family home (brighter than the manor) ---------- */
   // walls — soft modern paint / papered

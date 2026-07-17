@@ -419,16 +419,21 @@ export class World {
     if (isX) box(w, h, 0.05, M.windowGlow, mid, cy, pz, null, this.geoBuckets);
     else box(0.05, h, w, M.windowGlow, px, cy, mid, null, this.geoBuckets);
     const fm = M.woodDark;
+    // Head and sill OVERLAP the opening by ~0.05 (spanning past y1/y0) so the wall's
+    // hole-edge faces — the wall-below top at y0 and the wall-above bottom at y1 — end up
+    // BURIED inside the frame boxes instead of coplanar with them. Two opaque faces on the
+    // exact same plane z-fight (shimmer as the camera moves); a proud sill/head that caps
+    // the opening kills it. Was: sill top and head bottom sat flush at y0/y1.
     if (isX) {
       box(w, 0.07, t * 0.5, fm, mid, cy, pz, null, this.geoBuckets);
       box(0.07, h, t * 0.5, fm, mid, cy, pz, null, this.geoBuckets);
-      box(w + 0.16, 0.1, t + 0.1, fm, mid, y1 + 0.05, pz, null, this.geoBuckets);
-      box(w + 0.16, 0.1, t + 0.14, fm, mid, y0 - 0.05, pz, null, this.geoBuckets);
+      box(w + 0.16, 0.14, t + 0.1, fm, mid, y1 + 0.02, pz, null, this.geoBuckets);   // head: bottom y1-0.05
+      box(w + 0.16, 0.14, t + 0.14, fm, mid, y0 - 0.02, pz, null, this.geoBuckets);  // sill: top y0+0.05
     } else {
       box(t * 0.5, 0.07, w, fm, px, cy, mid, null, this.geoBuckets);
       box(t * 0.5, h, 0.07, fm, px, cy, mid, null, this.geoBuckets);
-      box(t + 0.1, 0.1, w + 0.16, fm, px, y1 + 0.05, mid, null, this.geoBuckets);
-      box(t + 0.14, 0.1, w + 0.16, fm, px, y0 - 0.05, mid, null, this.geoBuckets);
+      box(t + 0.1, 0.14, w + 0.16, fm, px, y1 + 0.02, mid, null, this.geoBuckets);
+      box(t + 0.14, 0.14, w + 0.16, fm, px, y0 - 0.02, mid, null, this.geoBuckets);
     }
     if (isX) aabb(this.colliders, mid - w / 2, y0, pz - t / 2, mid + w / 2, y1, pz + t / 2);
     else aabb(this.colliders, px - t / 2, y0, mid - w / 2, px + t / 2, y1, mid + w / 2);

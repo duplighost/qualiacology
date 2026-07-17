@@ -28,7 +28,10 @@ function boot() {
   canvas.addEventListener('webglcontextrestored', () => { try { fx.setQuality(0); } catch (_) {} }, false);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(71, innerWidth / innerHeight, 0.05, 300);
+  // near 0.05 / far 300 gave a 6000:1 range and almost no depth precision out at
+  // the treeline/sky, so distant coplanar surfaces z-fought (flickering). 0.2 / 260
+  // is ~6x tighter — walls stay >0.34m away (collision radius) so nothing clips.
+  const camera = new THREE.PerspectiveCamera(71, innerWidth / innerHeight, 0.2, 260);
 
   const M = makeMaterials();
   const world = new World(scene, M);
