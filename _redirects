@@ -10,6 +10,9 @@
 /doopliss.html /doopliss/ 301!
 /psychopharmacology.html /psychopharmacology/ 301!
 
+# --- unified hub indexes ---
+/records /music/ 301!
+
 # --- little toys ---
 /glide   /glide/index.html  301!
 /fly     /glide/            302
@@ -74,7 +77,5 @@
 /tennis        /rally/             302
 /duel          /rally/             302
 
-# --- boss codex + record shelf ---
+# --- boss codex ---
 /codex          /no-moon/codex/           302
-/music          /#music                   302
-/records        /#music                   302
