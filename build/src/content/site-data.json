@@ -176,17 +176,17 @@
       "actionLabel": "Play Glide"
     },
     {
-      "slug": "dispensary",
-      "title": "The Dispensary",
-      "descriptor": "Interactive toy",
-      "group": "worlds",
+      "slug": "pasta-mortale",
+      "title": "Pasta Mortale",
+      "descriptor": "Spaghetti FPS",
+      "group": "action",
       "featured": false,
-      "image": "/assets/games/dispensary-card-clean.webp",
-      "alt": "A luminous capsule in a surreal impossible pharmacy",
-      "summary": "Press the capsule; receive a prescription for a compound that doesn’t exist. Infinite refills.",
-      "metaDescription": "The Dispensary is the Department of Impossible Pharmacology: press the capsule and receive a prescription for a compound that doesn't exist yet.",
-      "controls": "Click or tap the capsule",
-      "actionLabel": "Open Dispensary"
+      "image": "/assets/games/pasta-mortale-card-clean.jpg",
+      "alt": "A first-person view down a gothic cathedral of wet spaghetti, marinara underfoot, pasta enemies closing in",
+      "summary": "The gun, the enemies, the cathedral, and the flood rising to drown you are all wet spaghetti. Fight to the grand altar, cook the three-phase Noodlemancer, and climb out before the sauce reaches your mouth.",
+      "metaDescription": "Pasta Mortale is a cinematic first-person shooter set in a living gothic basilica built from wet spaghetti, marinara, and bad table manners.",
+      "controls": "WASD move · mouse aim · click fire · F punch",
+      "actionLabel": "Play Pasta Mortale"
     }
   ],
   "albums": [

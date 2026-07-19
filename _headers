@@ -175,6 +175,15 @@
 /rally/js/*
   Cache-Control: public, max-age=0, must-revalidate
 
+/pasta-mortale/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/pasta-mortale/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/pasta-mortale/src/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
