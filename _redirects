@@ -79,3 +79,6 @@
 
 # --- boss codex ---
 /codex          /no-moon/codex/           302
+
+# --- build tooling: versioned in the repo, not served publicly ---
+/build/*        /404.html                 404!

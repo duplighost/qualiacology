@@ -1,0 +1,18 @@
+{
+  "name": "qualiacology-unified-hub",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-site.mjs",
+    "validate": "node scripts/validate-site.mjs --root=..",
+    "smoke": "node scripts/route-smoke.mjs --root=..",
+    "qa": "node qa/browser-qa.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "html-validate": "^11.5.6",
+    "lighthouse": "^13.4.0",
+    "playwright": "^1.61.1"
+  }
+}
