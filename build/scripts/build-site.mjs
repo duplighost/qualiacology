@@ -133,6 +133,9 @@ function header(current) {
 function footer() {
   return `
   <footer class="site-footer">
+    <div class="container">
+      <p class="footer-wordmark" aria-hidden="true">Qualiacology</p>
+    </div>
     <div class="container footer-grid">
       <div>
         <p class="footer-name">Qualiacology</p>
@@ -232,9 +235,9 @@ function gameCard(game, index, { eager = false } = {}) {
     : "";
   return `<li data-filter-kind="${escapeHtml(game.group)}" data-catalog-game="${escapeHtml(game.slug)}">
     <article class="work-card">
+      <span class="card-index" aria-hidden="true">${twoDigits(index)}</span>
       <a class="card-media" href="${routeForGame(game)}">
         ${catalogPicture(game, "games", eager)}
-        <span class="card-index" aria-hidden="true">${twoDigits(index)}</span>
       </a>
       <div class="card-body">
         <p class="card-kicker">${escapeHtml(game.descriptor)}</p>
@@ -255,9 +258,9 @@ function albumCard(album, index, { eager = false } = {}) {
   const meta = [...album.tags, ...(album.tracks ? [`${album.tracks} tracks`] : [])];
   return `<li data-catalog-album="${escapeHtml(album.slug)}">
     <article class="album-card">
+      <span class="card-index" aria-hidden="true">${twoDigits(index)}</span>
       <a class="card-media" href="${routeForAlbum(album)}">
         ${catalogPicture(album, "albums", eager)}
-        <span class="card-index" aria-hidden="true">${twoDigits(index)}</span>
       </a>
       <div class="card-body">
         <p class="card-kicker">Doopliss release</p>
@@ -299,30 +302,30 @@ function homepage() {
 
   const main = `<main id="main-content">
     <section class="hero">
-      <div class="container hero-grid">
-        <div class="hero-copy">
-          <p class="role-line">${escapeHtml(site.role)}</p>
-          <h1>${escapeHtml(site.thesis)}</h1>
-          <div class="button-row">
-            <a class="button button-primary button-arrow" href="#community">Explore the work</a>
-            <a class="button external-link" href="${escapeHtml(site.discord)}" ${external}>Join Discord</a>
-          </div>
-          <dl class="proof-list">
-            <div><dt>3,000+</dt><dd>community members</dd></div>
-            <div><dt>${games.length}</dt><dd>browser worlds</dd></div>
-            <div><dt>${albums.length}</dt><dd>Doopliss releases</dd></div>
-          </dl>
+      <div class="container">
+        <p class="role-line">${escapeHtml(site.role)}</p>
+        <h1>${escapeHtml(site.thesis).replace(/\balive\b/, '<span class="alive-word">alive</span>')}</h1>
+        ${site.thesisDeck ? `<p class="hero-deck">${escapeHtml(site.thesisDeck)}</p>` : ""}
+        <div class="button-row">
+          <a class="button button-primary button-arrow" href="#community">Explore the work</a>
+          <a class="button external-link" href="${escapeHtml(site.discord)}" ${external}>Join Discord</a>
         </div>
         <figure class="hero-art">
           ${heroPicture()}
           <figcaption>Original Qualiacology night-lab artwork</figcaption>
         </figure>
+        <dl class="proof-list">
+          <div><dt>3,000+</dt><dd>community members</dd></div>
+          <div><dt>${games.length}</dt><dd>browser worlds</dd></div>
+          <div><dt>${albums.length}</dt><dd>Doopliss releases</dd></div>
+        </dl>
       </div>
     </section>
 
     <section class="section" id="community">
       <div class="container">
         <div class="section-heading">
+          <span class="ghost-index" aria-hidden="true">01</span>
           <div>
             <p class="eyebrow">01 · Psychopharmacology</p>
             <h2>The Psychopharmacology Server</h2>
@@ -355,6 +358,7 @@ function homepage() {
     <section class="section" id="game">
       <div class="container">
         <div class="section-heading">
+          <span class="ghost-index" aria-hidden="true">02</span>
           <div>
             <p class="eyebrow">02 · Browser worlds</p>
             <h2>Games</h2>
@@ -373,6 +377,7 @@ function homepage() {
     <section class="section" id="music">
       <div class="container">
         <div class="section-heading">
+          <span class="ghost-index" aria-hidden="true">03</span>
           <div>
             <p class="eyebrow">03 · Doopliss</p>
             <h2>Doopliss</h2>
@@ -391,6 +396,7 @@ function homepage() {
     <section class="section" id="connect">
       <div class="container">
         <div class="section-heading">
+          <span class="ghost-index" aria-hidden="true">04</span>
           <div>
             <p class="eyebrow">04 · Connect</p>
             <h2>Find the right door.</h2>
@@ -439,6 +445,7 @@ function psychopharmacologyPage() {
     <section class="subhero">
       <div class="container subhero-grid">
         <div>
+          <span class="ghost-index" aria-hidden="true">01</span>
           <p class="eyebrow">01 · Psychopharmacology</p>
           <h1>The Psychopharmacology Server</h1>
           <p class="subhero-deck">We study medication, help people, and chill with friends — a puzzle-piece framework for finding what actually fits in psychiatric medicine, without pretending there's one magic answer.</p>
@@ -528,6 +535,7 @@ function gamesPage() {
     <section class="subhero">
       <div class="container subhero-grid">
         <div>
+          <span class="ghost-index" aria-hidden="true">02</span>
           <p class="eyebrow">02 · Browser worlds</p>
           <h1>Games</h1>
           <p class="subhero-deck">Small, self-contained worlds that run right in your browser — horror, exploration, movement, celestial chaos, and descent. No downloads; each opens on its own page.</p>
@@ -596,6 +604,7 @@ function musicPage() {
     <section class="subhero">
       <div class="container subhero-grid">
         <div>
+          <span class="ghost-index" aria-hidden="true">03</span>
           <p class="eyebrow">03 · Doopliss</p>
           <h1>Doopliss</h1>
           <p class="subhero-deck">Bright, catchy, upbeat melodies with psychologically dark, emotionally raw lyrics — murder pop on purpose. The hooks invite you in. The subtext quietly locks the door behind you.</p>

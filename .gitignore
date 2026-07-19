@@ -12,3 +12,6 @@ node_modules/
 
 # Logs
 *.log
+
+# Local-only handoff notes (not part of the site)
+HANDOFF.md

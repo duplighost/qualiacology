@@ -1,6 +1,7 @@
 document.documentElement.classList.add("js");
 
 const progress = document.querySelector("[data-scroll-progress]");
+const header = document.querySelector(".site-header");
 
 if (progress) {
   let scheduled = false;
@@ -14,6 +15,7 @@ if (progress) {
     }
     const ratio = Math.min(1, Math.max(0, window.scrollY / maxScroll));
     progress.style.transform = `scaleX(${ratio})`;
+    header?.classList.toggle("is-top", window.scrollY < 8);
     scheduled = false;
   };
 
@@ -30,6 +32,7 @@ if (progress) {
 
   window.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", markForRemeasure, { passive: true });
+  schedule();
 }
 
 const menuButton = document.querySelector("[data-menu-open]");
