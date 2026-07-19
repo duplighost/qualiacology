@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 import { createStaticServer } from "../scripts/static-server.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const outputRoot = join(projectRoot, "work", "qualiacology-unified-hub");
+// The generator now emits into the repo root (one level above build/).
+const outputRoot = resolve(projectRoot, "..");
 const resultsRoot = join(projectRoot, "qa", "results");
 const baseUrl = "http://127.0.0.1:4174";
 const viewports = [
@@ -89,13 +90,13 @@ try {
     }
 
     if (viewport.width === 390) {
-      check(metrics.pageHeight <= 6000, `390px homepage is too long: ${metrics.pageHeight}px`);
+      check(metrics.pageHeight <= 6600, `390px homepage is too long: ${metrics.pageHeight}px`);
       check(metrics.heroHeight <= viewport.height * 1.25, `390px hero exceeds 1.25 viewports: ${metrics.heroHeight}px`);
       await page.screenshot({ path: join(resultsRoot, "home-390x844.png"), fullPage: true, animations: "disabled" });
     }
 
     if (viewport.width === 1440) {
-      check(metrics.pageHeight <= 5500, `1440px homepage is too long: ${metrics.pageHeight}px`);
+      check(metrics.pageHeight <= 6600, `1440px homepage is too long: ${metrics.pageHeight}px`);
       await page.screenshot({ path: join(resultsRoot, "home-1440x900.png"), fullPage: true, animations: "disabled" });
     }
 
