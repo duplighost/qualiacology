@@ -78,6 +78,12 @@
 /pasta         /pasta-mortale/           302
 /spaghetti     /pasta-mortale/           302
 
+# --- DUET ---
+/duet          /duet/index.html          301!
+/duet.html     /duet/                    301!
+/graze         /duet/                    302
+/aubade        /duet/                    302
+
 # --- boss codex ---
 /codex          /no-moon/codex/           302
 
