@@ -646,8 +646,12 @@ p {
   line-height: 0.95;
 }
 
-/* One word carries the three rooms — the same seam the footer wears. */
+/* One word carries the three rooms — the same seam the footer wears.
+   The padding/margin pair widens the background-clip paint box so the
+   negative letter-spacing can't shave the last glyph's edge. */
 .alive-word {
+  padding-inline: 0.08em;
+  margin-inline: -0.08em;
   color: var(--cyan);
 }
 
