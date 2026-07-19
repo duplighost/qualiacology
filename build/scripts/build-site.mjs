@@ -304,7 +304,8 @@ function homepage() {
     <section class="hero">
       <div class="container">
         <p class="role-line">${escapeHtml(site.role)}</p>
-        <h1>${escapeHtml(site.thesis)}</h1>
+        <h1>${escapeHtml(site.thesis).replace(/\balive\b/, '<span class="alive-word">alive</span>')}</h1>
+        ${site.thesisDeck ? `<p class="hero-deck">${escapeHtml(site.thesisDeck)}</p>` : ""}
         <div class="button-row">
           <a class="button button-primary button-arrow" href="#community">Explore the work</a>
           <a class="button external-link" href="${escapeHtml(site.discord)}" ${external}>Join Discord</a>
