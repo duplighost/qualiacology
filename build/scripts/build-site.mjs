@@ -212,7 +212,7 @@ function heroPicture() {
 function catalogPicture(item, type, eager = false) {
   const isGame = type === "games";
   const widths = isGame ? [480, 800] : [360, 600];
-  const dimensions = isGame ? [800, 450] : [600, 600];
+  const dimensions = isGame ? [800, 500] : [600, 600];
   const sizes = isGame ? "(min-width: 1120px) 31vw, (min-width: 720px) 48vw, 86vw" : "(min-width: 1120px) 31vw, (min-width: 720px) 48vw, 86vw";
   const loading = eager ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
 
