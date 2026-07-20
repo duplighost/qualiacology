@@ -29,6 +29,20 @@ const escapeHtml = (value = "") =>
 
 const safeJson = (value) => JSON.stringify(value).replaceAll("<", "\\u003c");
 const hash = (buffer) => createHash("sha256").update(buffer).digest("hex").slice(0, 12);
+
+// Catalog art keeps stable filenames, but /assets/** is served
+// `immutable, max-age=1y`. Without a versioned URL a returning visitor keeps
+// the art they already cached, so replacing a card silently shows them a mix
+// of old and new images. Stamp each URL with a hash of its own bytes: the URL
+// changes only when the picture actually changes.
+const assetVersions = new Map();
+function versioned(urlPath) {
+  if (assetVersions.has(urlPath)) return assetVersions.get(urlPath);
+  const file = join(outputRoot, urlPath.replace(/^\//, ""));
+  const stamped = existsSync(file) ? `${urlPath}?v=${hash(readFileSync(file)).slice(0, 8)}` : urlPath;
+  assetVersions.set(urlPath, stamped);
+  return stamped;
+}
 const twoDigits = (index) => String(index + 1).padStart(2, "0");
 const routeForGame = (game) => `/${game.slug}/`;
 const routeForAlbum = (album) => `/music/${album.slug}/`;
@@ -217,14 +231,15 @@ function catalogPicture(item, type, eager = false) {
   const loading = eager ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
 
   if (item.image.endsWith(".svg")) {
-    return `<img src="${escapeHtml(item.image)}" width="${dimensions[0]}" height="${dimensions[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">`;
+    return `<img src="${escapeHtml(versioned(item.image))}" width="${dimensions[0]}" height="${dimensions[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">`;
   }
 
   const root = `/assets/catalog/${type}/${item.slug}`;
+  const src = (width, ext) => `${escapeHtml(versioned(`${root}-${width}.${ext}`))} ${width}w`;
   return `<picture>
-    <source type="image/avif" srcset="${root}-${widths[0]}.avif ${widths[0]}w, ${root}-${widths[1]}.avif ${widths[1]}w" sizes="${sizes}">
-    <source type="image/webp" srcset="${root}-${widths[0]}.webp ${widths[0]}w, ${root}-${widths[1]}.webp ${widths[1]}w" sizes="${sizes}">
-    <img src="${escapeHtml(item.image)}" width="${dimensions[0]}" height="${dimensions[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">
+    <source type="image/avif" srcset="${src(widths[0], "avif")}, ${src(widths[1], "avif")}" sizes="${sizes}">
+    <source type="image/webp" srcset="${src(widths[0], "webp")}, ${src(widths[1], "webp")}" sizes="${sizes}">
+    <img src="${escapeHtml(versioned(item.image))}" width="${dimensions[0]}" height="${dimensions[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">
   </picture>`;
 }
 
