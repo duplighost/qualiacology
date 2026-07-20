@@ -124,6 +124,16 @@ currentDeploy → `ready`) if available.
 - The hub build asserts exact counts; adding/removing catalog items without
   bumping the asserts fails the build (deliberately).
 - `404.html`, `_redirects`, `_headers` are easy to forget — they're manual.
+- **Replacing an image at the same filename does NOT reach returning visitors.**
+  `_headers` serves `/assets/**` with `max-age=31536000, immutable`, so a browser
+  that already cached a card keeps showing the OLD picture — you get a mix of old
+  and new art that looks like a broken deploy. This has actually happened. The hub
+  build now stamps catalog image URLs with a content hash (`versioned()` in
+  `build-site.mjs`, emitting `…webp?v=<hash>`), so changed art gets a new URL
+  automatically — just rebuild after swapping any image. Assets the build does NOT
+  emit (hero art, OG images, per-game assets) still need a manual version suffix in
+  the filename when replaced. Dropping only the `immutable` token would not fix
+  this; the year-long `max-age` alone already prevents revalidation.
 - Scroll-reveal/entrance animations in `build/src/site.css` must stay
   **transform-only** (no opacity keyframes) or axe fails color-contrast on
   below-fold content mid-animation.
