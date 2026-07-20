@@ -926,7 +926,7 @@ body[data-page="psych"] .subhero h1 {
 }
 
 .work-card .card-media {
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
 }
 
 .album-card .card-media {
@@ -934,6 +934,11 @@ body[data-page="psych"] .subhero h1 {
 }
 
 /* The develop: prints resolve to full color when you reach for them. */
+.card-media picture {
+  width: 100%;
+  height: 100%;
+}
+
 .card-media img {
   width: 100%;
   height: 100%;
