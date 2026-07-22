@@ -240,6 +240,18 @@
       "youtube": "https://www.youtube.com/watch?v=CY1al0jKaxY"
     },
     {
+      "slug": "ask-anyone",
+      "title": "Ask Anyone",
+      "featured": false,
+      "image": "/assets/albums/ask-anyone.jpg",
+      "alt": "Ask Anyone album cover",
+      "summary": "Pop, pop-punk, and emo — some lyrical dissonance and some truth. The one where the hooks aren’t covering for anybody.",
+      "tags": ["pop-punk", "emo", "some truth"],
+      "tracks": 9,
+      "listen": "https://suno.com/playlist/3463923e-cba5-4e4f-81e2-f262cce8f9bc",
+      "youtube": "https://www.youtube.com/watch?v=qfmtorKtv3U"
+    },
+    {
       "slug": "hate-fuck-hotline",
       "title": "Hate Fuck Hotline",
       "featured": false,
