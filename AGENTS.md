@@ -101,6 +101,35 @@ text edits only, then validate it still parses.
 block, `404.html` mentions, orphaned `assets/` files referencing it, catalog
 entry, count asserts, then rebuild + validate. Grep the slug until it's zero.
 
+## Adding an album (Doopliss release)
+
+Same shape as adding a game, with these differences:
+
+1. **Cover art**: `/assets/albums/<slug>.jpg` at **900×900**, plus the responsive
+   square set `/assets/catalog/albums/<slug>-{360,600}.{avif,webp}`. Source is
+   usually the Suno playlist cover — it's the page's `og:image` (fetch the file
+   directly; the declared `og:image:width` may lie, e.g. says 256 when the file
+   is 1600). `py -3` + Pillow generates all five (AVIF supported).
+2. **Catalog entry** in `site-data.json` `albums`: slug, title, `featured`,
+   image, alt (`"<Title> album cover"`), summary, tags, tracks (or `null`),
+   `listen` (Suno), optional `youtube`. Keep copy in Alex's voice — his YouTube
+   upload's description (the `shortDescription` in the watch-page HTML) usually
+   has his own blurb + a timestamped tracklist to reuse verbatim.
+3. **Detail page** `music/<slug>/index.html` — copy `music/summer-people/` and
+   swap content. The per-track `<em>` one-liners are Alex's voice; if you don't
+   have his, list titles only, don't invent them.
+4. **Bump the album-count asserts** in THREE files: `build-site.mjs`,
+   `validate-site.mjs`, AND `build/qa/browser-qa.mjs` (the QA one hardcodes
+   `bodyAlbumCount === "N"` and is easy to forget — it'll fail `npm run qa`).
+5. Albums have **no per-album short-links** (only `/records → /music/`) — don't
+   invent one. No `404.html` change needed (it names games, not albums).
+6. **Featured order = albums array order.** The homepage shows the 3 featured
+   albums in the order they appear in the array. To put a new release in the
+   left/first featured slot, MOVE its entry to the top of the array (flagging
+   `featured:true` alone puts it last). Keep exactly 3 featured — un-feature one
+   to compensate; an un-featured album stays on `/music/`, it just leaves the
+   homepage.
+
 ## Verifying a deploy
 
 ```sh
