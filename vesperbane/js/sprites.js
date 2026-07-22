@@ -731,6 +731,93 @@ down: [[
 ]],
 };
 
+// The Bellkeeper's Shade — 28x34 boss. Hooded wraith clutching a
+// cracked handbell; robe frays into spectral wisps.
+ART.shade = {
+float: [[
+'............KKKK............',
+'..........KKDDDDKK..........',
+'.........KDDddddDDK.........',
+'........KDdddddddDK.........',
+'........KDdKKKKKKdDK........',
+'.......KDdK......KdDK.......',
+'.......KDdK.R..R.KdDK.......',
+'.......KDdK......KdDK.......',
+'........KdK.KKKK.KdK........',
+'......KKDddKKKKKKddDKK......',
+'.....KDDdddddddddddDDK......',
+'....KDdddddddddddddddDK.....',
+'...KDddDdddddddddddDddDK....',
+'...KDdK.DdddddddddD.KdDK....',
+'...KDdK.DdddddddddD.KdDK....',
+'...KdK..DdddddddddD..KdK....',
+'..KdK..KDdddddddddDK..KdK...',
+'..KdK.KWWK.ddddd.KWWK.KdK...',
+'..K...KWwWKdddddKWwWK...K...',
+'......KWwWK.ddd.KWwWK.......',
+'......KWWWK.ddd.KWWWK.......',
+'.......KKK..ddd..KKK........',
+'............ddd.............',
+'...........Kdddd............',
+'..........KdKdddK...........',
+'..........Kd.KddK...........',
+'.........KdK..KdK...........',
+'.........Kd....Kd...........',
+'........KdK....KdK..........',
+'........CK......KC..........',
+'.......C..........C.........',
+'......C.....C......C........',
+'............C...............',
+'............................',
+],[
+'............................',
+'............KKKK............',
+'..........KKDDDDKK..........',
+'.........KDDddddDDK.........',
+'........KDdddddddDK.........',
+'........KDdKKKKKKdDK........',
+'.......KDdK.R..R.KdDK.......',
+'.......KDdK......KdDK.......',
+'........KdKKKKKKKKdK........',
+'......KKDddddddddddDKK......',
+'....KKDdddddddddddddDKK.....',
+'..KKDdddddddddddddddddKK....',
+'.KDddDdddddddddddddddDdK....',
+'.KDdK.DdddddddddddddD.KdK...',
+'.KdK..DdddddddddddddD..KK...',
+'.KK..KDdddddddddddddDK......',
+'.....KWWK.ddddddd.KWWK......',
+'.....KWwWKdddddddKWwWK......',
+'.....KWwWK.ddddd.KWwWK......',
+'.....KWWWK.ddddd.KWWWK......',
+'......KKK..ddddd..KKK.......',
+'...........ddddd............',
+'..........Kddddd.C..........',
+'.........KdKdddK.C..........',
+'.........Kd.KddKC...........',
+'........KdK..KdK.C..........',
+'........Kd....KdC...........',
+'.......KdK....C.............',
+'.......CK....C..............',
+'......C...C.................',
+'............................',
+'............................',
+'............................',
+'............................',
+'............................',
+]],
+};
+
+// bone pile decor — 14x6
+ART.bones = [[
+'..............',
+'....KK...KHHK.',
+'.KHHhHK.KHhhK.',
+'KhHKKhHK.KKK..',
+'.KK..KK.KHhK..',
+'.........KK...',
+]];
+
 // The Vesper Bell — 26x26 brass.
 ART.bell = [[
 '...........KKKK...........',
@@ -945,6 +1032,117 @@ function makeSkyline(seed, baseY, color, spired) {
   return c;
 }
 
+// The Pale Hound (Night II hunter) — a low spectral chaser, authored
+// facing LEFT. 24x14, two run frames. Dark keeper-purple with a cyan
+// spine-crack and a red eye; wisps off the tail.
+function makeHound(frame) {
+  const D = '#23263d', d = '#3a3f61', L = '#565d85', C = '#7fe9f5', c2 = '#3fa8bd', R = '#c22e46', K = '#14121f';
+  // Build the solid body on an offscreen canvas, then wrap it in a 1px
+  // outline "halo" so the silhouette reads crisply. Facing LEFT: raised
+  // haunch (right) slopes down an arched back to a lowered head (left).
+  const body = document.createElement('canvas'); body.width = 26; body.height = 16;
+  const bg = body.getContext('2d');
+  bg.fillStyle = d;
+  bg.fillRect(16, 4, 8, 7);        // haunch (tall, rear)
+  bg.fillRect(10, 5, 8, 5);        // arched back
+  bg.fillRect(6, 6, 6, 5);         // shoulder
+  bg.fillRect(2, 8, 6, 4);         // lowered head
+  bg.fillRect(0, 9, 3, 3);         // snout
+  bg.fillRect(6, 4, 2, 3);         // ear laid back
+  // galloping legs (front reaches left, rear pushes right; swap per frame)
+  const legs = frame === 0
+    ? [[4, 11, 2, 4], [8, 11, 2, 3], [16, 11, 2, 4], [20, 11, 2, 3]]
+    : [[4, 11, 2, 3], [8, 11, 2, 4], [16, 11, 2, 3], [20, 11, 2, 4]];
+  for (const [lx, ly, lw, lh] of legs) bg.fillRect(lx, ly, lw, lh);
+  // dark under-shadow (belly + far side)
+  bg.fillStyle = D;
+  bg.fillRect(6, 10, 16, 2); bg.fillRect(2, 11, 6, 1); bg.fillRect(16, 9, 8, 2); bg.fillRect(0, 12, 3, 1);
+  for (const [lx, ly, lw, lh] of legs) bg.fillRect(lx, ly + lh - 1, lw, 1);
+  // cold rim light along the very top of back + haunch
+  bg.fillStyle = L;
+  bg.fillRect(10, 5, 7, 1); bg.fillRect(16, 4, 7, 1);
+
+  const c = document.createElement('canvas'); c.width = 26; c.height = 16;
+  const g = c.getContext('2d');
+  const halo = silhouette(body, K);
+  for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [1, -1], [-1, 1]])
+    g.drawImage(halo, ox, oy);
+  g.drawImage(body, 0, 0);
+  // details on top: red eye, dark maw, cyan spine-cracks + belly seam, wisp tail
+  g.fillStyle = R; g.fillRect(3, 9, 2, 1);
+  g.fillStyle = K; g.fillRect(0, 11, 3, 1);
+  g.fillStyle = C;
+  for (const x of [11, 14, 17, 20]) g.fillRect(x, x < 16 ? 6 : 5, 1, 1);
+  g.fillStyle = c2; g.fillRect(7, 10, 13, 1);
+  g.fillStyle = C; g.fillRect(22, 3, 1, 1); g.fillRect(23, 2, 1, 1); g.fillRect(24, 1, 1, 1);
+  g.fillStyle = c2; g.fillRect(21, 4, 2, 1); g.fillRect(23, 3, 2, 1);
+  return c;
+}
+
+// The Tollbearer (Night II boss) — a hulking hooded keeper with your
+// cracked bell embedded, glowing, in its chest. 34x34.
+function makeTollbearer() {
+  const c = document.createElement('canvas'); c.width = 34; c.height = 34;
+  const g = c.getContext('2d');
+  const K = '#14121f', D = '#1b1d30', d = '#2b2f4d', L = '#3a3f61', W = '#d1a854', w = '#8e6f30',
+        C = '#7fe9f5', c2 = '#3fa8bd', Y = '#ffe27a', R = '#c22e46';
+  // hood + robe silhouette
+  g.fillStyle = K;
+  g.fillRect(9, 1, 16, 33);            // torso column
+  g.fillRect(5, 12, 24, 20);           // shoulders/robe flare
+  g.fillRect(11, 0, 12, 4);            // hood peak
+  // robe fills
+  g.fillStyle = d;
+  g.fillRect(10, 2, 14, 30);
+  g.fillRect(6, 13, 22, 18);
+  g.fillStyle = D;
+  g.fillRect(10, 2, 5, 30);            // left shade
+  g.fillRect(19, 4, 5, 28);            // right shade
+  // hood opening (dark) with two cold eyes
+  g.fillStyle = K; g.fillRect(13, 4, 8, 6);
+  g.fillStyle = C; g.fillRect(14, 6, 2, 2); g.fillRect(18, 6, 2, 2);
+  // heavy arms
+  g.fillStyle = L;
+  g.fillRect(5, 15, 4, 10); g.fillRect(25, 15, 4, 10);
+  g.fillStyle = D; g.fillRect(5, 22, 4, 3); g.fillRect(25, 22, 4, 3);
+  // the captured bell in the chest — brass rim, cyan core, a crack
+  g.fillStyle = w; g.fillRect(12, 14, 10, 12);
+  g.fillStyle = W; g.fillRect(12, 14, 10, 2); g.fillRect(11, 25, 12, 2);
+  g.fillStyle = c2; g.fillRect(13, 16, 8, 9);
+  g.fillStyle = C; g.fillRect(14, 17, 6, 6);
+  g.fillStyle = Y; g.fillRect(16, 18, 2, 4);       // clapper glow
+  g.fillStyle = K; g.fillRect(17, 15, 1, 11);      // the crack
+  g.fillStyle = R; g.fillRect(15, 20, 1, 1); g.fillRect(19, 19, 1, 1);
+  // hem
+  g.fillStyle = K; g.fillRect(6, 31, 22, 1);
+  g.fillStyle = L; g.fillRect(8, 30, 3, 1); g.fillRect(15, 30, 4, 1); g.fillRect(23, 30, 3, 1);
+  return c;
+}
+
+// high drifting night clouds for the rooftops / spire
+function makeCloudStrip(seed) {
+  const c = document.createElement('canvas');
+  c.width = 480; c.height = 70;
+  const g = c.getContext('2d');
+  const rnd = mulberry32(seed);
+  for (let i = 0; i < 14; i++) {
+    const x = rnd() * 480, y = 14 + rnd() * 40;
+    // each cloud is a row of overlapping soft discs
+    const n = 3 + Math.floor(rnd() * 4);
+    for (let j = 0; j < n; j++) {
+      const cx = x + j * 14 - n * 7, cy = y + (rnd() - 0.5) * 6, r = 10 + rnd() * 14;
+      for (const off of [-480, 0, 480]) {
+        const gr = g.createRadialGradient(cx + off, cy, 0, cx + off, cy, r);
+        gr.addColorStop(0, 'rgba(90,100,150,0.10)');
+        gr.addColorStop(1, 'rgba(90,100,150,0)');
+        g.fillStyle = gr;
+        g.beginPath(); g.arc(cx + off, cy, r, 0, 7); g.fill();
+      }
+    }
+  }
+  return c;
+}
+
 function makeMistStrip(seed, alpha) {
   const c = document.createElement('canvas');
   c.width = 480; c.height = 60;
@@ -988,6 +1186,15 @@ function initSprites() {
   SPR.flame = ART.candle.flame.map((r, i) => bakeRows(r, 'flame' + i));
   SPR.heart = bakeRows(ART.heart[0], 'heart');
   SPR.spark = ART.spark.map((r, i) => bakeRows(r, 'spark' + i));
+  SPR.shade = ART.shade.float.map((r, i) => bakeRows(r, 'shade' + i));
+  SPR.shadeL = SPR.shade.map(flipCanvas);
+  SPR.hound = [makeHound(0), makeHound(1)];         // authored facing left
+  SPR.houndR = SPR.hound.map(flipCanvas);
+  SPR.houndSil = SPR.hound.map(cv => silhouette(cv, '#7fe9f5'));
+  SPR.houndSilR = SPR.houndSil.map(flipCanvas);
+  SPR.tollbearer = makeTollbearer();
+  SPR.tollbearerL = flipCanvas(SPR.tollbearer);
+  SPR.bones = bakeRows(ART.bones[0], 'bones');
   SPR.lanternOff = bakeRows(ART.lantern.off[0], 'lanternOff');
   SPR.lanternOn = bakeRows(ART.lantern.on[0], 'lanternOn');
   SPR.signUp = bakeRows(ART.sign.up[0], 'signUp');
@@ -1005,4 +1212,5 @@ function initSprites() {
   SPR.skyMid = makeSkyline(23, 258, '#10111f', true);
   SPR.mistA = makeMistStrip(5, 0.16);
   SPR.mistB = makeMistStrip(9, 0.11);
+  SPR.clouds = makeCloudStrip(31);
 }

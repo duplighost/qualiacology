@@ -13,8 +13,9 @@ const CONFIG = {
   GRAV: 1500,
   MAX_FALL: 430,
   JUMP_V: 350,          // apex ≈ 78px held (~4.9 tiles): 4-tile rises are safe
-  ACCEL: 1500,
-  ACCEL_AIR: 1100,
+  ACCEL: 1700,
+  ACCEL_AIR: 1250,
+  TURN_BOOST: 2.1,        // extra bite when reversing, so direction flips feel crisp
   DECEL: 1800,
   BASE_SPEED: 150,
   TIER_MULT: [1, 1.17, 1.34, 1.5],
@@ -181,12 +182,15 @@ class Player {
       if (dir) {
         this.facing = dir;
         const cap = this.maxSpeed;
-        if (sgn(this.vx) === dir && Math.abs(this.vx) > cap) {
+        const movingWith = sgn(this.vx) === dir;
+        if (movingWith && Math.abs(this.vx) > cap) {
           // over-cap speed (post-dash) decays gently instead of snapping
           this.vx -= dir * C.DECEL * 0.5 * dt;
           if (dir * this.vx < cap) this.vx = dir * cap;
         } else {
-          this.vx += dir * accel * dt;
+          // reversing gets a boost so direction flips feel crisp, not icy
+          const a = movingWith ? accel : accel * C.TURN_BOOST;
+          this.vx += dir * a * dt;
           if (dir * this.vx > cap) this.vx = dir * cap;
         }
       } else {
@@ -617,6 +621,297 @@ class Gargoyle extends Enemy {
   }
 }
 
+// ── THE BELLKEEPER'S SHADE — the boss ────────────────────────────────
+// Phase 1 (hp>9): telegraphed swoop dives.
+// Phase 2 (hp>4): faster dives, summons bat pairs.
+// Phase 3:        rises and SLAMS, sending floor shockwaves, then lies
+//                 stunned — the punish window.
+class Shade extends Enemy {
+  constructor(x, y) {
+    super(x, y, 22, 26, 14);
+    this.hpMax = 14; this.bossName = "THE BELLKEEPER'S SHADE";
+    this.homeX = x; this.homeY = y;
+    this.state = 'hover';       // hover | telegraph | dive | rise | slamwind | slam | stun
+    this.t = 1.2;
+    this.animT = 0;
+    this.dir = -1;
+    this.summoned = [];
+    this.touchDmg = 1;
+  }
+  get phase() { return this.hp > 9 ? 1 : this.hp > 4 ? 2 : 3; }
+  update(dt, level, player, game) {
+    if (this.dead) return;
+    this.flashT -= dt; this.t -= dt; this.animT += dt;
+    const px = player.x + player.w / 2, py = player.y + player.h / 2;
+    this.dir = sgn(px - this.cx) || this.dir;
+    const speed = this.phase === 1 ? 185 : 225;
+    switch (this.state) {
+      case 'hover': {
+        // bob near home, drift toward the player's side of the arena
+        const tx = clamp(px, this.homeX - 70, this.homeX + 40);
+        this.x = damp(this.x, tx - this.w / 2, 1.6, dt);
+        this.y = this.homeY + Math.sin(this.animT * 2.2) * 6;
+        if (this.t <= 0 && !player.dead) {
+          if (this.phase === 3 && Math.random() < 0.6) { this.state = 'slamwind'; this.t = 0.8; }
+          else { this.state = 'telegraph'; this.t = this.phase === 1 ? 0.55 : 0.4; audio.sfx('slash'); }
+        }
+        break;
+      }
+      case 'telegraph':
+        this.flashT = Math.max(this.flashT, 0.05);   // shimmer = incoming
+        this.y += Math.sin(this.animT * 26) * 0.6;
+        if (this.t <= 0) {
+          this.state = 'dive'; this.t = 1.1;
+          const d = Math.hypot(px - this.cx, py - this.cy) || 1;
+          this.vx = (px - this.cx) / d * speed;
+          this.vy = (py - this.cy) / d * speed;
+          audio.sfx('dash');
+        }
+        break;
+      case 'dive': {
+        const hx = moveX(this, level, this.vx * dt);
+        const hy = moveY(this, level, this.vy * dt, true);
+        FX.ghost(this.dir > 0 ? SPR.shadeL[1] : SPR.shade[1], this.x - 3, this.y - 4);
+        if (this.t <= 0 || hx || hy) {
+          this.state = 'rise'; this.t = 0;
+          if (this.phase >= 2 && game) game.summonBossBats(this);
+        }
+        break;
+      }
+      case 'rise': {
+        const rx = this.homeX - this.x, ry = this.homeY - this.y;
+        const rd = Math.hypot(rx, ry);
+        if (rd < 6) { this.state = 'hover'; this.t = this.phase === 1 ? 1.4 : 0.9; break; }
+        this.x += (rx / rd) * 130 * dt;
+        this.y += (ry / rd) * 130 * dt;
+        break;
+      }
+      case 'slamwind': {
+        // rise above the player and hang for a beat
+        this.x = damp(this.x, px - this.w / 2, 3.5, dt);
+        this.y = damp(this.y, this.homeY - 34, 3, dt);
+        this.flashT = Math.max(this.flashT, 0.05);
+        if (this.t <= 0) { this.state = 'slam'; this.vy = 430; audio.sfx('dash'); }
+        break;
+      }
+      case 'slam': {
+        const hy = moveY(this, level, this.vy * dt, true);
+        if (hy === 1) {
+          this.state = 'stun'; this.t = 2.1;
+          FX.shake(5, 0.4); FX.hitstop(0.06);
+          audio.bell(140, 1.6, 0.4);
+          FX.burst(this.cx, this.y + this.h, ['#7fe9f5', '#e8e4f0'], 16, { speed: 100, life: 0.5, grav: 60 });
+          if (game) game.spawnShockwaves(this.cx, this.y + this.h);
+        }
+        break;
+      }
+      case 'stun':
+        // grounded and helpless — hit it
+        if (this.t <= 0) { this.state = 'rise'; audio.sfx('slash'); }
+        break;
+    }
+  }
+  draw(ctx, camX, camY) {
+    if (this.dead) return;
+    const diving = this.state === 'dive' || this.state === 'slam';
+    const img = (this.dir > 0 ? SPR.shadeL : SPR.shade)[diving ? 1 : 0];
+    const stunned = this.state === 'stun';
+    if (stunned) ctx.globalAlpha = 0.8 + Math.sin(this.animT * 10) * 0.15;
+    this.drawImg(ctx, img, camX, camY, -3, stunned ? -2 : -4);
+    ctx.globalAlpha = 1;
+  }
+  glow() {
+    return { x: this.cx, y: this.cy, r: 34, color: '127,233,245', a: this.state === 'stun' ? 0.22 : 0.1 };
+  }
+}
+
+// spectral shockwave running along the floor after a slam
+class Shockwave {
+  constructor(x, y, dir) {
+    this.x = x; this.y = y - 11;
+    this.w = 9; this.h = 11;
+    this.vx = dir * 150;
+    this.t = 2.4;
+    this.dead = false;
+    this.animT = Math.random() * 9;
+  }
+  update(dt, level) {
+    this.t -= dt; this.animT += dt;
+    this.x += this.vx * dt;
+    const tx = Math.floor((this.vx > 0 ? this.x + this.w + 1 : this.x - 1) / TW);
+    const ty = Math.floor((this.y + this.h / 2) / TW);
+    if (this.t <= 0 || level.solidAt(tx, ty)) this.dead = true;
+    // hug the floor over steps
+    const fy = Math.floor((this.y + this.h + 1) / TW);
+    if (!level.solidAt(Math.floor(this.cx() / TW), fy)) this.y += 140 * dt;
+  }
+  cx() { return this.x + this.w / 2; }
+  draw(ctx, camX, camY) {
+    if (this.dead) return;
+    const x = Math.round(this.x - camX), y = Math.round(this.y - camY);
+    const f = Math.floor(this.animT * 14) % 2;
+    ctx.fillStyle = f ? '#7fe9f5' : '#e8e4f0';
+    ctx.fillRect(x + 2, y + 2 + f, 5, 9 - f);
+    ctx.fillStyle = '#3fa8bd';
+    ctx.fillRect(x, y + 6, 9, 5);
+  }
+  glow() { return { x: this.cx(), y: this.y + 6, r: 16, color: '127,233,245', a: 0.14 }; }
+}
+
+class BonesProp {
+  constructor(tx, ty) {
+    this.x = tx * TW + 1; this.y = (ty + 1) * TW - 6;
+  }
+  draw(ctx, camX, camY) {
+    ctx.drawImage(SPR.bones, Math.round(this.x - camX), Math.round(this.y - camY));
+  }
+}
+
+// ── THE PALE HOUND — Night II hunter ─────────────────────────────────
+// A spectral chaser that phases through terrain. Slow between tolls (you
+// pull ahead by moving), but SURGES above your run speed while the toll
+// rings — the window that gave shortcuts in Night I now bares its teeth.
+// Can't be killed, only knocked back and briefly stunned by a slash.
+class Hunter {
+  constructor(x, y) {
+    this.x = x; this.y = y; this.w = 20; this.h = 12;
+    this.vx = 0; this.vy = 0;
+    this.facing = 1;
+    this.stunT = 0; this.hitCd = 0;
+    this.animT = 0; this.ghostAcc = 0;
+    this.dead = false;
+  }
+  get cx() { return this.x + this.w / 2; }
+  get cy() { return this.y + this.h / 2; }
+  update(dt, level, player, game) {
+    this.animT += dt; this.hitCd -= dt;
+    if (this.stunT > 0) {
+      this.stunT -= dt;
+      this.vx *= Math.pow(0.03, dt);
+      this.x += this.vx * dt;
+      return;
+    }
+    const surge = level.tollActive;
+    // surge sits just above top-tier run speed (225): a max-VELOCITY player
+    // outpaces it, a sluggish one gets caught — the flame is your escape
+    const sp = surge ? 235 : 100;
+    const px = player.x + player.w / 2, py = player.y + player.h / 2;
+    const dx = px - this.cx, dy = py - this.cy;
+    const d = Math.hypot(dx, dy) || 1;
+    this.vx = damp(this.vx, (dx / d) * sp, surge ? 4 : 2.4, dt);
+    this.vy = damp(this.vy, (dy / d) * sp * 0.8, 3, dt);
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    if (Math.abs(dx) > 4) this.facing = sgn(dx);
+    // spectral trail
+    this.ghostAcc += dt;
+    if (this.ghostAcc > (surge ? 0.03 : 0.08)) {
+      this.ghostAcc = 0;
+      const sil = (this.facing > 0 ? SPR.houndSilR : SPR.houndSil)[0];
+      FX.ghost(sil, this.x - 2, this.y - 2);
+    }
+    // contact
+    if (this.hitCd <= 0 && !player.dead && player.dashT <= 0 &&
+        rectsOverlap(this.x + 2, this.y + 1, this.w - 4, this.h - 2, player.x, player.y, player.w, player.h)) {
+      player.damage(1, this.cx, game);
+      this.hitCd = 0.9;
+      this.vx = -sgn(this.vx || 1) * 140;   // recoil so it doesn't glue on
+    }
+  }
+  stun(dir) {
+    this.stunT = 0.55;
+    this.vx = dir * 280;
+    audio.sfx('hit');
+    FX.burst(this.cx, this.cy, ['#7fe9f5', '#f4f2fa'], 9, { speed: 95, life: 0.3 });
+  }
+  draw(ctx, camX, camY) {
+    const set = this.facing > 0 ? SPR.houndR : SPR.hound;
+    const fr = Math.floor(this.animT * (this.stunT > 0 ? 4 : 13)) % 2;
+    ctx.globalAlpha = this.stunT > 0 ? 0.65 : 0.95;
+    // 26x16 art on a 20x12 box: center horizontally, align feet to box bottom
+    ctx.drawImage(set[fr], Math.round(this.x - camX - 3), Math.round(this.y - camY - 4));
+    ctx.globalAlpha = 1;
+  }
+  glow() { return { x: this.cx, y: this.cy, r: 24, color: '127,233,245', a: 0.15 }; }
+}
+
+// ── THE TOLLBEARER — Night II boss ───────────────────────────────────
+// A grounded bruiser wearing your cracked bell as a heart. It charges
+// (dodge or dash through; wall-hits stun it), and on every toll it slams
+// out shockwaves. Cut the bell out of its chest.
+class Tollbearer extends Enemy {
+  constructor(x, y) {
+    super(x, y, 28, 30, 16);
+    this.hpMax = 16; this.bossName = 'THE TOLLBEARER';
+    this.state = 'idle';        // idle | telegraph | charge | recover | tollslam
+    this.t = 1.0;
+    this.dir = -1; this.animT = 0;
+    this.touchDmg = 1;
+    this.summoned = [];
+  }
+  get phase() { return this.hp > 10 ? 1 : this.hp > 4 ? 2 : 3; }
+  update(dt, level, player, game) {
+    if (this.dead) return;
+    this.flashT -= dt; this.t -= dt; this.animT += dt;
+    this.vy = Math.min(this.vy + 1400 * dt, 430);
+    const px = player.x + player.w / 2;
+    if (this.state !== 'charge') this.dir = sgn(px - this.cx) || this.dir;
+    switch (this.state) {
+      case 'idle':
+        this.vx *= Math.pow(0.05, dt);
+        if (this.t <= 0 && !player.dead) { this.state = 'telegraph'; this.t = this.phase >= 3 ? 0.34 : 0.5; }
+        break;
+      case 'telegraph':
+        this.vx = 0;
+        this.flashT = Math.max(this.flashT, 0.05);
+        if (this.t <= 0) {
+          this.state = 'charge'; this.t = 1.5;
+          this.vx = this.dir * (this.phase >= 2 ? 300 : 250);
+          audio.sfx('dash'); FX.shake(1.5, 0.2);
+        }
+        break;
+      case 'charge': {
+        const hit = moveX(this, level, this.vx * dt);
+        if (hit) {
+          this.state = 'recover'; this.t = this.phase >= 3 ? 1.0 : 1.6;
+          FX.shake(4, 0.4); FX.hitstop(0.05);
+          audio.bell(150, 1.2, 0.35);
+          FX.burst(this.dir > 0 ? this.x + this.w : this.x, this.cy, ['#d1a854', '#7fe9f5'], 14, { speed: 90, life: 0.4 });
+        } else if (this.t <= 0) { this.state = 'idle'; this.t = 0.5; }
+        break;
+      }
+      case 'recover':
+        this.vx *= Math.pow(0.02, dt);
+        if (this.t <= 0) this.state = 'idle';
+        break;
+      case 'tollslam':
+        this.vx = 0;
+        if (this.t <= 0) { this.state = 'idle'; this.t = 0.6; }
+        break;
+    }
+    moveY(this, level, this.vy * dt, false);
+  }
+  onToll(game) {
+    if (this.dead || this.state === 'recover' || this.state === 'charge') return;
+    this.state = 'tollslam'; this.t = 0.5;
+    FX.shake(4, 0.4); audio.bell(140, 1.6, 0.4);
+    game.spawnShockwaves(this.cx, this.y + this.h);
+    if (this.phase >= 3) game.spawnShockwaves(this.cx, this.y + this.h);   // doubled late
+    FX.burst(this.cx, this.y + this.h, ['#7fe9f5', '#e8e4f0'], 16, { speed: 100, life: 0.5, grav: 60 });
+  }
+  draw(ctx, camX, camY) {
+    if (this.dead) return;
+    const img = this.dir > 0 ? SPR.tollbearerL : SPR.tollbearer;
+    let ox = -3, oy = -4;
+    if (this.state === 'charge') ox += this.dir * 2;
+    if (this.state === 'recover') oy += 2;
+    const dx = Math.round(this.x - camX + ox), dy = Math.round(this.y - camY + oy);
+    if (this.flashT > 0) ctx.drawImage(silhouetteCached(img), dx, dy);
+    else ctx.drawImage(img, dx, dy);
+  }
+  glow() { return { x: this.cx, y: this.cy - 6, r: 30, color: '127,233,245', a: this.state === 'recover' ? 0.2 : 0.12 }; }
+}
+
 // ── PROPS ────────────────────────────────────────────────────────────
 class Candle {
   constructor(tx, ty) {
@@ -668,11 +963,12 @@ class Heart {
 }
 
 class Checkpoint {
-  constructor(tx, ty) {
+  constructor(tx, ty, whisper) {
     this.x = tx * TW + 3; this.y = (ty + 1) * TW - 16;
     this.w = 10; this.h = 16;
     this.active = false;
     this.animT = 0;
+    this.whisper = whisper || null;
   }
   update(dt) { this.animT += dt; }
   draw(ctx, camX, camY) {
@@ -693,6 +989,7 @@ class Bell {
     this.hits = 3;
     this.sway = 0; this.swayV = 0;
     this.rung = false;
+    this.locked = true;          // the Shade holds it until it falls
   }
   update(dt) {
     // damped pendulum on the x offset
@@ -702,6 +999,13 @@ class Bell {
   }
   strike(game) {
     if (this.rung) return;
+    if (this.locked) {
+      // a dead thud — the Shade still holds the night
+      this.swayV = 20;
+      audio.sfx('hit');
+      if (game) game.whisperNow('THE SHADE HOLDS THE BELL');
+      return;
+    }
     this.hits--;
     this.swayV = 90;
     FX.shake(4, 0.4); FX.hitstop(0.08);
