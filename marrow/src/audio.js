@@ -595,9 +595,14 @@ export const Audio = (() => {
 
   // The classic "it's locked" — a few quick metallic handle rattles, then a dull
   // thud as the door shoves against its frame and refuses to give. Dry and tense.
+  // Ducks the drone bed for a beat (the stinger trick) and carries a mid-band
+  // knock, so it reads on laptop speakers instead of drowning in the zone drones.
   function lockedDoor(pos) {
     if (!ctx) return;
     const t = now(); const p = panFor(pos);
+    duck(0.3, 0.04);                      // pull the bed so the rattle cuts
+    const op = bedOps;                    // restore only if nothing else (hush,
+    setTimeout(() => { if (bedOps === op) duck(1.0, 0.9); }, 220);   // a transition duck) took the bed meanwhile
     // handle rattle: 3 fast metallic jiggles
     for (let i = 0; i < 3; i++) {
       const jt = t + i * 0.082 + Math.random() * 0.012;
@@ -606,26 +611,33 @@ export const Audio = (() => {
       bp.frequency.value = 1750 + Math.random() * 750; bp.Q.value = 7;
       const g = ctx.createGain();
       g.gain.setValueAtTime(0.0001, jt);
-      g.gain.exponentialRampToValueAtTime(0.13 - i * 0.025, jt + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.3 - i * 0.05, jt + 0.006);
       g.gain.exponentialRampToValueAtTime(0.0001, jt + 0.05);
       s.connect(bp); bp.connect(g); g.connect(p.in);
       s.start(jt); s.stop(jt + 0.08);
     }
-    // dull locked thud: low boom + a damped wood-knock body
+    // dull locked thud: low boom + damped wood-knock + a mid knock that survives
+    // small speakers (the 56-118 Hz boom alone sits right on the zone drones)
     const tt = t + 0.05;
     const o = ctx.createOscillator(); o.type = 'sine';
     const og = ctx.createGain();
     o.frequency.setValueAtTime(118, tt); o.frequency.exponentialRampToValueAtTime(56, tt + 0.12);
     og.gain.setValueAtTime(0.0001, tt);
-    og.gain.exponentialRampToValueAtTime(0.26, tt + 0.008);
+    og.gain.exponentialRampToValueAtTime(0.5, tt + 0.008);
     og.gain.exponentialRampToValueAtTime(0.0001, tt + 0.22);
     const k = noiseSource(false);
     const klp = ctx.createBiquadFilter(); klp.type = 'lowpass'; klp.frequency.value = 430;
     const kg = ctx.createGain();
-    kg.gain.setValueAtTime(0.16, tt); kg.gain.exponentialRampToValueAtTime(0.0001, tt + 0.09);
-    o.connect(og); k.connect(klp); klp.connect(kg);
-    og.connect(p.in); kg.connect(p.in); p.out.connect(master); p.out.connect(conv);
-    o.start(tt); o.stop(tt + 0.3); k.start(tt); k.stop(tt + 0.12);
+    kg.gain.setValueAtTime(0.3, tt); kg.gain.exponentialRampToValueAtTime(0.0001, tt + 0.09);
+    const mid = ctx.createOscillator(); mid.type = 'triangle';
+    const mg = ctx.createGain();
+    mid.frequency.setValueAtTime(310, tt); mid.frequency.exponentialRampToValueAtTime(190, tt + 0.1);
+    mg.gain.setValueAtTime(0.0001, tt);
+    mg.gain.exponentialRampToValueAtTime(0.3, tt + 0.006);
+    mg.gain.exponentialRampToValueAtTime(0.0001, tt + 0.14);
+    o.connect(og); k.connect(klp); klp.connect(kg); mid.connect(mg);
+    og.connect(p.in); kg.connect(p.in); mg.connect(p.in); p.out.connect(master); p.out.connect(conv);
+    o.start(tt); o.stop(tt + 0.3); k.start(tt); k.stop(tt + 0.12); mid.start(tt); mid.stop(tt + 0.18);
   }
 
   // ---- the scream: layered jump-scare stinger ------------------------------
@@ -749,9 +761,12 @@ export const Audio = (() => {
   }
 
   // ---- mixing controls -----------------------------------------------------
+  let bedOps = 0;                       // bumped by every bed-level writer, so a
+                                        // deferred restore can tell it went stale
   function duck(amount, time = 0.4) {
     if (!ctx) return;
     if (!bed.gain) return;
+    bedOps++;
     bed.gain.gain.cancelScheduledValues(now());
     bed.gain.gain.setTargetAtTime((bed.base ?? 0.38) * amount, now(), time / 3);
   }
@@ -765,6 +780,7 @@ export const Audio = (() => {
   // own heartbeat keeps going), then let them swell back. Dread loves a vacuum.
   function hush(dur = 1.3) {
     if (!ctx) return;
+    bedOps++;
     if (bed.gain) bed.gain.gain.setTargetAtTime(0.02, now(), 0.15);
     if (wind.gain) wind.gain.gain.setTargetAtTime(0.0, now(), 0.15);
     setTimeout(() => {

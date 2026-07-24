@@ -212,7 +212,10 @@ function updateTriggers() {
     if (inside && !t._inside) {
       const okOnce = !(t.once && t._fired);
       const okCd = !(t.cooldown && t._last && (nowS - t._last) < t.cooldown);
-      if (okOnce && okCd) { t.onEnter(ctx); t._fired = true; t._last = nowS; }
+      // `when` is a firing precondition: while it is false the trigger neither
+      // fires nor consumes itself — a once-trigger stays armed for a later entry.
+      const okWhen = !t.when || t.when(ctx);
+      if (okOnce && okCd && okWhen) { t.onEnter(ctx); t._fired = true; t._last = nowS; }
     }
     t._inside = inside;
   }

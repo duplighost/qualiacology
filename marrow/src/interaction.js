@@ -34,13 +34,22 @@ export class InteractionManager {
 
   tryUse(ctx) {
     const it = this.focused;
-    if (!it) return false;
-    if (it.canUse && !it.canUse(ctx)) {
-      // locked — the classic handle-rattle + dull thud, and a flinch, no words
-      if (performance.now() - this._lockedRattle > 400) {
-        this._lockedRattle = performance.now();
-        this.audio.lockedDoor(it.pos); ctx.player.addShake(0.12);
+    if (!it) {
+      // Nothing focused — but if a locked thing is within arm's reach, answer
+      // the press with the rattle anyway. Aiming a little off the handle must
+      // never read as "this door is scenery".
+      const cam = ctx.player.camera.position;
+      for (const c of this.list) {
+        if (c.enabled === false || c._done || !c.focusable) continue;
+        if (!(c.canUse && !c.canUse(ctx))) continue;
+        if (c.pos.distanceTo(cam) > Math.min(c.radius, 2.2)) continue;
+        this._lockedFeedback(ctx, c.pos);
+        break;
       }
+      return false;
+    }
+    if (it.canUse && !it.canUse(ctx)) {
+      this._lockedFeedback(ctx, it.pos);
       return false;
     }
     it.onUse(ctx, ctx);
@@ -48,5 +57,15 @@ export class InteractionManager {
     this.ui.setReticle(false);
     this.focused = null;
     return true;
+  }
+
+  // locked — the classic handle-rattle + dull thud, a flinch, a buzz on touch;
+  // still no words
+  _lockedFeedback(ctx, pos) {
+    if (performance.now() - this._lockedRattle <= 400) return;
+    this._lockedRattle = performance.now();
+    this.audio.lockedDoor(pos);
+    ctx.player.addShake(0.18);
+    this.ui.buzz([50, 30, 70]);
   }
 }

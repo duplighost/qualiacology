@@ -119,23 +119,31 @@ export function buildHouse(ctx) {
   // the front door (you came in; it does not open again)
   const frontDoor = new THREE.Mesh(new THREE.BoxGeometry(2, 3.2, 0.22), trimMat);
   frontDoor.position.set(0, 1.6, 13.85); group.add(frontDoor);
-  ctx.triggers.push({ x: 0, z: 12.6, r: 1.8, once: true, cooldown: 0, onEnter: (c) => {
-    // three steps in, the door slams itself behind you. You live here now.
+  // three steps in, the door slams itself behind you. You live here now.
+  // A net of circles, none containing the spawn: the hall centre, the two
+  // parlor/dining doorways, and the two squeezes past the stairs — every route
+  // inward crosses one, and the first to fire wins.
+  let frontSlammed = false;
+  const frontSlam = (c) => {
+    frontSlammed = true;
     c.audio.slam(new THREE.Vector3(0, 1.5, 13.8));
     c.player.addShake(0.5);
     c.audio.bumpHeart(0.7, 96);
     c.audio.setTension(0.35);
-  } });
+  };
+  for (const [tx, tz, tr] of [[0, 7.9, 3.4], [-4.0, 8.5, 2.2], [4.0, 8.5, 2.2], [-3.9, 3.5, 1.6], [3.9, 3.5, 1.6]]) {
+    ctx.triggers.push({ x: tx, z: tz, r: tr, once: true, when: () => !frontSlammed, onEnter: frontSlam });
+  }
 
   // --- entry hall: x[-4.5,4.5] z[2,13], open to the rafters -----------------
   // hall side walls only rise to WALL_H where rooms flank them; the hall's own
   // volume is open — the wall band above (up to HALL_H) closes the storey seam.
-  wallGap(-4.5, 2, -4.5, 13, WALL_H, 8.5, 1.7);                     // to parlor
-  wallGap(4.5, 2, 4.5, 13, WALL_H, 8.5, 1.7);                       // to dining room
-  wall(-4.5, 2, -4.5, 13, HALL_H - WALL_H, WALL_H, false, false);   // seam band above parlor door wall
-  wall(4.5, 2, 4.5, 13, HALL_H - WALL_H, WALL_H, false, false);
+  wallGap(-4.5, 2, -4.5, 14, WALL_H, 8.5, 1.7);                     // to parlor
+  wallGap(4.5, 2, 4.5, 14, WALL_H, 8.5, 1.7);                       // to dining room
+  wall(-4.5, 2, -4.5, 14, HALL_H - WALL_H, WALL_H, false, false);   // seam band above parlor door wall
+  wall(4.5, 2, 4.5, 14, HALL_H - WALL_H, WALL_H, false, false);
   wall(-4.5, 0, 4.5, 0, HALL_H - WALL_H, WALL_H, false, false);     // seam band over the corridor mouth
-  ceilSlab(-4.5, 2, 4.5, 13, HALL_H);
+  ceilSlab(-4.5, 2, 4.5, 14, HALL_H);
   ceilSlab(-4.5, 0, 4.5, 2, HALL_H);                                // high ceiling continues over the stair
   // hall dressing: rug, console tables, the chandelier far overhead
   const rug = makeRug(3.4, 5.2); rug.position.set(0, 0, 9); group.add(rug);
@@ -154,7 +162,7 @@ export function buildHouse(ctx) {
 
   // --- parlor: x[-16,-4.5] z[4,13] ------------------------------------------
   wallGap(-16, 4, -4.5, 4, WALL_H, -11, 1.7);                     // south corridor wall, door near west
-  ceilSlab(-16, 4, -4.5, 13, WALL_H);
+  ceilSlab(-16, 4, -4.5, 14, WALL_H);
   {
     const px = -10.2, pz = 8.5;
     const prug = makeRug(4.4, 3.2); prug.position.set(px, 0, pz); group.add(prug);
@@ -165,15 +173,15 @@ export function buildHouse(ctx) {
     const fp = makeFireplace(); fp.position.set(-15.6, 0, pz); fp.rotation.y = Math.PI / 2; group.add(fp);
     field.addBox(-16, pz - 1.2, -15.2, pz + 1.2, 2);
     const emb = makeFlame(0xff5a22, 0.55, 5.5); emb.position.set(-15.4, 0.5, pz); group.add(emb); flames.push(emb);
-    const mirror = makeMirror(1.1, 1.5); mirror.position.set(px, 1.8, 12.85); mirror.rotation.y = Math.PI; group.add(mirror);
-    ctx.triggers.push({ x: px, z: 11.4, r: 1.5, once: true, onEnter: (c) => c.director.mirrorScare?.(new THREE.Vector3(px, 1.8, 12.7)) });
+    const mirror = makeMirror(1.1, 1.5); mirror.position.set(px, 1.8, 13.85); mirror.rotation.y = Math.PI; group.add(mirror);
+    ctx.triggers.push({ x: px, z: 11.4, r: 1.5, once: true, onEnter: (c) => c.director.mirrorScare?.(new THREE.Vector3(px, 1.8, 13.7)) });
     window_(-10, 1.9, 13.85, Math.PI); window_(-15.85, 1.9, 6.5, Math.PI / 2);
     const p1 = makePortrait(4); p1.position.set(-6.5, 1.7, 4.15); group.add(p1);
   }
 
   // --- dining room: x[4.5,16] z[4,13] ---------------------------------------
   wallGap(4.5, 4, 16, 4, WALL_H, 11, 1.7);                        // south corridor wall, door near east
-  ceilSlab(4.5, 4, 16, 13, WALL_H);
+  ceilSlab(4.5, 4, 16, 14, WALL_H);
   {
     const cx = 10.2, cz = 8.5;
     const table = makeTable(6.2, 1.5, 0.78); table.position.set(cx, 0, cz); group.add(table);
@@ -327,8 +335,9 @@ export function buildHouse(ctx) {
   });
   // the subversion: come back key-in-hand and the door is ALREADY open a crack —
   // and the footsteps are behind you, in the rooms you just came through.
-  ctx.triggers.push({ x: 9, z: -8.5, r: 3.4, once: true, onEnter: (c) => {
-    if (!c.inventory.has('gardenkey')) return;                    // only armed on the way OUT
+  // `when` (not an early return in onEnter) so a keyless walk through the circle
+  // does not consume the once-trigger — it stays armed for the way OUT.
+  ctx.triggers.push({ x: 9, z: -8.5, r: 3.4, once: true, when: (c) => c.inventory.has('gardenkey'), onEnter: (c) => {
     gDoor.userData.targetAngle = -0.22;
     c.audio.doorCreak(new THREE.Vector3(9, 1.3, -11.8));
     c.audio.hush(1.1);
@@ -370,7 +379,10 @@ export function buildHouse(ctx) {
     for (const sxx of [-1, 1]) {
       for (let i = 0; i < 9; i++) {
         const st = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.2, 0.44), stairM);
-        st.position.set(sxx * 2.45, 1.9 + i * 0.2, 2.4 + i * 0.36 + 0.18); st.castShadow = true; sg.add(st);
+        // the upper copy's top step lands exactly coplanar with the balcony slab
+        // (y=0) — drop it a hair so the seam doesn't shimmer underfoot
+        const stepY = 1.9 + i * 0.2 - (upperCopy && i === 8 ? 0.012 : 0);
+        st.position.set(sxx * 2.45, stepY, 2.4 + i * 0.36 + 0.18); st.castShadow = true; sg.add(st);
       }
       // outer rail of each return flight
       const rr = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.9, 3.9), railM);
@@ -408,6 +420,11 @@ export function buildHouse(ctx) {
     field.addBox(ox - 3.45, 0.3, ox - 3.15, 2.2, 2);
     field.addBox(ox + 3.15, 0.3, ox + 3.45, 2.2, 2);
   }
+  // seal the mouths UNDER the ground copy's return flights: past them, groundAt
+  // would hoist a walker up through the steps (and slip them past the guarded
+  // swap). Ground copy only — the upper copy's flight exits cross this strip.
+  field.addBox(1.82, 5.4, 3.1, 5.9, 2);
+  field.addBox(-3.1, 5.4, -1.82, 5.9, 2);
 
   // ground height: both storeys' stairs in one function
   function groundAt(x, z) {
@@ -438,11 +455,13 @@ export function buildHouse(ctx) {
   // the twin (you arrive at your same z): ground fires around z 4.2-5.7, you
   // land >1.4m from the upper trigger's circle, and vice versa.
   for (const sxx of [-1, 1]) {
-    ctx.triggers.push({ x: sxx * 2.45, z: 4.9, r: 0.8, cooldown: 1.2, onEnter: (c) => {
+    // when-guards: the triggers are 2D circles, but the flights float — someone
+    // walking UNDER a return flight at ground level must not be teleported.
+    ctx.triggers.push({ x: sxx * 2.45, z: 4.9, r: 0.8, cooldown: 1.2, when: (c) => c.player.pos.y > 2.5, onEnter: (c) => {
       c.player.pos.x += UX; c.player.pos.y += UY;
       c.director.onPlayerRelocated();
     } });
-    ctx.triggers.push({ x: UX + sxx * 2.45, z: 2.6, r: 0.8, cooldown: 1.2, onEnter: (c) => {
+    ctx.triggers.push({ x: UX + sxx * 2.45, z: 2.6, r: 0.8, cooldown: 1.2, when: (c) => c.player.pos.y < -0.8, onEnter: (c) => {
       c.player.pos.x -= UX; c.player.pos.y -= UY;
       c.director.onPlayerRelocated();
     } });
@@ -450,7 +469,9 @@ export function buildHouse(ctx) {
   // ...and on the upper copy's central flight, for anyone who walks back DOWN
   // past the landing: it hands you to the ground copy's central flight so you
   // descend into the real hall, never the diorama.
-  ctx.triggers.push({ x: UX, z: 4.2, r: 0.9, cooldown: 1.2, onEnter: (c) => {
+  // r covers the full 3.2 m flight width (rail-huggers reach |dx| 1.23), and the
+  // y-guard keeps balcony walkers at y=0 out of the widened circle.
+  ctx.triggers.push({ x: UX, z: 4.2, r: 1.5, cooldown: 1.2, when: (c) => c.player.pos.y < -1.0, onEnter: (c) => {
     c.player.pos.x -= UX; c.player.pos.y -= UY;
     c.director.onPlayerRelocated();
   } });
@@ -509,25 +530,28 @@ export function buildHouse(ctx) {
   // --- upper rooms ----------------------------------------------------------
   // hallway spine z[-2,0] + around the balcony; rooms off it.
   // master bedroom: x[U+6,U+16] z[0,13] — the garden key lives here
-  wallGap(U + 6, 0, U + 6, 13, UP_H, 6.5, 1.5);                    // west wall w/ door
+  wallGap(U + 6, 0, U + 6, 14, UP_H, 6.5, 1.5);                    // west wall w/ door — runs to the shell so the door really is the only way in
   wall(U + 6, 0, U + 16, 0, UP_H);                                 // south wall — the door is the ONLY way in
   wall(U + 4.5, 0, U + 6, 0, UP_H); wall(U - 6, 0, U - 4.5, 0, UP_H);
   // nursery: x[U-16,U-6] z[2,13]
-  wallGap(U - 6, 2, U - 6, 13, UP_H, 6.5, 1.5);                    // east wall w/ door
+  wallGap(U - 6, 2, U - 6, 14, UP_H, 6.5, 1.5);                    // east wall w/ door
   wallGap(U - 16, 2, U - 6, 2, UP_H, U - 11, 1.5);                 // south wall w/ its own door
   wall(U - 6, 0, U - 6, 2, UP_H);
   // sewing room: x[U-16,U-6] z[-12,-2]; small hall wall
-  wallGap(U - 16, -2, U - 6, -2, UP_H, -11, 1.5);
+  wallGap(U - 16, -2, U - 6, -2, UP_H, U - 11, 1.5);
   wall(U - 6, -12, U - 6, -2, UP_H);
   // linen/store room: x[U+6,U+16] z[-12,-2]
-  wallGap(U + 6, -2, U + 16, -2, UP_H, 11, 1.5);
+  wallGap(U + 6, -2, U + 16, -2, UP_H, U + 11, 1.5);
   wall(U + 6, -12, U + 6, -2, UP_H);
+  // hallway north wall, centre span — the sewing/linen walls stop at U∓6, and
+  // the portraits at U-2 / U+5 hang here (0.18 proud, ground-corridor convention)
+  wall(U - 6, -2, U + 6, -2, UP_H);
 
   // hallway dressing: runner, portraits, one candle stand, window at each end
   {
     const runner = makeRug(1.4, 16); runner.position.set(U, 0.005, -1); runner.rotation.y = Math.PI / 2;
     runner.scale.set(1, 1, 0.55); group.add(runner);
-    for (const [px, pz, ry, sp] of [[U - 9, -1.82, Math.PI, 3], [U - 2, -1.82, Math.PI, 6], [U + 5, -1.82, Math.PI, 9], [U + 10, -0.18 - 1.8, Math.PI, 2]]) {
+    for (const [px, pz, ry, sp] of [[U - 9, -1.82, 0, 3], [U - 2, -1.82, 0, 6], [U + 5, -1.82, 0, 9], [U + 10, -1.82, 0, 2]]) {
       const p = makePortrait(sp); p.position.set(px, 1.62, pz); p.rotation.y = ry; group.add(p);
     }
     const hc = makeFlame(0xffaa44, 0.8, 5.5); hc.position.set(U - 5.4, 0.95, -1); group.add(hc); flames.push(hc);
@@ -557,7 +581,7 @@ export function buildHouse(ctx) {
     // the key table, and the key
     const kt = makeTable(0.8, 0.8, 0.82); kt.position.set(keyPos.x, 0, keyPos.z); group.add(kt);
     field.addCircle(keyPos.x, keyPos.z, 0.55, 2);
-    window_(U + 11, 1.8, 12.85, Math.PI); window_(U + 15.85, 1.8, 6.5, -Math.PI / 2);
+    window_(U + 11, 1.8, 13.85, Math.PI); window_(U + 15.85, 1.8, 6.5, -Math.PI / 2);
     const mk = makeFlame(0xffaa44, 0.9, 6); mk.position.set(keyPos.x + 0.45, 0.95, keyPos.z); group.add(mk); flames.push(mk);
   }
   const gardenKey = makeKey('brass'); gardenKey.position.copy(keyPos); group.add(gardenKey);
@@ -580,7 +604,7 @@ export function buildHouse(ctx) {
   // master door (closed; you open it)
   {
     const md = new THREE.Group(); md.position.set(U + 6, 0, 6.5); group.add(md);
-    const mDoor = makeDoor(1.5, 2.15); mDoor.position.set(0, 0, -0.75); mDoor.rotation.y = Math.PI / 2; md.add(mDoor);
+    const mDoor = makeDoor(1.5, 2.15); mDoor.position.set(0, 0, 0.75); mDoor.rotation.y = Math.PI / 2; md.add(mDoor);
     const mdBlocker = field.addDynamicBox(U + 5.85, 5.75, U + 6.15, 7.25, 2);
     ctx.interactables.push({
       object: mDoor, pos: new THREE.Vector3(U + 6, 1.2, 6.5), radius: 2.0, focusable: true, canUse: () => true,
@@ -639,7 +663,7 @@ export function buildHouse(ctx) {
         c.director._after(() => { c.director.behindYou(); }, 2600);
       },
     });
-    window_(nx, 1.8, 12.85, Math.PI);
+    window_(nx, 1.8, 13.85, Math.PI);
     const nc = makeFlame(0xd88a3a, 0.6, 5); nc.position.set(nx, 0.9, nz - 2); group.add(nc); flames.push(nc);
   }
 

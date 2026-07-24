@@ -25,7 +25,21 @@ export function buildGraveyard(ctx) {
 
   // --- ground + moon ---
   const gtex = groundTexture();
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 100),
+  // The ground carries a rectangular hole where the crypt stair descends inside
+  // the chapel — a plain 90x100 plane would render right OVER the pit and the
+  // whole stair (and its red guide-glow) would hide beneath "solid" ground.
+  // Plane local coords after rotation.x = -PI/2 and position z=-4: y = -z - 4.
+  const gShape = new THREE.Shape();
+  gShape.moveTo(-45, -50); gShape.lineTo(45, -50); gShape.lineTo(45, 50); gShape.lineTo(-45, 50); gShape.closePath();
+  const gPit = new THREE.Path();                                   // world x[-5.6,-3.6] z[-33.2,-27.6]
+  gPit.moveTo(-5.6, 23.6); gPit.lineTo(-3.6, 23.6); gPit.lineTo(-3.6, 29.2); gPit.lineTo(-5.6, 29.2); gPit.closePath();
+  gShape.holes.push(gPit);
+  const groundGeo = new THREE.ShapeGeometry(gShape);
+  {                                                                 // match PlaneGeometry's 0..1 UVs so the texture scale is unchanged
+    const uv = groundGeo.attributes.uv, gp = groundGeo.attributes.position;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (gp.getX(i) + 45) / 90, (gp.getY(i) + 50) / 100);
+  }
+  const ground = new THREE.Mesh(groundGeo,
     new THREE.MeshStandardMaterial({ map: gtex, bumpMap: gtex, bumpScale: 0.07, color: 0x9aab9e, roughness: 0.8, metalness: 0.1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.set(0, 0, -4); ground.receiveShadow = true; group.add(ground);
   // The yard is MOONLIT — the one act you can actually see across. After the
@@ -61,13 +75,21 @@ export function buildGraveyard(ctx) {
   const gateBlocker = field.addDynamicBox(-2.3, Z1 - 0.55, 2.3, Z1 - 0.05, 2);
   gateBlocker.active = false;
   let gateShut = false;
-  ctx.triggers.push({ x: 0, z: Z1 - 5, r: 3.4, once: true, onEnter: (c) => {
+  // The slam lands a few steps in — the band sits clear of the spawn so it can
+  // never fire on the first playable frame — and it must catch EVERY route
+  // south: one circle can be skirted along the walls, which would leave the
+  // gate open (and the yard walkable-out-of) forever. Overlapping circles span
+  // the yard's full width; the first to fire wins via gateShut.
+  const gateSlam = (c) => {
     gateShut = true; gateBlocker.active = true;
     c.audio.slam(new THREE.Vector3(0, 1.3, Z1));
     c.audio.bumpHeart(0.6, 96);
     c.audio.setTension(0.55);
     c.player.addShake(0.4);
-  } });
+  };
+  for (let gx = -27; gx <= 27; gx += 6) {
+    ctx.triggers.push({ x: gx, z: Z1 - 7.2, r: 4.2, once: true, when: () => !gateShut, onEnter: gateSlam });
+  }
   animated.push({ update: (dt) => { if (gateShut && gate.rotation.y < 0) gate.rotation.y = Math.min(0, gate.rotation.y + dt * 4.2); } });
 
   // --- the winding avenue to the chapel, lit by cold lanterns ----------------
@@ -311,6 +333,10 @@ export function buildGraveyard(ctx) {
   const pewM = new THREE.MeshStandardMaterial({ color: 0x1d1510, roughness: 0.95 });
   for (let r = 0; r < 4; r++) {
     for (const sx of [-1, 1]) {
+      // the west aisle's back rows stop where the crypt stair opens — rows 2-3
+      // would float over the pit, and row 1 sits 5cm from the stair mouth,
+      // pinching the way down to a 6cm squeeze. Row 0 stays (1.75m clear).
+      if (sx === -1 && r >= 1) continue;
       if (r === 2 && sx === 1) {                                     // one pew overturned
         const pew = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.5, 0.9), pewM);
         pew.position.set(sx * 3.2, 0.28, -25.5 - r * 1.7); pew.rotation.z = 2.6; pew.rotation.y = 0.3; group.add(pew);
