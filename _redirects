@@ -92,6 +92,12 @@
 /party             /party-animal/            302
 /pinata            /party-animal/            302
 
+# --- THE EATEN PATH ---
+/eaten-path      /eaten-path/index.html    301!
+/eaten-path.html /eaten-path/              301!
+/eaten           /eaten-path/              302
+/path            /eaten-path/              302
+
 # --- boss codex ---
 /codex          /no-moon/codex/           302
 
