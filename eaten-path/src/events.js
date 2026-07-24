@@ -2,7 +2,7 @@
 // up, sunlight cutting out to show you what it was hiding, junk switching on,
 // and the sounds of the path knitting shut at your back.
 import * as THREE from 'three';
-import { RNG, clamp, lerp, TAU } from './util.js';
+import { RNG, clamp, lerp, canvasTexture, TAU } from './util.js';
 
 const EYE_COLORS = [0xffb24d, 0x9dffb0, 0xc99dff, 0xff5c48];
 
@@ -35,12 +35,89 @@ export class Events {
         this.sealCreakCooldown = this.rng.range(2.2, 4.5);
       }
     };
-    world.onSegEnter = (seg) => { this.audio.biome(seg.kind); };
+    world.onSegEnter = (seg) => {
+      this.audio.biome(seg.kind);
+      if (seg.ruinBell && this.rng.chance(0.5)) this.audio.bell(this.world.pointAt(seg, seg.clearing ? seg.clearing.s : 4, 0));
+    };
 
     // shared eye resources
     this.eyeGeo = new THREE.CircleGeometry(0.05, 8);
     this.socketGeo = new THREE.CircleGeometry(0.17, 10);
     this.socketMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+    // ---- the things ahead ----
+    this.figAhead = this._makeFigure();   // the still watcher down the path
+    this.figRun = this._makeFigure();      // the one that runs
+    this.ahead = null;                     // active ahead-threat state
+    this.runner = null;                    // active runner state
+    this.aheadTimer = this.rng.range(20, 40);
+    this.runnerTimer = this.rng.range(26, 50);
+    this.footTimer = this.rng.range(16, 34);
+    this.footPool = this._makeFootprintPool();
+    this.foot = null;                      // active footprint trail
+    this.prevDepth = 0;
+    this.balkWhisperCd = 0;
+    this._ap = new THREE.Vector3();
+  }
+
+  // ---------------- shared silhouettes ----------------
+
+  _makeFigure() {
+    const mat = new THREE.MeshBasicMaterial({ color: 0x171b24, transparent: true, opacity: 1, fog: true });
+    const g = new THREE.Group();
+    const bx = (w, h, d, x, y, z) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z); return m;
+    };
+    g.add(bx(0.15, 1.15, 0.15, -0.13, 0.57, 0), bx(0.15, 1.15, 0.15, 0.13, 0.57, 0)); // legs
+    g.add(bx(0.44, 0.98, 0.27, 0, 1.6, 0));                                            // torso
+    g.add(bx(0.1, 1.08, 0.1, -0.27, 1.55, 0.02), bx(0.1, 1.08, 0.1, 0.27, 1.55, 0.02)); // long arms
+    g.add(bx(0.23, 0.29, 0.23, 0, 2.24, 0.04));                                          // bowed head
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 3, 4), mat);
+    rope.position.set(0, 3.7, 0); rope.visible = false; g.add(rope);
+    g.userData = { mat, rope };
+    g.visible = false;
+    this.scene.add(g);
+    return g;
+  }
+
+  _makeFootprintPool() {
+    const tex = canvasTexture(32, 48, (gg, w, h) => {
+      gg.clearRect(0, 0, w, h);
+      gg.fillStyle = '#000';
+      gg.globalAlpha = 0.95;
+      gg.beginPath(); gg.ellipse(w / 2, h * 0.7, 6.5, 9, 0, 0, TAU); gg.fill();   // heel
+      gg.beginPath(); gg.ellipse(w / 2, h * 0.33, 7.5, 12, 0, 0, TAU); gg.fill(); // ball
+    });
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, color: 0x0d0a06, transparent: true, opacity: 0.8,
+      alphaTest: 0.35, depthWrite: false, side: THREE.DoubleSide, fog: true,
+    });
+    const geo = new THREE.PlaneGeometry(0.34, 0.5);
+    geo.rotateX(-Math.PI / 2);
+    const cap = 80;
+    const m = new THREE.InstancedMesh(geo, mat, cap);
+    m.frustumCulled = false;
+    m.count = cap;
+    const D = this.dummy || (this.dummy = new THREE.Object3D());
+    for (let i = 0; i < cap; i++) { D.position.set(0, -50, 0); D.updateMatrix(); m.setMatrixAt(i, D.matrix); }
+    m.instanceMatrix.needsUpdate = true;
+    this.scene.add(m);
+    return { mesh: m, cap, next: 0, D: new THREE.Object3D() };
+  }
+
+  // world-space point `dist` metres ahead of the player along the path
+  _aheadPoint(dist, latOff = 0) {
+    const seg = this.world.current;
+    const targetS = this.world.sCur + dist;
+    if (targetS <= seg.samples.length) return { seg, s: targetS, pos: this.world.pointAt(seg, targetS, latOff, this._ap.clone()) };
+    const child = seg.children.find((c) => !c.sealed);
+    if (child) {
+      const cs = Math.min(targetS - seg.samples.length, child.samples.length);
+      return { seg: child, s: cs, pos: this.world.pointAt(child, cs, latOff, this._ap.clone()) };
+    }
+    const cl = seg.samples.length;
+    return { seg, s: cl, pos: this.world.pointAt(seg, cl, latOff, this._ap.clone()) };
   }
 
   // ---------------- eyes in the trees ----------------
@@ -332,6 +409,162 @@ export class Events {
     }
   }
 
+  // ---------------- the thing standing down the path ----------------
+
+  _tryAhead(dt, playerPos) {
+    if (this.ahead) return;
+    this.aheadTimer -= dt;
+    if (this.aheadTimer > 0) return;
+    const tier = this.world.tier();
+    this.aheadTimer = this.rng.range(17, 34) / (1 + tier * 0.45);
+    if (this.world.depth <= this.prevDepth + 0.02) { this.aheadTimer = this.rng.range(3, 6); return; }
+    const type = this.rng.pick(tier >= 1 ? ['sentinel', 'sentinel', 'hanged', 'hunched'] : ['sentinel', 'sentinel', 'hunched']);
+    const A = this._aheadPoint(this.rng.range(16, 26), this.rng.gauss() * 0.55);
+    const fig = this.figAhead;
+    fig.userData.mat.opacity = 1;
+    fig.userData.rope.visible = false;
+    fig.scale.set(1, 1, 1);
+    fig.rotation.set(0, 0, 0);
+    fig.position.set(A.pos.x, 0, A.pos.z);
+    if (type === 'hanged') { fig.position.y = 1.4; fig.userData.rope.visible = true; }
+    else if (type === 'hunched') { fig.scale.set(1.18, 0.78, 1.18); fig.rotation.x = 0.5; }
+    fig.rotation.y = Math.atan2(playerPos.x - A.pos.x, playerPos.z - A.pos.z);
+    fig.visible = true;
+    this.ahead = { type, pos: new THREE.Vector3(A.pos.x, fig.position.y, A.pos.z), t: 0, ttl: this.rng.range(9, 16), vanishing: false, vt: 0, swayPh: this.rng.float() * TAU, approached: false };
+    if (this.rng.chance(0.5)) this.audio.whisper(this.ahead.pos);
+    this.fx.glitch(0.15);
+  }
+
+  _updateAhead(dt, playerPos) {
+    const A = this.ahead; if (!A) return;
+    A.t += dt;
+    const fig = this.figAhead;
+    const dxz = Math.hypot(playerPos.x - A.pos.x, playerPos.z - A.pos.z);
+    fig.rotation.y = Math.atan2(playerPos.x - A.pos.x, playerPos.z - A.pos.z);
+    if (A.type === 'hanged') {
+      A.swayPh += dt * 1.3;
+      fig.rotation.z = Math.sin(A.swayPh) * 0.06;
+      fig.rotation.y += Math.sin(A.swayPh * 0.6) * 0.1;
+    }
+    if (!A.vanishing && (dxz < 8 || A.t > A.ttl)) {
+      A.vanishing = true; A.vt = 0; A.approached = dxz < 8;
+      if (A.approached) { this.audio.sealSting(); this.fx.glitch(0.5); } // the gut-punch: you got close, it's gone
+    }
+    if (A.vanishing) {
+      A.vt += dt;
+      fig.userData.mat.opacity = Math.max(0, 1 - A.vt / 0.35);
+      if (A.vt > 0.42) { fig.visible = false; this.ahead = null; }
+    }
+  }
+
+  // ---------------- the one that runs ----------------
+
+  _tryRunner(dt) {
+    if (this.runner) return;
+    this.runnerTimer -= dt;
+    if (this.runnerTimer > 0) return;
+    const tier = this.world.tier();
+    this.runnerTimer = this.rng.range(24, 46) / (1 + tier * 0.4);
+    if (this.world.depth <= this.prevDepth + 0.02) { this.runnerTimer = this.rng.range(4, 8); return; }
+    const kind = this.rng.chance(0.55) ? 'crosser' : 'fleer';
+    const fig = this.figRun;
+    fig.userData.mat.opacity = 1; fig.userData.rope.visible = false;
+    fig.scale.set(0.98, 1, 0.98); fig.rotation.set(0, 0, 0);
+    if (kind === 'crosser') {
+      const A = this._aheadPoint(this.rng.range(12, 20), 0);
+      const tn = this.world.tangentAt(A.seg, A.s);
+      const perp = new THREE.Vector3(tn.z, 0, -tn.x);
+      const side = this.rng.sign();
+      const half = this.world.halfWidthAt(A.seg, A.s) + 3.8;
+      const start = A.pos.clone().add(perp.clone().multiplyScalar(-side * half));
+      const end = A.pos.clone().add(perp.clone().multiplyScalar(side * half));
+      this.runner = { kind, t: 0, dur: this.rng.range(0.7, 1.1), start, end, stepCd: 0, pos: start.clone() };
+      fig.position.set(start.x, 0, start.z);
+      this.audio.brushCrash(start);
+    } else {
+      const A = this._aheadPoint(this.rng.range(10, 14), 0);
+      const B = this._aheadPoint(this.rng.range(27, 35), 0);
+      this.runner = { kind, t: 0, dur: this.rng.range(1.7, 2.7), start: A.pos.clone(), end: B.pos.clone(), stepCd: 0, pantCd: 0, pos: A.pos.clone() };
+      fig.position.set(A.pos.x, 0, A.pos.z);
+      this.audio.panting(A.pos);
+    }
+    fig.visible = true;
+    this.fx.glitch(0.12);
+  }
+
+  _updateRunner(dt) {
+    const R = this.runner; if (!R) return;
+    R.t += dt;
+    const k = Math.min(1, R.t / R.dur);
+    const fig = this.figRun;
+    R.pos.lerpVectors(R.start, R.end, k);
+    const bounce = Math.abs(Math.sin(k * Math.PI * (R.kind === 'crosser' ? 6 : 8))) * 0.09;
+    fig.position.set(R.pos.x, bounce, R.pos.z);
+    const dir = this._v.subVectors(R.end, R.start);
+    fig.rotation.set(0.28, Math.atan2(dir.x, dir.z), 0); // lean into the run
+    R.stepCd -= dt;
+    if (R.stepCd <= 0) { R.stepCd = 0.16; this.audio.footfall(R.pos, true); }
+    if (R.kind === 'fleer') { R.pantCd -= dt; if (R.pantCd <= 0) { R.pantCd = this.rng.range(0.7, 1.2); this.audio.panting(R.pos); } }
+    if (k > 0.85) fig.userData.mat.opacity = Math.max(0, (1 - k) / 0.15);
+    if (k >= 1) {
+      fig.visible = false;
+      if (R.kind === 'crosser') this.audio.brushCrash(R.end);
+      this.runner = null;
+    }
+  }
+
+  // ---------------- footprints leading forward ----------------
+
+  _tryFootprints(dt) {
+    if (this.foot) return;
+    this.footTimer -= dt;
+    if (this.footTimer > 0) return;
+    const tier = this.world.tier();
+    this.footTimer = this.rng.range(18, 34) / (1 + tier * 0.4);
+    if (this.world.depth <= this.prevDepth + 0.02) { this.footTimer = this.rng.range(4, 8); return; }
+    const n = this.rng.int(7, 12);
+    const wrong = tier >= 2 && this.rng.chance(0.42); // too many feet, or dragging
+    const prints = [];
+    let d0 = this.rng.range(2, 3.5);
+    for (let i = 0; i < n; i++) {
+      const dist = d0 + i * this.rng.range(0.7, 1.0);
+      const foot = (i % 2 === 0) ? -1 : 1;
+      let lat = foot * 0.2, drag = 1;
+      if (wrong) { if (this.rng.chance(0.35)) lat = foot * 0.6; if (this.rng.chance(0.3)) drag = 1.9; }
+      const A = this._aheadPoint(dist, lat);
+      const tn = this.world.tangentAt(A.seg, A.s);
+      const idx = this.footPool.next; this.footPool.next = (this.footPool.next + 1) % this.footPool.cap;
+      prints.push({ idx, pos: A.pos.clone(), yaw: Math.atan2(tn.x, tn.z), foot, drag, appear: i * 0.14, landed: false });
+    }
+    this.foot = { prints, t: 0, dur: this.rng.range(7, 11) };
+  }
+
+  _updateFootprints(dt) {
+    const F = this.foot; if (!F) return;
+    F.t += dt;
+    const D = this.footPool.D, m = this.footPool.mesh;
+    for (const p of F.prints) {
+      const local = F.t - p.appear;
+      let env = 0;
+      if (local > 0) {
+        const fadeOut = clamp(1 - (F.t - (F.dur - 2)) / 2, 0, 1);
+        env = Math.min(1, local / 0.22) * fadeOut;
+        if (!p.landed) { p.landed = true; this.audio.footfall(p.pos, false); } // you hear the steps you can't see
+      }
+      D.position.set(p.pos.x, 0.03, p.pos.z);
+      D.rotation.set(0, p.yaw, 0);
+      D.scale.set(Math.max(0.001, env) * (p.foot < 0 ? -1 : 1), Math.max(0.001, env), Math.max(0.001, env) * p.drag);
+      D.updateMatrix();
+      m.setMatrixAt(p.idx, D.matrix);
+    }
+    m.instanceMatrix.needsUpdate = true;
+    if (F.t > F.dur) {
+      for (const p of F.prints) { D.position.set(0, -50, 0); D.scale.set(1, 1, 1); D.rotation.set(0, 0, 0); D.updateMatrix(); m.setMatrixAt(p.idx, D.matrix); }
+      m.instanceMatrix.needsUpdate = true;
+      this.foot = null;
+    }
+  }
+
   // ---------------- hums, stings, anomalies ----------------
 
   _syncHums() {
@@ -366,6 +599,23 @@ export class Events {
     this._tryActuators(playerPos);
     this._updateActives(dt);
     this._syncHums();
+    this._tryAhead(dt, playerPos);
+    this._updateAhead(dt, playerPos);
+    this._tryRunner(dt);
+    this._updateRunner(dt);
+    this._tryFootprints(dt);
+    this._updateFootprints(dt);
+
+    // the forest herds you: balk in front of the watcher and it closes behind you
+    this.world.forwardUrge = 0;
+    const advancing = this.world.depth > this.prevDepth + 0.01;
+    if (this.ahead && !this.ahead.vanishing && !advancing) {
+      const d = Math.hypot(playerPos.x - this.ahead.pos.x, playerPos.z - this.ahead.pos.z);
+      this.world.forwardUrge = clamp(1 - (d - 8) / 20, 0.25, 1);
+      this.balkWhisperCd -= dt;
+      if (this.balkWhisperCd <= 0) { this.balkWhisperCd = this.rng.range(2.5, 5); this.audio.whisper(this.ahead.pos); this.fx.glitch(0.1); }
+    }
+    this.prevDepth = this.world.depth;
 
     // sun flicker-back (tracked list — works even after the player moved on)
     for (let i = this.flickerSuns.length - 1; i >= 0; i--) {

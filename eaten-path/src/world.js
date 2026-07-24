@@ -14,10 +14,17 @@ const DISPOSE_BEHIND = 70;      // drop sealed segments this far behind the play
 export const KINDS = {
   corridor: { lenMin: 42, lenMax: 70, halfW: [1.7, 2.3], step: 9,  kink: 0.34 },
   cave:     { lenMin: 26, lenMax: 44, halfW: [1.15, 1.5], step: 7,  kink: 0.45 },
+  thicket:  { lenMin: 22, lenMax: 40, halfW: [1.0, 1.35], step: 6,  kink: 0.52 }, // foliage engulfs the path
   cemetery: { lenMin: 48, lenMax: 64, halfW: [1.8, 2.1], step: 10, kink: 0.22, clearing: [10, 15] },
   sunclear: { lenMin: 40, lenMax: 56, halfW: [1.7, 2.1], step: 9,  kink: 0.26, clearing: [6.5, 9.5] },
   carspot:  { lenMin: 44, lenMax: 62, halfW: [2.3, 2.8], step: 10, kink: 0.2 },
+  ruin:     { lenMin: 46, lenMax: 62, halfW: [1.9, 2.3], step: 10, kink: 0.24, clearing: [9, 13] },
+  bog:      { lenMin: 40, lenMax: 58, halfW: [2.0, 2.6], step: 9,  kink: 0.3,  clearing: [7, 11] },
+  deadwood: { lenMin: 40, lenMax: 56, halfW: [1.8, 2.2], step: 9,  kink: 0.28, clearing: [8, 12] },
 };
+
+// biomes that open into a "landmark" space — the game rations these for variety
+export const LANDMARKS = ['cemetery', 'sunclear', 'ruin', 'bog', 'deadwood', 'carspot'];
 
 let NEXT_ID = 1;
 
@@ -68,13 +75,15 @@ export class World {
     this.lastSealSpawnS = 0;
     this.idleTime = 0;
     this.depth = 0;               // total metres travelled forward (arc)
-    this.since = { cemetery: 0, sunclear: 0, cave: 0, carspot: 0 };
+    this.since = { cemetery: 0, sunclear: 0, cave: 0, carspot: 0, ruin: 0, bog: 0, deadwood: 0, thicket: 0 };
+    this.forwardUrge = 0;         // events push this up to make the forest herd you onward
     // callbacks (wired by main/events)
     this.onSegEnter = null; this.onCommit = null; this.onSealSpawn = null;
     this._v = new THREE.Vector3(); this._v2 = new THREE.Vector3();
   }
 
-  tier() { return this.depth < 400 ? 0 : this.depth < 1200 ? 1 : this.depth < 2500 ? 2 : 3; }
+  // deeper = worse. Five stages; escalation never stops climbing.
+  tier() { return this.depth < 300 ? 0 : this.depth < 800 ? 1 : this.depth < 1600 ? 2 : this.depth < 2800 ? 3 : 4; }
 
   begin() {
     const root = this._spawnSegment(null, this.rng.range(0, TAU), 'corridor');
@@ -92,18 +101,32 @@ export class World {
 
   _chooseKind(parentKind) {
     const t = this.tier(), s = this.since, r = this.rng;
-    // hard variety guarantees
-    if (s.cemetery >= r.int(5, 8)) { return 'cemetery'; }
-    if (s.sunclear >= r.int(4, 7)) { return 'sunclear'; }
+    const clearingKind = (k) => KINDS[k].clearing || k === 'carspot';
+    // hard single-biome starvation guards — nothing waits forever
+    if (s.cemetery >= r.int(7, 11)) return 'cemetery';
+    if (s.ruin >= r.int(6, 10)) return 'ruin';
+    if (s.sunclear >= r.int(6, 10)) return 'sunclear';
+    if (s.deadwood >= r.int(8, 12)) return 'deadwood';
+    if (s.bog >= r.int(9, 13)) return 'bog';
+    // it must never feel same-y: if it's been only corridor/cave/thicket for a
+    // while, force some landmark — biased toward the one unseen longest.
+    const sinceLandmark = Math.min(...LANDMARKS.map((k) => s[k]));
+    if (sinceLandmark >= r.int(3, 5)) {
+      const pool = LANDMARKS.filter((k) => k !== parentKind).sort((a, b) => s[b] - s[a]);
+      return pool[r.int(0, Math.min(2, pool.length - 1))];
+    }
     let w = {
-      corridor: 10,
-      cave: 2.5 + t * 1.6 + (parentKind === 'cave' ? 2 : 0),
-      cemetery: s.cemetery >= 3 ? 2 : 0,
-      sunclear: s.sunclear >= 2 ? 1.8 : 0,
-      carspot: s.carspot >= 2 ? 2.2 : 0,
+      corridor: 8,
+      thicket: 2.5 + t * 0.9,
+      cave: 2.3 + t * 1.3 + (parentKind === 'cave' ? 1.4 : 0),
+      cemetery: s.cemetery >= 3 ? 1.5 : 0,
+      sunclear: s.sunclear >= 2 ? 1.4 : 0,
+      carspot: s.carspot >= 2 ? 1.7 : 0,
+      ruin: s.ruin >= 2 ? 1.7 : 0,
+      bog: s.bog >= 3 ? 1.3 : 0,
+      deadwood: s.deadwood >= 3 ? 1.3 : 0,
     };
-    if (parentKind === 'cemetery') w.cemetery = 0;
-    if (parentKind === 'sunclear') w.sunclear = 0;
+    if (clearingKind(parentKind)) w[parentKind] = 0; // don't stack two clearings
     let sum = 0; for (const k in w) sum += w[k];
     let x = r.float() * sum;
     for (const k in w) { x -= w[k]; if (x <= 0) return k; }
@@ -150,12 +173,14 @@ export class World {
   _ensureChildren(seg) {
     if (seg.children.length || seg.sealed) return;
     const r = seg.rng;
-    const n = r.float() < 0.42 ? 2 : (r.float() < 0.06 ? 3 : 1);
+    // denser branching — more real forks, the occasional three-way
+    const roll = r.float();
+    const n = roll < 0.52 ? 2 : (roll < 0.60 ? 3 : 1);
     const base = seg.endHeading;
     let headings;
-    if (n === 1) headings = [base + r.gauss() * 0.45];
-    else if (n === 2) headings = [base - r.range(0.5, 0.95), base + r.range(0.5, 0.95)];
-    else headings = [base - r.range(0.8, 1.1), base + r.gauss() * 0.2, base + r.range(0.8, 1.1)];
+    if (n === 1) headings = [base + r.gauss() * 0.42];
+    else if (n === 2) headings = [base - r.range(0.5, 1.05), base + r.range(0.5, 1.05)];
+    else headings = [base - r.range(0.85, 1.2), base + r.gauss() * 0.22, base + r.range(0.85, 1.2)];
     for (const h of headings) this._spawnSegment(seg, h);
     if (n > 1) this.flora.buildSignpost(seg, headings);
   }
@@ -323,6 +348,10 @@ export class World {
       let target = this.sCur - SEAL_TRAIL;
       // the forest is patient: linger too long and it closes in anyway, to 7 m
       if (this.idleTime > 40 && sp.s < this.sCur - 7) target = Math.max(target, sp.s + 0.22 * dt);
+      // ...and impatient when you balk at something ahead: it herds you onward, to 5 m
+      if (this.forwardUrge > 0 && sp.s < this.sCur - 5) {
+        target = Math.max(target, sp.s + this.forwardUrge * 1.7 * dt);
+      }
       if (target > sp.s) {
         sp.s = Math.min(target, sp.s + Math.max(1.5, (target - sp.s) * 2.4) * dt);
         while (this.lastSealSpawnS + 1.2 < sp.s) {

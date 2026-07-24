@@ -92,6 +92,19 @@ export class Flora {
       blending: THREE.AdditiveBlending, depthWrite: false,
     });
     this.woodMat = new THREE.MeshLambertMaterial({ color: 0x3a3028 });
+    // pale dead timber for the deadwood snag fields — bone against the dark
+    this.deadBarkMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    // still black water for the bog
+    this.waterMat = new THREE.MeshLambertMaterial({ color: 0x0a1512, transparent: true, opacity: 0.85 });
+    this.reedMat = new THREE.MeshLambertMaterial({ color: 0x3a3a22, side: THREE.DoubleSide });
+    this.reedGeo = crossPlanesGeo();
+
+    // per-biome ground base colour (multiplies the shared dirt texture)
+    this.GROUND_BASE = {
+      corridor: [0.72, 0.68, 0.55], cave: [0.55, 0.52, 0.46], thicket: [0.5, 0.55, 0.4],
+      cemetery: [0.7, 0.74, 0.6], sunclear: [0.76, 0.9, 0.62], carspot: [0.72, 0.68, 0.55],
+      ruin: [0.62, 0.66, 0.56], bog: [0.34, 0.42, 0.36], deadwood: [0.66, 0.68, 0.72],
+    };
   }
 
   // ---------- per-segment build ----------
@@ -103,35 +116,47 @@ export class Flora {
     this.scene.add(group);
     const L = seg.samples.length;
     const isCave = seg.kind === 'cave';
+    const isThicket = seg.kind === 'thicket';
+    const isDead = seg.kind === 'deadwood';
+    const dense = isCave || isThicket;      // foliage/rock crowds the path
 
     this._buildGround(seg, world, group);
 
     // plan instances first, then bake exact-count InstancedMeshes
     const trunks = [], canopies = [], branches = [], shrubs = [], roots = [];
-    const treeStep = isCave ? 1.25 : 1.7;
-    const spread = isCave ? 3.5 : 6.5;
+    const treeStep = isThicket ? 1.05 : isCave ? 1.25 : isDead ? 1.5 : 1.7;
+    const spread = dense ? 3.2 : isDead ? 5.5 : 6.5;
     seg.eyeSpots = [];
 
     for (let s = 2; s < L - 1.5; s += treeStep * rng.range(0.75, 1.3)) {
       const halfW = world.halfWidthAt(seg, s);
       const inClearing = seg.clearing && Math.abs(s - seg.clearing.s) < seg.clearing.r + 2;
       for (const side of [-1, 1]) {
-        const n = inClearing ? 1 : rng.int(1, 2);
+        const n = inClearing ? 1 : (isThicket ? rng.int(2, 3) : rng.int(1, 2));
         for (let k = 0; k < n; k++) {
-          const off = halfW + 0.7 + Math.min(spread + 1.5, -Math.log(1 - rng.float()) * (spread * 0.45));
+          const off = halfW + (isThicket ? 0.35 : 0.7) + Math.min(spread + 1.5, -Math.log(1 - rng.float()) * (spread * 0.45));
           const p = world.pointAt(seg, s + rng.gauss() * 0.7, side * off);
-          const h = isCave ? rng.range(4, 6.5) : rng.range(6.5, 11.5);
-          const rad = rng.range(0.75, 1.7) * (isCave ? 0.8 : 1);
-          const lean = (off < halfW + 2.4 ? rng.range(0.04, isCave ? 0.3 : 0.14) : rng.range(-0.05, 0.08));
-          trunks.push({ p, h, rad, rotY: rng.float() * TAU, lean, leanDir: -side, s, tint: rng.range(0.75, 1.15) });
-          if (!isCave || rng.chance(0.5)) {
+          const h = dense ? rng.range(4, 6.5) : isDead ? rng.range(7, 12.5) : rng.range(6.5, 11.5);
+          const rad = rng.range(0.75, 1.7) * (dense ? 0.8 : 1) * (isDead ? 0.7 : 1);
+          const lean = (off < halfW + 2.4 ? rng.range(0.04, dense ? 0.3 : 0.14) : rng.range(-0.05, 0.08));
+          trunks.push({ p, h, rad, rotY: rng.float() * TAU, lean, leanDir: -side, s, tint: rng.range(0.75, 1.15), pale: isDead });
+          // deadwood: bare skeletal limbs instead of leaves
+          if (isDead) {
+            for (let b = 0; b < rng.int(2, 4); b++) {
+              const y0 = rng.range(h * 0.4, h * 0.92);
+              const a0 = world.pointAt(seg, s, side * off); a0.y = y0;
+              const reach = rng.range(1, 2.4), az = rng.float() * TAU;
+              branches.push({ a: a0, b: a0.clone().add(new THREE.Vector3(Math.cos(az) * reach, rng.range(0.3, 1.4), Math.sin(az) * reach)), thin: true });
+            }
+          } else if (!isCave || rng.chance(0.5)) {
             canopies.push({
               p: p.clone().add(new THREE.Vector3(rng.gauss() * 0.8, h * rng.range(0.82, 0.98), rng.gauss() * 0.8)),
-              sc: rng.range(1.7, 3.1), tint: rng.range(0.6, 1.1), rotY: rng.float() * TAU,
+              sc: rng.range(1.7, 3.1) * (isThicket ? 1.25 : 1), tint: rng.range(0.6, 1.1), rotY: rng.float() * TAU,
             });
           }
           // eye candidates: near-wall trunks facing the path
-          if (off < halfW + 2.2 && seg.eyeSpots.length < 10 && rng.chance(0.35) && !inClearing) {
+          const eyeCap = isThicket ? 16 : 10;
+          if (off < halfW + 2.2 && seg.eyeSpots.length < eyeCap && rng.chance(isThicket ? 0.5 : 0.35) && !inClearing) {
             const ep = world.pointAt(seg, s, side * (off - rad * 0.16));
             ep.y = rng.range(1.15, 2.5);
             seg.eyeSpots.push({ pos: ep, s, side, used: false });
@@ -139,15 +164,18 @@ export class Flora {
         }
       }
       // overhead canopy — the forest closing over the path
-      const cover = isCave ? 1.0 : seg.kind === 'corridor' ? 0.55 : 0.3;
-      if (!inClearing && rng.chance(cover * 0.55)) {
-        const p = world.pointAt(seg, s, rng.gauss() * halfW * 0.5);
-        p.y = isCave ? rng.range(3.4, 4.4) : rng.range(5.4, 7.4);
-        canopies.push({ p, sc: rng.range(2.2, 3.4), tint: rng.range(0.45, 0.8), rotY: rng.float() * TAU });
+      const cover = isThicket ? 1.35 : isCave ? 1.0 : isDead ? 0 : seg.kind === 'corridor' ? 0.55 : 0.3;
+      const nCanopy = isThicket ? 2 : 1;
+      for (let cc = 0; cc < nCanopy; cc++) {
+        if (!inClearing && rng.chance(cover * 0.55)) {
+          const p = world.pointAt(seg, s, rng.gauss() * halfW * 0.6);
+          p.y = isThicket ? rng.range(3.2, 4.8) : isCave ? rng.range(3.4, 4.4) : rng.range(5.4, 7.4);
+          canopies.push({ p, sc: rng.range(2.2, 3.6), tint: rng.range(0.45, 0.8), rotY: rng.float() * TAU });
+        }
       }
       // knitting branches across the path
-      if (!inClearing && rng.chance(isCave ? 0.5 : 0.22)) {
-        const y = isCave ? rng.range(2.4, 3.2) : rng.range(2.9, 4.2);
+      if (!inClearing && rng.chance(isThicket ? 0.62 : isCave ? 0.5 : 0.22)) {
+        const y = dense ? rng.range(2.2, 3.2) : rng.range(2.9, 4.2);
         const a = world.pointAt(seg, s, -(halfW + rng.range(0, 0.8)));
         const b = world.pointAt(seg, s + rng.gauss() * 1.2, halfW + rng.range(0, 0.8));
         a.y = y + rng.gauss() * 0.4; b.y = y + rng.gauss() * 0.4;
@@ -227,13 +255,16 @@ export class Flora {
       group.add(m);
       return m;
     };
-    const cem = seg.kind === 'cemetery';
     const gRng = seg.rng.fork(5);
+    const biomeBase = this.GROUND_BASE[seg.kind] || this.GROUND_BASE.corridor;
     mk(
       (i) => world.halfWidthAt(seg, i) + FR,
       (i) => {
         const inClr = seg.clearing && Math.abs(i - seg.clearing.s) < seg.clearing.r + 3;
-        const base = inClr ? (cem ? [0.8, 0.86, 0.68] : [0.76, 0.9, 0.62]) : [0.72, 0.68, 0.55];
+        // clearings read a touch paler/greener; deadwood & bog keep their cast
+        const base = inClr && seg.kind !== 'bog' && seg.kind !== 'deadwood'
+          ? biomeBase.map((c, k) => c * (k === 1 ? 1.14 : 1.05))
+          : biomeBase;
         const v = () => base.map((c) => c * gRng.range(0.75, 1.1));
         return [v(), v()];
       },
@@ -263,11 +294,14 @@ export class Flora {
       return m;
     };
     const col = new THREE.Color();
-    mkInst(this.trunkGeo, this.barkMat, plan.trunks, (it) => {
+    const pale = plan.trunks.length && plan.trunks[0].pale;
+    mkInst(this.trunkGeo, pale ? this.deadBarkMat : this.barkMat, plan.trunks, (it) => {
       D.position.copy(it.p);
       D.rotation.set(it.lean * (it.leanDir || 1), it.rotY, it.lean * 0.3);
       D.scale.set(it.rad, it.h, it.rad);
-    }, (it) => col.setRGB(0.52 * it.tint, 0.44 * it.tint, 0.36 * it.tint));
+    }, (it) => (pale
+      ? col.setRGB(0.74 * it.tint, 0.72 * it.tint, 0.66 * it.tint)
+      : col.setRGB(0.52 * it.tint, 0.44 * it.tint, 0.36 * it.tint)));
     mkInst(this.canopyGeo, this.canopyMat, plan.canopies, (it) => {
       D.position.copy(it.p); D.rotation.set(0, it.rotY, 0);
       D.scale.setScalar(it.sc);
@@ -312,6 +346,39 @@ export class Flora {
     disc.scale.setScalar(radius * 1.7);
     group.add(shaft, disc);
     return { shaft, disc, pos: p };
+  }
+
+  // still black water for the bog — a shallow pool the path skirts
+  buildWaterPatch(center, radius, group) {
+    const geo = new THREE.CircleGeometry(radius, 20);
+    geo.rotateX(-Math.PI / 2);
+    geo.userData.perSeg = true;
+    const m = new THREE.Mesh(geo, this.waterMat);
+    m.position.set(center.x, 0.04, center.z);
+    group.add(m);
+    return m;
+  }
+
+  // a stand of reeds around a wet patch
+  buildReedPatch(center, radius, n, rng, group) {
+    if (n <= 0) return;
+    const m = new THREE.InstancedMesh(this.reedGeo, this.reedMat, n);
+    const D = this.dummy, col = new THREE.Color();
+    for (let i = 0; i < n; i++) {
+      const a = rng.float() * TAU, r = radius * (0.6 + rng.float() * 0.7);
+      D.position.set(center.x + Math.cos(a) * r, 0, center.z + Math.sin(a) * r);
+      D.rotation.set(rng.gauss() * 0.14, rng.float() * TAU, rng.gauss() * 0.14);
+      const sc = rng.range(0.7, 1.5);
+      D.scale.set(sc * 0.5, sc, sc * 0.5);
+      D.updateMatrix(); m.setMatrixAt(i, D.matrix);
+      const t = rng.range(0.6, 1.1);
+      m.setColorAt(i, col.setRGB(0.32 * t, 0.36 * t, 0.2 * t));
+    }
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    m.frustumCulled = false;
+    group.add(m);
+    return m;
   }
 
   // ---------- seal walls: the forest knitting shut ----------

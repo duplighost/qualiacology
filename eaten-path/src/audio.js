@@ -240,6 +240,61 @@ export class GameAudio {
         if (i < 130) d[i] += (R() * 2 - 1) * 0.4 * (1 - i / 130);
       }
     });
+    // soft footfall on dirt/leaves (the runner, the unseen steps)
+    this.footBuf = this._mono(0.13, (d, sr, n) => {
+      let lpv = 0;
+      for (let i = 0; i < n; i++) {
+        const env = Math.pow(1 - i / n, 2.4) * (i < 90 ? i / 90 : 1);
+        const w = R() * 2 - 1;
+        lpv = lpv + 0.18 * (w - lpv);
+        d[i] = (lpv * 0.7 + Math.sin(2 * Math.PI * 70 * (i / sr)) * 0.3) * env * 0.5;
+      }
+    });
+    // a breath — panting, ragged
+    this.pantBuf = this._mono(0.42, (d, sr, n) => {
+      let lpv = 0;
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const inhale = t < 0.18 ? Math.sin((Math.PI * t) / 0.18) : t > 0.24 && t < 0.42 ? Math.sin((Math.PI * (t - 0.24)) / 0.18) * 0.7 : 0;
+        const w = R() * 2 - 1;
+        lpv = lpv + 0.08 * (w - lpv);
+        d[i] = lpv * inhale * 0.5;
+      }
+    });
+    // foliage crash — something bursting through brush
+    this.brushBuf = this._mono(0.4, (d, sr, n) => {
+      let lpv = 0;
+      for (let i = 0; i < n; i++) {
+        const env = Math.pow(1 - i / n, 1.5);
+        const w = R() * 2 - 1;
+        lpv = lpv + 0.3 * (w - lpv);
+        d[i] = lpv * env * 0.7;
+      }
+      for (let k = 0; k < 20; k++) {
+        const c = Math.floor(R() * n * 0.7);
+        for (let j = 0; j < 40 && c + j < n; j++) d[c + j] += (R() * 2 - 1) * 0.5 * Math.pow(1 - j / 40, 2);
+      }
+    });
+    // a whisper — sibilant, wordless, close
+    this.whisperBuf = this._mono(1.4, (d, sr, n) => {
+      let bp = 0, bp2 = 0;
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const env = Math.sin(Math.PI * Math.min(1, t / 1.4)) ** 1.5;
+        const gate = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3.5 * t + Math.sin(t * 11));
+        const w = R() * 2 - 1;
+        bp = bp + 0.5 * (w - bp); bp2 = bp2 + 0.5 * (bp - bp2); // rough bandpass ~sss
+        d[i] = (bp - bp2) * gate * env * 0.5;
+      }
+    });
+    // a frog, for the bog
+    this.frogBuf = this._mono(0.3, (d, sr, n) => {
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const grr = Math.max(0, Math.sin(2 * Math.PI * 30 * t)) > 0.4 ? 1 : 0;
+        d[i] = Math.sin(2 * Math.PI * 180 * t) * grr * Math.sin(Math.PI * t / 0.3) * 0.3;
+      }
+    });
   }
 
   _panner(pos) {
@@ -327,6 +382,19 @@ export class GameAudio {
     if (this._wailT <= 0) {
       this._wailT = 100 + Math.random() * 160;
       if (tier >= 1) this.distantCall(playerPos);
+    }
+
+    // the bog has its own chorus
+    if (this.biomeKind === 'bog') {
+      this._frogAcc = (this._frogAcc || 0) + dt * 1.6;
+      while (this._frogAcc > 1) {
+        this._frogAcc -= 1;
+        const az = Math.random() * Math.PI * 2, dist = 5 + Math.random() * 16;
+        this._play(this.frogBuf, {
+          pos: { x: playerPos.x + Math.cos(az) * dist, y: 0.3, z: playerPos.z + Math.sin(az) * dist },
+          gain: 0.5 + Math.random() * 0.4, rate: 0.8 + Math.random() * 0.5, verb: 0.2,
+        });
+      }
     }
   }
 
@@ -433,6 +501,31 @@ export class GameAudio {
     const az = Math.random() * Math.PI * 2, dist = 40 + Math.random() * 30;
     const p = playerPos || { x: 0, z: 0 };
     this._play(this.wail, { pos: { x: p.x + Math.cos(az) * dist, y: 3, z: p.z + Math.sin(az) * dist }, gain: 0.9, rate: 0.85 + Math.random() * 0.2, verb: 0.8 });
+  }
+
+  // ---- the things ahead: steps, breath, brush, whispers, a bell ----
+  footfall(pos, running) {
+    this._play(this.footBuf, { pos, gain: running ? 0.5 : 0.34, rate: 0.9 + Math.random() * 0.2, verb: 0.2 });
+  }
+  panting(pos) { this._play(this.pantBuf, { pos, gain: 0.4, rate: 0.95 + Math.random() * 0.12, verb: 0.25 }); }
+  brushCrash(pos) { this._play(this.brushBuf, { pos, gain: 0.7, rate: 0.9 + Math.random() * 0.2, verb: 0.3 }); }
+  whisper(pos) { this._play(this.whisperBuf, { pos, gain: 0.5, rate: 0.92 + Math.random() * 0.12, verb: 0.6 }); }
+  bell(pos) {
+    if (!this.ready) return;
+    const ctx = this.ctx;
+    // a cracked distant toll — a few inharmonic partials
+    for (let k = 0; k < 3; k++) {
+      const t0 = ctx.currentTime + k * (1.6 + Math.random() * 0.6);
+      for (const [f, g0] of [[196, 0.09], [196 * 2.76, 0.05], [196 * 5.4, 0.03]]) {
+        const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f * (0.99 + Math.random() * 0.02);
+        const g = ctx.createGain(); g.gain.setValueAtTime(0, t0);
+        g.gain.linearRampToValueAtTime(g0, t0 + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.6);
+        const p = this._panner(pos);
+        o.connect(g).connect(p).connect(this.master); g.connect(this.verb); // post-envelope send, or the toll drones
+        o.start(t0); o.stop(t0 + 2.7);
+      }
+    }
   }
 
   tvStatic(pos, on, key = 'tv') {

@@ -28,10 +28,15 @@ renderer.setPixelRatio(1);
 const scene = new THREE.Scene();
 const FOG_COLORS = {
   corridor: new THREE.Color(0x0a0e0b), cave: new THREE.Color(0x060807),
-  cemetery: new THREE.Color(0x0c1016), sunclear: new THREE.Color(0x0e120c),
-  carspot: new THREE.Color(0x0a0e0b),
+  thicket: new THREE.Color(0x080b08), cemetery: new THREE.Color(0x0c1016),
+  sunclear: new THREE.Color(0x0e120c), carspot: new THREE.Color(0x0a0e0b),
+  ruin: new THREE.Color(0x0b0e11), bog: new THREE.Color(0x0c110e), deadwood: new THREE.Color(0x0f1216),
 };
-const FOG_DENSITY = { corridor: 0.055, cave: 0.088, cemetery: 0.034, sunclear: 0.04, carspot: 0.052 };
+const FOG_DENSITY = {
+  corridor: 0.055, cave: 0.088, thicket: 0.08, cemetery: 0.034, sunclear: 0.04,
+  carspot: 0.052, ruin: 0.05, bog: 0.072, deadwood: 0.04,
+};
+const BIOME_EXPO = { cave: 1.18, thicket: 0.95, bog: 0.92, deadwood: 1.07, ruin: 1.0 };
 scene.fog = new THREE.FogExp2(0x0a0e0b, 0.055);
 scene.background = scene.fog.color;
 
@@ -107,9 +112,9 @@ player.yaw = Math.atan2(-t0.x, -t0.z);
 
 // ---- OSD ----
 const osd = $('osd');
-const osdRec = $('osd-rec'), osdBatt = $('osd-batt'), osdDate = $('osd-date'), osdTime = $('osd-time'), osdWarn = $('osd-warn');
+const osdRec = $('osd-rec'), osdBatt = $('osd-batt'), osdDate = $('osd-date'), osdTime = $('osd-time'), osdWarn = $('osd-warn'), osdCount = $('osd-count');
 const T0 = new Date(1996, 9, 4, 3, 12, 0); // OCT 4 1996, 3:12 AM
-let elapsed = 0, battery = 0.82, recBlink = 0;
+let elapsed = 0, battery = 0.82, recBlink = 0, counterVal = 0;
 let anomaly = null; // {kind, t}
 let dewTimer = 140 + Math.random() * 200, dewOn = 0; // night condensation, now and then
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -140,6 +145,9 @@ function updateOSD(dt) {
   osdRec.innerHTML = recBlink % 1.6 < 1.1 ? recStr : '&nbsp;&nbsp;REC';
   osdDate.textContent = dateStr;
   osdTime.textContent = timeStr;
+  // tape counter — a number that only ever climbs; you are always getting deeper
+  counterVal = Math.max(counterVal, world.depth);
+  osdCount.textContent = String(Math.floor(counterVal)).padStart(4, '0');
   const bars = battery > 0.66 ? 3 : battery > 0.33 ? 2 : 1;
   osdBatt.innerHTML = '&#9646;'.repeat(bars) + '&#9647;'.repeat(4 - bars);
   dewTimer -= dt;
@@ -206,8 +214,7 @@ function tick(dt) {
     scene.fog.density = fogDensityCur;
     scene.fog.color.copy(fogColorCur);
 
-    let expo = 1;
-    if (kind === 'cave') expo = 1.18;
+    let expo = BIOME_EXPO[kind] || 1;
     if (info.seg.sunData && info.seg.sunData.armed) {
       const dc = Math.hypot(player.pos.x - info.seg.sunData.center.x, player.pos.z - info.seg.sunData.center.z);
       if (dc < info.seg.sunData.r + 6) expo = 0.8;
@@ -227,6 +234,15 @@ function tick(dt) {
     }
     moteGeo.attributes.position.needsUpdate = true;
     floor.position.x = pp.x; floor.position.z = pp.z;
+
+    // bog will-o'-wisps drift over the black water
+    for (const seg of [info.seg, ...info.seg.children, info.seg.parent]) {
+      if (!seg || !seg.bogWisps) continue;
+      for (const w of seg.bogWisps) {
+        w.ph += dt * 0.55;
+        w.mesh.position.set(w.bx + Math.sin(w.ph) * 0.5, w.by + Math.sin(w.ph * 1.3) * 0.28, w.bz + Math.cos(w.ph * 0.7) * 0.5);
+      }
+    }
 
     updateOSD(dt);
   }
@@ -272,11 +288,23 @@ if (TEST) {
         total: world.segs.size,
         sealPoint: { segId: world.sealPoint.seg.id, s: world.sealPoint.s },
         children: lastInfo.seg.children.map((c) => ({ id: c.id, kind: c.kind })),
+        ahead: events.ahead ? events.ahead.type : null,
+        runner: events.runner ? events.runner.kind : null,
+        foot: !!events.foot, tier: world.tier(),
       };
     },
+    kindsSeen() { return [...new Set([...world.segs.values()].map((s) => s.kind))]; },
     faceForward() {
-      const t = world.tangentAt(lastInfo.seg, Math.min(lastInfo.seg.samples.length, lastInfo.s + 1));
-      player.yaw = Math.atan2(-t.x, -t.z);
+      // steer like a player: aim into the next branch when near a fork
+      const seg = lastInfo.seg;
+      let aim;
+      if (lastInfo.s > seg.samples.length - 12 && seg.children.length) {
+        const child = seg.children.find((c) => !c.sealed) || seg.children[0];
+        aim = world.pointAt(child, Math.min(5, child.samples.length));
+      } else {
+        aim = world.pointAt(seg, Math.min(seg.samples.length, lastInfo.s + 4));
+      }
+      player.yaw = Math.atan2(-(aim.x - player.pos.x), -(aim.z - player.pos.z));
     },
     stats() {
       return {
@@ -298,6 +326,19 @@ if (TEST) {
       if (name === 'sunsnap' && lastInfo.seg.sunData) {
         lastInfo.seg.sunData.linger = 99;
         return true;
+      }
+      if (name === 'sentinel') {
+        events.ahead = null; events.aheadTimer = 0; events.prevDepth = world.depth - 1;
+        events._tryAhead(0.016, player.pos); return !!events.ahead;
+      }
+      if (name === 'runner') {
+        events.runner = null; events.runnerTimer = 0; events.prevDepth = world.depth - 1;
+        events._tryRunner(0.016); return !!events.runner;
+      }
+      if (name === 'footprints') {
+        if (events.foot) { events.foot.t = 1e9; events._updateFootprints(0.016); } // park old trail's instances first
+        events.footTimer = 0; events.prevDepth = world.depth - 1;
+        events._tryFootprints(0.016); return !!events.foot;
       }
       return false;
     },
