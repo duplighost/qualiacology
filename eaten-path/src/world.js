@@ -77,6 +77,7 @@ export class World {
     this.depth = 0;               // total metres travelled forward (arc)
     this.since = { cemetery: 0, sunclear: 0, cave: 0, carspot: 0, ruin: 0, bog: 0, deadwood: 0, thicket: 0 };
     this.forwardUrge = 0;         // events push this up to make the forest herd you onward
+    this.spawnCount = 0;          // how many segments have ever been generated
     // callbacks (wired by main/events)
     this.onSegEnter = null; this.onCommit = null; this.onSealSpawn = null;
     this._v = new THREE.Vector3(); this._v2 = new THREE.Vector3();
@@ -102,6 +103,13 @@ export class World {
   _chooseKind(parentKind) {
     const t = this.tier(), s = this.since, r = this.rng;
     const clearingKind = (k) => KINDS[k].clearing || k === 'carspot';
+    // The opening must not be a minute of plain corridor. Every branch off the
+    // first fork is somewhere strange — which one varies by seed, so the first
+    // choice you make is already a choice between two unlike places.
+    if (this.spawnCount <= 4) {
+      const opener = ['thicket', 'ruin', 'bog', 'deadwood', 'cemetery'].filter((k) => k !== parentKind);
+      return opener[r.int(0, opener.length - 1)];
+    }
     // hard single-biome starvation guards — nothing waits forever
     if (s.cemetery >= r.int(7, 11)) return 'cemetery';
     if (s.ruin >= r.int(6, 10)) return 'ruin';
@@ -135,12 +143,15 @@ export class World {
 
   _spawnSegment(parent, heading, kindForce) {
     const id = NEXT_ID++;
+    this.spawnCount++;
     const rng = new RNG(hash2(this.rng.seed, id * 7919));
     const kind = kindForce || this._chooseKind(parent ? parent.kind : 'corridor');
     const K = KINDS[kind];
     for (const k in this.since) this.since[k] = (k === kind) ? 0 : this.since[k] + 1;
 
-    const len = rng.range(K.lenMin, K.lenMax);
+    // the very first stretch is short — you reach your first fork in seconds,
+    // not half a minute, and the world starts branching immediately
+    const len = parent ? rng.range(K.lenMin, K.lenMax) : rng.range(24, 32);
     const start = parent ? parent.samples.pos[parent.samples.length].clone() : new THREE.Vector3(0, 0, 0);
     const ctrl = [start.clone()];
     let h = heading, p = start.clone();

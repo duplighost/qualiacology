@@ -50,9 +50,12 @@ export class Events {
     this.figRun = this._makeFigure();      // the one that runs
     this.ahead = null;                     // active ahead-threat state
     this.runner = null;                    // active runner state
-    this.aheadTimer = this.rng.range(20, 40);
-    this.runnerTimer = this.rng.range(26, 50);
-    this.footTimer = this.rng.range(16, 34);
+    // First-encounter timers are short on purpose: footprints lead you on within
+    // seconds, something is standing down the path soon after, and then the
+    // first thing runs. After these fire, the recurring timers take over.
+    this.aheadTimer = this.rng.range(11, 17);
+    this.runnerTimer = this.rng.range(17, 24);
+    this.footTimer = this.rng.range(5, 9);
     this.footPool = this._makeFootprintPool();
     this.foot = null;                      // active footprint trail
     this.prevDepth = 0;
