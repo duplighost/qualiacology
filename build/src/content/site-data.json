@@ -83,6 +83,19 @@
       "actionLabel": "Play Rocket Shoes"
     },
     {
+      "slug": "party-animal",
+      "title": "PARTY ANIMAL",
+      "descriptor": "Piñata brawler",
+      "group": "action",
+      "featured": true,
+      "image": "/assets/games/party-animal-card-clean.webp",
+      "alt": "A neon piñata swinging through party guests on a glossy dance floor",
+      "summary": "You're the piñata, and the piñata fights back. Five party games, a boss made of cake, and two ways to leave when it's over.",
+      "metaDescription": "PARTY ANIMAL is a top-down browser brawler: you're the piñata, the party wants a swing, and the piñata fights back.",
+      "controls": "WASD + mouse · click swing · Space dash",
+      "actionLabel": "Play PARTY ANIMAL"
+    },
+    {
       "slug": "vesperbane",
       "title": "Vesperbane",
       "descriptor": "Gothic action platformer",
@@ -141,7 +154,7 @@
       "title": "Marrow",
       "descriptor": "First-person horror",
       "group": "horror",
-      "featured": true,
+      "featured": false,
       "image": "/assets/games/marrow-card-clean.webp",
       "alt": "A lantern-carrying figure on a black wooded path toward a distant house",
       "summary": "A black wood, a haunted house, a graveyard chapel — and something that paces you through all three. Headphones on.",

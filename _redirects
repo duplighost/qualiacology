@@ -87,6 +87,10 @@
 /evensong.html /evensong/                301!
 /sing          /evensong/                302
 /cantor        /evensong/                302
+/party-animal      /party-animal/index.html  301!
+/party-animal.html /party-animal/            301!
+/party             /party-animal/            302
+/pinata            /party-animal/            302
 
 # --- boss codex ---
 /codex          /no-moon/codex/           302
