@@ -59,12 +59,15 @@ function jsonLd(html) {
   return JSON.parse(match[1]);
 }
 
-assert(data.games.length === 16, "Canonical game total is not 16");
+assert(data.games.length === 17, "Canonical game total is not 17");
 assert(data.albums.length === 10, "Canonical album total is not 10");
 assert(data.games.filter((item) => item.featured).length === 6, "Featured game total is not 6");
 assert(data.albums.filter((item) => item.featured).length === 3, "Featured album total is not 3");
 assert(!existsSync(join(outputRoot, "blackthorn-manor")), "Blackthorn directory must not exist");
 assert(!existsSync(join(outputRoot, "assets", "brand", "pikachu-forest.webp")), "Replaced hero asset must not remain in deploy");
+assert(!existsSync(join(outputRoot, "book.html")), "Retired book page must not exist");
+assert(!existsSync(join(outputRoot, "this-helped-someone")), "Retired book route must not exist");
+assert(!existsSync(join(outputRoot, "assets", "book")), "Retired book assets must not exist");
 
 for (const page of generatedPages) {
   assert(exactPathExists(page), `Missing generated page with exact case: ${page}`);
@@ -83,6 +86,13 @@ const home = read("index.html");
 const gamesPage = read(join("games", "index.html"));
 const musicPage = read(join("music", "index.html"));
 const sitemap = read("sitemap.xml");
+const publicHubText = [home, read(join("psychopharmacology", "index.html")), sitemap].join("\n").toLowerCase();
+assert(!publicHubText.includes("this helped someone"), "Retired book title remains in public hub");
+assert(!publicHubText.includes("book.html"), "Retired book URL remains in public hub");
+assert(!publicHubText.includes("ways of knowing converge"), "Obsolete convergence copy remains in public hub");
+assert(!publicHubText.includes("not diagnosis"), "Obsolete diagnosis disclaimer remains in public hub");
+assert(!publicHubText.includes("1st &amp; 3rd tuesdays"), "Unrelated NAMI schedule remains in the server section");
+assert(!publicHubText.includes("gives a shit"), "Homepage metadata or early copy still contains the removed swear");
 
 assert((home.match(/data-catalog-game="/g) || []).length === 6, "Homepage must feature six games");
 assert((home.match(/data-catalog-album="/g) || []).length === 3, "Homepage must feature three releases");

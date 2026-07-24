@@ -701,8 +701,9 @@ p {
 
 .hero-art img {
   width: 100%;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
+  object-position: center;
 }
 
 .hero-art figcaption {
@@ -785,13 +786,14 @@ p {
   line-height: 0.98;
 }
 
-/* "Psychopharmacology" is one unbreakable 18ch word — it sets its own ceiling. */
 #community .section-heading h2 {
-  font-size: clamp(1.9rem, 5.6vw, 3.9rem);
+  max-width: 19ch;
+  font-size: clamp(2rem, 5.6vw, 4rem);
 }
 
 body[data-page="psych"] .subhero h1 {
-  font-size: clamp(2.2rem, 9.5vw, 6.9rem);
+  max-width: 14ch;
+  font-size: clamp(2.55rem, 8.4vw, 6.5rem);
 }
 
 .section-heading-copy {
@@ -806,30 +808,42 @@ body[data-page="psych"] .subhero h1 {
   margin-top: 1.25rem;
 }
 
-/* Psychopharmacology feature: a manifesto over a ledger, not a panel. */
-.psych-feature {
+/* The server is translated from the tall community poster into native,
+   responsive site elements instead of squeezing the poster into a side rail. */
+.server-pillars {
   display: grid;
+  gap: 1.75rem;
+}
+
+.server-pillar {
+  position: relative;
+  min-width: 0;
+  padding: 1.45rem 0 0;
   border-top: 1px solid var(--line);
-  gap: 1.5rem;
 }
 
-.psych-manifesto {
-  padding-top: clamp(1.5rem, 4vw, 2.5rem);
-}
-
-.psych-manifesto blockquote {
-  max-width: 26ch;
-  margin-bottom: 1.5rem;
-  color: var(--text);
+.pillar-number {
+  display: block;
+  margin-bottom: 1.2rem;
+  color: var(--wing);
   font-family: var(--font-display);
-  font-size: clamp(1.55rem, 4.8vw, 2.9rem);
-  font-weight: 600;
-  letter-spacing: -0.04em;
-  line-height: 1.12;
+  font-size: 1.45rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
 }
 
-.psych-manifesto p {
-  max-width: 43rem;
+.server-pillar h3 {
+  margin-bottom: 0.75rem;
+  font-size: clamp(1.35rem, 4vw, 1.9rem);
+}
+
+.server-pillar p {
+  max-width: 34rem;
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
 }
 
 .community-facts {
@@ -839,7 +853,13 @@ body[data-page="psych"] .subhero h1 {
   list-style: none;
 }
 
+.community-facts-inline {
+  margin-top: clamp(2.4rem, 5vw, 3.5rem);
+  border-top: 1px solid var(--line-bright);
+}
+
 .community-facts li {
+  min-width: 0;
   padding: 1.25rem 1.5rem 1.25rem 0;
   border-bottom: 1px solid var(--line);
 }
@@ -865,13 +885,23 @@ body[data-page="psych"] .subhero h1 {
   font-size: 0.9rem;
 }
 
-.safety-line {
-  margin: 1.5rem 0 0;
-  padding: 1rem 1.1rem;
-  border-left: 3px solid var(--amber);
-  background: #15130f;
-  color: #f2dfc1;
-  font-size: 0.9rem;
+.community-actions {
+  margin-top: 1.4rem;
+}
+
+.community-cta {
+  display: grid;
+  margin-top: clamp(2.75rem, 6vw, 4.5rem);
+  padding-top: clamp(1.5rem, 4vw, 2.25rem);
+  border-top: 1px solid var(--line-bright);
+  gap: 1.4rem;
+}
+
+.community-cta h2 {
+  max-width: 18ch;
+  margin-bottom: 0;
+  font-size: clamp(2rem, 6vw, 3.8rem);
+  letter-spacing: -0.055em;
 }
 
 .card-list,
@@ -1294,7 +1324,7 @@ body[data-page="psych"] .subhero h1 {
 .subhero-stat strong {
   color: var(--text);
   font-family: var(--font-display);
-  font-size: clamp(2.6rem, 9vw, 5.5rem);
+  font-size: clamp(2.6rem, 7.5vw, 4.75rem);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.06em;
   line-height: 1;
@@ -1340,39 +1370,6 @@ body[data-page="psych"] .subhero h1 {
   margin-bottom: 0;
   color: var(--muted);
   font-size: 0.92rem;
-}
-
-/* The book: a plate and its caption. */
-.book-feature {
-  display: grid;
-  border-top: 1px solid var(--line);
-  padding-top: clamp(1.5rem, 4vw, 2.5rem);
-  gap: clamp(1.5rem, 4vw, 3rem);
-}
-
-.book-visual {
-  border: 1px solid var(--line);
-  background: #090d12;
-}
-
-.book-visual img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.book-copy h2 {
-  margin-bottom: 1rem;
-  font-size: clamp(2rem, 6vw, 3.4rem);
-  letter-spacing: -0.05em;
-}
-
-.book-quote {
-  margin: 1.5rem 0;
-  padding-left: 1rem;
-  border-left: 3px solid var(--violet);
-  color: var(--text-soft);
-  font-size: 1.04rem;
 }
 
 /* The filter rail: a printed index tab bar, latched in the room's color. */
@@ -1608,21 +1605,32 @@ body[data-page="psych"] .subhero h1 {
   }
 
   .hero-art img {
-    aspect-ratio: 21 / 9;
+    aspect-ratio: 41 / 16;
   }
 
-  .psych-feature {
-    grid-template-columns: minmax(0, 1.15fr) minmax(21rem, 0.85fr);
-    gap: clamp(2rem, 5vw, 4rem);
+  .server-pillars {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(1.5rem, 3vw, 2.5rem);
+  }
+
+  .community-facts-inline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: clamp(1.5rem, 3vw, 2.5rem);
+  }
+
+  .community-facts-inline li {
+    border-bottom: 0;
+  }
+
+  .community-cta {
+    grid-template-columns: minmax(0, 1.2fr) auto;
+    align-items: end;
   }
 
   .subhero-grid {
     grid-template-columns: minmax(0, 1.35fr) minmax(15rem, 0.45fr);
   }
 
-  .book-feature {
-    grid-template-columns: minmax(20rem, 0.78fr) minmax(0, 1.22fr);
-  }
 
   .catalog-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

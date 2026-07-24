@@ -99,3 +99,9 @@
 /build/*        /404.html                 404!
 /AGENTS.md      /404.html                 404!
 /CLAUDE.md      /404.html                 404!
+
+# --- retired book project: no longer part of Qualiacology ---
+/book                    /404.html  404!
+/book.html               /404.html  404!
+/this-helped-someone     /404.html  404!
+/this-helped-someone/*   /404.html  404!

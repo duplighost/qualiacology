@@ -2,7 +2,7 @@
 
 Source generator for the shared Qualiacology **hub pages** — the homepage plus
 the `/psychopharmacology/`, `/games/`, and `/music/` index pages. Everything
-else (individual games, album pages, `book.html`, legacy redirects) lives in the
+else (individual games, album pages, and legacy redirects) lives in the
 repo root and is **not** generated here; the build only regenerates the four hub
 pages, their fingerprinted `assets/hub/` CSS/JS, and `sitemap.xml`, writing them
 into the repo root **in place**.

@@ -1,0 +1,305 @@
+// main.js — boot, wiring, camcorder OSD, and the frame loop.
+import * as THREE from 'three';
+import { RNG, clamp, damp, lerp } from './util.js';
+import { World } from './world.js';
+import { Flora } from './flora.js';
+import { Events } from './events.js';
+import { Player } from './player.js';
+import { GameAudio } from './audio.js';
+import { VHS } from './vhs.js';
+
+const params = new URLSearchParams(location.search);
+const TEST = params.get('test') === '1';
+const TEST_RUN = params.get('run') === '1';
+const SEED = Number(params.get('seed')) || 19961004;
+
+const $ = (id) => document.getElementById(id);
+
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: false, powerPreference: 'high-performance' });
+} catch (e) {
+  $('err').style.display = 'flex';
+  throw e;
+}
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setPixelRatio(1);
+
+const scene = new THREE.Scene();
+const FOG_COLORS = {
+  corridor: new THREE.Color(0x0a0e0b), cave: new THREE.Color(0x060807),
+  cemetery: new THREE.Color(0x0c1016), sunclear: new THREE.Color(0x0e120c),
+  carspot: new THREE.Color(0x0a0e0b),
+};
+const FOG_DENSITY = { corridor: 0.055, cave: 0.088, cemetery: 0.034, sunclear: 0.04, carspot: 0.052 };
+scene.fog = new THREE.FogExp2(0x0a0e0b, 0.055);
+scene.background = scene.fog.color;
+
+const camera = new THREE.PerspectiveCamera(72, 4 / 3, 0.1, 80);
+scene.add(camera);
+
+// lighting: moon-starved night, plus the camcorder's own weak lamp
+scene.add(new THREE.AmbientLight(0x3a4844, 1.0));
+const hemi = new THREE.HemisphereLight(0x2b3a48, 0x141008, 0.75);
+scene.add(hemi);
+const moon = new THREE.DirectionalLight(0x8fa0c0, 0.4);
+moon.position.set(30, 60, -20);
+scene.add(moon);
+const camLight = new THREE.SpotLight(0xf7e9d0, 220, 30, 0.66, 0.8, 1.6);
+camLight.position.set(0.12, -0.14, 0.05);
+camera.add(camLight);
+const camTarget = new THREE.Object3D();
+camTarget.position.set(0, -2.0, -8);
+camera.add(camTarget);
+camLight.target = camTarget;
+const nearFill = new THREE.PointLight(0x91a09a, 1.4, 6, 2);
+nearFill.position.set(0, 0, -0.4);
+camera.add(nearFill);
+
+// safety floor under everything (ribbons sit above it)
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(90, 24).rotateX(-Math.PI / 2),
+  new THREE.MeshLambertMaterial({ color: 0x241b12 }),
+);
+floor.position.y = -0.08;
+scene.add(floor);
+
+// dust motes in the camcorder lamp
+const MOTES = 110;
+const moteGeo = new THREE.BufferGeometry();
+const motePos = new Float32Array(MOTES * 3);
+const moteVel = new Float32Array(MOTES * 3);
+for (let i = 0; i < MOTES; i++) {
+  motePos[i * 3] = (Math.random() - 0.5) * 9;
+  motePos[i * 3 + 1] = Math.random() * 3.4;
+  motePos[i * 3 + 2] = (Math.random() - 0.5) * 9;
+  moteVel[i * 3] = (Math.random() - 0.5) * 0.06;
+  moteVel[i * 3 + 1] = -0.02 - Math.random() * 0.05;
+  moteVel[i * 3 + 2] = (Math.random() - 0.5) * 0.06;
+}
+moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({
+  color: 0xbfc8b8, size: 0.02, transparent: true, opacity: 0.4,
+  blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+}));
+motes.frustumCulled = false; // positions trail the player; the baked bounds never move
+scene.add(motes);
+
+// ---- systems ----
+const flora = new Flora(scene);
+const world = new World(scene, SEED, flora);
+const audio = new GameAudio();
+const vhs = new VHS(renderer);
+const player = new Player(camera, document.body);
+player.onStep = (surface, hurry, speed) => audio.step(surface, hurry, speed);
+
+const fx = {
+  glitch: (x) => vhs.glitch(x),
+  osdAnomaly: () => osdAnomaly(),
+};
+const events = new Events(scene, world, audio, fx);
+
+world.begin();
+const startInfo = world.updatePlayer(player.pos, 0.016, false);
+// face down the path: camera forward (-sin yaw, -cos yaw) must equal the tangent
+const t0 = world.tangentAt(startInfo.seg, 2);
+player.yaw = Math.atan2(-t0.x, -t0.z);
+
+// ---- OSD ----
+const osd = $('osd');
+const osdRec = $('osd-rec'), osdBatt = $('osd-batt'), osdDate = $('osd-date'), osdTime = $('osd-time'), osdWarn = $('osd-warn');
+const T0 = new Date(1996, 9, 4, 3, 12, 0); // OCT 4 1996, 3:12 AM
+let elapsed = 0, battery = 0.82, recBlink = 0;
+let anomaly = null; // {kind, t}
+let dewTimer = 140 + Math.random() * 200, dewOn = 0; // night condensation, now and then
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+function osdAnomaly() {
+  const kinds = ['year', 'dashes', 'err', 'date'];
+  anomaly = { kind: kinds[(Math.random() * kinds.length) | 0], t: 0.22 + Math.random() * 0.3 };
+}
+
+function updateOSD(dt) {
+  elapsed += dt;
+  battery = Math.max(0.05, battery - dt / 4200); // ~1%/42s — never quite dies
+  recBlink += dt;
+  if (anomaly) anomaly.t -= dt;
+  if (anomaly && anomaly.t <= 0) anomaly = null;
+
+  const d = new Date(T0.getTime() + elapsed * 1000);
+  let dateStr = `${MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, ' ')} ${d.getFullYear()}`;
+  let h = d.getHours() % 12 || 12;
+  let timeStr = `${h}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
+  let recStr = '<span class="dot">&#9679;</span> REC';
+  if (anomaly) {
+    if (anomaly.kind === 'year') dateStr = dateStr.replace('1996', '2093');
+    else if (anomaly.kind === 'dashes') timeStr = '-:--:-- --';
+    else if (anomaly.kind === 'err') recStr = '<span class="dot">&#9679;</span> ERR';
+    else if (anomaly.kind === 'date') dateStr = `${MONTHS[d.getMonth()]} 34 1996`;
+  }
+  osdRec.innerHTML = recBlink % 1.6 < 1.1 ? recStr : '&nbsp;&nbsp;REC';
+  osdDate.textContent = dateStr;
+  osdTime.textContent = timeStr;
+  const bars = battery > 0.66 ? 3 : battery > 0.33 ? 2 : 1;
+  osdBatt.innerHTML = '&#9646;'.repeat(bars) + '&#9647;'.repeat(4 - bars);
+  dewTimer -= dt;
+  if (dewTimer <= 0) { dewOn = 22 + Math.random() * 20; dewTimer = 220 + Math.random() * 260; }
+  if (dewOn > 0) dewOn -= dt;
+  if (battery < 0.15) { osdWarn.style.display = 'block'; osdWarn.textContent = 'BATT'; }
+  else if (dewOn > 0) { osdWarn.style.display = 'block'; osdWarn.textContent = 'DEW'; }
+  else osdWarn.style.display = 'none';
+}
+
+function layoutOSD() {
+  const r = vhs.frameRect(innerWidth, innerHeight);
+  osd.style.left = r.x + 'px';
+  osd.style.top = r.y + 'px';
+  osd.style.width = r.w + 'px';
+  osd.style.height = r.h + 'px';
+  osd.style.fontSize = Math.max(12, r.h / 24) + 'px';
+}
+
+// ---- title / pause flow ----
+let started = false;
+function start() {
+  if (started) return;
+  started = true;
+  $('title').style.display = 'none';
+  osd.style.display = 'block';
+  audio.init();
+  audio.biome('corridor');
+}
+if (!TEST) {
+  addEventListener('click', () => {
+    if (!started) start();
+    if (!player.locked) document.body.requestPointerLock();
+  });
+  document.addEventListener('pointerlockchange', () => {
+    player.locked = document.pointerLockElement === document.body;
+    if (started) $('paused').style.display = player.locked ? 'none' : 'flex';
+    if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
+  });
+} else {
+  start();
+}
+
+// ---- frame loop ----
+let fogDensityCur = 0.055;
+const fogColorCur = new THREE.Color(0x0a0e0b);
+let lastInfo = startInfo;
+let statsFrames = 0, statsTime = 0, statsFPS = 0;
+
+function tick(dt) {
+  const running = TEST || player.locked;
+  if (running) {
+    const info = player.update(dt, world);
+    lastInfo = info;
+    world.update(dt);
+    flora.update(dt);
+    events.update(dt, player.pos, camera, info);
+    audio.update(dt, player.pos, camera, world.tier());
+
+    // biome fog + auto-iris
+    const kind = info.seg.kind;
+    fogDensityCur = damp(fogDensityCur, (FOG_DENSITY[kind] || 0.055) * (1 + world.tier() * 0.08), 0.8, dt);
+    fogColorCur.lerp(FOG_COLORS[kind] || FOG_COLORS.corridor, 1 - Math.exp(-0.8 * dt));
+    scene.fog.density = fogDensityCur;
+    scene.fog.color.copy(fogColorCur);
+
+    let expo = 1;
+    if (kind === 'cave') expo = 1.18;
+    if (info.seg.sunData && info.seg.sunData.armed) {
+      const dc = Math.hypot(player.pos.x - info.seg.sunData.center.x, player.pos.z - info.seg.sunData.center.z);
+      if (dc < info.seg.sunData.r + 6) expo = 0.8;
+    }
+    vhs.setExposureTarget(expo);
+
+    // dust motes drift and wrap around the player
+    const pp = player.pos;
+    for (let i = 0; i < MOTES; i++) {
+      let x = motePos[i * 3] + moteVel[i * 3] * dt;
+      let y = motePos[i * 3 + 1] + moteVel[i * 3 + 1] * dt;
+      let z = motePos[i * 3 + 2] + moteVel[i * 3 + 2] * dt;
+      if (y < 0.05) y = 3.2;
+      if (x - pp.x > 5) x -= 10; else if (x - pp.x < -5) x += 10;
+      if (z - pp.z > 5) z -= 10; else if (z - pp.z < -5) z += 10;
+      motePos[i * 3] = x; motePos[i * 3 + 1] = y; motePos[i * 3 + 2] = z;
+    }
+    moteGeo.attributes.position.needsUpdate = true;
+    floor.position.x = pp.x; floor.position.z = pp.z;
+
+    updateOSD(dt);
+  }
+  vhs.update(dt);
+  vhs.render(scene, camera);
+}
+
+let prev = performance.now();
+function raf(now) {
+  const dt = clamp((now - prev) / 1000, 0.0001, 0.05);
+  prev = now;
+  statsFrames++; statsTime += dt;
+  if (statsTime > 1) { statsFPS = statsFrames / statsTime; statsFrames = 0; statsTime = 0; }
+  tick(dt);
+  requestAnimationFrame(raf);
+}
+
+function onResize() {
+  renderer.setSize(innerWidth, innerHeight);
+  vhs.resize(innerWidth, innerHeight);
+  layoutOSD();
+}
+addEventListener('resize', onResize);
+onResize();
+
+if (!TEST || TEST_RUN) requestAnimationFrame(raf);
+
+// ---- test harness ----
+if (TEST) {
+  window.__EP = {
+    ready: true,
+    world, player, scene, renderer, audio, events, vhs,
+    step(seconds = 1 / 60, n = 1) {
+      for (let i = 0; i < n; i++) tick(seconds);
+    },
+    setInput(inp) { player.testInput = inp; },
+    pos() { return { x: player.pos.x, z: player.pos.z }; },
+    depth() { return world.depth; },
+    segInfo() {
+      return {
+        id: lastInfo.seg.id, kind: lastInfo.seg.kind, s: lastInfo.s,
+        sealed: [...world.segs.values()].filter((s) => s.sealed).length,
+        total: world.segs.size,
+        sealPoint: { segId: world.sealPoint.seg.id, s: world.sealPoint.s },
+        children: lastInfo.seg.children.map((c) => ({ id: c.id, kind: c.kind })),
+      };
+    },
+    faceForward() {
+      const t = world.tangentAt(lastInfo.seg, Math.min(lastInfo.seg.samples.length, lastInfo.s + 1));
+      player.yaw = Math.atan2(-t.x, -t.z);
+    },
+    stats() {
+      return {
+        fps: statsFPS,
+        drawCalls: vhs.sceneStats ? vhs.sceneStats.calls : 0,
+        triangles: vhs.sceneStats ? vhs.sceneStats.triangles : 0,
+        geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
+        sealAnims: flora.sealAnims.length, eyes: events.eyes.length,
+      };
+    },
+    forceEvent(name) {
+      if (name === 'glitch') vhs.glitch(1);
+      if (name === 'anomaly') osdAnomaly();
+      if (name === 'eyes') {
+        const spots = lastInfo.seg.eyeSpots.filter((s) => !s.used);
+        if (spots.length) { spots[0].segRef = lastInfo.seg; events._spawnEyes(spots[0], camera); return true; }
+        return false;
+      }
+      if (name === 'sunsnap' && lastInfo.seg.sunData) {
+        lastInfo.seg.sunData.linger = 99;
+        return true;
+      }
+      return false;
+    },
+  };
+}

@@ -54,7 +54,7 @@ function assert(condition, message) {
 
 function validateData() {
   assert(existsSync(outputRoot), `Missing recovered deploy root: ${outputRoot}`);
-  assert(games.length === 16, `Expected 16 games, found ${games.length}`);
+  assert(games.length === 17, `Expected 17 games, found ${games.length}`);
   assert(albums.length === 10, `Expected 10 albums, found ${albums.length}`);
   assert(games.filter((item) => item.featured).length === 6, "Exactly six games must be featured");
   assert(albums.filter((item) => item.featured).length === 3, "Exactly three albums must be featured");
@@ -170,7 +170,7 @@ function footer() {
   </button>`;
 }
 
-function head({ title, description, path, schema, image = "/assets/visuals/qualiacology-social-1200x630.jpg" }) {
+function head({ title, description, path, schema, image = "/assets/visuals/qualiacology-social-1200x630-v2.jpg" }) {
   const url = `${site.origin}${path}`;
   return `
   <meta charset="utf-8">
@@ -217,9 +217,9 @@ ${footer()}
 
 function heroPicture() {
   return `<picture>
-    <source type="image/avif" srcset="/assets/visuals/qualiacology-night-lab-640.avif 640w, /assets/visuals/qualiacology-night-lab-800.avif 800w, /assets/visuals/qualiacology-night-lab-1024.avif 1024w, /assets/visuals/qualiacology-night-lab-1536.avif 1536w" sizes="(min-width: 960px) 46vw, calc(100vw - 2rem)">
-    <source type="image/webp" srcset="/assets/visuals/qualiacology-night-lab-640.webp 640w, /assets/visuals/qualiacology-night-lab-800.webp 800w, /assets/visuals/qualiacology-night-lab-1024.webp 1024w, /assets/visuals/qualiacology-night-lab-1536.webp 1536w" sizes="(min-width: 960px) 46vw, calc(100vw - 2rem)">
-    <img src="/assets/visuals/qualiacology-night-lab-1024.webp" width="1536" height="1024" alt="An original nocturnal field lab opening into a strange luminous world, with chemistry glass, guitar-string constellations, and an enigmatic companion" fetchpriority="high" decoding="async">
+    <source type="image/avif" srcset="/assets/visuals/qualiacology-candy-city-640.avif 640w, /assets/visuals/qualiacology-candy-city-960.avif 960w, /assets/visuals/qualiacology-candy-city-1280.avif 1280w, /assets/visuals/qualiacology-candy-city-1640.avif 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
+    <source type="image/webp" srcset="/assets/visuals/qualiacology-candy-city-640.webp 640w, /assets/visuals/qualiacology-candy-city-960.webp 960w, /assets/visuals/qualiacology-candy-city-1280.webp 1280w, /assets/visuals/qualiacology-candy-city-1640.webp 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
+    <img src="/assets/visuals/qualiacology-candy-city-1640.jpg" width="1640" height="640" alt="A candy-loving ghost in a dark rain-soaked neon city, holding a lollipop and a bag of Ghost Pops" fetchpriority="high" decoding="async">
   </picture>`;
 }
 
@@ -329,7 +329,7 @@ function homepage() {
         </div>
         <figure class="hero-art">
           ${heroPicture()}
-          <figcaption>Original Qualiacology night-lab artwork</figcaption>
+          <figcaption>Original Qualiacology candy-city artwork</figcaption>
         </figure>
         <dl class="proof-list">
           <div><dt>3,000+</dt><dd>community members</dd></div>
@@ -344,30 +344,41 @@ function homepage() {
         <div class="section-heading">
           <span class="ghost-index" aria-hidden="true">01</span>
           <div>
-            <p class="eyebrow">01 · Psychopharmacology</p>
-            <h2>The Psychopharmacology Server</h2>
+            <p class="eyebrow">01 · Psychopharmacology community</p>
+            <h2>We study medication, help people, and chill with friends.</h2>
           </div>
           <div class="section-heading-copy">
-            <p>Convergence-based reasoning around MAOIs, serotonin toxicity, and the difference between what works on paper and what works in people.</p>
-            <div class="section-action"><a class="button button-arrow" href="/psychopharmacology/">Enter the field notes</a></div>
+            <p>A 3,000+ member Discord built around serious psychopharmacology, practical support, and the friendships that grow when people keep showing up.</p>
+            <div class="section-action"><a class="button button-arrow" href="/psychopharmacology/">Explore the community</a></div>
           </div>
         </div>
-        <div class="psych-feature">
-          <div class="psych-manifesto">
-            <blockquote>“Truth in psychiatric medicine doesn’t emerge from any single source. It emerges when multiple ways of knowing converge.”</blockquote>
-            <p>Mechanism, trials, expert judgment, prescriber observation, and patient experience belong at the same table. The community exists to compare notes without treating anecdotes like scripture.</p>
-            <div class="button-row">
-              <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
-              <a class="button button-quiet button-arrow" href="/book.html">Read This Helped Someone</a>
-            </div>
-            <p class="safety-line">Educational and peer-support material—not diagnosis, prescribing, or emergency care.</p>
-          </div>
-          <ul class="community-facts">
-            <li><strong>3,000+ members</strong><span>Knowledge, questions, and useful disagreement.</span></li>
-            <li><strong>Saturdays · 4 PM ET</strong><span>Live voice discussion and collective problem-solving.</span></li>
-            <li><strong>1st &amp; 3rd Tuesdays</strong><span>Co-facilitated NAMI groups, 6–7:30 PM ET.</span></li>
-            <li><strong>Warm and blunt</strong><span>Credible and useful, even when the subject is too important for fake certainty.</span></li>
-          </ul>
+
+        <div class="server-pillars">
+          <article class="server-pillar">
+            <span class="pillar-number" aria-hidden="true">01</span>
+            <h3>Explore medications</h3>
+            <p>Mechanisms, evidence, clinical practice, unusual responses, and the gap between textbook rules and actual lives.</p>
+          </article>
+          <article class="server-pillar">
+            <span class="pillar-number" aria-hidden="true">02</span>
+            <h3>Support one another</h3>
+            <p>Questions are taken seriously. Members share knowledge, compare experiences, and help people through difficult situations.</p>
+          </article>
+          <article class="server-pillar">
+            <span class="pillar-number" aria-hidden="true">03</span>
+            <h3>Build real friendships</h3>
+            <p>The conversation does not end when the pharmacology question does. People talk, laugh, join live discussions, and stay for each other.</p>
+          </article>
+        </div>
+
+        <ul class="community-facts community-facts-inline">
+          <li><strong>3,000+ members</strong><span>A large, active community with room for real conversation.</span></li>
+          <li><strong>Saturdays · 4 PM ET</strong><span>Live voice discussion and collective problem-solving.</span></li>
+          <li><strong>Science · support · friendship</strong><span>The three things the server is built to hold together.</span></li>
+        </ul>
+
+        <div class="button-row community-actions">
+          <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
         </div>
       </div>
     </section>
@@ -441,59 +452,51 @@ function homepage() {
 }
 
 function psychopharmacologyPage() {
+  const description = "A 3,000+ member psychopharmacology community for serious medication discussion, practical support, and friendship.";
   const schema = {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    name: "Psychopharmacology | Qualiacology",
+    name: "Psychopharmacology Community | Qualiacology",
     url: `${site.origin}/psychopharmacology/`,
-    description: "The chemistry of subjective experience, traced through mechanism, evidence, and real human mess.",
-    about: ["Psychopharmacology", "Peer support", "Psychiatric medicine"],
+    description,
+    about: ["Psychopharmacology", "Peer support", "Community"],
   };
-
-  const methods = [
-    ["Biochemical mechanism", "What the drug can actually do, in theory."],
-    ["Clinical trial data", "What holds up across a lot of people, not just one."],
-    ["Expert opinion", "What the people who've seen the most tend to think."],
-    ["Prescriber observation", "What survives contact with real patients."],
-    ["Patient experience", "What it's actually like in the body that has to live with it."],
-  ];
 
   const main = `<main id="main-content">
     <section class="subhero">
       <div class="container subhero-grid">
         <div>
           <span class="ghost-index" aria-hidden="true">01</span>
-          <p class="eyebrow">01 · Psychopharmacology</p>
-          <h1>The Psychopharmacology Server</h1>
-          <p class="subhero-deck">We study medication, help people, and chill with friends — a puzzle-piece framework for finding what actually fits in psychiatric medicine, without pretending there's one magic answer.</p>
+          <p class="eyebrow">Psychopharmacology community</p>
+          <h1>We study medication, help people, and chill with friends.</h1>
+          <p class="subhero-deck">A 3,000+ member Discord for exploring psychopharmacology, offering meaningful support, and building friendships that last beyond the original question.</p>
         </div>
-        <div class="subhero-stat"><strong>5</strong><span>ways of knowing</span></div>
+        <div class="subhero-stat"><strong>3,000+</strong><span>members</span></div>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="method-title">
+    <section class="section" aria-labelledby="pillars-title">
       <div class="container">
         <div class="section-heading">
-          <div><p class="eyebrow">The method</p><h2 id="method-title">Where five kinds of evidence converge.</h2></div>
-          <div class="section-heading-copy"><p>No single source gets you there. You line up what a drug can do, what the trials show, what clinicians see, and what patients actually live with — and you pay attention to where they agree.</p></div>
+          <div><p class="eyebrow">What this place is</p><h2 id="pillars-title">Learn. Support. Connect.</h2></div>
+          <div class="section-heading-copy"><p>The server works because it treats psychopharmacology and human connection as parts of the same community, not competing purposes.</p></div>
         </div>
-        <ol class="method-grid">
-          ${methods.map(([title, copy], index) => `<li class="method-card"><span class="method-number">${twoDigits(index)}</span><h3>${title}</h3><p>${copy}</p></li>`).join("")}
-        </ol>
-      </div>
-    </section>
-
-    <section class="section" aria-labelledby="book-title">
-      <div class="container">
-        <div class="book-feature">
-          <div class="book-visual"><img src="/assets/book/five-axis-framework.webp" width="1200" height="800" alt="The five-axis convergence framework from This Helped Someone" loading="lazy" decoding="async"></div>
-          <div class="book-copy">
-            <p class="eyebrow">This Helped Someone</p>
-            <h2 id="book-title">A framework for finding what actually fits.</h2>
-            <p>This Helped Someone is the long version: a puzzle-piece method for finding what fits in psychiatric medicine, without pretending there's one magic answer.</p>
-            <blockquote class="book-quote">“Truth in psychiatric medicine doesn’t emerge from any single source. It emerges when multiple ways of knowing converge—like pieces of a puzzle finally fitting together.”</blockquote>
-            <a class="button button-primary button-arrow" href="/book.html">Read the framework</a>
-          </div>
+        <div class="server-pillars">
+          <article class="server-pillar">
+            <span class="pillar-number" aria-hidden="true">01</span>
+            <h3>Explore medications</h3>
+            <p>Mechanisms, evidence, clinical practice, unusual responses, and the complicated ways medications affect minds and bodies.</p>
+          </article>
+          <article class="server-pillar">
+            <span class="pillar-number" aria-hidden="true">02</span>
+            <h3>Offer real support</h3>
+            <p>Members take questions seriously, share useful knowledge, compare experiences, and help people through difficult situations.</p>
+          </article>
+          <article class="server-pillar">
+            <span class="pillar-number" aria-hidden="true">03</span>
+            <h3>Build friendships</h3>
+            <p>Conversation keeps going after the original question. People talk, laugh, join voice chats, and become part of one another’s lives.</p>
+          </article>
         </div>
       </div>
     </section>
@@ -501,19 +504,24 @@ function psychopharmacologyPage() {
     <section class="section" id="community" aria-labelledby="community-title">
       <div class="container">
         <div class="section-heading">
-          <div><p class="eyebrow">The community</p><h2 id="community-title">We study medication, help people, and chill with friends.</h2></div>
-          <div class="section-heading-copy"><p>3,000+ people comparing notes, asking better questions, and helping each other out — without treating anecdotes like scripture.</p></div>
+          <div><p class="eyebrow">Inside the server</p><h2 id="community-title">Serious questions. Human answers.</h2></div>
+          <div class="section-heading-copy"><p>A place for depth without coldness, support without pretending to know everything, and friendship that is allowed to be ordinary.</p></div>
         </div>
         <div class="community-grid">
-          <article class="community-card"><h3>3,000+ members</h3><p>Knowledge, questions, and useful disagreement without treating anecdotes like scripture.</p></article>
-          <article class="community-card"><h3>Saturdays · 4 PM ET</h3><p>Live voice chats — discussion, support, and figuring things out together.</p></article>
-          <article class="community-card"><h3>1st &amp; 3rd Tuesdays</h3><p>Co-facilitated NAMI support groups from 6–7:30 PM ET.</p></article>
-          <article class="community-card"><h3>Warm and blunt</h3><p>Credible, warm, and blunt enough to be useful when the subject is too important for fake certainty.</p></article>
+          <article class="community-card"><h3>Medication deep dives</h3><p>Mechanisms, interactions, side effects, unusual responses, and what the evidence does—and does not—show.</p></article>
+          <article class="community-card"><h3>Practical support</h3><p>People help one another make sense of hard situations, find useful information, and feel less alone.</p></article>
+          <article class="community-card"><h3>Saturdays · 4 PM ET</h3><p>Live voice discussion, questions, and collective problem-solving.</p></article>
+          <article class="community-card"><h3>Friendship and camaraderie</h3><p>Serious conversations share space with humor, ordinary life, and people getting to know each other.</p></article>
         </div>
-        <p class="safety-line">Educational and peer-support material—not diagnosis, prescribing, or emergency care.</p>
-        <div class="button-row section-action">
-          <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
-          <a class="button external-link" href="${escapeHtml(site.chatgptGroup)}" ${external}>ChatGPT group chat</a>
+        <div class="community-cta">
+          <div>
+            <p class="eyebrow">Science · support · community</p>
+            <h2>The pharmacology matters. So do the people.</h2>
+          </div>
+          <div class="button-row">
+            <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
+            <a class="button external-link" href="${escapeHtml(site.chatgptGroup)}" ${external}>ChatGPT group chat</a>
+          </div>
         </div>
       </div>
     </section>
@@ -521,8 +529,8 @@ function psychopharmacologyPage() {
 
   return page({
     current: "psych",
-    title: "Psychopharmacology | Qualiacology",
-    description: "The chemistry of subjective experience, traced through mechanism, evidence, and real human mess.",
+    title: "Psychopharmacology Community | Qualiacology",
+    description,
     path: "/psychopharmacology/",
     schema,
     main,
@@ -664,7 +672,6 @@ function sitemap() {
     ["/games/", "0.9"],
     ["/music/", "0.9"],
     ...games.map((game) => [routeForGame(game), "0.8"]),
-    ["/book.html", "0.7"],
     ...albums.map((album) => [routeForAlbum(album), "0.7"]),
     ["/no-moon/codex/", "0.6"],
   ];
