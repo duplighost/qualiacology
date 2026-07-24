@@ -59,9 +59,9 @@ function jsonLd(html) {
   return JSON.parse(match[1]);
 }
 
-assert(data.games.length === 14, "Canonical game total is not 14");
+assert(data.games.length === 15, "Canonical game total is not 15");
 assert(data.albums.length === 10, "Canonical album total is not 10");
-assert(data.games.filter((item) => item.featured).length === 3, "Featured game total is not 3");
+assert(data.games.filter((item) => item.featured).length === 6, "Featured game total is not 6");
 assert(data.albums.filter((item) => item.featured).length === 3, "Featured album total is not 3");
 assert(!existsSync(join(outputRoot, "blackthorn-manor")), "Blackthorn directory must not exist");
 assert(!existsSync(join(outputRoot, "assets", "brand", "pikachu-forest.webp")), "Replaced hero asset must not remain in deploy");
@@ -84,7 +84,7 @@ const gamesPage = read(join("games", "index.html"));
 const musicPage = read(join("music", "index.html"));
 const sitemap = read("sitemap.xml");
 
-assert((home.match(/data-catalog-game="/g) || []).length === 3, "Homepage must feature three games");
+assert((home.match(/data-catalog-game="/g) || []).length === 6, "Homepage must feature six games");
 assert((home.match(/data-catalog-album="/g) || []).length === 3, "Homepage must feature three releases");
 assert((gamesPage.match(/data-catalog-game="/g) || []).length === data.games.length, "Game card count does not match canonical data");
 assert((musicPage.match(/data-catalog-album="/g) || []).length === data.albums.length, "Album card count does not match canonical data");
