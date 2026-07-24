@@ -2,7 +2,7 @@
 
 Read this before changing anything. It is the canonical playbook for AI agents
 (Codex, Claude, or anything else) and it is kept current — trust it over your
-own notes or memory. Last verified: 2026-07-19.
+own notes or memory. Last verified: 2026-07-23.
 
 ## The two rules that matter most
 
@@ -82,8 +82,10 @@ text edits only, then validate it still parses.
 4. **Catalog entry** in `build/src/content/site-data.json`: slug, title,
    descriptor, `group` (one of `action` / `horror` / `worlds`), summary
    (Alex's voice!), metaDescription, image, alt, controls, actionLabel,
-   optional duration/secondary. `featured: true` only by swapping — exactly 3
-   games are featured, and that's Alex's call.
+   optional duration/secondary. `featured: true` only by swapping — exactly 6
+   games are featured (grid is 3 columns, so keep it a multiple of 3), and
+   which ones is Alex's call. Featured order = games array order. Albums are
+   still exactly 3 featured.
 5. **Bump the count asserts** in BOTH `build/scripts/build-site.mjs` and
    `build/scripts/validate-site.mjs` (they hardcode the canonical game total).
 6. **Short links** in `_redirects` (e.g. `/duet  /duet/  302`) — check for
