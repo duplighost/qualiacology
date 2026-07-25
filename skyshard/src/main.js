@@ -184,6 +184,15 @@ async function boot() {
 
   const begin = () => {
     if (G.mode !== 'title') return;
+    // Pointer-lock mouselook + WASD is the only input path. No phone browser has
+    // Pointer Lock, so say so instead of dropping the player into a world they
+    // cannot turn or walk in.
+    if (!Input.pointerLockSupported()) {
+      const note = document.getElementById('desktop-note');
+      if (note) note.removeAttribute('hidden');
+      titleEl.classList.add('unsupported');
+      return;
+    }
     initAudio();
     resumeAudio();
     music.start();

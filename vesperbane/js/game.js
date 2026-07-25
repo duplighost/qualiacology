@@ -67,6 +67,10 @@ const DEFAULT_BINDS = {
 };
 
 const IS_TOUCH = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+// IS_TOUCH alone is true on touchscreen laptops driven by a mouse, so gate the
+// on-screen controls and the "TAP" prompts on touch being the PRIMARY pointer.
+const IS_TOUCH_PRIMARY = IS_TOUCH &&
+  !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 
 // gameplay options (persisted separately from binds)
 const DEFAULT_OPTS = { dtapDash: IS_TOUCH };
@@ -169,6 +173,12 @@ const TOUCH = {
   pause: { x: 414, y: 30, r: 11 },
 };
 
+// Show touch affordances once we know the player is on a thumb — either because
+// they already touched, or because the device says touch is how it is driven.
+// Without this the first thing a phone sees is "PRESS JUMP", naming a key it has
+// not got, and the on-screen controls stay invisible until it is touched blind.
+const touchUI = () => TOUCH.active || IS_TOUCH_PRIMARY;
+
 function touchSet(name, isDown) {
   if (isDown && !input[name]) {
     if (name === 'jump') input.jumpPressed = true;
@@ -270,7 +280,7 @@ function initTouch(canvas) {
 }
 
 function drawTouchUI(ctx, game) {
-  if (!TOUCH.active) return;
+  if (!touchUI()) return;
   if (game.state !== 'play' && game.state !== 'pause') return;
   ctx.save();
   // stick
@@ -1203,12 +1213,20 @@ class Game {
     // controls hint (reflects current bindings; hidden during the boss)
     if (this.hintT > 0 && this.time < 30 && !this.boss) {
       ctx.globalAlpha = clamp(this.hintT, 0, 1);
-      drawTextShadowCentered(ctx,
-        'ARROWS RUN   ' + pk('jump') + ' JUMP   ' + pk('attack') + ' SLASH   ' + pk('dash') + ' DASH',
-        VIEW_W / 2, VIEW_H - 24, 1, '#8d94b3');
-      drawTextShadowCentered(ctx,
-        'DOWN+' + pk('dash') + ' SLIDE   DOWN+' + pk('attack') + ' IN AIR POGO   F2 REBIND',
-        VIEW_W / 2, VIEW_H - 14, 1, '#565d85');
+      if (touchUI()) {
+        // Naming keys to a thumb is noise, and the whole bottom strip is taken by
+        // the stick and the DASH/JUMP/SLASH cluster — so this goes up top, in the
+        // one band nothing occupies. The stick needs no explaining; the combos do.
+        drawTextShadowCentered(ctx, 'SLIDE: DOWN + DASH', VIEW_W / 2, 44, 1, '#8d94b3');
+        drawTextShadowCentered(ctx, 'POGO: DOWN + SLASH IN AIR', VIEW_W / 2, 56, 1, '#565d85');
+      } else {
+        drawTextShadowCentered(ctx,
+          'ARROWS RUN   ' + pk('jump') + ' JUMP   ' + pk('attack') + ' SLASH   ' + pk('dash') + ' DASH',
+          VIEW_W / 2, VIEW_H - 24, 1, '#8d94b3');
+        drawTextShadowCentered(ctx,
+          'DOWN+' + pk('dash') + ' SLIDE   DOWN+' + pk('attack') + ' IN AIR POGO   F2 REBIND',
+          VIEW_W / 2, VIEW_H - 14, 1, '#565d85');
+      }
       ctx.globalAlpha = 1;
     }
   }
@@ -1237,11 +1255,13 @@ class Game {
       drawTextShadowCentered(ctx, 'RING NIGHT I TO OPEN THE WAY DOWN', VIEW_W / 2, 160, 1, '#3a3f61');
 
     if (Math.floor(this.stateT * 1.6) % 2 === 0)
-      drawTextShadowCentered(ctx, TOUCH.active ? 'TAP TO BEGIN' : 'PRESS  ' + pk('jump'), VIEW_W / 2, 182, 2, '#e8e4f0');
+      drawTextShadowCentered(ctx, touchUI() ? 'TAP TO BEGIN' : 'PRESS  ' + pk('jump'), VIEW_W / 2, 182, 2, '#e8e4f0');
     if (this.unlocked > 0)
-      drawTextShadowCentered(ctx, TOUCH.active ? 'TAP EDGES TO CHOOSE NIGHT' : 'LEFT / RIGHT  CHOOSE NIGHT', VIEW_W / 2, 202, 1, '#565d85');
+      drawTextShadowCentered(ctx, touchUI() ? 'TAP EDGES TO CHOOSE NIGHT' : 'LEFT / RIGHT  CHOOSE NIGHT', VIEW_W / 2, 202, 1, '#565d85');
     drawTextShadowCentered(ctx,
-      pk('jump') + ' JUMP   ' + pk('attack') + ' SLASH   ' + pk('dash') + ' DASH   F2 REBIND',
+      touchUI()
+        ? 'STICK LEFT   JUMP  SLASH  DASH RIGHT'
+        : pk('jump') + ' JUMP   ' + pk('attack') + ' SLASH   ' + pk('dash') + ' DASH   F2 REBIND',
       VIEW_W / 2, 224, 1, '#565d85');
     drawTextShadowCentered(ctx, 'SPEED FEEDS THE FLAME. THE FLAME FEEDS YOU.', VIEW_W / 2, 240, 1, '#3a3f61');
   }
@@ -1272,7 +1292,7 @@ class Game {
       line('RUN.', 172, 3.4, 3, '#c22e46');
     }
     if (t > 1)
-      line(TOUCH.active ? 'TAP TO SKIP' : 'ANY KEY TO SKIP', VIEW_H - 18, 1, 1, '#565d85');
+      line(touchUI() ? 'TAP TO SKIP' : 'ANY KEY TO SKIP', VIEW_H - 18, 1, 1, '#565d85');
   }
 
   drawDeath(ctx) {
@@ -1305,10 +1325,10 @@ class Game {
     if (hasNext) {
       if (this.justUnlocked && Math.floor(this.stateT * 2) % 2 === 0)
         drawTextShadowCentered(ctx, 'NIGHT II UNLOCKED', VIEW_W / 2, 186, 1, '#7fe9f5');
-      drawTextShadowCentered(ctx, TOUCH.active ? 'TAP FOR NIGHT II' : 'PRESS  ' + pk('jump') + '  FOR NIGHT II', VIEW_W / 2, 206, 1, '#e8e4f0');
+      drawTextShadowCentered(ctx, touchUI() ? 'TAP FOR NIGHT II' : 'PRESS  ' + pk('jump') + '  FOR NIGHT II', VIEW_W / 2, 206, 1, '#e8e4f0');
       drawTextShadowCentered(ctx, 'R  REPLAY THIS NIGHT', VIEW_W / 2, 220, 1, '#565d85');
     } else {
-      drawTextShadowCentered(ctx, TOUCH.active ? 'TAP TO RUN AGAIN' : 'PRESS  ' + pk('jump') + '  TO RUN AGAIN', VIEW_W / 2, 210, 1, '#e8e4f0');
+      drawTextShadowCentered(ctx, touchUI() ? 'TAP TO RUN AGAIN' : 'PRESS  ' + pk('jump') + '  TO RUN AGAIN', VIEW_W / 2, 210, 1, '#e8e4f0');
     }
     ctx.globalAlpha = 1;
   }
@@ -1356,8 +1376,12 @@ function boot() {
   function fit() {
     let raw = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
     if (!isFinite(raw) || raw <= 0.05) raw = 1;   // zero-size boot contexts
-    // crisp integer scaling on big screens, fractional fill on phones
-    const s = raw >= 1 ? Math.floor(raw) : raw;
+    // Crisp integer scaling on big screens, fractional fill everywhere else.
+    // Quantising only above 2x matters: a phone in landscape lands around 1.4-1.8x,
+    // and flooring that to 1x used to strand the game in a 480x270 window in the
+    // middle of the screen (~39% of a 844x390 viewport). Nearest-neighbour is on
+    // (imageSmoothingEnabled=false), so fractional scales stay chunky, not blurry.
+    const s = raw >= 2 ? Math.floor(raw) : raw;
     canvas.style.width = VIEW_W * s + 'px';
     canvas.style.height = VIEW_H * s + 'px';
     TOUCH.portrait = IS_TOUCH && window.innerHeight > window.innerWidth * 1.2;

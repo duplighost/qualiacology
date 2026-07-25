@@ -80,6 +80,14 @@ function boot() {
 
   titleEl.addEventListener('click', () => {
     if (G.mode !== 'title') return;
+    // STILL is pointer-lock mouselook + WASD. No mobile browser has Pointer Lock,
+    // so say so plainly rather than hiding the title and leaving a black screen.
+    if (!Input.pointerLockSupported()) {
+      const note = document.getElementById('desktop-note');
+      if (note) note.removeAttribute('hidden');
+      titleEl.classList.add('unsupported');
+      return;
+    }
     initAudio();
     resumeAudio();
     startEngines();

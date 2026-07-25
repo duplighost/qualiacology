@@ -19,7 +19,7 @@
 
   .overlay {
     position: fixed; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; z-index: 20;
+    align-items: center; justify-content: center; z-index: 20; padding: 0 5vw;
     transition: opacity 1400ms ease; pointer-events: none; opacity: 0;
     background: #000;
   }
@@ -43,6 +43,13 @@
     position: absolute; bottom: 5vh; font-size: 11px; letter-spacing: 0.3em; margin-right: -0.3em;
     color: #2a2724; text-transform: uppercase;
   }
+  /* Shown only on devices without Pointer Lock (every phone). Sits above .warn. */
+  #title #desktop-note {
+    position: absolute; bottom: 11vh; max-width: 82vw; text-align: center; line-height: 1.7;
+    font-size: 11px; letter-spacing: 0.3em; margin-right: -0.3em;
+    color: #6b635a; text-transform: uppercase;
+  }
+  #title.unsupported .begin { animation: none; opacity: 0.35; }
 
   #pause { background: rgba(0,0,0,0.88); }
   #pause .begin { font-size: 13px; letter-spacing: 0.4em; color: #57524c; text-transform: uppercase; animation: titlebreathe 3.5s ease-in-out infinite; }
@@ -121,6 +128,7 @@
   <h1>STILL</h1>
   <div class="sub">a house &middot; and what is under it</div>
   <div class="begin">click, if you're sure</div>
+  <div id="desktop-note" hidden>Desktop with a mouse &amp; keyboard required.</div>
   <div class="warn">headphones &middot; darkness &middot; alone</div>
 </div>
 

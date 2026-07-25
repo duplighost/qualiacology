@@ -43,8 +43,18 @@ export class Input {
 
   requestLock() {
     if (this.locked) return;
-    const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
-    if (p && p.catch) p.catch(() => this.canvas.requestPointerLock());
+    // No mobile browser implements Pointer Lock, and calling it there throws
+    // synchronously — which used to abort the caller mid-way through starting
+    // the game. Bail out quietly instead; the caller gates on POINTER_LOCK.
+    if (!Input.pointerLockSupported()) return;
+    try {
+      const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
+      if (p && p.catch) p.catch(() => { try { this.canvas.requestPointerLock(); } catch (e) {} });
+    } catch (e) { /* older browsers throw on the options form */ }
+  }
+
+  static pointerLockSupported() {
+    return typeof document.body.requestPointerLock === 'function';
   }
 
   down(code) { return this.keys.has(code); }

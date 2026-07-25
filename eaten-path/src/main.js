@@ -178,7 +178,17 @@ function start() {
   audio.biome('corridor');
 }
 if (!TEST) {
+  // The frame loop below gates on player.locked, and no mobile browser implements
+  // Pointer Lock — so without this the title would vanish and leave a frozen
+  // forest you cannot walk through. Say so instead.
+  const pointerLockSupported = typeof document.body.requestPointerLock === 'function';
   addEventListener('click', () => {
+    if (!pointerLockSupported) {
+      const note = $('desktop-note');
+      if (note) note.hidden = false;
+      $('title').classList.add('unsupported');
+      return;
+    }
     if (!started) start();
     if (!player.locked) document.body.requestPointerLock();
   });

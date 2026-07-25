@@ -247,6 +247,11 @@ window.SCORE = (function () {
     subtitle: 'sing them to rest.',
     begin: 'click, then hold to sing.',
     tutorial: 'hold the left button to sing. move the mouse to find her.',
+    // Same lines for a thumb. "left button" and "move the mouse" name inputs a
+    // phone has not got, and this tutorial is the game's whole onboarding —
+    // soul 0 does not release until you have followed it.
+    beginTouch: 'touch, then hold to sing.',
+    tutorialTouch: 'hold to sing. slide up and down to find her.',
     tutorial2: 'gold means you’re with her.',
     finaleIntro: 'they’re all here. sing with them.',
     fermata: 'you can rest now.',

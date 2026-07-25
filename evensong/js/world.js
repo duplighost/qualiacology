@@ -276,7 +276,8 @@ window.WORLD = (function () {
     cx.fillText('EVENSONG', CFG.W / 2 + 7, CFG.H / 2 - 60);
     cx.restore();
     drawText(window.SCORE.TEXT.subtitle, CFG.W / 2, CFG.H / 2 - 14, 18, 0.85);
-    drawText(window.SCORE.TEXT.begin, CFG.W / 2, CFG.H / 2 + 140, 15, 0.45 + 0.2 * Math.sin(t0 * 2));
+    drawText(G.coarsePointer ? window.SCORE.TEXT.beginTouch : window.SCORE.TEXT.begin,
+      CFG.W / 2, CFG.H / 2 + 140, 15, 0.45 + 0.2 * Math.sin(t0 * 2));
   }
 
   function drawEndcard(G) {
@@ -287,8 +288,11 @@ window.WORLD = (function () {
     flame(x0 + G.votives.length * w, CFG.H / 2, 9, CFG.COL_PLAYER, 1, true);
     cx.globalCompositeOperation = 'source-over';
     drawText('EVENSONG', CFG.W / 2, CFG.H / 2 - 110, 26, 0.9);
-    drawText(window.SCORE.TEXT.endAgain, CFG.W / 2 - 90, CFG.H / 2 + 130, 18, G.endHover === 0 ? 1 : 0.55);
-    drawText(window.SCORE.TEXT.endStay, CFG.W / 2 + 90, CFG.H / 2 + 130, 18, G.endHover === 1 ? 1 : 0.55);
+    // Both choices stay legible on touch: the dim state is a hover affordance, and
+    // a finger cannot hover — so "stay a while" was being aimed at blind and unread.
+    const rest = G.coarsePointer ? 0.82 : 0.55;
+    drawText(window.SCORE.TEXT.endAgain, CFG.W / 2 - 90, CFG.H / 2 + 130, 18, G.endHover === 0 ? 1 : rest);
+    drawText(window.SCORE.TEXT.endStay, CFG.W / 2 + 90, CFG.H / 2 + 130, 18, G.endHover === 1 ? 1 : rest);
   }
 
   function drawDebug(G) {
