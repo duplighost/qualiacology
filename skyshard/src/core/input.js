@@ -64,8 +64,16 @@ export class Input {
     } catch (e) { /* older browsers throw on the options form */ }
   }
 
+  // iOS omits the API outright. Android Chrome still EXPOSES requestPointerLock
+  // while not supporting it, so a capability check alone waves phones through into
+  // a game they cannot play. A device whose pointer is coarse and which has no fine
+  // pointer at all is a phone or tablet; a touchscreen laptop reports any-pointer:
+  // fine and keeps the desktop path.
   static pointerLockSupported() {
-    return typeof document.body.requestPointerLock === 'function';
+    if (typeof document.body.requestPointerLock !== 'function') return false;
+    const mq = window.matchMedia;
+    if (!mq) return true;
+    return !(mq('(pointer: coarse)').matches && !mq('(any-pointer: fine)').matches);
   }
 
   down(code) { return this.keys.has(code); }

@@ -7,6 +7,12 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
+// A thumb-driven device: coarse pointer AND no fine pointer anywhere. A touchscreen
+// laptop reports any-pointer:fine and is treated as the desktop it is.
+const TOUCH_PRIMARY = !!(window.matchMedia
+  && window.matchMedia('(pointer: coarse)').matches
+  && !window.matchMedia('(any-pointer: fine)').matches);
+
 const GrainVignetteShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -341,7 +347,13 @@ export class Effects {
     this.lantern.castShadow = q >= 2;
     this.renderer.shadowMap.enabled = q >= 1;
     if (q >= 1) this.moon.shadow.needsUpdate = true;
-    const dpr = q >= 2 ? Math.min(devicePixelRatio, 1.75) : 1;
+    // The composer's targets have no `samples` and the context's antialias flag
+    // does not reach them, so the pixel ratio IS this game's only antialiasing.
+    // A phone needs the full drop; a desktop that merely dipped below the frame
+    // budget should not also lose every smooth edge, so it keeps a floor.
+    const dpr = q >= 2
+      ? Math.min(devicePixelRatio, 1.75)
+      : (TOUCH_PRIMARY ? 1 : Math.min(devicePixelRatio, 1.35));
     this.renderer.setPixelRatio(dpr);
     // EffectComposer keeps its OWN pixel ratio, captured from the renderer at
     // construction, and render() goes through the composer — so setting only the

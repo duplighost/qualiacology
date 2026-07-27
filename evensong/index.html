@@ -30,8 +30,12 @@
   /* A phone opens in portrait, where 16/9 collapses to a ~390x219 strip: 12px
      strings against a 40px thumb, and instructions at 5px. Landscape is the only
      honest way to play this, and iOS cannot be told to rotate — so ask. */
+  /* Only for screens actually too narrow to play: a phone in portrait collapses
+     16/9 to a ~390x219 strip. An iPad in portrait is 768 wide, which gives a
+     768x432 canvas and 31px between strings — perfectly playable, so it must not
+     be blocked. Hence the max-width bound alongside the orientation test. */
   #rotate { display: none; }
-  @media (orientation: portrait) and (pointer: coarse) {
+  @media (orientation: portrait) and (pointer: coarse) and (max-width: 600px) {
     #wrap { display: none; }
     #rotate {
       display: flex; position: fixed; inset: 0; z-index: 600;
@@ -74,6 +78,11 @@
 <script src="js/world.js"></script>
 <script src="js/game.js"></script>
 <script>
+  // Last-resort audio unlock: `click` is activation-triggering on every device, and
+  // iOS can suspend the context long after the first press (a call, a route change).
+  document.addEventListener('click', function () {
+    try { var A = window.__evensong && window.__evensong.A; if (A && A.unlock) A.unlock(); } catch (e) {}
+  }, true);
   // hub shell: the pill stays for the title and the endcard, and leaves you alone while you sing.
   setInterval(function () {
     try {

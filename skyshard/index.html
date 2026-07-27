@@ -48,6 +48,10 @@
   @keyframes breathe { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
   /* Shown only on devices without Pointer Lock (every phone). The title overlay is
      transparent over the live world, so this needs its own backing to stay legible. */
+  /* display:inline-block outranks the UA stylesheet's [hidden]{display:none}, so
+     without this the note showed on desktop from page load. Keep it above the
+     display rule's specificity, not merely before it. */
+  #desktop-note[hidden] { display: none; }
   #desktop-note {
     display: inline-block; margin: 3.4vh auto 0; max-width: 78vw; line-height: 1.7;
     font-size: 12px; letter-spacing: 0.28em; text-indent: 0.28em;

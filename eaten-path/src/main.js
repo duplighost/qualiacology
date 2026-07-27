@@ -190,7 +190,13 @@ if (!TEST) {
     // No mobile browser implements Pointer Lock, and the frame loop gates on it —
     // so a device without it AND without touch (rare, but real) gets told plainly
     // rather than being dropped into a forest it cannot walk through.
-    const pointerLockSupported = typeof document.body.requestPointerLock === 'function';
+    // Android Chrome exposes requestPointerLock without supporting it, so the
+    // capability check alone would wave a phone into a game it cannot play. Coarse
+    // pointer with no fine pointer anywhere = phone or tablet; a touchscreen laptop
+    // reports any-pointer:fine and keeps the desktop path.
+    const mq = window.matchMedia;
+    const pointerLockSupported = typeof document.body.requestPointerLock === 'function'
+      && !(mq && mq('(pointer: coarse)').matches && !mq('(any-pointer: fine)').matches);
     addEventListener('click', () => {
       if (!pointerLockSupported) {
         const note = $('desktop-note');
@@ -223,19 +229,32 @@ function bindTouch() {
   let ox = 0, oy = 0, lx = 0, ly = 0;
   const ring = $('stick-ring'), nub = $('stick-nub');
 
+  // Retry-safe: iOS suspends the context on a phone call or a tab switch, and the
+  // desktop path re-resumes on every lock change. Touch had exactly one attempt,
+  // inside `if (!started)`, so a single miss meant silence for the whole session.
+  const resumeAudio = () => {
+    if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
+  };
+
   const resetStick = () => {
     moveId = null;
     player.touchMove.x = 0; player.touchMove.z = 0;
     player.touchHurry = false;
     if (ring) ring.style.opacity = '0';
   };
+  // Both thumbs, not just the stick — leaving lookId set latches a dead pointer id
+  // that the next finger cannot claim.
+  const releaseAll = () => { resetStick(); lookId = null; };
 
   addEventListener('touchstart', (e) => {
+    // Let touches on real UI through untouched — preventDefault here suppresses the
+    // compatibility click, which would make the Qualiacology home pill untappable.
+    if (e.target.closest && e.target.closest('a, button')) return;
     if (!started) {
       start();
       touchPlaying = true;
-      if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
     }
+    resumeAudio();
     for (const t of e.changedTouches) {
       if (t.clientX < innerWidth * 0.5 && moveId === null) {
         moveId = t.identifier; ox = t.clientX; oy = t.clientY;
@@ -280,8 +299,11 @@ function bindTouch() {
   addEventListener('touchend', endTouch);
   // iOS reclaims touches as system gestures; without this the stick latches on.
   addEventListener('touchcancel', endTouch);
-  // Backgrounding the tab would otherwise leave you walking into the dark.
-  document.addEventListener('visibilitychange', () => { if (document.hidden) resetStick(); });
+  // Backgrounding the tab would otherwise leave you walking into the dark. Release
+  // both thumbs, and re-resume audio on the way back in.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseAll(); else resumeAudio();
+  });
 }
 
 // ---- frame loop ----

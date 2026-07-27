@@ -80,12 +80,23 @@
   /* Narrow screens stack the four fixed panels instead of overlapping them:
      .home-link (14-40), #tl (52-111), #tr below it, then the star field, then the
      help line sitting just above the controls. */
-  @media (max-width:760px){ #tl .meta{display:none} .ctl{min-width:176px}
+  /* NARROW AND TALL (portrait phones): no width to spare, height to spare, so the
+     four fixed panels stack vertically. The min-height arm matters — a 667x375
+     landscape phone is also under 760 wide, and stacking there put #br inside #tr. */
+  @media (max-width:760px) and (min-height:560px){ #tl .meta{display:none} .ctl{min-width:176px}
     #tr{top:calc(119px + env(safe-area-inset-top))} #tr .kv{gap:12px} #tr .kv span{min-width:56px}
     /* #br used to be display:none here, which left touch with no instructions at
        all while the catalog advertised two controls touch does not have. */
     #br{top:auto;bottom:calc(190px + env(safe-area-inset-bottom));right:14px;text-align:right}
     h1{letter-spacing:.18em} }
+  /* Under ~340px the title wraps to a third line (#tl reaches y=132 at 320px wide),
+     so #tr needs to start lower still. Measured, not guessed. */
+  @media (max-width:340px) and (min-height:560px){
+    #tr{top:calc(142px + env(safe-area-inset-top))} }
+  /* SHORT screens (landscape phones) are the opposite: plenty of width, no height.
+     Do NOT stack here — that is what pushed #tr down into #br. Just shed the
+     subtitle so the coarse-enlarged control panel cannot grow up into #tl. */
+  @media (max-height:520px){ #tl .meta{display:none} .ctl{min-width:176px} }
   /* Thumb-sized controls. Gated on coarse pointers so the desktop hairline
      aesthetic is byte-identical — the slider track was a 2px-tall hit area. */
   @media (pointer:coarse){
@@ -96,7 +107,10 @@
     input[type=range]::-moz-range-track{height:2px;background:var(--hair)}
     input[type=range]::-moz-range-thumb{width:18px;height:26px}
     button{padding:12px 14px}
-    .btns{gap:8px}
+    /* Keep the four buttons on ONE row. If they wrap, #bl grows ~50px and the
+       help panel below — which is offset by a fixed amount — lands inside it. */
+    .btns{gap:6px;flex-wrap:nowrap}
+    .btns button{padding:12px 8px;flex:1 1 auto;white-space:nowrap}
   }
   @media (prefers-reduced-motion: reduce){ #thanks{transition:opacity .6s} }
 </style>

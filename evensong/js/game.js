@@ -139,11 +139,22 @@
     } else midi = T.midiForDegree(G.playerDeg, CFG.ROOT_MIDI, G.fictaActive);
     A.player.setPitch(midi);
   }
+  // The voice belongs to ONE pointer — declared before the listeners that read it.
+  let voiceId = null;
   canvas.addEventListener('pointermove', e => {
+    // While a voice is held, only that pointer may bend the pitch; a second finger
+    // sliding on the glass must not drag the note being sung. With none held
+    // (desktop hover) every move still updates the highlighted string.
+    if (voiceId !== null && e.pointerId !== voiceId) return;
     const r = canvas.getBoundingClientRect();
     setPointer((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, G.mouse.down);
   });
+  // Without tracking which pointer owns the voice, a stray second finger lifting
+  // anywhere on the page cut off a note the first finger was still holding — and a
+  // resting palm could end the final 2.5s release the ending depends on.
   canvas.addEventListener('pointerdown', e => {
+    if (voiceId !== null && e.pointerId !== voiceId) return;   // ignore extra fingers
+    voiceId = e.pointerId;
     // Nobody's echo knot needs three fast taps in one spot, which is exactly the
     // gesture iOS reads as double-tap-to-zoom. Claim the gesture so the browser
     // cannot steal the only input that solves the level.
@@ -151,11 +162,20 @@
     const r = canvas.getBoundingClientRect();
     setPointer((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, true);
   }, { passive: false });
-  window.addEventListener('pointerup', () => setPointer(G.mouse.x, G.mouse.y, false));
+  const releaseVoice = (e) => {
+    // pointerup IS an activation-triggering event for touch (pointerdown is not,
+    // except for a mouse) — so this is where a phone can actually start the audio.
+    // Without it a music game could run the whole session in silence.
+    A.init(); if (A.unlock) A.unlock();
+    if (voiceId !== null && e.pointerId !== voiceId) return;
+    voiceId = null;
+    setPointer(G.mouse.x, G.mouse.y, false);
+  };
+  window.addEventListener('pointerup', releaseVoice);
   // iOS fires pointercancel (never pointerup) when it reclaims a touch as a system
   // gesture, a pinch, or a palm. Without this the voice latched on forever, and both
   // Eli's four silent beats and the ending's 2.5s release became unreachable.
-  window.addEventListener('pointercancel', () => setPointer(G.mouse.x, G.mouse.y, false));
+  window.addEventListener('pointercancel', releaseVoice);
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 
   // --------------------------------------------------------------- scenes
@@ -678,6 +698,7 @@
 
   // --------------------------------------------------------------- debug api
   window.__evensong = {
+    A,                                  // so the page-level click unlock can reach it
     state() {
       return {
         scene: G.scene, soulIdx: G.soulIdx, soulId: soul ? soul.id : null, loopCount: G.loopCount,
