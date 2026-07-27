@@ -34,7 +34,9 @@
   .panel::before,.panel::after{content:"";position:absolute;width:7px;height:7px;pointer-events:none}
   .panel::before{top:-1px;left:-1px;border-top:1px solid var(--ink-lo);border-left:1px solid var(--ink-lo)}
   .panel::after{bottom:-1px;right:-1px;border-bottom:1px solid var(--ink-lo);border-right:1px solid var(--ink-lo)}
-  #tl{top:14px;left:14px}
+  /* Clears the .home-link pill, which is fixed at the same left:14px/top:14px.
+     They overlapped at every width, desktop included — not a mobile-only bug. */
+  #tl{top:calc(52px + env(safe-area-inset-top));left:14px}
   #tr{top:14px;right:14px;text-align:right}
   #bl{bottom:14px;left:14px;pointer-events:auto}
   #br{bottom:14px;right:14px;text-align:right;color:var(--ink-lo)}
@@ -75,9 +77,27 @@
   #thanks{position:fixed;left:50%;bottom:18%;transform:translateX(-50%);
           color:var(--ink);letter-spacing:.18em;font-size:12px;opacity:0;transition:opacity 4s;
           pointer-events:none}
-  @media (max-width:760px){ #br{display:none} #tl .meta{display:none} .ctl{min-width:176px}
-    #tr{top:70px} #tr .kv{gap:12px} #tr .kv span{min-width:56px}
+  /* Narrow screens stack the four fixed panels instead of overlapping them:
+     .home-link (14-40), #tl (52-111), #tr below it, then the star field, then the
+     help line sitting just above the controls. */
+  @media (max-width:760px){ #tl .meta{display:none} .ctl{min-width:176px}
+    #tr{top:calc(119px + env(safe-area-inset-top))} #tr .kv{gap:12px} #tr .kv span{min-width:56px}
+    /* #br used to be display:none here, which left touch with no instructions at
+       all while the catalog advertised two controls touch does not have. */
+    #br{top:auto;bottom:calc(190px + env(safe-area-inset-bottom));right:14px;text-align:right}
     h1{letter-spacing:.18em} }
+  /* Thumb-sized controls. Gated on coarse pointers so the desktop hairline
+     aesthetic is byte-identical — the slider track was a 2px-tall hit area. */
+  @media (pointer:coarse){
+    .ctl{gap:2px}
+    input[type=range]{height:44px;background:transparent}
+    input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--hair)}
+    input[type=range]::-webkit-slider-thumb{width:18px;height:26px;margin-top:-12px}
+    input[type=range]::-moz-range-track{height:2px;background:var(--hair)}
+    input[type=range]::-moz-range-thumb{width:18px;height:26px}
+    button{padding:12px 14px}
+    .btns{gap:8px}
+  }
   @media (prefers-reduced-motion: reduce){ #thanks{transition:opacity .6s} }
 </style>
 </head>
@@ -432,7 +452,7 @@ function w2sy(y){ return (y-camY)*scale+H/2; }
 
 let tool='mass', dragGhost=null, panning=false, lastPX=0,lastPY=0;
 let mouseSX=0,mouseSY=0,mouseWX=0,mouseWY=0,mouseIn=false,earlyThump=false;
-const pointers=new Map(); let pinchD=0;
+const pointers=new Map(); let pinchD=0, pinchMX=0, pinchMY=0;
 
 canvas.addEventListener('contextmenu',e=>e.preventDefault());
 canvas.addEventListener('pointerdown',e=>{
@@ -442,7 +462,8 @@ canvas.addEventListener('pointerdown',e=>{
   pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pointers.size===2){ dragGhost=null; panning=false;
     const ps=[...pointers.values()];
-    pinchD=Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y); return; }
+    pinchD=Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y);
+    pinchMX=(ps[0].x+ps[1].x)/2; pinchMY=(ps[0].y+ps[1].y)/2; return; }
   if(e.button===2||e.button===1||tool==='pan'){ panning=true; lastPX=e.clientX; lastPY=e.clientY; glideX=glideY=0; }
   else{
     const w=s2w(e.clientX,e.clientY);
@@ -458,9 +479,16 @@ canvas.addEventListener('pointermove',e=>{
   if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   if(pointers.size===2){
     const ps=[...pointers.values()],
-          d=Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y);
-    if(pinchD>0) zoomAt((ps[0].x+ps[1].x)/2,(ps[0].y+ps[1].y)/2,d/pinchD);
-    pinchD=d; return;
+          d=Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y),
+          mx=(ps[0].x+ps[1].x)/2, my=(ps[0].y+ps[1].y)/2;
+    if(pinchD>0){
+      zoomAt(mx,my,d/pinchD);
+      // Two fingers also pan, so TOOL: PAN stops being mandatory on a phone
+      // (right-drag and the scroll wheel, the desktop routes, do not exist there).
+      // A mouse can never produce two simultaneous pointers, so desktop is untouched.
+      camX-=(mx-pinchMX)/scale; camY-=(my-pinchMY)/scale; needClear=true;
+    }
+    pinchD=d; pinchMX=mx; pinchMY=my; return;
   }
   if(panning){
     const dx=(e.clientX-lastPX)/scale, dy=(e.clientY-lastPY)/scale;
@@ -469,7 +497,14 @@ canvas.addEventListener('pointermove',e=>{
   }else if(dragGhost){ const w2=s2w(e.clientX,e.clientY); dragGhost.x1=w2[0]; dragGhost.y1=w2[1]; }
 });
 function endPointer(e){
+  // pointerdown is NOT an activation-triggering event for touch, so unlocking
+  // audio there alone can silently leave a phone playing nothing. pointerup is.
+  audio.ensure(); audio.retune();
   pointers.delete(e.pointerId); pinchD=0;
+  // A mouse leaving the canvas fires pointerout; a finger just lifts. Without this
+  // the last touch point stays a permanent invisible attractor, freezes the CURSOR
+  // readout, and costs an all-5000-star loop every frame.
+  if(e.pointerType!=='mouse') mouseIn=false;
   if(panning&&pointers.size===0){
     panning=false;
     if(director.stage>=5){ // pan-glides travel a little farther toward the largest
@@ -512,6 +547,15 @@ function largestMass(){ let b=null; for(const p of masses) if(!b||p.GM>b.GM) b=p
 
 // ---------- UI ----------
 const $=id=>document.getElementById(id);
+// Touch has no right-drag and no scroll wheel, so the navigation hints have to
+// name a gesture that exists. hardReset() runs at boot and rewrites these, so the
+// markup default is only ever seen for a frame.
+const COARSE=!!(window.matchMedia&&window.matchMedia('(pointer:coarse)').matches);
+const HELP_NAV=COARSE?'two fingers — pan &nbsp;·&nbsp; pinch — zoom'
+                     :'right-drag — pan &nbsp;·&nbsp; scroll — zoom';
+// Stage 5 turns the same line around on you; keep the punchline, change the verb.
+const HELP_NAV_LOOKED=COARSE?'two fingers — be looked around'
+                            :'right-drag — be looked around &nbsp;·&nbsp; scroll — zoom';
 const el={stars:$('r-stars'),kStars:$('k-stars'),fedRow:$('row-fed'),fed:$('r-fed'),
   time:$('r-time'),view:$('r-view'),cur:$('r-cur'),mass:$('r-mass'),fps:$('r-fps'),
   kRate:$('k-rate'),oTime:$('o-time'),sTime:$('s-time'),subrate:$('subrate'),
@@ -537,7 +581,7 @@ $('s-mass').addEventListener('input',e=>{
 });
 let trails=false;
 $('b-trails').addEventListener('click',e=>{ trails=!trails; e.target.classList.toggle('on',trails); needClear=true; });
-$('b-sound').addEventListener('click',e=>{ audio.muted=!audio.muted; e.target.classList.toggle('on',!audio.muted); audio.apply(); });
+$('b-sound').addEventListener('click',e=>{ audio.ensure(); audio.muted=!audio.muted; e.target.classList.toggle('on',!audio.muted); audio.apply(); });
 $('b-tool').addEventListener('click',e=>{ tool=tool==='mass'?'pan':'mass';
   e.target.textContent='TOOL: '+tool.toUpperCase(); canvas.style.cursor=tool==='mass'?'crosshair':'grab'; });
 el.reset.addEventListener('click',()=>{
@@ -547,7 +591,9 @@ el.reset.addEventListener('click',()=>{
 
 // ---------- audio — all synthesized ----------
 const audio={ctx:null,master:null,padVoices:[],hiss:null,muted:false,ready:false,driftT0:0,
-  ensure(){ if(this.ready) return;
+  // Retry-safe: once built, a later call still resumes a context the OS suspended
+  // (a phone call, a tab switch) instead of returning early into silence.
+  ensure(){ if(this.ready){ if(this.ctx&&this.ctx.state==='suspended') this.ctx.resume(); return; }
     try{
       const C=window.AudioContext||window.webkitAudioContext; if(!C) return;
       this.ctx=new C(); if(this.ctx.state==='suspended') this.ctx.resume();
@@ -704,7 +750,7 @@ const director={
       this.fired.add('help'+((wallT/25)|0));
       const r=[
         ()=>{el.help1.textContent='drag — feed a perturber mass';},
-        ()=>{el.help2.innerHTML='right-drag — be looked around &nbsp;·&nbsp; scroll — zoom';},
+        ()=>{el.help2.innerHTML=HELP_NAV_LOOKED;},
         ()=>{el.help3.textContent='star colours followed main-sequence classes O–M';},
         ()=>{el.help1.textContent='drag — open another. they are grateful';},
       ];
@@ -873,7 +919,7 @@ function hardReset(){
   el.sTime.disabled=false; timeSlideRaw=50; el.sTime.value=50; applyRate();
   el.thanks.style.opacity='0'; el.thanks.textContent='';
   el.help1.textContent='drag — launch a perturber mass';
-  el.help2.innerHTML='right-drag — pan &nbsp;·&nbsp; scroll — zoom';
+  el.help2.innerHTML=HELP_NAV;
   el.help3.textContent='star colours follow main-sequence classes O–M';
   if(titleTick){ clearInterval(titleTick); titleTick=null; document.title='Galaxy Sandbox'; }
   if(run>1&&lifetimeFed>0){ el.lifetime.style.display='block';

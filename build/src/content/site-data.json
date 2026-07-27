@@ -131,7 +131,7 @@
       "alt": "A luminous spiral galaxy warping around a blazing golden perturber",
       "summary": "Drop perturber masses into a living spiral galaxy and watch wakes shear into little cosmic bruises.",
       "metaDescription": "Galaxy Sandbox is a restricted N-body browser toy: drop perturber masses into a spiral galaxy and watch the wakes shear away.",
-      "controls": "Drag to launch · right-drag to pan · scroll to zoom",
+      "controls": "Drag to launch · right-drag or two fingers to pan · scroll or pinch to zoom",
       "duration": "6–8 minutes",
       "actionLabel": "Open Galaxy"
     },
