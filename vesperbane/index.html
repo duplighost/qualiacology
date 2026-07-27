@@ -43,6 +43,11 @@
     background: rgba(8,8,20,.52); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(8px);
   }
   .home-link:focus-visible, .home-link:hover { outline: none; color: #fff; border-color: rgba(255,143,200,.55); }
+  /* The canvas now fills the screen on a phone, so the pill would sit on top of
+     the hearts and the zone name. It steps aside while you are actually playing
+     and comes back on the title, pause, death and win screens. */
+  body.playing .home-link { opacity: 0; pointer-events: none; }
+  .home-link { transition: opacity .3s ease; }
   /* Touch controls are drawn natively on the canvas by the game (floating
      stick + action arc) — no DOM overlay needed. */
   canvas { touch-action: none; }
@@ -59,5 +64,19 @@
 <script src="js/fx.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/game.js"></script>
+<script>
+/* hub shell: the pill leaves while you are playing, so it stops covering the
+   hearts and the zone name now that the canvas fills a phone screen. Only on
+   coarse pointers — on desktop the canvas is letterboxed and never reached it. */
+(function () {
+  if (!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) return;
+  setInterval(function () {
+    try {
+      var s = window.DEBUG && window.DEBUG.game() && window.DEBUG.game().state;
+      document.body.classList.toggle('playing', s === 'play');
+    } catch (e) {}
+  }, 250);
+})();
+</script>
 </body>
 </html>

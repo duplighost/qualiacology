@@ -1214,11 +1214,12 @@ class Game {
     if (this.hintT > 0 && this.time < 30 && !this.boss) {
       ctx.globalAlpha = clamp(this.hintT, 0, 1);
       if (touchUI()) {
-        // Naming keys to a thumb is noise, and the whole bottom strip is taken by
-        // the stick and the DASH/JUMP/SLASH cluster — so this goes up top, in the
-        // one band nothing occupies. The stick needs no explaining; the combos do.
-        drawTextShadowCentered(ctx, 'SLIDE: DOWN + DASH', VIEW_W / 2, 44, 1, '#8d94b3');
-        drawTextShadowCentered(ctx, 'POGO: DOWN + SLASH IN AIR', VIEW_W / 2, 56, 1, '#565d85');
+        // Naming keys to a thumb is noise, so only the combos are worth saying.
+        // Placement is hemmed in: y=40 is the zone toast, the top corners are the
+        // HUD, bottom-left is the stick (x<=86) and bottom-right the button
+        // cluster (x>=352). This sits in the gap between them.
+        drawTextShadowCentered(ctx, 'DOWN+DASH SLIDE  ·  DOWN+SLASH POGO',
+          214, VIEW_H - 9, 1, '#8d94b3');
       } else {
         drawTextShadowCentered(ctx,
           'ARROWS RUN   ' + pk('jump') + ' JUMP   ' + pk('attack') + ' SLASH   ' + pk('dash') + ' DASH',
@@ -1376,12 +1377,15 @@ function boot() {
   function fit() {
     let raw = Math.min(window.innerWidth / VIEW_W, window.innerHeight / VIEW_H);
     if (!isFinite(raw) || raw <= 0.05) raw = 1;   // zero-size boot contexts
-    // Crisp integer scaling on big screens, fractional fill everywhere else.
-    // Quantising only above 2x matters: a phone in landscape lands around 1.4-1.8x,
-    // and flooring that to 1x used to strand the game in a 480x270 window in the
-    // middle of the screen (~39% of a 844x390 viewport). Nearest-neighbour is on
-    // (imageSmoothingEnabled=false), so fractional scales stay chunky, not blurry.
-    const s = raw >= 2 ? Math.floor(raw) : raw;
+    // Integer scaling keeps the pixel art crisp, but flooring 1.4x to 1x strands
+    // the game in a 480x270 window mid-screen — ~39% of a 844x390 phone. So on a
+    // thumb-driven device, quantise only above 2x and take the fractional fill;
+    // nearest-neighbour is on (imageSmoothingEnabled=false), so it stays chunky.
+    // Desktop keeps its original rule exactly, including in a small window — a
+    // 900x600 browser still gets a pixel-perfect 1x, not a fractional 1.85x.
+    const s = IS_TOUCH_PRIMARY
+      ? (raw >= 2 ? Math.floor(raw) : raw)
+      : (raw >= 1 ? Math.floor(raw) : raw);
     canvas.style.width = VIEW_W * s + 'px';
     canvas.style.height = VIEW_H * s + 'px';
     TOUCH.portrait = IS_TOUCH && window.innerHeight > window.innerWidth * 1.2;
