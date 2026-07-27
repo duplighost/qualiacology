@@ -243,6 +243,30 @@ function boot() {
 
     fx.render();
   }
+
+  // Debug/test handle, matching the window.__* convention the other games use.
+  // Exposes the two things that decide mobile frame cost: the quality tier and
+  // whether the composer's pixel ratio actually followed the renderer's.
+  window.__uninvited = {
+    fx, renderer, player, world, ui,
+    get quality() { return fx.quality; },
+    get pixelRatio() { return renderer.getPixelRatio(); },
+    // EffectComposer has setPixelRatio but no getter; _pixelRatio is what its
+    // render targets are actually sized by, so read that.
+    get composerPixelRatio() { return fx.composer._pixelRatio; },
+    get transmissive() {
+      let n = 0;
+      fx.scene.traverse((o) => {
+        if (!o.isMesh || !o.material) return;
+        for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+          if (m && m.transmission > 0) n++;
+        }
+      });
+      return n;
+    },
+    get renderInfo() { return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles }; },
+  };
+
   loop();
 }
 

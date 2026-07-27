@@ -177,18 +177,133 @@ function start() {
   audio.init();
   audio.biome('corridor');
 }
+// Touch is the primary pointer. maxTouchPoints alone is true on touchscreen
+// laptops driven by a mouse, which should keep the pointer-lock path.
+const TOUCH_PRIMARY = navigator.maxTouchPoints > 0 &&
+  !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+let touchPlaying = false;
+
 if (!TEST) {
-  addEventListener('click', () => {
-    if (!started) start();
-    if (!player.locked) document.body.requestPointerLock();
-  });
-  document.addEventListener('pointerlockchange', () => {
-    player.locked = document.pointerLockElement === document.body;
-    if (started) $('paused').style.display = player.locked ? 'none' : 'flex';
-    if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
-  });
+  if (TOUCH_PRIMARY) {
+    bindTouch();
+  } else {
+    // No mobile browser implements Pointer Lock, and the frame loop gates on it —
+    // so a device without it AND without touch (rare, but real) gets told plainly
+    // rather than being dropped into a forest it cannot walk through.
+    // Android Chrome exposes requestPointerLock without supporting it, so the
+    // capability check alone would wave a phone into a game it cannot play. Coarse
+    // pointer with no fine pointer anywhere = phone or tablet; a touchscreen laptop
+    // reports any-pointer:fine and keeps the desktop path.
+    const mq = window.matchMedia;
+    const pointerLockSupported = typeof document.body.requestPointerLock === 'function'
+      && !(mq && mq('(pointer: coarse)').matches && !mq('(any-pointer: fine)').matches);
+    addEventListener('click', () => {
+      if (!pointerLockSupported) {
+        const note = $('desktop-note');
+        if (note) note.hidden = false;
+        $('title').classList.add('unsupported');
+        return;
+      }
+      if (!started) start();
+      if (!player.locked) document.body.requestPointerLock();
+    });
+    document.addEventListener('pointerlockchange', () => {
+      player.locked = document.pointerLockElement === document.body;
+      if (started) $('paused').style.display = player.locked ? 'none' : 'flex';
+      if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
+    });
+  }
 } else {
   start();
+}
+
+// ---- touch: left thumb walks, right thumb looks ----
+// The path only ever goes forward, so the left stick is deliberately forgiving:
+// push it anywhere upward and you walk, push it to the rim and you hurry. No run
+// button to find in the dark.
+function bindTouch() {
+  const STICK_MAX = 54;        // px of travel for full deflection
+  const HURRY_AT = 0.86;       // fraction of full deflection that starts hurrying
+  const DEAD = 0.16;
+  let moveId = null, lookId = null;
+  let ox = 0, oy = 0, lx = 0, ly = 0;
+  const ring = $('stick-ring'), nub = $('stick-nub');
+
+  // Retry-safe: iOS suspends the context on a phone call or a tab switch, and the
+  // desktop path re-resumes on every lock change. Touch had exactly one attempt,
+  // inside `if (!started)`, so a single miss meant silence for the whole session.
+  const resumeAudio = () => {
+    if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
+  };
+
+  const resetStick = () => {
+    moveId = null;
+    player.touchMove.x = 0; player.touchMove.z = 0;
+    player.touchHurry = false;
+    if (ring) ring.style.opacity = '0';
+  };
+  // Both thumbs, not just the stick — leaving lookId set latches a dead pointer id
+  // that the next finger cannot claim.
+  const releaseAll = () => { resetStick(); lookId = null; };
+
+  addEventListener('touchstart', (e) => {
+    // Let touches on real UI through untouched — preventDefault here suppresses the
+    // compatibility click, which would make the Qualiacology home pill untappable.
+    if (e.target.closest && e.target.closest('a, button')) return;
+    if (!started) {
+      start();
+      touchPlaying = true;
+    }
+    resumeAudio();
+    for (const t of e.changedTouches) {
+      if (t.clientX < innerWidth * 0.5 && moveId === null) {
+        moveId = t.identifier; ox = t.clientX; oy = t.clientY;
+        if (ring) {
+          ring.style.opacity = '1';
+          ring.style.left = ox + 'px'; ring.style.top = oy + 'px';
+          if (nub) nub.style.transform = 'translate(-50%,-50%)';
+        }
+      } else if (t.clientX >= innerWidth * 0.5 && lookId === null) {
+        lookId = t.identifier; lx = t.clientX; ly = t.clientY;
+      }
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === moveId) {
+        let dx = t.clientX - ox, dy = t.clientY - oy;
+        const len = Math.hypot(dx, dy);
+        if (len > STICK_MAX) { dx = dx / len * STICK_MAX; dy = dy / len * STICK_MAX; }
+        const nx = dx / STICK_MAX, nz = -dy / STICK_MAX;   // up = forward
+        const mag = Math.hypot(nx, nz);
+        player.touchMove.x = mag < DEAD ? 0 : nx;
+        player.touchMove.z = mag < DEAD ? 0 : nz;
+        player.touchHurry = mag >= HURRY_AT;
+        if (nub) nub.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      } else if (t.identifier === lookId) {
+        player.applyTouchLook(t.clientX - lx, t.clientY - ly);
+        lx = t.clientX; ly = t.clientY;
+      }
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  const endTouch = (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === moveId) resetStick();
+      if (t.identifier === lookId) lookId = null;
+    }
+  };
+  addEventListener('touchend', endTouch);
+  // iOS reclaims touches as system gestures; without this the stick latches on.
+  addEventListener('touchcancel', endTouch);
+  // Backgrounding the tab would otherwise leave you walking into the dark. Release
+  // both thumbs, and re-resume audio on the way back in.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseAll(); else resumeAudio();
+  });
 }
 
 // ---- frame loop ----
@@ -198,7 +313,7 @@ let lastInfo = startInfo;
 let statsFrames = 0, statsTime = 0, statsFPS = 0;
 
 function tick(dt) {
-  const running = TEST || player.locked;
+  const running = TEST || player.locked || touchPlaying;
   if (running) {
     const info = player.update(dt, world);
     lastInfo = info;

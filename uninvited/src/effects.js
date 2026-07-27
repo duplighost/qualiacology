@@ -7,6 +7,12 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
+// A thumb-driven device: coarse pointer AND no fine pointer anywhere. A touchscreen
+// laptop reports any-pointer:fine and is treated as the desktop it is.
+const TOUCH_PRIMARY = !!(window.matchMedia
+  && window.matchMedia('(pointer: coarse)').matches
+  && !window.matchMedia('(any-pointer: fine)').matches);
+
 const GrainVignetteShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -341,8 +347,40 @@ export class Effects {
     this.lantern.castShadow = q >= 2;
     this.renderer.shadowMap.enabled = q >= 1;
     if (q >= 1) this.moon.shadow.needsUpdate = true;
-    this.renderer.setPixelRatio(q >= 2 ? Math.min(devicePixelRatio, 1.75) : 1);
+    // The composer's targets have no `samples` and the context's antialias flag
+    // does not reach them, so the pixel ratio IS this game's only antialiasing.
+    // A phone needs the full drop; a desktop that merely dipped below the frame
+    // budget should not also lose every smooth edge, so it keeps a floor.
+    const dpr = q >= 2
+      ? Math.min(devicePixelRatio, 1.75)
+      : (TOUCH_PRIMARY ? 1 : Math.min(devicePixelRatio, 1.35));
+    this.renderer.setPixelRatio(dpr);
+    // EffectComposer keeps its OWN pixel ratio, captured from the renderer at
+    // construction, and render() goes through the composer — so setting only the
+    // renderer left the entire post chain drawing at the full ratio and the
+    // quality drop bought almost nothing on the devices that needed it.
+    this.composer.setPixelRatio(dpr);
+    // A material with transmission > 0 makes three render the whole scene a
+    // SECOND time each frame into a transmission target. Below full quality the
+    // refraction is not worth doubling the scene cost; opacity alone still reads
+    // as glass in a house this dark.
+    this.setTransmission(q >= 2);
     // force material shadow recompile when toggling the shadow system
     this.scene.traverse(o => { if (o.isMesh && o.material) o.material.needsUpdate = true; });
+  }
+
+  // Toggle refraction on every transmissive material, remembering each one's
+  // authored value so full quality restores exactly what the artist set.
+  setTransmission(on) {
+    this.scene.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        if (!m || m.transmission === undefined) continue;
+        if (m.userData.authoredTransmission === undefined) m.userData.authoredTransmission = m.transmission;
+        const next = on ? m.userData.authoredTransmission : 0;
+        if (m.transmission !== next) { m.transmission = next; m.needsUpdate = true; }
+      }
+    });
   }
 }

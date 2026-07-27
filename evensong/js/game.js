@@ -70,14 +70,38 @@
 
   // --------------------------------------------------------------- input
   const canvas = document.getElementById('cv');
+  // Touch is the primary pointer — used for affordances a mouse gets from hovering.
+  G.coarsePointer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+
+  // The endcard's two choices, defined once. The update loop and the click handler
+  // used to carry duplicate copies of this test, which is how they drift apart.
+  // The band was +/-26 canvas px = ~28 CSS px tall in landscape; a thumb needs 44+.
+  const END_ROW_Y = CFG.H / 2 + 130;
+  const END_ROW_HALF = 56;
+  function endChoiceAt(mx, my) {
+    return Math.abs(my - END_ROW_Y) < END_ROW_HALF ? (mx < CFG.W / 2 ? 0 : 1) : -1;
+  }
+
   function setPointer(x01, y01, down) {
     G.mouse.x = U.clamp(x01, 0, 1); G.mouse.y = U.clamp(y01, 0, 1);
     const wasDown = G.mouse.down; G.mouse.down = !!down;
     G.mouseXpx = G.mouse.x * CFG.W;
     const yAdj = U.clamp((G.mouse.y * CFG.H - CFG.LADDER_TOP_Y) / (CFG.LADDER_BOT_Y - CFG.LADDER_TOP_Y), 0, 1);
-    const deg = T.degreeFromY(yAdj, CFG.N_STRINGS, G.playerDeg, CFG.SNAP_HYSTERESIS);
+    // Hysteresis exists to stop a *travelling* pointer chattering across a string
+    // boundary. First contact is not travel — it is a discrete landing — and running
+    // it through the hysteresis branch resolves one scale step short of the string
+    // you actually touched. A mouse never exposed this (its per-event delta is under
+    // one string); a finger hits it on every single press, in a game where the
+    // interval between your note and theirs IS the mechanic. Round plainly instead.
+    const fresh = !wasDown && G.mouse.down;
+    const deg = T.degreeFromY(yAdj, CFG.N_STRINGS, fresh ? null : G.playerDeg, CFG.SNAP_HYSTERESIS);
     G.hoverDeg = deg;
-    if (!wasDown && G.mouse.down) onPress();
+    if (fresh) {
+      // Commit the degree before onPress so its pushPitch() sounds the string under
+      // the finger, instead of gliding in from wherever the previous note was.
+      G.playerDeg = deg;
+      onPress();
+    }
     if (wasDown && !G.mouse.down) onRelease();
     if (deg !== G.playerDeg) {
       G.playerDeg = deg;
@@ -115,15 +139,43 @@
     } else midi = T.midiForDegree(G.playerDeg, CFG.ROOT_MIDI, G.fictaActive);
     A.player.setPitch(midi);
   }
+  // The voice belongs to ONE pointer — declared before the listeners that read it.
+  let voiceId = null;
   canvas.addEventListener('pointermove', e => {
+    // While a voice is held, only that pointer may bend the pitch; a second finger
+    // sliding on the glass must not drag the note being sung. With none held
+    // (desktop hover) every move still updates the highlighted string.
+    if (voiceId !== null && e.pointerId !== voiceId) return;
     const r = canvas.getBoundingClientRect();
     setPointer((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, G.mouse.down);
   });
+  // Without tracking which pointer owns the voice, a stray second finger lifting
+  // anywhere on the page cut off a note the first finger was still holding — and a
+  // resting palm could end the final 2.5s release the ending depends on.
   canvas.addEventListener('pointerdown', e => {
+    if (voiceId !== null && e.pointerId !== voiceId) return;   // ignore extra fingers
+    voiceId = e.pointerId;
+    // Nobody's echo knot needs three fast taps in one spot, which is exactly the
+    // gesture iOS reads as double-tap-to-zoom. Claim the gesture so the browser
+    // cannot steal the only input that solves the level.
+    e.preventDefault();
     const r = canvas.getBoundingClientRect();
     setPointer((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, true);
-  });
-  window.addEventListener('pointerup', () => setPointer(G.mouse.x, G.mouse.y, false));
+  }, { passive: false });
+  const releaseVoice = (e) => {
+    // pointerup IS an activation-triggering event for touch (pointerdown is not,
+    // except for a mouse) — so this is where a phone can actually start the audio.
+    // Without it a music game could run the whole session in silence.
+    A.init(); if (A.unlock) A.unlock();
+    if (voiceId !== null && e.pointerId !== voiceId) return;
+    voiceId = null;
+    setPointer(G.mouse.x, G.mouse.y, false);
+  };
+  window.addEventListener('pointerup', releaseVoice);
+  // iOS fires pointercancel (never pointerup) when it reclaims a touch as a system
+  // gesture, a pinch, or a palm. Without this the voice latched on forever, and both
+  // Eli's four silent beats and the ending's 2.5s release became unreachable.
+  window.addEventListener('pointercancel', releaseVoice);
   canvas.addEventListener('contextmenu', e => e.preventDefault());
 
   // --------------------------------------------------------------- scenes
@@ -220,7 +272,7 @@
         // tutorial lines (wren only): the verb first; then, once they can sing, the goal.
         if (G.soulIdx === 0 && !resolutionPending) {
           if (!tutorialDone) {
-            G.textBottom = { str: S.TEXT.tutorial, alpha: Math.min(0.8, sceneT * 0.5) };
+            G.textBottom = { str: G.coarsePointer ? S.TEXT.tutorialTouch : S.TEXT.tutorial, alpha: Math.min(0.8, sceneT * 0.5) };
             if (G.recentW > 4) tutorialDone = true;
           } else if (G.loopCount >= 1 && !knot.done) {
             G.textBottom = { str: S.TEXT.tutorial2, alpha: Math.min(0.8, (G.textBottom ? G.textBottom.alpha : 0) + dt * 0.5) };
@@ -293,8 +345,7 @@
         break;
       }
       case 'endcard': {
-        const mx = G.mouse.x * CFG.W, my = G.mouse.y * CFG.H;
-        G.endHover = (Math.abs(my - (CFG.H / 2 + 130)) < 26) ? (mx < CFG.W / 2 ? 0 : 1) : -1;
+        G.endHover = endChoiceAt(G.mouse.x * CFG.W, G.mouse.y * CFG.H);
         break;
       }
       case 'freesing': {
@@ -327,8 +378,7 @@
   }
   function clickEnd() {
     // recompute from the click's own pointer position — G.endHover is last frame's state
-    const mx = G.mouse.x * CFG.W, my = G.mouse.y * CFG.H;
-    const hover = (Math.abs(my - (CFG.H / 2 + 130)) < 26) ? (mx < CFG.W / 2 ? 0 : 1) : -1;
+    const hover = endChoiceAt(G.mouse.x * CFG.W, G.mouse.y * CFG.H);
     if (hover === 0) location.reload();
     else if (hover === 1) {
       G.scene = 'freesing'; G.groundOn = true; G.grace = false;
@@ -648,6 +698,7 @@
 
   // --------------------------------------------------------------- debug api
   window.__evensong = {
+    A,                                  // so the page-level click unlock can reach it
     state() {
       return {
         scene: G.scene, soulIdx: G.soulIdx, soulId: soul ? soul.id : null, loopCount: G.loopCount,

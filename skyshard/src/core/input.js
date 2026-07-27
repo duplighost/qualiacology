@@ -53,9 +53,27 @@ export class Input {
 
   requestLock() {
     if (this.locked) return;
-    // unadjustedMovement disables OS mouse accel where supported = cleaner aim.
-    const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
-    if (p && p.catch) p.catch(() => this.canvas.requestPointerLock());
+    // No mobile browser implements Pointer Lock, and calling it there throws
+    // synchronously, aborting whatever was mid-flight. Bail out quietly; callers
+    // gate on Input.pointerLockSupported() before starting a run.
+    if (!Input.pointerLockSupported()) return;
+    try {
+      // unadjustedMovement disables OS mouse accel where supported = cleaner aim.
+      const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
+      if (p && p.catch) p.catch(() => { try { this.canvas.requestPointerLock(); } catch (e) {} });
+    } catch (e) { /* older browsers throw on the options form */ }
+  }
+
+  // iOS omits the API outright. Android Chrome still EXPOSES requestPointerLock
+  // while not supporting it, so a capability check alone waves phones through into
+  // a game they cannot play. A device whose pointer is coarse and which has no fine
+  // pointer at all is a phone or tablet; a touchscreen laptop reports any-pointer:
+  // fine and keeps the desktop path.
+  static pointerLockSupported() {
+    if (typeof document.body.requestPointerLock !== 'function') return false;
+    const mq = window.matchMedia;
+    if (!mq) return true;
+    return !(mq('(pointer: coarse)').matches && !mq('(any-pointer: fine)').matches);
   }
 
   down(code) { return this.keys.has(code); }

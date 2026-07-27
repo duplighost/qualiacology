@@ -66,7 +66,7 @@
       "alt": "A moonlit forest path closing between twisted trees, watched by eyes in the trunks and recorded on VHS",
       "summary": "Every path you take eats itself. Walk forward through an infinite nighttime forest while the route seals behind you, the camcorder keeps recording, and the trees watch.",
       "metaDescription": "THE EATEN PATH is a first-person horror walk through an infinite nighttime forest where every route seals behind you.",
-      "controls": "WASD + mouse · Shift to hurry · headphones recommended",
+      "controls": "WASD + mouse · two-thumb touch · Shift to hurry · headphones recommended",
       "actionLabel": "Enter THE EATEN PATH"
     },
     {
@@ -79,7 +79,7 @@
       "alt": "A gold flame and a pale flame joined by a glowing thread across dark strings",
       "summary": "Five souls are stuck one note from rest, and you are the second voice. Hold the mouse to sing, find the interval each of them needs, and when the choir holds its last chord, the only way to end it is to let go.",
       "metaDescription": "EVENSONG is a browser game sung in real counterpoint: five stuck souls, a looping ground bass, and an ending that asks you to stop playing.",
-      "controls": "Mouse only · hold to sing · release to rest",
+      "controls": "Mouse or touch · hold to sing · release to rest",
       "actionLabel": "Sing EVENSONG"
     },
     {
@@ -131,7 +131,7 @@
       "alt": "A luminous spiral galaxy warping around a blazing golden perturber",
       "summary": "Drop perturber masses into a living spiral galaxy and watch wakes shear into little cosmic bruises.",
       "metaDescription": "Galaxy Sandbox is a restricted N-body browser toy: drop perturber masses into a spiral galaxy and watch the wakes shear away.",
-      "controls": "Drag to launch · right-drag to pan · scroll to zoom",
+      "controls": "Drag to launch · right-drag or two fingers to pan · scroll or pinch to zoom",
       "duration": "6–8 minutes",
       "actionLabel": "Open Galaxy"
     },

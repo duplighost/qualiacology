@@ -237,6 +237,13 @@ window.AUDIO = (function () {
       wet = ctx.createGain(); wet.gain.value = U.dbToGain(CFG.MIX_WET);
       wet.connect(conv); conv.connect(comp);
       comp.connect(master); master.connect(ctx.destination);
+      // Retry-safe unlock, and NOT inside the ?debug block below — iOS suspends (or
+      // 'interrupted's) the context on a call, a route change or a tab switch, and
+      // per spec `pointerdown` grants user activation only when pointerType is
+      // 'mouse'; for a finger it is pointerup. So this gets called again from
+      // pointerup and from a capture-phase click, not just on the first press.
+      A.unlock = () => { if (ctx && ctx.state !== 'running') ctx.resume(); };
+      A.state = () => (ctx ? ctx.state : 'none');
       // debug tap: lets tests confirm the choir is actually sounding (and not clipping)
       if (new URLSearchParams(location.search).has('debug')) {
         const an = ctx.createAnalyser(); an.fftSize = 2048;

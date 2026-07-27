@@ -46,6 +46,20 @@
     animation: breathe 2.6s ease-in-out infinite;
   }
   @keyframes breathe { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+  /* Shown only on devices without Pointer Lock (every phone). The title overlay is
+     transparent over the live world, so this needs its own backing to stay legible. */
+  /* display:inline-block outranks the UA stylesheet's [hidden]{display:none}, so
+     without this the note showed on desktop from page load. Keep it above the
+     display rule's specificity, not merely before it. */
+  #desktop-note[hidden] { display: none; }
+  #desktop-note {
+    display: inline-block; margin: 3.4vh auto 0; max-width: 78vw; line-height: 1.7;
+    font-size: 12px; letter-spacing: 0.28em; text-indent: 0.28em;
+    color: #eaf4ff; text-transform: uppercase; font-weight: 300;
+    background: rgba(6, 10, 18, 0.74); padding: 11px 17px; border-radius: 4px;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+  }
+  #title.unsupported .begin { animation: none; opacity: 0.4; }
 
   #pause { background: rgba(6, 8, 14, 0.55); backdrop-filter: blur(6px); }
   #pause .begin { animation-duration: 2s; }
@@ -156,6 +170,7 @@
     <h1>SKYSHARD</h1>
     <div class="sub">five lands &middot; strange doors</div>
     <div class="begin">click to wake</div>
+    <div id="desktop-note" hidden>Desktop with a mouse &amp; keyboard required.</div>
   </div>
 </div>
 
