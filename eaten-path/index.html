@@ -21,7 +21,8 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2303050a'/%3E%3Crect x='10' y='18' width='44' height='28' rx='4' fill='none' stroke='%23e8e8e0' stroke-opacity='.7' stroke-width='3'/%3E%3Ccircle cx='23' cy='32' r='6' fill='%23ff3b30'/%3E%3Ccircle cx='41' cy='32' r='6' fill='%23e8e8e0' fill-opacity='.25'/%3E%3C/svg%3E">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <style>
-  html, body { margin:0; padding:0; background:#000; overflow:hidden; height:100%; cursor:none; }
+  html, body { margin:0; padding:0; background:#000; overflow:hidden; height:100%; cursor:none;
+    touch-action:none; -webkit-user-select:none; user-select:none; }
   /* qualiacology hub shell */
   .home-link{position:fixed;left:max(14px,env(safe-area-inset-left));top:max(14px,env(safe-area-inset-top));z-index:20;
     color:rgba(232,232,224,.85);text-decoration:none;cursor:pointer;font:bold 12px/1.2 'Courier New',monospace;
@@ -69,12 +70,42 @@
   #title .go .dot { color:#ff3b30; }
   @keyframes blink { 0%,60% {opacity:1;} 61%,100% {opacity:.25;} }
   #title .keys { position:absolute; bottom:6%; font-size:14px; letter-spacing:.18em; color:#6f6f66; }
-  /* Shown only on devices without Pointer Lock (every phone). The keyboard hint
-     line is meaningless there, and its &nbsp;-joined copy cannot wrap, so drop it. */
+  /* Shown only where there is no Pointer Lock AND no touch. The keyboard hint line
+     is meaningless there, and its &nbsp;-joined copy cannot wrap, so drop it. */
   #title #desktop-note { margin-top:34px; max-width:80vw; text-align:center; line-height:1.7;
     font-size:14px; letter-spacing:.18em; color:#c9c9bf; }
   #title.unsupported .keys { display:none; }
   #title.unsupported .go { animation:none; opacity:.35; }
+
+  /* One of the two hint lines shows, never both. */
+  #title .touch-keys { display:none; }
+  @media (pointer: coarse) {
+    #title .keys:not(.touch-keys) { display:none; }
+    #title .touch-keys { display:block; }
+  }
+
+  /* Left-thumb stick, drawn where the thumb lands rather than at a fixed spot. */
+  #stick-ring {
+    position:fixed; width:108px; height:108px; margin:-54px 0 0 -54px; border-radius:50%;
+    border:1px solid rgba(216,216,208,.30); background:rgba(0,0,0,.16);
+    z-index:9; pointer-events:none; opacity:0; transition:opacity .18s ease;
+  }
+  #stick-nub {
+    position:absolute; left:50%; top:50%; width:40px; height:40px; margin:-20px 0 0 -20px;
+    border-radius:50%; background:rgba(216,216,208,.24); border:1px solid rgba(216,216,208,.42);
+  }
+
+  /* The VHS frame is 4:3-ish: in portrait it shrinks to a band with the world in a
+     slot. Landscape is the only way this reads. iOS cannot be told to rotate. */
+  #rotate-hint { display:none; }
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotate-hint {
+      display:block; position:fixed; left:50%; bottom:6%; transform:translateX(-50%);
+      z-index:11; padding:9px 15px; border-radius:4px; background:rgba(0,0,0,.72);
+      color:#d8d8d0; font-family:'Courier New',monospace; font-size:13px;
+      letter-spacing:.16em; white-space:nowrap; pointer-events:none;
+    }
+  }
   #title .trackbar { position:absolute; left:0; right:0; height:3px; background:rgba(255,255,255,.06); animation: roll 7s linear infinite; }
   @keyframes roll { from { top:110%; } to { top:-5%; } }
   #paused { display:none; background:rgba(0,0,0,.72); }
@@ -105,7 +136,11 @@
   <div class="go">CLICK TO RECORD <span class="dot">&#9679;</span></div>
   <div id="desktop-note" hidden>Desktop with a mouse &amp; keyboard required.</div>
   <div class="keys">WASD&nbsp;WALK&nbsp;&nbsp;&middot;&nbsp;&nbsp;MOUSE&nbsp;LOOK&nbsp;&nbsp;&middot;&nbsp;&nbsp;SHIFT&nbsp;HURRY&nbsp;&nbsp;&middot;&nbsp;&nbsp;HEADPHONES&nbsp;ON</div>
+  <div class="keys touch-keys">LEFT&nbsp;THUMB&nbsp;WALKS&nbsp;&nbsp;&middot;&nbsp;&nbsp;RIGHT&nbsp;THUMB&nbsp;LOOKS&nbsp;&nbsp;&middot;&nbsp;&nbsp;PUSH&nbsp;FAR&nbsp;TO&nbsp;HURRY</div>
 </div>
+
+<div id="stick-ring"><div id="stick-nub"></div></div>
+<div id="rotate-hint">TURN YOUR PHONE SIDEWAYS</div>
 
 <div class="full" id="paused">
   <div class="p1">&#10074;&#10074; PAUSE</div>
@@ -125,6 +160,14 @@
 document.addEventListener('pointerlockchange', function () {
   document.body.classList.toggle('playing', !!document.pointerLockElement);
 });
+/* On touch there is no pointer lock to hide behind, so the title screen going away
+   is the signal. The pill stays reachable until then. */
+document.addEventListener('touchstart', function () {
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+    var t = document.getElementById('title');
+    if (t && t.style.display === 'none') document.body.classList.add('playing');
+  }
+}, { passive: true });
 </script>
 </body>
 </html>
