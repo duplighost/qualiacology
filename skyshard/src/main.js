@@ -7,6 +7,12 @@ import { CFG } from './config.js';
 import { G } from './state.js';
 import { loadSave, save, wipeSave } from './core/save.js';
 import { Input } from './core/input.js';
+
+// A thumb-driven device: coarse pointer AND no fine pointer anywhere. A touchscreen
+// laptop reports any-pointer:fine and keeps the pointer-lock path it can actually use.
+const TOUCH_PRIMARY = !!(window.matchMedia
+  && window.matchMedia('(pointer: coarse)').matches
+  && !window.matchMedia('(any-pointer: fine)').matches);
 import { initAudio, resumeAudio, sfx } from './core/audio.js';
 import { music } from './core/music.js';
 import { juice } from './fx/juice.js';
@@ -184,10 +190,10 @@ async function boot() {
 
   const begin = () => {
     if (G.mode !== 'title') return;
-    // Pointer-lock mouselook + WASD is the only input path. No phone browser has
-    // Pointer Lock, so say so instead of dropping the player into a world they
-    // cannot turn or walk in.
-    if (!Input.pointerLockSupported()) {
+    // A phone has no Pointer Lock, so it plays through the touch layer instead.
+    // The desktop-only note is now only for the genuinely stranded case: no
+    // pointer lock AND no touch.
+    if (!Input.pointerLockSupported() && !TOUCH_PRIMARY) {
       const note = document.getElementById('desktop-note');
       if (note) note.removeAttribute('hidden');
       titleEl.classList.add('unsupported');
@@ -200,7 +206,7 @@ async function boot() {
     titleEl.classList.remove('show');
     G.hud.show();
     G.mode = 'world';
-    G.input.requestLock();
+    if (TOUCH_PRIMARY) showTouchControls(); else G.input.requestLock();
     // instant action: something to fight within sight of the first step
     G.enemies.spawn('hopper', SPAWN.x + 14, SPAWN.z - 10, { ctx: 'world' });
     G.enemies.spawn('puff', SPAWN.x - 10, SPAWN.z - 16, { ctx: 'world' });
@@ -208,15 +214,134 @@ async function boot() {
   };
   titleEl.addEventListener('click', begin);
 
-  // pause on lock loss, resume on click
+  // ---- touch: left thumb walks, right side looks, pads do the verbs ---------
+  const touchRoot = document.getElementById('touch');
+  const stickEl = document.getElementById('tstick');
+  const nubEl = document.getElementById('tnub');
+  const PADS = [
+    ['t-jump', 'Space'], ['t-dash', 'ShiftLeft'],
+    ['t-slam', 'KeyC'], ['t-grap', 'KeyE'], ['t-seek', 'KeyQ'],
+  ];
+  const STICK_MAX = 54, STICK_DEAD = 0.17;
+  let moveId = null, lookId = null, ox = 0, oy = 0, lx = 0, ly = 0;
+
+  function showTouchControls() {
+    if (!touchRoot) return;
+    touchRoot.removeAttribute('hidden');
+    syncAbilityPads();
+  }
+  // The pads appear as the world grants the abilities, so the corner never shows
+  // a verb the player cannot do yet.
+  function syncAbilityPads() {
+    if (!TOUCH_PRIMARY) return;
+    const a = G.save.abilities, alt = G.save.altFires;
+    const vis = { 't-dash': a.dash, 't-slam': a.slam, 't-grap': a.grapple, 't-seek': alt.seeker };
+    for (const [id, on] of Object.entries(vis)) {
+      const el = document.getElementById(id);
+      if (el) el.toggleAttribute('hidden', !on);
+    }
+  }
+  G.syncAbilityPads = syncAbilityPads;   // pickups call this when they grant one
+
+  for (const [id, code] of PADS) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const set = (on) => (e) => {
+      e.preventDefault(); e.stopPropagation();
+      el.classList.toggle('on', on);
+      G.input.setTouchHeld(code, on);
+    };
+    el.addEventListener('touchstart', set(true), { passive: false });
+    el.addEventListener('touchend', set(false));
+    el.addEventListener('touchcancel', set(false));
+  }
+  const fireEl = document.getElementById('t-fire');
+  if (fireEl) {
+    const setFire = (on) => (e) => {
+      e.preventDefault(); e.stopPropagation();
+      fireEl.classList.toggle('on', on);
+      G.input.mouseDown[0] = on;
+      if (on) G.input.mousePressed[0] = true;
+    };
+    fireEl.addEventListener('touchstart', setFire(true), { passive: false });
+    fireEl.addEventListener('touchend', setFire(false));
+    fireEl.addEventListener('touchcancel', setFire(false));
+  }
+
+  const releaseAllTouch = () => {
+    moveId = null; lookId = null;
+    if (stickEl) stickEl.style.opacity = '0';
+    G.input.releaseTouch();
+    for (const [id] of PADS) document.getElementById(id)?.classList.remove('on');
+    fireEl?.classList.remove('on');
+  };
+
+  canvas.addEventListener('touchstart', (e) => {
+    G.input.touch = true;
+    if (G.mode === 'title') { begin(); e.preventDefault(); return; }
+    for (const t of e.changedTouches) {
+      if (t.clientX < innerWidth * 0.45 && moveId === null) {
+        moveId = t.identifier; ox = t.clientX; oy = t.clientY;
+        if (stickEl) {
+          stickEl.style.left = ox + 'px'; stickEl.style.top = oy + 'px';
+          stickEl.style.opacity = '1';
+          if (nubEl) nubEl.style.transform = 'translate(-50%,-50%)';
+        }
+      } else if (t.clientX >= innerWidth * 0.45 && lookId === null) {
+        lookId = t.identifier; lx = t.clientX; ly = t.clientY;
+      }
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === moveId) {
+        let dx = t.clientX - ox, dy = t.clientY - oy;
+        const len = Math.hypot(dx, dy);
+        if (len > STICK_MAX) { dx = dx / len * STICK_MAX; dy = dy / len * STICK_MAX; }
+        const nx = dx / STICK_MAX, ny = dy / STICK_MAX;
+        const mag = Math.hypot(nx, ny);
+        G.input.touchMove.s = mag < STICK_DEAD ? 0 : nx;    // right = strafe +
+        G.input.touchMove.f = mag < STICK_DEAD ? 0 : -ny;   // up = forward +
+        if (nubEl) nubEl.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      } else if (t.identifier === lookId) {
+        // Straight into the accumulators the mouse writes, scaled from the
+        // touch sensitivity rather than the mouse's.
+        G.input.lookX += (t.clientX - lx) * (G.input.touchSensitivity / G.input.sensitivity);
+        G.input.lookY += (t.clientY - ly) * (G.input.touchSensitivity / G.input.sensitivity);
+        lx = t.clientX; ly = t.clientY;
+      }
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  const endTouch = (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === moveId) {
+        moveId = null;
+        G.input.touchMove.f = 0; G.input.touchMove.s = 0;
+        if (stickEl) stickEl.style.opacity = '0';
+      }
+      if (t.identifier === lookId) lookId = null;
+    }
+  };
+  canvas.addEventListener('touchend', endTouch);
+  // iOS reclaims touches as system gestures; without this a thumb latches on.
+  canvas.addEventListener('touchcancel', endTouch);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAllTouch(); });
+
+  // pause on lock loss, resume on click. A phone never holds pointer lock, so it
+  // must not be dragged into the paused state by its absence.
   G.input.onLockChange = (locked) => {
-    if (G.mode === 'title') return;
+    if (G.mode === 'title' || TOUCH_PRIMARY) return;
     paused = !locked;
     pauseEl.classList.toggle('show', paused);
     if (!locked) music.setIntensity(0);
   };
   pauseEl.addEventListener('click', () => G.input.requestLock());
   canvas.addEventListener('click', () => {
+    if (TOUCH_PRIMARY) return;
     if (G.mode !== 'title' && !G.input.locked) G.input.requestLock();
   });
 

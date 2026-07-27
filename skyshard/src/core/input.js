@@ -16,6 +16,18 @@ export class Input {
     this.onLockChange = null;    // game pauses/resumes off this
     this.wheel = 0;
 
+    // --- touch ---------------------------------------------------------
+    // A thumb cannot press a key, so on-screen buttons hold and release the same
+    // key codes the keyboard uses, and the left stick supplies an analog move
+    // vector that moveAxis() folds in beside WASD. Look deltas go straight into
+    // lookX/lookY, the same accumulators the mouse writes, so nothing downstream
+    // knows the difference.
+    this.touch = false;          // true once a real touch has happened
+    this.touchHeld = new Set();
+    this.touchPressed = new Set();
+    this.touchMove = { f: 0, s: 0 };
+    this.touchSensitivity = 0.0030;   // a thumb travels less than a mouse
+
     document.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this.keys.add(e.code);
@@ -76,10 +88,34 @@ export class Input {
     return !(mq('(pointer: coarse)').matches && !mq('(any-pointer: fine)').matches);
   }
 
-  down(code) { return this.keys.has(code); }
+  down(code) { return this.keys.has(code) || this.touchHeld.has(code); }
   pressed(code) {
     if (this.pressedKeys.has(code)) { this.pressedKeys.delete(code); return true; }
+    if (this.touchPressed.has(code)) { this.touchPressed.delete(code); return true; }
     return false;
+  }
+
+  // An on-screen button behaves exactly like the key it stands for.
+  setTouchHeld(code, isDown) {
+    if (isDown) { if (!this.touchHeld.has(code)) this.touchPressed.add(code); this.touchHeld.add(code); }
+    else this.touchHeld.delete(code);
+  }
+
+  // Forward/strafe intent from keys AND the left stick. Keys stay ±1; the stick
+  // is analog, and the pair is clamped rather than normalised so a gentle push
+  // stays gentle while a diagonal never exceeds full speed.
+  moveAxis() {
+    let f = (this.down('KeyW') ? 1 : 0) - (this.down('KeyS') ? 1 : 0) + this.touchMove.f;
+    let s = (this.down('KeyD') ? 1 : 0) - (this.down('KeyA') ? 1 : 0) + this.touchMove.s;
+    const len = Math.hypot(f, s);
+    if (len > 1) { f /= len; s /= len; }
+    return { f, s };
+  }
+
+  releaseTouch() {
+    this.touchHeld.clear();
+    this.touchMove.f = 0; this.touchMove.s = 0;
+    this.mouseDown = [false, false, false];
   }
   firePressed() { if (this.mousePressed[0]) { this.mousePressed[0] = false; return true; } return false; }
   altPressed() { if (this.mousePressed[2]) { this.mousePressed[2] = false; return true; } return false; }
@@ -93,6 +129,7 @@ export class Input {
   }
   endFrame() {
     this.pressedKeys.clear();
+    this.touchPressed.clear();
     this.mousePressed = [false, false, false];
     this.wheel = 0;
   }

@@ -87,9 +87,8 @@ export class Player {
     const wantSlam = input.pressed('ControlLeft') || input.pressed('KeyC');
     const wantGrapple = input.pressed('KeyE');
 
-    // --- wish direction ---
-    const f = (input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0);
-    const s = (input.down('KeyD') ? 1 : 0) - (input.down('KeyA') ? 1 : 0);
+    // --- wish direction (keys + the left thumb stick) ---
+    const { f, s } = input.moveAxis();
     this.forward(this._fwd);
     this._right.set(-this._fwd.z, 0, this._fwd.x);
     this._wish.set(0, 0, 0)

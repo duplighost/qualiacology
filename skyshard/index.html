@@ -46,6 +46,43 @@
     animation: breathe 2.6s ease-in-out infinite;
   }
   @keyframes breathe { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+
+  /* ---- on-screen controls (touch only) ---- */
+  #touch { position: fixed; inset: 0; z-index: 8; pointer-events: none;
+           touch-action: none; -webkit-user-select: none; user-select: none; }
+  #touch[hidden] { display: none; }
+  #tstick { position: absolute; width: 116px; height: 116px; margin: -58px 0 0 -58px;
+            border: 1px solid rgba(220,238,255,.30); border-radius: 50%;
+            background: rgba(6,10,18,.16); opacity: 0; transition: opacity .16s ease; }
+  #tnub { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px;
+          margin: -22px 0 0 -22px; border-radius: 50%;
+          background: rgba(220,238,255,.24); border: 1px solid rgba(220,238,255,.42); }
+  .tbtn { position: absolute; pointer-events: auto; display: flex;
+          align-items: center; justify-content: center; border-radius: 50%;
+          font: 700 13px/1 system-ui, -apple-system, sans-serif; letter-spacing: .12em;
+          color: rgba(235,245,255,.86); background: rgba(6,10,18,.34);
+          border: 1px solid rgba(220,238,255,.34); backdrop-filter: blur(3px);
+          width: 86px; height: 86px; }
+  .tbtn.small { width: 62px; height: 62px; font-size: 11px; }
+  .tbtn.on { background: rgba(120,190,255,.30); border-color: rgba(180,220,255,.8); }
+  .tbtn[hidden] { display: none; }
+  /* Thumb-reachable corner cluster; safe-area aware for notched phones. */
+  #t-fire { right: calc(18px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); }
+  #t-jump { right: calc(116px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom)); }
+  #t-dash { right: calc(22px + env(safe-area-inset-right)); bottom: calc(114px + env(safe-area-inset-bottom)); }
+  #t-slam { right: calc(92px + env(safe-area-inset-right)); bottom: calc(114px + env(safe-area-inset-bottom)); }
+  #t-grap { right: calc(162px + env(safe-area-inset-right)); bottom: calc(114px + env(safe-area-inset-bottom)); }
+  #t-seek { right: calc(232px + env(safe-area-inset-right)); bottom: calc(114px + env(safe-area-inset-bottom)); }
+  /* Short landscape phones have no room for a second row above the main pads. */
+  @media (max-height: 400px) {
+    .tbtn { width: 72px; height: 72px; }
+    .tbtn.small { width: 54px; height: 54px; }
+    #t-jump { right: calc(100px + env(safe-area-inset-right)); }
+    #t-dash, #t-slam, #t-grap, #t-seek { bottom: calc(98px + env(safe-area-inset-bottom)); }
+    #t-slam { right: calc(82px + env(safe-area-inset-right)); }
+    #t-grap { right: calc(142px + env(safe-area-inset-right)); }
+    #t-seek { right: calc(202px + env(safe-area-inset-right)); }
+  }
   /* Shown only on devices without Pointer Lock (every phone). The title overlay is
      transparent over the live world, so this needs its own backing to stay legible. */
   /* display:inline-block outranks the UA stylesheet's [hidden]{display:none}, so
@@ -172,6 +209,18 @@
     <div class="begin">click to wake</div>
     <div id="desktop-note" hidden>Desktop with a mouse &amp; keyboard required.</div>
   </div>
+</div>
+
+<!-- On-screen controls. Hidden until a coarse pointer is confirmed, and the
+     ability pads only appear once the world has granted that ability. -->
+<div id="touch" hidden>
+  <div id="tstick"><div id="tnub"></div></div>
+  <div class="tbtn" id="t-fire">FIRE</div>
+  <div class="tbtn" id="t-jump">JUMP</div>
+  <div class="tbtn small" id="t-dash" hidden>DASH</div>
+  <div class="tbtn small" id="t-slam" hidden>SLAM</div>
+  <div class="tbtn small" id="t-grap" hidden>HOOK</div>
+  <div class="tbtn small" id="t-seek" hidden>SEEK</div>
 </div>
 
 <div id="pause" class="overlay">
