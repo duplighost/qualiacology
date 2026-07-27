@@ -7,26 +7,31 @@ import { save } from '../core/save.js';
 import { sfx } from '../core/audio.js';
 import { juice } from '../fx/juice.js';
 
+// A phone has no SHIFT or Q to name, so each reward carries a thumb wording too.
+const TOUCH_PRIMARY = !!(typeof window !== "undefined" && window.matchMedia
+  && window.matchMedia("(pointer: coarse)").matches
+  && !window.matchMedia("(any-pointer: fine)").matches);
+
 const REWARDS = {
   dash: {
     apply: (s) => { s.abilities.dash = true; },
-    line: 'DASH — SHIFT',
+    line: 'DASH — SHIFT', touchLine: 'DASH — THE DASH PAD',
   },
   lance: {
     apply: (s) => { s.altFires.lance = true; },
-    line: 'LANCE — HOLD RIGHT CLICK',
+    line: 'LANCE — HOLD RIGHT CLICK', touchLine: 'LANCE — HOLD FIRE TO CHARGE',
   },
   wings: {
     apply: (s) => { s.abilities.doubleJump = true; s.abilities.glide = true; },
-    line: 'WINGS — JUMP TWICE · HOLD TO GLIDE',
+    line: 'WINGS — JUMP TWICE · HOLD TO GLIDE', touchLine: 'WINGS — TAP JUMP TWICE · HOLD TO GLIDE',
   },
   seeker: {
     apply: (s) => { s.altFires.seeker = true; },
-    line: 'SEEKERS — Q',
+    line: 'SEEKERS — Q', touchLine: 'SEEKERS — THE SEEK PAD',
   },
   grapple: {
     apply: (s) => { s.abilities.grapple = true; s.abilities.slam = true; },
-    line: 'GRAPPLE — E · SLAM — C IN AIR',
+    line: 'GRAPPLE — E · SLAM — C IN AIR', touchLine: 'HOOK PAD · SLAM PAD IN AIR',
   },
 };
 
@@ -38,7 +43,8 @@ export function grantReward(key) {
   juice.slowmo('unlock');
   sfx('unlock');
   G.hud?.syncVerbs(G.save);
-  G.hud?.whisper(r.line, 5.5);
+  G.hud?.whisper((TOUCH_PRIMARY && r.touchLine) || r.line, 5.5);
+  G.syncAbilityPads?.();   // the new verb gets its on-screen pad immediately
   G.weapon?.syncEvolution(G.save);
   G.player && (G.player.iFrames = Math.max(G.player.iFrames, 2.5));
 }

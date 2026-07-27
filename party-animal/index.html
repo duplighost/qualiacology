@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>PARTY ANIMAL | Qualiacology</title>
 <meta name="theme-color" content="#0c0712">
 <meta name="description" content="PARTY ANIMAL is a top-down browser brawler: you're the piñata, the party wants a swing, and the piñata fights back.">
@@ -25,7 +25,12 @@
     border-radius:999px;background:rgba(12,7,18,.62);border:1px solid rgba(255,79,216,.34);backdrop-filter:blur(8px);transition:opacity .3s ease}
   .home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(255,79,216,.75);outline:0}
   body.playing .home-link{opacity:0;pointer-events:none}
-  html,body{margin:0;padding:0;height:100%;background:#0c0712;overflow:hidden}
+  /* Without these a phone treats the game as a document: pinch-zooms, double-tap
+     zooms, and rubber-band scrolls while you are trying to play. */
+  html,body{margin:0;padding:0;height:100%;background:#0c0712;overflow:hidden;
+    touch-action:none;overscroll-behavior:none;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+    -webkit-tap-highlight-color:transparent}
   #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
         background:radial-gradient(ellipse at 50% 40%, #1a1026 0%, #0c0712 70%)}
   canvas{image-rendering:auto;cursor:none;border-radius:6px;
@@ -521,6 +526,86 @@ cv.addEventListener('mousedown', function(e){ e.preventDefault(); IN.mdown=true;
 window.addEventListener('mouseup', function(){ IN.mdown=false; });
 cv.addEventListener('contextmenu', function(e){ e.preventDefault(); });
 
+// ---- touch: left thumb walks, right thumb aims and swings ----------------
+// Aim here is absolute (P.aim points at IN.mx/IN.my), which is a gift on a
+// touchscreen: you point at the piñata you want to hit. So the right thumb just
+// writes the same aim the mouse does, and holding it swings.
+IN.moveX = 0; IN.moveY = 0;
+IN.touch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+IN.touchPrimary = IN.touch && !!(window.matchMedia
+  && window.matchMedia('(pointer: coarse)').matches
+  && !window.matchMedia('(any-pointer: fine)').matches);
+const TOUCH = {
+  moveId:null, ox:0, oy:0, nx:0, ny:0,       // left stick, in CSS px
+  aimId:null,
+  dash:{ x:872, y:512, r:46 },               // canvas coords, bottom-right
+  dashId:null, dashLit:0,
+};
+const STICK_MAX = 52, STICK_DEAD = 0.18;
+
+function toCanvas(t){
+  const r = cv.getBoundingClientRect();
+  return [ (t.clientX-r.left)*(960/r.width), (t.clientY-r.top)*(600/r.height) ];
+}
+function inDash(x,y){ const d=TOUCH.dash; return Math.hypot(x-d.x,y-d.y) < d.r+14; }
+
+function releaseTouchAll(){
+  TOUCH.moveId=null; TOUCH.aimId=null; TOUCH.dashId=null;
+  IN.moveX=0; IN.moveY=0; IN.mdown=false;
+}
+
+cv.addEventListener('touchstart', function(e){
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    const [cx,cy] = toCanvas(t);
+    if(TOUCH.dashId===null && inDash(cx,cy)){
+      TOUCH.dashId=t.identifier; TOUCH.dashLit=1;
+      IN.pressed.add('Space');                 // same edge the keyboard raises
+      continue;
+    }
+    if(t.clientX < window.innerWidth*0.45 && TOUCH.moveId===null){
+      TOUCH.moveId=t.identifier;
+      TOUCH.ox=t.clientX; TOUCH.oy=t.clientY; TOUCH.nx=t.clientX; TOUCH.ny=t.clientY;
+      continue;
+    }
+    if(TOUCH.aimId===null){
+      TOUCH.aimId=t.identifier;
+      IN.mx=cx; IN.my=cy; IN.mdown=true;
+      onClick();                                // title / dialogue advance
+    }
+  }
+}, {passive:false});
+
+cv.addEventListener('touchmove', function(e){
+  e.preventDefault();
+  for(const t of e.changedTouches){
+    if(t.identifier===TOUCH.moveId){
+      let dx=t.clientX-TOUCH.ox, dy=t.clientY-TOUCH.oy;
+      const len=Math.hypot(dx,dy);
+      if(len>STICK_MAX){ dx=dx/len*STICK_MAX; dy=dy/len*STICK_MAX; }
+      TOUCH.nx=TOUCH.ox+dx; TOUCH.ny=TOUCH.oy+dy;
+      const nx=dx/STICK_MAX, ny=dy/STICK_MAX;
+      const mag=Math.hypot(nx,ny);
+      IN.moveX = mag<STICK_DEAD ? 0 : nx;
+      IN.moveY = mag<STICK_DEAD ? 0 : ny;
+    } else if(t.identifier===TOUCH.aimId){
+      const [cx,cy]=toCanvas(t); IN.mx=cx; IN.my=cy;
+    }
+  }
+}, {passive:false});
+
+function endTouch(e){
+  for(const t of e.changedTouches){
+    if(t.identifier===TOUCH.moveId){ TOUCH.moveId=null; IN.moveX=0; IN.moveY=0; }
+    if(t.identifier===TOUCH.aimId){ TOUCH.aimId=null; IN.mdown=false; }
+    if(t.identifier===TOUCH.dashId){ TOUCH.dashId=null; }
+  }
+}
+cv.addEventListener('touchend', endTouch);
+// iOS reclaims touches as system gestures; without this the stick latches on.
+cv.addEventListener('touchcancel', endTouch);
+document.addEventListener('visibilitychange', function(){ if(document.hidden) releaseTouchAll(); });
+
 function fitCanvas(){
   const w=window.innerWidth, h=window.innerHeight;
   const s=Math.min(w/960, h/600)*0.985;
@@ -915,7 +1000,8 @@ function update(dt){
     if(IN.k['KeyS']||IN.k['ArrowDown'])my++;
     if(IN.k['KeyA']||IN.k['ArrowLeft'])mx--;
     if(IN.k['KeyD']||IN.k['ArrowRight'])mx++;
-    const ml=Math.hypot(mx,my)||1;
+    mx += IN.moveX; my += IN.moveY;      // left thumb, analog
+    const ml=Math.max(1, Math.hypot(mx,my));   // never scale UP a partial push
     mx/=ml; my/=ml;
     P.aim=ang(P.x,P.y,IN.mx,IN.my);
 
@@ -1702,9 +1788,15 @@ function drawChalk(){
   g.fillStyle='rgba(235,220,255,0.8)';
   g.font='600 15px system-ui,sans-serif';
   g.textAlign='center';
-  g.fillText('W A S D — move',480,438);
-  g.fillText('mouse — aim · click — swing',480,460);
-  g.fillText('space — dash (you are paper. you are fast.)',480,482);
+  if(IN.touchPrimary){
+    g.fillText('left thumb — move',480,438);
+    g.fillText('right thumb — aim · hold — swing',480,460);
+    g.fillText('DASH (you are paper. you are fast.)',480,482);
+  } else {
+    g.fillText('W A S D — move',480,438);
+    g.fillText('mouse — aim · click — swing',480,460);
+    g.fillText('space — dash (you are paper. you are fast.)',480,482);
+  }
   g.restore();
 }
 
@@ -2102,6 +2194,42 @@ function hudPanel(x,y,w,h,r,edge){
   rrect(x,y,w,h,r); g.stroke();
 }
 
+// On-screen controls, drawn only for a thumb. The stick floats to wherever the
+// left thumb landed; the DASH pad is fixed so it can be found without looking.
+function drawTouchUI(){
+  if(!IN.touchPrimary) return;
+  if(G.state==='TITLE') return;
+  const r = cv.getBoundingClientRect();
+  const sx = 960/r.width, sy = 600/r.height;
+  g.save();
+  g.lineWidth = 2;
+
+  if(TOUCH.moveId!==null){
+    const ox=(TOUCH.ox-r.left)*sx, oy=(TOUCH.oy-r.top)*sy;
+    const nx=(TOUCH.nx-r.left)*sx, ny=(TOUCH.ny-r.top)*sy;
+    g.globalAlpha=.22; g.strokeStyle='#ffe9f7';
+    g.beginPath(); g.arc(ox,oy,STICK_MAX*sx,0,7); g.stroke();
+    g.globalAlpha=.42; g.fillStyle='#ffe9f7';
+    g.beginPath(); g.arc(nx,ny,19*sx,0,7); g.fill();
+  } else {
+    // ghost origin, so a first-time player can see the stick exists
+    g.globalAlpha=.13; g.strokeStyle='#ffe9f7';
+    g.beginPath(); g.arc(120,470,STICK_MAX*sx,0,7); g.stroke();
+    g.globalAlpha=.20; g.fillStyle='#ffe9f7';
+    g.font='600 15px system-ui,sans-serif'; g.textAlign='center';
+    g.fillText('MOVE',120,476);
+  }
+
+  const d=TOUCH.dash;
+  TOUCH.dashLit = Math.max(0, TOUCH.dashLit - 0.06);
+  g.globalAlpha = .18 + .42*TOUCH.dashLit + (TOUCH.dashId!==null?.30:0);
+  g.strokeStyle='#ffe9f7'; g.beginPath(); g.arc(d.x,d.y,d.r,0,7); g.stroke();
+  g.globalAlpha = .55 + .35*TOUCH.dashLit;
+  g.fillStyle='#ffe9f7'; g.font='700 15px system-ui,sans-serif'; g.textAlign='center';
+  g.fillText('DASH', d.x, d.y+5);
+  g.restore();
+}
+
 function drawUI(){
   // wraps (health) — glowing candy wrappers
   hudPanel(12,56,112,34,11);
@@ -2223,7 +2351,7 @@ function drawUI(){
     }
     if(P.hasBat && G.girl){
       if(dist(P.x,P.y,G.girl.x,G.girl.y)<84){
-        g.fillText('SPACE — hand it back', G.girl.x, G.girl.y-58);
+        g.fillText(IN.touchPrimary?'DASH — hand it back':'SPACE — hand it back', G.girl.x, G.girl.y-58);
       } else {
         g.fillText('you are holding the bat.', P.x, P.y-40);
       }
@@ -2295,10 +2423,12 @@ function drawTitle(){
   g.font='600 14px system-ui,sans-serif';
   g.fillStyle='rgba(255,233,246,0.6)';
   g.textAlign='center';
-  g.fillText('WASD move · mouse aim · click swing · SPACE dash · P pause · M mute', 480, 476);
+  g.fillText(IN.touchPrimary
+    ? 'left thumb moves · right thumb aims and swings · DASH bottom-right'
+    : 'WASD move · mouse aim · click swing · SPACE dash · P pause · M mute', 480, 476);
   const pulse=0.6+0.4*Math.sin(G.time*4);
   g.globalAlpha=pulse;
-  neonText(g,'CLICK TO START THE PARTY',480,520,'900 22px system-ui,sans-serif',PAL.butter,PAL.butter,16);
+  neonText(g,IN.touchPrimary?'TAP TO START THE PARTY':'CLICK TO START THE PARTY',480,520,'900 22px system-ui,sans-serif',PAL.butter,PAL.butter,16);
   g.globalAlpha=1;
   g.font='italic 500 12px system-ui,sans-serif';
   g.fillStyle='rgba(255,233,246,0.4)';
@@ -2481,6 +2611,7 @@ function draw(){
   }
 
   drawUI();
+  drawTouchUI();
   drawBanner();
   drawCleared();
 

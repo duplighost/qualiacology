@@ -105,7 +105,7 @@
       "alt": "A neon piñata swinging through party guests on a glossy dance floor",
       "summary": "You're the piñata, and the piñata fights back. Five party games, a boss made of cake, and two ways to leave when it's over.",
       "metaDescription": "PARTY ANIMAL is a top-down browser brawler: you're the piñata, the party wants a swing, and the piñata fights back.",
-      "controls": "WASD + mouse · click swing · Space dash",
+      "controls": "WASD + mouse · two-thumb touch · click swing · Space dash",
       "actionLabel": "Play PARTY ANIMAL"
     },
     {
@@ -159,7 +159,7 @@
       "alt": "A lone figure on a ledge facing floating islands ringed around a fracture in the sky",
       "summary": "Five small lands under one strange sky — and every boss you beat teaches your body a new move.",
       "metaDescription": "Skyshard is an open-world FPS with five lands, strange doors, and the things that wait behind them.",
-      "controls": "WASD + mouse · click to fire",
+      "controls": "WASD + mouse · two-thumb touch · click to fire",
       "actionLabel": "Enter Skyshard"
     },
     {
