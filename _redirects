@@ -98,6 +98,13 @@
 /eaten           /eaten-path/              302
 /path            /eaten-path/              302
 
+# --- Instead of the Goodbye (a walk, August 1st) ---
+/instead-of-the-goodbye      /instead-of-the-goodbye/index.html  301!
+/instead-of-the-goodbye.html /instead-of-the-goodbye/            301!
+/goodbye                     /instead-of-the-goodbye/            302
+/the-walk                    /instead-of-the-goodbye/            302
+/oswegatchie                 /instead-of-the-goodbye/            302
+
 # --- boss codex ---
 /codex          /no-moon/codex/           302
 

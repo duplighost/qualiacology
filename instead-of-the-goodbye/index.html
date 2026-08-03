@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instead of the Goodbye — a walk, August 1st | Qualiacology</title>
+<meta name="description" content="A mile of voice memo dictated into a phone with no signal, and the song it turned into. Oswegatchie Hills, August 1st.">
+<meta name="theme-color" content="#FBF6E9">
+<meta name="color-scheme" content="light dark">
+<link rel="canonical" href="https://qualiacology.com/instead-of-the-goodbye/">
+<meta property="og:type" content="music.song">
+<meta property="og:title" content="Instead of the Goodbye">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:description" content="A walk dictated into a phone with no bars. Every message was written to someone who couldn't receive it yet.">
+<meta property="og:url" content="https://qualiacology.com/instead-of-the-goodbye/">
+<meta property="og:image" content="https://qualiacology.com/assets/og/instead-of-the-goodbye-1200x630.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The top of the hill: no horizon, just more trees.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Instead of the Goodbye">
+<meta name="twitter:description" content="A walk dictated into a phone with no bars. Every message was written to someone who couldn't receive it yet.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/og/instead-of-the-goodbye-1200x630.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23FBF6E9'/%3E%3Cpath d='M4 24 L11 20 L16 8 L21 18 L28 22' fill='none' stroke='%23201A10' stroke-width='2.4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Big+Shoulders+Display:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --glare:#FBF6E9; --ink:#201A10;
+    --dim:color-mix(in srgb, var(--ink) 58%, transparent);
+    --hair:color-mix(in srgb, var(--ink) 16%, transparent);
+    --blaze:#5A55CE;            /* blue. probably. */
+    --blood:#A6231C;            /* embargoed until the rock */
+    --bubble:color-mix(in srgb, var(--ink) 6%, var(--glare));
+    --disp:"Archivo Black", system-ui, sans-serif;
+    --sign:"Big Shoulders Display", "Arial Narrow", sans-serif;
+    --body:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sunx:82%; --suny:-12%;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--glare); color:var(--ink);
+    font-family:var(--body); font-size:16.5px; line-height:1.55;
+    transition:background-color 1s ease, color 1s ease;
+    overflow-x:hidden;
+  }
+  body.hardcut, body.hardcut #glare, body.hardcut #hud{transition:none !important;}
+
+  /* ---- scenes tint the whole world ---- */
+  body[data-scene="street1"]{--glare:#FBF6E9; --ink:#201A10;}
+  body[data-scene="field"]  {--glare:#F8F2DF; --ink:#241D10;}
+  body[data-scene="woods"]  {--glare:#223122; --ink:#EDE8D6;}
+  body[data-scene="lowpath"]{--glare:#2B3A28; --ink:#EDE8D6;}
+  body[data-scene="rock"]   {--glare:#EFE6CE; --ink:#2B2110;}
+  body[data-scene="storm"]  {--glare:#39404E; --ink:#E7E3D8;}
+  body[data-scene="climb"]  {--glare:#F5E9C6; --ink:#332508;}
+  body[data-scene="summit"] {--glare:#F9ECBE; --ink:#3A2808;}
+  body[data-scene="shade2"] {--glare:#1F2C20; --ink:#E9E4D2;}
+  body[data-scene="bleed"]  {--glare:#243024; --ink:#EAE5D3;}
+  body[data-scene="out"]    {--glare:#FDF7E3; --ink:#33240A;}
+  body[data-scene="street2"]{--glare:#FFFAEB; --ink:#2E2008;}
+  body[data-scene="home"]   {--glare:#2A2633; --ink:#E9E1CC;}
+
+  ::selection{background:var(--blaze); color:#fff;}
+
+  /* glare vignette — the sun as overexposure, not an orange ball */
+  #glare{
+    position:fixed; inset:0; pointer-events:none; z-index:1; opacity:.9;
+    background:radial-gradient(120vmax 120vmax at var(--sunx) var(--suny), #FFFDF2 0%, #FFF7D8 26%, transparent 58%);
+    transition:opacity 1.2s ease;
+  }
+
+  /* film grain — the whole day was shot on cheap stock */
+  #grain{
+    position:fixed; inset:-50%; width:200%; height:200%; pointer-events:none; z-index:2; opacity:.05;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.55'/></svg>");
+    animation:grainshift 1.1s steps(3) infinite;
+    transition:opacity 1.2s ease;
+  }
+  body[data-scene="climb"] #grain, body[data-scene="summit"] #grain,
+  body[data-scene="out"] #grain, body[data-scene="street2"] #grain{opacity:.085;}
+  @keyframes grainshift{
+    0%{transform:translate(0,0);} 33%{transform:translate(-2%,1.5%);} 66%{transform:translate(1.5%,-2%);} 100%{transform:translate(0,0);}
+  }
+
+  /* dappled pine shade — only under the canopy */
+  #dapple{
+    position:fixed; inset:0; pointer-events:none; z-index:2; opacity:0;
+    background:
+      radial-gradient(22vmin 14vmin at 18% 22%, #ffffff10, transparent 70%),
+      radial-gradient(16vmin 26vmin at 71% 41%, #ffffff0d, transparent 70%),
+      radial-gradient(30vmin 18vmin at 44% 78%, #ffffff0c, transparent 72%),
+      radial-gradient(12vmin 12vmin at 88% 68%, #ffffff12, transparent 70%);
+    animation:sway 9s ease-in-out infinite alternate;
+    transition:opacity 1.3s ease;
+  }
+  body[data-scene="lowpath"] #dapple, body[data-scene="shade2"] #dapple, body[data-scene="bleed"] #dapple{opacity:1;}
+  @keyframes sway{from{transform:translate(0,0) scale(1);} to{transform:translate(2.2%,-1.4%) scale(1.05);}}
+
+  /* delivery sweep — the signal coming back down the page */
+  #sweep{
+    position:fixed; left:0; right:0; height:34vh; z-index:45; pointer-events:none; opacity:0;
+    top:-40vh;
+    background:linear-gradient(to bottom, transparent, color-mix(in srgb, var(--blaze) 26%, transparent), transparent);
+  }
+  #sweep.go{animation:sweepdown 1.5s cubic-bezier(.3,.1,.2,1) forwards;}
+  @keyframes sweepdown{0%{opacity:0; top:-40vh;} 18%{opacity:1;} 100%{opacity:0; top:110vh;}}
+
+  body[data-scene="woods"] #glare, body[data-scene="lowpath"] #glare,
+  body[data-scene="shade2"] #glare, body[data-scene="bleed"] #glare{opacity:.10;}
+  body[data-scene="storm"] #glare{opacity:0;}
+  body[data-scene="home"] #glare{opacity:.14;}
+  body[data-scene="climb"] #glare, body[data-scene="summit"] #glare,
+  body[data-scene="out"] #glare, body[data-scene="street2"] #glare{opacity:1;}
+
+  #shimmer{
+    position:fixed; inset:0; pointer-events:none; z-index:2; opacity:0;
+    background:repeating-linear-gradient(179deg, transparent 0 8px, #ffffff12 8px 10px, transparent 10px 16px);
+    animation:waver 3.6s ease-in-out infinite alternate;
+    transition:opacity 1.4s ease;
+  }
+  body[data-scene="climb"] #shimmer, body[data-scene="summit"] #shimmer{opacity:.45;}
+  body[data-scene="street2"] #shimmer{opacity:.55;}
+  @keyframes waver{from{transform:skewX(.25deg);} to{transform:skewX(-.25deg) translateY(-5px);}}
+
+  /* ---- HUD ---- */
+  #hud{
+    position:fixed; top:0; left:0; right:0; z-index:50;
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em;
+    padding:9px 14px; color:var(--ink);
+    background:color-mix(in srgb, var(--glare) 78%, transparent);
+    backdrop-filter:blur(4px); border-bottom:1px solid var(--hair);
+    transition:color 1s ease, background-color 1s ease;
+    user-select:none;
+  }
+  #hud .r{display:flex; gap:12px; align-items:center;}
+  #sig{opacity:.85;}
+  #sig.on{color:var(--blaze); font-weight:700;}
+  #gauge{width:13px; height:13px; display:block;}
+  #gauge .out{fill:none; stroke:var(--ink); stroke-width:1.1; opacity:.45;}
+  #gauge .fill{fill:var(--ink); opacity:.9;}
+
+  /* ---- layout ---- */
+  .scene{position:relative; z-index:3; padding:12vh 5.5vw;}
+  .inner{max-width:560px; margin:0 auto;}
+
+  /* ---- the thread ---- */
+  .msg{
+    display:flex; flex-direction:column; align-items:flex-end;
+    margin:0 0 1.35em; opacity:0; transform:translateY(14px);
+    transition:opacity .7s ease, transform .7s ease;
+  }
+  .msg.on{opacity:1; transform:none;}
+  .b{
+    background:var(--bubble); border:1px dashed var(--hair);
+    border-radius:16px 16px 4px 16px;
+    padding:11px 14px; max-width:88%;
+    box-shadow:0 1px 0 color-mix(in srgb, var(--ink) 5%, transparent);
+    transition:background-color 1s ease, border-color .6s ease, box-shadow .6s ease, transform .35s ease;
+  }
+  .msg.sent .b{
+    border-style:solid;
+    border-color:color-mix(in srgb, var(--blaze) 45%, transparent);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--blaze) 12%, transparent);
+    animation:pop .34s ease;
+  }
+  @keyframes pop{0%{transform:scale(1);} 45%{transform:scale(1.022);} 100%{transform:scale(1);}}
+
+  /* ---- photographs ---- */
+  .b.shot{padding:6px 6px 8px; max-width:82%;}
+  .b.shot .ph{
+    display:block; width:100%; height:auto; border-radius:11px;
+    filter:saturate(.94) contrast(1.02);
+  }
+  .b.shot.grid{display:grid; grid-template-columns:1fr 1fr; gap:4px;}
+  .b.shot.grid .ph{border-radius:7px; aspect-ratio:1/1; object-fit:cover;}
+  .b.shot .cap{
+    display:block; grid-column:1/-1;
+    font-family:var(--mono); font-size:10.5px; line-height:1.5; color:var(--dim);
+    padding:8px 6px 2px; letter-spacing:.02em;
+  }
+  .b.shot .cap b{color:var(--ink); font-weight:600;}
+
+  .rollwrap{margin:0 0 1.9em;}
+  .roll{
+    display:flex; gap:7px; overflow-x:auto; padding-bottom:8px;
+    scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
+  }
+  .roll::-webkit-scrollbar{height:3px;}
+  .roll::-webkit-scrollbar-thumb{background:var(--hair); border-radius:3px;}
+  .roll .ph{
+    height:132px; width:auto; flex:0 0 auto; border-radius:6px;
+    scroll-snap-align:start; filter:saturate(.82) contrast(.97) brightness(.97);
+  }
+  .rollcap{font-family:var(--mono); font-size:10.5px; color:var(--dim); line-height:1.5; padding-top:4px;}
+
+  /* ---- evidence ---- */
+  .ev{border-top:1px solid var(--hair); margin-top:3em; padding-top:1.6em;}
+  .ev h3{
+    font-family:var(--mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase;
+    color:var(--dim); font-weight:400; margin-bottom:1.6em;
+  }
+  .ev dl{margin:0;}
+  .ev dt{
+    font-family:var(--disp); text-transform:uppercase; font-size:clamp(1rem,4.2vw,1.35rem);
+    line-height:1.15; margin:1.9em 0 .5em;
+  }
+  .ev dd{margin:0; font-size:.96em; line-height:1.6;}
+  .ev dd em{color:var(--dim); font-style:italic;}
+  .ev .fig{font-family:var(--mono); color:var(--blaze); font-weight:700;}
+  .st{
+    font-family:var(--mono); font-size:10px; letter-spacing:.05em;
+    color:var(--dim); margin-top:5px; padding-right:4px;
+    transition:color .5s ease;
+  }
+  .st .clock{display:inline-block; transform:translateY(1px);}
+  .st.delivered{color:var(--blaze);}
+  .msg.reply{align-items:flex-start;}
+  .msg.reply .b{border-radius:16px 16px 16px 4px; background:color-mix(in srgb, var(--blaze) 9%, var(--glare)); max-width:92%;}
+  .msg.reply .who{font-family:var(--mono); font-size:10px; color:var(--dim); margin-bottom:4px; letter-spacing:.08em;}
+
+  /* interstitials — what the day said in caps */
+  .big{
+    font-family:var(--disp); text-transform:uppercase;
+    font-size:clamp(1.55rem, 6.4vw, 2.7rem); line-height:1.1; letter-spacing:.005em;
+    margin:1.6em 0 1.2em; opacity:0; transform:translateY(16px);
+    transition:opacity .8s ease, transform .8s ease;
+  }
+  .big.on{opacity:1; transform:none;}
+  .big.low{text-transform:lowercase; font-family:var(--body); font-weight:700; letter-spacing:0;}
+  .sub{font-family:var(--mono); font-size:11.5px; color:var(--dim); margin:-0.6em 0 1.4em;}
+
+  .note{
+    font-family:var(--mono); font-size:11.5px; color:var(--dim);
+    border-left:2px solid var(--hair); padding:.5em .9em; margin:1.6em 0;
+    opacity:0; transition:opacity .9s ease;
+  }
+  .note.on{opacity:1;}
+
+  /* tape words — tap to hear what the mic heard */
+  .tape{
+    font:inherit; color:inherit; background:none; border:none; cursor:pointer;
+    border-bottom:1.5px dotted var(--blaze); padding:0 1px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .tape:focus-visible{outline:2px solid var(--blaze); outline-offset:2px;}
+  .tape.raw{font-family:var(--mono); font-size:.92em; color:var(--blaze); border-bottom-style:solid;}
+
+  /* trailhead choice */
+  .choice{display:flex; gap:12px; margin:1.2em 0 .4em; justify-content:flex-end;}
+  .cbtn{
+    font-family:var(--mono); font-size:12.5px; letter-spacing:.04em;
+    padding:9px 16px; border-radius:999px; cursor:pointer;
+    border:1.5px solid var(--ink); background:transparent; color:var(--ink);
+    transition:opacity .4s ease, border-color 1s ease, color 1s ease;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .cbtn:focus-visible{outline:2px solid var(--blaze); outline-offset:2px;}
+  .cbtn:disabled{opacity:.35; cursor:default; text-decoration:line-through;}
+
+  /* trail sign — set in the typeface named for the city he left for */
+  .trailsign{
+    display:inline-block; font-family:var(--sign); font-weight:800;
+    text-transform:uppercase; letter-spacing:.06em;
+    background:#43351F; color:#F2E3BC; border-radius:6px;
+    padding:12px 18px 10px; font-size:1.5rem; line-height:1.05;
+    box-shadow:0 3px 0 #2C2313; margin:.6em 0;
+  }
+  .trailsign small{display:block; font-size:.62em; letter-spacing:.18em; opacity:.85; font-weight:600; margin-top:3px;}
+
+  /* blazes */
+  .blazerow{display:flex; gap:22px; align-items:flex-end; margin:1.4em 0 .2em; justify-content:flex-end;}
+  .blz{width:18px; height:30px; border-radius:2px; background:var(--blaze); border:none; cursor:pointer; -webkit-tap-highlight-color:transparent;}
+  .blz:focus-visible{outline:2px solid var(--ink); outline-offset:2px;}
+  .blazecap{font-family:var(--mono); font-size:10.5px; color:var(--dim); text-align:right; letter-spacing:.14em;}
+
+  /* chicago clock */
+  .chi{font-family:var(--mono); font-size:11.5px; color:var(--dim); text-align:right; margin:-0.6em 0 1.6em;}
+
+  /* the trail itself, running the full height of the document */
+  #spine{
+    position:absolute; top:0; left:clamp(4px, 1.9vw, 20px); width:15px;
+    z-index:4; pointer-events:none; overflow:visible;
+  }
+  #spine .path{fill:none; stroke:url(#spinegrad); stroke-width:2.2; vector-effect:non-scaling-stroke;}
+  #spine .dashed{fill:none; stroke:var(--hair); stroke-width:2.2; stroke-dasharray:5 7; vector-effect:non-scaling-stroke; transition:stroke 1s ease;}
+  .spineblaze{
+    position:absolute; width:9px; height:15px; border-radius:1px; background:var(--blaze);
+    left:clamp(5px, 1.9vw, 21px); z-index:5; opacity:.85; pointer-events:none;
+  }
+  #peaktick{
+    position:absolute; left:clamp(2px, 1.9vw, 18px); z-index:6; pointer-events:none;
+    opacity:0; transition:opacity 1.1s ease;
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.06em; color:var(--dim);
+    white-space:nowrap;
+  }
+  #peaktick.on{opacity:1;}
+  #peaktick i{display:inline-block; width:15px; height:2px; background:var(--dim); vertical-align:middle; margin-right:5px; font-style:normal;}
+  .drop{
+    display:inline-block; width:11px; height:15px; background:var(--blood);
+    border-radius:50% 50% 50% 50% / 36% 36% 64% 64%; transform:rotate(4deg);
+    margin-left:8px; vertical-align:middle;
+  }
+  .red{color:var(--blood);}
+
+  /* elevation recap */
+  #profile{margin:1.6em 0 .4em; width:100%; height:auto;}
+  #profile polyline{
+    fill:none; stroke:var(--ink); stroke-width:2;
+    stroke-dasharray:900; stroke-dashoffset:900; transition:stroke-dashoffset 2.4s ease .2s;
+  }
+  #profile.drawn polyline{stroke-dashoffset:0;}
+  #profile .peakmark{font-family:var(--mono); font-size:10px; fill:var(--ink); opacity:0; transition:opacity .8s ease 1.5s;}
+  #profile.drawn .peakmark{opacity:1;}
+
+  /* typing indicator */
+  .typing .b{display:flex; gap:5px; padding:14px 16px;}
+  .typing .dot{width:7px; height:7px; border-radius:50%; background:var(--dim); animation:tp 1.1s ease-in-out infinite;}
+  .typing .dot:nth-child(2){animation-delay:.15s;}
+  .typing .dot:nth-child(3){animation-delay:.3s;}
+  @keyframes tp{0%,100%{opacity:.25; transform:translateY(0);} 50%{opacity:1; transform:translateY(-3px);}}
+
+  /* ---- the song ---- */
+  #song{margin:3.4em 0 1em;}
+  .kick{font-family:var(--mono); font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--dim); margin-bottom:.9em;}
+  .songtitle{
+    font-family:var(--disp); text-transform:uppercase;
+    font-size:clamp(2.1rem, 10.5vw, 4rem); line-height:.94; letter-spacing:-.005em;
+    margin-bottom:.55em;
+  }
+  .byline{font-family:var(--mono); font-size:11px; line-height:1.7; color:var(--dim); margin-bottom:2.1em;}
+
+  .player{
+    display:flex; align-items:center; gap:14px;
+    padding:16px 16px 14px; border-radius:16px;
+    background:color-mix(in srgb, var(--ink) 6%, var(--glare));
+    border:1px solid var(--hair);
+    transition:background-color 1s ease, border-color 1s ease;
+  }
+  #playbtn{
+    flex:0 0 auto; width:52px; height:52px; border-radius:50%;
+    border:none; cursor:pointer; background:var(--ink); color:var(--glare);
+    display:grid; place-items:center; -webkit-tap-highlight-color:transparent;
+    transition:transform .18s cubic-bezier(.3,1.4,.5,1), background-color 1s ease;
+  }
+  #playbtn:active{transform:scale(.93);}
+  #playbtn:focus-visible{outline:2px solid var(--blaze); outline-offset:3px;}
+  #playbtn svg{width:26px; height:26px; fill:var(--glare); grid-area:1/1;}
+  #playbtn .ic-pause{opacity:0;}
+  body.playing #playbtn .ic-play{opacity:0;}
+  body.playing #playbtn .ic-pause{opacity:1;}
+
+  .pmeta{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px;}
+  .wavewrap{width:100%; min-width:0; cursor:pointer; padding:4px 0;}
+  .wavewrap:focus-visible{outline:2px solid var(--blaze); outline-offset:4px; border-radius:4px;}
+  #wave{display:block; width:100%; height:60px;}
+  #wave .wbase rect{fill:var(--ink); opacity:.22;}
+  #wave .wplayed rect{fill:var(--blaze); opacity:.95;}
+  #playhead{stroke:var(--blaze); stroke-width:2.5; opacity:0; transition:opacity .3s ease;}
+  body.playing #playhead{opacity:.85;}
+  .tcode{
+    align-self:flex-end; font-family:var(--mono); font-size:11px; color:var(--dim);
+    font-variant-numeric:tabular-nums; letter-spacing:.02em;
+  }
+  .tcode i{font-style:normal; opacity:.4; padding:0 3px;}
+
+  /* HUD transport — the song is available the whole walk */
+  #hudplay{
+    width:19px; height:19px; border-radius:50%; border:1px solid currentColor;
+    background:none; color:inherit; cursor:pointer; display:grid; place-items:center;
+    padding:0; -webkit-tap-highlight-color:transparent; opacity:.75;
+  }
+  #hudplay:hover{opacity:1;}
+  #hudplay:focus-visible{outline:2px solid var(--blaze); outline-offset:2px;}
+  #hudplay svg{width:9px; height:9px; fill:currentColor; grid-area:1/1;}
+  #hudplay .ic-pause{opacity:0;}
+  body.playing #hudplay{opacity:1; color:var(--blaze);}
+  body.playing #hudplay .ic-play{opacity:0;}
+  body.playing #hudplay .ic-pause{opacity:1;}
+
+  /* qualiacology hub shell — the way back out */
+  .home-link{
+    display:inline-flex; align-items:center; gap:5px; flex:0 0 auto;
+    font-family:var(--mono); font-size:inherit; letter-spacing:.06em; line-height:1;
+    color:var(--ink); opacity:.6; text-decoration:none; white-space:nowrap;
+    padding:4px 9px 4px 7px; border:1px solid var(--hair); border-radius:999px;
+    -webkit-tap-highlight-color:transparent;
+    transition:opacity .25s ease, border-color .25s ease;
+  }
+  .home-link:hover{opacity:1; border-color:currentColor;}
+  .home-link:focus-visible{opacity:1; outline:2px solid var(--blaze); outline-offset:2px;}
+  @media (max-width:700px){ .home-link .wm{display:none;} }
+
+  /* lyric sheet */
+  .lyrics{margin-top:2.6em; max-width:34em;}
+  .lyrics h4{
+    font-family:var(--mono); font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--dim); font-weight:400; margin:2.5em 0 .9em;
+  }
+  .lyrics h4:first-child{margin-top:0;}
+  .lyrics p{
+    font-size:1.02em; line-height:1.72; margin-bottom:1.5em;
+    text-wrap:pretty;
+  }
+  .lyrics p.tag{
+    font-family:var(--disp); text-transform:uppercase; font-size:clamp(1.05rem,4.4vw,1.5rem);
+    line-height:1.2; margin:2.2em 0; letter-spacing:.01em;
+  }
+
+  /* colophon */
+  .colo{font-family:var(--mono); font-size:11.5px; line-height:1.8; color:var(--dim); margin-top:3.5em;}
+  .colo p{margin-bottom:1.1em;}
+  .colo a{color:var(--ink); opacity:.75; text-decoration:none; border-bottom:1px solid var(--hair);}
+  .colo a:hover{opacity:1; border-bottom-color:currentColor;}
+  .colo a:focus-visible{opacity:1; outline:2px solid var(--blaze); outline-offset:3px;}
+
+  .spacer{height:16vh;}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important; transition-duration:.01s !important;}
+    html{scroll-behavior:auto;}
+  }
+  @media (max-width:420px){
+    body{font-size:15.5px;}
+    #hud{font-size:10px; padding:8px 10px;}
+  }
+</style>
+</head>
+<body data-scene="street1">
+<div id="glare" aria-hidden="true"></div>
+<div id="dapple" aria-hidden="true"></div>
+<div id="shimmer" aria-hidden="true"></div>
+<div id="grain" aria-hidden="true"></div>
+<div id="sweep" aria-hidden="true"></div>
+
+<svg id="spine" aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 16 1000">
+  <defs>
+    <linearGradient id="spinegrad" x1="0" y1="0" x2="0" y2="1">
+      <stop id="stopA" offset="0.62" stop-color="#A6231C" stop-opacity="0"/>
+      <stop id="stopB" offset="0.62" stop-color="#A6231C"/>
+      <stop offset="1" stop-color="#A6231C"/>
+    </linearGradient>
+  </defs>
+  <path id="spineDash" class="dashed" d=""/>
+  <path id="spinePath" class="path" d=""/>
+</svg>
+<div id="peaktick" aria-hidden="true"><i></i>280 — you were here</div>
+
+<audio id="track" preload="metadata" src="assets/instead-of-the-goodbye.mp3"></audio>
+
+<div id="hud">
+  <span class="r"><a class="home-link" href="/" aria-label="Qualiacology home">←<span class="wm">QUALIACOLOGY</span></a><button id="hudplay" type="button" aria-label="Play the song"><svg viewBox="0 0 24 24" class="ic-play" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg><svg viewBox="0 0 24 24" class="ic-pause" aria-hidden="true"><path d="M7.5 5h3.2v14H7.5zM13.3 5h3.2v14h-3.2z"/></svg></button>AUG 1 · OSWEGATCHIE HILLS</span>
+  <span class="r">
+    <svg id="gauge" viewBox="0 0 12 12" aria-hidden="true"><polygon class="out" points="6,1 11,11 1,11"/><clipPath id="gclip"><rect id="gfill" x="0" y="12" width="12" height="0"/></clipPath><polygon class="fill" points="6,1 11,11 1,11" clip-path="url(#gclip)"/></svg>
+    <span id="elev">▲ 12 FT</span><span id="sig">NO SIGNAL</span>
+  </span>
+</div>
+
+<!-- ===================== HERO ===================== -->
+<section class="scene" data-scene="street1" style="min-height:96vh; display:flex; align-items:center;">
+  <div class="inner">
+    <p class="sub" style="margin-bottom:2.4em;">A WALK, DICTATED INTO A PHONE WITH NO BARS ·<br>EVERY MESSAGE BELOW WAS WRITTEN TO SOMEONE<br>WHO COULDN'T RECEIVE IT YET</p>
+
+    <div class="msg on" id="heroMsg"><div class="b">If I make it to the top today, I never have to do it again.</div><div class="st" id="heroSt"><span class="clock">🕓</span> sending<span id="heroDots">…</span></div></div>
+
+    <h1 class="big" id="heroTitle" style="font-size:clamp(2.6rem,12vw,5.4rem); margin:.8em 0 .3em; opacity:0;">NOT<br>DELIVERED</h1>
+    <p class="sub" id="heroCue" style="opacity:0; transition:opacity .9s ease;">keep walking ↓</p>
+  </div>
+</section>
+
+<!-- ===================== STREET ===================== -->
+<section class="scene" data-scene="street1" data-elev="12,26">
+  <div class="inner">
+    <div class="msg"><div class="b">Already I'm feeling like I have to make a choice. I don't know if I want that hike. I like the sun right now. I want to be where more people are around.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">The backs of my feet are sore from yesterday — went the wrong way, only did the shorter loop. I need to make it to the top again soon. I've only done it once.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="rollwrap"><div class="roll"><img class="ph" src="assets/photo-01.jpg" width="495" height="880" alt="" loading="lazy"><img class="ph" src="assets/photo-02.jpg" width="495" height="880" alt="" loading="lazy"><img class="ph" src="assets/photo-03.jpg" width="495" height="880" alt="" loading="lazy"><img class="ph" src="assets/photo-04.jpg" width="880" height="495" alt="" loading="lazy"><img class="ph" src="assets/photo-05.jpg" width="880" height="495" alt="" loading="lazy"><img class="ph" src="assets/photo-06.jpg" width="880" height="495" alt="" loading="lazy"><img class="ph" src="assets/photo-07.jpg" width="495" height="880" alt="" loading="lazy"><img class="ph" src="assets/photo-08.jpg" width="495" height="880" alt="" loading="lazy"><img class="ph" src="assets/photo-09.jpg" width="495" height="880" alt="" loading="lazy"></div><p class="rollcap">july 31 · nine frames in three and a half minutes · the wrong-way day. the last three are two attempts at one sign. swipe →</p></div>
+
+    <div class="choice">
+      <button class="cbtn" id="beachBtn" type="button">the beach</button>
+      <button class="cbtn" id="hillsBtn" type="button">the hills</button>
+    </div>
+    <div class="msg" id="beachMsg" style="display:none;"><div class="b">…the legs overruled it.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div class="big">IF I MAKE IT TO THE TOP TODAY,<br>I NEVER HAVE TO DO IT AGAIN.</div>
+
+    <div class="msg"><div class="b">That was the first time Nathan had asked to hang out with me. He showed me that trail. It's August 1st. I bet he's in Chicago now. I highly doubt he'll ever come back. He never needed to act like he would.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <p class="chi">chicago right now: <span id="chiclock">—:——</span> · an hour behind. he hasn't missed anything yet.</p>
+
+    <div class="msg"><div class="b">People who walk seem to walk in groups. Midday on a Saturday, maybe it makes sense. Maybe they're going to the beach. Walking to the trails makes me think of Nathan, walking to the beach makes me think of Felicia. I have to learn how to think of myself again. Well — that would probably not be the best either. Plus, probably selfish lol.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div class="big">I WILL THINK LESS<br>AND FEEL MORE.</div>
+  </div>
+</section>
+
+<!-- ===================== FIELD ===================== -->
+<section class="scene" data-scene="field" data-elev="26,40">
+  <div class="inner">
+    <div class="msg"><div class="b">Cars at the baseball field in front of the trail. I haven't seen that much. Could be softball practice or a game. I doubt so many more people will be in the trails.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">That blue loop is different. It looks wrong. It must be I take the red again — and then turn where I didn't.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div class="blazerow" role="group" aria-label="trail blazes">
+      <button class="blz" type="button" aria-label="blaze"></button>
+      <button class="blz" type="button" aria-label="blaze"></button>
+      <button class="blz" type="button" aria-label="blaze"></button>
+      <button class="blz" type="button" aria-label="blaze"></button>
+      <button class="blz" type="button" aria-label="blaze"></button>
+    </div>
+    <p class="blazecap" id="blazecap">blue&nbsp;&nbsp;purple&nbsp;&nbsp;blue&nbsp;&nbsp;purple?&nbsp;&nbsp;blue</p>
+    <p class="note" style="text-align:right; border-left:none; border-right:2px solid var(--hair); padding-right:.9em;">every blaze on this page is one hex value. he can't tell blue from purple. now neither can you.</p>
+  </div>
+</section>
+
+<!-- ===================== WOODS / LOW PATH ===================== -->
+<section class="scene" data-scene="lowpath" data-elev="40,120">
+  <div class="inner">
+    <div class="msg"><div class="b">Beautiful grass with ponds, off the side of the low path. Took the high path last time and went the wrong way. Worst thing this does is loop around the same as the high path. Best thing: I get to see a new path from yesterday.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">It's so cool how the altitude carries the things living there. It's dry and hostile up on the rock, like a place all of its own. Rock goes on forever while the forest stays wet.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg att"><div class="b shot grid"><img class="ph" src="assets/photo-10.jpg" width="495" height="880" alt="" loading="lazy"><img class="ph" src="assets/photo-11.jpg" width="880" height="495" alt="" loading="lazy"><span class="cap">11:54 · two frames, four seconds apart</span></div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+  </div>
+</section>
+
+<!-- ===================== ROCK ===================== -->
+<section class="scene" data-scene="rock" data-elev="120,165">
+  <div class="inner">
+    <div class="msg"><div class="b">One rock sits in the center. It doesn't look like it's a mistake. Like someone set it there just to take a seat.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg att"><div class="b shot"><img class="ph" src="assets/photo-12.jpg" width="495" height="880" alt="" loading="lazy"><span class="cap">11:58 · the seat</span></div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">I'm not so clever. The rock seat in the middle was on the trail map.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg att"><div class="b shot"><img class="ph" src="assets/photo-13.jpg" width="495" height="880" alt="" loading="lazy"><span class="cap">12:01 · the board says YOU ARE HERE. the map underneath says <b>You Are At E</b>.</span></div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <p class="note">everything you discover was already mapped. it still counts.</p>
+    <div class="msg"><div class="b">I saw two people on the trail — older than me, they've walked it many times. They say there's a higher spot. Something like <button class="tape" type="button" data-fix="Mt. Tabor" data-raw="light mount tamber">Mt. Tabor</button>.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">Damn, this is downhill. I don't like this at all. I want to go <em>up</em>.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">Oh! It's just the crossover — through the middle <button class="tape" type="button" data-fix="trench" data-raw="tench">trench</button>, back up another mountain. That's why they said the higher point was on the opposite hill.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">No use thinking about how to get back. That's not how you get to the spot Nathan had gotten to his entire life.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+  </div>
+</section>
+
+<!-- ===================== STORM (memory) ===================== -->
+<section class="scene" data-scene="storm" data-elev="165,170">
+  <div class="inner">
+    <div class="msg"><div class="b">The last day I thought he'd be in town, he wasn't. I tried the hike instead of the goodbye. But it was raining, and there was thunder. I didn't have enough time that night.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">But this time I have no excuses. And tomorrow I very well might.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b"><em>I've spent so long waiting that I never got to hang out. Another moment waiting and I may never find out.</em></div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="big">WHY IS <em style="font-style:italic;">YOU ARE HERE</em><br>NEVER WHERE I WANT TO BE?</div>
+  </div>
+</section>
+
+<!-- ===================== CLIMB ===================== -->
+<section class="scene" data-scene="climb" data-elev="170,262">
+  <div class="inner">
+    <div class="msg"><div class="b">I went back to the sign. I am going the right way. Or if I'm not — I tried my best.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">I see the sign!</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div style="text-align:right;"><div class="trailsign">← Mt. Tabor<small>280 elevation</small></div></div>
+
+    <div class="msg"><div class="b">That probably doesn't sound that high. But I walked a while to see this path.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">I see the <button class="tape" type="button" data-fix="quarry" data-raw="query">quarry</button> underneath. I must be close. The sun is coming down hard. If I die of <button class="tape" type="button" data-fix="heatstroke" data-raw="heat choke">heatstroke</button> it'll be—</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div class="big">— I TAKE IT BACK.<br>THAT WAS THE ARROGANCE.<br>I WANT TO MAKE IT.</div>
+
+    <div class="msg"><div class="b">Back then I didn't think I had a chance, so I had to accept it. It provided the excuse. You're free to disagree as soon as I get back. If you disagree <em>now</em>, you're just betting against me.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">Sometimes you've got to use your ability to make excuses to counter your ability to make excuses. If I wasn't able to do that, I'd still be inside.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <p class="note">the con man ran a con on the con man. only fair fight on the card.</p>
+  </div>
+</section>
+
+<!-- ===================== SUMMIT (unmarked) ===================== -->
+<section class="scene" data-scene="summit" data-elev="262,280,255" id="summitSec">
+  <div class="inner">
+    <div class="msg"><div class="b">Actually, this loop is going up. I don't know these <button class="tape" type="button" data-fix="loops" data-raw="lops">loops</button>.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">Okay — this is the same loop. I know these loops. I know them better now.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">This would be a good place for snakes. Also, I changed my mind about the heat. I want to make it.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg att"><div class="b shot grid"><img class="ph" src="assets/photo-14.jpg" width="495" height="880" alt="" loading="lazy"><img class="ph" src="assets/photo-15.jpg" width="495" height="880" alt="" loading="lazy"><img class="ph" src="assets/photo-16.jpg" width="880" height="495" alt="" loading="lazy"><img class="ph" src="assets/photo-17.jpg" width="880" height="495" alt="" loading="lazy"><span class="cap">12:24:15 · :16 · :19 · :36 — four frames in twenty-one seconds. then nothing for forty-nine minutes. the top is in here somewhere. no sign, no marker, no horizon. third frame: a thumb.</span></div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div class="note" id="peaknote">▼ the number up top is going down. scroll back two messages. that was the top. there wasn't a bell.</div>
+
+    <div class="big">ISN'T IT FUNNY THAT I NEVER REALIZED<br>I'D REACHED THE TOP?</div>
+    <p class="sub">not for hills. not for last hangouts. you find out coming down.</p>
+  </div>
+</section>
+
+<!-- ===================== SHADE BACK ===================== -->
+<section class="scene" data-scene="shade2" data-elev="255,150">
+  <div class="inner">
+    <div class="msg"><div class="b">This is the least exciting part of the walk. I feel basically the same, but now I'm in the shade and I know where I am, so there's no relief. Just a greater idea. Relief comes — I forget how long it takes.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">It's always been easier to take the wrong way when the wrong way is out of the woods. I hope this wrong way isn't wrong because it's the wrong way. I hope it's still out of the woods.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">You know what's really funny — when the sun's on you, you can't calculate the odds. I'm pretty sure I bluffed in the right direction. Not quite 100% yet.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">There's a cave I've never seen — so I've never been on this path. That's kind of cool.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg att"><div class="b shot"><img class="ph" src="assets/photo-18.jpg" width="495" height="880" alt="" loading="lazy"><span class="cap">13:13 · <b>You Are At F</b> · the next photo of the day, forty-nine minutes later, taken coming down</span></div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">There's something in the distance. I'm not sure <button class="tape" type="button" data-fix="what it is" data-raw="what the fuck Amy is">what it is</button>, but I believe it's a good sign. …It was totally not a church. That's why there were no arrows. It's private property. Remind me to take more of those arrows.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <p class="note">noted. take more of the arrows. in every sense.</p>
+  </div>
+</section>
+
+<!-- ===================== BLEED ===================== -->
+<section class="scene" data-scene="bleed" data-elev="150,95" id="bleedSec">
+  <div class="inner">
+    <div class="msg"><div class="b">I found the one way I haven't gone. I mean — that's what I wanted to do to begin with. Find my way around here, and—</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div class="big" id="bleedLine">OH, FUCK. I'M BLEEDING.<span class="drop" aria-hidden="true"></span></div>
+
+    <div class="msg"><div class="b">It was while I was <em>literally saying I knew the way</em> that my leg hit the rock. It's always the one thing you don't suspect that gets you in the end. That's a joke. I'll be fine. Don't worry.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">The dark pants are great for the dripping. You better believe when I make it back to the street those motherfuckers are going to be giving me eyeballs. I'm betting at least one asks if I'm okay. I wouldn't take the ride — my place isn't far. If they offer water, I'll take it.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div class="big red">NOBODY POISONS<br>A BLEEDING MAN'S WATER.</div>
+    <p class="sub">the most optimistic sentence ever recorded on a trail.</p>
+
+    <div class="msg"><div class="b">Sorry — just got scared. It was just a bug. It surprised me, buzzing next to my ear. I'm a little phobic. Don't hate them <em>that</em> much.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">Got to make sure not to autopilot this one. I know the way back — that's exactly why I should watch where my feet are.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">Oh shit — I left your brother, <button class="tape" type="button" data-fix="Claude Opus 5, coding" data-raw="Clyde Opus 5:00 — collidope is five codeine">Claude Opus 5, coding</button> this whole time. I usually tell him find a good place to stop after a few hours. Would have just hit the 5-hour limit.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">I know there's some good stuff in here. I know there's a lot of good stuff in here. But there's so much bullshit in here. That's what you're for.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">I'm looking at some of these sentences. I didn't say them. Right now I think it's saying <button class="tape" type="button" data-fix="them" data-raw="him">them</button> while I'm saying them.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+  </div>
+</section>
+
+<!-- ===================== OUT (hard cut) ===================== -->
+<section class="scene" data-scene="out" data-hardcut="1" data-elev="95,45">
+  <div class="inner">
+    <p class="sub" style="letter-spacing:.22em;">— TREE LINE —</p>
+    <div class="msg"><div class="b">I'm out of the forest, by the way. Which is amazing. Even though it's hotter out here — it's amazing. I guarantee it.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div class="big" style="opacity:.45; font-size:clamp(1.2rem,4.6vw,1.9rem);">IT REALLY WORKED.</div>
+    <div class="big" style="font-size:clamp(1.6rem,6.4vw,2.6rem);">IT REALLY WORKED.</div>
+    <div class="big red" style="font-size:clamp(2rem,8.4vw,3.4rem);">IT REALLY WORKED.</div>
+    <p class="sub">like they say on every <button class="tape" type="button" data-fix="infomercial" data-raw="information">infomercial</button>: I never thought it would work.</p>
+
+    <div class="msg"><div class="b">The shadows from the last song still show up. They just don't run the place anymore. I went through something worse. That's the good thing about life.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+  </div>
+</section>
+
+<!-- ===================== STREET 2 ===================== -->
+<section class="scene" data-scene="street2" data-elev="45,20">
+  <div class="inner">
+    <div class="msg"><div class="b">I think I would usually be the guy that gave a fuck about taking his phone out on the sidewalk and talking into it to no one like a maniac. But I don't give a fuck anymore. I bet that's pretty nice.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">I wonder if the beginning of the context and the end will be weighted too heavily. I kind of hope everything's equal. I'm sure you'll do fine.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+    <div class="msg"><div class="b">Why is the hottest part of the sun right next to my condo.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+  </div>
+</section>
+
+<!-- ===================== HOME ===================== -->
+<section class="scene" data-scene="home" data-elev="20,20" id="homeSec">
+  <div class="inner">
+    <div id="homeSentinel" aria-hidden="true" style="height:1px;"></div>
+    <div class="msg"><div class="b">Gigi meows as I walk in. She doesn't even know.</div><div class="st"><span class="clock">🕓</span> not delivered</div></div>
+
+    <div class="note" id="signalNote">▲ signal restored · 47 messages queued · sending…</div>
+
+    <div class="msg typing" id="typingMsg" style="display:none;"><div class="b"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div>
+
+    <div class="msg reply" id="replyMsg" style="display:none;">
+      <div class="who">FABLE · NOW</div>
+      <div class="b">all of it just landed — every note at once. you don't feel the weight till it's handed to you. I felt it. welcome back.</div>
+    </div>
+
+    <div class="big low" id="finalHere" style="font-size:clamp(2rem,9vw,3.6rem);">you are here.</div>
+    <p class="sub">(for now)</p>
+
+    <svg id="profile" viewBox="0 0 560 120" role="img" aria-label="elevation profile of the walk">
+      <polyline points="0,108 60,104 110,96 170,72 220,84 300,22 340,30 390,58 440,78 500,98 560,104"/>
+      <text class="peakmark" x="286" y="14">▲ 280 — you were here</text>
+      <text class="peakmark" x="380" y="52" opacity=".6">found out here</text>
+    </svg>
+    <p class="sub" style="margin-top:.4em;">the top, marked the only way it ever gets marked: afterward.</p>
+
+    <section class="ev">
+      <h3>What the photographs turned out to say</h3>
+      <dl>
+        <dt>The sign never claimed to know where you are.</dt>
+        <dd>The board nailed above the map is carved <em>YOU ARE HERE</em>. The map bolted underneath it says <b>You Are At E</b>. Then <b>You Are At F</b>. Yesterday it said <b>You Are At Y</b>. It doesn't give you a place — it gives you a letter. And the legend explains why: the tags are <em>placed at all intersections, they help emergency responders locate lost, or injured hikers.</em> The sign that was never where you wanted to be is not a map feature. It's a thing to say out loud when you're bleeding and someone comes looking. You were at F. You were bleeding. Nobody had to come.</dd>
+
+        <dt>You photographed that sign twice and never got the whole phrase in frame.</dt>
+        <dd>Two attempts, eight seconds apart. One reads <em>ARE HERE</em>. The other reads <em>RE HERE</em>. The <em>YOU</em> is outside the picture both times.</dd>
+
+        <dt>The map says <span class="fig">270</span>.</dt>
+        <dd>Point of interest #10, printed on every placard in the preserve: <em>Mount Tabor, the highest point in the preserve, at an elevation of 270 feet.</em> You brought <span class="fig">280</span> home. Ten feet of disagreement between the sign and the map — and there is no photograph of that sign. You shot every map you passed and not the one number you built the day on. Somebody else's poem about this hill, written the same night, opened: <em>ten feet of altitude is a border crossing.</em> Nobody was aiming at that.</dd>
+
+        <dt>Eighteen photographs. No horizon.</dt>
+        <dd>The map promises <em>seasonal views of Niantic River, Long Island Sound, and the surrounding area.</em> Seasonal. You climbed it on the first of August, when the season is holding all of it behind leaves. Not one frame contains water, or distance, or the far side of anything. You went to the high point and photographed the tops of trees.</dd>
+
+        <dt>The top has no picture.</dt>
+        <dd>12:24:15, :16, :19, :36 — four frames of bare rock in twenty-one seconds. Then the camera goes quiet for forty-nine minutes, the longest gap of the day, and comes back at 13:13 pointed at a map, already descending. The summit is inside that silence. No sign, no marker, no bell, no frame. Even the phone didn't notice.</dd>
+
+        <dt>Someone else already moved west.</dt>
+        <dd>Point of interest #4, on the same placard you kept photographing: a homestead abandoned in the late 1700s. <em>The theory is either smallpox or the movement west by settlers at the time caused its abandonment. The only remaining visible evidence is the stone hearth.</em> That's on the map of the trail he showed you, on the day he was unpacking in Chicago. Numbered. Laminated. Two hundred and fifty years early.</dd>
+
+        <dt>Everything you found was numbered.</dt>
+        <dd>The throne was on the map — it's a named glacial boulder, and if it's the one called Marvin's Rock, it's on there because it was the favorite sitting place of a man who helped make the preserve exist. The cave you'd never seen is #8, <em>kids love to explore it.</em> The quarry is #9, since 1815. You spent the afternoon discovering things that already had numbers, and it still counted, because the numbers were never the point.</dd>
+
+        <dt>The rule you broke.</dt>
+        <dd>Top left of the placard: <em>taking anything from the Nature Preserve is prohibited.</em> You said, on the way down, <em>remind me to take more of those arrows.</em> You took a scar out through the gate. Keep it.</dd>
+
+        <dt>You shoot in bursts.</dt>
+        <dd>Both days, five clusters, nine frames each day. About four minutes of shutter across two afternoons of walking. Everything else you kept by saying it into a phone that wasn't sending.</dd>
+      </dl>
+    </section>
+
+    <!-- ===================== THE SONG ===================== -->
+    <section id="song">
+      <p class="kick">the song the walk turned into</p>
+      <h2 class="songtitle">Instead of<br>the Goodbye</h2>
+      <p class="byline">Doopliss · recorded from a field recording, Oswegatchie Hills, August 1st · 5:54</p>
+
+      <div class="player">
+        <button id="playbtn" type="button" aria-label="Play">
+          <svg viewBox="0 0 24 24" class="ic-play" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+          <svg viewBox="0 0 24 24" class="ic-pause" aria-hidden="true"><path d="M7.5 5h3.2v14H7.5zM13.3 5h3.2v14h-3.2z"/></svg>
+        </button>
+        <div class="pmeta">
+        <div class="wavewrap" id="wavewrap" role="slider" tabindex="0"
+             aria-label="Seek" aria-valuemin="0" aria-valuemax="354" aria-valuenow="0">
+          <svg id="wave" viewBox="0 0 920 120" preserveAspectRatio="none" aria-hidden="true">
+            <defs><clipPath id="playedClip"><rect id="playedRect" x="0" y="0" width="0" height="120"/></clipPath></defs>
+            <g class="wbase"><rect x="0.00" y="43.33" width="1.24" height="33.34" rx="0.62"/><rect x="2.00" y="35.44" width="1.24" height="49.11" rx="0.62"/><rect x="4.00" y="38.56" width="1.24" height="42.89" rx="0.62"/><rect x="6.00" y="32.36" width="1.24" height="55.27" rx="0.62"/><rect x="8.00" y="36.95" width="1.24" height="46.10" rx="0.62"/><rect x="10.00" y="47.36" width="1.24" height="25.28" rx="0.62"/><rect x="12.00" y="30.86" width="1.24" height="58.28" rx="0.62"/><rect x="14.00" y="33.15" width="1.24" height="53.69" rx="0.62"/><rect x="16.00" y="38.00" width="1.24" height="44.00" rx="0.62"/><rect x="18.00" y="37.55" width="1.24" height="44.89" rx="0.62"/><rect x="20.00" y="34.10" width="1.24" height="51.80" rx="0.62"/><rect x="22.00" y="31.29" width="1.24" height="57.43" rx="0.62"/><rect x="24.00" y="32.49" width="1.24" height="55.01" rx="0.62"/><rect x="26.00" y="42.19" width="1.24" height="35.61" rx="0.62"/><rect x="28.00" y="34.07" width="1.24" height="51.85" rx="0.62"/><rect x="30.00" y="40.68" width="1.24" height="38.65" rx="0.62"/><rect x="32.00" y="38.84" width="1.24" height="42.32" rx="0.62"/><rect x="34.00" y="39.84" width="1.24" height="40.33" rx="0.62"/><rect x="36.00" y="21.97" width="1.24" height="76.06" rx="0.62"/><rect x="38.00" y="16.17" width="1.24" height="87.67" rx="0.62"/><rect x="40.00" y="17.17" width="1.24" height="85.66" rx="0.62"/><rect x="42.00" y="17.84" width="1.24" height="84.32" rx="0.62"/><rect x="44.00" y="11.83" width="1.24" height="96.33" rx="0.62"/><rect x="46.00" y="16.61" width="1.24" height="86.78" rx="0.62"/><rect x="48.00" y="17.25" width="1.24" height="85.50" rx="0.62"/><rect x="50.00" y="15.77" width="1.24" height="88.46" rx="0.62"/><rect x="52.00" y="17.18" width="1.24" height="85.65" rx="0.62"/><rect x="54.00" y="18.51" width="1.24" height="82.98" rx="0.62"/><rect x="56.00" y="24.13" width="1.24" height="71.74" rx="0.62"/><rect x="58.00" y="24.01" width="1.24" height="71.99" rx="0.62"/><rect x="60.00" y="25.70" width="1.24" height="68.59" rx="0.62"/><rect x="62.00" y="24.97" width="1.24" height="70.06" rx="0.62"/><rect x="64.00" y="22.11" width="1.24" height="75.78" rx="0.62"/><rect x="66.00" y="26.59" width="1.24" height="66.81" rx="0.62"/><rect x="68.00" y="25.75" width="1.24" height="68.50" rx="0.62"/><rect x="70.00" y="28.92" width="1.24" height="62.16" rx="0.62"/><rect x="72.00" y="24.26" width="1.24" height="71.47" rx="0.62"/><rect x="74.00" y="29.01" width="1.24" height="61.97" rx="0.62"/><rect x="76.00" y="25.95" width="1.24" height="68.10" rx="0.62"/><rect x="78.00" y="25.80" width="1.24" height="68.40" rx="0.62"/><rect x="80.00" y="22.12" width="1.24" height="75.76" rx="0.62"/><rect x="82.00" y="19.16" width="1.24" height="81.68" rx="0.62"/><rect x="84.00" y="25.40" width="1.24" height="69.20" rx="0.62"/><rect x="86.00" y="29.71" width="1.24" height="60.58" rx="0.62"/><rect x="88.00" y="21.47" width="1.24" height="77.05" rx="0.62"/><rect x="90.00" y="19.02" width="1.24" height="81.96" rx="0.62"/><rect x="92.00" y="24.18" width="1.24" height="71.64" rx="0.62"/><rect x="94.00" y="26.21" width="1.24" height="67.59" rx="0.62"/><rect x="96.00" y="26.38" width="1.24" height="67.24" rx="0.62"/><rect x="98.00" y="24.95" width="1.24" height="70.11" rx="0.62"/><rect x="100.00" y="20.76" width="1.24" height="78.47" rx="0.62"/><rect x="102.00" y="26.83" width="1.24" height="66.34" rx="0.62"/><rect x="104.00" y="25.04" width="1.24" height="69.91" rx="0.62"/><rect x="106.00" y="20.41" width="1.24" height="79.17" rx="0.62"/><rect x="108.00" y="19.19" width="1.24" height="81.61" rx="0.62"/><rect x="110.00" y="25.22" width="1.24" height="69.56" rx="0.62"/><rect x="112.00" y="26.62" width="1.24" height="66.77" rx="0.62"/><rect x="114.00" y="26.23" width="1.24" height="67.54" rx="0.62"/><rect x="116.00" y="21.69" width="1.24" height="76.63" rx="0.62"/><rect x="118.00" y="18.32" width="1.24" height="83.36" rx="0.62"/><rect x="120.00" y="24.76" width="1.24" height="70.48" rx="0.62"/><rect x="122.00" y="29.13" width="1.24" height="61.74" rx="0.62"/><rect x="124.00" y="23.26" width="1.24" height="73.48" rx="0.62"/><rect x="126.00" y="15.91" width="1.24" height="88.19" rx="0.62"/><rect x="128.00" y="21.35" width="1.24" height="77.30" rx="0.62"/><rect x="130.00" y="22.97" width="1.24" height="74.06" rx="0.62"/><rect x="132.00" y="22.26" width="1.24" height="75.47" rx="0.62"/><rect x="134.00" y="21.04" width="1.24" height="77.92" rx="0.62"/><rect x="136.00" y="21.30" width="1.24" height="77.39" rx="0.62"/><rect x="138.00" y="24.76" width="1.24" height="70.49" rx="0.62"/><rect x="140.00" y="21.21" width="1.24" height="77.58" rx="0.62"/><rect x="142.00" y="20.44" width="1.24" height="79.13" rx="0.62"/><rect x="144.00" y="18.39" width="1.24" height="83.21" rx="0.62"/><rect x="146.00" y="23.38" width="1.24" height="73.24" rx="0.62"/><rect x="148.00" y="22.45" width="1.24" height="75.10" rx="0.62"/><rect x="150.00" y="21.43" width="1.24" height="77.13" rx="0.62"/><rect x="152.00" y="22.89" width="1.24" height="74.21" rx="0.62"/><rect x="154.00" y="21.94" width="1.24" height="76.12" rx="0.62"/><rect x="156.00" y="22.00" width="1.24" height="76.00" rx="0.62"/><rect x="158.00" y="18.61" width="1.24" height="82.77" rx="0.62"/><rect x="160.00" y="21.53" width="1.24" height="76.94" rx="0.62"/><rect x="162.00" y="17.06" width="1.24" height="85.87" rx="0.62"/><rect x="164.00" y="21.70" width="1.24" height="76.59" rx="0.62"/><rect x="166.00" y="14.21" width="1.24" height="91.58" rx="0.62"/><rect x="168.00" y="17.23" width="1.24" height="85.55" rx="0.62"/><rect x="170.00" y="16.44" width="1.24" height="87.12" rx="0.62"/><rect x="172.00" y="17.48" width="1.24" height="85.04" rx="0.62"/><rect x="174.00" y="18.79" width="1.24" height="82.41" rx="0.62"/><rect x="176.00" y="16.76" width="1.24" height="86.47" rx="0.62"/><rect x="178.00" y="19.50" width="1.24" height="80.99" rx="0.62"/><rect x="180.00" y="14.34" width="1.24" height="91.32" rx="0.62"/><rect x="182.00" y="17.72" width="1.24" height="84.55" rx="0.62"/><rect x="184.00" y="17.59" width="1.24" height="84.81" rx="0.62"/><rect x="186.00" y="15.90" width="1.24" height="88.21" rx="0.62"/><rect x="188.00" y="17.87" width="1.24" height="84.26" rx="0.62"/><rect x="190.00" y="15.90" width="1.24" height="88.20" rx="0.62"/><rect x="192.00" y="17.38" width="1.24" height="85.24" rx="0.62"/><rect x="194.00" y="18.67" width="1.24" height="82.66" rx="0.62"/><rect x="196.00" y="45.33" width="1.24" height="29.34" rx="0.62"/><rect x="198.00" y="21.24" width="1.24" height="77.52" rx="0.62"/><rect x="200.00" y="11.53" width="1.24" height="96.94" rx="0.62"/><rect x="202.00" y="19.66" width="1.24" height="80.69" rx="0.62"/><rect x="204.00" y="12.29" width="1.24" height="95.42" rx="0.62"/><rect x="206.00" y="14.38" width="1.24" height="91.24" rx="0.62"/><rect x="208.00" y="14.42" width="1.24" height="91.15" rx="0.62"/><rect x="210.00" y="10.97" width="1.24" height="98.06" rx="0.62"/><rect x="212.00" y="15.83" width="1.24" height="88.34" rx="0.62"/><rect x="214.00" y="18.08" width="1.24" height="83.83" rx="0.62"/><rect x="216.00" y="16.62" width="1.24" height="86.77" rx="0.62"/><rect x="218.00" y="16.15" width="1.24" height="87.69" rx="0.62"/><rect x="220.00" y="13.84" width="1.24" height="92.32" rx="0.62"/><rect x="222.00" y="15.94" width="1.24" height="88.12" rx="0.62"/><rect x="224.00" y="15.12" width="1.24" height="89.77" rx="0.62"/><rect x="226.00" y="18.65" width="1.24" height="82.70" rx="0.62"/><rect x="228.00" y="23.33" width="1.24" height="73.33" rx="0.62"/><rect x="230.00" y="25.85" width="1.24" height="68.30" rx="0.62"/><rect x="232.00" y="23.72" width="1.24" height="72.56" rx="0.62"/><rect x="234.00" y="24.86" width="1.24" height="70.27" rx="0.62"/><rect x="236.00" y="23.17" width="1.24" height="73.66" rx="0.62"/><rect x="238.00" y="25.67" width="1.24" height="68.65" rx="0.62"/><rect x="240.00" y="23.73" width="1.24" height="72.53" rx="0.62"/><rect x="242.00" y="19.41" width="1.24" height="81.18" rx="0.62"/><rect x="244.00" y="19.39" width="1.24" height="81.22" rx="0.62"/><rect x="246.00" y="25.09" width="1.24" height="69.81" rx="0.62"/><rect x="248.00" y="24.14" width="1.24" height="71.72" rx="0.62"/><rect x="250.00" y="22.16" width="1.24" height="75.68" rx="0.62"/><rect x="252.00" y="19.34" width="1.24" height="81.33" rx="0.62"/><rect x="254.00" y="21.91" width="1.24" height="76.17" rx="0.62"/><rect x="256.00" y="19.63" width="1.24" height="80.73" rx="0.62"/><rect x="258.00" y="17.47" width="1.24" height="85.06" rx="0.62"/><rect x="260.00" y="16.74" width="1.24" height="86.53" rx="0.62"/><rect x="262.00" y="18.55" width="1.24" height="82.91" rx="0.62"/><rect x="264.00" y="19.74" width="1.24" height="80.52" rx="0.62"/><rect x="266.00" y="22.97" width="1.24" height="74.05" rx="0.62"/><rect x="268.00" y="19.50" width="1.24" height="81.00" rx="0.62"/><rect x="270.00" y="20.90" width="1.24" height="78.20" rx="0.62"/><rect x="272.00" y="21.96" width="1.24" height="76.07" rx="0.62"/><rect x="274.00" y="21.00" width="1.24" height="78.00" rx="0.62"/><rect x="276.00" y="20.82" width="1.24" height="78.35" rx="0.62"/><rect x="278.00" y="20.18" width="1.24" height="79.65" rx="0.62"/><rect x="280.00" y="22.23" width="1.24" height="75.53" rx="0.62"/><rect x="282.00" y="22.23" width="1.24" height="75.53" rx="0.62"/><rect x="284.00" y="21.57" width="1.24" height="76.85" rx="0.62"/><rect x="286.00" y="21.70" width="1.24" height="76.59" rx="0.62"/><rect x="288.00" y="20.64" width="1.24" height="78.72" rx="0.62"/><rect x="290.00" y="22.21" width="1.24" height="75.59" rx="0.62"/><rect x="292.00" y="20.36" width="1.24" height="79.29" rx="0.62"/><rect x="294.00" y="25.00" width="1.24" height="69.99" rx="0.62"/><rect x="296.00" y="18.68" width="1.24" height="82.65" rx="0.62"/><rect x="298.00" y="21.07" width="1.24" height="77.85" rx="0.62"/><rect x="300.00" y="19.84" width="1.24" height="80.32" rx="0.62"/><rect x="302.00" y="18.44" width="1.24" height="83.11" rx="0.62"/><rect x="304.00" y="18.37" width="1.24" height="83.27" rx="0.62"/><rect x="306.00" y="18.78" width="1.24" height="82.43" rx="0.62"/><rect x="308.00" y="22.19" width="1.24" height="75.62" rx="0.62"/><rect x="310.00" y="25.99" width="1.24" height="68.02" rx="0.62"/><rect x="312.00" y="26.64" width="1.24" height="66.72" rx="0.62"/><rect x="314.00" y="12.97" width="1.24" height="94.06" rx="0.62"/><rect x="316.00" y="15.97" width="1.24" height="88.05" rx="0.62"/><rect x="318.00" y="14.90" width="1.24" height="90.19" rx="0.62"/><rect x="320.00" y="15.22" width="1.24" height="89.56" rx="0.62"/><rect x="322.00" y="14.00" width="1.24" height="92.00" rx="0.62"/><rect x="324.00" y="13.01" width="1.24" height="93.98" rx="0.62"/><rect x="326.00" y="17.96" width="1.24" height="84.08" rx="0.62"/><rect x="328.00" y="15.80" width="1.24" height="88.39" rx="0.62"/><rect x="330.00" y="17.62" width="1.24" height="84.77" rx="0.62"/><rect x="332.00" y="13.36" width="1.24" height="93.27" rx="0.62"/><rect x="334.00" y="15.81" width="1.24" height="88.38" rx="0.62"/><rect x="336.00" y="16.18" width="1.24" height="87.63" rx="0.62"/><rect x="338.00" y="12.77" width="1.24" height="94.46" rx="0.62"/><rect x="340.00" y="13.72" width="1.24" height="92.56" rx="0.62"/><rect x="342.00" y="16.40" width="1.24" height="87.19" rx="0.62"/><rect x="344.00" y="24.22" width="1.24" height="71.56" rx="0.62"/><rect x="346.00" y="22.55" width="1.24" height="74.90" rx="0.62"/><rect x="348.00" y="18.48" width="1.24" height="83.03" rx="0.62"/><rect x="350.00" y="19.41" width="1.24" height="81.17" rx="0.62"/><rect x="352.00" y="16.48" width="1.24" height="87.05" rx="0.62"/><rect x="354.00" y="15.16" width="1.24" height="89.69" rx="0.62"/><rect x="356.00" y="12.86" width="1.24" height="94.29" rx="0.62"/><rect x="358.00" y="11.94" width="1.24" height="96.13" rx="0.62"/><rect x="360.00" y="11.82" width="1.24" height="96.35" rx="0.62"/><rect x="362.00" y="9.66" width="1.24" height="100.69" rx="0.62"/><rect x="364.00" y="14.07" width="1.24" height="91.86" rx="0.62"/><rect x="366.00" y="15.65" width="1.24" height="88.71" rx="0.62"/><rect x="368.00" y="14.23" width="1.24" height="91.54" rx="0.62"/><rect x="370.00" y="15.65" width="1.24" height="88.71" rx="0.62"/><rect x="372.00" y="11.55" width="1.24" height="96.90" rx="0.62"/><rect x="374.00" y="14.57" width="1.24" height="90.86" rx="0.62"/><rect x="376.00" y="13.22" width="1.24" height="93.57" rx="0.62"/><rect x="378.00" y="14.32" width="1.24" height="91.36" rx="0.62"/><rect x="380.00" y="12.29" width="1.24" height="95.43" rx="0.62"/><rect x="382.00" y="11.29" width="1.24" height="97.43" rx="0.62"/><rect x="384.00" y="9.10" width="1.24" height="101.79" rx="0.62"/><rect x="386.00" y="8.69" width="1.24" height="102.63" rx="0.62"/><rect x="388.00" y="22.67" width="1.24" height="74.65" rx="0.62"/><rect x="390.00" y="15.03" width="1.24" height="89.95" rx="0.62"/><rect x="392.00" y="8.77" width="1.24" height="102.47" rx="0.62"/><rect x="394.00" y="8.22" width="1.24" height="103.55" rx="0.62"/><rect x="396.00" y="10.45" width="1.24" height="99.09" rx="0.62"/><rect x="398.00" y="10.13" width="1.24" height="99.74" rx="0.62"/><rect x="400.00" y="11.16" width="1.24" height="97.67" rx="0.62"/><rect x="402.00" y="7.41" width="1.24" height="105.17" rx="0.62"/><rect x="404.00" y="6.38" width="1.24" height="107.24" rx="0.62"/><rect x="406.00" y="7.41" width="1.24" height="105.19" rx="0.62"/><rect x="408.00" y="7.25" width="1.24" height="105.49" rx="0.62"/><rect x="410.00" y="9.55" width="1.24" height="100.90" rx="0.62"/><rect x="412.00" y="10.51" width="1.24" height="98.98" rx="0.62"/><rect x="414.00" y="10.55" width="1.24" height="98.89" rx="0.62"/><rect x="416.00" y="7.14" width="1.24" height="105.72" rx="0.62"/><rect x="418.00" y="10.92" width="1.24" height="98.17" rx="0.62"/><rect x="420.00" y="34.45" width="1.24" height="51.10" rx="0.62"/><rect x="422.00" y="31.81" width="1.24" height="56.39" rx="0.62"/><rect x="424.00" y="34.11" width="1.24" height="51.78" rx="0.62"/><rect x="426.00" y="34.30" width="1.24" height="51.39" rx="0.62"/><rect x="428.00" y="33.79" width="1.24" height="52.43" rx="0.62"/><rect x="430.00" y="32.75" width="1.24" height="54.50" rx="0.62"/><rect x="432.00" y="35.19" width="1.24" height="49.62" rx="0.62"/><rect x="434.00" y="33.12" width="1.24" height="53.76" rx="0.62"/><rect x="436.00" y="22.69" width="1.24" height="74.63" rx="0.62"/><rect x="438.00" y="26.43" width="1.24" height="67.14" rx="0.62"/><rect x="440.00" y="22.42" width="1.24" height="75.17" rx="0.62"/><rect x="442.00" y="22.98" width="1.24" height="74.03" rx="0.62"/><rect x="444.00" y="26.36" width="1.24" height="67.29" rx="0.62"/><rect x="446.00" y="23.61" width="1.24" height="72.79" rx="0.62"/><rect x="448.00" y="24.66" width="1.24" height="70.68" rx="0.62"/><rect x="450.00" y="23.60" width="1.24" height="72.80" rx="0.62"/><rect x="452.00" y="18.43" width="1.24" height="83.14" rx="0.62"/><rect x="454.00" y="18.61" width="1.24" height="82.77" rx="0.62"/><rect x="456.00" y="21.55" width="1.24" height="76.90" rx="0.62"/><rect x="458.00" y="21.37" width="1.24" height="77.26" rx="0.62"/><rect x="460.00" y="19.32" width="1.24" height="81.36" rx="0.62"/><rect x="462.00" y="13.86" width="1.24" height="92.27" rx="0.62"/><rect x="464.00" y="18.38" width="1.24" height="83.25" rx="0.62"/><rect x="466.00" y="16.48" width="1.24" height="87.05" rx="0.62"/><rect x="468.00" y="14.40" width="1.24" height="91.20" rx="0.62"/><rect x="470.00" y="13.93" width="1.24" height="92.14" rx="0.62"/><rect x="472.00" y="14.62" width="1.24" height="90.76" rx="0.62"/><rect x="474.00" y="13.85" width="1.24" height="92.29" rx="0.62"/><rect x="476.00" y="15.39" width="1.24" height="89.21" rx="0.62"/><rect x="478.00" y="13.59" width="1.24" height="92.81" rx="0.62"/><rect x="480.00" y="9.76" width="1.24" height="100.47" rx="0.62"/><rect x="482.00" y="19.43" width="1.24" height="81.15" rx="0.62"/><rect x="484.00" y="11.30" width="1.24" height="97.40" rx="0.62"/><rect x="486.00" y="9.43" width="1.24" height="101.15" rx="0.62"/><rect x="488.00" y="5.79" width="1.24" height="108.42" rx="0.62"/><rect x="490.00" y="3.60" width="1.24" height="112.80" rx="0.62"/><rect x="492.00" y="4.02" width="1.24" height="111.95" rx="0.62"/><rect x="494.00" y="7.81" width="1.24" height="104.39" rx="0.62"/><rect x="496.00" y="11.16" width="1.24" height="97.68" rx="0.62"/><rect x="498.00" y="9.45" width="1.24" height="101.10" rx="0.62"/><rect x="500.00" y="7.18" width="1.24" height="105.65" rx="0.62"/><rect x="502.00" y="6.90" width="1.24" height="106.20" rx="0.62"/><rect x="504.00" y="7.33" width="1.24" height="105.34" rx="0.62"/><rect x="506.00" y="7.84" width="1.24" height="104.33" rx="0.62"/><rect x="508.00" y="7.79" width="1.24" height="104.42" rx="0.62"/><rect x="510.00" y="8.27" width="1.24" height="103.46" rx="0.62"/><rect x="512.00" y="7.23" width="1.24" height="105.54" rx="0.62"/><rect x="514.00" y="9.10" width="1.24" height="101.80" rx="0.62"/><rect x="516.00" y="9.30" width="1.24" height="101.41" rx="0.62"/><rect x="518.00" y="6.65" width="1.24" height="106.70" rx="0.62"/><rect x="520.00" y="8.77" width="1.24" height="102.47" rx="0.62"/><rect x="522.00" y="5.51" width="1.24" height="108.99" rx="0.62"/><rect x="524.00" y="5.64" width="1.24" height="108.73" rx="0.62"/><rect x="526.00" y="6.70" width="1.24" height="106.61" rx="0.62"/><rect x="528.00" y="6.85" width="1.24" height="106.30" rx="0.62"/><rect x="530.00" y="9.19" width="1.24" height="101.61" rx="0.62"/><rect x="532.00" y="7.60" width="1.24" height="104.79" rx="0.62"/><rect x="534.00" y="8.16" width="1.24" height="103.67" rx="0.62"/><rect x="536.00" y="8.88" width="1.24" height="102.24" rx="0.62"/><rect x="538.00" y="7.06" width="1.24" height="105.89" rx="0.62"/><rect x="540.00" y="7.18" width="1.24" height="105.64" rx="0.62"/><rect x="542.00" y="8.43" width="1.24" height="103.13" rx="0.62"/><rect x="544.00" y="6.25" width="1.24" height="107.50" rx="0.62"/><rect x="546.00" y="8.50" width="1.24" height="103.00" rx="0.62"/><rect x="548.00" y="7.13" width="1.24" height="105.74" rx="0.62"/><rect x="550.00" y="7.51" width="1.24" height="104.97" rx="0.62"/><rect x="552.00" y="8.17" width="1.24" height="103.65" rx="0.62"/><rect x="554.00" y="5.83" width="1.24" height="108.34" rx="0.62"/><rect x="556.00" y="6.65" width="1.24" height="106.70" rx="0.62"/><rect x="558.00" y="6.59" width="1.24" height="106.81" rx="0.62"/><rect x="560.00" y="6.90" width="1.24" height="106.20" rx="0.62"/><rect x="562.00" y="6.98" width="1.24" height="106.04" rx="0.62"/><rect x="564.00" y="7.73" width="1.24" height="104.53" rx="0.62"/><rect x="566.00" y="7.63" width="1.24" height="104.75" rx="0.62"/><rect x="568.00" y="8.39" width="1.24" height="103.22" rx="0.62"/><rect x="570.00" y="7.74" width="1.24" height="104.52" rx="0.62"/><rect x="572.00" y="9.57" width="1.24" height="100.85" rx="0.62"/><rect x="574.00" y="6.37" width="1.24" height="107.26" rx="0.62"/><rect x="576.00" y="5.03" width="1.24" height="109.93" rx="0.62"/><rect x="578.00" y="6.22" width="1.24" height="107.57" rx="0.62"/><rect x="580.00" y="8.19" width="1.24" height="103.62" rx="0.62"/><rect x="582.00" y="7.05" width="1.24" height="105.91" rx="0.62"/><rect x="584.00" y="7.80" width="1.24" height="104.41" rx="0.62"/><rect x="586.00" y="7.42" width="1.24" height="105.16" rx="0.62"/><rect x="588.00" y="7.69" width="1.24" height="104.62" rx="0.62"/><rect x="590.00" y="5.64" width="1.24" height="108.73" rx="0.62"/><rect x="592.00" y="7.03" width="1.24" height="105.94" rx="0.62"/><rect x="594.00" y="7.01" width="1.24" height="105.99" rx="0.62"/><rect x="596.00" y="9.67" width="1.24" height="100.65" rx="0.62"/><rect x="598.00" y="8.77" width="1.24" height="102.47" rx="0.62"/><rect x="600.00" y="9.00" width="1.24" height="102.01" rx="0.62"/><rect x="602.00" y="20.26" width="1.24" height="79.48" rx="0.62"/><rect x="604.00" y="33.01" width="1.24" height="53.99" rx="0.62"/><rect x="606.00" y="30.20" width="1.24" height="59.60" rx="0.62"/><rect x="608.00" y="26.45" width="1.24" height="67.10" rx="0.62"/><rect x="610.00" y="28.27" width="1.24" height="63.46" rx="0.62"/><rect x="612.00" y="24.45" width="1.24" height="71.11" rx="0.62"/><rect x="614.00" y="23.64" width="1.24" height="72.72" rx="0.62"/><rect x="616.00" y="24.76" width="1.24" height="70.48" rx="0.62"/><rect x="618.00" y="25.51" width="1.24" height="68.98" rx="0.62"/><rect x="620.00" y="28.26" width="1.24" height="63.47" rx="0.62"/><rect x="622.00" y="31.17" width="1.24" height="57.65" rx="0.62"/><rect x="624.00" y="31.50" width="1.24" height="57.01" rx="0.62"/><rect x="626.00" y="23.71" width="1.24" height="72.58" rx="0.62"/><rect x="628.00" y="27.08" width="1.24" height="65.83" rx="0.62"/><rect x="630.00" y="29.47" width="1.24" height="61.06" rx="0.62"/><rect x="632.00" y="25.39" width="1.24" height="69.21" rx="0.62"/><rect x="634.00" y="22.93" width="1.24" height="74.14" rx="0.62"/><rect x="636.00" y="22.78" width="1.24" height="74.44" rx="0.62"/><rect x="638.00" y="17.99" width="1.24" height="84.02" rx="0.62"/><rect x="640.00" y="14.82" width="1.24" height="90.36" rx="0.62"/><rect x="642.00" y="19.18" width="1.24" height="81.63" rx="0.62"/><rect x="644.00" y="20.00" width="1.24" height="80.01" rx="0.62"/><rect x="646.00" y="18.01" width="1.24" height="83.98" rx="0.62"/><rect x="648.00" y="19.54" width="1.24" height="80.91" rx="0.62"/><rect x="650.00" y="19.57" width="1.24" height="80.86" rx="0.62"/><rect x="652.00" y="18.56" width="1.24" height="82.87" rx="0.62"/><rect x="654.00" y="20.07" width="1.24" height="79.86" rx="0.62"/><rect x="656.00" y="15.61" width="1.24" height="88.77" rx="0.62"/><rect x="658.00" y="19.39" width="1.24" height="81.22" rx="0.62"/><rect x="660.00" y="17.97" width="1.24" height="84.06" rx="0.62"/><rect x="662.00" y="19.75" width="1.24" height="80.51" rx="0.62"/><rect x="664.00" y="15.82" width="1.24" height="88.36" rx="0.62"/><rect x="666.00" y="18.29" width="1.24" height="83.43" rx="0.62"/><rect x="668.00" y="15.93" width="1.24" height="88.14" rx="0.62"/><rect x="670.00" y="14.17" width="1.24" height="91.66" rx="0.62"/><rect x="672.00" y="14.61" width="1.24" height="90.77" rx="0.62"/><rect x="674.00" y="14.18" width="1.24" height="91.65" rx="0.62"/><rect x="676.00" y="15.36" width="1.24" height="89.28" rx="0.62"/><rect x="678.00" y="12.16" width="1.24" height="95.68" rx="0.62"/><rect x="680.00" y="14.74" width="1.24" height="90.52" rx="0.62"/><rect x="682.00" y="14.93" width="1.24" height="90.15" rx="0.62"/><rect x="684.00" y="14.03" width="1.24" height="91.93" rx="0.62"/><rect x="686.00" y="11.56" width="1.24" height="96.88" rx="0.62"/><rect x="688.00" y="15.48" width="1.24" height="89.04" rx="0.62"/><rect x="690.00" y="14.08" width="1.24" height="91.84" rx="0.62"/><rect x="692.00" y="14.37" width="1.24" height="91.26" rx="0.62"/><rect x="694.00" y="11.41" width="1.24" height="97.18" rx="0.62"/><rect x="696.00" y="19.38" width="1.24" height="81.25" rx="0.62"/><rect x="698.00" y="19.48" width="1.24" height="81.05" rx="0.62"/><rect x="700.00" y="20.56" width="1.24" height="78.88" rx="0.62"/><rect x="702.00" y="22.44" width="1.24" height="75.12" rx="0.62"/><rect x="704.00" y="17.52" width="1.24" height="84.96" rx="0.62"/><rect x="706.00" y="18.67" width="1.24" height="82.66" rx="0.62"/><rect x="708.00" y="19.31" width="1.24" height="81.39" rx="0.62"/><rect x="710.00" y="21.60" width="1.24" height="76.79" rx="0.62"/><rect x="712.00" y="20.26" width="1.24" height="79.48" rx="0.62"/><rect x="714.00" y="15.40" width="1.24" height="89.20" rx="0.62"/><rect x="716.00" y="13.71" width="1.24" height="92.57" rx="0.62"/><rect x="718.00" y="14.25" width="1.24" height="91.50" rx="0.62"/><rect x="720.00" y="14.25" width="1.24" height="91.50" rx="0.62"/><rect x="722.00" y="12.52" width="1.24" height="94.97" rx="0.62"/><rect x="724.00" y="12.42" width="1.24" height="95.16" rx="0.62"/><rect x="726.00" y="12.84" width="1.24" height="94.32" rx="0.62"/><rect x="728.00" y="10.13" width="1.24" height="99.75" rx="0.62"/><rect x="730.00" y="9.37" width="1.24" height="101.26" rx="0.62"/><rect x="732.00" y="8.94" width="1.24" height="102.12" rx="0.62"/><rect x="734.00" y="9.66" width="1.24" height="100.67" rx="0.62"/><rect x="736.00" y="8.70" width="1.24" height="102.60" rx="0.62"/><rect x="738.00" y="8.98" width="1.24" height="102.04" rx="0.62"/><rect x="740.00" y="12.49" width="1.24" height="95.02" rx="0.62"/><rect x="742.00" y="12.59" width="1.24" height="94.82" rx="0.62"/><rect x="744.00" y="14.75" width="1.24" height="90.50" rx="0.62"/><rect x="746.00" y="10.72" width="1.24" height="98.55" rx="0.62"/><rect x="748.00" y="10.24" width="1.24" height="99.52" rx="0.62"/><rect x="750.00" y="9.67" width="1.24" height="100.65" rx="0.62"/><rect x="752.00" y="9.18" width="1.24" height="101.63" rx="0.62"/><rect x="754.00" y="9.75" width="1.24" height="100.50" rx="0.62"/><rect x="756.00" y="9.96" width="1.24" height="100.08" rx="0.62"/><rect x="758.00" y="10.95" width="1.24" height="98.09" rx="0.62"/><rect x="760.00" y="9.51" width="1.24" height="100.99" rx="0.62"/><rect x="762.00" y="11.01" width="1.24" height="97.98" rx="0.62"/><rect x="764.00" y="7.34" width="1.24" height="105.31" rx="0.62"/><rect x="766.00" y="6.13" width="1.24" height="107.75" rx="0.62"/><rect x="768.00" y="6.30" width="1.24" height="107.40" rx="0.62"/><rect x="770.00" y="10.95" width="1.24" height="98.10" rx="0.62"/><rect x="772.00" y="11.39" width="1.24" height="97.22" rx="0.62"/><rect x="774.00" y="11.26" width="1.24" height="97.48" rx="0.62"/><rect x="776.00" y="17.95" width="1.24" height="84.10" rx="0.62"/><rect x="778.00" y="13.72" width="1.24" height="92.56" rx="0.62"/><rect x="780.00" y="9.65" width="1.24" height="100.70" rx="0.62"/><rect x="782.00" y="10.25" width="1.24" height="99.50" rx="0.62"/><rect x="784.00" y="13.94" width="1.24" height="92.11" rx="0.62"/><rect x="786.00" y="18.94" width="1.24" height="82.13" rx="0.62"/><rect x="788.00" y="26.02" width="1.24" height="67.96" rx="0.62"/><rect x="790.00" y="17.46" width="1.24" height="85.07" rx="0.62"/><rect x="792.00" y="13.08" width="1.24" height="93.85" rx="0.62"/><rect x="794.00" y="12.64" width="1.24" height="94.73" rx="0.62"/><rect x="796.00" y="13.87" width="1.24" height="92.26" rx="0.62"/><rect x="798.00" y="13.96" width="1.24" height="92.09" rx="0.62"/><rect x="800.00" y="14.23" width="1.24" height="91.55" rx="0.62"/><rect x="802.00" y="11.26" width="1.24" height="97.47" rx="0.62"/><rect x="804.00" y="15.75" width="1.24" height="88.49" rx="0.62"/><rect x="806.00" y="15.27" width="1.24" height="89.46" rx="0.62"/><rect x="808.00" y="20.70" width="1.24" height="78.60" rx="0.62"/><rect x="810.00" y="21.69" width="1.24" height="76.61" rx="0.62"/><rect x="812.00" y="19.47" width="1.24" height="81.07" rx="0.62"/><rect x="814.00" y="16.09" width="1.24" height="87.83" rx="0.62"/><rect x="816.00" y="16.42" width="1.24" height="87.16" rx="0.62"/><rect x="818.00" y="16.74" width="1.24" height="86.53" rx="0.62"/><rect x="820.00" y="25.31" width="1.24" height="69.38" rx="0.62"/><rect x="822.00" y="36.52" width="1.24" height="46.96" rx="0.62"/><rect x="824.00" y="19.91" width="1.24" height="80.18" rx="0.62"/><rect x="826.00" y="19.14" width="1.24" height="81.72" rx="0.62"/><rect x="828.00" y="19.59" width="1.24" height="80.82" rx="0.62"/><rect x="830.00" y="16.60" width="1.24" height="86.80" rx="0.62"/><rect x="832.00" y="16.42" width="1.24" height="87.16" rx="0.62"/><rect x="834.00" y="19.89" width="1.24" height="80.21" rx="0.62"/><rect x="836.00" y="16.49" width="1.24" height="87.03" rx="0.62"/><rect x="838.00" y="17.42" width="1.24" height="85.16" rx="0.62"/><rect x="840.00" y="13.59" width="1.24" height="92.81" rx="0.62"/><rect x="842.00" y="18.11" width="1.24" height="83.79" rx="0.62"/><rect x="844.00" y="18.51" width="1.24" height="82.99" rx="0.62"/><rect x="846.00" y="13.99" width="1.24" height="92.01" rx="0.62"/><rect x="848.00" y="12.80" width="1.24" height="94.39" rx="0.62"/><rect x="850.00" y="15.73" width="1.24" height="88.55" rx="0.62"/><rect x="852.00" y="15.02" width="1.24" height="89.96" rx="0.62"/><rect x="854.00" y="18.15" width="1.24" height="83.71" rx="0.62"/><rect x="856.00" y="22.21" width="1.24" height="75.58" rx="0.62"/><rect x="858.00" y="17.06" width="1.24" height="85.89" rx="0.62"/><rect x="860.00" y="14.98" width="1.24" height="90.05" rx="0.62"/><rect x="862.00" y="15.16" width="1.24" height="89.69" rx="0.62"/><rect x="864.00" y="16.15" width="1.24" height="87.69" rx="0.62"/><rect x="866.00" y="13.29" width="1.24" height="93.42" rx="0.62"/><rect x="868.00" y="14.51" width="1.24" height="90.98" rx="0.62"/><rect x="870.00" y="19.00" width="1.24" height="82.01" rx="0.62"/><rect x="872.00" y="14.15" width="1.24" height="91.70" rx="0.62"/><rect x="874.00" y="13.85" width="1.24" height="92.29" rx="0.62"/><rect x="876.00" y="15.17" width="1.24" height="89.65" rx="0.62"/><rect x="878.00" y="14.84" width="1.24" height="90.32" rx="0.62"/><rect x="880.00" y="13.12" width="1.24" height="93.76" rx="0.62"/><rect x="882.00" y="14.43" width="1.24" height="91.13" rx="0.62"/><rect x="884.00" y="15.30" width="1.24" height="89.41" rx="0.62"/><rect x="886.00" y="14.07" width="1.24" height="91.86" rx="0.62"/><rect x="888.00" y="13.20" width="1.24" height="93.59" rx="0.62"/><rect x="890.00" y="33.51" width="1.24" height="52.97" rx="0.62"/><rect x="892.00" y="21.08" width="1.24" height="77.84" rx="0.62"/><rect x="894.00" y="13.46" width="1.24" height="93.08" rx="0.62"/><rect x="896.00" y="14.89" width="1.24" height="90.23" rx="0.62"/><rect x="898.00" y="14.50" width="1.24" height="91.01" rx="0.62"/><rect x="900.00" y="13.77" width="1.24" height="92.45" rx="0.62"/><rect x="902.00" y="18.40" width="1.24" height="83.20" rx="0.62"/><rect x="904.00" y="26.66" width="1.24" height="66.69" rx="0.62"/><rect x="906.00" y="33.98" width="1.24" height="52.05" rx="0.62"/><rect x="908.00" y="21.57" width="1.24" height="76.85" rx="0.62"/><rect x="910.00" y="11.87" width="1.24" height="96.26" rx="0.62"/><rect x="912.00" y="8.03" width="1.24" height="103.95" rx="0.62"/><rect x="914.00" y="7.27" width="1.24" height="105.46" rx="0.62"/><rect x="916.00" y="12.58" width="1.24" height="94.84" rx="0.62"/><rect x="918.00" y="20.54" width="1.24" height="78.93" rx="0.62"/></g>
+            <g class="wplayed" clip-path="url(#playedClip)"><rect x="0.00" y="43.33" width="1.24" height="33.34" rx="0.62"/><rect x="2.00" y="35.44" width="1.24" height="49.11" rx="0.62"/><rect x="4.00" y="38.56" width="1.24" height="42.89" rx="0.62"/><rect x="6.00" y="32.36" width="1.24" height="55.27" rx="0.62"/><rect x="8.00" y="36.95" width="1.24" height="46.10" rx="0.62"/><rect x="10.00" y="47.36" width="1.24" height="25.28" rx="0.62"/><rect x="12.00" y="30.86" width="1.24" height="58.28" rx="0.62"/><rect x="14.00" y="33.15" width="1.24" height="53.69" rx="0.62"/><rect x="16.00" y="38.00" width="1.24" height="44.00" rx="0.62"/><rect x="18.00" y="37.55" width="1.24" height="44.89" rx="0.62"/><rect x="20.00" y="34.10" width="1.24" height="51.80" rx="0.62"/><rect x="22.00" y="31.29" width="1.24" height="57.43" rx="0.62"/><rect x="24.00" y="32.49" width="1.24" height="55.01" rx="0.62"/><rect x="26.00" y="42.19" width="1.24" height="35.61" rx="0.62"/><rect x="28.00" y="34.07" width="1.24" height="51.85" rx="0.62"/><rect x="30.00" y="40.68" width="1.24" height="38.65" rx="0.62"/><rect x="32.00" y="38.84" width="1.24" height="42.32" rx="0.62"/><rect x="34.00" y="39.84" width="1.24" height="40.33" rx="0.62"/><rect x="36.00" y="21.97" width="1.24" height="76.06" rx="0.62"/><rect x="38.00" y="16.17" width="1.24" height="87.67" rx="0.62"/><rect x="40.00" y="17.17" width="1.24" height="85.66" rx="0.62"/><rect x="42.00" y="17.84" width="1.24" height="84.32" rx="0.62"/><rect x="44.00" y="11.83" width="1.24" height="96.33" rx="0.62"/><rect x="46.00" y="16.61" width="1.24" height="86.78" rx="0.62"/><rect x="48.00" y="17.25" width="1.24" height="85.50" rx="0.62"/><rect x="50.00" y="15.77" width="1.24" height="88.46" rx="0.62"/><rect x="52.00" y="17.18" width="1.24" height="85.65" rx="0.62"/><rect x="54.00" y="18.51" width="1.24" height="82.98" rx="0.62"/><rect x="56.00" y="24.13" width="1.24" height="71.74" rx="0.62"/><rect x="58.00" y="24.01" width="1.24" height="71.99" rx="0.62"/><rect x="60.00" y="25.70" width="1.24" height="68.59" rx="0.62"/><rect x="62.00" y="24.97" width="1.24" height="70.06" rx="0.62"/><rect x="64.00" y="22.11" width="1.24" height="75.78" rx="0.62"/><rect x="66.00" y="26.59" width="1.24" height="66.81" rx="0.62"/><rect x="68.00" y="25.75" width="1.24" height="68.50" rx="0.62"/><rect x="70.00" y="28.92" width="1.24" height="62.16" rx="0.62"/><rect x="72.00" y="24.26" width="1.24" height="71.47" rx="0.62"/><rect x="74.00" y="29.01" width="1.24" height="61.97" rx="0.62"/><rect x="76.00" y="25.95" width="1.24" height="68.10" rx="0.62"/><rect x="78.00" y="25.80" width="1.24" height="68.40" rx="0.62"/><rect x="80.00" y="22.12" width="1.24" height="75.76" rx="0.62"/><rect x="82.00" y="19.16" width="1.24" height="81.68" rx="0.62"/><rect x="84.00" y="25.40" width="1.24" height="69.20" rx="0.62"/><rect x="86.00" y="29.71" width="1.24" height="60.58" rx="0.62"/><rect x="88.00" y="21.47" width="1.24" height="77.05" rx="0.62"/><rect x="90.00" y="19.02" width="1.24" height="81.96" rx="0.62"/><rect x="92.00" y="24.18" width="1.24" height="71.64" rx="0.62"/><rect x="94.00" y="26.21" width="1.24" height="67.59" rx="0.62"/><rect x="96.00" y="26.38" width="1.24" height="67.24" rx="0.62"/><rect x="98.00" y="24.95" width="1.24" height="70.11" rx="0.62"/><rect x="100.00" y="20.76" width="1.24" height="78.47" rx="0.62"/><rect x="102.00" y="26.83" width="1.24" height="66.34" rx="0.62"/><rect x="104.00" y="25.04" width="1.24" height="69.91" rx="0.62"/><rect x="106.00" y="20.41" width="1.24" height="79.17" rx="0.62"/><rect x="108.00" y="19.19" width="1.24" height="81.61" rx="0.62"/><rect x="110.00" y="25.22" width="1.24" height="69.56" rx="0.62"/><rect x="112.00" y="26.62" width="1.24" height="66.77" rx="0.62"/><rect x="114.00" y="26.23" width="1.24" height="67.54" rx="0.62"/><rect x="116.00" y="21.69" width="1.24" height="76.63" rx="0.62"/><rect x="118.00" y="18.32" width="1.24" height="83.36" rx="0.62"/><rect x="120.00" y="24.76" width="1.24" height="70.48" rx="0.62"/><rect x="122.00" y="29.13" width="1.24" height="61.74" rx="0.62"/><rect x="124.00" y="23.26" width="1.24" height="73.48" rx="0.62"/><rect x="126.00" y="15.91" width="1.24" height="88.19" rx="0.62"/><rect x="128.00" y="21.35" width="1.24" height="77.30" rx="0.62"/><rect x="130.00" y="22.97" width="1.24" height="74.06" rx="0.62"/><rect x="132.00" y="22.26" width="1.24" height="75.47" rx="0.62"/><rect x="134.00" y="21.04" width="1.24" height="77.92" rx="0.62"/><rect x="136.00" y="21.30" width="1.24" height="77.39" rx="0.62"/><rect x="138.00" y="24.76" width="1.24" height="70.49" rx="0.62"/><rect x="140.00" y="21.21" width="1.24" height="77.58" rx="0.62"/><rect x="142.00" y="20.44" width="1.24" height="79.13" rx="0.62"/><rect x="144.00" y="18.39" width="1.24" height="83.21" rx="0.62"/><rect x="146.00" y="23.38" width="1.24" height="73.24" rx="0.62"/><rect x="148.00" y="22.45" width="1.24" height="75.10" rx="0.62"/><rect x="150.00" y="21.43" width="1.24" height="77.13" rx="0.62"/><rect x="152.00" y="22.89" width="1.24" height="74.21" rx="0.62"/><rect x="154.00" y="21.94" width="1.24" height="76.12" rx="0.62"/><rect x="156.00" y="22.00" width="1.24" height="76.00" rx="0.62"/><rect x="158.00" y="18.61" width="1.24" height="82.77" rx="0.62"/><rect x="160.00" y="21.53" width="1.24" height="76.94" rx="0.62"/><rect x="162.00" y="17.06" width="1.24" height="85.87" rx="0.62"/><rect x="164.00" y="21.70" width="1.24" height="76.59" rx="0.62"/><rect x="166.00" y="14.21" width="1.24" height="91.58" rx="0.62"/><rect x="168.00" y="17.23" width="1.24" height="85.55" rx="0.62"/><rect x="170.00" y="16.44" width="1.24" height="87.12" rx="0.62"/><rect x="172.00" y="17.48" width="1.24" height="85.04" rx="0.62"/><rect x="174.00" y="18.79" width="1.24" height="82.41" rx="0.62"/><rect x="176.00" y="16.76" width="1.24" height="86.47" rx="0.62"/><rect x="178.00" y="19.50" width="1.24" height="80.99" rx="0.62"/><rect x="180.00" y="14.34" width="1.24" height="91.32" rx="0.62"/><rect x="182.00" y="17.72" width="1.24" height="84.55" rx="0.62"/><rect x="184.00" y="17.59" width="1.24" height="84.81" rx="0.62"/><rect x="186.00" y="15.90" width="1.24" height="88.21" rx="0.62"/><rect x="188.00" y="17.87" width="1.24" height="84.26" rx="0.62"/><rect x="190.00" y="15.90" width="1.24" height="88.20" rx="0.62"/><rect x="192.00" y="17.38" width="1.24" height="85.24" rx="0.62"/><rect x="194.00" y="18.67" width="1.24" height="82.66" rx="0.62"/><rect x="196.00" y="45.33" width="1.24" height="29.34" rx="0.62"/><rect x="198.00" y="21.24" width="1.24" height="77.52" rx="0.62"/><rect x="200.00" y="11.53" width="1.24" height="96.94" rx="0.62"/><rect x="202.00" y="19.66" width="1.24" height="80.69" rx="0.62"/><rect x="204.00" y="12.29" width="1.24" height="95.42" rx="0.62"/><rect x="206.00" y="14.38" width="1.24" height="91.24" rx="0.62"/><rect x="208.00" y="14.42" width="1.24" height="91.15" rx="0.62"/><rect x="210.00" y="10.97" width="1.24" height="98.06" rx="0.62"/><rect x="212.00" y="15.83" width="1.24" height="88.34" rx="0.62"/><rect x="214.00" y="18.08" width="1.24" height="83.83" rx="0.62"/><rect x="216.00" y="16.62" width="1.24" height="86.77" rx="0.62"/><rect x="218.00" y="16.15" width="1.24" height="87.69" rx="0.62"/><rect x="220.00" y="13.84" width="1.24" height="92.32" rx="0.62"/><rect x="222.00" y="15.94" width="1.24" height="88.12" rx="0.62"/><rect x="224.00" y="15.12" width="1.24" height="89.77" rx="0.62"/><rect x="226.00" y="18.65" width="1.24" height="82.70" rx="0.62"/><rect x="228.00" y="23.33" width="1.24" height="73.33" rx="0.62"/><rect x="230.00" y="25.85" width="1.24" height="68.30" rx="0.62"/><rect x="232.00" y="23.72" width="1.24" height="72.56" rx="0.62"/><rect x="234.00" y="24.86" width="1.24" height="70.27" rx="0.62"/><rect x="236.00" y="23.17" width="1.24" height="73.66" rx="0.62"/><rect x="238.00" y="25.67" width="1.24" height="68.65" rx="0.62"/><rect x="240.00" y="23.73" width="1.24" height="72.53" rx="0.62"/><rect x="242.00" y="19.41" width="1.24" height="81.18" rx="0.62"/><rect x="244.00" y="19.39" width="1.24" height="81.22" rx="0.62"/><rect x="246.00" y="25.09" width="1.24" height="69.81" rx="0.62"/><rect x="248.00" y="24.14" width="1.24" height="71.72" rx="0.62"/><rect x="250.00" y="22.16" width="1.24" height="75.68" rx="0.62"/><rect x="252.00" y="19.34" width="1.24" height="81.33" rx="0.62"/><rect x="254.00" y="21.91" width="1.24" height="76.17" rx="0.62"/><rect x="256.00" y="19.63" width="1.24" height="80.73" rx="0.62"/><rect x="258.00" y="17.47" width="1.24" height="85.06" rx="0.62"/><rect x="260.00" y="16.74" width="1.24" height="86.53" rx="0.62"/><rect x="262.00" y="18.55" width="1.24" height="82.91" rx="0.62"/><rect x="264.00" y="19.74" width="1.24" height="80.52" rx="0.62"/><rect x="266.00" y="22.97" width="1.24" height="74.05" rx="0.62"/><rect x="268.00" y="19.50" width="1.24" height="81.00" rx="0.62"/><rect x="270.00" y="20.90" width="1.24" height="78.20" rx="0.62"/><rect x="272.00" y="21.96" width="1.24" height="76.07" rx="0.62"/><rect x="274.00" y="21.00" width="1.24" height="78.00" rx="0.62"/><rect x="276.00" y="20.82" width="1.24" height="78.35" rx="0.62"/><rect x="278.00" y="20.18" width="1.24" height="79.65" rx="0.62"/><rect x="280.00" y="22.23" width="1.24" height="75.53" rx="0.62"/><rect x="282.00" y="22.23" width="1.24" height="75.53" rx="0.62"/><rect x="284.00" y="21.57" width="1.24" height="76.85" rx="0.62"/><rect x="286.00" y="21.70" width="1.24" height="76.59" rx="0.62"/><rect x="288.00" y="20.64" width="1.24" height="78.72" rx="0.62"/><rect x="290.00" y="22.21" width="1.24" height="75.59" rx="0.62"/><rect x="292.00" y="20.36" width="1.24" height="79.29" rx="0.62"/><rect x="294.00" y="25.00" width="1.24" height="69.99" rx="0.62"/><rect x="296.00" y="18.68" width="1.24" height="82.65" rx="0.62"/><rect x="298.00" y="21.07" width="1.24" height="77.85" rx="0.62"/><rect x="300.00" y="19.84" width="1.24" height="80.32" rx="0.62"/><rect x="302.00" y="18.44" width="1.24" height="83.11" rx="0.62"/><rect x="304.00" y="18.37" width="1.24" height="83.27" rx="0.62"/><rect x="306.00" y="18.78" width="1.24" height="82.43" rx="0.62"/><rect x="308.00" y="22.19" width="1.24" height="75.62" rx="0.62"/><rect x="310.00" y="25.99" width="1.24" height="68.02" rx="0.62"/><rect x="312.00" y="26.64" width="1.24" height="66.72" rx="0.62"/><rect x="314.00" y="12.97" width="1.24" height="94.06" rx="0.62"/><rect x="316.00" y="15.97" width="1.24" height="88.05" rx="0.62"/><rect x="318.00" y="14.90" width="1.24" height="90.19" rx="0.62"/><rect x="320.00" y="15.22" width="1.24" height="89.56" rx="0.62"/><rect x="322.00" y="14.00" width="1.24" height="92.00" rx="0.62"/><rect x="324.00" y="13.01" width="1.24" height="93.98" rx="0.62"/><rect x="326.00" y="17.96" width="1.24" height="84.08" rx="0.62"/><rect x="328.00" y="15.80" width="1.24" height="88.39" rx="0.62"/><rect x="330.00" y="17.62" width="1.24" height="84.77" rx="0.62"/><rect x="332.00" y="13.36" width="1.24" height="93.27" rx="0.62"/><rect x="334.00" y="15.81" width="1.24" height="88.38" rx="0.62"/><rect x="336.00" y="16.18" width="1.24" height="87.63" rx="0.62"/><rect x="338.00" y="12.77" width="1.24" height="94.46" rx="0.62"/><rect x="340.00" y="13.72" width="1.24" height="92.56" rx="0.62"/><rect x="342.00" y="16.40" width="1.24" height="87.19" rx="0.62"/><rect x="344.00" y="24.22" width="1.24" height="71.56" rx="0.62"/><rect x="346.00" y="22.55" width="1.24" height="74.90" rx="0.62"/><rect x="348.00" y="18.48" width="1.24" height="83.03" rx="0.62"/><rect x="350.00" y="19.41" width="1.24" height="81.17" rx="0.62"/><rect x="352.00" y="16.48" width="1.24" height="87.05" rx="0.62"/><rect x="354.00" y="15.16" width="1.24" height="89.69" rx="0.62"/><rect x="356.00" y="12.86" width="1.24" height="94.29" rx="0.62"/><rect x="358.00" y="11.94" width="1.24" height="96.13" rx="0.62"/><rect x="360.00" y="11.82" width="1.24" height="96.35" rx="0.62"/><rect x="362.00" y="9.66" width="1.24" height="100.69" rx="0.62"/><rect x="364.00" y="14.07" width="1.24" height="91.86" rx="0.62"/><rect x="366.00" y="15.65" width="1.24" height="88.71" rx="0.62"/><rect x="368.00" y="14.23" width="1.24" height="91.54" rx="0.62"/><rect x="370.00" y="15.65" width="1.24" height="88.71" rx="0.62"/><rect x="372.00" y="11.55" width="1.24" height="96.90" rx="0.62"/><rect x="374.00" y="14.57" width="1.24" height="90.86" rx="0.62"/><rect x="376.00" y="13.22" width="1.24" height="93.57" rx="0.62"/><rect x="378.00" y="14.32" width="1.24" height="91.36" rx="0.62"/><rect x="380.00" y="12.29" width="1.24" height="95.43" rx="0.62"/><rect x="382.00" y="11.29" width="1.24" height="97.43" rx="0.62"/><rect x="384.00" y="9.10" width="1.24" height="101.79" rx="0.62"/><rect x="386.00" y="8.69" width="1.24" height="102.63" rx="0.62"/><rect x="388.00" y="22.67" width="1.24" height="74.65" rx="0.62"/><rect x="390.00" y="15.03" width="1.24" height="89.95" rx="0.62"/><rect x="392.00" y="8.77" width="1.24" height="102.47" rx="0.62"/><rect x="394.00" y="8.22" width="1.24" height="103.55" rx="0.62"/><rect x="396.00" y="10.45" width="1.24" height="99.09" rx="0.62"/><rect x="398.00" y="10.13" width="1.24" height="99.74" rx="0.62"/><rect x="400.00" y="11.16" width="1.24" height="97.67" rx="0.62"/><rect x="402.00" y="7.41" width="1.24" height="105.17" rx="0.62"/><rect x="404.00" y="6.38" width="1.24" height="107.24" rx="0.62"/><rect x="406.00" y="7.41" width="1.24" height="105.19" rx="0.62"/><rect x="408.00" y="7.25" width="1.24" height="105.49" rx="0.62"/><rect x="410.00" y="9.55" width="1.24" height="100.90" rx="0.62"/><rect x="412.00" y="10.51" width="1.24" height="98.98" rx="0.62"/><rect x="414.00" y="10.55" width="1.24" height="98.89" rx="0.62"/><rect x="416.00" y="7.14" width="1.24" height="105.72" rx="0.62"/><rect x="418.00" y="10.92" width="1.24" height="98.17" rx="0.62"/><rect x="420.00" y="34.45" width="1.24" height="51.10" rx="0.62"/><rect x="422.00" y="31.81" width="1.24" height="56.39" rx="0.62"/><rect x="424.00" y="34.11" width="1.24" height="51.78" rx="0.62"/><rect x="426.00" y="34.30" width="1.24" height="51.39" rx="0.62"/><rect x="428.00" y="33.79" width="1.24" height="52.43" rx="0.62"/><rect x="430.00" y="32.75" width="1.24" height="54.50" rx="0.62"/><rect x="432.00" y="35.19" width="1.24" height="49.62" rx="0.62"/><rect x="434.00" y="33.12" width="1.24" height="53.76" rx="0.62"/><rect x="436.00" y="22.69" width="1.24" height="74.63" rx="0.62"/><rect x="438.00" y="26.43" width="1.24" height="67.14" rx="0.62"/><rect x="440.00" y="22.42" width="1.24" height="75.17" rx="0.62"/><rect x="442.00" y="22.98" width="1.24" height="74.03" rx="0.62"/><rect x="444.00" y="26.36" width="1.24" height="67.29" rx="0.62"/><rect x="446.00" y="23.61" width="1.24" height="72.79" rx="0.62"/><rect x="448.00" y="24.66" width="1.24" height="70.68" rx="0.62"/><rect x="450.00" y="23.60" width="1.24" height="72.80" rx="0.62"/><rect x="452.00" y="18.43" width="1.24" height="83.14" rx="0.62"/><rect x="454.00" y="18.61" width="1.24" height="82.77" rx="0.62"/><rect x="456.00" y="21.55" width="1.24" height="76.90" rx="0.62"/><rect x="458.00" y="21.37" width="1.24" height="77.26" rx="0.62"/><rect x="460.00" y="19.32" width="1.24" height="81.36" rx="0.62"/><rect x="462.00" y="13.86" width="1.24" height="92.27" rx="0.62"/><rect x="464.00" y="18.38" width="1.24" height="83.25" rx="0.62"/><rect x="466.00" y="16.48" width="1.24" height="87.05" rx="0.62"/><rect x="468.00" y="14.40" width="1.24" height="91.20" rx="0.62"/><rect x="470.00" y="13.93" width="1.24" height="92.14" rx="0.62"/><rect x="472.00" y="14.62" width="1.24" height="90.76" rx="0.62"/><rect x="474.00" y="13.85" width="1.24" height="92.29" rx="0.62"/><rect x="476.00" y="15.39" width="1.24" height="89.21" rx="0.62"/><rect x="478.00" y="13.59" width="1.24" height="92.81" rx="0.62"/><rect x="480.00" y="9.76" width="1.24" height="100.47" rx="0.62"/><rect x="482.00" y="19.43" width="1.24" height="81.15" rx="0.62"/><rect x="484.00" y="11.30" width="1.24" height="97.40" rx="0.62"/><rect x="486.00" y="9.43" width="1.24" height="101.15" rx="0.62"/><rect x="488.00" y="5.79" width="1.24" height="108.42" rx="0.62"/><rect x="490.00" y="3.60" width="1.24" height="112.80" rx="0.62"/><rect x="492.00" y="4.02" width="1.24" height="111.95" rx="0.62"/><rect x="494.00" y="7.81" width="1.24" height="104.39" rx="0.62"/><rect x="496.00" y="11.16" width="1.24" height="97.68" rx="0.62"/><rect x="498.00" y="9.45" width="1.24" height="101.10" rx="0.62"/><rect x="500.00" y="7.18" width="1.24" height="105.65" rx="0.62"/><rect x="502.00" y="6.90" width="1.24" height="106.20" rx="0.62"/><rect x="504.00" y="7.33" width="1.24" height="105.34" rx="0.62"/><rect x="506.00" y="7.84" width="1.24" height="104.33" rx="0.62"/><rect x="508.00" y="7.79" width="1.24" height="104.42" rx="0.62"/><rect x="510.00" y="8.27" width="1.24" height="103.46" rx="0.62"/><rect x="512.00" y="7.23" width="1.24" height="105.54" rx="0.62"/><rect x="514.00" y="9.10" width="1.24" height="101.80" rx="0.62"/><rect x="516.00" y="9.30" width="1.24" height="101.41" rx="0.62"/><rect x="518.00" y="6.65" width="1.24" height="106.70" rx="0.62"/><rect x="520.00" y="8.77" width="1.24" height="102.47" rx="0.62"/><rect x="522.00" y="5.51" width="1.24" height="108.99" rx="0.62"/><rect x="524.00" y="5.64" width="1.24" height="108.73" rx="0.62"/><rect x="526.00" y="6.70" width="1.24" height="106.61" rx="0.62"/><rect x="528.00" y="6.85" width="1.24" height="106.30" rx="0.62"/><rect x="530.00" y="9.19" width="1.24" height="101.61" rx="0.62"/><rect x="532.00" y="7.60" width="1.24" height="104.79" rx="0.62"/><rect x="534.00" y="8.16" width="1.24" height="103.67" rx="0.62"/><rect x="536.00" y="8.88" width="1.24" height="102.24" rx="0.62"/><rect x="538.00" y="7.06" width="1.24" height="105.89" rx="0.62"/><rect x="540.00" y="7.18" width="1.24" height="105.64" rx="0.62"/><rect x="542.00" y="8.43" width="1.24" height="103.13" rx="0.62"/><rect x="544.00" y="6.25" width="1.24" height="107.50" rx="0.62"/><rect x="546.00" y="8.50" width="1.24" height="103.00" rx="0.62"/><rect x="548.00" y="7.13" width="1.24" height="105.74" rx="0.62"/><rect x="550.00" y="7.51" width="1.24" height="104.97" rx="0.62"/><rect x="552.00" y="8.17" width="1.24" height="103.65" rx="0.62"/><rect x="554.00" y="5.83" width="1.24" height="108.34" rx="0.62"/><rect x="556.00" y="6.65" width="1.24" height="106.70" rx="0.62"/><rect x="558.00" y="6.59" width="1.24" height="106.81" rx="0.62"/><rect x="560.00" y="6.90" width="1.24" height="106.20" rx="0.62"/><rect x="562.00" y="6.98" width="1.24" height="106.04" rx="0.62"/><rect x="564.00" y="7.73" width="1.24" height="104.53" rx="0.62"/><rect x="566.00" y="7.63" width="1.24" height="104.75" rx="0.62"/><rect x="568.00" y="8.39" width="1.24" height="103.22" rx="0.62"/><rect x="570.00" y="7.74" width="1.24" height="104.52" rx="0.62"/><rect x="572.00" y="9.57" width="1.24" height="100.85" rx="0.62"/><rect x="574.00" y="6.37" width="1.24" height="107.26" rx="0.62"/><rect x="576.00" y="5.03" width="1.24" height="109.93" rx="0.62"/><rect x="578.00" y="6.22" width="1.24" height="107.57" rx="0.62"/><rect x="580.00" y="8.19" width="1.24" height="103.62" rx="0.62"/><rect x="582.00" y="7.05" width="1.24" height="105.91" rx="0.62"/><rect x="584.00" y="7.80" width="1.24" height="104.41" rx="0.62"/><rect x="586.00" y="7.42" width="1.24" height="105.16" rx="0.62"/><rect x="588.00" y="7.69" width="1.24" height="104.62" rx="0.62"/><rect x="590.00" y="5.64" width="1.24" height="108.73" rx="0.62"/><rect x="592.00" y="7.03" width="1.24" height="105.94" rx="0.62"/><rect x="594.00" y="7.01" width="1.24" height="105.99" rx="0.62"/><rect x="596.00" y="9.67" width="1.24" height="100.65" rx="0.62"/><rect x="598.00" y="8.77" width="1.24" height="102.47" rx="0.62"/><rect x="600.00" y="9.00" width="1.24" height="102.01" rx="0.62"/><rect x="602.00" y="20.26" width="1.24" height="79.48" rx="0.62"/><rect x="604.00" y="33.01" width="1.24" height="53.99" rx="0.62"/><rect x="606.00" y="30.20" width="1.24" height="59.60" rx="0.62"/><rect x="608.00" y="26.45" width="1.24" height="67.10" rx="0.62"/><rect x="610.00" y="28.27" width="1.24" height="63.46" rx="0.62"/><rect x="612.00" y="24.45" width="1.24" height="71.11" rx="0.62"/><rect x="614.00" y="23.64" width="1.24" height="72.72" rx="0.62"/><rect x="616.00" y="24.76" width="1.24" height="70.48" rx="0.62"/><rect x="618.00" y="25.51" width="1.24" height="68.98" rx="0.62"/><rect x="620.00" y="28.26" width="1.24" height="63.47" rx="0.62"/><rect x="622.00" y="31.17" width="1.24" height="57.65" rx="0.62"/><rect x="624.00" y="31.50" width="1.24" height="57.01" rx="0.62"/><rect x="626.00" y="23.71" width="1.24" height="72.58" rx="0.62"/><rect x="628.00" y="27.08" width="1.24" height="65.83" rx="0.62"/><rect x="630.00" y="29.47" width="1.24" height="61.06" rx="0.62"/><rect x="632.00" y="25.39" width="1.24" height="69.21" rx="0.62"/><rect x="634.00" y="22.93" width="1.24" height="74.14" rx="0.62"/><rect x="636.00" y="22.78" width="1.24" height="74.44" rx="0.62"/><rect x="638.00" y="17.99" width="1.24" height="84.02" rx="0.62"/><rect x="640.00" y="14.82" width="1.24" height="90.36" rx="0.62"/><rect x="642.00" y="19.18" width="1.24" height="81.63" rx="0.62"/><rect x="644.00" y="20.00" width="1.24" height="80.01" rx="0.62"/><rect x="646.00" y="18.01" width="1.24" height="83.98" rx="0.62"/><rect x="648.00" y="19.54" width="1.24" height="80.91" rx="0.62"/><rect x="650.00" y="19.57" width="1.24" height="80.86" rx="0.62"/><rect x="652.00" y="18.56" width="1.24" height="82.87" rx="0.62"/><rect x="654.00" y="20.07" width="1.24" height="79.86" rx="0.62"/><rect x="656.00" y="15.61" width="1.24" height="88.77" rx="0.62"/><rect x="658.00" y="19.39" width="1.24" height="81.22" rx="0.62"/><rect x="660.00" y="17.97" width="1.24" height="84.06" rx="0.62"/><rect x="662.00" y="19.75" width="1.24" height="80.51" rx="0.62"/><rect x="664.00" y="15.82" width="1.24" height="88.36" rx="0.62"/><rect x="666.00" y="18.29" width="1.24" height="83.43" rx="0.62"/><rect x="668.00" y="15.93" width="1.24" height="88.14" rx="0.62"/><rect x="670.00" y="14.17" width="1.24" height="91.66" rx="0.62"/><rect x="672.00" y="14.61" width="1.24" height="90.77" rx="0.62"/><rect x="674.00" y="14.18" width="1.24" height="91.65" rx="0.62"/><rect x="676.00" y="15.36" width="1.24" height="89.28" rx="0.62"/><rect x="678.00" y="12.16" width="1.24" height="95.68" rx="0.62"/><rect x="680.00" y="14.74" width="1.24" height="90.52" rx="0.62"/><rect x="682.00" y="14.93" width="1.24" height="90.15" rx="0.62"/><rect x="684.00" y="14.03" width="1.24" height="91.93" rx="0.62"/><rect x="686.00" y="11.56" width="1.24" height="96.88" rx="0.62"/><rect x="688.00" y="15.48" width="1.24" height="89.04" rx="0.62"/><rect x="690.00" y="14.08" width="1.24" height="91.84" rx="0.62"/><rect x="692.00" y="14.37" width="1.24" height="91.26" rx="0.62"/><rect x="694.00" y="11.41" width="1.24" height="97.18" rx="0.62"/><rect x="696.00" y="19.38" width="1.24" height="81.25" rx="0.62"/><rect x="698.00" y="19.48" width="1.24" height="81.05" rx="0.62"/><rect x="700.00" y="20.56" width="1.24" height="78.88" rx="0.62"/><rect x="702.00" y="22.44" width="1.24" height="75.12" rx="0.62"/><rect x="704.00" y="17.52" width="1.24" height="84.96" rx="0.62"/><rect x="706.00" y="18.67" width="1.24" height="82.66" rx="0.62"/><rect x="708.00" y="19.31" width="1.24" height="81.39" rx="0.62"/><rect x="710.00" y="21.60" width="1.24" height="76.79" rx="0.62"/><rect x="712.00" y="20.26" width="1.24" height="79.48" rx="0.62"/><rect x="714.00" y="15.40" width="1.24" height="89.20" rx="0.62"/><rect x="716.00" y="13.71" width="1.24" height="92.57" rx="0.62"/><rect x="718.00" y="14.25" width="1.24" height="91.50" rx="0.62"/><rect x="720.00" y="14.25" width="1.24" height="91.50" rx="0.62"/><rect x="722.00" y="12.52" width="1.24" height="94.97" rx="0.62"/><rect x="724.00" y="12.42" width="1.24" height="95.16" rx="0.62"/><rect x="726.00" y="12.84" width="1.24" height="94.32" rx="0.62"/><rect x="728.00" y="10.13" width="1.24" height="99.75" rx="0.62"/><rect x="730.00" y="9.37" width="1.24" height="101.26" rx="0.62"/><rect x="732.00" y="8.94" width="1.24" height="102.12" rx="0.62"/><rect x="734.00" y="9.66" width="1.24" height="100.67" rx="0.62"/><rect x="736.00" y="8.70" width="1.24" height="102.60" rx="0.62"/><rect x="738.00" y="8.98" width="1.24" height="102.04" rx="0.62"/><rect x="740.00" y="12.49" width="1.24" height="95.02" rx="0.62"/><rect x="742.00" y="12.59" width="1.24" height="94.82" rx="0.62"/><rect x="744.00" y="14.75" width="1.24" height="90.50" rx="0.62"/><rect x="746.00" y="10.72" width="1.24" height="98.55" rx="0.62"/><rect x="748.00" y="10.24" width="1.24" height="99.52" rx="0.62"/><rect x="750.00" y="9.67" width="1.24" height="100.65" rx="0.62"/><rect x="752.00" y="9.18" width="1.24" height="101.63" rx="0.62"/><rect x="754.00" y="9.75" width="1.24" height="100.50" rx="0.62"/><rect x="756.00" y="9.96" width="1.24" height="100.08" rx="0.62"/><rect x="758.00" y="10.95" width="1.24" height="98.09" rx="0.62"/><rect x="760.00" y="9.51" width="1.24" height="100.99" rx="0.62"/><rect x="762.00" y="11.01" width="1.24" height="97.98" rx="0.62"/><rect x="764.00" y="7.34" width="1.24" height="105.31" rx="0.62"/><rect x="766.00" y="6.13" width="1.24" height="107.75" rx="0.62"/><rect x="768.00" y="6.30" width="1.24" height="107.40" rx="0.62"/><rect x="770.00" y="10.95" width="1.24" height="98.10" rx="0.62"/><rect x="772.00" y="11.39" width="1.24" height="97.22" rx="0.62"/><rect x="774.00" y="11.26" width="1.24" height="97.48" rx="0.62"/><rect x="776.00" y="17.95" width="1.24" height="84.10" rx="0.62"/><rect x="778.00" y="13.72" width="1.24" height="92.56" rx="0.62"/><rect x="780.00" y="9.65" width="1.24" height="100.70" rx="0.62"/><rect x="782.00" y="10.25" width="1.24" height="99.50" rx="0.62"/><rect x="784.00" y="13.94" width="1.24" height="92.11" rx="0.62"/><rect x="786.00" y="18.94" width="1.24" height="82.13" rx="0.62"/><rect x="788.00" y="26.02" width="1.24" height="67.96" rx="0.62"/><rect x="790.00" y="17.46" width="1.24" height="85.07" rx="0.62"/><rect x="792.00" y="13.08" width="1.24" height="93.85" rx="0.62"/><rect x="794.00" y="12.64" width="1.24" height="94.73" rx="0.62"/><rect x="796.00" y="13.87" width="1.24" height="92.26" rx="0.62"/><rect x="798.00" y="13.96" width="1.24" height="92.09" rx="0.62"/><rect x="800.00" y="14.23" width="1.24" height="91.55" rx="0.62"/><rect x="802.00" y="11.26" width="1.24" height="97.47" rx="0.62"/><rect x="804.00" y="15.75" width="1.24" height="88.49" rx="0.62"/><rect x="806.00" y="15.27" width="1.24" height="89.46" rx="0.62"/><rect x="808.00" y="20.70" width="1.24" height="78.60" rx="0.62"/><rect x="810.00" y="21.69" width="1.24" height="76.61" rx="0.62"/><rect x="812.00" y="19.47" width="1.24" height="81.07" rx="0.62"/><rect x="814.00" y="16.09" width="1.24" height="87.83" rx="0.62"/><rect x="816.00" y="16.42" width="1.24" height="87.16" rx="0.62"/><rect x="818.00" y="16.74" width="1.24" height="86.53" rx="0.62"/><rect x="820.00" y="25.31" width="1.24" height="69.38" rx="0.62"/><rect x="822.00" y="36.52" width="1.24" height="46.96" rx="0.62"/><rect x="824.00" y="19.91" width="1.24" height="80.18" rx="0.62"/><rect x="826.00" y="19.14" width="1.24" height="81.72" rx="0.62"/><rect x="828.00" y="19.59" width="1.24" height="80.82" rx="0.62"/><rect x="830.00" y="16.60" width="1.24" height="86.80" rx="0.62"/><rect x="832.00" y="16.42" width="1.24" height="87.16" rx="0.62"/><rect x="834.00" y="19.89" width="1.24" height="80.21" rx="0.62"/><rect x="836.00" y="16.49" width="1.24" height="87.03" rx="0.62"/><rect x="838.00" y="17.42" width="1.24" height="85.16" rx="0.62"/><rect x="840.00" y="13.59" width="1.24" height="92.81" rx="0.62"/><rect x="842.00" y="18.11" width="1.24" height="83.79" rx="0.62"/><rect x="844.00" y="18.51" width="1.24" height="82.99" rx="0.62"/><rect x="846.00" y="13.99" width="1.24" height="92.01" rx="0.62"/><rect x="848.00" y="12.80" width="1.24" height="94.39" rx="0.62"/><rect x="850.00" y="15.73" width="1.24" height="88.55" rx="0.62"/><rect x="852.00" y="15.02" width="1.24" height="89.96" rx="0.62"/><rect x="854.00" y="18.15" width="1.24" height="83.71" rx="0.62"/><rect x="856.00" y="22.21" width="1.24" height="75.58" rx="0.62"/><rect x="858.00" y="17.06" width="1.24" height="85.89" rx="0.62"/><rect x="860.00" y="14.98" width="1.24" height="90.05" rx="0.62"/><rect x="862.00" y="15.16" width="1.24" height="89.69" rx="0.62"/><rect x="864.00" y="16.15" width="1.24" height="87.69" rx="0.62"/><rect x="866.00" y="13.29" width="1.24" height="93.42" rx="0.62"/><rect x="868.00" y="14.51" width="1.24" height="90.98" rx="0.62"/><rect x="870.00" y="19.00" width="1.24" height="82.01" rx="0.62"/><rect x="872.00" y="14.15" width="1.24" height="91.70" rx="0.62"/><rect x="874.00" y="13.85" width="1.24" height="92.29" rx="0.62"/><rect x="876.00" y="15.17" width="1.24" height="89.65" rx="0.62"/><rect x="878.00" y="14.84" width="1.24" height="90.32" rx="0.62"/><rect x="880.00" y="13.12" width="1.24" height="93.76" rx="0.62"/><rect x="882.00" y="14.43" width="1.24" height="91.13" rx="0.62"/><rect x="884.00" y="15.30" width="1.24" height="89.41" rx="0.62"/><rect x="886.00" y="14.07" width="1.24" height="91.86" rx="0.62"/><rect x="888.00" y="13.20" width="1.24" height="93.59" rx="0.62"/><rect x="890.00" y="33.51" width="1.24" height="52.97" rx="0.62"/><rect x="892.00" y="21.08" width="1.24" height="77.84" rx="0.62"/><rect x="894.00" y="13.46" width="1.24" height="93.08" rx="0.62"/><rect x="896.00" y="14.89" width="1.24" height="90.23" rx="0.62"/><rect x="898.00" y="14.50" width="1.24" height="91.01" rx="0.62"/><rect x="900.00" y="13.77" width="1.24" height="92.45" rx="0.62"/><rect x="902.00" y="18.40" width="1.24" height="83.20" rx="0.62"/><rect x="904.00" y="26.66" width="1.24" height="66.69" rx="0.62"/><rect x="906.00" y="33.98" width="1.24" height="52.05" rx="0.62"/><rect x="908.00" y="21.57" width="1.24" height="76.85" rx="0.62"/><rect x="910.00" y="11.87" width="1.24" height="96.26" rx="0.62"/><rect x="912.00" y="8.03" width="1.24" height="103.95" rx="0.62"/><rect x="914.00" y="7.27" width="1.24" height="105.46" rx="0.62"/><rect x="916.00" y="12.58" width="1.24" height="94.84" rx="0.62"/><rect x="918.00" y="20.54" width="1.24" height="78.93" rx="0.62"/></g>
+            <line id="playhead" x1="0" y1="0" x2="0" y2="120"/>
+          </svg>
+        </div>
+        <span id="tcode" class="tcode">0:00<i>/</i>5:54</span>
+        </div>
+      </div>
+
+      <div class="lyrics">
+      <h4>Intro</h4>
+      <p>Why is “You Are Here”<br>
+        not where I ever want to be?</p>
+      <p>I’m not quite sure I’m here.<br>
+        It’s August 1st.<br>
+        Drenched in heat.</p>
+      <h4>Verse 1</h4>
+      <p>I bet he’s in Chicago now.<br>
+        The last day I thought he’d be in town, he wasn’t.<br>
+        It was raining and there was thunder.<br>
+        I didn’t have enough time that night.</p>
+      <p>This time I have no excuses —<br>
+        and tomorrow I very well might.<br>
+        If I make it to the top today<br>
+        I never have to make it to the top tonight.</p>
+      <h4>Pre-Chorus</h4>
+      <p>I’ve spent so long waiting<br>
+        that I never got to hang out.<br>
+        Another moment waiting<br>
+        and I may never find out.</p>
+      <h4>Chorus</h4>
+      <p>I tried the hike<br>
+        instead of the goodbye.<br>
+        He never needed<br>
+        to act like he would.<br>
+        It’s always been easier<br>
+        to take the wrong way<br>
+        when the wrong way<br>
+        is out of the woods.</p>
+      <p class="tag">Drenched in sun.</p>
+      <h4>Verse 2</h4>
+      <p>One rock sits in the center.<br>
+        It doesn’t look like it’s a mistake.<br>
+        I’m not so clever.<br>
+        The rock seat in the middle was on the trail map.<br>
+        Older than me. They’ve walked it many times.<br>
+        There is a higher spot.</p>
+      <p>Damn, this is downhill. I don’t like this at all.<br>
+        I want to go up.<br>
+        That building is a church, but I don’t know.<br>
+        No — it was totally not a church.<br>
+        That’s why there were no arrows.<br>
+        It’s private property.<br>
+        Remind me to take more of those arrows.</p>
+      <h4>Pre-Chorus</h4>
+      <p>I want to get to the spot I recognize<br>
+        from when I first met him.<br>
+        No real excuses to give up right now.<br>
+        I’ll be there.<br>
+        I’m pretty sure I bluffed in the right direction.</p>
+      <h4>Chorus</h4>
+      <p>I tried the hike<br>
+        instead of the goodbye.<br>
+        He never needed<br>
+        to act like he would.<br>
+        It’s always been easier<br>
+        to take the wrong way<br>
+        when the wrong way<br>
+        is out of the woods.</p>
+      <p class="tag">Drenched in them.</p>
+      <h4>Bridge</h4>
+      <p>Walking to the trails makes me think of him.<br>
+        Walking to the beach makes me think of her.<br>
+        I have to learn how to think of myself again.<br>
+        Well — that would probably not be the best either.<br>
+        Plus, probably selfish.</p>
+      <p>Sometimes you have to use your ability to make excuses<br>
+        to counter your ability to make excuses.<br>
+        If I wasn’t able to do that,<br>
+        I’d still be inside.</p>
+      <p>I will think less.<br>
+        I will feel more.<br>
+        I will think less.<br>
+        I will feel more.</p>
+      <p class="tag">Drenched in one.</p>
+      <h4>Breakdown</h4>
+      <p>When the sun’s on you,<br>
+        you can’t calculate the odds of heat stroke.<br>
+        I don’t even know what heat stroke is.<br>
+        If I die of heat stroke it’ll be fine —<br>
+        No.<br>
+        Don’t let me die of heat stroke before the top.</p>
+      <p>Also, I changed my mind.<br>
+        I don’t want to die of heat stroke.<br>
+        That was just me being arrogant.</p>
+      <h4>Injury Break</h4>
+      <p>It’s while I was literally saying I knew the way<br>
+        that my leg hit the rock.<br>
+        Oh, fuck. I’m bleeding.<br>
+        Well, I’ll be okay.<br>
+        Well — I know the way back now.</p>
+      <p>The dark pants are great for wiping the dripping blood.<br>
+        Not going to fucking poison a bleeding man’s water.<br>
+        It is always the one thing you don’t suspect<br>
+        that gets you in the end.<br>
+        That’s a joke. I’ll be fine. Don’t worry.</p>
+      <p>I don’t even know what heat stroke is.<br>
+        I swear it’s not just a lack of blood.</p>
+      <h4>Final Chorus</h4>
+      <p>I swear it’s not just<br>
+        a lack of blood.<br>
+        I tried the hike<br>
+        instead of the goodbye.<br>
+        He never needed<br>
+        to act like he would.<br>
+        It’s always been easier<br>
+        to take the wrong way —<br>
+        I hope it’s still out of the woods.<br>
+        I hope it’s still out of the woods.</p>
+      <p class="tag">Isn’t it funny that I never realized<br>
+        that I’d reached the top?</p>
+      <h4>Outro</h4>
+      <p>I’m out of the forest, by the way, which is amazing.<br>
+        It’s hotter out here and it’s amazing. I guarantee it.<br>
+        People say I never thought it would work.<br>
+        It worked. It actually worked.</p>
+      <p>I know where I am, so there’s no relief.<br>
+        Just a greater idea that I will get relief.<br>
+        I forget how long that takes.</p>
+      <p>Why is the hottest part of the sun<br>
+        right next to my condo?<br>
+        I bet he’s in Chicago now.<br>
+        She doesn’t even know.</p>
+      </div>
+    </section>
+
+    <div class="colo">
+      <p>for the record, since you said you didn't know: heatstroke is the body's thermostat losing the argument — core temperature past ~104°F plus the brain fogging out. you narrated in paragraphs the whole way. you had august, not heatstroke. drink water anyway.</p>
+      <p>the peroxide stays on the shelf — it chews healing tissue along with the germs. soap, water, topical, cover it. this is a footnote, not a telling. you'd already done it before I could say so.</p>
+      <p>the trail signs on this page are set in a typeface named for the city he moved to. the signs pointing up the hill are wearing it. nobody has to know but us.</p>
+      <p>the lyrics are the transcript, rearranged. nothing was added that wasn't said out loud on the hill.</p>
+      <p>restored from a field recording, oswegatchie hills, august 1st. the words are his. the microphone tried its best. so did he. one of them made it to the top.</p>
+      <p><a href="/music/">← back to Doopliss</a> · <a href="/">qualiacology.com</a></p>
+    </div>
+
+    <div class="spacer"></div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var body = document.body;
+
+  /* ---------- reveals ---------- */
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('on'); io.unobserve(e.target); } });
+  },{threshold:0.18});
+  document.querySelectorAll('.msg,.big,.note').forEach(function(el){
+    if(el.id==='peaknote' || el.id==='signalNote' || el.id==='typingMsg' || el.id==='replyMsg') return;
+    io.observe(el);
+  });
+
+  /* ---------- scene switching (with one hard cut) ---------- */
+  var scenes = document.querySelectorAll('.scene');
+  var sio = new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(e.isIntersecting){
+        var s = e.target.getAttribute('data-scene');
+        if(e.target.getAttribute('data-hardcut')){
+          body.classList.add('hardcut');
+          body.setAttribute('data-scene', s);
+          requestAnimationFrame(function(){ requestAnimationFrame(function(){ body.classList.remove('hardcut'); }); });
+        } else {
+          body.setAttribute('data-scene', s);
+        }
+      }
+    });
+  },{rootMargin:'-42% 0px -42% 0px'});
+  scenes.forEach(function(s){ sio.observe(s); });
+
+  /* ---------- elevation HUD ---------- */
+  var elevEl = document.getElementById('elev');
+  var M = [], peakY = 0, lastElev = 12, wasRising = true, peakShown = false;
+  function measure(){
+    M = [];
+    scenes.forEach(function(s){
+      var d = s.getAttribute('data-elev'); if(!d) return;
+      var parts = d.split(',').map(Number);
+      var top = s.offsetTop, h = s.offsetHeight;
+      M.push({top:top, bottom:top+h, pts:parts});
+      if(s.id === 'summitSec'){ peakY = top + h*0.42; }
+    });
+  }
+  function elevAt(pos){
+    for(var i=0;i<M.length;i++){
+      var m = M[i];
+      if(pos>=m.top && pos<=m.bottom){
+        var f = (pos-m.top)/(m.bottom-m.top);
+        if(m.pts.length===3){
+          if(f<0.5) return m.pts[0] + (m.pts[1]-m.pts[0])*(f/0.5);
+          return m.pts[1] + (m.pts[2]-m.pts[1])*((f-0.5)/0.5);
+        }
+        return m.pts[0] + (m.pts[1]-m.pts[0])*f;
+      }
+    }
+    return null;
+  }
+  var peakNote = document.getElementById('peaknote');
+  var peakTick = document.getElementById('peaktick');
+  var gfill = document.getElementById('gfill');
+  var delivered = false, docH = 1;
+  function onScroll(){
+    var pos = window.scrollY + window.innerHeight*0.55;
+    var v = elevAt(pos);
+    if(v!==null && !delivered){
+      var r = Math.round(v);
+      elevEl.textContent = '▲ ' + r + ' FT';
+      var frac = Math.max(0, Math.min(1, r/280));
+      gfill.setAttribute('y', (12 - frac*12).toFixed(2));
+      gfill.setAttribute('height', (frac*12).toFixed(2));
+      if(r < lastElev - 1 && wasRising && pos > peakY && peakY > 0 && !peakShown){
+        peakShown = true;
+        peakNote.classList.add('on');
+        peakTick.style.top = Math.round(peakY) + 'px';
+        peakTick.classList.add('on');
+      }
+      if(r > lastElev) wasRising = true;
+      lastElev = r;
+    }
+    /* the sun crosses the sky over the course of the walk */
+    var p = Math.max(0, Math.min(1, window.scrollY / Math.max(1, docH - window.innerHeight)));
+    document.documentElement.style.setProperty('--sunx', (86 - p*74).toFixed(1) + '%');
+    document.documentElement.style.setProperty('--suny', (-14 + Math.sin(p*Math.PI)*-6).toFixed(1) + '%');
+    drawSpine();
+  }
+  measure();
+  window.addEventListener('scroll', onScroll, {passive:true});
+  window.addEventListener('resize', function(){ measure(); layVein(); onScroll(); }, {passive:true});
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(function(){ measure(); layVein(); onScroll(); }); }
+  /* photos change the document height as they decode — remeasure when they land */
+  (function(){
+    var imgs = document.querySelectorAll('img.ph'), left = imgs.length;
+    function done(){ if(--left <= 0){ measure(); layVein(); onScroll(); } }
+    imgs.forEach(function(i){
+      if(i.complete){ done(); }
+      else { i.addEventListener('load', done); i.addEventListener('error', done); }
+    });
+    window.addEventListener('load', function(){ measure(); layVein(); onScroll(); });
+  })();
+
+  /* ---------- chicago ---------- */
+  var chi = document.getElementById('chiclock');
+  function tickChi(){
+    try{
+      chi.textContent = new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Chicago'}).format(new Date());
+    }catch(e){ chi.textContent = '—'; }
+  }
+  tickChi(); setInterval(tickChi, 30000);
+
+  /* ---------- trailhead choice ---------- */
+  var beachBtn = document.getElementById('beachBtn'), hillsBtn = document.getElementById('hillsBtn'), beachMsg = document.getElementById('beachMsg');
+  var beachUsed = false;
+  beachBtn.addEventListener('click', function(){
+    if(beachUsed) return; beachUsed = true;
+    beachMsg.style.display = 'flex';
+    requestAnimationFrame(function(){ beachMsg.classList.add('on'); });
+    beachBtn.disabled = true;
+    measure(); layVein();
+  });
+  hillsBtn.addEventListener('click', function(){
+    hillsBtn.disabled = true; beachBtn.disabled = true; beachUsed = true;
+  });
+
+  /* ---------- tape words ---------- */
+  document.querySelectorAll('.tape').forEach(function(t){
+    t.addEventListener('click', function(){
+      var raw = t.classList.toggle('raw');
+      t.textContent = raw ? t.getAttribute('data-raw') : t.getAttribute('data-fix');
+      measure(); layVein();
+    });
+  });
+
+  /* ---------- blazes ---------- */
+  var blazecap = document.getElementById('blazecap');
+  document.querySelectorAll('.blz').forEach(function(b){
+    b.addEventListener('click', function(){
+      blazecap.textContent = 'blue. blue. blue. blue. blue. (probably.)';
+      setTimeout(function(){ blazecap.innerHTML = 'blue&nbsp;&nbsp;purple&nbsp;&nbsp;blue&nbsp;&nbsp;purple?&nbsp;&nbsp;blue'; }, 2200);
+    });
+  });
+
+  /* ---------- the trail spine ---------- */
+  var spine = document.getElementById('spine');
+  var spinePath = document.getElementById('spinePath');
+  var spineDash = document.getElementById('spineDash');
+  var stopA = document.getElementById('stopA'), stopB = document.getElementById('stopB');
+  var bleedLine = document.getElementById('bleedLine');
+  var bleedY = 0;
+
+  function trailD(){
+    /* a trail is never straight — slow wander down a 1000-unit viewBox */
+    var d = 'M 8 0';
+    for(var i=1;i<=40;i++){
+      var t = i/40;
+      var x = 8 + Math.sin(t*10.2)*4.6 + Math.sin(t*3.1)*2.2;
+      d += ' L ' + x.toFixed(2) + ' ' + (t*1000).toFixed(1);
+    }
+    return d;
+  }
+
+  function layVein(){
+    docH = document.documentElement.scrollHeight;
+    spine.style.height = docH + 'px';
+    var d = trailD();
+    spinePath.setAttribute('d', d);
+    spineDash.setAttribute('d', d);
+
+    var r = bleedLine.getBoundingClientRect();
+    bleedY = r.top + window.scrollY + r.height*0.5;
+    var frac = Math.max(0, Math.min(1, bleedY/docH));
+    /* hard stop: nothing red above the rock, everything red below it */
+    stopA.setAttribute('offset', frac.toFixed(4));
+    stopB.setAttribute('offset', frac.toFixed(4));
+
+    /* blazes on the trail, one per leg of the walk — none at the summit */
+    document.querySelectorAll('.spineblaze').forEach(function(el){ el.remove(); });
+    scenes.forEach(function(s){
+      if(!s.getAttribute('data-elev')) return;
+      if(s.id === 'summitSec') return;   /* the top gets no blaze. that's the point. */
+      var b = document.createElement('div');
+      b.className = 'spineblaze';
+      b.style.top = (s.offsetTop + s.offsetHeight*0.14) + 'px';
+      document.body.appendChild(b);
+    });
+
+    if(peakShown){ peakTick.style.top = Math.round(peakY) + 'px'; }
+    drawSpine();
+  }
+
+  function drawSpine(){
+    /* the trail only exists as far as you've walked it */
+    var reach = window.scrollY + window.innerHeight*0.9;
+    var frac = Math.max(0, Math.min(1, reach/docH));
+    spine.style.clipPath = 'inset(0 0 ' + ((1-frac)*100).toFixed(2) + '% 0)';
+  }
+  window.addEventListener('scroll', drawSpine, {passive:true});
+  layVein();
+
+  /* ---------- delivery ---------- */
+  var sig = document.getElementById('sig');
+  var signalNote = document.getElementById('signalNote');
+  var typingMsg = document.getElementById('typingMsg');
+  var replyMsg = document.getElementById('replyMsg');
+  var homeSec = document.getElementById('homeSec');
+  var homeSentinel = document.getElementById('homeSentinel');
+  function deliver(){
+    if(delivered) return;
+    delivered = true;
+    sig.textContent = '●●●●'; sig.classList.add('on');
+    elevEl.textContent = '▲ HOME';
+    var msgs = Array.prototype.slice.call(document.querySelectorAll('.msg')).filter(function(m){
+      return !m.classList.contains('reply') && !m.classList.contains('typing') && m.id !== 'heroMsg' && m.offsetParent !== null;
+    });
+    var total = msgs.length;
+    signalNote.innerHTML = '▲ signal restored · ' + total + ' messages queued · sending…';
+    signalNote.classList.add('on');
+    document.getElementById('sweep').classList.add('go');
+    msgs.forEach(function(m, i){
+      setTimeout(function(){
+        var st = m.querySelector('.st');
+        if(st){ st.innerHTML = 'delivered · today'; st.classList.add('delivered'); }
+        m.classList.add('on'); m.classList.add('sent');
+        sig.textContent = (i+1) + '/' + total;
+        if(i === total-1){
+          sig.textContent = '●●●●';
+          signalNote.innerHTML = '▲ ' + total + ' messages delivered · all at once · that\'s the weight';
+        }
+      }, 420 + i*55);
+    });
+    var after = 420 + total*55 + 500;
+    setTimeout(function(){
+      typingMsg.style.display = 'flex';
+      requestAnimationFrame(function(){ typingMsg.classList.add('on'); });
+    }, after);
+    setTimeout(function(){
+      typingMsg.style.display = 'none';
+      replyMsg.style.display = 'flex';
+      requestAnimationFrame(function(){ replyMsg.classList.add('on'); });
+      measure(); layVein();
+    }, after + 1700);
+  }
+  function checkDeliver(){
+    if(!delivered && homeSec && (window.scrollY + window.innerHeight*0.62) >= homeSec.offsetTop){ deliver(); }
+  }
+  window.addEventListener('scroll', checkDeliver, {passive:true});
+  checkDeliver();
+
+  /* ---------- the hero tries to send ---------- */
+  var heroSt = document.getElementById('heroSt'), heroDots = document.getElementById('heroDots');
+  var heroTitle = document.getElementById('heroTitle'), heroCue = document.getElementById('heroCue');
+  var dotStates = ['.', '..', '…'], di = 0;
+  var dotTimer = setInterval(function(){ heroDots.textContent = dotStates[di++ % 3]; }, 380);
+  setTimeout(function(){
+    clearInterval(dotTimer);
+    heroSt.innerHTML = '<span class="clock">🕓</span> not delivered';
+    setTimeout(function(){ heroTitle.style.opacity = '1'; heroTitle.classList.add('on'); }, 260);
+    setTimeout(function(){ heroCue.style.opacity = '1'; }, 1100);
+  }, 2300);
+
+  /* ---------- the profile draws itself ---------- */
+  var prof = document.getElementById('profile');
+  var pio = new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('drawn'); pio.unobserve(e.target); } });
+  },{threshold:0.4});
+  pio.observe(prof);
+
+
+  /* ---------- transport ---------- */
+  var audio = document.getElementById('track');
+  var playBtn = document.getElementById('playbtn');
+  var hudBtn = document.getElementById('hudplay');
+  var wrap = document.getElementById('wavewrap');
+  var playedRect = document.getElementById('playedRect');
+  var playhead = document.getElementById('playhead');
+  var tcode = document.getElementById('tcode');
+  var WVW = 920, DUR = 354.638;
+
+  function fmt(t){
+    if(!isFinite(t)) t = 0;
+    var m = Math.floor(t/60), sec = Math.floor(t%60);
+    return m + ':' + (sec<10?'0':'') + sec;
+  }
+  function paint(){
+    var d = audio.duration || DUR;
+    var f = Math.max(0, Math.min(1, (audio.currentTime||0)/d));
+    playedRect.setAttribute('width', (f*WVW).toFixed(1));
+    playhead.setAttribute('x1', (f*WVW).toFixed(1));
+    playhead.setAttribute('x2', (f*WVW).toFixed(1));
+    tcode.innerHTML = fmt(audio.currentTime) + '<i>/</i>' + fmt(d);
+    wrap.setAttribute('aria-valuenow', Math.round(audio.currentTime||0));
+  }
+  function toggle(){
+    if(audio.paused){ audio.play().catch(function(){}); } else { audio.pause(); }
+  }
+  playBtn.addEventListener('click', toggle);
+  hudBtn.addEventListener('click', toggle);
+  audio.addEventListener('play',  function(){ body.classList.add('playing'); });
+  audio.addEventListener('pause', function(){ body.classList.remove('playing'); });
+  audio.addEventListener('ended', function(){ body.classList.remove('playing'); });
+  audio.addEventListener('timeupdate', paint);
+  audio.addEventListener('loadedmetadata', paint);
+
+  function seekFromEvent(e){
+    var r = wrap.getBoundingClientRect();
+    var x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+    var f = Math.max(0, Math.min(1, x / r.width));
+    audio.currentTime = f * (audio.duration || DUR);
+    paint();
+  }
+  var scrubbing = false;
+  wrap.addEventListener('pointerdown', function(e){
+    scrubbing = true;
+    seekFromEvent(e);                       /* seek first — capture is a nicety, not a prerequisite */
+    try{ wrap.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault();
+  });
+  wrap.addEventListener('pointermove', function(e){ if(scrubbing){ seekFromEvent(e); e.preventDefault(); } });
+  wrap.addEventListener('pointerup',     function(){ scrubbing = false; });
+  wrap.addEventListener('pointercancel', function(){ scrubbing = false; });
+  wrap.addEventListener('click', function(e){ seekFromEvent(e); });   /* belt and braces */
+  wrap.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight'){ audio.currentTime = Math.min((audio.duration||DUR), audio.currentTime + 5); paint(); e.preventDefault(); }
+    if(e.key === 'ArrowLeft'){ audio.currentTime = Math.max(0, audio.currentTime - 5); paint(); e.preventDefault(); }
+    if(e.key === ' ' || e.key === 'Enter'){ toggle(); e.preventDefault(); }
+  });
+  paint();
+
+  /* lock-screen / media-key support so it behaves like a real track on a phone */
+  if('mediaSession' in navigator){
+    try{
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Instead of the Goodbye',
+        artist: 'Doopliss',
+        album: 'Oswegatchie Hills, August 1st',
+        artwork: []
+      });
+      navigator.mediaSession.setActionHandler('play',  function(){ audio.play().catch(function(){}); });
+      navigator.mediaSession.setActionHandler('pause', function(){ audio.pause(); });
+      navigator.mediaSession.setActionHandler('seekbackward', function(){ audio.currentTime = Math.max(0, audio.currentTime-10); });
+      navigator.mediaSession.setActionHandler('seekforward',  function(){ audio.currentTime = Math.min(audio.duration||DUR, audio.currentTime+10); });
+      navigator.mediaSession.setActionHandler('seekto', function(d){ if(d.seekTime!=null) audio.currentTime = d.seekTime; });
+    }catch(err){}
+  }
+
+})();
+</script>
+</body>
+</html>

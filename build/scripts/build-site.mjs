@@ -644,6 +644,10 @@ function musicPage() {
           <div><p class="eyebrow">The artist</p><h2>Doopliss</h2><p>Doopliss lives in that deliciously wrong sweet spot between neon-pop seduction and emotional sabotage — playful, glossy, a little dangerous, and never interested in pretending the dark stuff only sounds dark.</p></div>
           <div class="button-row"><a class="button button-pink external-link" href="${escapeHtml(site.suno)}" ${external}>Follow on Suno</a><a class="button external-link" href="${escapeHtml(site.tiktok)}" ${external}>TikTok</a></div>
         </div>
+        <div class="music-intro">
+          <div><p class="eyebrow">One-off</p><h2>Instead of the Goodbye</h2><p>A walk dictated into a phone with no bars. Every message was written to someone who couldn't receive it yet. Recorded from a field recording, Oswegatchie Hills, August 1st — 5:54, with the photographs.</p></div>
+          <div class="button-row"><a class="button button-pink button-arrow" href="/instead-of-the-goodbye/">Keep walking</a></div>
+        </div>
         <div class="section-heading">
           <div><p class="eyebrow">The full discography</p><h2 id="music-catalog-title">All ${albums.length} releases.</h2></div>
           <div class="section-heading-copy"><p>Every Doopliss release in one place. Track counts where the pages actually have them — nothing made up.</p></div>
@@ -673,6 +677,7 @@ function sitemap() {
     ["/music/", "0.9"],
     ...games.map((game) => [routeForGame(game), "0.8"]),
     ...albums.map((album) => [routeForAlbum(album), "0.7"]),
+    ["/instead-of-the-goodbye/", "0.7"],
     ["/no-moon/codex/", "0.6"],
   ];
 
