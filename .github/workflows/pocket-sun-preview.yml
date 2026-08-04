@@ -1,0 +1,34 @@
+name: Build Pocket Sun preview
+
+on:
+  push:
+    branches: [pocket-sun-preview]
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply Pocket Sun catalog changes
+        run: node build/scripts/add-pocket-sun-preview.mjs
+      - name: Rebuild generated pages
+        run: node build/scripts/build-site.mjs
+      - name: Validate generated site
+        run: node build/scripts/validate-site.mjs --root=..
+      - name: Commit generated preview
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "integrate Pocket Sun into games catalog"
+          git push origin HEAD:pocket-sun-preview
