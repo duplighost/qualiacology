@@ -3,6 +3,8 @@ name: Build Pocket Sun preview
 on:
   push:
     branches: [pocket-sun-preview]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
@@ -14,6 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: pocket-sun-preview
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
