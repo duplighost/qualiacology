@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">POCKET SUN</title>
+  <desc id="desc">A glowing yellow sun curving through a neon gravity playground with cyan and pink orbit trails, black voids, sparks, and a musical score display.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="80%">
+      <stop offset="0" stop-color="#231033"/>
+      <stop offset="0.52" stop-color="#0c0717"/>
+      <stop offset="1" stop-color="#05030b"/>
+    </radialGradient>
+    <radialGradient id="sun" cx="35%" cy="30%" r="70%">
+      <stop offset="0" stop-color="#fffde0"/>
+      <stop offset="0.32" stop-color="#fff36a"/>
+      <stop offset="0.7" stop-color="#ffc445"/>
+      <stop offset="1" stop-color="#ff4f91"/>
+    </radialGradient>
+    <linearGradient id="trail" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#67f5de"/>
+      <stop offset="0.52" stop-color="#fff36a"/>
+      <stop offset="1" stop-color="#ff4f91"/>
+    </linearGradient>
+    <filter id="glowYellow" x="-200%" y="-200%" width="400%" height="400%">
+      <feGaussianBlur stdDeviation="18" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowCyan" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000" flood-opacity=".62"/>
+    </filter>
+    <pattern id="stars" width="90" height="90" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="18" r="1.2" fill="#fff" opacity=".26"/>
+      <circle cx="62" cy="46" r="1.8" fill="#67f5de" opacity=".18"/>
+      <circle cx="36" cy="78" r=".9" fill="#ff4f91" opacity=".22"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect width="1280" height="720" fill="url(#stars)"/>
+  <ellipse cx="642" cy="420" rx="540" ry="262" fill="none" stroke="#ffffff" stroke-opacity=".035" stroke-width="82"/>
+
+  <path d="M104 520 C238 174 592 95 914 230 C1118 315 1170 494 1048 620" fill="none" stroke="#67f5de" stroke-opacity=".16" stroke-width="38" stroke-linecap="round"/>
+  <path d="M118 532 C247 194 580 117 897 249 C1084 327 1133 493 1027 598" fill="none" stroke="url(#trail)" stroke-width="7" stroke-linecap="round" filter="url(#glowCyan)"/>
+  <path d="M242 604 C367 467 482 411 646 399 C815 386 942 427 1111 565" fill="none" stroke="#ff4f91" stroke-opacity=".24" stroke-width="4" stroke-dasharray="3 22" stroke-linecap="round"/>
+
+  <g filter="url(#shadow)">
+    <circle cx="271" cy="307" r="73" fill="#020106" stroke="#6b3b88" stroke-opacity=".46" stroke-width="3"/>
+    <circle cx="271" cy="307" r="51" fill="#000"/>
+    <circle cx="981" cy="430" r="94" fill="#020106" stroke="#ff4f91" stroke-opacity=".26" stroke-width="3"/>
+    <circle cx="981" cy="430" r="68" fill="#000"/>
+  </g>
+  <path d="M201 307c0-39 31-70 70-70" fill="none" stroke="#67f5de" stroke-opacity=".58" stroke-width="4" stroke-linecap="round"/>
+  <path d="M913 430c0-38 31-69 69-69" fill="none" stroke="#ff4f91" stroke-opacity=".54" stroke-width="4" stroke-linecap="round"/>
+
+  <g filter="url(#glowCyan)">
+    <circle cx="444" cy="208" r="13" fill="#67f5de"/>
+    <circle cx="525" cy="544" r="11" fill="#ff4f91"/>
+    <circle cx="829" cy="171" r="12" fill="#fff36a"/>
+    <circle cx="1090" cy="294" r="9" fill="#67f5de"/>
+    <circle cx="734" cy="585" r="9" fill="#ff4f91"/>
+  </g>
+  <g fill="none" stroke="#fff" stroke-opacity=".28">
+    <circle cx="444" cy="208" r="28"/>
+    <circle cx="525" cy="544" r="25"/>
+    <circle cx="829" cy="171" r="27"/>
+  </g>
+
+  <path d="M557 411 C505 386 470 352 446 309" fill="none" stroke="#fff36a" stroke-opacity=".18" stroke-width="50" stroke-linecap="round"/>
+  <path d="M559 411 C511 388 476 353 451 312" fill="none" stroke="url(#trail)" stroke-width="12" stroke-linecap="round" filter="url(#glowYellow)"/>
+  <g transform="translate(610 430)" filter="url(#glowYellow)">
+    <circle r="79" fill="#fff36a" opacity=".12"/>
+    <circle r="55" fill="url(#sun)"/>
+    <circle cx="-17" cy="-20" r="13" fill="#fff" opacity=".55"/>
+  </g>
+  <g fill="#fff36a" filter="url(#glowYellow)">
+    <circle cx="695" cy="405" r="5"/>
+    <circle cx="716" cy="387" r="3"/>
+    <circle cx="733" cy="420" r="4"/>
+    <circle cx="751" cy="397" r="2.5"/>
+  </g>
+
+  <g font-family="Arial Black, Inter, Arial, sans-serif" fill="#fffbea">
+    <text x="54" y="62" font-family="ui-monospace, monospace" font-size="15" font-weight="800" letter-spacing="4" fill="#ffffff88">ONE FINGER / NO END</text>
+    <text x="50" y="112" font-size="51" font-weight="950" letter-spacing="-3" fill="#fff36a">POCKET SUN</text>
+  </g>
+  <g transform="translate(528 42)" filter="url(#shadow)">
+    <rect width="224" height="74" rx="37" fill="#05040c" fill-opacity=".76" stroke="#ffffff26"/>
+    <text x="112" y="26" text-anchor="middle" font-family="ui-monospace, monospace" font-size="11" font-weight="800" letter-spacing="3" fill="#ffffff88">SCORE</text>
+    <text x="112" y="57" text-anchor="middle" font-family="ui-monospace, monospace" font-size="27" font-weight="900" fill="#fff">08,460</text>
+  </g>
+
+  <g transform="translate(50 616)" filter="url(#shadow)">
+    <rect width="176" height="62" rx="22" fill="#05040c" fill-opacity=".78" stroke="#ffffff22"/>
+    <text x="22" y="25" font-family="ui-monospace, monospace" font-size="10" font-weight="800" letter-spacing="3" fill="#ffffff78">FLOW</text>
+    <text x="22" y="49" font-family="ui-monospace, monospace" font-size="22" font-weight="900" fill="#ff4f91">x2.4</text>
+  </g>
+  <g transform="translate(244 616)" filter="url(#shadow)">
+    <rect width="640" height="62" rx="22" fill="#05040c" fill-opacity=".78" stroke="#ffffff22"/>
+    <text x="23" y="24" font-family="ui-monospace, monospace" font-size="10" font-weight="800" letter-spacing="3" fill="#ffffff78">DARE</text>
+    <text x="90" y="25" font-family="ui-monospace, monospace" font-size="13" font-weight="900" letter-spacing="1" fill="#fff">MAKE 3 FULL ORBITS</text>
+    <text x="592" y="25" font-family="ui-monospace, monospace" font-size="12" font-weight="900" fill="#fff36a">2 / 3</text>
+    <rect x="23" y="42" width="594" height="4" rx="2" fill="#ffffff1b"/>
+    <rect x="23" y="42" width="396" height="4" rx="2" fill="url(#trail)"/>
+  </g>
+  <g transform="translate(902 616)" filter="url(#shadow)">
+    <rect width="168" height="62" rx="22" fill="#05040c" fill-opacity=".78" stroke="#ffffff22"/>
+    <text x="21" y="25" font-family="ui-monospace, monospace" font-size="10" font-weight="800" letter-spacing="3" fill="#ffffff78">CHAIN</text>
+    <text x="21" y="49" font-family="ui-monospace, monospace" font-size="22" font-weight="900" fill="#67f5de">14</text>
+  </g>
+
+  <g transform="translate(1090 36)">
+    <rect width="142" height="43" rx="22" fill="#05040c" fill-opacity=".68" stroke="#ffffff24"/>
+    <text x="71" y="27" text-anchor="middle" font-family="ui-monospace, monospace" font-size="10" font-weight="800" letter-spacing="2" fill="#ffffffa0">SOFT GRAVITY</text>
+  </g>
+</svg>
