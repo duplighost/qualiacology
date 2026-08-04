@@ -136,6 +136,19 @@
       "actionLabel": "Open Galaxy"
     },
     {
+      "slug": "pocket-sun",
+      "title": "POCKET SUN",
+      "descriptor": "Musical gravity toy",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/pocket-sun-card-clean.svg",
+      "alt": "A tiny glowing sun curving through a neon gravity playground with black voids and colored orbit trails",
+      "summary": "Pull a tiny living sun through an endless musical gravity playground. Make full orbits, skim the black voids, clear dares, and turn every collision into music.",
+      "metaDescription": "POCKET SUN is an endless one-finger musical gravity toy for phones and desktop browsers.",
+      "controls": "Hold to pull · tap to pulse · mouse or touch",
+      "actionLabel": "Play POCKET SUN"
+    },
+    {
       "slug": "uninvited",
       "title": "Uninvited",
       "descriptor": "First-person horror",

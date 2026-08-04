@@ -118,3 +118,9 @@
 /book.html               /404.html  404!
 /this-helped-someone     /404.html  404!
 /this-helped-someone/*   /404.html  404!
+
+# --- POCKET SUN ---
+/pocket-sun       https://curious-gumdrop-5fe24d.netlify.app/  302!
+/pocket-sun/      https://curious-gumdrop-5fe24d.netlify.app/  302!
+/pocket-sun/*     https://curious-gumdrop-5fe24d.netlify.app/:splat  302!
+/pocketsun        /pocket-sun/  302
