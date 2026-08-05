@@ -43,7 +43,7 @@
     'chargeFill', 'chargeText', 'promptToast', 'controlsHint', 'soundButton',
     'fullscreenButton', 'qualityButton', 'pauseOverlay', 'winOverlay',
     'winSummary', 'winTime', 'winScore', 'winRank', 'restartButton',
-    'touchControls', 'movePad', 'lookPad', 'touchKick', 'touchSnap',
+    'touchControls', 'movePad', 'lookPad', 'rightActionLabel',
     'touchJump', 'touchPause', 'pauseResumeButton', 'portraitHint', 'loadingMeter',
   ].forEach(id => { ui[id] = document.getElementById(id); });
 
@@ -257,6 +257,12 @@
       this.loopLatched = false;
       this.releaseTimer = 0;
       this.loopTimer = 0;
+      this.actionTimer = 0;
+      this.actionHold = false;
+      this.actionReleased = false;
+      this.tapPulse = false;
+      this.totalMotion = 0;
+      this.downTime = 0;
       if (!element) return;
       element.addEventListener('pointerdown', event => this.down(event));
       element.addEventListener('pointermove', event => this.move(event));
@@ -274,8 +280,19 @@
       this.anchor.set(event.clientX, event.clientY);
       this.last.copy(this.anchor);
       this.value.set(0, 0);
+      this.totalMotion = 0;
+      this.downTime = this.eventTime(event);
+      this.actionReleased = false;
       this.gesturePoints = this.isLook ? [{ x: event.clientX, y: event.clientY, t: this.eventTime(event) }] : [];
       this.loopLatched = false;
+      if (this.isLook) {
+        if (this.actionTimer) clearTimeout(this.actionTimer);
+        this.actionTimer = setTimeout(() => {
+          if (this.pointerId !== event.pointerId || this.totalMotion > 16 || this.loopLatched) return;
+          this.actionHold = true;
+          this.element?.classList.add('is-holding');
+        }, 155);
+      }
       if (this.releaseTimer) clearTimeout(this.releaseTimer);
       this.positionVisual(event.clientX, event.clientY, true);
       try { this.element.setPointerCapture(event.pointerId); } catch (_) {}
@@ -287,10 +304,15 @@
       const y = event.clientY;
       const dx = x - this.last.x;
       const dy = y - this.last.y;
+      this.totalMotion += Math.hypot(dx, dy);
       if (this.isLook) {
         this.delta.x += dx;
         this.delta.y += dy;
         this.trackLoop(x, y, this.eventTime(event));
+        if (!this.actionHold && this.totalMotion > 16 && this.actionTimer) {
+          clearTimeout(this.actionTimer);
+          this.actionTimer = 0;
+        }
       }
       this.updateDeflection(x, y);
       this.last.set(x, y);
@@ -298,6 +320,17 @@
     }
     up(event) {
       if (event.pointerId !== this.pointerId) return;
+      const releasedAt = this.eventTime(event);
+      const wasLoop = this.loopLatched;
+      const wasHold = this.actionHold;
+      if (this.actionTimer) clearTimeout(this.actionTimer);
+      this.actionTimer = 0;
+      if (this.isLook) {
+        if (wasHold) this.actionReleased = true;
+        else if (!wasLoop && this.totalMotion < 16 && releasedAt - this.downTime <= 360) this.tapPulse = true;
+        this.actionHold = false;
+        this.element?.classList.remove('is-holding');
+      }
       this.pointerId = null;
       this.value.set(0, 0);
       this.gesturePoints.length = 0;
@@ -337,7 +370,10 @@
       this.gesturePoints.push({ x, y, t });
       while (this.gesturePoints.length > 8 && t - this.gesturePoints[0].t > 1150) this.gesturePoints.shift();
       if (this.gesturePoints.length > 96) this.gesturePoints.shift();
-      if (this.loopLatched) return;
+      // Once a stationary touch has committed to charge/pull, it cannot be
+      // reclassified as orbit halfway through the same gesture. A loop begins
+      // with motion and cancels the hold timer before that commitment.
+      if (this.loopLatched || this.actionHold) return;
       const result = analyzeRecentLoopGesture(this.gesturePoints);
       if (!result.matched) return;
       this.loopLatched = true;
@@ -379,6 +415,12 @@
       this.loopPulse = false;
       return result;
     }
+    consumeAction() {
+      const result = { tap: this.tapPulse, hold: this.actionHold, released: this.actionReleased };
+      this.tapPulse = false;
+      this.actionReleased = false;
+      return result;
+    }
     reset() {
       this.pointerId = null;
       this.value.set(0, 0);
@@ -388,7 +430,14 @@
       this.loopDirection = 0;
       this.loopPower = 0;
       this.loopLatched = false;
-      this.element?.classList.remove('is-active', 'is-loop');
+      this.tapPulse = false;
+      this.actionHold = false;
+      this.actionReleased = false;
+      this.totalMotion = 0;
+      this.downTime = 0;
+      if (this.actionTimer) clearTimeout(this.actionTimer);
+      this.actionTimer = 0;
+      this.element?.classList.remove('is-active', 'is-loop', 'is-holding');
       if (this.knob) this.knob.style.transform = 'translate3d(0,0,0)';
       if (this.visual) {
         this.visual.style.removeProperty('left');
@@ -401,6 +450,7 @@
     constructor() {
       this.keys = new Set();
       this.buttons = { kick: false, snap: false, jump: false, spin: false, sprint: false, pause: false };
+      this.edgePulses = { kick: false, snap: false, jump: false, spin: false, pause: false };
       this.previous = { kick: false, snap: false, jump: false, spin: false, pause: false };
       this.frame = {
         moveX: 0, moveZ: 0, lookX: 0, lookY: 0,
@@ -461,13 +511,17 @@
           return;
         }
         if (event.button === 0) this.buttons.kick = true;
-        if (event.button === 2) this.buttons.snap = true;
+        if (event.button === 2) {
+          const home = game?.ball?.mode === 'ready';
+          this.buttons.spin = home;
+          this.buttons.snap = !home;
+        }
         if (event.button === 1) this.buttons.spin = true;
         event.preventDefault();
       });
       window.addEventListener('mouseup', event => {
         if (event.button === 0) this.buttons.kick = false;
-        if (event.button === 2) this.buttons.snap = false;
+        if (event.button === 2) { this.buttons.snap = false; this.buttons.spin = false; }
         if (event.button === 1) this.buttons.spin = false;
       });
       window.addEventListener('mousemove', event => {
@@ -478,8 +532,6 @@
         }
       }, { passive: true });
       canvas.addEventListener('contextmenu', event => event.preventDefault());
-      this.bindButton(ui.touchKick, 'kick');
-      this.bindButton(ui.touchSnap, 'snap');
       this.bindButton(ui.touchJump, 'jump');
       this.bindButton(ui.touchPause, 'pause');
       document.addEventListener('pointerlockchange', () => {
@@ -530,6 +582,7 @@
       const down = event => {
         document.body.classList.remove('using-gamepad');
         this.buttons[action] = true;
+        if (action in this.edgePulses) this.edgePulses[action] = true;
         audio.ensure();
         try { element.setPointerCapture(event.pointerId); } catch (_) {}
         event.preventDefault();
@@ -605,9 +658,15 @@
       this.mouseLook.set(0, 0);
 
       const loop = this.lookStick.consumeLoop();
+      const rightAction = this.lookStick.consumeAction();
+      const ballHome = !game || game.ball.mode === 'ready';
+      const touchTapKick = this.touchEnabled && rightAction.tap && ballHome;
+      const touchHoldKick = this.touchEnabled && rightAction.hold && ballHome;
+      const touchTapCall = this.touchEnabled && rightAction.tap && !ballHome;
+      const touchHoldCall = this.touchEnabled && rightAction.hold && !ballHome;
 
-      const kick = this.buttons.kick || gpKick || this.keys.has('KeyF');
-      const snap = this.buttons.snap || gpSnap || this.keys.has('KeyE');
+      const kick = this.buttons.kick || gpKick || this.keys.has('KeyF') || touchHoldKick;
+      const snap = this.buttons.snap || gpSnap || this.keys.has('KeyE') || touchTapCall || touchHoldCall;
       const jump = this.buttons.jump || gpJump || this.keys.has('Space');
       const spin = loop.active || this.buttons.spin || gpSpin || this.keys.has('KeyQ');
       // Full forward deflection is the touch sprint gesture. It preserves an
@@ -618,15 +677,16 @@
       const pause = this.buttons.pause || this.keys.has('Escape') || this.keys.has('KeyP') || gpPause;
       Object.assign(this.frame, {
         moveX, moveZ, lookX: this.gamepadLook.x, lookY: this.gamepadLook.y, kick, snap, jump, spin, sprint,
-        kickPressed: kick && !this.previous.kick,
-        kickReleased: !kick && this.previous.kick,
-        snapPressed: snap && !this.previous.snap,
-        jumpPressed: jump && !this.previous.jump,
-        spinPressed: loop.active || (spin && !this.previous.spin),
+        kickPressed: touchTapKick || this.edgePulses.kick || (kick && !this.previous.kick),
+        kickReleased: touchTapKick || (!kick && this.previous.kick),
+        snapPressed: touchTapCall || this.edgePulses.snap || (snap && !this.previous.snap),
+        jumpPressed: this.edgePulses.jump || (jump && !this.previous.jump),
+        spinPressed: loop.active || this.edgePulses.spin || (spin && !this.previous.spin),
         spinDirection: loop.active ? loop.direction : 0,
         spinPower: loop.active ? loop.power : 1,
-        pausePressed: pause && !this.previous.pause,
+        pausePressed: this.edgePulses.pause || (pause && !this.previous.pause),
       });
+      Object.keys(this.edgePulses).forEach(key => { this.edgePulses[key] = false; });
       this.lastGamepadPause = gpPause;
       return this.frame;
     }
@@ -638,6 +698,7 @@
     resetTransient() {
       this.keys.clear();
       Object.keys(this.buttons).forEach(key => { this.buttons[key] = false; });
+      Object.keys(this.edgePulses).forEach(key => { this.edgePulses[key] = false; });
       Object.keys(this.previous).forEach(key => { this.previous[key] = false; });
       this.mouseLook.set(0, 0);
       this.pendingLook.set(0, 0);
@@ -672,6 +733,7 @@
       this.syncButton();
     }
     ensure() {
+      if (TEST_MODE) return;
       if (this.context) {
         if (this.context.state === 'suspended') this.context.resume().catch(() => {});
         return;
@@ -1005,6 +1067,10 @@
       this.platforms = [];
       this.anchors = [];
       this.breakables = [];
+      this.collectibles = [];
+      this.nests = [];
+      this.launchPads = [];
+      this.moonChimes = [];
       this.enemies = [];
       this.elapsed = 0;
       this.makeMaterials();
@@ -1014,6 +1080,7 @@
       this.makeCliffRoute();
       this.makeCourseObjects();
       this.makeBreakableField();
+      this.makePlaygroundFeatures();
       this.makeFirstPersonRig();
       this.makeBallVisual();
       this.particles = new ParticleField(this.scene, this.quality === 'LOW' ? 520 : 900);
@@ -1457,25 +1524,44 @@
       this.routeLights = { posts: postInstances, lamps: lampInstances, glows };
     }
     makeBreakableField() {
-      const reserved = [
-        { x: 0, z: 105, r: 25 }, { x: 0, z: 60, r: 24 }, { x: 0, z: -150, r: 42 },
-      ];
       const specs = [];
-      for (let i = 0; i < 38; i++) {
-        let x, z;
-        for (let attempt = 0; attempt < 12; attempt++) {
-          const pathBias = i < 18;
-          x = pathBias ? randomRange(-26, 26, worldRandom) : randomRange(-150, 150, worldRandom);
-          z = pathBias ? randomRange(-220, 120, worldRandom) : randomRange(-250, 145, worldRandom);
-          if (!reserved.some(area => Math.hypot(x - area.x, z - area.z) < area.r) || attempt === 11) break;
-        }
-        const radius = randomRange(.65, 2.1, worldRandom);
-        const y = this.sampleTerrainHeight(x, z);
-        const position = new T.Vector3(x, y + radius * .72, z);
+      const addSpec = (x, z, radius, kind = 'rock', top = null, reward = false) => {
+        const floor = top == null ? this.sampleTerrainHeight(x, z) : top;
+        const position = new T.Vector3(x, floor + radius * .72, z);
         const quaternion = new T.Quaternion().setFromEuler(new T.Euler(worldRandom() * TAU, worldRandom() * TAU, worldRandom() * TAU));
         const scale = new T.Vector3(radius * randomRange(.7, 1.35, worldRandom), radius * randomRange(.7, 1.55, worldRandom), radius * randomRange(.7, 1.35, worldRandom));
         const matrix = new T.Matrix4().compose(position, quaternion, scale);
-        specs.push({ id: `moonrock-${i}`, kind: i % 7 === 0 ? 'violet' : 'rock', position, radius: radius * 1.15, matrix, alive: true });
+        specs.push({ id: `moonrock-${specs.length}`, kind, position, radius: radius * 1.15, matrix, alive: true, reward });
+      };
+
+      // Authored smash lines put physical toys inside the opening sightline and
+      // on every landing instead of leaving all interaction to random scatter.
+      const authored = [
+        [-7, 108, 1.35, 'rock'], [-2, 106, 1.7, 'violet', null, true], [4, 104, 1.25, 'rock'], [9, 101, 1.7, 'rock'],
+        [-13, 96, 1.2, 'rock'], [-7, 94, 1.85, 'rock'], [1, 92, 1.45, 'violet', null, true], [8, 89, 1.25, 'rock'], [14, 86, 1.7, 'rock'],
+        [-17, 79, 1.3, 'rock'], [-10, 77, 1.8, 'rock'], [6, 74, 1.5, 'violet'], [13, 71, 1.25, 'rock'],
+        [-22, 57, 1.55, 'rock'], [-17, 54, 1.2, 'violet', null, true], [18, 52, 1.65, 'rock'], [24, 49, 1.25, 'rock'],
+        [-21, 8, 1.35, 'rock', 14], [-17, 8, 1.55, 'violet', 14, true], [-14, 10, 1.05, 'rock', 14],
+        [14, -9, 1.35, 'rock', 31], [18, -8, 1.65, 'violet', 31, true], [21, -11, 1.05, 'rock', 31],
+        [-18, -27, 1.25, 'rock', 47], [-14, -26, 1.7, 'violet', 47, true], [-10, -29, 1.1, 'rock', 47],
+        [8, -48, 1.35, 'rock', 62], [12, -47, 1.8, 'violet', 62, true], [16, -50, 1.2, 'rock', 62],
+        [-28, -126, 1.3, 'rock'], [-23, -129, 1.8, 'violet', null, true], [25, -151, 1.45, 'rock'], [30, -154, 1.7, 'rock'],
+      ];
+      authored.forEach(spec => addSpec(...spec));
+
+      const reserved = [
+        { x: 0, z: 105, r: 17 }, { x: 0, z: 60, r: 16 }, { x: 0, z: -150, r: 34 },
+      ];
+      for (let i = 0; i < 64; i++) {
+        let x, z;
+        for (let attempt = 0; attempt < 12; attempt++) {
+          const pathBias = i < 30;
+          x = pathBias ? randomRange(-34, 34, worldRandom) : randomRange(-175, 175, worldRandom);
+          z = pathBias ? randomRange(-225, 125, worldRandom) : randomRange(-265, 155, worldRandom);
+          if (!reserved.some(area => Math.hypot(x - area.x, z - area.z) < area.r) || attempt === 11) break;
+        }
+        const radius = randomRange(.65, 2.1, worldRandom);
+        addSpec(x, z, radius, i % 7 === 0 ? 'violet' : 'rock', null, i % 13 === 0);
       }
       this.breakableMeshes = [];
       const geometry = new T.DodecahedronGeometry(1, 0);
@@ -1494,6 +1580,118 @@
         this.breakableMeshes.push(mesh);
       }
       this.breakables.push(...specs);
+    }
+    makePlaygroundFeatures() {
+      const addPickup = (position, active = true, label = 'MOON SHARD') => {
+        const group = new T.Group();
+        const core = new T.Mesh(new T.OctahedronGeometry(.48, 0), this.materials.gold);
+        const ring = new T.Mesh(new T.TorusGeometry(.72, .055, 8, 32), this.materials.cyan);
+        ring.rotation.x = Math.PI / 2;
+        const glow = this.makeGlowSprite(this.glowGold, 3.8, .46);
+        group.add(core, ring, glow);
+        group.position.copy(position);
+        group.visible = active;
+        this.scene.add(group);
+        const pickup = { id: `shard-${this.collectibles.length}`, group, core, ring, glow, position: position.clone(), active, initialActive: active, label, phase: worldRandom() * TAU };
+        this.collectibles.push(pickup);
+        return pickup;
+      };
+
+      for (const item of this.breakables) {
+        if (!item.reward) continue;
+        item.rewardPickup = addPickup(item.position.clone().add(new T.Vector3(0, 1.8, 0)), false, item.kind === 'violet' ? 'VIOLET CACHE' : 'MOON SHARD');
+      }
+      [
+        [-43, 3], [48, -31], [-61, -73], [70, -138], [-42, -203], [34, -238],
+      ].forEach(([x, z], index) => addPickup(new T.Vector3(x, this.sampleTerrainHeight(x, z) + 2.1, z), true, index % 2 ? 'HIDDEN ORBIT' : 'MOON SHARD'));
+
+      const nestSpecs = [
+        { id: 'impact-nest', x: 24, z: 96, hp: 2 },
+        { id: 'side-nest', x: -58, z: 18, hp: 3 },
+        { id: 'rift-nest', x: 64, z: -78, hp: 3 },
+        { id: 'crown-nest', x: -42, z: -166, hp: 4 },
+      ];
+      for (const spec of nestSpecs) {
+        const group = new T.Group();
+        const core = new T.Mesh(new T.IcosahedronGeometry(1.65, 2), this.materials.alien);
+        core.scale.set(1.25, 1.5, 1.15);
+        core.position.y = 1.35;
+        core.castShadow = true;
+        group.add(core);
+        const crown = new T.Mesh(new T.TorusKnotGeometry(1.28, .22, 64, 8, 2, 3), this.materials.violet);
+        crown.position.y = 1.55;
+        crown.scale.y = .72;
+        group.add(crown);
+        for (let index = 0; index < 7; index++) {
+          const angle = index / 7 * TAU;
+          const tendril = new T.Mesh(new T.CapsuleGeometry(.14, 2.5, 5, 8), index % 2 ? this.materials.alienShell : this.materials.violet);
+          tendril.rotation.set(Math.PI / 2.45, 0, -angle + Math.PI / 2);
+          tendril.position.set(Math.cos(angle) * 1.5, .42, Math.sin(angle) * 1.5);
+          group.add(tendril);
+        }
+        const weak = new T.Mesh(new T.OctahedronGeometry(.48, 0), this.materials.gold);
+        weak.position.y = 2.9;
+        group.add(weak);
+        const glow = this.makeGlowSprite(this.glowViolet, 8.5, .3);
+        glow.position.y = 1.4;
+        group.add(glow);
+        const y = this.sampleTerrainHeight(spec.x, spec.z);
+        group.position.set(spec.x, y, spec.z);
+        group.traverse(object => { if (object.isMesh) object.castShadow = true; });
+        this.scene.add(group);
+        const nest = { ...spec, maxHp: spec.hp, group, core, crown, weak, glow, position: new T.Vector3(spec.x, y + 1.45, spec.z), radius: 2.6, alive: true, hitFlash: 0, phase: worldRandom() * TAU };
+        nest.drop = addPickup(new T.Vector3(spec.x, y + 3.4, spec.z), false, 'XENO HEART');
+        this.nests.push(nest);
+      }
+
+      const padSpecs = [
+        [-26, 88, 17], [29, 31, 19], [-34, -66, 20], [44, -118, 18], [-55, -191, 21], [48, -221, 19],
+      ];
+      for (const [x, z, impulse] of padSpecs) {
+        const y = this.sampleTerrainHeight(x, z) + .12;
+        const group = new T.Group();
+        const ring = new T.Mesh(new T.TorusGeometry(2.7, .18, 10, 52), this.materials.cyan);
+        ring.rotation.x = Math.PI / 2;
+        const inner = new T.Mesh(new T.CylinderGeometry(2.15, 2.35, .18, 32), new T.MeshStandardMaterial({ color: 0x182a3d, emissive: 0x126f88, emissiveIntensity: 1.8, roughness: .38, metalness: .62 }));
+        group.add(ring, inner);
+        group.position.set(x, y, z);
+        this.scene.add(group);
+        this.launchPads.push({ id: `launch-pad-${this.launchPads.length}`, group, ring, inner, position: new T.Vector3(x, y, z), radius: 2.85, impulse, cooldown: 0, phase: worldRandom() * TAU });
+      }
+
+      const chimeSpecs = [[-32, 64], [38, 4], [-48, -94], [51, -143], [-28, -214]];
+      for (const [x, z] of chimeSpecs) {
+        const y = this.sampleTerrainHeight(x, z) + 5.4;
+        const group = new T.Group();
+        const ring = new T.Mesh(new T.TorusGeometry(1.5, .14, 10, 48), this.materials.gold);
+        const crystal = new T.Mesh(new T.OctahedronGeometry(.58, 0), this.materials.cyan);
+        const beam = new T.Mesh(new T.CylinderGeometry(.04, .04, 5.2, 6), this.materials.cyan);
+        beam.position.y = 2.65;
+        group.add(ring, crystal, beam);
+        group.position.set(x, y, z);
+        this.scene.add(group);
+        const chime = { id: `moon-chime-${this.moonChimes.length}`, group, ring, crystal, position: new T.Vector3(x, y, z), radius: 1.8, used: false, phase: worldRandom() * TAU };
+        chime.drop = addPickup(new T.Vector3(x, y + 1.2, z), false, 'CHIME STAR');
+        this.moonChimes.push(chime);
+      }
+
+      // A readable side shrine makes one optional route look intentional from
+      // the basin instead of like another random rock pile.
+      this.sideShrine = new T.Group();
+      const shrineX = -58, shrineZ = 18, shrineY = this.sampleTerrainHeight(shrineX, shrineZ);
+      for (const side of [-1, 1]) {
+        const pillar = new T.Mesh(new T.BoxGeometry(2.2, 9.5, 2.2), this.materials.darkRock);
+        pillar.position.set(side * 5.2, 4.75, 0);
+        pillar.rotation.z = side * .08;
+        pillar.castShadow = true;
+        this.sideShrine.add(pillar);
+      }
+      const lintel = new T.Mesh(new T.BoxGeometry(12.5, 2.1, 2.5), this.materials.darkRock);
+      lintel.position.y = 9.2;
+      lintel.castShadow = true;
+      this.sideShrine.add(lintel);
+      this.sideShrine.position.set(shrineX, shrineY, shrineZ);
+      this.scene.add(this.sideShrine);
     }
     makeFirstPersonRig() {
       this.rig = new T.Group();
@@ -1553,6 +1751,8 @@
       };
       this.leftArm = makeArm(-1);
       this.rightArm = makeArm(1);
+      this.leftArm.visible = false;
+      this.rightArm.visible = false;
       this.rig.add(this.leftArm, this.rightArm);
       this.boot = new T.Group();
       // View-model materials must be private: the depth-test override below must
@@ -1613,11 +1813,22 @@
       );
       this.ballTrail.frustumCulled = false;
       this.scene.add(this.ballTrail);
+      const tetherGeometry = new T.BufferGeometry();
+      this.tetherPositions = new Float32Array(6);
+      tetherGeometry.setAttribute('position', new T.BufferAttribute(this.tetherPositions, 3).setUsage(T.DynamicDrawUsage));
+      this.ballTether = new T.Line(
+        tetherGeometry,
+        new T.LineBasicMaterial({ color: 0x72efff, transparent: true, opacity: .9, depthWrite: false, blending: T.AdditiveBlending }),
+      );
+      this.ballTether.visible = false;
+      this.ballTether.frustumCulled = false;
+      this.scene.add(this.ballTether);
     }
     makeAlienMesh(type = 'scuttler') {
       const group = new T.Group();
-      const scale = type === 'warden' ? 1.75 : type === 'shield' ? 1.28 : 1;
-      const abdomen = new T.Mesh(new T.IcosahedronGeometry(.84 * scale, 1), type === 'warden' ? this.materials.violet : this.materials.alien);
+      const scale = type === 'warden' ? 1.75 : type === 'brute' ? 1.46 : type === 'shield' ? 1.28 : type === 'floater' ? .96 : 1;
+      const abdomenMaterial = type === 'warden' || type === 'floater' ? this.materials.violet : type === 'brute' ? this.materials.alienShell : this.materials.alien;
+      const abdomen = new T.Mesh(new T.IcosahedronGeometry(.84 * scale, 1), abdomenMaterial);
       abdomen.scale.set(1.05, .8, 1.25);
       abdomen.position.y = 1.2 * scale;
       abdomen.castShadow = true;
@@ -1632,11 +1843,12 @@
       group.add(eye);
       const weak = new T.Mesh(new T.OctahedronGeometry(.24 * scale, 0), this.materials.gold);
       weak.position.set(0, 1.22 * scale, .98 * scale);
-      weak.visible = type !== 'scuttler';
+      weak.visible = type === 'shield' || type === 'warden' || type === 'brute';
       group.add(weak);
-      for (let i = 0; i < 6; i++) {
-        const side = i < 3 ? -1 : 1;
-        const local = i % 3;
+      const legCount = type === 'floater' ? 3 : type === 'brute' ? 8 : 6;
+      for (let i = 0; i < legCount; i++) {
+        const side = i < legCount / 2 ? -1 : 1;
+        const local = i % Math.ceil(legCount / 2);
         const legGeometry = new T.CapsuleGeometry(.08 * scale, .8 * scale, 4, 7);
         legGeometry.rotateX((local - 1) * .32);
         legGeometry.rotateZ(side * (.72 + local * .1));
@@ -1655,6 +1867,23 @@
         shield.rotation.x = Math.PI / 2;
         shield.position.set(0, 1.3 * scale, -1.25 * scale);
         group.add(shield);
+      }
+      if (type === 'floater') {
+        const halo = new T.Mesh(new T.TorusGeometry(1.18, .12, 10, 42), this.materials.cyan);
+        halo.rotation.x = Math.PI / 2;
+        halo.position.y = 1.2;
+        group.add(halo);
+        const lowerCore = new T.Mesh(new T.OctahedronGeometry(.34, 0), this.materials.gold);
+        lowerCore.position.y = .05;
+        group.add(lowerCore);
+      }
+      if (type === 'brute') {
+        for (const side of [-1, 1]) {
+          const horn = new T.Mesh(new T.ConeGeometry(.24, 1.2, 8), this.materials.gold);
+          horn.position.set(side * .72, 2.15, -.62);
+          horn.rotation.z = side * -.58;
+          group.add(horn);
+        }
       }
       const glow = this.makeGlowSprite(type === 'warden' ? this.glowViolet : this.glowCyan, 3.8 * scale, .13);
       glow.position.y = 1.15 * scale;
@@ -1715,7 +1944,36 @@
       item.mesh.setMatrixAt(item.instanceIndex, new T.Matrix4().makeScale(0, 0, 0));
       item.mesh.instanceMatrix.needsUpdate = true;
       this.particles.burst(item.position, item.mesh.material === this.materials.violet ? 0xba81ff : 0xbfc5d2, 14 + Math.floor(impact * 10), 8 + impact * 6, .75, .25);
+      if (item.rewardPickup) {
+        item.rewardPickup.active = true;
+        item.rewardPickup.group.visible = true;
+      }
       audio.impact(clamp(impact, .2, 1), 'rock');
+      return true;
+    }
+    damageNest(nest, amount = 1, impact = 1) {
+      if (!nest?.alive) return false;
+      nest.hp -= amount;
+      nest.hitFlash = 1;
+      this.particles.burst(nest.position, nest.hp <= 0 ? 0xffd66b : 0xbd83ff, nest.hp <= 0 ? 64 : 24, 10 + impact * 7, nest.hp <= 0 ? 1.2 : .72, .22);
+      audio.impact(clamp(.45 + impact * .5, .4, 1), 'alien');
+      if (nest.hp > 0) return false;
+      nest.hp = 0;
+      nest.alive = false;
+      nest.group.visible = false;
+      nest.drop.active = true;
+      nest.drop.group.visible = true;
+      audio.score(true);
+      return true;
+    }
+    strikeChime(chime) {
+      if (!chime || chime.used) return false;
+      chime.used = true;
+      chime.drop.active = true;
+      chime.drop.group.visible = true;
+      chime.ring.material = this.materials.cyan;
+      this.particles.burst(chime.position, 0xffd66b, 34, 12, .85, .28);
+      audio.score(true);
       return true;
     }
     restoreBreakables() {
@@ -1724,6 +1982,32 @@
         item.mesh.setMatrixAt(item.instanceIndex, item.matrix);
       }
       this.breakableMeshes.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
+    }
+    restorePlayground() {
+      for (const pickup of this.collectibles) {
+        pickup.active = pickup.initialActive;
+        pickup.group.visible = pickup.active;
+      }
+      for (const item of this.breakables) {
+        if (!item.rewardPickup) continue;
+        item.rewardPickup.active = false;
+        item.rewardPickup.group.visible = false;
+      }
+      for (const nest of this.nests) {
+        nest.hp = nest.maxHp;
+        nest.alive = true;
+        nest.hitFlash = 0;
+        nest.group.visible = true;
+        nest.drop.active = false;
+        nest.drop.group.visible = false;
+      }
+      for (const chime of this.moonChimes) {
+        chime.used = false;
+        chime.ring.material = this.materials.gold;
+        chime.drop.active = false;
+        chime.drop.group.visible = false;
+      }
+      for (const pad of this.launchPads) pad.cooldown = 0;
     }
     applyQuality(level, persist = true) {
       this.quality = level;
@@ -1776,6 +2060,31 @@
         anchor.glow.material.opacity = (anchor.used ? .18 : .58) + Math.sin(anchor.pulse) * .08;
         anchor.group.scale.setScalar(anchor.used ? .72 : 1 + Math.sin(anchor.pulse) * .025);
       });
+      this.collectibles.forEach(pickup => {
+        if (!pickup.active) return;
+        pickup.group.rotation.y += dt * 1.8;
+        pickup.group.position.y = pickup.position.y + Math.sin(this.elapsed * 2.8 + pickup.phase) * .22;
+        pickup.ring.rotation.z += dt * 1.5;
+        pickup.glow.material.opacity = .35 + Math.sin(this.elapsed * 4 + pickup.phase) * .11;
+      });
+      this.nests.forEach(nest => {
+        if (!nest.alive) return;
+        nest.hitFlash = Math.max(0, nest.hitFlash - dt * 3.6);
+        nest.core.scale.set(1.25 + nest.hitFlash * .16, 1.5 - nest.hitFlash * .12 + Math.sin(this.elapsed * 2.3 + nest.phase) * .05, 1.15 + nest.hitFlash * .16);
+        nest.crown.rotation.y += dt * (1.15 + nest.hitFlash * 3);
+        nest.weak.rotation.y -= dt * 2.4;
+        nest.glow.material.opacity = .22 + Math.sin(this.elapsed * 3.6 + nest.phase) * .08 + nest.hitFlash * .28;
+      });
+      this.launchPads.forEach(pad => {
+        pad.cooldown = Math.max(0, pad.cooldown - dt);
+        pad.ring.rotation.z += dt * (pad.cooldown > 0 ? 4.8 : 1.35);
+        pad.inner.material.emissiveIntensity = (pad.cooldown > 0 ? 3.8 : 1.65) + Math.sin(this.elapsed * 4 + pad.phase) * .35;
+      });
+      this.moonChimes.forEach(chime => {
+        chime.ring.rotation.z += dt * (chime.used ? 2.8 : .72);
+        chime.crystal.rotation.y -= dt * 1.8;
+        chime.crystal.position.y = Math.sin(this.elapsed * 3.2 + chime.phase) * .18;
+      });
       if (this.gate.active) {
         this.gate.field.material.opacity = .18 + Math.sin(this.elapsed * 4.2) * .07;
         this.gate.glow.material.opacity = .2 + Math.sin(this.elapsed * 3.1) * .08;
@@ -1794,11 +2103,35 @@
       this.ballGlow.material.opacity = .34 + Math.min(.42, gameState.ball.velocity.length() * .012) + Math.sin(this.elapsed * 8) * .06;
       this.rig.position.x = Math.sin(gameState.player.runCycle * .5) * .018;
       this.rig.position.y = -.25 + Math.abs(Math.sin(gameState.player.runCycle)) * -.025;
+      const catchDistance = gameState.ball.position.distanceTo(gameState.player.position);
+      const catching = gameState.ball.mode === 'returning' && catchDistance < 5.2;
+      this.leftArm.visible = catching;
+      this.rightArm.visible = false;
+      if (catching) {
+        const catchT = 1 - clamp((catchDistance - 1.5) / 3.7, 0, 1);
+        this.leftArm.position.set(-.18 - catchT * .16, -.28 + catchT * .12, -.38 - catchT * .5);
+        this.leftArm.rotation.z = -.18 + catchT * .28;
+      }
       this.boot.visible = gameState.kickVisual > 0;
       if (this.boot.visible) {
         const t = 1 - gameState.kickVisual;
         this.boot.position.z = -.35 - Math.sin(t * Math.PI) * 1.25;
         this.boot.rotation.x = -.2 - Math.sin(t * Math.PI) * .42;
+      }
+      if (gameState.ball.mode === 'anchored' && gameState.ball.anchor) {
+        const hand = gameState.player.position.clone().addScaledVector(UP, gameState.player.eyeHeight - .24);
+        this.tetherPositions[0] = hand.x;
+        this.tetherPositions[1] = hand.y;
+        this.tetherPositions[2] = hand.z;
+        this.tetherPositions[3] = gameState.ball.position.x;
+        this.tetherPositions[4] = gameState.ball.position.y;
+        this.tetherPositions[5] = gameState.ball.position.z;
+        this.ballTether.geometry.attributes.position.needsUpdate = true;
+        this.ballTether.material.color.set(gameState.player.grappling ? 0xffd66b : 0x72efff);
+        this.ballTether.material.opacity = gameState.player.grappling ? .98 : .58 + Math.sin(this.elapsed * 9) * .16;
+        this.ballTether.visible = true;
+      } else {
+        this.ballTether.visible = false;
       }
       this.particles.update(dt);
       const target = gameState.player.position;
@@ -1886,6 +2219,7 @@
       this.launchOrigin = this.position.clone();
       this.returnSide = 1;
       this.anchor = null;
+      this.anchorCharge = 0;
       this.caughtBy = null;
       this.catchTimer = 0;
       this.snapTimer = 0;
@@ -1907,8 +2241,8 @@
       this.position = new T.Vector3(x, groundHeightAt(x, z), z);
       this.velocity = new T.Vector3();
       this.facing = facing;
-      this.radius = type === 'warden' ? 2.8 : type === 'shield' ? 1.7 : 1.25;
-      this.maxHp = type === 'warden' ? 7 : type === 'shield' ? 3 : 1;
+      this.radius = type === 'warden' ? 2.8 : type === 'brute' ? 2.05 : type === 'shield' ? 1.7 : type === 'floater' ? 1.3 : 1.25;
+      this.maxHp = type === 'warden' ? 7 : type === 'brute' ? 3 : type === 'shield' ? 3 : 1;
       this.hp = this.maxHp;
       this.alive = true;
       this.phase = enemyRandom() * TAU;
@@ -2015,11 +2349,18 @@
         new AlienState('skitter-2', 'scuttler', 10, 91, Math.PI),
         new AlienState('skitter-3', 'scuttler', -12, 76, Math.PI),
         new AlienState('skitter-4', 'scuttler', 12, 69, Math.PI),
+        new AlienState('impact-floater', 'floater', 18, 103, Math.PI),
+        new AlienState('ridge-floater', 'floater', -23, 73, Math.PI),
+        new AlienState('side-brute', 'brute', -51, 22, Math.PI * .5),
+        new AlienState('rift-brute', 'brute', 56, -72, -Math.PI * .5),
         new AlienState('carapace-sentinel', 'shield', 0, 53, 0),
         new AlienState('crown-skitter-1', 'scuttler', -18, -132, 0),
         new AlienState('crown-skitter-2', 'scuttler', 18, -139, 0),
         new AlienState('crown-skitter-3', 'scuttler', -15, -161, 0),
         new AlienState('crown-skitter-4', 'scuttler', 16, -174, 0),
+        new AlienState('crown-floater-1', 'floater', -31, -151, 0),
+        new AlienState('crown-floater-2', 'floater', 34, -181, 0),
+        new AlienState('crown-brute', 'brute', 26, -196, 0),
         new AlienState('crown-warden', 'warden', 0, -191, 0),
       ];
       this.shieldEnemy = this.enemies.find(enemy => enemy.type === 'shield');
@@ -2038,7 +2379,7 @@
       canvas.focus({ preventScroll: true });
       audio.ensure();
       if (requestLock && !input.touchEnabled && !TEST_MODE) requestGamePointerLock();
-      this.announce(input.touchEnabled ? 'THUMBS FLOAT // RIGHT LOOP SPINS THE BALL' : 'TOUCHDOWN // THE BALL COMES HOME', '#83efff');
+      this.announce(input.touchEnabled ? 'LEFT THUMB MOVES // RIGHT THUMB DOES THE BALL' : 'LMB KICKS // RMB ORBITS OR CALLS', '#83efff');
       this.updateObjective(true);
     }
     restart() {
@@ -2083,6 +2424,7 @@
       world.goal.group.visible = false;
       world.anchors.forEach(anchor => { anchor.used = false; anchor.group.visible = true; });
       world.restoreBreakables();
+      world.restorePlayground();
       this.spawnEnemies();
       world.particles.clear();
       world.ballGroup.visible = true;
@@ -2211,6 +2553,7 @@
       this.updatePlayer(dt, actionFrame, edgeFrame);
       this.updateBall(dt, actionFrame, edgeFrame);
       this.updateEnemies(dt);
+      this.updatePlaygroundInteractions(dt);
       this.updateProgression();
       this.updateCamera(dt);
       this.decayFeedback(dt);
@@ -2323,6 +2666,20 @@
         }
       } else if (player.position.y > floor + .04) {
         player.grounded = false;
+      }
+      for (const pad of world.launchPads) {
+        if (pad.cooldown > 0 || Math.abs(player.position.y - pad.position.y) > 1.65) continue;
+        if (Math.hypot(player.position.x - pad.position.x, player.position.z - pad.position.z) > pad.radius) continue;
+        pad.cooldown = 1.05;
+        player.velocity.y = Math.max(player.velocity.y, pad.impulse);
+        const launchForward = this.horizontalForward(new T.Vector3());
+        player.velocity.addScaledVector(launchForward, 5.8);
+        player.grounded = false;
+        player.jumpsUsed = 0;
+        this.addStyle(7, 230, 'MOONSPRING', '#83efff');
+        world.particles.burst(pad.position.clone().addScaledVector(UP, .35), 0x72efff, 28, 9, .72, .08);
+        audio.jump(true);
+        this.shake = Math.max(this.shake, .18);
       }
       player.position.x = clamp(player.position.x, -355, 355);
       player.position.z = clamp(player.position.z, -350, 340);
@@ -2440,7 +2797,35 @@
           this.damageAlien(enemy, 1, 'spin');
           hits++;
         }
-        this.addStyle(7 + hits * 5, 220 + hits * 300, hits ? `ORBIT SMASH x${hits}` : (chosenDirection > 0 ? 'CLOCKWISE KICK' : 'COUNTER KICK'), '#bf83ff');
+        let rocks = 0;
+        for (const item of world.breakables) {
+          if (!item.alive || item.position.distanceTo(player.position) > 6.4 + gesturePower * 1.4 + item.radius) continue;
+          if (world.shatterBreakable(item, .82 + gesturePower * .15)) {
+            this.stats.breaks++;
+            rocks++;
+          }
+        }
+        let structures = 0;
+        for (const nest of world.nests) {
+          if (!nest.alive || nest.position.distanceTo(player.position) > 7.8 + nest.radius) continue;
+          if (world.damageNest(nest, 1, .8)) {
+            this.stats.breaks++;
+            structures++;
+          }
+        }
+        for (const chime of world.moonChimes) {
+          if (chime.used || chime.position.distanceTo(player.position) > 7.6 + chime.radius) continue;
+          if (world.strikeChime(chime)) structures++;
+        }
+        const wrecked = hits + rocks + structures;
+        this.addStyle(7 + hits * 5 + Math.min(10, rocks) + structures * 3, 220 + hits * 300 + rocks * 90 + structures * 280,
+          wrecked ? `ORBIT SMASH x${wrecked}` : (chosenDirection > 0 ? 'CLOCKWISE ORBIT' : 'COUNTER ORBIT'), '#bf83ff');
+        this.announce(wrecked ? 'ORBIT SMASH // EVERYTHING IN REACH GETS HIT' : 'ORBIT ARMED // CLOSE THE DISTANCE', '#d5a8ff');
+        for (let index = 0; index < 10; index++) {
+          const angle = index / 10 * TAU;
+          const point = player.position.clone().add(new T.Vector3(Math.cos(angle) * 4.8, 1.1, Math.sin(angle) * 4.8));
+          world.particles.burst(point, index % 2 ? 0xbd83ff : 0x72efff, 2, 4.5, .55, .04);
+        }
       } else {
         this.ball.curveBoost = .9 + gesturePower * .32;
         this.ball.returnSide = chosenDirection;
@@ -2610,7 +2995,7 @@
         const toAnchor = anchor.position.clone().sub(this.player.position);
         const distance = toAnchor.length();
         const direction = distance > .001 ? toAnchor.multiplyScalar(1 / distance) : UP.clone();
-        const desiredSpeed = Math.min(31, 17 + distance * .42);
+        const desiredSpeed = Math.min(34, (17 + distance * .42) * (.9 + ball.anchorCharge * .24));
         const desiredVelocity = direction.multiplyScalar(desiredSpeed);
         this.player.velocity.lerp(desiredVelocity, 1 - Math.exp(-dt * 9.2));
         this.player.grappling = true;
@@ -2646,7 +3031,7 @@
           ball.mode = 'returning';
           ball.returnTime = 0;
           ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
-          this.announce('ANCHOR RELEASED // HOLD SNAP TO PULL', '#83efff');
+          this.announce('TETHER RELEASED // HOLD RIGHT TO PULL', '#83efff');
         }
       }
     }
@@ -2786,20 +3171,68 @@
         ball.position.addScaledVector(normal, item.radius + ball.radius - distance + .02);
       }
 
-      if (ball.mode === 'outbound' && ball.launchCharge >= .78) {
+      for (const nest of world.nests) {
+        if (!nest.alive || ball.collisionCooldown.has(nest.id)) continue;
+        const distance = nest.position.distanceTo(ball.position);
+        if (distance > nest.radius + ball.radius) continue;
+        const speed = ball.velocity.length();
+        const normal = ball.position.clone().sub(nest.position).normalize();
+        if (speed > 8) {
+          const damage = ball.mode === 'returning' || ball.launchCharge > .86 || speed > 45 ? 2 : 1;
+          const destroyed = world.damageNest(nest, damage, clamp(speed / 42, .25, 1));
+          ball.collisionCooldown.set(nest.id, .24);
+          const along = ball.velocity.dot(normal);
+          if (along < 0) ball.velocity.addScaledVector(normal, -1.38 * along);
+          this.shake = Math.max(this.shake, destroyed ? .5 : .24);
+          this.hitStop = Math.max(this.hitStop, destroyed ? .065 : .032);
+          if (destroyed) {
+            this.stats.breaks++;
+            this.addStyle(22, 1800, 'XENO NEST SHATTERED', '#ffd66b');
+          } else {
+            this.addStyle(6, 260, `NEST ${nest.hp}/${nest.maxHp}`, '#bf83ff');
+          }
+        } else {
+          const along = ball.velocity.dot(normal);
+          if (along < 0) ball.velocity.addScaledVector(normal, -1.5 * along);
+        }
+      }
+
+      for (const chime of world.moonChimes) {
+        if (chime.used || ball.collisionCooldown.has(chime.id)) continue;
+        if (chime.position.distanceTo(ball.position) > chime.radius + ball.radius) continue;
+        if (ball.velocity.length() < 7) continue;
+        if (world.strikeChime(chime)) {
+          ball.collisionCooldown.set(chime.id, .25);
+          this.addStyle(12, 760, 'MOON CHIME', '#ffd66b');
+          this.shake = Math.max(this.shake, .18);
+        }
+      }
+
+      if (ball.mode === 'outbound' && ball.velocity.length() >= 12) {
         const anchor = world.anchors.find(candidate => !candidate.used);
-        const basinCleared = !this.enemies.some(enemy => !enemy.summit && enemy.type === 'scuttler' && enemy.alive);
-        const climbUnlocked = basinCleared && !this.shieldEnemy.alive;
-        if (climbUnlocked && anchor && ball.position.distanceTo(anchor.position) <= 2.55) {
+        const touchedAnchor = world.anchors.find(candidate => !candidate.used && ball.position.distanceTo(candidate.position) <= 4.4);
+        if (touchedAnchor && touchedAnchor !== anchor) {
+          const expected = (anchor?.index ?? 0) + 1;
+          this.announce(`LINK ${expected} IS PULSING // FOLLOW THE CYAN ROUTE`, '#ffd66b');
+          world.particles.burst(touchedAnchor.position, 0xffd66b, 18, 7, .58, .12);
+          ball.collisionCooldown.set(touchedAnchor.id, .32);
+          audio.impact(.55, 'anchor');
+        }
+        if (anchor && touchedAnchor === anchor) {
           ball.mode = 'anchored';
           ball.anchor = anchor;
+          ball.anchorCharge = ball.launchCharge;
           ball.anchorTimer = 0;
           ball.velocity.set(0, 0, 0);
           ball.position.copy(anchor.position);
+          const firstTug = anchor.position.clone().sub(this.player.position).normalize();
+          this.player.velocity.addScaledVector(firstTug, 6.5 + ball.launchCharge * 4.5);
+          this.player.velocity.y = Math.max(this.player.velocity.y, 3.8 + ball.launchCharge * 2.4);
+          this.player.grounded = false;
           this.addStyle(12, 520, 'ANCHORED', '#83efff');
           world.particles.burst(anchor.position, 0x76efff, 26, 10, .72, .2);
           audio.impact(.9, 'anchor');
-          this.announce('HOLD SNAP // PULL YOURSELF UP', '#83efff');
+          this.announce('TETHER LOCKED // HOLD RIGHT TO PULL', '#83efff');
         }
       }
 
@@ -2831,7 +3264,7 @@
         const returnAttack = ball.mode === 'returning';
         const validHit = speed > 8;
         ball.collisionCooldown.set(enemy.id, .22);
-        if (enemy.type === 'scuttler') {
+        if (enemy.type !== 'shield' && enemy.type !== 'warden') {
           if (validHit) this.damageAlien(enemy, 1, returnAttack ? 'return' : 'kick');
           const along = ball.velocity.dot(normal);
           if (along < 0) ball.velocity.addScaledVector(normal, -1.45 * along);
@@ -2845,7 +3278,7 @@
             ball.catchTimer = ball.snapTimer = 0;
             ball.velocity.set(0, 0, 0);
             enemy.catchCooldown = .8;
-            this.announce('BALL STOLEN // HOLD SNAP OR ARM A VOLLEY', '#bf83ff');
+            this.announce('BALL STOLEN // HOLD RIGHT TO RIP IT FREE', '#bf83ff');
             world.particles.burst(ball.position, 0xbe83ff, 22, 9, .68, .12);
             audio.impact(.9, 'alien');
           } else {
@@ -2923,7 +3356,7 @@
         const summitLocked = enemy.summit && world.fracture.active;
         const toPlayer = player.position.clone().sub(enemy.position);
         const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
-        const activeRange = enemy.type === 'warden' ? 80 : 44;
+        const activeRange = enemy.type === 'warden' ? 80 : enemy.type === 'floater' ? 58 : 46;
         if (!summitLocked && horizontalDistance < activeRange && enemy.stun <= 0) {
           const desiredFacing = Math.atan2(toPlayer.x, toPlayer.z);
           if (enemy.type === 'shield' || enemy.type === 'warden') {
@@ -2941,6 +3374,18 @@
             direction.normalize();
             enemy.velocity.x = damp(enemy.velocity.x, direction.x * 4.8, 5, dt);
             enemy.velocity.z = damp(enemy.velocity.z, direction.z * 4.8, 5, dt);
+          } else if (enemy.type === 'floater') {
+            const orbitAngle = this.time * .72 + enemy.phase;
+            const direction = toPlayer.setY(0).normalize();
+            direction.x += Math.cos(orbitAngle) * .82;
+            direction.z += Math.sin(orbitAngle) * .82;
+            direction.normalize();
+            enemy.velocity.x = damp(enemy.velocity.x, direction.x * 3.8, 3.4, dt);
+            enemy.velocity.z = damp(enemy.velocity.z, direction.z * 3.8, 3.4, dt);
+          } else if (enemy.type === 'brute') {
+            const direction = toPlayer.setY(0).normalize();
+            enemy.velocity.x = damp(enemy.velocity.x, direction.x * 2.15, 2.8, dt);
+            enemy.velocity.z = damp(enemy.velocity.z, direction.z * 2.15, 2.8, dt);
           } else if (enemy.type === 'warden') {
             enemy.velocity.x = damp(enemy.velocity.x, Math.cos(this.time * .72 + enemy.phase) * 4.2, 3.2, dt);
             enemy.velocity.z = damp(enemy.velocity.z, Math.sin(this.time * .5 + enemy.phase) * 2.1, 3.2, dt);
@@ -2955,13 +3400,16 @@
         enemy.position.x += enemy.velocity.x * dt;
         enemy.position.z += enemy.velocity.z * dt;
         const floor = world.floorHeight(enemy.position.x, enemy.position.z, enemy.position.y + 2);
-        const hop = enemy.type === 'scuttler' ? Math.max(0, Math.sin(this.time * 5.2 + enemy.phase)) * .32 : Math.sin(this.time * 1.7 + enemy.phase) * .06;
+        const hop = enemy.type === 'scuttler' ? Math.max(0, Math.sin(this.time * 5.2 + enemy.phase)) * .32
+          : enemy.type === 'floater' ? 4.1 + Math.sin(this.time * 2.3 + enemy.phase) * .8
+            : enemy.type === 'brute' ? Math.max(0, Math.sin(this.time * 2.2 + enemy.phase)) * .14
+              : Math.sin(this.time * 1.7 + enemy.phase) * .06;
         enemy.position.y = floor + hop;
         visual.group.position.copy(enemy.position);
         visual.group.rotation.y = enemy.facing + Math.PI;
         visual.abdomen.scale.y = visual.scale * (.8 + hop * .08);
         visual.eye.material.emissiveIntensity = 3.8 + Math.sin(this.time * 5 + enemy.phase) * .9;
-        visual.weak.visible = enemy.type !== 'scuttler';
+        visual.weak.visible = enemy.type === 'shield' || enemy.type === 'warden' || enemy.type === 'brute';
         if (visual.shield) visual.shield.material.emissiveIntensity = 1.7 + enemy.hitFlash * 5;
         const playerDistance = enemy.position.distanceTo(player.position);
         if (playerDistance < enemy.radius + player.radius + .6 && player.damageCooldown <= 0 && !summitLocked) {
@@ -2974,6 +3422,36 @@
             this.damagePlayer(enemy);
           }
         }
+      }
+    }
+    updatePlaygroundInteractions(dt) {
+      for (const pickup of world.collectibles) {
+        if (!pickup.active) continue;
+        const playerDistance = pickup.group.position.distanceTo(this.player.position.clone().addScaledVector(UP, .9));
+        const ballDistance = pickup.group.position.distanceTo(this.ball.position);
+        if (playerDistance > 2.1 && ballDistance > 1.65) continue;
+        pickup.active = false;
+        pickup.group.visible = false;
+        this.player.health = Math.min(5, this.player.health + 1);
+        this.player.jumpsUsed = 0;
+        this.player.jumpBuffer = Math.max(this.player.jumpBuffer, .06);
+        this.addStyle(8, 420, pickup.label, '#ffd66b');
+        world.particles.burst(pickup.group.position, 0xffd66b, 28, 9, .82, .25);
+        audio.score(true);
+      }
+
+      if (this.ball.mode !== 'outbound' && this.ball.mode !== 'returning') return;
+      for (const pad of world.launchPads) {
+        if (pad.cooldown > 0 || Math.abs(this.ball.position.y - pad.position.y) > 1.5) continue;
+        if (Math.hypot(this.ball.position.x - pad.position.x, this.ball.position.z - pad.position.z) > pad.radius) continue;
+        pad.cooldown = .48;
+        this.ball.position.y = pad.position.y + this.ball.radius + .25;
+        this.ball.velocity.y = Math.max(Math.abs(this.ball.velocity.y) * .72, pad.impulse * 1.22);
+        this.ball.velocity.multiplyScalar(1.08);
+        this.ball.bounceCount++;
+        this.addStyle(6, 260, 'BALLSPRING', '#83efff');
+        world.particles.burst(pad.position.clone().addScaledVector(UP, .45), 0x72efff, 24, 10, .68, .08);
+        audio.impact(.8, 'anchor');
       }
     }
     damagePlayer(enemy) {
@@ -3071,15 +3549,15 @@
       } else if (basinAlive > 0) {
         key = `basin-${basinAlive}`; stage = 1;
         label = 'LANDING CRATER // CONTACT';
-        text = `${basinAlive} ridge skitter${basinAlive === 1 ? '' : 's'} remain. KICK, return, stomp, or SPIN them into moon dust.`;
+        text = `${basinAlive} SKITTER${basinAlive === 1 ? '' : 'S'} // TAP KICK // TAP AGAIN TO CALL`;
       } else if (this.shieldEnemy.alive) {
         key = `shield-${this.shieldEnemy.hp}`; stage = 2;
         label = 'ORPHEUS GATE // CARAPACE SENTINEL';
-        text = `Frontal kicks are armor food. Throw wide, turn, and SNAP the return through its gold back. HP ${this.shieldEnemy.hp}/${this.shieldEnemy.maxHp}.`;
+        text = `Frontal kicks are armor food. Throw wide, turn, and call the return through its gold back. HP ${this.shieldEnemy.hp}/${this.shieldEnemy.maxHp}.`;
       } else if (anchorsUsed < world.anchors.length) {
         key = `climb-${anchorsUsed}`; stage = 3;
         label = 'ORPHEUS RIM // SIXTY-METRE ASCENT';
-        text = `Full-charge the next cyan socket, then hold SNAP to sling upward. Anchor ${anchorsUsed + 1}/${world.anchors.length}. Double jump and METEOR kicks recover altitude.`;
+        text = `Kick the next cyan socket, then hold right to ride the visible tether. Anchor ${anchorsUsed + 1}/${world.anchors.length}.`;
       } else if (world.fracture.active) {
         key = 'fracture'; stage = 4;
         label = 'CROWN FAULT // FRACTURE SEAM';
@@ -3087,7 +3565,7 @@
       } else if (summitAlive > 0) {
         key = `crown-${summitAlive}-${this.warden.hp}`; stage = 5;
         label = 'OBSERVATORY CROWN // ALIEN WARDEN';
-        text = `${summitAlive} alien${summitAlive === 1 ? '' : 's'} remain. The Warden catches frontal kicks; tear the ball free with SNAP and punish its exposed back.`;
+        text = `${summitAlive} alien${summitAlive === 1 ? '' : 's'} remain. The Warden catches frontal kicks; hold right to rip the ball free.`;
       } else if (!this.won) {
         key = 'goal'; stage = 6;
         label = 'APOGEE APERTURE // OPEN';
@@ -3220,8 +3698,27 @@
       if (ui.chargeUI) ui.chargeUI.classList.toggle('active', this.charging);
       if (ui.chargeFill) ui.chargeFill.style.width = `${this.charge * 100}%`;
       if (ui.chargeText) ui.chargeText.textContent = this.charge > .96 ? 'MAXIMUM KICK' : this.ball.mode === 'ready' ? 'KICK CHARGE' : 'QUEUE VOLLEY';
+      if (ui.rightActionLabel) {
+        const labels = {
+          ready: this.charging ? 'HOLD CHARGE // SWIPE AIM' : 'TAP KICK // HOLD CHARGE // LOOP ORBIT',
+          outbound: 'TAP CALL // SWIPE STEER',
+          returning: 'TAP REEL // SWIPE LOOK',
+          anchored: 'HOLD PULL // SWIPE LOOK',
+          caught: 'HOLD RIP FREE // SWIPE LOOK',
+        };
+        ui.rightActionLabel.textContent = labels[this.ball.mode] || 'RIGHT THUMB // BALL';
+      }
       if (ui.crosshair) {
         ui.crosshair.dataset.ball = this.ball.mode;
+        const nextAnchor = world.anchors.find(anchor => !anchor.used);
+        let anchorAim = false;
+        if (nextAnchor && this.ball.mode === 'ready') {
+          const toAnchor = nextAnchor.position.clone().sub(world.camera.position);
+          const distance = toAnchor.length();
+          anchorAim = distance < 92 && toAnchor.normalize().dot(this.forwardFromView(new T.Vector3())) > .982;
+        }
+        ui.crosshair.dataset.target = anchorAim ? 'anchor' : 'world';
+        if (anchorAim && ui.rightActionLabel) ui.rightActionLabel.textContent = 'SOCKET IN SIGHT // TAP OR HOLD KICK';
         ui.crosshair.style.transform = `translate(-50%, -50%) scale(${1 + this.charge * .22})`;
         ui.crosshair.style.opacity = this.paused || !this.started ? '.3' : '.9';
       }
@@ -3297,7 +3794,7 @@
     }
     getState() {
       return {
-        version: '3.1.0-lunar-gesture',
+        version: '3.2.0-moon-playground',
         player: {
           x: this.player.position.x, y: this.player.position.y, z: this.player.position.z,
           vx: this.player.velocity.x, vy: this.player.velocity.y, vz: this.player.velocity.z,
@@ -3327,6 +3824,13 @@
         fractureActive: world.fracture.active,
         goalOpen: world.goal.open,
         anchorsUsed: world.anchors.filter(anchor => anchor.used).length,
+        playground: {
+          breakablesAlive: world.breakables.filter(item => item.alive).length,
+          nestsAlive: world.nests.filter(item => item.alive).length,
+          chimesStruck: world.moonChimes.filter(item => item.used).length,
+          pickupsActive: world.collectibles.filter(item => item.active).length,
+          launchPads: world.launchPads.length,
+        },
         enemies: this.enemies.map(enemy => ({ id: enemy.id, type: enemy.type, hp: enemy.hp, alive: enemy.alive, x: enemy.position.x, y: enemy.position.y, z: enemy.position.z })),
         stats: { ...this.stats },
         render: world.stats(),
@@ -3454,6 +3958,34 @@
       check('touch-down-swipe-looks-down', downSwipeLook > .25, downSwipeLook);
       input.endFrame();
 
+      const touchButtons = [...document.querySelectorAll('#touchControls button')].map(button => button.id);
+      check('touch-has-one-gameplay-button', touchButtons.length === 2 && touchButtons.includes('touchJump')
+        && touchButtons.includes('touchPause') && !document.getElementById('touchKick') && !document.getElementById('touchSnap'), touchButtons);
+      game.ball.mode = 'ready';
+      input.lookStick.tapPulse = true;
+      const touchHomeTap = { ...input.poll() };
+      input.endFrame();
+      game.ball.mode = 'outbound';
+      input.lookStick.tapPulse = true;
+      const touchAwayTap = { ...input.poll() };
+      input.endFrame();
+      game.ball.mode = 'ready';
+      input.lookStick.actionHold = true;
+      const touchHomeHold = { ...input.poll() };
+      input.endFrame();
+      input.lookStick.actionHold = false;
+      input.poll(); input.endFrame();
+      game.ball.mode = 'anchored';
+      input.lookStick.actionHold = true;
+      const touchAnchorHold = { ...input.poll() };
+      input.lookStick.actionHold = false;
+      input.endFrame();
+      game.ball.mode = 'ready';
+      check('right-tap-is-contextual-kick-or-call', touchHomeTap.kickPressed && touchHomeTap.kickReleased && !touchHomeTap.snapPressed
+        && touchAwayTap.snapPressed && !touchAwayTap.kickPressed, { touchHomeTap, touchAwayTap });
+      check('right-hold-is-contextual-charge-or-pull', touchHomeHold.kick && !touchHomeHold.snap
+        && touchAnchorHold.snap && !touchAnchorHold.kick, { touchHomeHold, touchAnchorHold });
+
       const makeLoop = (direction, stepMs = 20) => Array.from({ length: 29 }, (_, index) => {
         const angle = direction * index / 28 * TAU;
         return { x: 200 + Math.cos(angle) * 31, y: 180 + Math.sin(angle) * 31, t: index * stepMs };
@@ -3484,6 +4016,19 @@
       const liveSlowPower = feedLiveTrace(makeLoop(1, 28), 403);
       const liveFastPower = feedLiveTrace(makeLoop(1, 12), 404);
       const liveDelayed = feedLiveTrace(lookHoldThenLoop, 405);
+      input.lookStick.reset();
+      const chargeLoopTrace = makeLoop(1);
+      input.lookStick.down(fakeTouch(406, chargeLoopTrace[0].x, chargeLoopTrace[0].y, chargeLoopTrace[0].t));
+      if (input.lookStick.actionTimer) clearTimeout(input.lookStick.actionTimer);
+      input.lookStick.actionTimer = 0;
+      input.lookStick.actionHold = true;
+      for (let index = 1; index < chargeLoopTrace.length; index++) {
+        const point = chargeLoopTrace[index];
+        input.lookStick.move(fakeTouch(406, point.x, point.y, point.t));
+      }
+      const committedChargeLoop = input.lookStick.consumeLoop();
+      const chargeLoopEnd = chargeLoopTrace[chargeLoopTrace.length - 1];
+      input.lookStick.up(fakeTouch(406, chargeLoopEnd.x, chargeLoopEnd.y, chargeLoopEnd.t + 1));
       const ordinarySwipe = analyzeLoopGesture(Array.from({ length: 12 }, (_, index) => ({ x: 20 + index * 14, y: 100 + index * 2, t: index * 24 })));
       const cHook = analyzeRecentLoopGesture(Array.from({ length: 23 }, (_, index) => {
         const angle = index / 22 * Math.PI * 1.22;
@@ -3505,6 +4050,7 @@
       });
       check('touch-live-loop-speed-controls-power', liveFastPower.active && liveSlowPower.active
         && liveFastPower.power > liveSlowPower.power + .05, { liveSlowPower, liveFastPower });
+      check('committed-charge-does-not-become-orbit', !committedChargeLoop.active, committedChargeLoop);
       check('touch-loop-rejects-ordinary-swipe', !ordinarySwipe.matched, ordinarySwipe);
       check('touch-loop-rejects-common-aim-corrections', !cHook.matched && !sCorrection.matched
         && !horizontalScrub.matched, { cHook, sCorrection, horizontalScrub });
@@ -3552,6 +4098,14 @@
       const readyBallDistance = game.ball.position.distanceTo(game.player.position);
       check('home-ball-stays-in-reach', game.ball.mode === 'ready' && readyBallDistance < 5, {
         mode: game.ball.mode, distance: readyBallDistance, player: game.player.position.toArray(), ball: game.ball.position.toArray(),
+      });
+      check('idle-first-person-view-is-clear', !world.leftArm.visible && !world.rightArm.visible && !world.boot.visible, {
+        leftArm: world.leftArm.visible, rightArm: world.rightArm.visible, boot: world.boot.visible,
+      });
+      check('moon-playground-is-dense-and-reactive', world.breakables.length >= 90 && world.nests.length >= 4
+        && world.launchPads.length >= 6 && world.moonChimes.length >= 5 && world.collectibles.length >= 12, {
+        breakables: world.breakables.length, nests: world.nests.length, launchPads: world.launchPads.length,
+        chimes: world.moonChimes.length, collectibles: world.collectibles.length,
       });
       const startZ = game.player.position.z;
       game.stepWith(.55, { moveZ: 1, sprint: true });
@@ -3741,6 +4295,16 @@
 
       game.restart();
       game.started = true;
+      const orbitRock = world.breakables.find(item => item.alive);
+      game.player.position.copy(orbitRock.position);
+      game.ball.position.copy(game.readyBallTarget(new T.Vector3()));
+      game.startSpin(1, 1);
+      check('orbit-smash-breaks-nearby-world', !orbitRock.alive && game.stats.breaks > 0, {
+        alive: orbitRock.alive, breaks: game.stats.breaks,
+      });
+
+      game.restart();
+      game.started = true;
       game.startSpin(1, .9);
       game.startSpin(-1, 1.05);
       const loopWasBanked = !!game.queuedSpin;
@@ -3804,10 +4368,13 @@
       game.ball.position.copy(anchor.position);
       game.ball.velocity.set(0, 0, -34);
       game.resolveBallWorld(anchor.position.clone().add(new T.Vector3(0, 0, 1)));
-      check('anchor-rejects-light-kick', game.ball.mode === 'outbound' && !game.ball.anchor, {
-        mode: game.ball.mode, charge: game.ball.launchCharge,
+      game.syncWorldVisuals();
+      check('quick-kick-connects-first-anchor-with-tug', game.ball.mode === 'anchored' && game.ball.anchor === anchor
+        && game.player.velocity.length() > 5 && world.ballTether.visible, {
+        mode: game.ball.mode, charge: game.ball.launchCharge, playerSpeed: game.player.velocity.length(), tether: world.ballTether.visible,
       });
       const laterAnchor = world.anchors[1];
+      game.ball.anchor = null;
       game.ball.mode = 'outbound';
       game.ball.launchCharge = .92;
       game.ball.position.copy(laterAnchor.position);
@@ -3816,6 +4383,7 @@
       check('anchors-enforce-climb-order', game.ball.mode === 'outbound' && !game.ball.anchor, {
         attempted: laterAnchor.id, expected: anchor.id, mode: game.ball.mode,
       });
+      game.ball.anchor = null;
       game.ball.mode = 'outbound';
       game.ball.launchCharge = .92;
       game.ball.position.copy(anchor.position);
@@ -3854,6 +4422,29 @@
       const testAlien = game.enemies.find(enemy => enemy.type === 'scuttler');
       game.damageAlien(testAlien, 1, 'spin');
       check('alien-kill-path', !testAlien.alive && testAlien.hp === 0, { alive: testAlien.alive, hp: testAlien.hp });
+
+      const rewardRock = world.breakables.find(item => item.rewardPickup);
+      world.shatterBreakable(rewardRock, 1);
+      const nestTest = world.nests[0];
+      world.damageNest(nestTest, nestTest.maxHp, 1);
+      const chimeTest = world.moonChimes[0];
+      world.strikeChime(chimeTest);
+      check('destruction-reveals-real-rewards', rewardRock.rewardPickup.active && rewardRock.rewardPickup.group.visible
+        && !nestTest.alive && nestTest.drop.active && chimeTest.used && chimeTest.drop.active, {
+        rockDrop: rewardRock.rewardPickup.active, nestAlive: nestTest.alive, nestDrop: nestTest.drop.active,
+        chimeUsed: chimeTest.used, chimeDrop: chimeTest.drop.active,
+      });
+
+      game.restart();
+      game.started = true;
+      const padTest = world.launchPads[0];
+      game.player.position.copy(padTest.position);
+      game.player.velocity.set(0, 0, 0);
+      game.player.grounded = true;
+      game.stepWith(FIXED_DT, {});
+      check('launch-pad-restores-air-play', game.player.velocity.y >= padTest.impulse - .1 && game.player.jumpsUsed === 0 && !game.player.grounded, {
+        velocityY: game.player.velocity.y, impulse: padTest.impulse, jumpsUsed: game.player.jumpsUsed, grounded: game.player.grounded,
+      });
 
       game.restart();
       game.started = true;
@@ -3964,7 +4555,7 @@
   if (!AUTO_START) ui.startButton?.focus({ preventScroll: true });
 
   window.KICKBALL = Object.freeze({
-    version: '3.1.0-lunar-gesture',
+    version: '3.2.0-moon-playground',
     getState: () => game.getState(),
     getRenderStats: () => world.stats(),
     restart: () => game.restart(),

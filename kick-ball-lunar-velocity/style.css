@@ -1592,6 +1592,114 @@ body.touch-enabled #fullscreenButton {
   }
 }
 
+/* Gesture-first mobile pass: the playfield is the controller. The left half
+   owns movement, the right half owns camera + ball, and JUMP is the only
+   persistent gameplay button. */
+body.touch-enabled .touch-action--kick,
+body.touch-enabled .touch-action--snap,
+body.touch-enabled .touch-action--spin,
+body.touch-enabled .utility-controls,
+body.touch-enabled #controlsHint {
+  display: none !important;
+}
+
+body.touch-enabled .touch-zone > .touch-pad {
+  opacity: 0;
+}
+
+body.touch-enabled .touch-zone.is-active > .touch-pad {
+  opacity: .54;
+}
+
+body.touch-enabled .touch-zone.is-holding > .touch-pad {
+  opacity: .82;
+  border-color: rgba(255, 223, 112, .9);
+  box-shadow: inset 0 0 32px rgba(255, 214, 107, .12), 0 0 28px rgba(105, 239, 255, .18);
+}
+
+body.touch-enabled .touch-zone.is-holding .touchKnob {
+  border-color: rgba(255, 240, 164, .96);
+  background: radial-gradient(circle at 34% 27%, #fff9cf, rgba(255, 214, 107, .5) 32%, rgba(50, 27, 96, .74));
+}
+
+body.touch-enabled #lookPad > .touch-pad {
+  top: 62%;
+}
+
+body.touch-enabled #movePad > .touch-pad {
+  top: 72%;
+}
+
+body.touch-enabled .touch-pad > span {
+  bottom: -22px;
+  max-width: 44vw;
+  overflow: hidden;
+  color: rgba(225, 248, 255, .9);
+  font-size: 7px;
+  text-overflow: ellipsis;
+}
+
+body.touch-enabled .touch-action--jump {
+  right: max(18px, env(safe-area-inset-right)) !important;
+  bottom: max(22px, env(safe-area-inset-bottom)) !important;
+  width: 68px !important;
+  height: 68px !important;
+  border: 2px solid rgba(194, 171, 255, .78);
+  background: radial-gradient(circle at 32% 25%, rgba(245, 240, 255, .62), rgba(116, 81, 198, .58) 38%, rgba(8, 12, 24, .82));
+  box-shadow: 0 0 25px rgba(158, 116, 255, .22), 0 10px 30px rgba(0, 0, 0, .35);
+  color: #fff;
+  font-size: 9px !important;
+}
+
+body.touch-enabled .touch-pause {
+  z-index: 18;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  bottom: auto;
+  left: auto;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  border-color: rgba(154, 231, 243, .28);
+  background: rgba(3, 8, 16, .48);
+  color: rgba(225, 248, 255, .74);
+  font-size: 8px;
+}
+
+body.touch-enabled .style-panel {
+  right: max(52px, calc(env(safe-area-inset-right) + 52px));
+}
+
+body.touch-enabled[data-started="true"] .hud-brand {
+  opacity: .34;
+  transform: scale(.82);
+  transform-origin: left top;
+}
+
+body.touch-enabled #portraitHint {
+  display: none !important;
+}
+
+@media (orientation: portrait) {
+  body.touch-enabled #lookPad > .touch-pad {
+    top: 70%;
+  }
+
+  body.touch-enabled #movePad > .touch-pad {
+    top: 78%;
+  }
+
+  body.touch-enabled .objective {
+    top: max(58px, calc(env(safe-area-inset-top) + 54px));
+  }
+
+  body.touch-enabled .vitals-panel,
+  body.touch-enabled .ball-panel {
+    top: max(118px, calc(env(safe-area-inset-top) + 112px));
+  }
+}
+
 @media (orientation: portrait) {
   body.touch-enabled #portraitHint {
     display: block;
@@ -2018,4 +2126,66 @@ body.touch-enabled .touch-action--spin {
   #lookPad > .touch-pad {
     top: 36%;
   }
+}
+
+/* Final gesture-control authority. Keep this after the legacy responsive
+   rules so phone play has one action disc, not a cockpit. */
+body.touch-enabled .touch-action--kick,
+body.touch-enabled .touch-action--snap,
+body.touch-enabled .touch-action--spin,
+body.touch-enabled .utility-controls,
+body.touch-enabled #controlsHint {
+  display: none !important;
+}
+
+body.touch-enabled .touch-zone > .touch-pad { opacity: 0; }
+body.touch-enabled .touch-zone.is-active > .touch-pad { opacity: .54; }
+body.touch-enabled .touch-zone.is-holding > .touch-pad { opacity: .82; }
+
+body.touch-enabled #lookPad > .touch-pad { top: 62%; }
+body.touch-enabled #movePad > .touch-pad { top: 72%; }
+
+body.touch-enabled .touch-action--jump {
+  right: max(18px, env(safe-area-inset-right)) !important;
+  bottom: max(22px, env(safe-area-inset-bottom)) !important;
+  width: 68px !important;
+  height: 68px !important;
+}
+
+body.touch-enabled .touch-pause {
+  z-index: 18;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  bottom: auto;
+  left: auto;
+}
+
+body.touch-enabled #portraitHint { display: none !important; }
+
+body.touch-enabled[data-started="true"] .hud-brand,
+body.touch-enabled[data-started="true"] .style-panel {
+  display: none;
+}
+
+body.touch-enabled[data-started="true"] .ball-panel {
+  top: max(54px, calc(env(safe-area-inset-top) + 50px));
+}
+
+body.touch-enabled[data-started="true"] .objective {
+  top: max(18px, calc(env(safe-area-inset-top) + 16px));
+  width: min(64vw, 560px);
+}
+
+#crosshair[data-target="anchor"] {
+  filter: drop-shadow(0 0 9px rgba(105, 239, 255, .95));
+}
+
+#crosshair[data-target="anchor"] i,
+#crosshair[data-target="anchor"] b {
+  background: #ffd86f;
+}
+
+@media (orientation: portrait) {
+  body.touch-enabled #lookPad > .touch-pad { top: 70%; }
+  body.touch-enabled #movePad > .touch-pad { top: 78%; }
 }
