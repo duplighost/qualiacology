@@ -151,3 +151,7 @@
 
 # --- SUNDOG ---
 /sundog.html  /sundog/  301!
+
+# --- KICK BALL // LUNAR VELOCITY ---
+/kick-ball-lunar-velocity.html  /kick-ball-lunar-velocity/  301!
+/kick-ball                       /kick-ball-lunar-velocity/  302
