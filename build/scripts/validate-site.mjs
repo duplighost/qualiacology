@@ -140,7 +140,18 @@ for (const album of data.albums) {
   assert(sitemap.includes(`<loc>${data.site.origin}${route}</loc>`), `Album missing from sitemap: ${route}`);
 }
 
-assert(!read("_redirects").includes("/#music"), "Legacy music-to-home redirect remains");
+const redirects = read("_redirects");
+const netlifyConfig = read("netlify.toml");
+assert(!redirects.includes("/#music"), "Legacy music-to-home redirect remains");
+assert(
+  redirects.includes("/no-moon /no-moon/index.html 301!") &&
+    redirects.includes("/no-moon.html /no-moon/index.html 301!"),
+  "No Moon legacy redirects must resolve directly to the real game",
+);
+assert(
+  !/pretty_urls\s*=\s*true/i.test(netlifyConfig),
+  "Netlify pretty_urls creates a redirect loop between no-moon.html and no-moon/index.html",
+);
 assert(read("_headers").includes("application/manifest+json"), "Manifest MIME header is missing");
 assert(JSON.parse(read(join("assets", "site.webmanifest"))).name === "Qualiacology", "Manifest is invalid");
 

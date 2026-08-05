@@ -160,6 +160,12 @@ currentDeploy → `ready`) if available.
 - **Do NOT bypass the Git-connected workflow with a manual production deploy.**
   The Netlify CLI is not logged in. Push a feature branch, inspect the PR
   preview, and merge to `main` only after approval.
+- **Do not enable Netlify `pretty_urls` while both `no-moon.html` and
+  `no-moon/index.html` exist.** Netlify collapses the two routes and creates a
+  browser loop between `/no-moon/` and the legacy redirect stub. Keep the
+  explicit `/no-moon` and `/no-moon.html` redirects pointed directly at
+  `/no-moon/index.html`, then verify both legacy and canonical URLs on the
+  actual Deploy Preview.
 - Two agents/threads must never work this repo at the same time. Before
   editing: `git status` + `git pull`. If the tree is dirty with changes you
   didn't make, stop — another session is mid-flight.
