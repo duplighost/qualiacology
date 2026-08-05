@@ -461,6 +461,19 @@
       "metaDescription": "RELAY//ECLIPSE is a browser horde FPS about holding the lower map, fighting up the relay, and reaching the moon while the planets shoot at you.",
       "controls": "WASD/arrows move · mouse aim · LMB fire · RMB aim · Space jump · Shift/F dash · R reload · 1–4 weapons · touch",
       "actionLabel": "Play RELAY//ECLIPSE"
+    },
+    {
+      "slug": "potlight",
+      "title": "POTLIGHT — DOWNPOUR",
+      "descriptor": "2.5D storm action",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/potlight-card-clean.jpg",
+      "alt": "A yellow-coated figure slashing a rain-soaked enemy on a flooded blue-black street beneath sheets of rain",
+      "summary": "Fight your way home through a neighborhood drowning in weather. Every light and found object changes how you survive.",
+      "metaDescription": "POTLIGHT: DOWNPOUR is a tactile 2.5D action game about fighting through a neighborhood transformed by relentless rain and the care strangers left behind.",
+      "controls": "WASD/arrows move · mouse/J fire · Space/K blade · Shift/right-click dash · E read or pulse · Q Color Read · gamepad/touch",
+      "actionLabel": "Step into the downpour"
     }
   ],
   "albums": [
