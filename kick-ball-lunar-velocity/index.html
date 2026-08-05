@@ -125,25 +125,28 @@
       </nav>
     </section>
 
-    <div id="touchControls" aria-label="Touch game controls">
-      <div id="movePad" class="touch-pad" role="application" aria-label="Movement stick">
-        <div class="touch-pad__ticks" aria-hidden="true"></div>
-        <div class="touchKnob" aria-hidden="true"></div>
-        <span>MOVE</span>
+    <div id="touchControls" aria-label="Touch controls. Move anywhere on the left, drag anywhere on the right to look, and draw a loop to spin the ball.">
+      <div id="movePad" class="touch-zone touch-zone--move" role="application" aria-label="Floating movement control. Touch anywhere on the left and drag.">
+        <div class="touch-pad" aria-hidden="true">
+          <div class="touch-pad__ticks"></div>
+          <div class="touchKnob"></div>
+          <span>MOVE // FLOAT</span>
+        </div>
       </div>
-      <div id="lookPad" class="touch-pad" role="application" aria-label="Look and curve stick">
-        <div class="touch-pad__ticks" aria-hidden="true"></div>
-        <div class="touchKnob" aria-hidden="true"></div>
-        <span>LOOK // CURVE</span>
+      <div id="lookPad" class="touch-zone touch-zone--look" role="application" aria-label="Free look and spin control. Drag to look. Draw a clockwise or counterclockwise loop to spin the ball that direction.">
+        <div class="touch-pad" aria-hidden="true">
+          <div class="touch-pad__ticks"></div>
+          <div class="touchKnob"></div>
+          <span>DRAG LOOK // LOOP SPIN</span>
+        </div>
       </div>
       <button id="touchKick" class="touch-action touch-action--kick" type="button" aria-label="Charge and kick the ball"><b>KICK</b><small>HOLD</small></button>
       <button id="touchSnap" class="touch-action touch-action--snap" type="button" aria-label="Snap the ball home">SNAP</button>
       <button id="touchJump" class="touch-action touch-action--jump" type="button" aria-label="Jump or double jump">JUMP</button>
-      <button id="touchSpin" class="touch-action touch-action--spin" type="button" aria-label="Spin attack">SPIN</button>
       <button id="touchPause" class="touch-pause" type="button" aria-label="Pause game">PAUSE</button>
     </div>
 
-    <div id="portraitHint" role="status">PORTRAIT VECTOR // ROTATE FOR THE FULL HORIZON</div>
+    <div id="portraitHint" role="status">THUMBS FLOAT // RIGHT-DRAG LOOK // DRAW A LOOP TO SPIN</div>
 
     <section id="startOverlay" class="overlay start-overlay" role="dialog" aria-modal="true" aria-labelledby="startTitle" aria-describedby="startCopy">
       <div class="start-orbit start-orbit--one" aria-hidden="true"></div>

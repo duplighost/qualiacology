@@ -1868,3 +1868,154 @@ body.pointer-locked .home-link {
 @keyframes orbit-spin {
   to { transform: rotate(360deg); }
 }
+
+/* --------------------------------------------------------------------------
+   Mobile mastery controls
+
+   The whole left and right halves are input surfaces. Their rings are only
+   floating feedback, so a thumb never has to hunt for a fixed joystick.
+   -------------------------------------------------------------------------- */
+
+body.touch-enabled #hud {
+  z-index: 40;
+}
+
+.touch-zone {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+body.touch-enabled #movePad.touch-zone {
+  right: auto;
+  bottom: 0;
+  left: 0;
+  width: 50%;
+  height: auto;
+}
+
+body.touch-enabled #lookPad.touch-zone {
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: 50%;
+  height: auto;
+  border: 0;
+}
+
+.touch-zone > .touch-pad {
+  pointer-events: none;
+  opacity: 0.13;
+  transform: translate3d(-50%, -50%, 0);
+  transition: opacity 120ms ease, filter 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  will-change: left, top, opacity, filter;
+}
+
+#movePad > .touch-pad {
+  left: 50%;
+  top: 73%;
+}
+
+#lookPad > .touch-pad {
+  left: 50%;
+  top: 38%;
+  border-color: rgba(167, 139, 255, 0.38);
+}
+
+.touch-zone.is-active > .touch-pad {
+  opacity: 0.78;
+  filter: brightness(1.14);
+}
+
+.touch-zone.is-loop > .touch-pad {
+  border-color: rgba(255, 223, 112, 0.96);
+  box-shadow: inset 0 0 36px rgba(178, 116, 255, 0.18), 0 0 34px rgba(255, 213, 92, 0.34);
+  filter: brightness(1.55) saturate(1.35);
+}
+
+.touch-zone.is-loop .touchKnob {
+  border-color: #fff2a8;
+  background: radial-gradient(circle at 34% 27%, #fff, rgba(255, 214, 107, 0.68) 28%, rgba(127, 76, 210, 0.76));
+}
+
+body.touch-enabled .touch-action,
+body.touch-enabled .touch-pause {
+  z-index: 6;
+}
+
+body.touch-enabled .touch-action--kick {
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(22px, env(safe-area-inset-bottom));
+  width: 76px;
+  height: 76px;
+}
+
+body.touch-enabled .touch-action--snap {
+  right: calc(max(18px, env(safe-area-inset-right)) + 88px);
+  bottom: calc(max(22px, env(safe-area-inset-bottom)) + 12px);
+  width: 54px;
+  height: 54px;
+}
+
+body.touch-enabled .touch-action--jump {
+  right: max(22px, env(safe-area-inset-right));
+  bottom: calc(max(22px, env(safe-area-inset-bottom)) + 94px);
+  width: 60px;
+  height: 60px;
+}
+
+body.touch-enabled .touch-action--spin {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  #movePad > .touch-pad {
+    left: 50%;
+    top: 82%;
+  }
+
+  #lookPad > .touch-pad {
+    left: 50%;
+    top: 53%;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  body.touch-enabled .touch-action--kick {
+    right: max(18px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    width: 70px;
+    height: 70px;
+  }
+
+  body.touch-enabled .touch-action--snap {
+    right: calc(max(18px, env(safe-area-inset-right)) + 82px);
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 8px);
+    width: 50px;
+    height: 50px;
+  }
+
+  body.touch-enabled .touch-action--jump {
+    right: max(22px, env(safe-area-inset-right));
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 82px);
+    width: 56px;
+    height: 56px;
+  }
+
+  #movePad > .touch-pad {
+    top: 72%;
+  }
+
+  #lookPad > .touch-pad {
+    top: 36%;
+  }
+}
