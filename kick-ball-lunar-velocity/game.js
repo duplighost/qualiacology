@@ -29,6 +29,8 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
+  const GAME_VERSION = '3.3.0-release-polish';
+  const QUALITY_STORAGE_KEY = 'kickball-lunar-quality-v2';
   const FIXED_DT = 1 / 120;
   const TAU = Math.PI * 2;
   const UP = new T.Vector3(0, 1, 0);
@@ -36,7 +38,7 @@
 
   const ui = {};
   [
-    'hud', 'startOverlay', 'startButton', 'startKicker', 'startTitle', 'startCopy',
+    'hud', 'startOverlay', 'startButton', 'startActionHint', 'startKicker', 'startTitle', 'startCopy',
     'objectiveLabel', 'objectiveText', 'styleRank', 'styleFill', 'scoreValue',
     'bestValue', 'shieldPips', 'ballState', 'altitudeValue', 'jumpPips',
     'comboText', 'crosshair', 'hitMarker', 'damageVignette', 'chargeUI',
@@ -214,7 +216,7 @@
     const winding = Math.abs(turn);
     const closureLimit = Math.max(34, Math.min(48, Math.max(spanX, spanY) * .78));
     const matched = path >= 105 && winding >= 5.15 && spanX >= 30 && spanY >= 30
-      && elapsed >= 100 && elapsed <= 950 && closure <= closureLimit;
+      && elapsed >= 100 && elapsed <= 1350 && closure <= closureLimit;
     const speed = elapsed > 0 ? path / elapsed : 0;
     const power = matched ? clamp(.82 + (winding - 5.15) * .16 + Math.max(0, speed - .18) * .42, .82, 1.25) : 0;
     return { matched, direction: matched ? (turn >= 0 ? 1 : -1) : 0, power, path, turn, elapsed, closure, closureLimit, spanX, spanY };
@@ -227,7 +229,7 @@
     let bestScore = Infinity;
     for (let start = 0; start <= points.length - 7; start++) {
       const elapsed = lastTime - points[start].t;
-      if (elapsed > 950) continue;
+      if (elapsed > 1350) continue;
       if (elapsed < 100) break;
       const result = analyzeLoopGesture(points.slice(start));
       if (!result.matched) continue;
@@ -368,7 +370,7 @@
       const previous = this.gesturePoints[this.gesturePoints.length - 1];
       if (previous && Math.hypot(x - previous.x, y - previous.y) < 2.5) return;
       this.gesturePoints.push({ x, y, t });
-      while (this.gesturePoints.length > 8 && t - this.gesturePoints[0].t > 1150) this.gesturePoints.shift();
+      while (this.gesturePoints.length > 8 && t - this.gesturePoints[0].t > 1500) this.gesturePoints.shift();
       if (this.gesturePoints.length > 96) this.gesturePoints.shift();
       // Once a stationary touch has committed to charge/pull, it cannot be
       // reclassified as orbit halfway through the same gesture. A loop begins
@@ -567,6 +569,7 @@
     }
     setTouchMode(enabled) {
       const next = FORCE_TOUCH || !!enabled;
+      if (ui.startActionHint) ui.startActionHint.textContent = next ? 'TAP TO ENTER' : 'CLICK TO LOCK VIEW';
       if (this.touchEnabled === next && document.body.classList.contains('touch-enabled') === next) return;
       this.touchEnabled = next;
       document.body.classList.toggle('touch-enabled', next);
@@ -1057,7 +1060,7 @@
       this.renderer.setClearColor(0x000005, 1);
       this.qualityOrder = ['LOW', 'MED', 'HIGH'];
       let rememberedQuality = 'HIGH';
-      try { rememberedQuality = localStorage.getItem('kickball-lunar-quality') || 'HIGH'; } catch (_) {}
+      try { rememberedQuality = localStorage.getItem(QUALITY_STORAGE_KEY) || 'HIGH'; } catch (_) {}
       const requested = (params.get('quality') || rememberedQuality).toUpperCase();
       this.quality = this.qualityOrder.includes(requested) ? requested : 'HIGH';
       this.frameSamples = [];
@@ -2021,9 +2024,9 @@
       this.breakableMeshes?.forEach(mesh => { mesh.castShadow = level === 'HIGH'; });
       if (ui.qualityButton) ui.qualityButton.textContent = `VISUAL ${level}`;
       if (persist) {
-        try { localStorage.setItem('kickball-lunar-quality', level); } catch (_) {}
-        this.resize();
+        try { localStorage.setItem(QUALITY_STORAGE_KEY, level); } catch (_) {}
       }
+      this.resize();
     }
     cycleQuality() {
       const index = this.qualityOrder.indexOf(this.quality);
@@ -2141,6 +2144,12 @@
     }
     noteFrame(delta) {
       if (TEST_MODE || this.quality === 'LOW') return;
+      // Background tabs, launch hitches, and debugger pauses are not evidence
+      // that the player's GPU needs a permanent visual downgrade.
+      if (document.hidden || delta <= 0 || delta > .1) {
+        this.frameSamples.length = 0;
+        return;
+      }
       this.autoReductionCooldown = Math.max(0, this.autoReductionCooldown - delta);
       if (this.autoReductionCooldown > 0) return;
       this.frameSamples.push(delta);
@@ -2150,7 +2159,7 @@
         const p80 = sorted[Math.floor(sorted.length * .8)];
         if (p80 > .032) {
           const next = this.quality === 'HIGH' ? 'MED' : 'LOW';
-          this.applyQuality(next);
+          this.applyQuality(next, false);
           this.autoReduced = true;
           this.autoReductionCooldown = 3;
           this.frameSamples.length = 0;
@@ -3031,7 +3040,7 @@
           ball.mode = 'returning';
           ball.returnTime = 0;
           ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
-          this.announce('TETHER RELEASED // HOLD RIGHT TO PULL', '#83efff');
+          this.announce('TETHER TIMED OUT // KICK THE SOCKET AGAIN', '#83efff');
         }
       }
     }
@@ -3232,7 +3241,7 @@
           this.addStyle(12, 520, 'ANCHORED', '#83efff');
           world.particles.burst(anchor.position, 0x76efff, 26, 10, .72, .2);
           audio.impact(.9, 'anchor');
-          this.announce('TETHER LOCKED // HOLD RIGHT TO PULL', '#83efff');
+          this.announce(input.touchEnabled ? 'TETHER LOCKED // HOLD THE RIGHT SIDE TO PULL' : 'TETHER LOCKED // HOLD RMB TO PULL', '#83efff');
         }
       }
 
@@ -3541,31 +3550,37 @@
       const basinAlive = this.enemies.filter(enemy => !enemy.summit && enemy.alive && enemy.type === 'scuttler').length;
       const anchorsUsed = world.anchors.filter(anchor => anchor.used).length;
       const summitAlive = this.enemies.filter(enemy => enemy.summit && enemy.alive).length;
+      const inputKind = input.touchEnabled ? 'touch' : 'pointer';
       let key, label, text, stage;
       if (!this.started) {
         key = 'start'; stage = 0;
         label = 'MARE IMBRIUM // DROP ZONE';
         text = 'Wake the ball. Break the occupation.';
       } else if (basinAlive > 0) {
-        key = `basin-${basinAlive}`; stage = 1;
+        const teachOrbit = basinAlive < 4 && this.stats.spins === 0;
+        key = `basin-${basinAlive}-${teachOrbit ? 'orbit' : 'kick'}-${inputKind}`; stage = 1;
         label = 'LANDING CRATER // CONTACT';
-        text = `${basinAlive} SKITTER${basinAlive === 1 ? '' : 'S'} // TAP KICK // TAP AGAIN TO CALL`;
+        text = teachOrbit
+          ? (input.touchEnabled ? 'DRAW A RIGHT-THUMB LOOP // ORBIT-SMASH THE CROWD' : 'BALL HOME // RMB ORBIT-SMASHES EVERYTHING CLOSE')
+          : (input.touchEnabled
+            ? `${basinAlive} SKITTER${basinAlive === 1 ? '' : 'S'} // RIGHT TAP KICKS // NEXT TAP CALLS`
+            : `${basinAlive} SKITTER${basinAlive === 1 ? '' : 'S'} // LMB KICKS // RMB CALLS`);
       } else if (this.shieldEnemy.alive) {
         key = `shield-${this.shieldEnemy.hp}`; stage = 2;
         label = 'ORPHEUS GATE // CARAPACE SENTINEL';
         text = `Frontal kicks are armor food. Throw wide, turn, and call the return through its gold back. HP ${this.shieldEnemy.hp}/${this.shieldEnemy.maxHp}.`;
       } else if (anchorsUsed < world.anchors.length) {
-        key = `climb-${anchorsUsed}`; stage = 3;
+        key = `climb-${anchorsUsed}-${inputKind}`; stage = 3;
         label = 'ORPHEUS RIM // SIXTY-METRE ASCENT';
-        text = `Kick the next cyan socket, then hold right to ride the visible tether. Anchor ${anchorsUsed + 1}/${world.anchors.length}.`;
+        text = `Kick the next cyan socket, then ${input.touchEnabled ? 'hold the right side' : 'hold RMB'} to ride the visible tether. Anchor ${anchorsUsed + 1}/${world.anchors.length}.`;
       } else if (world.fracture.active) {
         key = 'fracture'; stage = 4;
         label = 'CROWN FAULT // FRACTURE SEAM';
         text = 'The violet wall only breaks for a full-charge OUTBOUND impact. Put your whole moon into it.';
       } else if (summitAlive > 0) {
-        key = `crown-${summitAlive}-${this.warden.hp}`; stage = 5;
+        key = `crown-${summitAlive}-${this.warden.hp}-${inputKind}`; stage = 5;
         label = 'OBSERVATORY CROWN // ALIEN WARDEN';
-        text = `${summitAlive} alien${summitAlive === 1 ? '' : 's'} remain. The Warden catches frontal kicks; hold right to rip the ball free.`;
+        text = `${summitAlive} alien${summitAlive === 1 ? '' : 's'} remain. The Warden catches frontal kicks; ${input.touchEnabled ? 'hold the right side' : 'hold RMB'} to rip the ball free.`;
       } else if (!this.won) {
         key = 'goal'; stage = 6;
         label = 'APOGEE APERTURE // OPEN';
@@ -3794,7 +3809,7 @@
     }
     getState() {
       return {
-        version: '3.2.0-moon-playground',
+        version: GAME_VERSION,
         player: {
           x: this.player.position.x, y: this.player.position.y, z: this.player.position.z,
           vx: this.player.velocity.x, vy: this.player.velocity.y, vz: this.player.velocity.z,
@@ -3876,6 +3891,20 @@
     try {
       check('three-runtime-r161', T.REVISION === '161', T.REVISION);
       check('webgl-renderer-started', !!world.renderer.getContext(), world.stats());
+      const startingQuality = world.quality;
+      const transientQuality = startingQuality === 'HIGH' ? 'MED' : 'HIGH';
+      let storedQualityBefore = null;
+      let storedQualityAfter = null;
+      try { storedQualityBefore = localStorage.getItem(QUALITY_STORAGE_KEY); } catch (_) {}
+      world.applyQuality(transientQuality, false);
+      const transientQualityStats = world.stats();
+      try { storedQualityAfter = localStorage.getItem(QUALITY_STORAGE_KEY); } catch (_) {}
+      world.applyQuality(startingQuality, false);
+      check('automatic-quality-change-is-session-only-and-resizes', transientQualityStats.quality === transientQuality
+        && transientQualityStats.renderScale === (transientQuality === 'HIGH' ? .9 : .7)
+        && storedQualityAfter === storedQualityBefore, {
+        startingQuality, transientQuality, transientQualityStats, storedQualityBefore, storedQualityAfter,
+      });
       check('world-materials-keep-depth-test', world.materials.black.depthTest && world.materials.gold.depthTest, {
         black: world.materials.black.depthTest, gold: world.materials.gold.depthTest,
       });
@@ -3961,6 +3990,32 @@
       const touchButtons = [...document.querySelectorAll('#touchControls button')].map(button => button.id);
       check('touch-has-one-gameplay-button', touchButtons.length === 2 && touchButtons.includes('touchJump')
         && touchButtons.includes('touchPause') && !document.getElementById('touchKick') && !document.getElementById('touchSnap'), touchButtons);
+      const touchStartHint = ui.startActionHint?.textContent;
+      input.setTouchMode(false);
+      const pointerStartHint = ui.startActionHint?.textContent;
+      input.setTouchMode(true);
+      check('start-copy-matches-current-input', touchStartHint === 'TAP TO ENTER'
+        && pointerStartHint === 'CLICK TO LOCK VIEW', { touchStartHint, pointerStartHint });
+
+      game.restart();
+      game.updateObjective(true);
+      const touchKickObjective = ui.objectiveText?.textContent || '';
+      const orbitGuideTarget = game.enemies.find(enemy => !enemy.summit && enemy.type === 'scuttler' && enemy.alive);
+      orbitGuideTarget.alive = false;
+      orbitGuideTarget.visual.group.visible = false;
+      game.updateObjective(true);
+      const touchOrbitObjective = ui.objectiveText?.textContent || '';
+      input.setTouchMode(false);
+      game.updateObjective(true);
+      const pointerOrbitObjective = ui.objectiveText?.textContent || '';
+      check('objectives-teach-device-controls-and-orbit-purpose', touchKickObjective.includes('RIGHT TAP KICKS')
+        && touchOrbitObjective.includes('RIGHT-THUMB LOOP') && touchOrbitObjective.includes('ORBIT-SMASH')
+        && pointerOrbitObjective.includes('RMB ORBIT-SMASHES'), {
+        touchKickObjective, touchOrbitObjective, pointerOrbitObjective,
+      });
+      game.restart();
+      input.setTouchMode(true);
+
       game.ball.mode = 'ready';
       input.lookStick.tapPulse = true;
       const touchHomeTap = { ...input.poll() };
@@ -3992,7 +4047,7 @@
       });
       const clockwiseLoop = analyzeLoopGesture(makeLoop(1));
       const counterLoop = analyzeLoopGesture(makeLoop(-1));
-      const slowLoop = analyzeLoopGesture(makeLoop(1, 40));
+      const deliberateSlowLoop = analyzeLoopGesture(makeLoop(1, 40));
       const lookHoldThenLoop = [
         ...Array.from({ length: 61 }, (_, index) => ({ x: 111 + index * 2, y: 180, t: index * 20 })),
         ...makeLoop(-1).map(point => ({ ...point, t: point.t + 1220 })),
@@ -4054,7 +4109,8 @@
       check('touch-loop-rejects-ordinary-swipe', !ordinarySwipe.matched, ordinarySwipe);
       check('touch-loop-rejects-common-aim-corrections', !cHook.matched && !sCorrection.matched
         && !horizontalScrub.matched, { cHook, sCorrection, horizontalScrub });
-      check('touch-loop-rejects-slow-circle', !slowLoop.matched && slowLoop.elapsed > 950, slowLoop);
+      check('touch-loop-allows-deliberate-slow-circle', deliberateSlowLoop.matched
+        && deliberateSlowLoop.elapsed > 950 && deliberateSlowLoop.elapsed <= 1350, deliberateSlowLoop);
 
       input.lookStick.loopPulse = true;
       input.lookStick.loopDirection = -1;
@@ -4539,11 +4595,12 @@
     if (game.started && !game.paused && !input.touchEnabled && !TEST_MODE && document.pointerLockElement !== canvas) requestGamePointerLock();
   });
   document.addEventListener('visibilitychange', () => {
+    world?.frameSamples?.splice(0);
+    accumulator = 0;
+    lastFrame = performance.now();
     if (document.hidden) {
       audio.recall(false, 0);
       input.resetTransient();
-      accumulator = 0;
-      lastFrame = performance.now();
     }
   });
 
@@ -4555,7 +4612,7 @@
   if (!AUTO_START) ui.startButton?.focus({ preventScroll: true });
 
   window.KICKBALL = Object.freeze({
-    version: '3.2.0-moon-playground',
+    version: GAME_VERSION,
     getState: () => game.getState(),
     getRenderStats: () => world.stats(),
     restart: () => game.restart(),

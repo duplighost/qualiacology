@@ -1635,7 +1635,7 @@ body.touch-enabled .touch-pad > span {
   max-width: 44vw;
   overflow: hidden;
   color: rgba(225, 248, 255, .9);
-  font-size: 7px;
+  font-size: 9px;
   text-overflow: ellipsis;
 }
 
