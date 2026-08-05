@@ -170,7 +170,7 @@
     Object.assign(game,{time:0,runTime:0,stage:0,phase:'intro',waveIndex:0,wavePending:.8,stageKills:0,checkpoint:0,score:0,style:0,stylePeak:0,comboTimer:0,kills:0,perfects:0,shots:0,hits:0,damageTaken:0,pie:false,optionalUsed:false,completed:false,boss:null,bossMaxHp:0,hitstop:0,weatherLevel:.42,lastHistorySample:0,lastEchoTime:0,uiClock:0});game.perf.samples.length=0;game.perf.longFrames=0;game.perf.maxMs=0;
     game.gatesOpen.clear();game.abilities.clear();game.careRead=[];game.enemies.length=0;game.bullets.length=0;game.pickups.length=0;game.particles.length=0;game.rings.length=0;game.slashes.length=0;game.chains.length=0;game.telegraphs.length=0;game.afterimages.length=0;game.decoys.length=0;game.echoShots.length=0;game.scheduled.length=0;game.history.clear();
     game.player=makePlayer();game.companion=null;game.routePath=[];game.routeClock=0;game.routeTargetKey='';game.qaInvulnerable=QA;game.tutorial={move:false,blade:false,dash:false,pulse:false,focus:false,echo:false};
-    beginStage(0,true);setMode('play');Audio.setStage(0);Audio.setIntensity(.25);showBanner(D.STAGES[0].kicker,D.STAGES[0].name,'KEEP MOVING');const touchIntro=(COARSE_POINTER.matches||matchMedia('(pointer:coarse)').matches)&&D.TUTORIALS.moveTouch;showToast('CONTROL IS YOURS',touchIntro||D.TUTORIALS.move,3.8);
+    beginStage(0,true);setMode('play');Audio.setStage(0);Audio.setIntensity(.25);showBanner(D.STAGES[0].kicker,D.STAGES[0].name,'KEEP MOVING');const touchIntro=(COARSE_POINTER.matches||matchMedia('(pointer:coarse)').matches)&&D.TUTORIALS.moveTouch;scheduleEvent(1.35,()=>showToast('CONTROL IS YOURS',touchIntro||D.TUTORIALS.move,3.8),game.player,false);
   }
 
   function restartCheckpoint(){
