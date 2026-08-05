@@ -7,11 +7,14 @@
 // up; a full-speed jump crosses ~6-7 tiles; dash-jump at velocity
 // tier 1+ crosses ~9. Gaps are sized against those numbers.
 //
-// Grid legend: '#' solid  '=' one-way platform  '^' spikes
-//              '|' chain decor  'G' toll-ghost platform  ' ' air
+// Grid legend: '#' solid  'B' breakable solid  '=' one-way platform
+//              '^' spikes  '|' chain decor  'G' ward-ghost platform
+//              ' ' air
 //
-// 'G' tiles are spectral shortcuts that only hold weight while the
-// Vesper Toll rings (level.tollActive, driven by the game each frame).
+// 'G' tiles are spectral shortcuts grouped by a nearby Ward Bell. A group
+// becomes solid when the player strikes its bell and remains so for that life.
+// The distant Vesper Toll may still drive ambience / enemies through
+// level.tollActive, but it no longer owns platform collision.
 'use strict';
 
 const TW = 16;             // tile size in px
@@ -25,6 +28,8 @@ class LevelBuilder {
     this.spawns = [];
     this.zones = [];
     this.interiors = [];
+    this.ghostGroups = new Map();       // "tx,ty" -> Ward Bell group id
+    this.breakableFaces = [];           // authored connected B-tile faces
   }
   fill(x, y, w, h, ch) {
     for (let j = y; j < y + h; j++)
@@ -33,6 +38,24 @@ class LevelBuilder {
   }
   clear(x, y, w, h) { this.fill(x, y, w, h, ' '); }
   put(x, y, ch) { if (x >= 0 && x < this.w && y >= 0 && y < this.h) this.g[y][x] = ch; }
+  ghostFill(group, x, y, w, h) {
+    this.fill(x, y, w, h, 'G');
+    for (let j = y; j < y + h; j++)
+      for (let i = x; i < x + w; i++)
+        if (i >= 0 && i < this.w && j >= 0 && j < this.h)
+          this.ghostGroups.set(i + ',' + j, group);
+  }
+  wardBell(group, tx, ty, props) {
+    this.spawn('wardbell', tx, ty, Object.assign({ group }, props || {}));
+  }
+  breakableFace(id, x, y, w, h, props) {
+    const tiles = [];
+    this.fill(x, y, w, h, 'B');
+    for (let j = y; j < y + h; j++)
+      for (let i = x; i < x + w; i++)
+        if (i >= 0 && i < this.w && j >= 0 && j < this.h) tiles.push({ x: i, y: j });
+    this.breakableFaces.push(Object.assign({ id, tiles }, props || {}));
+  }
   // spawn(type, tx, ty): ty is the tile the entity's FEET occupy (the
   // air tile directly above its floor), except fliers which float.
   spawn(type, tx, ty, props) { this.spawns.push(Object.assign({ type, tx, ty }, props || {})); }
@@ -70,8 +93,17 @@ function buildLevel() {
   L.spawn('wretch', 28, 25); L.spawn('wretch', 47, 25); L.spawn('wretch', 63, 25);
   L.spawn('check', 84, 25, { whisper: 'THE BELLKEEPER IS DEAD. THE NIGHT FORGOT TO END.' });
   L.spawn('signup', 87, 25); L.spawn('signdown', 90, 27);
-  // toll-ghost arcs over the three pits: sprint straight through when it rings
-  L.fill(33, 22, 5, 1, 'G'); L.fill(51, 21, 5, 1, 'G'); L.fill(69, 22, 5, 1, 'G');
+  // A permanent upper micro-route teaches that height is optional: every miss
+  // lands on the main walk, while the Ward Bell ledges remain faster lines.
+  L.fill(29, 20, 5, 1, '='); L.fill(47, 19, 5, 1, '=');
+  L.fill(64, 18, 5, 1, '='); L.fill(75, 20, 6, 1, '=');
+  // Ward groups: RAMPART_WEST / MID / EAST each owns one ghost bridge.
+  L.ghostFill('RAMPART_WEST', 33, 22, 5, 1);
+  L.ghostFill('RAMPART_MID', 51, 21, 5, 1);
+  L.ghostFill('RAMPART_EAST', 69, 22, 5, 1);
+  L.wardBell('RAMPART_WEST', 32, 25, { whisper: 'STRIKE THE WARD. THE DEAD WILL HOLD.' });
+  L.wardBell('RAMPART_MID', 50, 25);
+  L.wardBell('RAMPART_EAST', 68, 25);
   L.zone(0, 0, 89, 29, 'THE RAMPARTS', null);
 
   // ══ B · SPLIT 1 (x 90-189): ROOFTOPS over CATACOMBS ═══════════════
@@ -125,8 +157,10 @@ function buildLevel() {
   L.fill(184, 28, 16, 2, '#');
   L.spawn('check', 192, 27, { whisper: 'EVERY UNRUNG HOUR, THE DEAD GROW BOLDER.' });
   L.spawn('candle', 188, 27); L.spawn('candle', 197, 27);
-  // toll-ghost stair out of the plaza into the nave's upper reaches
-  L.fill(186, 20, 4, 1, 'G'); L.fill(192, 17, 4, 1, 'G'); L.fill(198, 14, 4, 1, 'G'); L.fill(204, 12, 5, 1, 'G');
+  // Ward group PLAZA_RISE: optional stair from the converged plaza back to height.
+  L.ghostFill('PLAZA_RISE', 186, 20, 4, 1); L.ghostFill('PLAZA_RISE', 192, 17, 4, 1);
+  L.ghostFill('PLAZA_RISE', 198, 14, 4, 1); L.ghostFill('PLAZA_RISE', 204, 12, 5, 1);
+  L.wardBell('PLAZA_RISE', 185, 27, { whisper: 'ONE STRIKE. ONE ROAD HELD FAST.' });
   L.zone(184, 0, 199, 29, 'BELL PLAZA', null);
 
   // ══ C · THE NAVE (x 200-249) — interior, vertical play ════════════
@@ -137,6 +171,10 @@ function buildLevel() {
   // balconies
   L.fill(204, 23, 6, 1, '='); L.fill(212, 19, 6, 1, '='); L.fill(220, 23, 8, 1, '=');
   L.fill(230, 16, 6, 1, '='); L.fill(238, 20, 6, 1, '='); L.fill(244, 24, 4, 1, '=');
+  // Nave crosslinks make the high heart route reachable without an enemy pogo.
+  // They are one-way, so dropping always returns to the combat floor.
+  L.fill(226, 20, 4, 1, '='); L.fill(236, 17, 4, 1, '=');
+  L.fill(246, 21, 4, 1, '=');
   // floor pillars
   L.fill(210, 25, 2, 3, '#'); L.fill(226, 25, 2, 3, '#'); L.fill(242, 25, 2, 3, '#');
   L.fill(222, 27, 3, 1, '^');
@@ -177,9 +215,12 @@ function buildLevel() {
   L.spawn('heart', 278, 26); L.spawn('heart', 314, 26);
   for (const x of [254, 272, 290, 316, 334]) L.spawn('candle', x, 27);
   for (const x of [261, 287, 311, 331]) L.spawn('bones', x, 27);
-  // toll-ghost express lane over the crypt furniture
-  L.fill(264, 20, 4, 1, 'G'); L.fill(272, 21, 4, 1, 'G'); L.fill(280, 20, 4, 1, 'G');
-  L.fill(288, 21, 4, 1, 'G'); L.fill(296, 20, 4, 1, 'G'); L.fill(304, 21, 4, 1, 'G'); L.fill(312, 20, 4, 1, 'G');
+  // Ward group CRYPT_CHOIR: one player-triggered express lane over the furniture.
+  L.ghostFill('CRYPT_CHOIR', 264, 20, 4, 1); L.ghostFill('CRYPT_CHOIR', 272, 21, 4, 1);
+  L.ghostFill('CRYPT_CHOIR', 280, 20, 4, 1); L.ghostFill('CRYPT_CHOIR', 288, 21, 4, 1);
+  L.ghostFill('CRYPT_CHOIR', 296, 20, 4, 1); L.ghostFill('CRYPT_CHOIR', 304, 21, 4, 1);
+  L.ghostFill('CRYPT_CHOIR', 312, 20, 4, 1);
+  L.wardBell('CRYPT_CHOIR', 255, 27, { whisper: 'WAKE THE CHOIR. RUN ABOVE ITS TEETH.' });
   L.spawn('signup', 251, 27); L.spawn('signdown', 254, 27);
   L.zone(250, 0, 341, 16, 'THE RAFTERS', 'split2');
   L.zone(250, 17, 341, 29, 'THE CRYPT', 'split2');
@@ -187,20 +228,40 @@ function buildLevel() {
   // ══ E · THE ASCENT + THE VESPER BELL (x 342-419) ══════════════════
   L.fill(342, 28, 76, 2, '#');                  // convergence shaft floor
   L.spawn('check', 352, 27, { whisper: 'THE SHADE KEEPS YOUR BELL. GO TAKE IT BACK.' });
-  // toll-ghost ramp that shortcuts the staircase
-  L.fill(368, 19, 4, 1, 'G'); L.fill(377, 15, 4, 1, 'G'); L.fill(386, 12, 4, 1, 'G'); L.fill(394, 10, 4, 1, 'G');
+  // Ward group ASCENT_PEAL: the fastest line, activated before the first step.
+  L.ghostFill('ASCENT_PEAL', 368, 19, 4, 1); L.ghostFill('ASCENT_PEAL', 377, 15, 4, 1);
+  L.ghostFill('ASCENT_PEAL', 386, 12, 4, 1); L.ghostFill('ASCENT_PEAL', 394, 10, 4, 1);
+  L.wardBell('ASCENT_PEAL', 356, 27, { whisper: 'RING YOUR OWN ROAD INTO BEING.' });
   const steps = [[358, 26], [364, 24], [370, 22], [376, 20], [382, 18], [388, 16], [394, 14]];
   for (const [x, top] of steps) L.fill(x, top, 6, 30 - top, '#');
+  // A middle line crosses the solid stair in short, safe jumps. Missing it
+  // drops onto the staircase rather than into damage or a reset.
+  L.fill(361, 22, 5, 1, '='); L.fill(367, 21, 5, 1, '=');
+  L.fill(373, 18, 5, 1, '='); L.fill(380, 16, 5, 1, '=');
+  L.fill(387, 14, 5, 1, '='); L.fill(394, 12, 5, 1, '=');
   L.fill(400, 12, 20, 18, '#');                 // summit platform
   for (const [x, top] of steps) L.spawn('candle', x + 2, top - 1);
   L.spawn('wretch', 366, 23); L.spawn('wretch', 378, 19); L.spawn('wretch', 390, 15);
   L.spawn('bat', 372, 16); L.spawn('bat', 386, 12);
-  L.spawn('garg', 396, 13);   // feet on step7 (top row 14)
+  L.spawn('garg', 384, 17);   // moved off the boss-door checkpoint; feet on step5
   for (const [x, y] of [[360, 24], [366, 22], [372, 20], [378, 18], [384, 16], [390, 14], [396, 12]])
     L.spawn('spark', x, y);
+  // Boss-door lantern: x400 is on the summit and is touched before the x402
+  // trigger. Explicit pixel respawn metadata avoids the legacy 20px-player /
+  // 16px-lantern floor overlap while older runtimes can still use tx / ty.
+  L.spawn('check', 400, 11, {
+    whisper: 'NO MORE STAIRS. ONLY THE BELLKEEPER.',
+    bossDoor: true,
+    respawnX: 400 * TW + 3,
+    respawnY: 12 * TW - 20,
+  });
   // belfry: two posts and a beam; the bell entity hangs beneath
   L.fill(404, 9, 2, 3, '#'); L.fill(414, 9, 2, 3, '#');
   L.fill(404, 8, 12, 1, '#');
+  // Classic far-right wall chicken. x419 remains an unbreakable world seal.
+  L.breakableFace('BOSS_CHICKEN_WALL', 418, 10, 1, 2, {
+    hiddenSpawn: { type: 'chicken', tx: 418, ty: 11, heal: 3 },
+  });
   L.spawn('bell', 409.5, 9);   // centered under the 404-415 beam
   L.zone(342, 0, 399, 29, 'THE ASCENT', null);
   L.zone(400, 0, 419, 29, 'THE VESPER BELL', null);
@@ -243,7 +304,9 @@ function buildLevelTwo() {
   L.fill(84, 26, 3, 1, '^');                    // small spike hop
   // spiked pit — jumpable at speed; the ghost arc is the faster line
   L.clear(104, 27, 6, 2); L.fill(104, 28, 6, 1, '^');
-  L.fill(104, 24, 6, 1, 'G');                   // toll shortcut over the pit
+  // Ward group OSSUARY_ARC: a player-triggered shortcut over the pit.
+  L.ghostFill('OSSUARY_ARC', 104, 24, 6, 1);
+  L.wardBell('OSSUARY_ARC', 101, 26, { whisper: 'STRIKE. CROSS. DO NOT WAIT.' });
   L.spawn('check', 122, 26, { whisper: 'IT GAINS WHEN THE BELL RINGS. SPEND THE TOLL AND GO.' });
   // pillars & hanging fangs
   L.fill(130, 24, 2, 3, '#'); L.fill(146, 24, 2, 3, '#'); L.fill(160, 24, 2, 3, '#');
@@ -269,7 +332,9 @@ function buildLevelTwo() {
   L.fill(220, 20, 6, 1, '='); L.fill(232, 23, 6, 1, '=');
   // a jumpable spiked pit with a ghost shortcut over it
   L.clear(244, 27, 6, 2); L.fill(244, 28, 6, 1, '^');
-  L.fill(245, 24, 5, 1, 'G');
+  // Ward group DROWNED_CROSSING: an optional high line over the flooded pit.
+  L.ghostFill('DROWNED_CROSSING', 245, 24, 5, 1);
+  L.wardBell('DROWNED_CROSSING', 242, 26, { whisper: 'THE DROWNED STILL ANSWER A BELL.' });
   L.fill(210, 4, 1, 6, '|'); L.fill(240, 4, 1, 7, '|');
   L.spawn('garg', 204, 16); L.spawn('garg', 258, 26);
   L.spawn('bat', 216, 12); L.spawn('bat', 236, 10);
@@ -317,30 +382,121 @@ const LEVELS = [
 function finalizeLevel(L, meta) {
   const W = L.w, H = L.h;
   const rows = L.g.map(r => r.join(''));
+  const ghostGroupByTile = new Map(L.ghostGroups);
+  const bellGroupSet = new Set();
   const ghosts = [];
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++)
-      if (rows[y][x] === 'G') ghosts.push({ x, y });
+      if (rows[y][x] === 'G') {
+        const group = ghostGroupByTile.get(x + ',' + y) || 'LEGACY_GHOSTS';
+        ghostGroupByTile.set(x + ',' + y, group);
+        bellGroupSet.add(group);
+        ghosts.push({ x, y, group });
+      }
+
+  const breakables = L.breakableFaces.map(face => ({
+    id: face.id,
+    tiles: face.tiles.map(t => ({ x: t.x, y: t.y })),
+    hiddenSpawn: face.hiddenSpawn ? Object.assign({}, face.hiddenSpawn) : null,
+  }));
+  const breakableByTile = new Map();
+  for (const face of breakables)
+    for (const tile of face.tiles) breakableByTile.set(tile.x + ',' + tile.y, face);
+  const activeBellGroups = new Set();
+  const brokenTiles = new Set();
+
   return {
     id: meta.id, name: meta.name, sub: meta.sub,
     bossAt: meta.bossAt || null,
     hunter: meta.hunter || null,          // Night II: { startX } chaser
-    ghosts,
+    ghosts,                               // [{ x, y, group }]
+    bellGroups: Array.from(bellGroupSet),
+    ghostGroupByTile,
+    activeBellGroups,
+    breakables,
+    hiddenSpawns: breakables.filter(f => f.hiddenSpawn).map(f => Object.assign({ faceId: f.id }, f.hiddenSpawn)),
+    brokenTiles,
     w: W, h: H, rows,
     spawns: L.spawns, zones: L.zones, interiors: L.interiors,
     playerStart: meta.playerStart,
-    tileAt(tx, ty) {
+    inBounds(tx, ty) {
+      return tx >= 0 && tx < this.w && ty >= 0 && ty < this.h;
+    },
+    rawTileAt(tx, ty) {
       if (tx < 0 || tx >= this.w) return '#';
       if (ty >= this.h) return '#';
       if (ty < 0) return ' ';
       return this.rows[ty][tx];
     },
+    tileAt(tx, ty) {
+      const ch = this.rawTileAt(tx, ty);
+      if (ch === 'B' && this.brokenTiles.has(tx + ',' + ty)) return ' ';
+      return ch;
+    },
+    // Retained for the atmospheric Toll and the Night II Hound. It deliberately
+    // no longer changes G-tile collision.
     tollActive: false,
-    solidAt(tx, ty) { return this.tileAt(tx, ty) === '#'; },
+    ghostGroupAt(tx, ty) { return this.ghostGroupByTile.get(tx + ',' + ty) || null; },
+    isGhostActiveAt(tx, ty) {
+      const group = this.ghostGroupAt(tx, ty);
+      return !!group && this.activeBellGroups.has(group);
+    },
+    activateBellGroup(group) {
+      if (!group || !bellGroupSet.has(group)) return false;
+      const wasActive = this.activeBellGroups.has(group);
+      this.activeBellGroups.add(group);
+      return !wasActive;
+    },
+    resetBellGroups() { this.activeBellGroups.clear(); },
+    solidAt(tx, ty) {
+      const ch = this.tileAt(tx, ty);
+      return ch === '#' || ch === 'B';
+    },
     oneWayAt(tx, ty) {
       const ch = this.tileAt(tx, ty);
-      return ch === '=' || (ch === 'G' && this.tollActive);
+      return ch === '=' || (ch === 'G' && this.isGhostActiveAt(tx, ty));
     },
+    breakTile(tx, ty) {
+      tx = Math.floor(tx); ty = Math.floor(ty);
+      if (!this.inBounds(tx, ty)) return null;
+      const startKey = tx + ',' + ty;
+      if (this.rawTileAt(tx, ty) !== 'B' || this.brokenTiles.has(startKey)) return null;
+
+      const authored = breakableByTile.get(startKey) || null;
+      let tiles;
+      if (authored) {
+        tiles = authored.tiles;
+      } else {
+        // Safe fallback for a hand-authored B without a face declaration:
+        // break only its orthogonally connected B component.
+        tiles = [];
+        const seen = new Set(), stack = [{ x: tx, y: ty }];
+        while (stack.length) {
+          const cur = stack.pop(), key = cur.x + ',' + cur.y;
+          if (seen.has(key) || !this.inBounds(cur.x, cur.y) || this.rawTileAt(cur.x, cur.y) !== 'B') continue;
+          seen.add(key); tiles.push(cur);
+          stack.push({ x: cur.x + 1, y: cur.y }, { x: cur.x - 1, y: cur.y },
+            { x: cur.x, y: cur.y + 1 }, { x: cur.x, y: cur.y - 1 });
+        }
+      }
+      for (const tile of tiles) this.brokenTiles.add(tile.x + ',' + tile.y);
+      const xs = tiles.map(t => t.x), ys = tiles.map(t => t.y);
+      const bounds = {
+        x0: Math.min(...xs), y0: Math.min(...ys),
+        x1: Math.max(...xs), y1: Math.max(...ys),
+      };
+      return {
+        id: authored ? authored.id : null,
+        tiles: tiles.map(t => ({ x: t.x, y: t.y })),
+        bounds,
+        worldCenter: {
+          x: ((bounds.x0 + bounds.x1 + 1) * TW) / 2,
+          y: ((bounds.y0 + bounds.y1 + 1) * TW) / 2,
+        },
+        hiddenSpawn: authored && authored.hiddenSpawn ? Object.assign({}, authored.hiddenSpawn) : null,
+      };
+    },
+    resetBreakables() { this.brokenTiles.clear(); },
     spikeAt(tx, ty) { return this.tileAt(tx, ty) === '^'; },
     zoneAt(px, py) {
       const tx = px / TW, ty = py / TW;

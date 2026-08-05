@@ -82,7 +82,16 @@ class AudioSys {
     switch (name) {
       case 'jump':    this.tone(240, 0.12, 'square', 0.12, null, 460); break;
       case 'dash':    this.noise(0.16, 0.22, 1400); this.tone(180, 0.14, 'sawtooth', 0.07, null, 90); break;
-      case 'slash':   this.noise(0.08, 0.20, 2600); this.tone(700, 0.06, 'square', 0.06, null, 300); break;
+      case 'slash': { // whip crack followed by two tiny chain-link rattles
+        const t = this.ctx.currentTime;
+        this.noise(0.035, 0.24, 4200, null, t);
+        this.tone(1250, 0.035, 'square', 0.075, null, 430, t);
+        this.noise(0.032, 0.085, 1850, null, t + 0.032);
+        this.tone(720, 0.026, 'square', 0.038, null, 560, t + 0.036);
+        this.noise(0.028, 0.065, 2100, null, t + 0.066);
+        this.tone(560, 0.022, 'square', 0.03, null, 430, t + 0.069);
+        break;
+      }
       case 'hit':     this.tone(200, 0.09, 'square', 0.16, null, 110); this.noise(0.06, 0.15, 900); break;
       case 'kill':    this.tone(160, 0.22, 'square', 0.18, null, 55); this.noise(0.18, 0.2, 500); break;
       case 'hurt':    this.tone(310, 0.24, 'sawtooth', 0.2, null, 70); this.noise(0.2, 0.16, 400); break;
@@ -99,6 +108,28 @@ class AudioSys {
                       this.tone(587, 0.4, 'triangle', 0.12); break;
       case 'pogo':    this.tone(300, 0.1, 'square', 0.12, null, 600); break;
       case 'wallkick':this.noise(0.08, 0.14, 1800); this.tone(320, 0.08, 'square', 0.08, null, 480); break;
+      case 'wardBell': {
+        const t = this.ctx.currentTime;
+        this.tone(784, 0.16, 'triangle', 0.14, null, 1175, t);
+        this.tone(1175, 0.28, 'sine', 0.11, null, 1568, t + 0.045);
+        this.bell(784, 0.9, 0.24);
+        break;
+      }
+      case 'wallBreak': {
+        const t = this.ctx.currentTime;
+        this.noise(0.16, 0.24, 420, null, t);
+        this.tone(150, 0.14, 'square', 0.13, null, 48, t);
+        this.noise(0.065, 0.13, 1700, null, t + 0.028);
+        this.tone(82, 0.18, 'triangle', 0.09, null, 42, t + 0.05);
+        break;
+      }
+      case 'chicken': {
+        const t = this.ctx.currentTime;
+        this.tone(392, 0.16, 'triangle', 0.15, null, 523, t);
+        this.tone(523, 0.18, 'triangle', 0.13, null, 659, t + 0.065);
+        this.tone(659, 0.26, 'triangle', 0.12, null, 784, t + 0.13);
+        break;
+      }
       case 'bell':    this.bell(220, 2.6, 0.5); break;
       case 'bellFinal': this.bell(220, 4.5, 0.6); this.bell(330, 4.5, 0.3); this.bell(110, 5, 0.4); break;
     }
