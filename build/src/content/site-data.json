@@ -409,6 +409,32 @@
       "metaDescription": "AFTERPARTY AT THE END OF THE WORLD is a browser platformer about outrunning the sunrise and rescuing the people who made the night worth it.",
       "controls": "A/D or arrows move · Space jump · Shift dash · S/down drop · X feedback · gamepad/touch",
       "actionLabel": "Start the Last Song"
+    },
+    {
+      "slug": "wick",
+      "title": "WICK",
+      "descriptor": "Fluid fire simulation",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/wick-card-clean.webp",
+      "alt": "A lone candle flame bending two ribbons of smoke in a dark room beneath the word WICK",
+      "summary": "You are a spark. You cannot move. You can only move the air. Pull one ember through six movements and keep the room lit.",
+      "metaDescription": "WICK is a mouse-only browser fire simulation: move the air, draw breath, and carry one spark through six movements.",
+      "controls": "Move pointer to push air · hold to draw breath · M mute · R rewind · Esc movements",
+      "actionLabel": "Light WICK"
+    },
+    {
+      "slug": "sundog",
+      "title": "SUNDOG",
+      "descriptor": "High-speed action chase",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/sundog-card-clean.webp",
+      "alt": "The SUNDOG title card over a neon road beneath a low sun",
+      "summary": "They put the daylight in a machine. It ran. Chase the Crown Engine down a collapsing road and make morning public domain.",
+      "metaDescription": "SUNDOG is a browser action game about chasing the machine that stole the day across a collapsing neon road.",
+      "controls": "A/D or arrows move · Space/W jump · J/X or click cut · K/C/Shift or right-click dash · gamepad/touch",
+      "actionLabel": "Run the Crown"
     }
   ],
   "albums": [
