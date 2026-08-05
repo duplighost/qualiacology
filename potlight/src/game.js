@@ -716,8 +716,9 @@
 
   function damagePlayer(amount,x,y){
     const p=game.player;if(!p||!p.alive||p.invuln>0||game.qaInvulnerable)return;
+    amount*=difficulty().damage;
     if(p.homeShield>0&&!p.homeShieldUsed&&amount>=p.clarity){p.homeShieldUsed=true;p.homeShield=0;p.clarity=28;p.invuln=2;Audio.care(5);flashScreen('#ffeaa5',.9);spawnRing(p.x,p.y,p.z,38,'#ffe89d',1.5);showToast('HOME LIT','The light refuses your death once.',4);return;}
-    amount*=difficulty().damage;p.clarity-=amount;p.invuln=.55;p.hurtFlash=.25;p.hurtAngle=Math.atan2(y-p.y,x-p.x);game.damageTaken+=amount;game.style*=.58;game.comboTimer=0;Audio.hit(amount>14);trauma(.4);flashScreen('#ff5878',.5);const n=C.norm(p.x-x,p.y-y);p.vx+=n.x*260;p.vy+=n.y*260;const sd=worldVectorToScreen(n.x,n.y);camera.kickX+=sd.x*9;camera.kickY+=sd.y*7;spawnHitParticles(p.x,p.y,p.z+20,'#ff7d8f',16);
+    p.clarity-=amount;p.invuln=.55;p.hurtFlash=.25;p.hurtAngle=Math.atan2(y-p.y,x-p.x);game.damageTaken+=amount;game.style*=.58;game.comboTimer=0;Audio.hit(amount>14);trauma(.4);flashScreen('#ff5878',.5);const n=C.norm(p.x-x,p.y-y);p.vx+=n.x*260;p.vy+=n.y*260;const sd=worldVectorToScreen(n.x,n.y);camera.kickX+=sd.x*9;camera.kickY+=sd.y*7;spawnHitParticles(p.x,p.y,p.z+20,'#ff7d8f',16);
     if(p.clarity<=0)killPlayer();
   }
 
