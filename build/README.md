@@ -41,7 +41,7 @@ Playwright and Axe.
 
 ## Current verified baseline (2026-08-05)
 
-- 34 locally hosted games and 10 music releases.
+- 35 locally hosted games and 10 music releases.
 - Pocket Sun is hosted under `/pocket-sun/`; it no longer depends on a separate
   Netlify project.
 - The four generated hub pages, fingerprinted hub assets, and `sitemap.xml`

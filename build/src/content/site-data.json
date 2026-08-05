@@ -463,6 +463,19 @@
       "actionLabel": "Play RELAY//ECLIPSE"
     },
     {
+      "slug": "false-sun",
+      "title": "FALSE SUN",
+      "descriptor": "Shadow-cutting action-metroidvania",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/false-sun-card-clean.webp",
+      "alt": "A triangular figure carrying a gold sun faces a vast violet guardian whose body casts cyan shadows across a dark geometric garden",
+      "summary": "You carry a captive sun. Move it to redraw the room, open routes, and cut the things that cast the shadows.",
+      "metaDescription": "FALSE SUN is a browser action-metroidvania about moving a captive sun to redraw shadows, open routes, and cut the things that cast them.",
+      "controls": "WASD/arrows move · mouse aim · LMB Burn · Space Cut · E/RMB Pin · M map · gamepad/touch",
+      "actionLabel": "Carry the Sun"
+    },
+    {
       "slug": "potlight",
       "title": "POTLIGHT — DOWNPOUR",
       "descriptor": "2.5D storm action",
