@@ -164,3 +164,7 @@
 
 # --- POTLIGHT — DOWNPOUR ---
 /potlight.html  /potlight/  301!
+
+# --- VESPERWAKE: THE HOLLOW BELL ---
+/vesperwake.html  /vesperwake/  301!
+/hollow-bell      /vesperwake/  302

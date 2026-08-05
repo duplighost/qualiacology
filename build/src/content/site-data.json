@@ -487,6 +487,19 @@
       "metaDescription": "POTLIGHT: DOWNPOUR is a tactile 2.5D action game about fighting through a neighborhood transformed by relentless rain and the care strangers left behind.",
       "controls": "WASD/arrows move · mouse/J fire · Space/K blade · Shift/right-click dash · E read or pulse · Q Color Read · gamepad/touch",
       "actionLabel": "Step into the downpour"
+    },
+    {
+      "slug": "vesperwake",
+      "title": "VESPERWAKE: THE HOLLOW BELL",
+      "descriptor": "Gothic chain-whip action",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/vesperwake-card-clean.webp",
+      "alt": "Sabine Vale holding an iron chain whip beneath the Meridian Bell and the drowned towers of Mourneglass",
+      "summary": "Three continuous levels. A chain whip. A city held at midnight by a bell that stole one minute of noon.",
+      "metaDescription": "VESPERWAKE: THE HOLLOW BELL is a three-level gothic action platformer about a bellwright climbing a city trapped at midnight.",
+      "controls": "A/D or arrows move · Space/Z jump · J/X whip · K/Shift quickstep · touch",
+      "actionLabel": "Begin the Wake"
     }
   ],
   "albums": [
