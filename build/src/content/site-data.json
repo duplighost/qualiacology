@@ -27,8 +27,7 @@
       "summary": "They warned you about the Moon. You didn’t listen.",
       "metaDescription": "No Moon is a fast browser twin-stick roguelike about moon-headed Passengers descending through sealed rooms beneath a missing sky.",
       "controls": "WASD or arrows + mouse · twin-thumb touch",
-      "actionLabel": "Play No Moon",
-      "secondary": { "label": "Boss Codex", "href": "/no-moon/codex/" }
+      "actionLabel": "Play No Moon"
     },
     {
       "slug": "rally",
