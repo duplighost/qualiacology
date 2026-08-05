@@ -891,7 +891,7 @@ function silhouette(src, color) {
 function makeStoneTile(seed) {
   const c = document.createElement('canvas');
   c.width = 16; c.height = 16;
-  const g = c.getContext('2d');
+  const g = c.getContext('2d', { willReadFrequently: true });
   const rnd = mulberry32(seed);
   g.fillStyle = '#2c2f4a';
   g.fillRect(0, 0, 16, 16);
@@ -998,7 +998,10 @@ function makeSkyline(seed, baseY, color, spired) {
   const W = 480, H = 270;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
-  const g = c.getContext('2d');
+  // Skyline generation samples pixels repeatedly before placing windows.
+  // Tell Chromium this canvas is intentionally read-heavy so it keeps the
+  // backing store optimized for getImageData instead of warning every load.
+  const g = c.getContext('2d', { willReadFrequently: true });
   const rnd = mulberry32(seed);
   g.fillStyle = color;
   let x = 0;

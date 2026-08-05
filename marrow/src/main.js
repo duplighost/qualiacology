@@ -245,15 +245,29 @@ UI.endcard.addEventListener('click', () => {
 });
 
 // --- boot ---
+const homeLink = document.querySelector('.homeLink');
+const touchHome = IS_TOUCH
+  || navigator.maxTouchPoints > 0
+  || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+function syncHomeLink() {
+  if (!homeLink) return;
+  homeLink.style.removeProperty('display');
+  homeLink.hidden = !touchHome && document.pointerLockElement === canvas;
+}
+if (homeLink && touchHome) {
+  homeLink.textContent = '\u2039 Q.';
+  homeLink.setAttribute('aria-label', 'Back to Qualiacology');
+}
+document.addEventListener('pointerlockchange', syncHomeLink);
+window.addEventListener('pageshow', syncHomeLink);
+syncHomeLink();
+
 let started = false, time = 0, last = performance.now();
 function start() {
   if (started) return; started = true;
   Audio.start();
   UI.hideBoot();
-  // The branding chip lives only on the title screen. Once you're playing it
-  // must leave the screen entirely — both for "as few words as possible" and so
-  // a thumb on the mobile move-stick can't tap it and reload the page.
-  document.querySelector('.homeLink')?.style.setProperty('display', 'none');
+  syncHomeLink();
   loadLevel('forest');
   buildMotes();
   UI.fadeTo(0, 3000);

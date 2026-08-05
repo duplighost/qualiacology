@@ -31,6 +31,9 @@
     text-shadow:1px 0 rgba(255,60,60,.45),-1px 0 rgba(60,120,255,.45);}
   .home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(232,232,224,.7);outline:0;}
   body.playing .home-link{opacity:0;pointer-events:none;}
+  html.touch-device body.playing .home-link{opacity:1;pointer-events:auto;width:44px;height:44px;box-sizing:border-box;
+    display:grid;place-items:center;padding:0;font-size:0;}
+  html.touch-device body.playing .home-link::after{content:"Q.";font:bold 12px/1.2 'Courier New',monospace;letter-spacing:.08em;}
   #c { position:fixed; inset:0; width:100%; height:100%; display:block; }
   /* ---- camcorder OSD (positioned into the 4:3 frame by JS) ---- */
   #osd {
@@ -152,18 +155,22 @@
 </div>
 
 <script type="importmap">
-{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
+{ "imports": { "three": "./vendor/three.module.min.js" } }
 </script>
-<script type="module" src="./src/main.js"></script>
+<script type="module">
+  import { loadWebGLGame } from "/assets/game-webgl-guard.js?v=2";
+  loadWebGLGame("./src/main.js", { title: "THE EATEN PATH could not open." });
+</script>
 <script>
-/* hub shell: the pill leaves when the camcorder takes the pointer, comes back on pause. */
+var touchDevice = !!((window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0);
+document.documentElement.classList.toggle('touch-device', touchDevice);
+/* The pill leaves during desktop pointer lock, but becomes a compact, reachable Q on touch. */
 document.addEventListener('pointerlockchange', function () {
   document.body.classList.toggle('playing', !!document.pointerLockElement);
 });
-/* On touch there is no pointer lock to hide behind, so the title screen going away
-   is the signal. The pill stays reachable until then. */
+/* On touch there is no pointer lock, so the title screen going away is the play signal. */
 document.addEventListener('touchstart', function () {
-  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+  if (touchDevice) {
     var t = document.getElementById('title');
     if (t && t.style.display === 'none') document.body.classList.add('playing');
   }

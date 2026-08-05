@@ -38,6 +38,12 @@ button{font:inherit; color:inherit; cursor:pointer; border:1px solid var(--line)
   background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));
   border-radius:12px; padding:10px 16px; backdrop-filter:blur(10px)}
 button:hover{border-color:rgba(255,255,255,.22)}
+.overlayHome{display:inline-block;margin-top:14px;color:var(--dim);text-decoration:none;font-size:12px;letter-spacing:.08em}
+.overlayHome:hover,.overlayHome:focus-visible{color:var(--ink);outline:2px solid rgba(125,253,255,.72);outline-offset:4px;border-radius:3px}
+.gameHome{min-width:44px;min-height:44px;box-sizing:border-box;display:inline-grid;place-items:center;color:var(--ink);text-decoration:none;
+  font:900 12px/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.08em;border:1px solid rgba(125,253,255,.3);
+  border-radius:10px;background:rgba(5,11,20,.66)}
+.gameHome:hover,.gameHome:focus-visible{color:#fff;border-color:rgba(125,253,255,.8);outline:2px solid rgba(125,253,255,.72);outline-offset:2px}
 .panel{background:var(--panel); border:1px solid var(--line); border-radius:16px;
   backdrop-filter:blur(12px); box-shadow:0 18px 50px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05)}
 
@@ -171,6 +177,7 @@ body.onTitle #overlay .meta{color:#d6e4f8; margin-top:11px; text-shadow:0 1px 6p
     <span id="comboChip">x1.0</span>
     <button class="miniBtn" id="sfxBtn" type="button">sfx on</button>
     <button class="miniBtn" id="bgmBtn" type="button">bgm on</button>
+    <a class="gameHome" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology">Q.</a>
   </div>
 </div>
 <div id="buildChips"></div>
@@ -186,6 +193,7 @@ body.onTitle #overlay .meta{color:#d6e4f8; margin-top:11px; text-shadow:0 1px 6p
   <div id="overlayBody"></div>
   <div class="buttonRow" id="overlayButtons"></div>
   <div class="meta" id="overlayMeta"></div>
+  <a class="overlayHome" href="/">Qualiacology</a>
 </div></div>
 
 <div id="draft" class="modalHost"><div class="modal panel">
@@ -200,6 +208,7 @@ body.onTitle #overlay .meta{color:#d6e4f8; margin-top:11px; text-shadow:0 1px 6p
     <button class="bigBtn" id="resumeBtn" type="button">Resume</button>
     <button class="bigBtn" id="pauseSfxBtn" type="button">sfx on</button>
   </div>
+  <a class="overlayHome" href="/">Qualiacology</a>
 </div></div>
 
 <script type="module">

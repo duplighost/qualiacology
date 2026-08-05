@@ -1,4 +1,4 @@
-import * as THREE from "../vendor/three.module.js";
+import * as THREE from "../vendor/three.module.js?v=r165";
 
 // PASTA MORTALE is built around a compact combat nave, not a parkour house.
 // These bounds are shared with movement, combat traces, sauce depth, and tests.
@@ -244,6 +244,46 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   const normalizedQuality = quality === "low" ? "low" : quality === "medium" ? "medium" : "high";
   const lowQuality = normalizedQuality === "low";
   const highQuality = normalizedQuality === "high";
+  // Silhouette density matters more than invisible radial subdivision. These
+  // profiles preserve the authored cathedral while keeping the two richer
+  // presets out of the old 165k/307k-triangle vanity trap.
+  const detail = lowQuality ? {
+    coverRows: 4, coverPieces: 4, archSteps: 7, sideArchSteps: 6,
+    columnSides: 10, columnStrands: 3, columnSegments: 11,
+    stairLipBundles: 1, stairLipPieces: 5, stairRailStrands: 2,
+    knotTubular: 38, knotRadial: 7, coverKnotTubular: 38,
+    naveArchBundles: 2, lowerArchBundles: 2,
+    wallSpacing: 1.4, wallPieces: 4, endWallCount: 26, endWallPieces: 4,
+    looseCount: 9, looseTubeSegments: 20, looseTubeSides: 5, hangingCount: 24,
+    runoffLanes: 2, runoffSections: 10, flowWorms: 2, flowPieces: 3,
+    segmentSides: 5, ringRadial: 5, ringTubular: 18,
+    portalSegments: 10, portalArchSegments: 20, tendrilSegments: 18, tendrilSides: 7,
+    surfaceX: 8, surfaceZFactor: 0, surfaceZMinimum: 5, steamCount: 60
+  } : highQuality ? {
+    coverRows: 7, coverPieces: 6, archSteps: 10, sideArchSteps: 9,
+    columnSides: 14, columnStrands: 5, columnSegments: 18,
+    stairLipBundles: 3, stairLipPieces: 8, stairRailStrands: 3,
+    knotTubular: 60, knotRadial: 8, coverKnotTubular: 48,
+    naveArchBundles: 3, lowerArchBundles: 3,
+    wallSpacing: 0.84, wallPieces: 6, endWallCount: 46, endWallPieces: 6,
+    looseCount: 20, looseTubeSegments: 28, looseTubeSides: 6, hangingCount: 56,
+    runoffLanes: 4, runoffSections: 16, flowWorms: 4, flowPieces: 4,
+    segmentSides: 6, ringRadial: 6, ringTubular: 22,
+    portalSegments: 14, portalArchSegments: 26, tendrilSegments: 32, tendrilSides: 6,
+    surfaceX: 20, surfaceZFactor: 0.6, surfaceZMinimum: 7, steamCount: 150
+  } : {
+    coverRows: 5, coverPieces: 5, archSteps: 8, sideArchSteps: 7,
+    columnSides: 12, columnStrands: 4, columnSegments: 14,
+    stairLipBundles: 2, stairLipPieces: 6, stairRailStrands: 2,
+    knotTubular: 48, knotRadial: 7, coverKnotTubular: 38,
+    naveArchBundles: 3, lowerArchBundles: 3,
+    wallSpacing: 1.1, wallPieces: 5, endWallCount: 34, endWallPieces: 5,
+    looseCount: 12, looseTubeSegments: 22, looseTubeSides: 5, hangingCount: 36,
+    runoffLanes: 3, runoffSections: 12, flowWorms: 3, flowPieces: 3,
+    segmentSides: 5, ringRadial: 5, ringTubular: 18,
+    portalSegments: 10, portalArchSegments: 22, tendrilSegments: 24, tendrilSides: 6,
+    surfaceX: 12, surfaceZFactor: 0.4, surfaceZMinimum: 6, steamCount: 100
+  };
   const random = mulberry32(Number.isFinite(seed) ? seed : 1337);
   const root = new THREE.Group();
   root.name = "Basilica Della Marinara";
@@ -255,10 +295,10 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   const maximumAnisotropy = renderer?.capabilities?.getMaxAnisotropy?.() || 4;
   const anisotropy = Math.max(1, Math.min(highQuality ? 12 : 5, maximumAnisotropy));
   const [wallBase, surfaceBase, sauceBase, sanctumMatteBase] = await Promise.all([
-    loadTexture("gothic-pasta-lattice.png", seed + 11, "wall"),
-    loadTexture("spaghetti-surface.png", seed + 23, "surface"),
-    loadTexture("marinara-noodle-floor.png", seed + 37, "sauce"),
-    loadTexture("basilica-sanctum-matte.png", seed + 49, "wall")
+    loadTexture("gothic-pasta-lattice.webp", seed + 11, "wall"),
+    loadTexture("spaghetti-surface.webp", seed + 23, "surface"),
+    loadTexture("marinara-noodle-floor.webp", seed + 37, "sauce"),
+    loadTexture("basilica-sanctum-matte.webp", seed + 49, "wall")
   ]);
   sanctumMatteBase.colorSpace = THREE.SRGBColorSpace;
   sanctumMatteBase.anisotropy = anisotropy;
@@ -481,7 +521,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = name;
     mesh.position.set(x, y, z);
-    mesh.castShadow = highQuality && options.castShadow !== false;
+    mesh.castShadow = false;
     mesh.receiveShadow = options.receiveShadow !== false;
     root.add(mesh);
     if (colliderType) {
@@ -530,7 +570,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     const geometry = makeRampGeometry(minX, maxX, minZ, maxZ, axis, yAtMin, yAtMax, thickness);
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = id;
-    mesh.castShadow = highQuality;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     root.add(mesh);
     const collider = {
@@ -651,6 +691,15 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   const candleInstances = [];
   const flameInstances = [];
   const animatedLights = [];
+  // Point lights are paid for per fragment. The old medium/high presets gave
+  // every decorative beacon and every candle island a real light, turning a
+  // visual-density setting into a hidden 30+ light shader tax. Keep every
+  // emissive prop, but spend actual local lights only where they shape space.
+  const localLightBudget = highQuality
+    ? { crown: 5, candle: 4 }
+    : { crown: 4, candle: 3 };
+  let crownLightCount = 0;
+  let candleLightCount = 0;
   const knotMeshes = [];
 
   function pushSegment(start, end, radius = 0.05, tone = 0.5) {
@@ -669,8 +718,8 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   }
 
   function dressCoverFace(x, z, width, height, depth, seedOffset = 0) {
-    const rows = highQuality ? 10 : lowQuality ? 4 : 7;
-    const pieces = highQuality ? 7 : lowQuality ? 4 : 6;
+    const rows = detail.coverRows;
+    const pieces = detail.coverPieces;
     for (let row = 0; row < rows; row += 1) {
       const rowY = 0.12 + (row / Math.max(1, rows - 1)) * Math.max(0.16, height - 0.24);
       const points = [];
@@ -695,7 +744,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   }
 
   function addArchAcrossNave(z, span, baseY, apexY, bundles = 3) {
-    const steps = highQuality ? 14 : lowQuality ? 7 : 10;
+    const steps = detail.archSteps;
     for (let strand = 0; strand < bundles; strand += 1) {
       const spread = (strand - (bundles - 1) * 0.5) * 0.18;
       const depth = z + spread;
@@ -716,7 +765,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   }
 
   function addSideArch(x, centerZ, span, baseY, apexY, facing = 1) {
-    const steps = highQuality ? 12 : lowQuality ? 6 : 9;
+    const steps = detail.sideArchSteps;
     for (let strand = 0; strand < (lowQuality ? 1 : 2); strand += 1) {
       const sideOffset = facing * strand * 0.12;
       const curveA = new THREE.QuadraticBezierCurve3(
@@ -736,17 +785,17 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
 
   function addBraidedColumn(id, x, z, height = 15.2, radius = 0.72, solid = true) {
     const core = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.78, radius, height, highQuality ? 18 : 10, 2),
+      new THREE.CylinderGeometry(radius * 0.78, radius, height, detail.columnSides, 2),
       shadowPastaMaterial
     );
     core.name = id + " dense core";
     core.position.set(x, height * 0.5, z);
-    core.castShadow = highQuality;
+    core.castShadow = false;
     core.receiveShadow = true;
     root.add(core);
 
-    const strandCount = highQuality ? 7 : lowQuality ? 3 : 5;
-    const segments = highQuality ? 24 : lowQuality ? 11 : 17;
+    const strandCount = detail.columnStrands;
+    const segments = detail.columnSegments;
     for (let strand = 0; strand < strandCount; strand += 1) {
       const points = [];
       const phase = strand / strandCount * Math.PI * 2;
@@ -785,13 +834,14 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
       candleInstances.push({ x: px, y: y + height * 0.5, z: pz, sx: 0.08 + random() * 0.035, sy: height, sz: 0.08 + random() * 0.035 });
       flameInstances.push({ x: px, y: y + height + 0.09, z: pz, sx: 0.07, sy: 0.16 + random() * 0.05, sz: 0.07 });
     }
-    if (!lowQuality || animatedLights.length < 4) {
+    if (candleLightCount < localLightBudget.candle) {
       const light = new THREE.PointLight(lightColor, lowQuality ? 4.5 : 8.5, lowQuality ? 5 : 7, 1.8);
       light.position.set(x, y + 1.15, z);
       light.userData.baseIntensity = light.intensity;
       light.userData.phase = random() * Math.PI * 2;
       animatedLights.push(light);
       root.add(light);
+      candleLightCount += 1;
     }
   }
 
@@ -805,13 +855,14 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     beacon.scale.set(0.76, 2, 0.76);
     beacon.material.opacity = lowQuality ? 0.42 : 0.64;
     root.add(beacon);
-    if (!lowQuality || animatedLights.length < 7) {
+    if (crownLightCount < localLightBudget.crown) {
       const light = new THREE.PointLight(0x9beeff, lowQuality ? 3.2 : 6, 7.5, 1.7);
       light.position.set(x, y, z);
       light.userData.baseIntensity = light.intensity;
       light.userData.phase = random() * Math.PI * 2;
       animatedLights.push(light);
       root.add(light);
+      crownLightCount += 1;
     }
   }
 
@@ -838,8 +889,8 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     const geometry = new THREE.TorusKnotGeometry(
       0.78,
       0.23,
-      highQuality ? 88 : lowQuality ? 38 : 60,
-      highQuality ? 10 : 7,
+      detail.knotTubular,
+      detail.knotRadial,
       2,
       5
     );
@@ -848,7 +899,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     mesh.position.set(x, y, z);
     mesh.rotation.set(random() * 0.8, random() * Math.PI, random() * 0.5);
     mesh.scale.set(scale * (0.9 + random() * 0.16), scale * (0.72 + random() * 0.2), scale);
-    mesh.castShadow = highQuality;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     root.add(mesh);
     knotMeshes.push(mesh);
@@ -1170,10 +1221,10 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
       null,
       { castShadow: index % 2 === 0 }
     );
-    const lipBundles = highQuality ? 4 : lowQuality ? 1 : 2;
+    const lipBundles = detail.stairLipBundles;
     for (let bundle = 0; bundle < lipBundles; bundle += 1) {
       const points = [];
-      const pieces = highQuality ? 10 : lowQuality ? 5 : 7;
+      const pieces = detail.stairLipPieces;
       for (let piece = 0; piece <= pieces; piece += 1) {
         const amount = piece / pieces;
         points.push(new THREE.Vector3(
@@ -1188,7 +1239,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   // Braided side rails and balusters make the grand ascent read as constructed
   // pasta at first-person distance, not merely a staircase wearing a texture.
   for (const side of [-1, 1]) {
-    for (let strand = 0; strand < (highQuality ? 4 : lowQuality ? 2 : 3); strand += 1) {
+    for (let strand = 0; strand < detail.stairRailStrands; strand += 1) {
       const points = [];
       for (let piece = 0; piece <= grandStepCount; piece += 1) {
         const amount = piece / grandStepCount;
@@ -1271,13 +1322,13 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     dressCoverFace(x, z, width, height, depth, x * 0.3 + z * 0.12);
     if (!lowQuality) {
       const coil = new THREE.Mesh(
-        new THREE.TorusKnotGeometry(0.48, 0.12, highQuality ? 56 : 38, 7, 2, 5),
+        new THREE.TorusKnotGeometry(0.48, 0.12, detail.coverKnotTubular, 7, 2, 5),
         looseNoodleMaterial
       );
       coil.position.set(x, y + height * 0.45, z);
       coil.rotation.set(Math.PI * 0.5, random() * Math.PI, 0);
       coil.scale.set(width * 0.52, 0.8, depth * 0.55);
-      coil.castShadow = highQuality;
+      coil.castShadow = false;
       root.add(coil);
       knotMeshes.push(coil);
     }
@@ -1293,12 +1344,12 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
 
   // Gothic pointed ribs make the nave read as an actual pasta cathedral.
   for (const z of [17.5, 7.1, -3.3, -13.7]) {
-    addArchAcrossNave(z, 29.2, 0.35, 16.45, highQuality ? 4 : lowQuality ? 2 : 3);
+    addArchAcrossNave(z, 29.2, 0.35, 16.45, detail.naveArchBundles);
   }
   // Nested lower arches give the sightline the dense, layered noodle depth of
   // the key art instead of leaving one enormous empty vaulted volume.
   for (const z of [8.2, -3.1, -14.2]) {
-    addArchAcrossNave(z, 12.4, 0.28, 8.6, highQuality ? 3 : lowQuality ? 2 : 3);
+    addArchAcrossNave(z, 12.4, 0.28, 8.6, detail.lowerArchBundles);
   }
   for (const x of [-21.28, 21.28]) {
     const facing = x < 0 ? 1 : -1;
@@ -1307,14 +1358,14 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
 
   // Hundreds of vertical/woven strands break the wall planes into genuine
   // noodle masonry close to the camera.
-  const wallStrandSpacing = highQuality ? 0.52 : lowQuality ? 1.4 : 0.84;
+  const wallStrandSpacing = detail.wallSpacing;
   for (const x of [-21.35, 21.35]) {
     const strandCount = Math.floor(56 / wallStrandSpacing);
     for (let index = 0; index <= strandCount; index += 1) {
       const z = -30 + index * wallStrandSpacing;
       if (TRAVERSABLE_WINDOW_ZS.some((openingZ) => Math.abs(z - openingZ) < WINDOW_OPENING_WIDTH * 0.5)) continue;
       const points = [];
-      const pieces = highQuality ? 9 : lowQuality ? 4 : 6;
+      const pieces = detail.wallPieces;
       for (let piece = 0; piece <= pieces; piece += 1) {
         const amount = piece / pieces;
         points.push(new THREE.Vector3(
@@ -1326,12 +1377,12 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
       pushPolyline(points, 0.032 + (index % 4) * 0.006, 0.25 + (index % 7) / 10);
     }
   }
-  const endWallCount = highQuality ? 74 : lowQuality ? 26 : 46;
+  const endWallCount = detail.endWallCount;
   for (const z of [-30.36, 25.36]) {
     for (let index = 0; index <= endWallCount; index += 1) {
       const x = lerp(-21.2, 21.2, index / endWallCount);
       const points = [];
-      const pieces = highQuality ? 8 : lowQuality ? 4 : 6;
+      const pieces = detail.endWallPieces;
       for (let piece = 0; piece <= pieces; piece += 1) {
         const amount = piece / pieces;
         points.push(new THREE.Vector3(
@@ -1395,7 +1446,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
 
   // Loose cooked strands lie in the sauce rather than merely appearing as a
   // photograph tiled over boxes.
-  const looseCount = highQuality ? 30 : lowQuality ? 9 : 18;
+  const looseCount = detail.looseCount;
   for (let index = 0; index < looseCount; index += 1) {
     let centerX = lerp(-19.5, 19.5, random());
     let centerZ = lerp(-27.5, 23, random());
@@ -1412,18 +1463,18 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     }
     const curve = new THREE.CatmullRomCurve3(points);
     const mesh = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, highQuality ? 36 : 20, 0.038 + random() * 0.025, highQuality ? 7 : 5, false),
+      new THREE.TubeGeometry(curve, detail.looseTubeSegments, 0.038 + random() * 0.025, detail.looseTubeSides, false),
       looseNoodleMaterial
     );
     mesh.name = "loose floor spaghetti " + (index + 1);
-    mesh.castShadow = highQuality;
+    mesh.castShadow = false;
     mesh.receiveShadow = true;
     root.add(mesh);
   }
 
   // Hanging ceiling strands compress the vertical space and add silhouette
   // movement against the dark vault.
-  const hangingCount = highQuality ? 82 : lowQuality ? 24 : 48;
+  const hangingCount = detail.hangingCount;
   for (let index = 0; index < hangingCount; index += 1) {
     const x = lerp(-20.2, 20.2, random());
     const z = lerp(-28.5, 23.5, random());
@@ -1447,7 +1498,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   const runoffPositions = [];
   const runoffUvs = [];
   const runoffIndices = [];
-  const runoffLanesPerRamp = lowQuality ? 2 : highQuality ? 5 : 3;
+  const runoffLanesPerRamp = detail.runoffLanes;
   let flowRibbonCount = 0;
 
   function sampleRampFlowPoint(ramp, flowProgress, lateral = 0, lift = 0.052, target = null) {
@@ -1493,7 +1544,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
       const laneAmount = (lane + 0.5) / runoffLanesPerRamp;
       const laneCenter = lerp(-crossWidth * 0.42, crossWidth * 0.42, laneAmount);
       const phase = rampIndex * 1.91 + lane * 2.37;
-      const sections = ramp.visualSteps > 0 ? ramp.visualSteps : highQuality ? 20 : lowQuality ? 10 : 15;
+      const sections = ramp.visualSteps > 0 ? ramp.visualSteps : detail.runoffSections;
       for (let section = 0; section < sections; section += 1) {
         const q0 = section / sections;
         const q1 = (section + 1) / sections;
@@ -1536,9 +1587,9 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
 
   // Pool the thousands of noodle segments, pasta rings, and candles into a
   // handful of draw calls.
-  const segmentGeometry = new THREE.CylinderGeometry(1, 1, 1, lowQuality ? 5 : 7, 1, false);
-  const flowWormsPerRamp = lowQuality ? 2 : highQuality ? 5 : 3;
-  const flowPiecesPerWorm = highQuality ? 4 : 3;
+  const segmentGeometry = new THREE.CylinderGeometry(1, 1, 1, detail.segmentSides, 1, false);
+  const flowWormsPerRamp = detail.flowWorms;
+  const flowPiecesPerWorm = detail.flowPieces;
   const flowWorms = [];
   for (let rampIndex = 0; rampIndex < rampFlowDescriptors.length; rampIndex += 1) {
     const ramp = rampFlowDescriptors[rampIndex];
@@ -1615,7 +1666,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   }
   strandMesh.instanceMatrix.needsUpdate = true;
   if (strandMesh.instanceColor) strandMesh.instanceColor.needsUpdate = true;
-  strandMesh.castShadow = highQuality;
+  strandMesh.castShadow = false;
   strandMesh.receiveShadow = true;
   strandMesh.computeBoundingBox?.();
   strandMesh.computeBoundingSphere?.();
@@ -1627,7 +1678,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   const instanceEuler = new THREE.Euler();
   const instanceMatrix = new THREE.Matrix4();
   const ringMesh = new THREE.InstancedMesh(
-    new THREE.TorusGeometry(1, 0.055, lowQuality ? 5 : 7, highQuality ? 28 : 18),
+    new THREE.TorusGeometry(1, 0.055, detail.ringRadial, detail.ringTubular),
     looseNoodleMaterial,
     ringInstances.length
   );
@@ -1642,7 +1693,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     ringMesh.setMatrixAt(index, instanceMatrix);
   }
   ringMesh.instanceMatrix.needsUpdate = true;
-  ringMesh.castShadow = highQuality;
+  ringMesh.castShadow = false;
   ringMesh.receiveShadow = true;
   ringMesh.computeBoundingBox?.();
   ringMesh.computeBoundingSphere?.();
@@ -1660,7 +1711,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
       mesh.setMatrixAt(index, instanceMatrix);
     }
     mesh.instanceMatrix.needsUpdate = true;
-    mesh.castShadow = highQuality;
+    mesh.castShadow = false;
     mesh.computeBoundingBox?.();
     mesh.computeBoundingSphere?.();
     root.add(mesh);
@@ -1688,7 +1739,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   portalShape.quadraticCurveTo(2.02, 3.92, 2.18, 0.56);
   portalShape.lineTo(2.18, -4.44);
   portalShape.closePath();
-  const portal = new THREE.Mesh(new THREE.ShapeGeometry(portalShape, highQuality ? 18 : 10), portalMaterial);
+  const portal = new THREE.Mesh(new THREE.ShapeGeometry(portalShape, detail.portalSegments), portalMaterial);
   portal.name = "basilica extraction gate";
   portal.position.set(0, 8.82, -30.34);
   root.add(portal);
@@ -1704,13 +1755,13 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   );
   for (let strand = 0; strand < 3; strand += 1) {
     const mesh = new THREE.Mesh(
-      new THREE.TubeGeometry(exitArchLeft, highQuality ? 34 : 20, 0.11 + strand * 0.025, 7, false),
+      new THREE.TubeGeometry(exitArchLeft, detail.portalArchSegments, 0.11 + strand * 0.025, detail.tendrilSides, false),
       looseNoodleMaterial
     );
     mesh.position.z += strand * 0.1;
     root.add(mesh);
     const right = new THREE.Mesh(
-      new THREE.TubeGeometry(exitArchRight, highQuality ? 34 : 20, 0.11 + strand * 0.025, 7, false),
+      new THREE.TubeGeometry(exitArchRight, detail.portalArchSegments, 0.11 + strand * 0.025, detail.tendrilSides, false),
       looseNoodleMaterial
     );
     right.position.z += strand * 0.1;
@@ -1728,7 +1779,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
       new THREE.Vector3(baseX * -0.72, 13.08, -30.08 - strand * 0.012)
     ]);
     const tendril = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, highQuality ? 42 : lowQuality ? 18 : 28, 0.1 + (strand % 3) * 0.018, 7, false),
+      new THREE.TubeGeometry(curve, detail.tendrilSegments, 0.1 + (strand % 3) * 0.018, detail.tendrilSides, false),
       gateLockMaterial
     );
     tendril.name = `gate lock tendril ${strand + 1}`;
@@ -1755,7 +1806,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     key.position.set(8, 15.8, 18);
     key.target.position.set(0, 0, -5);
     key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.mapSize.set(512, 512);
     key.shadow.camera.near = 2;
     key.shadow.camera.far = 48;
     root.add(key.target);
@@ -1774,8 +1825,10 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
   const rooms = roomDefinitions.map((definition, roomIndex) => {
     const width = definition.maxX - definition.minX;
     const depth = definition.maxZ - definition.minZ;
-    const segmentsX = highQuality ? 28 : lowQuality ? 8 : 16;
-    const segmentsZ = highQuality ? Math.max(9, Math.round(depth * 0.8)) : lowQuality ? 5 : Math.max(7, Math.round(depth * 0.48));
+    const segmentsX = detail.surfaceX;
+    const segmentsZ = detail.surfaceZFactor > 0
+      ? Math.max(detail.surfaceZMinimum, Math.round(depth * detail.surfaceZFactor))
+      : detail.surfaceZMinimum;
     const geometry = new THREE.PlaneGeometry(width, depth, segmentsX, segmentsZ);
     geometry.rotateX(-Math.PI * 0.5);
     const positions = geometry.getAttribute("position");
@@ -1805,7 +1858,7 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
     };
   });
 
-  const steamCount = highQuality ? 210 : lowQuality ? 60 : 120;
+  const steamCount = detail.steamCount;
   const steamPositions = new Float32Array(steamCount * 3);
   const steamSpeeds = new Float32Array(steamCount);
   const steamSeeds = new Float32Array(steamCount);
@@ -1907,6 +1960,11 @@ export async function createSpaghettiWorld({ scene, renderer, quality = "high", 
       maxZ: 24.7
     }),
     playerSpawn: Object.freeze({ x: spawn.x, y: spawn.y, z: spawn.z, yaw: spawn.yaw }),
+    openingLessonSpawn: Object.freeze({ x: 0, y: 0, z: 13.2, lane: "center", role: "lesson" }),
+    openingHighGroundTargets: Object.freeze([
+      Object.freeze({ id: "west ascension ramp", x: -9, y: 0, z: 23.2 }),
+      Object.freeze({ id: "east ascension ramp", x: 9, y: 0, z: 23.2 })
+    ]),
     lanes: Object.freeze({
       left: Object.freeze([
         Object.freeze({ x: -10.2, y: 0, z: 8.4, role: "rifle" }),

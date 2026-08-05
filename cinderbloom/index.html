@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CINDERBLOOM | Qualiacology</title>
+<script>
+  window.__CB_BOOT_START = performance.getEntriesByType('navigation')[0]?.startTime ?? 0;
+  window.__CB_SHELL_READY_AT = null;
+  requestAnimationFrame(() => {
+    window.__CB_SHELL_READY_AT = performance.now();
+    window.dispatchEvent(new Event('cinderbloom:shell-ready'));
+  });
+</script>
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#05070a; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #gl { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  #ui { position:fixed; inset:0; pointer-events:none; }
+  #ui > * { pointer-events:auto; }
+  #boot {
+    position:fixed; inset:0; display:grid; place-items:center; z-index:50;
+    background:radial-gradient(120% 90% at 50% 45%, #0b1016 0%, #05070a 70%);
+    transition:opacity .6s ease; color:#c8d4dd;
+  }
+  #boot.done { opacity:0; pointer-events:none; }
+  #boot .wrap { width:min(520px, 84vw); text-align:center; }
+  #boot h1 {
+    font-size:clamp(28px,5.2vw,52px); font-weight:600; letter-spacing:.42em;
+    text-indent:.42em; margin-bottom:6px;
+    background:linear-gradient(180deg,#f2e6cf 0%,#c98f5a 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  #boot .sub { font-size:12px; letter-spacing:.28em; text-transform:uppercase; opacity:.42; margin-bottom:30px; }
+  #boot .bar { height:2px; background:#1a222c; border-radius:2px; overflow:hidden; }
+  #boot .bar i { display:block; height:100%; width:0%; background:linear-gradient(90deg,#c98f5a,#e8c48a); transition:width .25s ease; }
+  #boot .stage { margin-top:12px; font-size:11px; letter-spacing:.16em; text-transform:uppercase; opacity:.34; min-height:14px; }
+  #boot .err { margin-top:18px; font:12px/1.5 ui-monospace,monospace; color:#e2725b; white-space:pre-wrap; text-align:left; max-height:36vh; overflow:auto; }
+  noscript { color:#c8d4dd; display:block; padding:24px; }
+</style>
+
+
+<meta name="description" content="CINDERBLOOM is a procedural first-person shooter on an alien planet with fifteen mission beats and four creature types.">
+<link rel="canonical" href="https://qualiacology.com/cinderbloom/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:type" content="website">
+<meta property="og:title" content="CINDERBLOOM | Qualiacology">
+<meta property="og:description" content="CINDERBLOOM is a procedural first-person shooter on an alien planet with fifteen mission beats and four creature types.">
+<meta property="og:url" content="https://qualiacology.com/cinderbloom/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/cinderbloom-card-clean.webp">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="CINDERBLOOM | Qualiacology">
+<meta name="twitter:description" content="CINDERBLOOM is a procedural first-person shooter on an alien planet with fifteen mission beats and four creature types.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/cinderbloom-card-clean.webp">
+<style id="qualiacology-game-shell-v2">
+#qualiacology-home{position:fixed;z-index:2147483647;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:42px;padding:0 13px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(5,6,12,.78);color:#fff;text-decoration:none;font:800 12px/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.08em;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 8px 28px rgba(0,0,0,.38)}
+#qualiacology-home:hover,#qualiacology-home:focus-visible{background:rgba(20,22,34,.96);outline:2px solid rgba(255,255,255,.85);outline-offset:2px}
+#qualiacology-home[hidden]{display:none!important}
+@media(max-width:640px){#qualiacology-home{padding:0 11px;font-size:0}#qualiacology-home::after{content:"Q.";font-size:13px}}
+</style>
+</head>
+<body><a id="qualiacology-home" href="/" aria-label="Back to Qualiacology">Qualiacology</a><script id="qualiacology-home-behavior">(()=>{const q=document.getElementById("qualiacology-home");if(!q)return;const touch=()=>navigator.maxTouchPoints>0||matchMedia("(pointer: coarse)").matches;const sync=()=>{q.hidden=!touch()&&!!document.pointerLockElement};document.addEventListener("pointerlockchange",sync);addEventListener("pageshow",sync);sync()})();</script>
+<canvas id="gl"></canvas>
+<div id="ui"></div>
+<div id="boot"><div class="wrap">
+  <h1>CINDERBLOOM</h1>
+  <div class="sub">Survey 9 &mdash; Thessaly Basin</div>
+  <div class="bar"><i id="boot-bar"></i></div>
+  <div class="stage" id="boot-stage">initialising</div>
+  <div class="err" id="boot-err"></div>
+</div></div>
+<noscript>CINDERBLOOM requires JavaScript and WebGL2.</noscript>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
+</script>
+<script type="module">
+  import { loadWebGLGame } from "/assets/game-webgl-guard.js?v=2";
+  loadWebGLGame("./src/main.js", { title: "CINDERBLOOM could not open." });
+</script>
+</body>
+</html>

@@ -24,7 +24,8 @@
     font:800 11px/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.16em;text-transform:uppercase;padding:8px 12px;
     border-radius:999px;background:rgba(12,7,18,.62);border:1px solid rgba(255,79,216,.34);backdrop-filter:blur(8px);transition:opacity .3s ease}
   .home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(255,79,216,.75);outline:0}
-  body.playing .home-link{opacity:0;pointer-events:none}
+  body.playing .home-link{width:44px;height:44px;box-sizing:border-box;display:grid;place-items:center;padding:0;font-size:0}
+  body.playing .home-link::after{content:"Q.";font:800 11px/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.1em}
   /* Without these a phone treats the game as a document: pinch-zooms, double-tap
      zooms, and rubber-band scrolls while you are trying to play. */
   html,body{margin:0;padding:0;height:100%;background:#0c0712;overflow:hidden;
@@ -2716,7 +2717,7 @@ window.__PA = { G:G, P:P, AU:AU, IN:IN, startRun:startRun, startWave:startWave,
   enemies:function(){return enemies;}, update:update };
 </script>
 <script>
-// hub shell: the pill stays for the title and the death screen, and gets out of the way mid-party.
+// Hub shell: use the full pill on menu screens and a compact, reachable Q during play.
 setInterval(function(){
   try {
     var s = window.__PA && window.__PA.G.state;

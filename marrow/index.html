@@ -150,6 +150,9 @@
   <script type="importmap">
   { "imports": { "three": "./vendor/three.module.min.js" } }
   </script>
-  <script type="module" src="./src/main.js?v=three-acts"></script>
+  <script type="module">
+  import { loadWebGLGame } from "/assets/game-webgl-guard.js?v=2";
+  loadWebGLGame("./src/main.js?v=three-acts", { title: "Marrow could not open." });
+</script>
 </body>
 </html>

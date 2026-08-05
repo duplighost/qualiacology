@@ -1,7 +1,9 @@
 {
+  "id": "/",
   "name": "Qualiacology",
   "short_name": "Qualiacology",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#07070d",
   "theme_color": "#0d1020",

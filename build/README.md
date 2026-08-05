@@ -18,19 +18,34 @@ node scripts/build-site.mjs              # regenerate hub pages into the repo ro
 node scripts/validate-site.mjs --root=.. # assert structure/parity
 ```
 
-Then commit and push `main`. The Netlify site is git-connected with
-`publish = "."`, so pushing auto-deploys the repo root to qualiacology.com.
+For nontrivial changes, commit to a feature branch, open a pull request, and
+verify the Netlify Deploy Preview. Merge to `main` only after Alex explicitly
+approves the production release. The Netlify site is git-connected with
+`publish = "."`, so merging to `main` auto-deploys the repo root to
+qualiacology.com.
 
-`build-site.mjs` uses only Node built-ins — no `npm install` needed to build.
-`npm install` is only required for the optional QA tooling (`validate` uses
-html-validate; `smoke` / `qa` use a static server + Playwright/Lighthouse).
+`build-site.mjs`, `validate-site.mjs`, and `route-smoke.mjs` use only Node
+built-ins, so no install is needed for build, static validation, or route
+smoke. `npm ci` is required only for the optional browser QA, which uses
+Playwright and Axe.
 
 ## What this redesign changed (2026-07-17, from commit `cc10304`)
 
 - Shorter unified homepage with equal psychopharmacology, browser-world, and music paths.
 - Real `/psychopharmacology/`, `/games/`, and `/music/` indexes.
-- One canonical catalog for 13 games and 9 releases.
+- One canonical catalog, initially launched with 13 games and 9 releases.
 - Original night-lab hero and 1200×630 social artwork.
 - Self-hosted Inter and Space Grotesk; no Font Awesome on the hub pages.
 - Responsive AVIF/WebP catalog art, accessible mobile dialog nav, opt-in audio, filters.
 - All copy in the site author's own voice.
+
+## Current verified baseline (2026-08-05)
+
+- 30 locally hosted games and 10 music releases.
+- Pocket Sun is hosted under `/pocket-sun/`; it no longer depends on a separate
+  Netlify project.
+- The four generated hub pages, fingerprinted hub assets, and `sitemap.xml`
+  must remain byte-current with `src/content/site-data.json`.
+- Pull requests run the read-only validation workflow in
+  `.github/workflows/validate-site.yml`; that workflow never deploys or mutates
+  another branch.

@@ -663,4 +663,10 @@ function applyQuality() {
   G.postfx.resize();
 }
 
-boot();
+boot().catch((error) => {
+  console.warn('[Qualiacology] Skyshard boot failed', error);
+  window.__qualiacologyGameFatal?.(
+    'Skyshard could not open.',
+    'The game files loaded, but the renderer could not start. Reloading often fixes a temporary GPU reset.',
+  );
+});

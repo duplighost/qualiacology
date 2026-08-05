@@ -243,9 +243,19 @@
         </div>
     </div>
 
+    <script>
+      window.__Q_BEHIND_WEBGL_OK = (() => {
+        try {
+          const canvas = document.createElement('canvas');
+          const gl = canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: false })
+            || canvas.getContext('webgl', { failIfMajorPerformanceCaveat: false });
+          if (gl) { try { gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch (_) {} }
+          return !!gl;
+        } catch (_) { return false; }
+      })();
+    </script>
     <script src="./vendor/three.min.js"></script>
     <script src="./vendor/PointerLockControls.js"></script>
-    <script src="./vendor/Tone.js"></script>
 
     <script>
         let camera, scene, renderer, controls;
@@ -308,9 +318,64 @@
         let lastShotTime = 0;
         const baseFireRate = 80; // ms between shots
 
-        // Audio Synths
+        // Audio Synths. Tone is downloaded without executing during the title screen,
+        // then installed synchronously inside a real user gesture. Loading Tone at page
+        // startup creates an AudioContext before the visitor interacts, which Chromium
+        // correctly blocks and reports as an autoplay warning.
         let shootSynth, enemyDeathSynth, spawnerDeathSynth, playerHitSynth, pickupSynth, bossSlamSynth, bossDeathSynth;
         let nextSynthStart = 0;
+        let toneSource = null;
+        let toneSourcePromise = null;
+        let toneInstallFailed = false;
+
+        function primeToneSource() {
+            if (toneSourcePromise) return toneSourcePromise;
+            toneSourcePromise = fetch('./vendor/Tone.js', { cache: 'force-cache' })
+                .then(response => {
+                    if (!response.ok) throw new Error(`Tone.js returned HTTP ${response.status}`);
+                    return response.text();
+                })
+                .then(source => { toneSource = source; return source; })
+                .catch(error => {
+                    toneInstallFailed = true;
+                    console.warn('[Qualiacology] Behind You audio library could not be prepared', error);
+                    return null;
+                });
+            return toneSourcePromise;
+        }
+
+        function installToneDuringGesture() {
+            if (window.Tone) return true;
+            if (!toneSource || toneInstallFailed) return false;
+            try {
+                // Indirect eval executes the vendored UMD build in the global scope, exactly
+                // as a normal script tag would, but while the click/mousedown activation is
+                // still live. The source has already been fetched and remains same-origin.
+                (0, eval)(`${toneSource}\n//# sourceURL=/behind-you/vendor/Tone.js`);
+                return !!window.Tone;
+            } catch (error) {
+                toneInstallFailed = true;
+                console.warn('[Qualiacology] Behind You audio library could not start', error);
+                return false;
+            }
+        }
+
+        function ensureAudioFromGesture() {
+            if (shootSynth) {
+                const resumed = window.Tone?.start?.();
+                if (resumed && typeof resumed.catch === 'function') resumed.catch(() => {});
+                const spatialContext = audioListener?.context;
+                if (spatialContext?.state === 'suspended') spatialContext.resume().catch(() => {});
+                return true;
+            }
+            if (!window.Tone && !installToneDuringGesture()) return false;
+            initAudio();
+            return !!shootSynth;
+        }
+
+        // Fetching bytes is harmless and does not create an AudioContext. In the normal case
+        // the source is ready long before the visitor presses Click to Enter.
+        primeToneSource();
         const audioMix = {
             shotVolume: -29,
             shotVelocityMin: 0.1,
@@ -557,7 +622,8 @@
             }).toDestination();
             bossDeathSynth.volume.value = -9;
 
-            Tone.start();
+            const toneStart = Tone.start();
+            if (toneStart && typeof toneStart.catch === 'function') toneStart.catch(() => {});
 
             // Initialize Three.js 3D Spatial Audio Listener
             if (!audioListener) {
@@ -756,7 +822,12 @@
         }
 
         function onMouseDown(event) {
-            if (controls.isLocked && event.button === 0) isShooting = true;
+            if (controls.isLocked && event.button === 0) {
+                // If the title-screen prefetch had not completed by the first click, this
+                // second genuine gesture finishes audio setup without blocking gameplay.
+                if (!shootSynth) ensureAudioFromGesture();
+                isShooting = true;
+            }
         }
 
         function onMouseUp(event) {
@@ -1799,7 +1870,10 @@
 
         function startGame() {
             if (isLikelyUnsupported()) { showUnsupportedMessage(); return; }
-            if(!shootSynth) initAudio(); // init on first user interaction
+            // Keep the lock request in the original click handler. Audio setup is also
+            // synchronous when the prefetched Tone source is ready, preserving both browser
+            // activation requirements without creating an AudioContext during page load.
+            if (!shootSynth) ensureAudioFromGesture();
             lastTime = performance.now();
             lastSpawnTime = lastTime; // start the spawn clock fresh on every run
             try {
@@ -1897,10 +1971,36 @@
             renderer.render(scene, camera);
         }
 
-        // Boot up
+        // Boot up. A missing/disabled WebGL context should be a compatibility
+        // screen, not an uncaught exception and a black canvas.
         window.onload = function() {
-            init();
-            animate();
+            if (!window.__Q_BEHIND_WEBGL_OK) {
+                const screen = document.getElementById('start-screen');
+                if (screen) {
+                    screen.classList.remove('hidden');
+                    screen.innerHTML = `
+                        <h1 style="color:#f22;text-shadow:0 0 20px #f00;">BEHIND YOU</h1>
+                        <p class="stat-line">WebGL is unavailable.</p>
+                        <p>This game needs a current browser with hardware acceleration enabled.</p>
+                        <p><a class="home-link" style="position:static;display:inline-block;margin-top:18px" href="/games/">Back to Games</a></p>`;
+                }
+                return;
+            }
+            try {
+                init();
+                animate();
+            } catch (error) {
+                console.warn('[Qualiacology] Behind You could not start', error);
+                const screen = document.getElementById('start-screen');
+                if (screen) {
+                    screen.classList.remove('hidden');
+                    screen.innerHTML = `
+                        <h1 style="color:#f22;text-shadow:0 0 20px #f00;">BEHIND YOU</h1>
+                        <p class="stat-line">WebGL is unavailable.</p>
+                        <p>This game needs a current browser with hardware acceleration enabled.</p>
+                        <p><a class="home-link" style="position:static;display:inline-block;margin-top:18px" href="/games/">Back to Games</a></p>`;
+                }
+            }
         };
     </script>
 </body>

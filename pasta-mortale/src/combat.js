@@ -1,4 +1,4 @@
-import * as THREE from "../vendor/three.module.js";
+import * as THREE from "../vendor/three.module.js?v=r165";
 const TYPE_DATA = Object.freeze({
   twirler: { name: "Fork-Face Twirler", health: 54, speed: 2.5, damage: 8, range: 1.55, cadence: 1.08, scale: 1, color: 0xe9b64f, role: "rush", sight: 24 },
   saucier: { name: "Marinara Saucier", health: 84, speed: 1.6, damage: 10, range: 17, cadence: 1.65, scale: 1.08, color: 0xf2bd5b, ranged: true, role: "suppress", sight: 30 },
@@ -30,10 +30,33 @@ const PUNCH_DURATION = 0.38;
 const PUNCH_COOLDOWN = 0.56;
 const PUNCH_IMPACT_DELAY = 0.095;
 const PUNCH_CONE_DOT = Math.cos(THREE.MathUtils.degToRad(56));
+const KEEP_OUT_DISTANCE = Object.freeze({
+  twirler: 1.8,
+  saucier: 1.95,
+  colossus: 2.25,
+  noodlemancer: 2.25
+});
+const LAST_HOSTILE_RELOCATION_FAILURE_TIME = 8;
 // Fodder still punch-cooks into an instant spaghetti burst, but high-value
 // pasta (the colossus and the three-phase boss) only take a bounded chunk so a
 // single melee tap can no longer skip the entire climax fight.
 const PUNCH_DAMAGE = 60;
+const OPENING_LESSON_TIMEOUT = 15;
+const OPENING_FLOOD_RAMP = 3;
+const OPENING_RELEASE_DELAYS = Object.freeze([0.45, 1.05, 1.65]);
+const EVENT_QUEUE_LIMIT = 96;
+const ARCHETYPE_CUE_COLORS = Object.freeze({
+  twirler: 0xffc34f,
+  saucier: 0x43dfff,
+  colossus: 0xfff0bd
+});
+const BOSS_PHASE_CUE_COLORS = Object.freeze([0, 0xffc34f, 0x43dfff, 0xfff0bd]);
+const BOSS_PHASE_EMISSIVE_COLORS = Object.freeze([0, 0x4f2b05, 0x073843, 0x51462d]);
+
+function cueColorFor(type, bossPhase = 1) {
+  if (type === "noodlemancer") return BOSS_PHASE_CUE_COLORS[clamp(Math.round(finite(bossPhase, 1)), 1, 3)];
+  return ARCHETYPE_CUE_COLORS[type] || ARCHETYPE_CUE_COLORS.twirler;
+}
 
 export async function createPastaCombat(options = {}) {
   const scene = options.scene || new THREE.Scene();
@@ -56,6 +79,7 @@ export async function createPastaCombat(options = {}) {
   const callbacks = { message: options.onMessage, damage: options.onDamage, victory: options.onVictory,
     defeat: options.onDefeat, splat: options.onLensSplat, audio: options.onAudio, punch: options.onPunchImpact };
   const enemies = [], projectiles = [], bombs = [], noodlePieces = [], effects = [], errors = [];
+  const eventQueue = [];
   const raycaster = new THREE.Raycaster();
   const clockDirection = new THREE.Vector3();
   const worldCamera = new THREE.Vector3();
@@ -74,6 +98,8 @@ export async function createPastaCombat(options = {}) {
   let victory = false, defeated = false, firing = false, aiming = false, aimProgress = 0, lastKill = null;
   let triggerReleaseRequired = false;
   let reloadStage = 0;
+  let eventSequence = 0;
+  let lastEvent = null;
   let lastPlayer = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, eyeHeight: 1.62 };
   let lastPlayerSpeed = 0;
   let noodleCollisions = 0, noodleImpulses = 0;
@@ -104,6 +130,9 @@ export async function createPastaCombat(options = {}) {
     lastImpactAt: -1
   };
   const stats = freshStats();
+  const pendingWaveSpawns = [];
+  let opening = freshOpeningState();
+  const keepOutTelemetry = freshKeepOutTelemetry();
   const materials = {
     noodle: new THREE.MeshPhysicalMaterial({ color: 0xf5c76a, roughness: 0.32, metalness: 0.01, clearcoat: 0.52, clearcoatRoughness: 0.2 }),
     pale: new THREE.MeshPhysicalMaterial({ color: 0xffe7a6, roughness: 0.34, clearcoat: 0.44, clearcoatRoughness: 0.18 }),
@@ -112,6 +141,9 @@ export async function createPastaCombat(options = {}) {
     darkSauce: new THREE.MeshPhysicalMaterial({ color: 0x3b0906, roughness: 0.24, clearcoat: 0.65, clearcoatRoughness: 0.18 }),
     eye: new THREE.MeshBasicMaterial({ color: 0xfff0a8, toneMapped: false }),
     mouth: new THREE.MeshStandardMaterial({ color: 0x220201, roughness: 0.58 }),
+    roleGold: new THREE.MeshBasicMaterial({ color: ARCHETYPE_CUE_COLORS.twirler, transparent: true, opacity: 0.78, depthWrite: false, toneMapped: false }),
+    roleCyan: new THREE.MeshBasicMaterial({ color: ARCHETYPE_CUE_COLORS.saucier, transparent: true, opacity: 0.82, depthWrite: false, toneMapped: false }),
+    roleCream: new THREE.MeshBasicMaterial({ color: ARCHETYPE_CUE_COLORS.colossus, transparent: true, opacity: 0.76, depthWrite: false, toneMapped: false }),
     hitbox: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
   };
   const viewModel = buildViewModel();
@@ -131,8 +163,37 @@ export async function createPastaCombat(options = {}) {
       score: 0, damageDone: 0, damageTaken: 0, sauceThrows: 0, sauceBombs: 0, coverBlocks: 0,
       sauceKills: 0, reloads: 0, handRolls: 0, ammoSalvaged: 0, wavesCleared: 0, noodleImpulses: 0,
       tacticalTransitions: 0, coverUses: 0, flanks: 0, enemyShots: 0, bossPhaseTransitions: 0,
-      navigationRecoveries: 0, navigationRelocations: 0, lastHostilePursuits: 0,
+      navigationRecoveries: 0, navigationRelocations: 0, lastHostilePursuits: 0, lastHostileRelocations: 0,
       punchAttempts: 0, punchHits: 0, punchMisses: 0, punchKills: 0, punchExplosions: 0
+    };
+  } function freshKeepOutTelemetry() {
+    return {
+      nearestHostileDistance: null,
+      currentIntrusionDuration: 0,
+      longestIntrusionDuration: 0,
+      currentPeakIntrusion: 0,
+      peakIntrusion: 0,
+      forcedSeparations: 0,
+      forcedSeparationFrames: 0,
+      estimatedCentralHostileCoverage: 0,
+      peakEstimatedCentralHostileCoverage: 0
+    };
+  } function freshOpeningState() {
+    return {
+      active: true,
+      protected: false,
+      status: "waiting-wave",
+      startedAt: null,
+      deadlineAt: OPENING_LESSON_TIMEOUT,
+      firstEnemyId: null,
+      firstKillAt: null,
+      completedAt: null,
+      completionReason: null,
+      firstReinforcementAt: null,
+      lastReinforcementAt: null,
+      releasedCount: 0,
+      totalReinforcements: OPENING_RELEASE_DELAYS.length,
+      floodScale: 0
     };
   } function call(kind, ...args) {
     try {
@@ -141,6 +202,29 @@ export async function createPastaCombat(options = {}) {
       errors.push(`${kind}: ${String(error?.message || error)}`.slice(0, 180));
       if (errors.length > 12) errors.shift();
     }
+  } function eventPoint(value, fallback = null) {
+    if (!value || typeof value !== "object") return fallback;
+    const x = Number(value.x);
+    const y = Number(value.y);
+    const z = Number(value.z);
+    return Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z) ? { x, y, z } : fallback;
+  } function emitEvent(type, payload = {}) {
+    const event = {
+      sequence: ++eventSequence,
+      type: String(type || "unknown"),
+      time: finite(elapsed),
+      wave: Math.max(1, waveIndex || 1),
+      ...payload
+    };
+    for (const key of ["origin", "position", "direction", "normal", "targetPosition"]) {
+      if (event[key] != null) event[key] = eventPoint(event[key], null);
+    }
+    eventQueue.push(event);
+    if (eventQueue.length > EVENT_QUEUE_LIMIT) eventQueue.splice(0, eventQueue.length - EVENT_QUEUE_LIMIT);
+    lastEvent = event;
+    return event;
+  } function consumeEvents() {
+    return eventQueue.splice(0).map((event) => ({ ...event }));
   } function buildViewModel() {
     const root = new THREE.Group();
     root.name = "Al Dente-12 spaghetti rifle";
@@ -248,13 +332,48 @@ export async function createPastaCombat(options = {}) {
     mesh.castShadow = mesh.material !== materials.hitbox;
     hitMeshes.push(mesh);
     return mesh;
+  } function buildRoleAccent(type, s) {
+    if (type === "noodlemancer") return null;
+    const material = type === "saucier"
+      ? materials.roleCyan
+      : type === "colossus"
+        ? materials.roleCream
+        : materials.roleGold;
+    const radius = (type === "colossus" ? 0.34 : type === "saucier" ? 0.31 : 0.23) * s;
+    const accent = new THREE.Mesh(
+      new THREE.TorusGeometry(radius, 0.025 * s, quality === "low" ? 5 : 7, quality === "low" ? 18 : 28),
+      material
+    );
+    accent.name = `${type} role silhouette accent`;
+    if (type === "twirler") {
+      // A low, compact belt makes the fast melee unit read as a tight knot
+      // instead of another upright ranged silhouette.
+      accent.position.set(0, 0.82 * s, 0);
+      accent.rotation.x = Math.PI / 2;
+      accent.scale.set(1.12, 1.12, 1.12);
+    } else if (type === "saucier") {
+      // A narrow cyan pressure-loop frames the backpack and ranged apparatus.
+      accent.position.set(0, 1.12 * s, -0.1 * s);
+      accent.scale.set(0.58, 1.38, 1);
+    } else {
+      // A broad cream yoke reinforces the heavy's width without touching its
+      // hitboxes, locomotion footprint, or keep-out distance.
+      accent.position.set(0, 1.34 * s, -0.08 * s);
+      accent.scale.set(1.55, 0.66, 1);
+    }
+    accent.userData.cueBaseY = accent.position.y;
+    accent.userData.cueScaleX = accent.scale.x;
+    accent.userData.cueScaleY = accent.scale.y;
+    accent.userData.cueScaleZ = accent.scale.z;
+    accent.userData.cueBaseRotationZ = accent.rotation.z;
+    return accent;
   } function buildPastaWeapon(type, s, bodyMaterial) {
     const root = new THREE.Group();
     root.position.set(type === "noodlemancer" ? 0.38 * s : 0, 1.04 * s, 0.27 * s);
     const ranged = TYPE_DATA[type].ranged;
     const telegraph = new THREE.Mesh(
       new THREE.SphereGeometry(0.075 * s, 10, 7),
-      new THREE.MeshBasicMaterial({ color: 0xffbb3f, transparent: true, opacity: 0, toneMapped: false, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: cueColorFor(type), transparent: true, opacity: 0, toneMapped: false, depthWrite: false })
     );
     telegraph.visible = false;
     if (ranged) {
@@ -307,6 +426,8 @@ export async function createPastaCombat(options = {}) {
     const strandMeshes = [];
     const torso = new THREE.Group();
     rig.add(torso);
+    const roleAccent = buildRoleAccent(type, s);
+    if (roleAccent) rig.add(roleAccent);
     const torsoCount = type === "noodlemancer" ? 18 : type === "colossus" ? 15 : 11;
     const torsoWidth = (type === "colossus" ? 0.38 : type === "noodlemancer" ? 0.34 : 0.27) * s;
     for (let i = 0; i < torsoCount; i += 1) {
@@ -466,7 +587,7 @@ export async function createPastaCombat(options = {}) {
       rig.add(crown);
       spellRing = new THREE.Mesh(
         new THREE.TorusGeometry(0.52 * s, 0.022 * s, 7, quality === "low" ? 26 : 44),
-        new THREE.MeshBasicMaterial({ color: 0xff741c, transparent: true, opacity: 0.58, toneMapped: false })
+        new THREE.MeshBasicMaterial({ color: cueColorFor(type), transparent: true, opacity: 0.58, toneMapped: false })
       );
       spellRing.position.y = 1.12 * s;
       spellRing.rotation.x = Math.PI / 2;
@@ -482,7 +603,7 @@ export async function createPastaCombat(options = {}) {
     rig.add(headHit);
     return {
       root, rig, torso, headGroup, hitMeshes, leftArm, rightArm, legGroups, strandMeshes,
-      weapon: weapon.root, telegraph: weapon.telegraph, eyes, crown, spellRing,
+      weapon: weapon.root, telegraph: weapon.telegraph, roleAccent, eyes, crown, spellRing,
       strands: strandMeshes.length + (type === "noodlemancer" ? 9 : 0), material: enemyMaterial
     };
   } function spawnEnemy(rawType = "twirler", position = null, stationary = false, autoSpawn = false) {
@@ -513,14 +634,16 @@ export async function createPastaCombat(options = {}) {
     const role = String(config?.role || suppliedRole || data.role || "rush");
     const enemy = {
       id, type, name: data.name, health: maximum, maxHealth: maximum, alive: true,
-      stationary: Boolean(config?.stationary ?? stationary), boss: Boolean(data.boss), root: mesh.root,
+      stationary: Boolean(config?.stationary ?? stationary), boss: Boolean(data.boss), summoned: Boolean(config?.summoned), root: mesh.root,
       rig: mesh.rig, hitMeshes: mesh.hitMeshes, leftArm: mesh.leftArm, rightArm: mesh.rightArm,
       legGroups: mesh.legGroups, strandMeshes: mesh.strandMeshes, headGroup: mesh.headGroup,
-      weaponMesh: mesh.weapon, telegraph: mesh.telegraph, eyes: mesh.eyes, crown: mesh.crown, spellRing: mesh.spellRing,
+      weaponMesh: mesh.weapon, telegraph: mesh.telegraph, roleAccent: mesh.roleAccent,
+      eyes: mesh.eyes, crown: mesh.crown, spellRing: mesh.spellRing,
       material: mesh.material, strands: mesh.strands, speed: data.speed, damage: data.damage,
       range: data.range, cadence: data.cadence, ranged: Boolean(data.ranged), attackTimer: 0.35 + enemies.length * 0.12,
       wobbleSeed: nextEnemyId * 1.731, steerSign: enemies.length % 2 === 0 ? 1 : -1,
       impulse: new THREE.Vector3(), summonTimer: 6.5,
+      spawnPosition: mesh.root.position.clone(),
       role, baseRole: role, roleLocked: Boolean(config?.role || suppliedRole), state: "spawn", previousState: "seek", stateTimer: 0.45 + enemies.length * 0.08,
       rethinkTimer: 0.1 + enemies.length * 0.07, memoryTimer: 0, targetVisible: false,
       lastSeen: mesh.root.position.clone(),
@@ -537,7 +660,13 @@ export async function createPastaCombat(options = {}) {
       recoveryGoal: mesh.root.position.clone(), recoveryTimer: 0,
       stuckTimer: 0, recoveryStage: 0, navigationRecoveries: 0, navigationRelocations: 0,
       actualSpeed: 0, totalTravel: 0, unseenTimer: 0,
-      lastHostileTimer: 0, pursuitMode: false,
+      lastHostileTimer: 0, pursuitMode: false, lastHostileFailedProgress: 0,
+      lastHostileRelocated: false, lastHostileRelocationAt: null, lastHostileFailedAtRelocation: null,
+      inViewCone: false, relativeYaw: 0, relativePitch: 0, horizontalHalfFov: 0, verticalHalfFov: 0,
+      projectedCoverage: 0, centralCoverage: 0,
+      keepOutDistance: finite(KEEP_OUT_DISTANCE[type], PUNCH_RANGE), keepOutIntrusion: 0,
+      keepOutIntrusionTime: 0, keepOutLongestIntrusion: 0, keepOutPeakIntrusion: 0,
+      keepOutForced: false, keepOutForcedThisFrame: false, keepOutForcedFrames: 0, forcedSeparations: 0,
       progressAnchor: mesh.root.position.clone(), progressGoal: mesh.root.position.clone(),
       progressGoalDistance: 0, progressTimer: 0, progressNavRouteId: null, progressNavIndex: 0
     };
@@ -545,6 +674,13 @@ export async function createPastaCombat(options = {}) {
     if (enemy.boss) {
       call("message", "THE NOODLEMANCER HAS FINISHED BOILING");
       call("audio", "bossSpawn", { intensity: 1.25, pan: 0 });
+      emitEvent("bossSpawn", {
+        enemyId: enemy.id,
+        enemyType: enemy.type,
+        health: finite(enemy.health),
+        maxHealth: finite(enemy.maxHealth),
+        position: enemy.root.position
+      });
     }
     return enemyState(enemy);
   } function defaultSpawnPosition(index = 0, type = "twirler") {
@@ -648,6 +784,187 @@ export async function createPastaCombat(options = {}) {
       errors.push(`traceWorld: ${String(error?.message || error)}`.slice(0, 180));
       return { blocked: false, fraction: 1, point: new THREE.Vector3(finite(to?.x), finite(to?.y), finite(to?.z)) };
     }
+  } function viewConeForPosition(position = {}, scaleValue = 1) {
+    const scale = clamp(finite(scaleValue, 1), 0.25, 3);
+    const cameraFov = THREE.MathUtils.degToRad(clamp(finite(camera.fov, baseCameraFov), 20, 130));
+    const cameraZoom = Math.max(0.01, finite(camera.zoom, baseCameraZoom));
+    const verticalFov = 2 * Math.atan(Math.tan(cameraFov * 0.5) / cameraZoom);
+    const aspect = clamp(finite(camera.aspect, 1), 0.25, 5);
+    const horizontalFov = 2 * Math.atan(Math.tan(verticalFov * 0.5) * aspect);
+    const dx = finite(position?.x) - lastPlayer.x;
+    const dz = finite(position?.z) - lastPlayer.z;
+    const horizontalDistance = Math.max(0.001, Math.hypot(dx, dz));
+    const eyeY = lastPlayer.y + lastPlayer.eyeHeight;
+    const dy = finite(position?.y, eyeY) - eyeY;
+    const bearing = Math.atan2(-dx, -dz);
+    const relativeYaw = Math.atan2(Math.sin(bearing - lastPlayer.yaw), Math.cos(bearing - lastPlayer.yaw));
+    const targetPitch = Math.atan2(dy, horizontalDistance);
+    const relativePitch = targetPitch - lastPlayer.pitch;
+    const horizontalRadius = Math.atan2(0.46 * scale, horizontalDistance);
+    const verticalRadius = Math.atan2(0.92 * scale, Math.max(0.001, Math.hypot(horizontalDistance, dy)));
+    const horizontalHalfFov = horizontalFov * 0.5;
+    const verticalHalfFov = verticalFov * 0.5;
+    const inHorizontalCone = Math.abs(relativeYaw) <= horizontalHalfFov + horizontalRadius;
+    const inVerticalCone = Math.abs(relativePitch) <= verticalHalfFov + verticalRadius;
+    const inViewCone = inHorizontalCone && inVerticalCone && Math.abs(relativeYaw) < Math.PI * 0.5 + horizontalRadius;
+    const projectedWidth = clamp(horizontalRadius / Math.max(0.001, horizontalHalfFov), 0, 1);
+    const projectedHeight = clamp(verticalRadius / Math.max(0.001, verticalHalfFov), 0, 1);
+    const projectedCoverage = inViewCone ? projectedWidth * projectedHeight * 100 : 0;
+    const centralWeightX = clamp(1 - Math.abs(relativeYaw) / Math.max(0.001, horizontalHalfFov * 0.62), 0, 1);
+    const centralWeightY = clamp(1 - Math.abs(relativePitch) / Math.max(0.001, verticalHalfFov * 0.62), 0, 1);
+    return {
+      inViewCone,
+      inHorizontalCone,
+      inVerticalCone,
+      relativeYaw: finite(relativeYaw),
+      relativePitch: finite(relativePitch),
+      horizontalHalfFov: finite(horizontalHalfFov),
+      verticalHalfFov: finite(verticalHalfFov),
+      horizontalFov: finite(horizontalFov),
+      verticalFov: finite(verticalFov),
+      aspect,
+      zoom: cameraZoom,
+      distance: horizontalDistance,
+      projectedCoverage: finite(projectedCoverage),
+      centralCoverage: finite(projectedCoverage * centralWeightX * centralWeightY)
+    };
+  } function updateEnemyViewCone(enemy) {
+    const scale = TYPE_DATA[enemy.type].scale;
+    const view = viewConeForPosition({
+      x: enemy.root.position.x,
+      y: enemy.root.position.y + 1.05 * scale,
+      z: enemy.root.position.z
+    }, scale);
+    enemy.inViewCone = view.inViewCone;
+    enemy.relativeYaw = view.relativeYaw;
+    enemy.relativePitch = view.relativePitch;
+    enemy.horizontalHalfFov = view.horizontalHalfFov;
+    enemy.verticalHalfFov = view.verticalHalfFov;
+    enemy.projectedCoverage = view.projectedCoverage;
+    enemy.centralCoverage = view.centralCoverage;
+    return view;
+  } function adjustEnemyDeltaForKeepOut(enemy, target, rawDelta, dt) {
+    const origin = enemy.root.position;
+    const minimum = finite(enemy.keepOutDistance, KEEP_OUT_DISTANCE[enemy.type] || PUNCH_RANGE);
+    const fromPlayerX = origin.x - target.x;
+    const fromPlayerZ = origin.z - target.z;
+    const distance = Math.hypot(fromPlayerX, fromPlayerZ);
+    let outwardX;
+    let outwardZ;
+    if (distance > 0.001) {
+      outwardX = fromPlayerX / distance;
+      outwardZ = fromPlayerZ / distance;
+    } else {
+      outwardX = -Math.sin(enemy.root.rotation.y || enemy.wobbleSeed);
+      outwardZ = -Math.cos(enemy.root.rotation.y || enemy.wobbleSeed);
+    }
+    let x = finite(rawDelta?.x);
+    let z = finite(rawDelta?.z);
+    let radial = x * outwardX + z * outwardZ;
+    let forced = false;
+    let recoveryStep = 0;
+    if (radial < 0 && distance + radial < minimum) {
+      const allowedInward = Math.max(0, distance - minimum);
+      if (-radial > allowedInward) {
+        const correction = -allowedInward - radial;
+        x += outwardX * correction;
+        z += outwardZ * correction;
+        radial = -allowedInward;
+        forced = true;
+      }
+    }
+    if (distance < minimum) {
+      if (radial < 0) {
+        x -= outwardX * radial;
+        z -= outwardZ * radial;
+      }
+      const intrusion = minimum - distance;
+      const recoverySpeed = clamp(0.55 + intrusion * 0.72, 0.55, Math.max(0.9, Math.min(2.05, enemy.speed * 0.86)));
+      recoveryStep = Math.min(intrusion, recoverySpeed * Math.max(0, dt));
+      x += outwardX * recoveryStep;
+      z += outwardZ * recoveryStep;
+      forced = true;
+    }
+    return { x, z, forced, recoveryStep, outwardX, outwardZ, distance, minimum };
+  } function resolveEnemyMovementWithKeepOut(enemy, target, rawDelta, radius, height, dt) {
+    const origin = enemy.root.position;
+    const gate = adjustEnemyDeltaForKeepOut(enemy, target, rawDelta, dt);
+    const originDistance = gate.distance;
+    const validCandidate = (candidate) => {
+      if (![candidate?.x, candidate?.y, candidate?.z].every(Number.isFinite)) return false;
+      if (positionIsBlocked(candidate, radius, height)) return false;
+      const nextDistance = Math.hypot(candidate.x - target.x, candidate.z - target.z);
+      if (originDistance >= gate.minimum - 0.001 && nextDistance < gate.minimum - 0.003) return false;
+      if (originDistance < gate.minimum && nextDistance < originDistance - 0.001) return false;
+      return true;
+    };
+    let movement = resolveWorldMovement(origin, { x: gate.x, z: gate.z }, radius, height);
+    if (!validCandidate(movement)) {
+      movement = { x: origin.x, y: origin.y, z: origin.z, blocked: true, supportId: enemy.supportId };
+    }
+    let bestDistance = Math.hypot(movement.x - target.x, movement.z - target.z);
+    if (originDistance < gate.minimum && bestDistance <= originDistance + 0.001 && gate.recoveryStep > 0) {
+      for (const angle of [-0.58, 0.58]) {
+        const cosine = Math.cos(angle);
+        const sine = Math.sin(angle);
+        const sideX = gate.outwardX * cosine - gate.outwardZ * sine;
+        const sideZ = gate.outwardX * sine + gate.outwardZ * cosine;
+        const candidate = resolveWorldMovement(origin, {
+          x: sideX * gate.recoveryStep,
+          z: sideZ * gate.recoveryStep
+        }, radius, height);
+        if (!validCandidate(candidate)) continue;
+        const candidateDistance = Math.hypot(candidate.x - target.x, candidate.z - target.z);
+        if (candidateDistance > bestDistance + 0.001) {
+          movement = candidate;
+          bestDistance = candidateDistance;
+        }
+      }
+    }
+    return { ...movement, keepOutForced: gate.forced };
+  } function finalizeEnemySpatialTelemetry(enemy, dt) {
+    updateEnemyViewCone(enemy);
+    const distance = Math.hypot(enemy.root.position.x - lastPlayer.x, enemy.root.position.z - lastPlayer.z);
+    const intrusion = Math.max(0, enemy.keepOutDistance - distance);
+    enemy.keepOutIntrusion = intrusion;
+    if (intrusion > 0.002) {
+      enemy.keepOutIntrusionTime += dt;
+      enemy.keepOutLongestIntrusion = Math.max(enemy.keepOutLongestIntrusion, enemy.keepOutIntrusionTime);
+      enemy.keepOutPeakIntrusion = Math.max(enemy.keepOutPeakIntrusion, intrusion);
+    } else {
+      enemy.keepOutIntrusionTime = 0;
+    }
+    if (enemy.keepOutForcedThisFrame) {
+      enemy.keepOutForcedFrames += 1;
+      keepOutTelemetry.forcedSeparationFrames += 1;
+      if (!enemy.keepOutForced) {
+        enemy.forcedSeparations += 1;
+        keepOutTelemetry.forcedSeparations += 1;
+      }
+    }
+    enemy.keepOutForced = Boolean(enemy.keepOutForcedThisFrame);
+  } function refreshKeepOutTelemetry() {
+    const living = enemies.filter((enemy) => enemy.alive);
+    keepOutTelemetry.nearestHostileDistance = living.length
+      ? Math.min(...living.map((enemy) => Math.hypot(enemy.root.position.x - lastPlayer.x, enemy.root.position.z - lastPlayer.z)))
+      : null;
+    keepOutTelemetry.currentIntrusionDuration = living.reduce((maximum, enemy) => Math.max(maximum, enemy.keepOutIntrusionTime), 0);
+    keepOutTelemetry.longestIntrusionDuration = Math.max(
+      keepOutTelemetry.longestIntrusionDuration,
+      ...living.map((enemy) => enemy.keepOutLongestIntrusion),
+      0
+    );
+    keepOutTelemetry.currentPeakIntrusion = living.reduce((maximum, enemy) => Math.max(maximum, enemy.keepOutIntrusion), 0);
+    keepOutTelemetry.peakIntrusion = Math.max(
+      keepOutTelemetry.peakIntrusion,
+      ...living.map((enemy) => enemy.keepOutPeakIntrusion),
+      0
+    );
+    keepOutTelemetry.estimatedCentralHostileCoverage = living.reduce((maximum, enemy) => Math.max(maximum, enemy.centralCoverage), 0);
+    keepOutTelemetry.peakEstimatedCentralHostileCoverage = Math.max(
+      keepOutTelemetry.peakEstimatedCentralHostileCoverage,
+      keepOutTelemetry.estimatedCentralHostileCoverage
+    );
   } function update(dtValue, timeValue, context = {}) {
     const dt = clamp(finite(dtValue), 0, 0.05);
     const time = finite(timeValue, elapsed);
@@ -698,7 +1015,7 @@ export async function createPastaCombat(options = {}) {
       weapon.firing = firing;
       refreshPunchTarget();
       animateViewModel(0, time, context);
-      return getState();
+      return context.frameView ? getFrameState() : getState();
     }
     elapsed += dt;
     fireCooldown = Math.max(0, fireCooldown - dt);
@@ -744,6 +1061,7 @@ export async function createPastaCombat(options = {}) {
       }
     }
     const simulationDt = punchHitStop > 0 ? 0 : dt;
+    updateOpeningLesson(simulationDt);
     updateWaves(simulationDt);
     updateEnemies(simulationDt, time);
     updateProjectiles(simulationDt);
@@ -752,7 +1070,7 @@ export async function createPastaCombat(options = {}) {
     updateEffects(dt);
     refreshPunchTarget();
     animateViewModel(dt, time, context);
-    return getState();
+    return context.frameView ? getFrameState() : getState();
   } function animateViewModel(dt, time, context) {
     const speed = clamp(finite(context?.player?.speed, lastPlayerSpeed), 0, 12);
     if (dt <= 0 && !aiming) aimProgress = 0;
@@ -878,7 +1196,11 @@ export async function createPastaCombat(options = {}) {
     punchTelemetry.lastDistance = target.distance;
     const hitPosition = target.target.clone();
     const punchDamage = enemy.boss || enemy.type === "colossus" ? PUNCH_DAMAGE : enemy.health + 1;
-    damageEnemy(enemy, punchDamage, "punch");
+    damageEnemy(enemy, punchDamage, "punch", {
+      position: hitPosition,
+      origin: { x: lastPlayer.x, y: lastPlayer.y + lastPlayer.eyeHeight, z: lastPlayer.z },
+      direction: { x: target.forwardX, y: 0, z: target.forwardZ }
+    });
     const killed = wasAlive && !enemy.alive;
     const piecesAdded = Math.max(0, noodlePieces.length - piecesBefore);
     const energyAfter = noodlePieces.reduce((sum, piece) => sum + piece.velocity.lengthSq() * 0.5, 0);
@@ -984,15 +1306,35 @@ export async function createPastaCombat(options = {}) {
     const obstruction = worldTrace(origin, intendedEnd);
     const end = obstruction.blocked ? obstruction.point : intendedEnd;
     spawnTracer(origin, end, Boolean(hit && !obstruction.blocked));
+    const hitEnemy = hit && !obstruction.blocked
+      ? enemies.find((entry) => entry.id === hit.object.userData.enemyId && entry.alive) || null
+      : null;
+    emitEvent("shot", {
+      origin,
+      direction: shotDirection,
+      position: end,
+      blocked: Boolean(obstruction.blocked),
+      hit: Boolean(hitEnemy),
+      targetId: hitEnemy?.id || null,
+      targetType: hitEnemy?.type || null,
+      ammo: weapon.ammo
+    });
     if (obstruction.blocked) {
       stats.coverBlocks += 1;
       return true;
     }
     if (!hit) return true;
-    const enemy = enemies.find((entry) => entry.id === hit.object.userData.enemyId && entry.alive);
+    const enemy = hitEnemy;
     if (!enemy) return true;
     const headshot = hit.object.userData.hitPart === "head";
-    damageEnemy(enemy, headshot ? 36 : 18, headshot ? "headshot" : "bullet");
+    const normal = hit.face?.normal?.clone?.();
+    normal?.transformDirection?.(hit.object.matrixWorld);
+    damageEnemy(enemy, headshot ? 36 : 18, headshot ? "headshot" : "bullet", {
+      position: hit.point,
+      normal,
+      origin,
+      direction: shotDirection
+    });
     stats.hits += 1;
     stats.hitsLanded = stats.hits;
     if (headshot) stats.headshots += 1;
@@ -1070,8 +1412,91 @@ export async function createPastaCombat(options = {}) {
     viewModel.gun.rotation.z = 0;
     stats.reloads += 1;
     call("audio", "reloadEnd", { intensity: 0.9, pan: 0 });
+  } function resetOpeningLesson() {
+    pendingWaveSpawns.length = 0;
+    opening = freshOpeningState();
+  } function cancelOpeningLesson(reason = "cancelled") {
+    pendingWaveSpawns.length = 0;
+    opening.active = false;
+    opening.protected = false;
+    opening.status = String(reason || "cancelled");
+    opening.completionReason ||= String(reason || "cancelled");
+    opening.completedAt ??= elapsed;
+    opening.floodScale = 1;
+  } function beginOpeningLesson(list) {
+    resetOpeningLesson();
+    const arenaData = combatData();
+    const lessonSource = arenaData?.openingLessonSpawn || { x: 0, y: 0, z: 13.2 };
+    const lessonPosition = lessonSource?.position || lessonSource;
+    const lesson = spawnEnemy({
+      type: list[0] || "twirler",
+      position: lessonPosition,
+      autoSpawn: true,
+      spawnWave: 1,
+      spawnSlot: 0
+    });
+    opening.protected = true;
+    opening.status = "lesson";
+    opening.startedAt = elapsed;
+    opening.deadlineAt = elapsed < 1
+      ? OPENING_LESSON_TIMEOUT
+      : elapsed + OPENING_LESSON_TIMEOUT;
+    opening.firstEnemyId = lesson?.id || null;
+
+    const authoredSpawns = arenaData?.waveSpawns?.[0] || arenaData?.waves?.[0] || [];
+    for (let index = 0; index < OPENING_RELEASE_DELAYS.length; index += 1) {
+      const type = list[index + 1] || "twirler";
+      const source = authoredSpawns[index] || defaultSpawnPosition(index, type);
+      pendingWaveSpawns.push({
+        type,
+        position: { x: finite(source?.x), y: finite(source?.y), z: finite(source?.z) },
+        spawnSlot: index + 1,
+        delay: OPENING_RELEASE_DELAYS[index],
+        releaseAt: null
+      });
+    }
+    return lesson;
+  } function completeOpeningLesson(reason = "completed") {
+    if (!opening.active || !opening.protected) return false;
+    opening.protected = false;
+    opening.status = "releasing";
+    opening.completionReason = String(reason || "completed");
+    opening.completedAt = elapsed;
+    if (opening.completionReason === "first-kill") opening.firstKillAt = elapsed;
+    opening.floodScale = 0;
+    for (const pending of pendingWaveSpawns) pending.releaseAt = elapsed + pending.delay;
+    call("message", opening.completionReason === "timeout"
+      ? "THE REST OF THE POT BOILS OVER"
+      : "FIRST SERVING DRAINED // THE KITCHEN ANSWERS");
+    return true;
+  } function updateOpeningLesson(dt) {
+    if (!opening.active || dt <= 0) return;
+    if (opening.protected && opening.deadlineAt != null && elapsed >= opening.deadlineAt) {
+      completeOpeningLesson("timeout");
+    }
+    if (opening.protected || opening.completedAt == null) return;
+
+    opening.floodScale = clamp((elapsed - opening.completedAt) / OPENING_FLOOD_RAMP, 0, 1);
+    while (pendingWaveSpawns.length && pendingWaveSpawns[0].releaseAt <= elapsed) {
+      const pending = pendingWaveSpawns.shift();
+      spawnEnemy({
+        type: pending.type,
+        position: pending.position,
+        autoSpawn: true,
+        spawnWave: 1,
+        spawnSlot: pending.spawnSlot
+      });
+      opening.releasedCount += 1;
+      opening.firstReinforcementAt ??= elapsed;
+      opening.lastReinforcementAt = elapsed;
+    }
+    if (!pendingWaveSpawns.length && opening.floodScale >= 1) {
+      opening.active = false;
+      opening.status = "complete";
+    }
   } function updateWaves(dt) {
-    if (wavesSuppressed || victory || defeated || enemies.some((enemy) => enemy.alive)) return;
+    if (wavesSuppressed || victory || defeated || opening.protected || pendingWaveSpawns.length ||
+      (waveIndex > 0 && opening.active) || enemies.some((enemy) => enemy.alive)) return;
     waveTimer -= dt;
     if (waveTimer > 0) return;
     if (waveIndex >= WAVE_DATA.length) {
@@ -1085,15 +1510,27 @@ export async function createPastaCombat(options = {}) {
     combatGrace = Math.max(combatGrace, waveIndex === 1 ? 4.25 : 1.65);
     wavesSuppressed = false;
     const list = WAVE_DATA[waveIndex - 1];
-    list.forEach((type, i) => spawnEnemy({
-      type,
-      position: defaultSpawnPosition(i, type),
-      autoSpawn: true,
-      spawnWave: waveIndex,
-      spawnSlot: i
-    }));
+    if (waveIndex === 1) beginOpeningLesson(list);
+    else {
+      pendingWaveSpawns.length = 0;
+      opening.protected = false;
+      opening.floodScale = 1;
+      list.forEach((type, i) => spawnEnemy({
+        type,
+        position: defaultSpawnPosition(i, type),
+        autoSpawn: true,
+        spawnWave: waveIndex,
+        spawnSlot: i
+      }));
+    }
     call("message", waveIndex === WAVE_DATA.length ? "FINAL WAVE // CUT THE MASTER STRAND" : `WAVE ${waveIndex} // THE WATER IS BOILING`);
     call("audio", "waveStart", { intensity: 0.8 + waveIndex * 0.12, pan: 0 });
+    emitEvent("waveStart", {
+      index: waveIndex,
+      total: WAVE_DATA.length,
+      composition: [...list],
+      final: waveIndex === WAVE_DATA.length
+    });
     return true;
   } function setEnemyState(enemy, state, duration = 0.8) {
     if (enemy.state !== state) {
@@ -1539,8 +1976,10 @@ export async function createPastaCombat(options = {}) {
       return true;
     }
     return false;
-  } function relocateLostEnemy(enemy, target) {
-    if (enemy.boss) return false;
+  } function relocateLostEnemy(enemy, target, options = {}) {
+    const lastHostileRecovery = Boolean(options.lastHostile);
+    if (enemy.boss || (lastHostileRecovery && enemy.lastHostileRelocated)) return false;
+    const failedProgressAtRelocation = enemy.lastHostileFailedProgress;
     const arenaData = combatData();
     const enemyZone = navigationZone(enemy.root.position, enemy.groundY);
     const routeId = escapeRouteAt(enemy.root.position, enemy.groundY, target.x) ||
@@ -1560,6 +1999,8 @@ export async function createPastaCombat(options = {}) {
       const hintY = finite(raw?.y, lastPlayer.y);
       if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
       const y = surfaceY(x, z, hintY);
+      if (lastHostileRecovery && Math.abs(y - enemy.groundY) > 0.82) continue;
+      if (lastHostileRecovery && navigationZone({ x, z }, y) !== enemyZone) continue;
       if (positionIsBlocked({ x, y, z }, 0.36 * scale, 1.9 * scale)) continue;
       if (enemies.some((other) => other !== enemy && other.alive &&
         Math.hypot(other.root.position.x - x, other.root.position.z - z) < 1.25 * scale)) continue;
@@ -1567,14 +2008,11 @@ export async function createPastaCombat(options = {}) {
       if (playerDistance < 4.5 || playerDistance > 23) continue;
       scratchA.set(x, y + 1.05 * scale, z);
       const visible = !worldTrace(target, scratchA).blocked;
-      const forwardX = -Math.sin(lastPlayer.yaw);
-      const forwardZ = -Math.cos(lastPlayer.yaw);
-      const viewDot = ((x - lastPlayer.x) * forwardX + (z - lastPlayer.z) * forwardZ) /
-        Math.max(0.001, playerDistance);
-      const inView = viewDot > 0.25;
+      const inView = viewConeForPosition(scratchA, scale).inViewCone;
       // Recovery is fail-soft, not a jump scare: only relocate behind the
       // player or behind geometry, and always remain on the actor's tier.
       if (visible && inView) continue;
+      if (lastHostileRecovery && inView) continue;
       const score = (visible ? 0 : 2.6) + (inView ? 0 : 1.4) - Math.abs(playerDistance - 10) * 0.24;
       if (score > bestScore) {
         bestScore = score;
@@ -1591,10 +2029,17 @@ export async function createPastaCombat(options = {}) {
     enemy.rethinkTimer = 0;
     enemy.blockedTime = 0;
     enemy.stuckTimer = 0;
+    enemy.lastHostileFailedProgress = 0;
     enemy.recoveryStage = 0;
     enemy.recoveryTimer = 0;
     enemy.navigationRelocations += 1;
     stats.navigationRelocations += 1;
+    if (lastHostileRecovery) {
+      enemy.lastHostileRelocated = true;
+      enemy.lastHostileRelocationAt = elapsed;
+      enemy.lastHostileFailedAtRelocation = failedProgressAtRelocation;
+      stats.lastHostileRelocations += 1;
+    }
     clearNavigationRoute(enemy);
     enemy.lastValidGroundedPosition.copy(enemy.root.position);
     enemy.progressAnchor.copy(enemy.root.position);
@@ -1619,6 +2064,9 @@ export async function createPastaCombat(options = {}) {
       (!closingPursuit && enemy.ranged && enemy.targetVisible && distance <= enemy.range + 1.5);
     if (intentionallyHolding) {
       enemy.stuckTimer = Math.max(0, enemy.stuckTimer - dt * 3);
+      enemy.lastHostileFailedProgress = closingPursuit
+        ? Math.max(0, enemy.lastHostileFailedProgress - dt * 3)
+        : 0;
       if (enemy.stuckTimer <= 0.05) enemy.recoveryStage = 0;
       enemy.progressAnchor.copy(enemy.root.position);
       enemy.progressGoal.copy(enemy.goal);
@@ -1660,13 +2108,16 @@ export async function createPastaCombat(options = {}) {
     const progressed = goalGain >= 0.16 || routeAdvanced || goalDistance <= 0.32;
     if (progressed) {
       enemy.stuckTimer = Math.max(0, enemy.stuckTimer - progressWindow * 2.25);
+      if (closingPursuit) enemy.lastHostileFailedProgress = Math.max(0, enemy.lastHostileFailedProgress - progressWindow * 2.25);
       if (enemy.stuckTimer <= 0.05) enemy.recoveryStage = 0;
     } else {
       enemy.stuckTimer += progressWindow;
+      if (closingPursuit) enemy.lastHostileFailedProgress += progressWindow;
       // Net displacement remains diagnostic, but circling without goal gain
       // intentionally does not reset the watchdog.
       void netDisplacement;
     }
+    if (!closingPursuit) enemy.lastHostileFailedProgress = 0;
     if (enemy.stuckTimer >= 1 && enemy.recoveryStage < 1) {
       enemy.recoveryStage = 1;
       enemy.steerSign *= -1;
@@ -1680,7 +2131,12 @@ export async function createPastaCombat(options = {}) {
       enemy.rethinkTimer = 0;
       chooseRecoveryGoal(enemy, target, 2);
     }
-    if (enemy.stuckTimer >= 4.2 && !enemy.targetVisible && distance > 5) {
+    if (closingPursuit) {
+      if (enemy.lastHostileFailedProgress >= LAST_HOSTILE_RELOCATION_FAILURE_TIME &&
+        (!enemy.inViewCone || !enemy.targetVisible) && !enemy.lastHostileRelocated) {
+        if (relocateLostEnemy(enemy, target, { lastHostile: true })) return;
+      }
+    } else if (enemy.stuckTimer >= 4.2 && !enemy.targetVisible && distance > 5) {
       if (relocateLostEnemy(enemy, target)) return;
     }
     enemy.progressAnchor.copy(enemy.root.position);
@@ -1693,19 +2149,22 @@ export async function createPastaCombat(options = {}) {
     enemy.progressNavRouteId = enemy.navRouteId;
     enemy.progressNavIndex = enemy.navIndex;
   } function moveEnemy(enemy, target, distance, dt, time) {
-    if (enemy.stationary || enemy.state === "telegraph" || enemy.state === "stagger") return;
-    movementGoalForState(enemy, target, distance, time);
-    const navWaypoint = navigationWaypoint(enemy, target, distance);
-    if (enemy.recoveryTimer > 0) enemy.goal.copy(enemy.recoveryGoal);
+    if (enemy.stationary) return;
+    const keepOutOnly = enemy.state === "telegraph" || enemy.state === "stagger";
+    if (keepOutOnly && distance >= enemy.keepOutDistance - 0.002) return;
+    if (!keepOutOnly) movementGoalForState(enemy, target, distance, time);
+    const navWaypoint = keepOutOnly ? null : navigationWaypoint(enemy, target, distance);
+    if (!keepOutOnly && enemy.recoveryTimer > 0) enemy.goal.copy(enemy.recoveryGoal);
     else if (navWaypoint) enemy.goal.set(navWaypoint.x, navWaypoint.y, navWaypoint.z);
-    let dx = enemy.goal.x - enemy.root.position.x;
-    let dz = enemy.goal.z - enemy.root.position.z;
-    let length = Math.max(0.001, Math.hypot(dx, dz));
-    if (length < 0.18) return;
-    let directionX = dx / length;
-    let directionZ = dz / length;
+    let dx = keepOutOnly ? 0 : enemy.goal.x - enemy.root.position.x;
+    let dz = keepOutOnly ? 0 : enemy.goal.z - enemy.root.position.z;
+    let length = Math.hypot(dx, dz);
+    const requiresKeepOutRecovery = distance < enemy.keepOutDistance - 0.002;
+    if (length < 0.18 && !requiresKeepOutRecovery) return;
+    let directionX = length >= 0.18 ? dx / length : 0;
+    let directionZ = length >= 0.18 ? dz / length : 0;
     const separationRadius = 0.95 * TYPE_DATA[enemy.type].scale;
-    for (const other of enemies) {
+    for (const other of keepOutOnly ? [] : enemies) {
       if (other === enemy || !other.alive) continue;
       const ox = enemy.root.position.x - other.root.position.x;
       const oz = enemy.root.position.z - other.root.position.z;
@@ -1715,9 +2174,11 @@ export async function createPastaCombat(options = {}) {
       directionX += ox / separation * force;
       directionZ += oz / separation * force;
     }
-    length = Math.max(0.001, Math.hypot(directionX, directionZ));
-    directionX /= length;
-    directionZ /= length;
+    length = Math.hypot(directionX, directionZ);
+    if (length > 0.001) {
+      directionX /= length;
+      directionZ /= length;
+    }
     const stateScale = enemy.state === "rush" ? 1.18 : enemy.state === "retreat" ? 1.12 : enemy.state === "flank" ? 1.05 : 0.82;
     const pursuitScale = mustPursue(enemy, distance)
       ? clamp(1.24 + Math.max(0, distance - 12) * 0.022, 1.24, 1.72)
@@ -1726,25 +2187,25 @@ export async function createPastaCombat(options = {}) {
     const radius = 0.34 * TYPE_DATA[enemy.type].scale;
     const height = 1.9 * TYPE_DATA[enemy.type].scale;
     const origin = enemy.root.position;
-    let movement = resolveWorldMovement(origin, {
+    let movement = resolveEnemyMovementWithKeepOut(enemy, target, {
       x: directionX * speed * dt + enemy.impulse.x * dt,
       z: directionZ * speed * dt + enemy.impulse.z * dt
-    }, radius, height);
+    }, radius, height, dt);
     if (movement.blocked) {
       const tangentStep = speed * dt;
-      const tangentPreferred = resolveWorldMovement(origin, {
+      const tangentPreferred = resolveEnemyMovementWithKeepOut(enemy, target, {
         x: -directionZ * tangentStep * enemy.steerSign + enemy.impulse.x * dt,
         z: directionX * tangentStep * enemy.steerSign + enemy.impulse.z * dt
-      }, radius, height);
+      }, radius, height, dt);
       const travelDirect = (movement.x - origin.x) ** 2 + (movement.z - origin.z) ** 2;
       const travelPreferred = (tangentPreferred.x - origin.x) ** 2 + (tangentPreferred.z - origin.z) ** 2;
       if (travelPreferred > 0.000064 && travelPreferred >= travelDirect * 0.72) {
         movement = tangentPreferred;
       } else if (Math.max(travelDirect, travelPreferred) <= 0.000064) {
-        const tangentAlternate = resolveWorldMovement(origin, {
+        const tangentAlternate = resolveEnemyMovementWithKeepOut(enemy, target, {
           x: directionZ * tangentStep * enemy.steerSign + enemy.impulse.x * dt,
           z: -directionX * tangentStep * enemy.steerSign + enemy.impulse.z * dt
-        }, radius, height);
+        }, radius, height, dt);
         const travelAlternate = (tangentAlternate.x - origin.x) ** 2 + (tangentAlternate.z - origin.z) ** 2;
         if (travelAlternate > Math.max(travelDirect, travelPreferred)) {
           movement = tangentAlternate;
@@ -1772,6 +2233,7 @@ export async function createPastaCombat(options = {}) {
     }
     enemy.root.position.x = movement.x;
     enemy.root.position.z = movement.z;
+    enemy.keepOutForcedThisFrame = enemy.keepOutForcedThisFrame || Boolean(movement.keepOutForced);
     if (movement.supportId) enemy.supportId = movement.supportId;
   } function updateEnemyGrounding(enemy, dt) {
     const clearance = Math.max(0.02, finite(enemy.footClearance, 0.035));
@@ -1811,12 +2273,22 @@ export async function createPastaCombat(options = {}) {
     enemy.attackWindup = enemy.stateTimer;
     enemy.attackWindupMax = enemy.attackWindup;
     if (enemy.telegraph) {
+      enemy.telegraph.material.color.setHex(cueColorFor(enemy.type, enemy.bossPhase));
       enemy.telegraph.visible = true;
       enemy.telegraph.material.opacity = 0.15;
     }
     call("audio", "enemyShot", {
       intensity: enemy.boss ? 0.62 : 0.24,
       pan: clamp((enemy.root.position.x - lastPlayer.x) / 12, -1, 1)
+    });
+    emitEvent("enemyTelegraph", {
+      enemyId: enemy.id,
+      enemyType: enemy.type,
+      boss: Boolean(enemy.boss),
+      ranged: Boolean(enemy.ranged),
+      duration: finite(enemy.attackWindupMax),
+      position: enemy.root.position,
+      targetPosition: { x: lastPlayer.x, y: lastPlayer.y + lastPlayer.eyeHeight, z: lastPlayer.z }
     });
   } function finishEnemyAttack(enemy, target, distance) {
     if (enemy.telegraph) {
@@ -1831,7 +2303,7 @@ export async function createPastaCombat(options = {}) {
         if (enemy.boss) spawnBossVolley(enemy, target);
         else spawnEnemyProjectile(enemy, target, { prediction: enemy.role === "suppress" ? 0.72 : 0.5 });
       } else {
-        damagePlayerFromEnemy(enemy.damage * (enemy.bossPhase === 3 ? 1.18 : 1), enemy.type);
+        damagePlayerFromEnemy(enemy.damage * (enemy.bossPhase === 3 ? 1.18 : 1), enemy.id);
         call("splat", { x: 0.5, y: 0.52, intensity: enemy.type === "colossus" ? 0.85 : 0.54, wetness: 0.6, sauce: 0.2, directionY: 0.3 });
       }
     }
@@ -1841,7 +2313,10 @@ export async function createPastaCombat(options = {}) {
   } function updateBoss(enemy, target, distance, time) {
     const healthRatio = enemy.health / Math.max(1, enemy.maxHealth);
     const phase = healthRatio > 0.68 ? 1 : healthRatio > 0.34 ? 2 : 3;
+    const phaseCueColor = BOSS_PHASE_CUE_COLORS[phase];
     enemy.bossPhase = phase;
+    enemy.material.emissive.setHex(BOSS_PHASE_EMISSIVE_COLORS[phase]);
+    if (enemy.telegraph) enemy.telegraph.material.color.setHex(phaseCueColor);
     if (phase > enemy.announcedPhase) {
       enemy.announcedPhase = phase;
       stats.bossPhaseTransitions += 1;
@@ -1855,19 +2330,33 @@ export async function createPastaCombat(options = {}) {
       call("audio", "bossSpawn", { intensity: phase === 2 ? 1.3 : 1.65, pan: 0 });
       const pulse = new THREE.Mesh(
         new THREE.SphereGeometry(1, 16, 10),
-        new THREE.MeshBasicMaterial({ color: phase === 2 ? 0xff9a36 : 0xff2b10, transparent: true, opacity: 0.54, depthWrite: false, toneMapped: false })
+        new THREE.MeshBasicMaterial({ color: phaseCueColor, transparent: true, opacity: 0.54, depthWrite: false, toneMapped: false })
       );
       pulse.position.copy(enemy.root.position).add(scratchA.set(0, 1.3 * TYPE_DATA.noodlemancer.scale, 0));
       pulse.scale.setScalar(0.2);
       scene.add(pulse);
       effects.push({ object: pulse, life: 0.7, maxLife: 0.7, kind: "bossPulse" });
+      emitEvent("bossPhase", {
+        enemyId: enemy.id,
+        phase,
+        health: finite(enemy.health),
+        maxHealth: finite(enemy.maxHealth),
+        position: enemy.root.position
+      });
     }
     if (enemy.spellRing) {
+      enemy.spellRing.material.color.setHex(phaseCueColor);
       enemy.spellRing.rotation.z += (0.5 + phase * 0.35) * 0.016;
-      enemy.spellRing.scale.setScalar(1 + Math.sin(time * (2 + phase) + enemy.wobbleSeed) * 0.09);
+      const phaseScale = 1 + (phase - 1) * 0.13;
+      const phaseFlare = enemy.phaseFlareTimer > 0 ? (enemy.phaseFlareTimer / 0.5) * 0.14 : 0;
+      enemy.spellRing.scale.setScalar(phaseScale + phaseFlare + Math.sin(time * (2 + phase) + enemy.wobbleSeed) * 0.07);
       enemy.spellRing.material.opacity = 0.35 + phase * 0.12;
     }
-    if (enemy.crown) enemy.crown.rotation.y += 0.006 * phase;
+    if (enemy.crown) {
+      enemy.crown.rotation.y += 0.006 * phase;
+      const crownFlare = enemy.phaseFlareTimer > 0 ? (enemy.phaseFlareTimer / 0.5) * 0.09 : 0;
+      enemy.crown.scale.setScalar(1 + (phase - 1) * 0.055 + crownFlare);
+    }
     if (enemy.summonTimer > 0) return;
     let living = 0;
     for (const entry of enemies) if (entry.alive) living += 1;
@@ -1879,7 +2368,14 @@ export async function createPastaCombat(options = {}) {
         const angle = time * 0.7 + index * Math.PI;
         scratchA.x += Math.sin(angle) * (2.8 + index);
         scratchA.z += Math.cos(angle) * (2.8 + index);
-        spawnEnemy(type, { x: scratchA.x, y: scratchA.y, z: scratchA.z }, false, true);
+        spawnEnemy({
+          type,
+          position: { x: scratchA.x, y: scratchA.y, z: scratchA.z },
+          autoSpawn: true,
+          summoned: true,
+          spawnWave: waveIndex,
+          spawnSlot: enemies.length
+        });
       });
       call("message", phase === 3 ? "THE MASTER SERVES HIS INNER CIRCLE" : "THE NOODLEMANCER PULLS FRESH STRANDS");
     }
@@ -1897,10 +2393,26 @@ export async function createPastaCombat(options = {}) {
     enemy.legGroups[0].rotation.x = Math.sin(stride) * 0.2 * locomotion;
     enemy.legGroups[1].rotation.x = -Math.sin(stride) * 0.2 * locomotion;
     if (enemy.weaponMesh) enemy.weaponMesh.rotation.x = enemy.state === "telegraph" ? -0.1 + Math.sin(time * 24) * 0.035 : Math.sin(stride) * 0.025;
+    const attackCharge = enemy.telegraph?.visible
+      ? 1 - clamp(enemy.attackWindup / Math.max(0.01, enemy.attackWindupMax), 0, 1)
+      : 0;
     if (enemy.telegraph?.visible) {
-      const charge = 1 - clamp(enemy.attackWindup / Math.max(0.01, enemy.attackWindupMax), 0, 1);
+      const charge = attackCharge;
       enemy.telegraph.material.opacity = 0.18 + charge * 0.78;
       enemy.telegraph.scale.setScalar(0.7 + charge * 1.7 + Math.sin(time * 35) * 0.12);
+    }
+    if (enemy.roleAccent) {
+      const cue = enemy.roleAccent.userData;
+      const idlePulse = 1 + Math.sin(time * (enemy.type === "twirler" ? 3.1 : 2.1) + enemy.wobbleSeed) * 0.025;
+      const chargePulse = 1 + attackCharge * (enemy.type === "colossus" ? 0.14 : 0.2);
+      const pulse = idlePulse * chargePulse;
+      enemy.roleAccent.scale.set(cue.cueScaleX * pulse, cue.cueScaleY * pulse, cue.cueScaleZ * pulse);
+      enemy.roleAccent.position.y = cue.cueBaseY + Math.sin(time * 2.2 + enemy.wobbleSeed) * 0.008 + attackCharge * 0.025;
+      enemy.roleAccent.rotation.z = cue.cueBaseRotationZ + (enemy.type === "saucier"
+        ? Math.sin(time * 1.7 + enemy.wobbleSeed) * 0.08
+        : enemy.type === "colossus"
+          ? Math.sin(time * 0.9 + enemy.wobbleSeed) * 0.025
+          : 0);
     }
     const blink = Math.sin(time * 1.7 + enemy.wobbleSeed * 4) > 0.985 ? 0.12 : 1;
     for (const eye of enemy.eyes) eye.scale.y = blink;
@@ -1916,14 +2428,22 @@ export async function createPastaCombat(options = {}) {
     scratchC.set(lastPlayer.x, lastPlayer.y + 0.9, lastPlayer.z);
     coordinateSquad();
     const livingHostiles = enemies.filter((enemy) => enemy.alive);
-    const lastRegularId = livingHostiles.length === 1 && !livingHostiles[0].boss && !livingHostiles[0].stationary
-      ? livingHostiles[0].id
+    const regularHostiles = livingHostiles.filter((enemy) => !enemy.boss && !enemy.summoned && !enemy.stationary);
+    const lastRegularId = livingHostiles.length === 1 && regularHostiles.length === 1
+      ? regularHostiles[0].id
       : null;
     for (const enemy of [...enemies]) {
       if (!enemy.alive) continue;
+      enemy.keepOutForcedThisFrame = false;
       const wasPursuing = enemy.pursuitMode;
       if (lastRegularId === enemy.id) enemy.lastHostileTimer += dt;
-      else enemy.lastHostileTimer = 0;
+      else {
+        enemy.lastHostileTimer = 0;
+        enemy.lastHostileFailedProgress = 0;
+        enemy.lastHostileRelocated = false;
+        enemy.lastHostileRelocationAt = null;
+        enemy.lastHostileFailedAtRelocation = null;
+      }
       enemy.pursuitMode = enemy.lastHostileTimer >= 2.4;
       if (enemy.pursuitMode && !wasPursuing) {
         stats.lastHostilePursuits += 1;
@@ -1942,6 +2462,7 @@ export async function createPastaCombat(options = {}) {
       const startX = enemy.root.position.x;
       const startZ = enemy.root.position.z;
       updatePerception(enemy, scratchC, distance, dt);
+      updateEnemyViewCone(enemy);
       if (enemy.boss) updateBoss(enemy, scratchC, distance, time);
       if (enemy.staggerTimer > 0) {
         enemy.state = "stagger";
@@ -1949,6 +2470,9 @@ export async function createPastaCombat(options = {}) {
         enemy.rethinkTimer = 0;
       }
       if (enemy.state === "telegraph") {
+        // Telegraphs freeze normal pursuit, but an actor already inside the
+        // player's keep-out radius must keep yielding during the windup.
+        moveEnemy(enemy, scratchC, distance, dt, time);
         enemy.attackWindup -= dt;
         if (enemy.attackWindup <= 0) finishEnemyAttack(enemy, scratchC, distance);
       } else {
@@ -1975,9 +2499,11 @@ export async function createPastaCombat(options = {}) {
         distance
       );
       faceEnemyToward(enemy, scratchC, dt);
+      finalizeEnemySpatialTelemetry(enemy, dt);
       enemy.impulse.multiplyScalar(Math.pow(0.055, dt));
       animateEnemy(enemy, dt, time);
     }
+    refreshKeepOutTelemetry();
   } function spawnBossVolley(enemy, target) {
     const phase = enemy.bossPhase;
     const offsets = phase === 1 ? [0] : phase === 2 ? [-0.105, 0, 0.105] : [-0.24, -0.12, 0, 0.12, 0.24];
@@ -2013,6 +2539,7 @@ export async function createPastaCombat(options = {}) {
       scratchB.x += error;
       scratchB.z -= error * 0.55;
     }
+    const predictedTarget = scratchB.clone();
     const direction = scratchB.sub(start).normalize();
     if (config.yawOffset) direction.applyAxisAngle(THREE.Object3D.DEFAULT_UP, finite(config.yawOffset));
     projectiles.push({
@@ -2020,7 +2547,18 @@ export async function createPastaCombat(options = {}) {
       velocity: direction.clone().multiplyScalar(speed),
       life: boss ? 4.8 : 4,
       damage: finite(config.damage, enemy.damage),
-      owner: enemy.id
+      owner: enemy.id,
+      ownerType: enemy.type
+    });
+    emitEvent("projectile", {
+      enemyId: enemy.id,
+      enemyType: enemy.type,
+      boss,
+      origin: start,
+      direction,
+      targetPosition: predictedTarget,
+      speed,
+      damage: finite(config.damage, enemy.damage)
     });
     enemy.shotsFired += 1;
     stats.enemyShots += 1;
@@ -2043,7 +2581,14 @@ export async function createPastaCombat(options = {}) {
       }
       if (projectile.mesh.position.distanceToSquared(target) < 0.55 || projectile.life <= 0) {
         if (projectile.life > 0) {
-          damagePlayerFromEnemy(projectile.damage, projectile.owner, true);
+          // Aim the damage indicator back along the projectile's actual travel
+          // path. The shooter may have moved or died since firing, so resolving
+          // direction from the owner's current actor position is both fragile
+          // and visually misleading.
+          const impactOrigin = projectile.mesh.position.clone();
+          const projectileSpeed = projectile.velocity.length();
+          if (projectileSpeed > 0.0001) impactOrigin.addScaledVector(projectile.velocity, -3 / projectileSpeed);
+          damagePlayerFromEnemy(projectile.damage, projectile.owner, true, impactOrigin, projectile.ownerType);
           call("splat", { x: 0.5, y: 0.48, intensity: 0.72, wetness: 1, sauce: 1, directionY: 0.65 });
         }
         removeObject(projectile.mesh);
@@ -2104,7 +2649,11 @@ export async function createPastaCombat(options = {}) {
       const target = enemy.root.position.clone().add(new THREE.Vector3(0, 0.9 * TYPE_DATA[enemy.type].scale, 0));
       if (worldTrace(position, target).blocked) continue;
       const wasAlive = enemy.alive;
-      damageEnemy(enemy, 82 * (1 - distance / 8), "sauce");
+      damageEnemy(enemy, 82 * (1 - distance / 8), "sauce", {
+        position: enemy.root.position,
+        origin: position,
+        direction: enemy.root.position.clone().sub(position).normalize()
+      });
       if (wasAlive && !enemy.alive) killed += 1;
       enemy.impulse.add(enemy.root.position.clone().sub(position).normalize().multiplyScalar(6));
       enemy.impulse.y += 3.5;
@@ -2118,10 +2667,11 @@ export async function createPastaCombat(options = {}) {
     effects.push({ object: burst, life: 0.45, maxLife: 0.45, kind: "burst" });
     call("audio", "sauceBomb", { intensity: 1.25, pan: 0 });
     call("splat", { x: 0.5, y: 0.56, intensity: 0.82, wetness: 1, sauce: 1, directionY: 0.8 });
-  } function damageEnemy(enemy, rawAmount, cause) {
+  } function damageEnemy(enemy, rawAmount, cause, eventContext = {}) {
     if (!enemy?.alive) return false;
     const amount = Math.max(0, finite(rawAmount));
     enemy.health = Math.max(0, enemy.health - amount);
+    const killed = enemy.health <= 0;
     stats.damageDone += amount;
     enemy.flashTimer = Math.max(enemy.flashTimer, cause === "headshot" ? 0.16 : 0.09);
     enemy.suppression = clamp(enemy.suppression + amount / Math.max(40, enemy.maxHealth * 0.42), 0, 1.5);
@@ -2130,6 +2680,21 @@ export async function createPastaCombat(options = {}) {
     const knockLength = Math.max(0.001, Math.hypot(knockX, knockZ));
     enemy.impulse.x += knockX / knockLength * Math.min(2.8, amount * 0.038);
     enemy.impulse.z += knockZ / knockLength * Math.min(2.8, amount * 0.038);
+    emitEvent("hit", {
+      enemyId: enemy.id,
+      enemyType: enemy.type,
+      boss: Boolean(enemy.boss),
+      cause: String(cause || "unknown"),
+      amount,
+      health: finite(enemy.health),
+      maxHealth: finite(enemy.maxHealth),
+      killed,
+      headshot: cause === "headshot",
+      position: eventContext.position || enemy.root.position,
+      normal: eventContext.normal || null,
+      origin: eventContext.origin || { x: lastPlayer.x, y: lastPlayer.y + lastPlayer.eyeHeight, z: lastPlayer.z },
+      direction: eventContext.direction || null
+    });
     if (enemy.health > 0) {
       const canStagger = !enemy.boss || cause === "sauce" || amount >= 34;
       if (canStagger && amount >= (enemy.type === "colossus" ? 26 : 16)) {
@@ -2152,10 +2717,49 @@ export async function createPastaCombat(options = {}) {
     weapon.reserve += ammoSalvaged;
     stats.ammoSalvaged += ammoSalvaged;
     lastKill = { id: enemy.id, name: enemy.name, type: enemy.type, cause: String(cause || "unknown"), ammoSalvaged };
+    emitEvent("kill", {
+      enemyId: enemy.id,
+      enemyType: enemy.type,
+      enemyName: enemy.name,
+      boss: Boolean(enemy.boss),
+      cause: String(cause || "unknown"),
+      ammoSalvaged,
+      position: eventContext.position || enemy.root.position
+    });
+    if (enemy.boss) {
+      const court = enemies.filter((entry) => entry !== enemy && entry.alive && entry.summoned);
+      for (const summon of court) {
+        summon.alive = false;
+        if (summon.telegraph) summon.telegraph.visible = false;
+        spawnPunchBurst(summon.root.position.clone().add(new THREE.Vector3(0, 0.9 * TYPE_DATA[summon.type].scale, 0)), true);
+        emitEvent("courtDismissed", {
+          enemyId: summon.id,
+          enemyType: summon.type,
+          position: summon.root.position
+        });
+        removeEnemy(summon);
+      }
+      const dismissedIds = new Set([enemy.id, ...court.map((summon) => summon.id)]);
+      const clearedProjectiles = [];
+      for (let index = projectiles.length - 1; index >= 0; index -= 1) {
+        if (!dismissedIds.has(projectiles[index].owner)) continue;
+        const [projectile] = projectiles.splice(index, 1);
+        clearedProjectiles.push(projectile);
+        removeObject(projectile.mesh);
+      }
+      emitEvent("bossDeath", {
+        enemyId: enemy.id,
+        cause: String(cause || "unknown"),
+        courtDismissed: court.length,
+        projectilesCleared: clearedProjectiles.length,
+        position: eventContext.position || enemy.root.position
+      });
+    }
+    if (opening.protected && enemy.id === opening.firstEnemyId) completeOpeningLesson("first-kill");
     spawnDeathNoodles(enemy, cause);
     call("audio", "enemyDeath", { intensity: enemy.boss ? 1.4 : 0.9, pan: 0 });
     removeEnemy(enemy);
-    if (enemies.every((entry) => !entry.alive) && !wavesSuppressed) {
+    if (enemies.every((entry) => !entry.alive) && !wavesSuppressed && !opening.protected && pendingWaveSpawns.length === 0) {
       stats.wavesCleared = Math.max(stats.wavesCleared, waveIndex);
       waveTimer = enemy.boss ? 1.1 : 1.65;
     }
@@ -2246,7 +2850,7 @@ export async function createPastaCombat(options = {}) {
         effects.splice(i, 1);
       }
     }
-  } function damagePlayer(rawAmount, source = "enemy") {
+  } function damagePlayer(rawAmount, source = "enemy", explicitOrigin = null, sourceMeta = null) {
     if (defeated || victory) return false;
     const incoming = Math.max(0, finite(rawAmount));
     if (incoming <= 0) return false;
@@ -2256,12 +2860,39 @@ export async function createPastaCombat(options = {}) {
     const healthDamage = incoming - absorbed;
     player.health = Math.max(0, player.health - healthDamage);
     stats.damageTaken += incoming;
+    const sourceToken = String(source || "enemy");
+    const attacker = enemies.find((enemy) => enemy.alive && String(enemy.id) === sourceToken) || null;
+    const damageOrigin = eventPoint(explicitOrigin, null) || eventPoint(attacker?.root?.position, null);
+    const sourceKind = String(sourceMeta?.kind || (
+      sourceToken === "rising-spaghetti" ? "hazard" :
+        sourceToken === "debug" ? "debug" :
+          attacker ? "enemy" : "system"
+    ));
+    const sourceId = sourceMeta?.id != null
+      ? String(sourceMeta.id)
+      : attacker?.id != null ? String(attacker.id) : null;
+    const enemyType = sourceMeta?.enemyType || attacker?.type || null;
+    emitEvent("playerDamage", {
+      source: sourceToken,
+      sourceKind,
+      sourceId,
+      enemyType: enemyType == null ? null : String(enemyType),
+      projectile: sourceKind === "projectile",
+      amount: incoming,
+      absorbed,
+      healthDamage,
+      health: finite(player.health),
+      sauceArmor: finite(player.sauceArmor),
+      origin: damageOrigin,
+      position: { x: lastPlayer.x, y: lastPlayer.y + lastPlayer.eyeHeight, z: lastPlayer.z }
+    });
     call("damage", incoming, source);
-    call("audio", source === "rising-spaghetti" ? "spaghettiBurn" : "playerHit", {
+    call("audio", sourceToken === "rising-spaghetti" ? "spaghettiBurn" : "playerHit", {
       intensity: clamp(incoming / 18, 0.4, 1.35),
       pan: 0
     });
     if (player.health <= 0) {
+      cancelOpeningLesson("defeated");
       defeated = true;
       firing = false;
       weapon.firing = false;
@@ -2269,7 +2900,7 @@ export async function createPastaCombat(options = {}) {
       call("defeat", source);
     }
     return true;
-  } function damagePlayerFromEnemy(rawAmount, source, projectile = false) {
+  } function damagePlayerFromEnemy(rawAmount, source, projectile = false, origin = null, enemyType = null) {
     if (combatGrace > 0) return false;
     // Melee attackers share one 0.42s i-frame so a swarm cannot chew the player
     // down in a single frame. Projectiles get their own shorter, still-bounded
@@ -2282,7 +2913,11 @@ export async function createPastaCombat(options = {}) {
       if (enemyDamageCooldown > 0) return false;
       enemyDamageCooldown = 0.42;
     }
-    return damagePlayer(rawAmount, source);
+    return damagePlayer(rawAmount, source, origin, {
+      kind: projectile ? "projectile" : "enemy",
+      id: source,
+      enemyType
+    });
   } function removeEnemy(enemy) {
     const index = enemies.indexOf(enemy);
     if (index >= 0) enemies.splice(index, 1);
@@ -2301,6 +2936,11 @@ export async function createPastaCombat(options = {}) {
     punchTargetDistance = null;
     wavesSuppressed = Boolean(suppressWaves);
     waveTimer = 1.2;
+    keepOutTelemetry.nearestHostileDistance = null;
+    keepOutTelemetry.currentIntrusionDuration = 0;
+    keepOutTelemetry.currentPeakIntrusion = 0;
+    keepOutTelemetry.estimatedCentralHostileCoverage = 0;
+    cancelOpeningLesson(suppressWaves ? "cleared" : "superseded");
     return true;
   } function aimAtEnemy(id = null) {
     const enemy = enemies.find((entry) => entry.alive && (id == null || String(entry.id) === String(id))) || null;
@@ -2311,6 +2951,12 @@ export async function createPastaCombat(options = {}) {
       type: enemy.type,
       position: { x: enemy.root.position.x, y: enemy.root.position.y + 1.58 * scale, z: enemy.root.position.z }
     };
+  } function defeatEnemy(id, cause = "debug") {
+    const enemy = enemies.find((entry) => entry.alive && String(entry.id) === String(id)) || null;
+    if (!enemy) return false;
+    return damageEnemy(enemy, enemy.health + 1, String(cause || "debug"), {
+      position: enemy.root.position
+    });
   } function forceWave(index = 1) {
     clearEnemies(false);
     victory = false;
@@ -2318,11 +2964,18 @@ export async function createPastaCombat(options = {}) {
     return startWave(clamp(Math.round(finite(index, 1)), 1, WAVE_DATA.length));
   } function win() {
     if (victory) return true;
+    cancelOpeningLesson("victory");
     victory = true;
     firing = false;
     weapon.firing = false;
     call("message", "AL DENTE. THE BASILICA IS YOURS.");
     call("victory");
+    emitEvent("victory", {
+      score: finite(stats.score),
+      kills: finite(stats.kills),
+      elapsed: finite(elapsed),
+      position: { x: lastPlayer.x, y: lastPlayer.y + lastPlayer.eyeHeight, z: lastPlayer.z }
+    });
     return true;
   } function applyNoodleImpulse(targetOrImpulse, impulseOrX, yValue, zValue) {
     let targetId = null;
@@ -2381,6 +3034,7 @@ export async function createPastaCombat(options = {}) {
       activeReloadDuration: 0, reloadMode: "idle"
     });
     Object.assign(stats, freshStats());
+    Object.assign(keepOutTelemetry, freshKeepOutTelemetry());
     elapsed = 0;
     fireCooldown = 0;
     fireBufferTimer = 0;
@@ -2398,6 +3052,7 @@ export async function createPastaCombat(options = {}) {
     recoil = 0;
     waveIndex = 0;
     waveTimer = 0.85;
+    resetOpeningLesson();
     combatGrace = 0;
     enemyDamageCooldown = 0;
     enemyProjectileDamageCooldown = 0;
@@ -2414,6 +3069,9 @@ export async function createPastaCombat(options = {}) {
     lastKill = null;
     noodleCollisions = 0;
     noodleImpulses = 0;
+    eventQueue.length = 0;
+    eventSequence = 0;
+    lastEvent = null;
     Object.assign(weaponTelemetry, {
       lastShotAt: -1,
       recentShotIntervalsMs: [],
@@ -2454,11 +3112,19 @@ export async function createPastaCombat(options = {}) {
       id: enemy.id, enemyId: enemy.id, type: enemy.type, name: enemy.name,
       health: Math.max(0, finite(enemy.health)), hp: Math.max(0, finite(enemy.health)),
       maxHealth: finite(enemy.maxHealth, 1), alive: Boolean(enemy.alive), stationary: Boolean(enemy.stationary),
-      boss: Boolean(enemy.boss), position: { x: finite(position.x), y: finite(position.y), z: finite(position.z) },
+      boss: Boolean(enemy.boss), summoned: Boolean(enemy.summoned), scale: finite(TYPE_DATA[enemy.type].scale, 1),
+      position: { x: finite(position.x), y: finite(position.y), z: finite(position.z) },
+      spawnPosition: {
+        x: finite(enemy.spawnPosition?.x), y: finite(enemy.spawnPosition?.y), z: finite(enemy.spawnPosition?.z)
+      },
       distanceToPlayer: finite(Math.hypot(position.x - lastPlayer.x, position.z - lastPlayer.z)),
       strandCount: finite(enemy.strands), state: String(enemy.state), mode: String(enemy.state), role: String(enemy.role),
       awareness: enemy.targetVisible ? 1 : clamp(enemy.memoryTimer / (enemy.boss ? 9 : 5.8), 0, 1),
-      targetVisible: Boolean(enemy.targetVisible), lastSeen: {
+      targetVisible: Boolean(enemy.targetVisible), inViewCone: Boolean(enemy.inViewCone),
+      relativeYaw: finite(enemy.relativeYaw), relativePitch: finite(enemy.relativePitch),
+      horizontalHalfFov: finite(enemy.horizontalHalfFov), verticalHalfFov: finite(enemy.verticalHalfFov),
+      projectedCoverage: finite(enemy.projectedCoverage), centralCoverage: finite(enemy.centralCoverage),
+      lastSeen: {
         x: finite(enemy.lastSeen.x), y: finite(enemy.lastSeen.y), z: finite(enemy.lastSeen.z)
       },
       coverIntent: Boolean(enemy.coverIntent), coverId: enemy.coverId == null ? null : String(enemy.coverId),
@@ -2470,6 +3136,22 @@ export async function createPastaCombat(options = {}) {
       goalDistance: finite(Math.hypot(enemy.goal.x - position.x, enemy.goal.z - position.z)),
       actualSpeed: finite(enemy.actualSpeed), totalTravel: finite(enemy.totalTravel), unseenTimer: finite(enemy.unseenTimer),
       lastHostileTimer: finite(enemy.lastHostileTimer), pursuitMode: Boolean(enemy.pursuitMode),
+      lastHostileFailedProgress: finite(enemy.lastHostileFailedProgress),
+      lastHostileRelocated: Boolean(enemy.lastHostileRelocated),
+      lastHostileRelocationAt: enemy.lastHostileRelocationAt == null ? null : finite(enemy.lastHostileRelocationAt),
+      lastHostileFailedAtRelocation: enemy.lastHostileFailedAtRelocation == null
+        ? null
+        : finite(enemy.lastHostileFailedAtRelocation),
+      keepOut: {
+        minimumDistance: finite(enemy.keepOutDistance),
+        intrusion: finite(enemy.keepOutIntrusion),
+        intrusionDuration: finite(enemy.keepOutIntrusionTime),
+        longestIntrusionDuration: finite(enemy.keepOutLongestIntrusion),
+        peakIntrusion: finite(enemy.keepOutPeakIntrusion),
+        forced: Boolean(enemy.keepOutForced),
+        forcedFrames: finite(enemy.keepOutForcedFrames),
+        forcedSeparations: finite(enemy.forcedSeparations)
+      },
       stuckTimer: finite(enemy.stuckTimer), blockedTime: finite(enemy.blockedTime),
       navRouteId: enemy.navRouteId == null ? null : String(enemy.navRouteId),
       navIndex: finite(enemy.navIndex), navDirection: finite(enemy.navDirection),
@@ -2485,7 +3167,161 @@ export async function createPastaCombat(options = {}) {
       activePieces: noodlePieces.length, collisions: noodleCollisions, impulses: noodleImpulses,
       kineticEnergy: finite(kineticEnergy), gravity: 13, projectiles: projectiles.length, bombs: bombs.length
     };
-  } function getState() {
+  }
+
+  const frameState = {
+    player,
+    weapon: {},
+    stats,
+    enemies: [],
+    livingEnemies: 0,
+    enemyCount: 0,
+    wave: { index: 1, number: 1, total: WAVE_DATA.length },
+    waveIndex: 1,
+    boss: {},
+    opening: {},
+    melee: {},
+    punch: {},
+    health: player.health,
+    sauceArmor: player.sauceArmor,
+    armor: player.sauceArmor,
+    ammo: weapon.ammo,
+    reserve: weapon.reserve,
+    reloading: weapon.reloading,
+    firing: false,
+    aiming: false,
+    score: 0,
+    victory: false,
+    defeated: false,
+    lastKill: null
+  };
+  const frameEnemyState = {
+    id: "",
+    name: "",
+    type: "",
+    boss: false,
+    summoned: false,
+    stationary: false,
+    inViewCone: false,
+    targetVisible: false,
+    position: { x: 0, y: 0, z: 0 },
+    relativeYaw: 0,
+    relativePitch: 0,
+    distanceToPlayer: 0,
+    scale: 1
+  };
+
+  function getFrameState() {
+    let livingCount = 0;
+    let onlyEnemy = null;
+    let bossEnemy = null;
+    for (const enemy of enemies) {
+      if (!enemy.alive) continue;
+      livingCount += 1;
+      onlyEnemy = livingCount === 1 ? enemy : null;
+      if (enemy.boss) bossEnemy = enemy;
+    }
+
+    frameState.player = player;
+    Object.assign(frameState.weapon, {
+      ammo: weapon.ammo,
+      reserve: weapon.reserve,
+      reloading: weapon.reloading,
+      reloadMode: weapon.reloadMode,
+      firing: Boolean(firing && !weapon.reloading),
+      aiming: Boolean(aiming),
+      spread: currentWeaponSpread(),
+      bombCooldown: finite(bombCooldown),
+      lowAmmoThreshold: weapon.lowAmmoThreshold
+    });
+    frameState.stats = stats;
+    frameState.health = player.health;
+    frameState.sauceArmor = player.sauceArmor;
+    frameState.armor = player.sauceArmor;
+    frameState.ammo = weapon.ammo;
+    frameState.reserve = weapon.reserve;
+    frameState.reloading = weapon.reloading;
+    frameState.firing = Boolean(firing && !weapon.reloading);
+    frameState.aiming = Boolean(aiming);
+    frameState.score = stats.score;
+    frameState.livingEnemies = livingCount;
+    frameState.enemyCount = livingCount;
+    frameState.wave.index = Math.max(1, waveIndex);
+    frameState.wave.number = Math.max(1, waveIndex);
+    frameState.waveIndex = Math.max(1, waveIndex);
+
+    frameState.enemies.length = 0;
+    if (onlyEnemy) {
+      const position = onlyEnemy.root?.position || lastPlayer;
+      Object.assign(frameEnemyState, {
+        id: onlyEnemy.id,
+        name: onlyEnemy.name,
+        type: onlyEnemy.type,
+        boss: Boolean(onlyEnemy.boss),
+        summoned: Boolean(onlyEnemy.summoned),
+        stationary: Boolean(onlyEnemy.stationary),
+        inViewCone: Boolean(onlyEnemy.inViewCone),
+        targetVisible: Boolean(onlyEnemy.targetVisible),
+        relativeYaw: finite(onlyEnemy.relativeYaw),
+        relativePitch: finite(onlyEnemy.relativePitch),
+        distanceToPlayer: finite(Math.hypot(position.x - lastPlayer.x, position.z - lastPlayer.z)),
+        scale: finite(TYPE_DATA[onlyEnemy.type]?.scale, 1)
+      });
+      frameEnemyState.position.x = finite(position.x);
+      frameEnemyState.position.y = finite(position.y);
+      frameEnemyState.position.z = finite(position.z);
+      frameState.enemies.push(frameEnemyState);
+    }
+
+    Object.assign(frameState.boss, bossEnemy ? {
+      active: true,
+      alive: true,
+      id: bossEnemy.id,
+      name: bossEnemy.name,
+      health: finite(bossEnemy.health),
+      hp: finite(bossEnemy.health),
+      maxHealth: finite(bossEnemy.maxHealth),
+      maxHp: finite(bossEnemy.maxHealth),
+      phase: finite(bossEnemy.bossPhase, 1),
+      state: String(bossEnemy.state)
+    } : {
+      active: false,
+      alive: false,
+      id: "",
+      name: "The Noodlemancer",
+      health: 0,
+      hp: 0,
+      maxHealth: TYPE_DATA.noodlemancer.health,
+      maxHp: TYPE_DATA.noodlemancer.health,
+      phase: 1,
+      state: "idle"
+    });
+
+    Object.assign(frameState.opening, {
+      status: String(opening.status || "inactive"),
+      active: Boolean(opening.active),
+      protected: Boolean(opening.protected),
+      pendingCount: pendingWaveSpawns.length,
+      waveGatePending: Boolean(opening.protected || pendingWaveSpawns.length)
+    });
+    Object.assign(frameState.melee, {
+      active: punchTimer > 0,
+      ready: punchCooldown <= 0 && punchTimer <= 0 && !defeated && !victory,
+      remaining: finite(punchCooldown),
+      cooldown: finite(punchCooldown),
+      cooldownDuration: PUNCH_COOLDOWN,
+      cooldownMax: PUNCH_COOLDOWN,
+      targetId: punchTargetId,
+      inRange: punchTargetId != null
+    });
+    frameState.punch = frameState.melee;
+    frameState.victory = Boolean(victory);
+    frameState.defeated = Boolean(defeated);
+    frameState.lastKill = lastKill;
+    return frameState;
+  }
+
+  function getState() {
     const enemyStates = enemies.filter((enemy) => enemy.alive).map(enemyState);
     const bossEnemy = enemies.find((enemy) => enemy.alive && enemy.boss);
     const physics = physicsState();
@@ -2497,6 +3333,9 @@ export async function createPastaCombat(options = {}) {
     const spread = currentWeaponSpread();
     const effectiveFov = THREE.MathUtils.radToDeg(2 * Math.atan(
       Math.tan(THREE.MathUtils.degToRad(finite(camera.fov, baseCameraFov)) * 0.5) / Math.max(0.01, finite(camera.zoom, baseCameraZoom))
+    ));
+    const effectiveHorizontalFov = THREE.MathUtils.radToDeg(2 * Math.atan(
+      Math.tan(THREE.MathUtils.degToRad(effectiveFov) * 0.5) * clamp(finite(camera.aspect, 1), 0.25, 5)
     ));
     const melee = {
       active: punchTimer > 0,
@@ -2514,6 +3353,30 @@ export async function createPastaCombat(options = {}) {
       held: false,
       hitStop: finite(punchHitStop),
       ...punchTelemetry
+    };
+    const openingElapsed = opening.startedAt == null
+      ? 0
+      : Math.max(0, (opening.completedAt ?? elapsed) - opening.startedAt);
+    const pendingSpawns = pendingWaveSpawns.map((pending) => ({
+      type: pending.type,
+      spawnSlot: pending.spawnSlot,
+      delay: pending.delay,
+      releaseAt: pending.releaseAt,
+      releaseIn: pending.releaseAt == null ? null : Math.max(0, pending.releaseAt - elapsed),
+      position: { ...pending.position }
+    }));
+    const openingState = {
+      ...opening,
+      elapsed: finite(openingElapsed),
+      timeout: OPENING_LESSON_TIMEOUT,
+      timeoutBasis: "run-start",
+      timeoutIn: opening.protected && opening.deadlineAt != null
+        ? Math.max(0, opening.deadlineAt - elapsed)
+        : 0,
+      floodRampDuration: OPENING_FLOOD_RAMP,
+      pendingCount: pendingSpawns.length,
+      pendingSpawns,
+      waveGatePending: Boolean(opening.protected || pendingSpawns.length)
     };
     return {
       player: { ...player },
@@ -2537,12 +3400,35 @@ export async function createPastaCombat(options = {}) {
       enemies: enemyStates, livingEnemies: enemyStates.length, enemyCount: enemyStates.length,
       wave: { index: Math.max(1, waveIndex), number: Math.max(1, waveIndex), total: WAVE_DATA.length },
       waveIndex: Math.max(1, waveIndex), boss, stats: { ...stats }, score: stats.score,
+      opening: openingState,
+      pendingWaveSpawns: pendingSpawns,
       melee: { ...melee }, punch: { ...melee },
       tactical: {
         transitions: finite(stats.tacticalTransitions), coverUses: finite(stats.coverUses), flanks: finite(stats.flanks),
         enemyShots: finite(stats.enemyShots), bossPhaseTransitions: finite(stats.bossPhaseTransitions)
       },
+      keepOut: {
+        ...keepOutTelemetry,
+        nearestHostileDistance: keepOutTelemetry.nearestHostileDistance == null
+          ? null
+          : finite(keepOutTelemetry.nearestHostileDistance),
+        minimumDistances: { ...KEEP_OUT_DISTANCE },
+        punchRange: PUNCH_RANGE
+      },
+      viewCone: {
+        verticalFov: finite(effectiveFov, baseCameraFov),
+        horizontalFov: finite(effectiveHorizontalFov, effectiveFov),
+        aspect: finite(camera.aspect, 1),
+        zoom: finite(camera.zoom, baseCameraZoom),
+        yaw: finite(lastPlayer.yaw),
+        pitch: finite(lastPlayer.pitch)
+      },
       noodlePhysics: physics, physics: { ...physics }, visibleStrands: physics.strandCount,
+      events: {
+        queued: eventQueue.length,
+        sequence: eventSequence,
+        last: lastEvent ? { ...lastEvent } : null
+      },
       victory: Boolean(victory), defeated: Boolean(defeated), lastKill: lastKill ? { ...lastKill } : null,
       elapsed: finite(elapsed), combatGrace: finite(combatGrace), enemyDamageCooldown: finite(enemyDamageCooldown), errors: [...errors]
     };
@@ -2562,8 +3448,15 @@ export async function createPastaCombat(options = {}) {
   }
   const api = {
     update, reset, dispose, fire: shoot, punch, beginReload, throwSauceBomb, damagePlayer,
-    spawnEnemy, clearEnemies, aimAtEnemy, forceWave, win, getState, inspect: getState,
-    applyNoodleImpulse, setAmmo
+    spawnEnemy, clearEnemies, aimAtEnemy, defeatEnemy, forceWave, win, getState, getFrameState, inspect: getState, consumeEvents,
+    applyNoodleImpulse, setAmmo, viewConeForPosition,
+    getFloodScale: () => clamp(finite(opening.floodScale, 1), 0, 1),
+    releaseOpeningLesson: (reason = "debug") => completeOpeningLesson(String(reason || "debug")),
+    defeatOpeningLesson: (cause = "debug") => {
+      const lesson = enemies.find((enemy) => enemy.alive && enemy.id === opening.firstEnemyId);
+      return lesson ? damageEnemy(lesson, lesson.health + 1, String(cause || "debug")) : false;
+    },
+    expireOpeningLesson: () => completeOpeningLesson("timeout")
   };
   reset();
   return api;

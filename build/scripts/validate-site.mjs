@@ -53,13 +53,28 @@ function collectLocalReferences(html) {
   return values.map(localTarget).filter(Boolean);
 }
 
+function collectHtmlFiles(relativeDirectory = "") {
+  const directory = join(outputRoot, relativeDirectory);
+  const files = [];
+
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.isDirectory() && (entry.name === "node_modules" ||
+      (relativeDirectory === "" && [".git", ".github", "build"].includes(entry.name)))) continue;
+    const relativePath = join(relativeDirectory, entry.name);
+    if (entry.isDirectory()) files.push(...collectHtmlFiles(relativePath));
+    else if (entry.isFile() && entry.name.endsWith(".html")) files.push(relativePath);
+  }
+
+  return files;
+}
+
 function jsonLd(html) {
   const match = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
   assert(match, "Missing JSON-LD block");
   return JSON.parse(match[1]);
 }
 
-assert(data.games.length === 18, "Canonical game total is not 18");
+assert(data.games.length === 30, "Canonical game total is not 30");
 assert(data.albums.length === 10, "Canonical album total is not 10");
 assert(data.games.filter((item) => item.featured).length === 6, "Featured game total is not 6");
 assert(data.albums.filter((item) => item.featured).length === 3, "Featured album total is not 3");
@@ -80,6 +95,18 @@ for (const page of generatedPages) {
   for (const target of collectLocalReferences(html)) {
     assert(exactPathExists(target), `Missing or case-mismatched reference in ${page}: /${target.replaceAll(sep, "/")}`);
   }
+}
+
+for (const page of collectHtmlFiles()) {
+  const html = read(page);
+  const descriptionTag = [...html.matchAll(/<meta\b[^>]*>/gi)]
+    .map((match) => match[0])
+    .find((tag) => /\bname\s*=\s*(["'])description\1/i.test(tag));
+  assert(descriptionTag, `Missing meta description in ${page}`);
+  const content = descriptionTag.match(/\bcontent\s*=\s*(["'])([\s\S]*?)\1/i);
+  const description = content?.[2]?.trim() || "";
+  assert(description, `Empty meta description in ${page}`);
+  assert(/[.!?]$/.test(description), `Meta description appears truncated in ${page}: ${description}`);
 }
 
 const home = read("index.html");

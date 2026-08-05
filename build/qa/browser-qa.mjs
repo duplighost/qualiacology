@@ -80,7 +80,7 @@ try {
     report.viewports.push({ viewport, ...metrics, errors: finishErrors() });
     check(metrics.pageWidth <= metrics.width + 1, `Horizontal overflow at ${viewport.width}x${viewport.height}: ${metrics.pageWidth} > ${metrics.width}`);
     check(metrics.h1Visible, `Homepage H1 is not visible at ${viewport.width}x${viewport.height}`);
-    check(metrics.bodyGameCount === "17" && metrics.bodyAlbumCount === "10", `Catalog proof counts drifted at ${viewport.width}px`);
+    check(metrics.bodyGameCount === "30" && metrics.bodyAlbumCount === "10", `Catalog proof counts drifted at ${viewport.width}px`);
     check(!initialRequests.some((url) => url.includes("/assets/audio/")), `Audio requested before opt-in at ${viewport.width}px`);
 
     if (viewport.width < 960) {
@@ -178,8 +178,8 @@ try {
       visible: [...document.querySelectorAll("[data-catalog-game]")].filter((item) => !item.hidden).map((item) => item.dataset.catalogGame),
       query: location.search,
     }));
-    check(horror.status === "Showing 5 worlds.", `Horror filter status failed: ${horror.status}`);
-    check(horror.visible.join(",") === "eaten-path,uninvited,marrow,behind-you,still", `Horror filter results failed: ${horror.visible.join(",")}`);
+    check(horror.status === "Showing 6 worlds.", `Horror filter status failed: ${horror.status}`);
+    check(horror.visible.join(",") === "eaten-path,uninvited,marrow,behind-you,still,the-lag", `Horror filter results failed: ${horror.visible.join(",")}`);
     check(horror.query === "?filter=horror", `Horror filter URL failed: ${horror.query}`);
     report.interactions.filters = { ...horror, errors: finishErrors() };
     await context.close();

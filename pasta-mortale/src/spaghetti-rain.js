@@ -1,4 +1,4 @@
-import * as THREE from "../vendor/three.module.js";
+import * as THREE from "../vendor/three.module.js?v=r165";
 
 const TAU = Math.PI * 2;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -213,7 +213,10 @@ export async function createSpaghettiRain({
   fallingMesh.name = "pooled flexible falling spaghetti";
   fallingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   fallingMesh.frustumCulled = false;
-  fallingMesh.castShadow = normalizedQuality === "high";
+  // Thousands of thin moving cylinders produced an expensive, noisy shadow
+  // map for almost no readable gain. Static light and contact cues carry the
+  // depth; combat actors remain the useful dynamic casters.
+  fallingMesh.castShadow = false;
   fallingMesh.receiveShadow = true;
 
   const splatMaterial = lowQuality

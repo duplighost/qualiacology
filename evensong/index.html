@@ -55,11 +55,12 @@
   @media (prefers-reduced-motion: reduce) { #rotate .glyph { animation: none; } }
 
   /* qualiacology hub shell */
-  .home-link { position: fixed; right: 14px; top: 14px; z-index: 500; color: rgba(232,220,192,.85); text-decoration: none;
+  .home-link { position: fixed; right: 14px; top: 14px; z-index: 700; color: rgba(232,220,192,.85); text-decoration: none;
     font: 800 11px/1.2 system-ui,-apple-system,sans-serif; letter-spacing: .16em; text-transform: uppercase; padding: 8px 12px;
     border-radius: 999px; background: rgba(10,10,18,.62); border: 1px solid rgba(240,201,106,.32); backdrop-filter: blur(8px); transition: opacity .4s ease; }
   .home-link:hover, .home-link:focus-visible { color: #fff; border-color: rgba(240,201,106,.7); outline: 0; }
-  body.playing .home-link { opacity: 0; pointer-events: none; }
+  body.playing .home-link { width:44px; height:44px; box-sizing:border-box; display:grid; place-items:center; padding:0; font-size:0; }
+  body.playing .home-link::after { content:"Q."; font:800 11px/1.2 system-ui,-apple-system,sans-serif; letter-spacing:.1em; }
 </style>
 </head>
 <body>

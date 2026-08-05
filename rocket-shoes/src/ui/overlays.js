@@ -72,7 +72,6 @@ export function showTitle(menu = menuRef) {
     ['▶  Play', () => menu.start()],
     ['Shrine', () => showShrine(menu)],
     ['Codex', () => showCodex(menu)],
-    ['Qualiacology', () => { window.location.href = '/'; }],
   ];
   showOverlay('Rocket Shoes', TITLE_TAGLINES[0], buttons, meta);
   if (ui?.overlay) ui.overlay.classList.add('titleScreen');

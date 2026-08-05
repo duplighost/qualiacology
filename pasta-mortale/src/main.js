@@ -1,18 +1,30 @@
-import * as THREE from "../vendor/three.module.js";
-import { SpaghettiAudio } from "./audio.js";
-import { InputController } from "./input.js";
-import { createSpaghettiWorld } from "./world.js?v=14";
-import { createSpaghettiRain } from "./spaghetti-rain.js";
+import * as THREE from "../vendor/three.module.js?v=r165";
+import { SpaghettiAudio } from "./audio.js?v=16";
+import { InputController } from "./input.js?v=15";
+import { createSpaghettiWorld } from "./world.js?v=25";
+import { createSpaghettiRain } from "./spaghetti-rain.js?v=21";
 import { createCameraSpaghetti } from "./camera-spaghetti.js";
-import { createPastaCombat } from "./combat.js";
-import { createCinematicFX } from "./cinematic-fx.js";
+import { createPastaCombat } from "./combat.js?v=20";
+import { createCinematicFX } from "./cinematic-fx.js?v=18";
+import {
+  loadPastaSettings,
+  resetPastaSettings,
+  resolvePastaQuality,
+  reducedMotionEnabled,
+  sanitizePastaSettings,
+  savePastaSettings
+} from "./settings.js?v=3";
+import { gradePastaRun, loadPastaRecords, recordPastaRun } from "./records.js?v=2";
 
 const params = new URLSearchParams(location.search);
 const AUTOTEST = params.get("autotest") === "1";
 const FAST_FILL = params.get("fastfill") === "1";
 const SEED = Number(params.get("seed")) || 1337;
 const mobileLike = matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0;
-const QUALITY = params.get("quality") || (mobileLike ? "low" : "high");
+const reducedMotionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+let pastaSettings = loadPastaSettings();
+let reducedMotion = reducedMotionEnabled(pastaSettings, reducedMotionQuery);
+const QUALITY = resolvePastaQuality(pastaSettings, mobileLike, params.get("quality"));
 const FIXED_STEP = 1 / 60;
 const PLAYER_RADIUS = 0.31;
 const PLAYER_HEIGHT = 1.78;
@@ -49,6 +61,7 @@ const resumeButton = document.querySelector("#resume-button");
 const restartButton = document.querySelector("#restart-button");
 const restartPauseButton = document.querySelector("#restart-pause-button");
 const loadStatus = document.querySelector("#load-status");
+const loadingStatus = document.querySelector("#loading-status");
 const hud = document.querySelector("#hud");
 const touchUI = document.querySelector("#touch-ui");
 const touchPauseButton = document.querySelector("#touch-pause");
@@ -77,6 +90,7 @@ const endingKicker = document.querySelector("#ending-kicker");
 const endingTitle = document.querySelector("#ending-title");
 const endingCopy = document.querySelector("#ending-copy");
 const endingStats = document.querySelector("#ending-stats");
+const endingRecord = document.querySelector("#ending-record");
 const healthValue = document.querySelector("#health-value");
 const sauceArmorValue = document.querySelector("#sauce-armor-value");
 const healthRail = document.querySelector(".health-rail");
@@ -95,6 +109,23 @@ const killFeed = document.querySelector("#kill-feed");
 const reticle = document.querySelector("#reticle");
 const hitmarker = document.querySelector("#hitmarker");
 const damageFlash = document.querySelector("#damage-flash");
+const damageDirection = document.querySelector("#damage-direction");
+const combatAnnouncement = document.querySelector("#combat-announcement");
+const combatAnnouncementKicker = document.querySelector("#combat-announcement-kicker");
+const combatAnnouncementTitle = document.querySelector("#combat-announcement-title");
+const pointerGate = document.querySelector("#pointer-gate");
+const pointerGateKicker = document.querySelector("#pointer-gate-kicker");
+const pointerGateTitle = document.querySelector("#pointer-gate-title");
+const pointerGateCopy = document.querySelector("#pointer-gate-copy");
+const pointerRetryButton = document.querySelector("#pointer-retry-button");
+const graphicsFailure = document.querySelector("#graphics-failure");
+const graphicsBoot = window.__pastaGraphicsBoot || null;
+const settingsScreen = document.querySelector("#settings-screen");
+const settingsForm = document.querySelector("#settings-form");
+const settingsCloseButton = document.querySelector("#settings-close-button");
+const settingsResetButton = document.querySelector("#settings-reset-button");
+const settingsStatus = document.querySelector("#settings-status");
+const settingsOpenButtons = [...document.querySelectorAll("[data-open-settings]")];
 
 let renderer;
 let scene;
@@ -106,13 +137,29 @@ let cinematicFX;
 let input;
 let audio;
 let combat;
+let combatFrameState = null;
+let combatEvents = [];
+let settingsReturnFocus = null;
+let hudAccumulator = 0;
+let dynamicRenderScale = 1;
+let frameTimeEwma = FIXED_STEP;
+let slowFrameSeconds = 0;
+let fastFrameSeconds = 0;
+let renderScaleCooldown = 0;
+const renderFrameSamples = [];
+let renderTiming = { samples: 0, meanMs: 0, medianMs: 0, p95Ms: 0, p99Ms: 0, fps: 0 };
+let runRecordEligible = !AUTOTEST;
 let phase = "loading";
 let lastFrame = performance.now();
 let accumulator = 0;
 let frameCount = 0;
 let elapsed = 0;
 let runStartedAt = 0;
+let pendingRunStart = false;
+let pointerGateReason = "start";
+let pointerGateMessage = "";
 let fillMultiplier = FAST_FILL ? 9 : 1;
+let effectiveFillMultiplier = 0;
 let narrativeIndex = 0;
 let messageTimer = 0;
 let submergeTimer = 0;
@@ -141,6 +188,8 @@ let lastCombatPunchKills = 0;
 let lastCombatHealth = 100;
 let damageFlashTimer = 0;
 let hitmarkerTimer = 0;
+let damageDirectionTimer = 0;
+let combatAnnouncementTimer = 0;
 let spaghettiDamageCooldown = 0.35;
 let spaghettiDamagePulses = 0;
 let spaghettiDamageTotal = 0;
@@ -221,36 +270,77 @@ window.addEventListener("unhandledrejection", (event) => {
   errors.push(String(event.reason?.message || event.reason || "unhandled rejection"));
 });
 
+canvas.addEventListener("webglcontextlost", (event) => {
+  event.preventDefault();
+  showGraphicsFailure(new Error("The WebGL context was lost."), "context-lost");
+});
+
 boot().catch((error) => {
-  errors.push(error instanceof Error ? error.message : String(error));
-  console.error(error);
-  loadStatus.textContent = "THE KITCHEN CAUGHT FIRE";
+  showGraphicsFailure(error);
+});
+
+function graphicsFailureKind(error, preferredKind = "") {
+  if (preferredKind) return String(preferredKind);
+  const message = String(error?.message || error || "");
+  return /webgl|context|renderer|gpu/i.test(message) ? "webgl-unavailable" : "load-failure";
+}
+
+function showGraphicsFailure(error, preferredKind = "", options = {}) {
+  const message = error instanceof Error ? error.message : String(error || "Unknown graphics failure");
+  const kind = graphicsFailureKind(error, preferredKind);
+  if (!errors.includes(message)) errors.push(message);
+  if (!options.silent) console.error(error);
+  phase = "graphics-failed";
+  pendingRunStart = false;
+  input?.releaseAll?.();
+  document.exitPointerLock?.();
+  pointerGate.hidden = true;
+  hud.classList.add("hidden");
+  touchUI.classList.add("hidden");
+  pauseScreen.classList.remove("active");
+  endingScreen.classList.remove("active");
   loadingScreen.classList.remove("active");
   titleScreen.classList.add("active");
   startButton.disabled = true;
-});
+  loadStatus.textContent = "3D RENDERER OFFLINE";
+  graphicsFailure.hidden = false;
+  graphicsBoot?.fail?.(kind, message);
+  publishPhase();
+  return graphicsBoot?.state?.() || { status: "failed", kind, detail: message };
+}
+
+function setLoadingStatus(message) {
+  if (loadingStatus) loadingStatus.textContent = message;
+  if (phase === "loading" && loadStatus) loadStatus.textContent = message;
+}
 
 async function boot() {
+  setLoadingStatus("LIGHTING THE MARINARA NAVE…");
   renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: QUALITY !== "low",
+    // MSAA multiplied the cost of the entire wet physical-material scene and
+    // stayed expensive after dynamic resolution dropped. Native device-scale
+    // rendering plus the soft lens treatment keeps edges coherent without it.
+    antialias: false,
     alpha: false,
     powerPreference: "high-performance",
     preserveDrawingBuffer: AUTOTEST
   });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, QUALITY === "low" ? 1.2 : 1.55));
+  renderer.setPixelRatio(rendererPixelRatio());
   renderer.setSize(innerWidth, innerHeight, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = QUALITY === "low" ? 1.08 : 1.18;
-  renderer.shadowMap.enabled = QUALITY !== "low";
+  // The basilica's thousands of thin strands produce shimmering, high-cost
+  // shadow maps. Authored value lighting and contact feedback are clearer.
+  renderer.shadowMap.enabled = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x090302);
   scene.fog = new THREE.FogExp2(0x160704, QUALITY === "low" ? 0.012 : 0.0085);
 
-  camera = new THREE.PerspectiveCamera(66, innerWidth / innerHeight, 0.045, 145);
+  camera = new THREE.PerspectiveCamera(pastaSettings.fov, innerWidth / innerHeight, 0.045, 145);
   camera.rotation.order = "YXZ";
   scene.add(camera);
 
@@ -259,8 +349,10 @@ async function boot() {
   cameraSpaghetti = createCameraSpaghetti({
     canvas: lensCanvas,
     quality: QUALITY,
-    seed: SEED + 2401
+    seed: SEED + 2401,
+    reducedMotion
   });
+  applyPastaSettings(pastaSettings, { persist: false, syncForm: true });
 
   if (input.isTouch) {
     document.body.classList.add("touch-mode");
@@ -268,12 +360,14 @@ async function boot() {
     startButton.querySelector("small").textContent = "LEFT MOVE · RIGHT LOOK · FIRE + PUNCH + JUMP + SAUCE";
   }
 
+  setLoadingStatus("BUILDING THE SPAGHETTI BASILICA…");
   world = await createSpaghettiWorld({
     scene,
     renderer,
     quality: QUALITY,
     seed: SEED
   });
+  setLoadingStatus("SUMMONING THE KITCHEN…");
   cinematicFX = createCinematicFX({
     scene,
     renderer,
@@ -340,13 +434,15 @@ async function boot() {
       distance: 7.5,
       decay: 1.7
     },
-    autoCombatEvents: true
+    autoCombatEvents: false
   });
+  setLoadingStatus("HANGING THE NOODLE WEATHER…");
   spaghettiRain = await createSpaghettiRain({
     scene,
     quality: QUALITY,
     seed: SEED + 991
   });
+  setLoadingStatus("ARMING BALLISTIC PASTA…");
   combat = await createPastaCombat({
     scene,
     camera,
@@ -388,11 +484,15 @@ async function boot() {
   resize();
   addEventListeners();
 
+  setLoadingStatus("PLATING THE FIRST WAVE…");
+  graphicsFailure.hidden = true;
   phase = "title";
   publishPhase();
   updateCamera(0, performance.now() / 1000);
   renderer.render(scene, camera);
   renderReady = Number(renderer.info?.render?.calls || 0) > 0;
+  if (!renderReady) throw new Error("The renderer completed startup without producing a draw call.");
+  graphicsBoot?.ready?.();
   loadStatus.textContent = "THE BASILICA IS HUNGRY";
   startButton.disabled = false;
   loadingScreen.classList.remove("active");
@@ -422,24 +522,187 @@ function addEventListeners() {
     void audio.unlock();
     restartGame(true);
   });
+  pointerRetryButton.addEventListener("click", () => {
+    if (phase !== "arming") return;
+    void audio.unlock();
+    input.releaseAll?.();
+    canvas.focus({ preventScroll: true });
+    input.requestPointerLock();
+    updatePointerGate();
+  });
   touchPauseButton.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     event.stopPropagation();
     pauseGame();
   }, { passive: false });
 
+  for (const button of settingsOpenButtons) {
+    button.addEventListener("click", (event) => openSettings(event.currentTarget));
+  }
+  settingsCloseButton?.addEventListener("click", closeSettings);
+  settingsResetButton?.addEventListener("click", () => {
+    pastaSettings = resetPastaSettings();
+    applyPastaSettings(pastaSettings, { persist: true, syncForm: true });
+    if (settingsStatus) settingsStatus.textContent = "DEFAULTS RESTORED // QUALITY APPLIES NEXT LAUNCH";
+  });
+  settingsForm?.addEventListener("input", () => {
+    applyPastaSettings(readSettingsForm(), { persist: true, syncForm: true });
+    if (settingsStatus) settingsStatus.textContent = "SAVED // QUALITY APPLIES NEXT LAUNCH";
+  });
+  settingsScreen?.addEventListener("keydown", handleSettingsKeydown);
+  reducedMotionQuery.addEventListener?.("change", () => {
+    if (pastaSettings.reducedMotion === "auto") applyPastaSettings(pastaSettings, { persist: false, syncForm: false });
+  });
+
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && phase === "playing" && !AUTOTEST) pauseGame();
   });
-  // A pointer-lock request resolves asynchronously. If a pause, death, or
-  // overlay wins that race, immediately reject the late capture instead of
-  // trapping the cursor behind a non-playing screen.
   document.addEventListener("pointerlockchange", () => {
-    if (document.pointerLockElement === canvas && phase !== "playing") {
+    const captured = document.pointerLockElement === canvas;
+    if (captured && phase === "arming") {
+      enterPlayingAfterCapture();
+      return;
+    }
+    // A pointer-lock request resolves asynchronously. If a pause, death, or
+    // other overlay wins that race, reject the late capture instead of
+    // trapping the cursor behind a non-playing screen.
+    if (captured && phase !== "playing") {
       input.releaseAll?.();
       document.exitPointerLock?.();
+      return;
     }
+    if (!captured && phase === "playing" && needsDesktopCapture()) pauseGame("pointer-lock-lost");
+    else if (phase === "arming") updatePointerGate();
   });
+}
+
+function rendererPixelRatio() {
+  const cap = QUALITY === "low" ? 1.2 : 1.55;
+  return Math.max(0.65, Math.min((devicePixelRatio || 1) * pastaSettings.renderScale * dynamicRenderScale, cap));
+}
+
+function effectiveCameraMotion() {
+  return reducedMotion ? Math.min(0.12, pastaSettings.cameraMotion) : pastaSettings.cameraMotion;
+}
+
+function readSettingsForm() {
+  if (!settingsForm) return pastaSettings;
+  const control = (name) => settingsForm.elements.namedItem(name);
+  return sanitizePastaSettings({
+    ...pastaSettings,
+    quality: control("quality")?.value,
+    renderScale: control("renderScale")?.value,
+    sensitivity: control("sensitivity")?.value,
+    invertY: Boolean(control("invertY")?.checked),
+    fov: control("fov")?.value,
+    masterVolume: control("masterVolume")?.value,
+    muted: Boolean(control("muted")?.checked),
+    cameraMotion: control("cameraMotion")?.value,
+    lensIntensity: control("lensIntensity")?.value,
+    reticleScale: control("reticleScale")?.value,
+    hudScale: control("hudScale")?.value,
+    highContrast: Boolean(control("highContrast")?.checked),
+    reducedMotion: control("reducedMotion")?.value
+  });
+}
+
+function syncSettingsForm() {
+  if (!settingsForm) return;
+  const control = (name) => settingsForm.elements.namedItem(name);
+  for (const [name, value] of Object.entries(pastaSettings)) {
+    const element = control(name);
+    if (!element) continue;
+    if (element.type === "checkbox") element.checked = Boolean(value);
+    else element.value = String(value);
+  }
+  const labels = {
+    renderScale: `${Math.round(pastaSettings.renderScale * 100)}%`,
+    sensitivity: `${pastaSettings.sensitivity.toFixed(2)}x`,
+    fov: `${Math.round(pastaSettings.fov)}°`,
+    masterVolume: `${Math.round(pastaSettings.masterVolume * 100)}%`,
+    cameraMotion: `${Math.round(pastaSettings.cameraMotion * 100)}%`,
+    lensIntensity: `${Math.round(pastaSettings.lensIntensity * 100)}%`,
+    reticleScale: `${Math.round(pastaSettings.reticleScale * 100)}%`,
+    hudScale: `${Math.round(pastaSettings.hudScale * 100)}%`
+  };
+  for (const output of settingsForm.querySelectorAll("[data-setting-output]")) {
+    const name = output.dataset.settingOutput;
+    if (labels[name]) output.textContent = labels[name];
+  }
+}
+
+function applyPastaSettings(next, { persist = false, syncForm = false } = {}) {
+  pastaSettings = persist ? savePastaSettings(next) : sanitizePastaSettings(next);
+  reducedMotion = reducedMotionEnabled(pastaSettings, reducedMotionQuery);
+  document.body.dataset.quality = QUALITY;
+  document.body.dataset.highContrast = String(pastaSettings.highContrast);
+  document.body.dataset.reducedMotion = String(reducedMotion);
+  document.body.style.setProperty("--reticle-scale", pastaSettings.reticleScale.toFixed(3));
+  document.body.style.setProperty("--hud-scale", pastaSettings.hudScale.toFixed(3));
+  // Scale a correspondingly inverse HUD canvas from its top-left corner. A
+  // center-scaled 100vw canvas pushed every edge anchor offscreen above 100%.
+  document.body.style.setProperty("--hud-canvas-width", `${(100 / pastaSettings.hudScale).toFixed(4)}vw`);
+  document.body.style.setProperty("--hud-canvas-height", `${(100 / pastaSettings.hudScale).toFixed(4)}vh`);
+  document.body.style.setProperty("--camera-motion", pastaSettings.cameraMotion.toFixed(3));
+  document.body.style.setProperty("--lens-intensity", pastaSettings.lensIntensity.toFixed(3));
+  audio?.setMasterVolume?.(pastaSettings.masterVolume);
+  audio?.setMuted?.(pastaSettings.muted);
+  if (renderer) {
+    const nextRatio = rendererPixelRatio();
+    if (Math.abs(renderer.getPixelRatio() - nextRatio) > 0.005) {
+      renderer.setPixelRatio(nextRatio);
+      resize();
+    }
+  }
+  if (camera) {
+    camera.fov = pastaSettings.fov;
+    camera.updateProjectionMatrix();
+  }
+  if (pastaSettings.lensIntensity <= 0.001) cameraSpaghetti?.clear?.();
+  if (syncForm) syncSettingsForm();
+  return pastaSettings;
+}
+
+function openSettings(source = null) {
+  if (!settingsScreen) return;
+  settingsReturnFocus = source instanceof HTMLElement ? source : document.activeElement;
+  settingsScreen.hidden = false;
+  settingsScreen.classList.add("active");
+  settingsScreen.setAttribute("aria-hidden", "false");
+  document.body.dataset.settingsOpen = "true";
+  syncSettingsForm();
+  requestAnimationFrame(() => settingsCloseButton?.focus({ preventScroll: true }));
+}
+
+function closeSettings() {
+  if (!settingsScreen) return;
+  settingsScreen.classList.remove("active");
+  settingsScreen.setAttribute("aria-hidden", "true");
+  settingsScreen.hidden = true;
+  document.body.dataset.settingsOpen = "false";
+  settingsReturnFocus?.focus?.({ preventScroll: true });
+  settingsReturnFocus = null;
+}
+
+function handleSettingsKeydown(event) {
+  if (!settingsScreen?.classList.contains("active")) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeSettings();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = [...settingsScreen.querySelectorAll("button, input, select")].filter((element) => !element.disabled && !element.hidden);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function resize() {
@@ -447,45 +710,200 @@ function resize() {
   const width = Math.max(1, innerWidth);
   const height = Math.max(1, innerHeight);
   renderer.setSize(width, height, false);
-  cameraSpaghetti?.resize?.(width, height, devicePixelRatio || 1);
+  cameraSpaghetti?.resize?.(width, height, rendererPixelRatio());
   cinematicFX?.resize?.(renderer.getPixelRatio());
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
 }
 
+function updateAdaptiveResolution(frameSeconds) {
+  if (!renderer || AUTOTEST || phase !== "playing") return;
+  const sample = THREE.MathUtils.clamp(Number(frameSeconds) || FIXED_STEP, 0.004, 0.05);
+  frameTimeEwma = THREE.MathUtils.lerp(frameTimeEwma, sample, 0.055);
+  renderScaleCooldown = Math.max(0, renderScaleCooldown - sample);
+  const slowThreshold = QUALITY === "low" ? 0.035 : 0.0205;
+  const fastThreshold = QUALITY === "low" ? 0.026 : 0.0145;
+  if (frameTimeEwma > slowThreshold) {
+    slowFrameSeconds += sample;
+    fastFrameSeconds = Math.max(0, fastFrameSeconds - sample * 2);
+  } else if (frameTimeEwma < fastThreshold) {
+    fastFrameSeconds += sample;
+    slowFrameSeconds = Math.max(0, slowFrameSeconds - sample);
+  } else {
+    slowFrameSeconds = Math.max(0, slowFrameSeconds - sample * 0.5);
+    fastFrameSeconds = Math.max(0, fastFrameSeconds - sample * 0.5);
+  }
+
+  let nextScale = dynamicRenderScale;
+  if (renderScaleCooldown <= 0 && slowFrameSeconds >= 2.4 && dynamicRenderScale > 0.72) {
+    nextScale = Math.max(0.72, dynamicRenderScale - 0.08);
+    slowFrameSeconds = 0;
+    fastFrameSeconds = 0;
+    renderScaleCooldown = 4;
+  } else if (renderScaleCooldown <= 0 && fastFrameSeconds >= 8 && dynamicRenderScale < 1) {
+    nextScale = Math.min(1, dynamicRenderScale + 0.04);
+    slowFrameSeconds = 0;
+    fastFrameSeconds = 0;
+    renderScaleCooldown = 5;
+  }
+  if (Math.abs(nextScale - dynamicRenderScale) < 0.001) return;
+  dynamicRenderScale = nextScale;
+  renderer.setPixelRatio(rendererPixelRatio());
+  resize();
+  document.body.dataset.dynamicResolution = String(Math.round(dynamicRenderScale * 100));
+}
+
+function recordRenderTiming(frameSeconds) {
+  const seconds = Number(frameSeconds);
+  if (phase !== "playing" || document.visibilityState !== "visible" || !Number.isFinite(seconds) || seconds <= 0 || seconds > 0.5) return;
+  renderFrameSamples.push(seconds * 1000);
+  if (renderFrameSamples.length > 300) renderFrameSamples.splice(0, renderFrameSamples.length - 300);
+  if (renderFrameSamples.length < 30 || renderFrameSamples.length % 15 !== 0) return;
+  const sorted = [...renderFrameSamples].sort((left, right) => left - right);
+  const percentile = (ratio) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * ratio) - 1))];
+  const meanMs = renderFrameSamples.reduce((sum, value) => sum + value, 0) / renderFrameSamples.length;
+  renderTiming = {
+    samples: renderFrameSamples.length,
+    meanMs: Number(meanMs.toFixed(2)),
+    medianMs: Number(percentile(0.5).toFixed(2)),
+    p95Ms: Number(percentile(0.95).toFixed(2)),
+    p99Ms: Number(percentile(0.99).toFixed(2)),
+    fps: Number((1000 / Math.max(0.001, meanMs)).toFixed(1))
+  };
+  document.body.dataset.renderFps = String(renderTiming.fps);
+  document.body.dataset.renderP95 = String(renderTiming.p95Ms);
+}
+
 function startGame(fromGesture) {
-  if (!world || phase === "playing") return;
+  if (graphicsUnavailable()) return;
+  if (!world || phase === "playing" || phase === "arming") return;
   if (phase === "title" || phase === "escaped" || phase === "drowned") restartRun();
-  phase = "playing";
+  prepareGamePresentation();
+  if (needsDesktopCapture()) {
+    beginPointerArming({
+      fromGesture,
+      newRun: true,
+      reason: "start",
+      message: "THE BASILICA HAS BEEN WAITING FOR YOU"
+    });
+    return;
+  }
+  enterPlayingWithoutCapture(true, "THE BASILICA HAS BEEN WAITING FOR YOU", 3.5);
+}
+
+function restartGame(fromGesture = false) {
+  if (graphicsUnavailable()) return;
+  restartRun();
+  prepareGamePresentation();
+  if (needsDesktopCapture()) {
+    beginPointerArming({
+      fromGesture,
+      newRun: true,
+      reason: "restart",
+      message: "TAKE THE GRAND ALTAR. KILL WHAT BOILS."
+    });
+    return;
+  }
+  enterPlayingWithoutCapture(true, "TAKE THE GRAND ALTAR. KILL WHAT BOILS.", 2.4);
+}
+
+function needsDesktopCapture() {
+  return Boolean(input && !input.isTouch && !AUTOTEST);
+}
+
+function graphicsUnavailable() {
+  return phase === "graphics-failed" || graphicsBoot?.state?.().status === "failed";
+}
+
+function prepareGamePresentation() {
   titleScreen.classList.remove("active");
   pauseScreen.classList.remove("active");
   endingScreen.classList.remove("active");
   hud.classList.remove("hidden");
   if (input.isTouch) touchUI.classList.remove("hidden");
-  runStartedAt = performance.now();
-  publishPhase();
+  else touchUI.classList.add("hidden");
   input.enable();
-  if (fromGesture && !input.isTouch) {
-    canvas.focus({ preventScroll: true });
-    input.requestPointerLock();
-  }
-  showMessage("THE BASILICA HAS BEEN WAITING FOR YOU", 3.5);
 }
 
-function restartGame(fromGesture = false) {
-  restartRun();
-  phase = "playing";
-  endingScreen.classList.remove("active");
-  pauseScreen.classList.remove("active");
-  hud.classList.remove("hidden");
-  if (input.isTouch) touchUI.classList.remove("hidden");
-  runStartedAt = performance.now();
+function beginPointerArming({ fromGesture = false, newRun = false, reason = "start", message = "" } = {}) {
+  input.releaseAll?.();
+  phase = "arming";
+  pendingRunStart = Boolean(newRun);
+  pointerGateReason = String(reason || "start");
+  pointerGateMessage = String(message || "");
   publishPhase();
-  if (fromGesture && !input.isTouch && !AUTOTEST) {
+  updatePointerGate();
+  if (fromGesture) {
     canvas.focus({ preventScroll: true });
     input.requestPointerLock();
+    updatePointerGate();
   }
-  showMessage("TAKE THE GRAND ALTAR. KILL WHAT BOILS.", 2.4);
+}
+
+function enterPlayingAfterCapture() {
+  if (phase !== "arming" || !input.pointerLocked) return false;
+  const newRun = pendingRunStart;
+  const message = pointerGateMessage;
+  phase = "playing";
+  pendingRunStart = false;
+  pointerGate.hidden = true;
+  if (newRun) runStartedAt = performance.now();
+  publishPhase();
+  showMessage(message || (pointerGateReason === "resume" ? "BACK TO SERVICE" : "MOUSE CAPTURED"), pointerGateReason === "start" ? 3.5 : 2.4);
+  return true;
+}
+
+function enterPlayingWithoutCapture(newRun = false, message = "", duration = 2.4) {
+  phase = "playing";
+  pendingRunStart = false;
+  pointerGate.hidden = true;
+  if (newRun) runStartedAt = performance.now();
+  publishPhase();
+  showMessage(message, duration);
+}
+
+function updatePointerGate() {
+  const state = input?.getState?.() || {};
+  document.body.dataset.pointerState = String(state.pointerLockState || "unavailable");
+  if (phase !== "arming") {
+    pointerGate.hidden = true;
+    return;
+  }
+  if (state.pointerLocked || state.pointerLockState === "locked") {
+    enterPlayingAfterCapture();
+    return;
+  }
+
+  pointerGate.hidden = false;
+  pointerGateKicker.textContent = pointerGateReason === "resume" ? "COMBAT PAUSED" : "DESKTOP INPUT";
+  pointerRetryButton.disabled = false;
+  pointerRetryButton.textContent = "CAPTURE MOUSE";
+
+  if (state.pointerLockState === "requesting") {
+    pointerGateTitle.textContent = "CAPTURING MOUSE";
+    pointerGateCopy.textContent = "Waiting for the browser to arm mouse aim and fire. The fight is frozen.";
+    pointerRetryButton.disabled = true;
+    pointerRetryButton.textContent = "WAITING";
+  } else if (state.pointerLockState === "timed-out") {
+    pointerGateTitle.textContent = "CAPTURE TIMED OUT";
+    pointerGateCopy.textContent = "The browser never confirmed mouse capture. Click TRY AGAIN; combat has not advanced.";
+    pointerRetryButton.textContent = "TRY AGAIN";
+  } else if (state.pointerLockState === "rejected") {
+    pointerGateTitle.textContent = "CAPTURE REJECTED";
+    pointerGateCopy.textContent = "The browser rejected mouse capture. Click TRY AGAIN; combat has not advanced.";
+    pointerRetryButton.textContent = "TRY AGAIN";
+  } else if (state.pointerLockState === "unsupported") {
+    pointerGateTitle.textContent = "MOUSE CAPTURE UNAVAILABLE";
+    pointerGateCopy.textContent = "This browser does not expose pointer lock. Use a supported desktop browser or a touch device.";
+    pointerRetryButton.disabled = true;
+    pointerRetryButton.textContent = "NOT SUPPORTED";
+  } else if (state.pointerLockState === "released") {
+    pointerGateTitle.textContent = "MOUSE CAPTURE RELEASED";
+    pointerGateCopy.textContent = "Combat is paused. Capture the mouse again when you are ready.";
+  } else {
+    pointerGateTitle.textContent = "CAPTURE THE MOUSE";
+    pointerGateCopy.textContent = "Combat waits here until mouse aim and fire are armed.";
+  }
 }
 
 function restartRun() {
@@ -496,12 +914,14 @@ function restartRun() {
   cinematicFX?.reset?.();
   resetPlayer();
   combat?.reset?.();
+  combatFrameState = combat?.getFrameState?.() || null;
   elapsed = 0;
   narrativeIndex = 0;
   messageTimer = 0;
   lastSlickSurfaceId = null;
   submergeTimer = 0;
   fillMultiplier = FAST_FILL ? 9 : 1;
+  effectiveFillMultiplier = 0;
   audioStepBase = audio.getState().stepEvents;
   audioWetStepBase = audio.getState().wetStepEvents;
   rainImpactBase = spaghettiRain?.getStats?.().totalImpacts || 0;
@@ -521,6 +941,33 @@ function restartRun() {
   lastCombatHealth = 100;
   damageFlashTimer = 0;
   hitmarkerTimer = 0;
+  damageDirectionTimer = 0;
+  combatAnnouncementTimer = 0;
+  hudAccumulator = 0.05;
+  dynamicRenderScale = 1;
+  frameTimeEwma = FIXED_STEP;
+  slowFrameSeconds = 0;
+  fastFrameSeconds = 0;
+  renderScaleCooldown = 4;
+  renderFrameSamples.length = 0;
+  renderTiming = { samples: 0, meanMs: 0, medianMs: 0, p95Ms: 0, p99Ms: 0, fps: 0 };
+  delete document.body.dataset.renderFps;
+  delete document.body.dataset.renderP95;
+  runRecordEligible = !AUTOTEST;
+  document.body.dataset.dynamicResolution = "100";
+  if (renderer && Math.abs(renderer.getPixelRatio() - rendererPixelRatio()) > 0.005) {
+    renderer.setPixelRatio(rendererPixelRatio());
+    resize();
+  }
+  killFeed?.classList.remove("show");
+  if (killFeed) killFeed.textContent = "";
+  bossWrap?.classList.add("hidden");
+  document.body.classList.remove("boss-active");
+  if (bossFill) bossFill.style.width = "100%";
+  damageDirection?.classList.remove("show");
+  combatAnnouncement?.classList.remove("show");
+  damageFlash?.classList.remove("show", "pulse");
+  hitmarker?.classList.remove("show", "kill");
   spaghettiDamageCooldown = 0.35;
   spaghettiDamagePulses = 0;
   spaghettiDamageTotal = 0;
@@ -530,6 +977,10 @@ function restartRun() {
   lastDamageSource = "none";
   punchCameraKick = 0;
   input.setTestMove(0, 0);
+  // Restart presentation must be truthful before pointer capture succeeds.
+  // Without this synchronous refresh, the arming screen can briefly expose
+  // health, ammunition, objective, and reticle state from the previous run.
+  updateHud(0, combatFrameState || {});
 }
 
 function resetPlayer() {
@@ -601,8 +1052,14 @@ function resetPlayer() {
 }
 
 function frame(now) {
-  const rawDelta = Math.min(0.075, Math.max(0, (now - lastFrame) / 1000));
+  if (graphicsUnavailable() || !renderer || !scene || !camera) {
+    requestAnimationFrame(frame);
+    return;
+  }
+  const actualFrameSeconds = Math.max(0, (now - lastFrame) / 1000);
+  const rawDelta = Math.min(0.075, actualFrameSeconds);
   lastFrame = now;
+  recordRenderTiming(actualFrameSeconds);
   accumulator = Math.min(accumulator + rawDelta, FIXED_STEP * 5);
 
   while (accumulator >= FIXED_STEP) {
@@ -613,44 +1070,52 @@ function frame(now) {
   }
 
   updateCamera(rawDelta, now / 1000);
+  const cameraMotion = effectiveCameraMotion();
   cameraSpaghetti?.update?.(rawDelta, now / 1000, {
-    motionX: THREE.MathUtils.clamp(-player.vx / RUN_SPEED + player.lateralDriftAcceleration * 0.18, -1.4, 1.4),
-    motionY: THREE.MathUtils.clamp(-player.vy / 11, -1.2, 1.2),
-    gravityX: THREE.MathUtils.clamp(Math.sin(player.yaw) * player.slipAmount * 0.16, -0.2, 0.2),
+    motionX: THREE.MathUtils.clamp(-player.vx / RUN_SPEED + player.lateralDriftAcceleration * 0.18, -1.4, 1.4) * cameraMotion,
+    motionY: THREE.MathUtils.clamp(-player.vy / 11, -1.2, 1.2) * cameraMotion,
+    gravityX: THREE.MathUtils.clamp(Math.sin(player.yaw) * player.slipAmount * 0.16, -0.2, 0.2) * cameraMotion,
     gravityY: 1
   });
   renderer.render(scene, camera);
+  updateAdaptiveResolution(rawDelta);
   requestAnimationFrame(frame);
 }
 
 function update(dt, time) {
   input.update();
+  if (phase === "arming") updatePointerGate();
   if (input.consumePause()) {
     if (phase === "playing") pauseGame();
     else if (phase === "paused") resumeGame();
   }
 
   if (phase !== "playing") {
+    effectiveFillMultiplier = 0;
     world?.update(0, time, player, 0);
     spaghettiRain?.update?.(0, time, player, sampleRainSurface);
-    combat?.update?.(0, time, {
+    combatFrameState = combat?.update?.(0, time, {
       player,
       phase,
       fireHeld: false,
       firePressed: input.consumeFirePress?.() || false,
       punchRequested: input.consumePunch?.() || false,
-      aimHeld: false
-    });
-    cinematicFX?.update?.(0, time, player, combat?.getState?.());
+      aimHeld: false,
+      frameView: true
+    }) || combatFrameState;
+    combatEvents = combat?.consumeEvents?.() || [];
+    processCombatEvents(combatEvents);
+    cinematicFX?.update?.(0, time, player, combatFrameState);
     return;
   }
 
   elapsed += dt;
   lensWadeCooldown = Math.max(0, lensWadeCooldown - dt);
   const look = input.consumeLook();
-  const lookScale = input.isTouch ? 0.0035 : 0.00225;
+  const lookScale = (input.isTouch ? 0.0035 : 0.00225) * pastaSettings.sensitivity;
+  const verticalLook = pastaSettings.invertY ? -look.y : look.y;
   player.yaw -= look.x * lookScale;
-  player.pitch = THREE.MathUtils.clamp(player.pitch - look.y * lookScale, -MAX_PITCH, MAX_PITCH);
+  player.pitch = THREE.MathUtils.clamp(player.pitch - verticalLook * lookScale, -MAX_PITCH, MAX_PITCH);
 
   if (input.consumeJump() || debugJumpQueued) player.jumpBuffer = JUMP_BUFFER_TIME;
   else player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
@@ -901,7 +1366,9 @@ function update(dt, time) {
   updateCheckpoint();
   if (player.y < -3.2 || !Number.isFinite(player.y) || missedCheckpointDrop()) respawnAtCheckpoint();
 
-  world.update(dt, time, player, fillMultiplier);
+  const openingFloodScale = combat?.getFloodScale?.() ?? 1;
+  effectiveFillMultiplier = fillMultiplier * THREE.MathUtils.clamp(openingFloodScale, 0, 1);
+  world.update(dt, time, player, effectiveFillMultiplier);
   player.depth = sampleDepthAt(player.x, player.z, player.y);
   const rainIntensity = THREE.MathUtils.clamp(0.08 + elapsed / 600 + player.y / 240, 0.08, 0.2);
   if (Math.abs(rainIntensity - rainIntensityValue) >= 0.015) {
@@ -954,7 +1421,7 @@ function update(dt, time) {
     audio.slide(0.2 + Math.max(player.slipAmount, player.rampSlipCue) * 0.55, player.surfaceWetness);
   }
 
-  combat?.update?.(dt, time, {
+  combatFrameState = combat?.update?.(dt, time, {
     player,
     phase,
     fireHeld: input.fireHeld,
@@ -962,20 +1429,31 @@ function update(dt, time) {
     reloadRequested: input.consumeReload?.() || false,
     sauceRequested: input.consumeSauce?.() || false,
     punchRequested: input.consumePunch?.() || false,
-    aimHeld: input.aimHeld
-  });
+    aimHeld: input.aimHeld,
+    frameView: true
+  }) || combatFrameState;
   updateSpaghettiHazard(dt);
+  combatEvents = combat?.consumeEvents?.() || [];
+  processCombatEvents(combatEvents);
   cinematicFX?.setSauceLevel?.(maximumFill(world?.getFillLevels?.() || {}));
-  cinematicFX?.update?.(dt, time, player, combat?.getState?.());
+  cinematicFX?.update?.(dt, time, player, combatFrameState);
 
   damageFlashTimer = Math.max(0, damageFlashTimer - dt);
   hitmarkerTimer = Math.max(0, hitmarkerTimer - dt);
+  damageDirectionTimer = Math.max(0, damageDirectionTimer - dt);
+  combatAnnouncementTimer = Math.max(0, combatAnnouncementTimer - dt);
   damageFlash?.classList.toggle("show", damageFlashTimer > 0);
   hitmarker?.classList.toggle("show", hitmarkerTimer > 0);
+  damageDirection?.classList.toggle("show", damageDirectionTimer > 0);
+  combatAnnouncement?.classList.toggle("show", combatAnnouncementTimer > 0);
 
   updateNarrative();
-  updateHud(danger);
-  checkEnding();
+  hudAccumulator += dt;
+  if (hudAccumulator >= 0.05) {
+    hudAccumulator %= 0.05;
+    updateHud(danger, combatFrameState);
+  }
+  checkEnding(false, combatFrameState);
 
   if (messageTimer > 0) {
     messageTimer -= dt;
@@ -1725,7 +2203,12 @@ function sampleRainSurface(x, z) {
 
 function splatLens(config, source = "rain") {
   if (!cameraSpaghetti?.splat) return null;
-  const result = cameraSpaghetti.splat(config);
+  const lensScale = pastaSettings.lensIntensity;
+  if (lensScale <= 0.001) return null;
+  const result = cameraSpaghetti.splat({
+    ...config,
+    intensity: Math.max(0.05, Number(config?.intensity ?? 0.72) * lensScale)
+  });
   if (result?.id !== null) {
     lensSplatEvents += 1;
     if (source === "impact") lensImpactEvents += 1;
@@ -1781,36 +2264,37 @@ function handleLensRainImpact(impact) {
 
 function updateCamera(dt, time) {
   if (!camera) return;
+  const motion = effectiveCameraMotion();
   const punchKick = punchCameraKick;
   punchCameraKick = Math.max(0, punchCameraKick - Math.max(0, dt) * 8.6);
   const wet = smoothstep(0.03, 0.4, player.depth);
   const moving = Math.min(1, player.speed / 3.6);
-  const bob = phase === "playing"
+  const bob = (phase === "playing"
     ? Math.sin(player.bobPhase) * THREE.MathUtils.lerp(0.022, 0.054, wet) * moving
-    : Math.sin(time * 0.7) * 0.002;
-  const stepRoll = Math.sin(player.bobPhase * 0.5) * THREE.MathUtils.lerp(0.004, 0.017, wet) * moving;
+    : Math.sin(time * 0.7) * 0.002) * motion;
+  const stepRoll = Math.sin(player.bobPhase * 0.5) * THREE.MathUtils.lerp(0.004, 0.017, wet) * moving * motion;
   const rightVelocity = player.vx * Math.cos(player.yaw) - player.vz * Math.sin(player.yaw);
-  const slipRoll = THREE.MathUtils.clamp(-rightVelocity * player.slipAmount * 0.0045, -0.019, 0.019) +
+  const slipRoll = (THREE.MathUtils.clamp(-rightVelocity * player.slipAmount * 0.0045, -0.019, 0.019) +
     Math.sin(time * 6.4) * player.slipAmount * 0.0035 +
-    Math.sin(time * 4.75) * player.rampSlipCue * 0.0085;
-  const rampLurch = -player.rampSlipCue * (0.0045 + Math.sin(time * 5.6) * 0.0022);
+    Math.sin(time * 4.75) * player.rampSlipCue * 0.0085) * motion;
+  const rampLurch = -player.rampSlipCue * (0.0045 + Math.sin(time * 5.6) * 0.0022) * motion;
   const airPitch = THREE.MathUtils.clamp(-player.vy * 0.0022, -0.016, 0.02);
-  const dragPitch = Math.sin(player.bobPhase) * 0.004 * wet * moving + airPitch;
-  const headLagX = -player.vx * THREE.MathUtils.lerp(0.007, 0.015, wet);
-  const headLagZ = -player.vz * THREE.MathUtils.lerp(0.007, 0.015, wet);
+  const dragPitch = (Math.sin(player.bobPhase) * 0.004 * wet * moving + airPitch) * motion;
+  const headLagX = -player.vx * THREE.MathUtils.lerp(0.007, 0.015, wet) * motion;
+  const headLagZ = -player.vz * THREE.MathUtils.lerp(0.007, 0.015, wet) * motion;
   const smoothing = 1 - Math.exp(-10 * Math.max(0.001, dt));
-  const runFov = smoothstep(3.5, RUN_SPEED, player.speed) * 4.2;
-  const targetFov = THREE.MathUtils.lerp(66 + runFov, 63.5, smoothstep(0.55, 1.45, player.depth));
+  const runFov = smoothstep(3.5, RUN_SPEED, player.speed) * 4.2 * motion;
+  const targetFov = THREE.MathUtils.lerp(pastaSettings.fov + runFov, pastaSettings.fov - 2.5, smoothstep(0.55, 1.45, player.depth));
 
   camera.position.x = THREE.MathUtils.lerp(camera.position.x, player.x + headLagX, smoothing);
   camera.position.z = THREE.MathUtils.lerp(camera.position.z, player.z + headLagZ, smoothing);
   camera.position.y = THREE.MathUtils.lerp(
     camera.position.y || player.y + player.currentEyeHeight,
-    player.y + player.currentEyeHeight + bob - smoothstep(1.2, 1.65, player.depth) * 0.035 - player.rampSlipCue * 0.012 - punchKick * 0.012,
+    player.y + player.currentEyeHeight + bob - smoothstep(1.2, 1.65, player.depth) * 0.035 * motion - player.rampSlipCue * 0.012 * motion - punchKick * 0.012 * motion,
     smoothing
   );
-  const punchRoll = Math.sin((1 - punchKick) * 19) * punchKick * 0.012;
-  camera.rotation.set(player.pitch + dragPitch + rampLurch - punchKick * 0.022, player.yaw, stepRoll + slipRoll + punchRoll, "YXZ");
+  const punchRoll = Math.sin((1 - punchKick) * 19) * punchKick * 0.012 * motion;
+  camera.rotation.set(player.pitch + dragPitch + rampLurch - punchKick * 0.022 * motion, player.yaw, stepRoll + slipRoll + punchRoll, "YXZ");
   if (Math.abs(camera.fov - targetFov) > 0.01) {
     camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, smoothing * 0.45);
     camera.updateProjectionMatrix();
@@ -1821,22 +2305,60 @@ function lastHostileLocator(combatState) {
   const enemies = Array.isArray(combatState?.enemies) ? combatState.enemies : [];
   if (enemies.length !== 1) return null;
   const enemy = enemies[0];
-  if (enemy?.targetVisible || Number(enemy?.unseenTimer || 0) < 2.6) return null;
+  const visuallyTracked = Boolean(enemy?.inViewCone && enemy?.targetVisible);
+  if (enemy?.boss || enemy?.summoned || enemy?.stationary || visuallyTracked) return null;
   const position = enemy?.position;
   if (![position?.x, position?.y, position?.z].every(Number.isFinite)) return null;
+  const view = Number.isFinite(enemy?.relativeYaw) && Number.isFinite(enemy?.relativePitch)
+    ? enemy
+    : combat?.viewConeForPosition?.(position, Number(enemy?.scale || 1));
   const dx = position.x - player.x;
   const dz = position.z - player.z;
-  const distance = Math.hypot(dx, dz);
-  const bearing = Math.atan2(-dx, -dz);
-  const relative = Math.atan2(Math.sin(bearing - player.yaw), Math.cos(bearing - player.yaw));
+  const distance = Number.isFinite(enemy?.distanceToPlayer) ? enemy.distanceToPlayer : Math.hypot(dx, dz);
+  const relative = Number(view?.relativeYaw);
+  const relativePitch = Number(view?.relativePitch);
+  if (!Number.isFinite(relative) || !Number.isFinite(relativePitch)) return null;
   const horizontal = Math.abs(relative) < 0.48
     ? "AHEAD"
     : Math.abs(relative) > 2.56
       ? "BEHIND"
       : relative < 0 ? "RIGHT" : "LEFT";
-  const height = position.y - player.y;
-  const vertical = height > 1.45 ? " · ABOVE" : height < -1.45 ? " · BELOW" : "";
-  return `LAST HOSTILE · ${horizontal}${vertical} · ${Math.ceil(distance)}m`;
+  const vertical = relativePitch >= 0 ? "ABOVE" : "BELOW";
+  return `LAST HOSTILE · ${horizontal} · ${vertical} · ${Math.ceil(distance)}m`;
+}
+
+function openingHighGroundCue(combatState) {
+  if (!combatState?.opening?.protected) return null;
+  const authoredTargets = world?.getCombatData?.()?.openingHighGroundTargets;
+  const targets = Array.isArray(authoredTargets) ? authoredTargets : [];
+  const candidates = targets
+    .filter((target) => Number.isFinite(target?.x) && Number.isFinite(target?.z))
+    .map((target) => ({
+      ...target,
+      distance: Math.hypot(target.x - player.x, target.z - player.z)
+    }))
+    .sort((left, right) => left.distance - right.distance || String(left.id).localeCompare(String(right.id)));
+  const target = candidates[0];
+  if (!target) return null;
+  const dx = target.x - player.x;
+  const dz = target.z - player.z;
+  const bearing = Math.atan2(-dx, -dz);
+  const relativeBearing = Math.atan2(Math.sin(bearing - player.yaw), Math.cos(bearing - player.yaw));
+  const direction = Math.abs(relativeBearing) < 0.42
+    ? "ahead"
+    : Math.abs(relativeBearing) > 2.7
+      ? "behind"
+      : relativeBearing < 0 ? "right" : "left";
+  const arrow = direction === "ahead" ? "↑" : direction === "behind" ? "↓" : direction === "right" ? "↗" : "↖";
+  return {
+    id: String(target.id || "ascension ramp"),
+    position: { x: target.x, y: Number(target.y || 0), z: target.z },
+    distance: target.distance,
+    bearing,
+    relativeBearing,
+    direction,
+    arrow
+  };
 }
 
 function depthBandFor(value) {
@@ -1876,11 +2398,72 @@ function updateSpaghettiHazard(dt) {
   spaghettiDamageCooldown = THREE.MathUtils.lerp(1.02, 0.56, spaghettiHazardSeverity);
 }
 
-function updateHud(danger) {
+function processCombatEvents(events = []) {
+  let announcement = null;
+  const nominateAnnouncement = (priority, kicker, title, seconds) => {
+    if (!announcement || priority >= announcement.priority) announcement = { priority, kicker, title, seconds };
+  };
+  for (const event of events) {
+    if (!event || typeof event !== "object") continue;
+    if (event.type === "shot") {
+      cinematicFX?.onShot?.(event.origin, event.direction, event.hit ? 1.08 : 0.82);
+    } else if (event.type === "hit") {
+      cinematicFX?.onHit?.(
+        { position: event.position, normal: event.normal },
+        event.headshot ? 1.35 : event.killed ? 1.12 : 0.72,
+        true
+      );
+    } else if (event.type === "kill") {
+      cinematicFX?.onKill?.(event.position, event.boss ? 1.8 : event.cause === "punch" ? 1.25 : 0.92);
+    } else if (event.type === "playerDamage") {
+      cinematicFX?.onDamage?.(event.amount, event.origin || event.position);
+      showDirectionalDamage(event.origin);
+    } else if (event.type === "waveStart") {
+      nominateAnnouncement(
+        1,
+        event.final ? "FINAL COURSE" : `COURSE ${String(event.index || 1).padStart(2, "0")} / ${String(event.total || 4).padStart(2, "0")}`,
+        event.final ? "CUT THE MASTER STRAND" : "THE KITCHEN ANSWERS",
+        event.final ? 2.4 : 1.75
+      );
+    } else if (event.type === "bossSpawn") {
+      nominateAnnouncement(3, "FINAL COURSE // THE NOODLEMANCER", "CUT THE MASTER STRAND", 2.8);
+    } else if (event.type === "bossPhase") {
+      nominateAnnouncement(
+        4,
+        `NOODLEMANCER // PHASE ${event.phase || 1}`,
+        Number(event.phase) >= 3 ? "RAGU APOCALYPSE" : "REALITY UNTWINDS",
+        2.35
+      );
+    } else if (event.type === "bossDeath") {
+      nominateAnnouncement(5, "THE LAST POT GOES QUIET", "SERVICE OVER", 2.8);
+    }
+  }
+  if (announcement) showCombatAnnouncement(announcement.kicker, announcement.title, announcement.seconds);
+}
+
+function showDirectionalDamage(origin) {
+  if (!damageDirection || !origin || !Number.isFinite(origin.x) || !Number.isFinite(origin.z)) return;
+  const bearing = Math.atan2(-(origin.x - player.x), -(origin.z - player.z));
+  const relative = Math.atan2(Math.sin(bearing - player.yaw), Math.cos(bearing - player.yaw));
+  damageDirection.style.setProperty("--damage-bearing", `${(-relative).toFixed(4)}rad`);
+  damageDirectionTimer = Math.max(damageDirectionTimer, 0.62);
+}
+
+function showCombatAnnouncement(kicker, title, seconds = 2) {
+  if (!combatAnnouncement) return;
+  if (combatAnnouncementKicker) combatAnnouncementKicker.textContent = String(kicker || "COURSE CHANGE");
+  if (combatAnnouncementTitle) combatAnnouncementTitle.textContent = String(title || "THE KITCHEN ANSWERS");
+  combatAnnouncement.classList.remove("show");
+  void combatAnnouncement.offsetWidth;
+  combatAnnouncementTimer = Math.max(0.2, Number(seconds) || 2);
+  combatAnnouncement.classList.add("show");
+}
+
+function updateHud(danger, combatState = combatFrameState || {}) {
   const ratio = THREE.MathUtils.clamp(player.depth / player.currentEyeHeight, 0, 1.08);
   const floodLevel = maximumFill(world?.getFillLevels?.() || {});
   const clearance = player.y - floodLevel;
-  const floodRising = phase === "playing" && fillMultiplier > 0 &&
+  const floodRising = phase === "playing" && effectiveFillMultiplier > 0 &&
     floodLevel < Number(world?.worldBounds?.maxY ?? 18) - 0.08;
   fillLevelEl.style.height = Math.min(100, ratio * 100).toFixed(1) + "%";
   fillMarker.style.bottom = THREE.MathUtils.clamp(SPAGHETTI_DAMAGE_DEPTH / player.currentEyeHeight, 0, 1) * 100 + "%";
@@ -1893,7 +2476,7 @@ function updateHud(danger) {
   stage.style.setProperty("--hazard-glow", String(0.08 + spaghettiHazardSeverity * 0.22));
   roomLabel.textContent = formatRoom(player.room);
 
-  const combatState = updateCombatHud();
+  updateCombatHud(combatState);
   const living = countLivingEnemies(combatState);
   const boss = readCombatBoss(combatState);
   const exit = world.exit || { x: 0, y: 3.2, z: -38 };
@@ -1904,7 +2487,15 @@ function updateHud(danger) {
     player.z - exitZ
   ));
   const locator = lastHostileLocator(combatState);
+  const opening = combatState?.opening || {};
+  const highGroundCue = openingHighGroundCue(combatState);
   if (boss?.alive || boss?.active) objective.textContent = "SEVER THE NOODLEMANCER";
+  else if (opening.protected) objective.textContent = "DRAIN THE FIRST SERVING" + (highGroundCue
+    ? ` · RAMP/HIGH GROUND ${highGroundCue.arrow} ${Math.ceil(highGroundCue.distance)}m`
+    : " · FIND HIGH GROUND");
+  else if (opening.active && opening.pendingCount > 0) {
+    objective.textContent = "WAVE 01 · " + opening.pendingCount + (opening.pendingCount === 1 ? " SERVING INBOUND" : " SERVINGS INBOUND");
+  }
   else if (locator) objective.textContent = locator;
   else if (living > 0) objective.textContent = "WAVE " + String(readCombatWave(combatState)).padStart(2, "0") + " · " + living + " BOILING";
   else if (combatState?.victory) {
@@ -1914,7 +2505,7 @@ function updateHud(danger) {
       : "ALTAR GATE OPEN \u00b7 " + Math.ceil(remainingDistance) + "m";
   }
   else objective.textContent = "ADVANCE TO THE GRAND ALTAR · " + Math.ceil(remainingDistance) + "m";
-  objective.style.opacity = String(living > 0 || boss?.alive || combatState?.victory ? 0.96 : elapsed < 14 ? 0.72 : 0.5);
+  objective.style.opacity = String(living > 0 || opening.active || boss?.alive || combatState?.victory ? 0.96 : elapsed < 14 ? 0.72 : 0.5);
   roomLabel.style.opacity = String(elapsed < 7 ? 0.78 : 0.42);
 
   const depthBand = depthBandFor(player.depth);
@@ -1995,8 +2586,8 @@ function updateHud(danger) {
   }
 }
 
-function updateCombatHud() {
-  const state = combat?.getState?.() || {};
+function updateCombatHud(state = combatFrameState || {}) {
+  document.body.dataset.openingState = String(state.opening?.status || "unavailable");
   const combatPlayer = state.player || state;
   const weapon = state.weapon || state;
   const stats = state.stats || state;
@@ -2205,14 +2796,14 @@ function showMessage(text, seconds) {
   messageTimer = seconds;
 }
 
-function checkEnding(allowAutotest = false) {
+function checkEnding(allowAutotest = false, combatState = combatFrameState || {}) {
   if (phase !== "playing" || (AUTOTEST && !allowAutotest)) return;
   const exit = world.exit || { x: 0, y: 3.2, z: -38, radius: 1.8 };
   const atExit = typeof world?.isAtExit === "function"
     ? world.isAtExit(player.x, player.y, player.z)
     : Math.hypot(player.x - exit.x, player.z - exit.z) <= (exit.radius || 1.6) &&
       player.y >= Number(exit.minY ?? exit.y ?? 3.2) - 0.25;
-  if (elapsed > 1.2 && atExit && combat?.getState?.()?.victory) {
+  if (elapsed > 1.2 && atExit && combatState?.victory) {
     finish("victory");
     return;
   }
@@ -2240,12 +2831,40 @@ function finish(result) {
   const kills = Number(stats.kills || 0);
   const headshots = Number(stats.headshots || 0);
   const deepest = Math.min(1.99, player.depth);
+  const accuracy = shots ? Math.round(hits / shots * 100) : 0;
+  const runSummary = {
+    result,
+    score: Number(stats.score || 0),
+    timeMs: Math.round(seconds * 1000),
+    accuracy,
+    kills,
+    healthRatio: THREE.MathUtils.clamp((Number(combatState.player?.health ?? combatState.health ?? 0) + Number(combatState.player?.sauceArmor ?? combatState.sauceArmor ?? 0) * 0.5) / 125, 0, 1),
+    headshotRatio: kills > 0 ? headshots / kills : 0
+  };
+  const grade = gradePastaRun(runSummary);
+  const recordResult = runRecordEligible
+    ? recordPastaRun(runSummary)
+    : { records: loadPastaRecords(), grade, newHighScore: false, newBestTime: false, newBestGrade: false };
   endingStats.innerHTML =
+    "<span class=\"grade-stat\">RANK<strong>" + grade + "</strong></span>" +
     "<span>TIME<strong>" + formatTime(seconds) + "</strong></span>" +
     "<span>DRAINED<strong>" + kills + "</strong></span>" +
     "<span>HEADSHOTS<strong>" + headshots + "</strong></span>" +
-    "<span>ACCURACY<strong>" + (shots ? Math.round(hits / shots * 100) : 0) + "%</strong></span>" +
+    "<span>ACCURACY<strong>" + accuracy + "%</strong></span>" +
     "<span>DEEPEST<strong>" + deepest.toFixed(2) + "m</strong></span>";
+  if (endingRecord) {
+    const records = recordResult.records;
+    const newMarks = [
+      recordResult.newBestGrade ? "NEW BEST RANK" : "",
+      recordResult.newBestTime ? "NEW FASTEST SERVICE" : "",
+      recordResult.newHighScore ? "NEW HIGH SCORE" : ""
+    ].filter(Boolean);
+    endingRecord.textContent = !runRecordEligible
+      ? `PRACTICE RUN // RANK ${grade} // RECORD UNCHANGED`
+      : newMarks.length
+        ? newMarks.join(" // ")
+        : `SERVICE RECORD // ${records.victories} CLEARED // BEST ${records.bestGrade} // HIGH ${String(records.highScore).padStart(6, "0")}`;
+  }
 
   if (result === "victory") {
     endingKicker.textContent = "THE LAST POT HAS GONE QUIET";
@@ -2263,10 +2882,13 @@ function finish(result) {
     endingCopy.textContent = "The basilica keeps filling. Your rifle bubbles once, then joins the floor.";
     audio.drown();
   }
-  setTimeout(() => endingScreen.classList.add("active"), result === "victory" ? 620 : 850);
+  setTimeout(() => {
+    endingScreen.classList.add("active");
+    restartButton?.focus?.({ preventScroll: true });
+  }, result === "victory" ? 620 : 850);
 }
 
-function pauseGame() {
+function pauseGame(reason = "manual") {
   if (phase !== "playing") return;
   phase = "paused";
   player.vx = 0;
@@ -2283,27 +2905,44 @@ function pauseGame() {
   });
   pauseScreen.classList.add("active");
   touchUI.classList.add("hidden");
+  pauseScreen.dataset.reason = String(reason || "manual");
   publishPhase();
   if (document.pointerLockElement) document.exitPointerLock?.();
+  requestAnimationFrame(() => resumeButton?.focus?.({ preventScroll: true }));
 }
 
 async function resumeGame() {
+  if (graphicsUnavailable()) return;
   if (phase !== "paused") return;
   void audio.unlock();
   input.releaseAll?.();
-  phase = "playing";
   pauseScreen.classList.remove("active");
-  if (input.isTouch) touchUI.classList.remove("hidden");
-  publishPhase();
-  canvas.focus({ preventScroll: true });
-  if (!input.isTouch && !AUTOTEST) input.requestPointerLock();
+  prepareGamePresentation();
+  if (needsDesktopCapture()) {
+    beginPointerArming({
+      fromGesture: true,
+      newRun: false,
+      reason: "resume",
+      message: "BACK TO SERVICE"
+    });
+    return;
+  }
+  enterPlayingWithoutCapture(false, "BACK TO SERVICE", 1.8);
 }
 
 function publishPhase() {
+  if (graphicsBoot?.state?.().status === "failed") phase = "graphics-failed";
   document.body.dataset.phase = phase;
+  document.body.dataset.pointerState = String(input?.getState?.().pointerLockState || "unavailable");
 }
 
 function getState() {
+  const graphicsState = graphicsBoot?.state?.() || {
+    status: renderReady ? "ready" : phase === "graphics-failed" ? "failed" : "initializing",
+    kind: null,
+    detail: null
+  };
+  const reportedPhase = graphicsState.status === "failed" ? "graphics-failed" : phase;
   const fillLevels = world?.getFillLevels?.() || {};
   const worldStats = world?.getStats?.() || {};
   const rainStats = spaghettiRain?.getStats?.() || {};
@@ -2327,7 +2966,15 @@ function getState() {
   const health = Number(combatPlayer.health ?? combatState.health ?? 100);
   const sauceArmor = Number(combatPlayer.sauceArmor ?? combatPlayer.armor ?? combatState.sauceArmor ?? 0);
   return {
-    phase,
+    phase: reportedPhase,
+    graphics: { ...graphicsState },
+    arming: phase === "arming",
+    pointerCapture: {
+      required: needsDesktopCapture(),
+      reason: phase === "arming" ? pointerGateReason : null,
+      pendingRunStart: Boolean(pendingRunStart),
+      ...inputState
+    },
     room: player.room,
     position: { x: player.x, y: player.y + player.currentEyeHeight, z: player.z },
     player: {
@@ -2436,6 +3083,8 @@ function getState() {
     wave: combatState.wave || { index: 1, number: 1, total: 4 },
     waveIndex: Number(combatState.waveIndex ?? combatState.wave?.index ?? 1),
     boss: combatState.boss || null,
+    opening: combatState.opening || null,
+    openingHighGroundCue: openingHighGroundCue(combatState),
     victory: Boolean(combatState.victory),
     defeated: Boolean(combatState.defeated),
     stats: { ...combatStats },
@@ -2445,8 +3094,10 @@ function getState() {
       location: world?.root?.name || "Basilica Della Marinara",
       style: world?.root?.userData?.architecture?.style || "volumetric-gothic-spaghetti",
       fillMultiplier,
+      effectiveFillMultiplier,
+      openingFloodScale: Number(combatState.opening?.floodScale ?? 1),
       floodLevel: maximumFill(fillLevels),
-      floodRising: phase === "playing" && fillMultiplier > 0 &&
+      floodRising: phase === "playing" && effectiveFillMultiplier > 0 &&
         maximumFill(fillLevels) < Number(world?.worldBounds?.maxY ?? 18) - 0.08,
       clearanceAboveFlood: player.y - maximumFill(fillLevels),
       ...worldStats
@@ -2464,11 +3115,51 @@ function getState() {
     triangles: Number(renderStats.triangles || 0),
     render: {
       drawCalls: Number(renderStats.calls || 0),
-      triangles: Number(renderStats.triangles || 0)
+      triangles: Number(renderStats.triangles || 0),
+      pixelRatio: Number(renderer?.getPixelRatio?.() || 1),
+      selectedRenderScale: pastaSettings.renderScale,
+      dynamicRenderScale,
+      frameTimeEwmaMs: Number((frameTimeEwma * 1000).toFixed(2)),
+      slowFrameSeconds: Number(slowFrameSeconds.toFixed(2)),
+      fastFrameSeconds: Number(fastFrameSeconds.toFixed(2)),
+      timing: { ...renderTiming }
     },
     frames: frameCount,
     finite: finiteState,
     errors: [...errors, ...combatErrors]
+  };
+}
+
+function getRenderBreakdown(limit = 24) {
+  const rows = [];
+  const visibleThroughParents = (object) => {
+    for (let current = object; current; current = current.parent) if (current.visible === false) return false;
+    return true;
+  };
+  scene?.traverse?.((object) => {
+    const geometry = object?.geometry;
+    if (!geometry || !visibleThroughParents(object) || (!object.isMesh && !object.isInstancedMesh)) return;
+    const indexCount = Number(geometry.index?.count || 0);
+    const positionCount = Number(geometry.attributes?.position?.count || 0);
+    const baseTriangles = Math.floor((indexCount || positionCount) / 3);
+    const instances = object.isInstancedMesh ? Math.max(0, Number(object.count || 0)) : 1;
+    const triangles = baseTriangles * instances;
+    if (triangles <= 0) return;
+    rows.push({
+      name: String(object.name || object.type || "unnamed mesh"),
+      triangles,
+      instances,
+      castShadow: Boolean(object.castShadow),
+      receiveShadow: Boolean(object.receiveShadow),
+      material: String(Array.isArray(object.material) ? "multi" : object.material?.type || "unknown")
+    });
+  });
+  rows.sort((left, right) => right.triangles - left.triangles);
+  return {
+    totalTriangles: rows.reduce((sum, row) => sum + row.triangles, 0),
+    shadowTriangles: rows.reduce((sum, row) => sum + (row.castShadow ? row.triangles : 0), 0),
+    meshes: rows.length,
+    top: rows.slice(0, Math.max(1, Math.min(100, Number(limit) || 24)))
   };
 }
 
@@ -2512,6 +3203,9 @@ function beginAutotest() {
 function updateAutotest() {
   if (!autotestStart || document.body.dataset.autotest === "done") return;
   const duration = autotestFrames * FIXED_STEP * 1000;
+  if (duration > 1100 && combat?.getState?.().opening?.protected) {
+    combat.releaseOpeningLesson?.("autotest");
+  }
   if (duration > 1000 && duration < 1450) input.setTestMove(-0.35, 1);
   if (duration <= 3200) return;
 
@@ -2583,11 +3277,16 @@ function nextLensRandom() {
   return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
 }
 
+function taintRun() {
+  runRecordEligible = false;
+}
+
 const debugApi = {
-  version: "2.0.8",
+  version: "2.2.1",
   getState,
   state: getState,
   inspect: getState,
+  renderBreakdown: getRenderBreakdown,
   selfTest: () => {
     const state = getState();
     const environmentReady = Number(state.environment?.volumetricStrands || 0) > 0 && Number(state.environment?.coverCount || 0) > 0;
@@ -2609,6 +3308,22 @@ const debugApi = {
   restart: restartGame,
   pause: pauseGame,
   resume: resumeGame,
+  graphicsState: () => graphicsBoot?.state?.() || getState().graphics,
+  simulateGraphicsFailure: (kind = "debug-graphics-failure", detail = "Deterministic graphics failure test.") =>
+    showGraphicsFailure(new Error(String(detail)), String(kind || "debug-graphics-failure"), { silent: true }),
+  viewCone: (position = {}, scale = 1) => combat?.viewConeForPosition?.(position, scale) ?? null,
+  lastHostileCue: () => lastHostileLocator(combat?.getState?.() || {}),
+  retryPointerLock: () => {
+    if (phase !== "arming") return false;
+    const requested = input?.requestPointerLock?.() ?? false;
+    updatePointerGate();
+    return requested;
+  },
+  simulatePointerLockFailure: (reason) => {
+    const simulated = input?.simulatePointerLockFailure?.(reason) ?? false;
+    updatePointerGate();
+    return simulated;
+  },
   setMove: (x, y) => input?.setTestMove(Number(x) || 0, Number(y) || 0),
   setFire: (pressed) => input?.setTestFire?.(Boolean(pressed)),
   setAim: (pressed) => input?.setTestAim?.(Boolean(pressed)),
@@ -2624,18 +3339,23 @@ const debugApi = {
     debugPunchHeld = false;
     return input?.releaseAll?.() ?? null;
   },
-  setAmmo: (ammo, reserve) => combat?.setAmmo?.(ammo, reserve) ?? null,
+  setAmmo: (ammo, reserve) => {
+    taintRun();
+    return combat?.setAmmo?.(ammo, reserve) ?? null;
+  },
   traceWorld: (from, to) => traceCombatSegment(from || {}, to || {}),
   isPositionBlocked: (position, radius = 0.3, height = 1.8) => isCombatPositionBlocked(position || {}, radius, height),
   reload: () => combat?.beginReload?.("debug") ?? false,
   throwSauce: (config = {}) => combat?.throwSauceBomb?.(config) ?? false,
   spawnEnemy: (config = "twirler", position = null, stationary = false) => {
+    taintRun();
     if (config && typeof config === "object") {
       return combat?.spawnEnemy?.(config) ?? null;
     }
     return combat?.spawnEnemy?.(config, position, stationary) ?? null;
   },
   aimAtEnemy: (id = null) => {
+    taintRun();
     const target = combat?.aimAtEnemy?.(id);
     const position = target?.position || target;
     if (position && Number.isFinite(position.x) && Number.isFinite(position.z)) {
@@ -2649,24 +3369,60 @@ const debugApi = {
     }
     return target || null;
   },
-  damagePlayer: (amount = 1) => combat?.damagePlayer?.(Number(amount) || 0, "debug") ?? false,
-  clearThreats: () => combat?.clearEnemies?.() ?? false,
-  forceWave: (index = 1) => combat?.forceWave?.(Number(index) || 1) ?? false,
+  damagePlayer: (amount = 1) => {
+    taintRun();
+    return combat?.damagePlayer?.(Number(amount) || 0, "debug") ?? false;
+  },
+  damagePlayerFrom: (amount = 1, origin = {}) => {
+    taintRun();
+    return combat?.damagePlayer?.(Number(amount) || 0, "debug-direction", origin, {
+      kind: "debug",
+      id: "debug-direction"
+    }) ?? false;
+  },
+  defeatEnemy: (id, cause = "debug") => {
+    taintRun();
+    return combat?.defeatEnemy?.(id, cause) ?? false;
+  },
+  clearThreats: () => {
+    taintRun();
+    return combat?.clearEnemies?.() ?? false;
+  },
+  forceWave: (index = 1) => {
+    taintRun();
+    return combat?.forceWave?.(Number(index) || 1) ?? false;
+  },
+  releaseOpeningLesson: (reason = "debug") => {
+    taintRun();
+    return combat?.releaseOpeningLesson?.(reason) ?? false;
+  },
+  defeatOpeningLesson: (cause = "debug") => {
+    taintRun();
+    return combat?.defeatOpeningLesson?.(cause) ?? false;
+  },
+  expireOpeningLesson: () => {
+    taintRun();
+    return combat?.expireOpeningLesson?.() ?? false;
+  },
   unlockExit: () => {
+    taintRun();
     combat?.win?.();
     return getState();
   },
   win: () => {
+    taintRun();
     const result = combat?.win?.();
     finish("victory");
     return result ?? true;
   },
   lose: () => {
+    taintRun();
     const damaged = combat?.damagePlayer?.(9999, "debug");
     if (!damaged) finish("defeated");
     return getState();
   },
   setPosition: (x, z, y = player.y) => {
+    taintRun();
     if (Number.isFinite(x)) player.x = x;
     if (Number.isFinite(z)) player.z = z;
     if (Number.isFinite(y)) player.y = y;
@@ -2702,6 +3458,7 @@ const debugApi = {
     return getState();
   },
   setVelocity: (x = player.vx, z = player.vz, y = player.vy) => {
+    taintRun();
     if (Number.isFinite(x)) player.vx = THREE.MathUtils.clamp(x, -MAX_SURFACE_SPEED, MAX_SURFACE_SPEED);
     if (Number.isFinite(z)) player.vz = THREE.MathUtils.clamp(z, -MAX_SURFACE_SPEED, MAX_SURFACE_SPEED);
     if (Number.isFinite(y)) player.vy = THREE.MathUtils.clamp(y, -24, JUMP_VELOCITY);
@@ -2760,10 +3517,12 @@ const debugApi = {
     return getState();
   },
   setFill: (value) => {
+    taintRun();
     world?.setAllLevels?.(THREE.MathUtils.clamp(Number(value) || 0, 0, 25.5));
     return getState();
   },
   setFillMultiplier: (value) => {
+    taintRun();
     fillMultiplier = THREE.MathUtils.clamp(Number(value) || 0, 0, 100);
     return fillMultiplier;
   },
