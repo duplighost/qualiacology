@@ -448,6 +448,19 @@
       "metaDescription": "KICK BALL // LUNAR VELOCITY is a first-person 3D lunar combat-platformer built around one persistent boomerang ball.",
       "controls": "WASD + mouse · double jump · KICK/SNAP/SPIN · gamepad/touch",
       "actionLabel": "Enter the Moon"
+    },
+    {
+      "slug": "relay-eclipse",
+      "title": "RELAY//ECLIPSE",
+      "descriptor": "Lunar horde FPS",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/relay-eclipse-card-clean.jpg",
+      "alt": "A white and graphite rifle aimed across a dark moon deck beneath blue and violet ringed planets",
+      "summary": "Hold the lower map through round after round, fight up the relay, and reach the moon while the planets shoot at you.",
+      "metaDescription": "RELAY//ECLIPSE is a browser horde FPS about holding the lower map, fighting up the relay, and reaching the moon while the planets shoot at you.",
+      "controls": "WASD/arrows move · mouse aim · LMB fire · RMB aim · Space jump · Shift/F dash · R reload · 1–4 weapons · touch",
+      "actionLabel": "Play RELAY//ECLIPSE"
     }
   ],
   "albums": [
