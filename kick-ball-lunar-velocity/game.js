@@ -29,6 +29,8 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
+  const GAME_VERSION = '3.3.0-release-polish';
+  const QUALITY_STORAGE_KEY = 'kickball-lunar-quality-v2';
   const FIXED_DT = 1 / 120;
   const TAU = Math.PI * 2;
   const UP = new T.Vector3(0, 1, 0);
@@ -36,15 +38,15 @@
 
   const ui = {};
   [
-    'hud', 'startOverlay', 'startButton', 'startKicker', 'startTitle', 'startCopy',
+    'hud', 'startOverlay', 'startButton', 'startActionHint', 'startKicker', 'startTitle', 'startCopy',
     'objectiveLabel', 'objectiveText', 'styleRank', 'styleFill', 'scoreValue',
     'bestValue', 'shieldPips', 'ballState', 'altitudeValue', 'jumpPips',
     'comboText', 'crosshair', 'hitMarker', 'damageVignette', 'chargeUI',
     'chargeFill', 'chargeText', 'promptToast', 'controlsHint', 'soundButton',
     'fullscreenButton', 'qualityButton', 'pauseOverlay', 'winOverlay',
     'winSummary', 'winTime', 'winScore', 'winRank', 'restartButton',
-    'touchControls', 'movePad', 'lookPad', 'touchKick', 'touchSnap',
-    'touchJump', 'touchSpin', 'touchPause', 'pauseResumeButton', 'portraitHint', 'loadingMeter',
+    'touchControls', 'movePad', 'lookPad', 'rightActionLabel',
+    'touchJump', 'touchPause', 'pauseResumeButton', 'portraitHint', 'loadingMeter',
   ].forEach(id => { ui[id] = document.getElementById(id); });
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -179,14 +181,90 @@
     return { color, bump };
   }
 
-  class TouchStick {
-    constructor(element, isLook = false) {
+  function analyzeLoopGesture(points) {
+    if (!Array.isArray(points) || points.length < 7) {
+      return { matched: false, direction: 0, power: 0, path: 0, turn: 0, elapsed: 0, closure: Infinity, spanX: 0, spanY: 0 };
+    }
+    let path = 0;
+    let turn = 0;
+    let minX = points[0].x, maxX = points[0].x;
+    let minY = points[0].y, maxY = points[0].y;
+    let previousSegment = null;
+    for (let i = 1; i < points.length; i++) {
+      const point = points[i];
+      minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y); maxY = Math.max(maxY, point.y);
+      const dx = point.x - points[i - 1].x;
+      const dy = point.y - points[i - 1].y;
+      const length = Math.hypot(dx, dy);
+      if (length < 1.5) continue;
+      path += length;
+      const segment = { x: dx / length, y: dy / length };
+      if (previousSegment) {
+        const cross = previousSegment.x * segment.y - previousSegment.y * segment.x;
+        const dot = clamp(previousSegment.x * segment.x + previousSegment.y * segment.y, -1, 1);
+        turn += Math.atan2(cross, dot);
+      }
+      previousSegment = segment;
+    }
+    const first = points[0];
+    const last = points[points.length - 1];
+    const elapsed = Math.max(0, last.t - first.t);
+    const closure = Math.hypot(last.x - first.x, last.y - first.y);
+    const spanX = maxX - minX;
+    const spanY = maxY - minY;
+    const winding = Math.abs(turn);
+    const closureLimit = Math.max(34, Math.min(48, Math.max(spanX, spanY) * .78));
+    const matched = path >= 105 && winding >= 5.15 && spanX >= 30 && spanY >= 30
+      && elapsed >= 100 && elapsed <= 1350 && closure <= closureLimit;
+    const speed = elapsed > 0 ? path / elapsed : 0;
+    const power = matched ? clamp(.82 + (winding - 5.15) * .16 + Math.max(0, speed - .18) * .42, .82, 1.25) : 0;
+    return { matched, direction: matched ? (turn >= 0 ? 1 : -1) : 0, power, path, turn, elapsed, closure, closureLimit, spanX, spanY };
+  }
+
+  function analyzeRecentLoopGesture(points) {
+    if (!Array.isArray(points) || points.length < 7) return analyzeLoopGesture(points);
+    const lastTime = points[points.length - 1].t;
+    let best = null;
+    let bestScore = Infinity;
+    for (let start = 0; start <= points.length - 7; start++) {
+      const elapsed = lastTime - points[start].t;
+      if (elapsed > 1350) continue;
+      if (elapsed < 100) break;
+      const result = analyzeLoopGesture(points.slice(start));
+      if (!result.matched) continue;
+      const span = Math.max(1, result.spanX, result.spanY);
+      const score = result.closure / span * 2.2 + Math.abs(Math.abs(result.turn) - TAU) / TAU;
+      if (score < bestScore) { best = result; bestScore = score; }
+    }
+    return best || analyzeLoopGesture(points);
+  }
+
+  class TouchSurface {
+    constructor(element, kind = 'move') {
       this.element = element;
+      this.kind = kind;
+      this.isLook = kind === 'look';
+      this.visual = element ? element.querySelector('.touch-pad') : null;
       this.knob = element ? element.querySelector('.touchKnob') : null;
       this.pointerId = null;
+      this.anchor = new T.Vector2();
+      this.last = new T.Vector2();
       this.value = new T.Vector2();
       this.delta = new T.Vector2();
-      this.isLook = isLook;
+      this.gesturePoints = [];
+      this.loopPulse = false;
+      this.loopDirection = 0;
+      this.loopPower = 0;
+      this.loopLatched = false;
+      this.releaseTimer = 0;
+      this.loopTimer = 0;
+      this.actionTimer = 0;
+      this.actionHold = false;
+      this.actionReleased = false;
+      this.tapPulse = false;
+      this.totalMotion = 0;
+      this.downTime = 0;
       if (!element) return;
       element.addEventListener('pointerdown', event => this.down(event));
       element.addEventListener('pointermove', event => this.move(event));
@@ -194,53 +272,179 @@
       element.addEventListener('pointercancel', event => this.up(event));
       element.addEventListener('lostpointercapture', event => this.up(event));
     }
+    eventTime(event) {
+      return Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now();
+    }
     down(event) {
       if (this.pointerId !== null) return;
       document.body.classList.remove('using-gamepad');
       this.pointerId = event.pointerId;
+      this.anchor.set(event.clientX, event.clientY);
+      this.last.copy(this.anchor);
+      this.value.set(0, 0);
+      this.totalMotion = 0;
+      this.downTime = this.eventTime(event);
+      this.actionReleased = false;
+      this.gesturePoints = this.isLook ? [{ x: event.clientX, y: event.clientY, t: this.eventTime(event) }] : [];
+      this.loopLatched = false;
+      if (this.isLook) {
+        if (this.actionTimer) clearTimeout(this.actionTimer);
+        this.actionTimer = setTimeout(() => {
+          if (this.pointerId !== event.pointerId || this.totalMotion > 16 || this.loopLatched) return;
+          this.actionHold = true;
+          this.element?.classList.add('is-holding');
+        }, 155);
+      }
+      if (this.releaseTimer) clearTimeout(this.releaseTimer);
+      this.positionVisual(event.clientX, event.clientY, true);
       try { this.element.setPointerCapture(event.pointerId); } catch (_) {}
-      this.update(event);
       event.preventDefault();
     }
     move(event) {
       if (event.pointerId !== this.pointerId) return;
-      this.update(event);
+      const x = event.clientX;
+      const y = event.clientY;
+      const dx = x - this.last.x;
+      const dy = y - this.last.y;
+      this.totalMotion += Math.hypot(dx, dy);
+      if (this.isLook) {
+        this.delta.x += dx;
+        this.delta.y += dy;
+        this.trackLoop(x, y, this.eventTime(event));
+        if (!this.actionHold && this.totalMotion > 16 && this.actionTimer) {
+          clearTimeout(this.actionTimer);
+          this.actionTimer = 0;
+        }
+      }
+      this.updateDeflection(x, y);
+      this.last.set(x, y);
       event.preventDefault();
     }
     up(event) {
       if (event.pointerId !== this.pointerId) return;
+      const releasedAt = this.eventTime(event);
+      const wasLoop = this.loopLatched;
+      const wasHold = this.actionHold;
+      if (this.actionTimer) clearTimeout(this.actionTimer);
+      this.actionTimer = 0;
+      if (this.isLook) {
+        if (wasHold) this.actionReleased = true;
+        else if (!wasLoop && this.totalMotion < 16 && releasedAt - this.downTime <= 360) this.tapPulse = true;
+        this.actionHold = false;
+        this.element?.classList.remove('is-holding');
+      }
       this.pointerId = null;
       this.value.set(0, 0);
+      this.gesturePoints.length = 0;
+      this.loopLatched = false;
       if (this.knob) this.knob.style.transform = 'translate3d(0,0,0)';
+      this.positionVisual(0, 0, false);
       event.preventDefault();
     }
-    update(event) {
-      const rect = this.element.getBoundingClientRect();
-      const cx = rect.left + rect.width * .5;
-      const cy = rect.top + rect.height * .5;
-      const max = Math.max(16, Math.min(rect.width, rect.height) * .34);
-      let dx = event.clientX - cx;
-      let dy = event.clientY - cy;
-      const length = Math.hypot(dx, dy);
-      if (length > max) { dx *= max / length; dy *= max / length; }
-      const nextX = dx / max, nextY = dy / max;
-      if (this.isLook) {
-        this.delta.x += (nextX - this.value.x) * 12;
-        this.delta.y += (nextY - this.value.y) * 12;
+    updateDeflection(x, y) {
+      const visualSize = this.visual ? Math.min(this.visual.offsetWidth || 128, this.visual.offsetHeight || 128) : 128;
+      const max = Math.max(38, visualSize * .34);
+      let dx = x - this.anchor.x;
+      let dy = y - this.anchor.y;
+      if (!this.isLook && this.element) {
+        const rect = this.element.getBoundingClientRect();
+        const roomX = dx < 0 ? this.anchor.x - rect.left : rect.right - this.anchor.x;
+        const roomY = dy < 0 ? this.anchor.y - rect.top : rect.bottom - this.anchor.y;
+        const scaleX = Math.max(8, Math.min(max, roomX));
+        const scaleY = Math.max(8, Math.min(max, roomY));
+        let valueX = dx / scaleX;
+        let valueY = dy / scaleY;
+        const valueLength = Math.hypot(valueX, valueY);
+        if (valueLength > 1) { valueX /= valueLength; valueY /= valueLength; }
+        this.value.set(valueX, valueY);
+        dx = valueX * max;
+        dy = valueY * max;
+      } else {
+        const length = Math.hypot(dx, dy);
+        if (length > max) { dx *= max / length; dy *= max / length; }
+        this.value.set(dx / max, dy / max);
       }
-      this.value.set(nextX, nextY);
       if (this.knob) this.knob.style.transform = `translate3d(${dx}px,${dy}px,0)`;
+    }
+    trackLoop(x, y, t) {
+      const previous = this.gesturePoints[this.gesturePoints.length - 1];
+      if (previous && Math.hypot(x - previous.x, y - previous.y) < 2.5) return;
+      this.gesturePoints.push({ x, y, t });
+      while (this.gesturePoints.length > 8 && t - this.gesturePoints[0].t > 1500) this.gesturePoints.shift();
+      if (this.gesturePoints.length > 96) this.gesturePoints.shift();
+      // Once a stationary touch has committed to charge/pull, it cannot be
+      // reclassified as orbit halfway through the same gesture. A loop begins
+      // with motion and cancels the hold timer before that commitment.
+      if (this.loopLatched || this.actionHold) return;
+      const result = analyzeRecentLoopGesture(this.gesturePoints);
+      if (!result.matched) return;
+      this.loopLatched = true;
+      this.loopPulse = true;
+      this.loopDirection = result.direction;
+      this.loopPower = result.power;
+      document.body.dataset.touchLoopDirection = String(result.direction);
+      document.body.dataset.touchLoopPower = result.power.toFixed(3);
+      document.body.dataset.touchLoopCount = String((Number(document.body.dataset.touchLoopCount) || 0) + 1);
+      this.element?.classList.add('is-loop');
+      if (this.loopTimer) clearTimeout(this.loopTimer);
+      this.loopTimer = setTimeout(() => this.element?.classList.remove('is-loop'), 320);
+    }
+    positionVisual(clientX, clientY, active) {
+      if (!this.element || !this.visual) return;
+      this.element.classList.toggle('is-active', active);
+      if (active) {
+        const rect = this.element.getBoundingClientRect();
+        const half = Math.min((this.visual.offsetWidth || 128) * .5, rect.width * .5);
+        const x = clamp(clientX - rect.left, half, rect.width - half);
+        const y = clamp(clientY - rect.top, half, Math.max(half, rect.height - half - 22));
+        this.visual.style.left = `${x}px`;
+        this.visual.style.top = `${y}px`;
+      } else {
+        this.releaseTimer = setTimeout(() => {
+          if (this.pointerId !== null || !this.visual) return;
+          this.visual.style.removeProperty('left');
+          this.visual.style.removeProperty('top');
+        }, 180);
+      }
     }
     consumeDelta(target) {
       target.copy(this.delta);
       this.delta.set(0, 0);
       return target;
     }
+    consumeLoop() {
+      const result = { active: this.loopPulse, direction: this.loopDirection, power: this.loopPower };
+      this.loopPulse = false;
+      return result;
+    }
+    consumeAction() {
+      const result = { tap: this.tapPulse, hold: this.actionHold, released: this.actionReleased };
+      this.tapPulse = false;
+      this.actionReleased = false;
+      return result;
+    }
     reset() {
       this.pointerId = null;
       this.value.set(0, 0);
       this.delta.set(0, 0);
+      this.gesturePoints.length = 0;
+      this.loopPulse = false;
+      this.loopDirection = 0;
+      this.loopPower = 0;
+      this.loopLatched = false;
+      this.tapPulse = false;
+      this.actionHold = false;
+      this.actionReleased = false;
+      this.totalMotion = 0;
+      this.downTime = 0;
+      if (this.actionTimer) clearTimeout(this.actionTimer);
+      this.actionTimer = 0;
+      this.element?.classList.remove('is-active', 'is-loop', 'is-holding');
       if (this.knob) this.knob.style.transform = 'translate3d(0,0,0)';
+      if (this.visual) {
+        this.visual.style.removeProperty('left');
+        this.visual.style.removeProperty('top');
+      }
     }
   }
 
@@ -248,19 +452,20 @@
     constructor() {
       this.keys = new Set();
       this.buttons = { kick: false, snap: false, jump: false, spin: false, sprint: false, pause: false };
+      this.edgePulses = { kick: false, snap: false, jump: false, spin: false, pause: false };
       this.previous = { kick: false, snap: false, jump: false, spin: false, pause: false };
       this.frame = {
         moveX: 0, moveZ: 0, lookX: 0, lookY: 0,
         kick: false, snap: false, jump: false, spin: false, sprint: false,
         kickPressed: false, kickReleased: false, snapPressed: false,
-        jumpPressed: false, spinPressed: false, pausePressed: false,
+        jumpPressed: false, spinPressed: false, spinDirection: 0, spinPower: 1, pausePressed: false,
       };
       this.mouseLook = new T.Vector2();
       this.lookScratch = new T.Vector2();
       this.pendingLook = new T.Vector2();
       this.gamepadLook = new T.Vector2();
-      this.moveStick = new TouchStick(ui.movePad, false);
-      this.lookStick = new TouchStick(ui.lookPad, true);
+      this.moveStick = new TouchSurface(ui.movePad, 'move');
+      this.lookStick = new TouchSurface(ui.lookPad, 'look');
       this.primaryTouch = matchMedia('(pointer: coarse)').matches;
       this.hasTouch = FORCE_TOUCH || this.primaryTouch || (navigator.maxTouchPoints > 0 && matchMedia('(any-pointer: coarse)').matches);
       // A touchscreen laptop is not automatically a touch-only game. Start from
@@ -273,10 +478,10 @@
       this.bind();
     }
     bind() {
-      window.addEventListener('pointerdown', event => {
-        if (event.pointerType === 'touch') this.setTouchMode(true);
-        else if (event.pointerType === 'mouse' && !FORCE_TOUCH) this.setTouchMode(false);
-      }, { capture: true, passive: true });
+      window.addEventListener('pointerdown', event => this.handleGlobalPointerDown(event), { capture: true, passive: false });
+      window.addEventListener('pointermove', event => this.bridgeGlobalTouch('move', event), { capture: true, passive: false });
+      window.addEventListener('pointerup', event => this.bridgeGlobalTouch('up', event), { capture: true, passive: false });
+      window.addEventListener('pointercancel', event => this.bridgeGlobalTouch('up', event), { capture: true, passive: false });
       window.addEventListener('keydown', event => {
         document.body.classList.remove('using-gamepad');
         const interactiveTarget = event.target instanceof Element && !!event.target.closest('button, a, input, select, textarea, [role="button"]');
@@ -308,13 +513,17 @@
           return;
         }
         if (event.button === 0) this.buttons.kick = true;
-        if (event.button === 2) this.buttons.snap = true;
+        if (event.button === 2) {
+          const home = game?.ball?.mode === 'ready';
+          this.buttons.spin = home;
+          this.buttons.snap = !home;
+        }
         if (event.button === 1) this.buttons.spin = true;
         event.preventDefault();
       });
       window.addEventListener('mouseup', event => {
         if (event.button === 0) this.buttons.kick = false;
-        if (event.button === 2) this.buttons.snap = false;
+        if (event.button === 2) { this.buttons.snap = false; this.buttons.spin = false; }
         if (event.button === 1) this.buttons.spin = false;
       });
       window.addEventListener('mousemove', event => {
@@ -325,10 +534,7 @@
         }
       }, { passive: true });
       canvas.addEventListener('contextmenu', event => event.preventDefault());
-      this.bindButton(ui.touchKick, 'kick');
-      this.bindButton(ui.touchSnap, 'snap');
       this.bindButton(ui.touchJump, 'jump');
-      this.bindButton(ui.touchSpin, 'spin');
       this.bindButton(ui.touchPause, 'pause');
       document.addEventListener('pointerlockchange', () => {
         document.body.classList.toggle('pointer-locked', document.pointerLockElement === canvas);
@@ -339,8 +545,31 @@
       });
       this.setTouchMode(this.touchEnabled);
     }
+    handleGlobalPointerDown(event) {
+      if (event.pointerType === 'mouse' && !FORCE_TOUCH) {
+        this.setTouchMode(false);
+        return;
+      }
+      if (event.pointerType !== 'touch') return;
+      const wasTouchEnabled = this.touchEnabled;
+      this.setTouchMode(true);
+      const targetIsInteractive = event.target instanceof Element
+        && !!event.target.closest('#touchControls, button, a, input, select, textarea, [role="button"]');
+      if (wasTouchEnabled || targetIsInteractive || !game?.started || game.paused || game.won) return;
+      const surface = event.clientX < window.innerWidth * .5 ? this.moveStick : this.lookStick;
+      surface.down(event);
+    }
+    bridgeGlobalTouch(method, event) {
+      if (event.pointerType !== 'touch') return;
+      for (const surface of [this.moveStick, this.lookStick]) {
+        if (surface.pointerId !== event.pointerId) continue;
+        const targetIsSurface = event.target instanceof Node && surface.element?.contains(event.target);
+        if (!targetIsSurface) surface[method](event);
+      }
+    }
     setTouchMode(enabled) {
       const next = FORCE_TOUCH || !!enabled;
+      if (ui.startActionHint) ui.startActionHint.textContent = next ? 'TAP TO ENTER' : 'CLICK TO LOCK VIEW';
       if (this.touchEnabled === next && document.body.classList.contains('touch-enabled') === next) return;
       this.touchEnabled = next;
       document.body.classList.toggle('touch-enabled', next);
@@ -356,6 +585,7 @@
       const down = event => {
         document.body.classList.remove('using-gamepad');
         this.buttons[action] = true;
+        if (action in this.edgePulses) this.edgePulses[action] = true;
         audio.ensure();
         try { element.setPointerCapture(event.pointerId); } catch (_) {}
         event.preventDefault();
@@ -419,22 +649,29 @@
       const moveLength = Math.hypot(moveX, moveZ);
       if (moveLength > 1) { moveX /= moveLength; moveZ /= moveLength; }
       this.lookStick.consumeDelta(this.lookScratch);
-      // The touch look pad is a held joystick, not a one-shot swipe. A small
-      // positional impulse keeps initial response crisp; the stick value then
-      // contributes every simulation tick just like a controller right stick.
-      this.pendingLook.x += this.mouseLook.x * .00215 + this.lookScratch.x * .004;
-      this.pendingLook.y += this.mouseLook.y * .00215 + this.lookScratch.y * .004;
-      const touchLookActive = this.touchEnabled && this.lookStick.value.lengthSq() > .0025;
+      // Mouse and touch both use relative movement. Touch is deliberately a
+      // free swipe surface rather than a held right stick: the view stops when
+      // the thumb stops, so landing anywhere on the right never causes a snap.
+      this.pendingLook.x += this.mouseLook.x * .00215 + this.lookScratch.x * .00415;
+      this.pendingLook.y += this.mouseLook.y * .00215 + this.lookScratch.y * .00365;
       this.gamepadLook.set(
-        touchLookActive ? this.lookStick.value.x * .03 : gpLookX * .035,
-        touchLookActive ? this.lookStick.value.y * .026 : gpLookY * .03,
+        gpLookX * .035,
+        gpLookY * .03,
       );
       this.mouseLook.set(0, 0);
 
-      const kick = this.buttons.kick || gpKick || this.keys.has('KeyF');
-      const snap = this.buttons.snap || gpSnap || this.keys.has('KeyE');
+      const loop = this.lookStick.consumeLoop();
+      const rightAction = this.lookStick.consumeAction();
+      const ballHome = !game || game.ball.mode === 'ready';
+      const touchTapKick = this.touchEnabled && rightAction.tap && ballHome;
+      const touchHoldKick = this.touchEnabled && rightAction.hold && ballHome;
+      const touchTapCall = this.touchEnabled && rightAction.tap && !ballHome;
+      const touchHoldCall = this.touchEnabled && rightAction.hold && !ballHome;
+
+      const kick = this.buttons.kick || gpKick || this.keys.has('KeyF') || touchHoldKick;
+      const snap = this.buttons.snap || gpSnap || this.keys.has('KeyE') || touchTapCall || touchHoldCall;
       const jump = this.buttons.jump || gpJump || this.keys.has('Space');
-      const spin = this.buttons.spin || gpSpin || this.keys.has('KeyQ');
+      const spin = loop.active || this.buttons.spin || gpSpin || this.keys.has('KeyQ');
       // Full forward deflection is the touch sprint gesture. It preserves an
       // analog walk band while giving phones the same momentum route as Shift
       // and controller L3 without adding another thumb-blocking button.
@@ -443,13 +680,16 @@
       const pause = this.buttons.pause || this.keys.has('Escape') || this.keys.has('KeyP') || gpPause;
       Object.assign(this.frame, {
         moveX, moveZ, lookX: this.gamepadLook.x, lookY: this.gamepadLook.y, kick, snap, jump, spin, sprint,
-        kickPressed: kick && !this.previous.kick,
-        kickReleased: !kick && this.previous.kick,
-        snapPressed: snap && !this.previous.snap,
-        jumpPressed: jump && !this.previous.jump,
-        spinPressed: spin && !this.previous.spin,
-        pausePressed: pause && !this.previous.pause,
+        kickPressed: touchTapKick || this.edgePulses.kick || (kick && !this.previous.kick),
+        kickReleased: touchTapKick || (!kick && this.previous.kick),
+        snapPressed: touchTapCall || this.edgePulses.snap || (snap && !this.previous.snap),
+        jumpPressed: this.edgePulses.jump || (jump && !this.previous.jump),
+        spinPressed: loop.active || this.edgePulses.spin || (spin && !this.previous.spin),
+        spinDirection: loop.active ? loop.direction : 0,
+        spinPower: loop.active ? loop.power : 1,
+        pausePressed: this.edgePulses.pause || (pause && !this.previous.pause),
       });
+      Object.keys(this.edgePulses).forEach(key => { this.edgePulses[key] = false; });
       this.lastGamepadPause = gpPause;
       return this.frame;
     }
@@ -461,6 +701,7 @@
     resetTransient() {
       this.keys.clear();
       Object.keys(this.buttons).forEach(key => { this.buttons[key] = false; });
+      Object.keys(this.edgePulses).forEach(key => { this.edgePulses[key] = false; });
       Object.keys(this.previous).forEach(key => { this.previous[key] = false; });
       this.mouseLook.set(0, 0);
       this.pendingLook.set(0, 0);
@@ -495,6 +736,7 @@
       this.syncButton();
     }
     ensure() {
+      if (TEST_MODE) return;
       if (this.context) {
         if (this.context.state === 'suspended') this.context.resume().catch(() => {});
         return;
@@ -818,7 +1060,7 @@
       this.renderer.setClearColor(0x000005, 1);
       this.qualityOrder = ['LOW', 'MED', 'HIGH'];
       let rememberedQuality = 'HIGH';
-      try { rememberedQuality = localStorage.getItem('kickball-lunar-quality') || 'HIGH'; } catch (_) {}
+      try { rememberedQuality = localStorage.getItem(QUALITY_STORAGE_KEY) || 'HIGH'; } catch (_) {}
       const requested = (params.get('quality') || rememberedQuality).toUpperCase();
       this.quality = this.qualityOrder.includes(requested) ? requested : 'HIGH';
       this.frameSamples = [];
@@ -828,6 +1070,10 @@
       this.platforms = [];
       this.anchors = [];
       this.breakables = [];
+      this.collectibles = [];
+      this.nests = [];
+      this.launchPads = [];
+      this.moonChimes = [];
       this.enemies = [];
       this.elapsed = 0;
       this.makeMaterials();
@@ -837,6 +1083,7 @@
       this.makeCliffRoute();
       this.makeCourseObjects();
       this.makeBreakableField();
+      this.makePlaygroundFeatures();
       this.makeFirstPersonRig();
       this.makeBallVisual();
       this.particles = new ParticleField(this.scene, this.quality === 'LOW' ? 520 : 900);
@@ -1280,25 +1527,44 @@
       this.routeLights = { posts: postInstances, lamps: lampInstances, glows };
     }
     makeBreakableField() {
-      const reserved = [
-        { x: 0, z: 105, r: 25 }, { x: 0, z: 60, r: 24 }, { x: 0, z: -150, r: 42 },
-      ];
       const specs = [];
-      for (let i = 0; i < 38; i++) {
-        let x, z;
-        for (let attempt = 0; attempt < 12; attempt++) {
-          const pathBias = i < 18;
-          x = pathBias ? randomRange(-26, 26, worldRandom) : randomRange(-150, 150, worldRandom);
-          z = pathBias ? randomRange(-220, 120, worldRandom) : randomRange(-250, 145, worldRandom);
-          if (!reserved.some(area => Math.hypot(x - area.x, z - area.z) < area.r) || attempt === 11) break;
-        }
-        const radius = randomRange(.65, 2.1, worldRandom);
-        const y = this.sampleTerrainHeight(x, z);
-        const position = new T.Vector3(x, y + radius * .72, z);
+      const addSpec = (x, z, radius, kind = 'rock', top = null, reward = false) => {
+        const floor = top == null ? this.sampleTerrainHeight(x, z) : top;
+        const position = new T.Vector3(x, floor + radius * .72, z);
         const quaternion = new T.Quaternion().setFromEuler(new T.Euler(worldRandom() * TAU, worldRandom() * TAU, worldRandom() * TAU));
         const scale = new T.Vector3(radius * randomRange(.7, 1.35, worldRandom), radius * randomRange(.7, 1.55, worldRandom), radius * randomRange(.7, 1.35, worldRandom));
         const matrix = new T.Matrix4().compose(position, quaternion, scale);
-        specs.push({ id: `moonrock-${i}`, kind: i % 7 === 0 ? 'violet' : 'rock', position, radius: radius * 1.15, matrix, alive: true });
+        specs.push({ id: `moonrock-${specs.length}`, kind, position, radius: radius * 1.15, matrix, alive: true, reward });
+      };
+
+      // Authored smash lines put physical toys inside the opening sightline and
+      // on every landing instead of leaving all interaction to random scatter.
+      const authored = [
+        [-7, 108, 1.35, 'rock'], [-2, 106, 1.7, 'violet', null, true], [4, 104, 1.25, 'rock'], [9, 101, 1.7, 'rock'],
+        [-13, 96, 1.2, 'rock'], [-7, 94, 1.85, 'rock'], [1, 92, 1.45, 'violet', null, true], [8, 89, 1.25, 'rock'], [14, 86, 1.7, 'rock'],
+        [-17, 79, 1.3, 'rock'], [-10, 77, 1.8, 'rock'], [6, 74, 1.5, 'violet'], [13, 71, 1.25, 'rock'],
+        [-22, 57, 1.55, 'rock'], [-17, 54, 1.2, 'violet', null, true], [18, 52, 1.65, 'rock'], [24, 49, 1.25, 'rock'],
+        [-21, 8, 1.35, 'rock', 14], [-17, 8, 1.55, 'violet', 14, true], [-14, 10, 1.05, 'rock', 14],
+        [14, -9, 1.35, 'rock', 31], [18, -8, 1.65, 'violet', 31, true], [21, -11, 1.05, 'rock', 31],
+        [-18, -27, 1.25, 'rock', 47], [-14, -26, 1.7, 'violet', 47, true], [-10, -29, 1.1, 'rock', 47],
+        [8, -48, 1.35, 'rock', 62], [12, -47, 1.8, 'violet', 62, true], [16, -50, 1.2, 'rock', 62],
+        [-28, -126, 1.3, 'rock'], [-23, -129, 1.8, 'violet', null, true], [25, -151, 1.45, 'rock'], [30, -154, 1.7, 'rock'],
+      ];
+      authored.forEach(spec => addSpec(...spec));
+
+      const reserved = [
+        { x: 0, z: 105, r: 17 }, { x: 0, z: 60, r: 16 }, { x: 0, z: -150, r: 34 },
+      ];
+      for (let i = 0; i < 64; i++) {
+        let x, z;
+        for (let attempt = 0; attempt < 12; attempt++) {
+          const pathBias = i < 30;
+          x = pathBias ? randomRange(-34, 34, worldRandom) : randomRange(-175, 175, worldRandom);
+          z = pathBias ? randomRange(-225, 125, worldRandom) : randomRange(-265, 155, worldRandom);
+          if (!reserved.some(area => Math.hypot(x - area.x, z - area.z) < area.r) || attempt === 11) break;
+        }
+        const radius = randomRange(.65, 2.1, worldRandom);
+        addSpec(x, z, radius, i % 7 === 0 ? 'violet' : 'rock', null, i % 13 === 0);
       }
       this.breakableMeshes = [];
       const geometry = new T.DodecahedronGeometry(1, 0);
@@ -1317,6 +1583,118 @@
         this.breakableMeshes.push(mesh);
       }
       this.breakables.push(...specs);
+    }
+    makePlaygroundFeatures() {
+      const addPickup = (position, active = true, label = 'MOON SHARD') => {
+        const group = new T.Group();
+        const core = new T.Mesh(new T.OctahedronGeometry(.48, 0), this.materials.gold);
+        const ring = new T.Mesh(new T.TorusGeometry(.72, .055, 8, 32), this.materials.cyan);
+        ring.rotation.x = Math.PI / 2;
+        const glow = this.makeGlowSprite(this.glowGold, 3.8, .46);
+        group.add(core, ring, glow);
+        group.position.copy(position);
+        group.visible = active;
+        this.scene.add(group);
+        const pickup = { id: `shard-${this.collectibles.length}`, group, core, ring, glow, position: position.clone(), active, initialActive: active, label, phase: worldRandom() * TAU };
+        this.collectibles.push(pickup);
+        return pickup;
+      };
+
+      for (const item of this.breakables) {
+        if (!item.reward) continue;
+        item.rewardPickup = addPickup(item.position.clone().add(new T.Vector3(0, 1.8, 0)), false, item.kind === 'violet' ? 'VIOLET CACHE' : 'MOON SHARD');
+      }
+      [
+        [-43, 3], [48, -31], [-61, -73], [70, -138], [-42, -203], [34, -238],
+      ].forEach(([x, z], index) => addPickup(new T.Vector3(x, this.sampleTerrainHeight(x, z) + 2.1, z), true, index % 2 ? 'HIDDEN ORBIT' : 'MOON SHARD'));
+
+      const nestSpecs = [
+        { id: 'impact-nest', x: 24, z: 96, hp: 2 },
+        { id: 'side-nest', x: -58, z: 18, hp: 3 },
+        { id: 'rift-nest', x: 64, z: -78, hp: 3 },
+        { id: 'crown-nest', x: -42, z: -166, hp: 4 },
+      ];
+      for (const spec of nestSpecs) {
+        const group = new T.Group();
+        const core = new T.Mesh(new T.IcosahedronGeometry(1.65, 2), this.materials.alien);
+        core.scale.set(1.25, 1.5, 1.15);
+        core.position.y = 1.35;
+        core.castShadow = true;
+        group.add(core);
+        const crown = new T.Mesh(new T.TorusKnotGeometry(1.28, .22, 64, 8, 2, 3), this.materials.violet);
+        crown.position.y = 1.55;
+        crown.scale.y = .72;
+        group.add(crown);
+        for (let index = 0; index < 7; index++) {
+          const angle = index / 7 * TAU;
+          const tendril = new T.Mesh(new T.CapsuleGeometry(.14, 2.5, 5, 8), index % 2 ? this.materials.alienShell : this.materials.violet);
+          tendril.rotation.set(Math.PI / 2.45, 0, -angle + Math.PI / 2);
+          tendril.position.set(Math.cos(angle) * 1.5, .42, Math.sin(angle) * 1.5);
+          group.add(tendril);
+        }
+        const weak = new T.Mesh(new T.OctahedronGeometry(.48, 0), this.materials.gold);
+        weak.position.y = 2.9;
+        group.add(weak);
+        const glow = this.makeGlowSprite(this.glowViolet, 8.5, .3);
+        glow.position.y = 1.4;
+        group.add(glow);
+        const y = this.sampleTerrainHeight(spec.x, spec.z);
+        group.position.set(spec.x, y, spec.z);
+        group.traverse(object => { if (object.isMesh) object.castShadow = true; });
+        this.scene.add(group);
+        const nest = { ...spec, maxHp: spec.hp, group, core, crown, weak, glow, position: new T.Vector3(spec.x, y + 1.45, spec.z), radius: 2.6, alive: true, hitFlash: 0, phase: worldRandom() * TAU };
+        nest.drop = addPickup(new T.Vector3(spec.x, y + 3.4, spec.z), false, 'XENO HEART');
+        this.nests.push(nest);
+      }
+
+      const padSpecs = [
+        [-26, 88, 17], [29, 31, 19], [-34, -66, 20], [44, -118, 18], [-55, -191, 21], [48, -221, 19],
+      ];
+      for (const [x, z, impulse] of padSpecs) {
+        const y = this.sampleTerrainHeight(x, z) + .12;
+        const group = new T.Group();
+        const ring = new T.Mesh(new T.TorusGeometry(2.7, .18, 10, 52), this.materials.cyan);
+        ring.rotation.x = Math.PI / 2;
+        const inner = new T.Mesh(new T.CylinderGeometry(2.15, 2.35, .18, 32), new T.MeshStandardMaterial({ color: 0x182a3d, emissive: 0x126f88, emissiveIntensity: 1.8, roughness: .38, metalness: .62 }));
+        group.add(ring, inner);
+        group.position.set(x, y, z);
+        this.scene.add(group);
+        this.launchPads.push({ id: `launch-pad-${this.launchPads.length}`, group, ring, inner, position: new T.Vector3(x, y, z), radius: 2.85, impulse, cooldown: 0, phase: worldRandom() * TAU });
+      }
+
+      const chimeSpecs = [[-32, 64], [38, 4], [-48, -94], [51, -143], [-28, -214]];
+      for (const [x, z] of chimeSpecs) {
+        const y = this.sampleTerrainHeight(x, z) + 5.4;
+        const group = new T.Group();
+        const ring = new T.Mesh(new T.TorusGeometry(1.5, .14, 10, 48), this.materials.gold);
+        const crystal = new T.Mesh(new T.OctahedronGeometry(.58, 0), this.materials.cyan);
+        const beam = new T.Mesh(new T.CylinderGeometry(.04, .04, 5.2, 6), this.materials.cyan);
+        beam.position.y = 2.65;
+        group.add(ring, crystal, beam);
+        group.position.set(x, y, z);
+        this.scene.add(group);
+        const chime = { id: `moon-chime-${this.moonChimes.length}`, group, ring, crystal, position: new T.Vector3(x, y, z), radius: 1.8, used: false, phase: worldRandom() * TAU };
+        chime.drop = addPickup(new T.Vector3(x, y + 1.2, z), false, 'CHIME STAR');
+        this.moonChimes.push(chime);
+      }
+
+      // A readable side shrine makes one optional route look intentional from
+      // the basin instead of like another random rock pile.
+      this.sideShrine = new T.Group();
+      const shrineX = -58, shrineZ = 18, shrineY = this.sampleTerrainHeight(shrineX, shrineZ);
+      for (const side of [-1, 1]) {
+        const pillar = new T.Mesh(new T.BoxGeometry(2.2, 9.5, 2.2), this.materials.darkRock);
+        pillar.position.set(side * 5.2, 4.75, 0);
+        pillar.rotation.z = side * .08;
+        pillar.castShadow = true;
+        this.sideShrine.add(pillar);
+      }
+      const lintel = new T.Mesh(new T.BoxGeometry(12.5, 2.1, 2.5), this.materials.darkRock);
+      lintel.position.y = 9.2;
+      lintel.castShadow = true;
+      this.sideShrine.add(lintel);
+      this.sideShrine.position.set(shrineX, shrineY, shrineZ);
+      this.scene.add(this.sideShrine);
     }
     makeFirstPersonRig() {
       this.rig = new T.Group();
@@ -1376,6 +1754,8 @@
       };
       this.leftArm = makeArm(-1);
       this.rightArm = makeArm(1);
+      this.leftArm.visible = false;
+      this.rightArm.visible = false;
       this.rig.add(this.leftArm, this.rightArm);
       this.boot = new T.Group();
       // View-model materials must be private: the depth-test override below must
@@ -1436,11 +1816,22 @@
       );
       this.ballTrail.frustumCulled = false;
       this.scene.add(this.ballTrail);
+      const tetherGeometry = new T.BufferGeometry();
+      this.tetherPositions = new Float32Array(6);
+      tetherGeometry.setAttribute('position', new T.BufferAttribute(this.tetherPositions, 3).setUsage(T.DynamicDrawUsage));
+      this.ballTether = new T.Line(
+        tetherGeometry,
+        new T.LineBasicMaterial({ color: 0x72efff, transparent: true, opacity: .9, depthWrite: false, blending: T.AdditiveBlending }),
+      );
+      this.ballTether.visible = false;
+      this.ballTether.frustumCulled = false;
+      this.scene.add(this.ballTether);
     }
     makeAlienMesh(type = 'scuttler') {
       const group = new T.Group();
-      const scale = type === 'warden' ? 1.75 : type === 'shield' ? 1.28 : 1;
-      const abdomen = new T.Mesh(new T.IcosahedronGeometry(.84 * scale, 1), type === 'warden' ? this.materials.violet : this.materials.alien);
+      const scale = type === 'warden' ? 1.75 : type === 'brute' ? 1.46 : type === 'shield' ? 1.28 : type === 'floater' ? .96 : 1;
+      const abdomenMaterial = type === 'warden' || type === 'floater' ? this.materials.violet : type === 'brute' ? this.materials.alienShell : this.materials.alien;
+      const abdomen = new T.Mesh(new T.IcosahedronGeometry(.84 * scale, 1), abdomenMaterial);
       abdomen.scale.set(1.05, .8, 1.25);
       abdomen.position.y = 1.2 * scale;
       abdomen.castShadow = true;
@@ -1455,11 +1846,12 @@
       group.add(eye);
       const weak = new T.Mesh(new T.OctahedronGeometry(.24 * scale, 0), this.materials.gold);
       weak.position.set(0, 1.22 * scale, .98 * scale);
-      weak.visible = type !== 'scuttler';
+      weak.visible = type === 'shield' || type === 'warden' || type === 'brute';
       group.add(weak);
-      for (let i = 0; i < 6; i++) {
-        const side = i < 3 ? -1 : 1;
-        const local = i % 3;
+      const legCount = type === 'floater' ? 3 : type === 'brute' ? 8 : 6;
+      for (let i = 0; i < legCount; i++) {
+        const side = i < legCount / 2 ? -1 : 1;
+        const local = i % Math.ceil(legCount / 2);
         const legGeometry = new T.CapsuleGeometry(.08 * scale, .8 * scale, 4, 7);
         legGeometry.rotateX((local - 1) * .32);
         legGeometry.rotateZ(side * (.72 + local * .1));
@@ -1478,6 +1870,23 @@
         shield.rotation.x = Math.PI / 2;
         shield.position.set(0, 1.3 * scale, -1.25 * scale);
         group.add(shield);
+      }
+      if (type === 'floater') {
+        const halo = new T.Mesh(new T.TorusGeometry(1.18, .12, 10, 42), this.materials.cyan);
+        halo.rotation.x = Math.PI / 2;
+        halo.position.y = 1.2;
+        group.add(halo);
+        const lowerCore = new T.Mesh(new T.OctahedronGeometry(.34, 0), this.materials.gold);
+        lowerCore.position.y = .05;
+        group.add(lowerCore);
+      }
+      if (type === 'brute') {
+        for (const side of [-1, 1]) {
+          const horn = new T.Mesh(new T.ConeGeometry(.24, 1.2, 8), this.materials.gold);
+          horn.position.set(side * .72, 2.15, -.62);
+          horn.rotation.z = side * -.58;
+          group.add(horn);
+        }
       }
       const glow = this.makeGlowSprite(type === 'warden' ? this.glowViolet : this.glowCyan, 3.8 * scale, .13);
       glow.position.y = 1.15 * scale;
@@ -1538,7 +1947,36 @@
       item.mesh.setMatrixAt(item.instanceIndex, new T.Matrix4().makeScale(0, 0, 0));
       item.mesh.instanceMatrix.needsUpdate = true;
       this.particles.burst(item.position, item.mesh.material === this.materials.violet ? 0xba81ff : 0xbfc5d2, 14 + Math.floor(impact * 10), 8 + impact * 6, .75, .25);
+      if (item.rewardPickup) {
+        item.rewardPickup.active = true;
+        item.rewardPickup.group.visible = true;
+      }
       audio.impact(clamp(impact, .2, 1), 'rock');
+      return true;
+    }
+    damageNest(nest, amount = 1, impact = 1) {
+      if (!nest?.alive) return false;
+      nest.hp -= amount;
+      nest.hitFlash = 1;
+      this.particles.burst(nest.position, nest.hp <= 0 ? 0xffd66b : 0xbd83ff, nest.hp <= 0 ? 64 : 24, 10 + impact * 7, nest.hp <= 0 ? 1.2 : .72, .22);
+      audio.impact(clamp(.45 + impact * .5, .4, 1), 'alien');
+      if (nest.hp > 0) return false;
+      nest.hp = 0;
+      nest.alive = false;
+      nest.group.visible = false;
+      nest.drop.active = true;
+      nest.drop.group.visible = true;
+      audio.score(true);
+      return true;
+    }
+    strikeChime(chime) {
+      if (!chime || chime.used) return false;
+      chime.used = true;
+      chime.drop.active = true;
+      chime.drop.group.visible = true;
+      chime.ring.material = this.materials.cyan;
+      this.particles.burst(chime.position, 0xffd66b, 34, 12, .85, .28);
+      audio.score(true);
       return true;
     }
     restoreBreakables() {
@@ -1547,6 +1985,32 @@
         item.mesh.setMatrixAt(item.instanceIndex, item.matrix);
       }
       this.breakableMeshes.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
+    }
+    restorePlayground() {
+      for (const pickup of this.collectibles) {
+        pickup.active = pickup.initialActive;
+        pickup.group.visible = pickup.active;
+      }
+      for (const item of this.breakables) {
+        if (!item.rewardPickup) continue;
+        item.rewardPickup.active = false;
+        item.rewardPickup.group.visible = false;
+      }
+      for (const nest of this.nests) {
+        nest.hp = nest.maxHp;
+        nest.alive = true;
+        nest.hitFlash = 0;
+        nest.group.visible = true;
+        nest.drop.active = false;
+        nest.drop.group.visible = false;
+      }
+      for (const chime of this.moonChimes) {
+        chime.used = false;
+        chime.ring.material = this.materials.gold;
+        chime.drop.active = false;
+        chime.drop.group.visible = false;
+      }
+      for (const pad of this.launchPads) pad.cooldown = 0;
     }
     applyQuality(level, persist = true) {
       this.quality = level;
@@ -1560,9 +2024,9 @@
       this.breakableMeshes?.forEach(mesh => { mesh.castShadow = level === 'HIGH'; });
       if (ui.qualityButton) ui.qualityButton.textContent = `VISUAL ${level}`;
       if (persist) {
-        try { localStorage.setItem('kickball-lunar-quality', level); } catch (_) {}
-        this.resize();
+        try { localStorage.setItem(QUALITY_STORAGE_KEY, level); } catch (_) {}
       }
+      this.resize();
     }
     cycleQuality() {
       const index = this.qualityOrder.indexOf(this.quality);
@@ -1599,6 +2063,31 @@
         anchor.glow.material.opacity = (anchor.used ? .18 : .58) + Math.sin(anchor.pulse) * .08;
         anchor.group.scale.setScalar(anchor.used ? .72 : 1 + Math.sin(anchor.pulse) * .025);
       });
+      this.collectibles.forEach(pickup => {
+        if (!pickup.active) return;
+        pickup.group.rotation.y += dt * 1.8;
+        pickup.group.position.y = pickup.position.y + Math.sin(this.elapsed * 2.8 + pickup.phase) * .22;
+        pickup.ring.rotation.z += dt * 1.5;
+        pickup.glow.material.opacity = .35 + Math.sin(this.elapsed * 4 + pickup.phase) * .11;
+      });
+      this.nests.forEach(nest => {
+        if (!nest.alive) return;
+        nest.hitFlash = Math.max(0, nest.hitFlash - dt * 3.6);
+        nest.core.scale.set(1.25 + nest.hitFlash * .16, 1.5 - nest.hitFlash * .12 + Math.sin(this.elapsed * 2.3 + nest.phase) * .05, 1.15 + nest.hitFlash * .16);
+        nest.crown.rotation.y += dt * (1.15 + nest.hitFlash * 3);
+        nest.weak.rotation.y -= dt * 2.4;
+        nest.glow.material.opacity = .22 + Math.sin(this.elapsed * 3.6 + nest.phase) * .08 + nest.hitFlash * .28;
+      });
+      this.launchPads.forEach(pad => {
+        pad.cooldown = Math.max(0, pad.cooldown - dt);
+        pad.ring.rotation.z += dt * (pad.cooldown > 0 ? 4.8 : 1.35);
+        pad.inner.material.emissiveIntensity = (pad.cooldown > 0 ? 3.8 : 1.65) + Math.sin(this.elapsed * 4 + pad.phase) * .35;
+      });
+      this.moonChimes.forEach(chime => {
+        chime.ring.rotation.z += dt * (chime.used ? 2.8 : .72);
+        chime.crystal.rotation.y -= dt * 1.8;
+        chime.crystal.position.y = Math.sin(this.elapsed * 3.2 + chime.phase) * .18;
+      });
       if (this.gate.active) {
         this.gate.field.material.opacity = .18 + Math.sin(this.elapsed * 4.2) * .07;
         this.gate.glow.material.opacity = .2 + Math.sin(this.elapsed * 3.1) * .08;
@@ -1617,11 +2106,35 @@
       this.ballGlow.material.opacity = .34 + Math.min(.42, gameState.ball.velocity.length() * .012) + Math.sin(this.elapsed * 8) * .06;
       this.rig.position.x = Math.sin(gameState.player.runCycle * .5) * .018;
       this.rig.position.y = -.25 + Math.abs(Math.sin(gameState.player.runCycle)) * -.025;
+      const catchDistance = gameState.ball.position.distanceTo(gameState.player.position);
+      const catching = gameState.ball.mode === 'returning' && catchDistance < 5.2;
+      this.leftArm.visible = catching;
+      this.rightArm.visible = false;
+      if (catching) {
+        const catchT = 1 - clamp((catchDistance - 1.5) / 3.7, 0, 1);
+        this.leftArm.position.set(-.18 - catchT * .16, -.28 + catchT * .12, -.38 - catchT * .5);
+        this.leftArm.rotation.z = -.18 + catchT * .28;
+      }
       this.boot.visible = gameState.kickVisual > 0;
       if (this.boot.visible) {
         const t = 1 - gameState.kickVisual;
         this.boot.position.z = -.35 - Math.sin(t * Math.PI) * 1.25;
         this.boot.rotation.x = -.2 - Math.sin(t * Math.PI) * .42;
+      }
+      if (gameState.ball.mode === 'anchored' && gameState.ball.anchor) {
+        const hand = gameState.player.position.clone().addScaledVector(UP, gameState.player.eyeHeight - .24);
+        this.tetherPositions[0] = hand.x;
+        this.tetherPositions[1] = hand.y;
+        this.tetherPositions[2] = hand.z;
+        this.tetherPositions[3] = gameState.ball.position.x;
+        this.tetherPositions[4] = gameState.ball.position.y;
+        this.tetherPositions[5] = gameState.ball.position.z;
+        this.ballTether.geometry.attributes.position.needsUpdate = true;
+        this.ballTether.material.color.set(gameState.player.grappling ? 0xffd66b : 0x72efff);
+        this.ballTether.material.opacity = gameState.player.grappling ? .98 : .58 + Math.sin(this.elapsed * 9) * .16;
+        this.ballTether.visible = true;
+      } else {
+        this.ballTether.visible = false;
       }
       this.particles.update(dt);
       const target = gameState.player.position;
@@ -1631,6 +2144,12 @@
     }
     noteFrame(delta) {
       if (TEST_MODE || this.quality === 'LOW') return;
+      // Background tabs, launch hitches, and debugger pauses are not evidence
+      // that the player's GPU needs a permanent visual downgrade.
+      if (document.hidden || delta <= 0 || delta > .1) {
+        this.frameSamples.length = 0;
+        return;
+      }
       this.autoReductionCooldown = Math.max(0, this.autoReductionCooldown - delta);
       if (this.autoReductionCooldown > 0) return;
       this.frameSamples.push(delta);
@@ -1640,7 +2159,7 @@
         const p80 = sorted[Math.floor(sorted.length * .8)];
         if (p80 > .032) {
           const next = this.quality === 'HIGH' ? 'MED' : 'LOW';
-          this.applyQuality(next);
+          this.applyQuality(next, false);
           this.autoReduced = true;
           this.autoReductionCooldown = 3;
           this.frameSamples.length = 0;
@@ -1685,6 +2204,8 @@
       this.spinTimer = 0;
       this.spinCooldown = 0;
       this.spinAngle = 0;
+      this.spinDirection = 1;
+      this.spinPower = 1;
       this.grappling = false;
       this.landingKick = 0;
       this.checkpoint = this.position.clone();
@@ -1707,6 +2228,7 @@
       this.launchOrigin = this.position.clone();
       this.returnSide = 1;
       this.anchor = null;
+      this.anchorCharge = 0;
       this.caughtBy = null;
       this.catchTimer = 0;
       this.snapTimer = 0;
@@ -1728,8 +2250,8 @@
       this.position = new T.Vector3(x, groundHeightAt(x, z), z);
       this.velocity = new T.Vector3();
       this.facing = facing;
-      this.radius = type === 'warden' ? 2.8 : type === 'shield' ? 1.7 : 1.25;
-      this.maxHp = type === 'warden' ? 7 : type === 'shield' ? 3 : 1;
+      this.radius = type === 'warden' ? 2.8 : type === 'brute' ? 2.05 : type === 'shield' ? 1.7 : type === 'floater' ? 1.3 : 1.25;
+      this.maxHp = type === 'warden' ? 7 : type === 'brute' ? 3 : type === 'shield' ? 3 : 1;
       this.hp = this.maxHp;
       this.alive = true;
       this.phase = enemyRandom() * TAU;
@@ -1764,6 +2286,7 @@
       this.charge = 0;
       this.charging = false;
       this.queuedKick = null;
+      this.queuedSpin = null;
       this.snapHeld = false;
       this.snapBuffer = 0;
       this.kickVisual = 0;
@@ -1792,6 +2315,12 @@
       // the camera position and fling the HOME ball hundreds of metres away.
       this.readyForwardScratch = new T.Vector3();
       this.readyRightScratch = new T.Vector3();
+      this.orbitForwardScratch = new T.Vector3();
+      this.orbitRightScratch = new T.Vector3();
+      this.orbitUpScratch = new T.Vector3();
+      this.orbitCenterScratch = new T.Vector3();
+      this.orbitOffsetScratch = new T.Vector3();
+      this.orbitTargetScratch = new T.Vector3();
       this.spawnEnemies();
       this.syncWorldVisuals();
       this.updateObjective(true);
@@ -1829,11 +2358,18 @@
         new AlienState('skitter-2', 'scuttler', 10, 91, Math.PI),
         new AlienState('skitter-3', 'scuttler', -12, 76, Math.PI),
         new AlienState('skitter-4', 'scuttler', 12, 69, Math.PI),
+        new AlienState('impact-floater', 'floater', 18, 103, Math.PI),
+        new AlienState('ridge-floater', 'floater', -23, 73, Math.PI),
+        new AlienState('side-brute', 'brute', -51, 22, Math.PI * .5),
+        new AlienState('rift-brute', 'brute', 56, -72, -Math.PI * .5),
         new AlienState('carapace-sentinel', 'shield', 0, 53, 0),
         new AlienState('crown-skitter-1', 'scuttler', -18, -132, 0),
         new AlienState('crown-skitter-2', 'scuttler', 18, -139, 0),
         new AlienState('crown-skitter-3', 'scuttler', -15, -161, 0),
         new AlienState('crown-skitter-4', 'scuttler', 16, -174, 0),
+        new AlienState('crown-floater-1', 'floater', -31, -151, 0),
+        new AlienState('crown-floater-2', 'floater', 34, -181, 0),
+        new AlienState('crown-brute', 'brute', 26, -196, 0),
         new AlienState('crown-warden', 'warden', 0, -191, 0),
       ];
       this.shieldEnemy = this.enemies.find(enemy => enemy.type === 'shield');
@@ -1852,7 +2388,7 @@
       canvas.focus({ preventScroll: true });
       audio.ensure();
       if (requestLock && !input.touchEnabled && !TEST_MODE) requestGamePointerLock();
-      this.announce('TOUCHDOWN // THE BALL COMES HOME', '#83efff');
+      this.announce(input.touchEnabled ? 'LEFT THUMB MOVES // RIGHT THUMB DOES THE BALL' : 'LMB KICKS // RMB ORBITS OR CALLS', '#83efff');
       this.updateObjective(true);
     }
     restart() {
@@ -1870,6 +2406,7 @@
       this.charge = 0;
       this.charging = false;
       this.queuedKick = null;
+      this.queuedSpin = null;
       this.snapHeld = false;
       this.snapBuffer = 0;
       this.kickVisual = 0;
@@ -1896,6 +2433,7 @@
       world.goal.group.visible = false;
       world.anchors.forEach(anchor => { anchor.used = false; anchor.group.visible = true; });
       world.restoreBreakables();
+      world.restorePlayground();
       this.spawnEnemies();
       world.particles.clear();
       world.ballGroup.visible = true;
@@ -2002,7 +2540,7 @@
         this.charge = 0;
       }
       if (!frame.kick && !this.charging) this.charge = 0;
-      if (edgeFrame && frame.spinPressed) this.startSpin();
+      if (edgeFrame && frame.spinPressed) this.startSpin(frame.spinDirection, frame.spinPower);
       if (edgeFrame && frame.jumpPressed) this.player.jumpBuffer = Math.max(this.player.jumpBuffer, .15);
 
       // Edge inputs are captured above before hit stop freezes simulation. This
@@ -2024,6 +2562,7 @@
       this.updatePlayer(dt, actionFrame, edgeFrame);
       this.updateBall(dt, actionFrame, edgeFrame);
       this.updateEnemies(dt);
+      this.updatePlaygroundInteractions(dt);
       this.updateProgression();
       this.updateCamera(dt);
       this.decayFeedback(dt);
@@ -2037,6 +2576,14 @@
       player.damageCooldown = Math.max(0, player.damageCooldown - dt);
       player.spinCooldown = Math.max(0, player.spinCooldown - dt);
       player.spinTimer = Math.max(0, player.spinTimer - dt);
+      if (this.queuedSpin) {
+        if (this.time > this.queuedSpin.expires) this.queuedSpin = null;
+        else if (player.spinCooldown <= 0) {
+          const queued = this.queuedSpin;
+          this.queuedSpin = null;
+          this.startSpin(queued.direction, queued.power);
+        }
+      }
       player.landingKick = Math.max(0, player.landingKick - dt * 2.8);
       player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
       if (edgeFrame && frame.jumpPressed) player.jumpBuffer = .15;
@@ -2090,7 +2637,7 @@
       if (!frame.jump && player.velocity.y > 5.5) player.velocity.y -= 10 * dt;
       if (!player.grappling) player.velocity.y -= 15.2 * dt;
       player.runCycle += Math.hypot(player.velocity.x, player.velocity.z) * dt * .76;
-      player.spinAngle += (player.spinTimer > 0 ? 16 : 0) * dt;
+      player.spinAngle += (player.spinTimer > 0 ? 13 + player.spinPower * 5 : 0) * dt;
 
       const currentFloor = world.floorHeight(player.position.x, player.position.z, player.position.y + 1);
       const nextX = player.position.x + player.velocity.x * dt;
@@ -2129,6 +2676,20 @@
       } else if (player.position.y > floor + .04) {
         player.grounded = false;
       }
+      for (const pad of world.launchPads) {
+        if (pad.cooldown > 0 || Math.abs(player.position.y - pad.position.y) > 1.65) continue;
+        if (Math.hypot(player.position.x - pad.position.x, player.position.z - pad.position.z) > pad.radius) continue;
+        pad.cooldown = 1.05;
+        player.velocity.y = Math.max(player.velocity.y, pad.impulse);
+        const launchForward = this.horizontalForward(new T.Vector3());
+        player.velocity.addScaledVector(launchForward, 5.8);
+        player.grounded = false;
+        player.jumpsUsed = 0;
+        this.addStyle(7, 230, 'MOONSPRING', '#83efff');
+        world.particles.burst(pad.position.clone().addScaledVector(UP, .35), 0x72efff, 28, 9, .72, .08);
+        audio.jump(true);
+        this.shake = Math.max(this.shake, .18);
+      }
       player.position.x = clamp(player.position.x, -355, 355);
       player.position.z = clamp(player.position.z, -350, 340);
       if (player.position.y < -35 || !Number.isFinite(player.position.y)) this.respawnPlayer();
@@ -2144,7 +2705,11 @@
       const shakeX = (cosmeticRandom() * 2 - 1) * shakeMagnitude * .055;
       const shakeY = (cosmeticRandom() * 2 - 1) * shakeMagnitude * .04;
       world.camera.position.set(player.position.x + bobX, player.position.y + player.eyeHeight + bobY - player.landingKick * .14, player.position.z);
-      world.camera.rotation.set(player.pitch + shakeY, player.yaw + shakeX, this.cameraRoll, 'YXZ');
+      const spinRoll = player.spinTimer > 0 ? player.spinDirection * .065 * clamp(player.spinTimer * 5, 0, 1) : 0;
+      this.cameraRoll = damp(this.cameraRoll, spinRoll, 10, dt);
+      // Three cameras face local -Z, so their visual Y rotation is the inverse
+      // of the positive-right yaw used by movement, aim, and ball steering.
+      world.camera.rotation.set(player.pitch + shakeY, -player.yaw + shakeX, this.cameraRoll, 'YXZ');
       const speedFov = smoothstep(6, 19, speed) * 8;
       const actionFov = (player.grappling ? 6 : 0) + (player.spinTimer > 0 ? 4 : 0);
       world.camera.fov = damp(world.camera.fov, 76 + speedFov + actionFov, 7.5, dt);
@@ -2202,33 +2767,84 @@
       this.announce('VOLLEY ARMED // CATCH AND FIRE', '#ffd66b');
       this.addStyle(4, 120);
     }
-    startSpin() {
+    startSpin(direction = 0, power = 1) {
       const player = this.player;
-      if (player.spinCooldown > 0) return;
-      player.spinCooldown = .95;
-      player.spinTimer = .78;
+      const gesturePower = clamp(finite(Number(power)) || 1, .74, 1.25);
+      const chosenDirection = Math.sign(finite(Number(direction))) || Math.sign(this.cameraYawVelocity) || (this.stats.spins % 2 === 0 ? 1 : -1);
+      if (player.spinCooldown > 0) {
+        this.queuedSpin = {
+          direction: chosenDirection,
+          power: gesturePower,
+          expires: this.time + player.spinCooldown + .18,
+        };
+        this.announce(chosenDirection > 0 ? 'CLOCKWISE LOOP BANKED' : 'COUNTER LOOP BANKED', '#d5a8ff');
+        return false;
+      }
+      this.queuedSpin = null;
+      player.spinCooldown = .72 + gesturePower * .18;
+      player.spinTimer = .62 + gesturePower * .2;
       player.spinAngle = 0;
+      player.spinDirection = chosenDirection;
+      player.spinPower = gesturePower;
       this.stats.spins++;
       audio.spin();
       if (this.ball.mode === 'ready') {
-        this.ball.spin += 28 * (this.stats.spins % 2 ? 1 : -1);
-        const forward = this.horizontalForward(new T.Vector3());
-        player.velocity.addScaledVector(forward, 3.5);
+        const forward = this.forwardFromView(this.orbitForwardScratch);
+        const right = this.horizontalRight(this.orbitRightScratch);
+        const up = this.orbitUpScratch.copy(right).cross(forward).normalize();
+        const center = this.orbitCenterScratch.copy(player.position).addScaledVector(UP, player.eyeHeight)
+          .addScaledVector(forward, 3.05).addScaledVector(up, -.15);
+        const offset = this.orbitOffsetScratch.copy(this.ball.position).sub(center);
+        const phase = Math.atan2(-offset.dot(up) / .68, offset.dot(right));
+        player.spinAngle = phase * chosenDirection;
+        this.ball.spin += chosenDirection * (22 + gesturePower * 14);
+        const boostForward = this.horizontalForward(new T.Vector3());
+        player.velocity.addScaledVector(boostForward, 2.7 + gesturePower * 1.25);
         let hits = 0;
         for (const enemy of this.enemies) {
-          if (!enemy.alive || (enemy.summit && world.fracture.active) || enemy.position.distanceTo(player.position) > 5.1 + enemy.radius) continue;
+          if (!enemy.alive || (enemy.summit && world.fracture.active) || enemy.position.distanceTo(player.position) > 4.7 + gesturePower * .55 + enemy.radius) continue;
           this.damageAlien(enemy, 1, 'spin');
           hits++;
         }
-        this.addStyle(7 + hits * 5, 220 + hits * 300, hits ? `ORBIT SMASH x${hits}` : 'ORBIT KICK', '#bf83ff');
+        let rocks = 0;
+        for (const item of world.breakables) {
+          if (!item.alive || item.position.distanceTo(player.position) > 6.4 + gesturePower * 1.4 + item.radius) continue;
+          if (world.shatterBreakable(item, .82 + gesturePower * .15)) {
+            this.stats.breaks++;
+            rocks++;
+          }
+        }
+        let structures = 0;
+        for (const nest of world.nests) {
+          if (!nest.alive || nest.position.distanceTo(player.position) > 7.8 + nest.radius) continue;
+          if (world.damageNest(nest, 1, .8)) {
+            this.stats.breaks++;
+            structures++;
+          }
+        }
+        for (const chime of world.moonChimes) {
+          if (chime.used || chime.position.distanceTo(player.position) > 7.6 + chime.radius) continue;
+          if (world.strikeChime(chime)) structures++;
+        }
+        const wrecked = hits + rocks + structures;
+        this.addStyle(7 + hits * 5 + Math.min(10, rocks) + structures * 3, 220 + hits * 300 + rocks * 90 + structures * 280,
+          wrecked ? `ORBIT SMASH x${wrecked}` : (chosenDirection > 0 ? 'CLOCKWISE ORBIT' : 'COUNTER ORBIT'), '#bf83ff');
+        this.announce(wrecked ? 'ORBIT SMASH // EVERYTHING IN REACH GETS HIT' : 'ORBIT ARMED // CLOSE THE DISTANCE', '#d5a8ff');
+        for (let index = 0; index < 10; index++) {
+          const angle = index / 10 * TAU;
+          const point = player.position.clone().add(new T.Vector3(Math.cos(angle) * 4.8, 1.1, Math.sin(angle) * 4.8));
+          world.particles.burst(point, index % 2 ? 0xbd83ff : 0x72efff, 2, 4.5, .55, .04);
+        }
       } else {
-        this.ball.curveBoost = 1.15;
-        this.ball.spin += Math.sign(this.cameraYawVelocity || this.ball.returnSide) * 34;
+        this.ball.curveBoost = .9 + gesturePower * .32;
+        this.ball.returnSide = chosenDirection;
+        this.ball.spin += chosenDirection * (26 + gesturePower * 12);
         if (this.ball.mode === 'outbound') this.beginReturn('spin');
-        this.addStyle(11, 420, 'SPIN SLING', '#bf83ff');
+        this.addStyle(11, 420, chosenDirection > 0 ? 'RIGHT SPIN SLING' : 'LEFT SPIN SLING', '#bf83ff');
       }
       this.shake = Math.max(this.shake, .17);
       world.particles.burst(player.position.clone().add(new T.Vector3(0, 1, 0)), 0xbd83ff, 24, 9, .78, .16);
+      return true;
     }
     beginReturn(reason = 'auto') {
       const ball = this.ball;
@@ -2274,6 +2890,17 @@
         .addScaledVector(right, 2.05)
         .addScaledVector(UP, -.96);
     }
+    orbitBallTarget(angle, power, target) {
+      const forward = this.forwardFromView(this.orbitForwardScratch);
+      const right = this.horizontalRight(this.orbitRightScratch);
+      const up = this.orbitUpScratch.copy(right).cross(forward).normalize();
+      const radius = 2.05 + power * .3;
+      return target.copy(world.camera.position)
+        .addScaledVector(forward, 3.05 + Math.sin(angle * 2) * .22)
+        .addScaledVector(up, -.15)
+        .addScaledVector(right, Math.cos(angle) * radius)
+        .addScaledVector(up, -Math.sin(angle) * radius * .68);
+    }
     updateBall(dt, frame) {
       const ball = this.ball;
       const player = this.player;
@@ -2287,15 +2914,11 @@
 
       if (ball.mode === 'ready') {
         if (player.spinTimer > 0) {
-          const angle = player.spinAngle * (this.stats.spins % 2 ? 1 : -1);
-          const radius = 2.35;
-          ball.position.set(
-            player.position.x + Math.cos(angle) * radius,
-            player.position.y + 1.15 + Math.sin(angle * 2) * .34,
-            player.position.z + Math.sin(angle) * radius,
-          );
+          const angle = player.spinAngle * player.spinDirection;
+          const target = this.orbitBallTarget(angle, player.spinPower, this.orbitTargetScratch);
+          ball.position.lerp(target, 1 - Math.exp(-35 * dt));
           ball.velocity.copy(ball.position).sub(previous).multiplyScalar(1 / Math.max(dt, .0001));
-          ball.spin += dt * 42;
+          ball.spin += player.spinDirection * dt * 42;
         } else {
           const target = this.readyBallTarget(this.tempA);
           const spring = 1 - Math.exp(-dt * 22);
@@ -2381,7 +3004,7 @@
         const toAnchor = anchor.position.clone().sub(this.player.position);
         const distance = toAnchor.length();
         const direction = distance > .001 ? toAnchor.multiplyScalar(1 / distance) : UP.clone();
-        const desiredSpeed = Math.min(31, 17 + distance * .42);
+        const desiredSpeed = Math.min(34, (17 + distance * .42) * (.9 + ball.anchorCharge * .24));
         const desiredVelocity = direction.multiplyScalar(desiredSpeed);
         this.player.velocity.lerp(desiredVelocity, 1 - Math.exp(-dt * 9.2));
         this.player.grappling = true;
@@ -2417,7 +3040,7 @@
           ball.mode = 'returning';
           ball.returnTime = 0;
           ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
-          this.announce('ANCHOR RELEASED // HOLD SNAP TO PULL', '#83efff');
+          this.announce('TETHER TIMED OUT // KICK THE SOCKET AGAIN', '#83efff');
         }
       }
     }
@@ -2557,20 +3180,68 @@
         ball.position.addScaledVector(normal, item.radius + ball.radius - distance + .02);
       }
 
-      if (ball.mode === 'outbound' && ball.launchCharge >= .78) {
+      for (const nest of world.nests) {
+        if (!nest.alive || ball.collisionCooldown.has(nest.id)) continue;
+        const distance = nest.position.distanceTo(ball.position);
+        if (distance > nest.radius + ball.radius) continue;
+        const speed = ball.velocity.length();
+        const normal = ball.position.clone().sub(nest.position).normalize();
+        if (speed > 8) {
+          const damage = ball.mode === 'returning' || ball.launchCharge > .86 || speed > 45 ? 2 : 1;
+          const destroyed = world.damageNest(nest, damage, clamp(speed / 42, .25, 1));
+          ball.collisionCooldown.set(nest.id, .24);
+          const along = ball.velocity.dot(normal);
+          if (along < 0) ball.velocity.addScaledVector(normal, -1.38 * along);
+          this.shake = Math.max(this.shake, destroyed ? .5 : .24);
+          this.hitStop = Math.max(this.hitStop, destroyed ? .065 : .032);
+          if (destroyed) {
+            this.stats.breaks++;
+            this.addStyle(22, 1800, 'XENO NEST SHATTERED', '#ffd66b');
+          } else {
+            this.addStyle(6, 260, `NEST ${nest.hp}/${nest.maxHp}`, '#bf83ff');
+          }
+        } else {
+          const along = ball.velocity.dot(normal);
+          if (along < 0) ball.velocity.addScaledVector(normal, -1.5 * along);
+        }
+      }
+
+      for (const chime of world.moonChimes) {
+        if (chime.used || ball.collisionCooldown.has(chime.id)) continue;
+        if (chime.position.distanceTo(ball.position) > chime.radius + ball.radius) continue;
+        if (ball.velocity.length() < 7) continue;
+        if (world.strikeChime(chime)) {
+          ball.collisionCooldown.set(chime.id, .25);
+          this.addStyle(12, 760, 'MOON CHIME', '#ffd66b');
+          this.shake = Math.max(this.shake, .18);
+        }
+      }
+
+      if (ball.mode === 'outbound' && ball.velocity.length() >= 12) {
         const anchor = world.anchors.find(candidate => !candidate.used);
-        const basinCleared = !this.enemies.some(enemy => !enemy.summit && enemy.type === 'scuttler' && enemy.alive);
-        const climbUnlocked = basinCleared && !this.shieldEnemy.alive;
-        if (climbUnlocked && anchor && ball.position.distanceTo(anchor.position) <= 2.55) {
+        const touchedAnchor = world.anchors.find(candidate => !candidate.used && ball.position.distanceTo(candidate.position) <= 4.4);
+        if (touchedAnchor && touchedAnchor !== anchor) {
+          const expected = (anchor?.index ?? 0) + 1;
+          this.announce(`LINK ${expected} IS PULSING // FOLLOW THE CYAN ROUTE`, '#ffd66b');
+          world.particles.burst(touchedAnchor.position, 0xffd66b, 18, 7, .58, .12);
+          ball.collisionCooldown.set(touchedAnchor.id, .32);
+          audio.impact(.55, 'anchor');
+        }
+        if (anchor && touchedAnchor === anchor) {
           ball.mode = 'anchored';
           ball.anchor = anchor;
+          ball.anchorCharge = ball.launchCharge;
           ball.anchorTimer = 0;
           ball.velocity.set(0, 0, 0);
           ball.position.copy(anchor.position);
+          const firstTug = anchor.position.clone().sub(this.player.position).normalize();
+          this.player.velocity.addScaledVector(firstTug, 6.5 + ball.launchCharge * 4.5);
+          this.player.velocity.y = Math.max(this.player.velocity.y, 3.8 + ball.launchCharge * 2.4);
+          this.player.grounded = false;
           this.addStyle(12, 520, 'ANCHORED', '#83efff');
           world.particles.burst(anchor.position, 0x76efff, 26, 10, .72, .2);
           audio.impact(.9, 'anchor');
-          this.announce('HOLD SNAP // PULL YOURSELF UP', '#83efff');
+          this.announce(input.touchEnabled ? 'TETHER LOCKED // HOLD THE RIGHT SIDE TO PULL' : 'TETHER LOCKED // HOLD RMB TO PULL', '#83efff');
         }
       }
 
@@ -2602,7 +3273,7 @@
         const returnAttack = ball.mode === 'returning';
         const validHit = speed > 8;
         ball.collisionCooldown.set(enemy.id, .22);
-        if (enemy.type === 'scuttler') {
+        if (enemy.type !== 'shield' && enemy.type !== 'warden') {
           if (validHit) this.damageAlien(enemy, 1, returnAttack ? 'return' : 'kick');
           const along = ball.velocity.dot(normal);
           if (along < 0) ball.velocity.addScaledVector(normal, -1.45 * along);
@@ -2616,7 +3287,7 @@
             ball.catchTimer = ball.snapTimer = 0;
             ball.velocity.set(0, 0, 0);
             enemy.catchCooldown = .8;
-            this.announce('BALL STOLEN // HOLD SNAP OR ARM A VOLLEY', '#bf83ff');
+            this.announce('BALL STOLEN // HOLD RIGHT TO RIP IT FREE', '#bf83ff');
             world.particles.burst(ball.position, 0xbe83ff, 22, 9, .68, .12);
             audio.impact(.9, 'alien');
           } else {
@@ -2694,7 +3365,7 @@
         const summitLocked = enemy.summit && world.fracture.active;
         const toPlayer = player.position.clone().sub(enemy.position);
         const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
-        const activeRange = enemy.type === 'warden' ? 80 : 44;
+        const activeRange = enemy.type === 'warden' ? 80 : enemy.type === 'floater' ? 58 : 46;
         if (!summitLocked && horizontalDistance < activeRange && enemy.stun <= 0) {
           const desiredFacing = Math.atan2(toPlayer.x, toPlayer.z);
           if (enemy.type === 'shield' || enemy.type === 'warden') {
@@ -2712,6 +3383,18 @@
             direction.normalize();
             enemy.velocity.x = damp(enemy.velocity.x, direction.x * 4.8, 5, dt);
             enemy.velocity.z = damp(enemy.velocity.z, direction.z * 4.8, 5, dt);
+          } else if (enemy.type === 'floater') {
+            const orbitAngle = this.time * .72 + enemy.phase;
+            const direction = toPlayer.setY(0).normalize();
+            direction.x += Math.cos(orbitAngle) * .82;
+            direction.z += Math.sin(orbitAngle) * .82;
+            direction.normalize();
+            enemy.velocity.x = damp(enemy.velocity.x, direction.x * 3.8, 3.4, dt);
+            enemy.velocity.z = damp(enemy.velocity.z, direction.z * 3.8, 3.4, dt);
+          } else if (enemy.type === 'brute') {
+            const direction = toPlayer.setY(0).normalize();
+            enemy.velocity.x = damp(enemy.velocity.x, direction.x * 2.15, 2.8, dt);
+            enemy.velocity.z = damp(enemy.velocity.z, direction.z * 2.15, 2.8, dt);
           } else if (enemy.type === 'warden') {
             enemy.velocity.x = damp(enemy.velocity.x, Math.cos(this.time * .72 + enemy.phase) * 4.2, 3.2, dt);
             enemy.velocity.z = damp(enemy.velocity.z, Math.sin(this.time * .5 + enemy.phase) * 2.1, 3.2, dt);
@@ -2726,13 +3409,16 @@
         enemy.position.x += enemy.velocity.x * dt;
         enemy.position.z += enemy.velocity.z * dt;
         const floor = world.floorHeight(enemy.position.x, enemy.position.z, enemy.position.y + 2);
-        const hop = enemy.type === 'scuttler' ? Math.max(0, Math.sin(this.time * 5.2 + enemy.phase)) * .32 : Math.sin(this.time * 1.7 + enemy.phase) * .06;
+        const hop = enemy.type === 'scuttler' ? Math.max(0, Math.sin(this.time * 5.2 + enemy.phase)) * .32
+          : enemy.type === 'floater' ? 4.1 + Math.sin(this.time * 2.3 + enemy.phase) * .8
+            : enemy.type === 'brute' ? Math.max(0, Math.sin(this.time * 2.2 + enemy.phase)) * .14
+              : Math.sin(this.time * 1.7 + enemy.phase) * .06;
         enemy.position.y = floor + hop;
         visual.group.position.copy(enemy.position);
         visual.group.rotation.y = enemy.facing + Math.PI;
         visual.abdomen.scale.y = visual.scale * (.8 + hop * .08);
         visual.eye.material.emissiveIntensity = 3.8 + Math.sin(this.time * 5 + enemy.phase) * .9;
-        visual.weak.visible = enemy.type !== 'scuttler';
+        visual.weak.visible = enemy.type === 'shield' || enemy.type === 'warden' || enemy.type === 'brute';
         if (visual.shield) visual.shield.material.emissiveIntensity = 1.7 + enemy.hitFlash * 5;
         const playerDistance = enemy.position.distanceTo(player.position);
         if (playerDistance < enemy.radius + player.radius + .6 && player.damageCooldown <= 0 && !summitLocked) {
@@ -2745,6 +3431,36 @@
             this.damagePlayer(enemy);
           }
         }
+      }
+    }
+    updatePlaygroundInteractions(dt) {
+      for (const pickup of world.collectibles) {
+        if (!pickup.active) continue;
+        const playerDistance = pickup.group.position.distanceTo(this.player.position.clone().addScaledVector(UP, .9));
+        const ballDistance = pickup.group.position.distanceTo(this.ball.position);
+        if (playerDistance > 2.1 && ballDistance > 1.65) continue;
+        pickup.active = false;
+        pickup.group.visible = false;
+        this.player.health = Math.min(5, this.player.health + 1);
+        this.player.jumpsUsed = 0;
+        this.player.jumpBuffer = Math.max(this.player.jumpBuffer, .06);
+        this.addStyle(8, 420, pickup.label, '#ffd66b');
+        world.particles.burst(pickup.group.position, 0xffd66b, 28, 9, .82, .25);
+        audio.score(true);
+      }
+
+      if (this.ball.mode !== 'outbound' && this.ball.mode !== 'returning') return;
+      for (const pad of world.launchPads) {
+        if (pad.cooldown > 0 || Math.abs(this.ball.position.y - pad.position.y) > 1.5) continue;
+        if (Math.hypot(this.ball.position.x - pad.position.x, this.ball.position.z - pad.position.z) > pad.radius) continue;
+        pad.cooldown = .48;
+        this.ball.position.y = pad.position.y + this.ball.radius + .25;
+        this.ball.velocity.y = Math.max(Math.abs(this.ball.velocity.y) * .72, pad.impulse * 1.22);
+        this.ball.velocity.multiplyScalar(1.08);
+        this.ball.bounceCount++;
+        this.addStyle(6, 260, 'BALLSPRING', '#83efff');
+        world.particles.burst(pad.position.clone().addScaledVector(UP, .45), 0x72efff, 24, 10, .68, .08);
+        audio.impact(.8, 'anchor');
       }
     }
     damagePlayer(enemy) {
@@ -2776,11 +3492,18 @@
       player.jumpsUsed = 0;
       player.invulnerable = 1.4;
       player.grappling = false;
+      player.spinTimer = 0;
+      player.spinCooldown = 0;
+      player.spinAngle = 0;
+      player.spinDirection = 1;
+      player.spinPower = 1;
       this.style = Math.max(0, this.style - 24);
       this.ball = new BallState(player);
       this.queuedKick = null;
+      this.queuedSpin = null;
       this.charging = false;
       this.charge = 0;
+      this.cameraRoll = 0;
       world.ballGroup.position.copy(this.ball.position);
       world.particles.burst(player.position.clone().addScaledVector(UP, 1), 0x83efff, 34, 10, .9, .35);
       this.announce('SUIT RECONSTITUTED // BALL LINK RESTORED', '#83efff');
@@ -2827,31 +3550,37 @@
       const basinAlive = this.enemies.filter(enemy => !enemy.summit && enemy.alive && enemy.type === 'scuttler').length;
       const anchorsUsed = world.anchors.filter(anchor => anchor.used).length;
       const summitAlive = this.enemies.filter(enemy => enemy.summit && enemy.alive).length;
+      const inputKind = input.touchEnabled ? 'touch' : 'pointer';
       let key, label, text, stage;
       if (!this.started) {
         key = 'start'; stage = 0;
         label = 'MARE IMBRIUM // DROP ZONE';
         text = 'Wake the ball. Break the occupation.';
       } else if (basinAlive > 0) {
-        key = `basin-${basinAlive}`; stage = 1;
+        const teachOrbit = basinAlive < 4 && this.stats.spins === 0;
+        key = `basin-${basinAlive}-${teachOrbit ? 'orbit' : 'kick'}-${inputKind}`; stage = 1;
         label = 'LANDING CRATER // CONTACT';
-        text = `${basinAlive} ridge skitter${basinAlive === 1 ? '' : 's'} remain. KICK, return, stomp, or SPIN them into moon dust.`;
+        text = teachOrbit
+          ? (input.touchEnabled ? 'DRAW A RIGHT-THUMB LOOP // ORBIT-SMASH THE CROWD' : 'BALL HOME // RMB ORBIT-SMASHES EVERYTHING CLOSE')
+          : (input.touchEnabled
+            ? `${basinAlive} SKITTER${basinAlive === 1 ? '' : 'S'} // RIGHT TAP KICKS // NEXT TAP CALLS`
+            : `${basinAlive} SKITTER${basinAlive === 1 ? '' : 'S'} // LMB KICKS // RMB CALLS`);
       } else if (this.shieldEnemy.alive) {
         key = `shield-${this.shieldEnemy.hp}`; stage = 2;
         label = 'ORPHEUS GATE // CARAPACE SENTINEL';
-        text = `Frontal kicks are armor food. Throw wide, turn, and SNAP the return through its gold back. HP ${this.shieldEnemy.hp}/${this.shieldEnemy.maxHp}.`;
+        text = `Frontal kicks are armor food. Throw wide, turn, and call the return through its gold back. HP ${this.shieldEnemy.hp}/${this.shieldEnemy.maxHp}.`;
       } else if (anchorsUsed < world.anchors.length) {
-        key = `climb-${anchorsUsed}`; stage = 3;
+        key = `climb-${anchorsUsed}-${inputKind}`; stage = 3;
         label = 'ORPHEUS RIM // SIXTY-METRE ASCENT';
-        text = `Full-charge the next cyan socket, then hold SNAP to sling upward. Anchor ${anchorsUsed + 1}/${world.anchors.length}. Double jump and METEOR kicks recover altitude.`;
+        text = `Kick the next cyan socket, then ${input.touchEnabled ? 'hold the right side' : 'hold RMB'} to ride the visible tether. Anchor ${anchorsUsed + 1}/${world.anchors.length}.`;
       } else if (world.fracture.active) {
         key = 'fracture'; stage = 4;
         label = 'CROWN FAULT // FRACTURE SEAM';
         text = 'The violet wall only breaks for a full-charge OUTBOUND impact. Put your whole moon into it.';
       } else if (summitAlive > 0) {
-        key = `crown-${summitAlive}-${this.warden.hp}`; stage = 5;
+        key = `crown-${summitAlive}-${this.warden.hp}-${inputKind}`; stage = 5;
         label = 'OBSERVATORY CROWN // ALIEN WARDEN';
-        text = `${summitAlive} alien${summitAlive === 1 ? '' : 's'} remain. The Warden catches frontal kicks; tear the ball free with SNAP and punish its exposed back.`;
+        text = `${summitAlive} alien${summitAlive === 1 ? '' : 's'} remain. The Warden catches frontal kicks; ${input.touchEnabled ? 'hold the right side' : 'hold RMB'} to rip the ball free.`;
       } else if (!this.won) {
         key = 'goal'; stage = 6;
         label = 'APOGEE APERTURE // OPEN';
@@ -2984,8 +3713,27 @@
       if (ui.chargeUI) ui.chargeUI.classList.toggle('active', this.charging);
       if (ui.chargeFill) ui.chargeFill.style.width = `${this.charge * 100}%`;
       if (ui.chargeText) ui.chargeText.textContent = this.charge > .96 ? 'MAXIMUM KICK' : this.ball.mode === 'ready' ? 'KICK CHARGE' : 'QUEUE VOLLEY';
+      if (ui.rightActionLabel) {
+        const labels = {
+          ready: this.charging ? 'HOLD CHARGE // SWIPE AIM' : 'TAP KICK // HOLD CHARGE // LOOP ORBIT',
+          outbound: 'TAP CALL // SWIPE STEER',
+          returning: 'TAP REEL // SWIPE LOOK',
+          anchored: 'HOLD PULL // SWIPE LOOK',
+          caught: 'HOLD RIP FREE // SWIPE LOOK',
+        };
+        ui.rightActionLabel.textContent = labels[this.ball.mode] || 'RIGHT THUMB // BALL';
+      }
       if (ui.crosshair) {
         ui.crosshair.dataset.ball = this.ball.mode;
+        const nextAnchor = world.anchors.find(anchor => !anchor.used);
+        let anchorAim = false;
+        if (nextAnchor && this.ball.mode === 'ready') {
+          const toAnchor = nextAnchor.position.clone().sub(world.camera.position);
+          const distance = toAnchor.length();
+          anchorAim = distance < 92 && toAnchor.normalize().dot(this.forwardFromView(new T.Vector3())) > .982;
+        }
+        ui.crosshair.dataset.target = anchorAim ? 'anchor' : 'world';
+        if (anchorAim && ui.rightActionLabel) ui.rightActionLabel.textContent = 'SOCKET IN SIGHT // TAP OR HOLD KICK';
         ui.crosshair.style.transform = `translate(-50%, -50%) scale(${1 + this.charge * .22})`;
         ui.crosshair.style.opacity = this.paused || !this.started ? '.3' : '.9';
       }
@@ -3020,8 +3768,15 @@
       this.player.checkpointYaw = this.player.yaw;
       this.ball = new BallState(this.player);
       this.queuedKick = null;
+      this.queuedSpin = null;
+      this.player.spinTimer = 0;
+      this.player.spinCooldown = 0;
+      this.player.spinAngle = 0;
+      this.player.spinDirection = 1;
+      this.player.spinPower = 1;
       this.charging = false;
       this.charge = 0;
+      this.cameraRoll = 0;
       this.updateCamera(FIXED_DT);
       this.syncWorldVisuals();
     }
@@ -3044,6 +3799,8 @@
           snapPressed: first && !!controls.snapPressed,
           jumpPressed: first && !!controls.jumpPressed,
           spinPressed: first && !!controls.spinPressed,
+          spinDirection: first ? finite(Number(controls.spinDirection || 0)) : 0,
+          spinPower: first ? finite(Number(controls.spinPower || 1)) : 1,
           pausePressed: first && !!controls.pausePressed,
         };
         this.update(FIXED_DT, frame, first);
@@ -3052,13 +3809,14 @@
     }
     getState() {
       return {
-        version: '3.0.0-lunar-velocity',
+        version: GAME_VERSION,
         player: {
           x: this.player.position.x, y: this.player.position.y, z: this.player.position.z,
           vx: this.player.velocity.x, vy: this.player.velocity.y, vz: this.player.velocity.z,
           yaw: this.player.yaw, pitch: this.player.pitch, grounded: this.player.grounded,
           jumpsUsed: this.player.jumpsUsed, health: this.player.health,
-          spinTimer: this.player.spinTimer, grappling: this.player.grappling,
+          spinTimer: this.player.spinTimer, spinDirection: this.player.spinDirection,
+          spinPower: this.player.spinPower, spinQueued: !!this.queuedSpin, grappling: this.player.grappling,
         },
         ball: {
           x: this.ball.position.x, y: this.ball.position.y, z: this.ball.position.z,
@@ -3081,6 +3839,13 @@
         fractureActive: world.fracture.active,
         goalOpen: world.goal.open,
         anchorsUsed: world.anchors.filter(anchor => anchor.used).length,
+        playground: {
+          breakablesAlive: world.breakables.filter(item => item.alive).length,
+          nestsAlive: world.nests.filter(item => item.alive).length,
+          chimesStruck: world.moonChimes.filter(item => item.used).length,
+          pickupsActive: world.collectibles.filter(item => item.active).length,
+          launchPads: world.launchPads.length,
+        },
         enemies: this.enemies.map(enemy => ({ id: enemy.id, type: enemy.type, hp: enemy.hp, alive: enemy.alive, x: enemy.position.x, y: enemy.position.y, z: enemy.position.z })),
         stats: { ...this.stats },
         render: world.stats(),
@@ -3111,7 +3876,7 @@
       moveX: 0, moveZ: 0, lookX: 0, lookY: 0,
       kick: false, snap: false, jump: false, spin: false, sprint: false,
       kickPressed: false, kickReleased: false, snapPressed: false,
-      jumpPressed: false, spinPressed: false, pausePressed: false,
+      jumpPressed: false, spinPressed: false, spinDirection: 0, spinPower: 1, pausePressed: false,
     };
   }
 
@@ -3126,6 +3891,20 @@
     try {
       check('three-runtime-r161', T.REVISION === '161', T.REVISION);
       check('webgl-renderer-started', !!world.renderer.getContext(), world.stats());
+      const startingQuality = world.quality;
+      const transientQuality = startingQuality === 'HIGH' ? 'MED' : 'HIGH';
+      let storedQualityBefore = null;
+      let storedQualityAfter = null;
+      try { storedQualityBefore = localStorage.getItem(QUALITY_STORAGE_KEY); } catch (_) {}
+      world.applyQuality(transientQuality, false);
+      const transientQualityStats = world.stats();
+      try { storedQualityAfter = localStorage.getItem(QUALITY_STORAGE_KEY); } catch (_) {}
+      world.applyQuality(startingQuality, false);
+      check('automatic-quality-change-is-session-only-and-resizes', transientQualityStats.quality === transientQuality
+        && transientQualityStats.renderScale === (transientQuality === 'HIGH' ? .9 : .7)
+        && storedQualityAfter === storedQualityBefore, {
+        startingQuality, transientQuality, transientQualityStats, storedQualityBefore, storedQualityAfter,
+      });
       check('world-materials-keep-depth-test', world.materials.black.depthTest && world.materials.gold.depthTest, {
         black: world.materials.black.depthTest, gold: world.materials.gold.depthTest,
       });
@@ -3133,23 +3912,230 @@
       const terrainParityError = Math.max(...terrainParityPoints.map(([x, z]) => Math.abs(groundHeightAt(x, z) - world.sampleTerrainHeight(x, z))));
       check('physics-uses-render-heightfield', terrainParityError < 1e-6, terrainParityError);
       const originalTouchMode = input.touchEnabled;
-      input.touchEnabled = true;
+      input.setTouchMode(true);
       input.moveStick.value.set(0, -1);
       const touchSprintFrame = input.poll();
       check('touch-full-stick-enables-sprint', touchSprintFrame.sprint && touchSprintFrame.moveZ > .99, {
         sprint: touchSprintFrame.sprint, moveZ: touchSprintFrame.moveZ,
       });
-      input.lookStick.value.set(1, 0);
+      input.endFrame();
+      const fakeTouch = (pointerId, clientX, clientY, timeStamp) => ({
+        pointerId, clientX, clientY, timeStamp, preventDefault() {},
+      });
+      input.moveStick.down(fakeTouch(101, 80, 520, 0));
+      input.lookStick.down(fakeTouch(202, 250, 400, 0));
+      input.moveStick.move(fakeTouch(101, 80, 466, 80));
+      input.lookStick.move(fakeTouch(202, 314, 400, 80));
+      const simultaneousTouch = {
+        movePointer: input.moveStick.pointerId,
+        lookPointer: input.lookStick.pointerId,
+        moveZ: -input.moveStick.value.y,
+        lookX: input.lookStick.delta.x,
+      };
+      check('touch-zones-own-simultaneous-thumbs', simultaneousTouch.movePointer === 101
+        && simultaneousTouch.lookPointer === 202 && simultaneousTouch.moveZ > .9 && simultaneousTouch.lookX === 64,
+      simultaneousTouch);
+      input.moveStick.up(fakeTouch(101, 80, 466, 100));
+      input.lookStick.up(fakeTouch(202, 314, 400, 100));
+      input.lookStick.delta.set(0, 0);
+
+      const moveRect = ui.movePad.getBoundingClientRect();
+      const edgeY = moveRect.top + moveRect.height * .55;
+      input.moveStick.down(fakeTouch(303, moveRect.left + 8, edgeY, 0));
+      const clampedVisualLeft = parseFloat(input.moveStick.visual?.style.left || '0');
+      input.moveStick.move(fakeTouch(303, moveRect.left, edgeY, 40));
+      const edgeLeftValue = input.moveStick.value.x;
+      input.moveStick.up(fakeTouch(303, moveRect.left, edgeY, 50));
+      input.moveStick.down(fakeTouch(304, moveRect.right - 8, edgeY, 60));
+      input.moveStick.move(fakeTouch(304, moveRect.right, edgeY, 100));
+      const edgeRightValue = input.moveStick.value.x;
+      input.moveStick.up(fakeTouch(304, moveRect.right, edgeY, 110));
+      const visualHalf = Math.min((input.moveStick.visual?.offsetWidth || 128) * .5, moveRect.width * .5);
+      check('touch-edge-origins-keep-full-range', edgeLeftValue < -.98 && edgeRightValue > .98
+        && clampedVisualLeft >= visualHalf - .5, {
+        edgeLeftValue, edgeRightValue, clampedVisualLeft, visualHalf,
+      });
+
+      input.touchEnabled = false;
+      document.body.classList.remove('touch-enabled');
+      const hybridDown = { ...fakeTouch(305, 34, edgeY, 0), pointerType: 'touch', target: canvas };
+      input.handleGlobalPointerDown(hybridDown);
+      input.bridgeGlobalTouch('move', { ...fakeTouch(305, 34, edgeY - 44, 60), pointerType: 'touch', target: canvas });
+      const hybridFirstTouch = {
+        enabled: input.touchEnabled,
+        owner: input.moveStick.pointerId,
+        moveZ: -input.moveStick.value.y,
+      };
+      input.bridgeGlobalTouch('up', { ...fakeTouch(305, 34, edgeY - 44, 80), pointerType: 'touch', target: canvas });
+      check('hybrid-first-touch-enters-and-controls', hybridFirstTouch.enabled && hybridFirstTouch.owner === 305
+        && hybridFirstTouch.moveZ > .95, hybridFirstTouch);
+      input.setTouchMode(true);
+
+      input.lookStick.delta.set(80, 0);
       input.poll();
-      let heldTouchTurn = 0;
-      for (let i = 0; i < 60; i++) heldTouchTurn += input.prepareStep(i === 0).lookX;
-      check('touch-look-hold-turns-continuously', heldTouchTurn > 1, { radiansAcrossHalfSecond: heldTouchTurn });
+      const rightSwipeLook = input.prepareStep(true).lookX;
+      input.endFrame();
+      input.poll();
+      const stoppedSwipeLook = input.prepareStep(true).lookX;
+      check('touch-right-swipe-is-positive-and-stops', rightSwipeLook > .3 && Math.abs(stoppedSwipeLook) < 1e-6, {
+        rightSwipeLook, stoppedSwipeLook,
+      });
+      input.endFrame();
+      input.lookStick.delta.set(0, 80);
+      input.poll();
+      const downSwipeLook = input.prepareStep(true).lookY;
+      check('touch-down-swipe-looks-down', downSwipeLook > .25, downSwipeLook);
+      input.endFrame();
+
+      const touchButtons = [...document.querySelectorAll('#touchControls button')].map(button => button.id);
+      check('touch-has-one-gameplay-button', touchButtons.length === 2 && touchButtons.includes('touchJump')
+        && touchButtons.includes('touchPause') && !document.getElementById('touchKick') && !document.getElementById('touchSnap'), touchButtons);
+      const touchStartHint = ui.startActionHint?.textContent;
+      input.setTouchMode(false);
+      const pointerStartHint = ui.startActionHint?.textContent;
+      input.setTouchMode(true);
+      check('start-copy-matches-current-input', touchStartHint === 'TAP TO ENTER'
+        && pointerStartHint === 'CLICK TO LOCK VIEW', { touchStartHint, pointerStartHint });
+
+      game.restart();
+      game.updateObjective(true);
+      const touchKickObjective = ui.objectiveText?.textContent || '';
+      const orbitGuideTarget = game.enemies.find(enemy => !enemy.summit && enemy.type === 'scuttler' && enemy.alive);
+      orbitGuideTarget.alive = false;
+      orbitGuideTarget.visual.group.visible = false;
+      game.updateObjective(true);
+      const touchOrbitObjective = ui.objectiveText?.textContent || '';
+      input.setTouchMode(false);
+      game.updateObjective(true);
+      const pointerOrbitObjective = ui.objectiveText?.textContent || '';
+      check('objectives-teach-device-controls-and-orbit-purpose', touchKickObjective.includes('RIGHT TAP KICKS')
+        && touchOrbitObjective.includes('RIGHT-THUMB LOOP') && touchOrbitObjective.includes('ORBIT-SMASH')
+        && pointerOrbitObjective.includes('RMB ORBIT-SMASHES'), {
+        touchKickObjective, touchOrbitObjective, pointerOrbitObjective,
+      });
+      game.restart();
+      input.setTouchMode(true);
+
+      game.ball.mode = 'ready';
+      input.lookStick.tapPulse = true;
+      const touchHomeTap = { ...input.poll() };
+      input.endFrame();
+      game.ball.mode = 'outbound';
+      input.lookStick.tapPulse = true;
+      const touchAwayTap = { ...input.poll() };
+      input.endFrame();
+      game.ball.mode = 'ready';
+      input.lookStick.actionHold = true;
+      const touchHomeHold = { ...input.poll() };
+      input.endFrame();
+      input.lookStick.actionHold = false;
+      input.poll(); input.endFrame();
+      game.ball.mode = 'anchored';
+      input.lookStick.actionHold = true;
+      const touchAnchorHold = { ...input.poll() };
+      input.lookStick.actionHold = false;
+      input.endFrame();
+      game.ball.mode = 'ready';
+      check('right-tap-is-contextual-kick-or-call', touchHomeTap.kickPressed && touchHomeTap.kickReleased && !touchHomeTap.snapPressed
+        && touchAwayTap.snapPressed && !touchAwayTap.kickPressed, { touchHomeTap, touchAwayTap });
+      check('right-hold-is-contextual-charge-or-pull', touchHomeHold.kick && !touchHomeHold.snap
+        && touchAnchorHold.snap && !touchAnchorHold.kick, { touchHomeHold, touchAnchorHold });
+
+      const makeLoop = (direction, stepMs = 20) => Array.from({ length: 29 }, (_, index) => {
+        const angle = direction * index / 28 * TAU;
+        return { x: 200 + Math.cos(angle) * 31, y: 180 + Math.sin(angle) * 31, t: index * stepMs };
+      });
+      const clockwiseLoop = analyzeLoopGesture(makeLoop(1));
+      const counterLoop = analyzeLoopGesture(makeLoop(-1));
+      const deliberateSlowLoop = analyzeLoopGesture(makeLoop(1, 40));
+      const lookHoldThenLoop = [
+        ...Array.from({ length: 61 }, (_, index) => ({ x: 111 + index * 2, y: 180, t: index * 20 })),
+        ...makeLoop(-1).map(point => ({ ...point, t: point.t + 1220 })),
+      ];
+      const delayedLoop = analyzeRecentLoopGesture(lookHoldThenLoop);
+      const feedLiveTrace = (points, pointerId) => {
+        input.lookStick.reset();
+        const first = points[0];
+        input.lookStick.down(fakeTouch(pointerId, first.x, first.y, first.t));
+        for (let index = 1; index < points.length; index++) {
+          const point = points[index];
+          input.lookStick.move(fakeTouch(pointerId, point.x, point.y, point.t));
+        }
+        const result = input.lookStick.consumeLoop();
+        const last = points[points.length - 1];
+        input.lookStick.up(fakeTouch(pointerId, last.x, last.y, last.t + 1));
+        return result;
+      };
+      const liveClockwise = feedLiveTrace(makeLoop(1), 401);
+      const liveCounter = feedLiveTrace(makeLoop(-1), 402);
+      const liveSlowPower = feedLiveTrace(makeLoop(1, 28), 403);
+      const liveFastPower = feedLiveTrace(makeLoop(1, 12), 404);
+      const liveDelayed = feedLiveTrace(lookHoldThenLoop, 405);
+      input.lookStick.reset();
+      const chargeLoopTrace = makeLoop(1);
+      input.lookStick.down(fakeTouch(406, chargeLoopTrace[0].x, chargeLoopTrace[0].y, chargeLoopTrace[0].t));
+      if (input.lookStick.actionTimer) clearTimeout(input.lookStick.actionTimer);
+      input.lookStick.actionTimer = 0;
+      input.lookStick.actionHold = true;
+      for (let index = 1; index < chargeLoopTrace.length; index++) {
+        const point = chargeLoopTrace[index];
+        input.lookStick.move(fakeTouch(406, point.x, point.y, point.t));
+      }
+      const committedChargeLoop = input.lookStick.consumeLoop();
+      const chargeLoopEnd = chargeLoopTrace[chargeLoopTrace.length - 1];
+      input.lookStick.up(fakeTouch(406, chargeLoopEnd.x, chargeLoopEnd.y, chargeLoopEnd.t + 1));
+      const ordinarySwipe = analyzeLoopGesture(Array.from({ length: 12 }, (_, index) => ({ x: 20 + index * 14, y: 100 + index * 2, t: index * 24 })));
+      const cHook = analyzeRecentLoopGesture(Array.from({ length: 23 }, (_, index) => {
+        const angle = index / 22 * Math.PI * 1.22;
+        return { x: 180 + Math.cos(angle) * 38, y: 180 + Math.sin(angle) * 38, t: index * 22 };
+      }));
+      const sCorrection = analyzeRecentLoopGesture(Array.from({ length: 25 }, (_, index) => ({
+        x: 90 + index * 7, y: 180 + Math.sin(index / 24 * Math.PI * 2) * 34, t: index * 20,
+      })));
+      const horizontalScrub = analyzeRecentLoopGesture(Array.from({ length: 25 }, (_, index) => ({
+        x: 180 + (index % 4 < 2 ? 48 : -48), y: 180 + Math.sin(index) * 4, t: index * 18,
+      })));
+      check('touch-loop-recognizes-both-directions', clockwiseLoop.matched && clockwiseLoop.direction === 1
+        && counterLoop.matched && counterLoop.direction === -1, { clockwiseLoop, counterLoop });
+      check('touch-loop-recovers-after-look-hold', delayedLoop.matched && delayedLoop.direction === -1
+        && delayedLoop.elapsed <= 950 && Math.abs(delayedLoop.power - counterLoop.power) < .04, delayedLoop);
+      check('touch-live-loop-lifecycle-is-signed', liveClockwise.active && liveClockwise.direction === 1
+        && liveCounter.active && liveCounter.direction === -1 && liveDelayed.active && liveDelayed.direction === -1, {
+        liveClockwise, liveCounter, liveDelayed,
+      });
+      check('touch-live-loop-speed-controls-power', liveFastPower.active && liveSlowPower.active
+        && liveFastPower.power > liveSlowPower.power + .05, { liveSlowPower, liveFastPower });
+      check('committed-charge-does-not-become-orbit', !committedChargeLoop.active, committedChargeLoop);
+      check('touch-loop-rejects-ordinary-swipe', !ordinarySwipe.matched, ordinarySwipe);
+      check('touch-loop-rejects-common-aim-corrections', !cHook.matched && !sCorrection.matched
+        && !horizontalScrub.matched, { cHook, sCorrection, horizontalScrub });
+      check('touch-loop-allows-deliberate-slow-circle', deliberateSlowLoop.matched
+        && deliberateSlowLoop.elapsed > 950 && deliberateSlowLoop.elapsed <= 1350, deliberateSlowLoop);
+
+      input.lookStick.loopPulse = true;
+      input.lookStick.loopDirection = -1;
+      input.lookStick.loopPower = 1.1;
+      const gestureSpinFrame = input.poll();
+      check('touch-loop-queues-signed-spin', gestureSpinFrame.spinPressed && gestureSpinFrame.spinDirection === -1
+        && gestureSpinFrame.spinPower > 1, {
+        spinPressed: gestureSpinFrame.spinPressed, direction: gestureSpinFrame.spinDirection, power: gestureSpinFrame.spinPower,
+      });
       input.resetTransient();
-      input.touchEnabled = originalTouchMode;
+      input.setTouchMode(originalTouchMode);
 
       game.start(false);
       check('launch-focuses-gameplay-canvas', document.activeElement === canvas, {
         activeElement: document.activeElement?.id || document.activeElement?.tagName,
+      });
+      game.player.yaw = .63;
+      game.player.pitch = .19;
+      game.updateCamera(FIXED_DT);
+      world.camera.updateMatrixWorld(true);
+      const renderedForward = world.camera.getWorldDirection(new T.Vector3());
+      const gameplayForward = game.forwardFromView(new T.Vector3());
+      const cameraAimDot = renderedForward.dot(gameplayForward);
+      check('rendered-camera-matches-gameplay-aim', cameraAimDot > .999999, {
+        dot: cameraAimDot, rendered: renderedForward.toArray(), gameplay: gameplayForward.toArray(),
       });
       game.togglePause();
       ui.pauseResumeButton?.focus({ preventScroll: true });
@@ -3168,6 +4154,14 @@
       const readyBallDistance = game.ball.position.distanceTo(game.player.position);
       check('home-ball-stays-in-reach', game.ball.mode === 'ready' && readyBallDistance < 5, {
         mode: game.ball.mode, distance: readyBallDistance, player: game.player.position.toArray(), ball: game.ball.position.toArray(),
+      });
+      check('idle-first-person-view-is-clear', !world.leftArm.visible && !world.rightArm.visible && !world.boot.visible, {
+        leftArm: world.leftArm.visible, rightArm: world.rightArm.visible, boot: world.boot.visible,
+      });
+      check('moon-playground-is-dense-and-reactive', world.breakables.length >= 90 && world.nests.length >= 4
+        && world.launchPads.length >= 6 && world.moonChimes.length >= 5 && world.collectibles.length >= 12, {
+        breakables: world.breakables.length, nests: world.nests.length, launchPads: world.launchPads.length,
+        chimes: world.moonChimes.length, collectibles: world.collectibles.length,
       });
       const startZ = game.player.position.z;
       game.stepWith(.55, { moveZ: 1, sprint: true });
@@ -3300,8 +4294,118 @@
 
       game.restart();
       game.started = true;
-      game.startSpin();
-      check('orbit-spin-move', game.player.spinTimer > .5 && game.stats.spins === 1, { timer: game.player.spinTimer, spins: game.stats.spins });
+      const sampleOrbitInView = yaw => {
+        game.player.yaw = yaw;
+        game.player.pitch = -.12;
+        game.player.spinTimer = 0;
+        game.cameraRoll = 0;
+        game.shake = 0;
+        game.updateCamera(.25);
+        world.camera.updateMatrixWorld(true);
+        const forward = game.forwardFromView(new T.Vector3());
+        const right = game.horizontalRight(new T.Vector3());
+        const up = right.clone().cross(forward).normalize();
+        const center = world.camera.position.clone().addScaledVector(forward, 3.05).addScaledVector(up, -.15);
+        const target = game.orbitBallTarget(.68, 1, new T.Vector3());
+        const offset = target.clone().sub(center);
+        const screenStart = game.orbitBallTarget(0, 1, new T.Vector3()).project(world.camera);
+        const screenNext = game.orbitBallTarget(.08, 1, new T.Vector3()).project(world.camera);
+        return {
+          local: [offset.dot(right), offset.dot(up), offset.dot(forward)],
+          clockwiseScreenDown: screenNext.y < screenStart.y,
+        };
+      };
+      const orbitSamples = [0, Math.PI / 2, Math.PI, -Math.PI / 2].map(sampleOrbitInView);
+      const orbitBase = orbitSamples[0].local;
+      const orbitBasisError = Math.max(...orbitSamples.flatMap(sample => sample.local.map((value, index) => Math.abs(value - orbitBase[index]))));
+      check('spin-orbit-is-camera-relative-and-clockwise', orbitBasisError < 1e-6
+        && orbitSamples.every(sample => sample.clockwiseScreenDown), { orbitBasisError, orbitSamples });
+
+      game.restart();
+      game.started = true;
+      game.player.yaw = .82;
+      game.player.pitch = -.16;
+      game.updateCamera(.25);
+      game.ball.position.copy(game.readyBallTarget(new T.Vector3()));
+      const readyBeforeSpin = game.ball.position.clone();
+      game.startSpin(1, 1);
+      game.updateBall(FIXED_DT, neutralFrame());
+      const orbitEntryDistance = game.ball.position.distanceTo(readyBeforeSpin);
+      check('spin-orbit-enters-without-teleport', orbitEntryDistance < .35, {
+        distance: orbitEntryDistance, before: readyBeforeSpin.toArray(), after: game.ball.position.toArray(),
+      });
+
+      game.restart();
+      game.started = true;
+      game.startSpin(-1, 1.15);
+      check('signed-orbit-spin-move', game.player.spinTimer > .8 && game.player.spinDirection === -1
+        && game.player.spinPower > 1 && game.ball.spin < 0 && game.stats.spins === 1, {
+        timer: game.player.spinTimer, direction: game.player.spinDirection, power: game.player.spinPower,
+        ballSpin: game.ball.spin, spins: game.stats.spins,
+      });
+      game.stepWith(.62, {});
+      check('counter-spin-persists-through-orbit', game.player.spinTimer > .15 && game.player.spinDirection === -1
+        && game.ball.spin < -50, {
+        timer: game.player.spinTimer, direction: game.player.spinDirection, ballSpin: game.ball.spin,
+      });
+
+      game.restart();
+      game.started = true;
+      const orbitRock = world.breakables.find(item => item.alive);
+      game.player.position.copy(orbitRock.position);
+      game.ball.position.copy(game.readyBallTarget(new T.Vector3()));
+      game.startSpin(1, 1);
+      check('orbit-smash-breaks-nearby-world', !orbitRock.alive && game.stats.breaks > 0, {
+        alive: orbitRock.alive, breaks: game.stats.breaks,
+      });
+
+      game.restart();
+      game.started = true;
+      game.startSpin(1, .9);
+      game.startSpin(-1, 1.05);
+      const loopWasBanked = !!game.queuedSpin;
+      game.stepWith(1.12, {});
+      check('cooldown-loop-is-banked-not-swallowed', loopWasBanked && !game.queuedSpin
+        && game.stats.spins === 2 && game.player.spinDirection === -1, {
+        loopWasBanked, queued: !!game.queuedSpin, spins: game.stats.spins, direction: game.player.spinDirection,
+      });
+
+      game.restart();
+      game.started = true;
+      game.startSpin(1, 1);
+      game.startSpin(-1, 1);
+      game.respawnPlayer();
+      const respawnSpinReset = !game.queuedSpin && game.player.spinTimer === 0 && game.player.spinCooldown === 0
+        && game.player.spinDirection === 1 && game.ball.mode === 'ready';
+      game.startSpin(-1, 1);
+      game.startSpin(1, 1);
+      game.teleport('start');
+      const teleportSpinReset = !game.queuedSpin && game.player.spinTimer === 0 && game.player.spinCooldown === 0
+        && game.player.spinDirection === 1 && game.ball.mode === 'ready';
+      check('reconstitution-clears-banked-spin', respawnSpinReset && teleportSpinReset, {
+        respawnSpinReset, teleportSpinReset,
+      });
+
+      game.restart();
+      game.started = true;
+      game.ball.mode = 'outbound';
+      game.ball.position.set(8, game.player.position.y + 2, game.player.position.z - 16);
+      game.startSpin(1, .9);
+      const positiveFlightSpin = {
+        mode: game.ball.mode, returnSide: game.ball.returnSide, spin: game.ball.spin, curveBoost: game.ball.curveBoost,
+      };
+      game.restart();
+      game.started = true;
+      game.ball.mode = 'outbound';
+      game.ball.position.set(8, game.player.position.y + 2, game.player.position.z - 16);
+      game.startSpin(-1, .9);
+      const negativeFlightSpin = {
+        mode: game.ball.mode, returnSide: game.ball.returnSide, spin: game.ball.spin, curveBoost: game.ball.curveBoost,
+      };
+      check('signed-flight-spin-sets-return-curve', positiveFlightSpin.mode === 'returning' && positiveFlightSpin.returnSide === 1
+        && positiveFlightSpin.spin > 0 && positiveFlightSpin.curveBoost > 1
+        && negativeFlightSpin.mode === 'returning' && negativeFlightSpin.returnSide === -1
+        && negativeFlightSpin.spin < 0 && negativeFlightSpin.curveBoost > 1, { positiveFlightSpin, negativeFlightSpin });
 
       game.restart();
       game.started = true;
@@ -3320,10 +4424,13 @@
       game.ball.position.copy(anchor.position);
       game.ball.velocity.set(0, 0, -34);
       game.resolveBallWorld(anchor.position.clone().add(new T.Vector3(0, 0, 1)));
-      check('anchor-rejects-light-kick', game.ball.mode === 'outbound' && !game.ball.anchor, {
-        mode: game.ball.mode, charge: game.ball.launchCharge,
+      game.syncWorldVisuals();
+      check('quick-kick-connects-first-anchor-with-tug', game.ball.mode === 'anchored' && game.ball.anchor === anchor
+        && game.player.velocity.length() > 5 && world.ballTether.visible, {
+        mode: game.ball.mode, charge: game.ball.launchCharge, playerSpeed: game.player.velocity.length(), tether: world.ballTether.visible,
       });
       const laterAnchor = world.anchors[1];
+      game.ball.anchor = null;
       game.ball.mode = 'outbound';
       game.ball.launchCharge = .92;
       game.ball.position.copy(laterAnchor.position);
@@ -3332,6 +4439,7 @@
       check('anchors-enforce-climb-order', game.ball.mode === 'outbound' && !game.ball.anchor, {
         attempted: laterAnchor.id, expected: anchor.id, mode: game.ball.mode,
       });
+      game.ball.anchor = null;
       game.ball.mode = 'outbound';
       game.ball.launchCharge = .92;
       game.ball.position.copy(anchor.position);
@@ -3370,6 +4478,29 @@
       const testAlien = game.enemies.find(enemy => enemy.type === 'scuttler');
       game.damageAlien(testAlien, 1, 'spin');
       check('alien-kill-path', !testAlien.alive && testAlien.hp === 0, { alive: testAlien.alive, hp: testAlien.hp });
+
+      const rewardRock = world.breakables.find(item => item.rewardPickup);
+      world.shatterBreakable(rewardRock, 1);
+      const nestTest = world.nests[0];
+      world.damageNest(nestTest, nestTest.maxHp, 1);
+      const chimeTest = world.moonChimes[0];
+      world.strikeChime(chimeTest);
+      check('destruction-reveals-real-rewards', rewardRock.rewardPickup.active && rewardRock.rewardPickup.group.visible
+        && !nestTest.alive && nestTest.drop.active && chimeTest.used && chimeTest.drop.active, {
+        rockDrop: rewardRock.rewardPickup.active, nestAlive: nestTest.alive, nestDrop: nestTest.drop.active,
+        chimeUsed: chimeTest.used, chimeDrop: chimeTest.drop.active,
+      });
+
+      game.restart();
+      game.started = true;
+      const padTest = world.launchPads[0];
+      game.player.position.copy(padTest.position);
+      game.player.velocity.set(0, 0, 0);
+      game.player.grounded = true;
+      game.stepWith(FIXED_DT, {});
+      check('launch-pad-restores-air-play', game.player.velocity.y >= padTest.impulse - .1 && game.player.jumpsUsed === 0 && !game.player.grounded, {
+        velocityY: game.player.velocity.y, impulse: padTest.impulse, jumpsUsed: game.player.jumpsUsed, grounded: game.player.grounded,
+      });
 
       game.restart();
       game.started = true;
@@ -3464,11 +4595,12 @@
     if (game.started && !game.paused && !input.touchEnabled && !TEST_MODE && document.pointerLockElement !== canvas) requestGamePointerLock();
   });
   document.addEventListener('visibilitychange', () => {
+    world?.frameSamples?.splice(0);
+    accumulator = 0;
+    lastFrame = performance.now();
     if (document.hidden) {
       audio.recall(false, 0);
       input.resetTransient();
-      accumulator = 0;
-      lastFrame = performance.now();
     }
   });
 
@@ -3480,7 +4612,7 @@
   if (!AUTO_START) ui.startButton?.focus({ preventScroll: true });
 
   window.KICKBALL = Object.freeze({
-    version: '3.0.0-lunar-velocity',
+    version: GAME_VERSION,
     getState: () => game.getState(),
     getRenderStats: () => world.stats(),
     restart: () => game.restart(),

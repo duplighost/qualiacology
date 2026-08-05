@@ -10,7 +10,7 @@
   <meta property="og:site_name" content="Qualiacology" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="KICK BALL // LUNAR VELOCITY | Qualiacology" />
-  <meta property="og:description" content="The moon is a weapon. So is gravity. Charge the ball, curve it through the alien line, SNAP it home, and turn every impossible cliff into momentum." />
+  <meta property="og:description" content="The moon is a weapon. So is gravity. Kick the ball, steer it through the alien line, call it home, and turn every impossible cliff into momentum." />
   <meta property="og:url" content="https://qualiacology.com/kick-ball-lunar-velocity/" />
   <meta property="og:image" content="https://qualiacology.com/assets/games/kick-ball-lunar-velocity-card-clean.webp" />
   <meta property="og:image:width" content="1280" />
@@ -102,17 +102,16 @@
       <div id="controlsHint" aria-label="Controls">
         <div class="control-set keyboard-hints">
           <span><kbd>WASD</kbd> MOVE</span>
-          <span><kbd>MOUSE</kbd> LOOK / CURVE</span>
+          <span><kbd>MOUSE</kbd> LOOK / STEER</span>
           <span><kbd>LMB</kbd> KICK</span>
-          <span><kbd>RMB</kbd> SNAP</span>
-          <span><kbd>SPACE</kbd> DOUBLE JUMP</span>
-          <span><kbd>Q</kbd> SPIN</span>
+          <span><kbd>RMB</kbd> ORBIT / CALL</span>
+          <span><kbd>SPACE</kbd> HIGH JUMP x2</span>
         </div>
         <div class="control-set gamepad-hints">
           <span><kbd>LS</kbd> MOVE</span>
           <span><kbd>RS</kbd> LOOK / CURVE</span>
           <span><kbd>RT</kbd> KICK</span>
-          <span><kbd>LT</kbd> SNAP</span>
+          <span><kbd>LT</kbd> CALL / PULL</span>
           <span><kbd>A</kbd> DOUBLE JUMP</span>
           <span><kbd>B</kbd> SPIN</span>
         </div>
@@ -125,25 +124,26 @@
       </nav>
     </section>
 
-    <div id="touchControls" aria-label="Touch game controls">
-      <div id="movePad" class="touch-pad" role="application" aria-label="Movement stick">
-        <div class="touch-pad__ticks" aria-hidden="true"></div>
-        <div class="touchKnob" aria-hidden="true"></div>
-        <span>MOVE</span>
+    <div id="touchControls" aria-label="Touch controls. Move anywhere on the left. Use the right side to look, kick, call, charge, pull, and draw an orbit loop.">
+      <div id="movePad" class="touch-zone touch-zone--move" role="application" aria-label="Floating movement control. Touch anywhere on the left and drag.">
+        <div class="touch-pad" aria-hidden="true">
+          <div class="touch-pad__ticks"></div>
+          <div class="touchKnob"></div>
+          <span>MOVE // FLOAT</span>
+        </div>
       </div>
-      <div id="lookPad" class="touch-pad" role="application" aria-label="Look and curve stick">
-        <div class="touch-pad__ticks" aria-hidden="true"></div>
-        <div class="touchKnob" aria-hidden="true"></div>
-        <span>LOOK // CURVE</span>
+      <div id="lookPad" class="touch-zone touch-zone--look" role="application" aria-label="Ball hand. Swipe to look and steer. Tap to kick or call the ball. Hold to charge or pull. Draw a loop to orbit smash.">
+        <div class="touch-pad" aria-hidden="true">
+          <div class="touch-pad__ticks"></div>
+          <div class="touchKnob"></div>
+          <span id="rightActionLabel">TAP KICK // SWIPE LOOK // LOOP ORBIT</span>
+        </div>
       </div>
-      <button id="touchKick" class="touch-action touch-action--kick" type="button" aria-label="Charge and kick the ball"><b>KICK</b><small>HOLD</small></button>
-      <button id="touchSnap" class="touch-action touch-action--snap" type="button" aria-label="Snap the ball home">SNAP</button>
       <button id="touchJump" class="touch-action touch-action--jump" type="button" aria-label="Jump or double jump">JUMP</button>
-      <button id="touchSpin" class="touch-action touch-action--spin" type="button" aria-label="Spin attack">SPIN</button>
-      <button id="touchPause" class="touch-pause" type="button" aria-label="Pause game">PAUSE</button>
+      <button id="touchPause" class="touch-pause" type="button" aria-label="Pause game">II</button>
     </div>
 
-    <div id="portraitHint" role="status">PORTRAIT VECTOR // ROTATE FOR THE FULL HORIZON</div>
+    <div id="portraitHint" role="status">LEFT THUMB MOVES // RIGHT THUMB DOES THE BALL</div>
 
     <section id="startOverlay" class="overlay start-overlay" role="dialog" aria-modal="true" aria-labelledby="startTitle" aria-describedby="startCopy">
       <div class="start-orbit start-orbit--one" aria-hidden="true"></div>
@@ -151,11 +151,11 @@
       <div class="overlay-panel start-panel">
         <div id="startKicker">LUNAR COMBAT PROTOCOL // 01</div>
         <h1 id="startTitle"><span>KICK BALL</span><small>// LUNAR VELOCITY</small></h1>
-        <p id="startCopy">The moon is a weapon. So is gravity. Charge the ball, curve it through the alien line, SNAP it home, and turn every impossible cliff into momentum.</p>
+        <p id="startCopy">The moon is a weapon. So is gravity. Kick the ball, steer it through the alien line, call it home, and turn every impossible cliff into momentum.</p>
         <div class="start-law"><span aria-hidden="true">◉</span><strong>ONE BALL.</strong> EVERY MOVE. IT ALWAYS COMES HOME.</div>
         <button id="startButton" class="primary-button" type="button">
           <span>ENTER THE MOON</span>
-          <small>CLICK TO LOCK VIEW</small>
+          <small id="startActionHint">CLICK TO LOCK VIEW</small>
         </button>
         <div class="loading-track" role="progressbar" aria-label="Loading lunar surface" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div id="loadingMeter"></div>
