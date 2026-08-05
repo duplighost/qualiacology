@@ -120,6 +120,11 @@ assert(!publicHubText.includes("ways of knowing converge"), "Obsolete convergenc
 assert(!publicHubText.includes("not diagnosis"), "Obsolete diagnosis disclaimer remains in public hub");
 assert(!publicHubText.includes("1st &amp; 3rd tuesdays"), "Unrelated NAMI schedule remains in the server section");
 assert(!publicHubText.includes("gives a shit"), "Homepage metadata or early copy still contains the removed swear");
+assert(!publicHubText.includes("learn. support. connect."), "Rejected generic server tagline remains in public hub");
+assert(!publicHubText.includes("serious questions. human answers."), "Rejected generic server heading remains in public hub");
+assert(!publicHubText.includes("friendship that is allowed to be ordinary"), "Rejected server copy remains in public hub");
+assert(!publicHubText.includes("the pharmacology matters. so do the people."), "Rejected generic server CTA remains in public hub");
+assert(!publicHubText.includes("the three things the server is built to hold together"), "Rejected server filler remains in public hub");
 
 assert((home.match(/data-catalog-game="/g) || []).length === 6, "Homepage must feature six games");
 assert((home.match(/data-catalog-album="/g) || []).length === 3, "Homepage must feature three releases");

@@ -344,11 +344,11 @@ function homepage() {
         <div class="section-heading">
           <span class="ghost-index" aria-hidden="true">01</span>
           <div>
-            <p class="eyebrow">01 · Psychopharmacology community</p>
-            <h2>We study medication, help people, and chill with friends.</h2>
+            <p class="eyebrow">01 · Psychopharmacology</p>
+            <h2>The Psychopharmacology Server</h2>
           </div>
           <div class="section-heading-copy">
-            <p>A 3,000+ member Discord built around serious psychopharmacology, practical support, and the friendships that grow when people keep showing up.</p>
+            <p>We study medication, help people, and chill with friends.</p>
             <div class="section-action"><a class="button button-arrow" href="/psychopharmacology/">Explore the community</a></div>
           </div>
         </div>
@@ -356,26 +356,20 @@ function homepage() {
         <div class="server-pillars">
           <article class="server-pillar">
             <span class="pillar-number" aria-hidden="true">01</span>
-            <h3>Explore medications</h3>
-            <p>Mechanisms, evidence, clinical practice, unusual responses, and the gap between textbook rules and actual lives.</p>
+            <h3>3,000+ members</h3>
+            <p>Members sharing knowledge, asking better questions, and comparing notes without treating anecdotes like scripture.</p>
           </article>
           <article class="server-pillar">
             <span class="pillar-number" aria-hidden="true">02</span>
-            <h3>Support one another</h3>
-            <p>Questions are taken seriously. Members share knowledge, compare experiences, and help people through difficult situations.</p>
+            <h3>Saturdays · 4 PM ET</h3>
+            <p>Live voice chats — discussion, support, and figuring things out together.</p>
           </article>
           <article class="server-pillar">
             <span class="pillar-number" aria-hidden="true">03</span>
-            <h3>Build real friendships</h3>
-            <p>The conversation does not end when the pharmacology question does. People talk, laugh, join live discussions, and stay for each other.</p>
+            <h3>Warm and blunt</h3>
+            <p>Credible, warm, and blunt enough to be useful when the subject is too important for fake certainty.</p>
           </article>
         </div>
-
-        <ul class="community-facts community-facts-inline">
-          <li><strong>3,000+ members</strong><span>A large, active community with room for real conversation.</span></li>
-          <li><strong>Saturdays · 4 PM ET</strong><span>Live voice discussion and collective problem-solving.</span></li>
-          <li><strong>Science · support · friendship</strong><span>The three things the server is built to hold together.</span></li>
-        </ul>
 
         <div class="button-row community-actions">
           <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
@@ -452,14 +446,14 @@ function homepage() {
 }
 
 function psychopharmacologyPage() {
-  const description = "A 3,000+ member psychopharmacology community for serious medication discussion, practical support, and friendship.";
+  const description = "The chemistry of subjective experience, traced through mechanism, evidence, and real human mess.";
   const schema = {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    name: "Psychopharmacology Community | Qualiacology",
+    name: "Psychopharmacology | Qualiacology",
     url: `${site.origin}/psychopharmacology/`,
     description,
-    about: ["Psychopharmacology", "Peer support", "Community"],
+    about: ["Psychopharmacology", "Peer support", "Psychiatric medicine"],
   };
 
   const main = `<main id="main-content">
@@ -467,61 +461,29 @@ function psychopharmacologyPage() {
       <div class="container subhero-grid">
         <div>
           <span class="ghost-index" aria-hidden="true">01</span>
-          <p class="eyebrow">Psychopharmacology community</p>
-          <h1>We study medication, help people, and chill with friends.</h1>
-          <p class="subhero-deck">A 3,000+ member Discord for exploring psychopharmacology, offering meaningful support, and building friendships that last beyond the original question.</p>
+          <p class="eyebrow">01 · Psychopharmacology</p>
+          <h1>The Psychopharmacology Server</h1>
+          <p class="subhero-deck">We study medication, help people, and chill with friends.</p>
         </div>
         <div class="subhero-stat"><strong>3,000+</strong><span>members</span></div>
-      </div>
-    </section>
-
-    <section class="section" aria-labelledby="pillars-title">
-      <div class="container">
-        <div class="section-heading">
-          <div><p class="eyebrow">What this place is</p><h2 id="pillars-title">Learn. Support. Connect.</h2></div>
-          <div class="section-heading-copy"><p>The server works because it treats psychopharmacology and human connection as parts of the same community, not competing purposes.</p></div>
-        </div>
-        <div class="server-pillars">
-          <article class="server-pillar">
-            <span class="pillar-number" aria-hidden="true">01</span>
-            <h3>Explore medications</h3>
-            <p>Mechanisms, evidence, clinical practice, unusual responses, and the complicated ways medications affect minds and bodies.</p>
-          </article>
-          <article class="server-pillar">
-            <span class="pillar-number" aria-hidden="true">02</span>
-            <h3>Offer real support</h3>
-            <p>Members take questions seriously, share useful knowledge, compare experiences, and help people through difficult situations.</p>
-          </article>
-          <article class="server-pillar">
-            <span class="pillar-number" aria-hidden="true">03</span>
-            <h3>Build friendships</h3>
-            <p>Conversation keeps going after the original question. People talk, laugh, join voice chats, and become part of one another’s lives.</p>
-          </article>
-        </div>
       </div>
     </section>
 
     <section class="section" id="community" aria-labelledby="community-title">
       <div class="container">
         <div class="section-heading">
-          <div><p class="eyebrow">Inside the server</p><h2 id="community-title">Serious questions. Human answers.</h2></div>
-          <div class="section-heading-copy"><p>A place for depth without coldness, support without pretending to know everything, and friendship that is allowed to be ordinary.</p></div>
+          <div><p class="eyebrow">The community</p><h2 id="community-title">We study medication, help people, and chill with friends.</h2></div>
+          <div class="section-heading-copy"><p>3,000+ people comparing notes, asking better questions, and helping each other out — without treating anecdotes like scripture.</p></div>
         </div>
         <div class="community-grid">
-          <article class="community-card"><h3>Medication deep dives</h3><p>Mechanisms, interactions, side effects, unusual responses, and what the evidence does—and does not—show.</p></article>
+          <article class="community-card"><h3>3,000+ members</h3><p>Knowledge, questions, and useful disagreement without treating anecdotes like scripture.</p></article>
           <article class="community-card"><h3>Practical support</h3><p>People help one another make sense of hard situations, find useful information, and feel less alone.</p></article>
-          <article class="community-card"><h3>Saturdays · 4 PM ET</h3><p>Live voice discussion, questions, and collective problem-solving.</p></article>
-          <article class="community-card"><h3>Friendship and camaraderie</h3><p>Serious conversations share space with humor, ordinary life, and people getting to know each other.</p></article>
+          <article class="community-card"><h3>Saturdays · 4 PM ET</h3><p>Live voice chats — discussion, support, and figuring things out together.</p></article>
+          <article class="community-card"><h3>Warm and blunt</h3><p>Credible, warm, and blunt enough to be useful when the subject is too important for fake certainty.</p></article>
         </div>
-        <div class="community-cta">
-          <div>
-            <p class="eyebrow">Science · support · community</p>
-            <h2>The pharmacology matters. So do the people.</h2>
-          </div>
-          <div class="button-row">
-            <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
-            <a class="button external-link" href="${escapeHtml(site.chatgptGroup)}" ${external}>ChatGPT group chat</a>
-          </div>
+        <div class="button-row section-action">
+          <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
+          <a class="button external-link" href="${escapeHtml(site.chatgptGroup)}" ${external}>ChatGPT group chat</a>
         </div>
       </div>
     </section>
@@ -529,7 +491,7 @@ function psychopharmacologyPage() {
 
   return page({
     current: "psych",
-    title: "Psychopharmacology Community | Qualiacology",
+    title: "Psychopharmacology | Qualiacology",
     description,
     path: "/psychopharmacology/",
     schema,
