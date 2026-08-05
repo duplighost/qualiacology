@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Vesperwake: The Hollow Bell | Qualiacology</title>
+    <meta name="description" content="A three-level gothic action platformer about a bellwright climbing a city trapped at midnight." />
+    <link rel="canonical" href="https://qualiacology.com/vesperwake/" />
+    <link rel="icon" href="/assets/favicon.svg" />
+
+    <meta property="og:site_name" content="Qualiacology" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Vesperwake: The Hollow Bell | Qualiacology" />
+    <meta property="og:description" content="Three continuous levels. A chain whip. A city held at midnight by a bell that stole one minute of noon." />
+    <meta property="og:url" content="https://qualiacology.com/vesperwake/" />
+    <meta property="og:image" content="https://qualiacology.com/assets/games/vesperwake-card-clean.webp" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="720" />
+    <meta property="og:image:alt" content="Sabine Vale holding an iron chain whip beneath the Meridian Bell and the drowned towers of Mourneglass" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Vesperwake: The Hollow Bell | Qualiacology" />
+    <meta name="twitter:description" content="Three continuous levels. A chain whip. A city held at midnight by a bell that stole one minute of noon." />
+    <meta name="twitter:image" content="https://qualiacology.com/assets/games/vesperwake-card-clean.webp" />
+
+    <style id="qualiacology-game-shell">
+      #qualiacology-home {
+        position: fixed;
+        z-index: 2147483647;
+        top: max(10px, env(safe-area-inset-top));
+        left: max(10px, env(safe-area-inset-left));
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        height: 42px;
+        overflow: hidden;
+        border: 1px solid rgba(157, 235, 245, 0.34);
+        border-radius: 999px;
+        background: rgba(3, 7, 14, 0.82);
+        color: #edf5f2;
+        text-decoration: none;
+        font: 800 0/1 Arial, sans-serif;
+        letter-spacing: 0.08em;
+        white-space: nowrap;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42), inset 0 0 18px rgba(138, 231, 255, 0.07);
+        transition: width 160ms ease, color 160ms ease, border-color 160ms ease, background 160ms ease;
+      }
+
+      #qualiacology-home::after {
+        content: "Q.";
+        color: #9debf5;
+        font: 800 13px/1 Arial, sans-serif;
+      }
+
+      #qualiacology-home:hover,
+      #qualiacology-home:focus-visible {
+        width: 124px;
+        padding: 0 14px;
+        border-color: #e2c578;
+        background: rgba(6, 13, 24, 0.96);
+        color: #edf5f2;
+        font-size: 12px;
+        outline: 2px solid rgba(237, 245, 242, 0.9);
+        outline-offset: 2px;
+      }
+
+      #qualiacology-home:hover::after,
+      #qualiacology-home:focus-visible::after {
+        content: "";
+      }
+
+      @media (pointer: coarse), (max-width: 700px) {
+        #qualiacology-home:hover,
+        #qualiacology-home:focus-visible {
+          width: 42px;
+          padding: 0;
+          font-size: 0;
+        }
+
+        #qualiacology-home:hover::after,
+        #qualiacology-home:focus-visible::after {
+          content: "Q.";
+        }
+      }
+    </style>
+    <script type="module" crossorigin src="/vesperwake/assets/index-rrS4bMFL.js"></script>
+    <link rel="stylesheet" crossorigin href="/vesperwake/assets/index-BEvW0xr3.css">
+  </head>
+  <body>
+    <a id="qualiacology-home" href="/" aria-label="Back to Qualiacology">Qualiacology</a>
+    <div id="root"></div>
+  </body>
+</html>
