@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#071017" />
+  <meta name="description" content="POTLIGHT: DOWNPOUR is a tactile 2.5D action game about fighting through a neighborhood transformed by relentless rain and the care strangers left behind." />
+  <link rel="canonical" href="https://qualiacology.com/potlight/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Qualiacology" />
+  <meta property="og:title" content="POTLIGHT — DOWNPOUR | Qualiacology" />
+  <meta property="og:description" content="Fight through a neighborhood drowning in weather. Every light and found object changes how you survive." />
+  <meta property="og:url" content="https://qualiacology.com/potlight/" />
+  <meta property="og:image" content="https://qualiacology.com/assets/games/potlight-card-clean.jpg" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="720" />
+  <meta property="og:image:alt" content="A yellow-coated figure slashing a rain-soaked enemy on a flooded blue-black street beneath sheets of rain" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="POTLIGHT — DOWNPOUR | Qualiacology" />
+  <meta name="twitter:description" content="Fight through a neighborhood drowning in weather. Every light and found object changes how you survive." />
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/potlight-card-clean.jpg" />
+  <meta name="twitter:image:alt" content="A yellow-coated figure slashing a rain-soaked enemy on a flooded blue-black street beneath sheets of rain" />
+  <title>POTLIGHT — DOWNPOUR | Qualiacology</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <link rel="stylesheet" href="src/styles.css" />
+  <style>
+    .qualia-home{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:2147483647;color:rgba(232,248,246,.9);text-decoration:none;font:850 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(3,13,18,.66);border:1px solid rgba(143,255,240,.24);backdrop-filter:blur(8px);box-shadow:0 8px 26px rgba(0,0,0,.32);transition:color .16s ease,border-color .16s ease,transform .16s ease}
+    .qualia-home:hover{color:#fff;border-color:rgba(255,224,154,.68);transform:translateY(-1px)}
+    .qualia-home:focus-visible{color:#fff;border-color:#ffe09a;outline:3px solid rgba(255,224,154,.92);outline-offset:3px;transform:translateY(-1px)}
+    body:has(#hud:not(.hidden)) .qualia-home{top:max(124px,calc(env(safe-area-inset-top) + 112px))}
+    @media(max-width:600px){.qualia-home{width:44px;height:44px;padding:0;display:grid;place-items:center;font-size:0}.qualia-home::after{content:'Q.';font:900 12px/1 system-ui,sans-serif;letter-spacing:.04em;color:#8ffff0}}
+    @media(max-width:900px) and (max-height:540px){.qualia-home{top:max(4px,env(safe-area-inset-top));right:max(4px,env(safe-area-inset-right));width:44px;height:44px;padding:0;display:grid;place-items:center;font-size:0}.qualia-home::after{content:'Q.';font:900 12px/1 system-ui,sans-serif;letter-spacing:.04em;color:#8ffff0}body:has(#hud:not(.hidden)) .qualia-home{top:max(84px,calc(env(safe-area-inset-top) + 72px));right:max(4px,env(safe-area-inset-right))}}
+  </style>
+</head>
+<body>
+  <a class="qualia-home" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology">Qualiacology</a>
+  <main id="app">
+    <canvas id="game" aria-label="POTLIGHT game canvas"></canvas>
+    <div id="grain" aria-hidden="true"></div>
+    <div id="stormGlass" aria-hidden="true"></div>
+    <div id="flash" aria-hidden="true"></div>
+
+    <section id="titleScreen" class="screen screen--title">
+      <div class="titleWeather" aria-hidden="true"></div>
+      <div class="panel titlePanel">
+        <div class="titleTopline"><span>2.5D STORM ACTION</span><span>v2.2.0 — DOWNPOUR</span></div>
+        <h1>POTLIGHT</h1>
+        <p class="tagline">Fight your way home through a neighborhood drowning in weather. Every light and found object changes how you survive.</p>
+        <div class="titleActions">
+          <button id="startBtn" class="button button--primary">Step into the downpour</button>
+          <button id="settingsBtn" class="button button--ghost">Settings</button>
+        </div>
+        <div class="controlStrip">
+          <span><b>WASD</b> move</span><span><b>mouse / J</b> fire</span><span><b>Space</b> blade</span><span><b>Shift</b> dash</span><span><b>E</b> read / pulse</span><span><b>Q</b> color read</span>
+        </div>
+        <p class="titleNote">Control is immediate. The rain is not scenery; it is the whole damn night leaning on you.</p>
+      </div>
+    </section>
+
+    <section id="settingsScreen" class="screen hidden" aria-hidden="true">
+      <div class="panel settingsPanel">
+        <div class="panelHeader"><div><p class="eyebrow">OPTIONS</p><h2>Make the storm behave</h2></div><button id="closeSettingsBtn" class="iconButton" aria-label="Close settings">×</button></div>
+        <label class="settingRow"><span><b>Route pressure</b><small>Changes enemy damage and projectile speed.</small></span><select id="difficultySelect"><option value="open">Open Door</option><option value="route" selected>The Route</option><option value="cold">Cold Front</option></select></label>
+        <label class="settingRow"><span><b>Screen shake</b><small>Impact camera trauma.</small></span><input id="shakeRange" type="range" min="0" max="1" step="0.1" value="0.8" /></label>
+        <label class="settingRow"><span><b>Flash intensity</b><small>Hit and perfect-dodge flashes.</small></span><input id="flashRange" type="range" min="0" max="1" step="0.1" value="0.75" /></label>
+        <label class="settingRow"><span><b>Audio</b><small>Procedural music, rain, and combat sound.</small></span><input id="audioToggle" type="checkbox" checked /></label>
+        <label class="settingRow"><span><b>Touch aim assist</b><small>Softly bends touch shots toward nearby enemies.</small></span><input id="aimAssistToggle" type="checkbox" checked /></label>
+        <button id="resetRecordBtn" class="button button--danger">Clear local records</button>
+      </div>
+    </section>
+
+    <section id="pauseScreen" class="screen hidden" aria-hidden="true">
+      <div class="panel pausePanel">
+        <p class="eyebrow">PAUSED</p>
+        <h2>The rain can be dramatic without supervision.</h2>
+        <div class="pauseActions"><button id="resumeBtn" class="button button--primary">Resume</button><button id="pauseRestartBtn" class="button button--ghost">Restart checkpoint</button><button id="pauseTitleBtn" class="button button--ghost">Return to title</button></div>
+      </div>
+    </section>
+
+    <section id="deathScreen" class="screen hidden" aria-hidden="true">
+      <div class="panel deathPanel">
+        <p class="eyebrow">CLARITY LOST</p>
+        <h2>You misread the weather.</h2>
+        <p id="deathCopy">The route is still there. It is just being smug about it.</p>
+        <div class="pauseActions"><button id="retryBtn" class="button button--primary">Retry checkpoint</button><button id="deathTitleBtn" class="button button--ghost">Return to title</button></div>
+      </div>
+    </section>
+
+    <section id="endScreen" class="screen hidden" aria-hidden="true">
+      <div class="panel endPanel">
+        <p class="eyebrow">ROUTE COMPLETE</p>
+        <h2>The route kept its promise.</h2>
+        <p class="endingLine">Nobody was here to save you. Plenty of people had already tried.</p>
+        <div id="endStats" class="endStats"></div>
+        <div class="pauseActions"><button id="againBtn" class="button button--primary">Run it again</button><button id="endTitleBtn" class="button button--ghost">Return to title</button></div>
+      </div>
+    </section>
+
+    <section id="hud" class="hud hidden" aria-hidden="true">
+      <div class="hudTop">
+        <div class="brandBlock"><b>POTLIGHT</b><span id="zoneName">RAIN STREET</span></div>
+        <div id="objective" class="objective">Survive long enough to read the bench.</div>
+        <div id="styleRank" class="styleRank" data-rank="D"><small>READ</small><b>D</b><span id="styleScore">0</span></div>
+      </div>
+      <div class="resourceStack">
+        <div class="resource resource--clarity"><div><span>CLARITY</span><output id="clarityNumber">100</output></div><i><b id="clarityBar"></b></i></div>
+        <div class="resource resource--warmth"><div><span>WARMTH</span><output id="warmthNumber">0</output></div><i><b id="warmthBar"></b></i></div>
+        <div class="resource resource--focus"><div><span>COLOR READ</span><output id="focusNumber">—</output></div><i><b id="focusBar"></b></i></div>
+      </div>
+      <div id="verbs" class="verbs"></div>
+      <div id="bossHud" class="bossHud hidden"><div><span id="bossName">THE MISREAD</span><output id="bossPhase">I</output></div><i><b id="bossBar"></b></i></div>
+      <div id="minimap" class="minimap" aria-label="Route progress"></div>
+      <button id="pauseBtn" class="hudPause" aria-label="Pause">Ⅱ</button>
+    </section>
+
+    <div id="prompt" class="prompt hidden" aria-live="polite"><kbd id="promptKey">E</kbd><span id="promptText">Read the bench</span></div>
+    <div id="toast" class="toast hidden" aria-live="polite"><p id="toastTitle"></p><span id="toastCopy"></span></div>
+    <div id="banner" class="banner hidden" aria-live="assertive"><small id="bannerKicker"></small><b id="bannerTitle"></b><span id="bannerSub"></span></div>
+
+    <div id="touchControls" class="touchControls hidden" aria-hidden="true">
+      <div id="movePad" class="touchPad"><i id="moveKnob"></i></div>
+      <div id="aimPad" class="aimPad"></div>
+      <button class="touchButton touchButton--blade" data-touch="blade">BLADE</button>
+      <button class="touchButton touchButton--dash" data-touch="dash">DASH</button>
+      <button class="touchButton touchButton--read" data-touch="read">READ</button>
+      <button class="touchButton touchButton--focus" data-touch="focus">COLOR</button>
+    </div>
+
+    <div id="rotateScreen" class="rotateScreen hidden" aria-hidden="true"><div><b>Turn the phone sideways.</b><span>The neighborhood is wider than a tax form.</span></div></div>
+  </main>
+
+  <script src="src/core.js"></script>
+  <script src="src/content.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/weather.js"></script>
+  <script src="src/game.js"></script>
+</body>
+</html>
