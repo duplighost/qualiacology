@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en" data-build-id="false-sun-1.0.0">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#09071c">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="FALSE SUN — a fast action-metroidvania where aiming a captive sun redraws the world.">
+    <title>FALSE SUN | Qualiacology</title>
+    <link rel="canonical" href="https://qualiacology.com/false-sun/">
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css?v=1">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Qualiacology">
+    <meta property="og:title" content="FALSE SUN | Qualiacology">
+    <meta property="og:description" content="FALSE SUN — a fast action-metroidvania where aiming a captive sun redraws the world.">
+    <meta property="og:url" content="https://qualiacology.com/false-sun/">
+    <meta property="og:image" content="https://qualiacology.com/assets/games/false-sun-card-clean.webp">
+    <meta property="og:image:type" content="image/webp">
+    <meta property="og:image:width" content="1280">
+    <meta property="og:image:height" content="720">
+    <meta property="og:image:alt" content="A triangular figure carrying a gold sun faces a vast violet guardian whose body casts cyan shadows across a dark geometric garden.">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="FALSE SUN | Qualiacology">
+    <meta name="twitter:description" content="FALSE SUN — a fast action-metroidvania where aiming a captive sun redraws the world.">
+    <meta name="twitter:image" content="https://qualiacology.com/assets/games/false-sun-card-clean.webp">
+    <meta name="twitter:image:alt" content="A triangular figure carrying a gold sun faces a vast violet guardian whose body casts cyan shadows across a dark geometric garden.">
+    <script>
+      if (new URLSearchParams(location.search).get("touch") === "1") {
+        document.documentElement.classList.add("force-touch");
+      }
+      if (new URLSearchParams(location.search).get("reduced") === "1") {
+        document.documentElement.classList.add("reduced-motion");
+      }
+    </script>
+  </head>
+  <body data-game-ready="false" data-qa-status="idle" data-build-id="false-sun-1.0.0">
+    <main id="game-shell" aria-label="FALSE SUN game">
+      <canvas
+        id="game"
+        width="1280"
+        height="720"
+        tabindex="0"
+        aria-label="FALSE SUN game world. Use WASD or the arrow keys to move, the mouse to aim the sun, hold the left mouse button to burn, and press Space to dash."
+      ></canvas>
+
+      <section id="hud" class="hud" aria-label="Player status">
+        <div class="hud__location glass-panel">
+          <p id="area-name" class="hud__eyebrow">THE GILT GARDEN</p>
+          <p id="objective" class="hud__objective">Carry the stolen light beyond the hedge.</p>
+        </div>
+
+        <div class="hud__resources glass-panel">
+          <div class="meter meter--health">
+            <div class="meter__header">
+              <span>VITAL LIGHT</span>
+              <output id="health-value" for="health-meter">6 / 6</output>
+            </div>
+            <div id="health-meter" class="meter__track" role="progressbar" aria-label="Health" aria-valuemin="0" aria-valuemax="5" aria-valuenow="5">
+              <span id="health-fill" class="meter__fill" style="--value: 1"></span>
+            </div>
+          </div>
+
+          <div class="meter meter--heat">
+            <div class="meter__header">
+              <span>HEAT</span>
+              <output id="heat-value" for="heat-meter">0%</output>
+            </div>
+            <div id="heat-meter" class="meter__track" role="progressbar" aria-label="Sun heat" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <span id="heat-fill" class="meter__fill" style="--value: 0"></span>
+            </div>
+          </div>
+
+          <div class="hud__compact-row">
+            <div class="compact-meter meter--dash">
+              <span class="compact-meter__label">DASH</span>
+              <div id="dash-meter" class="compact-meter__track" role="progressbar" aria-label="Dash charge" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+                <span id="dash-fill" class="compact-meter__fill" style="--value: 1"></span>
+              </div>
+            </div>
+            <div class="compact-meter meter--flow">
+              <span class="compact-meter__label">FLOW <output id="flow-value">×1.0</output></span>
+              <div id="flow-meter" class="compact-meter__track" role="progressbar" aria-label="Flow" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <span id="flow-fill" class="compact-meter__fill" style="--value: 0"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="ability-hints" class="hud__abilities glass-panel" aria-label="Available abilities">
+          <span id="burn-hint" class="ability-chip is-ready"><kbd>LMB</kbd> BURN</span>
+          <span id="dash-hint" class="ability-chip is-ready"><kbd>SPACE</kbd> CUT</span>
+          <span id="pin-hint" class="ability-chip is-locked" aria-disabled="true"><kbd>E</kbd> PIN</span>
+        </div>
+      </section>
+
+      <section id="boss-hud" class="boss-hud glass-panel" aria-label="Guardian status" hidden>
+        <p id="boss-title" class="boss-hud__title">THE HEDGE THAT KEPT WALKING</p>
+        <div id="boss-meter" class="boss-hud__track" role="progressbar" aria-label="Guardian health" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+          <span id="boss-fill" class="boss-hud__fill" style="--value: 1"></span>
+        </div>
+        <p id="boss-phase" class="boss-hud__phase">ROOTED / LISTENING</p>
+      </section>
+
+      <section id="start-overlay" class="overlay overlay--start is-visible" aria-labelledby="game-title">
+        <a id="qualiacology-home" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology" onclick="event.stopPropagation()">Qualiacology</a>
+        <div class="start-card">
+          <p class="start-card__kicker">THE SKY WAS NOT EMPTY. IT WAS LOCKED.</p>
+          <h1 id="game-title" class="game-title" aria-label="False Sun">
+            <span>FALSE</span>
+            <span class="game-title__sun">SUN</span>
+          </h1>
+          <p class="start-card__promise">Aim the light. Rewrite every shadow.</p>
+          <button id="start-button" class="primary-button" type="button" autofocus>
+            <span>TAKE THE LIGHT</span>
+            <small>click, tap, or press Enter</small>
+          </button>
+          <div class="start-card__controls" aria-label="Controls summary">
+            <p><kbd>WASD</kbd><span>move</span></p>
+            <p><kbd>MOUSE</kbd><span>orbit sun</span></p>
+            <p><kbd>HOLD LMB</kbd><span>burn</span></p>
+            <p><kbd>SPACE</kbd><span>cut through shadow</span></p>
+          </div>
+          <p id="start-status" class="start-card__status" aria-live="polite">Sound wakes on your first input.</p>
+        </div>
+      </section>
+
+      <section id="pause-overlay" class="overlay" aria-labelledby="pause-title" hidden>
+        <div class="menu-card glass-panel">
+          <p class="menu-card__kicker">THE SUN HOLDS STILL</p>
+          <h2 id="pause-title">Paused</h2>
+          <div class="menu-card__actions">
+            <button id="resume-button" class="primary-button primary-button--small" type="button">RESUME</button>
+            <button id="open-map-button" class="text-button" type="button">MAP</button>
+            <button id="open-settings-button" class="text-button" type="button" aria-controls="settings-panel" aria-expanded="false">SETTINGS</button>
+            <button id="restart-room-button" class="text-button" type="button">RESTART ROOM</button>
+            <button id="return-title-button" class="text-button text-button--quiet" type="button">RETURN TO TITLE</button>
+            <a class="text-button text-button--quiet pause-home-link" href="/">RETURN TO QUALIACOLOGY</a>
+          </div>
+
+          <div id="settings-panel" class="settings-panel" aria-label="Settings" hidden>
+            <label class="setting-row" for="master-volume">
+              <span>MASTER VOLUME</span>
+              <input id="master-volume" type="range" min="0" max="100" value="72">
+              <output id="master-volume-value" for="master-volume">72%</output>
+            </label>
+            <label class="setting-toggle" for="reduced-motion">
+              <span><strong>REDUCED MOTION</strong><small>restrains shake, flash, and background drift</small></span>
+              <input id="reduced-motion" type="checkbox">
+            </label>
+            <label class="setting-toggle" for="high-contrast">
+              <span><strong>EDGE EMPHASIS</strong><small>strengthens cyan shadow boundaries and hostile white cores</small></span>
+              <input id="high-contrast" type="checkbox">
+            </label>
+            <label class="setting-toggle" for="screen-shake">
+              <span><strong>SCREEN SHAKE</strong><small>impact motion independent of gameplay</small></span>
+              <input id="screen-shake" type="checkbox" checked>
+            </label>
+          </div>
+          <p class="menu-card__controls"><kbd>ESC</kbd> resume · <kbd>M</kbd> map</p>
+        </div>
+      </section>
+
+      <section id="map-overlay" class="overlay overlay--map" aria-labelledby="map-title" hidden>
+        <div class="map-card glass-panel">
+          <header class="overlay-header">
+            <div>
+              <p class="menu-card__kicker">THE SHAPE OF THE PRISON</p>
+              <h2 id="map-title">Shadow Map</h2>
+            </div>
+            <button id="close-map-button" class="icon-button" type="button" aria-label="Close map">×</button>
+          </header>
+          <div id="map-canvas" class="map-surface" role="img" aria-label="Map of discovered rooms">
+            <div class="map-placeholder">
+              <span class="map-placeholder__sun"></span>
+              <p>Rooms appear when their shadows remember you.</p>
+            </div>
+          </div>
+          <footer class="map-legend">
+            <span><i class="legend-dot legend-dot--current"></i>current</span>
+            <span><i class="legend-dot legend-dot--secret"></i>unread glyph</span>
+            <span><i class="legend-dot legend-dot--gate"></i>sealed path</span>
+          </footer>
+        </div>
+      </section>
+
+      <section id="upgrade-overlay" class="overlay overlay--upgrade" aria-labelledby="upgrade-title" hidden>
+        <div class="upgrade-card">
+          <div id="upgrade-glyph" class="upgrade-glyph" aria-hidden="true"></div>
+          <p class="menu-card__kicker">THE LIGHT LEARNS A NEW LIE</p>
+          <h2 id="upgrade-title">PIN / RECALL</h2>
+          <p id="upgrade-description">Cast the captive sun into the world. Press Pin again to call it home.</p>
+          <p id="upgrade-instruction" class="upgrade-card__instruction"><kbd>E</kbd> or <kbd>RMB</kbd></p>
+          <button id="upgrade-continue-button" class="primary-button primary-button--small" type="button">LET IT BURN</button>
+        </div>
+      </section>
+
+      <section id="ending-overlay" class="overlay overlay--ending" aria-labelledby="ending-title" hidden>
+        <div class="ending-card">
+          <p id="ending-kicker" class="menu-card__kicker">THE CELL OPENS ABOVE YOU</p>
+          <h2 id="ending-title">A TRUE NOON</h2>
+          <p id="ending-copy">Every shadow you read has become a door. The sky remembers its own name.</p>
+          <dl class="ending-stats">
+            <div><dt>TIME</dt><dd id="ending-time">00:00</dd></div>
+            <div><dt>GLYPHS</dt><dd id="ending-glyphs">0 / 14</dd></div>
+            <div><dt>FLOW</dt><dd id="ending-flow">×1.0</dd></div>
+          </dl>
+          <button id="ending-restart-button" class="primary-button primary-button--small" type="button">CARRY IT AGAIN</button>
+        </div>
+      </section>
+
+      <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden>
+        <span id="toast-title" class="toast__title"></span>
+        <span id="toast-copy" class="toast__copy"></span>
+      </div>
+
+      <div id="subtitle" class="subtitle" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+
+      <section id="touch-controls" class="touch-controls" aria-label="Touch controls">
+        <div id="move-stick" class="touch-stick touch-stick--move" role="group" aria-label="Movement stick">
+          <span class="touch-stick__ring"></span>
+          <span class="touch-stick__nub"></span>
+          <span class="touch-stick__label">MOVE</span>
+        </div>
+        <div id="aim-stick" class="touch-stick touch-stick--aim" role="group" aria-label="Aim and burn stick">
+          <span class="touch-stick__ring"></span>
+          <span class="touch-stick__nub"></span>
+          <span class="touch-stick__label">AIM / BURN</span>
+        </div>
+        <button id="touch-dash" class="touch-action touch-action--dash" type="button" aria-label="Dash and cut">
+          <span>CUT</span>
+        </button>
+        <button id="touch-pin" class="touch-action touch-action--pin" type="button" aria-label="Pin or recall the sun">
+          <span>PIN</span>
+        </button>
+        <button id="touch-pause" class="touch-menu" type="button" aria-label="Pause game">
+          <span>II</span>
+        </button>
+      </section>
+
+      <p id="qa-result" class="visually-hidden" aria-live="polite" hidden></p>
+      <div id="boot-error" class="boot-error" role="alert" hidden>
+        <strong>THE LIGHT FAILED TO WAKE</strong>
+        <span id="boot-error-message">Refresh the page to try again.</span>
+      </div>
+    </main>
+
+    <noscript>
+      <p class="noscript">FALSE SUN needs JavaScript to move the light.</p>
+    </noscript>
+    <script type="module" src="./src/main.js?v=1"></script>
+  </body>
+</html>
