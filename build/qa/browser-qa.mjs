@@ -80,7 +80,7 @@ try {
     report.viewports.push({ viewport, ...metrics, errors: finishErrors() });
     check(metrics.pageWidth <= metrics.width + 1, `Horizontal overflow at ${viewport.width}x${viewport.height}: ${metrics.pageWidth} > ${metrics.width}`);
     check(metrics.h1Visible, `Homepage H1 is not visible at ${viewport.width}x${viewport.height}`);
-    check(metrics.bodyGameCount === "33" && metrics.bodyAlbumCount === "10", `Catalog proof counts drifted at ${viewport.width}px`);
+    check(metrics.bodyGameCount === "34" && metrics.bodyAlbumCount === "10", `Catalog proof counts drifted at ${viewport.width}px`);
     check(!initialRequests.some((url) => url.includes("/assets/audio/")), `Audio requested before opt-in at ${viewport.width}px`);
 
     if (viewport.width < 960) {
