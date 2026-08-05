@@ -1,0 +1,3552 @@
+(() => {
+  'use strict';
+
+  /*
+   * KICK BALL // LUNAR VELOCITY
+   * A first-person lunar action-platformer built around one persistent ball.
+   * Three.js r161 is vendored locally as a classic global in vendor/three.min.js.
+   */
+
+  const T = globalThis.THREE;
+  const canvas = document.getElementById('gameCanvas');
+  const fatal = message => {
+    document.body.dataset.boot = 'failed';
+    const overlay = document.getElementById('startOverlay');
+    if (overlay) {
+      overlay.classList.remove('hidden');
+      const title = document.getElementById('startTitle');
+      const copy = document.getElementById('startCopy');
+      if (title) title.textContent = 'THE MOON DID NOT BOOT';
+      if (copy) copy.textContent = message;
+    }
+  };
+  if (!T || !canvas) {
+    fatal(!T ? 'The local Three.js runtime is missing.' : 'The game canvas is missing.');
+    return;
+  }
+
+  const params = new URLSearchParams(location.search);
+  const TEST_MODE = params.has('autotest');
+  const AUTO_START = TEST_MODE || params.has('autostart');
+  const FORCE_TOUCH = params.has('touch');
+  const FIXED_DT = 1 / 120;
+  const TAU = Math.PI * 2;
+  const UP = new T.Vector3(0, 1, 0);
+  const ZERO = new T.Vector3();
+
+  const ui = {};
+  [
+    'hud', 'startOverlay', 'startButton', 'startKicker', 'startTitle', 'startCopy',
+    'objectiveLabel', 'objectiveText', 'styleRank', 'styleFill', 'scoreValue',
+    'bestValue', 'shieldPips', 'ballState', 'altitudeValue', 'jumpPips',
+    'comboText', 'crosshair', 'hitMarker', 'damageVignette', 'chargeUI',
+    'chargeFill', 'chargeText', 'promptToast', 'controlsHint', 'soundButton',
+    'fullscreenButton', 'qualityButton', 'pauseOverlay', 'winOverlay',
+    'winSummary', 'winTime', 'winScore', 'winRank', 'restartButton',
+    'touchControls', 'movePad', 'lookPad', 'touchKick', 'touchSnap',
+    'touchJump', 'touchSpin', 'touchPause', 'pauseResumeButton', 'portraitHint', 'loadingMeter',
+  ].forEach(id => { ui[id] = document.getElementById(id); });
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const invLerp = (a, b, v) => (v - a) / ((b - a) || 1);
+  const smoothstep = (a, b, v) => {
+    const t = clamp(invLerp(a, b, v), 0, 1);
+    return t * t * (3 - 2 * t);
+  };
+  const smootherstep = (a, b, v) => {
+    const t = clamp(invLerp(a, b, v), 0, 1);
+    return t * t * t * (t * (t * 6 - 15) + 10);
+  };
+  const damp = (current, target, lambda, dt) => lerp(current, target, 1 - Math.exp(-lambda * dt));
+  const angleDelta = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+  const finite = v => Number.isFinite(v) ? v : 0;
+  const formatTime = value => {
+    if (!Number.isFinite(value)) return '--:--.--';
+    const minutes = Math.floor(value / 60);
+    const seconds = Math.floor(value % 60);
+    const centis = Math.floor((value * 100) % 100);
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centis).padStart(2, '0')}`;
+  };
+
+  function mulberry32(seed) {
+    let value = seed >>> 0;
+    return () => {
+      value += 0x6D2B79F5;
+      let n = value;
+      n = Math.imul(n ^ (n >>> 15), n | 1);
+      n ^= n + Math.imul(n ^ (n >>> 7), n | 61);
+      return ((n ^ (n >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  const worldRandom = mulberry32(0xB00BCAFE);
+  const cosmeticRandom = mulberry32(0xA11E701D);
+  let enemyRandom = mulberry32(0xE11E5EED);
+  const randomRange = (min, max, rng = cosmeticRandom) => min + (max - min) * rng();
+
+  function hash2(x, z) {
+    const value = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
+    return value - Math.floor(value);
+  }
+
+  function valueNoise(x, z) {
+    const ix = Math.floor(x), iz = Math.floor(z);
+    const fx = x - ix, fz = z - iz;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sz = fz * fz * (3 - 2 * fz);
+    const a = hash2(ix, iz), b = hash2(ix + 1, iz);
+    const c = hash2(ix, iz + 1), d = hash2(ix + 1, iz + 1);
+    return lerp(lerp(a, b, sx), lerp(c, d, sx), sz) * 2 - 1;
+  }
+
+  function fbm(x, z, octaves = 5) {
+    let value = 0, amplitude = .5, frequency = 1;
+    for (let i = 0; i < octaves; i++) {
+      value += valueNoise(x * frequency, z * frequency) * amplitude;
+      frequency *= 2.03;
+      amplitude *= .5;
+    }
+    return value;
+  }
+
+  function radialTexture(inner, outer = 'rgba(0,0,0,0)', size = 128) {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const context = c.getContext('2d');
+    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, inner);
+    gradient.addColorStop(.22, inner);
+    gradient.addColorStop(1, outer);
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+    const texture = new T.CanvasTexture(c);
+    texture.colorSpace = T.SRGBColorSpace;
+    return texture;
+  }
+
+  function makeRegolithTextures() {
+    const size = 768;
+    const colorCanvas = document.createElement('canvas');
+    const heightCanvas = document.createElement('canvas');
+    colorCanvas.width = colorCanvas.height = size;
+    heightCanvas.width = heightCanvas.height = size;
+    const colorContext = colorCanvas.getContext('2d');
+    const heightContext = heightCanvas.getContext('2d');
+    const colorImage = colorContext.createImageData(size, size);
+    const heightImage = heightContext.createImageData(size, size);
+    const colorData = colorImage.data;
+    const heightData = heightImage.data;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const large = fbm(x / 92, y / 92, 5);
+        const grit = valueNoise(x / 6.5, y / 6.5) * .34;
+        const pin = hash2(x * 1.7, y * 2.1) > .985 ? -.32 : 0;
+        const h = clamp(.54 + large * .22 + grit * .17 + pin, 0, 1);
+        const i = (y * size + x) * 4;
+        const warmth = valueNoise(x / 180, y / 180) * 5;
+        colorData[i] = clamp(113 + h * 86 + warmth, 0, 255);
+        colorData[i + 1] = clamp(119 + h * 88 + warmth * .72, 0, 255);
+        colorData[i + 2] = clamp(130 + h * 91 + warmth * .28, 0, 255);
+        colorData[i + 3] = 255;
+        const height = Math.floor(h * 255);
+        heightData[i] = heightData[i + 1] = heightData[i + 2] = height;
+        heightData[i + 3] = 255;
+      }
+    }
+    colorContext.putImageData(colorImage, 0, 0);
+    heightContext.putImageData(heightImage, 0, 0);
+    for (let i = 0; i < 115; i++) {
+      const x = worldRandom() * size, y = worldRandom() * size;
+      const radius = 2 + Math.pow(worldRandom(), 2.2) * 25;
+      const gradient = colorContext.createRadialGradient(x, y, radius * .12, x, y, radius);
+      gradient.addColorStop(0, 'rgba(28,32,39,.42)');
+      gradient.addColorStop(.62, 'rgba(58,62,72,.25)');
+      gradient.addColorStop(.78, 'rgba(225,230,236,.22)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      colorContext.fillStyle = gradient;
+      colorContext.beginPath();
+      colorContext.arc(x, y, radius, 0, TAU);
+      colorContext.fill();
+    }
+    const color = new T.CanvasTexture(colorCanvas);
+    color.colorSpace = T.SRGBColorSpace;
+    color.wrapS = color.wrapT = T.RepeatWrapping;
+    color.repeat.set(28, 28);
+    const bump = new T.CanvasTexture(heightCanvas);
+    bump.wrapS = bump.wrapT = T.RepeatWrapping;
+    bump.repeat.copy(color.repeat);
+    return { color, bump };
+  }
+
+  class TouchStick {
+    constructor(element, isLook = false) {
+      this.element = element;
+      this.knob = element ? element.querySelector('.touchKnob') : null;
+      this.pointerId = null;
+      this.value = new T.Vector2();
+      this.delta = new T.Vector2();
+      this.isLook = isLook;
+      if (!element) return;
+      element.addEventListener('pointerdown', event => this.down(event));
+      element.addEventListener('pointermove', event => this.move(event));
+      element.addEventListener('pointerup', event => this.up(event));
+      element.addEventListener('pointercancel', event => this.up(event));
+      element.addEventListener('lostpointercapture', event => this.up(event));
+    }
+    down(event) {
+      if (this.pointerId !== null) return;
+      document.body.classList.remove('using-gamepad');
+      this.pointerId = event.pointerId;
+      try { this.element.setPointerCapture(event.pointerId); } catch (_) {}
+      this.update(event);
+      event.preventDefault();
+    }
+    move(event) {
+      if (event.pointerId !== this.pointerId) return;
+      this.update(event);
+      event.preventDefault();
+    }
+    up(event) {
+      if (event.pointerId !== this.pointerId) return;
+      this.pointerId = null;
+      this.value.set(0, 0);
+      if (this.knob) this.knob.style.transform = 'translate3d(0,0,0)';
+      event.preventDefault();
+    }
+    update(event) {
+      const rect = this.element.getBoundingClientRect();
+      const cx = rect.left + rect.width * .5;
+      const cy = rect.top + rect.height * .5;
+      const max = Math.max(16, Math.min(rect.width, rect.height) * .34);
+      let dx = event.clientX - cx;
+      let dy = event.clientY - cy;
+      const length = Math.hypot(dx, dy);
+      if (length > max) { dx *= max / length; dy *= max / length; }
+      const nextX = dx / max, nextY = dy / max;
+      if (this.isLook) {
+        this.delta.x += (nextX - this.value.x) * 12;
+        this.delta.y += (nextY - this.value.y) * 12;
+      }
+      this.value.set(nextX, nextY);
+      if (this.knob) this.knob.style.transform = `translate3d(${dx}px,${dy}px,0)`;
+    }
+    consumeDelta(target) {
+      target.copy(this.delta);
+      this.delta.set(0, 0);
+      return target;
+    }
+    reset() {
+      this.pointerId = null;
+      this.value.set(0, 0);
+      this.delta.set(0, 0);
+      if (this.knob) this.knob.style.transform = 'translate3d(0,0,0)';
+    }
+  }
+
+  class InputManager {
+    constructor() {
+      this.keys = new Set();
+      this.buttons = { kick: false, snap: false, jump: false, spin: false, sprint: false, pause: false };
+      this.previous = { kick: false, snap: false, jump: false, spin: false, pause: false };
+      this.frame = {
+        moveX: 0, moveZ: 0, lookX: 0, lookY: 0,
+        kick: false, snap: false, jump: false, spin: false, sprint: false,
+        kickPressed: false, kickReleased: false, snapPressed: false,
+        jumpPressed: false, spinPressed: false, pausePressed: false,
+      };
+      this.mouseLook = new T.Vector2();
+      this.lookScratch = new T.Vector2();
+      this.pendingLook = new T.Vector2();
+      this.gamepadLook = new T.Vector2();
+      this.moveStick = new TouchStick(ui.movePad, false);
+      this.lookStick = new TouchStick(ui.lookPad, true);
+      this.primaryTouch = matchMedia('(pointer: coarse)').matches;
+      this.hasTouch = FORCE_TOUCH || this.primaryTouch || (navigator.maxTouchPoints > 0 && matchMedia('(any-pointer: coarse)').matches);
+      // A touchscreen laptop is not automatically a touch-only game. Start from
+      // the primary pointer, then switch modes when the player actually uses a
+      // finger or mouse so neither input path can strand the other.
+      this.touchEnabled = FORCE_TOUCH || this.primaryTouch;
+      this.lastGamepadPause = false;
+      this.lastGamepadActivate = false;
+      this.consumeGamepadActivate = false;
+      this.bind();
+    }
+    bind() {
+      window.addEventListener('pointerdown', event => {
+        if (event.pointerType === 'touch') this.setTouchMode(true);
+        else if (event.pointerType === 'mouse' && !FORCE_TOUCH) this.setTouchMode(false);
+      }, { capture: true, passive: true });
+      window.addEventListener('keydown', event => {
+        document.body.classList.remove('using-gamepad');
+        const interactiveTarget = event.target instanceof Element && !!event.target.closest('button, a, input, select, textarea, [role="button"]');
+        if (interactiveTarget && !['Escape', 'KeyP', 'KeyR', 'KeyM', 'KeyG'].includes(event.code)) return;
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault();
+        // The browser owns Escape while pointer lock is active. Enqueuing it as
+        // a second pause edge can immediately undo the pointerlockchange pause.
+        const browserOwnsEscape = event.code === 'Escape' && document.pointerLockElement === canvas;
+        if (!browserOwnsEscape) this.keys.add(event.code);
+        audio.ensure();
+        if (event.code === 'KeyM' && !event.repeat) audio.toggle();
+        if (event.code === 'KeyR' && !event.repeat && game) {
+          game.restart();
+          if (game.started && !this.touchEnabled && !TEST_MODE && document.pointerLockElement !== canvas) requestGamePointerLock();
+        }
+        if (event.code === 'KeyG' && !event.repeat && world) world.cycleQuality();
+        if (event.code === 'Enter' && event.altKey && !event.repeat) toggleFullscreen();
+      });
+      window.addEventListener('keyup', event => this.keys.delete(event.code));
+      window.addEventListener('blur', () => this.resetTransient());
+      canvas.addEventListener('mousedown', event => {
+        document.body.classList.remove('using-gamepad');
+        if (!game || !game.started) return;
+        audio.ensure();
+        const needsPointerLock = !this.touchEnabled && !TEST_MODE && document.pointerLockElement !== canvas;
+        if (needsPointerLock) {
+          requestGamePointerLock();
+          event.preventDefault();
+          return;
+        }
+        if (event.button === 0) this.buttons.kick = true;
+        if (event.button === 2) this.buttons.snap = true;
+        if (event.button === 1) this.buttons.spin = true;
+        event.preventDefault();
+      });
+      window.addEventListener('mouseup', event => {
+        if (event.button === 0) this.buttons.kick = false;
+        if (event.button === 2) this.buttons.snap = false;
+        if (event.button === 1) this.buttons.spin = false;
+      });
+      window.addEventListener('mousemove', event => {
+        if (event.movementX || event.movementY) document.body.classList.remove('using-gamepad');
+        if (document.pointerLockElement === canvas || (AUTO_START && !this.touchEnabled)) {
+          this.mouseLook.x += event.movementX || 0;
+          this.mouseLook.y += event.movementY || 0;
+        }
+      }, { passive: true });
+      canvas.addEventListener('contextmenu', event => event.preventDefault());
+      this.bindButton(ui.touchKick, 'kick');
+      this.bindButton(ui.touchSnap, 'snap');
+      this.bindButton(ui.touchJump, 'jump');
+      this.bindButton(ui.touchSpin, 'spin');
+      this.bindButton(ui.touchPause, 'pause');
+      document.addEventListener('pointerlockchange', () => {
+        document.body.classList.toggle('pointer-locked', document.pointerLockElement === canvas);
+        if (document.pointerLockElement !== canvas) {
+          this.keys.delete('Escape');
+          if (game?.started && !game.paused && !game.won && !this.touchEnabled && !TEST_MODE) game.togglePause();
+        }
+      });
+      this.setTouchMode(this.touchEnabled);
+    }
+    setTouchMode(enabled) {
+      const next = FORCE_TOUCH || !!enabled;
+      if (this.touchEnabled === next && document.body.classList.contains('touch-enabled') === next) return;
+      this.touchEnabled = next;
+      document.body.classList.toggle('touch-enabled', next);
+      if (next) {
+        if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+      } else {
+        this.moveStick.reset();
+        this.lookStick.reset();
+      }
+    }
+    bindButton(element, action) {
+      if (!element) return;
+      const down = event => {
+        document.body.classList.remove('using-gamepad');
+        this.buttons[action] = true;
+        audio.ensure();
+        try { element.setPointerCapture(event.pointerId); } catch (_) {}
+        event.preventDefault();
+      };
+      const up = event => { this.buttons[action] = false; event.preventDefault(); };
+      element.addEventListener('pointerdown', down);
+      element.addEventListener('pointerup', up);
+      element.addEventListener('pointercancel', up);
+      element.addEventListener('lostpointercapture', up);
+    }
+    poll() {
+      let moveX = 0, moveZ = 0;
+      if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) moveX -= 1;
+      if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) moveX += 1;
+      if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) moveZ += 1;
+      if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) moveZ -= 1;
+      const touchMagnitude = this.moveStick.value.length();
+      if (touchMagnitude > .08) {
+        moveX = this.moveStick.value.x;
+        moveZ = -this.moveStick.value.y;
+      }
+
+      let gpKick = false, gpSnap = false, gpJump = false, gpSpin = false, gpPause = false, gpSprint = false;
+      let gpLookX = 0, gpLookY = 0;
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      const pad = [...pads].find(candidate => candidate && candidate.connected);
+      if (pad) {
+        const deadzone = value => Math.abs(value) < .15 ? 0 : Math.sign(value) * (Math.abs(value) - .15) / .85;
+        const lx = deadzone(pad.axes[0] || 0), ly = deadzone(pad.axes[1] || 0);
+        gpLookX = deadzone(pad.axes[2] || 0);
+        gpLookY = deadzone(pad.axes[3] || 0);
+        if (Math.hypot(lx, ly) > .08) { moveX = lx; moveZ = -ly; }
+        gpJump = !!pad.buttons[0]?.pressed;
+        gpSpin = !!(pad.buttons[1]?.pressed || pad.buttons[2]?.pressed);
+        gpSprint = !!pad.buttons[10]?.pressed;
+        gpSnap = !!(pad.buttons[6] && pad.buttons[6].value > .22);
+        gpKick = !!(pad.buttons[7] && pad.buttons[7].value > .22);
+        gpPause = !!pad.buttons[9]?.pressed;
+        const gamepadActive = Math.hypot(lx, ly, gpLookX, gpLookY) > .12 || gpJump || gpSpin || gpSprint || gpSnap || gpKick || gpPause;
+        if (gamepadActive) document.body.classList.add('using-gamepad');
+      }
+      const gamepadActivate = gpJump || gpPause;
+      if (this.consumeGamepadActivate) {
+        gpJump = false;
+        gpPause = false;
+        if (!gamepadActivate) this.consumeGamepadActivate = false;
+      } else if (game && gamepadActivate && !this.lastGamepadActivate) {
+        if (!game.started) {
+          game.start(false);
+          this.consumeGamepadActivate = true;
+          gpJump = false;
+          gpPause = false;
+        } else if (game.won) {
+          game.restart();
+          this.consumeGamepadActivate = true;
+          gpJump = false;
+          gpPause = false;
+        }
+      }
+      this.lastGamepadActivate = gamepadActivate;
+      const moveLength = Math.hypot(moveX, moveZ);
+      if (moveLength > 1) { moveX /= moveLength; moveZ /= moveLength; }
+      this.lookStick.consumeDelta(this.lookScratch);
+      // The touch look pad is a held joystick, not a one-shot swipe. A small
+      // positional impulse keeps initial response crisp; the stick value then
+      // contributes every simulation tick just like a controller right stick.
+      this.pendingLook.x += this.mouseLook.x * .00215 + this.lookScratch.x * .004;
+      this.pendingLook.y += this.mouseLook.y * .00215 + this.lookScratch.y * .004;
+      const touchLookActive = this.touchEnabled && this.lookStick.value.lengthSq() > .0025;
+      this.gamepadLook.set(
+        touchLookActive ? this.lookStick.value.x * .03 : gpLookX * .035,
+        touchLookActive ? this.lookStick.value.y * .026 : gpLookY * .03,
+      );
+      this.mouseLook.set(0, 0);
+
+      const kick = this.buttons.kick || gpKick || this.keys.has('KeyF');
+      const snap = this.buttons.snap || gpSnap || this.keys.has('KeyE');
+      const jump = this.buttons.jump || gpJump || this.keys.has('Space');
+      const spin = this.buttons.spin || gpSpin || this.keys.has('KeyQ');
+      // Full forward deflection is the touch sprint gesture. It preserves an
+      // analog walk band while giving phones the same momentum route as Shift
+      // and controller L3 without adding another thumb-blocking button.
+      const touchSprint = this.touchEnabled && touchMagnitude > .84 && moveZ > .35;
+      const sprint = touchSprint || gpSprint || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
+      const pause = this.buttons.pause || this.keys.has('Escape') || this.keys.has('KeyP') || gpPause;
+      Object.assign(this.frame, {
+        moveX, moveZ, lookX: this.gamepadLook.x, lookY: this.gamepadLook.y, kick, snap, jump, spin, sprint,
+        kickPressed: kick && !this.previous.kick,
+        kickReleased: !kick && this.previous.kick,
+        snapPressed: snap && !this.previous.snap,
+        jumpPressed: jump && !this.previous.jump,
+        spinPressed: spin && !this.previous.spin,
+        pausePressed: pause && !this.previous.pause,
+      });
+      this.lastGamepadPause = gpPause;
+      return this.frame;
+    }
+    prepareStep(firstStep) {
+      this.frame.lookX = this.gamepadLook.x + (firstStep ? this.pendingLook.x : 0);
+      this.frame.lookY = this.gamepadLook.y + (firstStep ? this.pendingLook.y : 0);
+      return this.frame;
+    }
+    resetTransient() {
+      this.keys.clear();
+      Object.keys(this.buttons).forEach(key => { this.buttons[key] = false; });
+      Object.keys(this.previous).forEach(key => { this.previous[key] = false; });
+      this.mouseLook.set(0, 0);
+      this.pendingLook.set(0, 0);
+      this.lookScratch.set(0, 0);
+      this.consumeGamepadActivate = false;
+      this.moveStick.reset();
+      this.lookStick.reset();
+      game?.cancelCharge();
+    }
+    endFrame() {
+      this.previous.kick = this.frame.kick;
+      this.previous.snap = this.frame.snap;
+      this.previous.jump = this.frame.jump;
+      this.previous.spin = this.frame.spin;
+      this.previous.pause = this.buttons.pause || this.keys.has('Escape') || this.keys.has('KeyP') || this.lastGamepadPause;
+      this.pendingLook.set(0, 0);
+    }
+  }
+
+  class AudioEngine {
+    constructor() {
+      this.context = null;
+      this.master = null;
+      this.fx = null;
+      this.music = null;
+      this.muted = false;
+      this.sequence = null;
+      this.step = 0;
+      this.recallOsc = null;
+      this.recallGain = null;
+      try { this.muted = localStorage.getItem('kickball-lunar-muted') === '1'; } catch (_) {}
+      this.syncButton();
+    }
+    ensure() {
+      if (this.context) {
+        if (this.context.state === 'suspended') this.context.resume().catch(() => {});
+        return;
+      }
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      try {
+        this.context = new AudioContext();
+        this.master = this.context.createGain();
+        this.fx = this.context.createGain();
+        this.music = this.context.createGain();
+        this.master.gain.value = this.muted ? 0 : .76;
+        this.fx.gain.value = .88;
+        this.music.gain.value = .12;
+        this.fx.connect(this.master);
+        this.music.connect(this.master);
+        this.master.connect(this.context.destination);
+        this.startMusic();
+      } catch (_) { this.context = null; }
+    }
+    toggle() {
+      this.muted = !this.muted;
+      if (this.master && this.context) this.master.gain.setTargetAtTime(this.muted ? 0 : .76, this.context.currentTime, .03);
+      try { localStorage.setItem('kickball-lunar-muted', this.muted ? '1' : '0'); } catch (_) {}
+      this.syncButton();
+    }
+    syncButton() { if (ui.soundButton) ui.soundButton.textContent = this.muted ? 'SOUND OFF' : 'SOUND ON'; }
+    tone(frequency, duration, type = 'sine', volume = .08, endFrequency = null, delay = 0, target = this.fx) {
+      if (!this.context || !target) return;
+      const when = this.context.currentTime + delay;
+      const oscillator = this.context.createOscillator();
+      const gain = this.context.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(Math.max(20, frequency), when);
+      if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), when + duration);
+      gain.gain.setValueAtTime(.0001, when);
+      gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), when + .008);
+      gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
+      oscillator.connect(gain);
+      gain.connect(target);
+      oscillator.start(when);
+      oscillator.stop(when + duration + .03);
+    }
+    noise(duration = .08, volume = .07, filterFrequency = 1200, delay = 0) {
+      if (!this.context || !this.fx) return;
+      const count = Math.max(1, Math.floor(this.context.sampleRate * duration));
+      const buffer = this.context.createBuffer(1, count, this.context.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < count; i++) data[i] = (cosmeticRandom() * 2 - 1) * Math.pow(1 - i / count, .8);
+      const source = this.context.createBufferSource();
+      const filter = this.context.createBiquadFilter();
+      const gain = this.context.createGain();
+      source.buffer = buffer;
+      filter.type = 'bandpass';
+      filter.frequency.value = filterFrequency;
+      filter.Q.value = .72;
+      const when = this.context.currentTime + delay;
+      gain.gain.setValueAtTime(volume, when);
+      gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.fx);
+      source.start(when);
+    }
+    kick(power = .5) {
+      this.ensure();
+      this.tone(104 + power * 38, .17, 'sine', .18 + power * .13, 35);
+      this.tone(470 + power * 250, .065, 'triangle', .045 + power * .04, 170);
+      this.noise(.055, .04 + power * .04, 1800);
+    }
+    impact(strength = .5, material = 'rock') {
+      this.ensure();
+      const value = clamp(strength, 0, 1);
+      if (material === 'alien') {
+        this.tone(240 + value * 190, .14, 'square', .07 + value * .07, 82);
+        this.tone(780, .09, 'triangle', .03 + value * .035, 290);
+      } else if (material === 'anchor') {
+        this.tone(420, .28, 'sine', .07, 970);
+        this.tone(840, .22, 'triangle', .035, 540, .035);
+      } else if (material === 'glass') {
+        this.tone(990, .4, 'sine', .06 + value * .06, 430);
+        this.tone(1430, .24, 'triangle', .04, 760, .02);
+        this.noise(.13, .06, 3200);
+      } else {
+        this.tone(76 + value * 45, .16, 'sine', .1 + value * .1, 31);
+        this.noise(.1, .07 + value * .08, 680);
+      }
+    }
+    jump(second = false) {
+      this.ensure();
+      this.tone(second ? 430 : 280, .13, 'triangle', .055, second ? 880 : 570);
+    }
+    spin() {
+      this.ensure();
+      this.tone(180, .42, 'sawtooth', .055, 760);
+      this.tone(520, .3, 'sine', .035, 980, .08);
+    }
+    score(high = false) {
+      this.ensure();
+      const base = high ? 620 : 440;
+      this.tone(base, .13, 'triangle', .06, base * 1.5);
+      this.tone(base * 1.25, .2, 'sine', .04, base * 1.8, .05);
+    }
+    damage() {
+      this.ensure();
+      this.tone(92, .28, 'sawtooth', .11, 39);
+      this.noise(.12, .1, 530);
+    }
+    win() {
+      this.ensure();
+      [0, 4, 7, 12, 16].forEach((semitone, index) => {
+        const frequency = 330 * Math.pow(2, semitone / 12);
+        this.tone(frequency, .58, 'triangle', .055, frequency * 1.35, index * .09);
+      });
+    }
+    recall(active, tension = 0) {
+      if (!this.context || !this.fx) return;
+      const now = this.context.currentTime;
+      if (active && !this.recallOsc) {
+        this.recallOsc = this.context.createOscillator();
+        this.recallGain = this.context.createGain();
+        this.recallOsc.type = 'sine';
+        this.recallOsc.frequency.value = 110;
+        this.recallGain.gain.value = .0001;
+        this.recallOsc.connect(this.recallGain);
+        this.recallGain.connect(this.fx);
+        this.recallOsc.start();
+      }
+      if (this.recallOsc && this.recallGain) {
+        this.recallOsc.frequency.setTargetAtTime(110 + tension * 240, now, .025);
+        this.recallGain.gain.setTargetAtTime(active ? .012 + tension * .05 : .0001, now, .025);
+        if (!active) {
+          const oscillator = this.recallOsc, gain = this.recallGain;
+          this.recallOsc = this.recallGain = null;
+          setTimeout(() => { try { oscillator.stop(); gain.disconnect(); } catch (_) {} }, 190);
+        }
+      }
+    }
+    startMusic() {
+      if (this.sequence || !this.context) return;
+      const interval = 60000 / 102 / 2;
+      const roots = [55, 65.41, 49, 73.42, 55, 82.41, 65.41, 49];
+      this.sequence = setInterval(() => {
+        if (!this.context || this.context.state !== 'running' || this.muted || !game || game.paused || game.won) return;
+        const step = this.step++ % 16;
+        const root = roots[Math.floor(step / 2) % roots.length];
+        if (step % 4 === 0) this.tone(root, .48, 'sine', .045, root * .5, 0, this.music);
+        if (step % 2 === 1) this.tone(root * 4, .22, 'triangle', .012, root * 5, 0, this.music);
+        if (step % 8 === 6) this.tone(root * 6, .7, 'sine', .009, root * 8, 0, this.music);
+      }, interval);
+    }
+  }
+
+  class ParticleField {
+    constructor(scene, count = 900) {
+      this.count = count;
+      this.cursor = 0;
+      this.life = new Float32Array(count);
+      this.maxLife = new Float32Array(count);
+      this.velocity = Array.from({ length: count }, () => new T.Vector3());
+      this.position = new Float32Array(count * 3);
+      this.color = new Float32Array(count * 3);
+      const geometry = new T.BufferGeometry();
+      geometry.setAttribute('position', new T.BufferAttribute(this.position, 3).setUsage(T.DynamicDrawUsage));
+      geometry.setAttribute('color', new T.BufferAttribute(this.color, 3).setUsage(T.DynamicDrawUsage));
+      geometry.setDrawRange(0, count);
+      const material = new T.PointsMaterial({
+        size: .34,
+        map: radialTexture('rgba(255,255,255,1)'),
+        transparent: true,
+        opacity: .94,
+        depthWrite: false,
+        vertexColors: true,
+        blending: T.AdditiveBlending,
+        sizeAttenuation: true,
+      });
+      this.points = new T.Points(geometry, material);
+      this.points.frustumCulled = false;
+      scene.add(this.points);
+    }
+    burst(origin, color, amount = 14, speed = 9, life = .65, upward = .45) {
+      const tint = color instanceof T.Color ? color : new T.Color(color);
+      for (let n = 0; n < amount; n++) {
+        const index = this.cursor++ % this.count;
+        const offset = index * 3;
+        const theta = cosmeticRandom() * TAU;
+        const vertical = randomRange(-.18, 1, cosmeticRandom);
+        const horizontal = Math.sqrt(Math.max(0, 1 - vertical * vertical));
+        const force = speed * randomRange(.28, 1, cosmeticRandom);
+        this.position[offset] = origin.x + randomRange(-.12, .12);
+        this.position[offset + 1] = origin.y + randomRange(-.08, .18);
+        this.position[offset + 2] = origin.z + randomRange(-.12, .12);
+        this.velocity[index].set(Math.cos(theta) * horizontal * force, (vertical + upward) * force, Math.sin(theta) * horizontal * force);
+        this.color[offset] = tint.r;
+        this.color[offset + 1] = tint.g;
+        this.color[offset + 2] = tint.b;
+        this.life[index] = this.maxLife[index] = life * randomRange(.55, 1.15);
+      }
+    }
+    update(dt) {
+      for (let index = 0; index < this.count; index++) {
+        const offset = index * 3;
+        if (this.life[index] <= 0) {
+          this.position[offset + 1] = -9999;
+          continue;
+        }
+        this.life[index] -= dt;
+        const velocity = this.velocity[index];
+        const drag = Math.exp(-2.4 * dt);
+        velocity.x *= drag;
+        velocity.z *= drag;
+        velocity.y -= 7.5 * dt;
+        this.position[offset] += velocity.x * dt;
+        this.position[offset + 1] += velocity.y * dt;
+        this.position[offset + 2] += velocity.z * dt;
+        const fade = clamp(this.life[index] / this.maxLife[index], 0, 1);
+        this.color[offset] *= .985;
+        this.color[offset + 1] *= .985;
+        this.color[offset + 2] *= .985;
+        if (fade <= 0) this.position[offset + 1] = -9999;
+      }
+      this.points.geometry.attributes.position.needsUpdate = true;
+      this.points.geometry.attributes.color.needsUpdate = true;
+    }
+    clear() {
+      this.cursor = 0;
+      this.life.fill(0);
+      this.maxLife.fill(0);
+      for (let index = 0; index < this.count; index++) {
+        this.position[index * 3 + 1] = -9999;
+        this.velocity[index].set(0, 0, 0);
+      }
+      this.points.geometry.attributes.position.needsUpdate = true;
+      this.points.geometry.attributes.color.needsUpdate = true;
+    }
+  }
+
+  let audio = new AudioEngine();
+  let input = null;
+  let world = null;
+  let game = null;
+
+  const CRATERS = [
+    { x: 0, z: 105, radius: 62, depth: 7.5, rim: 2.1 },
+    { x: -74, z: 91, radius: 27, depth: 5.2, rim: 1.4 },
+    { x: 82, z: 112, radius: 33, depth: 6.4, rim: 1.8 },
+    { x: -128, z: -75, radius: 46, depth: 8.2, rim: 2.2 },
+    { x: 122, z: -88, radius: 56, depth: 9.5, rim: 2.6 },
+    { x: -34, z: -186, radius: 31, depth: 4.8, rim: 1.7 },
+    { x: 72, z: -222, radius: 24, depth: 4.2, rim: 1.1 },
+  ];
+
+  function terrainHeightAt(x, z) {
+    let height = -2.8 + fbm(x * .012, z * .012, 5) * 3.3 + fbm(x * .041 + 11, z * .041 - 7, 3) * .8;
+    for (const crater of CRATERS) {
+      const distance = Math.hypot(x - crater.x, z - crater.z);
+      const normalized = distance / crater.radius;
+      if (normalized < 1) {
+        const bowl = Math.pow(1 - normalized, 2);
+        height -= crater.depth * bowl;
+      }
+      const rimDistance = Math.abs(normalized - 1);
+      if (rimDistance < .18) height += crater.rim * (1 - rimDistance / .18);
+    }
+    // Orpheus Rim: a true sixty-metre mesa, climbed via four ball anchors.
+    const mesaDistance = Math.hypot(x * 1.03, (z + 150) * .94);
+    height += 59 * smootherstep(148, 100, mesaDistance);
+    // A broken northern crown keeps the silhouette geological rather than cylindrical.
+    height += Math.max(0, valueNoise(x * .018 - 4, z * .018 + 9)) * smoothstep(150, 80, mesaDistance) * 4.5;
+    return height;
+  }
+
+  function groundHeightAt(x, z) {
+    return world?.sampleTerrainHeight ? world.sampleTerrainHeight(x, z) : terrainHeightAt(x, z);
+  }
+
+  function mergeStaticGeometries(sources) {
+    const geometries = sources.map(source => {
+      const geometry = source.index ? source.toNonIndexed() : source.clone();
+      source.dispose();
+      return geometry;
+    });
+    const merged = new T.BufferGeometry();
+    for (const name of ['position', 'normal', 'uv']) {
+      const attributes = geometries.map(geometry => geometry.getAttribute(name));
+      if (attributes.some(attribute => !attribute)) continue;
+      const itemSize = attributes[0].itemSize;
+      const length = attributes.reduce((total, attribute) => total + attribute.array.length, 0);
+      const array = new Float32Array(length);
+      let offset = 0;
+      for (const attribute of attributes) {
+        array.set(attribute.array, offset);
+        offset += attribute.array.length;
+      }
+      merged.setAttribute(name, new T.BufferAttribute(array, itemSize));
+    }
+    geometries.forEach(geometry => geometry.dispose());
+    merged.computeBoundingSphere();
+    return merged;
+  }
+
+  class LunarWorld {
+    constructor() {
+      this.scene = new T.Scene();
+      this.scene.background = new T.Color(0x000005);
+      this.scene.fog = new T.FogExp2(0x02020a, .00072);
+      this.camera = new T.PerspectiveCamera(76, 1, .05, 2400);
+      this.camera.rotation.order = 'YXZ';
+      this.scene.add(this.camera);
+      try {
+        this.renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
+      } catch (error) {
+        fatal(`WebGL could not start: ${error.message || error}`);
+        throw error;
+      }
+      this.renderer.outputColorSpace = T.SRGBColorSpace;
+      this.renderer.toneMapping = T.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = 1.18;
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = T.PCFSoftShadowMap;
+      this.renderer.setClearColor(0x000005, 1);
+      this.qualityOrder = ['LOW', 'MED', 'HIGH'];
+      let rememberedQuality = 'HIGH';
+      try { rememberedQuality = localStorage.getItem('kickball-lunar-quality') || 'HIGH'; } catch (_) {}
+      const requested = (params.get('quality') || rememberedQuality).toUpperCase();
+      this.quality = this.qualityOrder.includes(requested) ? requested : 'HIGH';
+      this.frameSamples = [];
+      this.autoReduced = false;
+      this.autoReductionCooldown = 0;
+      this.materials = {};
+      this.platforms = [];
+      this.anchors = [];
+      this.breakables = [];
+      this.enemies = [];
+      this.elapsed = 0;
+      this.makeMaterials();
+      this.makeLights();
+      this.makeSky();
+      this.makeTerrain();
+      this.makeCliffRoute();
+      this.makeCourseObjects();
+      this.makeBreakableField();
+      this.makeFirstPersonRig();
+      this.makeBallVisual();
+      this.particles = new ParticleField(this.scene, this.quality === 'LOW' ? 520 : 900);
+      this.resize();
+      window.addEventListener('resize', () => this.resize(), { passive: true });
+      this.applyQuality(this.quality, false);
+    }
+    makeMaterials() {
+      const textures = makeRegolithTextures();
+      textures.color.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+      this.materials.regolith = new T.MeshStandardMaterial({
+        map: textures.color,
+        bumpMap: textures.bump,
+        bumpScale: 1.05,
+        vertexColors: true,
+        roughness: .96,
+        metalness: .035,
+        color: 0xd4d9e2,
+      });
+      this.materials.rock = new T.MeshStandardMaterial({ color: 0x777d8c, roughness: .94, metalness: .04 });
+      this.materials.darkRock = new T.MeshStandardMaterial({
+        color: 0x626978, roughness: .97, metalness: .02,
+        emissive: 0x0d1120, emissiveIntensity: .16,
+        map: this.materials.regolith.map, bumpMap: this.materials.regolith.bumpMap, bumpScale: .72,
+      });
+      this.materials.glass = new T.MeshPhysicalMaterial({
+        color: 0x6ddfff, emissive: 0x116a8c, emissiveIntensity: 2.6,
+        metalness: .08, roughness: .16, transmission: .2, transparent: true, opacity: .82,
+      });
+      this.materials.violet = new T.MeshStandardMaterial({ color: 0x7b5bca, roughness: .34, metalness: .52 });
+      this.materials.alien = new T.MeshStandardMaterial({ color: 0x2b194d, roughness: .42, metalness: .3 });
+      this.materials.alienShell = new T.MeshStandardMaterial({ color: 0x6953ad, roughness: .3, metalness: .62 });
+      this.materials.cyan = new T.MeshStandardMaterial({ color: 0x6eeeff, emissive: 0x1dbbd6, emissiveIntensity: 3.8, roughness: .18, metalness: .5 });
+      this.materials.gold = new T.MeshStandardMaterial({ color: 0xffd76f, emissive: 0xd78c18, emissiveIntensity: 3.2, roughness: .22, metalness: .62 });
+      this.materials.black = new T.MeshStandardMaterial({ color: 0x080813, roughness: .24, metalness: .8 });
+      this.glowCyan = radialTexture('rgba(120,242,255,1)', 'rgba(25,118,255,0)');
+      this.glowGold = radialTexture('rgba(255,226,116,1)', 'rgba(255,110,26,0)');
+      this.glowViolet = radialTexture('rgba(202,134,255,1)', 'rgba(79,23,255,0)');
+    }
+    makeLights() {
+      this.ambient = new T.HemisphereLight(0x98bdff, 0x090610, .43);
+      this.scene.add(this.ambient);
+      this.sun = new T.DirectionalLight(0xfff1d6, 4.65);
+      this.sun.position.set(-130, 210, 110);
+      this.sun.castShadow = true;
+      this.sun.shadow.camera.near = 10;
+      this.sun.shadow.camera.far = 540;
+      this.sun.shadow.camera.left = -155;
+      this.sun.shadow.camera.right = 155;
+      this.sun.shadow.camera.top = 155;
+      this.sun.shadow.camera.bottom = -155;
+      this.sun.shadow.bias = -.00022;
+      this.sun.shadow.normalBias = .035;
+      this.scene.add(this.sun);
+      this.scene.add(this.sun.target);
+      this.rimLight = new T.DirectionalLight(0x6254ff, 1.1);
+      this.rimLight.position.set(170, 90, -210);
+      this.scene.add(this.rimLight);
+    }
+    makeGlowSprite(texture, scale, opacity = 1) {
+      const sprite = new T.Sprite(new T.SpriteMaterial({
+        map: texture, color: 0xffffff, transparent: true, opacity,
+        depthWrite: false, blending: T.AdditiveBlending,
+      }));
+      sprite.scale.setScalar(scale);
+      return sprite;
+    }
+    makeSky() {
+      const count = this.quality === 'LOW' ? 2200 : 5200;
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const starColor = new T.Color();
+      for (let i = 0; i < count; i++) {
+        const z = randomRange(-1, 1, worldRandom);
+        const angle = worldRandom() * TAU;
+        const radius = randomRange(1000, 1700, worldRandom);
+        const planar = Math.sqrt(1 - z * z);
+        positions[i * 3] = Math.cos(angle) * planar * radius;
+        positions[i * 3 + 1] = z * radius;
+        positions[i * 3 + 2] = Math.sin(angle) * planar * radius;
+        const choice = worldRandom();
+        if (choice < .12) starColor.setRGB(.52, .82, 1);
+        else if (choice < .22) starColor.setRGB(1, .82, .54);
+        else if (choice < .28) starColor.setRGB(.88, .61, 1);
+        else starColor.setRGB(.82 + worldRandom() * .18, .85 + worldRandom() * .15, 1);
+        colors[i * 3] = starColor.r;
+        colors[i * 3 + 1] = starColor.g;
+        colors[i * 3 + 2] = starColor.b;
+      }
+      const geometry = new T.BufferGeometry();
+      geometry.setAttribute('position', new T.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
+      this.stars = new T.Points(geometry, new T.PointsMaterial({
+        size: 1.7, sizeAttenuation: false, vertexColors: true,
+        transparent: true, opacity: .96, depthWrite: false,
+      }));
+      this.scene.add(this.stars);
+
+      // A dense diagonal stellar band makes the backdrop feel like a dark planetarium.
+      const bandCount = 1500;
+      const bandPositions = new Float32Array(bandCount * 3);
+      const bandColors = new Float32Array(bandCount * 3);
+      for (let i = 0; i < bandCount; i++) {
+        const angle = worldRandom() * TAU;
+        const latitude = randomRange(-.085, .085, worldRandom) + Math.sin(angle * 2) * .018;
+        const radius = randomRange(1120, 1540, worldRandom);
+        bandPositions[i * 3] = Math.cos(angle) * Math.cos(latitude) * radius;
+        bandPositions[i * 3 + 1] = Math.sin(latitude) * radius + Math.sin(angle) * 210;
+        bandPositions[i * 3 + 2] = Math.sin(angle) * Math.cos(latitude) * radius;
+        bandColors[i * 3] = .34 + worldRandom() * .28;
+        bandColors[i * 3 + 1] = .46 + worldRandom() * .3;
+        bandColors[i * 3 + 2] = .7 + worldRandom() * .3;
+      }
+      const bandGeometry = new T.BufferGeometry();
+      bandGeometry.setAttribute('position', new T.BufferAttribute(bandPositions, 3));
+      bandGeometry.setAttribute('color', new T.BufferAttribute(bandColors, 3));
+      this.starBand = new T.Points(bandGeometry, new T.PointsMaterial({
+        size: 1.25, sizeAttenuation: false, vertexColors: true,
+        transparent: true, opacity: .43, depthWrite: false, blending: T.AdditiveBlending,
+      }));
+      this.starBand.rotation.z = -.28;
+      this.scene.add(this.starBand);
+
+      this.makePlanet({
+        position: new T.Vector3(390, 290, -770), radius: 118,
+        colors: ['#0c1b4b', '#155fc6', '#2bd9cf', '#e8e9d4', '#8366f5'],
+        atmosphere: 0x59dfff, rings: false, tilt: -.18,
+      });
+      this.makePlanet({
+        position: new T.Vector3(-590, 175, -860), radius: 175,
+        colors: ['#26123e', '#673ca7', '#f08bc4', '#edc071', '#5146a9'],
+        atmosphere: 0xd98dff, rings: true, tilt: .47,
+      });
+
+      const sunDisk = this.makeGlowSprite(this.glowGold, 90, .7);
+      sunDisk.position.set(-720, 820, 420);
+      this.scene.add(sunDisk);
+      const sunCore = this.makeGlowSprite(this.glowGold, 24, 1);
+      sunCore.position.copy(sunDisk.position);
+      this.scene.add(sunCore);
+    }
+    makePlanet(options) {
+      const width = 1024, height = 512;
+      const textureCanvas = document.createElement('canvas');
+      textureCanvas.width = width;
+      textureCanvas.height = height;
+      const context = textureCanvas.getContext('2d');
+      const gradient = context.createLinearGradient(0, 0, 0, height);
+      options.colors.forEach((color, index) => gradient.addColorStop(index / (options.colors.length - 1), color));
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, width, height);
+      context.globalCompositeOperation = 'screen';
+      for (let i = 0; i < 42; i++) {
+        const y = worldRandom() * height;
+        const thickness = randomRange(2, 28, worldRandom);
+        context.fillStyle = `rgba(${Math.floor(randomRange(80, 255, worldRandom))},${Math.floor(randomRange(80, 230, worldRandom))},255,${randomRange(.015, .12, worldRandom)})`;
+        context.fillRect(0, y, width, thickness);
+      }
+      context.globalCompositeOperation = 'multiply';
+      for (let i = 0; i < 28; i++) {
+        const x = worldRandom() * width, y = worldRandom() * height;
+        const rx = randomRange(20, 130, worldRandom), ry = randomRange(4, 22, worldRandom);
+        context.fillStyle = `rgba(10,5,30,${randomRange(.025, .15, worldRandom)})`;
+        context.beginPath();
+        context.ellipse(x, y, rx, ry, randomRange(-.2, .2, worldRandom), 0, TAU);
+        context.fill();
+      }
+      const texture = new T.CanvasTexture(textureCanvas);
+      texture.colorSpace = T.SRGBColorSpace;
+      const planet = new T.Mesh(
+        new T.SphereGeometry(options.radius, 64, 40),
+        new T.MeshStandardMaterial({ map: texture, roughness: .78, metalness: .02, emissive: options.atmosphere, emissiveIntensity: .055 }),
+      );
+      planet.position.copy(options.position);
+      planet.rotation.z = options.tilt;
+      this.scene.add(planet);
+      const atmosphere = new T.Mesh(
+        new T.SphereGeometry(options.radius * 1.055, 48, 32),
+        new T.MeshBasicMaterial({ color: options.atmosphere, transparent: true, opacity: .14, side: T.BackSide, blending: T.AdditiveBlending }),
+      );
+      atmosphere.position.copy(options.position);
+      this.scene.add(atmosphere);
+      const glow = this.makeGlowSprite(radialTexture(`rgba(${new T.Color(options.atmosphere).r * 255},${new T.Color(options.atmosphere).g * 255},${new T.Color(options.atmosphere).b * 255},.62)`), options.radius * 2.85, .4);
+      glow.position.copy(options.position).add(new T.Vector3(0, 0, 8));
+      this.scene.add(glow);
+      if (options.rings) {
+        const rings = new T.Mesh(
+          new T.RingGeometry(options.radius * 1.28, options.radius * 1.92, 128, 4),
+          new T.MeshBasicMaterial({ color: 0xdcc6ff, transparent: true, opacity: .3, side: T.DoubleSide, depthWrite: false }),
+        );
+        rings.position.copy(options.position);
+        rings.rotation.set(Math.PI / 2.55, .18, options.tilt);
+        this.scene.add(rings);
+      }
+      planet.userData.spinRate = randomRange(.008, .018, worldRandom);
+      if (!this.planets) this.planets = [];
+      this.planets.push(planet);
+    }
+    makeTerrain() {
+      const size = 760;
+      const segments = this.quality === 'LOW' ? 112 : 168;
+      const geometry = new T.PlaneGeometry(size, size, segments, segments);
+      geometry.rotateX(-Math.PI / 2);
+      const positions = geometry.attributes.position;
+      const colors = new Float32Array(positions.count * 3);
+      const color = new T.Color();
+      this.terrainSize = size;
+      this.terrainSegments = segments;
+      this.terrainHeights = new Float32Array(positions.count);
+      for (let i = 0; i < positions.count; i++) {
+        const x = positions.getX(i), z = positions.getZ(i);
+        const height = terrainHeightAt(x, z);
+        positions.setY(i, height);
+        this.terrainHeights[i] = height;
+        const sampleX = terrainHeightAt(x + 1.4, z) - terrainHeightAt(x - 1.4, z);
+        const sampleZ = terrainHeightAt(x, z + 1.4) - terrainHeightAt(x, z - 1.4);
+        const slope = clamp(Math.hypot(sampleX, sampleZ) * .1, 0, 1);
+        const tone = clamp(.54 + fbm(x * .035, z * .035, 3) * .16 - slope * .2 + height * .0008, .24, .78);
+        color.setRGB(tone * .86, tone * .89, tone * .98);
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+      }
+      geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
+      geometry.computeVertexNormals();
+      this.terrain = new T.Mesh(geometry, this.materials.regolith);
+      this.terrain.receiveShadow = true;
+      this.scene.add(this.terrain);
+
+      const rockGeometry = new T.DodecahedronGeometry(1, 0);
+      const rockCount = this.quality === 'LOW' ? 250 : this.quality === 'MED' ? 430 : 650;
+      this.rockField = new T.InstancedMesh(rockGeometry, this.materials.rock, rockCount);
+      this.rockField.receiveShadow = true;
+      this.rockField.castShadow = this.quality === 'HIGH';
+      const matrix = new T.Matrix4();
+      const quaternion = new T.Quaternion();
+      const scale = new T.Vector3();
+      const position = new T.Vector3();
+      for (let i = 0; i < rockCount; i++) {
+        let x, z;
+        for (let attempt = 0; attempt < 8; attempt++) {
+          x = randomRange(-350, 350, worldRandom);
+          z = randomRange(-350, 330, worldRandom);
+          const protectedCourse = Math.abs(x) < (z > 30 ? 25 : 42) && z < 165 && z > -255;
+          if (!protectedCourse || attempt === 7) break;
+        }
+        const y = this.sampleTerrainHeight(x, z);
+        const size = randomRange(.25, 2.7, worldRandom) * (worldRandom() > .96 ? 2.4 : 1);
+        position.set(x, y + size * .35, z);
+        quaternion.setFromEuler(new T.Euler(worldRandom() * TAU, worldRandom() * TAU, worldRandom() * TAU));
+        scale.set(size * randomRange(.7, 1.35, worldRandom), size * randomRange(.45, 1.4, worldRandom), size * randomRange(.65, 1.5, worldRandom));
+        matrix.compose(position, quaternion, scale);
+        this.rockField.setMatrixAt(i, matrix);
+      }
+      this.rockField.instanceMatrix.needsUpdate = true;
+      this.scene.add(this.rockField);
+    }
+    sampleTerrainHeight(x, z) {
+      const size = this.terrainSize;
+      const segments = this.terrainSegments;
+      if (!this.terrainHeights || !size || !segments) return terrainHeightAt(x, z);
+      const half = size / 2;
+      const gx = clamp((clamp(x, -half, half) + half) / size * segments, 0, segments);
+      const gz = clamp((clamp(z, -half, half) + half) / size * segments, 0, segments);
+      const ix = Math.min(segments - 1, Math.floor(gx));
+      const iz = Math.min(segments - 1, Math.floor(gz));
+      const fx = gx - ix;
+      const fz = gz - iz;
+      const stride = segments + 1;
+      const a = this.terrainHeights[ix + stride * iz];
+      const b = this.terrainHeights[ix + stride * (iz + 1)];
+      const c = this.terrainHeights[ix + 1 + stride * (iz + 1)];
+      const d = this.terrainHeights[ix + 1 + stride * iz];
+      // PlaneGeometry splits every quad along b--d (faces a,b,d and b,c,d).
+      if (fx + fz <= 1) return a + (d - a) * fx + (b - a) * fz;
+      return b * (1 - fx) + d * (1 - fz) + c * (fx + fz - 1);
+    }
+    terrainSlopeAt(x, z) {
+      const radius = 1.25;
+      const dx = (this.sampleTerrainHeight(x + radius, z) - this.sampleTerrainHeight(x - radius, z)) / (radius * 2);
+      const dz = (this.sampleTerrainHeight(x, z + radius) - this.sampleTerrainHeight(x, z - radius)) / (radius * 2);
+      return Math.hypot(dx, dz);
+    }
+    makeIrregularPillar(platform) {
+      const height = platform.top - this.sampleTerrainHeight(platform.x, platform.z) + 15;
+      const geometry = new T.CylinderGeometry(platform.radius * .78, platform.radius * 1.14, height, 18, 9, false);
+      const positions = geometry.attributes.position;
+      for (let i = 0; i < positions.count; i++) {
+        const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+        const radial = Math.hypot(x, z);
+        if (radial > platform.radius * .4) {
+          const angle = Math.atan2(z, x);
+          const strata = Math.sin(y * .72 + platform.x * .1) * .035;
+          const distortion = 1 + valueNoise(angle * 2.4 + platform.x, y * .07 + platform.z) * .18 + strata;
+          positions.setX(i, x * distortion);
+          positions.setZ(i, z * distortion);
+        }
+      }
+      geometry.computeVertexNormals();
+      const mesh = new T.Mesh(geometry, this.materials.darkRock);
+      mesh.position.set(platform.x, platform.top - height / 2, platform.z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.scene.add(mesh);
+      platform.mesh = mesh;
+      const cap = new T.Mesh(new T.CylinderGeometry(platform.radius * .77, platform.radius * .82, .75, 32), this.materials.regolith);
+      cap.position.set(platform.x, platform.top - .24, platform.z);
+      cap.receiveShadow = true;
+      cap.castShadow = true;
+      this.scene.add(cap);
+      platform.cap = cap;
+    }
+    makeCliffRoute() {
+      this.platforms = [
+        { id: 'ledge-1', x: -18, z: 8, radius: 13, top: 14 },
+        { id: 'ledge-2', x: 17, z: -9, radius: 13.5, top: 31 },
+        { id: 'ledge-3', x: -15, z: -27, radius: 14, top: 47 },
+        { id: 'ledge-4', x: 12, z: -48, radius: 16, top: 62 },
+      ];
+      this.platforms.forEach(platform => this.makeIrregularPillar(platform));
+      this.platforms.forEach((platform, index) => {
+        const group = new T.Group();
+        const torus = new T.Mesh(new T.TorusGeometry(1.65, .18, 12, 40), this.materials.cyan);
+        group.add(torus);
+        const crystal = new T.Mesh(new T.OctahedronGeometry(.72, 0), index === this.platforms.length - 1 ? this.materials.gold : this.materials.cyan);
+        group.add(crystal);
+        const glow = this.makeGlowSprite(index === this.platforms.length - 1 ? this.glowGold : this.glowCyan, 6.4, .72);
+        group.add(glow);
+        const beam = new T.Mesh(
+          new T.CylinderGeometry(.055, .18, 5.8, 8),
+          index === this.platforms.length - 1 ? this.materials.gold : this.materials.cyan,
+        );
+        beam.position.y = -3.2;
+        group.add(beam);
+        const beacon = new T.PointLight(index === this.platforms.length - 1 ? 0xffc85c : 0x6defff, 5.5, 15, 2);
+        group.add(beacon);
+        // Hang sockets on the player-facing cliff lips so the climb reads from below.
+        group.position.set(platform.x * .58, platform.top + 5.1, platform.z + platform.radius * .82);
+        group.traverse(object => { if (object.isMesh) object.castShadow = true; });
+        this.scene.add(group);
+        this.anchors.push({
+          id: `anchor-${index + 1}`, index, position: group.position.clone(), group,
+          torus, crystal, glow, used: false, pulse: worldRandom() * TAU,
+        });
+      });
+    }
+    makeCourseObjects() {
+      const gateY = this.sampleTerrainHeight(0, 43) + 5.4;
+      this.gate = { active: true, position: new T.Vector3(0, gateY, 43), width: 24, height: 10 };
+      this.gate.group = new T.Group();
+      this.gate.group.position.copy(this.gate.position);
+      const field = new T.Mesh(
+        new T.PlaneGeometry(this.gate.width, this.gate.height, 22, 10),
+        new T.MeshBasicMaterial({ color: 0x5eeaff, transparent: true, opacity: .24, side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending }),
+      );
+      field.rotation.y = 0;
+      this.gate.field = field;
+      this.gate.group.add(field);
+      for (const side of [-1, 1]) {
+        const pylon = new T.Mesh(new T.CylinderGeometry(.9, 1.5, 12, 8), this.materials.black);
+        pylon.position.x = side * (this.gate.width / 2 + .7);
+        pylon.castShadow = true;
+        this.gate.group.add(pylon);
+        const strip = new T.Mesh(new T.CylinderGeometry(.15, .15, 10.5, 8), this.materials.cyan);
+        strip.position.copy(pylon.position);
+        strip.position.z = .55;
+        this.gate.group.add(strip);
+      }
+      this.gate.glow = this.makeGlowSprite(this.glowCyan, 24, .28);
+      this.gate.group.add(this.gate.glow);
+      this.scene.add(this.gate.group);
+
+      const fractureY = this.sampleTerrainHeight(0, -105) + 5.8;
+      this.fracture = { active: true, position: new T.Vector3(0, fractureY, -105), width: 25, height: 12, shards: [] };
+      this.fracture.group = new T.Group();
+      this.fracture.group.position.copy(this.fracture.position);
+      const shardMatrices = { violet: [], rock: [] };
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 7; col++) {
+          const radius = randomRange(1.15, 2.25, worldRandom);
+          const position = new T.Vector3((col - 3) * 3.3 + randomRange(-.45, .45, worldRandom), (row - 1.5) * 3 + randomRange(-.35, .35, worldRandom), randomRange(-.8, .8, worldRandom));
+          const quaternion = new T.Quaternion().setFromEuler(new T.Euler(worldRandom() * TAU, worldRandom() * TAU, worldRandom() * TAU));
+          const matrix = new T.Matrix4().compose(position, quaternion, new T.Vector3(radius, radius, radius * .58));
+          shardMatrices[col % 3 === 0 ? 'violet' : 'rock'].push(matrix);
+        }
+      }
+      for (const [kind, matrices] of Object.entries(shardMatrices)) {
+        const shards = new T.InstancedMesh(new T.DodecahedronGeometry(1, 0), this.materials[kind], matrices.length);
+        matrices.forEach((matrix, index) => shards.setMatrixAt(index, matrix));
+        shards.instanceMatrix.needsUpdate = true;
+        shards.castShadow = shards.receiveShadow = true;
+        this.fracture.group.add(shards);
+        this.fracture.shards.push(shards);
+      }
+      const fractureGlow = this.makeGlowSprite(this.glowViolet, 22, .23);
+      this.fracture.group.add(fractureGlow);
+      this.scene.add(this.fracture.group);
+
+      const goalY = this.sampleTerrainHeight(0, -229) + 6.5;
+      this.goal = { open: false, position: new T.Vector3(0, goalY, -229), radius: 5.7, group: new T.Group() };
+      this.goal.group.position.copy(this.goal.position);
+      const outer = new T.Mesh(new T.TorusGeometry(6.8, .58, 18, 72), this.materials.gold);
+      this.goal.group.add(outer);
+      const inner = new T.Mesh(new T.RingGeometry(.3, 5.65, 64), new T.MeshBasicMaterial({ color: 0xffd96b, transparent: true, opacity: .19, side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending }));
+      this.goal.group.add(inner);
+      this.goal.glow = this.makeGlowSprite(this.glowGold, 25, .52);
+      this.goal.group.add(this.goal.glow);
+      this.goal.group.visible = false;
+      this.scene.add(this.goal.group);
+
+      // Cyan stakes redundantly mark the intended route without turning the moon into a neon court.
+      const routePositions = [];
+      for (const z of [112, 86, 60, 34, 18, -83, -128, -160, -196, -220]) {
+        for (const x of [-13, 13]) {
+          const y = this.sampleTerrainHeight(x, z);
+          routePositions.push(new T.Vector3(x, y, z));
+        }
+      }
+      const postInstances = new T.InstancedMesh(new T.CylinderGeometry(.08, .13, 2.6, 7), this.materials.black, routePositions.length);
+      const lampInstances = new T.InstancedMesh(new T.SphereGeometry(.18, 10, 7), this.materials.cyan, routePositions.length);
+      const matrix = new T.Matrix4();
+      routePositions.forEach((position, index) => {
+        postInstances.setMatrixAt(index, matrix.makeTranslation(position.x, position.y + 1.3, position.z));
+        lampInstances.setMatrixAt(index, matrix.makeTranslation(position.x, position.y + 2.6, position.z));
+      });
+      postInstances.instanceMatrix.needsUpdate = true;
+      lampInstances.instanceMatrix.needsUpdate = true;
+      const glowGeometry = new T.BufferGeometry();
+      const glowPositions = new Float32Array(routePositions.length * 3);
+      routePositions.forEach((position, index) => {
+        glowPositions[index * 3] = position.x;
+        glowPositions[index * 3 + 1] = position.y + 2.6;
+        glowPositions[index * 3 + 2] = position.z;
+      });
+      glowGeometry.setAttribute('position', new T.BufferAttribute(glowPositions, 3));
+      const glows = new T.Points(glowGeometry, new T.PointsMaterial({
+        color: 0xa5f7ff, size: 2.15, sizeAttenuation: true, map: this.glowCyan,
+        transparent: true, opacity: .62, depthWrite: false, blending: T.AdditiveBlending,
+      }));
+      this.scene.add(postInstances, lampInstances, glows);
+      this.routeLights = { posts: postInstances, lamps: lampInstances, glows };
+    }
+    makeBreakableField() {
+      const reserved = [
+        { x: 0, z: 105, r: 25 }, { x: 0, z: 60, r: 24 }, { x: 0, z: -150, r: 42 },
+      ];
+      const specs = [];
+      for (let i = 0; i < 38; i++) {
+        let x, z;
+        for (let attempt = 0; attempt < 12; attempt++) {
+          const pathBias = i < 18;
+          x = pathBias ? randomRange(-26, 26, worldRandom) : randomRange(-150, 150, worldRandom);
+          z = pathBias ? randomRange(-220, 120, worldRandom) : randomRange(-250, 145, worldRandom);
+          if (!reserved.some(area => Math.hypot(x - area.x, z - area.z) < area.r) || attempt === 11) break;
+        }
+        const radius = randomRange(.65, 2.1, worldRandom);
+        const y = this.sampleTerrainHeight(x, z);
+        const position = new T.Vector3(x, y + radius * .72, z);
+        const quaternion = new T.Quaternion().setFromEuler(new T.Euler(worldRandom() * TAU, worldRandom() * TAU, worldRandom() * TAU));
+        const scale = new T.Vector3(radius * randomRange(.7, 1.35, worldRandom), radius * randomRange(.7, 1.55, worldRandom), radius * randomRange(.7, 1.35, worldRandom));
+        const matrix = new T.Matrix4().compose(position, quaternion, scale);
+        specs.push({ id: `moonrock-${i}`, kind: i % 7 === 0 ? 'violet' : 'rock', position, radius: radius * 1.15, matrix, alive: true });
+      }
+      this.breakableMeshes = [];
+      const geometry = new T.DodecahedronGeometry(1, 0);
+      for (const kind of ['violet', 'rock']) {
+        const entries = specs.filter(spec => spec.kind === kind);
+        const mesh = new T.InstancedMesh(geometry, this.materials[kind], entries.length);
+        entries.forEach((entry, index) => {
+          entry.mesh = mesh;
+          entry.instanceIndex = index;
+          mesh.setMatrixAt(index, entry.matrix);
+        });
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.castShadow = this.quality === 'HIGH';
+        mesh.receiveShadow = true;
+        this.scene.add(mesh);
+        this.breakableMeshes.push(mesh);
+      }
+      this.breakables.push(...specs);
+    }
+    makeFirstPersonRig() {
+      this.rig = new T.Group();
+      this.rig.position.set(0, -.43, -1.28);
+      this.rig.scale.setScalar(.72);
+      this.camera.add(this.rig);
+      const suitFabric = new T.MeshStandardMaterial({
+        color: 0x9da9b6, emissive: 0x0b1017, emissiveIntensity: .24,
+        roughness: .78, metalness: .08,
+      });
+      const jointMaterial = new T.MeshStandardMaterial({ color: 0x121927, roughness: .5, metalness: .48 });
+      const gloveShell = new T.MeshStandardMaterial({
+        color: 0xd6dde1, emissive: 0x151b20, emissiveIntensity: .16,
+        roughness: .62, metalness: .1,
+      });
+      const palmMaterial = new T.MeshStandardMaterial({ color: 0x202a35, roughness: .82, metalness: .05 });
+      const suitLight = new T.MeshStandardMaterial({
+        color: 0x9cf6ff, emissive: 0x42ddef, emissiveIntensity: 2.2,
+        roughness: .26, metalness: .24,
+      });
+      const makeArm = side => {
+        const arm = new T.Group();
+        const angle = side * .3;
+        const forearm = new T.Mesh(new T.CapsuleGeometry(.165, .67, 6, 14), suitFabric);
+        forearm.rotation.z = angle;
+        forearm.position.set(side * .69, -.48, -.31);
+        arm.add(forearm);
+
+        const elbow = new T.Mesh(new T.CylinderGeometry(.19, .18, .14, 14), jointMaterial);
+        elbow.rotation.z = angle;
+        elbow.position.set(side * .8, -.78, -.28);
+        arm.add(elbow);
+
+        const cuff = new T.Mesh(new T.CylinderGeometry(.205, .185, .17, 16), jointMaterial);
+        cuff.rotation.z = angle;
+        cuff.position.set(side * .55, -.17, -.43);
+        arm.add(cuff);
+        const cuffLight = new T.Mesh(new T.CylinderGeometry(.202, .202, .035, 18, 1, true), suitLight);
+        cuffLight.rotation.z = angle;
+        cuffLight.position.set(side * .55, -.17, -.43);
+        arm.add(cuffLight);
+
+        const glove = new T.Mesh(new T.SphereGeometry(.19, 18, 13), gloveShell);
+        glove.scale.set(.92, .72, 1.24);
+        glove.position.set(side * .45, -.055, -.57);
+        arm.add(glove);
+        const palm = new T.Mesh(new T.BoxGeometry(.18, .105, .19, 2, 1, 2), palmMaterial);
+        palm.position.set(side * .45, -.085, -.395);
+        palm.rotation.z = -angle * .35;
+        arm.add(palm);
+
+        const wristScreen = new T.Mesh(new T.BoxGeometry(.12, .065, .018), suitLight);
+        wristScreen.position.set(side * .62, -.31, -.135);
+        wristScreen.rotation.z = angle;
+        arm.add(wristScreen);
+        return arm;
+      };
+      this.leftArm = makeArm(-1);
+      this.rightArm = makeArm(1);
+      this.rig.add(this.leftArm, this.rightArm);
+      this.boot = new T.Group();
+      // View-model materials must be private: the depth-test override below must
+      // never leak into world pylons, goal trim, or gold anchor hardware.
+      const bootMaterial = this.materials.black.clone();
+      const soleMaterial = this.materials.gold.clone();
+      const bootMesh = new T.Mesh(new T.CapsuleGeometry(.21, .42, 6, 14), bootMaterial);
+      bootMesh.rotation.x = Math.PI / 2;
+      bootMesh.scale.set(1, 1, 1.12);
+      bootMesh.position.z = -.2;
+      const toe = new T.Mesh(new T.SphereGeometry(.235, 16, 10), suitFabric);
+      toe.scale.set(1, .72, 1.22);
+      toe.position.set(0, -.015, -.53);
+      const sole = new T.Mesh(new T.BoxGeometry(.4, .075, .82, 2, 1, 3), soleMaterial);
+      sole.position.set(0, -.2, -.22);
+      this.boot.add(bootMesh, toe, sole);
+      this.boot.position.set(.18, -.92, -.28);
+      this.boot.visible = false;
+      this.rig.add(this.boot);
+      this.rig.traverse(object => {
+        if (object.isMesh) { object.renderOrder = 20; object.material.depthTest = false; object.frustumCulled = false; }
+      });
+    }
+    makeBallVisual() {
+      this.ballGroup = new T.Group();
+      const shell = new T.Mesh(
+        new T.SphereGeometry(.72, 32, 24),
+        new T.MeshPhysicalMaterial({
+          color: 0xb8f8ff, emissive: 0x1596bb, emissiveIntensity: 2.25,
+          metalness: .35, roughness: .12, clearcoat: 1, clearcoatRoughness: .08,
+          transparent: true, opacity: .94,
+        }),
+      );
+      shell.castShadow = true;
+      shell.receiveShadow = true;
+      this.ballGroup.add(shell);
+      const core = new T.Mesh(new T.IcosahedronGeometry(.42, 2), this.materials.violet);
+      this.ballGroup.add(core);
+      const ringA = new T.Mesh(new T.TorusGeometry(.82, .065, 10, 48), this.materials.gold);
+      const ringB = new T.Mesh(new T.TorusGeometry(.82, .045, 10, 48), this.materials.cyan);
+      ringA.rotation.x = Math.PI / 2;
+      ringB.rotation.y = Math.PI / 2;
+      this.ballGroup.add(ringA, ringB);
+      this.ballGlow = this.makeGlowSprite(this.glowCyan, 4.5, .48);
+      this.ballGroup.add(this.ballGlow);
+      this.ballGroup.position.set(1, 2, 110);
+      this.ballDisplayScale = .46;
+      this.ballGroup.scale.setScalar(this.ballDisplayScale);
+      this.scene.add(this.ballGroup);
+      this.ballVisual = { shell, core, ringA, ringB };
+      const trailGeometry = new T.BufferGeometry();
+      this.trailPositions = new Float32Array(64 * 3);
+      trailGeometry.setAttribute('position', new T.BufferAttribute(this.trailPositions, 3).setUsage(T.DynamicDrawUsage));
+      trailGeometry.setDrawRange(0, 0);
+      this.ballTrail = new T.Line(
+        trailGeometry,
+        new T.LineBasicMaterial({ color: 0x62edff, transparent: true, opacity: .74, depthWrite: false, blending: T.AdditiveBlending }),
+      );
+      this.ballTrail.frustumCulled = false;
+      this.scene.add(this.ballTrail);
+    }
+    makeAlienMesh(type = 'scuttler') {
+      const group = new T.Group();
+      const scale = type === 'warden' ? 1.75 : type === 'shield' ? 1.28 : 1;
+      const abdomen = new T.Mesh(new T.IcosahedronGeometry(.84 * scale, 1), type === 'warden' ? this.materials.violet : this.materials.alien);
+      abdomen.scale.set(1.05, .8, 1.25);
+      abdomen.position.y = 1.2 * scale;
+      abdomen.castShadow = true;
+      group.add(abdomen);
+      const shellParts = [];
+      const headGeometry = new T.DodecahedronGeometry(.5 * scale, 1);
+      headGeometry.scale(1.1, .8, .92);
+      headGeometry.translate(0, 1.55 * scale, -.72 * scale);
+      shellParts.push(headGeometry);
+      const eye = new T.Mesh(new T.SphereGeometry(.18 * scale, 12, 8), this.materials.cyan);
+      eye.position.set(0, 1.62 * scale, -1.13 * scale);
+      group.add(eye);
+      const weak = new T.Mesh(new T.OctahedronGeometry(.24 * scale, 0), this.materials.gold);
+      weak.position.set(0, 1.22 * scale, .98 * scale);
+      weak.visible = type !== 'scuttler';
+      group.add(weak);
+      for (let i = 0; i < 6; i++) {
+        const side = i < 3 ? -1 : 1;
+        const local = i % 3;
+        const legGeometry = new T.CapsuleGeometry(.08 * scale, .8 * scale, 4, 7);
+        legGeometry.rotateX((local - 1) * .32);
+        legGeometry.rotateZ(side * (.72 + local * .1));
+        legGeometry.translate(side * (.65 + local * .12) * scale, .55 * scale, (local - 1) * .55 * scale);
+        shellParts.push(legGeometry);
+      }
+      const shell = new T.Mesh(mergeStaticGeometries(shellParts), this.materials.alienShell);
+      shell.castShadow = true;
+      group.add(shell);
+      let shield = null;
+      if (type === 'shield' || type === 'warden') {
+        shield = new T.Mesh(
+          new T.CylinderGeometry((type === 'warden' ? 1.65 : 1.2) * scale, (type === 'warden' ? 1.65 : 1.2) * scale, .2, 32),
+          new T.MeshPhysicalMaterial({ color: 0x748dff, emissive: 0x2638ad, emissiveIntensity: 2.1, roughness: .18, metalness: .72, transparent: true, opacity: .86 }),
+        );
+        shield.rotation.x = Math.PI / 2;
+        shield.position.set(0, 1.3 * scale, -1.25 * scale);
+        group.add(shield);
+      }
+      const glow = this.makeGlowSprite(type === 'warden' ? this.glowViolet : this.glowCyan, 3.8 * scale, .13);
+      glow.position.y = 1.15 * scale;
+      group.add(glow);
+      return { group, abdomen, head: shell, eye, weak, legs: [], shield, scale };
+    }
+    floorHeight(x, z, currentY = Infinity) {
+      let floor = this.sampleTerrainHeight(x, z);
+      for (const platform of this.platforms) {
+        const distance = Math.hypot(x - platform.x, z - platform.z);
+        if (distance < platform.radius * .82 && currentY >= platform.top - 2.4) floor = Math.max(floor, platform.top);
+      }
+      return floor;
+    }
+    insideBlocker(x, y, z, radius = .6, fromX = null, fromZ = null) {
+      if (this.gate.active && Math.abs(z - this.gate.position.z) < 1 + radius && Math.abs(x) < this.gate.width / 2 + radius && Math.abs(y - this.gate.position.y) < this.gate.height / 2 + radius) return true;
+      if (this.fracture.active && Math.abs(z - this.fracture.position.z) < 2.1 + radius && Math.abs(x) < this.fracture.width / 2 + radius && Math.abs(y - this.fracture.position.y) < this.fracture.height / 2 + radius) return true;
+      for (const platform of this.platforms) {
+        if (y >= platform.top - .35) continue;
+        const sideRadius = platform.radius * 1.03 + radius;
+        const nextDistance = Math.hypot(x - platform.x, z - platform.z);
+        if (nextDistance >= sideRadius) continue;
+        // If a sling, fall, or debug recovery places the player inside the
+        // irregular collision shell, outward motion must remain an escape path.
+        const currentDistance = Number.isFinite(fromX) && Number.isFinite(fromZ)
+          ? Math.hypot(fromX - platform.x, fromZ - platform.z)
+          : Infinity;
+        if (currentDistance < sideRadius && nextDistance > currentDistance + 1e-6) continue;
+        return true;
+      }
+      return false;
+    }
+    breakFracture(origin = this.fracture.position) {
+      if (!this.fracture.active) return false;
+      this.fracture.active = false;
+      this.fracture.group.visible = false;
+      this.particles.burst(origin, 0xc490ff, 78, 22, 1.1, .35);
+      this.particles.burst(origin, 0xffd674, 38, 17, .9, .5);
+      audio.impact(1, 'glass');
+      return true;
+    }
+    openGate() {
+      if (!this.gate.active) return;
+      this.gate.active = false;
+      this.gate.group.visible = false;
+      this.particles.burst(this.gate.position, 0x65eeff, 48, 14, .85, .3);
+      audio.score(true);
+    }
+    openGoal() {
+      this.goal.open = true;
+      this.goal.group.visible = true;
+      this.particles.burst(this.goal.position, 0xffd76b, 60, 16, 1.2, .55);
+      audio.score(true);
+    }
+    shatterBreakable(item, impact = 1) {
+      if (!item.alive) return false;
+      item.alive = false;
+      item.mesh.setMatrixAt(item.instanceIndex, new T.Matrix4().makeScale(0, 0, 0));
+      item.mesh.instanceMatrix.needsUpdate = true;
+      this.particles.burst(item.position, item.mesh.material === this.materials.violet ? 0xba81ff : 0xbfc5d2, 14 + Math.floor(impact * 10), 8 + impact * 6, .75, .25);
+      audio.impact(clamp(impact, .2, 1), 'rock');
+      return true;
+    }
+    restoreBreakables() {
+      for (const item of this.breakables) {
+        item.alive = true;
+        item.mesh.setMatrixAt(item.instanceIndex, item.matrix);
+      }
+      this.breakableMeshes.forEach(mesh => { mesh.instanceMatrix.needsUpdate = true; });
+    }
+    applyQuality(level, persist = true) {
+      this.quality = level;
+      const nativeDpr = Math.min(devicePixelRatio || 1, 1.5);
+      const renderScale = level === 'HIGH' ? .9 : level === 'MED' ? .7 : .52;
+      this.renderScale = renderScale;
+      this.renderer.setPixelRatio(Math.max(.5, nativeDpr * renderScale));
+      this.renderer.shadowMap.enabled = level !== 'LOW';
+      this.sun.shadow.mapSize.set(level === 'HIGH' ? 2048 : 1024, level === 'HIGH' ? 2048 : 1024);
+      if (this.rockField) this.rockField.castShadow = level === 'HIGH';
+      this.breakableMeshes?.forEach(mesh => { mesh.castShadow = level === 'HIGH'; });
+      if (ui.qualityButton) ui.qualityButton.textContent = `VISUAL ${level}`;
+      if (persist) {
+        try { localStorage.setItem('kickball-lunar-quality', level); } catch (_) {}
+        this.resize();
+      }
+    }
+    cycleQuality() {
+      const index = this.qualityOrder.indexOf(this.quality);
+      this.applyQuality(this.qualityOrder[(index + 1) % this.qualityOrder.length]);
+    }
+    resize() {
+      const width = Math.max(320, canvas.clientWidth || innerWidth);
+      const height = Math.max(240, canvas.clientHeight || innerHeight);
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(width, height, false);
+    }
+    setTrail(points, mode) {
+      const count = Math.min(64, points.length);
+      for (let i = 0; i < count; i++) {
+        this.trailPositions[i * 3] = points[i].x;
+        this.trailPositions[i * 3 + 1] = points[i].y;
+        this.trailPositions[i * 3 + 2] = points[i].z;
+      }
+      this.ballTrail.geometry.setDrawRange(0, count);
+      this.ballTrail.geometry.attributes.position.needsUpdate = true;
+      this.ballTrail.material.color.set(mode === 'returning' ? 0x65edff : mode === 'anchored' ? 0xffd66b : 0xbd78ff);
+    }
+    update(dt, gameState) {
+      this.elapsed += dt;
+      if (this.planets) this.planets.forEach(planet => { planet.rotation.y += planet.userData.spinRate * dt; });
+      this.stars.rotation.y += dt * .00035;
+      this.starBand.rotation.y -= dt * .00018;
+      this.anchors.forEach(anchor => {
+        anchor.pulse += dt * (anchor.used ? 1.6 : 3.1);
+        anchor.torus.rotation.z += dt * (anchor.used ? .4 : 1.35);
+        anchor.crystal.rotation.y += dt * 1.6;
+        anchor.crystal.position.y = Math.sin(anchor.pulse) * .18;
+        anchor.glow.material.opacity = (anchor.used ? .18 : .58) + Math.sin(anchor.pulse) * .08;
+        anchor.group.scale.setScalar(anchor.used ? .72 : 1 + Math.sin(anchor.pulse) * .025);
+      });
+      if (this.gate.active) {
+        this.gate.field.material.opacity = .18 + Math.sin(this.elapsed * 4.2) * .07;
+        this.gate.glow.material.opacity = .2 + Math.sin(this.elapsed * 3.1) * .08;
+      }
+      if (this.goal.open) {
+        this.goal.group.rotation.z += dt * .48;
+        this.goal.glow.material.opacity = .45 + Math.sin(this.elapsed * 3.4) * .12;
+      }
+      this.ballVisual.ringA.rotation.z += dt * (4 + gameState.ball.spin * .08);
+      this.ballVisual.ringB.rotation.x += dt * (3.3 - gameState.ball.spin * .06);
+      this.ballVisual.core.rotation.y += dt * 2.7;
+      const targetBallScale = gameState.ball.mode === 'ready' ? .46 : 1;
+      this.ballDisplayScale = damp(this.ballDisplayScale, targetBallScale, targetBallScale > this.ballDisplayScale ? 15 : 10, dt);
+      this.ballGroup.scale.setScalar(this.ballDisplayScale);
+      this.ballGlow.material.map = gameState.ball.mode === 'anchored' ? this.glowGold : gameState.ball.mode === 'returning' ? this.glowCyan : this.glowViolet;
+      this.ballGlow.material.opacity = .34 + Math.min(.42, gameState.ball.velocity.length() * .012) + Math.sin(this.elapsed * 8) * .06;
+      this.rig.position.x = Math.sin(gameState.player.runCycle * .5) * .018;
+      this.rig.position.y = -.25 + Math.abs(Math.sin(gameState.player.runCycle)) * -.025;
+      this.boot.visible = gameState.kickVisual > 0;
+      if (this.boot.visible) {
+        const t = 1 - gameState.kickVisual;
+        this.boot.position.z = -.35 - Math.sin(t * Math.PI) * 1.25;
+        this.boot.rotation.x = -.2 - Math.sin(t * Math.PI) * .42;
+      }
+      this.particles.update(dt);
+      const target = gameState.player.position;
+      this.sun.position.set(target.x - 130, target.y + 210, target.z + 110);
+      this.sun.target.position.set(target.x, target.y, target.z - 35);
+      this.sun.target.updateMatrixWorld();
+    }
+    noteFrame(delta) {
+      if (TEST_MODE || this.quality === 'LOW') return;
+      this.autoReductionCooldown = Math.max(0, this.autoReductionCooldown - delta);
+      if (this.autoReductionCooldown > 0) return;
+      this.frameSamples.push(delta);
+      if (this.frameSamples.length > 300) this.frameSamples.shift();
+      if (this.frameSamples.length === 300) {
+        const sorted = [...this.frameSamples].sort((a, b) => a - b);
+        const p80 = sorted[Math.floor(sorted.length * .8)];
+        if (p80 > .032) {
+          const next = this.quality === 'HIGH' ? 'MED' : 'LOW';
+          this.applyQuality(next);
+          this.autoReduced = true;
+          this.autoReductionCooldown = 3;
+          this.frameSamples.length = 0;
+          if (game) game.announce(`VISUAL ${next} // FRAME PACING`, '#83eeff');
+        }
+      }
+    }
+    render() { this.renderer.render(this.scene, this.camera); }
+    stats() {
+      const info = this.renderer.info;
+      const drawingBuffer = this.renderer.getDrawingBufferSize(new T.Vector2());
+      return {
+        quality: this.quality,
+        calls: info.render.calls,
+        triangles: info.render.triangles,
+        points: info.render.points,
+        geometries: info.memory.geometries,
+        textures: info.memory.textures,
+        pixelRatio: this.renderer.getPixelRatio(),
+        renderScale: this.renderScale,
+        drawingBuffer: [drawingBuffer.x, drawingBuffer.y],
+      };
+    }
+  }
+
+  class PlayerState {
+    constructor() {
+      this.position = new T.Vector3(0, groundHeightAt(0, 120), 120);
+      this.velocity = new T.Vector3();
+      this.yaw = 0;
+      this.pitch = -.055;
+      this.radius = .56;
+      this.eyeHeight = 1.72;
+      this.grounded = true;
+      this.jumpsUsed = 0;
+      this.jumpBuffer = 0;
+      this.coyote = .14;
+      this.runCycle = 0;
+      this.health = 5;
+      this.invulnerable = 0;
+      this.damageCooldown = 0;
+      this.spinTimer = 0;
+      this.spinCooldown = 0;
+      this.spinAngle = 0;
+      this.grappling = false;
+      this.landingKick = 0;
+      this.checkpoint = this.position.clone();
+      this.checkpointYaw = 0;
+    }
+  }
+
+  class BallState {
+    constructor(player) {
+      this.position = player.position.clone().add(new T.Vector3(2.05, .76, -3.35));
+      this.velocity = new T.Vector3();
+      this.radius = .72;
+      this.mode = 'ready'; // ready | outbound | returning | anchored | caught
+      this.spin = 0;
+      this.flightTime = 0;
+      this.returnTime = 0;
+      this.outboundDuration = .72;
+      this.maxRange = 45;
+      this.launchCharge = 0;
+      this.launchOrigin = this.position.clone();
+      this.returnSide = 1;
+      this.anchor = null;
+      this.caughtBy = null;
+      this.catchTimer = 0;
+      this.snapTimer = 0;
+      this.anchorTimer = 0;
+      this.returnStuck = 0;
+      this.lastReturnDistance = 0;
+      this.collisionCooldown = new Map();
+      this.trail = [];
+      this.curveBoost = 0;
+      this.bounceCount = 0;
+      this.returnReason = 'auto';
+    }
+  }
+
+  class AlienState {
+    constructor(id, type, x, z, facing = 0) {
+      this.id = id;
+      this.type = type;
+      this.position = new T.Vector3(x, groundHeightAt(x, z), z);
+      this.velocity = new T.Vector3();
+      this.facing = facing;
+      this.radius = type === 'warden' ? 2.8 : type === 'shield' ? 1.7 : 1.25;
+      this.maxHp = type === 'warden' ? 7 : type === 'shield' ? 3 : 1;
+      this.hp = this.maxHp;
+      this.alive = true;
+      this.phase = enemyRandom() * TAU;
+      this.stun = 0;
+      this.hitFlash = 0;
+      this.attackCooldown = randomRange(.2, 1.1, enemyRandom);
+      this.catchCooldown = 0;
+      this.deadTimer = 0;
+      this.summit = z < -100;
+      this.visual = world.makeAlienMesh(type);
+      this.visual.group.position.copy(this.position);
+      this.visual.group.rotation.y = facing + Math.PI;
+      world.scene.add(this.visual.group);
+      world.enemies.push(this);
+    }
+  }
+
+  class GameController {
+    constructor() {
+      this.player = new PlayerState();
+      this.ball = new BallState(this.player);
+      this.enemies = [];
+      this.started = false;
+      this.paused = false;
+      this.won = false;
+      this.time = 0;
+      this.score = 0;
+      this.style = 0;
+      this.styleHold = 0;
+      this.stage = 0;
+      this.objectiveKey = '';
+      this.charge = 0;
+      this.charging = false;
+      this.queuedKick = null;
+      this.snapHeld = false;
+      this.snapBuffer = 0;
+      this.kickVisual = 0;
+      this.shake = 0;
+      this.cameraRoll = 0;
+      this.cameraYawVelocity = 0;
+      this.lastYaw = 0;
+      this.hitStop = 0;
+      this.toastTimer = 0;
+      this.styleLabelTimer = 0;
+      this.winTimer = null;
+      this.pauseFocusVersion = 0;
+      this.respawnCount = 0;
+      this.stats = {
+        kicks: 0, snaps: 0, spins: 0, doubleJumps: 0, meteorKicks: 0,
+        anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0,
+      };
+      this.bestTime = this.loadBest();
+      this.forward = new T.Vector3();
+      this.right = new T.Vector3();
+      this.aimScratch = new T.Vector3();
+      this.tempA = new T.Vector3();
+      this.tempB = new T.Vector3();
+      // Dedicated ready-ball scratch vectors keep the output target independent.
+      // Passing tempA as both the output and the forward vector used to multiply
+      // the camera position and fling the HOME ball hundreds of metres away.
+      this.readyForwardScratch = new T.Vector3();
+      this.readyRightScratch = new T.Vector3();
+      this.spawnEnemies();
+      this.syncWorldVisuals();
+      this.updateObjective(true);
+      this.syncUI();
+      this.setGameplayInert(true);
+    }
+    loadBest() {
+      try {
+        const value = Number(localStorage.getItem('kickball-lunar-best-time'));
+        return Number.isFinite(value) && value > 0 ? value : null;
+      } catch (_) { return null; }
+    }
+    saveBest() {
+      if (!this.bestTime || this.time < this.bestTime) {
+        this.bestTime = this.time;
+        try { localStorage.setItem('kickball-lunar-best-time', String(this.bestTime)); } catch (_) {}
+      }
+    }
+    spawnEnemies() {
+      enemyRandom = mulberry32(0xE11E5EED);
+      const sharedMaterials = new Set(Object.values(world.materials));
+      for (const enemy of world.enemies) {
+        world.scene.remove(enemy.visual.group);
+        enemy.visual.group.traverse(object => {
+          object.geometry?.dispose?.();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          for (const material of materials) {
+            if (material && !sharedMaterials.has(material)) material.dispose?.();
+          }
+        });
+      }
+      world.enemies.length = 0;
+      this.enemies = [
+        new AlienState('skitter-1', 'scuttler', -9, 101, Math.PI),
+        new AlienState('skitter-2', 'scuttler', 10, 91, Math.PI),
+        new AlienState('skitter-3', 'scuttler', -12, 76, Math.PI),
+        new AlienState('skitter-4', 'scuttler', 12, 69, Math.PI),
+        new AlienState('carapace-sentinel', 'shield', 0, 53, 0),
+        new AlienState('crown-skitter-1', 'scuttler', -18, -132, 0),
+        new AlienState('crown-skitter-2', 'scuttler', 18, -139, 0),
+        new AlienState('crown-skitter-3', 'scuttler', -15, -161, 0),
+        new AlienState('crown-skitter-4', 'scuttler', 16, -174, 0),
+        new AlienState('crown-warden', 'warden', 0, -191, 0),
+      ];
+      this.shieldEnemy = this.enemies.find(enemy => enemy.type === 'shield');
+      this.warden = this.enemies.find(enemy => enemy.type === 'warden');
+    }
+    start(requestLock = true) {
+      if (this.won) return;
+      this.started = true;
+      this.paused = false;
+      document.body.dataset.started = 'true';
+      ui.startOverlay?.classList.add('hidden');
+      ui.startOverlay?.setAttribute('aria-hidden', 'true');
+      ui.pauseOverlay?.classList.add('hidden');
+      this.setGameplayInert(false);
+      this.pauseFocusVersion++;
+      canvas.focus({ preventScroll: true });
+      audio.ensure();
+      if (requestLock && !input.touchEnabled && !TEST_MODE) requestGamePointerLock();
+      this.announce('TOUCHDOWN // THE BALL COMES HOME', '#83efff');
+      this.updateObjective(true);
+    }
+    restart() {
+      if (this.winTimer) { clearTimeout(this.winTimer); this.winTimer = null; }
+      this.pauseFocusVersion++;
+      const wasStarted = this.started || AUTO_START;
+      this.player = new PlayerState();
+      this.ball = new BallState(this.player);
+      this.time = 0;
+      this.score = 0;
+      this.style = 0;
+      this.styleHold = 0;
+      this.stage = 0;
+      this.objectiveKey = '';
+      this.charge = 0;
+      this.charging = false;
+      this.queuedKick = null;
+      this.snapHeld = false;
+      this.snapBuffer = 0;
+      this.kickVisual = 0;
+      this.shake = 0;
+      this.cameraRoll = 0;
+      this.cameraYawVelocity = 0;
+      this.lastYaw = 0;
+      this.hitStop = 0;
+      this.toastTimer = 0;
+      this.styleLabelTimer = 0;
+      this.won = false;
+      this.paused = false;
+      this.started = wasStarted;
+      this.respawnCount = 0;
+      this.stats = {
+        kicks: 0, snaps: 0, spins: 0, doubleJumps: 0, meteorKicks: 0,
+        anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0,
+      };
+      world.gate.active = true;
+      world.gate.group.visible = true;
+      world.fracture.active = true;
+      world.fracture.group.visible = true;
+      world.goal.open = false;
+      world.goal.group.visible = false;
+      world.anchors.forEach(anchor => { anchor.used = false; anchor.group.visible = true; });
+      world.restoreBreakables();
+      this.spawnEnemies();
+      world.particles.clear();
+      world.ballGroup.visible = true;
+      world.ballGroup.position.copy(this.ball.position);
+      world.setTrail([], 'ready');
+      ui.pauseOverlay?.classList.add('hidden');
+      ui.pauseOverlay?.setAttribute('aria-hidden', 'true');
+      ui.winOverlay?.classList.add('hidden');
+      ui.winOverlay?.setAttribute('aria-hidden', 'true');
+      ui.damageVignette?.classList.remove('active');
+      ui.hitMarker?.classList.remove('active');
+      if (ui.hitMarker) ui.hitMarker.style.filter = '';
+      ui.promptToast?.classList.add('hidden');
+      if (ui.comboText) {
+        ui.comboText.textContent = '';
+        ui.comboText.classList.remove('active');
+      }
+      if (!wasStarted) {
+        ui.startOverlay?.classList.remove('hidden');
+        ui.startOverlay?.setAttribute('aria-hidden', 'false');
+      }
+      this.setGameplayInert(!wasStarted);
+      this.updateObjective(true);
+      this.syncWorldVisuals();
+      this.syncUI();
+      if (wasStarted) canvas.focus({ preventScroll: true });
+    }
+    togglePause() {
+      if (!this.started || this.won) return;
+      this.paused = !this.paused;
+      if (this.paused) this.cancelCharge();
+      this.setGameplayInert(this.paused);
+      ui.pauseOverlay?.classList.toggle('hidden', !this.paused);
+      ui.pauseOverlay?.setAttribute('aria-hidden', this.paused ? 'false' : 'true');
+      if (this.paused && document.pointerLockElement === canvas) document.exitPointerLock?.();
+      if (!this.paused && !input.touchEnabled && !TEST_MODE) requestGamePointerLock();
+      const focusVersion = ++this.pauseFocusVersion;
+      if (this.paused) {
+        setTimeout(() => {
+          if (this.paused && this.pauseFocusVersion === focusVersion) ui.pauseResumeButton?.focus({ preventScroll: true });
+        }, 32);
+      } else canvas.focus({ preventScroll: true });
+      audio.recall(false, 0);
+    }
+    cancelCharge() {
+      this.charging = false;
+      this.charge = 0;
+      ui.chargeUI?.classList.remove('active');
+    }
+    setGameplayInert(inert) {
+      canvas.inert = !!inert;
+      if (ui.hud) ui.hud.inert = !!inert;
+      if (ui.touchControls) ui.touchControls.inert = !!inert;
+    }
+    forwardFromView(target = this.forward) {
+      const horizontal = Math.cos(this.player.pitch);
+      return target.set(
+        Math.sin(this.player.yaw) * horizontal,
+        Math.sin(this.player.pitch),
+        -Math.cos(this.player.yaw) * horizontal,
+      ).normalize();
+    }
+    horizontalForward(target = this.forward) {
+      return target.set(Math.sin(this.player.yaw), 0, -Math.cos(this.player.yaw)).normalize();
+    }
+    horizontalRight(target = this.right) {
+      return target.set(Math.cos(this.player.yaw), 0, Math.sin(this.player.yaw)).normalize();
+    }
+    update(dt, frame, edgeFrame = true) {
+      if (edgeFrame && frame.pausePressed) this.togglePause();
+      if (!this.started || this.paused) {
+        this.updateCamera(dt);
+        this.syncWorldVisuals();
+        this.syncUI();
+        return;
+      }
+      if (this.won) {
+        // Keep the signature promise: the ball still comes home after the finish.
+        this.updateBall(dt, { ...frame, kick: false, snap: false }, edgeFrame);
+        this.updateCamera(dt);
+        this.syncWorldVisuals();
+        this.syncUI();
+        return;
+      }
+      const yawBefore = this.player.yaw;
+      this.player.yaw += frame.lookX;
+      this.player.pitch = clamp(this.player.pitch - frame.lookY, -1.42, 1.42);
+      this.cameraYawVelocity = damp(this.cameraYawVelocity, angleDelta(yawBefore, this.player.yaw) / Math.max(dt, .0001), 13, dt);
+      this.lastYaw = this.player.yaw;
+      if (edgeFrame && frame.snapPressed) {
+        this.stats.snaps++;
+        this.snapBuffer = Math.max(this.snapBuffer, .12);
+      }
+
+      if (edgeFrame && frame.kickPressed) {
+        this.charging = true;
+        this.charge = 0;
+      }
+      if (this.charging && frame.kick) this.charge = clamp(this.charge + dt / .68, 0, 1);
+      if (edgeFrame && frame.kickReleased && this.charging) {
+        if (this.ball.mode === 'ready' && this.ball.position.distanceTo(this.player.position) < 4.5) this.launchBall(this.charge);
+        else this.queueKick(this.charge);
+        this.charging = false;
+        this.charge = 0;
+      }
+      if (!frame.kick && !this.charging) this.charge = 0;
+      if (edgeFrame && frame.spinPressed) this.startSpin();
+      if (edgeFrame && frame.jumpPressed) this.player.jumpBuffer = Math.max(this.player.jumpBuffer, .15);
+
+      // Edge inputs are captured above before hit stop freezes simulation. This
+      // keeps quick KICK/JUMP/SPIN/SNAP taps from disappearing inside impact frames.
+      if (this.hitStop > 0) {
+        this.hitStop -= dt;
+        this.updateCamera(dt * .18);
+        this.syncWorldVisuals();
+        this.syncUI();
+        return;
+      }
+
+      this.time += dt;
+      const bufferedSnap = this.snapBuffer > 0;
+      const actionFrame = bufferedSnap && !frame.snap ? { ...frame, snap: true } : frame;
+      this.snapBuffer = Math.max(0, this.snapBuffer - dt);
+      this.snapHeld = actionFrame.snap;
+
+      this.updatePlayer(dt, actionFrame, edgeFrame);
+      this.updateBall(dt, actionFrame, edgeFrame);
+      this.updateEnemies(dt);
+      this.updateProgression();
+      this.updateCamera(dt);
+      this.decayFeedback(dt);
+      this.validate();
+      this.syncWorldVisuals();
+      this.syncUI();
+    }
+    updatePlayer(dt, frame, edgeFrame) {
+      const player = this.player;
+      player.invulnerable = Math.max(0, player.invulnerable - dt);
+      player.damageCooldown = Math.max(0, player.damageCooldown - dt);
+      player.spinCooldown = Math.max(0, player.spinCooldown - dt);
+      player.spinTimer = Math.max(0, player.spinTimer - dt);
+      player.landingKick = Math.max(0, player.landingKick - dt * 2.8);
+      player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
+      if (edgeFrame && frame.jumpPressed) player.jumpBuffer = .15;
+      if (player.grounded) player.coyote = .14;
+      else player.coyote = Math.max(0, player.coyote - dt);
+
+      const canGroundJump = player.coyote > 0 && player.jumpsUsed === 0;
+      const canAirJump = !player.grounded && player.jumpsUsed < 2;
+      if (player.jumpBuffer > 0 && (canGroundJump || canAirJump) && !player.grappling) {
+        const second = !canGroundJump;
+        player.jumpsUsed = second ? 2 : 1;
+        player.velocity.y = second ? 19 : 16;
+        player.grounded = false;
+        player.coyote = 0;
+        player.jumpBuffer = 0;
+        if (second) {
+          this.stats.doubleJumps++;
+          this.addStyle(9, 260, 'DOUBLE MOON', '#ffd66b');
+          world.particles.burst(player.position.clone().add(new T.Vector3(0, .3, 0)), 0xffd76b, 18, 7, .65, .15);
+        } else {
+          world.particles.burst(player.position.clone().add(new T.Vector3(0, .15, 0)), 0x8eeeff, 10, 4.5, .48, .08);
+        }
+        audio.jump(second);
+      }
+
+      const forward = this.horizontalForward(this.tempA);
+      const right = this.horizontalRight(this.tempB);
+      const desiredDirection = new T.Vector3()
+        .addScaledVector(forward, frame.moveZ)
+        .addScaledVector(right, frame.moveX);
+      if (desiredDirection.lengthSq() > 1) desiredDirection.normalize();
+      const moveAmount = desiredDirection.length();
+      const sprinting = frame.sprint && frame.moveZ > .25;
+      const maxSpeed = sprinting ? 18.5 : 12.4;
+      const desiredVelocity = desiredDirection.multiplyScalar(maxSpeed);
+      const acceleration = player.grounded ? (sprinting ? 58 : 72) : 35;
+      const horizontalVelocity = new T.Vector3(player.velocity.x, 0, player.velocity.z);
+      if (!player.grappling) {
+        if (moveAmount > .03) {
+          const change = desiredVelocity.sub(horizontalVelocity);
+          const maxChange = acceleration * dt;
+          if (change.length() > maxChange) change.setLength(maxChange);
+          player.velocity.x += change.x;
+          player.velocity.z += change.z;
+        } else {
+          const drag = Math.exp(-(player.grounded ? 11.8 : 1.55) * dt);
+          player.velocity.x *= drag;
+          player.velocity.z *= drag;
+        }
+      }
+      if (!frame.jump && player.velocity.y > 5.5) player.velocity.y -= 10 * dt;
+      if (!player.grappling) player.velocity.y -= 15.2 * dt;
+      player.runCycle += Math.hypot(player.velocity.x, player.velocity.z) * dt * .76;
+      player.spinAngle += (player.spinTimer > 0 ? 16 : 0) * dt;
+
+      const currentFloor = world.floorHeight(player.position.x, player.position.z, player.position.y + 1);
+      const nextX = player.position.x + player.velocity.x * dt;
+      const nextZ = player.position.z + player.velocity.z * dt;
+      const nextFloor = world.floorHeight(nextX, nextZ, player.position.y + 1);
+      const stepHeight = nextFloor - player.position.y;
+      const climbingTerrain = nextFloor > currentFloor + .005;
+      const routeIncomplete = world.anchors.some(anchor => !anchor.used);
+      const slopeBlocked = routeIncomplete && !player.grappling && climbingTerrain && world.terrainSlopeAt(nextX, nextZ) > .92 && player.position.y < nextFloor + 14;
+      const blocked = world.insideBlocker(nextX, player.position.y + 1, nextZ, player.radius, player.position.x, player.position.z) || (stepHeight > 1.05 && !player.grappling) || slopeBlocked;
+      if (!blocked) {
+        player.position.x = nextX;
+        player.position.z = nextZ;
+      } else {
+        const floorX = world.floorHeight(nextX, player.position.z, player.position.y + 1);
+        const floorZ = world.floorHeight(player.position.x, nextZ, player.position.y + 1);
+        const canMoveX = !world.insideBlocker(nextX, player.position.y + 1, player.position.z, player.radius, player.position.x, player.position.z) && floorX <= player.position.y + 1.05 && !(routeIncomplete && !player.grappling && floorX > currentFloor + .005 && world.terrainSlopeAt(nextX, player.position.z) > .92 && player.position.y < floorX + 14);
+        const canMoveZ = !world.insideBlocker(player.position.x, player.position.y + 1, nextZ, player.radius, player.position.x, player.position.z) && floorZ <= player.position.y + 1.05 && !(routeIncomplete && !player.grappling && floorZ > currentFloor + .005 && world.terrainSlopeAt(player.position.x, nextZ) > .92 && player.position.y < floorZ + 14);
+        if (canMoveX) player.position.x = nextX; else player.velocity.x *= -.05;
+        if (canMoveZ) player.position.z = nextZ; else player.velocity.z *= -.05;
+      }
+      player.position.y += player.velocity.y * dt;
+      const floor = world.floorHeight(player.position.x, player.position.z, player.position.y + 1.4);
+      if (!player.grappling && player.position.y <= floor && player.velocity.y <= 0) {
+        const landingSpeed = -player.velocity.y;
+        const wasAirborne = !player.grounded;
+        player.position.y = floor;
+        player.velocity.y = 0;
+        player.grounded = true;
+        player.jumpsUsed = 0;
+        if (wasAirborne && landingSpeed > 4) {
+          player.landingKick = clamp(landingSpeed / 16, .18, 1);
+          this.shake = Math.max(this.shake, clamp(landingSpeed * .012, .05, .24));
+          world.particles.burst(player.position.clone().add(new T.Vector3(0, .08, 0)), 0xc9d2df, Math.floor(7 + landingSpeed), 4 + landingSpeed * .22, .55, .02);
+        }
+      } else if (player.position.y > floor + .04) {
+        player.grounded = false;
+      }
+      player.position.x = clamp(player.position.x, -355, 355);
+      player.position.z = clamp(player.position.z, -350, 340);
+      if (player.position.y < -35 || !Number.isFinite(player.position.y)) this.respawnPlayer();
+    }
+    updateCamera(dt) {
+      const player = this.player;
+      const speed = Math.hypot(player.velocity.x, player.velocity.z);
+      const bobAmount = player.grounded ? clamp(speed / 18, 0, 1) : 0;
+      const bobY = Math.abs(Math.sin(player.runCycle * 1.9)) * .055 * bobAmount;
+      const bobX = Math.sin(player.runCycle * .95) * .035 * bobAmount;
+      this.shake = Math.max(0, this.shake - dt * 2.8);
+      const shakeMagnitude = this.shake * this.shake;
+      const shakeX = (cosmeticRandom() * 2 - 1) * shakeMagnitude * .055;
+      const shakeY = (cosmeticRandom() * 2 - 1) * shakeMagnitude * .04;
+      world.camera.position.set(player.position.x + bobX, player.position.y + player.eyeHeight + bobY - player.landingKick * .14, player.position.z);
+      world.camera.rotation.set(player.pitch + shakeY, player.yaw + shakeX, this.cameraRoll, 'YXZ');
+      const speedFov = smoothstep(6, 19, speed) * 8;
+      const actionFov = (player.grappling ? 6 : 0) + (player.spinTimer > 0 ? 4 : 0);
+      world.camera.fov = damp(world.camera.fov, 76 + speedFov + actionFov, 7.5, dt);
+      world.camera.updateProjectionMatrix();
+    }
+    launchBall(charge, forcedDirection = null, redirected = false) {
+      const ball = this.ball;
+      const player = this.player;
+      const direction = forcedDirection ? forcedDirection.clone().normalize() : this.forwardFromView(new T.Vector3());
+      const power = 24 + Math.pow(clamp(charge, 0, 1), .72) * 34;
+      const airborne = !player.grounded || player.position.y > world.floorHeight(player.position.x, player.position.z, player.position.y + 1) + .25;
+      const meteor = airborne && direction.y < -.36;
+      ball.position.copy(world.camera.position).addScaledVector(direction, 1.25);
+      ball.velocity.copy(direction).multiplyScalar(power).addScaledVector(player.velocity, .22);
+      ball.mode = 'outbound';
+      ball.flightTime = 0;
+      ball.returnTime = 0;
+      ball.launchCharge = charge;
+      ball.outboundDuration = .56 + charge * .5;
+      ball.maxRange = 35 + charge * 35;
+      ball.launchOrigin.copy(player.position);
+      ball.returnSide = this.stats.kicks % 2 === 0 ? 1 : -1;
+      ball.anchor = null;
+      ball.caughtBy = null;
+      ball.bounceCount = 0;
+      ball.curveBoost = 0;
+      ball.spin = clamp(this.cameraYawVelocity * .65, -22, 22) + ball.returnSide * (5 + charge * 8);
+      ball.collisionCooldown.clear();
+      this.stats.kicks++;
+      this.kickVisual = 1;
+      this.shake = Math.max(this.shake, .12 + charge * .22);
+      if (meteor) {
+        player.velocity.y = Math.max(player.velocity.y, 12.2 + charge * 4.2);
+        player.jumpsUsed = Math.min(player.jumpsUsed, 1);
+        this.stats.meteorKicks++;
+        this.addStyle(17, 720, 'METEOR REBOUND', '#ffd66b');
+      } else if (airborne) {
+        this.addStyle(9, 330, redirected ? 'AIR REDIRECT' : 'AIR KICK', '#83efff');
+      } else if (charge > .94) {
+        this.addStyle(10, 430, 'FULL SEND', '#ffd66b');
+      } else if (redirected) {
+        this.addStyle(8, 300, 'REDIRECT', '#bf83ff');
+      }
+      world.particles.burst(ball.position, charge > .8 ? 0xffd66b : 0x7befff, 12 + Math.floor(charge * 14), 9 + charge * 11, .7, .15);
+      audio.kick(charge);
+    }
+    queueKick(charge) {
+      this.queuedKick = {
+        charge: Math.max(.22, charge),
+        direction: this.forwardFromView(new T.Vector3()),
+        expires: this.time + 2.7,
+      };
+      if (this.ball.mode === 'outbound') this.beginReturn('queued');
+      if (this.ball.mode === 'caught') this.ball.snapTimer = Math.max(this.ball.snapTimer, .28);
+      this.announce('VOLLEY ARMED // CATCH AND FIRE', '#ffd66b');
+      this.addStyle(4, 120);
+    }
+    startSpin() {
+      const player = this.player;
+      if (player.spinCooldown > 0) return;
+      player.spinCooldown = .95;
+      player.spinTimer = .78;
+      player.spinAngle = 0;
+      this.stats.spins++;
+      audio.spin();
+      if (this.ball.mode === 'ready') {
+        this.ball.spin += 28 * (this.stats.spins % 2 ? 1 : -1);
+        const forward = this.horizontalForward(new T.Vector3());
+        player.velocity.addScaledVector(forward, 3.5);
+        let hits = 0;
+        for (const enemy of this.enemies) {
+          if (!enemy.alive || (enemy.summit && world.fracture.active) || enemy.position.distanceTo(player.position) > 5.1 + enemy.radius) continue;
+          this.damageAlien(enemy, 1, 'spin');
+          hits++;
+        }
+        this.addStyle(7 + hits * 5, 220 + hits * 300, hits ? `ORBIT SMASH x${hits}` : 'ORBIT KICK', '#bf83ff');
+      } else {
+        this.ball.curveBoost = 1.15;
+        this.ball.spin += Math.sign(this.cameraYawVelocity || this.ball.returnSide) * 34;
+        if (this.ball.mode === 'outbound') this.beginReturn('spin');
+        this.addStyle(11, 420, 'SPIN SLING', '#bf83ff');
+      }
+      this.shake = Math.max(this.shake, .17);
+      world.particles.burst(player.position.clone().add(new T.Vector3(0, 1, 0)), 0xbd83ff, 24, 9, .78, .16);
+    }
+    beginReturn(reason = 'auto') {
+      const ball = this.ball;
+      if (ball.mode === 'ready' || ball.mode === 'returning' || ball.mode === 'anchored' || ball.mode === 'caught') return;
+      ball.mode = 'returning';
+      ball.returnReason = reason;
+      ball.returnTime = 0;
+      ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
+      ball.returnStuck = 0;
+      if (reason === 'snap' || reason === 'queued' || reason === 'spin') {
+        world.particles.burst(ball.position, reason === 'spin' ? 0xbd83ff : 0x75efff, 14, 7, .55, .1);
+      }
+    }
+    completeReturn() {
+      const ball = this.ball;
+      const player = this.player;
+      const target = this.readyBallTarget(new T.Vector3());
+      const incoming = ball.velocity.length();
+      ball.mode = 'ready';
+      ball.position.copy(target);
+      ball.velocity.copy(player.velocity).multiplyScalar(.18);
+      ball.flightTime = ball.returnTime = 0;
+      ball.anchor = null;
+      ball.caughtBy = null;
+      ball.bounceCount = 0;
+      ball.curveBoost = 0;
+      ball.spin *= .58;
+      world.particles.burst(ball.position, 0x7ff3ff, incoming > 35 ? 16 : 8, 5.5, .48, .12);
+      if (incoming > 38) this.addStyle(6, 190, 'HOME AT MACH', '#83efff');
+      if (this.queuedKick) {
+        const queued = this.queuedKick;
+        this.queuedKick = null;
+        if (queued.expires >= this.time) this.launchBall(queued.charge, queued.direction, true);
+      }
+    }
+    readyBallTarget(target) {
+      const forward = this.forwardFromView(this.readyForwardScratch);
+      const right = this.horizontalRight(this.readyRightScratch);
+      return target.copy(world.camera.position)
+        // Telekinetically cradle the HOME ball low and right: always visible,
+        // never parked over the crosshair or the alien the player is reading.
+        .addScaledVector(forward, 3.35)
+        .addScaledVector(right, 2.05)
+        .addScaledVector(UP, -.96);
+    }
+    updateBall(dt, frame) {
+      const ball = this.ball;
+      const player = this.player;
+      for (const [key, value] of ball.collisionCooldown) {
+        const next = value - dt;
+        if (next <= 0) ball.collisionCooldown.delete(key); else ball.collisionCooldown.set(key, next);
+      }
+      ball.curveBoost = Math.max(0, ball.curveBoost - dt * .62);
+      player.grappling = false;
+      const previous = ball.position.clone();
+
+      if (ball.mode === 'ready') {
+        if (player.spinTimer > 0) {
+          const angle = player.spinAngle * (this.stats.spins % 2 ? 1 : -1);
+          const radius = 2.35;
+          ball.position.set(
+            player.position.x + Math.cos(angle) * radius,
+            player.position.y + 1.15 + Math.sin(angle * 2) * .34,
+            player.position.z + Math.sin(angle) * radius,
+          );
+          ball.velocity.copy(ball.position).sub(previous).multiplyScalar(1 / Math.max(dt, .0001));
+          ball.spin += dt * 42;
+        } else {
+          const target = this.readyBallTarget(this.tempA);
+          const spring = 1 - Math.exp(-dt * 22);
+          ball.position.lerp(target, spring);
+          ball.velocity.copy(player.velocity).multiplyScalar(.2);
+          ball.spin = damp(ball.spin, 2.2, 4, dt);
+        }
+      } else if (ball.mode === 'outbound') {
+        ball.flightTime += dt;
+        if (frame.snap) this.beginReturn('snap');
+        if (ball.mode === 'outbound') {
+          const speed = ball.velocity.length();
+          if (speed > 5) {
+            const currentDirection = ball.velocity.clone().normalize();
+            const desiredDirection = this.forwardFromView(this.tempA);
+            const steerStrength = 13 + Math.min(18, Math.abs(this.cameraYawVelocity) * .8) + ball.curveBoost * 22;
+            const steered = desiredDirection.sub(currentDirection);
+            const maxSteer = steerStrength * dt;
+            if (steered.length() > maxSteer) steered.setLength(maxSteer);
+            currentDirection.add(steered).normalize();
+            ball.velocity.copy(currentDirection).multiplyScalar(speed);
+            ball.spin = damp(ball.spin, clamp(this.cameraYawVelocity * 1.45, -38, 38), 5.5, dt);
+          }
+          ball.velocity.y -= 5.25 * dt;
+          ball.position.addScaledVector(ball.velocity, dt);
+          const separation = ball.position.distanceTo(player.position);
+          if (ball.flightTime >= ball.outboundDuration || separation >= ball.maxRange || (ball.bounceCount > 0 && ball.flightTime > .52) || speed < 4.5) this.beginReturn('auto');
+        }
+      }
+
+      if (ball.mode === 'returning') {
+        ball.returnTime += dt;
+        const target = world.camera.position.clone().addScaledVector(this.forwardFromView(this.tempA), 1.05).addScaledVector(UP, -.25);
+        const toTarget = target.sub(ball.position);
+        const distance = toTarget.length();
+        const direction = distance > .001 ? toTarget.multiplyScalar(1 / distance) : new T.Vector3(0, 0, -1);
+        const right = this.horizontalRight(this.tempB);
+        const snap = frame.snap ? 1 : 0;
+        const arcEnvelope = smoothstep(2.5, 12, distance) * (1 - smoothstep(38, 65, distance));
+        const arc = ball.returnSide * arcEnvelope * (7.5 + Math.min(9, distance * .16)) * (1 - snap * .76);
+        const desiredSpeed = 29 + Math.min(28, distance * .7) + snap * 17 + ball.curveBoost * 12;
+        const desiredVelocity = direction.multiplyScalar(desiredSpeed).addScaledVector(right, arc);
+        const acceleration = 112 + snap * 120 + ball.returnTime * 54;
+        const change = desiredVelocity.sub(ball.velocity);
+        const maxChange = acceleration * dt;
+        if (change.length() > maxChange) change.setLength(maxChange);
+        ball.velocity.add(change);
+        ball.position.addScaledVector(ball.velocity, dt);
+        ball.spin = damp(ball.spin, ball.returnSide * (19 + arc * .55), 8, dt);
+        const nowDistance = ball.position.distanceTo(player.position);
+        if (nowDistance >= ball.lastReturnDistance - .025) ball.returnStuck += dt;
+        else ball.returnStuck = Math.max(0, ball.returnStuck - dt * 1.7);
+        ball.lastReturnDistance = nowDistance;
+        audio.recall(true, clamp(nowDistance / 42, 0, 1));
+        if (nowDistance < 1.75 || ball.returnTime > 2.65 || ball.returnStuck > .72) this.completeReturn();
+      } else if (ball.mode === 'anchored') {
+        this.updateAnchoredBall(dt, frame);
+      } else if (ball.mode === 'caught') {
+        this.updateCaughtBall(dt, frame);
+      } else {
+        audio.recall(false, 0);
+      }
+
+      if (ball.mode === 'outbound' || ball.mode === 'returning') {
+        this.resolveBallWorld(previous);
+        this.resolveBallEnemies();
+      }
+      this.updateBallTrail(dt);
+    }
+    updateAnchoredBall(dt, frame) {
+      const ball = this.ball;
+      const anchor = ball.anchor;
+      if (!anchor || anchor.used) {
+        ball.anchor = null;
+        ball.mode = 'returning';
+        return;
+      }
+      ball.anchorTimer += dt;
+      ball.position.copy(anchor.position);
+      ball.position.y += Math.sin(this.time * 8) * .13;
+      ball.velocity.set(0, 0, 0);
+      if (frame.snap) {
+        const toAnchor = anchor.position.clone().sub(this.player.position);
+        const distance = toAnchor.length();
+        const direction = distance > .001 ? toAnchor.multiplyScalar(1 / distance) : UP.clone();
+        const desiredSpeed = Math.min(31, 17 + distance * .42);
+        const desiredVelocity = direction.multiplyScalar(desiredSpeed);
+        this.player.velocity.lerp(desiredVelocity, 1 - Math.exp(-dt * 9.2));
+        this.player.grappling = true;
+        this.player.grounded = false;
+        this.player.jumpsUsed = Math.min(this.player.jumpsUsed, 1);
+        this.shake = Math.max(this.shake, .055 + clamp(distance / 80, 0, .08));
+        audio.recall(true, clamp(distance / 45, 0, 1));
+        if (cosmeticRandom() < dt * 42) world.particles.burst(this.player.position.clone().add(new T.Vector3(0, 1, 0)), 0x7befff, 1, 2.5, .35, 0);
+        if (distance < 3.35) {
+          anchor.used = true;
+          this.stats.anchorLinks++;
+          this.player.grappling = false;
+          this.player.velocity.y = Math.max(this.player.velocity.y, 11.2);
+          this.player.jumpsUsed = 0;
+          const platform = world.platforms[anchor.index];
+          this.player.checkpoint.set(platform.x, platform.top + .1, platform.z + 1.5);
+          this.player.checkpointYaw = this.player.yaw;
+          ball.anchor = null;
+          ball.mode = 'returning';
+          ball.returnTime = 0;
+          ball.velocity.copy(this.player.velocity).multiplyScalar(.55);
+          ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
+          this.addStyle(18 + anchor.index * 2, 850 + anchor.index * 160, `SLING LINK ${anchor.index + 1}/4`, anchor.index === 3 ? '#ffd66b' : '#83efff');
+          world.particles.burst(anchor.position, anchor.index === 3 ? 0xffd66b : 0x7befff, 34, 13, .9, .3);
+          audio.impact(1, 'anchor');
+          this.shake = Math.max(this.shake, .24);
+        }
+      } else {
+        this.player.grappling = false;
+        audio.recall(false, 0);
+        if (ball.anchorTimer > 4.8) {
+          ball.anchor = null;
+          ball.mode = 'returning';
+          ball.returnTime = 0;
+          ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
+          this.announce('ANCHOR RELEASED // HOLD SNAP TO PULL', '#83efff');
+        }
+      }
+    }
+    updateCaughtBall(dt, frame) {
+      const ball = this.ball;
+      const enemy = ball.caughtBy;
+      if (!enemy || !enemy.alive) {
+        ball.caughtBy = null;
+        ball.mode = 'returning';
+        return;
+      }
+      ball.catchTimer += dt;
+      if (frame.snap) ball.snapTimer += dt;
+      else ball.snapTimer = Math.max(0, ball.snapTimer - dt * 1.2);
+      const front = this.enemyFront(enemy, this.tempA);
+      ball.position.copy(enemy.position).addScaledVector(UP, enemy.type === 'warden' ? 2.8 : 1.8).addScaledVector(front, enemy.radius + .72);
+      ball.velocity.set(0, 0, 0);
+      ball.spin += dt * 6;
+      const snapFree = ball.snapTimer > .38;
+      const autoFree = ball.catchTimer > 1.05;
+      audio.recall(true, clamp(Math.max(ball.snapTimer / .38, ball.catchTimer / 1.05), 0, 1));
+      if (snapFree || autoFree) {
+        const direction = this.player.position.clone().addScaledVector(UP, 1.2).sub(ball.position).normalize();
+        ball.caughtBy = null;
+        ball.mode = 'returning';
+        ball.catchTimer = ball.snapTimer = 0;
+        ball.velocity.copy(direction).multiplyScalar(snapFree ? 46 : 32);
+        ball.returnTime = 0;
+        ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
+        enemy.catchCooldown = 1.15;
+        enemy.stun = snapFree ? .6 : .3;
+        if (snapFree) {
+          this.addStyle(19, 920, 'RIPPED FREE', '#bf83ff');
+          world.particles.burst(ball.position, 0x81efff, 28, 14, .8, .18);
+          audio.spin();
+          this.shake = Math.max(this.shake, .28);
+        }
+      }
+    }
+    resolveBallWorld(previous) {
+      const ball = this.ball;
+      const floor = world.floorHeight(ball.position.x, ball.position.z, ball.position.y + 1);
+      if (ball.position.y - ball.radius < floor) {
+        const impact = Math.max(0, -ball.velocity.y);
+        ball.position.y = floor + ball.radius;
+        if (ball.velocity.y < 0) ball.velocity.y *= -.7;
+        ball.velocity.x *= .965;
+        ball.velocity.z *= .965;
+        if (impact > 5) {
+          ball.bounceCount++;
+          world.particles.burst(ball.position.clone().addScaledVector(UP, -ball.radius), 0xbfc6d2, 5 + Math.floor(impact), 4 + impact * .35, .5, .05);
+          audio.impact(clamp(impact / 28, .15, 1), 'rock');
+          if (impact > 16) this.addStyle(3, 90, 'LUNAR BANK', '#83efff');
+        }
+      }
+
+      // The climb pillars are true world solids for the signature ball too.
+      // Resolve their cylindrical sides before route anchors so a fast kick can
+      // bank around the mesa but cannot ghost through tens of metres of rock.
+      for (const platform of world.platforms) {
+        if (ball.position.y - ball.radius >= platform.top - .35) continue;
+        const sideRadius = platform.radius * 1.03 + ball.radius;
+        let dx = ball.position.x - platform.x;
+        let dz = ball.position.z - platform.z;
+        let distance = Math.hypot(dx, dz);
+        if (distance >= sideRadius) continue;
+        if (distance < 1e-5) {
+          dx = previous.x - platform.x;
+          dz = previous.z - platform.z;
+          distance = Math.hypot(dx, dz);
+          if (distance < 1e-5) {
+            dx = -ball.velocity.x;
+            dz = -ball.velocity.z;
+            distance = Math.hypot(dx, dz) || 1;
+          }
+        }
+        const nx = dx / distance;
+        const nz = dz / distance;
+        ball.position.x = platform.x + nx * sideRadius;
+        ball.position.z = platform.z + nz * sideRadius;
+        const along = ball.velocity.x * nx + ball.velocity.z * nz;
+        if (along < 0) {
+          ball.velocity.x -= nx * along * 1.78;
+          ball.velocity.z -= nz * along * 1.78;
+          ball.velocity.y *= .985;
+          ball.spin += (ball.velocity.x * nz - ball.velocity.z * nx) * .08;
+          ball.bounceCount++;
+          const key = `pillar-${platform.id}`;
+          if (!ball.collisionCooldown.has(key)) {
+            ball.collisionCooldown.set(key, .1);
+            world.particles.burst(ball.position, 0xc7d0dc, 12, 8, .48, .08);
+            audio.impact(clamp(Math.abs(along) / 38, .2, 1), 'rock');
+          }
+        }
+      }
+
+      if (world.gate.active && Math.abs(ball.position.z - world.gate.position.z) < 1.35 + ball.radius && Math.abs(ball.position.x) < world.gate.width / 2 + ball.radius && Math.abs(ball.position.y - world.gate.position.y) < world.gate.height / 2 + ball.radius) {
+        ball.position.z = previous.z;
+        ball.velocity.z *= -1.02;
+        ball.bounceCount++;
+        world.particles.burst(ball.position, 0x72edff, 18, 8, .55, .08);
+        audio.impact(.7, 'anchor');
+      }
+      if (world.fracture.active && Math.abs(ball.position.z - world.fracture.position.z) < 2.4 + ball.radius && Math.abs(ball.position.x) < world.fracture.width / 2 + ball.radius && Math.abs(ball.position.y - world.fracture.position.y) < world.fracture.height / 2 + ball.radius) {
+        const speed = ball.velocity.length();
+        const climbComplete = world.anchors.every(anchor => anchor.used);
+        if (climbComplete && ball.mode === 'outbound' && ball.launchCharge >= .78 && speed > 29) {
+          world.breakFracture(ball.position);
+          this.stats.breaks++;
+          this.addStyle(26, 2200, 'MOONBREAKER', '#ffd66b');
+          this.hitStop = .055;
+          this.shake = Math.max(this.shake, .58);
+        } else {
+          ball.position.z = previous.z;
+          ball.velocity.z *= -1.06;
+          ball.bounceCount++;
+          this.announce(climbComplete ? 'FRACTURE NEEDS A FULL OUTBOUND KICK' : 'LOCK THE FOUR SLING ANCHORS FIRST', '#ffd66b');
+          world.particles.burst(ball.position, 0xba84ff, 18, 9, .55, .08);
+        }
+      }
+
+      for (const item of world.breakables) {
+        if (!item.alive || ball.collisionCooldown.has(item.id)) continue;
+        const distance = item.position.distanceTo(ball.position);
+        if (distance > item.radius + ball.radius) continue;
+        const speed = ball.velocity.length();
+        if (speed > 10) {
+          world.shatterBreakable(item, clamp(speed / 38, .2, 1));
+          ball.collisionCooldown.set(item.id, .16);
+          this.stats.breaks++;
+          this.addStyle(2, 80, speed > 36 ? 'SHARD LINE' : null, '#c7d0dc');
+          continue;
+        }
+        const normal = ball.position.clone().sub(item.position).normalize();
+        const along = ball.velocity.dot(normal);
+        if (along < 0) ball.velocity.addScaledVector(normal, -1.7 * along);
+        ball.position.addScaledVector(normal, item.radius + ball.radius - distance + .02);
+      }
+
+      if (ball.mode === 'outbound' && ball.launchCharge >= .78) {
+        const anchor = world.anchors.find(candidate => !candidate.used);
+        const basinCleared = !this.enemies.some(enemy => !enemy.summit && enemy.type === 'scuttler' && enemy.alive);
+        const climbUnlocked = basinCleared && !this.shieldEnemy.alive;
+        if (climbUnlocked && anchor && ball.position.distanceTo(anchor.position) <= 2.55) {
+          ball.mode = 'anchored';
+          ball.anchor = anchor;
+          ball.anchorTimer = 0;
+          ball.velocity.set(0, 0, 0);
+          ball.position.copy(anchor.position);
+          this.addStyle(12, 520, 'ANCHORED', '#83efff');
+          world.particles.burst(anchor.position, 0x76efff, 26, 10, .72, .2);
+          audio.impact(.9, 'anchor');
+          this.announce('HOLD SNAP // PULL YOURSELF UP', '#83efff');
+        }
+      }
+
+      if (world.goal.open && Math.abs(ball.position.z - world.goal.position.z) < 2.4 && Math.hypot(ball.position.x - world.goal.position.x, ball.position.y - world.goal.position.y) < world.goal.radius) {
+        this.completeRun();
+      }
+      if (ball.position.y < -45 || ball.position.distanceTo(this.player.position) > 280) {
+        ball.position.copy(this.player.position).add(new T.Vector3(0, 3, 4));
+        ball.velocity.copy(this.player.position).sub(ball.position).setLength(32);
+        ball.mode = 'returning';
+        ball.returnTime = 0;
+        ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
+      }
+    }
+    enemyFront(enemy, target = new T.Vector3()) {
+      return target.set(Math.sin(enemy.facing), 0, Math.cos(enemy.facing)).normalize();
+    }
+    resolveBallEnemies() {
+      const ball = this.ball;
+      for (const enemy of this.enemies) {
+        if (!enemy.alive || (enemy.summit && world.fracture.active) || ball.collisionCooldown.has(enemy.id) || ball.caughtBy) continue;
+        const center = enemy.position.clone().addScaledVector(UP, enemy.radius * .7);
+        const distance = center.distanceTo(ball.position);
+        if (distance > enemy.radius + ball.radius) continue;
+        const normal = ball.position.clone().sub(center).normalize();
+        const speed = ball.velocity.length();
+        const front = this.enemyFront(enemy, this.tempA);
+        const frontness = normal.dot(front);
+        const returnAttack = ball.mode === 'returning';
+        const validHit = speed > 8;
+        ball.collisionCooldown.set(enemy.id, .22);
+        if (enemy.type === 'scuttler') {
+          if (validHit) this.damageAlien(enemy, 1, returnAttack ? 'return' : 'kick');
+          const along = ball.velocity.dot(normal);
+          if (along < 0) ball.velocity.addScaledVector(normal, -1.45 * along);
+          continue;
+        }
+        const protectedFront = frontness > .12;
+        if (protectedFront) {
+          if (enemy.type === 'warden' && ball.mode === 'outbound' && enemy.catchCooldown <= 0 && speed > 12) {
+            ball.mode = 'caught';
+            ball.caughtBy = enemy;
+            ball.catchTimer = ball.snapTimer = 0;
+            ball.velocity.set(0, 0, 0);
+            enemy.catchCooldown = .8;
+            this.announce('BALL STOLEN // HOLD SNAP OR ARM A VOLLEY', '#bf83ff');
+            world.particles.burst(ball.position, 0xbe83ff, 22, 9, .68, .12);
+            audio.impact(.9, 'alien');
+          } else {
+            const along = ball.velocity.dot(normal);
+            if (along < 0) ball.velocity.addScaledVector(normal, -1.78 * along);
+            else ball.velocity.addScaledVector(front, 7);
+            enemy.hitFlash = .5;
+            this.announce('CARAPACE BLOCK // CURVE THE RETURN BEHIND IT', '#83efff');
+            world.particles.burst(ball.position, 0x778cff, 15, 8, .52, .1);
+            audio.impact(.62, 'alien');
+          }
+        } else if (returnAttack && validHit) {
+          this.stats.returnHits++;
+          this.damageAlien(enemy, 1, 'return');
+          const along = ball.velocity.dot(normal);
+          if (along < 0) ball.velocity.addScaledVector(normal, -1.25 * along);
+        } else {
+          const along = ball.velocity.dot(normal);
+          if (along < 0) ball.velocity.addScaledVector(normal, -1.4 * along);
+          this.announce('WEAK SIDE ONLY // MAKE THE RETURN THE WEAPON', '#ffd66b');
+        }
+      }
+    }
+    damageAlien(enemy, amount = 1, source = 'kick') {
+      if (!enemy.alive || (enemy.summit && world.fracture.active)) return false;
+      enemy.hp -= amount;
+      enemy.hitFlash = 1;
+      enemy.stun = enemy.type === 'warden' ? .28 : .52;
+      const hitPosition = enemy.position.clone().addScaledVector(UP, enemy.radius * .75);
+      world.particles.burst(hitPosition, source === 'spin' ? 0xbd83ff : source === 'return' ? 0xffd66b : 0x7aefff, enemy.type === 'warden' ? 30 : 20, 12, .78, .2);
+      this.showHitMarker(enemy.hp <= 0);
+      this.shake = Math.max(this.shake, enemy.type === 'warden' ? .31 : .22);
+      this.hitStop = Math.max(this.hitStop, enemy.hp <= 0 ? .058 : .032);
+      audio.impact(.75, 'alien');
+      if (enemy.hp > 0) {
+        const label = enemy.type === 'warden' ? `WARDEN ${enemy.hp}/${enemy.maxHp}` : enemy.type === 'shield' ? `BACK HIT ${enemy.hp}/${enemy.maxHp}` : 'ALIEN HIT';
+        this.addStyle(source === 'return' ? 13 : 6, source === 'return' ? 620 : 240, label, source === 'return' ? '#ffd66b' : '#83efff');
+        return true;
+      }
+      enemy.hp = 0;
+      enemy.alive = false;
+      enemy.deadTimer = .82;
+      enemy.velocity.copy(enemy.position).sub(this.ball.position).normalize().multiplyScalar(10).addScaledVector(UP, 8);
+      this.stats.kills++;
+      this.addStyle(enemy.type === 'warden' ? 34 : enemy.type === 'shield' ? 25 : 12, enemy.type === 'warden' ? 5000 : enemy.type === 'shield' ? 2400 : 700, enemy.type === 'warden' ? 'CROWN SHATTERED' : enemy.type === 'shield' ? 'CARAPACE BROKEN' : 'MOONSMASH', '#ffd66b');
+      world.particles.burst(hitPosition, 0xffdf79, enemy.type === 'warden' ? 72 : 36, enemy.type === 'warden' ? 24 : 16, 1.15, .45);
+      audio.score(true);
+      if (enemy === this.shieldEnemy) world.openGate();
+      // The aperture opens only after the entire summit encounter is cleared.
+      return true;
+    }
+    updateEnemies(dt) {
+      const player = this.player;
+      for (const enemy of this.enemies) {
+        enemy.hitFlash = Math.max(0, enemy.hitFlash - dt * 3.8);
+        enemy.stun = Math.max(0, enemy.stun - dt);
+        enemy.attackCooldown = Math.max(0, enemy.attackCooldown - dt);
+        enemy.catchCooldown = Math.max(0, enemy.catchCooldown - dt);
+        const visual = enemy.visual;
+        if (!enemy.alive) {
+          enemy.deadTimer -= dt;
+          enemy.position.addScaledVector(enemy.velocity, dt);
+          enemy.velocity.y -= 13 * dt;
+          enemy.velocity.multiplyScalar(Math.exp(-2.4 * dt));
+          visual.group.position.copy(enemy.position);
+          visual.group.rotation.x += dt * 5;
+          visual.group.rotation.z += dt * 3.5;
+          const scale = clamp(enemy.deadTimer / .82, 0, 1);
+          visual.group.scale.setScalar(Math.pow(scale, .65));
+          if (enemy.deadTimer <= 0) visual.group.visible = false;
+          continue;
+        }
+        visual.group.visible = true;
+        visual.group.scale.setScalar(1);
+        const summitLocked = enemy.summit && world.fracture.active;
+        const toPlayer = player.position.clone().sub(enemy.position);
+        const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
+        const activeRange = enemy.type === 'warden' ? 80 : 44;
+        if (!summitLocked && horizontalDistance < activeRange && enemy.stun <= 0) {
+          const desiredFacing = Math.atan2(toPlayer.x, toPlayer.z);
+          if (enemy.type === 'shield' || enemy.type === 'warden') {
+            const target = this.ball.position.clone().sub(enemy.position);
+            const faceBall = Math.atan2(target.x, target.z);
+            enemy.facing += angleDelta(enemy.facing, faceBall) * (1 - Math.exp(-dt * (this.ball.mode === 'returning' ? 1.4 : 4.8)));
+          } else {
+            enemy.facing += angleDelta(enemy.facing, desiredFacing) * (1 - Math.exp(-dt * 6.5));
+          }
+          if (enemy.type === 'scuttler') {
+            const direction = toPlayer.setY(0).normalize();
+            const strafe = Math.sin(this.time * 2.2 + enemy.phase) * .35;
+            direction.x += Math.cos(enemy.facing) * strafe;
+            direction.z -= Math.sin(enemy.facing) * strafe;
+            direction.normalize();
+            enemy.velocity.x = damp(enemy.velocity.x, direction.x * 4.8, 5, dt);
+            enemy.velocity.z = damp(enemy.velocity.z, direction.z * 4.8, 5, dt);
+          } else if (enemy.type === 'warden') {
+            enemy.velocity.x = damp(enemy.velocity.x, Math.cos(this.time * .72 + enemy.phase) * 4.2, 3.2, dt);
+            enemy.velocity.z = damp(enemy.velocity.z, Math.sin(this.time * .5 + enemy.phase) * 2.1, 3.2, dt);
+          } else {
+            enemy.velocity.x *= Math.exp(-5 * dt);
+            enemy.velocity.z *= Math.exp(-5 * dt);
+          }
+        } else {
+          enemy.velocity.x *= Math.exp(-4 * dt);
+          enemy.velocity.z *= Math.exp(-4 * dt);
+        }
+        enemy.position.x += enemy.velocity.x * dt;
+        enemy.position.z += enemy.velocity.z * dt;
+        const floor = world.floorHeight(enemy.position.x, enemy.position.z, enemy.position.y + 2);
+        const hop = enemy.type === 'scuttler' ? Math.max(0, Math.sin(this.time * 5.2 + enemy.phase)) * .32 : Math.sin(this.time * 1.7 + enemy.phase) * .06;
+        enemy.position.y = floor + hop;
+        visual.group.position.copy(enemy.position);
+        visual.group.rotation.y = enemy.facing + Math.PI;
+        visual.abdomen.scale.y = visual.scale * (.8 + hop * .08);
+        visual.eye.material.emissiveIntensity = 3.8 + Math.sin(this.time * 5 + enemy.phase) * .9;
+        visual.weak.visible = enemy.type !== 'scuttler';
+        if (visual.shield) visual.shield.material.emissiveIntensity = 1.7 + enemy.hitFlash * 5;
+        const playerDistance = enemy.position.distanceTo(player.position);
+        if (playerDistance < enemy.radius + player.radius + .6 && player.damageCooldown <= 0 && !summitLocked) {
+          if (player.velocity.y < -3 && player.position.y > enemy.position.y + enemy.radius * .5) {
+            this.damageAlien(enemy, 1, 'stomp');
+            player.velocity.y = 12.8;
+            player.jumpsUsed = Math.min(player.jumpsUsed, 1);
+            this.addStyle(9, 330, 'LUNAR STOMP', '#83efff');
+          } else {
+            this.damagePlayer(enemy);
+          }
+        }
+      }
+    }
+    damagePlayer(enemy) {
+      const player = this.player;
+      if (player.invulnerable > 0 || player.damageCooldown > 0) return;
+      player.health = Math.max(0, player.health - 1);
+      player.damageCooldown = .8;
+      player.invulnerable = .45;
+      const away = player.position.clone().sub(enemy.position).setY(.18).normalize();
+      player.velocity.addScaledVector(away, 10);
+      player.velocity.y = Math.max(player.velocity.y, 6.5);
+      this.style = Math.max(0, this.style - 16);
+      this.shake = Math.max(this.shake, .62);
+      ui.damageVignette?.classList.add('active');
+      setTimeout(() => ui.damageVignette?.classList.remove('active'), 180);
+      audio.damage();
+      if (player.health <= 0) this.respawnPlayer();
+    }
+    respawnPlayer() {
+      const player = this.player;
+      this.stats.falls++;
+      this.respawnCount++;
+      player.position.copy(player.checkpoint);
+      player.velocity.set(0, 0, 0);
+      player.yaw = player.checkpointYaw;
+      player.pitch = -.05;
+      player.health = 5;
+      player.grounded = false;
+      player.jumpsUsed = 0;
+      player.invulnerable = 1.4;
+      player.grappling = false;
+      this.style = Math.max(0, this.style - 24);
+      this.ball = new BallState(player);
+      this.queuedKick = null;
+      this.charging = false;
+      this.charge = 0;
+      world.ballGroup.position.copy(this.ball.position);
+      world.particles.burst(player.position.clone().addScaledVector(UP, 1), 0x83efff, 34, 10, .9, .35);
+      this.announce('SUIT RECONSTITUTED // BALL LINK RESTORED', '#83efff');
+      audio.damage();
+    }
+    updateBallTrail(dt) {
+      const ball = this.ball;
+      const speed = ball.velocity.length();
+      if (speed > 6 || ball.mode === 'returning' || ball.mode === 'anchored' || this.player.spinTimer > 0) {
+        ball.trail.unshift(ball.position.clone());
+      }
+      const maximum = ball.mode === 'returning' ? 58 : 42;
+      while (ball.trail.length > maximum) ball.trail.pop();
+      if (ball.mode === 'ready' && this.player.spinTimer <= 0) {
+        const remove = Math.ceil(dt * 100);
+        if (remove > 0) ball.trail.splice(Math.max(0, ball.trail.length - remove), remove);
+      }
+      world.setTrail(ball.trail, ball.mode);
+    }
+    missionPrerequisitesComplete() {
+      const basinCleared = !this.enemies.some(enemy => !enemy.summit && enemy.type === 'scuttler' && enemy.alive);
+      const summitCleared = !this.enemies.some(enemy => enemy.summit && enemy.alive);
+      return basinCleared
+        && !this.shieldEnemy.alive
+        && world.anchors.every(anchor => anchor.used)
+        && !world.fracture.active
+        && summitCleared;
+    }
+    updateProgression() {
+      const anchorsUsed = world.anchors.filter(anchor => anchor.used).length;
+      const summitAlive = this.enemies.filter(enemy => enemy.summit && enemy.alive).length;
+      if (anchorsUsed === world.anchors.length && this.player.position.y > 52 && this.player.position.z < -48) {
+        this.player.checkpoint.set(0, groundHeightAt(0, -82) + .1, -82);
+        this.player.checkpointYaw = 0;
+      }
+      if (!world.fracture.active && this.player.position.z < -118) {
+        this.player.checkpoint.set(0, groundHeightAt(0, -128) + .1, -128);
+        this.player.checkpointYaw = 0;
+      }
+      if (this.missionPrerequisitesComplete() && !world.goal.open) world.openGoal();
+      this.updateObjective();
+    }
+    updateObjective(force = false) {
+      const basinAlive = this.enemies.filter(enemy => !enemy.summit && enemy.alive && enemy.type === 'scuttler').length;
+      const anchorsUsed = world.anchors.filter(anchor => anchor.used).length;
+      const summitAlive = this.enemies.filter(enemy => enemy.summit && enemy.alive).length;
+      let key, label, text, stage;
+      if (!this.started) {
+        key = 'start'; stage = 0;
+        label = 'MARE IMBRIUM // DROP ZONE';
+        text = 'Wake the ball. Break the occupation.';
+      } else if (basinAlive > 0) {
+        key = `basin-${basinAlive}`; stage = 1;
+        label = 'LANDING CRATER // CONTACT';
+        text = `${basinAlive} ridge skitter${basinAlive === 1 ? '' : 's'} remain. KICK, return, stomp, or SPIN them into moon dust.`;
+      } else if (this.shieldEnemy.alive) {
+        key = `shield-${this.shieldEnemy.hp}`; stage = 2;
+        label = 'ORPHEUS GATE // CARAPACE SENTINEL';
+        text = `Frontal kicks are armor food. Throw wide, turn, and SNAP the return through its gold back. HP ${this.shieldEnemy.hp}/${this.shieldEnemy.maxHp}.`;
+      } else if (anchorsUsed < world.anchors.length) {
+        key = `climb-${anchorsUsed}`; stage = 3;
+        label = 'ORPHEUS RIM // SIXTY-METRE ASCENT';
+        text = `Full-charge the next cyan socket, then hold SNAP to sling upward. Anchor ${anchorsUsed + 1}/${world.anchors.length}. Double jump and METEOR kicks recover altitude.`;
+      } else if (world.fracture.active) {
+        key = 'fracture'; stage = 4;
+        label = 'CROWN FAULT // FRACTURE SEAM';
+        text = 'The violet wall only breaks for a full-charge OUTBOUND impact. Put your whole moon into it.';
+      } else if (summitAlive > 0) {
+        key = `crown-${summitAlive}-${this.warden.hp}`; stage = 5;
+        label = 'OBSERVATORY CROWN // ALIEN WARDEN';
+        text = `${summitAlive} alien${summitAlive === 1 ? '' : 's'} remain. The Warden catches frontal kicks; tear the ball free with SNAP and punish its exposed back.`;
+      } else if (!this.won) {
+        key = 'goal'; stage = 6;
+        label = 'APOGEE APERTURE // OPEN';
+        text = 'Send the ball through the gold orbital ring. The last throw still comes home.';
+      } else {
+        key = 'complete'; stage = 7;
+        label = 'MOON // LIBERATED';
+        text = 'The occupation is debris. The ball is already on its way back.';
+      }
+      this.stage = stage;
+      if (!force && this.objectiveKey === key) return;
+      this.objectiveKey = key;
+      if (ui.objectiveLabel) ui.objectiveLabel.textContent = label;
+      if (ui.objectiveText) ui.objectiveText.textContent = text;
+    }
+    styleRank() {
+      if (this.style >= 92) return 'SS';
+      if (this.style >= 72) return 'S';
+      if (this.style >= 49) return 'A';
+      if (this.style >= 25) return 'B';
+      return 'C';
+    }
+    addStyle(amount, score = 0, label = null, color = '#83efff') {
+      this.style = clamp(this.style + amount, 0, 100);
+      this.styleHold = Math.max(this.styleHold, 1.05);
+      this.score += Math.round(score);
+      if (label) {
+        if (ui.comboText) {
+          ui.comboText.textContent = label;
+          ui.comboText.style.color = color;
+          ui.comboText.classList.add('active');
+        }
+        this.styleLabelTimer = 1.05;
+      }
+    }
+    announce(message, color = '#83efff') {
+      if (!ui.promptToast) return;
+      ui.promptToast.textContent = message;
+      ui.promptToast.style.color = color;
+      ui.promptToast.classList.remove('hidden');
+      this.toastTimer = 2.8;
+    }
+    showHitMarker(lethal = false) {
+      if (!ui.hitMarker) return;
+      ui.hitMarker.classList.add('active');
+      ui.hitMarker.style.filter = lethal ? 'drop-shadow(0 0 9px #fff)' : '';
+      setTimeout(() => {
+        ui.hitMarker?.classList.remove('active');
+        if (ui.hitMarker) ui.hitMarker.style.filter = '';
+      }, lethal ? 150 : 90);
+    }
+    decayFeedback(dt) {
+      if (this.styleHold > 0) this.styleHold -= dt;
+      else this.style = Math.max(0, this.style - dt * (this.style > 70 ? 6.4 : 3.4));
+      this.kickVisual = Math.max(0, this.kickVisual - dt * 4.2);
+      if (this.toastTimer > 0) {
+        this.toastTimer -= dt;
+        if (this.toastTimer <= 0) ui.promptToast?.classList.add('hidden');
+      }
+      if (this.styleLabelTimer > 0) {
+        this.styleLabelTimer -= dt;
+        if (this.styleLabelTimer <= 0 && ui.comboText) {
+          ui.comboText.textContent = '';
+          ui.comboText.classList.remove('active');
+        }
+      }
+    }
+    completeRun() {
+      if (this.won || !this.missionPrerequisitesComplete() || !world.goal.open) return false;
+      this.won = true;
+      this.cancelCharge();
+      this.setGameplayInert(true);
+      if (document.pointerLockElement === canvas) document.exitPointerLock?.();
+      if (this.ball.mode === 'outbound') this.beginReturn('finish');
+      this.addStyle(34, Math.max(1800, 15000 - this.time * 70), 'ORBIT CLEAN', '#ffd66b');
+      this.saveBest();
+      audio.win();
+      this.shake = .9;
+      world.particles.burst(world.goal.position, 0xffd66b, 110, 28, 1.5, .45);
+      world.particles.burst(world.goal.position, 0x74efff, 80, 22, 1.25, .3);
+      if (ui.winTime) ui.winTime.textContent = formatTime(this.time);
+      if (ui.winScore) ui.winScore.textContent = String(Math.floor(this.score)).padStart(6, '0');
+      if (ui.winRank) ui.winRank.textContent = this.styleRank();
+      if (ui.winSummary) {
+        const clean = this.respawnCount === 0 ? 'No suit reconstruction. The cliff never owned you.' : `${this.respawnCount} suit reconstruction${this.respawnCount === 1 ? '' : 's'}, and the moon still lost.`;
+        ui.winSummary.textContent = `${clean} ${this.stats.kills} aliens shattered, ${this.stats.anchorLinks} sling links, ${this.stats.meteorKicks} meteor rebounds.`;
+      }
+      this.winTimer = setTimeout(() => {
+        if (!this.won) return;
+        ui.winOverlay?.classList.remove('hidden');
+        ui.winOverlay?.setAttribute('aria-hidden', 'false');
+        ui.restartButton?.focus({ preventScroll: true });
+      }, 780);
+      this.updateObjective(true);
+      return true;
+    }
+    syncWorldVisuals() {
+      const ball = this.ball;
+      world.ballGroup.position.copy(ball.position);
+      const speed = ball.velocity.length();
+      const stretch = 1 + smoothstep(18, 65, speed) * .38;
+      world.ballGroup.scale.set(1 / Math.sqrt(stretch), 1 / Math.sqrt(stretch), stretch);
+      if (speed > 1) world.ballGroup.lookAt(ball.position.clone().add(ball.velocity));
+      world.update(FIXED_DT, this);
+    }
+    syncUI() {
+      if (ui.styleFill) ui.styleFill.style.width = `${this.style}%`;
+      if (ui.styleRank) ui.styleRank.textContent = this.styleRank();
+      if (ui.scoreValue) ui.scoreValue.textContent = String(Math.max(0, Math.floor(this.score))).padStart(6, '0');
+      if (ui.bestValue) ui.bestValue.textContent = `BEST ${this.bestTime ? formatTime(this.bestTime) : '--:--.--'}`;
+      if (ui.ballState) {
+        const labels = { ready: 'HOME', outbound: 'OUTBOUND', returning: 'RETURNING', anchored: 'ANCHORED', caught: 'STOLEN' };
+        ui.ballState.textContent = labels[this.ball.mode] || this.ball.mode.toUpperCase();
+      }
+      if (ui.altitudeValue) {
+        const localGround = groundHeightAt(this.player.position.x, this.player.position.z);
+        ui.altitudeValue.textContent = `${Math.max(0, this.player.position.y - localGround).toFixed(1).padStart(5, '0')} M`;
+      }
+      if (ui.shieldPips) {
+        const activePips = Math.ceil(this.player.health / 2);
+        const pips = [...ui.shieldPips.querySelectorAll('i')];
+        pips.forEach((pip, index) => pip.classList.toggle('spent', index >= activePips));
+        ui.shieldPips.setAttribute('aria-label', `Suit integrity ${this.player.health} of 5`);
+      }
+      if (ui.jumpPips) {
+        const pips = [...ui.jumpPips.querySelectorAll('i')];
+        pips.forEach((pip, index) => pip.classList.toggle('spent', index < this.player.jumpsUsed));
+        ui.jumpPips.setAttribute('aria-label', `${Math.max(0, 2 - this.player.jumpsUsed)} jumps available`);
+      }
+      if (ui.chargeUI) ui.chargeUI.classList.toggle('active', this.charging);
+      if (ui.chargeFill) ui.chargeFill.style.width = `${this.charge * 100}%`;
+      if (ui.chargeText) ui.chargeText.textContent = this.charge > .96 ? 'MAXIMUM KICK' : this.ball.mode === 'ready' ? 'KICK CHARGE' : 'QUEUE VOLLEY';
+      if (ui.crosshair) {
+        ui.crosshair.dataset.ball = this.ball.mode;
+        ui.crosshair.style.transform = `translate(-50%, -50%) scale(${1 + this.charge * .22})`;
+        ui.crosshair.style.opacity = this.paused || !this.started ? '.3' : '.9';
+      }
+    }
+    validate() {
+      const values = [
+        ...this.player.position.toArray(), ...this.player.velocity.toArray(), this.player.yaw, this.player.pitch,
+        ...this.ball.position.toArray(), ...this.ball.velocity.toArray(), this.score, this.style, this.time,
+      ];
+      for (const enemy of this.enemies) values.push(...enemy.position.toArray(), ...enemy.velocity.toArray(), enemy.hp, enemy.facing);
+      const validMode = ['ready', 'outbound', 'returning', 'anchored', 'caught'].includes(this.ball.mode);
+      if (values.every(Number.isFinite) && validMode) return;
+      console.error('KICK BALL finite-state guard restored the current checkpoint.');
+      this.respawnPlayer();
+    }
+    teleport(section = 'start') {
+      const spots = {
+        start: [0, groundHeightAt(0, 120), 120, 0],
+        shield: [0, groundHeightAt(0, 67), 67, 0],
+        cliff: [0, groundHeightAt(0, 31), 31, 0, .28],
+        summit: [0, groundHeightAt(0, -84), -84, 0],
+        fracture: [0, groundHeightAt(0, -91), -91, 0],
+        keeper: [0, groundHeightAt(0, -160), -160, 0],
+        goal: [0, groundHeightAt(0, -214), -214, 0],
+      };
+      const spot = spots[section] || spots.start;
+      this.player.position.set(spot[0], spot[1] + .1, spot[2]);
+      this.player.velocity.set(0, 0, 0);
+      this.player.yaw = spot[3];
+      this.player.pitch = Number.isFinite(spot[4]) ? spot[4] : -.04;
+      this.player.checkpoint.copy(this.player.position);
+      this.player.checkpointYaw = this.player.yaw;
+      this.ball = new BallState(this.player);
+      this.queuedKick = null;
+      this.charging = false;
+      this.charge = 0;
+      this.updateCamera(FIXED_DT);
+      this.syncWorldVisuals();
+    }
+    stepWith(seconds = .1, controls = {}) {
+      const ticks = Math.max(1, Math.min(3600, Math.round(Number(seconds) / FIXED_DT)));
+      for (let i = 0; i < ticks; i++) {
+        const first = i === 0;
+        const frame = {
+          moveX: finite(Number(controls.moveX || 0)),
+          moveZ: finite(Number(controls.moveZ || 0)),
+          lookX: first ? finite(Number(controls.lookX || 0)) : 0,
+          lookY: first ? finite(Number(controls.lookY || 0)) : 0,
+          kick: !!controls.kick,
+          snap: !!controls.snap,
+          jump: !!controls.jump,
+          spin: !!controls.spin,
+          sprint: !!controls.sprint,
+          kickPressed: first && !!controls.kickPressed,
+          kickReleased: first && !!controls.kickReleased,
+          snapPressed: first && !!controls.snapPressed,
+          jumpPressed: first && !!controls.jumpPressed,
+          spinPressed: first && !!controls.spinPressed,
+          pausePressed: first && !!controls.pausePressed,
+        };
+        this.update(FIXED_DT, frame, first);
+      }
+      return this.getState();
+    }
+    getState() {
+      return {
+        version: '3.0.0-lunar-velocity',
+        player: {
+          x: this.player.position.x, y: this.player.position.y, z: this.player.position.z,
+          vx: this.player.velocity.x, vy: this.player.velocity.y, vz: this.player.velocity.z,
+          yaw: this.player.yaw, pitch: this.player.pitch, grounded: this.player.grounded,
+          jumpsUsed: this.player.jumpsUsed, health: this.player.health,
+          spinTimer: this.player.spinTimer, grappling: this.player.grappling,
+        },
+        ball: {
+          x: this.ball.position.x, y: this.ball.position.y, z: this.ball.position.z,
+          vx: this.ball.velocity.x, vy: this.ball.velocity.y, vz: this.ball.velocity.z,
+          mode: this.ball.mode, spin: this.ball.spin, flightTime: this.ball.flightTime,
+          returnTime: this.ball.returnTime, launchCharge: this.ball.launchCharge,
+          anchored: !!this.ball.anchor, caught: !!this.ball.caughtBy,
+        },
+        stage: this.stage,
+        objective: this.objectiveKey,
+        score: this.score,
+        style: this.style,
+        rank: this.styleRank(),
+        time: this.time,
+        started: this.started,
+        paused: this.paused,
+        won: this.won,
+        queuedKick: !!this.queuedKick,
+        gateActive: world.gate.active,
+        fractureActive: world.fracture.active,
+        goalOpen: world.goal.open,
+        anchorsUsed: world.anchors.filter(anchor => anchor.used).length,
+        enemies: this.enemies.map(enemy => ({ id: enemy.id, type: enemy.type, hp: enemy.hp, alive: enemy.alive, x: enemy.position.x, y: enemy.position.y, z: enemy.position.z })),
+        stats: { ...this.stats },
+        render: world.stats(),
+      };
+    }
+  }
+
+  function toggleFullscreen() {
+    const root = document.getElementById('gameRoot');
+    if (!document.fullscreenElement) {
+      const request = root?.requestFullscreen || root?.webkitRequestFullscreen;
+      if (request) Promise.resolve(request.call(root)).catch(() => {});
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) Promise.resolve(exit.call(document)).catch(() => {});
+    }
+  }
+
+  function requestGamePointerLock() {
+    try {
+      const pending = canvas.requestPointerLock?.();
+      pending?.catch?.(() => {});
+    } catch (_) {}
+  }
+
+  function neutralFrame() {
+    return {
+      moveX: 0, moveZ: 0, lookX: 0, lookY: 0,
+      kick: false, snap: false, jump: false, spin: false, sprint: false,
+      kickPressed: false, kickReleased: false, snapPressed: false,
+      jumpPressed: false, spinPressed: false, pausePressed: false,
+    };
+  }
+
+  function runAutotest() {
+    const checks = [];
+    const failures = [];
+    const check = (name, condition, detail = null) => {
+      const passed = !!condition;
+      checks.push({ name, passed, detail });
+      if (!passed) failures.push(name);
+    };
+    try {
+      check('three-runtime-r161', T.REVISION === '161', T.REVISION);
+      check('webgl-renderer-started', !!world.renderer.getContext(), world.stats());
+      check('world-materials-keep-depth-test', world.materials.black.depthTest && world.materials.gold.depthTest, {
+        black: world.materials.black.depthTest, gold: world.materials.gold.depthTest,
+      });
+      const terrainParityPoints = [[240, 120], [-210, -45], [86, -248]];
+      const terrainParityError = Math.max(...terrainParityPoints.map(([x, z]) => Math.abs(groundHeightAt(x, z) - world.sampleTerrainHeight(x, z))));
+      check('physics-uses-render-heightfield', terrainParityError < 1e-6, terrainParityError);
+      const originalTouchMode = input.touchEnabled;
+      input.touchEnabled = true;
+      input.moveStick.value.set(0, -1);
+      const touchSprintFrame = input.poll();
+      check('touch-full-stick-enables-sprint', touchSprintFrame.sprint && touchSprintFrame.moveZ > .99, {
+        sprint: touchSprintFrame.sprint, moveZ: touchSprintFrame.moveZ,
+      });
+      input.lookStick.value.set(1, 0);
+      input.poll();
+      let heldTouchTurn = 0;
+      for (let i = 0; i < 60; i++) heldTouchTurn += input.prepareStep(i === 0).lookX;
+      check('touch-look-hold-turns-continuously', heldTouchTurn > 1, { radiansAcrossHalfSecond: heldTouchTurn });
+      input.resetTransient();
+      input.touchEnabled = originalTouchMode;
+
+      game.start(false);
+      check('launch-focuses-gameplay-canvas', document.activeElement === canvas, {
+        activeElement: document.activeElement?.id || document.activeElement?.tagName,
+      });
+      game.togglePause();
+      ui.pauseResumeButton?.focus({ preventScroll: true });
+      ui.pauseResumeButton?.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP', key: 'p', bubbles: true }));
+      const focusedPauseFrame = input.poll();
+      if (focusedPauseFrame.pausePressed) game.togglePause();
+      check('p-resumes-from-focused-pause-button', !game.paused && document.activeElement === canvas, {
+        paused: game.paused, activeElement: document.activeElement?.id || document.activeElement?.tagName,
+      });
+      input.resetTransient();
+
+      game.restart();
+      game.started = true;
+      game.teleport('start');
+      game.stepWith(FIXED_DT, {});
+      const readyBallDistance = game.ball.position.distanceTo(game.player.position);
+      check('home-ball-stays-in-reach', game.ball.mode === 'ready' && readyBallDistance < 5, {
+        mode: game.ball.mode, distance: readyBallDistance, player: game.player.position.toArray(), ball: game.ball.position.toArray(),
+      });
+      const startZ = game.player.position.z;
+      game.stepWith(.55, { moveZ: 1, sprint: true });
+      check('first-person-movement', game.player.position.z < startZ - 2.2, { startZ, endZ: game.player.position.z });
+
+      game.teleport('start');
+      game.player.grounded = true;
+      const baseY = game.player.position.y;
+      game.stepWith(FIXED_DT, { jump: true, jumpPressed: true });
+      const firstImpulse = game.player.velocity.y;
+      game.stepWith(.18, { jump: true });
+      game.stepWith(FIXED_DT, { jump: true, jumpPressed: true });
+      const secondImpulse = game.player.velocity.y;
+      const usedAfterSecond = game.player.jumpsUsed;
+      const beforeThird = game.player.velocity.y;
+      game.stepWith(FIXED_DT, { jump: true, jumpPressed: true });
+      check('high-first-jump', firstImpulse > 15, firstImpulse);
+      check('high-double-jump', usedAfterSecond === 2 && secondImpulse > 18, { usedAfterSecond, secondImpulse });
+      check('third-jump-rejected', game.player.jumpsUsed === 2 && game.player.velocity.y <= beforeThird + .01, { beforeThird, after: game.player.velocity.y });
+      let apex = game.player.position.y;
+      for (let i = 0; i < 420; i++) {
+        game.stepWith(FIXED_DT, {});
+        apex = Math.max(apex, game.player.position.y);
+      }
+      check('double-jump-clears-nine-metres', apex - baseY > 9, { baseY, apex, clearance: apex - baseY });
+
+      game.restart();
+      game.started = true;
+      game.teleport('cliff');
+      const cliffWalkStartY = game.player.position.y;
+      game.stepWith(5, { moveZ: 1 });
+      const cliffWalkGain = game.player.position.y - cliffWalkStartY;
+      check('steep-cliff-requires-ball-route', cliffWalkGain < 12 && world.anchors.every(item => !item.used), {
+        gain: cliffWalkGain, player: game.player.position.toArray(), anchorsUsed: world.anchors.filter(item => item.used).length,
+      });
+      game.player.position.set(-18, groundHeightAt(-18, 25) + .1, 25);
+      game.player.velocity.set(0, 0, 0);
+      game.player.yaw = 0;
+      game.player.grounded = true;
+      game.stepWith(3, { moveZ: 1, sprint: true });
+      check('cliff-pillars-have-solid-sides', game.player.position.z > 20, game.player.position.toArray());
+
+      const escapePlatform = world.platforms[0];
+      const escapeStartRadius = escapePlatform.radius * .9;
+      game.player.position.set(
+        escapePlatform.x,
+        groundHeightAt(escapePlatform.x, escapePlatform.z + escapeStartRadius) + .1,
+        escapePlatform.z + escapeStartRadius,
+      );
+      game.player.velocity.set(0, 0, 0);
+      game.player.yaw = Math.PI;
+      game.player.grounded = true;
+      game.stepWith(.75, { moveZ: 1, sprint: true });
+      const escapeEndRadius = Math.hypot(game.player.position.x - escapePlatform.x, game.player.position.z - escapePlatform.z);
+      check('player-can-escape-cliff-collider', escapeEndRadius > escapeStartRadius + 2, {
+        startRadius: escapeStartRadius, endRadius: escapeEndRadius, player: game.player.position.toArray(),
+      });
+
+      game.ball.mode = 'outbound';
+      game.ball.launchCharge = 1;
+      game.ball.flightTime = 0;
+      game.ball.position.set(-18, 8, 25);
+      game.ball.velocity.set(0, 0, -40);
+      game.ball.collisionCooldown.clear();
+      game.player.pitch = 0;
+      let pillarImpactZ = null;
+      let pillarReboundZ = null;
+      for (let i = 0; i < 60 && game.ball.bounceCount === 0; i++) {
+        game.stepWith(FIXED_DT, {});
+        if (game.ball.bounceCount > 0) {
+          pillarImpactZ = game.ball.position.z;
+          pillarReboundZ = game.ball.velocity.z;
+        }
+      }
+      check('ball-banks-off-cliff-pillars', pillarImpactZ > 21.5 && pillarReboundZ > 0, {
+        impactZ: pillarImpactZ, reboundZ: pillarReboundZ, bounces: game.ball.bounceCount,
+      });
+
+      game.restart();
+      game.started = true;
+      game.teleport('cliff');
+      let jumpSpamPeak = game.player.position.y;
+      for (let i = 0; i < 3600; i++) {
+        const jumpNow = game.player.grounded || (game.player.jumpsUsed === 1 && game.player.velocity.y < 3.5);
+        game.stepWith(FIXED_DT, { moveZ: 1, sprint: true, jump: jumpNow, jumpPressed: jumpNow });
+        jumpSpamPeak = Math.max(jumpSpamPeak, game.player.position.y);
+      }
+      check('jump-spam-cannot-bypass-mesa', game.player.position.z > -25 && jumpSpamPeak < 24 && world.anchors.every(item => !item.used), {
+        player: game.player.position.toArray(), peakY: jumpSpamPeak, anchorsUsed: world.anchors.filter(item => item.used).length,
+      });
+
+      game.restart();
+      game.started = true;
+      game.launchBall(.9);
+      check('charged-kick-outbound', game.ball.mode === 'outbound' && game.ball.velocity.length() > 40, { mode: game.ball.mode, speed: game.ball.velocity.length() });
+      const directionBeforeCurve = game.ball.velocity.clone().normalize();
+      game.stepWith(.14, { lookX: .55 });
+      const directionAfterCurve = game.ball.velocity.clone().normalize();
+      check('live-camera-curve', directionBeforeCurve.dot(directionAfterCurve) < .995, directionBeforeCurve.dot(directionAfterCurve));
+      game.stepWith(FIXED_DT, { snap: true, snapPressed: true });
+      check('snap-enters-return', game.ball.mode === 'returning', game.ball.mode);
+      game.stepWith(2.8, { snap: true });
+      check('ball-comes-home', game.ball.mode === 'ready', game.ball.mode);
+
+      game.restart();
+      game.started = true;
+      game.ball.mode = 'outbound';
+      game.ball.launchCharge = 1;
+      game.ball.position.set(0, world.gate.position.y + world.gate.height / 2 + 5, world.gate.position.z);
+      game.ball.velocity.set(0, 0, -30);
+      game.resolveBallWorld(game.ball.position.clone().add(new T.Vector3(0, 0, 2)));
+      const highGateVelocity = game.ball.velocity.z;
+      game.ball.position.set(0, world.fracture.position.y + world.fracture.height / 2 + 5, world.fracture.position.z);
+      game.ball.velocity.set(0, 0, -36);
+      game.resolveBallWorld(game.ball.position.clone().add(new T.Vector3(0, 0, 2)));
+      check('aerial-ball-clears-finite-walls', highGateVelocity < 0 && game.ball.velocity.z < 0 && world.fracture.active, {
+        gateVelocity: highGateVelocity, fractureVelocity: game.ball.velocity.z,
+      });
+
+      game.restart();
+      game.started = true;
+      game.launchBall(.72);
+      game.queueKick(.84);
+      let sawRedirect = false;
+      for (let i = 0; i < 520; i++) {
+        game.stepWith(FIXED_DT, {});
+        if (game.stats.kicks >= 2 && game.ball.mode === 'outbound') { sawRedirect = true; break; }
+      }
+      check('queued-volley-redirects', sawRedirect, { kicks: game.stats.kicks, mode: game.ball.mode });
+
+      game.restart();
+      game.started = true;
+      game.startSpin();
+      check('orbit-spin-move', game.player.spinTimer > .5 && game.stats.spins === 1, { timer: game.player.spinTimer, spins: game.stats.spins });
+
+      game.restart();
+      game.started = true;
+      for (const enemy of game.enemies) {
+        if (!enemy.summit && (enemy.type === 'scuttler' || enemy.type === 'shield')) {
+          enemy.alive = false;
+          enemy.hp = 0;
+          enemy.visual.group.visible = false;
+        }
+      }
+      const anchor = world.anchors[0];
+      game.player.position.copy(anchor.position).add(new T.Vector3(0, -4.5, 3.8));
+      game.player.velocity.set(0, 0, 0);
+      game.ball.mode = 'outbound';
+      game.ball.launchCharge = .62;
+      game.ball.position.copy(anchor.position);
+      game.ball.velocity.set(0, 0, -34);
+      game.resolveBallWorld(anchor.position.clone().add(new T.Vector3(0, 0, 1)));
+      check('anchor-rejects-light-kick', game.ball.mode === 'outbound' && !game.ball.anchor, {
+        mode: game.ball.mode, charge: game.ball.launchCharge,
+      });
+      const laterAnchor = world.anchors[1];
+      game.ball.mode = 'outbound';
+      game.ball.launchCharge = .92;
+      game.ball.position.copy(laterAnchor.position);
+      game.ball.velocity.set(0, 0, -44);
+      game.resolveBallWorld(laterAnchor.position.clone().add(new T.Vector3(0, 0, 1)));
+      check('anchors-enforce-climb-order', game.ball.mode === 'outbound' && !game.ball.anchor, {
+        attempted: laterAnchor.id, expected: anchor.id, mode: game.ball.mode,
+      });
+      game.ball.mode = 'outbound';
+      game.ball.launchCharge = .92;
+      game.ball.position.copy(anchor.position);
+      game.ball.velocity.set(0, 0, -44);
+      game.resolveBallWorld(anchor.position.clone().add(new T.Vector3(0, 0, 1)));
+      check('charged-kick-connects-anchor', game.ball.mode === 'anchored' && game.ball.anchor === anchor, {
+        mode: game.ball.mode, charge: game.ball.launchCharge,
+      });
+      for (let i = 0; i < 240 && !anchor.used; i++) game.stepWith(FIXED_DT, { snap: true, snapPressed: i === 0 });
+      check('anchor-pull-platforming', anchor.used && game.stats.anchorLinks === 1, { used: anchor.used, links: game.stats.anchorLinks, player: game.player.position.toArray() });
+
+      game.restart();
+      game.started = true;
+      world.anchors.forEach(item => { item.used = true; });
+      game.ball.mode = 'outbound';
+      game.ball.launchCharge = 1;
+      game.ball.position.copy(world.fracture.position).add(new T.Vector3(0, 0, 1.7));
+      game.ball.velocity.set(0, 0, -44);
+      game.resolveBallWorld(game.ball.position.clone().add(new T.Vector3(0, 0, 3)));
+      check('outbound-fracture-only', !world.fracture.active, { active: world.fracture.active, breaks: game.stats.breaks });
+
+      game.restart();
+      game.started = true;
+      const lockedSummitEnemy = game.enemies.find(enemy => enemy.summit);
+      const lockedSummitHp = lockedSummitEnemy.hp;
+      const lockedDamageAccepted = game.damageAlien(lockedSummitEnemy, 1, 'spin');
+      world.goal.open = true;
+      world.goal.group.visible = true;
+      const earlyWinAccepted = game.completeRun();
+      check('mission-order-blocks-early-summit-and-win', !lockedDamageAccepted && lockedSummitEnemy.hp === lockedSummitHp && !earlyWinAccepted && !game.won, {
+        lockedDamageAccepted, hp: lockedSummitEnemy.hp, earlyWinAccepted, won: game.won,
+      });
+
+      game.restart();
+      game.started = true;
+      const testAlien = game.enemies.find(enemy => enemy.type === 'scuttler');
+      game.damageAlien(testAlien, 1, 'spin');
+      check('alien-kill-path', !testAlien.alive && testAlien.hp === 0, { alive: testAlien.alive, hp: testAlien.hp });
+
+      game.restart();
+      game.started = true;
+      game.teleport('start');
+      game.stepWith(1, {});
+      const restartTraceA = game.enemies.map(enemy => [enemy.position.x, enemy.position.y, enemy.position.z]);
+      game.cameraYawVelocity = 99;
+      game.cameraRoll = .8;
+      game.toastTimer = 4;
+      game.restart();
+      const resetFeedback = game.cameraYawVelocity === 0 && game.cameraRoll === 0 && game.toastTimer === 0;
+      game.started = true;
+      game.teleport('start');
+      game.stepWith(1, {});
+      const restartTraceB = game.enemies.map(enemy => [enemy.position.x, enemy.position.y, enemy.position.z]);
+      const restartTraceError = Math.max(...restartTraceA.flatMap((point, index) => point.map((value, axis) => Math.abs(value - restartTraceB[index][axis]))));
+      check('restart-is-gameplay-deterministic', resetFeedback && restartTraceError < 1e-6, {
+        resetFeedback, maxEnemyPositionError: restartTraceError,
+      });
+
+      game.restart();
+      game.started = true;
+      const stressRandom = mulberry32(1337);
+      for (let i = 0; i < 720; i++) {
+        if (i % 120 === 8 && game.ball.mode === 'ready') game.launchBall(stressRandom());
+        if (i % 170 === 45) game.startSpin();
+        game.stepWith(FIXED_DT, {
+          moveX: Math.sin(i * .07), moveZ: Math.cos(i * .041),
+          lookX: (stressRandom() - .5) * .035,
+          jump: i % 83 < 3, jumpPressed: i % 83 === 0,
+          snap: i % 131 > 118, snapPressed: i % 131 === 119,
+        });
+      }
+      const state = game.getState();
+      const finiteState = [
+        state.player.x, state.player.y, state.player.z, state.player.vx, state.player.vy, state.player.vz,
+        state.ball.x, state.ball.y, state.ball.z, state.ball.vx, state.ball.vy, state.ball.vz,
+      ].every(Number.isFinite);
+      check('mixed-input-finite-stress', finiteState && ['ready', 'outbound', 'returning', 'anchored', 'caught'].includes(state.ball.mode), { finiteState, mode: state.ball.mode });
+      world.render();
+      const renderStats = world.stats();
+      check('render-budget-observable', renderStats.calls > 0 && renderStats.triangles > 10000 && renderStats.textures > 0, renderStats);
+      // Normalize the renderer cache with a fully visible, freshly spawned cast
+      // before measuring repeated restart disposal. Dead/hidden stress-test aliens
+      // otherwise make the baseline artificially low until their first render.
+      game.restart();
+      world.render();
+      const geometriesBeforeRestartStress = world.renderer.info.memory.geometries;
+      for (let i = 0; i < 4; i++) game.restart();
+      world.render();
+      const geometriesAfterRestartStress = world.renderer.info.memory.geometries;
+      check('restart-releases-alien-geometry', geometriesAfterRestartStress <= geometriesBeforeRestartStress + 1, {
+        before: geometriesBeforeRestartStress, after: geometriesAfterRestartStress,
+      });
+    } catch (error) {
+      failures.push('autotest-exception');
+      checks.push({ name: 'autotest-exception', passed: false, detail: String(error?.stack || error) });
+    }
+    game.restart();
+    game.started = true;
+    game.teleport(params.get('section') || 'start');
+    const result = { passed: failures.length === 0, checks, failures, state: game.getState() };
+    document.body.dataset.autotestResult = result.passed ? 'pass' : 'fail';
+    document.body.dataset.autotestDetails = JSON.stringify(result);
+    document.title = `[AUTOTEST ${result.passed ? 'PASS' : 'FAIL'} ${checks.filter(item => item.passed).length}/${checks.length}] KICK BALL // LUNAR VELOCITY`;
+    return result;
+  }
+
+  // Yield two task boundaries so the complete launch panel can paint before the
+  // synchronous procedural world build occupies the main thread on first load.
+  requestAnimationFrame(() => setTimeout(() => {
+  try {
+    world = new LunarWorld();
+    input = new InputManager();
+    game = new GameController();
+  } catch (error) {
+    console.error(error);
+    fatal(`The lunar renderer failed during boot: ${error.message || error}`);
+    return;
+  }
+
+  ui.startButton?.addEventListener('click', () => game.start(true));
+  ui.restartButton?.addEventListener('click', () => {
+    game.restart();
+    if (!input.touchEnabled && !TEST_MODE) requestGamePointerLock();
+  });
+  ui.pauseResumeButton?.addEventListener('click', () => game.togglePause());
+  ui.soundButton?.addEventListener('click', () => { audio.ensure(); audio.toggle(); });
+  ui.fullscreenButton?.addEventListener('click', toggleFullscreen);
+  ui.qualityButton?.addEventListener('click', () => world.cycleQuality());
+  canvas.addEventListener('click', () => {
+    if (game.started && !game.paused && !input.touchEnabled && !TEST_MODE && document.pointerLockElement !== canvas) requestGamePointerLock();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      audio.recall(false, 0);
+      input.resetTransient();
+      accumulator = 0;
+      lastFrame = performance.now();
+    }
+  });
+
+  if (ui.loadingMeter) {
+    ui.loadingMeter.style.width = '100%';
+    ui.loadingMeter.parentElement?.setAttribute('aria-valuenow', '100');
+  }
+  document.body.dataset.boot = 'ready';
+  if (!AUTO_START) ui.startButton?.focus({ preventScroll: true });
+
+  window.KICKBALL = Object.freeze({
+    version: '3.0.0-lunar-velocity',
+    getState: () => game.getState(),
+    getRenderStats: () => world.stats(),
+    restart: () => game.restart(),
+    start: () => game.start(false),
+    teleport: section => game.teleport(section),
+    stepWith: (seconds, controls) => game.stepWith(seconds, controls),
+    step: seconds => game.stepWith(seconds, {}),
+    runSmoke: () => runAutotest(),
+    setQuality: level => {
+      const normalized = String(level || '').toUpperCase();
+      if (!world.qualityOrder.includes(normalized)) throw new Error(`Unknown quality ${level}`);
+      world.applyQuality(normalized);
+      return world.stats();
+    },
+    setPlayer(x, y, z) {
+      game.player.position.set(finite(Number(x)), finite(Number(y)), finite(Number(z)));
+      game.player.velocity.set(0, 0, 0);
+      game.player.grounded = false;
+      return game.getState();
+    },
+    setBall(x, y, z, vx = 0, vy = 0, vz = 0, mode = 'outbound') {
+      if (!['ready', 'outbound', 'returning', 'anchored', 'caught'].includes(mode)) throw new Error(`Unknown ball mode ${mode}`);
+      game.ball.position.set(finite(Number(x)), finite(Number(y)), finite(Number(z)));
+      game.ball.velocity.set(finite(Number(vx)), finite(Number(vy)), finite(Number(vz)));
+      game.ball.mode = mode;
+      game.ball.anchor = null;
+      game.ball.caughtBy = null;
+      game.ball.collisionCooldown.clear();
+      return game.getState();
+    },
+  });
+
+  let accumulator = 0;
+  let lastFrame = performance.now();
+  let firstRenderedFrame = false;
+  function frame(now) {
+    const rawDelta = Math.max(0, (now - lastFrame) / 1000);
+    lastFrame = now;
+    const delta = clamp(rawDelta, 0, .05);
+    world.noteFrame(rawDelta);
+    if (!TEST_MODE) {
+      accumulator = Math.min(accumulator + delta, FIXED_DT * 10);
+      input.poll();
+      let firstStep = true;
+      let steps = 0;
+      while (accumulator >= FIXED_DT && steps < 10) {
+        game.update(FIXED_DT, input.prepareStep(firstStep), firstStep);
+        accumulator -= FIXED_DT;
+        firstStep = false;
+        steps++;
+      }
+      if (steps > 0) input.endFrame();
+    }
+    world.render();
+    if (!firstRenderedFrame) {
+      firstRenderedFrame = true;
+      document.body.dataset.firstFrame = 'true';
+    }
+    requestAnimationFrame(frame);
+  }
+
+  if (AUTO_START) {
+    game.start(false);
+    game.teleport(params.get('section') || 'start');
+  }
+  requestAnimationFrame(frame);
+  if (TEST_MODE) setTimeout(() => runAutotest(), 50);
+  }, 0));
+})();

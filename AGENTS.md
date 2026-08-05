@@ -50,7 +50,7 @@ own notes or memory. Last verified: 2026-08-05.
   rebuilds the hubs, validates the public tree, runs strict route smoke, and
   rejects stale generated pages. It must never commit or push generated files.
 
-Current verified baseline: **30 games, 10 music releases, 48 audited public
+Current verified baseline: **33 games, 10 music releases, 51 audited public
 routes.** Pocket Sun is hosted locally in this repository; it is not a redirect
 to a separate Netlify project.
 
@@ -95,8 +95,9 @@ text edits only, then validate it still parses.
    games are featured (grid is 3 columns, so keep it a multiple of 3), and
    which ones is Alex's call. Featured order = games array order. Albums are
    still exactly 3 featured.
-5. **Bump the count asserts** in BOTH `build/scripts/build-site.mjs` and
-   `build/scripts/validate-site.mjs` (they hardcode the canonical game total).
+5. **Bump the count asserts** in `build/scripts/build-site.mjs`,
+   `build/scripts/validate-site.mjs`, AND `build/qa/browser-qa.mjs` (all three
+   hardcode the canonical game total).
 6. **Short links** in `_redirects` (e.g. `/duet  /duet/  302`) — check for
    collisions first. Add a `_headers` block only if the game needs one.
 7. **`404.html`** is hand-coded and name-drops specific games — update it if
