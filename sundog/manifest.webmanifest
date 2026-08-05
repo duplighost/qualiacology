@@ -1,0 +1,29 @@
+{
+  "name": "SUNDOG",
+  "short_name": "SUNDOG",
+  "description": "Surf the crown road, perfect-dash through danger, and steal morning back.",
+  "start_url": "./",
+  "display": "fullscreen",
+  "background_color": "#071b31",
+  "theme_color": "#071b31",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

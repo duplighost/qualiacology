@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05040a">
+<meta name="description" content="WICK is a mouse-only browser fire simulation: move the air, draw breath, and carry one spark through six movements.">
+<title>WICK | Qualiacology</title>
+<link rel="canonical" href="https://qualiacology.com/wick/">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:type" content="website">
+<meta property="og:title" content="WICK | Qualiacology">
+<meta property="og:description" content="You are a spark. You cannot move. You can only move the air.">
+<meta property="og:url" content="https://qualiacology.com/wick/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/wick-card-clean.webp">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta property="og:image:alt" content="A lone candle flame bending smoke in a dark room beneath the word WICK">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="WICK | Qualiacology">
+<meta name="twitter:description" content="Move the air, draw breath, and carry one spark through six movements.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/wick-card-clean.webp">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; background:#05040a; overflow:hidden; }
+  body { font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+         color:#e8dcc8; -webkit-font-smoothing:antialiased; }
+  .home-link { position:fixed; left:max(12px,env(safe-area-inset-left)); top:max(12px,env(safe-area-inset-top)); z-index:2147483647;
+               color:rgba(242,228,204,.82); text-decoration:none; font:800 11px/1.2 system-ui,sans-serif; letter-spacing:.14em;
+               text-transform:uppercase; padding:8px 11px; border-radius:999px; background:rgba(5,4,10,.62);
+               border:1px solid rgba(255,180,90,.28); backdrop-filter:blur(8px); transition:opacity .25s,border-color .25s,color .25s; }
+  .home-link:hover,.home-link:focus-visible { color:#fff; border-color:rgba(255,180,90,.72); outline:2px solid rgba(255,255,255,.72); outline-offset:2px; }
+  #stage { position:fixed; inset:0; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:none; }
+  #ui { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+
+  .layer { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+           flex-direction:column; opacity:0; transition:opacity .7s ease; }
+  .layer.on { opacity:1; }
+
+  #title h1 { font-size: clamp(52px, 13vw, 190px); letter-spacing:.42em; text-indent:.42em;
+              font-weight:400; color:#f2e4cc; text-shadow:0 0 40px rgba(255,150,60,.30), 0 0 120px rgba(255,110,30,.16); }
+  #title .sub { margin-top:2.4em; font-size:13px; letter-spacing:.34em; text-indent:.34em;
+                color:#8d7f6c; text-transform:uppercase; }
+  #title .sub b { color:#c9b393; font-weight:400; }
+
+  #card .num { font-size: clamp(30px,5vw,58px); letter-spacing:.3em; text-indent:.3em; color:#a8916f; }
+  #card .nm  { margin-top:.55em; font-size: clamp(20px,3.2vw,38px); letter-spacing:.5em; text-indent:.5em; color:#efe0c6; }
+
+  #hint { position:absolute; left:0; right:0; bottom:7.5%; text-align:center;
+          font-size:13px; letter-spacing:.3em; text-indent:.3em; text-transform:uppercase;
+          color:#a0907c; opacity:0; transition:opacity 1s ease; }
+  #hint.on { opacity:.92; }
+
+  #wicks { position:absolute; left:50%; top:5.2%; transform:translateX(-50%); display:flex; gap:11px; opacity:0; transition:opacity .6s; }
+  #wicks.on { opacity:1; }
+  #wicks i { width:7px; height:7px; border-radius:50%; background:#3a3128; display:block;
+             box-shadow:inset 0 0 0 1px #4a3f31; transition:background .45s, box-shadow .45s; }
+  #wicks i.lit { background:#ffb45a; box-shadow:0 0 12px 2px rgba(255,150,50,.65); }
+
+  #menu { gap:.2em; }
+  #menu .row { pointer-events:auto; cursor:pointer; font-size:15px; letter-spacing:.32em; text-indent:.32em;
+               padding:.62em 1.6em; color:#6d6152; text-transform:uppercase; transition:color .2s; }
+  #menu .row.avail { color:#c2ad8c; }
+  #menu .row.avail:hover { color:#ffd9a0; }
+  #menu .ttl { font-size:12px; letter-spacing:.4em; color:#5c5344; margin-bottom:1.6em; text-transform:uppercase; }
+
+  #fade { position:absolute; inset:0; background:#05040a; opacity:1; transition:opacity 1.1s ease; }
+  #fade.clear { opacity:0; }
+
+  #err { position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:8vw;
+         font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; line-height:1.7; color:#c98d6a; text-align:center; }
+  #err.on { display:flex; }
+</style>
+</head>
+<body>
+<a class="home-link" href="/">Qualiacology</a>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="ui">
+    <div id="wicks"></div>
+
+    <div id="title" class="layer">
+      <h1>WICK</h1>
+      <div class="sub">move your hand &nbsp;·&nbsp; <b>hold</b> to draw breath</div>
+    </div>
+
+    <div id="card" class="layer">
+      <div class="num"></div>
+      <div class="nm"></div>
+    </div>
+
+    <div id="menu" class="layer"></div>
+
+    <div id="hint"></div>
+    <div id="fade" class="clear"></div>
+    <div id="err"></div>
+  </div>
+</div>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

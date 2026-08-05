@@ -375,6 +375,33 @@
 /afterparty-at-the-end-of-the-world/og.png
   Cache-Control: public, max-age=3600, must-revalidate
 
+# --- WICK ---
+/wick/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/wick/js/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+# --- SUNDOG ---
+/sundog/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/sundog/sw.js
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/sundog/manifest.webmanifest
+  Content-Type: application/manifest+json; charset=UTF-8
+  Cache-Control: public, max-age=0, must-revalidate
+
+/sundog/styles.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/sundog/sundog.bundle.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/sundog/assets/*
+  Cache-Control: public, max-age=3600, must-revalidate
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
