@@ -1,4 +1,6 @@
 const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+const MASTER_GAIN = 0.78;
+const MUTED_GAIN = 0.0001;
 
 const safeStop = (source, when) => {
   try {
@@ -35,6 +37,7 @@ export class SpaghettiAudio {
 
     this.unlocked = false;
     this.muted = false;
+    this.masterVolume = 1;
     this.audioState = this.disabled ? "disabled" : this.supported ? "locked" : "unsupported";
     this.lastError = null;
 
@@ -116,7 +119,7 @@ export class SpaghettiAudio {
       }
 
       this.unlocked = this.context.state === "running";
-      this._setMasterLevel(this.muted ? 0.0001 : 0.78, 0.025);
+      this._setMasterLevel(this._effectiveMasterLevel(), 0.025);
       this._publishState();
       return this.unlocked;
     } catch (error) {
@@ -861,11 +864,32 @@ export class SpaghettiAudio {
     return true;
   }
 
-  toggleMute(force) {
-    this.muted = typeof force === "boolean" ? force : !this.muted;
-    this._setMasterLevel(this.muted ? 0.0001 : 0.78, 0.035);
+  setMasterVolume(value) {
+    const next = Number(value);
+    if (!Number.isFinite(next)) return this.masterVolume;
+    this.masterVolume = clamp(next);
+    this._setMasterLevel(this._effectiveMasterLevel(), 0.035);
+    this._publishState();
+    return this.masterVolume;
+  }
+
+  getMasterVolume() {
+    return this.masterVolume;
+  }
+
+  setMuted(value) {
+    this.muted = Boolean(value);
+    this._setMasterLevel(this._effectiveMasterLevel(), 0.035);
     this._publishState();
     return this.muted;
+  }
+
+  isMuted() {
+    return this.muted;
+  }
+
+  toggleMute(force) {
+    return this.setMuted(typeof force === "boolean" ? force : !this.muted);
   }
 
   getState() {
@@ -874,6 +898,7 @@ export class SpaghettiAudio {
       unlocked: this.unlocked,
       running: this.context?.state === "running",
       muted: this.muted,
+      masterVolume: this.masterVolume,
       audioState: this.audioState,
       contextState: this.context?.state || "none",
       stepEvents: this.stepEvents,
@@ -900,7 +925,7 @@ export class SpaghettiAudio {
     this.sfxBus = context.createGain();
     this.compressor = context.createDynamicsCompressor();
 
-    this.master.gain.setValueAtTime(this.muted ? 0.0001 : 0.78, now);
+    this.master.gain.setValueAtTime(this._effectiveMasterLevel(), now);
     this.ambienceBus.gain.setValueAtTime(0.78, now);
     this.sfxBus.gain.setValueAtTime(0.94, now);
     this.compressor.threshold.setValueAtTime(-18, now);
@@ -1224,6 +1249,10 @@ export class SpaghettiAudio {
   _setMasterLevel(value, timeConstant) {
     if (!this.master || !this.context || this.context.state === "closed") return;
     this._target(this.master.gain, value, this.context.currentTime, timeConstant);
+  }
+
+  _effectiveMasterLevel() {
+    return this.muted ? MUTED_GAIN : MASTER_GAIN * this.masterVolume;
   }
 
   _handleVisibilityChange() {

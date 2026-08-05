@@ -1,4 +1,4 @@
-import * as THREE from "../vendor/three.module.js";
+import * as THREE from "../vendor/three.module.js?v=r165";
 
 const QUALITY_PROFILES = Object.freeze({
   low: Object.freeze({ embers: 42, steam: 14, burstEmbers: 36, burstSteam: 18, droplets: 46, rings: 8, sheenSegments: 8 }),

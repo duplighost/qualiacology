@@ -14,7 +14,6 @@
 /records /music/ 301!
 
 # --- little toys ---
-/glide   /glide/index.html  301!
 /fly     /glide/            302
 /luma    /   302
 /visualizer /  302
@@ -27,7 +26,6 @@
 /banana/*       /   302
 
 # --- Rocket Shoes ---
-/rocket-shoes       /rocket-shoes/index.html  301!
 /rocket-shoes.html  /rocket-shoes/            301!
 /rocketshoes        /rocket-shoes/            302
 /rockets            /rocket-shoes/            302
@@ -40,66 +38,54 @@
 /neon-breach/*     /duskfall/  301!
 
 # --- Duskfall ---
-/duskfall      /duskfall/index.html  301!
 /duskfall.html /duskfall/            301!
 /dusk          /duskfall/            302
 
 # --- Marrow ---
-/marrow             /marrow/index.html        301!
 /marrow.html        /marrow/                  301!
 /horror             /marrow/                  302
 /the-house          /marrow/                  302
 
 # --- Vesperbane ---
-/vesperbane          /vesperbane/index.html       301!
 /vesperbane.html     /vesperbane/                 301!
 /vesper              /vesperbane/                 302
 
 # --- Galaxy Sandbox ---
-/galaxy-sandbox      /galaxy-sandbox/index.html   301!
 /galaxy-sandbox.html /galaxy-sandbox/             301!
 /galaxy              /galaxy-sandbox/             302
 /sandbox             /galaxy-sandbox/             302
 
 # --- Behind You ---
-/behind-you        /behind-you/index.html   301!
 /behind-you.html   /behind-you/             301!
 /behindyou         /behind-you/             302
 /chased            /behind-you/             302
 
 # --- Rally ---
-/rally         /rally/index.html   301!
 /rally.html    /rally/             301!
 /tennis        /rally/             302
 /duel          /rally/             302
 
 # --- Pasta Mortale ---
-/pasta-mortale /pasta-mortale/index.html 301!
 /pasta         /pasta-mortale/           302
 /spaghetti     /pasta-mortale/           302
 
 # --- DUET ---
-/duet          /duet/index.html          301!
 /duet.html     /duet/                    301!
 /graze         /duet/                    302
 /aubade        /duet/                    302
-/evensong      /evensong/index.html      301!
 /evensong.html /evensong/                301!
 /sing          /evensong/                302
 /cantor        /evensong/                302
-/party-animal      /party-animal/index.html  301!
 /party-animal.html /party-animal/            301!
 /party             /party-animal/            302
 /pinata            /party-animal/            302
 
 # --- THE EATEN PATH ---
-/eaten-path      /eaten-path/index.html    301!
 /eaten-path.html /eaten-path/              301!
 /eaten           /eaten-path/              302
 /path            /eaten-path/              302
 
 # --- Instead of the Goodbye (a walk, August 1st) ---
-/instead-of-the-goodbye      /instead-of-the-goodbye/index.html  301!
 /instead-of-the-goodbye.html /instead-of-the-goodbye/            301!
 /goodbye                     /instead-of-the-goodbye/            302
 /the-walk                    /instead-of-the-goodbye/            302
@@ -119,8 +105,43 @@
 /this-helped-someone     /404.html  404!
 /this-helped-someone/*   /404.html  404!
 
+# --- AFTERGLOW ---
+/afterglow.html  /afterglow/  301!
+
+# --- Goodnight, Little Gods ---
+/goodnight-little-gods.html  /goodnight-little-gods/  301!
+
+# --- ECHO//SAINT ---
+/echo-saint.html  /echo-saint/  301!
+
+# --- CINDERBLOOM ---
+/cinderbloom.html  /cinderbloom/  301!
+
+# --- THE LAG ---
+/the-lag.html  /the-lag/  301!
+
+# --- GOODFIRE ---
+/goodfire.html  /goodfire/  301!
+
+# --- FINALE ---
+/finale.html  /finale/  301!
+
+# --- VANTA//9 ---
+/vanta-9.html  /vanta-9/  301!
+
+# --- THE DEAD KEEP PLAYING ---
+/the-dead-keep-playing.html  /the-dead-keep-playing/  301!
+
+# --- EVERYBODY LEAVES IN 4/4 ---
+/everybody-leaves-in-4-4.html  /everybody-leaves-in-4-4/  301!
+
+# --- UNSAY IT ---
+/unsay-it.html  /unsay-it/  301!
+
+# --- AFTERPARTY AT THE END OF THE WORLD ---
+/afterparty-at-the-end-of-the-world.html  /afterparty-at-the-end-of-the-world/  301!
+
 # --- POCKET SUN ---
-/pocket-sun       https://curious-gumdrop-5fe24d.netlify.app/  302!
-/pocket-sun/      https://curious-gumdrop-5fe24d.netlify.app/  302!
-/pocket-sun/*     https://curious-gumdrop-5fe24d.netlify.app/:splat  302!
-/pocketsun        /pocket-sun/  302
+/pocket-sun.html  /pocket-sun/  301!
+
+/pocketsun  /pocket-sun/  302

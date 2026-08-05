@@ -1,0 +1,20 @@
+{
+  "id": "/afterglow/",
+  "name": "AFTERGLOW",
+  "short_name": "AFTERGLOW",
+  "description": "A neon survival roguelite. Dash through the dark.",
+  "start_url": "/afterglow/",
+  "scope": "/afterglow/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#050210",
+  "theme_color": "#0a0420",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -37,6 +37,9 @@
   <canvas id="game"></canvas>
   <div id="hud"></div>
   <noscript>This game requires JavaScript and WebGL2.</noscript>
-  <script type="module" src="src/main.js"></script>
+  <script type="module">
+  import { loadWebGLGame } from "/assets/game-webgl-guard.js?v=2";
+  loadWebGLGame("./src/main.js", { title: "Duskfall could not open." });
+</script>
 </body>
 </html>

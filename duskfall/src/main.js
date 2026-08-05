@@ -1199,7 +1199,7 @@ class Game {
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+function bootGame() {
   try { window.__game = new Game(); }
   catch (err) {
     console.error(err);
@@ -1208,6 +1208,15 @@ window.addEventListener('DOMContentLoaded', () => {
       <div><h2>Failed to start</h2><pre style="white-space:pre-wrap;color:#ff9a9a">${(err && err.message) || err}</pre>
       <p>This game needs a WebGL2 browser. Serve it over http (not file://).</p></div></div>`;
   }
-});
+}
+
+// This entry module is loaded through the shared WebGL guard with a dynamic
+// import. On a cold load, its dependency graph can finish after DOMContentLoaded
+// has already fired, so listening unconditionally can leave the page black.
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootGame, { once: true });
+} else {
+  bootGame();
+}
 
 export { Game };

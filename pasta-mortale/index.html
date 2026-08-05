@@ -4,32 +4,51 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#160604">
-  <meta name="description" content="Pasta Mortale is a cinematic first-person assault on a living gothic basilica built from wet spaghetti, marinara, and bad table manners.">
+  <meta name="description" content="Pasta Mortale is a cinematic first-person shooter set in a living gothic basilica built from wet spaghetti, marinara, and bad table manners.">
   <title>Pasta Mortale | Qualiacology</title>
-  <link rel="canonical" href="https://qualiacology.com/pasta-mortale/">
-  <meta property="og:site_name" content="Qualiacology">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Pasta Mortale | Qualiacology">
-  <meta property="og:description" content="The basilica is alive. Dinner shoots back. A first-person shooter where the gun, the enemies, the cathedral, and the rising flood are all wet spaghetti.">
-  <meta property="og:url" content="https://qualiacology.com/pasta-mortale/">
-  <meta property="og:image" content="https://qualiacology.com/assets/games/pasta-mortale-card-clean.jpg">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Pasta Mortale | Qualiacology">
-  <meta name="twitter:description" content="The basilica is alive. Dinner shoots back.">
-  <meta name="twitter:image" content="https://qualiacology.com/assets/games/pasta-mortale-card-clean.jpg">
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23150604'/%3E%3Cpath d='M9 18c18-13 38 8 19 17S13 55 37 54 60 35 47 29 25 18 17 32s16 23 31 8' fill='none' stroke='%23f0b84f' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='48' cy='17' r='7' fill='%23a82416'/%3E%3C/svg%3E">
-  <link rel="preload" href="assets/pasta-mortale-key-art-v1.png" as="image">
-  <link rel="preload" href="assets/marinara-noodle-floor.png" as="image">
-  <link rel="preload" href="assets/gothic-pasta-lattice.png" as="image">
-  <link rel="preload" href="assets/basilica-sanctum-matte.png" as="image">
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="preload" href="assets/pasta-mortale-key-art-v1.webp" as="image" type="image/webp">
+  <link rel="stylesheet" href="styles.css?v=20">
   <style>
     .home-link{position:fixed;right:max(14px,env(safe-area-inset-right));top:max(14px,env(safe-area-inset-top));z-index:500;color:rgba(240,196,120,.9);text-decoration:none;font:800 11px/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.16em;text-transform:uppercase;padding:8px 12px;border-radius:999px;background:rgba(12,3,2,.6);border:1px solid rgba(240,184,79,.34);backdrop-filter:blur(8px);transition:opacity .3s ease}
     .home-link:hover,.home-link:focus-visible{color:#fff;border-color:rgba(240,184,79,.75);outline:0}
-    body[data-phase="playing"] .home-link{opacity:0;pointer-events:none}
+    body[data-phase="playing"] .home-link,body[data-settings-open="true"] .home-link{opacity:0;pointer-events:none}
   </style>
+
+
+<link rel="canonical" href="https://qualiacology.com/pasta-mortale/">
+
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Pasta Mortale | Qualiacology">
+<meta property="og:description" content="Pasta Mortale is a cinematic first-person shooter set in a living gothic basilica built from wet spaghetti, marinara, and bad table manners.">
+<meta property="og:url" content="https://qualiacology.com/pasta-mortale/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/pasta-mortale-card-clean.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Pasta Mortale | Qualiacology">
+<meta name="twitter:description" content="Pasta Mortale is a cinematic first-person shooter set in a living gothic basilica built from wet spaghetti, marinara, and bad table manners.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/pasta-mortale-card-clean.jpg">
+<style id="qualiacology-game-shell-v2">
+#qualiacology-home{position:fixed;z-index:2147483647;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:42px;padding:0 13px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(5,6,12,.78);color:#fff;text-decoration:none;font:800 12px/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.08em;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 8px 28px rgba(0,0,0,.38)}
+#qualiacology-home:hover,#qualiacology-home:focus-visible{background:rgba(20,22,34,.96);outline:2px solid rgba(255,255,255,.85);outline-offset:2px}
+#qualiacology-home[hidden]{display:none!important}
+@media(max-width:640px){#qualiacology-home{padding:0 11px;font-size:0}#qualiacology-home::after{content:"Q.";font-size:13px}}
+</style>
 </head>
-<body data-phase="loading" data-audio-state="locked">
+<body data-phase="loading" data-audio-state="locked" data-graphics-state="initializing">
   <a class="home-link" href="/">Qualiacology</a>
   <main id="stage" aria-label="Pasta Mortale game">
     <canvas id="game" tabindex="0" aria-label="First-person combat view"></canvas>
@@ -77,6 +96,11 @@
         <i></i><i></i><i></i><i></i><b></b>
       </div>
       <div id="hitmarker" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div id="damage-direction" aria-hidden="true"><i></i></div>
+      <div id="combat-announcement" role="status" aria-live="polite" aria-atomic="true">
+        <small id="combat-announcement-kicker">COURSE CHANGE</small>
+        <strong id="combat-announcement-title">THE KITCHEN ANSWERS</strong>
+      </div>
 
       <div class="player-status" aria-label="Player status">
         <div class="status-rail health-rail">
@@ -129,6 +153,13 @@
       <div id="hint"></div>
     </section>
 
+    <section id="pointer-gate" class="pointer-gate" role="status" aria-live="polite" aria-atomic="true" hidden>
+      <span id="pointer-gate-kicker">DESKTOP INPUT</span>
+      <strong id="pointer-gate-title">CAPTURE THE MOUSE</strong>
+      <small id="pointer-gate-copy">Combat waits until mouse aim and fire are armed.</small>
+      <button id="pointer-retry-button" type="button">CAPTURE MOUSE</button>
+    </section>
+
     <div id="touch-ui" class="hidden" aria-hidden="true">
       <div id="move-zone" class="touch-zone"><div id="move-ring"><div id="move-stick"></div></div></div>
       <div id="look-zone" class="touch-zone"><div class="look-glyph"><span></span></div></div>
@@ -158,7 +189,7 @@
       <div class="loading-sigil" aria-hidden="true">
         <span></span><span></span><span></span><span></span>
       </div>
-      <p>RAISING THE NOODLE CATHEDRAL</p>
+      <p id="loading-status" role="status" aria-live="polite">RAISING THE NOODLE CATHEDRAL</p>
       <div class="loading-rule"><i></i></div>
     </section>
 
@@ -178,6 +209,16 @@
           <small>WASD MOVE&nbsp;&nbsp;·&nbsp;&nbsp;MOUSE AIM&nbsp;&nbsp;·&nbsp;&nbsp;LMB FIRE&nbsp;&nbsp;·&nbsp;&nbsp;F PUNCH&nbsp;&nbsp;·&nbsp;&nbsp;R RELOAD / HAND-ROLL&nbsp;&nbsp;·&nbsp;&nbsp;SPACE JUMP</small>
         </button>
         <p id="load-status">ARMING THE AL DENTE-12…</p>
+
+        <button class="title-settings-button" data-open-settings type="button">SETTINGS</button>
+
+        <section id="graphics-failure" class="graphics-failure" role="alert" aria-live="assertive" aria-atomic="true" aria-labelledby="graphics-failure-title" hidden>
+          <span>3D RENDERER OFFLINE</span>
+          <h2 id="graphics-failure-title">THE BASILICA COULD NOT OPEN</h2>
+          <p id="graphics-failure-copy">Pasta Mortale could not start its WebGL graphics renderer.</p>
+          <small id="graphics-failure-guidance">Use a current Chrome, Edge, or Firefox with hardware acceleration enabled. Close other GPU-heavy tabs, update the graphics driver if needed, then retry.</small>
+          <button id="graphics-retry-button" type="button">RETRY GRAPHICS</button>
+        </section>
       </div>
 
       <div class="title-footer">
@@ -195,7 +236,47 @@
         <h2 id="pause-title">CEASE FIRE</h2>
         <p class="panel-copy">The noodles are still moving.</p>
         <button id="resume-button" type="button">RETURN TO COMBAT</button>
+        <button class="quiet-button" data-open-settings type="button">SETTINGS</button>
         <button id="restart-pause-button" class="quiet-button" type="button">RESTART OPERATION</button>
+      </div>
+    </section>
+
+    <section id="settings-screen" class="screen panel-screen settings-screen" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true" hidden>
+      <div class="panel settings-panel">
+        <div class="panel-notch"></div>
+        <button id="settings-close-button" class="settings-close" type="button" aria-label="Close settings">CLOSE</button>
+        <p class="eyebrow">FIELD CONFIGURATION</p>
+        <h2 id="settings-title">SETTINGS</h2>
+        <form id="settings-form">
+          <fieldset>
+            <legend>AIM &amp; VIEW</legend>
+            <label class="setting-range"><span>Aim speed <output data-setting-output="sensitivity">1.00x</output></span><input name="sensitivity" type="range" min="0.35" max="1.8" step="0.05" value="1"></label>
+            <label class="setting-toggle"><span>Invert vertical aim<small>Up looks down</small></span><input name="invertY" type="checkbox"><i aria-hidden="true"></i></label>
+            <label class="setting-range"><span>Field of view <output data-setting-output="fov">66°</output></span><input name="fov" type="range" min="58" max="85" step="1" value="66"></label>
+            <label class="setting-range"><span>Camera motion <output data-setting-output="cameraMotion">100%</output></span><input name="cameraMotion" type="range" min="0" max="1" step="0.05" value="1"></label>
+            <label class="setting-select"><span>Reduce motion<small>Auto follows your device</small></span><select name="reducedMotion"><option value="auto">AUTO</option><option value="on">ON</option><option value="off">OFF</option></select></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>DISPLAY</legend>
+            <label class="setting-select"><span>Graphics quality<small>Applies next launch</small></span><select name="quality"><option value="auto">AUTO</option><option value="medium">BALANCED</option><option value="high">HIGH</option><option value="low">LOW</option></select></label>
+            <label class="setting-range"><span>3D resolution <output data-setting-output="renderScale">100%</output></span><input name="renderScale" type="range" min="0.7" max="1" step="0.05" value="1"></label>
+            <label class="setting-range"><span>HUD size <output data-setting-output="hudScale">100%</output></span><input name="hudScale" type="range" min="0.85" max="1.2" step="0.05" value="1"></label>
+            <label class="setting-range"><span>Reticle size <output data-setting-output="reticleScale">100%</output></span><input name="reticleScale" type="range" min="0.8" max="1.4" step="0.05" value="1"></label>
+            <label class="setting-range"><span>Lens splatter <output data-setting-output="lensIntensity">100%</output></span><input name="lensIntensity" type="range" min="0" max="1" step="0.05" value="1"></label>
+            <label class="setting-toggle"><span>High-contrast HUD<small>Brighter cyan and cream cues</small></span><input name="highContrast" type="checkbox"><i aria-hidden="true"></i></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>AUDIO</legend>
+            <label class="setting-range"><span>Master volume <output data-setting-output="masterVolume">78%</output></span><input name="masterVolume" type="range" min="0" max="1" step="0.01" value="0.78"></label>
+            <label class="setting-toggle"><span>Mute all sound</span><input name="muted" type="checkbox"><i aria-hidden="true"></i></label>
+          </fieldset>
+        </form>
+        <p id="settings-status" role="status" aria-live="polite">CHANGES SAVE AUTOMATICALLY</p>
+        <div class="settings-actions">
+          <button id="settings-reset-button" class="quiet-button" type="button">RESTORE DEFAULTS</button>
+        </div>
       </div>
     </section>
 
@@ -206,7 +287,9 @@
         <h2 id="ending-title">BASILICA SEVERED</h2>
         <p id="ending-copy">The sauce settles. Nothing at the table is still breathing.</p>
         <div id="ending-stats"></div>
+        <p id="ending-record">SERVICE RECORD // NO COMPLETED RUNS</p>
         <button id="restart-button" type="button">RUN IT BACK</button>
+        <button class="quiet-button" data-open-settings type="button">SETTINGS</button>
       </div>
     </section>
 
@@ -214,6 +297,100 @@
   </main>
 
   <noscript>Pasta Mortale needs JavaScript. The noodles refuse to fight without it.</noscript>
-  <script type="module" src="src/main.js?v=14"></script>
+  <script>
+    (() => {
+      const body = document.body;
+      const panel = document.querySelector("#graphics-failure");
+      const copy = document.querySelector("#graphics-failure-copy");
+      const retry = document.querySelector("#graphics-retry-button");
+      const loading = document.querySelector("#loading-screen");
+      const title = document.querySelector("#title-screen");
+      const begin = document.querySelector("#start-button");
+      const loadingStatus = document.querySelector("#loading-status");
+      let status = "initializing";
+      let kind = null;
+      let detail = null;
+      let failedAt = null;
+      let readyAt = null;
+      const beganAt = performance.now();
+      const slowBootNotice = setTimeout(() => {
+        if (status === "initializing" && loadingStatus) {
+          loadingStatus.textContent = "STILL COOKING — LOW-POWER GRAPHICS MAY TAKE A MOMENT";
+        }
+      }, 15000);
+      const watchdog = setTimeout(() => {
+        if (status === "initializing") window.__pastaGraphicsBoot.fail("load-timeout", "Boot did not complete within 60 seconds.");
+      }, 60000);
+      const clearBootTimers = () => {
+        clearTimeout(slowBootNotice);
+        clearTimeout(watchdog);
+      };
+
+      const copyFor = (nextKind) => /webgl|context|renderer|graphics/i.test(String(nextKind || ""))
+        ? "Pasta Mortale could not start its WebGL graphics renderer."
+        : "Pasta Mortale could not finish loading the 3D basilica.";
+
+      window.__pastaGraphicsBoot = {
+        ready() {
+          clearBootTimers();
+          status = "ready";
+          kind = null;
+          detail = null;
+          readyAt = performance.now();
+          body.dataset.graphicsState = "ready";
+          panel.hidden = true;
+          return this.state();
+        },
+        fail(nextKind = "load-failure", nextDetail = "") {
+          clearBootTimers();
+          status = "failed";
+          kind = String(nextKind || "load-failure");
+          detail = String(nextDetail || "").slice(0, 240);
+          failedAt = performance.now();
+          body.dataset.graphicsState = "failed";
+          body.dataset.phase = "graphics-failed";
+          loading.classList.remove("active");
+          loading.hidden = true;
+          loading.setAttribute("aria-hidden", "true");
+          title.hidden = false;
+          title.classList.add("active");
+          title.removeAttribute("aria-hidden");
+          begin.disabled = true;
+          begin.setAttribute("aria-disabled", "true");
+          copy.textContent = copyFor(kind);
+          panel.hidden = false;
+          requestAnimationFrame(() => retry.focus({ preventScroll: true }));
+          return this.state();
+        },
+        state() {
+          return {
+            status,
+            kind,
+            detail,
+            beganAt,
+            failedAt,
+            readyAt,
+            elapsedMs: Math.max(0, (status === "failed" ? failedAt : readyAt || performance.now()) - beganAt)
+          };
+        }
+      };
+
+      retry.addEventListener("click", () => location.reload());
+      addEventListener("error", (event) => {
+        const target = event.target;
+        if (target instanceof HTMLScriptElement && target.type === "module") {
+          window.__pastaGraphicsBoot.fail("module-load-failure", target.src || "Main module failed to load.");
+        }
+      }, true);
+    })();
+  </script>
+  <script type="module">
+    import { loadWebGLGame } from "/assets/game-webgl-guard.js?v=2";
+    loadWebGLGame("./src/main.js?v=27", {
+      title: "THE BASILICA COULD NOT OPEN",
+      onUnavailable(detail) { window.__pastaGraphicsBoot.fail("webgl-unavailable", detail); },
+      onFailure(error) { window.__pastaGraphicsBoot.fail("module-load-failure", error?.message || String(error)); }
+    });
+  </script>
 </body>
 </html>

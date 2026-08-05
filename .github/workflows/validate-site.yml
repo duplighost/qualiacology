@@ -1,0 +1,60 @@
+name: Validate Qualiacology
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-site:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: build
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: build/package-lock.json
+
+      - name: Install validation tools
+        run: npm ci
+
+      - name: Rebuild generated hub pages
+        run: npm run build
+
+      - name: Validate catalog and public files
+        run: npm run validate
+
+      - name: Smoke-test every public route
+        run: npm run smoke
+
+      - name: Require generated files to be current
+        working-directory: .
+        shell: bash
+        run: |
+          generated_status="$(git status --porcelain -- \
+            index.html \
+            games/index.html \
+            music/index.html \
+            psychopharmacology/index.html \
+            sitemap.xml \
+            assets/hub)"
+          if [[ -n "$generated_status" ]]; then
+            printf '%s\n' "$generated_status"
+            echo "Generated hub files are not current. Run npm run build and commit the result."
+            exit 1
+          fi

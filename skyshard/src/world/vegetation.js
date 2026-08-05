@@ -12,7 +12,7 @@ import { DESTS, SPIRE } from './destdata.js';
 // ---- tiny geometry merge (position/normal/color, non-indexed) -------------
 function mergeGeos(parts) {
   const geos = parts.map(({ geo, color, translate, scale, rotate }) => {
-    let g = geo.toNonIndexed();
+    let g = geo.index ? geo.toNonIndexed() : geo.clone();
     if (scale) g.scale(...scale);
     if (rotate) g.rotateX(rotate[0]), g.rotateY(rotate[1]), g.rotateZ(rotate[2]);
     if (translate) g.translate(...translate);
@@ -88,7 +88,8 @@ const FLORA = {
   rock: {
     region: null, count: 320, minW: 0, scale: [0.4, 1.8], collider: 0.7, colliderH: 1.4, tint: true,
     make: () => {
-      const g = new I(1, 0).toNonIndexed();
+      const source = new I(1, 0);
+      const g = source.index ? source.toNonIndexed() : source.clone();
       g.scale(1, 0.72, 1);
       const n = g.attributes.position.count;
       const colors = new Float32Array(n * 3).fill(0.62);

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>RALLY</title>
+<title>RALLY | Qualiacology</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <meta name="description" content="RALLY — a mouse-only tennis duel. Swing your hand through the ball; the swing is the shot. The music only lives while the ball does.">
 <meta property="og:title" content="RALLY">
@@ -189,9 +189,15 @@
   #endcard h2 { font-size: 40px; letter-spacing: 0.14em; text-align: center; line-height: 1.4; max-width: 700px; }
   #endcard .thesis { color: var(--gold); font-style: italic; font-size: 24px; letter-spacing: 0.1em; }
   #end-rally { font-size: 17px; letter-spacing: 0.16em; color: rgba(243,233,210,0.8); }
+  .home-link { position:fixed; left:max(14px,env(safe-area-inset-left)); top:max(14px,env(safe-area-inset-top)); z-index:120;
+    width:44px; height:44px; box-sizing:border-box; display:grid; place-items:center; color:rgba(243,233,210,.82); text-decoration:none;
+    font:700 12px/1.2 Georgia,'Palatino Linotype',serif; letter-spacing:.12em; text-transform:uppercase;
+    border:1px solid rgba(243,233,210,.34); border-radius:999px; background:rgba(20,13,32,.62); backdrop-filter:blur(6px); }
+  .home-link:hover,.home-link:focus-visible { color:var(--cream); border-color:rgba(243,233,210,.72); outline:none; }
 </style>
 </head>
 <body>
+<a class="home-link" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology">Q.</a>
 <div id="stage">
   <canvas id="game" width="1280" height="720"></canvas>
 

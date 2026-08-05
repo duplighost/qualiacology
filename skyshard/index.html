@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#0a0c14" />
 <meta name="description" content="SKYSHARD — an open-world FPS. Five lands, strange doors, and the things that wait behind them." />
-<title>SKYSHARD</title>
+<title>SKYSHARD | Qualiacology</title>
 <style>
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -188,8 +188,15 @@
   <meta name="twitter:image" content="https://qualiacology.com/skyshard/assets/card.jpg" />
   <link rel="canonical" href="https://qualiacology.com/skyshard/" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%230a0c14'/><path d='M32 12 L42 34 L32 52 L22 34 Z' fill='%23eaf4ff' fill-opacity='0.92'/></svg>">
+<style id="qualiacology-game-shell-v3">
+#qualiacology-home{position:fixed;z-index:2147483647;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:42px;padding:0 13px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(5,6,12,.78);color:#fff;text-decoration:none;font:800 12px/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.08em;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 8px 28px rgba(0,0,0,.38)}
+#qualiacology-home:hover,#qualiacology-home:focus-visible{background:rgba(20,22,34,.96);outline:2px solid rgba(255,255,255,.85);outline-offset:2px}
+#qualiacology-home[hidden]{display:none!important}
+@media(max-width:640px){#qualiacology-home{padding:0 11px;font-size:0}#qualiacology-home::after{content:"Q.";font-size:13px}}
+</style>
 </head>
 <body>
+  <a id="qualiacology-home" href="/" aria-label="Back to Qualiacology">Qualiacology</a><script id="qualiacology-home-behavior">(()=>{const q=document.getElementById("qualiacology-home");if(!q)return;const sync=()=>{q.hidden=!!document.pointerLockElement};document.addEventListener("pointerlockchange",sync);addEventListener("pageshow",sync);sync()})();</script>
 <canvas id="c"></canvas>
 <div id="vignette"></div>
 <div id="hurt"></div>
@@ -237,6 +244,9 @@
   <div class="bar"><div id="loadfill"></div></div>
 </div>
 
-<script type="module" src="./src/main.js"></script>
+<script type="module">
+  import { loadWebGLGame } from "/assets/game-webgl-guard.js?v=2";
+  loadWebGLGame("./src/main.js", { title: "Skyshard could not open." });
+</script>
 </body>
 </html>

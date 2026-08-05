@@ -22,10 +22,9 @@
 <meta name="twitter:description" content="A walk dictated into a phone with no bars. Every message was written to someone who couldn't receive it yet.">
 <meta name="twitter:image" content="https://qualiacology.com/assets/og/instead-of-the-goodbye-1200x630.jpg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23FBF6E9'/%3E%3Cpath d='M4 24 L11 20 L16 8 L21 18 L28 22' fill='none' stroke='%23201A10' stroke-width='2.4'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Big+Shoulders+Display:wght@600;800&display=swap" rel="stylesheet">
 <style>
+  @font-face{font-family:"Walk Inter";src:url("/assets/fonts/inter-latin-v20.woff2") format("woff2");font-style:normal;font-weight:400 800;font-display:swap}
+  @font-face{font-family:"Walk Display";src:url("/assets/fonts/space-grotesk-latin-v22.woff2") format("woff2");font-style:normal;font-weight:500 700;font-display:swap}
   :root{
     --glare:#FBF6E9; --ink:#201A10;
     --dim:color-mix(in srgb, var(--ink) 58%, transparent);
@@ -33,9 +32,9 @@
     --blaze:#5A55CE;            /* blue. probably. */
     --blood:#A6231C;            /* embargoed until the rock */
     --bubble:color-mix(in srgb, var(--ink) 6%, var(--glare));
-    --disp:"Archivo Black", system-ui, sans-serif;
-    --sign:"Big Shoulders Display", "Arial Narrow", sans-serif;
-    --body:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --disp:"Walk Display", system-ui, sans-serif;
+    --sign:"Walk Display", "Arial Narrow", sans-serif;
+    --body:"Walk Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --mono:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --sunx:82%; --suny:-12%;
   }
@@ -200,7 +199,7 @@
 
   /* ---- evidence ---- */
   .ev{border-top:1px solid var(--hair); margin-top:3em; padding-top:1.6em;}
-  .ev h3{
+  .ev h2{
     font-family:var(--mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase;
     color:var(--dim); font-weight:400; margin-bottom:1.6em;
   }
@@ -397,11 +396,11 @@
 
   /* lyric sheet */
   .lyrics{margin-top:2.6em; max-width:34em;}
-  .lyrics h4{
+  .lyrics h3{
     font-family:var(--mono); font-size:10px; letter-spacing:.22em; text-transform:uppercase;
     color:var(--dim); font-weight:400; margin:2.5em 0 .9em;
   }
-  .lyrics h4:first-child{margin-top:0;}
+  .lyrics h3:first-child{margin-top:0;}
   .lyrics p{
     font-size:1.02em; line-height:1.72; margin-bottom:1.5em;
     text-wrap:pretty;
@@ -666,7 +665,7 @@
     <p class="sub" style="margin-top:.4em;">the top, marked the only way it ever gets marked: afterward.</p>
 
     <section class="ev">
-      <h3>What the photographs turned out to say</h3>
+      <h2>What the photographs turned out to say</h2>
       <dl>
         <dt>The sign never claimed to know where you are.</dt>
         <dd>The board nailed above the map is carved <em>YOU ARE HERE</em>. The map bolted underneath it says <b>You Are At E</b>. Then <b>You Are At F</b>. Yesterday it said <b>You Are At Y</b>. It doesn't give you a place — it gives you a letter. And the legend explains why: the tags are <em>placed at all intersections, they help emergency responders locate lost, or injured hikers.</em> The sign that was never where you wanted to be is not a map feature. It's a thing to say out loud when you're bleeding and someone comes looking. You were at F. You were bleeding. Nobody had to come.</dd>
@@ -723,13 +722,13 @@
       </div>
 
       <div class="lyrics">
-      <h4>Intro</h4>
+      <h3>Intro</h3>
       <p>Why is “You Are Here”<br>
         not where I ever want to be?</p>
       <p>I’m not quite sure I’m here.<br>
         It’s August 1st.<br>
         Drenched in heat.</p>
-      <h4>Verse 1</h4>
+      <h3>Verse 1</h3>
       <p>I bet he’s in Chicago now.<br>
         The last day I thought he’d be in town, he wasn’t.<br>
         It was raining and there was thunder.<br>
@@ -738,12 +737,12 @@
         and tomorrow I very well might.<br>
         If I make it to the top today<br>
         I never have to make it to the top tonight.</p>
-      <h4>Pre-Chorus</h4>
+      <h3>Pre-Chorus</h3>
       <p>I’ve spent so long waiting<br>
         that I never got to hang out.<br>
         Another moment waiting<br>
         and I may never find out.</p>
-      <h4>Chorus</h4>
+      <h3>Chorus</h3>
       <p>I tried the hike<br>
         instead of the goodbye.<br>
         He never needed<br>
@@ -753,7 +752,7 @@
         when the wrong way<br>
         is out of the woods.</p>
       <p class="tag">Drenched in sun.</p>
-      <h4>Verse 2</h4>
+      <h3>Verse 2</h3>
       <p>One rock sits in the center.<br>
         It doesn’t look like it’s a mistake.<br>
         I’m not so clever.<br>
@@ -767,13 +766,13 @@
         That’s why there were no arrows.<br>
         It’s private property.<br>
         Remind me to take more of those arrows.</p>
-      <h4>Pre-Chorus</h4>
+      <h3>Pre-Chorus</h3>
       <p>I want to get to the spot I recognize<br>
         from when I first met him.<br>
         No real excuses to give up right now.<br>
         I’ll be there.<br>
         I’m pretty sure I bluffed in the right direction.</p>
-      <h4>Chorus</h4>
+      <h3>Chorus</h3>
       <p>I tried the hike<br>
         instead of the goodbye.<br>
         He never needed<br>
@@ -783,7 +782,7 @@
         when the wrong way<br>
         is out of the woods.</p>
       <p class="tag">Drenched in them.</p>
-      <h4>Bridge</h4>
+      <h3>Bridge</h3>
       <p>Walking to the trails makes me think of him.<br>
         Walking to the beach makes me think of her.<br>
         I have to learn how to think of myself again.<br>
@@ -798,7 +797,7 @@
         I will think less.<br>
         I will feel more.</p>
       <p class="tag">Drenched in one.</p>
-      <h4>Breakdown</h4>
+      <h3>Breakdown</h3>
       <p>When the sun’s on you,<br>
         you can’t calculate the odds of heat stroke.<br>
         I don’t even know what heat stroke is.<br>
@@ -808,7 +807,7 @@
       <p>Also, I changed my mind.<br>
         I don’t want to die of heat stroke.<br>
         That was just me being arrogant.</p>
-      <h4>Injury Break</h4>
+      <h3>Injury Break</h3>
       <p>It’s while I was literally saying I knew the way<br>
         that my leg hit the rock.<br>
         Oh, fuck. I’m bleeding.<br>
@@ -821,7 +820,7 @@
         That’s a joke. I’ll be fine. Don’t worry.</p>
       <p>I don’t even know what heat stroke is.<br>
         I swear it’s not just a lack of blood.</p>
-      <h4>Final Chorus</h4>
+      <h3>Final Chorus</h3>
       <p>I swear it’s not just<br>
         a lack of blood.<br>
         I tried the hike<br>
@@ -834,7 +833,7 @@
         I hope it’s still out of the woods.</p>
       <p class="tag">Isn’t it funny that I never realized<br>
         that I’d reached the top?</p>
-      <h4>Outro</h4>
+      <h3>Outro</h3>
       <p>I’m out of the forest, by the way, which is amazing.<br>
         It’s hotter out here and it’s amazing. I guarantee it.<br>
         People say I never thought it would work.<br>

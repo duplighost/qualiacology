@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>GOODFIRE | Qualiacology</title>
+<meta name="description" content="GOODFIRE is a fire-season simulation about holding Ninemile Mountain with line, backburns, tankers, and hard choices.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%232a2320'/%3E%3Cpath d='M16 4 C14 10 20 11 19 16 C24 14 23 9 22 7 C27 12 27 19 22 24 C25 18 20 18 18 21 C17 23 18 25 16 27 C10 25 6 20 9 13 C10 16 12 17 13 16 C11 12 13 7 16 4 Z' fill='%23e07a35'/%3E%3C/svg%3E">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #14100d; overflow: hidden; }
+  #game { position: fixed; inset: 0; cursor: none; }
+  #game canvas { position: absolute; left: 0; top: 0; }
+  #boot {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 18px; color: #f2e9d8; background: #14100d;
+    font: 13px/1.6 ui-monospace, 'Cascadia Code', Consolas, monospace; z-index: 10;
+    cursor: pointer; user-select: none;
+  }
+  #boot .word { font-size: 34px; letter-spacing: 0.42em; padding-left: 0.42em; color: #e07a35; }
+  #boot .sub { opacity: 0.55; letter-spacing: 0.14em; }
+  #boot .gate { margin-top: 26px; opacity: 0.8; letter-spacing: 0.2em; animation: pulse 2.2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+</style>
+
+
+
+<link rel="canonical" href="https://qualiacology.com/goodfire/">
+
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:type" content="website">
+<meta property="og:title" content="GOODFIRE | Qualiacology">
+<meta property="og:description" content="GOODFIRE is a fire-season simulation about holding Ninemile Mountain with line, backburns, tankers, and hard choices.">
+<meta property="og:url" content="https://qualiacology.com/goodfire/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/goodfire-card-clean.webp">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="GOODFIRE | Qualiacology">
+<meta name="twitter:description" content="GOODFIRE is a fire-season simulation about holding Ninemile Mountain with line, backburns, tankers, and hard choices.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/goodfire-card-clean.webp">
+<style id="qualiacology-game-shell-v2">
+#qualiacology-home{position:fixed;z-index:2147483647;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:42px;padding:0 13px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(5,6,12,.78);color:#fff;text-decoration:none;font:800 12px/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.08em;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 8px 28px rgba(0,0,0,.38)}
+#qualiacology-home:hover,#qualiacology-home:focus-visible{background:rgba(20,22,34,.96);outline:2px solid rgba(255,255,255,.85);outline-offset:2px}
+#qualiacology-home[hidden]{display:none!important}
+@media(max-width:640px){#qualiacology-home{padding:0 11px;font-size:0}#qualiacology-home::after{content:"Q.";font-size:13px}}
+</style>
+</head>
+<body><a id="qualiacology-home" href="/" aria-label="Back to Qualiacology">Qualiacology</a><script id="qualiacology-home-behavior">(()=>{const q=document.getElementById("qualiacology-home");if(!q)return;const sync=()=>{q.hidden=!!document.pointerLockElement};document.addEventListener("pointerlockchange",sync);addEventListener("pageshow",sync);sync()})();</script>
+<div id="game"></div>
+<div id="boot">
+  <div class="word">GOODFIRE</div>
+  <div class="sub">a season on ninemile mountain</div>
+  <div class="gate">take the watch</div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

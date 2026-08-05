@@ -2,9 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>UNINVITED</title>
+<title>UNINVITED | Qualiacology</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="description" content="UNINVITED is a short first-person horror walk through a dark house, up the stairs, and into the last room.">
+<meta name="theme-color" content="#000000">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:title" content="UNINVITED | Qualiacology">
+<meta property="og:description" content="A short first-person horror walk through a dark house, up the stairs, and into the last room.">
+<meta property="og:url" content="https://qualiacology.com/uninvited/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/uninvited-card-clean.webp">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta property="og:image:alt" content="A figure outside a dark house, facing a lit doorway and the silhouette at the top of the stairs">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="UNINVITED | Qualiacology">
+<meta name="twitter:description" content="A short first-person horror walk through a dark house, up the stairs, and into the last room.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/uninvited-card-clean.webp">
 <link rel="canonical" href="https://qualiacology.com/uninvited/">
 <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <style>
@@ -91,8 +105,15 @@
   }
 }
 </script>
+<style id="qualiacology-game-shell-v3">
+#qualiacology-home{position:fixed;z-index:2147483647;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));display:inline-flex;align-items:center;justify-content:center;min-width:42px;height:42px;padding:0 13px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(5,6,12,.78);color:#fff;text-decoration:none;font:800 12px/1 system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.08em;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 8px 28px rgba(0,0,0,.38)}
+#qualiacology-home:hover,#qualiacology-home:focus-visible{background:rgba(20,22,34,.96);outline:2px solid rgba(255,255,255,.85);outline-offset:2px}
+#qualiacology-home[hidden]{display:none!important}
+@media(max-width:640px){#qualiacology-home{padding:0 11px;font-size:0}#qualiacology-home::after{content:"Q.";font-size:13px}}
+</style>
 </head>
 <body>
+  <a id="qualiacology-home" href="/" aria-label="Back to Qualiacology">Qualiacology</a><script id="qualiacology-home-behavior">(()=>{const q=document.getElementById("qualiacology-home");if(!q)return;const sync=()=>{q.hidden=!!document.pointerLockElement};document.addEventListener("pointerlockchange",sync);addEventListener("pageshow",sync);sync()})();</script>
   <div id="fade"></div>
 
   <div id="title">
@@ -118,6 +139,9 @@
 
   <div id="ending" class="hidden"><div class="txt" id="endingTxt"></div></div>
 
-  <script type="module" src="./src/main.js"></script>
+  <script type="module">
+  import { loadWebGLGame } from "/assets/game-webgl-guard.js?v=2";
+  loadWebGLGame("./src/main.js", { title: "UNINVITED could not open." });
+</script>
 </body>
 </html>

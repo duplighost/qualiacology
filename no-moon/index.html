@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>No Moon</title>
+<title>No Moon | Qualiacology</title>
 <meta name="description" content="No Moon is a fast browser twin-stick roguelike about moon-headed Passengers descending through sealed rooms beneath a missing sky.">
 <meta name="theme-color" content="#080b14">
 
@@ -26391,9 +26391,15 @@ function drawHudBossMiniStats(p, layout) {
       }
     }
 
-    function getAudioCtxForWake(reason) {
+    function getAudioCtxForWake(reason, createIfMissing = true) {
       try {
-        const ctx = baseEnsureAudioV37 ? baseEnsureAudioV37() : (audioState && audioState.ctx);
+        // pageshow/focus/visibility are lifecycle notifications, not user gestures.
+        // They may resume a context that already exists, but must never create one:
+        // constructing an AudioContext there triggers browser autoplay warnings and
+        // still leaves the context suspended. Real pointer/key gestures may create it.
+        const existing = audioState && audioState.ctx;
+        if (!existing && !createIfMissing) return null;
+        const ctx = existing || (baseEnsureAudioV37 ? baseEnsureAudioV37() : null);
         if (ctx && ctx.state !== 'running') resumeAudioFromCtx(ctx, reason || 'wake');
         return ctx || null;
       } catch (e) { recordError(e); return null; }
@@ -26475,11 +26481,11 @@ function drawHudBossMiniStats(p, layout) {
       ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'click', 'keydown'].forEach((type) => {
         try { window.addEventListener(type, wake, { capture: true, passive: true }); } catch (e) {}
       });
-      try { window.addEventListener('pageshow', wake, { passive: true }); } catch (e) {}
-      try { window.addEventListener('focus', wake, { passive: true }); } catch (e) {}
+      try { window.addEventListener('pageshow', () => getAudioCtxForWake('pageshow', false), { passive: true }); } catch (e) {}
+      try { window.addEventListener('focus', () => getAudioCtxForWake('focus', false), { passive: true }); } catch (e) {}
       try {
         document.addEventListener('visibilitychange', () => {
-          if (!document.hidden) getAudioCtxForWake('visibilitychange');
+          if (!document.hidden) getAudioCtxForWake('visibilitychange', false);
         }, { passive: true });
       } catch (e) {}
     }

@@ -21,7 +21,7 @@ const mat = (color, emissive = 0x000000, ei = 0) =>
 // ---- geometry merge helper (position/normal/color, non-indexed) -------------
 function mergeGeos(parts) {
   const geos = parts.map(({ geo, color, translate, scale, rotate }) => {
-    let g = geo.toNonIndexed();
+    let g = geo.index ? geo.toNonIndexed() : geo.clone();
     if (scale) g.scale(...scale);
     if (rotate) { g.rotateX(rotate[0]); g.rotateY(rotate[1]); g.rotateZ(rotate[2]); }
     if (translate) g.translate(...translate);
@@ -95,7 +95,8 @@ const FEATURES = {
   snowdrift: {
     region: 'frost', count: 100, scale: [0.8, 1.8],
     make: () => {
-      const g = new THREE.SphereGeometry(1.3, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).toNonIndexed();
+      const source = new THREE.SphereGeometry(1.3, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2);
+      const g = source.index ? source.toNonIndexed() : source.clone();
       g.scale(1.4, 0.35, 1);
       const n = g.attributes.position.count;
       const colors = new Float32Array(n * 3).fill(0.93);
