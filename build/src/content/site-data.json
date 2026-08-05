@@ -115,9 +115,9 @@
       "featured": false,
       "image": "/assets/games/vesperbane-card-clean.webp",
       "alt": "A crimson-cloaked hunter mid-leap between gothic spires under an eclipsed moon",
-      "summary": "Sprint, slash, wall-kick, and dash through a gothic platformer built for speed and blood-red momentum, across two nights.",
-      "metaDescription": "Vesperbane is a fast gothic action platformer: sprint, slash, wall-kick, dash, and ring the bell before the night eats you.",
-      "controls": "WASD or arrows · touch on mobile · rebindable",
+      "summary": "Sprint, chain-whip, wall-kick, and dash through a gothic platformer built for speed and eclipse-lit momentum, across two nights.",
+      "metaDescription": "Vesperbane is a fast gothic action platformer: sprint, chain-whip, wall-kick, dash, and ring the bell before the night eats you.",
+      "controls": "WASD or arrows · touch on mobile · action keys rebindable",
       "actionLabel": "Play Vesperbane"
     },
     {
