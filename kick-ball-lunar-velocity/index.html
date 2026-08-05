@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#010204" />
+  <meta name="description" content="KICK BALL // LUNAR VELOCITY is a first-person 3D lunar combat-platformer built around one persistent boomerang ball." />
+  <title>KICK BALL // LUNAR VELOCITY | Qualiacology</title>
+  <link rel="canonical" href="https://qualiacology.com/kick-ball-lunar-velocity/" />
+  <meta property="og:site_name" content="Qualiacology" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="KICK BALL // LUNAR VELOCITY | Qualiacology" />
+  <meta property="og:description" content="The moon is a weapon. So is gravity. Charge the ball, curve it through the alien line, SNAP it home, and turn every impossible cliff into momentum." />
+  <meta property="og:url" content="https://qualiacology.com/kick-ball-lunar-velocity/" />
+  <meta property="og:image" content="https://qualiacology.com/assets/games/kick-ball-lunar-velocity-card-clean.webp" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="720" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="KICK BALL // LUNAR VELOCITY | Qualiacology" />
+  <meta name="twitter:description" content="First-person lunar momentum combat. One ball. Every move. It always comes home." />
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/kick-ball-lunar-velocity-card-clean.webp" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <a class="home-link" href="/" aria-label="Return to Qualiacology"><span aria-hidden="true">←</span> <span class="home-link__name">Qualiacology</span></a>
+  <main id="gameRoot" aria-label="KICK BALL // LUNAR VELOCITY">
+    <canvas id="gameCanvas" tabindex="0" aria-label="First-person lunar action game"></canvas>
+
+    <section id="hud" aria-label="Combat telemetry">
+      <header class="hud-brand" aria-label="KICK BALL // LUNAR VELOCITY">
+        <span class="hud-brand__mark" aria-hidden="true">KB</span>
+        <span class="hud-brand__name">KICK BALL</span>
+        <span class="hud-brand__slash" aria-hidden="true">//</span>
+        <span class="hud-brand__edition">LUNAR VELOCITY</span>
+      </header>
+
+      <section class="objective" aria-live="polite" aria-atomic="true">
+        <div id="objectiveLabel">MARE IMBRIUM // DROP ZONE</div>
+        <div id="objectiveText">Wake the ball. Break the occupation.</div>
+      </section>
+
+      <section class="style-panel" aria-label="Style and score">
+        <div class="style-panel__header">
+          <span>STYLE VECTOR</span>
+          <strong id="styleRank">C</strong>
+        </div>
+        <div class="meter-track" aria-hidden="true"><div id="styleFill"></div></div>
+        <div class="score-line">
+          <strong id="scoreValue">000000</strong>
+          <span id="bestValue">BEST --:--.--</span>
+        </div>
+      </section>
+
+      <section class="vitals-panel" aria-label="Suit and movement status">
+        <div class="telemetry-row">
+          <span class="telemetry-label">SUIT</span>
+          <span id="shieldPips" class="pip-bank shield-bank" aria-label="Suit integrity full">
+            <i></i><i></i><i></i>
+          </span>
+        </div>
+        <div class="telemetry-row telemetry-row--split">
+          <span>
+            <span class="telemetry-label">ALT</span>
+            <strong id="altitudeValue">000.0 M</strong>
+          </span>
+          <span>
+            <span class="telemetry-label">JUMP</span>
+            <span id="jumpPips" class="pip-bank jump-bank" aria-label="Two jumps available"><i></i><i></i></span>
+          </span>
+        </div>
+      </section>
+
+      <section class="ball-panel" aria-label="Ball telemetry">
+        <span class="ball-panel__icon" aria-hidden="true"></span>
+        <span class="ball-panel__copy">
+          <span>BALL LINK</span>
+          <strong id="ballState">HOME</strong>
+        </span>
+      </section>
+
+      <div id="comboText" aria-live="polite" aria-atomic="true"></div>
+
+      <div id="crosshair" aria-hidden="true">
+        <i class="crosshair__north"></i>
+        <i class="crosshair__east"></i>
+        <i class="crosshair__south"></i>
+        <i class="crosshair__west"></i>
+        <b></b>
+      </div>
+      <div id="hitMarker" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div id="damageVignette" aria-hidden="true"></div>
+
+      <div id="chargeUI" aria-hidden="true">
+        <div class="charge-ui__header"><span id="chargeText">KICK CHARGE</span><b>◈</b></div>
+        <div class="charge-ui__track"><div id="chargeFill"></div></div>
+      </div>
+
+      <div id="promptToast" class="hidden" role="status" aria-live="polite"></div>
+
+      <div id="controlsHint" aria-label="Controls">
+        <div class="control-set keyboard-hints">
+          <span><kbd>WASD</kbd> MOVE</span>
+          <span><kbd>MOUSE</kbd> LOOK / CURVE</span>
+          <span><kbd>LMB</kbd> KICK</span>
+          <span><kbd>RMB</kbd> SNAP</span>
+          <span><kbd>SPACE</kbd> DOUBLE JUMP</span>
+          <span><kbd>Q</kbd> SPIN</span>
+        </div>
+        <div class="control-set gamepad-hints">
+          <span><kbd>LS</kbd> MOVE</span>
+          <span><kbd>RS</kbd> LOOK / CURVE</span>
+          <span><kbd>RT</kbd> KICK</span>
+          <span><kbd>LT</kbd> SNAP</span>
+          <span><kbd>A</kbd> DOUBLE JUMP</span>
+          <span><kbd>B</kbd> SPIN</span>
+        </div>
+      </div>
+
+      <nav class="utility-controls" aria-label="Game settings">
+        <button id="qualityButton" class="utility-button" type="button" aria-label="Change graphics quality">QUALITY HIGH</button>
+        <button id="soundButton" class="utility-button" type="button" aria-label="Toggle sound">SOUND ON</button>
+        <button id="fullscreenButton" class="utility-button" type="button" aria-label="Toggle fullscreen">FULLSCREEN</button>
+      </nav>
+    </section>
+
+    <div id="touchControls" aria-label="Touch game controls">
+      <div id="movePad" class="touch-pad" role="application" aria-label="Movement stick">
+        <div class="touch-pad__ticks" aria-hidden="true"></div>
+        <div class="touchKnob" aria-hidden="true"></div>
+        <span>MOVE</span>
+      </div>
+      <div id="lookPad" class="touch-pad" role="application" aria-label="Look and curve stick">
+        <div class="touch-pad__ticks" aria-hidden="true"></div>
+        <div class="touchKnob" aria-hidden="true"></div>
+        <span>LOOK // CURVE</span>
+      </div>
+      <button id="touchKick" class="touch-action touch-action--kick" type="button" aria-label="Charge and kick the ball"><b>KICK</b><small>HOLD</small></button>
+      <button id="touchSnap" class="touch-action touch-action--snap" type="button" aria-label="Snap the ball home">SNAP</button>
+      <button id="touchJump" class="touch-action touch-action--jump" type="button" aria-label="Jump or double jump">JUMP</button>
+      <button id="touchSpin" class="touch-action touch-action--spin" type="button" aria-label="Spin attack">SPIN</button>
+      <button id="touchPause" class="touch-pause" type="button" aria-label="Pause game">PAUSE</button>
+    </div>
+
+    <div id="portraitHint" role="status">PORTRAIT VECTOR // ROTATE FOR THE FULL HORIZON</div>
+
+    <section id="startOverlay" class="overlay start-overlay" role="dialog" aria-modal="true" aria-labelledby="startTitle" aria-describedby="startCopy">
+      <div class="start-orbit start-orbit--one" aria-hidden="true"></div>
+      <div class="start-orbit start-orbit--two" aria-hidden="true"></div>
+      <div class="overlay-panel start-panel">
+        <div id="startKicker">LUNAR COMBAT PROTOCOL // 01</div>
+        <h1 id="startTitle"><span>KICK BALL</span><small>// LUNAR VELOCITY</small></h1>
+        <p id="startCopy">The moon is a weapon. So is gravity. Charge the ball, curve it through the alien line, SNAP it home, and turn every impossible cliff into momentum.</p>
+        <div class="start-law"><span aria-hidden="true">◉</span><strong>ONE BALL.</strong> EVERY MOVE. IT ALWAYS COMES HOME.</div>
+        <button id="startButton" class="primary-button" type="button">
+          <span>ENTER THE MOON</span>
+          <small>CLICK TO LOCK VIEW</small>
+        </button>
+        <div class="loading-track" role="progressbar" aria-label="Loading lunar surface" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="loadingMeter"></div>
+        </div>
+        <div class="start-meta"><span>HEADPHONES RECOMMENDED</span><span>DESKTOP // CONTROLLER // TOUCH</span></div>
+      </div>
+    </section>
+
+    <section id="pauseOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pauseTitle" aria-hidden="true">
+      <div class="overlay-panel compact-panel">
+        <div class="overlay-kicker">FLIGHT COMPUTER // HOLD</div>
+        <h2 id="pauseTitle">ORBIT SUSPENDED</h2>
+        <p>The moon can wait. Press <kbd>ESC</kbd>, <kbd>P</kbd>, or controller <kbd>START</kbd> to drop back in.</p>
+        <div class="pause-rule" aria-hidden="true"></div>
+        <button id="pauseResumeButton" class="primary-button" type="button"><span>RETURN TO THE MOON</span><small>RESUME MISSION</small></button>
+      </div>
+    </section>
+
+    <section id="winOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="winTitle" aria-describedby="winSummary" aria-hidden="true">
+      <div class="overlay-panel win-panel">
+        <div class="overlay-kicker">LUNAR OCCUPATION // SHATTERED</div>
+        <h2 id="winTitle">MOON BROKEN OPEN</h2>
+        <p id="winSummary">Every alien down. Every impossible return made beautiful.</p>
+        <div class="win-stats" aria-label="Run results">
+          <div><span>MISSION TIME</span><strong id="winTime">00:00.00</strong></div>
+          <div><span>STYLE SCORE</span><strong id="winScore">000000</strong></div>
+          <div><span>FINAL RANK</span><strong id="winRank">A</strong></div>
+        </div>
+        <button id="restartButton" class="primary-button" type="button"><span>RUN THE MOON AGAIN</span><small>RESTART MISSION</small></button>
+      </div>
+    </section>
+  </main>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
