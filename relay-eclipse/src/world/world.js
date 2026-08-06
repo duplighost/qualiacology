@@ -134,8 +134,12 @@ export function buildWorld(scene, renderer) {
     sun.intensity = (1.65 - threat * 0.18) * (1 - underT * 0.78);
     cosmos.lighting.hemisphere.intensity = (1.14 - threat * 0.08) * (1 - underT * 0.48);
     cosmos.lighting.violetFill.intensity = (0.5 + threat * 0.14) * (1 - underT * 0.42);
-    lunarAmbient.intensity = (0.42 + threat * 0.04) * (1 - underT * 0.58);
-    if (renderer) renderer.toneMappingExposure = 1.28 - threat * 0.06 - underT * 0.12;
+    // The outer field used to bottom out into an unreadable black past the
+    // relay's own lighting: real terrain relief and real cover were out there
+    // and none of it survived to the eye. The fill and exposure are lifted
+    // enough to give the ground form again without turning night into dusk.
+    lunarAmbient.intensity = (0.62 + threat * 0.04) * (1 - underT * 0.58);
+    if (renderer) renderer.toneMappingExposure = 1.36 - threat * 0.06 - underT * 0.12;
   }
 
   function setThreat(value) {
