@@ -533,47 +533,80 @@ body.pointer-locked #gameCanvas {
 #chargeUI {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 48px);
-  width: min(330px, 36vw);
-  padding: 9px 12px 11px;
-  border-bottom: 1px solid rgba(255, 214, 107, 0.46);
-  background: linear-gradient(90deg, transparent, rgba(5, 8, 15, 0.79) 18%, rgba(5, 8, 15, 0.79) 82%, transparent);
-  transform: translateX(-50%) translateY(8px);
+  top: 62%;
+  width: 104px;
+  height: 104px;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(.78);
   opacity: 0;
-  transition: opacity 100ms ease, transform 100ms ease;
+  filter: drop-shadow(0 0 12px rgba(105, 239, 255, .2));
+  transition: opacity 100ms ease, transform 120ms cubic-bezier(.2, .82, .24, 1.24), filter 120ms ease;
 }
 
 #chargeUI.active {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translate(-50%, -50%) scale(1);
 }
 
-.charge-ui__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 7px;
-  color: var(--gold-soft);
-  font: 900 8px/1 ui-monospace, "Cascadia Mono", monospace;
-  letter-spacing: 0.2em;
-}
-
-.charge-ui__header b {
-  color: var(--gold);
-  font-size: 12px;
-}
-
-.charge-ui__track {
-  height: 7px;
-  border: 1px solid rgba(255, 231, 158, 0.18);
-}
-
-#chargeFill {
-  width: 0%;
+.charge-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, var(--cyan), var(--violet), var(--gold-soft));
-  box-shadow: 0 0 16px rgba(255, 214, 107, 0.62);
-  transition: width 35ms linear;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.charge-ring__track,
+.charge-ring__fill,
+.charge-ring__core {
+  fill: none;
+}
+
+.charge-ring__track {
+  stroke: rgba(123, 239, 255, .13);
+  stroke-width: 6;
+  stroke-dasharray: 2 6;
+}
+
+.charge-ring__fill {
+  stroke: url(#chargeGradient);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  filter: drop-shadow(0 0 5px rgba(105, 239, 255, .76));
+  transition: stroke-dashoffset 35ms linear, stroke-width 100ms ease;
+}
+
+.charge-ring__core {
+  stroke: rgba(191, 131, 255, .22);
+  stroke-width: 1;
+  stroke-dasharray: 1 8;
+}
+
+#chargeText {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 76px;
+  color: var(--cyan-soft);
+  font: 950 7px/1.22 ui-monospace, "Cascadia Mono", monospace;
+  letter-spacing: .12em;
+  text-align: center;
+  text-shadow: 0 0 8px rgba(105, 239, 255, .72);
+  text-transform: uppercase;
+  transform: translate(-50%, -50%);
+}
+
+#chargeUI[data-max="true"] {
+  filter: drop-shadow(0 0 18px rgba(255, 214, 107, .72));
+  animation: charge-lock 420ms ease-in-out infinite alternate;
+}
+
+#chargeUI[data-max="true"] .charge-ring__fill {
+  stroke-width: 10;
+  filter: drop-shadow(0 0 8px rgba(255, 214, 107, .94));
 }
 
 #promptToast {
@@ -1461,8 +1494,8 @@ body.touch-enabled #fullscreenButton {
   }
 
   body.touch-enabled #chargeUI {
-    bottom: calc(max(24px, env(safe-area-inset-bottom)) + 154px);
-    width: min(270px, 43vw);
+    width: 92px;
+    height: 92px;
   }
 
   body.touch-enabled #promptToast {
@@ -1542,8 +1575,8 @@ body.touch-enabled #fullscreenButton {
   }
 
   body.touch-enabled #chargeUI {
-    bottom: max(24px, env(safe-area-inset-bottom));
-    width: min(250px, 34vw);
+    width: 82px;
+    height: 82px;
   }
 
   body.touch-enabled .overlay {
@@ -1778,8 +1811,8 @@ body.touch-enabled #portraitHint {
   }
 
   body.touch-enabled #chargeUI {
-    bottom: calc(max(26px, env(safe-area-inset-bottom)) + 214px);
-    width: min(250px, 72vw);
+    width: 88px;
+    height: 88px;
   }
 
   body.touch-enabled #promptToast {
@@ -1883,8 +1916,8 @@ body.touch-enabled #portraitHint {
   }
 
   body.touch-enabled #chargeUI {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + 232px);
-    width: min(230px, 76vw);
+    width: 78px;
+    height: 78px;
   }
 }
 
@@ -1975,6 +2008,11 @@ body.pointer-locked .home-link {
 
 @keyframes orbit-spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes charge-lock {
+  from { transform: translate(-50%, -50%) scale(1); }
+  to { transform: translate(-50%, -50%) scale(1.055); }
 }
 
 /* --------------------------------------------------------------------------
@@ -2174,6 +2212,15 @@ body.touch-enabled[data-started="true"] .ball-panel {
 body.touch-enabled[data-started="true"] .objective {
   top: max(18px, calc(env(safe-area-inset-top) + 16px));
   width: min(64vw, 560px);
+}
+
+#crosshair[data-line="true"] {
+  filter: drop-shadow(0 0 10px rgba(255, 214, 107, .82));
+}
+
+#crosshair[data-line="true"] b {
+  background: #fff0a8;
+  box-shadow: 0 0 0 3px rgba(105, 239, 255, .16), 0 0 12px rgba(255, 214, 107, .8);
 }
 
 #crosshair[data-target="anchor"] {
