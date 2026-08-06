@@ -30,36 +30,94 @@ export const ASTRONAUT_VISUAL_TYPES = Object.freeze({
     height: 2.18, aspect: 1024 / 1536, widthScale: 1.08, groundOffset: 0,
     accent: 0xff48c8, cueLuminance: 0.92, lodDistance: 34, curveDepth: 0.055,
     shadowX: 0.72, shadowZ: 0.26, bobHz: 2.8, bobAmount: 0.045,
+    legSwing: 0.145, armSwing: 0.078, bodyBounce: 0.075, bodySway: 0.045, attackKick: 0.11,
   }),
   shooter: Object.freeze({
     height: 2.28, aspect: 1024 / 1536, widthScale: 1.1, groundOffset: 0,
     accent: 0x37e7ff, cueLuminance: 1.0, lodDistance: 42, curveDepth: 0.06,
     shadowX: 0.78, shadowZ: 0.31, bobHz: 1.45, bobAmount: 0.018,
+    legSwing: 0.115, armSwing: 0.028, bodyBounce: 0.065, bodySway: 0.034, attackKick: 0.085,
   }),
   brute: Object.freeze({
     height: 3.12, aspect: 1024 / 1536, widthScale: 1.08, groundOffset: 0,
     accent: 0xffd84a, cueLuminance: 1.08, lodDistance: 50, curveDepth: 0.085,
     shadowX: 0.92, shadowZ: 0.42, bobHz: 0.82, bobAmount: 0.025,
+    legSwing: 0.095, armSwing: 0.052, bodyBounce: 0.095, bodySway: 0.038, attackKick: 0.13,
   }),
   commander: Object.freeze({
     height: 3.62, aspect: 1024 / 1536, widthScale: 1.2, groundOffset: 0.02,
     accent: 0xc77dff, cueLuminance: 1.02, lodDistance: 58, curveDepth: 0.095,
     shadowX: 1.02, shadowZ: 0.45, bobHz: 0.62, bobAmount: 0.035,
+    legSwing: 0.078, armSwing: 0.042, bodyBounce: 0.088, bodySway: 0.032, attackKick: 0.15,
   }),
   maw: Object.freeze({
     height: 6.4, aspect: 1, widthScale: 1, groundOffset: 1.4,
     accent: 0xff52d6, cueLuminance: 1.05, lodDistance: 86, curveDepth: 0.16,
     shadowX: 0.72, shadowZ: 0.32, bobHz: 0.36, bobAmount: 0.16,
+    legSwing: 0, armSwing: 0, bodyBounce: 0, bodySway: 0.018, attackKick: 0.06,
   }),
 });
+
+// The source renders are single transparent images, not skeletons or sprite
+// sheets. This vertex deformation makes the visible art itself articulate:
+// opposite leg depth/lift, counter-swinging arms, torso weight transfer, and a
+// state-driven attack recoil. Both high and low LODs use it so phone quality
+// scaling never turns moving enemies back into rigid cards.
+const ANIMATED_IMPOSTOR_DEFORM = /* glsl */`
+  uniform float uMotionPhase;
+  uniform float uMotion;
+  uniform float uAttack;
+  uniform float uLegSwing;
+  uniform float uArmSwing;
+  uniform float uBodySway;
+  uniform float uAttackKick;
+
+  vec3 deformAnimatedImpostor(vec3 p, vec2 texUv) {
+    float x = texUv.x * 2.0 - 1.0;
+    float side = x < 0.0 ? -1.0 : 1.0;
+    float separated = smoothstep(0.035, 0.22, abs(x));
+    float lower = (1.0 - smoothstep(0.38, 0.59, texUv.y)) * separated;
+    float legCycle = sin(uMotionPhase + (side > 0.0 ? 3.14159265 : 0.0));
+    float planted = 0.5 + 0.5 * legCycle;
+
+    // Each half of the lower silhouette advances in opposing depth, lifts on
+    // its forward phase, and opens slightly at the foot. The deformation is
+    // smooth around the pelvis so the detailed source texture does not tear.
+    p.z += lower * legCycle * uLegSwing * uMotion;
+    p.y += lower * planted * uLegSwing * 0.62 * uMotion;
+    p.x += lower * legCycle * uLegSwing * 0.38 * uMotion;
+
+    float armBand = smoothstep(0.34, 0.62, abs(x))
+      * smoothstep(0.34, 0.54, texUv.y)
+      * (1.0 - smoothstep(0.82, 0.95, texUv.y));
+    p.z -= armBand * legCycle * uArmSwing * uMotion;
+    p.x -= armBand * legCycle * uArmSwing * 0.18 * uMotion;
+    p.y += armBand * (0.5 - planted) * uArmSwing * 0.42 * uMotion;
+
+    float torso = smoothstep(0.34, 0.66, texUv.y);
+    float transfer = sin(uMotionPhase);
+    p.x += torso * transfer * uBodySway * uMotion;
+    p.z += torso * cos(uMotionPhase) * uBodySway * 0.24 * uMotion;
+
+    // Attacks visibly gather and release through the upper silhouette instead
+    // of being communicated by glow alone. This also reads for the shooter art
+    // whose hands and weapon are intentionally kept together.
+    float upper = smoothstep(0.35, 0.72, texUv.y);
+    p.z -= upper * uAttack * uAttackKick;
+    p.y += upper * uAttack * uAttackKick * 0.18;
+    p.x -= upper * x * uAttack * uAttackKick * 0.09;
+    return p;
+  }
+`;
 
 const MAIN_VERTEX = /* glsl */`
   varying vec2 vUv;
   uniform float uCurveDepth;
+  ${ANIMATED_IMPOSTOR_DEFORM}
 
   void main() {
     vUv = uv;
-    vec3 p = position;
+    vec3 p = deformAnimatedImpostor(position, uv);
     float x = uv.x * 2.0 - 1.0;
     float y = uv.y * 2.0 - 1.0;
     // A shallow convex bow gives the cutout real depth parallax and a stable
@@ -105,10 +163,11 @@ const MAIN_FRAGMENT = /* glsl */`
 const OUTLINE_VERTEX = /* glsl */`
   varying vec2 vUv;
   uniform float uCurveDepth;
+  ${ANIMATED_IMPOSTOR_DEFORM}
 
   void main() {
     vUv = uv;
-    vec3 p = position;
+    vec3 p = deformAnimatedImpostor(position, uv);
     float x = uv.x * 2.0 - 1.0;
     p.z += (1.0 - x * x) * uCurveDepth;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
@@ -142,9 +201,11 @@ const OUTLINE_FRAGMENT = /* glsl */`
 
 const LOW_VERTEX = /* glsl */`
   varying vec2 vUv;
+  ${ANIMATED_IMPOSTOR_DEFORM}
   void main() {
     vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec3 p = deformAnimatedImpostor(position, uv);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
   }
 `;
 
@@ -226,6 +287,13 @@ function sharedUniforms(texture, def) {
     uOpacity: { value: 1 },
     uPulse: { value: 0 },
     uCurveDepth: { value: def.curveDepth },
+    uMotionPhase: { value: 0 },
+    uMotion: { value: 0 },
+    uAttack: { value: 0 },
+    uLegSwing: { value: def.legSwing || 0 },
+    uArmSwing: { value: def.armSwing || 0 },
+    uBodySway: { value: def.bodySway || 0 },
+    uAttackKick: { value: def.attackKick || 0 },
     uTexel: { value: new THREE.Vector2(1 / texture.image.width, 1 / texture.image.height) },
   };
 }
@@ -308,8 +376,11 @@ export class AstronautVisualLibrary {
     this._instances = new Set();
     this._disposed = false;
     this._quality = 'high';
-    this._highGeometry = new THREE.PlaneGeometry(1, 1, 8, 10);
-    this._lowGeometry = new THREE.PlaneGeometry(1, 1, 1, 1);
+    // Enough subdivisions for the gait deformation to bend the silhouette at
+    // hips, knees, shoulders, and torso. The vertex cost is tiny compared with
+    // the authored textures and remains shared across every enemy instance.
+    this._highGeometry = new THREE.PlaneGeometry(1, 1, 14, 20);
+    this._lowGeometry = new THREE.PlaneGeometry(1, 1, 6, 8);
     this._shadowGeometry = new THREE.PlaneGeometry(1, 1, 1, 1);
     this._shadowTexture = makeContactShadowTexture();
     this._shadowMaterial = new THREE.MeshBasicMaterial({
@@ -436,6 +507,10 @@ export class AstronautVisual {
     this._pitch = 0;
     this._lean = 0;
     this._speed01 = 0;
+    this._motion = 0;
+    this._attack = 0;
+    this._targetAttack = 0;
+    this._motionPhase = this._phase;
     this._disposed = false;
     this._hasFacing = false;
     this._facingYaw = 0;
@@ -486,6 +561,8 @@ export class AstronautVisual {
     this.low.name = `${type}-low-lod`;
     this.low.position.y = centerY;
     this.low.scale.set(width, height, 1);
+    this._lowBaseWidth = width;
+    this._lowBaseHeight = height;
     this.low.renderOrder = 4;
     this.low.visible = false;
     this.low.onBeforeRender = () => this._setUniforms(materials.low);
@@ -519,6 +596,9 @@ export class AstronautVisual {
     material.uniforms.uHit.value = this._hit;
     material.uniforms.uOpacity.value = this._opacity;
     if (material.uniforms.uPulse) material.uniforms.uPulse.value = this._pulse;
+    if (material.uniforms.uMotionPhase) material.uniforms.uMotionPhase.value = this._motionPhase;
+    if (material.uniforms.uMotion) material.uniforms.uMotion.value = this._motion;
+    if (material.uniforms.uAttack) material.uniforms.uAttack.value = this._attack;
   }
 
   /** White-hot emissive hit confirmation; strength is normalized to 0..1. */
@@ -570,7 +650,8 @@ export class AstronautVisual {
    * @param {THREE.Vector3|THREE.Object3D|null} target Optional enemy target;
    *   when omitted, the visual faces the camera.
    * @param {object|null} state Optional allocation-free state bag. Supported
-   *   fields: hit, opacity, speed01, pitch, lean, bob, pulse, visible.
+   *   fields: hit, opacity, speed01, gaitPhase, attack, pitch, lean, bob,
+   *   pulse, visible.
    */
   update(dt, camera, target = null, state = null) {
     if (this._disposed || !camera) return;
@@ -581,6 +662,8 @@ export class AstronautVisual {
       if (state.hit !== undefined) this._hit = Math.max(this._hit, clamp01(state.hit));
       if (state.opacity !== undefined) this._targetOpacity = clamp01(state.opacity);
       if (state.speed01 !== undefined) this._speed01 = clamp01(state.speed01);
+      if (state.gaitPhase !== undefined && Number.isFinite(state.gaitPhase)) this._motionPhase = state.gaitPhase;
+      if (state.attack !== undefined) this._targetAttack = clamp01(state.attack);
       if (state.pitch !== undefined) this._pitch = state.pitch;
       if (state.lean !== undefined) this._lean = state.lean;
       if (state.pulse !== undefined) this._pulse = clamp01(state.pulse);
@@ -589,6 +672,8 @@ export class AstronautVisual {
 
     this._hit = Math.max(0, this._hit - step * 7.5);
     this._opacity = damp(this._opacity, this._targetOpacity, 13, step);
+    this._motion = damp(this._motion, this._speed01, this._speed01 > this._motion ? 12 : 7, step);
+    this._attack = damp(this._attack, this._targetAttack, this._targetAttack > this._attack ? 20 : 8, step);
 
     camera.getWorldPosition(this._cameraWorld);
     if (target && target.isObject3D) target.getWorldPosition(this._targetWorld);
@@ -635,18 +720,49 @@ export class AstronautVisual {
 
     const def = this.definition;
     this._phase += step * def.bobHz * Math.PI * 2 * (0.55 + this._speed01 * 0.45);
+    if (!state || state.gaitPhase === undefined || !Number.isFinite(state.gaitPhase)) this._motionPhase = this._phase;
+    const gaitBob = Math.abs(Math.cos(this._motionPhase)) * def.bodyBounce * this._motion;
     const bob = state && state.bob !== undefined
       ? state.bob
-      : Math.sin(this._phase) * def.bobAmount * (0.35 + this._speed01 * 0.65);
-    this.high.position.y = def.groundOffset * this._scale + def.height * this._scale * 0.5 + bob;
+      : Math.sin(this._phase) * def.bobAmount * (0.35 + this._motion * 0.65) + gaitBob;
+    const centerY = def.groundOffset * this._scale + def.height * this._scale * 0.5;
+    const gaitSway = Math.sin(this._motionPhase) * def.bodySway * this._motion;
+    const compression = Math.abs(Math.cos(this._motionPhase)) * this._motion * 0.022;
+    const attackCompression = this._attack * Math.min(0.035, def.attackKick * 0.24);
+    this.high.position.x = gaitSway;
+    this.low.position.x = gaitSway;
+    this.high.position.y = centerY + bob;
     this.low.position.y = this.high.position.y;
+    this.high.scale.set(1 + compression * 0.32 + attackCompression, 1 - compression - attackCompression * 0.45, 1);
+    this.low.scale.set(
+      this._lowBaseWidth * this.high.scale.x,
+      this._lowBaseHeight * this.high.scale.y,
+      1,
+    );
     this.high.rotation.x = this._pitch;
     this.low.rotation.x = this._pitch;
-    this.high.rotation.z = this._lean;
-    this.low.rotation.z = this._lean;
+    const visibleLean = this._lean + gaitSway * 0.62;
+    this.high.rotation.z = visibleLean;
+    this.low.rotation.z = visibleLean;
     if (!state || state.pulse === undefined) {
       this._pulse = 0.5 + Math.sin(this._age * 3.1 + this._phase * 0.13) * 0.5;
     }
+  }
+
+  debugAnimationSnapshot() {
+    return {
+      type: this.type,
+      quality: this._quality,
+      motion: this._motion,
+      attack: this._attack,
+      phase: this._motionPhase,
+      highVisible: this.high.visible,
+      lowVisible: this.low.visible,
+      position: [this.high.position.x, this.high.position.y, this.high.position.z],
+      rotation: [this.high.rotation.x, this.high.rotation.y, this.high.rotation.z],
+      scale: [this.high.scale.x, this.high.scale.y, this.high.scale.z],
+      lowScale: [this.low.scale.x, this.low.scale.y, this.low.scale.z],
+    };
   }
 
   dispose() {

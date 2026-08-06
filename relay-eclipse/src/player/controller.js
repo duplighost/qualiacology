@@ -66,6 +66,7 @@ export class Controller {
     this.groundFn = null; this.ceilFn = null; this.isUnderFn = null; this.surfaceProbe = null;
     this.caveSDFFn = null;           // signed distance to the cave region (walls)
     this.inCraterFn = null;          // inside a sinkhole crater mouth (open air)
+    this.railConstraintFn = null;     // swept visible-rail resolver supplied by the relay
     this.surface = null;             // 'water' | 'ice' | null — what the feet are in/on
     this.speedMult = 1;              // external slow (frost-elite chill)
     this.pos = new THREE.Vector3(0, 0, 0);
@@ -92,7 +93,7 @@ export class Controller {
 
     this.speed = 0; this.horizSpeed = 0;
     this.isSprinting = false; this.isMoving = false; this.isCrouching = false;
-    this.events = { landed: 0, jumped: false, doubleJumped: false, dashed: false, stepped: false, slid: false, mantled: false };
+    this.events = { landed: 0, jumped: false, doubleJumped: false, dashed: false, stepped: false, slid: false, mantled: false, railHit: false };
   }
 
   reset(x = 0, z = 0) {
@@ -126,7 +127,7 @@ export class Controller {
 
   update(dt, input, wishYaw, suppressAim = false) {
     const ev = this.events;
-    ev.landed = 0; ev.jumped = false; ev.doubleJumped = false; ev.dashed = false; ev.stepped = false; ev.slid = false; ev.mantled = false;
+    ev.landed = 0; ev.jumped = false; ev.doubleJumped = false; ev.dashed = false; ev.stepped = false; ev.slid = false; ev.mantled = false; ev.railHit = false;
     this._jumpedThisFrame = false;
     this._dashCooldown = Math.max(0, this._dashCooldown - dt);
     this._dashIFrame = Math.max(0, this._dashIFrame - dt);
@@ -228,9 +229,27 @@ export class Controller {
     this.vel.y -= GRAVITY * dt;
 
     // integrate horizontal + collide
+    const previousX = this.pos.x;
+    const previousZ = this.pos.z;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
     this._collide();
+    if (this.railConstraintFn) {
+      const predictedFootY = this.pos.y + this.vel.y * dt;
+      ev.railHit = !!this.railConstraintFn(
+        previousX,
+        previousZ,
+        this.pos,
+        this.vel,
+        RADIUS,
+        this.height,
+        predictedFootY,
+      );
+      // The radial correction can move the capsule into an adjacent support or
+      // landing collider that the first pass had already resolved. Close that
+      // ordering gap immediately instead of leaving a one-frame penetration.
+      if (ev.railHit) this._collide();
+    }
 
     // ledge-mantle: brushing a sky-island's side near its top vaults you up
     if (!dashNow) this._tryMantle(wishDir);

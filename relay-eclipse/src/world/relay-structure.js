@@ -35,6 +35,13 @@ export const RELAY_STRUCTURE_DEFAULTS = Object.freeze({
 
 const TAU = Math.PI * 2;
 const UP = new THREE.Vector3(0, 1, 0);
+const RAMP_RAIL_GAP_CENTERS = Object.freeze([0.25, 0.5, 0.75]);
+const RAMP_RAIL_GAP_HALF_T = 0.013;
+const RAMP_RAIL_TUBE_RADIUS = 0.07;
+const RAMP_RAIL_POST_RADIUS = 0.075;
+const RAMP_RAIL_RADIUS_OFFSET = 0.08;
+const RAMP_RAIL_BOTTOM = 0.12;
+const RAMP_RAIL_TOP = 1.23;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -365,10 +372,23 @@ export function buildRelayStructure(scene, options = {}) {
   ), { solid: false, bullet: false, cast: false });
   outerEdge.name = 'relay-ramp-outer-guide';
 
-  // Visible outer handrail: posts are instanced and the rail follows the ramp.
-  // It is intentionally not an invisible radial clamp; traversal remains honest
-  // to the geometry and skilled players can jump over or off it.
-  const railPostCount = 45;
+  // Visible outer handrail: three deliberate openings line up with the physical
+  // battle pads. The matching analytic resolver below blocks walking, sliding,
+  // and low dashes through every visible segment while still allowing a real
+  // jump over the top. Visual geometry and collision share these exact gaps.
+  const isRampRailGap = (t, padding = 0) => RAMP_RAIL_GAP_CENTERS.some(
+    (centerT) => Math.abs(t - centerT) < RAMP_RAIL_GAP_HALF_T + padding,
+  );
+  const railPostTs = [];
+  for (let i = 0; i < 49; i++) {
+    const t = i / 48;
+    if (!isRampRailGap(t, 0.002)) railPostTs.push(t);
+  }
+  for (const centerT of RAMP_RAIL_GAP_CENTERS) {
+    railPostTs.push(centerT - RAMP_RAIL_GAP_HALF_T, centerT + RAMP_RAIL_GAP_HALF_T);
+  }
+  railPostTs.sort((a, b) => a - b);
+  const railPostCount = railPostTs.length;
   const railPosts = new THREE.InstancedMesh(
     new THREE.CylinderGeometry(0.065, 0.075, 1.02, 5),
     darkMetal,
@@ -377,7 +397,7 @@ export function buildRelayStructure(scene, options = {}) {
   railPosts.name = 'relay-ramp-rail-posts';
   const instanceMatrix = new THREE.Matrix4();
   for (let i = 0; i < railPostCount; i++) {
-    const t = i / (railPostCount - 1);
+    const t = railPostTs[i];
     const theta = config.rampStartAngle + totalRampAngle * t;
     const y = THREE.MathUtils.lerp(config.lowerFloorY, config.deckY, t);
     instanceMatrix.makeTranslation(
@@ -390,12 +410,35 @@ export function buildRelayStructure(scene, options = {}) {
   railPosts.instanceMatrix.needsUpdate = true;
   register(railPosts, { solid: false, bullet: false, cast: true });
 
-  const handrailPoints = outerCurvePoints.map((point) => point.clone().add(new THREE.Vector3(0, 0.98, 0)));
-  const handrail = register(new THREE.Mesh(
-    new THREE.TubeGeometry(new THREE.CatmullRomCurve3(handrailPoints), 144, 0.07, 5, false),
-    darkMetal,
-  ), { solid: false, bullet: false, cast: true });
-  handrail.name = 'relay-ramp-visible-handrail';
+  const railRanges = [];
+  let railStart = 0;
+  for (const centerT of RAMP_RAIL_GAP_CENTERS) {
+    railRanges.push([railStart, centerT - RAMP_RAIL_GAP_HALF_T]);
+    railStart = centerT + RAMP_RAIL_GAP_HALF_T;
+  }
+  railRanges.push([railStart, 1]);
+  const handrails = [];
+  for (let rangeIndex = 0; rangeIndex < railRanges.length; rangeIndex++) {
+    const [fromT, toT] = railRanges[rangeIndex];
+    const segmentCount = Math.max(8, Math.ceil((toT - fromT) * 144));
+    const points = [];
+    for (let i = 0; i <= segmentCount; i++) {
+      const t = THREE.MathUtils.lerp(fromT, toT, i / segmentCount);
+      const theta = config.rampStartAngle + totalRampAngle * t;
+      const y = THREE.MathUtils.lerp(config.lowerFloorY + 1.16, config.deckY + 1.16, t);
+      points.push(new THREE.Vector3(
+        Math.cos(theta) * (config.rampOuterRadius - RAMP_RAIL_RADIUS_OFFSET),
+        y,
+        Math.sin(theta) * (config.rampOuterRadius - RAMP_RAIL_RADIUS_OFFSET),
+      ));
+    }
+    const handrail = register(new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), segmentCount, RAMP_RAIL_TUBE_RADIUS, 5, false),
+      darkMetal,
+    ), { solid: false, bullet: false, cast: true });
+    handrail.name = `relay-ramp-visible-handrail-${rangeIndex + 1}`;
+    handrails.push(handrail);
+  }
 
   // Three physically overlapping rest/battle pads turn the climb into readable
   // encounter tiers.  Their returned platform descriptors match their visible
@@ -733,6 +776,165 @@ export function buildRelayStructure(scene, options = {}) {
     return bestY > -Infinity ? { y: bestY, t: bestT, radius } : null;
   }
 
+  /**
+   * Resolve the player's swept horizontal movement against the visible outer
+   * ramp rail. The rail is a wall only while the player's body overlaps its
+   * physical height; jumping the feet above it genuinely clears it. The three
+   * authored landing openings use the same normalized ranges as the segmented
+   * handrail meshes above, so there are no invisible blockers in a doorway.
+   */
+  function resolveRampRail(previousX, previousZ, position, velocity, playerRadius = 0.4, bodyHeight = 1.8, footY = position.y) {
+    const previousLocalX = previousX - center.x;
+    const previousLocalZ = previousZ - center.z;
+    const currentX = position.x - center.x;
+    const currentZ = position.z - center.z;
+    const currentRadius = Math.hypot(currentX, currentZ);
+    const previousRadius = Math.hypot(previousLocalX, previousLocalZ);
+    const railRadius = config.rampOuterRadius - RAMP_RAIL_RADIUS_OFFSET;
+    const extent = playerRadius + RAMP_RAIL_TUBE_RADIUS;
+    const insideLimit = railRadius - extent;
+    const outsideLimit = railRadius + extent;
+    const dx = currentX - previousLocalX;
+    const dz = currentZ - previousLocalZ;
+    const sweepLengthSq = dx * dx + dz * dz;
+    if (sweepLengthSq < 1e-10) return false;
+
+    const radialDelta = previousLocalX * dx + previousLocalZ * dz;
+    const closestAlpha = clamp01(-radialDelta / sweepLengthSq);
+    const closestX = previousLocalX + dx * closestAlpha;
+    const closestZ = previousLocalZ + dz * closestAlpha;
+    const minimumRadius = Math.hypot(closestX, closestZ);
+    const maximumRadius = Math.max(previousRadius, currentRadius);
+    if (maximumRadius < insideLimit - 1e-6 || minimumRadius > outsideLimit + 1e-6) return false;
+
+    // Split the movement at every crossing of the capsule-expanded rail
+    // annulus. We then inspect the complete time spent overlapping the rail,
+    // not only its first circle contact: entering through a doorway does not
+    // grant permission to clip the endpoint post before leaving the annulus.
+    const breakpoints = [0, 1];
+    const appendCircleRoots = (radius) => {
+      const b = 2 * radialDelta;
+      const c = previousLocalX * previousLocalX + previousLocalZ * previousLocalZ - radius * radius;
+      const discriminant = b * b - 4 * sweepLengthSq * c;
+      if (discriminant < 0) return;
+      const root = Math.sqrt(Math.max(0, discriminant));
+      const near = (-b - root) / (2 * sweepLengthSq);
+      const far = (-b + root) / (2 * sweepLengthSq);
+      if (near > 1e-7 && near < 1 - 1e-7) breakpoints.push(near);
+      if (far > 1e-7 && far < 1 - 1e-7 && Math.abs(far - near) > 1e-7) breakpoints.push(far);
+    };
+    appendCircleRoots(insideLimit);
+    appendCircleRoots(outsideLimit);
+    breakpoints.sort((a, b) => a - b);
+
+    // A doorway is open only when the whole player capsule clears the endpoint
+    // posts. The render gap itself remains wider; this merely keeps the capsule
+    // from clipping through a visible post at either edge.
+    const gapClearanceT = (playerRadius + RAMP_RAIL_POST_RADIUS) / (railRadius * totalRampAngle);
+    const sampleRadius = config.rampOuterRadius - 0.04;
+    let hitAlpha = -1;
+    let nx = 0;
+    let nz = 0;
+    const isSolidContactAt = (alpha) => {
+      const sampleX = previousLocalX + dx * alpha;
+      const sampleZ = previousLocalZ + dz * alpha;
+      const radius = Math.hypot(sampleX, sampleZ);
+      if (radius < insideLimit - 1e-5 || radius > outsideLimit + 1e-5 || radius < 1e-5) return false;
+      const sampleNx = sampleX / radius;
+      const sampleNz = sampleZ / radius;
+      const rampSample = rampSurfaceAt(sampleNx * sampleRadius, sampleNz * sampleRadius, footY);
+      if (!rampSample || isRampRailGap(rampSample.t, -gapClearanceT)) return false;
+      const railBottom = rampSample.y + RAMP_RAIL_BOTTOM;
+      const railTop = rampSample.y + RAMP_RAIL_TOP;
+      if (footY >= railTop || footY + bodyHeight <= railBottom) return false;
+      nx = sampleNx;
+      nz = sampleNz;
+      return true;
+    };
+
+    const sweepLength = Math.sqrt(sweepLengthSq);
+    for (let interval = 0; interval < breakpoints.length - 1 && hitAlpha < 0; interval++) {
+      const fromAlpha = breakpoints[interval];
+      const toAlpha = breakpoints[interval + 1];
+      if (toAlpha - fromAlpha < 1e-7) continue;
+      const midAlpha = (fromAlpha + toAlpha) * 0.5;
+      const midX = previousLocalX + dx * midAlpha;
+      const midZ = previousLocalZ + dz * midAlpha;
+      const midRadius = Math.hypot(midX, midZ);
+      if (midRadius < insideLimit - 1e-6 || midRadius > outsideLimit + 1e-6) continue;
+
+      // Doorway edges are angular discontinuities. Sample no farther apart than
+      // six centimetres along the actual sweep, then bisect the first clear to
+      // solid transition. This also covers height/helix-turn transitions and is
+      // only entered when the broad phase reaches the thin rail annulus.
+      const sampleCount = Math.max(1, Math.ceil(sweepLength * (toAlpha - fromAlpha) / 0.06));
+      let lastAlpha = fromAlpha;
+      for (let sample = 0; sample <= sampleCount; sample++) {
+        const alpha = THREE.MathUtils.lerp(fromAlpha, toAlpha, sample / sampleCount);
+        if (isSolidContactAt(alpha)) {
+          if (sample === 0) {
+            hitAlpha = alpha;
+          } else {
+            let clearAlpha = lastAlpha;
+            let solidAlpha = alpha;
+            for (let iteration = 0; iteration < 10; iteration++) {
+              const probeAlpha = (clearAlpha + solidAlpha) * 0.5;
+              if (isSolidContactAt(probeAlpha)) solidAlpha = probeAlpha;
+              else clearAlpha = probeAlpha;
+            }
+            hitAlpha = solidAlpha;
+            isSolidContactAt(hitAlpha);
+          }
+          break;
+        }
+        lastAlpha = alpha;
+      }
+    }
+    if (hitAlpha < 0) return false;
+
+    const hitX = previousLocalX + dx * hitAlpha;
+    const hitZ = previousLocalZ + dz * hitAlpha;
+    const hitRadius = Math.hypot(hitX, hitZ);
+    // Angular doorway-edge contacts can happen while the player is already in
+    // the annulus and steering radially back toward their own side. The motion
+    // sign is therefore not a reliable side indicator; preserve whichever half
+    // of the expanded rail the capsule center actually occupies at contact.
+    const approachFromInside = Math.abs(hitRadius - railRadius) <= 1e-6
+      ? previousRadius <= railRadius
+      : hitRadius < railRadius;
+    const targetRadius = approachFromInside ? insideLimit : outsideLimit;
+
+    // Preserve the unblocked tangential remainder of the frame, then project it
+    // back to the correct side of the curved rail. This produces a smooth slide
+    // instead of throwing diagonal contacts back along their entire movement.
+    let remainingX = dx * (1 - hitAlpha);
+    let remainingZ = dz * (1 - hitAlpha);
+    const remainingRadial = remainingX * nx + remainingZ * nz;
+    if ((approachFromInside && remainingRadial > 0) || (!approachFromInside && remainingRadial < 0)) {
+      remainingX -= remainingRadial * nx;
+      remainingZ -= remainingRadial * nz;
+    }
+    let resolvedX = hitX + remainingX;
+    let resolvedZ = hitZ + remainingZ;
+    const resolvedRadius = Math.hypot(resolvedX, resolvedZ);
+    if (resolvedRadius > 1e-5) {
+      const crossedOwnSide = approachFromInside ? resolvedRadius > insideLimit : resolvedRadius < outsideLimit;
+      if (crossedOwnSide) {
+        const correction = targetRadius / resolvedRadius;
+        resolvedX *= correction;
+        resolvedZ *= correction;
+      }
+    }
+    position.x = center.x + resolvedX;
+    position.z = center.z + resolvedZ;
+    const radialSpeed = velocity.x * nx + velocity.z * nz;
+    if ((approachFromInside && radialSpeed > 0) || (!approachFromInside && radialSpeed < 0)) {
+      velocity.x -= radialSpeed * nx;
+      velocity.z -= radialSpeed * nz;
+    }
+    return true;
+  }
+
   // Allocation-free mirror of the detailed surface probes below.  Player,
   // enemy, and projectile ground checks can call this hundreds of times per
   // frame, so the composed groundAt hot path only deals in numbers.
@@ -911,6 +1113,9 @@ export function buildRelayStructure(scene, options = {}) {
     visibleSupportColumns: columnCount + pylonCount + 4 + dishes.length,
     lowerPracticalLights: practicalLights.length,
     instancedElements: columnCount + bracePairs.length + pylonCount + railPostCount + lunarBlockCount,
+    rampRailSegments: handrails.length,
+    rampRailGaps: RAMP_RAIL_GAP_CENTERS.length,
+    rampRailCollides: true,
     spawnPointCount: spawnPoints.length,
     platformDescriptorCount: platforms.length,
     hasInvisibleBoundary: false,
@@ -922,7 +1127,7 @@ export function buildRelayStructure(scene, options = {}) {
     group: root,
     center: new THREE.Vector3(center.x, baseY, center.z),
     config: Object.freeze({ ...config }),
-    meshes: { lowerFloor, ramp, moonDeck, energyBeam, columns, braces, pylons, dishes, practicalLights },
+    meshes: { lowerFloor, ramp, moonDeck, energyBeam, columns, braces, pylons, railPosts, handrails, dishes, practicalLights },
     materials: { floor: floorMaterial, deck: deckMaterial, metal: darkMetal, panel: panelMetal, lunar: lunarMaterial, cyanTrim, violetTrim },
     solids,
     bulletSolids,
@@ -941,6 +1146,12 @@ export function buildRelayStructure(scene, options = {}) {
       const local = localCoordinates(x, z);
       return rampSurfaceAt(local.x, local.z, y);
     },
+    railGaps: Object.freeze(RAMP_RAIL_GAP_CENTERS.map((centerT) => Object.freeze({
+      centerT,
+      fromT: centerT - RAMP_RAIL_GAP_HALF_T,
+      toT: centerT + RAMP_RAIL_GAP_HALF_T,
+    }))),
+    resolveRampRail,
     setPower,
     setThreat,
     update,

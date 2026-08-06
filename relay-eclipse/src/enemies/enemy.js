@@ -928,6 +928,7 @@ export class Enemy {
     this.vel = new THREE.Vector3();
     this.knockback = new THREE.Vector3();
     this.attackTimer = rand(0.2, this.def.attackCd);
+    this._attackVisualT = 0;
     this.phase = rand(0, Math.PI * 2);
     this.flash = 0;
     this.astronautVisual = null;
@@ -1156,6 +1157,7 @@ export class Enemy {
   }
 
   update(dt, player) {
+    this._attackVisualT = Math.max(0, this._attackVisualT - dt);
     if (this._pinned) return;   // main owns the corpse transform while it's skewered on a dash
     if (this.deathT >= 0) { this._updateDeath(dt); return; }
     if (this.frozenT > 0) { this._frozenTick(dt); return; }
@@ -1351,6 +1353,7 @@ export class Enemy {
       this.attackTimer -= dt;
       if (pdist <= def.reach + player.radius + 0.5 && vGap <= vReach && this.attackTimer <= 0) {
         this.attackTimer = def.attackCd;
+        this._attackVisualT = 0.28;
         player.takeDamage((def.damage + this.mgr.wave * 0.5) * this._enrageDmg, this.pos);
         if (this.elite === 'frost' && this.mgr.onPlayerChilled) this.mgr.onPlayerChilled();
         this.mgr.audio.enemyAttack(this.mgr.panFor(this.pos), this.def.voice);
@@ -2113,6 +2116,8 @@ export class EnemyManager {
       hit: 0,
       opacity: 1,
       speed01: 0,
+      gaitPhase: enemy.phase,
+      attack: 0,
       pitch: 0,
       lean: 0,
       pulse: 0,
@@ -2151,19 +2156,40 @@ export class EnemyManager {
     const spawnOpacity = enemy.spawnT < 1 ? clamp01(enemy.spawnT) : 1;
     state.hit = enemy.flash;
     state.opacity = enemy._visualOpacity * spawnOpacity;
-    state.speed01 = enemy.alive
+    const locomotionLocked = enemy.frozenT > 0 || enemy._stunT > 0 || enemy._pinned || enemy.deathT >= 0;
+    state.speed01 = enemy.alive && !locomotionLocked
       ? clamp01(Math.hypot(enemy.vel.x, enemy.vel.z) / Math.max(0.001, enemy.speed))
       : 0;
+    state.gaitPhase = enemy.phase;
+    state.bob = locomotionLocked ? 0 : undefined;
     state.pitch = enemy.group.rotation.x;
     state.lean = enemy.group.rotation.z + enemy.hurtLean * 0.45;
-    // Preserve non-colour attack tells after the high-detail cutout replaces a
-    // procedural body: the entire silhouette and rim flare before commitment.
-    // Audio, ground effects, and motion remain separate redundant warnings.
-    if (enemy.type === 'stalker') state.pulse = enemy.lunging > 0 || enemy.lungeCd < 0.28 ? 1 : 0;
-    else if (enemy.type === 'juggernaut') state.pulse = enemy._chgState === 1 ? 1 : (enemy._chgState === 2 ? 0.62 : 0);
-    else if (enemy.type === 'colossus') state.pulse = enemy._slamT >= 0 ? 1 : (enemy.enraged ? 0.44 : 0);
-    else if (enemy.type === 'wurm') state.pulse = enemy._wstate === 'telegraph' ? 1 : (enemy._wstate === 'erupt' ? 0.7 : 0);
-    else state.pulse = enemy.attackTimer < 0.22 ? 0.78 : 0;
+    if (enemy._stunT > 0) state.lean += Math.sin(enemy._stunT * 9) * 0.12;
+    // Preserve non-colour attack motion and telegraphs after the high-detail
+    // cutout replaces a procedural body. Audio, ground effects, and movement
+    // remain separate redundant warnings or impact confirmation.
+    if (enemy.type === 'husk') {
+      state.attack = clamp01(enemy._attackVisualT / 0.28);
+      state.pulse = state.attack * 0.78;
+    } else if (enemy.type === 'stalker') {
+      state.attack = enemy.lunging > 0 ? 1 : 0;
+      state.pulse = state.attack || enemy.lungeCd < 0.28 ? 1 : 0;
+    } else if (enemy.type === 'juggernaut') {
+      state.attack = enemy._chgState === 1 ? 0.72 : (enemy._chgState === 2 ? 1 : 0);
+      state.pulse = enemy._chgState === 1 ? 1 : (enemy._chgState === 2 ? 0.62 : 0);
+    } else if (enemy.type === 'colossus') {
+      state.attack = enemy._slamT >= 0 ? 1 : 0;
+      state.pulse = state.attack || enemy.enraged ? (state.attack ? 1 : 0.44) : 0;
+    } else if (enemy.type === 'wurm') {
+      state.attack = enemy._wstate === 'erupt' ? 0.82 : 0;
+      state.pulse = enemy._wstate === 'telegraph' ? 1 : (enemy._wstate === 'erupt' ? 0.7 : 0);
+    } else {
+      state.attack = enemy.attackTimer >= 0 && enemy.attackTimer < 0.22
+        ? 1 - enemy.attackTimer / 0.22
+        : 0;
+      state.pulse = state.attack * 0.78;
+    }
+    if (locomotionLocked) state.attack = 0;
     state.visible = enemy.type !== 'wurm' || enemy._wstate === 'erupt';
     visual.update(dt, this.visualCamera, null, state);
   }
