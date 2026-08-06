@@ -11,6 +11,16 @@ export const PULSE_CARBINE_ASSET_URL = new URL(
 
 const artUrl = (filename) => new URL(`../../assets/art/${filename}`, import.meta.url).href;
 
+// Plane-local center of the sight picture baked into each transparent render.
+// Keeping the authored anchor beside the derived ADS translation makes the
+// hit-ray contract explicit and gives browser QA something exact to project.
+const centeredOptic = (opticX, opticY) => Object.freeze({
+  opticX,
+  opticY,
+  adsX: -opticX,
+  adsY: -opticY,
+});
+
 // One authored normal pose and one unambiguously articulated reload pose per
 // weapon. Keeping the registry here makes asset failures local to one slot and
 // gives the procedural meshes a clean per-weapon fallback path.
@@ -18,30 +28,46 @@ export const REALISTIC_VIEWMODEL_ASSETS = Object.freeze({
   pistol: Object.freeze({
     assetUrl: artUrl('pulse-sidearm-v1.png'),
     reloadAssetUrl: artUrl('pulse-sidearm-reload-v1.png'),
-    layout: Object.freeze({ hipX: 0.18, hipY: -0.12, muzzleX: -0.01, muzzleY: 0.105 }),
+    layout: Object.freeze({
+      hipX: 0.18, hipY: -0.12,
+      ...centeredOptic(0.282, 0.135),
+      muzzleX: -0.01, muzzleY: 0.105,
+    }),
   }),
   smg: Object.freeze({
     assetUrl: PULSE_CARBINE_ASSET_URL,
     reloadAssetUrl: artUrl('pulse-carbine-reload-v1.png'),
-    layout: Object.freeze({ muzzleX: -0.155, muzzleY: 0.115 }),
+    layout: Object.freeze({
+      ...centeredOptic(0.265, 0.155),
+      muzzleX: -0.155, muzzleY: 0.115,
+    }),
   }),
   shotgun: Object.freeze({
     assetUrl: artUrl('breach-scattergun-v1.png'),
     reloadAssetUrl: artUrl('breach-scattergun-reload-v1.png'),
-    layout: Object.freeze({ hipX: 0.19, hipY: -0.135, muzzleX: -0.19, muzzleY: 0.12 }),
+    layout: Object.freeze({
+      hipX: 0.19, hipY: -0.135,
+      ...centeredOptic(0.291, 0.154),
+      muzzleX: -0.19, muzzleY: 0.12,
+    }),
   }),
   rifle: Object.freeze({
     assetUrl: artUrl('longbow-mr-v1.png'),
     reloadAssetUrl: artUrl('longbow-mr-reload-v1.png'),
-    layout: Object.freeze({ hipX: 0.18, hipY: -0.13, muzzleX: -0.29, muzzleY: 0.11 }),
+    layout: Object.freeze({
+      hipX: 0.18, hipY: -0.13,
+      ...centeredOptic(0.379, 0.091),
+      muzzleX: -0.29, muzzleY: 0.11,
+    }),
   }),
 });
 
 export const REALISTIC_VIEWMODEL_DEFAULTS = Object.freeze({
   hipX: 0.2,
   hipY: -0.14,
-  adsX: -0.31,
-  adsY: -0.155,
+  // Fallback matches the carbine. Every authored weapon overrides this with
+  // its own baked optic center so the sight never lies about the hit ray.
+  ...centeredOptic(0.265, 0.155),
   sprintX: 0.21,
   sprintY: -0.34,
   sprintRoll: -0.34,
@@ -288,6 +314,8 @@ export class RealisticViewmodel {
     this._responsiveScale = 1;
     this._aspect = 16 / 9;
     this._portraitShiftX = 0;
+    this._responsiveShiftY = 0;
+    this._adsScaleBoost = 0.25;
     this._fov = 70;
     this.visible = true;
     this.syncCamera(70, this._aspect);
@@ -430,8 +458,14 @@ export class RealisticViewmodel {
     y -= reloadPose * (articulatedReload ? 0.055 : 0.2);
 
     const responsive = this._responsiveScale;
-    this.poseRoot.position.x = x * responsive + this._portraitShiftX;
-    this.poseRoot.position.y = y * responsive;
+    // Scale the authored ADS translation with the same aim enlargement as the
+    // image plane. Otherwise shrinking hip-fire and restoring a 1x optic makes
+    // the baked sight drift away from the crosshair. Phone-only hip offsets
+    // fade out during ADS for the same reason.
+    const aimedResponsive = responsive * (1 + this._aim * this._adsScaleBoost);
+    const hipOffset = 1 - this._aim;
+    this.poseRoot.position.x = x * aimedResponsive + this._portraitShiftX * hipOffset;
+    this.poseRoot.position.y = y * aimedResponsive + this._responsiveShiftY * hipOffset;
     this.poseRoot.position.z = -1;
     this.poseRoot.rotation.x = reloadPose * (articulatedReload ? -0.035 : -0.16);
     this.poseRoot.rotation.y = reloadPose * (articulatedReload ? 0.055 : 0.21);
@@ -440,7 +474,7 @@ export class RealisticViewmodel {
       + swayX * 0.42;
 
     const scale = responsive * (
-      1 + this._aim * 0.075 - sprintPose * 0.055 - reloadPose * (articulatedReload ? 0.012 : 0.035)
+      1 + this._aim * this._adsScaleBoost - sprintPose * 0.055 - reloadPose * (articulatedReload ? 0.012 : 0.035)
     );
     this.poseRoot.scale.setScalar(scale);
 
@@ -490,15 +524,17 @@ export class RealisticViewmodel {
     this.camera.bottom = -0.5;
     this.camera.updateProjectionMatrix();
 
-    // Keep the whole 3:2 source plane inside a portrait viewport and pull it
-    // away from the phone's right-side fire/aim cluster. Landscape and desktop
-    // retain the authored large weapon presence.
+    // Keep the detailed model, but give threats back the center-right combat
+    // lane during hip fire. ADS deliberately restores the larger authored
+    // presentation so the optic remains satisfying and readable.
     const portraitScale = this._aspect < 0.82
-      ? Math.max(0.24, Math.min(0.48, this._aspect / 1.72))
-      : Math.min(1, Math.max(0.52, this._aspect / 1.42));
+      ? Math.max(0.2, Math.min(0.4, this._aspect / 2.12))
+      : Math.min(0.8, Math.max(0.5, this._aspect / 1.75));
     const fovScale = Math.max(0.92, Math.min(1.06, 70 / this._fov));
     this._responsiveScale = portraitScale * fovScale;
     this._portraitShiftX = this._aspect < 0.82 ? -this._aspect * 0.045 : 0;
+    this._responsiveShiftY = this._aspect < 0.82 ? -0.03 : -0.022;
+    this._adsScaleBoost = this._aspect < 0.82 ? 0.3 : 0.25;
   }
 
   /** Renders the overlay safely after the world/post stack. */

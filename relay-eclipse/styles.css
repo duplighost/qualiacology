@@ -45,7 +45,7 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 }
 #dmg-vignette {
   position: absolute; inset: 0; opacity: 0;
-  background: radial-gradient(ellipse at center, transparent 35%, rgba(240, 62, 210, 0.62) 100%);
+  background: radial-gradient(ellipse at center, transparent 52%, rgba(240, 62, 210, 0.4) 100%);
   transition: opacity 0.08s linear;
 }
 /* time-warp (kill slow-mo) cue: a cool blue vignette + faint scanlines */
@@ -83,11 +83,11 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 #crosshair .ch-dot {
   position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; border-radius: 50%;
   background: var(--cyan); transform: translate(-50%, -50%);
-  box-shadow: 0 0 6px var(--cyan);
+  box-shadow: 0 0 0 1px rgba(1, 3, 9, 0.96), 0 0 6px var(--cyan);
 }
 #crosshair .ch.line {
   position: absolute; left: 50%; top: 50%; background: #eaffff;
-  box-shadow: 0 0 5px rgba(125, 249, 255, 0.9); border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(1, 3, 9, 0.92), 0 0 5px rgba(125, 249, 255, 0.9); border-radius: 2px;
 }
 #crosshair .top, #crosshair .bottom { width: 2px; height: 8px; }
 #crosshair .left, #crosshair .right { width: 8px; height: 2px; }
@@ -115,7 +115,7 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 #hit-flash {
   position: absolute; inset: 0; opacity: 0; pointer-events: none;
   background:
-    radial-gradient(ellipse at center, rgba(255, 235, 255, 0.2) 0%, rgba(240, 48, 210, 0.55) 70%, rgba(78, 20, 124, 0.9) 100%);
+    radial-gradient(ellipse at center, rgba(255, 235, 255, 0.12) 0%, rgba(240, 48, 210, 0.32) 72%, rgba(78, 20, 124, 0.62) 100%);
 }
 
 /* ---------- directional damage indicators ---------- */
@@ -334,6 +334,7 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 /* ---------- overlay / menus ---------- */
 #overlay {
   position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  grid-template-columns: minmax(0, 1fr);
   background:
     linear-gradient(115deg, rgba(8, 18, 38, 0.58), rgba(24, 8, 48, 0.48)),
     radial-gradient(ellipse at center, rgba(5, 11, 26, 0.7), rgba(1, 2, 8, 0.94));
@@ -398,11 +399,15 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 
 #controls {
   margin-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 28px;
-  font-size: 13px; opacity: 0.7; text-align: left;
+  min-width: 0; font-size: 13px; opacity: 0.7; text-align: left;
 }
 #controls b { color: var(--cyan); font-family: var(--mono); }
 #controls .wide { grid-column: 1 / -1; margin-top: 4px; opacity: 0.85; }
 #controls .wide b { color: var(--amber); }
+#controls .controls-mode { display: contents; }
+#controls .controls-touch { display: none; }
+#hud.touch-mode #controls .controls-desktop { display: none; }
+#hud.touch-mode #controls .controls-touch { display: contents; }
 
 .result { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 40px; margin: 28px 0 8px; }
 .result > div { display: flex; flex-direction: column; }
@@ -421,10 +426,11 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 #move-hint {
   position: absolute; left: 18px; bottom: 40px; width: 76px; height: 76px;
   display: grid; place-items: center; border-radius: 50%; pointer-events: none;
-  border: 2px dashed rgba(125, 249, 255, 0.42);
-  background: radial-gradient(circle, rgba(125, 249, 255, 0.08), transparent 68%);
-  color: rgba(226, 252, 255, 0.82); font-family: var(--font); font-weight: 800;
-  font-size: 10px; letter-spacing: 1.5px; opacity: 0.34; transition: opacity 0.12s;
+  border: 2px dashed rgba(125, 249, 255, 0.68);
+  background: radial-gradient(circle, rgba(125, 249, 255, 0.14), transparent 70%);
+  color: rgba(240, 254, 255, 0.96); font-family: var(--font); font-weight: 800;
+  font-size: 10px; letter-spacing: 1.5px; opacity: 0.7; transition: opacity 0.12s;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 7px rgba(125, 249, 255, 0.45);
 }
 #move-stick {
   position: absolute; left: 0; top: 0; width: 130px; height: 130px; margin: -65px 0 0 -65px;
@@ -454,19 +460,28 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 #touch-swap.active { background: rgba(168, 121, 255, 0.34); }
 #touch-reload { right: 224px; bottom: 122px; width: 58px; height: 58px; font-size: 9px; border-color: rgba(255, 227, 110, 0.78); }
 #touch-reload.active { background: rgba(255, 227, 110, 0.32); }
+#touch-slide { left: 110px; bottom: 24px; width: 54px; height: 54px; font-size: 9px; border-color: rgba(125, 249, 255, 0.7); }
+#touch-time { left: 178px; bottom: 24px; width: 54px; height: 54px; font-size: 9px; border-color: rgba(105, 178, 255, 0.78); }
+#touch-time.active { background: rgba(105, 178, 255, 0.34); }
+#touch-orb { left: 246px; bottom: 24px; width: 54px; height: 54px; font-size: 9px; border-color: rgba(194, 134, 255, 0.82); }
+#touch-orb.active { background: rgba(194, 134, 255, 0.36); }
 #touch-pause { right: 18px; top: 16px; width: 48px; height: 48px; font-size: 14px; }
 
 /* keep the ammo readout clear of the fire/jump/reload buttons on mobile */
 #hud.touch-mode #hud-bottom-right { bottom: 224px; right: 22px; }
-#hud.touch-mode #ammo-mag { font-size: 40px; }
-#hud.touch-mode #ammo-sep, #hud.touch-mode #ammo-reserve { font-size: 22px; }
-#hud.touch-mode #hud-bottom-left { bottom: 20px; left: 20px; }
+#hud.touch-mode #weapon-name { font-size: 11px; letter-spacing: 2px; margin-bottom: 1px; }
+#hud.touch-mode #ammo-mag { font-size: 34px; }
+#hud.touch-mode #ammo-sep, #hud.touch-mode #ammo-reserve { font-size: 18px; }
+#hud.touch-mode #reload-bar { width: 118px; height: 4px; margin-top: 4px; }
+/* Landscape phones use the lower-left strip for SLIDE/TIME/ORB. Lift health
+   above that row; the portrait rule below moves it to the upper-left instead. */
+#hud.touch-mode #hud-bottom-left { bottom: 96px; left: 20px; }
 #hud.touch-mode #health-bar { width: 150px; }
 
 @media (max-width: 700px) and (orientation: portrait) {
-  #hud-top { top: 18px; gap: 25px; }
-  .stat-label { font-size: 9px; letter-spacing: 2px; }
-  .stat-val { font-size: 24px; }
+  #hud-top { top: 18px; gap: 22px; }
+  .stat-label { font-size: 10px; letter-spacing: 1.6px; }
+  .stat-val { font-size: 23px; }
   #banner { top: 28%; }
   #banner-main { font-size: clamp(23px, 7.1vw, 30px); letter-spacing: 1.5px; }
   #banner-sub { max-width: 86vw; margin: 5px auto 0; font-size: 12px; line-height: 1.35; letter-spacing: 2px; }
@@ -478,13 +493,33 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
   #hud.touch-mode #slowmo-meter { bottom: 278px; }
   #hud.touch-mode #dash-meter { bottom: 258px; }
 
-  #overlay { place-items: start center; overflow-y: auto; padding: 72px 12px 18px; }
-  #overlay-card { width: 100%; max-width: 420px; padding: 26px 18px; border-radius: 13px; }
-  #game-title { font-size: clamp(34px, 11vw, 46px); letter-spacing: 3px; }
+  /* Two compact, non-overlapping action rows remain usable down to 320px.
+     Every utility target stays at the 44px touch floor. */
+  #move-hint { left: 12px; bottom: 24px; width: 72px; height: 72px; }
+  #touch-swap { left: 92px; right: auto; bottom: 26px; width: 52px; height: 52px; }
+  #touch-jump { left: 150px; right: auto; bottom: 24px; width: 64px; height: 64px; }
+  #touch-fire { left: auto; right: 12px; bottom: 18px; width: 88px; height: 88px; }
+  #touch-slide, #touch-time, #touch-reload, #touch-aim, #touch-dash, #touch-orb {
+    right: auto; bottom: 118px; width: 44px; height: 44px; font-size: 8px; letter-spacing: 0.5px;
+  }
+  #touch-slide { left: calc(8.333% - 22px); }
+  #touch-time { left: calc(25% - 22px); }
+  #touch-reload { left: calc(41.667% - 22px); }
+  #touch-aim { left: calc(58.333% - 22px); }
+  #touch-dash { left: calc(75% - 22px); }
+  #touch-orb { left: calc(91.667% - 22px); }
+
+  #overlay { place-items: start center; overflow-x: hidden; overflow-y: auto; padding: 72px 12px 18px; }
+  #overlay-card { width: min(100%, 420px); max-width: 100%; min-width: 0; padding: 26px 18px; border-radius: 13px; }
+  #game-title { max-width: 100%; white-space: nowrap; font-size: clamp(28px, 9vw, 40px); letter-spacing: clamp(1px, 0.6vw, 2.6px); }
   #game-tag { font-size: 12px; letter-spacing: 2px; }
   #play-btn { margin-top: 18px; padding: 14px 30px; font-size: 17px; }
-  #controls { margin-top: 20px; grid-template-columns: 1fr; gap: 6px; font-size: 11px; line-height: 1.25; }
+  #controls { margin-top: 20px; grid-template-columns: minmax(0, 1fr); gap: 6px; font-size: 11px; line-height: 1.25; overflow-wrap: anywhere; }
   #controls .wide { grid-column: 1; margin-top: 2px; }
+
+  #crosshair .ch-dot { width: 4px; height: 4px; }
+  #crosshair .top, #crosshair .bottom { width: 2px; height: 9px; }
+  #crosshair .left, #crosshair .right { width: 9px; height: 2px; }
 
   #upgrade-overlay { place-items: start center; overflow-y: auto; padding: 24px 12px; }
   #upgrade-title { font-size: 26px; margin-bottom: 16px; }

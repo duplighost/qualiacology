@@ -91,6 +91,9 @@ export class HUD {
         <button id="touch-aim" class="tbtn small">AIM</button>
         <button id="touch-swap" class="tbtn small">SWAP</button>
         <button id="touch-reload" class="tbtn small">RELOAD</button>
+        <button id="touch-slide" class="tbtn utility">SLIDE</button>
+        <button id="touch-time" class="tbtn utility">TIME</button>
+        <button id="touch-orb" class="tbtn utility">ORB</button>
         <button id="touch-pause" class="tbtn pause">❚❚</button>
       </div>
 
@@ -102,15 +105,29 @@ export class HUD {
           <div id="overlay-body"></div>
           <button id="play-btn">CLICK TO PLAY</button>
           <div id="controls">
-            <div><b>WASD</b> move (always running)</div><div><b>SPACE</b> jump · ✕2 double</div>
-            <div><b>SHIFT / F</b> dash · strike</div><div><b>CTRL</b> crouch / slide</div>
-            <div><b>L-CLICK</b> fire</div><div><b>R-CLICK</b> aim (iron sights)</div>
-            <div><b>Q / MID-MOUSE</b> slow-mo</div><div><b>1–4 / WHEEL</b> weapons</div>
-            <div><b>R</b> reload</div><div><b>G</b> gravity orb</div>
-            <div class="wide"><b>between rounds</b> choose one upgrade</div>
-            <div class="wide"><b>fight upward</b> — the spiral ramp is continuous; every landing is live combat space</div>
-            <div class="wide"><b>watch the sky</b> — a bright ground ring marks planetary artillery before impact</div>
-            <div class="wide"><b>stay aggressive</b> — dash-strike weakened targets for health and ammunition</div>
+            <div class="controls-mode controls-desktop">
+              <div><b>WASD</b> move (always running)</div><div><b>SPACE</b> jump · ✕2 double</div>
+              <div><b>SHIFT / F</b> dash · strike</div><div><b>CTRL</b> crouch / slide</div>
+              <div><b>L-CLICK</b> fire</div><div><b>R-CLICK</b> aim (iron sights)</div>
+              <div><b>Q / MID-MOUSE</b> slow-mo</div><div><b>1–4 / WHEEL</b> weapons</div>
+              <div><b>R</b> reload</div><div><b>G</b> gravity orb</div>
+              <div class="wide"><b>between rounds</b> choose one upgrade</div>
+              <div class="wide"><b>fight upward</b> — the spiral ramp is continuous; every landing is live combat space</div>
+              <div class="wide"><b>watch the sky</b> — a bright ground ring marks planetary artillery before impact</div>
+              <div class="wide"><b>stay aggressive</b> — dash-strike weakened targets for health and ammunition</div>
+            </div>
+            <div class="controls-mode controls-touch">
+              <div><b>LEFT THUMB</b> move</div><div><b>DRAG RIGHT</b> look</div>
+              <div><b>FIRE</b> shoot</div><div><b>JUMP</b> tap twice for double</div>
+              <div><b>DASH</b> strike</div><div><b>AIM</b> iron sights</div>
+              <div><b>SWAP</b> weapons</div><div><b>RELOAD</b> magazine</div>
+              <div><b>SLIDE</b> hold while moving</div><div><b>TIME</b> hold for slow-mo</div>
+              <div><b>ORB</b> gravity blast</div>
+              <div class="wide"><b>between rounds</b> choose one upgrade</div>
+              <div class="wide"><b>fight upward</b> — the spiral ramp is continuous; every landing is live combat space</div>
+              <div class="wide"><b>watch the sky</b> — a bright ground ring marks planetary artillery before impact</div>
+              <div class="wide"><b>stay aggressive</b> — dash-strike weakened targets for health and ammunition</div>
+            </div>
           </div>
         </div>
       </div>
@@ -187,6 +204,9 @@ export class HUD {
       touchAim: q('#touch-aim'),
       touchSwap: q('#touch-swap'),
       touchReload: q('#touch-reload'),
+      touchSlide: q('#touch-slide'),
+      touchTime: q('#touch-time'),
+      touchOrb: q('#touch-orb'),
       touchPause: q('#touch-pause'),
     };
     this.dashLineT = 0;
@@ -195,7 +215,10 @@ export class HUD {
   }
 
   // Reveal the on-screen touch controls (mobile).
-  enableTouchUI() { this.root.classList.add('touch-mode'); }
+  enableTouchUI() {
+    this.root.classList.add('touch-mode');
+    if (this.el.playBtn.textContent === 'CLICK TO PLAY') this.el.playBtn.textContent = 'TAP TO PLAY';
+  }
 
   setBest(best) {
     if (best && best.score > 0) {
@@ -210,7 +233,7 @@ export class HUD {
   renderTouchStick(stick) {
     if (!stick.active) {
       this.el.moveStick.style.opacity = '0';
-      this.el.moveHint.style.opacity = '0.34';
+      this.el.moveHint.style.opacity = '';
       return;
     }
     this.el.moveHint.style.opacity = '0';
@@ -425,7 +448,7 @@ export class HUD {
     this.el.title.innerHTML = 'RELAY<span>//ECLIPSE</span>';
     this.el.tag.textContent = 'the relay is under siege';
     this.el.overlayBody.innerHTML = '';
-    this.el.playBtn.textContent = 'CLICK TO PLAY';
+    this.el.playBtn.textContent = this.root.classList.contains('touch-mode') ? 'TAP TO PLAY' : 'CLICK TO PLAY';
     this.el.controls.style.display = '';
     this.el.overlay.classList.add('show');
     this.el.overlayCard.classList.remove('dead');
