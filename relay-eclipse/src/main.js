@@ -120,6 +120,7 @@ class Game {
     this.controller.surfaceProbe = this.world.surfaceAt;
     this.controller.caveSDFFn = this.world.caveSDF;
     this.controller.inCraterFn = this.world.inCrater;
+    this.controller.railConstraintFn = this.world.relay?.resolveRampRail || null;
     this.pickups.groundAt = this.world.groundAt;
     this.projectiles.groundAt = this.world.groundAt;
     this._pondWasFrozen = false;
@@ -322,6 +323,53 @@ class Game {
         const point = game.world.relay?.spawnPoints?.find((p) => p.tier === tier);
         return teleport(point);
       },
+      probeRampRail(options = {}) {
+        const relay = game.world.relay;
+        if (!relay?.resolveRampRail) return null;
+        const t = clamp01(options.t ?? options.toT ?? 0.38);
+        const fromT = clamp01(options.fromT ?? t);
+        const toT = clamp01(options.toT ?? t);
+        const railRadius = relay.config.rampOuterRadius - 0.08;
+        const fromRadius = options.fromRadius ?? railRadius - 0.8;
+        const toRadius = options.toRadius ?? railRadius + 0.8;
+        const fromTheta = relay.config.rampStartAngle + relay.config.rampTurns * Math.PI * 2 * fromT;
+        const toTheta = relay.config.rampStartAngle + relay.config.rampTurns * Math.PI * 2 * toT;
+        const fromNx = Math.cos(fromTheta);
+        const fromNz = Math.sin(fromTheta);
+        const toNx = Math.cos(toTheta);
+        const toNz = Math.sin(toTheta);
+        const rampY = relay.center.y + THREE.MathUtils.lerp(
+          relay.config.lowerFloorY + 0.03,
+          relay.config.deckY + 0.035,
+          toT,
+        );
+        const footY = rampY + (options.footOffset ?? 0.03);
+        const position = new THREE.Vector3(
+          relay.center.x + toNx * toRadius,
+          footY,
+          relay.center.z + toNz * toRadius,
+        );
+        const previousX = relay.center.x + fromNx * fromRadius;
+        const previousZ = relay.center.z + fromNz * fromRadius;
+        const velocity = new THREE.Vector3(position.x - previousX, 0, position.z - previousZ);
+        const collided = relay.resolveRampRail(
+          previousX,
+          previousZ,
+          position,
+          velocity,
+          options.playerRadius ?? 0.4,
+          options.bodyHeight ?? 1.8,
+          footY,
+        );
+        return {
+          collided,
+          fromT,
+          toT,
+          radius: Math.hypot(position.x - relay.center.x, position.z - relay.center.z),
+          radialSpeed: velocity.x * toNx + velocity.z * toNz,
+          gaps: relay.railGaps,
+        };
+      },
       clearHostiles() {
         for (const enemy of [...game.enemies.enemies]) {
           if (enemy.alive) enemy.takeDamage(enemy.health + 10000, enemy.pos.clone(), new THREE.Vector3(0, 1, 0), false);
@@ -338,6 +386,15 @@ class Game {
           enemy.group.position.copy(enemy.pos);
         }
         return enemy ? { type: enemy.type, health: enemy.health, position: enemy.pos.toArray() } : null;
+      },
+      inspectEnemyVisuals() {
+        return game.enemies.enemies
+          .filter((enemy) => enemy.alive && enemy.astronautVisual)
+          .map((enemy) => ({
+            type: enemy.type,
+            speed: Math.hypot(enemy.vel.x, enemy.vel.z),
+            animation: enemy.astronautVisual.debugAnimationSnapshot(),
+          }));
       },
       startWave(number = 1) {
         game.enemies.active = true;
