@@ -79,7 +79,12 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 
 /* ---------- crosshair ---------- */
 #crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transition: opacity 0.1s linear; }
-#crosshair.ads { opacity: 0.12; }
+#crosshair.ads { opacity: 1; }
+#crosshair.ads .ch.line { opacity: 0; }
+#crosshair.ads .ch-dot {
+  width: 4px; height: 4px; opacity: 0.82; background: #eaffff;
+  box-shadow: 0 0 5px rgba(125, 249, 255, 0.95), 0 0 1px #061018;
+}
 #crosshair .ch-dot {
   position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; border-radius: 50%;
   background: var(--cyan); transform: translate(-50%, -50%);
@@ -173,7 +178,7 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 @keyframes hitshake { 0% { transform: translateX(-5px); } 25% { transform: translateX(5px); } 50% { transform: translateX(-3px); } 100% { transform: translateX(0); } }
 @keyframes hitbar { 0% { border-color: #fff; box-shadow: 0 0 22px rgba(240, 78, 220, 0.95); } 100% { border-color: rgba(125, 249, 255, 0.35); } }
 
-#hud-bottom-right { position: absolute; right: 32px; bottom: 28px; text-align: right; }
+#hud-bottom-right { position: absolute; right: 32px; top: 82px; text-align: right; }
 #weapon-name { font-size: 15px; letter-spacing: 3px; color: var(--cyan); opacity: 0.85; margin-bottom: 2px; }
 #ammo { font-family: var(--mono); font-weight: 800; line-height: 1; }
 #ammo.gain { animation: ammogain 0.5s ease-out; }
@@ -301,6 +306,17 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
   width: 100%; background: linear-gradient(90deg, var(--amber), var(--cyan));
   box-shadow: 0 0 12px rgba(255, 181, 69, 0.9);
 }
+
+/* Keep the centered axial receiver visually clean while sighted. The meters
+   remain readable beside health instead of masquerading as paint on the gun. */
+#hud.aiming #slowmo-meter {
+  left: 32px; bottom: 78px; transform: none;
+}
+#hud.aiming #slowmo-meter.active { transform: scaleY(1.5); }
+#hud.aiming #dash-meter {
+  left: 32px; bottom: 62px; transform: none;
+}
+#hud.aiming #dash-meter.active { transform: scale(1.12); transform-origin: left center; }
 
 /* ---------- boss health bar ---------- */
 #boss-bar {
@@ -468,7 +484,7 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 #touch-pause { right: 18px; top: 16px; width: 48px; height: 48px; font-size: 14px; }
 
 /* keep the ammo readout clear of the fire/jump/reload buttons on mobile */
-#hud.touch-mode #hud-bottom-right { bottom: 224px; right: 22px; }
+#hud.touch-mode #hud-bottom-right { top: 76px; bottom: auto; right: 22px; }
 #hud.touch-mode #weapon-name { font-size: 11px; letter-spacing: 2px; margin-bottom: 1px; }
 #hud.touch-mode #ammo-mag { font-size: 34px; }
 #hud.touch-mode #ammo-sep, #hud.touch-mode #ammo-reserve { font-size: 18px; }
@@ -489,9 +505,13 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
   #hud.touch-mode #hud-bottom-left {
     left: 10px; top: 104px; bottom: auto; transform: scale(0.72); transform-origin: left top;
   }
-  #hud.touch-mode #hud-bottom-right { right: 12px; bottom: 224px; }
+  #hud.touch-mode #hud-bottom-right { right: 12px; top: 76px; bottom: auto; }
   #hud.touch-mode #slowmo-meter { bottom: 278px; }
   #hud.touch-mode #dash-meter { bottom: 258px; }
+  #hud.touch-mode.aiming #slowmo-meter { left: 12px; top: 170px; bottom: auto; transform: none; }
+  #hud.touch-mode.aiming #slowmo-meter.active { transform: scaleY(1.5); transform-origin: left center; }
+  #hud.touch-mode.aiming #dash-meter { left: 12px; top: 186px; bottom: auto; transform: none; }
+  #hud.touch-mode.aiming #dash-meter.active { transform: scale(1.12); transform-origin: left center; }
 
   /* Two compact, non-overlapping action rows remain usable down to 320px.
      Every utility target stays at the 44px touch floor. */

@@ -903,7 +903,7 @@ class Game {
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
     if (this.performanceGovernor) this.performanceGovernor.resize(w, h, window.devicePixelRatio || 1);
     else { this.renderer.setSize(w, h); this.post.setSize(w, h); }
-    this.weapons.syncCamera(this.cam.fov, w / h);
+    this.weapons.syncCamera(this.cam.fov, w / h, w, h);
   }
 
   loop(now) {
@@ -1679,7 +1679,12 @@ class Game {
     this.renderer.info.reset();
     this.post.render();                       // world + bloom + tone-map to screen
     this.renderer.clearDepth();
-    this.weapons.syncCamera(this.cam.fov, this.camera.aspect);
+    this.weapons.syncCamera(
+      this.cam.fov,
+      this.camera.aspect,
+      window.innerWidth,
+      window.innerHeight,
+    );
     this.renderer.render(this.weapons.viewScene, this.weapons.viewCamera); // gun overlay
     this._renderStats = {
       calls: this.renderer.info.render.calls,
