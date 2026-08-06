@@ -446,7 +446,7 @@
       "alt": "A glowing ringed ball, four purple aliens, and a high cratered lunar cliff beneath violet and cyan planets",
       "summary": "The moon is a weapon. So is gravity. Charge one ball through aliens, curve it back home, and sling yourself up a sixty-metre lunar rim.",
       "metaDescription": "KICK BALL // LUNAR VELOCITY is a first-person 3D lunar combat-platformer built around one persistent boomerang ball.",
-      "controls": "WASD + mouse · LMB kick/charge · RMB orbit/call · Space double jump · two-thumb touch",
+      "controls": "WASD + mouse · LMB kick/charge · RMB energy line, reel, spin, call · Space double jump · two-thumb touch",
       "actionLabel": "Enter the Moon"
     },
     {

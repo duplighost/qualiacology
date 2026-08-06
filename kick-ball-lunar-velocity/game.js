@@ -29,7 +29,7 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '3.3.0-release-polish';
+  const GAME_VERSION = '3.4.0-guided-line';
   const QUALITY_STORAGE_KEY = 'kickball-lunar-quality-v2';
   const FIXED_DT = 1 / 120;
   const TAU = Math.PI * 2;
@@ -262,6 +262,8 @@
       this.actionTimer = 0;
       this.actionHold = false;
       this.actionReleased = false;
+      this.actionCancelled = false;
+      this.actionContext = null;
       this.tapPulse = false;
       this.totalMotion = 0;
       this.downTime = 0;
@@ -269,8 +271,8 @@
       element.addEventListener('pointerdown', event => this.down(event));
       element.addEventListener('pointermove', event => this.move(event));
       element.addEventListener('pointerup', event => this.up(event));
-      element.addEventListener('pointercancel', event => this.up(event));
-      element.addEventListener('lostpointercapture', event => this.up(event));
+      element.addEventListener('pointercancel', event => this.cancel(event));
+      element.addEventListener('lostpointercapture', event => this.cancel(event));
     }
     eventTime(event) {
       return Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now();
@@ -285,6 +287,8 @@
       this.totalMotion = 0;
       this.downTime = this.eventTime(event);
       this.actionReleased = false;
+      this.actionCancelled = false;
+      this.actionContext = this.isLook && game?.ball?.mode === 'ready' ? 'home' : this.isLook ? 'away' : null;
       this.gesturePoints = this.isLook ? [{ x: event.clientX, y: event.clientY, t: this.eventTime(event) }] : [];
       this.loopLatched = false;
       if (this.isLook) {
@@ -321,6 +325,12 @@
       event.preventDefault();
     }
     up(event) {
+      this.finish(event, false);
+    }
+    cancel(event) {
+      this.finish(event, true);
+    }
+    finish(event, cancelled = false) {
       if (event.pointerId !== this.pointerId) return;
       const releasedAt = this.eventTime(event);
       const wasLoop = this.loopLatched;
@@ -328,7 +338,8 @@
       if (this.actionTimer) clearTimeout(this.actionTimer);
       this.actionTimer = 0;
       if (this.isLook) {
-        if (wasHold) this.actionReleased = true;
+        if (cancelled) this.actionCancelled = true;
+        else if (wasHold) this.actionReleased = true;
         else if (!wasLoop && this.totalMotion < 16 && releasedAt - this.downTime <= 360) this.tapPulse = true;
         this.actionHold = false;
         this.element?.classList.remove('is-holding');
@@ -418,9 +429,19 @@
       return result;
     }
     consumeAction() {
-      const result = { tap: this.tapPulse, hold: this.actionHold, released: this.actionReleased };
+      const result = {
+        tap: this.tapPulse,
+        hold: this.actionHold,
+        released: this.actionReleased,
+        cancelled: this.actionCancelled,
+        context: this.actionContext,
+        active: this.pointerId !== null,
+        moved: this.totalMotion > 16,
+      };
       this.tapPulse = false;
       this.actionReleased = false;
+      this.actionCancelled = false;
+      if (this.pointerId === null) this.actionContext = null;
       return result;
     }
     reset() {
@@ -435,6 +456,8 @@
       this.tapPulse = false;
       this.actionHold = false;
       this.actionReleased = false;
+      this.actionCancelled = false;
+      this.actionContext = null;
       this.totalMotion = 0;
       this.downTime = 0;
       if (this.actionTimer) clearTimeout(this.actionTimer);
@@ -451,19 +474,28 @@
   class InputManager {
     constructor() {
       this.keys = new Set();
-      this.buttons = { kick: false, snap: false, jump: false, spin: false, sprint: false, pause: false };
-      this.edgePulses = { kick: false, snap: false, jump: false, spin: false, pause: false };
-      this.previous = { kick: false, snap: false, jump: false, spin: false, pause: false };
+      this.buttons = { kick: false, snap: false, line: false, jump: false, spin: false, sprint: false, pause: false };
+      this.edgePulses = { kick: false, snap: false, lineReleased: false, jump: false, spin: false, pause: false };
+      this.previous = { kick: false, snap: false, line: false, jump: false, spin: false, pause: false };
       this.frame = {
         moveX: 0, moveZ: 0, lookX: 0, lookY: 0,
-        kick: false, snap: false, jump: false, spin: false, sprint: false,
+        kick: false, snap: false, line: false, jump: false, spin: false, sprint: false,
         kickPressed: false, kickReleased: false, snapPressed: false,
+        linePressed: false, lineReleased: false,
+        actionCancelled: false,
         jumpPressed: false, spinPressed: false, spinDirection: 0, spinPower: 1, pausePressed: false,
       };
       this.mouseLook = new T.Vector2();
       this.lookScratch = new T.Vector2();
       this.pendingLook = new T.Vector2();
       this.gamepadLook = new T.Vector2();
+      this.mouseLineStartedAt = 0;
+      this.mouseLineMotion = 0;
+      this.mouseLineCursor = new T.Vector2();
+      this.mouseLinePoints = [];
+      this.mouseLoop = { active: false, direction: 0, power: 0 };
+      this.mouseLoopCooldownUntil = 0;
+      this.mouseLineSpun = false;
       this.moveStick = new TouchSurface(ui.movePad, 'move');
       this.lookStick = new TouchSurface(ui.lookPad, 'look');
       this.primaryTouch = matchMedia('(pointer: coarse)').matches;
@@ -481,7 +513,7 @@
       window.addEventListener('pointerdown', event => this.handleGlobalPointerDown(event), { capture: true, passive: false });
       window.addEventListener('pointermove', event => this.bridgeGlobalTouch('move', event), { capture: true, passive: false });
       window.addEventListener('pointerup', event => this.bridgeGlobalTouch('up', event), { capture: true, passive: false });
-      window.addEventListener('pointercancel', event => this.bridgeGlobalTouch('up', event), { capture: true, passive: false });
+      window.addEventListener('pointercancel', event => this.bridgeGlobalTouch('cancel', event), { capture: true, passive: false });
       window.addEventListener('keydown', event => {
         document.body.classList.remove('using-gamepad');
         const interactiveTarget = event.target instanceof Element && !!event.target.closest('button, a, input, select, textarea, [role="button"]');
@@ -514,16 +546,15 @@
         }
         if (event.button === 0) this.buttons.kick = true;
         if (event.button === 2) {
-          const home = game?.ball?.mode === 'ready';
-          this.buttons.spin = home;
-          this.buttons.snap = !home;
+          this.buttons.line = true;
+          this.beginMouseLine(event);
         }
         if (event.button === 1) this.buttons.spin = true;
         event.preventDefault();
       });
       window.addEventListener('mouseup', event => {
         if (event.button === 0) this.buttons.kick = false;
-        if (event.button === 2) { this.buttons.snap = false; this.buttons.spin = false; }
+        if (event.button === 2) this.endMouseLine(event);
         if (event.button === 1) this.buttons.spin = false;
       });
       window.addEventListener('mousemove', event => {
@@ -531,6 +562,7 @@
         if (document.pointerLockElement === canvas || (AUTO_START && !this.touchEnabled)) {
           this.mouseLook.x += event.movementX || 0;
           this.mouseLook.y += event.movementY || 0;
+          if (this.buttons.line) this.trackMouseLine(event);
         }
       }, { passive: true });
       canvas.addEventListener('contextmenu', event => event.preventDefault());
@@ -544,6 +576,45 @@
         }
       });
       this.setTouchMode(this.touchEnabled);
+    }
+    beginMouseLine(event) {
+      this.mouseLineStartedAt = Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now();
+      this.mouseLineMotion = 0;
+      this.mouseLineCursor.set(0, 0);
+      this.mouseLinePoints = [{ x: 0, y: 0, t: this.mouseLineStartedAt }];
+      this.mouseLineSpun = false;
+    }
+    trackMouseLine(event) {
+      const dx = finite(Number(event.movementX));
+      const dy = finite(Number(event.movementY));
+      if (!dx && !dy) return;
+      const now = Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now();
+      this.mouseLineMotion += Math.hypot(dx, dy);
+      this.mouseLineCursor.x += dx;
+      this.mouseLineCursor.y += dy;
+      const point = { x: this.mouseLineCursor.x, y: this.mouseLineCursor.y, t: now };
+      const previous = this.mouseLinePoints[this.mouseLinePoints.length - 1];
+      if (!previous || Math.hypot(point.x - previous.x, point.y - previous.y) >= 2.5) this.mouseLinePoints.push(point);
+      while (this.mouseLinePoints.length > 8 && now - this.mouseLinePoints[0].t > 1500) this.mouseLinePoints.shift();
+      if (this.mouseLinePoints.length > 96) this.mouseLinePoints.shift();
+      if (now < this.mouseLoopCooldownUntil) return;
+      const result = analyzeRecentLoopGesture(this.mouseLinePoints);
+      if (!result.matched) return;
+      this.mouseLoop = { active: true, direction: result.direction, power: result.power };
+      this.mouseLineSpun = true;
+      this.mouseLoopCooldownUntil = now + 260;
+      this.mouseLinePoints = [point];
+      document.body.dataset.mouseLoopDirection = String(result.direction);
+      document.body.dataset.mouseLoopCount = String((Number(document.body.dataset.mouseLoopCount) || 0) + 1);
+    }
+    endMouseLine(event) {
+      if (!this.buttons.line) return;
+      const endedAt = Number.isFinite(event.timeStamp) ? event.timeStamp : performance.now();
+      const elapsed = Math.max(0, endedAt - this.mouseLineStartedAt);
+      this.buttons.line = false;
+      this.edgePulses.lineReleased = true;
+      if (!this.mouseLineSpun && elapsed <= 260 && this.mouseLineMotion < 18) this.edgePulses.snap = true;
+      this.mouseLinePoints.length = 0;
     }
     handleGlobalPointerDown(event) {
       if (event.pointerType === 'mouse' && !FORCE_TOUCH) {
@@ -662,16 +733,22 @@
 
       const loop = this.lookStick.consumeLoop();
       const rightAction = this.lookStick.consumeAction();
-      const ballHome = !game || game.ball.mode === 'ready';
-      const touchTapKick = this.touchEnabled && rightAction.tap && ballHome;
-      const touchHoldKick = this.touchEnabled && rightAction.hold && ballHome;
-      const touchTapCall = this.touchEnabled && rightAction.tap && !ballHome;
-      const touchHoldCall = this.touchEnabled && rightAction.hold && !ballHome;
+      const mouseLoop = { ...this.mouseLoop };
+      this.mouseLoop.active = false;
+      const actionHome = rightAction.context === 'home';
+      const touchTapKick = this.touchEnabled && rightAction.tap && actionHome;
+      const touchHoldKick = this.touchEnabled && rightAction.hold && actionHome;
+      const touchTapCall = this.touchEnabled && rightAction.tap && !actionHome;
+      // Away gestures keep the intent they had on pointer-down. A held reel
+      // cannot silently become a HOME charge when the ball reaches the player.
+      const touchLine = this.touchEnabled && !actionHome
+        && (rightAction.hold || (rightAction.active && rightAction.moved));
 
       const kick = this.buttons.kick || gpKick || this.keys.has('KeyF') || touchHoldKick;
-      const snap = this.buttons.snap || gpSnap || this.keys.has('KeyE') || touchTapCall || touchHoldCall;
+      const snap = this.buttons.snap || this.keys.has('KeyE') || touchTapCall;
+      const line = this.buttons.line || gpSnap || touchLine;
       const jump = this.buttons.jump || gpJump || this.keys.has('Space');
-      const spin = loop.active || this.buttons.spin || gpSpin || this.keys.has('KeyQ');
+      const spin = loop.active || mouseLoop.active || this.buttons.spin || gpSpin || this.keys.has('KeyQ');
       // Full forward deflection is the touch sprint gesture. It preserves an
       // analog walk band while giving phones the same momentum route as Shift
       // and controller L3 without adding another thumb-blocking button.
@@ -679,14 +756,18 @@
       const sprint = touchSprint || gpSprint || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
       const pause = this.buttons.pause || this.keys.has('Escape') || this.keys.has('KeyP') || gpPause;
       Object.assign(this.frame, {
-        moveX, moveZ, lookX: this.gamepadLook.x, lookY: this.gamepadLook.y, kick, snap, jump, spin, sprint,
+        moveX, moveZ, lookX: this.gamepadLook.x, lookY: this.gamepadLook.y, kick, snap, line, jump, spin, sprint,
         kickPressed: touchTapKick || this.edgePulses.kick || (kick && !this.previous.kick),
-        kickReleased: touchTapKick || (!kick && this.previous.kick),
-        snapPressed: touchTapCall || this.edgePulses.snap || (snap && !this.previous.snap),
+        kickReleased: !rightAction.cancelled && (touchTapKick || (rightAction.released && actionHome) || (!kick && this.previous.kick)),
+        snapPressed: touchTapCall || this.edgePulses.snap || (snap && !this.previous.snap) || (gpSnap && !this.previous.line),
+        linePressed: line && !this.previous.line,
+        lineReleased: !rightAction.cancelled
+          && (this.edgePulses.lineReleased || (rightAction.released && !actionHome) || (!line && this.previous.line)),
+        actionCancelled: rightAction.cancelled,
         jumpPressed: this.edgePulses.jump || (jump && !this.previous.jump),
-        spinPressed: loop.active || this.edgePulses.spin || (spin && !this.previous.spin),
-        spinDirection: loop.active ? loop.direction : 0,
-        spinPower: loop.active ? loop.power : 1,
+        spinPressed: loop.active || mouseLoop.active || this.edgePulses.spin || (spin && !this.previous.spin),
+        spinDirection: loop.active ? loop.direction : mouseLoop.active ? mouseLoop.direction : 0,
+        spinPower: loop.active ? loop.power : mouseLoop.active ? mouseLoop.power : 1,
         pausePressed: this.edgePulses.pause || (pause && !this.previous.pause),
       });
       Object.keys(this.edgePulses).forEach(key => { this.edgePulses[key] = false; });
@@ -706,6 +787,12 @@
       this.mouseLook.set(0, 0);
       this.pendingLook.set(0, 0);
       this.lookScratch.set(0, 0);
+      this.mouseLineStartedAt = 0;
+      this.mouseLineMotion = 0;
+      this.mouseLineCursor.set(0, 0);
+      this.mouseLinePoints.length = 0;
+      this.mouseLineSpun = false;
+      this.mouseLoop = { active: false, direction: 0, power: 0 };
       this.consumeGamepadActivate = false;
       this.moveStick.reset();
       this.lookStick.reset();
@@ -714,6 +801,7 @@
     endFrame() {
       this.previous.kick = this.frame.kick;
       this.previous.snap = this.frame.snap;
+      this.previous.line = this.frame.line;
       this.previous.jump = this.frame.jump;
       this.previous.spin = this.frame.spin;
       this.previous.pause = this.buttons.pause || this.keys.has('Escape') || this.keys.has('KeyP') || this.lastGamepadPause;
@@ -1817,15 +1905,22 @@
       this.ballTrail.frustumCulled = false;
       this.scene.add(this.ballTrail);
       const tetherGeometry = new T.BufferGeometry();
-      this.tetherPositions = new Float32Array(6);
+      this.tetherPositions = new Float32Array(32 * 3);
       tetherGeometry.setAttribute('position', new T.BufferAttribute(this.tetherPositions, 3).setUsage(T.DynamicDrawUsage));
+      tetherGeometry.setDrawRange(0, 0);
       this.ballTether = new T.Line(
         tetherGeometry,
         new T.LineBasicMaterial({ color: 0x72efff, transparent: true, opacity: .9, depthWrite: false, blending: T.AdditiveBlending }),
       );
       this.ballTether.visible = false;
       this.ballTether.frustumCulled = false;
-      this.scene.add(this.ballTether);
+      this.ballTetherNodes = new T.Points(
+        tetherGeometry,
+        new T.PointsMaterial({ color: 0x9af5ff, size: .19, sizeAttenuation: true, transparent: true, opacity: .82, depthWrite: false, blending: T.AdditiveBlending }),
+      );
+      this.ballTetherNodes.visible = false;
+      this.ballTetherNodes.frustumCulled = false;
+      this.scene.add(this.ballTether, this.ballTetherNodes);
     }
     makeAlienMesh(type = 'scuttler') {
       const group = new T.Group();
@@ -2121,20 +2216,30 @@
         this.boot.position.z = -.35 - Math.sin(t * Math.PI) * 1.25;
         this.boot.rotation.x = -.2 - Math.sin(t * Math.PI) * .42;
       }
-      if (gameState.ball.mode === 'anchored' && gameState.ball.anchor) {
-        const hand = gameState.player.position.clone().addScaledVector(UP, gameState.player.eyeHeight - .24);
-        this.tetherPositions[0] = hand.x;
-        this.tetherPositions[1] = hand.y;
-        this.tetherPositions[2] = hand.z;
-        this.tetherPositions[3] = gameState.ball.position.x;
-        this.tetherPositions[4] = gameState.ball.position.y;
-        this.tetherPositions[5] = gameState.ball.position.z;
+      const tetherPath = gameState.ball.tetherPath || [];
+      if (gameState.lineActive && tetherPath.length >= 2) {
+        const count = Math.min(32, tetherPath.length);
+        for (let index = 0; index < count; index++) {
+          const point = tetherPath[index];
+          this.tetherPositions[index * 3] = point.x;
+          this.tetherPositions[index * 3 + 1] = point.y;
+          this.tetherPositions[index * 3 + 2] = point.z;
+        }
+        this.ballTether.geometry.setDrawRange(0, count);
         this.ballTether.geometry.attributes.position.needsUpdate = true;
-        this.ballTether.material.color.set(gameState.player.grappling ? 0xffd66b : 0x72efff);
-        this.ballTether.material.opacity = gameState.player.grappling ? .98 : .58 + Math.sin(this.elapsed * 9) * .16;
+        const caught = gameState.ball.mode === 'caught';
+        const taut = gameState.player.grappling || gameState.lineHeld;
+        const color = caught ? 0xc58aff : taut ? 0xffd66b : 0x72efff;
+        this.ballTether.material.color.set(color);
+        this.ballTetherNodes.material.color.set(caught ? 0xf0bdff : taut ? 0xffec9b : 0xa6f8ff);
+        this.ballTether.material.opacity = taut ? .98 : .58 + Math.sin(this.elapsed * 9) * .16;
+        this.ballTetherNodes.material.opacity = taut ? .92 : .58;
         this.ballTether.visible = true;
+        this.ballTetherNodes.visible = true;
       } else {
         this.ballTether.visible = false;
+        this.ballTetherNodes.visible = false;
+        this.ballTether.geometry.setDrawRange(0, 0);
       }
       this.particles.update(dt);
       const target = gameState.player.position;
@@ -2215,12 +2320,13 @@
 
   class BallState {
     constructor(player) {
-      this.position = player.position.clone().add(new T.Vector3(2.05, .76, -3.35));
+      this.position = player.position.clone().add(new T.Vector3(.05, .55, -3.1));
       this.velocity = new T.Vector3();
       this.radius = .72;
       this.mode = 'ready'; // ready | outbound | returning | anchored | caught
       this.spin = 0;
       this.flightTime = 0;
+      this.freeFlightTime = 0;
       this.returnTime = 0;
       this.outboundDuration = .72;
       this.maxRange = 45;
@@ -2240,6 +2346,14 @@
       this.curveBoost = 0;
       this.bounceCount = 0;
       this.returnReason = 'auto';
+      this.flightSpinTimer = 0;
+      this.flightSpinDirection = 1;
+      this.flightSpinPower = 1;
+      this.tetherPath = [];
+      this.tetherPathLength = 0;
+      this.tetherWrapId = null;
+      this.tetherWrapSide = 1;
+      this.lastTetherPathLength = Infinity;
     }
   }
 
@@ -2289,10 +2403,14 @@
       this.queuedSpin = null;
       this.snapHeld = false;
       this.snapBuffer = 0;
+      this.lineHeld = false;
+      this.lineActive = false;
+      this.lineHoldTime = 0;
       this.kickVisual = 0;
       this.shake = 0;
       this.cameraRoll = 0;
       this.cameraYawVelocity = 0;
+      this.cameraPitchVelocity = 0;
       this.lastYaw = 0;
       this.hitStop = 0;
       this.toastTimer = 0;
@@ -2315,6 +2433,16 @@
       // the camera position and fling the HOME ball hundreds of metres away.
       this.readyForwardScratch = new T.Vector3();
       this.readyRightScratch = new T.Vector3();
+      this.readyUpScratch = new T.Vector3();
+      this.chargeProjectionScratch = new T.Vector3();
+      this.lineOriginScratch = new T.Vector3();
+      this.lineEndScratch = new T.Vector3();
+      this.lineTravelScratch = new T.Vector3();
+      this.linePullScratch = new T.Vector3();
+      this.guidePointScratch = new T.Vector3();
+      this.guideDirectionScratch = new T.Vector3();
+      this.flightRadialScratch = new T.Vector3();
+      this.flightTangentScratch = new T.Vector3();
       this.orbitForwardScratch = new T.Vector3();
       this.orbitRightScratch = new T.Vector3();
       this.orbitUpScratch = new T.Vector3();
@@ -2388,7 +2516,7 @@
       canvas.focus({ preventScroll: true });
       audio.ensure();
       if (requestLock && !input.touchEnabled && !TEST_MODE) requestGamePointerLock();
-      this.announce(input.touchEnabled ? 'LEFT THUMB MOVES // RIGHT THUMB DOES THE BALL' : 'LMB KICKS // RMB ORBITS OR CALLS', '#83efff');
+      this.announce(input.touchEnabled ? 'LEFT THUMB MOVES // RIGHT THUMB GUIDES THE BALL' : 'LMB KICKS // RMB ENERGIZES THE LINE', '#83efff');
       this.updateObjective(true);
     }
     restart() {
@@ -2409,10 +2537,14 @@
       this.queuedSpin = null;
       this.snapHeld = false;
       this.snapBuffer = 0;
+      this.lineHeld = false;
+      this.lineActive = false;
+      this.lineHoldTime = 0;
       this.kickVisual = 0;
       this.shake = 0;
       this.cameraRoll = 0;
       this.cameraYawVelocity = 0;
+      this.cameraPitchVelocity = 0;
       this.lastYaw = 0;
       this.hitStop = 0;
       this.toastTimer = 0;
@@ -2457,6 +2589,12 @@
       }
       this.setGameplayInert(!wasStarted);
       this.updateObjective(true);
+      // A restart can follow a teleport or a full run. Realign the camera and
+      // HOME ball in the same frame so neither launch physics nor the circular
+      // meter inherit the previous location for one deceptive tick.
+      this.updateCamera(FIXED_DT);
+      this.ball.position.copy(this.readyBallTarget(new T.Vector3()));
+      this.ball.velocity.set(0, 0, 0);
       this.syncWorldVisuals();
       this.syncUI();
       if (wasStarted) canvas.focus({ preventScroll: true });
@@ -2464,7 +2602,12 @@
     togglePause() {
       if (!this.started || this.won) return;
       this.paused = !this.paused;
-      if (this.paused) this.cancelCharge();
+      if (this.paused) {
+        this.cancelCharge();
+        this.lineHeld = false;
+        this.lineActive = false;
+        this.ball.tetherPath.length = 0;
+      }
       this.setGameplayInert(this.paused);
       ui.pauseOverlay?.classList.toggle('hidden', !this.paused);
       ui.pauseOverlay?.setAttribute('aria-hidden', this.paused ? 'false' : 'true');
@@ -2482,6 +2625,7 @@
       this.charging = false;
       this.charge = 0;
       ui.chargeUI?.classList.remove('active');
+      ui.chargeUI?.setAttribute('aria-hidden', 'true');
     }
     setGameplayInert(inert) {
       canvas.inert = !!inert;
@@ -2519,14 +2663,19 @@
         return;
       }
       const yawBefore = this.player.yaw;
+      const pitchBefore = this.player.pitch;
       this.player.yaw += frame.lookX;
       this.player.pitch = clamp(this.player.pitch - frame.lookY, -1.42, 1.42);
       this.cameraYawVelocity = damp(this.cameraYawVelocity, angleDelta(yawBefore, this.player.yaw) / Math.max(dt, .0001), 13, dt);
+      this.cameraPitchVelocity = damp(this.cameraPitchVelocity, (this.player.pitch - pitchBefore) / Math.max(dt, .0001), 13, dt);
       this.lastYaw = this.player.yaw;
-      if (edgeFrame && frame.snapPressed) {
+      this.lineHeld = !!frame.line;
+      this.lineHoldTime = this.lineHeld ? this.lineHoldTime + dt : 0;
+      if (edgeFrame && frame.snapPressed && this.ball.mode !== 'ready') {
         this.stats.snaps++;
         this.snapBuffer = Math.max(this.snapBuffer, .12);
       }
+      if (edgeFrame && frame.actionCancelled) this.cancelCharge();
 
       if (edgeFrame && frame.kickPressed) {
         this.charging = true;
@@ -2534,7 +2683,8 @@
       }
       if (this.charging && frame.kick) this.charge = clamp(this.charge + dt / .68, 0, 1);
       if (edgeFrame && frame.kickReleased && this.charging) {
-        if (this.ball.mode === 'ready' && this.ball.position.distanceTo(this.player.position) < 4.5) this.launchBall(this.charge);
+        const homeNearCamera = this.ball.position.distanceTo(world.camera.position) < 5.25;
+        if (this.ball.mode === 'ready' && homeNearCamera) this.launchBall(this.charge);
         else this.queueKick(this.charge);
         this.charging = false;
         this.charge = 0;
@@ -2558,6 +2708,7 @@
       const actionFrame = bufferedSnap && !frame.snap ? { ...frame, snap: true } : frame;
       this.snapBuffer = Math.max(0, this.snapBuffer - dt);
       this.snapHeld = actionFrame.snap;
+      this.lineHeld = !!actionFrame.line;
 
       this.updatePlayer(dt, actionFrame, edgeFrame);
       this.updateBall(dt, actionFrame, edgeFrame);
@@ -2726,16 +2877,23 @@
       ball.velocity.copy(direction).multiplyScalar(power).addScaledVector(player.velocity, .22);
       ball.mode = 'outbound';
       ball.flightTime = 0;
+      ball.freeFlightTime = 0;
       ball.returnTime = 0;
       ball.launchCharge = charge;
-      ball.outboundDuration = .56 + charge * .5;
-      ball.maxRange = 35 + charge * 35;
+      ball.outboundDuration = 1.28 + charge * 1.22;
+      ball.maxRange = 46 + charge * 48;
       ball.launchOrigin.copy(player.position);
       ball.returnSide = this.stats.kicks % 2 === 0 ? 1 : -1;
       ball.anchor = null;
       ball.caughtBy = null;
       ball.bounceCount = 0;
       ball.curveBoost = 0;
+      ball.flightSpinTimer = 0;
+      ball.flightSpinDirection = ball.returnSide;
+      ball.flightSpinPower = 1;
+      ball.tetherPath.length = 0;
+      ball.tetherPathLength = 0;
+      ball.tetherWrapId = null;
       ball.spin = clamp(this.cameraYawVelocity * .65, -22, 22) + ball.returnSide * (5 + charge * 8);
       ball.collisionCooldown.clear();
       this.stats.kicks++;
@@ -2771,6 +2929,33 @@
       const player = this.player;
       const gesturePower = clamp(finite(Number(power)) || 1, .74, 1.25);
       const chosenDirection = Math.sign(finite(Number(direction))) || Math.sign(this.cameraYawVelocity) || (this.stats.spins % 2 === 0 ? 1 : -1);
+      if (this.ball.mode !== 'ready') {
+        const ball = this.ball;
+        this.stats.spins++;
+        audio.spin();
+        ball.returnSide = chosenDirection;
+        ball.spin += chosenDirection * (27 + gesturePower * 15);
+        ball.curveBoost = Math.max(ball.curveBoost, 1 + gesturePower * .38);
+        if (ball.mode === 'outbound') {
+          ball.flightSpinTimer = 1.05 + gesturePower * .42;
+          ball.flightSpinDirection = chosenDirection;
+          ball.flightSpinPower = gesturePower;
+          ball.freeFlightTime = 0;
+          this.addStyle(13, 560, chosenDirection > 0 ? 'CLOCKWISE AIRLINE' : 'COUNTER AIRLINE', '#bf83ff');
+          this.announce('AIRBORNE ORBIT // KEEP AIMING THE LINE', '#d5a8ff');
+        } else if (ball.mode === 'returning') {
+          this.addStyle(11, 440, chosenDirection > 0 ? 'RIGHT RETURN ARC' : 'LEFT RETURN ARC', '#bf83ff');
+          this.announce('RETURN CURVE FLIPPED // GUIDE IT HOME', '#d5a8ff');
+        } else if (ball.mode === 'caught') {
+          ball.snapTimer += .2 + gesturePower * .16;
+          this.addStyle(8, 260, 'LINE TORQUE', '#bf83ff');
+        } else {
+          this.addStyle(6, 180, 'TETHER TORQUE', '#bf83ff');
+        }
+        this.shake = Math.max(this.shake, .13);
+        world.particles.burst(ball.position, 0xbd83ff, 22, 8, .72, .14);
+        return true;
+      }
       if (player.spinCooldown > 0) {
         this.queuedSpin = {
           direction: chosenDirection,
@@ -2835,12 +3020,6 @@
           const point = player.position.clone().add(new T.Vector3(Math.cos(angle) * 4.8, 1.1, Math.sin(angle) * 4.8));
           world.particles.burst(point, index % 2 ? 0xbd83ff : 0x72efff, 2, 4.5, .55, .04);
         }
-      } else {
-        this.ball.curveBoost = .9 + gesturePower * .32;
-        this.ball.returnSide = chosenDirection;
-        this.ball.spin += chosenDirection * (26 + gesturePower * 12);
-        if (this.ball.mode === 'outbound') this.beginReturn('spin');
-        this.addStyle(11, 420, chosenDirection > 0 ? 'RIGHT SPIN SLING' : 'LEFT SPIN SLING', '#bf83ff');
       }
       this.shake = Math.max(this.shake, .17);
       world.particles.burst(player.position.clone().add(new T.Vector3(0, 1, 0)), 0xbd83ff, 24, 9, .78, .16);
@@ -2853,6 +3032,7 @@
       ball.returnReason = reason;
       ball.returnTime = 0;
       ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
+      ball.lastTetherPathLength = Infinity;
       ball.returnStuck = 0;
       if (reason === 'snap' || reason === 'queued' || reason === 'spin') {
         world.particles.burst(ball.position, reason === 'spin' ? 0xbd83ff : 0x75efff, 14, 7, .55, .1);
@@ -2866,11 +3046,16 @@
       ball.mode = 'ready';
       ball.position.copy(target);
       ball.velocity.copy(player.velocity).multiplyScalar(.18);
-      ball.flightTime = ball.returnTime = 0;
+      ball.flightTime = ball.freeFlightTime = ball.returnTime = 0;
       ball.anchor = null;
       ball.caughtBy = null;
       ball.bounceCount = 0;
       ball.curveBoost = 0;
+      ball.flightSpinTimer = 0;
+      ball.tetherPath.length = 0;
+      ball.tetherPathLength = 0;
+      ball.tetherWrapId = null;
+      ball.lastTetherPathLength = Infinity;
       ball.spin *= .58;
       world.particles.burst(ball.position, 0x7ff3ff, incoming > 35 ? 16 : 8, 5.5, .48, .12);
       if (incoming > 38) this.addStyle(6, 190, 'HOME AT MACH', '#83efff');
@@ -2883,12 +3068,168 @@
     readyBallTarget(target) {
       const forward = this.forwardFromView(this.readyForwardScratch);
       const right = this.horizontalRight(this.readyRightScratch);
+      const up = this.readyUpScratch.copy(right).cross(forward).normalize();
       return target.copy(world.camera.position)
-        // Telekinetically cradle the HOME ball low and right: always visible,
-        // never parked over the crosshair or the alien the player is reading.
-        .addScaledVector(forward, 3.35)
-        .addScaledVector(right, 2.05)
-        .addScaledVector(UP, -.96);
+        // Cradle HOME directly below the aim ray. The ball now reads as the
+        // thing being aimed rather than a floating right-side HUD ornament.
+        .addScaledVector(forward, 3.15)
+        .addScaledVector(up, -1)
+        .addScaledVector(right, .05);
+    }
+    tetherOrigin(target) {
+      const forward = this.forwardFromView(this.readyForwardScratch);
+      const right = this.horizontalRight(this.readyRightScratch);
+      const up = this.readyUpScratch.copy(right).cross(forward).normalize();
+      return target.copy(world.camera.position)
+        .addScaledVector(forward, .22)
+        .addScaledVector(right, .28)
+        .addScaledVector(up, -.34);
+    }
+    tetherEnd(target, origin) {
+      const ball = this.ball;
+      const travel = this.lineTravelScratch;
+      if (ball.velocity.lengthSq() > 4) travel.copy(ball.velocity).normalize();
+      else travel.copy(ball.position).sub(origin).normalize();
+      return target.copy(ball.position).addScaledVector(travel, -ball.radius * .82);
+    }
+    buildTetherPath(active = this.lineActive) {
+      const ball = this.ball;
+      if (!active) {
+        ball.tetherPath.length = 0;
+        ball.tetherPathLength = 0;
+        ball.tetherWrapId = null;
+        return ball.tetherPath;
+      }
+      const start = this.tetherOrigin(this.lineOriginScratch).clone();
+      const end = this.tetherEnd(this.lineEndScratch, start).clone();
+      const dx = end.x - start.x;
+      const dz = end.z - start.z;
+      const horizontalLengthSq = dx * dx + dz * dz;
+
+      // The two authored progression walls are finite-height physical slabs.
+      // When the line crosses one, carry the same authoritative path over its
+      // cap. Returning physics consumes this path too, so the boomerang cannot
+      // get trapped hammering the far face while its line lies about the route.
+      let blockedBarrier = null;
+      if (Math.abs(dz) > .001) {
+        const barriers = [
+          { id: 'gate', item: world.gate, halfDepth: 1.35 },
+          { id: 'fracture', item: world.fracture, halfDepth: 2.4 },
+        ];
+        for (const barrier of barriers) {
+          if (!barrier.item.active) continue;
+          const t = (barrier.item.position.z - start.z) / dz;
+          if (t <= .025 || t >= .975) continue;
+          const crossingX = start.x + dx * t;
+          const crossingY = start.y + (end.y - start.y) * t;
+          const halfWidth = barrier.item.width / 2 + ball.radius;
+          const halfHeight = barrier.item.height / 2 + ball.radius;
+          if (Math.abs(crossingX - barrier.item.position.x) >= halfWidth
+            || Math.abs(crossingY - barrier.item.position.y) >= halfHeight) continue;
+          if (!blockedBarrier || t < blockedBarrier.t) blockedBarrier = { ...barrier, t, crossingX };
+        }
+      }
+      if (blockedBarrier) {
+        const { id, item, halfDepth, crossingX } = blockedBarrier;
+        const side = Math.sign(start.z - item.position.z) || 1;
+        const capY = item.position.y + item.height / 2 + ball.radius + .24;
+        const clearZ = halfDepth + ball.radius + .24;
+        const path = [
+          start,
+          new T.Vector3(crossingX, capY, item.position.z + side * clearZ),
+          new T.Vector3(crossingX, capY, item.position.z - side * clearZ),
+          end,
+        ];
+        ball.tetherPath = path;
+        ball.tetherPathLength = 0;
+        for (let index = 1; index < path.length; index++) ball.tetherPathLength += path[index].distanceTo(path[index - 1]);
+        ball.tetherWrapId = id;
+        ball.tetherWrapSide = side;
+        return path;
+      }
+
+      let blocked = null;
+      if (horizontalLengthSq > .001) {
+        for (const platform of world.platforms) {
+          const radius = platform.radius * 1.22 + .12;
+          const t = clamp(((platform.x - start.x) * dx + (platform.z - start.z) * dz) / horizontalLengthSq, 0, 1);
+          if (t <= .025 || t >= .975) continue;
+          const closestX = start.x + dx * t;
+          const closestZ = start.z + dz * t;
+          const distance = Math.hypot(closestX - platform.x, closestZ - platform.z);
+          const crossingY = start.y + (end.y - start.y) * t;
+          if (distance >= radius || crossingY > platform.top + .28) continue;
+          const startDistance = Math.hypot(start.x - platform.x, start.z - platform.z);
+          const endDistance = Math.hypot(end.x - platform.x, end.z - platform.z);
+          if (startDistance <= radius + .02 || endDistance <= radius + .02) continue;
+          if (!blocked || t < blocked.t) blocked = { platform, radius, t, startDistance, endDistance };
+        }
+      }
+
+      let path = [start, end];
+      if (blocked) {
+        const { platform, radius, startDistance, endDistance } = blocked;
+        const makeRoute = side => {
+          const thetaStart = Math.atan2(start.z - platform.z, start.x - platform.x);
+          const thetaEnd = Math.atan2(end.z - platform.z, end.x - platform.x);
+          const alphaStart = Math.acos(clamp(radius / startDistance, -1, 1));
+          const alphaEnd = Math.acos(clamp(radius / endDistance, -1, 1));
+          const angleStart = thetaStart - side * alphaStart;
+          const angleEnd = thetaEnd + side * alphaEnd;
+          let delta = angleEnd - angleStart;
+          if (side > 0) {
+            while (delta > 0) delta -= TAU;
+            while (delta <= -TAU) delta += TAU;
+          } else {
+            while (delta < 0) delta += TAU;
+            while (delta >= TAU) delta -= TAU;
+          }
+          const steps = clamp(Math.ceil(Math.abs(delta) / (Math.PI / 10)), 2, 16);
+          const route = [start];
+          for (let index = 0; index <= steps; index++) {
+            const progress = index / steps;
+            const angle = angleStart + delta * progress;
+            route.push(new T.Vector3(
+              platform.x + Math.cos(angle) * (radius + .025),
+              start.y + (end.y - start.y) * progress,
+              platform.z + Math.sin(angle) * (radius + .025),
+            ));
+          }
+          route.push(end);
+          let length = 0;
+          for (let index = 1; index < route.length; index++) length += route[index].distanceTo(route[index - 1]);
+          return { route, length, side };
+        };
+        const positive = makeRoute(1);
+        const negative = makeRoute(-1);
+        let chosen;
+        if (ball.tetherWrapId === platform.id) chosen = ball.tetherWrapSide > 0 ? positive : negative;
+        else if (Math.abs(positive.length - negative.length) < .08) {
+          const velocityCross = dx * ball.velocity.z - dz * ball.velocity.x;
+          chosen = (Math.sign(velocityCross) || ball.returnSide || 1) > 0 ? positive : negative;
+        } else chosen = positive.length < negative.length ? positive : negative;
+        path = chosen.route;
+        ball.tetherWrapId = platform.id;
+        ball.tetherWrapSide = chosen.side;
+      } else {
+        ball.tetherWrapId = null;
+      }
+      ball.tetherPath = path;
+      ball.tetherPathLength = 0;
+      for (let index = 1; index < path.length; index++) ball.tetherPathLength += path[index].distanceTo(path[index - 1]);
+      return path;
+    }
+    refreshTetherEndpoints() {
+      const path = this.ball.tetherPath;
+      if (!this.lineActive || path.length < 2) return path;
+      const origin = this.tetherOrigin(this.lineOriginScratch);
+      path[0].copy(origin);
+      path[path.length - 1].copy(this.tetherEnd(this.lineEndScratch, origin));
+      this.ball.tetherPathLength = 0;
+      for (let index = 1; index < path.length; index++) {
+        this.ball.tetherPathLength += path[index].distanceTo(path[index - 1]);
+      }
+      return path;
     }
     orbitBallTarget(angle, power, target) {
       const forward = this.forwardFromView(this.orbitForwardScratch);
@@ -2904,13 +3245,18 @@
     updateBall(dt, frame) {
       const ball = this.ball;
       const player = this.player;
+      const modeAtStart = ball.mode;
       for (const [key, value] of ball.collisionCooldown) {
         const next = value - dt;
         if (next <= 0) ball.collisionCooldown.delete(key); else ball.collisionCooldown.set(key, next);
       }
       ball.curveBoost = Math.max(0, ball.curveBoost - dt * .62);
+      ball.flightSpinTimer = Math.max(0, ball.flightSpinTimer - dt);
       player.grappling = false;
       const previous = ball.position.clone();
+      this.lineActive = this.lineHeld || ball.mode === 'returning' || ball.mode === 'anchored'
+        || ball.mode === 'caught' || ball.flightSpinTimer > 0 || player.spinTimer > 0;
+      this.buildTetherPath(this.lineActive);
 
       if (ball.mode === 'ready') {
         if (player.spinTimer > 0) {
@@ -2930,11 +3276,34 @@
         ball.flightTime += dt;
         if (frame.snap) this.beginReturn('snap');
         if (ball.mode === 'outbound') {
-          const speed = ball.velocity.length();
+          ball.freeFlightTime = this.lineHeld || ball.flightSpinTimer > 0
+            ? Math.max(0, ball.freeFlightTime - dt * 2.4)
+            : ball.freeFlightTime + dt;
+          let speed = ball.velocity.length();
           if (speed > 5) {
             const currentDirection = ball.velocity.clone().normalize();
-            const desiredDirection = this.forwardFromView(this.tempA);
-            const steerStrength = 13 + Math.min(18, Math.abs(this.cameraYawVelocity) * .8) + ball.curveBoost * 22;
+            const viewForward = this.forwardFromView(this.tempA);
+            const cameraDistance = ball.position.distanceTo(world.camera.position);
+            const guideDistance = clamp(cameraDistance + 10, 18, 95);
+            const guidePoint = this.guidePointScratch.copy(world.camera.position).addScaledVector(viewForward, guideDistance);
+            const desiredDirection = this.guideDirectionScratch.copy(guidePoint).sub(ball.position).normalize();
+            if (ball.flightSpinTimer > 0) {
+              const spinRadial = this.flightRadialScratch.copy(ball.position).sub(world.camera.position);
+              spinRadial.addScaledVector(viewForward, -spinRadial.dot(viewForward));
+              if (spinRadial.lengthSq() < .36) spinRadial.copy(this.horizontalRight(this.tempB)).multiplyScalar(2.25);
+              const spinTangent = this.flightTangentScratch.copy(viewForward).cross(spinRadial).normalize()
+                .multiplyScalar(ball.flightSpinDirection);
+              // A loop changes the desired flight helix, not merely a force
+              // that the ordinary aim solver erases one tick later.
+              desiredDirection.addScaledVector(spinTangent, .28 + ball.flightSpinPower * .12).normalize();
+            }
+            // Direction-space steering must remain quick without erasing the
+            // ball's inertia. RMB roughly doubles authority; a fast view sweep
+            // adds a bounded impulse, while remote spin can still bend the path
+            // instead of being normalized out on the following tick.
+            const steerStrength = (this.lineHeld ? 6.8 : 3.8)
+              + Math.min(5.2, Math.abs(this.cameraYawVelocity) * .16 + Math.abs(this.cameraPitchVelocity) * .12)
+              + ball.curveBoost * 2.6;
             const steered = desiredDirection.sub(currentDirection);
             const maxSteer = steerStrength * dt;
             if (steered.length() > maxSteer) steered.setLength(maxSteer);
@@ -2942,21 +3311,54 @@
             ball.velocity.copy(currentDirection).multiplyScalar(speed);
             ball.spin = damp(ball.spin, clamp(this.cameraYawVelocity * 1.45, -38, 38), 5.5, dt);
           }
-          ball.velocity.y -= 5.25 * dt;
+          if (this.lineHeld && ball.tetherPath.length >= 2) {
+            const pullTarget = ball.tetherPath[Math.max(0, ball.tetherPath.length - 2)];
+            const pull = this.linePullScratch.copy(pullTarget).sub(ball.position);
+            const pullDistance = pull.length();
+            if (pullDistance > .001) {
+              pull.multiplyScalar(1 / pullDistance);
+              ball.velocity.addScaledVector(pull, (10 + Math.min(24, ball.tetherPathLength * .24)) * dt);
+            }
+          }
+          if (ball.flightSpinTimer > 0) {
+            const axis = this.forwardFromView(this.tempA);
+            const cameraToBall = this.flightRadialScratch.copy(ball.position).sub(world.camera.position);
+            const along = clamp(cameraToBall.dot(axis), 5, 100);
+            const orbitCenter = this.guidePointScratch.copy(world.camera.position).addScaledVector(axis, along);
+            const radial = this.flightRadialScratch.copy(ball.position).sub(orbitCenter);
+            radial.addScaledVector(axis, -radial.dot(axis));
+            if (radial.lengthSq() < .36) radial.copy(this.horizontalRight(this.tempB)).multiplyScalar(2.25);
+            const radius = Math.max(.6, radial.length());
+            const tangent = this.flightTangentScratch.copy(axis).cross(radial).normalize().multiplyScalar(ball.flightSpinDirection);
+            const orbitForce = (38 + ball.flightSpinPower * 30) * smoothstep(0, .18, ball.flightSpinTimer);
+            ball.velocity.addScaledVector(tangent, orbitForce * dt);
+            ball.velocity.addScaledVector(radial, -(9 + ball.flightSpinPower * 5) / radius * dt);
+            ball.spin += ball.flightSpinDirection * dt * (34 + ball.flightSpinPower * 22);
+          }
+          if (ball.velocity.length() > 72) ball.velocity.setLength(72);
+          ball.velocity.y -= (this.lineHeld ? 3.2 : 5.25) * dt;
           ball.position.addScaledVector(ball.velocity, dt);
           const separation = ball.position.distanceTo(player.position);
-          if (ball.flightTime >= ball.outboundDuration || separation >= ball.maxRange || (ball.bounceCount > 0 && ball.flightTime > .52) || speed < 4.5) this.beginReturn('auto');
+          speed = ball.velocity.length();
+          if (this.lineHeld && separation < 1.8 && ball.tetherWrapId === null) this.completeReturn();
+          else if ((ball.freeFlightTime >= ball.outboundDuration && !this.lineHeld && ball.flightSpinTimer <= 0)
+            || separation >= ball.maxRange * (this.lineHeld ? 1.24 : 1)
+            || (ball.bounceCount > 0 && ball.freeFlightTime > .78 && !this.lineHeld)
+            || (speed < 4.5 && !this.lineHeld)) this.beginReturn('auto');
         }
       }
 
       if (ball.mode === 'returning') {
         ball.returnTime += dt;
-        const target = world.camera.position.clone().addScaledVector(this.forwardFromView(this.tempA), 1.05).addScaledVector(UP, -.25);
+        const wrapped = ball.tetherWrapId !== null && ball.tetherPath.length > 2;
+        const target = wrapped
+          ? ball.tetherPath[Math.max(1, ball.tetherPath.length - 2)].clone()
+          : this.readyBallTarget(new T.Vector3());
         const toTarget = target.sub(ball.position);
         const distance = toTarget.length();
         const direction = distance > .001 ? toTarget.multiplyScalar(1 / distance) : new T.Vector3(0, 0, -1);
         const right = this.horizontalRight(this.tempB);
-        const snap = frame.snap ? 1 : 0;
+        const snap = frame.snap || frame.line ? 1 : 0;
         const arcEnvelope = smoothstep(2.5, 12, distance) * (1 - smoothstep(38, 65, distance));
         const arc = ball.returnSide * arcEnvelope * (7.5 + Math.min(9, distance * .16)) * (1 - snap * .76);
         const desiredSpeed = 29 + Math.min(28, distance * .7) + snap * 17 + ball.curveBoost * 12;
@@ -2969,11 +3371,15 @@
         ball.position.addScaledVector(ball.velocity, dt);
         ball.spin = damp(ball.spin, ball.returnSide * (19 + arc * .55), 8, dt);
         const nowDistance = ball.position.distanceTo(player.position);
-        if (nowDistance >= ball.lastReturnDistance - .025) ball.returnStuck += dt;
+        const returnProgressDistance = wrapped ? ball.tetherPathLength : nowDistance;
+        const previousProgressDistance = wrapped ? ball.lastTetherPathLength : ball.lastReturnDistance;
+        if (returnProgressDistance >= previousProgressDistance - .025) ball.returnStuck += dt;
         else ball.returnStuck = Math.max(0, ball.returnStuck - dt * 1.7);
         ball.lastReturnDistance = nowDistance;
+        ball.lastTetherPathLength = returnProgressDistance;
         audio.recall(true, clamp(nowDistance / 42, 0, 1));
-        if (nowDistance < 1.75 || ball.returnTime > 2.65 || ball.returnStuck > .72) this.completeReturn();
+        if ((!wrapped && (distance < .72 || nowDistance < 1.45))
+          || ball.returnTime > 3.4 || ball.returnStuck > 1.05) this.completeReturn();
       } else if (ball.mode === 'anchored') {
         this.updateAnchoredBall(dt, frame);
       } else if (ball.mode === 'caught') {
@@ -2986,6 +3392,14 @@
         this.resolveBallWorld(previous);
         this.resolveBallEnemies();
       }
+      const nextLineActive = this.lineHeld || ball.mode === 'returning' || ball.mode === 'anchored'
+        || ball.mode === 'caught' || ball.flightSpinTimer > 0 || player.spinTimer > 0;
+      // The path solved at tick entry is the authoritative physics/render path.
+      // Re-solve only when the tick changed state or line visibility; ordinary
+      // flight must not allocate and scan the same colliders two or three times.
+      const lineStateChanged = nextLineActive !== this.lineActive;
+      this.lineActive = nextLineActive;
+      if (ball.mode !== modeAtStart || lineStateChanged) this.buildTetherPath(this.lineActive);
       this.updateBallTrail(dt);
     }
     updateAnchoredBall(dt, frame) {
@@ -2996,15 +3410,16 @@
         ball.mode = 'returning';
         return;
       }
-      ball.anchorTimer += dt;
       ball.position.copy(anchor.position);
       ball.position.y += Math.sin(this.time * 8) * .13;
       ball.velocity.set(0, 0, 0);
-      if (frame.snap) {
-        const toAnchor = anchor.position.clone().sub(this.player.position);
-        const distance = toAnchor.length();
-        const direction = distance > .001 ? toAnchor.multiplyScalar(1 / distance) : UP.clone();
-        const desiredSpeed = Math.min(34, (17 + distance * .42) * (.9 + ball.anchorCharge * .24));
+      if (frame.line || frame.snap) {
+        const nextTarget = ball.tetherPath[1] || anchor.position;
+        const toAnchor = nextTarget.clone().sub(this.player.position);
+        const distance = this.player.position.distanceTo(anchor.position);
+        const pathDistance = Math.max(distance, ball.tetherPathLength);
+        const direction = toAnchor.lengthSq() > .001 ? toAnchor.normalize() : UP.clone();
+        const desiredSpeed = Math.min(34, (17 + pathDistance * .42) * (.9 + ball.anchorCharge * .24));
         const desiredVelocity = direction.multiplyScalar(desiredSpeed);
         this.player.velocity.lerp(desiredVelocity, 1 - Math.exp(-dt * 9.2));
         this.player.grappling = true;
@@ -3012,8 +3427,11 @@
         this.player.jumpsUsed = Math.min(this.player.jumpsUsed, 1);
         this.shake = Math.max(this.shake, .055 + clamp(distance / 80, 0, .08));
         audio.recall(true, clamp(distance / 45, 0, 1));
+        if (pathDistance < ball.lastTetherPathLength - .025) ball.anchorTimer = Math.max(0, ball.anchorTimer - dt * .55);
+        else ball.anchorTimer += dt * .18;
+        ball.lastTetherPathLength = pathDistance;
         if (cosmeticRandom() < dt * 42) world.particles.burst(this.player.position.clone().add(new T.Vector3(0, 1, 0)), 0x7befff, 1, 2.5, .35, 0);
-        if (distance < 3.35) {
+        if (distance < 3.35 && ball.tetherWrapId === null) {
           anchor.used = true;
           this.stats.anchorLinks++;
           this.player.grappling = false;
@@ -3035,6 +3453,8 @@
       } else {
         this.player.grappling = false;
         audio.recall(false, 0);
+        ball.anchorTimer += dt;
+        ball.lastTetherPathLength = ball.tetherPathLength;
         if (ball.anchorTimer > 4.8) {
           ball.anchor = null;
           ball.mode = 'returning';
@@ -3053,7 +3473,7 @@
         return;
       }
       ball.catchTimer += dt;
-      if (frame.snap) ball.snapTimer += dt;
+      if (frame.line || frame.snap) ball.snapTimer += dt;
       else ball.snapTimer = Math.max(0, ball.snapTimer - dt * 1.2);
       const front = this.enemyFront(enemy, this.tempA);
       ball.position.copy(enemy.position).addScaledVector(UP, enemy.type === 'warden' ? 2.8 : 1.8).addScaledVector(front, enemy.radius + .72);
@@ -3232,8 +3652,14 @@
           ball.anchor = anchor;
           ball.anchorCharge = ball.launchCharge;
           ball.anchorTimer = 0;
+          ball.lastTetherPathLength = Infinity;
           ball.velocity.set(0, 0, 0);
           ball.position.copy(anchor.position);
+          // The socket collision happens after the normal ball update. Build
+          // the newly physical line immediately so the very first anchored
+          // frame cannot flash without its connection.
+          this.lineActive = true;
+          this.buildTetherPath(true);
           const firstTug = anchor.position.clone().sub(this.player.position).normalize();
           this.player.velocity.addScaledVector(firstTug, 6.5 + ball.launchCharge * 4.5);
           this.player.velocity.y = Math.max(this.player.velocity.y, 3.8 + ball.launchCharge * 2.4);
@@ -3503,7 +3929,11 @@
       this.queuedSpin = null;
       this.charging = false;
       this.charge = 0;
+      this.lineHeld = false;
+      this.lineActive = false;
+      this.lineHoldTime = 0;
       this.cameraRoll = 0;
+      this.cameraPitchVelocity = 0;
       world.ballGroup.position.copy(this.ball.position);
       world.particles.burst(player.position.clone().addScaledVector(UP, 1), 0x83efff, 34, 10, .9, .35);
       this.announce('SUIT RECONSTITUTED // BALL LINK RESTORED', '#83efff');
@@ -3561,14 +3991,14 @@
         key = `basin-${basinAlive}-${teachOrbit ? 'orbit' : 'kick'}-${inputKind}`; stage = 1;
         label = 'LANDING CRATER // CONTACT';
         text = teachOrbit
-          ? (input.touchEnabled ? 'DRAW A RIGHT-THUMB LOOP // ORBIT-SMASH THE CROWD' : 'BALL HOME // RMB ORBIT-SMASHES EVERYTHING CLOSE')
+          ? (input.touchEnabled ? 'DRAW A RIGHT-THUMB LOOP // ORBIT-SMASH THE CROWD' : 'HOLD RMB + DRAW A MOUSE LOOP // ORBIT-SMASH THE CROWD')
           : (input.touchEnabled
             ? `${basinAlive} SKITTER${basinAlive === 1 ? '' : 'S'} // RIGHT TAP KICKS // NEXT TAP CALLS`
-            : `${basinAlive} SKITTER${basinAlive === 1 ? '' : 'S'} // LMB KICKS // RMB CALLS`);
+            : `${basinAlive} SKITTER${basinAlive === 1 ? '' : 'S'} // LMB KICKS // RMB GUIDES / CALLS`);
       } else if (this.shieldEnemy.alive) {
         key = `shield-${this.shieldEnemy.hp}`; stage = 2;
         label = 'ORPHEUS GATE // CARAPACE SENTINEL';
-        text = `Frontal kicks are armor food. Throw wide, turn, and call the return through its gold back. HP ${this.shieldEnemy.hp}/${this.shieldEnemy.maxHp}.`;
+        text = `Frontal kicks are armor food. Throw wide, guide with your aim, then tug the line through its gold back. HP ${this.shieldEnemy.hp}/${this.shieldEnemy.maxHp}.`;
       } else if (anchorsUsed < world.anchors.length) {
         key = `climb-${anchorsUsed}-${inputKind}`; stage = 3;
         label = 'ORPHEUS RIM // SIXTY-METRE ASCENT';
@@ -3679,6 +4109,10 @@
     }
     syncWorldVisuals() {
       const ball = this.ball;
+      // Physics solves obstruction topology once per tick. Refresh the cheap
+      // attachment endpoints after camera/player/ball integration so the line
+      // still meets the emitter and rear socket exactly at render time.
+      this.refreshTetherEndpoints();
       world.ballGroup.position.copy(ball.position);
       const speed = ball.velocity.length();
       const stretch = 1 + smoothstep(18, 65, speed) * .38;
@@ -3693,7 +4127,9 @@
       if (ui.bestValue) ui.bestValue.textContent = `BEST ${this.bestTime ? formatTime(this.bestTime) : '--:--.--'}`;
       if (ui.ballState) {
         const labels = { ready: 'HOME', outbound: 'OUTBOUND', returning: 'RETURNING', anchored: 'ANCHORED', caught: 'STOLEN' };
-        ui.ballState.textContent = labels[this.ball.mode] || this.ball.mode.toUpperCase();
+        ui.ballState.textContent = this.lineHeld && this.ball.mode === 'outbound' ? 'GUIDED'
+          : this.lineHeld && this.ball.mode === 'returning' ? 'REELING'
+            : labels[this.ball.mode] || this.ball.mode.toUpperCase();
       }
       if (ui.altitudeValue) {
         const localGround = groundHeightAt(this.player.position.x, this.player.position.z);
@@ -3710,21 +4146,41 @@
         pips.forEach((pip, index) => pip.classList.toggle('spent', index < this.player.jumpsUsed));
         ui.jumpPips.setAttribute('aria-label', `${Math.max(0, 2 - this.player.jumpsUsed)} jumps available`);
       }
-      if (ui.chargeUI) ui.chargeUI.classList.toggle('active', this.charging);
-      if (ui.chargeFill) ui.chargeFill.style.width = `${this.charge * 100}%`;
-      if (ui.chargeText) ui.chargeText.textContent = this.charge > .96 ? 'MAXIMUM KICK' : this.ball.mode === 'ready' ? 'KICK CHARGE' : 'QUEUE VOLLEY';
+      if (ui.chargeUI) {
+        ui.chargeUI.classList.toggle('active', this.charging);
+        ui.chargeUI.setAttribute('aria-hidden', this.charging ? 'false' : 'true');
+        ui.chargeUI.dataset.max = this.charge > .96 ? 'true' : 'false';
+        ui.chargeUI.setAttribute('aria-valuenow', String(Math.round(this.charge * 100)));
+        let anchor = 'aim';
+        let x = 50;
+        let y = 50;
+        if (this.ball.mode === 'ready') {
+          const projected = this.chargeProjectionScratch.copy(this.ball.position).project(world.camera);
+          if (Number.isFinite(projected.x) && Number.isFinite(projected.y) && projected.z > -1 && projected.z < 1) {
+            x = clamp((projected.x * .5 + .5) * 100, 7, 93);
+            y = clamp((-projected.y * .5 + .5) * 100, 9, 91);
+            anchor = 'ball';
+          }
+        }
+        ui.chargeUI.dataset.anchor = anchor;
+        ui.chargeUI.style.left = `${x}%`;
+        ui.chargeUI.style.top = `${y}%`;
+      }
+      if (ui.chargeFill) ui.chargeFill.style.strokeDashoffset = String(100 - this.charge * 100);
+      if (ui.chargeText) ui.chargeText.textContent = this.charge > .96 ? 'MAXIMUM' : this.ball.mode === 'ready' ? 'CHARGE' : 'VOLLEY';
       if (ui.rightActionLabel) {
         const labels = {
-          ready: this.charging ? 'HOLD CHARGE // SWIPE AIM' : 'TAP KICK // HOLD CHARGE // LOOP ORBIT',
-          outbound: 'TAP CALL // SWIPE STEER',
-          returning: 'TAP REEL // SWIPE LOOK',
-          anchored: 'HOLD PULL // SWIPE LOOK',
-          caught: 'HOLD RIP FREE // SWIPE LOOK',
+          ready: this.charging ? 'HOLD CHARGE // DRAG AIM' : 'TAP KICK // HOLD CHARGE // LOOP SPIN',
+          outbound: 'DRAG GUIDE // TAP CALL // HOLD LINE',
+          returning: 'DRAG GUIDE // HOLD REEL',
+          anchored: 'HOLD LINE // PULL',
+          caught: 'HOLD LINE // RIP FREE',
         };
         ui.rightActionLabel.textContent = labels[this.ball.mode] || 'RIGHT THUMB // BALL';
       }
       if (ui.crosshair) {
         ui.crosshair.dataset.ball = this.ball.mode;
+        ui.crosshair.dataset.line = this.lineActive ? 'true' : 'false';
         const nextAnchor = world.anchors.find(anchor => !anchor.used);
         let anchorAim = false;
         if (nextAnchor && this.ball.mode === 'ready') {
@@ -3734,7 +4190,7 @@
         }
         ui.crosshair.dataset.target = anchorAim ? 'anchor' : 'world';
         if (anchorAim && ui.rightActionLabel) ui.rightActionLabel.textContent = 'SOCKET IN SIGHT // TAP OR HOLD KICK';
-        ui.crosshair.style.transform = `translate(-50%, -50%) scale(${1 + this.charge * .22})`;
+        ui.crosshair.style.transform = `translate(-50%, -50%) scale(${1 + this.charge * .08})`;
         ui.crosshair.style.opacity = this.paused || !this.started ? '.3' : '.9';
       }
     }
@@ -3776,7 +4232,11 @@
       this.player.spinPower = 1;
       this.charging = false;
       this.charge = 0;
+      this.lineHeld = false;
+      this.lineActive = false;
+      this.lineHoldTime = 0;
       this.cameraRoll = 0;
+      this.cameraPitchVelocity = 0;
       this.updateCamera(FIXED_DT);
       this.syncWorldVisuals();
     }
@@ -3791,12 +4251,16 @@
           lookY: first ? finite(Number(controls.lookY || 0)) : 0,
           kick: !!controls.kick,
           snap: !!controls.snap,
+          line: !!controls.line,
           jump: !!controls.jump,
           spin: !!controls.spin,
           sprint: !!controls.sprint,
           kickPressed: first && !!controls.kickPressed,
           kickReleased: first && !!controls.kickReleased,
           snapPressed: first && !!controls.snapPressed,
+          linePressed: first && !!controls.linePressed,
+          lineReleased: first && !!controls.lineReleased,
+          actionCancelled: first && !!controls.actionCancelled,
           jumpPressed: first && !!controls.jumpPressed,
           spinPressed: first && !!controls.spinPressed,
           spinDirection: first ? finite(Number(controls.spinDirection || 0)) : 0,
@@ -3821,9 +4285,12 @@
         ball: {
           x: this.ball.position.x, y: this.ball.position.y, z: this.ball.position.z,
           vx: this.ball.velocity.x, vy: this.ball.velocity.y, vz: this.ball.velocity.z,
-          mode: this.ball.mode, spin: this.ball.spin, flightTime: this.ball.flightTime,
+          mode: this.ball.mode, spin: this.ball.spin, flightTime: this.ball.flightTime, freeFlightTime: this.ball.freeFlightTime,
           returnTime: this.ball.returnTime, launchCharge: this.ball.launchCharge,
           anchored: !!this.ball.anchor, caught: !!this.ball.caughtBy,
+          flightSpinTimer: this.ball.flightSpinTimer, flightSpinDirection: this.ball.flightSpinDirection,
+          tetherPoints: this.ball.tetherPath.length, tetherPathLength: this.ball.tetherPathLength,
+          tetherWrapId: this.ball.tetherWrapId,
         },
         stage: this.stage,
         objective: this.objectiveKey,
@@ -3835,6 +4302,8 @@
         paused: this.paused,
         won: this.won,
         queuedKick: !!this.queuedKick,
+        lineHeld: this.lineHeld,
+        lineActive: this.lineActive,
         gateActive: world.gate.active,
         fractureActive: world.fracture.active,
         goalOpen: world.goal.open,
@@ -3874,8 +4343,10 @@
   function neutralFrame() {
     return {
       moveX: 0, moveZ: 0, lookX: 0, lookY: 0,
-      kick: false, snap: false, jump: false, spin: false, sprint: false,
+      kick: false, snap: false, line: false, jump: false, spin: false, sprint: false,
       kickPressed: false, kickReleased: false, snapPressed: false,
+      linePressed: false, lineReleased: false,
+      actionCancelled: false,
       jumpPressed: false, spinPressed: false, spinDirection: 0, spinPower: 1, pausePressed: false,
     };
   }
@@ -4010,27 +4481,31 @@
       const pointerOrbitObjective = ui.objectiveText?.textContent || '';
       check('objectives-teach-device-controls-and-orbit-purpose', touchKickObjective.includes('RIGHT TAP KICKS')
         && touchOrbitObjective.includes('RIGHT-THUMB LOOP') && touchOrbitObjective.includes('ORBIT-SMASH')
-        && pointerOrbitObjective.includes('RMB ORBIT-SMASHES'), {
+        && pointerOrbitObjective.includes('HOLD RMB + DRAW A MOUSE LOOP') && pointerOrbitObjective.includes('ORBIT-SMASH'), {
         touchKickObjective, touchOrbitObjective, pointerOrbitObjective,
       });
       game.restart();
       input.setTouchMode(true);
 
       game.ball.mode = 'ready';
+      input.lookStick.actionContext = 'home';
       input.lookStick.tapPulse = true;
       const touchHomeTap = { ...input.poll() };
       input.endFrame();
       game.ball.mode = 'outbound';
+      input.lookStick.actionContext = 'away';
       input.lookStick.tapPulse = true;
       const touchAwayTap = { ...input.poll() };
       input.endFrame();
       game.ball.mode = 'ready';
+      input.lookStick.actionContext = 'home';
       input.lookStick.actionHold = true;
       const touchHomeHold = { ...input.poll() };
       input.endFrame();
       input.lookStick.actionHold = false;
       input.poll(); input.endFrame();
       game.ball.mode = 'anchored';
+      input.lookStick.actionContext = 'away';
       input.lookStick.actionHold = true;
       const touchAnchorHold = { ...input.poll() };
       input.lookStick.actionHold = false;
@@ -4039,7 +4514,37 @@
       check('right-tap-is-contextual-kick-or-call', touchHomeTap.kickPressed && touchHomeTap.kickReleased && !touchHomeTap.snapPressed
         && touchAwayTap.snapPressed && !touchAwayTap.kickPressed, { touchHomeTap, touchAwayTap });
       check('right-hold-is-contextual-charge-or-pull', touchHomeHold.kick && !touchHomeHold.snap
-        && touchAnchorHold.snap && !touchAnchorHold.kick, { touchHomeHold, touchAnchorHold });
+        && touchAnchorHold.line && !touchAnchorHold.snap && !touchAnchorHold.kick, { touchHomeHold, touchAnchorHold });
+
+      input.buttons.line = true;
+      const desktopLineModes = ['ready', 'outbound', 'returning', 'anchored', 'caught'].map(mode => {
+        game.ball.mode = mode;
+        const frame = { ...input.poll() };
+        input.endFrame();
+        return { mode, line: frame.line, snap: frame.snap };
+      });
+      input.buttons.line = false;
+      input.poll(); input.endFrame();
+      check('rmb-hold-is-one-line-action-in-every-ball-mode', desktopLineModes.every(sample => sample.line && !sample.snap), desktopLineModes);
+
+      input.lookStick.reset();
+      game.ball.mode = 'outbound';
+      input.lookStick.down(fakeTouch(390, 260, 360, 0));
+      if (input.lookStick.actionTimer) clearTimeout(input.lookStick.actionTimer);
+      input.lookStick.actionTimer = 0;
+      input.lookStick.actionHold = true;
+      game.ball.mode = 'ready';
+      const latchedAwayHold = { ...input.poll() };
+      input.endFrame();
+      input.lookStick.cancel(fakeTouch(390, 260, 360, 220));
+      const cancelledAwayHold = { ...input.poll() };
+      input.endFrame();
+      check('touch-intent-stays-away-through-return-home', latchedAwayHold.line
+        && !latchedAwayHold.kick && !latchedAwayHold.kickPressed, latchedAwayHold);
+      check('cancelled-touch-never-fires-a-kick', cancelledAwayHold.actionCancelled
+        && !cancelledAwayHold.lineReleased && !cancelledAwayHold.kickReleased
+        && !cancelledAwayHold.kickPressed, cancelledAwayHold);
+      input.lookStick.reset();
 
       const makeLoop = (direction, stepMs = 20) => Array.from({ length: 29 }, (_, index) => {
         const angle = direction * index / 28 * TAU;
@@ -4146,6 +4651,67 @@
         paused: game.paused, activeElement: document.activeElement?.id || document.activeElement?.tagName,
       });
       input.resetTransient();
+
+      game.restart();
+      game.started = true;
+      game.teleport('start');
+      game.stepWith(FIXED_DT, {});
+      const homeScreenSamples = [];
+      for (const [yaw, pitch] of [[0, -1.25], [.9, -.45], [-1.6, 0], [2.35, .7], [-.4, 1.25]]) {
+        game.player.yaw = yaw;
+        game.player.pitch = pitch;
+        game.updateCamera(.25);
+        world.camera.updateMatrixWorld(true);
+        game.ball.position.copy(game.readyBallTarget(new T.Vector3()));
+        const projected = game.ball.position.clone().project(world.camera);
+        homeScreenSamples.push({ yaw, pitch, x: projected.x, y: projected.y, z: projected.z });
+      }
+      check('home-ball-is-centered-below-aim-across-look', homeScreenSamples.every(sample => Math.abs(sample.x) < .03
+        && sample.y < -.2 && sample.y > -.78 && sample.z > -1 && sample.z < 1), homeScreenSamples);
+
+      const pitchLaunches = [];
+      for (const pitch of [-1.42, -1, 0, 1, 1.42]) {
+        game.restart();
+        game.started = true;
+        game.player.pitch = pitch;
+        game.updateCamera(FIXED_DT);
+        game.ball.position.copy(game.readyBallTarget(new T.Vector3()));
+        game.stepWith(FIXED_DT, { kick: true, kickPressed: true });
+        game.stepWith(FIXED_DT, { kickReleased: true });
+        pitchLaunches.push({ pitch, mode: game.ball.mode, cameraDistance: game.ball.position.distanceTo(world.camera.position) });
+      }
+      check('home-ball-launches-at-every-valid-pitch', pitchLaunches.every(sample => sample.mode === 'outbound'), pitchLaunches);
+
+      game.restart();
+      game.started = true;
+      game.updateCamera(FIXED_DT);
+      game.ball.position.copy(game.readyBallTarget(new T.Vector3()));
+      world.camera.updateMatrixWorld(true);
+      game.stepWith(.34, { kick: true, kickPressed: true });
+      const ringProjection = game.ball.position.clone().project(world.camera);
+      const ringProgress = {
+        active: ui.chargeUI?.classList.contains('active'),
+        ariaHidden: ui.chargeUI?.getAttribute('aria-hidden'),
+        anchor: ui.chargeUI?.dataset.anchor,
+        value: Number(ui.chargeUI?.getAttribute('aria-valuenow')),
+        dash: Number(ui.chargeFill?.style.strokeDashoffset),
+        left: Number.parseFloat(ui.chargeUI?.style.left || ''),
+        top: Number.parseFloat(ui.chargeUI?.style.top || ''),
+        expectedLeft: (ringProjection.x * .5 + .5) * 100,
+        expectedTop: (-ringProjection.y * .5 + .5) * 100,
+      };
+      check('circular-charge-ring-follows-home-ball', ringProgress.active && ringProgress.ariaHidden === 'false'
+        && ringProgress.anchor === 'ball'
+        && ringProgress.value >= 48 && ringProgress.value <= 53 && ringProgress.dash >= 47 && ringProgress.dash <= 52
+        && Math.abs(ringProgress.left - ringProgress.expectedLeft) < .2
+        && Math.abs(ringProgress.top - ringProgress.expectedTop) < .2, ringProgress);
+      game.stepWith(FIXED_DT, { actionCancelled: true });
+      check('charge-ring-clears-on-cancel', !game.charging && game.charge === 0
+        && !ui.chargeUI?.classList.contains('active') && ui.chargeUI?.getAttribute('aria-hidden') === 'true'
+        && Number(ui.chargeFill?.style.strokeDashoffset) === 100, {
+        charging: game.charging, charge: game.charge, active: ui.chargeUI?.classList.contains('active'),
+        ariaHidden: ui.chargeUI?.getAttribute('aria-hidden'), dash: ui.chargeFill?.style.strokeDashoffset,
+      });
 
       game.restart();
       game.started = true;
@@ -4264,7 +4830,196 @@
       game.stepWith(FIXED_DT, { snap: true, snapPressed: true });
       check('snap-enters-return', game.ball.mode === 'returning', game.ball.mode);
       game.stepWith(2.8, { snap: true });
-      check('ball-comes-home', game.ball.mode === 'ready', game.ball.mode);
+      check('ball-comes-home', game.ball.mode === 'ready', {
+        mode: game.ball.mode,
+        returnTime: game.ball.returnTime,
+        position: game.ball.position.toArray(),
+        velocity: game.ball.velocity.toArray(),
+        distanceToPlayer: game.ball.position.distanceTo(game.player.position),
+        tetherPoints: game.ball.tetherPath.length,
+        tetherWrapId: game.ball.tetherWrapId,
+      });
+
+      game.restart();
+      game.started = true;
+      game.updateCamera(FIXED_DT);
+      const clearLineOrigin = game.tetherOrigin(new T.Vector3());
+      game.ball.mode = 'outbound';
+      game.ball.position.copy(clearLineOrigin).add(new T.Vector3(3, 1, -18));
+      game.ball.velocity.set(3, 0, -34);
+      game.lineActive = true;
+      const clearLinePath = game.buildTetherPath(true).map(point => point.clone());
+      const rearSocketOffset = clearLinePath[clearLinePath.length - 1].clone().sub(game.ball.position);
+      const rearSocketDot = rearSocketOffset.dot(game.ball.velocity.clone().normalize());
+      game.syncWorldVisuals();
+      const renderedPathError = Math.max(...clearLinePath.flatMap((point, index) => [
+        Math.abs(world.tetherPositions[index * 3] - point.x),
+        Math.abs(world.tetherPositions[index * 3 + 1] - point.y),
+        Math.abs(world.tetherPositions[index * 3 + 2] - point.z),
+      ]));
+      check('energy-line-is-direct-and-attaches-to-ball-rear', clearLinePath.length === 2
+        && Math.abs(rearSocketOffset.length() - game.ball.radius * .82) < 1e-6 && rearSocketDot < -.5, {
+        points: clearLinePath.length, rearOffset: rearSocketOffset.toArray(), rearSocketDot,
+      });
+      check('energy-line-render-uses-authoritative-path', world.ballTether.visible
+        && world.ballTether.geometry.drawRange.count === clearLinePath.length && renderedPathError < 1e-5, {
+        visible: world.ballTether.visible, drawCount: world.ballTether.geometry.drawRange.count,
+        pathCount: clearLinePath.length, renderedPathError,
+      });
+      game.stepWith(FIXED_DT, { line: true, linePressed: true });
+      const liveOrigin = game.tetherOrigin(new T.Vector3());
+      const liveEnd = game.tetherEnd(new T.Vector3(), liveOrigin);
+      const livePathEnd = game.ball.tetherPath[game.ball.tetherPath.length - 1];
+      const liveDrawIndex = (world.ballTether.geometry.drawRange.count - 1) * 3;
+      const movingEndpointError = Math.max(
+        livePathEnd.distanceTo(liveEnd),
+        Math.abs(world.tetherPositions[liveDrawIndex] - liveEnd.x),
+        Math.abs(world.tetherPositions[liveDrawIndex + 1] - liveEnd.y),
+        Math.abs(world.tetherPositions[liveDrawIndex + 2] - liveEnd.z),
+      );
+      check('moving-energy-line-meets-current-rear-socket', movingEndpointError < 1e-5, {
+        movingEndpointError, pathEnd: livePathEnd.toArray(), expectedEnd: liveEnd.toArray(),
+      });
+
+      const wrapPlatform = world.platforms[0];
+      const wrapRadius = wrapPlatform.radius * 1.22 + .12;
+      game.player.position.set(wrapPlatform.x - wrapRadius - 9, wrapPlatform.top - game.player.eyeHeight - 2, wrapPlatform.z);
+      game.player.yaw = Math.PI / 2;
+      game.player.pitch = 0;
+      game.updateCamera(FIXED_DT);
+      game.ball.position.set(wrapPlatform.x + wrapRadius + 9, wrapPlatform.top - 2, wrapPlatform.z);
+      game.ball.velocity.set(32, 0, 0);
+      const wrappedPath = game.buildTetherPath(true).map(point => point.clone());
+      const wrappedLength = game.ball.tetherPathLength;
+      const wrappedSide = game.ball.tetherWrapSide;
+      const wrappedDirect = wrappedPath[0].distanceTo(wrappedPath[wrappedPath.length - 1]);
+      const wrapContactError = Math.min(...wrappedPath.slice(1, -1).map(point => Math.abs(
+        Math.hypot(point.x - wrapPlatform.x, point.z - wrapPlatform.z) - (wrapRadius + .025)
+      )));
+      game.ball.position.z += .01;
+      game.buildTetherPath(true);
+      const stableWrapSide = game.ball.tetherWrapSide;
+      check('energy-line-wraps-real-cliff-collider', wrappedPath.length > 3 && game.ball.tetherWrapId === wrapPlatform.id
+        && wrappedLength > wrappedDirect + .1 && wrapContactError < .001, {
+        points: wrappedPath.length, wrapId: game.ball.tetherWrapId, platform: wrapPlatform.id,
+        wrappedLength, wrappedDirect, wrapContactError,
+      });
+      check('energy-line-wrap-side-is-stable', stableWrapSide === wrappedSide, { wrappedSide, stableWrapSide });
+
+      game.ball.position.set(wrapPlatform.x + wrapRadius + 9, wrapPlatform.top - 2, wrapPlatform.z);
+      game.ball.velocity.set(0, 0, 0);
+      game.ball.mode = 'outbound';
+      game.beginReturn('snap');
+      let sawWrappedReturn = false;
+      let maxWrappedStuck = 0;
+      let minimumPillarClearance = Infinity;
+      let wrappedReturnTicks = 0;
+      for (; wrappedReturnTicks < 480 && game.ball.mode !== 'ready'; wrappedReturnTicks++) {
+        game.stepWith(FIXED_DT, { line: true, linePressed: wrappedReturnTicks === 0 });
+        if (game.ball.tetherWrapId === wrapPlatform.id) {
+          sawWrappedReturn = true;
+          maxWrappedStuck = Math.max(maxWrappedStuck, game.ball.returnStuck);
+        }
+        minimumPillarClearance = Math.min(minimumPillarClearance,
+          Math.hypot(game.ball.position.x - wrapPlatform.x, game.ball.position.z - wrapPlatform.z));
+      }
+      const physicalPillarRadius = wrapPlatform.radius * 1.03 + game.ball.radius;
+      check('wrapped-return-follows-path-home-without-cutting-cliff', sawWrappedReturn
+        && game.ball.mode === 'ready' && maxWrappedStuck < 1.05
+        && minimumPillarClearance >= physicalPillarRadius - .03, {
+        sawWrappedReturn, mode: game.ball.mode, maxWrappedStuck, minimumPillarClearance,
+        physicalPillarRadius, wrappedReturnTicks,
+      });
+
+      game.player.position.y = wrapPlatform.top + 1.5;
+      game.updateCamera(FIXED_DT);
+      game.ball.position.set(wrapPlatform.x + wrapRadius + 9, wrapPlatform.top + 3.2, wrapPlatform.z);
+      game.ball.velocity.set(32, 0, 0);
+      const overCliffPath = game.buildTetherPath(true);
+      check('energy-line-clears-over-cliff-cap', overCliffPath.length === 2 && game.ball.tetherWrapId === null, {
+        points: overCliffPath.length, wrapId: game.ball.tetherWrapId,
+      });
+
+      const gate = world.gate;
+      game.player.position.set(0, gate.position.y - game.player.eyeHeight, gate.position.z + 18);
+      game.player.yaw = 0;
+      game.player.pitch = 0;
+      game.updateCamera(FIXED_DT);
+      game.ball.position.set(0, gate.position.y, gate.position.z - 18);
+      game.ball.velocity.set(0, 0, -30);
+      const gateWrapPath = game.buildTetherPath(true).map(point => point.clone());
+      check('energy-line-routes-over-finite-progression-wall', gateWrapPath.length === 4
+        && game.ball.tetherWrapId === 'gate'
+        && gateWrapPath[1].y > gate.position.y + gate.height / 2 + game.ball.radius, {
+        points: gateWrapPath.map(point => point.toArray()), wrapId: game.ball.tetherWrapId,
+      });
+
+      const simulateAimGuide = linked => {
+        game.restart();
+        game.started = true;
+        game.player.yaw = 0;
+        game.player.pitch = 0;
+        game.updateCamera(FIXED_DT);
+        game.ball.position.copy(game.readyBallTarget(new T.Vector3()));
+        game.launchBall(.82);
+        game.stepWith(.05, { lookX: .62, line: linked, linePressed: linked });
+        const newAim = game.forwardFromView(new T.Vector3());
+        return {
+          mode: game.ball.mode,
+          aimDot: game.ball.velocity.clone().normalize().dot(newAim),
+          velocity: game.ball.velocity.toArray(),
+          position: game.ball.position.toArray(),
+        };
+      };
+      const freeGuide = simulateAimGuide(false);
+      const linkedGuide = simulateAimGuide(true);
+      check('held-energy-line-strengthens-reticle-guidance', linkedGuide.mode === 'outbound'
+        && freeGuide.mode === 'outbound' && linkedGuide.aimDot > freeGuide.aimDot + .025, { freeGuide, linkedGuide });
+
+      game.restart();
+      game.started = true;
+      game.updateCamera(FIXED_DT);
+      game.launchBall(.8);
+      game.stepWith(.72, { line: true, linePressed: true });
+      check('held-energy-line-does-not-force-recall', game.ball.mode === 'outbound' && game.lineHeld, {
+        mode: game.ball.mode, lineHeld: game.lineHeld, freeFlightTime: game.ball.freeFlightTime,
+      });
+
+      const simulateFlightSpin = direction => {
+        game.restart();
+        game.started = true;
+        game.player.yaw = 0;
+        game.player.pitch = 0;
+        game.updateCamera(FIXED_DT);
+        game.launchBall(.75);
+        game.ball.position.x += 2;
+        game.startSpin(direction, 1);
+        game.stepWith(.24, { line: true });
+        return {
+          mode: game.ball.mode,
+          vy: game.ball.velocity.y,
+          spinTimer: game.ball.flightSpinTimer,
+          spinDirection: game.ball.flightSpinDirection,
+          playerSpinTimer: game.player.spinTimer,
+        };
+      };
+      const clockwiseFlight = simulateFlightSpin(1);
+      const counterFlight = simulateFlightSpin(-1);
+      check('signed-airborne-spin-curves-while-staying-outbound', clockwiseFlight.mode === 'outbound'
+        && counterFlight.mode === 'outbound' && clockwiseFlight.spinDirection === 1 && counterFlight.spinDirection === -1
+        && Math.sign(clockwiseFlight.vy) === -Math.sign(counterFlight.vy)
+        && Math.abs(clockwiseFlight.vy) > 10 && Math.abs(counterFlight.vy) > 10
+        && clockwiseFlight.playerSpinTimer === 0
+        && counterFlight.playerSpinTimer === 0, { clockwiseFlight, counterFlight });
+
+      game.restart();
+      game.started = true;
+      game.updateCamera(FIXED_DT);
+      game.launchBall(.7);
+      game.beginReturn('snap');
+      game.startSpin(-1, 1);
+      check('return-spin-changes-arc-without-changing-mode', game.ball.mode === 'returning'
+        && game.ball.returnSide === -1, { mode: game.ball.mode, returnSide: game.ball.returnSide });
 
       game.restart();
       game.started = true;
@@ -4392,7 +5147,8 @@
       game.ball.position.set(8, game.player.position.y + 2, game.player.position.z - 16);
       game.startSpin(1, .9);
       const positiveFlightSpin = {
-        mode: game.ball.mode, returnSide: game.ball.returnSide, spin: game.ball.spin, curveBoost: game.ball.curveBoost,
+        mode: game.ball.mode, direction: game.ball.flightSpinDirection,
+        timer: game.ball.flightSpinTimer, spin: game.ball.spin, curveBoost: game.ball.curveBoost,
       };
       game.restart();
       game.started = true;
@@ -4400,12 +5156,14 @@
       game.ball.position.set(8, game.player.position.y + 2, game.player.position.z - 16);
       game.startSpin(-1, .9);
       const negativeFlightSpin = {
-        mode: game.ball.mode, returnSide: game.ball.returnSide, spin: game.ball.spin, curveBoost: game.ball.curveBoost,
+        mode: game.ball.mode, direction: game.ball.flightSpinDirection,
+        timer: game.ball.flightSpinTimer, spin: game.ball.spin, curveBoost: game.ball.curveBoost,
       };
-      check('signed-flight-spin-sets-return-curve', positiveFlightSpin.mode === 'returning' && positiveFlightSpin.returnSide === 1
-        && positiveFlightSpin.spin > 0 && positiveFlightSpin.curveBoost > 1
-        && negativeFlightSpin.mode === 'returning' && negativeFlightSpin.returnSide === -1
-        && negativeFlightSpin.spin < 0 && negativeFlightSpin.curveBoost > 1, { positiveFlightSpin, negativeFlightSpin });
+      check('signed-flight-spin-preserves-outbound-control', positiveFlightSpin.mode === 'outbound'
+        && positiveFlightSpin.direction === 1 && positiveFlightSpin.timer > .7 && positiveFlightSpin.spin > 0
+        && negativeFlightSpin.mode === 'outbound' && negativeFlightSpin.direction === -1
+        && negativeFlightSpin.timer > .7 && negativeFlightSpin.spin < 0,
+      { positiveFlightSpin, negativeFlightSpin });
 
       game.restart();
       game.started = true;
