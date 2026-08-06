@@ -22,7 +22,6 @@ const CONFIG = {
   DASH_SPEED: 410,
   DASH_TIME: 0.13,
   DASH_CD: 0.55,
-  DASH_BUFFER: 0.10,
   WALL_SLIDE: 70,
   WALLKICK_VX: 250,
   WALLKICK_VY: 320,
@@ -33,11 +32,9 @@ const CONFIG = {
   POGO_V: 310,
   HP_MAX: 5,
   INVULN: 1.1,
-  ATTACK_TIME: 0.18,      // fast chain lash; movement remains fully available
-  ATTACK_ACTIVE: [0.025, 0.12],
-  ATTACK_CD: 0.04,        // gap after swing before next
-  ATTACK_BUFFER: 0.10,
-  WHIP_REACH: 44,
+  ATTACK_TIME: 0.2,       // whole swing
+  ATTACK_ACTIVE: [0.03, 0.13],
+  ATTACK_CD: 0.05,        // gap after swing before next
 };
 
 // ── tile collision (per-axis sweep; per-frame motion < tile size) ───
@@ -108,15 +105,11 @@ class Player {
     this.grounded = false;
     this.coyoteT = 0; this.bufferT = 0;
     this.dashT = 0; this.dashCd = 0; this.airDashUsed = false;
-    this.dashBufferT = 0; this.dashBufferDir = 1; this.dashBufferDown = false;
     this.slideT = 0;
     this.attackT = -1; this.attackCd = 0; this.attackHit = new Set(); this.pogoing = false;
-    this.attackBufferT = 0; this.attackBufferDir = 'side';
-    this.attackDir = 'side'; this.attackFacing = 1;
     this.hurtT = 0; this.invulnT = 0;
     this.dropT = 0;               // one-way drop-through window
     this.velocity = 0;            // momentum meter 0..3
-    this.velocityHoldT = 0;       // external rewards can pause momentum decay
     this.tier = 0;
     this.animT = 0; this.runDist = 0;
     this.dead = false;
@@ -131,40 +124,9 @@ class Player {
   }
 
   attackBox() {
-    // Compatibility union for callers that still expect one rectangle.
-    const boxes = this.attackBoxes();
-    const x0 = Math.min(...boxes.map(b => b.x));
-    const y0 = Math.min(...boxes.map(b => b.y));
-    const x1 = Math.max(...boxes.map(b => b.x + b.w));
-    const y1 = Math.max(...boxes.map(b => b.y + b.h));
-    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-  }
-
-  attackBoxes() {
-    const reach = CONFIG.WHIP_REACH;
-    const cx = this.x + this.w / 2;
-    if (this.attackDir === 'up') {
-      return [
-        { x: cx - 7, y: this.y - (reach - 7), w: 14, h: reach - 5, kind: 'chain' },
-        { x: cx - 10, y: this.y - reach, w: 20, h: 10, kind: 'tip' },
-      ];
-    }
-    if (this.attackDir === 'down') {
-      const edge = this.y + this.h;
-      return [
-        { x: cx - 7, y: edge - 2, w: 14, h: reach - 5, kind: 'chain' },
-        { x: cx - 10, y: edge + reach - 9, w: 20, h: 9, kind: 'tip' },
-      ];
-    }
-    const facing = this.attackFacing || this.facing;
-    const edge = facing > 0 ? this.x + this.w : this.x;
-    return facing > 0 ? [
-      { x: edge - 2, y: this.y - 4, w: reach - 5, h: this.h + 6, kind: 'chain' },
-      { x: edge + reach - 9, y: this.y - 7, w: 9, h: this.h + 12, kind: 'tip' },
-    ] : [
-      { x: edge - reach + 7, y: this.y - 4, w: reach - 5, h: this.h + 6, kind: 'chain' },
-      { x: edge - reach, y: this.y - 7, w: 9, h: this.h + 12, kind: 'tip' },
-    ];
+    if (this.pogoing) return { x: this.x - 3, y: this.y + this.h - 2, w: this.w + 6, h: 18 };
+    const w = 26, h = 16;
+    return { x: this.facing > 0 ? this.x + this.w - 2 : this.x - w + 2, y: this.y + 1, w, h };
   }
 
   update(dt, input, level, game) {
@@ -172,9 +134,6 @@ class Player {
     const C = CONFIG;
 
     this.coyoteT -= dt; this.dashCd -= dt; this.attackCd -= dt;
-    this.dashBufferT = Math.max(0, this.dashBufferT - dt);
-    this.attackBufferT = Math.max(0, this.attackBufferT - dt);
-    this.velocityHoldT = Math.max(0, this.velocityHoldT - dt);
     this.invulnT -= dt; this.hurtT -= dt; this.dropT -= dt;
     if (this.attackT >= 0) {
       this.attackT += dt;
@@ -185,27 +144,17 @@ class Player {
     const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const hurting = this.hurtT > 0;
 
-    if (input.dashPressed) {
-      this.dashBufferT = C.DASH_BUFFER;
-      this.dashBufferDir = dir || this.facing;
-      this.dashBufferDown = this.grounded && !!input.down;
-    }
-    if (input.attackPressed) {
-      this.attackBufferT = C.ATTACK_BUFFER;
-      this.attackBufferDir = input.up ? 'up' : (!this.grounded && input.down ? 'down' : 'side');
-    }
-
     // ── dash ──
-    if (this.dashBufferT > 0 && this.dashCd <= 0 && this.dashT <= 0 && !hurting
+    if (input.dashPressed && this.dashCd <= 0 && this.dashT <= 0 && !hurting
         && !(this.airDashUsed && !this.grounded)) {
-      this.facing = this.dashBufferDir || this.facing;
       // down+dash on the ground = slide (low profile)
-      if (this.grounded && this.dashBufferDown) {
+      if (this.grounded && input.down) {
         this.slideT = C.SLIDE_TIME;
         this.vx = this.facing * C.SLIDE_SPEED;
         audio.sfx('dash');
       } else {
         this.dashT = C.DASH_TIME;
+        if (dir) this.facing = dir;
         this.vx = this.facing * C.DASH_SPEED;
         this.vy = 0;
         if (!this.grounded) this.airDashUsed = true;
@@ -213,7 +162,6 @@ class Player {
         FX.burst(this.x + this.w / 2, this.y + this.h - 2, ['#8d94b3', '#c22e46'], 6,
           { angle: this.facing > 0 ? Math.PI : 0, spread: 0.9, speed: 70, grav: 40, life: 0.3 });
       }
-      this.dashBufferT = 0;
       this.dashCd = C.DASH_CD;
     }
 
@@ -300,14 +248,11 @@ class Player {
     if (this.vy < -60 && !input.jump && this.dashT <= 0) this.vy *= 0.86;
 
     // ── attack ──
-    if (this.attackBufferT > 0 && !this.attacking && this.attackCd <= 0 && !hurting && this.dashT <= 0) {
+    if (input.attackPressed && !this.attacking && this.attackCd <= 0 && !hurting && this.dashT <= 0) {
       this.attackT = 0;
       this.attackCd = C.ATTACK_TIME + C.ATTACK_CD;
-      this.attackDir = this.attackBufferDir === 'down' && this.grounded ? 'side' : this.attackBufferDir;
-      this.attackFacing = this.facing;
-      this.attackBufferT = 0;
       this.attackHit.clear();
-      this.pogoing = this.attackDir === 'down' && !this.grounded;
+      this.pogoing = !this.grounded && input.down;
       audio.sfx('slash');
     }
 
@@ -338,7 +283,7 @@ class Player {
     const fast = Math.abs(this.vx) >= this.maxSpeed * 0.82;
     if (this.dashT > 0 || (fast && !hurting)) {
       this.velocity = Math.min(3, this.velocity + (this.grounded ? 0.5 : 0.3) * dt);
-    } else if (!fast && this.velocityHoldT <= 0) {
+    } else if (!fast) {
       this.velocity = Math.max(0, this.velocity - 0.85 * dt);
     }
     const newTier = Math.min(3, Math.floor(this.velocity + 1e-6));
@@ -436,75 +381,46 @@ class Player {
     if (this.dead) return;
     if (this.invulnT > 0 && this.hurtT <= 0 && Math.floor(this.invulnT * 16) % 2 === 0) return;
     const [key, fr] = this.spriteKeyFrame();
-    const renderFacing = this.attacking && this.dashT <= 0 ? this.attackFacing : this.facing;
-    const set = renderFacing > 0 ? SPR.player : SPR.playerL;
+    const set = this.facing > 0 ? SPR.player : SPR.playerL;
     const img = set[key][fr];
     // sprite is 16x24 with feet on its bottom row; hitbox is 10 wide
     const dx = Math.round(this.x - camX - 3);
     const dy = Math.round(this.y + this.h - img.height - camY);
     ctx.drawImage(img, dx, dy);
-    this.drawChainWhip(ctx, camX, camY);
+    this.drawSlashArc(ctx, camX, camY);
   }
 
-  // Straight, readable chain links replace the old crescent effect.
-  drawChainWhip(ctx, camX, camY) {
+  // crescent swipe so the attack reads at speed
+  drawSlashArc(ctx, camX, camY) {
     if (!this.attacking) return;
-    const phase = this.attackT / CONFIG.ATTACK_TIME;
-    const extension = phase < 0.22 ? phase / 0.22
-      : phase < 0.72 ? 1 : clamp((1 - phase) / 0.28, 0, 1);
-    if (extension <= 0.04) return;
-
-    const facing = this.attackFacing || this.facing;
-    let ax = this.x + this.w / 2 + facing * 3;
-    let ay = this.y + 9;
-    let fullX = facing > 0 ? this.x + this.w + CONFIG.WHIP_REACH : this.x - CONFIG.WHIP_REACH;
-    let fullY = ay;
-    if (this.attackDir === 'up') {
-      ax = this.x + this.w / 2 + facing;
-      ay = this.y + 4;
-      fullX = ax;
-      fullY = this.y - CONFIG.WHIP_REACH;
-    } else if (this.attackDir === 'down') {
-      ax = this.x + this.w / 2 + facing;
-      ay = this.y + this.h - 3;
-      fullX = ax;
-      fullY = this.y + this.h + CONFIG.WHIP_REACH;
-    }
-
-    const tipX = ax + (fullX - ax) * extension;
-    const tipY = ay + (fullY - ay) * extension;
-    const dx = tipX - ax, dy = tipY - ay;
-    const distance = Math.hypot(dx, dy);
-    const links = Math.max(1, Math.floor(distance / 5));
-    const horizontal = Math.abs(dx) >= Math.abs(dy);
-    const oldAlpha = ctx.globalAlpha;
-    ctx.globalAlpha = clamp(0.45 + extension * 0.75, 0, 1);
-
-    for (let i = 1; i <= links; i++) {
-      const u = i / (links + 1);
-      const px = Math.round(ax + dx * u - camX);
-      const py = Math.round(ay + dy * u - camY);
-      ctx.fillStyle = '#262a46';
-      if (horizontal) ctx.fillRect(px - 2, py - 1 + (i & 1), 5, 3);
-      else ctx.fillRect(px - 1 + (i & 1), py - 2, 3, 5);
-      ctx.fillStyle = i & 1 ? '#8d94b3' : '#c9c6dc';
-      if (horizontal) ctx.fillRect(px - 1, py + (i & 1), 3, 1);
-      else ctx.fillRect(px + (i & 1), py - 1, 1, 3);
-    }
-
-    const tx = Math.round(tipX - camX), ty = Math.round(tipY - camY);
-    ctx.fillStyle = '#f4f2fa';
-    ctx.fillRect(tx - 2, ty - 1, 5, 3);
-    ctx.fillRect(tx - 1, ty - 2, 3, 5);
-    ctx.fillStyle = '#7fe9f5';
-    ctx.fillRect(tx - 1, ty - 1, 3, 3);
-    ctx.globalAlpha = oldAlpha;
+    const t = this.attackT / CONFIG.ATTACK_TIME;
+    if (t > 0.75) return;
+    const cx = this.x + this.w / 2 - camX;
+    const cy = this.y + this.h / 2 - camY;
+    const prog = clamp(t / 0.5, 0, 1);
+    const alpha = clamp(1.2 - t * 1.8, 0, 1);
+    let a0, a1;
+    if (this.pogoing) { a0 = Math.PI * 0.15; a1 = Math.PI * 0.85; }
+    else if (this.facing > 0) { a0 = -1.25; a1 = 1.25; }
+    else { a0 = Math.PI - 1.25; a1 = Math.PI + 1.25; }
+    const sweep = a0 + (a1 - a0) * prog;
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#f4f2fa';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, this.pogoing ? 13 : 16, a0, sweep);
+    ctx.stroke();
+    ctx.strokeStyle = '#c22e46';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, this.pogoing ? 10 : 12, a0, sweep);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 
   ghostSprite() {
     const [key, fr] = this.spriteKeyFrame();
-    const renderFacing = this.attacking && this.dashT <= 0 ? this.attackFacing : this.facing;
-    const set = renderFacing > 0 ? SPR.playerSil : SPR.playerSilL;
+    const set = this.facing > 0 ? SPR.playerSil : SPR.playerSilL;
     return set[key][fr];
   }
 }
@@ -706,36 +622,29 @@ class Gargoyle extends Enemy {
 }
 
 // ── THE BELLKEEPER'S SHADE — the boss ────────────────────────────────
-// Phase 1 (hp>6): telegraphed swoop dives.
-// Phase 2 (hp>3): faster dives, summons bat pairs.
+// Phase 1 (hp>9): telegraphed swoop dives.
+// Phase 2 (hp>4): faster dives, summons bat pairs.
 // Phase 3:        rises and SLAMS, sending floor shockwaves, then lies
 //                 stunned — the punish window.
 class Shade extends Enemy {
   constructor(x, y) {
-    // Contact stays compact and fair, while hurtBounds() follows the imposing
-    // 62x62 armour silhouette so a whip that visibly strikes a pauldron lands.
-    super(x, y, 26, 32, 10);
-    this.hpMax = 10; this.bossName = "THE BELLKEEPER'S SHADE";
+    super(x, y, 22, 26, 14);
+    this.hpMax = 14; this.bossName = "THE BELLKEEPER'S SHADE";
     this.homeX = x; this.homeY = y;
     this.state = 'hover';       // hover | telegraph | dive | rise | slamwind | slam | stun
-    this.t = 0.8;
+    this.t = 1.2;
     this.animT = 0;
     this.dir = -1;
-    this.attackStep = 0;          // deterministic dive/dive/slam rhythm in phase 3
     this.summoned = [];
     this.touchDmg = 1;
   }
-  get phase() { return this.hp > 6 ? 1 : this.hp > 3 ? 2 : 3; }
-  hurtBounds() {
-    const so = SPR.shadeOffset || { x: -20, y: -32 };
-    return { x: this.x + so.x + 3, y: this.y + so.y + 3, w: 56, h: 56 };
-  }
+  get phase() { return this.hp > 9 ? 1 : this.hp > 4 ? 2 : 3; }
   update(dt, level, player, game) {
     if (this.dead) return;
     this.flashT -= dt; this.t -= dt; this.animT += dt;
     const px = player.x + player.w / 2, py = player.y + player.h / 2;
     this.dir = sgn(px - this.cx) || this.dir;
-    const speed = this.phase === 1 ? 205 : 245;
+    const speed = this.phase === 1 ? 185 : 225;
     switch (this.state) {
       case 'hover': {
         // bob near home, drift toward the player's side of the arena
@@ -743,17 +652,16 @@ class Shade extends Enemy {
         this.x = damp(this.x, tx - this.w / 2, 1.6, dt);
         this.y = this.homeY + Math.sin(this.animT * 2.2) * 6;
         if (this.t <= 0 && !player.dead) {
-          const slamAttack = this.phase === 3 && this.attackStep % 3 === 2;
-          this.attackStep++;
-          if (slamAttack) { this.state = 'slamwind'; this.t = 0.52; }
-          else { this.state = 'telegraph'; this.t = this.phase === 1 ? 0.44 : 0.32; audio.sfx('slash'); }
+          if (this.phase === 3 && Math.random() < 0.6) { this.state = 'slamwind'; this.t = 0.8; }
+          else { this.state = 'telegraph'; this.t = this.phase === 1 ? 0.55 : 0.4; audio.sfx('slash'); }
         }
         break;
       }
       case 'telegraph':
+        this.flashT = Math.max(this.flashT, 0.05);   // shimmer = incoming
         this.y += Math.sin(this.animT * 26) * 0.6;
         if (this.t <= 0) {
-          this.state = 'dive'; this.t = 0.9;
+          this.state = 'dive'; this.t = 1.1;
           const d = Math.hypot(px - this.cx, py - this.cy) || 1;
           this.vx = (px - this.cx) / d * speed;
           this.vy = (py - this.cy) / d * speed;
@@ -763,8 +671,7 @@ class Shade extends Enemy {
       case 'dive': {
         const hx = moveX(this, level, this.vx * dt);
         const hy = moveY(this, level, this.vy * dt, true);
-        const so = SPR.shadeOffset || { x: -1, y: -2 };
-        FX.ghost(this.dir > 0 ? SPR.shadeL[1] : SPR.shade[1], this.x + so.x, this.y + so.y);
+        FX.ghost(this.dir > 0 ? SPR.shadeL[1] : SPR.shade[1], this.x - 3, this.y - 4);
         if (this.t <= 0 || hx || hy) {
           this.state = 'rise'; this.t = 0;
           if (this.phase >= 2 && game) game.summonBossBats(this);
@@ -774,22 +681,23 @@ class Shade extends Enemy {
       case 'rise': {
         const rx = this.homeX - this.x, ry = this.homeY - this.y;
         const rd = Math.hypot(rx, ry);
-        if (rd < 6) { this.state = 'hover'; this.t = this.phase === 1 ? 0.9 : 0.62; break; }
-        this.x += (rx / rd) * 160 * dt;
-        this.y += (ry / rd) * 160 * dt;
+        if (rd < 6) { this.state = 'hover'; this.t = this.phase === 1 ? 1.4 : 0.9; break; }
+        this.x += (rx / rd) * 130 * dt;
+        this.y += (ry / rd) * 130 * dt;
         break;
       }
       case 'slamwind': {
         // rise above the player and hang for a beat
         this.x = damp(this.x, px - this.w / 2, 3.5, dt);
         this.y = damp(this.y, this.homeY - 34, 3, dt);
+        this.flashT = Math.max(this.flashT, 0.05);
         if (this.t <= 0) { this.state = 'slam'; this.vy = 430; audio.sfx('dash'); }
         break;
       }
       case 'slam': {
         const hy = moveY(this, level, this.vy * dt, true);
         if (hy === 1) {
-          this.state = 'stun'; this.t = 1.8;
+          this.state = 'stun'; this.t = 2.1;
           FX.shake(5, 0.4); FX.hitstop(0.06);
           audio.bell(140, 1.6, 0.4);
           FX.burst(this.cx, this.y + this.h, ['#7fe9f5', '#e8e4f0'], 16, { speed: 100, life: 0.5, grav: 60 });
@@ -809,39 +717,11 @@ class Shade extends Enemy {
     const img = (this.dir > 0 ? SPR.shadeL : SPR.shade)[diving ? 1 : 0];
     const stunned = this.state === 'stun';
     if (stunned) ctx.globalAlpha = 0.8 + Math.sin(this.animT * 10) * 0.15;
-    const so = SPR.shadeOffset || { x: -1, y: -2 };
-    this.drawImg(ctx, img, camX, camY, so.x, so.y + (stunned ? 2 : 0));
+    this.drawImg(ctx, img, camX, camY, -3, stunned ? -2 : -4);
     ctx.globalAlpha = 1;
-
-    // Telegraph pixels are cyan/ivory geometry, never the white damage flash.
-    if (this.state === 'telegraph' || this.state === 'slamwind') {
-      const x = Math.round(this.x - camX), y = Math.round(this.y - camY);
-      const pulse = Math.floor(this.animT * 12) % 2;
-      ctx.fillStyle = this.state === 'slamwind' ? '#7fe9f5' : '#ffe8a3';
-      ctx.globalAlpha = pulse ? 1 : 0.55;
-      if (this.state === 'slamwind') {
-        ctx.fillRect(x + 10, y + this.h + 3, 6, 2);
-        ctx.fillRect(x + 11, y + this.h + 5, 4, 2);
-        ctx.fillRect(x + 12, y + this.h + 7, 2, 2);
-      } else {
-        ctx.fillRect(x - 4, y + 7, 3, 2);
-        ctx.fillRect(x + this.w + 1, y + 7, 3, 2);
-        ctx.fillRect(x + 4, y - 4, 2, 3);
-        ctx.fillRect(x + this.w - 6, y - 4, 2, 3);
-      }
-      ctx.globalAlpha = 1;
-    }
   }
   glow() {
-    const so = SPR.shadeOffset || { x: -20, y: -32 };
-    const core = SPR.shadeCore || { x: 31, y: 31 };
-    return {
-      x: this.x + so.x + core.x,
-      y: this.y + so.y + core.y,
-      r: 34,
-      color: '127,233,245',
-      a: this.state === 'stun' ? 0.22 : 0.1,
-    };
+    return { x: this.cx, y: this.cy, r: 34, color: '127,233,245', a: this.state === 'stun' ? 0.22 : 0.1 };
   }
 }
 
@@ -1082,101 +962,6 @@ class Heart {
   glow() { return { x: this.x + 4, y: this.bobY() + 3, r: 16, color: '255,107,143', a: 0.12 }; }
 }
 
-// Three-heart wall-food reward. game.js owns collection/healing so this stays
-// a lightweight pickup and can accept SPR.chicken when that art is baked.
-class Chicken {
-  constructor(tx, ty) {
-    this.x = tx * TW + 2; this.y = ty * TW + 5;
-    this.w = 12; this.h = 8;
-    this.heal = 3;
-    this.dead = false;
-    this.animT = Math.random() * 10;
-  }
-  update(dt) { this.animT += dt; }
-  bobY() { return this.y + Math.sin(this.animT * 2.4) * 1.5; }
-  draw(ctx, camX, camY) {
-    if (this.dead) return;
-    const source = SPR.chicken;
-    const frames = Array.isArray(source) ? source : source ? [source] : [];
-    const img = frames.length ? frames[Math.floor(this.animT * 4) % frames.length] : null;
-    const bx = Math.round(this.x - camX), by = Math.round(this.bobY() - camY);
-    if (img) {
-      ctx.drawImage(img, bx + Math.floor((this.w - img.width) / 2), by + this.h - img.height);
-      return;
-    }
-    // Crisp temporary drumstick silhouette until SPR.chicken is supplied.
-    ctx.fillStyle = '#272a46';
-    ctx.fillRect(bx + 1, by + 1, 9, 7);
-    ctx.fillStyle = '#d1a854';
-    ctx.fillRect(bx + 1, by + 2, 7, 5);
-    ctx.fillStyle = '#ffe8a3';
-    ctx.fillRect(bx + 7, by + 3, 5, 2);
-    ctx.fillRect(bx + 10, by + 2, 2, 1);
-    ctx.fillRect(bx + 10, by + 5, 2, 1);
-  }
-  glow() { return { x: this.x + 6, y: this.bobY() + 4, r: 17, color: '255,232,163', a: 0.14 }; }
-}
-
-// Optional-route ward bell. All bells sharing group are coordinated by game.js.
-class WardBell {
-  constructor(tx, ty, group) {
-    this.w = 14; this.h = 18;
-    this.x = tx * TW + 1; this.y = (ty + 1) * TW - this.h;
-    this.group = group === undefined ? 'default' : group;
-    this.activated = false;
-    this.dead = false;
-    this.animT = 0;
-    this.sway = 0; this.swayV = 0;
-  }
-  update(dt) {
-    this.animT += dt;
-    this.swayV += -this.sway * 38 * dt;
-    this.swayV *= Math.pow(0.28, dt);
-    this.sway += this.swayV * dt;
-  }
-  setActivated(active) { this.activated = active !== false; }
-  strike(game) {
-    if (this.activated || this.dead) return false;
-    this.activated = true;
-    this.swayV = 72;
-    audio.sfx('wardBell');
-    FX.shake(2, 0.18); FX.hitstop(0.04);
-    FX.burst(this.x + this.w / 2, this.y + this.h / 2,
-      ['#7fe9f5', '#ffe8a3'], 10, { speed: 75, life: 0.38, grav: 25 });
-    if (game && typeof game.activateBellGroup === 'function') game.activateBellGroup(this.group);
-    return true;
-  }
-  draw(ctx, camX, camY) {
-    if (this.dead) return;
-    const source = SPR.wardBell;
-    let img = source;
-    if (Array.isArray(source)) img = source[this.activated ? 1 : 0] || source[0];
-    else if (source && (source.on || source.off)) img = this.activated ? source.on : source.off;
-    const bx = Math.round(this.x - camX + this.sway), by = Math.round(this.y - camY);
-    if (img) {
-      ctx.drawImage(img, bx + Math.floor((this.w - img.width) / 2), by + this.h - img.height);
-      return;
-    }
-    // Fallback is deliberately simple; SPR.wardBell can replace it unchanged.
-    ctx.fillStyle = '#272a46';
-    ctx.fillRect(bx + 5, by, 4, 3);
-    ctx.fillRect(bx + 2, by + 3, 10, 12);
-    ctx.fillStyle = this.activated ? '#7fe9f5' : '#8d94b3';
-    ctx.fillRect(bx + 4, by + 5, 6, 8);
-    ctx.fillStyle = '#ffe8a3';
-    ctx.fillRect(bx + 1, by + 14, 12, 2);
-    ctx.fillRect(bx + 6, by + 16, 2, 2);
-  }
-  glow() {
-    if (!this.activated) return null;
-    return { x: this.x + this.w / 2, y: this.y + this.h / 2, r: 24,
-      color: '127,233,245', a: 0.18 + Math.sin(this.animT * 5) * 0.03 };
-  }
-}
-
-// Both names are supported so level data can call these ward or toll bells.
-class TollBell extends WardBell {}
-
 class Checkpoint {
   constructor(tx, ty, whisper) {
     this.x = tx * TW + 3; this.y = (ty + 1) * TW - 16;
@@ -1201,8 +986,7 @@ class Bell {
     this.w = 52; this.h = 52;
     this.x = tx * TW + TW / 2 - this.w / 2;
     this.y = ty * TW;
-    // The same verb learned from ward bells resolves the finale immediately.
-    this.hits = 1;
+    this.hits = 3;
     this.sway = 0; this.swayV = 0;
     this.rung = false;
     this.locked = true;          // the Shade holds it until it falls
