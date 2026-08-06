@@ -57,6 +57,7 @@ export class PerformanceGovernor {
     onResolutionChange,
     levels = DEFAULT_LEVELS,
     initialQuality = 'ultra',
+    initialDpr,
     targetFps = 60,
     minDpr = 0.65,
     maxDpr = Math.min(defaultDeviceDpr(), 1.75),
@@ -110,7 +111,15 @@ export class PerformanceGovernor {
     this.enabled = Boolean(enabled);
 
     this.qualityIndex = qualityIndex(this.levels, initialQuality);
-    this.resolutionScale = this._resolutionCeiling();
+    const requestedInitialDpr = Number.isFinite(initialDpr)
+      ? clamp(initialDpr, this.minDpr, this.maxDpr)
+      : this.maxDpr;
+    this.initialDpr = requestedInitialDpr;
+    this.resolutionScale = clamp(
+      requestedInitialDpr / this.deviceDpr,
+      this._resolutionFloor(),
+      this._resolutionCeiling(),
+    );
     this._lastAdaptiveAxis = 'quality'; // first pressure response lowers resolution
     this._manualLock = null;
     this._running = false;
@@ -238,6 +247,12 @@ export class PerformanceGovernor {
     const canLowerQuality = this.qualityIndex > 0;
     const canRaiseResolution = this.resolutionScale < ceiling - 0.001;
     const canRaiseQuality = this.qualityIndex < this.levels.length - 1;
+    const nativeResolutionScale = clamp(
+      Math.min(1, this.maxDpr) / this.deviceDpr,
+      floor,
+      ceiling,
+    );
+    const belowNativeResolution = this.resolutionScale < nativeResolutionScale - 0.001;
     let axis = null;
 
     if (direction < 0) {
@@ -251,8 +266,17 @@ export class PerformanceGovernor {
         this.resolutionScale = Math.max(floor, this.resolutionScale - this.resolutionStep);
         axis = 'resolution';
       }
-    } else if (canRaiseResolution && (this._lastAdaptiveAxis !== 'resolution' || !canRaiseQuality)) {
-      this.resolutionScale = Math.min(ceiling, this.resolutionScale + this.resolutionStep);
+    } else if (canRaiseResolution && (
+      belowNativeResolution || this._lastAdaptiveAxis !== 'resolution' || !canRaiseQuality
+    )) {
+      // A conservative cold start should regain a crisp 1 CSS-pixel world
+      // before spending headroom on extra effects. Above 1x, alternate the two
+      // axes as before so high-DPR recovery stays cautious and stable.
+      const target = belowNativeResolution ? nativeResolutionScale : ceiling;
+      const next = Math.min(target, this.resolutionScale + this.resolutionStep);
+      // Avoid wasting an entire recovery dwell on a sub-percent floating-point
+      // tail when the normal step landed effectively at the 1x target.
+      this.resolutionScale = target - next < 0.01 ? target : next;
       axis = 'resolution';
     } else if (canRaiseQuality) {
       this.qualityIndex += 1;
@@ -385,6 +409,7 @@ export class PerformanceGovernor {
       resolutionScale: rounded(this.resolutionScale, 3),
       minDpr: rounded(this.minDpr, 3),
       maxDpr: rounded(this.maxDpr, 3),
+      initialDpr: rounded(this.initialDpr, 3),
       viewport: { width: this._width, height: this._height },
       sampleCount: this._samples.length,
       meanMs: rounded(mean, 2),

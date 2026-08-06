@@ -58,14 +58,19 @@ export const ASTRONAUT_VISUAL_TYPES = Object.freeze({
   }),
 });
 
+// Keep the current LOD until the camera crosses a separate enter/exit boundary.
+// The gap prevents outline/mesh chatter when the player hovers near a cutoff.
+const LOD_HYSTERESIS = 0.1;
+
 // The source renders are single transparent images, not skeletons or sprite
 // sheets. This vertex deformation makes the visible art itself articulate:
 // opposite leg depth/lift, counter-swinging arms, torso weight transfer, and a
-// state-driven attack recoil. Both high and low LODs use it so phone quality
-// scaling never turns moving enemies back into rigid cards.
+// state-driven anticipation and attack recoil. Both high and low LODs use it
+// so phone quality scaling never turns moving enemies back into rigid cards.
 const ANIMATED_IMPOSTOR_DEFORM = /* glsl */`
   uniform float uMotionPhase;
   uniform float uMotion;
+  uniform float uWindup;
   uniform float uAttack;
   uniform float uLegSwing;
   uniform float uArmSwing;
@@ -99,10 +104,17 @@ const ANIMATED_IMPOSTOR_DEFORM = /* glsl */`
     p.x += torso * transfer * uBodySway * uMotion;
     p.z += torso * cos(uMotionPhase) * uBodySway * 0.24 * uMotion;
 
-    // Attacks visibly gather and release through the upper silhouette instead
-    // of being communicated by glow alone. This also reads for the shooter art
-    // whose hands and weapon are intentionally kept together.
+    // Windup is deliberately screen-plane dominant: a modest shoulder brace
+    // and crouch remain legible to the player without bending the baked weapon
+    // into rubber. The containing group adds the broader anticipation squash.
     float upper = smoothstep(0.35, 0.72, texUv.y);
+    float shoulderBrace = smoothstep(0.36, 0.54, texUv.y)
+      * (1.0 - smoothstep(0.82, 0.95, texUv.y));
+    p.x += side * shoulderBrace * uWindup * 0.012;
+    p.y -= upper * uWindup * 0.018;
+
+    // Attack remains the post-impact recoil channel. Most of its displacement
+    // stays in depth, with only a restrained screen-plane release.
     p.z -= upper * uAttack * uAttackKick;
     p.y += upper * uAttack * uAttackKick * 0.18;
     p.x -= upper * x * uAttack * uAttackKick * 0.09;
@@ -134,11 +146,14 @@ const MAIN_FRAGMENT = /* glsl */`
   uniform float uHit;
   uniform float uOpacity;
   uniform float uPulse;
+  uniform float uFrozen;
+  uniform float uDistanceCue;
   varying vec2 vUv;
 
   void main() {
     vec4 texel = texture2D(uMap, vUv);
-    if (texel.a < 0.055) discard;
+    float alphaCutoff = mix(0.055, 0.04, uDistanceCue);
+    if (texel.a < alphaCutoff) discard;
 
     vec2 p = vUv * 2.0 - 1.0;
     // Low-cost spherical lighting across the image provides shape even when
@@ -150,6 +165,23 @@ const MAIN_FRAGMENT = /* glsl */`
     float luma = dot(texel.rgb, vec3(0.2126, 0.7152, 0.0722));
     float poweredDetail = smoothstep(0.63, 1.0, luma) * (0.035 + 0.035 * uPulse);
     color += uAccent * poweredDetail * uCueLuminance;
+
+    // Range compensation is intentionally small and luminance-led. It keeps
+    // the suit readable against the dusk without turning distant enemies into
+    // neon pickups or relying on hue alone.
+    float distanceLift = uDistanceCue * (0.012 + smoothstep(0.5, 1.0, luma) * 0.024);
+    color += mix(vec3(0.86, 0.91, 0.96), uAccent, 0.18) * distanceLift * uCueLuminance;
+
+    // Frozen feedback affects the visible cutout itself. A bright desaturated
+    // blue-white body plus an alpha-edge glint survives deuteranopia and dark
+    // backgrounds; it does not depend on the hidden procedural materials.
+    float frozen = smoothstep(0.0, 1.0, uFrozen);
+    float iceLuma = max(dot(color, vec3(0.2126, 0.7152, 0.0722)), 0.66);
+    vec3 iceColor = vec3(iceLuma * 0.88, iceLuma * 1.02, iceLuma * 1.12);
+    float crystalEdge = smoothstep(0.07, 0.46, texel.a)
+      * (1.0 - smoothstep(0.58, 0.96, texel.a));
+    color = mix(color, iceColor, frozen * 0.82);
+    color += vec3(0.72, 0.93, 1.0) * frozen * (crystalEdge * 0.7 + poweredDetail * 0.16);
 
     float hit = smoothstep(0.0, 1.0, uHit);
     color = mix(color, vec3(1.0, 0.97, 0.86) + uAccent * 0.16, hit * 0.9);
@@ -182,6 +214,8 @@ const OUTLINE_FRAGMENT = /* glsl */`
   uniform float uOpacity;
   uniform float uPulse;
   uniform float uHit;
+  uniform float uFrozen;
+  uniform float uDistanceCue;
   varying vec2 vUv;
 
   void main() {
@@ -192,9 +226,12 @@ const OUTLINE_FRAGMENT = /* glsl */`
     float w = texture2D(uMap, vUv - vec2(uTexel.x * 3.0, 0.0)).a;
     float outer = max(max(n, s), max(e, w));
     float line = max(0.0, outer - a);
-    float energy = line * (0.28 + 0.16 * uPulse + 0.5 * uHit) * uCueLuminance;
+    float frozen = smoothstep(0.0, 1.0, uFrozen);
+    float energy = line * (0.28 + 0.16 * uPulse + 0.5 * uHit
+      + 0.12 * uDistanceCue + 0.46 * frozen) * uCueLuminance;
     if (energy < 0.006) discard;
-    gl_FragColor = vec4(uAccent * energy, energy * uOpacity);
+    vec3 edgeColor = mix(uAccent, vec3(0.72, 0.93, 1.0), frozen * 0.92);
+    gl_FragColor = vec4(edgeColor * energy, energy * uOpacity);
     #include <colorspace_fragment>
   }
 `;
@@ -215,15 +252,28 @@ const LOW_FRAGMENT = /* glsl */`
   uniform float uCueLuminance;
   uniform float uHit;
   uniform float uOpacity;
+  uniform float uFrozen;
+  uniform float uDistanceCue;
   varying vec2 vUv;
 
   void main() {
     vec4 texel = texture2D(uMap, vUv);
-    if (texel.a < 0.085) discard;
+    float alphaCutoff = mix(0.085, 0.045, uDistanceCue);
+    if (texel.a < alphaCutoff) discard;
     vec3 color = texel.rgb;
     color = mix(color, vec3(1.0, 0.96, 0.82) + uAccent * 0.12, uHit * 0.82);
     float luma = dot(texel.rgb, vec3(0.2126, 0.7152, 0.0722));
     color += uAccent * smoothstep(0.78, 1.0, luma) * 0.035 * uCueLuminance;
+    color += mix(vec3(0.88, 0.93, 0.98), uAccent, 0.16)
+      * uDistanceCue * (0.018 + smoothstep(0.55, 1.0, luma) * 0.025) * uCueLuminance;
+
+    float frozen = smoothstep(0.0, 1.0, uFrozen);
+    float iceLuma = max(dot(color, vec3(0.2126, 0.7152, 0.0722)), 0.7);
+    vec3 iceColor = vec3(iceLuma * 0.88, iceLuma * 1.02, iceLuma * 1.12);
+    float crystalEdge = smoothstep(0.08, 0.5, texel.a)
+      * (1.0 - smoothstep(0.6, 0.96, texel.a));
+    color = mix(color, iceColor, frozen * 0.84);
+    color += vec3(0.74, 0.94, 1.0) * frozen * crystalEdge * 0.62;
     gl_FragColor = vec4(color, texel.a * uOpacity);
     #include <colorspace_fragment>
   }
@@ -267,10 +317,11 @@ function prepareTexture(texture, renderer) {
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.magFilter = THREE.LinearFilter;
-  // These cutouts already have a dedicated low-geometry LOD. Avoiding a full
-  // mip chain saves roughly one third of their GPU texture memory on phones.
-  texture.minFilter = THREE.LinearFilter;
-  texture.generateMipmaps = false;
+  // Geometry LOD cannot prefilter a 1024x1536 color/alpha image. Trilinear
+  // mipmapping keeps suit detail and cutout edges stable during minification;
+  // anisotropy then has an actual mip chain to work with at oblique angles.
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
   texture.anisotropy = renderer
     ? Math.min(8, renderer.capabilities.getMaxAnisotropy())
     : 4;
@@ -289,7 +340,10 @@ function sharedUniforms(texture, def) {
     uCurveDepth: { value: def.curveDepth },
     uMotionPhase: { value: 0 },
     uMotion: { value: 0 },
+    uWindup: { value: 0 },
     uAttack: { value: 0 },
+    uFrozen: { value: 0 },
+    uDistanceCue: { value: 0 },
     uLegSwing: { value: def.legSwing || 0 },
     uArmSwing: { value: def.armSwing || 0 },
     uBodySway: { value: def.bodySway || 0 },
@@ -498,6 +552,14 @@ export class AstronautVisual {
     this._scale = options.scale === undefined ? 1 : options.scale;
     this._lodDistance = options.lodDistance || this.definition.lodDistance;
     this._lodDistanceSq = this._lodDistance * this._lodDistance;
+    this._lodEnterDistance = this._lodDistance * (1 - LOD_HYSTERESIS);
+    this._lodExitDistance = this._lodDistance * (1 + LOD_HYSTERESIS);
+    this._lodEnterDistanceSq = this._lodEnterDistance * this._lodEnterDistance;
+    this._lodExitDistanceSq = this._lodExitDistance * this._lodExitDistance;
+    this._lodInitialized = false;
+    this._usingHighLod = true;
+    this._lastCameraDistance = 0;
+    this._distanceCue = 0;
     this._opacity = options.opacity === undefined ? 1 : clamp01(options.opacity);
     this._targetOpacity = this._opacity;
     this._hit = 0;
@@ -508,8 +570,12 @@ export class AstronautVisual {
     this._lean = 0;
     this._speed01 = 0;
     this._motion = 0;
+    this._windup = 0;
+    this._targetWindup = 0;
     this._attack = 0;
     this._targetAttack = 0;
+    this._frozen = 0;
+    this._poseLocked = false;
     this._motionPhase = this._phase;
     this._disposed = false;
     this._hasFacing = false;
@@ -598,7 +664,10 @@ export class AstronautVisual {
     if (material.uniforms.uPulse) material.uniforms.uPulse.value = this._pulse;
     if (material.uniforms.uMotionPhase) material.uniforms.uMotionPhase.value = this._motionPhase;
     if (material.uniforms.uMotion) material.uniforms.uMotion.value = this._motion;
+    if (material.uniforms.uWindup) material.uniforms.uWindup.value = this._windup;
     if (material.uniforms.uAttack) material.uniforms.uAttack.value = this._attack;
+    if (material.uniforms.uFrozen) material.uniforms.uFrozen.value = this._frozen;
+    if (material.uniforms.uDistanceCue) material.uniforms.uDistanceCue.value = this._distanceCue;
   }
 
   /** White-hot emissive hit confirmation; strength is normalized to 0..1. */
@@ -624,7 +693,12 @@ export class AstronautVisual {
     this._outlineEnabled = name === 'ultra' || name === 'high';
     this._shadowEnabled = this.type !== 'maw' && name !== 'low';
     this._lodScale = name === 'low' ? 0.62 : (name === 'medium' ? 0.78 : 1);
-    this._lodDistanceSq = (this._lodDistance * this._lodScale) ** 2;
+    const scaledLodDistance = this._lodDistance * this._lodScale;
+    this._lodDistanceSq = scaledLodDistance * scaledLodDistance;
+    this._lodEnterDistance = scaledLodDistance * (1 - LOD_HYSTERESIS);
+    this._lodExitDistance = scaledLodDistance * (1 + LOD_HYSTERESIS);
+    this._lodEnterDistanceSq = this._lodEnterDistance * this._lodEnterDistance;
+    this._lodExitDistanceSq = this._lodExitDistance * this._lodExitDistance;
     this.shadow.visible = this._shadowEnabled;
     return this;
   }
@@ -650,13 +724,24 @@ export class AstronautVisual {
    * @param {THREE.Vector3|THREE.Object3D|null} target Optional enemy target;
    *   when omitted, the visual faces the camera.
    * @param {object|null} state Optional allocation-free state bag. Supported
-   *   fields: hit, opacity, speed01, gaitPhase, attack, pitch, lean, bob,
-   *   pulse, visible.
+   *   fields: hit, opacity, speed01, gaitPhase, windup, attack, frozen,
+   *   poseLocked, pitch, lean, bob, pulse, visible.
    */
   update(dt, camera, target = null, state = null) {
     if (this._disposed || !camera) return;
     const step = Math.max(0, Math.min(dt, 0.1));
     this._age += step;
+
+    // poseLocked and frozen describe current state rather than an impulse, so
+    // omission means false. windup similarly returns to rest unless explicitly
+    // driven by the caller on the current frame.
+    this._poseLocked = Boolean(state && state.poseLocked);
+    this._frozen = state && state.frozen !== undefined
+      ? clamp01(state.frozen === true ? 1 : Number(state.frozen) || 0)
+      : 0;
+    this._targetWindup = state && state.windup !== undefined
+      ? clamp01(state.windup === true ? 1 : Number(state.windup) || 0)
+      : 0;
 
     if (state) {
       if (state.hit !== undefined) this._hit = Math.max(this._hit, clamp01(state.hit));
@@ -672,8 +757,23 @@ export class AstronautVisual {
 
     this._hit = Math.max(0, this._hit - step * 7.5);
     this._opacity = damp(this._opacity, this._targetOpacity, 13, step);
-    this._motion = damp(this._motion, this._speed01, this._speed01 > this._motion ? 12 : 7, step);
-    this._attack = damp(this._attack, this._targetAttack, this._targetAttack > this._attack ? 20 : 8, step);
+    if (this._poseLocked) {
+      // A frozen/stunned/pinned/dead pose must stop on this frame. Damping here
+      // leaves half a second of ghost walking, especially obvious at low FPS.
+      this._speed01 = 0;
+      this._motion = 0;
+      this._windup = 0;
+      this._targetWindup = 0;
+      this._attack = 0;
+      this._targetAttack = 0;
+    } else {
+      this._motion = damp(this._motion, this._speed01, this._speed01 > this._motion ? 12 : 7, step);
+      // The gameplay timer already supplies a smooth 0..1 anticipation curve.
+      // Track it exactly so the short, dodgeable tell reaches its authored pose
+      // before contact instead of losing strength to a second smoothing layer.
+      this._windup = this._targetWindup;
+      this._attack = damp(this._attack, this._targetAttack, this._targetAttack > this._attack ? 20 : 8, step);
+    }
 
     camera.getWorldPosition(this._cameraWorld);
     if (target && target.isObject3D) target.getWorldPosition(this._targetWorld);
@@ -690,11 +790,26 @@ export class AstronautVisual {
     const cdy = this._cameraWorld.y - worldY;
     const cdz = this._cameraWorld.z - worldZ;
     const distanceSq = cdx * cdx + cdy * cdy + cdz * cdz;
-    const useHigh = distanceSq <= this._lodDistanceSq;
+    this._lastCameraDistance = Math.sqrt(distanceSq);
+    if (!this._lodInitialized) {
+      this._usingHighLod = distanceSq <= this._lodDistanceSq;
+      this._lodInitialized = true;
+    } else if (this._usingHighLod) {
+      if (distanceSq > this._lodExitDistanceSq) this._usingHighLod = false;
+    } else if (distanceSq < this._lodEnterDistanceSq) {
+      this._usingHighLod = true;
+    }
+    const useHigh = this._usingHighLod;
     this.high.visible = useHigh;
     this.low.visible = !useHigh;
     this.outline.visible = useHigh && this._outlineEnabled;
     this.shadow.visible = this._shadowEnabled;
+
+    const distanceCueStart = this._lodEnterDistance * 0.62;
+    this._distanceCue = clamp01(
+      (this._lastCameraDistance - distanceCueStart)
+      / Math.max(0.001, this._lodExitDistance - distanceCueStart),
+    );
 
     const dx = this._targetWorld.x - worldX;
     const dz = this._targetWorld.z - worldZ;
@@ -719,21 +834,32 @@ export class AstronautVisual {
     }
 
     const def = this.definition;
-    this._phase += step * def.bobHz * Math.PI * 2 * (0.55 + this._speed01 * 0.45);
+    if (!this._poseLocked) {
+      this._phase += step * def.bobHz * Math.PI * 2 * (0.55 + this._speed01 * 0.45);
+    }
     if (!state || state.gaitPhase === undefined || !Number.isFinite(state.gaitPhase)) this._motionPhase = this._phase;
     const gaitBob = Math.abs(Math.cos(this._motionPhase)) * def.bodyBounce * this._motion;
-    const bob = state && state.bob !== undefined
-      ? state.bob
-      : Math.sin(this._phase) * def.bobAmount * (0.35 + this._motion * 0.65) + gaitBob;
+    const bob = this._poseLocked
+      ? 0
+      : (state && state.bob !== undefined
+        ? state.bob
+        : Math.sin(this._phase) * def.bobAmount * (0.35 + this._motion * 0.65) + gaitBob);
     const centerY = def.groundOffset * this._scale + def.height * this._scale * 0.5;
     const gaitSway = Math.sin(this._motionPhase) * def.bodySway * this._motion;
     const compression = Math.abs(Math.cos(this._motionPhase)) * this._motion * 0.022;
     const attackCompression = this._attack * Math.min(0.035, def.attackKick * 0.24);
+    const windupCrouch = this._windup * def.height * this._scale * 0.02;
+    const windupWiden = this._windup * 0.032;
+    const windupSquash = this._windup * 0.044;
     this.high.position.x = gaitSway;
     this.low.position.x = gaitSway;
-    this.high.position.y = centerY + bob;
+    this.high.position.y = centerY + bob - windupCrouch;
     this.low.position.y = this.high.position.y;
-    this.high.scale.set(1 + compression * 0.32 + attackCompression, 1 - compression - attackCompression * 0.45, 1);
+    this.high.scale.set(
+      1 + compression * 0.32 + attackCompression + windupWiden,
+      1 - compression - attackCompression * 0.45 - windupSquash,
+      1,
+    );
     this.low.scale.set(
       this._lowBaseWidth * this.high.scale.x,
       this._lowBaseHeight * this.high.scale.y,
@@ -750,14 +876,38 @@ export class AstronautVisual {
   }
 
   debugAnimationSnapshot() {
+    const texture = this.library.textures[this.type];
     return {
       type: this.type,
       quality: this._quality,
       motion: this._motion,
+      windup: this._windup,
+      windupTarget: this._targetWindup,
       attack: this._attack,
+      attackTarget: this._targetAttack,
+      frozen: this._frozen,
+      poseLocked: this._poseLocked,
       phase: this._motionPhase,
       highVisible: this.high.visible,
       lowVisible: this.low.visible,
+      distanceCue: this._distanceCue,
+      lod: {
+        initialized: this._lodInitialized,
+        usingHigh: this._usingHighLod,
+        cameraDistance: this._lastCameraDistance,
+        baseDistance: this._lodDistance * this._lodScale,
+        enterHighDistance: this._lodEnterDistance,
+        exitHighDistance: this._lodExitDistance,
+        hysteresis: LOD_HYSTERESIS,
+      },
+      sampler: {
+        minFilter: texture.minFilter === THREE.LinearMipmapLinearFilter
+          ? 'LinearMipmapLinearFilter'
+          : texture.minFilter,
+        magFilter: texture.magFilter === THREE.LinearFilter ? 'LinearFilter' : texture.magFilter,
+        generateMipmaps: texture.generateMipmaps,
+        anisotropy: texture.anisotropy,
+      },
       position: [this.high.position.x, this.high.position.y, this.high.position.z],
       rotation: [this.high.rotation.x, this.high.rotation.y, this.high.rotation.z],
       scale: [this.high.scale.x, this.high.scale.y, this.high.scale.z],

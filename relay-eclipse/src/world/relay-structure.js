@@ -42,6 +42,11 @@ const RAMP_RAIL_POST_RADIUS = 0.075;
 const RAMP_RAIL_RADIUS_OFFSET = 0.08;
 const RAMP_RAIL_BOTTOM = 0.12;
 const RAMP_RAIL_TOP = 1.23;
+const RAMP_SURFACE_MARGIN = 0.12;
+// The deck notch begins while a standing player still has comfortable physical
+// headroom beneath its lip. This also starts before the generic step resolver
+// could mistake the deck for a climbable 1.7 m stair.
+const DECK_ENTRY_HEADROOM = 1.95;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -109,6 +114,92 @@ function makeHelixGeometry(config, segments = 144, thickness = 0.3) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function appendAnnularSector(
+  positions,
+  uvs,
+  indices,
+  innerRadius,
+  outerRadius,
+  phiStart,
+  phiLength,
+  angularSegments,
+  radialSegments,
+  uvRadius,
+) {
+  if (outerRadius <= innerRadius + 1e-5 || phiLength <= 1e-5) return;
+  const base = positions.length / 3;
+  const row = radialSegments + 1;
+  for (let segment = 0; segment <= angularSegments; segment++) {
+    const phi = phiStart + phiLength * (segment / angularSegments);
+    const cos = Math.cos(phi);
+    const sin = Math.sin(phi);
+    for (let ring = 0; ring <= radialSegments; ring++) {
+      const radius = THREE.MathUtils.lerp(innerRadius, outerRadius, ring / radialSegments);
+      const x = cos * radius;
+      const y = sin * radius;
+      positions.push(x, y, 0);
+      uvs.push((x / uvRadius + 1) * 0.5, (y / uvRadius + 1) * 0.5);
+    }
+  }
+  for (let segment = 0; segment < angularSegments; segment++) {
+    for (let ring = 0; ring < radialSegments; ring++) {
+      const innerNow = base + segment * row + ring;
+      const outerNow = innerNow + 1;
+      const innerNext = innerNow + row;
+      const outerNext = innerNext + 1;
+      // Counter-clockwise as viewed from +Z. The finished mesh rotates +Z to
+      // world +Y, matching THREE.RingGeometry's upward-facing deck surface.
+      indices.push(innerNow, outerNow, outerNext, innerNow, outerNext, innerNext);
+    }
+  }
+}
+
+/**
+ * Build the moon deck with a genuine, visible slot over the last arc of the
+ * spiral. The local +phi sector maps to the clockwise world-space approach once
+ * the deck is rotated flat, so phi 0..corridorAngle exactly follows ramp t..1.
+ */
+function makeMoonDeckGeometry(config, corridorAngle, segments = 80, radialSegments = 4) {
+  const positions = [];
+  const uvs = [];
+  const indices = [];
+  const corridorInner = Math.max(config.deckOpeningRadius, config.rampInnerRadius - RAMP_SURFACE_MARGIN);
+  const corridorOuter = Math.min(config.deckOuterRadius, config.rampOuterRadius + RAMP_SURFACE_MARGIN);
+  const mainAngle = TAU - corridorAngle;
+  const mainSegments = Math.max(1, Math.ceil(segments * mainAngle / TAU));
+  const corridorSegments = Math.max(1, Math.ceil(segments * corridorAngle / TAU));
+  const deckWidth = config.deckOuterRadius - config.deckOpeningRadius;
+  const innerSegments = Math.max(1, Math.round(radialSegments * (corridorInner - config.deckOpeningRadius) / deckWidth));
+  const outerSegments = Math.max(1, Math.round(radialSegments * (config.deckOuterRadius - corridorOuter) / deckWidth));
+
+  // Most of the annulus remains continuous. Inside the approach sector, retain
+  // only the deck inside and outside the ramp footprint, leaving a physical slot.
+  appendAnnularSector(
+    positions, uvs, indices,
+    config.deckOpeningRadius, config.deckOuterRadius,
+    corridorAngle, mainAngle, mainSegments, radialSegments, config.deckOuterRadius,
+  );
+  appendAnnularSector(
+    positions, uvs, indices,
+    config.deckOpeningRadius, corridorInner,
+    0, corridorAngle, corridorSegments, innerSegments, config.deckOuterRadius,
+  );
+  appendAnnularSector(
+    positions, uvs, indices,
+    corridorOuter, config.deckOuterRadius,
+    0, corridorAngle, corridorSegments, outerSegments, config.deckOuterRadius,
+  );
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
@@ -191,6 +282,15 @@ export function buildRelayStructure(scene, options = {}) {
   const rampRise = config.deckY - config.lowerFloorY;
   const rampLength = Math.hypot(averageRampRadius * totalRampAngle, rampRise);
   const rampGrade = Math.atan2(rampRise, averageRampRadius * totalRampAngle);
+  const rampBottomY = config.lowerFloorY + 0.03;
+  const rampTopY = config.deckY + 0.035;
+  const rampSurfaceRise = rampTopY - rampBottomY;
+  const deckEntryHeadroom = Math.max(DECK_ENTRY_HEADROOM, config.stepGrace + 0.15);
+  const deckEntryStartT = clamp01((config.deckY - deckEntryHeadroom - rampBottomY) / rampSurfaceRise);
+  const deckEntryCorridorAngle = Math.min(TAU, (1 - deckEntryStartT) * totalRampAngle);
+  const rampEndAngle = config.rampStartAngle + totalRampAngle;
+  const deckEntryInnerRadius = Math.max(config.deckOpeningRadius, config.rampInnerRadius - RAMP_SURFACE_MARGIN);
+  const deckEntryOuterRadius = Math.min(config.deckOuterRadius, config.rampOuterRadius + RAMP_SURFACE_MARGIN);
 
   const root = new THREE.Group();
   root.name = 'relay-observatory';
@@ -469,10 +569,12 @@ export function buildRelayStructure(scene, options = {}) {
     landingSpecs.push({ x, z, y, r: radius, tier: index + 1, object: landing });
   }
 
-  // Moon deck.  RingGeometry means the central aperture is genuinely absent
-  // from the vertex/index buffers; isDeckOpening() and groundAt() mirror it.
+  // Moon deck. The central aperture is genuinely absent from the vertex/index
+  // buffers. The custom annulus also cuts a matching slot
+  // over the ramp's final arc, so the deck never visually or analytically covers
+  // the player's bidirectional route through the lip.
   const moonDeck = register(new THREE.Mesh(
-    new THREE.RingGeometry(config.deckOpeningRadius, config.deckOuterRadius, 80, 4),
+    makeMoonDeckGeometry(config, deckEntryCorridorAngle, 80, 4),
     deckMaterial,
   ));
   moonDeck.name = 'relay-moon-surface-deck';
@@ -738,6 +840,30 @@ export function buildRelayStructure(scene, options = {}) {
     return { x: x - center.x, z: z - center.z };
   }
 
+  // Return normalized progress on the final ramp arc when a point lies inside
+  // the deck-entry slot. This spatial predicate is shared by visible geometry,
+  // numeric ground resolution, detailed surface probes, and the test hook below.
+  function deckEntryTAtLocal(localX, localZ, radius = Math.hypot(localX, localZ)) {
+    if (radius < deckEntryInnerRadius || radius > deckEntryOuterRadius) return null;
+    const angle = Math.atan2(localZ, localX);
+    let angleBackFromEnd = ((rampEndAngle - angle) % TAU + TAU) % TAU;
+    if (angleBackFromEnd > TAU - 1e-6) angleBackFromEnd = 0;
+    if (angleBackFromEnd > deckEntryCorridorAngle + 1e-5) return null;
+    const t = 1 - angleBackFromEnd / totalRampAngle;
+    return t >= deckEntryStartT - 1e-5 ? clamp01(t) : null;
+  }
+
+  function deckEntryCorridorAt(x, z) {
+    const localX = x - center.x;
+    const localZ = z - center.z;
+    const radius = Math.hypot(localX, localZ);
+    const t = deckEntryTAtLocal(localX, localZ, radius);
+    if (t === null) return null;
+    const rampY = baseY + THREE.MathUtils.lerp(rampBottomY, rampTopY, t);
+    const deckY = baseY + config.deckY;
+    return { t, radius, rampY, deckY, deckClearance: deckY - rampY };
+  }
+
   function landingSurfaceAt(localX, localZ, queryY) {
     let best = -Infinity;
     let bestLanding = null;
@@ -756,7 +882,7 @@ export function buildRelayStructure(scene, options = {}) {
 
   function rampSurfaceAt(localX, localZ, queryY) {
     const radius = Math.hypot(localX, localZ);
-    if (radius < config.rampInnerRadius - 0.12 || radius > config.rampOuterRadius + 0.12) return null;
+    if (radius < config.rampInnerRadius - RAMP_SURFACE_MARGIN || radius > config.rampOuterRadius + RAMP_SURFACE_MARGIN) return null;
     const angle = Math.atan2(localZ, localX);
     let relative = angle - config.rampStartAngle;
     relative = ((relative % TAU) + TAU) % TAU;
@@ -958,7 +1084,7 @@ export function buildRelayStructure(scene, options = {}) {
       ) best = landingY;
     }
 
-    if (radius >= config.rampInnerRadius - 0.12 && radius <= config.rampOuterRadius + 0.12) {
+    if (radius >= config.rampInnerRadius - RAMP_SURFACE_MARGIN && radius <= config.rampOuterRadius + RAMP_SURFACE_MARGIN) {
       const angle = Math.atan2(localZ, localX);
       let relative = ((angle - config.rampStartAngle) % TAU + TAU) % TAU;
       const maxTurn = Math.ceil(config.rampTurns);
@@ -973,6 +1099,7 @@ export function buildRelayStructure(scene, options = {}) {
 
     const deckY = baseY + config.deckY;
     if (
+      deckEntryTAtLocal(localX, localZ, radius) === null &&
       radius >= config.deckOpeningRadius &&
       radius <= config.deckOuterRadius &&
       deckY <= y + config.stepGrace &&
@@ -999,6 +1126,7 @@ export function buildRelayStructure(scene, options = {}) {
     }
     const deckY = baseY + config.deckY;
     if (
+      deckEntryTAtLocal(local.x, local.z, radius) === null &&
       radius >= config.deckOpeningRadius &&
       radius <= config.deckOuterRadius &&
       deckY <= y + config.stepGrace &&
@@ -1116,6 +1244,10 @@ export function buildRelayStructure(scene, options = {}) {
     rampRailSegments: handrails.length,
     rampRailGaps: RAMP_RAIL_GAP_CENTERS.length,
     rampRailCollides: true,
+    deckEntryStartT,
+    deckEntryArcDegrees: THREE.MathUtils.radToDeg(deckEntryCorridorAngle),
+    deckEntryHeadroom,
+    deckEntryIsGeometric: true,
     spawnPointCount: spawnPoints.length,
     platformDescriptorCount: platforms.length,
     hasInvisibleBoundary: false,
@@ -1142,6 +1274,7 @@ export function buildRelayStructure(scene, options = {}) {
     supportAt,
     navigationAt,
     isDeckOpening,
+    deckEntryCorridorAt,
     rampSurfaceAt: (x, z, y = Infinity) => {
       const local = localCoordinates(x, z);
       return rampSurfaceAt(local.x, local.z, y);

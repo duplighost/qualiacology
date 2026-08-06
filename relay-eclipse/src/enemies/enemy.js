@@ -115,6 +115,11 @@ const VISUAL_PROFILES = Object.freeze({
   wurm:        Object.freeze({ type: 'maw',       scale: 0.90 }),
 });
 
+// Basic husks are the first enemy most players meet. Give their contact hit a
+// short, dodgeable anticipation beat instead of applying damage on the same
+// frame that the visual recoil begins.
+const HUSK_MELEE_WINDUP = 0.16;
+
 // --- material + primitive helpers ----------------------------------------
 
 // Skin is FLAT-SHADED by default so creatures read as faceted low-poly art
@@ -929,6 +934,7 @@ export class Enemy {
     this.knockback = new THREE.Vector3();
     this.attackTimer = rand(0.2, this.def.attackCd);
     this._attackVisualT = 0;
+    this._meleeWindupT = -1;
     this.phase = rand(0, Math.PI * 2);
     this.flash = 0;
     this.astronautVisual = null;
@@ -978,6 +984,8 @@ export class Enemy {
     this._ent = new THREE.Vector3();
     this._relaySeek = new THREE.Vector3(); // allocation-free helix waypoint
     this._relayTier = 0;
+    this._relayOnRamp = false;
+    this._relayNeedsTransition = false;
     this.elite = null;             // 'blazing' | 'frost' | 'volatile' | 'gilded'
     this.scoreMult = 1;
     this._flank = Math.random() < 0.5 ? 1 : -1;   // which side a flanker arcs to
@@ -1158,11 +1166,16 @@ export class Enemy {
 
   update(dt, player) {
     this._attackVisualT = Math.max(0, this._attackVisualT - dt);
-    if (this._pinned) return;   // main owns the corpse transform while it's skewered on a dash
+    if (this._pinned) {
+      this._meleeWindupT = -1;
+      return;   // main owns the corpse transform while it's skewered on a dash
+    }
     if (this.deathT >= 0) { this._updateDeath(dt); return; }
     if (this.frozenT > 0) { this._frozenTick(dt); return; }
     if (this._stunT > 0) {
       // crashed into something mid-charge: reeling, extra-vulnerable
+      this._meleeWindupT = -1;
+      this.attackTimer = Math.max(this.attackTimer, 0.12);
       this._stunT -= dt;
       if (this.parts.pelvis) this.parts.pelvis.rotation.z = Math.sin(this._stunT * 9) * 0.18;
       this.flash = Math.max(this.flash, 0.25);
@@ -1212,7 +1225,9 @@ export class Enemy {
       // a sniper holds a firing standoff — advance if far, back off if crowded
       if (dist > def.standoff + 3) desired.addScaledVector(dir, spd);
       else if (dist < def.standoff - 4) desired.addScaledVector(dir, -spd * 0.8);
-    } else if (dist > def.reach + 0.4) desired.addScaledVector(dir, spd);
+    } else if (dist > def.reach + 0.4 && !(this.type === 'husk' && this._meleeWindupT >= 0)) {
+      desired.addScaledVector(dir, spd);
+    }
 
     // stalker/wisp weave: a sideways sine so they don't beeline (enraged charges straight)
     if (def.weave && this.lunging <= 0 && !this.enraged) {
@@ -1276,6 +1291,13 @@ export class Enemy {
     // wisps + flyers float over foliage; everything else pushes out of it
     if (def.gait !== 'float' && !def.flyer) this.mgr.collideEnemy(this, def.radius);
     else this.mgr.clampBounds(this);
+    // Enemy navigation is analytic, so its steering target must keep a walker
+    // on the authored helix just as firmly as the visible rail keeps the player
+    // there. A short tangent target already prevents chord-cutting; this radial
+    // safety clamp catches the last sub-frame of inertia at either edge.
+    // Once the longitudinal transition is complete, release the radial clamp so
+    // a walker can take the final step off the strip onto an overlapping landing.
+    if (this._relayOnRamp && this._relayNeedsTransition && !def.flyer) this._recoverRelayRampEdge();
     if (def.flyer) {
       // altitude control: cruise above the ground, dive to the player to strike,
       // then pull up and swoop back for another pass. (A sniper holds a high
@@ -1320,7 +1342,10 @@ export class Enemy {
     if (!this.boss && this.spawnT >= 1 && this.frozenT <= 0 && this._stunT <= 0) {
       this._stallRef = this._stallRef || this.pos.clone();
       if (this.pos.distanceToSquared(this._stallRef) > 2.25) { this._stallRef.copy(this.pos); this._stallT = 0; }
-      else if ((this._stallT = (this._stallT || 0) + dt) > 9 && pdist > 22) {
+      else if (
+        (this._stallT = (this._stallT || 0) + dt) > 9 &&
+        (pdist > 22 || this._relayNeedsTransition)
+      ) {
         this.mgr.relocate(this);
         this._stallRef.copy(this.pos); this._stallT = 0;
       }
@@ -1351,8 +1376,28 @@ export class Enemy {
       }
       // attack on contact (must be within horizontal AND vertical reach)
       this.attackTimer -= dt;
-      if (pdist <= def.reach + player.radius + 0.5 && vGap <= vReach && this.attackTimer <= 0) {
+      const contactReady = pdist <= def.reach + player.radius + 0.5 && vGap <= vReach;
+      let commitContactAttack = false;
+      if (this.type === 'husk') {
+        if (this._meleeWindupT >= 0) {
+          if (!contactReady) {
+            // A clean dodge cancels the hit and buys a brief reset before the
+            // husk can begin another anticipation pose.
+            this._meleeWindupT = -1;
+            this.attackTimer = Math.max(this.attackTimer, 0.12);
+          } else {
+            this._meleeWindupT += dt;
+            commitContactAttack = this._meleeWindupT >= HUSK_MELEE_WINDUP;
+          }
+        } else if (contactReady && this.attackTimer <= 0) {
+          this._meleeWindupT = 0;
+        }
+      } else {
+        commitContactAttack = contactReady && this.attackTimer <= 0;
+      }
+      if (commitContactAttack) {
         this.attackTimer = def.attackCd;
+        this._meleeWindupT = -1;
         this._attackVisualT = 0.28;
         player.takeDamage((def.damage + this.mgr.wave * 0.5) * this._enrageDmg, this.pos);
         if (this.elite === 'frost' && this.mgr.onPlayerChilled) this.mgr.onPlayerChilled();
@@ -1599,6 +1644,12 @@ export class Enemy {
   // Where should movement head? The player, unless we're on different layers of
   // the world — then the nearest sinkhole entrance (the only way up/down).
   _seekPos(player) {
+    // These flags describe this frame's steering decision. Clear them before
+    // any early return so a walker that leaves the relay pursuit path for a
+    // sinkhole/cave path cannot inherit last frame's helix edge clamp or its
+    // transition-aware stall watchdog exemption.
+    this._relayOnRamp = false;
+    this._relayNeedsTransition = false;
     const w = this.mgr.world;
     if (!w) return player.pos;
     if (!w.isUnder || !w.entrances || !w.entrances.length) {
@@ -1629,18 +1680,25 @@ export class Enemy {
 
   _relaySeekPos(player) {
     const relay = this.mgr.world && this.mgr.world.relay;
+    this._relayOnRamp = false;
+    this._relayNeedsTransition = false;
     if (!relay || !relay.navigationAt || !relay.rampSurfaceAt || !relay.config || !relay.center) return player.pos;
 
     const pNav = this.mgr.playerRelayNav || relay.navigationAt(player.pos.x, player.pos.z, player.pos.y + 0.75);
-    const meNav = relay.navigationAt(this.pos.x, this.pos.z, this.pos.y + 0.75);
+    // navigationAt already includes the relay's 1.7 m step grace. Adding another
+    // 0.75 m here let the moon deck leak through the ramp slot and reclassify a
+    // walker whose feet were correctly descending on the helix as tier 4.
+    const meQueryY = this.pos.y + 0.05;
+    const meNav = relay.navigationAt(this.pos.x, this.pos.z, meQueryY);
     const pTier = pNav && pNav.walkable && pNav.tier >= 0 ? pNav.tier : 0;
     const meTier = meNav && meNav.walkable && meNav.tier >= 0 ? meNav.tier : 0;
     this._relayTier = meTier;
 
     let meRamp = null;
     if (meNav && meNav.kind === 'spiral-ramp') {
-      meRamp = relay.rampSurfaceAt(this.pos.x, this.pos.z, this.pos.y + 0.75);
+      meRamp = relay.rampSurfaceAt(this.pos.x, this.pos.z, meQueryY);
     }
+    this._relayOnRamp = !!meRamp;
 
     // A coarse tier can span more than one helix turn. Stay on the authored
     // strip until the target ramp position/landing is genuinely close in t.
@@ -1649,27 +1707,30 @@ export class Enemy {
       if (pNav && pNav.kind === 'ramp-landing') playerRampT = pTier / 4;
       if (meRamp && playerRampT >= 0 && Math.abs(playerRampT - meRamp.t) > 0.035) {
         const sign = playerRampT > meRamp.t ? 1 : -1;
-        return this._relayRampWaypoint(meRamp.t + sign * 0.052, sign);
+        this._relayNeedsTransition = true;
+        return this._relayRampWaypoint(meRamp.t + sign * 0.012, sign);
       }
       if (meNav && meNav.kind === 'ramp-landing' && playerRampT >= 0) {
         const anchorT = meTier / 4;
         if (Math.abs(playerRampT - anchorT) > 0.035) {
           const sign = playerRampT > anchorT ? 1 : -1;
-          return this._relayRampWaypoint(anchorT + sign * 0.028, sign);
+          this._relayNeedsTransition = true;
+          return this._relayRampWaypoint(anchorT + sign * 0.01, sign);
         }
       }
       return player.pos;
     }
 
     const sign = pTier > meTier ? 1 : -1;
+    this._relayNeedsTransition = true;
     // Lower arena and moon deck may enter only at the physical helix endpoints.
     if (meTier <= 0) return this._relayRampWaypoint(0, 1);
     if (meTier >= 4) return this._relayRampWaypoint(1, -1);
-    if (meRamp) return this._relayRampWaypoint(meRamp.t + sign * 0.052, sign);
+    if (meRamp) return this._relayRampWaypoint(meRamp.t + sign * 0.012, sign);
 
     // Rest pads overlap the helix at t=.25/.5/.75. Step onto the correct side.
     const landingT = clamp(meTier / 4, 0, 1);
-    return this._relayRampWaypoint(landingT + sign * 0.028, sign);
+    return this._relayRampWaypoint(landingT + sign * 0.01, sign);
   }
 
   _relayRampWaypoint(rawT, direction) {
@@ -1681,16 +1742,42 @@ export class Enemy {
     let x = relay.center.x + Math.cos(theta) * radius;
     let z = relay.center.z + Math.sin(theta) * radius;
 
-    // Move beyond an endpoint along its tangent so walkers leave the strip
-    // instead of orbiting forever at t=0 or t=1.
+    // Move through either endpoint along the direction of travel. This applies
+    // both when leaving the strip and when entering it: targeting the exact lip
+    // lets melee walkers stop one reach-radius short without ever changing layer.
     const tx = -Math.sin(theta), tz = Math.cos(theta);
-    if (direction < 0 && rawT <= 0.018) { x -= tx * 4.0; z -= tz * 4.0; }
-    else if (direction > 0 && rawT >= 0.982) { x += tx * 4.0; z += tz * 4.0; }
+    if (rawT <= 0.018 || rawT >= 0.982) {
+      x += tx * direction * 4.0;
+      z += tz * direction * 4.0;
+    }
 
     const lowerY = relay.center.y + cfg.lowerFloorY + 0.03;
     const upperY = relay.center.y + cfg.deckY + 0.035;
     this._relaySeek.set(x, lerp(lowerY, upperY, t), z);
     return this._relaySeek;
+  }
+
+  _recoverRelayRampEdge() {
+    const relay = this.mgr.world && this.mgr.world.relay;
+    if (!relay || !relay.config || !relay.center) return;
+    const cfg = relay.config;
+    const dx = this.pos.x - relay.center.x;
+    const dz = this.pos.z - relay.center.z;
+    const radius = Math.hypot(dx, dz);
+    if (radius < 1e-5) return;
+    const bodyClearance = Math.max(0.16, this.def.radius * 0.62);
+    const safeInner = cfg.rampInnerRadius + bodyClearance;
+    const safeOuter = cfg.rampOuterRadius - bodyClearance;
+    const safeRadius = clamp(radius, safeInner, Math.max(safeInner, safeOuter));
+    if (Math.abs(safeRadius - radius) <= 1e-5) return;
+    const correction = safeRadius / radius;
+    this.pos.x = relay.center.x + dx * correction;
+    this.pos.z = relay.center.z + dz * correction;
+    const radialVelocity = (this.vel.x * dx + this.vel.z * dz) / radius;
+    if ((radius < safeInner && radialVelocity < 0) || (radius > safeOuter && radialVelocity > 0)) {
+      this.vel.x -= radialVelocity * dx / radius;
+      this.vel.z -= radialVelocity * dz / radius;
+    }
   }
 
   _nearestEntrance(ref) {
@@ -1717,6 +1804,7 @@ export class Enemy {
   freezeSolid(t) {
     this.frozenT = t;
     this.attackTimer = Math.max(this.attackTimer, 1);
+    this._meleeWindupT = -1;
   }
 
   // Boss dispatch: the yeti fights differently (ranged snowball-thrower).
@@ -2118,6 +2206,9 @@ export class EnemyManager {
       speed01: 0,
       gaitPhase: enemy.phase,
       attack: 0,
+      windup: 0,
+      poseLocked: false,
+      frozen: 0,
       pitch: 0,
       lean: 0,
       pulse: 0,
@@ -2157,6 +2248,8 @@ export class EnemyManager {
     state.hit = enemy.flash;
     state.opacity = enemy._visualOpacity * spawnOpacity;
     const locomotionLocked = enemy.frozenT > 0 || enemy._stunT > 0 || enemy._pinned || enemy.deathT >= 0;
+    state.poseLocked = locomotionLocked;
+    state.frozen = enemy.frozenT > 0 ? 1 : 0;
     state.speed01 = enemy.alive && !locomotionLocked
       ? clamp01(Math.hypot(enemy.vel.x, enemy.vel.z) / Math.max(0.001, enemy.speed))
       : 0;
@@ -2168,9 +2261,13 @@ export class EnemyManager {
     // Preserve non-colour attack motion and telegraphs after the high-detail
     // cutout replaces a procedural body. Audio, ground effects, and movement
     // remain separate redundant warnings or impact confirmation.
+    state.windup = 0;
     if (enemy.type === 'husk') {
       state.attack = clamp01(enemy._attackVisualT / 0.28);
-      state.pulse = state.attack * 0.78;
+      state.windup = enemy._meleeWindupT >= 0
+        ? clamp01(enemy._meleeWindupT / HUSK_MELEE_WINDUP)
+        : 0;
+      state.pulse = Math.max(state.attack * 0.78, state.windup * 0.68);
     } else if (enemy.type === 'stalker') {
       state.attack = enemy.lunging > 0 ? 1 : 0;
       state.pulse = state.attack || enemy.lungeCd < 0.28 ? 1 : 0;
@@ -2189,7 +2286,10 @@ export class EnemyManager {
         : 0;
       state.pulse = state.attack * 0.78;
     }
-    if (locomotionLocked) state.attack = 0;
+    if (locomotionLocked) {
+      state.attack = 0;
+      state.windup = 0;
+    }
     state.visible = enemy.type !== 'wurm' || enemy._wstate === 'erupt';
     visual.update(dt, this.visualCamera, null, state);
   }

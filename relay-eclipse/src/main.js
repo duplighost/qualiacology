@@ -69,6 +69,16 @@ const FINISHER_MIN = 55;         // ...or below this absolute hp
 const FINISHER_BONUS = 150;
 const FINISHER_HEAL = 18;        // Glory-kill style health reward
 const DROP_HEALTH = 26;
+// Cold-start toward a budgeted world-render pixel count. The DOM HUD remains native
+// resolution, while the 3D scene avoids spending its first several seconds at
+// an overloaded desktop/high-DPR buffer. Healthy hardware can still recover
+// toward maxDpr through the ordinary hysteretic governor.
+const COLD_START_PIXEL_BUDGET = 720_000;
+
+function coldStartDpr(width = window.innerWidth, height = window.innerHeight) {
+  const cssPixels = Math.max(1, width * height);
+  return Math.min(1, Math.sqrt(COLD_START_PIXEL_BUDGET / cssPixels));
+}
 
 class Game {
   constructor() {
@@ -157,7 +167,15 @@ class Game {
       resizeTargets: [this.post],
       minDpr: 0.65,
       maxDpr: Math.min(window.devicePixelRatio || 1, 1.6),
-      initialQuality: 'high',
+      // Medium is the honest cold-start tier: it avoids several seconds of
+      // overloaded high-quality rendering on older/mobile GPUs, while the
+      // governor can still promote healthy hardware after its long recovery
+      // dwell. Severe pressure is allowed to step down quickly at boot.
+      initialQuality: 'medium',
+      initialDpr: coldStartDpr(),
+      minimumSamples: 24,
+      degradeAfterMs: 900,
+      degradeCooldownMs: 1200,
       onQualityChange: ({ preset }) => {
         // Preserve the scene's authored composition while scaling its expensive
         // screen-space garnish. Resolution remains the governor's first lever.
@@ -680,6 +698,7 @@ class Game {
       el.addEventListener('touchend', up); el.addEventListener('touchcancel', up);
     };
     hold(hud.touchFire, 'fire'); hold(hud.touchJump, 'jump');
+    hold(hud.touchSlide, 'crouch'); hold(hud.touchTime, 'slowmo');
     // dash: an edge tap
     hud.touchDash.addEventListener('touchstart', (e) => { e.preventDefault(); hud.touchDash.classList.add('active'); this.input.setHeld('dash', true); this.input.setHeld('dash', false); }, { passive: false });
     hud.touchDash.addEventListener('touchend', () => hud.touchDash.classList.remove('active'));
@@ -705,6 +724,16 @@ class Game {
     const releaseReload = (e) => { e.preventDefault(); hud.touchReload.classList.remove('active'); };
     hud.touchReload.addEventListener('touchend', releaseReload, { passive: false });
     hud.touchReload.addEventListener('touchcancel', releaseReload, { passive: false });
+    hud.touchOrb.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      hud.touchOrb.classList.add('active');
+      // The orb is a discrete command, like reload: execute it immediately so
+      // a short phone tap cannot vanish between animation frames.
+      if (this.state === 'playing') this._throwGrenade();
+    }, { passive: false });
+    const releaseOrb = (e) => { e.preventDefault(); hud.touchOrb.classList.remove('active'); };
+    hud.touchOrb.addEventListener('touchend', releaseOrb, { passive: false });
+    hud.touchOrb.addEventListener('touchcancel', releaseOrb, { passive: false });
     hud.touchPause.addEventListener('touchstart', (e) => { e.preventDefault(); if (this.state === 'playing') { this.state = 'paused'; this.hud.showPause(); } }, { passive: false });
   }
 
