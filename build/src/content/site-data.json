@@ -500,6 +500,19 @@
       "metaDescription": "VESPERWAKE: THE HOLLOW BELL is a three-level gothic action platformer about a bellwright climbing a city trapped at midnight.",
       "controls": "A/D or arrows move · Space/Z jump · J/X whip · K/Shift quickstep · touch",
       "actionLabel": "Begin the Wake"
+    },
+    {
+      "slug": "fetch",
+      "title": "FETCH",
+      "descriptor": "Cursed-skull horror",
+      "group": "horror",
+      "featured": false,
+      "image": "/assets/games/fetch-card-clean.jpg",
+      "alt": "A moonlit forest path between dark trunks, seen over a pale skull carried at the chest",
+      "summary": "You wake up holding a skull you cannot get rid of. Thrown, it zips straight back — it is the key, the weapon, the only light, and the last thing you want in your hands. The bedroom door is locked from the inside, and the way out is down.",
+      "metaDescription": "FETCH is a browser first-person horror game about a cursed skull that always comes back — key, weapon and lamp through a locked house, a graveyard, and a forest that seals behind you.",
+      "controls": "WASD move · mouse look · hold LMB charge throw · tap RMB or E call it back · Shift run · Space jump · E use",
+      "actionLabel": "Pick it up"
     }
   ],
   "albums": [

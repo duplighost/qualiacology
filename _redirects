@@ -168,3 +168,7 @@
 # --- VESPERWAKE: THE HOLLOW BELL ---
 /vesperwake.html  /vesperwake/  301!
 /hollow-bell      /vesperwake/  302
+
+# --- FETCH ---
+/fetch.html  /fetch/  301!
+/skull       /fetch/  302
