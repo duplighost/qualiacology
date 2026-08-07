@@ -2284,6 +2284,31 @@ export class EnemyManager {
     state.pitch = enemy.group.rotation.x;
     state.lean = enemy.group.rotation.z + enemy.hurtLean * 0.45;
     if (enemy._stunT > 0) state.lean += Math.sin(enemy._stunT * 9) * 0.12;
+    // Bank into turns. Without it a walker changes direction by pivoting on the
+    // spot with a rigid upright body, which is the other half of why these read
+    // as sliding rather than moving under their own power. Taken from how fast
+    // the velocity heading is actually rotating, so it stays honest at any
+    // speed and costs one angle per enemy per frame.
+    if (locomotionLocked) {
+      enemy._bank = 0;
+      enemy._bankRef = undefined;
+    } else {
+      const planar = Math.hypot(enemy.vel.x, enemy.vel.z);
+      const stepDt = Math.max(dt, 1e-3);
+      if (planar > 0.25) {
+        const heading = Math.atan2(enemy.vel.x, enemy.vel.z);
+        if (enemy._bankRef === undefined) enemy._bankRef = heading;
+        let turn = heading - enemy._bankRef;
+        turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+        enemy._bankRef = heading;
+        const rate = clamp(turn / stepDt, -4, 4);
+        enemy._bank = damp(enemy._bank || 0, rate * 0.06 * state.speed01, 9, stepDt);
+      } else {
+        enemy._bankRef = undefined;
+        enemy._bank = damp(enemy._bank || 0, 0, 7, stepDt);
+      }
+      state.lean += enemy._bank;
+    }
     // Preserve non-colour attack motion and telegraphs after the high-detail
     // cutout replaces a procedural body. Audio, ground effects, and movement
     // remain separate redundant warnings or impact confirmation.

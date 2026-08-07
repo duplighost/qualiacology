@@ -82,27 +82,49 @@ const ANIMATED_IMPOSTOR_DEFORM = /* glsl */`
     float side = x < 0.0 ? -1.0 : 1.0;
     float separated = smoothstep(0.035, 0.22, abs(x));
     float lower = (1.0 - smoothstep(0.38, 0.59, texUv.y)) * separated;
-    float legCycle = sin(uMotionPhase + (side > 0.0 ? 3.14159265 : 0.0));
-    float planted = 0.5 + 0.5 * legCycle;
 
-    // Each half of the lower silhouette advances in opposing depth, lifts on
-    // its forward phase, and opens slightly at the foot. The deformation is
-    // smooth around the pelvis so the detailed source texture does not tear.
-    p.z += lower * legCycle * uLegSwing * uMotion;
-    p.y += lower * planted * uLegSwing * 0.62 * uMotion;
-    p.x += lower * legCycle * uLegSwing * 0.38 * uMotion;
+    // A sine ran both legs through the same motion in both halves of the
+    // cycle, which means the planted foot slid backwards along the ground for
+    // the whole stance — the loudest possible tell that a thing is not really
+    // walking. Split the cycle instead. Through stance the foot tracks steadily
+    // back at the rate the body passes over it; the shorter swing phase whips
+    // it forward and lifts it clear. Stance is the longer half, as in a walk.
+    const float STANCE = 0.62;
+    float cyc = fract((uMotionPhase + (side > 0.0 ? 3.14159265 : 0.0)) / 6.2831853);
+    float inStance = step(cyc, STANCE);
+    float stanceT = cyc / STANCE;
+    float swingT = (cyc - STANCE) / (1.0 - STANCE);
+    float travel = mix(
+      mix(-1.0, 1.0, smoothstep(0.0, 1.0, swingT)),
+      mix(1.0, -1.0, stanceT),
+      inStance);
+    float lift = (1.0 - inStance) * sin(swingT * 3.14159265);
+
+    // The leg travels in depth, lifts only while swinging, and opens slightly
+    // at the foot. Deformation stays smooth around the pelvis so the detailed
+    // source texture does not tear.
+    p.z += lower * travel * uLegSwing * uMotion;
+    p.y += lower * lift * uLegSwing * 0.82 * uMotion;
+    p.x += lower * travel * uLegSwing * 0.34 * uMotion;
 
     float armBand = smoothstep(0.34, 0.62, abs(x))
       * smoothstep(0.34, 0.54, texUv.y)
       * (1.0 - smoothstep(0.82, 0.95, texUv.y));
-    p.z -= armBand * legCycle * uArmSwing * uMotion;
-    p.x -= armBand * legCycle * uArmSwing * 0.18 * uMotion;
-    p.y += armBand * (0.5 - planted) * uArmSwing * 0.42 * uMotion;
+    p.z -= armBand * travel * uArmSwing * uMotion;
+    p.x -= armBand * travel * uArmSwing * 0.18 * uMotion;
+    p.y += armBand * lift * uArmSwing * 0.34 * uMotion;
 
     float torso = smoothstep(0.34, 0.66, texUv.y);
     float transfer = sin(uMotionPhase);
     p.x += torso * transfer * uBodySway * uMotion;
     p.z += torso * cos(uMotionPhase) * uBodySway * 0.24 * uMotion;
+
+    // Shoulders counter the hips. Because the impostor always faces you, the
+    // leg travel above happens almost entirely in depth and is nearly invisible
+    // — this counter-rotation is the clearest walk cue the frontal silhouette
+    // actually has, so it carries more of the read than it would on a model.
+    float shoulders = smoothstep(0.56, 0.88, texUv.y);
+    p.x -= shoulders * transfer * uBodySway * 0.9 * uMotion;
 
     // Windup is deliberately screen-plane dominant: a modest shoulder brace
     // and crouch remain legible to the player without bending the baked weapon
@@ -838,7 +860,18 @@ export class AstronautVisual {
       this._phase += step * def.bobHz * Math.PI * 2 * (0.55 + this._speed01 * 0.45);
     }
     if (!state || state.gaitPhase === undefined || !Number.isFinite(state.gaitPhase)) this._motionPhase = this._phase;
-    const gaitBob = Math.abs(Math.cos(this._motionPhase)) * def.bodyBounce * this._motion;
+    // Footfall. |cos| gives two events per stride, which was right, but the
+    // body used to reach its HIGHEST point and its deepest squash on the same
+    // beat — so it read as a wobbling jelly rather than weight arriving on a
+    // leg. The plant is now the low point and the squash; mid-stride is the
+    // high point and the stretch. That one phase relationship is most of what
+    // separates walking from bobbing. The squash is also deep enough to see:
+    // it used to be a little over two percent, which is nothing.
+    const plant = Math.abs(Math.cos(this._motionPhase));   // 1 at footfall
+    const airborne = 1 - plant;                            // 1 at mid-stride
+    const heelStrike = Math.pow(plant, 8);                 // the jolt itself
+    const gaitBob = (airborne - 0.45) * def.bodyBounce * 1.9 * this._motion
+      - heelStrike * def.bodyBounce * 0.5 * this._motion;
     const bob = this._poseLocked
       ? 0
       : (state && state.bob !== undefined
@@ -846,7 +879,9 @@ export class AstronautVisual {
         : Math.sin(this._phase) * def.bobAmount * (0.35 + this._motion * 0.65) + gaitBob);
     const centerY = def.groundOffset * this._scale + def.height * this._scale * 0.5;
     const gaitSway = Math.sin(this._motionPhase) * def.bodySway * this._motion;
-    const compression = Math.abs(Math.cos(this._motionPhase)) * this._motion * 0.022;
+    const squashDepth = def.bodyBounce * 0.9;
+    const compression = (plant * 0.55 + heelStrike * 0.45) * this._motion * squashDepth
+      - airborne * this._motion * squashDepth * 0.35;
     const attackCompression = this._attack * Math.min(0.035, def.attackKick * 0.24);
     const windupCrouch = this._windup * def.height * this._scale * 0.02;
     const windupWiden = this._windup * 0.032;
