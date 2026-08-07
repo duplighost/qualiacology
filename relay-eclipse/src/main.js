@@ -258,9 +258,13 @@ class Game {
       const tick = () => (--count <= 0 ? resolve() : requestAnimationFrame(tick));
       requestAnimationFrame(tick);
     });
+    // `maw` used to alias the wurm boss, back when the eclipse-maw art was only
+    // worn by the wurm. There is a real ECLIPSE MAW now, so the name resolves to
+    // it; ask for the boss by its own name. `planet` is RELAY ZERO's word for
+    // the same thing and is kept as an alias.
     const friendlyType = (type) => ({
       rusher: 'stalker', shooter: 'husk', brute: 'juggernaut',
-      commander: 'colossus', maw: 'wurm',
+      commander: 'colossus', planet: 'maw',
     })[type] || type;
     const teleport = (point) => {
       if (!point) return false;

@@ -15,6 +15,14 @@ const TYPES = {
     r: 1.35, speed: 15, damage: 34, color: 0xe6f3ff, life: 7, gravity: 5.5,
     reflectable: true, trail: 'snow',
   },
+  // what an ECLIPSE MAW drops on you: a slow, heavy, obvious orb. It is meant
+  // to be seen coming and stepped out of, so it is nearly twice a bolt's size
+  // and moves at about half the speed. No gravity — it comes down the line the
+  // maw fired it along, which is what makes "get out from under it" legible.
+  meteor: {
+    r: 0.62, speed: 17, damage: 15, color: 0xff5b9e, life: 5, gravity: 0,
+    reflectable: false, trail: 'spark',
+  },
   // the VOID ORB: arcs, bounces, then blooms into a singularity that drags the
   // whole pack into one point and detonates it. NEVER hurts the player.
   grenade: {
@@ -33,6 +41,7 @@ export class ProjectileManager {
     this.list = [];
     this._geo = {
       bolt: new THREE.IcosahedronGeometry(0.32, 0),
+      meteor: new THREE.IcosahedronGeometry(0.58, 0),
       snowball: new THREE.IcosahedronGeometry(1.2, 1),
       grenade: new THREE.IcosahedronGeometry(0.26, 0),
     };
