@@ -10,7 +10,7 @@
   <meta property="og:site_name" content="Qualiacology" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="KICK BALL // LUNAR VELOCITY | Qualiacology" />
-  <meta property="og:description" content="The moon is a weapon. So is gravity. Kick the ball, steer it through the alien line, call it home, and turn every impossible cliff into momentum." />
+  <meta property="og:description" content="A boomerang is fun because it comes back. A ball is more fun. Kick it, steer it with your aim, and catch it hard enough to throw yourself across the moon." />
   <meta property="og:url" content="https://qualiacology.com/kick-ball-lunar-velocity/" />
   <meta property="og:image" content="https://qualiacology.com/assets/games/kick-ball-lunar-velocity-card-clean.webp" />
   <meta property="og:image:width" content="1280" />
@@ -28,60 +28,12 @@
   <main id="gameRoot" aria-label="KICK BALL // LUNAR VELOCITY">
     <canvas id="gameCanvas" tabindex="0" aria-label="First-person lunar action game"></canvas>
 
-    <section id="hud" aria-label="Combat telemetry">
-      <header class="hud-brand" aria-label="KICK BALL // LUNAR VELOCITY">
-        <span class="hud-brand__mark" aria-hidden="true">KB</span>
-        <span class="hud-brand__name">KICK BALL</span>
-        <span class="hud-brand__slash" aria-hidden="true">//</span>
-        <span class="hud-brand__edition">LUNAR VELOCITY</span>
-      </header>
-
-      <section class="objective" aria-live="polite" aria-atomic="true">
-        <div id="objectiveLabel">MARE IMBRIUM // DROP ZONE</div>
-        <div id="objectiveText">Wake the ball. Break the occupation.</div>
-      </section>
-
-      <section class="style-panel" aria-label="Style and score">
-        <div class="style-panel__header">
-          <span>STYLE VECTOR</span>
-          <strong id="styleRank">C</strong>
-        </div>
-        <div class="meter-track" aria-hidden="true"><div id="styleFill"></div></div>
-        <div class="score-line">
-          <strong id="scoreValue">000000</strong>
-          <span id="bestValue">BEST --:--.--</span>
-        </div>
-      </section>
-
-      <section class="vitals-panel" aria-label="Suit and movement status">
-        <div class="telemetry-row">
-          <span class="telemetry-label">SUIT</span>
-          <span id="shieldPips" class="pip-bank shield-bank" aria-label="Suit integrity full">
-            <i></i><i></i><i></i>
-          </span>
-        </div>
-        <div class="telemetry-row telemetry-row--split">
-          <span>
-            <span class="telemetry-label">ALT</span>
-            <strong id="altitudeValue">000.0 M</strong>
-          </span>
-          <span>
-            <span class="telemetry-label">JUMP</span>
-            <span id="jumpPips" class="pip-bank jump-bank" aria-label="Two jumps available"><i></i><i></i></span>
-          </span>
-        </div>
-      </section>
-
-      <section class="ball-panel" aria-label="Ball telemetry">
-        <span class="ball-panel__icon" aria-hidden="true"></span>
-        <span class="ball-panel__copy">
-          <span>BALL LINK</span>
-          <strong id="ballState">HOME</strong>
-        </span>
-      </section>
-
-      <div id="comboText" aria-live="polite" aria-atomic="true"></div>
-
+    <!-- The HUD is deliberately almost empty. Everything the player needs to
+         know is shown in the world: the ball's own colour and line report its
+         state, suit damage frosts the edge of the visor, objectives are light
+         columns you can see from anywhere, and enemy health is written on
+         their armour. Nothing here asks the player to read. -->
+    <section id="hud" aria-label="Heads up display">
       <div id="crosshair" aria-hidden="true">
         <i class="crosshair__north"></i>
         <i class="crosshair__east"></i>
@@ -91,6 +43,8 @@
       </div>
       <div id="hitMarker" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
       <div id="damageVignette" aria-hidden="true"></div>
+      <div id="visorFrost" aria-hidden="true"></div>
+      <div id="rewardFlash" aria-hidden="true"></div>
 
       <div id="chargeUI" role="meter" aria-label="Kick charge" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-hidden="true">
         <svg class="charge-ring" viewBox="0 0 100 100" focusable="false" aria-hidden="true">
@@ -105,34 +59,11 @@
           <circle id="chargeFill" class="charge-ring__fill" cx="50" cy="50" r="43" pathLength="100"></circle>
           <circle class="charge-ring__core" cx="50" cy="50" r="34"></circle>
         </svg>
-        <span id="chargeText">KICK CHARGE</span>
       </div>
 
-      <div id="promptToast" class="hidden" role="status" aria-live="polite"></div>
-
-      <div id="controlsHint" aria-label="Controls">
-        <div class="control-set keyboard-hints">
-          <span><kbd>WASD</kbd> MOVE</span>
-          <span><kbd>MOUSE</kbd> LOOK / GUIDE</span>
-          <span><kbd>LMB</kbd> KICK</span>
-          <span><kbd>RMB</kbd> ENERGY LINE / REEL</span>
-          <span><kbd>SPACE</kbd> HIGH JUMP x2</span>
-        </div>
-        <div class="control-set gamepad-hints">
-          <span><kbd>LS</kbd> MOVE</span>
-          <span><kbd>RS</kbd> LOOK / CURVE</span>
-          <span><kbd>RT</kbd> KICK</span>
-          <span><kbd>LT</kbd> CALL / PULL</span>
-          <span><kbd>A</kbd> DOUBLE JUMP</span>
-          <span><kbd>B</kbd> SPIN</span>
-        </div>
-      </div>
-
-      <nav class="utility-controls" aria-label="Game settings">
-        <button id="qualityButton" class="utility-button" type="button" aria-label="Change graphics quality">QUALITY HIGH</button>
-        <button id="soundButton" class="utility-button" type="button" aria-label="Toggle sound">SOUND ON</button>
-        <button id="fullscreenButton" class="utility-button" type="button" aria-label="Toggle fullscreen">FULLSCREEN</button>
-      </nav>
+      <!-- Screen-reader-only mirror of the world-space state. Sighted players
+           get all of this visually; this exists so the game stays narratable. -->
+      <p id="srState" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
     </section>
 
     <div id="touchControls" aria-label="Touch controls. Move anywhere on the left. Use the right side to look, guide the ball, kick, call, charge, pull, and draw a spin loop.">
@@ -140,30 +71,45 @@
         <div class="touch-pad" aria-hidden="true">
           <div class="touch-pad__ticks"></div>
           <div class="touchKnob"></div>
-          <span>MOVE // FLOAT</span>
         </div>
       </div>
       <div id="lookPad" class="touch-zone touch-zone--look" role="application" aria-label="Ball hand. Swipe to look and guide the ball. Tap to kick or call it. Hold to charge or engage the energy line. Draw a loop to spin it.">
         <div class="touch-pad" aria-hidden="true">
           <div class="touch-pad__ticks"></div>
           <div class="touchKnob"></div>
-          <span id="rightActionLabel">TAP KICK // SWIPE LOOK // LOOP ORBIT</span>
         </div>
       </div>
       <button id="touchJump" class="touch-action touch-action--jump" type="button" aria-label="Jump or double jump">JUMP</button>
       <button id="touchPause" class="touch-pause" type="button" aria-label="Pause game">II</button>
     </div>
 
-    <div id="portraitHint" role="status">LEFT THUMB MOVES // RIGHT THUMB DOES THE BALL</div>
-
     <section id="startOverlay" class="overlay start-overlay" role="dialog" aria-modal="true" aria-labelledby="startTitle" aria-describedby="startCopy">
       <div class="start-orbit start-orbit--one" aria-hidden="true"></div>
       <div class="start-orbit start-orbit--two" aria-hidden="true"></div>
       <div class="overlay-panel start-panel">
-        <div id="startKicker">LUNAR COMBAT PROTOCOL // 01</div>
+        <div id="startKicker">LUNAR COMBAT PROTOCOL // FAST CORE</div>
         <h1 id="startTitle"><span>KICK BALL</span><small>// LUNAR VELOCITY</small></h1>
-        <p id="startCopy">The moon is a weapon. So is gravity. Kick the ball, steer it through the alien line, call it home, and turn every impossible cliff into momentum.</p>
+        <p id="startCopy">The moon is a weapon. Kick the ball, steer it hard with your aim, snap it home before the rhythm dies, and turn every impossible cliff into momentum.</p>
         <div class="start-law"><span aria-hidden="true">◉</span><strong>ONE BALL.</strong> EVERY MOVE. IT ALWAYS COMES HOME.</div>
+        <!-- Controls live here, where reading costs nothing, instead of on a
+             permanent bar across the bottom of the moon. -->
+        <div id="controlsHint" aria-label="Controls">
+          <div class="control-set keyboard-hints">
+            <span><kbd>WASD</kbd> MOVE</span>
+            <span><kbd>MOUSE</kbd> LOOK / STEER</span>
+            <span><kbd>LMB</kbd> KICK</span>
+            <span><kbd>RMB</kbd> HOLD GUIDE / CLICK CALL</span>
+            <span><kbd>SPACE</kbd> HIGH JUMP x2</span>
+          </div>
+          <div class="control-set gamepad-hints">
+            <span><kbd>LS</kbd> MOVE</span>
+            <span><kbd>RS</kbd> LOOK / CURVE</span>
+            <span><kbd>RT</kbd> KICK</span>
+            <span><kbd>LT</kbd> GUIDE / CALL</span>
+            <span><kbd>A</kbd> DOUBLE JUMP</span>
+            <span><kbd>B</kbd> SPIN</span>
+          </div>
+        </div>
         <button id="startButton" class="primary-button" type="button">
           <span>ENTER THE MOON</span>
           <small id="startActionHint">CLICK TO LOCK VIEW</small>
@@ -182,6 +128,11 @@
         <p>The moon can wait. Press <kbd>ESC</kbd>, <kbd>P</kbd>, or controller <kbd>START</kbd> to drop back in.</p>
         <div class="pause-rule" aria-hidden="true"></div>
         <button id="pauseResumeButton" class="primary-button" type="button"><span>RETURN TO THE MOON</span><small>RESUME MISSION</small></button>
+        <nav class="utility-controls" aria-label="Game settings">
+          <button id="qualityButton" class="utility-button" type="button" aria-label="Change graphics quality">QUALITY HIGH</button>
+          <button id="soundButton" class="utility-button" type="button" aria-label="Toggle sound">SOUND ON</button>
+          <button id="fullscreenButton" class="utility-button" type="button" aria-label="Toggle fullscreen">FULLSCREEN</button>
+        </nav>
       </div>
     </section>
 
