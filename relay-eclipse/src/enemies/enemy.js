@@ -1988,6 +1988,12 @@ export class Enemy {
     } else {
       this.shootTimer -= dt;
       if (this.shootTimer <= 0 && dist < 46 && this.spawnT >= 1) {
+        // Don't open fire through the observatory. A shooter that has no line
+        // to you used to charge and fire anyway, and since the shot itself
+        // ignored standing geometry it arrived through the floor from a thing
+        // you could not see. Re-check shortly rather than resetting the whole
+        // cadence, so it fires the moment you step back into the open.
+        if (!this.mgr.hasLineOfSight(this.pos, player.pos)) { this.shootTimer = 0.45; return; }
         this._chargeT = 0;
         this.mgr.audio.seerCharge(this.mgr.panFor(this.pos));
       }
@@ -2672,6 +2678,24 @@ export class EnemyManager {
   // all the existing `audio.x(panFor(pos), ...)` call sites need no change.
   panFor(pos) {
     return { x: pos.x, y: pos.y + 0.8, z: pos.z };   // +0.8 → sound from the torso, not the feet
+  }
+
+  // Is there clear air between a shooter and the player? Tested against the
+  // same standing geometry bullets collide with, aiming at the chest rather
+  // than the feet so a knee-high lip doesn't count as cover.
+  hasLineOfSight(from, to) {
+    const solids = this.world && this.world.bulletSolids;
+    if (!solids || !solids.length) return true;
+    this._losDir = this._losDir || new THREE.Vector3();
+    this._losRay = this._losRay || new THREE.Raycaster();
+    this._losDir.set(to.x - from.x, (to.y + 1.0) - from.y, to.z - from.z);
+    const range = this._losDir.length();
+    if (range < 0.5) return true;
+    this._losDir.multiplyScalar(1 / range);
+    this._losRay.set(from, this._losDir);
+    this._losRay.near = 0.35;
+    this._losRay.far = range - 0.35;
+    return this._losRay.intersectObjects(solids, false).length === 0;
   }
 
   raycastTargets() {

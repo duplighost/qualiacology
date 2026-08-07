@@ -38,6 +38,14 @@ export class ProjectileManager {
   constructor(scene, fx, audio, terrain) {
     this.scene = scene; this.fx = fx; this.audio = audio; this.terrain = terrain;
     this.groundAt = null;   // layer-aware ground fn (set by main)
+    // Standing geometry (set by main from world.bulletSolids). Until this
+    // existed, ordnance was only ever tested against the FLOOR HEIGHT, so every
+    // bolt in the game flew straight through walls, support columns and the
+    // moon deck. Anything shooting from outside the observatory was hitting
+    // people standing inside it, through the structure.
+    this.solids = null;
+    this._ray = new THREE.Raycaster();
+    this._rayDir = new THREE.Vector3();
     this.list = [];
     this._geo = {
       bolt: new THREE.IcosahedronGeometry(0.32, 0),
@@ -76,12 +84,38 @@ export class ProjectileManager {
     return p;
   }
 
+  // Would this step carry the projectile into standing geometry? If so, burst
+  // it on the surface it actually reached. Returns true when the shot is spent.
+  _blockedBy(p, dt) {
+    const step = p.vel.length() * dt;
+    if (step <= 1e-4) return false;
+    this._rayDir.copy(p.vel).normalize();
+    this._ray.set(p.pos, this._rayDir);
+    this._ray.near = 0;
+    this._ray.far = step + p.r;
+    const hits = this._ray.intersectObjects(this.solids, false);
+    if (!hits.length) return false;
+    this._impactAt(p, hits[0].point);
+    return true;
+  }
+
+  _impactAt(p, point) {
+    this.fx.shockwave(point, p.def.color, p.r * 3.2, 0.22);
+    this.fx.impactLight(point, p.def.color, 6, 0.09);
+    if (this.audio.impact) this.audio.impact({ x: point.x, y: point.y, z: point.z });
+  }
+
   // ctx: { player, controller, enemies, boss, onHitPlayer(dmg,pos), onReflect(pos), onHitEnemy(enemy,dmg,pos,reflected) }
   update(dt, ctx) {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];
       p.life -= dt;
       p.vel.y -= p.def.gravity * dt;
+      // March the step against standing geometry before committing to it, so a
+      // shot stops at the wall it hit rather than continuing through it. The
+      // grenade is exempt: it is meant to bounce along the floor, and it has
+      // its own ground handling below.
+      if (this.solids && p.type !== 'grenade' && this._blockedBy(p, dt)) { this._kill(i); continue; }
       p.pos.addScaledVector(p.vel, dt);
       p.mesh.position.copy(p.pos);
       p.mesh.rotation.x += p.spin.x * dt; p.mesh.rotation.y += p.spin.y * dt; p.mesh.rotation.z += p.spin.z * dt;

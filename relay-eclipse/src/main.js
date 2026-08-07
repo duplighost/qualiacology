@@ -133,6 +133,7 @@ class Game {
     this.controller.railConstraintFn = this.world.relay?.resolveRampRail || null;
     this.pickups.groundAt = this.world.groundAt;
     this.projectiles.groundAt = this.world.groundAt;
+    this.projectiles.solids = this.world.bulletSolids;
     this._pondWasFrozen = false;
     this._meteors = [];            // wurm-wave surface strikes [{x,z,y,t}]
     this._voids = [];              // live void orbs [{pos,t,spin}]
