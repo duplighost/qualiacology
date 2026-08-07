@@ -19,7 +19,7 @@ import { ProjectileManager } from './world/projectiles.js';
 import { HUD } from './ui/hud.js';
 import { buildComposer } from './gfx/post.js';
 import { createPerformanceGovernor } from './engine/performance-governor.js';
-import { loadAstronautVisuals } from './enemies/astronaut-visuals.js';
+import { loadCosmicEnemyVisuals } from './enemies/cosmic-enemy-visuals.js';
 import {
   loadRealisticViewmodel,
   REALISTIC_VIEWMODEL_ASSETS,
@@ -212,7 +212,7 @@ class Game {
   async _loadVisualDonors() {
     const weaponEntries = Object.entries(REALISTIC_VIEWMODEL_ASSETS);
     const [astronauts, ...weaponResults] = await Promise.allSettled([
-      loadAstronautVisuals({ renderer: this.renderer }),
+      loadCosmicEnemyVisuals(),
       ...weaponEntries.map(([id, config]) => loadRealisticViewmodel({
         renderer: this.renderer,
         ...config,
