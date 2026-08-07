@@ -54,7 +54,7 @@ function assert(condition, message) {
 
 function validateData() {
   assert(existsSync(outputRoot), `Missing recovered deploy root: ${outputRoot}`);
-  assert(games.length === 18, `Expected 18 games, found ${games.length}`);
+  assert(games.length === 31, `Expected 31 games, found ${games.length}`);
   assert(albums.length === 10, `Expected 10 albums, found ${albums.length}`);
   assert(games.filter((item) => item.featured).length === 6, "Exactly six games must be featured");
   assert(albums.filter((item) => item.featured).length === 3, "Exactly three albums must be featured");

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>
+  :root{
+    --silver:#d7dee2; --glass:#b9c8cf; --cold:#7fb0c4; --amber:#e8b46a;
+    --grey:#9fb6c4; --deep:#05070a; --blood:#9e2b2b; --ink:#030507;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;overscroll-behavior:none;
+    touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;cursor:default}
+  body{font-family:ui-sans-serif,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--silver);background:#000}
+  canvas{display:block;position:fixed;inset:0}
+  .hidden{display:none!important}
+
+  /* ---------- Title ---------- */
+  #title{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at center,#0b1116 0%,#04070a 68%,#000 100%);cursor:pointer;text-align:center;
+    padding:24px;transition:opacity .7s ease}
+  #title .name{font-family:Georgia,'Times New Roman',serif;font-size:clamp(58px,17vw,182px);letter-spacing:.06em;
+    font-weight:600;color:var(--silver);text-shadow:0 0 60px rgba(127,176,196,.28),0 6px 30px #000;line-height:.9}
+  #title .rule{width:min(340px,62vw);height:1px;background:linear-gradient(90deg,transparent,rgba(185,200,207,.5),transparent);margin:30px 0 26px}
+  #title .tag{font-size:clamp(13px,2.5vw,18px);letter-spacing:.16em;color:rgba(159,182,196,.82);
+    max-width:40ch;line-height:1.8;font-style:italic;font-family:Georgia,serif}
+  #title .start{margin-top:56px;font-size:12px;letter-spacing:.44em;color:var(--cold);text-transform:uppercase;
+    animation:pulse 2.6s ease-in-out infinite}
+  #title .warn{position:absolute;bottom:22px;font-size:10px;letter-spacing:.22em;color:rgba(159,182,196,.34);
+    text-transform:uppercase;padding:0 16px}
+  @keyframes pulse{0%,100%{opacity:.32}50%{opacity:1}}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;z-index:30;pointer-events:none;opacity:0;transition:opacity 1.4s ease}
+  #reticle{position:absolute;left:50%;top:50%;width:6px;height:6px;transform:translate(-50%,-50%);border-radius:50%;
+    background:rgba(215,222,226,.28);box-shadow:0 0 6px #000;transition:all .16s}
+  #reticle.on{background:var(--amber);width:9px;height:9px;box-shadow:0 0 12px var(--amber)}
+  #objective{position:absolute;top:26px;left:50%;transform:translateX(-50%);font-size:12px;letter-spacing:.3em;
+    text-transform:uppercase;color:rgba(159,182,196,.6);text-shadow:0 2px 10px #000;text-align:center}
+  #prompt{position:absolute;left:50%;top:57%;transform:translateX(-50%);font-size:14px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--silver);text-shadow:0 2px 10px #000;opacity:0;transition:opacity .14s;white-space:nowrap}
+  #prompt .k{display:inline-block;border:1px solid rgba(215,222,226,.55);border-radius:4px;padding:1px 8px;margin-right:9px}
+  #subtitle{position:fixed;left:50%;bottom:15%;transform:translateX(-50%);z-index:35;pointer-events:none;
+    text-align:center;max-width:78vw;opacity:0;transition:opacity .5s}
+  #subtitle .line{font-size:clamp(16px,2.6vw,23px);letter-spacing:.02em;color:var(--glass);
+    text-shadow:0 2px 16px #000,0 0 3px #000;font-style:italic;font-family:Georgia,serif;line-height:1.5}
+  #hint{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);font-size:10.5px;letter-spacing:.2em;
+    text-transform:uppercase;color:rgba(159,182,196,.4);text-align:center;line-height:2}
+  #hint .k{display:inline-block;border:1px solid rgba(159,182,196,.3);border-radius:4px;padding:1px 7px;margin:0 3px;color:rgba(215,222,226,.75)}
+
+  #paused{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;
+    background:rgba(3,6,9,.55);backdrop-filter:blur(2px);cursor:pointer;color:rgba(215,222,226,.8);
+    letter-spacing:.34em;text-transform:uppercase;font-size:13px}
+
+  /* ---------- End screens ---------- */
+  #winScreen,#deadScreen{position:fixed;inset:0;z-index:55;display:none;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;padding:28px;background:radial-gradient(ellipse at center,#080d11 0%,#000 76%)}
+  #winScreen.show,#deadScreen.show{display:flex}
+  #winScreen .big{font-family:Georgia,serif;font-size:clamp(40px,9vw,92px);letter-spacing:.14em;color:var(--silver);font-weight:600}
+  #deadScreen .big{font-family:Georgia,serif;font-size:clamp(38px,9vw,86px);letter-spacing:.14em;color:var(--cold);
+    font-weight:600;text-shadow:0 0 44px rgba(127,176,196,.3)}
+  .endsub{margin-top:24px;font-size:15px;letter-spacing:.04em;color:rgba(159,182,196,.72);max-width:46ch;line-height:1.9;
+    font-style:italic;font-family:Georgia,serif}
+  .endbtn{margin-top:46px;font-size:12px;letter-spacing:.34em;text-transform:uppercase;color:var(--cold);
+    border:1px solid rgba(127,176,196,.5);padding:14px 32px;cursor:pointer;transition:all .18s}
+  .endbtn:hover{background:rgba(127,176,196,.12);border-color:var(--cold)}
+
+  #home{position:fixed;left:14px;top:12px;z-index:58;color:rgba(159,182,196,.5);text-decoration:none;font-size:10px;
+    letter-spacing:.2em;text-transform:uppercase;padding:6px 10px;border:1px solid rgba(159,182,196,.16);
+    border-radius:999px;background:rgba(0,0,0,.4)}
+  #home:hover{color:var(--silver);border-color:rgba(159,182,196,.4)}
+</style>
+
+  <title>THE LAG | Qualiacology</title>
+  <meta name="description" content="THE LAG is a browser first-person horror game in a maze of mirrors where your reflection runs half a second behind — and keeps closing.">
+  <meta name="theme-color" content="#05070a">
+  <link rel="canonical" href="https://qualiacology.com/the-lag/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="THE LAG | Qualiacology">
+  <meta property="og:description" content="Every wall is a mirror. The only way to tell a corridor from a reflection is your own lantern, and it comes back late.">
+  <meta property="og:url" content="https://qualiacology.com/the-lag/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/the-lag-card-clean.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="THE LAG | Qualiacology">
+  <meta name="twitter:description" content="Every wall is a mirror. The only way to tell a corridor from a reflection is your own lantern, and it comes back late.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/the-lag-card-clean.jpg">
+</head>
+<body>
+  <div id="scene"></div>
+
+  <a id="home" href="#" class="hidden">◂ Qualiacology</a>
+
+  <div id="title">
+    <div class="name">THE LAG</div>
+    <div class="rule"></div>
+    <div class="tag">Your reflection is a half-second behind. It is closing the gap.</div>
+    <div class="start">Click to enter</div>
+    <div class="warn">A work of fiction · low light &amp; sudden sound · headphones recommended</div>
+  </div>
+
+  <div id="hud">
+    <div id="reticle"></div>
+    <div id="objective">Find the way out.</div>
+    <div id="prompt"><span class="k">E</span><span class="lbl"></span></div>
+    <div id="hint">
+      <span class="k">WASD</span> move &nbsp; <span class="k">MOUSE</span> look &nbsp;
+      <span class="k">RMB</span> raise lantern &nbsp; <span class="k">F</span> flare &nbsp;
+      <span class="k">SHIFT</span> shutter &nbsp; <span class="k">E</span> use
+    </div>
+  </div>
+
+  <div id="subtitle"><div class="line" id="subLine"></div></div>
+
+  <div id="paused" class="hidden">Click to look</div>
+
+  <div id="winScreen">
+    <div class="big">OUT</div>
+    <div class="endsub">You stepped through the one mirror that did not lag. The reverb dies. Your footsteps are singular. You walk out into open night, alone, for the first time in a long time.</div>
+    <div class="endbtn" id="winRetry">Again</div>
+  </div>
+  <div id="deadScreen">
+    <div class="big">BEHIND THE GLASS</div>
+    <div class="endsub">It reached arm's length and pulled you through. The screen is a reflection looking out. Somewhere ahead, a new figure lifts a lantern and walks away — a beat too late.</div>
+    <div class="endbtn" id="deadRetry">Again</div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.min.js",
+      "three/addons/": "./vendor/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./src/main.js"></script>
+
+<style>
+  .qc-home-link{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:2147483000;
+    color:rgba(255,255,255,.82);text-decoration:none;font:700 10px/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.16em;
+    text-transform:uppercase;padding:7px 11px;border-radius:999px;background:rgba(8,8,14,.62);border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(8px);transition:opacity .25s ease,color .25s ease}
+  .qc-home-link:hover,.qc-home-link:focus-visible{color:#fff;border-color:rgba(255,255,255,.45)}
+  body:has(canvas:fullscreen) .qc-home-link{opacity:0;pointer-events:none}
+</style>
+<a class="qc-home-link" href="/">Qualiacology</a>
+<script>
+  // hide the pill while the game holds pointer lock, so it never sits over a locked cursor
+  document.addEventListener('pointerlockchange',function(){
+    var a=document.querySelector('.qc-home-link'); if(!a) return;
+    var locked=!!document.pointerLockElement; a.style.opacity=locked?'0':''; a.style.pointerEvents=locked?'none':'';
+  });
+</script>
+</body>
+</html>

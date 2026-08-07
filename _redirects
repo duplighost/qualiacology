@@ -119,8 +119,80 @@
 /this-helped-someone     /404.html  404!
 /this-helped-someone/*   /404.html  404!
 
-# --- POCKET SUN ---
-/pocket-sun       https://curious-gumdrop-5fe24d.netlify.app/  302!
-/pocket-sun/      https://curious-gumdrop-5fe24d.netlify.app/  302!
-/pocket-sun/*     https://curious-gumdrop-5fe24d.netlify.app/:splat  302!
-/pocketsun        /pocket-sun/  302
+# --- POCKET SUN (now hosted here, not proxied to an outside Netlify site) ---
+/pocket-sun       /pocket-sun/index.html    301!
+/pocket-sun.html  /pocket-sun/              301!
+/pocketsun        /pocket-sun/              302
+/sun              /pocket-sun/              302
+
+# --- AFTERGLOW ---
+/afterglow        /afterglow/index.html     301!
+/afterglow.html   /afterglow/               301!
+/dash             /afterglow/               302
+
+# --- FINALE ---
+/finale           /finale/index.html        301!
+/finale.html      /finale/                  301!
+/fireworks        /finale/                  302
+
+# --- ECHO//SAINT ---
+/echo-saint       /echo-saint/index.html    301!
+/echo-saint.html  /echo-saint/              301!
+/echosaint        /echo-saint/              302
+/closure          /echo-saint/              302
+
+# --- CINDERBLOOM ---
+/cinderbloom      /cinderbloom/index.html   301!
+/cinderbloom.html /cinderbloom/             301!
+/survey           /cinderbloom/             302
+
+# --- VANTA//9 ---
+/vanta-9          /vanta-9/index.html       301!
+/vanta-9.html     /vanta-9/                 301!
+/vanta            /vanta-9/                 302
+/choir            /vanta-9/                 302
+
+# --- AFTERPARTY AT THE END OF THE WORLD ---
+/afterparty       /afterparty/index.html    301!
+/afterparty.html  /afterparty/              301!
+/sunrise          /afterparty/              302
+
+# --- EVERYBODY LEAVES IN 4/4 ---
+/everybody-leaves /everybody-leaves/index.html  301!
+/everybody-leaves.html /everybody-leaves/       301!
+/four-four        /everybody-leaves/        302
+/six-oh-five      /everybody-leaves/        302
+
+# --- THE DEAD KEEP PLAYING ---
+/dead-keep-playing /dead-keep-playing/index.html  301!
+/dead-keep-playing.html /dead-keep-playing/       301!
+/echoes           /dead-keep-playing/       302
+/take-one         /dead-keep-playing/       302
+
+# --- UNSAY IT ---
+/unsay-it         /unsay-it/index.html      301!
+/unsay-it.html    /unsay-it/                301!
+/unsayit          /unsay-it/                302
+/bellweather      /unsay-it/                302
+
+# --- GOODFIRE ---
+/goodfire         /goodfire/index.html      301!
+/goodfire.html    /goodfire/                301!
+/ninemile         /goodfire/                302
+
+# --- Goodnight, Little Gods ---
+/little-gods      /little-gods/index.html   301!
+/little-gods.html /little-gods/             301!
+/goodnight        /little-gods/             302
+/orchard          /little-gods/             302
+
+# --- THE LAG ---
+/the-lag          /the-lag/index.html       301!
+/the-lag.html     /the-lag/                 301!
+/thelag           /the-lag/                 302
+/mirrors          /the-lag/                 302
+
+# --- FETCH ---
+/fetch            /fetch/index.html         301!
+/fetch.html       /fetch/                   301!
+/skull            /fetch/                   302

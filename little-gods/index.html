@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="stylesheet" href="./styles.css?v=1" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.js",
+        "three/addons/": "./vendor/jsm/"
+      }
+    }
+  </script>
+
+  <title>Goodnight, Little Gods | Qualiacology</title>
+  <meta name="description" content="Goodnight, Little Gods is a short browser rhythm game about singing nine small creatures home before morning.">
+  <meta name="theme-color" content="#050711">
+  <link rel="canonical" href="https://qualiacology.com/little-gods/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Goodnight, Little Gods | Qualiacology">
+  <meta property="og:description" content="Nine small gods loose in a night orchard, and you have until morning. Pick a colour, sing on the beat, walk them home.">
+  <meta property="og:url" content="https://qualiacology.com/little-gods/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/little-gods-card-clean.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Goodnight, Little Gods | Qualiacology">
+  <meta name="twitter:description" content="Nine small gods loose in a night orchard, and you have until morning. Pick a colour, sing on the beat, walk them home.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/little-gods-card-clean.jpg">
+</head>
+<body data-mode="boot" data-touch="false">
+  <canvas id="game" aria-label="Goodnight, Little Gods game world"></canvas>
+  <div id="grain" aria-hidden="true"></div>
+  <div id="vignette" aria-hidden="true"></div>
+
+  <section id="loading" class="screen active" aria-live="polite">
+    <div class="loading-mark" aria-hidden="true">
+      <i></i><i></i><i></i>
+    </div>
+    <p>Waking the orchard…</p>
+  </section>
+
+  <section id="title" class="screen" aria-labelledby="game-title">
+    <div class="title-copy">
+      <p class="eyebrow">A small game about keeping impossible things alive</p>
+      <h1 id="game-title"><span>Goodnight,</span> Little Gods</h1>
+      <p class="tagline">Herd the last small gods into a song<br />before morning forgets them.</p>
+      <button id="play" class="primary" type="button">
+        <span>Enter the orchard</span>
+        <small>about 12 minutes · headphones lovely</small>
+      </button>
+      <div class="title-actions">
+        <button id="how" class="text-button" type="button">How it moves</button>
+        <button id="title-sound" class="text-button" type="button" aria-pressed="true">Sound on</button>
+      </div>
+    </div>
+    <div class="title-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+    <p class="credit">An original Qualiacology world</p>
+  </section>
+
+  <section id="how-panel" class="modal" role="dialog" aria-modal="true" aria-labelledby="how-title" aria-hidden="true">
+    <div class="modal-card">
+      <p class="eyebrow">Three notes. Nine gods. One last song.</p>
+      <h2 id="how-title">Listen for their color.</h2>
+      <div class="how-grid">
+        <div><span class="key">WASD / left stick</span><strong>Flow</strong><p>Move like ink over glass.</p></div>
+        <div><span class="key">Space / Sing</span><strong>Sing</strong><p>Pulse when a god’s halo closes.</p></div>
+        <div><span class="key">1 · 2 · 3 / colors</span><strong>Tune</strong><p>Match bloom, tide, or ember.</p></div>
+        <div><span class="key">Shift / Slip</span><strong>Slip</strong><p>Dash through the hush.</p></div>
+      </div>
+      <p class="kindness">The rhythm is forgiving. Misses cost nothing. Curiosity pays.</p>
+      <button id="close-how" class="primary compact" type="button">I hear it</button>
+    </div>
+  </section>
+
+  <main id="hud" aria-hidden="true">
+    <div class="hud-top">
+      <div class="gods-readout" aria-label="Little gods brought home">
+        <span id="gods-count">0 / 9</span>
+        <div id="god-pips" aria-hidden="true"></div>
+      </div>
+      <p id="objective">Find the first sleeping note.</p>
+      <div class="hud-actions">
+        <button id="sound" class="icon-button" type="button" aria-label="Mute sound" aria-pressed="true">♪</button>
+        <button id="pause" class="icon-button" type="button" aria-label="Pause game">Ⅱ</button>
+      </div>
+    </div>
+
+    <div id="beat" aria-hidden="true"><i></i><b></b></div>
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <div id="note-dock" aria-label="Resonance notes">
+      <button class="note active" data-note="0" type="button" aria-label="Bloom note, key 1">
+        <i></i><span>Bloom</span><small>1</small>
+      </button>
+      <button class="note" data-note="1" type="button" aria-label="Tide note, key 2">
+        <i></i><span>Tide</span><small>2</small>
+      </button>
+      <button class="note" data-note="2" type="button" aria-label="Ember note, key 3">
+        <i></i><span>Ember</span><small>3</small>
+      </button>
+    </div>
+
+    <p id="desktop-hint">WASD move · click/space sing · shift dash · 1 2 3 tune</p>
+
+    <div id="touch-controls" aria-label="Touch game controls">
+      <div id="move-zone" class="stick-zone"><i class="stick-base"></i><b class="stick-knob"></b></div>
+      <div class="touch-actions">
+        <button id="touch-dash" type="button" aria-label="Dash"><span>Slip</span></button>
+        <button id="touch-sing" type="button" aria-label="Sing"><span>Sing</span></button>
+      </div>
+    </div>
+  </main>
+
+  <section id="pause-screen" class="modal" role="dialog" aria-modal="true" aria-labelledby="pause-title" aria-hidden="true">
+    <div class="modal-card pause-card">
+      <p class="eyebrow">The orchard is holding its breath</p>
+      <h2 id="pause-title">Paused</h2>
+      <button id="resume" class="primary compact" type="button">Keep singing</button>
+      <button id="restart" class="text-button" type="button">Begin again</button>
+    </div>
+  </section>
+
+  <section id="ending" class="screen" aria-labelledby="ending-title">
+    <div class="ending-copy">
+      <p class="eyebrow">The morning remembered</p>
+      <h2 id="ending-title">Nothing small <br />was lost.</h2>
+      <p id="ending-line">Nine voices, carried safely into daylight.</p>
+      <dl>
+        <div><dt>Little gods</dt><dd id="final-gods">9 / 9</dd></div>
+        <div><dt>Secret seeds</dt><dd id="final-seeds">0 / 3</dd></div>
+        <div><dt>Time</dt><dd id="final-time">—</dd></div>
+      </dl>
+      <button id="again" class="primary" type="button"><span>Sing it again</span><small>The song remembers who you find first.</small></button>
+    </div>
+  </section>
+
+  <section id="fatal" class="screen" aria-live="assertive">
+    <div class="modal-card">
+      <p class="eyebrow">The orchard could not wake</p>
+      <h2>WebGL slipped away.</h2>
+      <p id="fatal-message">Try refreshing with hardware acceleration enabled.</p>
+    </div>
+  </section>
+
+  <script type="module" src="./src/main.js?v=1"></script>
+
+<style>
+  .qc-home-link{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:2147483000;
+    color:rgba(255,255,255,.82);text-decoration:none;font:700 10px/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.16em;
+    text-transform:uppercase;padding:7px 11px;border-radius:999px;background:rgba(8,8,14,.62);border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(8px);transition:opacity .25s ease,color .25s ease}
+  .qc-home-link:hover,.qc-home-link:focus-visible{color:#fff;border-color:rgba(255,255,255,.45)}
+  body:has(canvas:fullscreen) .qc-home-link{opacity:0;pointer-events:none}
+</style>
+<a class="qc-home-link" href="/">Qualiacology</a>
+<script>
+  // hide the pill while the game holds pointer lock, so it never sits over a locked cursor
+  document.addEventListener('pointerlockchange',function(){
+    var a=document.querySelector('.qc-home-link'); if(!a) return;
+    var locked=!!document.pointerLockElement; a.style.opacity=locked?'0':''; a.style.pointerEvents=locked?'none':'';
+  });
+</script>
+</body>
+</html>

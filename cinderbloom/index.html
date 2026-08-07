@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>
+  window.__CB_BOOT_START = performance.getEntriesByType('navigation')[0]?.startTime ?? 0;
+  window.__CB_SHELL_READY_AT = null;
+  requestAnimationFrame(() => {
+    window.__CB_SHELL_READY_AT = performance.now();
+    window.dispatchEvent(new Event('cinderbloom:shell-ready'));
+  });
+</script>
+<!-- suppress the favicon 404 the test harness would flag -->
+<style>
+  :root { color-scheme: dark; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#05070a; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #gl { position:fixed; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  #ui { position:fixed; inset:0; pointer-events:none; }
+  #ui > * { pointer-events:auto; }
+  #boot {
+    position:fixed; inset:0; display:grid; place-items:center; z-index:50;
+    background:radial-gradient(120% 90% at 50% 45%, #0b1016 0%, #05070a 70%);
+    transition:opacity .6s ease; color:#c8d4dd;
+  }
+  #boot.done { opacity:0; pointer-events:none; }
+  #boot .wrap { width:min(520px, 84vw); text-align:center; }
+  #boot h1 {
+    font-size:clamp(28px,5.2vw,52px); font-weight:600; letter-spacing:.42em;
+    text-indent:.42em; margin-bottom:6px;
+    background:linear-gradient(180deg,#f2e6cf 0%,#c98f5a 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  #boot .sub { font-size:12px; letter-spacing:.28em; text-transform:uppercase; opacity:.42; margin-bottom:30px; }
+  #boot .bar { height:2px; background:#1a222c; border-radius:2px; overflow:hidden; }
+  #boot .bar i { display:block; height:100%; width:0%; background:linear-gradient(90deg,#c98f5a,#e8c48a); transition:width .25s ease; }
+  #boot .stage { margin-top:12px; font-size:11px; letter-spacing:.16em; text-transform:uppercase; opacity:.34; min-height:14px; }
+  #boot .err { margin-top:18px; font:12px/1.5 ui-monospace,monospace; color:#e2725b; white-space:pre-wrap; text-align:left; max-height:36vh; overflow:auto; }
+  noscript { color:#c8d4dd; display:block; padding:24px; }
+</style>
+
+  <title>CINDERBLOOM | Qualiacology</title>
+  <meta name="description" content="CINDERBLOOM is a browser first-person shooter on an alien fire world where the ammunition comes out of the things you kill.">
+  <meta name="theme-color" content="#040302">
+  <link rel="canonical" href="https://qualiacology.com/cinderbloom/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="CINDERBLOOM | Qualiacology">
+  <meta property="og:description" content="A survey on a planet that has been burning for a billion years. Every mesh, texture and sound is generated at boot.">
+  <meta property="og:url" content="https://qualiacology.com/cinderbloom/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/cinderbloom-card-clean.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CINDERBLOOM | Qualiacology">
+  <meta name="twitter:description" content="A survey on a planet that has been burning for a billion years. Every mesh, texture and sound is generated at boot.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/cinderbloom-card-clean.jpg">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="ui"></div>
+<div id="boot"><div class="wrap">
+  <h1>CINDERBLOOM</h1>
+  <div class="sub">Survey 9 &mdash; Thessaly Basin</div>
+  <div class="bar"><i id="boot-bar"></i></div>
+  <div class="stage" id="boot-stage">initialising</div>
+  <div class="err" id="boot-err"></div>
+</div></div>
+<noscript>CINDERBLOOM requires JavaScript and WebGL2.</noscript>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/jsm/" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+
+<style>
+  .qc-home-link{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:2147483000;
+    color:rgba(255,255,255,.82);text-decoration:none;font:700 10px/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.16em;
+    text-transform:uppercase;padding:7px 11px;border-radius:999px;background:rgba(8,8,14,.62);border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(8px);transition:opacity .25s ease,color .25s ease}
+  .qc-home-link:hover,.qc-home-link:focus-visible{color:#fff;border-color:rgba(255,255,255,.45)}
+  body:has(canvas:fullscreen) .qc-home-link{opacity:0;pointer-events:none}
+</style>
+<a class="qc-home-link" href="/">Qualiacology</a>
+<script>
+  // hide the pill while the game holds pointer lock, so it never sits over a locked cursor
+  document.addEventListener('pointerlockchange',function(){
+    var a=document.querySelector('.qc-home-link'); if(!a) return;
+    var locked=!!document.pointerLockElement; a.style.opacity=locked?'0':''; a.style.pointerEvents=locked?'none':'';
+  });
+</script>
+</body>
+</html>

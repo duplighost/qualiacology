@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #14100d; overflow: hidden; }
+  #game { position: fixed; inset: 0; cursor: none; }
+  #game canvas { position: absolute; left: 0; top: 0; }
+  #boot {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 18px; color: #f2e9d8; background: #14100d;
+    font: 13px/1.6 ui-monospace, 'Cascadia Code', Consolas, monospace; z-index: 10;
+    cursor: pointer; user-select: none;
+  }
+  #boot .word { font-size: 34px; letter-spacing: 0.42em; padding-left: 0.42em; color: #e07a35; }
+  #boot .sub { opacity: 0.55; letter-spacing: 0.14em; }
+  #boot .gate { margin-top: 26px; opacity: 0.8; letter-spacing: 0.2em; animation: pulse 2.2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+</style>
+
+  <title>GOODFIRE | Qualiacology</title>
+  <meta name="description" content="GOODFIRE is a browser wildfire simulation across one season on one mountain, where the ground you fail to hold is what saves you later.">
+  <meta name="theme-color" content="#14100d">
+  <link rel="canonical" href="https://qualiacology.com/goodfire/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="GOODFIRE | Qualiacology">
+  <meta property="og:description" content="One mountain, one fire season, one warden on foot. There is no fail state — a fire that overruns you becomes scar.">
+  <meta property="og:url" content="https://qualiacology.com/goodfire/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/goodfire-card-clean.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="GOODFIRE | Qualiacology">
+  <meta name="twitter:description" content="One mountain, one fire season, one warden on foot. There is no fail state — a fire that overruns you becomes scar.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/goodfire-card-clean.jpg">
+</head>
+<body>
+<div id="game"></div>
+<div id="boot">
+  <div class="word">GOODFIRE</div>
+  <div class="sub">a season on ninemile mountain</div>
+  <div class="gate">take the watch</div>
+</div>
+<script type="module" src="src/main.js"></script>
+
+<style>
+  .qc-home-link{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:2147483000;
+    color:rgba(255,255,255,.82);text-decoration:none;font:700 10px/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.16em;
+    text-transform:uppercase;padding:7px 11px;border-radius:999px;background:rgba(8,8,14,.62);border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(8px);transition:opacity .25s ease,color .25s ease}
+  .qc-home-link:hover,.qc-home-link:focus-visible{color:#fff;border-color:rgba(255,255,255,.45)}
+  body:has(canvas:fullscreen) .qc-home-link{opacity:0;pointer-events:none}
+</style>
+<a class="qc-home-link" href="/">Qualiacology</a>
+<script>
+  // hide the pill while the game holds pointer lock, so it never sits over a locked cursor
+  document.addEventListener('pointerlockchange',function(){
+    var a=document.querySelector('.qc-home-link'); if(!a) return;
+    var locked=!!document.pointerLockElement; a.style.opacity=locked?'0':''; a.style.pointerEvents=locked?'none':'';
+  });
+</script>
+</body>
+</html>

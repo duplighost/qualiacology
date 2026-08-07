@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="stylesheet" href="style.css" />
+
+  <title>AFTERGLOW | Qualiacology</title>
+  <meta name="description" content="AFTERGLOW is a browser twin-stick survival roguelite — one neon arena, escalating waves, and a dash you learn to live inside.">
+  <meta name="theme-color" content="#0a0420">
+  <link rel="canonical" href="https://qualiacology.com/afterglow/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="AFTERGLOW | Qualiacology">
+  <meta property="og:description" content="One arena, waves that keep arriving, and a dash with invincibility frames — you go through the danger, not around it.">
+  <meta property="og:url" content="https://qualiacology.com/afterglow/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/afterglow-card-clean.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AFTERGLOW | Qualiacology">
+  <meta name="twitter:description" content="One arena, waves that keep arriving, and a dash with invincibility frames — you go through the danger, not around it.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/afterglow-card-clean.jpg">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+    <div id="ui"></div>
+  </div>
+  <noscript>
+    <p style="color:#fff;font-family:sans-serif;padding:2rem">AFTERGLOW needs JavaScript enabled to play.</p>
+  </noscript>
+  <script src="js/game.js"></script>
+
+<style>
+  .qc-home-link{position:fixed;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));z-index:2147483000;
+    color:rgba(255,255,255,.82);text-decoration:none;font:700 10px/1.2 system-ui,-apple-system,sans-serif;letter-spacing:.16em;
+    text-transform:uppercase;padding:7px 11px;border-radius:999px;background:rgba(8,8,14,.62);border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(8px);transition:opacity .25s ease,color .25s ease}
+  .qc-home-link:hover,.qc-home-link:focus-visible{color:#fff;border-color:rgba(255,255,255,.45)}
+  body:has(canvas:fullscreen) .qc-home-link{opacity:0;pointer-events:none}
+</style>
+<a class="qc-home-link" href="/">Qualiacology</a>
+<script>
+  // hide the pill while the game holds pointer lock, so it never sits over a locked cursor
+  document.addEventListener('pointerlockchange',function(){
+    var a=document.querySelector('.qc-home-link'); if(!a) return;
+    var locked=!!document.pointerLockElement; a.style.opacity=locked?'0':''; a.style.pointerEvents=locked?'none':'';
+  });
+</script>
+</body>
+</html>

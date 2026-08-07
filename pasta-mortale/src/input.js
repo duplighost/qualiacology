@@ -50,12 +50,26 @@ export class InputController {
     const params = new URLSearchParams(this.window.location.search);
     this.forceTouch = params.get("touch") === "1";
     this.isAutotest = params.has("autotest");
+    this.isQa = this.isAutotest || params.get("qa") === "1";
 
     const navigatorTouch = Number(this.window.navigator?.maxTouchPoints || 0) > 0;
     const coarsePointer = this.window.matchMedia?.("(pointer: coarse)").matches || false;
     const finePointer = this.window.matchMedia?.("(any-pointer: fine)").matches || false;
     this.isTouch = this.forceTouch || ((navigatorTouch || coarsePointer) && !finePointer);
     this.pointerLocked = this.document.pointerLockElement === this.canvas;
+    this.pointerLockTimeoutMs = 1500;
+    this.pointerLockState = this.isTouch
+      ? "touch"
+      : this.isAutotest
+        ? "bypassed"
+        : this.pointerLocked ? "locked" : "idle";
+    this.pointerLockError = null;
+    this.pointerLockAttempts = 0;
+    this.pointerLockSuccesses = this.pointerLocked ? 1 : 0;
+    this.pointerLockFailures = 0;
+    this.pointerLockRequestedAt = null;
+    this.pointerLockAcquiredAt = this.pointerLocked ? this.window.performance.now() : null;
+    this.pointerLockLatencyMs = null;
 
     this.touchUI = null;
     this.moveZone = null;
@@ -144,11 +158,17 @@ export class InputController {
     this._onCanvasMouseDown = (event) => {
       if (!this._enabled || this.isTouch || (event.button !== 0 && event.button !== 2)) return;
       if (event.button === 2) event.preventDefault();
+      const acquiringPointerLock = !this.pointerLocked && !this.isAutotest;
       this._setMouseButton(event.button, true, event.buttons);
-      // Preserve the acquisition click in the mask. The public getters remain
-      // gated until lock arrives, so the same deliberate click both captures
-      // the mouse and performs its fire/ADS action without leaking to menus.
-      if (!this.isAutotest) this._requestPointerLock();
+      if (acquiringPointerLock) {
+        // Mouse capture is an input-boundary gesture, not a combat action. Gate
+        // the held acquisition button until a real release/re-press and erase
+        // the one-shot fire edge so the first playing frame cannot inherit it.
+        const bit = event.button === 0 ? 1 : 2;
+        this._blockedMouseButtons |= bit;
+        if (bit === 1) this._fireRequested = false;
+        this._requestPointerLock();
+      }
     };
 
     this._onContextMenu = (event) => event.preventDefault();
@@ -157,14 +177,26 @@ export class InputController {
       this._pointerLockPending = false;
       const wasLocked = this.pointerLocked;
       this.pointerLocked = this.document.pointerLockElement === this.canvas;
-      if (this.pointerLocked && !wasLocked) this._dropNextLookDelta = true;
-      if (!this.pointerLocked) this.releaseAll();
+      if (this.pointerLocked) {
+        const acquiredAt = this.window.performance.now();
+        if (!wasLocked) {
+          this._dropNextLookDelta = true;
+          this.pointerLockSuccesses += 1;
+        }
+        this.pointerLockState = "locked";
+        this.pointerLockAcquiredAt = acquiredAt;
+        this.pointerLockLatencyMs = this.pointerLockRequestedAt == null
+          ? null
+          : Math.max(0, acquiredAt - this.pointerLockRequestedAt);
+        this.pointerLockError = null;
+      } else if (wasLocked) {
+        this.pointerLockState = "released";
+        this.releaseAll();
+      }
     };
 
-    this._onPointerLockError = () => {
-      this._pointerLockPending = false;
-      this.pointerLocked = this.document.pointerLockElement === this.canvas;
-      if (!this.pointerLocked) this.releaseAll();
+    this._onPointerLockError = (event) => {
+      this._failPointerLock("rejected", event?.error || event);
     };
 
     this._onMouseUp = (event) => {
@@ -360,6 +392,13 @@ export class InputController {
   }
 
   update() {
+    if (this._pointerLockPending && this.pointerLockRequestedAt != null) {
+      const pendingFor = this.window.performance.now() - this.pointerLockRequestedAt;
+      if (pendingFor >= this.pointerLockTimeoutMs && !this.pointerLocked) {
+        this._failPointerLock("timed-out", new Error("Mouse capture timed out"));
+      }
+    }
+
     const keyX = (this._keys.has("KeyD") || this._keys.has("ArrowRight") ? 1 : 0)
       - (this._keys.has("KeyA") || this._keys.has("ArrowLeft") ? 1 : 0);
     const keyY = (this._keys.has("KeyW") || this._keys.has("ArrowUp") ? 1 : 0)
@@ -405,6 +444,16 @@ export class InputController {
       fireRequested: Boolean(this._fireRequested),
       aimHeld: this.aimHeld,
       pointerLocked: Boolean(this.pointerLocked),
+      pointerLockState: this.pointerLockState,
+      pointerLockError: this.pointerLockError,
+      pointerLockSupported: typeof this.canvas.requestPointerLock === "function",
+      pointerLockAttempts: this.pointerLockAttempts,
+      pointerLockSuccesses: this.pointerLockSuccesses,
+      pointerLockFailures: this.pointerLockFailures,
+      pointerLockRequestedAt: this.pointerLockRequestedAt,
+      pointerLockAcquiredAt: this.pointerLockAcquiredAt,
+      pointerLockLatencyMs: this.pointerLockLatencyMs,
+      pointerLockTimeoutMs: this.pointerLockTimeoutMs,
       mouseButtons: this._mouseButtons,
       blockedMouseButtons: this._blockedMouseButtons,
       pointerLockPending: Boolean(this._pointerLockPending),
@@ -488,7 +537,13 @@ export class InputController {
   }
 
   requestPointerLock() {
-    this._requestPointerLock();
+    return this._requestPointerLock();
+  }
+
+  simulatePointerLockFailure(reason = "Simulated pointer-lock failure") {
+    if (!this.isQa) return false;
+    this._failPointerLock("rejected", new Error(String(reason)));
+    return true;
   }
 
   releaseAll() {
@@ -528,6 +583,7 @@ export class InputController {
     this._enabled = false;
     this.pointerLocked = false;
     this._pointerLockPending = false;
+    this.pointerLockState = "destroyed";
     this._resetHeldInput(false);
     this._look.x = 0;
     this._look.y = 0;
@@ -545,25 +601,67 @@ export class InputController {
 
   _requestPointerLock() {
     // Pointer lock is intentionally impossible in query-driven smoke tests.
-    if (!this._enabled || this._destroyed || this.isTouch || this.isAutotest) return;
-    if (!this.canvas.isConnected || this.document.pointerLockElement === this.canvas || this._pointerLockPending) return;
+    if (!this._enabled || this._destroyed) return false;
+    if (this.isTouch) {
+      this.pointerLockState = "touch";
+      return false;
+    }
+    if (this.isAutotest) {
+      this.pointerLockState = "bypassed";
+      return false;
+    }
+    if (!this.canvas.isConnected) {
+      this._failPointerLock("rejected", new Error("Game canvas is not connected"));
+      return false;
+    }
+    if (this.document.pointerLockElement === this.canvas) {
+      this.pointerLocked = true;
+      this.pointerLockState = "locked";
+      return true;
+    }
+    if (this._pointerLockPending) return false;
 
     const request = this.canvas.requestPointerLock;
-    if (typeof request !== "function") return;
+    if (typeof request !== "function") {
+      this._failPointerLock("unsupported", new Error("Pointer lock is not supported"));
+      return false;
+    }
 
     try {
+      this.pointerLockAttempts += 1;
       this._pointerLockPending = true;
+      this.pointerLockState = "requesting";
+      this.pointerLockError = null;
+      this.pointerLockRequestedAt = this.window.performance.now();
       const result = request.call(this.canvas);
       if (result && typeof result.then === "function") {
         result.then(
-          () => { this._pointerLockPending = false; },
-          () => { this._pointerLockPending = false; }
+          () => {
+            if (this.document.pointerLockElement === this.canvas) this._onPointerLockChange();
+          },
+          (error) => this._failPointerLock("rejected", error)
         );
       }
-    } catch {
-      this._pointerLockPending = false;
-      // Browsers can reject pointer lock when focus or user activation is lost.
+      return true;
+    } catch (error) {
+      this._failPointerLock("rejected", error);
+      return false;
     }
+  }
+
+  _failPointerLock(state, error) {
+    const wasPending = this._pointerLockPending || this.pointerLockState === "requesting";
+    this._pointerLockPending = false;
+    this.pointerLocked = this.document.pointerLockElement === this.canvas;
+    if (this.pointerLocked) {
+      this._onPointerLockChange();
+      return false;
+    }
+    this.pointerLockState = state;
+    this.pointerLockError = String(error?.name || error?.message || error || "Pointer lock failed").slice(0, 180);
+    if (wasPending || state === "unsupported") this.pointerLockFailures += 1;
+    this.releaseAll();
+    return true;
   }
 
   _setMouseButton(button, pressed, buttons = null) {
