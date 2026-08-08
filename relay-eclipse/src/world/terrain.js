@@ -154,6 +154,9 @@ const C_DIRT = new THREE.Color(0x4a4f59);
 const C_ROCK = new THREE.Color(0x6a6560);
 const C_SAND = new THREE.Color(0x39495b);
 const C_MUD = new THREE.Color(0x252934);
+// The sinkhole throat. Deliberately far darker than any other ground mineral:
+// the way down has to read as a hole punched in the plain, by brightness alone.
+const C_CRATER = new THREE.Color(0x101319);
 
 export function buildTerrain(scene) {
   const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
@@ -180,10 +183,17 @@ export function buildTerrain(scene) {
       col.lerp(C_SAND, clamp01((POND.r + 2.5 - pd) / 3) * 0.8);
       if (h < WATER_Y) col.lerp(C_MUD, 0.55);
     }
-    // dark rock down inside the sinkhole craters
+    // The sinkhole craters. C_ROCK used to be within a few percent of the plain
+    // it sat in, so a crater had no albedo read at all and the bowl only existed
+    // as shading — which at this light level is nothing. Now the throat falls
+    // away to near-black well before the rim, so each mouth is a dark disc on a
+    // lighter field: legible at any distance, and legible without colour.
     for (const e of ENTRANCES) {
       const ed = Math.hypot(x - e.x, z - e.z);
-      if (ed < ENTRANCE_CARVE) col.lerp(C_ROCK, clamp01((ENTRANCE_CARVE - ed) / 4) * 0.75);
+      if (ed < ENTRANCE_CARVE) {
+        const into = clamp01((ENTRANCE_CARVE - ed) / (ENTRANCE_CARVE * 0.78));
+        col.lerp(C_CRATER, into * into * 0.94);
+      }
     }
     colors[i * 3] = col.r; colors[i * 3 + 1] = col.g; colors[i * 3 + 2] = col.b;
   }

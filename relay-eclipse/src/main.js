@@ -5,7 +5,7 @@
 // disciplined automatic-fire cadence without its cluttered city renderer.
 
 import * as THREE from 'three';
-import { clamp, clamp01, damp, rand } from './engine/math.js';
+import { clamp, clamp01, damp, lerp, rand } from './engine/math.js';
 import { Input } from './engine/input.js';
 import { Audio } from './engine/audio.js';
 import { FX } from './engine/fx.js';
@@ -19,7 +19,7 @@ import { ProjectileManager } from './world/projectiles.js';
 import { HUD } from './ui/hud.js';
 import { buildComposer } from './gfx/post.js';
 import { createPerformanceGovernor } from './engine/performance-governor.js';
-import { loadAstronautVisuals } from './enemies/astronaut-visuals.js';
+import { loadCosmicEnemyVisuals } from './enemies/cosmic-enemy-visuals.js';
 import {
   loadRealisticViewmodel,
   REALISTIC_VIEWMODEL_ASSETS,
@@ -133,6 +133,7 @@ class Game {
     this.controller.railConstraintFn = this.world.relay?.resolveRampRail || null;
     this.pickups.groundAt = this.world.groundAt;
     this.projectiles.groundAt = this.world.groundAt;
+    this.projectiles.solids = this.world.bulletSolids;
     this._pondWasFrozen = false;
     this._meteors = [];            // wurm-wave surface strikes [{x,z,y,t}]
     this._voids = [];              // live void orbs [{pos,t,spin}]
@@ -211,7 +212,7 @@ class Game {
   async _loadVisualDonors() {
     const weaponEntries = Object.entries(REALISTIC_VIEWMODEL_ASSETS);
     const [astronauts, ...weaponResults] = await Promise.allSettled([
-      loadAstronautVisuals({ renderer: this.renderer }),
+      loadCosmicEnemyVisuals(),
       ...weaponEntries.map(([id, config]) => loadRealisticViewmodel({
         renderer: this.renderer,
         ...config,
@@ -258,9 +259,13 @@ class Game {
       const tick = () => (--count <= 0 ? resolve() : requestAnimationFrame(tick));
       requestAnimationFrame(tick);
     });
+    // `maw` used to alias the wurm boss, back when the eclipse-maw art was only
+    // worn by the wurm. There is a real ECLIPSE MAW now, so the name resolves to
+    // it; ask for the boss by its own name. `planet` is RELAY ZERO's word for
+    // the same thing and is kept as an alias.
     const friendlyType = (type) => ({
       rusher: 'stalker', shooter: 'husk', brute: 'juggernaut',
-      commander: 'colossus', maw: 'wurm',
+      commander: 'colossus', planet: 'maw',
     })[type] || type;
     const teleport = (point) => {
       if (!point) return false;
@@ -425,7 +430,7 @@ class Game {
         const z = game.controller.pos.z + (offset.z || 0);
         const y = game.world.groundAt(x, z, game.controller.pos.y + 2);
         game._meteors.push({ x, z, y, t: 0.75, light: false });
-        game.fx.shockwave(new THREE.Vector3(x, y + 0.3, z), 0xffe66d, 4.6, 0.75);
+        game.fx.groundWarning(new THREE.Vector3(x, y, z), 4.6, 0.75, 0xffe66d);
         return snapshot();
       },
       lockQuality(options = { dpr: 1, quality: 'high' }) { return game.performanceGovernor.lock(options); },
@@ -903,7 +908,7 @@ class Game {
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
     if (this.performanceGovernor) this.performanceGovernor.resize(w, h, window.devicePixelRatio || 1);
     else { this.renderer.setSize(w, h); this.post.setSize(w, h); }
-    this.weapons.syncCamera(this.cam.fov, w / h);
+    this.weapons.syncCamera(this.cam.fov, w / h, w, h);
   }
 
   loop(now) {
@@ -993,26 +998,54 @@ class Game {
           const x = this.controller.pos.x + Math.cos(a) * d, z = this.controller.pos.z + Math.sin(a) * d;
           const y = this.world.groundAt(x, z, this.controller.pos.y + 2);
           this._meteors.push({ x, z, y, t: 0.8, light: true });
-          this.fx.shockwave(new THREE.Vector3(x, y + 0.3, z), 0xffe66d, 3.6, 0.7);
+          this.fx.groundWarning(new THREE.Vector3(x, y, z), 3.6, 0.8, 0xffe66d);
+          this.audio.seerCharge({ x, y: y + 0.5, z });
         }
       }
 
-      // After the opening rounds, the orbiting bodies begin ranging the relay.
-      // The high deck draws more fire, making the climb a tactical trade instead
-      // of a permanently safe sniper perch. A bright ring gives a fair dodge cue.
-      const orbitalActive = this.enemies.wave >= 4 && this.enemies.aliveCount() > 0 &&
-        (onUpperDeck || this.enemies.wave >= 8) && !this.enemies.isBossWave;
+      // The orbiting bodies range the relay, and they range it by height.
+      //
+      // This used to be a switch: nothing at all before wave 4, and then only
+      // while you were standing on the deck, or from wave 8 anywhere. So the
+      // one thing the climb was meant to cost you did not begin until after the
+      // climb was already over, and a run that ended around wave 5 on the floor
+      // never saw a single shell. The ascent is the whole shape of this game —
+      // it should be the thing under fire.
+      //
+      // It is a gradient now. Step onto the ramp and the sky starts ranging
+      // you; the higher you get the harder it presses, and holding the floor is
+      // only safe until the siege is properly under way.
+      const relayCfg = this.world.relay?.config;
+      const lowerY = relayCfg ? this.world.relay.center.y + relayCfg.lowerFloorY : 0;
+      const climb01 = Number.isFinite(deckY) && deckY > lowerY + 1
+        ? clamp01((this.controller.pos.y - lowerY) / (deckY - lowerY))
+        : 0;
+      const onRamp = climb01 > 0.08;
+      const exposure = Math.max(climb01, this.enemies.wave >= 6 ? 0.36 : 0);
+      const orbitalActive = !this.enemies.isBossWave && this.enemies.aliveCount() > 0 &&
+        exposure > 0.08 && this.enemies.wave >= (onRamp ? 2 : 6);
       if (orbitalActive) {
         this._orbitalCd -= gdt;
         if (this._orbitalCd <= 0) {
-          this._orbitalCd = rand(onUpperDeck ? 2.2 : 3.8, onUpperDeck ? 4.0 : 6.2);
+          // 5.6 seconds between shells at the foot of the ramp, down to 1.9 on
+          // the deck. The spread closes as you climb too: a shell thrown nine
+          // metres sideways off a two-metre-wide ramp lands on the plain far
+          // below and threatens nobody, which is not a bombardment, it is
+          // weather.
+          const cadence = lerp(5.6, 1.9, exposure);
+          this._orbitalCd = rand(cadence * 0.78, cadence * 1.26);
           const a = Math.random() * Math.PI * 2;
-          const d = rand(2.5, 9.5);
+          const d = rand(2.0, lerp(9.5, 4.6, exposure));
           const x = this.controller.pos.x + Math.cos(a) * d;
           const z = this.controller.pos.z + Math.sin(a) * d;
           const y = this.world.groundAt(x, z, this.controller.pos.y + 2);
           this._meteors.push({ x, z, y, t: 0.9, light: false, orbital: true });
-          this.fx.shockwave(new THREE.Vector3(x, y + 0.28, z), 0xffe66d, 4.8, 0.8);
+          this.fx.groundWarning(new THREE.Vector3(x, y, z), 4.8, 0.9, 0xffe66d);
+          // Shells arrive from any bearing, so half of every barrage lands
+          // outside your view and a mark on the floor tells you nothing. The
+          // ranging tone is placed at the impact point through the HRTF panner:
+          // you hear which way to move before you can see it.
+          this.audio.seerCharge({ x, y: y + 0.5, z });
         }
       } else {
         this._orbitalCd = Math.min(this._orbitalCd, 4.5);
@@ -1285,8 +1318,8 @@ class Game {
         const x = this.player.pos.x + Math.cos(a) * d, z = this.player.pos.z + Math.sin(a) * d;
         const y = this.world.groundAt(x, z, this.player.pos.y + 2);
         this._meteors.push({ x, z, y, t: 0.75 });
-        this.fx.shockwave(new THREE.Vector3(x, y + 0.3, z), 0xffe66d, 4.4, 0.7);
-        this.audio.seerCharge(0);
+        this.fx.groundWarning(new THREE.Vector3(x, y, z), 4.4, 0.75, 0xffe66d);
+        this.audio.seerCharge({ x, y: y + 0.5, z });
       }
     }
     for (let i = this._meteors.length - 1; i >= 0; i--) {
@@ -1679,7 +1712,12 @@ class Game {
     this.renderer.info.reset();
     this.post.render();                       // world + bloom + tone-map to screen
     this.renderer.clearDepth();
-    this.weapons.syncCamera(this.cam.fov, this.camera.aspect);
+    this.weapons.syncCamera(
+      this.cam.fov,
+      this.camera.aspect,
+      window.innerWidth,
+      window.innerHeight,
+    );
     this.renderer.render(this.weapons.viewScene, this.weapons.viewCamera); // gun overlay
     this._renderStats = {
       calls: this.renderer.info.render.calls,

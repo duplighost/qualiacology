@@ -222,6 +222,25 @@ export class FX {
       this.rings.push({ mesh: m, life: 0, maxLife: 0.34, maxR: 3 });
     }
     this._ringCursor = 0;
+
+    // Impact telegraphs. Deliberately NOT drawn from the pool above. Those
+    // rings billboard to face the camera, which makes them a glow hanging at a
+    // point rather than a mark on a place, and they recycle after twelve uses,
+    // so in a busy fight an incoming-fire warning could be evicted before the
+    // thing it warned about landed. A warning has to lie flat on the surface
+    // you are standing on, and it has to outlive its own fuse.
+    this.warnings = [];
+    const warnGeo = new THREE.RingGeometry(0.76, 1.0, 44);
+    warnGeo.rotateX(-Math.PI / 2);
+    for (let i = 0; i < 6; i++) {
+      const m = new THREE.Mesh(warnGeo, new THREE.MeshBasicMaterial({
+        color: 0xffe08a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      }));
+      m.visible = false; m.frustumCulled = false; m.renderOrder = 4;
+      scene.add(m);
+      this.warnings.push({ mesh: m, life: 0, maxLife: 0.9, maxR: 4 });
+    }
+    this._warnCursor = 0;
   }
 
   addTrauma(amount) { this.trauma = clamp01(this.trauma + amount); }
@@ -355,6 +374,21 @@ export class FX {
 
   muzzleFlash(point) { this.impactLight(point, 0xffd27f, 9, 0.05); }
 
+  // A ring laid flat on the ground where something is about to land. It closes
+  // inward as the fuse burns and strobes faster toward the end, so the ring
+  // says where and its shrinking says when — and neither of those depends on
+  // being able to tell two colours apart.
+  groundWarning(point, maxR = 4, life = 0.9, colorHex = 0xffe08a) {
+    const w = this.warnings[this._warnCursor];
+    this._warnCursor = (this._warnCursor + 1) % this.warnings.length;
+    w.mesh.position.set(point.x, point.y + 0.07, point.z);
+    w.mesh.material.color.setHex(colorHex);
+    w.mesh.material.opacity = 0.9;
+    w.mesh.scale.setScalar(maxR);
+    w.mesh.visible = true;
+    w.life = life; w.maxLife = life; w.maxR = maxR;
+  }
+
   // A bright expanding ring, camera-facing — the punctuation on a dash strike.
   shockwave(point, colorHex = 0xffe08a, maxR = 3.2, life = 0.34) {
     const r = this.rings[this._ringCursor];
@@ -420,6 +454,16 @@ export class FX {
         r.mesh.material.opacity = (1 - t) * 0.95;
         r.mesh.lookAt(this.camera.position);
         if (r.life <= 0) r.mesh.visible = false;
+      }
+    }
+    for (const w of this.warnings) {
+      if (w.life > 0) {
+        w.life -= realDt;
+        const t = clamp01(1 - w.life / w.maxLife);
+        w.mesh.scale.setScalar(w.maxR * (1 - t * 0.7));
+        const strobe = 0.6 + 0.4 * Math.abs(Math.sin(t * t * 24));
+        w.mesh.material.opacity = (0.34 + t * 0.62) * strobe;
+        if (w.life <= 0) { w.mesh.visible = false; w.mesh.material.opacity = 0; }
       }
     }
 

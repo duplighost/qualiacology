@@ -69,6 +69,20 @@ const TYPES = {
     gait: 'fly', headY: 0.72, flyer: true, cruise: 12, diveRange: -1, climb: 2.0,
     standoff: 20, shooter: true, voice: 1.1, build: buildSeer,
   },
+  // --- THE ECLIPSE MAW: a small living world that holds station overhead and
+  // drops its fire straight down. This is RELAY ZERO's planet, and in that game
+  // the planets were the whole reason the climb was frightening. The thing that
+  // makes it work is `orbit`: it matches YOUR height rather than cruising at a
+  // fixed one, so there is no altitude you can climb to that gets you above it,
+  // and it follows you up the relay instead of being left behind on the floor.
+  // Unlike the shelling, it is a body in the sky you can shoot back at. ---
+  maw: {
+    hp: 260, speed: 2.6, radius: 0.95, height: 2.2, damage: 15, attackCd: 2.9, score: 300,
+    skin: 0x3a1c33, accent: 0xff5b9e, blood: 0xff5b9e, rate: 2.6, reach: 1.2,
+    gait: 'fly', headY: 0.7, flyer: true, orbit: true, cruise: 9.5, diveRange: -1, climb: 1.6,
+    standoff: 12, shooter: true, projectile: 'meteor', voice: 0.8, name: 'ECLIPSE MAW',
+    build: buildSeer,
+  },
   // --- BOSS: a towering molten titan that slams and calls in reinforcements ---
   colossus: {
     hp: 1600, speed: 2.9, radius: 1.7, height: 5.0, damage: 42, attackCd: 2.4, score: 3000,
@@ -113,6 +127,7 @@ const VISUAL_PROFILES = Object.freeze({
   juggernaut:  Object.freeze({ type: 'brute',     scale: 1.00 }),
   colossus:    Object.freeze({ type: 'commander', scale: 1.42 }),
   wurm:        Object.freeze({ type: 'maw',       scale: 0.90 }),
+  maw:         Object.freeze({ type: 'maw',       scale: 0.72 }),
 });
 
 // Basic husks are the first enemy most players meet. Give their contact hit a
@@ -1306,7 +1321,12 @@ export class Enemy {
       const cruise = groundY + def.cruise;
       if (this._swoopClimb > 0) this._swoopClimb -= dt;
       let ty;
-      if (def.diveRange > 0 && dist < def.diveRange && this._swoopClimb <= 0) ty = player.pos.y + def.height * 0.25;
+      if (def.orbit) {
+        // An orbiter holds station a fixed distance above the PLAYER, not above
+        // the ground. Climbing does not shake it: it is the reason the ascent
+        // has a ceiling of its own.
+        ty = player.pos.y + def.cruise;
+      } else if (def.diveRange > 0 && dist < def.diveRange && this._swoopClimb <= 0) ty = player.pos.y + def.height * 0.25;
       else ty = Math.max(cruise, player.pos.y * 0.55 + groundY * 0.2 + def.cruise * 0.45);
       if (this._swoopClimb > 0) ty = Math.max(ty, player.pos.y + def.cruise * 0.8);   // climb clear of the player after a strike
       ty = Math.max(ty, groundY + 1.0);
@@ -1968,6 +1988,12 @@ export class Enemy {
     } else {
       this.shootTimer -= dt;
       if (this.shootTimer <= 0 && dist < 46 && this.spawnT >= 1) {
+        // Don't open fire through the observatory. A shooter that has no line
+        // to you used to charge and fire anyway, and since the shot itself
+        // ignored standing geometry it arrived through the floor from a thing
+        // you could not see. Re-check shortly rather than resetting the whole
+        // cadence, so it fires the moment you step back into the open.
+        if (!this.mgr.hasLineOfSight(this.pos, player.pos)) { this.shootTimer = 0.45; return; }
         this._chargeT = 0;
         this.mgr.audio.seerCharge(this.mgr.panFor(this.pos));
       }
@@ -1981,7 +2007,7 @@ export class Enemy {
     if (aim.lengthSq() < 1e-6) aim.set(0, 0, 1);
     aim.normalize();
     origin.addScaledVector(aim, this._muzzleZ + 0.35);
-    this.mgr.projectiles.spawn('bolt', origin, aim, { owner: 'enemy', damage: def.damage + this.mgr.wave * 0.4 });
+    this.mgr.projectiles.spawn(def.projectile || 'bolt', origin, aim, { owner: 'enemy', damage: def.damage + this.mgr.wave * 0.4 });
     this.mgr.audio.enemyShoot(this.mgr.panFor(this.pos));
     this.mgr.fx.impactLight(origin, def.accent, 5, 0.1);
   }
@@ -2258,6 +2284,31 @@ export class EnemyManager {
     state.pitch = enemy.group.rotation.x;
     state.lean = enemy.group.rotation.z + enemy.hurtLean * 0.45;
     if (enemy._stunT > 0) state.lean += Math.sin(enemy._stunT * 9) * 0.12;
+    // Bank into turns. Without it a walker changes direction by pivoting on the
+    // spot with a rigid upright body, which is the other half of why these read
+    // as sliding rather than moving under their own power. Taken from how fast
+    // the velocity heading is actually rotating, so it stays honest at any
+    // speed and costs one angle per enemy per frame.
+    if (locomotionLocked) {
+      enemy._bank = 0;
+      enemy._bankRef = undefined;
+    } else {
+      const planar = Math.hypot(enemy.vel.x, enemy.vel.z);
+      const stepDt = Math.max(dt, 1e-3);
+      if (planar > 0.25) {
+        const heading = Math.atan2(enemy.vel.x, enemy.vel.z);
+        if (enemy._bankRef === undefined) enemy._bankRef = heading;
+        let turn = heading - enemy._bankRef;
+        turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+        enemy._bankRef = heading;
+        const rate = clamp(turn / stepDt, -4, 4);
+        enemy._bank = damp(enemy._bank || 0, rate * 0.06 * state.speed01, 9, stepDt);
+      } else {
+        enemy._bankRef = undefined;
+        enemy._bank = damp(enemy._bank || 0, 0, 7, stepDt);
+      }
+      state.lean += enemy._bank;
+    }
     // Preserve non-colour attack motion and telegraphs after the high-detail
     // cutout replaces a procedural body. Audio, ground effects, and movement
     // remain separate redundant warnings or impact confirmation.
@@ -2370,6 +2421,7 @@ export class EnemyManager {
       if (n >= 2) pool.push(['wisp', clamp(0.2 + (n - 2) * 0.1, 0, 0.9)]);
       if (n >= 3) pool.push(['juggernaut', clamp(0.15 + (n - 3) * 0.06, 0, 0.6)]);
       if (n >= 3) pool.push(['raven', clamp(0.3 + (n - 3) * 0.1, 0, 1.1)]);     // flyers reach the sky-islands
+      if (n >= 3) pool.push(['maw', clamp(0.28 + (n - 3) * 0.09, 0, 0.95)]);    // the planets start ranging you
       if (n >= 4) pool.push(['bloater', clamp(0.2 + (n - 4) * 0.08, 0, 0.8)]);
       if (n >= 5) pool.push(['megalith', clamp(0.12 + (n - 5) * 0.05, 0, 0.5)]);
       if (n >= 5) pool.push(['seer', clamp(0.15 + (n - 5) * 0.06, 0, 0.55)]);    // perched snipers, after the first few levels
@@ -2651,6 +2703,24 @@ export class EnemyManager {
   // all the existing `audio.x(panFor(pos), ...)` call sites need no change.
   panFor(pos) {
     return { x: pos.x, y: pos.y + 0.8, z: pos.z };   // +0.8 → sound from the torso, not the feet
+  }
+
+  // Is there clear air between a shooter and the player? Tested against the
+  // same standing geometry bullets collide with, aiming at the chest rather
+  // than the feet so a knee-high lip doesn't count as cover.
+  hasLineOfSight(from, to) {
+    const solids = this.world && this.world.bulletSolids;
+    if (!solids || !solids.length) return true;
+    this._losDir = this._losDir || new THREE.Vector3();
+    this._losRay = this._losRay || new THREE.Raycaster();
+    this._losDir.set(to.x - from.x, (to.y + 1.0) - from.y, to.z - from.z);
+    const range = this._losDir.length();
+    if (range < 0.5) return true;
+    this._losDir.multiplyScalar(1 / range);
+    this._losRay.set(from, this._losDir);
+    this._losRay.near = 0.35;
+    this._losRay.far = range - 0.35;
+    return this._losRay.intersectObjects(solids, false).length === 0;
   }
 
   raycastTargets() {

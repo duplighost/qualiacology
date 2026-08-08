@@ -5,71 +5,82 @@
 import * as THREE from 'three';
 
 export const PULSE_CARBINE_ASSET_URL = new URL(
-  '../../assets/art/pulse-carbine-v1.png',
+  '../../assets/art/pulse-carbine-hip-v2.png',
   import.meta.url,
 ).href;
 
 const artUrl = (filename) => new URL(`../../assets/art/${filename}`, import.meta.url).href;
 
-// Plane-local center of the sight picture baked into each transparent render.
-// Keeping the authored anchor beside the derived ADS translation makes the
-// hit-ray contract explicit and gives browser QA something exact to project.
-const centeredOptic = (opticX, opticY) => Object.freeze({
-  opticX,
-  opticY,
-  adsX: -opticX,
-  adsY: -opticY,
-});
-
-// One authored normal pose and one unambiguously articulated reload pose per
-// weapon. Keeping the registry here makes asset failures local to one slot and
-// gives the procedural meshes a clean per-weapon fallback path.
+// The hip and reload renders are deliberately three-quarter compositions.
+// ADS therefore uses a separate, genuinely bore-axis render rather than the
+// old (and visually false) trick of translating one pixel in the hip image to
+// the crosshair. `adsSightY` is the independently reviewed sight center in the
+// new axial master; the runtime projects that point to the firing ray.
 export const REALISTIC_VIEWMODEL_ASSETS = Object.freeze({
   pistol: Object.freeze({
-    assetUrl: artUrl('pulse-sidearm-v1.png'),
-    reloadAssetUrl: artUrl('pulse-sidearm-reload-v1.png'),
+    assetUrl: artUrl('pulse-sidearm-hip-v2.png'),
+    reloadAssetUrl: artUrl('pulse-sidearm-reload-v2.png'),
+    adsAssetUrl: artUrl('pulse-sidearm-ads-v1.png'),
     layout: Object.freeze({
-      hipX: 0.18, hipY: -0.12,
-      ...centeredOptic(0.282, 0.135),
-      muzzleX: -0.01, muzzleY: 0.105,
+      hipScaleDesktop: 0.70, hipScalePortrait: 0.30, hipScaleShort: 0.72,
+      hipScreenXDesktop: 0.68, hipScreenXPortrait: 0.50, hipScreenXShort: 0.45,
+      reloadPortraitScale: 0.78, reloadPortraitOffsetX: -0.011,
+      adsSightX: 0, adsSightY: 0.127, adsScale: 0.79,
+      muzzleX: -0.246, muzzleY: 0.08,
     }),
   }),
   smg: Object.freeze({
     assetUrl: PULSE_CARBINE_ASSET_URL,
-    reloadAssetUrl: artUrl('pulse-carbine-reload-v1.png'),
+    reloadAssetUrl: artUrl('pulse-carbine-reload-v2.png'),
+    adsAssetUrl: artUrl('pulse-carbine-ads-v1.png'),
     layout: Object.freeze({
-      ...centeredOptic(0.265, 0.155),
-      muzzleX: -0.155, muzzleY: 0.115,
+      hipScaleDesktop: 0.74, hipScalePortrait: 0.30, hipScaleShort: 0.76,
+      hipScreenXDesktop: 0.67, hipScreenXPortrait: 0.50, hipScreenXShort: 0.45,
+      reloadPortraitScale: 0.82, reloadPortraitOffsetX: 0,
+      adsSightX: 0, adsSightY: 0.130, adsScale: 0.79,
+      muzzleX: -0.306, muzzleY: 0.036,
     }),
   }),
   shotgun: Object.freeze({
-    assetUrl: artUrl('breach-scattergun-v1.png'),
-    reloadAssetUrl: artUrl('breach-scattergun-reload-v1.png'),
+    assetUrl: artUrl('breach-scattergun-hip-v2.png'),
+    reloadAssetUrl: artUrl('breach-scattergun-reload-v2.png'),
+    adsAssetUrl: artUrl('breach-scattergun-ads-v1.png'),
     layout: Object.freeze({
-      hipX: 0.19, hipY: -0.135,
-      ...centeredOptic(0.291, 0.154),
-      muzzleX: -0.19, muzzleY: 0.12,
+      hipScaleDesktop: 0.74, hipScalePortrait: 0.30, hipScaleShort: 0.76,
+      hipScreenXDesktop: 0.67, hipScreenXPortrait: 0.50, hipScreenXShort: 0.45,
+      reloadPortraitScale: 0.78, reloadPortraitOffsetX: -0.010,
+      adsSightX: 0, adsSightY: 0.123, adsScale: 0.80,
+      muzzleX: -0.26, muzzleY: 0.078,
     }),
   }),
   rifle: Object.freeze({
-    assetUrl: artUrl('longbow-mr-v1.png'),
-    reloadAssetUrl: artUrl('longbow-mr-reload-v1.png'),
+    assetUrl: artUrl('longbow-mr-hip-v2.png'),
+    reloadAssetUrl: artUrl('longbow-mr-reload-v2.png'),
+    adsAssetUrl: artUrl('longbow-mr-ads-v1.png'),
     layout: Object.freeze({
-      hipX: 0.18, hipY: -0.13,
-      ...centeredOptic(0.379, 0.091),
-      muzzleX: -0.29, muzzleY: 0.11,
+      hipScaleDesktop: 0.72, hipScalePortrait: 0.29, hipScaleShort: 0.72,
+      hipScreenXDesktop: 0.66, hipScreenXPortrait: 0.48, hipScreenXShort: 0.43,
+      reloadPortraitScale: 0.82, reloadPortraitOffsetX: 0,
+      adsSightX: 0, adsSightY: 0.076, adsScale: 0.86,
+      muzzleX: -0.344, muzzleY: 0.094,
     }),
   }),
 });
 
 export const REALISTIC_VIEWMODEL_DEFAULTS = Object.freeze({
-  hipX: 0.2,
-  hipY: -0.14,
-  // Fallback matches the carbine. Every authored weapon overrides this with
-  // its own baked optic center so the sight never lies about the hit ray.
-  ...centeredOptic(0.265, 0.155),
-  sprintX: 0.21,
-  sprintY: -0.34,
+  hipScaleDesktop: 0.74,
+  hipScalePortrait: 0.30,
+  hipScaleShort: 0.76,
+  hipScreenXDesktop: 0.67,
+  hipScreenXPortrait: 0.50,
+  hipScreenXShort: 0.45,
+  reloadPortraitScale: 1,
+  reloadPortraitOffsetX: 0,
+  adsSightX: 0,
+  adsSightY: 0.13,
+  adsScale: 0.79,
+  sprintOffsetX: 0.1,
+  sprintOffsetY: -0.14,
   sprintRoll: -0.34,
   imageAspect: 1536 / 1024,
   muzzleX: -0.215,
@@ -122,13 +133,16 @@ function makeMuzzleFlashTexture(size = 96) {
   return texture;
 }
 
-function prepareWeaponTexture(texture, renderer) {
-  texture.name = texture.name || 'pulse-carbine-v1.png';
+function prepareWeaponTexture(texture, renderer, assetUrl = '') {
+  const assetName = assetUrl
+    ? decodeURIComponent(new URL(assetUrl, globalThis.location?.href || import.meta.url).pathname.split('/').pop())
+    : 'weapon-art.png';
+  texture.name = texture.name || assetName;
   const source = texture.image;
   if (source && source.width > VIEWMODEL_TEXTURE_WIDTH && typeof document !== 'undefined') {
     // The authored 1536x1024 masters remain in the package, but uploading all
-    // eight at full size plus mip chains creates needless residency pressure
-    // on older discrete/mobile GPUs. The plane never exceeds ~1000px on the
+    // twelve at full size creates needless residency pressure on older
+    // discrete/mobile GPUs. The plane never exceeds ~1000px on the
     // validated 1440px viewport, so this preserves visible detail while more
     // than halving the live viewmodel texture footprint.
     const canvas = document.createElement('canvas');
@@ -139,6 +153,24 @@ function prepareWeaponTexture(texture, renderer) {
     context.imageSmoothingQuality = 'high';
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.drawImage(source, 0, 0, canvas.width, canvas.height);
+    if (/-hip-v2\.png$|-reload-v2\.png$/i.test(assetName)) {
+      // First-person forearms intentionally continue through the bottom of
+      // the masters. Feather only that final strip so compact portrait layouts
+      // can lift the weapon above touch controls without revealing a hard
+      // horizontal image boundary. On desktop the feather remains offscreen.
+      context.globalCompositeOperation = 'destination-in';
+      // Draw the mask across the entire canvas. With destination-in, drawing
+      // only the bottom strip also clears every destination pixel outside that
+      // strip, which previously amputated the upper 78% of the weapon.
+      const fade = context.createLinearGradient(0, 0, 0, canvas.height);
+      fade.addColorStop(0, 'rgba(255,255,255,1)');
+      fade.addColorStop(0.78, 'rgba(255,255,255,1)');
+      fade.addColorStop(0.97, 'rgba(255,255,255,0.42)');
+      fade.addColorStop(1, 'rgba(255,255,255,0)');
+      context.fillStyle = fade;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.globalCompositeOperation = 'source-over';
+    }
     texture.userData.masterDimensions = [source.width, source.height];
     texture.image = canvas;
   }
@@ -154,7 +186,8 @@ function prepareWeaponTexture(texture, renderer) {
 }
 
 /**
- * Loads pulse-carbine-v1.png and constructs a ready-to-render viewmodel.
+ * Loads a weapon's hip, reload and axial-ADS renders and constructs a
+ * ready-to-render viewmodel.
  *
  * @param {object} options
  * @param {THREE.WebGLRenderer} [options.renderer] Used only for anisotropy.
@@ -164,24 +197,36 @@ function prepareWeaponTexture(texture, renderer) {
  */
 export async function loadRealisticViewmodel(options = {}) {
   const loader = new THREE.TextureLoader(options.loadingManager);
-  const texture = await loader.loadAsync(options.assetUrl || PULSE_CARBINE_ASSET_URL);
-  prepareWeaponTexture(texture, options.renderer);
+  const assetUrl = options.assetUrl || PULSE_CARBINE_ASSET_URL;
+  let texture = null;
   let reloadTexture = null;
+  let adsTexture = null;
   try {
+    texture = await loader.loadAsync(assetUrl);
+    prepareWeaponTexture(texture, options.renderer, assetUrl);
     if (options.reloadAssetUrl) {
       reloadTexture = await loader.loadAsync(options.reloadAssetUrl);
-      prepareWeaponTexture(reloadTexture, options.renderer);
+      prepareWeaponTexture(reloadTexture, options.renderer, options.reloadAssetUrl);
     }
+    if (!options.adsAssetUrl) {
+      throw new Error('RealisticViewmodel requires a dedicated axial ADS texture.');
+    }
+    adsTexture = await loader.loadAsync(options.adsAssetUrl);
+    prepareWeaponTexture(adsTexture, options.renderer, options.adsAssetUrl);
+    return new RealisticViewmodel(texture, {
+      ...options,
+      reloadTexture,
+      adsTexture,
+      ownsTexture: true,
+      ownsReloadTexture: !!reloadTexture,
+      ownsAdsTexture: true,
+    });
   } catch (error) {
-    texture.dispose();
+    if (texture) texture.dispose();
+    if (reloadTexture && reloadTexture !== texture) reloadTexture.dispose();
+    if (adsTexture && adsTexture !== texture && adsTexture !== reloadTexture) adsTexture.dispose();
     throw error;
   }
-  return new RealisticViewmodel(texture, {
-    ...options,
-    reloadTexture,
-    ownsTexture: true,
-    ownsReloadTexture: !!reloadTexture,
-  });
 }
 
 export class RealisticViewmodel {
@@ -193,10 +238,15 @@ export class RealisticViewmodel {
    */
   constructor(texture, options = {}) {
     if (!texture) throw new Error('RealisticViewmodel requires a loaded weapon texture.');
+    if (!options.adsTexture) {
+      throw new Error('RealisticViewmodel requires a dedicated axial ADS texture.');
+    }
     this.texture = texture;
     this.reloadTexture = options.reloadTexture || null;
+    this.adsTexture = options.adsTexture;
     this._ownsTexture = !!options.ownsTexture;
     this._ownsReloadTexture = !!options.ownsReloadTexture;
+    this._ownsAdsTexture = !!options.ownsAdsTexture;
     this.layout = Object.freeze({
       ...REALISTIC_VIEWMODEL_DEFAULTS,
       ...(options.layout || {}),
@@ -241,6 +291,41 @@ export class RealisticViewmodel {
     this.weapon.frustumCulled = false;
     this.weapon.renderOrder = 1000;
     this.recoilRoot.add(this.weapon);
+
+    // ADS is a separate axial composition. A broadside hip render cannot be
+    // made into a truthful sight picture by translating or rotating a flat
+    // plane, so the old fake-optic-centering path is intentionally gone.
+    this.adsRoot = new THREE.Group();
+    this.adsRoot.name = 'weapon-axial-ads-pose';
+    this.adsRoot.position.z = -1;
+    this.scene.add(this.adsRoot);
+
+    this.adsRecoilRoot = new THREE.Group();
+    this.adsRecoilRoot.name = 'weapon-axial-ads-recoil';
+    this.adsRoot.add(this.adsRecoilRoot);
+
+    this.adsGeometry = new THREE.PlaneGeometry(this.layout.imageAspect, 1, 1, 1);
+    this.adsMaterial = new THREE.MeshBasicMaterial({
+      name: 'weapon-axial-ads-cutout',
+      map: this.adsTexture,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      alphaTest: 0.015,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    this.adsMaterial.premultipliedAlpha = false;
+    this.adsMaterial.forceSinglePass = true;
+    this.adsWeapon = new THREE.Mesh(this.adsGeometry, this.adsMaterial);
+    this.adsWeapon.name = 'weapon-axial-ads-plane';
+    this.adsWeapon.frustumCulled = false;
+    this.adsWeapon.renderOrder = 1003;
+    this.adsWeapon.visible = false;
+    this.adsRecoilRoot.add(this.adsWeapon);
+    this.adsMode = 'dedicated-axial-art';
 
     this.reloadMaterial = null;
     this.reloadWeapon = null;
@@ -311,14 +396,18 @@ export class RealisticViewmodel {
     this._reloadProgress = -1;
     this._reloadElapsed = 0;
     this._reloadDuration = 1.15;
-    this._responsiveScale = 1;
+    this._responsiveScale = this.layout.hipScaleDesktop;
+    this._adsResponsiveScale = this.layout.adsScale;
+    this._hipScreenX = this.layout.hipScreenXDesktop;
+    this._hipLift = 0;
+    this._portraitWeight = 0;
+    this._shortWeight = 0;
     this._aspect = 16 / 9;
-    this._portraitShiftX = 0;
-    this._responsiveShiftY = 0;
-    this._adsScaleBoost = 0.25;
+    this._viewportWidth = 1280;
+    this._viewportHeight = 720;
     this._fov = 70;
     this.visible = true;
-    this.syncCamera(70, this._aspect);
+    this.syncCamera(70, this._aspect, this._viewportWidth, this._viewportHeight);
   }
 
   setADS(amount) {
@@ -386,6 +475,8 @@ export class RealisticViewmodel {
     this.weapon.visible = true;
     if (this.reloadMaterial) this.reloadMaterial.opacity = 0;
     if (this.reloadWeapon) this.reloadWeapon.visible = false;
+    this.adsMaterial.opacity = 0;
+    this.adsWeapon.visible = false;
   }
 
   isReloading() {
@@ -395,6 +486,7 @@ export class RealisticViewmodel {
   setVisible(visible) {
     this.visible = !!visible;
     this.poseRoot.visible = this.visible;
+    this.adsRoot.visible = this.visible;
     return this;
   }
 
@@ -441,52 +533,83 @@ export class RealisticViewmodel {
 
     this._bobPhase += step * (5.2 + this._move01 * 6.8);
     const bobSuppression = (1 - this._aim * 0.88) * (1 - reloadPose * 0.55);
-    const bobX = Math.sin(this._bobPhase) * 0.012 * this._move01 * bobSuppression;
-    const bobY = Math.abs(Math.cos(this._bobPhase)) * 0.014 * this._move01 * bobSuppression;
-    const swayX = Math.max(-0.045, Math.min(0.045, -this._lookX * 0.7));
-    const swayY = Math.max(-0.035, Math.min(0.035, this._lookY * 0.65));
-
     const d = this.layout;
-    const hipX = d.hipX + bobX + swayX;
-    const hipY = d.hipY + bobY + swayY;
-    let x = hipX + (d.adsX - hipX) * this._aim;
-    let y = hipY + (d.adsY - hipY) * this._aim;
-    x += (d.sprintX - x) * sprintPose;
-    y += (d.sprintY - y) * sprintPose;
-    const articulatedReload = !!this.reloadWeapon;
-    x += reloadPose * (articulatedReload ? 0.025 : 0.12);
-    y -= reloadPose * (articulatedReload ? 0.055 : 0.2);
-
     const responsive = this._responsiveScale;
-    // Scale the authored ADS translation with the same aim enlargement as the
-    // image plane. Otherwise shrinking hip-fire and restoring a 1x optic makes
-    // the baked sight drift away from the crosshair. Phone-only hip offsets
-    // fade out during ADS for the same reason.
-    const aimedResponsive = responsive * (1 + this._aim * this._adsScaleBoost);
-    const hipOffset = 1 - this._aim;
-    this.poseRoot.position.x = x * aimedResponsive + this._portraitShiftX * hipOffset;
-    this.poseRoot.position.y = y * aimedResponsive + this._responsiveShiftY * hipOffset;
+    // Scale motion with the responsive art. The old unscaled phone sway was
+    // large enough to yank a cropped image boundary back into view.
+    const motionScale = Math.max(0.42, Math.min(1.08, responsive / d.hipScaleDesktop));
+    const bobX = Math.sin(this._bobPhase) * 0.01 * this._move01 * bobSuppression * motionScale;
+    const bobY = Math.abs(Math.cos(this._bobPhase)) * 0.012 * this._move01 * bobSuppression * motionScale;
+    const swayX = Math.max(-0.025, Math.min(0.025, -this._lookX * 0.55)) * motionScale;
+    const swayY = Math.max(-0.012, Math.min(0.012, this._lookY * 0.5)) * motionScale;
+
+    // Edge-safe v2 art can finally be composed around the playfield instead
+    // of being nailed to the lower-right crop. Portrait and short-landscape
+    // layouts keep the useful silhouette away from FIRE; the lower forearms
+    // use a soft alpha feather where they leave the screen.
+    const aimRaise = smoothstep01(this._aim / 0.68);
+    const hipX = (this._hipScreenX - 0.5) * this._aspect + bobX + swayX;
+    const hipY = -0.5 + responsive * 0.5 + this._hipLift + bobY + swayY;
+    let x = hipX + d.sprintOffsetX * sprintPose;
+    let y = hipY + d.sprintOffsetY * sprintPose;
+    const articulatedReload = !!this.reloadWeapon;
+    x += reloadPose * (articulatedReload ? 0.01 : 0.12);
+    y += reloadPose * (articulatedReload ? 0.025 : -0.2);
+    x *= 1 - aimRaise * 0.72;
+    if (articulatedReload) {
+      // Apply portrait reload centering after the ADS pose compression so the
+      // same authored silhouette stays safe whether reload began from hip or
+      // while the optic was raised.
+      x += reloadPose * d.reloadPortraitOffsetX * this._portraitWeight;
+    }
+    y += aimRaise * 0.12;
+
+    this.poseRoot.position.x = x;
+    this.poseRoot.position.y = y;
     this.poseRoot.position.z = -1;
-    this.poseRoot.rotation.x = reloadPose * (articulatedReload ? -0.035 : -0.16);
-    this.poseRoot.rotation.y = reloadPose * (articulatedReload ? 0.055 : 0.21);
+    this.poseRoot.rotation.x = reloadPose * (articulatedReload ? -0.01 : -0.16);
+    this.poseRoot.rotation.y = reloadPose * (articulatedReload ? 0.015 : 0.21);
     this.poseRoot.rotation.z = d.sprintRoll * sprintPose
-      + reloadPose * (articulatedReload ? 0.085 : 0.58)
-      + swayX * 0.42;
+      + reloadPose * (articulatedReload ? 0.02 : 0.58)
+      + swayX * 0.42 * (1 - aimRaise);
 
     const scale = responsive * (
-      1 + this._aim * this._adsScaleBoost - sprintPose * 0.055 - reloadPose * (articulatedReload ? 0.012 : 0.035)
+      1 + aimRaise * 0.08 - sprintPose * 0.055 - reloadPose * (articulatedReload ? 0.035 : 0.035)
     );
     this.poseRoot.scale.setScalar(scale);
 
+    let reloadBlend = 0;
     if (this.reloadWeapon) {
-      // A deliberately quick eased cut avoids a translucent double-gun while
-      // still preventing a visible pop between the authored poses.
-      const reloadBlend = smoothstep01(clamp01((reloadPose - 0.16) / 0.34));
-      this.weaponMaterial.opacity = 1 - reloadBlend;
-      this.reloadMaterial.opacity = reloadBlend;
-      this.weapon.visible = reloadBlend < 0.985;
-      this.reloadWeapon.visible = reloadBlend > 0.015;
+      // The edge-safe reload composition is spatially compatible with the new
+      // hip art, so transition directly and quickly rather than briefly
+      // stacking ADS, hip, and reload silhouettes.
+      reloadBlend = smoothstep01(reloadPose / 0.22);
     }
+
+    // Make the art swap inside a narrow part of the raise animation. The old
+    // long dissolve left two separately positioned guns visible for ~5 frames.
+    const adsPoseBlend = smoothstep01((this._aim - 0.46) / 0.08);
+    const basePoseBlend = 1 - reloadBlend;
+    const hipBlend = basePoseBlend * (1 - adsPoseBlend);
+    const adsBlend = basePoseBlend * adsPoseBlend;
+    this.weaponMaterial.opacity = hipBlend;
+    this.weapon.visible = this.weaponMaterial.opacity > 0.015;
+    if (this.reloadMaterial) {
+      this.reloadMaterial.opacity = reloadBlend;
+      this.reloadWeapon.visible = this.reloadMaterial.opacity > 0.015;
+      const reloadPortraitScale = 1
+        + (d.reloadPortraitScale - 1) * this._portraitWeight;
+      this.reloadWeapon.scale.setScalar(reloadPortraitScale);
+    }
+    this.adsMaterial.opacity = adsBlend;
+    this.adsWeapon.visible = adsBlend > 0.015;
+
+    const adsScale = this._adsResponsiveScale;
+    this.adsRoot.position.x = -d.adsSightX * adsScale;
+    this.adsRoot.position.y = -d.adsSightY * adsScale;
+    this.adsRoot.position.z = -1;
+    this.adsRoot.rotation.set(0, 0, 0);
+    this.adsRoot.scale.setScalar(adsScale);
 
     this._recoilKick = damp(this._recoilKick, 0, 19, step);
     this._recoilPitch = damp(this._recoilPitch, 0, 15, step);
@@ -499,12 +622,26 @@ export class RealisticViewmodel {
     this.recoilRoot.rotation.z = this._recoilYaw * 0.018;
     const recoilScale = 1 - this._recoilKick * 0.025;
     this.recoilRoot.scale.set(recoilScale, recoilScale, 1);
+    // ADS recoil stays on-axis: a short vertical impulse communicates the
+    // shot without turning the flat sight render into another canted slab.
+    this.adsRecoilRoot.position.set(
+      this._recoilYaw * 0.003,
+      -this._recoilPitch * 0.012,
+      0,
+    );
+    this.adsRecoilRoot.rotation.set(
+      -this._recoilPitch * 0.018,
+      this._recoilYaw * 0.008,
+      0,
+    );
+    const adsRecoilScale = 1 - this._recoilKick * 0.012;
+    this.adsRecoilRoot.scale.set(adsRecoilScale, adsRecoilScale, 1);
 
     if (this._flashLife > 0) {
       this._flashLife = Math.max(0, this._flashLife - step);
       const life = this._flashLife / this._flashDuration;
       const envelope = Math.sin(life * Math.PI) * this._flashIntensity;
-      this.flashMaterial.opacity = clamp01(envelope * 1.2);
+      this.flashMaterial.opacity = clamp01(envelope * 1.2) * hipBlend;
       const flashScale = 0.86 + (1 - life) * 0.48;
       this.flash.scale.set(0.18 * flashScale, 0.095 * flashScale, 1);
       if (this._flashLife <= 0) {
@@ -515,26 +652,46 @@ export class RealisticViewmodel {
   }
 
   /** Matches the overlay to the active game camera and viewport aspect. */
-  syncCamera(fov, aspect) {
+  syncCamera(fov, aspect, width = null, height = null) {
     this._fov = Number.isFinite(fov) ? fov : this._fov;
     this._aspect = Math.max(0.35, Number.isFinite(aspect) ? aspect : this._aspect);
+    if (Number.isFinite(width) && width > 0) this._viewportWidth = width;
+    if (Number.isFinite(height) && height > 0) this._viewportHeight = height;
     this.camera.left = -this._aspect * 0.5;
     this.camera.right = this._aspect * 0.5;
     this.camera.top = 0.5;
     this.camera.bottom = -0.5;
     this.camera.updateProjectionMatrix();
 
-    // Keep the detailed model, but give threats back the center-right combat
-    // lane during hip fire. ADS deliberately restores the larger authored
-    // presentation so the optic remains satisfying and readable.
-    const portraitScale = this._aspect < 0.82
-      ? Math.max(0.2, Math.min(0.4, this._aspect / 2.12))
-      : Math.min(0.8, Math.max(0.5, this._aspect / 1.75));
+    // Blend responsive modes across aspect and height bands. A binary 0.82
+    // breakpoint previously changed the carbine scale 2.7x on a one-pixel
+    // resize around small tablets/foldables.
+    const portraitWeight = 1 - smoothstep01((this._aspect - 0.68) / 0.38);
+    const landscapeWeight = 1 - portraitWeight;
+    const shortness = 1 - smoothstep01((this._viewportHeight - 420) / 180);
+    const shortWeight = landscapeWeight * shortness;
+    const desktopWeight = landscapeWeight - shortWeight;
+    const baseHipScale = this.layout.hipScalePortrait * portraitWeight
+      + this.layout.hipScaleShort * shortWeight
+      + this.layout.hipScaleDesktop * desktopWeight;
     const fovScale = Math.max(0.92, Math.min(1.06, 70 / this._fov));
-    this._responsiveScale = portraitScale * fovScale;
-    this._portraitShiftX = this._aspect < 0.82 ? -this._aspect * 0.045 : 0;
-    this._responsiveShiftY = this._aspect < 0.82 ? -0.03 : -0.022;
-    this._adsScaleBoost = this._aspect < 0.82 ? 0.3 : 0.25;
+    const wideCompensation = 1 + desktopWeight
+      * (Math.max(1, Math.min(1.08, this._aspect / (16 / 9))) - 1);
+    this._responsiveScale = baseHipScale * wideCompensation * fovScale;
+    this._hipScreenX = this.layout.hipScreenXPortrait * portraitWeight
+      + this.layout.hipScreenXShort * shortWeight
+      + this.layout.hipScreenXDesktop * desktopWeight;
+    this._hipLift = 0.14 * portraitWeight
+      + 0.06 * shortWeight
+      + 0.015 * desktopWeight;
+    this._portraitWeight = portraitWeight;
+    this._shortWeight = shortWeight;
+    // The widest axial silhouette (the sidearm hands) occupies ~59% of its
+    // source. This fit keeps that silhouette inside a 390px portrait viewport
+    // with breathing room instead of merely fitting the transparent plane.
+    const portraitFit = Math.min(1, this._aspect / 0.86);
+    const adsFit = portraitFit * portraitWeight + 0.9 * shortWeight + desktopWeight;
+    this._adsResponsiveScale = this.layout.adsScale * adsFit * fovScale;
   }
 
   /** Renders the overlay safely after the world/post stack. */
@@ -553,15 +710,22 @@ export class RealisticViewmodel {
   dispose() {
     if (this._disposed) return;
     if (this.poseRoot.parent) this.poseRoot.parent.remove(this.poseRoot);
+    if (this.adsRoot.parent) this.adsRoot.parent.remove(this.adsRoot);
     this.weaponGeometry.dispose();
     this.weaponMaterial.dispose();
     if (this.reloadMaterial) this.reloadMaterial.dispose();
+    this.adsGeometry.dispose();
+    this.adsMaterial.dispose();
     this.flashGeometry.dispose();
     this.flashMaterial.dispose();
     this.flashTexture.dispose();
     if (this._ownsTexture) this.texture.dispose();
     if (this._ownsReloadTexture && this.reloadTexture && this.reloadTexture !== this.texture) {
       this.reloadTexture.dispose();
+    }
+    if (this._ownsAdsTexture && this.adsTexture
+      && this.adsTexture !== this.texture && this.adsTexture !== this.reloadTexture) {
+      this.adsTexture.dispose();
     }
     this.onReloadProgress = null;
     this._disposed = true;

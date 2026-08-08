@@ -158,8 +158,19 @@ export function buildCave(scene) {
   // stone archway faces the arena, a carved ring of blocks lips the mouth, stone
   // steps descend on the near side, and two torches flank the arch — so from the
   // field it reads "go down here," not "there's a random pit."
-  const portalStone = new THREE.MeshStandardMaterial({ color: 0x6a6f68, roughness: 0.95, metalness: 0.03, flatShading: true });
-  const portalDark = new THREE.MeshStandardMaterial({ color: 0x474b46, roughness: 0.95, metalness: 0.03, flatShading: true });
+  // Portal stone is pale on purpose. The gate is the one piece of built
+  // architecture out on the field, and at 40+ metres under a night key light
+  // the old mid-grey sat at the same value as the plain behind it — the arch
+  // was physically there and visually absent. Pale stone gives it a silhouette.
+  const portalStone = new THREE.MeshStandardMaterial({ color: 0x8e959e, roughness: 0.95, metalness: 0.03, flatShading: true });
+  const portalDark = new THREE.MeshStandardMaterial({ color: 0x656d78, roughness: 0.95, metalness: 0.03, flatShading: true });
+  // Neutral white, not amber. Every other marker out here is warm, and warm
+  // against a blue-black field is a hue cue — it disappears for anyone who
+  // doesn't separate those two hues. White separates by brightness instead.
+  const mastHeadMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0c14, emissive: 0xf2f6ff, emissiveIntensity: 2.6, roughness: 0.4, flatShading: true,
+  });
+  const mastHeads = [];
   const torchHeadMat = new THREE.MeshStandardMaterial({ color: 0x0a0a08, emissive: 0xffb24a, emissiveIntensity: 2.6, roughness: 0.5, flatShading: true });
   const glyphMat = new THREE.MeshStandardMaterial({ color: 0x0a0c14, emissive: 0xffb24a, emissiveIntensity: 2.2, roughness: 0.4, flatShading: true });
   const portalColliders = [];
@@ -217,6 +228,24 @@ export function buildCave(scene) {
     lintel.castShadow = true; group.add(lintel);
     const glyph = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 0), glyphMat);
     glyph.position.set(lx + cx * 0.8, topY + 0.45, lz + cz * 0.8); group.add(glyph);
+
+    // A mast rises on the far rim, standing above the gate. Up close the arch,
+    // kerb and torches do the work; from across the field they're a few pixels
+    // and the only thing with angular size left is a tall vertical breaking the
+    // horizon. It sits opposite the arch so the two read as one gate, not two.
+    const mastX = e.x - cx * (rimR - 0.6);
+    const mastZ = e.z - cz * (rimR - 0.6);
+    const mastGY = terrainHeight(mastX, mastZ);
+    const mastH = 9.4;
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.36, mastH, 6), portalStone);
+    mast.position.set(mastX, mastGY + mastH * 0.5, mastZ);
+    mast.castShadow = true; mast.receiveShadow = true;
+    group.add(mast);
+    const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.54, 0), mastHeadMat);
+    head.position.set(mastX, mastGY + mastH + 0.42, mastZ);
+    group.add(head);
+    mastHeads.push(head);
+    portalColliders.push({ x: mastX, z: mastZ, r: 0.6 });
   }
 
   // surface beacons: every crater rim is RINGED in fire so the way down reads
@@ -236,8 +265,11 @@ export function buildCave(scene) {
       group.add(st);
     }
     const rimY = terrainHeight(e.x + ENTRANCE_CARVE, e.z);
-    // a warm light AT the mouth, always on — lights the bowl walls day + night
-    const rl = new THREE.PointLight(0xff9a4a, 42, 26, 1.7);
+    // A warm light at the mouth, always on. It used to be strong enough to fill
+    // the whole bowl with amber, which both erased the dark throat that makes
+    // the crater legible and left the entire cue riding on one hue. Turned down
+    // to atmosphere: the hole, the pale gate and the white mast carry the read.
+    const rl = new THREE.PointLight(0xff9a4a, 17, 20, 1.7);
     rl.position.set(e.x, rimY + 2.5, e.z);
     rl.userData.rim = true;
     scene.add(rl); lights.push(rl);
@@ -253,6 +285,15 @@ export function buildCave(scene) {
         l.intensity = l.userData.base * (0.2 + 0.8 * u);
       }
     },
-    update() {},   // (the pulsing glow columns are gone)
+    // The four mast heads breathe together, slowly. Nothing else in this world
+    // moves on a two-and-a-half second period, so the rhythm itself identifies
+    // them — a channel that still works when distance has eaten both the colour
+    // and the shape.
+    update(time) {
+      const pulse = 0.5 - 0.5 * Math.cos(time * 2.45);
+      mastHeadMat.emissiveIntensity = 1.7 + pulse * 1.5;
+      const scale = 0.92 + pulse * 0.2;
+      for (const head of mastHeads) head.scale.setScalar(scale);
+    },
   };
 }

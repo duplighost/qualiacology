@@ -308,6 +308,7 @@ export class HUD {
     this.aimT = t;
     this.el.adsVignette.style.opacity = (t * 0.9).toFixed(3);
     this.el.crosshair.classList.toggle('ads', t > 0.5);
+    this.root.classList.toggle('aiming', t > 0.12);
   }
 
   // flash the radial speed-lines when a dash launches

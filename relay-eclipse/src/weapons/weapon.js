@@ -625,12 +625,12 @@ export class Weapons {
     }
   }
 
-  syncCamera(fov, aspect) {
+  syncCamera(fov, aspect, width = null, height = null) {
     this._proceduralViewCamera.fov = fov;
     this._proceduralViewCamera.aspect = aspect;
     this._proceduralViewCamera.updateProjectionMatrix();
     for (const viewmodel of Object.values(this._realisticViewmodels)) {
-      viewmodel.syncCamera?.(fov, aspect);
+      viewmodel.syncCamera?.(fov, aspect, width, height);
     }
   }
 
