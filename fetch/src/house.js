@@ -240,17 +240,28 @@ function bedroomAct(game) {
   canopy.position.set(5.5, 9.6, 11.5);
   canopy.scale.set(1.3, 0.8, 1.3);
   scene.add(canopy);
-  const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 4.2, 6), M.bark);
-  branch.position.set(6.4, 6.4, 9.6);
-  branch.rotation.set(1.25, 0, -0.5);
+  // the branch reaches toward the window; the key hangs FROM it on a string
+  const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.14, 4.4, 6), M.bark);
+  branch.position.set(6.35, 6.35, 9.9);
+  branch.lookAt(7.2, 6.6, 8.0);
+  branch.rotateX(Math.PI / 2);
   scene.add(branch);
+  const string = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.5, 4),
+    new THREE.MeshLambertMaterial({ color: 0x6b6255 }));
+  string.position.set(7.2, 5.98, 8.2);
+  scene.add(string);
 
   const key = makeKey(M);
-  key.position.set(7.2, 5.7, 8.2);
-  key.scale.setScalar(1.5);   // must be findable from the window at 7m
+  key.position.set(7.2, 5.68, 8.2);
+  key.scale.setScalar(1.7);   // must be findable from the window at 7m
   scene.add(key);
-  // it sways on its string
-  game.tickers.push((dt, t) => { if (key.parent === scene) key.rotation.z = Math.sin(t * 1.3) * 0.3; });
+  // key and string sway together in the night air
+  game.tickers.push((dt, t) => {
+    if (key.parent !== scene) { string.visible = false; return; }
+    const sway = Math.sin(t * 1.3) * 0.22;
+    key.rotation.z = sway;
+    string.rotation.z = sway * 0.5;
+  });
 
   world.addFetchTarget({
     id: 'treeKey', object: key, radius: 0.85,
@@ -285,10 +296,10 @@ function nurseryAct(game) {
   const { world, scene, mats: M } = game;
   const F = HOUSE_TABLES.levels.first.floor;
 
-  // stair key on a hook, high on the nursery wall behind the crib
+  // stair key hangs FROM the mobile on a string — it spins with the toys.
+  // someone hung it there where only a thrown thing could take it.
   const key = makeKey(M);
-  key.position.set(-11.55, F + 2.1, 4.6);
-  scene.add(key);
+  key.scale.setScalar(1.4);
   world.addFetchTarget({
     id: 'stairKey', object: key, radius: 0.7,
     onHit(skull) {
@@ -328,6 +339,13 @@ function nurseryAct(game) {
     string.position.set(-0.28 + i * 0.28, -0.08, 0);
     mobile.add(string);
   }
+  // the key hangs among the toys, on its own string, and turns with them
+  const keyString = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.3, 4),
+    new THREE.MeshLambertMaterial({ color: 0x6b6255 }));
+  keyString.position.set(0.35, -0.15, 0);
+  mobile.add(keyString);
+  key.position.set(0.35, -0.42, 0);
+  mobile.add(key);
   mobile.position.set(-10.4, F + 2.05, 4.6);   // hanging above the crib
   scene.add(mobile);
   game.musicBox = { mesh: mobile, wound: 1, thing: null };

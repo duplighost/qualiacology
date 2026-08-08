@@ -12,10 +12,12 @@ export const FEEL_PROFILE = Object.freeze({
   launchBase: 16,
   launchCharge: 22,          // speed = base + pow(charge,0.72)*this
   inheritVel: 0.22,
-  outboundBase: 0.55,
-  outboundCharge: 0.45,
-  hardAwayBase: 1.30,
-  hardAwayCharge: 0.45,
+  outboundBase: 0.8,
+  outboundCharge: 0.5,
+  hardAwayBase: 1.9,
+  hardAwayCharge: 0.5,
+  poiseDrift: 6.5,           // aim-steer speed while poised (m/s)
+  poiseMax: 22,              // poised failsafe — it never hangs forever
   bounceReturnTime: 0.40,
   guideStrength: 8.5,
   gravityOut: 6.5,
@@ -37,7 +39,7 @@ export const FEEL_PROFILE = Object.freeze({
   snapBuffer: 0.12,
 });
 
-const MODES = ['held', 'outbound', 'returning', 'anchored', 'gone'];
+const MODES = ['held', 'outbound', 'poised', 'returning', 'anchored', 'gone'];
 
 const V = {
   a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3(),
@@ -300,13 +302,17 @@ export class Skull {
   }
 
   grab(id, mesh) {
-    // called by fetch targets: clamp an item in the teeth
+    // called by fetch targets: clamp an item in the teeth — and make sure the
+    // player FEELS the clamp: snap-shut jaw, flourish spin, chime
     this.carry = { id, mesh };
     if (mesh.parent) mesh.parent.remove(mesh);
-    mesh.position.set(0, 0, 0.02);
-    mesh.rotation.set(0, 0, 0);
+    mesh.position.set(0, -0.01, 0.045);
+    mesh.rotation.set(0.4, 0, 0);
     this.jawMount.add(mesh);
     this.jaw.rotation.x = 0.3;
+    this._flourishT = 0.45;
+    this.audio.catchThud({ pos: this.pos, gain: 0.55, rate: 1.6 });   // tooth CLACK
+    this.audio.unlock({ pos: this.pos, gain: 0.5, rate: 1.3 });       // bright metal chime
   }
 
   dropCarry() {
@@ -338,6 +344,9 @@ export class Skull {
     this.flightTime = 0;
     this.freeFlightTime = 0;
     this.bounced = false;
+    this._bounceTimes = [];
+    this._lastBounceSfx = undefined;
+    this._poiseT = 0;
     this.outboundDuration = P.outboundBase + charge * P.outboundCharge;
     this.hardAway = P.hardAwayBase + charge * P.hardAwayCharge;
     if (this.fearHome) {
@@ -359,7 +368,7 @@ export class Skull {
 
   call() {
     // duration-only quick call — never gated on motion (kick-ball law)
-    if (this.mode === 'outbound') {
+    if (this.mode === 'outbound' || this.mode === 'poised') {
       this.beginReturn('snap');
       return true;
     }
@@ -410,10 +419,38 @@ export class Skull {
     switch (this.mode) {
       case 'held': this._updateHeld(dt, ctx); break;
       case 'outbound': this._updateFlight(dt, ctx, false); break;
+      case 'poised': this._updatePoised(dt, ctx); break;
       case 'returning': this._updateFlight(dt, ctx, true); break;
       case 'anchored': this._updateAnchored(dt, ctx); break;
       case 'gone': break;
     }
+  }
+
+  _updatePoised(dt, ctx) {
+    // Alex's ask: "keep it stopped, then zip it back — aim it a little while
+    // it's far away." It hangs where you parked it; holding the call button
+    // drifts it toward your aim; tapping zips it home.
+    const P = FEEL_PROFILE;
+    this._poiseT = (this._poiseT || 0) + dt;
+    this.vel.multiplyScalar(Math.exp(-10 * dt));
+    if (ctx && ctx.callHeld && this._poiseT > 0.4) {
+      const camPos = this.camera.getWorldPosition(V.a);
+      const viewDir = this.camera.getWorldDirection(V.b);
+      const guide = V.c.copy(camPos).addScaledVector(viewDir,
+        clamp(this.pos.distanceTo(camPos), 3, 40));
+      const to = V.d.copy(guide).sub(this.pos);
+      const d = to.length();
+      if (d > 0.2) this.pos.addScaledVector(to.divideScalar(d), Math.min(P.poiseDrift * dt, d));
+    }
+    this.pos.y += Math.sin(this._poiseT * 2.4) * 0.035 * dt * 8;   // it treads air
+    this._collide(ctx);
+    this._checkTargets(ctx);
+    if (this.mode !== 'poised') return;
+    // face the player. it waits, watching you.
+    this.root.position.copy(this.pos);
+    this.root.lookAt(this.camera.getWorldPosition(V.e));
+    this.audio.skullMoanUpdate(this.pos, 1.5, 0.15);
+    if (this._poiseT > P.poiseMax) this.beginReturn('auto');
   }
 
   _updateHeld(dt, ctx) {
@@ -491,9 +528,13 @@ export class Skull {
 
     if (!returning) {
       this.flightTime += dt;
-      // holding the call button slows the away-clock but NEVER rewinds it
-      const scale = ctx && ctx.callHeld && this.flightTime > 0.27 ? 0.5 : 1;
-      this.freeFlightTime += dt * scale;
+      // hold the call button in flight: the skull BRAKES and hangs (poised)
+      if (ctx && ctx.callHeld && this.flightTime > 0.27) {
+        this.mode = 'poised';
+        this._poiseT = 0;
+        return;
+      }
+      this.freeFlightTime += dt;
 
       // guide steering: chase a view-ray point, direction-space, speed preserved
       const guide = V.c.copy(camPos).addScaledVector(viewDir,
@@ -570,16 +611,27 @@ export class Skull {
 
   _flightDress(dt, returning) {
     if (this.mode !== 'outbound' && this.mode !== 'returning') return;
-    // orient to velocity, spin about lateral axis — state is motion, not hue
     const speed = this.vel.length();
-    this._spin += speed * dt * (returning ? 3.2 : 2.2);
-    if (speed > 0.5) {
+    this.root.position.copy(this.pos);
+    if (returning) {
+      // it comes back FACE FIRST, looking at you the whole way
+      this.root.lookAt(this.camera.getWorldPosition(V.a));
+      this.root.rotation.z = Math.sin(this.returnTime * 14) * 0.12;   // wobble, not tumble
+    } else if (speed > 0.5) {
+      // outbound: tumbling object, spin about the lateral axis
+      this._spin += speed * dt * 2.2;
       V.a.copy(this.pos).add(this.vel);
-      this.root.position.copy(this.pos);
       this.root.lookAt(V.a);
       this.root.rotateX(this._spin);
-    } else {
-      this.root.position.copy(this.pos);
+    }
+    // grab flourish: a quick proud spin + swell when it takes something
+    if (this._flourishT > 0) {
+      this._flourishT = Math.max(0, this._flourishT - dt);
+      const k = this._flourishT / 0.45;
+      this.root.rotateZ(k * k * 0.5);
+      this.root.scale.setScalar(1 + Math.sin((1 - k) * Math.PI) * 0.22);
+    } else if (this.root.scale.x !== 1) {
+      this.root.scale.setScalar(1);
     }
     const camPos = this.camera.getWorldPosition(V.b);
     const tension = returning
@@ -657,8 +709,20 @@ export class Skull {
 
   _bounceFx(speed) {
     this.bounced = true;
+    const now = this.flightTime + this.returnTime;
+    // pinball guard: ricochet storms wreck the mix and feel broken — three
+    // bounces inside 0.4s means it's wedged in geometry; it comes home.
+    this._bounceTimes = (this._bounceTimes || []).filter((t) => now - t < 0.4);
+    this._bounceTimes.push(now);
+    if (this._bounceTimes.length >= 3 && this.mode === 'outbound') {
+      this.beginReturn('auto');
+      return;
+    }
+    // SFX cooldown so stacked thuds can't max the compressor out
+    if (this._lastBounceSfx !== undefined && now - this._lastBounceSfx < 0.1) return;
+    this._lastBounceSfx = now;
     const g = clamp(speed / 28, 0.1, 1);
-    this.audio.thud({ pos: this.pos, gain: 0.25 + g * 0.45, rate: 1.1 + Math.random() * 0.2 });
+    this.audio.thud({ pos: this.pos, gain: 0.22 + g * 0.4, rate: 1.1 + Math.random() * 0.2 });
   }
 
   _checkTargets(ctx) {
