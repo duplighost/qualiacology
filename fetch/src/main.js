@@ -371,16 +371,14 @@ class Game {
     const ctx = {
       playerVel: new THREE.Vector3(this.player.vel.x, this.player.fallV, this.player.vel.z),
       yawVel: this.player.yawVel, pitchVel: this.player.pitchVel,
-      callHeld: frame.callHeld, bobY: this.player.bobY,
+      callHeld: frame.callHeld, throwHeld: frame.throwHeld, bobY: this.player.bobY,
       onCatch: (impactV, hard) => { this.shake(0.1 + impactV * 0.15); },
     };
 
-    // input → skull verbs
-    if (frame.throwPressed && this.skull.mode === 'held') this.skull.charging = true;
-    if (frame.throwReleased) {
-      if (this.skull.mode === 'held' && this.skull.charging) this.skull.tryThrow(ctx);
-      this.skull.charging = false;
-    }
+    // input → skull verbs. Alex's grammar: press throws, hold keeps it out,
+    // release brings it home. The button is the tether.
+    if (frame.throwPressed && this.skull.mode === 'held') this.skull.tryThrow(ctx);
+    if (frame.throwReleased && this.skull.mode === 'outbound') this.skull.beginReturn('snap');
     if (frame.callTap) {
       if (this.skull.mode === 'gone') this.director.onVoidCall();
       else this.snapBuffer = FEEL_PROFILE.snapBuffer;
@@ -611,22 +609,23 @@ async function runAutotest(game) {
     return text === '';
   });
 
-  // throw enters outbound, then comes home on its own
+  // press throws; while held it stays out
   F.teleport('graveyard');
   F.stepWith(0.2);
+  game.player.yaw = -Math.PI / 2;   // face open ground, not the crashed car
   F.stepWith(FIXED_DT, { throwPressed: true, throwHeld: true });
-  F.stepWith(0.3, { throwHeld: true });
-  F.stepWith(FIXED_DT, { throwReleased: true });
+  F.stepWith(1.2, { throwHeld: true });
   check('throw-enters-outbound', () => game.skull.mode === 'outbound');
+  // release IS the recall — it lands on the very next fixed step, hot
+  F.stepWith(FIXED_DT, { throwReleased: true });
+  check('quick-call-enters-return-on-the-next-fixed-step', () => game.skull.mode === 'returning' && game.skull.snapReturn === true);
   F.stepWith(3.5);
   check('skull-returns-and-is-caught', () => game.skull.mode === 'held');
 
-  // quick call: duration-only, lands next fixed step
+  // a bare tap = the fast zip: out and straight back
   F.stepWith(FIXED_DT, { throwPressed: true, throwHeld: true });
+  F.stepWith(0.08, { throwHeld: true });
   F.stepWith(FIXED_DT, { throwReleased: true });
-  F.stepWith(0.1);
-  F.stepWith(FIXED_DT, { callTap: true });
-  check('quick-call-enters-return-on-the-next-fixed-step', () => game.skull.mode === 'returning' && game.skull.snapReturn === true);
   F.stepWith(2.5);
   check('called-skull-comes-home', () => game.skull.mode === 'held');
 

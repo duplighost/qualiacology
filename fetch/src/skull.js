@@ -8,9 +8,9 @@ import { LAYER_HELD } from './mirrors.js';
 
 export const FEEL_PROFILE = Object.freeze({
   name: 'fetch-core',
-  chargeTime: 0.6,
-  launchBase: 16,
-  launchCharge: 22,          // speed = base + pow(charge,0.72)*this
+  chargeTime: 0.6,           // (unused — charge removed; the button is the tether)
+  launchBase: 26,
+  launchCharge: 22,          // (unused)
   inheritVel: 0.22,
   outboundBase: 0.8,
   outboundCharge: 0.5,
@@ -324,9 +324,10 @@ export class Skull {
   }
 
   tryThrow(ctx) {
+    // Alex's grammar: press = throw, HOLD = it stays out, release = it comes
+    // back. No charge — the button is the tether.
     if (this.mode !== 'held') return false;
     const P = FEEL_PROFILE;
-    const charge = clamp(this.charge, 0, 1);
     const dir = this.camera.getWorldDirection(V.a).clone();
     const camPos = this.camera.getWorldPosition(V.b);
 
@@ -336,7 +337,7 @@ export class Skull {
     this.pos.copy(camPos).addScaledVector(dir, 0.55);
     this.pos.y -= 0.08;
     this.prevPos.copy(this.pos);
-    const speed = P.launchBase + Math.pow(charge, 0.72) * P.launchCharge;
+    const speed = P.launchBase;
     this.vel.copy(dir).multiplyScalar(speed);
     if (ctx && ctx.playerVel) this.vel.addScaledVector(ctx.playerVel, P.inheritVel);
 
@@ -347,19 +348,12 @@ export class Skull {
     this._bounceTimes = [];
     this._lastBounceSfx = undefined;
     this._poiseT = 0;
-    this.outboundDuration = P.outboundBase + charge * P.outboundCharge;
-    this.hardAway = P.hardAwayBase + charge * P.hardAwayCharge;
-    if (this.fearHome) {
-      // the graveyard: it hurries back, huddles into your palms
-      this.outboundDuration *= 0.55;
-      this.hardAway *= 0.6;
-    }
-    this.maxRange = P.maxRangeBase + charge * P.maxRangeCharge;
+    this.outboundDuration = P.outboundBase;      // failsafe window for UNHELD flights
+    this.hardAway = this.fearHome ? P.hardAwayBase * 0.6 : P.hardAwayBase;
+    this.maxRange = P.maxRangeBase + P.maxRangeCharge;
     this.lastFlightSpeed = speed;
     this.returnSide = Math.random() < 0.5 ? -1 : 1;
     this.snapReturn = false;
-    this.charge = 0;
-    this.charging = false;
     this._spin = 0;
     this.jaw.rotation.x = this.carry ? 0.3 : 0.55;   // it opens wide as it flies
     this.audio.skullMoanStart();
@@ -411,11 +405,6 @@ export class Skull {
 
   // ---------------------------------------------------------------- update
   update(dt, ctx) {
-    const P = FEEL_PROFILE;
-    if (this.charging && this.mode === 'held') {
-      this.charge = clamp(this.charge + dt / P.chargeTime, 0, 1);
-    }
-
     switch (this.mode) {
       case 'held': this._updateHeld(dt, ctx); break;
       case 'outbound': this._updateFlight(dt, ctx, false); break;
@@ -528,18 +517,36 @@ export class Skull {
 
     if (!returning) {
       this.flightTime += dt;
-      // hold the call button in flight: the skull BRAKES and hangs (poised)
-      if (ctx && ctx.callHeld && this.flightTime > 0.27) {
-        this.mode = 'poised';
-        this._poiseT = 0;
+      const held = !!(ctx && ctx.throwHeld);
+      // held = out on the tether: the away-clock freezes; unheld flights
+      // (bounced free, simulated) still auto-return on the failsafe window
+      this.freeFlightTime += held ? 0 : dt;
+
+      const sepNow = this.pos.distanceTo(camPos);
+      const guide = V.c.copy(camPos).addScaledVector(viewDir,
+        clamp(held ? sepNow + 7 : sepNow + 6, 8, this.maxRange));
+      const speed = this.vel.length();
+      const toGuide = V.d.copy(guide).sub(this.pos);
+      const arrived = toGuide.length() < 1.2;
+
+      if (held && (arrived || speed < 3)) {
+        // it TREADS AIR where you parked it, facing you, tracking your aim
+        this._poiseT += dt;
+        this.vel.multiplyScalar(Math.exp(-10 * dt));
+        const d = toGuide.length();
+        if (d > 0.3) this.pos.addScaledVector(toGuide.divideScalar(d), Math.min(P.poiseDrift * dt, d));
+        this.pos.y += Math.sin(this._poiseT * 2.4) * 0.03 * dt * 8;
+        this._collide(ctx);
+        this._checkTargets(ctx);
+        if (this.mode !== 'outbound') { this._flightDress(dt, returning); return; }
+        this.root.position.copy(this.pos);
+        this.root.lookAt(camPos);
+        this.audio.skullMoanUpdate(this.pos, 1.5, 0.15);
+        if (this.flightTime > P.poiseMax) this.beginReturn('auto');   // never out forever
         return;
       }
-      this.freeFlightTime += dt;
 
-      // guide steering: chase a view-ray point, direction-space, speed preserved
-      const guide = V.c.copy(camPos).addScaledVector(viewDir,
-        clamp(this.pos.distanceTo(camPos) + 6, 10, 40));
-      const speed = this.vel.length();
+      // in transit: steer toward the guide, direction-space, speed preserved
       if (speed > 1) {
         const want = V.d.copy(guide).sub(this.pos).normalize();
         const cur = V.e.copy(this.vel).divideScalar(speed);
@@ -550,7 +557,7 @@ export class Skull {
         cur.add(d).normalize();
         this.vel.copy(cur).multiplyScalar(speed);
       }
-      this.vel.y -= P.gravityOut * dt;
+      this.vel.y -= P.gravityOut * dt * (held ? 0.4 : 1);   // the tether carries some of its weight
       this.lastFlightSpeed = Math.max(this.lastFlightSpeed * 0.999, this.vel.length());
 
       this.pos.addScaledVector(this.vel, dt);
@@ -560,10 +567,11 @@ export class Skull {
 
       const sep = this.pos.distanceTo(camPos);
       if (this.freeFlightTime >= this.outboundDuration ||
-          this.flightTime >= this.hardAway ||
+          (!held && this.flightTime >= this.hardAway) ||
           sep >= this.maxRange ||
-          (this.bounced && this.freeFlightTime > P.bounceReturnTime) ||
-          this.vel.length() < 3.5) {
+          (!held && this.bounced && this.freeFlightTime > P.bounceReturnTime) ||
+          (!held && this.vel.length() < 3.5) ||
+          this.flightTime > P.poiseMax) {
         this.beginReturn('auto');
       }
     } else {
