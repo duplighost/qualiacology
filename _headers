@@ -90,6 +90,15 @@
 /uninvited/vendor/*
   Cache-Control: public, max-age=31536000, immutable
 
+/fetch/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/fetch/src/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/fetch/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /glide/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
