@@ -30,6 +30,7 @@ import { FAIR } from './config.js';
 import { clamp, lerp, overlaps, TAU, withAlpha, hash01, smoothstep } from './core.js';
 import { solidsNear, platformsNear } from './level.js';
 import { drawEnemy as drawEnemySprite } from './art/atlas.js';
+import { drawSwingArc } from './art/fx.js';
 
 /* ------------------------------------------------------------------ */
 
@@ -833,7 +834,202 @@ export function drawEnemyEntity(ctx, e, env) {
   }
 }
 
-/* Shape + brightness telegraph. Never hue alone. */
+/* Shape + brightness telegraph. Never hue alone — and never a rectangle.
+ *
+ * The first pass literally drew the hit rect: a hatched box with a hard white
+ * outline for the wind-up, and a filled bright box for the frames that hurt.
+ * It read as exactly what it was, a debug overlay, and on anything whose
+ * hitbox IS its body — a diving crow, a pouncing hound — it looked like the
+ * enemy was carrying a glowing crate around.
+ *
+ * Same information, drawn as the shape the attack actually makes: an arc for
+ * a swing, a lance for a thrust, chevrons running out along the floor for a
+ * shockwave, a dashed line for a dive. The wind-up and the live frames use the
+ * SAME shape — only brighter and further through its sweep — so what the tell
+ * teaches you is what the attack does.
+ */
+
+/* The path a swing will take, shown during the wind-up only: a thin dashed
+ * arc, the curved sibling of the dive line. It says WHERE without pretending
+ * to be a solid object. */
+function sweepPath(ctx, cx, cy, radius, a0, a1, alpha, time) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.strokeStyle = '#f6f9f2';
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.setLineDash([8, 7]);
+  ctx.lineDashOffset = -(time * 30) % 15;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, a0, a1, a1 < a0);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  /* a tick at the far end, so the reach reads even when the arc is short */
+  const ex = cx + Math.cos(a1) * radius;
+  const ey = cy + Math.sin(a1) * radius;
+  ctx.globalAlpha = Math.min(1, alpha * 1.5);
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(ex - Math.cos(a1) * 7, ey - Math.sin(a1) * 7);
+  ctx.lineTo(ex + Math.cos(a1) * 6, ey + Math.sin(a1) * 6);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* a tapered blade of light: wide at the shoulder, a point at the tip */
+function lance(ctx, x0, y0, x1, y1, thickness, alpha) {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#fff8dd';
+  ctx.beginPath();
+  ctx.moveTo(x0 + nx * thickness, y0 + ny * thickness);
+  ctx.lineTo(x1, y1);
+  ctx.lineTo(x0 - nx * thickness, y0 - ny * thickness);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/* the line a diver is about to travel, drawn as a line and not a corridor */
+function diveLine(ctx, cx, cy, tx, ty, reach, alpha, time) {
+  const len = Math.hypot(tx - cx, ty - cy) || 1;
+  const ux = (tx - cx) / len;
+  const uy = (ty - cy) / len;
+  const tipX = cx + ux * reach;
+  const tipY = cy + uy * reach;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#f6f9f2';
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([9, 8]);
+  ctx.lineDashOffset = -(time * 34) % 17;
+  ctx.beginPath();
+  ctx.moveTo(cx + ux * 20, cy + uy * 20);
+  ctx.lineTo(tipX, tipY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const a = Math.atan2(uy, ux);
+  ctx.globalAlpha = Math.min(1, alpha * 1.4);
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(tipX - Math.cos(a - 0.5) * 12, tipY - Math.sin(a - 0.5) * 12);
+  ctx.lineTo(tipX, tipY);
+  ctx.lineTo(tipX - Math.cos(a + 0.5) * 12, tipY - Math.sin(a + 0.5) * 12);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* chevrons running out along the floor, which is what a shockwave looks like */
+function groundChevrons(ctx, cx, y, reach, alpha, phase) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.strokeStyle = '#fff2c8';
+  ctx.lineCap = 'round';
+  for (const dir of [-1, 1]) {
+    for (let i = 0; i < 4; i += 1) {
+      const f = (i + phase) / 4;
+      const dx = dir * reach * f;
+      ctx.globalAlpha = alpha * (1 - f * 0.68);
+      ctx.lineWidth = 3 - f * 1.4;
+      ctx.beginPath();
+      ctx.moveTo(cx + dx - dir * 10, y - 9);
+      ctx.lineTo(cx + dx, y);
+      ctx.lineTo(cx + dx - dir * 10, y + 9);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+/* Per-kind cue. "live" is false during the wind-up and true on the frames
+ * that actually hurt. */
+function attackCue(ctx, e, d, live, k, env) {
+  const cx = e.x + e.w * 0.5;
+  const cy = e.y + e.h * 0.5;
+  const time = env?.time ?? 0;
+  const tellAlpha = 0.14 + k * 0.34;
+  /* how far through the live frames we are, for the trail */
+  const prog = live ? clamp(1 - (e.timer / (e.activeMax || 0.2)), 0, 1) : 0;
+
+  /* the geometry of each swing, in one place so the wind-up and the swing
+   * itself cannot disagree about where the weapon goes */
+  const swing = (() => {
+    switch (e.kind) {
+      case 'wretch': return { y: e.y + 17, r: d.reach * 0.82, from: -1.15, to: 0.72, w: 6 };
+      case 'warden': return { y: e.y + 12, r: d.reach * 0.88, from: -1.45, to: 0.12, w: 8 };
+      case 'bellKnight':
+        return e.intent === 'uppeal'
+          ? { y: e.y + 6, r: 62, from: -2.0, to: -1.0, w: 8, fixed: true }
+          : null;
+      default: return null;
+    }
+  })();
+
+  if (swing) {
+    const a0 = swing.fixed ? swing.from : (e.facing > 0 ? swing.from : Math.PI - swing.from);
+    const a1 = swing.fixed ? swing.to : (e.facing > 0 ? swing.to : Math.PI - swing.to);
+    if (live) {
+      drawSwingArc(ctx, cx, swing.y, swing.r, e.facing, prog, 'rgba(255,248,221,.62)', swing.w);
+    } else {
+      sweepPath(ctx, cx, swing.y, swing.r, a0, a1, tellAlpha, time);
+    }
+    return;
+  }
+
+  switch (e.kind) {
+    case 'duelist': {
+      if (live) {
+        lance(ctx, cx, e.y + 25, cx + e.facing * d.reach, e.y + 25, 5, 0.5);
+      } else {
+        const reach = d.reach * (0.42 + k * 0.5);
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = tellAlpha;
+        ctx.strokeStyle = '#f6f9f2';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 7]);
+        ctx.lineDashOffset = -(time * 30) % 15;
+        ctx.beginPath();
+        ctx.moveTo(cx + e.facing * 12, e.y + 25);
+        ctx.lineTo(cx + e.facing * reach, e.y + 25);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+      break;
+    }
+    case 'bellKnight':
+      /* the floor wave — chevrons running out along the ground */
+      groundChevrons(ctx, cx, e.y + e.h - 12, live ? 250 : 90 + k * 150,
+        (live ? 0.42 : tellAlpha) * 1.2, live ? 0.6 : k);
+      break;
+    case 'hound':
+    case 'crow':
+    case 'harrier': {
+      /* once it is moving, the motion IS the read — nothing on a moving body */
+      if (live) break;
+      const p = env?.game?.player;
+      const tx = p ? p.x + p.w * 0.5 : cx + e.facing * 160;
+      const ty = p ? p.y + p.h * 0.5 : cy;
+      diveLine(ctx, cx, cy, tx, ty, e.kind === 'hound' ? 190 : 240, tellAlpha, time);
+      break;
+    }
+    default:
+      /* moth, choir and censer already show the thing they are about to
+       * throw; a second marker would only be noise */
+      break;
+  }
+}
+
 function drawTelegraph(ctx, e, d, env, tp) {
   const cx = e.x + e.w * 0.5;
   const cy = e.y + e.h * 0.5;
@@ -858,60 +1054,27 @@ function drawTelegraph(ctx, e, d, env, tp) {
   ctx.beginPath();
   ctx.arc(cx, e.y - 16, 9, -Math.PI * 0.5, -Math.PI * 0.5 + TAU * tp);
   ctx.stroke();
-  ctx.globalAlpha = 1;
-
-  /* the footprint of the attack, hatched on the surface it will cover */
-  ctx.globalAlpha = 0.16 + k * 0.30;
-  ctx.fillStyle = '#f6f9f2';
-  const fp = previewBox(e, d);
-  if (fp) {
-    ctx.save();
-    ctx.beginPath(); ctx.rect(fp.x, fp.y, fp.w, fp.h); ctx.clip();
-    ctx.globalAlpha *= 0.5;
-    for (let hx = fp.x - fp.h; hx < fp.x + fp.w; hx += 9) {
-      ctx.beginPath();
-      ctx.moveTo(hx, fp.y + fp.h);
-      ctx.lineTo(hx + fp.h, fp.y);
-      ctx.lineWidth = 2; ctx.strokeStyle = '#f6f9f2';
-      ctx.stroke();
-    }
-    ctx.restore();
-    ctx.globalAlpha = 0.22 + k * 0.4;
-    ctx.strokeStyle = '#fbfff4';
-    ctx.lineWidth = 1.3;
-    ctx.strokeRect(fp.x, fp.y, fp.w, fp.h);
-  }
   ctx.restore();
-}
 
-function previewBox(e, d) {
-  const cx = e.x + e.w * 0.5;
-  switch (e.kind) {
-    case 'wretch': return { x: e.facing > 0 ? cx : cx - d.reach, y: e.y + 2, w: d.reach, h: 30 };
-    case 'warden': return { x: e.facing > 0 ? cx + 4 : cx - 4 - d.reach, y: e.y - 6, w: d.reach, h: e.h + 12 };
-    case 'duelist': return { x: e.facing > 0 ? cx : cx - d.reach, y: e.y + 18, w: d.reach, h: 14 };
-    case 'bellKnight':
-      return e.intent === 'uppeal'
-        ? { x: cx - 52, y: e.y - 56, w: 104, h: 70 }
-        : { x: cx - 250, y: e.y + e.h - 26, w: 500, h: 26 };
-    case 'hound': return { x: e.facing > 0 ? cx : cx - 210, y: e.y - 40, w: 210, h: e.h + 44 };
-    default: return null;
-  }
+  attackCue(ctx, e, d, false, k, env);
 }
 
 function drawStrike(ctx, e, d, env) {
   const box = enemyHitbox(e);
   if (!box) return;
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  ctx.globalAlpha = 0.35;
-  ctx.fillStyle = '#fff8dd';
+  /* the censer head is a real object on a real chain, so a disc is honest */
   if (box.orb) {
-    ctx.beginPath(); ctx.arc(box.x + box.w * 0.5, box.y + box.h * 0.5, box.w * 0.62, 0, TAU); ctx.fill();
-  } else {
-    ctx.fillRect(box.x, box.y, box.w, box.h);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#fff8dd';
+    ctx.beginPath();
+    ctx.arc(box.x + box.w * 0.5, box.y + box.h * 0.5, box.w * 0.62, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+    return;
   }
-  ctx.restore();
+  attackCue(ctx, e, d, true, 1, env);
 }
 
 function drawCenserArc(ctx, e, env) {
