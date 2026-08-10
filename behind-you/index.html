@@ -1377,7 +1377,10 @@
                     baseScale,
                     landed: false,
                     landPulse: 0,
-                    life: 8
+                    life: 8,
+                    age: 0,
+                    homing: false,
+                    homeSpeed: 6
                 });
             }
         }
@@ -1956,9 +1959,42 @@
             }
         }
 
+        // Shards notice the player from a long way off and come to them. They still get their
+        // burst-and-bounce moment first (shardMagnetDelay) so a kill still reads as a kill.
+        const shardMagnetRadius = 38;
+        const shardMagnetDelay = 0.35;
+        const shardMagnetTopSpeed = 46;
+        const _shardToPlayer = new THREE.Vector3();
+
         function updateShards(delta) {
             for (let i = shards.length - 1; i >= 0; i--) {
                 const shard = shards[i];
+
+                const toPlayer = _shardToPlayer.subVectors(camera.position, shard.mesh.position);
+                const distance = toPlayer.length();
+                if (!shard.homing && shard.age >= shardMagnetDelay && distance < shardMagnetRadius) {
+                    shard.homing = true;
+                }
+
+                if (shard.homing) {
+                    // Committed to the player: accelerate, ignore gravity and the ground, and
+                    // stop ageing so a shard already on its way is never lost to the timer.
+                    shard.homeSpeed = Math.min(shardMagnetTopSpeed, shard.homeSpeed + 95 * delta);
+                    const step = shard.homeSpeed * delta;
+                    // The collect radius has to cover a frame's travel or a fast shard tunnels past.
+                    if (distance < Math.max(2.35, step * 1.4)) {
+                        collectShard(i);
+                        continue;
+                    }
+                    shard.mesh.position.addScaledVector(toPlayer.multiplyScalar(1 / distance), step);
+                    shard.mesh.rotation.x += delta * 16;
+                    shard.mesh.rotation.y += delta * 21;
+                    shard.mesh.scale.setScalar(shard.baseScale);
+                    shard.mesh.material.opacity = 0.96;
+                    continue;
+                }
+
+                shard.age += delta;
                 shard.life -= delta;
                 shard.velocity.y -= 22 * delta;
                 shard.mesh.position.addScaledVector(shard.velocity, delta);
@@ -1987,8 +2023,9 @@
                     shard.mesh.scale.setScalar(shard.baseScale);
                 }
 
-                const distance = shard.mesh.position.distanceTo(camera.position);
-                if (distance < 2.35) {
+                // Still in its burst window: collect on contact so a shard cannot sit inside
+                // the player waiting for the magnet delay to elapse.
+                if (shard.mesh.position.distanceTo(camera.position) < 2.35) {
                     collectShard(i);
                     continue;
                 }
