@@ -111,45 +111,6 @@
             display: none;
         }
 
-        #boss-bar-wrap {
-            position: absolute; top: 88px; left: 50%;
-            transform: translateX(-50%);
-            width: min(320px, 62vw);
-            display: none; z-index: 60; text-align: center;
-        }
-        #boss-name-label {
-            font-weight: 700; font-size: 11px;
-            letter-spacing: 0.3em; text-transform: uppercase;
-            color: #ff6a5a; text-shadow: 0 0 8px rgba(255, 40, 0, 0.6);
-            margin-bottom: 4px;
-        }
-        #boss-bar {
-            height: 6px;
-            background: rgba(80, 0, 0, 0.55);
-            border: 1px solid rgba(255, 80, 60, 0.5);
-        }
-        #boss-fill {
-            height: 100%; width: 100%;
-            background: linear-gradient(90deg, #ff2200, #ff7a00);
-            box-shadow: 0 0 10px rgba(255, 60, 0, 0.8);
-            transition: width 0.12s linear;
-        }
-
-        #boss-announce {
-            position: absolute; top: 34%; left: 50%;
-            transform: translate(-50%, -50%);
-            font-weight: 800; font-size: clamp(1.6rem, 6vw, 3rem); line-height: 1.1;
-            color: #ff2a1a; letter-spacing: 0.18em; text-transform: uppercase;
-            text-shadow: 0 0 24px rgba(255, 30, 0, 0.9);
-            text-align: center; pointer-events: none; z-index: 80;
-            opacity: 0; transition: opacity 0.45s ease;
-        }
-        #boss-announce .sub {
-            display: block; font-size: 0.85rem; letter-spacing: 0.28em;
-            color: #fca5a5; margin-top: 10px; text-shadow: none;
-        }
-        #boss-announce.show { opacity: 1; }
-
         button {
             background: #500; color: white; border: 2px solid #f55;
             padding: 10px 30px; font-size: 1.5rem; font-family: inherit;
@@ -217,11 +178,6 @@
     <div id="death-flash"></div>
     <div id="crosshair"></div>
     <div id="timer-display">0.0000</div>
-    <div id="boss-bar-wrap">
-        <div id="boss-name-label">HELLWARDEN</div>
-        <div id="boss-bar"><div id="boss-fill"></div></div>
-    </div>
-    <div id="boss-announce">HELLWARDEN<span class="sub">Jump the shockwave</span></div>
 
         <div id="ui-layer">
             <div id="start-screen" class="screen">
@@ -311,16 +267,8 @@
         let shotCount = 0;
         let deathTimer = null;
 
-        // Boss state. The HELLWARDEN arrives at 66.666s and again 66.666s after each kill,
-        // escalating each time. Only one boss walks the arena at a time.
-        const bossIntervalTime = 66.666;
-        let bossNumber = 0;
-        let nextBossTime = bossIntervalTime;
-        let bossActive = false;
-        let bossAnnounceTimer = null;
-
         // HUD elements, cached at init so the hot loop never queries the DOM.
-        let timerEl, bossWrapEl, bossNameEl, bossFillEl, bossAnnounceEl;
+        let timerEl;
 
         // Entities
         const projectiles = [];
@@ -328,7 +276,7 @@
         const shards = [];
         const particles = [];
         const floorGlows = [];
-        const shockwaves = []; // expanding boss slam rings — jump them or die
+        const shockwaves = []; // expanding rings thrown out by the player's heel slam
         const glowLightPool = []; // reusable PointLights for floor glows (bounded, no per-kill alloc)
         
         // Player Physics/Stats
@@ -353,7 +301,7 @@
         // then installed synchronously inside a real user gesture. Loading Tone at page
         // startup creates an AudioContext before the visitor interacts, which Chromium
         // correctly blocks and reports as an autoplay warning.
-        let shootSynth, enemyDeathSynth, spawnerDeathSynth, playerHitSynth, pickupSynth, bossSlamSynth, bossDeathSynth;
+        let shootSynth, enemyDeathSynth, spawnerDeathSynth, playerHitSynth, pickupSynth, heelSlamSynth;
         let nextSynthStart = 0;
         let toneSource = null;
         let toneSourcePromise = null;
@@ -642,23 +590,14 @@
             }).toDestination();
             pickupSynth.volume.value = -24;
 
-            // Room-shaking boom when the boss slams the floor
-            bossSlamSynth = new Tone.MembraneSynth({
+            // Room-shaking boom when your heel slam goes off
+            heelSlamSynth = new Tone.MembraneSynth({
                 pitchDecay: 0.08,
                 octaves: 3,
                 oscillator: { type: "sine" },
                 envelope: { attack: 0.002, decay: 0.7, sustain: 0, release: 0.4 }
             }).toDestination();
-            bossSlamSynth.volume.value = -7;
-
-            // Long, grinding collapse when the boss finally dies
-            bossDeathSynth = new Tone.FMSynth({
-                modulationIndex: 18,
-                oscillator: { type: "sine" },
-                modulation: { type: "square" },
-                envelope: { attack: 0.01, decay: 1.4, sustain: 0, release: 0.6 }
-            }).toDestination();
-            bossDeathSynth.volume.value = -9;
+            heelSlamSynth.volume.value = -7;
 
             const toneStart = Tone.start();
             if (toneStart && typeof toneStart.catch === 'function') toneStart.catch(() => {});
@@ -694,32 +633,7 @@
                         const rough = Math.sin(t * 96 * Math.PI * 2) * 0.14;
                         return (sub + rough) * breath;
                     }),
-                    // The boss reads as a huge slow heartbeat — two sub thumps per cycle
-                    // with a low grind underneath. Proximity + enrage speed it up.
-                    boss: buildAudioBuffer(audioCtx, 1.15, t => {
-                        const ph = t % 0.575;
-                        const thump = Math.exp(-ph * 9);
-                        const sub = Math.sin(t * 46 * Math.PI * 2) * thump * 0.85;
-                        const grind = Math.sin(t * (30 + Math.sin(t * 5.2) * 6) * Math.PI * 2) * 0.16;
-                        return (sub + grind) * 0.6;
-                    }),
                     // EARSHOT lives in its own high band; see initEarshot below.
-                    bossClose: buildAudioBuffer(audioCtx, 0.8, t => {
-                        const breath = 0.5 + Math.sin(t * 1.25 * Math.PI * 2) * 0.14;
-                        const sub = Math.sin(t * 34 * Math.PI * 2) * 0.55;
-                        const rough = Math.sin(t * 68 * Math.PI * 2) * 0.18;
-                        return (sub + rough) * breath;
-                    }),
-                    // Rising growl: the slam telegraph. Non-looping; played from the boss mesh
-                    // so the warning itself is HRTF-localized on the sound stage.
-                    bossRoar: buildAudioBuffer(audioCtx, 1.3, t => {
-                        const p = Math.min(1, t / 1.3);
-                        const f = 34 + p * 46;
-                        const growl = Math.sin(t * f * Math.PI * 2) * (0.25 + p * 0.7);
-                        const rasp = Math.sin(t * f * 2.03 * Math.PI * 2) * 0.28 * p;
-                        const teeth = Math.sin(t * 415 * Math.PI * 2) * 0.06 * p;
-                        return (growl + rasp + teeth) * 0.9;
-                    })
                 };
                 initEarshot(audioCtx);
             }
@@ -824,10 +738,6 @@
 
             // Cache HUD elements so per-frame updates never hit getElementById.
             timerEl = document.getElementById('timer-display');
-            bossWrapEl = document.getElementById('boss-bar-wrap');
-            bossNameEl = document.getElementById('boss-name-label');
-            bossFillEl = document.getElementById('boss-fill');
-            bossAnnounceEl = document.getElementById('boss-announce');
 
             // Setup UI Buttons
             document.getElementById('start-btn').addEventListener('click', startGame);
@@ -1104,27 +1014,11 @@
             emissive: 0x550000,
             fog: false
         });
-        // What crawls out after a WYRM has died. Paler, hotter and spiked - the silhouette
-        // changes as well as the colour, so the escalation reads without relying on hue.
-        const feralMat = new THREE.MeshLambertMaterial({
-            color: 0xf5f0ff,
-            emissive: 0x8899cc,
-            fog: false
-        });
-        const feralSpikeGeo = new THREE.ConeGeometry(0.22, 1.5, 4);
-        const feralSpikeMat = new THREE.MeshLambertMaterial({ color: 0xdfe4ff, emissive: 0x556699, fog: false });
         const spawnerMat = new THREE.MeshLambertMaterial({
             color: 0x4b0015,
             emissive: 0x300012,
             fog: false
         });
-        const bossMat = new THREE.MeshLambertMaterial({
-            color: 0x8a0505,
-            emissive: 0x4a0000,
-            fog: false
-        });
-        const bossHornGeo = new THREE.ConeGeometry(0.16, 1.1, 5);
-        const bossHornMat = new THREE.MeshLambertMaterial({ color: 0xd8c9a3, emissive: 0x241c0c, fog: false });
         const chaserEyeMat = new THREE.MeshBasicMaterial({ color: 0xfff1c8, transparent: true, opacity: 0.9, fog: false });
         const chaserMawMat = new THREE.MeshBasicMaterial({ color: 0x100000, fog: false });
         const shardGeo = new THREE.TetrahedronGeometry(0.32, 0);
@@ -1142,22 +1036,7 @@
             const visual = { eyes: [], glowParts: [enemy] };
             enemy.userData.visual = visual;
 
-            if (type === 'boss') {
-                // A crown of horns. Positions are in local space, so they scale with the body.
-                [
-                    { x: -0.52, z: -0.3, lean: 0.5 },
-                    { x: 0.52, z: -0.3, lean: -0.5 },
-                    { x: -0.3, z: 0.42, lean: 0.35 },
-                    { x: 0.3, z: 0.42, lean: -0.35 }
-                ].forEach(def => {
-                    addEnemyPart(enemy, bossHornGeo, bossHornMat, part => {
-                        part.position.set(def.x, 0.82, def.z);
-                        part.rotation.z = def.lean;
-                    }, 'horn');
-                });
-            }
-
-            if (type === 'chaser' || type === 'spawner' || type === 'boss') {
+            if (type === 'chaser' || type === 'spawner') {
                 [
                     [-0.42, 0.24, -1.14],
                     [0.42, 0.24, -1.14],
@@ -1175,18 +1054,6 @@
                 addEnemyPart(enemy, chaserMawGeo, chaserMawMat, part => {
                     part.position.set(0, -0.42, -0.86);
                 }, 'maw');
-
-                // Post-WYRM the swarm comes back wrong: a crown of spikes changes the
-                // silhouette, so you can tell at a glance even in the dark.
-                if (enemiesAreFeral && type === 'chaser') {
-                    [[0, 1.05, 0], [-0.75, 0.5, 0.4], [0.75, 0.5, 0.4], [0, 0.6, -0.95]].forEach(p => {
-                        addEnemyPart(enemy, feralSpikeGeo, feralSpikeMat, part => {
-                            part.position.set(p[0], p[1], p[2]);
-                            part.lookAt(p[0] * 3, p[1] * 3 + 1, p[2] * 3);
-                            part.rotateX(Math.PI / 2);
-                        }, 'spike');
-                    });
-                }
             }
         }
 
@@ -1203,12 +1070,11 @@
             const visual = root.userData.visual;
             if (!visual) return;
 
-            if (enemyRecord.type === 'chaser' || enemyRecord.type === 'spawner' || enemyRecord.type === 'boss') {
-                // Spawners flare their eyes while charging an emit; the boss reuses the same
-                // channel to flare during its slam telegraph.
+            if (enemyRecord.type === 'chaser' || enemyRecord.type === 'spawner') {
+                // Spawners flare their eyes while charging an emit.
                 const emitCharge = enemyRecord.type === 'chaser' ? 0 : (enemyRecord.emitCharge || 0);
                 root.lookAt(playerPos.x, root.position.y, playerPos.z);
-                root.rotateZ(Math.sin(gameTime * 5.2 + enemyRecord.wobbleOffset) * (enemyRecord.type === 'boss' ? 0.05 : 0.16));
+                root.rotateZ(Math.sin(gameTime * 5.2 + enemyRecord.wobbleOffset) * 0.16);
                 visual.eyes.forEach((eye, index) => {
                     const eyeScale = 1 + nearThreat * 0.7 + pulse * 0.22 + emitCharge * 0.45 + index * 0.04;
                     eye.scale.setScalar(eyeScale);
@@ -1227,29 +1093,6 @@
         }
 
         function enemyProfile(type) {
-            if (type === 'boss') {
-                return {
-                    type,
-                    geometry: enemyGeo,
-                    material: bossMat,
-                    y: 3.3,
-                    scale: 3.4,
-                    shape: { x: 1, y: 1, z: 1 },
-                    health: 90 + 45 * (bossNumber - 1), // escalates each visit
-                    hitRadius: 4.4,
-                    speed: 3.0, // slow looming walker; enrage adds up to +2.6 as it takes damage
-                    shards: 24 + 8 * bossNumber,
-                    refDistance: 24,
-                    rolloff: 1.05,
-                    volume: 1,
-                    nearVolume: 1,
-                    pitchRise: 0.5,
-                    warningRadius: 70,
-                    nearRadius: 16,
-                    hitColor: 0xff2222,
-                    deathColor: 0xff7722
-                };
-            }
             if (type === 'spawner') {
                 return {
                     type,
@@ -1276,7 +1119,7 @@
             return {
                 type: 'chaser',
                 geometry: enemyGeo,
-                material: enemiesAreFeral ? feralMat : enemyMat,
+                material: enemyMat,
                 y: 1.55 + Math.random() * 0.85,
                 scale: 0.8 + Math.random() * 0.6,
                 shape: { x: 1, y: 1, z: 1 },
@@ -1329,7 +1172,6 @@
             // Add 3D Positional Audio to the enemy
             let sound = null;
             let nearSound = null;
-            let roarSound = null;
             if (audioListener && enemyAudioBuffers && enemyAudioBuffers[profile.type]) {
                 sound = new THREE.PositionalAudio(audioListener);
                 sound.setBuffer(enemyAudioBuffers[profile.type]);
@@ -1356,18 +1198,6 @@
                     nearSound.play();
                 }
 
-                // The boss carries its slam telegraph on its own body so the roar itself
-                // tells you where the shockwave will come from. Non-looping; replayed per slam.
-                if (profile.type === 'boss' && enemyAudioBuffers.bossRoar) {
-                    roarSound = new THREE.PositionalAudio(audioListener);
-                    roarSound.setBuffer(enemyAudioBuffers.bossRoar);
-                    roarSound.setRefDistance(26);
-                    roarSound.setRolloffFactor(1.0);
-                    roarSound.setDistanceModel('exponential');
-                    roarSound.panner.panningModel = 'HRTF';
-                    setSpatialVolume(roarSound, 0.95);
-                    enemy.add(roarSound);
-                }
             }
 
             scene.add(enemy);
@@ -1377,14 +1207,8 @@
                 type: profile.type,
                 sound: sound, // Store reference to kill the audio on death
                 nearSound: nearSound,
-                roarSound: roarSound,
                 speed: profile.speed,
                 health: profile.health,
-                maxHealth: profile.health,
-                bornAt: gameTime,
-                enrage: 0,
-                nextSlam: gameTime + 4.5, // boss only: first slam lands shortly after arrival
-                telegraphUntil: 0,
                 hitRadius: profile.hitRadius,
                 shardDrop: profile.shards,
                 hitColor: profile.hitColor,
@@ -1632,39 +1456,27 @@
                 const cdx = position.x - camera.position.x;
                 const cdz = position.z - camera.position.z;
                 const closeSq = cdx * cdx + cdz * cdz;
-                const gain = enemy.type === 'boss' ? 1 : enemy.type === 'spawner' ? 0.5
-                           : (closeSq < 81 ? 0.34 : 0.12);
+                const gain = enemy.type === 'spawner' ? 0.5 : (closeSq < 81 ? 0.34 : 0.12);
                 heelCharge = Math.min(1, heelCharge + gain);
             }
             createExplosion(position, enemy.deathColor || 0xff0000);
-            // The ground remembers. A HELLWARDEN leaves a hill; a chaser leaves a swell.
+            // The ground remembers. A spawner leaves a hill; a chaser leaves a swell.
             // This runs before the drop so the shards land on the new ground, not inside it.
-            if (enemy.type === 'boss') raiseGround(position.x, position.z, 15.0, 34);
-            else if (enemy.type === 'spawner') raiseGround(position.x, position.z, 7.0, 20);
+            if (enemy.type === 'spawner') raiseGround(position.x, position.z, 7.0, 20);
             else raiseGround(position.x, position.z, 4.0, 14);
             spawnShards(position, enemy.shardDrop);
-            if (enemy.type === 'boss') {
-                // The fall of a HELLWARDEN: a second burst, a long collapse, and the arena resets
-                // its clock — the next one arrives 66.666s from now.
-                createExplosion(position, 0xffcc55);
-                triggerSynth(bossDeathSynth, "C1", "1n");
-                bossActive = false;
-                nextBossTime = gameTime + bossIntervalTime;
-                if (bossWrapEl) bossWrapEl.style.display = 'none';
-            } else if (enemy.type === 'spawner') triggerSynth(spawnerDeathSynth, "C1", "4n");
+            if (enemy.type === 'spawner') triggerSynth(spawnerDeathSynth, "C1", "4n");
             else triggerNoise(enemyDeathSynth, "16n");
             if (enemy.sound && enemy.sound.isPlaying) enemy.sound.stop();
             if (enemy.nearSound && enemy.nearSound.isPlaying) enemy.nearSound.stop();
-            if (enemy.roarSound && enemy.roarSound.isPlaying) enemy.roarSound.stop();
             scene.remove(enemy.mesh);
             disposeEnemyMaterials(enemy.mesh);
             enemies.splice(index, 1);
         }
 
-        // --- Boss shockwaves -------------------------------------------------------------
-        // The slam sends a glowing ring outward along the floor. Grounded when it crosses
-        // you = death; jump it. It also shreds any lesser enemy it touches, so a well-baited
-        // slam can clear the crowd.
+        // --- Shockwave rings --------------------------------------------------------------
+        // A ring travelling along the floor, thrown out by the player's heel slam. It shreds
+        // anything it touches and drapes itself over the terrain it crosses.
         const shockwaveGeo = new THREE.RingGeometry(0.88, 1, 64);
 
         // opts.friendly rings come from the player's heelfall: they shred the crowd instead of
@@ -1700,8 +1512,7 @@
                 friendly,
                 basePos: new Float32Array(geo.attributes.position.array) // unscaled ring lattice
             });
-            if (friendly) triggerSynth(bossSlamSynth, "G1", "16n", 0.5);
-            else triggerSynth(bossSlamSynth, "C1", "2n");
+            triggerSynth(heelSlamSynth, "G1", "16n", 0.5);
             createFloorGlow(position, friendly ? 1.3 : 1.8);
         }
 
@@ -1748,308 +1559,16 @@
                     }
                 }
 
-                // Lesser enemies caught by the ring are destroyed (the boss is immune).
+                // Everything the ring touches is destroyed.
                 suppressHeelCharge = w.friendly;
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     const e = enemies[j];
-                    if (e.type === 'boss') continue;
                     const ex = e.mesh.position.x - w.x;
                     const ez = e.mesh.position.z - w.z;
                     const enemyDist = Math.sqrt(ex * ex + ez * ez);
                     if (Math.abs(enemyDist - w.radius) < w.band + 0.15) killEnemy(e, j);
                 }
                 suppressHeelCharge = false;
-            }
-        }
-
-        // --- THE WYRM -------------------------------------------------------------------
-        // The boss set-piece. Everything stops, the ground shakes, and a long serpent bursts out
-        // of the arena. It swims in arcs, spitting enemies at you, and the only thing that can
-        // hurt it is a plate on its BACK - so you have to work around behind it while it is
-        // trying to face you. Kill it and it roars and is swallowed by the ground again.
-        const wyrmSegmentCount = 16;
-        const wyrmTrailStride = 5;      // history frames between segments
-        let wyrm = null;
-        let wyrmPhase = 'none';         // none | hush | rising | fighting | dying
-        let wyrmPhaseUntil = 0;
-        let enemiesAreFeral = false;    // set once a wyrm has been killed
-
-        const wyrmHeadGeo = new THREE.IcosahedronGeometry(2.6, 0);
-        const wyrmBodyGeo = new THREE.IcosahedronGeometry(2.0, 0);
-        const wyrmFinGeo = new THREE.ConeGeometry(0.5, 2.6, 4);
-        const wyrmWeakGeo = new THREE.OctahedronGeometry(1.5, 0);
-        const wyrmJawGeo = new THREE.ConeGeometry(0.7, 2.2, 4);
-
-        function makeWyrmMaterial() {
-            // Bright enough to read as a silhouette against a black arena from across the field.
-            return new THREE.MeshLambertMaterial({ color: 0x7b4a9a, emissive: 0x4a2068, fog: false });
-        }
-
-        function spawnWyrm() {
-            bossNumber++;
-            bossActive = true;
-            wyrmPhase = 'hush';
-            wyrmPhaseUntil = gameTime + 2.6;   // the arena goes quiet before it arrives
-
-            // Clear the field: the set-piece needs the stage to itself.
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const e = enemies[i];
-                if (e.sound && e.sound.isPlaying) e.sound.stop();
-                if (e.nearSound && e.nearSound.isPlaying) e.nearSound.stop();
-                if (e.roarSound && e.roarSound.isPlaying) e.roarSound.stop();
-                scene.remove(e.mesh);
-                disposeEnemyMaterials(e.mesh);
-                enemies.splice(i, 1);
-            }
-
-            const group = new THREE.Group();
-            const segments = [];
-            for (let i = 0; i < wyrmSegmentCount; i++) {
-                const isHead = i === 0;
-                const taper = isHead ? 1 : 1 - (i / wyrmSegmentCount) * 0.55;
-                const mesh = new THREE.Mesh(isHead ? wyrmHeadGeo : wyrmBodyGeo, makeWyrmMaterial());
-                mesh.scale.setScalar(taper);
-                group.add(mesh);
-                // Dorsal fins read the spine's twist from any angle, so you can see which way
-                // its back is facing without relying on colour.
-                if (!isHead && i % 2 === 0) {
-                    const fin = new THREE.Mesh(wyrmFinGeo, makeWyrmMaterial());
-                    fin.position.y = 1.9 * taper;
-                    mesh.add(fin);
-                }
-                if (isHead) {
-                    [-0.8, 0.8].forEach(sx => {
-                        const jaw = new THREE.Mesh(wyrmJawGeo, makeWyrmMaterial());
-                        jaw.position.set(sx, -0.5, -2.2);
-                        jaw.rotation.x = Math.PI / 2;
-                        mesh.add(jaw);
-                    });
-                }
-                segments.push(mesh);
-            }
-
-            // The weak point: a bright plate riding the middle of its back.
-            const weak = new THREE.Mesh(wyrmWeakGeo, new THREE.MeshBasicMaterial({
-                color: 0xfff0c0, transparent: true, opacity: 0.95, fog: false
-            }));
-            segments[7].add(weak);
-            weak.position.y = 2.0;
-
-            scene.add(group);
-
-            let sound = null, roar = null;
-            if (audioListener && enemyAudioBuffers) {
-                sound = new THREE.PositionalAudio(audioListener);
-                sound.setBuffer(enemyAudioBuffers.boss);
-                sound.setRefDistance(30);
-                sound.setRolloffFactor(0.9);
-                sound.setDistanceModel('exponential');
-                sound.panner.panningModel = 'HRTF';
-                sound.setLoop(true);
-                setSpatialVolume(sound, 1);
-                segments[0].add(sound);
-                sound.play();
-                if (enemyAudioBuffers.bossRoar) {
-                    roar = new THREE.PositionalAudio(audioListener);
-                    roar.setBuffer(enemyAudioBuffers.bossRoar);
-                    roar.setRefDistance(34);
-                    roar.setRolloffFactor(0.85);
-                    roar.setDistanceModel('exponential');
-                    roar.panner.panningModel = 'HRTF';
-                    setSpatialVolume(roar, 1);
-                    segments[0].add(roar);
-                }
-            }
-
-            const angle = Math.random() * Math.PI * 2;
-            wyrm = {
-                group, segments, weak, sound, roar,
-                health: 26 + 10 * (bossNumber - 1),
-                maxHealth: 26 + 10 * (bossNumber - 1),
-                headPos: new THREE.Vector3(
-                    camera.position.x + Math.cos(angle) * 34, -26,
-                    camera.position.z + Math.sin(angle) * 34),
-                heading: new THREE.Vector3(-Math.cos(angle), 0, -Math.sin(angle)),
-                trail: [],
-                nextSpit: gameTime + 4,
-                surfaceUntil: gameTime + 14,
-                diveUntil: 0,
-                hitFlash: 0
-            };
-            for (let i = 0; i < wyrmSegmentCount * wyrmTrailStride + 4; i++) {
-                wyrm.trail.push(wyrm.headPos.clone());
-            }
-
-            if (bossNameEl) bossNameEl.textContent = 'THE WYRM ' + romanNumeral(bossNumber);
-            if (bossFillEl) bossFillEl.style.width = '100%';
-            if (bossWrapEl) bossWrapEl.style.display = 'block';
-            if (bossAnnounceEl) {
-                bossAnnounceEl.firstChild.textContent = 'THE WYRM ' + romanNumeral(bossNumber);
-                const sub = bossAnnounceEl.querySelector('.sub');
-                if (sub) sub.textContent = 'Its back is soft';
-                bossAnnounceEl.classList.add('show');
-                if (bossAnnounceTimer) clearTimeout(bossAnnounceTimer);
-                bossAnnounceTimer = setTimeout(() => {
-                    bossAnnounceEl.classList.remove('show');
-                    bossAnnounceTimer = null;
-                }, 2600);
-            }
-        }
-
-        function killWyrm() {
-            if (!wyrm) return;
-            wyrmPhase = 'dying';
-            wyrmPhaseUntil = gameTime + 2.2;
-            if (wyrm.sound && wyrm.sound.isPlaying) wyrm.sound.stop();
-            if (wyrm.roar) { if (wyrm.roar.isPlaying) wyrm.roar.stop(); wyrm.roar.play(); }
-            triggerSynth(bossDeathSynth, "C1", "1n");
-            for (let i = 0; i < wyrm.segments.length; i += 2) {
-                createExplosion(wyrm.segments[i].getWorldPosition(new THREE.Vector3()), 0xffcc55);
-            }
-            // Its grave is the biggest hill in the arena.
-            raiseGround(wyrm.segments[0].position.x, wyrm.segments[0].position.z, 22, 38);
-            spawnShards(wyrm.segments[0].position.clone(), 40 + 10 * bossNumber);
-            // Everything that comes after has seen what you did.
-            enemiesAreFeral = true;
-            if (bossWrapEl) bossWrapEl.style.display = 'none';
-        }
-
-        function disposeWyrm() {
-            if (!wyrm) return;
-            if (wyrm.sound && wyrm.sound.isPlaying) wyrm.sound.stop();
-            if (wyrm.roar && wyrm.roar.isPlaying) wyrm.roar.stop();
-            wyrm.group.traverse(obj => {
-                if (obj.material && obj.material.dispose) obj.material.dispose();
-            });
-            scene.remove(wyrm.group);
-            wyrm = null;
-            wyrmPhase = 'none';
-            bossActive = false;
-            nextBossTime = gameTime + bossIntervalTime;
-            if (bossWrapEl) bossWrapEl.style.display = 'none';
-        }
-
-        const _wyrmTmp = new THREE.Vector3();
-        const _wyrmToPlayer = new THREE.Vector3();
-
-        function updateWyrm(delta) {
-            if (!wyrm) return;
-
-            if (wyrmPhase === 'hush') {
-                // Two and a half seconds of nothing. The quiet IS the telegraph.
-                if (gameTime >= wyrmPhaseUntil) {
-                    wyrmPhase = 'rising';
-                    wyrmPhaseUntil = gameTime + 1.6;
-                    triggerSynth(bossSlamSynth, "C1", "1n");
-                    for (let i = 0; i < 5; i++) {
-                        const a = Math.random() * Math.PI * 2;
-                        createFloorGlow(new THREE.Vector3(
-                            wyrm.headPos.x + Math.cos(a) * 6, 0,
-                            wyrm.headPos.z + Math.sin(a) * 6), 2);
-                    }
-                }
-                return;
-            }
-
-            const target = camera.position;
-            _wyrmToPlayer.copy(target).sub(wyrm.headPos);
-            const distToPlayer = _wyrmToPlayer.length();
-
-            if (wyrmPhase === 'rising') {
-                // Bursting out of the ground.
-                wyrm.headPos.y += 34 * delta;
-                if (wyrm.headPos.y > terrainHeightAt(wyrm.headPos.x, wyrm.headPos.z) + 9) {
-                    wyrmPhase = 'fighting';
-                    wyrm.surfaceUntil = gameTime + 15;
-                }
-            } else if (wyrmPhase === 'dying') {
-                // Swallowed by the ground.
-                wyrm.headPos.y -= 16 * delta;
-                if (gameTime >= wyrmPhaseUntil) { disposeWyrm(); return; }
-            } else {
-                // Swimming: arc toward the player but always overshoot, so it sweeps past and
-                // gives you the window behind it that its back plate lives in.
-                const ground = terrainHeightAt(wyrm.headPos.x, wyrm.headPos.z);
-                const diving = gameTime < wyrm.diveUntil;
-                const wantY = diving ? ground - 14 : ground + 8 + Math.sin(gameTime * 1.3) * 3.5;
-                wyrm.headPos.y += (wantY - wyrm.headPos.y) * Math.min(1, delta * 1.8);
-
-                _wyrmToPlayer.y = 0;
-                if (_wyrmToPlayer.lengthSq() > 0.0001) _wyrmToPlayer.normalize();
-                // Steer, but slowly: its turning circle is what lets you get around it.
-                const turn = diving ? 2.4 : 0.85;
-                wyrm.heading.x += (_wyrmToPlayer.x - wyrm.heading.x) * Math.min(1, delta * turn);
-                wyrm.heading.z += (_wyrmToPlayer.z - wyrm.heading.z) * Math.min(1, delta * turn);
-                wyrm.heading.y = 0;
-                if (wyrm.heading.lengthSq() > 0.0001) wyrm.heading.normalize();
-
-                const speed = diving ? 30 : 16 + (1 - wyrm.health / wyrm.maxHealth) * 8;
-                wyrm.headPos.addScaledVector(wyrm.heading, speed * delta);
-
-                // Periodically dive and re-emerge somewhere else, so the fight keeps resetting.
-                if (!diving && gameTime > wyrm.surfaceUntil) {
-                    wyrm.diveUntil = gameTime + 2.4;
-                    wyrm.surfaceUntil = gameTime + 15;
-                }
-                if (diving && gameTime > wyrm.diveUntil - 0.05) {
-                    const a = Math.random() * Math.PI * 2;
-                    wyrm.headPos.set(target.x + Math.cos(a) * 30, ground - 12, target.z + Math.sin(a) * 30);
-                }
-
-                // It spits the swarm at you rather than fighting alone.
-                if (!diving && gameTime >= wyrm.nextSpit) {
-                    wyrm.nextSpit = gameTime + 3.4 - Math.min(1.6, bossNumber * 0.3);
-                    const origin = wyrm.segments[0].position.clone();
-                    origin.y = terrainHeightAt(origin.x, origin.z);
-                    spawnEnemy('chaser', origin);
-                    spawnEnemy('chaser', origin);
-                    triggerNoise(enemyDeathSynth, "16n");
-                }
-            }
-
-            // Push the head onto the trail and hang the body off it.
-            wyrm.trail.unshift(wyrm.headPos.clone());
-            if (wyrm.trail.length > wyrmSegmentCount * wyrmTrailStride + 4) wyrm.trail.pop();
-            for (let i = 0; i < wyrm.segments.length; i++) {
-                const p = wyrm.trail[Math.min(wyrm.trail.length - 1, i * wyrmTrailStride)];
-                const seg = wyrm.segments[i];
-                seg.position.copy(p);
-                const ahead = wyrm.trail[Math.max(0, i * wyrmTrailStride - wyrmTrailStride)];
-                if (ahead) seg.lookAt(ahead);
-            }
-
-            wyrm.hitFlash = Math.max(0, wyrm.hitFlash - delta * 3);
-            const heat = 0.5 + wyrm.hitFlash;
-            wyrm.weak.material.opacity = 0.6 + Math.sin(gameTime * 9) * 0.15 + wyrm.hitFlash * 0.3;
-            wyrm.weak.scale.setScalar(1 + Math.sin(gameTime * 9) * 0.12 + wyrm.hitFlash * 0.5);
-            wyrm.segments.forEach(s => setEnemyGlow(s, heat));
-
-            if (wyrmPhase !== 'fighting') return;
-
-            // Touching any part of it kills you.
-            for (let i = 0; i < wyrm.segments.length; i++) {
-                const seg = wyrm.segments[i];
-                if (seg.position.y < terrainHeightAt(seg.position.x, seg.position.z) - 1) continue;
-                if (seg.position.distanceTo(camera.position) < (i === 0 ? 3.6 : 2.9)) {
-                    triggerGameOver();
-                    return;
-                }
-            }
-
-            // Only the plate on its back takes damage.
-            const weakPos = wyrm.weak.getWorldPosition(_wyrmTmp);
-            for (let j = projectiles.length - 1; j >= 0; j--) {
-                const p = projectiles[j];
-                if (weakPos.distanceTo(p.mesh.position) < 2.4) {
-                    wyrm.health--;
-                    wyrm.hitFlash = 1;
-                    createExplosion(p.mesh.position, 0xffe08a);
-                    triggerNoise(enemyDeathSynth, "16n");
-                    scene.remove(p.mesh);
-                    projectiles.splice(j, 1);
-                    if (bossFillEl) bossFillEl.style.width = Math.max(0, (wyrm.health / wyrm.maxHealth) * 100) + '%';
-                    if (wyrm.health <= 0) { killWyrm(); return; }
-                }
             }
         }
 
@@ -2132,8 +1651,7 @@
             if (shardCount >= hungerThreshold) {
                 let packed = 0;
                 for (let i = 0; i < enemies.length; i++) {
-                    if (enemies[i].type !== 'boss' &&
-                        enemies[i].mesh.position.distanceTo(camera.position) < 13) packed++;
+                    if (enemies[i].mesh.position.distanceTo(camera.position) < 13) packed++;
                 }
                 r += Math.min(9, packed * 1.1) + Math.min(6, (shardCount - hungerThreshold) / 900);
             }
@@ -2149,7 +1667,6 @@
             suppressHeelCharge = true;
             for (let j = enemies.length - 1; j >= 0; j--) {
                 const e = enemies[j];
-                if (e.type === 'boss') continue;
                 const ex = e.mesh.position.x - px;
                 const ez = e.mesh.position.z - pz;
                 if (ex * ex + ez * ez < 9) killEnemy(e, j);
@@ -2192,34 +1709,6 @@
             if (playerLight) {
                 playerLight.distance = 50 + heelCharge * 24;
                 playerLight.intensity = 1 + heelCharge * 0.6;
-            }
-        }
-
-        function romanNumeral(n) {
-            const steps = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
-            let out = '';
-            for (let i = 0; i < steps.length; i++) {
-                while (n >= steps[i][0]) { out += steps[i][1]; n -= steps[i][0]; }
-            }
-            return out || 'I';
-        }
-
-        function spawnBoss() {
-            bossNumber++;
-            bossActive = true;
-            spawnEnemy('boss');
-            const title = 'HELLWARDEN ' + romanNumeral(bossNumber);
-            if (bossNameEl) bossNameEl.textContent = title;
-            if (bossFillEl) bossFillEl.style.width = '100%';
-            if (bossWrapEl) bossWrapEl.style.display = 'block';
-            if (bossAnnounceEl) {
-                bossAnnounceEl.firstChild.textContent = title;
-                bossAnnounceEl.classList.add('show');
-                if (bossAnnounceTimer) clearTimeout(bossAnnounceTimer);
-                bossAnnounceTimer = setTimeout(() => {
-                    bossAnnounceEl.classList.remove('show');
-                    bossAnnounceTimer = null;
-                }, 2600);
             }
         }
 
@@ -2269,7 +1758,7 @@
                 playerVelocity.y = 0;
             } else {
                 // Slopes ease so walking stays smooth. Ground erupting underfoot instead heaves
-                // the player up at a floor speed, so even a HELLWARDEN dying at their feet
+                // the player up at a floor speed, so even a spawner dying at their feet
                 // reads as being thrown skyward over a few frames rather than teleporting.
                 if (groundY > playerGroundY) {
                     // Constant rise speed, capped at the real surface: walking up a slope tracks
@@ -2332,44 +1821,12 @@
                     e.mesh.position.y = terrainHeightAt(e.mesh.position.x, e.mesh.position.z) + e.baseY + Math.sin(gameTime * 2 + e.wobbleOffset) * 0.35;
                     if (gameTime >= e.nextEmit) {
                         spawnEnemy('chaser', e.mesh.position);
-                        // Spawner output thins during boss fights too, matching the ambient
-                        // spawn multiplier, so the fight actually stays readable late-game.
-                        e.nextEmit = gameTime + Math.max(2.1, e.emitInterval - gameTime * 0.01) * (bossActive ? 1.7 : 1);
+                        e.nextEmit = gameTime + Math.max(2.1, e.emitInterval - gameTime * 0.01);
                         e.emitCharge = 0;
                     }
-                } else if (e.type === 'boss') {
-                    // Enrage builds from damage taken AND from time alive: an ignored
-                    // HELLWARDEN keeps getting faster until it outruns the player, so
-                    // kiting it forever is never the right play. Fully enraged ~75s in.
-                    const enrage = Math.max(1 - e.health / e.maxHealth, Math.min(1, (gameTime - e.bornAt) / 75));
-                    e.enrage = enrage;
-                    dir.y = 0;
-                    if (dir.lengthSq() > 0.0001) dir.normalize();
-                    e.mesh.position.addScaledVector(dir, (e.speed + enrage * 2.6) * delta);
-
-                    // Slam cycle: roar (telegraph, eyes flare) -> floor shockwave. Jump it.
-                    if (e.telegraphUntil === 0 && gameTime >= e.nextSlam) {
-                        e.telegraphUntil = gameTime + 1.35;
-                        if (e.roarSound) {
-                            if (e.roarSound.isPlaying) e.roarSound.stop();
-                            e.roarSound.play();
-                        }
-                    }
-                    if (e.telegraphUntil > 0) {
-                        e.emitCharge = smoothstep(1 - (e.telegraphUntil - gameTime) / 1.35);
-                        if (gameTime >= e.telegraphUntil) {
-                            e.telegraphUntil = 0;
-                            e.emitCharge = 0;
-                            e.nextSlam = gameTime + 6.5 - Math.min(2.5, enrage * 3) + Math.random() * 1.5;
-                            spawnShockwave(e.mesh.position);
-                        }
-                    }
-                    if (bossFillEl) bossFillEl.style.width = Math.max(0, (e.health / e.maxHealth) * 100) + '%';
                 } else {
-                    // Climbing always costs them - a permanent rule of the world, not an upgrade.
-                    // Every hill your kills built is fortification: high ground buys you the
-                    // seconds you need to turn around. The boss has mass and ignores slope, so
-                    // a hilltop is never a solved problem.
+                    // Climbing always costs them. Every hill your kills built is fortification:
+                    // high ground buys you the seconds you need to turn around.
                     const aheadX = e.mesh.position.x + dir.x * 1.4;
                     const aheadZ = e.mesh.position.z + dir.z * 1.4;
                     const rise = terrainHeightAt(aheadX, aheadZ) -
@@ -2389,17 +1846,11 @@
                 setEnemyGlow(e.mesh, 0.55 + nearThreat * 1.2 + audioPanic * 1.15 + pulse * 0.25);
                 animateEnemyVisual(e, pulse, nearThreat, audioPanic, delta, playerPos);
                 if (e.sound) {
-                    // The boss heartbeat never drops below half volume while it walks:
-                    // it must always be trackable on the sound stage.
-                    const volumeFloor = e.type === 'boss' ? 0.5 : 0.18;
-                    const farVolume = clamp01(volumeFloor + threat * 0.42 + nearThreat * 0.28 + rearThreat * 0.28);
+                    const farVolume = clamp01(0.18 + threat * 0.42 + nearThreat * 0.28 + rearThreat * 0.28);
                     setSpatialVolume(e.sound, e.cueVolume * farVolume);
                     if (e.sound.source && e.sound.source.playbackRate) {
-                        let rate = e.pitchBase + threat * e.pitchRise * 0.45 + audioPanic * e.pitchRise * 0.85;
-                        // Enrage (damage or time alive) quickens the boss heartbeat — the
-                        // rising pulse is itself the warning that it's getting faster.
-                        if (e.type === 'boss') rate += (e.enrage || 0) * 0.45;
-                        e.sound.source.playbackRate.value = rate;
+                        e.sound.source.playbackRate.value =
+                            e.pitchBase + threat * e.pitchRise * 0.45 + audioPanic * e.pitchRise * 0.85;
                     }
                 }
                 if (e.nearSound) {
@@ -2423,11 +1874,7 @@
                     const p = projectiles[j];
                     if (e.mesh.position.distanceToSquared(p.mesh.position) < hitRadiusSq) {
                         e.health--;
-                        // The boss soaks dozens of hits per second; sparking on every 4th
-                        // keeps the feedback without drowning the frame in particles.
-                        if (e.type !== 'boss' || e.health % 4 === 0) {
-                            createExplosion(p.mesh.position, e.hitColor || 0xff0000);
-                        }
+                        createExplosion(p.mesh.position, e.hitColor || 0xff0000);
                         if (e.health <= 0) {
                             killEnemy(e, i);
                         }
@@ -2582,12 +2029,10 @@
             if (enemyDeathSynth && enemyDeathSynth.triggerRelease) enemyDeathSynth.triggerRelease();
             if (spawnerDeathSynth && spawnerDeathSynth.triggerRelease) spawnerDeathSynth.triggerRelease();
             if (pickupSynth && pickupSynth.triggerRelease) pickupSynth.triggerRelease();
-            if (bossSlamSynth && bossSlamSynth.triggerRelease) bossSlamSynth.triggerRelease();
-            if (bossDeathSynth && bossDeathSynth.triggerRelease) bossDeathSynth.triggerRelease();
+            if (heelSlamSynth && heelSlamSynth.triggerRelease) heelSlamSynth.triggerRelease();
             enemies.forEach(e => {
                 if (e.sound && e.sound.isPlaying) e.sound.stop();
                 if (e.nearSound && e.nearSound.isPlaying) e.nearSound.stop();
-                if (e.roarSound && e.roarSound.isPlaying) e.roarSound.stop();
             });
             earshotEmitters.forEach(s => { if (s.isPlaying) s.stop(); });
         }
@@ -2619,15 +2064,6 @@
                 w.mesh.material.dispose();
             });
 
-            if (wyrm) {
-                if (wyrm.sound && wyrm.sound.isPlaying) wyrm.sound.stop();
-                if (wyrm.roar && wyrm.roar.isPlaying) wyrm.roar.stop();
-                wyrm.group.traverse(obj => { if (obj.material && obj.material.dispose) obj.material.dispose(); });
-                scene.remove(wyrm.group);
-                wyrm = null;
-            }
-            wyrmPhase = 'none';
-
             enemies.length = 0;
             projectiles.length = 0;
             shards.length = 0;
@@ -2635,13 +2071,6 @@
             floorGlows.length = 0;
             shockwaves.length = 0;
 
-            bossActive = false;
-            if (bossWrapEl) bossWrapEl.style.display = 'none';
-            if (bossAnnounceEl) bossAnnounceEl.classList.remove('show');
-            if (bossAnnounceTimer) {
-                clearTimeout(bossAnnounceTimer);
-                bossAnnounceTimer = null;
-            }
         }
 
         function triggerGameOver() {
@@ -2742,10 +2171,7 @@
             heelArmedClicked = false;
             dropUsed = false;
             suppressHeelCharge = false;
-            enemiesAreFeral = false;
             if (playerLight) { playerLight.distance = 50; playerLight.intensity = 1; }
-            bossNumber = 0;
-            nextBossTime = bossIntervalTime;
             lastSpawnTime = performance.now();
             lastShotTime = 0;
             lastTime = performance.now();
@@ -2772,15 +2198,9 @@
                 gameTime += delta;
                 timerEl.innerText = gameTime.toFixed(4);
 
-                // The boss arrives on schedule — but only one at a time.
-                if (!bossActive && gameTime >= nextBossTime) spawnWyrm();
-
-                // Handle Spawning - ramp up difficulty over time. Trash thins out while a
-                // boss walks so the fight stays readable.
-                // While the WYRM holds the arena the swarm stops entirely - it supplies its own.
-                // That silence is the set-piece.
+                // Handle Spawning - ramp up difficulty over time.
                 const spawnRate = currentSpawnInterval();
-                if (!bossActive && timeNow - lastSpawnTime > spawnRate) {
+                if (timeNow - lastSpawnTime > spawnRate) {
                     spawnEnemy(); // type defaults to chooseEnemyType()
                     lastSpawnTime = timeNow;
                 }
@@ -2796,7 +2216,6 @@
                 updateEnemies(delta);
                 updateHeelCharge(delta);
                 updateEarshot(delta);
-                updateWyrm(delta);
                 updateShockwaves(delta);
                 updateShards(delta);
                 updateFloorGlows(delta);
