@@ -178,8 +178,8 @@ try {
       visible: [...document.querySelectorAll("[data-catalog-game]")].filter((item) => !item.hidden).map((item) => item.dataset.catalogGame),
       query: location.search,
     }));
-    check(horror.status === "Showing 6 worlds.", `Horror filter status failed: ${horror.status}`);
-    check(horror.visible.join(",") === "eaten-path,uninvited,marrow,behind-you,still,the-lag", `Horror filter results failed: ${horror.visible.join(",")}`);
+    check(horror.status === "Showing 7 worlds.", `Horror filter status failed: ${horror.status}`);
+    check(horror.visible.join(",") === "eaten-path,uninvited,marrow,behind-you,still,the-lag,fetch", `Horror filter results failed: ${horror.visible.join(",")}`);
     check(horror.query === "?filter=horror", `Horror filter URL failed: ${horror.query}`);
     report.interactions.filters = { ...horror, errors: finishErrors() };
     await context.close();
