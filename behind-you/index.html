@@ -227,6 +227,7 @@
             <div id="start-screen" class="screen">
                 <h1 class="text-6xl font-bold mb-4 tracking-widest" style="color: #f22; text-shadow: 0 0 20px #f00;">BEHIND YOU</h1>
             <p class="stat-line">Best <span id="start-best">0.0000</span> / Hell Held <span class="achievement-target">666.6660</span></p>
+            <p class="stat-line">WASD / Mouse / Space &mdash; when your light swells, jump</p>
             <p id="desktop-note" class="stat-line hidden">Desktop with a mouse &amp; keyboard required.</p>
             <button id="start-btn">Click to Enter</button>
         </div>
@@ -271,10 +272,10 @@
         // --- Upgrades that answer the real failure: not turning around in time -------------
         // Shards stop buying damage (enemies already die instantly) and start buying WARNING,
         // TIME, and an ANSWER for when you turn too late.
-        const earshotThreshold = 40;    // hear what is behind you, precisely
-        const heelfallThreshold = 140;  // an answer when something is already on you
-        const undertowThreshold = 320;  // the ground you built starts costing them time
-        const hungerThreshold = 600;    // and from here the answer never stops growing
+        // Reachable inside the first minute — an upgrade you never see is not an upgrade.
+        const earshotThreshold = 12;    // hear what is behind you, precisely
+        const heelfallThreshold = 45;   // an answer when something is already on you
+        const hungerThreshold = 200;    // and from here the answer never stops growing
 
         let heelCharge = 0;             // 0..1, armed by killing things that are close
         let heelArmedClicked = false;   // one-shot cue when it reaches full
@@ -283,7 +284,6 @@
 
         function hasEarshot() { return shardCount >= earshotThreshold; }
         function hasHeelfall() { return shardCount >= heelfallThreshold; }
-        function hasUndertow() { return shardCount >= undertowThreshold; }
         let audioListener, enemyAudioBuffers;
         
         // Game State
@@ -1100,10 +1100,19 @@
         const chaserEyeGeo = new THREE.SphereGeometry(0.22, 8, 6);
         const chaserMawGeo = new THREE.BoxGeometry(0.7, 0.16, 0.08);
         const enemyMat = new THREE.MeshLambertMaterial({
-            color: 0xff0000, 
+            color: 0xff0000,
             emissive: 0x550000,
             fog: false
         });
+        // What crawls out after a WYRM has died. Paler, hotter and spiked - the silhouette
+        // changes as well as the colour, so the escalation reads without relying on hue.
+        const feralMat = new THREE.MeshLambertMaterial({
+            color: 0xf5f0ff,
+            emissive: 0x8899cc,
+            fog: false
+        });
+        const feralSpikeGeo = new THREE.ConeGeometry(0.22, 1.5, 4);
+        const feralSpikeMat = new THREE.MeshLambertMaterial({ color: 0xdfe4ff, emissive: 0x556699, fog: false });
         const spawnerMat = new THREE.MeshLambertMaterial({
             color: 0x4b0015,
             emissive: 0x300012,
@@ -1166,6 +1175,18 @@
                 addEnemyPart(enemy, chaserMawGeo, chaserMawMat, part => {
                     part.position.set(0, -0.42, -0.86);
                 }, 'maw');
+
+                // Post-WYRM the swarm comes back wrong: a crown of spikes changes the
+                // silhouette, so you can tell at a glance even in the dark.
+                if (enemiesAreFeral && type === 'chaser') {
+                    [[0, 1.05, 0], [-0.75, 0.5, 0.4], [0.75, 0.5, 0.4], [0, 0.6, -0.95]].forEach(p => {
+                        addEnemyPart(enemy, feralSpikeGeo, feralSpikeMat, part => {
+                            part.position.set(p[0], p[1], p[2]);
+                            part.lookAt(p[0] * 3, p[1] * 3 + 1, p[2] * 3);
+                            part.rotateX(Math.PI / 2);
+                        }, 'spike');
+                    });
+                }
             }
         }
 
@@ -1255,7 +1276,7 @@
             return {
                 type: 'chaser',
                 geometry: enemyGeo,
-                material: enemyMat,
+                material: enemiesAreFeral ? feralMat : enemyMat,
                 y: 1.55 + Math.random() * 0.85,
                 scale: 0.8 + Math.random() * 0.6,
                 shape: { x: 1, y: 1, z: 1 },
@@ -1741,6 +1762,297 @@
             }
         }
 
+        // --- THE WYRM -------------------------------------------------------------------
+        // The boss set-piece. Everything stops, the ground shakes, and a long serpent bursts out
+        // of the arena. It swims in arcs, spitting enemies at you, and the only thing that can
+        // hurt it is a plate on its BACK - so you have to work around behind it while it is
+        // trying to face you. Kill it and it roars and is swallowed by the ground again.
+        const wyrmSegmentCount = 16;
+        const wyrmTrailStride = 5;      // history frames between segments
+        let wyrm = null;
+        let wyrmPhase = 'none';         // none | hush | rising | fighting | dying
+        let wyrmPhaseUntil = 0;
+        let enemiesAreFeral = false;    // set once a wyrm has been killed
+
+        const wyrmHeadGeo = new THREE.IcosahedronGeometry(2.6, 0);
+        const wyrmBodyGeo = new THREE.IcosahedronGeometry(2.0, 0);
+        const wyrmFinGeo = new THREE.ConeGeometry(0.5, 2.6, 4);
+        const wyrmWeakGeo = new THREE.OctahedronGeometry(1.5, 0);
+        const wyrmJawGeo = new THREE.ConeGeometry(0.7, 2.2, 4);
+
+        function makeWyrmMaterial() {
+            // Bright enough to read as a silhouette against a black arena from across the field.
+            return new THREE.MeshLambertMaterial({ color: 0x7b4a9a, emissive: 0x4a2068, fog: false });
+        }
+
+        function spawnWyrm() {
+            bossNumber++;
+            bossActive = true;
+            wyrmPhase = 'hush';
+            wyrmPhaseUntil = gameTime + 2.6;   // the arena goes quiet before it arrives
+
+            // Clear the field: the set-piece needs the stage to itself.
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                if (e.sound && e.sound.isPlaying) e.sound.stop();
+                if (e.nearSound && e.nearSound.isPlaying) e.nearSound.stop();
+                if (e.roarSound && e.roarSound.isPlaying) e.roarSound.stop();
+                scene.remove(e.mesh);
+                disposeEnemyMaterials(e.mesh);
+                enemies.splice(i, 1);
+            }
+
+            const group = new THREE.Group();
+            const segments = [];
+            for (let i = 0; i < wyrmSegmentCount; i++) {
+                const isHead = i === 0;
+                const taper = isHead ? 1 : 1 - (i / wyrmSegmentCount) * 0.55;
+                const mesh = new THREE.Mesh(isHead ? wyrmHeadGeo : wyrmBodyGeo, makeWyrmMaterial());
+                mesh.scale.setScalar(taper);
+                group.add(mesh);
+                // Dorsal fins read the spine's twist from any angle, so you can see which way
+                // its back is facing without relying on colour.
+                if (!isHead && i % 2 === 0) {
+                    const fin = new THREE.Mesh(wyrmFinGeo, makeWyrmMaterial());
+                    fin.position.y = 1.9 * taper;
+                    mesh.add(fin);
+                }
+                if (isHead) {
+                    [-0.8, 0.8].forEach(sx => {
+                        const jaw = new THREE.Mesh(wyrmJawGeo, makeWyrmMaterial());
+                        jaw.position.set(sx, -0.5, -2.2);
+                        jaw.rotation.x = Math.PI / 2;
+                        mesh.add(jaw);
+                    });
+                }
+                segments.push(mesh);
+            }
+
+            // The weak point: a bright plate riding the middle of its back.
+            const weak = new THREE.Mesh(wyrmWeakGeo, new THREE.MeshBasicMaterial({
+                color: 0xfff0c0, transparent: true, opacity: 0.95, fog: false
+            }));
+            segments[7].add(weak);
+            weak.position.y = 2.0;
+
+            scene.add(group);
+
+            let sound = null, roar = null;
+            if (audioListener && enemyAudioBuffers) {
+                sound = new THREE.PositionalAudio(audioListener);
+                sound.setBuffer(enemyAudioBuffers.boss);
+                sound.setRefDistance(30);
+                sound.setRolloffFactor(0.9);
+                sound.setDistanceModel('exponential');
+                sound.panner.panningModel = 'HRTF';
+                sound.setLoop(true);
+                setSpatialVolume(sound, 1);
+                segments[0].add(sound);
+                sound.play();
+                if (enemyAudioBuffers.bossRoar) {
+                    roar = new THREE.PositionalAudio(audioListener);
+                    roar.setBuffer(enemyAudioBuffers.bossRoar);
+                    roar.setRefDistance(34);
+                    roar.setRolloffFactor(0.85);
+                    roar.setDistanceModel('exponential');
+                    roar.panner.panningModel = 'HRTF';
+                    setSpatialVolume(roar, 1);
+                    segments[0].add(roar);
+                }
+            }
+
+            const angle = Math.random() * Math.PI * 2;
+            wyrm = {
+                group, segments, weak, sound, roar,
+                health: 26 + 10 * (bossNumber - 1),
+                maxHealth: 26 + 10 * (bossNumber - 1),
+                headPos: new THREE.Vector3(
+                    camera.position.x + Math.cos(angle) * 34, -26,
+                    camera.position.z + Math.sin(angle) * 34),
+                heading: new THREE.Vector3(-Math.cos(angle), 0, -Math.sin(angle)),
+                trail: [],
+                nextSpit: gameTime + 4,
+                surfaceUntil: gameTime + 14,
+                diveUntil: 0,
+                hitFlash: 0
+            };
+            for (let i = 0; i < wyrmSegmentCount * wyrmTrailStride + 4; i++) {
+                wyrm.trail.push(wyrm.headPos.clone());
+            }
+
+            if (bossNameEl) bossNameEl.textContent = 'THE WYRM ' + romanNumeral(bossNumber);
+            if (bossFillEl) bossFillEl.style.width = '100%';
+            if (bossWrapEl) bossWrapEl.style.display = 'block';
+            if (bossAnnounceEl) {
+                bossAnnounceEl.firstChild.textContent = 'THE WYRM ' + romanNumeral(bossNumber);
+                const sub = bossAnnounceEl.querySelector('.sub');
+                if (sub) sub.textContent = 'Its back is soft';
+                bossAnnounceEl.classList.add('show');
+                if (bossAnnounceTimer) clearTimeout(bossAnnounceTimer);
+                bossAnnounceTimer = setTimeout(() => {
+                    bossAnnounceEl.classList.remove('show');
+                    bossAnnounceTimer = null;
+                }, 2600);
+            }
+        }
+
+        function killWyrm() {
+            if (!wyrm) return;
+            wyrmPhase = 'dying';
+            wyrmPhaseUntil = gameTime + 2.2;
+            if (wyrm.sound && wyrm.sound.isPlaying) wyrm.sound.stop();
+            if (wyrm.roar) { if (wyrm.roar.isPlaying) wyrm.roar.stop(); wyrm.roar.play(); }
+            triggerSynth(bossDeathSynth, "C1", "1n");
+            for (let i = 0; i < wyrm.segments.length; i += 2) {
+                createExplosion(wyrm.segments[i].getWorldPosition(new THREE.Vector3()), 0xffcc55);
+            }
+            // Its grave is the biggest hill in the arena.
+            raiseGround(wyrm.segments[0].position.x, wyrm.segments[0].position.z, 22, 38);
+            spawnShards(wyrm.segments[0].position.clone(), 40 + 10 * bossNumber);
+            // Everything that comes after has seen what you did.
+            enemiesAreFeral = true;
+            if (bossWrapEl) bossWrapEl.style.display = 'none';
+        }
+
+        function disposeWyrm() {
+            if (!wyrm) return;
+            if (wyrm.sound && wyrm.sound.isPlaying) wyrm.sound.stop();
+            if (wyrm.roar && wyrm.roar.isPlaying) wyrm.roar.stop();
+            wyrm.group.traverse(obj => {
+                if (obj.material && obj.material.dispose) obj.material.dispose();
+            });
+            scene.remove(wyrm.group);
+            wyrm = null;
+            wyrmPhase = 'none';
+            bossActive = false;
+            nextBossTime = gameTime + bossIntervalTime;
+            if (bossWrapEl) bossWrapEl.style.display = 'none';
+        }
+
+        const _wyrmTmp = new THREE.Vector3();
+        const _wyrmToPlayer = new THREE.Vector3();
+
+        function updateWyrm(delta) {
+            if (!wyrm) return;
+
+            if (wyrmPhase === 'hush') {
+                // Two and a half seconds of nothing. The quiet IS the telegraph.
+                if (gameTime >= wyrmPhaseUntil) {
+                    wyrmPhase = 'rising';
+                    wyrmPhaseUntil = gameTime + 1.6;
+                    triggerSynth(bossSlamSynth, "C1", "1n");
+                    for (let i = 0; i < 5; i++) {
+                        const a = Math.random() * Math.PI * 2;
+                        createFloorGlow(new THREE.Vector3(
+                            wyrm.headPos.x + Math.cos(a) * 6, 0,
+                            wyrm.headPos.z + Math.sin(a) * 6), 2);
+                    }
+                }
+                return;
+            }
+
+            const target = camera.position;
+            _wyrmToPlayer.copy(target).sub(wyrm.headPos);
+            const distToPlayer = _wyrmToPlayer.length();
+
+            if (wyrmPhase === 'rising') {
+                // Bursting out of the ground.
+                wyrm.headPos.y += 34 * delta;
+                if (wyrm.headPos.y > terrainHeightAt(wyrm.headPos.x, wyrm.headPos.z) + 9) {
+                    wyrmPhase = 'fighting';
+                    wyrm.surfaceUntil = gameTime + 15;
+                }
+            } else if (wyrmPhase === 'dying') {
+                // Swallowed by the ground.
+                wyrm.headPos.y -= 16 * delta;
+                if (gameTime >= wyrmPhaseUntil) { disposeWyrm(); return; }
+            } else {
+                // Swimming: arc toward the player but always overshoot, so it sweeps past and
+                // gives you the window behind it that its back plate lives in.
+                const ground = terrainHeightAt(wyrm.headPos.x, wyrm.headPos.z);
+                const diving = gameTime < wyrm.diveUntil;
+                const wantY = diving ? ground - 14 : ground + 8 + Math.sin(gameTime * 1.3) * 3.5;
+                wyrm.headPos.y += (wantY - wyrm.headPos.y) * Math.min(1, delta * 1.8);
+
+                _wyrmToPlayer.y = 0;
+                if (_wyrmToPlayer.lengthSq() > 0.0001) _wyrmToPlayer.normalize();
+                // Steer, but slowly: its turning circle is what lets you get around it.
+                const turn = diving ? 2.4 : 0.85;
+                wyrm.heading.x += (_wyrmToPlayer.x - wyrm.heading.x) * Math.min(1, delta * turn);
+                wyrm.heading.z += (_wyrmToPlayer.z - wyrm.heading.z) * Math.min(1, delta * turn);
+                wyrm.heading.y = 0;
+                if (wyrm.heading.lengthSq() > 0.0001) wyrm.heading.normalize();
+
+                const speed = diving ? 30 : 16 + (1 - wyrm.health / wyrm.maxHealth) * 8;
+                wyrm.headPos.addScaledVector(wyrm.heading, speed * delta);
+
+                // Periodically dive and re-emerge somewhere else, so the fight keeps resetting.
+                if (!diving && gameTime > wyrm.surfaceUntil) {
+                    wyrm.diveUntil = gameTime + 2.4;
+                    wyrm.surfaceUntil = gameTime + 15;
+                }
+                if (diving && gameTime > wyrm.diveUntil - 0.05) {
+                    const a = Math.random() * Math.PI * 2;
+                    wyrm.headPos.set(target.x + Math.cos(a) * 30, ground - 12, target.z + Math.sin(a) * 30);
+                }
+
+                // It spits the swarm at you rather than fighting alone.
+                if (!diving && gameTime >= wyrm.nextSpit) {
+                    wyrm.nextSpit = gameTime + 3.4 - Math.min(1.6, bossNumber * 0.3);
+                    const origin = wyrm.segments[0].position.clone();
+                    origin.y = terrainHeightAt(origin.x, origin.z);
+                    spawnEnemy('chaser', origin);
+                    spawnEnemy('chaser', origin);
+                    triggerNoise(enemyDeathSynth, "16n");
+                }
+            }
+
+            // Push the head onto the trail and hang the body off it.
+            wyrm.trail.unshift(wyrm.headPos.clone());
+            if (wyrm.trail.length > wyrmSegmentCount * wyrmTrailStride + 4) wyrm.trail.pop();
+            for (let i = 0; i < wyrm.segments.length; i++) {
+                const p = wyrm.trail[Math.min(wyrm.trail.length - 1, i * wyrmTrailStride)];
+                const seg = wyrm.segments[i];
+                seg.position.copy(p);
+                const ahead = wyrm.trail[Math.max(0, i * wyrmTrailStride - wyrmTrailStride)];
+                if (ahead) seg.lookAt(ahead);
+            }
+
+            wyrm.hitFlash = Math.max(0, wyrm.hitFlash - delta * 3);
+            const heat = 0.5 + wyrm.hitFlash;
+            wyrm.weak.material.opacity = 0.6 + Math.sin(gameTime * 9) * 0.15 + wyrm.hitFlash * 0.3;
+            wyrm.weak.scale.setScalar(1 + Math.sin(gameTime * 9) * 0.12 + wyrm.hitFlash * 0.5);
+            wyrm.segments.forEach(s => setEnemyGlow(s, heat));
+
+            if (wyrmPhase !== 'fighting') return;
+
+            // Touching any part of it kills you.
+            for (let i = 0; i < wyrm.segments.length; i++) {
+                const seg = wyrm.segments[i];
+                if (seg.position.y < terrainHeightAt(seg.position.x, seg.position.z) - 1) continue;
+                if (seg.position.distanceTo(camera.position) < (i === 0 ? 3.6 : 2.9)) {
+                    triggerGameOver();
+                    return;
+                }
+            }
+
+            // Only the plate on its back takes damage.
+            const weakPos = wyrm.weak.getWorldPosition(_wyrmTmp);
+            for (let j = projectiles.length - 1; j >= 0; j--) {
+                const p = projectiles[j];
+                if (weakPos.distanceTo(p.mesh.position) < 2.4) {
+                    wyrm.health--;
+                    wyrm.hitFlash = 1;
+                    createExplosion(p.mesh.position, 0xffe08a);
+                    triggerNoise(enemyDeathSynth, "16n");
+                    scene.remove(p.mesh);
+                    projectiles.splice(j, 1);
+                    if (bossFillEl) bossFillEl.style.width = Math.max(0, (wyrm.health / wyrm.maxHealth) * 100) + '%';
+                    if (wyrm.health <= 0) { killWyrm(); return; }
+                }
+            }
+        }
+
         // --- EARSHOT --------------------------------------------------------------------
         // The game is called Behind You and you die by turning around too late. Every enemy loop
         // lives between 30Hz and 430Hz; the 2-6kHz band the outer ear actually uses to tell front
@@ -1847,7 +2159,7 @@
                            { friendly: true, speed: 20, maxRadius, band: 1.6 });
 
             // The ground remembers this too: a low berm the crowd now has to climb (UNDERTOW).
-            if (hasUndertow()) {
+            {
                 for (let i = 0; i < 6; i++) {
                     const a = (i / 6) * Math.PI * 2;
                     raiseGround(px + Math.cos(a) * 7.5, pz + Math.sin(a) * 7.5, 2.4, 8);
@@ -2054,18 +2366,17 @@
                     }
                     if (bossFillEl) bossFillEl.style.width = Math.max(0, (e.health / e.maxHealth) * 100) + '%';
                 } else {
-                    // UNDERTOW: climbing costs them. Every hill you built out of the things you
-                    // killed now buys you the seconds you need to turn around. The boss has mass
-                    // and ignores slope, so high ground is never a solved problem.
+                    // Climbing always costs them - a permanent rule of the world, not an upgrade.
+                    // Every hill your kills built is fortification: high ground buys you the
+                    // seconds you need to turn around. The boss has mass and ignores slope, so
+                    // a hilltop is never a solved problem.
+                    const aheadX = e.mesh.position.x + dir.x * 1.4;
+                    const aheadZ = e.mesh.position.z + dir.z * 1.4;
+                    const rise = terrainHeightAt(aheadX, aheadZ) -
+                                 terrainHeightAt(e.mesh.position.x, e.mesh.position.z);
                     let slopeMul = 1;
-                    if (hasUndertow()) {
-                        const aheadX = e.mesh.position.x + dir.x * 1.4;
-                        const aheadZ = e.mesh.position.z + dir.z * 1.4;
-                        const rise = terrainHeightAt(aheadX, aheadZ) -
-                                     terrainHeightAt(e.mesh.position.x, e.mesh.position.z);
-                        if (rise > 0.75) slopeMul = 0.55;
-                        else if (rise > 0.35) slopeMul = 0.78;
-                    }
+                    if (rise > 0.6) slopeMul = 0.45;
+                    else if (rise > 0.25) slopeMul = 0.7;
                     e.mesh.position.addScaledVector(dir, e.speed * slopeMul * delta);
                 }
                  
@@ -2308,6 +2619,15 @@
                 w.mesh.material.dispose();
             });
 
+            if (wyrm) {
+                if (wyrm.sound && wyrm.sound.isPlaying) wyrm.sound.stop();
+                if (wyrm.roar && wyrm.roar.isPlaying) wyrm.roar.stop();
+                wyrm.group.traverse(obj => { if (obj.material && obj.material.dispose) obj.material.dispose(); });
+                scene.remove(wyrm.group);
+                wyrm = null;
+            }
+            wyrmPhase = 'none';
+
             enemies.length = 0;
             projectiles.length = 0;
             shards.length = 0;
@@ -2421,6 +2741,8 @@
             heelCharge = 0;
             heelArmedClicked = false;
             dropUsed = false;
+            suppressHeelCharge = false;
+            enemiesAreFeral = false;
             if (playerLight) { playerLight.distance = 50; playerLight.intensity = 1; }
             bossNumber = 0;
             nextBossTime = bossIntervalTime;
@@ -2450,13 +2772,15 @@
                 gameTime += delta;
                 timerEl.innerText = gameTime.toFixed(4);
 
-                // The HELLWARDEN arrives on schedule — but only one at a time.
-                if (!bossActive && gameTime >= nextBossTime) spawnBoss();
+                // The boss arrives on schedule — but only one at a time.
+                if (!bossActive && gameTime >= nextBossTime) spawnWyrm();
 
                 // Handle Spawning - ramp up difficulty over time. Trash thins out while a
                 // boss walks so the fight stays readable.
-                const spawnRate = currentSpawnInterval() * (bossActive ? 1.7 : 1);
-                if (timeNow - lastSpawnTime > spawnRate) {
+                // While the WYRM holds the arena the swarm stops entirely - it supplies its own.
+                // That silence is the set-piece.
+                const spawnRate = currentSpawnInterval();
+                if (!bossActive && timeNow - lastSpawnTime > spawnRate) {
                     spawnEnemy(); // type defaults to chooseEnemyType()
                     lastSpawnTime = timeNow;
                 }
@@ -2472,6 +2796,7 @@
                 updateEnemies(delta);
                 updateHeelCharge(delta);
                 updateEarshot(delta);
+                updateWyrm(delta);
                 updateShockwaves(delta);
                 updateShards(delta);
                 updateFloorGlows(delta);
