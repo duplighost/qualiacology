@@ -266,6 +266,24 @@
         let terrainOffsetX = 0, terrainOffsetZ = 0;
         let terrainDirty = false; // terrain buffers changed this frame; upload once
         let playerGroundY = 0; // smoothed ground height under the player
+        let playerLight = null; // the lamp on the player's head; also reads out heel charge
+
+        // --- Upgrades that answer the real failure: not turning around in time -------------
+        // Shards stop buying damage (enemies already die instantly) and start buying WARNING,
+        // TIME, and an ANSWER for when you turn too late.
+        const earshotThreshold = 40;    // hear what is behind you, precisely
+        const heelfallThreshold = 140;  // an answer when something is already on you
+        const undertowThreshold = 320;  // the ground you built starts costing them time
+        const hungerThreshold = 600;    // and from here the answer never stops growing
+
+        let heelCharge = 0;             // 0..1, armed by killing things that are close
+        let heelArmedClicked = false;   // one-shot cue when it reaches full
+        let dropUsed = false;           // airborne slam is once per jump
+        let suppressHeelCharge = false; // a heelfall's own kills must not re-arm it
+
+        function hasEarshot() { return shardCount >= earshotThreshold; }
+        function hasHeelfall() { return shardCount >= heelfallThreshold; }
+        function hasUndertow() { return shardCount >= undertowThreshold; }
         let audioListener, enemyAudioBuffers;
         
         // Game State
@@ -421,9 +439,16 @@
 
         function nextSynthTime() {
             const now = Tone.now();
-            // Space out triggers by 12ms, but never let the shared schedule run more than
-            // 50ms ahead of real time, so a burst of SFX can't add creeping latency.
-            nextSynthStart = Math.max(now, Math.min(nextSynthStart + 0.012, now + 0.05));
+            // Space out triggers by 12ms and never let the shared schedule run more than 50ms
+            // ahead of real time, so a burst of SFX cannot add creeping latency. The final term
+            // guarantees the timestamp still strictly increases: when a dozen things die on one
+            // frame (a heelfall), the 50ms cap would otherwise hand Tone a repeated start time
+            // and it throws.
+            nextSynthStart = Math.max(
+                now,
+                Math.min(nextSynthStart + 0.012, now + 0.05),
+                nextSynthStart + 0.0005
+            );
             return nextSynthStart;
         }
 
@@ -678,6 +703,7 @@
                         const grind = Math.sin(t * (30 + Math.sin(t * 5.2) * 6) * Math.PI * 2) * 0.16;
                         return (sub + grind) * 0.6;
                     }),
+                    // EARSHOT lives in its own high band; see initEarshot below.
                     bossClose: buildAudioBuffer(audioCtx, 0.8, t => {
                         const breath = 0.5 + Math.sin(t * 1.25 * Math.PI * 2) * 0.14;
                         const sub = Math.sin(t * 34 * Math.PI * 2) * 0.55;
@@ -695,6 +721,7 @@
                         return (growl + rasp + teeth) * 0.9;
                     })
                 };
+                initEarshot(audioCtx);
             }
         }
 
@@ -731,8 +758,8 @@
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
             scene.add(ambientLight);
 
-            const pointLight = new THREE.PointLight(0xff0000, 1, 50);
-            camera.add(pointLight); // Light follows player
+            playerLight = new THREE.PointLight(0xff0000, 1, 50);
+            camera.add(playerLight); // Light follows player; also reads out heel charge
             scene.add(camera);
 
             // Reusable glow lights (see createFloorGlow). Kept in the scene, toggled on demand,
@@ -832,9 +859,16 @@
                 case 'KeyD': keys.d = true; break;
                 case 'Space':
                     event.preventDefault();
+                    if (event.repeat) break;
                     if (isPlaying && isGrounded) {
                         playerVelocity.y = jumpVelocity;
                         isGrounded = false;
+                        dropUsed = false;
+                    } else if (isPlaying && !isGrounded && !dropUsed && hasHeelfall() && heelCharge >= 0.999) {
+                        // Second press in the air drives you down NOW, so the ring goes off where
+                        // you chose rather than wherever the arc happened to drop you.
+                        dropUsed = true;
+                        playerVelocity.y = -34;
                     }
                     break;
             }
@@ -1566,6 +1600,21 @@
 
         function killEnemy(enemy, index) {
             const position = enemy.mesh.position.clone();
+            // Arming HEELFALL: kills made CLOSE are worth nearly three times a safe one, so the
+            // moment you are about to be overrun is the moment the answer finishes loading.
+            // Kills made BY a heelfall are worth nothing, or it would refill itself from its own
+            // wreckage and become a spammable screen clear.
+            if (hasHeelfall() && !suppressHeelCharge) {
+                // Horizontal distance only: "close" means close on the floor. Enemies float at
+                // terrain height + baseY, so on a tall hill a 3D measure would call a thing at
+                // your feet distant.
+                const cdx = position.x - camera.position.x;
+                const cdz = position.z - camera.position.z;
+                const closeSq = cdx * cdx + cdz * cdz;
+                const gain = enemy.type === 'boss' ? 1 : enemy.type === 'spawner' ? 0.5
+                           : (closeSq < 81 ? 0.34 : 0.12);
+                heelCharge = Math.min(1, heelCharge + gain);
+            }
             createExplosion(position, enemy.deathColor || 0xff0000);
             // The ground remembers. A HELLWARDEN leaves a hill; a chaser leaves a swell.
             // This runs before the drop so the shards land on the new ground, not inside it.
@@ -1597,9 +1646,13 @@
         // slam can clear the crowd.
         const shockwaveGeo = new THREE.RingGeometry(0.88, 1, 64);
 
-        function spawnShockwave(position) {
+        // opts.friendly rings come from the player's heelfall: they shred the crowd instead of
+        // the player, and are drawn paler so the two are never confused at a glance.
+        function spawnShockwave(position, opts) {
+            const o = opts || {};
+            const friendly = !!o.friendly;
             const mat = new THREE.MeshBasicMaterial({
-                color: 0xff3a00,
+                color: friendly ? 0xffd8a0 : 0xff3a00,
                 transparent: true,
                 opacity: 0.85,
                 side: THREE.DoubleSide,
@@ -1619,11 +1672,16 @@
             mesh.scale.setScalar(0.1);
             scene.add(mesh);
             shockwaves.push({
-                mesh, x: position.x, z: position.z, radius: 0.1, speed: 13, maxRadius: 30,
+                mesh, x: position.x, z: position.z, radius: 0.1,
+                speed: o.speed || 13,
+                maxRadius: o.maxRadius || 30,
+                band: o.band || 1.15,
+                friendly,
                 basePos: new Float32Array(geo.attributes.position.array) // unscaled ring lattice
             });
-            triggerSynth(bossSlamSynth, "C1", "2n");
-            createFloorGlow(position, 1.8);
+            if (friendly) triggerSynth(bossSlamSynth, "G1", "16n", 0.5);
+            else triggerSynth(bossSlamSynth, "C1", "2n");
+            createFloorGlow(position, friendly ? 1.3 : 1.8);
         }
 
         function updateShockwaves(delta) {
@@ -1658,24 +1716,170 @@
                 }
                 pos.needsUpdate = true;
 
-                // Player: the ring only bites ankles. Airborne = safe.
-                const dx = camera.position.x - w.x;
-                const dz = camera.position.z - w.z;
-                const playerDist = Math.sqrt(dx * dx + dz * dz);
-                if (isGrounded && Math.abs(playerDist - w.radius) < 1.15) {
-                    triggerGameOver();
-                    return;
+                // Player: the ring only bites ankles. Airborne = safe. Your own ring never bites.
+                if (!w.friendly) {
+                    const dx = camera.position.x - w.x;
+                    const dz = camera.position.z - w.z;
+                    const playerDist = Math.sqrt(dx * dx + dz * dz);
+                    if (isGrounded && Math.abs(playerDist - w.radius) < w.band) {
+                        triggerGameOver();
+                        return;
+                    }
                 }
 
                 // Lesser enemies caught by the ring are destroyed (the boss is immune).
+                suppressHeelCharge = w.friendly;
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     const e = enemies[j];
                     if (e.type === 'boss') continue;
                     const ex = e.mesh.position.x - w.x;
                     const ez = e.mesh.position.z - w.z;
                     const enemyDist = Math.sqrt(ex * ex + ez * ez);
-                    if (Math.abs(enemyDist - w.radius) < 1.3) killEnemy(e, j);
+                    if (Math.abs(enemyDist - w.radius) < w.band + 0.15) killEnemy(e, j);
                 }
+                suppressHeelCharge = false;
+            }
+        }
+
+        // --- EARSHOT --------------------------------------------------------------------
+        // The game is called Behind You and you die by turning around too late. Every enemy loop
+        // lives between 30Hz and 430Hz; the 2-6kHz band the outer ear actually uses to tell front
+        // from back is completely empty. EARSHOT puts a sharp tick there, HRTF-panned from the
+        // thing itself, ONLY for threats behind you, ticking faster the closer they get. It does
+        // not make the mix busier - it uses a channel the mix never occupied, and it is silent
+        // whenever nothing is at your back.
+        const earshotEmitters = [];
+        const earshotCarriers = [];
+        let earshotBuffer = null;
+        let earshotBudget = 0;        // token bucket, refilled per frame, capped at 8/sec
+        let nextEarshotTick = 0;
+
+        function initEarshot(audioCtx) {
+            earshotBuffer = buildAudioBuffer(audioCtx, 0.05, t => {
+                // 3.2kHz click with a hard exponential decay: a pinna cue, not a tone.
+                return Math.sin(t * 3200 * Math.PI * 2) * Math.exp(-t * 180) * 0.5;
+            });
+            for (let i = 0; i < 6; i++) {
+                const carrier = new THREE.Object3D();
+                const sound = new THREE.PositionalAudio(audioListener);
+                sound.setBuffer(earshotBuffer);
+                sound.setRefDistance(9);
+                sound.setRolloffFactor(1.1);
+                sound.setDistanceModel('exponential');
+                sound.panner.panningModel = 'HRTF';
+                setSpatialVolume(sound, 0.85);
+                carrier.add(sound);
+                scene.add(carrier);
+                earshotCarriers.push(carrier);
+                earshotEmitters.push(sound);
+            }
+        }
+
+        function updateEarshot(delta) {
+            if (!hasEarshot() || !earshotBuffer || !earshotEmitters.length) return;
+            earshotBudget = Math.min(8, earshotBudget + delta * 8);
+            if (gameTime < nextEarshotTick) return;
+
+            // Find the closest thing at your back. rearThreat was already computed this frame.
+            let target = null, best = 0, targetDist = 0;
+            for (let i = 0; i < enemies.length; i++) {
+                const e = enemies[i];
+                const rear = e.rearFactor || 0;
+                if (rear <= 0.15) continue;
+                const dist = e.mesh.position.distanceTo(camera.position);
+                if (dist > 30) continue;
+                const urgency = rear * (1 - dist / 30);
+                if (urgency > best) { best = urgency; target = e; targetDist = dist; }
+            }
+            if (!target) { nextEarshotTick = gameTime + 0.1; return; }
+            if (earshotBudget < 1) return;
+
+            const proximity = 1 - Math.min(1, targetDist / 30);
+            // Closer means faster ticking: the rhythm itself is the distance readout.
+            nextEarshotTick = gameTime + 0.18 + 0.72 * (1 - proximity);
+            earshotBudget -= 1;
+
+            const carrier = earshotCarriers.shift();
+            const sound = earshotEmitters.shift();
+            earshotCarriers.push(carrier);
+            earshotEmitters.push(sound);
+            carrier.position.copy(target.mesh.position);
+            if (sound.isPlaying) sound.stop();
+            setSpatialVolume(sound, 0.55 + proximity * 0.45);
+            sound.play();
+        }
+
+        // --- HEELFALL -------------------------------------------------------------------
+        // The answer for when you turned around too late. Killing things CLOSE to you arms it,
+        // so the situation that kills you is the situation that loads the gun. Jump, land hard,
+        // and the ground throws a ring out from your heels that deletes whatever was on you.
+        function heelfallRadius() {
+            // Never stops growing: past hungerThreshold the answer scales with the crowd that
+            // made it necessary, so the last two hundred seconds still have something to chase.
+            let r = 9;
+            if (shardCount >= hungerThreshold) {
+                let packed = 0;
+                for (let i = 0; i < enemies.length; i++) {
+                    if (enemies[i].type !== 'boss' &&
+                        enemies[i].mesh.position.distanceTo(camera.position) < 13) packed++;
+                }
+                r += Math.min(9, packed * 1.1) + Math.min(6, (shardCount - hungerThreshold) / 900);
+            }
+            return r;
+        }
+
+        function fireHeelfall() {
+            const px = camera.position.x;
+            const pz = camera.position.z;
+            const maxRadius = heelfallRadius();
+
+            // Instant inner clear: anything already inside arm's reach dies on the landing frame.
+            suppressHeelCharge = true;
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                const e = enemies[j];
+                if (e.type === 'boss') continue;
+                const ex = e.mesh.position.x - px;
+                const ez = e.mesh.position.z - pz;
+                if (ex * ex + ez * ez < 9) killEnemy(e, j);
+            }
+            suppressHeelCharge = false;
+            spawnShockwave(new THREE.Vector3(px, 0, pz),
+                           { friendly: true, speed: 20, maxRadius, band: 1.6 });
+
+            // The ground remembers this too: a low berm the crowd now has to climb (UNDERTOW).
+            if (hasUndertow()) {
+                for (let i = 0; i < 6; i++) {
+                    const a = (i / 6) * Math.PI * 2;
+                    raiseGround(px + Math.cos(a) * 7.5, pz + Math.sin(a) * 7.5, 2.4, 8);
+                }
+            }
+        }
+
+        function updateHeelCharge(delta) {
+            if (!hasHeelfall()) return;
+            // It only bleeds away when you are actually safe, so it cannot be banked in open
+            // ground and saved for later — it belongs to the fight that filled it.
+            let nearest = 1e9;
+            for (let i = 0; i < enemies.length; i++) {
+                const dist = enemies[i].mesh.position.distanceTo(camera.position);
+                if (dist < nearest) nearest = dist;
+            }
+            // Only bleeds while you are on the ground and safe. Bleeding mid-jump would disarm
+            // the charge during the very leap you took to spend it.
+            if (isGrounded && nearest > 16) heelCharge = Math.max(0, heelCharge - 0.045 * delta);
+
+            if (heelCharge >= 0.999 && !heelArmedClicked) {
+                heelArmedClicked = true;
+                triggerSynth(pickupSynth, "C5", "64n");
+            } else if (heelCharge < 1) {
+                heelArmedClicked = false;
+            }
+
+            // Readout is the world, not a meter: as the charge fills, the lamp on your head
+            // pushes the dark back. Spending it snaps the world shut again.
+            if (playerLight) {
+                playerLight.distance = 50 + heelCharge * 24;
+                playerLight.intensity = 1 + heelCharge * 0.6;
             }
         }
 
@@ -1734,10 +1938,18 @@
                 // rose underfoot would be cancelled on its first frame, because the eased camera
                 // height still sits below the new surface.
                 if (playerVelocity.y <= 0 && camera.position.y <= groundY + playerEyeHeight) {
+                    const impactVy = playerVelocity.y; // capture before it is zeroed
                     camera.position.y = groundY + playerEyeHeight;
                     playerGroundY = groundY;
                     playerVelocity.y = 0;
                     isGrounded = true;
+                    dropUsed = false;
+                    // Land hard with a full charge and the ground answers.
+                    if (hasHeelfall() && heelCharge >= 0.999 && impactVy <= -8) {
+                        heelCharge = 0;
+                        heelArmedClicked = false;
+                        fireHeelfall();
+                    }
                 }
             } else if (playerGroundY - groundY > 1.2) {
                 // Walked off a ledge - fall properly instead of gliding down the cliff.
@@ -1795,6 +2007,8 @@
                 _toEnemyFlat.y = 0;
                 if (_toEnemyFlat.lengthSq() > 0.0001) _toEnemyFlat.normalize();
                 const rearThreat = clamp01(-_cameraForward.dot(_toEnemyFlat)) * nearThreat;
+                // Raw "is it behind me", independent of range, for EARSHOT to read this frame.
+                e.rearFactor = clamp01(-_cameraForward.dot(_toEnemyFlat));
                 const audioPanic = clamp01(contactThreat + rearThreat * 0.45);
                  
                 const dir = _dir.subVectors(playerPos, e.mesh.position);
@@ -1840,7 +2054,19 @@
                     }
                     if (bossFillEl) bossFillEl.style.width = Math.max(0, (e.health / e.maxHealth) * 100) + '%';
                 } else {
-                    e.mesh.position.addScaledVector(dir, e.speed * delta);
+                    // UNDERTOW: climbing costs them. Every hill you built out of the things you
+                    // killed now buys you the seconds you need to turn around. The boss has mass
+                    // and ignores slope, so high ground is never a solved problem.
+                    let slopeMul = 1;
+                    if (hasUndertow()) {
+                        const aheadX = e.mesh.position.x + dir.x * 1.4;
+                        const aheadZ = e.mesh.position.z + dir.z * 1.4;
+                        const rise = terrainHeightAt(aheadX, aheadZ) -
+                                     terrainHeightAt(e.mesh.position.x, e.mesh.position.z);
+                        if (rise > 0.75) slopeMul = 0.55;
+                        else if (rise > 0.35) slopeMul = 0.78;
+                    }
+                    e.mesh.position.addScaledVector(dir, e.speed * slopeMul * delta);
                 }
                  
                 if (e.type !== 'spawner') {
@@ -2052,6 +2278,7 @@
                 if (e.nearSound && e.nearSound.isPlaying) e.nearSound.stop();
                 if (e.roarSound && e.roarSound.isPlaying) e.roarSound.stop();
             });
+            earshotEmitters.forEach(s => { if (s.isPlaying) s.stop(); });
         }
 
         function clearActiveRun() {
@@ -2077,7 +2304,8 @@
             });
             shockwaves.forEach(w => {
                 scene.remove(w.mesh);
-                w.mesh.material.dispose(); // shockwaveGeo is shared; only the material is per-ring
+                w.mesh.geometry.dispose(); // each ring clones the lattice so it can drape on terrain
+                w.mesh.material.dispose();
             });
 
             enemies.length = 0;
@@ -2190,6 +2418,10 @@
             gameTime = 0;
             shardCount = 0;
             shotCount = 0;
+            heelCharge = 0;
+            heelArmedClicked = false;
+            dropUsed = false;
+            if (playerLight) { playerLight.distance = 50; playerLight.intensity = 1; }
             bossNumber = 0;
             nextBossTime = bossIntervalTime;
             lastSpawnTime = performance.now();
@@ -2238,6 +2470,8 @@
                 updatePhysics(delta);
                 updateProjectiles(delta);
                 updateEnemies(delta);
+                updateHeelCharge(delta);
+                updateEarshot(delta);
                 updateShockwaves(delta);
                 updateShards(delta);
                 updateFloorGlows(delta);
