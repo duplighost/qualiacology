@@ -245,13 +245,14 @@ export function createController(ctx, opts = {}) {
   const input = {
     moveX: 0, moveZ: 0,          // -1..1, right and forward
     lookX: 0, lookY: 0,          // accumulated pointer deltas, drained per frame
-    ads: false, jumpHeld: false,
+    ads: false, jumpHeld: false, fireHeld: false,
     edges: 0,                    // LATCHED above any freeze
     edgesDrained: 0,             // what the last executed substep actually took
     press(action) { this.edges |= action; },
     look(dx, dy) { this.lookX += dx; this.lookY += dy; },
     move(x, z) { this.moveX = clamp(x, -1, 1); this.moveZ = clamp(z, -1, 1); },
     setAds(v) { this.ads = !!v; },
+    setFireHeld(v) { this.fireHeld = !!v; },
     setJumpHeld(v) { this.jumpHeld = !!v; },
     clear() { this.moveX = 0; this.moveZ = 0; this.lookX = 0; this.lookY = 0; this.edges = 0; },
   };
@@ -903,6 +904,12 @@ export function createController(ctx, opts = {}) {
     stats, recoil: recoilStats, kick,
 
     step, update, spawn, hurt,
+    // The trigger, read by the weapons system every frame. It is HELD state, not
+    // the latched edge: the REPEATER is automatic, and an edge can only ever fire
+    // one round per click. The edge still exists alongside it — it is what
+    // survives a hitstop frame so a tap during an impact is not swallowed.
+    get firing() { return input.fireHeld; },
+    get adsHeld() { return input.ads; },
     aimBasis, addAimKick,
     addViewKick: (p, y) => cam.addViewKick(p, y),
     recoilState,
@@ -1056,10 +1063,13 @@ export function create(ctx) {
     });
     on(doc, 'mousedown', e => {
       if (!accepting()) return;
-      if (e.button === 0) player.input.press(EDGE.fire);
+      if (e.button === 0) { player.input.press(EDGE.fire); player.input.setFireHeld(true); }
       if (e.button === 2) player.input.setAds(true);
     });
-    on(doc, 'mouseup', e => { if (e.button === 2) player.input.setAds(false); });
+    on(doc, 'mouseup', e => {
+      if (e.button === 0) player.input.setFireHeld(false);
+      if (e.button === 2) player.input.setAds(false);
+    });
     on(doc, 'contextmenu', e => { if (doc.pointerLockElement === canvas) e.preventDefault(); });
     on(doc, 'pointerlockchange', () => {
       if (doc.pointerLockElement !== canvas) {
@@ -1067,6 +1077,7 @@ export function create(ctx) {
         syncMove();
         player.input.setAds(false);
         player.input.setJumpHeld(false);
+        player.input.setFireHeld(false);
       }
     });
   }

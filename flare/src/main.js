@@ -243,6 +243,17 @@ function frame(now) {
     for (const sys of ctx.systems.values()) if (sys && typeof sys.step === 'function') sys.step(FIXED_DT);
   }
 
+  // THE TRIGGER. The player owns the input; weapons owns the firing. Connecting
+  // them here keeps the controller ignorant of guns and the gun ignorant of the
+  // controller — and it is HELD state, because an edge fires one round per click
+  // and the REPEATER is automatic.
+  const wp = ctx.systems.get('weapons');
+  const pl = ctx.systems.get('player');
+  if (wp && pl && pl.player && typeof wp.setTrigger === 'function') {
+    wp.setTrigger(pl.player.firing);
+    if (typeof wp.setAds === 'function') wp.setAds(pl.player.adsHeld);
+  }
+
   // Presentation. Runs at render dt, which keeps integrating during hitstop so a
   // hit punches instead of stalling (core/time.js, RULE 1).
   for (const sys of ctx.systems.values()) if (sys && typeof sys.update === 'function') sys.update(rdt, ctx.time);
