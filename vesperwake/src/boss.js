@@ -335,40 +335,40 @@ export function drawBoss(ctx, b, env) {
   /* the ground she stands on remembers her */
   glowDot(ctx, cx, feet, 96, '#d9c3ff', 0.12 + Math.sin(b.cycle * 1.6) * 0.03);
 
-  /* bell markers land before the bells do */
+  /* Where a bell is about to fall, the floor is lit. Not a marker ring and a
+   * dashed line — the bells are coming down out of the dark and the light
+   * arrives first, which is a thing that happens rather than a diagram. */
   if (b.marks.length) {
-    ctx.save();
+    const k = smoothstep(tp);
+    const floor = b.arena.y + b.arena.h;
     for (const m of b.marks) {
-      const k = smoothstep(tp);
-      ctx.strokeStyle = withAlpha('#fff2c4', 0.3 + k * 0.55);
-      ctx.lineWidth = 2 + k * 2;
+      glowDot(ctx, m.x, floor - 6, 30 + k * 26, '#ffe9b8', 0.10 + k * 0.30);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      const shaft = ctx.createLinearGradient(0, floor - 150, 0, floor);
+      shaft.addColorStop(0, 'rgba(255,233,184,0)');
+      shaft.addColorStop(1, withAlpha('#ffe9b8', 0.06 + k * 0.16));
+      ctx.fillStyle = shaft;
       ctx.beginPath();
-      ctx.ellipse(m.x, b.arena.y + b.arena.h - 8, 34 - k * 12, 9 - k * 3, 0, 0, TAU);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(m.x, b.arena.y + b.arena.h - 8 - 40 * (1 - k));
-      ctx.lineTo(m.x, b.arena.y + b.arena.h - 10);
-      ctx.setLineDash([4, 6]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.moveTo(m.x - 10, floor - 150);
+      ctx.lineTo(m.x + 10, floor - 150);
+      ctx.lineTo(m.x + 26, floor);
+      ctx.lineTo(m.x - 26, floor);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
-    ctx.restore();
   }
 
-  /* safe pockets in the storm are drawn as clear ground, not as colour */
+  /* The safe places in the storm are where the smoke is not: clear air with
+   * the light still reaching the floor. No outline — you read it the way you
+   * read a gap in fog. */
   if (b.pattern === 'storm' && (b.state === 'tell' || b.state === 'active') && b.pockets.length) {
-    ctx.save();
+    const floor = b.arena.y + b.arena.h;
     for (const pk of b.pockets) {
-      ctx.strokeStyle = 'rgba(246,252,244,.55)';
-      ctx.setLineDash([6, 7]);
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(pk.x, b.arena.y + b.arena.h - 8, pk.r, 14, 0, 0, TAU);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      glowDot(ctx, pk.x, b.arena.y + b.arena.h - 30, pk.r * 0.9, '#eaf7ff', 0.10);
+      glowDot(ctx, pk.x, floor - 40, pk.r * 1.15, '#eaf7ff', 0.16);
+      glowDot(ctx, pk.x, floor - 6, pk.r * 0.8, '#eaf7ff', 0.12);
     }
-    ctx.restore();
   }
 
   ctx.save();
@@ -409,57 +409,9 @@ export function drawBoss(ctx, b, env) {
     ctx.restore();
   }
 
-  /* The sweep: the band it will cover, hatched rather than filled so you can
-   * still see what is standing in it, plus the chain of bells actually
-   * travelling through it. */
-  if (b.pattern === 'sweep' && (b.state === 'tell' || b.state === 'active')) {
-    const k = b.state === 'active' ? 1 : smoothstep(tp);
-    const bx = cx - 190; const by = b.y + 26; const bw = 380; const bh = 34;
-    ctx.save();
-    ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.clip();
-    ctx.globalAlpha = 0.10 + k * 0.16;
-    ctx.fillStyle = '#fff6dd';
-    ctx.fillRect(bx, by, bw, bh);
-    ctx.globalAlpha = 0.16 + k * 0.30;
-    ctx.strokeStyle = '#fffbe8';
-    ctx.lineWidth = 2;
-    for (let hx = bx - bh; hx < bx + bw; hx += 11) {
-      ctx.beginPath();
-      ctx.moveTo(hx, by + bh);
-      ctx.lineTo(hx + bh, by);
-      ctx.stroke();
-    }
-    ctx.restore();
-    ctx.save();
-    ctx.globalAlpha = 0.4 + k * 0.5;
-    ctx.strokeStyle = '#fffbe8'; ctx.lineWidth = 1.2;
-    ctx.strokeRect(bx, by, bw, bh);
-    if (b.state === 'active') {
-      /* the bells themselves, crossing the band */
-      const travel = 1 - clamp(b.timer / (b.activeMax || 1), 0, 1);
-      for (let i = 0; i < 6; i += 1) {
-        const f = clamp(travel * 1.35 - i * 0.06, 0, 1);
-        const px = cx - b.facing * 190 + b.facing * 380 * f;
-        const py = by + bh * 0.5 + Math.sin(f * Math.PI) * 5;
-        glowDot(ctx, px, py, 17, '#ffe9b8', 0.32);
-        ctx.fillStyle = '#c9a962';
-        ctx.beginPath();
-        ctx.moveTo(px, py - 7); ctx.quadraticCurveTo(px + 8, py - 1, px + 6, py + 7);
-        ctx.lineTo(px - 6, py + 7); ctx.quadraticCurveTo(px - 8, py - 1, px, py - 7);
-        ctx.closePath(); ctx.fill();
-      }
-    }
-    ctx.restore();
-  }
-
-  /* the tell tick */
-  if (telling) {
-    ctx.save();
-    ctx.strokeStyle = 'rgba(250,252,240,.9)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(cx, b.y - 22, 11, -Math.PI * 0.5, -Math.PI * 0.5 + TAU * tp);
-    ctx.stroke();
-    ctx.restore();
-  }
+  /* Nothing else is drawn over her. The sweep used to get a hatched band
+   * and every wind-up got a filling tick above her head; both were interface
+   * pasted onto a painting. Her SWEEP pose already fans the bell-chain out to
+   * its full width before it travels, which is the same information.
+   */
 }

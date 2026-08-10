@@ -271,10 +271,10 @@ export class Game {
   }
 
   enemyCommitFlash(e) {
-    /* a hard brightness pop at the instant an attack becomes real: the one
-     * frame that tells a colourblind player "now" as clearly as anyone */
+    /* A hard brightness pop on the sprite at the instant an attack becomes
+     * real: the one frame that says "now" without hue, and without drawing a
+     * ring in the air around it. */
     e.flash = 1;
-    this.particles.ring(e.x + e.w * 0.5, e.y + e.h * 0.5, 'rgba(255,252,232,.9)', 8, 46, 0.20, 3);
   }
 
   onLand(p) {
