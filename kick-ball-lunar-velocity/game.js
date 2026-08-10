@@ -29,7 +29,7 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '3.9.0-places';
+  const GAME_VERSION = '3.10.0-skyfield';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -1227,6 +1227,14 @@
       // reels you to it. Every cliff on the moon becomes a climbing hold.
       minCharge: .45,
     },
+    kite: {
+      id: 'kite',
+      color: 0x8bffca,
+      // Hold the line while falling and the ball drags you forward instead of
+      // down. The sky stops being a set of islands and becomes one place.
+      glideFall: 3.4,
+      glidePull: 26,
+    },
     comet: {
       id: 'comet',
       color: 0xffd66b,
@@ -1250,6 +1258,26 @@
     { id: 'grove', kind: 'grove', name: 'CHIME GROVE', x: -300, z: -170, tint: 0xffd66b },
     { id: 'garden', kind: 'garden', name: 'BLOOM GARDEN', x: 300, z: 140, tint: 0xff7ad0 },
   ];
+
+  // ---- THE SKYFIELD ------------------------------------------------------
+  // The moon came apart and the pieces never fell. Flat-topped slabs hang at
+  // four heights, and every one is walkable ground.
+  //
+  // The load-bearing rule: they catch you from ABOVE and let you through from
+  // BELOW. Kicking the ball straight down while airborne is how a player gets
+  // up here — it is the first move anyone discovers on their own — and solid
+  // undersides would punish exactly that. Same one-way contract the cliff
+  // pillars already use, so it is nothing new to learn.
+  const SKY_TIERS = [
+    { name: 'shelf', height: 36, count: 11, spread: [70, 240], radius: [13, 22] },
+    { name: 'reach', height: 82, count: 9, spread: [55, 195], radius: [11, 19] },
+    { name: 'high', height: 134, count: 6, spread: [40, 140], radius: [10, 16] },
+    { name: 'crown', height: 188, count: 1, spread: [0, 0], radius: [26, 26] },
+  ];
+
+  // What each slab is FOR. Assigned round-robin so no two neighbours share a
+  // job and every tier has a mix of things to do and ways to leave.
+  const SKY_ROLES = ['cache', 'ring', 'vent', 'anchor', 'spinner', 'ring', 'cache', 'anchor'];
 
   function regionShape(region, x, z) {
     const distance = Math.hypot(x - region.x, z - region.z);
@@ -1372,6 +1400,7 @@
       this.makePlaygroundFeatures();
       this.makeLandmarks();
       this.makeRegions();
+      this.makeSkyfield();
       this.makeFirstPersonRig();
       this.makeBallVisual();
       this.makeBeacon();
@@ -2190,6 +2219,228 @@
         if (object.isMesh) { object.renderOrder = 20; object.material.depthTest = false; object.frustumCulled = false; }
       });
     }
+    // ---- THE SKYFIELD ----------------------------------------------------
+    makeSkyfield() {
+      this.sky = [];
+      // A touch of self-illumination so the undersides do not read as flat
+      // black cut-outs. The sun is above them and the player spends a lot of
+      // time underneath looking up; without this they are silhouettes.
+      const rock = new T.MeshStandardMaterial({
+        color: 0x8a919e, roughness: .93, metalness: .05,
+        emissive: 0x1d2333, emissiveIntensity: 1,
+        map: this.materials.regolith.map, bumpMap: this.materials.regolith.bumpMap, bumpScale: .9,
+      });
+      const cap = new T.MeshStandardMaterial({
+        color: 0xb9c0cd, roughness: .9, metalness: .04,
+        map: this.materials.regolith.map, bumpMap: this.materials.regolith.bumpMap, bumpScale: .7,
+      });
+      this.materials.skyRock = rock;
+      // The slabs never move, so all twenty-seven bodies collapse into ONE
+      // draw call and all twenty-seven decks into another. Left as individual
+      // meshes they cost ~165 extra draws and pushed the spawn view to 30 fps
+      // at HIGH, which the adaptive quality system then papered over by
+      // dropping render scale. Merging fixes the cause instead of the symptom.
+      const bodyParts = [];
+      const deckParts = [];
+      let index = 0;
+      for (const tier of SKY_TIERS) {
+        for (let n = 0; n < tier.count; n++) {
+          // Golden angle again: rings of slabs that never line up into a grid,
+          // and never stack directly on top of each other.
+          const angle = index * 2.3999632 + tier.height * .07;
+          const reach = tier.spread[0] + (tier.count > 1 ? (n / (tier.count - 1)) : 0) * (tier.spread[1] - tier.spread[0]);
+          const x = Math.cos(angle) * reach;
+          const z = Math.sin(angle) * reach - 40;
+          const radius = tier.radius[0] + valueNoise(x * .05, z * .05) * (tier.radius[1] - tier.radius[0]);
+          // Float ABOVE everything underneath. Terrain alone is not enough:
+          // the 60 m mesa swallowed two slabs whole (sealing their undersides,
+          // since terrain is not one-way), and the Glassworks spires speared
+          // straight through others. Clear the ground AND any standing
+          // structure by a comfortable margin.
+          const ground = this.sampleTerrainHeight(x, z);
+          let top = Math.max(
+            tier.height + valueNoise(x * .09 + 3, z * .09) * 22 - 8,
+            ground + 26,
+          );
+          for (const solid of this.regionSolids(x, z)) {
+            if (Math.hypot(x - solid.x, z - solid.z) > radius + solid.radius + 4) continue;
+            top = Math.max(top, solid.top + 16);
+          }
+          const slab = new T.Group();
+          this.scene.add(slab);
+          bodyParts.push(this.skySlabGeometry(x, z, top, radius, false));
+          deckParts.push(this.skySlabGeometry(x, z, top, radius, true));
+          const role = tier.name === 'crown' ? 'crown' : SKY_ROLES[index % SKY_ROLES.length];
+          const mark = {
+            id: `sky-${index}`, index, tier: tier.name, role,
+            x, z, top, radius,
+            position: new T.Vector3(x, top, z),
+            group: slab, lit: false, cooldown: 0,
+          };
+          this.buildSkyFurniture(mark);
+          this.sky.push(mark);
+          index++;
+        }
+      }
+      const bodyMesh = new T.Mesh(mergeStaticGeometries(bodyParts), rock);
+      bodyMesh.receiveShadow = true;
+      bodyMesh.frustumCulled = false;
+      this.scene.add(bodyMesh);
+      const deckMesh = new T.Mesh(mergeStaticGeometries(deckParts), cap);
+      deckMesh.receiveShadow = true;
+      deckMesh.frustumCulled = false;
+      this.scene.add(deckMesh);
+      this.skyMeshes = [bodyMesh, deckMesh];
+
+      // Rings hang BETWEEN slabs, not on them: they are the road, and a road
+      // has to be visible from the place you are standing before you jump.
+      this.skyRings = [];
+      for (const mark of this.sky) {
+        if (mark.role !== 'ring') continue;
+        const partner = this.sky.find(other => other !== mark
+          && other.top > mark.top + 12
+          && Math.hypot(other.x - mark.x, other.z - mark.z) < 150);
+        if (!partner) continue;
+        const mid = new T.Vector3((mark.x + partner.x) / 2, (mark.top + partner.top) / 2 + 16, (mark.z + partner.z) / 2);
+        const toward = new T.Vector3(partner.x - mark.x, partner.top - mark.top, partner.z - mark.z).normalize();
+        const ring = new T.Mesh(
+          new T.TorusGeometry(6.5, .75, 10, 40),
+          new T.MeshBasicMaterial({ color: 0x8fe9ff, transparent: true, opacity: .55, blending: T.AdditiveBlending, depthWrite: false }),
+        );
+        ring.position.copy(mid);
+        ring.lookAt(mid.clone().add(toward));
+        this.scene.add(ring);
+        const halo = this.makeGlowSprite(this.glowCyan, 20, .3);
+        halo.position.copy(mid);
+        this.scene.add(halo);
+        this.skyRings.push({ mesh: ring, halo, position: mid, toward, radius: 6.5, cooldown: 0 });
+      }
+    }
+    // Returns world-space geometry for one slab, ready to be merged with the
+    // rest. `deck` picks the flat walkable cap instead of the boulder body.
+    skySlabGeometry(x, z, top, radius, deck) {
+      if (deck) {
+        const cap = new T.CylinderGeometry(radius, radius * .99, .8, 22);
+        cap.translate(x, top - .4, z);
+        return cap;
+      }
+      const depth = 8 + radius * .42;
+      // A broken CHUNK of moon: blunt underside, planed flat on top. A steep
+      // taper turned these into hanging funnels that read as light fittings
+      // rather than rock, so the base stays wide and the noise stays loud.
+      const geometry = new T.CylinderGeometry(radius, radius * .66, depth, 13, 3);
+      const positions = geometry.attributes.position;
+      for (let i = 0; i < positions.count; i++) {
+        const px = positions.getX(i);
+        const py = positions.getY(i);
+        const pz = positions.getZ(i);
+        if (py > depth * .42) continue; // keep the top rim crisp and walkable
+        const wobble = 1 + valueNoise(px * .26 + x, pz * .26 + z) * .62;
+        positions.setX(i, px * wobble);
+        positions.setZ(i, pz * wobble);
+        positions.setY(i, py - Math.abs(valueNoise(px * .17, pz * .17)) * 5.2);
+      }
+      geometry.computeVertexNormals();
+      geometry.translate(x, top - depth / 2, z);
+      return geometry;
+    }
+    // One job per slab, and the job is legible from the deck you land on.
+    buildSkyFurniture(mark) {
+      const group = mark.group;
+      // Every slab carries a plinth that lights the first time you stand on
+      // it. Unlit versus lit is brightness and motion, never colour, and the
+      // count of lit plinths across the sky is the whole progress display.
+      const plinth = new T.Mesh(
+        new T.CylinderGeometry(.8, 1.3, 3.2, 6),
+        new T.MeshStandardMaterial({ color: 0x1b1f2b, emissive: 0x2f6ea8, emissiveIntensity: .35, roughness: .4, metalness: .7 }),
+      );
+      plinth.position.set(mark.x, mark.top + 1.6, mark.z);
+      group.add(plinth);
+      const flame = new T.Mesh(
+        new T.OctahedronGeometry(.85, 0),
+        new T.MeshStandardMaterial({ color: 0xfff3c4, emissive: 0xffd66b, emissiveIntensity: .2, roughness: .3, metalness: .2 }),
+      );
+      flame.position.set(mark.x, mark.top + 4.1, mark.z);
+      group.add(flame);
+      mark.plinth = plinth;
+      mark.flame = flame;
+
+      if (mark.role === 'cache') {
+        // A knot of crystal to smash. Pure toy, instant payoff.
+        mark.cache = [];
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * TAU + mark.index;
+          const cx = mark.x + Math.cos(a) * mark.radius * .55;
+          const cz = mark.z + Math.sin(a) * mark.radius * .55;
+          const shard = new T.Mesh(
+            new T.OctahedronGeometry(1.5, 0),
+            new T.MeshStandardMaterial({ color: 0x2a4a63, emissive: 0x54d8ff, emissiveIntensity: 1.6, roughness: .25, metalness: .5 }),
+          );
+          shard.position.set(cx, mark.top + 1.5, cz);
+          group.add(shard);
+          mark.cache.push({ mesh: shard, x: cx, z: cz, y: mark.top + 1.5, alive: true, radius: 2.2 });
+        }
+      }
+      if (mark.role === 'vent') {
+        // A vent that throws you at the tier above.
+        const pad = new T.Mesh(
+          new T.CylinderGeometry(4.2, 4.6, .5, 20),
+          new T.MeshStandardMaterial({ color: 0x2c2618, emissive: 0xffae2b, emissiveIntensity: 1.2, roughness: .5, metalness: .5 }),
+        );
+        pad.position.set(mark.x, mark.top + .5, mark.z);
+        group.add(pad);
+        const plume = new T.Mesh(
+          new T.CylinderGeometry(3.4, 4.6, 44, 14, 1, true),
+          new T.MeshBasicMaterial({ color: 0xfff0c4, transparent: true, opacity: .1, side: T.FrontSide, depthWrite: false, blending: T.AdditiveBlending }),
+        );
+        plume.position.set(mark.x, mark.top + 22, mark.z);
+        group.add(plume);
+        mark.vent = { pad, plume, radius: 4.6 };
+      }
+      if (mark.role === 'anchor') {
+        // A pylon you kick and reel yourself to, from any other slab in range.
+        const pylon = new T.Mesh(new T.CylinderGeometry(.5, .9, 7, 7), this.materials.black);
+        pylon.position.set(mark.x, mark.top + 3.5, mark.z);
+        group.add(pylon);
+        const eye = new T.Mesh(new T.TorusGeometry(1.9, .3, 10, 28), this.materials.cyan);
+        eye.position.set(mark.x, mark.top + 7.4, mark.z);
+        group.add(eye);
+        const glow = this.makeGlowSprite(this.glowCyan, 9, .5);
+        glow.position.copy(eye.position);
+        group.add(glow);
+        mark.skyAnchor = { eye, glow, position: eye.position.clone(), radius: 4.4 };
+      }
+      if (mark.role === 'spinner') {
+        // A turning arm. Time your landing, or ride it and let it throw you.
+        const hub = new T.Mesh(new T.CylinderGeometry(1.1, 1.4, 2.4, 8), this.materials.black);
+        hub.position.set(mark.x, mark.top + 1.2, mark.z);
+        group.add(hub);
+        const arm = new T.Mesh(
+          new T.BoxGeometry(mark.radius * 1.7, 1.1, 2.2),
+          new T.MeshStandardMaterial({ color: 0x2b2620, emissive: 0xff7a3c, emissiveIntensity: .8, roughness: .5, metalness: .7 }),
+        );
+        arm.position.set(mark.x, mark.top + 2.4, mark.z);
+        group.add(arm);
+        mark.spinner = { arm, angle: mark.index, speed: .9 + (mark.index % 3) * .35, reach: mark.radius * .85 };
+      }
+      if (mark.role === 'crown') {
+        // The top of the sky. What is up here is the reason to climb it.
+        const ring = new T.Mesh(new T.TorusGeometry(11, .9, 12, 60), this.materials.gold);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(mark.x, mark.top + 7, mark.z);
+        group.add(ring);
+        const prize = new T.Mesh(
+          new T.IcosahedronGeometry(3.2, 1),
+          new T.MeshStandardMaterial({ color: 0x0d2a24, emissive: BALL_CORES.kite.color, emissiveIntensity: 2.4, roughness: .2, metalness: .7 }),
+        );
+        prize.position.set(mark.x, mark.top + 7, mark.z);
+        group.add(prize);
+        const glow = this.makeGlowSprite(this.glowCyan, 34, .5);
+        glow.position.copy(prize.position);
+        group.add(glow);
+        mark.crown = { ring, prize, glow, taken: false, radius: 6 };
+      }
+    }
     // ---- LANDMARKS -------------------------------------------------------
     makeLandmarks() {
       this.landmarks = [];
@@ -2262,7 +2513,7 @@
         mark.group.add(cone);
         const plume = new T.Mesh(
           new T.CylinderGeometry(2.6, 4.2, 40, 12, 1, true),
-          new T.MeshBasicMaterial({ color: 0xfff0c4, transparent: true, opacity: 0, side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending }),
+          new T.MeshBasicMaterial({ color: 0xfff0c4, transparent: true, opacity: 0, side: T.FrontSide, depthWrite: false, blending: T.AdditiveBlending }),
         );
         plume.position.set(x, base + 20, z);
         mark.group.add(plume);
@@ -2575,7 +2826,7 @@
         const column = new T.Mesh(
           new T.CylinderGeometry(5.2, 6.4, 62, 20, 1, true),
           new T.MeshBasicMaterial({
-            color: 0xc79bff, transparent: true, opacity: .12, side: T.DoubleSide,
+            color: 0xc79bff, transparent: true, opacity: .12, side: T.FrontSide,
             depthWrite: false, blending: T.AdditiveBlending,
           }),
         );
@@ -2938,6 +3189,13 @@
         if (currentY < mover.mesh.position.y - 1.6) continue;
         if (Math.hypot(x - mover.mesh.position.x, z - mover.mesh.position.z) >= mover.radius) continue;
         floor = Math.max(floor, mover.mesh.position.y + .55);
+      }
+      // Sky slabs catch from above and pass through from below, so kicking the
+      // ball down under yourself still throws you up through the whole stack.
+      for (const slab of this.sky || EMPTY_SOLIDS) {
+        if (currentY < slab.top - 1.5) continue;
+        if (Math.hypot(x - slab.x, z - slab.z) >= slab.radius) continue;
+        floor = Math.max(floor, slab.top);
       }
       return floor;
     }
@@ -3543,7 +3801,7 @@
       this.respawnCount = 0;
       this.stats = {
         kicks: 0, snaps: 0, spins: 0, doubleJumps: 0, meteorKicks: 0,
-        anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0, cores: 0, landmarks: 0,
+        anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0, cores: 0, landmarks: 0, skyLit: 0,
       };
       this.bestTime = this.loadBest();
       this.forward = new T.Vector3();
@@ -3689,7 +3947,7 @@
       this.respawnCount = 0;
       this.stats = {
         kicks: 0, snaps: 0, spins: 0, doubleJumps: 0, meteorKicks: 0,
-        anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0, cores: 0, landmarks: 0,
+        anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0, cores: 0, landmarks: 0, skyLit: 0,
       };
       world.gate.active = true;
       world.gate.group.visible = true;
@@ -3866,6 +4124,7 @@
       this.updateBall(dt, actionFrame, edgeFrame);
       this.updateRegions(dt);
       this.updateLandmarks(dt);
+      this.updateSky(dt);
       this.updateEnemies(dt);
       this.updatePlaygroundInteractions(dt);
       this.updateProgression();
@@ -3940,7 +4199,22 @@
         }
       }
       if (!frame.jump && player.velocity.y > 5.5) player.velocity.y -= 10 * dt;
-      if (!player.grappling) player.velocity.y -= 15.2 * dt;
+      // THE KITE CORE: hold the line while falling with the ball out and it
+      // drags you forward instead of down. It is the difference between the
+      // sky being a set of islands and the sky being one place.
+      this.gliding = false;
+      if (this.cores.has('kite') && frame.line && !player.grounded && player.velocity.y < 0
+        && (this.ball.mode === 'outbound' || this.ball.mode === 'returning')) {
+        const spec = BALL_CORES.kite;
+        this.gliding = true;
+        player.velocity.y = Math.max(player.velocity.y, -spec.glideFall);
+        const heading = this.horizontalForward(this.tempA);
+        player.velocity.x = damp(player.velocity.x, heading.x * spec.glidePull, 2.2, dt);
+        player.velocity.z = damp(player.velocity.z, heading.z * spec.glidePull, 2.2, dt);
+        if (cosmeticRandom() < dt * 26) {
+          world.particles.burst(player.position.clone().addScaledVector(UP, .6), spec.color, 1, 3, .35, .1);
+        }
+      } else if (!player.grappling) player.velocity.y -= 15.2 * dt;
       player.runCycle += Math.hypot(player.velocity.x, player.velocity.z) * dt * .76;
       player.spinAngle += (player.spinTimer > 0 ? 13 + player.spinPower * 5 : 0) * dt;
 
@@ -5107,6 +5381,154 @@
       // The aperture opens only after the entire summit encounter is cleared.
       return true;
     }
+    // ---- THE SKYFIELD ----------------------------------------------------
+    updateSky(dt) {
+      const player = this.player;
+      const ball = this.ball;
+      for (const ring of world.skyRings) {
+        ring.cooldown = Math.max(0, ring.cooldown - dt);
+        ring.mesh.rotateZ(dt * .5);
+        const pulse = .42 + Math.sin(this.time * 2.4 + ring.position.x) * .13;
+        ring.mesh.material.opacity = pulse;
+        ring.halo.material.opacity = pulse * .55;
+        if (ring.cooldown > 0) continue;
+        // Fly through and it throws you the way it points. This is the road
+        // between slabs, and it costs nothing but arriving with some speed.
+        if (player.position.distanceTo(ring.position) < ring.radius + 1.4) {
+          player.velocity.copy(ring.toward).multiplyScalar(44);
+          player.jumpsUsed = 0;
+          player.grounded = false;
+          ring.cooldown = .8;
+          this.impact('hurt', ring.position, 0x8fe9ff);
+          world.pulseRing(ring.position, new T.Color(0x8fe9ff), 16, .4);
+          this.addStyle(12, 460, 'RING SHOT', '#8fe9ff');
+        } else if (ball.position.distanceTo(ring.position) < ring.radius + 1
+          && (ball.mode === 'outbound' || ball.mode === 'returning')) {
+          ball.velocity.addScaledVector(ring.toward, 26);
+          ring.cooldown = .5;
+          world.pulseRing(ring.position, new T.Color(0x8fe9ff), 9, .3);
+        }
+      }
+      for (const slab of world.sky) {
+        slab.cooldown = Math.max(0, slab.cooldown - dt);
+        const near = player.position.distanceToSquared(slab.position) < 260 * 260;
+        // The plinth flame keeps turning whether or not you are close, so the
+        // lit ones read as a constellation from the ground.
+        slab.flame.rotation.y += dt * (slab.lit ? 2.6 : .5);
+        slab.flame.position.y = slab.top + 4.1 + (slab.lit ? Math.sin(this.time * 2 + slab.index) * .3 : 0);
+        slab.flame.material.emissiveIntensity = slab.lit ? 3.4 + Math.sin(this.time * 3 + slab.index) * .8 : .2;
+        slab.plinth.material.emissiveIntensity = slab.lit ? 2.2 : .35;
+        if (!near) continue;
+
+        const standing = Math.abs(player.position.y - slab.top) < 2.6
+          && Math.hypot(player.position.x - slab.x, player.position.z - slab.z) < slab.radius;
+        if (standing && !slab.lit) {
+          slab.lit = true;
+          this.stats.skyLit++;
+          this.impact('hurt', slab.flame.position, 0xffd66b);
+          world.pulseRing(slab.flame.position, new T.Color(0xffd66b), 12, .5);
+          this.addStyle(9, 340, 'BEACON LIT', '#ffd66b');
+        }
+        if (slab.vent && standing) {
+          slab.vent.plume.material.opacity = .1 + Math.sin(this.time * 6) * .05;
+          if (slab.cooldown <= 0 && Math.hypot(player.position.x - slab.x, player.position.z - slab.z) < slab.vent.radius) {
+            player.velocity.y = 46;
+            player.jumpsUsed = 0;
+            player.grounded = false;
+            slab.cooldown = 1.1;
+            this.impact('hurt', player.position, 0xffae2b);
+            this.addStyle(11, 420, 'UPDRAFT', '#ffd66b');
+          }
+        }
+        if (slab.spinner) {
+          slab.spinner.angle += dt * slab.spinner.speed;
+          slab.spinner.arm.rotation.y = slab.spinner.angle;
+          // Ride it or eat it: the arm sweeps you off your feet, hard.
+          if (standing && slab.cooldown <= 0) {
+            const armDirection = this.tempA.set(Math.cos(slab.spinner.angle), 0, -Math.sin(slab.spinner.angle));
+            const toPlayer = this.tempB.set(player.position.x - slab.x, 0, player.position.z - slab.z);
+            const along = toPlayer.dot(armDirection);
+            if (Math.abs(along) < slab.spinner.reach && toPlayer.lengthSq() > 1 && Math.abs(toPlayer.length() - Math.abs(along)) < 2.2) {
+              const fling = this.tempA.set(-armDirection.z, 0, armDirection.x).multiplyScalar(Math.sign(along) || 1);
+              player.velocity.addScaledVector(fling, 34);
+              player.velocity.y = Math.max(player.velocity.y, 13);
+              player.jumpsUsed = Math.min(player.jumpsUsed, 1);
+              player.grounded = false;
+              slab.cooldown = .9;
+              this.impact('graze', player.position, 0xff7a3c);
+              this.addStyle(10, 380, 'SWEPT', '#ff7a3c');
+            }
+          }
+        }
+        if (slab.cache) {
+          for (const shard of slab.cache) {
+            if (!shard.alive) continue;
+            shard.mesh.rotation.y += dt * 1.6;
+            if (ball.mode !== 'outbound' && ball.mode !== 'returning') continue;
+            if (Math.abs(ball.position.y - shard.y) > 3) continue;
+            if (Math.hypot(ball.position.x - shard.x, ball.position.z - shard.z) > shard.radius + ball.radius) continue;
+            shard.alive = false;
+            shard.mesh.visible = false;
+            this.stats.breaks++;
+            this.impact('break', shard.mesh.position, 0x54d8ff);
+            this.addStyle(5, 190);
+            if (slab.cache.every(entry => !entry.alive)) {
+              this.addStyle(16, 780, 'CACHE CRACKED', '#54d8ff');
+              this.player.maxHealth = Math.min(9, this.player.maxHealth + 1);
+              this.player.health = this.player.maxHealth;
+            }
+          }
+        }
+        if (slab.skyAnchor) {
+          slab.skyAnchor.eye.rotation.z += dt * 1.1;
+          slab.skyAnchor.glow.material.opacity = .4 + Math.sin(this.time * 2.6 + slab.index) * .14;
+          // A kicked ball sticks here and the line reels you across. Same
+          // grammar as the cliff sockets, so nothing new to learn.
+          if (ball.mode === 'outbound' && ball.velocity.length() >= 12
+            && !ball.collisionCooldown.has(slab.id)
+            && ball.position.distanceTo(slab.skyAnchor.position) <= slab.skyAnchor.radius) {
+            ball.collisionCooldown.set(slab.id, .5);
+            ball.mode = 'anchored';
+            ball.anchor = { id: slab.id, index: -1, position: slab.skyAnchor.position.clone(), used: true, synthetic: true };
+            ball.anchorCharge = ball.launchCharge;
+            ball.anchorTimer = 0;
+            ball.lastTetherPathLength = Infinity;
+            ball.velocity.set(0, 0, 0);
+            ball.position.copy(slab.skyAnchor.position);
+            this.lineActive = true;
+            this.buildTetherPath(true);
+            this.impact('hurt', slab.skyAnchor.position, 0x63f0ff);
+            this.addStyle(10, 360, 'SKY LINK', '#63f0ff');
+          }
+        }
+        if (slab.crown && !slab.crown.taken) {
+          slab.crown.ring.rotation.z += dt * .6;
+          slab.crown.prize.rotation.y += dt * 1.3;
+          slab.crown.prize.position.y = slab.top + 7 + Math.sin(this.time * 1.6) * .5;
+          slab.crown.glow.material.opacity = .4 + Math.sin(this.time * 2.2) * .14;
+          if (player.position.distanceTo(slab.crown.prize.position) < slab.crown.radius) {
+            slab.crown.taken = true;
+            slab.crown.prize.visible = false;
+            slab.crown.glow.visible = false;
+            this.grantKite(slab.crown.prize.position.clone());
+          }
+        }
+      }
+    }
+    grantKite(at) {
+      const spec = BALL_CORES.kite;
+      if (this.cores.has(spec.id)) return;
+      this.cores.add(spec.id);
+      this.stats.cores++;
+      this.rewardFlash = 1;
+      if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', `#${spec.color.toString(16).padStart(6, '0')}`);
+      this.hitStop = Math.max(this.hitStop, .1);
+      this.shake = Math.max(this.shake, .8);
+      this.addStyle(34, 6000, 'KITE CORE', '#8bffca');
+      world.particles.burst(at, spec.color, 120, 26, 1.5, .4);
+      world.pulseRing(at, new T.Color(spec.color), 30, .9);
+      audio.win();
+    }
     // ---- LANDMARKS -------------------------------------------------------
     // Every landmark answers on contact and rewards doing it well. None of
     // them gate anything: they exist to make crossing the moon worth doing.
@@ -6246,6 +6668,10 @@
           tetherWrapId: this.ball.tetherWrapId,
         },
         cores: [...this.cores],
+        sky: world.sky.map(slab => ({
+          id: slab.id, tier: slab.tier, role: slab.role,
+          x: slab.x, y: slab.top, z: slab.z, radius: slab.radius, lit: slab.lit,
+        })),
         landmarks: world.landmarks.map(mark => ({
           id: mark.id, kind: mark.kind, name: mark.name,
           x: mark.x, y: mark.y, z: mark.z, done: mark.done,
@@ -7412,6 +7838,111 @@
       const afterCatch = game.player.velocity.length();
       check('catching-a-fast-ball-slings-the-player', beforeCatch < .01 && afterCatch > 8,
         { beforeCatch, afterCatch: +afterCatch.toFixed(2) });
+
+      // --- skyfield fence -------------------------------------------------
+      const slabHeights = world.sky.map(slab => slab.top).sort((a, b) => a - b);
+      check('the-sky-is-a-real-archipelago-at-many-heights',
+        world.sky.length >= 24
+        && new Set(world.sky.map(slab => slab.tier)).size === 4
+        && slabHeights[0] < 40 && slabHeights[slabHeights.length - 1] > 170
+        && world.skyRings.length >= 3,
+        { slabs: world.sky.length, rings: world.skyRings.length,
+          lowest: +slabHeights[0].toFixed(1), highest: +slabHeights[slabHeights.length - 1].toFixed(1) });
+
+      // Every slab must be walkable ground from above AND passable from below,
+      // because kicking the ball down under yourself is how a player gets up
+      // here — solid undersides would break the move the game is named for.
+      const oneWay = world.sky.map(slab => ({
+        id: slab.id,
+        fromAbove: world.floorHeight(slab.x, slab.z, slab.top + 1) >= slab.top - .01,
+        fromBelow: world.floorHeight(slab.x, slab.z, slab.top - 12) < slab.top - .01,
+      }));
+      check('sky-slabs-catch-from-above-and-pass-through-from-below',
+        oneWay.every(entry => entry.fromAbove && entry.fromBelow),
+        oneWay.filter(entry => !entry.fromAbove || !entry.fromBelow).slice(0, 4));
+
+      // No slab may be speared by a spire or buried in the mesa: standing on
+      // one has to mean standing in open sky, not inside another object.
+      const speared = world.sky.filter(slab => {
+        for (const solid of world.regionSolids(slab.x, slab.z)) {
+          if (Math.hypot(slab.x - solid.x, slab.z - solid.z) > slab.radius + solid.radius) continue;
+          if (solid.top > slab.top - 6) return true;
+        }
+        return world.sampleTerrainHeight(slab.x, slab.z) > slab.top - 12;
+      }).map(slab => slab.id);
+      check('no-sky-slab-is-buried-in-terrain-or-speared-by-a-spire',
+        speared.length === 0, { speared });
+
+      // Every slab has a job, and the jobs are spread across the sky.
+      const roles = {};
+      for (const slab of world.sky) roles[slab.role] = (roles[slab.role] || 0) + 1;
+      check('every-sky-slab-has-something-to-do',
+        world.sky.every(slab => slab.plinth && slab.flame)
+        && Object.keys(roles).length >= 5
+        && roles.crown === 1,
+        roles);
+
+      // Landing lights the beacon; the count of lit beacons is the display.
+      game.restart();
+      game.started = true;
+      const litTarget = world.sky.find(slab => slab.role === 'cache');
+      game.player.position.set(litTarget.x, litTarget.top, litTarget.z);
+      game.updateSky(FIXED_DT);
+      check('landing-on-a-slab-lights-its-beacon', litTarget.lit && game.stats.skyLit === 1,
+        { lit: litTarget.lit, count: game.stats.skyLit });
+
+      // Boost rings are the road between slabs: they must throw the player.
+      game.restart();
+      game.started = true;
+      const road = world.skyRings[0];
+      game.player.position.copy(road.position);
+      game.player.velocity.set(0, 0, 0);
+      road.cooldown = 0;
+      game.updateSky(FIXED_DT);
+      check('boost-rings-throw-the-player-along-their-axis',
+        game.player.velocity.length() > 30
+        && game.player.velocity.clone().normalize().dot(road.toward) > .95,
+        { speed: +game.player.velocity.length().toFixed(1) });
+
+      // Vents launch, and sky anchors take a kicked ball so the line can reel
+      // you across open air.
+      game.restart();
+      game.started = true;
+      const ventSlab = world.sky.find(slab => slab.vent);
+      game.player.position.set(ventSlab.x, ventSlab.top, ventSlab.z);
+      game.player.velocity.set(0, 0, 0);
+      ventSlab.cooldown = 0;
+      game.updateSky(FIXED_DT);
+      const ventLift = game.player.velocity.y;
+      const anchorSlab = world.sky.find(slab => slab.skyAnchor);
+      game.player.position.set(anchorSlab.x, anchorSlab.top, anchorSlab.z);
+      game.ball.mode = 'outbound';
+      game.ball.launchCharge = .8;
+      game.ball.collisionCooldown.clear();
+      game.ball.position.copy(anchorSlab.skyAnchor.position);
+      game.ball.velocity.set(0, 0, 20);
+      game.updateSky(FIXED_DT);
+      check('vents-launch-and-sky-anchors-catch-the-ball',
+        ventLift > 30 && game.ball.mode === 'anchored' && !!game.ball.anchor?.synthetic,
+        { ventLift: +ventLift.toFixed(1), ballMode: game.ball.mode });
+
+      // THE CROWN hands over the KITE core, and the glide has to actually
+      // hold the player up.
+      game.restart();
+      game.started = true;
+      const crownSlab = world.sky.find(slab => slab.crown);
+      game.player.position.copy(crownSlab.crown.prize.position);
+      game.updateSky(FIXED_DT);
+      const gotKite = game.cores.has('kite');
+      game.player.position.set(0, 400, 0);
+      game.player.velocity.set(0, -30, 0);
+      game.player.grounded = false;
+      game.ball.mode = 'outbound';
+      game.updatePlayer(FIXED_DT, { ...neutralFrame(), line: true }, false);
+      const glideFall = game.player.velocity.y;
+      check('the-crown-grants-the-kite-and-the-glide-holds-you-up',
+        gotKite && glideFall > -BALL_CORES.kite.glideFall - .01 && game.gliding === true,
+        { gotKite, glideFall: +glideFall.toFixed(2) });
 
       // --- playtest fence -------------------------------------------------
       // Each of these is something a real player hit and reported. They are
