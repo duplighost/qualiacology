@@ -12,7 +12,7 @@
 import { VIEW_W, VIEW_H, CAM } from './config.js';
 import { clamp, lerp, damp, TAU, withAlpha, smoothstep } from './core.js';
 import { drawSabine, drawSabineFallback, SAB, SABINE_SCALE } from './art/atlas.js';
-import { drawChainWhip, drawSwingArc } from './art/fx.js';
+import { drawChainWhip } from './art/fx.js';
 import { drawEnemyEntity } from './enemies.js';
 import { whipTip, attackPhase, ATTACK, playerFrame } from './player.js';
 import { groundShadow, glowDot, withAlpha as wa } from './art/paint.js';
@@ -227,19 +227,11 @@ function drawWhip(ctx, game, p, env) {
   const hot = p.sunstrikeArmed;
   const alpha = ph.stage === 'recovery' ? 1 - ph.t * 0.8 : 1;
 
+  /* The chain and its clapper are the weapon. There used to be a bright arc
+   * drawn through wherever the strike landed — a diagram of the hit rather
+   * than the hit. The chain, the impact sparks and the hitstop do the job. */
   ctx.save();
   ctx.globalAlpha = alpha;
-  if (ph.stage === 'active') {
-    const cx = p.x + p.w * 0.5;
-    const cy = p.y + p.h * 0.42;
-    if (p.attack === ATTACK.GROUND || p.attack === ATTACK.AIR || p.attack === ATTACK.CROUCH) {
-      drawSwingArc(ctx, cx, p.attack === ATTACK.CROUCH ? p.y + p.h - 12 : cy,
-        Math.abs(tip.x - cx), p.facing, ph.t, hot ? 'rgba(255,240,190,.85)' : 'rgba(214,246,255,.7)',
-        p.attackIndex === 2 ? 7 : 5);
-    } else if (p.attack === ATTACK.UP) {
-      drawSwingArc(ctx, cx, cy - 12, 54, p.facing, ph.t, 'rgba(214,246,255,.7)', 5);
-    }
-  }
   const diving = p.attack === ATTACK.DIVE;
   drawChainWhip(ctx, hand, tip, {
     links: diving ? Math.round(game.chainLinks * 0.68) : game.chainLinks,

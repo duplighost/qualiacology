@@ -164,23 +164,3 @@ export function drawChainWhip(ctx, from, to, opts = {}) {
   ctx.stroke();
   ctx.restore();
 }
-
-/* The arc the whip has just swept, so a fast strike still leaves a shape. */
-export function drawSwingArc(ctx, cx, cy, radius, facing, phase, colour, thickness = 5) {
-  const a0 = facing > 0 ? -1.05 : Math.PI + 1.05;
-  const a1 = facing > 0 ? 0.72 : Math.PI - 0.72;
-  const a = lerp(a0, a1, phase);
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-  ctx.strokeStyle = colour;
-  ctx.lineCap = 'round';
-  for (let i = 0; i < 4; i += 1) {
-    const back = a - (a - a0) * (i / 4) * 0.7;
-    ctx.globalAlpha = (1 - i / 4) * 0.5;
-    ctx.lineWidth = thickness * (1 - i / 5);
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, Math.min(a0, back), Math.max(a0, back));
-    ctx.stroke();
-  }
-  ctx.restore();
-}
