@@ -183,7 +183,7 @@
             <div id="start-screen" class="screen">
                 <h1 class="text-6xl font-bold mb-4 tracking-widest" style="color: #f22; text-shadow: 0 0 20px #f00;">BEHIND YOU</h1>
             <p class="stat-line">Best <span id="start-best">0.0000</span> / Hell Held <span class="achievement-target">666.6660</span></p>
-            <p class="stat-line">WASD / Mouse / Space &mdash; when your light swells, jump</p>
+            <p class="stat-line">WASD / Mouse / Space &mdash; when your light pounds, jump and land</p>
             <p id="desktop-note" class="stat-line hidden">Desktop with a mouse &amp; keyboard required.</p>
             <button id="start-btn">Click to Enter</button>
         </div>
@@ -229,14 +229,20 @@
         // Shards stop buying damage (enemies already die instantly) and start buying WARNING,
         // TIME, and an ANSWER for when you turn too late.
         // Reachable inside the first minute — an upgrade you never see is not an upgrade.
-        const earshotThreshold = 12;    // hear what is behind you, precisely
-        const heelfallThreshold = 45;   // an answer when something is already on you
-        const hungerThreshold = 200;    // and from here the answer never stops growing
+        const earshotThreshold = 12;     // hear what is behind you, precisely
+        const heelfallThreshold = 45;    // an answer when something is already on you
+        const doubleJumpThreshold = 110; // a second jump, high, to line the answer up
+        const homingThreshold = 170;     // shots that correct toward what you swung past
+        const hungerThreshold = 260;     // and from here the answer never stops growing
 
         let heelCharge = 0;             // 0..1, armed by killing things that are close
         let heelArmedClicked = false;   // one-shot cue when it reaches full
         let dropUsed = false;           // airborne slam is once per jump
+        let doubleJumpUsed = false;     // second jump is once per airborne trip
         let suppressHeelCharge = false; // a heelfall's own kills must not re-arm it
+
+        function hasDoubleJump() { return shardCount >= doubleJumpThreshold; }
+        function hasHoming() { return shardCount >= homingThreshold; }
 
         function hasEarshot() { return shardCount >= earshotThreshold; }
         function hasHeelfall() { return shardCount >= heelfallThreshold; }
@@ -770,13 +776,35 @@
                 case 'Space':
                     event.preventDefault();
                     if (event.repeat) break;
-                    if (isPlaying && isGrounded) {
+                    if (!isPlaying) break;
+                    if (isGrounded) {
                         playerVelocity.y = jumpVelocity;
                         isGrounded = false;
                         dropUsed = false;
-                    } else if (isPlaying && !isGrounded && !dropUsed && hasHeelfall() && heelCharge >= 0.999) {
-                        // Second press in the air drives you down NOW, so the ring goes off where
-                        // you chose rather than wherever the arc happened to drop you.
+                        doubleJumpUsed = false;
+                    } else if (hasDoubleJump() && !doubleJumpUsed) {
+                        // A high second jump. Vertical only - it never makes you faster along the
+                        // ground, so being outrun still means being outrun. What it buys is a
+                        // long look down at the crowd and time to pick where the slam lands.
+                        doubleJumpUsed = true;
+                        playerVelocity.y = jumpVelocity * 1.25;
+                        triggerSynth(pickupSynth, "C6", "64n");
+                        for (let i = 0; i < 7; i++) {
+                            const a = (i / 7) * Math.PI * 2;
+                            const line = new THREE.Line(particleGeo.clone(),
+                                new THREE.LineBasicMaterial({ color: 0xbfd4ff, transparent: true, opacity: 0.75 }));
+                            line.position.copy(camera.position);
+                            line.position.y -= playerEyeHeight * 0.5;
+                            scene.add(line);
+                            particles.push({
+                                mesh: line,
+                                dir: new THREE.Vector3(Math.cos(a), -0.35, Math.sin(a)).normalize(),
+                                speed: 14, life: 0.35, fadeRate: 3
+                            });
+                        }
+                    } else if (!dropUsed && hasHeelfall() && heelCharge >= 0.999) {
+                        // Once you are out of jumps, the next press drives you down NOW, so the
+                        // ring goes off where you chose rather than where the arc dropped you.
                         dropUsed = true;
                         playerVelocity.y = -34;
                     }
@@ -1706,9 +1734,18 @@
 
             // Readout is the world, not a meter: as the charge fills, the lamp on your head
             // pushes the dark back. Spending it snaps the world shut again.
+            //
+            // And once it is armed, the light PULSES - slowly if you are clear, hard and fast
+            // once things are actually on top of you. That pulse is the "now" cue: it is only
+            // frantic when spending the slam is worth it.
             if (playerLight) {
-                playerLight.distance = 50 + heelCharge * 24;
-                playerLight.intensity = 1 + heelCharge * 0.6;
+                let pulse = 0;
+                if (heelCharge >= 0.999) {
+                    const crowding = clamp01(1 - (nearest - 3) / 12);
+                    pulse = (0.5 + Math.sin(gameTime * (5 + crowding * 16)) * 0.5) * (0.35 + crowding * 0.85);
+                }
+                playerLight.distance = 50 + heelCharge * 24 + pulse * 22;
+                playerLight.intensity = 1 + heelCharge * 0.6 + pulse * 0.9;
             }
         }
 
@@ -1745,6 +1782,7 @@
                     playerVelocity.y = 0;
                     isGrounded = true;
                     dropUsed = false;
+                    doubleJumpUsed = false;
                     // Land hard with a full charge and the ground answers.
                     if (hasHeelfall() && heelCharge >= 0.999 && impactVy <= -8) {
                         heelCharge = 0;
@@ -1773,9 +1811,42 @@
             updateInfiniteArena();
         }
 
+        const _homeDir = new THREE.Vector3();
+        const _homeTo = new THREE.Vector3();
+        const _homeBest = new THREE.Vector3();
+        const _homeAxis = new THREE.Vector3(0, 0, -1);
+
+        // Shots bend toward a target they are ALREADY pointed near. It corrects the shot you
+        // fumbled while spinning around; it will not find something you never aimed at, so
+        // pointing at the thing is still the skill.
+        function steerProjectile(p, delta) {
+            if (!hasHoming()) return;
+            _homeDir.copy(p.velocity);
+            const speed = _homeDir.length();
+            if (speed < 0.001) return;
+            _homeDir.multiplyScalar(1 / speed);
+
+            let found = false, bestDot = 0.955; // ~17 degree cone: a nudge, not a seeker
+            for (let i = 0; i < enemies.length; i++) {
+                const e = enemies[i];
+                _homeTo.copy(e.mesh.position).sub(p.mesh.position);
+                const distSq = _homeTo.lengthSq();
+                if (distSq < 0.25 || distSq > 1764) continue; // 0.5 .. 42 units, no sqrt
+                _homeTo.multiplyScalar(1 / Math.sqrt(distSq));
+                const dot = _homeDir.dot(_homeTo);
+                if (dot > bestDot) { bestDot = dot; _homeBest.copy(_homeTo); found = true; }
+            }
+            if (!found) return;
+            // Gentle turn rate, so a shot curves onto a near miss instead of snapping to it.
+            _homeDir.addScaledVector(_homeBest.sub(_homeDir), Math.min(1, delta * 7)).normalize();
+            p.velocity.copy(_homeDir).multiplyScalar(speed);
+            p.mesh.quaternion.setFromUnitVectors(_homeAxis, _homeDir);
+        }
+
         function updateProjectiles(delta) {
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const p = projectiles[i];
+                steerProjectile(p, delta);
                 p.mesh.position.addScaledVector(p.velocity, delta);
                 p.life -= delta;
 
