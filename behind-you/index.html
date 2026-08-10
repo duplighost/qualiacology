@@ -322,6 +322,7 @@
         const gravity = 42.0;
         const jumpVelocity = 13.5;
         const playerEyeHeight = 2;
+        const playerHeaveSpeed = 55; // units/sec the ground can shove the player upward
         let isGrounded = true;
         
         // Input state
@@ -1399,10 +1400,10 @@
         // exactly where they were made no matter how far the player walks.
         const mounds = [];
         const moundCells = new Map(); // cellKey -> mounds whose footprint touches that cell
-        const moundCellSize = 16;
-        const moundMergeDist = 5;     // a kill this close to an existing swell raises it instead
-        const moundMaxHeight = 12;
-        const moundMaxRadius = 22;
+        const moundCellSize = 12;
+        const moundMergeDist = 9;     // a kill this close to an existing swell raises it instead
+        const moundMaxHeight = 30;
+        const moundMaxRadius = 38;
 
         function moundCellKey(cx, cz) {
             return cx + ',' + cz;
@@ -1464,7 +1465,7 @@
                         // Brightness, not hue, carries the height read - raised ground glows
                         // hotter. Ramp over most of the usable height range so tall hills stay
                         // distinguishable from modest swells.
-                        const heat = Math.min(1, h / 8);
+                        const heat = Math.min(1, h / 14);
                         const ci = (iy * gridCols + ix) * 3;
                         gridColor.array[ci] = 0.267 + heat * 0.73;
                         gridColor.array[ci + 1] = heat * 0.34;
@@ -1565,9 +1566,9 @@
             createExplosion(position, enemy.deathColor || 0xff0000);
             // The ground remembers. A HELLWARDEN leaves a hill; a chaser leaves a swell.
             // This runs before the drop so the shards land on the new ground, not inside it.
-            if (enemy.type === 'boss') raiseGround(position.x, position.z, 5.0, 20);
-            else if (enemy.type === 'spawner') raiseGround(position.x, position.z, 2.4, 13);
-            else raiseGround(position.x, position.z, 1.5, 8);
+            if (enemy.type === 'boss') raiseGround(position.x, position.z, 15.0, 34);
+            else if (enemy.type === 'spawner') raiseGround(position.x, position.z, 7.0, 20);
+            else raiseGround(position.x, position.z, 4.0, 14);
             spawnShards(position, enemy.shardDrop);
             if (enemy.type === 'boss') {
                 // The fall of a HELLWARDEN: a second burst, a long collapse, and the arena resets
@@ -1740,12 +1741,17 @@
                 isGrounded = false;
                 playerVelocity.y = 0;
             } else {
-                // Ground swelling underfoot shoves the player up briskly; slopes downward ease
-                // so walking still feels smooth. The clamp guarantees the camera is never
-                // swallowed by a hill that erupted where the player was standing.
-                const followRate = groundY > playerGroundY ? 26 : 9;
-                playerGroundY += (groundY - playerGroundY) * Math.min(1, delta * followRate);
-                if (playerGroundY < groundY - 0.35) playerGroundY = groundY - 0.35;
+                // Slopes ease so walking stays smooth. Ground erupting underfoot instead heaves
+                // the player up at a floor speed, so even a HELLWARDEN dying at their feet
+                // reads as being thrown skyward over a few frames rather than teleporting.
+                if (groundY > playerGroundY) {
+                    // Constant rise speed, capped at the real surface: walking up a slope tracks
+                    // the ground exactly (the gap per frame is tiny), while ground erupting
+                    // underfoot heaves the player skyward over a few frames instead of snapping.
+                    playerGroundY = Math.min(groundY, playerGroundY + playerHeaveSpeed * delta);
+                } else {
+                    playerGroundY += (groundY - playerGroundY) * Math.min(1, delta * 9);
+                }
             }
 
             updateInfiniteArena();
