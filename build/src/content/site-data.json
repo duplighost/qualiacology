@@ -293,6 +293,19 @@
       "actionLabel": "Begin Transmission"
     },
     {
+      "slug": "flare",
+      "title": "FLARE",
+      "descriptor": "Dark-tower FPS",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/flare-card-clean.webp",
+      "alt": "A dark hall of pillars lit only by pools of light on the floor, a rifle held at the lower right",
+      "summary": "Five dark rooms stacked in a tower. Your gun is the only light you have and the only thing that gives you away, and everything you kill stays lit — so the part of the room you can see is exactly the part you've already won.",
+      "metaDescription": "FLARE is a browser first-person shooter played in the dark, where your muzzle flash is the light and every kill leaves a permanent pool of it on the floor.",
+      "controls": "WASD + mouse · RMB aim · Shift dash · R reload · 1–4 weapons · Esc pause",
+      "actionLabel": "Go up"
+    },
+    {
       "slug": "cinderbloom",
       "title": "CINDERBLOOM",
       "descriptor": "Alien-planet FPS",
