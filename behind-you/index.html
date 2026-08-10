@@ -260,6 +260,12 @@
     <script>
         let camera, scene, renderer, controls;
         let infiniteArena;
+        // Terrain mesh handles + the world-lattice offset the grid is currently snapped to.
+        let gridPos = null, gridColor = null;
+        let gridCols = 0, gridRows = 0, gridSpacing = 0, gridHalf = 0;
+        let terrainOffsetX = 0, terrainOffsetZ = 0;
+        let terrainDirty = false; // terrain buffers changed this frame; upload once
+        let playerGroundY = 0; // smoothed ground height under the player
         let audioListener, enemyAudioBuffers;
         
         // Game State
@@ -276,7 +282,13 @@
         const achievementTime = 666.666;
         const spawnDistancePressureTime = 66.666;
         const arenaTileSize = 2400;
-        const arenaRecenterStep = 400;
+        // The grid tile is smaller than the floor so it can carry twice the vertex density
+        // at the same vertex count - terrain needs that resolution to read. At 600 units of
+        // half-tile the nearest edge still sits ~400 units out, well past where the lines
+        // compress into haze, so the floor still looks endless.
+        const gridTileSize = 1200;
+        const gridSegments = 240;
+        const arenaRecenterStep = 400; // a whole number of grid cells, so hills never swim
         let shardCount = 0;
         let shotCount = 0;
         let deathTimer = null;
@@ -736,7 +748,7 @@
             scene.add(infiniteArena);
 
             const floorGeo = new THREE.PlaneGeometry(arenaTileSize, arenaTileSize, 1, 1);
-            const gridGeo = new THREE.PlaneGeometry(arenaTileSize, arenaTileSize, 240, 240);
+            const gridGeo = new THREE.PlaneGeometry(gridTileSize, gridTileSize, gridSegments, gridSegments);
             
             // Dark solid floor
             const floorMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
@@ -745,12 +757,28 @@
             infiniteArena.add(floor);
 
             // Dense reference grid that recenters with the player for an endless-floor feel.
-            const gridMat = new THREE.MeshBasicMaterial({ color: 0x440000, wireframe: true, transparent: true, opacity: 0.34, fog: false });
+            // It doubles as the terrain surface: kills displace its vertices (see raiseGround).
+            // Vertex colours carry the height read, so the material itself stays white and the
+            // base colour lives in the buffer - flat ground is still exactly 0x440000.
+            const gridMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.34, fog: false, vertexColors: true });
+            const gridVertCount = gridGeo.attributes.position.count;
+            const gridColors = new Float32Array(gridVertCount * 3);
+            for (let i = 0; i < gridVertCount; i++) gridColors[i * 3] = 0.267; // 0x44/0xff
+            gridGeo.setAttribute('color', new THREE.BufferAttribute(gridColors, 3));
             const grid = new THREE.Mesh(gridGeo, gridMat);
             grid.rotation.x = -Math.PI / 2;
             grid.renderOrder = 2;
             grid.position.y = 0.035;
             infiniteArena.add(grid);
+
+            gridPos = gridGeo.attributes.position;
+            gridColor = gridGeo.attributes.color;
+            gridCols = gridSegments + 1;
+            gridRows = gridSegments + 1;
+            gridSpacing = gridTileSize / gridSegments;
+            gridHalf = gridTileSize / 2;
+            gridPos.setUsage(THREE.DynamicDrawUsage);
+            gridColor.setUsage(THREE.DynamicDrawUsage);
 
             // Event Listeners
             window.addEventListener('resize', onWindowResize);
@@ -965,8 +993,9 @@
         }
 
         function createFloorGlow(position, strength = 1) {
+            const groundY = terrainHeightAt(position.x, position.z);
             const glow = new THREE.Mesh(floorGlowGeo, floorGlowMat.clone());
-            glow.position.set(position.x, 0.055, position.z);
+            glow.position.set(position.x, groundY + 0.055, position.z);
             glow.rotation.x = -Math.PI / 2;
             glow.rotation.z = Math.random() * Math.PI * 2;
             glow.scale.setScalar(2.0 + strength * 1.6);
@@ -985,7 +1014,7 @@
                 const light = poolEntry.light;
                 light.distance = 11 + strength * 3;
                 light.intensity = 0.9 * strength;
-                light.position.set(position.x, 1.0, position.z);
+                light.position.set(position.x, groundY + 1.0, position.z);
                 light.visible = true;
                 maxIntensity = light.intensity;
             }
@@ -1014,11 +1043,9 @@
                 );
                 const radius = Math.random() * (1.15 + strength * 0.45);
                 const angle = Math.random() * Math.PI * 2;
-                line.position.set(
-                    position.x + Math.cos(angle) * radius,
-                    0.09,
-                    position.z + Math.sin(angle) * radius
-                );
+                const splinterX = position.x + Math.cos(angle) * radius;
+                const splinterZ = position.z + Math.sin(angle) * radius;
+                line.position.set(splinterX, terrainHeightAt(splinterX, splinterZ) + 0.09, splinterZ);
                 line.rotation.y = Math.random() * Math.PI * 2;
                 line.renderOrder = 5;
                 scene.add(line);
@@ -1228,7 +1255,7 @@
                 enemy.position.x = camera.position.x + Math.cos(angle) * distance;
                 enemy.position.z = camera.position.z + Math.sin(angle) * distance;
             }
-            enemy.position.y = profile.y;
+            enemy.position.y = terrainHeightAt(enemy.position.x, enemy.position.z) + profile.y;
 
             const scale = profile.scale;
             const shape = profile.shape || { x: 1, y: 1, z: 1 };
@@ -1342,7 +1369,9 @@
                         3.8 + Math.random() * 4.2,
                         (Math.random() - 0.5) * 6
                     ),
-                    restY: 1.0 + Math.random() * 0.16,
+                    // Height above the ground, resolved live in updateShards - a later kill
+                    // nearby can raise the terrain under a shard during its 8 second life.
+                    restOffset: 1.0 + Math.random() * 0.16,
                     phase: Math.random() * Math.PI * 2,
                     baseScale,
                     landed: false,
@@ -1361,15 +1390,184 @@
             triggerSynth(pickupSynth, "C7", "64n");
         }
 
+        // --- Battlefield terrain ---------------------------------------------------------
+        // Every kill swells the ground where it happened, and the swell never goes away.
+        // Over a long run the arena stops being flat and becomes a record of the run itself.
+        //
+        // Heights live in a world-space list of mounds, never in the mesh, because the grid
+        // recenters around the player. The mesh is restamped from that list, so hills stay
+        // exactly where they were made no matter how far the player walks.
+        const mounds = [];
+        const moundCells = new Map(); // cellKey -> mounds whose footprint touches that cell
+        const moundCellSize = 16;
+        const moundMergeDist = 5;     // a kill this close to an existing swell raises it instead
+        const moundMaxHeight = 12;
+        const moundMaxRadius = 22;
+
+        function moundCellKey(cx, cz) {
+            return cx + ',' + cz;
+        }
+
+        function indexMound(m) {
+            const minX = Math.floor((m.x - m.r) / moundCellSize);
+            const maxX = Math.floor((m.x + m.r) / moundCellSize);
+            const minZ = Math.floor((m.z - m.r) / moundCellSize);
+            const maxZ = Math.floor((m.z + m.r) / moundCellSize);
+            for (let cx = minX; cx <= maxX; cx++) {
+                for (let cz = minZ; cz <= maxZ; cz++) {
+                    const key = moundCellKey(cx, cz);
+                    let bucket = moundCells.get(key);
+                    if (!bucket) { bucket = []; moundCells.set(key, bucket); }
+                    // A mound may already be here after a merge grew its radius; never double-add,
+                    // or terrainHeightAt would count it twice.
+                    if (bucket.indexOf(m) === -1) bucket.push(m);
+                }
+            }
+        }
+
+        // Because every mound is indexed into all cells its footprint touches, the single cell
+        // under a point holds every mound that can possibly affect it.
+        function terrainHeightAt(x, z) {
+            const bucket = moundCells.get(moundCellKey(Math.floor(x / moundCellSize), Math.floor(z / moundCellSize)));
+            if (!bucket) return 0;
+            let height = 0;
+            for (let i = 0; i < bucket.length; i++) {
+                const m = bucket[i];
+                const dx = x - m.x;
+                const dz = z - m.z;
+                const distSq = dx * dx + dz * dz;
+                if (distSq >= m.r * m.r) continue;
+                // Smooth dome: flat-topped at the centre, tangent to the ground at the rim.
+                const falloff = 1 - distSq / (m.r * m.r);
+                height += m.h * falloff * falloff;
+            }
+            return Math.min(height, moundMaxHeight);
+        }
+
+        // The grid is a PlaneGeometry rotated -90deg about X, so a vertex's geometry z drives
+        // its world height, geometry x maps to world x, and geometry y maps to -world z.
+        function stampMound(m) {
+            if (!gridPos) return;
+            const arr = gridPos.array;
+            const minIx = Math.max(0, Math.floor((m.x - m.r - terrainOffsetX + gridHalf) / gridSpacing));
+            const maxIx = Math.min(gridCols - 1, Math.ceil((m.x + m.r - terrainOffsetX + gridHalf) / gridSpacing));
+            const minIy = Math.max(0, Math.floor((m.z - m.r - terrainOffsetZ + gridHalf) / gridSpacing));
+            const maxIy = Math.min(gridRows - 1, Math.ceil((m.z + m.r - terrainOffsetZ + gridHalf) / gridSpacing));
+            for (let iy = minIy; iy <= maxIy; iy++) {
+                const worldZ = terrainOffsetZ - gridHalf + iy * gridSpacing;
+                for (let ix = minIx; ix <= maxIx; ix++) {
+                    const worldX = terrainOffsetX - gridHalf + ix * gridSpacing;
+                    const vi = (iy * gridCols + ix) * 3;
+                    const h = terrainHeightAt(worldX, worldZ);
+                    arr[vi + 2] = h;
+                    if (gridColor) {
+                        // Brightness, not hue, carries the height read - raised ground glows
+                        // hotter. Ramp over most of the usable height range so tall hills stay
+                        // distinguishable from modest swells.
+                        const heat = Math.min(1, h / 8);
+                        const ci = (iy * gridCols + ix) * 3;
+                        gridColor.array[ci] = 0.267 + heat * 0.73;
+                        gridColor.array[ci + 1] = heat * 0.34;
+                        gridColor.array[ci + 2] = heat * 0.12;
+                    }
+                }
+            }
+            // Uploading here would re-send both full buffers once per kill. Flag instead and
+            // flush at most once a frame (see flushTerrainBuffers).
+            terrainDirty = true;
+        }
+
+        function flushTerrainBuffers() {
+            if (!terrainDirty || !gridPos) return;
+            gridPos.needsUpdate = true;
+            if (gridColor) gridColor.needsUpdate = true;
+            terrainDirty = false;
+        }
+
+        function rebuildTerrain() {
+            if (!gridPos) return;
+            const arr = gridPos.array;
+            for (let i = 2; i < arr.length; i += 3) arr[i] = 0;
+            if (gridColor) {
+                const carr = gridColor.array;
+                for (let i = 0; i < carr.length; i += 3) {
+                    carr[i] = 0.267; carr[i + 1] = 0; carr[i + 2] = 0;
+                }
+            }
+            // Restamping from the mound list is O(mounds x small footprint), not O(vertices),
+            // so even a long run's worth of hills reprojects cheaply when the arena recenters.
+            for (let i = 0; i < mounds.length; i++) stampMound(mounds[i]);
+            terrainDirty = true;
+        }
+
+        function raiseGround(x, z, height, radius) {
+            let target = null;
+            const cx = Math.floor(x / moundCellSize);
+            const cz = Math.floor(z / moundCellSize);
+            for (let ox = -1; ox <= 1 && !target; ox++) {
+                for (let oz = -1; oz <= 1 && !target; oz++) {
+                    const bucket = moundCells.get(moundCellKey(cx + ox, cz + oz));
+                    if (!bucket) continue;
+                    for (let i = 0; i < bucket.length; i++) {
+                        const m = bucket[i];
+                        const dx = m.x - x;
+                        const dz = m.z - z;
+                        if (dx * dx + dz * dz <= moundMergeDist * moundMergeDist) { target = m; break; }
+                    }
+                }
+            }
+            if (target) {
+                // Killing repeatedly in one place piles the ground higher there instead of
+                // littering the list with overlapping bumps.
+                target.h = Math.min(moundMaxHeight, target.h + height * 0.4);
+                const grownRadius = Math.min(moundMaxRadius, Math.max(target.r, radius));
+                if (grownRadius !== target.r) {
+                    target.r = grownRadius;
+                    indexMound(target); // footprint may now reach cells it was not indexed in
+                }
+                stampMound(target);
+                return;
+            }
+            const mound = { x, z, h: Math.min(moundMaxHeight, height), r: radius };
+            mounds.push(mound);
+            indexMound(mound);
+            stampMound(mound);
+        }
+
+        function clearTerrain() {
+            mounds.length = 0;
+            moundCells.clear();
+            playerGroundY = 0;
+            rebuildTerrain();
+        }
+
         function updateInfiniteArena() {
             if (!infiniteArena || !camera) return;
-            infiniteArena.position.x = Math.round(camera.position.x / arenaRecenterStep) * arenaRecenterStep;
-            infiniteArena.position.z = Math.round(camera.position.z / arenaRecenterStep) * arenaRecenterStep;
+            // Deadband: only re-snap once the player is well past the boundary. Snapping on the
+            // exact midpoint would let someone loitering on the line rebuild the terrain every
+            // single frame.
+            if (Math.abs(camera.position.x - terrainOffsetX) < arenaRecenterStep * 0.75 &&
+                Math.abs(camera.position.z - terrainOffsetZ) < arenaRecenterStep * 0.75) return;
+            const offsetX = Math.round(camera.position.x / arenaRecenterStep) * arenaRecenterStep;
+            const offsetZ = Math.round(camera.position.z / arenaRecenterStep) * arenaRecenterStep;
+            if (offsetX === terrainOffsetX && offsetZ === terrainOffsetZ) return;
+            infiniteArena.position.x = offsetX;
+            infiniteArena.position.z = offsetZ;
+            terrainOffsetX = offsetX;
+            terrainOffsetZ = offsetZ;
+            // arenaRecenterStep is a whole number of grid cells, so the lattice lands back on
+            // the same world positions and the hills do not swim when the tile jumps.
+            rebuildTerrain();
         }
 
         function killEnemy(enemy, index) {
             const position = enemy.mesh.position.clone();
             createExplosion(position, enemy.deathColor || 0xff0000);
+            // The ground remembers. A HELLWARDEN leaves a hill; a chaser leaves a swell.
+            // This runs before the drop so the shards land on the new ground, not inside it.
+            if (enemy.type === 'boss') raiseGround(position.x, position.z, 5.0, 20);
+            else if (enemy.type === 'spawner') raiseGround(position.x, position.z, 2.4, 13);
+            else raiseGround(position.x, position.z, 1.5, 8);
             spawnShards(position, enemy.shardDrop);
             if (enemy.type === 'boss') {
                 // The fall of a HELLWARDEN: a second burst, a long collapse, and the arena resets
@@ -1405,13 +1603,21 @@
                 blending: THREE.AdditiveBlending,
                 fog: false
             });
-            const mesh = new THREE.Mesh(shockwaveGeo, mat);
+            // Each ring owns its geometry so its vertices can be draped over the terrain as it
+            // travels. The kill test is planar, so the ring has to LOOK planar-accurate too:
+            // a ring drawn at one fixed height would float over hills or vanish under them,
+            // and it is the player's only cue for when to jump.
+            const geo = shockwaveGeo.clone();
+            const mesh = new THREE.Mesh(geo, mat);
             mesh.rotation.x = -Math.PI / 2;
-            mesh.position.set(position.x, 0.08, position.z);
+            mesh.position.set(position.x, 0, position.z);
             mesh.renderOrder = 5;
             mesh.scale.setScalar(0.1);
             scene.add(mesh);
-            shockwaves.push({ mesh, x: position.x, z: position.z, radius: 0.1, speed: 13, maxRadius: 30 });
+            shockwaves.push({
+                mesh, x: position.x, z: position.z, radius: 0.1, speed: 13, maxRadius: 30,
+                basePos: new Float32Array(geo.attributes.position.array) // unscaled ring lattice
+            });
             triggerSynth(bossSlamSynth, "C1", "2n");
             createFloorGlow(position, 1.8);
         }
@@ -1424,13 +1630,29 @@
                 // radius the player never saw rendered.
                 if (w.radius >= w.maxRadius) {
                     scene.remove(w.mesh);
-                    w.mesh.material.dispose(); // shockwaveGeo is shared; only the material is per-ring
+                    w.mesh.geometry.dispose(); // this ring's own cloned lattice
+                    w.mesh.material.dispose();
                     shockwaves.splice(i, 1);
                     continue;
                 }
                 w.mesh.scale.setScalar(w.radius);
                 // Stay bright the whole time it is lethal; fade only over the final 15%.
                 w.mesh.material.opacity = 0.85 * Math.min(1, (w.maxRadius - w.radius) / (w.maxRadius * 0.15));
+
+                // Drape the ring over whatever ground it is currently crossing. The mesh is
+                // rotated -90deg about X and uniformly scaled, so local z becomes world height
+                // and has to be divided back out by the radius.
+                const pos = w.mesh.geometry.attributes.position;
+                const base = w.basePos;
+                const inv = 1 / w.radius;
+                for (let v = 0; v < pos.count; v++) {
+                    const lx = base[v * 3];
+                    const ly = base[v * 3 + 1];
+                    const wx = w.x + lx * w.radius;
+                    const wz = w.z - ly * w.radius;
+                    pos.array[v * 3 + 2] = (terrainHeightAt(wx, wz) + 0.12) * inv;
+                }
+                pos.needsUpdate = true;
 
                 // Player: the ring only bites ankles. Airborne = safe.
                 const dx = camera.position.x - w.x;
@@ -1499,14 +1721,31 @@
             controls.moveRight(-playerVelocity.x * delta);
             controls.moveForward(-playerVelocity.z * delta);
 
+            // Walk the deformed ground rather than a flat plane.
+            const groundY = terrainHeightAt(camera.position.x, camera.position.z);
             if (!isGrounded) {
                 playerVelocity.y -= gravity * delta;
                 camera.position.y += playerVelocity.y * delta;
-                if (camera.position.y <= playerEyeHeight) {
-                    camera.position.y = playerEyeHeight;
+                // Only land while descending. Without this, a jump taken just after the ground
+                // rose underfoot would be cancelled on its first frame, because the eased camera
+                // height still sits below the new surface.
+                if (playerVelocity.y <= 0 && camera.position.y <= groundY + playerEyeHeight) {
+                    camera.position.y = groundY + playerEyeHeight;
+                    playerGroundY = groundY;
                     playerVelocity.y = 0;
                     isGrounded = true;
                 }
+            } else if (playerGroundY - groundY > 1.2) {
+                // Walked off a ledge - fall properly instead of gliding down the cliff.
+                isGrounded = false;
+                playerVelocity.y = 0;
+            } else {
+                // Ground swelling underfoot shoves the player up briskly; slopes downward ease
+                // so walking still feels smooth. The clamp guarantees the camera is never
+                // swallowed by a hill that erupted where the player was standing.
+                const followRate = groundY > playerGroundY ? 26 : 9;
+                playerGroundY += (groundY - playerGroundY) * Math.min(1, delta * followRate);
+                if (playerGroundY < groundY - 0.35) playerGroundY = groundY - 0.35;
             }
 
             updateInfiniteArena();
@@ -1555,7 +1794,7 @@
                 if (e.type === 'spawner') {
                     const timeToEmit = e.nextEmit - gameTime;
                     e.emitCharge = smoothstep(1 - Math.max(0, timeToEmit) / 0.9);
-                    e.mesh.position.y = e.baseY + Math.sin(gameTime * 2 + e.wobbleOffset) * 0.35;
+                    e.mesh.position.y = terrainHeightAt(e.mesh.position.x, e.mesh.position.z) + e.baseY + Math.sin(gameTime * 2 + e.wobbleOffset) * 0.35;
                     if (gameTime >= e.nextEmit) {
                         spawnEnemy('chaser', e.mesh.position);
                         // Spawner output thins during boss fights too, matching the ambient
@@ -1596,7 +1835,7 @@
                 }
                  
                 if (e.type !== 'spawner') {
-                    e.mesh.position.y = e.baseY + Math.sin(gameTime * e.wobbleSpeed + e.wobbleOffset) * 0.06;
+                    e.mesh.position.y = terrainHeightAt(e.mesh.position.x, e.mesh.position.z) + e.baseY + Math.sin(gameTime * e.wobbleSpeed + e.wobbleOffset) * 0.06;
                 }
                 const pulse = Math.sin(gameTime * 14 + e.wobbleOffset) * 0.5 + 0.5;
                 const scale = e.baseScale * (1 + nearThreat * 0.22 + audioPanic * 0.18 + pulse * 0.05);
@@ -1719,7 +1958,7 @@
                 shard.mesh.position.addScaledVector(shard.velocity, delta);
                 shard.mesh.rotation.x += delta * 8;
                 shard.mesh.rotation.y += delta * 11;
-                const restY = shard.restY || 0.7;
+                const restY = terrainHeightAt(shard.mesh.position.x, shard.mesh.position.z) + (shard.restOffset || 0.7);
                 const fallingIntoFloor = shard.velocity.y < -0.45;
                 if (shard.mesh.position.y < restY) {
                     shard.mesh.position.y = restY;
@@ -1896,6 +2135,8 @@
             document.body.classList.remove('death-hit');
              
             camera.position.set(0, playerEyeHeight, 0);
+            // A new run gets flat ground; the old battlefield stays up behind the death screen.
+            clearTerrain();
             updateInfiniteArena();
             playerVelocity.set(0,0,0);
             scene.background = new THREE.Color(0x050000);
@@ -1965,8 +2206,11 @@
 
             // Slight camera bob for atmosphere even when still
             if(isPlaying && isGrounded) {
-                 camera.position.y = playerEyeHeight + Math.sin(timeNow * 0.003) * 0.05;
+                 camera.position.y = playerGroundY + playerEyeHeight + Math.sin(timeNow * 0.003) * 0.05;
             }
+
+            // One GPU upload per frame no matter how many kills reshaped the ground.
+            flushTerrainBuffers();
 
             renderer.render(scene, camera);
         }
