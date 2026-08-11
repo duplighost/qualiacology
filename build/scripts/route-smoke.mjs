@@ -22,6 +22,34 @@ const routes = [
   "/no-moon/codex/",
   "/404.html",
 ];
+// Routes that must stay gone. Case guards, the retired book, and games pulled
+// from the shelf — asserted 404 so a stray file or redirect cannot quietly
+// bring one back.
+const retiredRoutes = [
+  "/blackthorn-manor/",
+  "/Psychopharmacology/",
+  "/assets/Favicon.svg",
+  "/book",
+  "/book.html",
+  "/this-helped-someone/",
+  "/this-helped-someone/index.html",
+  ...[
+    "afterglow",
+    "afterparty-at-the-end-of-the-world",
+    "echo-saint",
+    "everybody-leaves-in-4-4",
+    "false-sun",
+    "finale",
+    "goodfire",
+    "goodnight-little-gods",
+    "potlight",
+    "sundog",
+    "the-dead-keep-playing",
+    "the-lag",
+    "unsay-it",
+    "vesperbane",
+  ].map((slug) => `/${slug}/`),
+];
 const results = [];
 const failures = [];
 const server = await createStaticServer({ root: outputRoot, port: portArgument });
@@ -34,7 +62,7 @@ try {
     if (response.status !== 200) failures.push(`${route} returned ${response.status}`);
   }
 
-  for (const route of ["/blackthorn-manor/", "/Psychopharmacology/", "/assets/Favicon.svg", "/book", "/book.html", "/this-helped-someone/", "/this-helped-someone/index.html"]) {
+  for (const route of retiredRoutes) {
     const response = await fetch(`${baseUrl}${route}`);
     results.push({ route, status: response.status, expected: 404 });
     if (response.status !== 404) failures.push(`${route} should be a strict-case 404, got ${response.status}`);
@@ -57,5 +85,5 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exitCode = 1;
 } else {
-  console.log(`Strict route smoke passed: ${routes.length} reachable routes, 7 intentional case/retired 404s`);
+  console.log(`Strict route smoke passed: ${routes.length} reachable routes, ${retiredRoutes.length} intentional case/retired 404s`);
 }
