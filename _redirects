@@ -46,10 +46,6 @@
 /horror             /marrow/                  302
 /the-house          /marrow/                  302
 
-# --- Vesperbane ---
-/vesperbane.html     /vesperbane/                 301!
-/vesper              /vesperbane/                 302
-
 # --- Galaxy Sandbox ---
 /galaxy-sandbox.html /galaxy-sandbox/             301!
 /galaxy              /galaxy-sandbox/             302
@@ -105,44 +101,14 @@
 /this-helped-someone     /404.html  404!
 /this-helped-someone/*   /404.html  404!
 
-# --- AFTERGLOW ---
-/afterglow.html  /afterglow/  301!
-
-# --- Goodnight, Little Gods ---
-/goodnight-little-gods.html  /goodnight-little-gods/  301!
-
-# --- ECHO//SAINT ---
-/echo-saint.html  /echo-saint/  301!
-
 # --- FLARE ---
 /flare.html  /flare/  301!
 
 # --- CINDERBLOOM ---
 /cinderbloom.html  /cinderbloom/  301!
 
-# --- THE LAG ---
-/the-lag.html  /the-lag/  301!
-
-# --- GOODFIRE ---
-/goodfire.html  /goodfire/  301!
-
-# --- FINALE ---
-/finale.html  /finale/  301!
-
 # --- VANTA//9 ---
 /vanta-9.html  /vanta-9/  301!
-
-# --- THE DEAD KEEP PLAYING ---
-/the-dead-keep-playing.html  /the-dead-keep-playing/  301!
-
-# --- EVERYBODY LEAVES IN 4/4 ---
-/everybody-leaves-in-4-4.html  /everybody-leaves-in-4-4/  301!
-
-# --- UNSAY IT ---
-/unsay-it.html  /unsay-it/  301!
-
-# --- AFTERPARTY AT THE END OF THE WORLD ---
-/afterparty-at-the-end-of-the-world.html  /afterparty-at-the-end-of-the-world/  301!
 
 # --- POCKET SUN ---
 /pocket-sun.html  /pocket-sun/  301!
@@ -152,9 +118,6 @@
 # --- WICK ---
 /wick.html  /wick/  301!
 
-# --- SUNDOG ---
-/sundog.html  /sundog/  301!
-
 # --- KICK BALL // LUNAR VELOCITY ---
 /kick-ball-lunar-velocity.html  /kick-ball-lunar-velocity/  301!
 /kick-ball                       /kick-ball-lunar-velocity/  302
@@ -162,15 +125,10 @@
 # --- RELAY//ECLIPSE ---
 /relay-eclipse.html  /relay-eclipse/  301!
 
-# --- FALSE SUN ---
-/false-sun.html  /false-sun/  301!
-
-# --- POTLIGHT — DOWNPOUR ---
-/potlight.html  /potlight/  301!
-
 # --- VESPERWAKE: THE HOLLOW BELL ---
 /vesperwake.html  /vesperwake/  301!
 /hollow-bell      /vesperwake/  302
+/vesper           /vesperwake/  302
 
 # --- FETCH ---
 /fetch.html  /fetch/  301!

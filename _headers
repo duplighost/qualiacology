@@ -168,12 +168,6 @@
 /duskfall/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-/vesperbane/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/vesperbane/js/*
-  Cache-Control: public, max-age=0, must-revalidate
-
 /galaxy-sandbox/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
@@ -247,49 +241,6 @@
 /pocket-sun/icons/*
   Cache-Control: public, max-age=3600, must-revalidate
 
-# --- AFTERGLOW ---
-/afterglow/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/afterglow/manifest.json
-  Content-Type: application/manifest+json; charset=UTF-8
-  Cache-Control: public, max-age=0, must-revalidate
-
-/afterglow/style.css
-  Cache-Control: public, max-age=0, must-revalidate
-
-/afterglow/js/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/afterglow/assets/*
-  Cache-Control: public, max-age=3600, must-revalidate
-
-# --- Goodnight, Little Gods ---
-/goodnight-little-gods/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/goodnight-little-gods/styles.css
-  Cache-Control: public, max-age=0, must-revalidate
-
-/goodnight-little-gods/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/goodnight-little-gods/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
-# --- ECHO//SAINT ---
-/echo-saint/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/echo-saint/styles.css
-  Cache-Control: public, max-age=0, must-revalidate
-
-/echo-saint/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/echo-saint/assets/*
-  Cache-Control: public, max-age=3600, must-revalidate
-
 # --- CINDERBLOOM ---
 /cinderbloom/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
@@ -302,30 +253,6 @@
 
 /cinderbloom/licenses/*
   Cache-Control: public, max-age=31536000, immutable
-
-# --- THE LAG ---
-/the-lag/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/the-lag/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/the-lag/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
-# --- GOODFIRE ---
-/goodfire/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/goodfire/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-# --- FINALE ---
-/finale/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/finale/js/*
-  Cache-Control: public, max-age=0, must-revalidate
 
 # --- VANTA//9 ---
 /vanta-9/index.html
@@ -343,76 +270,12 @@
 /vanta-9/vanta-9-og.png
   Cache-Control: public, max-age=3600, must-revalidate
 
-# --- THE DEAD KEEP PLAYING ---
-/the-dead-keep-playing/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/the-dead-keep-playing/manifest.webmanifest
-  Content-Type: application/manifest+json; charset=UTF-8
-  Cache-Control: public, max-age=0, must-revalidate
-
-/the-dead-keep-playing/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/the-dead-keep-playing/icons/*
-  Cache-Control: public, max-age=3600, must-revalidate
-
-# --- EVERYBODY LEAVES IN 4/4 ---
-/everybody-leaves-in-4-4/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/everybody-leaves-in-4-4/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-# --- UNSAY IT ---
-/unsay-it/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/unsay-it/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/unsay-it/favicon.png
-  Cache-Control: public, max-age=3600, must-revalidate
-
-/unsay-it/og.png
-  Cache-Control: public, max-age=3600, must-revalidate
-
-# --- AFTERPARTY AT THE END OF THE WORLD ---
-/afterparty-at-the-end-of-the-world/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/afterparty-at-the-end-of-the-world/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/afterparty-at-the-end-of-the-world/og.png
-  Cache-Control: public, max-age=3600, must-revalidate
-
 # --- WICK ---
 /wick/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
 /wick/js/*
   Cache-Control: public, max-age=0, must-revalidate
-
-# --- SUNDOG ---
-/sundog/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/sundog/sw.js
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/sundog/manifest.webmanifest
-  Content-Type: application/manifest+json; charset=UTF-8
-  Cache-Control: public, max-age=0, must-revalidate
-
-/sundog/styles.css
-  Cache-Control: public, max-age=0, must-revalidate
-
-/sundog/sundog.bundle.js
-  Cache-Control: public, max-age=0, must-revalidate
-
-/sundog/assets/*
-  Cache-Control: public, max-age=3600, must-revalidate
 
 # --- KICK BALL // LUNAR VELOCITY ---
 /kick-ball-lunar-velocity/index.html
@@ -452,35 +315,6 @@
 
 /relay-eclipse/assets/*
   Cache-Control: public, max-age=31536000, immutable
-
-# --- FALSE SUN ---
-/false-sun/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/false-sun/styles.css
-  Cache-Control: public, max-age=0, must-revalidate
-
-/false-sun/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-# --- POTLIGHT — DOWNPOUR ---
-/potlight/
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
-
-/potlight/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
-
-/potlight/manifest.webmanifest
-  Content-Type: application/manifest+json; charset=UTF-8
-  Cache-Control: public, max-age=0, must-revalidate
-
-/potlight/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/potlight/assets/*
-  Cache-Control: public, max-age=3600, must-revalidate
 
 # --- VESPERWAKE: THE HOLLOW BELL ---
 /vesperwake/index.html

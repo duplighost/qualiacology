@@ -108,19 +108,6 @@
       "actionLabel": "Play PARTY ANIMAL"
     },
     {
-      "slug": "vesperbane",
-      "title": "Vesperbane",
-      "descriptor": "Gothic action platformer",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/vesperbane-card-clean.webp",
-      "alt": "A crimson-cloaked hunter mid-leap between gothic spires under an eclipsed moon",
-      "summary": "Sprint, slash, wall-kick, and dash through a gothic platformer built for speed and blood-red momentum, across two nights.",
-      "metaDescription": "Vesperbane is a fast gothic action platformer: sprint, slash, wall-kick, dash, and ring the bell before the night eats you.",
-      "controls": "WASD or arrows · touch on mobile · rebindable",
-      "actionLabel": "Play Vesperbane"
-    },
-    {
       "slug": "galaxy-sandbox",
       "title": "Galaxy Sandbox",
       "descriptor": "N-body space toy",
@@ -253,46 +240,6 @@
       "actionLabel": "Play DUET"
     },
     {
-      "slug": "afterglow",
-      "title": "AFTERGLOW",
-      "descriptor": "Neon survival roguelite",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/afterglow-card-clean.webp",
-      "alt": "A small cyan ship dashing through a dark neon field of pink and blue enemies",
-      "summary": "You’re the last spark of a dead star, and the dark wants the light back. Dash through escalating waves for as long as you can.",
-      "metaDescription": "AFTERGLOW is a browser twin-stick survival roguelite — one neon arena, escalating waves, and a dash you learn to live inside.",
-      "controls": "WASD/arrows + mouse · Space/Shift/right-click dash · touch",
-      "actionLabel": "Play AFTERGLOW"
-    },
-    {
-      "slug": "goodnight-little-gods",
-      "title": "Goodnight, Little Gods",
-      "descriptor": "Resonance-herding game",
-      "group": "worlds",
-      "featured": false,
-      "image": "/assets/games/goodnight-little-gods-card-clean.webp",
-      "alt": "Goodnight, Little Gods title beside three small colored lights orbiting in darkness",
-      "summary": "Gather nine strange creatures into a living song before dawn forgets them.",
-      "metaDescription": "Goodnight, Little Gods is a short browser rhythm game about singing nine small creatures home before morning.",
-      "controls": "WASD · click/Space sing · Shift dash · 1/2/3 tune · touch",
-      "duration": "About 12 minutes",
-      "actionLabel": "Enter the Orchard"
-    },
-    {
-      "slug": "echo-saint",
-      "title": "ECHO//SAINT",
-      "descriptor": "Bullet-hell roguelite",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/echo-saint-card-clean.webp",
-      "alt": "A luminous cyan ship threading a vertical purple bullet field between doctrine panels",
-      "summary": "Draw through the bullet storm, close the shape, and send every captured shot screaming home.",
-      "metaDescription": "ECHO//SAINT is a browser bullet hell where you draw closed shapes around enemy fire and it comes back as your own.",
-      "controls": "WASD/arrows · hold Space Closure · Shift Break · touch/gamepad",
-      "actionLabel": "Begin Transmission"
-    },
-    {
       "slug": "flare",
       "title": "FLARE",
       "descriptor": "Dark-tower FPS",
@@ -319,45 +266,6 @@
       "actionLabel": "Begin Survey 9"
     },
     {
-      "slug": "the-lag",
-      "title": "THE LAG",
-      "descriptor": "Mirror-labyrinth horror",
-      "group": "horror",
-      "featured": false,
-      "image": "/assets/games/the-lag-card-clean.webp",
-      "alt": "THE LAG title suspended in a black fog with a faint reflected glow beneath it",
-      "summary": "Your reflection is a half-second behind, and it is closing the gap. Navigate a foggy labyrinth by the copy of your lantern in the glass.",
-      "metaDescription": "THE LAG is a browser first-person horror game in a maze of mirrors where your reflection runs half a second behind — and keeps closing.",
-      "controls": "WASD + mouse · RMB lantern · F flare · Shift shutter · E use",
-      "actionLabel": "Click to Enter"
-    },
-    {
-      "slug": "goodfire",
-      "title": "GOODFIRE",
-      "descriptor": "Fire-season simulation",
-      "group": "worlds",
-      "featured": false,
-      "image": "/assets/games/goodfire-card-clean.webp",
-      "alt": "A pixel-art mountain fire map with roads, forest, river, fireline and a small lookout settlement",
-      "summary": "You are the last fire warden of Ninemile Mountain. Cut line, light backburns, call the tanker — and learn what the mountain has been trying to tell you.",
-      "metaDescription": "GOODFIRE is a browser wildfire simulation across one season on one mountain, where the ground you fail to hold is what saves you later.",
-      "controls": "WASD move · LMB cut line · RMB drip torch · Space stomp · X give ground · G tanker · M tower",
-      "actionLabel": "Take the Watch"
-    },
-    {
-      "slug": "finale",
-      "title": "FINALE",
-      "descriptor": "Firework chain-reaction shooter",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/finale-card-clean.webp",
-      "alt": "Cyan and pink fireworks exploding over a black city skyline while a small craft flies below",
-      "summary": "The fireworks have started launching themselves. Kill one during its lit fuse and its whole volley blooms in your colour.",
-      "metaDescription": "FINALE is a browser bullet hell about beating a firework to its own explosion — kill a shell in its fuse window and its volley blooms in your colour.",
-      "controls": "WASD or mouse fly · Shift focus · E flare · Space misfire",
-      "actionLabel": "Begin FINALE"
-    },
-    {
       "slug": "vanta-9",
       "title": "VANTA//9",
       "descriptor": "Alien-world FPS descent",
@@ -371,59 +279,6 @@
       "actionLabel": "Enter the Choir"
     },
     {
-      "slug": "the-dead-keep-playing",
-      "title": "THE DEAD KEEP PLAYING",
-      "descriptor": "One-player co-op action",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/the-dead-keep-playing-card-clean.webp",
-      "alt": "A neon cutting-room arena where cyan echoes attack three glowing targets",
-      "summary": "You don’t get extra lives. You get backup. Every failed run becomes your next teammate.",
-      "metaDescription": "THE DEAD KEEP PLAYING is a browser platformer where every failed run comes back as a teammate — a one-player co-op built out of your own ghosts.",
-      "controls": "A/D move · W/Space double jump · X/J fire · Shift/K dash · R/E commit · touch",
-      "actionLabel": "Start the First Take"
-    },
-    {
-      "slug": "everybody-leaves-in-4-4",
-      "title": "EVERYBODY LEAVES IN 4/4",
-      "descriptor": "Playable breakup song",
-      "group": "worlds",
-      "featured": false,
-      "image": "/assets/games/everybody-leaves-in-4-4-card-clean.webp",
-      "alt": "A hand-inked city skyline with a small figure beneath a cream paper sky and red frame",
-      "summary": "A hand-inked playable breakup song about catching what people throw at you — and deciding what to do with it.",
-      "metaDescription": "EVERYBODY LEAVES IN 4/4 is a browser action platformer: one last song with your old band, where everything you use is something they threw at you.",
-      "controls": "A/D or arrows/left stick · Space jump · Shift dash · K/Y catch · J/X play · touch",
-      "duration": "About 12 minutes",
-      "actionLabel": "Play Side A"
-    },
-    {
-      "slug": "unsay-it",
-      "title": "UNSAY IT",
-      "descriptor": "Word-stealing action-adventure",
-      "group": "worlds",
-      "featured": false,
-      "image": "/assets/games/unsay-it-card-clean.webp",
-      "alt": "A paper-cut character moving through a purple town where adjectives float above doors and people",
-      "summary": "A hand-cut action-adventure about peeling words off the world and living with where you put them.",
-      "metaDescription": "UNSAY IT is a browser action-adventure where every adjective exists exactly once — peel a word off one thing and stick it on another, and live with the trade.",
-      "controls": "WASD/arrows · Space/Shift dash · J/click shove · E/right-click peel or stick · Q switch · touch",
-      "actionLabel": "Find a Lighter Way Out"
-    },
-    {
-      "slug": "afterparty-at-the-end-of-the-world",
-      "title": "AFTERPARTY AT THE END OF THE WORLD",
-      "descriptor": "Playable browser elegy",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/afterparty-at-the-end-of-the-world-card-clean.webp",
-      "alt": "A neon-paper city scene interrupted by a card reading YOU WERE NOT FINISHED",
-      "summary": "A loud, playable browser elegy about rescuing the people who made the end of the world worth surviving.",
-      "metaDescription": "AFTERPARTY AT THE END OF THE WORLD is a browser platformer about outrunning the sunrise and rescuing the people who made the night worth it.",
-      "controls": "A/D or arrows move · Space jump · Shift dash · S/down drop · X feedback · gamepad/touch",
-      "actionLabel": "Start the Last Song"
-    },
-    {
       "slug": "wick",
       "title": "WICK",
       "descriptor": "Fluid fire simulation",
@@ -435,19 +290,6 @@
       "metaDescription": "WICK is a mouse-only browser fire simulation: move the air, draw breath, and carry one spark through six movements.",
       "controls": "Move pointer to push air · hold to draw breath · M mute · R rewind · Esc movements",
       "actionLabel": "Light WICK"
-    },
-    {
-      "slug": "sundog",
-      "title": "SUNDOG",
-      "descriptor": "High-speed action chase",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/sundog-card-clean.webp",
-      "alt": "The SUNDOG title card over a neon road beneath a low sun",
-      "summary": "They put the daylight in a machine. It ran. Chase the Crown Engine down a collapsing road and make morning public domain.",
-      "metaDescription": "SUNDOG is a browser action game about chasing the machine that stole the day across a collapsing neon road.",
-      "controls": "A/D or arrows move · Space/W jump · J/X or click cut · K/C/Shift or right-click dash · gamepad/touch",
-      "actionLabel": "Run the Crown"
     },
     {
       "slug": "kick-ball-lunar-velocity",
@@ -474,32 +316,6 @@
       "metaDescription": "RELAY//ECLIPSE is a browser horde FPS about holding the lower map, fighting up the relay, and reaching the moon while the planets shoot at you.",
       "controls": "WASD/arrows move · mouse aim · LMB fire · RMB aim · Space jump · Shift/F dash · R reload · 1–4 weapons · touch",
       "actionLabel": "Play RELAY//ECLIPSE"
-    },
-    {
-      "slug": "false-sun",
-      "title": "FALSE SUN",
-      "descriptor": "Shadow-cutting action-metroidvania",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/false-sun-card-clean.webp",
-      "alt": "A triangular figure carrying a gold sun faces a vast violet guardian whose body casts cyan shadows across a dark geometric garden",
-      "summary": "You carry a captive sun. Move it to redraw the room, open routes, and cut the things that cast the shadows.",
-      "metaDescription": "FALSE SUN is a browser action-metroidvania about moving a captive sun to redraw shadows, open routes, and cut the things that cast them.",
-      "controls": "WASD/arrows move · mouse aim · LMB Burn · Space Cut · E/RMB Pin · M map · gamepad/touch",
-      "actionLabel": "Carry the Sun"
-    },
-    {
-      "slug": "potlight",
-      "title": "POTLIGHT — DOWNPOUR",
-      "descriptor": "2.5D storm action",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/potlight-card-clean.jpg",
-      "alt": "A yellow-coated figure slashing a rain-soaked enemy on a flooded blue-black street beneath sheets of rain",
-      "summary": "Fight your way home through a neighborhood drowning in weather. Every light and found object changes how you survive.",
-      "metaDescription": "POTLIGHT: DOWNPOUR is a tactile 2.5D action game about fighting through a neighborhood transformed by relentless rain and the care strangers left behind.",
-      "controls": "WASD/arrows move · mouse/J fire · Space/K blade · Shift/right-click dash · E read or pulse · Q Color Read · gamepad/touch",
-      "actionLabel": "Step into the downpour"
     },
     {
       "slug": "vesperwake",
