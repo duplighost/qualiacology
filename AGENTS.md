@@ -2,7 +2,7 @@
 
 Read this before changing anything. It is the canonical playbook for AI agents
 (Codex, Claude, or anything else) and it is kept current — trust it over your
-own notes or memory. Last verified: 2026-08-05.
+own notes or memory. Last verified: 2026-08-11.
 
 ## The two rules that matter most
 
@@ -50,9 +50,13 @@ own notes or memory. Last verified: 2026-08-05.
   rebuilds the hubs, validates the public tree, runs strict route smoke, and
   rejects stale generated pages. It must never commit or push generated files.
 
-Current verified baseline: **36 games, 10 music releases, 54 audited public
-routes.** Pocket Sun is hosted locally in this repository; it is not a redirect
-to a separate Netlify project.
+Current verified baseline: **25 games, 10 music releases, 43 reachable public
+routes + 21 asserted 404s.** Pocket Sun is hosted locally in this repository;
+it is not a redirect to a separate Netlify project.
+
+This baseline goes stale fast — it was still claiming 36 games when the real
+count was 39. Re-derive it from `node build/scripts/build-site.mjs` rather than
+trusting the number above, and correct it here when you find it wrong.
 
 ## Editing the hub pages (home / games / music / psych)
 
@@ -97,7 +101,10 @@ text edits only, then validate it still parses.
    still exactly 3 featured.
 5. **Bump the count asserts** in `build/scripts/build-site.mjs`,
    `build/scripts/validate-site.mjs`, AND `build/qa/browser-qa.mjs` (all three
-   hardcode the canonical game total).
+   hardcode the canonical game total). `browser-qa.mjs` also hardcodes the
+   **horror-filter roster** — the exact slug list and "Showing N worlds." — so
+   any horror game added or removed needs that expectation updated too, or
+   `npm run qa` fails on the filter interaction long after the counts agree.
 6. **Short links** in `_redirects` (e.g. `/duet  /duet/  302`) — check for
    collisions first. Add a `_headers` block only if the game needs one.
 7. **`404.html`** is hand-coded and name-drops specific games — update it if
@@ -113,6 +120,15 @@ text edits only, then validate it still parses.
 `assets/catalog/games/` set, any OG image, `_redirects` entries, `_headers`
 block, `404.html` mentions, orphaned `assets/` files referencing it, catalog
 entry, count asserts, then rebuild + validate. Grep the slug until it's zero.
+
+Two traps the first pass always misses. **Vanity short links outlive the game
+they pointed at** — `/vesper` was a 302 to `/vesperbane/`; deleting the game
+without deciding what happens to the short link leaves a dead route. Repoint it
+or delete it deliberately. And **add the dead routes to `retiredRoutes` in
+`build/scripts/route-smoke.mjs`**, which asserts them 404 alongside the retired
+book. That is what stops a later restore or a stray file from quietly putting a
+removed game back on the shelf; its 404 count is derived from that list, so it
+never needs bumping.
 
 ## Adding an album (Doopliss release)
 
