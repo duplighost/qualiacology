@@ -853,6 +853,22 @@ export class Enemies {
     this.game.scene.add(mesh);
     this.list.push(e);
     (this.game.spawnLog ||= []).push([kind, state, Math.round(x), Math.round(z), +this.game.time.toFixed(1)]);
+    // EVERY active body arrives by dragging itself out of the ground. Alex's
+    // two favourite enemy moments are both partial bodies — hands through a
+    // wall, "slowly coming up from the floor... that was cool" — and his
+    // verdict on the fully-revealed shape is that it isn't scary. So the
+    // reveal is now the default entrance, not a graveyard special case:
+    // popped into existence at full height is the one thing a body never
+    // does. Dormant spawns skip it (they are furniture until noticed), and
+    // callers that stage their own arrival (the arena's waves, the nursery's
+    // slow rise) override the fields after spawn returns.
+    if (state !== 'dormant' && state !== 'standing') {
+      e.graveRiseDur = 1.15;
+      e.graveRiseT = e.graveRiseDur;
+      if (this.game.act !== 'graveyard' && this.game.audio.ready) {
+        this.game.audio.walkerRise({ pos: e.pos, gain: 0.3, rate: 0.86, verb: 0.5 });
+      }
+    }
     return e;
   }
 
@@ -1128,10 +1144,41 @@ export class Enemies {
       // no hunting through floors: a storey of separation makes you unreachable
       const sameLevel = Math.abs(player.pos.y - e.pos.y) < 1.8;
 
+      // The Resident YIELDS while the skull is anchored in a puzzle. The
+      // house's required verbs include long anchored commitments (the window
+      // relay is ~10 s of held walking with the light and the weapon both
+      // away), and a hunter that presses during them turns a required verb
+      // into a death sentence. So while the house's own machinery is working
+      // it watches instead: it holds a ring outside arm's reach, backing off
+      // if you carry the anchor toward it, and the chatter never stops. The
+      // moment the anchor releases, it presses again — the pressure is real,
+      // the sentence is not.
+      if (e.kind === 'resident' && e.state !== 'stunned' && e.state !== 'dying'
+        && game.skull.mode === 'anchored' && game.skull.anchor?.puzzleId) {
+        if (sameLevel && dist < 4.4) {
+          toP.normalize();
+          this._moveWithPush(e, -toP.x * e.spec.stalk * 0.85 * dt, -toP.z * e.spec.stalk * 0.85 * dt);
+        }
+        e.phase += dt * 2.2;
+        e.stepT -= dt;
+        if (e.stepT <= 0) {
+          e.stepT = 0.7 + Math.random() * 0.12;
+          game.audio.footstep(game.world.surfaceAt(e.pos), { pos: e.pos, gain: 0.4, rate: 0.72 });
+        }
+        if (sameLevel && dist < 8) {
+          const level = 0.55 + (1 - dist / 8) * 0.3;
+          if (level > maxThreat) { maxThreat = level; threatDir = toP.clone().normalize(); }
+        }
+        continue;
+      }
+
       // ---- state machine ----
       switch (e.state) {
         case 'dormant':
-          // statue-still until you have PASSED it, or it hears you
+          // statue-still until you have PASSED it, or it hears you.
+          // A body whose rise an author is pacing (riseFrozen) cannot be
+          // startled awake half out of the floor.
+          if (e.riseFrozen) break;
           if (sameLevel && dist < 3.2 && player.noise > 0.5) { e.state = 'wind'; e.windT = 0; }
           break;
         case 'standing': {
@@ -1195,6 +1242,15 @@ export class Enemies {
           if (dist > 1 && sameLevel) {
             toP.normalize();
             this._moveWithPush(e, toP.x * e.spec.stalk * dt, toP.z * e.spec.stalk * dt);
+            // A body that now inhabits the whole act must be audible while it
+            // paces: slower and softer than the chase cadence, but there. The
+            // law is "you hear things before you see them", and the skull's
+            // chatter radar keys off the same presence.
+            e.stepT -= dt;
+            if (e.stepT <= 0) {
+              e.stepT = 0.62 + Math.random() * 0.1;
+              game.audio.footstep(game.world.surfaceAt(e.pos), { pos: e.pos, gain: 0.42, rate: 0.78 });
+            }
           }
           if (sameLevel && dist < 9 && (player.noise > 0.3 || dist < 5)) { e.state = 'wind'; e.windT = 0; }
           break;
@@ -1245,8 +1301,26 @@ export class Enemies {
               tz = graveExit.z;
             } else if (e._via) {
               const vd = Math.hypot(e._via.x - e.pos.x, e._via.z - e.pos.z);
-              if (vd < 0.9) e._via = null;
-              else { tx = e._via.x; tz = e._via.z; }
+              if (vd < 0.9) {
+                // waypoint consumed: remember its door (the one-entry
+                // exclusion that prevents oscillating straight back through
+                // it) and SHIFT to the next leg instead of beelining
+                e._viaLast = e._via.door || e._viaLast;
+                e._route?.shift();
+                e._via = e._route?.[0] || null;
+              }
+              if (e._via) { tx = e._via.x; tz = e._via.z; }
+            } else if (!e.graveArena && !e.gravePressure) {
+              // In the house, plan proactively rather than only after 0.8 s of
+              // grinding into a shut door. Throttled; BFS on the cell graph.
+              e._navT = (e._navT || 0) - dt;
+              if (e._navT <= 0) {
+                e._navT = 0.9;
+                const route = this._houseRoute(e, { exclude: e._viaLast });
+                if (route?.length) { e._route = route; e._via = route[0]; }
+                else if (route) { e._route = null; e._via = null; }   // same room: beeline
+              }
+              if (e._via) { tx = e._via.x; tz = e._via.z; }
             }
             const dl = Math.hypot(tx - e.pos.x, tz - e.pos.z) || 1;
             const dirX = (tx - e.pos.x) / dl, dirZ = (tz - e.pos.z) / dl;
@@ -1274,7 +1348,13 @@ export class Enemies {
                   };
                 }
               } else {
-                e._via = this._bestDoorNode(e);
+                // Stalled anyway (furniture, another body): re-plan on the
+                // graph, dropping the exclusion if it is all that blocks us.
+                const route = this._houseRoute(e, { exclude: e._viaLast })
+                  || this._houseRoute(e)
+                  || null;
+                if (route?.length) { e._route = route; e._via = route[0]; }
+                else e._via = this._bestDoorNode(e);   // outside the graph
               }
               e._stallT = 0;
             }
@@ -1447,9 +1527,24 @@ export class Enemies {
       if (e.state !== 'dying') e.pos.y = game.world.groundHeightAt(e.pos.x, e.pos.z, e.pos.y + 1);
       e.mesh.position.copy(e.pos);
       if (e.graveRiseT > 0 && e.state !== 'dying') {
-        e.graveRiseT = Math.max(0, e.graveRiseT - dt);
+        // The emerge, not an elevator. Position alone read as riding a
+        // platform; a body dragging itself out of the ground is compressed
+        // and fighting: it starts squashed and unfolds, it shudders
+        // laterally with the effort, and the jaw hangs open until it is out.
+        // riseFrozen lets an author (the nursery) own the clock.
+        if (!e.riseFrozen) e.graveRiseT = Math.max(0, e.graveRiseT - dt);
         const remaining = e.graveRiseT / Math.max(0.001, e.graveRiseDur || 1.1);
-        e.mesh.position.y -= remaining * remaining * 1.35;
+        const up = 1 - remaining;
+        // squash-only bodies (the nursery: its floor is someone's ceiling)
+        // grow from a crouch instead of sinking through the storey below
+        if (!e.riseSquashOnly) e.mesh.position.y -= remaining * remaining * 1.35;
+        e.mesh.scale.y = e.spec.scale * ((e.riseSquashOnly ? 0.06 : 0.34) + (e.riseSquashOnly ? 0.94 : 0.66) * up);
+        e.mesh.position.x = e.pos.x + Math.sin(up * 31 + e.serial) * 0.055 * remaining;
+        e.mesh.position.z = e.pos.z + Math.cos(up * 24 + e.serial) * 0.04 * remaining;
+        const w = e.mesh.userData.walker;
+        if (w?.jaw) w.jaw.rotation.x = w.jaw.userData.baseRotation.x + 0.5 * remaining;
+      } else if (e.mesh.scale.y !== e.spec.scale) {
+        e.mesh.scale.y = e.spec.scale;
       }
       if (e.state !== 'dormant' && e.state !== 'dying' && dist > 0.1) {
         e.mesh.rotation.y = Math.atan2(player.pos.x - e.pos.x, player.pos.z - e.pos.z);
@@ -2018,6 +2113,73 @@ export class Enemies {
     return true;
   }
 
+  // Real routing over the house's own cell graph (world.houseNav), replacing
+  // blind steering toward whichever door happened to be open. BFS on a grid
+  // this small (a few hundred cells) costs nothing, runs only on re-plan, and
+  // returns the first two DOORWAYS along the path — the only waypoints a
+  // straight-line steerer needs. `exclude` is the one-entry memory that stops
+  // a body oscillating back through the door it just used.
+  _houseRoute(e, { exclude = null } = {}) {
+    const world = this.game.world;
+    const player = this.game.player;
+    const from = world.houseCellAt(e.pos.x, e.pos.z, e.pos.y);
+    const to = world.houseCellAt(player.pos.x, player.pos.z, player.pos.y);
+    if (!from || !to || from.lv !== to.lv) return null;
+    const canOpen = e.kind === 'resident';
+    const start = from.cx + ',' + from.cz;
+    const goal = to.cx + ',' + to.cz;
+    if (start === goal) return [];
+    const prev = new Map([[start, null]]);
+    const queue = [start];
+    const DIRS = [['N', 0, -1], ['S', 0, 1], ['W', -1, 0], ['E', 1, 0]];
+    let found = false;
+    while (queue.length && !found) {
+      const key = queue.shift();
+      const [cx, cz] = key.split(',').map(Number);
+      for (const [dir, dx, dz] of DIRS) {
+        if (!world.housePassable(from.lv, cx, cz, dir, canOpen, exclude)) continue;
+        const nk = (cx + dx) + ',' + (cz + dz);
+        if (prev.has(nk)) continue;
+        prev.set(nk, key);
+        if (nk === goal) { found = true; break; }
+        queue.push(nk);
+      }
+    }
+    if (!found) return null;
+    // walk the path back and collect the doors it crosses, nearest first
+    const level = world.houseNav.levels[from.lv];
+    const path = [];
+    for (let k = goal; k; k = prev.get(k)) path.push(k);
+    path.reverse();
+    const waypoints = [];
+    for (let i = 1; i < path.length && waypoints.length < 2; i++) {
+      const [ax, az] = path[i - 1].split(',').map(Number);
+      const [bx, bz] = path[i].split(',').map(Number);
+      const o = az === bz ? 'V' : 'H';
+      const ex = o === 'V' ? Math.max(ax, bx) : ax;
+      const ez = o === 'H' ? Math.max(az, bz) : az;
+      const door = level.doorAt.get(o + '|' + ex + ',' + ez);
+      if (door) waypoints.push({ x: door.center.x, z: door.center.z, door });
+    }
+    return waypoints;
+  }
+
+  // A door closed in a pursuer's face is a purchase, not a wall. Clear the
+  // route (it was planned through a doorway that no longer passes) and put
+  // the knob-turn on a stagger so the slam visibly bought time.
+  onDoorClosed(door) {
+    for (const e of this.list) {
+      if (e.state !== 'chase' && e.state !== 'stalk') continue;
+      if (Math.abs(door.floor - e.pos.y) > 1.8) continue;
+      if (Math.hypot(door.center.x - e.pos.x, door.center.z - e.pos.z) > 2.2) continue;
+      e._doorT = -0.6;
+      e._doorTold = false;
+      e._route = null;
+      e._via = null;
+      e._viaLast = door;
+    }
+  }
+
   _bestDoorNode(e) {
     // nearest useful doorway: passable (open — or merely unlocked, if you are
     // the Resident) on this storey, scoring approach + remaining distance
@@ -2046,14 +2208,26 @@ export class Enemies {
       if (Math.hypot(d.center.x - e.pos.x, d.center.z - e.pos.z) < 1.25) { door = d; break; }
     }
     if (door) {
+      // A slam in its face sets _doorT negative (onDoorClosed): the shut is a
+      // purchased delay, so the commitment restarts from further back.
       e._doorT = (e._doorT || 0) + dt;
+      // The tell Alex asked for and only half received (playtest 2: "you shut
+      // the door, silence, then the knob turns"): silence, THEN the knob
+      // visibly works before the panel moves. Motion + sound, no words.
+      if (e._doorT > 0.55 && !e._doorTold) {
+        e._doorTold = true;
+        door.rattleT = Math.max(door.rattleT || 0, 0.5);
+        this.game.audio.lockedRattle({ pos: door.group.position, gain: 0.6, rate: 0.7 });
+      }
       if (e._doorT > 1.15) {
         e._doorT = 0;
+        e._doorTold = false;
         door.setOpen(true);
         this.game.audio.doorOpen(true, { pos: door.group.position });
       }
     } else {
-      e._doorT = 0;
+      e._doorT = Math.min(e._doorT || 0, 0);   // keep a slam's stagger ticking down
+      e._doorTold = false;
     }
   }
 

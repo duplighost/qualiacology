@@ -1148,7 +1148,8 @@ function buildOssuaryRoute(game) {
       game.flag('ossuaryCleared');
       game.flag('graveyardCleared');
       game.graveyardGate?.openGate?.('ossuary');
-      exitCollider.max.y = exitCollider.min.y;
+      // (the exit collider is not collapsed here — it tracks the sinking
+      // slab in the ticker below, so the way opens when the stone is gone)
       game.audio.metalDrop({ pos: anchorPos, gain: 0.88, rate: 0.62 });
       game.audio.duck(0.2, 2.8);
       game.checkpoint('graveyard');
@@ -1156,6 +1157,13 @@ function buildOssuaryRoute(game) {
     state.exitT += ((state.solved ? 1 : 0) - state.exitT) * Math.min(1, dt * 1.8);
     exitSlab.position.y = FLOOR + 1.33 - state.exitT * 3.1;
     exitSlab.rotation.z = state.exitT * 0.08;
+    // The collider follows the STONE, not the solve flag. It used to collapse
+    // on the solve frame while the slab spent the next two seconds visibly
+    // sinking — so the wall was walk-through-able while it still filled the
+    // corridor, which is precisely the "you touch a wall to exit" feel Alex
+    // reported. Open only once the slab's top has sunk below the floor.
+    const slabTop = exitSlab.position.y + 1.325;
+    exitCollider.max.y = slabTop < FLOOR + 0.05 ? exitCollider.min.y : FLOOR + HEIGHT;
 
     if (state.inOssuary) {
       const camPos = game.camera.getWorldPosition(eye);
@@ -2121,8 +2129,17 @@ export class Forest {
     const originalPr = this.project(original.x, original.z);
     const safe = this.safeRespawnPad(requestedS);
     const originalGround = this.heightAt(original.x, original.z);
+    // The lateral tolerance is the corridor's own width at this s, not a
+    // fixed 0.35. That constant dated from when the ravine rope skimmed the
+    // player along the centreline; with a pivot high enough to actually lift
+    // (see the ravine anchor), a legitimate landing can be a metre or more
+    // off-centre on ground the player can stand on — and snapping such a
+    // checkpoint to the pad broke exact-restore. Where the corridor is
+    // narrow this still clamps exactly as before.
+    const latIdx = clamp(Math.round(requestedS), 0, this.length - 1);
+    const latLimit = Math.max(0.35, (this.halfW[latIdx] ?? 0.8) - 0.45);
     const exactPoseIsSafe = originalPr
-      && Math.abs(originalPr.lat) <= 0.35
+      && Math.abs(originalPr.lat) <= latLimit
       && Math.abs(safe.s - requestedS) < 1e-3
       && Number.isFinite(original.y)
       && Math.abs(original.y - originalGround) <= 0.4;
@@ -3676,8 +3693,21 @@ export class Forest {
         // over the ground beyond it means holding carries you up and across,
         // and letting go drops you where the old scripted launch used to put
         // you — same destination, except now you fly there under your own arc.
-        const pivot = new THREE.Vector3(landing.x, 3.4, landing.z);
-        skull.anchorAt(pivot, { swing: true, maxHold: 7 });
+        //
+        // Height 6.9, not 3.4, and the reason is arithmetic: the rope can only
+        // LIFT while the line to the pivot is steeper than asin(GRAV/PULL) =
+        // asin(14/30) = 27.8°. From the near lip, 3.4 m of rise over 7-11 m of
+        // run is 17-26° — always below threshold — so a player who held on
+        // skimmed at ankle height (measured: max rise 0.83 m over the whole
+        // arc) and was then pendulum-hauled BACKWARDS across the gash they had
+        // just crossed. At 6.9 m the latch line starts at 32-44°: holding
+        // climbs, releasing keeps the arc, and the verb this anchor exists to
+        // teach behaves like the one Alex asked to see reused.
+        const pivot = new THREE.Vector3(landing.x, 6.9, landing.z);
+        // 6, matching beginSwing's default maxT below — the skull's hold
+        // used to outlive the player's swing by a full second, leaving it
+        // anchored in the air over a player already walking away.
+        skull.anchorAt(pivot, { swing: true, maxHold: 6 });
         game.flag('ropeLatched');
         audio.creak({ pos: rope.position, gain: 0.6 });
         game.player.beginSwing(pivot);
