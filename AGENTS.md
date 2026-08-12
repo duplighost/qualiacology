@@ -38,6 +38,20 @@ own notes or memory. Last verified: 2026-08-11.
   - `build/scripts/validate-site.mjs` — strict validator (counts, every
     href/src/srcset resolves with exact case).
   - `build/qa/browser-qa.mjs` — full Playwright + axe suite (`npm run qa`).
+  - `build/qa/fetch-boot-check.mjs` — **run this before shipping any FETCH
+    change.** Boots the game the way a player does (real title click, no
+    `?test=1`) and asserts the world is on screen AND the skull is visible in
+    the player's hands *while play is running*. FETCH 0.6.1 passed 74
+    counter-based checks and shipped a game Alex could hear but not see,
+    because every in-repo suite boots `?test=1` — which skips the shader
+    warmup — and none of them ever looked at a pixel. Note the trap it is
+    built around: with `preserveDrawingBuffer` false (the real renderer),
+    reading the canvas outside the frame task is black by construction, which
+    once "proved" a bug that did not exist. This samples inside `game.render`.
+    Calibrated 2026-08-12 against known-good production (passes) and against
+    the 0.6.1 tree at `90d9b16` (correctly fails: hand-region brightness 0).
+    Usage: serve the repo, then
+    `node build/qa/fetch-boot-check.mjs http://localhost:4173/fetch/`.
 - Per-game folders at root (`no-moon/`, `rally/`, `pasta-mortale/`, `duet/`, …)
   and albums under `music/<slug>/` — **static, edited directly**, never touched
   by the build.
