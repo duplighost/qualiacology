@@ -17,6 +17,10 @@ const ACT_SPAWNS = {
 };
 
 const STAGE_BY_ACT = { bedroom: 0, house: 1, basement: 2, graveyard: 3, forest: 3, clearing: 5, cave: 5, mirror: 5 };
+// Seconds of house-act time before the Resident starts walking the house.
+// Long enough to learn the first room, short enough that the act is HUNTED,
+// per DESIGN.md's "it is always somewhere". Alex dials this here.
+const HOUSE_RESIDENT_DELAY = 18;
 const FOG_BY_ACT = {
   bedroom: 0.028, house: 0.03, basement: 0.06, graveyard: 0.034,
   forest: 0.055, clearing: 0.018, cave: 0.07, mirror: 0.012,
@@ -480,52 +484,91 @@ export class Director {
     const p = g.player.pos;
     const inNursery = p.x < -4 && p.y > 3 && p.z > -2;
     mb.wound = Math.max(0, mb.wound - dt / 55);
+    // The thing in the corner IS the creature now. It used to be a bare
+    // capsule that grew for eleven seconds and was then deleted at scale 0.96
+    // so a full-size walker could be spawned in its place — the reveal
+    // swapped objects at the punchline, which is exactly the moment Alex was
+    // watching ("i watched it before it expanded. that was cool"). The real
+    // walker now drags itself out of the nursery floor on the same slow
+    // clock, and what he watched rise is what winds up and comes.
     if (mb.wound > 0.03) {
       this._boxTh = (this._boxTh || 0) - dt;
       if (this._boxTh <= 0) {
         this._boxTh = 0.34 / (0.5 + mb.wound * 0.5);
         g.audio.glassTink({ pos: mb.mesh.position, gain: 0.12 + mb.wound * 0.15, rate: 0.9 + mb.wound * 0.3, verb: 0.6 });
       }
-      if (mb.thing) { mb.thing.scale.setScalar(Math.max(0.001, mb.thing.scale.x - dt * 0.4)); if (mb.thing.scale.x <= 0.01) { g.scene.remove(mb.thing); mb.thing = null; } }
+      // rewinding the box sends it back down
+      if (mb.walker && !mb.spawned) {
+        mb.walker.graveRiseT = Math.min(mb.walker.graveRiseDur, mb.walker.graveRiseT + dt * 2.4);
+        if (mb.walker.graveRiseT >= mb.walker.graveRiseDur) {
+          g.enemies.clear((e) => e === mb.walker);
+          mb.walker = null;
+        }
+      }
     } else if (inNursery) {
       // while the box is silent, something in the corner is taller than it was
-      if (!mb.thing) {
-        const m = new THREE.Mesh(
-          new THREE.CapsuleGeometry(0.3, 1.5, 4, 8),
-          new THREE.MeshLambertMaterial({ color: 0x0b0a10 }));
-        m.position.set(-11.2, 4.6, 5.3);
-        m.scale.setScalar(0.001);
-        g.scene.add(m);
-        mb.thing = m;
+      if (!mb.walker) {
+        mb.walker = g.enemies.spawn('walker', -11.2, 5.3, 'dormant', 4.6);
+        mb.walker.graveRiseDur = 11.5;
+        mb.walker.graveRiseT = 11.5;
+        mb.walker.riseFrozen = true;      // this clock belongs to the music box
+        // squash-only: the nursery floor is the ground floor's ceiling, so a
+        // sunken body would hang into the room below for eleven seconds
+        mb.walker.riseSquashOnly = true;
       }
-      mb.thing.scale.setScalar(Math.min(1, mb.thing.scale.x + dt * 0.09));
-      if (mb.thing.scale.x > 0.96 && !mb.spawned) {
+      mb.walker.graveRiseT = Math.max(0, mb.walker.graveRiseT - dt);
+      if (mb.walker.graveRiseT <= 0 && !mb.spawned) {
         mb.spawned = true;
-        g.scene.remove(mb.thing); mb.thing = null;
+        mb.walker.riseFrozen = false;
+        mb.walker.state = 'wind';
+        mb.walker.windT = 0;
+        mb.walker = null;
         g.audio.sting(0.7);
-        g.enemies.spawn('walker', -10.5, 4.8, 'wind', 4.6);   // the nursery storey
       }
     }
   }
 
   // ------------------------------------------------------------- resident
+  // The director's pointer can go stale: tests and death paths clear the
+  // enemy list without telling the director, after which residentHeard
+  // "already has" a Resident that no longer exists and the house goes
+  // permanently empty. Resolve against the live list every time.
+  _liveResident() {
+    const list = this.game.enemies.list;
+    if (this.resident && list.includes(this.resident)) return this.resident;
+    this.resident = list.find((e) => e.kind === 'resident') || null;
+    return this.resident;
+  }
+
   residentHeard(n) {
     const g = this.game;
     this.residentPressure += n;
-    if (!this.resident && g.act === 'house') {
+    const live = this._liveResident();
+    if (!live && g.act === 'house') {
       this.resident = g.enemies.spawn('resident', -3, -12, 'stalk');
       g.audio.sting(0.5);
       this.after(0.8, () => g.audio.footstep('wood', { pos: this.resident.pos, gain: 0.9, rate: 0.7 }));
-    } else if (this.resident) {
+    } else if (live) {
       // it heard that too
-      this.resident.state = 'wind';
-      this.resident.windT = 0;
+      live.state = 'wind';
+      live.windT = 0;
     }
   }
 
   _updateResident(dt) {
     const g = this.game;
-    if (!this.resident) return;
+    // The house is no longer empty until its final gate. Alex: "the enemy in
+    // the house should come out pretty early and be a better chaser so you
+    // have to close doors to avoid it" — and DESIGN.md always said the
+    // Resident "hunts you through the gated section", which the code never
+    // delivered: it spawned only on the cellar boards, the act's last beat.
+    // It now walks the house from early in the act. One named constant so
+    // Alex can dial it.
+    if (g.act === 'house' && !g.dead && !this._liveResident()) {
+      this._houseResidentT = (this._houseResidentT ?? HOUSE_RESIDENT_DELAY) - dt;
+      if (this._houseResidentT <= 0) this.residentHeard(0);
+    }
+    if (!this._liveResident()) return;
     if (g.act !== 'house') return;
     // the Resident loses interest if it can't reach you, returns to pacing
     const e = this.resident;
