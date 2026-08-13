@@ -346,6 +346,17 @@
   ],
   "albums": [
     {
+      "slug": "you-are-here",
+      "title": "You Are Here",
+      "featured": true,
+      "image": "/assets/albums/you-are-here.jpg",
+      "alt": "You Are Here album cover",
+      "summary": "Pop-punk, hyperpop, and a spoken-word opener nobody asked for. Eight tracks about people who only figure out where they were standing once they’ve already left.",
+      "tags": ["pop-punk", "hyperpop", "found spoken word"],
+      "tracks": 8,
+      "listen": "https://www.youtube.com/watch?v=2f77ZVsRIXw"
+    },
+    {
       "slug": "ask-anyone",
       "title": "Ask Anyone",
       "featured": true,
@@ -372,7 +383,7 @@
     {
       "slug": "summer-people",
       "title": "Summer People",
-      "featured": true,
+      "featured": false,
       "image": "/assets/albums/summer-people.jpg",
       "alt": "Summer People album cover",
       "summary": "A Doopliss album: sunlit hooks with something wrong under the deck chairs. Summer shimmer, social rot, and a grin that knows exactly where the bodies are sunscreened.",
