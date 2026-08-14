@@ -194,7 +194,11 @@ function buildGraveyard(game) {
   scene.add(head, head.target);
   game.tickers.push((dt, t) => {
     // dying flicker — brightness carries the unease, not color
-    head.intensity = (Math.sin(t * 13) > -0.82 ? 1 : 0.15) * (280 + Math.sin(t * 3.1) * 50);
+    const beat = Math.sin(t * 13) > -0.82 ? 1 : 0.15;
+    head.intensity = beat * (280 + Math.sin(t * 3.1) * 50);
+    // the lens answers its own lamp, so the flicker is visible from the SIDE
+    // too — not only in the beam thrown out across the graves
+    if (game.wreckLens) game.wreckLens.color.setScalar(0.055 + beat * 0.30);
   });
 
   // the bodies. prone, wrong — every one of them crawling AWAY from the forest
@@ -2115,19 +2119,32 @@ function buildWreckedCar(game) {
   const { world, scene, mats: M } = game;
   const car = new THREE.Group();
   car.name = 'wrecked station wagon';
-  const paint = M.metal.clone();
-  paint.color.setHex(0x273139);
-  paint.roughness = 0.72;
-  paint.metalness = 0.46;
-  const rust = M.metal.clone();
-  rust.color.setHex(0x3b302b);
-  rust.roughness = 0.92;
+  // The shell, the crush and the glasshouse are all real now — what was left of
+  // "the car still looks like not a car" is that it wore a flat metal tint and
+  // came back as a clean plastic model of a wreck. M.carPaint is dead paint:
+  // chalked, blistered, rusted out of the seams, road dirt up the flanks.
+  // The map carries the albedo, exactly like the rest of this kit — a pale
+  // colour here would multiply the painted value straight back up.
+  const paint = M.carPaint;
+  const rust = M.carPaint.clone();
+  rust.color.setHex(0xb08c6a);   // the same surface, biased toward oxide
+  rust.roughness = 0.95;
+  // Glass that has stood outside for years is not a mirror. Rough it right up
+  // and drop the transmission — a clean 0.12-roughness pane was catching the
+  // moon like a showroom and was the brightest thing on the whole wreck.
   const glass = new THREE.MeshStandardMaterial({
-    color: 0x111d24, roughness: 0.12, metalness: 0.35,
-    transparent: true, opacity: 0.76,
+    color: 0x0d151b, roughness: 0.55, metalness: 0.1,
+    transparent: true, opacity: 0.82,
   });
   const tyre = new THREE.MeshStandardMaterial({ color: 0x070809, roughness: 0.98 });
-  const lamp = new THREE.MeshBasicMaterial({ color: 0xdde6de });
+  // The lens. MeshBasic is UNLIT, so this was a fixed 0.77-luminance shape —
+  // measured, the single brightest surface on the whole wreck and brighter
+  // than anything the act uses as a landmark, sitting there at full white
+  // whether the headlight was flickering on or off. Dim glass that BRIGHTENS
+  // with the dying flicker instead (driven from buildGraveyard's ticker via
+  // game.wreckLens), so the lamp reads as failing rather than as painted on.
+  const lamp = new THREE.MeshBasicMaterial({ color: 0x2c3330 });
+  game.wreckLens = lamp;
   const cavity = new THREE.MeshBasicMaterial({ color: 0x020304 });
   const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
     const m = new THREE.Mesh(geo, mat);
@@ -2332,7 +2349,12 @@ function buildGraveyardBodies(game) {
   const trousers = [0x090c0f, 0x100b0e, 0x0a100f, 0x11110d].map((color) =>
     new THREE.MeshStandardMaterial({ color, roughness: 0.99 }));
   const seam = new THREE.MeshStandardMaterial({ color: 0x050607, roughness: 1 });
-  const skin = new THREE.MeshStandardMaterial({ color: 0x554941, roughness: 1 });
+  // 0x554941 is 0.087 linear, and the lantern delivers ~19 at the two metres
+  // you stand over a body at: 1.65, hard clipped. That is why the dead read as
+  // pale shop mannequins rather than people — the skin was the brightest thing
+  // in the yard, brighter than the headstones the act uses as its landmarks.
+  // Everything you can walk up to in this game has to live under ~0.03.
+  const skin = new THREE.MeshStandardMaterial({ color: 0x241f1c, roughness: 1 });
   const shoe = new THREE.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 0.98 });
   const hair = new THREE.MeshStandardMaterial({ color: 0x11100f, roughness: 1 });
   const faceDark = new THREE.MeshStandardMaterial({ color: 0x080909, roughness: 1 });
