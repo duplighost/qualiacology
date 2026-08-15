@@ -6,6 +6,20 @@
 // booted ?test=1 -- which skips the shader warmup -- and none of them ever
 // looked at a pixel.
 //
+// 2026-08-14, THE NEW OPENING: the game now boots EMPTY-HANDED by authored
+// design (you wake without the skull; it arrives when the bedroom bell is
+// rung), and the opening fade lengthened 2.4s -> ~4s. Two consequences for
+// this instrument, neither a weakening:
+//   1. The old fixed 400-sample cap exhausted INSIDE the longer fade, so the
+//      tail measured authored darkness and cried black on a lit room. The
+//      sampler now runs until readout and the play phase waits out the fade.
+//   2. "Skull visible in hand" is now asserted in a second phase: after the
+//      real-click boot proves the LIT, skull-less room (the new truth), the
+//      arrival is completed through the game's own canonical contract
+//      (__FETCH.teleport auto-completes it -- the documented post-arrival
+//      state for every instrument), and the held-pass pixels are asserted
+//      with the ORIGINAL thresholds. The 0.6.1 disease stays caught.
+//
 // The trap that produced a fake fifth bug last time: with preserveDrawingBuffer
 // false (the real, non-test renderer), reading the canvas OUTSIDE the frame
 // task is black by construction. So this wraps game.render and grabs the pixels
@@ -41,7 +55,7 @@ await page.evaluate(() => {
   g.render = function patched(...args) {
     const out = realRender(...args);
     const b = window.__boot;
-    if (b.samples.length < 400) {
+    if (b.samples.length < 2400) {
       const c = g.renderer.domElement;
       const cv = document.createElement('canvas');
       cv.width = 160; cv.height = 100;
@@ -80,32 +94,63 @@ await page.evaluate(() => {
   el?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 });
 
-// let it play for a while, moving, the way a player would
-await page.waitForTimeout(1200);
+// PHASE 1 -- the real-click boot: wait out the authored ~4s fade, then play
+// a little, the way a player would, and read the lit skull-less room.
+await page.waitForTimeout(5200);
 for (let i = 0; i < 8; i++) {
   await page.keyboard.down('KeyW'); await page.waitForTimeout(260); await page.keyboard.up('KeyW');
   await page.mouse.move(640 + i * 12, 400);
   await page.waitForTimeout(180);
 }
-await page.waitForTimeout(1500);
+await page.waitForTimeout(1000);
 
 const r = await page.evaluate(() => {
   const s = window.__boot.samples;
   const g = window.__game;
-  const tail = s.slice(-45);
-  const avg = (k) => +(tail.reduce((n, x) => n + x[k], 0) / Math.max(1, tail.length)).toFixed(4);
   // when did the world first appear at all?
   const firstLit = s.find((x) => x.litFrac > 0.10);
+  // The walker has no carried light in the new opening, so wherever it ends
+  // up nose-first can be honestly dark. The claim that matters is SUSTAINED:
+  // after the ~4s authored fade, the frame held a lit world for a real
+  // stretch of play. Longest contiguous lit span, post-fade:
+  let span = 0, best = 0;
+  for (const x of s) {
+    if (x.ms < 4500) continue;
+    if (x.litFrac > 0.10) { span++; if (span > best) best = span; } else span = 0;
+  }
   return {
     frames: s.length,
     started: g.started,
     act: g.act,
     skullMode: g.skull.mode,
+    arrivalState: g.bedroomArrival ? g.bedroomArrival.state : null,
     msToWorld: firstLit ? firstLit.ms : null,
-    tailMeanV: avg('meanV'),
-    tailLitFrac: avg('litFrac'),
+    litSpanFrames: best,
+  };
+});
+
+// PHASE 2 -- the held pass (the 0.6.1 regression this tool was born for):
+// complete the arrival through the game's canonical contract, then assert the
+// skull draws in the hands with the ORIGINAL thresholds.
+await page.evaluate(() => { window.__boot.mark = window.__boot.samples.length; window.__FETCH.teleport('bedroom'); });
+await page.waitForTimeout(900);
+for (let i = 0; i < 4; i++) {
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(220); await page.keyboard.up('KeyW');
+  await page.mouse.move(640 - i * 10, 402);
+  await page.waitForTimeout(160);
+}
+await page.waitForTimeout(800);
+
+const h = await page.evaluate(() => {
+  const b = window.__boot;
+  const g = window.__game;
+  const tail = b.samples.slice(b.mark).slice(-45);
+  const avg = (k) => +(tail.reduce((n, x) => n + x[k], 0) / Math.max(1, tail.length)).toFixed(4);
+  return {
+    heldFrames: b.samples.length - b.mark,
+    skullMode: g.skull.mode,
     tailHandLitFrac: avg('handLitFrac'),
-    tailHandMax: Math.max(...tail.map((x) => x.handMax)),
+    tailHandMax: Math.max(0, ...tail.map((x) => x.handMax)),
   };
 });
 
@@ -117,9 +162,13 @@ console.log(JSON.stringify(r, null, 2));
 ok(r.frames > 60, `render ran (${r.frames} sampled frames)`);
 ok(r.started === true, 'the real title click started the game');
 ok(r.msToWorld !== null && r.msToWorld < 12000, `world on screen (${r.msToWorld}ms)`);
-ok(r.tailLitFrac > 0.10, `frame is not black while playing (litFrac ${r.tailLitFrac})`);
-ok(r.tailHandMax > 90, `something bright in the hands region (max ${r.tailHandMax})`);
-ok(r.tailHandLitFrac > 0.02, `the skull is visible in hand while playing (handLitFrac ${r.tailHandLitFrac})`);
+ok(r.litSpanFrames > 90, `a lit world holds on screen while playing (${r.litSpanFrames} contiguous frames post-fade)`);
+ok(r.act !== 'bedroom' || r.skullMode === 'gone', `the new opening boots empty-handed (mode ${r.skullMode}, arrival ${r.arrivalState})`);
+console.log(JSON.stringify(h, null, 2));
+ok(h.heldFrames > 30, `held-pass phase rendered (${h.heldFrames} frames)`);
+ok(h.skullMode === 'held', `arrival contract grants the skull (mode ${h.skullMode})`);
+ok(h.tailHandMax > 90, `something bright in the hands region (max ${h.tailHandMax})`);
+ok(h.tailHandLitFrac > 0.02, `the skull is visible in hand while playing (handLitFrac ${h.tailHandLitFrac})`);
 ok(errors.length === 0, `zero page/console errors${errors.length ? ': ' + errors.slice(0, 4).join(' | ') : ''}`);
 console.log(fail.length ? `\nBOOT CHECK FAILED (${fail.length})` : '\nBOOT CHECK PASSED');
 process.exit(fail.length ? 1 : 0);
