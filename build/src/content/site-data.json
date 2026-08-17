@@ -17,6 +17,19 @@
   },
   "games": [
     {
+      "slug": "fetch",
+      "title": "FETCH",
+      "descriptor": "Cursed-skull horror",
+      "group": "horror",
+      "featured": true,
+      "image": "/assets/games/fetch-card-keyart-5ab7c65b.webp",
+      "alt": "A cracked skull held in two hands as a wet, long-haired figure climbs through a ruined window from a moonlit graveyard",
+      "summary": "You wake up holding a skull you cannot get rid of. Thrown, it zips straight back — it is the key, the weapon, the only light, and the last thing you want in your hands. The bedroom door is locked from the inside, and the way out is down.",
+      "metaDescription": "FETCH is a browser first-person horror game about a cursed skull that always comes back — key, weapon and lamp through a locked house, a graveyard, and a forest that seals behind you.",
+      "controls": "WASD move · mouse look · hold LMB throw / release to return · tap RMB or E call it back · Shift run · Space jump · E use · Esc or P pause",
+      "actionLabel": "Pick it up"
+    },
+    {
       "slug": "no-moon",
       "title": "No Moon",
       "descriptor": "Roguelite descent",
@@ -60,7 +73,7 @@
       "title": "THE EATEN PATH",
       "descriptor": "VHS forest horror",
       "group": "horror",
-      "featured": true,
+      "featured": false,
       "image": "/assets/games/eaten-path-card-clean.webp",
       "alt": "A moonlit forest path closing between twisted trees, watched by eyes in the trunks and recorded on VHS",
       "summary": "Every path you take eats itself. Walk forward through an infinite nighttime forest while the route seals behind you, the camcorder keeps recording, and the trees watch.",
@@ -329,19 +342,6 @@
       "metaDescription": "VESPERWAKE: THE HOLLOW BELL is a three-level gothic action platformer about a bellwright climbing a city trapped at midnight.",
       "controls": "A/D or arrows move · Space/Z jump · J/X whip · K/Shift quickstep · touch",
       "actionLabel": "Begin the Wake"
-    },
-    {
-      "slug": "fetch",
-      "title": "FETCH",
-      "descriptor": "Cursed-skull horror",
-      "group": "horror",
-      "featured": false,
-      "image": "/assets/games/fetch-card-keyart-5ab7c65b.webp",
-      "alt": "A cracked skull held in two hands as a wet, long-haired figure climbs through a ruined window from a moonlit graveyard",
-      "summary": "You wake up holding a skull you cannot get rid of. Thrown, it zips straight back — it is the key, the weapon, the only light, and the last thing you want in your hands. The bedroom door is locked from the inside, and the way out is down.",
-      "metaDescription": "FETCH is a browser first-person horror game about a cursed skull that always comes back — key, weapon and lamp through a locked house, a graveyard, and a forest that seals behind you.",
-      "controls": "WASD move · mouse look · hold LMB throw / release to return · tap RMB or E call it back · Shift run · Space jump · E use · Esc or P pause",
-      "actionLabel": "Pick it up"
     }
   ],
   "albums": [
