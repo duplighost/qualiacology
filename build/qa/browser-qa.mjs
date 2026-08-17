@@ -179,7 +179,10 @@ try {
       query: location.search,
     }));
     check(horror.status === "Showing 6 worlds.", `Horror filter status failed: ${horror.status}`);
-    check(horror.visible.join(",") === "eaten-path,uninvited,marrow,behind-you,still,fetch", `Horror filter results failed: ${horror.visible.join(",")}`);
+    // Catalog order, and FETCH now leads the catalog (Alex, 2026-08-17: it
+    // takes the first game slot; THE EATEN PATH comes off the homepage and
+    // stays on /games/). Same six worlds, new first.
+    check(horror.visible.join(",") === "fetch,eaten-path,uninvited,marrow,behind-you,still", `Horror filter results failed: ${horror.visible.join(",")}`);
     check(horror.query === "?filter=horror", `Horror filter URL failed: ${horror.query}`);
     report.interactions.filters = { ...horror, errors: finishErrors() };
     await context.close();
