@@ -365,9 +365,18 @@ function buildGraveyardDress(game, track, own, ownTexture) {
     // their shoulders reads as ground that has been moving for a century.
     it.sink = rng.chance(0.3) ? rng.range(-0.34, -0.12) : rng.range(-0.04, 0.02);
     it.width = rng.range(0.78, 1.2);
-    it.value = rng.range(0.36, 0.84);
     // and no two of them weathered the same. Value only — the whole yard was
     // one flat pale grey before this line.
+    //
+    // The range moves down at both ends. The stones are meant to be this
+    // district's pale landmarks and they stay that — but stoneMat measures
+    // 0.138 linear (probe-albedo), and at the top of the old range that is
+    // 0.116 against a ceiling of 0.03, so the ones you walk past clipped to
+    // featureless white and took their carving with them. A landmark you
+    // cannot read the shape of is not a landmark. Lowering the floor as well
+    // sinks more of them into the dark, which is the other half of the same
+    // job: a yard where every stone is pale has no pale thing in it.
+    it.value = rng.range(0.26, 0.62);
   });
 
   const stoneFamily = (kind, geo, name) => {
@@ -493,7 +502,20 @@ function buildGraveyardDress(game, track, own, ownTexture) {
   // Lantern cages ration pale verticals at the path bends.  They are emissive
   // silhouettes only (no extra dynamic lights), keeping both performance and
   // combat visibility predictable.
-  const lanternSites = [[-3.4, 15.6, -0.12], [0.45, 23.4, 0.08], [3.2, 32.0, -0.08]];
+  // THE ARRIVAL HAD NO FOCAL. Frame 01 is the district's first — you come out
+  // of the house and this is the graveyard's opening statement — and it was a
+  // dark nothing: seventy-five percent near-black with no warm pool and
+  // nothing to look at. The reference image's first property is black corners,
+  // one warm pool, one bright focal, and the gate lanterns at the far end
+  // already prove the recipe works here (frames 09 and 13 are the two in the
+  // set that read).
+  //
+  // So the funeral walk gains one more lantern, standing on the arrival
+  // sightline from the house door at (0,7.5) toward (0,20). No new light — the
+  // ember is unlit MeshBasic, the law about the light census is absolute — and
+  // no new draw: these are three InstancedMeshes and this is a fourth instance
+  // of each.
+  const lanternSites = [[-2.2, 12.4, -0.16], [-3.4, 15.6, -0.12], [0.45, 23.4, 0.08], [3.2, 32.0, -0.08]];
   const postMat = own(cloneTint(game.mats?.metal, 0x20262a,
     () => new THREE.MeshLambertMaterial({ color: 0x20262a })));
   if (postMat.color) postMat.color.multiplyScalar(0.38);

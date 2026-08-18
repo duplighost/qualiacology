@@ -310,7 +310,12 @@ function buildGraveyard(game) {
   game.tickers.push((dt, t) => {
     // dying flicker — brightness carries the unease, not color
     const beat = Math.sin(t * 13) > -0.82 ? 1 : 0.15;
-    head.intensity = beat * (280 + Math.sin(t * 3.1) * 50);
+    // 280 -> 225, and this is deliberately the LAST and smallest lever on the
+    // bodies rather than the first. The beam across the graves is authored
+    // drama and frame 05 is built on it, so what comes off is the amount that
+    // stops the dead being floodlit without stopping the beam being a beam.
+    // Intensity changes are free: the light census is untouched.
+    head.intensity = beat * (225 + Math.sin(t * 3.1) * 42);
     // the lens answers its own lamp, so the flicker is visible from the SIDE
     // too — not only in the beam thrown out across the graves
     if (game.wreckLens) game.wreckLens.color.setScalar(0.055 + beat * 0.30);
@@ -334,13 +339,35 @@ function buildGraveyard(game) {
 
 function buildGraveyardLandmarks(game) {
   const { world, scene, mats: M } = game;
-  const stone = M.headstone.clone();
-  stone.color.multiplyScalar(0.64);
+  // THE MAUSOLEUMS WERE HEADSTONES THE SIZE OF ROOMS.
+  //
+  // M.headstone is a 256px map with no course structure in it at all — it was
+  // painted to be a headstone, deliberately pale — stretched across a 3.6 x
+  // 2.65 m wall at repeat 1, which is about 71 pixels per metre. Times 0.64 it
+  // measured 0.102 linear (probe-albedo), three times the district's own
+  // anything-you-walk-up-to ceiling and the palest large surface in the yard.
+  // Four untextured planes and a cone: a white box with a hat on it.
+  //
+  // M.stone is the answer and it was already in the building: coursed ashlar,
+  // 512px at repeat 2x1 (about 284 px/m here, four times the detail), mortar
+  // joints that the shared bumpMap rakes under a moving lantern, and 0.0398
+  // linear. Same Lambert+map+bumpMap shape as the material it replaces, so it
+  // is the same shader program — and the same TEXTURE object, so no clone and
+  // no second upload; the repeat is shared and stays where the house set it.
+  //
+  // x1.5 lands it at ~0.06: still the district's landmark, still lighter than
+  // the yard, no longer the thing that clips.
+  const stone = M.stone.clone();
+  stone.color.multiplyScalar(1.5);
   if ('emissive' in stone) {
     // A distant mausoleum must stay a room-shaped value landmark even after
-    // the skull light falls off; the doorway remains absolute black.
+    // the skull light falls off; the doorway remains absolute black. Down from
+    // 0.38: that floor was set to hold up a material with no texture in it,
+    // and an unconditional glow under coursed stone just washes the courses
+    // back out. Verified at both ends — frame 12 stops clipping, and the far
+    // approach still reads as a room-shaped mass.
     stone.emissive = new THREE.Color(0x343a3c);
-    stone.emissiveIntensity = 0.38;
+    stone.emissiveIntensity = 0.2;
   }
   const soil = M.dirt.clone();
   soil.color.multiplyScalar(0.72);
@@ -362,19 +389,44 @@ function buildGraveyardLandmarks(game) {
       g.add(m);
       return m;
     };
-    add(new THREE.BoxGeometry(3.6, 2.65, 0.34), stone, 0, 1.3, 1.55);
-    add(new THREE.BoxGeometry(0.38, 2.65, 3.2), stone, -1.62, 1.3, 0);
-    add(new THREE.BoxGeometry(0.38, 2.65, 3.2), stone, 1.62, 1.3, 0);
+    // A CENTURY OF SETTLING, and it costs nothing: every line in this
+    // building was dead straight and every angle exact, which is the cheap-3D
+    // tell that no amount of texture fixes. The pieces are merged into one
+    // mesh a few lines below, so a degree of yaw here and three centimetres of
+    // sink there are free — the same trick the basin lip used, applied to
+    // masonry that has stood in wet ground since before anyone alive.
+    const back = add(new THREE.BoxGeometry(3.6, 2.65, 0.34), stone, 0, 1.3, 1.55);
+    back.rotation.y = mirror * 0.012;
+    const westWall = add(new THREE.BoxGeometry(0.38, 2.65, 3.2), stone, -1.62, 1.29, 0);
+    westWall.rotation.z = mirror * 0.011;
+    const eastWall = add(new THREE.BoxGeometry(0.38, 2.65, 3.2), stone, 1.62, 1.315, 0);
+    eastWall.rotation.z = mirror * -0.007;
     // front wall leaves a human-width black doorway and a shallow porch.
-    add(new THREE.BoxGeometry(1.15, 2.65, 0.34), stone, -1.22, 1.3, -1.55);
-    add(new THREE.BoxGeometry(1.15, 2.65, 0.34), stone, 1.22, 1.3, -1.55);
-    add(new THREE.BoxGeometry(0.92, 0.42, 0.34), stone, 0, 2.43, -1.55);
-    add(new THREE.BoxGeometry(4.25, 0.18, 1.15), stone, 0, 0.09, -1.75);
-    const roof = add(roofGeo, stone, 0, 3.15, 0);
-    roof.rotation.y = Math.PI / 4;
+    const jambL = add(new THREE.BoxGeometry(1.15, 2.65, 0.34), stone, -1.22, 1.275, -1.55);
+    jambL.rotation.z = 0.014;
+    add(new THREE.BoxGeometry(1.15, 2.65, 0.34), stone, 1.22, 1.3, -1.552);
+    const lintel = add(new THREE.BoxGeometry(0.92, 0.42, 0.34), stone, 0, 2.43, -1.55);
+    lintel.rotation.z = mirror * 0.02;
+    // the plinth has taken the worst of it: one corner is going down
+    const plinth = add(new THREE.BoxGeometry(4.25, 0.18, 1.15), stone, 0, 0.075, -1.75);
+    plinth.rotation.set(0.008, mirror * -0.01, mirror * 0.015);
+    const roof = add(roofGeo, stone, 0, 3.145, 0);
+    roof.rotation.y = Math.PI / 4 + mirror * 0.026;
+    roof.rotation.z = mirror * 0.013;
     roof.scale.z = 0.82;
     const darkness = add(new THREE.PlaneGeometry(1.04, 2.05), voidMat, 0, 1.18, -1.735);
     darkness.rotation.y = mirror < 0 ? Math.PI : 0;
+    // the seal and the funeral flip this plane's visibility at runtime, so it
+    // is the one piece of the building that cannot be baked into the shell
+    darkness.userData.noBatch = true;
+    // Nine meshes for a box with a hat. The pair cost eighteen draws in a
+    // district that looks south into 1203 of them; batched they cost four, and
+    // nothing here ever moves independently except the doorway above.
+    // enemies.js used to recognise a hollow room by counting a group's
+    // children (>= 6); after the merge there are two, so the identity moves
+    // onto an explicit flag and matches exactly the same two groups.
+    g.userData.mausoleumRoom = true;
+    batchStaticGroup(g, 'mausoleum');
     scene.add(g);
     if (x < 0) game.ritualMausoleum = { group: g, darkness, x, z };
     else game.sealedMausoleum = { group: g, darkness, x, z };
@@ -401,7 +453,14 @@ function buildGraveyardLandmarks(game) {
       const R = OSSUARY_THROAT, cz = z + (R.z0 + R.z1) / 2;
       for (let i = 0; i < 4; i++) {
         const side = i < 2 ? -1 : 1;
-        world.box(M.headstone, x + side * (R.hx + 0.27), 0.1,
+        // M.stone, not M.headstone. These four slabs lie flat inside the west
+        // doorway in raw, ungraded headstone — 0.159 linear, the palest
+        // material in the game — and they are most of why frame 12 was the
+        // only shot in the set that clipped: a bright pool on the floor of the
+        // one opening that is supposed to be absolute black. M.stone is four
+        // times darker and the static shell already batches it (house.js puts
+        // a block of it in the crawl), so this costs nothing at all.
+        world.box(M.stone, x + side * (R.hx + 0.27), 0.1,
           cz - 0.32 + (i % 2) * 0.64, 0.52, 0.1, 0.66, side * 0.16);
       }
     }
@@ -3447,14 +3506,26 @@ function buildWreckedCar(game) {
   // colour here would multiply the painted value straight back up.
   const paint = M.carPaint;
   const rust = M.carPaint.clone();
-  rust.color.setHex(0xb08c6a);   // the same surface, biased toward oxide
-  rust.roughness = 0.95;
+  // The tint MULTIPLIES the map, so this is 0.032 x 0.25 = 0.008 linear —
+  // already three times darker than the painted panels, which is the right
+  // direction and was worth checking rather than assuming (a hex set over a
+  // mapped material is one of this project's standing traps). Desaturated from
+  // #b08c6a: chroma 3.0 down to 2.0, same job, and rust that announces itself
+  // by being orange is announcing itself in the one channel he cannot read.
+  rust.color.setHex(0x9c8570);
   // Glass that has stood outside for years is not a mirror. Rough it right up
   // and drop the transmission — a clean 0.12-roughness pane was catching the
   // moon like a showroom and was the brightest thing on the whole wreck.
+  //
+  // 0.55 was still glossy enough to hold a broad pale specular sheet under the
+  // skull lantern, so the glasshouse read as another body panel and the
+  // windshield's crack star had nothing to be seen against. Rough it to 0.84,
+  // drop the opacity so more of the 0x17191a upholstery behind it shows
+  // through, and take the tint down: the cabin should be the hole in the
+  // middle of the wreck.
   const glass = new THREE.MeshStandardMaterial({
-    color: 0x0d151b, roughness: 0.55, metalness: 0.1,
-    transparent: true, opacity: 0.82,
+    color: 0x090e13, roughness: 0.84, metalness: 0.06,
+    transparent: true, opacity: 0.72,
   });
   const tyre = new THREE.MeshStandardMaterial({ color: 0x070809, roughness: 0.98 });
   // The lens. MeshBasic is UNLIT, so this was a fixed 0.77-luminance shape —
@@ -3567,8 +3638,11 @@ function buildWreckedCar(game) {
   }
   const crackGeo = new THREE.BufferGeometry();
   crackGeo.setAttribute('position', new THREE.Float32BufferAttribute(crackPos, 3));
+  // Now that the glass behind it is genuinely dark, the star can be the money
+  // detail it was always meant to be: an unlit bright line on a black pane.
+  // 0.52 was tuned against glass that was nearly as pale as the line was.
   const cracks = new THREE.LineSegments(crackGeo, new THREE.LineBasicMaterial({
-    color: 0xaeb8b5, transparent: true, opacity: 0.52,
+    color: 0xaeb8b5, transparent: true, opacity: 0.78,
   }));
   cracks.name = 'shattered windshield star';
   car.add(cracks);
@@ -3583,6 +3657,32 @@ function buildWreckedCar(game) {
   }
   // The missing rear wheel leaves a naked hub; the wheel itself lies in grass.
   add(hubGeo, rust, -1.42, 0.42, 0.92, Math.PI / 2);
+
+  // THE DARK IT HAD NONE OF.
+  //
+  // Measured at the pose you stand beside it (tools/probe-albedo-ab.mjs): the
+  // painted shell owns 22.6% of that frame at a mean of 88, and a 6.7x cut in
+  // its albedo buys 1.66x on those pixels — the surface is riding the top of
+  // the tone curve and albedo has stopped being the variable. Darkening the
+  // paint is not the lever and never was.
+  //
+  // What a floodlit object needs is somewhere the light CANNOT go. These are
+  // MeshBasic, so they are not lit at all and no lantern can lift them: a sill
+  // strip down each flank where a rocker panel rots first, and a liner behind
+  // each arch. They read as the shadow under a car because that is exactly
+  // what a shadow under a car is — a place the light did not reach.
+  //
+  // `cavity` is already a material of this group (it lines the engine bay), so
+  // all of this merges into a bucket that already exists: zero new draws, zero
+  // new materials, zero new programs.
+  for (const side of [-0.9, 0.9]) {
+    const sill = add(new THREE.BoxGeometry(4.3, 0.16, 0.06), cavity, 0, 0.31, side);
+    sill.rotation.z = -0.025;
+  }
+  add(new THREE.BoxGeometry(4.1, 0.1, 1.7), cavity, 0, 0.26, 0);   // the underbody
+  for (const [x, z] of [[-1.42, -0.91], [1.42, -0.91], [1.42, 0.91], [-1.42, 0.91]]) {
+    add(new THREE.CylinderGeometry(0.46, 0.46, 0.2, 12), cavity, x, 0.42, z * 0.86, Math.PI / 2);
+  }
   const loose = new THREE.Mesh(wheelGeo, tyre);
   loose.position.set(-7.4, 0.25, 16.0);
   loose.rotation.set(1.2, 0.35, 0.4);
@@ -3664,22 +3764,55 @@ function buildGraveyardBodies(game) {
   // sits close to the night while the small areas of exposed skin remain
   // legible in the skull light; the former shared mid-grey made every body read
   // as one injection-moulded mannequin.
-  const clothes = [0x12191e, 0x211317, 0x111b19, 0x1d1c14].map((color) =>
-    new THREE.MeshStandardMaterial({ color, roughness: 0.98 }));
-  const trousers = [0x090c0f, 0x100b0e, 0x0a100f, 0x11110d].map((color) =>
-    new THREE.MeshStandardMaterial({ color, roughness: 0.99 }));
-  const seam = new THREE.MeshStandardMaterial({ color: 0x050607, roughness: 1 });
+  // LAMBERT, AND THIS IS THE WHOLE FIX.
+  //
+  // Two rounds have now recoloured the dead and failed, and the comment below
+  // still explains, correctly, why the skin had to come down to 0x241f1c. It
+  // was never going to be enough, and tools/probe-body-specular.mjs says why in
+  // one number: set every one of these materials to PURE BLACK and 79% of what
+  // you see on a body is still there.
+  //
+  // MeshStandardMaterial's dielectric specular uses a fixed F0 of 0.04 no
+  // matter what the albedo is. Cloth at 0.004 linear under the ~30 irradiance
+  // of the wreck's headlight plus the lantern you are holding gets 0.12 of
+  // diffuse and 1.2 of specular: ten to one, and the ten is the part no
+  // recolour can reach. It is the basement boiler's disease exactly — "the
+  // boiler stayed pale plastic through a 6.7x albedo cut because what was pale
+  // was never the albedo" — and the answer there was to stop being glossy. A
+  // corpse in wet clothes is not glossy at all.
+  //
+  // Lambert has no specular term whatsoever. It is also this project's
+  // workhorse — stone, brick, grass, wallpaper and the headstones are all
+  // Lambert — so nothing here is exotic. These are built at boot on
+  // scene-reachable objects, so the warm pass compiles them inside the pinned
+  // light census; the warm-start gate and a ?hitch=1 walk both ran.
+  // The four of them differ by VALUE now, not by hue. The old set —
+  // 0x12191e blue, 0x211317 red, 0x111b19 green, 0x1d1c14 yellow — spanned a
+  // 1.3x range in luminance and did all its real work in colour, which is the
+  // one channel the player cannot use; with the specular gone, the middle one
+  // simply became a man in a pink shirt. These span 3.3x, so the dead read as
+  // four different people in a greyscale photograph, which is the only place
+  // this game's reads are allowed to live.
+  const clothes = [0x141414, 0x1c1b1a, 0x0f1011, 0x232220].map((color) =>
+    new THREE.MeshLambertMaterial({ color }));
+  const trousers = [0x0b0b0b, 0x121212, 0x080809, 0x161515].map((color) =>
+    new THREE.MeshLambertMaterial({ color }));
+  const seam = new THREE.MeshLambertMaterial({ color: 0x050607 });
   // 0x554941 is 0.087 linear, and the lantern delivers ~19 at the two metres
   // you stand over a body at: 1.65, hard clipped. That is why the dead read as
   // pale shop mannequins rather than people — the skin was the brightest thing
   // in the yard, brighter than the headstones the act uses as its landmarks.
   // Everything you can walk up to in this game has to live under ~0.03.
-  const skin = new THREE.MeshStandardMaterial({ color: 0x241f1c, roughness: 1 });
-  const shoe = new THREE.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 0.98 });
-  const hair = new THREE.MeshStandardMaterial({ color: 0x11100f, roughness: 1 });
-  const faceDark = new THREE.MeshStandardMaterial({ color: 0x080909, roughness: 1 });
+  const skin = new THREE.MeshLambertMaterial({ color: 0x241f1c });
+  const shoe = new THREE.MeshLambertMaterial({ color: 0x0b0b0c });
+  const hair = new THREE.MeshLambertMaterial({ color: 0x11100f });
+  const faceDark = new THREE.MeshLambertMaterial({ color: 0x080909 });
+  // The one part of a body the light genuinely cannot reach: where it meets the
+  // ground. Unlit, so no lantern lifts it, and deepened — this is the same
+  // lever that gave the wreck its weight, and a figure whose edges dissolve
+  // into the yard is a figure lying ON the yard rather than hovering over it.
   const contactMat = new THREE.MeshBasicMaterial({
-    color: 0x010202, transparent: true, opacity: 0.58, depthWrite: false,
+    color: 0x010202, transparent: true, opacity: 0.74, depthWrite: false,
     side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1,
   });
   const Y = new THREE.Vector3(0, 1, 0);
@@ -3702,7 +3835,25 @@ function buildGraveyardBodies(game) {
     color: 0x030405, transparent: true, opacity: 0.62,
     depthWrite: false, side: THREE.DoubleSide,
   });
-  const dragMarks = new THREE.InstancedMesh(dragGeo, dragMat, sites.length);
+  // ...and the same quad, three more times, lying under the wreck.
+  //
+  // The car reads as a pale mass FLOATING on the yard: it is crushed, ribbed,
+  // batched and painted, and it has no ground contact whatsoever, because it
+  // casts into a shadow map that its own headlight and the moon both miss at
+  // this angle. An unlit near-black anchor under a floodlit object is the
+  // single highest-value pixel change available on it, and here it is free —
+  // same InstancedMesh, same material, same geometry, zero new draws.
+  const CAR = { x: -9, z: 14, yaw: -0.96 };
+  // the car's long axis, laid out in world space: rotation.y maps local +X to
+  // (cos, 0, -sin), and the quad's long side is its local +Z, so the Y-euler
+  // that lines them up is atan2 of that vector.
+  const carAxis = new THREE.Vector3(Math.cos(CAR.yaw), 0, -Math.sin(CAR.yaw));
+  const carShadows = [
+    [0, 2.3, 1.4],      // the body, corner to corner
+    [1.55, 1.7, 0.78],  // out under the crushed end
+    [-1.5, 1.95, 0.86], // and the tail, where the drag marks start
+  ];
+  const dragMarks = new THREE.InstancedMesh(dragGeo, dragMat, sites.length + carShadows.length);
   const dragMtx = new THREE.Matrix4(), dragQ = new THREE.Quaternion();
   const dragP = new THREE.Vector3(), dragScale = new THREE.Vector3();
   const dragEuler = new THREE.Euler();
@@ -3716,6 +3867,13 @@ function buildGraveyardBodies(game) {
     );
     dragMarks.setMatrixAt(i, dragMtx);
   });
+  carShadows.forEach(([along, sx, sz], i) => {
+    const x = CAR.x + carAxis.x * along, z = CAR.z + carAxis.z * along;
+    const gy = Math.sin(x * 0.23) * Math.sin(z * 0.31) * 0.22;
+    dragQ.setFromEuler(dragEuler.set(0, Math.atan2(carAxis.x, carAxis.z), 0));
+    dragMtx.compose(dragP.set(x, gy + 0.02, z), dragQ, dragScale.set(sx, 1, sz));
+    dragMarks.setMatrixAt(sites.length + i, dragMtx);
+  });
   dragMarks.instanceMatrix.needsUpdate = true;
   dragMarks.name = 'graveyard body drag marks';
   scene.add(dragMarks);
@@ -3724,20 +3882,45 @@ function buildGraveyardBodies(game) {
   // outline: shoulder shelf, rib cage, waist, jaw and occiput.  It is cheaper
   // than stacking spheres and, crucially, never presents a circular capsule
   // silhouette to the camera.
+  // CLOTH, not shrinkwrap.
+  //
+  // Measured at pose 07 (tools/probe-body-attribution.mjs): the trousers own
+  // 1321 pixels at a mean of 72.9 and the clothes 752 at 62, while the SKIN —
+  // the thing two rounds have now recoloured — owns ninety-two pixels. Nothing
+  // on a body is pale. They are lit: near-black cloth times the ~30 irradiance
+  // of the wreck's headlight plus the lantern you are standing there holding.
+  //
+  // These lofts carry position and nothing else — no uv survives, and
+  // batchStaticGroup intersects attributes anyway — so a cloth map is not
+  // available at any price. What IS available is the surface itself. The rings
+  // were already nudged by a fixed 2% alternation; making that a real
+  // two-frequency fold, around the body and along it, gives the normals
+  // something to do and turns one flat lit value into creases with shadow in
+  // them. Same vertex count, same geometry count, same draw: it is the loft it
+  // always was, rumpled.
   const sectionGeometry = (sections, sides = 8) => {
     const positions = [];
     const indices = [];
-    for (const s of sections) {
+    sections.forEach((s, i) => {
       for (let j = 0; j < sides; j++) {
         const a = (j / sides) * TAU + Math.PI / sides;
-        const irregular = 1 + ((j & 1) ? 0.025 : -0.018);
+        // integer harmonics only — anything else tears the ring at the seam
+        // The torso and pelvis carry 14-15 sides rather than the 8-9 they had:
+        // a three-and-five harmonic fold sampled at eight points is above
+        // Nyquist and comes back as noise, not as cloth. Six more vertices per
+        // ring is nothing — the geometry COUNT is unchanged, which is the gate
+        // that matters — and it is the difference between a crease and a
+        // faceting artefact.
+        const fold = 1 + Math.sin(a * 3 + i * 2.1) * 0.075
+          + Math.sin(a * 5 - i * 1.35) * 0.042
+          + ((j & 1) ? 0.02 : -0.015);
         positions.push(
-          (s.x || 0) + Math.cos(a) * s.w * irregular,
-          s.y + Math.sin(a) * s.h,
+          (s.x || 0) + Math.cos(a) * s.w * fold,
+          s.y + Math.sin(a) * s.h * fold,
           s.z,
         );
       }
-    }
+    });
     for (let i = 0; i < sections.length - 1; i++) {
       for (let j = 0; j < sides; j++) {
         const n = (j + 1) % sides;
@@ -3790,9 +3973,15 @@ function buildGraveyardBodies(game) {
       const up = new THREE.Vector3().crossVectors(tangent, side).normalize();
       for (let j = 0; j < sides; j++) {
         const angle = (j / sides) * TAU + 0.19;
+        // a sleeve and a trouser leg crease along their length too — same
+        // integer-harmonic fold as the torso, a little shallower because a
+        // limb has a bone in it
+        const fold = 1 + Math.sin(angle * 3 + i * 1.7) * 0.05
+          + Math.sin(angle * 5 - i * 2.3) * 0.028
+          + (j & 1 ? -0.02 : 0.04);
         const ring = path[i].clone()
-          .addScaledVector(side, Math.cos(angle) * radii[i] * (j & 1 ? 0.98 : 1.04))
-          .addScaledVector(up, Math.sin(angle) * radii[i] * flatten);
+          .addScaledVector(side, Math.cos(angle) * radii[i] * fold)
+          .addScaledVector(up, Math.sin(angle) * radii[i] * flatten * fold);
         positions.push(ring.x, ring.y, ring.z);
       }
     }
@@ -3880,14 +4069,14 @@ function buildGraveyardBodies(game) {
       { x: shoulderSkew * 0.5, y: 0.225, z: -0.02, w: 0.315, h: 0.175 },
       { x: -shoulderSkew, y: 0.205, z: 0.22, w: 0.22, h: 0.135 },
       { x: 0.015 * (i & 1 ? 1 : -1), y: 0.2, z: 0.34, w: 0.235, h: 0.13 },
-    ], 9), cloth);
+    ], 15), cloth);
     torso.castShadow = true;
     group.add(torso);
     const pelvis = new THREE.Mesh(sectionGeometry([
       { x: 0.01, y: 0.19, z: 0.25, w: 0.22, h: 0.12 },
       { x: -0.01, y: 0.19, z: 0.43, w: 0.3, h: 0.145 },
       { x: 0.018 * (i % 2 ? -1 : 1), y: 0.175, z: 0.58, w: 0.265, h: 0.12 },
-    ], 8), trouser);
+    ], 14), trouser);
     group.add(pelvis);
 
     // The irregular hem and raised lapel create cloth-over-body layering, not
@@ -4002,7 +4191,10 @@ function buildGraveyardBodies(game) {
       group.add(f);
     }
     if (i === 3) {
-      const sheetMat = new THREE.MeshStandardMaterial({ color: 0x353834, roughness: 1, side: THREE.DoubleSide });
+      // 0x353834 is 0.035 linear — right on the district ceiling, and the one
+      // body wearing it was the pale one of the four. A sheet that has been
+      // dragged across a graveyard is not clean linen.
+      const sheetMat = new THREE.MeshLambertMaterial({ color: 0x1d1f1c, side: THREE.DoubleSide });
       const rows = 6, cols = 5, vertices = [], indices = [];
       for (let row = 0; row < rows; row++) {
         const t = row / (rows - 1);
@@ -4217,12 +4409,20 @@ export class Forest {
     // house and graveyard props no longer need to submit hundreds of draws
     // whenever the player turns south in the forest.
     const lookback = new Set(game.graveyardLookbackRoots || []);
+    // The house's interior belongs to syncHouseInteriorCulling from the moment
+    // the player leaves the building, which is earlier and stricter than this
+    // culler's gate line. Exactly one culler owns a root, or the two save/
+    // restore maps fight and something comes back on that should not.
+    const interior = new Set(game.houseInteriorRoots || []);
     this.backDistrictRoots = [
       ...(game.houseRenderRoots || []),
       ...(game.graveyardRenderRoots || []),
-    ].filter((root) => !lookback.has(root));
+    ].filter((root) => !lookback.has(root) && !interior.has(root));
     this.backDistrictVisibility = new Map();
     this.backDistrictCullActive = false;
+    this.houseInteriorRoots = game.houseInteriorRoots || [];
+    this.houseInteriorVisibility = new Map();
+    this.houseInteriorCullActive = false;
 
     // NOTE: the forest zone/surface are registered in buildOutside AFTER the
     // clearing and cave, so their tighter rects win the first-match scan.
@@ -5920,6 +6120,48 @@ export class Forest {
       if (root.parent === this.game.scene) root.visible = visible;
     }
     this.backDistrictVisibility.clear();
+  }
+
+  // The furnished house, hidden the moment the player is no longer standing in
+  // it. Its silhouette is world-shell geometry and survives untouched; what
+  // goes is every chair, fixture and mechanism the graveyard was rendering
+  // through a wall. Measured: the south view falls from 1203 draws to 671
+  // without changing a single pixel (tools/shot-cull-audit.mjs).
+  //
+  // Same save/restore shape as syncBackDistrictCulling, and the same parent
+  // check for the same reason: pinned lights live under world.lightRoot and no
+  // culler may ever touch one.
+  syncHouseInteriorCulling() {
+    const act = this.game.act;
+    const inside = act === 'bedroom' || act === 'house' || act === 'basement';
+    if (!inside) {
+      // Capture the authored state once, on the way out...
+      if (!this.houseInteriorCullActive) {
+        this.houseInteriorCullActive = true;
+        this.houseInteriorVisibility.clear();
+        for (const root of this.houseInteriorRoots) {
+          if (root.parent !== this.game.scene) continue;
+          this.houseInteriorVisibility.set(root, root.visible);
+        }
+      }
+      // ...then hold it down every frame, because the house does not stop
+      // running when you walk out of it. The crawl-space counterweight writes
+      // `visible` on its cable and its four links from a ticker on every
+      // frame of the game, whatever act you are in, and a one-shot hide loses
+      // to it five draws at a time. Re-asserting is also self-correcting: any
+      // mechanism that owns a visibility bit recomputes it on the first frame
+      // after the restore below, so nothing can come back stale.
+      for (const root of this.houseInteriorRoots) {
+        if (root.visible && root.parent === this.game.scene) root.visible = false;
+      }
+      return;
+    }
+    if (!this.houseInteriorCullActive) return;
+    this.houseInteriorCullActive = false;
+    for (const [root, visible] of this.houseInteriorVisibility) {
+      if (root.parent === this.game.scene) root.visible = visible;
+    }
+    this.houseInteriorVisibility.clear();
   }
 
   update(dt) {

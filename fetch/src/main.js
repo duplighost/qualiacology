@@ -182,6 +182,7 @@ class Game {
     // forest can retire that finished chapter when the player crosses the
     // graveyard gate, including when they immediately look back.
     this.houseRenderRoots = this.scene.children.slice(houseRenderStart);
+    this.houseInteriorRoots = this._findHouseInteriorRoots();
     buildOutside(this);
     this.atmosphere = buildAtmosphere(this);
     this.finale = new Finale(this);
@@ -292,6 +293,46 @@ class Game {
     this._scheduleShaderWarmup();
   }
 
+  // Which of the house's render roots can the graveyard actually SEE?
+  //
+  // Standing mid-yard and looking south submitted 1203 draw calls against a
+  // 450 ceiling and not one of them was the graveyard: walls occlude nothing
+  // in three.js, so the far plane held the entire furnished house and the
+  // frustum took the lot. What SHOULD survive is the building's silhouette —
+  // the player is meant to see the house standing behind them, and the arrival
+  // reads against that shape — but the silhouette is not in here at all: the
+  // exterior walls are world.box geometry, merged into the static shell by
+  // finishStatic(). These roots are the furniture, the fixtures and the
+  // mechanisms, plus the handful of pieces that stand proud of the roofline.
+  //
+  // tools/shot-cull-audit.mjs measured all 453 of them the only honest way —
+  // hide one, render, pixel-diff, restore — at five graveyard poses plus two
+  // deliberate look-backs at the house. Exactly eleven changed a pixel by more
+  // than 3/765, and every one of them reaches above the eaves on the
+  // graveyard-facing side. So that is the rule, with margin, rather than a
+  // list of 420 array indices that would rot the first time someone adds a
+  // chair: a root that stays below y 5.5 or behind z 5.5 is interior.
+  //
+  // Roots with no geometry at all (the three house PointLights) never qualify:
+  // the visible light count keys every shader program in the game and hiding
+  // one mid-play is the round-five freeze born again.
+  _findHouseInteriorRoots() {
+    const EAVES_Y = 5.5, YARD_FACE_Z = 5.5;
+    const box = new THREE.Box3();
+    // The basement's dropcloths hide one real walker, spawned during the house
+    // build, so an enemy mesh is sitting in this array. Nothing that can move,
+    // chase or be fought belongs in a static culling ledger at any price.
+    const enemyMeshes = new Set((this.enemies?.list || []).map((e) => e.mesh));
+    return this.houseRenderRoots.filter((root) => {
+      if (root.isLight || enemyMeshes.has(root)) return false;
+      root.updateWorldMatrix(true, true);
+      box.makeEmpty();
+      box.expandByObject(root);
+      if (box.isEmpty() || !Number.isFinite(box.max.y) || !Number.isFinite(box.max.z)) return false;
+      return !(box.max.y >= EAVES_Y && box.max.z >= YARD_FACE_Z);
+    });
+  }
+
   // ---------------------------------------------------------------- setup
   _setupRenderer() {
     // test mode keeps the backbuffer for deterministic canvas capture; shipping
@@ -348,7 +389,13 @@ class Game {
     // light the player is carrying — the forest floor outshone the skull's own
     // pool and the trunks were the brightest objects on screen. A carried light
     // needs something dark to carve.
-    tint('grass', 0x3d4a3c);
+    // #3d4a3c was green on top of a green painter, and multiplying two green
+    // biases is how the yard's floor ended up carrying twice as much read in
+    // hue as in value. #474845 is the same LUMINANCE (0.064 linear, measured)
+    // with the bias taken out — the grade keeps every bit of its darkening job
+    // and stops doing a colouring one. tools/probe-albedo.mjs prints the
+    // product; it is the only honest way to judge either of these numbers.
+    tint('grass', 0x474845);
     tint('dirt', 0x4a4239);
     tint('bark', 0x4e4a42);
   }
@@ -358,24 +405,39 @@ class Game {
     this.grainCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.grainMat = new THREE.ShaderMaterial({
       transparent: true, depthTest: false, depthWrite: false,
-      uniforms: { uTime: { value: 0 }, uFear: { value: 0 } },
+      uniforms: {
+        uTime: { value: 0 }, uFear: { value: 0 },
+        uResolution: { value: new THREE.Vector2(1280, 720) },
+      },
       vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }',
       fragmentShader: `
         varying vec2 vUv; uniform float uTime; uniform float uFear;
+        uniform vec2 uResolution;
         float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
         void main(){
-          // Grain reads at 1440p as well as 720p only if it is sampled at a
-          // fixed screen scale, and it needs to be perceptible or the frame
-          // comes back looking rendered rather than shot.
-          float g = hash(vUv*vec2(1280.,720.) + fract(uTime)*173.1) - 0.5;
+          // Grain is sampled at the ACTUAL resolution, not a fixed 1280x720.
+          // Pinning the scale was meant to keep it perceptible at 1440p; what
+          // it actually did was make one grain cell cover four screen pixels
+          // there and read as screen-door, and half a pixel at 720p and read
+          // as nothing.
+          float g = hash(vUv*uResolution + fract(uTime)*173.1) - 0.5;
           vec2 c = vUv - 0.5;
           // A vignette that only reaches 16% in the extreme corners is a
           // vignette nobody sees. Start it earlier and let it close harder:
           // the corners of a frame in a game about carrying the only light
-          // should be somewhere the light has not got to.
-          float vig = smoothstep(0.18, 1.05, dot(c,c)*(2.2 + uFear*2.0));
+          // should be somewhere the light has not got to. 0.18 -> 0.14 takes
+          // the reference image's corners, which die well before its edges do.
+          float vig = smoothstep(0.14, 0.98, dot(c,c)*(2.2 + uFear*2.0));
           float a = abs(g)*0.075 + vig*(0.30 + uFear*0.40);
-          gl_FragColor = vec4(vec3(0.007,0.006,0.01), clamp(a, 0., 0.88));
+          vec3 tint = vec3(0.007,0.006,0.01);
+          // ORDERED-ISH DITHER, and the reason is that this game is 70-80%
+          // near-black. ACES into an 8-bit swapchain quantises the fog
+          // gradients into visible rings — the one artefact that makes a dark
+          // frame look cheap — and a sub-LSB of noise before output breaks
+          // them up for free. Invisible to every measured mean in the suite;
+          // MARROW ships exactly this.
+          float d = (hash(vUv*uResolution + 7.13) - 0.5) / 255.0;
+          gl_FragColor = vec4(tint + d, clamp(a + d, 0., 0.88));
         }`,
     });
     const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.grainMat);
@@ -1436,6 +1498,12 @@ class Game {
     this.audio.update(dt, this.camera.position, this.camera);
 
     for (const t of this.tickers) t(dt, this.time);
+    // AFTER the tickers, deliberately. The house keeps running when you walk
+    // out of it — the crawl-space counterweight writes `visible` on its cable
+    // and links from a ticker every frame of the game — so a culler that ran
+    // with the other district cullers up in forest.update() got overwritten
+    // before the frame was drawn. This is the last word on visibility.
+    if (this.forest) this.forest.syncHouseInteriorCulling();
     this._updateGore(dt);
     for (const st of this.bridgeStones) {
       if (st.userData.rise && st.position.y < 0.12) st.position.y = Math.min(0.12, st.position.y + dt * 0.7);
@@ -1703,6 +1771,10 @@ class Game {
     };
     this.grainMat.uniforms.uTime.value = REDUCED_MOTION ? 0 : this.time % 300;
     this.grainMat.uniforms.uFear.value = this.fx.fear;
+    // the drawing buffer, not the CSS size — this is the grid the grain and the
+    // dither are quantised against
+    this.grainMat.uniforms.uResolution.value.set(
+      this.renderer.domElement.width, this.renderer.domElement.height);
     this.renderer.render(this.grainScene, this.grainCam);
     this.renderer.autoClear = true;
 
