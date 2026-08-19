@@ -316,6 +316,27 @@ function buildGraveyard(game) {
     // stops the dead being floodlit without stopping the beam being a beam.
     // Intensity changes are free: the light census is untouched.
     head.intensity = beat * (225 + Math.sin(t * 3.1) * 42);
+    // ...unless it is SCREAMING, or finished. The alarm strobes the same lamp
+    // on its own period — a hard square, not this dying flutter — so the sound
+    // and the light are obviously one machine. Intensity only: the light census
+    // is never touched. (round nine)
+    const wreck = game.wreck;
+    if (wreck?.dead) {
+      head.intensity = 0;
+      if (game.wreckLens) game.wreckLens.color.setScalar(0.012);
+      return;
+    }
+    if (wreck?.alarm) {
+      const strobe = Math.sin(t * 8.1) > 0 ? 1 : 0.06;
+      // 300/0.50, not 340/0.67: round seven measured this lens as the single
+      // brightest surface on the wreck at 0.77 and pulled it down on purpose.
+      // The alarm is allowed to be the loudest thing here, not to walk that
+      // back — 0.50 is well clear of the dying flicker (0.355) and well under
+      // the value they rejected.
+      head.intensity = strobe * 300;
+      if (game.wreckLens) game.wreckLens.color.setScalar(0.05 + strobe * 0.45);
+      return;
+    }
     // the lens answers its own lamp, so the flicker is visible from the SIDE
     // too — not only in the beam thrown out across the graves
     if (game.wreckLens) game.wreckLens.color.setScalar(0.055 + beat * 0.30);
@@ -893,7 +914,10 @@ function buildDestructibleGraves(game) {
 
   // One fixed pool for every chip and topple. Breaking all six stones cannot
   // allocate another Mesh or grow the scene: exhausted cosmetics are dropped.
-  const DEBRIS_CAP = 36;
+  // 36 -> 52: the wrecked wagon fires its stages through THIS pool rather
+  // than standing up a second one (round nine). Same mesh, same draw, same
+  // recycling law — exhausted cosmetics are still simply dropped.
+  const DEBRIS_CAP = 52;
   const debrisMesh = new THREE.InstancedMesh(
     new THREE.DodecahedronGeometry(0.12, 0), stoneMat, DEBRIS_CAP,
   );
@@ -2335,6 +2359,124 @@ function buildOssuaryRoute(game) {
   const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.7, 6), ironMat);
   chain.position.set(1.15, CORBEL_Y - 0.275, 0);
   mechanism.add(chain);
+
+  // ------------------------------------------------------------- THE PAWL
+  // HIS NOTE, 2026-08-19: "there is a weighted basket thing you can use that
+  // does nothing in terms of gameplay. maybe it should be the thing that turns
+  // on that wheel/activates it at the end. make sure it looks deactivated."
+  //
+  // So the machine has to be visibly LOCKED before it is armed, and the lock
+  // has to be a thing, not a state: a dog standing up into the rim from the
+  // plinth's shoulder. Engaged, it is touching the wheel — you can see what is
+  // stopping it. Armed, it drops clear and the wheel is free. Both poses come
+  // off ONE scalar (state.armT), so a director restore seats it in a single
+  // assignment, exactly like the two lids.
+  //
+  // The first cut of this put the dog under the wheel, where the plinth ate it
+  // and the frame showed nothing (scratch shot 01, opened and looked at). A
+  // lock nobody can see is not a lock. It comes up the wheel's SOUTH face now,
+  // where the player's own approach silhouettes it, and it carries a lifted
+  // iron: the mechanism's own colour at this range is the same value as the
+  // stone behind it, so shape alone was never going to do it.
+  const pawlMat = ironMat.clone();
+  pawlMat.color.setHex(0x8d918c);
+  pawlMat.roughness = 0.5;
+  pawlMat.emissive = new THREE.Color(0x161a19);
+  pawlMat.emissiveIntensity = 0.6;
+  const pawlBracket = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.34, 0.24), ironMat);
+  pawlBracket.position.set(0, 0.17, 0.95);
+  mechanism.add(pawlBracket);
+  const pawlPivot = new THREE.Group();
+  // ENGAGED = -0.44 rad: the tooth sits on the rim's lower south face.
+  // RELEASED = +0.55: it falls back and down, a full radian of travel, so the
+  // release is a MOTION and not a colour change.
+  pawlPivot.position.set(0, 0.42, 0.95);
+  pawlPivot.rotation.x = -0.44;
+  mechanism.add(pawlPivot);
+  const pawlArm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.78, 0.1), pawlMat);
+  pawlArm.position.set(0, 0.39, 0);
+  pawlPivot.add(pawlArm);
+  const pawlTooth = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.17, 0.19), pawlMat);
+  pawlTooth.position.set(0, 0.8, -0.04);
+  pawlPivot.add(pawlTooth);
+  const pawlSpring = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.34, 6), pawlMat);
+  pawlSpring.rotation.x = 0.5;
+  pawlSpring.position.set(0.15, 0.2, 0.1);
+  pawlPivot.add(pawlSpring);
+
+  // ...and the wheel's own tell. Unlit, near-black while the mechanism is
+  // dead; it comes up and breathes once the kennel has armed it. Value and
+  // motion, never hue — the light in here is one carried lantern.
+  const wheelCoreMat = new THREE.MeshBasicMaterial({
+    color: 0xdfe5e2, transparent: true, opacity: 0.02, depthWrite: false,
+  });
+  const wheelCore = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.018, 5, 20), wheelCoreMat);
+  wheelCore.rotation.y = Math.PI / 2;
+  wheelGroup.add(wheelCore);
+
+  // THE WIRE. His words: "the basket thing that you throw the skull into
+  // clearly wires back to activate it." Cause has to point at effect BEFORE
+  // it is ever used, so the conduit is laid at build time and is readable on
+  // the walk up: down the kennel's back wall, out under the bars, across the
+  // corridor, and thirteen metres north to this plinth. Same vocabulary as the
+  // exit-slab wiring below it (world.box merges into the shell: zero draws),
+  // and it runs UNDER the baffle bases the way the slab's conduit already
+  // does — that is what a floor conduit does to a wall.
+  //
+  // AND IT HAS TO BE SEEN. The first cut used ironMat at 0.055 m and vanished
+  // into the floor at four metres — measured with conduitMat.visible toggled,
+  // not eyeballed. A wire that "clearly wires back" and cannot be seen is the
+  // round-two disease with a new coat of paint. So: its OWN material, value
+  // lifted well clear of the floor it lies on (one extra batch bucket, one
+  // draw), and a section thick enough to survive the mip chain at range.
+  // AND IT HAS TO BE IN routeRoot, NOT world.box. THE FINDING OF THIS ITEM:
+  // the district seal (keepInOssuary/syncOssuaryVisibility, below) hides every
+  // scene child that is not routeRoot while you are down here — and world.box
+  // merges into the world SHELL, which is a scene child. So a floor conduit
+  // laid with world.box in this district is drawn nowhere and always has been:
+  // the exit-slab wiring three blocks down, the "basement's blessed
+  // vocabulary" comment and all, has never been visible to anybody. Found by
+  // toggling the merged mesh off and diffing the frame; the first two cuts of
+  // this wire measured 0.00% of pixels and I would have shipped them.
+  //
+  // One merged BufferGeometry, one mesh, one draw, inside the route.
+  const conduitMat = ironMat.clone();
+  conduitMat.name = 'ossuary kennel conduit';
+  conduitMat.color.setHex(0x9aa09b);
+  conduitMat.roughness = 0.52;
+  conduitMat.emissive = new THREE.Color(0x1b201e);
+  conduitMat.emissiveIntensity = 0.75;
+  const WIRE_X = OX - 0.55;
+  const WIRE_Z = OZ + 12.4;
+  const WIRE_W = 0.13, WIRE_H = 0.1;
+  {
+    const parts = [];
+    const run = (x, y, z, w, h, d) => {
+      const g2 = new THREE.BoxGeometry(w, h, d);
+      g2.translate(x, y, z);
+      parts.push(g2);
+    };
+    run(OX - 5.75, FLOOR + 0.86, WIRE_Z, 0.09, 1.72, 0.09);                       // riser behind the cradle
+    run(OX - 4.4, FLOOR + 0.05, WIRE_Z, 2.82, WIRE_H, WIRE_W);                    // out of the cell
+    run((OX - 3.0 + WIRE_X) / 2, FLOOR + 0.05, WIRE_Z,
+      (WIRE_X - (OX - 3.0)), WIRE_H, WIRE_W);                                     // across the corridor
+    run(WIRE_X, FLOOR + 0.05, (WIRE_Z + OZ + 26.0) / 2,
+      WIRE_W, WIRE_H, (OZ + 26.0) - WIRE_Z);                                      // north to the machine
+    run(WIRE_X, FLOOR + 0.34, OZ + 26.0, 0.09, 0.68, 0.09);                       // up onto the plinth
+    run((WIRE_X + OX) / 2, FLOOR + 0.66, OZ + 26.0, OX - WIRE_X, 0.09, 0.09);
+    // cleats: a wire somebody FITTED, not a line drawn. They also give the run
+    // a rhythm, which is what makes it read as one object at a glance instead
+    // of a seam in the floor.
+    for (const cz of [OZ + 14.2, OZ + 16.6, OZ + 19.0, OZ + 21.4, OZ + 23.8]) {
+      run(WIRE_X, FLOOR + 0.1, cz, 0.26, 0.1, 0.09);
+    }
+    const conduit = new THREE.Mesh(mergeGeometries(parts), conduitMat);
+    conduit.name = 'ossuary kennel conduit';
+    conduit.userData.noBatch = true;
+    conduit.receiveShadow = true;
+    routeRoot.add(conduit);
+    game.ossuaryConduit = conduit;          // tools toggle this to measure it
+  }
   const exitSlab = new THREE.Mesh(new THREE.BoxGeometry(HALF_W * 2 - 0.35, 2.65, 0.34), wallMat);
   exitSlab.userData.noBatch = true;
   exitSlab.position.set(OX, FLOOR + 1.33, OZ + 28.15);
@@ -2823,6 +2965,10 @@ function buildOssuaryRoute(game) {
     origin: { x: OX, z: OZ, floor: FLOOR }, root: routeRoot,
     unlocked: false, route: null, inOssuary: false, solved: false,
     pulling: false, progress: 0, slabT: 0, exitT: 0,
+    // the counterweight is DEAD until the kennel cradle arms it. armT is the
+    // pawl's pose (0 = dog in the rim, 1 = dropped clear) and, like the lids,
+    // it is a plain scalar so a restore is one assignment.
+    armed: false, armT: 0,
     // Both hatches are plain scalars on the state object, deliberately: the
     // director's restore paths seat this district in single assignments, and
     // anything that needs a sequence to be correct would break on a respawn.
@@ -2852,12 +2998,12 @@ function buildOssuaryRoute(game) {
       this.progress = 0;
       this.slabT = 0;
       this.exitT = 0;
+      this.armed = false;
+      this.armT = 0;
       this.entryLid = { t: 0, open: false, moving: false };
       this.exitLid = { t: 0, open: false, moving: false };
-      // a reset must never leave a press queued: a restore that seats a lid
-      // open would otherwise take the player down the instant it lands
-      this._descendOnOpen = false;
-      this._ascendOnOpen = false;
+      // a reset must never leave a press queued: an armed verb surviving a
+      // restore would take the player down the instant it lands
       this._pendingDescend = false;
       this._pendingAscend = false;
       surfaceSlab.position.set(mausoleum.x, 0.11, mausoleum.z + 0.15);
@@ -2871,6 +3017,37 @@ function buildOssuaryRoute(game) {
     },
   };
   game.ossuary = state;
+
+  // THE ARMING SENTENCE. Cause -> wire -> effect, spoken out loud along the
+  // conduit the player has been walking beside since the kennel. Four knocks
+  // travelling the run, then the dog comes out of the rim and the wheel is
+  // live. A restore that finds the flag already set seats the pose instead
+  // (see restoreArm) and skips the noise, the exit-slab tickers' law.
+  const armTheCounterweight = () => {
+    if (state.armed) return;
+    state.armed = true;
+    const legs = [
+      [OX - 4.4, WIRE_Z], [WIRE_X, WIRE_Z],
+      [WIRE_X, OZ + 17.4], [WIRE_X, OZ + 22.6], [OX, OZ + 26.0],
+    ];
+    legs.forEach(([kx, kz], i) => {
+      game.after(0.16 + i * 0.19, () => game.audio.knock({
+        pos: new THREE.Vector3(kx, FLOOR + 0.12, kz),
+        gain: 0.34 + i * 0.05, rate: 0.86 - i * 0.06, verb: 0.8,
+      }), { global: true });
+    });
+    game.after(0.16 + legs.length * 0.19, () => {
+      game.audio.metalDrop({ pos: anchorPos, gain: 0.78, rate: 0.5 });
+      game.audio.unlock({ pos: anchorPos, gain: 0.6, rate: 0.5 });
+      game.shake(0.16);
+      game.impact('hurt', anchorPos);
+    }, { global: true });
+  };
+  // a director restore lands the armed pose in one assignment, silently
+  state.restoreArm = () => {
+    state.armed = true;
+    state.armT = 1;
+  };
 
   // "you just get to the end and telport. everything you can open should
   // kind of work the same way." — climbing out is now a USED verb: stand on
@@ -2889,10 +3066,13 @@ function buildOssuaryRoute(game) {
   // zero — both are gone as of 2026-08-17.) Same law as every other swap in
   // this file: the verb ARMS, the ticker EXECUTES, so the cullers run on the
   // pre-exit pose and the seal's save/restore maps stay coherent.
-  const doAscendOssuary = () => {
+  const doAscendOssuary = (viaVerb = false) => {
     const player = game.player;
     const p = player.pos;
-    if (!state.inOssuary || !state.exitLid.open) return false;
+    if (!state.inOssuary) return false;
+    // the VERB does not wait for the stone (see climbBack); the walk-into-it
+    // fallback still cannot fire through a panel that is still in the doorway
+    if (!viaVerb && !state.exitLid.open) return false;
     if (game.skull?.mode !== 'held') return false;
     state.inOssuary = false;
     // Out of the mausoleum's doorway, FACING OUT. It used to land you at yaw PI
@@ -2913,18 +3093,27 @@ function buildOssuaryRoute(game) {
   // E on the hatch: shut stone opens it; open stone lets you through.
   const climbBack = () => {
     if (!state.inOssuary) return;
+    const here = new THREE.Vector3(OX, FLOOR + 1.0, OZ);
+    // ...and the way out refuses out loud too. It used to open the stone for an
+    // empty-handed player and then silently decline to take them through it,
+    // which is the one thing this game is not allowed to do.
+    if (game.skull?.mode !== 'held') {
+      if (game.time > (state._refuseAt || 0)) {
+        state._refuseAt = game.time + 1.1;
+        game.audio.lockedRattle({ pos: here, gain: 0.42, rate: 0.78 });
+        game.impact('locked', here);
+      }
+      return;
+    }
     if (!state.exitLid.open && !state.exitLid.moving) {
       state.exitLid.moving = true;
       // and the way out obeys the same rule, because "everything you can open
       // should kind of work the same way" is his and it is older than this note
-      state._ascendOnOpen = true;
-      const here = new THREE.Vector3(OX, FLOOR + 1.0, OZ);
       game.audio.stoneGrind({ pos: here, gain: 0.82, rate: 0.62 });
       game.after(0.5, () => game.audio.creak({ pos: here, gain: 0.45, rate: 0.8 }));
       game.shake(0.1);
-      return;
     }
-    if (state.exitLid.open) state._pendingAscend = true;
+    state._pendingAscend = true;
   };
   state.climbBack = climbBack;
 
@@ -2959,7 +3148,9 @@ function buildOssuaryRoute(game) {
     // aside the moment the FUNERAL resolved, so the way down was simply open
     // and crossing it swallowed you. Now the funeral only unlocks it; the lid
     // is a verb. The walk-over survives — it just cannot fire through stone.
-    if (!state.entryLid.open) return false;
+    // the WALK-OVER still cannot fire through stone — a lid in the doorway is
+    // a lid. The verb is exempt: it is the hand that just took the stone off.
+    if (!state.entryLid.open && !viaVerb) return false;
     if (!viaVerb) {
       // the walk-over keeps its tighter band: it must not fire from the
       // doorway where the player is only leaning in to look
@@ -2991,26 +3182,35 @@ function buildOssuaryRoute(game) {
     // them. The keepInOssuary marker spares it from the district seal.
     const residentAlive = state.resident && game.enemies.list.includes(state.resident);
     if (!state.solved && !residentAlive) {
-      // posted on the WEST side: the last baffle forces the east gap, so
-      // the player passes it at arm's-plus length — watched, never blocked
-      const res = game.enemies.spawn('walker', OX - 1.6, OZ + 20.4, 'standing', FLOOR + 1);
+      // HIS NOTE, 2026-08-19: "the area would also be cooler if the enemies in
+      // it were in some of those rooms." They stood in the CORRIDOR — two posts
+      // on the walking line, which is why they read as obstacles on a route
+      // rather than as things that live here. Both are in pockets now: the
+      // corridor is empty and the rooms are not, so every doorway is worth a
+      // look and none of them is compulsory.
+      //
+      // ONE, in the mouth of the kennel cell, facing the bars it cannot pass —
+      // the player meets it side-on through the west wall gap while the lunger
+      // is still throwing itself at the iron behind it.
+      const res = game.enemies.spawn('walker', OX - 3.25, OZ + 12.05, 'standing', FLOOR + 1);
       res.standing = true;
       res.ossuaryResident = true;
-      res.home = { x: OX - 1.6, z: OZ + 20.4 };
+      res.home = { x: OX - 3.25, z: OZ + 12.05 };
       // it closes while your back is turned, but never leaves its post —
       // the corridor stays a walk of glances, not a pursuit
       res.tether = 2.2;
       res.mesh.userData.keepInOssuary = true;
       state.resident = res;
-      // ...and a second, leaning out of the EAST niche pocket on a tighter
-      // leash. Same ossuaryResident marker, so both exits clear it and there is
-      // no new teardown path. Nothing is posted between z+15.4 and z+18.2 —
-      // that is the counterweight hold, where the player stands still for 1.7 s
-      // with no skull in hand and no way to answer anything.
-      const east = game.enemies.spawn('walker', OX + 2.1, OZ + 18.6, 'standing', FLOOR + 1);
+      // TWO, standing in the EAST NICHE ROOM among the resonant minis: the
+      // payoff room of the whole district has somebody already in it. Same
+      // ossuaryResident marker, so both exits clear it and there is no new
+      // teardown path. Nothing is posted between z+15.4 and z+18.2 — that is
+      // the counterweight hold, where the player stands still for 1.7 s with
+      // no skull in hand and no way to answer anything.
+      const east = game.enemies.spawn('walker', OX + 4.5, OZ + 19.3, 'standing', FLOOR + 1);
       east.standing = true;
       east.ossuaryResident = true;
-      east.home = { x: OX + 2.1, z: OZ + 18.6 };
+      east.home = { x: OX + 4.5, z: OZ + 19.3 };
       east.tether = 1.8;
       east.mesh.userData.keepInOssuary = true;
     }
@@ -3032,24 +3232,27 @@ function buildOssuaryRoute(game) {
       }
       return;
     }
+    // HIS NOTE, 2026-08-19: "the other you hit e to get in, and e to get out on
+    // the right things. but in this one you hit e, and it opens slowly, then
+    // you can walk over it and be teleported... the other one under the
+    // graveyard is perfect." The perfect one is the MARROW: descend() there
+    // sets a pending flag and you are down on the next district tick, and the
+    // way out is the same verb on the way up. No wait in either direction.
+    //
+    // This hatch answered E and then made you wait ~0.9 s inside your own verb
+    // while the stone travelled — which is the same complaint he filed a round
+    // earlier against the walk-over version, in different words: a hatch that
+    // opens onto a hole you have to ask about again. The stone still slides
+    // (it was never the problem, and skipping it would skip the sound); it
+    // just finishes BEHIND you now.
     if (!state.entryLid.open && !state.entryLid.moving) {
       state.entryLid.moving = true;
-      // HIS NOTE, 2026-08-18: "to enter that mausoleum it shouldn't be that the
-      // hatch opens into a hole. it should bring you down when you hit E on
-      // it." It used to be one verb with two answers — the first press took the
-      // stone off, the second took you down — and that reads as a hatch that
-      // opens onto a hole you then have to ask about again. One press does both
-      // now: the stone slides, and the descent fires the moment it is clear.
-      // The lid still takes its ~0.9 s, so the stone is never skipped; it is
-      // the second PRESS that is gone, not the opening.
-      state._descendOnOpen = true;
       game.audio.stoneGrind({ pos: throatAt, gain: 0.82, rate: 0.62 });
       game.after(0.55, () => game.audio.creak({ pos: throatAt, gain: 0.45, rate: 0.78 }));
       game.after(0.95, () => game.audio.metalDrop({ pos: throatAt, gain: 0.5, rate: 0.6 }));
       game.shake(0.12);
-      return;
     }
-    if (state.entryLid.open) state._pendingDescend = true;
+    state._pendingDescend = true;
   };
   state.descend = descend;
   // registered on the mouth plane, which is already a Mesh — registerInteract
@@ -3139,6 +3342,16 @@ function buildOssuaryRoute(game) {
     onHit(skull, at) {
       if (state.solved) return 'return';
       if (skull.mode !== 'outbound') return 'continue';
+      // LOCKED, and it says so. The target stays ENABLED while the pawl is in
+      // — a disabled target lets the skull sail through in silence, and
+      // silence is the one answer this game is not allowed to give. This is
+      // the throat's idiom, restated on iron.
+      if (!state.armed) {
+        game.audio.knock({ pos: anchorPos, gain: 0.6, rate: 0.42, verb: 0.9 });
+        game.audio.lockedRattle({ pos: anchorPos, gain: 0.34, rate: 0.55 });
+        game.impact('locked', at || anchorPos);
+        return 'return';
+      }
       this.enabled = false;
       state.pulling = true;
       skull.anchorAt(anchorPos, { maxHold: 4.5, puzzleId: 'ossuaryCounterweight' });
@@ -3178,22 +3391,12 @@ function buildOssuaryRoute(game) {
     surfaceSlab.position.z = mausoleum.z + 0.15 + state.slabT * 0.72;
     surfaceSlab.rotation.x = -state.slabT * 0.42;
 
-    // ONE PRESS. The stone opening is not the answer to the verb, it is the
-    // first half of it — the descent fires as soon as the way is genuinely
-    // clear. doDescendOssuary re-checks the stance and the skull, so stepping
-    // away or throwing it in the meantime simply drops the intent.
-    if (eLid.open && state._descendOnOpen) {
-      state._descendOnOpen = false;
-      if (!state.inOssuary) state._pendingDescend = true;
-    }
+    // (the descent no longer waits on this lid — see descend(). The slide is
+    // flavour that finishes behind you, not a gate on your own verb.)
 
     const xLid = state.exitLid;
     xLid.t += ((xLid.moving ? 1 : 0) - xLid.t) * Math.min(1, dt * 1.1);
     xLid.open = xLid.t > 0.98;
-    if (xLid.open && state._ascendOnOpen) {
-      state._ascendOnOpen = false;
-      if (state.inOssuary) state._pendingAscend = true;
-    }
     exitLidPivot.position.y = FLOOR + 0.95 - smoothstep(0, 1, xLid.t) * 1.98;
     // the aperture stops being a wall only once the panel is genuinely clear —
     // the exit slab's law, and Door's. Opening the collider while the stone
@@ -3231,7 +3434,7 @@ function buildOssuaryRoute(game) {
     // is a HATCH at both ends now. The crosshair offers it whenever you are
     // down here and near the cap wall.
     exitLidInter.enabled = state.inOssuary;
-    if (state._pendingAscend) { state._pendingAscend = false; doAscendOssuary(); }
+    if (state._pendingAscend) { state._pendingAscend = false; doAscendOssuary(true); }
     // and the walk-into-it fallback survives, gated on the stone actually being
     // out of the way: once the hatch stands open, walking out still works.
     if (state.inOssuary && xLid.open && p.z < OZ + 0.28 && skull?.mode === 'held') {
@@ -3253,6 +3456,18 @@ function buildOssuaryRoute(game) {
     // the weight rides its bottom end down. The old maths ran the chain from
     // y 1.8 to y 3.5 at rest, through a ceiling that is at 2.85, and the two
     // parts never stayed connected to each other.
+    // the pawl rides its own scalar toward wherever armT points: engaged and
+    // touching the rim, or dropped clear of it
+    state.armT += ((state.armed ? 1 : 0) - state.armT) * Math.min(1, dt * 6.5);
+    const pawlPose = state.armT * state.armT * (3 - 2 * state.armT);
+    pawlPivot.rotation.x = -0.44 + pawlPose * 0.99;
+    pawlSpring.scale.y = 1 - pawlPose * 0.38;
+    // and the wheel stops looking dead the instant it is free
+    const wheelWant = state.armed
+      ? (state.solved ? 0.16 : 0.3 + Math.sin(time * 2.4) * 0.06)
+      : 0.02;
+    wheelCoreMat.opacity += (wheelWant - wheelCoreMat.opacity) * Math.min(1, dt * 2.6);
+    state._coreOpacity = wheelCoreMat.opacity;   // read by tools/probe-ossuary-arming
     wheelGroup.rotation.x = state.progress * TAU * 1.45;
     const payout = 0.55 + state.progress * 1.1;
     chain.scale.y = payout / 1.7;
@@ -3340,6 +3555,14 @@ function buildOssuaryRoute(game) {
           game.audio.metalDrop({ pos: kennel.solvePos, gain: 0.7, rate: 0.62 });
           game.after(0.62, () => game.audio.knock({ pos: kennel.remainsPos, gain: 0.34, rate: 0.76 }));
           game.after(1.15, () => game.audio.whisper({ pos: kennel.remainsPos, gain: 0.28, rate: 0.7, verb: 0.85 }));
+          // AND IT ARMS THE WHEEL. The cradle used to raise a shutter on a
+          // scare and stop there — his "does nothing in terms of gameplay."
+          // Now the weight is the first act of the gate: cause travels the
+          // conduit it was laid on, knock by knock, thirteen metres north, and
+          // the pawl lets go of the rim at the far end. The archive draft's
+          // travelling thunks in house.js are the model; this is the same
+          // sentence with a longer wire.
+          armTheCounterweight();
         }
       } else kp.progress = 1;
       const ke = kp.progress * kp.progress * (3 - 2 * kp.progress);
@@ -3714,6 +3937,17 @@ function buildWreckedCar(game) {
   doorPanel.castShadow = true;
   cabin.castShadow = false;
 
+  // HIS NOTE, 2026-08-19: "I want to be able to destroy the hell out of the car
+  // in the graveyard by throwing the skull at it. maybe it even has a car alarm
+  // going off before you destroy it."
+  //
+  // FOUR pieces come OUT of the static batch, because a merged mesh cannot move
+  // and these four have to: the roof crushes, the glasshouse collapses with it,
+  // the hanging door comes off, and the peeled hood goes with it. Everything
+  // else stays merged, so the wreck costs exactly what it always cost.
+  // (The crack star is LineSegments and batchStaticGroup never took it.)
+  for (const piece of [roof, cabin, door, tornHood]) piece.userData.noBatch = true;
+
   batchStaticGroup(car, 'wrecked wagon');
 
   car.position.set(-9, -0.02, 14);
@@ -3721,8 +3955,172 @@ function buildWreckedCar(game) {
   scene.add(car);
   car.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(car);
-  world.addCollider(bounds.min.x + 0.12, -0.2, bounds.min.z + 0.12,
+
+  // ------------------------------------------------------- BREAKING IT UP
+  // Modelled on the breakable graves, which is this game's blessed
+  // destructible: an addFetchTarget with a hit count, POOLED debris (theirs,
+  // enlarged — not a second pool), a collider that drops on the last hit, a
+  // flag so the state survives a checkpoint restore, and noise that draws the
+  // dead. The alarm turns that last part into the loop: it screams from the
+  // first hit, it pulls walkers the whole time it screams, and the only way to
+  // shut it up is to finish the job.
+  //
+  // Every stage is derived from ONE scalar (wreck.wreckT, paid out from the
+  // hit count) so a forced restore seats the pose in a single assignment, and
+  // the sounds are latched on the hit itself so a restore is silent.
+  const WRECK_DEBRIS_OWNER = 90;
+  const wreckAt = new THREE.Vector3(-9, 0.9, 14);
+  const wreck = {
+    hits: 0, stages: 4, wreckT: 0, alarm: false, dead: false,
+    _alarmT: 0, _wail: 0, collider: null, target: null,
+    reset() {
+      // a finished wreck STAYS finished: the flag is the truth, and un-crushing
+      // a car the player already took apart would be the graveyard reset eating
+      // their work
+      if (game.flags.has('wreckDestroyed')) return;
+      this.hits = 0;
+      this.wreckT = 0;
+      this.alarm = false;
+      this.dead = false;
+      this._alarmT = 0;
+      this._wail = 0;
+      if (this.collider) this.collider.max.y = Math.min(1.75, bounds.max.y);
+      if (this.target) this.target.enabled = true;
+      cracks.visible = true;
+      glass.opacity = 0.72;
+      poseWreck(0);                             // the pose is seated, not eased
+      for (const d of game.graveDebrisPool?.entries || []) {
+        if (d.owner !== WRECK_DEBRIS_OWNER) continue;
+        d.active = false;
+        d.owner = -1;
+        d.settled = false;
+      }
+    },
+  };
+  wreck.collider = world.addCollider(bounds.min.x + 0.12, -0.2, bounds.min.z + 0.12,
     bounds.max.x - 0.12, Math.min(1.75, bounds.max.y), bounds.max.z - 0.12);
+  game.wreck = wreck;
+
+  // ONE function owns the pose, so the ticker and a restore cannot disagree.
+  function poseWreck(t) {
+    const e = t * t * (3 - 2 * t);
+    // the roof comes down and twists; the glasshouse goes with it
+    roof.position.y = 1.68 - e * 0.72;
+    roof.rotation.z = -0.025 - e * 0.2;
+    roof.rotation.x = 0.02 + e * 0.1;
+    cabin.scale.y = 1 - e * 0.42;
+    cabin.position.y = -e * 0.06;
+    glass.opacity = 0.72 * (1 - Math.min(1, e * 2.4));
+    // the hanging door finishes coming off, and the hood peels back
+    door.rotation.y = -0.82 - e * 0.9;
+    door.rotation.x = e * 0.5;
+    door.position.y = 0.43 - e * 0.42;
+    tornHood.rotation.z = 0.19 + e * 0.62;
+    tornHood.position.y = 1.25 + e * 0.12;
+    tornHood.position.x = 1.72 - e * 0.3;
+  }
+
+  const shedDebris = (count, spread) => {
+    const pool = game.graveDebrisPool;
+    if (!pool) return;
+    let made = 0;
+    for (let i = 0; i < pool.entries.length && made < count; i++) {
+      const d = pool.entries[i];
+      if (d.active) continue;
+      const angle = wreck.hits * 1.31 + made * 2.39;
+      d.active = true;
+      d.owner = WRECK_DEBRIS_OWNER;
+      d.age = 0;
+      d.settled = false;
+      d.scale = 0.5 + ((wreck.hits + made * 2) % 5) * 0.14;
+      d.p.set(wreckAt.x + Math.cos(angle) * spread * 0.5, 1.05 + made * 0.09,
+        wreckAt.z + Math.sin(angle) * spread * 0.5);
+      d.v.set(Math.cos(angle) * (0.9 + made * 0.16), 1.7 + made * 0.19,
+        Math.sin(angle) * (0.9 + made * 0.16));
+      d.spin.set(2.4 + made, angle, 1.7 + made * 0.21);
+      made++;
+    }
+  };
+
+  wreck.target = world.addFetchTarget({
+    id: 'wreckedWagon', object: null, pos: wreckAt.clone(), radius: 2.35,
+    onHit(skull, at) {
+      if (skull.mode !== 'outbound') return 'continue';
+      if (wreck.dead) return 'return';
+      // THE CAR DOES NOT SHIELD THE DEAD. This target is a 2.35 m sphere so the
+      // wreck is easy to hit on purpose — but the arena is fought around it,
+      // and a walker standing against the panels must not be able to hide
+      // behind a car. If a body is inside the impact, the skull goes through to
+      // it and this hit never happened. (The guard lives on the TARGET, never
+      // in _checkTargets: FEEL_PROFILE's law.)
+      const point = at || wreckAt;
+      for (const e of game.enemies.list) {
+        if (e.state === 'dying') continue;
+        if (Math.hypot(e.pos.x - point.x, e.pos.z - point.z) < 1.75) return 'continue';
+      }
+      wreck.hits++;
+      const stage = wreck.hits;
+      game.impact('hurt', point);
+      game.player.noise = 1;
+      if (stage === 1) {
+        // IT WAKES UP. The alarm is the answer to the first hit, and it is
+        // also the price of it.
+        wreck.alarm = true;
+        wreck._alarmT = 0;
+        game.audio.thud({ pos: point, gain: 0.7, rate: 0.5, intensity: 0.7, crack: true });
+        game.audio.glassTink({ pos: point, gain: 0.5, rate: 0.9 });
+      } else if (stage === 2) {
+        cracks.visible = false;                 // the glasshouse goes
+        game.audio.glassShatter({ pos: point, gain: 0.85, rate: 0.92 });
+        game.audio.thud({ pos: point, gain: 0.6, rate: 0.6, intensity: 0.5 });
+        shedDebris(3, 1.4);
+      } else if (stage === 3) {
+        game.audio.metalDrop({ pos: point, gain: 0.8, rate: 0.5 });
+        game.audio.thud({ pos: point, gain: 0.72, rate: 0.46, intensity: 0.8, crack: true });
+        shedDebris(4, 1.9);
+        game.enemies.resonancePulse?.(wreckAt, 6.2, 1.0);
+      } else {
+        // DEAD. The alarm does not stop, it DIES — the pitch sagging out from
+        // under the wail. Same grammar the boiler speaks. The lamp goes with it.
+        wreck.dead = true;
+        wreck.alarm = false;
+        game.audio.carAlarm({ pos: wreckAt, gain: 0.85, dying: true });
+        game.audio.thud({ pos: point, gain: 0.9, rate: 0.4, intensity: 1, crack: true });
+        game.audio.metalDrop({ pos: point, gain: 0.9, rate: 0.42 });
+        game.after(0.7, () => game.audio.stoneGrind({
+          pos: wreckAt, gain: 0.5, rate: 0.5, verb: 0.8,
+        }), { global: true });
+        shedDebris(6, 2.6);
+        game.shake(0.42);
+        wreck.collider.max.y = 0.62;            // you can walk over what is left
+        this.enabled = false;
+        game.flag('wreckDestroyed');
+        game.enemies.resonancePulse?.(wreckAt, 7.4, 1.25);
+      }
+      return 'return';
+    },
+  });
+
+  game.tickers.push((dt) => {
+    const want = wreck.hits / wreck.stages;
+    if (Math.abs(want - wreck.wreckT) > 0.0005) {
+      wreck.wreckT += (want - wreck.wreckT) * Math.min(1, dt * 5.5);
+      poseWreck(wreck.wreckT);
+    }
+    if (!wreck.alarm) return;
+    // ONE CYCLE PER PERIOD, never a loop: audio.carAlarm is bounded and this
+    // ticker is what makes it repeat, so nothing can outlive the wreck.
+    wreck._alarmT -= dt;
+    if (wreck._alarmT <= 0) {
+      wreck._alarmT = 1.24;
+      wreck._wail++;
+      game.audio.carAlarm({ pos: wreckAt, gain: 0.8, rate: 1 - wreck.hits * 0.03 });
+      // and it CALLS THEM. This is the whole loop: the noise is what hitting it
+      // costs, and finishing the job is the only way to take the cost back.
+      game.enemies.resonancePulse?.(wreckAt, 5.6, 0.85);
+    }
+    game.player.noise = Math.max(game.player.noise, 0.72);
+  });
 
   // Debris stays outside the car group so the tight gameplay collider is not
   // silently enlarged by a suitcase or glass shard several metres away.

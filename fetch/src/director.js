@@ -193,7 +193,11 @@ export class Director {
         this._removeResident();
       });
     }
-    // the storeroom shapes: two lies and a truth
+    // the storeroom shapes: two lies and a truth. The truth is SPAWNED HERE
+    // now, not at house build time -- respawn() below clears every enemy, so a
+    // boot-spawned walker was deleted by any death anywhere and never came
+    // back. Arming on entry means a cleared list costs nothing.
+    g.dropcloths?.arm();
     this._storeArmed = true;
   }
 
@@ -219,6 +223,9 @@ export class Director {
         g.ossuary.entryLid.open = true;
         g.ossuary.slabT = 1;
       }
+      // the kennel arms the counterweight (round nine). A restore has to find
+      // the pawl already dropped, and must not replay the travelling knocks.
+      if (g.flags.has('ossuaryKennelSolved')) g.ossuary?.restoreArm?.();
       // the counterweight's own flag, not the gate's: the gate is three keys
       // now and the under-yard is only one of them
       if (g.flags.has('ossuaryCleared') && g.ossuary) {
@@ -673,6 +680,8 @@ export class Director {
   _updateStoreroom(dt) {
     const g = this.game;
     if (!this._storeArmed || g.act !== 'basement') return;
+    // retires the dropcloth walker only if it was actually put down
+    g.dropcloths?.watch();
     const p = g.player.pos;
     // two lies: passing the shapes plays steps behind you; nothing is there
     if (!this._lie1 && p.x < 0 && p.z < 0) {
@@ -1177,6 +1186,7 @@ export class Director {
       if (g.graveyardGate) g.graveyardGate.reset();
       for (const grave of g.resonantGraves || []) grave.reset?.();
       for (const grave of g.destructibleGraves || []) grave.reset?.();
+      g.wreck?.reset?.();
       g.ossuary?.reset?.();
     } else if (cp === 'graveyard' && graveResolved) {
       if (this.graveArena) { this.graveArena.done = true; this.graveArena.pending = 0; }
