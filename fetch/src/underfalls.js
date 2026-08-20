@@ -692,7 +692,9 @@ function addFloorAndShell(game, layout) {
         // inside it. FACES, not AABBs — main#7's yaw is 35.5 degrees and a
         // rotated 0.54 x 0.95 box has a 0.99 m AABB, 0.22 m fatter into the
         // lane than the box itself. That overstatement is the forest trap.
-        (layout.solids || (layout.solids = [])).push({
+        publishSolid(layout, {
+          name: 'cave flank wall', guard: 'clamp',
+          y0: bottom, y1: bottom + height,
           x: cx, z: cz, nx, nz, tx, tz, halfN: 0.27, halfT: depth * 0.5,
         });
       }
@@ -938,6 +940,11 @@ function addFloorAndShell(game, layout) {
   //    — gets the tallest.
   {
     const marks = [];
+    // The cone's base radius, shared by the seating test below and the drawn
+    // geometry, so the two can never drift apart. The cone is WIDEST at the
+    // floor and the player capsule stands on that floor, so this -- not the
+    // narrower slice at EYE -- is the footprint that has to clear the lane.
+    const markR = 0.34;
     const main = layout.main;
     for (let i = 1; i < main.length - 1; i++) {
       const a = main[i - 1], b = main[i], c = main[i + 1];
@@ -949,14 +956,72 @@ function addFloorAndShell(game, layout) {
       const bis = new THREE.Vector2(inD.x - outD.x, inD.y - outD.y);
       if (bis.lengthSq() < 1e-6) continue;
       bis.normalize();
-      const off = b.w + 1.1;
-      marks.push({
+      // THE MARKER IS OFFSET AGAINST THIS NODE'S OWN w, BUT THE FLOOR IT
+      // STANDS ON IS THE UNION'S. Both chapel-aisle nodes carry w 4.75 while
+      // the chapel disc reaches 10.50, so b.w + 1.1 planted two pale cones on
+      // open chapel floor. The east one's axis sat 0.187 m INSIDE the walkable
+      // union and the nearest pose the clamp will hold was 0.337 m inside the
+      // cone: you stand in it. The west one's axis was 0.158 m OUTSIDE the
+      // disc and still failed, because a cone has a radius -- its 0.34 m base
+      // overlapped a legal stand by 0.161 m. So seat outward against the union
+      // until the whole base circle clears UNDERFALLS_SOLID_PAD.
+      //
+      // Measured (tools/probe-wayfinding-tier.mjs), distance from the drawn
+      // cone to the nearest pose the clamp holds, head bob included:
+      //   pump approach      off 5.70 (+0.00)    0.783 ->  0.783 m
+      //   chapel west aisle  off 6.63 (+0.78)   -0.161 ->  0.449 m
+      //   chapel east aisle  off 6.97 (+1.12)   -0.337 ->  0.451 m
+      //   east ambulatory    off 4.10 (+0.00)    0.791 ->  0.791 m
+      // Nothing dropped: all four turns keep their landmark. Both new seats
+      // land 11.27 m from the chapel centre, inside the 11.75 m half-extent
+      // of that chamber's structural cap, and the two cones are 4.28 m and
+      // 4.45 m against a cap underside at 5.82 m -- so moving them outward
+      // pokes nothing through the shell. What it does do is stand them at
+      // the chapel WALL rather than on the chapel FLOOR, which is what
+      // "outside of the turn" was supposed to mean in the first place.
+      const base = b.w + 1.1;
+      let off = base, seated = false;
+      // 1.5 m is the whole budget. Past that the cone is marking the far side
+      // of a different room rather than this turn. Deepest seat needed: 1.12.
+      for (let push = 0; push <= 1.5 + 1e-9; push += 0.02) {
+        off = base + push;
+        const mx = b.x + bis.x * off, mz = b.z + bis.y * off;
+        let worst = Infinity;
+        for (let k = 0; k < 8; k++) {
+          const th = k * Math.PI / 4;
+          const hit = projectUnderfalls(layout,
+            mx + Math.cos(th) * markR, mz + Math.sin(th) * markR);
+          if (hit && hit.clearance < worst) worst = hit.clearance;
+        }
+        const axis = projectUnderfalls(layout, mx, mz);
+        if (axis && axis.clearance < worst) worst = axis.clearance;
+        if (worst >= UNDERFALLS_SOLID_PAD) { seated = true; break; }
+      }
+      // A marker that cannot get out of the lane is a rock in the road. The
+      // turn would keep its geometry and lose its landmark -- never gain an
+      // obstacle. No turn needs this today; the branch is the guarantee.
+      if (!seated) continue;
+      const mark = {
         x: b.x + bis.x * off, y: b.y, z: b.z + bis.y * off,
         h: 4.2 + Math.min(1.0, (turn - 45) / 90),
+      };
+      marks.push(mark);
+      // ON THE LEDGER AS A CIRCLE. Round thirteen's ledger stored only
+      // rectangles, so these cones were left off it with a note saying a
+      // 0.34 m cone squared into a rect invents 0.481 m of corner it does
+      // not have -- true, and the reason two of them then stood in open
+      // chapel floor with no gate able to say so. publishSolid carries {r}
+      // now, so the cone is measured as the cone it is. The base radius is
+      // the widest slice and the player stands on the same floor it does,
+      // so markR is the whole footprint.
+      publishSolid(layout, {
+        name: 'underfalls turn marker', guard: 'clamp',
+        y0: mark.y, y1: mark.y + mark.h,
+        x: mark.x, z: mark.z, r: markR,
       });
     }
     if (marks.length) {
-      const geo = new THREE.ConeGeometry(0.34, 1, 6);
+      const geo = new THREE.ConeGeometry(markR, 1, 6);
       geo.translate(0, 0.5, 0);
       const mesh = new THREE.InstancedMesh(geo, paleMark, marks.length);
       const m4 = new THREE.Matrix4();
@@ -974,8 +1039,10 @@ function addFloorAndShell(game, layout) {
     }
   }
 
-  // 2. Paired pale jambs where the main route crosses a chamber rim: rooms
-  //    get doorways, so entering and leaving one reads as an event.
+  // 2. Paired pale jambs at every chamber rim crossing that can honestly
+  //    carry them, so entering and leaving a room reads as an event. Three
+  //    of the four chambers on the main route can; the drowned pump chapel
+  //    cannot, and the comment on the seating loop says why.
   {
     const jambs = [];
     for (const seg of layout.mainSegments) {
@@ -994,8 +1061,82 @@ function addFloorAndShell(game, layout) {
           const y = lerp(seg.a.y, seg.b.y, t);
           const w = lerp(seg.a.w, seg.b.w, t);
           const nx = seg.dz / seg.length, nz = -seg.dx / seg.length;
+          // THE SAME BUG AS THE SLUICE GATE, ONE FUNCTION AWAY: the jamb is
+          // offset against the SEGMENT's w, but at a chamber rim the floor
+          // underneath is the chamber DISC. Three of the fourteen jambs stood
+          // on walkable floor -- (20.338, 44.972) union clearance -1.320,
+          // (29.480, 48.925) -1.461, (35.209, 55.472) -2.532, that last one
+          // 2.53 m inside main#6, a corridor its own crossing has nothing to
+          // do with. For all three the nearest pose the clamp will hold was
+          // 0.000 m away: you stand inside a pale post, and being the
+          // brightest thing in the district it is the one you walk at.
+          // The other eleven cleared by only 0.357..0.396 m: every one under
+          // the pad, though none of those eleven reached the 0.24 m at which
+          // the near plane eats a face outright. Only the three did.
+          //
+          // Seat outward until the whole footprint clears the pad. The ten
+          // survivors need 0.08..0.10 m of push and end 0.442..0.465 m from
+          // the nearest legal stand -- measured twice, by
+          // tools/probe-wayfinding-tier.mjs (a model of this loop) and by
+          // tools/verify-wayfinding-tier.mjs (which executes this loop's own
+          // source text and reads the instance matrices back).
+          //
+          // DROPPED: both drowned-pump-chapel crossings, all four jambs.
+          // Their offsets would have to pass 2.4 m to escape, because the
+          // chapel rim is not a pinch -- the corridor just widens into the
+          // room, and there is no doorway there to frame. A doorway is a
+          // PAIR, so a crossing is all-or-nothing exactly the way the sluice
+          // gate drops posts, lintel and tooth bar together: one lone pale
+          // post beside the route IS the "rocks and random things" this tier
+          // exists to stop being. Ten jambs, and the intake apse, overflow
+          // gallery and hatch cistern still get their doorways; the chapel
+          // is announced by the pale cone on its turn instead.
+          const pair = [];
           for (const side of [-1, 1]) {
-            jambs.push({ x: x + nx * side * (w + 0.55), y, z: z + nz * side * (w + 0.55) });
+            const base = w + 0.55;
+            let off = base, seated = false;
+            // 0.6 m -- two post widths -- is the budget. Further out it is no
+            // longer framing this doorway, it is a stone standing near one.
+            for (let push = 0; push <= 0.6 + 1e-9; push += 0.02) {
+              off = base + push;
+              const jx = x + nx * side * off, jz = z + nz * side * off;
+              // The instance is composed with an identity quaternion, so the
+              // 0.3 x 0.3 post is WORLD-axis-aligned however the segment runs.
+              // Sample its real square; a turned one understates the corners.
+              let worst = Infinity;
+              for (const u of [-0.15, 0, 0.15]) {
+                for (const v of [-0.15, 0, 0.15]) {
+                  const hit = projectUnderfalls(layout, jx + u, jz + v);
+                  if (hit && hit.clearance < worst) worst = hit.clearance;
+                }
+              }
+              if (worst >= UNDERFALLS_SOLID_PAD) { seated = true; break; }
+            }
+            if (!seated) { pair.length = 0; break; }
+            pair.push({ x: x + nx * side * off, y, z: z + nz * side * off });
+          }
+          jambs.push(...pair);
+          // AND PUT THEM ON THE LEDGER. layout.solids is what
+          // tests/underfalls-expansion.mjs walks when it asks whether any
+          // pose the clamp accepts stands inside a drawn face. Nothing in
+          // this district is a collider, so a fixture missing from that
+          // ledger is a fixture no gate can see -- which is exactly how
+          // three jambs survived round thirteen standing on open floor
+          // while the flank walls and gate posts beside them got fixed.
+          // The post is composed with an identity quaternion, so its face
+          // IS world-axis-aligned: nx/tx are the world axes and 0.15 is the
+          // exact half-extent, not an AABB's overstatement.
+          // The cones on the turns are on it too now, as circles: the ledger
+          // carries {r} as well as a rect, so nothing has to be squared off
+          // into corners it does not have to be measured.
+          // tools/verify-wayfinding-tier.mjs is the second opinion on both.
+          for (const p of pair) {
+            publishSolid(layout, {
+              name: 'underfalls chamber doorjamb', guard: 'clamp',
+              y0: p.y, y1: p.y + 2.6,
+              x: p.x, z: p.z, nx: 1, nz: 0, tx: 0, tz: 1,
+              halfN: 0.15, halfT: 0.15,
+            });
           }
         }
       }
@@ -1031,6 +1172,17 @@ function addFloorAndShell(game, layout) {
       dryDark.userData.underfalls = true;
       dryDark.color.multiplyScalar(0.42);
       world.box(dryDark, mouth.x, mouth.y + 2.24, mouth.z, 3.1, 0.34, 0.5, yaw);
+      // Overhead by design -- its underside is 2.07, which is 0.45 m over the
+      // eye -- and on the ledger anyway, for the same reason as the sluice
+      // gate's iron: over HEAD is not the same as out of the near plane.
+      publishSolid(layout, {
+        name: 'culvert mouth lintel', guard: 'clamp',
+        y0: mouth.y + 2.07, y1: mouth.y + 2.41,
+        x: mouth.x, z: mouth.z,
+        nx: Math.sin(yaw), nz: Math.cos(yaw),
+        tx: Math.cos(yaw), tz: -Math.sin(yaw),
+        halfN: 0.25, halfT: 1.55,
+      });
     }
   }
 }
@@ -1038,6 +1190,48 @@ function addFloorAndShell(game, layout) {
 function addColliderCylinder(world, x, z, r, y0, y1, role) {
   return world.addCollider(x - r, y0, z - r, x + r, y1, z + r,
     { underfalls: true, role });
+}
+
+// THE LEDGER OF DRAWN FACES. Everything this district draws that stands in
+// the player's HEAD WINDOW is published here, and
+// tests/underfalls-expansion.mjs walks it to ask the only question that has
+// ever mattered in the Underfalls: can a pose the player can actually hold
+// stand inside a drawn face, or close enough that the 0.2 near plane deletes
+// it. A fixture missing from this list is a fixture no gate can see -- which
+// is exactly how three doorjambs, two turn markers, the keepsake shelf, the
+// fallen bell and six benches all survived round thirteen standing in open
+// floor while the flank walls and gate posts beside them got fixed.
+//
+// THE HEAD WINDOW IS THE PLAYER'S OWN TWO COLLIDER TESTS, QUOTED
+// (player.js _moveAxis): a body reaching no higher than feet + STEP_UP (0.5)
+// is a step you walk over, and one starting above feet + HEAD (1.75) is
+// something you walk under. Only what crosses that band can be a wall you
+// walk through. y0/y1 are WORLD y, because this district's floor runs 0.00
+// to 3.20 and a bare 0.5 would call the bell cistern's keepsake shelf
+// overhead.
+//
+// `guard` names what holds the player off the face, because the two guards
+// have two different numbers and pretending otherwise fails honest geometry:
+//   'clamp'  -- nothing but the district clamp. installClamp stably permits
+//               clearance -0.04, so the distance owed is the player's RADIUS
+//               0.34 plus that 0.08 dead band: UNDERFALLS_SOLID_PAD.
+//   a role   -- a world collider carrying that role stands in front of it.
+//               _moveAxis puts the player's centre exactly RADIUS from the
+//               AABB with no dead band at all, so the distance owed is
+//               RADIUS. The gate proves the named collider exists rather
+//               than taking the word for it.
+// Both numbers are comfortably past the 0.24 at which the near plane starts
+// eating faces, so the flat XZ gap is the whole test.
+//
+// FACES, NOT AABBs. A rect entry is the drawn face in its own frame
+// (nx/nz is the normal axis paired with halfN); a disc entry is {r}. main#7
+// yaws 35.5 degrees and a rotated 0.54 x 0.95 box has a 0.99 m AABB, 0.22 m
+// fatter into the lane than the box -- believing that number is the old
+// forest trap, and squaring off a 0.34 m cone into a rect invents 0.481 m of
+// corner it does not have.
+function publishSolid(layout, entry) {
+  (layout.solids || (layout.solids = [])).push(entry);
+  return entry;
 }
 
 function markUnderfalls(object) {
@@ -1141,13 +1335,41 @@ function buildPumpChapel(game, layout, state) {
       const h = 3.7 + (row & 1 ? 0.35 : 0);
       pillarMatrices.push(transformMatrix(x, h * 0.5, z,
         side * 0.025, row * 0.13, side * 0.035, 1, h, 1));
+      // THE BOX AND THE DRAWING HAVE TO BE THE SAME WIDTH -- AND HERE IT IS
+      // THE DRAWING THAT MOVES. The pillar was a seven-sided cone 0.63 wide
+      // at the floor against a 0.54 box, so the drawn stone stood 0.09 m
+      // proud of its own stop. Measured against every pose that collider
+      // permits, the nearest drawn face was 0.314 m from the camera: past the
+      // near plane, so never clipped, but inside the player's own 0.34 m body
+      // radius. The stone was in you.
+      //
+      // MOVING THE BOX WOULD HAVE BEEN THE OTHER ANSWER, AND THE NUMBERS
+      // REFUSE IT. enemies.js sweeps the Choir's 0.42 m footprint against every
+      // AABB GROWN BY THAT RADIUS -- a Minkowski box, corners included, not a
+      // rounded capsule -- and at 0.63 these boxes close two chords the
+      // corridor union still allows: chapel east aisle -> dry return, and a
+      // second pillar taking chapel west aisle -> east ambulatory. The nave is
+      // where every chapel chord has to thread, and there is no room here.
+      // (The bell cistern one room over went the opposite way for the opposite
+      // reason -- the bell hangs, so its box came IN, to half 0.62 -- and it is
+      // the height of the iron, not its width, that settles that one.)
+      // So the flare comes in to 0.54 instead (see the geometry below):
+      // the base is the box and the box is the base, the camera stops 0.32 m
+      // from drawn stone, and not one navigation edge moves.
       addColliderCylinder(world, x, z, 0.54, -0.5, 3.2, 'pump chapel pillar');
+      publishSolid(layout, {
+        name: 'pump nave pillar', guard: 'pump chapel pillar',
+        y0: -0.05, y1: h + 0.05, x, z, r: 0.54,
+      });
       ribMatrices.push(transformMatrix(
         x - nx * side * 1.35, h + 0.25, z - nz * side * 1.35,
         0, aisleYaw, side * 0.75, 1, 4.5 * (row === 1 ? 0.72 : 1), 1));
     }
   }
-  addInstances(group, new THREE.CylinderGeometry(0.45, 0.63, 1, 7), wetStone, pillarMatrices,
+  // 0.54 at the base, not 0.63: the collider above is a 0.54 half-extent box
+  // and a drawn silhouette wider than its own stop is a silhouette you stand
+  // inside. Nine centimetres off the flare of a 3.7 m column.
+  addInstances(group, new THREE.CylinderGeometry(0.45, 0.54, 1, 7), wetStone, pillarMatrices,
     { name: 'pump nave pillars', castShadow: true, receiveShadow: true });
   addInstances(group, new THREE.CylinderGeometry(0.10, 0.17, 1, 6), wetStone, ribMatrices,
     { name: 'pump nave broken ribs', castShadow: true, receiveShadow: true });
@@ -1164,7 +1386,40 @@ function buildPumpChapel(game, layout, state) {
   // diagonal public aisle and the north-south secret culvert.
   const altarX = C.x + 6.05, altarZ = C.z - 4.15;
   add(new THREE.CylinderGeometry(1.25, 1.55, 0.72, 8), wetStone, altarX, 0.36, altarZ);
-  addColliderCylinder(world, altarX, altarZ, 1.28, -0.4, 1.1, 'pump altar');
+  // This box has to stop the camera short of the FLYWHEEL, not just the drum.
+  // The wheel's iron reaches 1.52 m from this axis (ring 1.38 + tube 0.14), and
+  // its plane is fixed: the spin below is rotation.z about the torus's OWN axis,
+  // so the silhouette never changes shape, only the world ZY circle it draws. At
+  // half 1.28 the closest pose the clamp will hold put the camera 0.100 m from
+  // that iron -- inside the 0.2 near plane, so the landmark was CLIPPED AWAY and
+  // you looked straight through the impossible wheel. The player's own 0.34 m
+  // radius already covers all of THE ONE PAD except the clamp's 0.08 dead band,
+  // so the box only has to stand 1.52 + 0.08 clear. 1.62 rather than 1.60
+  // because 1.60 MEETS 0.420 exactly and this measures 0.440, and because 1.62
+  // also swallows the drum's own 1.55 m base octagon -- the 1.28 box left 0.27 m
+  // of drum standing in walkable floor.
+  //
+  // Widening was measured before it was chosen, because this box sits in a room
+  // the player crosses and the Choir paths through (findUnderfallsRoute takes an
+  // edgeAllowed hook and enemies.js sweeps a 0.42 m footprint through every
+  // AABB). Across the whole navigation graph the SAME 9 of 91 line-of-sight
+  // pairs are blocked at 1.28 and at 1.62 -- not one route chord is lost -- and
+  // the floor reachable from the west aisle goes 388.8 -> 384.2 m2 with the east
+  // aisle, the culvert mouth and the north transept all still reached.
+  addColliderCylinder(world, altarX, altarZ, 1.62, -0.4, 1.1, 'pump altar');
+  publishSolid(layout, {
+    name: 'pump altar drum', guard: 'pump altar',
+    y0: 0, y1: 0.72, x: altarX, z: altarZ, r: 1.55,
+  });
+  // The flywheel is a SLAB on the ledger, not a disc: wheel.rotation.y is
+  // -PI/2, so the ring stands in the world ZY plane and its footprint is
+  // 0.28 m of tube across x by 3.04 m of ring along z. A disc of radius 1.52
+  // would claim 1.24 m of chapel floor on the x axis that has no iron in it.
+  publishSolid(layout, {
+    name: 'pump flywheel', guard: 'pump altar',
+    y0: 1.55 - 1.52, y1: 1.55 + 1.52,
+    x: altarX, z: altarZ, nx: 1, nz: 0, tx: 0, tz: 1, halfN: 0.14, halfT: 1.52,
+  });
   const pump = new THREE.Group();
   pump.position.set(altarX, 1.55, altarZ);
   group.add(pump);
@@ -1188,9 +1443,44 @@ function buildPumpChapel(game, layout, state) {
   const bellJar = add(new THREE.SphereGeometry(0.58, 12, 9, 0, TAU, 0, Math.PI * 0.64), pale,
     altarX + tx * 1.85, 2.86, altarZ + tz * 1.85, Math.PI);
   bellJar.scale.y = 1.32;
+  // The piston stands 1.85 m out along the aisle -- outside the altar box at any
+  // sane width -- and it had NO collider at all. Measured: the camera could stand
+  // 0.257 m inside it, and it spans y -0.09..2.99 so it crosses eye height for
+  // its whole stroke. Widening the altar cannot reach it: covering it with that
+  // square box needs half 1.93, which costs 10.2 m2 of chapel floor against the
+  // 0.4 this one costs, and STILL leaves the piston short of the pad at 0.335 m.
+  // It gets its own collider instead.
+  //
+  // It only ever moves in y (the ticker drives 1.45 +/- 0.29), so a fixed
+  // footprint holds. -0.4..3.0 covers the whole stroke, is far too tall to be a
+  // walkable step (STEP_UP 0.5) and starts far below head height (HEAD 1.75).
+  // Half 0.38 rather than the drawn 0.27 because addColliderCylinder builds a
+  // SQUARE box and the stop that matters is the face, not the corner:
+  // 0.38 + the player's 0.34, less the head bob's 0.02 of world X, leaves 0.430
+  // of air. Measured cost: 0.4 m2 of chapel floor and not one navigation edge.
+  addColliderCylinder(world, altarX + tx * 1.85, altarZ + tz * 1.85, 0.38, -0.4, 3.0,
+    'pump piston');
+  publishSolid(layout, {
+    name: 'pump piston', guard: 'pump piston',
+    y0: 0.2, y1: 2.7,
+    x: altarX + tx * 1.85, z: altarZ + tz * 1.85, r: 0.27,
+  });
+  // NOT ON THE LEDGER, DELIBERATELY, AND THE NUMBERS THAT SAY WHY:
+  //   the bell jar over the piston  world 2.094..3.186, and the chapel floor
+  //     is y 0, so it starts 0.34 m above HEAD everywhere it can be reached.
+  //   the broken nave ribs          world 2.203..6.005. Only a pose on the
+  //     neighbouring elevated corridor (feet 0.59) brings their lower ends
+  //     into the window at all, and there the nearest drawn face is 0.597 m
+  //     from the pose and 0.626 m from the camera -- clear of the pad.
+  //   the empty benches and their legs   0.309..0.491 and -0.137..0.397 over
+  //     a floor of 0, both wholly under STEP_UP. See the comment on the seat
+  //     thickness below: that is what it is for.
+  //   the drowned aisle water plane      y 0.035, floor dressing.
+  // (tools/probe-cistern-shelf.mjs measures every one of them.)
 
   const benchMatrices = [];
   const legMatrices = [];
+  const BENCH_SEAT = 0.10;   // plank thickness; see the seat comment below
   for (let row = -2; row <= 1; row++) {
     const along = row * 3.0 + 0.8;
     for (const side of [-1, 1]) {
@@ -1198,14 +1488,35 @@ function buildPumpChapel(game, layout, state) {
       const z = C.z + tz * along + nz * side * 3.55;
       const routeDistance = Math.min(...layout.segments.map((seg) => segmentProjection(seg, x, z).d));
       if (routeDistance < 1.18) continue;
-      const benchMatrix = transformMatrix(x, 0.48, z,
-        0, aisleYaw + (side < 0 ? Math.PI : 0), side * 0.035, 2.35, 0.18, 0.58);
+      // "ORDINARY STEP-HEIGHT CLUTTER" IS A CLAIM WITH A NUMBER IN IT, AND
+      // THIS ONE MISSED BY 0.111 m. The seat was an 0.18 m plank centred at
+      // 0.48 and tilted 0.035 rad over 2.35 m, so it topped out at 0.611 --
+      // above STEP_UP (0.5), which is precisely where player.js stops calling
+      // a body walkable and starts calling it a wall. Six of them stood on
+      // open chapel floor with no collider, and measured against every pose
+      // the clamp holds the nearest drawn face was 0.001 m away: you stand
+      // in the bench. Same sentence as his screenshots -- a thing that is
+      // drawn and is not there.
+      //
+      // A collider is the wrong answer here and the numbers say so: these are
+      // yawed 63.4 degrees, and a 2.35 x 0.58 seat squares off into a
+      // 2.36 x 1.57 AABB -- 2.7x its own footprint of invisible wall, six
+      // times over, in the one room the player crosses diagonally and the
+      // Choir paths through. So the plank gets thinner instead: 0.10 m at
+      // 0.40 tops out at 0.491, nine millimetres under STEP_UP, with the
+      // seating surface still at 0.45 where a bench belongs. The engine's own
+      // rule now classes it the way this comment always claimed, and the
+      // camera at EYE stays 1.009 m above it, four times the near plane.
+      // The legs are re-expressed against BENCH_SEAT so they stay put in
+      // world units: their local offsets are divided by the seat scale.
+      const benchMatrix = transformMatrix(x, 0.40, z,
+        0, aisleYaw + (side < 0 ? Math.PI : 0), side * 0.035, 2.35, BENCH_SEAT, 0.58);
       benchMatrices.push(benchMatrix);
       // Thin crooked legs make them read as furniture while remaining ordinary
       // step-height clutter, never another invisible wall.
       for (const d of [-0.78, 0.78]) {
-        const local = transformMatrix(d / 2.35, -0.29 / 0.18, 0, 0, 0, 0,
-          0.12 / 2.35, 0.48 / 0.18, 0.12 / 0.58);
+        const local = transformMatrix(d / 2.35, -0.27 / BENCH_SEAT, 0, 0, 0, 0,
+          0.12 / 2.35, 0.48 / BENCH_SEAT, 0.12 / 0.58);
         legMatrices.push(benchMatrix.clone().multiply(local));
       }
     }
@@ -1366,7 +1677,9 @@ function buildSluice(game, layout, state) {
       // The posts are the only part of the gate at body height: the lintel
       // sits at 3.72 and the tooth bar at 2.15 and up, both well clear of
       // HEAD (1.75), overhead by design. So the posts are what the pin reads.
-      (layout.solids || (layout.solids = [])).push({
+      publishSolid(layout, {
+        name: 'sluice gate post', guard: 'clamp',
+        y0: p.y - 0.025, y1: p.y + 3.825,
         x: p.x + ax * side * half, z: p.z + az * side * half,
         nx: ax, nz: az, tx: bx, tz: bz, halfN: 0.115, halfT: 0.14,
       });
@@ -1376,6 +1689,25 @@ function buildSluice(game, layout, state) {
     toothMatrices.push(gateMatrix.clone().multiply(transformMatrix(
       0, 2.15 + (index & 1) * 0.55, 0,
       0, 0, (index & 1 ? 1 : -1) * 0.05, p.w * 1.45, 0.11, 0.28)));
+    // The lintel and the tooth bar go on the ledger too even though both are
+    // over HEAD. "Overhead" only settles the body; the near plane does not
+    // care which way is up, and the tooth bar is the lowest iron in this
+    // district: 2.15 less half its 0.11 thickness and less the 0.05 rad tilt
+    // over its own length, which puts its underside 0.385 m over the eye.
+    const toothDrop = (p.w * 1.45 / 2) * Math.sin(0.05) + 0.055;
+    publishSolid(layout, {
+      name: 'sluice gate tooth bar', guard: 'clamp',
+      y0: p.y + 2.15 + (index & 1) * 0.55 - toothDrop,
+      y1: p.y + 2.15 + (index & 1) * 0.55 + toothDrop,
+      x: p.x, z: p.z, nx: bx, nz: bz, tx: ax, tz: az,
+      halfN: 0.14, halfT: p.w * 1.45 / 2,
+    });
+    publishSolid(layout, {
+      name: 'sluice gate lintel', guard: 'clamp',
+      y0: p.y + 3.595, y1: p.y + 3.845,
+      x: p.x, z: p.z, nx: bx, nz: bz, tx: ax, tz: az,
+      halfN: 0.18, halfT: half + 0.17,
+    });
   }
   addInstances(group, new THREE.BoxGeometry(1, 1, 1), iron, postMatrices,
     { name: 'sluice gate posts', castShadow: true, receiveShadow: true });
@@ -1402,6 +1734,26 @@ function buildSluice(game, layout, state) {
   state.lights.push(lowerLight);
   state.sluice = { group, runnels, highLight, midLight, lowerLight, sprayKick: 0 };
 }
+
+// THE HUNG BELL, in one place, because the collider and the swing have to
+// agree with each other and with the one condition Alex put on this round:
+// "make sure that's not what is causing the sound bug where that areas sound
+// can completely go bad". BELL_HALF answers BELL_MAX -- at 0.055 rad about the
+// chain's apex the widest iron any reachable head window can hold reaches
+// 0.608 m from the axis, 0.014 m inside the 0.62 box -- and BELL_VERB and
+// BELL_TOLL_GAP together hold this object below the reverb drive of the build
+// he has already played.
+const BELL_HALF = 0.62;      // collider half-extent (round thirteen shipped 0.75)
+const BELL_MAX = 0.055;      // rad, hard cap on swing amplitude
+const BELL_W2 = 3.4045;      // g / L, L = 2.882 m from the apex to the shell's centroid
+const BELL_W = Math.sqrt(BELL_W2);
+const BELL_DAMP = 0.14;      // 14.4 s e-fold: it is never quite still
+const BELL_GUST = 0.054;     // rad/s the district's draught adds per cadence step
+const BELL_PUSH = 0.024;     // rad/s per m/s of shove per second of contact
+const BELL_CONTACT = BELL_HALF + 0.34 + 0.30;   // face stop 0.96, corner stop 1.217
+const BELL_TOLL = 0.028;     // rad of amplitude before the loose clapper reaches iron
+const BELL_TOLL_GAP = 7.3;   // s FLOOR between tolls -- round thirteen's shortest cadence
+const BELL_VERB = 0.34;      // reverb send, down from round thirteen's 0.96
 
 function buildBellCistern(game, layout, state) {
   const { scene, world, mats: M } = game;
@@ -1430,97 +1782,363 @@ function buildBellCistern(game, layout, state) {
     [0.18, 0.00], [0.24, 0.16], [0.38, 0.52], [0.53, 0.91],
     [0.76, 1.22], [0.98, 1.38], [1.03, 1.44],
   ].map(([x, y]) => new THREE.Vector2(x, y));
-  // IT SITS ON THE FLOOR, WHICH IS WHERE A FALLEN BELL IS.
+  // IT HANGS, THE WAY IT WAS AUTHORED. ROUND TWELVE'S REASON FOR TAKING IT
+  // DOWN WAS NOT TRUE, AND THE FALSE SENTENCE STOOD IN THIS COMMENT UNTIL NOW.
   //
-  // It used to hang 1.18 m clear of the floor with nothing holding it: the
-  // profile above is a bottom-origin lathe, and it inherited the +1.18 offset
-  // from the centre-origin sphere it replaced. The rim was re-based onto the
-  // new top and the base offset never was. So a two-metre dark iron object
-  // floated unattached, dead centre of the walking line, over a marked ring —
-  // mechanism grammar, in a district whose previous lesson was that a
-  // suspended dark metal disc is a thing you throw the skull at. Alex, on the
-  // live build: "what is this, it doesn't move or do anything."
+  // What it said: that the bottom-origin lathe had inherited a +1.18 offset
+  // from the centre-origin sphere it replaced, that only the rim was ever
+  // re-based, and that a two-metre iron bell was therefore floating unattached.
+  // Four parts disagree. Base C.y+1.18. Rim C.y+2.62, which is that base plus
+  // the profile's own 1.44 top. Clapper C.y+1.46, sitting in the crown of a
+  // bell whose crown is at 1.18. And a chain whose free end sat 0.086 m from
+  // the rim ring's centre-line -- 0.011 m off its iron, i.e. hung ON it. An
+  // inherited offset moves ONE part. All four were placed for a bell hanging
+  // off that chain, and the chain was placed to meet it.
   //
-  // Dropped by that same 1.18 so its narrow end rests on the stone. Nothing
-  // else changes, and the snapped chain overhead now reads as the reason it is
-  // down here: the bell FELL. That is the story the dressing was already
-  // telling; it just was not standing in it.
-  // ...AND IT STANDS BESIDE THE LANE, NOT ON IT, SO IT CAN BE SOLID.
+  // The defect was never height. It was Alex, on the live build: "what is this,
+  // it doesn't move or do anything" -- a complaint about PURPOSE. Round twelve
+  // answered it by changing height; round thirteen answered it properly, with a
+  // voice and a rock and a collider. This round puts the height back and keeps
+  // the voice. His words for this round: "if you can make it swing and stuff
+  // sure, let it swing or whatever if it's interactable by hitting it with the
+  // skull."
   //
-  // Sitting it down left a 2.06 m iron bell straddling the exact secret-route
-  // node with no collider of any kind, so you walk through it — the same
-  // sentence as his screenshots 4, 5 and 6: a thing that is drawn and is not
-  // there. The pump chapel two hundred lines up gives its pillars (line 872)
-  // and its altar (line 895) real colliders, so this was a judgement rather
-  // than a district policy, and it was the wrong one.
+  // ...AND IT STAYS OFF THE LANE, SO IT CAN BE SOLID.
   //
-  // 1.95 m along the bend's interior bisector — the INSIDE of the turn, which
-  // is forced: the keepsake shelf owns the outside. Derived, not guessed
-  // (tools/probe-bell-cistern.mjs replays all of it):
-  //   bisector of (22,59)->(27,68)->(37,75) is (0.743, -0.670); x 1.95 gives
-  //   (+1.45, -1.31), and the bell axis lands 1.90 m off both centrelines.
-  //   tests/underfalls-expansion.mjs:167 samples both polylines every 0.55 m
-  //   and fails any authored underfalls collider within 0.32 m of a sample;
-  //   the closest sample here is 0.70 m outside the box. The same gate then
-  //   walks the secret route node to node needing to arrive within 0.62 m of
-  //   each: the cistern node stands 0.70 m clear of the collider face against
-  //   a 0.34 m player radius, and no leg of that walk touches the box.
-  //   Cave enemies DO consult world.colliders — findUnderfallsRoute takes an
-  //   edgeAllowed hook and enemies.js:2060 sweeps the Choir's 0.42 m footprint
-  //   through every AABB — so this was checked too: of the seven node chords
-  //   the box intersects, six were already refused by the corridor union, and
-  //   the one live loss (pump undercroft -> service climb) costs 0.57 m of
-  //   detour through the cistern node. Every consecutive route chord is open.
-  //   Moving the ROUTE instead would change secretLength, which the same gate
-  //   checks against the main route it is supposed to shorten.
-  //
-  // Bell, rim and clapper hang off ONE pivot at the bell's base so the tick in
-  // installBeats can rock the whole assembly and keep the pale rim — the only
-  // part of this object that survives a dark room — attached to the dark iron
-  // it belongs to. A Group is free: no draw call, no renderRoot.
+  // Round thirteen's offset, kept and re-derived: the bisector of
+  // (22,59)->(27,68)->(37,75) is (0.743,-0.670), x 1.95 gives (+1.45,-1.31),
+  // and the axis lands 1.904 m off the leg in and 1.905 m off the leg out.
+  // Hanging it does NOT make the node safe -- the crown still bottoms out
+  // 0.685 m inside the head window of the nearest stand (see the collider
+  // below, where that is measured against the real floor) -- and the culvert
+  // is the STRAIGHT-AHEAD read at the fork, leaving the pump approach 15.3 deg
+  // off your heading where the main route turns 48.9 deg away. A two-metre iron
+  // object over that centreline is the last thing this district needs.
   const bx = C.x + 1.45, bz = C.z - 1.31;
-  const bellPivot = new THREE.Group();
-  bellPivot.position.set(bx, C.y, bz);
-  group.add(bellPivot);
+  // The chamber vault (atmosphere.js: a 0.34-tall cap centred at chamber.y +
+  // 5.18, radius r * 0.96) has its underside at C.y + 5.01 and a 12-gon
+  // apothem of 3.199 m, so it stands over a bell 1.954 m off the node. That
+  // underside is where the chain starts and where the pendulum pivots, so
+  // nothing in this object ends in mid-air any more.
+  const APEX = 5.01;
+  const CROWN = 1.18;                 // authored: the lathe's base
+  const RIM = CROWN + 1.44;           // authored: C.y + 2.62, the profile's top
+  const RING_R = 1.03;                // authored: the pale rim's centre-line
   //
-  // ONE CORRECTION TO THE RECORD, from the audit of round twelve: that round
-  // said the snapped chain "missed the bell by half a metre". It did not. At
-  // length 1.8 tilted 0.55 about z its free end sat 0.971 out from the axis
-  // and 0.086 from the centre-line of the rim ring -- 1 cm off touching it,
-  // i.e. hung ON it. The claim was wrong, not the geometry. It is moot now
-  // that the bell has moved off the node, and the chain stays where it broke.
+  // Bell, rim, clapper AND chain hang off ONE pivot at the top of the chain, so
+  // the tick in installBeats swings the whole assembly as a pendulum instead of
+  // rocking it about its own foot. A Group is free: no draw call, no renderRoot.
+  const bellPivot = new THREE.Group();
+  bellPivot.position.set(bx, C.y + APEX, bz);
+  group.add(bellPivot);
   const bell = new THREE.Mesh(new THREE.LatheGeometry(bellProfile, 16), iron);
+  bell.position.y = CROWN - APEX;
   bell.castShadow = true;
   bellPivot.add(bell);
-  const bellRim = new THREE.Mesh(new THREE.TorusGeometry(1.03, 0.075, 7, 24), pale);
-  bellRim.position.set(0, 1.44, 0);
+  const bellRim = new THREE.Mesh(new THREE.TorusGeometry(RING_R, 0.075, 7, 24), pale);
+  bellRim.position.y = RIM - APEX;
   bellRim.rotation.x = Math.PI / 2;
   bellPivot.add(bellRim);
+  // The clapper is LOOSE, resting in the crown of an upturned bell, and that is
+  // the whole striking mechanism: swing the bell, the clapper slides to the low
+  // side, and at the bottom of the swing it meets the wall. Authored height.
   const clapper = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 6), iron);
-  clapper.position.set(0, 0.28, 0);
+  clapper.position.set(0, 1.46 - APEX, 0);
   bellPivot.add(clapper);
-  // The chain stays where it broke: 1.47 m to the side of the bell's axis and
-  // 1.24 m above its rim, which is the whole story in one silhouette — the
-  // bell hung there, and it is not there any more.
-  const snapped = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 1.8, 5), iron);
-  snapped.position.set(C.x + 0.48, C.y + 3.45, C.z - 0.2);
-  snapped.rotation.z = 0.55;
-  group.add(snapped);
-  addColliderCylinder(world, bx, bz, 0.75, C.y - 0.4, C.y + 1.44, 'fallen bell');
+  //
+  // THE CHAIN HOLDS THE BELL AGAIN, and it is a two-legged sling: the authored
+  // chain was one leg of it and its partner was never drawn. One grip point on
+  // a rim cannot hold an inverted bell level -- the shell's centroid is on the
+  // axis, so a lip-hung bell settles at 64.5 deg and every dry keepsake in it
+  // slides out. Two legs to opposite sides of the same ring hold it flat, and
+  // that is the only reading in which the dry things stay dry things.
+  //
+  // Both feet land exactly ON the rim ring's centre-line by construction
+  // (RING_R out, APEX - RIM down: length 2.6025, 23.31 deg from vertical) and
+  // both tops meet at the vault. Round thirteen left the old chain where it
+  // broke, 1.217 m from the bell it no longer held; nothing measured that, and
+  // nothing measured the 1.18 either, which is how this object drifted twice.
+  // tests/underfalls-expansion.mjs now reads these instance matrices back and
+  // measures them against the drawn rim.
+  //
+  // Splayed across the bend's bisector (perpendicular to (0.743,-0.670)) so the
+  // sling reads as a V from the approach instead of one leg hiding the other.
+  // One InstancedMesh: two legs, one draw call -- what the single chain cost.
+  const SLING_N = Math.hypot(0.670, 0.743);            // unit, so the feet land ON the ring
+  const SLING_UX = 0.670 / SLING_N, SLING_UZ = 0.743 / SLING_N;
+  const slingLen = Math.hypot(RING_R, APEX - RIM);
+  const slingUp = new THREE.Vector3(0, 1, 0);
+  const sling = addInstances(
+    bellPivot, new THREE.CylinderGeometry(0.035, 0.05, slingLen, 5), iron,
+    [1, -1].map((side) => {
+      const foot = new THREE.Vector3(
+        RING_R * SLING_UX * side, RIM - APEX, RING_R * SLING_UZ * side,
+      );
+      return new THREE.Matrix4().compose(
+        foot.clone().multiplyScalar(0.5),
+        new THREE.Quaternion().setFromUnitVectors(slingUp, foot.clone().negate().normalize()),
+        new THREE.Vector3(1, 1, 1),
+      );
+    }),
+    { name: 'bell sling' },
+  );
+  //
+  // THE COLLIDER IS SIZED FOR THE SWEPT BELL, NOT FOR THE BELL AT REST.
+  //
+  // A hung bell still needs one, and this is the arithmetic rather than a
+  // guess: the crown bottoms out at C.y + 1.18 while the player capsule tops
+  // out at feet + 1.75 (player.js HEAD). _moveAxis only ignores a box whose
+  // min.y is above that line, which would take the crown at C.y + 1.75 -- and
+  // a bell you cannot reach is a bell you cannot ring.
+  //
+  // AND THE HEAD WINDOW IS NOT MEASURED FROM THE NODE. This paragraph used to
+  // say 0.57 m of iron stands in it, which is the answer for a player standing
+  // at C.y, and nobody in this room does: the chamber floor runs C.y - 0.405 to
+  // C.y + 0.315 across the three metres around this object. At the nearest
+  // stand the box allows -- 0.960 m out on a face -- the ground is C.y + 0.115
+  // and the window reaches C.y + 1.865, so 0.685 m of iron is in it, not 0.57.
+  //
+  // BELL_HALF is 0.62, not the mouth's 1.105. The mouth is over a metre above
+  // the top of the capsule and can never be touched, so an AABB drawn to it
+  // would be a metre of invisible wall around a thin iron cone -- this
+  // district's own old mistake. 0.62 answers the SWING: at BELL_MAX the widest
+  // iron any reachable window can hold reaches 0.6075 m from the axis (C.y +
+  // 1.869, in the window of a stand 0.961 m out on ground C.y + 0.120), so the
+  // swept bell stops 0.0136 m short of that capsule at every height and every
+  // phase and the box never has to move.
+  // That is 0.014 and not the 0.042 this comment claimed before the floor was
+  // measured; the box still holds, with a third of the air it was credited
+  // with. You are held at 0.96 m on a face and 1.217 m on a corner, inside the
+  // dry ring and under the mouth's overhang. It is also SMALLER than round
+  // thirteen's 0.75, so the Choir loses nothing it had not already lost (one
+  // chord, pump undercroft -> service climb, costing 0.57 m of detour), and the
+  // nearest route sample sits 0.83 m outside it against a 0.32 m threshold.
+  addColliderCylinder(world, bx, bz, BELL_HALF, C.y + CROWN, C.y + RIM, 'hung bell');
+  //
+  // AND ON THE LEDGER AS THE CONE IT IS, NOT AS ONE BOX.
+  //
+  // tests/underfalls-expansion.mjs walks every drawn silhouette this district
+  // publishes against every pose the clamp and the colliders both allow, and
+  // it asks each entry two questions: the flat gap, while that entry crosses
+  // the pose's own head window (feet + STEP_UP .. feet + HEAD), and the 3D
+  // distance from the eye, always. Round fourteen's walkthrough branch wrote
+  // this entry for a bell LYING ON THE FLOOR -- one disc at the 1.03 lip for
+  // the whole object, which is right for a fallen bell because a fallen bell
+  // presents its mouth at body height. A hung one does not. Publishing that
+  // disc next to this bell would have claimed a metre of iron in your head
+  // window that is not there: the gate would be measuring an object that does
+  // not exist, which is the exact failure the ledger was widened to end.
+  //
+  // A HUNG BELL IS A CONE, SO IT GOES ON AS A STACK. What is in the head
+  // window is the narrow shoulder; the mouth is a metre over it. One prism
+  // reports one radius for its whole height, so the rungs go where the answer
+  // changes -- and all three are the top of somebody's head window, not round
+  // numbers off the profile. The chamber floor is NOT flat: across the 2.9 m
+  // the gate's own search box can reach around this object it runs C.y - 0.405
+  // to C.y + 0.315, so how much of this cone can be in your window depends on
+  // where you stand -- and the two move together, because ground high enough
+  // to raise your window is ground you can only reach from further out.
+  //
+  //   C.y + 1.87  the window top of the pose that holds the LEAST air: 0.961 m
+  //               out, ground C.y + 0.120, window top C.y + 1.870. No pose
+  //               nearer than that reaches higher.
+  //   C.y + 1.90  by here the frontier has bought room -- the nearest stand
+  //               whose window passes 1.87 is 0.969 m out, and one whose
+  //               window passes 1.90 is 1.182 m out.
+  //   C.y + 2.10  over the top of every window there is: the highest ground
+  //               the gate can reach here is C.y + 0.315, topping out at
+  //               C.y + 2.065. Nothing above this rung can be a wall you walk
+  //               through; the mouth and the pale rim are a near-plane
+  //               question and nothing else.
+  //
+  // What the gate then measures of this stack: body 0.327 against the 0.32 a
+  // collider-guarded face owes, camera 0.308 against the 0.24 the near plane
+  // eats at. That 0.007 of headroom is not the ladder being coarse -- the true
+  // triangle-level answer is 0.335, and the object itself only has 0.0136 m of
+  // air (see the collider above). The one-disc-at-the-lip entry the walkthrough
+  // branch wrote would have claimed 1.235 m of iron over the whole height and
+  // scored 0.000. tools/probe-bell-cistern.mjs replays all of it out of band.
+  //
+  // THE RADII ARE READ OFF THE DRAWN GEOMETRY, NEVER TYPED, so editing
+  // bellProfile, the rim or the swing cap re-derives the ledger instead of
+  // leaving it describing a bell that has moved. And they are SAMPLED rather
+  // than bounded, because the obvious bound is wrong about HEIGHT: under a
+  // lean the point of a ring that drops furthest is the one on the far side,
+  // and that point moves INWARD, not outward. So walk every drawn circle at
+  // the cap lean, take where each point of it actually goes, and bin it by the
+  // height it actually reaches.
+  const LEAN_C = Math.cos(BELL_MAX), LEAN_S = Math.sin(BELL_MAX);
+  const swungRing = (into, rho, restY) => {
+    const drop = APEX - restY;
+    for (let k = 0; k <= 24; k++) {
+      const u = k / 12 - 1;              // cos of the way round the ring
+      into.push([
+        C.y + APEX - drop * LEAN_C + rho * u * LEAN_S,
+        Math.hypot(rho * u * LEAN_C + drop * LEAN_S,
+          rho * Math.sqrt(Math.max(0, 1 - u * u))),
+      ]);
+    }
+  };
+  const bellSwung = [], slingSwung = [];
+  for (let i = 1; i < bellProfile.length; i++) {   // the lathe, at 10 mm of profile
+    const a = bellProfile[i - 1], b = bellProfile[i];
+    const steps = Math.ceil((b.y - a.y) / 0.01);
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      swungRing(bellSwung, a.x + (b.x - a.x) * t, CROWN + a.y + (b.y - a.y) * t);
+    }
+  }
+  for (let k = 0; k < 24; k++) {                   // the pale rim's tube: the widest iron drawn
+    const a = (k / 24) * Math.PI * 2;
+    swungRing(bellSwung, RING_R + Math.cos(a) * 0.075, RIM + Math.sin(a) * 0.075);
+  }
+  for (let k = 0; k <= 16; k++) {                  // the clapper, at the 0.045 it slides
+    const a = (k / 16) * Math.PI;
+    swungRing(bellSwung, Math.sin(a) * 0.24 + 0.045, 1.46 - Math.cos(a) * 0.24);
+  }
+  for (let k = 0; k <= 16; k++) {                  // and the two legs of the sling
+    const t = k / 16;
+    swungRing(slingSwung, RING_R * (1 - t) + 0.05, RIM + (APEX - RIM) * t);
+  }
+  const swungSpan = (points) => {
+    let lo = Infinity, hi = -Infinity, widest = 0;
+    for (const [y, r] of points) {
+      if (y < lo) lo = y;
+      if (y > hi) hi = y;
+      if (r > widest) widest = r;
+    }
+    return { lo, hi, widest };
+  };
+  const bandRadius = (points, y0, y1) => {
+    let r = 0;
+    for (const [y, h] of points) if (y >= y0 && y <= y1 && h > r) r = h;
+    return r;
+  };
+  const bellSpan = swungSpan(bellSwung);
+  const rungs = [bellSpan.lo, C.y + 1.87, C.y + 1.90, C.y + 2.10, bellSpan.hi];
+  for (let i = 0; i < rungs.length - 1; i++) {
+    publishSolid(layout, {
+      name: 'hung bell', guard: 'hung bell',
+      y0: rungs[i], y1: rungs[i + 1],
+      x: bx, z: bz, r: bandRadius(bellSwung, rungs[i], rungs[i + 1]),
+    });
+  }
+  // The sling is its own fixture and gets its own entry: the box above ends at
+  // the rim, so nothing holds you off these two legs but the district clamp --
+  // the stricter of the two numbers, and never actually asked for, because
+  // their lowest iron sits at C.y + 2.564 and the highest head window in this
+  // room tops out at C.y + 2.065. What the ledger does ask them is the near
+  // plane, which does not care which way is up: 0.784 m from the nearest eye.
+  const slingSpan = swungSpan(slingSwung);
+  publishSolid(layout, {
+    name: 'bell sling', guard: 'clamp',
+    y0: slingSpan.lo, y1: slingSpan.hi, x: bx, z: bz, r: slingSpan.widest,
+  });
 
-  const shelf = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.18, 0.75), M.woodDark);
-  shelf.position.set(C.x - 1.8, C.y + 0.72, C.z + 2.0);
-  shelf.rotation.y = 0.28;
+  // THE KEEPSAKE SHELF -- "the actual secret", two paragraphs up -- WAS A
+  // PLANK YOU WALKED THROUGH, AND ITS WEST THIRD WAS OVER NOTHING.
+  //
+  // It was a 3.8 x 0.75 plank yawed 0.28 at (C.x-1.8, C.z+2.0), which is
+  // 2.69 m out from the cistern node on a chamber of radius 3.45: union
+  // clearance -0.759, and the nearest pose the clamp will hold was 0.000 m
+  // from the drawn wood. You stand in it. Its top is 0.81 m over the floor
+  // and STEP_UP is 0.50, so the engine calls that a wall, not a step -- and
+  // buildBellCistern authored exactly one collider, the bell.
+  //
+  // AND THE YAW WAS NOT A SEAT. At 0.28 the plank crosses the corner rather
+  // than following it: its west corner landed 4.55 m from the chamber centre
+  // while the drawn sixteen-gon floor ends at 3.45, so 1.1 m of shelf, and
+  // the three westmost keepsakes with it, hung over the 0x03050c background.
+  // That is the same defect the dry ring below already has a paragraph about,
+  // one object away.
+  //
+  // Seated properly now, in the frame the chamber actually has: OUT is the
+  // bearing the shelf already had from the node (the outside of the bend,
+  // which the bell's own comment reserves for it) and the plank runs
+  // TANGENTIAL to the chamber at 2.62 m, which puts its far corners at
+  // 3.35 m -- inside the floor with 0.10 m to spare -- and its whole face
+  // parallel to the wall it leans on. 3.0 m long rather than 3.8, because
+  // 3.8 tangential cannot fit inside this room at any radius that keeps its
+  // corners on the floor.
+  //
+  // Then the collider a 3 m plank at waist height has to have. Eight boxes,
+  // not one: this thing is yawed 42 degrees and its single AABB would be
+  // 2.73 x 2.56 -- most of the room, invisible. Sliced along its own length
+  // the AABBs hug it to within 0.15 m. Their half-depth is the keepsakes'
+  // own reach plus (UNDERFALLS_SOLID_PAD - RADIUS), so the camera stops at
+  // THE ONE PAD from drawn wood rather than merely at the player's radius:
+  // a collider has no dead band the way the clamp does, so the 0.08 has to
+  // be built into the box.
+  const SHELF_RADIUS = 2.62;       // centre, out from the cistern node
+  const SHELF_LEN = 3.0;
+  const SHELF_DEPTH = 0.75;
+  const SHELF_THICK = 0.18;
+  const KEEP_SPAN = 1.15;          // half the keepsake row, along the plank
+  const KEEP_ACROSS = 0.08;        // and its wander across it
+  // half the longest rod (0.66): the most any one keepsake can reach outside
+  // its own centre, whatever euler the seeded pattern hands it.
+  const KEEP_REACH = 0.33;
+  const out = new THREE.Vector2(-1.8, 2.0).normalize();
+  const alongX = out.y, alongZ = -out.x;
+  const shelfX = C.x + out.x * SHELF_RADIUS;
+  const shelfZ = C.z + out.y * SHELF_RADIUS;
+  const shelf = new THREE.Mesh(
+    new THREE.BoxGeometry(SHELF_LEN, SHELF_THICK, SHELF_DEPTH), M.woodDark);
+  shelf.position.set(shelfX, C.y + 0.72, shelfZ);
+  // rotation.y maps local +X to (cos, -sin) and local +Z to (sin, cos), so
+  // this puts the plank's length on ALONG and its depth face on OUT.
+  shelf.rotation.y = Math.atan2(-alongZ, alongX);
   group.add(shelf);
+  const SHELF_GUARD_DEPTH = KEEP_ACROSS + KEEP_REACH + (UNDERFALLS_SOLID_PAD - 0.34);
+  const SHELF_GUARD_LEN = KEEP_SPAN + KEEP_REACH + (UNDERFALLS_SOLID_PAD - 0.34);
+  const SHELF_GUARD_PIECES = 8;
+  for (let k = 0; k < SHELF_GUARD_PIECES; k++) {
+    const halfAlong = SHELF_GUARD_LEN / SHELF_GUARD_PIECES;
+    const t = SHELF_GUARD_LEN * (2 * (k + 0.5) / SHELF_GUARD_PIECES - 1);
+    const px = shelfX + alongX * t, pz = shelfZ + alongZ * t;
+    const halfX = Math.abs(alongX) * halfAlong + Math.abs(out.x) * SHELF_GUARD_DEPTH;
+    const halfZ = Math.abs(alongZ) * halfAlong + Math.abs(out.y) * SHELF_GUARD_DEPTH;
+    // Tall enough to cover the tallest keepsake standing on end (C.y + 1.15)
+    // and far too tall to be a step; it starts below the floor so no pose can
+    // ever be above it.
+    world.addCollider(px - halfX, C.y - 0.4, pz - halfZ, px + halfX, C.y + 1.3, pz + halfZ,
+      { underfalls: true, role: 'keepsake shelf' });
+  }
+  publishSolid(layout, {
+    name: 'keepsake shelf plank', guard: 'keepsake shelf',
+    y0: C.y + 0.72 - SHELF_THICK / 2, y1: C.y + 0.72 + SHELF_THICK / 2,
+    x: shelfX, z: shelfZ,
+    nx: out.x, nz: out.y, tx: alongX, tz: alongZ,
+    halfN: SHELF_DEPTH / 2, halfT: SHELF_LEN / 2,
+  });
+  // The keepsakes go on the ledger as ONE band rather than thirteen entries:
+  // the row plus a rod's reach in every direction. That is deliberately
+  // stricter than the objects themselves -- it claims a rectangle where there
+  // are thirteen small things -- and being over-strict is the safe direction
+  // for a pin. tools/probe-cistern-shelf.mjs measures the real triangles.
+  publishSolid(layout, {
+    name: 'dry keepsakes', guard: 'keepsake shelf',
+    y0: C.y + 0.88 - KEEP_REACH, y1: C.y + 0.915 + KEEP_REACH,
+    x: shelfX, z: shelfZ,
+    nx: out.x, nz: out.y, tx: alongX, tz: alongZ,
+    halfN: KEEP_ACROSS + KEEP_REACH, halfT: KEEP_SPAN + KEEP_REACH,
+  });
   const lost = { ringPale: [], ringIron: [], rodPale: [], rodIron: [] };
   for (let i = 0; i < 13; i++) {
     const ring = i % 3 === 0;
     const paleObject = i % 4 === 0;
     const scale = ring ? (0.11 + (i % 2) * 0.035) / 0.11 : 1;
     const height = ring ? scale : 0.42 + (i % 4) * 0.08;
+    // ON the plank now, in the plank's own frame. They used to be laid out
+    // in world x and z with no reference to the shelf at all, so the row ran
+    // 16 degrees across it: the first one sat 0.13 m past the plank's edge
+    // in mid-air, and the three at that end were over the void with it.
+    const along = -KEEP_SPAN + i * (KEEP_SPAN * 2 / 12);
+    const across = Math.sin(i * 2.3) * KEEP_ACROSS;
     const matrix = transformMatrix(
-      C.x - 3.1 + i * 0.23, C.y + 0.88 + (i % 2) * 0.035,
-      C.z + 1.85 + Math.sin(i * 2.3) * 0.18,
+      shelfX + alongX * along + out.x * across,
+      C.y + 0.88 + (i % 2) * 0.035,
+      shelfZ + alongZ * along + out.y * across,
       i * 0.4, i * 1.7, Math.PI / 2 + Math.sin(i) * 0.4,
       scale, height, scale,
     );
@@ -1540,36 +2158,73 @@ function buildBellCistern(game, layout, state) {
   // sixteen-gon whose real edge on this bearing is 3.49 m — a metre of pale
   // annulus hanging over black nothing. At 1.40 the far edge is 3.35 m, inside
   // the floor, and the near edge stays 0.50 m clear of the walking line.
+  // Hanging it back up is also what gives this ring anything to mean: a dry
+  // annulus under an object resting ON the stone is just occluded floor.
   const dryRing = new THREE.Mesh(new THREE.RingGeometry(1.22, 1.40, 28),
     new THREE.MeshBasicMaterial({ color: 0xa6b0ad, transparent: true, opacity: 0.27, side: THREE.DoubleSide }));
   dryRing.rotation.x = -Math.PI / 2;
   dryRing.position.set(bx, C.y + 0.025, bz);
   group.add(dryRing);
-  world.candles.push({ x: C.x - 2.4, y: C.y + 1.05, z: C.z + 1.8, intensity: 1.25, r: 4.5 });
+  // The shelf's own pooled candle is written in the plank's frame so it
+  // cannot drift off it again: 0.60 m along the row and 0.62 m out into the
+  // room, which is 0.13 m past the collider's face, so it lights the
+  // keepsakes from where the player stands rather than from behind them. It
+  // used to be a world-space pair of numbers that happened to land 0.29 m
+  // BEHIND the old plank.
+  world.candles.push({
+    x: shelfX + alongX * -0.60 + out.x * -0.62,
+    y: C.y + 1.05,
+    z: shelfZ + alongZ * -0.60 + out.y * -0.62,
+    intensity: 1.25, r: 4.5,
+  });
   const bellLight = new THREE.PointLight(0xd7a468, 13.5, 12, 1.15);
   markUnderfalls(bellLight);
-  // The district's one cistern light follows the bell, but only part of the
-  // way: it is also the keepsake shelf's second source, and the shelf is what
-  // the comment above calls the actual secret. Pulled back to bx-1.05/bz+0.85
-  // it sits 1.66 m off the rim and 3.48 m off the keepsakes, which costs the
-  // rim 0.64x and the keepsakes 0.59x of what each had before — against 0.34x
-  // for the rim if the light had stayed put. The shelf keeps its own pooled
-  // candle 0.68 m away, unmoved, and the tick below lifts this light to 24 on
-  // a strike, which puts the rim at 1.14x its old resting level exactly when
-  // it is moving. Do NOT add a second PointLight: the census is pinned at boot
-  // and a new one recompiles every lit material in the game.
-  bellLight.position.set(bx - 1.05, C.y + 2.4, bz + 0.85);
+  // The district's one cistern light follows the bell, and re-hanging the bell
+  // 1.44 m moved it again. Left where round thirteen put it, the source would
+  // have ended 0.389 m from the raised rim's centre-line -- a lantern at arm's
+  // length, clipping the one pale thing in this room to white. So it was solved
+  // for instead of nudged: this is the position that keeps the nearest PALE RIM
+  // IRON at the distance it already has on the live build (0.935 m against
+  // 0.937 m, irradiance x1.003 under three.js's 1/d^1.15 windowed falloff)
+  // while moving 0.57 m CLOSER to the keepsake shelf, which the comment above
+  // calls the actual secret.
+  //
+  // THOSE SHELF NUMBERS ARE RE-MEASURED, because the shelf did not stay where
+  // this paragraph first found it: the same round reseated the plank tangential
+  // to the chamber and shortened it to 3.0 m. Against the plank as it is drawn
+  // now, round thirteen's lamp position stands 3.591 m from its nearest wood and
+  // this one stands 3.017 m -- irradiance x1.222, not the x1.251 measured
+  // against the plank that has been replaced.
+  //
+  // It clears the player rather than clearing EYE, which is not the same claim
+  // on a floor that runs C.y - 0.455 to C.y + 0.350: the highest eye anything
+  // can raise within 1.2 m of this lamp is 2.977 and the lamp is at 3.250, so
+  // it stands 0.273 m over it, and the nearest legal eye in space is 0.390 m
+  // away -- past the near plane. The shelf's own pooled candle travelled with
+  // the plank and now sits 0.963 m off its wood, and the tick below still lifts
+  // this light to 24 on a strike. Do NOT add a second PointLight: the census is
+  // pinned at boot and a new one recompiles every lit material in the game.
+  bellLight.position.set(bx - 1.42, C.y + 2.0, bz + 1.15);
   scene.add(bellLight);
   state.lights.push(bellLight);
-  // `position` stays the CHAMBER NODE, not the bell: it is the discovery
-  // radius and the route point the gate walks to. `strikePos` is where the
-  // water lands, which is where the sound has to come from.
+  // `position` stays the CHAMBER NODE, not the bell: it is the discovery radius
+  // and the route point the gate walks to. `strikePos` is where the loose
+  // clapper meets the wall, which is where the sound has to come from -- round
+  // thirteen put it at C.y + 1.15, the mid-body of a bell lying on the floor.
   state.secret = {
-    group, bell, clapper, pivot: bellPivot, light: bellLight,
+    group, bell, rim: bellRim, clapper, sling, pivot: bellPivot, light: bellLight,
     position: new THREE.Vector3(C.x, C.y, C.z),
-    strikePos: new THREE.Vector3(bx, C.y + 1.15, bz),
+    strikePos: new THREE.Vector3(bx, C.y + 1.46, bz),
+    // the drawn constants, published so the gate can measure the OBJECT instead
+    // of trusting a comment about it
+    axis: new THREE.Vector3(bx, C.y, bz),
+    apexY: C.y + APEX, crownY: C.y + CROWN, rimY: C.y + RIM, ringR: RING_R,
+    maxSwing: BELL_MAX, half: BELL_HALF, tollGap: BELL_TOLL_GAP, verb: BELL_VERB,
     discovered: false,
-    rock: 0, ringT: 3.4, ringIndex: 0,
+    // the pendulum: two small-angle components about the apex. ax is the angle
+    // whose crown displacement is +x, az the one whose displacement is +z.
+    ax: 0.008, az: 0, avx: 0, avz: 0.004,
+    glow: 0, gustT: 3.4, gustIndex: 0, tollCd: 0, prevLean2: 0, towardCentre: false,
   };
 }
 
@@ -2083,6 +2738,30 @@ function buildHatchCistern(game, layout, state) {
     { underfalls: true, role: 'hatch chamber wall' });
   world.addCollider(H.x - r, y - 1, H.z + r - 0.4, H.x + r, y + 4, H.z + r + 0.4,
     { underfalls: true, role: 'hatch chamber wall' });
+  // The arrival room is the one place in the district where the collider IS
+  // the drawn box, bit for bit, so the player's centre stops at exactly
+  // RADIUS from the stone it can see. That is what a wall is, and it is the
+  // best case the ledger has -- but it is only true while the three boxes
+  // above and the three colliders beside them keep the same numbers, so all
+  // three go on the ledger and the gate re-derives it every run. The floor
+  // slab (y - 0.174) and the cap (y + 4.15) stay off it: one is the floor and
+  // the other is 2.4 m over HEAD.
+  publishSolid(layout, {
+    name: 'hatch chamber wall (east)', guard: 'hatch chamber wall',
+    y0: y - 0.25, y1: y + 4.25,
+    x: H.x + r, z: H.z, nx: 1, nz: 0, tx: 0, tz: 1, halfN: 0.4, halfT: r,
+  });
+  publishSolid(layout, {
+    name: 'hatch chamber wall (west)', guard: 'hatch chamber wall',
+    y0: y - 0.25, y1: y + 4.25,
+    x: H.x - r, z: H.z + (r - 0.6) / 2,
+    nx: 1, nz: 0, tx: 0, tz: 1, halfN: 0.4, halfT: (r + 0.6) / 2,
+  });
+  publishSolid(layout, {
+    name: 'hatch chamber wall (north)', guard: 'hatch chamber wall',
+    y0: y - 0.25, y1: y + 4.25,
+    x: H.x, z: H.z + r, nx: 0, nz: 1, tx: 1, tz: 0, halfN: 0.4, halfT: r,
+  });
 
   const hatch = new THREE.Group();
   hatch.name = 'cave ceiling hatch';
@@ -2116,13 +2795,37 @@ function buildHatchCistern(game, layout, state) {
   // authored physical destination instead of a glowing texture. They stop at
   // different heights, keeping the hatch tantalisingly reachable without
   // stealing movement or inventing a climb input.
+  // AND THE LONG ONE HUNG INTO YOUR HEAD. At 0.23 m of pitch the eighth link
+  // sat at 3.42 - 7 * 0.23 = 1.81, and a 0.12/0.022 torus at 0.72 scale
+  // reaches 0.102, so its underside was 1.708 -- BELOW HEAD (1.75). Standing
+  // where the player has to stand to look up at the hatch, the camera came
+  // within 0.093 m of it: inside the 0.2 near plane, so the last link of the
+  // chain was clipped away exactly when you were looking at it.
+  //
+  // 0.18 of pitch instead. Eight and six links still, still mismatched, and
+  // links whose outer diameter is 0.204 now overlap by 0.024 -- which is what
+  // chain links do. The long chain's underside lands at 2.058: 0.31 m over
+  // HEAD, and 0.438 m over the camera, which is THE ONE PAD from an eye
+  // standing directly beneath it.
+  const CHAIN_PITCH = 0.18;
+  const CHAIN_REACH = 0.102;   // (0.12 major + 0.022 tube) * 0.72 scale
   const chainMatrices = [];
   for (let side = -1; side <= 1; side += 2) {
     const links = side < 0 ? 8 : 6;
     for (let i = 0; i < links; i++) {
-      chainMatrices.push(transformMatrix(side * 0.46, 3.42 - i * 0.23, 0.38,
+      chainMatrices.push(transformMatrix(side * 0.46, 3.42 - i * CHAIN_PITCH, 0.38,
         0, (i & 1) * Math.PI / 2, 0, 0.72, 0.72, 0.72));
     }
+    // Overhead, but on the ledger: a thing hanging over the player is out of
+    // the head window and still perfectly able to sit inside the near plane,
+    // which is how this one got here. The gate measures the eye against the
+    // whole prism, not just its footprint.
+    publishSolid(layout, {
+      name: 'hatch pull chain', guard: 'clamp',
+      y0: y + 3.42 - (links - 1) * CHAIN_PITCH - CHAIN_REACH,
+      y1: y + 3.42 + CHAIN_REACH,
+      x: H.x + side * 0.46, z: H.z + 0.38, r: CHAIN_REACH,
+    });
   }
   addInstances(hatch, new THREE.TorusGeometry(0.12, 0.022, 5, 10), hatchMetal, chainMatrices,
     { name: 'mismatched hatch pull chains' });
@@ -2488,79 +3191,155 @@ function installBeats(game, layout, state) {
       game.audio.splash({ pos: new THREE.Vector3(behind.x - 2.6, behind.y + 2.2, behind.z), gain: 0.46, rate: 0.64, verb: 0.82 });
     }
 
-    // THE FALLEN BELL IS THE ONE IRON THING IN A ROOM MADE OF WATER.
+    // THE BELL HANGS, AND IT IS THE ONE THING IN THIS DISTRICT YOU CAN MOVE.
     //
     // Alex, on the live build: "what is this, it doesn't move or do anything."
-    // Round twelve answered half of that — it was floating, and now it is on
-    // the floor. This is the other half, and he was literally right: it had no
-    // ticker, no light of its own and no voice. The only line in the whole
-    // codebase that ever named it was the discovery one-shot, and that one-shot
-    // played metalDrop — a dropped spanner. The room's only bell made the sound
-    // of something else falling over.
+    // Round twelve answered by putting it on the floor, on a reason that was
+    // not true (see buildBellCistern). Round thirteen answered the real half:
+    // it had no ticker, no light of its own and no voice, and the one line in
+    // the codebase that ever named it played metalDrop -- the room's only bell
+    // making the sound of a dropped spanner. This round hangs it back up and
+    // keeps the voice, and now the MOTION CAUSES THE SOUND instead of the
+    // sound being decorated with motion afterwards.
     //
-    // It cannot be a fetch target. The skull is GONE by the time anyone stands
-    // here (director.js:1240 waterfallTaken -> skull.vanish, "the waterfall. it
-    // does not come back"), so the answer cannot be a verb. It is the district
-    // answering itself: water off the broken vault finds the iron, the iron
-    // answers, and the bell rocks because a bell resting mouth-up on its crown
-    // is not stable. That is what the dry ring underneath has always meant.
+    // It cannot be a fetch target. The skull is gone by the time anyone stands
+    // here (director.js waterfallTaken -> skull.vanish, "the waterfall. it does
+    // not come back") and it never comes back in this act, so "hit it with the
+    // skull" is not an answer that exists. What does exist is your own body:
+    // walk into it and it swings, because it is hanging.
+    //
+    // The old fiction was not true either. buildCeilingDrips samples
+    // layout.mainSegments ONLY; replayed offline, all 29 sites land on the main
+    // route and the nearest one to this axis is 8.55 m away through rock, so
+    // "water off the broken vault finds the iron" described something the
+    // geometry does not contain, and the caveDrip that used to fire with each
+    // toll was a sound with no drop. It is gone. The bell is DRY -- that is the
+    // whole point of the room -- and what moves it is the draught, in a
+    // district that is open at both ends.
     const S = state.secret;
-    // Discovery keeps its radius and its flag untouched — tests/underfalls-
-    // expansion.mjs:203-220 walks to this node and asserts both — but it is the
-    // FIRST TOLL instead of a dropped spanner, in the bell's own voice, from
-    // the bell's own mouth.
+    // Discovery keeps its radius and its flag untouched -- tests/underfalls-
+    // expansion.mjs walks to this node and asserts both -- but it arrives now
+    // as a gust and a toll rather than as a dropped spanner. The gust is a
+    // velocity change, not a position change, so nothing snaps.
     if (!S.discovered && player.distanceToSquared(S.position) < 3.05 * 3.05) {
       S.discovered = true;
       game.flag('underfallsSecret');
-      S.rock = 1;
-      S.ringT = 9.1;
-      game.audio.bellRing({ pos: S.strikePos, gain: 0.23, rate: 0.33, verb: 0.96, dark: true });
+      const dax = S.axis.x - player.x, daz = S.axis.z - player.z;
+      const far = Math.hypot(dax, daz) || 1;
+      S.avx += BELL_GUST * (dax / far);
+      S.avz += BELL_GUST * (daz / far);
+      S.glow = 1;
+      S.tollCd = BELL_TOLL_GAP;
+      game.audio.bellRing({ pos: S.strikePos, gain: 0.23, rate: 0.33, verb: BELL_VERB, dark: true });
     }
     if (S.pivot) {
-      // EARSHOT IS MEMBERSHIP, NOT A RADIUS. A 22 m circle around the strike
-      // point reaches the MAIN route at 8.06 m (lower sluice) and covers most
-      // of the chapel-to-upper-sluice run through solid rock: a secret calling
-      // attention to itself along the public road, which inverts law 6 and is
-      // the thing audio.js:1634 refuses to do. So the gate is the district's
-      // own walk-region query instead. projectUnderfalls answers 'secret' only
-      // inside the culvert and the cistern, and the chapel chamber's r 10.5
-      // disc owns the first two culvert legs, so walking in the toll opens
-      // 6.49 m short of the bell and sounds nowhere on the main route. It
-      // rewards the player who went in rather than luring them in. Cost is one
-      // projectUnderfalls per cave frame — 22 segment/chamber projections, the
-      // same order as the lateral clamp's existing per-frame call, and zero
-      // outside the cave because the ticker has already returned by here.
-      const where = projectUnderfalls(layout, player.x, player.z);
-      if (where && where.kind === 'secret' && where.clearance <= 0) {
-        S.ringT -= dt;
-        if (S.ringT <= 0) {
-          const cadence = [7.3, 11.6, 9.1, 13.8];
-          S.ringT = cadence[S.ringIndex % cadence.length];
-          S.ringIndex++;
-          S.rock = 1;
-          game.audio.caveDrip({ pos: S.strikePos, gain: 0.26, rate: 1.22, verb: 0.9 });
-          game.audio.bellRing({
-            pos: S.strikePos, gain: 0.17 + (S.ringIndex % 3) * 0.015,
-            rate: 0.33, verb: 0.96, dark: true,
-          });
+      // THE DRAUGHT. The same cadence array round thirteen tolled on, doing a
+      // different job: it delivers a nudge, not a sound. Fixed array, no
+      // Math.random and no setTimeout, so a playthrough stays bit-identical.
+      S.gustT -= dt;
+      if (S.gustT <= 0) {
+        const cadence = [7.3, 11.6, 9.1, 13.8];
+        S.gustT = cadence[S.gustIndex % cadence.length];
+        const bearing = S.gustIndex * 2.399963;    // golden angle: never repeats
+        S.avx += BELL_GUST * Math.cos(bearing);
+        S.avz += BELL_GUST * Math.sin(bearing);
+        S.gustIndex++;
+      }
+      // AND YOUR SHOULDER. The collider holds you 0.96 m off the axis on a face
+      // and 1.217 m on a corner, so contact is a ring rather than a point;
+      // player.vel is smoothed INTENT, so it stays live while the box holds you
+      // and leaning keeps feeding the swing. The crown goes AWAY from you,
+      // which is the only direction a shove can send it.
+      const px = player.x - S.axis.x, pz = player.z - S.axis.z;
+      const reach = Math.hypot(px, pz);
+      if (reach > 1e-4 && reach < BELL_CONTACT) {
+        const into = -(game.player.vel.x * px + game.player.vel.z * pz) / reach;
+        if (into > 0.4) {
+          S.avx -= BELL_PUSH * into * (px / reach) * dt;
+          S.avz -= BELL_PUSH * into * (pz / reach) * dt;
         }
       }
-      // It never fully stops. The idle wobble is what a two-tonne thing
-      // balanced on its narrow end does; the struck rock is six times it and
-      // decays over about three seconds. Value and motion carry it — the pale
-      // rim travels 0.25 m peak-to-peak on a strike against dark iron, which
-      // is all a dark room leaves behind — and no part of the read is hue.
-      // Fixed cadence array, no Math.random and no setTimeout, so a
-      // playthrough stays bit-identical.
-      S.rock = Math.max(0, S.rock - dt * 0.34);
-      const amp = 0.012 + S.rock * S.rock * 0.075;
-      S.pivot.rotation.z = Math.sin(t * 1.05) * amp;
-      S.pivot.rotation.x = Math.cos(t * 0.83) * amp * 0.72;
-      // 0.04, not the 0.11 first drafted: the lathe's inner radius at the
-      // clapper's height is 0.287 and the clapper is 0.24, so it has exactly
-      // 0.047 m of room before it pushes out through the bell's own wall.
-      S.clapper.position.x = Math.sin(t * 2.9) * 0.04 * S.rock;
-      S.light.intensity = 13.5 + S.rock * 10.5;
+      // Small-angle pendulum about the chain's apex on the fixed 1/120 step.
+      // L is apex to the lathe's surface-of-revolution centroid (local y 0.948)
+      // = 2.882 m, so g/L is 3.4045 and the period is 3.405 s: a two-tonne
+      // thing, not a wind chime. Damping 0.14 is a 14.4 s e-fold, so it never
+      // quite stops and it is still moving when you leave the room.
+      S.avx -= (BELL_W2 * Math.sin(S.ax) + BELL_DAMP * S.avx) * dt;
+      S.avz -= (BELL_W2 * Math.sin(S.az) + BELL_DAMP * S.avz) * dt;
+      S.ax += S.avx * dt;
+      S.az += S.avz * dt;
+      // ONE CAP, ON ENERGY, and it is what keeps the iron out of the player.
+      // For a harmonic swing the amplitude is hypot(lean, speed / w), and at
+      // BELL_MAX the widest iron any reachable head window can hold reaches
+      // 0.608 m -- 0.014 m short of the BELL_HALF box, measured against this
+      // chamber's own sloping floor rather than against the node. Scaling all
+      // four terms caps it without the jolt that clamping the angle alone gives.
+      const amp = Math.hypot(
+        Math.hypot(S.ax, S.az), Math.hypot(S.avx, S.avz) / BELL_W,
+      );
+      if (amp > BELL_MAX) {
+        const k = BELL_MAX / amp;
+        S.ax *= k; S.az *= k; S.avx *= k; S.avz *= k;
+      }
+      // THE TOLL IS A CONSEQUENCE, NOT A TIMER. The clapper is loose in the
+      // crown of an upturned bell, so it strikes at the BOTTOM of the swing
+      // where the bell is fastest: the instant the lean stops shrinking and
+      // starts growing again. A bell circling smoothly never gets there, which
+      // is right -- a resting clapper needs a reversal to be thrown.
+      const lean2 = S.ax * S.ax + S.az * S.az;
+      S.tollCd -= dt;
+      if (lean2 < S.prevLean2) S.towardCentre = true;
+      else if (S.towardCentre) {
+        S.towardCentre = false;
+        if (amp >= BELL_TOLL && S.tollCd <= 0) {
+          // EARSHOT IS MEMBERSHIP, NOT A RADIUS -- round thirteen's rule kept
+          // verbatim. A 22 m circle around the strike point reaches the MAIN
+          // route at 8.06 m and covers most of the chapel-to-upper-sluice run
+          // through solid rock: a secret calling attention to itself along the
+          // public road, which inverts law 6. projectUnderfalls answers
+          // 'secret' only inside the culvert and the cistern, and the chapel's
+          // r 10.5 disc owns the first two culvert legs, so the bell opens
+          // 6.49 m short of itself and sounds nowhere on the main route.
+          //
+          // Round thirteen paid for that query on EVERY cave frame. Asking it
+          // here instead -- at a swing reversal, about 0.6 times a second and
+          // only when the amplitude and the cooldown already agree -- is the
+          // same answer for a fraction of the calls.
+          const where = projectUnderfalls(layout, player.x, player.z);
+          if (where && where.kind === 'secret' && where.clearance <= 0) {
+            S.tollCd = BELL_TOLL_GAP;
+            // An inelastic strike: the swing PAYS for the sound. This is what
+            // holds the ambient rate at one toll per 20.7 s against round
+            // thirteen's 10.45 s mean, with no timer saying so -- and it is why
+            // leaning on the bell for twenty seconds still only produced a toll
+            // every 10.4 s in simulation, never reaching the 7.3 s floor.
+            S.avx *= 0.55; S.avz *= 0.55;
+            S.glow = 1;
+            game.audio.bellRing({
+              pos: S.strikePos, gain: 0.17 + (S.gustIndex % 3) * 0.015,
+              rate: 0.33, verb: BELL_VERB, dark: true,
+            });
+          }
+        }
+      }
+      S.prevLean2 = lean2;
+      // Rotation about the apex: +ax leans the crown toward +x, +az toward +z
+      // (three.js sends a point below the pivot toward -z for a positive x
+      // rotation, hence the sign). At the cap the crown travels 0.421 m
+      // peak-to-peak and the pale rim -- the only part of this object a dark
+      // room leaves you -- travels 0.263 m, against round thirteen's 0.250.
+      // Value and motion carry the read; no part of it is hue.
+      S.pivot.rotation.z = S.ax;
+      S.pivot.rotation.x = -S.az;
+      // The clapper lags the bell and slides to the low side. 0.045 m of
+      // travel: the lathe's inner radius at the clapper's height is 0.287 and
+      // the clapper is 0.24, so it has 0.047 m before it pushes out through the
+      // bell's own wall. The scale puts it exactly at the wall at the angular
+      // speed a toll fires on, so the picture and the sound agree.
+      S.clapper.position.x = clamp(-S.avx * 0.87, -0.045, 0.045);
+      S.clapper.position.z = clamp(-S.avz * 0.87, -0.045, 0.045);
+      S.glow = Math.max(0, S.glow - dt * 0.34);
+      S.light.intensity = 13.5 + S.glow * 10.5;
     }
 
     // Hear displaced spray before it owns a silhouette. It never attacks,
