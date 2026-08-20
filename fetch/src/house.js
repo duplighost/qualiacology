@@ -1578,42 +1578,129 @@ function furnish(game) {
 
   // unlit near-black: a spider is a silhouette that moves, not a lit object
   const spiderBody = new THREE.MeshBasicMaterial({ color: 0x0a0806 });
+  // ONE MESH PER SPIDER, NOT EIGHTEEN.
+  //
+  // Alex: "can we have more spider webs with spiders in places. those are
+  // cool." They were 18 draw calls each — an abdomen, a head, and sixteen leg
+  // segments, all on the same material — which is why there were only ever
+  // three of them, in the district with the least headroom in the game.
+  //
+  // Nothing about them ever needed separate transforms: the ticker below moves
+  // the WHOLE spider and never a leg, so the pose is rigid and can be baked.
+  // Merged, a spider is one draw and the same silhouette exactly, which is what
+  // makes more of them affordable.
   const mkSpider = (scale = 1) => {
-    const sp = new THREE.Group();
-    const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.042 * scale, 8, 6), spiderBody);
-    abdomen.scale.set(0.85, 0.75, 1.15);
-    abdomen.position.z = -0.045 * scale;
-    sp.add(abdomen);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.024 * scale, 7, 5), spiderBody);
-    head.position.z = 0.012 * scale;
-    sp.add(head);
+    const parts = [];
+    const bake = (geo, pos, rot, scl) => {
+      const m = new THREE.Matrix4().compose(
+        pos || new THREE.Vector3(),
+        new THREE.Quaternion().setFromEuler(rot || new THREE.Euler()),
+        scl || new THREE.Vector3(1, 1, 1),
+      );
+      geo.applyMatrix4(m);
+      parts.push(geo);
+    };
+    bake(new THREE.SphereGeometry(0.042 * scale, 8, 6),
+      new THREE.Vector3(0, 0, -0.045 * scale), null, new THREE.Vector3(0.85, 0.75, 1.15));
+    bake(new THREE.SphereGeometry(0.024 * scale, 7, 5),
+      new THREE.Vector3(0, 0, 0.012 * scale));
     for (let i = 0; i < 8; i++) {
       const side = i < 4 ? -1 : 1;
       const k = i % 4;
-      const leg = new THREE.Group();
-      leg.position.set(side * 0.02 * scale, 0, (k - 1.4) * 0.02 * scale);
-      leg.rotation.z = side * (0.7 + k * 0.12);
-      leg.rotation.y = side * (k - 1.5) * 0.35;
-      const seg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.0035 * scale, 0.0025 * scale, 0.075 * scale, 4), spiderBody);
-      seg1.position.y = 0.034 * scale;
-      leg.add(seg1);
-      const seg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.0025 * scale, 0.0015 * scale, 0.07 * scale, 4), spiderBody);
-      seg2.position.set(0, 0.068 * scale, 0.01 * scale);
-      seg2.rotation.x = 1.25;
-      leg.add(seg2);
-      sp.add(leg);
+      // the leg's own frame, then each segment inside it — composed by hand
+      // because the group that used to hold them is what we are removing
+      const legM = new THREE.Matrix4().compose(
+        new THREE.Vector3(side * 0.02 * scale, 0, (k - 1.4) * 0.02 * scale),
+        new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(0, side * (k - 1.5) * 0.35, side * (0.7 + k * 0.12), 'XYZ')),
+        new THREE.Vector3(1, 1, 1),
+      );
+      const seg1 = new THREE.CylinderGeometry(0.0035 * scale, 0.0025 * scale, 0.075 * scale, 4);
+      seg1.translate(0, 0.034 * scale, 0);
+      seg1.applyMatrix4(legM);
+      parts.push(seg1);
+      const seg2 = new THREE.CylinderGeometry(0.0025 * scale, 0.0015 * scale, 0.07 * scale, 4);
+      seg2.rotateX(1.25);
+      seg2.translate(0, 0.068 * scale, 0.01 * scale);
+      seg2.applyMatrix4(legM);
+      parts.push(seg2);
     }
-    return sp;
+    const merged = mergeGeometries(parts);
+    for (const g of parts) g.dispose();
+    return new THREE.Mesh(merged, spiderBody);
   };
 
-  for (let i = 0; i < 5; i++) {
-    const w = mkWeb(0x1234 + i * 977);
-    w.position.set(6.5 - i * 2.1, B + 1.2, 3.05 + (i % 2) * 0.5);
-    w.rotation.y = Math.PI / 2 + (i - 2) * 0.12;
+  // WHERE THE WEBS ARE. The corridor's five are the curtain kind — full height,
+  // in your way, brushed aside as you pass. Everywhere else takes the corner
+  // kind: smaller, tucked into the angle where two walls meet the ceiling,
+  // which is where a real one would be and where no furniture ever is. On the
+  // ground and first floors they hang above head height and are pure decor;
+  // in the basement the ceiling is 2.45 m, so those you can still walk into.
+  //
+  // The coordinates are the house's world frame (origin -12,-14, 2 m cells),
+  // and every site is checked against the colliders before it is built — a web
+  // grown through a crate reads as a bug, and furnish() puts down enough that
+  // hand-picked corners cannot be trusted to stay empty.
+  const CEIL = HOUSE_TABLES.levels;
+  const webSites = [
+    // the corridor curtain — the original five, unchanged
+    ...Array.from({ length: 5 }, (_, i) => ({
+      at: [6.5 - i * 2.1, B + 1.2, 3.05 + (i % 2) * 0.5],
+      rotY: Math.PI / 2 + (i - 2) * 0.12,
+      s: 1, seed: 0x1234 + i * 977, spider: i % 2 === 0, curtain: i,
+    })),
+    // ---- basement corners (ceiling -0.55) ----
+    { at: [-2.65, -1.30, -4.65], rotY: Math.PI / 4, s: 0.55, seed: 0x2a11, spider: true },   // storeroom, far corner
+    { at: [2.65, -1.30, 0.65], rotY: -Math.PI * 0.75, s: 0.5, seed: 0x2a22 },                // storeroom, by the corridor
+    { at: [-10.65, -1.30, -8.65], rotY: Math.PI / 4, s: 0.55, seed: 0x2a33, spider: true },  // crawl, deep end
+    { at: [-10.65, -1.30, 4.65], rotY: Math.PI * 0.75, s: 0.5, seed: 0x2a44 },               // hatchbay
+    { at: [10.65, -1.30, -4.65], rotY: -Math.PI / 4, s: 0.5, seed: 0x2a55 },                 // boiler room
+    { at: [-18.65, -1.30, 4.65], rotY: Math.PI * 0.75, s: 0.55, seed: 0x2a66, spider: true },// blind archive
+    { at: [-18.65, -1.30, -8.65], rotY: Math.PI / 4, s: 0.5, seed: 0x2a77 },                 // pump gallery
+    // ---- ground corners (ceiling 3.3) ----
+    { at: [5.4, 2.55, 4.6], rotY: Math.PI * 0.75, s: 0.6, seed: 0x3b11, spider: true },      // scullery
+    { at: [10.6, 2.55, 3.4], rotY: -Math.PI * 0.75, s: 0.55, seed: 0x3b22 },                 // over the cellar stair
+    { at: [-2.6, 2.55, 4.6], rotY: Math.PI * 0.75, s: 0.55, seed: 0x3b33 },                  // back hall
+    { at: [-10.6, 2.55, 4.6], rotY: Math.PI * 0.75, s: 0.6, seed: 0x3b44, spider: true },    // study
+    // ---- first corners (ceiling 6.4) ----
+    { at: [-10.6, 5.65, -0.6], rotY: Math.PI / 4, s: 0.6, seed: 0x4c11, spider: true },      // nursery
+    { at: [10.6, 5.65, -8.6], rotY: -Math.PI / 4, s: 0.55, seed: 0x4c22 },                   // guest room
+    { at: [2.6, 5.65, -8.6], rotY: -Math.PI / 4, s: 0.5, seed: 0x4c33 },                     // stair shaft
+  ];
+
+  // a site is clear if the disc the web occupies touches nothing solid
+  const webClear = (x, y, z, reach) => {
+    for (const c of game.world.colliders) {
+      if (c.door || c.disabled || c.enabled === false) continue;
+      if (x + reach < c.min.x || x - reach > c.max.x) continue;
+      if (z + reach < c.min.z || z - reach > c.max.z) continue;
+      if (y + reach < c.min.y || y - reach > c.max.y) continue;
+      return false;
+    }
+    return true;
+  };
+
+  const webReport = { placed: 0, skipped: [] };
+  for (const site of webSites) {
+    const [x, y, z] = site.at;
+    // the curtain five are authored across an empty corridor and predate the
+    // check; they are exempt so a later collider can never silently delete the
+    // beat the corridor is built around.
+    if (site.curtain === undefined && !webClear(x, y, z, 0.62 * site.s + 0.12)) {
+      webReport.skipped.push(site.seed.toString(16));
+      continue;
+    }
+    const i = site.curtain !== undefined ? site.curtain : (webReport.placed % 5);
+    const w = mkWeb(site.seed);
+    w.position.set(x, y, z);
+    w.rotation.y = site.rotY;
+    if (site.s !== 1) w.scale.setScalar(site.s);
+    w.userData.scale0 = site.s;
     scene.add(w);
     game.webs.push(w);
+    webReport.placed++;
     // every other web is occupied. the occupant minds you coming.
-    if (i % 2 === 0) {
+    if (site.spider) {
       const sp = mkSpider(0.8 + (i % 3) * 0.25);
       sp.position.set((i - 2) * 0.11, 0.25 + (i % 2) * 0.3, 0.02);
       sp.rotation.z = (i - 2) * 0.9;
@@ -1621,7 +1708,9 @@ function furnish(game) {
       const home = sp.position.clone();
       let darted = 0, trembleT = 2 + i;
       game.tickers.push((dt, t) => {
-        if (w.scale.y < 0.5) { sp.visible = false; return; }   // web brushed away: it's gone. somewhere.
+        // torn is RELATIVE to the size the site was built at — a corner web
+        // starts at half scale and would otherwise read as already brushed away
+        if (w.scale.y < (w.userData.scale0 || 1) * 0.55) { sp.visible = false; return; }
         trembleT -= dt;
         if (trembleT <= 0) {
           trembleT = 2.5 + Math.random() * 4;
@@ -1639,6 +1728,7 @@ function furnish(game) {
       });
     }
   }
+  game.__webReport = webReport;
 }
 
 // ---------------------------------------------------------------- act 0
@@ -2420,6 +2510,7 @@ function nurseryAct(game) {
     keyId: 'stairKey', targetId: 'stairLock', flag: 'stairsOpen', radius: 1.2,
   });
 
+
   // the mobile over the crib, turning with no wind. while it turns you are safe.
   // when it slows, the corner is closer. hit it with the skull to spin it back up.
   const mobile = new THREE.Group();
@@ -2855,9 +2946,24 @@ function buildBasementPilot(game, B) {
     state.coldCd = Math.max(0, state.coldCd - dt);
     flame.scale.set(0.7, 1.32 + Math.sin(time * 15) * 0.13, 0.7);
     flame.material.opacity = lit ? 0.88 + Math.sin(time * 19) * 0.08 : 0;
+    // A COLD PILOT THAT KNOWS YOU ARE CARRYING FIRE SAYS SO.
+    //
+    // Struck empty-handed this fixture refuses, grants nothing and goes inert —
+    // flame hidden, glow zero — so it reads as a prop you already tried. Alex
+    // did exactly that, came back later with fire, and walked past it: "i think
+    // i did everything and the furnace didnt work." The furnace's only pointer
+    // at this thing is one chime and a 1.35 s glow of radius 4.8, from ten
+    // metres away behind the stair mass, which is not a pointer.
+    //
+    // So once the skull carries fire, and only then, the dead pilot keeps a
+    // slow standing breath. Empty-handed it stays exactly as dead as it was, so
+    // the authored cold refusal is untouched. Value and motion, never hue, and
+    // it costs nothing: pilotGlow is a world.candles DESCRIPTOR feeding the
+    // eight-slot pooled light rig, not a light of its own.
     pilotGlow.intensity = lit
       ? 0.94 + Math.sin(time * 9) * 0.12
-      : state.pulse * 0.7;
+      : state.pulse * 0.7
+        + (game.flags.has('ateFlame') ? 0.20 + Math.sin(time * 1.5) * 0.08 : 0);
   });
 }
 
@@ -3168,8 +3274,16 @@ function basementAct(game) {
       }
     }
     glow.intensity += (incin.glowTarget - glow.intensity) * Math.min(1, dt * 3.5);
-    const gaugeGoal = (game.flags.has('pumpGalleryLatched') && game.flags.has('archiveDraftOpened'))
-      ? -1.02 : 1.18;
+    // THE GAUGE STOPS LYING. It used to read two of the three conditions the
+    // fire actually needs — pump and archive, never the pilot — so in the one
+    // state where a player has done everything visible and the pilot is still
+    // dark, the needle swept to FULL DRAFT over a furnace that cannot light.
+    // Alex hit exactly that and spent a trip upstairs and a checkpoint reload
+    // on it: "i think i did everything and the furnace didnt work." Nothing was
+    // broken (hasDraft is re-tested every frame and no flag here can be lost),
+    // but the machine told him it was ready. A scoreboard that reports two
+    // thirds of its own requirement is worse than no scoreboard.
+    const gaugeGoal = hasDraft ? -1.02 : 1.18;
     gaugeNeedle.rotation.z += (gaugeGoal - gaugeNeedle.rotation.z) * Math.min(1, dt * 4.6);
     // furnace scoreboard, state 1: a lit pilot breathes in the door slits —
     // slow slit swell + ember brightness amplitude, readable before any
@@ -6875,6 +6989,51 @@ function voidDoorAct(game) {
   const { world, scene, mats: M } = game;
   const F = HOUSE_TABLES.levels.first.floor;
   const door = world.doorById.voidDoor;
+
+  // NO FURNACE. His idea, and his correction to my first attempt at it:
+  //
+  //   "when that door is closed, we just put a sign on it with a picture of a
+  //    furnace, one of those things with a circle with a line through it. like
+  //    its saying no furnace. The player will see that sign on the door the
+  //    first time they leave the upstairs of the house."
+  //
+  // I put it on the stair door. He put it here: "the right door is actually on
+  // the stairs from the second to first floor and you can't enter. the door
+  // opens during part of the puzzle and you throw your skull to hit a candle."
+  // He is right and it is a better idea than mine, because THIS is the door
+  // with the fire behind it. A works plate saying no-furnace, hung on the one
+  // door in the house you can never walk through, over the stair void where
+  // every player sees it on the way down — and when the beat finally knocks it
+  // open, the plate swings away with the panel and what is behind it is the lit
+  // candle you came for. The warning is replaced by the answer, and it costs
+  // nothing to say it that way: the plate is a child of the panel.
+  //
+  // What it claims is true and unlosable. The furnace two floors down needs a
+  // flame the skull has to steal, checked every frame by three flags none of
+  // which can be lost. He spent a trip upstairs and a checkpoint reload
+  // learning that rule; this teaches it before the basement exists.
+  //
+  // Inside both laws: a picture on an object is not a HUD, and a glyph is shape
+  // rather than hue.
+  {
+    // Sized and placed for the view it is actually read from — the stair shaft
+    // below, looking up. See tools/probe-stair-plate.mjs for the measurements,
+    // and note that colour is NOT the lever: at close range the carried lantern
+    // clips almost any albedo to white, so a pale plate and a dark one measured
+    // the same. Frame share on the approach is what moved.
+    const PLATE_W = 0.44, PLATE_H = 0.34;
+    const plateGeo = new THREE.BoxGeometry(PLATE_W, PLATE_H, 0.012);
+    const panelDepth = 0.09;
+    for (const face of [1, -1]) {
+      const plate = new THREE.Mesh(plateGeo, M.furnaceSign);
+      plate.position.set(0, 0.30, face * (panelDepth / 2 + 0.007));
+      if (face < 0) plate.rotation.y = Math.PI;
+      plate.castShadow = false;
+      plate.receiveShadow = true;
+      plate.name = 'void door works plate';
+      door.panel.add(plate);
+    }
+  }
 
   // a tall iron candle-stand just inside, dead in line with the doorway —
   // from the stairs below, its flame floats in the open door's glow
