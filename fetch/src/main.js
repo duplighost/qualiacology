@@ -28,6 +28,23 @@ const _impV = new THREE.Vector3();
 const OCC_AXES = ['x', 'y', 'z'];   // slab-test order for the E-pick occlusion
 const VERSION = '0.5.0-intruder';
 const GORE_CAP = 64;
+// ---------------------------------------------------------------- the coda
+// His rhythm game -- "FETCH: The True Ending", the one he made with Grok --
+// ships as its own page at ending/. Going there is a real navigation, so this
+// entire Three.js scene dies in one go and the two games never coexist: the
+// coda costs FETCH zero draw calls, zero per-frame CPU and no district budget.
+const CODA_PATH = 'ending/';
+// The seven files the coda plays on, warmed one district early (see _warmCoda).
+// dancer-club is in this list because the coda MOUNTS on it -- its title and
+// its results screen are the club clip -- so it is precisely the media the
+// player is looking at one frame after the seam. Warming the other six and not
+// this one would pay 3.5 MB early and still stall on 2.7 MB at the click.
+const CODA_WARM_FILES = [
+  'media/dancer-club.mp4', 'media/dancer-club.jpg',
+  'media/dancer-stage.mp4', 'media/dancer-stage.jpg',
+  'media/dancer-spin.mp4', 'media/dancer-spin.jpg',
+  'media/skull-close.jpg',
+];
 
 // ------------------------------------------------------------------- input
 class InputState {
@@ -150,6 +167,10 @@ class Game {
     this._shake = 0;
     this.baseTension = 0;
     this.fx = { fear: 0 };
+    // 0..1 water on the first-person lens. Cosmetic only: nothing reads it but
+    // the grain shader, nothing writes it but splashLens() and step()'s
+    // dry-off, and Underfalls is the only district that currently sets it.
+    this.lensWet = 0;
     this.fogTarget = 0.028;
     this.snapBuffer = 0;
     this.lastCheckpoint = 'bedroom';
@@ -161,6 +182,13 @@ class Game {
     this._lockPending = false;       // a pointer-lock request is in flight
     this._lockEverHeld = false;
     this.longFrames = [];            // ?hitch=1 — every frame over 150 ms
+    this._coda = null;               // the coda's warm-fetch state (see _warmCoda)
+    this._codaLeft = null;           // the URL the hand-off actually left for
+    // location.assign is [LegacyUnforgeable]: no gate can stub it, spy on it or
+    // replace it, and a gate that really navigated would destroy its own page
+    // mid-assertion. Routing the hand-off through a plain field is the only
+    // thing that makes the seam testable at all.
+    this._navigate = (url) => location.assign(url);
     this.goreGeo = new THREE.IcosahedronGeometry(0.08, 0);
     this.goreMat = new THREE.MeshStandardMaterial({ color: 0x3a3236, roughness: 0.75 });   // must read in the dark
 
@@ -410,12 +438,13 @@ class Game {
     this.grainMat = new THREE.ShaderMaterial({
       transparent: true, depthTest: false, depthWrite: false,
       uniforms: {
-        uTime: { value: 0 }, uFear: { value: 0 },
+        uTime: { value: 0 }, uFear: { value: 0 }, uWet: { value: 0 },
         uResolution: { value: new THREE.Vector2(1280, 720) },
       },
       vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }',
       fragmentShader: `
         varying vec2 vUv; uniform float uTime; uniform float uFear;
+        uniform float uWet;
         uniform vec2 uResolution;
         float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
         void main(){
@@ -441,7 +470,50 @@ class Game {
           // them up for free. Invisible to every measured mean in the suite;
           // MARROW ships exactly this.
           float d = (hash(vUv*uResolution + 7.13) - 0.5) / 255.0;
-          gl_FragColor = vec4(tint + d, clamp(a + d, 0., 0.88));
+          vec3 col = tint + d;
+          float alpha = clamp(a + d, 0., 0.88);
+          // WATER ON THE LENS. There is no render target anywhere in this game
+          // -- render() draws the world pass, the held pass and this quad
+          // straight to the default framebuffer -- so a REFRACTIVE droplet is
+          // not available at any price: introducing a target would give every
+          // material a second linear-colour-space program key and undo the
+          // whole freeze effort. These are drawn beads instead: a bright rim
+          // and a slightly lifted body, which is what a bead on glass looks
+          // like in a black cave anyway. One hashed cell per pixel, no
+          // neighbourhood loop, behind a uniform branch that is coherent
+          // across the entire draw -- a dry lens costs one compare.
+          if (uWet > 0.001) {
+            float aspect = uResolution.x / max(1.0, uResolution.y);
+            vec2 grid = vec2(vUv.x * aspect, vUv.y) * 9.0;
+            vec2 cellId = floor(grid);
+            vec2 f = fract(grid);
+            float h1 = hash(cellId + 0.5);
+            float h2 = hash(cellId + 11.7);
+            float h3 = hash(cellId + 31.3);
+            float live = step(h1, uWet * 0.72);   // wetter lens, more cells hold a bead
+            // the creep rate is quantised to k/300 because uTime wraps at 300
+            // -- an unquantised rate pops every five minutes
+            float creep = fract(uTime * ((3.0 + floor(h2 * 7.0)) / 300.0) + h3);
+            vec2 cell = vec2(0.22 + h2 * 0.56, 0.86 - creep * 0.72);
+            float rad = (0.13 + h3 * 0.16) * (0.55 + 0.45 * uWet);
+            float rr = length((f - cell) * vec2(1.0, 1.15)) / max(0.02, rad);
+            float rim = smoothstep(0.62, 0.97, rr) * (1.0 - smoothstep(0.97, 1.22, rr));
+            float body = 1.0 - smoothstep(0.55, 1.0, rr);
+            float ex = live * uWet * (1.0 - smoothstep(0.75, 1.0, creep));
+            // A PROPER OVER, not a max(). The bead is a layer in FRONT of the
+            // vignette, so each colour is weighted by its own alpha. Writing
+            // mix(col, bead) and then alpha = max(alpha, beadAlpha) paints the
+            // bead's pale grey at the VIGNETTE's alpha, which turns every dark
+            // corner of the frame grey the moment the lens gets wet.
+            float beadA = clamp(rim * 0.52 * ex + body * 0.14 * ex, 0.0, 1.0);
+            vec3 beadC = vec3(0.60, 0.71, 0.75);
+            float outA = beadA + alpha * (1.0 - beadA);
+            col = outA > 0.0001
+              ? (beadC * beadA + col * alpha * (1.0 - beadA)) / outA
+              : col;
+            alpha = outA;
+          }
+          gl_FragColor = vec4(col, alpha);
         }`,
     });
     const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.grainMat);
@@ -813,6 +885,79 @@ class Game {
     if (shader !== 'created' && shader !== 'ready' && shader !== 'degraded') return false;
     const texture = this.textureWarmup?.status;
     return texture === 'ready' || texture === 'degraded' || texture === 'skipped';
+  }
+
+  // ---- the coda's bytes, paid for while he is still walking ---------------
+  // His one stated worry about this hand-off was that it lags: "we just have to
+  // make sure the transition between the other stuff doesn't like, lag into
+  // this part or something." The coda is 6.0 MB of video and stills. Nothing
+  // else in FETCH loads at runtime, so if this does not run, every one of those
+  // bytes is downloaded at the exact instant of the click.
+  //
+  // So it is kicked from director._enterCave -- one district before the mirror
+  // room, minutes of Underfalls walking before the ending can even exist. Pay
+  // while he is busy; never at the seam.
+  //
+  // r.blob(), not r.arrayBuffer(). The point is the HTTP cache entry that the
+  // coda's <video src> and <img> read on the next page; blob() lets the browser
+  // keep the bytes where it already put them, while arrayBuffer() would copy
+  // six megabytes into the JS heap of a page that is about to be destroyed.
+  // Nothing is retained here on purpose -- only the sizes, for the gate.
+  //
+  // Fenced end to end. A failed warm is a slower seam, never a broken game:
+  // the coda simply fetches whatever is missing when it mounts.
+  _warmCoda() {
+    if (this._coda) return this._coda;              // one district, one warm
+    const state = this._coda = {
+      status: 'scheduled', total: CODA_WARM_FILES.length,
+      done: 0, failed: 0, bytes: 0, spentMs: 0, files: [], errors: [],
+    };
+    // NOT just TEST_MODE, and this is the whole reason the guard has a comment.
+    // tests/warm-start-regression.mjs boots ?mute=1&hitch=1 -- which is NOT test
+    // mode -- and its tour teleports through 'cave'. An unguarded fetch there
+    // 404s into that gate's check(errors.length === 0) if ending/ is ever
+    // missing, and lands megabytes of real transfer inside its worst-frame-under
+    // -500 ms arrival window either way. HITCH_LOG is exactly the flag that
+    // marks a page which is measuring rather than playing. ?warmup=1 opts back
+    // in -- that is how tests/coda-seam-regression.mjs exercises this at all.
+    if ((TEST_MODE || HITCH_LOG) && !Q.has('warmup')) {
+      state.status = 'skipped';
+      state.reason = TEST_MODE ? 'test-mode' : 'hitch-mode';
+      return state;
+    }
+    let base;
+    try {
+      base = this.codaTarget();
+    } catch (error) {
+      state.status = 'failed';
+      state.errors.push('' + (error && error.message || error));
+      return state;
+    }
+    state.status = 'fetching';
+    const t0 = performance.now();
+    const warmOne = async (name) => {
+      try {
+        const response = await fetch(new URL(name, base).href);
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const blob = await response.blob();
+        state.bytes += blob.size;
+        state.files.push({ name, bytes: blob.size });
+        state.done += 1;
+      } catch (error) {
+        state.failed += 1;
+        state.errors.push(name + ': ' + (error && error.message || error));
+      }
+    };
+    try {
+      Promise.all(CODA_WARM_FILES.map(warmOne)).then(() => {
+        state.spentMs = +(performance.now() - t0).toFixed(1);
+        state.status = state.failed ? 'partial' : 'ready';
+      });
+    } catch (error) {
+      state.status = 'failed';
+      state.errors.push('' + (error && error.message || error));
+    }
+    return state;
   }
 
   // ------------------------------------------------- first-draw warm-up
@@ -1228,7 +1373,10 @@ class Game {
       sr: document.getElementById('srState'),
     };
     this.el.title.addEventListener('click', (event) => {
-      if (this.flags.has('ended')) { location.reload(); return; }
+      // THE SEAM. This click used to reload FETCH, and was the player's only
+      // exit -- restartFromCheckpoint refuses once 'ended' is set. It hands off
+      // to his coda now; the coda owes them a door back to ../ and has one.
+      if (this.flags.has('ended')) { this._leaveForCoda(); return; }
       if (event.target.closest('[data-action="start"]')) this.startGame();
     });
     this.el.die.addEventListener('click', () => {
@@ -1476,6 +1624,11 @@ class Game {
     };
   }
   shake(v) { this._shake = Math.max(this._shake, v); }
+  // Water arrives on the lens. It accumulates, so standing under a fall
+  // saturates the glass while a brisk walk-through only beads it. step() dries
+  // it off. Same kind of thing as shake(): a cosmetic camera verb any district
+  // may call, owning no state anything else reads.
+  splashLens(amount = 1) { this.lensWet = clamp(this.lensWet + amount, 0, 1); }
   residentHeard(n) { this.director.residentHeard(n); }
 
   impact(kind, pos) {
@@ -1706,6 +1859,30 @@ class Game {
     document.exitPointerLock && document.exitPointerLock();
   }
 
+  // Relative, exactly like index.html's own <script src="src/main.js">: FETCH
+  // is served from / here and from /fetch/ on the live site, and one relative
+  // hop resolves correctly in both. Anything absolute would be wrong in one.
+  codaTarget() { return new URL(CODA_PATH, location.href).href; }
+
+  // The hand-off itself. Everything about FETCH stops existing the moment this
+  // navigation commits -- scene, renderer, audio graph, tickers, the RAF loop --
+  // so there is nothing to tear down by hand and nothing left to leak.
+  //
+  // Audio is suspended first anyway: the click can land in the ~2.25 s between
+  // showEnd() and _finishEnd(), when the ending beats are still scheduled and
+  // the context is still running. One less thing for the browser to unwind
+  // underneath the coda's own AudioContext.
+  //
+  // It navigates through this._navigate for the [LegacyUnforgeable] reason
+  // given in the constructor; that field is the only seam a gate can hold.
+  _leaveForCoda() {
+    const url = this.codaTarget();
+    this._codaLeft = url;
+    try { this.audio.stopAll({ suspend: true }); } catch { /* the page is going anyway */ }
+    this._navigate(url);
+    return url;
+  }
+
   _finishEnd() {
     if (this.terminal) return;
     this.enemies.clear();
@@ -1836,6 +2013,14 @@ class Game {
     // before the frame was drawn. This is the last word on visibility.
     if (this.forest) this.forest.syncHouseInteriorCulling();
     this._updateGore(dt);
+    // The lens dries. In the cave it takes about seven seconds, so a curtain
+    // is still beaded on the glass at the next corner; anywhere else it is
+    // gone in half a second, so a death, an act change or a debug teleport can
+    // never carry water out of the district. dt-driven inside the fixed step,
+    // never a setTimeout, per the beats law.
+    if (this.lensWet > 0) {
+      this.lensWet = Math.max(0, this.lensWet - dt * (this.act === 'cave' ? 0.145 : 2.2));
+    }
     for (const st of this.bridgeStones) {
       if (st.userData.rise && st.position.y < 0.12) st.position.y = Math.min(0.12, st.position.y + dt * 0.7);
     }
@@ -2105,6 +2290,7 @@ class Game {
     };
     this.grainMat.uniforms.uTime.value = REDUCED_MOTION ? 0 : this.time % 300;
     this.grainMat.uniforms.uFear.value = this.fx.fear;
+    this.grainMat.uniforms.uWet.value = this.lensWet;
     // the drawing buffer, not the CSS size — this is the grid the grain and the
     // dither are quantised against
     this.grainMat.uniforms.uResolution.value.set(
@@ -2247,6 +2433,17 @@ class Game {
         };
       },
       hitches() { return g.longFrames.slice(); },
+      // The coda hand-off, readable from a gate: where it goes, whether the
+      // click has fired, and how the one-district-early warm actually did.
+      coda() {
+        const warm = g._coda;
+        return {
+          target: g.codaTarget(),
+          left: g._codaLeft,
+          warm: warm ? { ...warm, files: warm.files.slice(), errors: warm.errors.slice() } : null,
+        };
+      },
+      codaTarget() { return g.codaTarget(); },
       pause(reason = 'debug') { return g.pauseGame(reason); },
       resume() { return g.resumeGame(); },
       restartCheckpoint() { return g.restartFromCheckpoint(); },
