@@ -226,19 +226,6 @@
       "actionLabel": "Play Pasta Mortale"
     },
     {
-      "slug": "duet",
-      "title": "DUET",
-      "descriptor": "Bullet-dance duel",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/duet-card-clean.jpg",
-      "alt": "Two cyan lights on interlocking rings at the center of a vast spiral of rose bullets",
-      "summary": "One partner, no words, and a meter that only fills while you fly close enough to die. Graze the rose lace to warm the room and raise the song; in the last movement you dance your own recorded path, and the only way it resolves is to stay close.",
-      "metaDescription": "DUET is a browser bullet-dance: a wordless duel with one partner where grazing enemy fire is the only way to raise the meter that runs the whole game.",
-      "controls": "WASD/arrows or mouse · Shift focus · Z fire · X bomb",
-      "actionLabel": "Play DUET"
-    },
-    {
       "slug": "wick",
       "title": "WICK",
       "descriptor": "Fluid fire simulation",

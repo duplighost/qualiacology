@@ -52,7 +52,7 @@ own notes or memory. Last verified: 2026-08-21.
     the 0.6.1 tree at `90d9b16` (correctly fails: hand-region brightness 0).
     Usage: serve the repo, then
     `node build/qa/fetch-boot-check.mjs http://localhost:4173/fetch/`.
-- Per-game folders at root (`no-moon/`, `rally/`, `pasta-mortale/`, `duet/`, …)
+- Per-game folders at root (`no-moon/`, `rally/`, `pasta-mortale/`, `fetch/`, …)
   and albums under `music/<slug>/` — **static, edited directly**, never touched
   by the build.
 - `_redirects` (short links + guards), `_headers`, `404.html` — **hand-
@@ -64,8 +64,8 @@ own notes or memory. Last verified: 2026-08-21.
   rebuilds the hubs, validates the public tree, runs strict route smoke, and
   rejects stale generated pages. It must never commit or push generated files.
 
-Current verified baseline: **20 games, 11 music releases, 40 reachable public
-routes + 26 asserted 404s.** Pocket Sun is hosted locally in this repository;
+Current verified baseline: **19 games, 11 music releases, 39 reachable public
+routes + 27 asserted 404s.** Pocket Sun is hosted locally in this repository;
 it is not a redirect to a separate Netlify project.
 
 This baseline goes stale fast — it was still claiming 36 games when the real
@@ -126,7 +126,7 @@ text edits only, then validate it still parses.
    re-counts `data-catalog-game=` in the rendered homepage further down
    ("Homepage must feature six games"). The build passes and validation fails
    several steps later, which reads like a build bug — it isn't.
-6. **Short links** in `_redirects` (e.g. `/duet  /duet/  302`) — check for
+6. **Short links** in `_redirects` (e.g. `/dusk  /duskfall/  302`) — check for
    collisions first. Add a `_headers` block only if the game needs one.
 7. **`404.html`** is hand-coded and name-drops specific games — update it if
    it references anything you removed.

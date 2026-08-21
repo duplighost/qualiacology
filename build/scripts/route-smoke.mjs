@@ -38,6 +38,7 @@ const retiredRoutes = [
     "afterglow",
     "afterparty-at-the-end-of-the-world",
     "cinderbloom",
+    "duet",
     "echo-saint",
     "everybody-leaves-in-4-4",
     "false-sun",
