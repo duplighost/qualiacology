@@ -32,15 +32,6 @@
 /moon-boots         /rocket-shoes/            302
 /boon-moots         /rocket-shoes/            302
 
-# --- retired: Neon Breach -> Duskfall ---
-/neon-breach       /duskfall/  301!
-/neon-breach.html  /duskfall/  301!
-/neon-breach/*     /duskfall/  301!
-
-# --- Duskfall ---
-/duskfall.html /duskfall/            301!
-/dusk          /duskfall/            302
-
 # --- Marrow ---
 /marrow.html        /marrow/                  301!
 /horror             /marrow/                  302

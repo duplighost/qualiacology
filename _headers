@@ -144,21 +144,6 @@
 /still/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-/duskfall/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/duskfall/styles.css
-  Cache-Control: public, max-age=0, must-revalidate
-
-/duskfall/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/duskfall/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/duskfall/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
 /galaxy-sandbox/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 

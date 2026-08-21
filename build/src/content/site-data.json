@@ -56,19 +56,6 @@
       "actionLabel": "Enter the Moon"
     },
     {
-      "slug": "duskfall",
-      "title": "Duskfall",
-      "descriptor": "Horde-survival FPS",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/duskfall-card-clean.webp",
-      "alt": "A rifle raised toward a horde massing in a golden pine forest",
-      "summary": "Hold the golden-hour treeline against waves of the dead — smooth gunplay, arcade scoring.",
-      "metaDescription": "A realistic golden-hour outdoor horde survival FPS built with Three.js, with smooth gunplay, arcade scoring, and detailed animated enemies.",
-      "controls": "WASD + mouse · full touch controls",
-      "actionLabel": "Play Duskfall"
-    },
-    {
       "slug": "eaten-path",
       "title": "THE EATEN PATH",
       "descriptor": "VHS forest horror",
