@@ -228,7 +228,10 @@ currentDeploy → `ready`) if available.
   without it.
 - On Alex's Windows machine (PowerShell 5.1): no `&&` chaining, and quoted
   strings in `git commit -m` get mangled — write the message to a file and use
-  `git commit -F <file>`. Python is `py -3`. Headless browser testing: use
+  `git commit -F <file>`. Write that file with `Set-Content -Encoding ascii`
+  (or your editor tool), **not** `Out-File -Encoding utf8`: in 5.1 that adds a
+  BOM, and `git commit -F` keeps it, so the BOM ends up as an invisible
+  character at the head of the commit subject line. Commit `7d5472e` has one. Python is `py -3`. Headless browser testing: use
   Playwright from `build/node_modules` with system Chrome
   (`channel: "chrome"`), not bundled Chromium.
 - Commit identity: `user.name=duplighost`, `user.email=alexdguitar@gmail.com`.
