@@ -28,6 +28,9 @@ const routes = [
 // bring one back.
 const retiredRoutes = [
   "/blackthorn-manor/",
+  "/dusk",
+  "/neon-breach",
+  "/neon-breach.html",
   "/Psychopharmacology/",
   "/assets/Favicon.svg",
   "/book",
@@ -38,6 +41,7 @@ const retiredRoutes = [
     "afterglow",
     "afterparty-at-the-end-of-the-world",
     "cinderbloom",
+    "duskfall",
     "echo-saint",
     "everybody-leaves-in-4-4",
     "false-sun",
