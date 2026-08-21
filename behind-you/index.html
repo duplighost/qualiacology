@@ -229,11 +229,11 @@
         // Shards stop buying damage (enemies already die instantly) and start buying WARNING,
         // TIME, and an ANSWER for when you turn too late.
         // Reachable inside the first minute — an upgrade you never see is not an upgrade.
-        const earshotThreshold = 12;     // hear what is behind you, precisely
-        const heelfallThreshold = 45;    // an answer when something is already on you
-        const doubleJumpThreshold = 110; // a second jump, high, to line the answer up
-        const homingThreshold = 170;     // shots that correct toward what you swung past
-        const hungerThreshold = 260;     // and from here the answer never stops growing
+        const earshotThreshold = 8;      // hear what is behind you, precisely
+        const heelfallThreshold = 29;    // an answer when something is already on you
+        const doubleJumpThreshold = 72;  // a second jump, high, to line the answer up
+        const homingThreshold = 110;     // shots that correct toward what you swung past
+        const hungerThreshold = 170;     // and from here the answer never stops growing
 
         let heelCharge = 0;             // 0..1, armed by killing things that are close
         let heelArmedClicked = false;   // one-shot cue when it reaches full
@@ -501,11 +501,11 @@
         }
 
         function currentSpawnInterval() {
-            if (gameTime < 20) return 2200;
-            if (gameTime < 40) return 1650;
-            if (gameTime < 60) return 1125;
-            if (gameTime < 90) return 780;
-            return Math.max(360, 780 - (gameTime - 90) * 10);
+            if (gameTime < 20) return 2900;
+            if (gameTime < 40) return 2200;
+            if (gameTime < 60) return 1500;
+            if (gameTime < 90) return 1050;
+            return Math.max(550, 1050 - (gameTime - 90) * 13.5);
         }
 
         function currentSpawnDistance() {
@@ -1250,8 +1250,8 @@
                 baseY: profile.y,
                 pitchBase: 1,
                 pitchRise: profile.pitchRise,
-                nextEmit: gameTime + 2.5 + Math.random() * 1.5,
-                emitInterval: 3.6 + Math.random() * 0.9,
+                nextEmit: gameTime + 3.3 + Math.random() * 2.0,
+                emitInterval: 4.8 + Math.random() * 1.2,
                 emitCharge: 0,
                 wobbleSpeed: Math.random() * 5 + 2,
                 wobbleOffset: Math.random() * Math.PI * 2
@@ -1892,7 +1892,7 @@
                     e.mesh.position.y = terrainHeightAt(e.mesh.position.x, e.mesh.position.z) + e.baseY + Math.sin(gameTime * 2 + e.wobbleOffset) * 0.35;
                     if (gameTime >= e.nextEmit) {
                         spawnEnemy('chaser', e.mesh.position);
-                        e.nextEmit = gameTime + Math.max(2.1, e.emitInterval - gameTime * 0.01);
+                        e.nextEmit = gameTime + Math.max(2.8, e.emitInterval - gameTime * 0.01);
                         e.emitCharge = 0;
                     }
                 } else {
