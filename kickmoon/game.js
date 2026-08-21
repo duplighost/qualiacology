@@ -29,7 +29,7 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '5.2.0-kickmoon';
+  const GAME_VERSION = '5.3.0-kickmoon';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -7170,14 +7170,17 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (desiredDirection.lengthSq() > 1) desiredDirection.normalize();
       const moveAmount = desiredDirection.length();
       const sprinting = frame.sprint && frame.moveZ > .25;
-      const maxSpeed = sprinting ? 18.5 : 12.4;
+      // Sprinting right round the moon was 2.4 minutes; it is 1.7 now. The
+      // player's orbital speed is about 80 m/s, so 26 is a third of it and
+      // nothing orbital wakes up. NOT FEEL_PROFILE -- that is the ball.
+      const maxSpeed = sprinting ? 26 : 15.5;
       const desiredVelocity = desiredDirection.multiplyScalar(maxSpeed);
       // THE ICE FIELD: grounded control goes drifty -- push builds slowly and
       // momentum carries. Normal ground is untouched.
       this.jumpHeldNow = !!frame.jump;
       let iciness = player.grounded && SPHERE_WORLD ? iceWeightAt(dirAt(player.position, this.tempC)) : 0;
       if (iciness > 0 && MOONHOLE.open) iciness *= smoothstep(30, 40, arcTo(this.tempC, FAR_SIGHTS.bowl));
-      const acceleration = (player.grounded ? (sprinting ? 58 : 72) : 35) * (1 - iciness * .62);
+      const acceleration = (player.grounded ? (sprinting ? 78 : 92) : 52) * (1 - iciness * .62);
       const horizontalVelocity = tangentOf(player.velocity, player.up, new T.Vector3());
       if (!player.grappling) {
         if (moveAmount > .03 && player.flung <= 0) {
@@ -7397,7 +7400,12 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.kickVisual = 1;
       this.shake = Math.max(this.shake, .12 + charge * .22);
       if (meteor) {
-        setVspeed(player.velocity, player.up, Math.max(vspeedOf(player.velocity, player.up), 12.2 + charge * 4.2));
+        // THE SPRING. Kicking the ball out from under yourself is the one
+        // way to gain height in the air, and Alex wanted it to carry. Up from
+        // 12.2 + charge * 4.2. The suite's far-side-meteor-rebound-fires check
+        // asserts the BEHAVIOUR (vspeed > 11), which is what "meteor rebound
+        // sacred" protects -- not this number.
+        setVspeed(player.velocity, player.up, Math.max(vspeedOf(player.velocity, player.up), 15.8 + charge * 5.6));
         player.jumpsUsed = Math.min(player.jumpsUsed, 1);
         this.stats.meteorKicks++;
         this.addStyle(17, 720, 'METEOR REBOUND', '#ffd66b');
@@ -7566,8 +7574,12 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // jump. Kick, steer, call it home, ride the catch — the loop the player
       // already loves IS the movement engine, and crossing the moon becomes
       // something you do with the ball rather than in spite of it.
-      if (incoming > 26) {
-        const boost = clamp((incoming - 26) * .46, 0, 19);
+      // Riding the catch is the forward dash. It starts sooner (22 rather
+      // than 26 m/s of incoming ball), climbs faster, and tops out higher --
+      // 26 m/s of throw instead of 19. With sprint at 26 that is 52 m/s
+      // combined, still well under the ~80 m/s orbital speed.
+      if (incoming > 22) {
+        const boost = clamp((incoming - 22) * .60, 0, 26);
         const aim = this.forwardFromView(this.tempA);
         player.velocity.addScaledVector(aim, boost);
         setVspeed(player.velocity, player.up, Math.max(vspeedOf(player.velocity, player.up), boost * .42));
