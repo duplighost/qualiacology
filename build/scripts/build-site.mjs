@@ -54,7 +54,7 @@ function assert(condition, message) {
 
 function validateData() {
   assert(existsSync(outputRoot), `Missing output root: ${outputRoot}`);
-  assert(games.length === 18, `Expected 18 games, found ${games.length}`);
+  assert(games.length === 19, `Expected 19 games, found ${games.length}`);
   assert(albums.length === 11, `Expected 11 albums, found ${albums.length}`);
   assert(games.filter((item) => item.featured).length === 3, "Exactly three games must be featured");
   assert(albums.filter((item) => item.featured).length === 3, "Exactly three albums must be featured");

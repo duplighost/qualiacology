@@ -1,0 +1,118 @@
+:root {
+  --cyan: #5df7ff;
+  --violet: #a879ff;
+  --amber: #ffe66d;
+  --ink: #03050c;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --mono: "Consolas", ui-monospace, monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--ink); }
+body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-select: none; }
+
+/* The ONE canvas sizing authority. renderer.setSize always passes updateStyle:false. */
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: none; }
+
+#hud {
+  position: fixed; inset: 0; pointer-events: none; overflow: hidden;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.boot-error {
+  position: fixed; inset: 0; z-index: 20000;
+  display: grid; place-items: center; padding: 28px;
+  background: radial-gradient(circle at 50% 35%, #15203c 0, #050711 55%, #010207 100%);
+  color: #f7fbff; text-align: center; pointer-events: auto;
+}
+.boot-error > div { max-width: 720px; }
+.boot-error h1 { color: var(--cyan); font-size: clamp(24px, 5vw, 48px); letter-spacing: 0.08em; }
+.boot-error p { margin: 18px 0 10px; color: #ffd8fa; font-family: var(--mono); white-space: pre-wrap; }
+.boot-error small { color: rgba(235, 245, 255, 0.72); }
+
+/* ---------- vignettes (health lives here, not in a bar) ---------- */
+#vignette {
+  position: absolute; inset: 0;
+  box-shadow: inset 0 0 220px rgba(0, 0, 0, 0.7), inset 0 0 60px rgba(0, 0, 0, 0.35);
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.35) 100%);
+}
+#dmg-vignette {
+  position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 48%, rgba(168, 60, 120, 0.5) 100%);
+  transition: opacity 0.08s linear;
+}
+#hurt-vignette {
+  position: absolute; inset: 0; opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 34%, rgba(140, 12, 48, 0.62) 100%);
+}
+
+/* ---------- crosshair: canvas-drawn (real spread cone + markers) ---------- */
+#reticle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+
+/* ---------- damage direction ---------- */
+#dmgdir { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+
+/* ---------- ammo (subdued, lower right) ---------- */
+#ammo {
+  position: absolute; right: max(26px, env(safe-area-inset-right)); bottom: 22px;
+  font: 600 15px/1.1 var(--mono); letter-spacing: 0.1em; text-align: right;
+  color: rgba(214, 236, 255, 0.55);
+}
+#ammo .mag { font-size: 26px; color: rgba(230, 246, 255, 0.8); }
+#ammo.low .mag { color: var(--amber); }
+#ammo.dry .mag { color: #ff5d7a; }
+
+/* ---------- vitals: the ammo readout's twin, opposite corner ---------- */
+#vitals {
+  position: absolute; left: max(26px, env(safe-area-inset-left)); bottom: 22px;
+  font: 600 15px/1.1 var(--mono); letter-spacing: 0.1em;
+  color: rgba(214, 236, 255, 0.55);
+  display: flex; align-items: flex-end; gap: 9px;
+}
+#vitals .hp { font-size: 26px; color: rgba(230, 246, 255, 0.8); }
+#vitals .pips { display: flex; align-items: flex-end; gap: 3px; padding-bottom: 5px; }
+#vitals .pips i {
+  display: block; width: 4px; height: 17px; border-radius: 1px;
+  background: var(--cyan); transform-origin: bottom center;
+  transition: opacity 0.12s linear, transform 0.12s linear;
+}
+#vitals.low .hp { color: var(--amber); }
+#vitals.low .pips i { background: var(--amber); }
+#vitals.crit .hp { color: #ff5d7a; }
+#vitals.crit .pips i { background: #ff5d7a; }
+
+/* ---------- wave banner: plain, charged, brief ---------- */
+#banner {
+  position: absolute; left: 50%; top: 26%; transform: translateX(-50%);
+  font: 800 clamp(18px, 2.6vw, 30px)/1.2 var(--font);
+  letter-spacing: 0.34em; text-transform: uppercase;
+  color: rgba(233, 246, 255, 0.92); opacity: 0; white-space: nowrap;
+}
+#banner small {
+  display: block; font: 500 12px/2.2 var(--mono);
+  letter-spacing: 0.22em; color: rgba(160, 214, 255, 0.6); text-transform: none;
+}
+
+/* ---------- menu / death shell ---------- */
+.shell {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 38%, rgba(21, 32, 60, 0.55) 0, rgba(5, 7, 17, 0.86) 60%, rgba(1, 2, 7, 0.94) 100%);
+  pointer-events: auto; text-align: center; transition: opacity 0.35s ease;
+}
+.shell.hidden { opacity: 0; pointer-events: none; }
+.shell h1 {
+  font: 900 clamp(44px, 9vw, 96px)/1 var(--font);
+  letter-spacing: 0.42em; text-indent: 0.42em; color: #eaf6ff;
+  text-shadow: 0 0 34px rgba(93, 247, 255, 0.35);
+}
+.shell p { margin-top: 18px; font: 500 14px/1.7 var(--font); letter-spacing: 0.12em; color: rgba(196, 222, 246, 0.75); }
+.shell .go {
+  margin-top: 34px; display: inline-block; padding: 13px 34px;
+  font: 700 14px/1 var(--font); letter-spacing: 0.28em; text-indent: 0.28em; text-transform: uppercase;
+  color: #0a1420; background: var(--cyan); border-radius: 3px; cursor: pointer; border: 0;
+}
+.shell .go:hover { filter: brightness(1.12); }
+.shell .stats { margin-top: 22px; font: 500 13px/2 var(--mono); letter-spacing: 0.14em; color: rgba(255, 230, 109, 0.8); }
+.shell .keys { margin-top: 26px; font: 500 11px/1.9 var(--mono); letter-spacing: 0.12em; color: rgba(150, 178, 208, 0.55); }
+
+#boot-note { position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); font: 500 11px/1.6 var(--mono); letter-spacing: 0.18em; color: rgba(150, 178, 208, 0.5); }
