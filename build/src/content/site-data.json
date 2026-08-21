@@ -43,15 +43,15 @@
       "actionLabel": "Play No Moon"
     },
     {
-      "slug": "moonkick",
-      "title": "MOONKICK",
+      "slug": "kickmoon",
+      "title": "KICKMOON",
       "descriptor": "First-person moon collectathon",
       "group": "action",
       "featured": true,
-      "image": "/assets/games/moonkick-card-clean.webp",
+      "image": "/assets/games/kickmoon-card-clean.webp",
       "alt": "An astronaut mid-kick low over the cratered moon, the ringed ball blazing a light-trail past golden crescents",
       "summary": "A boomerang is fun because it comes back. A ball is more fun. Kick it, catch it, and chase it all the way around a moon that is actually round.",
-      "metaDescription": "MOONKICK is a first-person collectathon on a real spherical moon, built around one persistent boomerang ball.",
+      "metaDescription": "KICKMOON is a first-person collectathon on a real spherical moon, built around one persistent boomerang ball.",
       "controls": "WASD + mouse · LMB kick/charge · RMB call it home · MMB grapple · Space double jump · two-thumb touch",
       "actionLabel": "Enter the Moon"
     },

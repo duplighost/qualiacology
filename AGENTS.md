@@ -113,7 +113,8 @@ text edits only, then validate it still parses.
    games are featured (grid is 3 columns, so keep it a multiple of 3), and
    which ones is Alex's call. Featured order = games array order. Albums are
    still exactly 3 featured. The featured row was 6 until 2026-08-21, when Alex
-   cut the homepage to FETCH / No Moon / MOONKICK; the three that came off
+   cut the homepage to FETCH / No Moon / MOONKICK (renamed KICKMOON later
+  that same day); the three that came off
    (Duskfall, Rocket Shoes, PARTY ANIMAL) stayed on `/games/`.
 5. **Bump the count asserts** in `build/scripts/build-site.mjs`,
    `build/scripts/validate-site.mjs`, AND `build/qa/browser-qa.mjs` (all three
