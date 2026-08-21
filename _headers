@@ -183,12 +183,6 @@
 /pasta-mortale/src/*
   Cache-Control: public, max-age=0, must-revalidate
 
-/duet/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/duet/js/*
-  Cache-Control: public, max-age=0, must-revalidate
-
 /instead-of-the-goodbye/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
