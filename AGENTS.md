@@ -64,7 +64,7 @@ own notes or memory. Last verified: 2026-08-21.
   rebuilds the hubs, validates the public tree, runs strict route smoke, and
   rejects stale generated pages. It must never commit or push generated files.
 
-Current verified baseline: **18 games, 11 music releases, 38 reachable public
+Current verified baseline: **19 games, 11 music releases, 39 reachable public
 routes + 31 asserted 404s.** Pocket Sun is hosted locally in this repository;
 it is not a redirect to a separate Netlify project.
 
