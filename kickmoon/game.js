@@ -29,7 +29,7 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '5.4.0-kickmoon';
+  const GAME_VERSION = '5.5.0-kickmoon';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -2194,6 +2194,9 @@
       this.makeSkyfield();
       this.makeLaunchRings();
       this.makeFarSights();
+      this.makeTheLanding();
+      this.makeTheLongShot();
+      this.makeTheRun();
       this.makeRoc();
       this.makeColossus();
       this.makeFullMoons();
@@ -3240,6 +3243,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         { x: 388, z: -132 }, { x: -544, z: 84 },          // deep in the caves
         { x: -470, z: 92 },                               // THE RILLE's bend
         { x: 430, z: 62 },                                // THE DOMES' saddle
+        { x: -640, z: -38 },                              // THE LANDING's hatch
         // One on each of THE LANTERNS' crowns. `deck` snaps these to the
         // nearest platform top, and makeFarSights has already registered the
         // towers by the time this runs. Climbing one is the reward for having
@@ -4729,6 +4733,318 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // over the far side -- rears, and dives at whoever stands there. Its
     // whole body takes hits (the one combat law), and a strike from ABOVE,
     // onto the gold eye it carries on its back, takes double.
+    // THE LANDING. The phantoms in the dark quarter are dead astronauts;
+    // this is what they came down in. A lander on its side, three who never
+    // got up, a flag somebody still managed to plant, and a distress beacon
+    // that is somehow still running. It gives you nothing you did not already
+    // have -- it is a place, not a mechanic. Authored, zero worldRandom draws.
+    makeTheLanding() {
+      const siteX = -648, siteZ = -52;
+      const ground = this.sampleTerrainHeight(siteX, siteZ);
+      const group = new T.Group();
+      group.position.set(siteX, ground, siteZ);
+      this.scene.add(group);
+
+      const hull = new T.MeshStandardMaterial({
+        color: 0xb4b8c6, roughness: .55, metalness: .55, flatShading: true,
+      });
+      const scorched = new T.MeshStandardMaterial({
+        color: 0x3d3844, roughness: .9, metalness: .24, flatShading: true,
+      });
+      const cloth = new T.MeshStandardMaterial({
+        color: 0xe4e8f2, roughness: .92, metalness: .02, side: T.DoubleSide,
+        emissive: 0x2a3a5e, emissiveIntensity: .55,
+      });
+      const suitSkin = new T.MeshStandardMaterial({
+        color: 0xd6dbe8, roughness: .8, metalness: .06, flatShading: true,
+      });
+      const visorGlass = new T.MeshStandardMaterial({
+        color: 0x1b2740, roughness: .16, metalness: .72,
+        emissive: 0x2f5680, emissiveIntensity: .7,
+      });
+      // The one thing still drawing power.
+      const beaconLamp = new T.MeshStandardMaterial({
+        color: 0xffd9a0, emissive: 0xff9a3c, emissiveIntensity: 3.4,
+        roughness: .3, metalness: .1,
+      });
+      const stripLamp = new T.MeshStandardMaterial({
+        color: 0xffe6c2, emissive: 0xffb257, emissiveIntensity: 2.2,
+        roughness: .4, metalness: .1,
+      });
+
+      // --- the lander, come down hard on one side ------------------------
+      const wreck = new T.Group();
+      wreck.rotation.set(.29, .7, .2);
+      wreck.position.set(0, 9.4, 0);
+      group.add(wreck);
+
+      const body = new T.Mesh(new T.CylinderGeometry(6.6, 8.2, 11.5, 8, 1), hull);
+      body.castShadow = true;
+      wreck.add(body);
+      const skirt = new T.Mesh(new T.CylinderGeometry(8.6, 6.2, 3.2, 8, 1), scorched);
+      skirt.position.y = -7;
+      wreck.add(skirt);
+      // the open hatch, and the light still on inside it
+      const hatch = new T.Mesh(new T.BoxGeometry(3.6, 4.6, .36), scorched);
+      hatch.position.set(0, .9, 7.7);
+      hatch.rotation.set(-.52, 0, .12);
+      wreck.add(hatch);
+      const doorway = new T.Mesh(new T.BoxGeometry(3, 4, .3), stripLamp);
+      doorway.position.set(0, .7, 6.7);
+      wreck.add(doorway);
+      const lamp = this.makeGlowSprite(this.glowGold, 15, .42);
+      lamp.position.set(0, .7, 6.4);
+      wreck.add(lamp);
+      // hull strip lights, so the wreck reads as a made thing in the dark
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + .78;
+        const strip = new T.Mesh(new T.BoxGeometry(.3, 2.6, .3), stripLamp);
+        strip.position.set(Math.cos(a) * 7.2, 1.4, Math.sin(a) * 7.2);
+        wreck.add(strip);
+      }
+
+      // four legs, and the one that failed
+      for (let i = 0; i < 4; i++) {
+        const angle = i * Math.PI / 2 + .4;
+        const failed = i === 2;
+        const leg = new T.Mesh(new T.CylinderGeometry(.4, .54, failed ? 6 : 9.6, 6), hull);
+        leg.position.set(Math.cos(angle) * 6.4, -8.4, Math.sin(angle) * 6.4);
+        leg.rotation.set(Math.sin(angle) * (failed ? .95 : .42), 0, -Math.cos(angle) * (failed ? .95 : .42));
+        wreck.add(leg);
+        const pad = new T.Mesh(new T.CylinderGeometry(1.7, 1.7, .4, 10), scorched);
+        pad.position.set(Math.cos(angle) * 9.6, failed ? -11 : -12.6, Math.sin(angle) * 9.6);
+        wreck.add(pad);
+      }
+
+      // --- the relay mast ------------------------------------------------
+      // 96 m to the beacon. The first draft put it at 62 and it died at 240 m;
+      // the exact law is h_min = R*(1/cos((d - 37.9)/R) - 1), so 96 m carries
+      // to about 300 m -- the same order as THE LANTERNS, which is what a
+      // landmark has to be. Tall beats plausible: this is why you walk over.
+      const mastLow = new T.Mesh(new T.CylinderGeometry(.72, 1.15, 58, 6), hull);
+      mastLow.position.set(4.2, 29, -3);
+      mastLow.rotation.z = -.1;
+      mastLow.castShadow = true;
+      group.add(mastLow);
+      const mastHigh = new T.Mesh(new T.CylinderGeometry(.34, .68, 42, 6), hull);
+      mastHigh.position.set(11.4, 76, -3.6);
+      mastHigh.rotation.set(.06, 0, -.34);
+      mastHigh.castShadow = true;
+      group.add(mastHigh);
+      const dish = new T.Mesh(new T.CylinderGeometry(6.8, .6, 1.2, 14, 1, true), hull);
+      dish.position.set(18.4, 95.4, -4);
+      dish.rotation.set(1.02, 0, -.4);
+      group.add(dish);
+      // THE BEACON. Still transmitting. This is what you actually see first.
+      const beaconBulb = new T.Mesh(new T.SphereGeometry(1.8, 12, 9), beaconLamp);
+      beaconBulb.position.set(18.4, 96.2, -4);
+      group.add(beaconBulb);
+      const beaconGlow = this.makeGlowSprite(this.glowGold, 46, .5);
+      beaconGlow.position.copy(beaconBulb.position);
+      group.add(beaconGlow);
+
+      // --- the flag -------------------------------------------------------
+      const pole = new T.Mesh(new T.CylinderGeometry(.13, .16, 14, 6), hull);
+      pole.position.set(-12.6, 7, 8.4);
+      pole.rotation.z = .07;
+      group.add(pole);
+      const flag = new T.Mesh(new T.PlaneGeometry(5, 3.1), cloth);
+      flag.position.set(-10.2, 12.6, 8.4);
+      flag.rotation.y = Math.PI / 2;
+      group.add(flag);
+
+      // --- three who did not get up ---------------------------------------
+      const suits = [
+        { at: [-6, .9, 13.2], lean: [-1.35, .5, .2] },
+        { at: [10.4, 1, 10.6], lean: [-1.42, -1.1, 0] },
+        { at: [-2, 2.1, -11.2], lean: [-.42, 2.5, .1] },
+      ];
+      for (const spec of suits) {
+        const who = new T.Group();
+        who.position.set(spec.at[0], spec.at[1], spec.at[2]);
+        who.rotation.set(spec.lean[0], spec.lean[1], spec.lean[2]);
+        who.scale.setScalar(1.7);
+        const torso = new T.Mesh(new T.CapsuleGeometry(.44, .95, 3, 8), suitSkin);
+        who.add(torso);
+        const head = new T.Mesh(new T.SphereGeometry(.36, 12, 9), suitSkin);
+        head.position.y = 1.02;
+        who.add(head);
+        const glass = new T.Mesh(new T.SphereGeometry(.31, 12, 9), visorGlass);
+        glass.position.set(0, 1.02, .19);
+        glass.scale.set(1, .82, .62);
+        who.add(glass);
+        const pack = new T.Mesh(new T.BoxGeometry(.62, .8, .34), scorched);
+        pack.position.set(0, .1, -.5);
+        who.add(pack);
+        group.add(who);
+      }
+
+      // --- what came off on the way down ----------------------------------
+      const debris = [
+        [-20, 6, .5], [16, -14, -.2], [-10, -21, .9], [24, 8, -.4],
+        [-25, -11, .3], [5, 22, .7], [12.5, 20, -.6], [-17, 17, .5],
+      ];
+      debris.forEach((spec, i) => {
+        const panel = new T.Mesh(
+          new T.BoxGeometry(2.6 + (i % 3) * 1.2, .28, 1.8 + (i % 2) * 1.4),
+          i % 2 ? scorched : hull,
+        );
+        panel.position.set(spec[0], .2, spec[1]);
+        panel.rotation.set(spec[2] * .4, i * 1.7, spec[2]);
+        group.add(panel);
+      });
+
+      // The hull is a real solid: the ball banks off it and you can stand on
+      // the wreck, the same deal every other authored sight gets.
+      this.platforms.push({
+        id: 'landing-hull', x: siteX, z: siteZ, radius: 7.4, top: ground + 14.4,
+      });
+      this.theLanding = { x: siteX, z: siteZ, ground, group, beaconGlow, beaconBulb, pulse: 0 };
+    }
+    // THE LONG SHOT. Two towers exactly one full-charge kick apart. The tee
+    // is high, the target is low, and the only way to ring the chime is to
+    // charge the whole meter and steer the ball the whole way across. The
+    // three rings in the gap are the sight line -- they say "along here"
+    // without a word on screen.
+    makeTheLongShot() {
+      const teeX = -150, teeZ = 425;
+      const tgtX = -150, tgtZ = 495;          // 70 m: a fully charged kick
+      const teeGround = this.sampleTerrainHeight(teeX, teeZ);
+      const tgtGround = this.sampleTerrainHeight(tgtX, tgtZ);
+      const teeTop = teeGround + 46;
+      const tgtTop = tgtGround + 28;
+
+      const stone = new T.MeshStandardMaterial({
+        color: 0x6f7688, roughness: .84, metalness: .1, flatShading: true,
+      });
+      const deck = new T.MeshStandardMaterial({
+        color: 0x8d94a8, roughness: .6, metalness: .3, flatShading: true,
+      });
+
+      const tower = (x, z, ground, height, capRadius) => {
+        const group = new T.Group();
+        group.position.set(x, ground, z);
+        this.scene.add(group);
+        const shaft = new T.Mesh(new T.CylinderGeometry(capRadius, capRadius * 1.5, height, 7, 1), stone);
+        shaft.position.y = height / 2;
+        shaft.castShadow = true;
+        group.add(shaft);
+        const cap = new T.Mesh(new T.CylinderGeometry(capRadius * 1.22, capRadius * 1.22, 1.1, 7), deck);
+        cap.position.y = height + .55;
+        group.add(cap);
+        this.platforms.push({ id: 'longshot-' + x + '-' + z, x, z, radius: capRadius * 1.1, top: ground + height + 1.1 });
+        return group;
+      };
+
+      // the tee: high, with a gold ring on the deck that says STAND HERE
+      const tee = tower(teeX, teeZ, teeGround, 46, 4.4);
+      const mark = new T.Mesh(new T.TorusGeometry(3, .18, 10, 40), this.materials.gold);
+      mark.rotation.x = Math.PI / 2;
+      mark.position.y = 47.3;
+      tee.add(mark);
+
+      // the target tower: lower, so the shot arcs down and reads as a shot
+      const target = tower(tgtX, tgtZ, tgtGround, 28, 3.8);
+
+      // THE CHIME, on the far deck. Struck by the ball, exactly like the five
+      // that already exist -- built by hand so no worldRandom draw is added.
+      const chimeY = tgtGround + 30.4;
+      const chimeGroup = new T.Group();
+      const ring = new T.Mesh(new T.TorusGeometry(2.3, .2, 10, 48), this.materials.gold);
+      const crystal = new T.Mesh(new T.OctahedronGeometry(.86, 0), this.materials.cyan);
+      const beam = new T.Mesh(new T.CylinderGeometry(.05, .05, 6.4, 6), this.materials.cyan);
+      beam.position.y = 3.3;
+      chimeGroup.add(ring, crystal, beam);
+      chimeGroup.position.set(tgtX, chimeY, tgtZ);
+      this.scene.add(chimeGroup);
+
+      // its reward, hand-built for the same reason (addPickup draws worldRandom)
+      const dropGroup = new T.Group();
+      const dropCore = new T.Mesh(new T.OctahedronGeometry(.48, 0), this.materials.gold);
+      const dropRing = new T.Mesh(new T.TorusGeometry(.72, .055, 8, 32), this.materials.cyan);
+      dropRing.rotation.x = Math.PI / 2;
+      const dropGlow = this.makeGlowSprite(this.glowGold, 3.8, .46);
+      dropGroup.add(dropCore, dropRing, dropGlow);
+      dropGroup.position.set(tgtX, chimeY + 1.4, tgtZ);
+      dropGroup.visible = false;
+      this.scene.add(dropGroup);
+      const drop = {
+        id: 'shard-longshot', group: dropGroup, core: dropCore, ring: dropRing, glow: dropGlow,
+        position: new T.Vector3(tgtX, chimeY + 1.4, tgtZ),
+        active: false, initialActive: false, label: 'LONG SHOT', phase: 1.97,
+      };
+      this.collectibles.push(drop);
+
+      this.moonChimes.push({
+        id: 'moon-chime-longshot', group: chimeGroup, ring, crystal,
+        position: new T.Vector3(tgtX, chimeY, tgtZ),
+        radius: 2.6, used: false, phase: 4.31, drop,
+      });
+
+      // THE SIGHT LINE. Three rings on the arc the ball has to take. This is
+      // the whole tutorial: no words, just "along here".
+      for (let i = 1; i <= 3; i++) {
+        const t = i / 4;
+        const x = teeX + (tgtX - teeX) * t;
+        const z = teeZ + (tgtZ - teeZ) * t;
+        // a shallow arc between the two decks
+        const y = teeTop + (tgtTop - teeTop) * t + Math.sin(t * Math.PI) * 7 + 1.6;
+        // A torus already lies in the XY plane facing +Z, which IS the shot
+        // axis here -- rotating it flat (the first draft) turned three gates
+        // into three thin lines you cannot read.
+        const guide = new T.Mesh(new T.TorusGeometry(2.6, .1, 8, 34), this.materials.cyan);
+        guide.rotation.z = .18 * i;
+        guide.position.set(x, y, z);
+        this.scene.add(guide);
+      }
+
+      this.theLongShot = { teeX, teeZ, tgtX, tgtZ, teeTop, tgtTop };
+    }
+    // THE RUN's pylons. A launch ring at 140 m is a dot from the ground;
+    // these are 74 m and read from about 265 m, so the four nodes of the
+    // circuit are visible as a set and the loop reads as ONE PLACE rather
+    // than four unrelated rings. Amber crowns, to match the ring rims.
+    makeTheRun() {
+      const nodes = [[-274, -274], [-486, -274], [-486, -486], [-274, -486]];
+      const pylonBody = new T.MeshStandardMaterial({
+        color: 0x565f74, roughness: .72, metalness: .42, flatShading: true,
+      });
+      const crown = new T.MeshStandardMaterial({
+        color: 0xffe9b0, emissive: 0xffb42a, emissiveIntensity: 2.3,
+        metalness: .7, roughness: .25,
+      });
+      this.theRun = [];
+      nodes.forEach(([x, z], i) => {
+        const ground = this.sampleTerrainHeight(x, z);
+        const group = new T.Group();
+        group.position.set(x, ground, z);
+        this.scene.add(group);
+        const height = 74 + (i % 2) * 6;
+        // THIRD time this session I under-scaled a prop. On a 420 m sphere
+        // the horizon is 37.9 m, so anything you want READ at range has to be
+        // fat as well as tall: a 3 m column at 150 m is twelve pixels.
+        const shaft = new T.Mesh(new T.CylinderGeometry(4.2, 9, height, 6, 1), pylonBody);
+        shaft.position.y = height / 2;
+        shaft.castShadow = true;
+        group.add(shaft);
+        // three collars up the shaft, so it reads as built and not as a rock
+        for (let c = 1; c <= 3; c++) {
+          const collar = new T.Mesh(new T.TorusGeometry(8.4 - c * 1.1, .6, 8, 24), crown);
+          collar.rotation.x = Math.PI / 2;
+          collar.position.y = height * (c / 4);
+          group.add(collar);
+        }
+        const top = new T.Mesh(new T.TorusGeometry(8.2, 1.05, 10, 40), crown);
+        top.rotation.x = Math.PI / 2;
+        top.position.y = height + 1;
+        group.add(top);
+        const glow = this.makeGlowSprite(this.glowGold, 34, .44);
+        glow.position.y = height + 1;
+        group.add(glow);
+        this.platforms.push({ id: 'run-pylon-' + i, x, z, radius: 4.6, top: ground + height + 1 });
+        this.theRun.push({ x, z, ground, group });
+      });
+    }
     makeRoc() {
       const perch = this.sky.find(slab => slab.tier === 'perch');
       if (!perch) return;
@@ -4799,6 +5115,13 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         [{ x: -30, z: 92, alt: 156 }, { x: 270, z: -312, alt: 128 }],    // ...to the coronet
         [{ x: 446, z: 106, alt: 78 }, { x: 606, z: -194, alt: 128 }],    // archway out
         [{ x: 578, z: -228, alt: 126 }, { x: 620, z: -520, alt: 150 }],  // ...to the peak
+        // THE RUN: four hops that close into a loop. Each pair starts about
+        // thirty metres from where the last one dropped you, which is the same
+        // land-and-take-the-next grammar the ring roads above already use.
+        [{ x: -274, z: -274, alt: 140 }, { x: -486, z: -274, alt: 152 }],
+        [{ x: -460, z: -296, alt: 148 }, { x: -486, z: -486, alt: 136 }],
+        [{ x: -464, z: -464, alt: 138 }, { x: -274, z: -486, alt: 150 }],
+        [{ x: -296, z: -460, alt: 146 }, { x: -296, z: -300, alt: 142 }],
       ];
       const ringMaterial = new T.MeshBasicMaterial({
         color: 0x9fd8ff, transparent: true, opacity: .34, side: T.DoubleSide,
@@ -6141,6 +6464,13 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     }
     update(dt, gameState) {
       this.elapsed += dt;
+      // THE LANDING's beacon. Slow, patient, and the brightest thing on that
+      // side of the moon: it is the reason you walk over there at all.
+      if (this.theLanding) {
+        const pulse = .5 + .5 * Math.sin(this.elapsed * 1.25);
+        this.theLanding.beaconGlow.material.opacity = .3 + pulse * .42;
+        this.theLanding.beaconBulb.material.emissiveIntensity = 2.2 + pulse * 3.4;
+      }
       // The cyan world furniture used to shimmer only because every enemy eye
       // wrote to this shared material each frame. The eyes own their own
       // materials now, so the breath is deliberate here instead of accidental
