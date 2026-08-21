@@ -56,6 +56,19 @@
       "actionLabel": "Enter the Moon"
     },
     {
+      "slug": "thrown",
+      "title": "THROWN",
+      "descriptor": "Hold-and-release climb",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/thrown-card-clean.webp",
+      "alt": "Two pale hands reaching toward each other in the dark, a small warm light held in the lower palm",
+      "summary": "The only way up a dark tower is other people’s hands. Hold one to hang from it, lean to swing, and let go to fly. Held, let go, thrown — at the top it is the same number.",
+      "metaDescription": "THROWN is a browser game about climbing a dark tower on other people’s hands. Hold to hang on, lean to swing, let go to fly. Plays on desktop and on a phone.",
+      "controls": "Hold space, click or touch to catch a hand · A D, arrows or drag to lean · let go to fly · Esc or P pause",
+      "actionLabel": "Take a hand"
+    },
+    {
       "slug": "vigil",
       "title": "VIGIL",
       "descriptor": "Horde-mode FPS",

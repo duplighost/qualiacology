@@ -117,3 +117,7 @@
 # --- VIGIL ---
 /vigil.html  /vigil/  301!
 /watch       /vigil/  302
+
+# --- THROWN ---
+/thrown.html  /thrown/  301!
+/hands        /thrown/  302
