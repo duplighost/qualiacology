@@ -2,7 +2,7 @@
 
 Read this before changing anything. It is the canonical playbook for AI agents
 (Codex, Claude, or anything else) and it is kept current — trust it over your
-own notes or memory. Last verified: 2026-08-11.
+own notes or memory. Last verified: 2026-08-21.
 
 ## The two rules that matter most
 
@@ -64,8 +64,8 @@ own notes or memory. Last verified: 2026-08-11.
   rebuilds the hubs, validates the public tree, runs strict route smoke, and
   rejects stale generated pages. It must never commit or push generated files.
 
-Current verified baseline: **25 games, 10 music releases, 43 reachable public
-routes + 21 asserted 404s.** Pocket Sun is hosted locally in this repository;
+Current verified baseline: **20 games, 11 music releases, 40 reachable public
+routes + 26 asserted 404s.** Pocket Sun is hosted locally in this repository;
 it is not a redirect to a separate Netlify project.
 
 This baseline goes stale fast — it was still claiming 36 games when the real
@@ -109,16 +109,23 @@ text edits only, then validate it still parses.
 4. **Catalog entry** in `build/src/content/site-data.json`: slug, title,
    descriptor, `group` (one of `action` / `horror` / `worlds`), summary
    (Alex's voice!), metaDescription, image, alt, controls, actionLabel,
-   optional duration/secondary. `featured: true` only by swapping — exactly 6
+   optional duration/secondary. `featured: true` only by swapping — exactly 3
    games are featured (grid is 3 columns, so keep it a multiple of 3), and
    which ones is Alex's call. Featured order = games array order. Albums are
-   still exactly 3 featured.
+   still exactly 3 featured. The featured row was 6 until 2026-08-21, when Alex
+   cut the homepage to FETCH / No Moon / MOONKICK; the three that came off
+   (Duskfall, Rocket Shoes, PARTY ANIMAL) stayed on `/games/`.
 5. **Bump the count asserts** in `build/scripts/build-site.mjs`,
    `build/scripts/validate-site.mjs`, AND `build/qa/browser-qa.mjs` (all three
    hardcode the canonical game total). `browser-qa.mjs` also hardcodes the
    **horror-filter roster** — the exact slug list and "Showing N worlds." — so
    any horror game added or removed needs that expectation updated too, or
    `npm run qa` fails on the filter interaction long after the counts agree.
+   Changing how many games are **featured** hits a fourth spot the other three
+   don't cover: `validate-site.mjs` asserts the game total near the top *and*
+   re-counts `data-catalog-game=` in the rendered homepage further down
+   ("Homepage must feature six games"). The build passes and validation fails
+   several steps later, which reads like a build bug — it isn't.
 6. **Short links** in `_redirects` (e.g. `/duet  /duet/  302`) — check for
    collisions first. Add a `_headers` block only if the game needs one.
 7. **`404.html`** is hand-coded and name-drops specific games — update it if

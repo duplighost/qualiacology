@@ -81,15 +81,6 @@
 /assets/qualiacology-v300.js
   Cache-Control: public, max-age=3600
 
-/uninvited/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/uninvited/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/uninvited/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
 /fetch/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
@@ -241,35 +232,6 @@
 /pocket-sun/icons/*
   Cache-Control: public, max-age=3600, must-revalidate
 
-# --- CINDERBLOOM ---
-/cinderbloom/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/cinderbloom/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/cinderbloom/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/cinderbloom/licenses/*
-  Cache-Control: public, max-age=31536000, immutable
-
-# --- VANTA//9 ---
-/vanta-9/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/vanta-9/assets/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/vanta-9/textures/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/vanta-9/favicon.svg
-  Cache-Control: public, max-age=3600, must-revalidate
-
-/vanta-9/vanta-9-og.png
-  Cache-Control: public, max-age=3600, must-revalidate
-
 # --- WICK ---
 /wick/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
@@ -299,22 +261,6 @@
 
 /kick-ball-lunar-velocity/favicon.svg
   Cache-Control: public, max-age=3600, must-revalidate
-
-# --- RELAY//ECLIPSE ---
-/relay-eclipse/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/relay-eclipse/styles.css
-  Cache-Control: public, max-age=0, must-revalidate
-
-/relay-eclipse/src/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/relay-eclipse/vendor/*
-  Cache-Control: public, max-age=31536000, immutable
-
-/relay-eclipse/assets/*
-  Cache-Control: public, max-age=31536000, immutable
 
 # --- VESPERWAKE: THE HOLLOW BELL ---
 /vesperwake/index.html
