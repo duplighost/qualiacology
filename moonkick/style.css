@@ -81,19 +81,8 @@ button:focus-visible,
     #010204;
 }
 
-#gameRoot::before {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(105, 239, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(rgba(105, 239, 255, 0.02) 1px, transparent 1px);
-  background-size: 88px 88px;
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 48%, transparent 100%);
-  opacity: 0.28;
-}
+/* The old sci-fi grid overlay died here: it read as a layer of squares
+   over every bright sky (Alex, 2026-08-21: "do they have to be there?" No.) */
 
 #gameCanvas {
   position: absolute;
@@ -554,7 +543,7 @@ body.touch-enabled #fullscreenButton {
   color: #e8e0ff;
 }
 
-.touch-action--spin {
+.touch-action--grapple {
   right: calc(max(24px, env(safe-area-inset-right)) + 265px);
   bottom: calc(max(24px, env(safe-area-inset-bottom)) + 20px);
   border-color: rgba(255, 214, 107, 0.48);
@@ -1058,7 +1047,7 @@ body.touch-enabled #fullscreenButton {
     bottom: calc(max(18px, env(safe-area-inset-bottom)) + 116px);
   }
 
-  body.touch-enabled .touch-action--spin {
+  body.touch-enabled .touch-action--grapple {
     right: calc(max(18px, env(safe-area-inset-right)) + 230px);
     bottom: calc(max(18px, env(safe-area-inset-bottom)) + 15px);
   }
@@ -1252,7 +1241,7 @@ body.touch-enabled .touch-pause {
     bottom: calc(max(26px, env(safe-area-inset-bottom)) + 93px);
   }
 
-  body.touch-enabled .touch-action--spin {
+  body.touch-enabled .touch-action--grapple {
     right: calc(max(16px, env(safe-area-inset-right)) + 144px);
     bottom: calc(max(26px, env(safe-area-inset-bottom)) + 166px);
   }
@@ -1350,7 +1339,7 @@ body.touch-enabled .touch-pause {
     bottom: calc(max(18px, env(safe-area-inset-bottom)) + 108px);
   }
 
-  body.touch-enabled .touch-action--spin {
+  body.touch-enabled .touch-action--grapple {
     right: calc(max(10px, env(safe-area-inset-right)) + 75px);
     bottom: calc(max(18px, env(safe-area-inset-bottom)) + 172px);
   }
@@ -1545,7 +1534,7 @@ body.touch-enabled .touch-action--jump {
   height: 60px;
 }
 
-body.touch-enabled .touch-action--spin {
+body.touch-enabled .touch-action--grapple {
   display: none;
 }
 
@@ -1718,4 +1707,56 @@ body.pointer-locked .home-link {
 /* Touch pads lost their captions with the rest of the reading. */
 body.touch-enabled .touch-pad > span {
   display: none;
+}
+
+/* MOONCRESCENT COUNTER — the one number the HUD may print (Alex's amendment
+   to the no-HUD law, 2026-08-20). A quiet gold crescent and a count. */
+#stoneCounter {
+  position: absolute;
+  left: 24px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-family: 'Chakra Petch', 'Segoe UI', monospace;
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  background: linear-gradient(105deg, #d99114 8%, #ffd66b 28%, #fff7e0 40%, #ffd66b 52%, #d99114 88%);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 10px rgba(255, 190, 60, .45));
+  animation: stoneShimmer 3.6s linear infinite;
+  pointer-events: none;
+  transition: transform .13s cubic-bezier(.2, 1.6, .4, 1);
+  transform-origin: left center;
+}
+@keyframes stoneShimmer {
+  from { background-position: 130% 0; }
+  to { background-position: -130% 0; }
+}
+#stoneCounter.bump { transform: scale(1.32); }
+.stone-crescent {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 38%, #fff6d8, #ffb42a 58%, #a86a06);
+  -webkit-mask: radial-gradient(circle at 74% 32%, transparent 55%, #000 57%);
+  mask: radial-gradient(circle at 74% 32%, transparent 55%, #000 57%);
+  filter: drop-shadow(0 0 8px rgba(255, 190, 60, .9));
+}
+#stoneCounter.milestone .stone-crescent::after {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 224, 130, .9);
+  animation: stoneMilestone .7s ease-out forwards;
+}
+@keyframes stoneMilestone {
+  from { transform: scale(.4); opacity: 1; }
+  to { transform: scale(2.1); opacity: 0; }
 }

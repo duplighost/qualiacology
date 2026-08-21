@@ -1,7 +1,7 @@
 {
-  "name": "KICK BALL // LUNAR VELOCITY",
-  "short_name": "KICK BALL",
-  "description": "A first-person 3D lunar combat-platformer built around one unstoppable boomerang ball.",
+  "name": "MOONKICK",
+  "short_name": "MOONKICK",
+  "description": "A first-person collectathon on a real spherical moon, built around one unstoppable boomerang ball.",
   "start_url": "./",
   "display": "fullscreen",
   "background_color": "#000005",
