@@ -29,7 +29,7 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '5.3.0-kickmoon';
+  const GAME_VERSION = '5.4.0-kickmoon';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -72,6 +72,26 @@
     returnBendRate: 9,
     returnSnapBendRate: 15,
   });
+  // HOW THE MOON SOUNDS WHEN SOMETHING IS NEAR. One entry per species: the
+  // pitch says WHAT, the pan says WHERE, and the volume says HOW CLOSE. All of
+  // it is quiet on purpose -- .045 peak against a kick's .18 -- because this
+  // is meant to sit under the music, not on top of it.
+  const ENEMY_VOICE_RANGE = 55;
+  const ENEMY_VOICES = {
+    scuttler: { hz: 620, every: 1.15, len: .07, gain: 1 },
+    shardling: { hz: 815, every: 1.0, len: .06, gain: .85 },
+    clinger: { hz: 700, every: 1.5, len: .1, gain: .95 },   // above you
+    floater: { hz: 380, every: 1.7, len: .16, gain: 1 },
+    skater: { hz: 545, every: 1.25, len: .09, gain: .9 },
+    drifter: { hz: 300, every: 1.9, len: .18, gain: 1 },
+    snowman: { hz: 455, every: 1.8, len: .12, gain: .9 },
+    watcher: { hz: 210, every: 2.2, len: .22, gain: 1.05 },
+    phantom: { hz: 296, every: 2.4, len: .3, gain: .8 },    // the dead ones breathe
+    shield: { hz: 250, every: 1.9, len: .16, gain: 1.05 },
+    brute: { hz: 188, every: 2.0, len: .2, gain: 1.15 },
+    warden: { hz: 162, every: 2.1, len: .26, gain: 1.2 },
+    default: { hz: 420, every: 1.6, len: .1, gain: 1 },
+  };
   const QUALITY_STORAGE_KEY = 'kickball-lunar-quality-v2';
   const FIXED_DT = 1 / 120;
   const TAU = Math.PI * 2;
@@ -1128,7 +1148,9 @@
         this.music = this.context.createGain();
         this.master.gain.value = this.muted ? 0 : .76;
         this.fx.gain.value = .88;
-        this.music.gain.value = .12;
+        // Was .12 against fx's .88, which is why the music read as "is there
+        // music?". Slightly more present, still well under the effects.
+        this.music.gain.value = .2;
         this.fx.connect(this.master);
         this.music.connect(this.master);
         this.master.connect(this.context.destination);
@@ -1157,6 +1179,49 @@
       gain.connect(target);
       oscillator.start(when);
       oscillator.stop(when + duration + .03);
+    }
+    // A soft PANNED tick, so a nearby alien tells you where it is without
+    // telling the whole moon. Oscillator only -- deliberately no noise(),
+    // because that draws from cosmeticRandom and this fires many times a
+    // second. Nothing here is loud: peak volume is a quarter of a kick.
+    near(frequency, pan, volume, duration = .09, type = 'sine', behind = 0) {
+      // Recorded BEFORE the context guard: in test mode there is no audio
+      // context at all, and a silently inverted pan is exactly the kind of
+      // bug that only a player would ever notice. This makes it assertable.
+      this.note('near', { hz: Math.round(frequency), pan: +pan.toFixed(3), vol: +volume.toFixed(4), behind: +behind.toFixed(2) });
+      if (!this.context || !this.fx) return;
+      const when = this.context.currentTime;
+      const oscillator = this.context.createOscillator();
+      const gain = this.context.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(Math.max(20, frequency), when);
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, frequency * .82), when + duration);
+      gain.gain.setValueAtTime(.0001, when);
+      gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), when + .014);
+      gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
+      // Something dead ahead and something dead behind both pan to zero, so
+      // the pan alone cannot tell them apart. Muffle what is behind you: it is
+      // the cue real ears use, and it costs one filter.
+      let tail = gain;
+      if (behind > .01) {
+        const shade = this.context.createBiquadFilter();
+        shade.type = 'lowpass';
+        shade.frequency.value = 2600 - behind * 1900;
+        shade.Q.value = .5;
+        gain.connect(shade);
+        tail = shade;
+      }
+      oscillator.connect(gain);
+      if (this.context.createStereoPanner) {
+        const panner = this.context.createStereoPanner();
+        panner.pan.value = clamp(pan, -1, 1);
+        tail.connect(panner);
+        panner.connect(this.fx);
+      } else {
+        tail.connect(this.fx);
+      }
+      oscillator.start(when);
+      oscillator.stop(when + duration + .04);
     }
     noise(duration = .08, volume = .07, filterFrequency = 1200, delay = 0) {
       if (!this.context || !this.fx) return;
@@ -1297,7 +1362,7 @@
       this.padGain.gain.value = 0;
       const padFilter = context.createBiquadFilter();
       padFilter.type = 'lowpass';
-      padFilter.frequency.value = 520;
+      padFilter.frequency.value = 640;
       padFilter.Q.value = .4;
       this.padFilter = padFilter;
       this.padGain.connect(padFilter);
@@ -1371,9 +1436,23 @@
           const chord = this.chords[this.chordIndex];
           this.padVoices.forEach((osc, i) => osc.frequency.setTargetAtTime(chord[i], now, 1.4));
           this.padShimmer.frequency.setTargetAtTime(chord[3] * 1.005, now, 1.4);
+          // Mark the change. Twelve seconds of gliding pad with nothing
+          // landing on the chord is why it read as wash rather than as music:
+          // one low bell on the new root turns the harmony into movement.
+          const root = context.createOscillator();
+          root.type = 'sine';
+          root.frequency.value = chord[0] * 2;
+          const rootGain = context.createGain();
+          rootGain.gain.setValueAtTime(0, now);
+          rootGain.gain.linearRampToValueAtTime(.075, now + .04);
+          rootGain.gain.exponentialRampToValueAtTime(.0001, now + 4.2);
+          root.connect(rootGain);
+          rootGain.connect(this.bellSend);
+          root.start(now);
+          root.stop(now + 4.4);
         }
         // Filter breathes with the chord cycle.
-        this.padFilter.frequency.setTargetAtTime(430 + Math.sin(beat * .35) * 160, now, .9);
+        this.padFilter.frequency.setTargetAtTime(530 + Math.sin(beat * .35) * 190, now, .9);
         // A bell, sometimes. Sparse is the whole point.
         if (Math.random() < .34) {
           const penta = [293.66, 329.63, 369.99, 440, 493.88, 587.33, 659.25, 739.99];
@@ -6530,6 +6609,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.hp = this.maxHp;
       this.alive = true;
       this.phase = enemyRandom() * TAU;
+      // Staggered off the phase so a garrison never speaks in chorus.
+      this.voice = (this.phase / TAU) * 1.7;
       this.stun = 0;
       this.hitFlash = 0;
       this.weakPulse = 0;
@@ -9360,6 +9441,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       audio.win();
     }
     updateEnemies(dt) {
+      // One budget per frame for the proximity ticks (see ENEMY_VOICES).
+      // It resets HERE and not in updateThreatMusic, which runs after this
+      // pass -- resetting there let nothing through at all.
+      this.voicesThisFrame = 0;
       const player = this.player;
       // Enemies live and steer entirely in chart coordinates -- the space
       // their homes, leashes and speeds were authored in. The player and ball
@@ -9402,6 +9487,33 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         }
         visual.group.visible = true;
         visual.group.scale.setScalar(1);
+        // YOU CAN HEAR WHERE THEY ARE. A quiet panned tick per nearby alien,
+        // pitched by species, so the moon tells you what is behind you without
+        // a single word on screen. Capped at three voices a frame so a
+        // garrison is a texture and not an alarm.
+        if (horizontalDistance < ENEMY_VOICE_RANGE) {
+          enemy.voice -= dt;
+          if (enemy.voice <= 0 && this.voicesThisFrame < 3) {
+            const near = 1 - horizontalDistance / ENEMY_VOICE_RANGE;
+            // player -> enemy, in chart space
+            const ex = -toPlayer.x, ez = -toPlayer.z;
+            const yaw = this.player.yaw;
+            const pan = horizontalDistance > .001
+              ? (ex * Math.cos(yaw) + ez * Math.sin(yaw)) / horizontalDistance
+              : 0;
+            const ahead = horizontalDistance > .001
+              ? (ex * Math.sin(yaw) + ez * -Math.cos(yaw)) / horizontalDistance
+              : 1;
+            const voice = ENEMY_VOICES[enemy.type] || ENEMY_VOICES.default;
+            audio.near(voice.hz, pan, .045 * near * near * voice.gain, voice.len, 'sine', Math.max(0, -ahead));
+            // Far things speak rarely, close things speak often: at the edge
+            // of range the gap is 1.7x the species interval, at contact 0.7x.
+            // That keeps the moon quiet until something is actually near you,
+            // which is the difference between a cue and a nag.
+            enemy.voice = voice.every * (1.7 - near) * (.82 + (enemy.phase / TAU) * .36);
+            this.voicesThisFrame++;
+          }
+        }
         const activeRange = enemy.type === 'warden' ? 80 : enemy.type === 'floater' ? 58 : 46;
         if (!summitLocked && horizontalDistance < activeRange && enemy.stun <= 0) {
           const desiredFacing = Math.atan2(toPlayer.x, toPlayer.z);
