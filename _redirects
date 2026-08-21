@@ -56,10 +56,7 @@
 /pasta         /pasta-mortale/           302
 /spaghetti     /pasta-mortale/           302
 
-# --- EVENSONG / PARTY ANIMAL ---
-/evensong.html /evensong/                301!
-/sing          /evensong/                302
-/cantor        /evensong/                302
+# --- PARTY ANIMAL ---
 /party-animal.html /party-animal/            301!
 /party             /party-animal/            302
 /pinata            /party-animal/            302

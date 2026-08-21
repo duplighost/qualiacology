@@ -59,7 +59,7 @@
       "slug": "thrown",
       "title": "THROWN",
       "descriptor": "Hold-and-release climb",
-      "group": "worlds",
+      "group": "action",
       "featured": false,
       "image": "/assets/games/thrown-card-clean.webp",
       "alt": "Two pale hands reaching toward each other in the dark, a small warm light held in the lower palm",
@@ -93,19 +93,6 @@
       "metaDescription": "THE EATEN PATH is a first-person horror walk through an infinite nighttime forest where every route seals behind you.",
       "controls": "WASD + mouse · two-thumb touch · Shift to hurry · headphones recommended",
       "actionLabel": "Enter THE EATEN PATH"
-    },
-    {
-      "slug": "evensong",
-      "title": "EVENSONG",
-      "descriptor": "Sung counterpoint",
-      "group": "worlds",
-      "featured": false,
-      "image": "/assets/games/evensong-card-clean.webp",
-      "alt": "A gold flame and a pale flame joined by a glowing thread across dark strings",
-      "summary": "Five souls are stuck one note from rest, and you are the second voice. Hold the mouse to sing, find the interval each of them needs, and when the choir holds its last chord, the only way to end it is to let go.",
-      "metaDescription": "EVENSONG is a browser game sung in real counterpoint: five stuck souls, a looping ground bass, and an ending that asks you to stop playing.",
-      "controls": "Mouse or touch · hold to sing · release to rest",
-      "actionLabel": "Sing EVENSONG"
     },
     {
       "slug": "rocket-shoes",

@@ -153,7 +153,7 @@
 <div class="ov" id="pauseOv" role="dialog" aria-label="Paused">
   <div class="card">
     <h2>PAUSED</h2>
-    <p class="small">hold: space · click · touch &nbsp;&nbsp; lean: A D · ← → · drag</p>
+    <p class="small">hold: space · click · touch &nbsp;&nbsp; lean: A D · ← → · slide sideways</p>
     <div class="row">
       <button class="b primary" id="resumeBtn">Resume</button>
       <button class="b" id="restartChBtn">Restart hands</button>
@@ -2213,10 +2213,6 @@ function drawRope(ax,ay,bx,by,L,color){
    reaching the screen, so the game opened on a dark shaft with nothing to tell a first
    player that holding is the whole verb. */
 function hudScale(){ return clamp(Math.min(VW,VH)/760,.62,1.25); }
-function controlLine(){
-  return COARSE_POINTER ? 'hold anywhere · slide to lean · let go'
-                  : 'hold space or click · A D to lean · let go';
-}
 // An elliptical scrim, not a band: a rectangle with a vertical-only gradient leaves two
 // hard vertical seams down the screen wherever the plate ends.
 function hudPlate(y,h,a,w){
@@ -2235,12 +2231,13 @@ function hudRule(mx,y,w,a){
 function drawTitleCard(G_,tnow){
   const a=G_.titleA; if(a<=.003) return;
   const s=hudScale(),mx=VW/2,y=G_.safe.top+(VH-G_.safe.top-G_.safe.bottom)*.24;
-  hudPlate(y+16*s,132*s,a,Math.min(VW,660*s));
+  hudPlate(y+10*s,110*s,a,Math.min(VW,640*s));
   spacedText(cx,'THROWN',mx,y,52*s,15*s,'#f8efdd',{alpha:a,shadow:.42});
   hudRule(mx,y+27*s,76*s,a*.6);
+  // No key legend. "hold to hold on. let go to fly." already names both verbs, and the
+  // reach-invitation arc points at the first hand — a player does not need the mapping
+  // spelled out to start. It lives in the pause card for anyone who wants it.
   text(cx,'hold to hold on. let go to fly.',mx,y+52*s,17*s,'#f3ead8',{italic:true,alpha:a*.86,shadow:.7});
-  const blink=REDUCED?1:.7+.3*Math.sin(tnow*1.9);
-  text(cx,controlLine(),mx,y+86*s,12*s,'#ffd9a0',{alpha:a*.72*blink,mono:true,shadow:.9});
 }
 function drawChapterCard(G_,tnow){
   const c=G_.card; if(!c||c.a<=.004) return;
