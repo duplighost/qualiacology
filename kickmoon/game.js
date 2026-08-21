@@ -29,7 +29,7 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '5.1.0-kickmoon';
+  const GAME_VERSION = '5.2.0-kickmoon';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -2143,7 +2143,77 @@
         roughness: .93,
         metalness: .025,
         color: 0xcbd2df,
+        // The moon is a SHELL, and a front-side-only shell is invisible from
+        // inside it: stand at the bottom of the graben or fall through a thin
+        // place and the whole moon vanishes, leaving you looking at the far
+        // side's crystals through open space. Double-siding the one terrain
+        // material turns the underside into a real cave ceiling -- which is
+        // also what makes THE THIN PLACES read as falling THROUGH the moon
+        // rather than as a rendering glitch. Measured free: all four stable
+        // perf stations unchanged at 16.66-16.72 ms p95.
+        side: T.DoubleSide,
       });
+      // THE GROUND IS ACTUALLY FROZEN. Tinting the vertex colours left the
+      // regolith's craters and dust showing straight through, which is why the
+      // ice field read as "grey moon, slightly blue" instead of as ice. This
+      // buries the dust map under a real surface: a hard cracked plate in the
+      // ice field, a soft drifted sheet in the snow country -- and it moves the
+      // ROUGHNESS too, so ice takes a sharp sun glint and snow stays matte.
+      // Shape and brightness carry it, not hue (law 3).
+      //
+      // Albedo stays in the .15-.40 band the rest of the moon lives in. Going
+      // brighter does not make a brighter surface, it makes a WHITE one: the
+      // sun is 4.65 and ACES desaturates everything it drives past 1.0.
+      this.materials.regolith.onBeforeCompile = shader => {
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', `#include <common>
+attribute vec2 kbBiome;
+varying vec2 vKbBiome;
+varying vec3 vKbPos;`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+vKbBiome = kbBiome;
+vKbPos = position;`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', `#include <common>
+varying vec2 vKbBiome;
+varying vec3 vKbPos;`)
+          // after <color_fragment> so the vertex tint cannot re-dirty the surface
+          .replace('#include <color_fragment>', `#include <color_fragment>
+float kbIce = vKbBiome.x;
+float kbSnow = vKbBiome.y;
+if (kbIce + kbSnow > 0.004) {
+  vec3 kp = normalize(vKbPos) * 420.0;
+  if (kbSnow > 0.004) {
+    // A DRIFTED SHEET. Long dunes carry the shape read; the regolith's
+    // craters are gone, because snow buries things.
+    float dune = sin(kp.x * .085 + sin(kp.z * .041) * 2.4) * .5 + .5;
+    float drift = sin(kp.x * .30 + kp.z * .12 + dune * 3.0) * .5 + .5;
+    float fine = sin(kp.z * 1.9 + kp.x * .7) * .5 + .5;
+    vec3 snowCol = vec3(.300, .325, .385) - dune * .060 - drift * .030 + fine * .012;
+    diffuseColor.rgb = mix(diffuseColor.rgb, snowCol, kbSnow * .93);
+  }
+  if (kbIce > 0.004) {
+    // A FROZEN PLATE, AND THE PLATE IS CRACKED. Three sine planes thresholded
+    // near zero give a web of fracture lines: that web is the shape read, and
+    // it is what stops this looking like "the moon but bluer".
+    float a = sin(kp.x * .43 + kp.y * .17);
+    float b = sin(kp.z * .49 - kp.x * .21 + 2.1);
+    float c = sin(kp.y * .37 + kp.z * .29 - 1.3);
+    float web = min(min(abs(a), abs(b)), abs(c));
+    // wide enough to survive mipping at range, and DARK -- a crack is a
+    // shadow in the plate, not a highlight. Bright cracks just read as glare.
+    float crack = 1.0 - smoothstep(0.0, .26, web);
+    float rim = smoothstep(.26, .40, web) * (1.0 - smoothstep(.40, .56, web));
+    vec3 iceCol = mix(vec3(.049, .103, .244), vec3(.083, .146, .279), smoothstep(.10, .90, web));
+    diffuseColor.rgb = mix(diffuseColor.rgb, iceCol, kbIce * .94);
+    diffuseColor.rgb -= crack * kbIce * vec3(.022, .040, .078);
+    diffuseColor.rgb += rim * kbIce * vec3(.014, .026, .044);
+  }
+}`)
+          .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+roughnessFactor = mix(roughnessFactor, .17, vKbBiome.x * .92);
+roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
+      };
       this.materials.rock = new T.MeshStandardMaterial({
         color: 0x747c8c, roughness: .91, metalness: .035,
         emissive: 0x090f1e, emissiveIntensity: .09,
@@ -2632,6 +2702,9 @@
       const entryCount = positions.count;
       const colors = new Float32Array(entryCount * 3);
       const normals = new Float32Array(entryCount * 3);
+      // (ice, snow) weight per vertex -- the terrain shader turns these into
+      // real surfaces instead of a wash over the regolith map.
+      const biome = new Float32Array(entryCount * 2);
       const dir = new T.Vector3();
       this.terrainSize = 760;
       this.terrainSegments = 168;
@@ -2702,6 +2775,7 @@
         // not exist. sqrt() pulls the read out to the fringe.
         shadeDirScratch.set(record.dx, record.dy, record.dz);
         const iceW = iceWeightAt(shadeDirScratch);
+        record.ice = iceW;
         if (iceW > 0) {
           const iceV = Math.sqrt(iceW);
           r = lerp(r, .62, iceV); g = lerp(g, .9, iceV); b = lerp(b, 1.2, iceV);
@@ -2718,6 +2792,7 @@
           }
         }
         const snowW = snowWeightAt(shadeDirScratch);
+        record.snow = snowW;
         if (snowW > 0) { r = lerp(r, .94, snowW * .92); g = lerp(g, .96, snowW * .92); b = lerp(b, 1.06, snowW * .92); }
         // THE DARK QUARTER: the ground itself goes out.
         const darkW = darkWeightAt(shadeDirScratch);
@@ -2745,7 +2820,10 @@
         colors[i * 3] = record.r;
         colors[i * 3 + 1] = record.g;
         colors[i * 3 + 2] = record.b;
+        biome[i * 2] = record.ice || 0;
+        biome[i * 2 + 1] = record.snow || 0;
       }
+      geometry.setAttribute('kbBiome', new T.BufferAttribute(biome, 2));
       geometry.setAttribute('color', new T.BufferAttribute(colors, 3));
       geometry.setAttribute('normal', new T.BufferAttribute(normals, 3));
       geometry.computeBoundingSphere();
@@ -3083,6 +3161,26 @@
         { x: 388, z: -132 }, { x: -544, z: 84 },          // deep in the caves
         { x: -470, z: 92 },                               // THE RILLE's bend
         { x: 430, z: 62 },                                // THE DOMES' saddle
+        // One on each of THE LANTERNS' crowns. `deck` snaps these to the
+        // nearest platform top, and makeFarSights has already registered the
+        // towers by the time this runs. Climbing one is the reward for having
+        // walked out there.
+        { x: 1148, z: 40, deck: true },
+        { x: 838, z: 812, deck: true },
+        { x: 62, z: 1232, deck: true },
+        { x: -806, z: 828, deck: true },
+        { x: -1162, z: -30, deck: true },
+        { x: -828, z: -806, deck: true },
+        { x: -40, z: -1168, deck: true },
+        { x: 812, z: -838, deck: true },
+        { x: 902, z: 388, deck: true },
+        { x: 386, z: 916, deck: true },
+        { x: -372, z: 898, deck: true },
+        { x: -918, z: 366, deck: true },
+        { x: -894, z: -382, deck: true },
+        { x: -366, z: -912, deck: true },
+        { x: 380, z: -898, deck: true },
+        { x: 916, z: -370, deck: true },
       ];
       const orbMaterial = new T.MeshStandardMaterial({
         color: 0xf6f4ff, emissive: 0xb8c8ff, emissiveIntensity: 1.5,
@@ -3393,7 +3491,33 @@
     // works on the cliff pillars works out here for free. THE BOWL's floor
     // gets its ice sheen. No randomness: the far side is authored.
     makeFarSights() {
-      const specs = [{ x: -700, z: -260, radius: 7, height: 160 }];
+      const specs = [
+        { x: -700, z: -260, radius: 7, height: 160 },
+      // THE LANTERNS. Past 1050 m the moon had nothing tall enough to steer
+      // by -- no landmarks, no enemies, one breakable, across a tenth of the
+      // surface. These are what you navigate the outer ice with: 46-68 m, so
+      // each one clears the 37.9 m horizon from over 200 m away and you can
+      // always see the next. They join this.platforms with everything else
+      // here, so the ball banks off them and the grapple climbs them for
+      // free, and each wears a full moon on its crown -- lit until you take
+      // it. Authored, not scattered: zero worldRandom draws.
+        { x: 1148, z: 40, radius: 9.3, height: 107 },
+        { x: 838, z: 812, radius: 8.3, height: 85 },
+        { x: 62, z: 1232, radius: 8.8, height: 96 },
+        { x: -806, z: 828, radius: 9.6, height: 113 },
+        { x: -1162, z: -30, radius: 8.4, height: 87 },
+        { x: -828, z: -806, radius: 9.1, height: 102 },
+        { x: -40, z: -1168, radius: 8.7, height: 93 },
+        { x: 812, z: -838, radius: 9.8, height: 117 },
+        { x: 902, z: 388, radius: 10.2, height: 126 },
+        { x: 386, z: 916, radius: 9.2, height: 105 },
+        { x: -372, z: 898, radius: 9.8, height: 118 },
+        { x: -918, z: 366, radius: 9.0, height: 100 },
+        { x: -894, z: -382, radius: 10.0, height: 122 },
+        { x: -366, z: -912, radius: 9.4, height: 109 },
+        { x: 380, z: -898, radius: 9.7, height: 115 },
+        { x: 916, z: -370, radius: 9.2, height: 104 },
+      ];
       const orchard = { x: -430, z: 470 };
       for (let i = 0; i < 11; i++) {
         const angle = i * 2.3999632 + .7;
@@ -6677,6 +6801,15 @@
         ['floater', 300, -600, 'deck'], ['floater', 540, 400, 'deck'],
         ['floater', 0, 660, 'deck'], ['floater', -440, 460, 'deck'],
         ['scuttler', -320, -520, 'deck'], ['scuttler', -640, -230, 'deck'],
+        // THE LANTERNS' ice: skaters and drifters between the towers, so the
+        // outer ring has a cast and not just scenery. Both species are already
+        // the cold ones -- skater wears materials.frost, drifter snowHide.
+        ['skater', 1100, 90], ['skater', 1060, -60], ['drifter', 880, 780],
+        ['skater', 790, 860], ['skater', -70, 1190], ['drifter', 120, 1250],
+        ['skater', -760, 862], ['drifter', -870, 790], ['skater', -1110, 60],
+        ['skater', -1080, -110], ['drifter', -790, -840], ['skater', -90, -1130],
+        ['skater', 60, -1190], ['drifter', 850, -800], ['skater', 940, -420],
+        ['skater', 890, 420],
       ];
       farSpawns.forEach(([type, x, z, deck], index) => {
         const enemy = new AlienState(`far-${type}-${index}`, type, x, z, index * .9);
