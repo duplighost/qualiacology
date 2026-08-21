@@ -273,7 +273,7 @@
   [
     'hud', 'startOverlay', 'startButton', 'startActionHint', 'startKicker', 'startTitle', 'startCopy',
     'crosshair', 'hitMarker', 'damageVignette', 'visorFrost', 'rewardFlash', 'srState',
-    'stoneCounter', 'stoneCount',
+    'stoneCounter', 'stoneCount', 'coreCounter', 'suitMeter',
     'chargeUI', 'chargeFill', 'controlsHint', 'soundButton',
     'fullscreenButton', 'qualityButton', 'pauseOverlay', 'winOverlay',
     'winSummary', 'winTime', 'winScore', 'winRank', 'restartButton',
@@ -1214,9 +1214,22 @@
     }
     score(high = false) {
       this.ensure();
-      const base = high ? 620 : 440;
-      this.tone(base, .13, 'triangle', .06, base * 1.5);
-      this.tone(base * 1.25, .2, 'sine', .04, base * 1.8, .05);
+      if (high) {
+        // A found treasure: a little major arpeggio in the music's own key.
+        this.tone(587.33, .3, 'sine', .05, null, 0, this.music);
+        this.tone(739.99, .3, 'sine', .045, null, .07, this.music);
+        this.tone(880, .44, 'sine', .05, null, .14, this.music);
+        this.tone(1174.66, .6, 'sine', .035, null, .21, this.music);
+        return;
+      }
+      // The run: D-major pentatonic climbing while the streak lasts.
+      const now = performance.now();
+      if (now - (this.runLast || 0) > 2600) this.runIndex = 0;
+      this.runLast = now;
+      const penta = [587.33, 659.25, 739.99, 880, 987.77, 1174.66, 1318.51, 1479.98, 1760, 1975.53];
+      const note = penta[Math.min(this.runIndex++, penta.length - 1)];
+      this.tone(note, .2, 'triangle', .055, null, 0, this.music);
+      this.tone(note * 2, .13, 'sine', .018, null, .02, this.music);
     }
     damage() {
       this.ensure();
@@ -1255,16 +1268,130 @@
     }
     startMusic() {
       if (this.sequence || !this.context) return;
-      const interval = 60000 / 102 / 2;
-      const roots = [55, 65.41, 49, 73.42, 55, 82.41, 65.41, 49];
+      const context = this.context;
+      // THE PAD: four voices that glide between chords instead of retriggering
+      // -- D / A(add9) / Bm / G, the slow breath under everything.
+      this.chords = [
+        [73.42, 110, 185, 277.18],   // Dmaj7
+        [55, 110, 164.81, 277.18],   // A add9
+        [61.74, 92.5, 146.83, 293.66], // Bm add9
+        [49, 98, 146.83, 185],       // G maj (wide)
+      ];
+      this.chordIndex = 0;
+      this.padGain = context.createGain();
+      this.padGain.gain.value = 0;
+      const padFilter = context.createBiquadFilter();
+      padFilter.type = 'lowpass';
+      padFilter.frequency.value = 520;
+      padFilter.Q.value = .4;
+      this.padFilter = padFilter;
+      this.padGain.connect(padFilter);
+      padFilter.connect(this.music);
+      this.padVoices = this.chords[0].map((freq, i) => {
+        const osc = context.createOscillator();
+        osc.type = i === 0 ? 'triangle' : 'sine';
+        osc.frequency.value = freq;
+        const g = context.createGain();
+        g.gain.value = i === 0 ? .35 : .24;
+        osc.connect(g);
+        g.connect(this.padGain);
+        osc.start();
+        return osc;
+      });
+      // Detuned shimmer twin for the top voice.
+      const shimmer = context.createOscillator();
+      shimmer.type = 'sine';
+      shimmer.frequency.value = this.chords[0][3] * 1.005;
+      const shimmerGain = context.createGain();
+      shimmerGain.gain.value = .12;
+      shimmer.connect(shimmerGain);
+      shimmerGain.connect(this.padGain);
+      shimmer.start();
+      this.padShimmer = shimmer;
+      // THE SPACE: one feedback delay that every bell falls into.
+      this.bellSend = context.createGain();
+      this.bellSend.gain.value = .9;
+      const delay = context.createDelay(1.2);
+      delay.delayTime.value = .41;
+      const feedback = context.createGain();
+      feedback.gain.value = .38;
+      const damp = context.createBiquadFilter();
+      damp.type = 'lowpass';
+      damp.frequency.value = 2400;
+      this.bellSend.connect(delay);
+      delay.connect(damp);
+      damp.connect(feedback);
+      feedback.connect(delay);
+      damp.connect(this.music);
+      // THE THREAT: a low pulse that only exists near something hostile.
+      this.threat = 0;
+      this.threatGain = context.createGain();
+      this.threatGain.gain.value = 0;
+      const threatOsc = context.createOscillator();
+      threatOsc.type = 'sawtooth';
+      threatOsc.frequency.value = 55;
+      const threatFilter = context.createBiquadFilter();
+      threatFilter.type = 'lowpass';
+      threatFilter.frequency.value = 240;
+      threatOsc.connect(threatFilter);
+      threatFilter.connect(this.threatGain);
+      threatOsc.start();
+      this.threatGain.connect(this.music);
+      this.threatLevel = 0;
+      this.threatBeat = 0;
+      // THE CLOCK: chord changes and sparse bells. D-major pentatonic, an
+      // octave wider once the moon's heart has been sung to rest.
+      let beat = 0;
       this.sequence = setInterval(() => {
-        if (!this.context || this.context.state !== 'running' || this.muted || !game || game.paused || game.won) return;
-        const step = this.step++ % 16;
-        const root = roots[Math.floor(step / 2) % roots.length];
-        if (step % 4 === 0) this.tone(root, .48, 'sine', .045, root * .5, 0, this.music);
-        if (step % 2 === 1) this.tone(root * 4, .22, 'triangle', .012, root * 5, 0, this.music);
-        if (step % 8 === 6) this.tone(root * 6, .7, 'sine', .009, root * 8, 0, this.music);
-      }, interval);
+        if (!this.context || this.context.state !== 'running' || this.muted || !game || !game.started || game.paused || game.won) {
+          if (this.padGain) this.padGain.gain.setTargetAtTime(0, context.currentTime, .4);
+          if (this.threatGain) this.threatGain.gain.setTargetAtTime(0, context.currentTime, .3);
+          return;
+        }
+        const now = context.currentTime;
+        this.padGain.gain.setTargetAtTime(.5, now, 1.2);
+        beat++;
+        if (beat % 10 === 0) {
+          this.chordIndex = (this.chordIndex + 1) % this.chords.length;
+          const chord = this.chords[this.chordIndex];
+          this.padVoices.forEach((osc, i) => osc.frequency.setTargetAtTime(chord[i], now, 1.4));
+          this.padShimmer.frequency.setTargetAtTime(chord[3] * 1.005, now, 1.4);
+        }
+        // Filter breathes with the chord cycle.
+        this.padFilter.frequency.setTargetAtTime(430 + Math.sin(beat * .35) * 160, now, .9);
+        // A bell, sometimes. Sparse is the whole point.
+        if (Math.random() < .34) {
+          const penta = [293.66, 329.63, 369.99, 440, 493.88, 587.33, 659.25, 739.99];
+          const wide = game.endgameComplete ? [...penta, 880, 987.77, 1174.66] : penta;
+          const note = wide[Math.floor(Math.random() * wide.length)];
+          const osc = context.createOscillator();
+          osc.type = 'sine';
+          osc.frequency.value = note;
+          const g = context.createGain();
+          g.gain.setValueAtTime(0, now);
+          g.gain.linearRampToValueAtTime(.05, now + .02);
+          g.gain.exponentialRampToValueAtTime(.0001, now + 2.6);
+          const partial = context.createOscillator();
+          partial.type = 'sine';
+          partial.frequency.value = note * 3.01;
+          const pg = context.createGain();
+          pg.gain.setValueAtTime(0, now);
+          pg.gain.linearRampToValueAtTime(.012, now + .015);
+          pg.gain.exponentialRampToValueAtTime(.0001, now + 1.1);
+          osc.connect(g); partial.connect(pg);
+          g.connect(this.bellSend); pg.connect(this.bellSend);
+          osc.start(now); partial.start(now);
+          osc.stop(now + 2.8); partial.stop(now + 1.3);
+        }
+        // Threat follows what the game reported since last tick; the pulse
+        // lives HERE (the first cut summed an LFO into the gain param, which
+        // droned at fixed depth even at threat zero).
+        this.threatBeat++;
+        this.threatGain.gain.setTargetAtTime(this.threatLevel * .055 * (1 + .35 * Math.sin(this.threatBeat * 1.9)), now, .4);
+      }, 1200);
+    }
+    setThreat(level) {
+      this.threatLevel = clamp(level, 0, 1);
     }
   }
 
@@ -1609,6 +1736,36 @@
   // job and every tier has a mix of things to do and ways to leave.
   const SKY_ROLES = ['cache', 'ring', 'vent', 'anchor', 'spinner', 'ring', 'cache', 'anchor'];
 
+  // Authored sky STRUCTURES: exact compositions, because "more slabs" is not
+  // the same as "shapes that are fun". Heights are offsets above local ground.
+  const SKY_STRUCTURES = (() => {
+    const list = [];
+    // THE HELIX: a spiral stair of eight small decks over THE RILLE's end,
+    // crowned with a wide cache platform.
+    for (let i = 0; i < 8; i++) {
+      const angle = i * .85;
+      list.push({
+        x: -300 + Math.cos(angle) * 24, z: 300 + Math.sin(angle) * 24,
+        lift: 20 + i * 11, radius: 7.5, role: i % 3 === 0 ? 'vent' : 'anchor',
+      });
+    }
+    list.push({ x: -300, z: 300, lift: 116, radius: 14, role: 'cache' });
+    // THE ARCHWAY: two piers and a spanning deck over THE DOMES' saddle.
+    list.push({ x: 430, z: 95, lift: 26, radius: 8, role: 'anchor' });
+    list.push({ x: 462, z: 117, lift: 26, radius: 8, role: 'anchor' });
+    list.push({ x: 446, z: 106, lift: 42, radius: 13, role: 'cache', body: 6 });
+    // THE CORONET: a ring of six decks over THE FINS with a jewel at centre.
+    for (let i = 0; i < 6; i++) {
+      const angle = i * (Math.PI / 3);
+      list.push({
+        x: 270 + Math.cos(angle) * 34, z: -312 + Math.sin(angle) * 34,
+        lift: 86 + (i % 2) * 9, radius: 8.5, role: i % 2 ? 'cache' : 'vent',
+      });
+    }
+    list.push({ x: 270, z: -312, lift: 104, radius: 6.5, role: 'spinner' });
+    return list;
+  })();
+
   function regionShape(region, x, z) {
     const distance = Math.hypot(x - region.x, z - region.z);
     if (distance > region.radius * 1.24) return 0;
@@ -1633,7 +1790,8 @@
   }
 
   function terrainHeightAt(x, z) {
-    let height = -2.8 + fbm(x * .012, z * .012, 5) * 3.3 + fbm(x * .041 + 11, z * .041 - 7, 3) * .8;
+    let height = -2.8 + fbm(x * .012, z * .012, 5) * 3.3 + fbm(x * .041 + 11, z * .041 - 7, 3) * .8
+      + sculptedAt(x, z);
     for (const crater of CRATERS) {
       const distance = Math.hypot(x - crater.x, z - crater.z);
       const normalized = distance / crater.radius;
@@ -1693,7 +1851,48 @@
     { x: -840, z: 330, radius: 52, depth: 8.5, rim: 2.4 },
     { x: 90, z: -960, radius: 38, depth: 6, rim: 2 },
   ].map(crater => ({ ...crater, dir: chartDirAt(crater.x, crater.z, new T.Vector3()).clone() }));
+  // Session-4 landforms live in PLANAR chart coordinates and apply through
+  // sculptedAt() on BOTH terrain paths -- several of them straddle the
+  // authored-cap boundary (rho 430-560), where far-only features are muted
+  // to nothing. That bug shipped a cave with no cavity.
+  const SCULPT_PITS = [
+    // THE RILLE: four overlapping pits, one snaking canyon.
+    { x: -560, z: -20, radius: 36, depth: 11, rim: 3 },
+    { x: -470, z: 90, radius: 36, depth: 12, rim: 3 },
+    { x: -380, z: 200, radius: 34, depth: 11, rim: 3 },
+    { x: -300, z: 300, radius: 30, depth: 9, rim: 2.6 },
+    // THE GRABEN: the dark quarter's sunken heart, with two deep pits.
+    { x: -520, z: 100, radius: 110, depth: 10, rim: 4 },
+    { x: -540, z: 80, radius: 30, depth: 22, rim: 2 },
+    { x: -490, z: 140, radius: 26, depth: 20, rim: 2 },
+    // Cave trench: two overlapping pits east of the mesa, roofed by makeCaves.
+    { x: 375, z: -145, radius: 30, depth: 20, rim: 2 },
+    { x: 391, z: -129, radius: 30, depth: 20, rim: 2 },
+  ];
+  const SCULPT_BUMPS = [
+    { x: 430, z: 60, radius: 58, height: 17 },
+    { x: 505, z: 145, radius: 48, height: 14 },
+    { x: 375, z: 165, radius: 42, height: 12 },
+    { x: 250, z: -380, radius: 24, height: 15 }, { x: 292, z: -348, radius: 24, height: 15 }, { x: 334, z: -316, radius: 24, height: 15 },
+    { x: 228, z: -310, radius: 22, height: 12 }, { x: 270, z: -278, radius: 22, height: 12 }, { x: 312, z: -246, radius: 22, height: 12 },
+  ];
+  function sculptedAt(x, z) {
+    let height = 0;
+    for (const pit of SCULPT_PITS) {
+      const normalized = Math.hypot(x - pit.x, z - pit.z) / pit.radius;
+      if (normalized < 1) height -= pit.depth * Math.pow(1 - normalized, 2);
+      const rimDistance = Math.abs(normalized - 1);
+      if (rimDistance < .18) height += pit.rim * (1 - rimDistance / .18);
+    }
+    for (const bump of SCULPT_BUMPS) {
+      const distance = Math.hypot(x - bump.x, z - bump.z);
+      if (distance < bump.radius) height += bump.height * Math.pow(smoothstep(bump.radius, 4, distance), 1.15);
+    }
+    return height;
+  }
   const arcTo = (dir, sightDir) => PLANET.radius * Math.acos(clamp(dir.dot(sightDir), -1, 1));
+  // (Session-4 domes and fins live in SCULPT_BUMPS above, applied on both
+  // terrain paths through sculptedAt.)
   function farElevation(dir) {
     let height = 0;
     for (const crater of FAR_CRATERS) {
@@ -1721,6 +1920,14 @@
     // Two true mountains: the far horizon has somewhere to be.
     height += 92 * Math.pow(smoothstep(150, 0, arcTo(dir, FAR_SIGHTS.montA)), 1.5);
     height += 74 * Math.pow(smoothstep(130, 0, arcTo(dir, FAR_SIGHTS.montB)), 1.5);
+    // Session-4 landforms, in the same chart the authored cap speaks.
+    {
+      const horizontal = Math.hypot(dir.x, dir.z);
+      if (horizontal > 1e-9) {
+        const rho = PLANET.radius * Math.atan2(horizontal, dir.y);
+        height += sculptedAt(dir.x * (rho / horizontal), dir.z * (rho / horizontal));
+      }
+    }
     // THE BOWL: rim up, floor down; the ice flattening happens in elevationAt.
     const bowlDistance = arcTo(dir, FAR_SIGHTS.bowl);
     if (bowlDistance < 150) {
@@ -1745,11 +1952,22 @@
   function snowWeightAt(dir) {
     return smoothstep(360, 210, arcTo(dir, SNOW_CENTRE));
   }
+  // THE DARK QUARTER: the one part of this moon the sun forgets. Charcoal
+  // ground, dim light, glowing crystals -- and the dead astronauts walk here.
+  const DARK_CENTRE = chartDirAt(-520, 100, new T.Vector3()).clone();
+  function darkWeightAt(dir) {
+    return smoothstep(250, 130, arcTo(dir, DARK_CENTRE));
+  }
   // THE HOLE TO THE END OF THE MOON. Once every boss is down and enough
   // crescents are gathered, the ice cracks and a shaft opens through THE
   // BOWL's floor -- the same law feeds render and collision, so the way down
   // is exactly what you see.
   const MOONHOLE = { open: false, depth: -88 };
+  // THE THIN PLACES. Three cracked plates of crust; break one open, drop in,
+  // and you fall THROUGH the moon and land on the exact opposite side.
+  const CRUST_HOLES = [
+    { x: 455, z: 55 }, { x: -180, z: 640 }, { x: 140, z: -810 },
+  ].map(hole => ({ ...hole, dir: chartDirAt(hole.x, hole.z, new T.Vector3()).clone(), open: false }));
 
   function elevationAt(dir) {
     const horizontal = Math.hypot(dir.x, dir.z);
@@ -1772,12 +1990,23 @@
       const shaft = smoothstep(34, 15, arcTo(dir, FAR_SIGHTS.bowl));
       if (shaft > 0) base = lerp(base, MOONHOLE.depth, shaft);
     }
-    return lerp(base, authored, authoredWeight);
+    let blended = lerp(base, authored, authoredWeight);
+    // THE THIN PLACES carve wherever they are -- including inside the
+    // authored-cap blend band, which mutes far-only features.
+    for (const hole of CRUST_HOLES) {
+      if (!hole.open) continue;
+      const shaft = smoothstep(20, 6, arcTo(dir, hole.dir));
+      if (shaft > 0) blended = lerp(blended, -46, shaft);
+    }
+    return blended;
   }
 
   const groundDirScratch = new T.Vector3();
   const shadeDirScratch = new T.Vector3();
   const absorbPoint = new T.Vector3();
+  const absorbUp = new T.Vector3();
+  const snowballScratch = new T.Vector3();
+  const snowballMatrix = new T.Matrix4();
   const absorbQuat = new T.Quaternion();
   const absorbScale = new T.Vector3();
   const absorbMatrix = new T.Matrix4();
@@ -1873,6 +2102,10 @@
       this.makeFarSights();
       this.makeRoc();
       this.makeColossus();
+      this.makeFullMoons();
+      this.makeBiomeProps();
+      this.makeCrustPlates();
+      this.makeCaves();
       this.makeFirstPersonRig();
       this.makeBallVisual();
       this.makeBeacon();
@@ -2055,7 +2288,11 @@
         { at: [-1050, -260, 950], scale: 1100, tint: [150, 70, 220], second: [30, 90, 200] },
       ];
       for (const cloud of clouds) {
-        const size = 256;
+        // 1024 with a blur pass: at 256 the texel grid of the additive
+        // low-alpha blobs survived magnification as a faint quilt of squares
+        // across the whole sky -- Alex reported it twice. Same worldRandom
+        // draw count as before; only the canvas work changed.
+        const size = 512;
         const canvasElement = document.createElement('canvas');
         canvasElement.width = canvasElement.height = size;
         const context = canvasElement.getContext('2d');
@@ -2080,7 +2317,14 @@
         context.globalCompositeOperation = 'destination-out';
         context.fillStyle = mask;
         context.fillRect(0, 0, size, size);
-        const texture = new T.CanvasTexture(canvasElement);
+        // Final smoothing: one blurred self-draw erases any remaining
+        // per-texel quantization noise before the sky ever sees it.
+        const smoothed = document.createElement('canvas');
+        smoothed.width = smoothed.height = size;
+        const smoothContext = smoothed.getContext('2d');
+        smoothContext.filter = 'blur(5px)';
+        smoothContext.drawImage(canvasElement, 0, 0);
+        const texture = new T.CanvasTexture(smoothed);
         texture.colorSpace = T.SRGBColorSpace;
         const sprite = new T.Sprite(new T.SpriteMaterial({
           map: texture, transparent: true, opacity: .95,
@@ -2409,12 +2653,29 @@
           : lerp(fbm3(record.dx * 14.7, record.dy * 14.7 + 5, record.dz * 14.7, 3), fbm(px * .035, pz * .035, 3), capWeight);
         const tone = clamp(.54 + mottle * .16 - slope * .2 + record.height * .0008, .24, .78);
         let r = tone * .86, g = tone * .89, b = tone * .98;
-        // THE BOWL's floor freezes: brighter, bluer, unmistakably not regolith.
+        // THE ICE FIELD: glacial blue-white with bright frozen veins. Alex
+        // walked past the old tint without noticing it, which means it did
+        // not exist. sqrt() pulls the read out to the fringe.
         shadeDirScratch.set(record.dx, record.dy, record.dz);
         const iceW = iceWeightAt(shadeDirScratch);
-        if (iceW > 0) { r = lerp(r, .68, iceW); g = lerp(g, .88, iceW); b = lerp(b, 1.18, iceW); }
+        if (iceW > 0) {
+          const iceV = Math.sqrt(iceW);
+          r = lerp(r, .58, iceV); g = lerp(g, .86, iceV); b = lerp(b, 1.34, iceV);
+          const vein = fbm3(record.dx * 46, record.dy * 46 + 3, record.dz * 46, 2);
+          if (Math.abs(vein - .5) < .05) {
+            const shine = (1 - Math.abs(vein - .5) / .05) * iceV * .3;
+            r += shine; g += shine; b += shine * 1.1;
+          }
+        }
         const snowW = snowWeightAt(shadeDirScratch);
-        if (snowW > 0) { r = lerp(r, .88, snowW * .85); g = lerp(g, .92, snowW * .85); b = lerp(b, 1.02, snowW * .85); }
+        if (snowW > 0) { r = lerp(r, .94, snowW * .92); g = lerp(g, .96, snowW * .92); b = lerp(b, 1.06, snowW * .92); }
+        // THE DARK QUARTER: the ground itself goes out.
+        const darkW = darkWeightAt(shadeDirScratch);
+        if (darkW > 0) {
+          r *= 1 - darkW * .68; g *= 1 - darkW * .64; b *= 1 - darkW * .42;
+          const lichen = fbm3(record.dx * 33, record.dy * 33 - 7, record.dz * 33, 2);
+          if (lichen > .62) { g += darkW * (lichen - .62) * .5; b += darkW * (lichen - .62) * .7; }
+        }
         // the deeper the open shaft, the darker the rock
         if (MOONHOLE.open) {
           const sink = clamp((-16 - record.height) / 60, 0, 1)
@@ -2558,6 +2819,9 @@
         { x: -80, z: 730 },                               // under THE PERCH
         { x: 200, z: -560 },                              // deep snow country
         { x: 0, z: 700 }, { x: -300, z: -450 },           // the long walks between
+        { x: 383, z: -137 }, { x: -540, z: 80 },          // inside the crystal caves
+        { x: -470, z: 90 }, { x: -380, z: 200 },          // down THE RILLE's spine
+        { x: 455, z: 60 }, { x: -520, z: 105 },           // the thin place, the graben
       ];
       const clusterCount = this.quality === 'LOW' ? 10 : trailSpots.length;
       const clusters = [];
@@ -2650,6 +2914,83 @@
       this.moondropMesh.instanceMatrix.needsUpdate = true;
       this.particles.burst(at, 0xffd66b, Math.min(18, 6 + amount * 2), 8, .6, .3);
     }
+    // Lobbed snowballs: chart-space ballistics, an instanced pool of eight.
+    throwSnowball(fromChart, targetChart) {
+      if (!this.snowballMesh) {
+        this.snowballs = [];
+        this.snowballMesh = new T.InstancedMesh(
+          new T.IcosahedronGeometry(.42, 1),
+          new T.MeshStandardMaterial({ color: 0xf4f8ff, roughness: .85, emissive: 0x8a9ab8, emissiveIntensity: .3 }),
+          8,
+        );
+        this.snowballMesh.userData.kbLifted = true;
+        this.snowballMesh.frustumCulled = false;
+        for (let i = 0; i < 8; i++) this.snowballMesh.setMatrixAt(i, ZERO_MATRIX);
+        this.scene.add(this.snowballMesh);
+        for (let i = 0; i < 8; i++) this.snowballs.push({ alive: false, position: new T.Vector3(), velocity: new T.Vector3() });
+      }
+      const ball = this.snowballs.find(entry => !entry.alive) || this.snowballs[0];
+      ball.alive = true;
+      ball.t = 0;
+      ball.position.copy(fromChart).setY(fromChart.y + 2.4);
+      const dx = targetChart.x - fromChart.x;
+      const dz = targetChart.z - fromChart.z;
+      const distance = Math.max(4, Math.hypot(dx, dz));
+      const flight = clamp(distance / 16, .8, 2.2);
+      ball.velocity.set(
+        dx / flight,
+        (targetChart.y - ball.position.y) / flight + 7 * flight,
+        dz / flight,
+      );
+    }
+    updateSnowballs(dt, gameState) {
+      if (!this.snowballs) return;
+      const matrix = snowballMatrix;
+      let any = false;
+      for (let i = 0; i < this.snowballs.length; i++) {
+        const ball = this.snowballs[i];
+        if (!ball.alive) continue;
+        any = true;
+        ball.t += dt;
+        ball.velocity.y -= 14 * dt;
+        ball.position.addScaledVector(ball.velocity, dt);
+        const playerChart = toChartVec(snowballScratch.copy(gameState.player.position));
+        const hit = Math.hypot(ball.position.x - playerChart.x, ball.position.z - playerChart.z) < 1.7
+          && Math.abs(ball.position.y - playerChart.y) < 2.4;
+        const grounded = ball.position.y <= this.floorHeight(ball.position.x, ball.position.z, ball.position.y + .5) + .3;
+        if (hit || grounded || ball.t > 3.5) {
+          ball.alive = false;
+          this.snowballMesh.setMatrixAt(i, ZERO_MATRIX);
+          const at = chartLift(ball.position.x, ball.position.y, ball.position.z, snowballScratch);
+          this.particles.burst(at, 0xf4f8ff, 12, 5, .5, .14);
+          if (hit && gameState.started && !gameState.paused && !gameState.won
+            && gameState.player.damageCooldown <= 0) gameState.damagePlayer({ position: ball.position });
+          continue;
+        }
+        chartLift(ball.position.x, ball.position.y, ball.position.z, snowballScratch);
+        matrix.makeTranslation(snowballScratch.x, snowballScratch.y, snowballScratch.z);
+        this.snowballMesh.setMatrixAt(i, matrix);
+      }
+      if (any || this.snowballDirty) this.snowballMesh.instanceMatrix.needsUpdate = true;
+      this.snowballDirty = any;
+    }
+    // A boss core rises from the kill, spins for a beat, then streaks to the
+    // ball. The grant itself is instant (state never waits on a cosmetic);
+    // this is the ceremony that makes the grant readable.
+    spawnTrophy(at, color) {
+      this.flyingTrophies = this.flyingTrophies || [];
+      const mesh = new T.Mesh(
+        new T.OctahedronGeometry(.95, 0),
+        new T.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2.6, roughness: .3, metalness: .4 }),
+      );
+      const glow = this.makeGlowSprite(this.glowGold, 5.5, .5);
+      glow.material = glow.material.clone();
+      glow.material.color.set(color);
+      mesh.add(glow);
+      mesh.position.copy(at);
+      this.scene.add(mesh);
+      this.flyingTrophies.push({ mesh, from: at.clone(), up: dirAt(at, new T.Vector3()).clone(), t: 0 });
+    }
     takeMoondrop(drop) {
       if (!drop.alive) return false;
       drop.alive = false;
@@ -2661,9 +3002,286 @@
       this.pulseRing(drop.position, new T.Color(0xffd66b), 2.4, .22);
       return true;
     }
+    // FULL MOONS. The rare collectible: a pearl in a gold ring, worth five
+    // crescents, placed at DESTINATIONS -- summit decks, sky caches, the ends
+    // of long walks -- so wanting one is wanting to go somewhere. No
+    // worldRandom draws: authored, so nothing downstream shifts.
+    makeFullMoons() {
+      const spots = [
+        { x: 0, z: -662 },                       // THE STAIR crest
+        { x: -700, z: -276, deck: true },        // THE NEEDLE's point
+        { x: -430, z: 470 },                     // THE ORCHARD heart
+        { x: 720, z: 260 },                      // THE RIB's far end
+        { x: 0, z: 1130 },                       // the rink, mid-ice
+        { x: 620, z: -520 },                     // the COLOSSUS's peak
+        { x: 280, z: -620 },                     // deep snow country
+        { x: -80, z: 780, deck: true },          // THE PERCH
+        { x: 0, z: 160, deck: true },            // first sky road
+        { x: -440, z: 460, deck: true },         // orchardway
+        { x: 300, z: -600, deck: true },         // snowway
+        { x: 0, z: 660, deck: true },            // bowlway
+        { x: -320, z: -520, deck: true },        // westway
+        { x: 540, z: 400, deck: true },          // ribway
+        { x: -640, z: -230, deck: true },        // needleway
+        { x: 0, z: 700 }, { x: -300, z: -450 },  // the long walks
+        { x: 0, z: -350 }, { x: -550, z: 100 },
+        { x: 420, z: 90 }, { x: -180, z: 640 },
+        { x: 150, z: 300 }, { x: 500, z: -100 },
+        { x: -350, z: -80 }, { x: 250, z: 900 },
+        { x: -150, z: 1000 }, { x: 700, z: -100 },
+        { x: -500, z: -420 }, { x: 100, z: -800 },
+        { x: 388, z: -132 }, { x: -544, z: 84 },          // deep in the caves
+        { x: -470, z: 92 },                               // THE RILLE's bend
+        { x: 430, z: 62 },                                // THE DOMES' saddle
+      ];
+      const orbMaterial = new T.MeshStandardMaterial({
+        color: 0xf6f4ff, emissive: 0xb8c8ff, emissiveIntensity: 1.5,
+        roughness: .18, metalness: .3,
+      });
+      const ringMaterial = new T.MeshStandardMaterial({
+        color: 0xffe9b0, emissive: 0xffb42a, emissiveIntensity: 2.1,
+        roughness: .2, metalness: .7,
+      });
+      const moonPhases = new Float32Array(spots.length);
+      for (let i = 0; i < spots.length; i++) moonPhases[i] = (i * 2.399) % TAU;
+      const bobShader = shader => {
+        shader.uniforms.kbTime = this.skyTime;
+        shader.vertexShader = shader.vertexShader
+          .replace('void main() {', 'attribute float kbPhase;\nuniform float kbTime;\nvoid main() {')
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+	float kbSpin = kbTime * 1.1 + kbPhase;
+	float kbS = sin( kbSpin ), kbC = cos( kbSpin );
+	transformed.xz = mat2( kbC, -kbS, kbS, kbC ) * transformed.xz;
+	transformed.y += sin( kbTime * 1.6 + kbPhase ) * 0.42;`);
+      };
+      orbMaterial.onBeforeCompile = bobShader;
+      ringMaterial.onBeforeCompile = bobShader;
+      const orbGeometry = new T.IcosahedronGeometry(.62, 2);
+      const ringGeometry = new T.TorusGeometry(1.02, .07, 8, 40);
+      ringGeometry.rotateX(Math.PI / 2 - .36);
+      this.fullMoonOrb = new T.InstancedMesh(orbGeometry, orbMaterial, spots.length);
+      this.fullMoonRing = new T.InstancedMesh(ringGeometry, ringMaterial, spots.length);
+      const matrix = new T.Matrix4();
+      const position = new T.Vector3();
+      const quaternion = new T.Quaternion();
+      this.fullmoons = [];
+      const decks = [...(this.sky || []), ...(this.platforms || [])];
+      spots.forEach((spot, index) => {
+        let alt = this.sampleTerrainHeight(spot.x, spot.z) + 2;
+        if (spot.deck) {
+          let best = null, bestD = 46;
+          for (const deck of decks) {
+            const d = Math.hypot(deck.x - spot.x, deck.z - spot.z);
+            if (d < bestD) { bestD = d; best = deck; }
+          }
+          if (best) { spot.x = best.x; spot.z = best.z; alt = best.top + 2; }
+        }
+        chartLift(spot.x, alt, spot.z, position);
+        liftQuatAt(spot.x, spot.z, quaternion);
+        matrix.compose(position, quaternion, ONE_SCALE);
+        this.fullMoonOrb.setMatrixAt(index, matrix);
+        this.fullMoonRing.setMatrixAt(index, matrix);
+        this.fullmoons.push({ index, alive: true, position: position.clone(), matrix: matrix.clone() });
+      });
+      this.fullMoonOrb.geometry.setAttribute('kbPhase', new T.InstancedBufferAttribute(moonPhases, 1));
+      this.fullMoonRing.geometry.setAttribute('kbPhase', new T.InstancedBufferAttribute(moonPhases.slice(), 1));
+      for (const mesh of [this.fullMoonOrb, this.fullMoonRing]) {
+        mesh.userData.kbLifted = true;
+        mesh.frustumCulled = false;
+        this.scene.add(mesh);
+      }
+    }
+    // Props that make the biomes readable from a distance: frozen spikes
+    // ringing the ice field, glowing crystals lighting the dark quarter.
+    // Deterministic golden-angle scatter -- zero worldRandom draws.
+    makeBiomeProps() {
+      const iceGlass = new T.MeshPhysicalMaterial({
+        color: 0xcfeaff, emissive: 0x2a6f9e, emissiveIntensity: .9,
+        metalness: .08, roughness: .1, transmission: .4, thickness: 2,
+        transparent: true, opacity: .9, clearcoat: 1, clearcoatRoughness: .05,
+      });
+      const spikeGeometry = new T.ConeGeometry(1, 1, 6, 1);
+      spikeGeometry.translate(0, .5, 0);
+      const spikes = [];
+      const spikeScratch = new T.Vector3();
+      for (let i = 0; i < 46; i++) {
+        const angle = i * 2.39996;
+        const reach = 55 + ((i * 47) % 97) * 1.35;
+        const spikeX = Math.cos(angle) * reach * 2.2;
+        const spikeZ = 1130 + Math.sin(angle) * reach;
+        // Skip the endgame shaft's footprint: a spike there would float
+        // mid-air the moment the moon opens.
+        if (arcTo(chartDirAt(spikeX, spikeZ, spikeScratch), FAR_SIGHTS.bowl) < 42) continue;
+        spikes.push({
+          x: spikeX,
+          z: spikeZ,
+          radius: 1 + ((i * 31) % 17) * .16,
+          height: 4 + ((i * 53) % 23) * .8,
+          tilt: (((i * 29) % 13) - 6) * .045,
+        });
+      }
+      const spikeMesh = new T.InstancedMesh(spikeGeometry, iceGlass, spikes.length);
+      const matrix = new T.Matrix4();
+      const position = new T.Vector3();
+      const quaternion = new T.Quaternion();
+      const tiltQuat = new T.Quaternion();
+      const scale = new T.Vector3();
+      spikes.forEach((spec, index) => {
+        const ground = this.sampleTerrainHeight(spec.x, spec.z);
+        chartLift(spec.x, ground - .8, spec.z, position);
+        liftQuatAt(spec.x, spec.z, quaternion);
+        tiltQuat.setFromEuler(new T.Euler(spec.tilt, spec.x, spec.tilt * 1.7));
+        quaternion.multiply(tiltQuat);
+        scale.set(spec.radius, spec.height, spec.radius);
+        matrix.compose(position, quaternion, scale);
+        spikeMesh.setMatrixAt(index, matrix);
+      });
+      spikeMesh.userData.kbLifted = true;
+      spikeMesh.castShadow = true;
+      this.scene.add(spikeMesh);
+      // Crystals: violet-cyan light sources scattered through the graben.
+      const crystalMaterial = new T.MeshStandardMaterial({
+        color: 0xb9a7ff, emissive: 0x8b5cf6, emissiveIntensity: 2.4,
+        roughness: .18, metalness: .2, flatShading: true,
+      });
+      const crystalGeometry = new T.ConeGeometry(.8, 3.2, 5, 1);
+      crystalGeometry.translate(0, 1.6, 0);
+      const crystals = [];
+      for (let i = 0; i < 34; i++) {
+        const angle = i * 2.39996 + 1.3;
+        const reach = 18 + ((i * 41) % 89) * 1.5;
+        crystals.push({
+          x: -520 + Math.cos(angle) * reach * 1.35,
+          z: 100 + Math.sin(angle) * reach,
+          scale: .7 + ((i * 37) % 19) * .09,
+          tilt: (((i * 23) % 11) - 5) * .09,
+        });
+      }
+      const crystalMesh = new T.InstancedMesh(crystalGeometry, crystalMaterial, crystals.length);
+      crystals.forEach((spec, index) => {
+        const ground = this.sampleTerrainHeight(spec.x, spec.z);
+        chartLift(spec.x, ground - .4, spec.z, position);
+        liftQuatAt(spec.x, spec.z, quaternion);
+        tiltQuat.setFromEuler(new T.Euler(spec.tilt, spec.x * 2.1, spec.tilt * 1.4));
+        quaternion.multiply(tiltQuat);
+        scale.setScalar(spec.scale);
+        matrix.compose(position, quaternion, scale);
+        crystalMesh.setMatrixAt(index, matrix);
+      });
+      crystalMesh.userData.kbLifted = true;
+      this.scene.add(crystalMesh);
+      const crystalGlow = this.makeGlowSprite(this.glowViolet, 30, .3);
+      chartLift(-520, this.sampleTerrainHeight(-520, 100) + 8, 100, crystalGlow.position);
+      crystalGlow.userData.kbLifted = true;
+      this.scene.add(crystalGlow);
+    }
+    // The visible promise: a plate of cracked obsidian flush with the ground,
+    // veins glowing brighter with every solid hit until it gives.
+    // THE CRYSTAL CAVES: the chunk-4 trenches get rock roofs (thin-body
+    // slabs, so the interior stays walkable and the roof is still a deck),
+    // violet light inside, and the crystal breakables under them.
+    makeCaves() {
+      const roofs = [
+        { x: 372, z: -148, radius: 15 }, { x: 383, z: -137, radius: 15 }, { x: 394, z: -126, radius: 15 },
+        { x: -533, z: 72, radius: 15 }, { x: -547, z: 88, radius: 15 },
+        { x: -486, z: 142, radius: 13 },
+      ];
+      const roofGeometry = new T.DodecahedronGeometry(1, 0);
+      const roofMesh = new T.InstancedMesh(roofGeometry, this.materials.darkRock, roofs.length);
+      const matrix = new T.Matrix4();
+      const position = new T.Vector3();
+      const quaternion = new T.Quaternion();
+      const scale = new T.Vector3();
+      roofs.forEach((roof, index) => {
+        // Rim height, sampled OUTSIDE the pit so the roof sits flush with the
+        // surrounding ground rather than sinking into the hole it covers.
+        const rim = Math.max(
+          this.sampleTerrainHeight(roof.x + roof.radius + 26, roof.z),
+          this.sampleTerrainHeight(roof.x - roof.radius - 26, roof.z),
+          this.sampleTerrainHeight(roof.x, roof.z + roof.radius + 26),
+          this.sampleTerrainHeight(roof.x, roof.z - roof.radius - 26),
+        );
+        chartLift(roof.x, rim + .8, roof.z, position);
+        liftQuatAt(roof.x, roof.z, quaternion);
+        scale.set(roof.radius * 1.12, 2.6, roof.radius * 1.12);
+        matrix.compose(position, quaternion, scale);
+        roofMesh.setMatrixAt(index, matrix);
+        this.sky.push({
+          id: `cave-roof-${index}`, x: roof.x, z: roof.z,
+          radius: roof.radius, top: rim + 1.6, body: 4.2, inert: true, cooldown: 0,
+          position: new T.Vector3(roof.x, rim + 1.6, roof.z),
+        });
+      });
+      roofMesh.userData.kbLifted = true;
+      roofMesh.castShadow = true;
+      roofMesh.receiveShadow = true;
+      this.scene.add(roofMesh);
+      for (const at of [[383, -137, -9], [-540, 80, -12], [-488, 142, -10]]) {
+        const glow = this.makeGlowSprite(this.glowViolet, 16, .4);
+        chartLift(at[0], at[2] + 4, at[1], glow.position);
+        glow.userData.kbLifted = true;
+        this.scene.add(glow);
+      }
+    }
+    makeCrustPlates() {
+      this.crustPlates = [];
+      for (const hole of CRUST_HOLES) {
+        const group = new T.Group();
+        const plate = new T.Mesh(
+          new T.CircleGeometry(7.2, 26),
+          new T.MeshStandardMaterial({
+            color: 0x191423, emissive: 0x36214f, emissiveIntensity: .5,
+            roughness: .5, metalness: .3, flatShading: true,
+          }),
+        );
+        plate.rotation.x = -Math.PI / 2;
+        group.add(plate);
+        const veins = new T.Mesh(
+          new T.RingGeometry(1.4, 6.6, 8, 2),
+          new T.MeshBasicMaterial({
+            color: 0xa96bff, transparent: true, opacity: .3,
+            depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+            wireframe: true,
+          }),
+        );
+        veins.rotation.x = -Math.PI / 2;
+        veins.position.y = .1;
+        group.add(veins);
+        const ground = this.sampleTerrainHeight(hole.x, hole.z);
+        chartLift(hole.x, ground + .25, hole.z, group.position);
+        liftQuatAt(hole.x, hole.z, group.quaternion);
+        group.userData.kbLifted = true;
+        this.scene.add(group);
+        this.crustPlates.push({
+          hole, group, veins,
+          position: group.position.clone(), maxHp: 5, hp: 5,
+        });
+      }
+    }
+    takeFullMoon(moon) {
+      if (!moon.alive) return false;
+      moon.alive = false;
+      this.moonAbsorbing = this.moonAbsorbing || [];
+      this.moonAbsorbing.push({ index: moon.index, from: moon.position.clone(), t: 0 });
+      this.particles.burst(moon.position, 0xdfe8ff, 26, 10, .9, .3);
+      this.pulseRing(moon.position, new T.Color(0xf6f4ff), 5, .5);
+      return true;
+    }
     restoreMoondrops() {
       if (!this.moondrops) return;
       if (this.absorbing) this.absorbing.length = 0;
+      if (this.moonAbsorbing) this.moonAbsorbing.length = 0;
+      if (this.fullmoons) {
+        for (const moon of this.fullmoons) {
+          if (!moon.alive) {
+            this.fullMoonOrb.setMatrixAt(moon.index, moon.matrix);
+            this.fullMoonRing.setMatrixAt(moon.index, moon.matrix);
+          }
+          moon.alive = true;
+        }
+        this.fullMoonOrb.instanceMatrix.needsUpdate = true;
+        this.fullMoonRing.instanceMatrix.needsUpdate = true;
+      }
       for (const drop of this.moondrops) {
         if (drop.spilled) {
           // Spilled crescents are ephemeral: a restart clears the ground.
@@ -3229,6 +3847,16 @@
           );
         }
       }
+      // THE CRYSTAL CAVES: breakables that live under the roofed trenches --
+      // tall glowing crystals instead of round rocks, so shape still carries
+      // the meaning. Smashing one pays like a rock but SOUNDS like a bell.
+      const caveCrystals = [
+        [372, -152, 1.6, 'crystal'], [378, -144, 2.1, 'crystal', null, true], [385, -136, 1.4, 'crystal'],
+        [390, -130, 1.9, 'crystal'], [396, -122, 1.5, 'crystal', null, true], [368, -142, 1.2, 'crystal'],
+        [-548, 74, 1.7, 'crystal'], [-540, 82, 2.2, 'crystal', null, true], [-532, 90, 1.5, 'crystal'],
+        [-526, 96, 1.8, 'crystal'], [-490, 138, 1.6, 'crystal', null, true], [-484, 146, 1.3, 'crystal'],
+      ];
+      caveCrystals.forEach(spec => addSpec(...spec));
       // ONE rock material for every breakable. The old build split them into
       // two colours that meant nothing mechanically — and the player this is
       // made for is colourblind, so it was a distinction that cost him
@@ -3236,9 +3864,11 @@
       // carrying a reward wears a crystal spur you can see from any angle and
       // in any palette.
       this.breakableMeshes = [];
+      const rockSpecs = specs.filter(spec => spec.kind !== 'crystal');
+      const crystalSpecs = specs.filter(spec => spec.kind === 'crystal');
       const geometry = new T.DodecahedronGeometry(1, 0);
-      const mesh = new T.InstancedMesh(geometry, this.materials.rock, specs.length);
-      specs.forEach((entry, index) => {
+      const mesh = new T.InstancedMesh(geometry, this.materials.rock, rockSpecs.length);
+      rockSpecs.forEach((entry, index) => {
         entry.mesh = mesh;
         entry.instanceIndex = index;
         mesh.setMatrixAt(index, entry.matrix);
@@ -3248,6 +3878,24 @@
       mesh.receiveShadow = true;
       this.scene.add(mesh);
       this.breakableMeshes.push(mesh);
+      if (crystalSpecs.length) {
+        const crystalGeometry = new T.ConeGeometry(.55, 2.6, 5, 1);
+        crystalGeometry.translate(0, .9, 0);
+        const crystalMaterial = new T.MeshStandardMaterial({
+          color: 0x9fe8ff, emissive: 0x3fb9e8, emissiveIntensity: 1.7,
+          roughness: .14, metalness: .25, flatShading: true,
+        });
+        const crystalMesh = new T.InstancedMesh(crystalGeometry, crystalMaterial, crystalSpecs.length);
+        crystalSpecs.forEach((entry, index) => {
+          entry.mesh = crystalMesh;
+          entry.instanceIndex = index;
+          crystalMesh.setMatrixAt(index, entry.matrix);
+        });
+        crystalMesh.instanceMatrix.needsUpdate = true;
+        crystalMesh.castShadow = this.quality === 'HIGH';
+        this.scene.add(crystalMesh);
+        this.breakableMeshes.push(crystalMesh);
+      }
 
       const rewards = specs.filter(spec => spec.reward);
       const spurGeometry = new T.ConeGeometry(.34, 1.5, 5);
@@ -3551,6 +4199,25 @@
           this.sky.push(mark);
           index++;
         }
+      }
+      for (const spec of SKY_STRUCTURES) {
+        const ground = this.sampleTerrainHeight(spec.x, spec.z);
+        const top = ground + spec.lift;
+        const slab = new T.Group();
+        slab.userData.kbOriginGroup = true;
+        this.scene.add(slab);
+        bodyParts.push(this.skySlabGeometry(spec.x, spec.z, top, spec.radius, false));
+        deckParts.push(this.skySlabGeometry(spec.x, spec.z, top, spec.radius, true));
+        const mark = {
+          id: `sky-${index}`, index, tier: 'structure', role: spec.role,
+          x: spec.x, z: spec.z, top, radius: spec.radius,
+          position: new T.Vector3(spec.x, top, spec.z),
+          group: slab, lit: false, cooldown: 0,
+        };
+        if (spec.body) mark.body = spec.body;
+        this.buildSkyFurniture(mark);
+        this.sky.push(mark);
+        index++;
       }
       const bodyMesh = new T.Mesh(mergeStaticGeometries(bodyParts), rock);
       bodyMesh.userData.kbWorldGeometry = true;
@@ -3873,6 +4540,12 @@
         [{ x: 60, z: -600, alt: 128 }, { x: 600, z: -470, alt: 148 }],
         [{ x: 0, z: 1000, alt: 108 }, { x: -90, z: 760, alt: 172 }],
         [{ x: 700, z: 300, alt: 118 }, { x: 260, z: -560, alt: 138 }],
+        // Ring ROADS: consecutive pairs read as one line in the sky -- ride
+        // the chain structure to structure.
+        [{ x: -300, z: 300, alt: 150 }, { x: -66, z: 126, alt: 158 }],   // helix out
+        [{ x: -30, z: 92, alt: 156 }, { x: 270, z: -312, alt: 128 }],    // ...to the coronet
+        [{ x: 446, z: 106, alt: 78 }, { x: 606, z: -194, alt: 128 }],    // archway out
+        [{ x: 578, z: -228, alt: 126 }, { x: 620, z: -520, alt: 150 }],  // ...to the peak
       ];
       const ringMaterial = new T.MeshBasicMaterial({
         color: 0x9fd8ff, transparent: true, opacity: .34, side: T.DoubleSide,
@@ -4689,6 +5362,94 @@
           roughness: .95, metalness: .02,
         });
       }
+      if (type === 'snowman') {
+        // Three stacked snowballs, coal eyes, a carrot, stick arms. It lobs
+        // real snowballs and pops a segment per hit. Pure snow-country joy.
+        const group = new T.Group();
+        const balls = [];
+        const sizes = [1.15, .82, .55];
+        let stackY = 0;
+        for (let i = 0; i < 3; i++) {
+          stackY += (i === 0 ? sizes[0] * .8 : sizes[i - 1] * .62 + sizes[i] * .62);
+          const ballMesh = new T.Mesh(new T.IcosahedronGeometry(sizes[i], 2), this.materials.snowHide);
+          ballMesh.position.y = stackY;
+          ballMesh.castShadow = true;
+          group.add(ballMesh);
+          balls.push(ballMesh);
+        }
+        const headY = balls[2].position.y;
+        const eye = new T.Mesh(new T.SphereGeometry(.09, 8, 6), new T.MeshStandardMaterial({ color: 0x10131a, roughness: .4 }));
+        eye.position.set(-.18, headY + .12, -.48);
+        group.add(eye);
+        const eye2 = eye.clone();
+        eye2.position.x = .18;
+        group.add(eye2);
+        const carrot = new T.Mesh(new T.ConeGeometry(.11, .62, 7), new T.MeshStandardMaterial({ color: 0xe8842e, roughness: .7 }));
+        carrot.rotation.x = -Math.PI / 2;
+        carrot.position.set(0, headY - .04, -.75);
+        group.add(carrot);
+        for (const side of [-1, 1]) {
+          const arm = new T.Mesh(new T.CapsuleGeometry(.05, 1.1, 3, 6), new T.MeshStandardMaterial({ color: 0x4a3421, roughness: .95 }));
+          arm.rotation.z = side * 1.25;
+          arm.position.set(side * 1.05, balls[1].position.y + .25, 0);
+          group.add(arm);
+        }
+        const weak = new T.Mesh(new T.OctahedronGeometry(.22, 0), this.materials.gold.clone());
+        weak.visible = false;
+        group.add(weak);
+        group.userData.snowballs = balls;
+        group.userData.headBits = [eye, eye2, carrot];
+        return { group, abdomen: balls[0], head: balls[2], eye, weak, legs: [], shield: null, scale: 1.2 };
+      }
+      if (type === 'phantom') {
+        // A dead astronaut, walking. White suit, black visor, a red light
+        // still breathing on the chest. The mirror of the player, and harder
+        // than anything else that walks.
+        if (!this.materials.suit) {
+          this.materials.suit = new T.MeshStandardMaterial({ color: 0xd8dde6, roughness: .6, metalness: .08 });
+          this.materials.visor = new T.MeshPhysicalMaterial({
+            color: 0x05070c, roughness: .08, metalness: .4, clearcoat: 1, emissive: 0x101822, emissiveIntensity: .4,
+          });
+        }
+        const group = new T.Group();
+        const torso = new T.Mesh(new T.CapsuleGeometry(.52, 1, 6, 12), this.materials.suit);
+        torso.position.y = 1.35;
+        torso.castShadow = true;
+        group.add(torso);
+        const helmet = new T.Mesh(new T.SphereGeometry(.42, 16, 12), this.materials.suit);
+        helmet.position.y = 2.35;
+        group.add(helmet);
+        const eye = new T.Mesh(new T.SphereGeometry(.3, 14, 10), this.materials.visor);
+        eye.position.set(0, 2.37, -.2);
+        eye.scale.set(1, .8, .82);
+        group.add(eye);
+        const pack = new T.Mesh(new T.BoxGeometry(.7, .95, .4), this.materials.suit);
+        pack.position.set(0, 1.55, .58);
+        group.add(pack);
+        const heart = new T.Mesh(
+          new T.SphereGeometry(.1, 8, 6),
+          new T.MeshStandardMaterial({ color: 0xff4444, emissive: 0xff2222, emissiveIntensity: 3 }),
+        );
+        heart.position.set(.2, 1.7, -.5);
+        group.add(heart);
+        for (const side of [-1, 1]) {
+          const leg = new T.Mesh(new T.CapsuleGeometry(.17, .72, 4, 8), this.materials.suit);
+          leg.position.set(side * .26, .5, 0);
+          group.add(leg);
+          const arm = new T.Mesh(new T.CapsuleGeometry(.13, .78, 4, 8), this.materials.suit);
+          arm.position.set(side * .68, 1.5, 0);
+          arm.rotation.z = side * .22;
+          group.add(arm);
+        }
+        const weak = new T.Mesh(new T.OctahedronGeometry(.24, 0), this.materials.gold.clone());
+        weak.position.set(0, 1.62, .84);
+        weak.visible = true;
+        group.add(weak);
+        const glow = this.makeGlowSprite(this.glowViolet, 3.4, .1);
+        glow.position.y = 1.4;
+        group.add(glow);
+        return { group, abdomen: torso, head: helmet, eye, weak, legs: [], shield: null, scale: 1.15 };
+      }
       const abdomenMaterial = type === 'warden' || type === 'floater' ? this.materials.violet
         : type === 'brute' ? this.materials.alienShell
           : type === 'skater' ? this.materials.frost
@@ -4859,7 +5620,7 @@
       // test keeps the ground beneath them walkable; the escape clause works
       // like the columns' so a recovery inside the shell can still walk out.
       for (const slab of this.sky || EMPTY_SOLIDS) {
-        const bottom = slab.top - (8 + slab.radius * .42);
+        const bottom = slab.top - (slab.body ?? (8 + slab.radius * .42));
         if (y <= bottom - .1 || y >= slab.top - .35) continue;
         const sideRadius = slab.radius * .92 + radius;
         const nextDistance = Math.hypot(x - slab.x, z - slab.z);
@@ -5330,21 +6091,89 @@
           }
         }
       }
+      this.updateSnowballs(dt, gameState);
       if (this.absorbing?.length) {
+        // Two beats, not one: the crescent pops up and SPINS where you found
+        // it (so drops buried in a kill are still seen), then streaks home.
         const target = gameState.ball.position;
         for (let i = this.absorbing.length - 1; i >= 0; i--) {
           const grab = this.absorbing[i];
-          grab.t += dt * 5;
+          grab.t += dt * 2.4;
           if (grab.t >= 1) {
             this.moondropMesh.setMatrixAt(grab.index, ZERO_MATRIX);
             this.absorbing.splice(i, 1);
             continue;
           }
-          absorbPoint.copy(grab.from).lerp(target, grab.t * grab.t);
-          absorbMatrix.compose(absorbPoint, absorbQuat.identity(), absorbScale.setScalar(1 - grab.t * .55));
+          dirAt(grab.from, absorbUp);
+          absorbQuat.setFromAxisAngle(absorbUp, grab.t * 15);
+          if (grab.t < .45) {
+            const pop = grab.t / .45;
+            absorbPoint.copy(grab.from).addScaledVector(absorbUp, Math.sin(pop * Math.PI * .5) * 1.4);
+            absorbScale.setScalar(1 + pop * .45);
+          } else {
+            const dive = (grab.t - .45) / .55;
+            absorbPoint.copy(grab.from).addScaledVector(absorbUp, 1.4).lerp(target, dive * dive);
+            absorbScale.setScalar(1.45 - dive * 1.1);
+          }
+          absorbMatrix.compose(absorbPoint, absorbQuat, absorbScale);
           this.moondropMesh.setMatrixAt(grab.index, absorbMatrix);
         }
         this.moondropMesh.instanceMatrix.needsUpdate = true;
+      }
+      if (this.moonAbsorbing?.length) {
+        const target = gameState.ball.position;
+        for (let i = this.moonAbsorbing.length - 1; i >= 0; i--) {
+          const grab = this.moonAbsorbing[i];
+          grab.t += dt * 1.9;
+          if (grab.t >= 1) {
+            this.fullMoonOrb.setMatrixAt(grab.index, ZERO_MATRIX);
+            this.fullMoonRing.setMatrixAt(grab.index, ZERO_MATRIX);
+            this.moonAbsorbing.splice(i, 1);
+            continue;
+          }
+          dirAt(grab.from, absorbUp);
+          absorbQuat.setFromAxisAngle(absorbUp, grab.t * 11);
+          if (grab.t < .45) {
+            const pop = grab.t / .45;
+            absorbPoint.copy(grab.from).addScaledVector(absorbUp, Math.sin(pop * Math.PI * .5) * 2.2);
+            absorbScale.setScalar(1 + pop * .6);
+          } else {
+            const dive = (grab.t - .45) / .55;
+            absorbPoint.copy(grab.from).addScaledVector(absorbUp, 2.2).lerp(target, dive * dive);
+            absorbScale.setScalar(1.6 - dive * 1.3);
+          }
+          absorbMatrix.compose(absorbPoint, absorbQuat, absorbScale);
+          this.fullMoonOrb.setMatrixAt(grab.index, absorbMatrix);
+          this.fullMoonRing.setMatrixAt(grab.index, absorbMatrix);
+        }
+        this.fullMoonOrb.instanceMatrix.needsUpdate = true;
+        this.fullMoonRing.instanceMatrix.needsUpdate = true;
+      }
+      if (this.flyingTrophies?.length) {
+        const ballAt = gameState.ball.position;
+        for (let i = this.flyingTrophies.length - 1; i >= 0; i--) {
+          const fly = this.flyingTrophies[i];
+          fly.t += dt;
+          fly.mesh.rotateOnWorldAxis(fly.up, dt * (4 + fly.t * 5));
+          if (fly.t < .95) {
+            const rise = fly.t / .95;
+            fly.mesh.position.copy(fly.from).addScaledVector(fly.up, Math.sin(rise * Math.PI * .5) * 5.5);
+            fly.mesh.scale.setScalar(1 + rise * .5);
+          } else if (fly.t < 1.35) {
+            const dive = (fly.t - .95) / .4;
+            fly.mesh.position.copy(fly.from).addScaledVector(fly.up, 5.5).lerp(ballAt, dive * dive);
+            fly.mesh.scale.setScalar(1.5 - dive * 1.15);
+          } else {
+            this.pulseRing(ballAt, new T.Color(fly.mesh.material.color.getHex()), 5, .4);
+            audio.score(true);
+            this.scene.remove(fly.mesh);
+            fly.mesh.geometry.dispose();
+            fly.mesh.material.dispose();
+            const flyGlow = fly.mesh.children[0];
+            if (flyGlow?.material) flyGlow.material.dispose();
+            this.flyingTrophies.splice(i, 1);
+          }
+        }
       }
       this.particles.update(dt);
       this.ringField.update(dt, this.camera);
@@ -5362,6 +6191,10 @@
       this.sun.position.copy(target).add(this.fxScratch);
       this.sun.target.position.copy(target).add(this.fxScratchB);
       this.sun.target.updateMatrixWorld();
+      // In THE DARK QUARTER the light itself dims and cools.
+      const darkHere = SPHERE_WORLD ? darkWeightAt(dirAt(target, this.fxScratch)) : 0;
+      this.sun.intensity = 4.65 * (1 - darkHere * .58);
+      this.ambient.intensity = .43 * (1 - darkHere * .35);
     }
     noteFrame(delta) {
       if (TEST_MODE || this.quality === 'LOW') return;
@@ -5508,10 +6341,12 @@
       this.facing = facing;
       this.radius = type === 'warden' ? 2.8 : type === 'brute' ? 2.05 : type === 'shield' ? 1.7
         : type === 'watcher' ? 1.55 : type === 'clinger' ? 1.35 : type === 'floater' ? 1.3
-          : type === 'drifter' ? 2.7 : type === 'shardling' ? 1.1 : type === 'skater' ? 2.6 : 1.25;
+          : type === 'drifter' ? 2.7 : type === 'shardling' ? 1.1 : type === 'skater' ? 2.6
+            : type === 'snowman' ? 2.6 : type === 'phantom' ? 1.7 : 1.25;
       this.maxHp = type === 'warden' ? 7 : type === 'brute' ? 3 : type === 'shield' ? 3
         : type === 'watcher' ? 2 : type === 'clinger' ? 2 : type === 'drifter' ? 3
-          : type === 'shardling' ? 2 : type === 'skater' ? 2 : 1;
+          : type === 'shardling' ? 2 : type === 'skater' ? 2
+            : type === 'snowman' ? 3 : type === 'phantom' ? 4 : 1;
       this.hp = this.maxHp;
       this.alive = true;
       this.phase = enemyRandom() * TAU;
@@ -5718,6 +6553,16 @@
         titan.group.scale.setScalar(1);
         titan.weak.material.emissiveIntensity = 1.9;
       }
+      for (const plate of world.crustPlates || []) {
+        if (plate.hole.open) {
+          plate.hole.open = false;
+          world.reDisplaceTerrain(plate.hole.dir, 30);
+        }
+        plate.hp = plate.maxHp;
+        plate.group.visible = true;
+        plate.veins.material.opacity = .3;
+        plate.group.children[0].material.emissiveIntensity = .5;
+      }
       if (this.endgameOpen) {
         // Reseal the moon: the flag flips first so reDisplaceTerrain samples
         // the closed law, restoring render AND collision together.
@@ -5753,9 +6598,42 @@
         ['scuttler', -428, 432], ['shardling', -392, 498], ['floater', -468, 502],
         ['scuttler', 356, 522], ['shardling', 702, 282], ['floater', 542, 398],
         ['brute', 642, -538], ['watcher', -4, -706], ['watcher', 98, 902], ['clinger', -602, -252],
+        // THE DARK QUARTER: dead astronauts walk the graben. Harder than
+        // anything else on foot, lit only by the crystals.
+        ['phantom', -540, 76], ['phantom', -498, 138], ['phantom', -560, 130],
+        ['phantom', -472, 66], ['phantom', -524, 178], ['phantom', -586, 92],
+        ['watcher', -516, 52], ['brute', -462, 118],
+        // Snowmen in the snow country, lobbing.
+        ['snowman', 246, -588], ['snowman', 302, -646], ['snowman', 200, -662],
+        ['snowman', 344, -580], ['snowman', 270, -540], ['snowman', 150, -600],
+        // Ambush pockets in the new landforms.
+        ['scuttler', -472, 88], ['clinger', -538, 84],           // dark cave mouth
+        ['shardling', 380, -140], ['shardling', 392, -128],      // crystal cave
+        ['scuttler', -466, 96], ['clinger', -378, 198],          // THE RILLE
+        ['scuttler', -556, -16], ['shardling', -302, 296],
+        ['shardling', 432, 66], ['shardling', 502, 140],         // THE DOMES
+        ['brute', 288, -344], ['brute', 268, -282],              // THE FINS
+        // Sky garrisons: floaters hover over the decks, scuttlers patrol them.
+        ['floater', -80, 780, 'deck'], ['floater', 0, 160, 'deck'],
+        ['floater', 300, -600, 'deck'], ['floater', 540, 400, 'deck'],
+        ['floater', 0, 660, 'deck'], ['floater', -440, 460, 'deck'],
+        ['scuttler', -320, -520, 'deck'], ['scuttler', -640, -230, 'deck'],
       ];
-      farSpawns.forEach(([type, x, z], index) => {
-        this.enemies.push(new AlienState(`far-${type}-${index}`, type, x, z, index * .9));
+      farSpawns.forEach(([type, x, z, deck], index) => {
+        const enemy = new AlienState(`far-${type}-${index}`, type, x, z, index * .9);
+        if (deck === 'deck') {
+          let best = null, bestD = 50;
+          for (const slab of world.sky || []) {
+            const d = Math.hypot(slab.x - x, slab.z - z);
+            if (d < bestD) { bestD = d; best = slab; }
+          }
+          if (best) {
+            enemy.position.x = best.x;
+            enemy.position.z = best.z;
+            enemy.position.y = best.top + .2;
+          }
+        }
+        this.enemies.push(enemy);
       });
       this.shieldEnemy = this.enemies.find(enemy => enemy.type === 'shield');
       this.warden = this.enemies.find(enemy => enemy.type === 'warden');
@@ -5825,6 +6703,23 @@
       world.restoreBreakables();
       world.restoreRockField();
       world.restoreMoondrops();
+      if (world.flyingTrophies) {
+        for (const fly of world.flyingTrophies) {
+          world.scene.remove(fly.mesh);
+          fly.mesh.geometry.dispose();
+          fly.mesh.material.dispose();
+          const glow = fly.mesh.children[0];
+          if (glow?.material) glow.material.dispose();
+        }
+        world.flyingTrophies.length = 0;
+      }
+      if (world.snowballs) {
+        for (let i = 0; i < world.snowballs.length; i++) {
+          world.snowballs[i].alive = false;
+          world.snowballMesh.setMatrixAt(i, ZERO_MATRIX);
+        }
+        world.snowballMesh.instanceMatrix.needsUpdate = true;
+      }
       world.restorePlayground();
       this.spawnEnemies();
       world.particles.clear();
@@ -6025,6 +6920,8 @@
       this.updateRoc(dt);
       this.updateColossus(dt);
       this.updateEndgame(dt);
+      this.updateCrustTransit();
+      this.updateThreatMusic();
       this.updatePlaygroundInteractions(dt);
       this.updateProgression();
       this.updateCamera(dt);
@@ -6085,6 +6982,7 @@
       const desiredVelocity = desiredDirection.multiplyScalar(maxSpeed);
       // THE ICE FIELD: grounded control goes drifty -- push builds slowly and
       // momentum carries. Normal ground is untouched.
+      this.jumpHeldNow = !!frame.jump;
       let iciness = player.grounded && SPHERE_WORLD ? iceWeightAt(dirAt(player.position, this.tempC)) : 0;
       if (iciness > 0 && MOONHOLE.open) iciness *= smoothstep(30, 40, arcTo(this.tempC, FAR_SIGHTS.bowl));
       const acceleration = (player.grounded ? (sprinting ? 58 : 72) : 35) * (1 - iciness * .62);
@@ -6169,7 +7067,7 @@
       if (vspeedOf(player.velocity, pf.up) > 0) {
         const crown = pf.alt + 1.9;
         for (const slab of world.sky || EMPTY_SOLIDS) {
-          const slabBottom = slab.top - (8 + slab.radius * .42);
+          const slabBottom = slab.top - (slab.body ?? (8 + slab.radius * .42));
           if (crown <= slabBottom || pf.alt >= slabBottom) continue;
           if (Math.hypot(pf.x - slab.x, pf.z - slab.z) >= slab.radius * .92) continue;
           setAltAt(player.position, slabBottom - 1.9);
@@ -6838,6 +7736,7 @@
         this.resolveBallEnemies();
         this.resolveBallRoc();
         this.resolveBallColossus();
+        this.resolveBallCrust();
         this.resolveBallMoonheart();
       }
       const nextLineActive = this.lineHeld || ball.mode === 'returning' || ball.mode === 'anchored'
@@ -7025,7 +7924,7 @@
       const ball = this.ball;
       for (const slab of world.sky || EMPTY_SOLIDS) {
         const bc = chartFrameAt(ball.position, this.ballChart);
-        const slabBottom = slab.top - (8 + slab.radius * .42);
+        const slabBottom = slab.top - (slab.body ?? (8 + slab.radius * .42));
         if (bc.alt - ball.radius >= slab.top - .35 || bc.alt + ball.radius <= slabBottom) continue;
         const dx = bc.x - slab.x;
         const dz = bc.z - slab.z;
@@ -7099,6 +7998,22 @@
         if (this.drops % 6 === 0) {
           this.shake = Math.max(this.shake, .12);
           world.pulseRing(ball, new T.Color(0x9defff), 6.5, .42);
+        }
+      }
+      // FULL MOONS: worth five, and the take is worth a real beat.
+      if (world.fullmoons) {
+        const moonReachSq = (flying ? ballReach + 1.6 : 3.4) ** 2;
+        for (const moon of world.fullmoons) {
+          if (!moon.alive) continue;
+          const taken = moon.position.distanceToSquared(ball) < moonReachSq
+            || moon.position.distanceToSquared(player) < 10.9;
+          if (!taken || !world.takeFullMoon(moon)) continue;
+          this.drops += 5;
+          this.score += 400;
+          this.stats.fullmoons = (this.stats.fullmoons || 0) + 1;
+          audio.score(true);
+          this.shake = Math.max(this.shake, .16);
+          world.pulseRing(ball, new T.Color(0xf6f4ff), 9, .5);
         }
       }
     }
@@ -7567,8 +8482,27 @@
         }
       }
       for (const slab of world.sky) {
+        if (slab.inert) continue;
         slab.cooldown = Math.max(0, slab.cooldown - dt);
-        const near = player.position.distanceToSquared(slab.position) < 260 * 260;
+        const nearSq = player.position.distanceToSquared(slab.position);
+        // Two cull rings. The lit-flame constellation (plinth + flame, two
+        // small meshes) reads out to 640 m; the ROLE furniture -- 44 m vent
+        // plumes, cache knots, spinners -- is the additive-overdraw bomb and
+        // hides beyond 380 m (the sphere hides things; the frustum does not).
+        const showFurniture = nearSq < 640 * 640;
+        if (slab.group.visible !== showFurniture) slab.group.visible = showFurniture;
+        if (!showFurniture) continue;
+        const showRoles = nearSq < 380 * 380;
+        if (slab.roleShown !== showRoles) {
+          slab.roleShown = showRoles;
+          for (const child of slab.group.children) {
+            if (child === slab.plinth || child === slab.flame) continue;
+            // Never resurrect a smashed cache shard's mesh.
+            if (showRoles && slab.cache && slab.cache.some(entry => entry.mesh === child && !entry.alive)) continue;
+            child.visible = showRoles;
+          }
+        }
+        const near = nearSq < 260 * 260;
         // The plinth flame keeps turning whether or not you are close, so the
         // lit ones read as a constellation from the ground.
         slab.flameSpin = (slab.flameSpin || 0) + dt * (slab.lit ? 2.6 : .5);
@@ -8215,6 +9149,7 @@
       this.shake = Math.max(this.shake, .8);
       this.addStyle(34, 6000, `${spec.id.toUpperCase()} CORE`, `#${spec.color.toString(16).padStart(6, '0')}`);
       world.particles.burst(boss.position, spec.color, 120, 26, 1.5, .4);
+      world.spawnTrophy(boss.position, spec.color);
       world.particles.burst(boss.position, 0xffffff, 50, 18, 1.1, .5);
       world.pulseRing(boss.position, new T.Color(spec.color), 26, .9);
       world.pulseRing(this.ball.position, new T.Color(spec.color), 12, .7);
@@ -8248,11 +9183,21 @@
           if (enemy.deadTimer <= 0) visual.group.visible = false;
           continue;
         }
-        visual.group.visible = true;
-        visual.group.scale.setScalar(1);
         const summitLocked = enemy.summit && world.fracture.active;
         const toPlayer = this.playerChartVec.clone().sub(enemy.position);
         const horizontalDistance = Math.hypot(toPlayer.x, toPlayer.z);
+        // The far side's garrisons live INSIDE the view frustum even when the
+        // moon itself hides them (the sphere curves away, the frustum does
+        // not), so every distant enemy was still a handful of draw calls.
+        // Beyond ~340 chart-m nothing is visible OR active: skip it whole.
+        if (horizontalDistance > 340) {
+          if (visual.group.visible) visual.group.visible = false;
+          enemy.tensing = 0;
+          enemy.dropping = 0;
+          continue;
+        }
+        visual.group.visible = true;
+        visual.group.scale.setScalar(1);
         const activeRange = enemy.type === 'warden' ? 80 : enemy.type === 'floater' ? 58 : 46;
         if (!summitLocked && horizontalDistance < activeRange && enemy.stun <= 0) {
           const desiredFacing = Math.atan2(toPlayer.x, toPlayer.z);
@@ -8292,6 +9237,45 @@
             const direction = toPlayer.setY(0).normalize();
             enemy.velocity.x = damp(enemy.velocity.x, direction.x * surge, 2.4, dt);
             enemy.velocity.z = damp(enemy.velocity.z, direction.z * surge, 2.4, dt);
+          } else if (enemy.type === 'snowman') {
+            // Waddles, TENSES (the vibrate is the telegraph), then LOBS.
+            const direction = toPlayer.setY(0).normalize();
+            const braking = enemy.tensing > 0 ? 0 : 2.4;
+            enemy.velocity.x = damp(enemy.velocity.x, direction.x * braking, 2, dt);
+            enemy.velocity.z = damp(enemy.velocity.z, direction.z * braking, 2, dt);
+            if (horizontalDistance < 52 && enemy.attackCooldown <= 0 && enemy.tensing <= 0) {
+              enemy.tensing = .55;
+              enemy.attackCooldown = 4.4;
+            }
+            if (enemy.tensing > 0) {
+              enemy.tensing = Math.max(0, enemy.tensing - dt);
+              if (enemy.tensing === 0) {
+                world.throwSnowball(enemy.position, this.playerChartVec);
+                audio.impact(.4, 'alien');
+              }
+            }
+          } else if (enemy.type === 'phantom') {
+            // Pursues with a sidestep weave, and RUSHES after a short stand-up
+            // -- the drifter's telegraph grammar, worn by a dead astronaut.
+            if (horizontalDistance < 30 && enemy.attackCooldown <= 0 && enemy.tensing <= 0 && enemy.dropping <= 0) {
+              enemy.tensing = .6;
+              enemy.attackCooldown = 5;
+            }
+            if (enemy.tensing > 0) {
+              enemy.tensing = Math.max(0, enemy.tensing - dt);
+              if (enemy.tensing === 0) {
+                enemy.dropping = 1.4;
+                world.pulseRing(fromChartVec(this.tempC.copy(enemy.position)), new T.Color(0xff4444), 5, .3, true);
+                audio.impact(.5, 'alien');
+              }
+            }
+            const rush = enemy.dropping > 0 ? 13 : 5.6;
+            const direction = toPlayer.setY(0).normalize();
+            const weave = Math.sin(this.time * 1.9 + enemy.phase) * (enemy.dropping > 0 ? 0 : .55);
+            const wx = direction.x + direction.z * weave;
+            const wz = direction.z - direction.x * weave;
+            enemy.velocity.x = damp(enemy.velocity.x, wx * rush, 3, dt);
+            enemy.velocity.z = damp(enemy.velocity.z, wz * rush, 3, dt);
           } else if (enemy.type === 'scuttler') {
             const direction = toPlayer.setY(0).normalize();
             const strafe = Math.sin(this.time * 2.2 + enemy.phase) * .35;
@@ -8398,7 +9382,11 @@
         enemy.position.z += enemy.velocity.z * dt;
         const floor = world.floorHeight(enemy.position.x, enemy.position.z, enemy.position.y + 2);
         if (enemy.dropping > 0) enemy.dropping = Math.max(0, enemy.dropping - dt);
+        if (enemy.tensing > 0 && (summitLocked || horizontalDistance >= activeRange || enemy.stun > 0)) enemy.tensing = 0;
         const hop = enemy.type === 'skater' ? .06
+          : enemy.type === 'snowman'
+            ? (enemy.tensing > 0 ? .55 + Math.sin(this.time * 24) * .14 : Math.abs(Math.sin(this.time * 3.1 + enemy.phase)) * .22)
+          : enemy.type === 'phantom' ? (enemy.tensing > 0 ? .5 + Math.sin(this.time * 26) * .1 : .02)
           : enemy.type === 'drifter'
             ? (enemy.dropping > 0 ? .9 : (enemy.tensing > 0 ? .7 + Math.sin(this.time * 22) * .18 : -.85))
             : enemy.type === 'scuttler' ? Math.max(0, Math.sin(this.time * 5.2 + enemy.phase)) * .32
@@ -8423,8 +9411,16 @@
         liftQuatAt(enemy.position.x, enemy.position.z, visual.group.quaternion)
           .multiply(this.frameQuat.setFromAxisAngle(UP, enemy.facing + Math.PI));
         visual.abdomen.scale.y = visual.scale * (.8 + hop * .08);
-        visual.eye.material.emissiveIntensity = 3.8 + Math.sin(this.time * 5 + enemy.phase) * .9;
-        visual.weak.visible = enemy.type === 'shield' || enemy.type === 'warden' || enemy.type === 'brute';
+        // The phantom's visor keeps its own dead calm; every other eye pulses.
+        if (enemy.type !== 'phantom') visual.eye.material.emissiveIntensity = 3.8 + Math.sin(this.time * 5 + enemy.phase) * .9;
+        visual.weak.visible = enemy.type === 'shield' || enemy.type === 'warden' || enemy.type === 'brute' || enemy.type === 'phantom';
+        // Snowmen pop a segment per hit: body balls (and the face with the
+        // head) vanish as hp falls.
+        if (enemy.type === 'snowman' && visual.group.userData.snowballs) {
+          visual.group.userData.snowballs.forEach((ballMesh, i) => { ballMesh.visible = i < enemy.hp; });
+          const headOn = enemy.hp >= 3;
+          for (const bit of visual.group.userData.headBits) bit.visible = headOn;
+        }
         if (visual.weak.visible) {
           // Damage is written on the armour: the core burns brighter and beats
           // faster the closer this thing is to breaking, so a player can read
@@ -8531,6 +9527,22 @@
       roc.body.material.emissiveIntensity = .85 + roc.hitFlash * 2.6 + wounded * .5;
       if (roc.mode !== 'rear') roc.weak.material.emissiveIntensity = 1.9 + wounded * 2.2 + Math.sin(this.time * (4 + wounded * 6)) * .6;
     }
+    // How much danger the music should admit to: nearest living boss wins.
+    feelThreat(position, reach) {
+      const away = arcTo(this.threatPlayerDir, dirAt(position, this.tempB));
+      if (away < reach) this.threatNow = Math.max(this.threatNow, 1 - away / reach);
+    }
+    updateThreatMusic() {
+      this.threatPlayerDir = dirAt(this.player.position, this.tempC);
+      this.threatNow = 0;
+      if (world.colossus?.alive) this.feelThreat(world.colossus.position, 65);
+      if (world.roc?.alive) this.feelThreat(world.roc.position, 70);
+      if (this.endgameOpen && world.moonheart?.alive) this.feelThreat(world.moonheart.position, 55);
+      for (const region of world.regions) {
+        if (region.boss?.alive && region.boss.engaged !== false) this.feelThreat(region.boss.position, 50);
+      }
+      audio.setThreat(this.threatNow);
+    }
     updateColossus(dt) {
       const titan = world.colossus;
       if (!titan) return;
@@ -8591,6 +9603,62 @@
       }
       titan.chest.rotation.y = Math.sin(this.time * .5) * .08;
     }
+    resolveBallCrust() {
+      const ball = this.ball;
+      if (ball.mode !== 'outbound' && ball.mode !== 'returning') return;
+      for (const plate of world.crustPlates || []) {
+        if (plate.hole.open || ball.collisionCooldown.has(plate.hole)) continue;
+        if (plate.position.distanceTo(ball.position) > 7.4 + ball.radius) continue;
+        const speed = ball.velocity.length();
+        if (speed <= 8) continue;
+        ball.collisionCooldown.set(plate.hole, .3);
+        plate.hp -= speed > 42 ? 2 : 1;
+        const cracked = 1 - Math.max(0, plate.hp) / plate.maxHp;
+        plate.veins.material.opacity = .3 + cracked * .65;
+        plate.group.children[0].material.emissiveIntensity = .5 + cracked * 1.6;
+        this.showHitMarker(plate.hp <= 0);
+        world.particles.burst(ball.position, 0xa96bff, 18, 9, .7, .2);
+        audio.impact(.9, 'rock');
+        this.shake = Math.max(this.shake, .22);
+        if (plate.hp > 0) continue;
+        // THE MOON IS OPEN. Fall in, fall THROUGH, come out the other side.
+        plate.hole.open = true;
+        plate.group.visible = false;
+        world.reDisplaceTerrain(plate.hole.dir, 30);
+        world.pulseRing(plate.position, new T.Color(0xa96bff), 18, .8);
+        world.particles.burst(plate.position, 0xc9a7ff, 60, 18, 1.2, .3);
+        audio.impact(1, 'rock');
+        audio.score(true);
+        this.shake = Math.max(this.shake, .7);
+        this.addStyle(24, 1800, 'THE MOON IS THIN HERE', '#c9a7ff');
+      }
+    }
+    // Falling deep inside a thin place hands you to the far side of the moon.
+    updateCrustTransit() {
+      const playerDir = dirAt(this.player.position, this.tempC);
+      for (const hole of CRUST_HOLES) {
+        if (!hole.open) continue;
+        if (arcTo(playerDir, hole.dir) > 11 || altAt(this.player.position) > -30) continue;
+        const exitDir = this.tempB.copy(hole.dir).negate();
+        this.player.position.copy(PLANET_CENTRE).addScaledVector(exitDir, PLANET.radius + 52);
+        this.player.velocity.copy(exitDir).multiplyScalar(-4);
+        this.player.grounded = false;
+        this.player.jumpsUsed = 0;
+        if (this.ball.mode !== 'ready') {
+          this.ball.position.copy(PLANET_CENTRE).addScaledVector(exitDir, PLANET.radius + 55);
+          this.ball.velocity.set(0, 0, 0);
+          this.ball.mode = 'returning';
+        }
+        this.rewardFlash = 1;
+        if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', '#ffffff');
+        world.pulseRing(this.player.position, new T.Color(0xc9a7ff), 14, .8);
+        audio.impact(1, 'rock');
+        audio.score(true);
+        this.shake = Math.max(this.shake, .55);
+        this.addStyle(20, 1400, 'THROUGH THE MOON', '#c9a7ff');
+        return;
+      }
+    }
     resolveBallColossus() {
       const titan = world.colossus;
       const ball = this.ball;
@@ -8632,6 +9700,7 @@
       if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', '#c9a06a');
       this.cores.add('colossus');
       this.stats.cores++;
+      world.spawnTrophy(centre, 0xc9a06a);
       this.addStyle(34, 5200, 'THE COLOSSUS FALLS', '#ffd66b');
       world.pulseRing(centre, new T.Color(0xc9a06a), 30, .8);
       audio.win();
@@ -8677,6 +9746,7 @@
       if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', '#ffb42a');
       this.cores.add('roc');
       this.stats.cores++;
+      world.spawnTrophy(roc.position, 0xffb42a);
       this.addStyle(34, 5200, 'THE ROC FALLS', '#ffd66b');
       world.pulseRing(roc.position, new T.Color(0xffb42a), 30, .8);
       audio.win();
@@ -8701,11 +9771,11 @@
           && arcTo(dirAt(this.player.position, this.playerUpScratch), FAR_SIGHTS.bowl) > 60;
       }
       if (!this.endgameComplete) return;
-      // The easy way back up: the open heart breathes a standing updraft the
-      // whole height of the shaft -- measured in the same TRUE arc metric
-      // that carved the shaft, so it fills the entire pit floor.
+      // The way back up -- but only while JUMP is held. Alex wanted back DOWN
+      // after the win and the old always-on draft kept spitting him out;
+      // now falling in with jump released is a normal fall.
       const pAlt = altAt(this.player.position);
-      if (pAlt > MOONHOLE.depth - 3 && pAlt < -6
+      if (this.jumpHeldNow && pAlt > MOONHOLE.depth - 3 && pAlt < -6
         && arcTo(dirAt(this.player.position, this.playerUpScratch), FAR_SIGHTS.bowl) < 15) {
         const vy = vspeedOf(this.player.velocity, this.player.up);
         setVspeed(this.player.velocity, this.player.up, Math.min(48, vy + 48 * 2.4 * dt));
@@ -8867,7 +9937,7 @@
         if (playerDistance > 2.1 && ballDistance > 1.65) continue;
         pickup.active = false;
         pickup.group.visible = false;
-        this.player.health = Math.min(5, this.player.health + 1);
+        this.player.health = Math.min(this.player.maxHealth, this.player.health + 1);
         this.player.jumpsUsed = 0;
         this.player.jumpBuffer = Math.max(this.player.jumpBuffer, .06);
         this.addStyle(8, 420, pickup.label, '#ffd66b');
@@ -8932,7 +10002,7 @@
         player.up.copy(trueUp);
       }
       player.pitch = -.05;
-      player.health = 5;
+      player.health = player.maxHealth;
       player.grounded = false;
       player.jumpsUsed = 0;
       player.invulnerable = 1.4;
@@ -9196,6 +10266,60 @@
           ui.stoneCounter.classList.add('bump');
           if (Math.floor(this.drops / 50) > Math.floor(previousDrops / 50)) ui.stoneCounter.classList.add('milestone');
         }
+      }
+      // Boss trophy sockets: build once from the core table, then light
+      // each socket in its core's colour the moment that core is owned.
+      if (ui.coreCounter) {
+        if (!ui.coreCounter.childElementCount) {
+          for (const id of ['ember', 'piton', 'kite', 'comet', 'roc', 'colossus']) {
+            const socket = document.createElement('i');
+            socket.className = 'core-socket';
+            socket.dataset.core = id;
+            socket.style.setProperty('--core-tint', `#${BALL_CORES[id].color.toString(16).padStart(6, '0')}`);
+            ui.coreCounter.appendChild(socket);
+          }
+        }
+        if (this.lastCoreCount !== this.cores.size) {
+          this.lastCoreCount = this.cores.size;
+          for (const socket of ui.coreCounter.children) {
+            const owned = this.cores.has(socket.dataset.core);
+            if (owned && !socket.classList.contains('lit')) {
+              socket.classList.add('lit');
+              socket.classList.remove('flash');
+              void socket.offsetWidth;
+              socket.classList.add('flash');
+            } else if (!owned) {
+              socket.classList.remove('lit', 'flash');
+            }
+          }
+        }
+      }
+      // Suit lights, bottom right: one glass pip per hit point. The visor
+      // frost stays; this is the countable copy of the same fact.
+      if (ui.suitMeter) {
+        if (ui.suitMeter.childElementCount !== this.player.maxHealth) {
+          ui.suitMeter.textContent = '';
+          for (let i = 0; i < this.player.maxHealth; i++) {
+            const pip = document.createElement('i');
+            pip.className = 'suit-pip';
+            ui.suitMeter.appendChild(pip);
+          }
+          this.lastShownHealth = this.player.maxHealth;
+        }
+        if (this.lastShownHealth !== this.player.health) {
+          const fell = this.player.health < this.lastShownHealth;
+          this.lastShownHealth = this.player.health;
+          [...ui.suitMeter.children].forEach((pip, index) => {
+            pip.classList.toggle('lost', index >= this.player.health);
+          });
+          if (fell && ui.suitMeter.children[this.player.health]) {
+            const pip = ui.suitMeter.children[this.player.health];
+            pip.classList.remove('crack');
+            void pip.offsetWidth;
+            pip.classList.add('crack');
+          }
+        }
+        ui.suitMeter.dataset.critical = String(this.player.health <= 1 && this.started && !this.won);
       }
       // Suit integrity is peripheral vision, not a pip row: the visor frosts
       // red as health falls, and the last hit point breathes.
@@ -10597,6 +11721,96 @@
         sawWindup && sawStomp && stompLift > 8 && baredHit > frontHit && !titan.alive && game.cores.has('colossus'),
         { sawWindup, sawStomp, stompLift: +stompLift.toFixed(1), baredHit, frontHit, trophy: game.cores.has('colossus') });
 
+      // THE SUIT LIGHTS: pips mirror health, sockets mirror cores.
+      game.restart();
+      game.started = true;
+      game.stepWith(FIXED_DT, {});
+      const pipsBefore = ui.suitMeter ? ui.suitMeter.childElementCount : -1;
+      game.player.damageCooldown = 0;
+      game.damagePlayer({ position: toChartVec(new T.Vector3().copy(game.player.position)) });
+      game.stepWith(FIXED_DT, {});
+      const lostPips = ui.suitMeter ? [...ui.suitMeter.children].filter(pip => pip.classList.contains('lost')).length : -1;
+      check('the-suit-writes-its-pips',
+        pipsBefore === game.player.maxHealth && lostPips === game.player.maxHealth - game.player.health && lostPips > 0,
+        { pipsBefore, lostPips, health: game.player.health, max: game.player.maxHealth });
+
+      // FULL MOONS: a flying ball drinks one and it pays five.
+      game.restart();
+      game.started = true;
+      const fullMoon = world.fullmoons.find(moon => moon.alive);
+      KICKBALL.setBall(0, 0, 0, 0, 0, 0);
+      game.ball.position.copy(fullMoon.position);
+      game.ball.mode = 'outbound';
+      const moonPayBefore = game.drops;
+      game.collectMoondrops();
+      check('full-moons-pay-five',
+        game.drops >= moonPayBefore + 5 && !fullMoon.alive,
+        { paid: game.drops - moonPayBefore, taken: !fullMoon.alive });
+      game.restart();
+      check('full-moons-respawn-on-restart', world.fullmoons.every(moon => moon.alive),
+        { alive: world.fullmoons.filter(moon => moon.alive).length, total: world.fullmoons.length });
+
+      // THE THIN PLACES: break a crust crustPlate, fall in, come out the exact
+      // opposite side of the moon.
+      game.restart();
+      game.started = true;
+      const crustPlate = world.crustPlates[0];
+      const plateGroundBefore = groundHeightAt(crustPlate.hole.x, crustPlate.hole.z);
+      let plateSwings = 0;
+      while (!crustPlate.hole.open && plateSwings++ < 12) {
+        game.ball.mode = 'outbound';
+        game.ball.collisionCooldown.clear();
+        game.ball.position.copy(crustPlate.position).addScaledVector(dirAt(crustPlate.position, new T.Vector3()), 2);
+        game.ball.velocity.copy(dirAt(crustPlate.position, new T.Vector3())).multiplyScalar(-20);
+        game.resolveBallCrust();
+      }
+      const plateGroundOpen = groundHeightAt(crustPlate.hole.x, crustPlate.hole.z);
+      KICKBALL.setPlayer(crustPlate.hole.x, -34, crustPlate.hole.z);
+      game.stepWith(FIXED_DT * 2, {});
+      const playerAfterTransit = game.player.position.clone();
+      const throughDot = dirAt(game.player.position, new T.Vector3()).dot(crustPlate.hole.dir);
+      game.restart();
+      const plateGroundResealed = groundHeightAt(crustPlate.hole.x, crustPlate.hole.z);
+      check('the-moon-is-thin-here',
+        crustPlate.hole.open === false && plateGroundBefore > -20 && plateGroundOpen < -38
+        && throughDot < -.98 && Math.abs(plateGroundResealed - plateGroundBefore) < .5,
+        {
+          swings: plateSwings, opened: plateGroundOpen < -38, throughDot: +throughDot.toFixed(3),
+          resealed: +plateGroundResealed.toFixed(1), before: +plateGroundBefore.toFixed(1),
+          endedAt: toChartVec(new T.Vector3().copy(playerAfterTransit)).toArray().map(v => +v.toFixed(1)),
+
+        });
+
+      // THE CRYSTAL CAVES: a real room -- pit floor below, solid roof deck
+      // above, and the inside is the pit, not the roof.
+      const caveRoof = world.sky.find(slab => slab.id === 'cave-roof-1');
+      const caveFloor = groundHeightAt(caveRoof.x, caveRoof.z);
+      check('the-caves-are-rooms',
+        !!caveRoof && caveFloor < caveRoof.top - 8
+        && world.floorHeight(caveRoof.x, caveRoof.z, caveRoof.top + 5) === caveRoof.top
+        && world.floorHeight(caveRoof.x, caveRoof.z, caveFloor + 2) < caveRoof.top - 6,
+        { floor: +caveFloor.toFixed(1), roof: +caveRoof.top.toFixed(1) });
+
+      // SNOWMEN lob, PHANTOMS rush: the new species actually do their verbs.
+      game.restart();
+      game.started = true;
+      const snowman = game.enemies.find(enemy => enemy.type === 'snowman' && enemy.alive);
+      KICKBALL.setPlayer(snowman.position.x + 20, groundHeightAt(snowman.position.x + 20, snowman.position.z) + .1, snowman.position.z);
+      snowman.attackCooldown = 0;
+      snowman.stun = 0;
+      for (let tick = 0; tick < 240 && !(world.snowballs || []).some(entry => entry.alive); tick++) game.stepWith(FIXED_DT, {});
+      const lobbed = (world.snowballs || []).some(entry => entry.alive);
+      const phantom = game.enemies.find(enemy => enemy.type === 'phantom' && enemy.alive);
+      KICKBALL.setPlayer(phantom.position.x + 16, groundHeightAt(phantom.position.x + 16, phantom.position.z) + .1, phantom.position.z);
+      phantom.attackCooldown = 0;
+      phantom.stun = 0;
+      let sawRush = false;
+      for (let tick = 0; tick < 360 && !sawRush; tick++) {
+        game.stepWith(FIXED_DT, {});
+        if (phantom.dropping > 0) sawRush = true;
+      }
+      check('snowmen-lob-and-phantoms-rush', lobbed && sawRush, { lobbed, sawRush });
+
       // THE ROC: it flies, every solid hit takes something off, a talon
       // strike from above takes more, and killing it pays a fountain and a
       // fifth trophy.
@@ -10808,7 +12022,7 @@
         game.resolveBallEnemies();
         return before - enemy.hp;
       };
-      for (const type of ['shardling', 'clinger', 'watcher', 'shield', 'brute', 'skater', 'drifter']) {
+      for (const type of ['shardling', 'clinger', 'watcher', 'shield', 'brute', 'skater', 'drifter', 'snowman', 'phantom']) {
         const enemy = game.enemies.find(item => item.type === type && item.alive);
         if (!enemy) continue;
         enemy.hp = enemy.maxHp = 40;
@@ -10966,7 +12180,7 @@
       // from the side and below, and never a phantom floor that yanks a ball
       // up through the deck.
       const solidSky = world.sky.map(slab => {
-        const slabBottom = slab.top - (8 + slab.radius * .42);
+        const slabBottom = slab.top - (slab.body ?? (8 + slab.radius * .42));
         return {
           id: slab.id,
           deck: world.floorHeight(slab.x, slab.z, slab.top + 1) >= slab.top - .01,
@@ -10981,6 +12195,7 @@
       // No slab may be speared by a spire or buried in the mesa: standing on
       // one has to mean standing in open sky, not inside another object.
       const speared = world.sky.filter(slab => {
+        if (slab.inert) return false;
         for (const solid of world.regionSolids(slab.x, slab.z)) {
           if (Math.hypot(slab.x - solid.x, slab.z - solid.z) > slab.radius + solid.radius) continue;
           if (solid.top > slab.top - 6) return true;
@@ -10994,7 +12209,7 @@
       const roles = {};
       for (const slab of world.sky) roles[slab.role] = (roles[slab.role] || 0) + 1;
       check('every-sky-slab-has-something-to-do',
-        world.sky.every(slab => slab.plinth && slab.flame)
+        world.sky.every(slab => slab.inert || (slab.plinth && slab.flame))
         && Object.keys(roles).length >= 5
         && roles.crown === 1,
         roles);
@@ -11134,11 +12349,12 @@
       // Two rock colours that meant nothing, to a colourblind player. Meaning
       // now lives in shape: one material, and reward rocks wear a spur.
       const rockMaterials = new Set(world.breakables.map(item => item.mesh.material.uuid));
+      const rockGeometries = new Set(world.breakables.map(item => item.mesh.geometry.uuid));
       const spurred = world.breakables.filter(item => item.spur).length;
       const rewarded = world.breakables.filter(item => item.reward).length;
       check('breakables-speak-in-shape-not-colour',
-        rockMaterials.size === 1 && spurred === rewarded && spurred > 0,
-        { materials: rockMaterials.size, spurred, rewarded });
+        rockMaterials.size === rockGeometries.size && spurred === rewarded && spurred > 0,
+        { materials: rockMaterials.size, geometries: rockGeometries.size, spurred, rewarded });
 
       const simulateFlightSpin = direction => {
         game.restart();
@@ -11520,7 +12736,8 @@
       // in a 4 m strip; the arc-metric one must fill the floor)
       const pitPlayerStart = MOONHOLE.depth + 2;
       KICKBALL.setPlayer(31, pitPlayerStart, 1127);
-      game.stepWith(2.2, {});
+      // The post-victory updraft is HOLD-JUMP now (Alex wanted back down too)
+      game.stepWith(2.2, { jump: true });
       const pitAlt = altAt(game.player.position);
       check('the-end-of-the-moon-opens-fights-and-smiles',
         holeOpened && iceBefore > -30 && iceAfter < -70

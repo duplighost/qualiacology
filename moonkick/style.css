@@ -1730,14 +1730,18 @@ body.touch-enabled .touch-pad > span {
   filter: drop-shadow(0 0 10px rgba(255, 190, 60, .45));
   animation: stoneShimmer 3.6s linear infinite;
   pointer-events: none;
-  transition: transform .13s cubic-bezier(.2, 1.6, .4, 1);
   transform-origin: left center;
 }
 @keyframes stoneShimmer {
   from { background-position: 130% 0; }
   to { background-position: -130% 0; }
 }
-#stoneCounter.bump { transform: scale(1.32); }
+#stoneCounter.bump { animation: stoneBump .26s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes stoneBump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.32); }
+  100% { transform: scale(1); }
+}
 .stone-crescent {
   position: relative;
   width: 22px;
@@ -1759,4 +1763,81 @@ body.touch-enabled .touch-pad > span {
 @keyframes stoneMilestone {
   from { transform: scale(.4); opacity: 1; }
   to { transform: scale(2.1); opacity: 0; }
+}
+
+/* BOSS TROPHY SOCKETS — six glass dots above the crescent counter, each
+   lighting in its core's own colour when that boss falls. */
+#coreCounter {
+  position: absolute;
+  left: 26px;
+  bottom: 62px;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+.core-socket {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: rgba(10, 16, 30, .72);
+  border: 1px solid rgba(140, 170, 220, .28);
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, .8);
+  transition: transform .18s cubic-bezier(.2, 1.6, .4, 1);
+}
+.core-socket.lit {
+  background: radial-gradient(circle at 36% 32%, #ffffff, var(--core-tint, #ffd66b) 55%, rgba(0, 0, 0, .5));
+  border-color: var(--core-tint, #ffd66b);
+  box-shadow: 0 0 9px var(--core-tint, #ffd66b);
+}
+.core-socket.flash {
+  animation: coreFlash .8s cubic-bezier(.2, 1.6, .4, 1);
+}
+@keyframes coreFlash {
+  0% { transform: scale(.4); }
+  45% { transform: scale(1.9); }
+  100% { transform: scale(1); }
+}
+
+/* SUIT LIGHTS — bottom right, one visor-glass pip per hit point. Lost pips
+   go dark and cracked; the last one breathes. */
+#suitMeter {
+  position: absolute;
+  right: 26px;
+  bottom: 20px;
+  display: flex;
+  gap: 7px;
+  align-items: flex-end;
+  pointer-events: none;
+}
+.suit-pip {
+  width: 15px;
+  height: 21px;
+  border-radius: 7px 7px 5px 5px;
+  background: radial-gradient(circle at 38% 28%, #eafcff, #9defff 46%, #1d7fae 92%);
+  border: 1px solid rgba(157, 239, 255, .65);
+  box-shadow: 0 0 9px rgba(120, 226, 255, .55), inset 0 -3px 5px rgba(10, 40, 70, .45);
+  transition: transform .16s cubic-bezier(.2, 1.6, .4, 1);
+}
+.suit-pip.lost {
+  background:
+    linear-gradient(118deg, transparent 44%, rgba(190, 220, 240, .32) 46%, transparent 49%),
+    linear-gradient(64deg, transparent 60%, rgba(190, 220, 240, .22) 62%, transparent 66%),
+    radial-gradient(circle at 38% 28%, #26313f, #131b26 60%, #05080d);
+  border-color: rgba(120, 150, 180, .3);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, .85);
+}
+.suit-pip.crack {
+  animation: pipCrack .5s cubic-bezier(.3, 1.7, .4, 1);
+}
+@keyframes pipCrack {
+  0% { transform: scale(1.55) rotate(-7deg); }
+  40% { transform: scale(.82) rotate(4deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+#suitMeter[data-critical="true"] .suit-pip:not(.lost) {
+  animation: pipBreathe 1.05s ease-in-out infinite;
+}
+@keyframes pipBreathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 9px rgba(120, 226, 255, .55), inset 0 -3px 5px rgba(10, 40, 70, .45); }
+  50% { transform: scale(1.22); box-shadow: 0 0 16px rgba(255, 120, 120, .8), inset 0 -3px 5px rgba(70, 10, 20, .5); }
 }
