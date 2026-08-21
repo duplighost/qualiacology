@@ -60,7 +60,7 @@
       "title": "Duskfall",
       "descriptor": "Horde-survival FPS",
       "group": "action",
-      "featured": true,
+      "featured": false,
       "image": "/assets/games/duskfall-card-clean.webp",
       "alt": "A rifle raised toward a horde massing in a golden pine forest",
       "summary": "Hold the golden-hour treeline against waves of the dead — smooth gunplay, arcade scoring.",
@@ -99,7 +99,7 @@
       "title": "Rocket Shoes",
       "descriptor": "Arcade",
       "group": "action",
-      "featured": true,
+      "featured": false,
       "image": "/assets/games/rocket-shoes-card-clean.webp",
       "alt": "A round white runner in an orange-striped sweater grinding a neon rail above a city",
       "summary": "Rocket boots, glowing rails, an endless neon city — never touch the brakes.",
@@ -112,7 +112,7 @@
       "title": "PARTY ANIMAL",
       "descriptor": "Piñata brawler",
       "group": "action",
-      "featured": true,
+      "featured": false,
       "image": "/assets/games/party-animal-card-clean.webp",
       "alt": "A neon piñata swinging through party guests on a glossy dance floor",
       "summary": "You're the piñata, and the piñata fights back. Five party games, a boss made of cake, and two ways to leave when it's over.",
@@ -146,20 +146,6 @@
       "metaDescription": "POCKET SUN is an endless one-finger musical gravity toy for phones and desktop browsers.",
       "controls": "Hold to pull · tap to pulse · mouse or touch",
       "actionLabel": "Play POCKET SUN"
-    },
-    {
-      "slug": "uninvited",
-      "title": "Uninvited",
-      "descriptor": "First-person horror",
-      "group": "horror",
-      "featured": false,
-      "image": "/assets/games/uninvited-card-clean.webp",
-      "alt": "A figure outside a dark house, facing a lit doorway and the silhouette at the top of the stairs",
-      "summary": "The house at the edge of town has been dark for years — but tonight something moves in it. A short first-person horror walk to the last room at the top of the stairs, and an ending you won't see coming.",
-      "metaDescription": "Uninvited is a short first-person horror walk through a dark house, up the stairs, and into the last room.",
-      "controls": "WASD + mouse · dual-thumb mobile controls",
-      "duration": "8–10 minutes",
-      "actionLabel": "Step Inside"
     },
     {
       "slug": "skyshard",
@@ -253,45 +239,6 @@
       "actionLabel": "Play DUET"
     },
     {
-      "slug": "flare",
-      "title": "FLARE",
-      "descriptor": "Dark-tower FPS",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/flare-card-clean.webp",
-      "alt": "A dark hall of pillars lit only by pools of light on the floor, a rifle held at the lower right",
-      "summary": "Five dark rooms stacked in a tower. Your gun is the only light you have and the only thing that gives you away, and everything you kill stays lit — so the part of the room you can see is exactly the part you've already won.",
-      "metaDescription": "FLARE is a browser first-person shooter played in the dark, where your muzzle flash is the light and every kill leaves a permanent pool of it on the floor.",
-      "controls": "WASD + mouse · RMB aim · Shift dash · R reload · 1–4 weapons · Esc pause",
-      "actionLabel": "Go up"
-    },
-    {
-      "slug": "cinderbloom",
-      "title": "CINDERBLOOM",
-      "descriptor": "Alien-planet FPS",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/cinderbloom-card-clean.webp",
-      "alt": "A rifle firing at alien creatures in a teal and ash-colored basin beneath thin trees",
-      "summary": "Survey 9 — Thessaly Basin. Fifteen mission beats, four creature types, one rifle, and a planet lit by a warm sun and a cool companion star.",
-      "metaDescription": "CINDERBLOOM is a browser first-person shooter on an alien fire world where the ammunition comes out of the things you kill.",
-      "controls": "WASD + mouse · Shift sprint · Ctrl crouch · Space jump · R reload · V melee",
-      "actionLabel": "Begin Survey 9"
-    },
-    {
-      "slug": "vanta-9",
-      "title": "VANTA//9",
-      "descriptor": "Alien-world FPS descent",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/vanta-9-card-clean.webp",
-      "alt": "An armed explorer facing a dark alien world beneath an eclipse and a vast webbed structure",
-      "summary": "The planet began transmitting in our dead pilots’ voices. Sever the three Choir Anchors. Do not answer back.",
-      "metaDescription": "VANTA//9 is a browser first-person shooter: descend into a low-poly alien city, sever three Choir Anchors, and survive the last note.",
-      "controls": "WASD + mouse · Shift sprint · RMB focus · R reload · touch controls",
-      "actionLabel": "Enter the Choir"
-    },
-    {
       "slug": "wick",
       "title": "WICK",
       "descriptor": "Fluid fire simulation",
@@ -316,19 +263,6 @@
       "metaDescription": "Rally is a mouse-only tennis duel where the swing is the shot and the music only lives while the ball does.",
       "controls": "Mouse only · click to toss, swing through the ball",
       "actionLabel": "Play Rally"
-    },
-    {
-      "slug": "relay-eclipse",
-      "title": "RELAY//ECLIPSE",
-      "descriptor": "Lunar horde FPS",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/relay-eclipse-card-clean.jpg",
-      "alt": "A white and graphite rifle aimed across a dark moon deck beneath blue and violet ringed planets",
-      "summary": "Hold the lower map through round after round, fight up the relay, and reach the moon while the planets shoot at you.",
-      "metaDescription": "RELAY//ECLIPSE is a browser horde FPS about holding the lower map, fighting up the relay, and reaching the moon while the planets shoot at you.",
-      "controls": "WASD/arrows move · mouse aim · LMB fire · RMB aim · Space jump · Shift/F dash · R reload · 1–4 weapons · touch",
-      "actionLabel": "Play RELAY//ECLIPSE"
     },
     {
       "slug": "vesperwake",

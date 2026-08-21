@@ -101,15 +101,6 @@
 /this-helped-someone     /404.html  404!
 /this-helped-someone/*   /404.html  404!
 
-# --- FLARE ---
-/flare.html  /flare/  301!
-
-# --- CINDERBLOOM ---
-/cinderbloom.html  /cinderbloom/  301!
-
-# --- VANTA//9 ---
-/vanta-9.html  /vanta-9/  301!
-
 # --- POCKET SUN ---
 /pocket-sun.html  /pocket-sun/  301!
 
@@ -123,9 +114,6 @@
 /kick-ball-lunar-velocity.html     /moonkick/  301!
 /kick-ball-lunar-velocity/*        /moonkick/  301!
 /kick-ball                         /moonkick/  302
-
-# --- RELAY//ECLIPSE ---
-/relay-eclipse.html  /relay-eclipse/  301!
 
 # --- VESPERWAKE: THE HOLLOW BELL ---
 /vesperwake.html  /vesperwake/  301!

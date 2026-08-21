@@ -74,9 +74,9 @@ function jsonLd(html) {
   return JSON.parse(match[1]);
 }
 
-assert(data.games.length === 25, "Canonical game total is not 25");
+assert(data.games.length === 20, "Canonical game total is not 20");
 assert(data.albums.length === 11, "Canonical album total is not 11");
-assert(data.games.filter((item) => item.featured).length === 6, "Featured game total is not 6");
+assert(data.games.filter((item) => item.featured).length === 3, "Featured game total is not 3");
 assert(data.albums.filter((item) => item.featured).length === 3, "Featured album total is not 3");
 assert(!existsSync(join(outputRoot, "blackthorn-manor")), "Blackthorn directory must not exist");
 assert(!existsSync(join(outputRoot, "assets", "brand", "pikachu-forest.webp")), "Replaced hero asset must not remain in deploy");
@@ -126,7 +126,7 @@ assert(!publicHubText.includes("friendship that is allowed to be ordinary"), "Re
 assert(!publicHubText.includes("the pharmacology matters. so do the people."), "Rejected generic server CTA remains in public hub");
 assert(!publicHubText.includes("the three things the server is built to hold together"), "Rejected server filler remains in public hub");
 
-assert((home.match(/data-catalog-game="/g) || []).length === 6, "Homepage must feature six games");
+assert((home.match(/data-catalog-game="/g) || []).length === 3, "Homepage must feature three games");
 assert((home.match(/data-catalog-album="/g) || []).length === 3, "Homepage must feature three releases");
 assert((gamesPage.match(/data-catalog-game="/g) || []).length === data.games.length, "Game card count does not match canonical data");
 assert((musicPage.match(/data-catalog-album="/g) || []).length === data.albums.length, "Album card count does not match canonical data");
