@@ -74,7 +74,7 @@ function jsonLd(html) {
   return JSON.parse(match[1]);
 }
 
-assert(data.games.length === 19, "Canonical game total is not 19");
+assert(data.games.length === 18, "Canonical game total is not 18");
 assert(data.albums.length === 11, "Canonical album total is not 11");
 assert(data.games.filter((item) => item.featured).length === 3, "Featured game total is not 3");
 assert(data.albums.filter((item) => item.featured).length === 3, "Featured album total is not 3");
