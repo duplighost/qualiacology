@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#03050c" />
+  <meta name="description" content="VIGIL is a browser horde-mode FPS. Hold one relay deck on a dead moon for ten watches while an eclipse crosses the sky." />
+  <title>VIGIL | Qualiacology</title>
+  <link rel="canonical" href="https://qualiacology.com/vigil/" />
+  <meta property="og:site_name" content="Qualiacology" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="VIGIL | Qualiacology" />
+  <meta property="og:description" content="One rifle, one deck, ten watches. They come across the flat and up the ramps. The eclipse overhead is the only clock you get." />
+  <meta property="og:url" content="https://qualiacology.com/vigil/" />
+  <meta property="og:image" content="https://qualiacology.com/assets/games/vigil-card-clean.webp" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="720" />
+  <meta property="og:image:alt" content="A rifle firing across a moon flat toward a lit relay tower with two ramps, under a ringed planet and a violet eclipse" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="VIGIL | Qualiacology" />
+  <meta name="twitter:description" content="One rifle, one deck, ten watches. The eclipse overhead is the only clock you get." />
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/vigil-card-clean.webp" />
+  <meta name="twitter:image:alt" content="A rifle firing across a moon flat toward a lit relay tower under a violet eclipse" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.min.js",
+      "three/addons/": "./vendor/jsm/"
+    }
+  }
+  </script>
+  <style>
+    /* Home pill: above the game's UI, gone while pointer lock has the mouse. */
+    .home-link {
+      position: fixed;
+      left: max(14px, env(safe-area-inset-left));
+      top: max(14px, env(safe-area-inset-top));
+      z-index: 2147483647;
+      display: inline-flex; align-items: center; gap: 7px;
+      min-height: 34px; padding: 0 13px;
+      color: rgba(233, 246, 255, .86); text-decoration: none;
+      font: 800 11px/1.2 "Segoe UI", system-ui, sans-serif;
+      letter-spacing: .14em; text-transform: uppercase;
+      border: 1px solid rgba(93, 247, 255, .38);
+      border-radius: 999px;
+      background: rgba(3, 5, 12, .74);
+      box-shadow: 0 0 22px rgba(93, 247, 255, .12);
+      backdrop-filter: blur(8px);
+      transition: opacity .16s ease, transform .16s ease, visibility 0s linear 0s;
+    }
+    .home-link:hover, .home-link:focus-visible { color: #fff; border-color: rgba(168, 121, 255, .7); outline: 0; }
+    .pointer-locked .home-link {
+      opacity: 0; visibility: hidden; pointer-events: none;
+      transform: translateY(-8px);
+      transition: opacity .16s ease, transform .16s ease, visibility 0s linear .16s;
+    }
+    @media (max-width: 600px) {
+      .home-link { width: 42px; height: 42px; padding: 0; display: grid; place-items: center; font-size: 0; }
+      .home-link::after { content: 'Q.'; font: 900 13px/1 "Segoe UI", system-ui, sans-serif; letter-spacing: .04em; color: #5df7ff; }
+    }
+  </style>
+</head>
+<body>
+  <a class="home-link" href="/" onclick="event.stopPropagation()" aria-label="Return to Qualiacology" title="Return to Qualiacology"><span aria-hidden="true">&#8592;</span> <span>Qualiacology</span></a>
+  <canvas id="game" aria-label="First-person horde-mode shooter"></canvas>
+  <div id="hud"></div>
+  <noscript>VIGIL requires JavaScript and WebGL2.</noscript>
+  <script type="module">
+    const showBootError = (error) => {
+      console.error(error);
+      const hud = document.getElementById('hud');
+      if (!hud || window.__VG?.ready) return;
+      const message = error?.message || String(error || 'Unknown startup error');
+      const safe = message.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+      hud.innerHTML = `<div class="boot-error"><div><h1>VIGIL COULD NOT OPEN</h1><p>${safe}</p><small>WebGL2 and an HTTP server are required.</small></div></div>`;
+    };
+    window.addEventListener('error', (event) => showBootError(event.error || event.message), { once: true });
+    window.addEventListener('unhandledrejection', (event) => showBootError(event.reason), { once: true });
+    const gameCanvas = document.getElementById('game');
+    const syncHomeLink = () => {
+      document.documentElement.classList.toggle('pointer-locked', document.pointerLockElement === gameCanvas);
+    };
+    document.addEventListener('pointerlockchange', syncHomeLink);
+    window.addEventListener('pageshow', syncHomeLink);
+    syncHomeLink();
+    import('./src/main.js').catch(showBootError);
+  </script>
+</body>
+</html>

@@ -56,6 +56,19 @@
       "actionLabel": "Enter the Moon"
     },
     {
+      "slug": "vigil",
+      "title": "VIGIL",
+      "descriptor": "Horde-mode FPS",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/vigil-card-clean.webp",
+      "alt": "A rifle firing across a moon flat toward a lit relay tower with two ramps, under a ringed planet and a violet eclipse",
+      "summary": "One rifle, one deck, ten watches. They come across the flat and up the ramps. The eclipse overhead is the only clock you get.",
+      "metaDescription": "VIGIL is a browser horde-mode first-person shooter about holding one relay deck on a dead moon through ten waves while an eclipse crosses the sky.",
+      "controls": "WASD + mouse · LMB fire · RMB sights · R reload · V melee · Shift sprint · Ctrl crouch or slide · Space jump",
+      "actionLabel": "Stand the watch"
+    },
+    {
       "slug": "eaten-path",
       "title": "THE EATEN PATH",
       "descriptor": "VHS forest horror",

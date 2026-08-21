@@ -111,3 +111,7 @@
 # --- FETCH ---
 /fetch.html  /fetch/  301!
 /skull       /fetch/  302
+
+# --- VIGIL ---
+/vigil.html  /vigil/  301!
+/watch       /vigil/  302
