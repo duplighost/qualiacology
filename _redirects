@@ -97,11 +97,13 @@
 # --- WICK ---
 /wick.html  /wick/  301!
 
-# --- MOONKICK (was KICK BALL // LUNAR VELOCITY) ---
-/moonkick.html                     /moonkick/  301!
-/kick-ball-lunar-velocity.html     /moonkick/  301!
-/kick-ball-lunar-velocity/*        /moonkick/  301!
-/kick-ball                         /moonkick/  302
+# --- KICKMOON (was MOONKICK, was KICK BALL // LUNAR VELOCITY) ---
+/moonkick                          /kickmoon/  301!
+/moonkick/*                        /kickmoon/  301!
+/moonkick.html                     /kickmoon/  301!
+/kick-ball-lunar-velocity.html     /kickmoon/  301!
+/kick-ball-lunar-velocity/*        /kickmoon/  301!
+/kick-ball                         /kickmoon/  302
 
 # --- VESPERWAKE: THE HOLLOW BELL ---
 /vesperwake.html  /vesperwake/  301!

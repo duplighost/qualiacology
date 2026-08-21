@@ -29,7 +29,7 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '5.0.0-moonkick';
+  const GAME_VERSION = '5.1.0-kickmoon';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -406,17 +406,21 @@
     const heightData = heightImage.data;
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
-        const large = fbm(x / 92, y / 92, 5);
-        const grit = valueNoise(x / 6.5, y / 6.5) * .34;
+        const large = fbm(x / 104, y / 104, 5);
+        const drift = fbm(x / 34 + 13, y / 34 - 17, 4);
+        const grit = valueNoise(x / 6.5, y / 6.5) * .28;
+        const dust = valueNoise(x / 2.2 + 31, y / 2.2 - 47) * .07;
         const pin = hash2(x * 1.7, y * 2.1) > .985 ? -.32 : 0;
-        const h = clamp(.54 + large * .22 + grit * .17 + pin, 0, 1);
+        const reliefHeight = clamp(.52 + large * .18 + drift * .1 + grit * .13 + pin, 0, 1);
+        const h = clamp(reliefHeight + dust, 0, 1);
         const i = (y * size + x) * 4;
-        const warmth = valueNoise(x / 180, y / 180) * 5;
-        colorData[i] = clamp(113 + h * 86 + warmth, 0, 255);
-        colorData[i + 1] = clamp(119 + h * 88 + warmth * .72, 0, 255);
-        colorData[i + 2] = clamp(130 + h * 91 + warmth * .28, 0, 255);
+        const warmth = valueNoise(x / 180, y / 180) * 4.5 + drift * 3.5;
+        const coolDust = Math.max(0, -drift) * 5;
+        colorData[i] = clamp(105 + h * 92 + warmth, 0, 255);
+        colorData[i + 1] = clamp(112 + h * 91 + warmth * .62 + coolDust * .25, 0, 255);
+        colorData[i + 2] = clamp(126 + h * 94 - warmth * .1 + coolDust, 0, 255);
         colorData[i + 3] = 255;
-        const height = Math.floor(h * 255);
+        const height = Math.floor(reliefHeight * 255);
         heightData[i] = heightData[i + 1] = heightData[i + 2] = height;
         heightData[i + 3] = 255;
       }
@@ -427,14 +431,25 @@
       const x = worldRandom() * size, y = worldRandom() * size;
       const radius = 2 + Math.pow(worldRandom(), 2.2) * 25;
       const gradient = colorContext.createRadialGradient(x, y, radius * .12, x, y, radius);
-      gradient.addColorStop(0, 'rgba(28,32,39,.42)');
-      gradient.addColorStop(.62, 'rgba(58,62,72,.25)');
-      gradient.addColorStop(.78, 'rgba(225,230,236,.22)');
+      gradient.addColorStop(0, 'rgba(24,27,36,.52)');
+      gradient.addColorStop(.58, 'rgba(52,57,69,.28)');
+      gradient.addColorStop(.72, 'rgba(237,235,226,.28)');
+      gradient.addColorStop(.82, 'rgba(168,180,202,.1)');
       gradient.addColorStop(1, 'rgba(0,0,0,0)');
       colorContext.fillStyle = gradient;
       colorContext.beginPath();
       colorContext.arc(x, y, radius, 0, TAU);
       colorContext.fill();
+      const relief = heightContext.createRadialGradient(x, y, radius * .08, x, y, radius);
+      relief.addColorStop(0, 'rgba(0,0,0,.48)');
+      relief.addColorStop(.58, 'rgba(0,0,0,.22)');
+      relief.addColorStop(.72, 'rgba(255,255,255,.38)');
+      relief.addColorStop(.86, 'rgba(255,255,255,.06)');
+      relief.addColorStop(1, 'rgba(128,128,128,0)');
+      heightContext.fillStyle = relief;
+      heightContext.beginPath();
+      heightContext.arc(x, y, radius, 0, TAU);
+      heightContext.fill();
     }
     const color = new T.CanvasTexture(colorCanvas);
     color.colorSpace = T.SRGBColorSpace;
@@ -2050,8 +2065,8 @@
   class LunarWorld {
     constructor() {
       this.scene = new T.Scene();
-      this.scene.background = new T.Color(0x000005);
-      this.scene.fog = new T.FogExp2(0x02020a, .00072);
+      this.scene.background = new T.Color(0x000006);
+      this.scene.fog = new T.FogExp2(0x02030c, .00072);
       this.camera = new T.PerspectiveCamera(76, 1, .05, 2400);
       this.camera.rotation.order = 'YXZ';
       this.fxScratch = new T.Vector3();
@@ -2119,20 +2134,24 @@
     makeMaterials() {
       const textures = makeRegolithTextures();
       textures.color.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+      textures.bump.anisotropy = textures.color.anisotropy;
       this.materials.regolith = new T.MeshStandardMaterial({
         map: textures.color,
         bumpMap: textures.bump,
-        bumpScale: 1.05,
+        bumpScale: 1.14,
         vertexColors: true,
-        roughness: .96,
-        metalness: .035,
-        color: 0xd4d9e2,
+        roughness: .93,
+        metalness: .025,
+        color: 0xcbd2df,
       });
-      this.materials.rock = new T.MeshStandardMaterial({ color: 0x777d8c, roughness: .94, metalness: .04 });
+      this.materials.rock = new T.MeshStandardMaterial({
+        color: 0x747c8c, roughness: .91, metalness: .035,
+        emissive: 0x090f1e, emissiveIntensity: .09,
+      });
       this.materials.darkRock = new T.MeshStandardMaterial({
-        color: 0x626978, roughness: .97, metalness: .02,
-        emissive: 0x0d1120, emissiveIntensity: .16,
-        map: this.materials.regolith.map, bumpMap: this.materials.regolith.bumpMap, bumpScale: .72,
+        color: 0x596477, roughness: .93, metalness: .025,
+        emissive: 0x0a1022, emissiveIntensity: .2,
+        map: this.materials.regolith.map, bumpMap: this.materials.regolith.bumpMap, bumpScale: .82,
       });
       this.materials.glass = new T.MeshPhysicalMaterial({
         color: 0x6ddfff, emissive: 0x116a8c, emissiveIntensity: 2.6,
@@ -2149,9 +2168,9 @@
       this.glowViolet = radialTexture('rgba(202,134,255,1)', 'rgba(79,23,255,0)');
     }
     makeLights() {
-      this.ambient = new T.HemisphereLight(0x98bdff, 0x090610, .43);
+      this.ambient = new T.HemisphereLight(0x91c4ff, 0x110817, .43);
       this.scene.add(this.ambient);
-      this.sun = new T.DirectionalLight(0xfff1d6, 4.65);
+      this.sun = new T.DirectionalLight(0xffedcf, 4.65);
       this.sun.position.set(-130, 210, 110);
       this.sun.castShadow = true;
       this.sun.shadow.camera.near = 10;
@@ -2164,7 +2183,7 @@
       this.sun.shadow.normalBias = .035;
       this.scene.add(this.sun);
       this.scene.add(this.sun.target);
-      this.rimLight = new T.DirectionalLight(0x6254ff, 1.1);
+      this.rimLight = new T.DirectionalLight(0x7167ff, 1.1);
       this.rimLight.position.set(170, 90, -210);
       this.scene.add(this.rimLight);
     }
@@ -2304,11 +2323,20 @@
           const r = size * randomRange(.1, .34, worldRandom);
           const mix = worldRandom();
           const tint = mix < .55 ? cloud.tint : cloud.second;
-          const gradient = context.createRadialGradient(cx, cy, 0, cx, cy, r);
-          gradient.addColorStop(0, `rgba(${tint[0]},${tint[1]},${tint[2]},${randomRange(.11, .24, worldRandom)})`);
+          const alpha = randomRange(.11, .24, worldRandom);
+          const stretch = 1.24 + (i % 4) * .11;
+          context.save();
+          context.translate(cx, cy);
+          context.rotate(i * 2.39996 + mix * .7);
+          context.scale(stretch, .72 + (i % 3) * .09);
+          const gradient = context.createRadialGradient(0, 0, 0, 0, 0, r);
+          gradient.addColorStop(0, `rgba(${tint[0]},${tint[1]},${tint[2]},${alpha * .48})`);
+          gradient.addColorStop(.24, `rgba(${tint[0]},${tint[1]},${tint[2]},${alpha * .78})`);
+          gradient.addColorStop(.58, `rgba(${tint[0]},${tint[1]},${tint[2]},${alpha * .3})`);
           gradient.addColorStop(1, 'rgba(0,0,0,0)');
           context.fillStyle = gradient;
-          context.fillRect(0, 0, size, size);
+          context.fillRect(-r, -r, r * 2, r * 2);
+          context.restore();
         }
         // A soft mask at the rim so the square sprite never shows its edges.
         const mask = context.createRadialGradient(size / 2, size / 2, size * .18, size / 2, size / 2, size * .5);
@@ -2378,15 +2406,18 @@
             // Interiors go dry and pale, coasts stay green. Flat green reads
             // as moss on a marble rather than as a world with weather.
             const inland = clamp((land - .52) / .22, 0, 1);
-            const arid = smoothstep(.1, .55, Math.abs(lat)) * .55 + inland * .45;
-            data[i] = lerp(74, 186, arid);
-            data[i + 1] = lerp(136, 158, arid);
-            data[i + 2] = lerp(72, 104, arid);
+            const arid = clamp(smoothstep(.12, .62, Math.abs(lat)) * .48 + inland * .42, 0, 1);
+            const ridge = smoothstep(.72, .94, land);
+            const coast = 1 - smoothstep(.52, .59, land);
+            data[i] = lerp(54, 184, arid) + ridge * 26 + coast * 8;
+            data[i + 1] = lerp(142, 157, arid) + ridge * 18 + coast * 14;
+            data[i + 2] = lerp(76, 105, arid) + ridge * 28 + coast * 10;
           } else {
             const deep = clamp((.52 - land) / .3, 0, 1);
-            data[i] = lerp(58, 20, deep);
-            data[i + 1] = lerp(140, 76, deep);
-            data[i + 2] = lerp(214, 168, deep);
+            const current = Math.sin(x * .071 + y * .037 + field[y * width + x] * 11) * .5 + .5;
+            data[i] = lerp(58, 15, deep) + current * 5;
+            data[i + 1] = lerp(151, 67, deep) + current * 7;
+            data[i + 2] = lerp(226, 157, deep) + current * 9;
           }
           if (ice > 0) {
             data[i] = lerp(data[i], 236, ice);
@@ -2403,12 +2434,21 @@
         const cx = worldRandom() * width;
         const cy = worldRandom() * height;
         const r = randomRange(10, 58, worldRandom);
+        const alpha = randomRange(.12, .3, worldRandom);
+        const angle = Math.sin(cx * .013 + cy * .019) * .18;
+        context.globalCompositeOperation = 'multiply';
+        context.fillStyle = `rgba(8,24,54,${alpha * .2})`;
+        context.beginPath();
+        context.ellipse(cx + 4, cy + 3, r * 2.25, r * .52, angle, 0, TAU);
+        context.fill();
+        context.globalCompositeOperation = 'screen';
         const gradient = context.createRadialGradient(cx, cy, 0, cx, cy, r);
-        gradient.addColorStop(0, `rgba(255,255,255,${randomRange(.12, .3, worldRandom)})`);
+        gradient.addColorStop(0, `rgba(255,255,255,${alpha})`);
+        gradient.addColorStop(.46, `rgba(238,248,255,${alpha * .62})`);
         gradient.addColorStop(1, 'rgba(255,255,255,0)');
         context.fillStyle = gradient;
         context.beginPath();
-        context.ellipse(cx, cy, r * 1.9, r * .58, 0, 0, TAU);
+        context.ellipse(cx, cy, r * 2.25, r * .52, angle, 0, TAU);
         context.fill();
       }
       const texture = new T.CanvasTexture(canvasElement);
@@ -2423,8 +2463,8 @@
       const earth = new T.Mesh(
         new T.SphereGeometry(radius, 72, 48),
         new T.MeshStandardMaterial({
-          map: texture, roughness: .92, metalness: .02,
-          emissive: 0xffffff, emissiveMap: texture, emissiveIntensity: 1,
+          map: texture, roughness: .8, metalness: .015,
+          emissive: 0xffffff, emissiveMap: texture, emissiveIntensity: .78,
         }),
       );
       earth.position.copy(position);
@@ -2433,11 +2473,11 @@
       this.scene.add(earth);
       const air = new T.Mesh(
         new T.SphereGeometry(radius * 1.045, 48, 32),
-        new T.MeshBasicMaterial({ color: 0x7cc9ff, transparent: true, opacity: .2, side: T.BackSide, blending: T.AdditiveBlending }),
+        new T.MeshBasicMaterial({ color: 0x7cc9ff, transparent: true, opacity: .16, side: T.BackSide, blending: T.AdditiveBlending }),
       );
       air.position.copy(position);
       this.scene.add(air);
-      const halo = this.makeGlowSprite(radialTexture('rgba(124,201,255,.5)'), radius * 3.1, .42);
+      const halo = this.makeGlowSprite(radialTexture('rgba(124,201,255,.5)'), radius * 3.1, .34);
       halo.position.copy(position);
       this.scene.add(halo);
       skyMaterial(earth);
@@ -2651,8 +2691,12 @@
         const capWeight = 1 - smoothstep(CAP_FULL, CAP_FADE, rho);
         const mottle = capWeight >= 1 ? fbm(px * .035, pz * .035, 3)
           : lerp(fbm3(record.dx * 14.7, record.dy * 14.7 + 5, record.dz * 14.7, 3), fbm(px * .035, pz * .035, 3), capWeight);
-        const tone = clamp(.54 + mottle * .16 - slope * .2 + record.height * .0008, .24, .78);
-        let r = tone * .86, g = tone * .89, b = tone * .98;
+        const highland = clamp(.5 + record.height * .008, 0, 1);
+        const dust = clamp(.5 + mottle * .85, 0, 1);
+        const tone = clamp(.49 + mottle * .15 - slope * .26 + record.height * .0011, .22, .79);
+        let r = tone * (.82 + dust * .055 + highland * .025);
+        let g = tone * (.87 + dust * .025 + highland * .015);
+        let b = tone * (1 - dust * .035);
         // THE ICE FIELD: glacial blue-white with bright frozen veins. Alex
         // walked past the old tint without noticing it, which means it did
         // not exist. sqrt() pulls the read out to the fringe.
@@ -2660,8 +2704,14 @@
         const iceW = iceWeightAt(shadeDirScratch);
         if (iceW > 0) {
           const iceV = Math.sqrt(iceW);
-          r = lerp(r, .58, iceV); g = lerp(g, .86, iceV); b = lerp(b, 1.34, iceV);
+          r = lerp(r, .62, iceV); g = lerp(g, .9, iceV); b = lerp(b, 1.2, iceV);
           const vein = fbm3(record.dx * 46, record.dy * 46 + 3, record.dz * 46, 2);
+          // fbm3 is ZERO-CENTRED (valueNoise3 ends in *2-1), so this tests
+          // the far upper tail on purpose: about 1% of the field, which is
+          // what makes these read as rare bright CRACKS instead of mottling.
+          // Widening it to |vein| < .065 lights 23.6% of the ice and the
+          // filament read disappears entirely. Measured 2026-08-21. Do not
+          // "fix" the .5 -- it is the shape of the vein, not an off-by-half.
           if (Math.abs(vein - .5) < .05) {
             const shine = (1 - Math.abs(vein - .5) / .05) * iceV * .3;
             r += shine; g += shine; b += shine * 1.1;
@@ -3096,9 +3146,9 @@
     // Deterministic golden-angle scatter -- zero worldRandom draws.
     makeBiomeProps() {
       const iceGlass = new T.MeshPhysicalMaterial({
-        color: 0xcfeaff, emissive: 0x2a6f9e, emissiveIntensity: .9,
-        metalness: .08, roughness: .1, transmission: .4, thickness: 2,
-        transparent: true, opacity: .9, clearcoat: 1, clearcoatRoughness: .05,
+        color: 0xd7efff, emissive: 0x1b5688, emissiveIntensity: .68,
+        metalness: .03, roughness: .17, transmission: .48, thickness: 2,
+        transparent: true, opacity: .86, clearcoat: 1, clearcoatRoughness: .1,
       });
       const spikeGeometry = new T.ConeGeometry(1, 1, 6, 1);
       spikeGeometry.translate(0, .5, 0);
@@ -3141,8 +3191,8 @@
       this.scene.add(spikeMesh);
       // Crystals: violet-cyan light sources scattered through the graben.
       const crystalMaterial = new T.MeshStandardMaterial({
-        color: 0xb9a7ff, emissive: 0x8b5cf6, emissiveIntensity: 2.4,
-        roughness: .18, metalness: .2, flatShading: true,
+        color: 0xc8b9ff, emissive: 0x7444d8, emissiveIntensity: 2.1,
+        roughness: .23, metalness: .34, flatShading: true,
       });
       const crystalGeometry = new T.ConeGeometry(.8, 3.2, 5, 1);
       crystalGeometry.translate(0, 1.6, 0);
@@ -3356,9 +3406,9 @@
         });
       }
       const iceGlass = new T.MeshPhysicalMaterial({
-        color: 0xcfeaff, emissive: 0x2a6f9e, emissiveIntensity: .7,
-        metalness: .08, roughness: .12, transmission: .35, thickness: 2,
-        transparent: true, opacity: .88, clearcoat: 1, clearcoatRoughness: .06,
+        color: 0xd7efff, emissive: 0x1b5688, emissiveIntensity: .62,
+        metalness: .03, roughness: .17, transmission: .44, thickness: 2,
+        transparent: true, opacity: .86, clearcoat: 1, clearcoatRoughness: .1,
       });
       const geometry = new T.ConeGeometry(1, 1, 9, 4);
       geometry.translate(0, .5, 0);
@@ -3389,8 +3439,8 @@
       const sheen = new T.Mesh(
         new T.CircleGeometry(58, 48),
         new T.MeshPhysicalMaterial({
-          color: 0xbfe8ff, metalness: .1, roughness: .05, clearcoat: 1, clearcoatRoughness: .03,
-          transparent: true, opacity: .38, depthWrite: false,
+          color: 0xcbefff, metalness: .05, roughness: .08, clearcoat: 1, clearcoatRoughness: .05,
+          transparent: true, opacity: .32, depthWrite: false,
         }),
       );
       chartLift(0, -15.55, 1130, sheen.position);
@@ -3882,8 +3932,8 @@
         const crystalGeometry = new T.ConeGeometry(.55, 2.6, 5, 1);
         crystalGeometry.translate(0, .9, 0);
         const crystalMaterial = new T.MeshStandardMaterial({
-          color: 0x9fe8ff, emissive: 0x3fb9e8, emissiveIntensity: 1.7,
-          roughness: .14, metalness: .25, flatShading: true,
+          color: 0xb9efff, emissive: 0x319bcf, emissiveIntensity: 1.55,
+          roughness: .2, metalness: .32, flatShading: true,
         });
         const crystalMesh = new T.InstancedMesh(crystalGeometry, crystalMaterial, crystalSpecs.length);
         crystalSpecs.forEach((entry, index) => {
@@ -5269,9 +5319,9 @@
       const shell = new T.Mesh(
         new T.SphereGeometry(.72, 32, 24),
         new T.MeshPhysicalMaterial({
-          color: 0xb8f8ff, emissive: 0x1596bb, emissiveIntensity: 2.25,
-          metalness: .35, roughness: .12, clearcoat: 1, clearcoatRoughness: .08,
-          transparent: true, opacity: .94,
+          color: 0xc4faff, emissive: 0x1596bb, emissiveIntensity: 2.25,
+          metalness: .24, roughness: .18, clearcoat: 1, clearcoatRoughness: .045,
+          transparent: true, opacity: .92,
         }),
       );
       shell.castShadow = true;
@@ -5464,7 +5514,7 @@
       headGeometry.scale(1.1, .8, .92);
       headGeometry.translate(0, 1.55 * scale, -.72 * scale);
       shellParts.push(headGeometry);
-      const eye = new T.Mesh(new T.SphereGeometry(.18 * scale, 12, 8), this.materials.cyan);
+      const eye = new T.Mesh(new T.SphereGeometry(.18 * scale, 12, 8), this.materials.cyan.clone());
       eye.position.set(0, 1.62 * scale, -1.13 * scale);
       group.add(eye);
       // The weak core sits on the BACK (local +z is away from `facing`) and
@@ -5888,6 +5938,12 @@
     }
     update(dt, gameState) {
       this.elapsed += dt;
+      // The cyan world furniture used to shimmer only because every enemy eye
+      // wrote to this shared material each frame. The eyes own their own
+      // materials now, so the breath is deliberate here instead of accidental
+      // there -- and slower/shallower than an eye, so a lamp never reads as a
+      // creature the way the borrowed pulse made it.
+      this.materials.cyan.emissiveIntensity = 3.8 + Math.sin(this.elapsed * 1.6) * .55;
       if (this.planets) this.planets.forEach(planet => { planet.rotation.y += planet.userData.spinRate * dt; });
       if (this.skyTime) this.skyTime.value = this.elapsed;
       this.updateMeteors(dt);
@@ -6453,6 +6509,9 @@
       // A moon whose heart was already found keeps its face: the cosmic ball
       // and the smiling planets persist across sessions.
       try {
+        // NOTE: this key keeps the old MOONKICK name for ever. It is the
+        // saved endgame flag; renaming it wipes the moon for everyone who
+        // already finished it. The game's NAME changed, the save did not.
         if (localStorage.getItem('moonkick-heart-v1')) {
           world.dressMoonheartBall();
           world.drawSmiles();
