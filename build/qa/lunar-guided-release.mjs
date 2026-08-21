@@ -1,8 +1,8 @@
 import { chromium } from 'playwright';
 
 // Usage (with the repository static server already running):
-//   node qa/lunar-guided-release.mjs http://127.0.0.1:4174/kick-ball-lunar-velocity/
-const base = process.argv[2] || 'http://127.0.0.1:4174/kick-ball-lunar-velocity/';
+//   node qa/lunar-guided-release.mjs http://127.0.0.1:4174/moonkick/
+const base = process.argv[2] || 'http://127.0.0.1:4174/moonkick/';
 const chargeScreenshotPath = process.env.LUNAR_QA_CHARGE_SCREENSHOT || '';
 const failures = [];
 const checks = [];
