@@ -122,3 +122,8 @@
 # --- LEAD ---
 /lead.html  /lead/  301!
 /rope       /lead/  302
+
+# --- STARLING ---
+/starling.html  /starling/  301!
+/murmuration    /starling/  302
+/flock          /starling/  302

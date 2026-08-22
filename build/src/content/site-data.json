@@ -56,6 +56,19 @@
       "actionLabel": "Enter the Moon"
     },
     {
+      "slug": "starling",
+      "title": "STARLING",
+      "descriptor": "One-bird murmuration",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/starling-card-clean.webp",
+      "alt": "Thousands of starlings against a dusk sky over bare winter trees, a pale wave of alarm rolling out through the dark flock from one warm-lit bird, a falcon holding above them",
+      "summary": "You are one starling in three thousand. You cannot tell the flock anything. You can only turn \u2014 and the birds beside you turn a beat later, and theirs a beat after that, and the wave of it crosses the flock faster than any bird can fly. The falcon hunts whichever part of them is calmest.",
+      "metaDescription": "STARLING is a browser game about one bird in a murmuration of three thousand. Turn hard and the alarm travels outward faster than any bird can fly \u2014 the only question is whether it reaches the falcon's target first.",
+      "controls": "Mouse or touch to steer \u00b7 A D or arrows turn \u00b7 M mute \u00b7 R again",
+      "actionLabel": "Fly with them"
+    },
+    {
       "slug": "lead",
       "title": "LEAD",
       "descriptor": "One-rope dog walk",

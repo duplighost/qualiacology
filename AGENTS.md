@@ -2,7 +2,7 @@
 
 Read this before changing anything. It is the canonical playbook for AI agents
 (Codex, Claude, or anything else) and it is kept current — trust it over your
-own notes or memory. Last verified: 2026-08-21.
+own notes or memory. Last verified: 2026-08-22.
 
 ## The two rules that matter most
 
@@ -38,6 +38,23 @@ own notes or memory. Last verified: 2026-08-21.
   - `build/scripts/validate-site.mjs` — strict validator (counts, every
     href/src/srcset resolves with exact case).
   - `build/qa/browser-qa.mjs` — full Playwright + axe suite (`npm run qa`).
+    Uses system Chrome by default; set `QA_CHROME_PATH=/path/to/chrome` to point
+    it at an explicit binary on a box with no Chrome channel installed (a
+    container, CI). Nothing else about the run changes.
+  - `build/qa/starling-boot-check.mjs` — **run this before shipping any STARLING
+    change.** Same doctrine as the FETCH check below and written for the same
+    reason: it boots the page the way a player does and reads the canvas back
+    rather than trusting counters. It asserts birds are on screen, that a
+    swerve visibly lights the flock and then passes, and — the one that matters
+    — that a stoop into an unwarned flock kills and the same stoop into a
+    warned one does not. That last assert has already caught two real bugs: a
+    build where every bird could see the falcon itself and a player who did
+    nothing lost one bird in nine stoops, and a build where the flock had grown
+    small enough that one wave covered all of it. Time anything in it off
+    `falcon.t`, never the wall clock — the game runs on a clamped simulation
+    delta, so on a slow machine wall-clock waits land somewhere else entirely
+    in the dive. Usage: serve the repo, then
+    `node build/qa/starling-boot-check.mjs http://localhost:4173/starling/`.
   - `build/qa/fetch-boot-check.mjs` — **run this before shipping any FETCH
     change.** Boots the game the way a player does (real title click, no
     `?test=1`) and asserts the world is on screen AND the skull is visible in
@@ -64,7 +81,7 @@ own notes or memory. Last verified: 2026-08-21.
   rebuilds the hubs, validates the public tree, runs strict route smoke, and
   rejects stale generated pages. It must never commit or push generated files.
 
-Current verified baseline: **20 games, 12 music releases, 41 reachable public
+Current verified baseline: **21 games, 12 music releases, 42 reachable public
 routes + 35 asserted 404s.** Pocket Sun is hosted locally in this repository;
 it is not a redirect to a separate Netlify project.
 
@@ -125,7 +142,9 @@ text edits only, then validate it still parses.
    Changing how many games are **featured** hits a fourth spot the other three
    don't cover: `validate-site.mjs` asserts the game total near the top *and*
    re-counts `data-catalog-game=` in the rendered homepage further down
-   ("Homepage must feature six games"). The build passes and validation fails
+   ("Homepage must feature three games" — the message said *six* until the
+   2026-08-21 cut and the assert is the thing to read, not the wording). The
+   build passes and validation fails
    several steps later, which reads like a build bug — it isn't.
 6. **Short links** in `_redirects` (e.g. `/dusk  /duskfall/  302`) — check for
    collisions first. Add a `_headers` block only if the game needs one.
@@ -229,6 +248,15 @@ currentDeploy → `ready`) if available.
   emit (hero art, OG images, per-game assets) still need a manual version suffix in
   the filename when replaced. Dropping only the `immutable` token would not fix
   this; the year-long `max-age` alone already prevents revalidation.
+- **Canvas 2D: a path with thousands of subpaths falls off a cliff.** Batching
+  many small shapes into one path and filling once is the usual advice and it is
+  wrong past about a thousand subpaths — the rasteriser goes superlinear. In
+  STARLING, 3,000 birds cost 45ms as one fill, 15ms in chunks of 1000, and
+  2.2ms in chunks of 100: a 20x difference for identical geometry. It is not
+  about how dense the shapes are on screen (the same birds spread evenly over
+  the canvas cost the same 45ms) and it is not fixed by drawing fewer of them.
+  Fill in small batches. A sprite atlas with one `drawImage` per bird was
+  measured too and came out slower than plain batching.
 - Scroll-reveal/entrance animations in `build/src/site.css` must stay
   **transform-only** (no opacity keyframes) or axe fails color-contrast on
   below-fold content mid-animation.
