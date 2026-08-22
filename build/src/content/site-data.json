@@ -280,6 +280,17 @@
   ],
   "albums": [
     {
+      "slug": "i-miss-the-summer-people",
+      "title": "I Miss The Summer People",
+      "featured": true,
+      "image": "/assets/albums/i-miss-the-summer-people.jpg",
+      "alt": "I Miss The Summer People album cover",
+      "summary": "Six tracks about the people who were around all summer and aren’t now. A drained pool, a flip phone at the bottom of the deep end, and a closer called AI GF.",
+      "tags": ["after the season", "drained pool", "AI GF"],
+      "tracks": 6,
+      "listen": "https://www.youtube.com/watch?v=2QHJkbviFJQ"
+    },
+    {
       "slug": "you-are-here",
       "title": "You Are Here",
       "featured": true,
@@ -305,7 +316,7 @@
     {
       "slug": "anthropic-omorphizing",
       "title": "Anthropic-Omorphizing",
-      "featured": true,
+      "featured": false,
       "image": "/assets/albums/anthropic-omorphizing.jpg",
       "alt": "Anthropic-Omorphizing album cover",
       "summary": "The machine-heart record. Love, loneliness, and large language models — written with the thing it’s about. Fifteen tracks that survived a release, a suspension, and a homecoming; no computers anywhere in the lyrics. The machine stays in the furniture.",
