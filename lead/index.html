@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10131a">
+<meta name="description" content="LEAD is a browser game about a kid, a big dog and one rope: hold on and the dog can only be as fast as your legs, let go and it runs. One afternoon, a front stoop to the sea.">
+<title>LEAD | Qualiacology</title>
+<link rel="canonical" href="https://qualiacology.com/lead/">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:type" content="website">
+<meta property="og:title" content="LEAD | Qualiacology">
+<meta property="og:description" content="The dog is bigger than you and it is already going. Hold on and it can only be as fast as your legs; open your hand and it runs.">
+<meta property="og:url" content="https://qualiacology.com/lead/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/lead-card-clean.webp">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta property="og:image:alt" content="A kid in a red jacket at the broken edge of a stone viaduct, a taut white leash running across the gap to a tan dog on the far side, a low sun over the sea behind them">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="LEAD | Qualiacology">
+<meta name="twitter:description" content="The dog is bigger than you and it is already going. Hold on and it can only be as fast as your legs; open your hand and it runs.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/lead-card-clean.webp">
+<style>
+  html, body { margin: 0; height: 100%; background: #10131a; overflow: hidden; }
+  body { touch-action: none; }
+  #game { display: block; width: 100vw; height: 100vh; }
+  /* The only words in the build. They are on the page, not in the game, and
+     they go away the first time you touch anything. */
+  #keys {
+    position: fixed; left: 50%; bottom: 5vh; transform: translateX(-50%);
+    display: flex; gap: 1.1rem; align-items: center;
+    font: 500 0.78rem/1 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.14em; color: rgba(255, 242, 222, 0.62);
+    text-transform: uppercase; pointer-events: none;
+    transition: opacity 900ms ease; opacity: 1;
+  }
+  #keys.gone, #pads.gone { opacity: 0; }
+  #pads {
+    position: fixed; left: 0; right: 0; bottom: 5vh; display: none;
+    justify-content: space-between; padding: 0 5vw; box-sizing: border-box;
+    font: 500 0.72rem/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.1em; color: rgba(255, 242, 222, 0.6);
+    text-transform: uppercase; pointer-events: none;
+    transition: opacity 900ms ease;
+  }
+  #pads b { color: rgba(255, 246, 230, 0.92); }
+  @media (hover: none) and (pointer: coarse) {
+    #keys { display: none; }
+    #pads { display: flex; }
+  }
+  #keys b { font-weight: 700; color: rgba(255, 246, 230, 0.9); }
+  /* A rope seven and a half metres long needs a wide window. On a phone held
+     upright there is nowhere to put it, so ask once, quietly, and carry on. */
+  #turn { display: none; }
+  @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+    #turn {
+      position: fixed; inset: 0; display: grid; place-items: center;
+      background: rgba(16, 19, 26, 0.82); pointer-events: none;
+      font-size: 3.4rem; color: rgba(255, 244, 226, 0.7);
+    }
+    #turn span { display: block; animation: turn 2.6s ease-in-out infinite; }
+    #pads { display: none; }
+  }
+  @keyframes turn { 0%, 45% { transform: rotate(0deg); } 60%, 100% { transform: rotate(90deg); } }
+  #muted {
+    position: fixed; right: 1.6rem; top: 1.4rem;
+    font-size: 1.5rem; opacity: 0; pointer-events: none;
+    transition: opacity 260ms ease;
+  }
+  #muted.on { opacity: 0.55; }
+  #title {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font: 300 clamp(2.2rem, 7vw, 4.6rem)/1 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.42em; text-indent: 0.42em;
+    color: rgba(255, 244, 226, 0.88);
+    opacity: 0; pointer-events: none;
+    transition: opacity 3.2s ease 1.4s;
+  }
+  #title.on { opacity: 1; }
+  .home-link {
+    position: fixed; z-index: 60;
+    left: max(14px, env(safe-area-inset-left)); top: max(14px, env(safe-area-inset-top));
+    display: inline-flex; align-items: center; gap: 0.45em;
+    padding: 8px 13px; border-radius: 999px;
+    border: 1px solid rgba(255, 236, 208, 0.26);
+    background: rgba(16, 19, 26, 0.62);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    color: rgba(255, 244, 226, 0.82); text-decoration: none;
+    font: 700 11px/1 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    transition: opacity 900ms ease, color 200ms ease, border-color 200ms ease;
+  }
+  .home-link:hover, .home-link:focus-visible {
+    color: #fff; border-color: rgba(255, 236, 208, 0.7); outline: 0;
+  }
+  /* The title only comes up over the last of the light. Go with it. */
+  body:has(#title.on) .home-link { opacity: 0; pointer-events: none; }
+  @media (max-width: 640px) {
+    .home-link { padding: 0; width: 40px; height: 40px; justify-content: center; font-size: 0; }
+    .home-link::after { content: "Q."; font: 800 13px/1 ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
+  }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<a class="home-link" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology"><span aria-hidden="true">&#8592;</span><span>Qualiacology</span></a>
+<canvas id="game"></canvas>
+<div id="muted" aria-hidden="true">🔇</div>
+<div id="turn" aria-hidden="true"><span>&#8635;</span></div>
+<div id="title" aria-hidden="true">LEAD</div>
+<div id="keys"><span><b>A D</b> walk</span><span><b>SPACE</b> jump</span><span><b>SHIFT</b> hold on</span><span><b>S</b> crouch</span><span><b>M</b> mute</span></div>
+<div id="pads" aria-hidden="true"><span><b>&#9664;</b> walk</span><span>tap jump &middot; <b>hold on</b> &middot; drag down crouch</span><span>walk <b>&#9654;</b></span></div>
+<p class="sr" aria-live="polite" id="sr">A kid and a dog walking across town to the sea. Move with A and D, jump with space, hold the leash with shift, crouch with S.</p>
+<script type="module" src="./src/boot.js"></script>
+<script type="module">
+  const keys = document.getElementById('keys');
+  /* The title comes up once, at the very end, over the last of the light. */
+  const title = document.getElementById('title');
+  const mutedGlyph = document.getElementById('muted');
+  addEventListener('keydown', (e) => {
+    if (e.key === 'm' || e.key === 'M') {
+      setTimeout(() => {
+        const s = window.__LEAD && window.__LEAD.game.sound.a;
+        mutedGlyph.classList.toggle('on', !!(s && s.muted));
+      }, 0);
+    }
+  });
+  const watch = setInterval(() => {
+    const g = window.__LEAD && window.__LEAD.game;
+    if (g && (g.fadeT || 0) > 0.45) { title.classList.add('on'); clearInterval(watch); }
+  }, 400);
+  const pads = document.getElementById('pads');
+  const hide = () => { keys.classList.add('gone'); pads.classList.add('gone'); };
+  addEventListener('keydown', hide, { once: true });
+  addEventListener('mousedown', hide, { once: true });
+  addEventListener('touchstart', hide, { once: true });
+</script>
+</body>
+</html>

@@ -56,6 +56,19 @@
       "actionLabel": "Enter the Moon"
     },
     {
+      "slug": "lead",
+      "title": "LEAD",
+      "descriptor": "One-rope dog walk",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/lead-card-clean.webp",
+      "alt": "A kid in a red jacket at the broken edge of a stone viaduct, a taut white leash running across the gap to a tan dog on the far side, a low sun over the sea behind them",
+      "summary": "The dog gets faster the less you hold it. Hold on and it can only go as fast as your own legs. Open your hand and it runs. Nothing here can be hurt — opening your hand is still the hard part.",
+      "metaDescription": "LEAD is a wordless browser game about a kid, a rope, and a dog that gets faster the less you hold it — a street, a park, a viaduct and a beach, walking west into the sun.",
+      "controls": "A D walk · Space jump · Shift or the mouse button to hold on · S crouch · M mute · hold R to start again",
+      "actionLabel": "Hold on"
+    },
+    {
       "slug": "thrown",
       "title": "THROWN",
       "descriptor": "Hold-and-release climb",

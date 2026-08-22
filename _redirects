@@ -118,3 +118,7 @@
 # --- THROWN ---
 /thrown.html  /thrown/  301!
 /hands        /thrown/  302
+
+# --- LEAD ---
+/lead.html  /lead/  301!
+/rope       /lead/  302
