@@ -64,8 +64,8 @@ own notes or memory. Last verified: 2026-08-21.
   rebuilds the hubs, validates the public tree, runs strict route smoke, and
   rejects stale generated pages. It must never commit or push generated files.
 
-Current verified baseline: **19 games, 11 music releases, 39 reachable public
-routes + 31 asserted 404s.** Pocket Sun is hosted locally in this repository;
+Current verified baseline: **20 games, 12 music releases, 41 reachable public
+routes + 35 asserted 404s.** Pocket Sun is hosted locally in this repository;
 it is not a redirect to a separate Netlify project.
 
 This baseline goes stale fast — it was still claiming 36 games when the real
@@ -180,6 +180,14 @@ Same shape as adding a game, with these differences:
    `featured:true` alone puts it last). Keep exactly 3 featured — un-feature one
    to compensate; an un-featured album stays on `/music/`, it just leaves the
    homepage.
+7. **No Suno link is normal** — several releases (`bite-marks-and-bubblegum`,
+   `death-threats-and-makeup-sex`, `cherry-lipstick`,
+   `i-miss-the-summer-people`) put the YouTube URL straight in `listen` and
+   omit the `youtube` key entirely. Do not invent a Suno playlist to fill the
+   slot; one link is the whole contract.
+8. `build/scripts/route-smoke.mjs` derives album routes from `site-data.json`
+   automatically — a new album needs no edit there, but its reachable-route
+   total goes up by one, so re-read the number it prints rather than assuming.
 
 ## Verifying a deploy
 
