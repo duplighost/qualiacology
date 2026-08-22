@@ -184,12 +184,6 @@
 /eaten-path/vendor/*
   Cache-Control: public, max-age=31536000, immutable
 
-/evensong/index.html
-  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
-
-/evensong/js/*
-  Cache-Control: public, max-age=0, must-revalidate
-
 /party-animal/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 

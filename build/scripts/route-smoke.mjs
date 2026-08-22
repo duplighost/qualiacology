@@ -29,6 +29,9 @@ const routes = [
 const retiredRoutes = [
   "/blackthorn-manor/",
   "/dusk",
+  "/evensong.html",
+  "/sing",
+  "/cantor",
   "/neon-breach",
   "/neon-breach.html",
   "/Psychopharmacology/",
@@ -44,6 +47,7 @@ const retiredRoutes = [
     "duet",
     "duskfall",
     "echo-saint",
+    "evensong",
     "everybody-leaves-in-4-4",
     "false-sun",
     "finale",

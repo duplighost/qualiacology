@@ -1,0 +1,2751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- touch-action:none on the canvas already blocks pinch during play, so blocking it
+     page-wide only stopped low-vision players enlarging the end-screen summary. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0a14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="THROWN is a browser game about climbing a dark tower on other people’s hands. Hold to hang on, lean to swing, let go to fly. Plays on desktop and on a phone.">
+<title>THROWN | Qualiacology</title>
+<link rel="canonical" href="https://qualiacology.com/thrown/">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:type" content="website">
+<meta property="og:title" content="THROWN | Qualiacology">
+<meta property="og:description" content="A spark climbing a dark tower on other people’s hands. Hold to hold on. Let go to fly.">
+<meta property="og:url" content="https://qualiacology.com/thrown/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/thrown-card-clean.webp">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta property="og:image:alt" content="Two pale hands reaching toward each other in the dark, a small warm light held in the lower palm">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="THROWN | Qualiacology">
+<meta name="twitter:description" content="A spark climbing a dark tower on other people’s hands. Hold to hold on. Let go to fly.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/thrown-card-clean.webp">
+<meta name="twitter:image:alt" content="Two pale hands reaching toward each other in the dark, a small warm light held in the lower palm">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<style>
+  :root{
+    --void:#0b0a14;
+    --paper:#f3ead8;
+    --spark:#ffb347;
+    --ink:#1a1522;
+    --serif:"Iowan Old Style","Palatino Linotype","Palatino","Book Antiqua","Hoefler Text",Georgia,serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  html,body{margin:0;padding:0;height:100%;background:var(--void);overflow:hidden;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none;}
+  canvas#c{display:block;touch-action:none;cursor:crosshair;}
+  .ov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 42%,rgba(30,22,44,.72),rgba(6,5,12,.93) 70%);backdrop-filter:blur(14px) saturate(1.15);-webkit-backdrop-filter:blur(14px) saturate(1.15);
+    color:var(--paper);font-family:var(--serif);z-index:10;
+    padding:calc(env(safe-area-inset-top) + 20px) calc(env(safe-area-inset-right) + 20px) calc(env(safe-area-inset-bottom) + 20px) calc(env(safe-area-inset-left) + 20px);}
+  .ov.show{display:flex;}
+  .card{box-sizing:border-box;max-width:540px;max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 28px);width:100%;text-align:center;padding:30px 26px;border:1px solid rgba(243,234,216,.12);border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));box-shadow:0 24px 80px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.05);overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+  .card h2{font-weight:400;font-size:clamp(26px,5vw,40px);letter-spacing:.18em;margin:0 0 10px;}
+  .card p{margin:6px 0;opacity:.8;font-size:15px;line-height:1.5;}
+  .card .small{font-size:12px;opacity:.55;letter-spacing:.08em;}
+  .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:22px;}
+  button.b{appearance:none;border:1px solid rgba(243,234,216,.35);background:transparent;color:var(--paper);
+    font-family:var(--serif);font-size:16px;letter-spacing:.14em;padding:14px 22px;min-width:140px;min-height:48px;
+    border-radius:999px;cursor:pointer;transition:background .15s,border-color .15s,transform .1s,box-shadow .15s;text-shadow:0 1px 10px rgba(255,255,255,.08);}
+  button.b:hover,button.b:focus-visible{background:rgba(255,179,71,.12);border-color:var(--spark);outline:none;box-shadow:0 0 0 3px rgba(255,179,71,.08),0 8px 26px rgba(0,0,0,.22);}
+  button.b:active{transform:translateY(1px);}
+  button.b.primary{border-color:var(--spark);}
+  .tally{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:22px auto 8px;max-width:420px;}
+  .tally div{border-top:1px solid rgba(243,234,216,.18);padding-top:10px;}
+  .tally .n{font-family:var(--mono);font-size:clamp(30px,7vw,48px);font-variant-numeric:tabular-nums;line-height:1;}
+  .tally .l{font-size:11px;letter-spacing:.22em;text-transform:uppercase;opacity:.6;margin-top:8px;}
+  .medals{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin:18px 0 4px;font-size:12px;letter-spacing:.1em;}
+  .medals span{opacity:.75}
+  .medals b{font-weight:400;color:var(--spark);}
+  .life{font-family:var(--mono);font-size:12px;opacity:.5;margin-top:14px;letter-spacing:.06em;}
+  .line{font-style:italic;font-size:clamp(16px,3.4vw,21px);opacity:0;transition:opacity 1.4s;margin-top:26px;}
+  .line.show{opacity:.92;}
+  .corner{position:fixed;z-index:5;top:calc(env(safe-area-inset-top) + 10px);right:calc(env(safe-area-inset-right) + 10px);
+    width:44px;height:44px;border-radius:50%;border:1px solid rgba(243,234,216,.22);background:rgba(11,10,20,.52);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    color:var(--paper);display:none;align-items:center;justify-content:center;cursor:pointer;font-family:var(--serif);
+    font-size:18px;line-height:1;opacity:.55;transition:opacity .2s;}
+  .corner.show{display:flex;}
+  .corner:hover{opacity:1;}
+  .corner:focus-visible{outline:1px solid var(--spark);}
+  @media (prefers-reduced-motion: reduce){ .line{transition:none;} }
+
+  /* second-pass presentation: quiet, theatrical, and intentionally not a generic glass UI */
+  .ov{animation:ovIn .18s ease-out both;}
+  /* overflow stays auto: this re-declaration used to say `hidden`, which clipped the end
+     screen's own buttons off small phones with no way to scroll to them. */
+  .card{position:relative;overflow:auto;border-radius:10px;background:
+    linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.012)),
+    radial-gradient(circle at 50% 0%,rgba(255,179,71,.075),transparent 48%);
+    box-shadow:0 34px 110px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.07);}
+  .card::before,.card::after{content:"";position:absolute;pointer-events:none;opacity:.55;}
+  .card::before{inset:9px;border:1px solid rgba(243,234,216,.07);}
+  .card::after{left:50%;top:0;width:96px;height:1px;transform:translateX(-50%);background:linear-gradient(90deg,transparent,var(--spark),transparent);box-shadow:0 0 18px rgba(255,179,71,.7);}
+  .card h2{text-shadow:0 0 32px rgba(255,220,175,.15);}
+  button.b{border-radius:4px;background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0));position:relative;overflow:hidden;}
+  button.b::after{content:"";position:absolute;left:18%;right:18%;bottom:7px;height:1px;background:var(--spark);transform:scaleX(0);opacity:.7;transition:transform .18s ease;}
+  button.b:hover::after,button.b:focus-visible::after{transform:scaleX(1);}
+  .corner{border-radius:5px;}
+  @keyframes ovIn{from{opacity:0}to{opacity:1}}
+
+
+  /* Pure-play presentation: no persistent HUD. The only chrome is one quiet corner mark,
+     which is the ONLY way a touch player can reach pause, sound and restart — desktop also
+     has P / Escape / M / R. It is deliberately small and dim so it never reads as UI. */
+  .corner{width:36px;height:36px;font-size:15px;opacity:.30;}
+  .corner:hover,.corner:focus-visible{opacity:.9;}
+  @media (pointer:coarse){.corner{width:40px;height:40px;opacity:.26;}}
+  /* A 320x568 phone overflowed the end card by about one button, so "Climb again" and
+     "Sound" — the only touch UI a player gets after a full climb — sat on or past the cut
+     edge. Trim spacing before the type, so the reading order (tally, line, medals, then the
+     buttons) survives intact and nothing has to be scrolled to. */
+  @media (max-height:700px){
+    .card{padding:22px 20px}
+    .card h2{font-size:clamp(22px,4.6vw,32px);margin-bottom:6px}
+    .tally{margin:14px auto 4px}.tally .n{font-size:clamp(26px,6vw,38px)}
+    .line{margin-top:14px;font-size:clamp(15px,3.2vw,18px)}
+    .medals{margin:12px 0 2px;gap:10px}
+    .life{margin-top:10px}
+    .row{margin-top:14px}
+    button.b{padding:12px 20px;min-height:46px}
+  }
+  @media (max-height:480px){
+    .ov{align-items:flex-start;padding-top:calc(env(safe-area-inset-top) + 10px);padding-bottom:calc(env(safe-area-inset-bottom) + 10px);}
+    .card{padding:16px 18px}.card h2{font-size:24px;margin-bottom:5px}.tally{margin:12px auto 4px}.tally .n{font-size:28px}.row{margin-top:12px}.line{margin-top:12px}.medals{margin:10px 0 2px}.life{margin-top:8px}
+  }
+  /* A 320px-tall viewport (a small phone held sideways) still cannot hold everything. The
+     lifetime tally is the one thing here that is not about THIS climb, so it goes first
+     rather than pushing the buttons off the card. */
+  @media (max-height:380px){
+    .card{padding:12px 16px}.card h2{font-size:21px;letter-spacing:.14em}
+    .tally{margin:9px auto 2px}.tally .n{font-size:24px}.tally .l{font-size:10px;margin-top:5px}
+    .line{margin-top:9px;font-size:14px}
+    .medals{margin:8px 0 0;gap:9px;font-size:11px}
+    .life{display:none}
+    .row{margin-top:10px;gap:8px}
+    button.b{padding:10px 16px;min-height:44px;min-width:120px;font-size:14px}
+  }
+
+  /* site home pill (added by build-site-copy.mjs) */
+  .home-link{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));
+    z-index:2147483647;display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 13px;
+    color:rgba(243,234,216,.9);text-decoration:none;font:400 11px/1.2 var(--serif);letter-spacing:.16em;
+    text-transform:uppercase;border:1px solid rgba(243,234,216,.24);border-radius:4px;
+    background:rgba(11,10,20,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    opacity:.36;transition:opacity .18s ease,border-color .18s ease;}
+  .home-link:hover,.home-link:focus-visible{opacity:1;border-color:var(--spark);outline:0;}
+  @media (pointer:coarse){.home-link{opacity:.3;}}
+  @media (max-width:600px){
+    .home-link{width:40px;height:40px;padding:0;display:grid;place-items:center;font-size:0;}
+    .home-link::after{content:'Q.';font:400 13px/1 var(--serif);letter-spacing:.02em;color:var(--paper);}
+  }
+</style>
+</head>
+<body>
+<a class="home-link" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology"><span aria-hidden="true">&#8592;</span> <span>Qualiacology</span></a>
+<canvas id="c" role="application" aria-label="THROWN. Hold the screen to catch a hand, drag sideways to lean, and release to fly."></canvas>
+<button class="corner" id="pauseBtn" aria-label="Pause">‖</button>
+
+<div class="ov" id="pauseOv" role="dialog" aria-label="Paused">
+  <div class="card">
+    <h2>PAUSED</h2>
+    <p class="small">hold: space · click · touch &nbsp;&nbsp; lean: A D · ← → · slide sideways</p>
+    <div class="row">
+      <button class="b primary" id="resumeBtn">Resume</button>
+      <button class="b" id="restartChBtn">Restart hands</button>
+      <button class="b" id="soundBtn">Sound: on</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="b" id="restartGameBtn">Start over</button>
+    </div>
+    <p class="small" style="margin-top:18px" id="pauseStats"></p>
+  </div>
+</div>
+
+<div class="ov" id="endOv" role="dialog" aria-label="The top">
+  <div class="card">
+    <h2 id="endTitle">THE TOP</h2>
+    <div class="tally">
+      <div><div class="n" id="tHeld">0</div><div class="l">held</div></div>
+      <div><div class="n" id="tLet">0</div><div class="l">let go</div></div>
+      <div><div class="n" id="tThrown">0</div><div class="l">thrown</div></div>
+    </div>
+    <p class="line" id="endLine">Same number. It was always the same number.</p>
+    <div class="medals" id="endMedals"></div>
+    <p class="life" id="endLife"></p>
+    <div class="row">
+      <button class="b primary" id="againBtn">Climb again</button>
+      <button class="b" id="endSoundBtn">Sound: on</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   THROWN
+   hold to hold on. let go to fly.
+   one spark, many hands, one direction.
+   ============================================================ */
+
+/* ---------- utils ---------- */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const sign = v => v < 0 ? -1 : v > 0 ? 1 : 0;
+const hyp = Math.hypot;
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+const easeInOut = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const smooth = t => t * t * (3 - 2 * t);
+let QA_RNG_SEED = 0x54a8f13d;
+function gameRandom() {
+  if (!QA_MODE) return Math.random();
+  QA_RNG_SEED = (Math.imul(QA_RNG_SEED, 1664525) + 1013904223) >>> 0;
+  return QA_RNG_SEED / 4294967296;
+}
+const rnd = (a = 1, b) => b === undefined ? gameRandom() * a : a + gameRandom() * (b - a);
+const pick = a => a[(gameRandom() * a.length) | 0];
+const fmtTime = s => { s = Math.max(0, s); const m = (s / 60) | 0; const r = s - m * 60; return m + ':' + (r < 10 ? '0' : '') + r.toFixed(1); };
+// cheap deterministic noise (for tremor etc.)
+function hashNoise(i) { let x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+function noise1(t, seed = 0) { const i = Math.floor(t); const f = t - i; const a = hashNoise(i + seed * 57), b = hashNoise(i + 1 + seed * 57); return lerp(a, b, smooth(f)) * 2 - 1; }
+
+const BUILD_ID = 'thrown-mobile-luminous-1.0.0';
+const FLAGS = new URLSearchParams(window.location.search);
+const QA_MODE = FLAGS.get('qa') === '1';
+const FORCE_TOUCH = FLAGS.get('touch') === '1';
+const REDUCED = FLAGS.get('reduced') === '1' || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const IS_TOUCH = FORCE_TOUCH || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+const mq = q => !!(window.matchMedia && window.matchMedia(q).matches);
+let COARSE_POINTER = FORCE_TOUCH || mq('(pointer: coarse)');
+// navigator.maxTouchPoints alone calls every touchscreen Windows laptop a phone, which then
+// gets the phone's reduced DPR, softer darkness buffer and coarser hands on a machine being
+// played with a mouse. Ask what the PRIMARY pointer is, and re-ask on resize.
+function deviceIsMobile() {
+  if (!IS_TOUCH) return false;
+  if (FORCE_TOUCH) return true;
+  if (!COARSE_POINTER) return false;                       // primary pointer is a mouse/trackpad
+  if (mq('(any-pointer: fine)') && Math.min(window.innerWidth, window.innerHeight) >= 720) return false;
+  return true;
+}
+let MOBILE_LIKELY = deviceIsMobile();
+const DEVICE_CORES = navigator.hardwareConcurrency || 4;
+const DEVICE_MEMORY = navigator.deviceMemory || 4;
+const LOW_POWER_HINT = MOBILE_LIKELY && (DEVICE_CORES <= 4 || DEVICE_MEMORY <= 3);
+document.body.dataset.buildId = BUILD_ID;
+document.body.dataset.gameReady = 'false';
+
+const Haptics = (() => {
+  const supported = IS_TOUCH && typeof navigator.vibrate === 'function';
+  function pulse(pattern) {
+    if (!supported || REDUCED || document.visibilityState !== 'visible') return;
+    try { navigator.vibrate(pattern); } catch (e) { /* optional hardware feedback */ }
+  }
+  return { pulse, get supported() { return supported; } };
+})();
+
+// QA-only long-task telemetry. It stays out of normal play, but makes first-touch
+// audio and mobile frame stalls directly measurable in the exact shipped file.
+const RUNTIME_PERF = { longTasks: [], maxLongTask: 0 };
+if (QA_MODE && typeof PerformanceObserver === 'function') {
+  try {
+    new PerformanceObserver(list => {
+      for (const entry of list.getEntries()) {
+        const duration = +entry.duration.toFixed(2);
+        RUNTIME_PERF.longTasks.push(duration);
+        RUNTIME_PERF.maxLongTask = Math.max(RUNTIME_PERF.maxLongTask, duration);
+      }
+      if (RUNTIME_PERF.longTasks.length > 64) RUNTIME_PERF.longTasks.splice(0, RUNTIME_PERF.longTasks.length - 64);
+    }).observe({ entryTypes: ['longtask'] });
+  } catch (e) { /* optional browser telemetry */ }
+}
+
+/* ---------- storage (guarded; never throws) ---------- */
+const SAVE_KEY = 'thrown.save.v1';
+const Store = (() => {
+  let mem = null;
+  function load() {
+    if (mem) return mem;
+    let d = null;
+    try { const raw = localStorage.getItem(SAVE_KEY); if (raw) d = JSON.parse(raw); } catch (e) { /* ignore */ }
+    mem = Object.assign({ best: {}, life: { held: 0, letgo: 0, thrown: 0, snuffs: 0, climbs: 0, tops: 0 }, sound: true }, d || {});
+    if (!mem.best) mem.best = {};
+    if (!mem.life) mem.life = { held: 0, letgo: 0, thrown: 0, snuffs: 0, climbs: 0, tops: 0 };
+    return mem;
+  }
+  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(mem)); } catch (e) { /* ignore */ } }
+  return { load, save };
+})();
+const SAVE = Store.load();
+
+/* ---------- audio (all synthesized) ---------- */
+const Audio = (() => {
+  let ac = null, master = null, comp = null, mixBus = null, fxBus = null, musicBus = null;
+  let dryGain = null, reverb = null, reverbGain = null, delay = null, delayGain = null, delayFeedback = null;
+  let windGain = null, windFilter = null, airGain = null, airFilter = null;
+  let droneGain = null, droneFilter = null, shimmerGain = null, holdGain = null, holdFilter = null;
+  let enabled = SAVE.sound !== false, unlocked = false, noiseBuf = null, ambienceReady = false, ambienceQueued = false;
+  let droneOsc = [], currentRoot = 110, nextNoteT = 0, scoreStep = 0, scoreChapter = -1;
+  let scoreIntensity = 0, scoreHeld = 0, scoreProgress = 0, lastBedT = -99;
+  // When the game ducks the mix — a death, the last throw, a pause — bed() must stop
+  // rewriting the same gains 30 times a second, or the silence lasts exactly one frame.
+  let ducked = false;
+
+  const SCORE = [
+    { tempo: 66,  pattern: [0,null,2,null,4,null,2,null],                    kind:'wood',  gain:.038, octave:.50, chord:[1,1.25,1.5] },
+    { tempo: 112, pattern: [0,4,2,5,3,6,2,4,0,5,2,7,3,6,4,2],            kind:'pulse', gain:.026, octave:.50, chord:[1,1.2,1.5] },
+    { tempo: 50,  pattern: [0,null,null,4,null,null,2,null,5,null,null,4],   kind:'bell',  gain:.032, octave:.50, chord:[1,1.25,1.5] },
+    { tempo: 62,  pattern: [0,null,5,null,2,null,6,null,4,null,2,null],     kind:'glass', gain:.026, octave:.50, chord:[1,1.2,1.5] },
+    { tempo: 80,  pattern: [0,2,4,5,7,9,7,5,4,2,5,7],                    kind:'open',  gain:.034, octave:.50, chord:[1,1.25,1.5,2] },
+  ];
+
+  // Waiting for idle is right ONCE, to stay out of the way of first paint. It is wrong for
+  // every continuation: the buffer fill yields eight or nine times, and each yield cost the
+  // full idle timeout, so ~30 ms of actual work took two to three seconds of wall clock.
+  // Start on idle, continue on the next macrotask — each slice is capped well under a frame.
+  function deferAudioWork(fn) {
+    if ('requestIdleCallback' in window) requestIdleCallback(fn, { timeout: 200 });
+    else setTimeout(fn, 16);
+  }
+  // setTimeout(fn, 0) is not "the next task" here — behind a running rAF loop each one was
+  // measured at ~146 ms, turning 103 ms of buffer fill into 1.6 s of wall clock. A
+  // MessageChannel post is a real next-task yield: it still lets rendering in between
+  // slices, but it is not a clamped, deprioritised timer.
+  const continueAudioWork = (() => {
+    if (typeof MessageChannel !== 'function') return fn => setTimeout(fn, 0);
+    const ch = new MessageChannel(), q = [];
+    ch.port1.onmessage = () => { const fn = q.shift(); if (fn) fn(); };
+    return fn => { q.push(fn); ch.port2.postMessage(0); };
+  })();
+  function queueAmbience() {
+    if (ambienceQueued || ambienceReady || !enabled) return;
+    ambienceQueued = true;
+    const begin = () => {
+      if (!ac || ambienceReady || !enabled) { ambienceQueued = false; return; }
+      try {
+        // Build the long noise and impulse-response buffers in sub-5 ms slices.
+        // This keeps audio richness without planting a 50–90 ms hitch after first touch.
+        const len = Math.floor(ac.sampleRate * (MOBILE_LIKELY ? 1.35 : 2));
+        const fullNoise = ac.createBuffer(1, len, ac.sampleRate), nd = fullNoise.getChannelData(0);
+        const tail = MOBILE_LIKELY ? 2.35 : 3.15;
+        const irLen = Math.floor(ac.sampleRate * tail), ir = ac.createBuffer(2, irLen, ac.sampleRate);
+        const targets = [nd, ir.getChannelData(0), ir.getChannelData(1)];
+        let target = 0, pos = 0;
+        const fill = () => {
+          if (!ac || !enabled) { ambienceQueued = false; return; }
+          const sliceStart = performance.now();
+          while (target < targets.length && performance.now() - sliceStart < 7) {
+            const d = targets[target], end = Math.min(d.length, pos + 4096);
+            if (target === 0) {
+              for (let i = pos; i < end; i++) d[i] = Math.random() * 2 - 1;
+            } else {
+              const ch = target - 1;
+              for (let i = pos; i < end; i++) {
+                const t = i / irLen;
+                d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3.25) * (.70 + .30 * Math.sin(i * .013 + ch * 1.7));
+              }
+            }
+            pos = end;
+            if (pos >= d.length) { target++; pos = 0; }
+          }
+          if (target < targets.length) { continueAudioWork(fill); return; }
+          finish(fullNoise, ir);
+        };
+        continueAudioWork(fill);
+      } catch (e) { ambienceQueued = false; }
+    };
+    const finish = (fullNoise, ir) => {
+      if (!ac || !enabled) { ambienceQueued = false; return; }
+      try {
+        noiseBuf = fullNoise;
+        reverb = ac.createConvolver();
+        reverbGain = ac.createGain(); reverbGain.gain.value = .21;
+        reverb.buffer = ir; mixBus.connect(reverb); reverb.connect(reverbGain); reverbGain.connect(comp);
+
+        delay = ac.createDelay(1); delay.delayTime.value = .285;
+        delayGain = ac.createGain(); delayGain.gain.value = .075;
+        delayFeedback = ac.createGain(); delayFeedback.gain.value = .22;
+        mixBus.connect(delay); delay.connect(delayGain); delayGain.connect(comp); delay.connect(delayFeedback); delayFeedback.connect(delay);
+
+        const wind = ac.createBufferSource(); wind.buffer = noiseBuf; wind.loop = true;
+        windFilter = ac.createBiquadFilter(); windFilter.type = 'bandpass'; windFilter.frequency.value = 520; windFilter.Q.value = .72;
+        windGain = ac.createGain(); windGain.gain.value = 0;
+        wind.connect(windFilter); windFilter.connect(windGain); windGain.connect(mixBus); wind.start();
+
+        const air = ac.createBufferSource(); air.buffer = noiseBuf; air.loop = true;
+        airFilter = ac.createBiquadFilter(); airFilter.type = 'highpass'; airFilter.frequency.value = 2500; airFilter.Q.value = .18;
+        airGain = ac.createGain(); airGain.gain.value = 0;
+        air.connect(airFilter); airFilter.connect(airGain); airGain.connect(mixBus); air.start();
+
+        droneFilter = ac.createBiquadFilter(); droneFilter.type = 'lowpass'; droneFilter.frequency.value = 360; droneFilter.Q.value = .45;
+        droneGain = ac.createGain(); droneGain.gain.value = .0001;
+        droneFilter.connect(droneGain); droneGain.connect(musicBus);
+        const droneDefs = [
+          { type:'sine', mult:.5, gain:.45 }, { type:'triangle', mult:.75, gain:.17 },
+          { type:'sine', mult:1.002, gain:.18 }, { type:'sine', mult:1.5, gain:.08 }
+        ];
+        droneDefs.forEach(d => {
+          const o = ac.createOscillator(); o.type = d.type; o.frequency.value = currentRoot * d.mult;
+          const g = ac.createGain(); g.gain.value = d.gain; o.connect(g); g.connect(droneFilter); o.start();
+          droneOsc.push({ o, mult:d.mult, shimmer:false });
+        });
+        shimmerGain = ac.createGain(); shimmerGain.gain.value = .0001; shimmerGain.connect(musicBus);
+        [3.998, 6.01, 8.02].forEach((mult, i) => {
+          const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = currentRoot * mult;
+          const g = ac.createGain(); g.gain.value = [.018,.010,.006][i]; o.connect(g); g.connect(shimmerGain); o.start();
+          droneOsc.push({ o, mult, shimmer:true });
+        });
+        const holdOsc = ac.createOscillator(); holdOsc.type = 'sine'; holdOsc.frequency.value = currentRoot * .5;
+        holdFilter = ac.createBiquadFilter(); holdFilter.type = 'lowpass'; holdFilter.frequency.value = 150;
+        holdGain = ac.createGain(); holdGain.gain.value = .0001;
+        holdOsc.connect(holdFilter); holdFilter.connect(holdGain); holdGain.connect(musicBus); holdOsc.start();
+        droneOsc.push({ o:holdOsc, mult:.5, hold:true });
+
+        ambienceReady = true; ambienceQueued = false;
+        setRoot(currentRoot, 0); droneGain.gain.linearRampToValueAtTime(.11, ac.currentTime + 2.8);
+        nextNoteT = ac.currentTime + .35;
+      } catch (e) { ambienceQueued = false; }
+    };
+    deferAudioWork(begin);
+  }
+
+  function ctx() {
+    if (ac) return ac;
+    try { ac = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { return null; }
+
+    master = ac.createGain(); master.gain.value = enabled ? .86 : 0;
+    comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -21; comp.knee.value = 20; comp.ratio.value = 3.4; comp.attack.value = .006; comp.release.value = .24;
+    mixBus = ac.createGain(); mixBus.gain.value = .94;
+    fxBus = ac.createGain(); fxBus.gain.value = .96; fxBus.connect(mixBus);
+    musicBus = ac.createGain(); musicBus.gain.value = .16; musicBus.connect(mixBus);
+    dryGain = ac.createGain(); dryGain.gain.value = .90;
+    mixBus.connect(dryGain); dryGain.connect(comp); comp.connect(master); master.connect(ac.destination);
+
+    // A tiny dry-noise seed preserves the first grab's tactile click without building the ambient beds.
+    const seedLen = Math.max(128, Math.floor(ac.sampleRate * .12));
+    noiseBuf = ac.createBuffer(1, seedLen, ac.sampleRate);
+    const seed = noiseBuf.getChannelData(0); for (let i = 0; i < seedLen; i++) seed[i] = Math.random() * 2 - 1;
+    queueAmbience();
+    return ac;
+  }
+
+  // Build the whole graph while the page is idle and nobody is playing yet. Constructing
+  // an AudioContext is real main-thread work (tens of ms on a laptop, hundreds on a phone)
+  // and it used to land on the very first tap — i.e. exactly on the first grab, the one
+  // moment the game cannot afford to stutter. A context built here starts suspended, which
+  // is allowed without a gesture; unlock() then only has to resume it.
+  function prewarm() { if (ac || !enabled) return; deferAudioWork(() => { if (!ac) ctx(); }); }
+  // A muted player should not get a live audio output session for the whole visit — on a
+  // phone that ducks whatever they were already listening to, and costs battery, for a game
+  // they explicitly silenced.
+  function unlock() { unlocked = true; if (!enabled) return; const c = ctx(); if (!c) return; if (c.state !== 'running' && c.state !== 'closed') c.resume().catch(() => {}); queueAmbience(); }
+  function setEnabled(v) {
+    enabled = v; SAVE.sound = v; Store.save();
+    if (master) master.gain.setTargetAtTime(v ? .86 : 0, ac.currentTime, .045);
+    if (v) { resume(); queueAmbience(); }
+    else if (ac) setTimeout(() => { if (!enabled) suspend(); }, 90);
+  }
+  function isEnabled() { return enabled; }
+  function out(bus) { return bus === 'music' ? musicBus : fxBus; }
+  function panNode(node, pan) {
+    if (pan && ac && ac.createStereoPanner) { const p = ac.createStereoPanner(); p.pan.value = clamp(pan,-1,1); node.connect(p); return p; }
+    return node;
+  }
+  function env(g, t0, a, peak, d, sus = .0001) {
+    g.gain.cancelScheduledValues(t0); g.gain.setValueAtTime(.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(.0002, peak), t0 + Math.max(.001,a));
+    g.gain.exponentialRampToValueAtTime(Math.max(.0001,sus), t0 + Math.max(.002,a+d));
+  }
+  function tone(freq, { type='triangle', a=.004, d=.25, peak=.2, slide=0, at=0, pan=0, detune=0, lowpass=0, q=.6, bus='fx' } = {}) {
+    const c = ctx(); if (!c || !enabled) return;
+    const t0 = c.currentTime + at, o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(Math.max(20,freq),t0); o.detune.value = detune;
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t0 + a + d);
+    const g = c.createGain(); env(g,t0,a,peak,d); let n = o;
+    if (lowpass) { const f = c.createBiquadFilter(); f.type='lowpass'; f.frequency.setValueAtTime(lowpass,t0); f.Q.value=q; if(slide) f.frequency.exponentialRampToValueAtTime(Math.max(90,lowpass*(slide>.99?1.35:.48)),t0+a+d); o.connect(f); n=f; }
+    n.connect(g); panNode(g,pan).connect(out(bus)); o.start(t0); o.stop(t0+a+d+.08);
+  }
+  function noise({ a=.003, d=.2, peak=.16, f=1200, q=1, type='bandpass', slide=0, at=0, pan=0, bus='fx' } = {}) {
+    const c = ctx(); if (!c || !enabled || !noiseBuf) return;
+    const t0=c.currentTime+at, s=c.createBufferSource(); s.buffer=noiseBuf;
+    const fl=c.createBiquadFilter(); fl.type=type; fl.frequency.setValueAtTime(Math.max(40,f),t0); fl.Q.value=q;
+    if(slide) fl.frequency.exponentialRampToValueAtTime(Math.max(40,f*slide),t0+a+d);
+    const g=c.createGain(); env(g,t0,a,peak,d); s.connect(fl); fl.connect(g); panNode(g,pan).connect(out(bus)); s.start(t0); s.stop(t0+a+d+.08);
+  }
+  function pluck(freq,{at=0,peak=.08,pan=0,bus='music',bright=1}={}) {
+    tone(freq,{type:'triangle',a:.002,d:.38,peak,at,pan,bus,lowpass:900+bright*2400,q:1.1});
+    tone(freq*2.003,{type:'sine',a:.002,d:.15,peak:peak*.24,at:at+.008,pan,bus});
+    noise({a:.001,d:.028,peak:peak*.16,f:2600+bright*1800,q:2.2,at,pan,bus});
+  }
+  function bell(freq,{at=0,peak=.05,pan=0,bus='music',glass=false}={}) {
+    const partials = glass ? [[1,1],[2.01,.42],[3.92,.20],[6.14,.09]] : [[1,1],[2,.31],[3.01,.14],[4.11,.07]];
+    partials.forEach(([m,g],i)=>tone(freq*m,{type:'sine',a:.003+i*.002,d:(glass?1.35:1.0)+i*.14,peak:peak*g,at:at+i*.006,pan,bus,detune:i%2?3:-2}));
+  }
+  function chord(freq, ratios, {at=0,peak=.028,d=2.3,bus='music',open=false}={}) {
+    ratios.forEach((m,i)=>tone(freq*m,{type:i===0?'sine':'triangle',a:.18+i*.05,d:d+i*.18,peak:peak/(1+i*.24),at:at+i*.025,bus,detune:(i-1)*2,lowpass:open?2800:1100}));
+  }
+  function sub(freq=58,{at=0,peak=.16,d=.32,slide=.55}={}) { tone(freq,{type:'sine',a:.003,d,peak,slide,at,lowpass:180}); }
+  function whoosh(speed=1,pan=0,{at=0,down=false}={}) {
+    noise({a:.012,d:.24+speed*.38,peak:.035+speed*.11,f:down?2300:620+speed*1500,q:.58,slide:down?.28:2.8,at,pan});
+    if(speed>.35) tone(170+speed*150,{type:'sine',a:.004,d:.16+speed*.08,peak:.018+speed*.025,slide:down?.55:1.75,at,pan});
+  }
+
+  const PENT=[1,9/8,5/4,3/2,5/3,2,9/4,5/2,3,10/3,4];
+  function degree(i,root=currentRoot){ return root*2*PENT[clamp(i,0,PENT.length-1)]; }
+  function setRoot(f,t=1.2){
+    currentRoot=f; if(!ac) return; const now=ac.currentTime;
+    droneOsc.forEach(d=>{ d.o.frequency.cancelScheduledValues(now); d.o.frequency.setTargetAtTime(f*d.mult,now,Math.max(.02,t*.34)); });
+    scoreStep=0; nextNoteT=now+.18;
+  }
+
+  function scoreNote(ci, step, at) {
+    const cfg=SCORE[ci]||SCORE[0], raw=cfg.pattern[step%cfg.pattern.length]; if(raw==null) return;
+    const freq=degree(raw)*cfg.octave, pan=Math.sin(step*2.17)*.38, p=cfg.gain*(.38+.62*scoreIntensity);
+    if(cfg.kind==='wood') pluck(freq,{at,peak:p,pan,bright:.45});
+    else if(cfg.kind==='pulse') pluck(freq*(step%4===3?2:1),{at,peak:p,pan,bright:.9});
+    else if(cfg.kind==='bell') bell(freq*(step%6===0?.5:1),{at,peak:p,pan});
+    else if(cfg.kind==='glass') bell(freq,{at,peak:p,pan,glass:true});
+    else { pluck(freq,{at,peak:p*.75,pan,bright:1}); if(step%3===0) bell(freq*2,{at:at+.03,peak:p*.22,pan:-pan}); }
+    if(step%cfg.pattern.length===0) chord(currentRoot*cfg.octave,cfg.chord,{at:at+.03,peak:p*.34,d:ci===4?3.2:2.2,open:ci===4});
+    if(scoreHeld>.35 && step%4===0) tone(currentRoot*.5,{type:'sine',a:.02,d:.28,peak:.012+.018*scoreHeld,at,bus:'music',lowpass:150});
+  }
+  function scheduleScore(ci){
+    if(!ac||!enabled||!ambienceReady) return; const cfg=SCORE[ci]||SCORE[0], stepDur=60/cfg.tempo/2, look=ac.currentTime+.18;
+    if(scoreChapter!==ci){ scoreChapter=ci; scoreStep=0; nextNoteT=ac.currentTime+.12; }
+    // Re-base rather than replay. ac.currentTime keeps running through a pause and through
+    // any long frame, so nextNoteT ends up arbitrarily far in the past; scheduling those
+    // notes hands every envelope a start time that has already gone, and the oscillator is
+    // built, settles straight to silence and is thrown away. The melody just stopped.
+    if(nextNoteT<ac.currentTime){
+      const missed=Math.ceil((ac.currentTime-nextNoteT)/stepDur);
+      scoreStep+=missed; nextNoteT+=missed*stepDur;
+    }
+    let guard=0; while(nextNoteT<look && guard++<4){
+      if(scoreIntensity>.08) scoreNote(ci,scoreStep,nextNoteT-ac.currentTime);
+      scoreStep++; nextNoteT+=stepDur;
+    }
+  }
+
+  // Per-frame mix control. Extra arguments are presentation-only state.
+  function bed(speed01, bright01, openness, ci=0, held=false, progress=0) {
+    scoreIntensity=clamp(.14+speed01*.43+bright01*.13+openness*.24,0,1); scoreHeld+=(Number(held)-scoreHeld)*.08; scoreProgress=progress;
+    if(!ac||!ambienceReady||!enabled||ducked) return; const now=ac.currentTime;
+    if(now-lastBedT<.032) return; lastBedT=now;
+    // Attached swinging is intentionally restrained; free flight gets more air.
+    // This keeps the rope motion tactile without letting broadband noise dominate the score.
+    const motionAir = speed01 * (held ? .27 : .68);
+    windGain.gain.setTargetAtTime(.0015 + motionAir * .074 + openness * .0025, now, .11);
+    windFilter.frequency.setTargetAtTime(220 + motionAir * 1450 + openness * 240, now, .14);
+    airGain.gain.setTargetAtTime(motionAir * motionAir * .016 + openness * .0045, now, .16);
+    airFilter.frequency.setTargetAtTime(2500 + motionAir * 2500, now, .16);
+    droneFilter.frequency.setTargetAtTime(160+bright01*720+openness*1450,now,.26);
+    droneGain.gain.setTargetAtTime(.055+bright01*.05+openness*.045,now,.45);
+    shimmerGain.gain.setTargetAtTime(.0008+bright01*.014+openness*.038,now,.40);
+    holdGain.gain.setTargetAtTime(held ? .0035 + .0045 * speed01 : .0001, now, .16);
+    holdFilter.frequency.setTargetAtTime(95+speed01*115+progress*55,now,.18);
+    musicBus.gain.setTargetAtTime(.11+scoreIntensity*.08+openness*.035,now,.35);
+    reverbGain.gain.setTargetAtTime(.17+openness*.18+(ci===2||ci===3?.05:0),now,.45);
+    delayGain.gain.setTargetAtTime(ci===1?.11:ci===2?.095:.06,now,.45);
+    scheduleScore(ci);
+  }
+
+  const sfx={
+    grab(i,pan){ const f=degree(i); pluck(f,{peak:.135,pan,bus:'fx',bright:1}); tone(f*.5,{type:'sine',a:.002,d:.18,peak:.035,pan,lowpass:260}); noise({d:.035,peak:.07,f:3300,q:2.7,pan}); },
+    release(speed01,pan){ whoosh(speed01,pan); if(speed01>.55) bell(degree(1+((speed01*5)|0)),{peak:.018+.018*speed01,pan,bus:'fx'}); },
+    pump(){ sub(72,{peak:.035,d:.12,slide:.8}); },
+    mote(k){ const f=degree(5+(k%4)); bell(f*2,{peak:.105,glass:true,bus:'fx'}); bell(f*4.01,{at:.045,peak:.035,pan:.18,bus:'fx'}); },
+    hit(){ sub(68,{peak:.26,d:.44,slide:.33}); noise({a:.001,d:.34,peak:.22,f:340,q:.55,type:'lowpass',slide:.42}); noise({d:.09,peak:.10,f:2900,q:1.4,slide:.35}); if(ac&&droneFilter){const n=ac.currentTime;droneFilter.frequency.cancelScheduledValues(n);droneFilter.frequency.setValueAtTime(85,n);} },
+    snuff(){ whoosh(1,0,{down:true}); sub(55,{peak:.30,d:1.15,slide:.38}); chord(55,[1,1.189,1.498],{peak:.055,d:1.7,bus:'fx'}); },
+    flickTele(){ tone(1320,{type:'square',a:.001,d:.045,peak:.04,slide:1.08}); },
+    flick(){ noise({a:.001,d:.13,peak:.14,f:4200,q:1.3,slide:.25}); tone(980,{type:'square',a:.001,d:.11,peak:.10,slide:.25}); sub(90,{peak:.08,d:.18,slide:.65}); },
+    land(){ const f=degree(0); sub(f*.25,{peak:.12,d:.36,slide:.64}); chord(f*.5,[1,1.25,1.5,2],{peak:.07,d:1.45,bus:'fx'}); noise({d:.06,peak:.045,f:480,q:.9,type:'lowpass'}); },
+    chapter(root){ setRoot(root,2.0); chord(root,[1,1.25,1.5,2,3],{peak:.065,d:3.1,bus:'fx',open:true}); noise({a:.12,d:1.55,peak:.045,f:520,q:.45,slide:3.2}); bell(root*4,{at:.20,peak:.045,glass:true,bus:'fx'}); },
+    lift(){ noise({a:.16,d:.85,peak:.055,f:360,q:.7,slide:2.8}); tone(currentRoot,{type:'sine',a:.15,d:.9,peak:.025,slide:1.5}); },
+    slip(){ noise({d:.12,peak:.045,f:1900,q:3.4,slide:.72}); },
+    catchLittle(){ [0,2,4,6].forEach((d,i)=>bell(degree(d),{at:i*.065,peak:.09,glass:i>1,bus:'fx',pan:(i-1.5)*.15})); },
+    thrown(){ [0,2,4,5,7,9].forEach((d,i)=>{pluck(degree(d),{at:i*.075,peak:.085,bus:'fx',pan:(i-2.5)*.13,bright:1});bell(degree(d)*2,{at:.22+i*.085,peak:.032,bus:'fx',glass:true});}); chord(currentRoot,[1,1.25,1.5,2,2.5,3],{at:.12,peak:.075,d:4.2,bus:'fx',open:true}); noise({a:.04,d:1.9,peak:.12,f:900,q:.5,slide:4.2}); sub(72,{peak:.14,d:.9,slide:.72}); },
+    ui(){ pluck(760,{peak:.032,bus:'fx',bright:1}); tone(1140,{type:'sine',a:.001,d:.055,peak:.014,at:.012}); },
+  };
+  function silenceDrone(t=.6){ ducked=true; if(!ac||!ambienceReady)return; droneGain.gain.setTargetAtTime(.0001,ac.currentTime,t*.3); windGain.gain.setTargetAtTime(0,ac.currentTime,.08); airGain.gain.setTargetAtTime(0,ac.currentTime,.08); shimmerGain.gain.setTargetAtTime(.0001,ac.currentTime,.16); musicBus.gain.setTargetAtTime(.025,ac.currentTime,.18); }
+  function restoreDrone(){ ducked=false; if(!ac||!ambienceReady)return; droneGain.gain.setTargetAtTime(.10,ac.currentTime,1.0); shimmerGain.gain.setTargetAtTime(.012,ac.currentTime,1.2); musicBus.gain.setTargetAtTime(.15,ac.currentTime,1.0); lastBedT=-99; nextNoteT=ac.currentTime+.18; }
+  function suspend(){ if(ac&&ac.state==='running') ac.suspend().catch(()=>{}); }
+  function resume(){ if(ac&&enabled&&unlocked&&ac.state!=='running'&&ac.state!=='closed') ac.resume().catch(()=>{}); }
+  return {prewarm,unlock,setEnabled,isEnabled,bed,sfx,setRoot,silenceDrone,restoreDrone,suspend,resume,get unlocked(){return unlocked;},get ambienceReady(){return ambienceReady;},get state(){return ac?ac.state:'cold';}};
+})();
+
+/* ---------- tuning ---------- */
+const G = 2400;            // gravity, px/s^2 (world y is UP)
+const FALL_MULT = 1.12;    // heavier on the way down -> readable apex, snappy fall
+const MAX_FALL = 1700;
+const PUMP = 2150;         // lean acceleration while holding
+const BRAKE_MULT = 1.5;    // leaning against motion is stronger -> you can stop fast
+const AIR = 300;           // tiny air nudge
+const REACH = 170;         // how close a hand must be to catch it
+const L_MIN = 70, L_MAX = 190;
+const MAX_HOLD_SPEED = 1750;
+const SPARK_R = 9;
+const TOWER_W = 640;
+const REL_BOOST = 1.08;    // letting go is a little throw
+const LIT_MAX = 3;
+const DT = 1 / 120;
+
+/* ---------- input ---------- */
+const Input = (() => {
+  const keys = Object.create(null);
+  const edges = Object.create(null);   // one-shot key presses, survive a fast tap
+  const pointers = new Map();
+  let latImpulse = 0;
+  let holdEdge = false;      // pressed this frame
+  let anyEdge = false;
+  let resumeHold = false;    // preserves an attached hand across app/tab interruptions
+  let resumeHoldUntil = 0;   // ...but never forever. see poll().
+  let lastPointerT = 0;
+  let holdId = null;         // the pointer that owns the GRIP; lifting it lets go
+  let promoteAfter = false;  // one poll of "released" before another finger can take over
+  let activeId = null;       // the pointer that owns the lean; last one down wins
+  const HOLD_KEYS = ['Space', 'ArrowUp', 'KeyW', 'Enter', 'KeyZ', 'KeyX', 'KeyJ', 'KeyK'];
+  const st = { hold: false, lat: 0, pressed: false, any: false, usedTouch: false, usedKeys: false, gentleLetGo: false };
+  // Lean has two parts. Drag SPEED gives a flick its snap; drag OFFSET from where the
+  // finger went down is what lets a touch player hold a lean the way a keyboard player
+  // holds A or D. Without the offset term, standing still meant zero lean after ~0.13s,
+  // so a thumb had to keep sawing back and forth to pump at all.
+  const LEAN_DEAD = 9;
+  const leanSpan = () => clamp(Math.min(window.innerWidth, window.innerHeight) * 0.16, 46, 110);
+  // While a button has focus, that button owns Enter and Space: a <button> fires its click
+  // as the DEFAULT ACTION of those keys, so preventDefaulting them here made Resume /
+  // Restart / Sound / Start over / Climb again / the corner mark mouse-only — in a game that
+  // focuses those buttons for you and draws focus rings on them.
+  // Crucially this must still record the key STATE before bailing. Skipping the bookkeeping
+  // on keyup meant a player who held space, paused (which focuses Resume), then let go, left
+  // keys.Space latched true forever — welded to the hand after Resume with nothing pressed.
+  function buttonHasFocus() {
+    const a = document.activeElement;
+    return !!(a && a.tagName === 'BUTTON' && a.offsetParent !== null);
+  }
+  function onKey(e, down) {
+    // On the way down: leave it entirely to the button, and do NOT let it assert a hold —
+    // pressing Space on "Resume" should resume, not also grab the next hand.
+    // On the way up: always clear, so nothing can stay latched.
+    if ((e.code === 'Enter' || e.code === 'Space') && buttonHasFocus()) { if (!down) keys[e.code] = false; return; }
+    // A repeat still has to refresh key state: Input.interrupt() wipes the map on every
+    // blur/visibilitychange, and a key the player never let go of only ever produces
+    // repeats after that — so lean silently died until they released and pressed again.
+    if (e.repeat) { if (HOLD_KEYS.includes(e.code)) e.preventDefault(); keys[e.code] = down; return; }
+    keys[e.code] = down;
+    if (down) edges[e.code] = true;
+    if (HOLD_KEYS.includes(e.code)) { e.preventDefault(); if (down) { resumeHold = false; holdEdge = true; anyEdge = true; st.usedKeys = true; } }
+    if (['ArrowLeft', 'ArrowRight', 'ArrowDown', 'KeyA', 'KeyD'].includes(e.code)) { e.preventDefault(); if (down) st.usedKeys = true; }
+    if (down) { Audio.unlock(); anyEdge = true; }
+  }
+  window.addEventListener('keydown', e => onKey(e, true));
+  window.addEventListener('keyup', e => onKey(e, false));
+  const cv = document.getElementById('c');
+  cv.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    resumeHold = false;
+    cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, ox: e.clientX, t: performance.now() });
+    activeId = e.pointerId;
+    if (holdId == null) { holdId = e.pointerId; promoteAfter = false; }
+    holdEdge = true; anyEdge = true; lastPointerT = performance.now();
+    if (e.pointerType !== 'mouse') st.usedTouch = true;
+    Audio.unlock(); e.preventDefault();
+  }, { passive: false });
+  cv.addEventListener('pointermove', e => {
+    const p = pointers.get(e.pointerId); if (!p) return;
+    const dx = e.clientX - p.x; p.x = e.clientX; p.y = e.clientY;
+    if (Math.abs(dx) > 0.5) latImpulse = clamp(latImpulse + dx, -80, 80);
+    e.preventDefault();
+  }, { passive: false });
+  const dropPointer = id => {
+    pointers.delete(id);
+    if (holdId === id) { holdId = null; promoteAfter = true; }
+    // hand the lean to whatever finger is still down, re-anchored where it is now
+    if (activeId === id) {
+      activeId = null;
+      for (const [pid, p] of pointers) { activeId = pid; p.ox = p.x; }
+    }
+  };
+  // A finger coming off the glass is the player letting go, full stop. It must clear a
+  // resumed hold even when the pointer id is one we already forgot about — an interrupt
+  // wipes the pointer map, and without this the lift after an interrupt was a no-op and
+  // the spark stayed welded to the hand with no way to release it.
+  const up = e => { resumeHold = false; dropPointer(e.pointerId); e.preventDefault && e.preventDefault(); };
+  const cancel = e => {
+    const known = pointers.has(e.pointerId); dropPointer(e.pointerId);
+    if (!known) { resumeHold = false; }
+    else if (pointers.size === 0 && !HOLD_KEYS.some(k => keys[k]) && ((Game.spark && Game.spark.hold) || (Game.little && Game.little.held))) resumeHold = true;
+    e.preventDefault && e.preventDefault();
+  };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', cancel); cv.addEventListener('lostpointercapture', cancel);
+  window.addEventListener('contextmenu', e => { if (e.target === cv) e.preventDefault(); });
+  function poll(dt) {
+    const keyHold = HOLD_KEYS.some(k => keys[k]);
+    // A resumed hold is a grace period, not a state. The deadline is armed on the first
+    // poll after play resumes (not when the interrupt happened, or a long tab-away would
+    // expire it instantly and throw the player the moment they came back).
+    st.gentleLetGo = false;
+    if (resumeHold) {
+      const now = performance.now();
+      if (!resumeHoldUntil) resumeHoldUntil = now + 1500;
+      else if (now > resumeHoldUntil) { resumeHold = false; st.gentleLetGo = true; }
+    } else resumeHoldUntil = 0;
+    // Exactly one pointer owns the grip. Any other contact — a resting palm, the other
+    // thumb, a stray knuckle — must not be able to keep the player attached after they
+    // have lifted the finger they were holding with. When the grip finger does lift, the
+    // next poll reads as released (so the throw happens) and only the poll after that
+    // hands the grip to whatever finger is still down.
+    if (holdId == null && pointers.size > 0) {
+      if (promoteAfter) promoteAfter = false;
+      else holdId = pointers.keys().next().value;
+    }
+    st.hold = keyHold || (holdId != null && pointers.has(holdId)) || holdEdge || resumeHold;
+    const kl = ((keys.KeyD || keys.ArrowRight) ? 1 : 0) - ((keys.KeyA || keys.ArrowLeft) ? 1 : 0);
+    latImpulse *= Math.exp(-dt / 0.13);
+    const flick = clamp(latImpulse / 30, -1, 1);
+    const p = activeId != null ? pointers.get(activeId) : null;
+    let held = 0;
+    if (p) { const d = p.x - p.ox; if (Math.abs(d) > LEAN_DEAD) held = clamp((d - sign(d) * LEAN_DEAD) / leanSpan(), -1, 1); }
+    const tl = clamp(held + flick * .55, -1, 1);
+    st.lat = kl !== 0 ? kl : (Math.abs(tl) > 0.06 ? tl : 0);
+    // Edges are committed by the first fixed simulation tick, not by RAF. This keeps
+    // sub-8 ms taps alive on 120/144 Hz screens where a rendered frame may run zero ticks.
+    st.pressed = holdEdge;
+    st.any = anyEdge;
+    return st;
+  }
+  function commitStep() { holdEdge = false; anyEdge = false; st.pressed = false; st.any = false; }
+  // Keyboard state does NOT survive a blur — the keyup lands in whatever window took focus,
+  // so a key we still believe is down would stick forever. Pointer state DOES survive: the
+  // browser still delivers pointerup/pointercancel for live contacts, and clearing the map
+  // was what orphaned the player's finger and welded the spark to the hand. So: wipe keys,
+  // keep pointers, and re-anchor their lean origin so nothing jumps on the way back.
+  function interrupt(preserveHold = false) {
+    for (const k in keys) keys[k] = false;
+    for (const k in edges) edges[k] = false;
+    for (const p of pointers.values()) p.ox = p.x;
+    latImpulse = 0; holdEdge = false; anyEdge = false; promoteAfter = false;
+    resumeHold = !!preserveHold && pointers.size === 0; resumeHoldUntil = 0;
+    st.hold = resumeHold || pointers.size > 0; st.lat = 0; st.pressed = false; st.any = false;
+  }
+  function clearResumeHold() { resumeHold = false; resumeHoldUntil = 0; }
+  function consumeKey(code) { if (edges[code]) { edges[code] = false; keys[code] = false; return true; } return false; }
+  return { poll, commitStep, interrupt, clearResumeHold, consumeKey, keys, get pointerCount() { return pointers.size; }, get resumeHold() { return resumeHold; } };
+})();
+
+/* ---------- level data ----------
+   coordinates: x in [0,TOWER_W], y grows UP from the ground.
+   hands: t = reach | palm | lift | wave | flick | pull
+   flags: shy (only visible when lit close), fade (gone after you let go),
+          tremor (jitter px), slip (rope lengthens while held), acc (accessory)
+   side: which edge the arm comes from: L R T (top) B (bottom, palms)
+---------------------------------- */
+const h = {
+  palm: (x, y, o) => Object.assign({ t: 'palm', x, y, side: 'B' }, o),
+  reach: (x, y, o) => Object.assign({ t: 'reach', x, y }, o),
+  lift: (x, y, hgt, o) => Object.assign({ t: 'lift', x, y, h: hgt, side: 'T' }, o),
+  wave: (x, y, amp, per, o) => Object.assign({ t: 'wave', x, y, amp, per, ph: 0 }, o),
+  flick: (x, y, o) => Object.assign({ t: 'flick', x, y }, o),
+  pull: (x, y, dir, o) => Object.assign({ t: 'pull', x, y, dir }, o),
+};
+const z = {
+  thorn: (x, y, r) => ({ t: 'thorn', x, y, r }),
+  snap: (x, y, r, per, ph = 0) => ({ t: 'snap', x, y, r, per, ph }),
+  fan: (x, y, w, hh, ax, ay) => ({ t: 'fan', x, y, w, h: hh, ax, ay }),
+  jar: (x, y, w, hh, open) => ({ t: 'jar', x, y, w, h: hh, open }),
+  twall: (side, y0, y1) => ({ t: 'twall', side, y0, y1 }),
+};
+
+const CHAPTERS = [
+  {
+    key: 'big', name: 'BIG HANDS', line: "everything is far. everyone is tall.",
+    base: 0, top: 1908, root: 110, par: 13,
+    pal: { void: '#0c0a16', dark: '#0c0a16', hand: '#e9b3a0', lit: '#ffdccb', shade: '#b8806e', glow: '#ff9f6e', hazard: '#7a2d3d', deco: '#1c1626', scale: 1.22 },
+    hands: [
+      h.palm(320, 40, { w: 150, side: 'B', start: true }),
+      h.lift(320, 190, 330, { rock: true, acc: 'bandaid', side: 'T' }),
+      h.reach(465, 590, { side: 'R' }),
+      h.reach(580, 662, { acc: 'ring', side: 'R' }),
+      h.reach(440, 734, { side: 'R' }),
+      h.reach(295, 806, { side: 'T' }),
+      h.palm(320, 878, { w: 120, side: 'B' }),
+      h.reach(320, 954, { side: 'T' }),
+      h.reach(470, 1026, { side: 'R' }),
+      h.reach(580, 1098, { side: 'R' }),
+      h.lift(440, 1170, 300, { side: 'R' }),
+      h.reach(295, 1546, { side: 'T' }),
+      h.reach(170, 1618, { acc: 'watch', side: 'L' }),
+      h.reach(310, 1690, { side: 'T' }),
+      h.reach(455, 1762, { side: 'R' }),
+      h.reach(315, 1834, { side: 'T' }),
+      h.palm(320, 1908, { w: 120, side: 'B' }),
+    ],
+    hazards: [],
+    motes: [ { x: 320, y: 380 }, { x: 590, y: 720 }, { x: 70, y: 1300 } ],
+  },
+  {
+    key: 'busy', name: 'BUSY HANDS', line: "they mean well. they're just going somewhere.",
+    base: 1908, top: 3144, root: 130.81, par: 11,
+    pal: { void: '#09101c', dark: '#09101c', hand: '#ff6fae', lit: '#ffc4de', shade: '#b8457d', glow: '#5ee6d3', hazard: '#6f2a4a', deco: '#121a2a', scale: 1.0, alt: '#5ee6d3', altLit: '#c6fff6', altShade: '#2f9e90' },
+    hands: [
+      h.reach(320, 2048, { side: 'T' }),
+      h.wave(460, 2120, 90, 2.6, { ph: 0, side: 'R' }),
+      h.reach(570, 2192, { acc: 'bracelet', side: 'R' }),
+      h.wave(430, 2264, 80, 2.1, { ph: 1.2, side: 'R' }),
+      h.palm(320, 2338, { w: 120, side: 'B' }),
+      h.reach(320, 2414, { side: 'T' }),
+      h.wave(175, 2486, 105, 3, { ph: 0.5, side: 'L' }),
+      h.reach(60, 2558, { side: 'L' }),
+      h.wave(200, 2630, 95, 1.9, { ph: 2, side: 'L' }),
+      h.palm(320, 2706, { w: 120, side: 'B' }),
+      h.reach(320, 2782, { side: 'T' }),
+      h.wave(465, 2854, 90, 2.3, { ph: 1.7, side: 'R' }),
+      h.reach(580, 2926, { acc: 'ring', side: 'R' }),
+      h.wave(440, 2998, 115, 2.8, { ph: 0.9, side: 'R' }),
+      h.reach(300, 3070, { side: 'T' }),
+      h.palm(320, 3144, { w: 120, side: 'B' }),
+    ],
+    hazards: [ z.snap(339, 2141, 32, 2.2, 0), z.snap(406, 2594, 34, 1.8, 0.9), z.twall('L', 2854, 3070), z.twall('R', 2854, 3070), z.fan(0, 2444, 640, 250, 560, 0) ],
+    motes: [ { x: 320, y: 2232 }, { x: 70, y: 2630 }, { x: 570, y: 2998 } ],
+  },
+  {
+    key: 'far', name: 'FAR HANDS', line: "you can hang on as long as you like. they can't.",
+    base: 3144, top: 4581, root: 146.83, par: 16,
+    pal: { void: '#120d07', dark: '#120d07', hand: '#d9a23a', lit: '#ffd98a', shade: '#9a6d1c', glow: '#ffb347', hazard: '#5c2b1f', deco: '#1d150c', scale: 0.94 },
+    hands: [
+      h.reach(320, 3284, { side: 'T' }),
+      h.flick(460, 3356, { side: 'R' }),
+      h.reach(310, 3471, { side: 'T' }),
+      h.pull(200, 3543, 1, { side: 'L' }),
+      h.reach(340, 3615, { acc: 'watch', side: 'T' }),
+      h.palm(320, 3689, { w: 120, side: 'B' }),
+      h.reach(320, 3765, { side: 'T' }),
+      h.flick(180, 3837, { side: 'L' }),
+      h.reach(330, 3952, { side: 'T' }),
+      h.pull(440, 4024, -1, { side: 'R' }),
+      h.reach(295, 4096, { acc: 'ring', side: 'T' }),
+      h.palm(320, 4172, { w: 120, side: 'B' }),
+      h.reach(320, 4248, { side: 'T' }),
+      h.flick(465, 4320, { side: 'R' }),
+      h.reach(315, 4435, { side: 'T' }),
+      h.reach(195, 4507, { side: 'L' }),
+      h.palm(320, 4581, { w: 120, side: 'B' }),
+    ],
+    hazards: [ z.thorn(383, 3368, 30), z.thorn(221, 3988, 32), z.thorn(383, 4377, 30), z.jar(490, 3565, 70, 90, 'L'), z.jar(80, 4046, 70, 90, 'R'), z.twall('R', 3471, 3615), z.twall('L', 4024, 4172) ],
+    motes: [ { x: 580, y: 3416 }, { x: 60, y: 3765 }, { x: 320, y: 4485 } ],
+  },
+  {
+    key: 'cold', name: 'COLD HANDS', line: "hold them anyway.",
+    base: 4581, top: 5735, root: 164.81, par: 9,
+    pal: { void: '#0a0f14', dark: '#0a0f14', hand: '#9fb4c7', lit: '#e3eef7', shade: '#60788c', glow: '#bfe3ff', hazard: '#3d2f3c', deco: '#101820', scale: 0.9 },
+    hands: [
+      h.reach(320, 4721, { tremor: 3, side: 'T' }),
+      h.reach(455, 4787, { slip: true, side: 'R' }),
+      h.reach(565, 4853, { shy: true, tremor: 2, side: 'R' }),
+      h.reach(425, 4919, { fade: true, side: 'R' }),
+      h.reach(290, 4985, { slip: true, tremor: 3, side: 'T' }),
+      h.palm(320, 5055, { w: 120, side: 'B' }),
+      h.reach(320, 5127, { shy: true, side: 'T' }),
+      h.reach(180, 5193, { tremor: 4, fade: true, side: 'L' }),
+      h.reach(75, 5259, { slip: true, side: 'L' }),
+      h.reach(215, 5325, { shy: true, tremor: 3, side: 'L' }),
+      h.palm(320, 5395, { w: 120, side: 'B' }),
+      h.reach(320, 5467, { fade: true, slip: true, side: 'T' }),
+      h.reach(460, 5533, { tremor: 5, shy: true, side: 'R' }),
+      h.reach(570, 5599, { slip: true, side: 'R' }),
+      h.reach(430, 5665, { tremor: 6, acc: 'band', side: 'R' }),
+      h.palm(320, 5735, { w: 120, side: 'B' }),
+    ],
+    hazards: [ z.fan(0, 4787, 640, 230, -560, 0), z.fan(0, 5467, 640, 230, 600, 0), z.snap(392, 5226, 32, 2, 0), z.jar(80, 5493, 70, 90, 'R') ],
+    motes: [ { x: 580, y: 4853 }, { x: 60, y: 5127 }, { x: 320, y: 5599 } ],
+  },
+  {
+    key: 'open', name: 'OPEN', line: "your turn.",
+    base: 5735, top: 6703, root: 196, par: 6,
+    pal: { void: '#2a2a3a', dark: '#3a3746', hand: '#f7f3ea', lit: '#ffffff', shade: '#cbc3b6', glow: '#fff2c8', hazard: '#5c2b1f', deco: '#4a4658', scale: 1.05, open: true },
+    hands: [
+      h.reach(320, 5875, { side: 'T' }),
+      h.reach(460, 5947, { side: 'R' }),
+      h.reach(315, 6019, { side: 'T' }),
+      h.reach(185, 6091, { side: 'L' }),
+      h.lift(325, 6163, 460, { final: true, side: 'T' }),
+      h.palm(320, 6703, { w: 150, side: 'B', last: true }),
+    ],
+    hazards: [],
+    motes: [],
+  },
+];
+const TOWER_TOP = 7163;
+
+/* ---------- world construction ---------- */
+function buildWorld() {
+  const W = { hands: [], hazards: [], motes: [], chapters: CHAPTERS, t: 0 };
+  let id = 0;
+  CHAPTERS.forEach((ch, ci) => {
+    ch.hands.forEach((d, hi) => {
+      const hd = Object.assign({}, d);
+      hd.id = id++; hd.ci = ci; hd.hi = hi;
+      hd.ax = hd.x; hd.ay = hd.y;       // live anchor
+      hd.held = false; hd.heldT = 0; hd.tm = rnd(100);
+      hd.top = !!(hd.t === 'palm' && Math.abs(hd.y - ch.top) < 1);   // chapter-exit palm
+      hd.flickAnim = 0; hd.wantFlick = false; hd.rockT = 0; hd.done = false;
+      hd.prog = 0; hd.cool = 0; hd.gone = 0; hd.alpha = 1; hd.grip = 0; hd.tele = 0;
+      hd.releaseT = -99; hd.returnDelay = 0;
+      hd.sc = (hd.sc || 1) * (ch.pal.scale || 1);
+      if (!hd.side) hd.side = hd.x < TOWER_W * 0.4 ? 'L' : hd.x > TOWER_W * 0.6 ? 'R' : 'T';
+      // finger direction: toward tower center, down-ish
+      if (hd.ang === undefined) {
+        if (hd.t === 'palm') hd.ang = Math.PI / 2;
+        else if (hd.side === 'T') hd.ang = -Math.PI / 2 + (hd.x < 320 ? 0.18 : -0.18) + rnd(-.08, .08);
+        else if (hd.side === 'L') hd.ang = -Math.PI / 2 + 0.72 + rnd(-.12, .12);
+        else hd.ang = -Math.PI / 2 - 0.72 + rnd(-.12, .12);
+      }
+      hd.seed = hd.id * 13.7;
+      hd.alt = (ch.pal.alt && (hi % 2 === 1));
+      W.hands.push(hd);
+    });
+    ch.hazards.forEach(d => { const hz = Object.assign({}, d); hz.ci = ci; hz.t0 = rnd(10); hz.seed = rnd(100); W.hazards.push(hz); });
+    ch.motes.forEach(d => { W.motes.push(Object.assign({ ci, taken: false, t: rnd(10) }, d)); });
+  });
+  // background deco hands (silhouettes, never grabbable)
+  W.deco = [];
+  for (let y = -200; y < TOWER_TOP; y += 210) {
+    const side = gameRandom() < 0.5 ? 'L' : 'R';
+    const x = side === 'L' ? rnd(-120, 40) : rnd(600, 760);
+    W.deco.push({ x, y, side, sc: rnd(.9, 1.6), ang: side === 'L' ? rnd(-1.3, -0.2) : rnd(-2.9, -1.9), par: rnd(.35, .6), seed: rnd(100) });
+  }
+  return W;
+}
+function chapterAt(y) { for (let i = CHAPTERS.length - 1; i >= 0; i--) if (y >= CHAPTERS[i].base - 60) return i; return 0; }
+
+/* ---------- hand behaviour ---------- */
+function updateHands(W, dt, s) {
+  W.t += dt;
+  for (const hd of W.hands) {
+    hd.tm += dt;
+    if (hd.cool > 0) hd.cool -= dt;
+    const held = s.hold === hd;
+    hd.grip += ((held ? 1 : 0) - hd.grip) * Math.min(1, dt * 14);
+    if (hd.gone > 0 && hd.gone < 1) { hd.gone = Math.min(1, hd.gone + dt * 1.2); hd.alpha = 1 - hd.gone; }
+    if (hd.flickAnim > 0) hd.flickAnim = Math.max(0, hd.flickAnim - dt * 3);
+    let ax = hd.x, ay = hd.y;
+    switch (hd.t) {
+      case 'wave':
+        ax = hd.x + hd.amp * Math.sin(TAU * hd.tm / hd.per + hd.ph);
+        if (hd.ampY) ay = hd.y + hd.ampY * Math.sin(TAU * hd.tm / (hd.perY || hd.per) + (hd.phY || 0));
+        break;
+      case 'lift': {
+        const T = hd.h / 380;
+        if (held) {
+          if (hd.prog < 1) hd.prog = Math.min(1, hd.prog + dt / T);
+          hd.returnDelay = 2.5;
+          if (hd.rock && hd.prog >= 1) hd.rockT = (hd.rockT || 0) + dt;
+        } else if (hd.prog > 0) {
+          if (hd.returnDelay > 0) hd.returnDelay -= dt; else hd.prog = Math.max(0, hd.prog - dt / (T * 2.2));
+          if (hd.prog <= 0) hd.rockT = 0;
+        }
+        ay = hd.y + hd.h * easeInOut(hd.prog);
+        if (hd.rock && hd.rockT) ax = hd.x + 58 * Math.sin(hd.rockT * 3.3) * Math.exp(-hd.rockT * 0.42);
+        break;
+      }
+      case 'flick': {
+        if (held) {
+          hd.heldT += dt;
+          hd.tele = clamp((hd.heldT - 1.2) / 0.55, 0, 1);
+          // Audio.sfx.flickTele was written for exactly this and never fired: the only tell
+          // that a hand is about to throw you was a few degrees of index-finger cock, which
+          // at phone scale is invisible. An accelerating tick over the 0.55 s wind-up.
+          if (hd.tele > 0) {
+            hd.teleTick = (hd.teleTick || 0) - dt;
+            if (hd.teleTick <= 0) { hd.teleTick = .23 - .13 * hd.tele; Audio.sfx.flickTele(); }
+          } else hd.teleTick = 0;
+          if (hd.heldT >= 1.75) hd.wantFlick = true;
+        } else { hd.heldT = Math.max(0, hd.heldT - dt * 3); hd.tele = clamp((hd.heldT - 1.2) / 0.55, 0, 1); hd.teleTick = 0; }
+        break;
+      }
+      case 'pull': {
+        const dist = hd.dir > 0 ? (TOWER_W - 34 - hd.x) : (hd.x - 34);
+        if (held) { hd.prog = Math.min(1, hd.prog + dt / 1.5); hd.returnDelay = 1.0; }
+        else if (hd.prog > 0) { if (hd.returnDelay > 0) hd.returnDelay -= dt; else hd.prog = Math.max(0, hd.prog - dt / 1.1); }
+        ax = hd.x + hd.dir * dist * (hd.prog * hd.prog);
+        break;
+      }
+    }
+    if (hd.tremor) { const a = hd.tremor * (held ? 1.35 : 1); ax += noise1(hd.tm * 17, hd.seed) * a; ay += noise1(hd.tm * 15, hd.seed + 7) * a; }
+    hd.ax = ax; hd.ay = ay;
+  }
+}
+function resetChapterHands(W, ci) {
+  for (const hd of W.hands) if (hd.ci === ci) { hd.prog = 0; hd.gone = 0; hd.alpha = 1; hd.heldT = 0; hd.tele = 0; hd.cool = 0; hd.rockT = 0; hd.returnDelay = 0; hd.wantFlick = false; }
+}
+
+/* ---------- spark physics (pure) ---------- */
+function newSpark(x, y) {
+  return { x, y, px: x, py: y, vx: 0, vy: 0, hold: null, L: 120, rest: null, restT: 0, lastHand: null, relT: 9, heldT: 0,
+    lit: LIT_MAX, iT: 0, t: 0, chain: 0, speedS: 0, energy: 0, slideX: 0, pumpPhase: 0, lightR: 240, floorY: -1e9 };
+}
+// px/py are the previous fixed-step position. render() draws between them and the current
+// one, because the simulation runs at a fixed 120 Hz and the display does not: on a 120 or
+// 144 Hz screen a real frame regularly advances zero substeps, and drawing the raw position
+// made the spark stand still for a frame and then jump two — against a camera that moves on
+// wall-clock time. That reads as judder in exactly the thing the player is watching.
+function snapSpark(s) { s.px = s.x; s.py = s.y; }
+function findGrab(s, W, exclude) {
+  let best = null, bs = 1e9;
+  const sp = hyp(s.vx, s.vy);
+  const dvx = sp > 1 ? s.vx / sp : 0, dvy = sp > 1 ? s.vy / sp : 0;
+  for (const hd of W.hands) {
+    if (hd === exclude || hd.alpha <= 0 || hd.cool > 0 || hd.done) continue;
+    if (hd === s.lastHand && s.relT < 0.35) continue;
+    const dx = hd.ax - s.x, dy = hd.ay - s.y; const d = hyp(dx, dy);
+    if (d > REACH) continue;
+    let score = d - 80 * Math.max(0, (dx * dvx + dy * dvy) / Math.max(1, d)) - (hd.t === 'palm' ? -40 : 0);
+    if (s.rest && hd === s.rest) score += 500;
+    if (score < bs) { bs = score; best = hd; }
+  }
+  return best;
+}
+function doGrab(s, hd, ev) {
+  const d = hyp(hd.ax - s.x, hd.ay - s.y);
+  s.hold = hd; s.L = clamp(d, L_MIN, L_MAX); s.heldT = 0; s.rest = null; s.pumpPhase = 0;
+  hd.held = true; hd.wantFlick = false; hd.heldT = 0;
+  s.chain++;
+  ev.grab && ev.grab(hd, s);
+}
+function doRelease(s, W, ev, forced) {
+  const hd = s.hold; if (!hd) return;
+  s.hold = null; hd.held = false; hd.releaseT = W.t; s.lastHand = hd; s.relT = 0;
+  if (!forced) {
+    s.vx *= REL_BOOST; s.vy *= REL_BOOST; if (s.vy > 0) s.vy += 26;
+  }
+  if (hd.fade && hd.gone === 0) hd.gone = 0.0001;
+  ev.release && ev.release(hd, s, forced);
+}
+function applyHit(s, W, ev, hz, nx, ny) {
+  if (s.iT > 0) return false;
+  s.lit -= 1; s.iT = 1.1; s.chain = 0;
+  const kb = 560;
+  s.vx = nx * kb; s.vy = ny * kb + 140;
+  if (s.hold) doRelease(s, W, ev, true);
+  s.rest = null;
+  ev.hit && ev.hit(hz, s);
+  if (s.lit <= 0) { ev.snuff && ev.snuff(hz, s); }
+  return true;
+}
+function physStep(s, dt, inp, W, ev) {
+  s.px = s.x; s.py = s.y;
+  s.t += dt; s.relT += dt; if (s.iT > 0) s.iT -= dt;
+  // wind
+  let fx = 0, fy = 0;
+  for (const hz of W.hazards) if (hz.t === 'fan' && s.x >= hz.x && s.x <= hz.x + hz.w && s.y >= hz.y && s.y <= hz.y + hz.h) { fx += hz.ax; fy += hz.ay; }
+
+  if (s.rest) {
+    const p = s.rest; s.restT += dt;
+    s.x += (p.ax - s.x) * Math.min(1, dt * 9); s.y = p.ay + 11 + (p.t === 'palm' ? 0 : 0);
+    s.vx = s.vy = 0; s.energy = 0; s.speedS *= Math.max(0, 1 - dt * 6);
+    if (inp.hold && (inp.pressed || s.restT > 0.3)) {
+      const hd = findGrab(s, W, null);
+      if (hd && hd !== p) { doGrab(s, hd, ev); }
+      else if (hd === p && s.restT > 0.3) { /* nothing else in reach: stay */ }
+    }
+    return;
+  }
+
+  if (s.hold) {
+    const hd = s.hold;
+    s.heldT += dt;
+    // A slip hand quietly pays out 34 px of rope a second. Audio.sfx.slip was written for
+    // it and never called, so the only feedback was three small droplets.
+    if (hd.slip) {
+      s.L = Math.min(260, s.L + 34 * dt);
+      if (s.L < 260) { s.slipTick = (s.slipTick || 0) - dt; if (s.slipTick <= 0) { s.slipTick = .42; Audio.sfx.slip(); } }
+    }
+    // lean: horizontal push; braking (against motion) is stronger
+    let lat = inp.lat;
+    let push = lat * PUMP;
+    if (lat !== 0 && sign(lat) !== sign(s.vx) && Math.abs(s.vx) > 30) push *= BRAKE_MULT;
+    s.vx += (push + fx) * dt;
+    s.vy += (-G + fy) * dt;
+    s.vx *= (1 - 0.05 * dt); s.vy *= (1 - 0.05 * dt);
+    let px = s.x + s.vx * dt, py = s.y + s.vy * dt;
+    const dx = px - hd.ax, dy = py - hd.ay; const d = hyp(dx, dy);
+    if (d > s.L) { px = hd.ax + dx / d * s.L; py = hd.ay + dy / d * s.L; }
+    s.vx = (px - s.x) / dt; s.vy = (py - s.y) / dt;
+    const sp = hyp(s.vx, s.vy);
+    if (sp > MAX_HOLD_SPEED) { s.vx *= MAX_HOLD_SPEED / sp; s.vy *= MAX_HOLD_SPEED / sp; }
+    s.x = px; s.y = py;
+    // swing energy relative to hanging rest (for light + audio)
+    const hgt = (s.y - (hd.ay - s.L)); s.energy = 0.5 * sp * sp + G * hgt;
+    if (hd.wantFlick) {
+      hd.wantFlick = false; hd.heldT = 0; hd.tele = 0; hd.cool = 1.2; hd.flickAnim = 1;
+      const away = Math.cos(hd.ang); // off the fingertips (fingers point into the tower)
+      let nx = (s.x - hd.ax), ny = (s.y - hd.ay); const nl = hyp(nx, ny) || 1; nx /= nl; ny /= nl;
+      // flick goes up and away from the palm
+      let ux = nx * 0.5 + away * 0.4, uy = 0.95; const ul = hyp(ux, uy); ux /= ul; uy /= ul;
+      doRelease(s, W, ev, true);
+      s.vx = ux * 980; s.vy = uy * 980;
+      ev.flick && ev.flick(hd, s);
+    } else if (!inp.hold) {
+      // A grip that expired because the app was interrupted is not the player throwing:
+      // let go quietly, without the release boost that would fling them into a hazard.
+      doRelease(s, W, ev, !!inp.gentleLetGo);
+    }
+  } else {
+    s.vy += (-G * (s.vy < 0 ? FALL_MULT : 1) + fy) * dt;
+    if (s.vy < -MAX_FALL) s.vy = -MAX_FALL;
+    s.vx += (inp.lat * AIR + fx) * dt;
+    s.vx *= (1 - 0.12 * dt);
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    s.energy = 0.5 * (s.vx * s.vx + s.vy * s.vy);
+    if (inp.hold) { const hd = findGrab(s, W, null); if (hd) doGrab(s, hd, ev); }
+  }
+  // smoothed speed for light/audio
+  const spNow = hyp(s.vx, s.vy);
+  s.speedS += (spNow - s.speedS) * Math.min(1, dt * (spNow > s.speedS ? 6 : 2.2));
+
+  // walls
+  if (s.x < SPARK_R) { s.x = SPARK_R; if (s.vx < 0) s.vx = -s.vx * 0.45; wallTouch(s, W, ev, 'L'); }
+  else if (s.x > TOWER_W - SPARK_R) { s.x = TOWER_W - SPARK_R; if (s.vx > 0) s.vx = -s.vx * 0.45; wallTouch(s, W, ev, 'R'); }
+  // ground = the first palm (it is a floor as wide as the tower)
+  if (s.y < SPARK_R + 8 && !s.hold) { s.y = SPARK_R + 8; if (s.vy < 0) s.vy = 0; }
+  // fell well below the last palm that caught you -> the game puts you back there
+  if (!s.hold && !s.rest && s.floorY != null && s.y < s.floorY) { ev.fall && ev.fall(s); return; }
+
+  // hazards — while a hand is holding you, nothing can touch you.
+  // the risk lives in the letting go. that is the whole game.
+  for (let hi = 0; s.hold === null && hi < W.hazards.length; hi++) {
+    const hz = W.hazards[hi];
+    if (Math.abs(hz.y - s.y) > 700) continue;
+    if (hz.t === 'thorn') {
+      const dx = s.x - hz.x, dy = s.y - hz.y; const d = hyp(dx, dy);
+      if (d < hz.r + SPARK_R) { const n = d || 1; applyHit(s, W, ev, hz, dx / n, dy / n); }
+    } else if (hz.t === 'snap') {
+      const ph = ((W.t + hz.ph) % hz.per) / hz.per; const closed = ph > 0.58 && ph < 0.86;
+      if (closed) { const dx = s.x - hz.x, dy = s.y - hz.y; const d = hyp(dx, dy); if (d < hz.r + SPARK_R) { const n = d || 1; applyHit(s, W, ev, hz, dx / n, dy / n); } }
+    } else if (hz.t === 'jar') {
+      if (s.x > hz.x && s.x < hz.x + hz.w && s.y > hz.y && s.y < hz.y + hz.h) {
+        const ox = hz.open === 'L' ? -1 : hz.open === 'R' ? 1 : 0; const oy = hz.open === 'U' ? 1 : 0;
+        if (applyHit(s, W, ev, hz, ox, oy)) { if (ox) s.x = hz.x + (ox > 0 ? hz.w + 12 : -12); if (oy) s.y = hz.y + hz.h + 12; }
+      }
+    }
+  }
+  // motes
+  for (const m of W.motes) {
+    if (m.taken) continue; const dx = m.x - s.x, dy = m.y - s.y;
+    if (dx * dx + dy * dy < 26 * 26) { m.taken = true; ev.mote && ev.mote(m, s); }
+  }
+  // palms catch you when you come down into them
+  if (!s.hold && s.vy <= 0) {
+    for (const hd of W.hands) {
+      if (hd.t !== 'palm') continue;
+      if (hd === s.lastHand && s.relT < 0.3) continue;
+      const w = (hd.w || 110) / 2;
+      if (Math.abs(s.x - hd.ax) < w && s.y <= hd.ay + 30 && s.y >= hd.ay - 22) {
+        s.rest = hd; s.restT = 0; s.y = hd.ay + 11; s.vx = s.vy = 0; s.lit = LIT_MAX; s.iT = 0;
+        ev.land && ev.land(hd, s); break;
+      }
+    }
+  }
+}
+function wallTouch(s, W, ev, side) {
+  if (s.hold) return;
+  for (const hz of W.hazards) if (hz.t === 'twall' && hz.side === side && s.y >= hz.y0 && s.y <= hz.y1) {
+    applyHit(s, W, ev, hz, side === 'L' ? 1 : -1, 0.25); return;
+  }
+}
+
+/* ---------- adaptive presentation quality ---------- */
+let qualityResizePending = false;
+const RenderQuality = (() => {
+  const forced = FLAGS.get('quality');
+  const locked = forced === 'low' || forced === 'medium' || forced === 'high';
+  let tier = forced === 'low' ? 0 : forced === 'medium' ? 1 : forced === 'high' ? 2 : LOW_POWER_HINT ? 0 : MOBILE_LIKELY ? 1 : 2;
+  let lastEval = 0, lastChange = -99000, slowWindows = 0, fastWindows = 0, evals = 0;
+  const frameSamples = [], renderSamples = [];
+  const metrics = { frameMean: 0, frameP95: 0, renderMean: 0, renderP95: 0, longFrameRatio: 0, tier };
+  const quantile = (a, p) => a[Math.min(a.length - 1, Math.floor((a.length - 1) * p))] || 0;
+  function dprCap() {
+    const area = Math.max(1, window.innerWidth * window.innerHeight);
+    if (MOBILE_LIKELY) {
+      if (tier === 0) return 1;
+      if (tier === 1) return area <= 520000 ? 1.28 : 1.12;
+      return area <= 620000 ? 1.42 : 1.24;
+    }
+    return area > 700000 ? (tier === 0 ? 1 : tier === 1 ? 1.15 : 1.25) : (tier === 0 ? 1 : tier === 1 ? 1.22 : 1.4);
+  }
+  function darkScale() { return MOBILE_LIKELY ? [0.74, 0.76, 0.86][tier] : [0.76, 0.88, 1][tier]; }
+  function particleScale() { return [0.62, 0.82, 1][tier]; }
+  function trailLimit() { return [18, 26, 34][tier]; }
+  function detailLevel() { return tier; }
+  function setTier(next, now) {
+    next = clamp(next, 0, 2) | 0; if (next === tier) return false;
+    tier = next; metrics.tier = tier; lastChange = now; slowWindows = fastWindows = 0;
+    qualityResizePending = true;
+    return true;
+  }
+  function observe(frameMs, renderMs, now) {
+    if (!Number.isFinite(frameMs) || !Number.isFinite(renderMs) || frameMs <= 0 || frameMs > 500 || document.hidden) return;
+    frameSamples.push(Math.min(frameMs, 120)); renderSamples.push(renderMs);
+    if (frameSamples.length > 210) frameSamples.shift();
+    if (renderSamples.length > 210) renderSamples.shift();
+    // The old gate was "120 frames AND 2.8 s", counted in FRAMES — so the slower the device,
+    // the longer the rescue took, which is exactly backwards. A struggling phone waited
+    // 6-12 s (19 s for two drops) before anything happened, i.e. the whole first impression.
+    // First look is short and time-based; after that, settle into the slow, stable cadence.
+    const warm = evals > 0;
+    const needSamples = warm ? 120 : 30, needMs = warm ? 2800 : 900;
+    if (now - lastEval < needMs || frameSamples.length < needSamples) return;
+    lastEval = now; evals++;
+    const fs = frameSamples.slice().sort((a,b)=>a-b), rs = renderSamples.slice().sort((a,b)=>a-b);
+    metrics.frameMean = +(fs.reduce((a,b)=>a+b,0)/fs.length).toFixed(2);
+    metrics.frameP95 = +quantile(fs,.95).toFixed(2);
+    metrics.renderMean = +(rs.reduce((a,b)=>a+b,0)/rs.length).toFixed(2);
+    metrics.renderP95 = +quantile(rs,.95).toFixed(2);
+    metrics.longFrameRatio = +(fs.filter(v=>v>22).length/fs.length).toFixed(3);
+    if (locked) return;
+    // A device in real trouble drops immediately, without waiting out the confirmation
+    // window or the post-change lockout. Nothing else is worth protecting at that point.
+    const dire = metrics.longFrameRatio > .5 || metrics.frameP95 > 60;
+    if (dire && tier > 0) { setTier(tier - 1, now); return; }
+    if (now - lastChange < 7000) return;
+    const slow = metrics.renderP95 > 11.5 || metrics.longFrameRatio > .18;
+    // Promotion is judged on frameMs, which includes rasterisation and compositing.
+    // renderMs only measures the JS that records canvas commands, and the things tier 2
+    // turns back on (per-hand blurred shadows, pattern fills, extra detail) are paid for
+    // almost entirely on the raster side — so renderMs alone could not see the cost of its
+    // own decision, and a GPU-bound device would keep promoting itself into stutter.
+    const fast = metrics.renderP95 < 6.2 && metrics.longFrameRatio < .045 && metrics.frameP95 < 20;
+    slowWindows = slow ? slowWindows + 1 : 0; fastWindows = fast ? fastWindows + 1 : 0;
+    if (slowWindows >= 2 && tier > 0) setTier(tier - 1, now);
+    // A promotion resizes the backing store and pops shadows, nail detail and paper grain
+    // back in on one frame — a 28% resolution snap mid-swing reads as the game glitching,
+    // not as it recovering. Drops happen the instant they are needed; promotions wait for a
+    // moment the player is not watching the spark move.
+    else if (fastWindows >= 3 && tier < 2 && maskedMoment()) setTier(tier + 1, now);
+  }
+  function maskedMoment() {
+    const G_ = typeof Game === 'undefined' ? null : Game;
+    return !!(G_ && (G_.paused || G_.snuffed || G_.card || G_.phase === 'title' || G_.phase === 'done' || (G_.spark && G_.spark.rest)));
+  }
+  return { get tier(){return tier;}, get locked(){return locked;}, metrics, dprCap, darkScale, particleScale, trailLimit, detailLevel, observe, setTier };
+})();
+
+/* ---------- canvas + camera ---------- */
+const cv = document.getElementById('c');
+const cx = cv.getContext('2d');
+const darkCv = document.createElement('canvas');
+const dcx = darkCv.getContext('2d');
+let VW = 1, VH = 1, DPR = 1, DARK_DPR = 1;
+let staticFrameDirty = true;
+const cam = { x: TOWER_W / 2, y: 300, zoom: 1, zoomMul: 1, punch: 0, shake: 0, ox: 0, oy: 0 };
+function resize() {
+  COARSE_POINTER = FORCE_TOUCH || mq('(pointer: coarse)');
+  MOBILE_LIKELY = deviceIsMobile();
+  DPR = Math.min(window.devicePixelRatio || 1, RenderQuality.dprCap());
+  DARK_DPR = Math.min(DPR, Math.max(.72, DPR * RenderQuality.darkScale()));
+  VW = window.innerWidth; VH = window.innerHeight;
+  cv.width = Math.floor(VW * DPR); cv.height = Math.floor(VH * DPR);
+  cv.style.width = VW + 'px'; cv.style.height = VH + 'px';
+  darkCv.width = Math.max(1, Math.floor(VW * DARK_DPR)); darkCv.height = Math.max(1, Math.floor(VH * DARK_DPR));
+  cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  dcx.setTransform(DARK_DPR, 0, 0, DARK_DPR, 0, 0);
+  cam.zoom = clamp(Math.min(VW / (TOWER_W + 120), VH / 820), 0.42, 1.45);
+  clearSceneGrads();   // viewport-sized gradients
+  _vig = null;
+  staticFrameDirty = true;
+}
+// readSafeArea has to run with resize, not only on wake: iOS Safari collapsing its URL bar
+// changes VH without any wake, and the title and chapter cards are positioned from those
+// insets, so they would drift off their intended line.
+window.addEventListener('resize', () => { resize(); readSafeArea(); });
+// A rotation is a viewport change, not an app interruption. Tearing down input armed the
+// resumed-hold grace even though the player's thumb never left the glass, and suspending
+// the AudioContext cost a real dropout in the wind and drone beds every time the phone
+// turned. Just re-measure the viewport, twice, since iOS has not settled it immediately.
+window.addEventListener('orientationchange', () => {
+  const relayout = () => { resize(); readSafeArea(); };
+  requestAnimationFrame(relayout); setTimeout(relayout, 260);
+});
+const zoomNow = () => cam.zoom * cam.zoomMul * (1 + cam.punch);
+const W2S = (wx, wy) => { const z = zoomNow(); return [(wx - cam.x) * z + VW / 2 + cam.ox, (cam.y - wy) * z + VH / 2 + cam.oy]; };
+
+// Deterministic paper grain; generated once, reused as a CanvasPattern.
+const _grainCv=document.createElement('canvas');_grainCv.width=_grainCv.height=192;
+const _grainCx=_grainCv.getContext('2d'),_grainIm=_grainCx.createImageData(192,192);
+for(let i=0;i<_grainIm.data.length;i+=4){const n=(hashNoise(i*.017)*255)|0;_grainIm.data[i]=n;_grainIm.data[i+1]=n;_grainIm.data[i+2]=n;_grainIm.data[i+3]=10+((hashNoise(i*.071+8)*20)|0);}
+_grainCx.putImageData(_grainIm,0,0);const ART_TEXTURE=cx.createPattern(_grainCv,'repeat');
+
+// Soft light fields are rasterized once. Scaling these tiny atlases is substantially
+// cheaper than asking mobile Canvas to solve dozens of new radial gradients per frame.
+function makeMaskSprite(hard=.08, hand=false, size=160){
+  const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d'),r=size*.5,g=x.createRadialGradient(r,r,0,r,r,r);
+  if(hand){g.addColorStop(0,'rgba(0,0,0,1)');g.addColorStop(.04,'rgba(0,0,0,1)');g.addColorStop(.58,'rgba(0,0,0,.34)');g.addColorStop(1,'rgba(0,0,0,0)');}
+  else{g.addColorStop(0,'rgba(0,0,0,1)');g.addColorStop(hard,'rgba(0,0,0,1)');g.addColorStop(1,'rgba(0,0,0,0)');}
+  x.fillStyle=g;x.fillRect(0,0,size,size);return c;
+}
+const _maskSprites=new Map(),_handMaskSprite=makeMaskSprite(.04,true);
+function maskSprite(hard){const k=Math.round(hard*100)/100;if(!_maskSprites.has(k))_maskSprites.set(k,makeMaskSprite(k,false));return _maskSprites.get(k);}
+
+function makeBloomSprite(size=256){
+  const c=document.createElement('canvas');c.width=c.height=size;const x=c.getContext('2d'),m=size*.5;
+  x.globalCompositeOperation='lighter';
+  let g=x.createRadialGradient(m,m,0,m,m,m);g.addColorStop(0,'rgba(255,255,255,.98)');g.addColorStop(.035,'rgba(255,246,214,.94)');g.addColorStop(.14,'rgba(255,179,71,.38)');g.addColorStop(.48,'rgba(255,139,91,.10)');g.addColorStop(1,'rgba(255,159,110,0)');x.fillStyle=g;x.fillRect(0,0,size,size);
+  x.save();x.translate(m,m);x.scale(1,.095);g=x.createRadialGradient(0,0,0,0,0,m);g.addColorStop(0,'rgba(255,255,255,.8)');g.addColorStop(.12,'rgba(255,215,154,.26)');g.addColorStop(1,'rgba(255,179,71,0)');x.fillStyle=g;x.beginPath();x.arc(0,0,m,0,TAU);x.fill();x.restore();
+  return c;
+}
+const _bloomSprite=makeBloomSprite();
+
+
+/* ---------- FX ---------- */
+const FX = {
+  parts: [], pops: [], freeze: 0, trauma: 0, timeScale: 1, slowT: 0, flash: 0,
+  hitstop(ms) { this.freeze = Math.max(this.freeze, ms / 1000); },
+  shake(a) { this.trauma = Math.min(1, this.trauma + a); },
+  slow(scale, t) { this.timeScale = scale; this.slowT = t; },
+  burst(x, y, n, color, sp = 220, life = .6, r = 2.2, g = 600) {
+    if (REDUCED) n = Math.ceil(n / 3);
+    n=Math.max(1,Math.ceil(n*RenderQuality.particleScale()));
+    for (let i = 0; i < n; i++) { const a = rnd(TAU), v = rnd(sp * .2, sp); this.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(life * .5, life), max: life, r: rnd(r * .5, r), c: color, g }); }
+  },
+  dir(x, y, dx, dy, n, color, sp = 200, spread = .6, life = .5, r = 2, g = 300) {
+    if (REDUCED) n = Math.ceil(n / 3);
+    n=Math.max(1,Math.ceil(n*RenderQuality.particleScale()));
+    const base = Math.atan2(dy, dx);
+    for (let i = 0; i < n; i++) { const a = base + rnd(-spread, spread), v = rnd(sp * .3, sp); this.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(life * .5, life), max: life, r: rnd(r * .5, r), c: color, g }); }
+  },
+  pop(x, y, text, color = '#f3ead8', size = 20, life = 1.6) { this.pops.push({ x, y, text, color, size, life, max: life, vy: 46 }); },
+  update(dt) {
+    if (this.slowT > 0) { this.slowT -= dt; if (this.slowT <= 0) this.timeScale = 1; }
+    this.trauma = Math.max(0, this.trauma - dt * 1.6);
+    this.flash = Math.max(0, this.flash - dt * 2.5);
+    const ps = this.parts; let j = 0;
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i]; p.life -= dt; if (p.life <= 0) continue;
+      p.vy -= p.g * dt; p.vx *= (1 - 1.6 * dt); p.vy *= (1 - 1.2 * dt); p.x += p.vx * dt; p.y += p.vy * dt; ps[j++] = p;
+    }
+    ps.length = Math.min(j,[360,620,900][RenderQuality.tier]);
+    const pp = this.pops; j = 0;
+    for (let i = 0; i < pp.length; i++) { const p = pp[i]; p.life -= dt; if (p.life <= 0) continue; p.y += p.vy * dt; p.vy *= (1 - 2 * dt); pp[j++] = p; }
+    pp.length = j;
+  },
+};
+
+/* ---------- drawing helpers ----------
+   Every silhouette piece is emitted as a polygon with the SAME winding, so a
+   whole hand can be one path (nonzero fill = clean union, and it clips). */
+function arcPts(cx, cy, r, a0, a1, n, out) { for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; out.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } }
+function emitPoly(ctx, pts) {
+  let A = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; A += p[0] * q[1] - q[0] * p[1]; }
+  if (A < 0) pts.reverse();
+  ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath();
+}
+function capsule(ctx, x0, y0, x1, y1, w0, w1) {
+  const a = Math.atan2(y1 - y0, x1 - x0); const nx = -Math.sin(a), ny = Math.cos(a);
+  const pts = [[x0 + nx * w0 / 2, y0 + ny * w0 / 2], [x1 + nx * w1 / 2, y1 + ny * w1 / 2]];
+  arcPts(x1, y1, w1 / 2, a + Math.PI / 2, a - Math.PI / 2, 10, pts);
+  pts.push([x0 - nx * w0 / 2, y0 - ny * w0 / 2]);
+  arcPts(x0, y0, w0 / 2, a - Math.PI / 2, a - 3 * Math.PI / 2, 10, pts);
+  emitPoly(ctx, pts);
+}
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2); const pts = [];
+  arcPts(x + w - r, y + r, r, -Math.PI / 2, 0, 6, pts);
+  arcPts(x + w - r, y + h - r, r, 0, Math.PI / 2, 6, pts);
+  arcPts(x + r, y + h - r, r, Math.PI / 2, Math.PI, 6, pts);
+  arcPts(x + r, y + r, r, Math.PI, Math.PI * 1.5, 6, pts);
+  emitPoly(ctx, pts);
+}
+// finger: from base (bx,by) along angle a, length len, width w; curl bends the tip toward +y (local)
+function prepareDigitRibbon(digit) {
+  const pts = digit.pts, widths = digit.widths, L = [], R = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[Math.min(pts.length - 1, i + 1)];
+    const a = Math.atan2(p1.y - p0.y, p1.x - p0.x), nx = -Math.sin(a), ny = Math.cos(a), hw = widths[i] * .5;
+    L.push({ x: pts[i].x + nx * hw, y: pts[i].y + ny * hw });
+    R.push({ x: pts[i].x - nx * hw, y: pts[i].y - ny * hw });
+  }
+  const tip = pts[pts.length - 1], prev = pts[pts.length - 2];
+  const ta = Math.atan2(tip.y - prev.y, tip.x - prev.x), tr = widths[widths.length - 1] * .52;
+  digit.ribbon = { L, R, tip, ta, tr };
+  return digit;
+}
+function digitRibbon(ctx, digit) {
+  // Ribbon edges are geometry, not presentation. Build them once with the pose and
+  // reuse them across skin, darkness and luminous-presence passes in the same frame.
+  const ribbon = digit.ribbon || prepareDigitRibbon(digit).ribbon;
+  const { L, R, tip, ta, tr } = ribbon;
+  // Clockwise winding matches the palm/arm subpaths so overlaps unite instead of punching holes.
+  ctx.moveTo(R[0].x, R[0].y);
+  for (let i = 1; i < R.length; i++) {
+    const m0 = R[i - 1], m1 = R[i];
+    ctx.quadraticCurveTo(m0.x, m0.y, (m0.x + m1.x) * .5, (m0.y + m1.y) * .5);
+  }
+  ctx.lineTo(R[R.length - 1].x, R[R.length - 1].y);
+  ctx.arc(tip.x, tip.y, tr, ta - Math.PI / 2, ta + Math.PI / 2, false);
+  for (let i = L.length - 2; i >= 0; i--) {
+    const m0 = L[i + 1], m1 = L[i];
+    ctx.quadraticCurveTo(m0.x, m0.y, (m0.x + m1.x) * .5, (m0.y + m1.y) * .5);
+  }
+  ctx.lineTo(L[0].x, L[0].y);
+  ctx.closePath();
+}
+
+function makeDigit(bx, by, angle, len, width, bend, segments = (MOBILE_LIKELY ? 5 : 6)) {
+  const pts = [{ x: bx, y: by }], widths = [width * .98];
+  let x = bx, y = by;
+  for (let i = 1; i <= segments; i++) {
+    const t = i / segments;
+    // Most flex happens after the proximal phalanx, like a real reaching finger.
+    const curve = t < .34 ? t * .25 : .085 + Math.pow((t - .34) / .66, 1.35) * .915;
+    const a = angle + bend * curve;
+    const step = len / segments;
+    x += Math.cos(a) * step; y += Math.sin(a) * step;
+    pts.push({ x, y });
+    const joint1 = Math.exp(-Math.pow((t - .39) / .10, 2));
+    const joint2 = Math.exp(-Math.pow((t - .70) / .085, 2));
+    widths.push(width * (1 - .31 * t + .055 * joint1 + .042 * joint2));
+  }
+  return { pts, widths, angle, len, width, bend };
+}
+
+function handMirror(hd) {
+  if (hd.side === 'R') return -1;
+  if (hd.side === 'L') return 1;
+  const n = hd.id == null ? Math.floor((hd.seed || 0) * 11) : hd.id;
+  return (n & 1) ? -1 : 1;
+}
+
+function buildHandPose(hd, tnow) {
+  const g = clamp(hd._visualGrip == null ? (hd.grip || 0) : hd._visualGrip, 0, 1);
+  const isPalm = hd.t === 'palm', mirror = handMirror(hd), shift = isPalm ? 91 : 0;
+  const wob = hd.t === 'wave' ? .045 * Math.sin(tnow * 3 + hd.seed) : 0;
+  const breathe = .014 * Math.sin(tnow * 1.25 + hd.seed);
+  const basesY = [-25.7, -8.2, 9.2, 26.4];
+  const basesX = [-59, -55.5, -57, -61];
+  const lengths = [55.5, 65, 61, 48];
+  const widths = [17.2, 18.2, 17.4, 15.1];
+  const spread = [-.095, -.022, .035, .105];
+  const digits = [];
+  const tele = hd.tele || 0, fa = hd.flickAnim || 0;
+  for (let i = 0; i < 4; i++) {
+    const y = basesY[i], inward = y < 0 ? 1 : -1;
+    let a = wob + breathe + spread[i] * (1 - g * .68);
+    let bend = inward * ([.055, .018, .028, .075][i] + g * (i === 1 || i === 2 ? .17 : .25));
+    let len = lengths[i] * (1 - g * .035);
+    if (isPalm) {
+      a = spread[i] * 1.25 + breathe * .5;
+      bend = inward * .035;
+      len *= .95;
+    }
+    // The index finger is the flicking finger; retain the mechanic's readable anticipation.
+    if (hd.t === 'flick' && i === 0) {
+      a += -tele * .88 + fa * .34;
+      bend += tele * .52;
+      len *= 1 - tele * .08;
+    }
+    digits.push(makeDigit(basesX[i], y, a, len, widths[i], bend));
+  }
+  const thumbA = isPalm ? -.68 : -.76 + g * .30 + (hd.t === 'flick' ? tele * .16 : 0);
+  const thumbBend = .22 + g * .25;
+  const thumb = makeDigit(-103, -30.5, thumbA, isPalm ? 47 : 46, 20, thumbBend, 8);
+  thumb.widths[0] = 24; thumb.widths[1] = 22.5; thumb.widths[2] = Math.max(20.5, thumb.widths[2]);
+  for (const digit of digits) prepareDigitRibbon(digit);
+  prepareDigitRibbon(thumb);
+  return { g, isPalm, mirror, shift, digits, thumb };
+}
+
+function organicArmPath(ctx, pose, hd, tnow) {
+  const sway = Math.sin((hd.seed || 0) * 1.7 + tnow * .23) * 2.4;
+  const bend = Math.sin((hd.seed || 0) * 2.31 + .7) * 9;
+  const wrist = -128;
+  // Reverse winding to match the palm so the overlapping wrist becomes one continuous silhouette.
+  ctx.moveTo(wrist, 22.5);
+  ctx.bezierCurveTo(-164, 25, -205, 30 + sway * .3, -252, 32 + sway * .45 + bend * .22);
+  ctx.bezierCurveTo(-302, 34 + sway * .65, -338, 28 + sway * .75, -372, 30 + sway * .8 + bend * .62);
+  ctx.bezierCurveTo(-414, 30 + sway, -447, 32 + sway * .7, -480, 32 + sway * .45 + bend);
+  ctx.quadraticCurveTo(-495, sway * .2 + bend, -480, -32 + sway * .45 + bend);
+  ctx.bezierCurveTo(-447, -31 + sway * .7, -414, -29 + sway, -372, -29 + sway * .8 + bend * .62);
+  ctx.bezierCurveTo(-338, -27 + sway * .75, -302, -33 + sway * .65, -252, -31 + sway * .45 + bend * .22);
+  ctx.bezierCurveTo(-205, -29 + sway * .3, -164, -24, wrist, -22.5);
+  ctx.closePath();
+}
+
+function organicPalmPath(ctx, pose) {
+  const back = pose.isPalm ? -141 : -140, front = -53;
+  ctx.moveTo(back, -22.5);
+  ctx.bezierCurveTo(-132, -35, -113, -42, -91, -42.5);
+  ctx.bezierCurveTo(-75, -42.5, -61, -37.5, front, -29);
+  ctx.bezierCurveTo(-48.5, -17, -48.8, 12.5, -55.5, 27.5);
+  ctx.bezierCurveTo(-64, 40, -84, 45, -106, 42);
+  ctx.bezierCurveTo(-124, 39, -137, 31.5, back, 22.5);
+  ctx.closePath();
+}
+
+/* ---------- hand rendering ---------- */
+// Hand gradients live in fixed hand-local coordinates and depend only on the chapter
+// palette, so they were being rebuilt — object allocation plus a Skia shader/LUT rebuild —
+// once per hand per frame for a value that changes five times in the whole game.
+const _gradCache = new Map();
+function cachedGrad(key, build) { let g = _gradCache.get(key); if (!g) { g = build(); _gradCache.set(key, g); } return g; }
+function skinGradient(base, lit, shade) {
+  return cachedGrad('skin|' + base + '|' + lit + '|' + shade, () => {
+    const g = cx.createLinearGradient(-490, 0, 18, 0);
+    g.addColorStop(0, rgbaHex(mixHex(shade, '#05050a', .30), 0));
+    g.addColorStop(.24, rgbaHex(mixHex(shade, '#05050a', .26), .035));
+    g.addColorStop(.43, rgbaHex(mixHex(shade, '#05050a', .20), .28));
+    g.addColorStop(.62, mixHex(shade, base, .12));
+    g.addColorStop(.84, base);
+    g.addColorStop(1, mixHex(lit, base, .18));
+    return g;
+  });
+}
+function sideGradient() {
+  return cachedGrad('side', () => {
+    const g = cx.createLinearGradient(-490, 0, 34, 0);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.40, 'rgba(0,0,0,0)');
+    g.addColorStop(.64, 'rgba(0,0,0,.06)'); g.addColorStop(1, 'rgba(255,255,255,.10)');
+    return g;
+  });
+}
+function decoGradient(deco) {
+  return cachedGrad('deco|' + deco, () => {
+    const g = cx.createLinearGradient(-490, 0, 12, 0);
+    g.addColorStop(0, rgbaHex(deco, 0)); g.addColorStop(.42, rgbaHex(mixHex(deco, '#000000', .25), .12));
+    g.addColorStop(.70, rgbaHex(deco, .72)); g.addColorStop(1, deco);
+    return g;
+  });
+}
+function presenceGradients(pal, shift) {
+  return cachedGrad('pres|' + pal.glow + '|' + (pal.lit || '#ffffff') + '|' + shift, () => {
+    const body = cx.createLinearGradient(shift - 430, 0, shift + 52, 0);
+    body.addColorStop(0, rgbaHex(pal.glow, 0)); body.addColorStop(.28, rgbaHex(pal.glow, .018));
+    body.addColorStop(.53, rgbaHex(pal.glow, .12)); body.addColorStop(.76, rgbaHex(pal.glow, .34));
+    body.addColorStop(1, rgbaHex(pal.glow, .48));
+    const sheen = cx.createLinearGradient(0, -72, 0, 72);
+    sheen.addColorStop(0, rgbaHex(pal.lit || '#ffffff', 0)); sheen.addColorStop(.31, rgbaHex(pal.lit || '#ffffff', .16));
+    sheen.addColorStop(.58, rgbaHex(pal.glow, .065)); sheen.addColorStop(1, rgbaHex(pal.glow, 0));
+    const contact = cx.createLinearGradient(shift + 48, 0, shift - 175, 0);
+    contact.addColorStop(0, rgbaHex(pal.glow, .58)); contact.addColorStop(.30, rgbaHex(pal.glow, .34));
+    contact.addColorStop(.72, rgbaHex(pal.glow, .085)); contact.addColorStop(1, rgbaHex(pal.glow, 0));
+    return { body, sheen, contact };
+  });
+}
+// The anchor remains exactly where gameplay expects it. Only the anatomy and material are new.
+const PALM_SHIFT = 91;
+function frameHandPose(hd,tnow){
+  if(hd._framePoseT!==tnow){hd._framePoseT=tnow;hd._framePose=buildHandPose(hd,tnow);}
+  hd._handPose=hd._framePose;return hd._framePose;
+}
+// The silhouette used to be re-emitted five times per hand per frame — once to fill the
+// skin, once to cut the darkness, three times inside the luminous-presence pass — and each
+// emission is an 8-bezier arm, a 6-bezier palm, five ~14-segment digit ribbons, three
+// webbing ellipses and a thumb. It is the same shape every time. Build it once per hand per
+// frame into a Path2D and hand that object to every fill() and clip().
+const PATH2D_OK = (() => {
+  try {
+    const inner = new Path2D(); inner.rect(0, 0, 10, 10);
+    const outer = new Path2D(); outer.addPath(inner, { a: 1, b: 0, c: 0, d: 1, e: 100, f: 0 });
+    const probe = document.createElement('canvas').getContext('2d');
+    return probe.isPointInPath(outer, 105, 5) && !probe.isPointInPath(outer, 5, 5);
+  } catch (e) { return false; }   // no matrix-aware addPath: fall back to immediate mode
+})();
+function emitHandLocal(sink, hd, tnow) {
+  const pose = frameHandPose(hd, tnow);
+  organicArmPath(sink, pose, hd, tnow);
+  organicPalmPath(sink, pose);
+  for (const d of pose.digits) digitRibbon(sink, d);
+  // Interdigital webbing keeps the fingers anatomically connected without erasing their silhouette.
+  for (let i = 0; i < 3; i++) {
+    const y = ([-25.7, -8.2, 9.2, 26.4][i] + [-25.7, -8.2, 9.2, 26.4][i + 1]) * .5;
+    sink.moveTo(-45, y); sink.ellipse(-55.5, y, 10.5, 7.2, 0, 0, TAU, false);
+  }
+  digitRibbon(sink, pose.thumb);
+  return pose;
+}
+// Returns a Path2D to pass to fill()/clip(), or null when the caller should use the
+// context's own current path (the pre-Path2D fallback).
+function handShape(ctx, hd, tnow) {
+  // Always re-establish hd._handPose, even on a cache hit: the drawing passes null it out
+  // when they finish, and the accessory / volume / slip passes read it back.
+  frameHandPose(hd, tnow);
+  if (PATH2D_OK) {
+    if (hd._pathT === tnow && hd._path) return hd._path;
+    const local = new Path2D(), pose = emitHandLocal(local, hd, tnow), p = new Path2D();
+    p.addPath(local, { a: 1, b: 0, c: 0, d: pose.mirror, e: pose.shift, f: 0 });
+    hd._pathT = tnow; hd._path = p; return p;
+  }
+  const pose = frameHandPose(hd, tnow);
+  ctx.beginPath(); ctx.save();
+  ctx.translate(pose.shift, 0); ctx.scale(1, pose.mirror);
+  emitHandLocal(ctx, hd, tnow);
+  ctx.restore(); return null;
+}
+
+function pointOnDigit(d, t) {
+  const f = clamp(t, 0, 1) * (d.pts.length - 1), i = Math.min(d.pts.length - 2, Math.floor(f)), u = f - i;
+  const a = d.pts[i], b = d.pts[i + 1];
+  return { x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u), a: Math.atan2(b.y - a.y, b.x - a.x) };
+}
+
+function drawAccessory(ctx, hd, pal) {
+  const acc = hd.acc, pose = hd._handPose; if (!acc || !pose) return;
+  ctx.save(); ctx.translate(pose.shift, 0); ctx.scale(1, pose.mirror); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (acc === 'ring') {
+    const p = pointOnDigit(pose.digits[2], .25);
+    ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.shadowColor = '#ffd66b'; ctx.shadowBlur = 5;
+    ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.ellipse(0, 0, 2.6, pose.digits[2].width * .54, 0, 0, TAU); ctx.stroke();
+  } else if (acc === 'watch') {
+    ctx.translate(-151, 0);
+    ctx.fillStyle = 'rgba(18,16,24,.62)'; ctx.beginPath(); roundRect(ctx, -11, -35, 22, 70, 5); ctx.fill();
+    const bezel = ctx.createRadialGradient(-3, -4, 1, 0, 0, 14); bezel.addColorStop(0, '#fffaf0'); bezel.addColorStop(1, '#bcb3a5');
+    ctx.fillStyle = bezel; ctx.beginPath(); ctx.ellipse(0, 0, 14, 12, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(25,22,30,.72)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(0, 0, 14, 12, 0, 0, TAU); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -7); ctx.moveTo(0, 0); ctx.lineTo(6, 2.5); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.48)'; ctx.beginPath(); ctx.ellipse(-4, -4, 2.4, 1.5, -.4, 0, TAU); ctx.fill();
+  } else if (acc === 'bandaid') {
+    ctx.save(); ctx.translate(-92, 13); ctx.rotate(-.18); ctx.fillStyle = '#e8c7a8'; ctx.beginPath(); roundRect(ctx, -16, -7, 32, 14, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(74,44,37,.18)'; ctx.beginPath(); roundRect(ctx, -5, -4, 10, 8, 2); ctx.fill();
+    ctx.fillStyle = 'rgba(90,54,43,.18)'; for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { ctx.beginPath(); ctx.arc(i * 11, j * 4, .8, 0, TAU); ctx.fill(); } ctx.restore();
+  } else if (acc === 'band') {
+    ctx.fillStyle = '#f5f1e8'; ctx.beginPath(); roundRect(ctx, -171, -31, 13, 62, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.24)'; ctx.fillRect(-168, -7, 7, 14);
+  } else if (acc === 'bracelet') {
+    ctx.strokeStyle = '#ffd66b'; ctx.shadowColor = '#ffd66b'; ctx.shadowBlur = 4; ctx.lineWidth = 2.2;
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-166 - i * 7, -31); ctx.quadraticCurveTo(-162 - i * 7, 0, -166 - i * 7, 31); ctx.stroke(); }
+  }
+  ctx.restore();
+}
+
+function drawHandVolumes(ctx, hd, pal, alpha) {
+  const pose = hd._handPose, q=RenderQuality.detailLevel(); if (!pose || q===0) return;
+  ctx.save(); ctx.translate(pose.shift, 0); ctx.scale(1, pose.mirror);
+  if(q===1)ctx.globalAlpha*=.72;
+  // Thenar and hypothenar volumes give the palm a believable three-dimensional architecture.
+  const thenar = ctx.createRadialGradient(-86, -23, 1, -86, -23, 32);
+  thenar.addColorStop(0, 'rgba(255,255,255,.18)'); thenar.addColorStop(.55, 'rgba(255,255,255,.055)'); thenar.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = thenar; ctx.fillRect(-122, -56, 72, 67);
+  const hypo = ctx.createRadialGradient(-95, 27, 1, -95, 27, 31);
+  hypo.addColorStop(0, 'rgba(0,0,0,.10)'); hypo.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = hypo; ctx.fillRect(-130, -2, 80, 65);
+  // Soft knuckle pads, never hard circles.
+  if (q>=1) pose.digits.forEach((d, i) => {
+    const p = pointOnDigit(d, .08), k = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, d.width * 1.05);
+    k.addColorStop(0, i < 2 ? 'rgba(255,255,255,.13)' : 'rgba(255,255,255,.09)'); k.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = k; ctx.fillRect(p.x - 22, p.y - 22, 44, 44);
+  });
+  ctx.restore();
+}
+
+function drawHandLocalDetails(ctx, hd, alpha, far) {
+  const pose = hd._handPose; if (!pose) return;
+  ctx.save(); ctx.translate(pose.shift, 0); ctx.scale(1, pose.mirror); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const dark = 'rgba(39,25,34,.62)', light = 'rgba(255,248,239,.62)';
+  // Wrist folds.
+  ctx.globalAlpha = alpha * (far ? .035 : .14); ctx.strokeStyle = dark; ctx.lineWidth = 1.05;
+  ctx.beginPath(); ctx.moveTo(-141, -15); ctx.quadraticCurveTo(-134, 0, -141, 15); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-149, -12); ctx.quadraticCurveTo(-144, 0, -149, 12); ctx.stroke();
+  // Heart, head and life lines; understated enough to read as skin rather than iconography.
+  ctx.globalAlpha = alpha * (far ? .045 : .18);
+  ctx.beginPath(); ctx.moveTo(-58, -17); ctx.bezierCurveTo(-76, -27, -104, -26, -124, -15); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-60, 2); ctx.bezierCurveTo(-80, -4, -103, 2, -127, 16); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-67, -24); ctx.bezierCurveTo(-82, -15, -92, 0, -91, 25); ctx.bezierCurveTo(-92, 34, -105, 37, -115, 29); ctx.stroke();
+  // Finger joint folds and nails follow the actual animated digits. At phone scale,
+  // the extra paths cost more than they read, so the silhouette and palm architecture carry it.
+  if (RenderQuality.detailLevel()>=2 && !far) for (let i = 0; i < pose.digits.length; i++) {
+    const d = pose.digits[i];
+    for (const t of [.40, .69]) {
+      const p = pointOnDigit(d, t), rr = d.width * (t < .5 ? .30 : .25);
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.globalAlpha = alpha * (far ? .025 : .13); ctx.strokeStyle = dark; ctx.lineWidth = .85;
+      ctx.beginPath(); ctx.moveTo(-1.5, -rr); ctx.quadraticCurveTo(1.2, 0, -1.5, rr); ctx.stroke(); ctx.restore();
+    }
+    if (!pose.isPalm) {
+      const p = pointOnDigit(d, .88);
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.globalAlpha = alpha * (far ? .02 : .13);
+      const nail = ctx.createLinearGradient(-5, 0, 5, 0); nail.addColorStop(0, 'rgba(255,255,255,.18)'); nail.addColorStop(.55, light); nail.addColorStop(1, 'rgba(90,55,66,.16)');
+      ctx.fillStyle = nail; ctx.beginPath(); ctx.ellipse(0, 0, 5.4 - i * .25, 3.2 - i * .13, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(64,38,48,.16)'; ctx.lineWidth = .55; ctx.stroke(); ctx.restore();
+    }
+  }
+  // A pair of subtle longitudinal arm highlights avoids the dead pool-noodle look.
+  ctx.globalAlpha = alpha * (far ? .018 : .065); ctx.strokeStyle = light; ctx.lineWidth = .8;
+  ctx.beginPath(); ctx.moveTo(-155, -17); ctx.bezierCurveTo(-220, -22, -292, -27, -355, -29); ctx.stroke();
+  ctx.globalAlpha = alpha * (far ? .018 : .055); ctx.strokeStyle = dark;
+  ctx.beginPath(); ctx.moveTo(-155, 18); ctx.bezierCurveTo(-225, 23, -294, 28, -355, 30); ctx.stroke();
+  if (ART_TEXTURE && !REDUCED && RenderQuality.detailLevel()>=2) { ctx.globalAlpha = alpha * (far ? .014 : .033); ctx.fillStyle = ART_TEXTURE; ctx.fillRect(-380, -58, 345, 116); }
+  ctx.restore();
+}
+
+function drawHand(hd, pal, sx, sy, sr, tnow) {
+  if (hd.alpha <= 0) return;
+  const lightState = handLightState(hd, sx, sy, sr, tnow); if (!lightState) return;
+  const { ax, ay, z, dist, alpha: lightAlpha, rot } = lightState;
+  if (ay < -440 * z || ay > VH + 440 * z) return;
+  let alpha = lightAlpha; if (alpha <= .01) return;
+  const useAlt = hd.alt && pal.alt, base = useAlt ? pal.alt : pal.hand, lit = useAlt ? pal.altLit : pal.lit, shade = useAlt ? pal.altShade : pal.shade;
+  const far = dist > sr + 300 * zoomNow() * hd.sc;
+  const detailed = !far && dist < sr * .92 + 135 * z;
+  const near = clamp(1 - dist / Math.max(1, sr + 130 * z), 0, 1);
+  hd._visualGrip = clamp((hd.grip || 0) + near * (hd.t === 'palm' ? .035 : .11) + Math.sin(tnow * 1.7 + hd.seed) * .008 - (hd._reachCue||0)*.075, 0, 1);
+  cx.save(); cx.translate(ax, ay); cx.rotate(rot); cx.scale(z, z);
+  const _hp = handShape(cx, hd, tnow);
+  cx.globalAlpha = alpha; cx.fillStyle = skinGradient(base, lit, shade);
+  // The blur was tier-gated but the colour and offsets were not, so the two lower tiers —
+  // the ones that exist to rescue a struggling phone — still paid to rasterize every hand
+  // twice for a hard offset shadow the darkness pass largely swallows anyway.
+  const wantShadow = RenderQuality.detailLevel() >= 2 && detailed;
+  if (wantShadow) {
+    cx.shadowColor = far ? 'rgba(0,0,0,.30)' : 'rgba(0,0,0,.58)';
+    cx.shadowBlur = 9 / Math.max(.65, z); cx.shadowOffsetX = 3 / Math.max(.65, z); cx.shadowOffsetY = 5 / Math.max(.65, z);
+  } else { cx.shadowColor = 'rgba(0,0,0,0)'; cx.shadowBlur = 0; cx.shadowOffsetX = cx.shadowOffsetY = 0; }
+  _hp ? cx.fill(_hp) : cx.fill(); cx.shadowBlur = 0; cx.shadowColor = 'rgba(0,0,0,0)'; cx.shadowOffsetX = cx.shadowOffsetY = 0;
+
+  if (!far) {
+    cx.save(); _hp ? cx.clip(_hp) : cx.clip();
+    const dx = (sx - ax) / z, dy = (sy - ay) / z, co = Math.cos(rot), si = Math.sin(rot), lx = dx * co + dy * si, ly = -dx * si + dy * co, lr = sr / z;
+    if (detailed) drawHandVolumes(cx, hd, pal, alpha);
+    cx.globalAlpha = alpha; cx.fillStyle = sideGradient(); cx.fillRect(-500, -105, 560, 210);
+    const light = cx.createRadialGradient(lx, ly, 0, lx, ly, lr);
+    light.addColorStop(0, lit); light.addColorStop(.16, rgbaHex(lit, .92)); light.addColorStop(.55, rgbaHex(lit, .22)); light.addColorStop(1, 'rgba(255,255,255,0)');
+    cx.globalCompositeOperation = 'screen'; cx.globalAlpha = alpha * .83; cx.fillStyle = light; cx.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+    cx.globalCompositeOperation = 'source-over'; cx.restore();
+  }
+
+  // No compound-path outline: it was tracing every overlapping finger base and creating toy-like rings.
+  drawHandLocalDetails(cx, hd, alpha, far || !detailed);
+  cx.globalAlpha = alpha; drawAccessory(cx, hd, pal);
+  if (hd.slip && !far && hd._handPose) {
+    const pose = hd._handPose; cx.save(); cx.translate(pose.shift, 0); cx.scale(1, pose.mirror); cx.fillStyle = 'rgba(190,229,255,.65)';
+    for (let i = 0; i < 3; i++) { const ph = (tnow * .5 + i * .37 + hd.seed) % 1; cx.globalAlpha = alpha * (1 - ph); cx.beginPath(); cx.ellipse(-68 - i * 25, 37 + ph * 48, 2.7 - ph * 1.5, 4.5 - ph * 2, 0, 0, TAU); cx.fill(); }
+    cx.restore();
+  }
+  cx.restore();
+  // No point-shaped grip lamp here; the post-darkness hand-presence pass distributes
+  // contact light through the fingers and palm.
+  hd._visualGrip = null; hd._handPose = null;
+}
+
+function drawDeco(d, pal, tnow) {
+  const [ax, ay] = W2S(d.x, d.y + (cam.y - d.y) * (1 - d.par)), z = zoomNow() * d.sc; if (ay < -360 * z || ay > VH + 360 * z) return;
+  cx.save(); cx.translate(ax, ay); cx.rotate(-d.ang + .022 * Math.sin(tnow * .7 + d.seed)); cx.scale(z, z);
+  // the ghost object is cached on the deco entry: a fresh literal each frame gave the
+  // pose and path caches a new identity every time, so nothing was ever reused.
+  const ghost = d._ghost || (d._ghost = { grip: .06, t: 'reach', seed: d.seed, tele: 0, _visualGrip: .06, side: d.side });
+  const _gp = handShape(cx, ghost, tnow);
+  cx.fillStyle = decoGradient(pal.deco); cx.globalAlpha = .76; _gp ? cx.fill(_gp) : cx.fill(); cx.restore();
+}
+
+/* ---------- hazards ---------- */
+function drawHazard(hz,pal,tnow){
+  const z=zoomNow();
+  if(hz.t==='thorn'){
+    const[x,y]=W2S(hz.x,hz.y);if(y<-220||y>VH+220)return;const pulse=.5+.5*Math.sin(tnow*2.4+hz.seed),rot=tnow*.22+hz.seed;
+    cx.save();cx.translate(x,y);cx.scale(z,z);cx.rotate(rot);cx.globalCompositeOperation='lighter';
+    const glow=cx.createRadialGradient(0,0,0,0,0,hz.r*2.2);glow.addColorStop(0,rgbaHex(pal.hazard,.34+.12*pulse));glow.addColorStop(1,'rgba(0,0,0,0)');cx.fillStyle=glow;cx.beginPath();cx.arc(0,0,hz.r*2.2,0,TAU);cx.fill();cx.globalCompositeOperation='source-over';
+    for(let layer=0;layer<2;layer++){const n=layer?9:12,inner=hz.r*(layer?.34:.58),outer=hz.r*(layer?1.05:1.48);cx.fillStyle=layer?mixHex(pal.hazard,'#ff8a72',.18):pal.hazard;cx.strokeStyle='rgba(255,225,210,.13)';cx.lineWidth=.8;cx.beginPath();for(let i=0;i<n;i++){const a=i/n*TAU+(layer?.18:0),a1=a-.12,a2=a+.12;if(i===0){cx.moveTo(Math.cos(a1)*inner,Math.sin(a1)*inner);}else cx.lineTo(Math.cos(a1)*inner,Math.sin(a1)*inner);cx.quadraticCurveTo(Math.cos(a)*outer,Math.sin(a)*outer,Math.cos(a2)*inner,Math.sin(a2)*inner);}cx.closePath();cx.fill();cx.stroke();}
+    const core=cx.createRadialGradient(-hz.r*.2,-hz.r*.22,0,0,0,hz.r*.65);core.addColorStop(0,'rgba(255,150,130,.38)');core.addColorStop(1,'rgba(32,12,18,.82)');cx.fillStyle=core;cx.beginPath();cx.arc(0,0,hz.r*.58,0,TAU);cx.fill();cx.restore();
+  }else if(hz.t==='snap'){
+    // The jaws MUST be drawn from the same clock physStep bites on (World.t). tnow is a
+    // different clock: it keeps advancing through every hitstop, and it is never reset by
+    // startGame while World.t is. Drawn from tnow, the animation drifted out of phase with
+    // the hitbox — the one hazard with a timing tell was teaching the wrong timing.
+    const[x,y]=W2S(hz.x,hz.y);if(y<-220||y>VH+220)return;const ph=(((Game.world?Game.world.t:tnow)+hz.ph)%hz.per)/hz.per;let open=1;if(ph>.42&&ph<.58)open=1-smooth((ph-.42)/.16);else if(ph>=.58&&ph<.86)open=0;else if(ph>=.86)open=smooth((ph-.86)/.14);const gap=hz.r*(.12+.98*open),danger=1-open;
+    cx.save();cx.translate(x,y);cx.scale(z,z);cx.rotate(Math.sin(hz.seed)*.4);
+    cx.globalCompositeOperation='lighter';const aura=cx.createRadialGradient(0,0,0,0,0,hz.r*2.4);aura.addColorStop(0,rgbaHex(pal.hazard,.18+.25*danger));aura.addColorStop(1,'rgba(0,0,0,0)');cx.fillStyle=aura;cx.beginPath();cx.arc(0,0,hz.r*2.4,0,TAU);cx.fill();cx.globalCompositeOperation='source-over';
+    if(danger>.3&&!REDUCED){cx.globalAlpha=.08*danger;for(let k=1;k<=3;k++){cx.strokeStyle=pal.hazard;cx.lineWidth=5-k;cx.beginPath();cx.moveTo(-hz.r*1.2,-gap-k*6);cx.lineTo(hz.r*1.2,-gap-k*6);cx.moveTo(-hz.r*1.2,gap+k*6);cx.lineTo(hz.r*1.2,gap+k*6);cx.stroke();}cx.globalAlpha=1;}
+    for(const sgn of[-1,1]){cx.save();cx.translate(0,sgn*gap);cx.scale(1,sgn);const jaw=cx.createLinearGradient(0,-hz.r,0,hz.r*.25);jaw.addColorStop(0,mixHex(pal.hazard,'#ff857b',.22));jaw.addColorStop(1,mixHex(pal.hazard,'#160912',.35));cx.fillStyle=jaw;cx.beginPath();cx.moveTo(-hz.r*1.35,-hz.r*.18);cx.quadraticCurveTo(0,-hz.r*.92,hz.r*1.35,-hz.r*.18);cx.quadraticCurveTo(0,hz.r*.32,-hz.r*1.35,-hz.r*.18);cx.closePath();cx.fill();cx.strokeStyle='rgba(255,210,205,.14)';cx.lineWidth=1;cx.stroke();cx.fillStyle='#f5eadb';for(let i=-3;i<=3;i++){const xx=i*hz.r*.30,w=4.5,h=hz.r*(.44-.045*Math.abs(i));cx.beginPath();cx.moveTo(xx-w,-hz.r*.18);cx.lineTo(xx+w,-hz.r*.18);cx.lineTo(xx,h);cx.closePath();cx.fill();}cx.restore();}
+    cx.restore();
+  }else if(hz.t==='fan'){
+    const[x0,y0]=W2S(hz.x,hz.y+hz.h),[x1,y1]=W2S(hz.x+hz.w,hz.y);if(y1<-60||y0>VH+60)return;cx.save();cx.beginPath();cx.rect(x0,y0,x1-x0,y1-y0);cx.clip();const l=hyp(hz.ax,hz.ay)||1,dx=hz.ax/l,dy=-hz.ay/l;
+    const field=cx.createLinearGradient(x0,y0,x1,y1);field.addColorStop(0,'rgba(150,220,255,0)');field.addColorStop(.5,'rgba(180,232,255,.035)');field.addColorStop(1,'rgba(150,220,255,0)');cx.fillStyle=field;cx.fillRect(x0,y0,x1-x0,y1-y0);
+    cx.lineCap='round';for(let i=0;i<(REDUCED?12:28);i++){const seed=i+hz.seed*7,p=(tnow*(.30+.40*hashNoise(seed+3))+hashNoise(seed))%1,px=lerp(x0,x1,hashNoise(seed+9)),py=lerp(y0,y1,p),len=(24+52*hashNoise(seed+4))*z;cx.globalAlpha=.06+.20*Math.sin(p*Math.PI)*hashNoise(seed+5);cx.strokeStyle='#ccefff';cx.lineWidth=.65+1.2*hashNoise(seed+8);cx.beginPath();cx.moveTo(px,py);cx.quadraticCurveTo(px+dx*len*.52-dy*7,py+dy*len*.52+dx*7,px+dx*len,py+dy*len);cx.stroke();}
+    cx.restore();
+  }else if(hz.t==='jar'){
+    const[x0,y0]=W2S(hz.x,hz.y+hz.h),[x1,y1]=W2S(hz.x+hz.w,hz.y);if(y1<-120||y0>VH+120)return;const w=x1-x0,h=y1-y0,r=Math.min(12*z,w*.22,h*.18);cx.save();
+    cx.shadowColor='#9fdcff';cx.shadowBlur=RenderQuality.detailLevel()<2?0:14*z;cx.globalAlpha=.25;cx.strokeStyle='#a6ddf6';cx.lineWidth=2*z;cx.beginPath();roundRect(cx,x0,y0,w,h,r);cx.stroke();cx.shadowBlur=0;cx.globalAlpha=1;
+    const glass=cx.createLinearGradient(x0,y0,x1,y1);glass.addColorStop(0,'rgba(205,238,255,.15)');glass.addColorStop(.45,'rgba(100,170,210,.035)');glass.addColorStop(1,'rgba(225,245,255,.11)');cx.fillStyle=glass;cx.beginPath();roundRect(cx,x0,y0,w,h,r);cx.fill();
+    cx.save();cx.beginPath();roundRect(cx,x0,y0,w,h,r);cx.clip();cx.globalAlpha=.18;cx.strokeStyle='#dff7ff';cx.lineWidth=1;for(let i=0;i<3;i++){const yy=y0+h*(.25+i*.24)+Math.sin(tnow*.6+i)*8*z;cx.beginPath();cx.moveTo(x0-10,yy);cx.bezierCurveTo(x0+w*.3,yy-12*z,x0+w*.7,yy+12*z,x1+10,yy);cx.stroke();}cx.restore();
+    cx.strokeStyle='rgba(235,250,255,.58)';cx.lineWidth=1.2*z;cx.beginPath();if(hz.open==='L'){cx.moveTo(x1,y0+r);cx.lineTo(x1,y1-r);cx.moveTo(x0+r,y0);cx.lineTo(x1-r,y0);cx.moveTo(x0+r,y1);cx.lineTo(x1-r,y1);}else if(hz.open==='R'){cx.moveTo(x0,y0+r);cx.lineTo(x0,y1-r);cx.moveTo(x0+r,y0);cx.lineTo(x1-r,y0);cx.moveTo(x0+r,y1);cx.lineTo(x1-r,y1);}else{cx.moveTo(x0,y0+r);cx.lineTo(x0,y1-r);cx.moveTo(x1,y0+r);cx.lineTo(x1,y1-r);cx.moveTo(x0+r,y1);cx.lineTo(x1-r,y1);}cx.stroke();
+    cx.fillStyle='rgba(36,38,52,.88)';if(hz.open==='L')cx.fillRect(x1-5*z,y0,10*z,h);else if(hz.open==='R')cx.fillRect(x0-5*z,y0,10*z,h);cx.globalAlpha=.48;cx.fillStyle='#fff';cx.fillRect(x0+8*z,y0+10*z,1.2*z,h-20*z);cx.restore();
+  }else if(hz.t==='twall'){
+    const[xl,ya]=W2S(0,hz.y1),[xr,yb]=W2S(TOWER_W,hz.y0);if(yb<-60||ya>VH+60)return;const x=hz.side==='L'?xl:xr,dir=hz.side==='L'?1:-1,step=26*z,depth=25*z;cx.save();
+    const strip=cx.createLinearGradient(x,0,x+dir*depth*1.7,0);strip.addColorStop(0,rgbaHex(pal.hazard,.72));strip.addColorStop(1,'rgba(0,0,0,0)');cx.fillStyle=strip;cx.fillRect(dir>0?x:x-depth*1.7,ya,depth*1.7,yb-ya);
+    cx.fillStyle=pal.hazard;cx.beginPath();cx.moveTo(x,ya);for(let yy=ya;yy<yb;yy+=step){const d=depth*(.68+.32*hashNoise(yy/7+hz.y0));cx.lineTo(x+dir*d,yy+step*.5);cx.lineTo(x+dir*3*z,yy+step);}cx.lineTo(x,yb);cx.closePath();cx.fill();cx.strokeStyle='rgba(255,115,130,.20)';cx.lineWidth=1;cx.beginPath();cx.moveTo(x,ya);cx.lineTo(x,yb);cx.stroke();cx.restore();
+  }
+}
+
+// Fans and thorn walls used to disappear beneath the darkness pass. A neutral,
+// shape-based foreground edge keeps danger legible without relying on red/green vision.
+function drawHazardForeground(hz,pal,tnow){
+  const z=zoomNow(),danger=(Game.spark&&Game.spark.hold)?.58:1;
+  if(hz.t==='fan'){
+    const[x0,y0]=W2S(hz.x,hz.y+hz.h),[x1,y1]=W2S(hz.x+hz.w,hz.y);if(y1<-60||y0>VH+60)return;
+    const l=hyp(hz.ax,hz.ay)||1,dx=hz.ax/l,dy=-hz.ay/l,nx=-dy,ny=dx,count=RenderQuality.tier===0?3:4,span=hyp(x1-x0,y1-y0);
+    cx.save();cx.beginPath();cx.rect(x0,y0,x1-x0,y1-y0);cx.clip();cx.globalCompositeOperation='screen';cx.lineCap='round';cx.lineJoin='round';cx.setLineDash([11,9]);cx.lineDashOffset=REDUCED?0:-tnow*34;
+    for(let i=0;i<count;i++){const seed=i*17+hz.seed*3,p=(i+.72)/(count+1.35),phase=REDUCED?.5:(tnow*(.075+.025*hashNoise(seed+4))+hashNoise(seed+9))%1,px=lerp(x0,x1,dx>=0?phase:1-phase),py=lerp(y0,y1,p),len=Math.max(82,Math.min(span*.58,(205+38*hashNoise(seed+8))*z)),ex=px+dx*len*.48,ey=py+dy*len*.48,sx=px-dx*len*.52,sy=py-dy*len*.52,wing=Math.max(6,10*z);
+      cx.globalAlpha=danger*(.16+.10*hashNoise(seed+2));cx.strokeStyle=i%2?'#f1f7f8':'#b9e6ef';cx.lineWidth=1+hashNoise(seed+5)*.7;cx.beginPath();cx.moveTo(sx,sy);cx.quadraticCurveTo(px+nx*5,py+ny*5,ex,ey);cx.stroke();
+      cx.setLineDash([]);cx.globalAlpha=danger*.30;cx.beginPath();cx.moveTo(ex-dx*wing+nx*wing*.58,ey-dy*wing+ny*wing*.58);cx.lineTo(ex,ey);cx.lineTo(ex-dx*wing-nx*wing*.58,ey-dy*wing-ny*wing*.58);cx.stroke();cx.setLineDash([11,9]);
+    }
+    cx.setLineDash([]);cx.restore();
+  }else if(hz.t==='twall'){
+    const[xl,ya]=W2S(0,hz.y1),[xr,yb]=W2S(TOWER_W,hz.y0);if(yb<-60||ya>VH+60)return;const x=hz.side==='L'?xl:xr,dir=hz.side==='L'?1:-1;
+    cx.save();cx.globalCompositeOperation='screen';cx.globalAlpha=danger*.34;cx.strokeStyle='#ffe8dd';cx.lineWidth=Math.max(.8,1.05*z);cx.setLineDash([3*z,7*z]);cx.lineDashOffset=REDUCED?0:-tnow*13;cx.beginPath();cx.moveTo(x+dir*3*z,ya);cx.lineTo(x+dir*3*z,yb);cx.stroke();cx.setLineDash([]);cx.restore();
+  }
+}
+
+/* ---------- text helpers ---------- */
+const FONT_SERIF = getComputedStyle(document.documentElement).getPropertyValue('--serif').trim() || 'Georgia, serif';
+const FONT_MONO = getComputedStyle(document.documentElement).getPropertyValue('--mono').trim() || 'monospace';
+function spacedText(ctx, text, x, y, size, spacing, color, { italic = false, weight = '400', align = 'center', alpha = 1, gapChar = null, gapW = 0, shadow = 0 } = {}) {
+  ctx.save();
+  ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${FONT_SERIF}`;
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillStyle = color; ctx.globalAlpha = alpha;
+  if (shadow) { ctx.shadowColor = 'rgba(4,3,9,.92)'; ctx.shadowBlur = size * shadow; }
+  const chars = [...text];
+  const widths = chars.map(ch => ch === gapChar ? gapW : ctx.measureText(ch).width);
+  const total = widths.reduce((a, b) => a + b, 0) + spacing * (chars.length - 1);
+  let px = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+  let gapX = null;
+  chars.forEach((ch, i) => { if (ch === gapChar) gapX = px + widths[i] / 2; else ctx.fillText(ch, px, y); px += widths[i] + spacing; });
+  ctx.restore();
+  return { total, gapX };
+}
+function text(ctx, str, x, y, size, color, { italic = false, weight = '400', align = 'center', alpha = 1, mono = false, baseline = 'middle', shadow = 0 } = {}) {
+  ctx.save(); ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${mono ? FONT_MONO : FONT_SERIF}`;
+  ctx.textAlign = align; ctx.textBaseline = baseline; ctx.fillStyle = color; ctx.globalAlpha = alpha;
+  // Two dark passes then the glyph: one halo is not enough to sit cream serif over a lit
+  // palm or over OPEN's daylight sky, and this text has to be readable in every chapter.
+  if (shadow) { ctx.shadowColor = 'rgba(4,3,9,.92)'; ctx.shadowBlur = size * shadow; ctx.fillText(str, x, y); }
+  ctx.fillText(str, x, y); ctx.restore();
+}
+function hexToRgb(hx) { const n = parseInt(hx.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function mixHex(a, b, t) { const A = hexToRgb(a), B = hexToRgb(b); return `rgb(${Math.round(lerp(A[0], B[0], t))},${Math.round(lerp(A[1], B[1], t))},${Math.round(lerp(A[2], B[2], t))})`; }
+
+/* ---------- orb (spark) ---------- */
+function drawOrb(ctx, x, y, r, core = '#fff6e8', glow = '#ffb347', intensity = 1, flick = 0, underlay = 0) {
+  ctx.save();
+  const pulse = 1 + flick * 0.035;
+  if (underlay > 0) {
+    const u = ctx.createRadialGradient(x, y, 0, x, y, r * 5.4);
+    u.addColorStop(0, `rgba(28,22,26,${0.42 * underlay})`); u.addColorStop(.5, `rgba(30,22,24,${0.16 * underlay})`); u.addColorStop(1, 'rgba(40,30,26,0)');
+    ctx.fillStyle = u; ctx.beginPath(); ctx.arc(x, y, r * 5.4, 0, TAU); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  const R = r * (6.8 + flick * 0.5);
+  const halo = ctx.createRadialGradient(x, y, 0, x, y, R);
+  halo.addColorStop(0, glow); halo.addColorStop(.09, glow); halo.addColorStop(.34, rgbaHex(glow, .34)); halo.addColorStop(1, rgbaHex(glow, 0));
+  ctx.globalAlpha = 0.32 * intensity; ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, R, 0, TAU); ctx.fill();
+  ctx.shadowColor = glow; ctx.shadowBlur = RenderQuality.detailLevel()<2 ? 0 : Math.max(5, r * 2.4);
+  ctx.globalAlpha = 0.9 * intensity; ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, r * 1.65 * pulse, 0, TAU); ctx.fill();
+  ctx.shadowBlur = RenderQuality.detailLevel()<2 ? 0 : Math.max(4, r * 1.4); ctx.globalAlpha = intensity; ctx.fillStyle = core; ctx.beginPath(); ctx.arc(x, y, r * pulse, 0, TAU); ctx.fill();
+  ctx.shadowBlur = 0; ctx.globalAlpha = 0.9 * intensity; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x - r*.22, y - r*.25, Math.max(.7,r*.27), 0, TAU); ctx.fill();
+  ctx.globalAlpha = 0.16 * intensity; ctx.strokeStyle = core; ctx.lineWidth = Math.max(.7, r*.09); ctx.beginPath(); ctx.arc(x, y, r * (2.3 + .12*Math.sin(performance.now()*.005)), 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------- darkness ---------- */
+function cutLight(x, y, r, a = 1, hard = 0.3) {
+  dcx.save();dcx.globalAlpha=a;dcx.drawImage(maskSprite(hard),x-r,y-r,r*2,r*2);dcx.restore();
+}
+
+// Hands do not carry point lamps. Their whole form holds a low, diffuse presence:
+// skin, fingers, palm and forearm emerge together from the dark.
+function handLightState(hd, sx, sy, sr, tnow) {
+  if (hd._lightFrame === tnow) return hd._lightState;
+  hd._lightFrame = tnow;
+  const p = W2S(hd.ax, hd.ay), ax = p[0], ay = p[1], z = zoomNow() * hd.sc;
+  if (ay < -460 * z || ay > VH + 460 * z) return (hd._lightState = null);
+  const dist = hyp(ax - sx, ay - sy); let alpha = hd.alpha;
+  if (hd.shy) alpha *= clamp((sr * .95 - dist) / Math.max(1, sr * .35), 0, 1);
+  if (alpha <= .008) return (hd._lightState = null);
+  let rot = -hd.ang;
+  if (hd.t === 'wave') rot += .075 * Math.sin(tnow * TAU / hd.per + hd.ph + 1.2);
+  if (hd.tremor) rot += noise1(hd.tm * 11, hd.seed + 3) * .009 * hd.tremor;
+  if (hd.flickAnim) rot += Math.sin(hd.flickAnim * Math.PI) * .065;
+  return (hd._lightState = { ax, ay, z, dist, alpha, rot, shift: hd.t === 'palm' ? PALM_SHIFT : 0 });
+}
+
+function softMaskEllipse(ctx, x, y, rx, ry, strength, hard = .06) {
+  if (strength <= .001) return;
+  ctx.save(); ctx.translate(x, y); ctx.scale(rx, ry);
+  ctx.globalAlpha=strength;ctx.drawImage(_handMaskSprite,-1,-1,2,2);ctx.restore();
+}
+
+function cutHandPresence(hd, sx, sy, sr, tnow) {
+  if (hd.alpha <= 0 || hd.done) return;
+  const st = handLightState(hd, sx, sy, sr, tnow); if (!st) return;
+  const pulse = .94 + .06 * Math.sin(tnow * 1.35 + hd.seed);
+  const cool = hd.cool > 0 ? .28 : 1;
+  const palm = hd.t === 'palm';
+  const strength = st.alpha * cool * pulse * (palm ? .34 : .235) * (1+(hd._reachCue||0)*.58) * (MOBILE_LIKELY&&RenderQuality.tier>0?1.08:1);
+  dcx.save(); dcx.translate(st.ax, st.ay); dcx.rotate(st.rot); dcx.scale(st.z, st.z);
+  // Overlapping anatomical lobes make one soft area light instead of a bright dot.
+  softMaskEllipse(dcx, st.shift - 10, 0, palm ? 112 : 93, palm ? 82 : 66, strength * .74, .025); // finger fan
+  softMaskEllipse(dcx, st.shift - 91, 0, 92, 72, strength, .04);                              // palm
+  softMaskEllipse(dcx, st.shift - 176, 0, 116, 55, strength * .48, 0);                       // wrist
+  softMaskEllipse(dcx, st.shift - 305, 0, 184, 54, strength * .21, 0);                       // forearm fade
+  // A restrained exact-form reveal preserves anatomy within the atmospheric wash.
+  const _cp = handShape(dcx, hd, tnow); dcx.globalAlpha = strength * (palm ? .42 : .34); dcx.fillStyle = '#000'; _cp ? dcx.fill(_cp) : dcx.fill();
+  dcx.restore(); hd._handPose = null;
+}
+
+function drawHandPresence(hd, pal, sx, sy, sr, tnow) {
+  if (hd.alpha <= 0 || hd.done) return;
+  const st = handLightState(hd, sx, sy, sr, tnow); if (!st) return;
+  const pulse = .90 + .10 * Math.sin(tnow * 1.15 + hd.seed);
+  const cool = hd.cool > 0 ? .25 : 1;
+  const palm = hd.t === 'palm', grip = clamp(hd.grip || 0, 0, 1), cue=hd._reachCue||0;
+  // A hand winding up to throw you brightens as it does it — the finger-cock alone was
+  // never going to read at 390 px wide.
+  const tele = hd.tele || 0;
+  const baseA = st.alpha * cool * pulse * (palm ? .105 : .075) * (1+cue*1.25+tele*1.6) * (MOBILE_LIKELY&&RenderQuality.tier>0?1.12:1);
+  cx.save(); cx.translate(st.ax, st.ay); cx.rotate(st.rot); cx.scale(st.z, st.z);
+  const _pp = handShape(cx, hd, tnow);
+  const G3 = presenceGradients(pal, st.shift), bodyGlow = G3.body;
+  cx.globalCompositeOperation = 'screen'; cx.globalAlpha = baseA;
+  cx.shadowColor = pal.glow; cx.shadowBlur = RenderQuality.detailLevel()<2 ? 0 : 20;
+  cx.fillStyle = bodyGlow; _pp ? cx.fill(_pp) : cx.fill(); cx.shadowBlur = 0;
+
+  // A wide cross-form sheen gives the light volume and avoids a flat neon silhouette.
+  cx.save(); _pp ? cx.clip(_pp) : cx.clip();
+  const sheen = G3.sheen;
+  cx.globalAlpha = st.alpha * cool * (palm ? .12 : .085) * (1+cue*.9); cx.fillStyle = sheen;
+  cx.fillRect(st.shift - 500, -90, 570, 180); cx.restore();
+
+  // While held, illumination spreads through the distal hand rather than forming a contact bulb.
+  if (grip > .025) {
+    cx.save(); _pp ? cx.clip(_pp) : cx.clip();
+    const contact = G3.contact;
+    cx.globalAlpha = st.alpha * grip * .30; cx.fillStyle = contact;
+    cx.fillRect(st.shift - 190, -88, 250, 176); cx.restore();
+  }
+  cx.restore(); hd._handPose = null;
+}
+
+/* ---------- presentation direction ---------- */
+const ART=[
+  {top:'#1b1024',bottom:'#07050d',accent:'#ff9f6e',accent2:'#ffd2b3'},
+  {top:'#071728',bottom:'#050914',accent:'#5ee6d3',accent2:'#ff6fae'},
+  {top:'#241504',bottom:'#090603',accent:'#ffb347',accent2:'#ffe49a'},
+  {top:'#0d1b28',bottom:'#050b12',accent:'#bfe3ff',accent2:'#eaf7ff'},
+  {top:'#aaa6ba',bottom:'#4d4a5d',accent:'#fff2c8',accent2:'#ffffff'},
+];
+const VIS={trail:[],lastTrailT:0,rings:[],chapterT:-99,chapterCi:0,hitT:-99,snuffT:-99,pulseT:-99};
+function rgbaHex(color,a){let c;if(color&&color[0]==='#')c=hexToRgb(color);else{const m=String(color).match(/\d+(?:\.\d+)?/g);c=m?m.slice(0,3).map(Number):[255,255,255];}return`rgba(${c[0]},${c[1]},${c[2]},${a})`;}
+
+// Collectibles use their own spectral light language: cool violet/cyan rather than the warm amber of the player and rope.
+const MOTE_LIGHT={core:'#f3fdff',inner:'#69efff',glow:'#8d62ff',ring:'#d0b5ff',spark:'#73f4ff'};
+function drawCollectibleLight(ctx,x,y,scale,tnow,seed,foreground=false){
+  const pulse=.5+.5*Math.sin(tnow*4.2+seed*1.7),r=Math.max(3.55*scale,MOBILE_LIKELY?2.65:0),orbit=Math.max(10.5*scale,MOBILE_LIKELY?7.2:0)*(1+.06*pulse);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  if(!foreground){
+    const outer=ctx.createRadialGradient(x,y,0,x,y,r*(8.4+.7*pulse));
+    outer.addColorStop(0,rgbaHex(MOTE_LIGHT.inner,.66));outer.addColorStop(.16,rgbaHex(MOTE_LIGHT.glow,.43));outer.addColorStop(.46,rgbaHex(MOTE_LIGHT.glow,.16));outer.addColorStop(1,rgbaHex(MOTE_LIGHT.glow,0));
+    ctx.globalAlpha=.92;ctx.fillStyle=outer;ctx.beginPath();ctx.arc(x,y,r*(8.4+.7*pulse),0,TAU);ctx.fill();
+    drawOrb(ctx,x,y,r,MOTE_LIGHT.core,MOTE_LIGHT.glow,.98,Math.sin(tnow*5.5+seed)*.42);
+  }
+  ctx.translate(x,y);ctx.rotate(tnow*.72+seed);
+  ctx.globalAlpha=foreground?.72:.38;ctx.strokeStyle=foreground?MOTE_LIGHT.ring:MOTE_LIGHT.inner;ctx.lineWidth=Math.max(.7,1.0*scale);ctx.setLineDash([3.4*scale,5.2*scale]);
+  ctx.beginPath();ctx.ellipse(0,0,orbit,orbit*.55,.35,0,TAU);ctx.stroke();ctx.setLineDash([]);
+  for(let i=0;i<3;i++){
+    const a=i*TAU/3+tnow*(foreground?.48:.28),rr=orbit*(.92+.08*Math.sin(tnow*2+i+seed));
+    ctx.globalAlpha=(foreground?.72:.48)*(.7+.3*pulse);ctx.fillStyle=i===1?MOTE_LIGHT.ring:MOTE_LIGHT.spark;ctx.beginPath();ctx.arc(Math.cos(a)*rr,Math.sin(a)*rr*.55,Math.max(.65,1.1*scale),0,TAU);ctx.fill();
+  }
+  ctx.restore();
+}
+// Backdrop silhouettes are keyed by call site so the pose/path caches have a stable
+// identity to hang off; a fresh object literal per frame defeated both of them.
+const _backdropGhosts=new Map();
+function backdropHand(key,x,y,sc,rot,color,alpha,tnow,grip=.08){
+  let g=_backdropGhosts.get(key);
+  if(!g||g.seed!==x+y||g.grip!==grip){g={t:'reach',grip,seed:x+y,tele:0,_visualGrip:grip};_backdropGhosts.set(key,g);}
+  cx.save();cx.translate(x,y);cx.rotate(rot);cx.scale(sc,sc);
+  const p=handShape(cx,g,tnow);
+  cx.fillStyle=color;cx.globalAlpha=alpha;p?cx.fill(p):cx.fill();cx.restore();
+}
+function drawCloudBand(y,wob,alpha,tnow){
+  cx.save();cx.globalAlpha=alpha;cx.fillStyle='#fff8ed';cx.beginPath();cx.moveTo(-40,y+35);
+  for(let i=0;i<=9;i++){const x=-40+i*(VW+80)/9,yy=y+Math.sin(i*1.7+tnow*.06+wob)*18;cx.quadraticCurveTo(x-(VW/18),yy-30,x,yy);}
+  cx.lineTo(VW+40,y+115);cx.lineTo(-40,y+115);cx.closePath();cx.fill();cx.restore();
+}
+// Full-screen background gradients depend only on the chapter and the viewport, and a
+// chapter blend draws two scenes per frame — so this was up to twenty gradient rebuilds a
+// frame for something that changes when the window resizes. Cleared by resize().
+const _sceneGrads=new Map();
+function clearSceneGrads(){_sceneGrads.clear();}
+function sceneGrads(ci){
+  let S=_sceneGrads.get(ci); if(S) return S;
+  const a=ART[ci]; S={};
+  S.bg=cx.createLinearGradient(0,0,0,VH);S.bg.addColorStop(0,a.top);S.bg.addColorStop(1,a.bottom);
+  if(ci===0){
+    S.halo=cx.createRadialGradient(VW*.5,VH*.05,0,VW*.5,VH*.12,VH*.85);
+    S.halo.addColorStop(0,rgbaHex(a.accent,.18));S.halo.addColorStop(.5,rgbaHex(a.accent,.025));S.halo.addColorStop(1,'rgba(0,0,0,0)');
+    S.curtains=[];
+    for(let i=0;i<7;i++){const x=VW*(i+.5)/7,ww=VW/7,g=cx.createLinearGradient(x-ww*.5,0,x+ww*.5,0);
+      g.addColorStop(0,'rgba(0,0,0,.16)');g.addColorStop(.5,'rgba(255,220,190,.025)');g.addColorStop(1,'rgba(0,0,0,.17)');S.curtains.push(g);}
+  }else if(ci===3){
+    S.shaft=cx.createLinearGradient(0,0,VW,0);
+    S.shaft.addColorStop(0,'rgba(190,227,255,.02)');S.shaft.addColorStop(.5,'rgba(215,242,255,.095)');S.shaft.addColorStop(1,'rgba(190,227,255,.02)');
+  }else if(ci===4){
+    S.sky=cx.createLinearGradient(0,0,0,VH);S.sky.addColorStop(0,'#eee6d8');S.sky.addColorStop(.42,'#b8b4c3');S.sky.addColorStop(1,'#555264');
+    S.sun=cx.createRadialGradient(VW*.5,-VH*.06,0,VW*.5,VH*.02,VH*.9);
+    S.sun.addColorStop(0,'rgba(255,250,225,.85)');S.sun.addColorStop(.3,'rgba(255,242,200,.25)');S.sun.addColorStop(1,'rgba(255,255,255,0)');
+  }
+  _sceneGrads.set(ci,S); return S;
+}
+function drawChapterScene(ci,alpha,G_,tnow){
+  if(alpha<=.001)return;const a=ART[ci],z=zoomNow();cx.save();cx.globalAlpha=alpha;
+  const SG=sceneGrads(ci);cx.fillStyle=SG.bg;cx.fillRect(0,0,VW,VH);
+  if(ci===0){
+    // A warm shadow theatre: huge forms, soft curtain folds, concentric proscenium arcs.
+    cx.fillStyle=SG.halo;cx.fillRect(0,0,VW,VH);
+    for(let i=0;i<7;i++){const x=VW*(i+.5)/7,ww=VW/7;cx.fillStyle=SG.curtains[i];cx.fillRect(x-ww*.5,0,ww,VH);}
+    cx.strokeStyle=rgbaHex(a.accent,.075);cx.lineWidth=1.2;for(let i=0;i<5;i++){cx.beginPath();cx.ellipse(VW*.5,VH*1.03,VW*(.40+i*.13),VH*(.30+i*.10),0,Math.PI,TAU);cx.stroke();}
+    backdropHand('c0a',-VW*.02,VH*.22,Math.max(1.4,VW/500),-.52,a.accent,.055,tnow,.1);backdropHand('c0b',VW*1.02,VH*.62,Math.max(1.65,VW/470),-2.55,a.accent2,.038,tnow,.04);
+  }else if(ci===1){
+    // Busy hands: a moving city of panels, traffic ribbons, and crowded silhouettes.
+    for(let i=0;i<9;i++){const x=((i*137+cam.y*.035)% (VW+150))-75,w=48+hashNoise(i+4)*58;cx.fillStyle=i%2?'rgba(94,230,211,.025)':'rgba(255,111,174,.024)';cx.fillRect(x,0,w,VH);cx.strokeStyle='rgba(255,255,255,.025)';cx.strokeRect(x+.5,0,w,VH);}
+    cx.save();cx.globalCompositeOperation='screen';for(let i=0;i<(MOBILE_LIKELY?8:12);i++){const p=((tnow*(.08+hashNoise(i)*.11)+hashNoise(i+15))%1),y=p*VH,x=-VW*.25+p*VW*1.5;cx.strokeStyle=i%2?rgbaHex(a.accent,.075):rgbaHex(a.accent2,.065);cx.lineWidth=.7+hashNoise(i+2)*1.5;cx.beginPath();cx.moveTo(x-120,y+80);cx.lineTo(x+180,y-90);cx.stroke();}cx.restore();
+    for(let i=0;i<(MOBILE_LIKELY?4:7);i++){const side=i%2,yy=(hashNoise(i+33)*1.25-.1)*VH,xx=side?-30:VW+30,sc=.55+hashNoise(i+1)*.7,rr=side?-.45:-2.7;backdropHand('c1'+i,xx,yy,sc,rr,side?a.accent:a.accent2,.045,tnow+i,.1);}
+  }else if(ci===2){
+    // Far hands: an enormous vanishing corridor with tiny unreachable lights.
+    const vx=VW*.5,vy=VH*.03;cx.strokeStyle=rgbaHex(a.accent,.055);cx.lineWidth=1;
+    for(let i=0;i<14;i++){const x=(i/13)*VW;cx.beginPath();cx.moveTo(vx,vy);cx.lineTo(x,VH);cx.stroke();}
+    for(let i=0;i<10;i++){const p=((i/10+cam.y*.00008)%1),yy=lerp(vy,VH,p*p),ww=lerp(18,VW*1.05,p);cx.globalAlpha=alpha*(.025+.055*p);cx.strokeStyle=a.accent2;cx.beginPath();cx.moveTo(vx-ww*.5,yy);cx.lineTo(vx+ww*.5,yy);cx.stroke();}
+    cx.globalAlpha=alpha;for(let i=0;i<24;i++){const sx=hashNoise(i*7+12)*VW,sy=((hashNoise(i*9+3)+tnow*.002*(.4+hashNoise(i)))%1)*VH,r=.7+hashNoise(i+99)*2.2;cx.fillStyle=i%5===0?a.accent2:a.accent;cx.globalAlpha=alpha*(.04+hashNoise(i+2)*.12);cx.beginPath();cx.arc(sx,sy,r,0,TAU);cx.fill();}
+    backdropHand('c2a',-VW*.10,VH*.52,Math.max(2.0,VW/380),-.30,a.accent,.030,tnow,.02);backdropHand('c2b',VW*1.12,VH*.18,Math.max(2.15,VW/360),-2.78,a.accent,.025,tnow,.02);
+  }else if(ci===3){
+    // Cold hands: refraction, drifting frost, and a frame that is slowly freezing shut.
+    cx.fillStyle=SG.shaft;cx.fillRect(0,0,VW,VH);
+    cx.strokeStyle=rgbaHex(a.accent,.055);for(let i=0;i<9;i++){const x=hashNoise(i+8)*VW,sl=70+hashNoise(i+28)*180;cx.beginPath();cx.moveTo(x-40,0);cx.lineTo(x+sl,VH);cx.stroke();}
+    cx.fillStyle=a.accent2;for(let i=0;i<(REDUCED?18:38);i++){const sx=hashNoise(i*11+6)*VW,sy=((hashNoise(i*3+4)+tnow*(.012+.02*hashNoise(i+8)))%1.15-.08)*VH,r=.7+hashNoise(i+2)*1.8;cx.globalAlpha=alpha*(.08+.22*hashNoise(i+12));cx.beginPath();cx.arc(sx,sy,r,0,TAU);cx.fill();}
+    cx.globalAlpha=alpha*.10;cx.fillStyle=a.accent2;for(const side of[-1,1])for(let i=0;i<13;i++){const y=i*VH/12,w=18+hashNoise(i+side*20)*64,h=35+hashNoise(i+9)*95;cx.beginPath();cx.moveTo(side<0?0:VW,y);cx.lineTo(side<0?w:VW-w,y+h*.25);cx.lineTo(side<0?0:VW,y+h);cx.closePath();cx.fill();}
+  }else{
+    // Open: the tower finally stops being a shaft and becomes weather.
+    cx.fillStyle=SG.sky;cx.fillRect(0,0,VW,VH);
+    cx.fillStyle=SG.sun;cx.fillRect(0,0,VW,VH);
+    drawCloudBand(VH*.13,0,.12,tnow);drawCloudBand(VH*.43,3,.08,tnow);drawCloudBand(VH*.72,7,.05,tnow);
+    cx.strokeStyle='rgba(255,255,255,.10)';for(let i=0;i<8;i++){const x=(i+.5)*VW/8+Math.sin(tnow*.04+i)*13;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x+55,VH);cx.stroke();}
+    backdropHand('c4a',-30,VH*.7,1.05,-.42,'#fff',.045,tnow,.05);backdropHand('c4b',VW+30,VH*.35,1.15,-2.70,'#fff',.04,tnow,.05);
+  }
+  cx.restore();
+}
+function drawTowerFrame(G_,ch,tnow){
+  const [xl]=W2S(0,0),[xr]=W2S(TOWER_W,0),fade=1-G_.openness*.86,z=zoomNow();cx.save();cx.globalAlpha=fade;
+  for(const [x,dir] of [[xl,-1],[xr,1]]){const g=cx.createLinearGradient(x,x?0:0,x+dir*32,0);g.addColorStop(0,'rgba(255,255,255,.055)');g.addColorStop(.15,'rgba(0,0,0,.22)');g.addColorStop(1,'rgba(0,0,0,0)');cx.fillStyle=g;cx.fillRect(dir<0?x-42:x,0,42,VH);cx.strokeStyle='rgba(255,255,255,.055)';cx.lineWidth=1;cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,VH);cx.stroke();}
+  const unit=150*z,off=((cam.y*z)%unit);cx.strokeStyle='rgba(255,255,255,.028)';for(let y=-unit+off;y<VH+unit;y+=unit){cx.beginPath();cx.moveTo(xl,y);cx.lineTo(xl+18*z,y+9*z);cx.moveTo(xr,y);cx.lineTo(xr-18*z,y+9*z);cx.stroke();}
+  cx.restore();
+}
+function visualRing(x,y,color,kind='grab'){VIS.rings.push({x,y,color,kind,t:tnow});if(VIS.rings.length>28)VIS.rings.shift();VIS.pulseT=tnow;}
+function drawVisualEvents(t){
+  cx.save();cx.globalCompositeOperation='lighter';
+  let keep=0;for(let i=0;i<VIS.rings.length;i++){const r=VIS.rings[i];if(t-r.t<(r.kind==='land'?1.0:.72))VIS.rings[keep++]=r;}VIS.rings.length=keep;
+  for(const r of VIS.rings){const age=t-r.t,dur=r.kind==='land'?1:.72,p=clamp(age/dur,0,1),[x,y]=W2S(r.x,r.y),rad=(r.kind==='land'?18:10)+p*(r.kind==='land'?125:r.kind==='hit'?90:70)*zoomNow(),a=(1-p)*(r.kind==='hit'?.55:.38);cx.globalAlpha=a;cx.strokeStyle=r.color;cx.lineWidth=(2.4-1.5*p)*zoomNow();cx.setLineDash(r.kind==='release'?[8,7]:[]);cx.beginPath();cx.arc(x,y,rad,0,TAU);cx.stroke();if(r.kind==='grab'){cx.globalAlpha=a*.5;cx.beginPath();cx.arc(x,y,rad*.62,0,TAU);cx.stroke();}}
+  cx.setLineDash([]);cx.restore();
+}
+function prepareReachInvitation(G_,t){
+  for(const hd of G_.world.hands)hd._reachCue=0;
+  const s=G_.spark;if(G_.snuffed||s.hold||!s.rest||s.restT<.08)return null;
+  const hd=findGrab(s,G_.world,s.rest);if(!hd)return null;
+  const wake=clamp((s.restT-.08)/.72,0,1),soft=G_.run.held===0?1:.62,a=wake*soft*(.88+.12*Math.sin(t*2.3+hd.seed));
+  hd._reachCue=a;return{hd,a};
+}
+function drawReachInvitation(G_,cue,t){
+  if(!cue||cue.a<.015)return;const s=G_.spark,[x0,y0]=W2S(s.rx,s.ry),[x1,y1]=W2S(cue.hd.ax,cue.hd.ay),dx=x1-x0,dy=y1-y0,d=hyp(dx,dy)||1;
+  if(y1<-100||y1>VH+100)return;const bend=clamp(d*.11,8,26)*(x1<VW*.5?-1:1),mx=(x0+x1)*.5-dy/d*bend,my=(y0+y1)*.5+dx/d*bend,pal=CHAPTERS[cue.hd.ci].pal;
+  cx.save();cx.globalCompositeOperation='screen';cx.lineCap='round';
+  let g=cx.createLinearGradient(x0,y0,x1,y1);g.addColorStop(0,'rgba(255,246,220,.16)');g.addColorStop(.55,rgbaHex(pal.glow,.34));g.addColorStop(1,rgbaHex(pal.lit||'#ffffff',.5));
+  cx.globalAlpha=cue.a*.22;cx.strokeStyle=g;cx.lineWidth=8;cx.beginPath();cx.moveTo(x0,y0);cx.quadraticCurveTo(mx,my,x1,y1);cx.stroke();
+  cx.globalAlpha=cue.a*.72;cx.lineWidth=1.05;cx.setLineDash([2.4,8]);cx.lineDashOffset=REDUCED?0:-t*18;cx.beginPath();cx.moveTo(x0,y0);cx.quadraticCurveTo(mx,my,x1,y1);cx.stroke();cx.setLineDash([]);
+  if(!REDUCED)for(let i=0;i<2;i++){const q=(t*.34+i*.5)%1,a=(1-q)*(1-q),b=2*(1-q)*q,c=q*q,px=a*x0+b*mx+c*x1,py=a*y0+b*my+c*y1;cx.globalAlpha=cue.a*(.10+.22*q);cx.fillStyle='#fff8df';cx.beginPath();cx.arc(px,py,.8+q*.65,0,TAU);cx.fill();}
+  cx.restore();
+}
+function drawSparkBloom(x,y,r,intensity,t){
+  const size=Math.max(58,r*17);cx.save();cx.globalCompositeOperation='screen';cx.globalAlpha=intensity*(.16+.025*Math.sin(t*3.1));cx.drawImage(_bloomSprite,x-size*.5,y-size*.5,size,size);cx.restore();
+}
+// The three charges ARE the health bar — hazards cost nothing else, and there is no other
+// readout anywhere. They used to be ~1.7 px beads sitting inside the spark's own blown-out
+// bloom, where lit amber and unlit grey both clipped to white: three charges and one charge
+// looked identical. Now they ride at the bloom's shoulder, each on an opaque dark bead so
+// it survives the additive wash, and lit vs spent differs by SHAPE (filled vs hollow) as
+// well as by brightness.
+function drawLightCharges(x,y,r,lit,t,open){
+  const rr=Math.max(MOBILE_LIKELY?30:24,r*5.4),dot=Math.max(MOBILE_LIKELY?2.6:2.1,r*.34);cx.save();
+  for(let i=0;i<LIT_MAX;i++){
+    const a=-Math.PI*.5+i*TAU/LIT_MAX+t*(REDUCED?0:.18),px=x+Math.cos(a)*rr,py=y+Math.sin(a)*rr*.74,on=i<lit;
+    cx.globalCompositeOperation='source-over';
+    cx.globalAlpha=.72;cx.fillStyle='rgba(12,9,17,.92)';cx.beginPath();cx.arc(px,py,dot+2.1,0,TAU);cx.fill();
+    if(on){
+      cx.globalAlpha=.98;cx.fillStyle='#ffd071';cx.beginPath();cx.arc(px,py,dot,0,TAU);cx.fill();
+      cx.globalCompositeOperation='screen';cx.globalAlpha=.34;cx.fillStyle='#ffb347';cx.beginPath();cx.arc(px,py,dot*2.6,0,TAU);cx.fill();
+      cx.globalCompositeOperation='source-over';cx.globalAlpha=.9;cx.fillStyle='#fff8dc';cx.beginPath();cx.arc(px-dot*.24,py-dot*.28,Math.max(.6,dot*.34),0,TAU);cx.fill();
+    }else{
+      cx.globalAlpha=.62;cx.strokeStyle='#8d8296';cx.lineWidth=Math.max(1,dot*.44);cx.beginPath();cx.arc(px,py,dot*.92,0,TAU);cx.stroke();
+    }
+  }cx.restore();
+}
+function drawLeanLanguage(G_,t){
+  const a=G_.hint.lean,s=G_.spark,hd=s.hold;if(!hd||a<.02)return;const[x0,y0]=W2S(hd.ax,hd.ay),[x1,y1]=W2S(s.rx,s.ry),mx=(x0+x1)*.5,my=(y0+y1)*.5,rr=18+10*Math.sin(t*2.2)*Math.sin(t*2.2);
+  cx.save();cx.globalCompositeOperation='screen';cx.lineCap='round';cx.strokeStyle=CHAPTERS[hd.ci].pal.glow;cx.lineWidth=1.25;
+  for(const side of[-1,1]){const ph=.5+.5*Math.sin(t*3.2+side*.8);cx.globalAlpha=a*(.10+.16*ph);cx.beginPath();cx.arc(mx+side*(26+rr*.25),my,rr,-Math.PI*.62,Math.PI*.62,side<0);cx.stroke();cx.globalAlpha=a*.32;const tipX=mx+side*(42+rr*.25),tipY=my+(ph-.5)*9;cx.beginPath();cx.moveTo(tipX-side*5,tipY-4);cx.lineTo(tipX,tipY);cx.lineTo(tipX-side*5,tipY+4);cx.stroke();}
+  cx.restore();
+}
+function updateAndDrawTrail(G_,t,accent){
+  const s=G_.spark,limit=RenderQuality.trailLimit();if(G_.snuffed){VIS.trail.length=0;return;}if(t-VIS.lastTrailT>.012){VIS.lastTrailT=t;VIS.trail.push({x:s.x,y:s.y,t,sp:s.speedS});if(VIS.trail.length>limit)VIS.trail.shift();}
+  cx.save();cx.globalCompositeOperation='lighter';cx.lineCap='round';for(let i=1;i<VIS.trail.length;i++){const a=VIS.trail[i-1],b=VIS.trail[i],age=clamp(1-(t-b.t)/.52,0,1);if(age<=0)continue;const[x0,y0]=W2S(a.x,a.y),[x1,y1]=W2S(b.x,b.y),sp=clamp(b.sp/1150,0,1);cx.strokeStyle=rgbaHex(accent,.22*age*sp);cx.lineWidth=(.7+4.1*age*sp)*zoomNow();cx.beginPath();cx.moveTo(x0,y0);cx.lineTo(x1,y1);cx.stroke();}
+  cx.restore();while(VIS.trail.length&&t-VIS.trail[0].t>.58)VIS.trail.shift();
+}
+function drawMotionLanguage(G_,ch,tnow){
+  const s=G_.spark,sp=clamp(s.speedS/1200,0,1);if(sp<.16||REDUCED)return;const dx=-s.vx/(s.speedS||1),dy=s.vy/(s.speedS||1);
+  const count=Math.ceil((5+sp*13)*RenderQuality.particleScale());cx.save();cx.globalCompositeOperation='screen';cx.lineCap='round';for(let i=0;i<count;i++){const q=i*29+Math.floor(tnow*18),x=hashNoise(q)*VW,y=hashNoise(q+7)*VH,len=(12+52*hashNoise(q+4))*sp;cx.globalAlpha=.04+.16*sp*hashNoise(q+2);cx.strokeStyle=ch.pal.glow;cx.lineWidth=.6+1.2*hashNoise(q+11);cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+dx*len,y+dy*len);cx.stroke();}cx.restore();
+}
+// completeChapter has always recorded VIS.chapterT / VIS.chapterCi and nothing has ever read
+// them; this function was an empty body. Crossing a chapter line is the game's biggest
+// structural beat and it used to produce only a slow palette cross-blend and one chord.
+function drawChapterTransition(t){
+  const age=t-VIS.chapterT; if(age<0||age>1.6)return;
+  const p=age/1.6, a=(1-p)*(1-p), acc=ART[clamp(VIS.chapterCi,0,ART.length-1)].accent;
+  cx.save();cx.globalCompositeOperation='screen';
+  const g=cx.createRadialGradient(VW*.5,VH*.42,0,VW*.5,VH*.42,Math.max(VW,VH)*(.35+p*.75));
+  g.addColorStop(0,rgbaHex(acc,.16*a));g.addColorStop(.55,rgbaHex(acc,.05*a));g.addColorStop(1,'rgba(0,0,0,0)');
+  cx.fillStyle=g;cx.fillRect(0,0,VW,VH);
+  if(!REDUCED){
+    cx.globalAlpha=a*.30;cx.strokeStyle=acc;cx.lineWidth=1.4;
+    cx.beginPath();cx.ellipse(VW*.5,VH*.42,VW*(.18+p*.85),VH*(.12+p*.62),0,0,TAU);cx.stroke();
+  }
+  cx.restore();
+}
+function drawScreenFinish(G_,t,accent){
+  const[spx,spy]=W2S(G_.spark.rx,G_.spark.ry);cx.save();cx.globalCompositeOperation='screen';const g=cx.createRadialGradient(spx,spy,0,spx,spy,Math.max(VW,VH)*.42);g.addColorStop(0,rgbaHex(accent,.065));g.addColorStop(1,'rgba(0,0,0,0)');cx.fillStyle=g;cx.fillRect(0,0,VW,VH);cx.restore();
+  const hit=clamp(1-(t-VIS.hitT)/.32,0,1);if(hit>0){cx.save();cx.globalCompositeOperation='screen';cx.globalAlpha=.13*hit;cx.fillStyle='#ff4f6d';cx.fillRect(0,0,5+12*hit,VH);cx.fillStyle='#6be8ff';cx.fillRect(VW-(5+12*hit),0,5+12*hit,VH);cx.restore();}
+  if(ART_TEXTURE){cx.save();cx.globalAlpha=G_.openness>.7?.022:.034;cx.globalCompositeOperation='overlay';cx.fillStyle=ART_TEXTURE;cx.fillRect(0,0,VW,VH);cx.restore();}
+  if(!REDUCED){cx.save();cx.globalAlpha=.022;for(let i=0;i<28;i++){const q=i+Math.floor(t*18)*37,x=hashNoise(q)*VW,y=hashNoise(q+11)*VH;cx.fillStyle=hashNoise(q+5)>.5?'#fff':'#000';cx.fillRect(x,y,1,1);}cx.restore();}
+}
+
+/* ---------- main render ---------- */
+let _vig=null;
+let stepAlpha=0;   // how far the display is between the last two fixed steps
+function render(G_,tnow){
+  const s=G_.spark,Wd=G_.world,ci=G_.viewCi,ch=CHAPTERS[ci],nxt=CHAPTERS[Math.min(ci+1,CHAPTERS.length-1)];
+  // Draw between the last two simulation steps, not on the last one. See snapSpark().
+  s.rx=lerp(s.px,s.x,stepAlpha); s.ry=lerp(s.py,s.y,stepAlpha);
+  if(G_.little){const L_=G_.little;L_.rx=lerp(L_.px===undefined?L_.x:L_.px,L_.x,stepAlpha);L_.ry=lerp(L_.py===undefined?L_.y:L_.py,L_.y,stepAlpha);}
+  const blend=clamp((s.y-(ch.top-320))/320,0,1)*(ci<CHAPTERS.length-1?1:0),z=zoomNow(),reachCue=prepareReachInvitation(G_,tnow);
+  const tr=FX.trauma*FX.trauma*(REDUCED?.3:1);cam.ox=noise1(tnow*40,1)*14*tr;cam.oy=noise1(tnow*40,2)*14*tr;
+  drawChapterScene(ci,1,G_,tnow);if(blend>.001)drawChapterScene(Math.min(ci+1,CHAPTERS.length-1),blend,G_,tnow);
+  // A widening shaft of real daylight carries the final chapter's emotional change.
+  if(G_.openness>0){cx.save();cx.globalCompositeOperation='screen';const g=cx.createRadialGradient(VW*.5,0,0,VW*.5,0,Math.max(VW,VH)*(.45+G_.openness*.55));g.addColorStop(0,`rgba(255,248,220,${.18+.42*G_.openness})`);g.addColorStop(1,'rgba(255,255,255,0)');cx.fillStyle=g;cx.fillRect(0,0,VW,VH);cx.restore();}
+  drawTowerFrame(G_,ch,tnow);
+  for(const d of Wd.deco)drawDeco(d,ch.pal,tnow);
+  // World-space dust respects camera movement and changes material by chapter.
+  cx.fillStyle=ci===3?'rgba(220,244,255,.22)':'rgba(255,240,220,.16)';const DUST=REDUCED?10:[14,21,30][RenderQuality.tier];
+  for(let i=0;i<DUST;i++){const sx=(hashNoise(i)*1.6-.3)*VW,sy=((hashNoise(i+99)*1.3+tnow*.012*(.5+hashNoise(i+7))+cam.y*.0005*(1+hashNoise(i+3)))%1.3-.15)*VH;cx.globalAlpha=.35+.65*hashNoise(i+8);cx.beginPath();cx.arc(sx,sy,.6+hashNoise(i+50)*1.5,0,TAU);cx.fill();}cx.globalAlpha=1;
+  const[spx,spy]=W2S(s.rx,s.ry),lightR=s.lightR*z;
+  // Hands first, hazards over them. The level deliberately parks traps within a few dozen
+  // pixels of grabbable hands, and a hand is an opaque path with a 490-unit forearm — drawn
+  // underneath, the thing you are dodging vanished behind the thing you are aiming at.
+  for(const hd of Wd.hands)drawHand(hd,CHAPTERS[hd.ci].pal,spx,spy,lightR,tnow);
+  for(const hz of Wd.hazards)drawHazard(hz,CHAPTERS[hz.ci].pal,tnow);
+  updateAndDrawTrail(G_,tnow,ch.pal.glow);
+  for(const m of Wd.motes){if(m.taken)continue;const[mx,my]=W2S(m.x,m.y+Math.sin(tnow*2+m.t)*6);if(my<-80||my>VH+80)continue;drawCollectibleLight(cx,mx,my,z,tnow,m.t,false);}
+  if(s.hold)drawRope(s.hold.ax,s.hold.ay,s.rx,s.ry,s.L,ch.pal.glow);
+  if(G_.little){const L_=G_.little;if(L_.held)drawRope(s.rx,s.ry,L_.rx,L_.ry,L_.L,'#ffe8a3');const[lx,ly]=W2S(L_.rx,L_.ry);drawOrb(cx,lx,ly,Math.max(4.6*z,MOBILE_LIKELY?4.4:0),'#fffdf3','#ffe08a',1,noise1(tnow*18,9)*.4,G_.openness);}
+  cx.save();cx.globalCompositeOperation='lighter';cx.lineCap='round';for(const p of FX.parts){const[px,py]=W2S(p.x,p.y),a=clamp(p.life/p.max,0,1),plen=clamp(hyp(p.vx,p.vy)*.018,1,14)*z,vl=hyp(p.vx,p.vy)||1,dx=-p.vx/vl*plen,dy=p.vy/vl*plen;cx.globalAlpha=a*.88;cx.strokeStyle=p.c;cx.lineWidth=Math.max(.8,p.r*z*(.42+a*.42));cx.beginPath();cx.moveTo(px,py);cx.lineTo(px+dx,py+dy);cx.stroke();}cx.restore();cx.globalAlpha=1;
+  const litF=[0,.55,.78,1][clamp(s.lit,0,3)],flick=noise1(tnow*22,4)*.5,hurt=s.iT>0&&Math.sin(tnow*40)>0?.45:1,sparkVR=Math.max((4.5+2.5*litF)*z,MOBILE_LIKELY?4.7:0);
+  if(!G_.snuffed)drawOrb(cx,spx,spy,sparkVR,'#fff6e8','#ffb347',hurt*(.5+litF*.5),flick,G_.openness);
+  // Darkness remains the mechanic, but its falloff is now more cinematic and less like a flat black sheet.
+  const darkC=mixHex(ch.pal.dark,nxt.pal.dark,blend);dcx.setTransform(DARK_DPR,0,0,DARK_DPR,0,0);dcx.globalCompositeOperation='source-over';dcx.fillStyle=darkC;dcx.fillRect(0,0,VW,VH);dcx.globalCompositeOperation='destination-out';
+  if(!G_.snuffed)cutLight(spx,spy,lightR,1,.18);
+  for(const m of Wd.motes){if(m.taken)continue;const[mx,my]=W2S(m.x,m.y+Math.sin(tnow*2+m.t)*6);if(my>-120&&my<VH+120)cutLight(mx,my,112*z,.76,.06);}
+  // Every hazard class gets a hole in the darkness. Fans and thorn-walls used to fall
+  // through this loop, so ~90% of their art was painted out and the player was shoved
+  // sideways by an invisible wind, or scraped along a corridor wall they could not see.
+  for(const hz of Wd.hazards){
+    if(hz.t==='fan'){
+      const[fx0,fy0]=W2S(hz.x,hz.y+hz.h),[fx1,fy1]=W2S(hz.x+hz.w,hz.y);
+      if(fy1<-140||fy0>VH+140)continue;
+      dcx.save();dcx.globalAlpha=.30;dcx.translate((fx0+fx1)*.5,(fy0+fy1)*.5);dcx.scale(Math.abs(fx1-fx0)*.62,Math.abs(fy1-fy0)*.72);
+      dcx.drawImage(_handMaskSprite,-1,-1,2,2);dcx.restore();continue;
+    }
+    if(hz.t==='twall'){
+      const[wxl,wya]=W2S(0,hz.y1),[wxr,wyb]=W2S(TOWER_W,hz.y0);
+      if(wyb<-140||wya>VH+140)continue;
+      const wx=hz.side==='L'?wxl:wxr,wdir=hz.side==='L'?1:-1;
+      dcx.save();dcx.globalAlpha=.52;dcx.translate(wx+wdir*20*z,(wya+wyb)*.5);dcx.scale(Math.max(26,46*z),Math.abs(wyb-wya)*.5+40*z);
+      dcx.drawImage(_handMaskSprite,-1,-1,2,2);dcx.restore();continue;
+    }
+    let hx,hy,hr;if(hz.t==='thorn'||hz.t==='snap'){hx=hz.x;hy=hz.y;hr=hz.r*2.8;}else if(hz.t==='jar'){hx=hz.x+hz.w/2;hy=hz.y+hz.h/2;hr=95;}else continue;
+    const[px,py]=W2S(hx,hy);if(py<-140||py>VH+140)continue;cutLight(px,py,hr*z,.43,.10);
+  }
+  for(const hd of Wd.hands)cutHandPresence(hd,spx,spy,lightR,tnow);
+  if(G_.little){const[lx,ly]=W2S(G_.little.rx,G_.little.ry);cutLight(lx,ly,170*z,.9,.18);}
+  const darkBase=MOBILE_LIKELY?.875:.90;cx.save();cx.globalAlpha=clamp(darkBase-G_.openness*.72,.11,darkBase);cx.drawImage(darkCv,0,0,VW,VH);cx.restore();
+  // Point beacons are gone. Each target now reads as one softly luminous body.
+  for(const hd of Wd.hands)drawHandPresence(hd,CHAPTERS[hd.ci].pal,spx,spy,lightR,tnow);
+  // Repaint only the collectible's cool spectral rim above the darkness so it remains a separate visual language.
+  for(const m of Wd.motes){if(m.taken)continue;const[mx,my]=W2S(m.x,m.y+Math.sin(tnow*2+m.t)*6);if(my<-80||my>VH+80)continue;drawCollectibleLight(cx,mx,my,z,tnow,m.t,true);}
+  cx.save();cx.globalCompositeOperation='lighter';for(const hz of Wd.hazards){if(hz.t==='fan'||hz.t==='twall')continue;const hx=hz.t==='jar'?hz.x+hz.w/2:hz.x,hy=hz.t==='jar'?hz.y+hz.h/2:hz.y,[px,py]=W2S(hx,hy);if(py<-60||py>VH+60)continue;const rr=(hz.t==='jar'?44:hz.r*1.2)*z,gg=cx.createRadialGradient(px,py,0,px,py,rr);gg.addColorStop(0,hz.t==='jar'?'#9fdcff':'#ff6b6b');gg.addColorStop(1,'rgba(0,0,0,0)');cx.globalAlpha=.15+.06*Math.sin(tnow*3+(hz.seed||0));cx.fillStyle=gg;cx.beginPath();cx.arc(px,py,rr,0,TAU);cx.fill();}cx.restore();
+  for(const hz of Wd.hazards)if(hz.t==='fan'||hz.t==='twall')drawHazardForeground(hz,CHAPTERS[hz.ci].pal,tnow);
+  if(!G_.snuffed){drawSparkBloom(spx,spy,sparkVR,hurt*(1-G_.openness*.48),tnow);drawLightCharges(spx,spy,sparkVR,s.lit,tnow,G_.openness);}
+  drawReachInvitation(G_,reachCue,tnow);drawLeanLanguage(G_,tnow);drawVisualEvents(tnow);drawMotionLanguage(G_,ch,tnow);
+  if(!_vig||_vig.w!==VW||_vig.h!==VH||_vig.q!==RenderQuality.tier){const vg=cx.createRadialGradient(VW/2,VH/2,Math.min(VW,VH)*.31,VW/2,VH/2,Math.max(VW,VH)*.76),edge=MOBILE_LIKELY?.55:RenderQuality.tier===0?.60:.54;vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(.70,'rgba(0,0,0,.045)');vg.addColorStop(1,`rgba(0,0,0,${edge})`);_vig={g:vg,w:VW,h:VH,q:RenderQuality.tier};}cx.fillStyle=_vig.g;cx.fillRect(0,0,VW,VH);
+  drawChapterTransition(tnow);drawScreenFinish(G_,tnow,ch.pal.glow);
+  if(FX.flash>0){cx.fillStyle=`rgba(255,246,232,${FX.flash*.8})`;cx.fillRect(0,0,VW,VH);}renderHUD(G_,tnow);
+}
+
+function drawRope(ax,ay,bx,by,L,color){
+  const[x0,y0]=W2S(ax,ay),[x1,y1]=W2S(bx,by),d=hyp(bx-ax,by-ay),slack=Math.max(0,L-d),mx=(x0+x1)/2,my=(y0+y1)/2+slack*.5*zoomNow();
+  cx.save();cx.lineCap='round';cx.globalCompositeOperation='lighter';cx.shadowColor=color;cx.shadowBlur=RenderQuality.detailLevel()<2?0:18;cx.globalAlpha=.12;cx.strokeStyle=color;cx.lineWidth=11;cx.beginPath();cx.moveTo(x0,y0);cx.quadraticCurveTo(mx,my,x1,y1);cx.stroke();
+  cx.shadowBlur=RenderQuality.detailLevel()<2?0:5;cx.globalAlpha=.55;cx.lineWidth=3.4;cx.beginPath();cx.moveTo(x0,y0);cx.quadraticCurveTo(mx,my,x1,y1);cx.stroke();
+  cx.shadowBlur=0;cx.globalAlpha=.96;cx.lineWidth=1.05;cx.strokeStyle='#fff8ec';cx.beginPath();cx.moveTo(x0,y0);cx.quadraticCurveTo(mx,my,x1,y1);cx.stroke();
+  for(let i=0;i<2;i++){const q=((performance.now()*.00048+i*.5)%1),a=(1-q)*(1-q),b=2*(1-q)*q,c=q*q,px=a*x0+b*mx+c*x1,py=a*y0+b*my+c*y1;cx.globalAlpha=.28*(1-Math.abs(q-.5));cx.fillStyle='#fff';cx.beginPath();cx.arc(px,py,1.7-i*.4,0,TAU);cx.fill();}
+  cx.restore();
+}
+
+/* ---------- HUD ----------
+   There are still no readouts: no timer, no counter, no meter. The world carries state.
+   What lives here is theatre — the title, the chapter cards, and the one word you get
+   when you go out. All of it was already being timed by step(); it was simply never
+   reaching the screen, so the game opened on a dark shaft with nothing to tell a first
+   player that holding is the whole verb. */
+function hudScale(){ return clamp(Math.min(VW,VH)/760,.62,1.25); }
+// An elliptical scrim, not a band: a rectangle with a vertical-only gradient leaves two
+// hard vertical seams down the screen wherever the plate ends.
+function hudPlate(y,h,a,w){
+  cx.save();cx.translate(VW*.5,y);cx.scale(w*.5,h);
+  const g=cx.createRadialGradient(0,0,0,0,0,1);
+  g.addColorStop(0,`rgba(6,5,12,${.66*a})`);g.addColorStop(.55,`rgba(6,5,12,${.44*a})`);g.addColorStop(1,'rgba(6,5,12,0)');
+  cx.fillStyle=g;cx.fillRect(-1,-1,2,2);cx.restore();
+}
+function hudRule(mx,y,w,a){
+  if(a<=.004) return;
+  cx.save();cx.globalAlpha=a;cx.shadowColor='rgba(4,3,9,.8)';cx.shadowBlur=6;
+  const g=cx.createLinearGradient(mx-w,0,mx+w,0);
+  g.addColorStop(0,'rgba(255,179,71,0)');g.addColorStop(.5,'#ffb347');g.addColorStop(1,'rgba(255,179,71,0)');
+  cx.fillStyle=g;cx.fillRect(mx-w,y,w*2,1.3);cx.restore();
+}
+function drawTitleCard(G_,tnow){
+  const a=G_.titleA; if(a<=.003) return;
+  const s=hudScale(),mx=VW/2,y=G_.safe.top+(VH-G_.safe.top-G_.safe.bottom)*.24;
+  hudPlate(y+10*s,110*s,a,Math.min(VW,640*s));
+  spacedText(cx,'THROWN',mx,y,52*s,15*s,'#f8efdd',{alpha:a,shadow:.42});
+  hudRule(mx,y+27*s,76*s,a*.6);
+  // No key legend. "hold to hold on. let go to fly." already names both verbs, and the
+  // reach-invitation arc points at the first hand — a player does not need the mapping
+  // spelled out to start. It lives in the pause card for anyone who wants it.
+  text(cx,'hold to hold on. let go to fly.',mx,y+52*s,17*s,'#f3ead8',{italic:true,alpha:a*.86,shadow:.7});
+}
+function drawChapterCard(G_,tnow){
+  const c=G_.card; if(!c||c.a<=.004) return;
+  const s=hudScale(),mx=VW/2,y=G_.safe.top+(VH-G_.safe.top-G_.safe.bottom)*.185;
+  hudPlate(y+14*s,80*s,c.a,Math.min(VW,720*s));
+  spacedText(cx,c.title,mx,y,24*s,9*s,'#f8efdd',{alpha:c.a*.98,shadow:.55});
+  hudRule(mx,y+19*s,50*s,c.a*.55);
+  if(c.line) text(cx,c.line,mx,y+41*s,15.5*s,'#f3ead8',{italic:true,alpha:c.a*.86,shadow:.75});
+  else if(c.sub) text(cx,c.sub,mx,y+41*s,12.5*s,'#ffd9a0',{alpha:c.a*.9,mono:true,shadow:.9});
+}
+function drawSnuffWord(G_,tnow){
+  if(!G_.snuffed||!G_.snuffWord) return;
+  const p=clamp(G_.snuffT/Math.max(.25,G_.snuffDur||1.15),0,1);
+  const a=smooth(clamp(p/.16,0,1))*(1-smooth(clamp((p-.6)/.4,0,1))); if(a<=.005) return;
+  const s=hudScale(),[x,y]=W2S(G_.spark.rx,G_.spark.ry);
+  text(cx,G_.snuffWord,clamp(x,80*s,VW-80*s),clamp(y+58*s,54,VH-46),20*s,'#f6ecd8',{italic:true,alpha:a*.94,shadow:.8});
+}
+function drawPops(tnow){
+  const s=hudScale();
+  for(const p of FX.pops){
+    const[x,y]=W2S(p.x,p.y); if(y<-40||y>VH+40) continue;
+    text(cx,p.text,x,y,p.size*s*.9,p.color,{italic:true,alpha:clamp(p.life/p.max,0,1)*.9,shadow:.8});
+  }
+}
+function renderHUD(G_,tnow){
+  drawPops(tnow); drawChapterCard(G_,tnow); drawTitleCard(G_,tnow); drawSnuffWord(G_,tnow);
+}
+
+/* ---------- game state ---------- */
+/* Two chapter indices, on purpose:
+     ci     — how far you have PROGRESSED. Monotonic. Owns scoring, medals, pars.
+     viewCi — where the spark physically IS. Owns the sky, the palette, the music.
+   They diverge whenever you fall back down the tower, and until this split existed the
+   game would show you OPEN's daylight while you hung in the dark at the bottom of
+   BIG HANDS, playing the wrong chapter's score. */
+const Game = {
+  phase: 'title', world: null, spark: null, ci: 0, viewCi: 0, checkpoint: null, titleA: 1,
+  run: null, chT: 0, chRunning: false, chHeld: 0, chMotes: 0,
+  card: null, cardQueue: [],
+  hint: { lean: 0, leanDone: false, stallT: 0, pumpT: 0 },
+  snuffed: false, snuffT: 0, snuffWord: '',
+  little: null, endT: 0, openness: 0, paused: false,
+  safe: { top: 0, left: 0, bottom: 0, right: 0 },
+  tnow: 0,
+};
+function newRun() { return { held: 0, letgo: 0, thrown: 0, snuffs: 0, motes: 0, chapters: {}, startT: 0 }; }
+function startGame(fromTitle = true) {
+  if (QA_MODE) QA_RNG_SEED = 0x54a8f13d;
+  Game.world = buildWorld();
+  const start = Game.world.hands.find(hd => hd.start);
+  Game.spark = newSpark(start.ax, start.ay + 11);
+  Game.spark.rest = start; Game.spark.restT = 1; Game.spark.lightR = 260; Game.spark.floorY = -1e9; snapSpark(Game.spark);
+  Game.checkpoint = start; Game.ci = 0; Game.viewCi = 0; Game.run = newRun();
+  Game.chT = 0; Game.chRunning = false; Game.chHeld = 0; Game.chMotes = 0;
+  Game.card = null; Game.cardQueue = []; Game.little = null; Game.endT = 0; Game.openness = 0; cam.zoomMul = 1;
+  Game.snuffed = false; Game.paused = false; Game.phase = fromTitle ? 'title' : 'play'; Game.titleA = fromTitle ? 1 : 0;
+  Game.hint = { lean: 0, leanDone: false, stallT: 0, pumpT: 0 }; VIS.trail.length=0; VIS.rings.length=0; VIS.chapterT=-99;
+  for (const hd of Game.world.hands) hd.done = false;
+  cam.y = Game.spark.y + 220; cam.x = TOWER_W / 2;
+  Audio.setRoot(CHAPTERS[0].root, 0);
+  if (!fromTitle) queueCard(CHAPTERS[0].name, CHAPTERS[0].line);
+  pauseOv.classList.remove('show'); endOv.classList.remove('show');
+  // A climb is counted when someone actually starts climbing, not when the page loads.
+  if (!QA_MODE && !fromTitle) { SAVE.life.climbs = (SAVE.life.climbs || 0) + 1; Store.save(); }
+  updatePauseBtn();
+}
+function queueCard(title, line, sub, dur = 3.4) { Game.cardQueue.push({ title, line, sub, a: 0, t: 0, dur }); }
+function chapterStartPalm(ci) {
+  if (ci === 0) return Game.world.hands.find(hd => hd.start);
+  return Game.world.hands.find(hd => hd.t === 'palm' && hd.ci === ci - 1 && hd.top);
+}
+function restartChapter() {
+  // Inert once the finale has begun. The pause card stays usable through the 'ending' phase,
+  // and this used to re-seed the spark on a palm ~950 px below the top while the phase stayed
+  // 'ending' — so physStep was never called again, the controls went dead, and the game's
+  // payoff re-staged at the wrong palm. The KeyR path already guarded itself; the button did not.
+  if (Game.phase !== 'play') return;
+  // The chapter you are CLIMBING, derived from the checkpoint — not Game.ci, which only
+  // ever counts up. Using Game.ci here would fling a player who had fallen back down the
+  // tower straight to the start of the highest chapter they had ever reached.
+  const ck = Game.checkpoint;
+  const ci = ck ? (ck.top ? Math.min(ck.ci + 1, CHAPTERS.length - 1) : ck.ci) : Game.ci;
+  const palm = chapterStartPalm(ci); if (!palm) return;
+  resetChapterHands(Game.world, ci);
+  for (const m of Game.world.motes) if (m.ci === ci && m.taken) { m.taken = false; Game.run.motes--; }
+  const s = Game.spark;
+  if (s.hold) { s.hold.held = false; Game.run.letgo++; Game.run.thrown++; SAVE.life.letgo++; SAVE.life.thrown++; }
+  Object.assign(s, { x: palm.ax, y: palm.ay + 11, vx: 0, vy: 0, hold: null, rest: palm, restT: 1, lit: LIT_MAX, iT: 0, chain: 0, speedS: 0, energy: 0, relT: 9, floorY: palm.ay - 420 }); snapSpark(s);
+  Game.checkpoint = palm; Game.viewCi = chapterAt(s.y);
+  Game.chT = 0; Game.chRunning = false; Game.chHeld = 0; Game.chMotes = 0; Game.snuffed = false;
+  Game.card = null; Game.cardQueue = []; VIS.trail.length=0; VIS.rings.length=0; queueCard(CHAPTERS[ci].name, CHAPTERS[ci].line, null, 2.2);
+  cam.y = s.y + 220;
+}
+function medalFor(held, par) { return held <= par ? '★★★' : held <= par + 4 ? '★★' : '★'; }
+
+function reachPalm(palm, s, landed) {
+  const G_ = Game;
+  if (landed) { FX.hitstop(24); FX.burst(s.x, s.y - 6, 10, '#ffd9a0', 90, .5, 1.6, 60); Audio.sfx.land(); }
+  if (G_.checkpoint !== palm) { G_.checkpoint = palm; s.floorY = palm.ay - 420; s.lit = LIT_MAX; }
+  if (palm.last) { beginEnding(); return; }
+  // a chapter closes the moment you get a hand on its top palm. Only the chapter the run
+  // counters belong to is scored — completeChapter advances G_.ci, so the "played" test has
+  // to be against the index we started from, not the live one.
+  const closeUpTo = palm.top ? palm.ci : palm.ci - 1, fromCi = G_.ci;
+  for (let c = fromCi; c <= closeUpTo && c < CHAPTERS.length - 1; c++) completeChapter(c, c === fromCi);
+}
+// `played` says whether the run counters actually belong to THIS chapter. Both callers close
+// chapters in a loop, and the counters are a single shared accumulator that this function
+// then zeroes — so every iteration after the first used to read counters the previous
+// iteration had just cleared, and score a chapter the player never finished as a perfect
+// ★★★ held-0 in 0:00.0. That fake record was also written to localStorage as a personal
+// best, which no honest later run could ever beat.
+function completeChapter(c, played = true) {
+  const G_ = Game, ch = CHAPTERS[c]; G_.chRunning = false; VIS.chapterT=tnow; VIS.chapterCi=Math.min(c+1,CHAPTERS.length-1);
+  if (played) {
+    const rec = { time: G_.chT, held: G_.chHeld, motes: G_.chMotes, medal: medalFor(G_.chHeld, ch.par) };
+    G_.run.chapters[ch.key] = rec;
+    if (rec.held > 0) {                       // never persist a degenerate record as a best
+      const b = SAVE.best[ch.key] || {}; let improved = false;
+      if (b.held == null || rec.held < b.held) { b.held = rec.held; improved = true; }
+      if (b.time == null || rec.time < b.time) { b.time = rec.time; improved = true; }
+      SAVE.best[ch.key] = b; Store.save();
+      queueCard(ch.name, null, `${rec.medal}  held ${rec.held} · par ${ch.par} · ${fmtTime(rec.time)}${improved ? ' · best' : ''}`, 3.6);
+    }
+    G_.chT = 0; G_.chHeld = 0; G_.chMotes = 0;
+  }
+  if (c < CHAPTERS.length - 1) {
+    G_.ci = c + 1;
+    const n = CHAPTERS[G_.ci]; queueCard(n.name, n.line, null, 3.4); Audio.sfx.chapter(n.root);
+  }
+}
+
+/* ---------- event sink (FX + audio + stats) ---------- */
+const EV = {
+  grab(hd, s) {
+    const G_ = Game; G_.run.held++; G_.chHeld++; SAVE.life.held++;
+    if (!G_.chRunning) { G_.chRunning = true; G_.chT = 0; }
+    FX.hitstop(hd.t === 'palm' ? 20 : 34); cam.punch = 0.036; FX.shake(0.09); FX.flash=Math.max(FX.flash,.055); visualRing(hd.ax,hd.ay,CHAPTERS[hd.ci].pal.glow,hd.t==='palm'?'land':'grab');
+    FX.burst(hd.ax, hd.ay, 13, '#fff1dc', 185, .42, 1.9, 180);
+    const idx = hd.hi % 11;
+    Audio.sfx.grab(idx, (s.x - TOWER_W / 2) / TOWER_W * 1.4);
+    Haptics.pulse(hd.t === 'palm' ? 8 : 12);
+    if (hd.t === 'lift' && hd.prog < 1) Audio.sfx.lift();
+    if (G_.phase === 'title') { G_.phase = 'play'; if (!QA_MODE) { SAVE.life.climbs = (SAVE.life.climbs || 0) + 1; Store.save(); } }
+    G_.hint.stallT = 0;
+    if (hd.t === 'palm') reachPalm(hd, s, false);
+  },
+  release(hd, s, forced) {
+    const G_ = Game; G_.run.letgo++; G_.run.thrown++; SAVE.life.letgo++; SAVE.life.thrown++;
+    if (!forced) { visualRing(s.x,s.y,CHAPTERS[hd.ci].pal.glow,'release'); FX.hitstop(12); const sp = hyp(s.vx, s.vy); FX.dir(s.x, s.y, -s.vx, -s.vy, 6 + (sp / 120) | 0, '#ffd9a0', 120 + sp * 0.25, .5, .4, 1.6, 100); Audio.sfx.release(clamp(sp / 1200, 0, 1), (s.x - TOWER_W / 2) / TOWER_W * 1.4); Haptics.pulse(5); }
+    G_.hint.stallT = 0;
+  },
+  flick(hd, s) {
+    FX.hitstop(60); FX.shake(0.35); cam.punch = 0.05; visualRing(s.x,s.y,CHAPTERS[hd.ci].pal.glow,'release');
+    FX.burst(s.x, s.y, 18, '#ffd9a0', 420, .5, 2.2, 500);
+    FX.pop(s.x, s.y + 40, 'flicked.', '#f3ead8', 18, 1.3);
+    Audio.sfx.flick();
+    Haptics.pulse([12, 18, 22]);
+  },
+  hit(hz, s) {
+    FX.hitstop(90); FX.shake(0.55); FX.flash=Math.max(FX.flash,.11); VIS.hitT=tnow; visualRing(s.x,s.y,'#ff5c73','hit'); FX.burst(s.x, s.y, 28, '#5a4048', 340, .76, 2.7, 500);
+    Audio.sfx.hit();
+    Haptics.pulse([18, 14, 28]);
+  },
+  snuff(hz, s) {
+    const G_ = Game; VIS.snuffT=tnow; G_.snuffed = true; G_.snuffT = 0; G_.snuffDur = 1.15; G_.run.snuffs++; SAVE.life.snuffs++; Store.save();
+    G_.snuffWord = { thorn: 'pricked.', twall: 'pricked.', snap: 'bitten.', jar: 'kept.' }[hz.t] || 'out.';
+    FX.burst(s.x, s.y, 40, '#ffb347', 380, 1.1, 3, 300); FX.shake(0.8);
+    Audio.sfx.snuff(); Audio.silenceDrone(0.5);
+    Haptics.pulse([28, 24, 52]);
+  },
+  mote(m, s) {
+    const G_ = Game; s.lit = Math.min(LIT_MAX, s.lit + 1); G_.run.motes++; G_.chMotes++;
+    FX.hitstop(18); visualRing(m.x,m.y,MOTE_LIGHT.glow,'grab'); FX.burst(m.x,m.y,10,MOTE_LIGHT.glow,230,.68,2.2,70); FX.burst(m.x,m.y,8,MOTE_LIGHT.spark,180,.55,1.5,35); Audio.sfx.mote(G_.chMotes);
+    Haptics.pulse([6, 12, 8]);
+  },
+  fall(s) {
+    const G_ = Game; if (G_.snuffed) return;
+    G_.snuffed = true; G_.snuffT = 0; G_.snuffDur = 0.8; G_.snuffWord = 'fell.'; G_.run.snuffs++; SAVE.life.snuffs++; Store.save();
+    FX.burst(s.x, s.y, 18, '#ffb347', 160, .8, 2.2, -200); FX.shake(0.2);
+    Audio.sfx.release(1, 0); Audio.silenceDrone(0.4);
+    Haptics.pulse([20, 18, 32]);
+  },
+  land(palm, s) { reachPalm(palm, s, true); Haptics.pulse(8); },
+};
+
+/* ---------- ending ---------- */
+function beginEnding() {
+  const G_ = Game; if (G_.phase === 'ending' || G_.phase === 'done') return;
+  const s = G_.spark;
+  // Seat the spark on the last palm FIRST. reachPalm fires from EV.grab as well as EV.land,
+  // so catching the final palm on the way up entered the ending still roped to it — and
+  // nothing in updateEnding touches the spark's position, so the whole finale played out
+  // with the spark frozen mid-arc on a taut rope, up to a rope-length off the palm, with
+  // the little one launched relative to that wrong point.
+  if (s.hold) doRelease(s, G_.world, EV, true);
+  s.rest = palm_of_last(G_.world) || s.rest;
+  if (s.rest) { s.x = s.rest.ax; s.y = s.rest.ay + 11; }
+  s.vx = s.vy = 0; s.speedS = 0; s.energy = 0; s.restT = 1; snapSpark(s);
+
+  const skipped = G_.ci < CHAPTERS.length - 1, fromCi = G_.ci;
+  for (let c = fromCi; c < CHAPTERS.length - 1; c++) completeChapter(c, c === fromCi);
+  G_.phase = 'ending'; G_.endT = 0; G_.little = null;
+  for (const hd of G_.world.hands) if (hd.final) hd.done = true;
+  const ch = CHAPTERS[CHAPTERS.length - 1];
+  // Only score OPEN if the player actually climbed it. If chapters were still open when the
+  // last palm was caught, the counters belong to those, not to this one.
+  if (!skipped) G_.run.chapters[ch.key] = { time: G_.chT, held: G_.chHeld, motes: G_.chMotes, medal: medalFor(G_.chHeld, ch.par) };
+  G_.chRunning = false;
+  Audio.sfx.chapter(ch.root * 1.5);
+}
+function palm_of_last(W) { for (const hd of W.hands) if (hd.last) return hd; return null; }
+function launchLittle() {
+  const s = Game.spark; const x0 = s.x - 120, y0 = s.y - 560;
+  const dy = 590; const vy = Math.sqrt(2 * G * dy); const t = vy / G; const vx = (s.x + 30 - x0) / t;
+  Game.little = { x: x0, y: y0, px: x0, py: y0, rx: x0, ry: y0, vx, vy, L: 120, held: false, thrown: false, t: 0, lastY: y0 };
+}
+function updateEnding(dt, inp) {
+  const G_ = Game; const s = G_.spark; G_.endT += dt;
+  if (G_.little) { G_.little.px = G_.little.x; G_.little.py = G_.little.y; }
+  G_.openness = Math.min(1, G_.openness + dt * 0.4);
+  if (!G_.little) { if (G_.endT > 0.55) launchLittle(); return; }
+  const L_ = G_.little; L_.t += dt;
+  if (L_.thrown) {
+    L_.vy += 420 * dt; L_.vx *= (1 - 1.4 * dt); L_.x += L_.vx * dt; L_.y += L_.vy * dt;
+    if (L_.t > 2.6 || L_.y > s.y + 1100) { G_.phase = 'done'; showEnd(); }
+    if (gameRandom() < 0.6) FX.dir(L_.x, L_.y, -L_.vx, -L_.vy, 1, '#ffe08a', 60, .8, .7, 1.6, 0);
+    return;
+  }
+  if (L_.held) {
+    // same physics, other side of the rope
+    let push = inp.lat * PUMP * 0.95;
+    if (inp.lat !== 0 && sign(inp.lat) !== sign(L_.vx) && Math.abs(L_.vx) > 30) push *= BRAKE_MULT;
+    L_.vx += push * dt; L_.vy -= G * dt; L_.vx *= (1 - 0.05 * dt); L_.vy *= (1 - 0.05 * dt);
+    let px = L_.x + L_.vx * dt, py = L_.y + L_.vy * dt;
+    const dx = px - s.x, dy = py - s.y; const d = hyp(dx, dy);
+    if (d > L_.L) { px = s.x + dx / d * L_.L; py = s.y + dy / d * L_.L; }
+    L_.vx = (px - L_.x) / dt; L_.vy = (py - L_.y) / dt; const sp = hyp(L_.vx, L_.vy);
+    if (sp > MAX_HOLD_SPEED) { L_.vx *= MAX_HOLD_SPEED / sp; L_.vy *= MAX_HOLD_SPEED / sp; }
+    L_.x = px; L_.y = py;
+    if (L_.y < SPARK_R) { L_.y = SPARK_R; L_.vy = Math.abs(L_.vy) * 0.3; }
+    if (!inp.hold) {
+      L_.held = false; L_.thrown = true; L_.t = 0;
+      L_.vx *= 1.35; L_.vy = Math.max(L_.vy * 1.35, 260) + 120;
+      G_.run.letgo++; G_.run.thrown++; SAVE.life.letgo++; SAVE.life.thrown++; SAVE.life.tops = (SAVE.life.tops || 0) + 1; Store.save();
+      FX.hitstop(40); FX.flash = 0.7; FX.burst(L_.x, L_.y, 30, '#ffe08a', 300, 1.2, 2.2, 120);
+      Audio.sfx.thrown(); Audio.silenceDrone(3);
+      Haptics.pulse([8, 14, 24]);
+    }
+    return;
+  }
+  // in flight toward you (and it leans your way if you're reaching)
+  L_.vy -= G * dt;
+  if (inp.hold) { const dx = s.x - L_.x, dy = s.y - L_.y, dd = hyp(dx, dy) || 1; L_.vx += (dx / dd) * 260 * dt; L_.vy += (dy / dd) * 260 * dt; }
+  L_.x += L_.vx * dt; L_.y += L_.vy * dt;
+  const d = hyp(L_.x - s.x, L_.y - s.y);
+  if (inp.hold && d < 175) {
+    L_.held = true; L_.L = clamp(d, 60, 140);
+    G_.run.held++; SAVE.life.held++; Store.save();
+    FX.hitstop(120); FX.slow(0.35, 0.45); FX.shake(0.18); FX.burst(L_.x, L_.y, 16, '#fff6e8', 180, .6, 2, 100);
+    Audio.sfx.catchLittle();
+    Haptics.pulse([12, 18, 16]);
+  } else if (L_.y < s.y - 620 && L_.vy < 0) {
+    G_.little = null; G_.endT = 0; // comes back around
+  }
+}
+
+/* ---------- overlays ---------- */
+const $ = id => document.getElementById(id);
+const pauseOv = $('pauseOv'), endOv = $('endOv'), pauseBtn = $('pauseBtn');
+function updatePauseBtn() { pauseBtn.classList.toggle('show', Game.phase !== 'done'); }
+function setPaused(v) {
+  if (Game.phase === 'done') return;
+  Game.paused = v; pauseOv.classList.toggle('show', v);
+  $('soundBtn').textContent = 'Sound: ' + (Audio.isEnabled() ? 'on' : 'off');
+  if (v) {
+    const r = Game.run; $('pauseStats').textContent = `held ${r.held} · let go ${r.letgo} · snuffed ${r.snuffs} · ${CHAPTERS[Game.viewCi].name.toLowerCase()}`;
+    $('resumeBtn').focus();
+    // frame() returns before Audio.bed() while paused, but the context keeps running — so
+    // whatever wind gain the last flying frame set just held there, roaring behind the card.
+    Audio.silenceDrone(.35);
+  } else {
+    if (!Game.snuffed) Audio.restoreDrone();
+    // hand focus back to the game so the next keypress is a hold, not another button press
+    const a = document.activeElement; if (a && a.tagName === 'BUTTON') a.blur();
+  }
+}
+pauseBtn.addEventListener('click', () => { Audio.unlock(); Audio.sfx.ui(); setPaused(!Game.paused); });
+$('resumeBtn').addEventListener('click', () => { Audio.sfx.ui(); setPaused(false); });
+$('restartChBtn').addEventListener('click', () => { Audio.sfx.ui(); setPaused(false); restartChapter(); });
+$('restartGameBtn').addEventListener('click', () => { Audio.sfx.ui(); setPaused(false); startGame(false); });
+function toggleSound() { Audio.setEnabled(!Audio.isEnabled()); const t = 'Sound: ' + (Audio.isEnabled() ? 'on' : 'off'); $('soundBtn').textContent = t; $('endSoundBtn').textContent = t; }
+$('soundBtn').addEventListener('click', toggleSound);
+$('endSoundBtn').addEventListener('click', toggleSound);
+function climbAgain() { Audio.sfx.ui(); endOv.classList.remove('show'); Audio.restoreDrone(); startGame(false); }
+$('againBtn').addEventListener('click', climbAgain);
+function showEnd() {
+  const G_ = Game; updatePauseBtn();
+  endOv.classList.add('show'); $('endSoundBtn').textContent = 'Sound: ' + (Audio.isEnabled() ? 'on' : 'off');
+  const r = G_.run;
+  const counters = [['tHeld', r.held], ['tLet', r.letgo], ['tThrown', r.thrown]];
+  counters.forEach(([id, n], i) => {
+    const el = $(id); el.textContent = '0';
+    const t0 = performance.now() + 500 + i * 700; const dur = 900;
+    const tick = () => { const t = clamp((performance.now() - t0) / dur, 0, 1); el.textContent = Math.round(n * easeOut(t)); if (t < 1) requestAnimationFrame(tick); else if (i === 2) setTimeout(() => $('endLine').classList.add('show'), 600); };
+    setTimeout(tick, Math.max(0, t0 - performance.now()));
+  });
+  $('endLine').classList.remove('show');
+  $('endMedals').innerHTML = CHAPTERS.map(ch => { const c = r.chapters[ch.key]; return c ? `<span>${ch.name.toLowerCase()} <b>${c.medal}</b> ${c.held}/${ch.par}</span>` : ''; }).join('');
+  const L = SAVE.life;
+  $('endLife').textContent = `snuffed ${r.snuffs} this climb · lifetime held ${L.held} · let go ${L.letgo} · thrown ${L.thrown} · tops ${L.tops}`;
+  setTimeout(() => $('againBtn').focus(), 100);
+}
+
+/* ---------- per-step logic ---------- */
+function step(dt, inp) {
+  const G_ = Game; const s = G_.spark; const Wd = G_.world;
+  updateHands(Wd, dt, s);
+  if (G_.snuffed) {
+    G_.snuffT += dt;
+    if (G_.snuffT > (G_.snuffDur || 1.15)) {
+      const palm = G_.checkpoint; resetChapterHands(Wd, palm.ci); if (palm.ci + 1 < CHAPTERS.length) resetChapterHands(Wd, palm.ci + 1);
+      Object.assign(s, { x: palm.ax, y: palm.ay + 11, vx: 0, vy: 0, hold: null, rest: palm, restT: 0.3, lit: LIT_MAX, iT: 0, chain: 0, speedS: 0, energy: 0, relT: 9, floorY: palm.ay - 420 }); snapSpark(s);
+      G_.snuffed = false; Audio.restoreDrone(); FX.burst(s.x, s.y, 16, '#ffb347', 140, .7, 2, 0);
+    }
+  } else if (G_.phase === 'ending') {
+    updateEnding(dt, inp);
+  } else if (G_.phase !== 'done') {
+    physStep(s, dt, inp, Wd, EV);
+    if (s.chain > 0 && s.chain % 4 === 0 && s.lit < LIT_MAX && !s._chainGave) { s.lit++; s._chainGave = true; FX.burst(s.x, s.y, 10, '#ffe08a', 120, .5, 1.6, 0); }
+    if (s.chain % 4 !== 0) s._chainGave = false;
+  }
+  // timers
+  if (G_.chRunning) G_.chT += dt;
+  // title fade
+  if (G_.phase !== 'title' && G_.titleA > 0) { G_.titleA = Math.max(0, G_.titleA - dt / 1.2); if (G_.titleA === 0 && !G_._titleCard) { G_._titleCard = true; queueCard(CHAPTERS[0].name, CHAPTERS[0].line); } }
+  // cards
+  if (!G_.card && G_.cardQueue.length) G_.card = G_.cardQueue.shift();
+  if (G_.card) { const c = G_.card; c.t += dt; c.a = c.t < 0.6 ? smooth(c.t / 0.6) : c.t > c.dur - 0.8 ? smooth(clamp((c.dur - c.t) / 0.8, 0, 1)) : 1; if (c.t >= c.dur) G_.card = null; }
+  // lean hint
+  const hn = G_.hint;
+  if (s.hold && !hn.leanDone) {
+    if (Math.abs(inp.lat) > 0.25) hn.pumpT += dt; if (hn.pumpT > 0.45) hn.leanDone = true;
+    if (s.speedS < 140 && s.hold.t !== 'lift' || (s.hold.t === 'lift' && s.hold.prog >= 1 && s.speedS < 140)) hn.stallT += dt; else hn.stallT = Math.max(0, hn.stallT - dt * 2);
+  } else hn.stallT = 0;
+  const wantLean = !hn.leanDone && hn.stallT > 2.4 && s.hold;
+  hn.lean += ((wantLean ? 1 : 0) - hn.lean) * Math.min(1, dt * 4);
+  // light radius: moving = seeing
+  const litF = [0.4, 0.55, 0.76, 1][clamp(s.lit, 0, 3)];
+  const targetR = clamp((165 + s.speedS * 0.24) * litF, 90, 470) * (1 + G_.openness * 1.6);
+  s.lightR += (targetR - s.lightR) * Math.min(1, dt * 3.2);
+  // where the spark actually is, which is what the sky and the score follow
+  G_.viewCi = chapterAt(s.y);
+  // openness (final chapter is lit)
+  const ch = CHAPTERS[G_.viewCi];
+  if (G_.phase !== 'ending' && G_.phase !== 'done') { const want = ch.pal.open ? clamp((s.y - ch.base) / 500, 0, 0.8) : 0; G_.openness += (want - G_.openness) * Math.min(1, dt * 1.5); }
+}
+function updateCamera(dt) {
+  const s = Game.spark;
+  const look = clamp(s.vy * 0.2, -150, 230);
+  const ty = s.y + 120 * (1 - Game.openness * 0.4) + look + (Game.phase === 'title' ? 110 : 0);
+  const tx = TOWER_W / 2 + (s.x - TOWER_W / 2) * 0.18;
+  const k = 1 - Math.exp(-dt * 4.6);
+  cam.y += (ty - cam.y) * k; cam.x += (tx - cam.x) * k;
+  const zm = (Game.phase === 'ending' || Game.phase === 'done') ? 0.84 : 1;
+  cam.zoomMul += (zm - cam.zoomMul) * (1 - Math.exp(-dt * 1.6));
+  cam.punch *= Math.exp(-dt * 9);
+}
+
+/* ---------- main loop ---------- */
+let lastT = performance.now(), acc = 0, tnow = 0;
+let pageActive = document.visibilityState !== 'hidden';
+function renderMeasured(frameMs, now) {
+  const renderStart = performance.now();
+  render(Game, tnow);
+  const renderMs = performance.now() - renderStart;
+  staticFrameDirty = false;
+  if (document.body.dataset.gameReady !== 'true') document.body.dataset.gameReady = 'true';
+  RenderQuality.observe(frameMs, renderMs, now);
+  return renderMs;
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  const frameMs = Math.max(0, now - lastT);
+  let rdt = Math.min(0.05, frameMs / 1000); lastT = now;
+  if (!pageActive) return;
+  if (qualityResizePending) { qualityResizePending = false; resize(); }
+  const inp = Input.poll(rdt);
+  // Consume both edges before branching: `||` short-circuits, which left an unconsumed
+  // Escape armed to fire on the next frame and toggle pause straight back shut.
+  const wantsPause = Input.consumeKey('KeyP') | Input.consumeKey('Escape');
+  const wantsRestart = Input.consumeKey('KeyR');
+  if (Input.consumeKey('KeyM')) toggleSound();
+  if (Game.phase === 'done') {
+    // THE TOP used to be a keyboard dead end: pause off, restart off, corner mark hidden,
+    // and the only button unreachable. Any of these keys means "climb again".
+    if (wantsPause || wantsRestart || Input.consumeKey('Enter')) { climbAgain(); }
+  } else {
+    if (wantsPause) setPaused(!Game.paused);
+    if (wantsRestart && !Game.paused && Game.phase === 'play') restartChapter();
+  }
+  if (Game.paused || Game.phase === 'done') {
+    if (staticFrameDirty) renderMeasured(frameMs, now);
+    Input.commitStep();
+    return;
+  }
+  tnow += rdt;
+  if (FX.freeze > 0) { FX.freeze -= rdt; FX.update(rdt * 0.15); renderMeasured(frameMs, now); return; }
+  acc += rdt * FX.timeScale;
+  let n = 0;
+  while (acc >= DT && n < 8) {
+    step(DT, inp); acc -= DT; n++;
+    if (n === 1) Input.commitStep();
+  }
+  stepAlpha = clamp(acc / DT, 0, 1);
+  FX.update(rdt); updateCamera(rdt);
+  const s = Game.spark;
+  if (!s.hold && !(Game.little && Game.little.held) && Input.resumeHold) Input.clearResumeHold();
+  const vch = CHAPTERS[Game.viewCi];
+  Audio.bed(clamp(s.speedS / 1100, 0, 1), [0, .4, .7, 1][clamp(s.lit, 0, 3)], Game.openness, Game.viewCi, !!s.hold, clamp((s.y-vch.base)/Math.max(1,vch.top-vch.base),0,1));
+  Game.tnow = tnow;
+  renderMeasured(frameMs, now);
+}
+function readSafeArea() {
+  const d = document.createElement('div'); d.style.cssText = 'position:fixed;top:env(safe-area-inset-top);left:env(safe-area-inset-left);bottom:env(safe-area-inset-bottom);right:env(safe-area-inset-right);visibility:hidden;pointer-events:none';
+  document.body.appendChild(d); const r = d.getBoundingClientRect();
+  Game.safe = { top: r.top, left: r.left, bottom: Math.max(0, window.innerHeight - r.bottom), right: Math.max(0, window.innerWidth - r.right) }; d.remove();
+}
+
+/* ---------- app/tab lifecycle ---------- */
+function interruptPlay() {
+  const preserveHold = !!((Game.spark && Game.spark.hold) || (Game.little && Game.little.held));
+  Input.interrupt(preserveHold);
+  acc = 0; lastT = performance.now(); staticFrameDirty = true;
+}
+function wakePlay() {
+  pageActive = document.visibilityState !== 'hidden';
+  if (!pageActive) return;
+  acc = 0; lastT = performance.now(); staticFrameDirty = true;
+  resize(); readSafeArea(); Audio.resume();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    pageActive = false; interruptPlay(); Audio.suspend();
+  } else wakePlay();
+});
+window.addEventListener('blur', () => { pageActive = false; interruptPlay(); Audio.suspend(); });
+window.addEventListener('focus', wakePlay);
+window.addEventListener('pagehide', () => { pageActive = false; interruptPlay(); Audio.suspend(); });
+window.addEventListener('pageshow', wakePlay);
+
+/* ---------- deterministic QA surface ---------- */
+function qaGoToChapter(index) {
+  if (!QA_MODE) return false;
+  const ci = clamp(Number(index) || 0, 0, CHAPTERS.length - 1) | 0;
+  startGame(false);
+  const palm = chapterStartPalm(ci);
+  if (!palm) return false;
+  const s = Game.spark;
+  Object.assign(s, { x: palm.ax, y: palm.ay + 11, vx: 0, vy: 0, hold: null, rest: palm, restT: 1, lit: LIT_MAX, iT: 0, chain: 0, speedS: 0, energy: 0, relT: 9, floorY: palm.ay - 420 }); snapSpark(s);
+  Game.checkpoint = palm; Game.ci = ci; Game.viewCi = chapterAt(s.y); Game.phase = 'play'; Game.titleA = 0; Game.openness = CHAPTERS[ci].pal.open ? .5 : 0;
+  Game.card = null; Game.cardQueue.length = 0; Game.chT = 0; Game.chRunning = false; Game.chHeld = 0; Game.chMotes = 0;
+  cam.x = TOWER_W / 2; cam.y = s.y + 220; cam.zoomMul = 1;
+  Audio.setRoot(CHAPTERS[ci].root, 0); staticFrameDirty = true;
+  return true;
+}
+function qaSnapshot() {
+  const s = Game.spark;
+  return {
+    build: BUILD_ID, ready: document.body.dataset.gameReady === 'true', qa: QA_MODE,
+    phase: Game.phase, paused: Game.paused, chapter: Game.ci, viewChapter: Game.viewCi,
+    checkpoint: Game.checkpoint ? { id: Game.checkpoint.id, ci: Game.checkpoint.ci, y: Game.checkpoint.ay } : null,
+    titleA: +Game.titleA.toFixed(3), card: Game.card ? { title: Game.card.title, a: +Game.card.a.toFixed(3) } : null,
+    spark: s ? { x: +s.x.toFixed(2), y: +s.y.toFixed(2), vx: +s.vx.toFixed(2), vy: +s.vy.toFixed(2), lit: s.lit, heldBy: s.hold ? s.hold.id : null, restingOn: s.rest ? s.rest.id : null } : null,
+    run: Game.run ? { held: Game.run.held, letgo: Game.run.letgo, thrown: Game.run.thrown, snuffs: Game.run.snuffs, motes: Game.run.motes } : null,
+    viewport: { width: VW, height: VH, dpr: +DPR.toFixed(2), darknessDpr: +DARK_DPR.toFixed(2), canvasWidth: cv.width, canvasHeight: cv.height, darkWidth: darkCv.width, darkHeight: darkCv.height },
+    quality: { tier: RenderQuality.tier, locked: RenderQuality.locked, metrics: Object.assign({}, RenderQuality.metrics) },
+    world: Game.world ? { hands: Game.world.hands.length, hazards: Game.world.hazards.length, motes: Game.world.motes.length, deco: Game.world.deco.length } : null,
+    input: { pointers: Input.pointerCount, resumeHold: Input.resumeHold, touchMode: IS_TOUCH, coarsePointer: COARSE_POINTER, mobileProfile: MOBILE_LIKELY },
+    audio: { state: Audio.state, unlocked: Audio.unlocked, ambienceReady: Audio.ambienceReady },
+    lifecycle: { visibility: document.visibilityState, active: pageActive },
+    performance: { longTaskCount: RUNTIME_PERF.longTasks.length, maxLongTask: RUNTIME_PERF.maxLongTask }
+  };
+}
+function qaBenchmarkRender(count = 40) {
+  if (!QA_MODE) return null;
+  const n = clamp(Number(count) || 40, 5, 120) | 0, samples = [];
+  const savedTrail = VIS.trail.map(p => Object.assign({}, p)), savedRings = VIS.rings.map(r => Object.assign({}, r)), savedTrailT = VIS.lastTrailT, savedPulseT = VIS.pulseT;
+  for (let i = 0; i < 5; i++) render(Game, tnow + i / 60);
+  for (let i = 0; i < n; i++) { const a = performance.now(); render(Game, tnow + (i + 5) / 60); samples.push(performance.now() - a); }
+  VIS.trail.splice(0, VIS.trail.length, ...savedTrail); VIS.rings.splice(0, VIS.rings.length, ...savedRings); VIS.lastTrailT = savedTrailT; VIS.pulseT = savedPulseT;
+  render(Game, tnow);
+  const sorted = samples.slice().sort((a,b) => a-b);
+  const mean = samples.reduce((a,b) => a+b, 0) / samples.length;
+  return { count: n, mean: +mean.toFixed(3), p50: +sorted[(n * .5) | 0].toFixed(3), p95: +sorted[Math.min(n - 1, (n * .95) | 0)].toFixed(3), max: +sorted[n - 1].toFixed(3), tier: RenderQuality.tier };
+}
+
+resize(); readSafeArea(); startGame(true); Audio.prewarm();
+window.__THROWN__ = Object.freeze({
+  build: BUILD_ID,
+  snapshot: qaSnapshot,
+  restart: () => { startGame(true); staticFrameDirty = true; return qaSnapshot(); },
+  chapter: qaGoToChapter,
+  benchmarkRender: qaBenchmarkRender,
+  setQuality: tier => QA_MODE ? RenderQuality.setTier(clamp(Number(tier) || 0, 0, 2), performance.now()) : false,
+  clearLongTasks: () => { if (!QA_MODE) return false; RUNTIME_PERF.longTasks.length = 0; RUNTIME_PERF.maxLongTask = 0; return true; }
+});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
