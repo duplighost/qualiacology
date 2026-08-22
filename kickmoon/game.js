@@ -29,7 +29,7 @@
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '5.5.0-kickmoon';
+  const GAME_VERSION = '5.5.1-kickmoon';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -847,6 +847,16 @@
         }
         if (event.button === 0) this.buttons.kick = true;
         if (event.button === 2) {
+          // RIGHT MOUSE IS THE RECALL. It used to fire the snap only on
+          // RELEASE, and only if the whole click came in under 260 ms --
+          // otherwise you got line-steering, which tugs the ball toward your
+          // aim without bringing it home. That release-latency is the entire
+          // reason it felt weaker than E, which fires on PRESS. Now it sets
+          // the same held `snap` E does, so the two are the same verb.
+          this.buttons.snap = true;
+          // The drag is still tracked: the loop gesture (draw a circle with
+          // the button down) is how the mouse throws a SPIN, and it lives on
+          // this handler. Recalling and spinning do not conflict.
           this.buttons.line = true;
           this.beginMouseLine(event);
         }
@@ -857,7 +867,10 @@
       });
       window.addEventListener('mouseup', event => {
         if (event.button === 0) this.buttons.kick = false;
-        if (event.button === 2) this.endMouseLine(event);
+        if (event.button === 2) {
+          this.buttons.snap = false;
+          this.endMouseLine(event);
+        }
         if (event.button === 1) this.buttons.grapple = false;
       });
       window.addEventListener('mousemove', event => {
