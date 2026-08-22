@@ -30,7 +30,6 @@
 /rocketshoes        /rocket-shoes/            302
 /rockets            /rocket-shoes/            302
 /moon-boots         /rocket-shoes/            302
-/boon-moots         /rocket-shoes/            302
 
 # --- Marrow ---
 /marrow.html        /marrow/                  301!
@@ -127,3 +126,12 @@
 /starling.html  /starling/  301!
 /murmuration    /starling/  302
 /flock          /starling/  302
+
+# --- BOON MOOTS ---
+# /boon-moots used to be a joke alias for Rocket Shoes. There is now an actual
+# game called BOON MOOTS, so the slug takes its own name back. /moon-boots is
+# left pointing at Rocket Shoes on purpose — it is an older link that may be
+# out in the world — but it is the obvious next one to move if you'd rather.
+/boon-moots.html  /boon-moots/  301!
+/pocket-moon      /boon-moots/  302
+/spiggot          /boon-moots/  302

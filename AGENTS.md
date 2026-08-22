@@ -15,6 +15,15 @@ own notes or memory. Last verified: 2026-08-22.
    directly to `main` or merge a PR without Alex's explicit approval. Rollback
    = redeploy a previous deploy in the Netlify UI.
 
+1b. **Games other people made keep their own voice.** BOON MOOTS was written
+   and built by Milo as a present for Alex, and its text — the exhibits, the
+   ranks, the wave subtitles, "a pocket moon for Alex · from Milo" — is Milo's,
+   not Alex's. Do not edit it toward the house register, do not tidy the jokes,
+   and do not drop the dedication. Rule 2 below governs the *catalog entry* on
+   the hub, which is site copy and is Alex's; the game itself is a guest. The
+   same goes for anything else contributed from outside: shell it, make it work
+   on a static host, fix accessibility, leave the writing alone.
+
 2. **Copy is Alex's voice — never invent it.** All site text is written by
    Alex: plain, dry, a little charged, occasionally profane. Never write
    marketing taglines or clipped ad-copy ("Small worlds with sharp teeth" got
@@ -81,7 +90,7 @@ own notes or memory. Last verified: 2026-08-22.
   rebuilds the hubs, validates the public tree, runs strict route smoke, and
   rejects stale generated pages. It must never commit or push generated files.
 
-Current verified baseline: **21 games, 12 music releases, 42 reachable public
+Current verified baseline: **22 games, 12 music releases, 43 reachable public
 routes + 35 asserted 404s.** Pocket Sun is hosted locally in this repository;
 it is not a redirect to a separate Netlify project.
 
@@ -119,6 +128,20 @@ text edits only, then validate it still parses.
    pill (`<a href="/">Qualiacology</a>`) styled to the game's palette with a
    z-index above the game's UI (hide it during pointer lock if the game uses
    it). Model: `behind-you/index.html` or `pasta-mortale/index.html`.
+2b. **If the game came from somewhere else**, it will assume its old host.
+   Everything on this site is self-contained and offline-capable, so before it
+   ships: replace any external font/CDN link with a self-hosted copy in
+   `assets/fonts/` plus its licence in `assets/fonts/licenses/` (BOON MOOTS
+   pulled Anton off Google Fonts; it is now `assets/fonts/anton-latin.woff2`,
+   OFL 1.1); replace host-only APIs with a browser fallback that cannot throw
+   (BOON MOOTS saved through `window.storage`, which does not exist here, so
+   the best score and every unlocked exhibit vanished on refresh — it now falls
+   back to namespaced `localStorage` inside try/catch, because a private window
+   throws on the first write); and run axe over it, since `npm run qa` only
+   covers the four hub pages and never looks at a game. BOON MOOTS arrived with
+   a scrollable Evidence list no keyboard could reach and `user-scalable=no`,
+   which is the same zoom-blocking THROWN already removed for the same reason.
+
 3. **Card art**: `assets/games/<slug>-card-clean.webp` (or .jpg) at 1280×720,
    plus responsive `assets/catalog/games/<slug>-480.{avif,webp}` and
    `<slug>-800.{avif,webp}`. Target file sizes in line with existing cards
