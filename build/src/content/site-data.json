@@ -58,13 +58,13 @@
     {
       "slug": "boon-moots",
       "title": "BOON MOOTS",
-      "descriptor": "Round-moon horde kicker",
+      "descriptor": "Round-moon horde arcade",
       "group": "action",
       "featured": false,
       "image": "/assets/games/boon-moots-card-clean.webp",
-      "alt": "A small round moon in a dark violet void, drawn in neon pink and cyan, a figure in striped boots standing at the middle of it and five green goblins closing in across the curve",
-      "summary": "A pocket moon, and it is properly round \u2014 walk far enough in any direction and you arrive behind yourself. One ball, kicked at whatever is coming; it goes over one horizon and comes back over the other. A troll follows you announcing that the task is complete and its confidence is high. Milo made this one, for me.",
-      "metaDescription": "BOON MOOTS is a browser game on a small, genuinely spherical moon. Kick one ball at whatever is coming, and collect the evidence that the moon is round and there was never a fence. Made for Alexander Duncan Guitar by Milo.",
+      "alt": "A small round moon in a dark violet void, rimmed in neon pink and cyan, a figure in striped boots at the middle of it and five green goblins closing in across the curve",
+      "summary": "A pocket moon, and you are standing on it \u2014 walk far enough in any direction and you arrive behind yourself. One ball, kicked at whatever is coming, over one horizon and back over the other. A troll walks at you announcing that the task is complete and its confidence is high. Milo made this one, for me.",
+      "metaDescription": "BOON MOOTS is a browser game on a small, genuinely spherical moon: kick one ball at whatever is coming, and collect the evidence that there was never a fence. Made for Alexander Duncan Guitar by Milo.",
       "controls": "WASD or arrows move \u00b7 Space kicks, hold to charge \u00b7 P pauses \u00b7 left thumb moves and right thumb kicks on touch",
       "actionLabel": "Stand on it"
     },
@@ -76,8 +76,8 @@
       "featured": false,
       "image": "/assets/games/starling-card-clean.webp",
       "alt": "Thousands of starlings against a dusk sky over bare winter trees, a pale wave of alarm rolling out through the dark flock from one warm-lit bird, a falcon holding above them",
-      "summary": "You are one bird in three thousand. You cannot tell the flock anything \u2014 you can only turn, and the birds beside you turn a beat later, and theirs a beat after that. The wave of it crosses the flock faster than any bird can fly. The falcon hunts whichever part of them is calmest, so turning early is the same as not turning at all.",
-      "metaDescription": "STARLING is a browser game about one bird in a murmuration of three thousand. Turn hard and the alarm travels outward faster than any bird can fly. The only question is whether it gets there before the falcon does.",
+      "summary": "You are one bird in three thousand. You cannot tell the flock anything \u2014 you can only turn, and the birds beside you turn a beat later, and theirs a beat after that. The wave of it crosses the whole murmuration faster than any bird can fly. The falcon hunts the calmest part of it, so turning early is the same as not turning at all.",
+      "metaDescription": "STARLING is a browser game about one bird in a murmuration of three thousand. Turn hard and the alarm travels outward faster than any bird can fly. The falcon stoops nine times before dark.",
       "controls": "Mouse or touch to steer \u00b7 A D or arrows turn \u00b7 M mute \u00b7 R again",
       "actionLabel": "Fly with them"
     },
