@@ -45,7 +45,15 @@ function attachErrorCapture(page, label) {
 
 mkdirSync(resultsRoot, { recursive: true });
 const server = await createStaticServer({ root: outputRoot, port: 4174 });
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+/* System Chrome by default, which is what Alex's machine has and what this
+ * suite has always been calibrated against. QA_CHROME_PATH points it at an
+ * explicit binary instead, for a container or CI box that has no Chrome
+ * channel installed — nothing else about the run changes. */
+const browser = await chromium.launch(
+  process.env.QA_CHROME_PATH
+    ? { executablePath: process.env.QA_CHROME_PATH, headless: true }
+    : { channel: "chrome", headless: true },
+);
 
 try {
   for (const viewport of viewports) {
@@ -80,7 +88,7 @@ try {
     report.viewports.push({ viewport, ...metrics, errors: finishErrors() });
     check(metrics.pageWidth <= metrics.width + 1, `Horizontal overflow at ${viewport.width}x${viewport.height}: ${metrics.pageWidth} > ${metrics.width}`);
     check(metrics.h1Visible, `Homepage H1 is not visible at ${viewport.width}x${viewport.height}`);
-    check(metrics.bodyGameCount === "20" && metrics.bodyAlbumCount === "12", `Catalog proof counts drifted at ${viewport.width}px`);
+    check(metrics.bodyGameCount === "22" && metrics.bodyAlbumCount === "12", `Catalog proof counts drifted at ${viewport.width}px`);
     check(!initialRequests.some((url) => url.includes("/assets/audio/")), `Audio requested before opt-in at ${viewport.width}px`);
 
     if (viewport.width < 960) {

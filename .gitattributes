@@ -6,6 +6,11 @@
 *.jpg binary
 *.jpeg binary
 *.webp binary
+# Every catalog set since the responsive-image change has shipped .avif, and
+# until now they were binary only because git's own text/binary guess happened
+# to spot the NUL bytes. Under `* text=auto eol=lf` that is a guess, not a
+# rule, and a wrong guess on a Windows checkout rewrites the bytes.
+*.avif binary
 *.gif binary
 *.ico binary
 *.mp3 binary
