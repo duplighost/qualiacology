@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "asset": "scoria-environment-float32-640x320-v1.bin",
+  "generator": "src/procedural-art.js#makeScoriaEnvironmentData",
+  "seed": "scoria-environment-v1",
+  "normalizedSeed": 2013314710,
+  "width": 640,
+  "height": 320,
+  "channels": 4,
+  "componentType": "Float32",
+  "byteOrder": "little-endian",
+  "values": 819200,
+  "bytes": 3276800,
+  "sha256": "e8c7b7763019300d2d6a254449726f2e89929f3fdfff94f72f1aacc16dfa09e2",
+  "verification": "npm run verify:baked-terrain"
+}

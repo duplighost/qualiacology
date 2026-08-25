@@ -1,0 +1,16 @@
+{
+  "schema": "ninefold-static-scoria-v1",
+  "version": 1,
+  "asset": "scoria-static-p1-v1.bin",
+  "format": "NFSCP1B1 header + UTF-8 JSON manifest + 8-byte-aligned little-endian typed-array payload",
+  "bytes": 2626336,
+  "sha256": "358c1318c7843e641704d68c5f5dc2f5ac7f8de01e6b96aceadeb7230d538382",
+  "manifestBytes": 6845,
+  "payloadOffset": 6872,
+  "payloadBytes": 2619464,
+  "residentBytes": 2605844,
+  "geometryCount": 9,
+  "arrayCount": 25,
+  "generator": "tools/generate-static-scoria-surface.mjs",
+  "source": "RaceRenderer procedural static P1 Scoria authoring path"
+}
