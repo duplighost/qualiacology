@@ -24,9 +24,19 @@ page.on('response', (r) => { if (r.status() >= 400) errors.push(`HTTP ${r.status
 await page.goto(target, { waitUntil: 'load' });
 await page.waitForTimeout(900);
 
-// Nothing may leave the site.
-const external = await page.evaluate(() => performance.getEntriesByType('resource')
-  .map((e) => e.name).filter((n) => !n.startsWith(location.origin)));
+// Nothing may leave the site. This is the assertion that stops the Google
+// Fonts CDN creeping back into a game folder.
+//
+// Netlify injects its own instrumentation into deploy previews only
+// (app.netlify.com/cdp/?deployID=...). That is the host serving the page, not
+// something the game asked for, and it is absent in production - so it is
+// excluded by exact host rather than by loosening the check.
+const NETLIFY_PREVIEW_HOST = 'app.netlify.com';
+const external = await page.evaluate((skipHost) => performance.getEntriesByType('resource')
+  .map((e) => e.name)
+  .filter((n) => !n.startsWith(location.origin))
+  .filter((n) => { try { return new URL(n).host !== skipHost; } catch { return true; } }),
+NETLIFY_PREVIEW_HOST);
 assert.deepEqual(external, [], `STAY fetched something off-site:\n${external.join('\n')}`);
 
 // The display face must actually be there - the title is set in it at 150px.
