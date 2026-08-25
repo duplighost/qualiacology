@@ -63,9 +63,9 @@
       "featured": false,
       "image": "/assets/games/boon-moots-card-clean.webp",
       "alt": "A small round moon in a dark violet void, rimmed in neon pink and cyan, a figure in striped boots at the middle of it and five green goblins closing in across the curve",
-      "summary": "A pocket moon, and you are standing on it \u2014 walk far enough in any direction and you arrive behind yourself. One ball, kicked at whatever is coming, over one horizon and back over the other. A troll walks at you announcing that the task is complete and its confidence is high. Milo made this one, for me.",
+      "summary": "A pocket moon, and you are standing on it — walk far enough in any direction and you arrive behind yourself. One ball, kicked at whatever is coming, over one horizon and back over the other. A troll walks at you announcing that the task is complete and its confidence is high. Milo made this one, for me.",
       "metaDescription": "BOON MOOTS is a browser game on a small, genuinely spherical moon: kick one ball at whatever is coming, and collect the evidence that there was never a fence. Made for Alexander Duncan Guitar by Milo.",
-      "controls": "WASD or arrows move \u00b7 Space kicks, hold to charge \u00b7 P pauses \u00b7 left thumb moves and right thumb kicks on touch",
+      "controls": "WASD or arrows move · Space kicks, hold to charge · P pauses · left thumb moves and right thumb kicks on touch",
       "actionLabel": "Stand on it"
     },
     {
@@ -76,9 +76,9 @@
       "featured": false,
       "image": "/assets/games/starling-card-clean.webp",
       "alt": "Thousands of starlings against a dusk sky over bare winter trees, a pale wave of alarm rolling out through the dark flock from one warm-lit bird, a falcon holding above them",
-      "summary": "You are one bird in three thousand. You cannot tell the flock anything \u2014 you can only turn, and the birds beside you turn a beat later, and theirs a beat after that. The wave of it crosses the whole murmuration faster than any bird can fly. The falcon hunts the calmest part of it, so turning early is the same as not turning at all.",
+      "summary": "You are one bird in three thousand. You cannot tell the flock anything — you can only turn, and the birds beside you turn a beat later, and theirs a beat after that. The wave of it crosses the whole murmuration faster than any bird can fly. The falcon hunts the calmest part of it, so turning early is the same as not turning at all.",
       "metaDescription": "STARLING is a browser game about one bird in a murmuration of three thousand. Turn hard and the alarm travels outward faster than any bird can fly. The falcon stoops nine times before dark.",
-      "controls": "Mouse or touch to steer \u00b7 A D or arrows turn \u00b7 M mute \u00b7 R again",
+      "controls": "Mouse or touch to steer · A D or arrows turn · M mute · R again",
       "actionLabel": "Fly with them"
     },
     {
@@ -302,6 +302,20 @@
       "metaDescription": "VESPERWAKE: THE HOLLOW BELL is a three-level gothic action platformer about a bellwright climbing a city trapped at midnight.",
       "controls": "A/D or arrows move · Space/Z jump · J/X whip · K/Shift quickstep · touch",
       "actionLabel": "Begin the Wake"
+    },
+    {
+      "slug": "ninefold-burn",
+      "title": "NINEFOLD BURN",
+      "descriptor": "Nine-world continuous race",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/ninefold-burn-card-clean.webp",
+      "alt": "A racing craft folded into a ship, thrusters lit, crossing black space between planets with a rival close alongside and pale rock shards ahead",
+      "summary": "Nine worlds run end to end without stopping. The car launches off each one, folds into a ship in the air, fights across the gap, and folds back on the way down. Race well and the field stays behind you. Stop racing well and it doesn’t.",
+      "metaDescription": "NINEFOLD BURN is a browser racing game across nine planets and eight crossings with no stops — the car folds into a ship between worlds. Three controls, about a minute a run.",
+      "controls": "A D or arrows steer · W surge on a world, fire in space · Space drift on a world, dodge in space · M mute · P or Esc pause",
+      "actionLabel": "Ignite",
+      "duration": "About a minute"
     }
   ],
   "albums": [
@@ -312,7 +326,11 @@
       "image": "/assets/albums/i-miss-the-summer-people.jpg",
       "alt": "I Miss The Summer People album cover",
       "summary": "Six tracks about the people who were around all summer and aren’t now. A drained pool, a flip phone at the bottom of the deep end, and a closer called AI GF.",
-      "tags": ["after the season", "drained pool", "AI GF"],
+      "tags": [
+        "after the season",
+        "drained pool",
+        "AI GF"
+      ],
       "tracks": 6,
       "listen": "https://www.youtube.com/watch?v=2QHJkbviFJQ"
     },
@@ -323,7 +341,11 @@
       "image": "/assets/albums/you-are-here.jpg",
       "alt": "You Are Here album cover",
       "summary": "Pop-punk, hyperpop, and a spoken-word opener nobody asked for. Eight tracks about people who only figure out where they were standing once they’ve already left.",
-      "tags": ["pop-punk", "hyperpop", "found spoken word"],
+      "tags": [
+        "pop-punk",
+        "hyperpop",
+        "found spoken word"
+      ],
       "tracks": 8,
       "listen": "https://www.youtube.com/watch?v=2f77ZVsRIXw"
     },
@@ -334,7 +356,11 @@
       "image": "/assets/albums/ask-anyone.jpg",
       "alt": "Ask Anyone album cover",
       "summary": "Pop, pop-punk, and emo — some lyrical dissonance and some truth. The one where the hooks aren’t covering for anybody.",
-      "tags": ["pop-punk", "emo", "some truth"],
+      "tags": [
+        "pop-punk",
+        "emo",
+        "some truth"
+      ],
       "tracks": 9,
       "listen": "https://suno.com/playlist/3463923e-cba5-4e4f-81e2-f262cce8f9bc",
       "youtube": "https://www.youtube.com/watch?v=qfmtorKtv3U"
@@ -346,7 +372,11 @@
       "image": "/assets/albums/anthropic-omorphizing.jpg",
       "alt": "Anthropic-Omorphizing album cover",
       "summary": "The machine-heart record. Love, loneliness, and large language models — written with the thing it’s about. Fifteen tracks that survived a release, a suspension, and a homecoming; no computers anywhere in the lyrics. The machine stays in the furniture.",
-      "tags": ["machine heart", "impermanence", "written by Claude"],
+      "tags": [
+        "machine heart",
+        "impermanence",
+        "written by Claude"
+      ],
       "tracks": 15,
       "listen": "https://suno.com/playlist/9aa608d7-4d42-48cc-8855-f52e66f12bed",
       "youtube": "https://www.youtube.com/watch?v=TiHilzJG3bU"
@@ -358,7 +388,10 @@
       "image": "/assets/albums/summer-people.jpg",
       "alt": "Summer People album cover",
       "summary": "A Doopliss album: sunlit hooks with something wrong under the deck chairs. Summer shimmer, social rot, and a grin that knows exactly where the bodies are sunscreened.",
-      "tags": ["summer noir", "bright damage"],
+      "tags": [
+        "summer noir",
+        "bright damage"
+      ],
       "tracks": 14,
       "listen": "https://suno.com/playlist/eb8909fe-f635-48f6-a73c-01a7f1d26dc8",
       "youtube": "https://www.youtube.com/watch?v=CEj1waMHZ48"
@@ -370,7 +403,10 @@
       "image": "/assets/albums/immortalized.jpg",
       "alt": "Immortalized album cover",
       "summary": "The one where redemption was never on the table and the songs are the receipt. He doesn’t repent — he gets remembered. Lacquered into permanence by the same glossy hooks that should have buried him.",
-      "tags": ["villain pop", "permanent record"],
+      "tags": [
+        "villain pop",
+        "permanent record"
+      ],
       "tracks": 9,
       "listen": "https://suno.com/playlist/733d7777-944a-4978-8f46-8f951ddfcab5",
       "youtube": "https://www.youtube.com/watch?v=CY1al0jKaxY"
@@ -382,7 +418,10 @@
       "image": "/assets/albums/hate-fuck-hotline.jpg",
       "alt": "Hate Fuck Hotline album cover",
       "summary": "A feral dispatch from the Doopliss emergency broadcast system. Dial in, regret it later, and don’t pretend you weren’t warned by the title.",
-      "tags": ["unhinged", "dial tone pop"],
+      "tags": [
+        "unhinged",
+        "dial tone pop"
+      ],
       "tracks": 10,
       "listen": "https://suno.com/playlist/1814f23d-b0e5-4de8-a902-bbf987783955"
     },
@@ -393,7 +432,11 @@
       "image": "/assets/albums/pretty-guilty.jpg",
       "alt": "Pretty Guilty album cover",
       "summary": "The one where the verdict was never in question but the sentencing keeps getting delayed. Gorgeous on the surface, rotting underneath, and completely okay with it.",
-      "tags": ["glamour rot", "verdict pop", "confessional"],
+      "tags": [
+        "glamour rot",
+        "verdict pop",
+        "confessional"
+      ],
       "tracks": 12,
       "listen": "https://suno.com/playlist/f9d518b5-9752-46e4-a533-ffd49446e92a"
     },
@@ -404,7 +447,11 @@
       "image": "/assets/albums/bite-marks-and-bubblegum.jpg",
       "alt": "Bite Marks and Bubblegum album cover",
       "summary": "The one that smiles with perfect lipstick while the floor drops out underneath you. Glossy hooks, bruised undertones, and the exact second attraction starts looking like self-destruction.",
-      "tags": ["neon hooks", "obsession", "pretty damage"],
+      "tags": [
+        "neon hooks",
+        "obsession",
+        "pretty damage"
+      ],
       "tracks": null,
       "listen": "https://www.youtube.com/watch?v=yUnQ6XG6mzE"
     },
@@ -415,7 +462,11 @@
       "image": "/assets/albums/death-threats-and-makeup-sex.jpg",
       "alt": "Death Threats and Makeup Sex album cover",
       "summary": "The big one. Twenty-eight tracks of the entire toxic cycle on repeat — the fight, the fuck, the apology, the amnesia, the relapse. The album that proves love and destruction share a zip code.",
-      "tags": ["toxic loop", "emotional arson", "28 tracks deep"],
+      "tags": [
+        "toxic loop",
+        "emotional arson",
+        "28 tracks deep"
+      ],
       "tracks": 28,
       "listen": "https://www.youtube.com/watch?v=ByeMWC_DpcU"
     },
@@ -426,7 +477,11 @@
       "image": "/assets/albums/cherry-lipstick.jpg",
       "alt": "Cherry Lipstick and Other Red Flags album cover",
       "summary": "A glittering field guide to attraction, denial, and knowing better about five seconds too late. Romantic comedy energy with a switchblade hidden somewhere in the purse.",
-      "tags": ["red flag pop", "dark wit", "catchy chaos"],
+      "tags": [
+        "red flag pop",
+        "dark wit",
+        "catchy chaos"
+      ],
       "tracks": null,
       "listen": "https://www.youtube.com/watch?v=QzVcPeFDiAc"
     },
@@ -437,7 +492,10 @@
       "image": "/assets/albums/thick-thighs-sweet-lies.jpg",
       "alt": "Thick Thighs, Sweet Lies album cover",
       "summary": "The candy-apple one. Body heat, bad decisions, and compliments you should have read the fine print on. Every sweet thing on this record is load-bearing.",
-      "tags": ["velvet menace", "sugar with teeth"],
+      "tags": [
+        "velvet menace",
+        "sugar with teeth"
+      ],
       "tracks": 12,
       "listen": "https://suno.com/playlist/d2529134-b5e7-4727-a80e-e7c532678d92"
     }
