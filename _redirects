@@ -141,3 +141,9 @@
 /ninefold           /ninefold-burn/  302
 /burn               /ninefold-burn/  302
 /nine-worlds        /ninefold-burn/  302
+
+# --- STAY ---
+/stay.html   /stay/  301!
+/hold        /stay/  302
+/orbit       /stay/  302
+/last-call   /stay/  302

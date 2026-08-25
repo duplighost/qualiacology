@@ -316,6 +316,20 @@
       "controls": "A D or arrows steer · W surge on a world, fire in space · Space drift on a world, dodge in space · M mute · P or Esc pause",
       "actionLabel": "Ignite",
       "duration": "About a minute"
+    },
+    {
+      "slug": "stay",
+      "title": "STAY",
+      "descriptor": "One-button orbit keeper",
+      "group": "worlds",
+      "featured": false,
+      "image": "/assets/games/stay-card-clean.webp",
+      "alt": "A warm orange light at the centre of a dark screen with small coloured guests curving around it on glowing trails, inside a dashed circle marked as the door",
+      "summary": "Hold to pull. Let go to let them go. Everyone who shows up is already leaving, and the only way to keep one is to catch them on the way out — hold too long and you pull them apart instead. One night, from nine until whenever the room empties.",
+      "metaDescription": "STAY is a one-button browser game about holding people in orbit for one night. Hold to pull them closer, let go to let them settle. Hold too tight and they come apart.",
+      "controls": "Hold anywhere · or hold Space · that is the whole game",
+      "actionLabel": "Hold on",
+      "duration": "A few minutes"
     }
   ],
   "albums": [
