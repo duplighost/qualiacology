@@ -40,7 +40,7 @@ export const SHARPNESS_DECAY = 0.14;          // proportional, per second
 // 15) while drift releases scale with real technique (6 vs 15). Weighting the
 // move that actually tracks skill is what gives the race a difficulty curve.
 export const SHARPNESS_GAIN = Object.freeze({
-  drift: 0.3,
+  drift: 0.58,
   hit: 0.1,
   dodge: 0.12,
 });
@@ -51,6 +51,14 @@ export const SHARPNESS_LOSS = Object.freeze({
 // Full sharpness buys back this much rival speed. Set against RIVALS racePace
 // so that a sharp player out-paces the field and a sloppy one cannot.
 export const SHARPNESS_RELIEF = 152;
+
+// The charge at which a drift is worth taking. Nothing enforces it — the
+// reward curve is continuous and holding longer still pays more — but it is
+// the moment the payout stops being crumbs, and it is what the renderer
+// signals so the player can learn the loop by feel instead of by guessing.
+// A firm lean reaches it in roughly half a second, which is also about how
+// long you can hold that lean before the rail boundary takes the drift away.
+export const DRIFT_RIPE_CHARGE = 0.55;
 
 const EPSILON = 1e-7;
 // Segment maxSpeed values shape the authored acceleration curve; they are not
@@ -217,6 +225,7 @@ export function createRaceState(options = {}) {
     wallKisses: 0,
     sharpness: 0,
     sharpnessPeak: 0,
+    driftVoidFlash: 0,
     transitions: 0,
     currentGate: -1,
     lastSlip: false,
@@ -772,6 +781,7 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
   state.dodgeWindow = Math.max(0, state.dodgeWindow - dt);
   state.incomingHitFlash = Math.max(0, state.incomingHitFlash - dt * 3.8);
   state.wallContactCooldown = Math.max(0, state.wallContactCooldown - dt);
+  state.driftVoidFlash = Math.max(0, state.driftVoidFlash - dt * 2.6);
   // Sharpness bleeds whenever it is not being earned. This is what makes a
   // lead losable: stop racing well and the authored rival pace comes back.
   state.sharpness = clamp(state.sharpness * Math.exp(-SHARPNESS_DECAY * dt), 0, 1);
@@ -805,6 +815,9 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
     // convert wall-adjacent charge into propulsion. Eligibility only rearms
     // after the player releases slip and returns to a clear interior lane.
     if (state.drifting && Math.abs(state.lateral) >= railRewardBoundary) {
+      // Signal the kill. A voided drift used to just go quiet, which reads as
+      // nothing happening rather than as a mistake you made.
+      if (!state.driftRailInvalidated) state.driftVoidFlash = 1;
       state.driftRailInvalidated = true;
       state.railRewardLockout = true;
       state.driftCharge = 0;
@@ -825,14 +838,33 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
       // again. This keeps legitimate committed drifts intact while preventing
       // wall-adjacent release farming.
       if (!state.driftRailInvalidated) {
-        state.driftCharge = clamp(state.driftCharge + dt * (0.13 + Math.abs(input.steer) * 0.19 + state.speed / 5600), 0, 1);
+        // Charge comes from how hard you are actually leaning on the slide,
+        // not from how fast the world happens to be moving. The old mix was
+        // 0.13 + steer*0.19 + speed/5600, and at racing speed that last term
+        // was 0.36 of roughly 0.51 - charge filled itself. Committing to a
+        // real drift bought almost nothing over flicking the stick, so the
+        // fastest route was 29 twitches instead of 12 committed slides.
+        // The rate is scaled so that a drift you can actually hold - roughly
+        // half a second of firm lean before the rail boundary takes it away -
+        // lands near 0.55 charge rather than 0.27. The reward curve below is
+        // superlinear, so it needs the achievable range to cover the part of
+        // the curve where commitment starts paying. With the old scale the
+        // whole race lived in the flat bottom of it.
+        state.driftCharge = clamp(
+          state.driftCharge + dt * (0.1 + Math.abs(input.steer) * 1.05 + state.speed / 24000),
+          0,
+          1,
+        );
         state.boost = clamp(state.boost + dt * 0.012, 0, 1);
       }
     } else if (state.drifting) {
       if (state.driftCharge > 0 && !state.driftRailInvalidated) {
         const commitment = state.driftCharge;
-        const reward = Math.min(0.42, 0.5 * Math.pow(commitment, 1.55));
-        const comboGain = Math.min(0.34, 0.55 * Math.pow(commitment, 1.25));
+        // Strongly superlinear, and deliberately continuous - no cliff, a short
+        // slide still pays crumbs. Doubling the commitment more than quadruples
+        // the payout, which is what makes one held slide beat a burst of taps.
+        const reward = Math.min(0.46, 0.74 * Math.pow(commitment, 2.15));
+        const comboGain = Math.min(0.34, 0.6 * Math.pow(commitment, 1.6));
         addBoost(
           state,
           reward,
@@ -841,7 +873,11 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
           { comboGain, minimumIntensity: 0.06 },
         );
         state.driftBoosts += 1;
-        addSharpness(state, SHARPNESS_GAIN.drift);
+        // Scaled by commitment. A flat gain per release meant sharpness - the
+        // value the whole race is paced against - was farmed fastest by
+        // tapping slip as often as possible, which is the exact opposite of
+        // the technique this game is about.
+        addSharpness(state, SHARPNESS_GAIN.drift * Math.pow(commitment, 1.35));
       }
       state.drifting = false;
       state.driftCharge = 0;

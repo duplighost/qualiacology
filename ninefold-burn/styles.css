@@ -82,6 +82,44 @@ button { font: inherit; }
   transition: opacity 260ms ease-out;
 }
 
+/* The drift loop, made legible. Three states, no words:
+   charging  - heat gathers under the car and grows with the charge
+   ripe      - it snaps to the world's second colour and holds, meaning let go
+   voided    - a cold grey blink, meaning the rail just took that drift
+   All of it sits low and behind the vehicle so it reads as the machine
+   working rather than as a gauge bolted onto the screen. */
+.drift-heat {
+  opacity: calc(var(--drift, 0) * .8);
+  background: radial-gradient(ellipse 46% 30% at 50% 96%,
+    color-mix(in srgb, var(--accent) 72%, transparent) 0,
+    color-mix(in srgb, var(--accent) 26%, transparent) 42%,
+    transparent 76%);
+  mix-blend-mode: screen;
+  transition: opacity 90ms linear;
+}
+/* Ripe: brighter, wider, and in the secondary colour so the change is a
+   different hue and not just more of the same - hue reads faster than level
+   in peripheral vision, which is where this lives while you are steering. */
+body[data-drift-ripe="1"] .drift-heat {
+  opacity: .92;
+  background: radial-gradient(ellipse 58% 38% at 50% 96%,
+    color-mix(in srgb, var(--secondary) 88%, transparent) 0,
+    color-mix(in srgb, var(--secondary) 34%, transparent) 46%,
+    transparent 80%);
+  animation: drift-ripe-pulse 420ms ease-in-out infinite alternate;
+}
+@keyframes drift-ripe-pulse { from { transform: scaleY(1); } to { transform: scaleY(1.11); } }
+@media (prefers-reduced-motion: reduce) {
+  body[data-drift-ripe="1"] .drift-heat { animation: none; }
+}
+/* Voided: the heat goes out, cold and grey, for about a third of a second. */
+.drift-void {
+  opacity: calc(var(--drift-void, 0) * .55);
+  background: radial-gradient(ellipse 54% 34% at 50% 96%,
+    rgba(190,200,214,.85) 0, rgba(150,160,176,.28) 44%, transparent 78%);
+  mix-blend-mode: screen;
+}
+
 .impact-flash {
   opacity: var(--flash);
   background: radial-gradient(circle at 50% 58%, white 0, color-mix(in srgb, var(--secondary) 75%, transparent) 13%, color-mix(in srgb, var(--accent) 40%, transparent) 33%, transparent 70%);
