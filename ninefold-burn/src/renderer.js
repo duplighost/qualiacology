@@ -26,7 +26,6 @@ import {
   gateTarget,
   getMorphState,
   getSegmentFraction,
-  DRIFT_RIPE_CHARGE,
   locateCourseDistance,
   morphAt,
   seededLayout,
@@ -1719,8 +1718,6 @@ export class RaceRenderer {
       flash: null,
       drift: null,
       sharpness: null,
-      driftRipe: null,
-      driftVoid: null,
     };
     this.segmentId = null;
     this.logicalProgress = 0;
@@ -9611,12 +9608,6 @@ export class RaceRenderer {
     // It is published to CSS so the player can see the thing that is beating
     // or losing the race for them, rather than having to infer it.
     const sharpnessValue = clamp(state.sharpness ?? 0, 0, 1).toFixed(3);
-    // The drift loop, published so it can be seen. Charge alone was already
-    // here and unused; what was missing were the two moments that teach the
-    // loop - when the drift is worth taking, and when the rail just killed it.
-    const driftRipeValue = (state.drifting && !state.driftRailInvalidated
-      && state.driftCharge >= DRIFT_RIPE_CHARGE) ? '1' : '0';
-    const driftVoidValue = clamp(state.driftVoidFlash ?? 0, 0, 1).toFixed(3);
     if (cssValues.speed !== speedValue) {
       cssValues.speed = speedValue;
       document.documentElement.style.setProperty('--speed', speedValue);
@@ -9636,18 +9627,6 @@ export class RaceRenderer {
     if (cssValues.sharpness !== sharpnessValue) {
       cssValues.sharpness = sharpnessValue;
       document.documentElement.style.setProperty('--sharpness', sharpnessValue);
-    }
-    if (cssValues.driftRipe !== driftRipeValue) {
-      cssValues.driftRipe = driftRipeValue;
-      document.documentElement.style.setProperty('--drift-ripe', driftRipeValue);
-      // Also as a body attribute: the ripe state changes hue, not just level,
-      // and a plain attribute selector is a far sturdier hook for that than
-      // pattern-matching the inline style string.
-      document.body.dataset.driftRipe = driftRipeValue;
-    }
-    if (cssValues.driftVoid !== driftVoidValue) {
-      cssValues.driftVoid = driftVoidValue;
-      document.documentElement.style.setProperty('--drift-void', driftVoidValue);
     }
   }
 
