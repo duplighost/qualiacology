@@ -212,27 +212,27 @@
 /wick/js/*
   Cache-Control: public, max-age=0, must-revalidate
 
-# --- KICK BALL // LUNAR VELOCITY ---
-/kick-ball-lunar-velocity/index.html
+# --- KICKMOON ---
+/kickmoon/index.html
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
-/kick-ball-lunar-velocity/manifest.webmanifest
+/kickmoon/manifest.webmanifest
   Content-Type: application/manifest+json; charset=UTF-8
   Cache-Control: public, max-age=0, must-revalidate
 
-/kick-ball-lunar-velocity/style.css
+/kickmoon/style.css
   Cache-Control: public, max-age=0, must-revalidate
 
-/kick-ball-lunar-velocity/game.js
+/kickmoon/game.js
   Cache-Control: public, max-age=0, must-revalidate
 
-/kick-ball-lunar-velocity/vendor/*
+/kickmoon/vendor/*
   Cache-Control: public, max-age=31536000, immutable
 
-/kick-ball-lunar-velocity/licenses/*
+/kickmoon/licenses/*
   Cache-Control: public, max-age=31536000, immutable
 
-/kick-ball-lunar-velocity/favicon.svg
+/kickmoon/favicon.svg
   Cache-Control: public, max-age=3600, must-revalidate
 
 # --- VESPERWAKE: THE HOLLOW BELL ---
