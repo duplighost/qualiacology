@@ -1705,6 +1705,41 @@ body.touch-enabled .touch-pause {
   opacity: .74;
 }
 
+/* The desktop launch panel has a clipped lower-right corner. The former
+   single unbreakable row was 49px wider than its own content box at 1280x720,
+   so the last controls ran underneath that corner (and farther out on smaller
+   PC windows). Give every verb an authored cell: two calm rows remain readable
+   without shrinking the type or depending on overflow outside the panel. */
+.start-panel #controlsHint .control-set {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  justify-content: stretch;
+  gap: 8px 14px;
+  width: 100%;
+  white-space: normal;
+}
+
+.start-panel #controlsHint .control-set span {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.start-panel #controlsHint .gamepad-hints,
+body.using-gamepad .start-panel #controlsHint .keyboard-hints {
+  display: none;
+}
+
+body.using-gamepad .start-panel #controlsHint .gamepad-hints {
+  display: grid;
+}
+
+@media (max-width: 560px) {
+  .start-panel #controlsHint .control-set {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .utility-controls {
   position: static;
   justify-content: center;

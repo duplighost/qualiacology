@@ -2,14 +2,15 @@
 
 ## three.js r161
 
-KICK BALL // LUNAR VELOCITY includes code derived from **three.js**, release
+KICKMOON (formerly KICK BALL // LUNAR VELOCITY) includes code derived from
+**three.js**, release
 **r161**, distributed under the MIT License.
 
 - Project: https://threejs.org/
 - Release source: https://github.com/mrdoob/three.js/tree/r161
 - Core source file: https://github.com/mrdoob/three.js/blob/r161/build/three.module.min.js
 - License source: https://github.com/mrdoob/three.js/blob/r161/LICENSE
-- Included license: `licenses/threejs-r161-LICENSE.txt`
+- Included license: `licenses/threejs-r161-license.txt`
 
 `vendor/three.min.js` is a classic-script adaptation of the r161 minified ES
 module. It was generated from an already-local copy of
