@@ -143,9 +143,27 @@ text edits only, then validate it still parses.
    which is the same zoom-blocking THROWN already removed for the same reason.
 
 3. **Card art**: `assets/games/<slug>-card-clean.webp` (or .jpg) at 1280×720,
-   plus responsive `assets/catalog/games/<slug>-480.{avif,webp}` and
-   `<slug>-800.{avif,webp}`. Target file sizes in line with existing cards
-   (roughly 6–30 KB for the catalog set). SVG cards skip the catalog set.
+   plus responsive `assets/catalog/games/<slug>-{480,800,1200}.{avif,webp}`
+   (albums: `assets/catalog/albums/<slug>-{360,600,900}.{avif,webp}`). The 1200/900
+   tier was added 2026-08-27 when cards grew to 440px — every game master is exactly
+   1280×720 and every album master 900×900, so those are real re-exports, never
+   upscales. Target file sizes in line with existing cards (roughly 6–30 KB at 480w).
+   SVG cards skip the catalog set.
+
+   **Derive every tier from the image `site-data.json` points at, never from a
+   filename glob.** Not every master follows `<slug>-card-clean.*` — `fetch` uses
+   `fetch-card-keyart-<hash>.webp` — so a glob over `assets/games/*-card-clean.*`
+   silently builds that slug's tiers from a *different picture*. That shipped once:
+   only the 1200w tier was wrong, so FETCH showed another game's art on large screens
+   and nowhere else. Build and check with:
+
+   ```
+   python build/qa/catalog-art.py build     # regenerate all tiers from site-data masters
+   python build/qa/catalog-art.py audit     # perceptual check; run after ANY art change
+   ```
+
+   The audit compares each tier against its master and is the only thing that catches
+   a wrong-picture mismatch — no other gate looks at pixels.
 4. **Catalog entry** in `build/src/content/site-data.json`: slug, title,
    descriptor, `group` (one of `action` / `horror` / `worlds`), summary
    (Alex's voice!), metaDescription, image, alt, controls, actionLabel,
