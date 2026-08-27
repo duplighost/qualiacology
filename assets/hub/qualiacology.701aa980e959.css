@@ -386,6 +386,13 @@ p {
   margin-inline: auto;
 }
 
+/* The sticky filter rail lives in the plate rail with the grid it filters - it can only
+   stick inside its own parent's box, and leaving it behind in .container meant that box
+   ended immediately below it. It gets the plate gutter back so its rule spans the shelf. */
+.plate-bleed > .filter-shell {
+  width: 100%;
+}
+
 .site-header {
   position: fixed;
   z-index: 100;

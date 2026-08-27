@@ -548,6 +548,8 @@ function gamesPage() {
           <div><p class="eyebrow">The full shelf</p><h2 id="catalog-title">All ${games.length} worlds.</h2></div>
           <div class="section-heading-copy"><p>Filter by mood. Controls and play times are listed where the game actually reports them — where it doesn't, I left it blank instead of guessing.</p></div>
         </div>
+      </div>
+      <div class="plate-bleed">
         <div class="filter-shell">
           <fieldset>
             <legend>Filter the worlds</legend>
@@ -558,8 +560,6 @@ function gamesPage() {
           </fieldset>
           <p class="filter-status" data-filter-status aria-live="polite">Showing ${games.length} worlds.</p>
         </div>
-      </div>
-      <div class="plate-bleed">
         <ul class="catalog-grid" data-game-catalog="${games.length}">
           ${games.map((item, index) => gameCard(item, index, { eager: index < 2 })).join("\n")}
         </ul>
