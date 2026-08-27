@@ -47,6 +47,10 @@
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --content: 76rem;
   --gutter: clamp(1rem, 3vw, 2rem);
+  /* The seam between chapters. Asymmetric on purpose: a heading needs less air above
+     it than the content it closes needs below. It is also the numeral's height budget. */
+  --seam-top: clamp(3rem, 6vw, 5rem);
+  --seam-bot: clamp(3.5rem, 7vw, 6rem);
   --header-height: 4.5rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   /* The room you are standing in. */
@@ -165,6 +169,9 @@ body[data-page="music"] ::selection {
   color: #120a24;
 }
 
+/* Every hover affordance below carries a :focus-visible twin. The amber outline says
+   WHERE you are; the twin says what the thing DOES. Keyboard users were getting only
+   the first half. The outline itself never changes — see the law at the top. */
 a {
   color: inherit;
   text-underline-offset: 0.18em;
@@ -409,7 +416,8 @@ p {
   color: var(--text);
 }
 
-.nav-link:hover::before {
+.nav-link:hover::before,
+.nav-link:focus-visible::before {
   opacity: 1;
 }
 
@@ -541,6 +549,16 @@ p {
   transition-duration: 45ms;
 }
 
+/* The two biggest targets on the site — the card art and the card title, 24 of each on
+   /games/ — acknowledged nothing at all. With the resting filter gone there is now no
+   other feedback before navigation, least of all on a phone. `transform` is the press
+   lane; the entrance animation owns `translate` on the ancestor, so they never contend. */
+.card-media:active,
+.card-title a:active {
+  transform: translateY(1px);
+  transition: transform 45ms ease;
+}
+
 .button-primary {
   border-color: var(--cyan);
   background: var(--cyan);
@@ -574,7 +592,8 @@ p {
   transition: transform 180ms var(--ease);
 }
 
-.button-arrow:hover::after {
+.button-arrow:hover::after,
+.button-arrow:focus-visible::after {
   transform: translateX(0.25em);
 }
 
@@ -606,14 +625,28 @@ p {
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
-  -webkit-text-stroke: 1px rgba(158, 176, 185, 0.24);
-  -webkit-text-stroke-color: color-mix(in srgb, var(--wing) 38%, transparent);
+  -webkit-text-stroke: 1px rgba(158, 176, 185, 0.2);
+  -webkit-text-stroke-color: color-mix(in srgb, var(--wing) 30%, transparent);
 }
 
 @supports not (-webkit-text-stroke: 1px red) {
   .ghost-index {
     color: rgba(158, 176, 185, 0.07);
     color: color-mix(in srgb, var(--wing) 7%, transparent);
+  }
+}
+
+/* The numeral was absolutely positioned INSIDE the text column, so on the one page
+   with a heading long enough to reach it ("Psychopharmacology" is a single unbreakable
+   726px word) it struck straight through the words. It now hangs in the seam above the
+   chapter rule, sized off the seam tokens rather than a viewport clamp — so it cannot
+   grow into the text at any width, by construction rather than by tuning. */
+@media (min-width: 45rem) {
+  .section-heading .ghost-index {
+    top: auto;
+    right: -0.04em;
+    bottom: calc(100% - 0.06em);
+    font-size: calc((var(--seam-top) + var(--seam-bot)) * 0.86);
   }
 }
 
@@ -758,7 +791,7 @@ p {
 }
 
 .section {
-  padding: clamp(4rem, 8vw, 6.25rem) 0;
+  padding-block: var(--seam-top) var(--seam-bot);
 }
 
 /* Every section opens like a chapter: a full rule, a wing eyebrow, a ghost numeral. */
@@ -766,7 +799,7 @@ p {
   position: relative;
   z-index: 0;
   display: grid;
-  margin-bottom: clamp(2rem, 5vw, 3.5rem);
+  margin-bottom: clamp(1.5rem, 3.5vw, 2.5rem);
   padding-top: 1.3rem;
   border-top: 1px solid var(--line-bright);
   gap: 1.25rem;
@@ -911,6 +944,7 @@ body[data-page="psych"] .subhero h1 {
 .card-list,
 .catalog-grid {
   display: grid;
+  counter-reset: plate;
   gap: 2.25rem 1.75rem;
 }
 
@@ -918,6 +952,7 @@ body[data-page="psych"] .subhero h1 {
 .card-list > li,
 .catalog-grid > li {
   border-top: 1px solid var(--line);
+  counter-increment: plate;
   padding-top: 1.35rem;
 }
 
@@ -926,6 +961,14 @@ body[data-page="psych"] .subhero h1 {
   display: flex;
   height: 100%;
   flex-direction: column;
+}
+
+/* The index counts what is ON THE SHELF, not what exists in the data. Filtering to
+   Horror used to render 01, 09, 15, 16, 17 underneath a line reading "Showing 5
+   worlds." A counter cannot do that: `[hidden] { display: none }` means a filtered-out
+   item generates no box, so it never increments. */
+.card-index::before {
+  content: counter(plate, decimal-leading-zero);
 }
 
 .card-index {
@@ -1033,7 +1076,8 @@ body[data-page="psych"] .subhero h1 {
   transition: color 180ms ease;
 }
 
-.card-title a:hover {
+.card-title a:hover,
+.card-title a:focus-visible {
   color: var(--wing);
 }
 
@@ -1152,18 +1196,19 @@ body[data-page="psych"] .subhero h1 {
   }
 }
 
-.route-card:hover strong {
+.route-card:hover strong,
+.route-card:focus-visible strong {
   color: var(--wing);
 }
 
-.route-card:hover span {
+.route-card:hover span,
+.route-card:focus-visible span {
   transform: translateX(0.4em);
 }
 
-/* `translate`, not `transform`: the rise animation owns transform on this element. */
 .route-card:active {
-  translate: 0 1px;
-  transition: translate 45ms ease;
+  transform: translateY(1px);
+  transition: transform 45ms ease;
 }
 
 /* The footer: the house seen from the street after dark.
@@ -1228,7 +1273,8 @@ body[data-page="psych"] .subhero h1 {
   transition: color 160ms ease;
 }
 
-.footer-links a:hover {
+.footer-links a:hover,
+.footer-links a:focus-visible {
   color: var(--cyan);
 }
 
@@ -1305,6 +1351,23 @@ body[data-page="psych"] .subhero h1 {
 .subhero-grid > div:first-child {
   position: relative;
   z-index: 0;
+}
+
+/* Making the inner column static hands the containing block to .subhero-grid, which is
+   already relative; its z-index: 0 still creates the stacking context, so paint order
+   is unchanged. The numeral lands in the empty air over the stat plate instead of on
+   top of the headline. */
+@media (min-width: 60rem) {
+  .subhero-grid > div:first-child {
+    position: static;
+  }
+
+  .subhero .ghost-index {
+    top: -0.24em;
+    right: -0.04em;
+    bottom: auto;
+    font-size: clamp(6rem, 11.5vw, 10.5rem);
+  }
 }
 
 .subhero h1 {
@@ -1424,7 +1487,8 @@ body[data-page="psych"] .subhero h1 {
   transition: color 160ms ease, border-color 160ms ease;
 }
 
-.filter-button:hover {
+.filter-button:hover,
+.filter-button:focus-visible {
   color: var(--text);
 }
 
@@ -1479,11 +1543,14 @@ body[data-page="psych"] .subhero h1 {
 }
 
 /* Entrance: entries rise onto the ledger as you scroll. Zero JS; browsers
-   without scroll-driven animations (and reduced-motion users) see everything. */
+   without scroll-driven animations (and reduced-motion users) see everything.
+   It targets the card INSIDE the <li>, not the <li> itself: the <li> carries the
+   ledger's border-top, and animating it dragged the site's own hairlines up to 16px
+   out of true mid-scroll. The rule stays nailed; the card rises off it. */
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
-    .card-list > li,
-    .catalog-grid > li,
+    .card-list > li > *,
+    .catalog-grid > li > *,
     .method-card,
     .community-card,
     .route-card {
@@ -1494,14 +1561,38 @@ body[data-page="psych"] .subhero h1 {
   }
 }
 
-/* Transform-only: text keeps full contrast at every scroll position. */
-@keyframes rise {
+/* The result beat. A new keyframe name on the inner card is required: reusing `rise`
+   would collide with the view-timeline binding that owns the <li>'s translate. Four
+   nth-child buckets, not a per-card stagger — the shelf settles, it does not cascade. */
+@media (prefers-reduced-motion: no-preference) {
+  .is-filtering .work-card {
+    animation: settle 180ms var(--ease) both;
+  }
+
+  .is-filtering > li:nth-child(4n + 2) .work-card { animation-delay: 30ms; }
+  .is-filtering > li:nth-child(4n + 3) .work-card { animation-delay: 60ms; }
+  .is-filtering > li:nth-child(4n + 4) .work-card { animation-delay: 90ms; }
+}
+
+@keyframes settle {
   from {
-    transform: translateY(22px);
+    translate: 0 6px;
   }
 
   to {
-    transform: none;
+    translate: none;
+  }
+}
+
+/* Transform-family only, never opacity: text keeps full contrast at every scroll
+   position. `translate` is the entrance lane — see the motion law at the top. */
+@keyframes rise {
+  from {
+    translate: 0 22px;
+  }
+
+  to {
+    translate: none;
   }
 }
 

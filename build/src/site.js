@@ -107,11 +107,25 @@ if (filterButtons.length && filterItems.length) {
       button.setAttribute("aria-pressed", String(button.dataset.filter === nextFilter));
     });
 
+    // Filtering collapses the document under you. Measured on production before this
+    // existed: pressing Horror at scrollY 3000 shrank the page from 8933px to 3198px,
+    // the browser clamped scroll to 303, and the rail you had just clicked landed 426px
+    // further down the viewport than the cursor that clicked it. Hold the rail still.
+    const rail = document.querySelector(".filter-shell");
+    const before = rail ? rail.getBoundingClientRect().top : null;
+
     filterItems.forEach((item) => {
       const show = nextFilter === "all" || item.dataset.filterKind === nextFilter;
       item.hidden = !show;
       if (show) visible += 1;
     });
+
+    if (rail && before !== null) {
+      const drift = rail.getBoundingClientRect().top - before;
+      // "instant" is mandatory: html { scroll-behavior: smooth } would otherwise animate
+      // the correction, turning a held rail into an unexplained slide.
+      if (drift) window.scrollBy({ top: drift, behavior: "instant" });
+    }
 
     if (filterStatus) {
       filterStatus.textContent = `Showing ${visible} ${visible === 1 ? "world" : "worlds"}.`;
@@ -125,8 +139,23 @@ if (filterButtons.length && filterItems.length) {
     }
   };
 
+  const grid = document.querySelector(".catalog-grid");
+
   filterButtons.forEach((button) => {
-    button.addEventListener("click", () => applyFilter(button.dataset.filter));
+    button.addEventListener("click", () => {
+      applyFilter(button.dataset.filter);
+      // A result beat, so the shelf reads as having answered. Its own keyframe on the
+      // inner card, never `rise` on the <li> — that one is bound to a view timeline.
+      if (grid) {
+        grid.classList.remove("is-filtering");
+        void grid.offsetWidth;
+        grid.classList.add("is-filtering");
+      }
+    });
+  });
+
+  document.querySelector(".catalog-grid")?.addEventListener("animationend", (event) => {
+    if (event.animationName === "settle") grid?.classList.remove("is-filtering");
   });
 
   const initial = new URLSearchParams(window.location.search).get("filter") || "all";

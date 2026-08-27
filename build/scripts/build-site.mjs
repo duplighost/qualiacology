@@ -43,7 +43,6 @@ function versioned(urlPath) {
   assetVersions.set(urlPath, stamped);
   return stamped;
 }
-const twoDigits = (index) => String(index + 1).padStart(2, "0");
 const routeForGame = (game) => `/${game.slug}/`;
 const routeForAlbum = (album) => `/music/${album.slug}/`;
 const external = 'target="_blank" rel="noopener noreferrer"';
@@ -252,7 +251,7 @@ function gameCard(game, index, { eager = false } = {}) {
     : "";
   return `<li data-filter-kind="${escapeHtml(game.group)}" data-catalog-game="${escapeHtml(game.slug)}">
     <article class="work-card">
-      <span class="card-index" aria-hidden="true">${twoDigits(index)}</span>
+      <span class="card-index" aria-hidden="true"></span>
       <a class="card-media" href="${routeForGame(game)}">
         ${catalogPicture(game, "games", eager)}
       </a>
@@ -275,7 +274,7 @@ function albumCard(album, index, { eager = false } = {}) {
   const meta = [...album.tags, ...(album.tracks ? [`${album.tracks} tracks`] : [])];
   return `<li data-catalog-album="${escapeHtml(album.slug)}">
     <article class="album-card">
-      <span class="card-index" aria-hidden="true">${twoDigits(index)}</span>
+      <span class="card-index" aria-hidden="true"></span>
       <a class="card-media" href="${routeForAlbum(album)}">
         ${catalogPicture(album, "albums", eager)}
       </a>
