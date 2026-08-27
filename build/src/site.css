@@ -5,6 +5,23 @@
   audio LED. Hero art gave its glow back on 2026-08-27 — the picture is the light now.
   Wing colors mean rooms — amber = psychopharmacology, cyan = games, pink = Doopliss.
   Amber focus outlines are accessibility, not theming; they never change.
+
+  Motion law - three lanes, so entrance, pointer and press can never write the same
+  property and fight each other:
+    translate = entrance   (scroll timelines only: `rise`, `settle`)
+    scale     = pointer    (hover/focus, always inside
+                            @media (hover: hover) and (prefers-reduced-motion: no-preference))
+    transform = press      (:active, 45ms attack)
+  Entrance animations are transform-family ONLY, never opacity: an opacity keyframe
+  makes axe fail colour-contrast on below-fold content mid-animation. This was learned
+  the hard way; do not re-learn it.
+
+  Not doing, on purpose: card tilt, parallax, magnetic buttons, a cursor follower, a
+  cursor-driven torch, a fixed scroll-driven lamp, per-card stagger beyond four
+  nth-child buckets, `will-change` on card images. All are desktop-only by nature,
+  invisible inside a stranger's first ten seconds, absent on the phones this site is
+  mostly read on, and untestable by a QA suite that runs at 390px and 1440px with no
+  hover emulation.
 */
 
 @font-face {
@@ -284,7 +301,10 @@ p {
   transform: translateY(0);
 }
 
-/* The one glowing line on the site: the filament that measures your descent. */
+/* The one glowing line on the site: the filament that measures your descent.
+   Where scroll-driven animations exist the browser drives the scale itself, which
+   removes one inline-style write and one style recalc per scroll frame; the JS stays
+   as the fallback for engines without them. */
 .scroll-progress {
   position: fixed;
   z-index: 150;
@@ -298,19 +318,51 @@ p {
   pointer-events: none;
 }
 
-/* On the homepage the filament walks the hallway: cyan, amber, cyan, pink. */
+/* Must come AFTER the base rule: same specificity, so source order decides, and
+   `transform: none` here is load-bearing. The base parks the filament at scaleX(0)
+   for the JS fallback; left in place it multiplies against the animated `scale` and
+   the filament is zero-width at every scroll position, forever. */
 @supports (animation-timeline: scroll(root)) {
-  .home-page .scroll-progress {
-    animation: hallway-walk linear both;
+  .scroll-progress {
+    animation: filament linear both;
     animation-timeline: scroll(root);
+    transform: none;
   }
 }
 
-@keyframes hallway-walk {
-  0%, 12% { color: var(--cyan); }
-  24%, 40% { color: var(--amber); }
-  52%, 66% { color: var(--cyan); }
-  80%, 100% { color: var(--pink); }
+@keyframes filament {
+  from {
+    scale: 0 1;
+  }
+
+  to {
+    scale: 1 1;
+  }
+}
+
+/* The filament used to walk the hallway on a fixed set of percentage stops, which
+   were 10-20% out of phase with the real sections (pink arrived at 80% for a section
+   that ended at 78%) and never showed violet at all. Re-tuning the stops would only
+   have drifted again the moment the seams changed. `data-here` is set by an
+   IntersectionObserver over the four homepage rooms, so the light is a report rather
+   than a guess, and it cannot go stale when the layout moves. */
+.home-page[data-here="community"] .scroll-progress { color: var(--amber); }
+.home-page[data-here="game"] .scroll-progress { color: var(--cyan); }
+.home-page[data-here="music"] .scroll-progress { color: var(--pink); }
+.home-page[data-here="connect"] .scroll-progress { color: var(--violet); }
+
+.scroll-progress {
+  transition: color 420ms var(--ease);
+}
+
+/* The stylesheet has always claimed the lit pilot light is "the room you are standing
+   in". On the homepage it was never lit, because there was no page to be current. */
+.home-page[data-here="community"] .nav-link[href="/psychopharmacology/"]::before,
+.home-page[data-here="game"] .nav-link[href="/games/"]::before,
+.home-page[data-here="music"] .nav-link[href="/music/"]::before,
+.home-page[data-here="connect"] .nav-link[href="/#connect"]::before {
+  opacity: 1;
+  box-shadow: 0 0 8px 1px var(--dot, transparent);
 }
 
 .container {

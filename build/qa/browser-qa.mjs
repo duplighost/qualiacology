@@ -132,6 +132,21 @@ try {
       const serious = axe.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
       report.accessibility.push({ route, viewport: viewport.width, violations: axe.violations.length, serious: serious.map((item) => item.id) });
       check(serious.length === 0, `${route} has serious/critical Axe violations at ${viewport.width}px: ${serious.map((item) => item.id).join(", ")}`);
+
+      // The audio LED is the one place on the site that animates opacity, which is the
+      // exact thing the stylesheet's own motion law forbids in keyframes. It only runs
+      // while music is playing, and the axe pass above never turns it on - so the lit
+      // state has never actually been audited. Forcing aria-pressed lights it without
+      // depending on autoplay policy or the audio file loading.
+      const led = page.locator("[data-audio-toggle]");
+      if (await led.count()) {
+        await led.evaluate((button) => button.setAttribute("aria-pressed", "true"));
+        const axeLit = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+        const seriousLit = axeLit.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
+        check(seriousLit.length === 0, `${route} has serious/critical Axe violations with the audio LED lit at ${viewport.width}px: ${seriousLit.map((item) => item.id).join(", ")}`);
+        await led.evaluate((button) => button.setAttribute("aria-pressed", "false"));
+      }
+
       report.routes.push({ route, viewport, ...routeMetrics, errors: finishErrors() });
       await context.close();
     }
