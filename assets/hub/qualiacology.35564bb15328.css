@@ -908,12 +908,9 @@ body[data-page="psych"] .subhero h1 {
   list-style: none;
 }
 
-/* `align-items: start` is what lets a card be as tall as its own caption. Every plate
-   in a row still lines up perfectly, because the media comes first and is fixed-aspect. */
 .card-list,
 .catalog-grid {
   display: grid;
-  align-items: start;
   gap: 2.25rem 1.75rem;
 }
 
@@ -927,6 +924,7 @@ body[data-page="psych"] .subhero h1 {
 .work-card,
 .album-card {
   display: flex;
+  height: 100%;
   flex-direction: column;
 }
 
@@ -1008,6 +1006,7 @@ body[data-page="psych"] .subhero h1 {
 .card-body {
   display: flex;
   min-height: 0;
+  flex: 1;
   flex-direction: column;
   padding: 1.2rem 0 0;
 }
@@ -1045,8 +1044,9 @@ body[data-page="psych"] .subhero h1 {
   line-height: 1.62;
 }
 
-/* Metadata is printed, not chipped. The slack used to be `margin-top: auto`, which
-   pushed a 138px hole into the middle of every short card to keep the row square. */
+/* Metadata is printed, not chipped, and it stays attached to the summary it describes.
+   The row's slack used to sit HERE (`margin-top: auto`), tearing a ~138px hole between
+   a short summary and its own metadata. It now sits below, above the action. */
 .card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1075,9 +1075,13 @@ body[data-page="psych"] .subhero h1 {
   font-weight: 400;
 }
 
+/* The action sits on the floor of the card, so every button in a row shares one
+   baseline. This is where a row's uneven slack goes: as breathing room in front of
+   the press, never as a gap inside the reading. */
 .card-actions {
   display: flex;
   flex-wrap: wrap;
+  margin-top: auto;
   gap: 0.55rem;
 }
 
