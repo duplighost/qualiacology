@@ -1235,8 +1235,28 @@ body[data-page="psych"] .subhero h1 {
   gap: 0.55rem;
 }
 
+/* The action sits at its own width instead of stretching the whole column. A
+   full-bleed 386px slab of solid cyan out-emitted the picture above it - 24 of them
+   on /games/ were the brightest thing on a page whose subject is the artwork. */
 .card-actions .button {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+}
+
+/* On the shelf the action is an outline: the picture is the thing being chosen, and
+   every card is equally choosable, so nothing here earns a filled slab. The homepage
+   featured three keep theirs - that is where "featured" means something, and it keeps
+   one unambiguous press-shaped object in a stranger's path. Alex's verb is untouched. */
+.catalog-grid .card-actions .button-primary {
+  border-color: var(--line-bright);
+  background: transparent;
+  color: var(--text);
+}
+
+.catalog-grid .card-actions .button-primary:hover,
+.catalog-grid .card-actions .button-primary:focus-visible {
+  border-color: var(--wing);
+  background: transparent;
+  color: var(--text);
 }
 
 /* Three doorways, set as ledger rows. Each door is lit in its own wing. */
