@@ -30,6 +30,7 @@ export function create(ctx) {
   // NB: enemies is constructed AFTER combat in the SYSTEMS manifest, so it
   // must be read lazily at call time — never captured here.
   const _muzzle = new THREE.Vector3(), _n = new THREE.Vector3(0, 1, 0), _v = new THREE.Vector3();
+  const _meleePoint = new THREE.Vector3(), _meleeNormal = new THREE.Vector3();
   let marker = null;               // {kind, age, strength, hpFrac}
   let markerTimes = [];
 
@@ -66,7 +67,7 @@ export function create(ctx) {
   }
 
   /* ---------------- the shot ---------------- */
-  ctx.bus.on('weapon:fire', ({ dir, origin, tracer }) => {
+  ctx.bus.on('weapon:fire', ({ dir, origin, tracer, boosted = false, damageMult = 1, tracerPower = 1 }) => {
     const world = ctx.systems.world;
     const enemies = ctx.systems.enemies;
     const MAXT = 300;
@@ -88,36 +89,37 @@ export function create(ctx) {
     if (cHit) endT = Math.min(endT, cHit.t);
     if (eHit) endT = Math.min(endT, eHit.t);
 
-    if (tracer) ctx.systems.fx.tracer(_muzzle, dir, Math.max(endT - 0.4, 2));
+    if (tracer) ctx.systems.fx.tracer(_muzzle, dir, Math.max(endT - 0.4, 2), tracerPower);
 
     if (eHit && eHit.t <= endT + 0.01) {
       const dist = eHit.t;
       const zoneMult = ZONES[eHit.zone] ?? 1;
-      let dmg = bandDamage(dist) * zoneMult;
+      let dmg = bandDamage(dist) * zoneMult * damageMult;
       dmg = Math.max(1, Math.round(dmg));          // THE ONE LAW: >= 1 hp, always
       const res = enemies.damage(eHit.enemy, dmg, { zone: eHit.zone, dir, point: eHit.point, dist });
       const deflected = eHit.zone === 'plate';
-      ctx.systems.fx.impact(deflected ? 'deflect' : 'flesh', eHit.point, _v.copy(dir).negate(), deflected ? 0.7 : 1);
+      const shotPower = boosted ? 1.30 : 1;
+      ctx.systems.fx.impact(deflected ? 'deflect' : 'flesh', eHit.point, _v.copy(dir).negate(), (deflected ? 0.7 : 1) * shotPower);
       if (res.killed) {
         setMarker('kill', dmg / 34, 0);
         ctx.systems.fx.hitstop(0.07);
-        ctx.systems.fx.impact('death', eHit.point, _n, 1);
+        ctx.systems.fx.impact('death', eHit.point, _n, boosted ? 1.18 : 1);
         spawnDrop(eHit.point, dir, DROPS[res.species] ?? 16);
-        ctx.bus.emit('combat:kill', { species: res.species, point: eHit.point, zone: eHit.zone });
+        ctx.bus.emit('combat:kill', { species: res.species, point: eHit.point, zone: eHit.zone, boosted, damage: dmg });
       } else {
         setMarker(deflected ? 'deflect' : eHit.zone === 'vent' ? 'weak' : eHit.zone === 'head' ? 'head' : 'normal', dmg / 34, res.hpFrac);
       }
-      ctx.bus.emit('combat:hit', { zone: eHit.zone, deflected, dist, killed: res.killed });
+      ctx.bus.emit('combat:hit', { zone: eHit.zone, deflected, dist, killed: res.killed, boosted, damage: dmg, damageMult });
       return;
     }
     if (cHit && (!gHit || cHit.t <= gHit.t)) {
-      ctx.systems.fx.impact(cHit.kind, cHit.point, _v.copy(dir).negate(), 1);
-      ctx.bus.emit('combat:surface', { kind: cHit.kind, point: cHit.point });
+      ctx.systems.fx.impact(cHit.kind, cHit.point, _v.copy(dir).negate(), boosted ? 1.30 : 1);
+      ctx.bus.emit('combat:surface', { kind: cHit.kind, point: cHit.point, boosted });
       return;
     }
     if (gHit) {
-      ctx.systems.fx.impact(gHit.kind, gHit.point, _n, 1);
-      ctx.bus.emit('combat:surface', { kind: gHit.kind, point: gHit.point });
+      ctx.systems.fx.impact(gHit.kind, gHit.point, _n, boosted ? 1.30 : 1);
+      ctx.bus.emit('combat:surface', { kind: gHit.kind, point: gHit.point, boosted });
     }
   });
 
@@ -132,24 +134,56 @@ export function create(ctx) {
      */
     meleeStrike(enemy, damage) {
       _v.set(enemy.pos.x - ctx.systems.player.pos.x, 0, enemy.pos.z - ctx.systems.player.pos.z).normalize();
-      const point = new THREE.Vector3(
+      _meleePoint.set(
         enemy.pos.x - _v.x * enemy.def.radius,
         enemy.pos.y + enemy.def.height * 0.5,
         enemy.pos.z - _v.z * enemy.def.radius,
       );
-      const res = ctx.systems.enemies.damage(enemy, damage, { zone: 'torso', dir: _v, point, dist: 2 });
-      ctx.systems.fx.impact('flesh', point, _v.clone().negate(), 1.6);
-      ctx.systems.camera.addTrauma(0.22);
+      const res = ctx.systems.enemies.damage(enemy, damage, { zone: 'torso', dir: _v, point: _meleePoint, dist: 2 });
+      ctx.systems.fx.impact('meleeFlesh', _meleePoint, _meleeNormal.copy(_v).negate(), 1.75);
+      ctx.systems.camera.addTrauma(0.28);
       if (res.killed) {
         setMarker('kill', damage / 34, 0);
-        ctx.systems.fx.impact('death', point, _n, 1);
-        spawnDrop(point, _v, DROPS[res.species] ?? 16);
-        ctx.bus.emit('combat:kill', { species: res.species, point, zone: 'melee' });
+        ctx.systems.fx.impact('death', _meleePoint, _n, 1);
+        spawnDrop(_meleePoint, _v, DROPS[res.species] ?? 16);
+        ctx.bus.emit('combat:kill', { species: res.species, point: _meleePoint, zone: 'melee' });
       } else {
         setMarker('normal', damage / 34, res.hpFrac);
       }
-      ctx.bus.emit('combat:melee', { killed: res.killed, species: res.species });
+      ctx.bus.emit('combat:melee', {
+        outcome: 'enemy', killed: res.killed, species: res.species,
+        damage, point: _meleePoint,
+      });
       return res;
+    },
+
+    /**
+     * Resolve the butt against solid world geometry after enemy lock fails.
+     * Technology owns the metal response even when its generic collider kind
+     * predates the surface tag; natural colliders and terrain stay hard rock.
+     */
+    meleeSurface(origin, dir, range) {
+      const world = ctx.systems.world;
+      const cHit = world.rayColliders(origin, dir, range);
+      // marchGround samples every 0.7 m. Give it one look-ahead sample so a
+      // short 2.05 m melee ray cannot end between samples, then enforce the
+      // authored reach here before resolving anything.
+      const marched = world.marchGround(origin, dir, range + 0.7);
+      const gHit = marched && marched.t <= range ? marched : null;
+      let hit = null;
+      if (cHit && (!gHit || cHit.t <= gHit.t)) {
+        hit = cHit;
+        const technology = cHit.kind === 'metal'
+          || cHit.collider?.surface === 'metal'
+          || cHit.collider?.kind === 'field-bastion';
+        hit.kind = technology ? 'metal' : 'rock';
+        ctx.systems.fx.impact(hit.kind, hit.point, _meleeNormal.copy(dir).negate(), 1.25);
+      } else if (gHit) {
+        hit = gHit;
+        ctx.systems.fx.impact(hit.kind, hit.point, _n, 1.18);
+      }
+      if (hit) ctx.bus.emit('combat:melee:surface', { kind: hit.kind, point: hit.point });
+      return hit;
     },
     reset() {
       marker = null;
@@ -163,7 +197,7 @@ export function create(ctx) {
         if (marker.age > (marker.kind === 'kill' ? 0.26 : 0.21)) marker = null;
       }
 
-      // drops: 0.28 s free flight, then home on the player from 14 m
+      // drops: 0.28 s free flight, then home on the player from 26 m
       const p = ctx.systems.player;
       const world = ctx.systems.world;
       const wep = ctx.systems.weapons;

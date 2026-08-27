@@ -27,6 +27,7 @@ import * as enemies from './enemies/enemies.js';
 import * as director from './director/director.js';
 import * as hud from './ui/hud.js';
 import * as post from './gfx/post.js';
+import { setLunarSurfaceSource } from './gfx/surfaces.js';
 
 const SYSTEMS = [
   ['input', input],
@@ -84,7 +85,7 @@ const VG = window.__VG = {
   ready: false,
   bootStage: 'init',
   bootError: null,
-  version: '0.1.0',
+  version: '0.3.0-impact',
 };
 
 /* ---------------- resize: ONE handler, one authority ---------------- */
@@ -134,6 +135,9 @@ function buildEnvironment() {
 }
 
 async function boot() {
+  VG.bootStage = 'assets';
+  const lunarAlbedo = await new THREE.ImageLoader().loadAsync('./assets/textures/lunar-regolith-albedo-v1.png');
+  setLunarSurfaceSource(lunarAlbedo);
   VG.bootStage = 'systems';
   const env = buildEnvironment();
   ctx.scene.environment = env;
@@ -217,6 +221,7 @@ function resetRun() {
   ctx.systems.director.reset();
   ctx.systems.weapons.reset();
   ctx.systems.combat.reset();
+  ctx.systems.camera.resetTransient();
 }
 
 /* ---------------- the loop ---------------- */

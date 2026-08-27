@@ -19,17 +19,20 @@ export function create(ctx) {
     <div id="ammo"><span class="mag">30</span> <span class="res">/ 210</span></div>
     <div id="vitals"><span class="pips"></span><span class="hp">100</span></div>
     <div id="banner"></div>
+    <div id="salvage-confirm"><strong>SALVAGE SECURED</strong> <small>+45 AMMO // +20 HEALTH</small></div>
     <div class="shell" id="shell">
       <h1>VIGIL</h1>
       <p>The relay is dark. The eclipse is rising.<br/>Hold the deck until dawn.</p>
       <button class="go" id="go">BEGIN THE WATCH</button>
-      <div class="keys">WASD move &nbsp;·&nbsp; SHIFT sprint &nbsp;·&nbsp; CTRL crouch / slide &nbsp;·&nbsp; SPACE jump<br/>
+      <div class="keys">WASD move &nbsp;·&nbsp; SHIFT sprint &nbsp;·&nbsp; HOLD CTRL crouch &nbsp;·&nbsp; SPRINT + CTRL slide &nbsp;·&nbsp; SPACE jump<br/>
       MOUSE aim &nbsp;·&nbsp; LMB fire &nbsp;·&nbsp; RMB sights &nbsp;·&nbsp; R reload &nbsp;·&nbsp; V melee</div>
       <div id="boot-note"></div>
     </div>`;
 
   const el = (id) => document.getElementById(id);
   const shell = el('shell'), go = el('go'), banner = el('banner');
+  const salvageConfirm = el('salvage-confirm');
+  const salvageDetail = salvageConfirm.querySelector('small');
   const ammoEl = el('ammo'), ammoMag = ammoEl.querySelector('.mag'), ammoRes = ammoEl.querySelector('.res');
   const vitalsEl = el('vitals'), hpNum = vitalsEl.querySelector('.hp'), hpPips = vitalsEl.querySelector('.pips');
   const PIPS = 5;
@@ -48,6 +51,8 @@ export function create(ctx) {
   let dmgDirs = [];             // {angle, age}
   let pendingAmmo = null, pendingT = 0;
   let shownAmmo = { ammo: 30, reserve: 210 };
+  let reloadFeedback = null;
+  let salvageT = 99, salvageShowing = false;
   let deadStats = { wave: 1, kills: 0 };
   let kills = 0;
 
@@ -68,10 +73,22 @@ export function create(ctx) {
     }
   });
   ctx.bus.on('weapon:ammo', (a) => { pendingAmmo = { ...a }; pendingT = 0.2; });
+  ctx.bus.on('weapon:reload:start', () => { reloadFeedback = null; });
+  ctx.bus.on('weapon:reload:active', (a) => { reloadFeedback = { ...a, age: 0 }; });
   ctx.bus.on('wave:start', ({ wave, final }) => {
     setBanner(`WATCH ${ROMAN[wave] || wave}`, wave === 1 ? 'hold until dawn' : wave === final ? 'the last of the night' : '');
   });
   ctx.bus.on('wave:clear', () => setBanner('CLEAR', 'breathe'));
+  ctx.bus.on('supply:collect', ({ kind, ammo, heal, awardAmmo, awardHeal }) => {
+    if (kind !== 'satellite') return;
+    const ammoGain = Number.isFinite(ammo) ? ammo : (awardAmmo ?? 45);
+    const healGain = Number.isFinite(heal) ? heal : (awardHeal ?? 20);
+    const ammoRead = ammoGain > 0 ? `+${ammoGain} AMMO` : 'AMMO FULL';
+    const healRead = healGain > 0 ? `+${healGain} HEALTH` : 'HEALTH FULL';
+    salvageDetail.textContent = `${ammoRead} // ${healRead}`;
+    salvageT = 0;
+    salvageShowing = true;
+  });
   ctx.bus.on('run:won', () => {
     showShell('DAWN.', `The watch held. ${kills} put down.`, 'STAND ANOTHER WATCH');
   });
@@ -88,6 +105,85 @@ export function create(ctx) {
     shell.querySelector('p').innerHTML = sub;
     go.textContent = cta;
     shell.classList.remove('hidden');
+  }
+
+  function drawActiveReload(wep, dt, cx, cy) {
+    const live = wep.reloadState?.();
+    let rl = live;
+    if (reloadFeedback) {
+      reloadFeedback.age += dt;
+      if (!rl && reloadFeedback.age < 0.30) {
+        rl = {
+          progress: reloadFeedback.progress,
+          windowStart: reloadFeedback.windowStart,
+          windowEnd: reloadFeedback.windowEnd,
+          attempted: true,
+          outcome: reloadFeedback.outcome,
+          jamFrac: reloadFeedback.outcome === 'fail' ? 1 : 0,
+        };
+      }
+      if (reloadFeedback.age >= 0.30 && !live) reloadFeedback = null;
+    }
+    if (!rl) return;
+
+    const resolved = rl.attempted && rl.outcome !== 'pending';
+    const resolveAge = resolved ? (reloadFeedback?.age ?? 0) : 0;
+    const alpha = resolved ? clamp01(1 - resolveAge / 0.30) : 1;
+    if (alpha <= 0) return;
+
+    const w = 172, h = 8;
+    const x = cx - w / 2, y = cy + 58;
+    const fail = rl.outcome === 'fail';
+    const success = rl.outcome === 'success';
+    const pulse = success ? 1 + Math.sin(clamp01(resolveAge / 0.22) * Math.PI) * 0.36 : 1;
+
+    ret.save();
+    ret.globalAlpha = alpha;
+    ret.shadowColor = success ? 'rgba(93,247,255,0.92)' : fail ? 'rgba(255,230,109,0.76)' : 'rgba(93,247,255,0.42)';
+    ret.shadowBlur = success ? 14 : 5;
+    ret.fillStyle = 'rgba(7,12,23,0.76)';
+    ret.fillRect(x - 4, y - 4, w + 8, h + 8);
+    ret.shadowBlur = 0;
+    ret.fillStyle = fail ? 'rgba(255,230,109,0.30)' : 'rgba(137,109,255,0.24)';
+    ret.fillRect(x, y, w, h);
+
+    const wx = x + rl.windowStart * w;
+    const ww = Math.max(8, (rl.windowEnd - rl.windowStart) * w);
+    ret.fillStyle = success ? `rgba(93,247,255,${0.92 * pulse})` : fail ? 'rgba(255,230,109,0.74)' : 'rgba(93,247,255,0.70)';
+    ret.fillRect(wx, y - (pulse - 1) * 4, ww, h + (pulse - 1) * 8);
+
+    // Brackets and a centre notch make the target readable without hue.
+    ret.strokeStyle = `rgba(233,250,255,${0.82 * alpha})`;
+    ret.lineWidth = 1;
+    ret.beginPath();
+    ret.moveTo(wx, y - 4); ret.lineTo(wx, y + h + 4);
+    ret.moveTo(wx + ww, y - 4); ret.lineTo(wx + ww, y + h + 4);
+    const mid = wx + ww * 0.5;
+    ret.moveTo(mid, y - 3); ret.lineTo(mid, y + 1);
+    ret.moveTo(mid, y + h - 1); ret.lineTo(mid, y + h + 3);
+    ret.stroke();
+
+    // A resolved success gains a bright enclosing frame and diamond at the
+    // needle: the result remains legible even without colour perception.
+    if (success) {
+      ret.strokeStyle = `rgba(222,255,255,${0.92 * alpha})`;
+      ret.lineWidth = 2;
+      ret.strokeRect(x - 3 - (pulse - 1) * 2, y - 3 - (pulse - 1) * 2,
+        w + 6 + (pulse - 1) * 4, h + 6 + (pulse - 1) * 4);
+    }
+
+    const nx = x + clamp01(rl.progress) * w;
+    ret.translate(nx, y + h * 0.5);
+    if (fail) ret.rotate(-0.22 * (rl.jamFrac || 1));
+    ret.fillStyle = fail ? 'rgba(255,230,109,0.98)' : 'rgba(250,253,255,0.98)';
+    ret.fillRect(-1.5, -8, 3, 16);
+    if (success) {
+      ret.rotate(Math.PI * 0.25);
+      ret.strokeStyle = 'rgba(222,255,255,0.98)';
+      ret.lineWidth = 1.5;
+      ret.strokeRect(-5, -5, 10, 10);
+    }
+    ret.restore();
   }
 
   function drawReticle(dt) {
@@ -112,6 +208,8 @@ export function create(ctx) {
     }
     ret.fillStyle = `rgba(226,242,255,${0.9 * adsFade})`;
     ret.fillRect(cx - 1, cy - 1, 2, 2);
+
+    drawActiveReload(wep, dt, cx, cy);
 
     // hitmarker: 4 diagonal ticks; deflect angles INWARD; kill adds the X bar
     if (marker) {
@@ -187,6 +285,7 @@ export function create(ctx) {
       ammoRes.textContent = `/ ${shownAmmo.reserve}`;
       ammoEl.classList.toggle('low', shownAmmo.ammo <= 10 && shownAmmo.ammo > 0);
       ammoEl.classList.toggle('dry', shownAmmo.ammo === 0);
+      ammoEl.classList.toggle('boosted', !!live.boosted);
       ammoEl.style.opacity = ctx.state === 'playing' ? 1 : 0;
 
       // health vignettes
@@ -215,6 +314,20 @@ export function create(ctx) {
       bannerT += dt;
       const bA = bannerT < 0.3 ? bannerT / 0.3 : bannerT < bannerHold ? 1 : Math.max(0, 1 - (bannerT - bannerHold) / 0.6);
       banner.style.opacity = bA;
+
+      // Satellite confirmation is independent of the wave banner: the wreck
+      // can open during CONTACT without overwriting the watch's only title.
+      if (salvageShowing) {
+        salvageT += dt;
+        const salvageIn = clamp01(salvageT / 0.18);
+        const salvageOut = clamp01((salvageT - 1.65) / 0.48);
+        salvageConfirm.style.opacity = ctx.state === 'playing' ? salvageIn * (1 - salvageOut) : 0;
+        salvageConfirm.style.transform = `translate(-50%, ${lerp(9, -7, salvageIn) - salvageOut * 7}px)`;
+        if (salvageOut >= 1) {
+          salvageShowing = false;
+          salvageConfirm.style.opacity = 0;
+        }
+      }
     },
   };
 }

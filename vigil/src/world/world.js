@@ -11,7 +11,9 @@ import * as THREE from 'three';
 import { TAU, clamp, clamp01, lerp, damp } from '../engine/math.js';
 import { PLAY_RADIUS, terrainHeight, buildTerrain } from './terrain.js';
 import { createCosmos } from './cosmos.js';
-import { CFG, buildStructure, structureSurfaces } from './structure.js';
+import { CFG, buildStructure, structureSurfaces, structureBlocksBody } from './structure.js';
+import { buildFieldDetail } from './detail.js';
+import { batchStaticMeshes } from '../gfx/geometry.js';
 
 export { PLAY_RADIUS };
 
@@ -49,6 +51,17 @@ export function create(ctx) {
   scene.fog = new THREE.FogExp2(0x101827, 0.0039);
   const fogCold = new THREE.Color(0x101827);
   const fogThreat = new THREE.Color(0x21162f);
+  const fogDawn = new THREE.Color(0x526b7f);
+  const sunNight = new THREE.Color(0xa6e8ff);
+  const sunDawn = new THREE.Color(0xd9f4ff);
+  const fillNight = new THREE.Color(0x4c70ff);
+  const fillDawn = new THREE.Color(0x94cfff);
+  const hemiNightSky = new THREE.Color(0x7289b5);
+  const hemiDawnSky = new THREE.Color(0xb5d3e0);
+  const hemiNightGround = new THREE.Color(0x101420);
+  const hemiDawnGround = new THREE.Color(0x34424b);
+  const ambientNight = new THREE.Color(0x7692bd);
+  const ambientDawn = new THREE.Color(0xabc7d4);
 
   const sun = new THREE.DirectionalLight(0xa6e8ff, 1.65);
   sun.position.set(-92, 136, 64);
@@ -90,36 +103,96 @@ export function create(ctx) {
   const relay = buildStructure({ place });
   scene.add(relay.group);
 
-  // cover ring: flat-topped 7-sided cylinders, alternating plain / fractured
+  // Outer-ring field bastions. These preserve the original conservative
+  // circular colliders and walkable top planes exactly, but the silhouette now
+  // belongs to the relay: armored gravitic capacitors, not extruded rocks.
+  // Every mesh is boot-built and folded into three static material batches.
   const coverSpecs = [
     [-39, -18, 2.8, 4.2, 0], [33, -30, 3.1, 3.6, 1], [-24, 40, 2.6, 3.2, 0],
     [46, 18, 3.4, 4.6, 1], [-52, 12, 3.0, 3.8, 0], [12, 48, 2.7, 3.4, 1],
     [-14, -50, 3.2, 4.0, 0], [55, -8, 2.5, 3.0, 1], [-44, -40, 2.9, 4.4, 0],
     [22, -56, 3.3, 3.7, 1], [-60, -14, 2.6, 3.5, 0], [10, -34, 2.4, 2.9, 1],
   ];
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x747c8a, roughness: 0.85, flatShading: true });
-  const fracMat = new THREE.MeshStandardMaterial({ color: 0x2e3542, roughness: 0.8, flatShading: true, emissive: 0x1d4258, emissiveIntensity: 0.85 });
+  const bastionShellMat = new THREE.MeshStandardMaterial({
+    color: 0x202c39, roughness: 0.42, metalness: 0.72, flatShading: true,
+  });
+  const bastionArmorMat = new THREE.MeshStandardMaterial({
+    color: 0x718393, roughness: 0.30, metalness: 0.84, flatShading: true,
+  });
+  const bastionGlowMat = new THREE.MeshStandardMaterial({
+    color: 0x164454, roughness: 0.28, metalness: 0.48,
+    emissive: 0x35dfff, emissiveIntensity: 2.35, flatShading: true,
+  });
+  const bastionBaseGeo = new THREE.CylinderGeometry(1, 1, 1, 8);
+  const bastionCoreGeo = new THREE.CylinderGeometry(0.60, 0.72, 1, 8);
+  const bastionCrownGeo = new THREE.CylinderGeometry(0.64, 0.78, 1, 8);
+  const bastionRibGeo = new THREE.BoxGeometry(0.18, 1, 0.30);
+  const bastionPanelGeo = new THREE.BoxGeometry(0.24, 0.13, 0.035);
+  const bastionRingGeo = new THREE.TorusGeometry(1, 0.032, 5, 24);
+  bastionRingGeo.rotateX(Math.PI / 2);
+  const coverRoot = new THREE.Group();
+  coverRoot.name = 'field-bastions';
+  scene.add(coverRoot);
   for (let ci = 0; ci < coverSpecs.length; ci++) {
     const [x, z, r, h, dark] = coverSpecs[ci];
     const gy = terrainHeight(x, z);
-    const geo = new THREE.CylinderGeometry(r * 0.76, r, h, 7);
-    // chip the verts so no two rocks read identical
-    const p = geo.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const chip = Math.sin((i + 1) * 19.71 + ci * 7.31) * 0.075;
-      p.setX(i, p.getX(i) * (1 + chip));
-      p.setZ(i, p.getZ(i) * (1 - chip));
+    const unitYaw = ci * 0.83;
+    const unitCos = Math.cos(unitYaw), unitSin = Math.sin(unitYaw);
+    const part = (geo, mat, px, py, pz, sx, sy, sz, ry = 0) => {
+      const mesh = new THREE.Mesh(geo, mat);
+      // Parts remain direct children so batchStaticMeshes can collapse all
+      // twelve bastions by material. Bake each unit's local yaw/translation
+      // here instead of hiding hundreds of meshes beneath nested Groups.
+      mesh.position.set(
+        x + px * unitCos + pz * unitSin,
+        gy + py,
+        z - px * unitSin + pz * unitCos,
+      );
+      mesh.scale.set(sx, sy, sz);
+      mesh.rotation.y = unitYaw + ry;
+      mesh.castShadow = mat !== bastionGlowMat;
+      mesh.receiveShadow = mat !== bastionGlowMat;
+      coverRoot.add(mesh);
+      return mesh;
+    };
+
+    // Wide deployed foot and tapered energy core stay inside the historical
+    // collider while giving enemies and players the same slide-along contour.
+    part(bastionBaseGeo, bastionShellMat, 0, 0.16, 0, r * 0.84, 0.32, r * 0.84);
+    part(bastionBaseGeo, bastionArmorMat, 0, 0.34, 0, r * 0.73, 0.16, r * 0.73);
+    part(bastionCoreGeo, dark ? bastionShellMat : bastionArmorMat,
+      0, h * 0.50 - 0.25, 0, r, h - 0.50, r);
+
+    // Eight load-bearing vanes make the units read as fabricated machinery at
+    // combat distance; paired light bands identify them as relay-owned cover.
+    for (let j = 0; j < 8; j++) {
+      const a = j * TAU / 8;
+      // Push the ribs out to the historical collider skin. Their outer edge is
+      // ~0.85r (collider 0.88r): visually structural, physically unchanged.
+      const rr = r * 0.70;
+      part(bastionRibGeo, j % 2 ? bastionShellMat : bastionArmorMat,
+        Math.sin(a) * rr, h * 0.48 - 0.19, Math.cos(a) * rr,
+        r, h * 0.68, r, a);
+      if ((j & 1) === 0) {
+        part(bastionPanelGeo, bastionGlowMat,
+          Math.sin(a) * r * 0.84, h * (0.42 + (j === 0 || j === 4 ? 0.10 : 0)), Math.cos(a) * r * 0.84,
+          r, 1, r, a);
+      }
     }
-    geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, dark ? fracMat : rockMat);
-    m.position.set(x, gy + h / 2 - 0.25, z);
-    m.rotation.y = ci * 0.83;
-    m.castShadow = true;
-    m.receiveShadow = true;
-    scene.add(m);
-    place({ kind: 'cover-rock', x, z, r: r * 0.88, yMin: gy - 1, yMax: gy + h - 0.3 });
+    for (const y of [h * 0.30, h * 0.70]) {
+      part(bastionRingGeo, bastionGlowMat, 0, y, 0, r * 0.84, 1, r * 0.84);
+    }
+
+    // A recessed armored crown keeps the exact old walkable height and gives
+    // the player a convincing manufactured platform when standing on one.
+    part(bastionCrownGeo, bastionShellMat, 0, h - 0.39, 0, r, 0.28, r);
+    part(bastionBaseGeo, bastionArmorMat, 0, h - 0.27, 0, r * 0.70, 0.04, r * 0.70);
+    part(bastionRingGeo, bastionGlowMat, 0, h - 0.245, 0, r * 0.64, 1, r * 0.64);
+
+    place({ kind: 'field-bastion', surface: 'metal', x, z, r: r * 0.88, yMin: gy - 1, yMax: gy + h - 0.3 });
     platforms.push({ x, z, r: r * 0.72, y: gy + h - 0.25 });
   }
+  coverRoot.userData.staticBatch = batchStaticMeshes(coverRoot);
 
   // instanced rubble (decor by declaration — too small to block a capsule)
   const rubbleGeo = new THREE.DodecahedronGeometry(1, 0);
@@ -140,6 +213,10 @@ export function create(ctx) {
   scene.add(rubble);
   place({ kind: 'rubble', decor: true });
 
+  // Hundreds of sub-capsule stones and fragments in three instanced draws.
+  // They bias toward the outer field, preserving the clean central horde bowl.
+  scene.add(buildFieldDetail(ctx.rng.fork('field-detail'), terrainHeight, place));
+
   /* ---------------- ground + collision queries ---------------- */
 
   /** highest walkable surface at (x,z) eligible from height y (one-way). */
@@ -159,9 +236,9 @@ export function create(ctx) {
   }
 
   /** circle-vs-cylinders pushout; mutates pos, kills velocity into surfaces. */
-  function collideCircle(pos, radius, vel = null, feetY = pos.y) {
+  function collideCircle(pos, radius, vel = null, feetY = pos.y, bodyHeight = 1.7) {
     for (const c of colliders) {
-      if (feetY > c.yMax - 0.35 || feetY + 1.7 < c.yMin) continue;
+      if (feetY > c.yMax - 0.35 || feetY + bodyHeight < c.yMin) continue;
       const dx = pos.x - c.x, dz = pos.z - c.z;
       const rr = radius + c.r;
       const d2 = dx * dx + dz * dz;
@@ -178,7 +255,7 @@ export function create(ctx) {
     // circle vs axis-aligned boxes (ramp rails): push out along the shallowest
     // axis so a body sliding along a rail stays on the ramp instead of popping
     for (const b of boxes) {
-      if (feetY > b.yMax - 0.2 || feetY + 1.7 < b.yMin) continue;
+      if (feetY > b.yMax - 0.2 || feetY + bodyHeight < b.yMin) continue;
       const eMinX = b.minX - radius, eMaxX = b.maxX + radius;
       const eMinZ = b.minZ - radius, eMaxZ = b.maxZ + radius;
       if (pos.x <= eMinX || pos.x >= eMaxX || pos.z <= eMinZ || pos.z >= eMaxZ) continue;
@@ -206,6 +283,113 @@ export function create(ctx) {
         if (out > 0) { vel.x -= nx * out; vel.z -= nz * out; }
       }
     }
+  }
+
+  /** True when a body of the requested height fits without intersecting a
+   * registered volume or a walkable surface above its feet. Player posture
+   * uses this to defer standing under low cover; navigation keeps its existing
+   * standing-height queries and therefore cannot drift. */
+  function canFitBody(x, z, radius, feetY, bodyHeight = 1.7) {
+    const headY = feetY + bodyHeight;
+    for (const c of colliders) {
+      if (feetY > c.yMax - 0.35 || headY < c.yMin) continue;
+      const dx = x - c.x, dz = z - c.z;
+      // A tiny inward tolerance treats collideCircle's exact tangent pushout
+      // as clear instead of intermittently forcing crouch on floating error.
+      const rr = radius + c.r - 1e-4;
+      if (dx * dx + dz * dz < rr * rr) return false;
+    }
+    for (const b of boxes) {
+      if (feetY > b.yMax - 0.2 || headY < b.yMin) continue;
+      const r = radius - 1e-4;
+      if (x > b.minX - r && x < b.maxX + r
+          && z > b.minZ - r && z < b.maxZ + r) return false;
+    }
+    if (structureBlocksBody(x, z, feetY, headY)) return false;
+    for (const p of platforms) {
+      if (p.y <= feetY + 0.08 || p.y >= headY + 0.02) continue;
+      const dx = x - p.x, dz = z - p.z;
+      const rr = radius + p.r;
+      if (dx * dx + dz * dz < rr * rr) return false;
+    }
+    return true;
+  }
+
+  /* ---------------- navigation / placement queries ----------------
+   * These are scalar, allocation-free companions to collideCircle(). Enemy
+   * routing and the director use the exact same collider registry as the
+   * player instead of maintaining a second, drifting idea of free space. */
+  const bodyTouches = (feetY, c, pad = 0) =>
+    feetY <= c.yMax - 0.2 + pad && feetY + 1.7 >= c.yMin - pad;
+
+  function canOccupyCircle(x, z, radius, feetY = terrainHeight(x, z), clearance = 0) {
+    if (Math.hypot(x, z) > PLAY_RADIUS - radius - clearance) return false;
+    for (const c of colliders) {
+      if (!bodyTouches(feetY, c)) continue;
+      const rr = radius + c.r + clearance;
+      const dx = x - c.x, dz = z - c.z;
+      if (dx * dx + dz * dz < rr * rr) return false;
+    }
+    for (const b of boxes) {
+      if (!bodyTouches(feetY, b)) continue;
+      if (x > b.minX - radius - clearance && x < b.maxX + radius + clearance
+          && z > b.minZ - radius - clearance && z < b.maxZ + radius + clearance) return false;
+    }
+    return true;
+  }
+
+  /** First circular blocker along a swept body segment, or null. */
+  function firstCircleBlocker(x0, z0, x1, z1, radius, feetY, clearance = 0.12) {
+    const sx = x1 - x0, sz = z1 - z0;
+    const ll = sx * sx + sz * sz;
+    let best = null, bestT = Infinity;
+    if (ll < 1e-8) return null;
+    for (const c of colliders) {
+      if (!bodyTouches(feetY, c)) continue;
+      const t = clamp(((c.x - x0) * sx + (c.z - z0) * sz) / ll, 0, 1);
+      const qx = x0 + sx * t - c.x, qz = z0 + sz * t - c.z;
+      const rr = radius + c.r + clearance;
+      if (qx * qx + qz * qz < rr * rr && t < bestT) { best = c; bestT = t; }
+    }
+    return best;
+  }
+
+  function corridorClear(x0, z0, x1, z1, radius, feetY, clearance = 0.12) {
+    if (firstCircleBlocker(x0, z0, x1, z1, radius, feetY, clearance)) return false;
+    const sx = x1 - x0, sz = z1 - z0;
+    for (const b of boxes) {
+      if (!bodyTouches(feetY, b)) continue;
+      const loX = b.minX - radius - clearance, hiX = b.maxX + radius + clearance;
+      const loZ = b.minZ - radius - clearance, hiZ = b.maxZ + radius + clearance;
+      let t0 = 0, t1 = 1;
+      if (Math.abs(sx) < 1e-8) {
+        if (x0 < loX || x0 > hiX) continue;
+      } else {
+        let a = (loX - x0) / sx, c = (hiX - x0) / sx;
+        if (a > c) { const q = a; a = c; c = q; }
+        t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+        if (t0 > t1) continue;
+      }
+      if (Math.abs(sz) < 1e-8) {
+        if (z0 < loZ || z0 > hiZ) continue;
+      } else {
+        let a = (loZ - z0) / sz, c = (hiZ - z0) / sz;
+        if (a > c) { const q = a; a = c; c = q; }
+        t0 = Math.max(t0, a); t1 = Math.min(t1, c);
+      }
+      if (t0 <= t1 && t1 >= 0 && t0 <= 1) return false;
+    }
+    return true;
+  }
+
+  function terrainPatchRange(x, z, radius = 1.5, samples = 8) {
+    let lo = terrainHeight(x, z), hi = lo;
+    for (let i = 0; i < samples; i++) {
+      const a = (i / samples) * TAU;
+      const h = terrainHeight(x + Math.cos(a) * radius, z + Math.sin(a) * radius);
+      lo = Math.min(lo, h); hi = Math.max(hi, h);
+    }
+    return hi - lo;
   }
 
   /**
@@ -268,7 +452,8 @@ export function create(ctx) {
       const y = origin.y + dir.y * t;
       if (y < c.yMin || y > c.yMax) continue;
       if (!best || t < best.t) {
-        best = { t, kind: c.kind.startsWith('relay') ? 'metal' : 'rock', collider: c };
+        const metal = c.surface === 'metal' || c.kind === 'field-bastion' || c.kind.startsWith('relay');
+        best = { t, kind: metal ? 'metal' : 'rock', collider: c };
       }
     }
     // slab method vs the boxes, with the y-span honoured at the hit point
@@ -313,6 +498,19 @@ export function create(ctx) {
     spawnPoints.deck.push({ x, z, y: CFG.deckY });
   }
 
+  /** Certified outer salvage site: clear footprint, modest local slope, and
+   * at least one unobstructed body-width corridor back to the inner ring. */
+  function isCrashSiteAccessible(site) {
+    const y = terrainHeight(site.x, site.z);
+    if (Math.hypot(site.x, site.z) > PLAY_RADIUS - 6) return false;
+    if (terrainPatchRange(site.x, site.z, 1.5, 8) > 0.9) return false;
+    if (!canOccupyCircle(site.x, site.z, 1.15, y, 0.55)) return false;
+    for (const gate of spawnPoints.inner) {
+      if (corridorClear(site.x, site.z, gate.x, gate.z, 0.36, y, 0.22)) return true;
+    }
+    return false;
+  }
+
   /* ---------------- state ---------------- */
   let threat = 0, threatTarget = 0, power = 0.14, progress = 0;
   const exposureBase = 1.28;
@@ -324,6 +522,12 @@ export function create(ctx) {
     groundAt,
     terrainHeight,
     collideCircle,
+    canFitBody,
+    canOccupyCircle,
+    firstCircleBlocker,
+    corridorClear,
+    terrainPatchRange,
+    isCrashSiteAccessible,
     marchGround,
     rayColliders,
     place,
@@ -342,14 +546,24 @@ export function create(ctx) {
 
     update(dt) {
       threat = damp(threat, threatTarget, 1.6, dt);
+      // Dawn only arrives after the final clear. Wave X stops at progress .9;
+      // the jump to 1 is therefore a readable earned payoff, never a combat
+      // exposure shift halfway through a firefight.
+      const dawn = THREE.MathUtils.smoothstep(progress, 0.94, 1.0);
       // absolute-value atmosphere — one owner, immune to drift
       scene.fog.color.copy(fogCold).lerp(fogThreat, threat * 0.58);
-      scene.fog.density = 0.0039 + threat * 0.0020;
-      sun.intensity = 1.65 - threat * 0.18;
-      fill.intensity = 0.5 + threat * 0.14;
-      hemi.intensity = 1.14 - threat * 0.08;
-      ambient.intensity = 0.42 + threat * 0.04;
-      ctx.renderer.toneMappingExposure = exposureBase - threat * 0.06 + (ctx.shared?.flashEV || 0) * 0.35;
+      scene.fog.color.lerp(fogDawn, dawn * 0.76);
+      scene.fog.density = 0.0039 + threat * 0.0020 - dawn * 0.00125;
+      sun.color.copy(sunNight).lerp(sunDawn, dawn);
+      sun.intensity = 1.65 - threat * 0.18 + dawn * 0.72;
+      fill.color.copy(fillNight).lerp(fillDawn, dawn);
+      fill.intensity = 0.5 + threat * 0.14 + dawn * 0.20;
+      hemi.color.copy(hemiNightSky).lerp(hemiDawnSky, dawn);
+      hemi.groundColor.copy(hemiNightGround).lerp(hemiDawnGround, dawn);
+      hemi.intensity = 1.14 - threat * 0.08 + dawn * 0.28;
+      ambient.color.copy(ambientNight).lerp(ambientDawn, dawn);
+      ambient.intensity = 0.42 + threat * 0.04 + dawn * 0.12;
+      ctx.renderer.toneMappingExposure = exposureBase - threat * 0.06 + dawn * 0.10 + (ctx.shared?.flashEV || 0) * 0.35;
       cosmos.update(dt, ctx.camera.position, threat, progress);
       relay.update(dt, threat, 0.14 + power * 0.86);
     },

@@ -19,6 +19,7 @@ const GradeShader = {
     uShadow: { value: new THREE.Vector3(0.90, 0.95, 1.08) },
     uHigh: { value: new THREE.Vector3(1.07, 1.02, 0.90) },
     uVignette: { value: 0.16 },
+    uFrame: { value: 0 },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -26,7 +27,7 @@ const GradeShader = {
   fragmentShader: /* glsl */`
     varying vec2 vUv;
     uniform sampler2D tDiffuse;
-    uniform float uSat, uContrast, uLift, uVignette;
+    uniform float uSat, uContrast, uLift, uVignette, uFrame;
     uniform vec3 uShadow, uHigh;
     void main() {
       vec3 c = texture2D(tDiffuse, vUv).rgb;
@@ -38,6 +39,12 @@ const GradeShader = {
       c *= mix(uShadow, uHigh, t);
       vec2 p = vUv - 0.5;
       c *= 1.0 - dot(p, p) * uVignette * 2.4;
+      // Display-space interleaved-gradient noise: enough to break up the
+      // blue-black bands, below the threshold of visible film-grain crawl.
+      vec2 grainCoord = gl_FragCoord.xy + vec2(uFrame * 17.0, uFrame * 59.0);
+      float grain = fract(52.9829189 * fract(dot(grainCoord, vec2(0.06711056, 0.00583715)))) - 0.5;
+      float grainAmount = mix(0.78, 0.30, smoothstep(0.035, 0.52, luma)) / 255.0;
+      c += grain * grainAmount;
       gl_FragColor = vec4(max(c, 0.0), 1.0);
     }`,
 };
@@ -56,12 +63,17 @@ export function create(ctx) {
   composer.addPass(new OutputPass());
   const grade = new ShaderPass(GradeShader);
   composer.addPass(grade);
+  let frame = 0;
 
   return {
     id: 'post',
     composer,
     grade,
-    render() { composer.render(); },
+    render() {
+      grade.uniforms.uFrame.value = frame;
+      frame = (frame + 1) % 64;
+      composer.render();
+    },
     setSize(w, h) { composer.setSize(w, h); bloom.setSize(w, h); },
   };
 }

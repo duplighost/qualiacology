@@ -191,9 +191,14 @@ export function create(ctx) {
     podDrop: clickBuf(61, 0.6, [[120, 0.8], [80, 0.5]], [400, 150, 1], 0.2, 1.8),
     hurt: clickBuf(62, 0.25, [[180, 0.7], [90, 0.6]], [600, 250, 1], 0.07, 2.0),
     rumble: clickBuf(63, 1.2, [[46, 0.9], [62, 0.5]], null, 0.45, 1.8),
+    salvageOpen: clickBuf(64, 0.42,
+      [[112, 0.72], [224, 0.34], [690, 0.20], [1380, 0.10]],
+      [2600, 330, 0.65], 0.11, 1.85),
     markNormal: clickBuf(70, 0.045, [[2400, 0.8]], null, 0.008),
     markWeak: clickBuf(71, 0.09, [[3100, 0.8], [4650, 0.3]], null, 0.02),
     markDeflect: clickBuf(72, 0.07, [[900, 0.9]], null, 0.014, 1.6),
+    activeGood: clickBuf(73, 0.12, [[1860, 0.55], [2790, 0.34], [3720, 0.16]], [5200, 2600, 0.35], 0.025, 1.15),
+    activeFail: clickBuf(74, 0.19, [[310, 0.5], [470, 0.32]], [1200, 280, 1.1], 0.055, 1.8),
     boltFly: clickBuf(80, 0.5, [[320, 0.4], [480, 0.25]], [500, 900, 2], 0.2),
   };
   B.surf = [0, 1, 2, 3].map(i => clickBuf(90 + i, 0.13, [], [1200 + i * 180, 500, 0.7], 0.045));
@@ -203,6 +208,54 @@ export function create(ctx) {
   B.impactMetal = [0, 1, 2].map(i => clickBuf(115 + i, 0.22, [[880, 0.7], [1505, 0.4], [2755, 0.3]], null, 0.05, 1.5));
   B.impactEnergy = [0, 1, 2].map(i => clickBuf(120 + i, 0.2, [[620 + i * 90, 0.5], [1240, 0.3]], [1600, 600, 1.4], 0.06));
   B.impactFlesh = [0, 1, 2].map(i => clickBuf(125 + i, 0.14, [[240, 0.6]], [900, 350, 0.9], 0.04, 1.9));
+  B.meleeSwing = [0, 1].map(i => clickBuf(130 + i, 0.19, [], [3900 + i * 240, 620, 0.13], 0.060, 1.25));
+  B.meleeSolid = [0, 1].map(i => clickBuf(134 + i, 0.18,
+    [[94 + i * 11, 0.95], [188 + i * 17, 0.36], [720 + i * 90, 0.18]],
+    [3600, 520, 0.075], 0.042, 2.15));
+  // Close, wet body contact is deliberately absent from bullet impacts. A
+  // falling low tone supplies mass while two correlated noise bands make the
+  // short squeeze/release read as anatomy rather than another hard surface.
+  B.meleeWet = [0, 1, 2].map(i => synth(0.24, (d, len) => {
+    const noise = wn(1400 + i * 41);
+    let phase = 0, low = 0, slow = 0;
+    for (let k = 0; k < len; k++) {
+      const t = k / SR;
+      const u = clamp01(t / 0.17);
+      const f = lerp(170 + i * 9, 58 + i * 4, u);
+      phase += 2 * Math.PI * f / SR;
+      const n = noise();
+      low += (n - low) * (0.065 + i * 0.004);
+      slow += (n - slow) * 0.012;
+      const squeeze = low * 0.72 + slow * 0.48;
+      const body = Math.sin(phase) * 0.58 + Math.sin(phase * 0.51 + i) * 0.20;
+      const wobble = 0.86 + Math.sin(2 * Math.PI * (23 + i * 2) * t) * 0.14;
+      const env = t < 0.003 ? t / 0.003 : Math.exp(-(t - 0.003) / 0.072);
+      d[k] = (body + squeeze * wobble) * env;
+    }
+    tanhDrive(d, 2.35);
+    norm(d);
+  }));
+  // A short rising triad follows the physical service-petal beat. It is
+  // deliberately cleaner than the combat mix so the streamed ammo/vitality
+  // shapes read as a reward, not another impact or UI beep.
+  B.salvageReward = synth(0.62, (d, len) => {
+    let p1 = 0, p2 = 0, p3 = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / SR;
+      const rise = clamp01(t / 0.32);
+      p1 += 2 * Math.PI * lerp(620, 930, rise) / SR;
+      p2 += 2 * Math.PI * lerp(930, 1395, rise) / SR;
+      p3 += 2 * Math.PI * lerp(1240, 1860, rise) / SR;
+      const e1 = Math.exp(-t / 0.25);
+      const e2 = t > 0.065 ? Math.exp(-(t - 0.065) / 0.22) : 0;
+      const e3 = t > 0.130 ? Math.exp(-(t - 0.130) / 0.19) : 0;
+      const attack = Math.min(1, t / 0.006);
+      d[i] = (Math.sin(p1) * e1 * 0.55
+        + Math.sin(p2) * e2 * 0.36
+        + Math.sin(p3) * e3 * 0.22) * attack;
+    }
+    norm(d, 0.88);
+  });
   // kill confirm: two-note 1.9 -> 2.6 kHz, 90 ms apart
   B.markKill = synth(0.24, (d, len) => {
     let p1 = 0, p2 = 0;
@@ -287,19 +340,19 @@ export function create(ctx) {
   let bodyRing = 0, mechRing = 0;
   let reflexDb = 0, sustainedShots = [];
 
-  function gunshot(subT, lowAmmo) {
+  function gunshot(subT, lowAmmo, boosted = false) {
     const when = A.currentTime + Math.max(0.001, 0.026 - subT);
     bodyRing = (bodyRing + 1 + Math.floor(rng.next() * 6)) % 8;
     mechRing = (mechRing + 1 + Math.floor(rng.next() * 4)) % 6;
     const detune = 1 + (rng.next() * 2 - 1) * 0.015;
     const stag = () => rng.next() * 0.003;
-    play(bodyVars[bodyRing], { gain: 0.9, rate: detune, when: when + stag(), bus: bodyBus });
+    play(bodyVars[bodyRing], { gain: boosted ? 0.96 : 0.9, rate: detune, when: when + stag(), bus: bodyBus });
     play(mechVars[mechRing], { gain: 0.9 * 0.2, rate: detune, when: when + stag() });
     // openness probe: under the deck = close tail
     const p = ctx.systems.player;
     const underDeck = p && Math.hypot(p.pos.x, p.pos.z) < 14 && p.eyeY < 8;
-    play(underDeck ? tailClose : tailOpen, { gain: 0.34, rate: 1 + (detune - 1) * 0.5, when: when + stag() });
-    play(subBuf, { gain: 0.5, when });
+    play(underDeck ? tailClose : tailOpen, { gain: boosted ? 0.36 : 0.34, rate: 1 + (detune - 1) * 0.5, when: when + stag() });
+    play(subBuf, { gain: boosted ? 0.55 : 0.5, when });
     if (lowAmmo) play(B.dryClick, { gain: 0.1, rate: 1.6, when });
 
     // punch EQ: duck ambience 5 dB + carve 400 Hz for 120 ms
@@ -354,7 +407,7 @@ export function create(ctx) {
   const V = { thrall: B.vocalThrall, warden: B.vocalWarden, chorister: B.vocalChorister };
   function wire() {
     const bus = ctx.bus;
-    bus.on('weapon:fire', ({ subT, lowAmmo }) => gunshot(subT, lowAmmo));
+    bus.on('weapon:fire', ({ subT, lowAmmo, boosted }) => gunshot(subT, lowAmmo, boosted));
     bus.on('weapon:dryfire', () => play(B.dryClick, { gain: 0.5 }));
     bus.on('weapon:boltlock', () => play(B.boltLock, { gain: 0.4 }));
     bus.on('weapon:reload:beat', ({ name }) => {
@@ -365,6 +418,28 @@ export function create(ctx) {
       };
       const m = map[name];
       if (m) play(m[0], { gain: m[1], rate: 1 + (rng.next() - 0.5) * 0.06 });
+    });
+    bus.on('weapon:reload:active', ({ outcome }) => {
+      if (outcome === 'success') play(B.activeGood, { gain: 0.42 });
+      else play(B.activeFail, { gain: 0.46, rate: 0.94 });
+    });
+    // The release event lands after the full 260 ms anticipation, so the
+    // 190 ms whoosh spans the actual strike instead of expiring in wind-up.
+    bus.on('weapon:melee:swing', () => {
+      const pool = B.meleeSwing;
+      play(pool[Math.floor(rng.next() * pool.length)], { gain: 0.36, rate: 0.94 + rng.next() * 0.10 });
+    });
+    bus.on('weapon:melee:resolve', ({ outcome, kind }) => {
+      if (outcome === 'enemy') {
+        const pool = B.meleeWet;
+        play(pool[Math.floor(rng.next() * pool.length)], { gain: 0.62, rate: 0.94 + rng.next() * 0.10 });
+      } else if (outcome === 'surface') {
+        const pool = B.meleeSolid;
+        play(pool[Math.floor(rng.next() * pool.length)], {
+          gain: kind === 'metal' ? 0.55 : 0.48,
+          rate: (kind === 'metal' ? 1.06 : 0.86) + rng.next() * 0.06,
+        });
+      }
     });
     bus.on('player:step', ({ sprint, crouch }) => {
       const g = sprint ? 1.4 : crouch ? 0.5 : 1;
@@ -388,7 +463,7 @@ export function create(ctx) {
     });
     bus.on('fx:impact', ({ kind, point, power }) => {
       const pool = kind === 'metal' ? B.impactMetal : kind === 'energy' ? B.impactEnergy
-        : (kind === 'flesh' || kind === 'death') ? B.impactFlesh
+        : (kind === 'flesh' || kind === 'meleeFlesh' || kind === 'death') ? B.impactFlesh
         : kind === 'deflect' ? B.impactMetal : B.impactRock;
       play(pool[Math.floor(rng.next() * pool.length)], {
         gain: Math.pow(clamp01(power), 0.45) * 0.4,
@@ -407,7 +482,12 @@ export function create(ctx) {
     bus.on('enemy:stagger', ({ pos }) => play(B.magSeat, { gain: 0.3, rate: 0.5, pos }));
     bus.on('combat:pickup', () => play(B.pickup, { gain: 0.35 }));
     bus.on('supply:drop', ({ pos }) => play(B.podDrop, { gain: 0.6, pos }));
-    bus.on('supply:collect', () => play(B.pickup, { gain: 0.5, rate: 0.75 }));
+    bus.on('supply:crash-open', ({ pos }) => play(B.salvageOpen, { gain: 0.42, pos }));
+    bus.on('supply:crash-reward', ({ pos }) => play(B.salvageReward, { gain: 0.36, pos }));
+    bus.on('supply:collect', ({ kind }) => play(B.pickup, {
+      gain: kind === 'satellite' ? 0.24 : 0.5,
+      rate: kind === 'satellite' ? 0.92 : 0.75,
+    }));
     bus.on('wave:start', () => { startAmbience(); play(B.rumble, { gain: 0.3, rate: 1.6 }); });
     bus.on('run:won', () => play(B.vocalChorister[0], { gain: 0.7, rate: 1.5 }));
     bus.on('state', ({ next }) => {

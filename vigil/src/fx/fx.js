@@ -15,6 +15,8 @@ const MAX_PARTICLES = 1400;
 const MAX_TRACERS = 24;
 const MAX_DECALS = 64;
 const FLASH_LIGHTS = 5;
+const MELEE_FLESH_SPRAY = Object.freeze({ grav: 9, spread: 1.5, alpha: 0.94 });
+const MELEE_FLESH_KNOT = Object.freeze({ grav: 5, spread: 1.9, alpha: 0.46 });
 
 export function create(ctx) {
   const scene = ctx.scene;
@@ -99,7 +101,7 @@ export function create(ctx) {
   // additive lines vanish — Cinderbloom's receipt).
   const trGeo = new THREE.BoxGeometry(1, 1, 1);
   const trMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(4.5, 2.6, 1.15), transparent: true, opacity: 0.9,
+    color: 0xffffff, transparent: true, opacity: 0.9,
     blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
   });
   const tracers = new THREE.InstancedMesh(trGeo, trMat, MAX_TRACERS);
@@ -107,16 +109,23 @@ export function create(ctx) {
   tracers.count = MAX_TRACERS;
   scene.add(tracers);
   const trState = [];
-  for (let i = 0; i < MAX_TRACERS; i++) trState.push({ live: false, age: 0, dist: 0, speed: 340, origin: new THREE.Vector3(), dir: new THREE.Vector3(), maxDist: 0 });
+  for (let i = 0; i < MAX_TRACERS; i++) trState.push({ live: false, age: 0, dist: 0, speed: 340, origin: new THREE.Vector3(), dir: new THREE.Vector3(), maxDist: 0, power: 1 });
+  const trNormalColor = new THREE.Color().setRGB(4.5, 2.6, 1.15);
+  const trBoostColor = new THREE.Color().setRGB(2.35, 4.8, 5.2);
+  for (let i = 0; i < MAX_TRACERS; i++) tracers.setColorAt(i, trNormalColor);
+  tracers.instanceColor.needsUpdate = true;
   let trCursor = 0;
   const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p2 = new THREE.Vector3();
   const _up = new THREE.Vector3(0, 1, 0), _zAxis = new THREE.Vector3(0, 0, 1);
 
-  function tracer(origin, dir, maxDist) {
-    const t = trState[trCursor];
+  function tracer(origin, dir, maxDist, power = 1) {
+    const i = trCursor;
+    const t = trState[i];
     trCursor = (trCursor + 1) % MAX_TRACERS;
     t.live = true; t.age = 0; t.dist = 1.2; // hidden first 1.2 m
-    t.origin.copy(origin); t.dir.copy(dir); t.maxDist = maxDist;
+    t.origin.copy(origin); t.dir.copy(dir); t.maxDist = maxDist; t.power = power;
+    tracers.setColorAt(i, power > 1 ? trBoostColor : trNormalColor);
+    tracers.instanceColor.needsUpdate = true;
   }
 
   /* ---------------- decals: pooled dark scorch discs ---------------- */
@@ -201,13 +210,21 @@ export function create(ctx) {
       case 'flesh':
         burst(point, normal, 12, 3.6 * power, 0.42, 0.075, COLORS.flesh, { grav: 8, spread: 1.2, alpha: 0.9 });
         break;
+      case 'meleeFlesh':
+        // Same violet enemy language, but broader and heavier than a bullet:
+        // one dense contact knot plus a short directional spray. Both consume
+        // the existing particle/light rings; no contact-time allocations.
+        burst(point, normal, 17, 4.1 * power, 0.48, 0.095, COLORS.flesh, MELEE_FLESH_SPRAY);
+        burst(point, normal, 6, 1.5 * power, 0.24, 0.14, COLORS.flesh, MELEE_FLESH_KNOT);
+        flashLight(point, 0x896dff, 13, 0.055, 7);
+        break;
       case 'deflect':
         burst(point, normal, 8, 7.0 * power, 0.15, 0.04, COLORS.deflect, { grav: 12 });
         flashLight(point, 0x9fb4d8, 10, 0.04, 6);
         break;
       case 'death':
-        burst(point, normal, 26, 5.0, 0.6, 0.12, COLORS.flesh, { grav: 6, spread: 1.5, alpha: 0.85 });
-        flashLight(point, 0x896dff, 30, 0.12, 14);
+        burst(point, normal, 26, 5.0 * power, 0.6, 0.12 * lerp(1, 1.12, clamp01(power - 1)), COLORS.flesh, { grav: 6, spread: 1.5, alpha: 0.85 });
+        flashLight(point, 0x896dff, 30 * power, 0.12, 14);
         break;
     }
     ctx.bus.emit('fx:impact', { kind, point, power });
@@ -230,7 +247,7 @@ export function create(ctx) {
       // one of everything so no shader compiles mid-fight
       const p = new THREE.Vector3(0, -50, 0);
       impact('rock', p); impact('metal', p); impact('energy', p);
-      impact('flesh', p); impact('deflect', p); impact('death', p);
+      impact('flesh', p); impact('meleeFlesh', p); impact('deflect', p); impact('death', p);
       tracer(p, _n, 1);
     },
 
@@ -263,14 +280,15 @@ export function create(ctx) {
         t.age += dt;
         t.dist += t.speed * dt;
         const headD = Math.min(t.dist, t.maxDist);
-        const tailD = clamp(t.dist - 2.6, 1.2, t.maxDist);
-        if (t.dist > t.maxDist + 2.6 || t.age > 0.055 + t.maxDist / t.speed) { t.live = false; continue; }
+        const ribbonLen = 2.6 * lerp(1, 1.19, clamp01((t.power - 1) / 0.65));
+        const tailD = clamp(t.dist - ribbonLen, 1.2, t.maxDist);
+        if (t.dist > t.maxDist + ribbonLen || t.age > 0.055 + t.maxDist / t.speed) { t.live = false; continue; }
         const len = Math.max(headD - tailD, 0.05);
         const mid = (headD + tailD) / 2;
         _p2.copy(t.origin).addScaledVector(t.dir, mid);
         // min screen width: scale thickness with distance to camera
         const dCam = _p2.distanceTo(ctx.camera.position);
-        const wBase = 0.022 * (t.age < 0.12 ? 1.6 : 1);
+        const wBase = 0.022 * t.power * (t.age < 0.12 ? 1.6 : 1);
         const w = Math.max(wBase, dCam * 0.0011) * Math.sqrt(Math.min(1, wBase / Math.max(wBase, dCam * 0.0011)) + 0.5);
         _q.setFromUnitVectors(_zAxis, t.dir);
         _m4.compose(_p2, _q, _s.set(w, w, len));

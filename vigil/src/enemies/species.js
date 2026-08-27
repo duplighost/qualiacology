@@ -14,7 +14,7 @@ const ARMOR = 0x232a38;
 
 export const SPECIES = {
   thrall: {
-    hp: 55, speed: 7.5, height: 1.1, radius: 0.42, mass: 46,
+    hp: 55, speed: 6.4, maxRunSpeed: 6.6, height: 1.1, radius: 0.42, mass: 46,
     burstMs: 0.6, pauseMs: 0.35,
     lungeRange: 4.2, strikeRange: 7.6, standoff: 3.2,
     telegraph: 0.320, attack: 0.470, recover: 0.380, dmg: 22,
@@ -213,4 +213,6 @@ function buildChorister() {
   };
 }
 
-export const BUILDERS = { thrall: buildThrall, warden: buildWarden, chorister: buildChorister };
+// Navigation/combat stats stay in this small authority; the richer pooled
+// bodies live in a visual-only module so art cannot silently rewrite feel.
+export { BUILDERS } from './visuals.js';
