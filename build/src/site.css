@@ -5,6 +5,23 @@
   audio LED. Hero art gave its glow back on 2026-08-27 — the picture is the light now.
   Wing colors mean rooms — amber = psychopharmacology, cyan = games, pink = Doopliss.
   Amber focus outlines are accessibility, not theming; they never change.
+
+  Motion law - three lanes, so entrance, pointer and press can never write the same
+  property and fight each other:
+    translate = entrance   (scroll timelines only: `rise`, `settle`)
+    scale     = pointer    (hover/focus, always inside
+                            @media (hover: hover) and (prefers-reduced-motion: no-preference))
+    transform = press      (:active, 45ms attack)
+  Entrance animations are transform-family ONLY, never opacity: an opacity keyframe
+  makes axe fail colour-contrast on below-fold content mid-animation. This was learned
+  the hard way; do not re-learn it.
+
+  Not doing, on purpose: card tilt, parallax, magnetic buttons, a cursor follower, a
+  cursor-driven torch, a fixed scroll-driven lamp, per-card stagger beyond four
+  nth-child buckets, `will-change` on card images. All are desktop-only by nature,
+  invisible inside a stranger's first ten seconds, absent on the phones this site is
+  mostly read on, and untestable by a QA suite that runs at 390px and 1440px with no
+  hover emulation.
 */
 
 @font-face {
@@ -47,6 +64,10 @@
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --content: 76rem;
   --gutter: clamp(1rem, 3vw, 2rem);
+  /* The seam between chapters. Asymmetric on purpose: a heading needs less air above
+     it than the content it closes needs below. It is also the numeral's height budget. */
+  --seam-top: clamp(3rem, 6vw, 5rem);
+  --seam-bot: clamp(3.5rem, 7vw, 6rem);
   --header-height: 4.5rem;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   /* The room you are standing in. */
@@ -165,6 +186,9 @@ body[data-page="music"] ::selection {
   color: #120a24;
 }
 
+/* Every hover affordance below carries a :focus-visible twin. The amber outline says
+   WHERE you are; the twin says what the thing DOES. Keyboard users were getting only
+   the first half. The outline itself never changes — see the law at the top. */
 a {
   color: inherit;
   text-underline-offset: 0.18em;
@@ -277,7 +301,10 @@ p {
   transform: translateY(0);
 }
 
-/* The one glowing line on the site: the filament that measures your descent. */
+/* The one glowing line on the site: the filament that measures your descent.
+   Where scroll-driven animations exist the browser drives the scale itself, which
+   removes one inline-style write and one style recalc per scroll frame; the JS stays
+   as the fallback for engines without them. */
 .scroll-progress {
   position: fixed;
   z-index: 150;
@@ -291,24 +318,79 @@ p {
   pointer-events: none;
 }
 
-/* On the homepage the filament walks the hallway: cyan, amber, cyan, pink. */
+/* Must come AFTER the base rule: same specificity, so source order decides, and
+   `transform: none` here is load-bearing. The base parks the filament at scaleX(0)
+   for the JS fallback; left in place it multiplies against the animated `scale` and
+   the filament is zero-width at every scroll position, forever. */
 @supports (animation-timeline: scroll(root)) {
-  .home-page .scroll-progress {
-    animation: hallway-walk linear both;
+  .scroll-progress {
+    animation: filament linear both;
     animation-timeline: scroll(root);
+    transform: none;
   }
 }
 
-@keyframes hallway-walk {
-  0%, 12% { color: var(--cyan); }
-  24%, 40% { color: var(--amber); }
-  52%, 66% { color: var(--cyan); }
-  80%, 100% { color: var(--pink); }
+@keyframes filament {
+  from {
+    scale: 0 1;
+  }
+
+  to {
+    scale: 1 1;
+  }
+}
+
+/* The filament used to walk the hallway on a fixed set of percentage stops, which
+   were 10-20% out of phase with the real sections (pink arrived at 80% for a section
+   that ended at 78%) and never showed violet at all. Re-tuning the stops would only
+   have drifted again the moment the seams changed. `data-here` is set by an
+   IntersectionObserver over the four homepage rooms, so the light is a report rather
+   than a guess, and it cannot go stale when the layout moves. */
+.home-page[data-here="community"] .scroll-progress { color: var(--amber); }
+.home-page[data-here="game"] .scroll-progress { color: var(--cyan); }
+.home-page[data-here="music"] .scroll-progress { color: var(--pink); }
+.home-page[data-here="connect"] .scroll-progress { color: var(--violet); }
+
+.scroll-progress {
+  transition: color 420ms var(--ease);
+}
+
+/* The stylesheet has always claimed the lit pilot light is "the room you are standing
+   in". On the homepage it was never lit, because there was no page to be current. */
+.home-page[data-here="community"] .nav-link[href="/psychopharmacology/"]::before,
+.home-page[data-here="game"] .nav-link[href="/games/"]::before,
+.home-page[data-here="music"] .nav-link[href="/music/"]::before,
+.home-page[data-here="connect"] .nav-link[href="/#connect"]::before {
+  opacity: 1;
+  box-shadow: 0 0 8px 1px var(--dot, transparent);
 }
 
 .container {
   width: min(calc(100% - (var(--gutter) * 2)), var(--content));
   margin-inline: auto;
+}
+
+/* The plate rail. Words stay in the 76rem measure where they read; pictures get their
+   own wider one, because a shelf of browser worlds is not a column of prose. At 1440
+   that is 1376px against the text column's 1216px, so a 3-up card goes 386 -> 440px:
+   29% more picture area at the same scan rate and no extra page height.
+   rem and percentages ONLY - never 100vw. The Windows scrollbar is outside the
+   viewport width, and browser-qa asserts pageWidth <= width + 1. */
+.plate-bleed {
+  width: 100%;
+  padding-inline: var(--gutter);
+}
+
+.plate-bleed > * {
+  max-width: 100rem;
+  margin-inline: auto;
+}
+
+/* The sticky filter rail lives in the plate rail with the grid it filters - it can only
+   stick inside its own parent's box, and leaving it behind in .container meant that box
+   ended immediately below it. It gets the plate gutter back so its rule spans the shelf. */
+.plate-bleed > .filter-shell {
+  width: 100%;
 }
 
 .site-header {
@@ -409,7 +491,8 @@ p {
   color: var(--text);
 }
 
-.nav-link:hover::before {
+.nav-link:hover::before,
+.nav-link:focus-visible::before {
   opacity: 1;
 }
 
@@ -541,6 +624,16 @@ p {
   transition-duration: 45ms;
 }
 
+/* The two biggest targets on the site — the card art and the card title, 24 of each on
+   /games/ — acknowledged nothing at all. With the resting filter gone there is now no
+   other feedback before navigation, least of all on a phone. `transform` is the press
+   lane; the entrance animation owns `translate` on the ancestor, so they never contend. */
+.card-media:active,
+.card-title a:active {
+  transform: translateY(1px);
+  transition: transform 45ms ease;
+}
+
 .button-primary {
   border-color: var(--cyan);
   background: var(--cyan);
@@ -574,7 +667,8 @@ p {
   transition: transform 180ms var(--ease);
 }
 
-.button-arrow:hover::after {
+.button-arrow:hover::after,
+.button-arrow:focus-visible::after {
   transform: translateX(0.25em);
 }
 
@@ -606,14 +700,28 @@ p {
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
-  -webkit-text-stroke: 1px rgba(158, 176, 185, 0.24);
-  -webkit-text-stroke-color: color-mix(in srgb, var(--wing) 38%, transparent);
+  -webkit-text-stroke: 1px rgba(158, 176, 185, 0.2);
+  -webkit-text-stroke-color: color-mix(in srgb, var(--wing) 30%, transparent);
 }
 
 @supports not (-webkit-text-stroke: 1px red) {
   .ghost-index {
     color: rgba(158, 176, 185, 0.07);
     color: color-mix(in srgb, var(--wing) 7%, transparent);
+  }
+}
+
+/* The numeral was absolutely positioned INSIDE the text column, so on the one page
+   with a heading long enough to reach it ("Psychopharmacology" is a single unbreakable
+   726px word) it struck straight through the words. It now hangs in the seam above the
+   chapter rule, sized off the seam tokens rather than a viewport clamp — so it cannot
+   grow into the text at any width, by construction rather than by tuning. */
+@media (min-width: 45rem) {
+  .section-heading .ghost-index {
+    top: auto;
+    right: -0.04em;
+    bottom: calc(100% - 0.06em);
+    font-size: calc((var(--seam-top) + var(--seam-bot)) * 0.86);
   }
 }
 
@@ -700,12 +808,15 @@ p {
   background: #05080d;
 }
 
-/* 16:9 on phones is a centre punch-out of the 41:16 plate, but it is also a TALLER
-   picture on the screen with least room (201px vs 140px at 390w), so it stays until a
-   real 3:2 phone crop exists to beat both. */
+/* Phones now get a real 3:2 cut of the plate rather than a 16:9 punch-out of it, so
+   the ratio here has to match the source heroPicture() actually serves them - and the
+   switch has to happen at the SAME breakpoint (45rem) as that <source media> query, or
+   there is a band of widths where the CSS box and the downloaded image disagree.
+   At 390w this is 239px tall, against 201px for the old punch-out and 140px if the
+   authored 41:16 simply carried down. */
 .hero-art img {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 3 / 2;
   object-fit: cover;
   object-position: center;
 }
@@ -739,6 +850,41 @@ p {
 .proof-list > div:nth-child(2) { --tick: var(--cyan); }
 .proof-list > div:nth-child(3) { --tick: var(--pink); }
 
+/* The three numbers are the three doors. They already carried amber / cyan / pink
+   ticks - the same three rooms the nav uses - so this needed no new colour and no new
+   word, only the ability to press them.
+   The anchor sits INSIDE the <dd> and stretches over the whole cell with a positioned
+   ::after. Wrapping <dt> + <dd> in an <a> looks tidier and is invalid: a <dl>'s <div>
+   may contain only <dt> and <dd>, and axe fails it on definition-list + dlitem. */
+.proof-list a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.proof-list a::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.proof-list > div:hover dt,
+.proof-list > div:focus-within dt {
+  color: var(--tick, var(--cyan));
+}
+
+.proof-list > div:hover dd,
+.proof-list > div:focus-within dd {
+  color: var(--text-soft);
+}
+
+.proof-list dt,
+.proof-list dd {
+  transition: color 160ms ease;
+}
+
 .proof-list dt {
   color: var(--text);
   font-family: var(--font-display);
@@ -758,7 +904,7 @@ p {
 }
 
 .section {
-  padding: clamp(4rem, 8vw, 6.25rem) 0;
+  padding-block: var(--seam-top) var(--seam-bot);
 }
 
 /* Every section opens like a chapter: a full rule, a wing eyebrow, a ghost numeral. */
@@ -766,7 +912,7 @@ p {
   position: relative;
   z-index: 0;
   display: grid;
-  margin-bottom: clamp(2rem, 5vw, 3.5rem);
+  margin-bottom: clamp(1.5rem, 3.5vw, 2.5rem);
   padding-top: 1.3rem;
   border-top: 1px solid var(--line-bright);
   gap: 1.25rem;
@@ -911,6 +1057,7 @@ body[data-page="psych"] .subhero h1 {
 .card-list,
 .catalog-grid {
   display: grid;
+  counter-reset: plate;
   gap: 2.25rem 1.75rem;
 }
 
@@ -918,6 +1065,7 @@ body[data-page="psych"] .subhero h1 {
 .card-list > li,
 .catalog-grid > li {
   border-top: 1px solid var(--line);
+  counter-increment: plate;
   padding-top: 1.35rem;
 }
 
@@ -926,6 +1074,14 @@ body[data-page="psych"] .subhero h1 {
   display: flex;
   height: 100%;
   flex-direction: column;
+}
+
+/* The index counts what is ON THE SHELF, not what exists in the data. Filtering to
+   Horror used to render 01, 09, 15, 16, 17 underneath a line reading "Showing 5
+   worlds." A counter cannot do that: `[hidden] { display: none }` means a filtered-out
+   item generates no box, so it never increments. */
+.card-index::before {
+  content: counter(plate, decimal-leading-zero);
 }
 
 .card-index {
@@ -1033,7 +1189,8 @@ body[data-page="psych"] .subhero h1 {
   transition: color 180ms ease;
 }
 
-.card-title a:hover {
+.card-title a:hover,
+.card-title a:focus-visible {
   color: var(--wing);
 }
 
@@ -1085,8 +1242,28 @@ body[data-page="psych"] .subhero h1 {
   gap: 0.55rem;
 }
 
+/* The action sits at its own width instead of stretching the whole column. A
+   full-bleed 386px slab of solid cyan out-emitted the picture above it - 24 of them
+   on /games/ were the brightest thing on a page whose subject is the artwork. */
 .card-actions .button {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+}
+
+/* On the shelf the action is an outline: the picture is the thing being chosen, and
+   every card is equally choosable, so nothing here earns a filled slab. The homepage
+   featured three keep theirs - that is where "featured" means something, and it keeps
+   one unambiguous press-shaped object in a stranger's path. Alex's verb is untouched. */
+.catalog-grid .card-actions .button-primary {
+  border-color: var(--line-bright);
+  background: transparent;
+  color: var(--text);
+}
+
+.catalog-grid .card-actions .button-primary:hover,
+.catalog-grid .card-actions .button-primary:focus-visible {
+  border-color: var(--wing);
+  background: transparent;
+  color: var(--text);
 }
 
 /* Three doorways, set as ledger rows. Each door is lit in its own wing. */
@@ -1152,18 +1329,19 @@ body[data-page="psych"] .subhero h1 {
   }
 }
 
-.route-card:hover strong {
+.route-card:hover strong,
+.route-card:focus-visible strong {
   color: var(--wing);
 }
 
-.route-card:hover span {
+.route-card:hover span,
+.route-card:focus-visible span {
   transform: translateX(0.4em);
 }
 
-/* `translate`, not `transform`: the rise animation owns transform on this element. */
 .route-card:active {
-  translate: 0 1px;
-  transition: translate 45ms ease;
+  transform: translateY(1px);
+  transition: transform 45ms ease;
 }
 
 /* The footer: the house seen from the street after dark.
@@ -1228,7 +1406,8 @@ body[data-page="psych"] .subhero h1 {
   transition: color 160ms ease;
 }
 
-.footer-links a:hover {
+.footer-links a:hover,
+.footer-links a:focus-visible {
   color: var(--cyan);
 }
 
@@ -1305,6 +1484,23 @@ body[data-page="psych"] .subhero h1 {
 .subhero-grid > div:first-child {
   position: relative;
   z-index: 0;
+}
+
+/* Making the inner column static hands the containing block to .subhero-grid, which is
+   already relative; its z-index: 0 still creates the stacking context, so paint order
+   is unchanged. The numeral lands in the empty air over the stat plate instead of on
+   top of the headline. */
+@media (min-width: 60rem) {
+  .subhero-grid > div:first-child {
+    position: static;
+  }
+
+  .subhero .ghost-index {
+    top: -0.24em;
+    right: -0.04em;
+    bottom: auto;
+    font-size: clamp(6rem, 11.5vw, 10.5rem);
+  }
 }
 
 .subhero h1 {
@@ -1424,7 +1620,8 @@ body[data-page="psych"] .subhero h1 {
   transition: color 160ms ease, border-color 160ms ease;
 }
 
-.filter-button:hover {
+.filter-button:hover,
+.filter-button:focus-visible {
   color: var(--text);
 }
 
@@ -1479,11 +1676,14 @@ body[data-page="psych"] .subhero h1 {
 }
 
 /* Entrance: entries rise onto the ledger as you scroll. Zero JS; browsers
-   without scroll-driven animations (and reduced-motion users) see everything. */
+   without scroll-driven animations (and reduced-motion users) see everything.
+   It targets the card INSIDE the <li>, not the <li> itself: the <li> carries the
+   ledger's border-top, and animating it dragged the site's own hairlines up to 16px
+   out of true mid-scroll. The rule stays nailed; the card rises off it. */
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
-    .card-list > li,
-    .catalog-grid > li,
+    .card-list > li > *,
+    .catalog-grid > li > *,
     .method-card,
     .community-card,
     .route-card {
@@ -1494,14 +1694,38 @@ body[data-page="psych"] .subhero h1 {
   }
 }
 
-/* Transform-only: text keeps full contrast at every scroll position. */
-@keyframes rise {
+/* The result beat. A new keyframe name on the inner card is required: reusing `rise`
+   would collide with the view-timeline binding that owns the <li>'s translate. Four
+   nth-child buckets, not a per-card stagger — the shelf settles, it does not cascade. */
+@media (prefers-reduced-motion: no-preference) {
+  .is-filtering .work-card {
+    animation: settle 180ms var(--ease) both;
+  }
+
+  .is-filtering > li:nth-child(4n + 2) .work-card { animation-delay: 30ms; }
+  .is-filtering > li:nth-child(4n + 3) .work-card { animation-delay: 60ms; }
+  .is-filtering > li:nth-child(4n + 4) .work-card { animation-delay: 90ms; }
+}
+
+@keyframes settle {
   from {
-    transform: translateY(22px);
+    translate: 0 6px;
   }
 
   to {
-    transform: none;
+    translate: none;
+  }
+}
+
+/* Transform-family only, never opacity: text keeps full contrast at every scroll
+   position. `translate` is the entrance lane — see the motion law at the top. */
+@keyframes rise {
+  from {
+    translate: 0 22px;
+  }
+
+  to {
+    translate: none;
   }
 }
 
@@ -1578,8 +1802,32 @@ body[data-page="psych"] .subhero h1 {
 }
 
 @media (min-width: 45rem) {
+  .hero-art img {
+    aspect-ratio: 41 / 16;
+  }
+
   .card-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* One principal plate and two studies. Three identical cards at the same size as the
+     full catalog meant "featured" had no visual meaning at all - the row said nothing
+     the /games/ grid did not already say. Scoped above the mobile scroll-snap rail
+     (max-width: 44.99rem), so the rail's negative margin is never unwound. */
+  .homepage-shelf[data-featured-games] {
+    grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr);
+  }
+
+  .homepage-shelf[data-featured-games] > li:first-child {
+    grid-row: span 2;
+  }
+
+  /* The principal spans two rows, so its cell is far taller than its own content -
+     pushing its action to a floor 380px below the text it belongs to. It is the only
+     card on the site with no row-mate to line up with, so it stops stretching and is
+     simply as tall as it is. */
+  .homepage-shelf[data-featured-games] > li:first-child .work-card {
+    height: auto;
   }
 
   .section-heading {
@@ -1609,10 +1857,6 @@ body[data-page="psych"] .subhero h1 {
 
   .menu-button {
     display: none;
-  }
-
-  .hero-art img {
-    aspect-ratio: 41 / 16;
   }
 
   .server-pillars {
