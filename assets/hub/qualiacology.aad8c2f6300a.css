@@ -318,6 +318,22 @@ p {
   margin-inline: auto;
 }
 
+/* The plate rail. Words stay in the 76rem measure where they read; pictures get their
+   own wider one, because a shelf of browser worlds is not a column of prose. At 1440
+   that is 1376px against the text column's 1216px, so a 3-up card goes 386 -> 440px:
+   29% more picture area at the same scan rate and no extra page height.
+   rem and percentages ONLY - never 100vw. The Windows scrollbar is outside the
+   viewport width, and browser-qa asserts pageWidth <= width + 1. */
+.plate-bleed {
+  width: 100%;
+  padding-inline: var(--gutter);
+}
+
+.plate-bleed > * {
+  max-width: 100rem;
+  margin-inline: auto;
+}
+
 .site-header {
   position: fixed;
   z-index: 100;
@@ -733,12 +749,15 @@ p {
   background: #05080d;
 }
 
-/* 16:9 on phones is a centre punch-out of the 41:16 plate, but it is also a TALLER
-   picture on the screen with least room (201px vs 140px at 390w), so it stays until a
-   real 3:2 phone crop exists to beat both. */
+/* Phones now get a real 3:2 cut of the plate rather than a 16:9 punch-out of it, so
+   the ratio here has to match the source heroPicture() actually serves them - and the
+   switch has to happen at the SAME breakpoint (45rem) as that <source media> query, or
+   there is a band of widths where the CSS box and the downloaded image disagree.
+   At 390w this is 239px tall, against 201px for the old punch-out and 140px if the
+   authored 41:16 simply carried down. */
 .hero-art img {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 3 / 2;
   object-fit: cover;
   object-position: center;
 }
@@ -771,6 +790,41 @@ p {
 .proof-list > div:nth-child(1) { --tick: var(--amber); }
 .proof-list > div:nth-child(2) { --tick: var(--cyan); }
 .proof-list > div:nth-child(3) { --tick: var(--pink); }
+
+/* The three numbers are the three doors. They already carried amber / cyan / pink
+   ticks - the same three rooms the nav uses - so this needed no new colour and no new
+   word, only the ability to press them.
+   The anchor sits INSIDE the <dd> and stretches over the whole cell with a positioned
+   ::after. Wrapping <dt> + <dd> in an <a> looks tidier and is invalid: a <dl>'s <div>
+   may contain only <dt> and <dd>, and axe fails it on definition-list + dlitem. */
+.proof-list a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.proof-list a::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.proof-list > div:hover dt,
+.proof-list > div:focus-within dt {
+  color: var(--tick, var(--cyan));
+}
+
+.proof-list > div:hover dd,
+.proof-list > div:focus-within dd {
+  color: var(--text-soft);
+}
+
+.proof-list dt,
+.proof-list dd {
+  transition: color 160ms ease;
+}
 
 .proof-list dt {
   color: var(--text);
@@ -1669,8 +1723,32 @@ body[data-page="psych"] .subhero h1 {
 }
 
 @media (min-width: 45rem) {
+  .hero-art img {
+    aspect-ratio: 41 / 16;
+  }
+
   .card-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* One principal plate and two studies. Three identical cards at the same size as the
+     full catalog meant "featured" had no visual meaning at all - the row said nothing
+     the /games/ grid did not already say. Scoped above the mobile scroll-snap rail
+     (max-width: 44.99rem), so the rail's negative margin is never unwound. */
+  .homepage-shelf[data-featured-games] {
+    grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr);
+  }
+
+  .homepage-shelf[data-featured-games] > li:first-child {
+    grid-row: span 2;
+  }
+
+  /* The principal spans two rows, so its cell is far taller than its own content -
+     pushing its action to a floor 380px below the text it belongs to. It is the only
+     card on the site with no row-mate to line up with, so it stops stretching and is
+     simply as tall as it is. */
+  .homepage-shelf[data-featured-games] > li:first-child .work-card {
+    height: auto;
   }
 
   .section-heading {
@@ -1700,10 +1778,6 @@ body[data-page="psych"] .subhero h1 {
 
   .menu-button {
     display: none;
-  }
-
-  .hero-art img {
-    aspect-ratio: 41 / 16;
   }
 
   .server-pillars {

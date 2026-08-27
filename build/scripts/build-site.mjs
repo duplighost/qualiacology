@@ -215,7 +215,13 @@ ${footer()}
 }
 
 function heroPicture() {
+  // Phones get a 3:2 cut of the same plate. At 390w that renders 239px tall, against
+  // 201px for the 16:9 punch-out and 140px if the authored 41:16 simply carried down -
+  // so the small screen gets the biggest picture, not the widest one.
+  const phone = "/assets/visuals/qualiacology-candy-city-portrait";
   return `<picture>
+    <source media="(max-width: 44.99rem)" type="image/avif" srcset="${phone}-640.avif 640w, ${phone}-960.avif 960w" sizes="calc(100vw - 2rem)">
+    <source media="(max-width: 44.99rem)" type="image/webp" srcset="${phone}-640.webp 640w, ${phone}-960.webp 960w" sizes="calc(100vw - 2rem)">
     <source type="image/avif" srcset="/assets/visuals/qualiacology-candy-city-640.avif 640w, /assets/visuals/qualiacology-candy-city-960.avif 960w, /assets/visuals/qualiacology-candy-city-1280.avif 1280w, /assets/visuals/qualiacology-candy-city-1640.avif 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
     <source type="image/webp" srcset="/assets/visuals/qualiacology-candy-city-640.webp 640w, /assets/visuals/qualiacology-candy-city-960.webp 960w, /assets/visuals/qualiacology-candy-city-1280.webp 1280w, /assets/visuals/qualiacology-candy-city-1640.webp 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
     <img src="/assets/visuals/qualiacology-candy-city-1640.jpg" width="1640" height="640" alt="A candy-loving ghost in a dark rain-soaked neon city, holding a lollipop and a bag of Ghost Pops" fetchpriority="high" decoding="async">
@@ -224,7 +230,9 @@ function heroPicture() {
 
 function catalogPicture(item, type, eager = false) {
   const isGame = type === "games";
-  const widths = isGame ? [480, 800] : [360, 600];
+  // 1200/900 exist because the plate rail makes cards 440px wide, and a 2x screen then
+  // needs 880 device px - the 800w file was already under-resolving at the OLD 386px.
+  const widths = isGame ? [480, 800, 1200] : [360, 600, 900];
   // Intrinsic size must match the real art (16:9 games, 1:1 albums) so the
   // browser reserves the right box and nothing shifts while images load.
   const dimensions = isGame ? [800, 450] : [600, 600];
@@ -237,9 +245,10 @@ function catalogPicture(item, type, eager = false) {
 
   const root = `/assets/catalog/${type}/${item.slug}`;
   const src = (width, ext) => `${escapeHtml(versioned(`${root}-${width}.${ext}`))} ${width}w`;
+  const set = (ext) => widths.map((width) => src(width, ext)).join(", ");
   return `<picture>
-    <source type="image/avif" srcset="${src(widths[0], "avif")}, ${src(widths[1], "avif")}" sizes="${sizes}">
-    <source type="image/webp" srcset="${src(widths[0], "webp")}, ${src(widths[1], "webp")}" sizes="${sizes}">
+    <source type="image/avif" srcset="${set("avif")}" sizes="${sizes}">
+    <source type="image/webp" srcset="${set("webp")}" sizes="${sizes}">
     <img src="${escapeHtml(versioned(item.image))}" width="${dimensions[0]}" height="${dimensions[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">
   </picture>`;
 }
@@ -330,9 +339,9 @@ function homepage() {
           ${heroPicture()}
         </figure>
         <dl class="proof-list">
-          <div><dt>3,000+</dt><dd>community members</dd></div>
-          <div><dt>${games.length}</dt><dd>browser worlds</dd></div>
-          <div><dt>${albums.length}</dt><dd>Doopliss releases</dd></div>
+          <div><dt>3,000+</dt><dd><a href="/psychopharmacology/">community members</a></dd></div>
+          <div><dt>${games.length}</dt><dd><a href="/games/">browser worlds</a></dd></div>
+          <div><dt>${albums.length}</dt><dd><a href="/music/">Doopliss releases</a></dd></div>
         </dl>
       </div>
     </section>
@@ -388,6 +397,8 @@ function homepage() {
             <div class="section-action"><a class="button button-arrow" href="/games/">Browse all ${games.length} worlds</a></div>
           </div>
         </div>
+      </div>
+      <div class="plate-bleed">
         <ul class="card-list homepage-shelf" data-featured-games="${featuredGames.length}">
           ${featuredGames.map((item, index) => gameCard(item, index, { eager: index === 0 })).join("\n")}
         </ul>
@@ -407,6 +418,8 @@ function homepage() {
             <div class="section-action"><a class="button button-arrow" href="/music/">Explore all ${albums.length} releases</a></div>
           </div>
         </div>
+      </div>
+      <div class="plate-bleed">
         <ul class="card-list homepage-shelf" data-featured-albums="${featuredAlbums.length}">
           ${featuredAlbums.map((item, index) => albumCard(item, index)).join("\n")}
         </ul>
@@ -545,6 +558,8 @@ function gamesPage() {
           </fieldset>
           <p class="filter-status" data-filter-status aria-live="polite">Showing ${games.length} worlds.</p>
         </div>
+      </div>
+      <div class="plate-bleed">
         <ul class="catalog-grid" data-game-catalog="${games.length}">
           ${games.map((item, index) => gameCard(item, index, { eager: index < 2 })).join("\n")}
         </ul>
@@ -612,6 +627,8 @@ function musicPage() {
           <div><p class="eyebrow">The full discography</p><h2 id="music-catalog-title">All ${albums.length} releases.</h2></div>
           <div class="section-heading-copy"><p>Every Doopliss release in one place. Track counts where the pages actually have them — nothing made up.</p></div>
         </div>
+      </div>
+      <div class="plate-bleed">
         <ul class="catalog-grid" data-album-catalog="${albums.length}">
           ${albums.map((item, index) => albumCard(item, index, { eager: index < 2 })).join("\n")}
         </ul>
