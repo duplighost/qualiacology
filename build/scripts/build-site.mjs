@@ -329,7 +329,6 @@ function homepage() {
         </div>
         <figure class="hero-art">
           ${heroPicture()}
-          <figcaption>Original Qualiacology candy-city artwork</figcaption>
         </figure>
         <dl class="proof-list">
           <div><dt>3,000+</dt><dd>community members</dd></div>

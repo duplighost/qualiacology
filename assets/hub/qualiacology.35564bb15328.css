@@ -1,7 +1,8 @@
 /*
   Qualiacology hub styles — "the index, in three rooms".
   Discipline budget (do not exceed): one aura per view, resting wing alpha <= 8%,
-  glow shadows only on the scroll filament, hero art, and the playing audio LED.
+  glow shadows only on the scroll filament, the lit nav pilot light, and the playing
+  audio LED. Hero art gave its glow back on 2026-08-27 — the picture is the light now.
   Wing colors mean rooms — amber = psychopharmacology, cyan = games, pink = Doopliss.
   Amber focus outlines are accessibility, not theming; they never change.
 */
@@ -30,6 +31,9 @@
   --surface-2: #121e28;
   --line: #263846;
   --line-bright: #3d5968;
+  /* The lit edge of a shelf the art sits ON. 3.2:1 against --surface, so the frame
+     is a component boundary you can actually see. */
+  --rule-lit: #4a6577;
   --text: #f4f7f8;
   --text-soft: #c9d4d9;
   --muted: #9eb0b9;
@@ -120,9 +124,9 @@ body::after {
   position: fixed;
   z-index: 60;
   inset: -2%;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   content: "";
-  opacity: 0.03;
+  opacity: 0.045;
   pointer-events: none;
 }
 
@@ -225,23 +229,33 @@ p {
   outline-offset: 4px;
 }
 
-/* The meta register: tiny, tracked, printed. The counterweight to the display scale. */
+/* The locator register: tiny, tracked, printed. It names a place — a door, a room,
+   a kind, a count. The counterweight to the display scale. */
 .eyebrow,
 .nav-link,
 .card-kicker,
-.card-meta li,
 .dialog-label,
 .proof-list dd,
 .route-card small,
 .subhero-stat span,
 .filter-shell legend,
-.filter-button,
-.footer-links a {
+.filter-button {
   font-family: var(--font-body);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.15em;
   text-transform: uppercase;
+}
+
+/* The data register: the same small size, said instead of shouted. These carry values
+   that were already cased on purpose — WASD, LMB, RMB, Esc, TikTok — and uppercasing
+   them threw that signal away. Set them, don't transform them. */
+.card-meta li,
+.footer-links a {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.005em;
 }
 
 .skip-link {
@@ -677,44 +691,23 @@ p {
   gap: 0.75rem;
 }
 
-/* The one image on the site sits in its own pool of instrument light. */
+/* The one painting on the site. It used to sit in a lit box with a bracket and a
+   label, which is how you present a specimen; a picture only needs somewhere to hang.
+   The mat stays as a load-in ground so the plate never flashes page-black. */
 .hero-art {
   position: relative;
   margin: clamp(2rem, 5vw, 3rem) 0 0;
-  border: 1px solid var(--line-bright);
   background: #05080d;
-  box-shadow: 0 0 70px -12px rgba(64, 238, 225, 0.22);
 }
 
-.hero-art::before {
-  position: absolute;
-  z-index: 2;
-  inset: -1px auto auto -1px;
-  width: 5rem;
-  height: 5rem;
-  border-top: 2px solid var(--cyan);
-  border-left: 2px solid var(--cyan);
-  content: "";
-  filter: drop-shadow(0 0 6px rgba(64, 238, 225, 0.5));
-  pointer-events: none;
-}
-
+/* 16:9 on phones is a centre punch-out of the 41:16 plate, but it is also a TALLER
+   picture on the screen with least room (201px vs 140px at 390w), so it stays until a
+   real 3:2 phone crop exists to beat both. */
 .hero-art img {
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   object-position: center;
-}
-
-.hero-art figcaption {
-  position: absolute;
-  right: 0.65rem;
-  bottom: 0.55rem;
-  margin: 0;
-  padding: 0.25rem 0.45rem;
-  background: rgba(3, 6, 10, 0.88);
-  color: var(--muted);
-  font-size: 0.72rem;
 }
 
 /* The stats ruler: three numbers, three rooms, three ticks. */
@@ -753,6 +746,7 @@ p {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   letter-spacing: -0.04em;
+  line-height: 1;
 }
 
 .proof-list dd {
@@ -946,12 +940,16 @@ body[data-page="psych"] .subhero h1 {
   line-height: 1;
 }
 
+/* The mat sits ABOVE the page, not below it. It used to paint #04070b — darker than
+   the page itself — which is exactly what let the nine near-black cards dissolve into
+   the background instead of reading as objects on a shelf. */
 .card-media {
   position: relative;
   display: block;
   overflow: hidden;
   border: 1px solid var(--line);
-  background: #04070b;
+  border-top-color: var(--rule-lit);
+  background: var(--surface);
   transition: border-color 240ms ease;
 }
 
@@ -971,19 +969,21 @@ body[data-page="psych"] .subhero h1 {
   height: 100%;
 }
 
-/* The develop: prints resolve to full color when you reach for them. */
+/* The art rests resolved, always, on every device. It used to sit at 55% chroma until
+   you hovered it — a darkroom develop, which is a lovely idea on a page with one image
+   and costs you the whole shelf on a page with twenty-four. */
 .card-media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: saturate(0.55) brightness(0.92);
-  transition: filter 420ms var(--ease);
 }
 
-/* Touch has no hover: the develop can never play, so the art rests resolved. */
-@media (hover: none) {
+/* The develop survives as a push toward you instead of a change of exposure.
+   `scale` is the pointer lane: the entrance animation owns `transform` and the press
+   owns nothing here, so the two can never write the same property. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .card-media img {
-    filter: none;
+    transition: scale 520ms var(--ease);
   }
 }
 
@@ -994,11 +994,13 @@ body[data-page="psych"] .subhero h1 {
   border-color: var(--wing);
 }
 
-.work-card:hover .card-media img,
-.album-card:hover .card-media img,
-.work-card:focus-within .card-media img,
-.album-card:focus-within .card-media img {
-  filter: none;
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .work-card:hover .card-media img,
+  .album-card:hover .card-media img,
+  .work-card:focus-within .card-media img,
+  .album-card:focus-within .card-media img {
+    scale: 1.03;
+  }
 }
 
 .card-body {
@@ -1042,11 +1044,13 @@ body[data-page="psych"] .subhero h1 {
   line-height: 1.62;
 }
 
-/* Metadata is printed, not chipped. */
+/* Metadata is printed, not chipped, and it stays attached to the summary it describes.
+   The row's slack used to sit HERE (`margin-top: auto`), tearing a ~138px hole between
+   a short summary and its own metadata. It now sits below, above the action. */
 .card-meta {
   display: flex;
   flex-wrap: wrap;
-  margin: auto 0 1.2rem;
+  margin: 0 0 1.2rem;
   padding: 0;
   gap: 0.3rem 0;
   list-style: none;
@@ -1061,16 +1065,23 @@ body[data-page="psych"] .subhero h1 {
   line-height: 1.6;
 }
 
-.card-meta li + li::before {
+/* Hung off the item it FOLLOWS, not the one it precedes. As a ::before on the next
+   item it was physically incapable of staying on the line it terminates, so a wrapping
+   row started line two with an orphaned slash. */
+.card-meta li:not(:last-child)::after {
   margin: 0 0.55rem;
   color: var(--line-bright);
   content: "/";
   font-weight: 400;
 }
 
+/* The action sits on the floor of the card, so every button in a row shares one
+   baseline. This is where a row's uneven slack goes: as breathing room in front of
+   the press, never as a gap inside the reading. */
 .card-actions {
   display: flex;
   flex-wrap: wrap;
+  margin-top: auto;
   gap: 0.55rem;
 }
 
@@ -1521,10 +1532,6 @@ body[data-page="psych"] .subhero h1 {
 }
 
 @media (max-width: 44.99rem) {
-  .hero-art figcaption {
-    display: none;
-  }
-
   .audio-toggle {
     width: 2.75rem;
     padding-inline: 0;
@@ -1680,10 +1687,6 @@ body[data-page="psych"] .subhero h1 {
   .site-header.is-top {
     background: rgba(6, 10, 15, 0.94);
     border-bottom-color: rgba(61, 89, 104, 0.55);
-  }
-
-  .card-media img {
-    filter: none;
   }
 
   .ghost-index {
