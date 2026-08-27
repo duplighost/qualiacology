@@ -254,7 +254,11 @@ function catalogPicture(item, type, eager = false) {
 }
 
 function gameCard(game, index, { eager = false } = {}) {
-  const metadata = [game.duration, game.controls].filter(Boolean);
+  // Controls are post-decision information sitting in the pre-decision slot: eight
+  // tracked items telling you how to play a thing you have not chosen yet. They stay
+  // on each game's own page, where they answer a question you are actually asking.
+  // Play times stay here - 3 of 24 games report one, and that IS a choosing signal.
+  const metadata = [game.duration].filter(Boolean);
   const secondaryAction = game.secondary
     ? `\n          <a class="button button-quiet" href="${escapeHtml(game.secondary.href)}">${escapeHtml(game.secondary.label)}</a>`
     : "";
@@ -268,9 +272,9 @@ function gameCard(game, index, { eager = false } = {}) {
         <p class="card-kicker">${escapeHtml(game.descriptor)}</p>
         <h3 class="card-title"><a href="${routeForGame(game)}">${escapeHtml(game.title)}</a></h3>
         <p class="card-summary">${escapeHtml(game.summary)}</p>
-        <ul class="card-meta" aria-label="Game details">
+        ${metadata.length ? `<ul class="card-meta" aria-label="Game details">
           ${metadata.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-        </ul>
+        </ul>` : ""}
         <div class="card-actions">
           <a class="button button-primary button-arrow" href="${routeForGame(game)}">${escapeHtml(game.actionLabel)}</a>${secondaryAction}
         </div>
@@ -546,7 +550,7 @@ function gamesPage() {
       <div class="container">
         <div class="section-heading">
           <div><p class="eyebrow">The full shelf</p><h2 id="catalog-title">All ${games.length} worlds.</h2></div>
-          <div class="section-heading-copy"><p>Filter by mood. Controls and play times are listed where the game actually reports them — where it doesn't, I left it blank instead of guessing.</p></div>
+          <div class="section-heading-copy"><p>Filter by mood. Play times are listed where the game actually reports them — where it doesn't, I left it blank instead of guessing.</p></div>
         </div>
       </div>
       <div class="plate-bleed">
