@@ -5,7 +5,7 @@
 // counter-input first claim on the recoil accumulator.
 
 import * as THREE from 'three';
-import { TAU, DEG, clamp, clamp01, lerp, damp, ease, Spring3 } from '../engine/math.js';
+import { TAU, DEG, clamp, lerp, damp, ease, Spring3 } from '../engine/math.js';
 
 const BASE_FOV = 65;                 // vertical; = CoD slider 80 @16:9
 const ADS_ZOOM = 1.18;
@@ -23,7 +23,7 @@ export function create(ctx) {
   const punch = new Spring3(13, 0.42);   // view kick (visual only)
   let trauma = 0;
   let shakeT = 0;
-  let sprintT = 0, slideFovT = 0;
+  let sprintT = 0, slideFovT = 0, slideLeanT = 0;
 
   const api = {
     id: 'camera',
@@ -41,6 +41,17 @@ export function create(ctx) {
     },
     addTrauma(v) { trauma = Math.min(1, trauma + v); },
     get fov() { return camera.fov; },
+    /** Clear visual-only carryover when a run restarts; preserve player aim. */
+    resetTransient() {
+      lookDeltaPitch = 0; lookDeltaYaw = 0;
+      punch.x.set(0); punch.y.set(0); punch.z.set(0);
+      trauma = 0; shakeT = 0;
+      sprintT = 0; slideFovT = 0; slideLeanT = 0;
+      if (camera.fov !== BASE_FOV) {
+        camera.fov = BASE_FOV;
+        camera.updateProjectionMatrix();
+      }
+    },
     /** world-space aim direction (recoil-included — shots track the kick). */
     aimDir(out) {
       out.set(
@@ -66,14 +77,15 @@ export function create(ctx) {
       trauma = Math.max(0, trauma - 1.6 * dt);
       shakeT += dt * 28;
       sprintT = damp(sprintT, player.sprinting ? 1 : 0, player.sprinting ? 9 : 13, dt);
-      slideFovT = damp(slideFovT, (player.sliding && player.slideT < 0.4) ? 1 : 0, 10, dt);
+      slideFovT = damp(slideFovT, (player.sliding && player.slideT < 0.56) ? 1 : 0, 10, dt);
+      slideLeanT = damp(slideLeanT, player.sliding ? 1 : 0, player.sliding ? 12 : 8, dt);
 
       // ---- FOV pipeline: ADS eased both ends (front-loaded zoom = nausea)
       const adsEase = ease.inOutQuad(adsT);
       const adsFov = 2 * Math.atan(Math.tan(BASE_FOV * DEG / 2) / ADS_ZOOM) / DEG;
       let fov = lerp(BASE_FOV, adsFov, adsEase);
       fov += 6.5 * ease.outCubic(sprintT) * (1 - adsEase);
-      fov += 3.5 * slideFovT;
+      fov += 4.0 * slideFovT;
       if (wep) fov += wep.fovPunch || 0;
       if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
     },
@@ -104,7 +116,7 @@ export function create(ctx) {
 
       // lean: strafe + slide cant
       const strafe = (input.held('right') ? 1 : 0) - (input.held('left') ? 1 : 0);
-      const lean = -strafe * 0.032 * (1 - adsT) - (player.sliding ? 4.5 * DEG : 0) * (player.sliding ? clamp01(player.slideT / 0.16) : 0);
+      const lean = -strafe * 0.032 * (1 - adsT) - 4.5 * DEG * slideLeanT;
 
       camera.position.set(player.pos.x + bobX * Math.cos(yaw), player.eyeY + bobY, player.pos.z - bobX * Math.sin(yaw));
       camera.rotation.order = 'YXZ';

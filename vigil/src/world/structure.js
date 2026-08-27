@@ -6,6 +6,8 @@
 
 import * as THREE from 'three';
 import { TAU, clamp } from '../engine/math.js';
+import { batchStaticMeshes } from '../gfx/geometry.js';
+import { createMetalSurface } from '../gfx/surfaces.js';
 
 export const CFG = {
   floorY: 0.40,        // circular floor plate over the flattened bowl
@@ -26,16 +28,24 @@ export const CFG = {
   beamTop: 46,
 };
 
-/* ---------------- materials (Eclipse palette, verbatim) ---------------- */
+/* -------- Eclipse's two-hue palette, with a generated physical finish ----- */
 
 function materials() {
+  const surface = createMetalSurface(0x51a7b3);
+  const finish = (bumpScale) => ({
+    map: surface.color,
+    bumpMap: surface.bump,
+    bumpScale,
+    roughnessMap: surface.roughness,
+    envMapIntensity: 0.82,
+  });
   return {
-    floor: new THREE.MeshStandardMaterial({ color: 0xb4bfd0, roughness: 0.42, metalness: 0.56, emissive: 0x08162b, emissiveIntensity: 0.23 }),
-    deck: new THREE.MeshStandardMaterial({ color: 0x8fa0b5, roughness: 0.5, metalness: 0.42, side: THREE.DoubleSide }),
-    darkMetal: new THREE.MeshStandardMaterial({ color: 0x243047, roughness: 0.62, metalness: 0.45, emissive: 0x07101d, emissiveIntensity: 0.22 }),
-    panelMetal: new THREE.MeshStandardMaterial({ color: 0x344764, roughness: 0.55, metalness: 0.4, emissive: 0x08152a, emissiveIntensity: 0.16 }),
-    cyanTrim: new THREE.MeshStandardMaterial({ color: 0x193044, roughness: 0.24, metalness: 0.58, emissive: 0x35dfff, emissiveIntensity: 1.28 }),
-    violetTrim: new THREE.MeshStandardMaterial({ color: 0x25193f, roughness: 0.25, metalness: 0.52, emissive: 0x896dff, emissiveIntensity: 1.05 }),
+    floor: new THREE.MeshStandardMaterial({ ...finish(0.055), color: 0x9daabb, roughness: 0.54, metalness: 0.58, emissive: 0x08162b, emissiveIntensity: 0.23 }),
+    deck: new THREE.MeshStandardMaterial({ ...finish(0.045), color: 0x8495aa, roughness: 0.57, metalness: 0.49, side: THREE.DoubleSide }),
+    darkMetal: new THREE.MeshStandardMaterial({ ...finish(0.038), color: 0x1d293d, roughness: 0.67, metalness: 0.53, emissive: 0x07101d, emissiveIntensity: 0.22 }),
+    panelMetal: new THREE.MeshStandardMaterial({ ...finish(0.046), color: 0x30425c, roughness: 0.59, metalness: 0.49, emissive: 0x08152a, emissiveIntensity: 0.16 }),
+    cyanTrim: new THREE.MeshStandardMaterial({ ...finish(0.018), color: 0x152c40, roughness: 0.30, metalness: 0.63, emissive: 0x35dfff, emissiveIntensity: 1.28 }),
+    violetTrim: new THREE.MeshStandardMaterial({ ...finish(0.018), color: 0x211738, roughness: 0.31, metalness: 0.59, emissive: 0x896dff, emissiveIntensity: 1.05 }),
     beam: new THREE.MeshBasicMaterial({ color: 0x68ddff, transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }),
   };
 }
@@ -89,16 +99,38 @@ export function structureSurfaces(x, z) {
   return out.length ? out : null;
 }
 
+/**
+ * Allocation-free posture query for the player capsule. This mirrors every
+ * layer returned by structureSurfaces(), but answers the only question the
+ * controller needs: whether a structure surface crosses the body's vertical
+ * span at this horizontal point.
+ */
+export function structureBlocksBody(x, z, feetY, headY) {
+  const minY = feetY + 0.08;
+  const maxY = headY + 0.02;
+  const d = Math.hypot(x, z);
+  if (d < CFG.floorR && CFG.floorY > minY && CFG.floorY < maxY) return true;
+  if (d >= CFG.deckIn && d <= CFG.deckOut
+      && CFG.deckY > minY && CFG.deckY < maxY) return true;
+  const ra = rampHeight(x, z, 1);
+  if (ra !== null && ra > minY && ra < maxY) return true;
+  const rb = rampHeight(x, z, -1);
+  return rb !== null && rb > minY && rb < maxY;
+}
+
 export function buildStructure(colliderApi) {
   const M = materials();
   const g = new THREE.Group();
   g.name = 'relay';
+  const staticRoot = new THREE.Group();
+  staticRoot.name = 'relay-static';
+  g.add(staticRoot);
   const trims = { cyan: M.cyanTrim, violet: M.violetTrim };
 
   const add = (mesh, { shadow = true } = {}) => {
     mesh.castShadow = shadow;
     mesh.receiveShadow = true;
-    g.add(mesh);
+    staticRoot.add(mesh);
     return mesh;
   };
 
@@ -122,6 +154,22 @@ export function buildStructure(colliderApi) {
     band.rotation.x = Math.PI / 2;
     band.position.y = y;
   }
+  // Flush maintenance panels break the shaft's single primitive silhouette.
+  // Their radial face follows the existing taper instead of growing the core.
+  const coreH = CFG.deckY + 3.4;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * TAU;
+    const y = 1.45 + (i % 3) * 3.2;
+    const shellR = CFG.coreR + 0.5 * (1 - y / coreH);
+    const panel = add(new THREE.Mesh(new THREE.BoxGeometry(0.045, 1.28, 1.08), M.darkMetal), { shadow: false });
+    panel.position.set(Math.cos(a) * shellR, y, Math.sin(a) * shellR);
+    panel.rotation.y = -a;
+    if ((i & 1) === 0) {
+      const status = add(new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.06, 0.68), i % 4 ? M.cyanTrim : M.violetTrim), { shadow: false });
+      status.position.set(Math.cos(a) * (shellR + 0.025), y + 0.37, Math.sin(a) * (shellR + 0.025));
+      status.rotation.y = -a;
+    }
+  }
 
   // deck annulus (with a real hole)
   const deckGeo = new THREE.RingGeometry(CFG.deckIn, CFG.deckOut, 56, 1);
@@ -136,6 +184,24 @@ export function buildStructure(colliderApi) {
     rim.rotation.x = Math.PI / 2;
     rim.position.y = CFG.deckY + 0.10;
   }
+  // Engraved concentric joints and radial panel seams sit effectively flush;
+  // they improve parallax/readability without becoming new floor obstacles.
+  for (const r of [6.55, 9.15, 11.65]) {
+    const joint = add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.022, 5, 64), M.darkMetal), { shadow: false });
+    joint.rotation.x = Math.PI / 2;
+    joint.position.y = CFG.deckY + 0.018;
+  }
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * TAU;
+    const seam = add(new THREE.Mesh(new THREE.BoxGeometry(7.72, 0.018, 0.035), M.darkMetal), { shadow: false });
+    seam.position.set(Math.cos(a) * 8.82, CFG.deckY + 0.012, Math.sin(a) * 8.82);
+    seam.rotation.y = -a;
+  }
+  for (const r of [7.8, 12.0, 14.7]) {
+    const floorJoint = add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.024, 5, 72), M.darkMetal), { shadow: false });
+    floorJoint.rotation.x = Math.PI / 2;
+    floorJoint.position.y = CFG.floorY + 0.018;
+  }
 
   // outer columns with cross-braces (the under-deck arcade)
   for (let i = 0; i < CFG.columns; i++) {
@@ -148,6 +214,12 @@ export function buildStructure(colliderApi) {
     colliderApi.place({ kind: 'relay-column', x, z, r: 0.62, yMin: 0, yMax: CFG.deckY });
     const shoe = add(new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 0.5, 10), M.panelMetal), { shadow: false });
     shoe.position.set(x, 0.55, z);
+    const footCollar = add(new THREE.Mesh(new THREE.TorusGeometry(0.79, 0.045, 6, 20), i % 2 ? M.violetTrim : M.cyanTrim), { shadow: false });
+    footCollar.rotation.x = Math.PI / 2;
+    footCollar.position.set(x, 0.80, z);
+    const headCollar = add(new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.035, 6, 20), M.darkMetal), { shadow: false });
+    headCollar.rotation.x = Math.PI / 2;
+    headCollar.position.set(x, CFG.deckY - 0.52, z);
   }
 
   // pylons rising past the deck, with trim rings
@@ -161,6 +233,11 @@ export function buildStructure(colliderApi) {
     const ringT = add(new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.06, 6, 22), i % 2 ? M.violetTrim : M.cyanTrim), { shadow: false });
     ringT.rotation.x = Math.PI / 2;
     ringT.position.set(x, CFG.deckY + 6.8, z);
+    for (const y of [4.15, 11.65]) {
+      const collar = add(new THREE.Mesh(new THREE.TorusGeometry(0.425, 0.035, 6, 20), M.darkMetal), { shadow: false });
+      collar.rotation.x = Math.PI / 2;
+      collar.position.set(x, y, z);
+    }
   }
 
   // aperture crown above the core + dishes
@@ -180,6 +257,15 @@ export function buildStructure(colliderApi) {
     dish.rotation.x = -0.9;
     dish.castShadow = true;
     arm.add(dish);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.035, 6, 28), M.darkMetal);
+    rim.position.y = 2.7;
+    rim.rotation.x = Math.PI / 2 - 0.9;
+    rim.castShadow = true;
+    arm.add(rim);
+    const gimbal = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 8), M.darkMetal);
+    gimbal.position.y = 2.38;
+    gimbal.castShadow = true;
+    arm.add(gimbal);
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), s > 0 ? M.cyanTrim : M.violetTrim);
     eye.position.set(0, 2.7, 0.6);
     arm.add(eye);
@@ -207,7 +293,16 @@ export function buildStructure(colliderApi) {
     ramp.rotation.z = -sign * slope;
     ramp.receiveShadow = true;
     ramp.castShadow = true;
-    g.add(ramp);
+    staticRoot.add(ramp);
+    for (const z of [-2.42, 2.42]) {
+      const strip = add(new THREE.Mesh(new THREE.BoxGeometry(run - 0.9, 0.035, 0.055), M.darkMetal), { shadow: false });
+      strip.position.set(
+        midX + sign * Math.sin(slope) * 0.19,
+        midY - 0.17 + Math.cos(slope) * 0.19,
+        z,
+      );
+      strip.rotation.z = -sign * slope;
+    }
 
     // treads: cross-bars that make the climb legible at a glance
     const treads = 11;
@@ -218,7 +313,7 @@ export function buildStructure(colliderApi) {
       const bar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, CFG.rampW - 0.5), M.darkMetal);
       bar.position.set(lx, ly + 0.03, 0);
       bar.rotation.z = -sign * slope;
-      g.add(bar);
+      staticRoot.add(bar);
     }
 
     for (const zs of [-1, 1]) {
@@ -228,11 +323,11 @@ export function buildStructure(colliderApi) {
       beamMesh.position.set(midX, midY + CFG.railH, zEdge);
       beamMesh.rotation.z = -sign * slope;
       beamMesh.castShadow = true;
-      g.add(beamMesh);
+      staticRoot.add(beamMesh);
       const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, run, 6), zs > 0 ? M.cyanTrim : M.violetTrim);
       tube.rotation.z = Math.PI / 2 - sign * slope;
       tube.position.set(midX, midY + CFG.railH + 0.14, zEdge);
-      g.add(tube);
+      staticRoot.add(tube);
       for (let i = 0; i <= 6; i++) {
         const t = i / 6;
         const lx = sign * (CFG.rampFoot - t * len);
@@ -240,7 +335,10 @@ export function buildStructure(colliderApi) {
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, CFG.railH, 0.12), M.darkMetal);
         post.position.set(lx, ly + CFG.railH / 2, zEdge);
         post.castShadow = true;
-        g.add(post);
+        staticRoot.add(post);
+        const gusset = add(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.14), M.panelMetal), { shadow: false });
+        gusset.position.set(lx, ly + 0.10, zEdge);
+        gusset.rotation.z = -sign * slope;
       }
       // ONE box collider per rail: a low wall you slide along, and bullets
       // clear it above railH. Spans the ramp run in X, thin in Z.
@@ -263,10 +361,15 @@ export function buildStructure(colliderApi) {
     const apron = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, CFG.rampW), M.deck);
     apron.position.set(sign * (CFG.rampFoot + 0.7), CFG.rampFootY - 0.22, 0);
     apron.receiveShadow = true;
-    g.add(apron);
+    staticRoot.add(apron);
 
     colliderApi.place({ kind: 'relay-ramp', decor: true }); // walkable via structureSurfaces
   }
+
+  // Collapse the authored relay shell after every transform is final. The
+  // dishes and energy beam remain outside this subtree so they can move.
+  const staticBatch = batchStaticMeshes(staticRoot);
+  g.userData.staticBatch = staticBatch;
 
   let t = 0;
   return {

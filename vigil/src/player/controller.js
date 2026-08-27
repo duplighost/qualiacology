@@ -10,8 +10,10 @@ const WALK = 4.35, SPRINT = 6.60, CROUCH = 2.10, ADS_WALK = 2.95, CROUCH_ADS = 1
 const GROUND_ACCEL = 62, AIR_ACCEL = 16, AIR_CAP = 1.40;
 const FRICTION = 11.5, STOP_SNAP = 26, GRAVITY = 22, JUMP = 6.40;
 const EYE = 1.68, EYE_CROUCH = 1.06, RADIUS = 0.36;
+const BODY_STAND = 1.70, BODY_CROUCH = 1.16, BODY_SLIDE = 0.94;
 const STICK = 0.42, COYOTE = 0.12, JUMP_BUFFER = 0.16;
-const SLIDE_MIN_ENTRY = 5.60, SLIDE_CAP = 9.40, SLIDE_TIME = 0.85, SLIDE_COOLDOWN = 1.10;
+const SLIDE_MIN_ENTRY = 5.60, SLIDE_BOOST = 1.38, SLIDE_CAP = 9.75;
+const SLIDE_TIME = 1.08, SLIDE_COOLDOWN = 1.10, SLIDE_STEP = 0.15;
 
 export function create(ctx) {
   const input = ctx.systems.input;
@@ -22,7 +24,9 @@ export function create(ctx) {
   const vel = new THREE.Vector3();
   let grounded = true, sinceGround = 0, jumpBuffered = -1;
   let sprinting = false, crouched = false;
+  let standingClear = true;       // refreshed once after each non-slide move
   let crouchT = 0;              // 0 stand .. 1 crouch (190/240 ms)
+  let slideViewT = 0;           // camera posture outlives the physical slide
   let sliding = false, slideT = 0, slideCooldown = 0, slideDir = new THREE.Vector3();
   let bobPhase = 0;             // ONE stride clock, [0, TAU)
   let stepParity = 0;
@@ -42,6 +46,15 @@ export function create(ctx) {
     return cap;
   }
 
+  function hasStandingClearance() {
+    return !world.canFitBody || world.canFitBody(pos.x, pos.z, RADIUS, pos.y, BODY_STAND);
+  }
+
+  function resolveCrouch(crouchHeld = input.held('crouch')) {
+    crouched = sliding || crouchHeld || !standingClear;
+    return crouched;
+  }
+
   function tryJump() {
     if (sinceGround > COYOTE) return false;
     vel.y = JUMP;
@@ -51,6 +64,7 @@ export function create(ctx) {
       // slide-cancel keeps 0.85x of horizontal speed — a combat move, not tech
       vel.x *= 0.85; vel.z *= 0.85;
       endSlide();
+      resolveCrouch();
     }
     ctx.bus.emit('player:jump');
     return true;
@@ -62,7 +76,7 @@ export function create(ctx) {
     sliding = true;
     slideT = 0;
     slideDir.set(vel.x, 0, vel.z).normalize();
-    const s = Math.min(hs * 1.28, SLIDE_CAP);
+    const s = Math.min(hs * SLIDE_BOOST, SLIDE_CAP);
     vel.x = slideDir.x * s;
     vel.z = slideDir.z * s;
     slideEye.set(0);
@@ -70,6 +84,7 @@ export function create(ctx) {
     ctx.bus.emit('player:slide');
   }
   function endSlide() {
+    if (!sliding) return;
     sliding = false;
     slideCooldown = SLIDE_COOLDOWN;
   }
@@ -80,8 +95,8 @@ export function create(ctx) {
     radius: RADIUS,
     get eyeY() {
       const stand = lerp(EYE, EYE_CROUCH, ease.outQuad(crouchT));
-      const slideDrop = sliding ? lerp(stand, 0.82, clamp01(slideT / 0.14)) + slideEye.value * 0.026 : stand;
-      return pos.y + (sliding ? slideDrop : stand) + eyeSpring.value;
+      const slideDrop = lerp(stand, 0.82, slideViewT) + slideEye.value * 0.026 * slideViewT;
+      return pos.y + slideDrop + eyeSpring.value;
     },
     get grounded() { return grounded; },
     get sprinting() { return sprinting; },
@@ -113,7 +128,12 @@ export function create(ctx) {
       vel.set(0, 0, 0);
       hp = 100; dead = false; sinceHurt = 99;
       sliding = false; crouched = false; sprinting = false;
-      bobPhase = 0;
+      standingClear = true;
+      grounded = true; sinceGround = 0; jumpBuffered = -1;
+      crouchT = 0; slideViewT = 0; slideT = 0; slideCooldown = 0;
+      slideDir.set(0, 0, 0);
+      eyeSpring.set(0); slideEye.set(0);
+      bobPhase = 0; stepParity = 0;
     },
 
     update(dt) {
@@ -130,17 +150,29 @@ export function create(ctx) {
       const hasInput = wish.lengthSq() > 0;
       if (hasInput) wish.normalize();
 
+      const crouchHeld = input.held('crouch');
+      const crouchPressed = input.pressed('crouch');
+      let clearanceQueried = false;
+
+      // The previous frame's post-move clearance is exact for our current
+      // position. Using it here lets a released crouch stand before sprint
+      // evaluation without issuing the same world query twice this frame. A
+      // release edge refreshes first so newly registered/dynamic cover cannot
+      // invalidate the cache between frames.
+      if (!sliding && input.released('crouch')) {
+        standingClear = hasStandingClearance();
+        clearanceQueried = true;
+      }
+      if (!sliding && !crouchHeld) resolveCrouch(false);
+
       // sprint: forward + key; fire/ADS cancels on the input frame
       const wepBlocks = ctx.systems.weapons && (ctx.systems.weapons.wantsSprintCancel);
       sprinting = input.held('sprint') && f > 0 && !crouched && !wepBlocks && grounded && !sliding;
 
-      // crouch + slide entry
-      if (input.pressed('crouch')) {
-        if (!crouched && sprinting && grounded) startSlide();
-        crouched = !crouched;
-      }
-      if (sliding) crouched = true;
-      crouchT = damp(crouchT, crouched ? 1 : 0, crouched ? 12 : 9.5, dt);
+      // Crouch is a held intent. Its press still starts a sprint slide, but a
+      // release never cancels that slide; posture resolves when the move ends.
+      if (crouchPressed && !crouched && sprinting && grounded) startSlide();
+      if (sliding || crouchHeld) crouched = true;
 
       // ---- jump buffering + coyote
       if (input.pressed('jump')) jumpBuffered = JUMP_BUFFER;
@@ -148,25 +180,35 @@ export function create(ctx) {
       if (jumpBuffered > 0 && tryJump()) jumpBuffered = -1;
 
       // ---- slide physics
+      const slideMotion = sliding;
       if (sliding) {
         slideT += dt;
-        const fr = 3.40 + 1.60 * slideT;
+        const phase = clamp01(slideT / SLIDE_TIME);
+        const shaped = ease.inQuad(phase);
         const sp = Math.hypot(vel.x, vel.z);
-        const ns = Math.max(0, sp - fr * sp * dt * 0.32 - fr * dt);
+        // Low early drag carries a full-sprint slide roughly 8.7 m; the rising
+        // tail keeps the exit readable and prevents an endlessly optimal move.
+        const drag = lerp(0.50, 4.60, shaped);
+        const rolling = lerp(0.055, 0.24, shaped);
+        const ns = Math.max(0, sp - (drag + sp * rolling) * dt);
         if (sp > 0.01) { vel.x *= ns / sp; vel.z *= ns / sp; }
-        // ±38°/s of steering, zero acceleration
+        // About 45–58°/s of authored steering, with zero acceleration.
         if (hasInput) {
-          const want = Math.atan2(-wish.x, -wish.z);
-          const cur = Math.atan2(-vel.x, -vel.z);
+          const want = Math.atan2(wish.x, -wish.z);
+          const cur = Math.atan2(vel.x, -vel.z);
           let d = want - cur;
           while (d > Math.PI) d -= TAU;
           while (d < -Math.PI) d += TAU;
-          const turn = clamp(d, -0.663 * dt, 0.663 * dt);
+          const turnRate = lerp(0.78, 1.02, ease.inOutQuad(phase));
+          const turn = clamp(d, -turnRate * dt, turnRate * dt);
           const cs = Math.cos(turn), sn = Math.sin(turn);
           const vx = vel.x * cs - vel.z * sn, vz = vel.x * sn + vel.z * cs;
           vel.x = vx; vel.z = vz;
         }
-        if (slideT >= SLIDE_TIME || ns < 2.60 || !grounded) { endSlide(); crouched = ns < 2.6; }
+        if (slideT >= SLIDE_TIME || ns < 2.80 || !grounded) {
+          endSlide();
+          resolveCrouch(crouchHeld);
+        }
       } else if (grounded) {
         // ---- Quake-with-snap ground move (COMBAT_FEEL §2.1)
         const cap = speedCap();
@@ -199,12 +241,21 @@ export function create(ctx) {
       vel.y -= GRAVITY * dt;
       const wasAirborne = !grounded;
       const fallSpeed = -vel.y;
-      pos.x += vel.x * dt;
-      pos.z += vel.z * dt;
-      pos.y += vel.y * dt;
+      const bodyHeight = sliding ? BODY_SLIDE : crouched ? BODY_CROUCH : BODY_STAND;
+      const travel = Math.hypot(vel.x, vel.z) * dt;
+      const moveSteps = slideMotion ? Math.max(1, Math.ceil(travel / SLIDE_STEP)) : 1;
+      const moveDt = dt / moveSteps;
 
-      // ---- collide: circle pushout then ground clamp (tunneling impossible)
-      world.collideCircle(pos, RADIUS, vel, pos.y);
+      // ---- integrate + collide. Only high-speed slide frames substep; all
+      // ordinary movement retains the exact prior single-step dt behavior.
+      for (let i = 0; i < moveSteps; i++) {
+        pos.x += vel.x * moveDt;
+        pos.z += vel.z * moveDt;
+        pos.y += vel.y * moveDt;
+        world.collideCircle(pos, RADIUS, vel, pos.y, bodyHeight);
+      }
+
+      // ---- ground clamp
       const g = world.groundAt(pos.x, pos.z, pos.y + STICK);
       if (pos.y <= g + (vel.y <= 0 ? STICK : 0) && vel.y <= 0.001) {
         pos.y = g;
@@ -224,6 +275,16 @@ export function create(ctx) {
         sinceGround += dt;
         if (!grounded && pos.y < g) { pos.y = g; vel.y = Math.max(0, vel.y); grounded = true; sinceGround = 0; }
       }
+
+      // Refresh once, after movement: entering low cover crouches and moving
+      // clear stands on this frame. The cached result drives next frame's
+      // pre-sprint posture without a duplicate query.
+      if (!sliding) {
+        if (!clearanceQueried) standingClear = hasStandingClearance();
+        resolveCrouch(crouchHeld);
+      }
+      crouchT = damp(crouchT, crouched ? 1 : 0, crouched ? 12 : 9.5, dt);
+      slideViewT = damp(slideViewT, sliding ? 1 : 0, sliding ? 10 : 7, dt);
 
       // ---- the ONE stride clock
       const hSpeed = Math.hypot(vel.x, vel.z);

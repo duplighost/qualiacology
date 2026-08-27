@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { clamp, clamp01, lerp, smoothstep } from '../engine/math.js';
+import { createLunarSurface } from '../gfx/surfaces.js';
 
 export const PLAY_RADIUS = 82;
 const SIZE = 420;
@@ -70,36 +71,6 @@ const MINERALS = [
   new THREE.Color(0x6a6560), new THREE.Color(0x39495b), new THREE.Color(0x252934),
 ];
 
-function lunarTexture() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
-  const g = c.getContext('2d');
-  g.fillStyle = '#6d727b';
-  g.fillRect(0, 0, 256, 256);
-  let s = SEED;
-  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-  for (let i = 0; i < 5200; i++) {
-    const v = 88 + rnd() * 72 | 0;
-    g.fillStyle = `rgba(${v},${v + 4 | 0},${v + 10 | 0},${0.16 + rnd() * 0.3})`;
-    g.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 1.6, 1 + rnd() * 1.6);
-  }
-  for (let i = 0; i < 90; i++) {
-    const x = rnd() * 256, y = rnd() * 256, r = 2 + rnd() * 6;
-    const grad = g.createRadialGradient(x, y, 0, x, y, r);
-    grad.addColorStop(0, 'rgba(30,33,42,0.35)');
-    grad.addColorStop(0.7, 'rgba(122,128,140,0.18)');
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = grad;
-    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(72, 72);
-  tex.anisotropy = 8;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
 export function buildTerrain() {
   const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
@@ -123,8 +94,16 @@ export function buildTerrain() {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
+  const surface = createLunarSurface(SEED);
   const mat = new THREE.MeshStandardMaterial({
-    map: lunarTexture(), vertexColors: true, roughness: 0.91, metalness: 0.08,
+    map: surface.color,
+    bumpMap: surface.bump,
+    bumpScale: 0.16,
+    roughnessMap: surface.roughness,
+    vertexColors: true,
+    roughness: 0.97,
+    metalness: 0.06,
+    envMapIntensity: 0.58,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;

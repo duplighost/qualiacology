@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { TAU, DEG, clamp, clamp01, lerp, damp, dampAngle } from '../engine/math.js';
 import { SPECIES, BUILDERS } from './species.js';
-import { CFG as RELAY, rampWaypoints, onRamp } from '../world/structure.js';
+import { CFG as RELAY, onRamp } from '../world/structure.js';
 
 const POOL = { thrall: 20, warden: 3, chorister: 6 };
 const MAX_ATTACKERS = 2;   // the token that makes a pack a rhythm, not a blender
@@ -46,6 +46,12 @@ export function create(ctx) {
         deathT: 0, deathSpin: 0, glowBase: null,
         vocalT: 2 + rng.next() * 6,
         stallT: 0, stallPos: new THREE.Vector3(),
+        routing: false, routeMode: 'none', routeStage: 'none',
+        routeSign: 1, routeSide: 1, routeGoalX: 0, routeGoalZ: 0,
+        routeBest: Infinity, routeNoProgressT: 0, routeRetries: 0,
+        routeDetour: false, routeDetourX: 0, routeDetourZ: 0,
+        routeAvoidSide: uid % 2 ? 1 : -1,
+        relocations: 0,
         slotSeed: rng.next() * TAU,
       });
     }
@@ -98,6 +104,10 @@ export function create(ctx) {
     e.staggerT = 0; e.immuneT = 0; e.windowDmg = 0;
     e.flinchT = 99; e.deathT = 0;
     e.stallT = 0; e.stallPos.copy(e.pos);
+    e.burstT = 0;
+    e.routing = false; e.routeMode = 'none'; e.routeStage = 'none';
+    e.routeBest = Infinity; e.routeNoProgressT = 0; e.routeRetries = 0;
+    e.routeDetour = false; e.relocations = 0;
     e.built.group.visible = true;
     e.enraged = false;
     lastProgress = ctx.time;
@@ -110,6 +120,8 @@ export function create(ctx) {
     e.alive = false;
     e.state = 'dead';
     e.enraged = false;
+    e.routing = false; e.routeMode = 'none'; e.routeStage = 'none';
+    e.routeDetour = false;
     e.built.group.visible = false;
   }
 
@@ -208,34 +220,162 @@ export function create(ctx) {
    * steering target, never by writing position.
    */
   const onDeckTier = (y) => y > RELAY.deckY - 1.5;
+  const ROUTE_SIDE_Z = RELAY.rampW / 2 + 1.5;
+  const ROUTE_EXIT_X = RELAY.deckOut + 1.2;
+  const ROUTE_BYPASS_X = RELAY.rampFoot + 1.2;
+  const ROUTE_FOOT_X = RELAY.rampFoot + 2.4;
+  const ROUTE_HEAD_X = RELAY.rampHead + 0.6;
+  const ROUTE_REACH = 0.85;
 
-  function tierWaypoint(e, targetX, targetZ, targetY) {
+  function resetRoute(e) {
+    e.routing = false;
+    e.routeMode = 'none'; e.routeStage = 'none';
+    e.routeBest = Infinity; e.routeNoProgressT = 0; e.routeRetries = 0;
+    e.routeDetour = false;
+  }
+
+  function setRouteStage(e, stage) {
+    if (e.routeStage === stage) return;
+    e.routeStage = stage;
+    e.routeBest = Infinity; e.routeNoProgressT = 0; e.routeRetries = 0;
+    e.routeDetour = false;
+  }
+
+  function setRouteGoal(e, x, z) {
+    if (Math.abs(e.routeGoalX - x) < 0.01 && Math.abs(e.routeGoalZ - z) < 0.01) return;
+    e.routeGoalX = x; e.routeGoalZ = z;
+    e.routeBest = Infinity; e.routeNoProgressT = 0;
+    e.routeDetour = false;
+  }
+
+  function tryDetourCandidate(e, blocker, dx, dz, side, radius) {
+    const px = -dz * side, pz = dx * side;
+    let x = blocker.x + dx * radius * 0.78 + px * radius * 1.42;
+    let z = blocker.z + dz * radius * 0.78 + pz * radius * 1.42;
+    if (world.canOccupyCircle(x, z, e.def.radius, e.pos.y, 0.08)
+        && world.corridorClear(e.pos.x, e.pos.z, x, z, e.def.radius, e.pos.y, 0.05)) {
+      e.routeDetourX = x; e.routeDetourZ = z; return true;
+    }
+
+    // If the forward tangent is crowded, walk around the obstacle from the
+    // body's current radial side. This is deterministic and produces an
+    // actual path around a pylon rather than a hidden relocation.
+    let rx = e.pos.x - blocker.x, rz = e.pos.z - blocker.z;
+    const rl = Math.hypot(rx, rz) || 1;
+    rx /= rl; rz /= rl;
+    x = blocker.x + rx * radius + (-rz * side) * radius * 1.15;
+    z = blocker.z + rz * radius + (rx * side) * radius * 1.15;
+    if (world.canOccupyCircle(x, z, e.def.radius, e.pos.y, 0.05)
+        && world.corridorClear(e.pos.x, e.pos.z, x, z, e.def.radius, e.pos.y, 0.02)) {
+      e.routeDetourX = x; e.routeDetourZ = z; return true;
+    }
+    return false;
+  }
+
+  function beginCircleDetour(e, blocker, goalX, goalZ) {
+    let dx = goalX - e.pos.x, dz = goalZ - e.pos.z;
+    const dl = Math.hypot(dx, dz) || 1;
+    dx /= dl; dz /= dl;
+    const radius = blocker.r + e.def.radius + 0.34;
+    const preferred = e.routeAvoidSide;
+    if (!tryDetourCandidate(e, blocker, dx, dz, preferred, radius)
+        && !tryDetourCandidate(e, blocker, dx, dz, -preferred, radius)) return false;
+    e.routeDetour = true;
+    e.routeBest = Infinity; e.routeNoProgressT = 0;
+    return true;
+  }
+
+  /**
+   * Persistent tier route. A low enemy beneath the deck first exits beside a
+   * rail, follows the rail outside its solid end, turns through the mouth,
+   * then climbs. Core/pylon blockers get a persisted tangent waypoint. The
+   * route is changed only on waypoint completion or measured lack of progress.
+   */
+  function tierWaypoint(e, targetY, dt) {
     const wantHigh = onDeckTier(targetY);
     const amHigh = onDeckTier(e.pos.y);
     const mySign = onRamp(e.pos.x, e.pos.z);
-    // Standing on the slope itself always routes to an end, even when the
-    // tiers already match: turning side-on partway up only grinds a body into
-    // a rail.
     const midSlope = mySign !== 0
       && e.pos.y > RELAY.rampFootY + 1.0
       && e.pos.y < RELAY.deckY - 1.5;
-    // Same tier and not mid-climb: go straight at the target. Without this
-    // release, anything that finished a climb parked at the ramp head forever
-    // and the wave could never end.
-    if (wantHigh === amHigh && !midSlope) return null;
+    if (wantHigh === amHigh && !midSlope) { resetRoute(e); return false; }
 
-    const sign = mySign !== 0 ? mySign : (e.pos.x >= 0 ? 1 : -1);
-    const wp = rampWaypoints(sign);
-    const ax = Math.abs(e.pos.x);
-    // "lined up with the corridor" — the only state from which driving at the
-    // far end of the ramp is safe; otherwise walk around to the open mouth.
-    const aligned = Math.abs(e.pos.z) < RELAY.rampW / 2 - 0.5;
     if (wantHigh) {
-      if (aligned && ax > RELAY.rampHead && ax < RELAY.rampFoot + 5) return wp.head;
-      return wp.foot;
+      if (e.routeMode !== 'up') {
+        e.routeMode = 'up'; e.routing = true;
+        e.routeSign = e.pos.x >= 0 ? 1 : -1;
+        e.routeSide = e.pos.z >= 0 ? 1 : -1;
+        e.routeAvoidSide = e.id % 2 ? 1 : -1;
+        const underDeck = Math.hypot(e.pos.x, e.pos.z) < RELAY.deckOut + 1.2;
+        setRouteStage(e, underDeck ? 'exit' : (Math.abs(e.pos.z) > RELAY.rampW / 2 - 0.5 ? 'bypass' : 'foot'));
+      }
+      if (mySign !== 0 && midSlope) { e.routeSign = mySign; setRouteStage(e, 'head'); }
+
+      let gx = 0, gz = 0;
+      if (e.routeStage === 'exit') {
+        gx = e.routeSign * ROUTE_EXIT_X; gz = e.routeSide * ROUTE_SIDE_Z;
+        if (Math.hypot(e.pos.x - gx, e.pos.z - gz) < ROUTE_REACH) setRouteStage(e, 'bypass');
+      }
+      if (e.routeStage === 'bypass') {
+        gx = e.routeSign * ROUTE_BYPASS_X; gz = e.routeSide * ROUTE_SIDE_Z;
+        if (Math.hypot(e.pos.x - gx, e.pos.z - gz) < ROUTE_REACH) setRouteStage(e, 'foot');
+      }
+      if (e.routeStage === 'foot') {
+        gx = e.routeSign * ROUTE_FOOT_X; gz = 0;
+        if (mySign === e.routeSign || Math.hypot(e.pos.x - gx, e.pos.z) < ROUTE_REACH) setRouteStage(e, 'head');
+      }
+      if (e.routeStage === 'head') {
+        gx = e.routeSign * ROUTE_HEAD_X; gz = 0;
+      }
+      setRouteGoal(e, gx, gz);
+    } else {
+      if (e.routeMode !== 'down') {
+        e.routeMode = 'down'; e.routing = true;
+        e.routeSign = mySign || (e.pos.x >= 0 ? 1 : -1);
+        setRouteStage(e, 'head');
+      }
+      if (mySign === e.routeSign
+          && Math.abs(e.pos.z) < RELAY.rampW / 2 - 0.5
+          && Math.abs(e.pos.x) >= RELAY.rampHead - 0.5) setRouteStage(e, 'foot');
+      if (e.routeStage === 'head') setRouteGoal(e, e.routeSign * ROUTE_HEAD_X, 0);
+      else setRouteGoal(e, e.routeSign * ROUTE_FOOT_X, 0);
     }
-    if (aligned && ax > RELAY.rampHead - 0.5) return wp.foot;
-    return wp.head;
+
+    e.routing = true;
+    if (e.routeDetour) {
+      if (Math.hypot(e.pos.x - e.routeDetourX, e.pos.z - e.routeDetourZ) < ROUTE_REACH) {
+        e.routeDetour = false; e.routeBest = Infinity; e.routeNoProgressT = 0;
+      }
+    }
+    if (!e.routeDetour) {
+      const blocker = world.firstCircleBlocker(
+        e.pos.x, e.pos.z, e.routeGoalX, e.routeGoalZ, e.def.radius, e.pos.y, 0.10,
+      );
+      if (blocker) beginCircleDetour(e, blocker, e.routeGoalX, e.routeGoalZ);
+    }
+
+    const tx = e.routeDetour ? e.routeDetourX : e.routeGoalX;
+    const tz = e.routeDetour ? e.routeDetourZ : e.routeGoalZ;
+    const remaining = Math.hypot(e.pos.x - tx, e.pos.z - tz);
+    if (remaining < e.routeBest - 0.35) {
+      e.routeBest = remaining; e.routeNoProgressT = 0;
+    } else e.routeNoProgressT += dt;
+
+    if (e.routeNoProgressT > 1.25) {
+      e.routeRetries++;
+      e.routeAvoidSide *= -1;
+      e.routeDetour = false;
+      if (e.routeRetries === 2 && (e.routeStage === 'exit' || e.routeStage === 'bypass')) e.routeSide *= -1;
+      if (e.routeRetries >= 3 && e.routeMode === 'up') {
+        e.routeSign *= -1; e.routeRetries = 0;
+        setRouteStage(e, Math.hypot(e.pos.x, e.pos.z) < RELAY.deckOut + 1.2 ? 'exit' : 'bypass');
+      }
+      e.routeBest = Infinity; e.routeNoProgressT = 0;
+      ctx.bus.emit('enemy:route-replan', { id: e.id, stage: e.routeStage });
+    }
+
+    _tgt.set(tx, 0, tz);
+    return true;
   }
 
   function commitCount() {
@@ -287,11 +427,8 @@ export function create(ctx) {
           // target: ring slot around the player, or a ramp waypoint when the
           // player is on another tier (the deck is ONLY reachable by ramp)
           const standoff = e.enraged ? Math.min(def.standoff, 6) : def.standoff;
-          const wp = tierWaypoint(e, p.pos.x, p.pos.z, p.pos.y);
-          e.routing = !!wp;
-          if (wp) {
-            _tgt.set(wp.x, 0, wp.z);
-          } else {
+          const routing = tierWaypoint(e, p.pos.y, dt);
+          if (!routing) {
             const slotA = e.slotSeed;
             _tgt.set(
               p.pos.x + Math.cos(slotA) * standoff,
@@ -304,10 +441,12 @@ export function create(ctx) {
           if (toLen > 0.6) _to.divideScalar(toLen); else _to.set(0, 0, 0);
 
           // thrall burst gait: 600 ms move / 350 ms pause; attack only in a pause
-          let want = def.speed * (e.enraged ? 1.45 : 1);
+          let want = def.speed;
           if (def.burstMs < 100) {
             e.burstT += dt;
-            const cycle = def.burstMs + def.pauseMs;
+            // The stalemate breaker increases persistence, never top speed.
+            const pause = e.enraged && e.species === 'thrall' ? 0.15 : def.pauseMs;
+            const cycle = def.burstMs + pause;
             e.moving = (e.burstT % cycle) < def.burstMs;
             if (!e.moving) want = 0;
           } else e.moving = true;
@@ -339,8 +478,25 @@ export function create(ctx) {
 
           const desiredX = _to.x * want + _sep.x * 2.2;
           const desiredZ = _to.z * want + _sep.z * 2.2;
-          e.vel.x = damp(e.vel.x, desiredX, 9, dt);
-          e.vel.z = damp(e.vel.z, desiredZ, 9, dt);
+          let cappedX = desiredX, cappedZ = desiredZ;
+          if (def.maxRunSpeed) {
+            const desiredSpeed = Math.hypot(cappedX, cappedZ);
+            if (desiredSpeed > def.maxRunSpeed) {
+              const k = def.maxRunSpeed / desiredSpeed;
+              cappedX *= k; cappedZ *= k;
+            }
+          }
+          e.vel.x = damp(e.vel.x, cappedX, 9, dt);
+          e.vel.z = damp(e.vel.z, cappedZ, 9, dt);
+          // Attack motion is authored separately below. This cap applies only
+          // inside ordinary approach/routing, including dense separation.
+          if (def.maxRunSpeed) {
+            const runSpeed = Math.hypot(e.vel.x, e.vel.z);
+            if (runSpeed > def.maxRunSpeed) {
+              const k = def.maxRunSpeed / runSpeed;
+              e.vel.x *= k; e.vel.z *= k;
+            }
+          }
 
           // decide attacks (an enraged chorister fires from anywhere inside range)
           const inBand = e.enraged
@@ -494,16 +650,33 @@ export function create(ctx) {
       e.yaw = dampAngle(e.yaw, Math.atan2(-e.vel.x, -e.vel.z), 9, dt);
     }
 
-    // stall watchdog: relocate a walker that has moved <1.5 m in 9 s while far
-    e.stallT += dt;
-    if (e.stallT > 9) {
-      if (e.pos.distanceTo(e.stallPos) < 1.5 && distToPlayer > 22) {
-        const a = rng.next() * TAU;
-        e.pos.set(p.pos.x + Math.cos(a) * 20, 0, p.pos.z + Math.sin(a) * 20);
-        e.pos.y = world.groundAt(e.pos.x, e.pos.z, 200);
-      }
+    // Cross-tier routes recover by deterministic replanning above. The old
+    // random relocation could never help an under-deck enemy because those
+    // enemies are generally within its >22 m trigger. Keep a certified,
+    // deterministic last resort only for genuinely remote same-tier walkers.
+    if (e.routing) {
       e.stallT = 0;
       e.stallPos.copy(e.pos);
+    } else {
+      e.stallT += dt;
+      if (e.stallT > 9) {
+        if (e.pos.distanceTo(e.stallPos) < 1.5 && distToPlayer > 22) {
+          for (let i = 0; i < 12; i++) {
+            const a = e.slotSeed + i * 2.399963229728653;
+            const x = p.pos.x + Math.cos(a) * 20;
+            const z = p.pos.z + Math.sin(a) * 20;
+            const y = world.terrainHeight(x, z);
+            if (!world.canOccupyCircle(x, z, def.radius, y, 0.25)) continue;
+            e.pos.set(x, world.groundAt(x, z, 200), z);
+            e.vel.set(0, 0, 0);
+            e.relocations++;
+            ctx.bus.emit('enemy:relocate', { id: e.id, species: e.species, pos: e.pos });
+            break;
+          }
+        }
+        e.stallT = 0;
+        e.stallPos.copy(e.pos);
+      }
     }
 
     // ---- drive the mesh

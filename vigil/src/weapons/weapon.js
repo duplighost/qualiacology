@@ -11,7 +11,10 @@ import { createViewmodel } from './viewmodel.js';
 const RPM = 725;
 const INTERVAL = 60 / RPM;              // 0.082759 s — 4.966 frames. Sub-frame or bust.
 const MAG = 30;
-const RESERVE_START = 210, RESERVE_MAX = 270;
+// Starting economy stays exactly where the proven balance pass put it. The
+// storage ceiling is larger so explored satellite salvage remains valuable
+// across several watches instead of silently capping during the first wave.
+const RESERVE_START = 210, RESERVE_MAX = 420;
 
 // authored 16-shot aim-kick pattern (deg): seven up, drift right, hook left
 const PATTERN = [
@@ -42,13 +45,23 @@ const SPRINT_OUT = 0.150, INPUT_BUFFER = 0.220;
 // thrall at 1.6 m sits ~35 deg BELOW the eye and a camera-axis ray simply
 // cannot hit anything shorter than you are.
 const MELEE = {
-  windup: 0.260, travel: 0.200, active: 0.140, recover: 0.380,
+  windup: 0.260, travel: 0.200, active: 0.140, contact: 0.070, recover: 0.380,
   damage: 130, range: 2.05, assist: 2.70, coneDeg: 42, ySquash: 0.55,
-  hitstop: 0.075, cooldown: 0.0,
+  hitstop: 0.095, surfaceHitstop: 0.045, cooldown: 0.0,
 };
 
 // reload beat sheet (s). tac / empty
 const RELOAD_TAC = 2.100, RELOAD_EMPTY = 2.850;
+const AUTO_EMPTY_DELAY = 0.180;
+const ACTIVE_DAMAGE_MULT = 1.25;
+const ACTIVE_FAIL_JAM = 0.650;
+// The active windows are centred on the existing physical ammo-credit beats:
+// the tactical mag seat and the empty bolt release. The normal reload remains
+// untouched if the player never presses R a second time.
+const ACTIVE_RELOAD = {
+  tac: { start: 1.000, end: 1.160, credit: 1.080 },
+  empty: { start: 1.840, end: 2.040, credit: 1.940 },
+};
 const BEATS_TAC = [
   ['release', 0.130], ['drop', 0.190], ['enter', 0.620], ['contact', 0.900],
   ['seat', 1.080], ['tug', 1.420], ['cancelopen', 1.560],
@@ -72,15 +85,17 @@ export function create(ctx) {
   let adsT = 0, fullyAdsFor = 0;
   let sprintOutTimer = 0;                  // counts down after sprint cancel
   let buffered = 0;                        // fire input buffer
-  let reloading = null;                    // {empty, t, dur, beats, bi, credited, cancelable}
-  let dryLatch = false, dryHeld = 0;
+  let reloading = null;                    // base timeline + active-reload state
+  let dryLatch = false, emptyAutoT = -1;
+  let boostedRounds = 0;
   let heat = 0, roundsRecent = 0;
   const fireTimes = [];                    // ideal sim-time of each shot (feel gate)
-  let melee = null;                        // {t, phase, target, struck}
+  let melee = null;                        // {t, phase, target, struck, resolved, outcome}
   let meleeBuffered = 0, meleeCount = 0;
 
   const vm = createViewmodel(ctx);
   const _dir = new THREE.Vector3(), _right = new THREE.Vector3(), _upv = new THREE.Vector3();
+  const _meleeOrigin = new THREE.Vector3(), _meleeTargetDir = new THREE.Vector3();
 
   function stanceMods() {
     const p = ctx.systems.player;
@@ -129,7 +144,7 @@ export function create(ctx) {
     // lateral, which is what makes a swing feel like an arc instead of a ray.
     const ax = _dir.x, ay = _dir.y * S, az = _dir.z;
     const an = Math.max(1e-4, Math.hypot(ax, ay, az));
-    let best = null;
+    let best = null, bestD = Infinity;
     for (const e of ctx.systems.enemies.all) {
       if (!e.alive) continue;
       const vx = e.pos.x - ex;
@@ -139,33 +154,61 @@ export function create(ctx) {
       if (d > MELEE.assist + e.def.radius) continue;
       const dot = (vx * ax + vy * ay + vz * az) / (Math.max(1e-4, d) * an);
       if (dot < cosCone) continue;
-      if (!best || d < best.d) best = { e, d };
+      if (d < bestD) { best = e; bestD = d; }
     }
     return best;
   }
 
+  /** Aim the assisted contact trace at the chosen body's centre and return
+   * the distance to its near edge. A solid hit before this distance owns the
+   * contact; assist may bend a swing, but it may never bend through cover. */
+  function meleeTargetContact(enemy) {
+    _meleeTargetDir.set(
+      enemy.pos.x - _meleeOrigin.x,
+      enemy.pos.y + enemy.def.height * 0.5 - _meleeOrigin.y,
+      enemy.pos.z - _meleeOrigin.z,
+    );
+    const centreD = _meleeTargetDir.length();
+    if (centreD > 1e-4) _meleeTargetDir.multiplyScalar(1 / centreD);
+    else ctx.systems.camera.aimDir(_meleeTargetDir);
+    return Math.max(0, centreD - enemy.def.radius);
+  }
+
   function startMelee() {
     if (melee) return;
-    melee = { t: 0, phase: 'windup', target: null, struck: false };
+    melee = { t: 0, phase: 'windup', target: null, struck: false, resolved: false, outcome: 'pending' };
     if (reloading) cancelReload();
     ctx.bus.emit('weapon:melee:start');
     vm.onMeleeStart();
   }
 
-  function startReload() {
-    if (reloading || reserve <= 0) return;
+  function activeSpec(empty) { return empty ? ACTIVE_RELOAD.empty : ACTIVE_RELOAD.tac; }
+
+  function emitAmmo() {
+    ctx.bus.emit('weapon:ammo', {
+      ammo, reserve, boosted: boostedRounds > 0, boostedRounds,
+    });
+  }
+
+  function startReload(source = 'manual') {
+    if (reloading || reserve <= 0 || melee) return false;
     const empty = ammo === 0;
-    if (ammo >= MAG + (chambered ? 1 : 0)) return;
+    if (ammo >= MAG + (chambered ? 1 : 0)) return false;
     reloading = {
       empty, t: 0,
       dur: empty ? RELOAD_EMPTY : RELOAD_TAC,
       beats: empty ? BEATS_EMPTY : BEATS_TAC,
       bi: 0, credited: false, cancelable: false,
+      source, attempted: false, outcome: 'pending', jamT: 0,
+      activeFinishAt: null, boostOnCredit: false,
     };
-    ctx.bus.emit('weapon:reload:start', { empty });
+    emptyAutoT = -1;
+    ctx.bus.emit('weapon:reload:start', { empty, source });
+    return true;
   }
 
   function creditReload() {
+    if (!reloading || reloading.credited) return;
     const keep = reloading.empty ? 0 : ammo;
     const want = MAG + (keep > 0 ? 1 : 0) - keep;
     const take = Math.min(want, reserve);
@@ -173,18 +216,61 @@ export function create(ctx) {
     reserve -= take;
     chambered = ammo > 0;
     reloading.credited = true;
-    ctx.bus.emit('weapon:ammo', { ammo, reserve });
+    boostedRounds = reloading.boostOnCredit ? ammo : 0;
+    emitAmmo();
   }
 
-  function cancelReload() {
+  function attemptActiveReload() {
+    if (!reloading || reloading.attempted) return;
+    const spec = activeSpec(reloading.empty);
+    const t = reloading.t;
+    const success = t >= spec.start && t <= spec.end;
+    reloading.attempted = true;
+    reloading.outcome = success ? 'success' : 'fail';
+
+    if (success) {
+      reloading.boostOnCredit = true;
+      reloading.activeFinishAt = Math.max(spec.credit + 0.120, t + 0.100);
+      if (reloading.credited) {
+        boostedRounds = ammo;
+        emitAmmo();
+      }
+    } else {
+      reloading.jamT = ACTIVE_FAIL_JAM;
+    }
+
+    const progress = clamp01(t / reloading.dur);
+    ctx.bus.emit('weapon:reload:active', {
+      outcome: reloading.outcome, empty: reloading.empty, source: reloading.source,
+      t, progress, windowStart: spec.start / reloading.dur,
+      windowEnd: spec.end / reloading.dur,
+    });
+    vm.onActiveReload?.(reloading.outcome);
+  }
+
+  function finishReload(outcome = 'normal') {
     if (!reloading) return;
-    ctx.bus.emit('weapon:reload:cancel', { credited: reloading.credited });
+    ctx.bus.emit('weapon:reload:finish', {
+      outcome, empty: reloading.empty, boostedRounds,
+    });
     reloading = null;
     vm.onReloadEnd();
   }
 
+  function cancelReload() {
+    if (!reloading) return;
+    ctx.bus.emit('weapon:reload:cancel', {
+      credited: reloading.credited, outcome: reloading.outcome,
+    });
+    reloading = null;
+    vm.onReloadEnd();
+    if (ammo === 0 && reserve > 0) emptyAutoT = AUTO_EMPTY_DELAY;
+  }
+
   function fire(subT) {
+    const boosted = boostedRounds > 0;
     ammo--;
+    if (boosted) boostedRounds = Math.max(0, boostedRounds - 1);
     chambered = ammo > 0;
     fireCount++;
     const idx = shotIndex++;
@@ -226,15 +312,24 @@ export function create(ctx) {
 
     fireTimes.push(ctx.time - subT);
     if (fireTimes.length > 64) fireTimes.shift();
-    const tracerRound = (fireCount % 3 === 0) || ammo < 3;
+    const tracerRound = boosted || (fireCount % 3 === 0) || ammo < 3;
     ctx.bus.emit('weapon:fire', {
       dir: _dir.clone(),
       origin: new THREE.Vector3(ctx.systems.player.pos.x, ctx.systems.player.eyeY, ctx.systems.player.pos.z),
       subT, index: idx, tracer: tracerRound, lowAmmo: ammo <= 5,
+      boosted, damageMult: boosted ? ACTIVE_DAMAGE_MULT : 1,
+      tracerPower: boosted ? 1.65 : 1,
     });
-    vm.flash(subT, adsT);
-    ctx.shared.flashEV = 0.35;
-    if (ammo === 0) ctx.bus.emit('weapon:boltlock');
+    vm.flash(subT, adsT, boosted);
+    ctx.shared.flashEV = boosted ? 0.42 : 0.35;
+    if (ammo === 0) {
+      boostedRounds = 0;
+      // subT is how far inside this simulation step the ideal shot occurred;
+      // subtract it so the 180 ms onset is measured from the shot, not the
+      // following frame boundary.
+      emptyAutoT = Math.max(0, AUTO_EMPTY_DELAY - subT);
+      ctx.bus.emit('weapon:boltlock');
+    }
   }
 
   const api = {
@@ -247,31 +342,57 @@ export function create(ctx) {
     get heat() { return heat; },
     viewScene: vm.scene,
     viewCamera: vm.camera,
-    ammoState: () => ({ ammo, reserve, reloading: !!reloading }),
+    ammoState: () => ({
+      ammo, reserve, reloading: !!reloading,
+      reserveMax: RESERVE_MAX,
+      boosted: boostedRounds > 0, boostedRounds,
+    }),
+    reloadState: () => {
+      if (!reloading) return null;
+      const spec = activeSpec(reloading.empty);
+      return {
+        empty: reloading.empty, source: reloading.source,
+        t: reloading.t, dur: reloading.dur,
+        progress: clamp01(reloading.t / reloading.dur),
+        windowStart: spec.start / reloading.dur,
+        windowEnd: spec.end / reloading.dur,
+        attempted: reloading.attempted, outcome: reloading.outcome,
+        jamT: reloading.jamT, jamFrac: clamp01(reloading.jamT / ACTIVE_FAIL_JAM),
+        credited: reloading.credited,
+      };
+    },
     kickState: () => ({ pitch: kickPitch, yaw: kickYaw }),
     get fireTimes() { return fireTimes; },
     get meleeCount() { return meleeCount; },
-    get meleeState() { return melee && { phase: melee.phase, t: melee.t, hasTarget: !!melee.target, struck: melee.struck }; },
+    get meleeState() {
+      return melee && {
+        phase: melee.phase, t: melee.t, hasTarget: !!melee.target,
+        struck: melee.struck, resolved: melee.resolved, outcome: melee.outcome,
+      };
+    },
     meleeSpec: MELEE,
     sightScreenOffset: () => vm.sightScreenOffset(),
     addReserve(n) {
       const got = Math.min(n, RESERVE_MAX - reserve);
       reserve += got;
-      if (got > 0) ctx.bus.emit('weapon:ammo', { ammo, reserve });
+      if (got > 0) emitAmmo();
       return got;
     },
     dump: () => ({
       ammo, reserve, adsT, spreadDeg: currentCone(), bloom, kickPitch, kickYaw,
-      shotIndex, fireClock, sprintOutTimer, reloading: reloading && { t: reloading.t, empty: reloading.empty },
-      heat, fireCount,
+      shotIndex, fireClock, sprintOutTimer, reloading: api.reloadState(),
+      heat, fireCount, boostedRounds, emptyAutoT,
+      viewmodel: vm.debugState?.(),
     }),
     reset() {
       ammo = MAG; reserve = RESERVE_START; chambered = true;
       fireClock = INTERVAL;                 // primed: the first pull is instant
       shotIndex = 0; kickPitch = 0; kickYaw = 0; bloom = 0;
-      adsT = 0; reloading = null; dryLatch = false; heat = 0; fireCount = 0;
+      adsT = 0; reloading = null; dryLatch = false; emptyAutoT = -1;
+      boostedRounds = 0; heat = 0; fireCount = 0;
       fireTimes.length = 0;
       melee = null; meleeBuffered = 0; meleeCount = 0;
+      vm.onReloadEnd();
       vm.onMeleeEnd();
     },
     onResize(w, h) { vm.onResize(w, h); },
@@ -312,21 +433,56 @@ export function create(ctx) {
           if (melee.t >= MELEE.windup) {
             melee.phase = 'active';
             melee.t -= MELEE.windup;
-            const got = acquireMelee();
-            melee.target = got ? got.e : null;
+            melee.target = acquireMelee();
+            ctx.bus.emit('weapon:melee:swing');
           }
         } else if (melee.phase === 'active') {
-          // trace every active frame; the lock must still be in range or the
-          // escape counts as a real miss
-          if (!melee.struck && melee.target) {
-            const still = acquireMelee();
-            if (still && still.e === melee.target) {
+          // Contact is a discrete beat halfway through the 140 ms stroke. The
+          // original target lock must still be valid or the escape is a real
+          // miss; only then may the butt meet the solid world behind it.
+          if (!melee.resolved && melee.t >= MELEE.contact) {
+            const still = melee.target ? acquireMelee() : null;
+            const target = still === melee.target ? melee.target : null;
+            _meleeOrigin.set(p.pos.x, p.eyeY, p.pos.z);
+            let surface = null;
+            if (target) {
+              const contactD = meleeTargetContact(target);
+              surface = ctx.systems.combat.meleeSurface(
+                _meleeOrigin, _meleeTargetDir, contactD,
+              );
+            }
+            if (target && !surface) {
+              melee.resolved = true;
               melee.struck = true;
-              ctx.systems.combat.meleeStrike(melee.target, MELEE.damage);
+              melee.outcome = 'enemy';
+              const result = ctx.systems.combat.meleeStrike(target, MELEE.damage);
               ctx.systems.fx.hitstop(MELEE.hitstop);
-              // the kick goes DOWN: a kick that goes up is a recoil, not an impact
-              cam.addPunch(-1.9, 0.9, 2.6);
-              vm.onMeleeConnect();
+              // Visual-only camera kick: down and across with the shoulder,
+              // never into aim state and never large enough to steal control.
+              cam.addPunch(-2.45, 1.10, 3.25);
+              vm.onMeleeConnect('enemy');
+              ctx.bus.emit('weapon:melee:resolve', {
+                outcome: 'enemy', killed: result.killed, species: result.species,
+              });
+            } else {
+              if (!surface) {
+                cam.aimDir(_dir);
+                surface = ctx.systems.combat.meleeSurface(_meleeOrigin, _dir, MELEE.range);
+              }
+              melee.resolved = true;
+              if (surface) {
+                melee.outcome = 'surface';
+                ctx.systems.fx.hitstop(MELEE.surfaceHitstop);
+                cam.addTrauma(0.11);
+                cam.addPunch(-0.95, 0.45, surface.kind === 'metal' ? 1.65 : 1.30);
+                vm.onMeleeConnect('surface');
+                ctx.bus.emit('weapon:melee:resolve', {
+                  outcome: 'surface', kind: surface.kind, point: surface.point,
+                });
+              } else {
+                melee.outcome = 'air';
+                ctx.bus.emit('weapon:melee:resolve', { outcome: 'air' });
+              }
             }
           }
           if (melee.t >= MELEE.active) { melee.phase = 'recover'; melee.t -= MELEE.active; }
@@ -338,9 +494,30 @@ export function create(ctx) {
       }
 
       // ---- reload timeline
-      if (input.pressed('reload')) startReload();
+      if (input.pressed('reload')) {
+        if (reloading) attemptActiveReload();
+        else startReload('manual');
+      }
+
+      // Running dry arms an automatic reload independently of trigger state.
+      // The 180 ms pause preserves the bolt-lock/dry-click read without making
+      // the player hold an empty trigger for 700 ms.
+      if (!reloading && ammo === 0 && reserve > 0 && !melee) {
+        if (emptyAutoT < 0) emptyAutoT = AUTO_EMPTY_DELAY;
+        emptyAutoT -= dt;
+        if (emptyAutoT <= 0) startReload('auto');
+      } else if (ammo > 0 || reserve <= 0) {
+        emptyAutoT = -1;
+      }
+
       if (reloading) {
-        reloading.t += dt;
+        let timelineDt = dt;
+        if (reloading.jamT > 0) {
+          const jamStep = Math.min(timelineDt, reloading.jamT);
+          reloading.jamT -= jamStep;
+          timelineDt -= jamStep;
+        }
+        reloading.t += timelineDt;
         while (reloading.bi < reloading.beats.length && reloading.t >= reloading.beats[reloading.bi][1]) {
           const [name] = reloading.beats[reloading.bi++];
           if (name === 'seat' && !reloading.empty) creditReload();
@@ -349,11 +526,11 @@ export function create(ctx) {
           ctx.bus.emit('weapon:reload:beat', { name, empty: reloading.empty });
           vm.onReloadBeat(name);
         }
-        if (reloading.t >= reloading.dur) {
-          ctx.bus.emit('weapon:reload:finish', {});
-          reloading = null;
-          vm.onReloadEnd();
-        } else if ((input.fire || buffered > 0 || input.aimPressed) && reloading.cancelable) {
+        if (reloading.activeFinishAt !== null && reloading.credited && reloading.t >= reloading.activeFinishAt) {
+          finishReload('success');
+        } else if (reloading.t >= reloading.dur) {
+          finishReload(reloading.outcome === 'fail' ? 'fail' : 'normal');
+        } else if ((input.fire || buffered > 0 || input.aimPressed) && reloading.cancelable && reloading.jamT <= 0) {
           cancelReload();
         }
       }
@@ -380,10 +557,7 @@ export function create(ctx) {
             dryLatch = true;
             ctx.bus.emit('weapon:dryfire');
           }
-          dryHeld += dt;
-          if (dryHeld > 0.700) { dryHeld = 0; startReload(); }
         } else {
-          dryHeld = 0;
           if (!wantFire) dryLatch = false;
         }
       }
@@ -429,6 +603,7 @@ export function create(ctx) {
       vm.update(dt, {
         adsT, firing, sinceShot, ammo, mag: MAG, heat, roundsRecent,
         sprintT: p.sprinting ? 1 : 0, reloading, melee, meleeSpec: MELEE,
+        boostedRounds,
       });
     },
 

@@ -3,7 +3,7 @@
   --violet: #a879ff;
   --amber: #ffe66d;
   --ink: #03050c;
-  --font: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --font: "Bahnschrift", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   --mono: "Consolas", ui-monospace, monospace;
 }
 
@@ -61,6 +61,17 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
 #ammo .mag { font-size: 26px; color: rgba(230, 246, 255, 0.8); }
 #ammo.low .mag { color: var(--amber); }
 #ammo.dry .mag { color: #ff5d7a; }
+#ammo.boosted .mag {
+  color: var(--cyan);
+  text-shadow: 0 0 8px rgba(93, 247, 255, 0.62), 0 0 20px rgba(93, 247, 255, 0.25);
+}
+#ammo.boosted::after {
+  content: "";
+  position: absolute; right: 0; bottom: -7px;
+  width: 34px; height: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 9px rgba(93, 247, 255, 0.75);
+}
 
 /* ---------- vitals: the ammo readout's twin, opposite corner ---------- */
 #vitals {
@@ -93,26 +104,88 @@ body { font-family: var(--font); color: #fff; user-select: none; -webkit-user-se
   letter-spacing: 0.22em; color: rgba(160, 214, 255, 0.6); text-transform: none;
 }
 
+/* ---------- recovered satellite: brief, separate from wave language ---------- */
+#salvage-confirm {
+  position: absolute; left: 50%; bottom: max(11%, 82px);
+  min-width: 250px; padding: 9px 22px 8px;
+  text-align: center; opacity: 0; transform: translate(-50%, 9px);
+  color: rgba(239, 252, 255, 0.96);
+  background: linear-gradient(90deg, transparent, rgba(8, 30, 42, 0.70) 18%, rgba(8, 30, 42, 0.70) 82%, transparent);
+  border-top: 1px solid rgba(93, 247, 255, 0.30);
+  border-bottom: 1px solid rgba(93, 247, 255, 0.18);
+  filter: drop-shadow(0 0 11px rgba(93, 247, 255, 0.20));
+  will-change: opacity, transform;
+}
+#salvage-confirm::before, #salvage-confirm::after {
+  content: ""; position: absolute; top: 6px; bottom: 6px; width: 6px;
+  border-top: 1px solid rgba(216, 249, 255, 0.84);
+  border-bottom: 1px solid rgba(216, 249, 255, 0.84);
+}
+#salvage-confirm::before { left: 9px; border-left: 2px solid rgba(93, 247, 255, 0.82); }
+#salvage-confirm::after { right: 9px; border-right: 2px solid rgba(93, 247, 255, 0.82); }
+#salvage-confirm strong {
+  display: block; font: 760 12px/1.2 var(--font);
+  letter-spacing: 0.24em; text-indent: 0.24em;
+}
+#salvage-confirm small {
+  display: block; margin-top: 4px; font: 600 10px/1 var(--mono);
+  letter-spacing: 0.13em; color: rgba(194, 237, 255, 0.76);
+}
+
 /* ---------- menu / death shell ---------- */
 .shell {
-  position: absolute; inset: 0; display: grid; place-items: center;
-  background: radial-gradient(circle at 50% 38%, rgba(21, 32, 60, 0.55) 0, rgba(5, 7, 17, 0.86) 60%, rgba(1, 2, 7, 0.94) 100%);
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: max(34px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(34px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background:
+    linear-gradient(90deg, rgba(1, 3, 9, 0.82), rgba(3, 8, 18, 0.34) 38%, rgba(3, 8, 18, 0.34) 62%, rgba(1, 3, 9, 0.82)),
+    radial-gradient(circle at 50% 38%, rgba(23, 50, 72, 0.22) 0, rgba(5, 7, 17, 0.72) 56%, rgba(1, 2, 7, 0.94) 100%);
+  box-shadow: inset 0 0 180px rgba(0, 0, 0, 0.58);
   pointer-events: auto; text-align: center; transition: opacity 0.35s ease;
 }
 .shell.hidden { opacity: 0; pointer-events: none; }
 .shell h1 {
-  font: 900 clamp(44px, 9vw, 96px)/1 var(--font);
-  letter-spacing: 0.42em; text-indent: 0.42em; color: #eaf6ff;
-  text-shadow: 0 0 34px rgba(93, 247, 255, 0.35);
+  font: 780 clamp(50px, 8.2vw, 104px)/0.9 var(--font);
+  letter-spacing: 0.34em; text-indent: 0.34em; color: #edf8ff;
+  text-shadow: 0 0 14px rgba(93, 247, 255, 0.20), 0 0 54px rgba(93, 247, 255, 0.24), 0 6px 30px #000;
 }
-.shell p { margin-top: 18px; font: 500 14px/1.7 var(--font); letter-spacing: 0.12em; color: rgba(196, 222, 246, 0.75); }
+.shell p {
+  max-width: 620px; margin-top: 24px;
+  font: 520 clamp(12px, 1.3vw, 15px)/1.75 var(--font);
+  letter-spacing: 0.15em; color: rgba(205, 229, 247, 0.76);
+}
 .shell .go {
-  margin-top: 34px; display: inline-block; padding: 13px 34px;
-  font: 700 14px/1 var(--font); letter-spacing: 0.28em; text-indent: 0.28em; text-transform: uppercase;
-  color: #0a1420; background: var(--cyan); border-radius: 3px; cursor: pointer; border: 0;
+  position: relative; margin-top: 36px; display: inline-block; min-width: 250px; padding: 15px 34px 14px;
+  font: 720 13px/1 var(--font); letter-spacing: 0.25em; text-indent: 0.25em; text-transform: uppercase;
+  color: #e8fbff; background: linear-gradient(180deg, rgba(33, 77, 94, 0.72), rgba(7, 22, 32, 0.94));
+  border: 1px solid rgba(93, 247, 255, 0.72); border-radius: 2px; cursor: pointer;
+  box-shadow: inset 0 0 18px rgba(93, 247, 255, 0.08), 0 0 24px rgba(93, 247, 255, 0.14);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
-.shell .go:hover { filter: brightness(1.12); }
+.shell .go:hover, .shell .go:focus-visible {
+  color: #06131c; background: var(--cyan); border-color: #d9fdff;
+  box-shadow: 0 0 32px rgba(93, 247, 255, 0.36); outline: none;
+}
 .shell .stats { margin-top: 22px; font: 500 13px/2 var(--mono); letter-spacing: 0.14em; color: rgba(255, 230, 109, 0.8); }
-.shell .keys { margin-top: 26px; font: 500 11px/1.9 var(--mono); letter-spacing: 0.12em; color: rgba(150, 178, 208, 0.55); }
+.shell .keys {
+  max-width: 760px; margin-top: 30px; padding-top: 16px;
+  border-top: 1px solid rgba(124, 193, 224, 0.16);
+  font: 500 10px/2 var(--mono); letter-spacing: 0.13em; color: rgba(167, 195, 219, 0.56);
+}
 
 #boot-note { position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); font: 500 11px/1.6 var(--mono); letter-spacing: 0.18em; color: rgba(150, 178, 208, 0.5); }
+
+@media (max-height: 650px) {
+  .shell h1 { font-size: clamp(42px, 10vh, 70px); }
+  .shell p { margin-top: 14px; }
+  .shell .go { margin-top: 22px; }
+  .shell .keys { margin-top: 18px; padding-top: 10px; line-height: 1.65; }
+}
+
+@media (max-width: 640px) {
+  .shell h1 { font-size: clamp(38px, 15vw, 70px); letter-spacing: 0.22em; text-indent: 0.22em; }
+  .shell p { letter-spacing: 0.08em; }
+  .shell .keys { font-size: 9px; letter-spacing: 0.07em; }
+  #ammo { right: 16px; bottom: 16px; }
+  #vitals { left: 16px; bottom: 16px; }
+}
