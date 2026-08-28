@@ -53,7 +53,7 @@ function assert(condition, message) {
 
 function validateData() {
   assert(existsSync(outputRoot), `Missing output root: ${outputRoot}`);
-  assert(games.length === 25, `Expected 25 games, found ${games.length}`);
+  assert(games.length === 26, `Expected 26 games, found ${games.length}`);
   assert(albums.length === 12, `Expected 12 albums, found ${albums.length}`);
   assert(games.filter((item) => item.featured).length === 3, "Exactly three games must be featured");
   assert(albums.filter((item) => item.featured).length === 3, "Exactly three albums must be featured");
@@ -257,7 +257,7 @@ function gameCard(game, index, { eager = false } = {}) {
   // Controls are post-decision information sitting in the pre-decision slot: eight
   // tracked items telling you how to play a thing you have not chosen yet. They stay
   // on each game's own page, where they answer a question you are actually asking.
-  // Play times stay here - 3 of 25 games report one, and that IS a choosing signal.
+  // Play times stay here - 3 of 26 games report one, and that IS a choosing signal.
   const metadata = [game.duration].filter(Boolean);
   const secondaryAction = game.secondary
     ? `\n          <a class="button button-quiet" href="${escapeHtml(game.secondary.href)}">${escapeHtml(game.secondary.label)}</a>`
@@ -272,10 +272,10 @@ function gameCard(game, index, { eager = false } = {}) {
         <p class="card-kicker">${escapeHtml(game.descriptor)}</p>
         <h3 class="card-title"><a href="${routeForGame(game)}">${escapeHtml(game.title)}</a></h3>
         <p class="card-summary">${escapeHtml(game.summary)}</p>
-        ${metadata.length ? `<ul class="card-meta" aria-label="Game details">
+${metadata.length ? `        <ul class="card-meta" aria-label="Game details">
           ${metadata.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
-        </ul>` : ""}
-        <div class="card-actions">
+        </ul>
+` : "\n"}        <div class="card-actions">
           <a class="button button-primary button-arrow" href="${routeForGame(game)}">${escapeHtml(game.actionLabel)}</a>${secondaryAction}
         </div>
       </div>

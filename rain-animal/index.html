@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#03090d">
+  <meta name="description" content="RAIN ANIMAL is a continuous six-zone browser bullet hell across and through a continent-sized organism that manufactures weather.">
+  <title>RAIN ANIMAL | Qualiacology</title>
+  <link rel="canonical" href="https://qualiacology.com/rain-animal/">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="RAIN ANIMAL | Qualiacology">
+  <meta property="og:description" content="Six fields and six bosses run together without loading screens. Let hostile fire cross your wake and strike back at what fired it.">
+  <meta property="og:url" content="https://qualiacology.com/rain-animal/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/rain-animal-card-clean.webp">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="720">
+  <meta property="og:image:alt" content="The ivory-winged Crown Louse hangs beneath a black halo, firing red-and-cyan bullets and a fan of pale lasers through a luminous blue storm">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="RAIN ANIMAL | Qualiacology">
+  <meta name="twitter:description" content="Six fields and six bosses run together without loading screens. Let hostile fire cross your wake and strike back at what fired it.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/rain-animal-card-clean.webp">
+  <meta name="twitter:image:alt" content="The ivory-winged Crown Louse hangs beneath a black halo, firing red-and-cyan bullets and a fan of pale lasers through a luminous blue storm">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .home-link {
+      position: fixed;
+      left: max(12px, env(safe-area-inset-left));
+      bottom: max(12px, env(safe-area-inset-bottom));
+      z-index: 2147483647;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 0 13px;
+      color: rgba(240, 250, 248, .9);
+      text-decoration: none;
+      font: 700 10px/1.2 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      border: 1px solid rgba(160, 231, 224, .26);
+      border-radius: 2px;
+      background: rgba(3, 9, 13, .68);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      opacity: .34;
+      transition: opacity .18s ease, border-color .18s ease, box-shadow .18s ease;
+      pointer-events: auto;
+    }
+    .home-link:hover,
+    .home-link:focus-visible {
+      opacity: 1;
+      border-color: #f4bd62;
+      outline: 0;
+    }
+    .home-link:focus-visible { box-shadow: 0 0 0 2px rgba(244, 189, 98, .36); }
+    @media (pointer: coarse) { .home-link { opacity: .28; } }
+    @media (max-width: 600px) {
+      .home-link {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        font-size: 0;
+      }
+      .home-link::after {
+        content: "Q.";
+        color: #f0faf8;
+        font: 700 13px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+        letter-spacing: .02em;
+      }
+      .home-link > span { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="home-link" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology"><span aria-hidden="true">&#8592;</span><span>Qualiacology</span></a>
+  <main id="shell">
+    <canvas id="game" tabindex="0" aria-label="RAIN ANIMAL game canvas. Move with WASD, arrow keys, pointer drag, touch, or gamepad. Hold Space or Z to focus."></canvas>
+
+    <section id="title-screen" class="panel open" aria-labelledby="game-title">
+      <img class="title-world" src="assets/world/zone-1-low-tide-under-heaven-v2.png" alt="" aria-hidden="true" fetchpriority="high" draggable="false">
+      <div class="title-shade" aria-hidden="true"></div>
+      <div class="title-lockup">
+        <p class="eyebrow">PASSAGE I · THE COAST IS BREATHING</p>
+        <h1 id="game-title"><span>RAIN</span><span>ANIMAL</span></h1>
+        <p class="tagline">Thread the impossible. Give the storm its body back.</p>
+        <div class="title-actions">
+          <button id="voyage" class="primary">LAUNCH FROM THE LOW TIDE</button>
+          <button id="practice" class="quiet" disabled>ZONE PRACTICE · LOCKED</button>
+        </div>
+        <p id="launch-status" class="launch-status" role="status" aria-live="polite"></p>
+        <div class="title-options">
+          <button id="audio-toggle" class="chip" aria-pressed="false">SOUND ON</button>
+          <button id="effects-toggle" class="chip" aria-pressed="false">FULL EFFECTS</button>
+        </div>
+        <p class="controls"><span>MOVE <b>WASD / ARROWS / DRAG</b> · FOLD WINGS <b>HOLD SPACE / Z</b></span><span>LET FIRE CROSS YOUR WAKE</span></p>
+      </div>
+      <div class="passage-marker" aria-hidden="true">
+        <span>01</span>
+        <strong>LOW TIDE<br>UNDER HEAVEN</strong>
+      </div>
+    </section>
+
+    <section id="pause-screen" class="panel" role="dialog" aria-modal="true" aria-label="Paused" aria-hidden="true" inert>
+      <div class="pause-card">
+        <p class="eyebrow">THE WEATHER WAITS</p>
+        <h2>PAUSED</h2>
+        <div class="menu-actions">
+          <button id="resume" class="primary">RETURN</button>
+          <button id="restart-zone" class="quiet">RESTART PASSAGE</button>
+          <button id="quit-title" class="quiet">LEAVE VOYAGE</button>
+        </div>
+        <div class="pause-options" aria-label="Sensory settings">
+          <button id="pause-audio-toggle" class="chip" aria-pressed="true">SOUND ON</button>
+          <button id="pause-effects-toggle" class="chip" aria-pressed="true">FULL EFFECTS</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="end-screen" class="panel" role="dialog" aria-modal="true" aria-live="polite" aria-hidden="true" inert>
+      <div class="pause-card end-card">
+        <p id="end-eyebrow" class="eyebrow"></p>
+        <h2 id="end-title"></h2>
+        <p id="end-copy" class="end-copy"></p>
+        <div class="end-actions">
+          <button id="retry" class="primary">RE-ENTER PASSAGE</button>
+          <button id="end-title-button" class="quiet">TITLE</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="touch-ui" role="group" aria-label="Touch flight controls">
+      <div id="touch-stick" aria-hidden="true"><i></i></div>
+      <button id="touch-focus" aria-label="Hold to focus and fold PETREL's wings">FOCUS</button>
+      <button id="touch-pause" aria-label="Pause"><span aria-hidden="true"></span></button>
+    </div>
+
+    <div id="rotate-note" aria-hidden="true"></div>
+    <div id="boot-error" role="alert"></div>
+  </main>
+  <script src="world-art.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

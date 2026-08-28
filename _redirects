@@ -149,3 +149,6 @@
 /hold        /stay/  302
 /orbit       /stay/  302
 /last-call   /stay/  302
+
+# --- RAIN ANIMAL ---
+/rain-animal.html  /rain-animal/  301!
