@@ -330,6 +330,19 @@
       "controls": "Hold anywhere · or hold Space · that is the whole game",
       "actionLabel": "Hold on",
       "duration": "A few minutes"
+    },
+    {
+      "slug": "rain-animal",
+      "title": "RAIN ANIMAL",
+      "descriptor": "Six-zone living-world bullet hell",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/rain-animal-card-clean.webp",
+      "alt": "The ivory-winged Crown Louse hangs beneath a black halo, firing red-and-cyan bullets and a fan of pale lasers through a luminous blue storm",
+      "summary": "Fly PETREL from a drowned coast, across and through a continent-sized organism that manufactures weather, to remove the parasite rooted in its crown. Six fields and six bosses run together without loading screens; hostile fire crossing your wake strikes back at what fired it.",
+      "metaDescription": "RAIN ANIMAL is a continuous six-zone browser bullet hell across and through a continent-sized organism that manufactures weather.",
+      "controls": "WASD or arrows move · Space or Z focuses · automatic fire · pointer, touch, and gamepad supported",
+      "actionLabel": "Launch from the Low Tide"
     }
   ],
   "albums": [
