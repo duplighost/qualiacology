@@ -20,6 +20,7 @@ import { Particles } from './fx/particles.js';
 import { Motes } from './fx/motes.js';
 import { Rovers } from './fx/rovers.js';
 import { PostFX } from './fx/postfx.js';
+import { enhanceEnemyPresentation, enhanceSparkcaster } from './fx/visualdetail.js';
 import { Hud } from './ui/hud.js';
 import { Player } from './player/controller.js';
 import { Weapon } from './player/weapon.js';
@@ -31,14 +32,22 @@ import { plantWorld } from './world/vegetation.js';
 import { Destinations } from './world/destinations.js';
 import { Streams } from './world/streams.js';
 import { Features } from './world/features.js';
+import { LivingWorld } from './world/livingworld.js';
+import { loadWorldMaterials } from './world/materials.js';
 import { updateGlows, updateCulling } from './world/props.js';
 import { Enemies } from './combat/enemies.js';
 import { Projectiles } from './combat/projectiles.js';
 import { Breakables } from './combat/breakables.js';
 import { killChain } from './combat/damage.js';
 import { InteriorManager } from './interiors/builder.js';
-import { SPAWN, SPIRE } from './world/destdata.js';
+import { DESTS, SPAWN, SPIRE } from './world/destdata.js';
 import { dominantRegion } from './world/regions.js';
+import { TRIAL_DESTS } from './world/trialdata.js';
+import { Constellation } from './progression/constellation.js';
+import { RelicSystem } from './progression/relics.js';
+import { ModernWorld } from './world/modernworld.js';
+import { Stormglass } from './world/stormglass.js';
+import { EndgameGate, FINAL_DEST, ORIGINAL_GUARDIANS } from './world/endgame.js';
 
 const canvas = document.getElementById('c');
 const loadFill = document.getElementById('loadfill');
@@ -58,9 +67,70 @@ let lastT = 0;
 // fps sampling for the quality governor + debug
 let fpsAccum = 0, fpsFrames = 0, fpsTimer = 0, aboveTimer = 0, qualityStep = 0;
 let cullTimer = 0;
+let viewportW = 0, viewportH = 0, viewportCheckT = 0, viewportSyncQueued = false;
 
 // ?fx=low → no shadows, no post pass, dpr 1 (weak hardware / headless tests)
 const FX_LOW = new URLSearchParams(location.search).get('fx') === 'low';
+
+function makeMaterialEnvironment() {
+  const faces = [];
+  for (let i = 0; i < 6; i++) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 96;
+    const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, 96);
+    if (i === 2) { grad.addColorStop(0, '#839ac2'); grad.addColorStop(1, '#445473'); }
+    else if (i === 3) { grad.addColorStop(0, '#3f4b59'); grad.addColorStop(1, '#252b2d'); }
+    else { grad.addColorStop(0, '#344a75'); grad.addColorStop(.64, '#657899'); grad.addColorStop(1, '#d2aa83'); }
+    g.fillStyle = grad; g.fillRect(0, 0, 96, 96);
+    if (i === 0) {
+      const sun = g.createRadialGradient(72, 42, 1, 72, 42, 24);
+      sun.addColorStop(0, 'rgba(255,244,210,.88)'); sun.addColorStop(.22, 'rgba(255,214,170,.34)'); sun.addColorStop(1, 'rgba(255,196,150,0)');
+      g.fillStyle = sun; g.fillRect(0, 0, 96, 96);
+    }
+    faces.push(c);
+  }
+  const cube = new THREE.CubeTexture(faces);
+  cube.colorSpace = THREE.SRGBColorSpace;
+  cube.needsUpdate = true;
+  return cube;
+}
+
+function measureViewport() {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    width: Math.max(1, Math.round(rect.width || document.documentElement.clientWidth || innerWidth)),
+    height: Math.max(1, Math.round(rect.height || document.documentElement.clientHeight || innerHeight)),
+  };
+}
+
+function syncViewport(force = false) {
+  const renderer = G.renderer, camera = G.camera;
+  if (!renderer || !camera) return false;
+  const { width, height } = measureViewport();
+  const ratio = renderer.getPixelRatio();
+  const bufferW = Math.max(1, Math.floor(width * ratio));
+  const bufferH = Math.max(1, Math.floor(height * ratio));
+  if (!force && width === viewportW && height === viewportH
+      && canvas.width === bufferW && canvas.height === bufferH) return false;
+  viewportW = width; viewportH = height;
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  // `false` is the important part: Three.js may resize the drawing buffer,
+  // but it must never replace the viewport-relative CSS width/height.
+  renderer.setSize(width, height, false);
+  G.postfx?.resize();
+  return true;
+}
+
+function queueViewportSync() {
+  if (viewportSyncQueued) return;
+  viewportSyncQueued = true;
+  requestAnimationFrame(() => {
+    viewportSyncQueued = false;
+    syncViewport(true);
+  });
+}
 
 async function boot() {
   // ---- renderer -------------------------------------------------------------
@@ -72,18 +142,26 @@ async function boot() {
   }
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.18;
+  renderer.toneMappingExposure = 1.32;
   renderer.shadowMap.enabled = !FX_LOW;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.setPixelRatio(FX_LOW ? 1 : Math.min(devicePixelRatio || 1, CFG.fx.dprCap));
-  renderer.setSize(innerWidth, innerHeight);
+  const initialViewport = measureViewport();
+  viewportW = initialViewport.width; viewportH = initialViewport.height;
+  renderer.setSize(viewportW, viewportH, false);
   G.renderer = renderer;
 
-  const camera = new THREE.PerspectiveCamera(74, innerWidth / innerHeight, 0.09, 950);
+  // Decode the authored surface scans before any world materials are created.
+  // They are enhancement-only and carry their own procedural fallbacks.
+  await loadWorldMaterials(renderer);
+  setLoad(0.04);
+
+  const camera = new THREE.PerspectiveCamera(74, viewportW / viewportH, 0.09, 950);
   camera.rotation.order = 'YXZ';
   G.camera = camera;
 
   const worldScene = new THREE.Scene();
+  worldScene.environment = makeMaterialEnvironment();
   worldScene.fog = new THREE.FogExp2(0xb8c4c8, CFG.world.fogBase);
   G.worldScene = worldScene;
   G.scene = worldScene;
@@ -93,14 +171,17 @@ async function boot() {
   const hemi = new THREE.HemisphereLight(0x9fb8d8, 0x5a5442, 0.85);
   const sun = new THREE.DirectionalLight(0xfff2d0, 2.4);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
-  sun.shadow.camera.left = -42; sun.shadow.camera.right = 42;
-  sun.shadow.camera.top = 42; sun.shadow.camera.bottom = -42;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -56; sun.shadow.camera.right = 56;
+  sun.shadow.camera.top = 56; sun.shadow.camera.bottom = -56;
   sun.shadow.camera.near = 10; sun.shadow.camera.far = 220;
-  sun.shadow.bias = -0.0002;
-  sun.shadow.normalBias = 0.9;   // terrain is one giant receiver — acne killer
-  worldScene.add(hemi, sun, sun.target);
-  G.hemi = hemi; G.sun = sun;
+  sun.shadow.bias = -.00008;
+  sun.shadow.normalBias = .46;
+  const bounce = new THREE.AmbientLight(0x9aa6b2, .36);
+  const fill = new THREE.DirectionalLight(0xa9bdd5, .58);
+  fill.position.set(-45, 52, -38);
+  worldScene.add(hemi, sun, sun.target, bounce, fill, fill.target);
+  G.hemi = hemi; G.sun = sun; G.fill = fill;
 
   // ---- core -----------------------------------------------------------------
   G.save = loadSave();
@@ -135,6 +216,7 @@ async function boot() {
 
   const sky = new Sky(worldScene);
   G.sky = sky;
+  sky.setPostgame(!!G.save.finalDefeated);
   setLoad(0.6);
   await nextFrame();
 
@@ -146,6 +228,10 @@ async function boot() {
   G.destinations = new Destinations(worldScene, G.worldCollide);
   G.streams = new Streams(worldScene);
   G.features = new Features(worldScene, G.worldCollide);
+  G.livingWorld = new LivingWorld(worldScene, G.worldCollide);
+  G.modernWorld = new ModernWorld(worldScene);
+  G.stormglass = new Stormglass(worldScene, { low: FX_LOW });
+  G.endgame = new EndgameGate(worldScene, G.worldCollide);
   setLoad(0.85);
   await nextFrame();
 
@@ -160,14 +246,19 @@ async function boot() {
   G.projectiles.setScene(worldScene);
   G.enemies = new Enemies();
   G.enemies.setScene(worldScene);
+  enhanceEnemyPresentation(G.enemies);
   G.interiors = new InteriorManager();
 
   G.player = new Player();
   G.player.pos.set(SPAWN.x, terrainHeight(SPAWN.x, SPAWN.z), SPAWN.z);
   G.weapon = new Weapon(camera, worldScene);
+  enhanceSparkcaster(G.weapon);
   G.weapon.syncEvolution(G.save);
   G.weapon.applySkin(G.save.skin || 'default');
   worldScene.add(camera);   // viewmodel rides the camera
+
+  G.constellation = new Constellation();
+  G.relics = new RelicSystem();
 
   G.postfx = new PostFX(renderer);
   if (FX_LOW) G.postfx.enabled = false;
@@ -334,7 +425,7 @@ async function boot() {
   // pause on lock loss, resume on click. A phone never holds pointer lock, so it
   // must not be dragged into the paused state by its absence.
   G.input.onLockChange = (locked) => {
-    if (G.mode === 'title' || TOUCH_PRIMARY) return;
+    if (G.mode === 'title' || TOUCH_PRIMARY || G.uiOpen) return;
     paused = !locked;
     pauseEl.classList.toggle('show', paused);
     if (!locked) music.setIntensity(0);
@@ -345,12 +436,14 @@ async function boot() {
     if (G.mode !== 'title' && !G.input.locked) G.input.requestLock();
   });
 
-  addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-    G.postfx.resize();
-  });
+  addEventListener('resize', queueViewportSync);
+  window.visualViewport?.addEventListener('resize', queueViewportSync);
+  document.addEventListener('fullscreenchange', queueViewportSync);
+  if ('ResizeObserver' in window) {
+    const viewportObserver = new ResizeObserver(queueViewportSync);
+    viewportObserver.observe(document.documentElement);
+    viewportObserver.observe(canvas);
+  }
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); paused = true; });
   canvas.addEventListener('webglcontextrestored', () => { location.reload(); });
   document.addEventListener('visibilitychange', () => {
@@ -371,6 +464,8 @@ function wireGameEvents() {
     G.particles.debris(pos.x, pos.y + 0.2, pos.z, 8, [0.5, 0.5, 0.55], { floorY: pos.y });
     G.rovers.pulse(pos.x, pos.y + 1, pos.z, [0.6, 0.8, 1], 3.5, 8, 14);
     G.projectiles.explode(pos.x, pos.y + 0.5, pos.z, slam.radius, [0.6, 0.85, 1], { fromPlayer: true, damage: slam.damage, kind: 'slam' });
+    G.relics?.onLand(pos);
+    G.boss?.onAbility?.('slam', pos);
   };
 
   G.onShardCollected = () => {
@@ -388,6 +483,25 @@ function wireGameEvents() {
   };
 
   G.onRewardTaken = (key) => grantReward(key);
+
+  G.onSoulCollected = (at) => {
+    G.constellation?.collect(1);
+    G.relics?.onSoul(at);
+  };
+
+  G.onRelicTaken = (relic) => G.relics?.unlock(relic);
+  G.onCompassPoint = (dest) => G.modernWorld?.pointTo(dest);
+
+  G.onFinalVictory = () => {
+    G.sky?.setPostgame(true);
+    G.postfx?.pulse(1.4);
+    G.hud?.whisper('THE NIGHT REMEMBERS', 4.8);
+    // Return control to the persistent world after the unskippable visual
+    // bloom; the game continues instead of falling into credits or a menu.
+    setTimeout(() => {
+      if (G.interior?.dest?.kind === 'final') G.requestExitInterior?.();
+    }, 3600);
+  };
 
   G.onBossDown = () => {
     G.postfx.pulse(1.2);
@@ -419,6 +533,7 @@ function wireGameEvents() {
     pl.vel.set(0, 0, 0);
     pl.pips = pl.maxPips;
     pl.dead = false;
+    pl.resetVisitProtections?.();
     pl.iFrames = 2;
     G.hud.setPips(pl.pips, pl.maxPips);
     G.terrain.buildAround(pl.pos.x, pl.pos.z);
@@ -432,6 +547,12 @@ function wireGameEvents() {
     G.interiors.exit();
     G.terrain.buildAround(G.player.pos.x, G.player.pos.z);
     transition = false;
+  };
+
+  G.requestEnterFinal = async () => {
+    if (transition || G.mode !== 'world') return;
+    if (G.player.stream) G.streams.detach(G.player, false);
+    await enterInterior(FINAL_DEST);
   };
 }
 
@@ -454,6 +575,13 @@ function wireDebug() {
       abilities: { ...G.save.abilities }, altFires: { ...G.save.altFires },
       bossesDown: { ...G.save.bossesDown }, boss: G.boss ? { hp: G.boss.hp, key: G.boss.key } : null,
       interior: G.interior ? G.interior.dest.id : null,
+      aster: G.save.aster || 0, skills: { ...G.save.skills }, trialsDown: { ...G.save.trialsDown },
+      relics: { ...G.save.relics }, activeRelic: G.save.activeRelic || null,
+      finalGateShown: !!G.save.finalGateShown, finalDefeated: !!G.save.finalDefeated,
+      content: {
+        bossDestinations: DESTS.filter((d) => d.kind === 'major' || d.kind === 'trial').length,
+        trials: TRIAL_DESTS.length,
+      },
     }),
     teleport(x, z) {
       G.player.pos.set(x, 60, z);
@@ -469,6 +597,15 @@ function wireDebug() {
       G.weapon.syncEvolution(G.save);
       save();
     },
+    giveAster(n = 100) { G.constellation.collect(n); },
+    buySkill(id) { return G.constellation.buy(id); },
+    equipRelic(id) { return G.relics.equip(id); },
+    defeatBoss() { if (G.boss && !G.boss.dead) G.boss._die?.(); },
+    completeMain() {
+      for (const key of ORIGINAL_GUARDIANS) G.save.bossesDown[key] = true;
+      this.giveAll(); save();
+    },
+    enterFinal() { enterInterior(FINAL_DEST); },
     god(on = true) { G.player.iFrames = on ? 1e9 : 0; },
     spawn(type, dx = 8, dz = 0) {
       G.enemies.spawn(type, G.player.pos.x + dx, G.player.pos.z + dz, { ctx: G.mode === 'world' ? 'world' : 'interior' });
@@ -494,6 +631,15 @@ function loop(tMs) {
   let rawDt = Math.min(trueDt, 0.05);
   lastT = t;
   G.time.raw = t;
+
+  // Some desktop browsers do not emit a dependable resize event while their
+  // chrome collapses or a maximized window changes display scale. A bounded
+  // rect check repairs that missed transition without allocating per frame.
+  viewportCheckT += trueDt;
+  if (viewportCheckT >= 0.5) {
+    viewportCheckT = 0;
+    syncViewport();
+  }
 
   // fps sampling + adaptive quality (with recovery)
   fpsFrames++; fpsAccum += trueDt; fpsTimer += trueDt;
@@ -521,6 +667,14 @@ function loop(tMs) {
 
   if (G.mode === 'title') {
     renderTitle(t, rawDt);
+    return;
+  }
+  if (G.uiOpen) {
+    // The constellation owns input while open; the last playable frame stays
+    // alive under the glass so this feels like looking into the sky, not
+    // leaving the game.
+    G.postfx.render(G.scene, G.camera, rawDt, t);
+    G.input.endFrame();
     return;
   }
   if (paused || dead || transition) {
@@ -554,6 +708,8 @@ function loop(tMs) {
   const pl = G.player;
   G.particles.update(rawDt * timeMult, G.camera);
   G.motes.update(rawDt * timeMult, G.time.now);
+  G.constellation?.update(rawDt * timeMult);
+  G.relics?.update(rawDt * timeMult);
   updateGlows(t, pl.pos.x, pl.pos.z);
   G.breakables.update(pl.pos.x, pl.pos.y, pl.pos.z);
   G.rovers.update(rawDt, pl.pos.x, pl.pos.y + 1.2, pl.pos.z);
@@ -565,11 +721,17 @@ function loop(tMs) {
     G.sky.update(rawDt, t, pl.pos.x, pl.pos.z, G.worldScene, G.sun, G.hemi);
     G.streams.update(rawDt, t);
     G.features.update(rawDt, t);
+    G.livingWorld.update(rawDt, t);
+    G.modernWorld?.update(rawDt, t);
+    G.stormglass?.update(rawDt, t);
+    G.endgame?.update(rawDt, t);
     const entering = G.destinations.update(rawDt, t, pl.pos.x, pl.pos.z);
     if (entering) { if (pl.stream) G.streams.detach(pl, false); enterInterior(entering); }
     // sun + shadow frustum follow the player
     G.sun.position.set(pl.pos.x + 60, 90, pl.pos.z + 40);
     G.sun.target.position.set(pl.pos.x, pl.pos.y, pl.pos.z);
+    G.fill.position.set(pl.pos.x - 45, pl.pos.y + 52, pl.pos.z - 38);
+    G.fill.target.position.set(pl.pos.x, pl.pos.y + 4, pl.pos.z);
     music.setRegion(dominantRegion(pl.pos.x, pl.pos.z));
     // ambient region particles
     emitAmbient(rawDt, pl);
@@ -627,7 +789,10 @@ function renderTitle(t, rawDt) {
   G.sun.position.set(cx + 60, 90, cz + 40);
   G.sun.target.position.set(cx, 0, cz);
   G.destinations.update(rawDt, t, cx, cz);
-  G.renderer.render(G.worldScene, G.camera);
+  G.modernWorld?.update(rawDt, t);
+  G.stormglass?.update(rawDt, t);
+  G.endgame?.update(rawDt, t);
+  G.postfx.render(G.worldScene, G.camera, rawDt, t);
   G.input.endFrame();
 }
 
@@ -659,8 +824,7 @@ function applyQuality() {
     r.setPixelRatio(Math.max(0.85, base * 0.62));
     r.shadowMap.enabled = false;
   }
-  r.setSize(innerWidth, innerHeight);
-  G.postfx.resize();
+  syncViewport(true);
 }
 
 boot().catch((error) => {

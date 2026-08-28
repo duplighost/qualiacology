@@ -3,9 +3,12 @@
 // numbers drive worldgen, collision, minimap-free wayfinding, and saves.
 //
 // kind: 'major' = boss + ability reward. 'minor' = story tableau + health shard.
+// kind: 'trial' = optional ruin expedition + cosmetic relic.
 // enter: has an interior scene behind its door.
 
-export const DESTS = [
+import { TRIAL_DESTS } from './trialdata.js';
+
+const ORIGINAL_DESTS = [
   // ---- Verdant Vale ----
   { id: 'mill', kind: 'major', region: 'vale', x: 118, z: 388, r: 26, y: 7.5,
     name: 'The Hollow Mill', boss: 'millwright', reward: 'dash', enter: true },
@@ -46,6 +49,11 @@ export const DESTS = [
   { id: 'stairs', kind: 'minor', region: 'shatter', x: 190, z: -540, r: 16, y: 17.0,
     name: 'The Stairs to Nowhere', enter: false },
 ];
+
+// Keep the original registry order and values intact, then append the optional
+// expansion. Terrain, discovery, doors, and save ids all consume one registry.
+export const DESTS = [...ORIGINAL_DESTS, ...TRIAL_DESTS];
+export { ORIGINAL_DESTS };
 
 export const destById = Object.fromEntries(DESTS.map((d) => [d.id, d]));
 

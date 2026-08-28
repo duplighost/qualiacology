@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { makeRng, fbm2 } from '../core/rng.js';
 import { G } from '../state.js';
+import { worldSurface } from './materials.js';
 
 // ---- procedural textures ---------------------------------------------------
 const texCache = new Map();
@@ -54,17 +55,38 @@ export const stoneTex = () => canvasTex('stone', 128, (g, s) => {
 const M = {};
 export function mats() {
   if (M.wood) return M;
-  M.wood = new THREE.MeshStandardMaterial({ map: woodTex(), roughness: 0.9 });
-  M.woodDark = new THREE.MeshStandardMaterial({ color: 0x4a3320, roughness: 0.95, flatShading: true });
-  M.stone = new THREE.MeshStandardMaterial({ map: stoneTex(), roughness: 1 });
-  M.clay = new THREE.MeshStandardMaterial({ color: 0xa5714c, roughness: 0.9, flatShading: true });
-  M.iron = new THREE.MeshStandardMaterial({ color: 0x3b3f46, roughness: 0.5, metalness: 0.6 });
+  const forest = worldSurface('forest');
+  const stone = worldSurface('stone');
+  M.wood = new THREE.MeshStandardMaterial({
+    map: woodTex(), bumpMap: forest?.bump || woodTex(), bumpScale: 0.11,
+    emissive: 0x160b06, emissiveIntensity: .12, roughness: 0.72, metalness: 0.015,
+  });
+  M.woodDark = new THREE.MeshStandardMaterial({
+    color: 0x352720, emissive: 0x100805, emissiveIntensity: .14,
+    bumpMap: forest?.bump || woodTex(), bumpScale: .10, roughness: 0.78, metalness: 0.025,
+  });
+  M.woodBench = new THREE.MeshStandardMaterial({
+    color: 0xb78358, map: woodTex(), bumpMap: forest?.bump || woodTex(), bumpScale: .13,
+    emissive: 0x100805, emissiveIntensity: .08, roughness: .84, metalness: .008,
+  });
+  M.stone = new THREE.MeshStandardMaterial({
+    map: stone?.map || stoneTex(), bumpMap: stone?.bump || stoneTex(), bumpScale: 0.14,
+    roughness: 0.78, metalness: 0.025, flatShading: false,
+  });
+  M.clay = new THREE.MeshStandardMaterial({ color: 0xa5714c, roughness: 0.84 });
+  M.iron = new THREE.MeshStandardMaterial({ color: 0x252b38, roughness: 0.32, metalness: 0.72 });
   M.cloth = new THREE.MeshStandardMaterial({ color: 0x8a4a4a, roughness: 1, flatShading: true });
   M.paper = new THREE.MeshStandardMaterial({ color: 0xd8cfb4, roughness: 1 });
   M.candle = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.8 });
   M.flame = new THREE.MeshBasicMaterial({ color: 0xffb75c, fog: false });
-  M.crystal = new THREE.MeshStandardMaterial({ color: 0x9fd8ff, emissive: 0x3388cc, emissiveIntensity: 0.7, roughness: 0.2, flatShading: true });
-  M.bone = new THREE.MeshStandardMaterial({ color: 0xd8d2c0, roughness: 0.9, flatShading: true });
+  M.flameHot = new THREE.MeshBasicMaterial({ color: 0xfff0a0, fog: false, transparent: true, opacity: .92 });
+  M.lanternGlass = new THREE.MeshStandardMaterial({
+    color: 0xffca72, emissive: 0xff8b28, emissiveIntensity: 1.25,
+    roughness: .16, metalness: .02, transparent: true, opacity: .42,
+    depthWrite: false,
+  });
+  M.crystal = new THREE.MeshStandardMaterial({ color: 0x9fd8ff, emissive: 0x3388cc, emissiveIntensity: 0.82, roughness: 0.13, metalness: 0.08 });
+  M.bone = new THREE.MeshStandardMaterial({ color: 0xd8d2c0, bumpMap: stone?.bump || null, bumpScale: .08, roughness: 0.86 });
   return M;
 }
 
@@ -109,15 +131,35 @@ export function clearGlows(ctx) {
 // ---- builders ---------------------------------------------------------------
 const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
 const cyl = (r0, r1, h, seg, mat) => new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg), mat);
+const timber = (length, radius, mat, radial = 10) => {
+  const mesh = new THREE.Mesh(
+    new THREE.CapsuleGeometry(radius, Math.max(.01, length - radius * 2), 6, radial),
+    mat,
+  );
+  mesh.rotation.z = Math.PI / 2;
+  return mesh;
+};
 
 export const BUILDERS = {
   crate(o = {}) {
     const m = mats();
     const s = o.size || 0.8;
     const g = new THREE.Group();
-    const b = box(s, s, s, m.wood);
+    const b = box(s * .91, s * .91, s * .91, m.wood);
     b.position.y = s / 2;
     g.add(b);
+    const rail = s * .085;
+    for (const x of [-1, 1]) for (const z of [-1, 1]) {
+      const post = box(rail, s, rail, m.woodDark);
+      post.position.set(x * s * .46, s * .5, z * s * .46);
+      g.add(post);
+    }
+    for (const z of [-1, 1]) {
+      const brace = box(rail, s * 1.04, rail * .58, m.woodDark);
+      brace.position.set(0, s * .5, z * s * .475);
+      brace.rotation.z = z * .68;
+      g.add(brace);
+    }
     g.userData = { breakable: 'wood', collider: { kind: 'box', w: s, h: s, d: s } };
     return g;
   },
@@ -135,12 +177,15 @@ export const BUILDERS = {
   barrel() {
     const m = mats();
     const g = new THREE.Group();
-    const b = cyl(0.34, 0.34, 0.9, 9, m.wood);
-    b.position.y = 0.45;
-    const ring = cyl(0.36, 0.36, 0.06, 9, m.iron);
-    ring.position.y = 0.6;
-    const ring2 = ring.clone(); ring2.position.y = 0.25;
-    g.add(b, ring, ring2);
+    const lower = cyl(.37, .31, .26, 12, m.wood); lower.position.y = .13;
+    const belly = cyl(.37, .37, .42, 12, m.wood); belly.position.y = .47;
+    const upper = cyl(.31, .37, .26, 12, m.wood); upper.position.y = .81;
+    g.add(lower, belly, upper);
+    for (const y of [.17, .47, .77]) {
+      const ring = cyl(.382, .382, .045, 12, m.iron);
+      ring.position.y = y; g.add(ring);
+    }
+    const lid = cyl(.29, .31, .045, 12, m.woodDark); lid.position.y = .955; g.add(lid);
     g.userData = { breakable: 'wood', collider: { kind: 'circle', r: 0.36, h: 0.95 } };
     return g;
   },
@@ -158,14 +203,20 @@ export const BUILDERS = {
   lanternPost(o = {}) {
     const m = mats();
     const g = new THREE.Group();
-    const post = cyl(0.06, 0.08, 2.6, 6, m.woodDark);
+    const post = cyl(0.055, 0.095, 2.6, 8, m.woodDark);
     post.position.y = 1.3;
-    const cage = box(0.3, 0.34, 0.3, m.iron);
-    cage.position.y = 2.45;
-    const core = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), m.flame);
-    core.position.y = 2.45;
-    g.add(post, cage, core);
-    g.userData = { breakable: 'lantern', collider: { kind: 'circle', r: 0.1, h: 2.6 }, glowAt: [0, 2.45, 0], glowColor: o.color || [1, 0.72, 0.36] };
+    const foot = cyl(.13, .17, .16, 8, m.iron); foot.position.y = .08;
+    const arm = box(.48, .055, .055, m.iron); arm.position.set(.18, 2.55, 0);
+    const brace = box(.055, .42, .055, m.iron); brace.position.set(.13, 2.38, 0); brace.rotation.z = -.72;
+    const glass = box(.26, .31, .26, m.lanternGlass); glass.position.set(.38, 2.34, 0);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(.23, .19, 4), m.iron); roof.position.set(.38, 2.61, 0); roof.rotation.y = Math.PI * .25;
+    const floor = box(.30, .045, .30, m.iron); floor.position.set(.38, 2.16, 0);
+    g.add(post, foot, arm, brace, glass, roof, floor);
+    for (const x of [-1, 1]) for (const z of [-1, 1]) {
+      const bar = box(.026, .34, .026, m.iron);
+      bar.position.set(.38 + x * .125, 2.34, z * .125); g.add(bar);
+    }
+    g.userData = { breakable: 'lantern', collider: { kind: 'circle', r: 0.1, h: 2.6 }, glowAt: [.38, 2.34, 0], glowColor: o.color || [1, 0.72, 0.36] };
     return g;
   },
   table() {
@@ -232,13 +283,31 @@ export const BUILDERS = {
   bench() {
     const m = mats();
     const g = new THREE.Group();
-    const seat = box(1.5, 0.08, 0.42, m.wood);
-    seat.position.y = 0.45;
-    g.add(seat);
+    // Hand-hewn timbers keep this very visible spawn prop from reading as a
+    // stack of white boxes. Small offsets make it feel assembled, not cloned.
+    for (const [i, z] of [-.16, 0, .16].entries()) {
+      const slat = timber(1.52, .075, m.woodBench, 12);
+      slat.position.set((i - 1) * .012, .47 + (i === 1 ? .012 : 0), z);
+      slat.rotation.x = (i - 1) * .018;
+      g.add(slat);
+    }
+    for (const [i, y] of [.82, 1.04].entries()) {
+      const back = timber(1.52, .085, m.woodBench, 12);
+      back.position.set(i ? -.015 : .01, y, -.16);
+      back.rotation.x = -.08 + (i ? -.012 : .01);
+      g.add(back);
+    }
     for (const x of [-0.6, 0.6]) {
-      const leg = box(0.1, 0.45, 0.4, m.woodDark);
-      leg.position.set(x, 0.22, 0);
-      g.add(leg);
+      const leg = cyl(.07, .095, .46, 9, m.woodDark);
+      leg.position.set(x, .23, 0);
+      leg.rotation.z = x * -.035;
+      const backPost = cyl(.055, .075, .72, 9, m.woodDark);
+      backPost.position.set(x, .73, -.18);
+      backPost.rotation.x = -.08;
+      const brace = cyl(.032, .044, .50, 8, m.iron);
+      brace.position.set(x, .37, .03);
+      brace.rotation.x = .70;
+      g.add(leg, backPost, brace);
     }
     g.userData = { collider: { kind: 'box', w: 1.5, h: 0.5, d: 0.42, standable: true } };
     return g;
@@ -257,18 +326,26 @@ export const BUILDERS = {
   campfire() {
     const m = mats();
     const g = new THREE.Group();
-    for (let i = 0; i < 5; i++) {
-      const log = box(0.7, 0.1, 0.1, m.woodDark);
-      log.position.y = 0.08;
-      log.rotation.y = (i / 5) * Math.PI;
+    for (let i = 0; i < 3; i++) {
+      const log = box(0.82, 0.12, 0.12, m.woodDark);
+      log.position.y = 0.13;
+      log.rotation.y = (i / 3) * Math.PI;
       g.add(log);
     }
-    const stone = cyl(0.5, 0.6, 0.12, 8, mats().stone);
-    stone.position.y = 0.03;
-    const ember = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), m.flame);
-    ember.position.y = 0.2;
-    g.add(stone, ember);
-    g.userData = { glowAt: [0, 0.5, 0], glowColor: [1, 0.55, 0.2], glowIntensity: 1.6, emit: 'ember' };
+    for (let i = 0; i < 9; i++) {
+      const a = i / 9 * Math.PI * 2;
+      const stone = new THREE.Mesh(new THREE.IcosahedronGeometry(.13, 1), m.stone);
+      stone.position.set(Math.cos(a) * .48, .09, Math.sin(a) * .48);
+      stone.scale.set(1.25, .72, .92); stone.rotation.y = a; g.add(stone);
+    }
+    const ember = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.48, 8, 2), m.flame);
+    ember.position.y = 0.37;
+    const hot = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.38, 7, 2), m.flameHot);
+    hot.position.set(0.045, 0.42, 0.01); hot.rotation.z = -0.12;
+    const tongue = new THREE.Mesh(new THREE.ConeGeometry(.075, .30, 6, 2), m.flameHot);
+    tongue.position.set(-.10, .34, .03); tongue.rotation.z = .28;
+    g.add(ember, hot, tongue);
+    g.userData = { glowAt: [0, 0.5, 0], glowColor: [1, 0.55, 0.2], glowIntensity: 2.05, emit: 'ember' };
     return g;
   },
   pedestal() {

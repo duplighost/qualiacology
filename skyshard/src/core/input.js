@@ -72,7 +72,12 @@ export class Input {
     try {
       // unadjustedMovement disables OS mouse accel where supported = cleaner aim.
       const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
-      if (p && p.catch) p.catch(() => { try { this.canvas.requestPointerLock(); } catch (e) {} });
+      if (p && p.catch) p.catch(() => {
+        try {
+          const fallback = this.canvas.requestPointerLock();
+          fallback?.catch?.(() => {});
+        } catch (e) { /* sandboxed/automation documents can reject both forms */ }
+      });
     } catch (e) { /* older browsers throw on the options form */ }
   }
 

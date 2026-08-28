@@ -111,6 +111,13 @@ export class Projectiles {
           const d = (e.x - b.x) ** 2 + (e.y - b.y) ** 2 + (e.z - b.z) ** 2;
           if (d < bd) { bd = d; best = e; }
         }
+        // The final constellation nodes are a legitimate seeker target. This
+        // branch is final-boss-only, so the original guardian combat contract
+        // and ordinary seeker behavior remain unchanged.
+        if (!best && G.boss?.requiresAbilities && !G.boss.dead) {
+          best = { x: G.boss.pos.x, y: G.boss.pos.y, z: G.boss.pos.z };
+          bd = (best.x - b.x) ** 2 + (best.y - b.y) ** 2 + (best.z - b.z) ** 2;
+        }
         if (best) {
           const d = Math.sqrt(bd) || 1;
           const f = 1 - Math.exp(-b.turn * dt);
@@ -148,6 +155,7 @@ export class Projectiles {
             }
           }
           if (G.boss && G.boss.testHit && G.boss.testHit(b.x, b.y, b.z, 0.6)) {
+            if (G.boss.requiresAbilities) G.boss.onHit?.({ part: 'core' }, b.damage, { kind: 'seeker', point: { x: b.x, y: b.y, z: b.z } });
             this.explode(b.x, b.y, b.z, 2.4, [0.5, 1, 0.75], { fromPlayer: true, damage: b.damage });
             b.mesh.visible = false;
             return false;

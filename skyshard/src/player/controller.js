@@ -10,6 +10,7 @@ import { G } from '../state.js';
 import { clamp, clamp01, damp, lerp } from '../core/math.js';
 import { sfx } from '../core/audio.js';
 import { juice } from '../fx/juice.js';
+import { hasSkill } from '../progression/constellation.js';
 
 const P = CFG.player;
 const A = CFG.abilities;
@@ -40,6 +41,7 @@ export class Player {
     this.maxPips = G.save.maxPips ?? P.startPips;
     this.iFrames = 0;
     this.dead = false;
+    this.lastLanternUsed = false;
 
     this.bobPhase = 0;
     this.stepDist = 0;
@@ -295,7 +297,16 @@ export class Player {
   hurt(n, fromX, fromZ) {
     if (this.iFrames > 0 || this.dead) return false;
     if (this.stream) G.streams?.detach(this, false);
-    this.pips -= n;
+    const wouldDie = this.pips - n <= 0;
+    const lanternReady = hasSkill('last-lantern') && !this.lastLanternUsed && (G.motes?.streak || 0) >= 5;
+    this.pips = lanternReady && wouldDie ? 1 : this.pips - n;
+    if (lanternReady && wouldDie) {
+      this.lastLanternUsed = true;
+      G.motes.streak = 0;
+      G.postfx?.pulse(1.1);
+      G.hud?.whisper('THE LAST LANTERN HOLDS', 2.4);
+      G.particles?.burst('soul', this.pos.x, this.pos.y + 1, this.pos.z, 22, { color: [0.45, 0.9, 1], sizeMult: 1.5 });
+    }
     this.iFrames = P.hurtIFrames;
     juice.shake(CFG.shake.hurt);
     juice.stop('hurt');
@@ -313,6 +324,8 @@ export class Player {
     if (this.pips <= 0) { this.dead = true; G.onPlayerDeath?.(); }
     return true;
   }
+
+  resetVisitProtections() { this.lastLanternUsed = false; }
 
   heal(n) {
     if (this.pips >= this.maxPips) return false;

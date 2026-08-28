@@ -8,11 +8,13 @@ import { DESTS, SPIRE } from './destdata.js';
 import { terrainHeight } from './terrain.js';
 import { REGIONS } from './regions.js';
 import { G } from '../state.js';
-import { mats, place, addCullable } from './props.js';
+import { mats, place, addCullable, canvasTex } from './props.js';
 import { discover } from '../player/abilities.js';
 import { sfx } from '../core/audio.js';
 import { save } from '../core/save.js';
 import { makeRng } from '../core/rng.js';
+import { hasSkill } from '../progression/constellation.js';
+import { worldSurface } from './materials.js';
 
 const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
 const cyl = (r0, r1, h, seg, mat) => new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg), mat);
@@ -34,12 +36,14 @@ export class Destinations {
       g.position.set(d.x, d.y, d.z);
       scene.add(g);
       addCullable(g, d.x, d.z);   // fog wall = draw wall (beacons stay visible)
-      const builder = this['_' + d.id];
+      const builder = this['_' + d.id] || (d.kind === 'trial' ? this._trial : null);
       if (builder) builder.call(this, g, d);
+      this._regionalDressing(g, d);
       g.traverse((o) => { if (o.isMesh && o.castShadow === undefined) o.castShadow = true; });
 
       if (d.enter) this._door(g, d, g.userData.door);
       if (d.kind === 'major') this._beacon(d, 60, 1.6);
+      else if (d.kind === 'trial') this._beacon(d, 38, 1.0);
       else this._beacon(d, 22, 0.5);
     }
   }
@@ -132,6 +136,157 @@ export class Destinations {
     );
   }
 
+  // Optional expeditions announce themselves as destination-scale ruins. The
+  // shared shell only holds the door; each layout adds a different skyline
+  // derived from its interior motif so the exterior is a truthful preview.
+  _trial(g, d) {
+    const R = REGIONS[d.region];
+    const base = new THREE.Color(...R.terra.cliff);
+    const key = new THREE.Color(...R.key);
+    const surface = worldSurface(d.region === 'ember' ? 'obsidian' : d.region === 'frost' ? 'ice' : d.region === 'mycel' ? 'mycel' : 'stone');
+    const stone = new THREE.MeshStandardMaterial({ color: base, bumpMap: surface?.bump || null, bumpScale: .12, roughness: 0.82, metalness: d.region === 'shatter' ? 0.24 : 0.03 });
+    const dark = new THREE.MeshStandardMaterial({ color: base.clone().multiplyScalar(0.42), bumpMap: surface?.bump || null, bumpScale: .14, roughness: 0.94, metalness: d.region === 'shatter' ? 0.3 : 0 });
+    const accent = new THREE.MeshStandardMaterial({ color: key.clone().multiplyScalar(0.52), emissive: key, emissiveIntensity: 0.65, roughness: 0.28, metalness: 0.18 });
+    this._shell(g, d, 12, 7.2, 12, stone, { noRoof: true });
+    g.userData.door = { x: 0, z: 6.02, w: 2, h: 3.1 };
+
+    const tower = (x, z, h, r = 0.8, mat = stone) => {
+      const p = cyl(r * 0.82, r, h, 8, mat); p.position.set(x, h / 2, z); g.add(p);
+      this.collide.addCircle(d.x + x, d.z + z, r, d.y, d.y + h); return p;
+    };
+    const shard = (x, y, z, s = 1) => {
+      const q = new THREE.Mesh(new THREE.OctahedronGeometry(s, 0), accent); q.position.set(x, y, z); q.scale.set(0.6, 1.6, 0.6); g.add(q); return q;
+    };
+    const arch = (x, z, w, h, rot = 0) => {
+      const dx = Math.cos(rot) * w / 2, dz = -Math.sin(rot) * w / 2;
+      tower(x - dx, z - dz, h, 0.46); tower(x + dx, z + dz, h, 0.46);
+      const lintel = box(w + 0.8, 0.55, 0.65, stone); lintel.position.set(x, h - 0.3, z); lintel.rotation.y = rot; g.add(lintel);
+    };
+    const torus = (x, y, z, r, rx = Math.PI / 2) => {
+      const t = new THREE.Mesh(new THREE.TorusGeometry(r, 0.12, 7, 28), accent); t.position.set(x, y, z); t.rotation.x = rx; g.add(t); return t;
+    };
+
+    switch (d.layout) {
+      case 'weir':
+        for (const x of [-8, 0, 8]) arch(x, -3, 5, 8, Math.PI / 2);
+        for (let i = 0; i < 7; i++) tower(-11 + i * 3.7, 8 + (i % 2), 3 + (i % 3), 0.32, mats().woodDark);
+        break;
+      case 'orchard':
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; tower(Math.cos(a) * 10, Math.sin(a) * 10, 7, 0.55, mats().woodDark); shard(Math.cos(a) * 10, 7.5, Math.sin(a) * 10, 0.5); }
+        break;
+      case 'aqueduct':
+        for (const x of [-7, 0, 7]) arch(x, 0, 7, 11, Math.PI / 2);
+        this._solid(g, 0, 9, -1, 4, 0.5, 28, stone);
+        break;
+      case 'cloister':
+        for (const x of [-9, 9]) for (const z of [-8, 0, 8]) tower(x, z, 7, 0.45);
+        torus(0, 7, -4, 4, 0);
+        break;
+      case 'trenches':
+        for (const x of [-9, -5, 5, 9]) { const t = tower(x, -1, 12 - Math.abs(x) * 0.4, 0.65, dark); t.rotation.z = x * 0.018; }
+        shard(0, 9, -4, 1.6);
+        break;
+      case 'ribs':
+        for (let z = -9; z <= 9; z += 4.5) arch(0, z, 18 - Math.abs(z) * 0.35, 12 - Math.abs(z) * 0.2, 0);
+        break;
+      case 'lensmaze':
+        for (const p of [[-8, 5], [8, 1], [-5, -6], [7, -9]]) { const w = this._ruinWall(g, p[0], p[1], 10, 6, p[0] > 0 ? .8 : -.8, dark); }
+        torus(0, 10, -3, 5, 0); shard(0, 9, -3, 1.3);
+        break;
+      case 'amphitheater':
+        for (let i = 0; i < 11; i++) { const a = Math.PI * (0.05 + i / 11 * .9); tower(Math.cos(a) * 12, Math.sin(a) * 9 - 3, 3 + i % 3, 0.5, dark); }
+        arch(0, -8, 13, 11);
+        break;
+      case 'causeway':
+        for (let i = 0; i < 7; i++) { const b = box(5, .55, 4, i % 2 ? stone : accent); b.position.set(Math.sin(i * 2) * 7, .15 + i * .7, 11 - i * 4); g.add(b); }
+        shard(-9, 7, -5, 1);
+        break;
+      case 'windnave':
+        for (let i = 0; i < 9; i++) tower(-8 + i * 2, -4, 5 + Math.abs(4 - i) * 1.2, .28, i % 2 ? accent : stone);
+        torus(0, 11, -5, 5, 0);
+        break;
+      case 'ossuary':
+        for (let i = 0; i < 9; i++) arch(0, 9 - i * 2.4, 11 + Math.sin(i) * 3, 8 + i * .4, 0);
+        for (const x of [-10, 10]) tower(x, -5, 13, .35, mats().bone);
+        break;
+      case 'prismtarn':
+        for (let i = 0; i < 13; i++) { const a = i * 2.399; shard(Math.cos(a) * (5 + i % 4 * 2), 1 + (i % 4), Math.sin(a) * (5 + i % 4 * 2), .45 + (i % 3) * .3); }
+        break;
+      case 'sporeorchard':
+        for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; const stem = tower(Math.cos(a) * 10, Math.sin(a) * 9, 4 + i % 3, .4, dark); const cap = new THREE.Mesh(new THREE.SphereGeometry(1.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), accent); cap.position.set(stem.position.x, stem.position.y * 2 + .2, stem.position.z); cap.scale.y = .5; g.add(cap); }
+        break;
+      case 'rootlung':
+        for (const side of [-1, 1]) { const lung = new THREE.Mesh(new THREE.SphereGeometry(5, 14, 9), accent); lung.scale.set(.7, 1.25, .55); lung.position.set(side * 4, 7, -4); g.add(lung); }
+        for (let i = 0; i < 7; i++) tower(-10 + i * 3.4, 8, 6 + i % 3, .3, mats().woodDark);
+        break;
+      case 'floodcrypt':
+        for (let i = 0; i < 8; i++) { const s = box(5, .5, 4, stone); s.position.set(Math.sin(i * 1.7) * 8, i * .55, 11 - i * 3.2); g.add(s); }
+        for (const x of [-10, 10]) arch(x, -4, 5, 8, Math.PI / 2);
+        break;
+      case 'capcathedral':
+        for (const x of [-9, -4.5, 4.5, 9]) tower(x, -1, 12 - Math.abs(x) * .3, .55, dark);
+        { const dome = new THREE.Mesh(new THREE.SphereGeometry(9, 18, 9, 0, Math.PI * 2, 0, Math.PI / 2), accent); dome.position.set(0, 8, -4); dome.scale.y = .55; g.add(dome); }
+        break;
+      case 'gravitystair':
+        for (let i = 0; i < 10; i++) { const s = box(7, .55, 3, i % 3 ? stone : accent); s.position.set((i % 2 ? 1 : -1) * (2 + i), i * .9, 10 - i * 2.5); s.rotation.z = (i % 2 ? 1 : -1) * .06; g.add(s); }
+        break;
+      case 'orrery':
+        for (let i = 0; i < 5; i++) { const o = torus(0, 8, -4, 3 + i * 1.2, i % 2 ? 0 : Math.PI / 2); o.rotation.y = i * .6; }
+        shard(0, 8, -4, 1.4);
+        break;
+      case 'archive':
+        for (const x of [-9, -3, 3, 9]) for (const z of [-8, 0, 8]) this._solid(g, x, 4 + ((x + z) & 2), z, 4.5, 8, 1.1, (x + z) % 2 ? dark : stone);
+        torus(0, 11, -4, 5, 0);
+        break;
+      case 'tribunal':
+        for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; const c = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 4.5, 8, 1, true), dark.clone()); c.material.wireframe = true; c.position.set(Math.cos(a) * 11, 6 + i % 3, Math.sin(a) * 10 - 2); g.add(c); }
+        arch(0, -7, 14, 13); torus(0, 13, -7, 6, 0);
+        break;
+    }
+    // Every expedition has one unmistakable relic-colored crown light.
+    shard(0, 8.4, 0, 0.52);
+  }
+
+  _regionalDressing(g, d) {
+    const rng = makeRng(d.x * 41 + d.z * 97 + d.id.length * 701);
+    const R = REGIONS[d.region];
+    const key = new THREE.Color(...R.key);
+    const rubbleMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(...R.terra.cliff).multiplyScalar(0.75), roughness: 0.96 });
+    // A composed reveal: low foreground fragments, a midground colonnade, and
+    // the destination silhouette. Trial sites receive more ruins; the original
+    // sites gain depth without changing their doors or routes.
+    const n = d.kind === 'trial' ? 16 : d.kind === 'major' ? 11 : 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rng() * 0.35;
+      const rr = (d.r || 16) * (0.68 + rng() * 0.34);
+      const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+      let m;
+      if (d.region === 'vale') {
+        m = cyl(0.18 + rng() * .2, .36 + rng() * .25, 2.5 + rng() * 5, 7, i % 4 ? mats().woodDark : rubbleMat);
+      } else if (d.region === 'ember') {
+        m = box(.7 + rng() * 1.4, 2 + rng() * 5, .5 + rng(), i % 3 ? rubbleMat : mats().iron);
+      } else if (d.region === 'frost') {
+        m = new THREE.Mesh(new THREE.OctahedronGeometry(.5 + rng() * .7, 0), i % 3 ? rubbleMat : mats().crystal);
+        m.scale.set(.55, 1.8 + rng() * 1.8, .55);
+      } else if (d.region === 'mycel') {
+        m = new THREE.Mesh(new THREE.SphereGeometry(.7 + rng(), 9, 6, 0, Math.PI * 2, 0, Math.PI / 2), i % 3 ? rubbleMat : mats().crystal);
+        m.scale.y = .45; m.position.y = 1.1 + rng() * 2.8;
+      } else {
+        m = box(.5 + rng() * 1.8, .2 + rng() * .45, 1.2 + rng() * 2.5, i % 3 ? rubbleMat : mats().iron);
+        m.position.y = 2 + rng() * 6; m.rotation.set(rng(), rng(), rng());
+      }
+      m.position.x = x; m.position.z = z;
+      if (m.position.y === 0) m.position.y = 1 + rng() * 2;
+      m.rotation.y += a + rng();
+      m.castShadow = true; g.add(m);
+    }
+    // A restrained luminous lintel ties the richer ruin kit back to Skyshard's
+    // existing beacon language.
+    const crown = new THREE.Mesh(new THREE.TorusGeometry(d.kind === 'trial' ? 2.4 : 1.45, .055, 6, 24),
+      new THREE.MeshBasicMaterial({ color: key, transparent: true, opacity: .46, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    crown.position.set(0, d.kind === 'trial' ? 9.6 : 6.8, -2); crown.rotation.x = Math.PI / 2; g.add(crown);
+  }
+
   // Floating isles over the Shatter — a playground for grapple/wings, each
   // crowned with breakable crystals worth the climb.
   _floatingIsles() {
@@ -165,12 +320,47 @@ export class Destinations {
     g.position.set(SPIRE.x, SPIRE.y, SPIRE.z);
     this.scene.add(g);
     const m = mats();
-    const spireMat = new THREE.MeshStandardMaterial({ color: 0x9aa8c8, emissive: 0x3355aa, emissiveIntensity: 0.25, roughness: 0.4, flatShading: true });
+    const spireTex = canvasTex('stormglass-spire', 256, (paint, size) => {
+      paint.fillStyle = '#aebfe7'; paint.fillRect(0, 0, size, size);
+      const texRng = makeRng(60417);
+      for (let i = 0; i < 520; i++) {
+        const x = texRng() * size, y = texRng() * size;
+        const w = 3 + texRng() * 18, h = 5 + texRng() * 34;
+        const blue = 125 + (texRng() * 72 | 0);
+        paint.fillStyle = `rgba(${blue - 35},${blue - 12},${blue + 38},${.08 + texRng() * .22})`;
+        paint.beginPath();
+        paint.moveTo(x, y - h); paint.lineTo(x + w, y); paint.lineTo(x - w * .45, y + h * .42);
+        paint.closePath(); paint.fill();
+      }
+      paint.strokeStyle = 'rgba(32,72,168,.28)'; paint.lineWidth = 1;
+      for (let i = 0; i < 34; i++) {
+        const x = texRng() * size;
+        paint.beginPath(); paint.moveTo(x, 0); paint.lineTo(x + (texRng() - .5) * 24, size); paint.stroke();
+      }
+    });
+    spireTex.repeat.set(1.25, 4);
+    const spireBump = spireTex.clone();
+    spireBump.colorSpace = THREE.NoColorSpace;
+    spireBump.needsUpdate = true;
+    const spireMat = new THREE.MeshStandardMaterial({
+      color: 0x3156b8, map: spireTex, bumpMap: spireBump, bumpScale: .08,
+      emissive: 0x103b98, emissiveMap: spireTex, emissiveIntensity: .22,
+      roughness: .42, metalness: .14, flatShading: true,
+    });
     const body = cyl(1.2, 3.4, 26, 6, spireMat);
     body.position.y = 13;
     const tip = cone(1.2, 5, 6, spireMat);
     tip.position.y = 28.5;
     g.add(body, tip);
+    const edgeMat = new THREE.LineBasicMaterial({
+      color: 0x75b9ff, transparent: true, opacity: .24,
+      blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+    });
+    const bodyEdges = new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry, 18), edgeMat);
+    bodyEdges.position.copy(body.position);
+    const tipEdges = new THREE.LineSegments(new THREE.EdgesGeometry(tip.geometry, 18), edgeMat);
+    tipEdges.position.copy(tip.position);
+    g.add(bodyEdges, tipEdges);
     this.collide.addCircle(SPIRE.x, SPIRE.z, 3.4, SPIRE.y, SPIRE.y + 26);
     // orbiting shards
     this.spireShards = [];
@@ -512,9 +702,14 @@ export class Destinations {
     for (const b of this.beacons) {
       const done = b.dest.kind === 'major'
         ? G.save.bossesDown[b.dest.boss]
-        : (b.dest.enter ? G.save.entered[b.dest.id] : G.save.found['shard-' + b.dest.id]);
-      b.mesh.visible = !done;
-      if (b.mesh.visible) b.mesh.material.opacity = 0.1 + Math.sin(t * 1.3 + b.dest.x) * 0.05 + 0.06;
+        : b.dest.kind === 'trial'
+          ? G.save.trialsDown?.[b.dest.id]
+          : (b.dest.enter ? G.save.entered[b.dest.id] : G.save.found['shard-' + b.dest.id]);
+      const remembered = done && b.dest.kind === 'trial' && hasSkill('ruin-memory');
+      b.mesh.visible = !done || remembered;
+      if (b.mesh.visible) b.mesh.material.opacity = remembered
+        ? 0.028 + Math.sin(t * .7 + b.dest.x) * .012
+        : 0.1 + Math.sin(t * 1.3 + b.dest.x) * 0.05 + 0.06;
     }
 
     // door veils pulse; return a dest if the player walks through

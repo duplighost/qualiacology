@@ -22,6 +22,7 @@ const REGION_MUSIC = {
   frost:   { root: 62, scale: 'aeolian',  walk: [0, 5, 3, 4], padType: 'sine',     padCut: 1400, sparkle: 0.42, sparkleOct: 2, bright: 1.2 },
   mycel:   { root: 52, scale: 'dorian',   walk: [0, 2, 5, 3], padType: 'triangle', padCut: 640,  sparkle: 0.34, sparkleOct: 1, bright: 0.8 },
   shatter: { root: 55, scale: 'aeolian',  walk: [0, 4, 5, 2], padType: 'sawtooth', padCut: 760,  sparkle: 0.26, sparkleOct: 2, bright: 0.9 },
+  cloud:   { root: 60, scale: 'lydian',   walk: [0, 4, 2, 5], padType: 'sine',     padCut: 1700, sparkle: 0.62, sparkleOct: 3, bright: 1.35 },
   boss:    { root: 48, scale: 'phrygian', walk: [0, 1, 3, 1], padType: 'sawtooth', padCut: 480,  sparkle: 0.1,  sparkleOct: 1, bright: 0.6 },
 };
 
