@@ -28,6 +28,8 @@
 # --- Rocket Shoes ---
 /rocket-shoes.html  /rocket-shoes/            301!
 /rocketshoes        /rocket-shoes/            302
+/lbb                /lil-big-bang/            302
+/bang               /lil-big-bang/            302
 /rockets            /rocket-shoes/            302
 /moon-boots         /rocket-shoes/            302
 
