@@ -55,7 +55,7 @@ export const TRIAL_DESTS = [
     path: [[0, 48], [16, 34], [16, 4], [-16, 4], [-16, -24], [0, -47]] }),
 
   // Ember Flats — industrial scars, glass optics, rib kilns, and spectacle.
-  make({ id: 'cruciblescar', region: 'ember', x: -220, z: 390, y: 4.6, name: 'Crucible Scar', layout: 'trenches',
+  make({ id: 'cruciblescar', region: 'ember', x: -340, z: 440, y: 4.6, name: 'Crucible Scar', layout: 'trenches',
     boss: 'mother-clinker', bossName: 'MOTHER CLINKER', bossShape: 'clinker', hp: 66, fly: 0, radius: 2.0, speed: 2.1, arenaR: 9, minion: 'hound', relic: RELICS.cinderstep,
     path: [[0, 48], [-16, 29], [9, 13], [-9, -8], [13, -28], [0, -47]] }),
   make({ id: 'furnaceribs', region: 'ember', x: -430, z: 330, y: 6.2, name: 'Furnace Ribs', layout: 'ribs',
@@ -115,3 +115,18 @@ export const TRIAL_BY_ID = Object.fromEntries(TRIAL_DESTS.map((d) => [d.id, d]))
 export const TRIAL_BOSS_BY_ID = Object.fromEntries(TRIAL_DESTS.map((d) => [d.boss, d]));
 export const RELIC_BY_ID = Object.fromEntries(TRIAL_DESTS.map((d) => [d.relic.id, d.relic]));
 
+// Boss victory and reward claim are deliberately separate states. A cleared
+// trial must not resurrect its boss, but it is not complete until its relic is
+// safely in the save. These helpers keep every wayfinding and re-entry system
+// on that same contract.
+export function isTrialCleared(saveState, dest) {
+  return !!(dest?.kind === 'trial' && saveState?.trialsDown?.[dest.id]);
+}
+
+export function isTrialComplete(saveState, dest) {
+  return !!(dest?.kind === 'trial' && saveState?.relics?.[dest.relic?.id]);
+}
+
+export function isTrialRewardPending(saveState, dest) {
+  return isTrialCleared(saveState, dest) && !isTrialComplete(saveState, dest);
+}

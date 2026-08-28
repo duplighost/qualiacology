@@ -15,6 +15,7 @@ import { save } from '../core/save.js';
 import { makeRng } from '../core/rng.js';
 import { hasSkill } from '../progression/constellation.js';
 import { worldSurface } from './materials.js';
+import { isTrialComplete } from './trialdata.js';
 
 const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
 const cyl = (r0, r1, h, seg, mat) => new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg), mat);
@@ -703,7 +704,7 @@ export class Destinations {
       const done = b.dest.kind === 'major'
         ? G.save.bossesDown[b.dest.boss]
         : b.dest.kind === 'trial'
-          ? G.save.trialsDown?.[b.dest.id]
+          ? isTrialComplete(G.save, b.dest)
           : (b.dest.enter ? G.save.entered[b.dest.id] : G.save.found['shard-' + b.dest.id]);
       const remembered = done && b.dest.kind === 'trial' && hasSkill('ruin-memory');
       b.mesh.visible = !done || remembered;

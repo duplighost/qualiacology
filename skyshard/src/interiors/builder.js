@@ -12,6 +12,7 @@ import { REGIONS } from '../world/regions.js';
 import { INTERIORS } from './defs.js';
 import { makeTrialDef } from './trials.js';
 import { makeFinalDef } from './finalrealm.js';
+import { isTrialCleared, isTrialRewardPending } from '../world/trialdata.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
 import { save } from '../core/save.js';
@@ -206,13 +207,17 @@ export class InteriorManager {
     // A cleared expedition remains an explorable place. Its battle seals stay
     // open and its boss never resurrects, while all geometry and atmosphere
     // remain available for free-roam revisits.
-    if (dest.kind === 'trial' && G.save.trialsDown?.[dest.id]) {
+    if (isTrialCleared(G.save, dest)) {
       for (const encounter of ctx.encounters || []) {
         encounter.cleared = true;
         encounter.spawned = true;
         encounter.gate.visible = false;
         encounter.collider.dead = true;
       }
+      // A boss victory is saved immediately so it cannot be farmed. If play
+      // stopped before the relic was touched, reconstruct that exact reward
+      // here so refresh, death, or walking out can never strand it.
+      if (isTrialRewardPending(G.save, dest)) this._spawnRewardPedestal(this.active);
     }
     if (dest.kind === 'final' && G.save.finalDefeated) {
       for (const encounter of ctx.encounters || []) {
@@ -405,6 +410,11 @@ export class InteriorManager {
     if (!a) return;
     a.bossLock = false;
     a.boss = null;
+    this._spawnRewardPedestal(a);
+  }
+
+  _spawnRewardPedestal(a) {
+    if (!a || a.rewardPedestal) return;
     // the reward crystal rises where the boss stood
     const at = a.def.bossAt || { x: 0, z: -6 };
     const trialColor = a.dest.kind === 'trial' ? new THREE.Color(...a.dest.relic.color) : new THREE.Color(0xffe8a0);
@@ -415,7 +425,9 @@ export class InteriorManager {
     mesh.position.set(at.x, 1.6, at.z);
     a.scene.add(mesh);
     a.rewardPedestal = { x: at.x, z: at.z, y: 1.6, mesh };
+    setGlowCtx('interior');
     addGlow(at.x, 2, at.z, a.dest.kind === 'trial' ? a.dest.relic.color : [1, 0.8, 0.4], 2.2);
+    setGlowCtx('world');
   }
 
   onFinalDown() {
