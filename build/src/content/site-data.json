@@ -356,6 +356,19 @@
       "metaDescription": "RAIN ANIMAL is a continuous six-zone browser bullet hell across and through a continent-sized organism that manufactures weather.",
       "controls": "WASD or arrows move · Space or Z focuses · automatic fire · pointer, touch, and gamepad supported",
       "actionLabel": "Launch from the Low Tide"
+    },
+    {
+      "slug": "the-last-room",
+      "title": "THE LAST ROOM",
+      "descriptor": "An endless house",
+      "group": "horror",
+      "featured": false,
+      "image": "/assets/games/the-last-room-card-clean.webp",
+      "alt": "A brass telescope and armillary rings beneath green-gold observatory coils, overlooking a dark indoor pool in an impossible haunted mansion",
+      "summary": "An endless first-person haunted mansion. Every room has something to touch, carry, throw, burn, solve, or open. The house remembers what you touch.",
+      "metaDescription": "An endless first-person haunted mansion.",
+      "controls": "WASD + mouse · E interact or drop · F throw · Shift run · Space jump · C crouch",
+      "actionLabel": "Enter the house"
     }
   ],
   "albums": [

@@ -276,7 +276,7 @@ const Audio2 = (() => {
   }
   function duckMusic(sec) {
     if (!ctx) return;
-    const t = 0;   // t is now a relative delay
+    const t = ctx.currentTime;
     musicBus.gain.cancelScheduledValues(t);
     musicBus.gain.setValueAtTime(0.12, t);
     musicBus.gain.linearRampToValueAtTime(0.5, t + sec);
@@ -568,7 +568,6 @@ const Shell = (() => {
     while (acc >= CFG.STEP && steps < CFG.MAX_STEPS) { update(CFG.STEP); acc -= CFG.STEP; steps++; }
     if (steps === CFG.MAX_STEPS) acc = 0;              // drop the rest (shell owns the clock)
     render();
-    Input.endFrame();
   }
   function update(dt) {
     stateT += dt;
@@ -661,6 +660,9 @@ const Shell = (() => {
         break;
       }
     }
+    // Edge input belongs to one simulation step. Keep it queued across RAFs
+    // that render without updating, then consume it before any catch-up step.
+    Input.endFrame();
   }
   function advance(isBoss) {
     run.gameNum++;

@@ -90,7 +90,7 @@ own notes or memory. Last verified: 2026-08-27.
   rebuilds the hubs, validates the public tree, runs strict route smoke, and
   rejects stale generated pages. It must never commit or push generated files.
 
-Current verified baseline: **24 games, 12 music releases, 45 reachable public
+Current verified baseline: **27 games, 12 music releases, 48 reachable public
 routes + 35 asserted 404s.** Pocket Sun is hosted locally in this repository;
 it is not a redirect to a separate Netlify project.
 
@@ -289,7 +289,7 @@ in this redesign were invisible locally and obvious on the preview.
    items telling you how to play a thing you had not chosen yet, about 59px per
    card of post-decision information in the pre-decision slot. Putting it back
    would also re-falsify the `/games/` intro, whose clause naming controls was
-   deleted in the same change. `duration` DOES still render (3 of 24 games have
+   deleted in the same change. `duration` DOES still render (3 of 27 games have
    one) and is the only thing in `.card-meta` now. `featured: true` only by swapping — exactly 3
    games are featured (grid is 3 columns, so keep it a multiple of 3), and
    which ones is Alex's call. Featured order = games array order. Albums are
