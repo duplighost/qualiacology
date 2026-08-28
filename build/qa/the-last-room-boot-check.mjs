@@ -125,7 +125,9 @@ const storageContext = await browser.newContext({ viewport: { width: 960, height
 const storagePage = await storageContext.newPage();
 storagePage.on("pageerror", (error) => errors.push(`storage pageerror: ${error?.message || error}`));
 storagePage.on("console", (message) => {
-  if (message.type() === "error" && !/favicon/i.test(message.text())) errors.push(`storage console: ${message.text()}`);
+  const text = message.text();
+  const intentionalStorageProbe = text === "SecurityError: Storage disabled for hosted-path check";
+  if (message.type() === "error" && !/favicon/i.test(text) && !intentionalStorageProbe) errors.push(`storage console: ${text}`);
 });
 storagePage.on("requestfailed", (request) => errors.push(`storage requestfailed: ${request.url()} (${request.failure()?.errorText || "unknown"})`));
 await storagePage.addInitScript(() => {
