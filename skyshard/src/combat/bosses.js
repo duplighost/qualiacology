@@ -11,10 +11,240 @@ import { juice } from '../fx/juice.js';
 import { music } from '../core/music.js';
 import { save } from '../core/save.js';
 import { clamp, clamp01, damp } from '../core/math.js';
+import { TRIAL_BOSS_BY_ID } from '../world/trialdata.js';
 
 const glowMat = (color) => new THREE.MeshBasicMaterial({ color, fog: false });
 const bMat = (color, emissive, ei = 0.5) =>
-  new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: ei, roughness: 0.85, flatShading: true });
+  new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: ei, roughness: 0.72, metalness: 0.08 });
+
+// The optional ruin bosses use twenty named silhouettes built from one bounded
+// material family. Their attack chassis is shared with the guardians, but the
+// visual reads, movement values, attack bags, arenas, names, and rewards are
+// destination-specific.
+function buildTrialBoss(spec) {
+  const g = new THREE.Group();
+  const col = new THREE.Color(...spec.relic.color);
+  const glowHex = col.getHex();
+  const dark = col.clone().multiplyScalar(0.16).getHex();
+  const mid = col.clone().multiplyScalar(0.46).getHex();
+  const armor = bMat(mid, glowHex, 0.36);
+  const black = bMat(dark, glowHex, 0.12);
+  const hot = bMat(col.clone().lerp(new THREE.Color(0xffffff), 0.28).getHex(), glowHex, 1.0);
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 2), glowMat(col.clone().lerp(new THREE.Color(0xffffff), 0.45)));
+  core.position.set(0, spec.fly ? 0 : 1.7, 0.72);
+  const orbit = new THREE.Group();
+
+  const part = (geo, mat, x, y, z, sx = 1, sy = 1, sz = 1) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z); m.scale.set(sx, sy, sz);
+    g.add(m); return m;
+  };
+  const spike = (x, y, z, s = 1, rx = 0, rz = 0) => {
+    const p = part(new THREE.ConeGeometry(0.13 * s, 1.2 * s, 6), hot, x, y, z);
+    p.rotation.x = rx; p.rotation.z = rz; return p;
+  };
+
+  switch (spec.bossShape) {
+    case 'antler': {
+      const body = part(new THREE.DodecahedronGeometry(1.25, 1), armor, 0, 1.3, 0, 1.1, 1.35, 0.85);
+      for (const side of [-1, 1]) for (let i = 0; i < 4; i++) {
+        const branch = part(new THREE.CylinderGeometry(0.08, 0.16, 1.8 + i * 0.25, 7), black, side * (0.65 + i * 0.28), 2.5 + i * 0.42, -0.15);
+        branch.rotation.z = side * (0.35 + i * 0.09);
+      }
+      g.userData.breathePart = body;
+      break;
+    }
+    case 'jaw': {
+      const skull = part(new THREE.SphereGeometry(1.35, 14, 9), armor, 0, 1.45, 0, 1.15, 0.75, 1.0);
+      const jaw = part(new THREE.BoxGeometry(2.25, 0.38, 1.25), black, 0, 0.72, 0.35);
+      for (let i = 0; i < 8; i++) spike(-0.85 + i * 0.24, 1.0, 0.95, 0.55, Math.PI, 0);
+      g.userData.breathePart = skull; g.userData.spinPart = jaw;
+      break;
+    }
+    case 'bell': {
+      const bell = part(new THREE.ConeGeometry(1.5, 2.6, 16, 1, true), armor, 0, 0.3, 0);
+      bell.rotation.x = Math.PI;
+      const lip = part(new THREE.TorusGeometry(1.45, 0.14, 8, 28), hot, 0, -0.95, 0);
+      lip.rotation.x = Math.PI / 2;
+      part(new THREE.SphereGeometry(0.34, 10, 8), black, 0, -1.05, 0);
+      g.userData.spinPart = lip; g.userData.breathePart = bell;
+      break;
+    }
+    case 'hart': {
+      const chest = part(new THREE.CapsuleGeometry(0.72, 1.55, 6, 12), armor, 0, 0.5, 0);
+      chest.rotation.z = Math.PI / 2;
+      for (const side of [-1, 1]) {
+        const horn = part(new THREE.TorusGeometry(1.25, 0.1, 7, 18, Math.PI * 1.2), hot, side * 0.72, 1.35, -0.2);
+        horn.rotation.y = side * 0.55; horn.rotation.z = side * 0.45;
+      }
+      g.userData.breathePart = chest;
+      break;
+    }
+    case 'clinker': {
+      const furnace = part(new THREE.DodecahedronGeometry(1.5, 1), black, 0, 1.45, 0, 1.2, 1.35, 0.9);
+      for (let i = 0; i < 10; i++) {
+        const a = i / 10 * Math.PI * 2;
+        part(new THREE.BoxGeometry(0.8, 0.22, 1.2), armor, Math.cos(a) * 1.45, 1.5 + Math.sin(i * 2) * 0.6, Math.sin(a) * 1.1).rotation.y = -a;
+      }
+      g.userData.breathePart = furnace;
+      break;
+    }
+    case 'halo': {
+      const saint = part(new THREE.CylinderGeometry(0.72, 1.15, 3.2, 10), black, 0, 0.35, 0);
+      for (let i = 0; i < 3; i++) {
+        const h = new THREE.Mesh(new THREE.TorusGeometry(1.25 + i * 0.4, 0.08, 6, 28), i === 1 ? hot : armor);
+        h.rotation.set(i * 0.55, i * 0.8, 0); orbit.add(h);
+      }
+      orbit.position.y = 1.2; g.add(orbit); g.userData.spinPart = orbit; g.userData.breathePart = saint;
+      break;
+    }
+    case 'widow': {
+      const abdomen = part(new THREE.IcosahedronGeometry(1.15, 1), armor, 0, 0.5, -0.2, 1.1, 0.8, 1.35);
+      for (let i = 0; i < 8; i++) {
+        const a = i / 8 * Math.PI * 2;
+        const leg = part(new THREE.BoxGeometry(0.13, 0.13, 2.7), black, Math.cos(a) * 1.2, 0.1 + Math.sin(i) * 0.3, Math.sin(a) * 1.2);
+        leg.rotation.y = -a; leg.rotation.z = (i % 2 ? 1 : -1) * 0.28;
+      }
+      ringPart(orbit, 1.6, hot); orbit.rotation.x = Math.PI / 2; g.add(orbit); g.userData.spinPart = orbit; g.userData.breathePart = abdomen;
+      break;
+    }
+    case 'crown': {
+      const throne = part(new THREE.BoxGeometry(2.25, 2.5, 1.35), black, 0, 1.3, 0);
+      for (let i = 0; i < 11; i++) spike(-1.15 + i * 0.23, 3.0 + Math.sin(i * 1.7) * 0.35, 0, 0.9 + (i % 3) * 0.35, 0, (i - 5) * 0.04);
+      g.userData.breathePart = throne;
+      break;
+    }
+    case 'whale': {
+      const body = part(new THREE.CapsuleGeometry(0.85, 2.7, 7, 14), armor, 0, 0, 0);
+      body.rotation.z = Math.PI / 2;
+      for (const side of [-1, 1]) {
+        const fin = part(new THREE.ConeGeometry(0.55, 1.8, 4), hot, side * 0.7, -0.1, 0);
+        fin.rotation.z = side * 1.2;
+      }
+      part(new THREE.ConeGeometry(0.9, 1.5, 4), black, -2.15, 0, 0).rotation.z = Math.PI / 2;
+      g.userData.breathePart = body;
+      break;
+    }
+    case 'organ': {
+      const pipes = new THREE.Group();
+      for (let i = 0; i < 9; i++) {
+        const h = 1.8 + (4 - Math.abs(4 - i)) * 0.55;
+        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.26, h, 8), i % 2 ? armor : hot);
+        p.position.set((i - 4) * 0.38, h / 2 - 1.1, 0); pipes.add(p);
+      }
+      g.add(pipes); ringPart(orbit, 1.65, hot); orbit.rotation.x = Math.PI / 2; g.add(orbit);
+      g.userData.spinPart = orbit; g.userData.breathePart = pipes;
+      break;
+    }
+    case 'bonewheel': {
+      const wheel = new THREE.Group();
+      ringPart(wheel, 1.75, armor);
+      for (let i = 0; i < 12; i++) {
+        const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.11, 3.4, 6), i % 3 ? black : hot);
+        spoke.rotation.z = i / 12 * Math.PI * 2; wheel.add(spoke);
+      }
+      g.add(wheel); g.userData.spinPart = wheel;
+      break;
+    }
+    case 'prism': {
+      const prism = part(new THREE.OctahedronGeometry(1.4, 0), hot, 0, 0.2, 0, 0.8, 1.45, 0.8);
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2;
+        const s = new THREE.Mesh(new THREE.TetrahedronGeometry(0.6), armor);
+        s.position.set(Math.cos(a) * 1.8, Math.sin(a * 2) * 0.6, Math.sin(a) * 1.8); orbit.add(s);
+      }
+      g.add(orbit); g.userData.spinPart = orbit; g.userData.breathePart = prism;
+      break;
+    }
+    case 'fruit': {
+      const mass = new THREE.Group();
+      for (let i = 0; i < 9; i++) {
+        const a = i * 2.399, r = i ? 1.0 : 0;
+        const f = new THREE.Mesh(new THREE.SphereGeometry(0.72 + (i % 3) * 0.12, 10, 7), i % 2 ? armor : hot);
+        f.position.set(Math.cos(a) * r, Math.sin(i * 1.8) * 0.55, Math.sin(a) * r); mass.add(f);
+      }
+      g.add(mass); g.userData.breathePart = mass;
+      break;
+    }
+    case 'lungs': {
+      const lungs = new THREE.Group();
+      for (const side of [-1, 1]) {
+        const l = new THREE.Mesh(new THREE.SphereGeometry(1.05, 12, 9), armor);
+        l.position.x = side * 0.82; l.scale.set(0.8, 1.35, 0.65); lungs.add(l);
+      }
+      part(new THREE.CylinderGeometry(0.16, 0.28, 3.3, 8), hot, 0, 0.65, 0);
+      g.add(lungs); g.userData.breathePart = lungs;
+      break;
+    }
+    case 'jelly': {
+      const dome = part(new THREE.SphereGeometry(1.45, 14, 9, 0, Math.PI * 2, 0, Math.PI / 2), armor, 0, 0.35, 0);
+      for (let i = 0; i < 9; i++) {
+        const a = i / 9 * Math.PI * 2;
+        const t = part(new THREE.CylinderGeometry(0.06, 0.14, 2.2 + (i % 3) * 0.4, 6), i % 2 ? hot : black, Math.cos(a) * 0.9, -1.1, Math.sin(a) * 0.9);
+        t.rotation.z = Math.sin(a) * 0.28;
+      }
+      g.userData.breathePart = dome;
+      break;
+    }
+    case 'bishop': {
+      const robe = part(new THREE.ConeGeometry(1.35, 3.5, 12), black, 0, -0.3, 0);
+      const mitre = part(new THREE.ConeGeometry(1.15, 1.8, 5), armor, 0, 1.95, 0);
+      for (const x of [-0.7, 0, 0.7]) spike(x, 2.9 + Math.abs(x) * 0.3, 0, 0.8);
+      g.userData.breathePart = robe; g.userData.spinPart = mitre;
+      break;
+    }
+    case 'pendulum': {
+      const frame = new THREE.Group(); ringPart(frame, 1.85, armor); frame.rotation.x = Math.PI / 2;
+      const line = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 2.8, 6), hot); line.position.y = -1.2; frame.add(line);
+      const weight = new THREE.Mesh(new THREE.OctahedronGeometry(0.68), black); weight.position.y = -2.7; frame.add(weight);
+      g.add(frame); g.userData.spinPart = frame; g.userData.breathePart = weight;
+      break;
+    }
+    case 'orrery': {
+      const engine = part(new THREE.IcosahedronGeometry(0.9, 2), hot, 0, 0, 0);
+      for (let i = 0; i < 4; i++) {
+        const rr = new THREE.Mesh(new THREE.TorusGeometry(1.2 + i * 0.42, 0.07, 6, 30), i % 2 ? armor : black);
+        rr.rotation.set(i * 0.55, i * 0.8, i * 0.25); orbit.add(rr);
+        const moon = new THREE.Mesh(new THREE.SphereGeometry(0.17 + i * 0.05, 8, 6), hot);
+        moon.position.set(1.2 + i * 0.42, 0, 0); rr.add(moon);
+      }
+      g.add(orbit); g.userData.spinPart = orbit; g.userData.breathePart = engine;
+      break;
+    }
+    case 'pages': {
+      const spine = part(new THREE.BoxGeometry(0.5, 2.8, 0.7), black, 0, 0, 0);
+      const pages = new THREE.Group();
+      for (const side of [-1, 1]) for (let i = 0; i < 7; i++) {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(1.15 + i * 0.12, 0.55, 0.08), i % 2 ? armor : hot);
+        p.position.set(side * (0.6 + i * 0.24), 1.35 - i * 0.42, 0); p.rotation.z = side * (0.45 + i * 0.04); pages.add(p);
+      }
+      g.add(pages); g.userData.spinPart = pages; g.userData.breathePart = spine;
+      break;
+    }
+    case 'bailiff': {
+      const body = part(new THREE.BoxGeometry(2.4, 3.1, 1.4), black, 0, 0.8, 0);
+      const head = part(new THREE.DodecahedronGeometry(0.62, 0), hot, 0, 2.75, 0);
+      const gavel = part(new THREE.BoxGeometry(0.65, 3.8, 0.65), armor, 1.9, 0.8, 0);
+      gavel.rotation.z = -0.65;
+      part(new THREE.BoxGeometry(1.8, 0.75, 0.85), hot, 2.85, 2.25, 0).rotation.z = -0.65;
+      g.userData.breathePart = body; g.userData.spinPart = head;
+      break;
+    }
+    default:
+      part(new THREE.DodecahedronGeometry(1.4, 1), armor, 0, 0.4, 0);
+  }
+
+  g.add(core);
+  g.userData.coreMesh = core;
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+
+function ringPart(group, radius, material) {
+  const r = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.09, 7, 30), material);
+  group.add(r);
+  return r;
+}
 
 const BOSS_DEFS = {
   millwright: {
@@ -127,6 +357,22 @@ const BOSS_DEFS = {
     },
   },
 };
+
+for (const [key, spec] of Object.entries(TRIAL_BOSS_BY_ID)) {
+  BOSS_DEFS[key] = {
+    name: spec.bossName,
+    hp: spec.hp,
+    fly: spec.fly,
+    radius: spec.radius,
+    speed: spec.speed,
+    color: spec.relic.color,
+    minion: spec.minion,
+    arenaR: spec.arenaR,
+    attacks: spec.attacks,
+    teleports: !!spec.teleports,
+    build: () => buildTrialBoss(spec),
+  };
+}
 
 const PHASE_THRESHOLDS = [0.66, 0.33];
 
@@ -243,7 +489,9 @@ class Boss {
 
   _die() {
     this.dead = true;
-    G.save.bossesDown[this.key] = true;
+    const isTrial = this.interior?.dest?.kind === 'trial';
+    if (isTrial) G.save.trialsDown[this.interior.dest.id] = true;
+    else G.save.bossesDown[this.key] = true;
     save();
     juice.slowmo('bossDeath');
     juice.shake(1.2);
@@ -256,6 +504,9 @@ class Boss {
     const floor = 0;
     G.particles?.debris(this.pos.x, this.pos.y + 1, this.pos.z, 30, this.def.color, { floorY: floor, power: 1.6, sizeMult: 1.6 });
     G.particles?.burst('soul', this.pos.x, this.pos.y + 1, this.pos.z, 24, { color: this.def.color, sizeMult: 1.5 });
+    // Trial bosses fund the optional constellation without replacing their
+    // relic ceremony. Guardian rewards remain exactly what they were.
+    if (isTrial) G.motes?.spawn('soul', this.pos.x, this.pos.y + 1, this.pos.z, 12);
     G.motes?.spawn('health', this.pos.x, this.pos.y + 1, this.pos.z, 3);
     G.enemies.killAll('interior');   // adds dissolve with their master
     this.mesh.visible = false;
@@ -554,3 +805,5 @@ export function spawnBoss(key, interior) {
   G.boss = boss;
   return boss;
 }
+
+export { BOSS_DEFS };

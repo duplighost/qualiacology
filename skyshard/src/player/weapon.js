@@ -24,7 +24,7 @@ const _tmp = new THREE.Vector3();
 // slight self-glow so the gun reads in dusk regions instead of silhouetting
 const vmMat = (color, emissive, ei = 0.5) =>
   new THREE.MeshStandardMaterial({
-    color, roughness: 0.55, metalness: 0.25,
+    color, roughness: 0.34, metalness: 0.52,
     emissive: emissive ?? color, emissiveIntensity: emissive ? ei : 0.22,
   });
 
@@ -41,24 +41,45 @@ export class Weapon {
 
     // ---- viewmodel ----
     this.rig = new THREE.Group();
-    this.rig.position.set(0.24, -0.22, -0.48);
+    this.rig.position.set(0.29, -0.25, -0.53);
+    this.rig.scale.setScalar(.86);
     camera.add(this.rig);
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.34), vmMat(0x55617a));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.115, 0.13, 0.36), vmMat(0x36445f));
     body.position.z = -0.05;
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.035, 0.3, 8), vmMat(0x6b7890));
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.033, 0.041, 0.32, 12), vmMat(0x586987));
     barrel.rotation.x = Math.PI / 2;
     barrel.position.set(0, 0.02, -0.28);
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.08), vmMat(0x3c4356));
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.17, 0.09), vmMat(0x252d40));
     this.skinMats = { body: body.material, barrel: barrel.material, grip: grip.material };
     this.tracerColor = 0xaee6ff;
     grip.position.set(0, -0.12, 0.06);
-    this.coreGlow = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6),
+    this.coreGlow = new THREE.Mesh(new THREE.SphereGeometry(0.041, 12, 8),
       new THREE.MeshBasicMaterial({ color: 0x86d8ff, fog: false }));
     this.coreGlow.position.set(0, 0.045, -0.12);
+    const coreShell = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.008, 6, 18), barrel.material);
+    coreShell.position.copy(this.coreGlow.position);
+    coreShell.rotation.x = Math.PI / 2;
+    const muzzleCollar = new THREE.Mesh(new THREE.CylinderGeometry(.052, .052, .055, 12), barrel.material);
+    muzzleCollar.rotation.x = Math.PI / 2;
+    muzzleCollar.position.set(0, .02, -.42);
+    const rearCap = new THREE.Mesh(new THREE.BoxGeometry(.13, .095, .075), body.material);
+    rearCap.position.set(0, -.005, .16);
+    rearCap.rotation.x = -.12;
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(.008, .072, .22), barrel.material);
+    panel.position.set(-.061, .0, -.06);
+    const accentMat = new THREE.MeshBasicMaterial({ color: 0x86d8ff, fog: false, toneMapped: false });
+    this.accentMats = [accentMat];
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(.012, .012, .25), accentMat);
+    rail.position.set(.059, .056, -.075);
+    this.relicBand = new THREE.Mesh(new THREE.TorusGeometry(0.058, 0.006, 6, 20),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.82, fog: false }));
+    this.relicBand.position.set(0, 0.045, -0.12);
+    this.relicBand.rotation.x = Math.PI / 2;
+    this.relicBand.visible = false;
     this.muzzle = new THREE.Object3D();
     this.muzzle.position.set(0, 0.02, -0.44);
-    this.rig.add(body, barrel, grip, this.coreGlow, this.muzzle);
+    this.rig.add(body, barrel, grip, rearCap, panel, muzzleCollar, coreShell, rail, this.coreGlow, this.relicBand, this.muzzle);
 
     // evolution addons appear as bosses fall
     this.addons = {
@@ -102,8 +123,20 @@ export class Weapon {
     this.skinMats.grip.color.setHex(sk.grip);
     this.skinMats.grip.emissive.setHex(sk.grip);
     this.coreGlow.material.color.setHex(sk.glow);
-    this.tracerColor = sk.tracer;
+    for (const mat of this.accentMats) mat.color.setHex(sk.glow);
+    this.baseTracerColor = sk.tracer;
+    this.tracerColor = this.relic?.effect === 'weapon' ? new THREE.Color(...this.relic.color).getHex() : sk.tracer;
     this.skinKey = key;
+  }
+
+  setRelicAccent(relic) {
+    this.relic = relic || null;
+    this.relicBand.visible = !!relic;
+    if (relic) this.relicBand.material.color.setRGB(...relic.color);
+    this.tracerColor = relic?.effect === 'weapon'
+      ? new THREE.Color(...relic.color).getHex()
+      : (this.baseTracerColor ?? this.tracerColor);
+    for (const t of this.tracers?.items || []) t.mesh.material.color.setHex(this.tracerColor);
   }
 
   cycleSkin() {
@@ -350,6 +383,10 @@ export class Weapon {
     // charge glow
     const chargeFrac = clamp01(this.charging / W.lance.chargeTime);
     this.coreGlow.scale.setScalar(1 + chargeFrac * 1.6 + Math.sin(performance.now() / 90) * 0.06);
+    if (this.relicBand.visible) {
+      this.relicBand.rotation.z += rawDt * 1.5;
+      this.relicBand.scale.setScalar(1 + Math.sin(performance.now() / 240) * 0.12);
+    }
 
     this.tracers.update((t) => {
       t.life -= rawDt;

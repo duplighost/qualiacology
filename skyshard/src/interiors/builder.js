@@ -10,10 +10,13 @@ import { ColliderField } from '../world/collision.js';
 import { mats, place, canvasTex, setGlowCtx, clearGlows, addGlow } from '../world/props.js';
 import { REGIONS } from '../world/regions.js';
 import { INTERIORS } from './defs.js';
+import { makeTrialDef } from './trials.js';
+import { makeFinalDef } from './finalrealm.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
 import { save } from '../core/save.js';
 import { spawnBoss } from '../combat/bosses.js';
+import { spawnFinalBoss } from '../combat/finalboss.js';
 import { makeRng } from '../core/rng.js';
 
 const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -164,7 +167,7 @@ export class InteriorManager {
   }
 
   enter(dest) {
-    const def = INTERIORS[dest.id];
+    const def = INTERIORS[dest.id] || (dest.kind === 'trial' ? makeTrialDef(dest) : dest.kind === 'final' ? makeFinalDef() : null);
     if (!def) return false;
 
     const scene = new THREE.Scene();
@@ -187,20 +190,42 @@ export class InteriorManager {
     );
     const spawn = def.spawn || { x: 0, z: 8, yaw: 0 };
     const spawnY = spawn.y ?? 0;
-    veil.position.set(spawn.x, spawnY + 1.3, spawn.z + 1.2);
+    const exitOffset = def.exitOffset ?? 1.2;
+    veil.position.set(spawn.x, spawnY + 1.3, spawn.z + exitOffset);
     scene.add(veil);
 
     this.active = {
       dest, def, scene, collide, ctx, veil,
-      exitAt: { x: spawn.x, z: spawn.z + 1.2, r: 1.0, y: spawnY },
+      exitAt: { x: spawn.x, z: spawn.z + exitOffset, r: 1.0, y: spawnY },
       packsSpawned: false,
       boss: null,
       rewardPedestal: null,
       graceT: 1.2,           // can't re-exit instantly
     };
 
+    // A cleared expedition remains an explorable place. Its battle seals stay
+    // open and its boss never resurrects, while all geometry and atmosphere
+    // remain available for free-roam revisits.
+    if (dest.kind === 'trial' && G.save.trialsDown?.[dest.id]) {
+      for (const encounter of ctx.encounters || []) {
+        encounter.cleared = true;
+        encounter.spawned = true;
+        encounter.gate.visible = false;
+        encounter.collider.dead = true;
+      }
+    }
+    if (dest.kind === 'final' && G.save.finalDefeated) {
+      for (const encounter of ctx.encounters || []) {
+        encounter.cleared = true;
+        encounter.spawned = true;
+        encounter.gate.visible = false;
+        encounter.collider.dead = true;
+      }
+    }
+
     // move the player + systems into the interior
     const pl = G.player;
+    pl.resetVisitProtections?.();
     pl.pos.set(spawn.x, spawnY, spawn.z);
     pl.vel.set(0, 0, 0);
     pl.yaw = spawn.yaw;
@@ -228,6 +253,7 @@ export class InteriorManager {
     if (!G.save.entered[dest.id]) { G.save.entered[dest.id] = true; save(); }
     // compile interior shaders while the screen is still black — no first-frame hitch
     G.renderer.compile(scene, G.camera);
+    if (dest.kind === 'final') music.setRegion('cloud');
     music.setMode('interior');
     sfx('door');
     return true;
@@ -247,6 +273,7 @@ export class InteriorManager {
     const dest = a.dest;
     const doorWorld = { x: dest.x + (a.def.spawn?.doorX ?? 0), z: dest.z + (a.def.doorOutZ ?? 10) };
     const pl = G.player;
+    pl.resetVisitProtections?.();
     pl.pos.set(doorWorld.x, 30, doorWorld.z);
     pl.pos.y = G.worldCollide.groundAt(doorWorld.x, doorWorld.z, 200, 2);
     pl.vel.set(0, 0, 0);
@@ -300,10 +327,45 @@ export class InteriorManager {
       }
     }
 
+    // Expedition battle seals are exact, tagged encounters. Each threshold
+    // wakes independently and its physical seal dissolves only when every
+    // enemy in that battle (including telegraphs) is gone.
+    for (const encounter of a.ctx.encounters || []) {
+      if (encounter.cleared) continue;
+      const td = Math.hypot(pl.pos.x - encounter.trigger.x, pl.pos.z - encounter.trigger.z);
+      if (!encounter.spawned && td < encounter.trigger.r) {
+        encounter.spawned = true;
+        encounter.gate.material.opacity = 0.36;
+        sfx('bossroar', { pitch: 1.8, gain: 0.35 });
+        for (const spawn of encounter.spawns) {
+          G.enemies.spawn(spawn.type, spawn.x, spawn.z, {
+            ctx: 'interior', boost: encounter.id === 'sanctum' ? 1.35 : 1.18, tag: encounter.tag,
+          });
+        }
+      }
+      if (encounter.spawned) {
+        const alive = G.enemies.list.some((e) => e.tag === encounter.tag) ||
+          G.enemies.pending.some((e) => e.tag === encounter.tag);
+        if (!alive) {
+          encounter.cleared = true;
+          encounter.gate.visible = false;
+          encounter.collider.dead = true;
+          sfx('chime', { pitch: encounter.id === 'sanctum' ? 1.28 : 1.06 });
+          G.postfx?.pulse(0.35);
+          G.particles?.burst('soul', encounter.trigger.x, 2.2, encounter.gate.position.z, 18,
+            { color: REGIONS[a.dest.region].key, sizeMult: 1.3 });
+          G.hud?.whisper(encounter.id === 'sanctum' ? 'THE NAME WAKES' : 'THE RUIN ANSWERS', 1.8);
+        }
+      }
+    }
+
     // boss wake
-    if (a.dest.kind === 'major' && !a.boss && !G.save.bossesDown[a.dest.boss] &&
+    const stagedReady = !['trial', 'final'].includes(a.dest.kind) || (a.ctx.encounters || []).every((e) => e.cleared);
+    const bossDone = a.dest.kind === 'trial' ? G.save.trialsDown?.[a.dest.id]
+      : a.dest.kind === 'final' ? G.save.finalDefeated : G.save.bossesDown[a.dest.boss];
+    if ((a.dest.kind === 'major' || a.dest.kind === 'trial' || a.dest.kind === 'final') && stagedReady && !a.boss && !bossDone &&
         Math.hypot(pl.pos.x - (a.def.bossAt?.x ?? 0), pl.pos.z - (a.def.bossAt?.z ?? -6)) < (a.def.bossWake ?? 10)) {
-      a.boss = spawnBoss(a.dest.boss, a);
+      a.boss = a.dest.kind === 'final' ? spawnFinalBoss(a) : spawnBoss(a.dest.boss, a);
       a.bossLock = true; // exit seals until it's decided
     }
 
@@ -329,7 +391,8 @@ export class InteriorManager {
       if (Math.hypot(pl.pos.x - rp.x, pl.pos.z - rp.z) < 1.6) {
         rp.taken = true;
         rp.mesh.removeFromParent();
-        G.onRewardTaken?.(a.dest.reward);
+        if (a.dest.kind === 'trial') G.onRelicTaken?.(a.dest.relic);
+        else G.onRewardTaken?.(a.dest.reward);
       }
     }
 
@@ -344,14 +407,22 @@ export class InteriorManager {
     a.boss = null;
     // the reward crystal rises where the boss stood
     const at = a.def.bossAt || { x: 0, z: -6 };
-    const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.42),
+    const trialColor = a.dest.kind === 'trial' ? new THREE.Color(...a.dest.relic.color) : new THREE.Color(0xffe8a0);
+    const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(a.dest.kind === 'trial' ? 0.56 : 0.42, 1),
       new THREE.MeshStandardMaterial({
-        color: 0xffe8a0, emissive: 0xcc8820, emissiveIntensity: 1.0, roughness: 0.2, flatShading: true,
+        color: trialColor, emissive: trialColor, emissiveIntensity: 1.2, roughness: 0.16,
       }));
     mesh.position.set(at.x, 1.6, at.z);
     a.scene.add(mesh);
     a.rewardPedestal = { x: at.x, z: at.z, y: 1.6, mesh };
-    addGlow(at.x, 2, at.z, [1, 0.8, 0.4], 2.2);
+    addGlow(at.x, 2, at.z, a.dest.kind === 'trial' ? a.dest.relic.color : [1, 0.8, 0.4], 2.2);
+  }
+
+  onFinalDown() {
+    const a = this.active;
+    if (!a || a.dest.kind !== 'final') return;
+    a.bossLock = false;
+    a.boss = null;
   }
 }
 

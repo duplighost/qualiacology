@@ -18,12 +18,30 @@ export const ENEMY_TYPES = {
     contact: 1, score: 1, color: [0.75, 0.9, 0.5],
     build() {
       const g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), mat(0xa8cc66, 0x3a5a1a, 0.5));
-      const spikes = new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 0), mat(0x7da84e));
-      spikes.material.wireframe = true;
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), glow(0xfff6c8));
-      eye.position.set(0, 0.05, 0.42);
-      g.add(body, spikes, eye);
+      const body = new THREE.Mesh(new THREE.DodecahedronGeometry(0.46, 1), mat(0x9fcf69, 0x315b1a, 0.52));
+      body.scale.set(1.0, .92, .96);
+      const membrane = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.60, 1),
+        new THREE.MeshPhysicalMaterial({
+          color: 0xb9e78e, emissive: 0x18350f, emissiveIntensity: .36,
+          roughness: .24, metalness: 0, clearcoat: .8, clearcoatRoughness: .22,
+          transparent: true, opacity: .28, depthWrite: false, side: THREE.DoubleSide,
+        }),
+      );
+      const finMat = mat(0x6f9e49, 0x1f4312, .26);
+      for (let i = 0; i < 7; i++) {
+        const a = i / 7 * Math.PI * 2;
+        const fin = new THREE.Mesh(new THREE.ConeGeometry(.085, .30, 5), finMat);
+        fin.position.set(Math.cos(a) * .49, Math.sin(i * 2.1) * .15, Math.sin(a) * .49);
+        fin.rotation.z = Math.PI / 2;
+        fin.rotation.y = -a;
+        g.add(fin);
+      }
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), glow(0xfff5b8));
+      eye.position.set(0, 0.035, 0.455);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(.046, 9, 6), glow(0x26331a));
+      pupil.position.set(0, .035, .555);
+      g.add(body, membrane, eye, pupil);
       return g;
     },
   },

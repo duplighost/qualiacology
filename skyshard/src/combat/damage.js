@@ -7,6 +7,7 @@ import { CFG } from '../config.js';
 import { G } from '../state.js';
 import { sfx } from '../core/audio.js';
 import { juice } from '../fx/juice.js';
+import { hasSkill } from '../progression/constellation.js';
 
 const chain = { n: 0, lastAt: -9 };
 const TIER_NAMES = ['DOUBLE', 'TRIPLE', 'OVERKILL', 'RAMPAGE', 'MASSACRE', 'ANNIHILATION'];
@@ -36,6 +37,14 @@ export function hitEnemy(e, dmg, opts = {}) {
   sfx('hit', { pitch: opts.headshot ? 1.5 : 1 });
   juice.stop('hit');
 
+  if (opts.headshot) {
+    G.relics?.onPrecision({ x: px, y: py, z: pz });
+    if (hasSkill('resonant-hit')) {
+      G.particles?.burst('spark', px, py, pz, 9, { color: [1.0, 0.78, 0.48], sizeMult: 1.35 });
+      G.rovers?.pulse(px, py, pz, [1.0, 0.72, 0.42], 1.7, 8, 6);
+    }
+  }
+
   if (e.hp <= 0) kill(e, kind, opts);
   return true;
 }
@@ -51,7 +60,8 @@ function kill(e, kind, opts) {
   sfx('kill', { pitch: moveKill ? 1.2 : 1 });
 
   // chain crescendo — announce only at exact thresholds [ported]
-  chain.n = (now - chain.lastAt <= CFG.chain.window) ? chain.n + 1 : 1;
+  const chainWindow = CFG.chain.window + (hasSkill('chain-memory') ? 0.35 : 0);
+  chain.n = (now - chain.lastAt <= chainWindow) ? chain.n + 1 : 1;
   chain.lastAt = now;
   const tierIdx = CFG.chain.tiers.indexOf(chain.n);
   if (tierIdx >= 0) {
@@ -76,5 +86,6 @@ function kill(e, kind, opts) {
   }
 
   G.enemies.remove(e, true);
+  G.relics?.onKill(e);
   G.onEnemyKilled?.(e, kind);
 }
