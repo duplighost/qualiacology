@@ -281,7 +281,16 @@ in this redesign were invisible locally and obvious on the preview.
 4. **Catalog entry** in `build/src/content/site-data.json`: slug, title,
    descriptor, `group` (one of `action` / `horror` / `worlds`), summary
    (Alex's voice!), metaDescription, image, alt, controls, actionLabel,
-   optional duration/secondary. `featured: true` only by swapping — exactly 3
+   optional duration/secondary.
+
+   **`controls` is no longer rendered on the card**, as of 2026-08-27, with Alex's
+   explicit yes. Keep supplying it — it is true data and the game pages use it —
+   but do not "fix" its absence from the shelf. It was eight tracked-uppercase
+   items telling you how to play a thing you had not chosen yet, about 59px per
+   card of post-decision information in the pre-decision slot. Putting it back
+   would also re-falsify the `/games/` intro, whose clause naming controls was
+   deleted in the same change. `duration` DOES still render (3 of 24 games have
+   one) and is the only thing in `.card-meta` now. `featured: true` only by swapping — exactly 3
    games are featured (grid is 3 columns, so keep it a multiple of 3), and
    which ones is Alex's call. Featured order = games array order. Albums are
    still exactly 3 featured. The featured row was 6 until 2026-08-21, when Alex
