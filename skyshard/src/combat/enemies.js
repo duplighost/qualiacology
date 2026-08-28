@@ -11,6 +11,7 @@ import { dominantRegion } from '../world/regions.js';
 import { terrainHeight } from '../world/terrain.js';
 import { sfx } from '../core/audio.js';
 import { clamp01, damp } from '../core/math.js';
+import { hasSkill } from '../progression/constellation.js';
 
 const E = CFG.enemies;
 const _v = new THREE.Vector3();
@@ -74,6 +75,13 @@ export class Enemies {
       glowSprite.scale.setScalar(ENEMY_TYPES[type].radius * 4.6);
       mesh.add(glowSprite);
       mesh.userData.glowSprite = glowSprite;
+      const coreSight = new THREE.Sprite(getGlowMat(type).clone());
+      coreSight.material.opacity = .92;
+      coreSight.position.y = ENEMY_TYPES[type].fly > 0 ? 0 : ENEMY_TYPES[type].radius * 1.35;
+      coreSight.scale.setScalar(ENEMY_TYPES[type].radius * 1.8);
+      coreSight.visible = false;
+      mesh.add(coreSight);
+      mesh.userData.coreSight = coreSight;
     }
     return mesh;
   }
@@ -208,7 +216,10 @@ export class Enemies {
       // integrate + world collision (circle push-out)
       e.x += e.vx * dt; e.z += e.vz * dt;
       _v.x = e.x; _v.z = e.z;
-      G.collide.resolve(_v, e.def.radius, e.y - 0.5, e.y + 1.2, (e._scr ||= []));
+      // e.y is the enemy's foot position, just like player.pos.y. Using a
+      // negative foot offset makes broad standable floors look like solid
+      // walls and ejects grounded enemies to the platform edge.
+      G.collide.resolve(_v, e.def.radius, e.y + 0.05, e.y + 1.2, (e._scr ||= []));
       e.x = _v.x; e.z = _v.z;
 
       // vertical: grounded types track ground; flyers hover with a bob
@@ -237,10 +248,30 @@ export class Enemies {
         }
       }
 
-      // contact damage
+      // Contact damage still lands at the original range, but a flying body is
+      // not allowed to settle around the camera afterward. Puffs in particular
+      // have a wireframe shell: when their centre reached the player's eye the
+      // shell filled the entire view with giant diagonals. A small visual safety
+      // shell preserves the hit and pursuit pressure, then pushes the enemy just
+      // beyond the camera instead of letting it live inside the lens.
+      const postDx = pl.pos.x - e.x, postDz = pl.pos.z - e.z;
+      const postDist = Math.hypot(postDx, postDz);
       const r = e.def.radius + CFG.player.radius + 0.15;
-      if (e.contactCd <= 0 && distXZ < r && Math.abs((pl.pos.y + 0.9) - e.y) < 1.7) {
+      if (e.contactCd <= 0 && postDist < r && Math.abs((pl.pos.y + 0.9) - e.y) < 1.7) {
         if (pl.hurt(e.def.contact, e.x, e.z)) e.contactCd = 0.8;
+      }
+      if (e.def.fly > 0) {
+        const eyeGap = Math.abs((pl.pos.y + CFG.player.eyeHeight) - e.y);
+        // A puff's decorative wire cage extends beyond its stated hit radius,
+        // so it needs a wider lens-safe ring than the solid-bodied flyers.
+        const safeR = e.type === 'puff' ? 2.45 : e.def.radius + CFG.player.radius + 0.42;
+        if (postDist < safeR && eyeGap < e.def.radius + 0.58) {
+          const a = postDist > 0.001 ? Math.atan2(-postDz, -postDx) : e.mesh.id * 2.399963;
+          const push = safeR - postDist;
+          const nx = Math.cos(a), nz = Math.sin(a);
+          e.x += nx * push; e.z += nz * push;
+          e.vx += nx * 1.25; e.vz += nz * 1.25;
+        }
       }
 
       // present
@@ -253,6 +284,7 @@ export class Enemies {
         const pulse = 1 + Math.sin(e.t * 3.2) * 0.12 + e.flashT * 2;
         ud.glowSprite.scale.setScalar(e.def.radius * 4.6 * pulse);
       }
+      if (ud.coreSight) ud.coreSight.visible = hasSkill('core-sight') && e.hp / e.maxHp <= .5 && distXZ < 24;
       if (ud.spin) ud.spin.rotation.y += dt * 2.4;
       if (ud.spin2) ud.spin2.rotation.x += dt * 1.7;
       if (ud.swell && e.fuse >= 0) {

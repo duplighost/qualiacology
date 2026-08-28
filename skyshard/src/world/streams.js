@@ -11,6 +11,7 @@ import { terrainHeight } from './terrain.js';
 import { REGIONS } from './regions.js';
 import { clamp01, damp } from '../core/math.js';
 import { sfx } from '../core/audio.js';
+import { hasSkill } from '../progression/constellation.js';
 
 const S = CFG.streams;
 
@@ -123,6 +124,10 @@ export class Streams {
 
   update(dt, t) {
     this.cooldown = Math.max(0, this.cooldown - dt);
+    const currentSight = hasSkill('current-sight');
+    this.cloud.material.opacity += ((currentSight ? .62 : .42) - this.cloud.material.opacity) * Math.min(1, dt * 3);
+    this.runnerCloud.material.opacity += ((currentSight ? 1 : .9) - this.runnerCloud.material.opacity) * Math.min(1, dt * 3);
+    this.runnerCloud.material.size = currentSight ? 3.15 : 2.6;
 
     // runners flow outward, always
     const rpos = this.runnerCloud.geometry.attributes.position;

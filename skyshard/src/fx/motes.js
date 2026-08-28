@@ -7,6 +7,7 @@ import { CFG } from '../config.js';
 import { G } from '../state.js';
 import { Pool } from '../core/pool.js';
 import { sfx } from '../core/audio.js';
+import { hasSkill } from '../progression/constellation.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -65,7 +66,12 @@ export class Motes {
     this.pool.update((m) => {
       m.t += dt;
       // scatter briefly, then home with increasing hunger
-      const pull = Math.min(28, Math.max(0, (m.t - 0.25) * 46));
+      const soulDraw = m.kind === 'soul' && hasSkill('soul-draw');
+      const kindVessel = m.kind === 'health' && hasSkill('kind-vessel');
+      const delay = soulDraw ? 0.08 : kindVessel ? 0.14 : 0.25;
+      const hunger = soulDraw ? 68 : kindVessel ? 58 : 46;
+      const ceiling = soulDraw ? 44 : kindVessel ? 38 : 28;
+      const pull = Math.min(ceiling, Math.max(0, (m.t - delay) * hunger));
       let dx = px - m.x, dy = py - m.y, dz = pz - m.z;
       const d = Math.hypot(dx, dy, dz) || 1;
       m.vx += (dx / d) * pull * dt; m.vy += (dy / d) * pull * dt; m.vz += (dz / d) * pull * dt;
@@ -81,6 +87,7 @@ export class Motes {
           this.streak = (now - this.lastCollect < 0.9) ? this.streak + 1 : 0;
           this.lastCollect = now;
           sfx('mote', { pitch: 1 + Math.min(this.streak, 8) * 0.09 });
+          G.onSoulCollected?.({ x: m.x, y: m.y, z: m.z, streak: this.streak });
         }
         G.particles?.burst(m.kind === 'health' ? 'heal' : 'soul', m.x, m.y, m.z, 5);
         _m.compose(_p.set(0, -999, 0), _q, ZERO);

@@ -14,9 +14,12 @@ import { G } from '../state.js';
 import { sfx } from '../core/audio.js';
 import { juice } from '../fx/juice.js';
 import { save } from '../core/save.js';
+import { R6_THRESHOLDS, WONDERS } from './wonderdata.js';
+import { worldSurface } from './materials.js';
 
 const mat = (color, emissive = 0x000000, ei = 0) =>
   new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: ei, roughness: 1, flatShading: true });
+const LANDMARKS = Object.freeze([...WONDERS, ...R6_THRESHOLDS]);
 
 // ---- geometry merge helper (position/normal/color, non-indexed) -------------
 function mergeGeos(parts) {
@@ -34,11 +37,13 @@ function mergeGeos(parts) {
   let total = 0;
   for (const g of geos) total += g.attributes.position.count;
   const pos = new Float32Array(total * 3), norm = new Float32Array(total * 3), col = new Float32Array(total * 3);
+  const uv = new Float32Array(total * 2);
   let off = 0;
   for (const g of geos) {
     pos.set(g.attributes.position.array, off * 3);
     norm.set(g.attributes.normal.array, off * 3);
     col.set(g.attributes.color.array, off * 3);
+    if (g.attributes.uv) uv.set(g.attributes.uv.array, off * 2);
     off += g.attributes.position.count;
     g.dispose();
   }
@@ -46,31 +51,58 @@ function mergeGeos(parts) {
   out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   out.setAttribute('normal', new THREE.BufferAttribute(norm, 3));
   out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   return out;
 }
 
-const C = THREE.CylinderGeometry, B = THREE.BoxGeometry, Co = THREE.ConeGeometry, T = THREE.TorusGeometry;
+const C = THREE.CylinderGeometry, B = THREE.BoxGeometry, Co = THREE.ConeGeometry,
+  T = THREE.TorusGeometry, I = THREE.IcosahedronGeometry;
+
+function rootArcGeo(radius = .22, phase = 0) {
+  const points = [
+    [-1.13, .02, .05], [-1.01, .38, -.08], [-.76, .80, .10],
+    [-.44, 1.20, -.11], [-.10, 1.48, .08], [.27, 1.43, -.06],
+    [.61, 1.16, .11], [.91, .67, -.08], [1.12, .02, .04],
+  ].map(([x, y, z], i) => new THREE.Vector3(
+    x,
+    y * (1 + Math.sin(i * 1.7 + phase) * .045),
+    z + Math.sin(i * 2.3 + phase) * .035,
+  ));
+  const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', .5);
+  const g = new THREE.TubeGeometry(curve, 46, radius, 11, false);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const grain = 1 + Math.sin(x * 7.1 + y * 4.3 + z * 5.7 + phase) * .032;
+    p.setXYZ(i, x * grain, y, z * grain);
+  }
+  g.computeVertexNormals();
+  return g;
+}
 
 // ---- region features (instanced) ---------------------------------------------
 const FEATURES = {
-  waystone: {  // Vale: mossy path markers, stacked
+  waystone: {  // Vale: weather-softened lichen cairns
+    surface: 'stone',
     region: 'vale', count: 115, scale: [0.7, 1.3], collider: 0.5, colliderH: 1.6,
     make: () => mergeGeos([
-      { geo: new B(0.8, 0.5, 0.7), color: [0.5, 0.48, 0.42], translate: [0, 0.25, 0] },
-      { geo: new B(0.55, 0.45, 0.5), color: [0.55, 0.53, 0.46], translate: [0.05, 0.72, 0], rotate: [0, 0.4, 0] },
-      { geo: new B(0.35, 0.4, 0.32), color: [0.42, 0.52, 0.34], translate: [-0.04, 1.12, 0.03], rotate: [0, 0.9, 0] },
+      { geo: new I(.54, 1), color: [.31, .33, .28], scale: [1.18, .53, .88], translate: [0, .29, 0], rotate: [.04, .42, -.03] },
+      { geo: new I(.42, 1), color: [.40, .41, .34], scale: [1.02, .59, .82], translate: [.09, .68, .01], rotate: [.17, 1.18, -.09] },
+      { geo: new I(.31, 1), color: [.34, .43, .27], scale: [.91, .66, .78], translate: [-.07, 1.02, .04], rotate: [-.12, 2.08, .12] },
     ]),
   },
   fence: {     // Vale: leaning field fences, long fallen
+    surface: 'forest',
     region: 'vale', count: 165, scale: [0.8, 1.2],
     make: () => mergeGeos([
-      { geo: new C(0.05, 0.07, 1.1, 5), color: [0.4, 0.32, 0.22], translate: [-0.9, 0.55, 0], rotate: [0, 0, 0.06] },
-      { geo: new C(0.05, 0.07, 1.0, 5), color: [0.38, 0.3, 0.2], translate: [0.9, 0.5, 0], rotate: [0, 0, -0.09] },
-      { geo: new B(2.0, 0.09, 0.05), color: [0.45, 0.36, 0.24], translate: [0, 0.78, 0], rotate: [0, 0, 0.04] },
-      { geo: new B(1.9, 0.09, 0.05), color: [0.42, 0.34, 0.23], translate: [0, 0.42, 0.02], rotate: [0, 0, -0.05] },
+      { geo: new C(0.05, 0.075, 1.1, 8), color: [0.4, 0.32, 0.22], translate: [-0.9, 0.55, 0], rotate: [0, 0, 0.06] },
+      { geo: new C(0.05, 0.073, 1.0, 8), color: [0.38, 0.3, 0.2], translate: [0.9, 0.5, 0], rotate: [0, 0, -0.09] },
+      { geo: new C(0.044, 0.058, 2.03, 8), color: [0.45, 0.36, 0.24], translate: [0, 0.78, 0], rotate: [0, 0, Math.PI / 2 + 0.04] },
+      { geo: new C(0.042, 0.056, 1.93, 8), color: [0.42, 0.34, 0.23], translate: [0, 0.42, 0.02], rotate: [0, 0, Math.PI / 2 - 0.05] },
     ]),
   },
   obsArch: {   // Ember: half-melted obsidian arches
+    surface: 'obsidian',
     region: 'ember', count: 72, scale: [0.9, 1.9], collider: 0.6, colliderH: 4,
     make: () => mergeGeos([
       { geo: new C(0.35, 0.55, 3.4, 5), color: [0.09, 0.06, 0.08], translate: [-1.5, 1.7, 0], rotate: [0, 0, 0.24] },
@@ -80,12 +112,14 @@ const FEATURES = {
     ]),
   },
   boneRib: {   // Ember: something enormous died here
+    surface: 'stone',
     region: 'ember', count: 66, scale: [0.8, 1.8], collider: 0.35, colliderH: 3,
     make: () => mergeGeos([
       { geo: new T(2.2, 0.16, 5, 10, Math.PI * 0.62), color: [0.78, 0.72, 0.6], rotate: [0, 0, Math.PI * 0.22], translate: [0, 0.3, 0] },
     ]),
   },
   iceMonolith: { // Frost: tall singing ice
+    surface: 'ice',
     region: 'frost', count: 88, scale: [0.7, 2.0], collider: 0.55, colliderH: 4.5,
     make: () => mergeGeos([
       { geo: new Co(0.6, 4.4, 5), color: [0.75, 0.88, 1.0], translate: [0, 2.2, 0], rotate: [0.04, 0, 0.05] },
@@ -93,6 +127,7 @@ const FEATURES = {
     ]),
   },
   snowdrift: {
+    surface: 'ice',
     region: 'frost', count: 100, scale: [0.8, 1.8],
     make: () => {
       const source = new THREE.SphereGeometry(1.3, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -105,13 +140,15 @@ const FEATURES = {
     },
   },
   rootArc: {   // Mycel: roots of something far larger than any tree here
+    surface: 'mycel',
     region: 'mycel', count: 82, scale: [0.9, 1.9], collider: 0.5, colliderH: 2.6,
     make: () => mergeGeos([
-      { geo: new T(1.8, 0.28, 6, 10, Math.PI * 0.86), color: [0.2, 0.16, 0.13], rotate: [0, 0, Math.PI * 0.08], translate: [0, 0.2, 0] },
-      { geo: new T(1.1, 0.14, 5, 8, Math.PI * 0.8), color: [0.24, 0.19, 0.15], rotate: [0.3, 0.7, 0.2], translate: [0.8, 0.1, 0.5] },
+      { geo: rootArcGeo(.24, .3), color: [.39, .30, .25], scale: [1.55, 1.28, 1.18], rotate: [0, -.10, .035], translate: [0, -.01, 0] },
+      { geo: rootArcGeo(.13, 1.7), color: [.48, .36, .29], scale: [.92, .76, .82], rotate: [.18, .66, -.12], translate: [.72, .05, .34] },
     ]),
   },
   glowpod: {   // Mycel: soft light growing out of the marsh
+    surface: 'mycel',
     region: 'mycel', count: 105, scale: [0.6, 1.4],
     make: () => mergeGeos([
       { geo: new THREE.SphereGeometry(0.28, 7, 6), color: [0.5, 1.0, 0.85], translate: [0, 0.34, 0] },
@@ -122,6 +159,7 @@ const FEATURES = {
     emissiveLike: true,
   },
   brokenArch: { // Shatter: the sky fell through these
+    surface: 'stone',
     region: 'shatter', count: 70, scale: [0.9, 1.8], collider: 0.6, colliderH: 4,
     make: () => mergeGeos([
       { geo: new C(0.4, 0.5, 3.8, 6), color: [0.5, 0.45, 0.58], translate: [-1.6, 1.9, 0] },
@@ -131,6 +169,7 @@ const FEATURES = {
     ]),
   },
   runeStone: { // Shatter: still faintly humming
+    surface: 'stone',
     region: 'shatter', count: 66, scale: [0.7, 1.4], collider: 0.5, colliderH: 2.8,
     make: () => mergeGeos([
       { geo: new B(0.9, 2.6, 0.5), color: [0.32, 0.28, 0.42], translate: [0, 1.3, 0], rotate: [0, 0.2, 0.05] },
@@ -138,6 +177,7 @@ const FEATURES = {
     ]),
   },
   banner: {    // near majors: the old order marked its doors
+    surface: 'forest',
     region: null, count: 56, scale: [0.9, 1.2], nearMajors: true, collider: 0.2, colliderH: 3,
     make: () => mergeGeos([
       { geo: new C(0.06, 0.09, 3.2, 5), color: [0.3, 0.24, 0.18], translate: [0, 1.6, 0] },
@@ -188,13 +228,17 @@ export class Features {
     const _e = new THREE.Euler();
     const up = new THREE.Vector3();
     const majors = DESTS.filter((d) => d.kind === 'major');
+    const golden = 2.399963229728653;
 
     for (const [key, def] of Object.entries(FEATURES)) {
       const geo = def.make();
+      const authored = worldSurface(def.surface);
       const m = new THREE.MeshStandardMaterial({
-        vertexColors: true, flatShading: true, roughness: 1,
+        vertexColors: true, flatShading: false, roughness: .82, metalness: .025,
+        map: authored?.map || null,
+        bumpMap: authored?.bump || null, bumpScale: authored ? .105 : 0,
         emissive: def.emissiveLike ? 0x77ffd0 : 0x000000,
-        emissiveIntensity: def.emissiveLike ? 0.55 : 0,
+        emissiveIntensity: def.emissiveLike ? 0.72 : 0,
       });
       const mesh = new THREE.InstancedMesh(geo, m, def.count);
       mesh.castShadow = true;
@@ -207,7 +251,21 @@ export class Features {
           const rr = d.r + 4 + rng() * 14;
           x = d.x + Math.cos(a) * rr; z = d.z + Math.sin(a) * rr;
         } else {
-          x = (rng() * 2 - 1) * 620; z = (rng() * 2 - 1) * 620;
+          // Each feature belongs to a landmark ecosystem. Four offset lobes
+          // around every authored site create thickets, ruins, and bone beds;
+          // this replaces the old independent dice roll across a 1.2km square.
+          const anchors = def.region
+            ? LANDMARKS.filter((w) => w.region === def.region)
+            : LANDMARKS;
+          const d = anchors[(rng() * anchors.length) | 0];
+          const lobe = (rng() * 4) | 0;
+          const ca = d.rotation + lobe * golden + (rng() - .5) * .28;
+          const cd = 12 + lobe * 3.4 + rng() * 7;
+          const cx = d.x + Math.cos(ca) * cd;
+          const cz = d.z + Math.sin(ca) * cd;
+          const a = rng() * Math.PI * 2;
+          const rr = Math.sqrt(rng()) * (4.5 + lobe * 1.15);
+          x = cx + Math.cos(a) * rr; z = cz + Math.sin(a) * rr;
         }
         if (Math.hypot(x, z) > 600) continue;
         const h = terrainHeight(x, z);
@@ -237,41 +295,103 @@ export class Features {
   // ---- shrines ----
   _buildShrines(scene, collide) {
     this.shrines = [];
-    const stoneGeo = new THREE.BoxGeometry(0.8, 1.7, 0.55);
-    const stoneMat = mat(0x3a3f3a);
-    const stones = new THREE.InstancedMesh(stoneGeo, stoneMat, SHRINES.length * 5);
+    const stoneGeo = new THREE.DodecahedronGeometry(0.75, 0);
+    stoneGeo.scale(1, 1.35, .78);
+    const ruinSurface = worldSurface('stone');
+    const stoneMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, map: ruinSurface?.map || null, bumpMap: ruinSurface?.bump || null,
+      bumpScale: .14, roughness: .94, metalness: .01, flatShading: false,
+    });
+    const stones = new THREE.InstancedMesh(stoneGeo, stoneMat, SHRINES.length * 20);
     stones.castShadow = true;
+    const pylonGeo = new THREE.CylinderGeometry(.42, .66, 4.8, 8, 2);
+    const pylonMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff, map: ruinSurface?.map || null, bumpMap: ruinSurface?.bump || null,
+      bumpScale: .12, roughness: .82, metalness: .03, flatShading: false,
+    });
+    const pylons = new THREE.InstancedMesh(pylonGeo, pylonMat, SHRINES.length * 4);
+    pylons.castShadow = true;
+    const ringGeo = new THREE.TorusGeometry(6.7, .11, 7, 48);
+    ringGeo.rotateX(Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .34, blending: THREE.AdditiveBlending, depthWrite: false });
+    const rings = new THREE.InstancedMesh(ringGeo, ringMat, SHRINES.length);
     const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1);
     const _e = new THREE.Euler();
-    let si = 0;
+    const _c = new THREE.Color();
+    let si = 0, pi = 0;
 
     for (let i = 0; i < SHRINES.length; i++) {
       const def = SHRINES[i];
       const y = terrainHeight(def.x, def.z);
       const key = REGIONS[def.region].key;
 
-      for (let k = 0; k < 5; k++) {
-        const a = (k / 5) * Math.PI * 2 + i;
-        const sx = def.x + Math.cos(a) * 5.2, sz = def.z + Math.sin(a) * 5.2;
+      const approach = Math.atan2(-def.z, -def.x);
+      const baseCol = REGIONS[def.region].terra.cliff;
+      for (let k = 0; k < 14; k++) {
+        // A complete arena with one deliberate opening toward the island hub.
+        const a = approach + .54 + k / 13 * (Math.PI * 2 - 1.08);
+        const sx = def.x + Math.cos(a) * 9.2, sz = def.z + Math.sin(a) * 9.2;
         const sy = terrainHeight(sx, sz);
-        _e.set(0, -a + Math.PI / 2, (i + k) % 2 ? 0.05 : -0.04);
+        _e.set(0, -a + Math.PI / 2, (i + k) % 2 ? .11 : -.08);
         _q.setFromEuler(_e);
-        _m.compose(_p.set(sx, sy + 0.8, sz), _q, _s);
+        const ss = .7 + (k % 4) * .12;
+        _m.compose(_p.set(sx, sy + .72 * ss, sz), _q, _s.set(ss, ss, ss));
         stones.setMatrixAt(si++, _m);
-        collide.addCircle(sx, sz, 0.55, sy - 0.5, sy + 1.7);
+        _c.setRGB(baseCol[0] * (1.02 + (k % 3) * .08), baseCol[1] * (1.02 + (k % 3) * .08), baseCol[2] * (1.02 + (k % 3) * .08));
+        stones.setColorAt(si - 1, _c);
+        if (k % 3 === 0) collide.addCircle(sx, sz, .48 * ss, sy - .5, sy + 1.8 * ss);
+      }
+      for (let k = 0; k < 6; k++) {
+        const a = approach + Math.PI + k / 6 * Math.PI * 2;
+        const rr = 4.8 + (k % 2) * .7;
+        const sx = def.x + Math.cos(a) * rr, sz = def.z + Math.sin(a) * rr;
+        const sy = terrainHeight(sx, sz);
+        _e.set(0, -a, (k % 2 ? .08 : -.06)); _q.setFromEuler(_e);
+        const ss = .48 + (k % 3) * .08;
+        _m.compose(_p.set(sx, sy + .72 * ss, sz), _q, _s.set(ss, ss, ss));
+        stones.setMatrixAt(si++, _m);
+        _c.setRGB(baseCol[0] * 1.12, baseCol[1] * 1.12, baseCol[2] * 1.12);
+        stones.setColorAt(si - 1, _c);
       }
 
+      const pylonAngles = [approach - .78, approach + .78, approach + Math.PI - .62, approach + Math.PI + .62];
+      for (let k = 0; k < pylonAngles.length; k++) {
+        const a = pylonAngles[k], rr = k < 2 ? 10.8 : 11.8;
+        const x = def.x + Math.cos(a) * rr, z = def.z + Math.sin(a) * rr;
+        const py = terrainHeight(x, z);
+        _e.set(0, -a, k % 2 ? -.08 : .08); _q.setFromEuler(_e);
+        const hh = .78 + (k % 2) * .13;
+        _m.compose(_p.set(x, py + 2.4 * hh, z), _q, _s.set(.82, hh, .82));
+        pylons.setMatrixAt(pi++, _m);
+        _c.setRGB(REGIONS[def.region].key[0] * .72, REGIONS[def.region].key[1] * .72, REGIONS[def.region].key[2] * .72);
+        pylons.setColorAt(pi - 1, _c);
+        collide.addCircle(x, z, .58, py - .5, py + 4.8 * hh);
+      }
+
+      _m.compose(_p.set(def.x, y + .14, def.z), new THREE.Quaternion(), _s.set(1, 1, 1));
+      rings.setMatrixAt(i, _m);
+      _c.setRGB(REGIONS[def.region].key[0], REGIONS[def.region].key[1], REGIONS[def.region].key[2]);
+      rings.setColorAt(i, _c);
+
       const obelisk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.28, 0.5, 2.6, 5),
+        new THREE.CylinderGeometry(.34, .74, 4.4, 7, 3),
         new THREE.MeshStandardMaterial({
           color: 0x23262b, emissive: new THREE.Color(...key), emissiveIntensity: 0.06,
-          roughness: 0.6, flatShading: true,
+          bumpMap: worldSurface(def.region === 'ember' ? 'obsidian' : def.region === 'frost' ? 'ice' : def.region === 'mycel' ? 'mycel' : 'stone')?.bump || null,
+          bumpScale: .12, roughness: .42, metalness: .12, flatShading: false,
         })
       );
-      obelisk.position.set(def.x, y + 1.3, def.z);
+      obelisk.position.set(def.x, y + 2.2, def.z);
       obelisk.castShadow = true;
+      const crown = new THREE.Mesh(
+        new THREE.TorusGeometry(.82, .06, 6, 28),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(...key), transparent: true, opacity: .62, blending: THREE.AdditiveBlending, depthWrite: false })
+      );
+      crown.position.y = 1.55;
+      crown.rotation.x = Math.PI / 2;
+      obelisk.add(crown);
       scene.add(obelisk);
-      collide.addCircle(def.x, def.z, 0.55, y, y + 2.6);
+      collide.addCircle(def.x, def.z, .62, y, y + 4.4);
 
       const done = !!G.save.found['shrine-' + i];
       this.shrines.push({
@@ -282,8 +402,15 @@ export class Features {
       if (done) obelisk.material.emissiveIntensity = 1.4;
     }
     stones.instanceMatrix.needsUpdate = true;
+    if (stones.instanceColor) stones.instanceColor.needsUpdate = true;
     stones.matrixAutoUpdate = false;
-    scene.add(stones);
+    pylons.instanceMatrix.needsUpdate = true;
+    if (pylons.instanceColor) pylons.instanceColor.needsUpdate = true;
+    pylons.matrixAutoUpdate = false;
+    rings.instanceMatrix.needsUpdate = true;
+    if (rings.instanceColor) rings.instanceColor.needsUpdate = true;
+    rings.matrixAutoUpdate = false;
+    scene.add(stones, pylons, rings);
   }
 
   _spawnWave(sh, n) {

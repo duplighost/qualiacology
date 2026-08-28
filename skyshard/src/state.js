@@ -25,11 +25,17 @@ export const G = {
   projectiles: null,
   breakables: null,
   boss: null,           // active boss controller or null
+  constellation: null,
+  relics: null,
+  uiOpen: false,
 
   // world
   terrain: null,
   regions: null,
   destinations: null,
+  livingWorld: null,
+  modernWorld: null,
+  endgame: null,
   collide: null,        // active collider field (world's or interior's)
   worldCollide: null,
 
