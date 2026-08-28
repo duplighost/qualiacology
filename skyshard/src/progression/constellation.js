@@ -5,7 +5,7 @@
 import { G } from '../state.js';
 import { save } from '../core/save.js';
 import { sfx } from '../core/audio.js';
-import { TRIAL_DESTS } from '../world/trialdata.js';
+import { TRIAL_DESTS, isTrialCleared, isTrialComplete } from '../world/trialdata.js';
 import { DESTS, SPIRE } from '../world/destdata.js';
 
 export const SKILL_BRANCHES = [
@@ -64,9 +64,27 @@ export class Constellation {
     this.closeButton?.addEventListener('click', () => this.close());
     this.overlay?.addEventListener('click', (e) => { if (e.target === this.overlay) this.close(); });
     addEventListener('keydown', (e) => {
-      if (e.code === 'Tab' && G.mode !== 'title') {
-        e.preventDefault();
-        this.toggle();
+      if (e.code === 'Tab') {
+        if (!this.opened && G.mode !== 'title') {
+          e.preventDefault();
+          this.open();
+        } else if (this.opened) {
+          const controls = [...(this.panel?.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          ) || [])].filter((el) => !el.hidden && el.getClientRects().length > 0);
+          if (!controls.length) {
+            e.preventDefault();
+            this.panel?.focus();
+          } else {
+            const active = document.activeElement;
+            const current = controls.indexOf(active);
+            const next = current < 0
+              ? (e.shiftKey ? controls.length - 1 : 0)
+              : (current + (e.shiftKey ? -1 : 1) + controls.length) % controls.length;
+            e.preventDefault();
+            controls[next].focus();
+          }
+        }
       } else if (e.code === 'Escape' && this.opened) {
         e.preventDefault();
         this.close();
@@ -204,7 +222,7 @@ export class Constellation {
     this.compassT -= dt;
 
     if (hasSkill('quiet-camp') && this.campT <= 0 && pl.pips < pl.maxPips && G.intensity < 0.08) {
-      const nearCleared = TRIAL_DESTS.some((d) => G.save.trialsDown[d.id] && Math.hypot(pl.pos.x - d.x, pl.pos.z - d.z) < 18);
+      const nearCleared = TRIAL_DESTS.some((d) => isTrialCleared(G.save, d) && Math.hypot(pl.pos.x - d.x, pl.pos.z - d.z) < 18);
       if (nearCleared) {
         this.campT = 4.8;
         pl.heal(1);
@@ -232,7 +250,7 @@ export class Constellation {
       this.compassT = 12;
       let nearest = null, nd = Infinity;
       for (const d of TRIAL_DESTS) {
-        if (G.save.trialsDown[d.id]) continue;
+        if (isTrialComplete(G.save, d)) continue;
         const dist = Math.hypot(pl.pos.x - d.x, pl.pos.z - d.z);
         if (dist < nd) { nd = dist; nearest = d; }
       }

@@ -1,32 +1,32 @@
 // Authored material library. R6 adds dedicated biome-ground scans and one
-// alpha-cut ground-cover family to the R5 surface/foliage set. Loading stays
-// centralized so every system shares the same GPU textures and every optional
-// asset can fall back without stopping boot.
+// alpha-cut ground-cover family to the R5 surface/foliage set. Browser-native
+// WebP keeps the full 1024px material detail while cutting cold-boot transfer
+// to a small fraction of the source PNG set.
 
 import * as THREE from 'three';
 
 const FILES = Object.freeze({
-  forest: './assets/textures/r5-forest-bark-lichen.png',
-  stone: './assets/textures/r5-weathered-ruin-stone.png',
-  obsidian: './assets/textures/r5-obsidian-crust.png',
-  ice: './assets/textures/r5-glacial-ice.png',
-  mycel: './assets/textures/r5-mycelium-organic.png',
+  forest: './assets/textures/r5-forest-bark-lichen.webp',
+  stone: './assets/textures/r5-weathered-ruin-stone.webp',
+  obsidian: './assets/textures/r5-obsidian-crust.webp',
+  ice: './assets/textures/r5-glacial-ice.webp',
+  mycel: './assets/textures/r5-mycelium-organic.webp',
 });
 
 const FOLIAGE_FILES = Object.freeze({
-  broadleaf: './assets/textures/r5-broadleaf-canopy.png',
-  spruce: './assets/textures/r5-spruce-crown.png',
-  mushroom: './assets/textures/r5-giant-mushroom-crown.png',
-  cloud: './assets/textures/r5-cinematic-cloud-bank.png',
-  groundcover: './assets/textures/r6-groundcover-sedge.png',
+  broadleaf: './assets/textures/r5-broadleaf-canopy.webp',
+  spruce: './assets/textures/r5-spruce-crown.webp',
+  mushroom: './assets/textures/r5-giant-mushroom-crown.webp',
+  cloud: './assets/textures/r5-cinematic-cloud-bank.webp',
+  groundcover: './assets/textures/r6-groundcover-sedge.webp',
 });
 
 const GROUND_FILES = Object.freeze({
-  vale: './assets/textures/r6-vale-ground.png',
-  ember: './assets/textures/r6-ember-ground.png',
-  frost: './assets/textures/r6-frost-ground.png',
-  mycel: './assets/textures/r6-mycel-ground.png',
-  shatter: './assets/textures/r6-shatter-ground.png',
+  vale: './assets/textures/r6-vale-ground.webp',
+  ember: './assets/textures/r6-ember-ground.webp',
+  frost: './assets/textures/r6-frost-ground.webp',
+  mycel: './assets/textures/r6-mycel-ground.webp',
+  shatter: './assets/textures/r6-shatter-ground.webp',
 });
 
 const REPEAT = Object.freeze({
