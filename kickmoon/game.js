@@ -28,8 +28,13 @@
   const params = new URLSearchParams(location.search);
   const TEST_MODE = params.has('autotest');
   const AUTO_START = TEST_MODE || params.has('autostart');
+  // Deterministic, input-free visual stations for release screenshots. This
+  // never changes ordinary play; it only freezes simulation after the normal
+  // start + teleport path has produced one honest rendered gameplay frame.
+  const SHOWCASE_FREEZE = params.has('showcase');
+  const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '6.0.0-kickmoon';
+  const GAME_VERSION = '6.1.0-moonfall';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -72,6 +77,19 @@
     returnBendRate: 9,
     returnSnapBendRate: 15,
   });
+  // MOONFALL is deliberately outside FEEL_PROFILE. The signed-off ball law
+  // above remains frozen; this is a new player verb with its own radial-speed
+  // budget and regression surface.
+  const MOONFALL_PROFILE = Object.freeze({
+    initialDownSpeed: 18,
+    acceleration: 56,
+    terminalSpeed: 36,
+    minImpactSpeed: 12,
+    baseRadius: 7.5,
+    maxRadius: 13,
+    reboundSpeed: 15.2,
+    cooldown: .18,
+  });
   // HOW THE MOON SOUNDS WHEN SOMETHING IS NEAR. One entry per species: the
   // pitch says WHAT, the pan says WHERE, and the volume says HOW CLOSE. All of
   // it is quiet on purpose -- .045 peak against a kick's .18 -- because this
@@ -94,6 +112,7 @@
     snatcher: { hz: 342, every: 1.85, len: .19, gain: .95 },
     burrower: { hz: 174, every: 2.05, len: .24, gain: 1.05 },
     bellbug: { hz: 512, every: 2.3, len: .28, gain: .9 },
+    ribbonback: { hz: 468, every: 1.35, len: .11, gain: 1.05 },
     default: { hz: 420, every: 1.6, len: .1, gain: 1 },
   };
   const QUALITY_STORAGE_KEY = 'kickball-lunar-quality-v2';
@@ -302,7 +321,7 @@
     'fullscreenButton', 'qualityButton', 'pauseOverlay', 'winOverlay',
     'winSummary', 'winTime', 'winScore', 'winRank', 'restartButton',
     'touchControls', 'movePad', 'lookPad',
-    'touchJump', 'touchGrapple', 'touchPause', 'pauseResumeButton', 'loadingMeter',
+    'touchJump', 'touchGrapple', 'touchDrop', 'touchPause', 'pauseResumeButton', 'loadingMeter',
   ].forEach(id => { ui[id] = document.getElementById(id); });
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -1184,17 +1203,17 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
   class InputManager {
     constructor() {
       this.keys = new Set();
-      this.buttons = { kick: false, snap: false, line: false, jump: false, spin: false, grapple: false, sprint: false, pause: false };
-      this.edgePulses = { kick: false, snap: false, lineReleased: false, jump: false, spin: false, grapple: false, pause: false };
-      this.previous = { kick: false, snap: false, line: false, jump: false, spin: false, grapple: false, pause: false };
+      this.buttons = { kick: false, snap: false, line: false, jump: false, spin: false, grapple: false, drop: false, sprint: false, pause: false };
+      this.edgePulses = { kick: false, snap: false, lineReleased: false, jump: false, spin: false, grapple: false, drop: false, pause: false };
+      this.previous = { kick: false, snap: false, line: false, jump: false, spin: false, grapple: false, drop: false, pause: false };
       this.frame = {
         moveX: 0, moveZ: 0, lookX: 0, lookY: 0,
-        kick: false, snap: false, line: false, jump: false, spin: false, grapple: false, sprint: false,
+        kick: false, snap: false, line: false, jump: false, spin: false, grapple: false, drop: false, sprint: false,
         kickPressed: false, kickReleased: false, snapPressed: false,
         linePressed: false, lineReleased: false,
         actionCancelled: false,
         jumpPressed: false, spinPressed: false, spinDirection: 0, spinPower: 1,
-        grapplePressed: false, pausePressed: false,
+        grapplePressed: false, dropPressed: false, pausePressed: false,
       };
       this.mouseLook = new T.Vector2();
       this.lookScratch = new T.Vector2();
@@ -1294,6 +1313,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       canvas.addEventListener('contextmenu', event => event.preventDefault());
       this.bindButton(ui.touchJump, 'jump');
       this.bindButton(ui.touchGrapple, 'grapple');
+      this.bindButton(ui.touchDrop, 'drop');
       this.bindButton(ui.touchPause, 'pause');
       document.addEventListener('pointerlockchange', () => {
         document.body.classList.toggle('pointer-locked', document.pointerLockElement === canvas);
@@ -1409,7 +1429,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         moveZ = -this.moveStick.value.y;
       }
 
-      let gpKick = false, gpSnap = false, gpJump = false, gpSpin = false, gpPause = false, gpSprint = false;
+      let gpKick = false, gpSnap = false, gpJump = false, gpSpin = false, gpDrop = false, gpPause = false, gpSprint = false;
       let gpLookX = 0, gpLookY = 0;
       const pads = navigator.getGamepads ? navigator.getGamepads() : [];
       const pad = [...pads].find(candidate => candidate && candidate.connected);
@@ -1421,11 +1441,12 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         if (Math.hypot(lx, ly) > .08) { moveX = lx; moveZ = -ly; }
         gpJump = !!pad.buttons[0]?.pressed;
         gpSpin = !!(pad.buttons[1]?.pressed || pad.buttons[2]?.pressed);
+        gpDrop = !!pad.buttons[3]?.pressed;
         gpSprint = !!pad.buttons[10]?.pressed;
         gpSnap = !!(pad.buttons[6] && pad.buttons[6].value > .22);
         gpKick = !!(pad.buttons[7] && pad.buttons[7].value > .22);
         gpPause = !!pad.buttons[9]?.pressed;
-        const gamepadActive = Math.hypot(lx, ly, gpLookX, gpLookY) > .12 || gpJump || gpSpin || gpSprint || gpSnap || gpKick || gpPause;
+        const gamepadActive = Math.hypot(lx, ly, gpLookX, gpLookY) > .12 || gpJump || gpSpin || gpDrop || gpSprint || gpSnap || gpKick || gpPause;
         if (gamepadActive) document.body.classList.add('using-gamepad');
       }
       const gamepadActivate = gpJump || gpPause;
@@ -1474,7 +1495,8 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const line = this.buttons.line || gpSnap || touchLine;
       const jump = this.buttons.jump || gpJump || this.keys.has('Space');
       const spin = loop.active || mouseLoop.active || this.buttons.spin || gpSpin || this.keys.has('KeyQ');
-      const grapple = this.buttons.grapple || this.keys.has('KeyC');
+      const grapple = this.buttons.grapple;
+      const drop = this.buttons.drop || gpDrop || this.keys.has('KeyC');
       // Full forward deflection is the touch sprint gesture. It preserves an
       // analog walk band while giving phones the same momentum route as Shift
       // and controller L3 without adding another thumb-blocking button.
@@ -1482,7 +1504,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const sprint = touchSprint || gpSprint || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
       const pause = this.buttons.pause || this.keys.has('Escape') || this.keys.has('KeyP') || gpPause;
       Object.assign(this.frame, {
-        moveX, moveZ, lookX: this.gamepadLook.x, lookY: this.gamepadLook.y, kick, snap, line, jump, spin, grapple, sprint,
+        moveX, moveZ, lookX: this.gamepadLook.x, lookY: this.gamepadLook.y, kick, snap, line, jump, spin, grapple, drop, sprint,
         kickPressed: touchTapKick || this.edgePulses.kick || (kick && !this.previous.kick),
         kickReleased: !rightAction.cancelled && (touchTapKick || (rightAction.released && actionHome) || (!kick && this.previous.kick)),
         snapPressed: touchTapCall || this.edgePulses.snap || (snap && !this.previous.snap) || (gpSnap && !this.previous.line),
@@ -1495,6 +1517,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         spinDirection: loop.active ? loop.direction : mouseLoop.active ? mouseLoop.direction : 0,
         spinPower: loop.active ? loop.power : mouseLoop.active ? mouseLoop.power : 1,
         grapplePressed: this.edgePulses.grapple || (grapple && !this.previous.grapple),
+        dropPressed: this.edgePulses.drop || (drop && !this.previous.drop),
         pausePressed: this.edgePulses.pause || (pause && !this.previous.pause),
       });
       Object.keys(this.edgePulses).forEach(key => { this.edgePulses[key] = false; });
@@ -1532,6 +1555,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.previous.jump = this.frame.jump;
       this.previous.spin = this.frame.spin;
       this.previous.grapple = this.frame.grapple;
+      this.previous.drop = this.frame.drop;
       this.previous.pause = this.buttons.pause || this.keys.has('Escape') || this.keys.has('KeyP') || this.lastGamepadPause;
       this.pendingLook.set(0, 0);
     }
@@ -2624,6 +2648,17 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       ribHalfArc: PLANET.radius * ribA.angleTo(ribB) / 2,
     };
   })();
+  // THE STRATA: a compact east-limb fault district authored in chart space so its
+  // stepped terrain enters both the displaced sphere and every floor query.
+  // Literal placement adds no draws to the legacy construction RNG stream.
+  const STRATA_SITE = Object.freeze({
+    id: 'strata', x: 650, z: 20, radius: 66, yaw: -.42,
+  });
+  const STRATA_DRUM_ANGLES = Object.freeze([-.32, 1.78, 3.85]);
+  const STRATA_DRUM_SITES = Object.freeze(STRATA_DRUM_ANGLES.map(angle => Object.freeze({
+    x: STRATA_SITE.x + Math.cos(angle) * 27,
+    z: STRATA_SITE.z + Math.sin(angle) * 27,
+  })));
   const FAR_CRATERS = [
     { x: 240, z: 780, radius: 60, depth: 9, rim: 2.6 },
     { x: -520, z: -640, radius: 44, depth: 7, rim: 2.2 },
@@ -2667,6 +2702,24 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     for (const bump of SCULPT_BUMPS) {
       const distance = Math.hypot(x - bump.x, z - bump.z);
       if (distance < bump.radius) height += bump.height * Math.pow(smoothstep(bump.radius, 4, distance), 1.15);
+    }
+    // Three broad fault steps climb across the district, then fold down into
+    // the Crownback's concave arena. Every blend is wider than four terrain
+    // samples, so the walked lip and the rendered lip cannot diverge.
+    {
+      const dx = x - STRATA_SITE.x, dz = z - STRATA_SITE.z;
+      const cosine = Math.cos(STRATA_SITE.yaw), sine = Math.sin(STRATA_SITE.yaw);
+      const along = cosine * dx - sine * dz;
+      const across = sine * dx + cosine * dz;
+      const distance = Math.hypot(along / 1.12, across);
+      const footprint = smootherstep(STRATA_SITE.radius, STRATA_SITE.radius - 14, distance);
+      if (footprint > 0) {
+        height += footprint * 4;
+        height += footprint * 7 * smootherstep(-38, -29, along);
+        height += footprint * 8 * smootherstep(-9, 0, along);
+        height += footprint * 9 * smootherstep(20, 29, along);
+        height -= 12 * smootherstep(26, 10, distance);
+      }
     }
     return height;
   }
@@ -2732,6 +2785,19 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     return flattenDescenderTerrain(terrainHeightRawAt(x, z), x, z);
   }
   const arcTo = (dir, sightDir) => PLANET.radius * Math.acos(clamp(dir.dot(sightDir), -1, 1));
+  const surfaceDistanceScratchA = new T.Vector3();
+  const surfaceDistanceScratchB = new T.Vector3();
+  // Physical metres along the spherical datum between two authored chart
+  // points. Rigid tangent-built props need this metric: azimuthal chart metres
+  // compress around the circumference away from the pole even though their
+  // meshes remain true metres wide.
+  function surfaceDistanceAt(ax, az, bx, bz) {
+    if (!SPHERE_WORLD) return Math.hypot(ax - bx, az - bz);
+    return arcTo(
+      chartDirAt(ax, az, surfaceDistanceScratchA),
+      chartDirAt(bx, bz, surfaceDistanceScratchB),
+    );
+  }
   // (Session-4 domes and fins live in SCULPT_BUMPS above, applied on both
   // terrain paths through sculptedAt.)
   function farElevation(dir) {
@@ -2956,6 +3022,25 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
   ];
   const FINAL_CANNON = { x: 0, z: 1062, muzzleLocalY: 54, crystalRadius: 7.5 };
 
+  const STRATA_PAD_TARGETS = new Array(STRATA_DRUM_SITES.length).fill(null);
+  const strataPadDirScratch = new T.Vector3();
+  let resolvingStrataPadTarget = false;
+  function flattenStrataDrumTerrain(height, x, z) {
+    for (let index = 0; index < STRATA_DRUM_SITES.length; index++) {
+      const site = STRATA_DRUM_SITES[index];
+      const distance = surfaceDistanceAt(x, z, site.x, site.z);
+      if (distance >= 14.5) continue;
+      if (!Number.isFinite(STRATA_PAD_TARGETS[index])) {
+        resolvingStrataPadTarget = true;
+        STRATA_PAD_TARGETS[index] = elevationAt(chartDirAt(site.x, site.z, strataPadDirScratch));
+        resolvingStrataPadTarget = false;
+      }
+      const weight = smootherstep(14.5, 10.6, distance);
+      height = lerp(height, STRATA_PAD_TARGETS[index], weight);
+    }
+    return height;
+  }
+
   function elevationAt(dir) {
     const horizontal = Math.hypot(dir.x, dir.z);
     const rho = PLANET.radius * Math.atan2(horizontal, dir.y);
@@ -2990,7 +3075,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     // of the flattening survives and the gantry is buried by its own crater.
     if (horizontal > 1e-9) {
       const chartScale = rho / horizontal;
-      blended = flattenDescenderTerrain(blended, dir.x * chartScale, dir.z * chartScale);
+      const chartX = dir.x * chartScale, chartZ = dir.z * chartScale;
+      blended = flattenDescenderTerrain(blended, chartX, chartZ);
+      if (!resolvingStrataPadTarget) blended = flattenStrataDrumTerrain(blended, chartX, chartZ);
     }
     return blended;
   }
@@ -3078,6 +3165,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.undergroundPlatforms = [];
       this.undergroundSlabs = [];
       this.surfaceStructures = [];
+      this.strata = null;
       this.finalSlabs = [];
       this.towAnchors = [];
       this.skyRails = [];
@@ -3121,6 +3209,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.makeMoonline();
       this.makeLaunchRings();
       this.makeFarSights();
+      this.makeStrata();
       this.makeTheLanding();
       this.makeTheLongShot();
       this.makeTheRun();
@@ -8984,6 +9073,20 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       for (const region of this.regions) {
         if (region.boss) region.boss.position.copy(region.boss.group.position);
       }
+      if (this.strata) {
+        for (const anchor of this.strata.anchors) {
+          anchor.group.updateMatrixWorld(true);
+          anchor.group.getWorldPosition(anchor.position);
+        }
+        for (const drum of this.strata.drums) {
+          drum.group.updateMatrixWorld(true);
+          drum.ring.getWorldPosition(drum.position);
+          drum.baseQuaternion = drum.group.quaternion.clone();
+        }
+        this.strata.boss.group.updateMatrixWorld(true);
+        this.strata.boss.group.getWorldPosition(this.strata.boss.position);
+        this.strata.boss.baseQuaternion = this.strata.boss.group.quaternion.clone();
+      }
       // The fracture's per-piece world points, recomputed through the lifted
       // group so chip feedback lands on the actual wall.
       const pieceLocal = new T.Vector3();
@@ -10128,6 +10231,240 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // over the far side -- rears, and dives at whoever stands there. Its
     // whole body takes hits (the one combat law), and a strike from ABOVE,
     // onto the gold eye it carries on its back, takes double.
+    // THE STRATA. Three real fault terraces, grapple ribs, Moonfall drums and
+    // one boss form one optional surface sentence: climb, let go, break the
+    // back, then finish with the ball. Nothing here participates in the old
+    // mission gates or save schema.
+    makeStrata() {
+      const site = STRATA_SITE;
+      const root = new T.Group();
+      root.name = 'the-strata';
+      root.userData.kbOriginGroup = true;
+      this.scene.add(root);
+
+      const stone = new T.MeshStandardMaterial({
+        color: 0x241b35, emissive: 0x3d1f5e, emissiveIntensity: .46,
+        roughness: .88, metalness: .12, flatShading: true,
+      });
+      const ribField = new T.MeshBasicMaterial({
+        color: 0x9f6cff, transparent: true, opacity: .34,
+        wireframe: true, depthWrite: false, blending: T.AdditiveBlending,
+      });
+      const mineralColors = [0xff6f91, 0x62edff, 0xffd66b];
+      const mineral = mineralColors.map(color => new T.MeshStandardMaterial({
+        color, emissive: color, emissiveIntensity: 1.45,
+        roughness: .27, metalness: .62,
+      }));
+
+      // The terraces themselves wear three thin mineral sutures. These are
+      // terrain-following tubes (not floating decals): every vertex samples
+      // the same analytic ground and then passes through the normal spherical
+      // lift, giving the district coloured geology without counterfeit walls.
+      const seamAlong = [-31, -2, 27];
+      const faultSeams = [];
+      const cosine = Math.cos(site.yaw), sine = Math.sin(site.yaw);
+      for (let seamIndex = 0; seamIndex < seamAlong.length; seamIndex++) {
+        const points = [];
+        for (let across = -48; across <= 48; across += 8) {
+          const along = seamAlong[seamIndex] + Math.sin(across * .14 + seamIndex * 1.7) * 1.15;
+          const x = site.x + cosine * along + sine * across;
+          const z = site.z - sine * along + cosine * across;
+          points.push(new T.Vector3(x, this.sampleTerrainHeight(x, z) + .3, z));
+        }
+        const seamMaterial = mineral[seamIndex].clone();
+        seamMaterial.emissiveIntensity = .46;
+        seamMaterial.roughness = .36;
+        const seamMesh = new T.Mesh(
+          new T.TubeGeometry(new T.CatmullRomCurve3(points), 64, .22, 6, false),
+          seamMaterial,
+        );
+        seamMesh.name = `strata-fault-seam-${seamIndex + 1}`;
+        seamMesh.userData.kbWorldGeometry = true;
+        seamMesh.castShadow = false;
+        seamMesh.receiveShadow = true;
+        root.add(seamMesh);
+        faultSeams.push(seamMesh);
+      }
+
+      const anchors = [];
+      const archSpecs = [
+        { x: site.x - 25, z: site.z + 10, span: 17, yaw: site.yaw + .18 },
+        { x: site.x + 25, z: site.z - 12, span: 20, yaw: site.yaw - .32 },
+      ];
+      for (let index = 0; index < archSpecs.length; index++) {
+        const spec = archSpecs[index];
+        const base = this.sampleTerrainHeight(spec.x, spec.z);
+        const arch = new T.Group();
+        arch.name = `strata-rib-${index + 1}`;
+        arch.position.set(spec.x, base + 3.4, spec.z);
+        arch.rotation.y = spec.yaw;
+        // This is a magnetic fault field, not counterfeit stone collision.
+        // The socket is the grapple target; the translucent rib is a readable
+        // trajectory and can honestly be crossed by player and ball.
+        const shell = new T.Mesh(new T.TorusGeometry(spec.span, 3.05, 10, 56, Math.PI), ribField);
+        arch.add(shell);
+        for (let band = 0; band < 3; band++) {
+          const seam = new T.Mesh(new T.TorusGeometry(spec.span - 5 - band * 4.4, .24, 6, 44, Math.PI), mineral[band]);
+          seam.position.z = -.24 - band * .12;
+          arch.add(seam);
+        }
+        const socket = new T.Group();
+        socket.position.set(0, spec.span + 3.1, 0);
+        const socketCore = new T.Mesh(new T.OctahedronGeometry(1.55, 0), mineral[index + 1]);
+        const socketRing = new T.Mesh(new T.TorusGeometry(2.35, .28, 8, 30), mineral[index]);
+        socket.add(socketCore, socketRing);
+        arch.add(socket);
+        root.add(arch);
+        anchors.push({
+          id: `strata-rib-${index + 1}`, group: socket, position: new T.Vector3(spec.x, base + spec.span + 6.5, spec.z),
+          radius: 3.3, used: true, synthetic: true, layer: 'surface', static: true,
+        });
+      }
+
+      const drums = [];
+      for (let index = 0; index < STRATA_DRUM_SITES.length; index++) {
+        const { x, z } = STRATA_DRUM_SITES[index];
+        const floor = this.sampleTerrainHeight(x, z);
+        const top = floor + 1.35;
+        const drumGroup = new T.Group();
+        drumGroup.name = `strata-drum-${index + 1}`;
+        drumGroup.position.set(x, floor, z);
+        const body = new T.Mesh(new T.CylinderGeometry(8.9, 10.2, 1.35, 28), stone.clone());
+        body.position.y = .675;
+        body.castShadow = true;
+        body.receiveShadow = true;
+        const drumMaterial = mineral[index].clone();
+        drumMaterial.emissiveIntensity = .24;
+        drumMaterial.roughness = .42;
+        drumMaterial.metalness = .38;
+        const drumRingMaterial = drumMaterial.clone();
+        drumRingMaterial.emissiveIntensity = .48;
+        const face = new T.Mesh(new T.CylinderGeometry(8.25, 8.25, .24, 28), drumMaterial);
+        face.position.y = 1.43;
+        const ring = new T.Mesh(new T.TorusGeometry(8.35, .34, 8, 40), drumRingMaterial);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 1.5;
+        drumGroup.add(body, face, ring);
+        root.add(drumGroup);
+        const solid = {
+          id: `strata-drum-${index + 1}`, x, z, radius: 9.6, top, bottom: floor,
+          collisionScale: .92, layer: 'surface', strata: true, geodesic: true,
+        };
+        this.surfaceStructures.push(solid);
+        drums.push({
+          ...solid, group: drumGroup, body, face, ring, struck: false, flash: 0,
+          position: new T.Vector3(x, top, z), tint: mineralColors[index], index,
+        });
+      }
+
+      const bossGround = this.sampleTerrainHeight(site.x, site.z);
+      const bossGroup = new T.Group();
+      bossGroup.name = 'boss-crownback';
+      bossGroup.position.set(site.x, bossGround, site.z);
+      const bossHide = new T.MeshStandardMaterial({
+        color: 0x301a43, emissive: 0x6b245e, emissiveIntensity: .72,
+        roughness: .48, metalness: .3, flatShading: true,
+      });
+      const body = new T.Mesh(new T.DodecahedronGeometry(7.4, 1), bossHide);
+      body.scale.set(1.45, .76, 1.72);
+      body.position.y = 6.7;
+      body.castShadow = true;
+      body.receiveShadow = true;
+      bossGroup.add(body);
+      const head = new T.Mesh(new T.DodecahedronGeometry(4.1, 0), stone.clone());
+      head.scale.set(1.1, .75, 1.2);
+      head.position.set(0, 5.5, -12.2);
+      head.castShadow = true;
+      bossGroup.add(head);
+      const jawMaterial = mineral[1].clone();
+      jawMaterial.emissiveIntensity = .62;
+      jawMaterial.roughness = .34;
+      jawMaterial.metalness = .46;
+      const jaw = new T.Mesh(new T.BoxGeometry(6.8, 1.5, 5), jawMaterial);
+      jaw.position.set(0, 3.8, -12.8);
+      jaw.rotation.x = -.12;
+      bossGroup.add(jaw);
+      const eyes = [];
+      for (const side of [-1, 1]) {
+        const eye = new T.Mesh(new T.SphereGeometry(.72, 12, 8), mineral[side < 0 ? 0 : 1]);
+        eye.position.set(side * 1.7, 6.5, -15.5);
+        bossGroup.add(eye);
+        eyes.push(eye);
+      }
+      const legs = [];
+      for (const side of [-1, 1]) {
+        for (const fore of [-1, 1]) {
+          const leg = new T.Group();
+          leg.position.set(side * 7.1, 3.5, fore * 7.8);
+          const upper = new T.Mesh(new T.CylinderGeometry(1.45, 2.2, 7, 7), stone.clone());
+          upper.position.y = -.4;
+          upper.rotation.z = side * .22;
+          upper.castShadow = true;
+          const hoof = new T.Mesh(new T.DodecahedronGeometry(2.1, 0), bossHide);
+          hoof.position.set(side * .55, -3.4, fore * .35);
+          leg.add(upper, hoof);
+          bossGroup.add(leg);
+          legs.push(leg);
+        }
+      }
+      const bands = [];
+      for (let index = 0; index < 3; index++) {
+        const bandMaterial = mineral[index].clone();
+        bandMaterial.emissiveIntensity = .62;
+        bandMaterial.roughness = .34;
+        bandMaterial.metalness = .46;
+        const band = new T.Mesh(new T.TorusGeometry(7.05, .72, 9, 42), bandMaterial);
+        band.scale.set(1.42, .82, 1);
+        band.position.set(0, 7, -4.2 + index * 4.25);
+        band.castShadow = true;
+        bossGroup.add(band);
+        bands.push({ mesh: band, alive: true, index, tint: mineralColors[index], basePosition: band.position.clone(), breakTimer: 0 });
+      }
+      const coreMaterial = new T.MeshStandardMaterial({
+        color: 0xff7bd4, emissive: 0xff1c9e, emissiveIntensity: .85,
+        roughness: .12, metalness: .72,
+      });
+      const core = new T.Mesh(new T.IcosahedronGeometry(3.05, 2), coreMaterial);
+      core.position.set(0, 7.2, 8.6);
+      core.scale.setScalar(.42);
+      bossGroup.add(core);
+      const coreGlow = this.makeGlowSprite(this.glowViolet, 12, .08);
+      coreGlow.position.copy(core.position);
+      bossGroup.add(coreGlow);
+      // Sixty-four mineral dashes are projected onto the actual sphere every
+      // frame. A single flat 60m torus floated metres above the ground at its
+      // far edge and disagreed with its chart-space damage test; this one is a
+      // one-draw instanced geodesic ring whose pixels and hit radius are the
+      // same physical metres.
+      const attackSegments = 64;
+      const attackRing = new T.InstancedMesh(
+        new T.BoxGeometry(1, .14, .38),
+        new T.MeshBasicMaterial({
+          color: 0xff6fae, transparent: true, opacity: 0,
+          depthWrite: false, blending: T.AdditiveBlending,
+        }),
+        attackSegments,
+      );
+      attackRing.instanceMatrix.setUsage(T.DynamicDrawUsage);
+      attackRing.frustumCulled = false;
+      attackRing.visible = false;
+      this.scene.add(attackRing);
+      root.add(bossGroup);
+
+      const boss = {
+        id: 'crownback', group: bossGroup, body, head, jaw, eyes, legs, bands, core, coreGlow,
+        attackRing, attackSegments, attackMatrix: new T.Matrix4(),
+        attackX: new T.Vector3(), attackY: new T.Vector3(), attackZ: new T.Vector3(),
+        attackBaseX: new T.Vector3(), attackBaseZ: new T.Vector3(), attackCircumference: new T.Vector3(),
+        attackTangent: new T.Vector3(), attackPoint: new T.Vector3(), attackChart: { x: 0, z: 0 },
+        x: site.x, z: site.z, ground: bossGround, position: new T.Vector3(site.x, bossGround, site.z),
+        radius: 12.5, coreRadius: 4.6, maxArmor: 3, armorHp: 3, maxHp: 3, hp: 3,
+        alive: true, phase: 'armoured', engaged: false, hitFlash: 0, deadTimer: 0,
+        attackTimer: 2.6, attackActive: 0, attackRadius: 0, attackSerial: 0, attackHitSerial: -1,
+        telegraph: 0, telegraphArmed: false,
+      };
+      this.strata = { ...site, root, stone, ribField, mineral, faultSeams, anchors, drums, boss };
+    }
     // THE LANDING. The phantoms in the dark quarter are dead astronauts;
     // this is what they came down in. Three visibly bolted salvage plates make
     // the wreck answer the signature kick in three readable beats. The cache
@@ -11567,12 +11904,66 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     makeBallVisual() {
       this.ballGroup = new T.Group();
       this.ballGroup.userData.kbLifted = true;
+      // A fixed, authored tidal contour: broad broken mineral rivers rather
+      // than the reference build's candy-cage toruses. The pattern is baked
+      // once into one texture, so the ball gains a recognizable striped skin
+      // without adding a stack of transparent draw calls.
+      const contourCanvas = document.createElement('canvas');
+      contourCanvas.width = 256;
+      contourCanvas.height = 128;
+      const contour = contourCanvas.getContext('2d');
+      const night = contour.createLinearGradient(0, 0, 256, 128);
+      night.addColorStop(0, '#09142f');
+      night.addColorStop(.46, '#2d1a55');
+      night.addColorStop(1, '#071d2e');
+      contour.fillStyle = night;
+      contour.fillRect(0, 0, 256, 128);
+      const contourBands = [
+        { y: 28, color: '#63efff', phase: .2, width: 11 },
+        { y: 66, color: '#ff6fae', phase: 2.1, width: 13 },
+        { y: 102, color: '#ffd66b', phase: 4.3, width: 9 },
+      ];
+      for (const band of contourBands) {
+        for (const offset of [-256, 0, 256]) {
+          contour.beginPath();
+          for (let x = 0; x <= 256; x += 4) {
+            const y = band.y + Math.sin(x * .045 + band.phase) * 8 + Math.sin(x * .013 - band.phase) * 4;
+            if (x === 0) contour.moveTo(x + offset, y);
+            else contour.lineTo(x + offset, y);
+          }
+          contour.strokeStyle = '#050914';
+          contour.lineWidth = band.width + 6;
+          contour.lineCap = 'round';
+          contour.stroke();
+          contour.strokeStyle = band.color;
+          contour.lineWidth = band.width;
+          contour.stroke();
+          contour.globalAlpha = .46;
+          contour.strokeStyle = '#ffffff';
+          contour.lineWidth = 1.6;
+          contour.stroke();
+          contour.globalAlpha = 1;
+        }
+      }
+      contour.fillStyle = 'rgba(236,252,255,.72)';
+      for (let i = 0; i < 18; i++) {
+        const x = (i * 73) % 256;
+        const y = (i * i * 17 + 9) % 128;
+        contour.beginPath();
+        contour.arc(x, y, i % 3 === 0 ? 2.1 : 1.1, 0, TAU);
+        contour.fill();
+      }
+      const contourTexture = new T.CanvasTexture(contourCanvas);
+      contourTexture.colorSpace = T.SRGBColorSpace;
+      contourTexture.wrapS = T.RepeatWrapping;
+      contourTexture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
       const shell = new T.Mesh(
         new T.SphereGeometry(.72, 32, 24),
         new T.MeshPhysicalMaterial({
-          color: 0xc4faff, emissive: 0x1596bb, emissiveIntensity: 2.25,
-          metalness: .24, roughness: .18, clearcoat: 1, clearcoatRoughness: .045,
-          transparent: true, opacity: .92,
+          map: contourTexture, emissiveMap: contourTexture,
+          color: 0xffffff, emissive: 0x2c84a3, emissiveIntensity: 1.8,
+          metalness: .32, roughness: .16, clearcoat: 1, clearcoatRoughness: .035,
+          transparent: true, opacity: .96,
         }),
       );
       shell.castShadow = true;
@@ -11620,7 +12011,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.ballDisplayScale = .46;
       this.ballGroup.scale.setScalar(this.ballDisplayScale);
       this.scene.add(this.ballGroup);
-      this.ballVisual = { shell, core, ringA, ringB, coreShards, dropMotes };
+      this.ballVisual = { shell, core, ringA, ringB, coreShards, dropMotes, contourTexture };
       const trailGeometry = new T.BufferGeometry();
       this.trailPositions = new Float32Array(64 * 3);
       trailGeometry.setAttribute('position', new T.BufferAttribute(this.trailPositions, 3).setUsage(T.DynamicDrawUsage));
@@ -11752,6 +12143,76 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         glow.position.y = 1.4;
         group.add(glow);
         return { group, abdomen: torso, head: helmet, eye, weak, legs: [], shield: null, scale: 1.15 };
+      }
+      if (type === 'ribbonback') {
+        // THE RIBBONBACK. Three physical mineral bands are its health: every
+        // hit removes a whole piece of silhouette, not merely a few pixels of
+        // hue. Opaque dedicated materials keep the creature cheap and prevent
+        // one victim's flash from recolouring the entire cast.
+        const hide = new T.MeshStandardMaterial({
+          color: 0x34204f, emissive: 0x6a246f, emissiveIntensity: .72,
+          roughness: .46, metalness: .28,
+        });
+        const abdomen = new T.Mesh(new T.IcosahedronGeometry(1.05, 2), hide);
+        abdomen.scale.set(1.18, .72, 1.48);
+        abdomen.position.y = 1.08;
+        abdomen.castShadow = true;
+        group.add(abdomen);
+
+        const faceMaterial = new T.MeshStandardMaterial({
+          color: 0x13243b, emissive: 0x1e80a7, emissiveIntensity: 1.15,
+          roughness: .3, metalness: .55,
+        });
+        const head = new T.Mesh(new T.DodecahedronGeometry(.62, 1), faceMaterial);
+        head.scale.set(1.05, .78, .9);
+        head.position.set(0, 1.18, -1.32);
+        head.castShadow = true;
+        group.add(head);
+        const eye = new T.Mesh(new T.SphereGeometry(.17, 12, 8), new T.MeshStandardMaterial({
+          color: 0xeaffff, emissive: 0x63eeff, emissiveIntensity: 4.2,
+          roughness: .18, metalness: .3,
+        }));
+        eye.position.set(0, 1.26, -1.84);
+        group.add(eye);
+
+        const bandColors = [0xff6f91, 0x62edff, 0xffd66b];
+        const healthBands = [];
+        for (let i = 0; i < 3; i++) {
+          const material = new T.MeshStandardMaterial({
+            color: bandColors[i], emissive: bandColors[i], emissiveIntensity: 1.35,
+            roughness: .24, metalness: .58,
+          });
+          const band = new T.Mesh(new T.TorusGeometry(.88, .13, 8, 28), material);
+          band.scale.set(1.2, .76, 1);
+          band.position.set(0, 1.08, -.58 + i * .58);
+          band.castShadow = true;
+          band.userData.basePosition = band.position.clone();
+          band.userData.breakTimer = 0;
+          band.userData.breakSide = i % 2 ? -1 : 1;
+          group.add(band);
+          healthBands.push(band);
+        }
+        const weak = new T.Mesh(new T.OctahedronGeometry(.34, 0), new T.MeshStandardMaterial({
+          color: 0xffedf9, emissive: 0xff4fc2, emissiveIntensity: 2.4,
+          roughness: .12, metalness: .62,
+        }));
+        weak.position.set(0, 1.18, 1.44);
+        group.add(weak);
+        for (const side of [-1, 1]) {
+          for (const fore of [-.65, .62]) {
+            const leg = new T.Mesh(new T.CapsuleGeometry(.11, .74, 4, 7), faceMaterial);
+            leg.position.set(side * .83, .45, fore);
+            leg.rotation.z = side * .72;
+            leg.rotation.x = fore * .25;
+            leg.castShadow = true;
+            group.add(leg);
+          }
+        }
+        group.userData.healthBands = healthBands;
+        return {
+          group, abdomen, head, eye, weak, legs: [], shield: null, scale: 1.22,
+          hitMaterials: [hide, faceMaterial, ...healthBands.map(band => band.material)],
+        };
       }
       const abdomenMaterial = type === 'warden' || type === 'floater' ? this.materials.violet
         : type === 'brute' ? this.materials.alienShell
@@ -12016,6 +12477,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (this.layerGroups.final) this.layerGroups.final.visible = next === 'final';
       if (this.highExpansionGroup) this.highExpansionGroup.visible = next === 'surface';
       for (const anchor of this.towAnchors || EMPTY_SOLIDS) anchor.group.visible = next === 'surface';
+      if (this.strata?.root) this.strata.root.visible = next === 'surface';
+      if (this.strata?.boss?.attackRing && next !== 'surface') this.strata.boss.attackRing.visible = false;
       if (this.vane?.group) this.vane.group.visible = next === 'surface' && this.vane.alive;
       if (this.bellower?.group) this.bellower.group.visible = next === 'underground' && this.bellower.alive;
       if (this.moonheart?.group) {
@@ -12461,7 +12924,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         if (distance < platform.radius * .82 && currentY >= platform.top - 2.4) floor = Math.max(floor, platform.top);
       }
       for (const structure of this.surfaceStructures || EMPTY_SOLIDS) {
-        const distance = Math.hypot(x - structure.x, z - structure.z);
+        const distance = structure.geodesic
+          ? surfaceDistanceAt(x, z, structure.x, structure.z)
+          : Math.hypot(x - structure.x, z - structure.z);
         if (distance < structure.radius * (structure.collisionScale ?? 1) && currentY >= structure.top - 2.4) {
           floor = Math.max(floor, structure.top);
         }
@@ -12615,12 +13080,16 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         if (platform.alive === false) continue;
         if (y >= platform.top - .35 || y <= (platform.bottom ?? -Infinity) + .1) continue;
         const sideRadius = platform.radius * (platform.sideScale ?? 1.03) + radius;
-        const nextDistance = Math.hypot(x - platform.x, z - platform.z);
+        const nextDistance = platform.geodesic
+          ? surfaceDistanceAt(x, z, platform.x, platform.z)
+          : Math.hypot(x - platform.x, z - platform.z);
         if (nextDistance >= sideRadius) continue;
         // If a sling, fall, or debug recovery places the player inside the
         // irregular collision shell, outward motion must remain an escape path.
         const currentDistance = Number.isFinite(fromX) && Number.isFinite(fromZ)
-          ? Math.hypot(fromX - platform.x, fromZ - platform.z)
+          ? (platform.geodesic
+            ? surfaceDistanceAt(fromX, fromZ, platform.x, platform.z)
+            : Math.hypot(fromX - platform.x, fromZ - platform.z))
           : Infinity;
         if (currentDistance < sideRadius && nextDistance > currentDistance + 1e-6) continue;
         return true;
@@ -13765,6 +14234,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.ballVisual.ringA.rotation.z += dt * (4 + gameState.ball.spin * .08);
       this.ballVisual.ringB.rotation.x += dt * (3.3 - gameState.ball.spin * .06);
       this.ballVisual.core.rotation.y += dt * 2.7;
+      this.ballVisual.shell.rotation.y += dt * (1.1 + Math.min(4, gameState.ball.velocity.length() * .025));
+      this.ballVisual.shell.rotation.z += dt * .42;
+      this.ballVisual.contourTexture.offset.x = (this.elapsed * .018 + (gameState.player.moonfallActive ? this.elapsed * .09 : 0)) % 1;
       // Earned cores orbit the ball. This is the entire progression display:
       // one, then two, then three lights circling the thing in your hands.
       const owned = gameState.cores;
@@ -13804,8 +14276,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // special" is something the player sees rather than remembers.
       const heat = clamp(gameState.ball.emberHeat || 0, 0, 1);
       const cometOn = gameState.ball.comet ? 1 : 0;
+      const falling = gameState.player.moonfallActive && gameState.player.moonfallArmed ? 1 : 0;
       this.ballVisual.shell.material.emissive.setRGB(.08 + heat * .82 + cometOn * .62, .59 - heat * .3 + cometOn * .3, .73 - heat * .58);
-      this.ballVisual.shell.material.emissiveIntensity = 2.25 + heat * 3.4 + cometOn * 2.2;
+      this.ballVisual.shell.material.emissiveIntensity = 1.8 + heat * 3.4 + cometOn * 2.2 + falling * 2.8;
       this.rig.position.x = Math.sin(gameState.player.runCycle * .5) * .018;
       this.rig.position.y = -.25 + Math.abs(Math.sin(gameState.player.runCycle)) * -.025;
       const catchDistance = gameState.ball.position.distanceTo(gameState.player.position);
@@ -14114,6 +14587,12 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.spinDirection = 1;
       this.spinPower = 1;
       this.grappling = false;
+      this.moonfallActive = false;
+      this.moonfallArmed = false;
+      this.moonfallTime = 0;
+      this.moonfallCooldown = 0;
+      this.moonfallStartAltitude = 0;
+      this.moonfallImpactSpeed = 0;
       this.landingKick = 0;
       this.flung = 0;
       this.checkpoint = this.position.clone();
@@ -14196,12 +14675,14 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         : type === 'watcher' ? 1.55 : type === 'clinger' ? 1.35 : type === 'floater' ? 1.3
           : type === 'drifter' ? 2.7 : type === 'shardling' ? 1.1 : type === 'skater' ? 2.6
             : type === 'snowman' ? 2.6 : type === 'phantom' ? 1.7 : type === 'banker' ? 2.25
-              : type === 'snatcher' ? 1.75 : type === 'burrower' ? 2.2 : type === 'bellbug' ? 1.6 : 1.25;
+              : type === 'snatcher' ? 1.75 : type === 'burrower' ? 2.2 : type === 'bellbug' ? 1.6
+                : type === 'ribbonback' ? 1.85 : 1.25;
       this.maxHp = type === 'warden' ? 7 : type === 'brute' ? 3 : type === 'shield' ? 3
         : type === 'watcher' ? 2 : type === 'clinger' ? 2 : type === 'drifter' ? 3
           : type === 'shardling' ? 2 : type === 'skater' ? 2
             : type === 'snowman' ? 3 : type === 'phantom' ? 4 : type === 'banker' ? 4
-              : type === 'snatcher' ? 2 : type === 'burrower' ? 3 : type === 'bellbug' ? 2 : 1;
+              : type === 'snatcher' ? 2 : type === 'burrower' ? 3 : type === 'bellbug' ? 2
+                : type === 'ribbonback' ? 3 : 1;
       this.hp = this.maxHp;
       this.alive = true;
       this.phase = enemyRandom() * TAU;
@@ -14209,6 +14690,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.voice = (this.phase / TAU) * 1.7;
       this.stun = 0;
       this.hitFlash = 0;
+      this.hitRecoil = 0;
+      this.hitDirection = new T.Vector3();
       this.weakPulse = 0;
       this.dropping = 0;
       this.tensing = 0;
@@ -14267,7 +14750,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.respawnCount = 0;
       this.stats = {
         kicks: 0, snaps: 0, spins: 0, doubleJumps: 0, meteorKicks: 0,
-        anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0, cores: 0, landmarks: 0, skyLit: 0,
+        moonfalls: 0, anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0, cores: 0, landmarks: 0, skyLit: 0,
       };
       this.bestTime = this.loadBest();
       this.forward = new T.Vector3();
@@ -14595,8 +15078,75 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.enemies.push(new AlienState(`under-wing-${type}-${index}`, type, x, z,
           68 + index * 1.19, { layer: 'underground', altitude }));
       });
+      // Appended after the complete legacy and expansion sequences: the old
+      // cast keeps every seeded phase/cooldown while THE STRATA gets a real,
+      // authored population rather than recoloured ambient scatter.
+      const ribbonbackCast = [
+        [596, -8], [610, 64], [667, 73],
+        [706, 43], [694, -25], [636, -39],
+      ];
+      ribbonbackCast.forEach(([x, z], index) => {
+        this.enemies.push(new AlienState(`strata-ribbonback-${index}`, 'ribbonback', x, z, index * 1.07));
+      });
+      this.resetStrataEncounter();
       this.shieldEnemy = this.enemies.find(enemy => enemy.type === 'shield');
       this.warden = this.enemies.find(enemy => enemy.type === 'warden');
+    }
+    resetStrataEncounter() {
+      const strata = world.strata;
+      if (!strata) return;
+      for (const drum of strata.drums) {
+        drum.struck = false;
+        drum.flash = 0;
+        if (drum.baseQuaternion) drum.group.quaternion.copy(drum.baseQuaternion);
+        drum.group.scale.setScalar(1);
+        drum.face.scale.setScalar(1);
+        drum.face.rotation.set(0, 0, 0);
+        drum.ring.scale.setScalar(1);
+        drum.ring.rotation.set(Math.PI / 2, 0, 0);
+        drum.face.visible = true;
+        drum.ring.visible = true;
+        drum.face.material.emissiveIntensity = .24;
+        drum.ring.material.emissiveIntensity = .48;
+      }
+      const boss = strata.boss;
+      boss.alive = true;
+      boss.phase = 'armoured';
+      boss.armorHp = boss.maxArmor;
+      boss.hp = boss.maxHp;
+      boss.engaged = false;
+      boss.hitFlash = 0;
+      boss.deadTimer = 0;
+      boss.attackTimer = 2.6;
+      boss.attackActive = 0;
+      boss.attackRadius = 0;
+      boss.attackSerial = 0;
+      boss.attackHitSerial = -1;
+      boss.telegraph = 0;
+      boss.telegraphArmed = false;
+      boss.group.visible = world.activeLayer === 'surface';
+      boss.group.scale.setScalar(1);
+      if (boss.baseQuaternion) boss.group.quaternion.copy(boss.baseQuaternion);
+      boss.body.position.y = 6.7;
+      boss.body.rotation.set(0, 0, 0);
+      boss.body.material.emissiveIntensity = .72;
+      boss.jaw.rotation.set(-.12, 0, 0);
+      for (const leg of boss.legs) leg.rotation.set(0, 0, 0);
+      boss.core.position.set(0, 7.2, 8.6);
+      boss.core.scale.setScalar(.42);
+      boss.core.material.emissiveIntensity = .85;
+      boss.coreGlow.position.copy(boss.core.position);
+      boss.coreGlow.material.opacity = .08;
+      for (const band of boss.bands) {
+        band.alive = true;
+        band.breakTimer = 0;
+        band.mesh.visible = true;
+        band.mesh.position.copy(band.basePosition);
+        band.mesh.scale.set(1.42, .82, 1);
+        band.mesh.rotation.set(0, 0, 0);
+      }
+      boss.attackRing.visible = false;
+      boss.attackRing.material.opacity = 0;
     }
     start(requestLock = true) {
       this.started = true;
@@ -14657,7 +15207,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.player.transportCar = null;
       this.stats = {
         kicks: 0, snaps: 0, spins: 0, doubleJumps: 0, meteorKicks: 0,
-        anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0, cores: 0, landmarks: 0, skyLit: 0,
+        moonfalls: 0, anchorLinks: 0, breaks: 0, kills: 0, returnHits: 0, falls: 0, cores: 0, landmarks: 0, skyLit: 0,
       };
       world.gate.active = true;
       world.gate.group.visible = true;
@@ -14778,6 +15328,36 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (SPHERE_WORLD) target.applyQuaternion(this.player.frame);
       return target;
     }
+    cancelMoonfall() {
+      const player = this.player;
+      player.moonfallActive = false;
+      player.moonfallArmed = false;
+      player.moonfallTime = 0;
+    }
+    beginMoonfall() {
+      const player = this.player;
+      const anchored = this.ball.mode === 'anchored' && !!this.ball.anchor;
+      if (player.grounded || player.moonfallActive || player.moonfallCooldown > 0
+        || player.transportCar || this.transition.active || this.cannonFlight.active
+        || (player.grappling && !anchored)) return false;
+      if (anchored) {
+        // The piton stays alive. C only lets go of the reel, preserving the
+        // grapple-up -> fall -> rebound -> re-grapple route.
+        player.grappling = false;
+        this.grappleReel = 0;
+      }
+      player.moonfallActive = true;
+      player.moonfallArmed = this.ball.mode === 'ready' || anchored;
+      player.moonfallTime = 0;
+      player.moonfallStartAltitude = altAt(player.position);
+      player.moonfallImpactSpeed = 0;
+      setVspeed(player.velocity, player.up,
+        Math.min(vspeedOf(player.velocity, player.up), -MOONFALL_PROFILE.initialDownSpeed));
+      world.particles.burst(player.position.clone().addScaledVector(player.up, -.08),
+        player.moonfallArmed ? 0x72edff : 0x9ea9bd, 12, 5.5, .42, .06);
+      audio.impact(.34, 'anchor');
+      return true;
+    }
     update(dt, frame, edgeFrame = true) {
       if (edgeFrame && frame.pausePressed) this.togglePause();
       if (!this.started || this.paused) {
@@ -14801,7 +15381,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         // A call always means "come back" — even from a tether socket. The
         // actual E/RMB edge occurs while its held state is true, so requiring
         // !frame.snap here made release possible only through a fabricated
-        // debug frame. MMB/C owns grapple reeling; E/RMB owns recall.
+        // debug frame. MMB owns grapple reeling; E/RMB owns recall; C falls.
         if (this.ball.mode === 'anchored') {
           const ball = this.ball;
           if (ball.anchor?.railTransit) ball.anchor.active = false;
@@ -14836,6 +15416,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       }
       if (!frame.kick && !this.charging) this.charge = 0;
       if (edgeFrame && frame.spinPressed) this.startSpin(frame.spinDirection, frame.spinPower);
+      if (edgeFrame && frame.dropPressed) this.beginMoonfall();
       // THE GRAPPLE. Holding the button IS the arming -- no window, no timing.
       // While it is down the ball bites whatever it touches; when it comes up
       // the reel keeps running a beat so letting go early never drops you.
@@ -14848,6 +15429,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.grappleReel = Math.max(0, this.grappleReel - dt);
       }
       if (edgeFrame && frame.grapplePressed) {
+        this.cancelMoonfall();
         // MIDDLE CLICK IS THE WHOLE GRAPPLE. Ball in hand: throw a shot that
         // sticks to the first thing it touches. Ball in flight or a moment
         // after a bounce: bite now. Held: reel. One button, no timing.
@@ -14883,6 +15465,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.updateLandmarks(dt);
         this.updateSky(dt);
         this.updateEnemies(dt);
+        this.updateStrata(dt);
         this.updateRoc(dt);
         this.updateColossus(dt);
         this.updateEndgame(dt);
@@ -14955,6 +15538,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       player.damageCooldown = Math.max(0, player.damageCooldown - dt);
       player.spinCooldown = Math.max(0, player.spinCooldown - dt);
       player.spinTimer = Math.max(0, player.spinTimer - dt);
+      player.moonfallCooldown = Math.max(0, player.moonfallCooldown - dt);
+      if (player.moonfallActive) player.moonfallTime += dt;
       if (this.queuedSpin) {
         if (this.time > this.queuedSpin.expires) this.queuedSpin = null;
         else if (player.spinCooldown <= 0) {
@@ -14973,6 +15558,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       const canGroundJump = player.coyote > 0 && player.jumpsUsed === 0;
       const canAirJump = !player.grounded && player.jumpsUsed < 2;
       if (player.jumpBuffer > 0 && (canGroundJump || canAirJump) && !player.grappling) {
+        this.cancelMoonfall();
         const second = !canGroundJump;
         if (player.transportCar) this.releaseMoonlineRide(true);
         player.jumpsUsed = second ? 2 : 1;
@@ -15046,6 +15632,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           gravity += tangentOf(player.velocity, up, this.tangentScratch).lengthSq() / (PLANET.radius + altAt(player.position));
         }
         player.velocity.addScaledVector(up, -gravity * dt);
+        if (player.moonfallActive && !player.grounded) {
+          const downward = clamp(-vspeedOf(player.velocity, up) + MOONFALL_PROFILE.acceleration * dt,
+            MOONFALL_PROFILE.initialDownSpeed, MOONFALL_PROFILE.terminalSpeed);
+          setVspeed(player.velocity, up, -downward);
+        }
       }
       player.runCycle += tangentOf(player.velocity, player.up, this.tangentScratch).length() * dt * .76;
       player.spinAngle += (player.spinTimer > 0 ? 13 + player.spinPower * 5 : 0) * dt;
@@ -15176,7 +15767,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         player.grounded = true;
         player.jumpsUsed = 0;
         player.flung = 0;
-        if (wasAirborne && landingSpeed > 4) {
+        if (wasAirborne && player.moonfallActive) {
+          this.resolveMoonfallImpact(landingSpeed, pf);
+        } else if (wasAirborne && landingSpeed > 4) {
           // THE SNOW COUNTRY: deep powder swallows the landing -- a white
           // poof instead of a kick and a shake.
           const onTerrain = world.activeLayer === 'surface' && floor - groundHeightAt(pf.x, pf.z) < 1.5;
@@ -15238,6 +15831,56 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         player.velocity.applyQuaternion(this.transportQuat);
         player.up.copy(newUp);
       }
+    }
+    resolveMoonfallImpact(landingSpeed, playerFrame) {
+      const player = this.player;
+      const armed = player.moonfallArmed && landingSpeed >= MOONFALL_PROFILE.minImpactSpeed;
+      const radius = armed
+        ? clamp(MOONFALL_PROFILE.baseRadius + (landingSpeed - MOONFALL_PROFILE.minImpactSpeed) * .18,
+          MOONFALL_PROFILE.baseRadius, MOONFALL_PROFILE.maxRadius)
+        : 4.5;
+      const at = player.position.clone().addScaledVector(playerFrame.up, .12);
+      const sourceChart = new T.Vector3(playerFrame.x, playerFrame.alt, playerFrame.z);
+      let hits = 0;
+
+      if (armed) {
+        const damage = landingSpeed >= 31 ? 2 : 1;
+        for (const enemy of this.enemies) {
+          if (!enemy.alive || (enemy.layer || 'surface') !== world.activeLayer) continue;
+          const surfaceDistance = world.activeLayer === 'surface' && enemy.type === 'ribbonback'
+            ? surfaceDistanceAt(enemy.position.x, enemy.position.z, playerFrame.x, playerFrame.z)
+            : Math.hypot(enemy.position.x - playerFrame.x, enemy.position.z - playerFrame.z);
+          if (surfaceDistance > radius + enemy.radius) continue;
+          if (Math.abs(enemy.position.y - playerFrame.alt) > radius * .8 + enemy.radius) continue;
+          if (this.damageAlien(enemy, damage, 'moonfall', sourceChart)) hits++;
+        }
+        if (this.resolveMoonfallStrata) hits += this.resolveMoonfallStrata(playerFrame, radius, landingSpeed);
+      }
+
+      player.moonfallImpactSpeed = landingSpeed;
+      player.moonfallActive = false;
+      player.moonfallArmed = false;
+      player.moonfallTime = 0;
+      player.moonfallCooldown = MOONFALL_PROFILE.cooldown;
+      player.landingKick = 1;
+      player.damageCooldown = Math.max(player.damageCooldown, .2);
+      player.jumpsUsed = Math.min(player.jumpsUsed, 1);
+      player.grounded = false;
+      setVspeed(player.velocity, playerFrame.up, MOONFALL_PROFILE.reboundSpeed + (hits > 0 ? 1.3 : 0));
+      this.stats.moonfalls++;
+
+      const tint = armed ? (hits > 0 ? 0xff7dd8 : 0x72edff) : 0xaab4c8;
+      world.particles.burst(at, tint, armed ? 34 + hits * 5 : 14, armed ? 12 + landingSpeed * .16 : 6, .82, .08);
+      world.pulseRing(at, new T.Color(tint), radius, armed ? .48 : .3, true);
+      if (armed) {
+        world.pulseRing(at.clone().addScaledVector(playerFrame.up, .08), new T.Color(0xffd66b), radius * .62, .35, true);
+        this.hitStop = Math.max(this.hitStop, hits > 0 ? .06 : .035);
+        this.shake = Math.max(this.shake, hits > 0 ? .36 : .26);
+      } else {
+        this.shake = Math.max(this.shake, .12);
+      }
+      audio.impact(armed ? .92 : .55, hits > 0 ? 'alien' : 'rock');
+      this.addStyle(hits > 0 ? 18 : 8, hits > 0 ? 820 : 320, 'MOONFALL', hits > 0 ? '#ff9de2' : '#83efff');
     }
     updateCamera(dt) {
       const player = this.player;
@@ -15406,7 +16049,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const playerChart = toChartVec(this.tempC.copy(player.position));
         let hits = 0;
         for (const enemy of this.enemies) {
-          if ((enemy.layer || 'surface') !== world.activeLayer || !enemy.alive || (enemy.summit && world.fracture.active) || enemy.position.distanceTo(playerChart) > 4.7 + gesturePower * .55 + enemy.radius) continue;
+          if ((enemy.layer || 'surface') !== world.activeLayer || !enemy.alive || (enemy.summit && world.fracture.active)) continue;
+          const enemyDistance = enemy.type === 'ribbonback' && world.activeLayer === 'surface'
+            ? fromChartVec(this.tempA.copy(enemy.position)).distanceTo(player.position)
+            : enemy.position.distanceTo(playerChart);
+          if (enemyDistance > 4.7 + gesturePower * .55 + enemy.radius) continue;
           this.damageAlien(enemy, 1, 'spin');
           hits++;
         }
@@ -15950,7 +16597,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         audio.impact(.9, 'anchor');
         return;
       }
-      // MMB/C is the whole grapple everywhere. Its existing reel grace must
+      // MMB is the whole grapple everywhere. Its existing reel grace must
       // apply to authored cliff sockets as well as synthetic/moving anchors;
       // E/RMB remains an unambiguous detach-and-recall edge.
       const reeling = frame.line || frame.snap || this.grappleReel > 0;
@@ -16138,7 +16785,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         if (bc.alt - ball.radius >= slab.top - .35 || bc.alt + ball.radius <= slabBottom) continue;
         const dx = bc.x - slab.x;
         const dz = bc.z - slab.z;
-        const side = Math.hypot(dx, dz);
+        const side = slab.geodesic
+          ? surfaceDistanceAt(bc.x, bc.z, slab.x, slab.z)
+          : Math.hypot(dx, dz);
         const sideRadius = slab.radius * (slab.collisionScale ?? .92) + ball.radius;
         if (side >= sideRadius) continue;
         const key = `slab-${slab.id}`;
@@ -16161,17 +16810,31 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           continue;
         }
         if (side <= 1e-5) continue;
-        const nx = dx / side;
-        const nz = dz / side;
-        chartLift(slab.x + nx * sideRadius, bc.alt, slab.z + nz * sideRadius, ball.position);
-        const vex = ball.velocity.dot(bc.ex);
-        const vez = ball.velocity.dot(bc.ez);
-        const along = vex * nx + vez * nz;
+        let worldNormal;
+        let along;
+        if (slab.geodesic) {
+          const centreDir = chartDirAt(slab.x, slab.z, this.tempA);
+          const ballDir = dirAt(ball.position, this.tempB);
+          const tangent = this.tempC.copy(ballDir).addScaledVector(centreDir, -ballDir.dot(centreDir));
+          if (tangent.lengthSq() < 1e-8) tangent.copy(bc.ex); else tangent.normalize();
+          const theta = sideRadius / Math.max(1, PLANET.radius + bc.alt);
+          const sine = Math.sin(theta), cosine = Math.cos(theta);
+          const destinationDir = this.tempB.copy(centreDir).multiplyScalar(cosine).addScaledVector(tangent, sine).normalize();
+          ball.position.copy(destinationDir).multiplyScalar(PLANET.radius + bc.alt).add(PLANET.centre);
+          worldNormal = this.pitonNormalScratch.copy(tangent).multiplyScalar(cosine)
+            .addScaledVector(centreDir, -sine).normalize();
+          along = ball.velocity.dot(worldNormal);
+        } else {
+          const nx = dx / side;
+          const nz = dz / side;
+          chartLift(slab.x + nx * sideRadius, bc.alt, slab.z + nz * sideRadius, ball.position);
+          worldNormal = this.pitonNormalScratch.copy(bc.ex).multiplyScalar(nx).addScaledVector(bc.ez, nz);
+          along = ball.velocity.dot(worldNormal);
+        }
         if (along >= 0) continue;
-        const worldNormal = this.pitonNormalScratch.copy(bc.ex).multiplyScalar(nx).addScaledVector(bc.ez, nz);
         this.noteBallContact(ball.position, worldNormal);
         if (this.tryPiton(ball.position, worldNormal)) return true;
-        ball.velocity.addScaledVector(bc.ex, -nx * along * 1.78).addScaledVector(bc.ez, -nz * along * 1.78);
+        ball.velocity.addScaledVector(worldNormal, -along * 1.78);
         ball.bounceCount++;
         this.onBallBounce(ball.position);
         if (!ball.collisionCooldown.has(key)) {
@@ -16446,7 +17109,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
 
       if (world.activeLayer === 'surface') {
         for (const structure of world.surfaceStructures || EMPTY_SOLIDS) {
-          if (Math.hypot(bc.x - structure.x, bc.z - structure.z)
+          const distance = structure.geodesic
+            ? surfaceDistanceAt(bc.x, bc.z, structure.x, structure.z)
+            : Math.hypot(bc.x - structure.x, bc.z - structure.z);
+          if (distance
             >= structure.radius * (structure.collisionScale ?? 1) + ball.radius) continue;
           if (strike(structure.bottom, `surface-under-${structure.id}`, 0x9defff)) return true;
         }
@@ -16901,20 +17567,33 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         }
       }
     }
-    damageAlien(enemy, amount = 1, source = 'kick') {
+    damageAlien(enemy, amount = 1, source = 'kick', sourceChart = null) {
       if (!enemy.alive || (enemy.summit && world.fracture.active)) return false;
+      const previousHp = enemy.hp;
       enemy.hp -= amount;
       enemy.hitFlash = 1;
+      enemy.hitRecoil = 1;
       enemy.stun = enemy.type === 'warden' ? .28 : .52;
       // Getting hit visibly moves it. A creature that takes damage without
       // budging is the main reason a hit reads as "nothing happened".
-      const ballChart = toChartVec(this.tempB.copy(this.ball.position));
+      const ballChart = sourceChart ? this.tempB.copy(sourceChart) : toChartVec(this.tempB.copy(this.ball.position));
       const knock = this.tempA.copy(enemy.position).sub(ballChart).setY(0);
+      if (knock.lengthSq() > 1e-6) enemy.hitDirection.copy(knock).normalize();
       if (knock.lengthSq() > 1e-6) enemy.velocity.addScaledVector(knock.normalize(), 5 + amount * 3);
+      if (enemy.type === 'ribbonback' && enemy.visual.group.userData.healthBands) {
+        const remaining = clamp(Math.ceil(enemy.hp), 0, enemy.maxHp);
+        const previous = clamp(Math.ceil(previousHp), 0, enemy.maxHp);
+        for (let index = remaining; index < previous; index++) {
+          const band = enemy.visual.group.userData.healthBands[index];
+          if (!band) continue;
+          band.userData.breakTimer = 1;
+          band.userData.breakSide = Math.sign(enemy.hitDirection.x) || (index % 2 ? -1 : 1);
+        }
+      }
       const hitPosition = fromChartVec(enemy.position.clone());
       hitPosition.addScaledVector(dirAt(hitPosition, this.tempC), enemy.radius * .75);
       this.impact(enemy.hp <= 0 ? 'break' : 'hurt', hitPosition,
-        source === 'spin' ? 0xbd83ff : source === 'return' ? 0xffd66b : 0x7aefff);
+        source === 'spin' ? 0xbd83ff : source === 'return' ? 0xffd66b : source === 'moonfall' ? 0xff7dd8 : 0x7aefff);
       if (enemy.hp > 0) {
         const label = enemy.type === 'warden' ? `WARDEN ${enemy.hp}/${enemy.maxHp}` : enemy.type === 'shield' ? `BACK HIT ${enemy.hp}/${enemy.maxHp}` : 'ALIEN HIT';
         this.addStyle(source === 'return' ? 13 : 6, source === 'return' ? 620 : 240, label, source === 'return' ? '#ffd66b' : '#83efff');
@@ -17990,6 +18669,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           continue;
         }
         enemy.hitFlash = Math.max(0, enemy.hitFlash - dt * 3.8);
+        enemy.hitRecoil = Math.max(0, enemy.hitRecoil - dt * 5.5);
         enemy.weakPulse = Math.max(0, enemy.weakPulse - dt);
         enemy.stun = Math.max(0, enemy.stun - dt);
         enemy.attackCooldown = Math.max(0, enemy.attackCooldown - dt);
@@ -18439,11 +19119,48 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         fromChartVec(visual.group.position.copy(enemy.position));
         liftQuatAt(enemy.position.x, enemy.position.z, visual.group.quaternion)
           .multiply(this.frameQuat.setFromAxisAngle(UP, enemy.facing + Math.PI));
+        if (enemy.hitRecoil > 0) {
+          const recoil = Math.sin(enemy.hitRecoil * Math.PI) * enemy.hitRecoil;
+          visual.group.rotateX(enemy.hitDirection.z * recoil * .22);
+          visual.group.rotateZ(-enemy.hitDirection.x * recoil * .22);
+          visual.group.scale.set(1 + recoil * .16, 1 - recoil * .3, 1 + recoil * .16);
+        }
         visual.abdomen.scale.y = visual.scale * (.8 + hop * .08);
         // The phantom's visor keeps its own dead calm; every other eye pulses.
-        if (enemy.type !== 'phantom') visual.eye.material.emissiveIntensity = 3.8 + Math.sin(this.time * 5 + enemy.phase) * .9;
+        if (enemy.type !== 'phantom') visual.eye.material.emissiveIntensity = 3.8 + Math.sin(this.time * 5 + enemy.phase) * .9 + enemy.hitFlash * 6;
         visual.weak.visible = enemy.type === 'shield' || enemy.type === 'warden' || enemy.type === 'brute'
-          || enemy.type === 'phantom' || enemy.type === 'banker' || enemy.type === 'burrower';
+          || enemy.type === 'phantom' || enemy.type === 'banker' || enemy.type === 'burrower' || enemy.type === 'ribbonback';
+        if (enemy.type === 'ribbonback' && visual.group.userData.healthBands) {
+          visual.group.userData.healthBands.forEach((band, index) => {
+            const active = index < Math.ceil(enemy.hp);
+            if (band.userData.breakTimer > 0) {
+              band.userData.breakTimer = Math.max(0, band.userData.breakTimer - dt * 2.25);
+              const flight = 1 - band.userData.breakTimer;
+              band.visible = true;
+              band.position.copy(band.userData.basePosition);
+              band.position.x += band.userData.breakSide * flight * 1.4;
+              band.position.y += Math.sin(flight * Math.PI * .78) * 1.65 + flight * .35;
+              band.rotation.x = flight * (3.2 + index * .6);
+              band.rotation.z = band.userData.breakSide * flight * 2.4;
+              const shred = Math.max(.04, band.userData.breakTimer);
+              band.scale.set(1.2 * shred, .76 * shred, shred);
+            } else if (active) {
+              band.visible = true;
+              band.position.copy(band.userData.basePosition);
+              band.rotation.set(0, 0, 0);
+              const breathe = 1 + Math.sin(this.time * 3.2 + enemy.phase + index * .9) * .035;
+              band.scale.set(1.2 * breathe, .76 * breathe, 1);
+            } else {
+              band.visible = false;
+            }
+          });
+        }
+        if (visual.hitMaterials) {
+          for (const material of visual.hitMaterials) {
+            if (!Number.isFinite(material.userData.kbBaseEmissive)) material.userData.kbBaseEmissive = material.emissiveIntensity || 0;
+            material.emissiveIntensity = material.userData.kbBaseEmissive + enemy.hitFlash * 4.8;
+          }
+        }
         // Snowmen pop a segment per hit: body balls (and the face with the
         // head) vanish as hp falls.
         if (enemy.type === 'snowman' && visual.group.userData.snowballs) {
@@ -18462,8 +19179,18 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           visual.weak.scale.setScalar(1 + wounded * .3 + beckon * .55 + beat * .08);
         }
         if (visual.shield) visual.shield.material.emissiveIntensity = 1.7 + enemy.hitFlash * 5;
-        const playerDistance = enemy.position.distanceTo(this.playerChartVec);
+        const playerDistance = enemy.type === 'ribbonback' && world.activeLayer === 'surface'
+          ? Math.hypot(
+            surfaceDistanceAt(enemy.position.x, enemy.position.z, this.playerChartVec.x, this.playerChartVec.z),
+            enemy.position.y - this.playerChartVec.y,
+          )
+          : enemy.position.distanceTo(this.playerChartVec);
         if (playerDistance < enemy.radius + player.radius + .6 && player.damageCooldown <= 0 && !summitLocked) {
+          // Moonfall owns the whole descent. Letting the legacy stomp contact
+          // fire first bounced the player off an enemy before the authored
+          // ground shockwave could exist, turning C into an accidental old
+          // stomp whenever the target was exactly beneath the player.
+          if (player.moonfallActive) continue;
           if (vspeedOf(player.velocity, player.up) < -3 && this.playerChartVec.y > enemy.position.y + enemy.radius * .5) {
             this.damageAlien(enemy, 1, 'stomp');
             setVspeed(player.velocity, player.up, 12.8);
@@ -18472,6 +19199,254 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           } else {
             this.damagePlayer(enemy);
           }
+        }
+      }
+    }
+    resolveMoonfallStrata(playerFrame, radius, landingSpeed) {
+      const strata = world.strata;
+      if (!strata || world.activeLayer !== 'surface') return 0;
+      for (const drum of strata.drums) {
+        if (drum.struck || surfaceDistanceAt(playerFrame.x, playerFrame.z, drum.x, drum.z) > radius + drum.radius * .72) continue;
+        drum.struck = true;
+        drum.flash = 1;
+        const boss = strata.boss;
+        if (boss.alive && boss.armorHp > 0) {
+          const band = boss.bands.find(entry => entry.alive);
+          if (band) {
+            band.alive = false;
+            band.breakTimer = 1;
+          }
+          boss.armorHp--;
+          boss.phase = boss.armorHp > 0 ? 'armoured' : 'exposed';
+          boss.hitFlash = 1;
+          boss.attackTimer = Math.max(boss.attackTimer, .85);
+          world.particles.burst(boss.position.clone().addScaledVector(dirAt(boss.position, this.tempC), 8), drum.tint, 46, 17, 1, .24);
+          world.pulseRing(boss.position, new T.Color(drum.tint), 19, .6, true);
+          this.hitStop = Math.max(this.hitStop, .072);
+          this.shake = Math.max(this.shake, .46);
+          if (boss.armorHp === 0) audio.win();
+        }
+        world.particles.burst(drum.position, drum.tint, 42, 15 + landingSpeed * .1, .92, .18);
+        world.pulseRing(drum.position, new T.Color(drum.tint), 17, .55, true);
+        audio.impact(1, 'rock');
+        this.addStyle(20, 1100, 'FAULT RUNG', '#ff9de2');
+        return 1;
+      }
+      return 0;
+    }
+    resolveBallCrownback() {
+      const boss = world.strata?.boss;
+      const ball = this.ball;
+      if (!boss?.alive || world.activeLayer !== 'surface'
+        || (ball.mode !== 'outbound' && ball.mode !== 'returning')) return false;
+      if (ball.collisionCooldown.has(boss.id)) return false;
+      const speed = ball.velocity.length();
+      if (speed <= 8) return false;
+      boss.group.updateMatrixWorld(true);
+      const corePosition = boss.core.getWorldPosition(this.tempC);
+      const bodyHit = boss.position.distanceTo(ball.position) <= boss.radius + ball.radius;
+      const coreHit = boss.armorHp <= 0 && corePosition.distanceTo(ball.position) <= boss.coreRadius + ball.radius;
+      if (!bodyHit && !coreHit) return false;
+      ball.collisionCooldown.set(boss.id, .28);
+      const away = this.tempA.copy(ball.position).sub(coreHit ? corePosition : boss.position);
+      if (away.lengthSq() < .001) away.copy(this.player.up); else away.normalize();
+      const along = ball.velocity.dot(away);
+      if (along < 0 && !ball.comet) ball.velocity.addScaledVector(away, -1.65 * along);
+      if (!coreHit) {
+        boss.hitFlash = Math.max(boss.hitFlash, .38);
+        const liveBand = boss.bands.find(entry => entry.alive);
+        if (liveBand) liveBand.mesh.scale.set(1.58, .68, 1.14);
+        this.impact('locked', ball.position, 0xff7dbf);
+        return true;
+      }
+      boss.hp -= ball.comet ? BALL_CORES.comet.pierceDamage : 1;
+      boss.hitFlash = 1;
+      boss.core.scale.multiplyScalar(.76);
+      this.impact(boss.hp <= 0 ? 'break' : 'hurt', corePosition, 0xff55bd);
+      this.addStyle(18, 1200, 'CROWNBACK CORE', '#ff9de2');
+      if (boss.hp > 0) return true;
+      boss.hp = 0;
+      boss.alive = false;
+      boss.phase = 'defeated';
+      boss.deadTimer = 1.45;
+      boss.attackActive = 0;
+      boss.attackRing.visible = false;
+      this.drops += 36;
+      this.score += 9000;
+      world.spawnStones(boss.position, 22, 10);
+      world.particles.burst(boss.position, 0xff6fae, 120, 28, 1.5, .42);
+      world.particles.burst(boss.position, 0x62edff, 72, 21, 1.1, .28);
+      world.pulseRing(boss.position, new T.Color(0xffd66b), 42, .9);
+      this.rewardFlash = 1;
+      if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', '#ff6fae');
+      audio.win();
+      this.addStyle(42, 9000, 'THE CROWNBACK FALLS', '#ffd66b');
+      return true;
+    }
+    placeStrataAttackRing(boss, radius, opacity) {
+      const ring = boss.attackRing;
+      if (!(radius > .25) || !(opacity > .001) || world.activeLayer !== 'surface') {
+        ring.visible = false;
+        ring.material.opacity = 0;
+        return;
+      }
+      const centreDir = dirAt(boss.position, this.tempA);
+      const baseQuaternion = boss.baseQuaternion || boss.group.quaternion;
+      const baseX = boss.attackBaseX.set(1, 0, 0).applyQuaternion(baseQuaternion).normalize();
+      const baseZ = boss.attackBaseZ.set(0, 0, 1).applyQuaternion(baseQuaternion).normalize();
+      const theta = radius / PLANET.radius;
+      const sine = Math.sin(theta), cosine = Math.cos(theta);
+      const segmentLength = Math.max(.78, TAU * radius / boss.attackSegments * .7);
+      for (let index = 0; index < boss.attackSegments; index++) {
+        const angle = index / boss.attackSegments * TAU;
+        const tangent = boss.attackTangent.copy(baseX).multiplyScalar(Math.cos(angle))
+          .addScaledVector(baseZ, Math.sin(angle)).normalize();
+        const surfaceNormal = boss.attackY.copy(centreDir).multiplyScalar(cosine)
+          .addScaledVector(tangent, sine).normalize();
+        const point = boss.attackPoint.copy(surfaceNormal).multiplyScalar(PLANET.radius).add(PLANET.centre);
+        chartAt(point, boss.attackChart);
+        const altitude = groundHeightAt(boss.attackChart.x, boss.attackChart.z) + .34;
+        point.copy(surfaceNormal).multiplyScalar(PLANET.radius + altitude).add(PLANET.centre);
+
+        const circumference = boss.attackCircumference.copy(centreDir).cross(surfaceNormal);
+        if (circumference.lengthSq() < 1e-8) circumference.copy(baseZ); else circumference.normalize();
+        const radial = boss.attackZ.copy(circumference).cross(surfaceNormal).normalize();
+        const along = boss.attackX.copy(circumference).multiplyScalar(segmentLength);
+        boss.attackMatrix.makeBasis(along, surfaceNormal, radial);
+        boss.attackMatrix.setPosition(point);
+        ring.setMatrixAt(index, boss.attackMatrix);
+      }
+      ring.instanceMatrix.needsUpdate = true;
+      ring.material.color.setHex(boss.armorHp <= 0 ? 0xffd66b : 0xff6fae);
+      ring.material.opacity = opacity;
+      ring.visible = true;
+    }
+    updateStrata(dt) {
+      const strata = world.strata;
+      if (!strata || world.activeLayer !== 'surface') return;
+      for (const drum of strata.drums) {
+        drum.flash = Math.max(0, drum.flash - dt * 2.4);
+        const pulse = Math.sin(this.time * 3.2 + drum.index);
+        drum.face.material.emissiveIntensity = (drum.struck ? .08 : .24 + pulse * .05) + drum.flash * 2.4;
+        drum.ring.material.emissiveIntensity = (drum.struck ? .14 : .48 + pulse * .08) + drum.flash * 3.2;
+        if (drum.struck) {
+          drum.face.scale.x = damp(drum.face.scale.x, .28, 8, dt);
+          drum.face.scale.z = damp(drum.face.scale.z, .28, 8, dt);
+          drum.face.rotation.y += dt * 2.8;
+          drum.ring.rotation.z += dt * 3.4;
+          drum.ring.scale.setScalar(damp(drum.ring.scale.x, 1.24, 6, dt));
+        }
+      }
+      const boss = strata.boss;
+      boss.hitFlash = Math.max(0, boss.hitFlash - dt * 3.2);
+      if (!boss.alive) {
+        if (boss.deadTimer > 0) {
+          boss.deadTimer = Math.max(0, boss.deadTimer - dt);
+          boss.body.rotation.z += dt * 1.5;
+          boss.body.position.y = Math.max(.5, boss.body.position.y - dt * 4.2);
+          boss.group.scale.setScalar(Math.max(.01, Math.pow(boss.deadTimer / 1.45, .55)));
+          if (boss.deadTimer <= 0) boss.group.visible = false;
+        }
+        return;
+      }
+      const broken = boss.maxArmor - boss.armorHp;
+      boss.body.position.y = damp(boss.body.position.y, 6.7 - broken * .55, 6, dt);
+      boss.body.material.emissiveIntensity = .72 + boss.hitFlash * 3.8 + broken * .18;
+      if (boss.baseQuaternion) {
+        boss.group.quaternion.copy(boss.baseQuaternion)
+          .multiply(this.transportQuat.setFromAxisAngle(this.tempC.set(0, 0, 1), -.035 * broken));
+      }
+      for (const band of boss.bands) {
+        if (band.alive) {
+          band.mesh.visible = true;
+          band.mesh.scale.x = damp(band.mesh.scale.x, 1.42 + Math.sin(this.time * 2.4 + band.index) * .035, 9, dt);
+          band.mesh.scale.y = damp(band.mesh.scale.y, .82, 9, dt);
+          band.mesh.scale.z = damp(band.mesh.scale.z, 1, 9, dt);
+        } else if (band.breakTimer > 0) {
+          band.breakTimer = Math.max(0, band.breakTimer - dt * 1.65);
+          band.mesh.rotation.x += dt * (2.8 + band.index);
+          band.mesh.rotation.z += dt * (1.7 + band.index * .4);
+          band.mesh.position.y += dt * 4.2;
+          band.mesh.scale.setScalar(Math.max(.01, band.breakTimer));
+          if (band.breakTimer <= 0) band.mesh.visible = false;
+        }
+      }
+      const exposed = boss.armorHp <= 0 ? 1 : 0;
+      // Once the armour is gone the lunar core rises above the whole back,
+      // becoming an unmistakable body-sized target from every arena lane.
+      boss.core.position.y = damp(boss.core.position.y, exposed ? 13 : 7.2, 7, dt);
+      boss.core.position.z = damp(boss.core.position.z, exposed ? 6.5 : 8.6, 7, dt);
+      const coreScale = damp(boss.core.scale.x, exposed ? 1 : .42, 7, dt);
+      boss.core.scale.setScalar(coreScale);
+      boss.core.rotation.y += dt * (1.2 + exposed * 3.8);
+      boss.core.rotation.x += dt * exposed * 1.9;
+      boss.core.material.emissiveIntensity = .85 + exposed * (1.35 + Math.sin(this.time * 8) * .32) + boss.hitFlash * 2.2;
+      boss.coreGlow.position.copy(boss.core.position);
+      boss.coreGlow.material.opacity = .08 + exposed * .5 + boss.hitFlash * .28;
+
+      toChartVec(this.playerChartVec.copy(this.player.position));
+      boss.engaged = surfaceDistanceAt(this.playerChartVec.x, this.playerChartVec.z, boss.x, boss.z) < 82;
+      if (!boss.engaged) {
+        boss.attackTimer = Math.max(boss.attackTimer, 1.05);
+        boss.telegraph = 0;
+        boss.telegraphArmed = false;
+        boss.attackActive = 0;
+        boss.attackRing.visible = false;
+        boss.jaw.rotation.x = -.12;
+        return;
+      }
+      const tellLength = .92;
+      boss.attackTimer -= dt;
+      if (boss.attackTimer > 0 && boss.attackTimer <= tellLength) {
+        boss.telegraph = 1 - boss.attackTimer / tellLength;
+        this.placeStrataAttackRing(boss, 7 + boss.telegraph * 4, .1 + boss.telegraph * .34);
+        boss.jaw.rotation.x = -.12 - boss.telegraph * .52;
+        for (let index = 0; index < boss.legs.length; index++) {
+          boss.legs[index].rotation.z = (index < 2 ? -1 : 1) * boss.telegraph * .13;
+        }
+        if (!boss.telegraphArmed) {
+          boss.telegraphArmed = true;
+          world.pulseRing(boss.position, new T.Color(0xff6fae), 16, tellLength, true);
+          audio.impact(.52, 'alien');
+        }
+      } else if (boss.attackTimer > tellLength) {
+        boss.telegraph = 0;
+        boss.telegraphArmed = false;
+        boss.attackRing.visible = false;
+      }
+      if (boss.attackTimer <= 0) {
+        boss.attackTimer = 3.3 - broken * .18;
+        boss.attackSerial++;
+        boss.attackActive = 1.35;
+        boss.attackRadius = 7;
+        boss.attackHitSerial = -1;
+        boss.telegraph = 0;
+        boss.telegraphArmed = false;
+        boss.attackRing.visible = true;
+        world.particles.burst(boss.position, 0xff6fae, 52, 18, .9, .24);
+        audio.impact(.88, 'alien');
+        this.shake = Math.max(this.shake, .31);
+      }
+      if (boss.attackActive > 0) {
+        const previousRadius = boss.attackRadius;
+        boss.attackActive = Math.max(0, boss.attackActive - dt);
+        boss.attackRadius = Math.min(60, boss.attackRadius + dt * (35 + broken * 2));
+        this.placeStrataAttackRing(boss, boss.attackRadius, .6 * Math.min(1, boss.attackActive * 2.6));
+        if (boss.attackHitSerial !== boss.attackSerial && this.player.grounded) {
+          toChartVec(this.playerChartVec.copy(this.player.position));
+          const radial = surfaceDistanceAt(this.playerChartVec.x, this.playerChartVec.z, boss.x, boss.z);
+          if (radial >= previousRadius - 2.8 && radial <= boss.attackRadius + 2.8) {
+            boss.attackHitSerial = boss.attackSerial;
+            this.damagePlayer({ position: new T.Vector3(boss.x, boss.ground, boss.z), radius: 8 });
+            setVspeed(this.player.velocity, this.player.up, Math.max(13, vspeedOf(this.player.velocity, this.player.up)));
+            this.player.grounded = false;
+          }
+        }
+        if (boss.attackActive <= 0) {
+          boss.attackRing.visible = false;
+          boss.attackRing.material.opacity = 0;
+          boss.jaw.rotation.x = -.12;
+          for (const leg of boss.legs) leg.rotation.z = 0;
         }
       }
     }
@@ -18585,6 +19560,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.threatPlayerDir = dirAt(this.player.position, this.tempC);
       this.threatNow = 0;
       if (world.activeLayer === 'surface') {
+        if (world.strata?.boss?.alive && world.strata.boss.engaged) this.feelThreat(world.strata.boss.position, 82);
         if (world.colossus?.alive) this.feelThreat(world.colossus.position, 65);
         if (world.roc?.alive) this.feelThreat(world.roc.position, 70);
         if (world.vane?.alive && world.vane.engaged) this.feelThreat(world.vane.position, 78);
@@ -19278,6 +20254,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const ray = (world.towAnchors || EMPTY_SOLIDS).find(anchor =>
           anchor.position.distanceTo(ball.position) <= anchor.radius + ball.radius);
         if (ray && this.attachExpansionAnchor(ray, 0x63e4ff, 'MOON RAY')) return;
+        const strataAnchor = (world.strata?.anchors || EMPTY_SOLIDS).find(anchor =>
+          anchor.position.distanceTo(ball.position) <= anchor.radius + ball.radius);
+        if (strataAnchor && this.attachExpansionAnchor(strataAnchor, 0xff7dbf, 'STRATA RIB')) return;
         const vaneAnchor = world.vane?.alive
           ? world.vane.anchors.find((anchor, index) => !world.vane.blades[index].alive
             && anchor.position.distanceTo(ball.position) <= anchor.radius + ball.radius)
@@ -19285,6 +20264,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         if (vaneAnchor && this.attachExpansionAnchor(vaneAnchor, 0xffd66b, 'BROKEN VANE')) return;
       }
       const speed = ball.velocity.length();
+      if (this.resolveBallCrownback()) return;
       if (this.resolveBallMoonlineBoss()) return;
       for (const bell of world.belfryBells || EMPTY_SOLIDS) {
         if (ball.collisionCooldown.has(bell.id) || bell.position.distanceTo(ball.position) > bell.radius + ball.radius) continue;
@@ -19775,6 +20755,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       cannon.cooldown = 4;
       cannon.recoil = 1;
       cannon.unlockBeam.visible = false;
+      this.cancelMoonfall();
       this.cannonFlight.active = true;
       this.cannonFlight.launched = true;
       this.cannonFlight.time = 0;
@@ -20540,6 +21521,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.player.grounded = false;
       this.player.jumpsUsed = 0;
       this.player.grappling = false;
+      this.cancelMoonfall();
       if (checkpoint) {
         this.player.checkpoint.copy(this.player.position);
         this.saveCheckpointFrame();
@@ -20590,6 +21572,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       player.jumpsUsed = 0;
       player.invulnerable = 1.4;
       player.grappling = false;
+      this.cancelMoonfall();
       player.spinTimer = 0;
       player.spinCooldown = 0;
       player.spinAngle = 0;
@@ -20846,6 +21829,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // still meets the emitter and rear socket exactly at render time.
       this.refreshTetherEndpoints();
       world.ballGroup.position.copy(ball.position);
+      if (this.player.moonfallActive && ball.mode === 'ready') {
+        world.ballGroup.position.copy(this.player.position)
+          .addScaledVector(this.player.up, .48)
+          .addScaledVector(this.horizontalForward(this.tempA), .62);
+      }
       const speed = ball.velocity.length();
       const stretch = 1 + smoothstep(18, 65, speed) * .38;
       world.ballGroup.scale.set(1 / Math.sqrt(stretch), 1 / Math.sqrt(stretch), stretch);
@@ -21010,6 +21998,14 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           z: world.cinderTowers[2]?.z ?? 414, yaw: Math.PI * .5,
         },
         cannon: { layer: 'surface', x: 0, alt: groundHeightAt(0, FINAL_CANNON.z - 25), z: FINAL_CANNON.z - 25, yaw: Math.PI },
+        // The arena approach remains a grounded establishing view. Crownback's
+        // two inspection points are real, gently sloped terrain corridors with
+        // line-of-sight to body, head and every armour band; no floating QA
+        // perch or collision exemption is involved.
+        strata: { layer: 'surface', x: 650, alt: groundHeightAt(650, 73), z: 73, yaw: 0 },
+        crownback: { layer: 'surface', x: 624, alt: groundHeightAt(624, 29), z: 29, yaw: 1.237552 },
+        'crownback-wide': { layer: 'surface', x: 652, alt: groundHeightAt(652, -33), z: -33, yaw: -3.103875 },
+        ribbonback: { layer: 'surface', x: 606, alt: groundHeightAt(606, -8), z: -8, yaw: -Math.PI * .5 },
         'under-veins': { layer: 'underground', x: 0, alt: UNDERGROUND_ROOMS[0].floor, z: 0, yaw: Math.PI * .5 },
         'under-choir': { layer: 'underground', x: UNDERGROUND_ROOMS[1].x, alt: UNDERGROUND_ROOMS[1].floor, z: UNDERGROUND_ROOMS[1].z, yaw: Math.PI * .5 },
         'under-depot': { layer: 'underground', x: UNDERGROUND_ROOMS[2].x, alt: UNDERGROUND_ROOMS[2].floor, z: UNDERGROUND_ROOMS[2].z, yaw: Math.PI * .5 },
@@ -21073,6 +22069,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       }
       this.player.layer = spot.layer;
       this.player.velocity.set(0, 0, 0);
+      this.player.grounded = false;
+      this.player.transportCar = null;
+      this.player.grappling = false;
+      this.cancelMoonfall();
       this.player.yaw = spot.yaw;
       this.player.pitch = Number.isFinite(spot.pitch) ? spot.pitch : -.04;
       this.player.checkpoint.copy(this.player.position);
@@ -21192,6 +22192,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           jump: !!controls.jump,
           spin: !!controls.spin,
           grapple: !!controls.grapple,
+          drop: !!controls.drop,
           sprint: !!controls.sprint,
           kickPressed: first && !!controls.kickPressed,
           kickReleased: first && !!controls.kickReleased,
@@ -21204,6 +22205,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           spinDirection: first ? finite(Number(controls.spinDirection || 0)) : 0,
           spinPower: first ? finite(Number(controls.spinPower || 1)) : 1,
           grapplePressed: first && !!controls.grapplePressed,
+          dropPressed: first && !!controls.dropPressed,
           pausePressed: first && !!controls.pausePressed,
         };
         this.update(FIXED_DT, frame, first);
@@ -21222,6 +22224,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           jumpsUsed: this.player.jumpsUsed, health: this.player.health,
           spinTimer: this.player.spinTimer, spinDirection: this.player.spinDirection,
           spinPower: this.player.spinPower, spinQueued: !!this.queuedSpin, grappling: this.player.grappling,
+          moonfallActive: this.player.moonfallActive, moonfallArmed: this.player.moonfallArmed,
+          moonfallCooldown: this.player.moonfallCooldown, moonfallImpactSpeed: this.player.moonfallImpactSpeed,
           // Authored-chart pose and local vertical speed, so checks can keep
           // asserting the numbers the game was tuned in on any topology.
           chart: (() => { const c = toChartVec(new T.Vector3().copy(this.player.position)); return { x: c.x, alt: c.y, z: c.z }; })(),
@@ -21285,6 +22289,16 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           cannon: world.cannon ? {
             deployed: world.cannon.deployed, armed: world.cannon.armed, firing: world.cannon.firing,
             flightActive: this.cannonFlight.active, flightProgress: this.cannonFlight.progress,
+          } : null,
+          strata: world.strata ? {
+            x: world.strata.x, z: world.strata.z,
+            drumsStruck: world.strata.drums.filter(drum => drum.struck).length,
+            ribbonbacksAlive: this.enemies.filter(enemy => enemy.type === 'ribbonback' && enemy.alive).length,
+            boss: {
+              alive: world.strata.boss.alive, phase: world.strata.boss.phase,
+              armorHp: world.strata.boss.armorHp, hp: world.strata.boss.hp,
+              engaged: world.strata.boss.engaged,
+            },
           } : null,
           finalBoss: world.moonheart ? {
             alive: world.moonheart.alive, phase: world.moonheart.phase, phaseHp: world.moonheart.phaseHp,
@@ -21356,12 +22370,12 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
   function neutralFrame() {
     return {
       moveX: 0, moveZ: 0, lookX: 0, lookY: 0,
-      kick: false, snap: false, line: false, jump: false, spin: false, grapple: false, sprint: false,
+      kick: false, snap: false, line: false, jump: false, spin: false, grapple: false, drop: false, sprint: false,
       kickPressed: false, kickReleased: false, snapPressed: false,
       linePressed: false, lineReleased: false,
       actionCancelled: false,
       jumpPressed: false, spinPressed: false, spinDirection: 0, spinPower: 1,
-      grapplePressed: false, pausePressed: false,
+      grapplePressed: false, dropPressed: false, pausePressed: false,
     };
   }
 
@@ -21473,11 +22487,16 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       input.endFrame();
 
       const touchButtons = [...document.querySelectorAll('#touchControls button')].map(button => button.id);
-      // Two gameplay buttons and a pause. Kick and call stay on the ball hand;
-      // the grapple gets a button because touch has no middle mouse.
-      check('touch-has-two-gameplay-buttons', touchButtons.length === 3 && touchButtons.includes('touchJump')
-        && touchButtons.includes('touchGrapple') && touchButtons.includes('touchPause')
-        && !document.getElementById('touchKick') && !document.getElementById('touchSnap'), touchButtons);
+      const visibleTouchButtons = [...document.querySelectorAll('#touchControls button')]
+        .filter(button => getComputedStyle(button).display !== 'none').map(button => button.id);
+      // JUMP and DROP are the two visible gameplay discs. The old HOOK DOM path
+      // remains bound for compatibility but stays hidden under the final touch
+      // grammar; kick, call and steering remain on the ball hand.
+      check('touch-has-two-gameplay-buttons', touchButtons.length === 4 && touchButtons.includes('touchGrapple')
+        && visibleTouchButtons.length === 3 && visibleTouchButtons.includes('touchJump')
+        && visibleTouchButtons.includes('touchDrop') && visibleTouchButtons.includes('touchPause')
+        && !visibleTouchButtons.includes('touchGrapple')
+        && !document.getElementById('touchKick') && !document.getElementById('touchSnap'), { touchButtons, visibleTouchButtons });
       const touchStartHint = ui.startActionHint?.textContent;
       input.setTouchMode(false);
       const pointerStartHint = ui.startActionHint?.textContent;
@@ -23771,7 +24790,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     lastFrame = now;
     const delta = clamp(rawDelta, 0, .05);
     world.noteFrame(rawDelta);
-    if (!TEST_MODE) {
+    if (!TEST_MODE && !SHOWCASE_FREEZE) {
       accumulator = Math.min(accumulator + delta, FIXED_DT * 10);
       input.poll();
       let firstStep = true;
@@ -23795,6 +24814,34 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
   if (AUTO_START) {
     game.start(false);
     game.teleport(params.get('section') || 'start');
+    // Screenshot-only stations use the real damage/state code and then freeze
+    // that rendered beat. Ordinary URLs never enter this branch.
+    if (SHOWCASE_MODE === 'ribbonback-hit') {
+      const ribbonback = game.enemies.find(enemy => enemy.id === 'strata-ribbonback-0');
+      if (ribbonback) {
+        game.damageAlien(ribbonback, 2, 'moonfall', new T.Vector3(606, ribbonback.position.y, -8));
+        game.updateEnemies(.08);
+      }
+    } else if (SHOWCASE_MODE === 'crownback-wounded' || SHOWCASE_MODE === 'crownback-exposed') {
+      const boss = world.strata?.boss;
+      if (boss) {
+        const exposed = SHOWCASE_MODE === 'crownback-exposed';
+        boss.armorHp = exposed ? 0 : 1;
+        boss.phase = exposed ? 'exposed' : 'armoured';
+        boss.hitFlash = .72;
+        boss.body.position.y = exposed ? 5.05 : 5.6;
+        boss.bands.forEach((band, index) => {
+          band.alive = !exposed && index === 2;
+          band.breakTimer = 0;
+          band.mesh.visible = band.alive;
+        });
+        boss.core.scale.setScalar(exposed ? 1 : .42);
+        boss.core.position.set(0, exposed ? 13 : 7.2, exposed ? 6.5 : 8.6);
+        boss.core.material.emissiveIntensity = exposed ? 2.2 : .85;
+        boss.coreGlow.position.copy(boss.core.position);
+        boss.coreGlow.material.opacity = exposed ? .58 : .08;
+      }
+    }
   }
   requestAnimationFrame(frame);
   if (TEST_MODE) setTimeout(() => runAutotest(), 50);
