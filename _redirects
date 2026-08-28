@@ -152,3 +152,7 @@
 
 # --- RAIN ANIMAL ---
 /rain-animal.html  /rain-animal/  301!
+
+# --- THE LAST ROOM ---
+/the-last-room.html  /the-last-room/  301!
+/last-room           /the-last-room/  302

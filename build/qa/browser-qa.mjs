@@ -88,7 +88,7 @@ try {
     report.viewports.push({ viewport, ...metrics, errors: finishErrors() });
     check(metrics.pageWidth <= metrics.width + 1, `Horizontal overflow at ${viewport.width}x${viewport.height}: ${metrics.pageWidth} > ${metrics.width}`);
     check(metrics.h1Visible, `Homepage H1 is not visible at ${viewport.width}x${viewport.height}`);
-    check(metrics.bodyGameCount === "26" && metrics.bodyAlbumCount === "12", `Catalog proof counts drifted at ${viewport.width}px`);
+    check(metrics.bodyGameCount === "27" && metrics.bodyAlbumCount === "12", `Catalog proof counts drifted at ${viewport.width}px`);
     check(!initialRequests.some((url) => url.includes("/assets/audio/")), `Audio requested before opt-in at ${viewport.width}px`);
 
     if (viewport.width < 960) {
@@ -201,11 +201,11 @@ try {
       visible: [...document.querySelectorAll("[data-catalog-game]")].filter((item) => !item.hidden).map((item) => item.dataset.catalogGame),
       query: location.search,
     }));
-    check(horror.status === "Showing 5 worlds.", `Horror filter status failed: ${horror.status}`);
+    check(horror.status === "Showing 6 worlds.", `Horror filter status failed: ${horror.status}`);
     // Catalog order, and FETCH leads the catalog (Alex, 2026-08-17: it takes
     // the first game slot; THE EATEN PATH comes off the homepage and stays on
-    // /games/). Five worlds since 2026-08-21, when Uninvited was retired.
-    check(horror.visible.join(",") === "fetch,eaten-path,marrow,behind-you,still", `Horror filter results failed: ${horror.visible.join(",")}`);
+    // /games/). THE LAST ROOM is the sixth horror world.
+    check(horror.visible.join(",") === "fetch,eaten-path,marrow,behind-you,still,the-last-room", `Horror filter results failed: ${horror.visible.join(",")}`);
     check(horror.query === "?filter=horror", `Horror filter URL failed: ${horror.query}`);
     report.interactions.filters = { ...horror, errors: finishErrors() };
     await context.close();

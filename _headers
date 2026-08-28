@@ -277,6 +277,13 @@
 /rain-animal/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# --- THE LAST ROOM ---
+/the-last-room/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/the-last-room/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
