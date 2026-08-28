@@ -261,6 +261,22 @@
 /vesperwake/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# --- RAIN ANIMAL ---
+/rain-animal/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/rain-animal/styles.css
+  Cache-Control: public, max-age=0, must-revalidate
+
+/rain-animal/game.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/rain-animal/world-art.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/rain-animal/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
