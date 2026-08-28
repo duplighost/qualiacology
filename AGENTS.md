@@ -2,7 +2,7 @@
 
 Read this before changing anything. It is the canonical playbook for AI agents
 (Codex, Claude, or anything else) and it is kept current — trust it over your
-own notes or memory. Last verified: 2026-08-22.
+own notes or memory. Last verified: 2026-08-27.
 
 ## The two rules that matter most
 
@@ -109,6 +109,10 @@ node build/scripts/build-site.mjs
 node build/scripts/validate-site.mjs --root=..
 # 4. Optional deeper gate (first time: cd build && npm ci):
 cd build && npm run qa        # Playwright + axe, needs Chrome
+#    npm run qa also audits the audio LED lit, because it animates opacity and
+#    the plain pass never turns it on.
+# 4b. If you touched ANY image, also run the only pixel-level gate there is:
+python build/qa/catalog-art.py audit
 # 5. Ship safely: commit on a feature branch, push that branch, open a PR,
 #    inspect the Netlify deploy preview, then merge only with Alex's approval.
 #    Merging to main deploys production.
@@ -117,6 +121,116 @@ cd build && npm run qa        # Playwright + axe, needs Chrome
 **site-data.json is hand-formatted.** Never load-and-redump it with a JSON
 library — that reformats the whole file and bloats the diff. Make targeted
 text edits only, then validate it still parses.
+
+## The design system (read before touching site.css or site.js)
+
+A five-stage redesign landed 2026-08-27 (PRs #109–#112). The stylesheet now
+carries two laws in its opening comment. **Read those first — they are rules,
+not notes**, and both were corrected in the same commits that changed them.
+
+**1. The discipline budget.** One aura per view; resting wing alpha ≤ 8% (both
+`--wing-dim` values sit at 0.06 and were deliberately NOT spent to the ceiling);
+glow shadows only on the scroll filament, the lit nav pilot light, and the
+playing audio LED. Hero art no longer glows — that glow was deleted and the
+clause was updated to match. If you add a glow, you are spending from a fixed
+budget; say so out loud.
+
+**2. The motion law — three lanes.** These are independent composited
+properties, so entrance, pointer and press can never write the same thing:
+
+| lane | property | where |
+|---|---|---|
+| entrance | `translate` | scroll timelines only — `rise`, `settle` |
+| pointer | `scale` | hover/focus, always inside `@media (hover: hover) and (prefers-reduced-motion: no-preference)` |
+| press | `transform` | `:active`, 45ms attack |
+
+Entrance animations are **transform-family only, never opacity**. An opacity
+keyframe makes axe fail colour-contrast on below-fold content mid-animation.
+That lesson cost a session once; do not re-learn it. The stylesheet also carries
+an explicit not-doing list (no card tilt, parallax, magnetic buttons, cursor
+follower, cursor torch, fixed scroll lamp, `will-change` on card images) — all
+desktop-only, invisible in a stranger's first ten seconds, and untestable by a
+suite that runs at 390px and 1440px with no hover emulation.
+
+### Structures you will trip over if you don't know they exist
+
+- **The plate rail.** Grids are NOT inside `.container`. Text keeps the 76rem
+  measure; `<div class="plate-bleed">` gives pictures their own 100rem one, so a
+  3-up card is 440px instead of 386px. Every catalog/shelf `<ul>` is a sibling of
+  `.container`, not a child. Use `rem`/`%` only inside it — **never `100vw`**: the
+  Windows scrollbar sits outside the viewport width and `browser-qa.mjs` asserts
+  `pageWidth <= width + 1`.
+- **The sticky filter rail lives in the plate rail too**, with the grid it
+  filters. A `position: sticky` element only sticks inside its own parent's box —
+  leaving it behind in `.container` (which now ends above the grid) silently kills
+  the stick entirely. This shipped broken once.
+- **The card index is a CSS counter**, not template output. `build-site.mjs`
+  emits an empty `<span class="card-index">`; `counter-reset` is on the grid and
+  `counter-increment` on each `<li>`. This is what makes a filtered shelf read
+  01–05 instead of 01/09/15/16/17 — `[hidden] { display: none }` means a
+  filtered-out item generates no box and cannot increment. Do not put numbers
+  back in the template.
+- **`data-here` on `<body>` is the room signal.** An IntersectionObserver in
+  site.js (rootMargin `-45% 0px -45% 0px`) reports which homepage section you are
+  in, and that drives both the scroll filament's colour and the nav pilot lights.
+  It replaced fixed percentage keyframes that were 10–20% out of phase and never
+  showed violet. **Do not go back to percentage stops** — they drift the moment
+  section heights change. Note `.home-page` is a BODY class, so `data-here` must
+  live on `<body>` too.
+- **Seams are tokens.** `--seam-top` / `--seam-bot`, deliberately asymmetric, and
+  they double as the chapter numeral's height budget: `.ghost-index` is sized off
+  them, which is what makes it arithmetically impossible for the numeral to reach
+  the heading at any width. It used to strike through the `/psychopharmacology/`
+  h1 by 122px.
+- **Two type registers, not one.** *Locator* (uppercase, tracked): eyebrows, nav,
+  kickers, filter buttons, stat labels. *Data* (sentence case, untracked):
+  `.card-meta li`, `.footer-links a`. The data register exists because Alex's
+  source strings are already cased on purpose — `WASD`, `LMB`, `RMB`, `Esc`,
+  `TikTok` — and `text-transform: uppercase` was flattening that signal. Do not
+  uppercase them again.
+- **Card art rests resolved.** The old `filter: saturate(0.55) brightness(0.92)`
+  is gone. Cards sit on `--surface` (lighter than the page) with a `--rule-lit`
+  top edge, so dark art reads as an object on a shelf rather than a hole. The
+  hover "develop" is a 3% `scale`, in the pointer lane.
+- **Card action buttons sit at their natural width** and are outlined on the
+  `/games/` shelf; the homepage featured three keep filled slabs on purpose. Row
+  slack collects above the action (`margin-top: auto` on `.card-actions`, NOT on
+  `.card-meta`) so every button in a row shares a baseline while metadata stays
+  welded to the summary it describes. Alex rejected the ragged-baseline
+  alternative on sight.
+
+### Things that are load-bearing and look optional
+
+- `heroPicture()`'s `<source media="(max-width: 44.99rem)">` phone crop and the
+  CSS `aspect-ratio` switch **must use the same breakpoint**. If they disagree
+  there is a band of widths where the CSS box and the downloaded image have
+  different ratios.
+- `.scroll-progress` has a base `transform: scaleX(0)` for the JS fallback. The
+  `@supports (animation-timeline: scroll(root))` block that drives it from a
+  scroll timeline sets `transform: none` **and must come after the base rule** —
+  same specificity, so source order decides. Get either wrong and the filament is
+  zero-width forever. The JS write is guarded by
+  `CSS.supports("animation-timeline", "scroll(root)")` so both never run at once.
+- Filtering: `applyFilter` captures the reader's scroll on **pointerdown**, before
+  the browser's own focus-scroll fires. Clicking a filter focuses it, and because
+  the rail is sticky the browser scrolls to the button's *layout* position —
+  hundreds of pixels away. That, not the document collapsing, is what threw
+  readers up the page. Keyboard focus deliberately still scrolls.
+- An `<a>` wrapping `<dt>` + `<dd>` is **invalid** inside a `<dl>` — axe fails it
+  on `definition-list` + `dlitem`. The hero's three "doors" put the anchor inside
+  the `<dd>` with a stretched `::after`. Keep it that way.
+
+### Measuring anything in a browser
+
+`locator.click()` in Playwright runs `scrollIntoViewIfNeeded` **before** it
+clicks, so any measurement of scroll position, jump, or camera behaviour is
+measuring the harness. Use `page.mouse.click(x, y)` at the element's real
+coordinates. A wrong number from this shipped in a written plan once. Related:
+a `position: sticky` element's rect is constant while stuck, so a before/after
+delta on one is always 0 — never use it as a scroll anchor.
+
+**And verify against the deploy preview, not only localhost.** Two regressions
+in this redesign were invisible locally and obvious on the preview.
 
 ## Adding a game (the full recipe)
 
@@ -167,7 +281,16 @@ text edits only, then validate it still parses.
 4. **Catalog entry** in `build/src/content/site-data.json`: slug, title,
    descriptor, `group` (one of `action` / `horror` / `worlds`), summary
    (Alex's voice!), metaDescription, image, alt, controls, actionLabel,
-   optional duration/secondary. `featured: true` only by swapping — exactly 3
+   optional duration/secondary.
+
+   **`controls` is no longer rendered on the card**, as of 2026-08-27, with Alex's
+   explicit yes. Keep supplying it — it is true data and the game pages use it —
+   but do not "fix" its absence from the shelf. It was eight tracked-uppercase
+   items telling you how to play a thing you had not chosen yet, about 59px per
+   card of post-decision information in the pre-decision slot. Putting it back
+   would also re-falsify the `/games/` intro, whose clause naming controls was
+   deleted in the same change. `duration` DOES still render (3 of 24 games have
+   one) and is the only thing in `.card-meta` now. `featured: true` only by swapping — exactly 3
    games are featured (grid is 3 columns, so keep it a multiple of 3), and
    which ones is Alex's call. Featured order = games array order. Albums are
    still exactly 3 featured. The featured row was 6 until 2026-08-21, when Alex
@@ -278,6 +401,14 @@ currentDeploy → `ready`) if available.
   didn't make, stop — another session is mid-flight.
 - The hub build asserts exact counts; adding/removing catalog items without
   bumping the asserts fails the build (deliberately).
+- **Nothing in the Node gates looks at pixels.** The build, the validator, the
+  route smoke and `npm run qa` all pass happily while a card shows *another
+  game's art*. That shipped: the 1200w tier was generated by globbing
+  `assets/games/*-card-clean.*`, and `fetch` is the one game whose master is
+  named differently (`fetch-card-keyart-<hash>.webp`), so FETCH showed a
+  different picture on 2x screens and nowhere else. After ANY art change run
+  `python build/qa/catalog-art.py audit` — it is the only thing that can catch
+  this.
 - `404.html`, `_redirects`, `_headers` are easy to forget — they're manual.
 - **Replacing an image at the same filename does NOT reach returning visitors.**
   `_headers` serves `/assets/**` with `max-age=31536000, immutable`, so a browser
@@ -320,6 +451,35 @@ currentDeploy → `ready`) if available.
   machine the `gh` CLI is authed as `duplighost`.
 - Netlify: team "Alexander Guitar", project `classy-strudel-55444b`,
   site_id `85511573-c8bc-48fb-b23e-c9a5d2eff8f6`, domain qualiacology.com.
+
+## What is NOT done (so nobody assumes it is)
+
+The 2026-08-27 redesign finished its code side. What remains is art, and it
+needs Alex — do not substitute your own.
+
+- **Weak card art.** Measured share of pixels indistinguishable from the page
+  background: `pocket-sun` 93.8% (and it still has the game's own HUD in frame —
+  it is the only card that reads as a screenshot of a dev build), `still` 90.3%,
+  `no-moon` 89.4%, `stay` 87.4% (its 480w AVIF is 1.2 KB against a 21.8 KB
+  typical card), `marrow` 87.4%, `thrown` 86.7%, `wick` 86.3%. `lead` is the
+  least background-dead card on the site (0.3%) and still among the least
+  legible, because its subject is ~4% of frame and the rope — the whole game —
+  is a hairline at card size.
+- **`wick` and `vesperwake` cards are screenshots of their own title screens**,
+  which is why they carry baked-in typography and print each game's title twice
+  (once in the picture, once as `.card-title`). Surveyed 2026-08-27: both are
+  painted/designed art, not in-engine, so they cannot be "re-rendered without the
+  type". Replacing them with gameplay captures is a real art-direction change and
+  is Alex's call, not an agent's.
+- All seven of those games DO render in headless Chrome with a real GPU
+  (`{ channel: "chrome", args: ["--use-angle=d3d11"] }`) and most expose debug
+  hooks — `__LEAD`, `__VG`, `__WICK`, `__VW`, `__THREE__` — so in-engine
+  recapture is technically possible. Note `pocket-sun` draws its HUD **into the
+  canvas**, so screenshotting the canvas element does not exclude it; that one
+  needs a flag inside the game.
+- **No new site copy is pending.** Nothing in the redesign invented a word, and
+  the one clause that went stale (`/games/` intro naming controls) was deleted
+  with Alex's explicit yes, not rewritten.
 
 ## Keep this file true
 
