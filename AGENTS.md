@@ -64,6 +64,14 @@ own notes or memory. Last verified: 2026-08-27.
     delta, so on a slow machine wall-clock waits land somewhere else entirely
     in the dive. Usage: serve the repo, then
     `node build/qa/starling-boot-check.mjs http://localhost:4173/starling/`.
+  - `build/qa/the-last-room-boot-check.mjs` — **run this before shipping any
+    THE LAST ROOM change.** It boots the game through its hosted subdirectory,
+    uses the real ENTER gesture, verifies architectural state and spatial
+    audio, proves all 15 painting textures load from
+    `/the-last-room/assets/paintings/`, checks storage-disabled boot, runs Axe
+    directly over the game, and verifies the real 390px touch layout for
+    overlapping controls. Usage: serve the repo, then
+    `node build/qa/the-last-room-boot-check.mjs http://localhost:4173/the-last-room/`.
   - `build/qa/fetch-boot-check.mjs` — **run this before shipping any FETCH
     change.** Boots the game the way a player does (real title click, no
     `?test=1`) and asserts the world is on screen AND the skull is visible in

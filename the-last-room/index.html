@@ -22,8 +22,8 @@
     <meta name="twitter:image" content="https://qualiacology.com/assets/games/the-last-room-card-clean.webp" />
     <meta name="twitter:image:alt" content="A brass telescope and armillary rings beneath green-gold observatory coils, overlooking a dark indoor pool in an impossible haunted mansion" />
     <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
-    <script type="module" crossorigin src="./assets/index-Ds6j_jgy.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-1bsv0QJj.css">
+    <script type="module" crossorigin src="./assets/index-BW1WF1mO.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CUa2WwV9.css">
     <style>
       .home-link {
         position: fixed;
@@ -55,12 +55,14 @@
         outline: 0;
       }
       .home-link:focus-visible { box-shadow: 0 0 0 2px rgba(216, 182, 119, .34); }
-      .is-playing .home-link { opacity: .08; }
-      .is-playing .home-link:hover,
-      .is-playing .home-link:focus-visible { opacity: 1; }
+      .home-link[hidden] { display: none !important; }
       @media (pointer: coarse) { .home-link { opacity: .24; } }
       @media (max-width: 600px) {
         .home-link {
+          left: 50%;
+          top: max(12px, env(safe-area-inset-top));
+          bottom: auto;
+          transform: translateX(-50%);
           width: 40px;
           height: 40px;
           padding: 0;
@@ -114,9 +116,13 @@
       <div id="announce" aria-live="assertive"></div>
     </main>
     <script>
-      document.addEventListener('pointerlockchange', function () {
-        document.body.classList.toggle('is-playing', document.pointerLockElement === document.querySelector('#scene'));
-      });
+      const scene = document.querySelector('#scene');
+      const homeLink = document.querySelector('.home-link');
+      function syncHomeLink() {
+        if (homeLink) homeLink.hidden = document.pointerLockElement === scene;
+      }
+      document.addEventListener('pointerlockchange', syncHomeLink);
+      syncHomeLink();
     </script>
   </body>
 </html>

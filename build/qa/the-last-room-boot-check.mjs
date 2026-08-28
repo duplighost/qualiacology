@@ -88,6 +88,15 @@ const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag2
 const seriousAxe = axe.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
 await page.locator("#enter").click();
 await page.waitForFunction(() => window.__LAST_ROOM__.audioSnapshot().active === true, null, { timeout: 15000 });
+await page.waitForFunction(() => document.pointerLockElement === document.querySelector("#scene"), null, { timeout: 15000 });
+const homeDuringPlay = await page.evaluate(() => {
+  const link = document.querySelector(".home-link");
+  return {
+    hidden: link?.hidden,
+    display: link ? getComputedStyle(link).display : null,
+    focused: document.activeElement === link,
+  };
+});
 await page.keyboard.down("KeyW");
 await page.waitForTimeout(900);
 await page.keyboard.up("KeyW");
@@ -96,8 +105,51 @@ const playState = await page.evaluate(() => ({
   snapshot: window.__LAST_ROOM__.snapshot(),
   audio: window.__LAST_ROOM__.audioSnapshot(),
 }));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(250);
+if (await page.evaluate(() => Boolean(document.pointerLockElement))) {
+  await page.evaluate(() => document.exitPointerLock());
+}
+await page.waitForFunction(() => !document.pointerLockElement && document.querySelector(".home-link")?.hidden === false && document.querySelector("#pause")?.hidden === false, null, { timeout: 15000 });
+const homeAfterUnlock = await page.evaluate(() => {
+  const link = document.querySelector(".home-link");
+  return {
+    hidden: link?.hidden,
+    display: link ? getComputedStyle(link).display : null,
+    pauseVisible: document.querySelector("#pause")?.hidden === false,
+  };
+});
+await desktopContext.close();
 
-const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+const storageContext = await browser.newContext({ viewport: { width: 960, height: 640 }, deviceScaleFactor: 1 });
+const storagePage = await storageContext.newPage();
+storagePage.on("pageerror", (error) => errors.push(`storage pageerror: ${error?.message || error}`));
+storagePage.on("console", (message) => {
+  if (message.type() === "error" && !/favicon/i.test(message.text())) errors.push(`storage console: ${message.text()}`);
+});
+storagePage.on("requestfailed", (request) => errors.push(`storage requestfailed: ${request.url()} (${request.failure()?.errorText || "unknown"})`));
+await storagePage.addInitScript(() => {
+  Object.defineProperty(window, "sessionStorage", {
+    configurable: true,
+    get() { throw new DOMException("Storage disabled for hosted-path check", "SecurityError"); },
+  });
+});
+const storageUrl = new URL(base);
+storageUrl.searchParams.set("autotest", "1");
+await storagePage.goto(storageUrl.href, { waitUntil: "domcontentloaded", timeout: 90000 });
+await storagePage.waitForFunction(() => document.body.dataset.gameReady === "true" && window.__LAST_ROOM__?.snapshot, null, { timeout: 90000 });
+const firstStorageSeed = await storagePage.evaluate(() => window.__LAST_ROOM__.snapshot().seed);
+await storagePage.evaluate(() => document.querySelector("#new-house").click());
+await storagePage.waitForFunction((previousSeed) => window.__LAST_ROOM__.snapshot().seed !== previousSeed, firstStorageSeed, { timeout: 30000 });
+const storageState = await storagePage.evaluate(() => window.__LAST_ROOM__.snapshot());
+await storageContext.close();
+
+const mobileContext = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 1,
+  isMobile: true,
+  hasTouch: true,
+});
 const mobilePage = await mobileContext.newPage();
 mobilePage.on("pageerror", (error) => errors.push(`mobile pageerror: ${error?.message || error}`));
 mobilePage.on("console", (message) => {
@@ -106,7 +158,7 @@ mobilePage.on("console", (message) => {
 mobilePage.on("requestfailed", (request) => errors.push(`mobile requestfailed: ${request.url()} (${request.failure()?.errorText || "unknown"})`));
 await mobilePage.goto(playUrl.href, { waitUntil: "domcontentloaded", timeout: 90000 });
 await mobilePage.waitForFunction(() => document.body.dataset.gameReady === "true", null, { timeout: 90000 });
-await mobilePage.locator("#enter").click();
+await mobilePage.locator("#enter").click({ timeout: 90000 });
 await mobilePage.waitForTimeout(900);
 const mobileState = await mobilePage.evaluate(() => {
   const box = (selector) => {
@@ -116,7 +168,10 @@ const mobileState = await mobilePage.evaluate(() => {
   return {
     viewport: [innerWidth, innerHeight],
     page: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+    coarse: matchMedia("(pointer: coarse)").matches,
+    touchDisplay: getComputedStyle(document.querySelector("#touch-ui")).display,
     home: box(".home-link"),
+    move: box("#move-zone"),
     pause: box("#touch-pause"),
     crouch: box("#touch-crouch"),
     jump: box("#touch-jump"),
@@ -126,7 +181,6 @@ const mobileState = await mobilePage.evaluate(() => {
 });
 await mobileContext.close();
 
-await desktopContext.close();
 await browser.close();
 
 const failures = [];
@@ -139,7 +193,7 @@ const overlaps = (a, b) => Boolean(a && b && !(
   || a.y + a.height <= b.y || b.y + b.height <= a.y
 ));
 
-check(captureState.buildId === "the-last-room-1.4.0-house-of-oddities", `exact v1.4.0 build (${captureState.buildId})`);
+check(captureState.buildId === "the-last-room-1.4.1-site-hardening", `exact v1.4.1 build (${captureState.buildId})`);
 check(captureState.validation?.ok === true, "generated wing passes architectural validation");
 check(captureState.errors?.length === 0, `game reports zero errors (${captureState.errors?.length || 0})`);
 check(captureState.stats?.rooms >= 6, `furnished room graph loaded (${captureState.stats?.rooms || 0} rooms)`);
@@ -150,12 +204,20 @@ check(captureState.paintingUrls.every((url) => new URL(url).pathname.startsWith(
 check(playState.snapshot?.validation?.ok === true, "real ENTER click starts a valid house");
 check(playState.audio?.active === true, "spatial sound activates from the real start gesture");
 check(playState.snapshot?.errors?.length === 0, "real player start reports zero game errors");
+check(homeDuringPlay.hidden === true && homeDuringPlay.display === "none" && homeDuringPlay.focused === false, "pointer lock removes the Qualiacology link from paint, focus, and hit testing");
+check(homeAfterUnlock.hidden === false && homeAfterUnlock.display !== "none" && homeAfterUnlock.pauseVisible === true, "leaving pointer lock restores the Qualiacology return link and pause state");
+check(storageState?.ready === true && storageState?.validation?.ok === true, "storage-disabled browsers boot and start a new house");
+check(storageState?.seed && storageState.seed !== firstStorageSeed, "NEW HOUSE keeps an in-memory seed when sessionStorage throws");
+check(storageState?.errors?.length === 0, "storage-disabled run reports zero game errors");
 check(seriousAxe.length === 0, `game page has zero serious/critical Axe violations${seriousAxe.length ? `: ${seriousAxe.map((item) => item.id).join(", ")}` : ""}`);
 check(mobileState.viewport[0] === 390 && mobileState.page[0] <= 391, `390px touch layout has no horizontal overflow (${mobileState.page[0]}px)`);
+check(mobileState.coarse === true && mobileState.touchDisplay !== "none", "390px mobile context exposes coarse pointer controls");
+check([mobileState.crouch, mobileState.jump, mobileState.throwButton].every((box) => box?.width > 0 && box?.height > 0), "touch actions are visibly rendered");
 check(mobileState.crouch?.width <= 65 && mobileState.jump?.width <= 65 && mobileState.throwButton?.width <= 65, "touch actions keep their authored 64px width");
 check(!overlaps(mobileState.crouch, mobileState.jump), "HOP and DUCK do not overlap");
 check(!overlaps(mobileState.jump, mobileState.throwButton) && !overlaps(mobileState.crouch, mobileState.throwButton), "THROW does not overlap HOP or DUCK");
 check(!overlaps(mobileState.home, mobileState.pause) && !overlaps(mobileState.home, mobileState.bone), "Qualiacology return control clears PAUSE and the bone counter on touch");
+check(!overlaps(mobileState.home, mobileState.move), "Qualiacology return control clears the movement pad on touch");
 if (capturePath) check(captureBytes > 20000, `representative 1280x720 capture contains rendered pixels (${captureBytes} bytes)`);
 check(badResponses.length === 0, `zero same-origin HTTP errors${badResponses.length ? `: ${badResponses.slice(0, 4).join(" | ")}` : ""}`);
 check(errors.length === 0, `zero page, console, and request errors${errors.length ? `: ${errors.slice(0, 4).join(" | ")}` : ""}`);
