@@ -42,6 +42,9 @@ jobs:
       - name: Smoke-test every public route
         run: npm run smoke
 
+      - name: Verify SKYSHARD authored-world layout
+        run: npm run qa:skyshard-world
+
       - name: Require generated files to be current
         working-directory: .
         shell: bash

@@ -72,6 +72,13 @@ own notes or memory. Last verified: 2026-08-27.
     directly over the game, and verifies the real 390px touch layout for
     overlapping controls. Usage: serve the repo, then
     `node build/qa/the-last-room-boot-check.mjs http://localhost:4173/the-last-room/`.
+  - `build/qa/skyshard-world-layout-check.mjs` — **run this before shipping any
+    SKYSHARD authored-world placement change.** It verifies that every major,
+    minor, trial, threshold, and wonder sits in its declared biome and that
+    their authored footprints keep at least 20m of edge clearance. This keeps
+    biome-specific ruins out of the wrong weather and prevents one destination
+    shell from swallowing another landmark's approach. Usage: from `build/`,
+    run `npm run qa:skyshard-world`.
   - `build/qa/fetch-boot-check.mjs` — **run this before shipping any FETCH
     change.** Boots the game the way a player does (real title click, no
     `?test=1`) and asserts the world is on screen AND the skull is visible in

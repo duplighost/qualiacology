@@ -7,6 +7,7 @@
     "build": "node scripts/build-site.mjs",
     "validate": "node scripts/validate-site.mjs --root=..",
     "smoke": "node scripts/route-smoke.mjs --root=..",
+    "qa:skyshard-world": "node qa/skyshard-world-layout-check.mjs",
     "qa": "node qa/browser-qa.mjs"
   },
   "devDependencies": {

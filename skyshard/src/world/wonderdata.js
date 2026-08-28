@@ -32,8 +32,8 @@ export const WONDERS = [
   W('vale-bells', 'Bellstone Orchard', 'vale', -92, 227, 0, .98, true, 1, .22),
   W('vale-giant', 'The Sleeping Giant', 'vale', 120, 258, 2, 1.28, true, 2, -.24),
   W('vale-vigil', 'Greenward Vigil', 'vale', -46, 327, 1, 1.05, false, 1, .12),
-  W('vale-terraces', 'Sunken Terraces', 'vale', 210, 325, 0, 1.12, true, 2, -.34),
-  W('vale-hush', 'Hushgrove', 'vale', -170, 395, 1, 1.18, true, 3, .20),
+  W('vale-terraces', 'Sunken Terraces', 'vale', 85, 320, 0, 1.12, true, 2, -.34),
+  W('vale-hush', 'Hushgrove', 'vale', -145, 405, 1, 1.18, true, 3, .20),
   W('vale-last-oak', 'The Last Oak Court', 'vale', -70, 500, 2, 1.34, true, 3, -.08),
 
   // Ember Flats — vitrified architecture and the bones of impossible fauna.
@@ -42,10 +42,10 @@ export const WONDERS = [
   W('ember-ribfall', 'Ribfall Processional', 'ember', -187, 83, 0, 1.10, true, 2, -.20),
   W('ember-kiln', 'The Black Kiln', 'ember', -244, -17, 1, 1.22, true, 2, .10),
   W('ember-sunsink', 'Sunsink Caldera', 'ember', -208, 194, 2, 1.20, true, 2, -.26),
-  W('ember-furnace', 'Furnace Wreck', 'ember', -350, 110, 0, 1.14, false, 1, .22),
+  W('ember-furnace', 'Furnace Wreck', 'ember', -330, 100, 0, 1.14, false, 1, .22),
   W('ember-throne', 'Ashglass Throne', 'ember', -319, 207, 1, 1.26, true, 3, -.10),
-  W('ember-teeth', 'Titan Teeth', 'ember', -437, -54, 2, 1.30, true, 3, .16),
-  W('ember-vigil', 'Red Horizon Vigil', 'ember', -351, 363, 0, 1.20, true, 3, -.18),
+  W('ember-teeth', 'Titan Teeth', 'ember', -415, -55, 2, 1.30, true, 3, .16),
+  W('ember-vigil', 'Red Horizon Vigil', 'ember', -395, 390, 0, 1.20, true, 3, -.18),
 
   // Frostmere — glacial cathedrals, stranded hulls, and singing ice.
   W('frost-choir', 'The Ice Choir', 'frost', -104, -70, 0, 1.02, true, 1, .14),
@@ -78,7 +78,7 @@ export const WONDERS = [
   W('shatter-archive', 'Fallen Star Archive', 'shatter', 229, -237, 2, 1.20, true, 2, -.18),
   W('shatter-crown', 'Levitation Crown', 'shatter', 310, -320, 0, 1.32, true, 3, .20),
   W('shatter-procession', 'The Hanging Procession', 'shatter', 220, -430, 1, 1.28, true, 3, -.14),
-  W('shatter-end', 'Worldbreak Court', 'shatter', 470, -330, 2, 1.36, true, 3, .18),
+  W('shatter-end', 'Worldbreak Court', 'shatter', 450, -330, 2, 1.36, true, 3, .18),
 ];
 
 export const WONDERS_BY_REGION = Object.freeze({

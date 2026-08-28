@@ -180,7 +180,13 @@ try {
     });
     check(audioRequests.length === 0, "Audio requested before click in interaction test");
     await page.getByRole("button", { name: "Sound off" }).click();
-    await page.waitForTimeout(500);
+    // Audio.play() resolves only after Chrome has buffered enough of the MP3 to
+    // begin playback. A fixed 500 ms sample races that cold-cache decode even
+    // though the explicit click and request are both working correctly.
+    await page.waitForFunction(() => {
+      const button = document.querySelector("[data-audio-toggle]");
+      return button?.getAttribute("aria-pressed") === "true";
+    }, undefined, { timeout: 10_000 }).catch(() => {});
     const audioOn = await page.locator("[data-audio-toggle]").evaluate((button) => ({ pressed: button.getAttribute("aria-pressed"), text: button.textContent.trim() }));
     check(audioOn.pressed === "true" && audioOn.text === "Sound on", `Sound-on state failed: ${JSON.stringify(audioOn)}`);
     check(audioRequests.length > 0, "Audio did not request after explicit opt-in");
