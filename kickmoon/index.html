@@ -79,7 +79,7 @@
       <p id="srState" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
     </section>
 
-    <div id="touchControls" aria-label="Touch controls. Move anywhere on the left. Use the right side to look, guide the ball, kick, call, charge and pull. HOOK grapples the ball to whatever it touches.">
+    <div id="touchControls" aria-label="Touch controls. Move anywhere on the left. Use the right side to look, guide the ball, kick, call, charge and pull. JUMP rises and DROP commits to Moonfall.">
       <div id="movePad" class="touch-zone touch-zone--move" role="application" aria-label="Floating movement control. Touch anywhere on the left and drag.">
         <div class="touch-pad" aria-hidden="true">
           <div class="touch-pad__ticks"></div>
@@ -94,6 +94,7 @@
       </div>
       <button id="touchJump" class="touch-action touch-action--jump" type="button" aria-label="Jump or double jump">JUMP</button>
       <button id="touchGrapple" class="touch-action touch-action--grapple" type="button" aria-label="Grapple. Sticks the ball to whatever it touches and reels you to it.">HOOK</button>
+      <button id="touchDrop" class="touch-action touch-action--drop" type="button" aria-label="Moonfall drop">DROP</button>
       <button id="touchPause" class="touch-pause" type="button" aria-label="Pause game">II</button>
     </div>
 
@@ -114,7 +115,7 @@
             <span><kbd>LMB</kbd> KICK</span>
             <span><kbd>RMB</kbd> RECALL / LOOP SPIN</span>
             <span><kbd>MMB</kbd> GRAPPLE</span>
-            <span><kbd>SPACE</kbd> HIGH JUMP x2</span>
+            <span><kbd>SPACE</kbd> JUMP x2 · <kbd>C</kbd> DROP</span>
           </div>
           <div class="control-set gamepad-hints">
             <span><kbd>LS</kbd> MOVE</span>
@@ -122,7 +123,7 @@
             <span><kbd>RT</kbd> KICK</span>
             <span><kbd>LT</kbd> GUIDE / CALL</span>
             <span><kbd>A</kbd> DOUBLE JUMP</span>
-            <span><kbd>B</kbd> SPIN</span>
+            <span><kbd>B/X</kbd> SPIN · <kbd>Y</kbd> DROP</span>
           </div>
         </div>
         <button id="startButton" class="primary-button" type="button">
