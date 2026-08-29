@@ -30,6 +30,19 @@
       "actionLabel": "Play LIL BIG BANG"
     },
     {
+      "slug": "thurible",
+      "title": "THURIBLE",
+      "descriptor": "One-thumb liturgy",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/thurible-card-clean.webp",
+      "alt": "A hooded thurifer at the centre of a candlelit cathedral floor, swinging a brass censer on a long chain through a burning orange arc, with armoured figures closing in out of the dark at the edges",
+      "summary": "You drag; the censer swings out behind you on its chain and arrives late. Only a fast coal burns — a slow one just shoves — so the whole game is keeping a weight moving. Three candles on the altar are your health, and the room goes a step darker every time one of them goes out. Milo made this one too.",
+      "metaDescription": "THURIBLE is a one-thumb browser game about swinging a censer on a chain around a dark cathedral: only a fast coal burns, and three candles on the altar are the whole of your health. Made for Alexander Duncan Guitar by Milo.",
+      "controls": "Drag anywhere · one thumb or mouse · WASD or arrows also move · M mutes",
+      "actionLabel": "Swing it"
+    },
+    {
       "slug": "fetch",
       "title": "FETCH",
       "descriptor": "Cursed-skull horror",

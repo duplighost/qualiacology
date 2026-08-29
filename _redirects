@@ -33,6 +33,11 @@
 /rockets            /rocket-shoes/            302
 /moon-boots         /rocket-shoes/            302
 
+# --- Thurible ---
+/thur               /thurible/                302
+/censer             /thurible/                302
+/incense            /thurible/                302
+
 # --- Marrow ---
 /marrow.html        /marrow/                  301!
 /horror             /marrow/                  302

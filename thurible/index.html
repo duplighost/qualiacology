@@ -1,0 +1,3678 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- GENERATED — do not hand-edit this file.
+     Source: Projects/thurible on Alex's machine (src/*.js + src/shell-site.html).
+     Rebuild the site copy with:  node build.mjs --site <path-to>/qualiacology/thurible/index.html
+     Hand edits here are lost the next time THURIBLE changes. -->
+<head>
+<meta charset="utf-8">
+<title>THURIBLE | Qualiacology</title>
+<meta name="description" content="THURIBLE is a one-thumb browser game. You drag; the censer follows late; only a fast coal burns. Three candles on the altar are the whole of your health plan." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Qualiacology" />
+<meta property="og:title" content="THURIBLE | Qualiacology" />
+<meta property="og:description" content="Drag anywhere. You move, the censer follows late. Only a fast coal burns — a slow one just shoves." />
+<meta property="og:url" content="https://qualiacology.com/thurible/" />
+<meta property="og:image" content="https://qualiacology.com/assets/games/thurible-card-clean.webp" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="THURIBLE | Qualiacology" />
+<meta name="twitter:description" content="Drag anywhere. You move, the censer follows late. Only a fast coal burns — a slow one just shoves." />
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/thurible-card-clean.webp" />
+<link rel="canonical" href="https://qualiacology.com/thurible/" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%2304030a'/><path d='M32 6 L32 20' stroke='%23b48c48' stroke-width='3' stroke-linecap='round'/><circle cx='32' cy='38' r='15' fill='none' stroke='%23b48c48' stroke-width='3'/><circle cx='32' cy='38' r='7.5' fill='%23ffb347'/></svg>">
+<!-- No maximum-scale / user-scalable=no. Blocking pinch-zoom locks out anyone who needs
+     to magnify, and this site already stripped exactly that from THROWN and LIL BIG BANG.
+     The canvas re-fits on resize, so zooming costs the game nothing. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#04030a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#04030a}
+body{touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none;
+     cursor:none}
+#view{position:fixed;inset:0;display:block;width:100%;height:100%;touch-action:none}
+
+/* the only chrome in the game: a 3-bar sound glyph, barely there */
+#snd{position:fixed;z-index:4;right:calc(10px + env(safe-area-inset-right));
+     bottom:calc(10px + env(safe-area-inset-bottom));
+     width:34px;height:34px;padding:0;border:0;background:none;cursor:pointer;
+     display:flex;align-items:flex-end;justify-content:center;gap:3px;
+     opacity:.20;transition:opacity .6s ease}
+body.playing #snd{opacity:.05}
+body.playing #snd:hover,body.playing #snd:focus-visible{opacity:.4}
+#snd:hover,#snd:focus-visible{opacity:.5;outline:none}
+#snd b{display:block;width:3px;border-radius:2px;background:#e8c98a;
+       transition:height .3s cubic-bezier(.2,.9,.2,1),opacity .3s}
+#snd b:nth-child(1){height:7px}
+#snd b:nth-child(2){height:15px}
+#snd b:nth-child(3){height:10px}
+#snd.off b{height:3px;opacity:.55}
+@media (prefers-reduced-motion: reduce){#snd b{transition:none}}
+
+/* Milo made this for Alex. That line was in the original and it stays in —
+   it is a credit, not a HUD, and it is gone the moment a run starts. */
+.sig{position:fixed;left:0;right:0;bottom:calc(12px + env(safe-area-inset-bottom));
+     z-index:3;margin:0;text-align:center;pointer-events:none;
+     font:400 9.5px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;
+     letter-spacing:.22em;text-transform:uppercase;color:#6a5a48;
+     opacity:.55;transition:opacity .5s ease}
+body.playing .sig{opacity:0}
+
+
+/* the site's home pill, in the game's own brass. It dims while a run is live —
+   the same courtesy behind-you pays by hiding its pill during pointer lock —
+   but it stays clickable, because the only other way out is to die. */
+.home-link{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));
+  z-index:200;color:#e8c98a;text-decoration:none;
+  font:800 11px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;
+  letter-spacing:.14em;text-transform:uppercase;padding:8px 11px;border-radius:999px;
+  background:rgba(8,6,14,.62);border:1px solid rgba(180,140,72,.38);
+  backdrop-filter:blur(8px);transition:opacity .35s ease,color .25s,border-color .25s}
+.home-link:hover,.home-link:focus-visible{color:#fff3d6;border-color:rgba(240,205,138,.85);opacity:1!important;outline:0}
+body.playing .home-link{opacity:.16}
+/* landmarks only — display:contents keeps these out of layout, so the canvas is untouched */
+nav.site-nav,main.game-root,footer.game-chrome{display:contents}
+</style>
+</head>
+<body>
+<nav class="site-nav" aria-label="Site"><a class="home-link" href="/">Qualiacology</a></nav>
+<main class="game-root">
+<canvas id="view" aria-label="THURIBLE — drag anywhere to swing the censer"></canvas>
+</main>
+<footer class="game-chrome">
+<button id="snd" type="button" aria-label="Toggle sound"><b></b><b></b><b></b></button>
+<p class="sig">for Alex &middot; swung by Milo</p>
+</footer>
+<script>
+(function(){
+/* ===== a-core.js ===== */
+/* ============================================================
+   THURIBLE — a one-thumb liturgy
+   core: math, buffers, floor bake, lighting, post-process
+   ============================================================ */
+'use strict';
+
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+const sstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* deterministic RNG so the floor bakes identically every time */
+function mulberry(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ---------- the ember ramp: the whole game's colour language ----------
+   0 = dead coal, 1 = white-hot. Everything that burns samples this. */
+const EMBER = [
+  [0.00, 86, 26, 12],
+  [0.16, 150, 46, 16],
+  [0.34, 220, 88, 22],
+  [0.52, 255, 128, 34],
+  [0.70, 255, 178, 72],
+  [0.86, 255, 226, 150],
+  [1.00, 255, 250, 232]
+];
+function ember(t) {
+  t = clamp(t, 0, 1);
+  for (let i = 1; i < EMBER.length; i++) {
+    if (t <= EMBER[i][0]) {
+      const a = EMBER[i - 1], b = EMBER[i];
+      const f = (t - a[0]) / (b[0] - a[0]);
+      return [Math.round(lerp(a[1], b[1], f)), Math.round(lerp(a[2], b[2], f)), Math.round(lerp(a[3], b[3], f))];
+    }
+  }
+  return [255, 250, 232];
+}
+const emberCss = (t, a) => { const c = ember(t); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + (a === undefined ? 1 : a) + ')'; };
+const rgba = (c, a) => 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+
+/* ---------- canvases ---------- */
+const view = document.getElementById('view');
+let W = 0, H = 0, DPR = 1, unit = 1, PW = 0, PH = 0;
+
+function mkbuf(w, h) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, w | 0); c.height = Math.max(1, h | 0);
+  return c;
+}
+/* a buffer that you draw into using CSS pixels, at an arbitrary internal scale */
+function Layer(scale, alpha) {
+  return {
+    scale, alpha: alpha !== false, c: null, x: null,
+    fit() {
+      this.c = mkbuf(W * this.scale * DPR, H * this.scale * DPR);
+      this.x = this.c.getContext('2d', { alpha: this.alpha, willReadFrequently: false });
+      this.reset();
+    },
+    reset() { this.x.setTransform(this.scale * DPR, 0, 0, this.scale * DPR, 0, 0); },
+    clear() { this.x.setTransform(1, 0, 0, 1, 0, 0); this.x.clearRect(0, 0, this.c.width, this.c.height); this.reset(); },
+    fill(col) {
+      this.x.setTransform(1, 0, 0, 1, 0, 0);
+      this.x.globalCompositeOperation = 'copy'; this.x.fillStyle = col;
+      this.x.fillRect(0, 0, this.c.width, this.c.height);
+      this.x.globalCompositeOperation = 'source-over'; this.reset();
+    }
+  };
+}
+
+const SCENE = Layer(1, false);
+const FLOOR = Layer(1, false);   // baked stone, "fully lit" colours
+const DECAL = Layer(1);          // scorch, soot, spilled coal — persists across a run
+const LIT = Layer(1, false);     // scratch: floor × light
+const LIGHT = Layer(0.5, false); // additive light accumulation
+const SPILL = Layer(0.5);        // the light itself, no ambient
+let SMOKE_A = Layer(0.5), SMOKE_B = Layer(0.5); // ping-pong advected incense
+const SMOKE_LIT = Layer(0.5);
+const HALO = Layer(0.28);        // the trail's outer glow, blurred by being small
+
+let ctx = null; // SCENE context, the one every draw call uses
+
+/* ---------- soft radial sprite, reused everywhere ---------- */
+function radial(size, stops) {
+  const c = mkbuf(size, size), x = c.getContext('2d');
+  const g = x.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  for (const s of stops) g.addColorStop(s[0], s[1]);
+  x.fillStyle = g; x.fillRect(0, 0, size, size);
+  return c;
+}
+const GLOW = radial(160, [
+  [0, 'rgba(255,255,255,1)'], [0.11, 'rgba(255,255,255,0.86)'],
+  [0.26, 'rgba(255,255,255,0.44)'], [0.48, 'rgba(255,255,255,0.15)'],
+  [0.74, 'rgba(255,255,255,0.035)'], [1, 'rgba(255,255,255,0)']
+]);
+const SOFT = radial(128, [
+  [0, 'rgba(255,255,255,0.85)'], [0.35, 'rgba(255,255,255,0.42)'],
+  [0.68, 'rgba(255,255,255,0.11)'], [1, 'rgba(255,255,255,0)']
+]);
+const PUFF = radial(128, [
+  [0, 'rgba(255,255,255,0.62)'], [0.28, 'rgba(255,255,255,0.40)'],
+  [0.58, 'rgba(255,255,255,0.16)'], [0.82, 'rgba(255,255,255,0.04)'], [1, 'rgba(255,255,255,0)']
+]);
+
+function sprite(x2, img, x, y, size, col, alpha, op) {
+  x2.save();
+  x2.globalCompositeOperation = op || 'lighter';
+  x2.globalAlpha = alpha;
+  if (col) {
+    // tint by drawing the sprite then multiplying — cheaper: pre-tint via shadow trick is slow,
+    // so we just draw white and rely on the caller's fillStyle overlay where colour matters.
+    x2.fillStyle = col;
+  }
+  x2.drawImage(img, x - size / 2, y - size / 2, size, size);
+  x2.restore();
+}
+
+/* tinted glow: draw into a scratch tint canvas once per colour is expensive, so instead
+   we stack a white core + a coloured wide pass. Reads as a hot light with coloured spill. */
+function light2d(x2, x, y, size, col, alpha) {
+  x2.save();
+  x2.globalCompositeOperation = 'lighter';
+  x2.globalAlpha = alpha;
+  x2.fillStyle = col;
+  const g = x2.createRadialGradient(x, y, 0, x, y, size / 2);
+  g.addColorStop(0, col);
+  g.addColorStop(0.18, rgbaMul(col, 0.70));
+  g.addColorStop(0.42, rgbaMul(col, 0.26));
+  g.addColorStop(0.70, rgbaMul(col, 0.06));
+  g.addColorStop(1, rgbaMul(col, 0));
+  x2.fillStyle = g;
+  x2.fillRect(x - size / 2, y - size / 2, size, size);
+  x2.restore();
+}
+function rgbaMul(css, k) {
+  const m = css.match(/rgba?\(([^)]+)\)/);
+  if (!m) return css;
+  const p = m[1].split(',').map(Number);
+  const a = (p[3] === undefined ? 1 : p[3]) * k;
+  return 'rgba(' + p[0] + ',' + p[1] + ',' + p[2] + ',' + a + ')';
+}
+
+/* ============================================================
+   THE FLOOR — a cathedral seen from directly above.
+   Baked once per resize in "fully lit" values; the light buffer
+   multiplies it down, so the room only exists where fire falls.
+   ============================================================ */
+const ROOM = { cx: 0, cy: 0, R: 0, altarY: 0, roseY: 0 };
+
+/* A tiled grain sheet, generated once. Stone without grain reads as plastic. */
+let GRAIN = null;
+function makeGrain() {
+  const n = 256;
+  const c = mkbuf(n, n), x = c.getContext('2d');
+  const img = x.createImageData(n, n);
+  const R = mulberry(99);
+  for (let i = 0; i < n * n; i++) {
+    const v = 128 + (R() - 0.5) * 160 + (R() - 0.5) * 100;
+    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
+    img.data[i * 4 + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  return c;
+}
+
+function bakeFloor() {
+  FLOOR.fit();
+  if (!GRAIN) GRAIN = makeGrain();
+  const x = FLOOR.x;
+  const R = mulberry(1337);
+  ROOM.cx = W / 2; ROOM.cy = H * 0.53;
+  ROOM.R = Math.min(W, H) * 0.42;
+  ROOM.altarY = Math.max(46 * unit, H * 0.075);
+  ROOM.roseY = ROOM.cy;
+
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.clearRect(0, 0, FLOOR.c.width, FLOOR.c.height);
+  FLOOR.reset();
+
+  /* Baked at FULLY LIT values: this is the stone with the coal right on top of
+     it. The light buffer multiplies it down to nothing everywhere else. Kept
+     nearly neutral so the coal can make it warm and the high windows cold. */
+  const PALE = [198, 190, 196], MID = [168, 158, 168], DARK = [138, 128, 142];
+  const mix = (a, b, t) => [lerp(a[0], b[0], t) | 0, lerp(a[1], b[1], t) | 0, lerp(a[2], b[2], t) | 0];
+  const css = (c) => 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+
+  x.fillStyle = css(MID);
+  x.fillRect(0, 0, W, H);
+
+  const T = clamp(Math.min(W, H) / 9.5, 58, 112);
+
+  const crack = (cx0, cy0, n, alpha) => {
+    x.globalAlpha = alpha === undefined ? 0.18 + R() * 0.14 : alpha;
+    x.strokeStyle = 'rgb(72,64,80)';
+    x.lineWidth = rndR(R, 0.6, 1.5) * unit;
+    x.beginPath();
+    let px = cx0, py = cy0, ang = rndR(R, 0, TAU);
+    x.moveTo(px, py);
+    for (let s = 0; s < (n || 5); s++) {
+      ang += rndR(R, -0.8, 0.8);
+      px += Math.cos(ang) * rndR(R, 7, 28) * unit;
+      py += Math.sin(ang) * rndR(R, 7, 28) * unit;
+      x.lineTo(px, py);
+    }
+    x.stroke();
+    x.globalAlpha = 1;
+  };
+
+  /* --- the field of slabs: no chequer, just stone that varies --- */
+  for (let py = -T; py < H + T; py += T) {
+    for (let px = -T; px < W + T; px += T) {
+      const d = Math.hypot(px + T / 2 - ROOM.cx, py + T / 2 - ROOM.roseY) / ROOM.R;
+      // neighbouring slabs stay close in value: a big jump between two of them
+      // turns into a hard-edged rectangle the moment the coal lights it
+      const base = mix(PALE, DARK, clamp(0.34 + R() * 0.30 + d * 0.16, 0, 1));
+      const v = 1 + (R() - 0.5) * 0.07;
+      x.fillStyle = 'rgb(' + ((base[0] * v) | 0) + ',' + ((base[1] * v) | 0) + ',' + ((base[2] * v) | 0) + ')';
+      x.fillRect(px, py, T, T);
+      for (let m = 0; m < 4; m++) {
+        x.globalAlpha = 0.035 + R() * 0.065;
+        x.fillStyle = R() < 0.5 ? 'rgb(238,234,242)' : 'rgb(88,80,94)';
+        x.beginPath();
+        x.ellipse(px + rndR(R, 0.05, 0.95) * T, py + rndR(R, 0.05, 0.95) * T,
+          rndR(R, 0.08, 0.40) * T, rndR(R, 0.06, 0.34) * T, rndR(R, 0, TAU), 0, TAU);
+        x.fill();
+      }
+      // seam: a hairline, and only three sides of it, so the grid never closes
+      x.globalAlpha = 0.20 + R() * 0.16;
+      x.strokeStyle = 'rgb(84,76,92)';
+      x.lineWidth = 1 * unit;
+      x.beginPath();
+      x.moveTo(px + 0.5, py + T - 0.5); x.lineTo(px + 0.5, py + 0.5); x.lineTo(px + T - 0.5, py + 0.5);
+      if (R() < 0.7) x.lineTo(px + T - 0.5, py + T - 0.5);
+      x.stroke();
+      x.globalAlpha = 0.07;
+      x.fillStyle = 'rgb(250,248,252)';
+      x.fillRect(px + 1, py + 1, T - 2, 1.1 * unit);
+      x.globalAlpha = 1;
+      if (R() < 0.10) crack(px + rndR(R, 0.2, 0.8) * T, py + rndR(R, 0.2, 0.8) * T, 4);
+    }
+  }
+
+  /* --- a ring of voussoir blocks around the rose: the one deliberate pattern --- */
+  x.save();
+  x.translate(ROOM.cx, ROOM.roseY);
+  for (let i = 0; i < 36; i++) {
+    const a0 = (i / 36) * TAU, a1 = ((i + 1) / 36) * TAU;
+    const r0 = ROOM.R * 1.02, r1 = ROOM.R * 1.16;
+    x.globalAlpha = 0.5;
+    x.fillStyle = i & 1 ? css(mix(DARK, MID, 0.35)) : css(mix(PALE, MID, 0.5));
+    x.beginPath();
+    x.arc(0, 0, r0, a0, a1); x.arc(0, 0, r1, a1, a0, true); x.closePath(); x.fill();
+    x.globalAlpha = 0.28;
+    x.strokeStyle = 'rgb(78,70,86)'; x.lineWidth = 1 * unit;
+    x.stroke();
+  }
+  x.globalAlpha = 1;
+  x.restore();
+
+  /* --- wear that ignores the grid entirely --- */
+  for (let i = 0; i < 54; i++) {
+    const rr = rndR(R, 0.05, 0.32) * Math.min(W, H);
+    const cx0 = rndR(R, -0.1, 1.1) * W, cy0 = rndR(R, -0.1, 1.1) * H;
+    const dark = R() < 0.56;
+    const g = x.createRadialGradient(cx0, cy0, 0, cx0, cy0, rr);
+    g.addColorStop(0, dark ? 'rgba(70,62,78,0.30)' : 'rgba(246,244,250,0.17)');
+    g.addColorStop(0.55, dark ? 'rgba(70,62,78,0.12)' : 'rgba(246,244,250,0.06)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g;
+    x.fillRect(cx0 - rr, cy0 - rr, rr * 2, rr * 2);
+  }
+  // the path worn down the middle of the nave by centuries of feet
+  const wg = x.createLinearGradient(W * 0.5 - ROOM.R * 0.55, 0, W * 0.5 + ROOM.R * 0.55, 0);
+  wg.addColorStop(0, 'rgba(238,236,244,0)');
+  wg.addColorStop(0.5, 'rgba(238,236,244,0.10)');
+  wg.addColorStop(1, 'rgba(238,236,244,0)');
+  x.fillStyle = wg; x.fillRect(0, 0, W, H);
+  for (let i = 0; i < 11; i++) crack(rndR(R, 0, W), rndR(R, 0, H), 18, 0.16);
+
+  /* --- benches down the aisles: worn wood, not a barcode --- */
+  const aisle = Math.max(0, (W - ROOM.R * 2.5) / 2);
+  const pewW = Math.min(aisle - 18 * unit, 128 * unit);
+  if (pewW > 40 * unit) {
+    for (const side of [0, 1]) {
+      const bx = side ? W - pewW - 14 * unit : 14 * unit;
+      for (let py = ROOM.altarY + 110 * unit; py < H - 40 * unit; py += 46 * unit) {
+        const jit = (R() - 0.5) * 5 * unit, w = pewW * (0.92 + R() * 0.08);
+        x.globalAlpha = 0.34;
+        x.fillStyle = 'rgb(112,96,110)';
+        x.fillRect(bx + jit, py, w, 20 * unit);
+        x.globalAlpha = 0.22;
+        x.fillStyle = 'rgb(224,214,226)';
+        x.fillRect(bx + jit, py + 1 * unit, w, 2 * unit);
+        x.globalAlpha = 0.30;
+        x.fillStyle = 'rgb(56,48,62)';
+        x.fillRect(bx + jit, py + 18 * unit, w, 4.5 * unit);
+        x.globalAlpha = 0.12;
+        x.strokeStyle = 'rgb(48,40,54)'; x.lineWidth = 1 * unit;
+        for (let k = 1; k < 4; k++) {
+          x.beginPath(); x.moveTo(bx + jit + w * k / 4, py); x.lineTo(bx + jit + w * k / 4, py + 20 * unit); x.stroke();
+        }
+        x.globalAlpha = 1;
+      }
+    }
+  }
+
+  /* --- the great rose inlay under the nave --- */
+  x.save();
+  x.translate(ROOM.cx, ROOM.roseY);
+  const BR = 'rgb(206,160,84)', BRL = 'rgb(252,222,156)', BRD = 'rgb(120,90,46)';
+  for (const [rr, lw, col] of [[1.0, 3.4, BR], [0.88, 1.7, BRD], [0.63, 2.6, BR], [0.31, 1.7, BRD]]) {
+    x.strokeStyle = col; x.lineWidth = lw * unit; x.globalAlpha = 0.60;
+    x.beginPath(); x.arc(0, 0, ROOM.R * rr, 0, TAU); x.stroke();
+  }
+  x.globalAlpha = 0.38; x.strokeStyle = BR; x.lineWidth = 1.8 * unit;
+  x.beginPath();
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * TAU;
+    x.moveTo(Math.cos(a) * ROOM.R * 0.63, Math.sin(a) * ROOM.R * 0.63);
+    x.lineTo(Math.cos(a) * ROOM.R * 0.995, Math.sin(a) * ROOM.R * 0.995);
+  }
+  x.stroke();
+  x.globalAlpha = 0.48; x.strokeStyle = BRL; x.lineWidth = 1.6 * unit;
+  for (let i = 0; i < 8; i++) {
+    x.save(); x.rotate((i / 8) * TAU);
+    x.beginPath();
+    x.moveTo(0, 0);
+    x.quadraticCurveTo(ROOM.R * 0.20, -ROOM.R * 0.13, ROOM.R * 0.30, 0);
+    x.quadraticCurveTo(ROOM.R * 0.20, ROOM.R * 0.13, 0, 0);
+    x.stroke();
+    x.restore();
+  }
+  x.globalAlpha = 0.66; x.fillStyle = BRL;
+  x.beginPath(); x.arc(0, 0, 4.5 * unit, 0, TAU); x.fill();
+  x.globalAlpha = 1;
+  x.restore();
+
+  /* --- the altar: a raised sanctuary step, then the mensa --- */
+  const ay = ROOM.altarY;
+  const stepY = ay + 22 * unit;
+  x.globalAlpha = 0.42;
+  x.fillStyle = 'rgb(214,206,216)';
+  x.fillRect(0, 0, W, stepY);
+  x.globalAlpha = 0.34;
+  x.fillStyle = 'rgb(84,74,92)';
+  for (let i = 0; i < 44; i++) {
+    const rr = rndR(R, 18, 96) * unit;
+    x.beginPath();
+    x.ellipse(rndR(R, 0, W), rndR(R, -14, stepY + 8 * unit), rr, rr * 0.45, 0, 0, TAU);
+    x.fill();
+  }
+  x.globalAlpha = 1;
+  // the shadow the step throws down the nave
+  const sg = x.createLinearGradient(0, stepY, 0, stepY + 30 * unit);
+  sg.addColorStop(0, 'rgba(24,18,32,0.62)');
+  sg.addColorStop(1, 'rgba(24,18,32,0)');
+  x.fillStyle = sg; x.fillRect(0, stepY, W, 30 * unit);
+  // mensa
+  const mw = Math.min(W * 0.46, 520 * unit), mx = (W - mw) / 2;
+  x.globalAlpha = 0.92;
+  x.fillStyle = 'rgb(212,202,216)';
+  x.fillRect(mx, ay - 32 * unit, mw, 46 * unit);
+  x.globalAlpha = 0.50; x.fillStyle = 'rgb(252,250,255)';
+  x.fillRect(mx, ay - 32 * unit, mw, 2.6 * unit);
+  x.globalAlpha = 0.55; x.fillStyle = 'rgb(40,32,52)';
+  x.fillRect(mx, ay + 12 * unit, mw, 3.5 * unit);
+  const mg = x.createLinearGradient(mx, 0, mx + mw, 0);
+  mg.addColorStop(0, 'rgba(40,32,52,0.5)');
+  mg.addColorStop(0.12, 'rgba(40,32,52,0)');
+  mg.addColorStop(0.88, 'rgba(40,32,52,0)');
+  mg.addColorStop(1, 'rgba(40,32,52,0.5)');
+  x.globalAlpha = 1; x.fillStyle = mg;
+  x.fillRect(mx, ay - 32 * unit, mw, 46 * unit);
+
+  /* --- the name, brass, set into the stone of the nave --- */
+  inlayWord(x, 'THURIBLE', ROOM.cx, ROOM.roseY + ROOM.R * 0.80, Math.min(W * 0.052, 34 * unit));
+
+  /* --- grain over everything, so no surface is perfectly smooth --- */
+  x.save();
+  x.globalAlpha = 0.10;
+  x.fillStyle = x.createPattern(GRAIN, 'repeat');
+  x.fillRect(0, 0, W, H);
+  x.restore();
+
+  /* --- grime in the corners --- */
+  const vg = x.createRadialGradient(W / 2, H * 0.5, Math.min(W, H) * 0.22, W / 2, H * 0.5, Math.max(W, H) * 0.84);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(40,32,54,0.66)');
+  x.fillStyle = vg; x.fillRect(0, 0, W, H);
+}
+
+function rndR(R, a, b) { return a + R() * (b - a); }
+
+function inlayWord(x, word, cx, cy, size) {
+  x.save();
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '600 ' + size + 'px Georgia,"Times New Roman",Didot,serif';
+  const track = size * 0.42;
+  let total = 0;
+  const widths = [];
+  for (const ch of word) { const w = x.measureText(ch).width; widths.push(w); total += w + track; }
+  total -= track;
+  let px = cx - total / 2;
+  for (let i = 0; i < word.length; i++) {
+    const cxi = px + widths[i] / 2;
+    // recess shadow
+    x.globalAlpha = 0.6; x.fillStyle = '#241a32';
+    x.fillText(word[i], cxi + size * 0.03, cy + size * 0.035);
+    // brass fill
+    const g = x.createLinearGradient(cxi, cy - size * 0.55, cxi, cy + size * 0.55);
+    g.addColorStop(0, '#f0cd8a'); g.addColorStop(0.45, '#b48c48');
+    g.addColorStop(0.55, '#8f6c33'); g.addColorStop(1, '#d6a95e');
+    x.globalAlpha = 0.92; x.fillStyle = g;
+    x.fillText(word[i], cxi, cy);
+    // top bevel
+    x.globalAlpha = 0.5; x.strokeStyle = '#e6c98d'; x.lineWidth = Math.max(0.6, size * 0.018);
+    x.strokeText(word[i], cxi, cy - size * 0.012);
+    px += widths[i] + track;
+  }
+  x.globalAlpha = 1;
+  x.restore();
+}
+
+/* ============================================================
+   POST — WebGL2: bright-pass, dual-Kawase bloom, heat refraction,
+   aberration, filmic tonemap, vignette, grain.
+   Falls back to a pure Canvas2D bloom if WebGL is missing.
+   ============================================================ */
+const Post = {
+  gl: null, ok: false, quality: 1,
+  fbo: [], tex: {}, prog: {}, vao: null,
+  W: 0, H: 0,
+
+  init() {
+    let gl = null;
+    try {
+      gl = view.getContext('webgl2', {
+        alpha: false, antialias: false, depth: false, stencil: false,
+        premultipliedAlpha: false, preserveDrawingBuffer: true,
+        powerPreference: 'high-performance', desynchronized: false
+      });
+    } catch (e) { gl = null; }
+    if (!gl) { this.ok = false; this.fallback(); return; }
+    this.gl = gl;
+    const half = gl.getExtension('EXT_color_buffer_half_float');
+    const flt = gl.getExtension('EXT_color_buffer_float');
+    this.hdr = !!(half || flt);
+    this.fmt = half ? gl.HALF_FLOAT : (flt ? gl.FLOAT : gl.UNSIGNED_BYTE);
+    this.ifmt = half ? gl.RGBA16F : (flt ? gl.RGBA32F : gl.RGBA8);
+    gl.getExtension('OES_texture_float_linear');
+    gl.getExtension('OES_texture_half_float_linear');
+
+    const VS = `#version 300 es
+    out vec2 vUv;
+    void main(){
+      vec2 p = vec2((gl_VertexID<<1)&2, gl_VertexID&2);
+      vUv = p;
+      gl_Position = vec4(p*2.0-1.0, 0.0, 1.0);
+    }`;
+
+    const HEAD = `#version 300 es
+    precision highp float;
+    in vec2 vUv;
+    out vec4 o;
+    `;
+
+    /* bright pass + half-res downsample */
+    const F_BRIGHT = HEAD + `
+    uniform sampler2D uT; uniform vec2 uTexel; uniform float uThresh, uKnee;
+    void main(){
+      vec3 s = vec3(0.0);
+      s += texture(uT, vUv + uTexel*vec2(-1.0,-1.0)).rgb;
+      s += texture(uT, vUv + uTexel*vec2( 1.0,-1.0)).rgb;
+      s += texture(uT, vUv + uTexel*vec2(-1.0, 1.0)).rgb;
+      s += texture(uT, vUv + uTexel*vec2( 1.0, 1.0)).rgb;
+      s *= 0.25;
+      float l = max(s.r, max(s.g, s.b));
+      float w = clamp((l - uThresh) / max(uKnee, 1e-4), 0.0, 1.0);
+      w *= w;
+      o = vec4(s * w, 1.0);
+    }`;
+
+    /* dual-Kawase down */
+    const F_DOWN = HEAD + `
+    uniform sampler2D uT; uniform vec2 uTexel;
+    void main(){
+      vec3 s = texture(uT, vUv).rgb * 4.0;
+      s += texture(uT, vUv - uTexel).rgb;
+      s += texture(uT, vUv + uTexel).rgb;
+      s += texture(uT, vUv + vec2(uTexel.x, -uTexel.y)).rgb;
+      s += texture(uT, vUv - vec2(uTexel.x, -uTexel.y)).rgb;
+      o = vec4(s / 8.0, 1.0);
+    }`;
+
+    /* dual-Kawase up */
+    const F_UP = HEAD + `
+    uniform sampler2D uT; uniform vec2 uTexel;
+    void main(){
+      vec3 s = texture(uT, vUv + vec2(-uTexel.x*2.0, 0.0)).rgb;
+      s += texture(uT, vUv + vec2(-uTexel.x, uTexel.y)).rgb*2.0;
+      s += texture(uT, vUv + vec2(0.0, uTexel.y*2.0)).rgb;
+      s += texture(uT, vUv + vec2(uTexel.x, uTexel.y)).rgb*2.0;
+      s += texture(uT, vUv + vec2(uTexel.x*2.0, 0.0)).rgb;
+      s += texture(uT, vUv + vec2(uTexel.x, -uTexel.y)).rgb*2.0;
+      s += texture(uT, vUv + vec2(0.0, -uTexel.y*2.0)).rgb;
+      s += texture(uT, vUv + vec2(-uTexel.x, -uTexel.y)).rgb*2.0;
+      o = vec4(s / 12.0, 1.0);
+    }`;
+
+    /* composite */
+    const F_OUT = HEAD + `
+    uniform sampler2D uScene, uBloom, uSmoke;
+    uniform vec2 uRes;
+    uniform float uTime, uHeat, uBloomAmt, uAber, uShock, uShockR, uFade, uGrain, uHurt, uFlash, uStreak, uToe;
+    uniform vec2 uShockC;
+
+    vec3 aces(vec3 x){
+      const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;
+      return clamp((x*(a*x+b))/(x*(c*x+d)+e),0.0,1.0);
+    }
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+
+    void main(){
+      vec2 uv = vUv;
+      vec2 c = uv - 0.5;
+      float r2 = dot(c,c);
+
+      /* heat shimmer: refract along the gradient of the incense density */
+      vec2 tx = 1.0/uRes;
+      float sC = texture(uSmoke, uv).a;
+      float sx = texture(uSmoke, uv + vec2(4.0,0.0)*tx).a - texture(uSmoke, uv - vec2(4.0,0.0)*tx).a;
+      float sy = texture(uSmoke, uv + vec2(0.0,4.0)*tx).a - texture(uSmoke, uv - vec2(0.0,4.0)*tx).a;
+      float wob = sin(uv.y*140.0 + uTime*3.4) * 0.5 + sin(uv.x*97.0 - uTime*2.1)*0.5;
+      vec2 refr = vec2(sx, sy) * (0.0016 + uHeat*0.0034) * (0.6 + 0.4*wob) * smoothstep(0.02,0.35,sC);
+
+      /* shockwave rings from big kills */
+      if (uShock > 0.001){
+        vec2 d = uv - uShockC;
+        d.x *= uRes.x/uRes.y;
+        float dist = length(d);
+        float band = exp(-pow((dist - uShockR)*26.0, 2.0)) * uShock;
+        refr += normalize(d + 1e-5) * band * 0.020;
+      }
+
+      uv += refr;
+
+      /* chromatic aberration, radial, stronger at the frame's edge */
+      float ab = (uAber + uHurt*0.0055) * (0.25 + r2*2.2);
+      vec2 dir = c * ab;
+      vec3 col;
+      col.r = texture(uScene, uv + dir).r;
+      col.g = texture(uScene, uv).g;
+      col.b = texture(uScene, uv - dir).b;
+
+      vec3 bl = texture(uBloom, uv).rgb;
+      /* a lazy anamorphic smear: widen the bloom horizontally a touch */
+      if (uStreak > 0.001){
+        vec3 st = vec3(0.0);
+        st += texture(uBloom, uv + vec2( 6.0,0.0)*tx).rgb;
+        st += texture(uBloom, uv + vec2(-6.0,0.0)*tx).rgb;
+        st += texture(uBloom, uv + vec2( 14.0,0.0)*tx).rgb;
+        st += texture(uBloom, uv + vec2(-14.0,0.0)*tx).rgb;
+        bl += st * 0.22 * uStreak;
+      }
+      col += bl * uBloomAmt;
+
+      /* A kill flashes the room, it does not paint over it: multiply, so the
+         blacks stay black and only what is already lit gets hit. */
+      col *= 1.0 + uFlash * 3.2;
+      /* the room turning against you */
+      col = mix(col, col*vec3(1.22,0.46,0.50), uHurt*0.46);
+
+      /* Tonemap the LUMINANCE and rescale chroma, so a hot coal goes amber-white
+         instead of every bright thing clipping to the same neutral. */
+      col *= 1.10;
+      float l0 = max(dot(col, vec3(0.2126,0.7152,0.0722)), 1e-5);
+      float l1 = aces(vec3(l0)).r;
+      col *= l1 / l0;
+      col = mix(col, col * vec3(1.0, 0.88, 0.66), smoothstep(0.55, 1.0, l1) * 0.80);
+      col = clamp(col, 0.0, 1.0);
+
+      /* vignette, warm at the core */
+      float v = smoothstep(1.15, 0.02, r2*1.95);
+      col *= mix(0.055, 1.0, v);
+      /* a chroma floor on the vignette: without it the corners collapse to neutral
+         and the room stops being cold exactly where it is darkest */
+      col += vec3(0.0035, 0.0050, 0.0125) * (1.0 - v);
+      col += vec3(0.030,0.012,0.020) * v * (0.4 + uHeat*0.9);
+
+      /* A toe. Without one the bottom two stops sit at a third of a percent of peak
+         and a phone in daylight shows a dead panel where the room should be. Tinted
+         cool, so what survives reads as night air and not as a lifted black. */
+      float lt2 = dot(col, vec3(0.2126,0.7152,0.0722));
+      col += uToe * vec3(0.0090, 0.0115, 0.0235) * (1.0 - smoothstep(0.0, 0.32, lt2));
+
+      /* grain — 35mm, not TV static */
+      /* multiplicative, luminance-only, quiet in the darks, and it does not crawl */
+      float gseed = floor(uTime * 11.0);
+      float g = hash(floor(gl_FragCoord.xy) + gseed * 71.3);
+      float lg = dot(col, vec3(0.2126,0.7152,0.0722));
+      col *= 1.0 + (g - 0.5) * uGrain * (0.35 + sqrt(lg) * 1.5);
+
+      col *= uFade;
+      o = vec4(max(col, 0.0), 1.0);
+    }`;
+
+    const cmp = (vs, fs) => {
+      const p = gl.createProgram();
+      for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src); gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          console.warn('shader', gl.getShaderInfoLog(s));
+          return null;
+        }
+        gl.attachShader(p, s);
+      }
+      gl.linkProgram(p);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { console.warn(gl.getProgramInfoLog(p)); return null; }
+      const u = {};
+      const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+      for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); u[info.name] = gl.getUniformLocation(p, info.name); }
+      return { p, u };
+    };
+
+    this.prog.bright = cmp(VS, F_BRIGHT);
+    this.prog.down = cmp(VS, F_DOWN);
+    this.prog.up = cmp(VS, F_UP);
+    this.prog.out = cmp(VS, F_OUT);
+    if (!this.prog.bright || !this.prog.down || !this.prog.up || !this.prog.out) { this.ok = false; this.fallback(); return; }
+
+    this.vao = gl.createVertexArray();
+    this.tex.scene = this.mktex(gl.LINEAR, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE);
+    this.tex.smoke = this.mktex(gl.LINEAR, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE);
+    this.ok = true;
+    view.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.ok = false; this.fallback(); });
+  },
+
+  fallback() {
+    // No WebGL: the visible canvas becomes a plain 2D surface and we do a
+    // downsample-bloom by hand. Less pretty, still lit.
+    this.fb = view.getContext('2d', { alpha: false });
+    if (this.fb) { this.fbBloom = [Layer(0.25), Layer(0.125), Layer(0.0625)]; this.fbReady = true; this.fitFallback(); }
+  },
+  fitFallback() { view.width = PW; view.height = PH; if (this.fbBloom) for (const l of this.fbBloom) l.fit(); },
+
+  mktex(filter, ifmt, fmt, type) {
+    const gl = this.gl, t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    t._i = ifmt; t._f = fmt; t._t = type;
+    return t;
+  },
+
+  fit() {
+    if (!this.ok) { this.fitFallback(); return; }
+    const gl = this.gl;
+    view.width = PW; view.height = PH;
+    this.W = PW; this.H = PH;
+    for (const f of this.fbo) { gl.deleteFramebuffer(f.fb); gl.deleteTexture(f.tex); }
+    this.fbo = [];
+    let w = Math.max(2, PW >> 1), h = Math.max(2, PH >> 1);
+    const LEVELS = 6;
+    for (let i = 0; i < LEVELS; i++) {
+      const tex = this.mktex(gl.LINEAR, this.ifmt, gl.RGBA, this.fmt);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, this.ifmt, w, h, 0, gl.RGBA, this.fmt, null);
+      const fb = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      this.fbo.push({ fb, tex, w, h });
+      w = Math.max(2, w >> 1); h = Math.max(2, h >> 1);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  },
+
+  pass(prog, target, binds, setup) {
+    const gl = this.gl;
+    if (target) { gl.bindFramebuffer(gl.FRAMEBUFFER, target.fb); gl.viewport(0, 0, target.w, target.h); }
+    else { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, this.W, this.H); }
+    gl.useProgram(prog.p);
+    for (let i = 0; i < binds.length; i++) {
+      gl.activeTexture(gl.TEXTURE0 + i);
+      gl.bindTexture(gl.TEXTURE_2D, binds[i][1]);
+      gl.uniform1i(prog.u[binds[i][0]], i);
+    }
+    if (setup) setup(gl, prog.u);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  },
+
+  render(p) {
+    if (!this.ok) return this.renderFallback(p);
+    const gl = this.gl;
+    gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
+
+    gl.bindTexture(gl.TEXTURE_2D, this.tex.scene);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, SCENE.c);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex.smoke);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, SMOKE_A.c);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+
+    const N = this.quality >= 1 ? 5 : 4;
+    // bright pass into level 0
+    this.pass(this.prog.bright, this.fbo[0], [['uT', this.tex.scene]], (g, u) => {
+      g.uniform2f(u.uTexel, 1 / this.W, 1 / this.H);
+      g.uniform1f(u.uThresh, p.thresh);
+      g.uniform1f(u.uKnee, 0.55);
+    });
+    for (let i = 1; i < N; i++) {
+      this.pass(this.prog.down, this.fbo[i], [['uT', this.fbo[i - 1].tex]], (g, u) => {
+        g.uniform2f(u.uTexel, 1 / this.fbo[i - 1].w, 1 / this.fbo[i - 1].h);
+      });
+    }
+    for (let i = N - 1; i > 0; i--) {
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+      this.pass(this.prog.up, this.fbo[i - 1], [['uT', this.fbo[i].tex]], (g, u) => {
+        g.uniform2f(u.uTexel, 1 / this.fbo[i].w, 1 / this.fbo[i].h);
+      });
+      gl.disable(gl.BLEND);
+    }
+
+    this.pass(this.prog.out, null,
+      [['uScene', this.tex.scene], ['uBloom', this.fbo[0].tex], ['uSmoke', this.tex.smoke]],
+      (g, u) => {
+        g.uniform2f(u.uRes, this.W, this.H);
+        g.uniform1f(u.uTime, p.time);
+        g.uniform1f(u.uHeat, p.heat);
+        g.uniform1f(u.uBloomAmt, p.bloom);
+        g.uniform1f(u.uAber, p.aber);
+        g.uniform1f(u.uShock, p.shock);
+        g.uniform1f(u.uShockR, p.shockR);
+        g.uniform2f(u.uShockC, p.shockX, 1 - p.shockY);
+        g.uniform1f(u.uFade, p.fade);
+        g.uniform1f(u.uGrain, p.grain);
+        g.uniform1f(u.uHurt, p.hurt);
+        g.uniform1f(u.uFlash, p.flash);
+        g.uniform1f(u.uStreak, p.streak);
+        g.uniform1f(u.uToe, p.toe);
+      });
+  },
+
+  renderFallback(p) {
+    const fb = this.fb;
+    if (!fb) return;
+    fb.setTransform(1, 0, 0, 1, 0, 0);
+    fb.globalCompositeOperation = 'copy';
+    fb.drawImage(SCENE.c, 0, 0, PW, PH);
+    fb.globalCompositeOperation = 'source-over';
+    // cheap bloom: cascade of downsamples, added back
+    let src = SCENE.c;
+    for (const l of this.fbBloom) {
+      l.x.setTransform(1, 0, 0, 1, 0, 0);
+      l.x.globalCompositeOperation = 'copy';
+      l.x.imageSmoothingEnabled = true;
+      l.x.drawImage(src, 0, 0, l.c.width, l.c.height);
+      l.x.globalCompositeOperation = 'source-over';
+      src = l.c;
+    }
+    fb.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < this.fbBloom.length; i++) {
+      fb.globalAlpha = clamp(p.bloom * (0.16 + i * 0.14), 0, 1);
+      fb.drawImage(this.fbBloom[i].c, 0, 0, PW, PH);
+    }
+    fb.globalAlpha = 1;
+    fb.globalCompositeOperation = 'source-over';
+    if (p.fade < 1) { fb.fillStyle = 'rgba(0,0,0,' + (1 - p.fade) + ')'; fb.fillRect(0, 0, PW, PH); }
+  }
+};
+
+/* ---------- resize ---------- */
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, QUALITY.dpr);
+  W = Math.max(320, window.innerWidth);
+  H = Math.max(320, window.innerHeight);
+  PW = Math.floor(W * DPR); PH = Math.floor(H * DPR);
+  view.style.width = W + 'px'; view.style.height = H + 'px';
+  unit = clamp(Math.min(W, H) / 720, 0.62, 1.6);
+
+  SCENE.fit(); DECAL.fit(); LIT.fit(); LIGHT.fit(); SPILL.fit();
+  SMOKE_A.fit(); SMOKE_B.fit(); SMOKE_LIT.fit(); HALO.fit();
+  ctx = SCENE.x;
+  bakeFloor();
+  Post.fit();
+  if (typeof onResized === 'function') onResized();
+}
+
+const QUALITY = { dpr: 1.75, bloom: 1, smoke: 1 };
+
+
+/* ===== b-art.js ===== */
+/* ============================================================
+   art: lighting, incense, the censer, the thurifer, the congregation
+   ============================================================ */
+
+/* A glow with a temperature. The white GLOW sprite is right for a lens flare and
+   wrong for fire: a small bright ball of it desaturates to pale green-white long
+   before it ever reaches the tonemap's warm shoulder. */
+function fireGlow(x, y, size, t01, alpha) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 0, x, y, size / 2);
+  g.addColorStop(0.00, rgba(ember(clamp(t01 + 0.10, 0, 1)), alpha));
+  g.addColorStop(0.10, rgba(ember(t01), alpha * 0.82));
+  g.addColorStop(0.26, rgba(ember(clamp(t01 - 0.18, 0, 1)), alpha * 0.40));
+  g.addColorStop(0.50, rgba(ember(clamp(t01 - 0.34, 0, 1)), alpha * 0.13));
+  g.addColorStop(0.76, rgba(ember(clamp(t01 - 0.46, 0, 1)), alpha * 0.032));
+  g.addColorStop(1.00, rgba(ember(0.2), 0));
+  ctx.fillStyle = g;
+  ctx.fillRect(x - size / 2, y - size / 2, size, size);
+  ctx.restore();
+}
+
+/* soft black sprite, multiplied into the light buffer to carve shadows */
+const SHADOW = radial(128, [
+  [0, 'rgba(0,0,0,0.94)'], [0.30, 'rgba(0,0,0,0.72)'],
+  [0.58, 'rgba(0,0,0,0.32)'], [0.82, 'rgba(0,0,0,0.08)'], [1, 'rgba(0,0,0,0)']
+]);
+
+/* every light in the room, rebuilt each frame */
+let lights = [], shadows = [];
+function parseRGB(css) {
+  const m = css.match(/rgba?\(([^)]+)\)/);
+  if (!m) return [255, 255, 255];
+  const p = m[1].split(',');
+  return [+p[0], +p[1], +p[2]];
+}
+function addLight(x, y, r, col, a, soft, sx, sy, rot, warm) {
+  lights.push({ x, y, r, col, a, soft, sx: sx || 1, sy: sy || 1, rot: rot || 0, rgb: parseRGB(col), warm: !!warm });
+}
+function addShadow(x, y, rx, ry, rot, k) { shadows.push({ x, y, rx, ry, rot, k }); }
+
+const AMBIENT = [15, 13, 22];
+
+/* Two buffers, deliberately: SPILL is the light itself (used for the glow that
+   hangs in the air and for tinting the incense), LIGHT is SPILL over an ambient
+   floor with the shadows carved back out (used to multiply the stone). */
+/* The room has its own cold light — high windows, a moon somewhere, whatever a
+   cathedral has at night. It is barely there, but it means the stone exists before
+   you light it, and it gives every warm thing something cold to sit against. */
+let ROOMK = 1;
+let WORLDK = 1;   // set each frame: 0 = the room has gone out
+function roomLight() {
+  if (ROOMK < 0.004) return;
+  /* Three shafts down each aisle from the clerestory, and a wash under the great
+     window over the altar. Directional, so the nave keeps its dark middle and the
+     coal still owns the frame. */
+  const S = Math.min(W, H);
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const y = H * (0.20 + i * 0.28);
+      addLight(W * 0.5 + side * W * 0.40, y, S * 0.40,
+        'rgba(122,140,184,1)', (0.155 - i * 0.022) * ROOMK, true, 1.0, 2.1, side * 0.22);
+    }
+  }
+  addLight(W * 0.5, ROOM.altarY + S * 0.06, S * 0.56, 'rgba(126,142,186,1)', 0.115 * ROOMK, true, 1.5, 0.85);
+  addLight(W * 0.5, H * 0.55, S * 1.25, 'rgba(104,118,158,1)', 0.050 * ROOMK, true);
+}
+
+function buildLight(heat) {
+  roomLight();
+  const S = SPILL, sx = S.x;
+  S.clear();
+  sx.save();
+  sx.globalCompositeOperation = 'lighter';
+  for (const l of lights) {
+    sx.save();
+    if (l.sx !== 1 || l.sy !== 1 || l.rot) {
+      sx.translate(l.x, l.y); sx.rotate(l.rot); sx.scale(l.sx, l.sy); sx.translate(-l.x, -l.y);
+    }
+    const g = sx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r);
+    if (l.soft === 'pool') {
+      g.addColorStop(0.00, rgbaMul(l.col, l.a));
+      g.addColorStop(0.09, rgbaMul(l.col, l.a * 0.76));
+      g.addColorStop(0.22, rgbaMul(l.col, l.a * 0.48));
+      g.addColorStop(0.40, rgbaMul(l.col, l.a * 0.255));
+      g.addColorStop(0.60, rgbaMul(l.col, l.a * 0.110));
+      g.addColorStop(0.80, rgbaMul(l.col, l.a * 0.032));
+      g.addColorStop(1.00, rgbaMul(l.col, 0));
+    } else if (l.soft) {
+      g.addColorStop(0.00, rgbaMul(l.col, l.a));
+      g.addColorStop(0.32, rgbaMul(l.col, l.a * 0.66));
+      g.addColorStop(0.62, rgbaMul(l.col, l.a * 0.28));
+      g.addColorStop(0.85, rgbaMul(l.col, l.a * 0.07));
+      g.addColorStop(1.00, rgbaMul(l.col, 0));
+    } else {
+      // inverse-square-ish: a small hot core and a long, quiet falloff
+      g.addColorStop(0.00, rgbaMul(l.col, l.a));
+      g.addColorStop(0.055, rgbaMul(l.col, l.a * 0.70));
+      g.addColorStop(0.14, rgbaMul(l.col, l.a * 0.38));
+      g.addColorStop(0.28, rgbaMul(l.col, l.a * 0.175));
+      g.addColorStop(0.48, rgbaMul(l.col, l.a * 0.075));
+      g.addColorStop(0.72, rgbaMul(l.col, l.a * 0.024));
+      g.addColorStop(1.00, rgbaMul(l.col, 0));
+    }
+    sx.fillStyle = g;
+    sx.fillRect(l.x - l.r, l.y - l.r, l.r * 2, l.r * 2);
+    sx.restore();
+  }
+  sx.restore();
+
+  const L = LIGHT, x = L.x;
+  const amb = (1 + heat * 0.22) * (0.10 + ROOMK * 0.90);
+  AMBK = amb;
+  L.fill('rgb(' + Math.round(AMBIENT[0] * amb) + ',' + Math.round(AMBIENT[1] * amb) + ',' + Math.round(AMBIENT[2] * amb) + ')');
+  x.save();
+  // SPILL is already in this buffer's pixel space — draw it 1:1, not through
+  // the layer's CSS-pixel transform, or the whole room ends up in one quadrant.
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.globalCompositeOperation = 'lighter';
+  x.drawImage(S.c, 0, 0);
+  x.restore();
+  L.reset();
+
+  x.save();
+  x.globalCompositeOperation = 'multiply';
+  for (const s of shadows) {
+    x.globalAlpha = s.k;
+    x.translate(s.x, s.y); x.rotate(s.rot);
+    x.drawImage(SHADOW, -s.rx, -s.ry, s.rx * 2, s.ry * 2);
+    x.setTransform(L.scale * DPR, 0, 0, L.scale * DPR, 0, 0);
+  }
+  x.restore();
+}
+
+/* A shadow stretched away from the coal: long, soft at the tip, and anchored by a
+   tight dark contact right under the thing so it stands ON the floor. */
+function castShadow(px, py, r, hx, hy, strength) {
+  let dx = px - hx, dy = py - hy;
+  const d = Math.hypot(dx, dy) || 1;
+  dx /= d; dy /= d;
+  const near = clamp(1 - d / (900 * unit), 0.10, 1);
+  const len = r * (1.9 + clamp(d / (200 * unit), 0, 3.2));
+  const rot = Math.atan2(dy, dx);
+  addShadow(px + dx * len * 0.30, py + dy * len * 0.30, len * 0.70, r * 1.10, rot, strength * near * 0.80);
+  addShadow(px + dx * len * 0.72, py + dy * len * 0.72, len * 0.85, r * 1.55, rot, strength * near * 0.34);
+  addShadow(px + dx * r * 0.22, py + dy * r * 0.22, r * 1.25, r * 1.10, rot, strength * near * 0.95);
+}
+
+/* ============================================================
+   INCENSE — a feedback field that billows out from the coal
+   ============================================================ */
+function advectSmoke(dt, tnow, ex, ey) {
+  /* One transform, one draw, one decay. Anything drawn twice per frame becomes a
+     fixed point that never fades — which is how you end up with flat fog instead
+     of plumes. All the shape comes from where the coal laid the smoke down. */
+  const src = SMOKE_A, dst = SMOKE_B;
+  const x = dst.x, cw = dst.c.width, ch = dst.c.height;
+  const S = SMOKE_A.scale * DPR;
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.clearRect(0, 0, cw, ch);
+
+  const decay = Math.pow(0.42, dt);            // ~1.7 s half-life
+  const grow = 1 + 0.15 * dt;                  // it billows
+  const spin = (Math.sin(tnow * 0.23) * 0.80 + Math.sin(tnow * 0.47 + 2) * 0.42) * dt;
+  const cx = (ex === undefined ? cw / (2 * S) : ex) * S;
+  const cy = (ey === undefined ? ch / (2 * S) : ey) * S;
+  const dx = Math.sin(tnow * 0.37) * 7 * S * dt;
+  const dy = (Math.cos(tnow * 0.29) * 0.5 - 0.9) * 7 * S * dt;
+
+  x.globalAlpha = decay;
+  x.translate(cx + dx, cy + dy);
+  x.rotate(spin);
+  x.scale(grow, grow);
+  x.translate(-cx, -cy);
+  x.drawImage(src.c, 0, 0);
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.globalAlpha = 1;
+  dst.reset();
+  const tmp = SMOKE_A; SMOKE_A = SMOKE_B; SMOKE_B = tmp;
+}
+
+function stampSmoke(x, y, r, a) {
+  const s = SMOKE_A.x;
+  s.save();
+  s.globalCompositeOperation = 'lighter';
+  s.globalAlpha = a;
+  s.drawImage(PUFF, x - r, y - r, r * 2, r * 2);
+  s.restore();
+}
+
+function compositeSmoke(amount) {
+  /* Smoke has no colour of its own. It borrows whatever light reaches it,
+     which is why incense in front of a coal looks like fire and incense
+     in the dark looks like nothing at all. */
+  const L = SMOKE_LIT, x = L.x;
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.globalCompositeOperation = 'copy';
+  x.drawImage(SPILL.c, 0, 0);
+  x.globalCompositeOperation = 'destination-in';
+  x.drawImage(SMOKE_A.c, 0, 0);
+  // incense is never neutral: it is smoke off a coal
+  x.globalCompositeOperation = 'source-atop';
+  x.fillStyle = 'rgba(255,176,104,0.30)';
+  x.fillRect(0, 0, L.c.width, L.c.height);
+  x.globalCompositeOperation = 'source-over';
+  L.reset();
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = amount;
+  ctx.drawImage(L.c, 0, 0, W, H);
+  ctx.restore();
+}
+
+/* ============================================================
+   DECALS — scorch the floor keeps. The only record of the run.
+   ============================================================ */
+function scorch(x, y, r, dark) {
+  const d = DECAL.x;
+  d.save();
+  d.globalAlpha = dark * 0.85;
+  const g = d.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, 'rgba(6,4,7,0.95)');
+  g.addColorStop(0.42, 'rgba(11,7,9,0.62)');
+  g.addColorStop(0.76, 'rgba(16,10,12,0.20)');
+  g.addColorStop(1, 'rgba(16,10,12,0)');
+  d.fillStyle = g;
+  d.beginPath(); d.arc(x, y, r, 0, TAU); d.fill();
+  d.globalAlpha = dark * 0.42;
+  d.strokeStyle = 'rgba(58,34,20,0.8)';
+  d.lineWidth = 1.3 * unit;
+  d.beginPath();
+  for (let i = 0; i <= 20; i++) {
+    const a = (i / 20) * TAU;
+    const rr = r * (0.58 + Math.sin(a * 3.1 + x * 0.03) * 0.09 + Math.sin(a * 5.7 + y * 0.02) * 0.05);
+    if (i === 0) d.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    else d.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  d.closePath(); d.stroke();
+  d.restore();
+}
+function sootTrail(x, y, r, a) {
+  const d = DECAL.x;
+  d.save();
+  d.globalAlpha = a;
+  const g = d.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, 'rgba(8,5,8,0.5)');
+  g.addColorStop(1, 'rgba(8,5,8,0)');
+  d.fillStyle = g;
+  d.fillRect(x - r, y - r, r * 2, r * 2);
+  d.restore();
+}
+
+/* ============================================================
+   THE TRAIL — hot gas. It expands as it ages and cools as it ages,
+   so the oldest part is the widest and the reddest, and it does not end:
+   it thins out and hands itself over to the incense.
+
+   Drawn as chunks along its own length rather than one polygon with a
+   gradient across it — a swing that loops back on itself has its tail
+   sitting next to its head, and a straight-line gradient across that
+   chord paints the whole loop one temperature.
+   ============================================================ */
+function drawTrail(trail, heat, kill01, now, coal) {
+  const n = trail.length;
+  if (n < 6) return;
+  const life = 0.62;
+
+  const layers = [
+    { k: 3.10, a: 0.038, boil: 0.30 },
+    { k: 1.90, a: 0.058, boil: 0.24 },
+    { k: 1.15, a: 0.105, boil: 0.18 },
+    { k: 0.66, a: 0.210, boil: 0.12 },
+    { k: 0.34, a: 0.330, boil: 0.07 },
+    { k: 0.15, a: 0.460, boil: 0.03 }
+  ];
+  const w0 = (1.8 + heat * 3.5 + kill01 * 5.0) * unit;
+  const hot = clamp(0.26 + coal * 0.76, 0, 1);
+  const CH = 5;
+
+  const lx = new Float32Array(n), ly = new Float32Array(n);
+  const rx = new Float32Array(n), ry = new Float32Array(n);
+
+  /* The outer halo is rasterised into a third-scale buffer and blown back up:
+     the upsample filter turns the stack of stepped quads into a continuous
+     falloff, which is what a glow is. The bright core stays at full res. */
+  HALO.clear();
+  const HX = HALO.x;
+  HX.globalCompositeOperation = 'lighter';
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+
+  for (let li = 0; li < layers.length; li++) {
+    const L = layers[li];
+    const g2 = li < 3 ? HX : ctx;
+    for (let i = 0; i < n; i++) {
+      const p = trail[i];
+      const a = trail[Math.max(0, i - 1)], b = trail[Math.min(n - 1, i + 1)];
+      let tx = b.x - a.x, ty = b.y - a.y;
+      const d = Math.hypot(tx, ty) || 1;
+      tx /= d; ty /= d;
+      const age = clamp((now - p.t) / life, 0, 1);
+      const grow = 0.50 + age * 1.45;
+      const cap = 1 - Math.pow(1 - (i / (n - 1)), 2.4);
+      const boil = 1 + (Math.sin(i * 1.9 + p.t * 11) * 0.6 + Math.sin(i * 0.7 - p.t * 6) * 0.4) * L.boil;
+      const w = (w0 + p.s * 9 * unit) * L.k * grow * cap * boil;
+      lx[i] = p.x - ty * w; ly[i] = p.y + tx * w;
+      rx[i] = p.x + ty * w; ry[i] = p.y - tx * w;
+    }
+
+    for (let c = 0; c < CH; c++) {
+      // integer boundaries, shared exactly: floor/ceil would overlap one segment
+      // between chunks and draw it twice, which shows up as a bright quad
+      const i0 = Math.round((c * (n - 1)) / CH);
+      const i1 = Math.min(n - 1, Math.round(((c + 1) * (n - 1)) / CH));
+      if (i1 <= i0) continue;
+      g2.beginPath();
+      g2.moveTo(lx[i0], ly[i0]);
+      for (let i = i0 + 1; i <= i1; i++) g2.lineTo(lx[i], ly[i]);
+      for (let i = i1; i >= i0; i--) g2.lineTo(rx[i], ry[i]);
+      g2.closePath();
+
+      const f0 = i0 / (n - 1), f1 = i1 / (n - 1);
+      const temp = (f) => clamp(hot * Math.pow(f, 0.55) - (1 - f) * 0.10, 0, 1);
+      const fade = (f) => { const g = 1 - f; return Math.exp(-g * 2.9) * (1 - Math.pow(g, 4)); };
+      const g = g2.createLinearGradient(trail[i0].x, trail[i0].y, trail[i1].x, trail[i1].y);
+      g.addColorStop(0, emberCss(temp(f0), L.a * fade(f0)));
+      g.addColorStop(0.5, emberCss(temp((f0 + f1) / 2), L.a * fade((f0 + f1) / 2)));
+      g.addColorStop(1, emberCss(temp(f1), L.a * fade(f1)));
+      g2.fillStyle = g;
+      g2.fill();
+    }
+  }
+  // the halo, upsampled out of its small buffer, which is what smooths the steps
+  ctx.globalAlpha = 1;
+  ctx.drawImage(HALO.c, 0, 0, W, H);
+  ctx.restore();
+}
+
+/* ============================================================
+   THE CENSER — a pierced brass thurible seen from above.
+   It must stay an OBJECT, and it must LOOK like what it currently is:
+   cold iron when it cannot kill, blowing out when it can.
+   ============================================================ */
+function drawCenser(h, spd01, heat, tnow, spin, coal, killing) {
+  const R = (15 + heat * 8) * unit;
+  const vx = h.x - h.px, vy = h.y - h.py;
+  const vlen = Math.hypot(vx, vy);
+  const ang = vlen > 0.4 ? Math.atan2(vy, vx) : 0;
+
+  const ghosts = spd01 > 0.12 ? 3 : 0;
+  for (let g = ghosts; g >= 1; g--) {
+    const f = g / (ghosts + 1);
+    ctx.save();
+    ctx.globalAlpha = 0.13 * spd01 * (1 - f * 0.5);
+    ctx.globalCompositeOperation = 'lighter';
+    body(h.x - vx * f * 1.5, h.y - vy * f * 1.5, R * (1 - f * 0.10), ang, coal * 0.85, true);
+    ctx.restore();
+  }
+  body(h.x, h.y, R, ang, coal, false);
+
+  function body(cx, cy, r, a, hot, ghost) {
+    const stretch = 1 + clamp(vlen * 0.015, 0, 0.42);
+    // how much the metal itself has come up: dead iron -> working brass -> glowing
+    const glow = clamp(hot * 1.15, 0.24, 1);
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(a);
+    ctx.scale(stretch, 1 / (1 + (stretch - 1) * 0.4));
+    ctx.rotate(-a);
+    ctx.rotate(spin);
+
+    if (!ghost) {
+      ctx.fillStyle = '#0b0810';
+      ctx.beginPath(); ctx.arc(0, 0, r * 1.15, 0, TAU); ctx.fill();
+      const k = 0.10 + WORLDK * 0.90;
+      const m = (cold, warm) => 'rgb(' +
+        Math.round(lerp(cold[0], warm[0], glow) * k) + ',' +
+        Math.round(lerp(cold[1], warm[1], glow) * k) + ',' +
+        Math.round(lerp(cold[2], warm[2], glow) * k) + ')';
+      const lg = ctx.createRadialGradient(-r * 0.38, -r * 0.38, r * 0.04, 0, 0, r);
+      lg.addColorStop(0, m([64, 60, 70], [214, 176, 112]));
+      lg.addColorStop(0.38, m([44, 41, 50], [148, 114, 52]));
+      lg.addColorStop(0.78, m([27, 25, 32], [76, 58, 28]));
+      lg.addColorStop(1, m([15, 14, 19], [38, 28, 16]));
+      ctx.fillStyle = lg;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+    }
+
+    /* the coal seen through the piercings — the holes grow and blow out as it heats */
+    ctx.globalCompositeOperation = 'lighter';
+    const holes = 8;
+    const hw = r * (0.085 + hot * 0.135), hh = r * (0.13 + hot * 0.24);
+    for (let i = 0; i < holes; i++) {
+      const th = (i / holes) * TAU;
+      const rr = r * 0.62;
+      const flick = 0.70 + Math.sin(tnow * 12 + i * 2.1) * 0.30;
+      ctx.fillStyle = rgba(ember(clamp(0.10 + hot * 0.95 * flick, 0, 1)), 0.52 + hot * 0.46);
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(th) * rr, Math.sin(th) * rr, hw, hh, th, 0, TAU);
+      ctx.fill();
+    }
+    /* the eye of the coal: nothing at all when cold, a white pinpoint when lethal */
+    if (hot > 0.02) {
+      const cr = r * (0.34 + hot * 0.62);
+      const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, cr);
+      cg.addColorStop(0, rgba(ember(clamp(hot * 1.22, 0, 1)), clamp(0.35 + hot * 1.4, 0, 1)));
+      cg.addColorStop(0.42, rgba(ember(hot * 0.96), clamp(0.20 + hot * 0.85, 0, 1)));
+      cg.addColorStop(1, rgba(ember(hot * 0.55), 0));
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.arc(0, 0, cr, 0, TAU); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    if (!ghost && killing) {
+      // a genuinely clipped pinpoint, only ever when this coal can kill
+      ctx.globalCompositeOperation = 'lighter';
+      const wr = r * (0.16 + hot * 0.10);
+      const wg = ctx.createRadialGradient(0, 0, 0, 0, 0, wr * 2.2);
+      wg.addColorStop(0, 'rgba(255,252,244,1)');
+      wg.addColorStop(0.42, 'rgba(255,238,206,0.72)');
+      wg.addColorStop(1, 'rgba(255,214,150,0)');
+      ctx.fillStyle = wg;
+      ctx.beginPath(); ctx.arc(0, 0, wr * 2.2, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    if (!ghost) {
+      // the rim states plainly whether this coal is hot enough to kill
+      ctx.strokeStyle = killing
+        ? rgba(ember(clamp(0.80 + hot * 0.20, 0, 1)), 0.60 + hot * 0.40)
+        : 'rgba(112,104,120,' + ((0.32 + glow * 0.30) * (0.15 + WORLDK * 0.85)) + ')';
+      ctx.lineWidth = (killing ? 2.2 : 1.4) * unit;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(230,206,164,' + ((0.10 + glow * 0.34) * (0.15 + WORLDK * 0.85)) + ')';
+      ctx.lineWidth = 1.0 * unit;
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.80, -2.5, -0.6); ctx.stroke();
+      const fk = 0.10 + WORLDK * 0.90;
+      ctx.fillStyle = 'rgb(' + Math.round(lerp(58, 226, glow) * fk) + ',' +
+        Math.round(lerp(54, 190, glow) * fk) + ',' + Math.round(lerp(64, 128, glow) * fk) + ')';
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.13, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(' + Math.round(lerp(96, 184, glow) * fk) + ',' +
+        Math.round(lerp(90, 152, glow) * fk) + ',' + Math.round(lerp(104, 92, glow) * fk) + ',0.8)';
+      ctx.lineWidth = 1.4 * unit;
+      for (let i = 0; i < 3; i++) {
+        const th = -a + (i / 3) * TAU;
+        ctx.beginPath();
+        ctx.arc(Math.cos(th) * r * 0.94, Math.sin(th) * r * 0.94, r * 0.12, 0, TAU);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+  return R;
+}
+
+/* ============================================================
+   THE CHAIN
+   ============================================================ */
+function drawChain(chain, SEGS, heat) {
+  ctx.save();
+  for (let i = 0; i < SEGS - 1; i++) {
+    const a = chain[i], b = chain[i + 1];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const ang = Math.atan2(dy, dx);
+    const f = i / (SEGS - 1);
+    const glow = clamp((f - 0.45) / 0.55, 0, 1) * heat;
+    for (let k = 0; k < 2; k++) {
+      const tt = (k + 0.5) / 2;
+      const lx = a.x + dx * tt, ly = a.y + dy * tt;
+      const lw = d / 2 * 0.55, lh = 1.9 * unit + f * unit;
+      const edge = (i + k) & 1;
+      ctx.save();
+      ctx.translate(lx, ly); ctx.rotate(ang);
+      // brass near the coal, near-black at the hand: it is lit by one thing only
+      const reach = 0.36 + f * f * 0.78;
+      ctx.strokeStyle = glow > 0.04
+        ? rgba(ember(clamp(0.08 + glow * 0.55, 0, 1)), (0.5 + glow * 0.5) * reach)
+        : 'rgba(158,146,124,' + (0.52 * (0.12 + WORLDK * 0.88) * reach) + ')';
+      ctx.lineWidth = 1.3 * unit;
+      ctx.beginPath();
+      if (edge) ctx.ellipse(0, 0, lw, lh, 0, 0, TAU);
+      else ctx.ellipse(0, 0, lw * 0.9, lh * 0.4, 0, 0, TAU);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(248,238,216,' + ((0.26 + glow * 0.42) * (0.12 + WORLDK * 0.88) * reach) + ')';
+      ctx.lineWidth = 0.7 * unit;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, lw * 0.86, (edge ? lh : lh * 0.4) * 0.8, 0, -2.5, -0.85);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+/* ============================================================
+   THE THURIFER
+   ============================================================ */
+function drawPlayer(p, hem, hx, hy, hurtFlick, tnow, coalK) {
+  const K = 0.10 + WORLDK * 0.90;
+  const dk = (c) => 'rgb(' + ((c[0] * K) | 0) + ',' + ((c[1] * K) | 0) + ',' + ((c[2] * K) | 0) + ')';
+  const RK = clamp(Math.max(coalK === undefined ? 1 : coalK, WORLDK * 0.35), 0, 1);
+  const r = p.r * unit * 1.30;              // drawn a touch bigger than it is hit
+  const toL = Math.atan2(hy - p.y, hx - p.x);
+
+  ctx.save();
+  ctx.globalAlpha = hurtFlick ? 0.45 : 1;
+  ctx.translate(p.x, p.y);
+
+  // hem: cloth that lags behind the turn
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  for (let i = 0; i < hem.length; i++) ctx.lineTo(hem[i].x - p.x, hem[i].y - p.y);
+  ctx.closePath();
+  const hg = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 2.6);
+  hg.addColorStop(0, dk([36, 26, 46]));
+  hg.addColorStop(1, dk([10, 7, 16]));
+  ctx.fillStyle = hg;
+  ctx.fill();
+
+  ctx.rotate(p.face + Math.PI / 2);
+
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 1.42);
+  ctx.bezierCurveTo(r * 1.12, -r * 0.92, r * 1.34, r * 0.55, r * 0.94, r * 1.66);
+  ctx.lineTo(-r * 0.94, r * 1.66);
+  ctx.bezierCurveTo(-r * 1.34, r * 0.55, -r * 1.12, -r * 0.92, 0, -r * 1.42);
+  ctx.closePath();
+  const rg = ctx.createLinearGradient(0, -r * 1.5, 0, r * 1.7);
+  rg.addColorStop(0, dk([51, 38, 68]));
+  rg.addColorStop(0.5, dk([29, 22, 40]));
+  rg.addColorStop(1, dk([11, 8, 18]));
+  ctx.fillStyle = rg;
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(146,124,176,' + (0.085 * K) + ')';
+  ctx.lineWidth = 1 * unit;
+  for (const o of [-0.42, 0.46]) {
+    ctx.beginPath();
+    ctx.moveTo(r * o * 0.8, r * 0.05);
+    ctx.quadraticCurveTo(r * o, r * 0.7, r * o * 1.30, r * 1.50);
+    ctx.stroke();
+  }
+
+  ctx.beginPath();
+  ctx.ellipse(0, -r * 0.44, r * 0.82, r * 0.74, 0, 0, TAU);
+  ctx.fillStyle = '#07050c';
+  ctx.fill();
+  ctx.restore();
+
+  // warm rim from the coal + a cold kicker on the far side: the figure gets an
+  // edge on both sides and stops being a smudge
+  ctx.save();
+  ctx.globalAlpha = hurtFlick ? 0.4 : 1;
+  ctx.translate(p.x, p.y);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  ctx.rotate(p.face + Math.PI / 2);
+  // the robe's own outline, lit from wherever the coal happens to be
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 1.42);
+  ctx.bezierCurveTo(r * 1.12, -r * 0.92, r * 1.34, r * 0.55, r * 0.94, r * 1.66);
+  ctx.lineTo(-r * 0.94, r * 1.66);
+  ctx.bezierCurveTo(-r * 1.34, r * 0.55, -r * 1.12, -r * 0.92, 0, -r * 1.42);
+  ctx.closePath();
+  const savedK = LITK;
+  LITK = RK;
+  rimShape(r * 1.5, [214, 196, 232], toL - p.face - Math.PI / 2, 3.0, 0.95);
+  LITK = savedK;
+  const eb = 0.70 + Math.sin(tnow * 2.3) * 0.16;
+  ctx.fillStyle = 'rgba(255,206,120,' + (eb * (0.35 + RK * 0.65)) + ')';
+  ctx.beginPath(); ctx.ellipse(-r * 0.25, -r * 0.52, r * 0.12, r * 0.09, 0.2, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(r * 0.25, -r * 0.52, r * 0.12, r * 0.09, -0.2, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ============================================================
+   THE ALTAR — three candles are the whole of your health plan.
+   They are the second-brightest thing in the game and must never
+   outrank the coal, so they are capped and they are never white.
+   ============================================================ */
+function drawAltar(candleList, tnow) {
+  for (const c of candleList) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+
+    // spilled wax pooled on the stone, then the taper itself
+    const waxR = 9.0 * unit;
+    ctx.fillStyle = 'rgba(30,25,32,0.75)';
+    ctx.beginPath(); ctx.ellipse(0, waxR * 0.30, waxR * 1.75, waxR * 1.30, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = c.lit ? 'rgba(74,64,58,0.90)' : 'rgba(38,33,40,0.90)';
+    ctx.beginPath(); ctx.ellipse(0, waxR * 0.14, waxR * 1.42, waxR * 1.20, 0, 0, TAU); ctx.fill();
+    const wg = ctx.createRadialGradient(-waxR * 0.32, -waxR * 0.36, 0, 0, 0, waxR);
+    wg.addColorStop(0, c.lit ? 'rgb(196,180,148)' : 'rgb(70,64,66)');
+    wg.addColorStop(0.62, c.lit ? 'rgb(138,120,90)' : 'rgb(48,43,48)');
+    wg.addColorStop(1, c.lit ? 'rgb(74,62,44)' : 'rgb(28,25,30)');
+    ctx.fillStyle = wg;
+    ctx.beginPath(); ctx.arc(0, 0, waxR, 0, TAU); ctx.fill();
+    // a run of wax down one side, different on each candle
+    ctx.fillStyle = c.lit ? 'rgba(210,196,164,0.35)' : 'rgba(84,78,80,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(c.seed * 2.1) * waxR * 0.62, Math.sin(c.seed * 2.1) * waxR * 0.62,
+      waxR * 0.30, waxR * 0.46, c.seed, 0, TAU);
+    ctx.fill();
+
+    if (c.lit) {
+      /* the flame: never neutral, never as bright as the coal, always moving */
+      const f1 = Math.sin(tnow * 7.7 + c.seed * 3.1);
+      const f2 = Math.sin(tnow * 13.3 + c.seed * 5.7);
+      const f3 = Math.sin(tnow * 2.3 + c.seed);
+      const fl = 0.88 + f1 * 0.08 + f2 * 0.045;
+      const lean = (f3 * 0.5 + f1 * 0.25) * waxR * 0.20;
+      const leanY = f2 * waxR * 0.10;
+      ctx.save();
+      ctx.translate(lean, leanY);
+      ctx.globalCompositeOperation = 'lighter';
+      // outer envelope, amber
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, waxR * 2.35 * fl);
+      g.addColorStop(0, 'rgba(255,206,132,0.92)');
+      g.addColorStop(0.22, 'rgba(255,168,74,0.52)');
+      g.addColorStop(0.55, 'rgba(238,112,36,0.16)');
+      g.addColorStop(1, 'rgba(220,96,30,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, waxR * 2.35 * fl, waxR * 2.62 * fl, lean * 0.06, 0, TAU);
+      ctx.fill();
+      // the body of the flame, a little taller than wide
+      const bg = ctx.createRadialGradient(0, waxR * 0.10, 0, 0, 0, waxR * 0.78 * fl);
+      bg.addColorStop(0, 'rgba(255,232,178,0.95)');
+      bg.addColorStop(0.55, 'rgba(255,190,104,0.62)');
+      bg.addColorStop(1, 'rgba(255,150,60,0)');
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.ellipse(0, -waxR * 0.06, waxR * 0.46 * fl, waxR * 0.74 * fl, lean * 0.1, 0, TAU);
+      ctx.fill();
+      // the cool base where the wax is still burning off
+      ctx.fillStyle = 'rgba(140,178,236,0.24)';
+      ctx.beginPath();
+      ctx.ellipse(0, waxR * 0.30, waxR * 0.24 * fl, waxR * 0.20 * fl, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+      // the wick, dark, under all of it
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(24,16,14,0.85)';
+      ctx.beginPath();
+      ctx.ellipse(lean * 0.4, waxR * 0.22, waxR * 0.10, waxR * 0.16, 0, 0, TAU);
+      ctx.fill();
+    } else {
+      // a black wick and a ring of soot: it stays out for the rest of the run
+      ctx.fillStyle = 'rgba(9,7,10,0.95)';
+      ctx.beginPath(); ctx.ellipse(0, 0, waxR * 0.26, waxR * 0.24, 0, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 0.34;
+      ctx.fillStyle = '#08060c';
+      ctx.beginPath(); ctx.ellipse(0, 0, waxR * 1.05, waxR * 0.98, 0, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+}
+
+/* ============================================================
+   Sampling the same light the floor gets.
+   The floor is albedo x light. If actors are not, the room's whole thesis is
+   false in every frame: a creature stays bright in a room that has gone out.
+   The lights are analytic, so this evaluates them directly — no readback.
+   ============================================================ */
+const FALLOFF = {
+  pool: [[0, 1], [0.09, 0.76], [0.22, 0.48], [0.40, 0.255], [0.60, 0.110], [0.80, 0.032], [1, 0]],
+  soft: [[0, 1], [0.32, 0.66], [0.62, 0.28], [0.85, 0.07], [1, 0]],
+  hard: [[0, 1], [0.055, 0.70], [0.14, 0.38], [0.28, 0.175], [0.48, 0.075], [0.72, 0.024], [1, 0]]
+};
+function curveAt(d, soft) {
+  const T = soft === 'pool' ? FALLOFF.pool : soft ? FALLOFF.soft : FALLOFF.hard;
+  for (let i = 1; i < T.length; i++) {
+    if (d <= T[i][0]) {
+      const a = T[i - 1], b = T[i];
+      return lerp(a[1], b[1], (d - a[0]) / (b[0] - a[0]));
+    }
+  }
+  return 0;
+}
+
+let AMBK = 1;                    // whatever buildLight used this frame
+const _L = { r: 0, g: 0, b: 0, lum: 0, coal: 0, cx: 0, cy: 0 };
+
+function lightAt(x, y) {
+  let r = AMBIENT[0] * AMBK, g = AMBIENT[1] * AMBK, b = AMBIENT[2] * AMBK;
+  let coal = 0, cx = 0, cy = 0;
+  for (let i = 0; i < lights.length; i++) {
+    const l = lights[i];
+    let dx = x - l.x, dy = y - l.y;
+    if (l.rot) {
+      const c = Math.cos(-l.rot), s = Math.sin(-l.rot);
+      const nx = dx * c - dy * s; dy = dx * s + dy * c; dx = nx;
+    }
+    if (l.sx !== 1) dx /= l.sx;
+    if (l.sy !== 1) dy /= l.sy;
+    const d = Math.sqrt(dx * dx + dy * dy) / l.r;
+    if (d >= 1) continue;
+    const k = l.a * curveAt(d, l.soft);
+    if (k <= 0.0006) continue;
+    r += l.rgb[0] * k; g += l.rgb[1] * k; b += l.rgb[2] * k;
+    if (l.warm) { coal += k; cx += (l.x - x) * k; cy += (l.y - y) * k; }
+  }
+  _L.r = r; _L.g = g; _L.b = b;
+  _L.lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  _L.coal = coal;
+  const m = Math.hypot(cx, cy) || 1;
+  _L.cx = cx / m; _L.cy = cy / m;
+  return _L;
+}
+
+/* ============================================================
+   THE CONGREGATION
+   Law: the body is a hole in the lit floor. Colour arrives as light —
+   a rim from the coal, a cold kicker opposite, self-lit marks inside.
+   Every silhouette must be nameable in one frame at thirty pixels.
+   ============================================================ */
+/* Light the CURRENT PATH from the direction of the coal. A rim that follows the
+   silhouette makes the thing look lit; a rim drawn as a circle over it just looks
+   like a crescent stuck on top. */
+let LITK = 1;   // how much of the coal reaches this thing
+let LITE = 1;   // how much of ALL light reaches it
+let TOA = -Math.PI / 2;   // which way the altar is, in the creature's local frame
+function rimShape(r, col, toL, w, a) {
+  const uw = Math.max(unit, 0.86);   // a hairline on a phone is not a rim
+  const cold = a * (0.55 + 0.45 * LITK);   // the room lights the far edge no matter where the coal is
+  a *= LITK;
+  /* r is the silhouette's own reach, not the collision radius: the gradient has to
+     put its full value ON the outline or a wide creature gets a fraction of the rim
+     a narrow one gets, purely because of how far its edge sits from the centre. */
+  const gx = Math.cos(toL), gy = Math.sin(toL), L = r * 1.06;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  let g = ctx.createLinearGradient(gx * L, gy * L, -gx * L * 0.55, -gy * L * 0.55);
+  g.addColorStop(0, rgba(ember(0.86), a));
+  g.addColorStop(0.26, rgba(ember(0.64), a * 0.52));
+  g.addColorStop(0.58, rgba(col, a * 0.14));
+  g.addColorStop(1, rgba(col, 0));
+  ctx.strokeStyle = g; ctx.lineWidth = w * uw; ctx.stroke();
+  g = ctx.createLinearGradient(gx * L, gy * L, -gx * L * 0.2, -gy * L * 0.2);
+  g.addColorStop(0, 'rgba(255,214,150,' + (a * 0.26) + ')');
+  g.addColorStop(0.24, 'rgba(255,180,110,0)');
+  ctx.strokeStyle = g; ctx.lineWidth = w * 0.20 * unit; ctx.stroke();
+  g = ctx.createLinearGradient(-gx * L, -gy * L, gx * L * 0.5, gy * L * 0.5);
+  g.addColorStop(0, 'rgba(164,192,240,' + (cold * 0.34) + ')');
+  g.addColorStop(0.45, 'rgba(120,146,200,0)');
+  ctx.strokeStyle = g; ctx.lineWidth = w * 0.55 * uw; ctx.stroke();
+  /* the altar's edge. Whatever the coal is doing, three candles are still burning
+     somewhere behind you, and this is the floor under which no shape may sink. */
+  const ax = Math.cos(TOA), ay = Math.sin(TOA);
+  const guard = clamp(0.15 + (1 - LITE) * 0.14, 0, 0.32);
+  g = ctx.createLinearGradient(ax * L, ay * L, -ax * L * 0.55, -ay * L * 0.55);
+  g.addColorStop(0, 'rgba(158,178,218,' + guard + ')');
+  g.addColorStop(0.42, 'rgba(130,152,196,0)');
+  ctx.strokeStyle = g; ctx.lineWidth = Math.max(w * 0.60 * uw, 1.5); ctx.stroke();
+  ctx.restore();
+}
+
+/* and a soft wash of the coal's light across the body's coal-facing half */
+function litHalf(r, toL, a) {
+  a *= 0.35 + LITK * 0.9;
+  const gx = Math.cos(toL), gy = Math.sin(toL);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.clip();
+  const g = ctx.createRadialGradient(gx * r * 0.85, gy * r * 0.85, 0, gx * r * 0.85, gy * r * 0.85, r * 1.7);
+  g.addColorStop(0, rgba(ember(0.66), a));
+  g.addColorStop(0.45, rgba(ember(0.42), a * 0.35));
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(-r * 3, -r * 3, r * 6, r * 6);
+  ctx.restore();
+}
+
+function rimPair(r, col, toL, spread, w, a) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = rgba(ember(0.70), a * 0.55);
+  ctx.lineWidth = w * 0.40 * unit;
+  ctx.beginPath(); ctx.arc(0, 0, r, toL - spread, toL + spread); ctx.stroke();
+  ctx.strokeStyle = 'rgba(150,178,228,0.26)';
+  ctx.lineWidth = w * 0.30 * unit;
+  ctx.beginPath(); ctx.arc(0, 0, r, toL + Math.PI - spread * 0.85, toL + Math.PI + spread * 0.85); ctx.stroke();
+  ctx.restore();
+}
+
+/* the same, but along an arbitrary path the caller has already built */
+function rimPath(col, toL, w, a) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = rgba(ember(0.60), a * 0.55);
+  ctx.lineWidth = w * unit;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function bodyFill(r, col, albedo) {
+  /* Albedo x the light that actually reaches it. Flat, because a baked highlight
+     fights the coal and every creature ends up the same polished bean. */
+  const k = (0.13 + LITE * 0.92) * (albedo === undefined ? 1 : albedo);
+  const g = ctx.createLinearGradient(0, -r, 0, r);
+  g.addColorStop(0, 'rgb(' + ((col[0] * 0.150 * k) | 0) + ',' + ((col[1] * 0.132 * k) | 0) + ',' + ((col[2] * 0.160 * k) | 0) + ')');
+  g.addColorStop(1, 'rgb(' + ((col[0] * 0.058 * k) | 0) + ',' + ((col[1] * 0.050 * k) | 0) + ',' + ((col[2] * 0.082 * k) | 0) + ')');
+  return g;
+}
+
+/* a dark pool directly under the thing, so it stands ON the floor */
+function contact(r, k) {
+  ctx.save();
+  ctx.globalAlpha = k;
+  const g = ctx.createRadialGradient(0, r * 0.18, 0, 0, r * 0.18, r * 1.5);
+  g.addColorStop(0, 'rgba(2,1,5,0.85)');
+  g.addColorStop(0.55, 'rgba(2,1,5,0.35)');
+  g.addColorStop(1, 'rgba(2,1,5,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.ellipse(0, r * 0.18, r * 1.5, r * 1.30, 0, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+function drawEnemy(e, tnow, hx, hy) {
+  const ty = TYPES[e.type];
+  const col = ty.rgb;
+  const r = e.r;
+  const L = lightAt(e.x, e.y);
+  // how lit this thing actually is, and from where
+  LITK = clamp(L.coal * 1.35, 0.015, 1.25);
+  LITE = clamp(L.lum * 2.4, 0.05, 1.2);
+  const toL = (L.coal > 0.004 ? Math.atan2(L.cy, L.cx) : Math.atan2(hy - e.y, hx - e.x)) - (e.rot || 0);
+  // the altar is always somewhere behind you: its light is what keeps a distant
+  // shape from becoming a hole in the floor
+  TOA = Math.atan2(ROOM.altarY - e.y, W / 2 - e.x) - (e.rot || 0);
+  const flash = e.flash > 0 ? clamp(e.flash / 0.12, 0, 1) : 0;
+
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.rotate(e.rot || 0);
+  ctx.lineJoin = 'round';
+  contact(r, clamp(0.25 + LITE * 0.95, 0, 1));
+  const F = ENEMY_ART[e.type];
+  if (F) F(e, r, col, toL, tnow, flash);
+  if (flash > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = flash * 0.95;
+    ctx.fillStyle = rgba(ember(0.90), 1);
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.12, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+  LITK = 1; LITE = 1;
+}
+
+function fear0(e) { return LITK; }
+
+const ENEMY_ART = {
+
+  /* MILKSOP — tallow. Heavy, slumped, and dripping. Nothing on it is sharp. */
+  milksop(e, r, col, toL, tt) {
+    /* Two shoulders and a bowed head, and the head has to be a BUMP on the outline —
+       a dark hollow inside the shape reads as a pot with a hole in it. Built from its
+       own seed so a crowd of them is never a pattern. */
+    const s = e.seed;
+    const fear = LITK;
+    const lean = Math.sin(s * 3.1) * 0.40;
+    const wide = 1.30 + Math.sin(s * 1.7) * 0.16;
+    const tall = (0.92 + Math.cos(s * 2.3) * 0.11) * (1 - fear * 0.12);
+    const tremble = Math.sin(tt * (7.5 + fear * 16)) * (0.012 + fear * 0.040) + Math.sin(tt * 2.1 + s) * 0.038;
+    const hr = r * 0.40;                                  // the head
+    const hx0 = lean * r * 0.30, hy0 = -r * tall * 1.02;
+
+    ctx.save();
+    ctx.rotate(tremble);
+    ctx.beginPath();
+    // left shoulder up over the neck, round the head, down the right shoulder,
+    // then in to a narrow base where it is kneeling
+    ctx.moveTo(-r * wide, -r * tall * 0.02);
+    ctx.bezierCurveTo(-r * wide * 0.92, -r * tall * 0.66, hx0 - r * 0.60, -r * tall * 0.80, hx0 - hr * 0.86, hy0 + hr * 0.52);
+    ctx.arc(hx0, hy0, hr, Math.PI * 0.86, Math.PI * 0.14, true);
+    ctx.bezierCurveTo(hx0 + r * 0.60, -r * tall * 0.80, r * wide * 0.92, -r * tall * 0.66, r * wide, -r * tall * 0.02);
+    ctx.bezierCurveTo(r * wide * 0.94, r * tall * 0.56, r * 0.62, r * tall * 0.92, r * 0.28, r * tall * 0.96);
+    ctx.quadraticCurveTo(0, r * tall * 1.06, -r * 0.28, r * tall * 0.96);
+    ctx.bezierCurveTo(-r * 0.62, r * tall * 0.92, -r * wide * 0.94, r * tall * 0.56, -r * wide, -r * tall * 0.02);
+    ctx.closePath();
+    ctx.fillStyle = bodyFill(r, col);
+    ctx.fill();
+    ctx.save(); litHalf(r * 1.35, toL, 0.30); ctx.restore();
+    rimShape(r * 1.42, col, toL, 3.0, 0.95);
+
+    // the hood's shadow, sitting inside the head bump
+    ctx.beginPath();
+    ctx.ellipse(hx0, hy0 + hr * 0.24, hr * 0.66, hr * 0.54, lean * 0.5, 0, TAU);
+    ctx.fillStyle = 'rgba(3,2,6,0.88)';
+    ctx.fill();
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // tallow catches the high windows even where the coal never reaches
+    ctx.strokeStyle = 'rgba(176,196,238,0.12)';
+    ctx.lineWidth = 1.3 * unit;
+    ctx.beginPath();
+    ctx.arc(hx0, hy0, hr * 0.92, Math.PI * 1.00, Math.PI * 1.62);
+    ctx.stroke();
+    // cloth pulled tight over a back that has given up
+    ctx.strokeStyle = rgba(col, 0.10 * LITK);
+    ctx.lineWidth = 1.1 * unit;
+    for (const o of [-0.70, -0.22, 0.34, 0.74]) {
+      ctx.beginPath();
+      ctx.moveTo(r * o * 0.72, -r * tall * 0.38);
+      ctx.quadraticCurveTo(r * o * 1.06, r * tall * 0.22, r * o * 0.56, r * tall * 0.92);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.restore();
+  },
+
+  /* NINNYHAMMER — a dart with barbs. It rears, then it is where you were. */
+  ninnyhammer(e, r, col, toL, tt) {
+    const wind = e.wind || 0;
+    const back = -r * 0.75 * wind;
+    if (wind > 0.02) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const len = r * 11 * wind;
+      const g = ctx.createLinearGradient(r, 0, len, 0);
+      g.addColorStop(0, 'rgba(255,244,214,' + (0.46 * wind) + ')');
+      g.addColorStop(0.35, 'rgba(255,146,66,' + (0.20 * wind) + ')');
+      g.addColorStop(1, 'rgba(255,110,60,0)');
+      ctx.fillStyle = g;
+      const hw = (1.0 + wind * 3.4) * unit;
+      ctx.fillRect(r, -hw / 2, len - r, hw);
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.translate(back, 0);
+    const barb = 1 + wind * 0.35;
+    ctx.beginPath();
+    ctx.moveTo(r * 2.35, 0);
+    ctx.lineTo(-r * 0.30, r * 0.62 * barb);
+    ctx.lineTo(-r * 1.15, r * 1.20 * barb);
+    ctx.lineTo(-r * 0.62, 0);
+    ctx.lineTo(-r * 1.15, -r * 1.20 * barb);
+    ctx.lineTo(-r * 0.30, -r * 0.62 * barb);
+    ctx.closePath();
+    ctx.fillStyle = bodyFill(r, col);
+    ctx.fill();
+    ctx.save(); litHalf(r * 1.4, toL, 0.26); ctx.restore();
+    rimShape(r * 1.42, col, toL, 2.6, 0.95);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = rgba(ember(0.58), (0.30 + wind * 0.55) * (0.35 + LITK * 0.65));
+    ctx.lineWidth = (1.9 + wind * 1.7) * unit;
+    ctx.beginPath();
+    ctx.moveTo(r * 2.35, 0); ctx.lineTo(-r * 0.30, -r * 0.62 * barb); ctx.lineTo(-r * 1.15, -r * 1.20 * barb);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(r * 2.35, 0); ctx.lineTo(-r * 0.30, r * 0.62 * barb); ctx.lineTo(-r * 1.15, r * 1.20 * barb);
+    ctx.stroke();
+    ctx.strokeStyle = rgba(col, 0.24 * LITK);
+    ctx.lineWidth = 1.3 * unit;
+    ctx.beginPath(); ctx.moveTo(r * 2.0, 0); ctx.lineTo(-r * 0.5, 0); ctx.stroke();
+    if (wind > 0.02) {
+      ctx.fillStyle = 'rgba(255,248,228,' + (0.85 * wind) + ')';
+      ctx.beginPath(); ctx.arc(r * 2.35, 0, r * 0.26 * wind, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+    ctx.restore();
+  },
+
+  /* POPINJAY — a fan of eyes. It will not be hit and it wants you to notice. */
+  popinjay(e, r, col, toL, tt) {
+    const d = e.dodge || 0;
+    const spread = 0.72 + d * 0.68;
+    ctx.save();
+    ctx.rotate(Math.PI);
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 6 - 0.5) * spread * 2;
+      const L = r * (2.05 + Math.sin(tt * 5.5 + i * 1.2 + e.seed) * 0.16) * (1 + d * 0.30);
+      ctx.save();
+      ctx.rotate(a);
+      // the quill, dark
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(L * 0.5, -r * 0.17, L, 0);
+      ctx.quadraticCurveTo(L * 0.5, r * 0.17, 0, 0);
+      const pk = 0.06 + LITE * 0.94;
+      ctx.fillStyle = 'rgb(' + ((col[0] * 0.11 * pk) | 0) + ',' + ((col[1] * 0.12 * pk) | 0) + ',' + ((col[2] * 0.14 * pk) | 0) + ')';
+      ctx.fill();
+      rimShape(r * 0.9, col, toL - a - Math.PI, 1.7, 0.85);
+      // an eye on the tip of every plume
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const eg = ctx.createRadialGradient(L * 0.88, 0, 0, L * 0.88, 0, r * 0.34);
+      eg.addColorStop(0, rgba(col, (0.30 + d * 0.20) * LITK));
+      eg.addColorStop(0.45, rgba(col, 0.08 * LITK));
+      eg.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = eg;
+      ctx.beginPath(); ctx.arc(L * 0.88, 0, r * 0.34, 0, TAU); ctx.fill();
+      ctx.restore();
+      // the vane, a thin bright spine
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = rgba(col, 0.14 * LITK);
+      ctx.lineWidth = 0.9 * unit;
+      ctx.beginPath(); ctx.moveTo(r * 0.2, 0); ctx.lineTo(L * 0.8, 0); ctx.stroke();
+      ctx.restore();
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.beginPath();
+    ctx.moveTo(r * 1.20, 0);
+    ctx.bezierCurveTo(r * 0.6, -r * 0.86, -r * 0.7, -r * 0.80, -r * 0.95, 0);
+    ctx.bezierCurveTo(-r * 0.7, r * 0.80, r * 0.6, r * 0.86, r * 1.20, 0);
+    ctx.closePath();
+    ctx.fillStyle = bodyFill(r, col);
+    ctx.fill();
+    ctx.save(); litHalf(r * 1.1, toL, 0.24); ctx.restore();
+    rimShape(r, col, toL, 3.4, 0.98);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = rgba(col, 0.34 * LITK);
+    ctx.lineWidth = 1.5 * unit;
+    for (let i = 0; i < 3; i++) {
+      const a = -0.5 + i * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(r * 0.35, -r * 0.35);
+      ctx.quadraticCurveTo(r * 0.7, -r * 0.9 + a * r * 0.2, r * 0.6 + a * r * 0.5, -r * 1.35);
+      ctx.stroke();
+    }
+    ctx.fillStyle = rgba(col, 0.55 * LITK);
+    ctx.beginPath(); ctx.arc(r * 0.62, -r * 0.16, r * 0.13, 0, TAU); ctx.fill();
+    ctx.restore();
+  },
+
+  /* SPIGGOT — a cask on legs. Hoops are its health. The tap drinks your swing. */
+  spiggot(e, r, col, toL, tt) {
+    const swell = 1 + (e.drink || 0) * 0.13;
+    ctx.save();
+    ctx.scale(swell, swell);
+    // stubby feet
+    ctx.fillStyle = 'rgb(' + ((col[0] * 0.09) | 0) + ',' + ((col[1] * 0.09) | 0) + ',' + ((col[2] * 0.12) | 0) + ')';
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(s * r * 0.52, r * 1.02, r * 0.24, r * 0.20, 0, 0, TAU);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.70, -r * 0.98);
+    ctx.lineTo(r * 0.70, -r * 0.98);
+    ctx.quadraticCurveTo(r * 1.04, 0, r * 0.70, r * 0.98);
+    ctx.lineTo(-r * 0.70, r * 0.98);
+    ctx.quadraticCurveTo(-r * 1.04, 0, -r * 0.70, -r * 0.98);
+    ctx.closePath();
+    ctx.fillStyle = bodyFill(r, col);
+    ctx.fill();
+    ctx.save(); litHalf(r * 1.1, toL, 0.22); ctx.restore();
+    rimShape(r, col, toL, 3.4, 0.95);
+    // staves crowd toward the silhouette, the way staves on a barrel do
+    ctx.strokeStyle = 'rgba(150,116,182,' + (0.16 * (0.2 + LITE * 0.8)) + ')';
+    ctx.lineWidth = 1 * unit;
+    for (const o of [-0.86, -0.58, -0.22, 0.16, 0.52, 0.84]) {
+      ctx.beginPath();
+      ctx.moveTo(r * o * 0.78, -r * 0.94);
+      ctx.quadraticCurveTo(r * o * 1.02, 0, r * o * 0.78, r * 0.94);
+      ctx.stroke();
+    }
+    // the spout, jutting forward
+    const ik = 0.13 + LITE * 0.87;
+    ctx.fillStyle = 'rgb(' + ((44 * ik) | 0) + ',' + ((40 * ik) | 0) + ',' + ((48 * ik) | 0) + ')';
+    ctx.beginPath();
+    ctx.moveTo(r * 0.20, r * 0.50); ctx.lineTo(r * 0.20, r * 1.42);
+    ctx.lineTo(-r * 0.20, r * 1.42); ctx.lineTo(-r * 0.20, r * 0.50);
+    ctx.closePath(); ctx.fill();
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const maxhp = TYPES.spiggot.hp;
+    for (let i = 0; i < e.hp && i < 5; i++) {
+      const oy = (-0.56 + i * (1.12 / Math.max(1, maxhp - 1))) * r;
+      ctx.strokeStyle = 'rgba(126,120,132,' + (0.30 + LITK * 0.20) + ')';
+      ctx.lineWidth = 3.0 * unit;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.86, oy); ctx.quadraticCurveTo(0, oy - r * 0.13, r * 0.86, oy);
+      ctx.stroke();
+      ctx.strokeStyle = rgba(ember(0.72), 0.42 * LITK);
+      ctx.lineWidth = 1.2 * unit;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.86, oy - r * 0.045); ctx.quadraticCurveTo(0, oy - r * 0.175, r * 0.86, oy - r * 0.045);
+      ctx.stroke();
+    }
+    const dr = e.drink || 0;
+    ctx.fillStyle = rgba(col, (0.30 + dr * 0.70) * LITK);
+    ctx.beginPath(); ctx.ellipse(0, r * 1.46, r * 0.09 * (1 + dr * 0.6), r * 0.15 * (1 + dr * 0.9), 0, 0, TAU); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  },
+
+  /* TRAGGOT — a sac with two passengers pushing at the membrane. */
+  traggot(e, r, col, toL, tt) {
+    /* A bag with two lumps in it and a fault line between them. The outline itself
+       has to say "this is about to become two things". */
+    const p1 = tt * 1.5 + e.seed, p2 = p1 + Math.PI * 0.86;
+    const bulge = (a) =>
+      Math.pow(Math.max(0, Math.cos(a - p1)), 1.35) * 0.60 +
+      Math.pow(Math.max(0, Math.cos(a - p2)), 1.35) * 0.54;
+    const skin = (a, k) => r * (0.68 + Math.sin(a * 3 + tt * 1.7 + e.seed) * 0.04 + bulge(a)) * (k || 1);
+    const outline = (k) => {
+      ctx.beginPath();
+      for (let i = 0; i <= 44; i++) {
+        const a = (i / 44) * TAU, rr = skin(a, k);
+        if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        else ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      ctx.closePath();
+    };
+
+    outline();
+    ctx.fillStyle = bodyFill(r, col, 2.1);
+    ctx.fill();
+
+    // the two of them, swelling the skin from underneath
+    ctx.save();
+    outline();
+    ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [ph, sz] of [[p1, 0.60], [p2, 0.54]]) {
+      const px = Math.cos(ph) * r * 0.46, py = Math.sin(ph) * r * 0.46;
+      const g = ctx.createRadialGradient(px, py, 0, px, py, r * sz * 1.25);
+      const lk = 0.34 + LITE * 0.66;
+      g.addColorStop(0, rgba(col, 0.26 * lk));
+      g.addColorStop(0.55, rgba(col, 0.085 * lk));
+      g.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.ellipse(px, py, r * sz * 1.25, r * sz * 0.96, ph, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+
+    // the fault line, where it will come apart
+    const seam = (p1 + p2) / 2 + Math.PI / 2;
+    ctx.save();
+    outline();
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(5,3,8,0.72)';
+    ctx.lineWidth = 1.8 * unit;
+    const tear = 0.30 + Math.abs(Math.sin(tt * 1.9 + e.seed)) * 0.22;
+    ctx.beginPath();
+    for (let i = -1; i <= 1; i += 2) {
+      ctx.moveTo(0, 0);
+      let px = 0, py = 0, ang = seam + (i < 0 ? Math.PI : 0);
+      for (let k = 0; k < 3; k++) {
+        ang += Math.sin(k * 2.7 + e.seed) * 0.55;
+        px += Math.cos(ang) * r * tear * 0.45;
+        py += Math.sin(ang) * r * tear * 0.45;
+        ctx.lineTo(px, py);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    outline(1.02);
+    rimShape(r * 1.30, col, toL, 4.2, 1.0);
+    // the skin goes pale and tight over each lump, wherever the light is
+    outline(0.62);
+    rimShape(r * 0.82, col, toL, 2.0, 0.6);
+  },
+
+  runt(e, r, col, toL, tt) {
+    /* Half of a traggot, out on its own and in a hurry. Smallest thing in the game,
+       so it gets a whipping tail and a hot little eye to be findable by. */
+    const w = Math.sin(tt * 13 + e.seed);
+    ctx.beginPath();
+    ctx.moveTo(r * 1.20, 0);
+    ctx.quadraticCurveTo(r * 0.30, -r * 0.94, -r * 0.50, -r * 0.34 + w * r * 0.20);
+    ctx.quadraticCurveTo(-r * 1.70, w * r * 0.62, -r * 2.30, w * r * 1.00);
+    ctx.quadraticCurveTo(-r * 1.55, w * r * 0.34, -r * 0.50, r * 0.34 + w * r * 0.20);
+    ctx.quadraticCurveTo(r * 0.30, r * 0.94, r * 1.20, 0);
+    ctx.closePath();
+    ctx.fillStyle = bodyFill(r, col);
+    ctx.fill();
+    rimShape(r, col, toL, 2.4, 1.0);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(r * 0.46, 0, 0, r * 0.46, 0, r * 0.46);
+    g.addColorStop(0, rgba(col, 0.55 * (0.40 + LITK * 0.60)));
+    g.addColorStop(0.5, rgba(col, 0.16 * (0.40 + LITK * 0.60)));
+    g.addColorStop(1, rgba(col, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(r * 0.46, 0, r * 0.46, 0, TAU); ctx.fill();
+    // the tail catches the room even when the coal does not
+    const tg = ctx.createLinearGradient(-r * 0.5, 0, -r * 2.2, 0);
+    tg.addColorStop(0, 'rgba(170,196,240,0.34)');
+    tg.addColorStop(1, 'rgba(150,176,220,0)');
+    ctx.strokeStyle = tg;
+    ctx.lineWidth = 1.5 * unit;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.50, w * r * 0.10);
+    ctx.quadraticCurveTo(-r * 1.5, w * r * 0.55, -r * 2.20, w * r * 0.96);
+    ctx.stroke();
+    ctx.restore();
+  },
+
+  /* BEAR — a caryatid. Half animal, half masonry, holding a piece of the roof off
+     your head. Its health is the cracks running through it, and the entablature it
+     carries is real stone: dark, jointed, and heavier than anything else in the room. */
+  bear(e, r, col, toL, tt) {
+    const maxhp = e.maxhp || 20;
+    const dmg = 1 - clamp(e.hp / maxhp, 0, 1);
+    const strain = Math.sin(tt * 1.15 + e.seed) * 0.016 + dmg * 0.030;
+    const K = 0.05 + LITE * 0.95;
+    const st = (c) => 'rgb(' + ((c[0] * K) | 0) + ',' + ((c[1] * K) | 0) + ',' + ((c[2] * K) | 0) + ')';
+
+    /* ---- the entablature ---- */
+    const sy = -r * 1.40, sh = r * 0.86, sw = r * 2.35;
+    const sag = dmg * r * 0.10 + Math.sin(tt * 0.9 + e.seed) * r * 0.012;
+    ctx.save();
+    ctx.translate(0, sag);
+    // the shadow it drops on everything under it
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(SHADOW, -sw * 1.25, sy + sh - r * 0.55, sw * 2.5, r * 1.9);
+    ctx.globalAlpha = 1;
+    // the block itself
+    ctx.beginPath();
+    ctx.moveTo(-sw, sy);
+    ctx.lineTo(sw, sy);
+    ctx.lineTo(sw * 0.955, sy + sh);
+    ctx.lineTo(-sw * 0.955, sy + sh);
+    ctx.closePath();
+    const SK = 0.05 + clamp(LITE * 1.5, 0, 1.35) * 0.95;
+    const sst = (c) => 'rgb(' + ((c[0] * SK) | 0) + ',' + ((c[1] * SK) | 0) + ',' + ((c[2] * SK) | 0) + ')';
+    ctx.fillStyle = sst([64, 60, 82]);
+    ctx.fill();
+    rimShape(sw, [168, 178, 206], toL, 2.6, 0.55);
+    // the near face, in shadow, and the top face catching whatever is above
+    ctx.beginPath();
+    ctx.moveTo(-sw * 0.955, sy + sh * 0.66);
+    ctx.lineTo(sw * 0.955, sy + sh * 0.66);
+    ctx.lineTo(sw * 0.955, sy + sh);
+    ctx.lineTo(-sw * 0.955, sy + sh);
+    ctx.closePath();
+    ctx.fillStyle = sst([20, 17, 28]);
+    ctx.fill();
+    ctx.globalAlpha = 0.30;
+    ctx.fillStyle = sst([150, 152, 184]);
+    ctx.fillRect(-sw, sy, sw * 2, r * 0.06);
+    ctx.globalAlpha = 1;
+    // joints between the blocks, and chips out of the ends
+    ctx.strokeStyle = 'rgba(4,3,8,0.65)';
+    ctx.lineWidth = 2.0 * unit;
+    for (const jx of [-0.52, -0.04, 0.48]) {
+      ctx.beginPath();
+      ctx.moveTo(sw * jx, sy);
+      ctx.lineTo(sw * jx * 0.955, sy + sh);
+      ctx.stroke();
+    }
+
+    // dust shaken loose where it is failing
+    if (dmg > 0.25) {
+      ctx.globalAlpha = (dmg - 0.25) * 0.5;
+      ctx.fillStyle = st([120, 110, 130]);
+      for (let i = 0; i < 7; i++) {
+        const dx = Math.sin(i * 2.3 + e.seed) * sw * 0.8;
+        ctx.fillRect(dx, sy + sh, 1.4 * unit, r * (0.2 + ((tt * 1.6 + i) % 1) * 0.9));
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+
+    /* ---- the animal under it ---- */
+    ctx.save();
+    ctx.scale(1 + strain, 1 - strain);
+
+    // arms, bent at the elbow, paws flat against the underside
+    ctx.strokeStyle = st([72, 53, 44]);
+    ctx.lineWidth = r * 0.44; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.66, -r * 0.02);
+      ctx.lineTo(s * r * 1.26, -r * 0.56);
+      ctx.lineTo(s * r * 1.30, sy + sh * 0.9 + sag);
+      ctx.stroke();
+    }
+    ctx.fillStyle = st([84, 62, 50]);
+    for (const s of [-1, 1]) {
+      ctx.save();
+      ctx.translate(s * r * 1.30, sy + sh * 0.92 + sag);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.34, r * 0.20, 0, 0, TAU);
+      ctx.fill();
+      // toes
+      ctx.fillStyle = st([34, 25, 22]);
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath(); ctx.arc(i * r * 0.17, -r * 0.10, r * 0.07, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = st([62, 46, 38]);
+      ctx.restore();
+    }
+
+    // ears
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.arc(s * r * 0.70, -r * 0.70, r * 0.33, 0, TAU);
+      ctx.fillStyle = st([40, 29, 25]); ctx.fill();
+      ctx.beginPath(); ctx.arc(s * r * 0.70, -r * 0.70, r * 0.17, 0, TAU);
+      ctx.fillStyle = st([22, 15, 14]); ctx.fill();
+    }
+
+    // the mass: not a circle. A hunched back seen from above.
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 1.02);
+    ctx.bezierCurveTo(r * 0.72, -r * 0.98, r * 1.08, -r * 0.34, r * 1.02, r * 0.24);
+    ctx.bezierCurveTo(r * 0.96, r * 0.86, r * 0.44, r * 1.14, 0, r * 1.10);
+    ctx.bezierCurveTo(-r * 0.44, r * 1.14, -r * 0.96, r * 0.86, -r * 1.02, r * 0.24);
+    ctx.bezierCurveTo(-r * 1.08, -r * 0.34, -r * 0.72, -r * 0.98, 0, -r * 1.02);
+    ctx.closePath();
+    ctx.fillStyle = bodyFill(r, col, 1.25);
+    ctx.fill();
+    ctx.save(); litHalf(r * 1.1, toL, 0.26); ctx.restore();
+    rimShape(r * 1.06, col, toL, 4.6, 1.0);
+
+    // fur, or the chisel marks of whoever carved it
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 1.02);
+    ctx.bezierCurveTo(r * 0.72, -r * 0.98, r * 1.08, -r * 0.34, r * 1.02, r * 0.24);
+    ctx.bezierCurveTo(r * 0.96, r * 0.86, r * 0.44, r * 1.14, 0, r * 1.10);
+    ctx.bezierCurveTo(-r * 0.44, r * 1.14, -r * 0.96, r * 0.86, -r * 1.02, r * 0.24);
+    ctx.bezierCurveTo(-r * 1.08, -r * 0.34, -r * 0.72, -r * 0.98, 0, -r * 1.02);
+    ctx.closePath();
+    ctx.clip();
+    const R3 = mulberry(4242);
+    ctx.strokeStyle = 'rgba(200,168,132,' + (0.055 * (0.2 + LITE * 0.8)) + ')';
+    ctx.lineWidth = 1.4 * unit;
+    for (let i = 0; i < 30; i++) {
+      const a = R3() * TAU, d0 = (0.25 + R3() * 0.72) * r;
+      const w = 0.20 + R3() * 0.28;
+      ctx.beginPath();
+      ctx.arc(0, 0, d0, a, a + w);
+      ctx.stroke();
+    }
+
+    // the cracks: its health, and they get into the light as they open
+    if (dmg > 0.02) {
+      ctx.globalCompositeOperation = 'lighter';
+      const R2 = mulberry(777);
+      const n = 3 + Math.floor(dmg * 11);
+      for (let i = 0; i < n; i++) {
+        const flick = 0.75 + Math.sin(tt * 6 + i) * 0.25;
+        ctx.strokeStyle = rgba(ember(0.40 + dmg * 0.48), (0.20 + dmg * 0.62) * flick);
+        ctx.lineWidth = (0.9 + dmg * 2.2) * unit;
+        ctx.beginPath();
+        let px = 0, py = 0, ang = R2() * TAU;
+        ctx.moveTo(0, 0);
+        for (let s = 0; s < 5; s++) {
+          ang += (R2() - 0.5) * 1.3;
+          px += Math.cos(ang) * r * 0.26; py += Math.sin(ang) * r * 0.26;
+          ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    // eyes, deep in the mass
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = rgba(col, 0.50 * clamp(0.35 + LITK, 0, 1));
+    ctx.beginPath(); ctx.ellipse(-r * 0.28, -r * 0.18, r * 0.10, r * 0.070, 0.2, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(r * 0.28, -r * 0.18, r * 0.10, r * 0.070, -0.2, 0, TAU); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+};
+
+/* ============================================================
+   PARTICLES
+   ============================================================ */
+function drawParticles(parts) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  for (const p of parts) {
+    if (p.kind === 'ash') continue;
+    const f = clamp(p.life / p.max, 0, 1);
+    const c = p.col ? p.col : ember(clamp(p.heat * f + 0.05, 0, 1));
+    const a = f * f * (p.a || 1);
+    if (p.kind === 'spark') {
+      const vl = Math.hypot(p.vx, p.vy);
+      const st = clamp(vl / 800, 0, 1);
+      ctx.strokeStyle = rgba(c, a);
+      ctx.lineWidth = p.r * (1 - st * 0.35);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.vx * 0.018 * st, p.y - p.vy * 0.018 * st);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = rgba(c, a);
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (0.4 + f * 0.6), 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+  ctx.save();
+  for (const p of parts) {
+    if (p.kind !== 'ash') continue;
+    const f = clamp(p.life / p.max, 0, 1);
+    ctx.globalAlpha = f * 0.5;
+    ctx.fillStyle = '#181318';
+    ctx.save();
+    ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+    ctx.fillRect(-p.r, -p.r * 0.35, p.r * 2, p.r * 0.7);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawSpikes(spikes) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  for (const s of spikes) {
+    const f = clamp(s.life / s.max, 0, 1);
+    const grow = 1 - f * f;
+    const g = ctx.createLinearGradient(s.x, s.y,
+      s.x + Math.cos(s.a) * s.len * grow, s.y + Math.sin(s.a) * s.len * grow);
+    g.addColorStop(0, rgba(ember(0.98), f * s.k));
+    g.addColorStop(0.45, rgba(ember(0.78), f * s.k * 0.5));
+    g.addColorStop(1, rgba(ember(0.5), 0));
+    ctx.strokeStyle = g;
+    ctx.lineWidth = s.w * f;
+    ctx.beginPath();
+    ctx.moveTo(s.x + Math.cos(s.a) * s.len * grow * 0.12, s.y + Math.sin(s.a) * s.len * grow * 0.12);
+    ctx.lineTo(s.x + Math.cos(s.a) * s.len * grow, s.y + Math.sin(s.a) * s.len * grow);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRings(rings) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const r of rings) {
+    const f = clamp(r.life / r.max, 0, 1);
+    const rr = r.r0 + (r.r1 - r.r0) * (1 - f * f);
+    const w = r.w * unit * (0.2 + f * 0.8);
+    for (let k = 0; k < 3; k++) {
+      ctx.strokeStyle = rgba(r.col, f * f * r.a * [0.22, 0.42, 1][k]);
+      ctx.lineWidth = w * [3.2, 1.7, 0.7][k];
+      ctx.beginPath(); ctx.arc(r.x, r.y, rr, 0, TAU); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+
+/* ===== c-game.js ===== */
+/* ============================================================
+   game: the part that was already right. Physics and rules are
+   carried over unchanged; everything else is consequence.
+   ============================================================ */
+
+/* ---------------- audio ---------------- */
+const Audio_ = {
+  ok: false, muted: false, ac: null,
+  init() {
+    if (this.ac) { if (this.ac.state === 'suspended') this.ac.resume(); return; }
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      const ac = new AC();
+      this.ac = ac;
+      const master = ac.createGain(); master.gain.value = 0.9;
+      const comp = ac.createDynamicsCompressor();
+      comp.threshold.value = -16; comp.ratio.value = 8; comp.attack.value = 0.003; comp.release.value = 0.25;
+
+      // a stone room: long, dark, cheap convolution
+      const rl = Math.floor(ac.sampleRate * 2.6);
+      const ir = ac.createBuffer(2, rl, ac.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = ir.getChannelData(ch);
+        for (let i = 0; i < rl; i++) {
+          const t = i / rl;
+          d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 2.6) * (i < 400 ? i / 400 : 1);
+        }
+      }
+      const verb = ac.createConvolver(); verb.buffer = ir;
+      const wet = ac.createGain(); wet.gain.value = 0.34;
+      const damp = ac.createBiquadFilter(); damp.type = 'lowpass'; damp.frequency.value = 2600;
+      master.connect(comp);
+      master.connect(damp); damp.connect(verb); verb.connect(wet); wet.connect(comp);
+      comp.connect(ac.destination);
+      this.master = master;
+
+      const dg = ac.createGain(); dg.gain.value = 0.0; dg.connect(master);
+      const dlp = ac.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 520; dlp.connect(dg);
+      const o1 = ac.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 55;
+      const o2 = ac.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = 55.6;
+      const o3 = ac.createOscillator(); o3.type = 'triangle'; o3.frequency.value = 82.5;
+      const g3 = ac.createGain(); g3.gain.value = 0.0;
+      o1.connect(dlp); o2.connect(dlp); o3.connect(g3); g3.connect(dlp);
+      o1.start(); o2.start(); o3.start();
+      this.drone = dg; this.fifth = g3;
+
+      const len = ac.sampleRate * 2;
+      const buf = ac.createBuffer(1, len, ac.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      this.noiseBuf = buf;
+      const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 400; bp.Q.value = 1.4;
+      const wg = ac.createGain(); wg.gain.value = 0;
+      src.connect(bp); bp.connect(wg); wg.connect(master);
+      src.start();
+      this.whoosh = wg; this.whooshF = bp;
+      this.ok = true;
+    } catch (e) { this.ok = false; }
+  },
+  setDrone(v, heat) {
+    if (!this.ok) return;
+    const t = this.ac.currentTime;
+    this.drone.gain.setTargetAtTime(this.muted ? 0 : v, t, 0.4);
+    this.fifth.gain.setTargetAtTime(this.muted ? 0 : heat * 0.5, t, 0.5);
+  },
+  setSwing(s) {
+    if (!this.ok) return;
+    const t = this.ac.currentTime;
+    const g = this.muted ? 0 : Math.pow(s, 1.6) * 0.22;
+    this.whoosh.gain.setTargetAtTime(g, t, 0.04);
+    this.whooshF.frequency.setTargetAtTime(280 + s * 2200, t, 0.05);
+  },
+  noise(dur, f0, f1, vol, type) {
+    if (!this.ok || this.muted) return;
+    const ac = this.ac, t = ac.currentTime;
+    const s = ac.createBufferSource(); s.buffer = this.noiseBuf;
+    const bp = ac.createBiquadFilter(); bp.type = type || 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(f0, t);
+    bp.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(bp); bp.connect(g); g.connect(this.master);
+    s.start(t); s.stop(t + dur + 0.02);
+  },
+  bell(freq, dur, vol) {
+    if (!this.ok || this.muted) return;
+    const ac = this.ac, t = ac.currentTime;
+    const car = ac.createOscillator(); car.type = 'sine'; car.frequency.value = freq;
+    const mod = ac.createOscillator(); mod.type = 'sine'; mod.frequency.value = freq * 2.41;
+    const mg = ac.createGain(); mg.gain.setValueAtTime(freq * 1.6, t);
+    mg.gain.exponentialRampToValueAtTime(1, t + dur * 0.5);
+    mod.connect(mg); mg.connect(car.frequency);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    car.connect(g); g.connect(this.master);
+    car.start(t); mod.start(t); car.stop(t + dur + 0.02); mod.stop(t + dur + 0.02);
+  },
+  tone(freq, dur, vol, type) {
+    if (!this.ok || this.muted) return;
+    const ac = this.ac, t = ac.currentTime;
+    const o = ac.createOscillator(); o.type = type || 'triangle'; o.frequency.setValueAtTime(freq, t);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.02);
+  },
+  slide(f0, f1, dur, vol, type) {
+    if (!this.ok || this.muted) return;
+    const ac = this.ac, t = ac.currentTime;
+    const o = ac.createOscillator(); o.type = type || 'sawtooth';
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+};
+const SCALE = [196, 233.08, 261.63, 293.66, 349.23, 392, 466.16, 523.25, 587.33, 698.46];
+
+/* ---------------- world ---------------- */
+const PAD = 26;
+let state = 'title';
+let t = 0, last = 0, hitstop = 0, shake = 0, frames = 0;
+let score = 0, wave = 0, candles = 3, heat = 0, iframes = 0, sag = 0;
+let enemies = [], parts = [], rings = [], flashes = [], spikes = [], trail = [];
+let spawnQueue = [], spawnTimer = 0, betweenWaves = 0;
+let killChain = 0, chainTimer = 0, moonAlpha = 0;
+let hurt = 0, flash = 0, fade = 1, limp = false, dyingT = 0, restT = 0;
+let shockA = 0, shockR = 0, shockX = 0.5, shockY = 0.5;
+let waveGlow = 0, best = 0, GOD = false;
+let coalT = 0, emberX = 0, emberY = 0, killCount = 0, idlePh = 0;   // what the coal LOOKS like: fast to catch, slow to die
+
+/* The room has air in it, and the air catches the coal. */
+const dust = [];
+function seedDust() {
+  dust.length = 0;
+  const n = Math.round(clamp(W * H / 12000, 40, 150));
+  for (let i = 0; i < n; i++) {
+    dust.push({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: rnd(-7, 7) * unit, vy: rnd(-13, -2) * unit,
+      r: rnd(0.5, 1.9) * unit, ph: rnd(0, TAU), sp: rnd(0.5, 1.6)
+    });
+  }
+}
+function stepSnuffed(dt) {
+  for (const c of candleList) {
+    if (c.snuff > 0) {
+      c.snuff -= dt;
+      if (Math.random() < 0.55) {
+        stampSmoke(c.x + rnd(-3, 3) * unit, c.y + rnd(-3, 3) * unit,
+          rnd(6, 14) * unit, 0.05 * clamp(c.snuff / 4.5, 0, 1));
+      }
+    }
+  }
+}
+function stepDust(dt) {
+  for (const d of dust) {
+    d.ph += dt * d.sp;
+    d.x += (d.vx + Math.sin(d.ph) * 9 * unit) * dt;
+    d.y += (d.vy + Math.cos(d.ph * 0.7) * 5 * unit) * dt;
+    if (d.y < -8) { d.y = H + 8; d.x = Math.random() * W; }
+    if (d.x < -8) d.x = W + 8; else if (d.x > W + 8) d.x = -8;
+  }
+}
+function drawDust(hx, hy) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const d of dust) {
+    const dx = d.x - hx, dy = d.y - hy;
+    const k = 1 / (1 + (dx * dx + dy * dy) / (170 * 170 * unit * unit));
+    if (k < 0.012) continue;
+    const tw = 0.55 + Math.sin(d.ph * 3.1) * 0.45;
+    ctx.fillStyle = rgba(ember(clamp(0.45 + k * 0.5, 0, 1)), clamp(k * 0.85 * tw, 0, 0.9));
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r * (0.7 + k * 0.9), 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+
+const player = { x: 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0, r: 13, face: 0 };
+const chain = [];
+const SEGS = 11;
+let segLen = 15;
+const hem = [];
+const candleList = [];
+
+function resetChain() {
+  chain.length = 0;
+  for (let i = 0; i < SEGS; i++) {
+    chain.push({ x: player.x + i * segLen, y: player.y, px: player.x + i * segLen, py: player.y });
+  }
+  hem.length = 0;
+  for (let i = 0; i < 7; i++) hem.push({ x: player.x, y: player.y, px: player.x, py: player.y });
+}
+function head() { return chain[SEGS - 1]; }
+function headSpeed() { const h = head(); return Math.hypot(h.x - h.px, h.y - h.py) * 60; }
+
+function placeCandles() {
+  candleList.length = 0;
+  const y = ROOM.altarY;
+  for (let i = 0; i < 3; i++) {
+    candleList.push({
+      x: W / 2 + (i - 1) * Math.min(W * 0.19, 140 * unit),
+      y: y, lit: i < candles, life: 1, seed: i * 2.1, snuff: 0
+    });
+  }
+}
+function onResized() {
+  player.x = player.tx = clamp(player.x || W / 2, PAD, W - PAD);
+  player.y = player.ty = clamp(player.y || H * 0.62, PAD, H - PAD);
+  segLen = 15 * unit;
+  placeCandles();
+  seedDust();
+}
+
+/* ---------------- input ---------------- */
+let dragging = false, lastPX = 0, lastPY = 0, isTouch = false;
+const keys = {};
+function pointerPos(e) {
+  const r = view.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  return { x: p.clientX - r.left, y: p.clientY - r.top };
+}
+function down(e) {
+  e.preventDefault();
+  Audio_.init();
+  isTouch = !!e.touches || e.pointerType === 'touch';
+  const p = pointerPos(e);
+  lastPX = p.x; lastPY = p.y;
+  dragging = true;
+  if (state === 'title') startRun();
+  else if (state === 'dead' && restT > 0.55) startRun();
+  else if (!isTouch && state === 'play') { player.tx = p.x; player.ty = p.y; }
+}
+function move(e) {
+  if (!dragging) return;
+  e.preventDefault();
+  const p = pointerPos(e);
+  if (isTouch) { player.tx += (p.x - lastPX); player.ty += (p.y - lastPY); }
+  else { player.tx = p.x; player.ty = p.y; }
+  lastPX = p.x; lastPY = p.y;
+  player.tx = clamp(player.tx, PAD, W - PAD);
+  player.ty = clamp(player.ty, PAD, H - PAD);
+}
+function up() { dragging = false; }
+view.addEventListener('pointerdown', down, { passive: false });
+window.addEventListener('pointermove', move, { passive: false });
+window.addEventListener('pointerup', up);
+window.addEventListener('pointercancel', up);
+window.addEventListener('keydown', (e) => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === ' ' || e.key === 'Enter') {
+    Audio_.init();
+    if (state === 'title' || (state === 'dead' && restT > 0.55)) startRun();
+  }
+  if (e.key.toLowerCase() === 'm') toggleMute();
+  if (e.key.toLowerCase() === 'p' && state === 'play') state = 'paused';
+  else if (e.key.toLowerCase() === 'p' && state === 'paused') state = 'play';
+});
+window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') state = 'paused'; });
+
+function toggleMute() {
+  Audio_.muted = !Audio_.muted;
+  document.getElementById('snd').classList.toggle('off', Audio_.muted);
+  if (Audio_.muted) Audio_.setSwing(0);
+}
+document.getElementById('snd').addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+document.getElementById('snd').addEventListener('click', (e) => { e.stopPropagation(); Audio_.init(); toggleMute(); });
+
+/* ---------------- enemies ---------------- */
+const TYPES = {
+  milksop:     { r: 13,   spd: 52,  hp: 1,  score: 100,  rgb: [228, 214, 170] },
+  ninnyhammer: { r: 12,   spd: 46,  hp: 1,  score: 170,  rgb: [236, 62, 78] },
+  popinjay:    { r: 12.5, spd: 128, hp: 1,  score: 230,  rgb: [86, 236, 198] },
+  spiggot:     { r: 23,   spd: 44,  hp: 3,  score: 340,  rgb: [176, 92, 255] },
+  traggot:     { r: 16,   spd: 74,  hp: 1,  score: 270,  rgb: [255, 198, 70] },
+  runt:        { r: 9.5,  spd: 118, hp: 1,  score: 90,   rgb: [255, 198, 70] },
+  bear:        { r: 44,   spd: 26,  hp: 20, score: 2600, rgb: [236, 158, 76] }
+};
+
+function spawnAt(type) {
+  const s = TYPES[type];
+  const side = (Math.random() * 4) | 0;
+  let x, y;
+  if (side === 0) { x = rnd(0, W); y = -60; }
+  else if (side === 1) { x = W + 60; y = rnd(0, H); }
+  else if (side === 2) { x = rnd(0, W); y = H + 60; }
+  else { x = -60; y = rnd(0, H); }
+  const scale = 1 + Math.min(wave, 18) * 0.022;
+  const hp = s.hp + (type === 'bear' ? Math.floor(wave / 6) * 3 : 0);
+  enemies.push({
+    type, x, y, vx: 0, vy: 0,
+    r: s.r * unit, hp, maxhp: hp,
+    spd: s.spd * scale * unit, seed: rnd(0, TAU), timer: rnd(0, 2),
+    ang: rnd(0, TAU), stagger: 0, flash: 0, born: t,
+    rot: 0, wind: 0, dodge: 0, drink: 0
+  });
+}
+
+function buildWave(n) {
+  const q = [];
+  const push = (type, k) => { for (let i = 0; i < k; i++) q.push(type); };
+  push('milksop', 3 + Math.floor(n * 1.2));
+  if (n >= 2) push('ninnyhammer', 1 + Math.floor(n * 0.75));
+  if (n >= 3) push('popinjay', 1 + Math.floor((n - 2) * 0.55));
+  if (n >= 4) push('spiggot', 1 + Math.floor((n - 3) * 0.4));
+  if (n >= 5) push('traggot', 1 + Math.floor((n - 4) * 0.5));
+  if (n === 8 || (n > 8 && (n - 8) % 5 === 0)) push('bear', 1);
+  for (let i = q.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const tmp = q[i]; q[i] = q[j]; q[j] = tmp; }
+  return q;
+}
+
+/* ---------------- run control ---------------- */
+function startRun() {
+  state = 'play';
+  score = 0; wave = 0; candles = 3; heat = 0; iframes = 0; sag = 0;
+  enemies = []; parts = []; rings = []; flashes = []; spikes = []; trail = [];
+  spawnQueue = []; spawnTimer = 0; betweenWaves = 0.9;
+  killChain = 0; chainTimer = 0; moonAlpha = 0;
+  hurt = 0; flash = 0; fade = 1; limp = false; dyingT = 0; restT = 0;
+  shockA = 0; waveGlow = 0;
+  player.x = player.tx = W / 2; player.y = player.ty = H * 0.62;
+  player.vx = player.vy = 0;
+  segLen = 15 * unit;
+  resetChain();
+  DECAL.clear();
+  SMOKE_A.clear(); SMOKE_B.clear();
+  placeCandles();
+  ROOMK = 1; coalT = 0;
+  document.body.classList.add('playing');
+  Audio_.setDrone(0.07, 0);
+  Audio_.tone(98, 1.1, 0.12, 'triangle');
+}
+
+function nextWave() {
+  wave++;
+  spawnQueue = buildWave(wave);
+  spawnTimer = 0;
+  waveGlow = 1;
+  rings.push({ x: W / 2, y: ROOM.roseY, r0: ROOM.R * 0.12, r1: Math.max(W, H) * 0.85, life: 1.5, max: 1.5, col: ember(0.62), a: 0.55, w: 3.2 });
+  Audio_.tone(110, 1.6, 0.14, 'triangle');
+  Audio_.tone(164.8, 1.4, 0.09, 'triangle');
+  Audio_.noise(0.5, 900, 200, 0.12);
+  Audio_.bell(196, 2.6, 0.10);
+}
+
+function die() {
+  if (state !== 'play') return;
+  state = 'dying';
+  document.body.classList.remove('playing');
+  dyingT = 0; limp = true;
+  const hd = head();
+  const ea = rnd(0, TAU);
+  emberX = clamp(hd.x + Math.cos(ea) * 38 * unit, PAD, W - PAD);
+  emberY = clamp(hd.y + Math.sin(ea) * 38 * unit, PAD, H - PAD);
+  Audio_.setSwing(0);
+  Audio_.setDrone(0.05, 0);
+  Audio_.bell(196, 3.6, 0.30);
+  Audio_.bell(98, 4.2, 0.20);
+  Audio_.slide(220, 40, 1.8, 0.14, 'sawtooth');
+  shake = 26;
+  for (const c of candleList) { if (c.lit) { c.lit = false; c.snuff = 1; } }
+  const h = head();
+  // the censer spills: coals go across the flagstones and cool where they land
+  spark(h.x, h.y, 70, 460, 1.0);
+  ash(h.x, h.y, 26, 200);
+  for (let i = 0; i < 26; i++) {
+    const a = rnd(0, TAU), s = rnd(0.15, 1) * 300 * unit;
+    parts.push({
+      kind: 'dot', x: h.x, y: h.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+      life: rnd(1.4, 3.2), max: 3.2, r: rnd(1.6, 3.4) * unit,
+      heat: rnd(0.55, 0.95), a: 1, drag: 0.80
+    });
+  }
+  scorch(h.x, h.y, 46 * unit, 0.5);
+  if (score > best) { best = score; try { localStorage.setItem('thurible:best', String(best)); } catch (e) {} }
+}
+
+/* ---------------- fx spawners ---------------- */
+function spark(x, y, n, spd, heat0, col) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd(0, TAU), s = rnd(0.15, 1) * spd * unit;
+    parts.push({
+      kind: 'spark', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+      life: rnd(0.22, 0.85), max: 0.85, r: rnd(1.0, 2.6) * unit,
+      heat: heat0 === undefined ? 0.85 : heat0, col: col || null, a: 1, drag: 0.93
+    });
+  }
+}
+function ash(x, y, n, spd) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd(0, TAU), s = rnd(0.1, 1) * spd * unit;
+    parts.push({
+      kind: 'ash', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+      life: rnd(1.1, 2.6), max: 2.6, r: rnd(1.4, 3.4) * unit,
+      rot: rnd(0, TAU), spin: rnd(-3, 3), drag: 0.88
+    });
+  }
+}
+function ring(x, y, r0, r1, life, col, a, w) {
+  rings.push({ x, y, r0, r1, life, max: life, col, a, w });
+}
+function bang(x, y, r, k) {
+  flashes.push({ x, y, r, life: 0.26, max: 0.26, k });
+}
+/* short bright spikes thrown out of the impact, gone in a tenth of a second */
+function starburst(x, y, n, len, k) {
+  const a0 = rnd(0, TAU);
+  for (let i = 0; i < n; i++) {
+    const a = a0 + (i / n) * TAU + rnd(-0.16, 0.16);
+    spikes.push({ x, y, a, len: len * rnd(0.7, 1.6), life: 0.11, max: 0.11, k, w: rnd(1.4, 3.2) * unit });
+  }
+}
+
+/* ---------------- update ---------------- */
+function update(dt) {
+  t += dt;
+
+  const kx = (keys['d'] || keys['arrowright'] ? 1 : 0) - (keys['a'] || keys['arrowleft'] ? 1 : 0);
+  const ky = (keys['s'] || keys['arrowdown'] ? 1 : 0) - (keys['w'] || keys['arrowup'] ? 1 : 0);
+  if (kx || ky) {
+    const m = Math.hypot(kx, ky) || 1;
+    player.tx = clamp(player.tx + (kx / m) * 620 * unit * dt, PAD, W - PAD);
+    player.ty = clamp(player.ty + (ky / m) * 620 * unit * dt, PAD, H - PAD);
+  }
+
+  const dx = player.tx - player.x, dy = player.ty - player.y;
+  const k = 1 - Math.pow(0.0009, dt);
+  player.vx = dx * k / Math.max(dt, 0.0001);
+  player.vy = dy * k / Math.max(dt, 0.0001);
+  player.x += dx * k; player.y += dy * k;
+  player.x = clamp(player.x, PAD, W - PAD);
+  player.y = clamp(player.y, PAD, H - PAD);
+  if (Math.hypot(player.vx, player.vy) > 20) player.face = Math.atan2(player.vy, player.vx);
+
+  simChain(dt);
+  simHem(dt);
+
+  const h = head();
+  const spd = headSpeed();
+  const spd01 = clamp((spd - 120) / 1700, 0, 1);
+  const KILL = 780 * unit, NUDGE = 340 * unit, WHITE = 2300 * unit;
+
+  heat += (clamp((spd - KILL) / (WHITE - KILL), 0, 1) * 1.35 - 0.95) * dt;
+  heat = clamp(heat, 0, 1);
+  const mult = 1 + Math.floor(heat * 4.999);
+  const headR = (19 + heat * 13) * unit;
+
+  Audio_.setSwing(spd01);
+  Audio_.setDrone(0.07 + heat * 0.05, heat);
+
+  trail.push({ x: h.x, y: h.y, s: spd01, t: t });
+  while (trail.length && t - trail[0].t > 0.62) trail.shift();
+  if (trail.length > 90) trail.shift();
+
+  emitCenser(dt, h, spd01, spd, KILL);
+
+  moonAlpha = clamp(moonAlpha + (heat > 0.82 ? dt * 1.6 : -dt * 1.1), 0, 1);
+  waveGlow = Math.max(0, waveGlow - dt * 0.55);
+
+  if (betweenWaves > 0) {
+    betweenWaves -= dt;
+    if (betweenWaves <= 0) nextWave();
+  } else if (spawnQueue.length) {
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnAt(spawnQueue.shift());
+      spawnTimer = clamp(0.82 - wave * 0.035, 0.19, 0.82) * rnd(0.7, 1.3);
+    }
+  } else if (enemies.length === 0) {
+    betweenWaves = 1.5;
+    score += 250 * wave;
+    if (wave % 3 === 0 && candles < 3) {
+      candles++;
+      relightCandle();
+    }
+  }
+
+  if (iframes > 0) iframes -= dt;
+  if (chainTimer > 0) { chainTimer -= dt; if (chainTimer <= 0) killChain = 0; }
+  hurt = Math.max(0, hurt - dt * 2.2);
+  flash = Math.max(0, flash - dt * 7.5);
+  if (shockA > 0) { shockA = Math.max(0, shockA - dt * 2.2); shockR += dt * 0.85; }
+
+  /* ---- enemies: behaviour is untouched ---- */
+  let bearAlive = false;
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    const ty = TYPES[e.type];
+    if (e.type === 'bear') bearAlive = true;
+    if (e.flash > 0) e.flash -= dt;
+    e.dodge = Math.max(0, e.dodge - dt * 2.4);
+    e.drink = Math.max(0, e.drink - dt * 1.8);
+    const toP = Math.atan2(player.y - e.y, player.x - e.x);
+    const distP = Math.hypot(player.x - e.x, player.y - e.y);
+
+    if (e.stagger > 0) {
+      e.stagger -= dt;
+      e.x += e.vx * dt; e.y += e.vy * dt;
+      e.vx *= 0.9; e.vy *= 0.9;
+      e.wind = 0;
+    } else {
+      switch (e.type) {
+        case 'milksop': {
+          const wob = Math.sin(t * 2.4 + e.seed) * 0.5;
+          e.x += Math.cos(toP + wob) * e.spd * dt;
+          e.y += Math.sin(toP + wob) * e.spd * dt;
+          break;
+        }
+        case 'ninnyhammer': {
+          e.timer -= dt;
+          if (e.timer > 0 && e.timer < 0.45) { e.wind = clamp((0.45 - e.timer) / 0.45, 0, 1); }
+          else if (e.timer <= 0) {
+            e.vx = Math.cos(toP) * 620 * unit; e.vy = Math.sin(toP) * 620 * unit;
+            e.timer = rnd(1.5, 2.4); e.stagger = 0.45; e.wind = 0;
+            spark(e.x, e.y, 7, 210, 0.55, ty.rgb);
+            Audio_.noise(0.16, 1400, 500, 0.05);
+          } else {
+            e.wind = 0;
+            e.x += Math.cos(toP) * e.spd * dt; e.y += Math.sin(toP) * e.spd * dt;
+          }
+          break;
+        }
+        case 'popinjay': {
+          const dh = Math.hypot(h.x - e.x, h.y - e.y);
+          if (dh < 120 * unit && spd > NUDGE) {
+            const away = Math.atan2(e.y - h.y, e.x - h.x);
+            e.x += Math.cos(away) * e.spd * 1.5 * dt;
+            e.y += Math.sin(away) * e.spd * 1.5 * dt;
+            e.dodge = 1;
+          } else {
+            const orbit = toP + (Math.sin(t * 0.8 + e.seed) > 0 ? 1 : -1) * (distP > 165 * unit ? 0.35 : 1.35);
+            e.x += Math.cos(orbit) * e.spd * dt;
+            e.y += Math.sin(orbit) * e.spd * dt;
+          }
+          break;
+        }
+        case 'spiggot': {
+          e.x += Math.cos(toP) * e.spd * dt; e.y += Math.sin(toP) * e.spd * dt;
+          break;
+        }
+        case 'traggot':
+        case 'runt': {
+          const wob = Math.sin(t * 5 + e.seed) * 0.32;
+          e.x += Math.cos(toP + wob) * e.spd * dt;
+          e.y += Math.sin(toP + wob) * e.spd * dt;
+          break;
+        }
+        case 'bear': {
+          e.x += Math.cos(toP) * e.spd * dt; e.y += Math.sin(toP) * e.spd * dt;
+          break;
+        }
+      }
+    }
+
+    // presentation only: which way is it facing
+    if (e.type === 'ninnyhammer') e.rot = toP;
+    else if (e.type === 'popinjay') e.rot = lerpAngle(e.rot, toP, 1 - Math.pow(0.001, dt));
+    else if (e.type === 'traggot' || e.type === 'runt') e.rot = t * 1.4 + e.seed;
+    else if (e.type === 'milksop') e.rot = Math.sin(t * 1.5 + e.seed) * 0.12;
+    else e.rot = 0;
+
+    const dh = Math.hypot(h.x - e.x, h.y - e.y);
+    if (dh < e.r + headR) {
+      if (spd > KILL) {
+        e.hp -= (spd > WHITE ? 3 : 1);
+        e.flash = 0.12;
+        const kb = Math.atan2(e.y - h.y, e.x - h.x);
+        e.vx = Math.cos(kb) * 320 * unit; e.vy = Math.sin(kb) * 320 * unit; e.stagger = 0.22;
+        if (e.type === 'spiggot' && e.hp > 0) {
+          for (let s = 1; s < SEGS; s++) chain[s].px = lerp(chain[s].px, chain[s].x, -0.45);
+          e.drink = 1;
+          spark(e.x, e.y, 14, 260, 0.5, ty.rgb);
+          ring(e.x, e.y, e.r * 1.6, e.r * 0.2, 0.45, ty.rgb, 0.7, 2.4);
+          Audio_.noise(0.22, 300, 90, 0.12, 'lowpass');
+        }
+        if (e.hp <= 0) killEnemy(i, e, spd, WHITE, mult);
+        else {
+          spark(e.x, e.y, 9, 230, 0.75);
+          ring(e.x, e.y, e.r * 0.4, e.r * 2.1, 0.28, ember(0.75), 0.55, 2);
+          Audio_.noise(0.1, 1800, 700, 0.06);
+        }
+      } else if (spd > NUDGE) {
+        const kb = Math.atan2(e.y - h.y, e.x - h.x);
+        e.vx = Math.cos(kb) * 170 * unit; e.vy = Math.sin(kb) * 170 * unit; e.stagger = 0.18;
+        if (Math.random() < 0.35) spark(e.x, e.y, 2, 120, 0.35);
+        if (Math.random() < 0.2) Audio_.noise(0.07, 500, 200, 0.04, 'lowpass');
+      }
+    }
+
+    if (distP < e.r + player.r * unit && iframes <= 0 && !GOD) {
+      candles--;
+      iframes = 1.5;
+      shake = 18;
+      hurt = 1;
+      snuffCandle();
+      Audio_.noise(0.5, 1200, 120, 0.2, 'lowpass');
+      Audio_.slide(180, 60, 0.5, 0.12, 'square');
+      spark(player.x, player.y, 30, 420, 0.2, [255, 70, 82]);
+      ring(player.x, player.y, player.r * unit, 150 * unit, 0.5, [255, 70, 82], 0.8, 3);
+      const kb = Math.atan2(e.y - player.y, e.x - player.x);
+      e.vx = Math.cos(kb) * 420 * unit; e.vy = Math.sin(kb) * 420 * unit; e.stagger = 0.4;
+      heat *= 0.35;
+      if (candles <= 0) { die(); return; }
+    }
+
+    if (e.x < -260 || e.x > W + 260 || e.y < -260 || e.y > H + 260) {
+      if (t - e.born > 6) enemies.splice(i, 1);
+    }
+  }
+
+  sag = clamp(sag + (bearAlive ? dt * 0.7 : -dt * 1.2), 0, 1);
+  stepParticles(dt);
+  if (shake > 0) shake = Math.max(0, shake - dt * 52);
+}
+
+function lerpAngle(a, b, k) {
+  let d = ((b - a + Math.PI) % TAU + TAU) % TAU - Math.PI;
+  return a + d * k;
+}
+
+function simChain(dt) {
+  const hand = { x: player.x + Math.cos(player.face) * 6 * unit, y: player.y + Math.sin(player.face) * 6 * unit };
+  const damp = limp ? 0.90 : 0.992;
+  for (let i = 1; i < SEGS; i++) {
+    const p = chain[i];
+    const vx = (p.x - p.px) * damp, vy = (p.y - p.py) * damp;
+    p.px = p.x; p.py = p.y;
+    p.x += vx; p.y += vy;
+  }
+  chain[0].x = hand.x; chain[0].y = hand.y; chain[0].px = hand.x; chain[0].py = hand.y;
+  for (let it = 0; it < 5; it++) {
+    for (let i = 0; i < SEGS - 1; i++) {
+      const a = chain[i], b = chain[i + 1];
+      const ax = b.x - a.x, ay = b.y - a.y;
+      const d = Math.hypot(ax, ay) || 0.0001;
+      const diff = (d - segLen) / d;
+      const w = i === 0 ? 0 : 0.5;
+      const mv = i === 0 ? 1 : 0.5;
+      a.x += ax * diff * w; a.y += ay * diff * w;
+      b.x -= ax * diff * mv; b.y -= ay * diff * mv;
+    }
+    chain[0].x = hand.x; chain[0].y = hand.y;
+  }
+  const h = head();
+  if (!limp) {
+    const hd = Math.hypot(h.x - hand.x, h.y - hand.y);
+    if (hd < segLen * 1.2) {
+      const a = t * 3.1;
+      h.x += Math.cos(a) * 26 * unit * dt * 8;
+      h.y += Math.sin(a) * 26 * unit * dt * 8;
+    }
+  }
+  h.x = clamp(h.x, -30, W + 30); h.y = clamp(h.y, -30, H + 30);
+}
+
+function simHem(dt) {
+  const r = player.r * unit;
+  for (let i = 0; i < hem.length; i++) {
+    const a = (i / (hem.length - 1)) * Math.PI + player.face + Math.PI / 2;
+    const tx = player.x + Math.cos(a) * r * 1.62;
+    const ty = player.y + Math.sin(a) * r * 1.62;
+    const p = hem[i];
+    const vx = (p.x - p.px) * 0.80, vy = (p.y - p.py) * 0.80;
+    p.px = p.x; p.py = p.y;
+    p.x += vx; p.y += vy;
+    const kk = 1 - Math.pow(0.00004, dt);
+    p.x += (tx - p.x) * kk; p.y += (ty - p.y) * kk;
+    const d = Math.hypot(p.x - player.x, p.y - player.y);
+    if (d > r * 2.5) {
+      const s = r * 2.5 / d;
+      p.x = player.x + (p.x - player.x) * s;
+      p.y = player.y + (p.y - player.y) * s;
+    }
+  }
+}
+
+let smokeAcc = 0;
+function emitCenser(dt, h, spd01, spd, KILL) {
+  // incense: dense, continuous, thicker the harder you swing
+  smokeAcc += dt * (86 + spd01 * 170);
+  while (smokeAcc > 1) {
+    smokeAcc -= 1;
+    /* Braid the plume as it is laid down: puffs go off to either side of the
+       swing, alternating, so the smoke curls instead of tracing one wire. */
+    const vx = h.x - h.px, vy = h.y - h.py;
+    const vl = Math.hypot(vx, vy) || 1;
+    const px = -vy / vl, py = vx / vl;
+    const ph = t * 5.2 + smokeAcc;
+    const side = Math.sin(ph) * (5 + spd01 * 22) * unit;
+    const back = rnd(0, 1) * vl * 3;
+    const j = 4 * unit;
+    stampSmoke(h.x + px * side - vx * back / vl + rnd(-j, j),
+      h.y + py * side - vy * back / vl + rnd(-j, j),
+      rnd(16, 42) * unit, 0.20 + spd01 * 0.23 + heat * 0.12);
+    if (Math.random() < 0.22) {
+      stampSmoke(h.x - px * side * 1.4 + rnd(-j, j), h.y - py * side * 1.4 + rnd(-j, j),
+        rnd(26, 62) * unit, 0.07 + spd01 * 0.08);
+    }
+  }
+  // sparks spat from the piercings
+  if (Math.random() < spd01 * 0.9 + heat * 0.4) {
+    const a = rnd(0, TAU), s = rnd(30, 150) * unit;
+    parts.push({
+      kind: 'spark', x: h.x, y: h.y,
+      vx: Math.cos(a) * s - (h.x - h.px) * 12, vy: Math.sin(a) * s - (h.y - h.py) * 12,
+      life: rnd(0.25, 0.8), max: 0.8, r: rnd(0.8, 2.0) * unit,
+      heat: clamp(0.45 + spd01 * 0.55, 0, 1), a: 0.9, drag: 0.94
+    });
+  }
+  // soot laid down when the coal is really up
+  if (spd > KILL && Math.random() < 0.28) sootTrail(h.x, h.y, 18 * unit, 0.016 + heat * 0.018);
+}
+
+function stepParticles(dt) {
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.life -= dt;
+    if (p.life <= 0) { parts.splice(i, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    const d = Math.pow(p.drag || 0.94, dt * 60);
+    p.vx *= d; p.vy *= d;
+    if (p.kind === 'ash') p.rot += p.spin * dt;
+  }
+  for (let i = rings.length - 1; i >= 0; i--) { rings[i].life -= dt; if (rings[i].life <= 0) rings.splice(i, 1); }
+  for (let i = flashes.length - 1; i >= 0; i--) { flashes[i].life -= dt; if (flashes[i].life <= 0) flashes.splice(i, 1); }
+  for (let i = spikes.length - 1; i >= 0; i--) { spikes[i].life -= dt; if (spikes[i].life <= 0) spikes.splice(i, 1); }
+}
+
+function snuffCandle() {
+  for (let i = candleList.length - 1; i >= 0; i--) {
+    if (candleList[i].lit) {
+      candleList[i].lit = false; candleList[i].snuff = 4.5;
+      for (let k = 0; k < 26; k++) stampSmoke(candleList[i].x + rnd(-7, 7), candleList[i].y + rnd(-7, 7), rnd(9, 22) * unit, 0.10);
+      Audio_.noise(0.35, 2600, 400, 0.10);
+      break;
+    }
+  }
+}
+function relightCandle() {
+  for (const c of candleList) {
+    if (!c.lit) {
+      c.lit = true; c.snuff = 0;
+      const h = head();
+      // a spark travels from the coal to the wick
+      for (let i = 0; i < 10; i++) {
+        const a = Math.atan2(c.y - h.y, c.x - h.x) + rnd(-0.3, 0.3);
+        const s = rnd(300, 620) * unit;
+        parts.push({ kind: 'spark', x: h.x, y: h.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rnd(0.4, 0.7), max: 0.7, r: 1.8 * unit, heat: 0.95, a: 1, drag: 0.98 });
+      }
+      ring(c.x, c.y, 4 * unit, 70 * unit, 0.7, ember(0.8), 0.8, 2);
+      Audio_.bell(392, 1.3, 0.16);
+      Audio_.bell(587.33, 1.1, 0.10);
+      break;
+    }
+  }
+}
+
+function killEnemy(i, e, spd, WHITE, mult) {
+  const ty = TYPES[e.type];
+  const white = spd > WHITE;
+  enemies.splice(i, 1);
+  killChain++; chainTimer = 1.6; killCount++;
+  score += Math.round(ty.score * mult * (1 + Math.min(killChain, 12) * 0.06));
+
+  const big = e.type === 'bear';
+  const R = e.r;
+
+  // the coal goes through it: a hard white core, then everything it was made of
+  const hv = head();
+  const swx = (hv.x - hv.px) * 34, swy = (hv.y - hv.py) * 34;
+  bang(e.x, e.y, R * (big ? 5.0 : 2.4), big ? 1.9 : (white ? 1.5 : 1.05));
+  spark(e.x, e.y, big ? 150 : 42, big ? 700 : 430, white ? 1 : 0.86);
+  spark(e.x, e.y, big ? 46 : 14, big ? 340 : 230, 0.5, ty.rgb);
+  // everything the coal knocked loose keeps the coal's momentum
+  for (let k = parts.length - 1; k >= 0 && k > parts.length - (big ? 200 : 60); k--) {
+    parts[k].vx += swx; parts[k].vy += swy;
+  }
+  ash(e.x, e.y, big ? 44 : 12, big ? 260 : 170);
+  // a fast thin ring, and a slower fat one behind it
+  ring(e.x, e.y, R * 0.6, R * (big ? 7.5 : 4.2), big ? 0.34 : 0.22, ember(0.94), 0.95, big ? 3.4 : 2.0);
+  ring(e.x, e.y, R * 0.3, R * (big ? 13 : 6.4), big ? 0.95 : 0.52, ember(white ? 0.96 : 0.80), white ? 0.85 : 0.62, big ? 6 : 3.2);
+  if (white || big) ring(e.x, e.y, R * 0.2, R * (big ? 19 : 9.6), big ? 1.3 : 0.72, ember(0.88), 0.34, big ? 3.5 : 1.8);
+  // a star of embers thrown along the swing
+  starburst(e.x, e.y, big ? 9 : 6, R * (big ? 4.6 : 2.6), white || big ? 1 : 0.72);
+  // the incense gets punched out of the way
+  for (let k = 0; k < (big ? 26 : 9); k++) {
+    const a = rnd(0, TAU), d = R * rnd(1.1, big ? 4.0 : 2.4);
+    stampSmoke(e.x + Math.cos(a) * d, e.y + Math.sin(a) * d, R * rnd(0.7, 1.5), big ? 0.16 : 0.09);
+  }
+  scorch(e.x, e.y, R * (big ? 2.6 : 1.45), big ? 0.55 : 0.30);
+  flash = Math.min(0.55, flash + (big ? 0.42 : white ? 0.22 : 0.12));
+
+  hitstop = white ? 0.075 : 0.04;
+  shake = Math.min(24, shake + (big ? 26 : 6));
+  Audio_.bell(SCALE[Math.min(SCALE.length - 1, Math.min(killChain, 9))], 0.9, 0.16);
+  if (white) Audio_.bell(SCALE[Math.min(SCALE.length - 1, Math.min(killChain, 9))] * 2, 0.5, 0.08);
+
+  if (e.type === 'traggot' && !white) {
+    for (let k = 0; k < 2; k++) {
+      const a = rnd(0, TAU);
+      enemies.push({
+        type: 'runt', x: e.x + Math.cos(a) * 18, y: e.y + Math.sin(a) * 18,
+        vx: 0, vy: 0, r: TYPES.runt.r * unit, hp: 1, maxhp: 1, spd: TYPES.runt.spd * unit,
+        seed: rnd(0, TAU), timer: 0, ang: 0, stagger: 0.2, flash: 0, born: t,
+        rot: 0, wind: 0, dodge: 0, drink: 0
+      });
+    }
+    ring(e.x, e.y, e.r * 1.2, e.r * 0.3, 0.4, ty.rgb, 0.9, 3);
+  }
+  if (e.type === 'bear') {
+    shake = 32;
+    shockA = 1; shockR = 0.02; shockX = e.x / W; shockY = e.y / H;
+    Audio_.slide(70, 30, 1.8, 0.2, 'sawtooth');
+    Audio_.bell(98, 2.4, 0.22);
+    for (const other of enemies) { other.stagger = 1.4; other.vx *= 0.2; other.vy *= 0.2; }
+    for (let k = 0; k < 70; k++) stampSmoke(e.x + rnd(-80, 80) * unit, e.y + rnd(-80, 80) * unit, rnd(22, 52) * unit, 0.13);
+  }
+}
+
+/* ---------------- title / death idles ---------------- */
+function idleUpdate(dt) {
+  t += dt;
+  /* The attract loop is a real swing, not a screensaver: it breathes up into a hard
+     sweep every few seconds so the coal flares and the trail blazes, then settles.
+     It teaches the verb and it rakes the brass letters with light on the way past. */
+  const cx = W / 2, cy = ROOM.roseY + ROOM.R * 0.22;
+  const breath = 0.5 + 0.5 * Math.sin(t * 0.62);
+  const drive = 0.34 + Math.pow(breath, 2.4) * 1.45;
+  const amp = Math.min(W * 0.20, 190 * unit) * (0.6 + drive * 0.55);
+  const ampY = Math.min(H * 0.13, 120 * unit) * (0.6 + drive * 0.55);
+  idlePh += dt * (0.55 + drive * 1.9);
+  player.tx = cx + Math.cos(idlePh) * amp;
+  player.ty = cy + Math.sin(idlePh * 2) * ampY;
+  const dx = player.tx - player.x, dy = player.ty - player.y;
+  const k = 1 - Math.pow(0.0009, dt);
+  player.x += dx * k; player.y += dy * k;
+  if (Math.hypot(dx, dy) > 0.4) player.face = Math.atan2(dy, dx);
+  simChain(dt);
+  simHem(dt);
+  coolCoal(dt);
+  const h = head();
+  const spd01 = clamp((headSpeed() - 120) / 1700, 0, 1);
+  trail.push({ x: h.x, y: h.y, s: spd01, t: t });
+  while (trail.length && t - trail[0].t > 0.62) trail.shift();
+  emitCenser(dt, h, spd01, headSpeed(), 780 * unit);
+  stepParticles(dt);
+  heat = lerp(heat, 0.18 + drive * 0.34, 1 - Math.pow(0.25, dt));
+  ROOMK = lerp(ROOMK, 1, 1 - Math.pow(0.02, dt));
+  moonAlpha = clamp(moonAlpha - dt * 0.8, 0, 1);
+  if (shake > 0) shake = Math.max(0, shake - dt * 52);
+  for (const c of candleList) { c.lit = true; c.snuff = 0; }
+  candles = 3;
+  fade = 1;
+}
+
+function dyingUpdate(dt) {
+  t += dt; dyingT += dt;
+  simChain(dt);
+  simHem(dt);
+  const h = head();
+  trail.push({ x: h.x, y: h.y, s: 0, t: t });
+  while (trail.length && t - trail[0].t > 0.62) trail.shift();
+  smokeAcc += dt * 40;
+  while (smokeAcc > 1) { smokeAcc -= 1; stampSmoke(h.x + rnd(-8, 8), h.y + rnd(-8, 8), rnd(16, 34) * unit, 0.06); }
+  heat = Math.max(0, heat - dt * 0.9);
+  coalT = Math.max(0, coalT - dt * 0.55);
+  hurt = Math.max(0, hurt - dt * 1.4);
+  ROOMK = Math.max(0.055, ROOMK - dt * 0.55);
+  if (Math.random() < 0.6) stampSmoke(emberX + rnd(-5, 5) * unit, emberY + rnd(-5, 5) * unit, rnd(10, 22) * unit, 0.06);
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    e.vx *= Math.pow(0.05, dt); e.vy *= Math.pow(0.05, dt);
+    e.dodge = Math.max(0, e.dodge - dt); e.drink = Math.max(0, e.drink - dt);
+  }
+  stepParticles(dt);
+  if (shake > 0) shake = Math.max(0, shake - dt * 52);
+  fade = 1 - sstep(0.4, 2.4, dyingT) * 0.22;
+  if (dyingT > 2.9) { state = 'dead'; restT = 0; }
+}
+
+function deadUpdate(dt) {
+  t += dt; restT += dt;
+  simChain(dt); simHem(dt);
+  stepParticles(dt);
+  stepDust(dt);
+  heat = 0; coalT = 0;
+  ROOMK = Math.max(0.055, ROOMK - dt * 0.5);
+  fade = 1;
+  // one thread of smoke off the ember, the only motion left in the room
+  if (Math.random() < 0.5) {
+    stampSmoke(emberX + rnd(-3, 3) * unit, emberY + rnd(-3, 3) * unit, rnd(7, 15) * unit, 0.05);
+  }
+  for (let i = enemies.length - 1; i >= 0; i--) enemies.splice(i, 1);
+  if (shake > 0) shake = Math.max(0, shake - dt * 52);
+}
+/* the breath of the last coal: up over a second, down over two, forever */
+function emberBreath() {
+  const p = (restT % 3.2) / 3.2;
+  return p < 0.375 ? sstep(0, 1, p / 0.375) : 1 - sstep(0, 1, (p - 0.375) / 0.625);
+}
+
+/* ---------------- draw ---------------- */
+function draw() {
+  const h = head();
+  const spd = headSpeed();
+  const KILL = 780 * unit, WHITE = 2300 * unit;
+  const spd01 = clamp((spd - 120) / 1700, 0, 1);
+  const kill01 = clamp((spd - KILL) / (WHITE - KILL), 0, 1);
+  const killing = spd > KILL;
+  // the coal's colour IS the rule: dull below killing speed, bright above it
+  const kf = spd / KILL;
+  const target = kf < 1 ? 0.05 + kf * 0.47 : 0.52 + kill01 * 0.48;
+  const coal = coalT;
+
+  /* ---- 1. the light in the room ---- */
+  lights.length = 0; shadows.length = 0;
+  const pool = (330 + coal * 300) * unit;
+  addLight(h.x, h.y, pool, rgba(ember(clamp(coal * 0.86 + 0.08, 0, 1)), 1), 0.42 + coal * 0.52, 'pool', 1, 1, 0, true);
+  addLight(h.x, h.y, 78 * unit, rgba(ember(clamp(coal * 1.1, 0, 1)), 1), 0.30 + coal * 0.70, false, 1, 1, 0, true);
+  /* The ribbon is burning gas. It has to put light on the floor it passes over,
+     or the biggest thing on the screen is a decal. Eight emitters down its length,
+     each carrying that segment's own age and temperature. */
+  {
+    const N = 8, tn = trail.length;
+    if (tn > 4) {
+      for (let i = 1; i <= N; i++) {
+        const p = trail[Math.round((i / (N + 0.6)) * (tn - 1))];
+        const age = clamp((t - p.t) / 0.62, 0, 1);
+        const amt = (1 - age) * (1 - age) * (0.034 + coal * 0.082);
+        if (amt < 0.006) continue;
+        addLight(p.x, p.y, (70 + age * 190 + coal * 90) * unit,
+          rgba(ember(clamp((0.22 + coal * 0.72) * Math.pow(1 - age, 0.7), 0, 1)), 1),
+          amt, 'pool', 1, 1, 0, true);
+      }
+    }
+  }
+  if (killing) addLight(h.x, h.y, 105 * unit, 'rgba(255,232,180,1)', 0.30 + kill01 * 0.45, false, 1, 1, 0, true);
+
+  for (const c of candleList) {
+    if (!c.lit) continue;
+    const fl = 0.86 + Math.sin(t * 7.7 + c.seed * 3.1) * 0.09 + Math.sin(t * 13.3 + c.seed * 5.7) * 0.05;
+    addLight(c.x + Math.sin(t * 2.3 + c.seed) * 3 * unit, c.y, 250 * unit * fl, 'rgba(255,172,84,1)', 0.50 * fl, false, 1, 1, 0, true);
+  }
+  for (const f of flashes) {
+    const ff = clamp(f.life / f.max, 0, 1);
+    addLight(f.x, f.y, f.r * 4.2 * (1.6 - ff * 0.6), 'rgba(255,228,182,1)', ff * ff * 1.7 * f.k, 'pool', 1, 1, 0, true);
+  }
+  if (state === 'dead' || state === 'dying') {
+    const bth = state === 'dead' ? emberBreath() : 1;
+    addLight(emberX, emberY, (120 + bth * 90) * unit, rgba(ember(0.42 + bth * 0.22), 1), 0.55 + bth * 0.55, 'pool', 1, 1, 0, true);
+    addLight(emberX, emberY, 34 * unit, rgba(ember(0.70 + bth * 0.20), 1), 0.5 + bth * 0.5, false, 1, 1, 0, true);
+  }
+  if (waveGlow > 0.01) addLight(W / 2, ROOM.roseY, ROOM.R * 1.7, rgba(ember(0.52), 1), waveGlow * 0.28);
+  if (moonAlpha > 0.01) addLight(W / 2, ROOM.altarY * 0.5, Math.min(W, H) * 0.8, 'rgba(146,176,232,1)', moonAlpha * 0.16);
+  const glassK = heat * heat;
+  if (glassK > 0.005) {
+    addLight(W * 0.30, ROOM.altarY + 6 * unit, Math.min(W, H) * 0.34, 'rgba(70,104,220,1)', glassK * 0.20);
+    addLight(W * 0.70, ROOM.altarY + 6 * unit, Math.min(W, H) * 0.34, 'rgba(214,48,66,1)', glassK * 0.18);
+  }
+
+  // a boss opening up is a second fire: its cracks light the floor under it
+  for (const e of enemies) {
+    if (e.type !== 'bear') continue;
+    const d = 1 - clamp(e.hp / (e.maxhp || 20), 0, 1);
+    if (d < 0.08) continue;
+    addLight(e.x, e.y, (90 + d * 210) * unit, rgba(ember(0.44 + d * 0.40), 1), d * d * 0.62, 'pool', 1, 1, 0, true);
+  }
+  for (const e of enemies) castShadow(e.x, e.y, e.r * 1.10, h.x, h.y, 0.92);
+  castShadow(player.x, player.y, player.r * unit * 1.45, h.x, h.y, 0.85);
+  if (state === 'play' || state === 'title' || state === 'paused') {
+    const want = state === 'title' ? 0.86 : 0.40 + candles * 0.20;
+    ROOMK += (want - ROOMK) * (1 - Math.pow(0.06, 1 / 60));
+  }
+  WORLDK = clamp(ROOMK * 0.72 + coal * 0.42, 0, 1);
+  buildLight(heat);
+
+  /* ---- 2. the floor, revealed only where fire falls ---- */
+  const LX = LIT.x;
+  LX.setTransform(1, 0, 0, 1, 0, 0);
+  LX.globalCompositeOperation = 'copy';
+  LX.drawImage(FLOOR.c, 0, 0);
+  LX.globalCompositeOperation = 'source-over';
+  LX.drawImage(DECAL.c, 0, 0);
+  LX.globalCompositeOperation = 'multiply';
+  LX.drawImage(LIGHT.c, 0, 0, LIT.c.width, LIT.c.height);
+  LX.globalCompositeOperation = 'source-over';
+  LIT.reset();
+
+  const sx = shake > 0 ? rnd(-shake, shake) * 0.35 : 0;
+  const sy = shake > 0 ? rnd(-shake, shake) * 0.35 : 0;
+
+  SCENE.fill('#040309');
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.drawImage(LIT.c, 0, 0, W, H);
+  // the light hanging in the air itself
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.11;
+  ctx.drawImage(SPILL.c, 0, 0, W, H);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+
+  drawAltar(candleList, t);
+  for (const e of enemies) drawEnemy(e, t, h.x, h.y);
+  drawChain(chain, SEGS, heat);
+  drawPlayer(player, hem, h.x, h.y, iframes > 0 && Math.floor(iframes * 16) % 2 === 0, t,
+    (state === 'dead' || state === 'dying') ? (0.25 + emberBreath() * 0.45) : clamp(0.25 + coal * 0.85, 0, 1));
+
+  compositeSmoke(0.58);
+
+  drawTrail(trail, heat, kill01, t, coal);
+  drawCenser(h, spd01, heat, t, t * (0.7 + spd01 * 5.0), coal, killing);
+
+  if (killChain > 1 && chainTimer > 0) {
+    const k = clamp(killChain / 12, 0, 1) * clamp(chainTimer / 1.6, 0, 1);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = rgba(ember(0.70 + k * 0.30), 0.22 + k * 0.36);
+    ctx.lineWidth = (1 + k * 2.2) * unit;
+    ctx.beginPath();
+    ctx.arc(h.x, h.y, (28 + heat * 14 + k * 20) * unit, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawDust(h.x, h.y);
+  drawRings(rings);
+  drawSpikes(spikes);
+  drawParticles(parts);
+
+  for (const f of flashes) {
+    const ff = clamp(f.life / f.max, 0, 1);
+    fireGlow(f.x, f.y, f.r * 3.8, 0.72 + (1 - ff) * 0.26, clamp(ff * ff * f.k, 0, 1));
+  }
+
+  drawMoon();
+
+  if (state === 'title') {
+    // two slow rings out of the thurifer: the only instruction the game gives
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 2; i++) {
+      const ph = ((t * 0.42) + i * 0.5) % 1;
+      const rr = (18 + ph * 74) * unit;
+      const a = Math.sin(ph * Math.PI) * 0.30;
+      ctx.strokeStyle = rgba(ember(0.62), a);
+      ctx.lineWidth = (1.6 - ph) * unit;
+      ctx.beginPath(); ctx.arc(player.x, player.y, rr, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (state === 'dead' || (state === 'dying' && dyingT > 1.2)) {
+    const bth = state === 'dead' ? emberBreath() : clamp((dyingT - 1.2) / 1.2, 0, 1);
+    fireGlow(emberX, emberY, 156 * unit, 0.46 + bth * 0.24, 0.42 + bth * 0.52);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const cg = ctx.createRadialGradient(emberX, emberY, 0, emberX, emberY, 6 * unit);
+    cg.addColorStop(0, rgba(ember(0.58 + bth * 0.26), 0.95));
+    cg.addColorStop(0.5, rgba(ember(0.34 + bth * 0.20), 0.7));
+    cg.addColorStop(1, rgba(ember(0.14), 0));
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(emberX, emberY, 6 * unit, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  /* ---- the roof the bear is holding, sagging into frame ---- */
+  if (sag > 0.004) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, 'rgba(3,2,6,' + (sag * 0.6) + ')');
+    g.addColorStop(0.32, 'rgba(3,2,6,0)');
+    g.addColorStop(0.68, 'rgba(3,2,6,0)');
+    g.addColorStop(1, 'rgba(3,2,6,' + (sag * 0.6) + ')');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function drawMoon() {
+  if (moonAlpha <= 0.004) return;
+  const x = W / 2, y = ROOM.altarY * 0.55, r = 26 * unit;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = moonAlpha;
+  ctx.drawImage(GLOW, x - 150 * unit, y - 150 * unit, 300 * unit, 300 * unit);
+  ctx.globalAlpha = moonAlpha * 0.95;
+  ctx.fillStyle = '#efe6d2';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = moonAlpha * 0.22;
+  ctx.fillStyle = '#9a8e78';
+  ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.2, r * 0.22, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + r * 0.28, y + r * 0.3, r * 0.16, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* ---------------- main loop ---------------- */
+const POST = {
+  time: 0, heat: 0, bloom: 0.6, thresh: 0.80, aber: 0.0009,
+  shock: 0, shockR: 0, shockX: 0.5, shockY: 0.5,
+  fade: 1, grain: 0.048, hurt: 0, flash: 0, streak: 0.5, toe: 0.7
+};
+
+function present() {
+  POST.time = t;
+  POST.heat = heat;
+  POST.bloom = 0.62 + heat * 0.38;
+  POST.thresh = 0.86 - heat * 0.16;
+  POST.aber = 0.00030 + heat * 0.00045 + shake * 0.00007 + hurt * 0.0010;
+  POST.shock = shockA; POST.shockR = shockR; POST.shockX = shockX; POST.shockY = shockY;
+  POST.fade = fade;
+  POST.hurt = hurt;
+  POST.flash = flash;
+  POST.streak = QUALITY.bloom;
+  POST.toe = clamp(1.45 - Math.min(W, H) / 620, 0.42, 1.15);
+  Post.render(POST);
+}
+
+let acc = 0;
+const FIXED = 1 / 120;
+let LOOP = true;   // the harness parks the live loop so a posed frame stays posed
+let costMs = 0, costRing = [];
+let perfAcc = 0, perfN = 0;
+
+function coolCoal(dt) {
+  const h = head();
+  const spd = Math.hypot(h.x - h.px, h.y - h.py) * 60;
+  const KILL = 780 * unit, WHITE = 2300 * unit;
+  const kf = spd / KILL;
+  const tgt = kf < 1 ? 0.05 + kf * 0.47 : 0.52 + clamp((spd - KILL) / (WHITE - KILL), 0, 1) * 0.48;
+  const tau = tgt > coalT ? 0.075 : 0.52;         // catches quickly, dies slowly
+  coalT += (tgt - coalT) * (1 - Math.pow(0.0001, dt / tau));
+}
+
+function step(dt) {
+  if (state === 'play') update(dt);
+  else if (state === 'dying') dyingUpdate(dt);
+  else if (state === 'dead') deadUpdate(dt);
+  else if (state === 'paused') { /* held */ }
+  else idleUpdate(dt);
+  coolCoal(dt);
+  const hh = head();
+  advectSmoke(dt, t, hh.x, hh.y);
+  stepDust(dt);
+  stepSnuffed(dt);
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!LOOP) { last = now; return; }
+  if (!last) last = now;
+  let dt = (now - last) / 1000;
+  last = now;
+  dt = Math.min(dt, 0.05);
+  frames++;
+
+  const t0 = performance.now();
+  if (hitstop > 0) { hitstop -= dt; draw(); present(); }
+  else { step(dt); draw(); present(); }
+  costMs = performance.now() - t0;
+  costRing.push(costMs); if (costRing.length > 240) costRing.shift();
+
+  // if the room is too much for the machine, dim the machinery, not the room
+  perfAcc += dt; perfN++;
+  if (perfN >= 90) {
+    const avg = perfAcc / perfN;
+    perfAcc = 0; perfN = 0;
+    if (avg > 0.024 && QUALITY.dpr > 1.0) { QUALITY.dpr = Math.max(1.0, QUALITY.dpr - 0.25); QUALITY.bloom = 0; resize(); }
+    else if (avg > 0.021 && QUALITY.bloom > 0) { QUALITY.bloom = 0; Post.quality = 0; }
+  }
+}
+
+/* ---------------- boot ---------------- */
+Post.init();
+resize();
+window.addEventListener('resize', () => { QUALITY.dpr = Math.min(QUALITY.dpr, 1.75); resize(); });
+player.x = player.tx = W / 2; player.y = player.ty = H * 0.62;
+segLen = 15 * unit;
+resetChain();
+placeCandles();
+try { best = Number(localStorage.getItem('thurible:best')) || 0; } catch (e) {}
+requestAnimationFrame(frame);
+
+/* ---------------- harness hooks ---------------- */
+window.__TH = {
+  ready: true,
+  phase() { return state; },
+  mute() { Audio_.muted = true; if (Audio_.ok) Audio_.setSwing(0); },
+  start() { startRun(); },
+  run(sec, st) {
+    st = st || 1 / 60;
+    const n = Math.max(1, Math.round(sec / st));
+    for (let i = 0; i < n; i++) { if (hitstop > 0) hitstop -= st; else step(st); }
+    draw(); present();
+  },
+  drag(x, y) { player.tx = clamp(x, PAD, W - PAD); player.ty = clamp(y, PAD, H - PAD); },
+  setHeat(v) { heat = clamp(v, 0, 1); },
+  god(v) { GOD = v !== false; },
+  pause() { LOOP = false; },
+  resume() { LOOP = true; last = 0; },
+  enemyNear(x, y, d) { return enemies.some(e => Math.hypot(e.x - x, e.y - y) < d); },
+  headPos() { const h = head(); return { x: h.x, y: h.y, vx: (h.x - h.px), vy: (h.y - h.py) }; },
+  /* peak luminance of a creature against the floor immediately around it */
+  lum(pts) {
+    const cv = SCENE.c, cx = cv.getContext('2d', { willReadFrequently: true });
+    const S = DPR;
+    return pts.map(p => {
+      const R = Math.max(6, p.r * S), px = p.x * S, py = p.y * S;
+      const box = (x0, y0, w, hh) => {
+        x0 = Math.max(0, Math.round(x0)); y0 = Math.max(0, Math.round(y0));
+        w = Math.min(cv.width - x0, Math.round(w)); hh = Math.min(cv.height - y0, Math.round(hh));
+        if (w <= 0 || hh <= 0) return { peak: 0, mean: 0 };
+        const d = cx.getImageData(x0, y0, w, hh).data;
+        let peak = 0, dark = 255, sum = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+          if (l > peak) peak = l;
+          if (l < dark) dark = l;
+          sum += l; n++;
+        }
+        return { peak, dark, mean: sum / n };
+      };
+      // the box has to contain the whole creature: plumes, tails and bulges all
+      // reach well past the collision radius, and they are what you actually see
+      const on = box(px - R * 2.4, py - R * 2.4, R * 4.8, R * 4.8);
+      const around = box(px - R * 6.0, py - R * 6.0, R * 12, R * 12);
+      const floor = Math.max(0.6, (around.mean * 144 - on.mean * 23.04) / (144 - 23.04));
+      return { k: p.k, peak: on.peak, dark: on.dark, floor, ratio: on.peak / floor };
+    });
+  },
+  /* how differently a killing coal reads from a cold one */
+  coalContrast() {
+    const cv = SCENE.c, cx = cv.getContext('2d', { willReadFrequently: true });
+    const sample = () => {
+      const hd = head(), S = DPR, R = 26 * unit * S;
+      const x0 = Math.max(0, Math.round(hd.x * S - R)), y0 = Math.max(0, Math.round(hd.y * S - R));
+      const w = Math.min(cv.width - x0, Math.round(R * 2)), hh = Math.min(cv.height - y0, Math.round(R * 2));
+      if (w <= 0 || hh <= 0) return 0;
+      const d = cx.getImageData(x0, y0, w, hh).data;
+      let sum = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) { sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++; }
+      return sum / n;
+    };
+    window.__TH.start(); GOD = true; enemies.length = 0; betweenWaves = 9999;
+    const st = 1 / 120;
+    for (let i = 0; i < 200; i++) { drag(innerWidth / 2 + Math.cos(i * st * 0.5) * 30, innerHeight / 2 + Math.sin(i * st * 0.5) * 30); window.__TH.run(st, st); }
+    const cold = sample();
+    for (let i = 0; i < 260; i++) { drag(innerWidth / 2 + Math.cos(i * st * 5.4) * 250, innerHeight / 2 + Math.sin(i * st * 5.4) * 250); window.__TH.run(st, st); }
+    const hot = sample();
+    return { cold, hot, ratio: hot / Math.max(1, cold) };
+    function drag(x, y) { player.tx = clamp(x, PAD, W - PAD); player.ty = clamp(y, PAD, H - PAD); }
+  },
+  /* honest frame cost: real rAF frames, not the stepped harness */
+  bench(n) {
+    return new Promise(res => {
+      const wasParked = !LOOP;
+      LOOP = true; last = 0;
+      costRing.length = 0;
+      let k = 0;
+      const tick = () => {
+        if (++k < n) requestAnimationFrame(tick);
+        else {
+          const ms = costRing.slice().sort((a, b) => a - b);
+          if (wasParked) LOOP = false;
+          res({ p50: ms[ms.length >> 1] || 0, p95: ms[Math.floor(ms.length * 0.95)] || 0, enemies: enemies.length, frames: ms.length });
+        }
+      };
+      requestAnimationFrame(tick);
+    });
+  },
+  dump() {
+    const onBlack = (lay) => { const t = document.createElement('canvas'); t.width = lay.c.width; t.height = lay.c.height; const q = t.getContext('2d'); q.fillStyle = '#000'; q.fillRect(0,0,t.width,t.height); q.drawImage(lay.c,0,0); return t.toDataURL(); };
+    return { floor: FLOOR.c.toDataURL(), light: LIGHT.c.toDataURL(), spill: onBlack(SPILL), lit: LIT.c.toDataURL(), smoke: onBlack(SMOKE_A), scene: SCENE.c.toDataURL() };
+  },
+  probe() {
+    const stat = (lay, name) => {
+      const cv = lay.c, cx = cv.getContext('2d', { willReadFrequently: true });
+      const d = cx.getImageData(0, 0, cv.width, cv.height).data;
+      let maxA = 0, sumA = 0, maxL = 0, sumL = 0, n = 0;
+      for (let i = 0; i < d.length; i += 16) {
+        const l = Math.max(d[i], d[i + 1], d[i + 2]);
+        if (d[i + 3] > maxA) maxA = d[i + 3];
+        if (l > maxL) maxL = l;
+        sumA += d[i + 3]; sumL += l; n++;
+      }
+      return { name, w: cv.width, maxAlpha: maxA, meanAlpha: +(sumA / n).toFixed(2), maxLum: maxL, meanLum: +(sumL / n).toFixed(2) };
+    };
+    return [stat(SMOKE_A, 'smoke'), stat(SPILL, 'spill'), stat(LIGHT, 'light'), stat(LIT, 'lit'), stat(SCENE, 'scene')];
+  },
+  setWave(n) { wave = n; },
+  spawn(type, x, y) {
+    spawnAt(type);
+    const e = enemies[enemies.length - 1];
+    if (x !== undefined) { e.x = x; e.y = y; }
+    return e;
+  },
+  clearEnemies() { enemies.length = 0; spawnQueue.length = 0; betweenWaves = 9999; },
+  kill() { candles = 0; die(); },
+  info() {
+    return {
+      frames, state, wave, candles, heat, score,
+      enemies: enemies.length, parts: parts.length, flashes: flashes.length, spikes: spikes.length, rings: rings.length,
+      gl: Post.ok, dpr: DPR, W, H, unit,
+      headSpeed: headSpeed(), kills: killCount, coalT: coalT, kill01: clamp((headSpeed() - 780 * unit) / (2300 * unit - 780 * unit), 0, 1)
+    };
+  }
+};
+window.__TH.state = window.__TH.info;
+
+})();
+</script>
+</body>
+</html>
