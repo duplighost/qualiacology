@@ -1,4 +1,9 @@
-// Boot NINEFOLD BURN the way a player does and look at actual pixels.
+// Boot SPACEBOARDING the way a player does and look at actual pixels.
+//
+// Ported from ninefold-boot-check.mjs when SPACEBOARDING replaced NINEFOLD BURN
+// on the shelf (2026-08-29). Same engine, same lesson, one different button:
+// the start control reads DROP IN here, and the game needs a far longer boot
+// budget because it prewarms its whole first loop before reporting ready.
 //
 // Same lesson as build/qa/fetch-boot-check.mjs: every in-repo counter check can
 // pass while the page ships a black canvas. This one clicks IGNITE for real (no
@@ -8,12 +13,12 @@
 // preserveDrawingBuffer:false reads back black by construction, so sampling the
 // game canvas directly would prove nothing - the screenshot is the evidence.
 //
-// Usage: node build/qa/ninefold-boot-check.mjs http://localhost:4173/ninefold-burn/
+// Usage: node build/qa/spaceboarding-boot-check.mjs http://localhost:4173/spaceboarding/
 
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
-const target = process.argv[2] || 'http://localhost:4173/ninefold-burn/';
+const target = process.argv[2] || 'http://localhost:4173/spaceboarding/';
 const CHROME_ARGS = [
   '--enable-webgl', '--ignore-gpu-blocklist', '--enable-gpu-rasterization',
   '--use-angle=d3d11', '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
@@ -28,7 +33,7 @@ page.on('requestfailed', (r) => errors.push(`requestfailed: ${r.url()}`));
 page.on('response', (r) => { if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url()}`); });
 
 await page.goto(target, { waitUntil: 'load' });
-await page.waitForFunction(() => document.body.dataset.gameReady === 'true', null, { timeout: 60000 });
+await page.waitForFunction(() => document.body.dataset.gameReady === 'true', null, { timeout: 300000 });
 
 const fatal = await page.evaluate(() => document.body.dataset.raceStatus === 'fatal');
 assert.equal(fatal, false, 'the game reported a fatal boot');
@@ -85,7 +90,7 @@ assert.ok(pixels.distinctColours > 60,
 
 assert.deepEqual(errors, [], `page reported errors:\n${errors.join('\n')}`);
 
-console.log(`ninefold boot check passed: mean luminance ${pixels.mean.toFixed(1)}, `
+console.log(`spaceboarding boot check passed: mean luminance ${pixels.mean.toFixed(1)}, `
   + `range ${(pixels.max - pixels.min).toFixed(0)}, ${pixels.distinctColours} distinct colours, `
   + `home pill clickable, 0 page errors`);
 

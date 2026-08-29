@@ -8,12 +8,20 @@ const smoothstep = (a, b, value) => {
 const BOOST_EVENTS = new Set([
   'thermal-sling', 'lightning-ride', 'vine-cut', 'ice-bloom',
   'magnetic-throw', 'worm-surf', 'gravity-lean', 'echo-break',
-  'crown-ring', 'gate-boost', 'space-gate', 'wall-kiss',
+  'crown-ring', 'gate-boost', 'wall-kiss',
+  // Spaceboarding's own earned speed. Every one of these is a thing the
+  // player did on purpose, so every one of them gets the reward chord.
+  'trick-landed', 'grind-payout', 'coping-pop', 'pop',
+  'ring', 'ring-rolled', 'slipstream',
+  // The combo cash was missing from this set, which meant the single biggest
+  // payout in the game was also the only one that made no sound. It is the
+  // reward chord's whole reason to exist.
+  'combo-cashed',
 ]);
 
 const FAILURE_EVENTS = new Set([
   'vent-burst', 'ice-crack', 'worm-pass', 'sun-skim',
-  'space-near-miss', 'rail-touch',
+  'rail-touch', 'ring-missed', 'blown',
 ]);
 
 const MORPH_LATCH_THRESHOLDS = Object.freeze([0.25, 0.55, 0.82]);
@@ -860,7 +868,7 @@ export class AudioDirector {
       this.nextAmbienceAt = now + initialDelay + stableUnit(key, 0) * 0.36;
     }
     if (!AMBIENCE_GIMMICKS.has(gimmick) || now < this.nextAmbienceAt) return;
-    if (transitionBusy || events.length > 0 || state.drifting) {
+    if (transitionBusy || events.length > 0 || state.riderState === 'grind') {
       this.nextAmbienceAt = now + 0.42;
       return;
     }
@@ -924,7 +932,10 @@ export class AudioDirector {
     const localSpeed = clamp((state.speed - segment.baseSpeed) / Math.max(120, segment.maxSpeed - segment.baseSpeed), 0, 1);
     const speedNorm = clamp((state.speed - 280) / 780, 0, 1);
     const boost = clamp(state.boost, 0, 1);
-    const surge = Boolean(state.lastInput?.surge);
+    // Upstream this read the held SURGE key. There is no throttle any more, so
+    // the thrust kick keys off the thing that actually is thrust: an active
+    // earned boost.
+    const surge = Number(state.boost) > 0.35;
     const launchFold = segment.type === 'planet' ? smoothstep(0.81, 0.968, fraction) : 0;
     const reentryFold = segment.type === 'space' ? smoothstep(0.80, 0.985, fraction) : 0;
     const rocketAmount = segment.type === 'space' ? 1 - reentryFold : launchFold;
@@ -997,11 +1008,12 @@ export class AudioDirector {
     this.boostToneGain.gain.setTargetAtTime(Math.max(0.0001, boostWhine * bedGain), now, 0.06);
     this.boostTone.frequency.setTargetAtTime(420 + speedNorm * 310 + boost * 610 + rocketAmount * 110, now, 0.055);
 
-    const driftCharge = state.drifting ? clamp(state.driftCharge, 0, 1) : 0;
+    // The scrub used to be drift; it is the rail and the landing now.
+    const driftCharge = state.riderState === 'grind' ? 0.8 : clamp(state.trickMeter ?? 0, 0, 1);
     const railSkim = Boolean(state.railSkimming);
-    const scrub = (state.drifting ? 0.018 + driftCharge * 0.056 + Math.abs(state.lateralVelocity) * 0.0012 : 0)
+    const scrub = (state.riderState === 'grind' ? 0.024 + driftCharge * 0.06 + Math.abs(state.lateralVelocity) * 0.0012 : 0)
       + (railSkim ? 0.021 + speedNorm * 0.009 : 0);
-    this.driftGain.gain.setTargetAtTime(Math.max(0.0001, scrub * bedGain), now, state.drifting || railSkim ? 0.026 : 0.07);
+    this.driftGain.gain.setTargetAtTime(Math.max(0.0001, scrub * bedGain), now, state.riderState === 'grind' || railSkim ? 0.026 : 0.07);
     this.driftFilter.frequency.setTargetAtTime(
       510 + driftCharge * 1550 + Math.abs(state.lateralVelocity) * 19 + (railSkim ? 980 : 0),
       now,
@@ -1009,13 +1021,13 @@ export class AudioDirector {
     );
     this.driftFilter.Q.setTargetAtTime(0.58 + driftCharge * 0.62 + (railSkim ? 0.22 : 0), now, 0.08);
     this.driftToneGain.gain.setTargetAtTime(
-      Math.max(0.0001, ((state.drifting ? 0.006 + driftCharge * driftCharge * 0.024 : 0) + (railSkim ? 0.006 : 0)) * bedGain),
+      Math.max(0.0001, ((state.riderState === 'grind' ? 0.006 + driftCharge * driftCharge * 0.024 : 0) + (railSkim ? 0.006 : 0)) * bedGain),
       now,
       0.045,
     );
     this.driftTone.frequency.setTargetAtTime(165 + driftCharge * 465 + speedNorm * 95 + (railSkim ? 190 : 0), now, 0.05);
     if (this.driftPanner) {
-      const scrubSide = railSkim ? state.wallContactSide : state.driftSide;
+      const scrubSide = railSkim ? state.wallContactSide : (state.grindSide || state.spinSide);
       this.driftPanner.pan.setTargetAtTime(clamp((scrubSide || 0) * 0.52, -0.65, 0.65), now, 0.05);
     }
 
@@ -1095,6 +1107,18 @@ export class AudioDirector {
     }
 
     switch (event.type) {
+      // The dash. Not a boost -- it grants no speed on its own -- so it does
+      // not get the reward chord. It gets a sideways shove of air, panned hard
+      // to the side you went, which is the ear's version of the same
+      // information the roll gives the eye.
+      case 'dash': {
+        const pan = clamp((event.side ?? 0) * 0.7, -0.8, 0.8);
+        this.noiseBurst(0.13, 0.026, 1450 + variation * 700, { at: now, pan, variation, q: 0.55 });
+        this.tone(196 + variation * 40, 0.16, {
+          at: now, type: 'sine', gain: 0.026, slide: 1.34, pan: pan * 0.5,
+        });
+        break;
+      }
       case 'drift-release': {
         const charge = clamp(Number(event.charge) || 0, 0, 1);
         const chargeFloor = 0.22 + charge * 0.78;

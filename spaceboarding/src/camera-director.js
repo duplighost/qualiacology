@@ -47,7 +47,7 @@ function setBankedRigPoint(target, anchorX, anchorY, anchorZ, localX, localY, lo
 
 const RIG_ORDER = Object.freeze([
   'drift',
-  'drift-release/boost',
+  'trick-landed/boost',
   'launch',
   'space-combat',
   'reentry',
@@ -57,7 +57,7 @@ const RIG_ORDER = Object.freeze([
 const WEIGHT_FREQUENCIES = Object.freeze({
   drive: 18,
   drift: 15,
-  'drift-release/boost': 12,
+  'trick-landed/boost': 12,
   launch: 8,
   'space-combat': 10,
   reentry: 7,
@@ -67,7 +67,7 @@ const WEIGHT_FREQUENCIES = Object.freeze({
 const RESPONSE_FREQUENCIES = Object.freeze({
   drive: Object.freeze({ position: 12, look: 10, fov: 9, roll: 11 }),
   drift: Object.freeze({ position: 14, look: 12, fov: 10, roll: 14 }),
-  'drift-release/boost': Object.freeze({ position: 10, look: 9, fov: 8, roll: 11 }),
+  'trick-landed/boost': Object.freeze({ position: 10, look: 9, fov: 8, roll: 11 }),
   launch: Object.freeze({ position: 7, look: 7, fov: 7, roll: 8 }),
   'space-combat': Object.freeze({ position: 11, look: 10, fov: 9, roll: 12 }),
   reentry: Object.freeze({ position: 7, look: 7, fov: 7, roll: 9 }),
@@ -85,7 +85,7 @@ const DEFAULT_TRAUMA_PROFILE = Object.freeze({
 
 const TRAUMA_PROFILES = Object.freeze({
   boost: Object.freeze({ gain: 0.44, decay: 4.4, x: 0.025, y: 0.035, z: 0.12, roll: 0.005 }),
-  'drift-release': Object.freeze({ gain: 0.58, decay: 4, x: 0.05, y: 0.045, z: 0.15, roll: 0.012 }),
+  'trick-landed': Object.freeze({ gain: 0.58, decay: 4, x: 0.05, y: 0.045, z: 0.15, roll: 0.012 }),
   shot: Object.freeze({ gain: 0.24, decay: 7.5, x: 0.018, y: 0.014, z: 0.055, roll: 0.004 }),
   hit: Object.freeze({ gain: 0.76, decay: 4.6, x: 0.12, y: 0.09, z: 0.1, roll: 0.024 }),
   launch: Object.freeze({ gain: 0.9, decay: 2.1, x: 0.1, y: 0.1, z: 0.22, roll: 0.018 }),
@@ -213,7 +213,7 @@ export class CameraDirector {
     this.rigs = {
       drive: makeRig('drive'),
       drift: makeRig('drift'),
-      'drift-release/boost': makeRig('drift-release/boost'),
+      'trick-landed/boost': makeRig('trick-landed/boost'),
       launch: makeRig('launch'),
       'space-combat': makeRig('space-combat'),
       reentry: makeRig('reentry'),
@@ -224,7 +224,7 @@ export class CameraDirector {
     this.weights = {
       drive: scalarState(1),
       drift: scalarState(0),
-      'drift-release/boost': scalarState(0),
+      'trick-landed/boost': scalarState(0),
       launch: scalarState(0),
       'space-combat': scalarState(0),
       reentry: scalarState(0),
@@ -291,8 +291,8 @@ export class CameraDirector {
 
     this.elapsed = 0;
     this.initialized = false;
-    this.previousDrifting = false;
-    this.previousDriftCharge = 0;
+    this.previousAirborne = false;
+    this.previousTrickMeter = 0;
     this.previousBoost = 0;
     this.previousSegmentType = null;
     this.releaseTimer = 0;
@@ -376,7 +376,7 @@ export class CameraDirector {
       this.traumaPhases[i] = hashUnit((base + Math.imul(i + 1, 0x85ebca6b)) >>> 0) * TAU;
     }
 
-    if (key === 'drift-release' || key === 'boost') {
+    if (key === 'trick-landed' || key === 'boost') {
       const releaseStrength = saturate(amount);
       this.releaseStrength = Math.max(this.releaseStrength, releaseStrength);
       this.releaseTimer = Math.max(
@@ -413,8 +413,11 @@ export class CameraDirector {
     const lift = Math.max(0, finite(state.lift));
     const yaw = finite(state.yaw);
     const vehicleRoll = finite(state.roll);
-    const driftCharge = saturate(state.driftCharge);
-    const driftSide = Math.sign(finite(state.driftSide, Math.sign(finite(state.lastInput?.steer)))) || 1;
+    // The drift camera became the TRICK camera: it frames the board while a
+    // trick is charging in the air, which is when the player most needs to see
+    // their own orientation to judge the landing.
+    const driftCharge = saturate(state.trickMeter);
+    const driftSide = Math.sign(finite(state.spinSide, Math.sign(finite(state.lastInput?.steer)))) || 1;
     const bank = finite(current.bank);
     const curveX = clamp(finite(next.x) - finite(current.x), -30, 30);
     const roadRise = clamp(finite(next.y) - finite(current.y), -18, 22);
@@ -480,7 +483,7 @@ export class CameraDirector {
     drift.roll = bank * 0.38 + vehicleRoll * 0.25 - driftSide * driftCharge * 0.028;
     drift.screenTarget = 0.184;
 
-    const release = this.rigs['drift-release/boost'];
+    const release = this.rigs['trick-landed/boost'];
     setBankedRigPoint(release.position, vehicleX, vehicleY, vehicleZ,
       -yaw * 1.15, 2.4, 8.25, bankCos, bankSin);
     setBankedRigPoint(release.look, vehicleX, vehicleY, vehicleZ,
@@ -490,7 +493,12 @@ export class CameraDirector {
       bankCos,
       bankSin,
     );
-    release.fov = 66 + speedNorm * 4 + boost * 5;
+    // The FOV punch, and it is now large enough to be a punch. At `boost * 5`
+    // -- blended in at partial weight -- a full cash moved the lens by about
+    // three degrees, which is below the threshold anyone notices. Alex, on the
+    // result: "i really cant see it." The clamp above this is 78, so there was
+    // headroom the whole time and nothing was using it.
+    release.fov = 66 + speedNorm * 4 + boost * 12;
     release.roll = bank * 0.32 + vehicleRoll * 0.16;
     release.screenTarget = 0.171;
 
@@ -609,8 +617,11 @@ export class CameraDirector {
     const touchdownEnvelope = smoothstep01(this.touchdownTimer / this.touchdownDuration);
     const targets = {
       drive: 1,
-      drift: isSurface && state.drifting ? 0.56 + saturate(state.driftCharge) * 0.44 : 0,
-      'drift-release/boost': isSurface ? Math.max(releaseEnvelope, boost * 0.52) : 0,
+      drift: isSurface && state.riderState === 'air' ? 0.56 + saturate(state.trickMeter) * 0.44 : 0,
+      // Boost pulls the release rig in HARD. At 0.52 the widened, pulled-back
+      // camera was never more than half present, so half of an effect that was
+      // already too small for anyone to see.
+      'trick-landed/boost': isSurface ? Math.max(releaseEnvelope, boost * 0.95) : 0,
       launch: isSurface ? smoothstep01(launch) : departure,
       'space-combat': isSpace ? (1 - smoothstep01(landing)) * (1 - departure * 0.72) : 0,
       reentry: isSpace ? smoothstep01(landing) : 0,
@@ -676,8 +687,8 @@ export class CameraDirector {
       );
     const poseRoll = vehiclePoseRoll({
       roll: finite(context.state.roll),
-      driftSide: finite(context.state.driftSide),
-      driftCharge: saturate(context.state.driftCharge),
+      driftSide: finite(context.state.spinSide),
+      driftCharge: saturate(context.state.trickMeter),
       morph: morphAmount,
     });
 
@@ -1018,10 +1029,12 @@ export class CameraDirector {
       : 0;
 
     let releasedThisFrame = false;
-    if (this.initialized && this.previousDrifting && !state.drifting) {
-      const commitment = saturate(this.previousDriftCharge);
+    const wasAirborne = this.previousAirborne;
+    const landedThisFrame = this.initialized && wasAirborne && state.riderState !== 'air';
+    if (landedThisFrame) {
+      const commitment = saturate(this.previousTrickMeter);
       const releaseStrength = clamp(0.06 + Math.pow(commitment, 0.9) * 0.94, 0.06, 1);
-      this.trauma('drift-release', releaseStrength);
+      this.trauma('trick-landed', releaseStrength);
       releasedThisFrame = true;
     }
     if (this.initialized && !releasedThisFrame && segmentType !== 'space' && boost - this.previousBoost > 0.06) {
@@ -1116,8 +1129,8 @@ export class CameraDirector {
     this.diagnostics.position = this.camera.position.toArray().map((value) => Number(value.toFixed(4)));
     this.diagnostics.look = this.look.toArray().map((value) => Number(value.toFixed(4)));
 
-    this.previousDrifting = Boolean(state.drifting);
-    this.previousDriftCharge = saturate(state.driftCharge);
+    this.previousAirborne = state.riderState === 'air';
+    this.previousTrickMeter = saturate(state.trickMeter);
     this.previousBoost = boost;
     this.previousSegmentType = segmentType;
 
