@@ -330,18 +330,18 @@
       "actionLabel": "Begin the Wake"
     },
     {
-      "slug": "ninefold-burn",
-      "title": "NINEFOLD BURN",
-      "descriptor": "Nine-world continuous race",
+      "slug": "spaceboarding",
+      "title": "SPACEBOARDING",
+      "descriptor": "Trick-fed continuous race",
       "group": "action",
       "featured": false,
-      "image": "/assets/games/ninefold-burn-card-clean.webp",
-      "alt": "A racing craft folded into a ship, thrusters lit, crossing black space between planets with a rival close alongside and pale rock shards ahead",
-      "summary": "Nine worlds run end to end without stopping. The car launches off each one, folds into a ship in the air, fights across the gap, and folds back on the way down. Race well and the field stays behind you. Stop racing well and it doesn’t.",
-      "metaDescription": "NINEFOLD BURN is a browser racing game across nine planets and eight crossings with no stops — the car folds into a ship between worlds. Three controls, about a minute a run.",
-      "controls": "A D or arrows steer · W surge on a world, fire in space · Space drift on a world, dodge in space · M mute · P or Esc pause",
-      "actionLabel": "Ignite",
-      "duration": "About a minute"
+      "image": "/assets/games/spaceboarding-card-clean.webp",
+      "alt": "A rider standing on a lit board on a red canyon road, white speed streaks tearing past on both sides, a violet rival riding alongside",
+      "summary": "Three worlds run end to end without stopping, ridden standing up on a rocket skateboard. There is no throttle — speed is earned. Land tricks and ride the rails to fill the burn, then cash the chain and the whole road stretches. Land them badly and you are slower than if you had never left the ground.",
+      "metaDescription": "SPACEBOARDING is a browser race across three worlds ridden standing on a rocket skateboard. No throttle: land tricks and grind rails to earn every scrap of speed.",
+      "controls": "A D steer and spin · Space hold to load, release to pop · W S flip · Q E board flip · Shift grab · M mute · P or Esc pause",
+      "actionLabel": "Drop in",
+      "duration": "A minute or two"
     },
     {
       "slug": "stay",

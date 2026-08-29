@@ -4,11 +4,10 @@
   --secondary: #ffd17a;
   --speed: 0;
   --boost: .1;
-  --drift: 0;
+  --trick: 0;
+  --trick-tier: 0;
+  --trick-flame: transparent;
   --flash: 0;
-  --target-x: 50%;
-  --target-y: 43%;
-  --target-lock: 0;
   --safe-top: max(16px, env(safe-area-inset-top));
   --safe-right: max(18px, env(safe-area-inset-right));
   --safe-bottom: max(18px, env(safe-area-inset-bottom));
@@ -62,11 +61,13 @@ button { font: inherit; }
   transition: opacity 100ms linear;
 }
 
-/* Sharpness made visible. This is the value the rivals are actually paced
-   against, so it gets a channel the player can feel instead of a number to
-   read: the frame runs hot in the world's own accent while technique is being
-   earned, and goes cold within a few seconds of sloppy driving. Deliberately
-   an edge effect - it must never compete with the road for attention. */
+/* Form made visible. Sharpness measures how much technique is being earned
+   right now - it rises on drifts, tricks and grinds and bleeds away within a
+   few seconds of sloppy driving. The rivals no longer read it (Phase 7 gave
+   them their own pace lines), so it is not a hidden race variable any more:
+   it is simply the frame running hot in the world's accent while the player is
+   racing well. Deliberately an edge effect - it must never compete with the
+   road for attention. */
 .edge-heat {
   opacity: calc(var(--sharpness, 0) * .85);
   /* Transparent through the middle. A full-frame wash reads instantly but
@@ -205,24 +206,9 @@ body[data-race-status="finished"] .hud { opacity: 1; }
 .burn-meter i:nth-child(1) { background: linear-gradient(90deg, var(--accent) calc(var(--boost) * 300%), rgba(255,255,255,.16) 0); }
 .burn-meter i:nth-child(2) { background: linear-gradient(90deg, var(--accent) calc((var(--boost) - .333) * 300%), rgba(255,255,255,.16) 0); }
 .burn-meter i:nth-child(3) { background: linear-gradient(90deg, var(--secondary) calc((var(--boost) - .666) * 300%), rgba(255,255,255,.16) 0); }
-
-.target-bracket {
-  position: absolute;
-  left: var(--target-x);
-  top: var(--target-y);
-  width: 58px;
-  height: 58px;
-  transform: translate(-50%, -50%) scale(calc(.94 + var(--boost) * .08));
-  opacity: 0;
-  transition: opacity 120ms linear;
-}
-
-body[data-vehicle-mode="space"] .target-bracket { opacity: calc(var(--target-lock) * .72); }
-.target-bracket i { position: absolute; width: 17px; height: 17px; border-color: var(--secondary); }
-.target-bracket i:nth-child(1) { top: 0; left: 0; border-top: 2px solid; border-left: 2px solid; }
-.target-bracket i:nth-child(2) { top: 0; right: 0; border-top: 2px solid; border-right: 2px solid; }
-.target-bracket i:nth-child(3) { bottom: 0; left: 0; border-bottom: 2px solid; border-left: 2px solid; }
-.target-bracket i:nth-child(4) { right: 0; bottom: 0; border-right: 2px solid; border-bottom: 2px solid; }
+/* While a drift is charged the meter frame takes the flame colour, so the HUD
+   and the board agree about which tier is lit without adding a word. */
+.burn-meter { box-shadow: 0 0 0 1px var(--trick-flame), 0 0 12px -2px var(--trick-flame); transition: box-shadow 120ms linear; }
 
 .corner-button {
   position: absolute;
@@ -392,6 +378,15 @@ body[data-vehicle-mode="space"] .target-bracket { opacity: calc(var(--target-loc
 }
 
 .control-whisper b { color: #fff; }
+/* The one line that says what the game IS. There is no throttle, and a player
+   arriving from the game this was forked out of will hold W expecting a boost
+   -- that game bound W to SURGE and said so on this exact widget. */
+.control-whisper .control-note {
+  flex-basis: 100%;
+  margin-top: 4px;
+  color: rgba(255,255,255,.38);
+  letter-spacing: .16em;
+}
 .start-hint { margin-top: 15px; opacity: .45; animation: breathe 1.9s ease-in-out infinite; }
 @keyframes breathe { 50% { opacity: .9; } }
 
@@ -469,7 +464,7 @@ body[data-race-status="racing"] .touch-controls { opacity: 1; }
   pointer-events: auto;
   touch-action: none;
 }
-.touch-button.surge { width: 88px; height: 88px; border-color: color-mix(in srgb, var(--accent) 60%, white); }
+.touch-button.hop { width: 88px; height: 88px; border-color: color-mix(in srgb, var(--accent) 60%, white); }
 .touch-button.is-held { transform: scale(.9); background-color: color-mix(in srgb, var(--accent) 52%, #160300); box-shadow: 0 0 35px var(--accent); }
 
 .fatal { z-index: 50; background: #03040a; }
@@ -516,7 +511,7 @@ html.force-touch .touch-controls { display: flex; }
   .steer-zone { width: 42vw; height: 76px; }
   .steer-zone i { width: 52px; height: 52px; }
   .touch-button { width: 62px; height: 62px; }
-  .touch-button.surge { width: 78px; height: 78px; }
+  .touch-button.hop { width: 78px; height: 78px; }
 }
 
 @media (max-height: 520px) and (orientation: landscape) {
@@ -528,7 +523,7 @@ html.force-touch .touch-controls { display: flex; }
   .steer-zone { height: 66px; width: 31vw; }
   .steer-zone i { width: 46px; height: 46px; }
   .touch-button { width: 56px; height: 56px; }
-  .touch-button.surge { width: 68px; height: 68px; }
+  .touch-button.hop { width: 68px; height: 68px; }
   .speed-readout { bottom: calc(var(--safe-bottom) + 72px); }
   .burn-meter { bottom: calc(var(--safe-bottom) + 128px); }
 }
@@ -539,4 +534,74 @@ html.force-touch .touch-controls { display: flex; }
   .stage-card.show { animation-duration: .65s; }
   .start-hint { animation: none; }
   *, *::before, *::after { scroll-behavior: auto !important; }
+}
+
+/* --- the trick banner -----------------------------------------------------
+
+   Sits right of centre and low, out of the road's vanishing point and out of
+   the way of the rider, who is the thing being watched. Nothing here ever
+   takes a click or holds a frame: it is pure readout.
+
+   The colour comes from --trick-flame, which the renderer already publishes
+   for the charged tier, so the banner is the same colour as the flame under
+   the board without either knowing about the other. */
+.trick-banner {
+  position: absolute;
+  right: 5vw;
+  bottom: 22vh;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  pointer-events: none;
+  text-align: right;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-shadow: 0 2px 14px rgba(0,0,0,.85);
+}
+
+.trick-move {
+  font-size: clamp(18px, 3.2vw, 42px);
+  line-height: 1;
+  color: #fff;
+  opacity: 0;
+  transform: translate3d(26px, 0, 0) skewX(-9deg);
+}
+/* Snaps in, drifts out. A trick is an impact, so the arrival has no easing to
+   speak of and the exit has all of it. */
+.trick-move.hit {
+  animation: trick-move-in 900ms cubic-bezier(.12, .82, .2, 1) forwards;
+}
+@keyframes trick-move-in {
+  0%   { opacity: 0; transform: translate3d(34px, 0, 0) skewX(-14deg); }
+  9%   { opacity: 1; transform: translate3d(0, 0, 0) skewX(-9deg); }
+  62%  { opacity: 1; transform: translate3d(0, 0, 0) skewX(-9deg); }
+  100% { opacity: 0; transform: translate3d(-16px, -10px, 0) skewX(-9deg); }
+}
+
+.trick-chain {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: clamp(13px, 1.9vw, 24px);
+  color: var(--trick-flame, #fff);
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+}
+.trick-chain.alive { opacity: .92; }
+/* The cash-out. One pulse, on the frame the boost actually fires. */
+.trick-chain.cashed { animation: trick-cash 620ms ease-out forwards; }
+@keyframes trick-cash {
+  0%   { opacity: 1; transform: scale(1); }
+  14%  { opacity: 1; transform: scale(1.28); }
+  70%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+.trick-multiplier { opacity: .8; font-size: .78em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .trick-move.hit { animation: trick-move-fade 900ms linear forwards; }
+  .trick-chain.cashed { animation: trick-move-fade 620ms linear forwards; }
+  @keyframes trick-move-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 }

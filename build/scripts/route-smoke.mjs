@@ -63,7 +63,12 @@ const retiredRoutes = [
     "unsay-it",
     "vanta-9",
     "vesperbane",
+    "ninefold-burn",
   ].map((slug) => `/${slug}/`),
+  // NINEFOLD BURN's legacy .html, retired with the game. Its three vanity
+  // short links (/ninefold, /burn, /nine-worlds) are NOT here: they now point
+  // at SPACEBOARDING, which replaced it.
+  "/ninefold-burn.html",
 ];
 const results = [];
 const failures = [];

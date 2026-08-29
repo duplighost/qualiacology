@@ -1,10 +1,27 @@
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+// There is no throttle key. The board always runs; every one of these earns
+// speed rather than requesting it. See docs/PLAN.md "Controls".
 const STEER_LEFT = new Set(['KeyA', 'ArrowLeft']);
 const STEER_RIGHT = new Set(['KeyD', 'ArrowRight']);
-const SURGE_KEYS = new Set(['KeyW', 'ArrowUp']);
-const SLIP_KEYS = new Set(['Space', 'ShiftLeft', 'ShiftRight']);
-const GAME_KEYS = new Set([...STEER_LEFT, ...STEER_RIGHT, ...SURGE_KEYS, ...SLIP_KEYS]);
+const PITCH_UP = new Set(['KeyW', 'ArrowUp']);
+const PITCH_DOWN = new Set(['KeyS', 'ArrowDown']);
+const HOP_KEYS = new Set(['Space']);
+// The board flip. Alex: "there should be tricks where your flip your board".
+//
+// Rotation about the board's LONG axis, which is the third and last axis a
+// board has -- yaw is the spin on A/D, pitch is the flip on W/S, and this is
+// the one a skater calls a kickflip. Q and E because they sit under the same
+// two fingers already on W and A, so a spin and a flip can be thrown together
+// without moving a hand.
+const ROLL_LEFT = new Set(['KeyQ']);
+const ROLL_RIGHT = new Set(['KeyE']);
+const GRAB_KEYS = new Set(['ShiftLeft', 'ShiftRight']);
+const RESPAWN_KEYS = new Set(['KeyR']);
+const GAME_KEYS = new Set([
+  ...STEER_LEFT, ...STEER_RIGHT, ...PITCH_UP, ...PITCH_DOWN,
+  ...ROLL_LEFT, ...ROLL_RIGHT, ...HOP_KEYS, ...GRAB_KEYS, ...RESPAWN_KEYS,
+]);
 
 export class InputManager {
   constructor({ canvas, root = document, forceTouch = false, onStart = () => {}, onMute = () => {}, onPause = () => {} }) {
@@ -15,10 +32,10 @@ export class InputManager {
     this.onMute = onMute;
     this.onPause = onPause;
     this.keys = new Set();
-    this.mouseSurge = false;
-    this.mouseSlip = false;
-    this.touchSurge = new Set();
-    this.touchSlip = new Set();
+    this.mouseHop = false;
+    this.mouseGrab = false;
+    this.touchHop = new Set();
+    this.touchGrab = new Set();
     this.touchSteer = new Map();
     this.pauseQueued = false;
     this.gamepadActive = false;
@@ -52,19 +69,19 @@ export class InputManager {
 
     this.canvas.addEventListener('pointerdown', (event) => {
       if (event.pointerType !== 'mouse') return;
-      if (event.button === 0) this.mouseSurge = true;
-      if (event.button === 2) this.mouseSlip = true;
+      if (event.button === 0) this.mouseHop = true;
+      if (event.button === 2) this.mouseGrab = true;
       this.onStart();
     }, { signal });
     window.addEventListener('pointerup', (event) => {
       if (event.pointerType !== 'mouse') return;
-      if (event.button === 0) this.mouseSurge = false;
-      if (event.button === 2) this.mouseSlip = false;
+      if (event.button === 0) this.mouseHop = false;
+      if (event.button === 2) this.mouseGrab = false;
     }, { signal });
     this.canvas.addEventListener('contextmenu', (event) => event.preventDefault(), { signal });
 
-    this.bindButton(this.root.querySelector('[data-control="surge"]'), this.touchSurge);
-    this.bindButton(this.root.querySelector('[data-control="slip"]'), this.touchSlip);
+    this.bindButton(this.root.querySelector('[data-control="hop"]'), this.touchHop);
+    this.bindButton(this.root.querySelector('[data-control="grab"]'), this.touchGrab);
     this.bindSteering(this.root.querySelector('[data-control="steer"]'));
   }
 
@@ -123,29 +140,39 @@ export class InputManager {
     const pad = [...pads].find(Boolean);
     if (!pad) {
       this.gamepadActive = false;
-      return { steer: 0, surge: false, slip: false };
+      return { steer: 0, pitch: 0, hop: false, grab: false };
     }
-    const raw = Number(pad.axes?.[0]) || 0;
-    const steer = Math.abs(raw) < 0.12 ? 0 : Math.sign(raw) * ((Math.abs(raw) - 0.12) / 0.88);
-    const surge = Boolean(pad.buttons?.[0]?.pressed || pad.buttons?.[7]?.value > 0.35);
-    const slip = Boolean(pad.buttons?.[2]?.pressed || pad.buttons?.[6]?.value > 0.35);
-    this.gamepadActive = Math.abs(steer) > 0.05 || surge || slip;
+    const deadzone = (raw) => (Math.abs(raw) < 0.12 ? 0 : Math.sign(raw) * ((Math.abs(raw) - 0.12) / 0.88));
+    const steer = deadzone(Number(pad.axes?.[0]) || 0);
+    // Inverted so pushing the stick forward pitches the nose up, matching W.
+    const pitch = -deadzone(Number(pad.axes?.[1]) || 0);
+    const hop = Boolean(pad.buttons?.[0]?.pressed);
+    const grab = Boolean(pad.buttons?.[2]?.pressed || pad.buttons?.[6]?.value > 0.35);
+    // The shoulders throw the board flip -- left shoulder rolls left, right
+    // rolls right, which is the mapping every board game uses because it is the
+    // one that needs no explaining.
+    const roll = (pad.buttons?.[5]?.pressed ? 1 : 0) - (pad.buttons?.[4]?.pressed ? 1 : 0);
+    this.gamepadActive = Math.abs(steer) > 0.05 || Math.abs(pitch) > 0.05 || roll !== 0 || hop || grab;
     if (this.gamepadActive) this.onStart();
-    return { steer, surge, slip };
+    return { steer, pitch, roll, hop, grab };
   }
 
   read() {
     const keyboardSteer = (this.hasAny(STEER_RIGHT) ? 1 : 0) - (this.hasAny(STEER_LEFT) ? 1 : 0);
+    const keyboardPitch = (this.hasAny(PITCH_UP) ? 1 : 0) - (this.hasAny(PITCH_DOWN) ? 1 : 0);
+    const keyboardRoll = (this.hasAny(ROLL_RIGHT) ? 1 : 0) - (this.hasAny(ROLL_LEFT) ? 1 : 0);
     const touchSteer = this.touchSteer.size
       ? [...this.touchSteer.values()].reduce((sum, value) => sum + value, 0) / this.touchSteer.size
       : 0;
     const pad = this.readGamepad();
-    const steerCandidates = [keyboardSteer, touchSteer, pad.steer];
-    const steer = steerCandidates.sort((a, b) => Math.abs(b) - Math.abs(a))[0] || 0;
+    const strongest = (...values) => values.sort((a, b) => Math.abs(b) - Math.abs(a))[0] || 0;
     return {
-      steer: clamp(steer, -1, 1),
-      surge: this.hasAny(SURGE_KEYS) || this.mouseSurge || this.touchSurge.size > 0 || pad.surge,
-      slip: this.hasAny(SLIP_KEYS) || this.mouseSlip || this.touchSlip.size > 0 || pad.slip,
+      steer: clamp(strongest(keyboardSteer, touchSteer, pad.steer), -1, 1),
+      pitch: clamp(strongest(keyboardPitch, pad.pitch), -1, 1),
+      roll: clamp(strongest(keyboardRoll, pad.roll ?? 0), -1, 1),
+      hop: this.hasAny(HOP_KEYS) || this.mouseHop || this.touchHop.size > 0 || pad.hop,
+      grab: this.hasAny(GRAB_KEYS) || this.mouseGrab || this.touchGrab.size > 0 || pad.grab,
+      respawn: this.hasAny(RESPAWN_KEYS),
     };
   }
 
@@ -162,10 +189,10 @@ export class InputManager {
 
   clear() {
     this.keys.clear();
-    this.mouseSurge = false;
-    this.mouseSlip = false;
-    this.touchSurge.clear();
-    this.touchSlip.clear();
+    this.mouseHop = false;
+    this.mouseGrab = false;
+    this.touchHop.clear();
+    this.touchGrab.clear();
     this.touchSteer.clear();
     for (const element of this.root.querySelectorAll('.is-held')) element.classList.remove('is-held');
     // clear() is also the emergency recovery path for blur/visibility loss.

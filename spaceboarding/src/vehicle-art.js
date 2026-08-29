@@ -474,7 +474,7 @@ function createWheel(materials, accent, side, z, front) {
   return assembly;
 }
 
-function createMaterials(accentHex, secondaryHex, player) {
+function createMaterials(accentHex, secondaryHex, player, racer = RACERS.player) {
   const accent = new THREE.Color(accentHex);
   const secondary = new THREE.Color(secondaryHex);
   const paintColor = player ? new THREE.Color(0x18232d) : secondary.clone().multiplyScalar(0.2);
@@ -602,18 +602,808 @@ function createMaterials(accentHex, secondaryHex, player) {
     depthWrite: false,
     toneMapped: false,
   });
+  // The rider's suit.
+  //
+  // Every other material on this vehicle was authored for a dark chassis, and
+  // a figure built out of them vanished: on Thunderglass the rider read as a
+  // floating head over a dark wedge. A person has to hold together as ONE
+  // shape on every world, so the suit is a light, self-lifting material with
+  // the world's accent in its emissive -- bright against a dark road, and
+  // still separated from a bright one by the accent rim.
+  // --- the rider's materials ---------------------------------------------
+  //
+  // Alex sent reference sheets -- one man and one woman, recoloured five ways
+  // each -- and they are all built the same way: a single saturated METALLIC
+  // hue over the whole body, crisp dark panel lines cut into it, and bright
+  // EMISSIVE piping running the limbs and the spine. A rounded full-face
+  // helmet with a dark visor. No bolt-on armour anywhere.
+  //
+  // That is a different solution to the same problem the measurement found
+  // earlier, and a better one. The worry was that a single-value body
+  // disappears against half the game: the five roads span 555:1 in luminance
+  // and four of them are nearly black. Bright ends on a dark body fixed it by
+  // splitting the AREA. The reference sheets fix it by making the second tier
+  // EMISSIVE instead -- piping is unlit, so no world can dim it, and the body
+  // underneath is then free to be one clean metal. Same principle, and it
+  // reads as a suit somebody wears rather than as a figure in pads.
+  //
+  // The player takes the silver-blue of the last male sheet. It is the only
+  // one in the set that is not a saturated hue, which matters: the worlds own
+  // orange, cyan and green, and the three rivals own crimson, yellow and
+  // violet. Silver is the one thing on screen nothing else is.
+
+  // The body. Glossy metal, smooth-shaded: the panel lines and the piping
+  // carry the internal edges now, so the facets are not needed to provide
+  // them and the reference look is smooth.
+  const riderSuit = new THREE.MeshStandardMaterial({
+    color: racer.suit,
+    metalness: 0.62,
+    roughness: 0.26,
+    envMapIntensity: 2.0,
+  });
+  // A half-step brighter, for the helmet crown, the shoulders and the boots --
+  // the parts the eye tracks. Same metal, just caught more light.
+  const riderGear = new THREE.MeshStandardMaterial({
+    color: racer.gear,
+    metalness: 0.66,
+    roughness: 0.2,
+    envMapIntensity: 2.2,
+  });
+  // The panel lines, and everything that should read as a cut rather than as
+  // a part: visor surround, belt, gauntlet, boot sole, knee and elbow.
+  const riderShell = new THREE.MeshStandardMaterial({
+    color: racer.shell,
+    metalness: 0.55,
+    roughness: 0.42,
+    envMapIntensity: 1.2,
+  });
+  // The piping. Unlit, so its value is the one thing on the figure that no
+  // world can touch -- which is what lets the body be a single metal.
+  //
+  // Deliberately not the vehicle accent 0x62f6ff: that is the same cyan as
+  // Thunderglass and Ion Suture, their own lane lines and gates, so the
+  // player would be camouflaged on forty per cent of the game. And
+  // deliberately pale rather than saturated, because trick tier three is
+  // 0xff4bd0 and the legibility gate counts tier pixels by normalised hue --
+  // a saturated rider would sit inside a tier readout and eat it.
+  const riderTrim = new THREE.MeshBasicMaterial({
+    color: racer.trim,
+    toneMapped: true,
+  });
+  // The visor. Dark and reflective, with just enough of the piping colour in
+  // it to read as lit from inside.
+  const riderVisor = new THREE.MeshPhysicalMaterial({
+    color: 0x05090e,
+    emissive: racer.visor,
+    emissiveIntensity: 1,
+    metalness: 0.2,
+    roughness: 0.06,
+    clearcoat: 1,
+    clearcoatRoughness: 0.04,
+    envMapIntensity: 2.4,
+  });
+  const suit = new THREE.MeshPhysicalMaterial({
+    color: player ? 0xd6dee6 : secondary.clone().lerp(new THREE.Color(0xffffff), 0.55),
+    emissive: accent.clone().multiplyScalar(player ? 0.10 : 0.06),
+    metalness: 0.25,
+    roughness: 0.45,
+    clearcoat: 0.4,
+    envMapIntensity: 1.2,
+  });
   return {
     accent, secondary, paint, brushed, brushedDark, shoulder, carbon, glass, tire, brake,
-    engineMetal, heatMetal, engineThroat, contact, skid, glow, hot, wingSkin,
+    engineMetal, heatMetal, engineThroat, contact, skid, glow, hot, wingSkin, suit,
+    riderSuit, riderShell, riderGear, riderTrim, riderVisor,
   };
 }
 
+/**
+ * The rider. A person on a rocket board, built to be looked at for an hour.
+ *
+ * Alex, after the second play: "the character are just like white pill shaped
+ * parts. its important to get the thing right the the player will be looking at
+ * for so much of the game."
+ *
+ * The old rig failed for two reasons that are worth writing down, because they
+ * are the two reasons any primitive-built figure fails.
+ *
+ * ONE VALUE. Every part -- torso, arms, legs, head -- was the same material at
+ * the same near-white luminance. A human form in a single uniform material is
+ * the definition of a mannequin; you get that read whatever shapes you use, and
+ * no amount of added geometry fixes it. So the figure is built in three tiers
+ * now, and which parts go in which tier is the whole design:
+ *
+ *   LIGHT   helmet, shoulder yoke, gloves, boots -- the extremities, which are
+ *           exactly the parts whose silhouette the eye tracks.
+ *   DARK    suit, limbs, torso core -- the mass between them.
+ *   ACCENT  visor, spine line, pack chevron. A few per cent, and reserved.
+ *
+ * Bright ends on a dark body reads on ANY background, which matters because
+ * this rider crosses Scoria's near-black road and Verdant Maw's mid green in
+ * the same run. A single-tier character is guaranteed to vanish against half
+ * the game.
+ *
+ * CAPSULES. A capsule is a pill because its radius never changes, both ends are
+ * round, and its cross-section is circular. All three are fixed here: limbs are
+ * tapered cylinders, they terminate in flat-cut blocks (gloves, boots) rather
+ * than dissolving into a dome, and forearms and shins are flattened on one
+ * axis. Every limb also BREAKS at its joint -- a pad, a cuff, a diameter step --
+ * because an unbroken tube cannot express an elbow, and a pose that cannot
+ * express an elbow cannot express effort.
+ *
+ * And the thing that decides the rest: at this camera you are looking at the
+ * BACK, slightly from above, essentially always. So the back is designed first.
+ * The pack, the shoulder yoke, the spine line and the trailing fin are the
+ * shapes doing the work; a beautiful chest would contribute nothing.
+ *
+ * Proportions are the arcade-athletic band rather than anatomical: five heads
+ * tall, shoulders about two and a half head-widths, hips three quarters of the
+ * shoulders, legs half the height, and deliberately oversized helmet, gloves
+ * and boots. Anatomically correct proportions plus no facial detail is, again,
+ * precisely a shop dummy.
+ */
+// How much bigger the rig is drawn than it is modelled.
+//
+// Measured rather than guessed: the chase camera sits 12.9 units back at a 61
+// degree fov, which puts 15.2 units of world across the frame height. A rider
+// needs about 3.8 of those to read as a person rather than a speck, and this
+// is what gets a 1.77-unit rig there. The framing solver's screenTarget and
+// minimum distance are NOT the lever -- the camera is pinned at its MAXIMUM
+// distance, so neither is in play.
+const BOARD_RIG_SCALE = 1.9;
+
+// In rider space: -z is the direction of travel, +z is toward the camera. The
+// pack, the fin and the spine line all live at +z for that reason -- they are
+// what is actually on screen.
+const RIDER_HEAD_Y = 1.30;
+
+/**
+ * One mesh out of several parts, placed by transform.
+ *
+ * The rider is built almost entirely out of these, and the reason is draw
+ * calls rather than tidiness. On a planet the board rig IS the whole vehicle,
+ * every mesh costs roughly four draws once shadows and the three rivals are
+ * counted -- rivals share this rig exactly -- and the perf gate in main.js
+ * fails above 240. A first pass at this character was 45 meshes and measured
+ * 284 draws on Scoria. Merging every static part into the joint that carries
+ * it brings the mesh count to about 30 with no visible difference at all,
+ * because none of those parts were ever going to move relative to each other.
+ *
+ * The rule the rig follows: ONE MESH PER ANIMATED JOINT PER MATERIAL. If two
+ * parts share a parent and a material and never move apart, they are one mesh.
+ *
+ * mergeGeometryParts DISPOSES what it is given, so nothing handed to this may
+ * be used anywhere else.
+ */
+function partsMesh(parent, material, parts, { castShadow = true, name = '' } = {}) {
+  const matrix = new THREE.Matrix4();
+  const quaternion = new THREE.Quaternion();
+  const euler = new THREE.Euler();
+  const position = new THREE.Vector3();
+  const scale = new THREE.Vector3();
+  const merged = mergeGeometryParts(parts.map((part) => {
+    position.set(...(part.position ?? [0, 0, 0]));
+    euler.set(...(part.rotation ?? [0, 0, 0]));
+    quaternion.setFromEuler(euler);
+    scale.set(...(part.scale ?? [1, 1, 1]));
+    return { geometry: part.geometry, matrix: matrix.clone().compose(position, quaternion, scale) };
+  }));
+  return addMesh(parent, merged, material, { castShadow, name });
+}
+
+/** A tapered, optionally flattened limb segment. Never a capsule. */
+function limbSegment(parent, material, {
+  top, bottom, length, name, flatten = 1, sides = 12,
+}) {
+  const geometry = new THREE.CylinderGeometry(top, bottom, length, sides, 1);
+  const mesh = addMesh(parent, geometry, material, { name });
+  mesh.scale.z = flatten;
+  return mesh;
+}
+
+/**
+ * A soft round falloff for the trick underglow.
+ *
+ * Alex: "When i do tricks in this it shows different color squares under the
+ * board im riding, which probably shouldn't happen."
+ *
+ * They were literally squares. The underglow was a bare PlaneGeometry with no
+ * alpha map and normal blending, so it drew as a hard-cornered, uniformly
+ * opaque coloured quad -- and because a trick tier is held while AIRBORNE, at
+ * nine to twelve units of measured lift, what the player saw was a solid
+ * rectangle hanging in space under the board rather than a glow on anything.
+ *
+ * Two separate faults made it a square and both had to go: no falloff, so it
+ * had four corners; and normal blending with tone mapping, so it PAINTED over
+ * what was behind it instead of adding light to it. A glow adds.
+ *
+ * Built once at module scope. createBoardRig runs four times -- the player and
+ * three rivals -- and this is a canvas upload every time it is called.
+ */
+let underglowTexture = null;
+function makeUnderglowTexture(size = 64) {
+  if (underglowTexture) return underglowTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  const gradient = context.createRadialGradient(size * 0.5, size * 0.5, 0, size * 0.5, size * 0.5, size * 0.5);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.30, 'rgba(255,255,255,.70)');
+  gradient.addColorStop(0.62, 'rgba(255,255,255,.22)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, size, size);
+  underglowTexture = new THREE.CanvasTexture(canvas);
+  underglowTexture.colorSpace = THREE.NoColorSpace;
+  underglowTexture.needsUpdate = true;
+  return underglowTexture;
+}
+
+/**
+ * The two bodies.
+ *
+ * Alex sent reference sheets of one male and one female figure, each
+ * recoloured five ways, and asked for both: "you need to use those characters
+ * i gave you. one male and one female. and then you can make them different
+ * colors basically."
+ *
+ * WHAT ACTUALLY DIFFERS at this size is a short list, and most of the obvious
+ * answers are not on it. At 12.9 units back the rider is about 150 pixels
+ * tall, seen from behind and slightly above, in motion. Faces, hair, skin,
+ * surface form and muscle definition are all either absent or sub-pixel. So
+ * is the front hemisphere, which is never seen.
+ *
+ * HEIGHT IS DEAD TOO, and getting that wrong would have been the easy
+ * mistake: a shorter figure at a fixed chase distance does not read as female,
+ * it reads as further away or as a child, and it breaks the framing that
+ * BOARD_RIG_SCALE was solved against. Both bodies are exactly the same height,
+ * with the same joint positions, so one animation drives both.
+ *
+ * What survives is the OUTLINE, and specifically its two widest horizontals:
+ * the shoulder line and the hip line. M is a monotonic wedge -- widest at the
+ * shoulders, narrowing all the way down, no concavity anywhere. F reads
+ * pelvis-wide, pinches at a higher waist, and flares to a narrower chest. The
+ * torso-only shoulder-to-pelvis ratio is 1.87 against 1.35, and the waist
+ * notch is the single most valuable number in the table.
+ *
+ * Every value here already existed in this function. No new meshes, no new
+ * materials, no changed part counts -- which matters, because rivals share
+ * this rig and draw calls are the binding constraint.
+ */
+/**
+ * Who the four racers are.
+ *
+ * Alex: "one male and one female. and then you can make them different colors
+ * basically."
+ *
+ * The suit colours are EXPLICIT here rather than derived from each racer's
+ * accent, and that is a fix rather than a shortcut. The rivals could not have
+ * a body colour at all before: the suit was built as
+ * secondary.lerp(white, 0.42), three.js r161 runs Color.lerp in linear space
+ * with colour management on, and that expression floors every channel at 0.42
+ * linear -- 0xAE in sRGB -- whatever the input. VANTA's deep crimson came out
+ * 0xB2AEAE. All three rivals were wearing the player's silver with a four-in-
+ * 255 red bias, and a saturated metallic body was unreachable by construction.
+ * The same shape of bug as every other one in this project: a derivation
+ * authored for one case, with everything else falling through it.
+ *
+ * The vehicle accents are deliberately NOT touched -- they drive the HUD, the
+ * standings, the trails, the glow and the flame, so repainting them has a far
+ * wider blast radius than the suit.
+ *
+ * The hue space is genuinely crowded. The worlds own orange (15-16 deg), green
+ * (110) and cyan (188-189); the trick tiers own 205, 32 and 317. That leaves
+ * 240-360 and 40-60, which is why two of the reference sheet colours cannot be
+ * used at all: green walks straight into Verdant Maw, and blue into two of the
+ * five worlds. So: silver, red, brass, violet -- one achromatic and three hues
+ * 90, 147 and 103 degrees apart, which also separate by value.
+ *
+ * Both bodies are on screen at once. Two of the four are female, so whichever
+ * way the pack is running the player is looking at both silhouettes.
+ */
+export const RACERS = Object.freeze({
+  player: { suit: 0xb9c6d4, gear: 0xd6e2ee, shell: 0x11161d, trim: 0xbdf3ff, visor: 0x0a2a38, body: 'M' },
+  // VANTA, the knife.
+  0: { suit: 0xe0596a, gear: 0xf2909c, shell: 0x1c0a0e, trim: 0xffd7dd, visor: 0x2e0a14, body: 'F' },
+  // SAINT-0, the halo.
+  1: { suit: 0xd9b45c, gear: 0xf0d590, shell: 0x1a1206, trim: 0xfff2c8, visor: 0x2a1f06, body: 'M' },
+  // MORROW, the ghost.
+  2: { suit: 0x9b8ee6, gear: 0xc0b6f4, shell: 0x0d0a1e, trim: 0xe2dcff, visor: 0x150e33, body: 'F' },
+});
+
+export const BODY_M = Object.freeze({
+  torso: [
+    { z: -0.05, width: 0.150, height: 0.104 },
+    { z: 0.11, width: 0.158, height: 0.104 },
+    { z: 0.26, width: 0.208, height: 0.120 },
+    { z: 0.41, width: 0.264, height: 0.142 },
+    { z: 0.53, width: 0.280, height: 0.146 },
+    { z: 0.63, width: 0.228, height: 0.120 },
+  ],
+  shoulderX: 0.242,
+  yokeSpan: 0.248,
+  armX: 0.276,
+  upperArm: [0.060, 0.048],
+  foreArm: [0.048, 0.038],
+  thigh: [0.086, 0.064],
+  shin: [0.058, 0.046],
+  hipX: 0.14,
+  belt: [0.33, 0.054, 0.225],
+  hair: null,
+});
+
+export const BODY_F = Object.freeze({
+  torso: [
+    { z: -0.05, width: 0.176, height: 0.112 },
+    { z: 0.15, width: 0.146, height: 0.098 },
+    { z: 0.29, width: 0.194, height: 0.118 },
+    { z: 0.42, width: 0.226, height: 0.136 },
+    { z: 0.53, width: 0.238, height: 0.138 },
+    { z: 0.63, width: 0.204, height: 0.116 },
+  ],
+  shoulderX: 0.212,
+  yokeSpan: 0.218,
+  armX: 0.246,
+  upperArm: [0.054, 0.044],
+  foreArm: [0.043, 0.035],
+  thigh: [0.092, 0.066],
+  shin: [0.056, 0.045],
+  hipX: 0.152,
+  belt: [0.352, 0.050, 0.232],
+  // Alex: "you need to use those characters i gave you." Every female sheet
+  // has a huge flowing hair mass -- a quarter of the whole silhouette -- and
+  // the earlier call that "hair is dead at this size" was made about a fringe,
+  // not about this. A mass this large is the single strongest read the figure
+  // has, and it is the one thing that tells the two bodies apart from behind,
+  // which is the only angle this camera ever gives you.
+  //
+  // Three lofted shells, merged into ONE mesh: the draw budget is the binding
+  // constraint on this rig (240, and each mesh costs about four), so hair that
+  // cost three draws would have to come out of somewhere else.
+  hair: [
+    { z: -0.02, width: 0.150, height: 0.120, y: 0 },
+    { z: 0.18, width: 0.196, height: 0.168, y: 0.044 },
+    { z: 0.40, width: 0.176, height: 0.152, y: 0.118 },
+    { z: 0.60, width: 0.124, height: 0.108, y: 0.206 },
+    { z: 0.74, width: 0.064, height: 0.056, y: 0.286 },
+  ],
+});
+
+// The height of the deck's own centreline inside the rig. The board spins
+// about THIS, not about the rig origin -- a board pivoting around the rider's
+// waist is a windmill, not a kickflip.
+const BOARD_AXIS_Y = -0.17;
+
+function createBoardRig(materials, player, body = BODY_M) {
+  const rig = new THREE.Group();
+  rig.name = 'board-rig';
+
+  // Everything the RIDER does not stand on hangs off here, and this group is
+  // what a kickflip turns. The rider is a sibling, so they stay upright with
+  // their knees tucked while the deck comes round under their feet -- which is
+  // what the trick is. Rotating the shared parent instead (which is what
+  // `state.roll` did) put the whole figure on its side in mid-air and read as
+  // a wipeout.
+  const boardSpin = new THREE.Group();
+  boardSpin.name = 'board-spin';
+  boardSpin.position.y = BOARD_AXIS_Y;
+  rig.add(boardSpin);
+
+  // --- the board ---------------------------------------------------------
+  // Short, thin, upturned at both ends. It is furniture for the rider, not the
+  // vehicle: at this size it should read as something under someone's feet.
+  // Chunky, not a plank. Alex's sheets show a hoverboard with real depth and
+  // thrusters slung under it; what shipped was a thin dark board that read as
+  // a shadow with the rider standing on it. Roughly doubling the section is
+  // most of the difference, and it is also what makes the board worth grabbing
+  // -- a deck the hand can actually find has to have a side to it.
+  const deck = addMesh(boardSpin, makeLoftGeometry([
+    { z: -1.32, width: 0.13, height: 0.052, y: 0.088 },
+    { z: -1.06, width: 0.28, height: 0.082, y: 0.028 },
+    { z: -0.42, width: 0.33, height: 0.098, y: 0 },
+    { z: 0.42, width: 0.33, height: 0.098, y: 0 },
+    { z: 1.06, width: 0.28, height: 0.082, y: 0.028 },
+    { z: 1.32, width: 0.13, height: 0.052, y: 0.088 },
+  ], 22, true), materials.brushedDark, { name: 'board-deck' });
+  deck.position.y = 0;
+
+  // Two lit strips down the deck edges, plus the two glowing rings slung
+  // UNDER it that every one of Alex's board sheets has. All four are one mesh
+  // on purpose: the two strips used to be two meshes, so folding the rings in
+  // here adds the detail the sheets ask for and still costs one draw fewer
+  // than before. The draw budget is what decides what this rig can have.
+  const railParts = [
+    { geometry: new THREE.BoxGeometry(0.05, 0.032, 2.45), position: [-0.158, -0.140 - BOARD_AXIS_Y, 0] },
+    { geometry: new THREE.BoxGeometry(0.05, 0.032, 2.45), position: [0.158, -0.140 - BOARD_AXIS_Y, 0] },
+    { geometry: new THREE.TorusGeometry(0.115, 0.022, 6, 16), position: [0, -0.196 - BOARD_AXIS_Y, -0.64], rotation: [Math.PI / 2, 0, 0] },
+    { geometry: new THREE.TorusGeometry(0.115, 0.022, 6, 16), position: [0, -0.196 - BOARD_AXIS_Y, 0.68], rotation: [Math.PI / 2, 0, 0] },
+  ];
+  const rail = [partsMesh(boardSpin, materials.glow, railParts, {
+    castShadow: false, name: 'board-rail',
+  })];
+
+  // Thrusters where the trucks would be, tips swept back.
+  const pods = [partsMesh(
+    boardSpin,
+    materials.engineMetal,
+    [-1, 1].flatMap((side) => [-0.62, 0.66].map((z) => ({
+      geometry: new THREE.ConeGeometry(0.062, 0.26, 8),
+      position: [side * 0.12, -0.25 - BOARD_AXIS_Y, z],
+      rotation: [Math.PI / 2 - 0.22, 0, 0],
+    }))),
+    { name: 'board-thruster' },
+  )];
+
+  // Underglow: the trick flame, written on the thing the rider stands on.
+  const flameMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    map: makeUnderglowTexture(),
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    // Additive, so it reads as light thrown onto whatever is under the board
+    // rather than as a decal stuck over it. That is the difference between a
+    // glow and a sticker, and it is most of why the old one looked like a
+    // rectangle even before the missing falloff is counted.
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  const flame = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 3.4), flameMaterial);
+  flame.rotation.x = -Math.PI / 2;
+  // Raised from -0.40. At BOARD_RIG_SCALE that left 0.10 units of clearance
+  // over the road, so any bank or roll cut the plane through the surface --
+  // which is what turned the last third of a second after a landing into a
+  // clipped rectangle sliding through the ground.
+  flame.position.y = -0.30;
+  flame.renderOrder = 3;
+  rig.add(flame);
+
+  const exhausts = [-1, 1].map((side) => {
+    const cone = addMesh(boardSpin, new THREE.ConeGeometry(0.085, 0.5, 10), materials.hot, {
+      castShadow: false, name: 'board-exhaust',
+    });
+    cone.rotation.x = -Math.PI / 2;
+    cone.position.set(side * 0.11, -0.15 - BOARD_AXIS_Y, 1.32);
+    return cone;
+  });
+
+  // --- the rider ---------------------------------------------------------
+  const rider = new THREE.Group();
+  rig.add(rider);
+  // A SIDEWAYS stance -- you do not stand on a board facing where you are
+  // going. It is applied to the BODY, not to the whole rider: rotating the
+  // rider group swung the feet off the board with it, and the result was a
+  // torso floating beside a deck it was not standing on. The feet stay planted
+  // along the board's length and the shoulders turn above them.
+  const STANCE = -1.15;
+
+  // --- legs --------------------------------------------------------------
+  // Shin slightly longer than thigh and noticeably thinner. Equal-length,
+  // equal-thickness segments read as furniture; this ratio reads as sprung.
+  //
+  // Three meshes per leg, one per value tier: the suit, the hard breaks, and
+  // the boot. The knee pad and the binding never move relative to the leg, so
+  // they are part of the shell mesh rather than meshes of their own.
+  const legs = [-1, 1].map((side) => {
+    const leg = new THREE.Group();
+    leg.position.set(side * body.hipX, -0.045, side * 0.40);
+    leg.rotation.y = STANCE * 0.55;
+    rider.add(leg);
+
+    const limb = partsMesh(leg, materials.riderSuit, [
+      { geometry: new THREE.CylinderGeometry(body.thigh[0], body.thigh[1], 0.34, 12, 1), position: [0, 0.52, 0] },
+      { geometry: new THREE.CylinderGeometry(body.shin[0], body.shin[1], 0.31, 12, 1), position: [0, 0.165, 0], scale: [1, 1, 0.78] },
+    ], { name: 'rider-leg' });
+
+    // The knee BREAK and the binding. An unbroken tube cannot express a knee
+    // angle, and a pose that cannot express a knee cannot express effort; a
+    // foot with nothing holding it to the deck reads as propped, not planted.
+    const shell = partsMesh(leg, materials.riderShell, [
+      { geometry: new THREE.BoxGeometry(0.118, 0.078, 0.104), position: [0, 0.345, -0.022] },
+      { geometry: new THREE.BoxGeometry(0.104, 0.028, 0.058), position: [0, 0.048, 0.012] },
+      // The boot's sole, folded in: same tier, same group, never moves apart.
+      { geometry: new THREE.BoxGeometry(0.155, 0.030, 0.285), position: [0, -0.030, -0.012] },
+    ], { name: 'rider-leg-shell' });
+
+    // Boot: deliberately oversized, flat-soled, wedged toe forward. This is the
+    // base of the figure's wedge and the thing that plants it on the deck. A
+    // limb that tapers to a rounded stop is the definitive mannequin cue.
+    const boot = addMesh(leg, makeLoftGeometry([
+      { z: -0.17, width: 0.058, height: 0.032, y: 0.032 },
+      { z: -0.09, width: 0.080, height: 0.048, y: 0.012 },
+      { z: 0.06, width: 0.084, height: 0.060, y: 0 },
+      { z: 0.14, width: 0.066, height: 0.053, y: 0.008 },
+    ], 10, true), materials.riderGear, { name: 'rider-boot' });
+    boot.position.y = 0.012;
+
+    // The piping, down the outside of the thigh and the shin.
+    const pipe = partsMesh(leg, materials.riderTrim, [
+      { geometry: new THREE.BoxGeometry(0.016, 0.20, 0.030), position: [side * (body.thigh[0] - 0.004), 0.55, -0.020] },
+      { geometry: new THREE.BoxGeometry(0.014, 0.17, 0.026), position: [side * 0.056, 0.19, -0.026] },
+    ], { castShadow: false, name: 'rider-leg-pipe' });
+
+    return { group: leg, limb, shell, boot, pipe };
+  });
+
+  // Hips carry everything above the knees, so a crouch is one rotation -- and
+  // the stance turn lives here, above the feet.
+  const hips = new THREE.Group();
+  hips.position.y = 0.755;
+  hips.rotation.y = STANCE;
+  rider.add(hips);
+
+  // --- torso -------------------------------------------------------------
+  // Wider than it is deep, narrowest just above the belt, widest at the chest.
+  // A tube of constant width is the second-largest mannequin cue after uniform
+  // value. Shoulder-to-hip taper IS the athleticism.
+  //
+  // After the -PI/2 rotation about x, a ring's `z` is height and its `height`
+  // is front-to-back depth. And -z is the direction of travel: the chest faces
+  // away from the camera, the pack faces toward it.
+  const torso = addMesh(hips, makeLoftGeometry(
+    body.torso.map((ring) => ({ ...ring, y: 0 })),
+    20,
+    true,
+  ), materials.riderSuit, { name: 'rider-torso' });
+  torso.rotation.x = -Math.PI / 2;
+
+  // --- the back, which is what the player actually looks at ---------------
+  // One dark-shell mesh: the belt, the pack, and the pack's lower fairing. The
+  // pack is the biggest shape above the waist and the chase camera sees it for
+  // the whole game, so it is designed first and everything else fits round it.
+  // The belt is a hard horizontal break at the waist -- the eye needs somewhere
+  // to stop between the legs and the chest.
+  const shell = partsMesh(hips, materials.riderShell, [
+    { geometry: new THREE.BoxGeometry(...body.belt), position: [0, 0.075, 0] },
+    {
+      geometry: makeLoftGeometry([
+        { z: -0.02, width: 0.125, height: 0.058, y: 0 },
+        { z: 0.06, width: 0.148, height: 0.076, y: 0 },
+        { z: 0.30, width: 0.152, height: 0.080, y: 0 },
+        { z: 0.38, width: 0.116, height: 0.062, y: 0 },
+      ], 8, true),
+      position: [0, 0.235, 0.150],
+      rotation: [-Math.PI / 2, 0, 0],
+    },
+  ], { name: 'rider-shell' });
+
+  // --- shoulders and gear ------------------------------------------------
+  // One light-tier mesh: the shoulder yoke, both pads and the tank.
+  //
+  // Angular hard-shell caps against the round helmet dome. The collision of a
+  // circle with a wedge is what the eye locks onto; a figure built entirely
+  // from one shape family is uniform and therefore illegible.
+  //
+  // Two deliberate asymmetries live here: the left pad is a sixth larger than
+  // the right, and there is ONE tank rather than a matched pair. Asymmetry is a
+  // spice -- two or three touches read as a person who packed it that way,
+  // while a rig where nothing lines up reads as broken.
+  const shoulderProfile = () => makeLoftGeometry([
+    { z: -0.12, width: 0.064, height: 0.052, y: 0 },
+    { z: 0.02, width: 0.104, height: 0.082, y: 0.005 },
+    { z: 0.15, width: 0.082, height: 0.064, y: -0.012 },
+  ], 8, true);
+  const gear = partsMesh(hips, materials.riderGear, [
+    {
+      geometry: shoulderProfile(),
+      position: [-body.shoulderX, 0.551, 0.008],
+      rotation: [-Math.PI / 2, 0, -0.30],
+      scale: [1.16, 1.16, 1.16],
+    },
+    {
+      geometry: shoulderProfile(),
+      position: [body.shoulderX, 0.551, 0.008],
+      rotation: [-Math.PI / 2, 0, 0.30],
+      scale: [0.92, 0.92, 0.92],
+    },
+    {
+      // The yoke, tying the two pads into one shape so the shoulder line reads
+      // as a single wide plane rather than as two bumps.
+      geometry: makeLoftGeometry([
+        { z: -body.yokeSpan, width: 0.052, height: 0.042, y: 0 },
+        { z: -0.08, width: 0.080, height: 0.056, y: 0.012 },
+        { z: 0.08, width: 0.080, height: 0.056, y: 0.012 },
+        { z: body.yokeSpan, width: 0.052, height: 0.042, y: 0 },
+      ], 8, true),
+      position: [0, 0.581, 0.052],
+      rotation: [0, Math.PI / 2, 0],
+    },
+    {
+      geometry: new THREE.CylinderGeometry(0.042, 0.048, 0.21, 8),
+      position: [-0.092, 0.30, 0.200],
+      rotation: [0.10, 0, 0],
+    },
+  ], { name: 'rider-gear' });
+
+  // --- the reserved accent ------------------------------------------------
+  // One saturated colour, used on the player and almost nowhere else: a spine
+  // line up the back, a chevron on the pack, a plate on the chest. A thin
+  // bright vertical is the cheapest thing there is for saying which way a dark
+  // mass is facing, and at distance it is what says which racer is you.
+  const trim = partsMesh(hips, materials.riderTrim, [
+    { geometry: new THREE.BoxGeometry(0.028, 0.30, 0.020), position: [0, 0.32, 0.120] },
+    { geometry: new THREE.BoxGeometry(0.044, 0.23, 0.022), position: [0.032, 0.34, 0.234] },
+    { geometry: new THREE.BoxGeometry(0.078, 0.22, 0.030), position: [0.026, 0.39, -0.144] },
+  ], { castShadow: false, name: 'rider-trim' });
+  // updateBoardRig drives `chest` by name; it is part of the trim now.
+  const chest = trim;
+
+  // --- head --------------------------------------------------------------
+  // No neck. A pale cylinder between head and shoulders is a strong dummy
+  // signal, so the helmet sits nearly on the yoke.
+  //
+  // The helmet is the single most important shape on the figure: it is the top
+  // fifth, it is what the player consciously tracks, and it must not be a shape
+  // anything else in the scene has. So: a dome longer front-to-back than it is
+  // wide, a brow over the visor, and a crest swept off the back of the crown --
+  // which, at this camera, points straight at the player all game.
+  const skull = new THREE.Group();
+  skull.position.y = 0.555;
+  hips.add(skull);
+
+  const head = addMesh(skull, new THREE.SphereGeometry(0.178, 20, 14), materials.riderSuit, {
+    castShadow: false, name: 'rider-helmet',
+  });
+  head.scale.set(1, 0.94, 1.10);
+
+  // The visor: a band, not a face. At this size eyes and a mouth are five
+  // pixels of noise that break under motion; DIRECTION is what is needed, and
+  // a band gives it without pretending to be features.
+  const visor = addMesh(skull, new THREE.SphereGeometry(0.181, 14, 8, 0, Math.PI, 0.62, 0.72), materials.riderVisor, {
+    castShadow: false, name: 'rider-visor',
+  });
+  visor.scale.set(1, 0.94, 1.10);
+  visor.rotation.y = -Math.PI / 2;
+
+  // Brow and crest: the two shapes that turn a sphere into a head that is
+  // pointing somewhere. A sphere is the only primitive with no orientation, and
+  // that absence of attention is exactly the mannequin read.
+  const skullShell = partsMesh(skull, materials.riderShell, [
+    {
+      geometry: makeLoftGeometry([
+        { z: -0.140, width: 0.034, height: 0.026, y: 0 },
+        { z: 0, width: 0.062, height: 0.036, y: 0.014 },
+        { z: 0.140, width: 0.034, height: 0.026, y: 0 },
+      ], 8, true),
+      position: [0, 0.058, -0.142],
+      rotation: [0, Math.PI / 2, 0],
+    },
+    {
+      geometry: makeLoftGeometry([
+        { z: -0.04, width: 0.024, height: 0.060, y: 0 },
+        { z: 0.11, width: 0.019, height: 0.078, y: -0.012 },
+        { z: 0.26, width: 0.011, height: 0.044, y: -0.064 },
+      ], 6, true),
+      position: [0, 0.090, 0.058],
+      rotation: [-Math.PI / 2, 0, 0],
+    },
+    // Ear pods, in every one of Alex's sheets. Cheap, distinctive, and free:
+    // they never move relative to the helmet, so they are part of this mesh
+    // rather than a mesh of their own.
+    {
+      geometry: new THREE.CylinderGeometry(0.052, 0.046, 0.038, 10),
+      position: [-0.166, -0.010, 0.016],
+      rotation: [0, 0, Math.PI / 2],
+    },
+    {
+      geometry: new THREE.CylinderGeometry(0.052, 0.046, 0.038, 10),
+      position: [0.166, -0.010, 0.016],
+      rotation: [0, 0, Math.PI / 2],
+    },
+  ], { castShadow: false, name: 'rider-skull-shell' });
+
+  // The hair, on its own pivot so it can LAG. Free secondary motion: the fin
+  // already proves the machinery (see finLag), and one element arriving late
+  // is the whole difference between a figure and a rigid object being moved
+  // through space. It hangs off the helmet and swings behind the shoulders,
+  // which at this camera is the part the player actually sees.
+  let hairPivot = null;
+  let hair = null;
+  if (body.hair) {
+    hairPivot = new THREE.Group();
+    hairPivot.position.set(0, 0.040, 0.092);
+    skull.add(hairPivot);
+    hair = addMesh(hairPivot, makeLoftGeometry(body.hair, 10, true), materials.riderShell, {
+      castShadow: false, name: 'rider-hair',
+    });
+    hair.rotation.x = Math.PI / 2;
+  }
+
+  // --- arms --------------------------------------------------------------
+  // Three meshes an arm: the upper, the forearm, and the gauntlet the forearm
+  // ends in. The forearm and everything below it hang off their own group so
+  // the elbow can actually bend -- an arm that is one rigid tube cannot express
+  // an elbow angle, and a pose that cannot express an elbow cannot express
+  // effort.
+  const arms = [-1, 1].map((side) => {
+    const arm = new THREE.Group();
+    arm.position.set(side * body.armX, 0.518, 0.012);
+    hips.add(arm);
+
+    const upper = limbSegment(arm, materials.riderSuit, {
+      top: body.upperArm[0], bottom: body.upperArm[1], length: 0.25, name: 'rider-upper-arm',
+    });
+    upper.position.y = -0.145;
+
+    const forearm = new THREE.Group();
+    forearm.position.y = -0.278;
+    arm.add(forearm);
+
+    const fore = limbSegment(forearm, materials.riderSuit, {
+      top: body.foreArm[0], bottom: body.foreArm[1], length: 0.22, name: 'rider-forearm', flatten: 0.76,
+    });
+    fore.position.y = -0.127;
+
+    // The gauntlet: elbow cap, cuff and glove as one light-tier mesh. The
+    // glove is deliberately oversized -- small hands vanish at distance and
+    // take the arm's readability with them -- and the left gauntlet is the
+    // longer one, which is the figure's third asymmetry.
+    const gauntlet = partsMesh(forearm, materials.riderShell, [
+      { geometry: new THREE.BoxGeometry(0.086, 0.058, 0.082), position: [0, 0.008, 0] },
+      { geometry: new THREE.CylinderGeometry(0.054, 0.047, side < 0 ? 0.115 : 0.062, 8), position: [0, -0.214, 0] },
+      {
+        geometry: makeLoftGeometry([
+          { z: -0.070, width: 0.054, height: 0.046, y: 0 },
+          { z: 0.026, width: 0.074, height: 0.064, y: 0 },
+          { z: 0.084, width: 0.052, height: 0.050, y: -0.005 },
+        ], 8, true),
+        position: [0, -0.267, 0],
+        rotation: [-Math.PI / 2, 0, 0],
+      },
+    ], { name: 'rider-gauntlet' });
+
+    // And down the outside of the upper arm and the forearm.
+    const pipe = partsMesh(arm, materials.riderTrim, [
+      { geometry: new THREE.BoxGeometry(0.014, 0.16, 0.026), position: [side * 0.058, -0.145, -0.014] },
+    ], { castShadow: false, name: 'rider-arm-pipe' });
+    const forePipe = partsMesh(forearm, materials.riderTrim, [
+      { geometry: new THREE.BoxGeometry(0.012, 0.14, 0.022), position: [side * 0.046, -0.127, -0.012] },
+    ], { castShadow: false, name: 'rider-forearm-pipe' });
+
+    return { group: arm, forearm, upper, fore, gauntlet, pipe, forePipe, side };
+  });
+
+  // --- the trailing fin ---------------------------------------------------
+  // The one element allowed to arrive late. A figure where every part reaches
+  // its new orientation on the same frame reads as one rigid object being
+  // translated through space; a single lagging piece breaks that, and it costs
+  // one eased angle.
+  // Hung off the RIDER rather than the hips, and that is the whole point: the
+  // hips carry the sideways stance turn, so anything parented to them points
+  // sixty-six degrees off the direction of travel. A pack riding on the rider's
+  // back should turn with the rider. A thing that streams behind them in the
+  // air should not -- it streams down the board, whichever way the shoulders
+  // happen to be facing.
+  const finPivot = new THREE.Group();
+  finPivot.position.set(0.02, 1.02, 0.14);
+  rider.add(finPivot);
+  const fin = addMesh(finPivot, makeLoftGeometry([
+    { z: 0, width: 0.030, height: 0.052, y: 0 },
+    { z: 0.12, width: 0.024, height: 0.086, y: -0.016 },
+    { z: 0.30, width: 0.017, height: 0.070, y: -0.056 },
+    { z: 0.44, width: 0.008, height: 0.030, y: -0.108 },
+  ], 6, true), materials.riderShell, { castShadow: false, name: 'rider-fin' });
+  fin.rotation.x = 0.30;
+
+  rig.userData = {
+    deck, rail, pods, flame, flameMaterial, exhausts, boardSpin,
+    rider, hips, torso, chest, head, visor, arms, legs, stance: STANCE,
+    shell, gear, trim, skull, skullShell, fin, finPivot,
+    hair, hairPivot, hairLag: 0,
+    player,
+  };
+  return rig;
+}
+
 export function createVehicle(accentHex, secondaryHex, { player = false, personality = 0 } = {}) {
+  const racer = player ? RACERS.player : (RACERS[personality] ?? RACERS.player);
   const root = new THREE.Group();
   root.name = player ? 'player-vehicle' : `rival-${personality}`;
   const pose = new THREE.Group();
   root.add(pose);
-  const materials = createMaterials(accentHex, secondaryHex, player);
+  const materials = createMaterials(accentHex, secondaryHex, player, racer);
 
   const core = new THREE.Group();
   pose.add(core);
@@ -1166,10 +1956,14 @@ export function createVehicle(accentHex, secondaryHex, { player = false, persona
     }
   }
 
+  const boardRig = createBoardRig(materials, player, racer.body === 'F' ? BODY_F : BODY_M);
+  pose.add(boardRig);
+
   root.userData = {
     accent: materials.accent,
     materials,
     pose,
+    boardRig,
     core,
     lowerHull,
     upperHull,
@@ -1214,6 +2008,7 @@ export function createVehicle(accentHex, secondaryHex, { player = false, persona
     releaseKick: 0,
   };
   root.scale.setScalar(player ? 1.13 : 0.98 + personality * 0.035);
+
   return root;
 }
 
@@ -1223,6 +2018,26 @@ export function updateVehicleVisual(vehicle, {
   speed = 0,
   yaw = 0,
   roll = 0,
+  // Rider flip angle. Phase 5's air tricks drive it, and it composes with the
+  // launch fold rather than replacing it.
+  pitch = 0,
+  // The BOARD's rotation about its own long axis, under a rider who stays
+  // upright. This is a kickflip. It is deliberately NOT `roll`: `roll` turns
+  // the pose group the rider is parented under, which inverts the person too.
+  boardFlip = 0,
+  // Which trick flame is lit, 0-3. Written on the board's underglow, and lit
+  // WHILE the trick is in the air so the player can see what they are about to
+  // cash before choosing to keep spinning or square up.
+  trickTier = 0,
+  // Seconds the grab has been held. Drives the rider reaching for the board.
+  grab = 0,
+  trickMeter = 0,
+  crouch = 0,
+  landingSettle = 0,
+  landingQuality = 0,
+  flameColor = null,
+  airborne = false,
+  grinding = false,
   lift = 0,
   hitFlash = 0,
   drift = 0,
@@ -1235,6 +2050,26 @@ export function updateVehicleVisual(vehicle, {
   const data = vehicle.userData;
   const m = smooth(morph);
   const car = 1 - m;
+  updateBoardRig(data, {
+    morph: m,
+    steer,
+    driftSide,
+    driftCharge: drift,
+    boardFlip,
+    trickTier,
+    trickMeter,
+    crouch,
+    landingSettle,
+    landingQuality,
+    flameColor,
+    airborne,
+    grinding,
+    grab,
+    boost,
+    speed,
+    dt,
+    time,
+  });
   const surfaceDrift = drift * car;
   data.morph = m;
   data.releaseKick = Math.max(releaseKick, data.releaseKick - dt * 2.6);
@@ -1247,7 +2082,7 @@ export function updateVehicleVisual(vehicle, {
     driftCharge: drift,
     morph,
   });
-  data.pose.rotation.x = -m * 0.035 + data.releaseKick * 0.055;
+  data.pose.rotation.x = pitch - m * 0.035 + data.releaseKick * 0.055;
   data.pose.position.y = 0.27 + lift - surfaceDrift * 0.018 + Math.sin(time * 12) * 0.012 * m;
   data.pose.position.z = -data.releaseKick * 0.3;
 
@@ -1256,6 +2091,18 @@ export function updateVehicleVisual(vehicle, {
     1 - m * 0.17,
     1 + m * 0.7,
   );
+  // On the ground the vehicle IS the board -- the hull and the car rig are the
+  // glider's body, and they unfold out of the board as the morph rises rather
+  // than sitting inside it. The crossover is the same 0-0.22 window the board
+  // fades across, so there is never a frame containing two vehicles.
+  const hullPresence = smooth(clamp(m / 0.22, 0, 1));
+  data.core.visible = hullPresence > 0.005;
+  data.carRig.visible = hullPresence > 0.005;
+  // The engine rig belongs to the glider: it is sized and placed for a hull
+  // that is not there on the ground, and left visible it read as car turbines
+  // hanging off the back of a skateboard. The board carries its own exhaust.
+  data.engineRig.visible = hullPresence > 0.005;
+  if (data.core.visible) data.core.scale.multiplyScalar(Math.max(0.02, hullPresence));
   data.core.position.z = -m * 0.54;
   // Core elongation already stretches every child longitudinally. Keep the
   // cockpit compact inside that pressure body instead of compounding it into a
@@ -1455,6 +2302,190 @@ export function updateVehicleVisual(vehicle, {
  * the private wheel hierarchy, and guarantees the instanced tyre submission
  * is refreshed from the same reset transforms before the next draw.
  */
+/**
+ * The board's own animation.
+ *
+ * The lean is the point, and so is the crouch. A rider who visibly loads up
+ * before a pop and visibly absorbs a landing tells the player what their own
+ * hands are doing, in the middle of the screen where they are already looking.
+ */
+function updateBoardRig(data, {
+  morph, steer, driftSide, driftCharge, boardFlip, trickTier, trickMeter, crouch,
+  landingSettle, landingQuality, flameColor, airborne, grinding, grab,
+  boost, speed, dt, time,
+}) {
+  const rig = data.boardRig;
+  if (!rig) return;
+  const board = rig.userData;
+  // The board folds away as the glider unfolds; they cross over quickly so
+  // there is never a frame with two vehicles in it.
+  const present = 1 - smooth(clamp(morph / 0.22, 0, 1));
+  rig.visible = present > 0.01;
+  if (!rig.visible) return;
+  // Fold-away times base scale. Setting it to `present` alone silently wiped
+  // the base scale every frame, which is why two rounds of resizing the rig
+  // changed nothing on screen.
+  rig.scale.setScalar(present * BOARD_RIG_SCALE);
+
+  // The GRAB. Alex: "grab tricks where you grab your board as well."
+  //
+  // A grab is not a pose the arm holds -- it is the rider folding up and
+  // pulling the board to meet the hand, which is how it works on a real board
+  // and why it reads as effort rather than as a limb sticking out. So one arm
+  // reaches down and across, the knees come up harder, and the whole body
+  // shortens. The leading arm does the reaching; the other stays out for
+  // balance, which is the asymmetry that makes it look deliberate.
+  const reach = clamp((grab ?? 0) * 5.5, 0, 1) * (airborne ? 1 : 0);
+  const lean = clamp(-steer * 0.46, -0.95, 0.95);
+  // One crouch channel: the pop being loaded, plus a landing being absorbed,
+  // plus a little squat under boost.
+  const absorbing = clamp(landingSettle * 2.4, 0, 1) * (1.15 - landingQuality * 0.5);
+  const squat = clamp(crouch * 0.85 + absorbing * 0.75 + boost * 0.10, 0, 1);
+
+  rig.rotation.z = lean * 0.42;
+  // THE KICKFLIP. One assignment, on a group the rider is not inside: the deck,
+  // its lit strips, its thrusters and its exhausts come round the board's long
+  // axis while the person above them stays on their feet. The underglow is
+  // deliberately left out of this group -- it is light thrown on the road, and
+  // spinning it would strobe the trick-tier readout the player is reading.
+  //
+  // THE POKE rides on the same group. A grab where only the rider moves reads
+  // from the chase camera as an air crouch, because the thing being grabbed
+  // never answers: the hand goes down, the board does nothing, and nothing
+  // connects. So the board answers. The nose kicks out and the deck tilts up
+  // toward the reaching hand, which is the shape every real grab has and the
+  // reason it is legible at 150 pixels.
+  if (board.boardSpin) {
+    board.boardSpin.rotation.z = (boardFlip ?? 0) - reach * 0.24;
+    board.boardSpin.rotation.x = reach * 0.32;
+    // And the board comes UP. A grab is the rider pulling the deck to their
+    // hand, not the hand falling to the deck -- the arm is not long enough for
+    // the second one, which is the geometry the previous attempt lost to. The
+    // knees are already tucking by the same `reach`, so the feet travel with
+    // it and the rider stays standing on the thing they are holding.
+    board.boardSpin.position.y = BOARD_AXIS_Y + reach * 0.20;
+  }
+  board.rider.rotation.z = lean * 0.30;
+  // Hips drop and the torso folds forward as the board is loaded. This is the
+  // tell for how much pop is coming, and it is why holding the button feels
+  // like winding something up.
+  // On a grab the whole body drops toward the deck as well as folding. Tucking
+  // the knees alone left the hand a clear gap above the board -- which reads as
+  // reaching for it and missing, and is worse than not reaching at all.
+  board.hips.position.y = 0.80 - squat * 0.36 - reach * 0.30;
+  board.hips.rotation.x = (airborne ? -0.34 : squat * 0.62) + reach * 0.42;
+  board.hips.rotation.y = board.stance + lean * 0.18;
+  board.torso.rotation.z = -lean * 0.22;
+  board.chest.material = data.materials.glow;
+  // The head, and everything bolted to it, move together. A helmet that stays
+  // put while the shoulders drop is a helmet floating above a person.
+  // The head, and everything bolted to it, move together -- a helmet that
+  // stays put while the shoulders drop is a helmet floating above a person.
+  // They share a group, so that is one assignment.
+  if (board.skull) board.skull.position.y = 0.555 - squat * 0.08;
+
+  board.legs.forEach(({ group, limb }, index) => {
+    const side = index === 0 ? -1 : 1;
+    // Knees bend outward under load and tuck up in the air. The leg is one
+    // merged mesh per tier now, so the compression is a scale on the limb
+    // rather than a per-segment offset -- visually the same at this size, and
+    // three draws a leg instead of five.
+    // Knees come up hard on a grab. The board rises with them, which is the
+    // half of the motion that makes the hand and the deck actually meet.
+    const bend = squat * 0.9 + (airborne ? 0.5 : 0) + reach * 0.75;
+    group.rotation.x = side * 0.10 - bend * 0.18;
+    group.rotation.z = side * (0.05 + bend * 0.22) + lean * 0.12;
+    limb.scale.y = 1 - bend * 0.14;
+    group.position.y = -0.045 + (airborne ? 0.10 : 0);
+  });
+
+  board.arms.forEach(({ group, side, forearm }) => {
+    // Arms out for balance, wider the harder the board is leaning, thrown up
+    // in the air and tucked in on a grind.
+    //
+    // The spread is not vanity: the GAP between the inner arm and the torso is
+    // what makes the figure read as a figure at all. A solid convex mass reads
+    // as a blob at any resolution -- it is the holes that carry it -- so the
+    // arms are never allowed to lie flat against the body.
+    const spread = 0.40 + Math.abs(lean) * 0.62 + (airborne ? 0.62 : 0) - (grinding ? 0.16 : 0);
+    // Asymmetric by a few per cent. A figure caught perfectly symmetric is a
+    // figure nobody is inside.
+    const bias = side < 0 ? 1.09 : 0.94;
+    // side < 0 is the leading arm, and it is the one that reaches.
+    const grabbing = side < 0 ? reach : reach * 0.18;
+    // The other arm goes UP. Both arms drifting toward the board is two hands
+    // doing the same job; one down and one high is a figure counterweighting
+    // itself, and the asymmetry is what sells the grab from behind.
+    const counterweight = side > 0 ? reach * 0.62 : 0;
+    group.rotation.z = (side * spread * bias + lean * 0.3) * (1 - grabbing * 0.72)
+      + grabbing * side * 0.34;
+    group.rotation.x = airborne
+      ? -0.7 - trickMeter * 0.4 + grabbing * 2.05 - counterweight
+      : side * 0.30 - 0.10 + Math.sin(time * 2.4 + side) * 0.05;
+    // The elbow actually bends, and everything below it follows -- which is
+    // the whole reason the forearm hangs off its own group. Without it the arm
+    // is one rigid tube, and a tube cannot express effort.
+    // The elbow OPENS on a grab. It used to close: `+ grabbing * 0.85` folded
+    // the forearm back 1.9 rad while the shoulder swung down 1.35, so the net
+    // hand direction pointed UP and the reach ended at the rider's own chest.
+    // That is why the grab read as an air crouch -- the arm was not reaching
+    // for anything, it was hugging. You cannot grab something by curling up.
+    const flex = 0.62 + squat * 0.55 + (airborne ? 0.45 : 0) + Math.abs(lean) * 0.22
+      - grabbing * 0.62;
+    forearm.rotation.x = -flex;
+  });
+
+  // The fin LAGS. One element arriving late is the whole difference between a
+  // figure and a rigid object being translated through space, and it costs a
+  // single eased angle. It trails the lean and lifts with speed.
+  if (board.finPivot) {
+    const wanted = lean * 0.62 + Math.sin(time * 3.1) * 0.05;
+    board.finLag = (board.finLag ?? 0) + (wanted - (board.finLag ?? 0)) * Math.min(1, dt * 7.5);
+    board.finPivot.rotation.z = board.finLag;
+    board.finPivot.rotation.x = 0.22 - clamp(speed / 900, 0, 1) * 0.30 - boost * 0.14;
+  }
+
+  // The hair lags harder and slower than the fin, because it is heavier and
+  // because a mass this size arriving late is the motion cue doing the work.
+  // It streams up as speed rises and swings across the lean.
+  if (board.hairPivot) {
+    const wanted = lean * 0.95 + Math.sin(time * 2.2) * 0.075;
+    board.hairLag = (board.hairLag ?? 0) + (wanted - (board.hairLag ?? 0)) * Math.min(1, dt * 4.2);
+    board.hairPivot.rotation.z = board.hairLag;
+    board.hairPivot.rotation.x = 0.30 - clamp(speed / 780, 0, 1) * 0.62 - boost * 0.22
+      + (airborne ? 0.18 : 0);
+  }
+
+  // The reserved accent stretches with earned speed, so the one saturated
+  // colour on the figure is also a readout.
+  if (board.trim) board.trim.scale.y = 1 + boost * 0.22;
+
+  // Deliberately not scaled. The four thrusters are one merged mesh now, and
+  // scaling a merged mesh moves its parts apart instead of growing them in
+  // place -- so the boost read lives entirely in the exhausts below, which is
+  // where it was always loudest anyway.
+
+  board.exhausts.forEach((cone) => {
+    // Length tracks BOOST, not speed, so what is behind the board is the speed
+    // the player earned rather than the speed the segment gave them.
+    // Nearly nothing at rest: two idle cones behind the board read as wheels,
+    // and a wheel is the one thing this vehicle must not appear to have.
+    const lit = clamp(boost * 1.6, 0, 1);
+    cone.visible = lit > 0.02;
+    cone.scale.set(0.35 + lit * 0.55, 0.2 + lit * 2.4, 0.35 + lit * 0.55);
+    cone.position.z = 1.32 + lit * 0.42;
+  });
+
+  // The flame. No tier lit means no colour at all, so "nothing yet" reads as
+  // clearly as blue, orange or pink.
+  const wanted = trickTier > 0 && flameColor !== null ? 0.46 + trickTier * 0.15 : 0;
+  const material = board.flameMaterial;
+  material.opacity = material.opacity + (wanted - material.opacity) * Math.min(1, dt * 12);
+  if (flameColor !== null) material.color.setHex(flameColor);
+  board.flame.scale.set(1 + trickMeter * 0.35, 1, 1 + boost * 0.3);
+  for (const strip of board.rail) strip.material = data.materials.glow;
+}
+
 export function resetVehiclePresentation(vehicle) {
   const data = vehicle?.userData;
   if (!data?.wheelAssemblies || !data.tireBatch || !data.tireMatrixScratch) return false;

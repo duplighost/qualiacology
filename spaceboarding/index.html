@@ -10,25 +10,25 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="description" content="NINEFOLD BURN is a browser racing game across nine planets and eight crossings with no stops. The car folds into a ship between worlds. Three controls, about a minute a run.">
-  <title>NINEFOLD BURN | Qualiacology</title>
-  <link rel="canonical" href="https://qualiacology.com/ninefold-burn/">
+  <meta name="description" content="SPACEBOARDING is a browser race across three worlds ridden standing on a rocket skateboard. No throttle: land tricks and grind rails for every scrap of speed, and the board unfolds into a glider between worlds.">
+  <title>SPACEBOARDING | Qualiacology</title>
+  <link rel="canonical" href="https://qualiacology.com/spaceboarding/">
   <meta property="og:site_name" content="Qualiacology">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="NINEFOLD BURN | Qualiacology">
-  <meta property="og:description" content="Nine worlds run end to end without stopping. The car folds into a ship between them.">
-  <meta property="og:url" content="https://qualiacology.com/ninefold-burn/">
-  <meta property="og:image" content="https://qualiacology.com/assets/games/ninefold-burn-card-clean.webp">
+  <meta property="og:title" content="SPACEBOARDING | Qualiacology">
+  <meta property="og:description" content="Worlds run end to end without stopping, ridden standing up. Speed is earned, never given.">
+  <meta property="og:url" content="https://qualiacology.com/spaceboarding/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/spaceboarding-card-clean.webp">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="720">
-  <meta property="og:image:alt" content="A racing craft folded into a ship, thrusters lit, crossing black space between planets with a rival close alongside and pale rock shards ahead">
+  <meta property="og:image:alt" content="A rider standing on a lit board on a red canyon road, white speed streaks tearing past on both sides, a violet rival riding alongside">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="NINEFOLD BURN | Qualiacology">
-  <meta name="twitter:description" content="Nine worlds run end to end without stopping. The car folds into a ship between them.">
-  <meta name="twitter:image" content="https://qualiacology.com/assets/games/ninefold-burn-card-clean.webp">
-  <meta name="twitter:image:alt" content="A racing craft folded into a ship, thrusters lit, crossing black space between planets with a rival close alongside and pale rock shards ahead">
+  <meta name="twitter:title" content="SPACEBOARDING | Qualiacology">
+  <meta name="twitter:description" content="Worlds run end to end without stopping, ridden standing up. Speed is earned, never given.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/spaceboarding-card-clean.webp">
+  <meta name="twitter:image:alt" content="A rider standing on a lit board on a red canyon road, white speed streaks tearing past on both sides, a violet rival riding alongside">
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=1.0.0">
+  <link rel="stylesheet" href="./styles.css?v=0.1.0">
   <style>
     /* Home pill. Sits above the game's own UI, and borrows --accent so it
        shifts colour with whichever world you are on. */
@@ -50,9 +50,9 @@
     body:not([data-race-status="racing"]):not([data-race-status="paused"]) .home-link{opacity:.62;}
   </style>
 </head>
-<body data-build-id="ninefold-burn-1.0.0" data-game-ready="false" data-race-status="booting" data-quality-tier="high">
+<body data-build-id="spaceboarding-0.1.0" data-game-ready="false" data-race-status="booting" data-quality-tier="high">
   <a class="home-link" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology"><span aria-hidden="true">&#8592;</span> <span>Qualiacology</span></a>
-  <canvas id="game" aria-label="NINEFOLD BURN 3D racing game"></canvas>
+  <canvas id="game" aria-label="SPACEBOARDING 3D racing game"></canvas>
 
   <div class="fx" aria-hidden="true">
     <div class="speed-wash"></div>
@@ -77,9 +77,23 @@
     <div id="burn-meter" class="burn-meter" aria-label="Burn charge">
       <i></i><i></i><i></i>
     </div>
-    <div id="target-bracket" class="target-bracket" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <button id="mute" class="corner-button" type="button" aria-label="Mute audio">SOUND</button>
   </header>
+
+  <!-- The trick banner. Alex: "we can throw the name of the trick and the
+       point value onto the screen in a cool way when you do a trick."
+
+       Two lines that do different jobs. The MOVE is what you just did and it
+       replaces itself every trick. The CHAIN underneath is the run so far --
+       it accumulates while the combo is alive and flashes its total when the
+       combo cashes, which is the same moment the boost fires. -->
+  <section id="trick-banner" class="trick-banner" aria-live="off">
+    <div id="trick-move" class="trick-move"></div>
+    <div id="trick-chain" class="trick-chain">
+      <span id="trick-score" class="trick-score"></span>
+      <span id="trick-multiplier" class="trick-multiplier"></span>
+    </div>
+  </section>
 
   <section id="stage-card" class="stage-card" aria-live="polite">
     <span id="stage-index">WORLD I</span>
@@ -89,14 +103,16 @@
 
   <section id="start-screen" class="start-screen">
     <div class="title-lockup">
-      <p class="eyebrow">FOUR RACERS · NINE WORLDS · ONE WORLDLINE</p>
-      <h1>NINEFOLD<br><span>BURN</span></h1>
-      <p class="tagline">NOTHING SLOWS. EVERYTHING BENDS.</p>
-      <button id="start" type="button">IGNITE</button>
+      <h1>SPACE<br><span>BOARDING</span></h1>
+      <p class="tagline">SPEED IS EARNED.</p>
+      <button id="start" type="button">DROP IN</button>
       <div class="control-whisper" aria-label="Controls">
-        <span><b>A D</b> STEER</span>
-        <span><b>W</b> SURGE / FIRE</span>
-        <span><b>SPACE</b> DRIFT / SLIP</span>
+        <span><b>A D</b> STEER · SPIN</span>
+        <span><b>SPACE</b> HOLD TO LOAD · RELEASE TO POP</span>
+        <span><b>W S</b> FLIP</span>
+        <span><b>Q E</b> BOARD FLIP</span>
+        <span><b>SHIFT</b> GRAB</span>
+        <span class="control-note">NO THROTTLE. LAND TRICKS FOR SPEED.</span>
       </div>
       <p class="start-hint">PRESS ANY CONTROL</p>
     </div>
@@ -104,17 +120,17 @@
 
   <section id="pause-screen" class="pause-screen" hidden>
     <div>
-      <p>WORLDLINE HELD</p>
-      <button id="resume" type="button">BURN AGAIN</button>
+      <p>HELD</p>
+      <button id="resume" type="button">GO</button>
     </div>
   </section>
 
   <section id="finish-screen" class="finish-screen" hidden>
     <div class="finish-core">
-      <p id="finish-kicker">THE NINTH SUN IS LIT</p>
+      <p id="finish-kicker">&nbsp;</p>
       <h2 id="finish-place">1ST</h2>
       <p id="finish-time">04:19.284</p>
-      <button id="restart" type="button">RACE THE WORLDLINE AGAIN</button>
+      <button id="restart" type="button">AGAIN</button>
     </div>
   </section>
 
@@ -125,19 +141,19 @@
       <span class="steer-arrow right">›</span>
     </div>
     <div class="touch-actions">
-      <button class="touch-button slip" data-control="slip" type="button"><span>SLIP</span></button>
-      <button class="touch-button surge" data-control="surge" type="button"><span>SURGE</span></button>
+      <button class="touch-button grab" data-control="grab" type="button"><span>GRAB</span></button>
+      <button class="touch-button hop" data-control="hop" type="button"><span>HOP</span></button>
     </div>
   </div>
 
   <div id="fatal" class="fatal" hidden role="alert">
-    <h2>THE WORLDLINE BROKE</h2>
+    <h2>IT BROKE</h2>
     <p id="fatal-message">This browser could not start the 3D race.</p>
   </div>
   <div id="announcer" class="sr-only" aria-live="polite"></div>
   <output id="autotest-result" hidden></output>
 
-  <noscript>NINEFOLD BURN requires JavaScript and WebGL.</noscript>
+  <noscript>SPACEBOARDING requires JavaScript and WebGL.</noscript>
   <script type="importmap">
     {
       "imports": {
@@ -146,6 +162,6 @@
       }
     }
   </script>
-  <script type="module" src="./src/boot.js?v=1.0.0"></script>
+  <script type="module" src="./src/boot.js?v=0.1.0"></script>
 </body>
 </html>

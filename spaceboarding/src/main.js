@@ -11,6 +11,7 @@ import {
   currentSegment,
   getMorphState,
   getSegmentFraction,
+  normalizeInput,
   raceSnapshot,
   runDeterministicSmoke,
   startRace,
@@ -35,6 +36,10 @@ const elements = {
   worldName: document.querySelector('#world-name'),
   position: document.querySelector('#position'),
   speed: document.querySelector('#speed'),
+  trickMove: document.querySelector('#trick-move'),
+  trickChain: document.querySelector('#trick-chain'),
+  trickScore: document.querySelector('#trick-score'),
+  trickMultiplier: document.querySelector('#trick-multiplier'),
   stageCard: document.querySelector('#stage-card'),
   stageIndex: document.querySelector('#stage-index'),
   stageName: document.querySelector('#stage-name'),
@@ -47,6 +52,10 @@ const elements = {
 };
 
 const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
+// The slice (Planets I-III + Crossings 1-2) is what the game runs by default:
+// it is the stretch that is actually sized and tuned. ?slice=0 opens the whole
+// nine-world course, which is still carrying upstream lengths past segment 4.
+const sliceRun = params.get('slice') !== '0';
 const ordinal = (value) => {
   const mod100 = value % 100;
   const suffix = mod100 >= 11 && mod100 <= 13 ? 'TH' : ({ 1: 'ST', 2: 'ND', 3: 'RD' }[value % 10] ?? 'TH');
@@ -78,7 +87,7 @@ const QA_FRAME_PHASE_CAPACITY = 2400;
 
 if (forcedTouch) document.documentElement.classList.add('force-touch');
 
-const bootPreloads = globalThis.__NINEFOLD_SCORIA_BOOT_PRELOADS__ ?? null;
+const bootPreloads = globalThis.__SPACEBOARDING_BOOT_PRELOADS__ ?? null;
 let quality = bootPreloads?.quality ?? chooseInitialQuality(params);
 const forceProceduralStaticScoriaSurface = params.has('procedural-static-scoria');
 const rollingP1Surface = params.has('rolling-p1-surface');
@@ -120,6 +129,61 @@ let perfElapsed = 0;
 let governorElapsed = 0;
 let firstFrameReady = false;
 let controlsReady = false;
+/**
+ * The trick banner.
+ *
+ * Alex: "we can throw the name of the trick and the point value onto the
+ * screen in a cool way when you do a trick."
+ *
+ * Two readouts with different lifetimes. The MOVE line names the thing you
+ * just landed and is replaced by the next one. The CHAIN line is the run in
+ * progress -- it stays up while the combo is alive and flashes its total on
+ * the frame the combo cashes, which is the same frame the boost fires. That
+ * simultaneity is the point: the number and the shove are one event, so the
+ * player learns what the chain was worth by feeling it.
+ *
+ * Restarting a CSS animation needs the class removed, a reflow forced, and
+ * the class re-added -- without the reflow the browser coalesces the two
+ * changes and nothing replays, so a second trick inside one animation would
+ * silently not show.
+ */
+function replayAnimation(element, className) {
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+}
+
+function updateTrickBanner(events, state) {
+  for (const item of events) {
+    if (item.type === 'trick-landed' || item.type === 'rail-payout' || item.type === 'grind-payout') {
+      if (!item.name) continue;
+      elements.trickMove.textContent = item.name;
+      replayAnimation(elements.trickMove, 'hit');
+    } else if (item.type === 'blown') {
+      elements.trickMove.textContent = 'BAILED';
+      replayAnimation(elements.trickMove, 'hit');
+    } else if (item.type === 'combo-cashed') {
+      elements.trickScore.textContent = item.score.toLocaleString();
+      elements.trickMultiplier.textContent = item.count > 1 ? `${item.count} x${item.multiplier}` : '';
+      elements.trickChain.classList.remove('alive');
+      replayAnimation(elements.trickChain, 'cashed');
+    }
+  }
+  // While a chain is alive the running total sits under the move name. It is
+  // read from state rather than accumulated here, so the HUD can never drift
+  // out of step with the thing that actually pays out.
+  if (state.comboTimer > 0 && state.comboCount > 0) {
+    elements.trickChain.classList.remove('cashed');
+    elements.trickChain.classList.add('alive');
+    elements.trickScore.textContent = state.comboScore.toLocaleString();
+    elements.trickMultiplier.textContent = state.comboCount > 1
+      ? `${state.comboCount} x${(1 + Math.min(2.5, state.combo * 0.06)).toFixed(2)}`
+      : '';
+  } else if (!elements.trickChain.classList.contains('cashed')) {
+    elements.trickChain.classList.remove('alive');
+  }
+}
+
 const hudValues = {
   worldLabel: null,
   worldName: null,
@@ -136,6 +200,7 @@ function makeState({ segment = stageParam, started = false } = {}) {
     seed: parseSeed(),
     short: shortMode,
     startSegmentId: segment || undefined,
+    slice: sliceRun,
     started,
   });
 }
@@ -228,16 +293,22 @@ function formatRaceTime(seconds) {
   return `${String(minutes).padStart(2, '0')}:${remaining.toFixed(3).padStart(6, '0')}`;
 }
 
+function planetCount() {
+  return COURSE.slice(0, state.finalSegmentIndex + 1).filter((s) => s.type === 'planet').length;
+}
+
 function updateHud() {
   const segment = currentSegment(state);
   const worldLabel = segment.type === 'planet'
-    ? `${roman[segment.index - 1]} / IX`
+    ? `${roman[segment.index - 1]} / ${roman[planetCount() - 1]}`
     : `${roman[segment.index - 1]} → ${roman[segment.index]}`;
   const position = String(state.position);
   const speed = String(Math.round(state.speed * 4.7)).padStart(4, '0');
+  // The band invariant, surfaced for QA: par is a settling point, not a floor
+  // that ratchets, so what matters is that speed stayed inside the band.
   const speedFloorOk = String(
-    state.minimumObservedSpeed >= segment.baseSpeed - 0.01
-      || !Number.isFinite(state.minimumObservedSpeed),
+    state.speed <= Math.max(segment.maxSpeed, state.segmentEntrySpeed) + 0.01
+      && state.speed >= segment.baseSpeed * 0.5,
   );
   if (hudValues.worldLabel !== worldLabel) {
     hudValues.worldLabel = worldLabel;
@@ -280,7 +351,7 @@ function showFinish() {
   body.dataset.raceStatus = 'finished';
   elements.finishPlace.textContent = ordinal(state.finalPosition ?? state.position);
   elements.finishTime.textContent = formatRaceTime(state.finishTime ?? state.time);
-  elements.finishKicker.textContent = state.finalPosition === 1 ? 'YOU LIT THE NINTH SUN' : 'THE NINTH SUN REMEMBERS YOU';
+  elements.finishKicker.textContent = state.finalPosition === 1 ? 'YOU MADE IT STICK' : 'THEY GOT THERE FIRST';
   window.setTimeout(() => {
     if (state.finished) elements.finishScreen.hidden = false;
   }, reducedMotion ? 350 : 1250);
@@ -528,6 +599,7 @@ function gameFrame(now) {
         accumulator -= FIXED_STEP;
         steps += 1;
       }
+      updateTrickBanner(frameEvents, state);
       if (isFirstActiveFrame) firstActiveFramePending = false;
       if (profileFrame) endPhase('simulation');
     } else {
@@ -594,7 +666,7 @@ async function boot() {
   body.dataset.qualityTier = quality;
   body.dataset.prewarmStatus = 'running';
   document.title = GAME_TITLE;
-  elements.start.dataset.readyLabel = elements.start.textContent.trim() || 'IGNITE';
+  elements.start.dataset.readyLabel = elements.start.textContent.trim() || 'DROP IN';
   elements.start.textContent = 'CALIBRATING';
   elements.start.disabled = true;
   elements.start.setAttribute('aria-busy', 'true');
@@ -731,21 +803,16 @@ function installQaSurface() {
       lateralVelocity: state.lateralVelocity,
       yaw: state.yaw,
       roll: state.roll,
-      drifting: state.drifting,
-      driftCharge: state.driftCharge,
-      driftBoosts: state.driftBoosts,
-      shotsFired: state.shotsFired,
-      hits: state.hits,
-      hitsTaken: state.hitsTaken,
-      incomingDodges: state.incomingDodges,
-      incomingShots: state.incomingShots.map((shot) => ({
-        id: shot.id,
-        sourceId: shot.sourceId,
-        resolveIn: Math.max(0, shot.resolveAt - state.time),
-        aimLateral: shot.aimLateral,
-        missSide: shot.missSide,
-      })),
-      dodgeWindow: state.dodgeWindow,
+      riderState: state.riderState,
+      trickCharge: state.trickCharge,
+      trickMeter: state.trickMeter,
+      trickTier: state.trickTier,
+      tricksLanded: state.tricksLandedCount,
+      tricksBlown: state.tricksBlownCount,
+      gateBoosts: state.gateBoosts,
+      wallKisses: state.wallKisses,
+      sharpness: state.sharpness,
+      position: state.position,
       morph: getMorphState(state).morph,
       lift: state.lift,
       liftVelocity: state.liftVelocity,
@@ -851,17 +918,13 @@ function installQaSurface() {
     }),
     canonicalPresentationState: () => renderer.canonicalPresentationState(),
     setInput: (next = {}) => {
-      qaInput = {
-        steer: Math.max(-1, Math.min(1, Number(next.steer) || 0)),
-        surge: Boolean(next.surge),
-        slip: Boolean(next.slip),
-      };
+      qaInput = normalizeInput(next);
       renderer.noteControlState(qaInput);
       return { ...qaInput };
     },
     clearInput: () => {
       qaInput = null;
-      renderer.noteControlState({ steer: 0, surge: false, slip: false });
+      renderer.noteControlState(normalizeInput());
       return true;
     },
     resubmitFrame: () => {
@@ -879,6 +942,10 @@ function installQaSurface() {
         stepRace(state, command, FIXED_STEP);
         captureEvents(events, state.events);
       }
+      // The banner is driven here too, not only from the live loop. A HUD that
+      // only exists under requestAnimationFrame cannot be looked at by any test
+      // or by npm run look, which means nobody finds out it is broken.
+      updateTrickBanner(events, state);
       submitQaSynchronousFrame('qa:stepTicks', events, { startedAt });
       return raceSnapshot(state);
     },
@@ -890,6 +957,7 @@ function installQaSurface() {
         stepRace(state, input.read(), FIXED_STEP);
         captureEvents(events, state.events);
       }
+      updateTrickBanner(events, state);
       submitQaSynchronousFrame('qa:stepTicksFromLiveInput', events, { startedAt });
       return raceSnapshot(state);
     },
@@ -916,27 +984,6 @@ function installQaSurface() {
       });
       return raceSnapshot(state).rivals;
     },
-    forceNextShotOutcome: (outcome = null) => {
-      state.qaForcedShotOutcome = outcome == null ? null : Boolean(outcome);
-      return state.qaForcedShotOutcome;
-    },
-    forceNextRivalShot: (options = {}) => {
-      const sourceId = state.rivals.some((rival) => rival.id === options.sourceId)
-        ? options.sourceId
-        : state.rivals[0]?.id;
-      state.qaForcedRivalShot = {
-        sourceId,
-        flightTime: Math.max(0.28, Math.min(0.56, Number(options.flightTime) || 0.4)),
-        aimLateral: Number.isFinite(Number(options.aimLateral))
-          ? Number(options.aimLateral)
-          : state.lateral,
-      };
-      return { ...state.qaForcedRivalShot };
-    },
-    suppressRandomRivalShots: (value = true) => {
-      state.qaSuppressRandomRivalShots = Boolean(value);
-      return state.qaSuppressRandomRivalShots;
-    },
     eventJournal: ({ since = 0, clear = false } = {}) => {
       const sequence = Math.max(0, Number(since) || 0);
       const result = qaEventJournal.filter((item) => item.sequence > sequence).map((item) => ({ ...item }));
@@ -958,6 +1005,9 @@ function installQaSurface() {
       return quality;
     },
     rendererStats: () => renderer.stats(),
+    worldLook: () => renderer.readWorldLook(),
+    rivalPlacements: () => renderer.rivalPlacements(),
+    trackBankBounds: () => renderer.trackBankBounds(),
     measurePlayerVisibility: (options = {}) => renderer.measurePlayerVisibility(options),
     waitForFirstLoopPrewarm: () => renderer.waitForFirstLoopPrewarm(),
     resetRendererStats: () => { renderer.resetFrameSamples(); return true; },
@@ -984,7 +1034,7 @@ function installQaSurface() {
     runSmoke: (seed = parseSeed()) => runDeterministicSmoke({ seed }),
     mute: (value = true) => { setMuted(value); return audio.muted; },
   });
-  Object.defineProperty(window, '__NINEFOLD_BURN__', { value: api, configurable: false, enumerable: false, writable: false });
+  Object.defineProperty(window, '__SPACEBOARDING__', { value: api, configurable: false, enumerable: false, writable: false });
 }
 
 boot().catch(showFatal);

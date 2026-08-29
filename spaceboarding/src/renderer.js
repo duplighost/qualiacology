@@ -9,6 +9,7 @@ import {
   updateVehicleVisual as updatePremiumVehicleVisual,
 } from './vehicle-art.js';
 import { createPlanetOneArt, preloadBakedScoriaEnvironmentData } from './procedural-art.js';
+import { Hyperspeed } from './hyperspeed.js';
 import {
   encodeStaticScoriaSurfacePackage,
   preloadBakedStaticScoriaSurfacePackage,
@@ -20,6 +21,9 @@ import { createArrivalArt } from './arrival-art.js';
 import { createTouchdownArt } from './touchdown-art.js';
 
 import { COURSE, PLANETS, segmentLength } from './content.js';
+import { TRICK_TIER_COLOR } from './rider.js';
+import { COPING_HEIGHT, profileAt, surfaceHeight } from './profile.js';
+import { railsOf, sampleRail } from './rails.js';
 import {
   FIXED_STEP,
   createRaceState,
@@ -29,7 +33,7 @@ import {
   locateCourseDistance,
   morphAt,
   seededLayout,
-  SPACE_WEAPONS_ARM_FRACTION,
+  SPACE_DEPARTURE_FRACTION,
   stepRace,
   trackSample,
 } from './sim.js';
@@ -325,44 +329,27 @@ function writeHighQualityScoriaRibbonRows(
   }
 }
 
-// Exact color endpoints for the first physical launch/arrival corridor. These
-// are immutable scratch-free targets: updateTransitionFX can blend every frame
-// without constructing Color objects or letting setSegment create a sky cut.
-const SCORIA_SKY_TOP = new THREE.Color(PLANETS[0].sky).lerp(new THREE.Color(0x000008), 0.08);
-const SCORIA_SKY_BOTTOM = new THREE.Color(PLANETS[0].fog).multiplyScalar(0.7);
-const SCORIA_SKY_ACCENT = new THREE.Color(PLANETS[0].accent);
-const SCORIA_FOG = new THREE.Color(PLANETS[0].fog);
-const SPACE_ONE_SKY_TOP = new THREE.Color(COURSE[1].sky).lerp(new THREE.Color(0x000008), 0.68);
-const SPACE_ONE_SKY_BOTTOM = new THREE.Color(COURSE[1].fog).multiplyScalar(0.16);
-const SPACE_ONE_SKY_ACCENT = new THREE.Color(0x16455a);
-const SPACE_ONE_FOG = new THREE.Color(COURSE[1].fog);
-const STORMGLASS_SKY_TOP = new THREE.Color(PLANETS[1].sky).lerp(new THREE.Color(0x000008), 0.08);
-const STORMGLASS_SKY_BOTTOM = new THREE.Color(PLANETS[1].fog).multiplyScalar(0.7);
-const STORMGLASS_SKY_ACCENT = new THREE.Color(PLANETS[1].accent);
-const STORMGLASS_FOG = new THREE.Color(PLANETS[1].fog);
-const SCORIA_SUN_LIGHT = new THREE.Color(0xffe3d5);
-const SPACE_ONE_SUN_LIGHT = new THREE.Color(0xc5eaff);
-const STORMGLASS_SUN_LIGHT = new THREE.Color(PLANETS[1].sun);
-const SCORIA_AMBIENT_LIGHT = new THREE.Color(0xffd8cf);
-const SPACE_ONE_AMBIENT_LIGHT = new THREE.Color(COURSE[1].sun).lerp(new THREE.Color(0xffffff), 0.2);
-const STORMGLASS_AMBIENT_LIGHT = new THREE.Color(PLANETS[1].sun).lerp(new THREE.Color(0xffffff), 0.2);
-const SCORIA_HEMISPHERE_LIGHT = new THREE.Color(PLANETS[0].accent).lerp(new THREE.Color(0xffffff), 0.45);
-const SPACE_ONE_HEMISPHERE_LIGHT = new THREE.Color(COURSE[1].accent).lerp(new THREE.Color(0xffffff), 0.45);
-const STORMGLASS_HEMISPHERE_LIGHT = new THREE.Color(PLANETS[1].accent).lerp(new THREE.Color(0xffffff), 0.45);
-const SCORIA_HEMISPHERE_GROUND = new THREE.Color(0x3f2823);
-const SPACE_ONE_HEMISPHERE_GROUND = new THREE.Color(COURSE[1].ground);
-const STORMGLASS_HEMISPHERE_GROUND = new THREE.Color(PLANETS[1].ground);
-const SCORIA_RIM_LIGHT = new THREE.Color(PLANETS[0].accent);
-const SPACE_ONE_RIM_LIGHT = new THREE.Color(COURSE[1].secondary);
-const STORMGLASS_RIM_LIGHT = new THREE.Color(PLANETS[1].accent);
-const SCORIA_DESTINATION_LIGHT = new THREE.Color(0xffddcf);
-const SPACE_ONE_DESTINATION_LIGHT = new THREE.Color(0x7bdcff);
-const STORMGLASS_DESTINATION_LIGHT = new THREE.Color(0x7bdcff);
+// (The thirty-odd hand-written colour endpoints that used to live here were
+// the first launch corridor's palette, transcribed by hand so one journey
+// could crossfade. segmentLook() derives the same numbers for every segment,
+// so they are gone and the corridor blends through the general path.)
 
-function combatPresentationActive(state, segment) {
+// True through the open middle of a crossing: after the rocket has cleared the
+// departure structure and before re-entry begins. Space combat is cut, so the
+// shot/hit branches this gates are dormant by construction -- combat-fx.js is
+// left wired but never fed, per docs/PLAN.md. The window itself still matters:
+// it is the stretch where the glider is free-flying.
+// The segment length the upstream decor counts were tuned against.
+const DECOR_REFERENCE_LENGTH = 5600;
+// How many frames a declared orientation snap is smoothed across. Three is
+// the ceiling docs/PLAN.md sets: enough to kill the pop, short enough that the
+// board is never visibly lagging where the simulation says it is.
+const POSE_SNAP_FRAMES = 3;
+
+function openSpaceFlight(state, segment) {
   if (segment.type !== 'space') return false;
   const morph = getMorphState(state);
-  return getSegmentFraction(state) >= SPACE_WEAPONS_ARM_FRACTION && morph.landing < 0.08;
+  return getSegmentFraction(state) >= SPACE_DEPARTURE_FRACTION && morph.landing < 0.08;
 }
 
 function visualUnit(index, salt = 0) {
@@ -582,9 +569,283 @@ function makeSphericalFieldGrid(width, height, seed, octaves = 5, {
   return values;
 }
 
+/**
+ * Lift a surface colour to a readable value without touching its hue.
+ *
+ * Alex: "the area in general just doesn't look as good as the early ones." The
+ * cause turned out to be in the palette rather than in the lighting. Scoria's
+ * terrain is drawn with a hand-picked warm near-neutral -- the comment beside
+ * it in setSegment says why: "the old three dark factors buried the authored
+ * stone response" -- and every other world was left on its raw authored
+ * `ground`, which is nearly black. Verdant Maw's measures 0.002, 0.010, 0.005.
+ * Worse, that same near-black is applied TWICE, once as the material colour
+ * and once as the per-vertex tint, so the product is dark squared. The hills
+ * came out as literal black holes cut in the sky.
+ *
+ * Scaling rather than mixing toward white is the point: multiplying every
+ * channel by one factor preserves hue and saturation exactly, so a world keeps
+ * the colour it was authored with and gains only the value it needs to be lit.
+ */
+function liftSurface(hex, target) {
+  const color = new THREE.Color(hex);
+  const peak = Math.max(color.r, color.g, color.b);
+  if (peak <= 1e-5) return color;
+  return color.multiplyScalar(clamp(target / peak, 1, 40));
+}
+
+// Where a planet's terrain and shoulder are lifted to. Mid-tones: bright
+// enough that a ridge facing away from the key light is still land, dark
+// enough that the road stays the brightest thing on screen.
+const TERRAIN_VALUE = 0.28;
+// The atmospheric bounce, lifted the same way. Derived from the world's own
+// fog, so what fills the shadowed side of a ridge is the colour of the air
+// that world is standing in.
+const BOUNCE_VALUE = 0.05;
+const SCORIA_GROUND_TINT = new THREE.Color(0xb49e93);
+const SCORIA_SHOULDER_TINT = new THREE.Color(0xc7a99c);
+const SHOULDER_VALUE = 0.3;
+
 function colorMix(a, b, amount) {
   return new THREE.Color(a).lerp(new THREE.Color(b), amount);
 }
+
+/**
+ * A segment's whole blendable LOOK, as plain colours and numbers.
+ *
+ * Alex, after playing: "some of the teleports and returns from space don't
+ * [look cool]. you can never really tell when its going to happen... the
+ * teleport looks like it just loads a new screen at the wrong time."
+ *
+ * He was describing a real asymmetry in the code rather than a matter of
+ * taste. ONE journey had been hand-authored -- Scoria out, across the first
+ * corridor, down into Thunderglass -- with named constants and a three-way
+ * lerp that walked the sky, the fog and every light from one world to the
+ * next while you flew. Every other boundary fell through to setSegment(),
+ * which slammed all of it across in a single frame the instant the segment id
+ * changed. A cut with no motion in it is exactly what "loads a new screen"
+ * looks like, and it is why you could never tell one was coming: nothing in
+ * the world moved until everything did.
+ *
+ * So the palette became data. segmentLook() is a pure function of a segment,
+ * blendLook() walks between two of them, and applyLook() writes one to the
+ * scene. Now a crossfade is available at EVERY boundary rather than at the one
+ * somebody found time to hand-write, and the bespoke journey is one call to
+ * the general thing instead of eighty lines of its own.
+ */
+function segmentLook(segment, quality) {
+  const isScoria = segment.shortId === 'planet-1';
+  const space = segment.type === 'space';
+  return {
+    fogColor: new THREE.Color(segment.fog),
+    fogDensity: space ? 0.00027 : (isScoria ? 0.00068 : 0.00072),
+    skyTop: new THREE.Color(segment.sky).lerp(new THREE.Color(0x000008), space ? 0.68 : 0.08),
+    skyBottom: new THREE.Color(segment.fog).multiplyScalar(space ? 0.16 : 0.7),
+    skyAccent: new THREE.Color(segment.shortId === 'space-1' ? 0x16455a : segment.accent),
+    spaceFactor: space ? 1 : 0,
+    starOpacity: space ? 0.2 : 0.003,
+    sunColor: new THREE.Color(isScoria ? 0xffe3d5 : (segment.shortId === 'space-1' ? 0xc5eaff : segment.sun)),
+    sunIntensity: space ? 3.15 : (isScoria ? 0.7 : 3.8),
+    ambientColor: new THREE.Color(isScoria ? 0xffd8cf : colorMix(segment.sun, 0xffffff, 0.2)),
+    ambientIntensity: isScoria
+      ? (quality === 'low' ? 1.92 : quality === 'medium' ? 1.86 : 1.8)
+      : (space ? 0.16 : 0.28),
+    hemiColor: new THREE.Color(colorMix(segment.accent, 0xffffff, 0.45)),
+    hemiIntensity: space ? 0.78 : (isScoria ? 0.5 : 1.18),
+    rimColor: new THREE.Color(segment.shortId === 'space-1' ? segment.secondary : segment.accent),
+    rimIntensity: space ? 48 : 32,
+    lavaFill: isScoria ? 6.5 : (space && segment.index === 1 ? 4.5 : 0),
+    destinationFillColor: new THREE.Color(isScoria ? 0xffddcf : 0x7bdcff),
+    destinationFill: segment.shortId === 'space-1' ? 3.6 : (isScoria ? 0.35 : 0.55),
+    sunOrbColor: new THREE.Color(segment.sun),
+    // --- the surface group -------------------------------------------------
+    // What is under the board, as opposed to what is around it. Blended at
+    // less than full weight on an approach: the ground you are still standing
+    // on may warm toward where you are going, but it must not pretend to have
+    // arrived while you are still riding the old world.
+    roadEmissive: new THREE.Color(isScoria ? 0x2b1a16 : segment.accent),
+    // The road was a flat unbroken slab on every world but the first. It gets
+    // enough of its own accent back to have a surface.
+    roadEmissiveIntensity: isScoria ? 0.58 : (space ? 0.16 : 0.15),
+    roadColor: new THREE.Color(isScoria ? 0xc2ada4 : 0xffffff),
+    roadMetalness: space ? 0.72 : (isScoria ? 0.18 : 0.46),
+    roadRoughness: space ? 0.22 : (isScoria ? 0.82 : 0.5),
+    // A low atmospheric bounce, so a ridge turned away from the key light is
+    // land rather than a hole cut in the sky.
+    //
+    // Scoria had this and nothing else did, which is most of why Alex said the
+    // later worlds "just don't look as good as the early ones": Verdant Maw's
+    // hills were pure black silhouettes. Every world gets it now, keyed off
+    // its own fog so each one bounces its own air back at itself.
+    terrainEmissive: isScoria
+      ? new THREE.Color(0x2b1711)
+      : (space ? new THREE.Color(0x000000) : liftSurface(segment.fog, BOUNCE_VALUE)),
+    terrainEmissiveIntensity: isScoria ? 1.05 : (space ? 0 : 1),
+    // Near-neutral for every world, the way Scoria's already was. The world's
+    // hue arrives through the per-vertex tint in updateTrack; this multiplies
+    // it, and a dark multiplier over a dark tint is what buried them.
+    // In SPACE this property has a second owner: updateTrack tints the terrain
+    // toward the world you are re-entering, for the landing reveal. So the
+    // look's space value is exactly what updateTrack writes at fraction zero,
+    // or the crossfade walks to one value and the next frame writes another --
+    // which is what happened the moment the planet side got brighter, and the
+    // continuity gate caught it as a 3.0 jump on a 14.8 journey.
+    terrainColor: isScoria
+      ? new THREE.Color(0xc0a89d)
+      : (space
+        ? new THREE.Color(segment.shortId === 'space-1'
+          ? PLANETS[1].fog
+          : (PLANETS[Math.min(PLANETS.length - 1, segment.index)]?.ground ?? segment.ground))
+        : colorMix(segment.ground, 0xffffff, 0.86)),
+    horizonEmissive: isScoria
+      ? new THREE.Color(0x24120d)
+      : (space ? new THREE.Color(0x000000) : liftSurface(segment.fog, BOUNCE_VALUE * 0.7)),
+    horizonEmissiveIntensity: isScoria ? 0.5 : (space ? 0 : 1),
+    horizonColor: isScoria
+      ? new THREE.Color(0x8f6f64)
+      : (space ? new THREE.Color(segment.ground) : liftSurface(segment.ground, TERRAIN_VALUE * 0.8)),
+    hemiGround: new THREE.Color(isScoria ? 0x3f2823 : segment.ground),
+    lineSecondary: new THREE.Color(segment.secondary),
+    lineAccent: new THREE.Color(segment.accent),
+  };
+}
+
+// Which half of the look each key belongs to. Everything not named here is
+// atmosphere and blends at full approach weight.
+const LOOK_SURFACE_KEYS = new Set([
+  'roadEmissive', 'roadEmissiveIntensity', 'roadColor', 'roadMetalness', 'roadRoughness',
+  'terrainEmissive', 'terrainEmissiveIntensity', 'terrainColor',
+  'horizonEmissive', 'horizonEmissiveIntensity', 'horizonColor',
+  'hemiGround', 'lineSecondary', 'lineAccent',
+]);
+
+/** Walk from one look to another. Sky and surface move at their own rates. */
+function blendLook(from, to, sky, surface) {
+  const out = {};
+  for (const key of Object.keys(from)) {
+    const t = LOOK_SURFACE_KEYS.has(key) ? surface : sky;
+    const a = from[key];
+    const b = to[key];
+    out[key] = a && a.isColor ? a.clone().lerp(b, t) : a + (b - a) * t;
+  }
+  return out;
+}
+
+/**
+ * How far either side of a boundary the two segments' curves are mixed.
+ *
+ * The palette crossfade was only half of "it looks like it just loads a new
+ * screen". The other half is GEOMETRY: every row of road is sampled from one
+ * segment's curve, and at the boundary the whole ribbon in front of you --
+ * shape, width, bank -- was swapped for a different curve in a single frame.
+ * Measured at that frame it changed 8.4x as much of the screen as the frame
+ * before it. That is not a transition, it is a cut.
+ *
+ * So the two curves are stitched. The next segment's curve is translated so
+ * its start meets this one's end, and across a 300-unit seam the road is a mix
+ * of both. The road AHEAD of you in the last seconds of a world is already the
+ * next world's road, and you drive onto it.
+ *
+ * The mix is symmetric on purpose, and that symmetry is the whole trick: at
+ * the seam itself both sides evaluate to the same point, so the frame before
+ * the boundary and the frame after it draw the same geometry from two
+ * different segments' arithmetic. There is nothing left to jump.
+ */
+const SEAM_BLEND = 300;
+
+// How fast a boundary's camera offset decays, in seconds. A quarter second is
+// comfortably below the rate at which a moving camera's drift is visible.
+const CAMERA_SEAM_SETTLE = 0.25;
+// Past this much position error the discontinuity is a teleport -- a QA jump,
+// a restart -- and smoothing a teleport only makes it a slow teleport.
+const CAMERA_SEAM_MAX_OFFSET = 6;
+const CAMERA_SEAM_SLERP = new THREE.Quaternion();
+
+/**
+ * How fast the full-screen flash can RISE, in seconds.
+ *
+ * This is the answer to "the teleport looks like it just loads a new screen",
+ * and it is almost funny how literal it turned out to be: the boundary fires a
+ * launch or landing event, that event set the flash straight to 0.55, and
+ * .impact-flash is a white radial over the entire viewport on screen blend.
+ * Every pixel in the frame changed because a white sheet was drawn over all of
+ * them, in one tick, with no rise.
+ *
+ * It is why hiding the terrain, the road, the lines, the planets, the stars,
+ * the decor, the sky -- and finally the entire world root -- each failed to
+ * move the measurement. None of them were the problem. The flash is not in the
+ * scene at all; it is a DOM overlay, and it was on top of everything.
+ *
+ * Given an attack the same flash reads as a bloom of light instead of a cut.
+ * Nothing about its strength or its decay changes.
+ */
+const FLASH_ATTACK = 0.055;
+// The same for the speed driver behind the vignette. speedNorm is measured
+// against the CURRENT segment's band, and the bands differ by hundreds of
+// units, so crossing a boundary snapped it -- 0.001 to 0.476 in one frame at
+// the second crossing. It is a presentation value; it can ease.
+const SPEED_DRIVER_SETTLE = 0.28;
+
+/**
+ * Where each segment starts along the whole course, in its own units.
+ *
+ * Terrain is a field of sine noise phased on distance, and that distance was
+ * the distance into the CURRENT segment -- so at every boundary the phase
+ * reset to zero and every ridge on both sides of the road re-shaped itself in
+ * one frame. In the boundary difference image it is the largest single thing
+ * on screen, a green band down both edges.
+ *
+ * Phasing on distance along the course instead makes the landscape continuous:
+ * the ridge you are looking at when you cross is the ridge you are looking at
+ * after you cross. Scoria sits at zero by construction, which is not a
+ * coincidence -- its terrain is baked, and the parity tests compare against
+ * buffers generated from the old phase. Leaving the first segment's offset at
+ * zero keeps every one of those buffers exactly valid.
+ */
+const COURSE_PHASE = (() => {
+  const phases = [];
+  let total = 0;
+  for (const segment of COURSE) {
+    phases.push(total);
+    total += segment.length;
+  }
+  return Object.freeze(phases);
+})();
+
+// How long, as a fraction of the arriving planet's length, the world you just
+// flew into stays in the sky.
+//
+// It used to blink out on the boundary frame, which is the single largest
+// thing in the "loads a new screen" evidence: you spend a whole crossing
+// flying at a planet that grows in the window, and then instead of landing on
+// it, it vanishes and you are on a road. Now it keeps the exact trajectory it
+// had -- swelling, sinking -- and slides down past the camera. You land on the
+// thing you were flying at.
+const PLANET_ARRIVAL_FRACTION = 0.05;
+// And the same at the other end. The world you just launched off used to
+// appear in the sky from nothing, at full size, on the boundary frame -- the
+// brightest single object in that boundary's difference image. It starts where
+// the ground was instead: enormous and below the frame, curving away under you
+// as you climb, which is what leaving a planet actually looks like.
+const PLANET_DEPARTURE_FRACTION = 0.06;
+
+// The approach window, as a fraction of the segment you are leaving.
+//
+// It opens BEFORE the launch arc (0.76) and well before the vehicle morph
+// (0.83), because the order matters: the sky has to start moving before the
+// board does. A change that arrives with the boundary is the boundary; a
+// change that arrives ahead of it is a place you are travelling toward.
+const APPROACH_START = 0.62;
+const APPROACH_END = 0.995;
+// How far the ground under you LAGS the sky. The surface group runs the same
+// walk on a curve rather than a fraction of one -- barely moving while the
+// atmosphere does most of its work, then catching all the way up by the end.
+//
+// A fraction was the obvious thing and it was wrong: capping the ground at
+// half the journey means the other half has to arrive somewhere, and the only
+// place left is the boundary frame. tests/browser-transition.mjs caught it
+// immediately -- 17% of the whole walk landing in a single tick, which is
+// exactly the cut this work exists to remove. Lagging costs nothing at the end.
+const APPROACH_SURFACE_LAG = 2.4;
 
 function setAttrDynamic(attribute) {
   attribute.setUsage(THREE.DynamicDrawUsage);
@@ -594,6 +855,24 @@ function setAttrDynamic(attribute) {
 function setAttrUsage(attribute, usage) {
   attribute.setUsage(usage);
   return attribute;
+}
+
+/**
+ * Give every rotating work bank the bounds of the one just written.
+ *
+ * three.js takes the transparent render list's depth sort key from
+ * geometry.boundingSphere.center and only computes it when null, so banks that
+ * disagree about that centre reorder the transparent pass every time the
+ * rotation comes round. Equal spheres cannot.
+ */
+function shareBankBounds(active, banks) {
+  if (!active) return;
+  active.computeBoundingSphere();
+  if (!banks || !active.boundingSphere) return;
+  for (const bank of banks) {
+    if (bank === active) continue;
+    bank.boundingSphere = active.boundingSphere.clone();
+  }
 }
 
 function makeRibbonGeometry(
@@ -642,6 +921,15 @@ function makeRibbonGeometry(
   // storage and produced rare clustered buffer-sync stalls during drift.
   // The array values, topology, precision and update cadence are unchanged.
   setAttrUsage(geometry.getAttribute('normal'), usage);
+  // Seed the bounds explicitly. This geometry is allocated with an all-zero
+  // position buffer and filled later, and three.js caches a bounding sphere the
+  // first time anything asks for one -- so if a prewarm pass asks while the
+  // buffer is still zeroed, the geometry keeps centre (0,0,0) radius 0 for the
+  // rest of its life, and every clone taken afterwards inherits it. That is
+  // exactly how the vista planets ended up flashing every third frame. A sphere
+  // large enough to contain any ribbon can never be the degenerate one.
+  geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, -810), 4000);
+
   return geometry;
 }
 
@@ -1210,38 +1498,12 @@ function createVehicle(accentHex, secondaryHex, { player = false, personality = 
   return group;
 }
 
-function updateVehicleVisual(vehicle, { morph, boost, speed, yaw, roll, lift = 0, hitFlash = 0, dt = 1 / 60 }) {
-  const data = vehicle.userData;
-  const carAmount = 1 - morph;
-  data.carParts.visible = carAmount > 0.01;
-  data.rocketParts.visible = morph > 0.01;
-  data.carParts.scale.set(1, Math.max(0.02, carAmount), 1);
-  data.rocketParts.scale.setScalar(Math.max(0.001, morph));
-  data.rocketParts.position.y = (1 - morph) * -0.35;
-  data.core.scale.set(1 - morph * 0.13, 1 - morph * 0.08, 1 + morph * 0.34);
-  for (let i = 0; i < data.wheels.length; i += 1) {
-    const wheel = data.wheels[i];
-    wheel.rotation.x -= speed * dt * 0.032;
-    wheel.position.y = -0.3 + morph * 0.42;
-    wheel.position.x = (i < 2 ? -1 : 1) * (1.48 - morph * 0.7);
-    wheel.scale.setScalar(Math.max(0.06, 1 - morph * 0.82));
-  }
-  data.frontFin.rotation.z = Math.PI / 2 + morph * Math.PI / 2;
-  const flame = 0.72 + boost * 1.3 + clamp((speed - 300) / 700, 0, 1) * 0.5;
-  data.turbines.forEach((turbine, i) => {
-    turbine.scale.setScalar(0.82 + flame * 0.24 + Math.sin(performance.now() * 0.012 + i) * 0.04);
-    turbine.material.opacity = 0.65 + boost * 0.35;
-  });
-  data.wakes.forEach((wake, i) => {
-    wake.scale.set(0.8 + morph * 0.45, 0.8 + morph * 0.45, flame * (0.7 + i * 0.1));
-    wake.material.opacity = 0.2 + boost * 0.32 + morph * 0.1;
-  });
-  vehicle.rotation.y = yaw;
-  vehicle.rotation.z = roll;
-  vehicle.position.y = 0.2 + lift;
-  const flash = 0.2 + hitFlash * 2.8;
-  data.materials[2].emissiveIntensity = flash;
-}
+// (A dead updateVehicleVisual() lived here. It was shadowed by the import
+// alias at the top of this file, had not been called in a long time, and was
+// the only code in the renderer that assigned a vehicle root vertical -- so a
+// read-through of rival placement looked correct while every rival was in
+// fact hanging at y = 0. Dead code that answers a question wrongly is worse
+// than no code at all.)
 
 export function makePlanetTexture(baseHex, accentHex, seed, styleIndex = 0) {
   const canvas = document.createElement('canvas');
@@ -1492,6 +1754,346 @@ class ParticlePool {
   }
 }
 
+/**
+ * The quarter-pipe walls and their coping rails, built from profileAt().
+ *
+ * This is the "one source of truth" rule made literal. The rider resolves
+ * against profileAt(); so does this mesh, row by row, using the same track
+ * frame the road uses. There is no second authoring of the wall shape that
+ * could drift out of agreement with the surface the player actually collides
+ * with -- which is precisely how CARVE ended up with a rider passing visibly
+ * through geometry it was supposedly standing on.
+ *
+ * Both sides live in one ribbon: columns run left lip -> left coping -> left
+ * road edge, then right road edge -> right coping -> right lip. The two halves
+ * are separated by a degenerate seam column pair, so a single indexed strip
+ * covers both without stitching the middle of the road.
+ */
+const WALL_COLUMNS_PER_SIDE = 5;
+const WALL_COLUMNS = WALL_COLUMNS_PER_SIDE * 2;
+
+class SkateFeatures {
+  constructor(parent, rows) {
+    this.rows = rows;
+    this.enabled = false;
+    const vertexCount = rows * WALL_COLUMNS;
+    const wallGeometry = new THREE.BufferGeometry();
+    wallGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
+    wallGeometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
+    wallGeometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(vertexCount * 2), 2));
+    wallGeometry.setIndex(new THREE.BufferAttribute(SkateFeatures.makeIndex(rows, WALL_COLUMNS_PER_SIDE), 1));
+    this.wallMaterial = new THREE.MeshStandardMaterial({
+      color: 0x2a2a33,
+      roughness: 0.74,
+      metalness: 0.18,
+      side: THREE.DoubleSide,
+    });
+    this.wall = new THREE.Mesh(wallGeometry, this.wallMaterial);
+    this.wall.frustumCulled = false;
+    this.wall.receiveShadow = true;
+    this.wall.renderOrder = 1;
+    parent.add(this.wall);
+
+    // The coping is a thin emissive rail along the top of each wall. It is the
+    // thing a player aims a grind at, so it is lit rather than shaded: you
+    // must be able to see where the rail is from the road below it.
+    const copingVertexCount = rows * 4;
+    const copingGeometry = new THREE.BufferGeometry();
+    copingGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(copingVertexCount * 3), 3));
+    copingGeometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(copingVertexCount * 3), 3));
+    copingGeometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(copingVertexCount * 2), 2));
+    copingGeometry.setIndex(new THREE.BufferAttribute(SkateFeatures.makeIndex(rows, 2), 1));
+    this.copingMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0xffffff,
+      emissiveIntensity: 1.5,
+      roughness: 0.3,
+      metalness: 0.6,
+      side: THREE.DoubleSide,
+    });
+    this.coping = new THREE.Mesh(copingGeometry, this.copingMaterial);
+    this.coping.frustumCulled = false;
+    this.coping.renderOrder = 2;
+    parent.add(this.coping);
+  }
+
+  /** Two triangles per quad, for a rows x (columnsPerSide * 2) strip. */
+  static makeIndex(rows, columnsPerSide) {
+    const columns = columnsPerSide * 2;
+    const quads = (rows - 1) * (columns - 1);
+    const index = new Uint32Array(quads * 6);
+    let cursor = 0;
+    for (let row = 0; row < rows - 1; row += 1) {
+      for (let column = 0; column < columns - 1; column += 1) {
+        // Skip the seam between the two sides: nothing spans the road.
+        if (column === columnsPerSide - 1) continue;
+        const a = row * columns + column;
+        const b = a + 1;
+        const c = a + columns;
+        const d = c + 1;
+        index[cursor] = a; index[cursor + 1] = c; index[cursor + 2] = b;
+        index[cursor + 3] = b; index[cursor + 4] = c; index[cursor + 5] = d;
+        cursor += 6;
+      }
+    }
+    return index.subarray(0, cursor);
+  }
+
+  setPalette(segment) {
+    this.wallMaterial.color.setHex(segment.shoulder);
+    this.copingMaterial.color.setHex(segment.secondary);
+    this.copingMaterial.emissive.setHex(segment.accent);
+  }
+
+  /**
+   * Lay the wall out along the current track rows. The samples are the same rows
+   * the road is built from, so the wall shares the road's frame exactly and
+   * cannot slide relative to it.
+   */
+  update(segment, samples, short) {
+    const wallPosition = this.wall.geometry.attributes.position.array;
+    const wallUv = this.wall.geometry.attributes.uv.array;
+    const copingPosition = this.coping.geometry.attributes.position.array;
+    const copingUv = this.coping.geometry.attributes.uv.array;
+    let anyWall = false;
+
+    for (let row = 0; row < this.rows; row += 1) {
+      const sample = samples[row];
+      const profile = profileAt(segment, sample.worldProgress, short);
+      if (profile.hasWall) anyWall = true;
+      const { cos, sin, x, y, z } = sample;
+      const uvY = sample.worldProgress / 24;
+
+      for (let side = 0; side < 2; side += 1) {
+        const sign = side === 0 ? -1 : 1;
+        for (let step = 0; step < WALL_COLUMNS_PER_SIDE; step += 1) {
+          // Left half runs outside-in so the strip stays wound consistently.
+          const t = side === 0 ? 1 - step / (WALL_COLUMNS_PER_SIDE - 1) : step / (WALL_COLUMNS_PER_SIDE - 1);
+          const lateral = profile.roadHalf + t * (profile.lipX - profile.roadHalf);
+          const height = surfaceHeight(profile, lateral);
+          const column = side * WALL_COLUMNS_PER_SIDE + step;
+          const vertex = row * WALL_COLUMNS + column;
+          const index = vertex * 3;
+          const signedLateral = sign * lateral;
+          wallPosition[index] = x + signedLateral * cos - height * sin;
+          wallPosition[index + 1] = y + signedLateral * sin + height * cos;
+          wallPosition[index + 2] = z;
+          wallUv[vertex * 2] = t * 2;
+          wallUv[vertex * 2 + 1] = uvY;
+        }
+
+        // Coping rail: two vertices per side, deck height to rail height.
+        for (let step = 0; step < 2; step += 1) {
+          const height = profile.copingH + step * COPING_HEIGHT;
+          const vertex = row * 4 + side * 2 + step;
+          const index = vertex * 3;
+          const signedLateral = sign * profile.copingX;
+          copingPosition[index] = x + signedLateral * cos - height * sin;
+          copingPosition[index + 1] = y + signedLateral * sin + height * cos;
+          copingPosition[index + 2] = z;
+          copingUv[vertex * 2] = step;
+          copingUv[vertex * 2 + 1] = uvY;
+        }
+      }
+    }
+
+    this.enabled = anyWall;
+    this.wall.visible = anyWall;
+    this.coping.visible = anyWall;
+    if (!anyWall) return;
+    reconstructRibbonNormals(this.wall.geometry, this.rows, WALL_COLUMNS);
+    reconstructRibbonNormals(this.coping.geometry, this.rows, 4);
+    this.wall.geometry.attributes.position.needsUpdate = true;
+    this.wall.geometry.attributes.uv.needsUpdate = true;
+    this.wall.geometry.attributes.normal.needsUpdate = true;
+    this.coping.geometry.attributes.position.needsUpdate = true;
+    this.coping.geometry.attributes.uv.needsUpdate = true;
+    this.coping.geometry.attributes.normal.needsUpdate = true;
+  }
+
+  dispose() {
+    this.wall.geometry.dispose();
+    this.coping.geometry.dispose();
+    this.wallMaterial.dispose();
+    this.copingMaterial.dispose();
+  }
+}
+
+/**
+ * The aerial rails, drawn from railAt()'s own samples.
+ *
+ * A rail has to be visible from far enough out to line up on -- Alex asked for
+ * lines that leave the ground and throw you back onto the course, and a line
+ * you cannot see coming is a line you never take. So each one is a lit tube
+ * built from sampleRail(), which is the same function the rider is carried
+ * along. What you aim at and what you ride are one curve.
+ */
+const RAIL_TUBE_SAMPLES = 34;
+const RAIL_TUBE_SIDES = 4;
+// 0.55, not 0.22. A rail mouth is typically first visible 200-plus units out
+// and at that distance a thin tube is a fraction of a pixel -- the line was
+// being drawn correctly and was simply too thin to see, which is the same as
+// not drawing it.
+const RAIL_TUBE_RADIUS = 0.55;
+const MAX_DRAWN_RAILS = 4;
+
+class RailLines {
+  constructor(parent) {
+    // A MOUTH MARKER per rail: a lit arch standing at the entry.
+    //
+    // The rail line itself is correct from 300 units out and completely
+    // invisible there -- a 0.55-radius tube at that range is a fraction of a
+    // pixel, and 300 units is only about a second of warning at par. You
+    // cannot line up for something you cannot see, so the entry gets a five
+    // unit arch that reads at distance, and the line behind it explains what
+    // the arch is for once you are close enough to see both.
+    this.mouths = Array.from({ length: MAX_DRAWN_RAILS }, () => {
+      const arch = new THREE.Mesh(
+        new THREE.TorusGeometry(2.6, 0.22, 8, 26, Math.PI),
+        new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          emissive: 0xffffff,
+          emissiveIntensity: 3.2,
+          roughness: 0.3,
+          metalness: 0.4,
+          fog: false,
+        }),
+      );
+      arch.frustumCulled = false;
+      arch.visible = false;
+      arch.renderOrder = 2;
+      parent.add(arch);
+      return arch;
+    });
+    const perRail = (RAIL_TUBE_SAMPLES + 1) * RAIL_TUBE_SIDES;
+    const vertexCount = perRail * MAX_DRAWN_RAILS;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
+    geometry.setIndex(new THREE.BufferAttribute(RailLines.makeIndex(), 1));
+    this.material = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0xffffff,
+      emissiveIntensity: 3.4,
+      roughness: 0.25,
+      metalness: 0.5,
+      // NOT fogged. A rail mouth is 300 units ahead when you need to start
+      // lining up for it, and at that range the world's fog swallowed the line
+      // completely -- it was being drawn correctly and could not be seen,
+      // which is the same as not existing. Unfogged, a rail reads as a glowing
+      // line arcing up out of the road ahead, which is its own invitation.
+      fog: false,
+    });
+    this.mesh = new THREE.Mesh(geometry, this.material);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 2;
+    parent.add(this.mesh);
+    this.perRail = perRail;
+    this.scratch = new THREE.Vector3();
+  }
+
+  static makeIndex() {
+    const perRail = (RAIL_TUBE_SAMPLES + 1) * RAIL_TUBE_SIDES;
+    const quads = RAIL_TUBE_SAMPLES * RAIL_TUBE_SIDES;
+    const index = new Uint32Array(quads * 6 * MAX_DRAWN_RAILS);
+    let cursor = 0;
+    for (let rail = 0; rail < MAX_DRAWN_RAILS; rail += 1) {
+      const base = rail * perRail;
+      for (let i = 0; i < RAIL_TUBE_SAMPLES; i += 1) {
+        for (let side = 0; side < RAIL_TUBE_SIDES; side += 1) {
+          const next = (side + 1) % RAIL_TUBE_SIDES;
+          const a = base + i * RAIL_TUBE_SIDES + side;
+          const b = base + i * RAIL_TUBE_SIDES + next;
+          const c = base + (i + 1) * RAIL_TUBE_SIDES + side;
+          const d = base + (i + 1) * RAIL_TUBE_SIDES + next;
+          index[cursor] = a; index[cursor + 1] = c; index[cursor + 2] = b;
+          index[cursor + 3] = b; index[cursor + 4] = c; index[cursor + 5] = d;
+          cursor += 6;
+        }
+      }
+    }
+    return index;
+  }
+
+  setPalette(segment) {
+    this.material.color.setHex(segment.secondary);
+    this.material.emissive.setHex(segment.accent);
+    for (const arch of this.mouths) {
+      arch.material.color.setHex(segment.secondary);
+      arch.material.emissive.setHex(segment.accent);
+    }
+  }
+
+  update(segment, logicalProgress, currentSample, short, sampleTrack) {
+    const position = this.mesh.geometry.attributes.position.array;
+    const rails = railsOf(segment, short);
+    let drawn = 0;
+    for (const rail of rails) {
+      if (drawn >= MAX_DRAWN_RAILS) break;
+      // Only what is in front of the player and near enough to matter. A rail
+      // behind the camera is wasted vertices; one too far ahead is a smear.
+      if (rail.endS < logicalProgress - 60) continue;
+      if (rail.startS > logicalProgress + 1400) continue;
+      const points = sampleRail(segment, rail, RAIL_TUBE_SAMPLES);
+      const base = drawn * this.perRail;
+      // Stand the arch on the mouth.
+      const mouth = points[0];
+      const mouthTrack = sampleTrack(segment, mouth.s);
+      const mouthCos = Math.cos(mouthTrack.bank);
+      const mouthSin = Math.sin(mouthTrack.bank);
+      const arch = this.mouths[drawn];
+      arch.visible = true;
+      arch.position.set(
+        mouthTrack.x - currentSample.x + mouth.lateral * mouthCos - mouth.height * mouthSin,
+        mouthTrack.y - currentSample.y + mouth.lateral * mouthSin + mouth.height * mouthCos,
+        -(mouth.s - logicalProgress),
+      );
+      arch.rotation.z = mouthTrack.bank;
+      for (let i = 0; i < points.length; i += 1) {
+        const point = points[i];
+        const track = sampleTrack(segment, point.s);
+        const cos = Math.cos(track.bank);
+        const sin = Math.sin(track.bank);
+        const centreX = track.x - currentSample.x + point.lateral * cos - point.height * sin;
+        const centreY = track.y - currentSample.y + point.lateral * sin + point.height * cos;
+        const centreZ = -(point.s - logicalProgress);
+        for (let side = 0; side < RAIL_TUBE_SIDES; side += 1) {
+          const angle = (side / RAIL_TUBE_SIDES) * Math.PI * 2;
+          const vertex = (base + i * RAIL_TUBE_SIDES + side) * 3;
+          position[vertex] = centreX + Math.cos(angle) * RAIL_TUBE_RADIUS;
+          position[vertex + 1] = centreY + Math.sin(angle) * RAIL_TUBE_RADIUS;
+          position[vertex + 2] = centreZ;
+        }
+      }
+      drawn += 1;
+    }
+    // Collapse anything not drawn this frame to a degenerate point far below.
+    for (let rail = drawn; rail < MAX_DRAWN_RAILS; rail += 1) {
+      const base = rail * this.perRail;
+      for (let i = 0; i < this.perRail; i += 1) {
+        const vertex = (base + i) * 3;
+        position[vertex] = 0;
+        position[vertex + 1] = -100000;
+        position[vertex + 2] = 0;
+      }
+    }
+    for (let i = drawn; i < this.mouths.length; i += 1) this.mouths[i].visible = false;
+    this.mesh.visible = drawn > 0;
+    if (!drawn) return;
+    this.mesh.geometry.attributes.position.needsUpdate = true;
+    this.mesh.geometry.computeVertexNormals();
+  }
+
+  dispose() {
+    this.mesh.geometry.dispose();
+    this.material.dispose();
+    for (const arch of this.mouths) {
+      arch.geometry.dispose();
+      arch.material.dispose();
+    }
+  }
+}
+
 class TireTrailPool {
   constructor(parent, count = 240) {
     this.count = count;
@@ -1499,7 +2101,8 @@ class TireTrailPool {
     this.timer = 0;
     this.dummy = new THREE.Object3D();
     this.color = new THREE.Color();
-    this.marks = Array.from({ length: count }, () => ({ x: 0, y: -10000, z: 0, yaw: 0, life: 0, heat: 0 }));
+    this.marks = Array.from({ length: count }, () => ({ x: 0, y: -10000, z: 0, yaw: 0, life: 0, heat: 0, tint: null }));
+    this.tintColor = new THREE.Color();
     this.mesh = new THREE.InstancedMesh(
       new THREE.BoxGeometry(0.24, 0.018, 1.5),
       new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, transparent: true, opacity: 0.72, depthWrite: false, toneMapped: true }),
@@ -1511,7 +2114,7 @@ class TireTrailPool {
     parent.add(this.mesh);
   }
 
-  spawn(x, z, yaw, heat) {
+  spawn(x, z, yaw, heat, tint) {
     const mark = this.marks[this.cursor];
     this.cursor = (this.cursor + 1) % this.count;
     mark.x = x;
@@ -1520,17 +2123,25 @@ class TireTrailPool {
     mark.yaw = yaw;
     mark.life = 1.65;
     mark.heat = heat;
+    mark.tint = tint;
   }
 
   update(state, segment, dt) {
     this.mesh.visible = segment.type === 'planet';
     if (!this.mesh.visible) return;
     this.timer -= dt;
-    if (dt > 0 && state.drifting && this.timer <= 0) {
+    // Marks are left by the rail and by a landing, not by a drift -- there is
+    // no drift any more. A grind throws sparks along the coping; a landing
+    // scuffs the road where the board came down.
+    const grinding = state.riderState === 'grind';
+    const settling = (state.landingSettle ?? 0) > 0;
+    if (dt > 0 && (grinding || settling) && this.timer <= 0) {
       this.timer = 0.022;
       const sideShift = Math.sin(state.yaw) * 1.45;
-      this.spawn(state.lateral - 1.05 + sideShift, 1.48, state.yaw, state.driftCharge);
-      this.spawn(state.lateral + 1.05 + sideShift, 1.48, state.yaw, state.driftCharge);
+      const tint = state.trickTier > 0 ? TRICK_TIER_COLOR[state.trickTier - 1] : null;
+      const heat = grinding ? 0.85 : clamp(state.landingQuality ?? 0, 0.2, 1);
+      this.spawn(state.lateral - 1.05 + sideShift, 1.48, state.yaw, heat, tint);
+      this.spawn(state.lateral + 1.05 + sideShift, 1.48, state.yaw, heat, tint);
     }
     for (let i = 0; i < this.count; i += 1) {
       const mark = this.marks[i];
@@ -1548,7 +2159,15 @@ class TireTrailPool {
         this.dummy.position.set(mark.x, mark.y, mark.z);
         this.dummy.rotation.set(0, -mark.yaw, 0);
         this.dummy.scale.set(1 + mark.heat * 0.22, 1, 1 + mark.heat * 0.55);
-        this.color.setRGB((0.21 + mark.heat * 0.82) * fade, (0.22 + mark.heat * 0.14) * fade, (0.24 + mark.heat * 0.025) * fade);
+        if (mark.tint === null) {
+          this.color.setRGB((0.21 + mark.heat * 0.82) * fade, (0.22 + mark.heat * 0.14) * fade, (0.24 + mark.heat * 0.025) * fade);
+        } else {
+          // Bright enough to read as a lit flame rather than a scorch mark:
+          // the tier colour is the signal, so it is not allowed to be subtle.
+          this.tintColor.setHex(mark.tint);
+          const lift = 0.55 + mark.heat * 0.65;
+          this.color.setRGB(this.tintColor.r * fade * lift, this.tintColor.g * fade * lift, this.tintColor.b * fade * lift);
+        }
       }
       this.dummy.updateMatrix();
       this.mesh.setMatrixAt(i, this.dummy.matrix);
@@ -1712,11 +2331,14 @@ export class RaceRenderer {
     this.cameraRoll = 0;
     this.shake = 0;
     this.flash = 0;
+    this.flashTarget = 0;
+    this.speedDriver = 0;
     this.cameraCssValues = {
       speed: null,
       boost: null,
       flash: null,
-      drift: null,
+      trick: null,
+      trickTier: null,
       sharpness: null,
     };
     this.segmentId = null;
@@ -1940,6 +2562,8 @@ export class RaceRenderer {
       recordStartupStage('arrivalAndTouchdown');
       await yieldStartupFrame();
       const rivalColors = [[0xff356e, 0x3d0615], [0xffd451, 0x382600], [0x7d73ff, 0x100a46]];
+      // One surface frame per rival, reused every frame -- see updateRivals.
+      this.rivalSurfaceFrames = rivalColors.map(() => ({}));
       this.rivalVehicles = rivalColors.map(([accent, secondary], i) => {
         const vehicle = createPremiumVehicle(accent, secondary, { personality: i });
         vehicle.userData.presentationBaseScale = vehicle.scale.x;
@@ -1953,6 +2577,16 @@ export class RaceRenderer {
         () => this.presentationRandom.next(),
       );
       this.tireTrails = new TireTrailPool(this.worldRoot, this.quality === 'high' ? 280 : 180);
+      // The thing Alex could not see. Parented to the SCENE rather than the
+      // world root, because it is anchored to the camera's own axis and must
+      // not inherit the road's curve -- streaks that bend with the track read
+      // as scenery, and scenery is exactly what they must not read as.
+      this.hyperspeed = new Hyperspeed({
+        parent: this.scene,
+        count: this.quality === 'high' ? 260 : this.quality === 'medium' ? 170 : 110,
+        reducedMotion: this.reducedMotion,
+        random: () => this.presentationRandom.next(),
+      });
       recordStartupStage('rivalsAndEffects');
       await yieldStartupFrame();
       this.createPostFX();
@@ -2121,6 +2755,7 @@ export class RaceRenderer {
     this.resetCameraDirector();
     this.shake = 0;
     this.flash = 0;
+    this.flashTarget = 0;
     this.cameraX = 0;
     this.cameraY = 4.5;
     this.cameraLookX = 0;
@@ -2674,6 +3309,7 @@ export class RaceRenderer {
       this.resetCameraDirector();
       this.shake = 0;
       this.flash = 0;
+      this.flashTarget = 0;
       this.combatFX.resetDiagnostics();
       this.trackGeometryCache.segmentId = null;
       this.update(initialState, [], 0);
@@ -2723,6 +3359,7 @@ export class RaceRenderer {
       this.resetCameraDirector();
       this.shake = 0;
       this.flash = 0;
+      this.flashTarget = 0;
       this.combatFX.resetDiagnostics();
       this.update(initialState, [], 0);
       restorePasses.push(Number((performance.now() - restoreStarted).toFixed(3)));
@@ -3482,6 +4119,7 @@ export class RaceRenderer {
           this.resetCameraDirector();
           this.shake = 0;
           this.flash = 0;
+          this.flashTarget = 0;
           this.combatFX.resetDiagnostics();
           this.update(initialState, [], 0);
           this.render(0, 0, 'prewarm-recovery');
@@ -3562,8 +4200,45 @@ export class RaceRenderer {
     }
   }
 
+  smoothPose(state) {
+    const epoch = state.poseEpoch | 0;
+    this.renderedPose ??= {
+      yaw: state.yaw, roll: state.roll, pitch: state.pitch ?? 0, boardFlip: state.boardFlip ?? 0,
+    };
+    if (epoch !== this.poseEpochSeen) {
+      this.poseEpochSeen = epoch;
+      // Blend from wherever the board is actually being drawn, not from the
+      // pre-snap simulation value -- otherwise a snap during an earlier blend
+      // would jump.
+      this.poseBlendFrom = { ...this.renderedPose };
+      this.poseBlend = 0;
+    }
+    if (this.poseBlend === undefined) this.poseBlend = 1;
+    this.poseBlend = Math.min(1, this.poseBlend + 1 / POSE_SNAP_FRAMES);
+    const from = this.poseBlendFrom ?? this.renderedPose;
+    const t = this.poseBlend;
+    // Shortest arc, not raw difference. Yaw accumulates whole turns during an
+    // air spin and a completed barrel roll leaves the roll channel a full 2*PI
+    // from where it started -- both are the SAME orientation, and a raw lerp
+    // would unwind them visibly across the blend.
+    const arc = (from, to) => {
+      const delta = (to - from + Math.PI) % (Math.PI * 2);
+      return (delta < 0 ? delta + Math.PI * 2 : delta) - Math.PI;
+    };
+    this.renderedPose.yaw = from.yaw + arc(from.yaw, state.yaw) * t;
+    this.renderedPose.roll = from.roll + arc(from.roll, state.roll) * t;
+    this.renderedPose.pitch = from.pitch + arc(from.pitch, state.pitch ?? 0) * t;
+    // The board flip is wrapped by the same `wrapWholeTurns` that wraps the
+    // other three, so it needs the same shortest-arc blend -- a landed double
+    // kickflip drops 4*PI off the books in one tick, and a raw lerp would play
+    // that back as the board unwinding two turns the wrong way.
+    this.renderedPose.boardFlip = (from.boardFlip ?? 0)
+      + arc(from.boardFlip ?? 0, state.boardFlip ?? 0) * t;
+    return this.renderedPose;
+  }
+
   noteControlState(controls = {}) {
-    const signature = `${Number(controls.steer || 0).toFixed(3)}:${controls.surge ? 1 : 0}:${controls.slip ? 1 : 0}`;
+    const signature = `${Number(controls.steer || 0).toFixed(3)}:${Number(controls.pitch || 0).toFixed(3)}:${controls.hop ? 1 : 0}:${controls.grab ? 1 : 0}`;
     if (signature === this.prewarmLastControlSignature) return;
     this.prewarmLastControlSignature = signature;
     this.notePlayerInput({ type: 'control-change' });
@@ -4538,7 +5213,7 @@ export class RaceRenderer {
             // here to exercise cleanup/rearm without changing normal topology.
             faultInjected = true;
             const fault = new Error('Injected rocket shadow-prime failure after DoubleSide depth submission.');
-            fault.code = 'NINEFOLD_QA_ROCKET_SHADOW_PRIME_AFTER_DEPTH_SUBMIT';
+            fault.code = 'SPACEBOARDING_QA_ROCKET_SHADOW_PRIME_AFTER_DEPTH_SUBMIT';
             throw fault;
           }
         }
@@ -4707,7 +5382,7 @@ export class RaceRenderer {
       throw restorationError;
     }
     const expectedInjectedFailure = faultInjected
-      && pendingError?.code === 'NINEFOLD_QA_ROCKET_SHADOW_PRIME_AFTER_DEPTH_SUBMIT';
+      && pendingError?.code === 'SPACEBOARDING_QA_ROCKET_SHADOW_PRIME_AFTER_DEPTH_SUBMIT';
     if (pendingError && !expectedInjectedFailure) throw pendingError;
     return {
       status: expectedInjectedFailure ? 'fault-injected' : 'complete',
@@ -5400,93 +6075,79 @@ export class RaceRenderer {
     this.scene.add(this.reentryClouds);
   }
 
+  /**
+   * Walk the world's palette toward the next segment's as you approach it.
+   *
+   * This is the answer to "you can never really tell when its going to
+   * happen". The window opens at APPROACH_START -- deliberately earlier than
+   * the launch arc (0.76 of the segment) and the vehicle morph (0.83) -- so
+   * the SKY moves first, then the board, then the boundary. By the time the
+   * segment id actually changes there is nothing left to change: you have been
+   * flying into the next world for ten seconds and watching it arrive.
+   *
+   * Sky and surface move at different rates on purpose. The atmosphere leads,
+   * because that is what travelling toward somewhere looks like; the ground
+   * lags well behind it, because you are still riding the old world and a road
+   * that has already become the next planet is a lie the player can see. Both
+   * arrive together at the boundary -- anything the ground has NOT done by
+   * then has to happen in the boundary frame, which is the cut. Returns the
+   * weights so the effects below can use them.
+   */
+  updateApproachPalette(state, segment) {
+    const fraction = getSegmentFraction(state);
+    const next = COURSE[state.segmentIndex + 1];
+    const look = segmentLook(segment, this.quality);
+    if (!next || state.finished) {
+      this.applyLook(look);
+      return { sky: 0, surface: 0, intoPlanet: 0, intoSpace: 0 };
+    }
+    const sky = smoothstep(APPROACH_START, APPROACH_END, fraction);
+    const surface = Math.pow(sky, APPROACH_SURFACE_LAG);
+    this.applyLook(blendLook(look, segmentLook(next, this.quality), sky, surface));
+    return {
+      sky,
+      surface,
+      intoPlanet: next.type === 'planet' ? sky : 0,
+      intoSpace: next.type === 'space' ? sky : 0,
+    };
+  }
+
   updateTransitionFX(state, segment, dt) {
     const morph = getMorphState(state);
     const fraction = getSegmentFraction(state);
     const planetLaunch = segment.shortId === 'planet-1' ? morph.launch : 0;
     const reentry = segment.type === 'space' ? morph.landing : 0;
     const spaceDeparture = segment.shortId === 'space-1'
-      ? 1 - smoothstep(0.004, SPACE_WEAPONS_ARM_FRACTION, fraction)
+      ? 1 - smoothstep(0.004, SPACE_DEPARTURE_FRACTION, fraction)
       : 0;
     const launchPressure = Math.max(
       smoothstep(0.08, 0.72, planetLaunch),
       spaceDeparture,
     );
+    // The crossfade, for every boundary rather than for the one journey
+    // somebody hand-wrote. See segmentLook().
+    const approach = this.updateApproachPalette(state, segment);
+
+    // What is left here is per-world EFFECT rather than palette: the sheet of
+    // atmosphere Scoria tears through, the haze that thins as it goes. Those
+    // are authored moments and stay authored.
     if (segment.shortId === 'planet-1') {
       const rupture = smoothstep(0.48, 0.96, planetLaunch);
       this.launchFallaway.userData.atmosphereEscape = rupture;
       this.launchFallaway.userData.destinationAtmosphere = 0;
-      this.sky.material.uniforms.spaceFactor.value = rupture;
-      this.stars.material.opacity = lerp(0.003, 0.2, rupture);
       for (const plane of this.scoriaHaze.children) {
         plane.material.uniforms.opacity.value = plane.userData.baseOpacity * (1 - rupture);
       }
     } else if (segment.shortId === 'space-1') {
-      // setSegment changes palettes atomically. Rebuild the first corridor's
-      // actual visual state here so the first space frame still contains the
-      // atmosphere Scoria just ruptured, and the last space frame is already
-      // inside Thunderglass' atmosphere before the simulation boundary.
-      const escape = smoothstep(0.008, 0.19, fraction);
-      const atmosphericCapture = smoothstep(0.2, 0.96, reentry);
-      this.launchFallaway.userData.atmosphereEscape = escape;
-      this.launchFallaway.userData.destinationAtmosphere = atmosphericCapture;
-      this.sky.material.uniforms.topColor.value
-        .copy(SCORIA_SKY_TOP)
-        .lerp(SPACE_ONE_SKY_TOP, escape)
-        .lerp(STORMGLASS_SKY_TOP, atmosphericCapture);
-      this.sky.material.uniforms.bottomColor.value
-        .copy(SCORIA_SKY_BOTTOM)
-        .lerp(SPACE_ONE_SKY_BOTTOM, escape)
-        .lerp(STORMGLASS_SKY_BOTTOM, atmosphericCapture);
-      this.sky.material.uniforms.accentColor.value
-        .copy(SCORIA_SKY_ACCENT)
-        .lerp(SPACE_ONE_SKY_ACCENT, escape)
-        .lerp(STORMGLASS_SKY_ACCENT, atmosphericCapture);
-      this.sky.material.uniforms.spaceFactor.value = 1 - atmosphericCapture;
-      this.scene.fog.color
-        .copy(SCORIA_FOG)
-        .lerp(SPACE_ONE_FOG, escape)
-        .lerp(STORMGLASS_FOG, atmosphericCapture);
-      this.scene.fog.density = lerp(
-        lerp(0.00068, 0.00027, escape),
-        0.00072,
-        atmosphericCapture,
-      );
-      this.stars.material.opacity = lerp(0.2, 0.003, atmosphericCapture);
-      const scoriaAmbient = this.quality === 'low' ? 1.92 : this.quality === 'medium' ? 1.86 : 1.8;
-      this.sunLight.color
-        .copy(SCORIA_SUN_LIGHT)
-        .lerp(SPACE_ONE_SUN_LIGHT, escape)
-        .lerp(STORMGLASS_SUN_LIGHT, atmosphericCapture);
-      this.ambientLight.color
-        .copy(SCORIA_AMBIENT_LIGHT)
-        .lerp(SPACE_ONE_AMBIENT_LIGHT, escape)
-        .lerp(STORMGLASS_AMBIENT_LIGHT, atmosphericCapture);
-      this.hemisphere.color
-        .copy(SCORIA_HEMISPHERE_LIGHT)
-        .lerp(SPACE_ONE_HEMISPHERE_LIGHT, escape)
-        .lerp(STORMGLASS_HEMISPHERE_LIGHT, atmosphericCapture);
-      this.hemisphere.groundColor
-        .copy(SCORIA_HEMISPHERE_GROUND)
-        .lerp(SPACE_ONE_HEMISPHERE_GROUND, escape)
-        .lerp(STORMGLASS_HEMISPHERE_GROUND, atmosphericCapture);
-      this.rimLight.color
-        .copy(SCORIA_RIM_LIGHT)
-        .lerp(SPACE_ONE_RIM_LIGHT, escape)
-        .lerp(STORMGLASS_RIM_LIGHT, atmosphericCapture);
-      this.destinationFill.color
-        .copy(SCORIA_DESTINATION_LIGHT)
-        .lerp(SPACE_ONE_DESTINATION_LIGHT, escape)
-        .lerp(STORMGLASS_DESTINATION_LIGHT, atmosphericCapture);
-      this.sunLight.intensity = lerp(lerp(0.7, 3.15, escape), 3.8, atmosphericCapture);
-      this.ambientLight.intensity = lerp(lerp(scoriaAmbient, 0.16, escape), 0.28, atmosphericCapture);
-      this.hemisphere.intensity = lerp(lerp(0.5, 0.78, escape), 1.18, atmosphericCapture);
-      this.rimLight.intensity = lerp(lerp(32, 48, escape), 32, atmosphericCapture);
-      this.lavaFill.intensity = lerp(lerp(6.5, 4.5, escape), 0, atmosphericCapture);
-      this.destinationFill.intensity = lerp(lerp(0.35, 3.6, escape), 0.55, atmosphericCapture);
+      this.launchFallaway.userData.atmosphereEscape = smoothstep(0.008, 0.19, fraction);
+      this.launchFallaway.userData.destinationAtmosphere = smoothstep(0.2, 0.96, reentry);
     } else {
       this.launchFallaway.userData.atmosphereEscape = 1;
-      this.launchFallaway.userData.destinationAtmosphere = segment.shortId === 'planet-2' ? 1 : 0;
+      // Every later crossing gets the same atmosphere-capture ramp the first
+      // one got, driven by the general approach rather than by a hardcoded id.
+      this.launchFallaway.userData.destinationAtmosphere = segment.type === 'space'
+        ? approach.intoPlanet
+        : 0;
     }
     const launchVisible = launchPressure > 0.012;
     this.launchFallaway.userData.launchPressure = launchPressure;
@@ -6037,6 +6698,21 @@ export class RaceRenderer {
     this.road = new THREE.Mesh(this.roadGeometry, this.roadMaterial);
     this.road.receiveShadow = true;
     this.worldRoot.add(this.road);
+    this.cameraSeam = {
+      index: -1,
+      ready: false,
+      blend: 0,
+      positionOffset: new THREE.Vector3(),
+      rotationOffset: new THREE.Quaternion(),
+      lastPosition: new THREE.Vector3(),
+      lastQuaternion: new THREE.Quaternion(),
+    };
+    this.trackSeamScratch = {
+      next: null, previous: null, length: 0,
+      nextX: 0, nextY: 0, previousX: 0, previousY: 0,
+    };
+    this.skateFeatures = new SkateFeatures(this.worldRoot, this.trackRows);
+    this.railLines = new RailLines(this.worldRoot);
     this.roadWorkGeometry = this.roadGeometry;
 
     this.terrainGeometry = makeRibbonGeometry(this.trackRows, this.terrainColumns);
@@ -7460,7 +8136,7 @@ export class RaceRenderer {
   updateAtmosphereFlow(state, segment, dt) {
     const scoria = segment.shortId === 'planet-1';
     const departure = segment.shortId === 'space-1'
-      ? 1 - smoothstep(0.004, SPACE_WEAPONS_ARM_FRACTION, getSegmentFraction(state))
+      ? 1 - smoothstep(0.004, SPACE_DEPARTURE_FRACTION, getSegmentFraction(state))
       : 0;
     const active = scoria || departure > 0.001;
     this.ash.visible = active;
@@ -8046,7 +8722,15 @@ export class RaceRenderer {
       if (retainedKey) this.retainCurrentDecor(retainedKey);
       return;
     }
-    const count = this.quality === 'high' ? 118 : this.quality === 'medium' ? 82 : 52;
+    // Decor is spread across the whole segment, so a longer segment with a
+    // fixed count is a thinner world. Phase 2 more than doubled the slice
+    // planets to hit their pacing window; this keeps their density where it
+    // was authored. Both meshes are instanced, so this costs vertex and shadow
+    // work but not draw calls, and it is capped so a future long segment
+    // cannot quietly blow the frame budget.
+    const density = Math.min(2.2, Math.max(0.8, segment.length / DECOR_REFERENCE_LENGTH));
+    const base = this.quality === 'high' ? 118 : this.quality === 'medium' ? 82 : 52;
+    const count = Math.round(base * density);
     this.decorLayout = seededLayout(segment, seed, count);
     const spec = this.decorSpec(segment);
     const materialA = new THREE.MeshStandardMaterial({
@@ -8118,82 +8802,138 @@ export class RaceRenderer {
     }
   }
 
+  /**
+   * What the world's palette actually is right now.
+   *
+   * A QA read, and the instrument behind tests/browser-transition.mjs. The
+   * complaint being defended against -- "the teleport looks like it just loads
+   * a new screen" -- is a claim about a SINGLE FRAME's worth of change, which
+   * is a number, so it gets measured rather than eyeballed.
+   */
+  readWorldLook() {
+    const rgb = (c) => [c.r, c.g, c.b];
+    const sky = this.sky.material.uniforms;
+    return {
+      fog: rgb(this.scene.fog.color),
+      fogDensity: this.scene.fog.density,
+      skyTop: rgb(sky.topColor.value),
+      skyBottom: rgb(sky.bottomColor.value),
+      skyAccent: rgb(sky.accentColor.value),
+      spaceFactor: sky.spaceFactor.value,
+      starOpacity: this.stars.material.opacity,
+      sun: rgb(this.sunLight.color),
+      sunIntensity: this.sunLight.intensity,
+      ambient: rgb(this.ambientLight.color),
+      ambientIntensity: this.ambientLight.intensity,
+      hemisphere: rgb(this.hemisphere.color),
+      hemisphereIntensity: this.hemisphere.intensity,
+      road: rgb(this.roadMaterial.color),
+      roadEmissive: rgb(this.roadMaterial.emissive),
+      terrain: rgb(this.terrainMaterial.color),
+      terrainEmissive: rgb(this.terrainMaterial.emissive),
+      terrainEmissiveIntensity: this.terrainMaterial.emissiveIntensity,
+    };
+  }
+
+  /** Write a look to the scene. The only place these values are assigned. */
+  applyLook(look) {
+    if (!this.scene.fog) this.scene.fog = new THREE.FogExp2(look.fogColor.getHex(), look.fogDensity);
+    this.scene.fog.color.copy(look.fogColor);
+    this.scene.fog.density = look.fogDensity;
+    const sky = this.sky.material.uniforms;
+    sky.topColor.value.copy(look.skyTop);
+    sky.bottomColor.value.copy(look.skyBottom);
+    sky.accentColor.value.copy(look.skyAccent);
+    sky.spaceFactor.value = look.spaceFactor;
+    this.stars.material.opacity = look.starOpacity;
+    this.roadMaterial.emissive.copy(look.roadEmissive);
+    this.roadMaterial.emissiveIntensity = look.roadEmissiveIntensity;
+    this.roadMaterial.color.copy(look.roadColor);
+    this.roadMaterial.metalness = look.roadMetalness;
+    this.roadMaterial.roughness = look.roadRoughness;
+    this.terrainMaterial.emissive.copy(look.terrainEmissive);
+    this.terrainMaterial.emissiveIntensity = look.terrainEmissiveIntensity;
+    this.terrainMaterial.color.copy(look.terrainColor);
+    this.horizon.material.emissive.copy(look.horizonEmissive);
+    this.horizon.material.emissiveIntensity = look.horizonEmissiveIntensity;
+    this.horizon.material.color.copy(look.horizonColor);
+    this.sunLight.color.copy(look.sunColor);
+    this.sunLight.intensity = look.sunIntensity;
+    this.ambientLight.color.copy(look.ambientColor);
+    this.ambientLight.intensity = look.ambientIntensity;
+    this.hemisphere.color.copy(look.hemiColor);
+    this.hemisphere.groundColor.copy(look.hemiGround);
+    this.hemisphere.intensity = look.hemiIntensity;
+    this.rimLight.color.copy(look.rimColor);
+    this.rimLight.intensity = look.rimIntensity;
+    this.lavaFill.intensity = look.lavaFill;
+    this.destinationFill.color.copy(look.destinationFillColor);
+    this.destinationFill.intensity = look.destinationFill;
+    this.sunOrb.material.color.copy(look.sunOrbColor);
+    this.sunHalo.material.color.copy(look.sunOrbColor);
+    this.speedLines.material.color.copy(look.lineSecondary);
+    for (const line of this.laneLines) line.material.color.copy(look.lineSecondary);
+    for (const line of this.edgeLines) line.material.color.copy(look.lineAccent);
+    for (const gate of this.gates) gate.userData.material.color.copy(look.lineAccent);
+    for (const ring of this.launchRings) ring.material.color.copy(look.lineSecondary);
+  }
+
+  /**
+   * Everything about a segment that CANNOT be crossfaded: texture maps, which
+   * meshes exist at all, the decor rebuild. Runs once, at the boundary.
+   *
+   * Keeping this list short is the point. The less that has to change on the
+   * frame the id changes, the less there is to read as a cut -- by the time
+   * this fires, updateApproachPalette() has already walked the sky, the fog
+   * and every light most of the way to the destination.
+   */
   setSegment(segment, seed) {
     if (this.segmentId === segment.id) return;
     this.segmentId = segment.id;
     const isScoria = segment.shortId === 'planet-1';
-    this.scene.fog = new THREE.FogExp2(
-      segment.fog,
-      segment.type === 'space' ? 0.00027 : (isScoria ? 0.00068 : 0.00072),
-    );
-    this.sky.material.uniforms.topColor.value.set(segment.sky).lerp(new THREE.Color(0x000008), segment.type === 'space' ? 0.68 : 0.08);
-    this.sky.material.uniforms.bottomColor.value.set(segment.fog).multiplyScalar(segment.type === 'space' ? 0.16 : 0.7);
-    this.sky.material.uniforms.accentColor.value.set(segment.shortId === 'space-1' ? 0x16455a : segment.accent);
-    this.sky.material.uniforms.spaceFactor.value = segment.type === 'space' ? 1 : 0;
+    this.applyLook(segmentLook(segment, this.quality));
+    // The ALBEDO map is Scoria's rock and stays Scoria's. The normal and
+    // roughness maps are not: a normal map is a field of bumps and a roughness
+    // map is a grey mask, neither of which carries a world's colour. Handing
+    // them to every planet costs nothing, swaps one texture instead of three
+    // at a boundary, and is the difference between a surface and a slab.
+    const surfaced = segment.type === 'planet';
     this.roadMaterial.map = isScoria ? this.planetOneArt.road.map : null;
-    this.roadMaterial.normalMap = isScoria ? this.planetOneArt.road.normalMap : null;
-    this.roadMaterial.roughnessMap = isScoria ? this.planetOneArt.road.roughnessMap : null;
+    this.roadMaterial.normalMap = surfaced ? this.planetOneArt.road.normalMap : null;
+    this.roadMaterial.normalScale.set(isScoria ? 1 : 0.62, isScoria ? 1 : 0.62);
+    this.roadMaterial.roughnessMap = surfaced ? this.planetOneArt.road.roughnessMap : null;
     this.roadMaterial.emissiveMap = null;
-    this.roadMaterial.emissive.set(isScoria ? 0x2b1a16 : segment.accent);
-    this.roadMaterial.emissiveIntensity = isScoria ? 0.58 : (segment.type === 'space' ? 0.16 : 0.08);
-    this.roadMaterial.color.set(isScoria ? 0xc2ada4 : 0xffffff);
-    this.roadMaterial.metalness = segment.type === 'space' ? 0.72 : (isScoria ? 0.18 : 0.46);
-    this.roadMaterial.roughness = segment.type === 'space' ? 0.22 : (isScoria ? 0.82 : 0.5);
     // Planet 2 crossfades from the already-visible authored touchdown strip;
     // retaining the transparent variant prevents a live shader toggle there.
-    this.roadMaterial.transparent = segment.type === 'space' || segment.shortId === 'planet-2';
+    // Always transparent. A planet's road now fades across its launch seam
+    // rather than being switched off on the far side, and a material that
+    // cannot fade cannot do that. Planet 2 already shipped this way.
+    this.roadMaterial.transparent = true;
     this.roadMaterial.opacity = segment.type === 'space' || segment.shortId === 'planet-2' ? 0 : 1;
     this.roadMaterial.needsUpdate = true;
     this.terrainMaterial.map = isScoria ? this.planetOneArt.terrain.map : null;
-    this.terrainMaterial.normalMap = isScoria ? this.planetOneArt.terrain.normalMap : null;
-    this.terrainMaterial.normalScale.set(1.08, 1.08);
-    this.terrainMaterial.roughnessMap = isScoria ? this.planetOneArt.terrain.roughnessMap : null;
+    this.terrainMaterial.normalMap = surfaced ? this.planetOneArt.terrain.normalMap : null;
+    this.terrainMaterial.normalScale.set(isScoria ? 1.08 : 0.78, isScoria ? 1.08 : 0.78);
+    this.terrainMaterial.roughnessMap = surfaced ? this.planetOneArt.terrain.roughnessMap : null;
     // A low, map-independent atmospheric bounce keeps distant folded terrain
     // readable through the red haze. The old sparse ember mask left every
     // non-ember texel black whenever a ridge turned away from the key light.
     this.terrainMaterial.emissiveMap = null;
-    this.terrainMaterial.emissive.set(isScoria ? 0x2b1711 : 0x000000);
-    this.terrainMaterial.emissiveIntensity = isScoria ? 1.05 : 0;
-    // Scoria's texture, material colour, and per-vertex terrain tint multiply.
-    // The old three dark factors buried the authored stone response. This warm
-    // near-neutral multiplier leaves darkness to the physical lighting.
-    this.terrainMaterial.color.set(isScoria ? 0xc0a89d : segment.ground);
     this.terrainMaterial.needsUpdate = true;
     this.horizon.material.map = isScoria ? this.horizonTextures.map : null;
-    this.horizon.material.normalMap = isScoria ? this.horizonTextures.normalMap : null;
+    this.horizon.material.normalMap = surfaced ? this.horizonTextures.normalMap : null;
     this.horizon.material.normalScale.set(0.68, 0.68);
-    this.horizon.material.roughnessMap = isScoria ? this.horizonTextures.roughnessMap : null;
+    this.horizon.material.roughnessMap = surfaced ? this.horizonTextures.roughnessMap : null;
     this.horizon.material.emissiveMap = null;
-    this.horizon.material.emissive.set(isScoria ? 0x24120d : 0x000000);
-    this.horizon.material.emissiveIntensity = isScoria ? 0.5 : 0;
-    this.horizon.material.color.set(isScoria ? 0x8f6f64 : segment.ground);
     this.horizon.material.needsUpdate = true;
+    // The horizon and the haze belong to a planet, but they are faded rather
+    // than switched -- see updateApproachPalette. A mesh appearing in one
+    // frame is a cut whatever colour it is.
     this.horizon.visible = segment.type === 'planet';
-    this.sunLight.color.set(isScoria ? 0xffe3d5 : (segment.shortId === 'space-1' ? 0xc5eaff : segment.sun));
-    this.sunLight.intensity = segment.type === 'space' ? 3.15 : (isScoria ? 0.7 : 3.8);
-    this.ambientLight.color.set(isScoria ? 0xffd8cf : colorMix(segment.sun, 0xffffff, 0.2));
-    this.ambientLight.intensity = isScoria
-      ? (this.quality === 'low' ? 1.92 : this.quality === 'medium' ? 1.86 : 1.8)
-      : (segment.type === 'space' ? 0.16 : 0.28);
-    this.hemisphere.color.set(colorMix(segment.accent, 0xffffff, 0.45));
-    this.hemisphere.groundColor.set(isScoria ? 0x3f2823 : segment.ground);
-    this.hemisphere.intensity = segment.type === 'space' ? 0.78 : (isScoria ? 0.5 : 1.18);
-    this.rimLight.color.set(segment.shortId === 'space-1' ? segment.secondary : segment.accent);
-    this.rimLight.intensity = segment.type === 'space' ? 48 : 32;
-    this.lavaFill.intensity = isScoria ? 6.5 : (segment.type === 'space' && segment.index === 1 ? 4.5 : 0);
-    this.destinationFill.color.set(isScoria ? 0xffddcf : 0x7bdcff);
-    this.destinationFill.intensity = segment.shortId === 'space-1' ? 3.6 : (isScoria ? 0.35 : 0.55);
-    this.sunOrb.material.color.set(segment.sun);
-    this.sunHalo.material.color.set(segment.sun);
-    this.stars.material.opacity = segment.type === 'space' ? 0.2 : 0.003;
     this.scoriaHaze.visible = isScoria;
-    this.speedLines.material.color.set(segment.secondary);
-    for (const line of this.laneLines) line.material.color.set(segment.secondary);
-    for (const line of this.edgeLines) line.material.color.set(segment.accent);
-    for (const gate of this.gates) gate.userData.material.color.set(segment.accent);
-    for (const ring of this.launchRings) ring.material.color.set(segment.secondary);
     this.rebuildDecor(segment, seed);
   }
+
 
   writeReflectorMarker(segment, markerIndex, slot, spacing) {
     const progress = markerIndex * spacing;
@@ -8293,6 +9033,58 @@ export class RaceRenderer {
     this.terrain.geometry = this.terrainWorkGeometry;
   }
 
+  /**
+   * Where the neighbouring segments' curves have to sit to meet this one's
+   * ends. Constant for a frame, so it is resolved once rather than per row.
+   */
+  trackSeam(index, segment) {
+    const seam = this.trackSeamScratch;
+    seam.next = COURSE[index + 1] ?? null;
+    seam.previous = COURSE[index - 1] ?? null;
+    seam.length = segment.length;
+    if (seam.next) {
+      const end = trackSample(segment, segment.length);
+      const start = trackSample(seam.next, 0);
+      seam.nextX = end.x - start.x;
+      seam.nextY = end.y - start.y;
+    }
+    if (seam.previous) {
+      const start = trackSample(segment, 0);
+      const end = trackSample(seam.previous, seam.previous.length);
+      seam.previousX = start.x - end.x;
+      seam.previousY = start.y - end.y;
+    }
+    return seam;
+  }
+
+  /**
+   * Mix a sampled row toward the neighbouring segment's curve near a seam.
+   * Mutates and returns `base` -- the Scoria path samples into reused scratch
+   * objects, and this has to work for both.
+   */
+  seamSample(base, seam, p) {
+    if (seam.next && p > seam.length - SEAM_BLEND) {
+      const t = smoothstep(seam.length - SEAM_BLEND, seam.length + SEAM_BLEND, p);
+      if (t > 0) {
+        const ahead = trackSample(seam.next, p - seam.length);
+        base.x += (ahead.x + seam.nextX - base.x) * t;
+        base.y += (ahead.y + seam.nextY - base.y) * t;
+        base.bank += (ahead.bank - base.bank) * t;
+        base.width += (ahead.width - base.width) * t;
+      }
+    } else if (seam.previous && p < SEAM_BLEND) {
+      const t = 1 - smoothstep(-SEAM_BLEND, SEAM_BLEND, p);
+      if (t > 0) {
+        const behind = trackSample(seam.previous, seam.previous.length + p);
+        base.x += (behind.x + seam.previousX - base.x) * t;
+        base.y += (behind.y + seam.previousY - base.y) * t;
+        base.bank += (behind.bank - base.bank) * t;
+        base.width += (behind.width - base.width) * t;
+      }
+    }
+    return base;
+  }
+
   updateTrack(state, segment) {
     const profile = this.trackProfileSamples;
     const profileStartedAt = profile ? performance.now() : 0;
@@ -8352,9 +9144,17 @@ export class RaceRenderer {
       ?? (openingResponseCandidate?.preuploaded ? openingResponseCandidate : null);
     const workBankActivated = !isStaticScoria && !openingResponse;
     if (workBankActivated) this.activateNextTrackWorkGeometry();
-    const current = isScoria
-      ? sampleScoriaTrackInto(segment, this.logicalProgress, this.scoriaCurrentSample)
-      : trackSample(segment, this.logicalProgress);
+    const seam = this.trackSeam(state.segmentIndex, segment);
+    const coursePhase = COURSE_PHASE[state.segmentIndex] ?? 0;
+    // The origin every row is measured from has to be stitched as well, or the
+    // rows move smoothly while the point they are drawn relative to jumps.
+    const current = this.seamSample(
+      isScoria
+        ? sampleScoriaTrackInto(segment, this.logicalProgress, this.scoriaCurrentSample)
+        : trackSample(segment, this.logicalProgress),
+      seam,
+      this.logicalProgress,
+    );
     if (isStaticScoria) {
       const profileSetupAt = profile ? performance.now() : 0;
       this.updateStaticScoriaSurface(current);
@@ -8447,6 +9247,16 @@ export class RaceRenderer {
       || (segment.shortId === 'planet-2' && stormglassGenericReveal <= 0.92);
     const skipLineGeometry = isSpaceOne || inStormglassTouchdown;
     const destination = segment.type === 'space' ? PLANETS[Math.min(PLANETS.length - 1, segment.index)] : null;
+    // The road's fade across a launch, written once as two halves of the same
+    // curve. Each evaluates to 0.5 exactly at the seam, so the last frame of
+    // the planet and the first frame of the crossing draw the road at the same
+    // strength -- there is no frame where it changes.
+    const launchRoad = seam.next?.type === 'space'
+      ? 1 - smoothstep(segment.length - SEAM_BLEND, segment.length + SEAM_BLEND, this.logicalProgress)
+      : 1;
+    const departureRoad = seam.previous?.type === 'planet'
+      ? 1 - smoothstep(-SEAM_BLEND, SEAM_BLEND, this.logicalProgress)
+      : 0;
     const reconstructScoriaNormals = isScoria && this.quality === 'high';
     if (isScoria
       && this.quality === 'high'
@@ -8462,22 +9272,43 @@ export class RaceRenderer {
       .set(isScoria ? 0xa08f87 : segment.road)
       .lerp(this.trackColors.target.set(destination?.road ?? segment.road), landingAmount);
     const accent = this.trackColors.accent.set(segment.accent);
+    // The per-vertex terrain tint. Lifted to a value that can be lit, on every
+    // planet rather than only the first -- see liftSurface().
     const ground = this.trackColors.ground
-      .set(isScoria ? 0xb49e93 : segment.ground)
-      .lerp(this.trackColors.target.set(destination?.ground ?? segment.ground), landingAmount);
+      .copy(isScoria ? SCORIA_GROUND_TINT : liftSurface(segment.ground, TERRAIN_VALUE))
+      .lerp(
+        this.trackColors.target.copy(liftSurface(destination?.ground ?? segment.ground, TERRAIN_VALUE)),
+        landingAmount,
+      );
     const shoulder = this.trackColors.shoulder
-      .set(isScoria ? 0xc7a99c : segment.shoulder)
-      .lerp(this.trackColors.target.set(destination?.shoulder ?? segment.shoulder), landingAmount);
+      .copy(isScoria ? SCORIA_SHOULDER_TINT : liftSurface(segment.shoulder, SHOULDER_VALUE))
+      .lerp(
+        this.trackColors.target.copy(liftSurface(destination?.shoulder ?? segment.shoulder, SHOULDER_VALUE)),
+        landingAmount,
+      );
     if (isSpaceOne) {
       // ArrivalArt + TouchdownArt are the one continuous physical runway for
       // S1->P2. The generic space ribbon used an orange vertex accent and
       // inflated into the captured red/cyan slab one frame before landing.
-      this.roadMaterial.opacity = 0;
-      this.road.visible = false;
-      this.terrain.visible = false;
-      this.terrainMaterial.color.copy(STORMGLASS_FOG);
+      //
+      // But the first frame of the corridor still has Scoria's road under it,
+      // and hiding both meshes outright took the whole lower half of the
+      // screen away in one tick. The runway takes over over three hundred
+      // units instead, which is the same seam every other boundary uses.
+      this.roadMaterial.opacity = departureRoad;
+      this.road.visible = departureRoad > 0.002;
+      this.terrain.visible = departureRoad > 0.002;
+      this.terrainMaterial.color.set(PLANETS[1].fog);
     } else if (segment.type === 'space') {
-      this.roadMaterial.opacity = 0.015 + landingReveal * landingReveal * 0.965;
+      // Leaving a planet, the road does not switch off -- it FADES, continuing
+      // the same curve the planet side was already running, and the rows
+      // behind the seam keep falling away beneath you while it does. The road
+      // was sixty per cent of the screen, and switching it off in one frame
+      // was the single largest thing in the boundary's pixel evidence.
+      this.roadMaterial.opacity = Math.max(
+        0.015 + landingReveal * landingReveal * 0.965,
+        departureRoad,
+      );
       this.terrainMaterial.color.copy(
         this.trackColors.surfaceTint
           .set(destination?.ground ?? segment.ground)
@@ -8485,9 +9316,10 @@ export class RaceRenderer {
       );
       this.road.visible = true;
     } else if (segment.shortId === 'planet-2') {
-      this.roadMaterial.opacity = stormglassGenericReveal;
-      this.road.visible = stormglassGenericReveal > 0.002;
+      this.roadMaterial.opacity = Math.min(stormglassGenericReveal, launchRoad);
+      this.road.visible = this.roadMaterial.opacity > 0.002;
     } else {
+      this.roadMaterial.opacity = launchRoad;
       this.road.visible = true;
     }
     const roadBaseR = roadBase.r;
@@ -8544,16 +9376,31 @@ export class RaceRenderer {
     } else for (let i = 0; i < this.trackRows; i += 1) {
       const offset = (i - this.behindRows) * this.trackSpacing;
       const worldProgress = this.logicalProgress + offset;
-      const sample = isScoria
-        ? sampleScoriaTrackInto(segment, worldProgress, this.scoriaCourseSamples[i])
-        : trackSample(segment, worldProgress);
-      const nextSample = isScoria
-        ? sampleScoriaTrackInto(segment, worldProgress + 2, this.scoriaNextSamples[i])
-        : trackSample(segment, worldProgress + 2);
+      const sample = this.seamSample(
+        isScoria
+          ? sampleScoriaTrackInto(segment, worldProgress, this.scoriaCourseSamples[i])
+          : trackSample(segment, worldProgress),
+        seam,
+        worldProgress,
+      );
+      const nextSample = this.seamSample(
+        isScoria
+          ? sampleScoriaTrackInto(segment, worldProgress + 2, this.scoriaNextSamples[i])
+          : trackSample(segment, worldProgress + 2),
+        seam,
+        worldProgress + 2,
+      );
       const x = sample.x - current.x;
       let y = sample.y - current.y - 0.52;
-      if (isScoria && worldProgress > segment.length) {
+      // The ground going with you is what a launch looks like. Scoria was the
+      // only world that did it; every planet does now, and the crossing on the
+      // far side of the seam keeps the rows behind it falling for as long as
+      // they are still drawn.
+      if (segment.type === 'planet' && seam.next && worldProgress > segment.length) {
         const fallaway = smoothstep(0, 92, worldProgress - segment.length);
+        y -= fallaway * fallaway * 680;
+      } else if (segment.type === 'space' && seam.previous?.type === 'planet' && worldProgress < 0) {
+        const fallaway = smoothstep(0, 92, -worldProgress);
         y -= fallaway * fallaway * 680;
       }
       const z = -offset;
@@ -8573,6 +9420,9 @@ export class RaceRenderer {
         ? smoothstep(0.48, 0.62, fraction) * (1 - smoothstep(0.74, 0.81, fraction))
         : 0;
       const launch = segment.type === 'planet' ? smoothstep(0.76, 1, fraction) : 0;
+      // Distance along the whole course rather than into this segment. Every
+      // phase below is continuous across a boundary because of it.
+      const phaseProgress = worldProgress + coursePhase;
       const trackRow = samples[i];
       trackRow.x = x;
       trackRow.y = y;
@@ -8587,8 +9437,8 @@ export class RaceRenderer {
       trackRow.fraction = fraction;
 
       if (!skipRoadGeometry) {
-        const roadUvY = worldProgress / (segment.type === 'space' ? 72 : 38);
-        const pulse = Math.sin(worldProgress * 0.034 + segment.index) * 0.5 + 0.5;
+        const roadUvY = phaseProgress / (segment.type === 'space' ? 72 : 38);
+        const pulse = Math.sin(phaseProgress * 0.034) * 0.5 + 0.5;
         const roadRowOffset = i * this.roadColumns;
 
         for (let column = 0; column < this.roadColumns; column += 1) {
@@ -8619,20 +9469,20 @@ export class RaceRenderer {
 
       if (!skipTerrainGeometry) {
         const terrainRowOffset = i * this.terrainColumns;
-        const terrainUvY = worldProgress / 52;
-        const macroRowA = worldProgress * 0.0061 + segment.index * 0.9;
-        const macroRowB = worldProgress * 0.0137;
-        const macroRowC = worldProgress * 0.0022;
-        const macroRowD = worldProgress * 0.027 + segment.index;
-        const broadRow = worldProgress * 0.00325;
-        const ridgeRowA = worldProgress * 0.0057;
-        const ridgeRowB = worldProgress * 0.00235;
-        const shelfRowA = worldProgress * 0.011;
-        const shelfRowB = worldProgress * 0.0043;
-        const fractureRowA = worldProgress * 0.041;
-        const fractureRowB = worldProgress * 0.073;
-        const canyonRow = worldProgress * 0.012;
-        const stratumRow = worldProgress * 0.017;
+        const terrainUvY = phaseProgress / 52;
+        const macroRowA = phaseProgress * 0.0061;
+        const macroRowB = phaseProgress * 0.0137;
+        const macroRowC = phaseProgress * 0.0022;
+        const macroRowD = phaseProgress * 0.027;
+        const broadRow = phaseProgress * 0.00325;
+        const ridgeRowA = phaseProgress * 0.0057;
+        const ridgeRowB = phaseProgress * 0.00235;
+        const shelfRowA = phaseProgress * 0.011;
+        const shelfRowB = phaseProgress * 0.0043;
+        const fractureRowA = phaseProgress * 0.041;
+        const fractureRowB = phaseProgress * 0.073;
+        const canyonRow = phaseProgress * 0.012;
+        const stratumRow = phaseProgress * 0.017;
         const macroRowASin = Math.sin(macroRowA);
         const macroRowACos = Math.cos(macroRowA);
         const macroRowBSin = Math.sin(macroRowB);
@@ -8809,6 +9659,47 @@ export class RaceRenderer {
       this.terrainGeometry.attributes.normal.needsUpdate = true;
       this.terrainGeometry.attributes.uv.needsUpdate = true;
     }
+    // The ribbon rows were just rewritten into one of three rotating work
+    // banks, so the bounds cached on that bank are now a frame out of date.
+    //
+    // Alex: "Sometimes things are flashing like planets or the background."
+    //
+    // It was the planets, it was every third frame, and the road did it.
+    // three.js r161 derives the TRANSPARENT RENDER LIST's depth sort key from
+    // geometry.boundingSphere.center, and computes that sphere only when it is
+    // null -- a stale or degenerate one is used exactly as it stands. Bank 0's
+    // sphere was computed lazily during prewarm while its position buffer was
+    // still all zeros and cached forever as centre (0,0,0) radius 0; banks 1
+    // and 2 were cloned before that happened and later cached real centres near
+    // z = -810. Nothing ever invalidated any of them, even though updateTrack
+    // rewrites every row every frame.
+    //
+    // So the three banks handed the sorter three different depths for the same
+    // road, and the road is in the transparent list on every segment because
+    // roadMaterial.transparent is unconditional. Every third frame the whole
+    // transparent pass reordered, changing when the road blended against the
+    // vista planets' cloud and atmosphere shells -- measured as a 37% jump in
+    // the planet's own pixels, period-3 ANOVA r2 0.985. At sixty frames a
+    // second that is a 20 Hz flash on the largest object on screen.
+    //
+    // Why every ordinary probe missed it: the scene graph is genuinely smooth.
+    // Zero visibility flips, zero renderOrder changes, constant draw calls,
+    // constant materials, constant transforms. It is not IN the scene state --
+    // it is in the order the renderer walks it.
+    //
+    // Recomputing on the bank that was just written costs nothing measurable
+    // (5.83 -> 5.68 ms/frame). Do NOT reach for frustumCulled = false instead:
+    // the sort path reads the sphere whether or not culling is enabled, and it
+    // was measured to change nothing.
+    // Recompute on the bank that was just written, then SHARE it with the
+    // others. Recomputing the active bank alone was enough to stop the flash,
+    // but it leaves the three banks holding three spheres computed at three
+    // different moments -- measured still 344 units apart -- so the invariant
+    // that actually matters is only accidentally true. Copying makes them equal
+    // by construction, for the price of two clones a frame, and it is the thing
+    // tests/browser-flicker.mjs can assert without asserting a symptom.
+    shareBankBounds(this.roadGeometry, this.roadWorkGeometries);
+    shareBankBounds(this.terrainGeometry, this.terrainWorkGeometries);
     const profileDirtyAt = profile ? performance.now() : 0;
     this.terrain.visible = isSpaceOne
       ? false
@@ -8886,7 +9777,14 @@ export class RaceRenderer {
       const gateProgress = gateIndex * spacing;
       const local = gateProgress - this.logicalProgress;
       const gate = this.gates[i];
-      const visible = !['planet-1', 'space-1'].includes(segment.shortId)
+      // Space I used to hide its rings entirely, because the crossing had
+      // nothing in it but the cathedral and the guns. It has rings now, and a
+      // crossing with no rings is a crossing with nothing to do -- so they
+      // appear once the launch spectacle is behind the player rather than not
+      // at all. Scoria still has none: it is the tutorial road.
+      const afterLaunch = segment.shortId !== 'space-1' || gateProgress > segment.length * 0.22;
+      const visible = segment.shortId !== 'planet-1'
+        && afterLaunch
         && !(segment.shortId === 'planet-2' && this.logicalProgress < 855)
         && local > 18 && local < this.trackRows * this.trackSpacing - 40 && gateProgress < segment.length * 0.88;
       gate.visible = visible;
@@ -8894,7 +9792,12 @@ export class RaceRenderer {
       const sample = trackSample(segment, gateProgress);
       const target = gateTarget(segment, Math.floor(gateProgress * shortScale / Math.max(18, segment.gimmick.spacing * (state.short ? 0.16 : 1))), state);
       gate.position.set(sample.x - currentSample.x + target, sample.y - currentSample.y, -local);
-      const size = segment.type === 'space' ? 1.45 : 1;
+      // A crossing ring is a thing you fly THROUGH, so its aperture has to read
+      // as passable from far enough out to line up on. The ring tolerance in
+      // the sim is 22% of segment width, which on a 22-wide crossing is a
+      // 4.8-unit corridor -- the drawn ring is sized to match rather than to
+      // decorate.
+      const size = segment.type === 'space' ? 2.4 : 1;
       gate.scale.set(size, size, size);
       gate.rotation.z = sample.bank;
       gate.userData.ring.rotation.z = state.time * (segment.type === 'space' ? 0.75 : 0.15) * (i % 2 ? -1 : 1);
@@ -9215,6 +10118,27 @@ export class RaceRenderer {
     const morphState = getMorphState(state);
     const currentPlanetIndex = segment.index - 1;
     const destinationIndex = Math.min(8, segment.index);
+    // Fresh off a crossing: 1 on the boundary frame, 0 once the world you
+    // arrived on has slid out of the sky.
+    //
+    // Only where the crossing was actually SHOWING that planet. Zero on
+    // Scoria, which nobody flew to, and zero coming out of the first corridor,
+    // where ArrivalArt owns Thunderglass and this globe is deliberately
+    // hidden -- continuing a planet the player was not looking at means
+    // switching one on, which is the exact cut being hunted. Measured: turning
+    // it on there took that boundary from 19.8x to 28.5x.
+    const previousSegment = COURSE[state.segmentIndex - 1] ?? null;
+    const arrival = segment.type === 'planet'
+      && previousSegment?.type === 'space'
+      && previousSegment.shortId !== 'space-1'
+      ? 1 - smoothstep(0, PLANET_ARRIVAL_FRACTION, fraction)
+      : 0;
+    // Fresh off a launch. Scoria's departure belongs to launchFallaway, which
+    // hides this globe outright, so the first corridor is excluded the same way
+    // the first arrival is.
+    const departure = segment.type === 'space' && segment.shortId !== 'space-1'
+      ? 1 - smoothstep(0, PLANET_DEPARTURE_FRACTION, fraction)
+      : 0;
     this.planetMeshes.forEach((planetGroup, i) => {
       planetGroup.rotation.y += dt * (0.025 + i * 0.004);
       planetGroup.userData.cloud.rotation.y += dt * (0.012 + i * 0.002);
@@ -9232,6 +10156,15 @@ export class RaceRenderer {
           );
           planetGroup.scale.setScalar(lerp(58, 64, morphState.launch));
           planetGroup.rotation.z = lerp(-0.28, -0.33, morphState.launch);
+        } else if (i === currentPlanetIndex && arrival > 0) {
+          // The world you just landed on, continuing. The numbers below start
+          // exactly where the crossing's destination branch ends -- scale 302
+          // at (60, 46, -600) -- so the boundary frame does not move it at
+          // all; it simply carries on swelling and sinking out of frame.
+          const past = 1 - arrival;
+          planetGroup.visible = true;
+          planetGroup.position.set(60 - past * 60, 46 - past * 620, -600 + past * 330);
+          planetGroup.scale.setScalar(lerp(302, 680, past));
         } else {
           const relative = (i - currentPlanetIndex + 9) % 9;
           const angle = relative * 0.91 + 0.3;
@@ -9261,8 +10194,12 @@ export class RaceRenderer {
           planetGroup.position.set(150 - fraction * 90, 82 - fraction * 36, -1320 + fraction * 720);
           planetGroup.scale.setScalar(size);
         } else if (isSource) {
-          planetGroup.position.set(-360 - fraction * 260, -225 - fraction * 55, -760 + fraction * 210);
-          planetGroup.scale.setScalar(168 - fraction * 92);
+          planetGroup.position.set(
+            -360 - fraction * 260,
+            -225 - fraction * 55 - departure * 700,
+            -760 + fraction * 210 + departure * 300,
+          );
+          planetGroup.scale.setScalar(168 - fraction * 92 + departure * 470);
         } else {
           planetGroup.position.set((i % 2 ? -1 : 1) * (620 + i * 20), 190 - i * 26, -1300 - i * 70);
           planetGroup.scale.setScalar(28);
@@ -9281,7 +10218,7 @@ export class RaceRenderer {
     const priorVisibleMask = this.rivalFrameStats.visibleMask;
     let visibleMask = 0;
     const currentLocation = locateCourseDistance(state.globalProgress, state.short);
-    const combatPresentation = combatPresentationActive(state, segment);
+    const inOpenSpace = openSpaceFlight(state, segment);
     const segmentFraction = getSegmentFraction(state);
     const approachSpread = segment.shortId === 'space-1' ? smoothstep(0.74, 0.94, segmentFraction) : 0;
     const touchdownSpread = segment.shortId === 'planet-2' ? 1 - smoothstep(0.018, 0.12, segmentFraction) : 0;
@@ -9340,7 +10277,37 @@ export class RaceRenderer {
       const laneLimit = Math.max(0, sample.width - 2.6);
       const desiredLane = clamp(state.lateral + landingLaneSlots[i], -laneLimit, laneLimit);
       const presentationLane = (desiredLane - rival.lateral) * formationSpread;
-      vehicle.position.x = sample.x - currentTrackSample.x + rival.lateral + presentationLane;
+      // A rival rides the same banked, crowned surface frame the player does.
+      //
+      // Alex: "the vehicles ... sink into the ground a lot". They did, and it
+      // was never the player -- it was these. This loop wrote position.x and
+      // position.z and nothing else, so every rival hung at y = 0 with an
+      // identity rotation while the road row drawn underneath it went over
+      // whatever hill it happened to be on. Measured across 84,000 rival
+      // frames: 45 per cent had solid board geometry inside the drawn road,
+      // the 90th percentile buried the board and the boots, and the worst
+      // case buried an entire racer under thirty units of Thunderglass.
+      //
+      // What made it invisible on a read-through is that this file carried a
+      // dead updateVehicleVisual() that DID set a vehicle root vertical. It
+      // was shadowed by the import alias at the top of the file and had not
+      // been called in a long time. It is deleted now, so this is the only
+      // code that places a rival, and what it does and does not do is plain.
+      const rivalFrame = writeVehicleSurfaceFrame(this.rivalSurfaceFrames[i], {
+        lateral: rival.lateral + presentationLane,
+        width: sample.width,
+        bank: sample.bank,
+        // Rivals never leave the road -- the sim clamps them to it -- so there
+        // is no lift term, and in a crossing the frame's own free-flight
+        // anchor is the right answer.
+        surface: location.segment.type === 'planet' ? 1 - morph : 0,
+        lift: 0,
+        roadColumns: this.roadColumns,
+        pitch: 0,
+      });
+      vehicle.position.x = sample.x - currentTrackSample.x + rivalFrame.x;
+      vehicle.position.y = sample.y - currentTrackSample.y + rivalFrame.y;
+      vehicle.rotation.z = rivalFrame.bank;
       // Blend into an order-preserving landing train. Both the natural Z and
       // the ranked formation Z have the same order, so the interpolation
       // cannot visually swap racers; the nearest rival still clears the
@@ -9359,26 +10326,12 @@ export class RaceRenderer {
         dt,
         time: state.time,
       });
-      if (combatPresentation && delta > -18 && visualDelta < 360) targetCandidates.push({ vehicle, delta: Math.max(0, delta), lateral: Math.abs(vehicle.position.x - state.lateral) });
+      if (inOpenSpace && delta > -18 && visualDelta < 360) targetCandidates.push({ vehicle, delta: Math.max(0, delta), lateral: Math.abs(vehicle.position.x - state.lateral) });
+      void targetCandidates;
     }
-    targetCandidates.sort((a, b) => (a.lateral * 2 + a.delta * 0.018) - (b.lateral * 2 + b.delta * 0.018));
-    const target = targetCandidates[0]?.vehicle ?? null;
-    this.currentTargetVehicle = target;
-    if (target) {
-      target.updateWorldMatrix(true, false);
-      this.camera.updateMatrixWorld(true);
-      this.targetProjection ??= new THREE.Vector3();
-      this.targetProjection.setFromMatrixPosition(target.matrixWorld).project(this.camera);
-      const onScreen = this.targetProjection.z > -1 && this.targetProjection.z < 1
-        && Math.abs(this.targetProjection.x) < 0.94 && Math.abs(this.targetProjection.y) < 0.9;
-      document.documentElement.style.setProperty('--target-lock', onScreen ? '1' : '0');
-      if (onScreen) {
-        document.documentElement.style.setProperty('--target-x', `${((this.targetProjection.x * 0.5 + 0.5) * 100).toFixed(2)}%`);
-        document.documentElement.style.setProperty('--target-y', `${((-this.targetProjection.y * 0.5 + 0.5) * 100).toFixed(2)}%`);
-      }
-    } else {
-      document.documentElement.style.setProperty('--target-lock', '0');
-    }
+    // The target lock is gone with the guns. A reticle that cannot be fired is
+    // worse than no reticle: it tells the player there is a mechanic here when
+    // there is not. The #target-bracket element and its CSS went with it.
     this.rivalFrameStats.visibleMask = visibleMask;
     this.rivalFrameStats.newlyVisibleMask = visibleMask & ~priorVisibleMask;
     this.rivalFrameStats.newlyHiddenMask = priorVisibleMask & ~visibleMask;
@@ -9430,7 +10383,7 @@ export class RaceRenderer {
     const roadLength = 7
       + clamp((state.speed - segment.baseSpeed) / 420, 0, 1) * 18
       + state.boost * 12
-      + state.driftCharge * 7;
+      + state.trickMeter * 7;
     // The deterministic short course compresses simulation distance to 7.5%
     // while rendering against the full authored track. Keep these genuinely
     // world-anchored marks in the same distance domain as logicalProgress;
@@ -9490,24 +10443,59 @@ export class RaceRenderer {
     this.roadFlow.material.opacity = 0.04
       + steadySurfaceSpeed * 0.052
       + state.boost * 0.034
-      + state.driftCharge * 0.028
+      + state.trickMeter * 0.028
       + (this.quality === 'low' ? 0.012 : 0);
   }
 
   processEvents(state, events, segment) {
-    const combatPresentation = combatPresentationActive(state, segment);
+    const inOpenSpace = openSpaceFlight(state, segment);
     for (const item of events) {
       const intensity = item.intensity ?? 0.35;
-      if (item.type === 'shot' && combatPresentation) this.cameraDirector.trauma('shot', intensity);
-      else if ((item.type === 'shot-hit' || item.type === 'echo-hit') && combatPresentation) {
+      if (item.type === 'shot' && inOpenSpace) this.cameraDirector.trauma('shot', intensity);
+      else if ((item.type === 'shot-hit' || item.type === 'echo-hit') && inOpenSpace) {
         this.cameraDirector.trauma('hit', intensity * 0.55);
       }
-      else if (item.type === 'player-hit' && combatPresentation) this.cameraDirector.trauma('hit', intensity);
-      else if (item.type === 'incoming-dodge' && combatPresentation) this.cameraDirector.trauma('boost', intensity * 0.72);
+      else if (item.type === 'player-hit' && inOpenSpace) this.cameraDirector.trauma('hit', intensity);
+      else if (item.type === 'incoming-dodge' && inOpenSpace) this.cameraDirector.trauma('boost', intensity * 0.72);
+      else if (item.type === 'trick-tier') {
+        // Lighting a new flame is the moment the ladder becomes legible, so it
+        // gets a burst in the world and a kick in the camera rather than only
+        // a colour change that a player mid-corner may never look down at.
+        this.cameraDirector.trauma('boost', 0.2 + item.tier * 0.16);
+        this.particles.spawn(
+          new THREE.Vector3(state.lateral, 0.4, 2.2),
+          item.color ?? 0xffffff,
+          14 + item.tier * 8,
+          16 + item.tier * 6,
+          new THREE.Vector3(-(item.side ?? 0) * 0.4, 0.55, 0.6),
+        );
+      }
+      else if (item.type === 'combo-cashed') {
+        // THE BLAST OFF. This is the biggest reward the game pays and until now
+        // it reached the screen as a number in the corner and nothing else:
+        // `combo-cashed` was absent from this map, absent from the audio's
+        // BOOST_EVENTS, and the only thing that moved was a meter that had
+        // already finished moving. Alex, having played it: "why dont i like
+        // blast off hard when it goes up high? it should be rewarding".
+        //
+        // The camera machinery for it already existed and was simply never
+        // fired -- the 'trick-landed/boost' rig pulls back to 8.25 and widens
+        // to 66 degrees, and its weight is max(releaseEnvelope, boost * 0.52),
+        // so a trauma here is what swings the whole rig into the shot.
+        const cash = Math.max(0, Math.min(1, item.power ?? 0));
+        this.cameraDirector.trauma('boost', Math.max(0.55, 0.55 + cash * 0.45));
+        this.particles.spawn(
+          new THREE.Vector3(state.lateral, 0.5, 2.4),
+          item.color ?? 0xffd9a0,
+          34 + Math.round(cash * 40),
+          26 + cash * 22,
+          new THREE.Vector3(0, 0.7, 1.5),
+        );
+      }
       else if (item.type === 'launch') this.cameraDirector.trauma('launch', intensity);
       else if (item.type === 'landing') this.cameraDirector.trauma('touchdown', intensity);
       else if (['thermal-sling', 'space-gate', 'lightning-ride', 'crown-ring'].includes(item.type)) this.cameraDirector.trauma('boost', intensity * 0.55);
-      if (item.type === 'shot' && combatPresentation) {
+      if (item.type === 'shot' && inOpenSpace) {
         const targetIndex = state.rivals.findIndex((rival) => rival.id === item.targetId);
         const target = targetIndex >= 0 ? this.rivalVehicles[targetIndex] : this.currentTargetVehicle;
         if (target?.visible) {
@@ -9522,7 +10510,7 @@ export class RaceRenderer {
             time: state.time,
           });
         }
-      } else if (item.type === 'rival-shot' && combatPresentation) {
+      } else if (item.type === 'rival-shot' && inOpenSpace) {
         const sourceIndex = state.rivals.findIndex((rival) => rival.id === item.sourceId);
         const source = sourceIndex >= 0 ? this.rivalVehicles[sourceIndex] : null;
         if (source?.visible) {
@@ -9537,7 +10525,7 @@ export class RaceRenderer {
             time: state.time,
           });
         }
-      } else if (item.type === 'player-hit' && combatPresentation) {
+      } else if (item.type === 'player-hit' && inOpenSpace) {
         const sourceIndex = state.rivals.findIndex((rival) => rival.id === item.sourceId);
         this.combatFX.hitTarget(this.playerVehicle, {
           externalShotId: item.shotId,
@@ -9546,34 +10534,34 @@ export class RaceRenderer {
           returnToPlayer: false,
         });
       }
-      if (['drift-release', 'thermal-sling', 'lightning-ride', 'ice-bloom', 'worm-surf', 'gravity-lean', 'echo-break', 'crown-ring', 'space-gate', 'incoming-dodge'].includes(item.type)) {
+      if (['trick-landed', 'grind-payout', 'thermal-sling', 'lightning-ride', 'ice-bloom', 'worm-surf', 'gravity-lean', 'echo-break', 'crown-ring', 'ring', 'ring-rolled'].includes(item.type)) {
         this.shake = Math.max(this.shake, intensity * 0.7);
-        this.flash = Math.max(this.flash, intensity * 0.24);
-        // Drift already has authored tyre trails, suspension load, camera kick,
+        this.flashTarget = Math.max(this.flashTarget, intensity * 0.24);
+        // A landed trick already has authored trails, camera kick,
         // and a boost surge. Generic glowing balls made the release read like
         // a pickup explosion instead of rubber unloading into acceleration.
-        if (item.type !== 'drift-release') {
+        if (item.type !== 'trick-landed') {
           const amount = Math.round(4 + intensity * 6);
           this.particles.spawn(new THREE.Vector3(this.playerVehicle.position.x, 0.15, 2.7), segment.accent, amount, 6 + intensity * 6, new THREE.Vector3(0, 0.12, 1));
         }
       } else if (item.type === 'launch') {
         this.shake = 1.3;
-        this.flash = 0.55;
+        this.flashTarget = 0.55;
         this.particles.spawn(new THREE.Vector3(this.playerVehicle.position.x, 0.27 + state.lift, 3.2), segment.secondary, 28, 18, new THREE.Vector3(0, 0.1, 1));
       } else if (item.type === 'landing') {
         this.shake = 1.05;
-        this.flash = 0.42;
+        this.flashTarget = 0.42;
         this.particles.spawn(new THREE.Vector3(this.playerVehicle.position.x, -0.1, 1.7), segment.accent, 24, 13, new THREE.Vector3(0, 0.2, 1));
       } else if (item.type === 'finish') {
         this.shake = 1.4;
-        this.flash = 1.3;
+        this.flashTarget = 1.3;
         this.particles.spawn(this.playerVehicle.position, 0xffffff, 110, 30);
       } else if (['rail-touch', 'vent-burst', 'space-near-miss'].includes(item.type)) {
         this.shake = Math.max(this.shake, 0.28);
         this.particles.spawn(this.playerVehicle.position, segment.secondary, 10, 7);
       } else if (item.type === 'player-hit') {
         this.shake = Math.max(this.shake, 0.82);
-        this.flash = Math.max(this.flash, 0.34);
+        this.flashTarget = Math.max(this.flashTarget, 0.34);
         this.particles.spawn(this.playerVehicle.position, 0xff5f86, 18, 11, new THREE.Vector3(item.side * 0.3, 0.18, 1));
       } else if (item.type === 'incoming-whiff') {
         this.particles.spawn(this.playerVehicle.position, segment.accent, 8, 9, new THREE.Vector3(-item.side * 0.4, 0.08, 1));
@@ -9581,12 +10569,74 @@ export class RaceRenderer {
     }
   }
 
+  /**
+   * Take the jump out of the camera at a segment boundary.
+   *
+   * This is the thing Alex was actually describing. "It doesn't follow the
+   * player's view that the game is actually in their control and they are
+   * moving forward" -- the camera TELEPORTED on the boundary frame, half a
+   * unit of position and seventy times its normal frame-to-frame rotation, on
+   * every single boundary. It is why hiding the terrain, the lines, the road,
+   * the planets or the stars one at a time all failed to move the pixel
+   * measurement: nothing in the scene was the problem, the viewpoint was.
+   *
+   * The rider genuinely does move at a boundary -- the lane is carried across
+   * as a fraction of road width, and a 22-unit crossing hands over to a 16.5-
+   * unit planet -- so the honest fix is not to pretend otherwise. It is to
+   * hold the camera exactly where it was on the frame the swap happens and let
+   * the difference decay away over a quarter of a second, which is under the
+   * threshold at which anyone can see a camera move. Same idea as the pose
+   * epochs the rider already declares, applied to the viewpoint.
+   */
+  settleCameraAcrossBoundary(state, dt) {
+    const seam = this.cameraSeam;
+    const camera = this.camera;
+    if (seam.index !== state.segmentIndex) {
+      const advanced = seam.ready && state.segmentIndex === seam.index + 1;
+      seam.index = state.segmentIndex;
+      if (advanced) {
+        seam.positionOffset.copy(seam.lastPosition).sub(camera.position);
+        // A QA jump or a restart is not a boundary. Anything this large is a
+        // teleport, and smoothing a teleport just makes it a long teleport.
+        if (seam.positionOffset.length() > CAMERA_SEAM_MAX_OFFSET) {
+          seam.blend = 0;
+        } else {
+          seam.rotationOffset.copy(camera.quaternion).invert().premultiply(seam.lastQuaternion);
+          seam.blend = 1;
+        }
+      } else {
+        seam.blend = 0;
+      }
+    }
+    if (seam.blend > 0.0015) {
+      camera.position.addScaledVector(seam.positionOffset, seam.blend);
+      CAMERA_SEAM_SLERP.identity().slerp(seam.rotationOffset, seam.blend);
+      camera.quaternion.premultiply(CAMERA_SEAM_SLERP);
+      camera.updateMatrixWorld();
+      seam.blend *= Math.exp(-dt / CAMERA_SEAM_SETTLE);
+    } else {
+      seam.blend = 0;
+    }
+    seam.lastPosition.copy(camera.position);
+    seam.lastQuaternion.copy(camera.quaternion);
+    seam.ready = true;
+  }
+
   updateCamera(state, segment, currentSample, dt) {
     const morph = getMorphState(state);
     const speedNorm = clamp((state.speed - segment.baseSpeed) / Math.max(1, segment.maxSpeed - segment.baseSpeed), 0, 1);
-    const next = segment.shortId === 'planet-1'
-      ? sampleScoriaTrackInto(segment, this.logicalProgress + 80, this.scoriaFlowSamples.camera)
-      : trackSample(segment, this.logicalProgress + 80);
+    // The point the camera aims at is eighty units ahead, which in the last
+    // second of a segment is on the far side of the boundary. Unstitched, that
+    // was the OLD curve extrapolated past its end one frame and the NEW curve
+    // the next -- the camera's aim swinging between two different roads.
+    const seam = this.trackSeam(state.segmentIndex, segment);
+    const next = this.seamSample(
+      segment.shortId === 'planet-1'
+        ? sampleScoriaTrackInto(segment, this.logicalProgress + 80, this.scoriaFlowSamples.camera)
+        : trackSample(segment, this.logicalProgress + 80),
+      seam,
+      this.logicalProgress + 80,
+    );
     this.cameraDirector.update({
       state,
       segment,
@@ -9597,13 +10647,19 @@ export class RaceRenderer {
       vehiclePitch: this.playerVehiclePitch,
       dt,
     });
+    this.settleCameraAcrossBoundary(state, dt);
     this.shake = Math.max(0, this.shake - dt * 2.2);
-    this.flash = Math.max(0, this.flash - dt * 2.8);
+    // The flash DECAYS from its target as it always did, but now it also has
+    // to travel to get there. See FLASH_ATTACK.
+    this.flashTarget = Math.max(0, this.flashTarget - dt * 2.8);
+    this.flash += (this.flashTarget - this.flash) * (1 - Math.exp(-dt / FLASH_ATTACK));
+    this.speedDriver += (speedNorm - this.speedDriver) * (1 - Math.exp(-dt / SPEED_DRIVER_SETTLE));
     const cssValues = this.cameraCssValues;
-    const speedValue = speedNorm.toFixed(3);
+    const speedValue = this.speedDriver.toFixed(3);
     const boostValue = state.boost.toFixed(3);
     const flashValue = clamp(this.flash, 0, 1).toFixed(3);
-    const driftValue = state.drifting ? Math.max(0.2, state.driftCharge).toFixed(3) : '0';
+    const trickValue = (state.trickMeter ?? 0).toFixed(3);
+    const trickTierValue = String(state.trickTier ?? 0);
     // Sharpness is what actually decides the race (see SHARPNESS_* in sim.js).
     // It is published to CSS so the player can see the thing that is beating
     // or losing the race for them, rather than having to infer it.
@@ -9620,9 +10676,18 @@ export class RaceRenderer {
       cssValues.flash = flashValue;
       document.documentElement.style.setProperty('--flash', flashValue);
     }
-    if (cssValues.drift !== driftValue) {
-      cssValues.drift = driftValue;
-      document.documentElement.style.setProperty('--drift', driftValue);
+    if (cssValues.trick !== trickValue) {
+      cssValues.trick = trickValue;
+      document.documentElement.style.setProperty('--trick', trickValue);
+    }
+    if (cssValues.trickTier !== trickTierValue) {
+      cssValues.trickTier = trickTierValue;
+      document.documentElement.style.setProperty('--trick-tier', trickTierValue);
+      const tint = state.trickTier > 0 ? TRICK_TIER_COLOR[state.trickTier - 1] : null;
+      document.documentElement.style.setProperty(
+        '--trick-flame',
+        tint === null ? 'transparent' : '#' + tint.toString(16).padStart(6, '0'),
+      );
     }
     if (cssValues.sharpness !== sharpnessValue) {
       cssValues.sharpness = sharpnessValue;
@@ -9652,6 +10717,13 @@ export class RaceRenderer {
     this.sky.material.uniforms.time.value = state.time;
     if (rendererProfile) markRendererProfile('segmentSetupMs');
     const { current } = this.updateTrack(state, segment);
+    // The wall is laid out on the same rows the road was just built from, and
+    // its shape comes from the same profileAt() the rider collided against
+    // this tick. One function, one truth.
+    this.skateFeatures.setPalette(segment);
+    this.skateFeatures.update(segment, this.trackSamples, state.short);
+    this.railLines.setPalette(segment);
+    this.railLines.update(segment, this.logicalProgress, current, state.short, trackSample);
     if (rendererProfile) markRendererProfile('trackMs');
     const morph = getMorphState(state);
     const inStormglassTouchdown = segment.shortId === 'planet-2' && this.logicalProgress < 855;
@@ -9676,11 +10748,28 @@ export class RaceRenderer {
       ? this.stormglassEntrySurface.ahead
       : segmentAhead;
     const pitch = -Math.atan2(surfaceAhead.y - surfaceCurrent.y, 18) * morph.surface;
+    // Do not let go of the road until the craft is actually off it.
+    //
+    // morph.surface falls from 1 to 0 across 0.83..0.965 of a planet, which
+    // unpins the vehicle from the banked road frame and drops it to the flat
+    // free-flight anchor. But the launch arc does not start lifting until about
+    // 0.976. In that gap the craft sat flat, unrolled, while the launch ramp's
+    // own bank rolled the road cross-section up through it -- measured at up to
+    // 2.13 units of solid vehicle inside a fully opaque road, for a thousand
+    // units of Scoria, on any steer held toward the bank.
+    //
+    // Which is what "they sink into the ground a lot BEFORE things" meant. It
+    // happens on the run-up to every launch.
+    //
+    // Tying the release to the arc instead of to the morph closes it: the road
+    // frame is held while the craft is still on the road, whatever the vehicle
+    // is doing about turning into a rocket.
+    const airborne = clamp(state.arcHeight / 1.6, 0, 1);
     writeVehicleSurfaceFrame(this.playerSurfaceFrame, {
       lateral: state.lateral,
       width: surfaceCurrent.width,
       bank: surfaceCurrent.bank,
-      surface: morph.surface,
+      surface: Math.max(morph.surface, 1 - airborne),
       lift: state.lift,
       roadColumns: this.roadColumns,
       pitch,
@@ -9691,20 +10780,44 @@ export class RaceRenderer {
     this.playerVehicle.rotation.x = pitch;
     this.playerVehicle.rotation.z = this.playerSurfaceFrame.bank;
     this.playerVehiclePitch = pitch;
+    // Orientation snaps -- a landing realigning the board with travel, a
+    // rescue putting the rider back on the road -- are DECLARED by the sim as
+    // a pose-epoch change rather than discovered here as a suspiciously large
+    // delta. IONWAKE copied its physics quaternion straight to the mesh with
+    // no smoothing, so any single-tick frame glitch was an instant visible
+    // snap; this blends across three frames instead.
+    const pose = this.smoothPose(state);
     updatePremiumVehicleVisual(this.playerVehicle, {
       morph: morph.morph,
       boost: state.boost,
       speed: state.speed,
-      yaw: state.yaw,
-      roll: state.roll,
+      yaw: pose.yaw,
+      roll: pose.roll,
+      pitch: pose.pitch,
+      boardFlip: pose.boardFlip ?? 0,
+      trickTier: state.trickTier ?? 0,
+      trickMeter: state.trickMeter ?? 0,
+      crouch: state.crouch ?? 0,
+      landingSettle: state.landingSettle ?? 0,
+      landingQuality: state.landingQuality ?? 0,
+      flameColor: state.trickTier > 0 ? TRICK_TIER_COLOR[state.trickTier - 1] : null,
+      airborne: state.riderState === 'air',
+      grinding: state.riderState === 'grind',
+      // How long the grab has been held. The rider reaches for the board with
+      // it -- Alex: "grab tricks where you grab your board as well" -- so the
+      // reach has to be a continuous value the arm can travel along, not a
+      // boolean it snaps between.
+      grab: state.grabSeconds ?? 0,
       // Launch, free-flight, reentry, and touchdown altitude live entirely in
       // simulation state so the rendered hull shares the exact same physical
       // trajectory on both sides of every mode boundary.
       lift: state.lift,
-      drift: state.driftCharge,
-      driftSide: state.driftSide,
+      drift: state.trickMeter,
+      driftSide: state.spinSide,
       steer: state.lastInput?.steer ?? 0,
-      releaseKick: events.some((event) => event.type === 'drift-release') ? Math.max(0.35, state.boost) : 0,
+      releaseKick: events.some((event) => event.type === 'trick-landed' || event.type === 'combo-cashed')
+        ? Math.max(0.35, state.boost)
+        : 0,
       hitFlash: state.incomingHitFlash,
       dt,
       time: state.time,
@@ -9732,15 +10845,61 @@ export class RaceRenderer {
     this.updateAtmosphereFlow(state, segment, dt);
     this.tireTrails.update(state, segment, dt);
     this.processEvents(state, events, segment);
-    if (segment.type === 'space' && !combatPresentationActive(state, segment)) this.combatFX.clear();
+    if (segment.type === 'space' && !openSpaceFlight(state, segment)) this.combatFX.clear();
     this.combatFX.update(dt, state.time);
     if (rendererProfile) markRendererProfile('rivalsAndFlowFxMs');
-    if (dt > 0 && state.drifting && this.presentationRandom.next() < dt * 58) {
-      this.particles.spawn(new THREE.Vector3(state.lateral - state.driftSide * 1.15, 0, 1.5), segment.secondary, 2, 4, new THREE.Vector3(-state.driftSide * 0.25, 0.2, 1));
+    // The SUSTAINED flame, not just the burst when a tier lights.
+    //
+    // This spray used to be two particles at a random 58/s -- invisible. The
+    // rendered legibility pin measured tier 1 at 189 on-screen pixels, and
+    // every one of those was the vehicle's own cyan trim: a player holding a
+    // blue drift saw exactly what a player holding nothing saw. A tier that is
+    // only announced at the instant it lights is a tier you learn by accident.
+    //
+    // Now it sprays continuously from both sides of the board, and harder for
+    // each rung, so "which flame am I holding" is answerable at a glance at
+    // any moment -- not only in the frame the rung changed.
+    if (dt > 0 && state.trickTier > 0 && state.riderState === 'air') {
+      const tierColor = TRICK_TIER_COLOR[state.trickTier - 1];
+      const plume = 3 + state.trickTier * 2;
+      for (const side of [-1, 1]) {
+        this.particles.spawn(
+          new THREE.Vector3(state.lateral + side * 1.15, 0.12, 1.5),
+          tierColor,
+          plume,
+          9 + state.trickTier * 3,
+          new THREE.Vector3(side * 0.42, 0.34 + state.trickTier * 0.06, 0.9),
+        );
+      }
+    } else if (dt > 0 && state.riderState === 'air' && this.presentationRandom.next() < dt * 58) {
+      // Airborne with nothing lit yet. A thin colourless trail, so "not yet"
+      // is legible too rather than looking identical to standing still.
+      this.particles.spawn(
+        new THREE.Vector3(state.lateral - state.spinSide * 1.15, 0, 1.5),
+        segment.secondary,
+        2,
+        4,
+        new THREE.Vector3(-state.spinSide * 0.25, 0.2, 1),
+      );
     } else if (dt > 0 && segment.type === 'space' && this.presentationRandom.next() < dt * 44) {
       this.particles.spawn(new THREE.Vector3(state.lateral, 0.2, 2.2), segment.accent, 1, 8, new THREE.Vector3(0, 0, 1));
     }
     this.particles.update(dt);
+    // Driven by state.boost -- the exact value the burn meter renders -- so the
+    // streaks and the bar can never tell the player two different stories about
+    // how fast they are going.
+    // Each world's hyperspeed is its own colour. Cheap, and it keeps the effect
+    // from reading as a bolted-on white overlay that is the same everywhere --
+    // which is the exact failure this codebase keeps finding (one thing
+    // authored for one case that nothing else derives from).
+    this.hyperspeed?.setColor(segment.accent);
+    this.hyperspeed?.update({
+      boost: state.boost ?? 0,
+      speed: state.speed ?? 0,
+      dt,
+      anchorX: this.camera?.position.x ?? 0,
+      anchorZ: this.camera?.position.z ?? 0,
+    });
     if (rendererProfile) markRendererProfile('particlesMs');
     this.updateCamera(state, segment, current, dt);
     this.stars.rotation.y += dt * 0.003;
@@ -10621,6 +11780,85 @@ export class RaceRenderer {
       tireTrails,
       combat: this.combatFX?.presentationSignatureState() ?? null,
     };
+  }
+
+  /**
+   * Where each rival is drawn, and where the road is underneath it.
+   *
+   * Nothing measured rival placement, which is a large part of why every
+   * rival spent the game hanging at y = 0 while the road went over hills and
+   * nobody caught it: the telemetry described the player in detail and the
+   * other three racers not at all. clearance is the gap between the lowest
+   * point of a rival board and the road row drawn under it -- positive is
+   * above the road, negative is inside it.
+   */
+  /**
+   * Where each road work-geometry bank thinks the road is.
+   *
+   * three.js sorts the transparent render list on geometry.boundingSphere.
+   * center, so if the rotating banks disagree about that centre the draw order
+   * changes every time the bank rotates -- which is what made the vista planets
+   * flash every third frame. Nothing measured this, which is why it survived:
+   * the scene graph is perfectly smooth while it happens, so every visibility,
+   * transform and material probe reports everything is fine.
+   */
+  trackBankBounds() {
+    // Road banks against road banks, terrain against terrain. The road and the
+    // terrain legitimately have different centres -- the terrain is far wider
+    // and deeper -- so comparing the two families to each other measures a
+    // difference that is supposed to exist.
+    const spreadOf = (banks = []) => {
+      const centres = banks.map((geometry) => {
+        if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+        return geometry.boundingSphere.center.clone();
+      });
+      let spread = 0;
+      for (let i = 0; i < centres.length; i += 1) {
+        for (let j = i + 1; j < centres.length; j += 1) {
+          spread = Math.max(spread, centres[i].distanceTo(centres[j]));
+        }
+      }
+      return { count: centres.length, spread, centres };
+    };
+    const road = spreadOf(this.roadWorkGeometries);
+    const terrain = spreadOf(this.terrainWorkGeometries);
+    return {
+      count: road.count + terrain.count,
+      spread: Math.max(road.spread, terrain.spread),
+      road: road.spread,
+      terrain: terrain.spread,
+      centres: [...road.centres, ...terrain.centres]
+        .map((c) => [Number(c.x.toFixed(2)), Number(c.y.toFixed(2)), Number(c.z.toFixed(2))]),
+    };
+  }
+
+  rivalPlacements() {
+    if (!this.rivalVehicles) return [];
+    const rows = this.trackSamples;
+    // The player is measured the same way, as a control. A clearance number
+    // means nothing without knowing what the same probe reports for the
+    // vehicle everyone agrees is placed correctly.
+    return [this.playerVehicle, ...this.rivalVehicles].map((vehicle) => {
+      if (!vehicle.visible) return null;
+      // The drawn road row nearest the rival, found by its own z.
+      let nearest = null;
+      let bestDistance = Infinity;
+      for (const row of rows) {
+        const distance = Math.abs(row.z - vehicle.position.z);
+        if (distance < bestDistance) { bestDistance = distance; nearest = row; }
+      }
+      if (!nearest) return null;
+      // Lift the row to the rival lane along the row's own banked frame.
+      const lateral = vehicle.position.x - nearest.x;
+      const roadY = nearest.y + lateral * nearest.sin;
+      return {
+        y: vehicle.position.y,
+        z: vehicle.position.z,
+        roadY,
+        clearance: vehicle.position.y - roadY,
+        rowDistance: bestDistance,
+      };
+    }).filter(Boolean);
   }
 
   presentationTelemetry({ canonical = false } = {}) {

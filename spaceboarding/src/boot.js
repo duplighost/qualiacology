@@ -17,7 +17,7 @@ if (quality === 'high') {
   }
 }
 
-Object.defineProperty(globalThis, '__NINEFOLD_SCORIA_BOOT_PRELOADS__', {
+Object.defineProperty(globalThis, '__SPACEBOARDING_BOOT_PRELOADS__', {
   value: Object.freeze({ quality, scoriaEnvironmentDataPromise, staticScoriaSurfacePackageRequest }),
   configurable: false,
   enumerable: false,
