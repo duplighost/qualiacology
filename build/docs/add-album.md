@@ -23,9 +23,10 @@ with these differences:
    walks EVERY .html under root, so this page needs a
    `<meta name="description">` ending in `.`/`!`/`?`.
 
-4. **Bump the album-count asserts** in THREE files: `build-site.mjs`,
-   `validate-site.mjs`, AND `build/qa/browser-qa.mjs` (the QA one hardcodes
-   `bodyAlbumCount === "N"` and is easy to forget — it fails `npm run qa`).
+4. **Bump `albums` in `build/src/content/expected.json`** — the one place
+   catalog counts are declared; every checker reads it via
+   `build/scripts/expected.mjs`. Forget it and the build fails immediately
+   with a message naming the file.
 
 5. Albums have **no per-album short-links** (only `/records → /music/`) —
    don't invent one. No `404.html` change needed (it names games, not

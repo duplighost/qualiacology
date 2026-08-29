@@ -28,12 +28,17 @@ game/album has its own guide.
 ```sh
 # 1. Edit sources (site-data.json for copy/catalog, build-site.mjs for
 #    templates, site.css|js for style/behavior).
-node build/scripts/build-site.mjs                # 2. regenerate in place (Node built-ins only)
-node build/scripts/validate-site.mjs --root=..   # 3. validate (counts, every href/src/srcset, exact case)
-cd build && npm run qa                           # 4. optional deeper gate (first time: npm ci)
-python build/qa/catalog-art.py audit             # 4b. REQUIRED if you touched any image
-node build/scripts/static-server.mjs --root=. --port=4173   # 5. eyeball it locally
+node build/scripts/preflight.mjs                 # 2. build + validate + route smoke, one command
+#    add --art if you touched any image (REQUIRED); --qa for Playwright+axe
+node build/scripts/static-server.mjs --root=. --port=4173   # 3. eyeball it locally
 ```
+
+**Catalog counts are declared once, in `build/src/content/expected.json`.**
+Adding or removing a game/album means editing `site-data.json` AND bumping
+that one file — every checker (build, validator, browser QA, horror-filter
+roster, "Showing N worlds.") reads or derives from it via
+`build/scripts/expected.mjs`. A mismatch fails the build immediately with a
+message naming the fix. Never hardcode a catalog count anywhere else.
 
 Then ship per the router checklist: branch, commit, push, PR, deploy preview,
 Alex's approval, merge, verify production.

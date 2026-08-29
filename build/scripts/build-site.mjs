@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkCatalog } from "./expected.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Publish target defaults to the site repo root (one level above build/), so
@@ -53,10 +54,7 @@ function assert(condition, message) {
 
 function validateData() {
   assert(existsSync(outputRoot), `Missing output root: ${outputRoot}`);
-  assert(games.length === 28, `Expected 28 games, found ${games.length}`);
-  assert(albums.length === 12, `Expected 12 albums, found ${albums.length}`);
-  assert(games.filter((item) => item.featured).length === 3, "Exactly three games must be featured");
-  assert(albums.filter((item) => item.featured).length === 3, "Exactly three albums must be featured");
+  checkCatalog(assert);
 
   for (const [label, records] of [["game", games], ["album", albums]]) {
     const slugs = records.map((item) => item.slug);

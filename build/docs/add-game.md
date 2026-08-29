@@ -51,18 +51,12 @@ touching site.css/site.js/templates.
      is 3 columns; keep it a multiple of 3), and which ones is Alex's call.
      Featured order = games array order.
 
-5. **Bump the count asserts — they hide in FOUR places:**
-   1. `build/scripts/build-site.mjs` (canonical game total)
-   2. `build/scripts/validate-site.mjs` (same total near the top AND a
-      re-count of `data-catalog-game=` in the rendered homepage further down
-      — "Homepage must feature three games". The build passes and validation
-      fails several steps later, which reads like a build bug. It isn't.)
-   3. `build/qa/browser-qa.mjs` (total AND the **horror-filter roster** — the
-      exact slug list and "Showing N worlds." — any horror game added or
-      removed needs that expectation updated or `npm run qa` fails on the
-      filter interaction long after the counts agree)
-   4. If the featured count itself changes, re-read the validate assert in
-      (2) — the assert is the thing to trust, not its message wording.
+5. **Bump `build/src/content/expected.json`** — the ONE place catalog
+   counts are declared (games/albums/featuredGames/featuredAlbums). Every
+   checker reads it via `build/scripts/expected.mjs`; the horror-filter
+   roster and "Showing N worlds." derive from `site-data.json`
+   automatically, so a horror game needs no QA edit. Forget the bump and
+   the build fails immediately with a message naming this file.
 
 6. **Short links** in `_redirects` (e.g. `/dusk  /duskfall/  302`) — check
    for collisions first. Add a `_headers` block only if the game needs one.

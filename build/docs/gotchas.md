@@ -15,11 +15,11 @@ and skim it once before your first big change to this repo.
 - **Two agents/threads must never work this repo at the same time.** Before
   editing: `git status` + `git pull`. A dirty tree with changes you didn't
   make means another session is mid-flight — stop.
-- **Count asserts fail late and read like build bugs.** The build asserts
-  exact catalog counts, and `validate-site.mjs` re-checks them (plus the
-  rendered homepage) several steps later. If validation fails after a clean
-  build, check the four assert sites in `add-game.md` step 5 before
-  debugging anything else.
+- **Catalog counts live in ONE file:** `build/src/content/expected.json`,
+  read by every checker via `build/scripts/expected.mjs`. A count mismatch
+  fails the build immediately and the error names the file to bump. If you
+  find a hardcoded catalog count anywhere else, that's a regression — move
+  it to the module.
 - `404.html`, `_redirects`, `_headers` are hand-maintained and easy to
   forget — the build never touches them.
 - **Image at the same filename ≠ updated for returning visitors** — the
