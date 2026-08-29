@@ -1822,12 +1822,25 @@ body[data-page="psych"] .subhero h1 {
     grid-row: span 2;
   }
 
-  /* The principal spans two rows, so its cell is far taller than its own content -
-     pushing its action to a floor 380px below the text it belongs to. It is the only
-     card on the site with no row-mate to line up with, so it stops stretching and is
-     simply as tall as it is. */
+  /* The principal spans two rows, so its cell is far taller than its own content. The
+     first fix for that was `height: auto` on the card - it stopped stretching, which
+     did stop the action floating 380px below the summary, but it paid for it with
+     322-373px of dead page under the card at EVERY desktop width (measured 720-2200).
+     The card stretches again; the PICTURE absorbs the slack instead of the gap above
+     the button, so the action stays welded to the summary and the column bottoms line
+     up with the two studies beside it. `flex-shrink: 0` keeps 16/9 as a hard floor -
+     the frame can only ever grow. */
   .homepage-shelf[data-featured-games] > li:first-child .work-card {
-    height: auto;
+    height: 100%;
+  }
+
+  .homepage-shelf[data-featured-games] > li:first-child .card-media {
+    min-height: 0;
+    flex: 1 0 auto;
+  }
+
+  .homepage-shelf[data-featured-games] > li:first-child .card-body {
+    flex: 0 0 auto;
   }
 
   .section-heading {

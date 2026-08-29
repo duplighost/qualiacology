@@ -2,7 +2,7 @@
 
 Read this before changing anything. It is the canonical playbook for AI agents
 (Codex, Claude, or anything else) and it is kept current — trust it over your
-own notes or memory. Last verified: 2026-08-27.
+own notes or memory. Last verified: 2026-08-29.
 
 ## The two rules that matter most
 
@@ -206,9 +206,33 @@ suite that runs at 390px and 1440px with no hover emulation.
   `.card-meta`) so every button in a row shares a baseline while metadata stays
   welded to the summary it describes. Alex rejected the ragged-baseline
   alternative on sight.
+- **The homepage principal fills its cell with picture, not with gap.** Slot 1 of
+  the featured row spans two grid rows, so its cell is as tall as the two studies
+  beside it stacked — far taller than one card's content. That used to be paid for
+  with `height: auto` on the card, which did stop the action floating ~380px below
+  the summary but left **322–373px of dead page under the card at every desktop
+  width** (measured 720–2200px; it was not a narrow-window edge case). Now the card
+  stretches and `.card-media` takes `flex: 1 0 auto`, so the *frame* absorbs the
+  slack: measured slack is 1px at every width, the action stays welded to the
+  summary, and the column bottoms line up with slot 3. `flex-shrink: 0` keeps 16/9
+  as a hard floor — the frame can only grow. Consequence to know before you put a
+  new game in slot 1: the frame runs **0.72 (720px) to 1.12 (≥1664px)**, so a 16/9
+  master gets centre-cropped on its sides, hardest at narrow widths. FETCH survives
+  it because its subject is centred; a composition with anything important near the
+  left or right edge needs a `featuredImage` (below) or a different slot. The whole
+  rule is scoped inside `@media (min-width: 45rem)` — the mobile scroll rail is
+  still plain 16/9 and must stay that way.
 
 ### Things that are load-bearing and look optional
 
+- **`sizes` on the homepage principal is not the card `sizes`.** Every other catalog
+  card is a 31vw grid cell; slot 1 is the 1.85fr column of a 1.85/1 grid, so it runs
+  59–61vw until `.plate-bleed > *` caps the shelf at `100rem`, past which it is a flat
+  1020px. It was described as 31vw until 2026-08-29, so the browser picked the **480w
+  file for an 875px slot** — a 1.8x upscale on the largest, first-painted image on the
+  site, and invisible in every gate because nothing asserted on `currentSrc`. If you
+  change the featured grid's column ratio, change `principalSizes` in
+  `catalogPicture()` with it. Over-asking costs bytes; under-asking costs the picture.
 - `heroPicture()`'s `<source media="(max-width: 44.99rem)">` phone crop and the
   CSS `aspect-ratio` switch **must use the same breakpoint**. If they disagree
   there is a band of widths where the CSS box and the downloaded image have
@@ -283,6 +307,31 @@ in this redesign were invisible locally and obvious on the preview.
    python build/qa/catalog-art.py build     # regenerate all tiers from site-data masters
    python build/qa/catalog-art.py audit     # perceptual check; run after ANY art change
    ```
+
+   `catalog-art.py build` **re-encodes every tier on the site**, so it dirties ~120
+   files even when you only touched one slug. Run it, then `git checkout --` the
+   catalog paths you did not mean to change, then rebuild the hubs — the `?v=` hashes
+   are content hashes of the files on disk, so a rebuild BEFORE that revert bakes in
+   hashes for files that no longer exist.
+
+   **Optional taller master for the homepage principal: `featuredImage`.** Slot 1's
+   frame is square-to-portrait (see the principal-fill rule above), not 16/9. A game
+   can ship a second cut for just that slot:
+
+   ```json
+   "featuredImage": { "src": "/assets/games/<slug>-featured-<hash>.webp",
+                      "width": 1200, "height": 1500 }
+   ```
+
+   It cannot simply replace `image`: that master is also the `/games/` shelf card and
+   that grid *is* 16/9, so a portrait file there breaks the shelf. Tiers land at
+   `assets/catalog/games/<slug>-featured-{480,800,1200}.{avif,webp}` and are the one
+   set that keeps its master's own aspect ratio instead of `RATIO` — forcing 16/9
+   would squash the exact art the cut exists to carry. `width`/`height` are declared
+   so the Node build never has to decode an image; `catalog-art.py audit` checks the
+   declaration against the real file and fails on a mismatch. Entirely optional —
+   with no `featuredImage`, the principal just crops the 16/9 master, which is what
+   every game does today.
 
    The audit compares each tier against its master and is the only thing that catches
    a wrong-picture mismatch — no other gate looks at pixels.
