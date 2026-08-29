@@ -44,11 +44,9 @@ Last verified: 2026-08-29.
 # 0. Before editing: git status && git pull. A dirty tree with changes you
 #    didn't make means another session is mid-flight — STOP.
 git checkout -b <feature-branch>
-node build/scripts/build-site.mjs                # if you touched hub sources
-node build/scripts/validate-site.mjs --root=..   # strict validator
-python build/qa/catalog-art.py audit             # if you touched ANY image
-# optional deeper gate (first time: cd build && npm ci):
-cd build && npm run qa                           # Playwright + axe, needs Chrome
+node build/scripts/preflight.mjs                 # build + validate + route smoke, one command
+#   add --art if you touched ANY image; add --qa for the full Playwright+axe
+#   gate (first time: cd build && npm ci; needs Chrome)
 git add <files> && git commit                    # identity: duplighost / alexdguitar@gmail.com
 git push -u origin <feature-branch>
 gh pr create                                     # then inspect the Netlify deploy preview
