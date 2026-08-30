@@ -17,6 +17,19 @@
   },
   "games": [
     {
+      "slug": "i-seent-it",
+      "title": "I SEENT IT",
+      "descriptor": "Lunar custody arcade",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/i-seent-it-card-clean.webp",
+      "alt": "A masked figure in a torn coat pulling a cratered moon on a bright cyan tether across black rooftops under the words I SEENT IT",
+      "summary": "The moon is missing. You have custody. Drag it through four impossible cases and put it back wrong.",
+      "metaDescription": "I SEENT IT is a four-case rooftop physics campaign about dragging the missing moon across the city and putting it back wrong.",
+      "controls": "A D or arrows move · W, Up or Space jumps · drag to steer and swipe up to jump · touch controls · R again · M mute",
+      "actionLabel": "Move the evidence"
+    },
+    {
       "slug": "lil-big-bang",
       "title": "LIL BIG BANG",
       "descriptor": "Microgame reel",

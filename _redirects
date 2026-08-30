@@ -17,6 +17,12 @@
 /fly     /glide/            302
 /luma    /   302
 /visualizer /  302
+
+# --- I SEENT IT ---
+/i-seent-it.html  /i-seent-it/  301!
+/seent             /i-seent-it/  302
+/custody           /i-seent-it/  302
+
 # --- retired toys (links land home) ---
 /banana         /   302
 /banana.html    /   302
