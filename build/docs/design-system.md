@@ -84,9 +84,10 @@ a suite that runs at 390px and 1440px with no hover emulation.
   (measured slack 1px at every width; the old `height: auto` fix left
   322–373px of dead page). `flex-shrink: 0` keeps 16/9 as a hard floor — the
   frame only grows, running **0.72 (720px) to 1.12 (≥1664px)**, so a 16/9
-  master gets centre-cropped on its sides, hardest at narrow widths. FETCH
-  survives because its subject is centred; art with important edges needs a
-  `featuredImage` (see `images.md`) or a different slot. The whole rule is
+  master gets centre-cropped on its sides, hardest at narrow widths. Art with a
+  centred subject survives (FETCH did, through every day it held this slot);
+  art with important edges needs a `featuredImage` (see `images.md`) or a
+  different slot — LIL BIG BANG ships one. The whole rule is
   scoped inside `@media (min-width: 45rem)` — the mobile scroll rail stays
   plain 16/9.
 

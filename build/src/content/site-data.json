@@ -17,6 +17,24 @@
   },
   "games": [
     {
+      "slug": "lil-big-bang",
+      "title": "LIL BIG BANG",
+      "descriptor": "Microgame reel",
+      "group": "action",
+      "featured": true,
+      "image": "/assets/games/lil-big-bang-card-clean.webp",
+      "featuredImage": {
+        "src": "/assets/games/lil-big-bang-featured-v20260830.webp",
+        "width": 1200,
+        "height": 1500
+      },
+      "alt": "Dozens of game screens bursting out of a white flash in deep space, a flaming skull, a piñata, an astronaut chasing a ball, a duck, a rally truck and a neon monorail nearest the front and the rest trailing off into the stars",
+      "summary": "Thirty-one microgames, a few seconds each, and it keeps speeding up. Most of them are games from this site cut down to a single move. You get four moons, and a hand comes and takes them one at a time.",
+      "metaDescription": "LIL BIG BANG is a browser microgame reel: thirty-one games a few seconds each, most of them built out of the games already on this site.",
+      "controls": "One thumb · tap, hold, drag · mouse or touch",
+      "actionLabel": "Play LIL BIG BANG"
+    },
+    {
       "slug": "i-seent-it",
       "title": "I SEENT IT",
       "descriptor": "Lunar custody arcade",
@@ -54,19 +72,6 @@
       "metaDescription": "FETCH is a browser first-person horror game about a cursed skull that always comes back — key, weapon and lamp through a locked house, a graveyard, and a forest that seals behind you.",
       "controls": "WASD move · mouse look · hold LMB throw / release to return · tap RMB or E call it back · Shift run · Space jump · E use · Esc or P pause",
       "actionLabel": "Pick it up"
-    },
-    {
-      "slug": "lil-big-bang",
-      "title": "LIL BIG BANG",
-      "descriptor": "Microgame reel",
-      "group": "action",
-      "featured": true,
-      "image": "/assets/games/lil-big-bang-card-clean.webp",
-      "alt": "A vast hand reaching in to flick a spiral galaxy alight, moons and debris turning around it, with a burning skull, a piñata, a flock of birds, a neon monorail and a drifting astronaut scattered through the dark",
-      "summary": "Thirty-one microgames, a few seconds each, and it keeps speeding up. Most of them are games from this site cut down to a single move. You get four moons, and a hand comes and takes them one at a time.",
-      "metaDescription": "LIL BIG BANG is a browser microgame reel: thirty-one games a few seconds each, most of them built out of the games already on this site.",
-      "controls": "One thumb · tap, hold, drag · mouse or touch",
-      "actionLabel": "Play LIL BIG BANG"
     },
     {
       "slug": "no-moon",
