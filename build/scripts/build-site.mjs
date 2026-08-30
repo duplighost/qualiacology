@@ -178,7 +178,7 @@ function footer() {
   </button>`;
 }
 
-function head({ title, description, path, schema, image = "/assets/visuals/qualiacology-social-1200x630-v2.jpg" }) {
+function head({ title, description, path, schema, image = "/assets/visuals/qualiacology-social-1200x630-v3.jpg" }) {
   const url = `${site.origin}${path}`;
   return `
   <meta charset="utf-8">
