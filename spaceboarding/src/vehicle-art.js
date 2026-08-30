@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { vehiclePoseRoll } from './surface-frame.js';
+import { resetBoardPresentationState } from './vehicle-presentation.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const smooth = (value) => {
@@ -637,6 +638,8 @@ function createMaterials(accentHex, secondaryHex, player, racer = RACERS.player)
   // them and the reference look is smooth.
   const riderSuit = new THREE.MeshStandardMaterial({
     color: racer.suit,
+    emissive: racer.suit,
+    emissiveIntensity: 0.11,
     metalness: 0.62,
     roughness: 0.26,
     envMapIntensity: 2.0,
@@ -645,6 +648,8 @@ function createMaterials(accentHex, secondaryHex, player, racer = RACERS.player)
   // the parts the eye tracks. Same metal, just caught more light.
   const riderGear = new THREE.MeshStandardMaterial({
     color: racer.gear,
+    emissive: racer.gear,
+    emissiveIntensity: 0.22,
     metalness: 0.66,
     roughness: 0.2,
     envMapIntensity: 2.2,
@@ -903,30 +908,34 @@ function makeUnderglowTexture(size = 64) {
  * way the pack is running the player is looking at both silhouettes.
  */
 export const RACERS = Object.freeze({
-  player: { suit: 0xb9c6d4, gear: 0xd6e2ee, shell: 0x11161d, trim: 0xbdf3ff, visor: 0x0a2a38, body: 'M' },
-  // VANTA, the knife.
-  0: { suit: 0xe0596a, gear: 0xf2909c, shell: 0x1c0a0e, trim: 0xffd7dd, visor: 0x2e0a14, body: 'F' },
-  // SAINT-0, the halo.
-  1: { suit: 0xd9b45c, gear: 0xf0d590, shell: 0x1a1206, trim: 0xfff2c8, visor: 0x2a1f06, body: 'M' },
-  // MORROW, the ghost.
-  2: { suit: 0x9b8ee6, gear: 0xc0b6f4, shell: 0x0d0a1e, trim: 0xe2dcff, visor: 0x150e33, body: 'F' },
+  // Active presets are direct reads of the supplied turnaround sheets: one M
+  // and one F silhouette, then colour. The source JPGs are concept art rather
+  // than UV textures, so hue/material/silhouette are the honest procedural
+  // equivalents here.
+  player: { suit: 0x1768b4, gear: 0x3d9cf2, shell: 0x061425, trim: 0xb8edff, visor: 0x041a32, body: 'M' },
+  // VANTA, the knife — F hot pink.
+  0: { suit: 0xcf3189, gear: 0xf35fb0, shell: 0x260817, trim: 0xffb6df, visor: 0x35081f, body: 'F' },
+  // SAINT-0, the halo — M furnace red.
+  1: { suit: 0xc93616, gear: 0xf66b2c, shell: 0x270b05, trim: 0xffbd71, visor: 0x340b04, body: 'M' },
+  // MORROW, the ghost — F violet.
+  2: { suit: 0x6429ad, gear: 0x9652df, shell: 0x140622, trim: 0xd8adff, visor: 0x19072e, body: 'F' },
 });
 
 export const BODY_M = Object.freeze({
   torso: [
     { z: -0.05, width: 0.150, height: 0.104 },
     { z: 0.11, width: 0.158, height: 0.104 },
-    { z: 0.26, width: 0.208, height: 0.120 },
-    { z: 0.41, width: 0.264, height: 0.142 },
-    { z: 0.53, width: 0.280, height: 0.146 },
-    { z: 0.63, width: 0.228, height: 0.120 },
+    { z: 0.26, width: 0.220, height: 0.124 },
+    { z: 0.41, width: 0.292, height: 0.150 },
+    { z: 0.53, width: 0.316, height: 0.154 },
+    { z: 0.63, width: 0.252, height: 0.126 },
   ],
-  shoulderX: 0.242,
-  yokeSpan: 0.248,
-  armX: 0.276,
-  upperArm: [0.060, 0.048],
-  foreArm: [0.048, 0.038],
-  thigh: [0.086, 0.064],
+  shoulderX: 0.268,
+  yokeSpan: 0.274,
+  armX: 0.304,
+  upperArm: [0.068, 0.053],
+  foreArm: [0.052, 0.041],
+  thigh: [0.094, 0.068],
   shin: [0.058, 0.046],
   hipX: 0.14,
   belt: [0.33, 0.054, 0.225],
@@ -935,9 +944,9 @@ export const BODY_M = Object.freeze({
 
 export const BODY_F = Object.freeze({
   torso: [
-    { z: -0.05, width: 0.176, height: 0.112 },
-    { z: 0.15, width: 0.146, height: 0.098 },
-    { z: 0.29, width: 0.194, height: 0.118 },
+    { z: -0.05, width: 0.208, height: 0.122 },
+    { z: 0.15, width: 0.132, height: 0.090 },
+    { z: 0.29, width: 0.202, height: 0.120 },
     { z: 0.42, width: 0.226, height: 0.136 },
     { z: 0.53, width: 0.238, height: 0.138 },
     { z: 0.63, width: 0.204, height: 0.116 },
@@ -947,10 +956,10 @@ export const BODY_F = Object.freeze({
   armX: 0.246,
   upperArm: [0.054, 0.044],
   foreArm: [0.043, 0.035],
-  thigh: [0.092, 0.066],
+  thigh: [0.112, 0.074],
   shin: [0.056, 0.045],
-  hipX: 0.152,
-  belt: [0.352, 0.050, 0.232],
+  hipX: 0.176,
+  belt: [0.398, 0.050, 0.246],
   // Alex: "you need to use those characters i gave you." Every female sheet
   // has a huge flowing hair mass -- a quarter of the whole silhouette -- and
   // the earlier call that "hair is dead at this size" was made about a fringe,
@@ -1101,10 +1110,10 @@ function createBoardRig(materials, player, body = BODY_M) {
     // angle, and a pose that cannot express a knee cannot express effort; a
     // foot with nothing holding it to the deck reads as propped, not planted.
     const shell = partsMesh(leg, materials.riderShell, [
-      { geometry: new THREE.BoxGeometry(0.118, 0.078, 0.104), position: [0, 0.345, -0.022] },
-      { geometry: new THREE.BoxGeometry(0.104, 0.028, 0.058), position: [0, 0.048, 0.012] },
+      { geometry: new THREE.BoxGeometry(0.096, 0.048, 0.086), position: [0, 0.345, -0.030] },
+      { geometry: new THREE.BoxGeometry(0.090, 0.020, 0.050), position: [0, 0.048, 0.012] },
       // The boot's sole, folded in: same tier, same group, never moves apart.
-      { geometry: new THREE.BoxGeometry(0.155, 0.030, 0.285), position: [0, -0.030, -0.012] },
+      { geometry: new THREE.BoxGeometry(0.146, 0.022, 0.272), position: [0, -0.030, -0.012] },
     ], { name: 'rider-leg-shell' });
 
     // Boot: deliberately oversized, flat-soled, wedged toe forward. This is the
@@ -1124,7 +1133,18 @@ function createBoardRig(materials, player, body = BODY_M) {
       { geometry: new THREE.BoxGeometry(0.014, 0.17, 0.026), position: [side * 0.056, 0.19, -0.026] },
     ], { castShadow: false, name: 'rider-leg-pipe' });
 
-    return { group: leg, limb, shell, boot, pipe };
+    return {
+      group: leg,
+      limb,
+      shell,
+      boot,
+      pipe,
+      side,
+      restX: side * body.hipX,
+      restY: -0.045,
+      restZ: side * 0.40,
+      restBootY: 0.012,
+    };
   });
 
   // Hips carry everything above the knees, so a crouch is one rotation -- and
@@ -1305,9 +1325,27 @@ function createBoardRig(materials, player, body = BODY_M) {
     hairPivot = new THREE.Group();
     hairPivot.position.set(0, 0.040, 0.092);
     skull.add(hairPivot);
-    hair = addMesh(hairPivot, makeLoftGeometry(body.hair, 10, true), materials.riderShell, {
-      castShadow: false, name: 'rider-hair',
-    });
+    // Three asymmetric masses merged into ONE submission. The sheets' hair is
+    // a coloured, flowing silhouette—not a single black dorsal triangle—and
+    // the unequal side fans keep it alive even in a frozen chase frame.
+    hair = partsMesh(hairPivot, materials.riderGear, [
+      {
+        geometry: makeLoftGeometry(body.hair, 10, true),
+        scale: [1.05, 0.94, 1.22],
+      },
+      {
+        geometry: makeLoftGeometry(body.hair, 10, true),
+        position: [-0.155, -0.006, 0.015],
+        rotation: [0, 0.06, -0.22],
+        scale: [0.70, 0.78, 1.08],
+      },
+      {
+        geometry: makeLoftGeometry(body.hair, 10, true),
+        position: [0.165, 0.012, 0.045],
+        rotation: [0, -0.04, 0.25],
+        scale: [0.62, 0.72, 0.98],
+      },
+    ], { castShadow: false, name: 'rider-hair' });
     hair.rotation.x = Math.PI / 2;
   }
 
@@ -1340,7 +1378,7 @@ function createBoardRig(materials, player, body = BODY_M) {
     // glove is deliberately oversized -- small hands vanish at distance and
     // take the arm's readability with them -- and the left gauntlet is the
     // longer one, which is the figure's third asymmetry.
-    const gauntlet = partsMesh(forearm, materials.riderShell, [
+    const gauntlet = partsMesh(forearm, materials.riderGear, [
       { geometry: new THREE.BoxGeometry(0.086, 0.058, 0.082), position: [0, 0.008, 0] },
       { geometry: new THREE.CylinderGeometry(0.054, 0.047, side < 0 ? 0.115 : 0.062, 8), position: [0, -0.214, 0] },
       {
@@ -1362,7 +1400,19 @@ function createBoardRig(materials, player, body = BODY_M) {
       { geometry: new THREE.BoxGeometry(0.012, 0.14, 0.022), position: [side * 0.046, -0.127, -0.012] },
     ], { castShadow: false, name: 'rider-forearm-pipe' });
 
-    return { group: arm, forearm, upper, fore, gauntlet, pipe, forePipe, side };
+    return {
+      group: arm,
+      forearm,
+      upper,
+      fore,
+      gauntlet,
+      pipe,
+      forePipe,
+      side,
+      restX: side * body.armX,
+      restY: 0.518,
+      restZ: 0.012,
+    };
   });
 
   // --- the trailing fin ---------------------------------------------------
@@ -1386,6 +1436,8 @@ function createBoardRig(materials, player, body = BODY_M) {
     { z: 0.44, width: 0.008, height: 0.030, y: -0.108 },
   ], 6, true), materials.riderShell, { castShadow: false, name: 'rider-fin' });
   fin.rotation.x = 0.30;
+  fin.visible = !body.hair;
+  fin.scale.setScalar(0.48);
 
   rig.userData = {
     deck, rail, pods, flame, flameMaterial, exhausts, boardSpin,
@@ -1393,6 +1445,14 @@ function createBoardRig(materials, player, body = BODY_M) {
     shell, gear, trim, skull, skullShell, fin, finPivot,
     hair, hairPivot, hairLag: 0,
     player,
+    wasAirborne: false,
+    boardWasActive: false,
+    lastCrouch: 0,
+    popPose: 0,
+    stompPose: 0,
+    catchPose: 0,
+    grabPose: 0,
+    spinPose: 0,
   };
   return rig;
 }
@@ -2031,6 +2091,11 @@ export function updateVehicleVisual(vehicle, {
   trickTier = 0,
   // Seconds the grab has been held. Drives the rider reaching for the board.
   grab = 0,
+  grabHeld = null,
+  spinRate = 0,
+  flipRate = 0,
+  boardFlipRate = 0,
+  boardFlipSide = 0,
   trickMeter = 0,
   crouch = 0,
   landingSettle = 0,
@@ -2065,6 +2130,12 @@ export function updateVehicleVisual(vehicle, {
     airborne,
     grinding,
     grab,
+    grabHeld: grabHeld ?? grab > 0,
+    pitch,
+    spinRate,
+    flipRate,
+    boardFlipRate,
+    boardFlipSide,
     boost,
     speed,
     dt,
@@ -2311,7 +2382,8 @@ export function updateVehicleVisual(vehicle, {
  */
 function updateBoardRig(data, {
   morph, steer, driftSide, driftCharge, boardFlip, trickTier, trickMeter, crouch,
-  landingSettle, landingQuality, flameColor, airborne, grinding, grab,
+  landingSettle, landingQuality, flameColor, airborne, grinding, grabHeld,
+  pitch, spinRate, flipRate, boardFlipRate, boardFlipSide,
   boost, speed, dt, time,
 }) {
   const rig = data.boardRig;
@@ -2327,6 +2399,28 @@ function updateBoardRig(data, {
   // changed nothing on screen.
   rig.scale.setScalar(present * BOARD_RIG_SCALE);
 
+  // Presentation has authored edges even though the simulation remains the
+  // authority. Pop, catch and stomp each get a short pose pulse; continuous
+  // rates drive only the middle of the move.
+  if (!board.wasAirborne && airborne) {
+    board.popPose = clamp(0.3 + board.lastCrouch * 0.8, 0, 1);
+  }
+  if (board.wasAirborne && !airborne && landingSettle > 0) board.stompPose = 1;
+  const boardActive = airborne && Math.abs(boardFlipRate ?? 0) > 0.05;
+  if (board.boardWasActive && !boardActive && Math.abs(Math.sin((boardFlip ?? 0) * 0.5)) < 0.15) {
+    board.catchPose = 1;
+  }
+  board.popPose = Math.max(0, board.popPose - dt / 0.12);
+  board.stompPose = Math.max(0, board.stompPose - dt / (landingQuality > 0.75 ? 0.16 : 0.25));
+  board.catchPose = Math.max(0, board.catchPose - dt / 0.16);
+  const wantedGrab = airborne && grabHeld ? 1 : 0;
+  board.grabPose += (wantedGrab - board.grabPose) * (1 - Math.exp(-dt * (wantedGrab ? 18 : 11)));
+  const spinIntent = clamp((spinRate ?? 0) / 15.2, -1, 1);
+  board.spinPose += (spinIntent - board.spinPose) * (1 - Math.exp(-dt * 12));
+  board.wasAirborne = airborne;
+  board.boardWasActive = boardActive;
+  board.lastCrouch = crouch;
+
   // The GRAB. Alex: "grab tricks where you grab your board as well."
   //
   // A grab is not a pose the arm holds -- it is the rider folding up and
@@ -2335,12 +2429,30 @@ function updateBoardRig(data, {
   // reaches down and across, the knees come up harder, and the whole body
   // shortens. The leading arm does the reaching; the other stays out for
   // balance, which is the asymmetry that makes it look deliberate.
-  const reach = clamp((grab ?? 0) * 5.5, 0, 1) * (airborne ? 1 : 0);
+  const reach = board.grabPose;
   const lean = clamp(-steer * 0.46, -0.95, 0.95);
+  const flipTuck = airborne
+    ? clamp(Math.abs(flipRate ?? 0) / 7, 0, 1)
+      * (0.35 + 0.65 * Math.abs(Math.sin((pitch ?? 0) * 0.5)))
+    : 0;
+  const tau = Math.PI * 2;
+  const boardPhase = (Math.abs(boardFlip ?? 0) / tau) % 1;
+  const boardMotion = boardActive ? clamp(Math.abs(boardFlipRate ?? 0) / 8, 0, 1) : 0;
+  const separation = Math.sin(Math.PI * boardPhase) ** 2 * boardMotion;
+  const flick = smooth(clamp(boardPhase / 0.10, 0, 1))
+    * (1 - smooth(clamp((boardPhase - 0.30) / 0.16, 0, 1)))
+    * boardMotion;
+  const catchWindow = smooth(clamp((boardPhase - 0.68) / 0.15, 0, 1))
+    * (1 - smooth(clamp((boardPhase - 0.94) / 0.06, 0, 1)))
+    * boardMotion;
+  const catchPose = Math.max(catchWindow, board.catchPose);
+  const popPose = board.popPose;
+  const stompPose = board.stompPose;
   // One crouch channel: the pop being loaded, plus a landing being absorbed,
   // plus a little squat under boost.
   const absorbing = clamp(landingSettle * 2.4, 0, 1) * (1.15 - landingQuality * 0.5);
-  const squat = clamp(crouch * 0.85 + absorbing * 0.75 + boost * 0.10, 0, 1);
+  const squat = clamp(crouch * 0.85 * (1 - popPose * 0.85)
+    + absorbing * 0.75 + boost * 0.10 + stompPose * 0.55 + catchPose * 0.18, 0, 1);
 
   rig.rotation.z = lean * 0.42;
   // THE KICKFLIP. One assignment, on a group the rider is not inside: the deck,
@@ -2356,25 +2468,28 @@ function updateBoardRig(data, {
   // toward the reaching hand, which is the shape every real grab has and the
   // reason it is legible at 150 pixels.
   if (board.boardSpin) {
-    board.boardSpin.rotation.z = (boardFlip ?? 0) - reach * 0.24;
-    board.boardSpin.rotation.x = reach * 0.32;
+    board.boardSpin.rotation.z = (boardFlip ?? 0) - reach * 0.28;
+    board.boardSpin.rotation.x = reach * 0.38;
+    board.boardSpin.position.x = -reach * 0.08;
     // And the board comes UP. A grab is the rider pulling the deck to their
     // hand, not the hand falling to the deck -- the arm is not long enough for
     // the second one, which is the geometry the previous attempt lost to. The
     // knees are already tucking by the same `reach`, so the feet travel with
     // it and the rider stays standing on the thing they are holding.
-    board.boardSpin.position.y = BOARD_AXIS_Y + reach * 0.20;
+    board.boardSpin.position.y = BOARD_AXIS_Y + reach * 0.52 - stompPose * 0.03;
   }
   board.rider.rotation.z = lean * 0.30;
+  board.rider.position.y = -stompPose * 0.06;
   // Hips drop and the torso folds forward as the board is loaded. This is the
   // tell for how much pop is coming, and it is why holding the button feels
   // like winding something up.
   // On a grab the whole body drops toward the deck as well as folding. Tucking
   // the knees alone left the hand a clear gap above the board -- which reads as
   // reaching for it and missing, and is worse than not reaching at all.
-  board.hips.position.y = 0.80 - squat * 0.36 - reach * 0.30;
-  board.hips.rotation.x = (airborne ? -0.34 : squat * 0.62) + reach * 0.42;
-  board.hips.rotation.y = board.stance + lean * 0.18;
+  board.hips.position.y = 0.80 - squat * 0.36 - reach * 0.42
+    - flipTuck * 0.18 + popPose * 0.07 - stompPose * 0.14;
+  board.hips.rotation.x = (airborne ? -0.34 : squat * 0.62) + reach * 0.42 + flipTuck * 0.42;
+  board.hips.rotation.y = board.stance + lean * 0.18 + board.spinPose * 0.22;
   board.torso.rotation.z = -lean * 0.22;
   board.chest.material = data.materials.glow;
   // The head, and everything bolted to it, move together. A helmet that stays
@@ -2382,24 +2497,39 @@ function updateBoardRig(data, {
   // The head, and everything bolted to it, move together -- a helmet that
   // stays put while the shoulders drop is a helmet floating above a person.
   // They share a group, so that is one assignment.
-  if (board.skull) board.skull.position.y = 0.555 - squat * 0.08;
+  if (board.skull) {
+    board.skull.position.y = 0.555 - squat * 0.08 - flipTuck * 0.08 - stompPose * 0.05;
+    board.skull.rotation.y = -board.spinPose * 0.10;
+  }
 
-  board.legs.forEach(({ group, limb }, index) => {
-    const side = index === 0 ? -1 : 1;
+  const boardSide = Math.sign(boardFlipRate ?? 0) || boardFlipSide || 1;
+  board.legs.forEach(({ group, limb, boot, side, restX, restY, restZ, restBootY }) => {
     // Knees bend outward under load and tuck up in the air. The leg is one
     // merged mesh per tier now, so the compression is a scale on the limb
     // rather than a per-segment offset -- visually the same at this size, and
     // three draws a leg instead of five.
     // Knees come up hard on a grab. The board rises with them, which is the
     // half of the motion that makes the hand and the deck actually meet.
-    const bend = squat * 0.9 + (airborne ? 0.5 : 0) + reach * 0.75;
+    const bend = squat * 0.9 + (airborne ? 0.5 : 0) + reach * 0.75
+      + flipTuck * 0.9 + stompPose * 0.75 - popPose * 0.35;
     group.rotation.x = side * 0.10 - bend * 0.18;
     group.rotation.z = side * (0.05 + bend * 0.22) + lean * 0.12;
     limb.scale.y = 1 - bend * 0.14;
-    group.position.y = -0.045 + (airborne ? 0.10 : 0);
+    const leading = side < 0;
+    const footLift = separation * (leading ? 0.27 : 0.17);
+    group.position.set(
+      restX + (leading ? boardSide * flick * 0.15 : 0),
+      restY + (airborne ? 0.10 : 0) + reach * 0.30 + flipTuck * 0.18
+        + footLift - catchPose * 0.10,
+      restZ,
+    );
+    boot.position.y = restBootY;
+    boot.rotation.x = leading ? -flick * 0.50 : 0;
+    boot.rotation.z = leading ? -boardSide * flick * 0.90 : 0;
   });
 
-  board.arms.forEach(({ group, side, forearm }) => {
+  board.arms.forEach(({ group, side, forearm, restX, restY, restZ }) => {
+    group.position.set(restX, restY, restZ);
     // Arms out for balance, wider the harder the board is leaning, thrown up
     // in the air and tucked in on a grind.
     //
@@ -2407,7 +2537,8 @@ function updateBoardRig(data, {
     // what makes the figure read as a figure at all. A solid convex mass reads
     // as a blob at any resolution -- it is the holes that carry it -- so the
     // arms are never allowed to lie flat against the body.
-    const spread = 0.40 + Math.abs(lean) * 0.62 + (airborne ? 0.62 : 0) - (grinding ? 0.16 : 0);
+    const spread = 0.40 + Math.abs(lean) * 0.62 + (airborne ? 0.62 : 0)
+      - (grinding ? 0.16 : 0) - flipTuck * 0.28 + stompPose * 0.16 + catchPose * 0.32;
     // Asymmetric by a few per cent. A figure caught perfectly symmetric is a
     // figure nobody is inside.
     const bias = side < 0 ? 1.09 : 0.94;
@@ -2420,7 +2551,8 @@ function updateBoardRig(data, {
     group.rotation.z = (side * spread * bias + lean * 0.3) * (1 - grabbing * 0.72)
       + grabbing * side * 0.34;
     group.rotation.x = airborne
-      ? -0.7 - trickMeter * 0.4 + grabbing * 2.05 - counterweight
+      ? -0.7 - trickMeter * 0.4 + grabbing * 2.28 - counterweight + catchPose * 0.62
+        + side * board.spinPose * 0.45 - popPose * 0.5
       : side * 0.30 - 0.10 + Math.sin(time * 2.4 + side) * 0.05;
     // The elbow actually bends, and everything below it follows -- which is
     // the whole reason the forearm hangs off its own group. Without it the arm
@@ -2431,7 +2563,7 @@ function updateBoardRig(data, {
     // That is why the grab read as an air crouch -- the arm was not reaching
     // for anything, it was hugging. You cannot grab something by curling up.
     const flex = 0.62 + squat * 0.55 + (airborne ? 0.45 : 0) + Math.abs(lean) * 0.22
-      - grabbing * 0.62;
+      - grabbing * 0.78 + flipTuck * 0.45 - catchPose * 0.28;
     forearm.rotation.x = -flex;
   });
 
@@ -2490,6 +2622,7 @@ export function resetVehiclePresentation(vehicle) {
   const data = vehicle?.userData;
   if (!data?.wheelAssemblies || !data.tireBatch || !data.tireMatrixScratch) return false;
   data.releaseKick = 0;
+  resetBoardPresentationState(data.boardRig?.userData);
   for (const assembly of data.wheelAssemblies) {
     const wheelData = assembly.userData;
     wheelData.tire.rotation.set(0, Math.PI / 2, 0);

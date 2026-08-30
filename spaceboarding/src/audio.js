@@ -1107,6 +1107,64 @@ export class AudioDirector {
     }
 
     switch (event.type) {
+      // A dry mechanical flick on the INPUT edge. Landing still owns the big
+      // musical reward; this is the tiny, instant acknowledgement that says
+      // "the move is committed" before the animation has finished it.
+      case 'trick-input': {
+        const pan = clamp((event.side ?? 0) * 0.34, -0.5, 0.5);
+        const board = event.channel === 'boardFlip';
+        const body = event.channel === 'flip';
+        this.noiseBurst(
+          board ? 0.048 : 0.038,
+          board ? 0.012 : 0.009,
+          board ? 2380 : 1760,
+          { at: now, pan, variation, q: board ? 1.7 : 1.25 },
+        );
+        this.tone(body ? 172 : (board ? 286 : 224), board ? 0.075 : 0.065, {
+          at: now,
+          type: board ? 'square' : 'triangle',
+          gain: 0.012 + intensity * 0.009,
+          slide: body ? 0.82 : 1.16,
+          pan: -pan * 0.35,
+        });
+        break;
+      }
+      case 'trick-complete': {
+        const pan = clamp((event.side ?? 0) * 0.28, -0.45, 0.45);
+        const board = event.channel === 'boardFlip';
+        this.noiseBurst(board ? 0.036 : 0.03, board ? 0.018 : 0.012, board ? 3150 : 2440, {
+          at: now,
+          pan,
+          variation,
+          q: 2.1,
+        });
+        this.tone(board ? 418 : 330, 0.052, {
+          at: now,
+          type: 'triangle',
+          gain: 0.014 + intensity * 0.008,
+          slide: 0.82,
+          pan: -pan * 0.25,
+        });
+        break;
+      }
+      case 'land': {
+        // The deck has a physical touchdown even when no reward tier was
+        // earned. Reward chords belong to landed tricks; this low clack belongs
+        // to gravity and is what makes the catch/stomp sequence feel connected.
+        const clean = event.clean !== false;
+        this.noiseBurst(0.055, clean ? 0.02 : 0.028, clean ? 1280 : 860, {
+          at: now,
+          variation,
+          q: clean ? 0.72 : 0.5,
+        });
+        this.tone(clean ? 104 : 78, 0.08, {
+          at: now,
+          type: 'sine',
+          gain: 0.014 + intensity * 0.01,
+          slide: clean ? 0.9 : 0.68,
+        });
+        break;
+      }
       // The dash. Not a boost -- it grants no speed on its own -- so it does
       // not get the reward chord. It gets a sideways shove of air, panned hard
       // to the side you went, which is the ear's version of the same

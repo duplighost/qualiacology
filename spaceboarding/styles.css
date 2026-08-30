@@ -465,6 +465,13 @@ body[data-race-status="racing"] .touch-controls { opacity: 1; }
   touch-action: none;
 }
 .touch-button.hop { width: 88px; height: 88px; border-color: color-mix(in srgb, var(--accent) 60%, white); }
+.touch-button.hop span {
+  display: grid;
+  gap: 2px;
+  translate: var(--flick-x, 0px) var(--flick-y, 0px);
+  transition: translate 70ms linear;
+}
+.touch-button.hop small { font-size: .52em; letter-spacing: .17em; opacity: .58; }
 .touch-button.is-held { transform: scale(.9); background-color: color-mix(in srgb, var(--accent) 52%, #160300); box-shadow: 0 0 35px var(--accent); }
 
 .fatal { z-index: 50; background: #03040a; }
