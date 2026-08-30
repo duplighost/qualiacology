@@ -195,7 +195,7 @@ const overlaps = (a, b) => Boolean(a && b && !(
   || a.y + a.height <= b.y || b.y + b.height <= a.y
 ));
 
-check(captureState.buildId === "the-last-room-1.4.1-site-hardening", `exact v1.4.1 build (${captureState.buildId})`);
+check(captureState.buildId === "the-last-room-1.5.0-architectural-variety", `exact v1.5.0 build (${captureState.buildId})`);
 check(captureState.validation?.ok === true, "generated wing passes architectural validation");
 check(captureState.errors?.length === 0, `game reports zero errors (${captureState.errors?.length || 0})`);
 check(captureState.stats?.rooms >= 6, `furnished room graph loaded (${captureState.stats?.rooms || 0} rooms)`);
