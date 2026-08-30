@@ -67,5 +67,7 @@ are the one set that keeps its master's own aspect ratio. `width`/`height`
 are declared so the Node build never decodes an image; the audit checks the
 declaration against the real file and fails on a mismatch. Entirely optional
 — with no `featuredImage`, the principal crops the 16/9 master, which is what
-every game does today. A composition with anything important near the left or
-right edge needs one (the frame runs 0.72–1.12 and centre-crops the sides).
+every game but `lil-big-bang` does. A composition with anything important near
+the left or right edge needs one (the frame runs 0.72–1.12 and centre-crops
+the sides): LIL BIG BANG's art fans out of a flash on its left third, and the
+centre crop cut the flash and every foreground card in half.

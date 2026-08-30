@@ -227,13 +227,13 @@ function heroPicture() {
   // Phones get a 3:2 cut of the same plate. At 390w that renders 239px tall, against
   // 201px for the 16:9 punch-out and 140px if the authored 41:16 simply carried down -
   // so the small screen gets the biggest picture, not the widest one.
-  const phone = "/assets/visuals/qualiacology-candy-city-portrait";
+  const phone = "/assets/visuals/qualiacology-candy-city-v2-portrait";
   return `<picture>
     <source media="(max-width: 44.99rem)" type="image/avif" srcset="${phone}-640.avif 640w, ${phone}-960.avif 960w" sizes="calc(100vw - 2rem)">
     <source media="(max-width: 44.99rem)" type="image/webp" srcset="${phone}-640.webp 640w, ${phone}-960.webp 960w" sizes="calc(100vw - 2rem)">
-    <source type="image/avif" srcset="/assets/visuals/qualiacology-candy-city-640.avif 640w, /assets/visuals/qualiacology-candy-city-960.avif 960w, /assets/visuals/qualiacology-candy-city-1280.avif 1280w, /assets/visuals/qualiacology-candy-city-1640.avif 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
-    <source type="image/webp" srcset="/assets/visuals/qualiacology-candy-city-640.webp 640w, /assets/visuals/qualiacology-candy-city-960.webp 960w, /assets/visuals/qualiacology-candy-city-1280.webp 1280w, /assets/visuals/qualiacology-candy-city-1640.webp 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
-    <img src="/assets/visuals/qualiacology-candy-city-1640.jpg" width="1640" height="640" alt="A candy-loving ghost in a dark rain-soaked neon city, holding a lollipop and a bag of Ghost Pops" fetchpriority="high" decoding="async">
+    <source type="image/avif" srcset="/assets/visuals/qualiacology-candy-city-v2-640.avif 640w, /assets/visuals/qualiacology-candy-city-v2-960.avif 960w, /assets/visuals/qualiacology-candy-city-v2-1280.avif 1280w, /assets/visuals/qualiacology-candy-city-v2-1640.avif 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
+    <source type="image/webp" srcset="/assets/visuals/qualiacology-candy-city-v2-640.webp 640w, /assets/visuals/qualiacology-candy-city-v2-960.webp 960w, /assets/visuals/qualiacology-candy-city-v2-1280.webp 1280w, /assets/visuals/qualiacology-candy-city-v2-1640.webp 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
+    <img src="/assets/visuals/qualiacology-candy-city-v2-1640.jpg" width="1640" height="640" alt="A candy-loving ghost in a dark rain-soaked neon city, holding a lollipop and a bag of Ghost Pops" fetchpriority="high" decoding="async">
   </picture>`;
 }
 
