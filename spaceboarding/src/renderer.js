@@ -10457,6 +10457,40 @@ export class RaceRenderer {
       }
       else if (item.type === 'player-hit' && inOpenSpace) this.cameraDirector.trauma('hit', intensity);
       else if (item.type === 'incoming-dodge' && inOpenSpace) this.cameraDirector.trauma('boost', intensity * 0.72);
+      else if (item.type === 'trick-input') {
+        // A small deck-level spark answers the press immediately. It is not a
+        // reward burst (landing owns that); it is input confirmation visible
+        // in peripheral vision while the rider starts the committed move.
+        const board = item.channel === 'boardFlip';
+        const anchor = new THREE.Vector3(
+          this.playerSurfaceFrame.anchorX,
+          this.playerSurfaceFrame.anchorY,
+          this.playerSurfaceFrame.anchorZ + 2.05,
+        );
+        this.particles.spawn(
+          anchor,
+          board ? segment.secondary : segment.accent,
+          board ? 9 : 6,
+          board ? 11 : 8,
+          new THREE.Vector3((item.side ?? 0) * 0.65, 0.25, 0.35),
+        );
+      }
+      else if (item.type === 'trick-complete') {
+        const board = item.channel === 'boardFlip';
+        this.cameraDirector.trauma('boost', board ? 0.17 : 0.12);
+        const anchor = new THREE.Vector3(
+          this.playerSurfaceFrame.anchorX,
+          this.playerSurfaceFrame.anchorY + 0.12,
+          this.playerSurfaceFrame.anchorZ + 2.15,
+        );
+        this.particles.spawn(
+          anchor,
+          board ? segment.secondary : segment.accent,
+          board ? 12 : 8,
+          board ? 13 : 10,
+          new THREE.Vector3((item.side ?? 0) * 0.35, 0.48, 0.55),
+        );
+      }
       else if (item.type === 'trick-tier') {
         // Lighting a new flame is the moment the ladder becomes legible, so it
         // gets a burst in the world and a kick in the camera rather than only
@@ -10492,6 +10526,7 @@ export class RaceRenderer {
           new THREE.Vector3(0, 0.7, 1.5),
         );
       }
+      else if (item.type === 'land') this.cameraDirector.trauma('touchdown', intensity * (item.clean ? 0.34 : 0.52));
       else if (item.type === 'launch') this.cameraDirector.trauma('launch', intensity);
       else if (item.type === 'landing') this.cameraDirector.trauma('touchdown', intensity);
       else if (['thermal-sling', 'space-gate', 'lightning-ride', 'crown-ring'].includes(item.type)) this.cameraDirector.trauma('boost', intensity * 0.55);
@@ -10795,6 +10830,10 @@ export class RaceRenderer {
       roll: pose.roll,
       pitch: pose.pitch,
       boardFlip: pose.boardFlip ?? 0,
+      spinRate: state.spinRate ?? 0,
+      flipRate: state.flipRate ?? 0,
+      boardFlipRate: state.boardFlipRate ?? 0,
+      boardFlipSide: state.boardFlipSide ?? 0,
       trickTier: state.trickTier ?? 0,
       trickMeter: state.trickMeter ?? 0,
       crouch: state.crouch ?? 0,
@@ -10808,6 +10847,9 @@ export class RaceRenderer {
       // reach has to be a continuous value the arm can travel along, not a
       // boolean it snaps between.
       grab: state.grabSeconds ?? 0,
+      // Scoring needs cumulative seconds; posing needs the button's current
+      // truth so the hand lets go when the player does.
+      grabHeld: Boolean(state.lastInput?.grab),
       // Launch, free-flight, reentry, and touchdown altitude live entirely in
       // simulation state so the rendered hull shares the exact same physical
       // trajectory on both sides of every mode boundary.

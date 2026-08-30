@@ -48,28 +48,33 @@ export const RIDER = Object.freeze({
 export const RIDER_STATES = Object.freeze(Object.values(RIDER));
 
 // --- The pop --------------------------------------------------------------
-// Hold to crouch, release to launch. A tap is a quick hop for a quick trick; a
-// full load buys enough airtime for a 540. This is where the commitment that
-// used to live in a held drift went, and it is the same gesture: load it up,
-// let go at the right moment, and what you get back is the size of what you
-// put in.
+// Hold to crouch, release to launch. The load stays, because it gives the pop a
+// readable physical gesture, but it peaks quickly: SPACE should feel like a
+// spring under the thumb, not a progress bar the player waits on.
 export const HOP_MIN_IMPULSE = 19.5;
 export const HOP_MAX_IMPULSE = 34;
-export const HOP_CHARGE_SECONDS = 0.28;
+export const HOP_CHARGE_SECONDS = 0.22;
 export const GRAVITY = 46;
 export const AIR_STEER_FORCE = 18;
-// A tap gives 0.67s of air and a full load 1.08s. At AIR_SPIN_RATE that is
-// 4.8 rad off a tap and 7.8 off a full pop -- so both ends of the charge are
-// worth something and the top end is worth committing to.
-export const AIR_SPIN_RATE = 12.4;
-export const AIR_FLIP_RATE = 9.2;
-// The board flip, about the board's long axis. Faster than either of the
-// others: a kickflip is a flick of the foot, not a rotation of the whole
-// body, and it has to be able to fit two of them inside one hop.
-export const AIR_ROLL_RATE = 15.5;
-// Without a spin delay the instant of the pop reads as the start of a spin and
-// every hop lands crooked. CARVE was right about this one.
-export const HOP_SPIN_DELAY = 0.13;
+// Trick inputs are commitments, not aircraft controls. One tap adds one legal
+// landing unit to a target (180 spin, one body flip, or one board flip), and a
+// fast motor finishes it after the player's finger has already moved on. That
+// is the Tony-Hawk part of the language: the skill is choosing what fits in the
+// air, not releasing a held axis inside a 70 ms landing window.
+export const AIR_SPIN_RATE = 15.2;
+export const AIR_FLIP_RATE = 13.6;
+// A kickflip is the fastest channel because it is a foot flick, not the whole
+// body. It completes in roughly a third of a second and can combine with either
+// body axis on the same input frame.
+export const AIR_ROLL_RATE = 21.5;
+export const TRICK_INPUT_DEADZONE = 0.48;
+// Dedicated trick keys are one press / one move. A/D is also steering, so its
+// airborne hold repeats 180s at a readable cadence after the first tap; that
+// preserves fast spin lines without turning a held Q into accidental triples.
+export const TRICK_REPEAT_DELAY = 0.34;
+export const TRICK_REPEAT_SECONDS = 0.26;
+export const TRICK_PREPOP_BUFFER = 0.14;
+export const TRICK_QUEUE_LIMIT = 5;
 
 // --- Landing --------------------------------------------------------------
 // The board lands clean on any HALF turn, not only a full one. A 180 is a real
@@ -160,32 +165,19 @@ export const LAND_ASSIST_RATE = 7.0;       // rad/s, the fastest it may correct
 export const LAND_ASSIST_QUALITY_COST = 0.42;
 
 // --- Trick scoring --------------------------------------------------------
-// Rotation counts as distance TRAVELLED, so a spin out and back scores; the
-// landing is what demands you come down square. Grab and airtime pay too, so a
-// big straight pop off a wall is a trick even without rotation.
-const TRICK_HALF_TURN = 0.30;   // per half turn of yaw
-const TRICK_FLIP = 0.34;        // per full flip of pitch
-const TRICK_ROLL = 0.30;        // per full flip of the board
-const TRICK_GRAB = 0.42;        // per second held
-const TRICK_AIRTIME = 0.26;     // per second airborne
-// Charge thresholds for the three flames, reachable in order: a tap hop with a
-// grab lights blue, a full pop with a 360 lights orange, and pink wants a wall
-// or a rail launch behind it.
-// Re-measured after the air was raised for "like a tony hawk game but even
-// faster": a full pop is now 1.48 seconds and 12.6 units high, against 1.08 and
-// 5.8 before, and the spin ceiling went from 1.24 turns to 2.92.
-//
-// The whole ladder, driven through the sim with a release timed to land square,
-// which is what a player actually does:
-//
-//   tap + grab                0.61      full pop + grab            1.00
-//   tap + 360 + grab          1.21      full pop + 360 + grab      1.60
-//   full pop + 720 + grab     2.21      full pop + 900 + grab      2.50
-//   full pop + 1080           blown -- 3 turns is past the 2.92 ceiling
-//
-// The rungs sit BETWEEN those, not on them. On the old thresholds every one of
-// these landed pink, which is the same as having no tiers at all.
-export const TRICK_TIER_CHARGE = Object.freeze([0.45, 0.90, 1.45]);
+// Only FINISHED commands score. The previous system summed absolute angular
+// travel, so rapidly alternating Q/E could return the deck to level and still
+// be called a triple kickflip. A skate game has to credit the caught move, not
+// every radian the geometry happened to visit on the way there.
+const TRICK_HALF_TURN = 0.36;   // each completed 180 of yaw
+const TRICK_FLIP = 0.72;        // each completed body flip
+const TRICK_ROLL = 0.62;        // each completed board flip
+const TRICK_GRAB = 0.32;        // per second held
+const TRICK_AIRTIME = 0.08;     // small style floor; never a tier by itself
+// The ladder keeps the current three-flame race economy while restoring a
+// useful hierarchy: a short grab is blue, a caught kickflip is worth more than
+// that grab, and a 360 + grab (or a real combination) reaches pink.
+export const TRICK_TIER_CHARGE = Object.freeze([0.30, 0.72, 1.28]);
 export const TRICK_TIER_COLOR = Object.freeze([0x4bb8ff, 0xff9a2e, 0xff4bd0]);
 // Peak fraction of the segment speed band each flame is worth on a clean
 // landing. No tier reaches the cap alone -- the cap is where tricks, rails and
@@ -262,6 +254,168 @@ function offsetToNearest(value, step) {
   return value - Math.round(value / step) * step;
 }
 
+const TRICK_CHANNELS = Object.freeze({
+  spin: Object.freeze({ value: 'yaw', target: 'spinTarget', unit: Math.PI }),
+  flip: Object.freeze({ value: 'pitch', target: 'flipTarget', unit: Math.PI * 2 }),
+  boardFlip: Object.freeze({ value: 'boardFlip', target: 'boardFlipTarget', unit: Math.PI * 2 }),
+});
+
+const axisSide = (raw) => (Math.abs(raw) >= TRICK_INPUT_DEADZONE ? Math.sign(raw) : 0);
+
+function startTrickCommand(state, channel, side) {
+  const spec = TRICK_CHANNELS[channel];
+  state.trickActive[channel] = side;
+  state[spec.target] = state[spec.value] + side * spec.unit;
+}
+
+/** Accept one authored move, concurrently across channels and serially within one. */
+function enqueueTrickCommand(state, channel, side, hooks) {
+  if (!side) return false;
+  const queue = state.trickQueue[channel];
+  if (state.trickActive[channel]) {
+    if (queue.length >= TRICK_QUEUE_LIMIT) return false;
+    queue.push(side);
+  } else {
+    startTrickCommand(state, channel, side);
+  }
+  state.trickInputsQueued += 1;
+  if (channel === 'spin') state.spinSide = side;
+  if (channel === 'boardFlip') state.boardFlipSide = side;
+  hooks.onTrickInput?.({
+    channel,
+    side,
+    queued: queue.length + (state.trickActive[channel] ? 1 : 0),
+  });
+  return true;
+}
+
+/**
+ * Capture a direction pressed just before SPACE releases.
+ *
+ * 140 ms is long enough to chord Q/E/W/S with the pop at racing speed, but
+ * short enough that ordinary steering from earlier in the crouch is not
+ * remembered as a surprise trick. Inputs already held before loading are
+ * latched but not buffered: intent needs a fresh edge.
+ */
+function captureGroundTrickInputs(state, input, dt) {
+  const axes = { spin: input.steer, flip: input.pitch, boardFlip: input.roll };
+  for (const channel of Object.keys(TRICK_CHANNELS)) {
+    state.trickBufferTimer[channel] = Math.max(0, state.trickBufferTimer[channel] - dt);
+    if (state.trickBufferTimer[channel] <= 0) state.trickBufferSide[channel] = 0;
+    const side = axisSide(axes[channel]);
+    const previous = state.trickInputSide[channel];
+    if (!side) {
+      state.trickInputSide[channel] = 0;
+      state.trickRepeatTimer[channel] = 0;
+      continue;
+    }
+    if (side !== previous) {
+      state.trickInputSide[channel] = side;
+      state.trickRepeatTimer[channel] = TRICK_REPEAT_DELAY;
+      if (state.popLoading) {
+        state.trickBufferSide[channel] = side;
+        state.trickBufferTimer[channel] = TRICK_PREPOP_BUFFER;
+      }
+    } else if (state.popLoading && state.trickBufferSide[channel] === side) {
+      // Holding the chord through the release keeps it alive; the 140 ms
+      // expiry applies only after the player lets the direction go.
+      state.trickBufferTimer[channel] = TRICK_PREPOP_BUFFER;
+    }
+  }
+  if (!state.popLoading) {
+    for (const channel of Object.keys(TRICK_CHANNELS)) {
+      state.trickBufferSide[channel] = 0;
+      state.trickBufferTimer[channel] = 0;
+    }
+  }
+}
+
+/** Edge-trigger dedicated moves; only the shared A/D spin axis repeats on hold. */
+function trickAxisPress(state, channel, raw, dt) {
+  const side = axisSide(raw);
+  const previous = state.trickInputSide[channel];
+  if (!side) {
+    state.trickInputSide[channel] = 0;
+    state.trickRepeatTimer[channel] = 0;
+    return 0;
+  }
+  if (side !== previous) {
+    state.trickInputSide[channel] = side;
+    state.trickRepeatTimer[channel] = TRICK_REPEAT_DELAY;
+    return side;
+  }
+  if (channel !== 'spin') return 0;
+  state.trickRepeatTimer[channel] -= dt;
+  if (state.trickRepeatTimer[channel] > 0) return 0;
+  state.trickRepeatTimer[channel] += TRICK_REPEAT_SECONDS;
+  return side;
+}
+
+/** Desired velocity toward a committed landing target. */
+function trickTargetRate(value, target, maxRate) {
+  const delta = target - value;
+  if (Math.abs(delta) <= 1e-5) return 0;
+  // The integrator below clamps the final step, so there is no reason to ease
+  // into the target. Constant speed gives every command a short, learnable
+  // duration and a crisp catch instead of asymptotically crawling through the
+  // last few degrees.
+  return Math.sign(delta) * maxRate;
+}
+
+/** Integrate without ever overshooting the target. */
+function advanceTrickTarget(value, target, rate, dt) {
+  const delta = target - value;
+  const move = rate * dt;
+  if (Math.sign(move) === Math.sign(delta) && Math.abs(move) >= Math.abs(delta)) return target;
+  return value + move;
+}
+
+function queueAirTricks(state, input, dt, hooks) {
+  const axes = { spin: input.steer, flip: input.pitch, boardFlip: input.roll };
+  for (const channel of Object.keys(TRICK_CHANNELS)) {
+    const buffered = state.trickBufferTimer[channel] > 0 ? state.trickBufferSide[channel] : 0;
+    if (buffered) enqueueTrickCommand(state, channel, buffered, hooks);
+    state.trickBufferSide[channel] = 0;
+    state.trickBufferTimer[channel] = 0;
+    const side = trickAxisPress(state, channel, axes[channel], dt);
+    if (side) enqueueTrickCommand(state, channel, side, hooks);
+  }
+}
+
+function completeTrickCommands(state, hooks) {
+  for (const channel of Object.keys(TRICK_CHANNELS)) {
+    const side = state.trickActive[channel];
+    if (!side) continue;
+    const spec = TRICK_CHANNELS[channel];
+    if (Math.abs(state[spec.target] - state[spec.value]) > 1e-5) continue;
+    state.completedTrickMoves.push({ channel, side });
+    state.trickActive[channel] = 0;
+    hooks.onTrickComplete?.({
+      channel,
+      side,
+      name: trickName(state),
+      score: scoreTrick(state),
+      completed: state.completedTrickMoves.length,
+    });
+    const next = state.trickQueue[channel].shift();
+    if (next) startTrickCommand(state, channel, next);
+  }
+}
+
+const incompleteTrickCount = (state) => Object.keys(TRICK_CHANNELS).reduce(
+  (count, channel) => count + (state.trickActive[channel] ? 1 : 0) + state.trickQueue[channel].length,
+  0,
+);
+
+function clearTrickLedger(state) {
+  for (const channel of Object.keys(TRICK_CHANNELS)) {
+    state.trickActive[channel] = 0;
+    state.trickQueue[channel].length = 0;
+  }
+  state.completedTrickMoves.length = 0;
+  state.trickInputsQueued = 0;
+}
+
 /** Which flame the current trick charge has earned. 0 means none yet. */
 export function trickTierOf(charge) {
   if (charge >= TRICK_TIER_CHARGE[2]) return 3;
@@ -290,6 +444,20 @@ export function createRiderState(segment) {
 
     // --- the trick in progress ---
     spinTravelled: 0,
+    // A tap moves one of these targets by a complete landing unit. The motor
+    // keeps moving after the key is released, so a quick chord at takeoff is
+    // never swallowed and simultaneous inputs genuinely combine.
+    spinTarget: 0,
+    flipTarget: 0,
+    boardFlipTarget: 0,
+    trickActive: { spin: 0, flip: 0, boardFlip: 0 },
+    trickQueue: { spin: [], flip: [], boardFlip: [] },
+    completedTrickMoves: [],
+    trickInputSide: { spin: 0, flip: 0, boardFlip: 0 },
+    trickRepeatTimer: { spin: 0, flip: 0, boardFlip: 0 },
+    trickBufferSide: { spin: 0, flip: 0, boardFlip: 0 },
+    trickBufferTimer: { spin: 0, flip: 0, boardFlip: 0 },
+    trickInputsQueued: 0,
     // The BOARD flip is its own channel, and that is the whole point of it.
     // It used to drive `state.roll`, which the renderer applies to the pose
     // group the rider is parented under -- so a kickflip rotated the person
@@ -415,6 +583,29 @@ export function rescueRider(state, profile, reason) {
   state.trickTier = 0;
   state.spinTravelled = 0;
   state.flipTravelled = 0;
+  state.spinTarget = 0;
+  state.flipTarget = 0;
+  state.boardFlipTarget = 0;
+  state.trickActive.spin = 0;
+  state.trickActive.flip = 0;
+  state.trickActive.boardFlip = 0;
+  state.trickQueue.spin.length = 0;
+  state.trickQueue.flip.length = 0;
+  state.trickQueue.boardFlip.length = 0;
+  state.completedTrickMoves.length = 0;
+  state.trickInputSide.spin = 0;
+  state.trickInputSide.flip = 0;
+  state.trickInputSide.boardFlip = 0;
+  state.trickRepeatTimer.spin = 0;
+  state.trickRepeatTimer.flip = 0;
+  state.trickRepeatTimer.boardFlip = 0;
+  state.trickBufferSide.spin = 0;
+  state.trickBufferSide.flip = 0;
+  state.trickBufferSide.boardFlip = 0;
+  state.trickBufferTimer.spin = 0;
+  state.trickBufferTimer.flip = 0;
+  state.trickBufferTimer.boardFlip = 0;
+  state.trickInputsQueued = 0;
   state.landingSettle = 0;
   state.stance = 0;
   state.lateral = clamp(finite(state.safePoint.lateral), -profile.roadHalf * 0.8, profile.roadHalf * 0.8);
@@ -436,6 +627,10 @@ export function guardFinite(state, profile) {
   const fields = [
     state.lateral, state.lateralVelocity, state.height, state.heightVelocity,
     state.pitch, state.yaw, state.roll, state.speed, state.globalProgress, state.segmentProgress,
+    state.spinTarget, state.flipTarget, state.boardFlipTarget,
+    state.trickRepeatTimer.spin, state.trickRepeatTimer.flip, state.trickRepeatTimer.boardFlip,
+    state.trickBufferTimer.spin, state.trickBufferTimer.flip, state.trickBufferTimer.boardFlip,
+    state.trickActive.spin, state.trickActive.flip, state.trickActive.boardFlip,
   ];
   if (fields.every(Number.isFinite)) return false;
   if (!Number.isFinite(state.globalProgress)) state.globalProgress = finite(state.safePoint.s);
@@ -484,11 +679,23 @@ export function beginAir(state, impulse) {
   state.airTime = 0;
   state.spinRate = 0;
   state.flipRate = 0;
+  state.spinTarget = state.yaw;
+  state.flipTarget = state.pitch;
+  state.boardFlipTarget = state.boardFlip;
+  state.trickActive.spin = 0;
+  state.trickActive.flip = 0;
+  state.trickActive.boardFlip = 0;
+  state.trickQueue.spin.length = 0;
+  state.trickQueue.flip.length = 0;
+  state.trickQueue.boardFlip.length = 0;
+  state.completedTrickMoves.length = 0;
+  state.trickInputsQueued = 0;
   state.grabSeconds = 0;
   state.spinTravelled = 0;
   state.flipTravelled = 0;
   state.boardFlipRate = 0;
   state.boardFlipTravelled = 0;
+  state.boardFlipSide = 0;
   state.landingAssist = 0;
   state.landingAssistSpent.yaw = 0;
   state.landingAssistSpent.pitch = 0;
@@ -506,52 +713,60 @@ export function beginAir(state, impulse) {
  * Alex: "we can throw the name of the trick and the point value onto the
  * screen in a cool way when you do a trick."
  *
- * Every part of the name is read off something the sim already tracks, and
- * nothing is invented: spin is yaw travelled, flip is pitch travelled, the
- * grab is a held second count, switch is the stance flag, and the rail shape
- * is whatever line threw you. A name that claims a component the simulation
- * does not have is a lie the player will eventually catch.
- *
- * Skate naming is degrees plus modifiers, so that is what this is. Spin
- * rounds to the nearest half turn because the landing is judged on half turns
- * -- calling a 340 a 360 is not flattery, it is the same rounding the landing
- * already did.
+ * Names come from the completed-move ledger. That is a stronger promise than
+ * rounding travel: if the banner says KICKFLIP, the board completed and caught
+ * one authored kickflip command.
  */
 const GRAB_NAMES = [[0.42, "TUCK"], [0.95, "GRAB"], [Infinity, "BONED"]];
-const FLIP_NAMES = ["", "FLIP", "DOUBLE FLIP", "TRIPLE FLIP"];
-const ROLL_COUNTS = ["", "", "DOUBLE", "TRIPLE", "QUAD"];
+const COUNT_PREFIX = ["", "", "DOUBLE ", "TRIPLE ", "QUAD ", "QUINT "];
 const RAIL_PREFIX = { kicker: "KICKER", sweep: "SWEEP", loop: "LOOP" };
 
+const completedCount = (state, channel, side = 0) => state.completedTrickMoves.reduce(
+  (count, move) => count + (move.channel === channel && (!side || move.side === side) ? 1 : 0),
+  0,
+);
+
+function countedMove(name, count) {
+  if (count <= 0) return null;
+  if (count >= COUNT_PREFIX.length) return `${count}X ${name}`;
+  return `${COUNT_PREFIX[count]}${name}`;
+}
+
 export function trickName(state) {
+  const prefix = [];
   const parts = [];
   if (state.launchedFromRail && RAIL_PREFIX[state.launchedFromRail]) {
-    parts.push(RAIL_PREFIX[state.launchedFromRail]);
+    prefix.push(RAIL_PREFIX[state.launchedFromRail]);
   }
-  if (state.stance) parts.push("SWITCH");
-  const halfTurns = Math.round(state.spinTravelled / Math.PI);
-  if (halfTurns >= 1) parts.push(String(halfTurns * 180));
-  const flips = Math.round(state.flipTravelled / (Math.PI * 2));
-  if (flips >= 1) parts.push(FLIP_NAMES[Math.min(flips, FLIP_NAMES.length - 1)]);
-  // Which way the board went decides which of the two names it gets, the same
-  // way it does on a real board.
-  const boardFlips = Math.round(state.boardFlipTravelled / (Math.PI * 2));
-  if (boardFlips >= 1) {
-    const kind = state.boardFlipSide < 0 ? 'KICKFLIP' : 'HEELFLIP';
-    parts.push(boardFlips > 1 ? `${ROLL_COUNTS[Math.min(boardFlips, ROLL_COUNTS.length - 1)]} ${kind}` : kind);
+  if (state.stance) prefix.push("SWITCH");
+
+  const spins = state.completedTrickMoves.filter((move) => move.channel === 'spin');
+  if (spins.length) {
+    const rewound = spins.some((move, index) => index > 0 && move.side !== spins[index - 1].side);
+    parts.push(`${spins.length * 180}${rewound ? ' REWIND' : ''}`);
   }
+  const frontFlips = completedCount(state, 'flip', 1);
+  const backFlips = completedCount(state, 'flip', -1);
+  if (frontFlips) parts.push(countedMove('FRONTFLIP', frontFlips));
+  if (backFlips) parts.push(countedMove('BACKFLIP', backFlips));
+
+  const kickflips = completedCount(state, 'boardFlip', -1);
+  const heelflips = completedCount(state, 'boardFlip', 1);
+  if (kickflips) parts.push(countedMove('KICKFLIP', kickflips));
+  if (heelflips) parts.push(countedMove('HEELFLIP', heelflips));
   if (state.grabSeconds > 0.08) {
     parts.push(GRAB_NAMES.find(([limit]) => state.grabSeconds < limit)[1]);
   }
   // Something always has a name. A big straight pop off a wall is a trick.
-  if (!parts.length) return state.airTime > 0.75 ? "BIG AIR" : "OLLIE";
-  return parts.join(" ");
+  if (!parts.length) parts.push(state.airTime > 0.75 ? "BIG AIR" : "OLLIE");
+  return `${prefix.length ? `${prefix.join(' ')} ` : ''}${parts.join(' + ')}`;
 }
 
 /** The running score of the trick currently in the air. */
 function scoreTrick(state) {
-  return (state.spinTravelled / Math.PI) * TRICK_HALF_TURN
-    + (state.flipTravelled / (Math.PI * 2)) * TRICK_FLIP
-    + (state.boardFlipTravelled / (Math.PI * 2)) * TRICK_ROLL
+  return completedCount(state, 'spin') * TRICK_HALF_TURN
+    + completedCount(state, 'flip') * TRICK_FLIP
+    + completedCount(state, 'boardFlip') * TRICK_ROLL
     + state.grabSeconds * TRICK_GRAB
     + state.airTime * TRICK_AIRTIME;
 }
@@ -566,11 +781,16 @@ function scoreTrick(state) {
  * it right.
  */
 export function landingError(state) {
-  return Math.max(
+  const orientationError = Math.max(
     Math.abs(offsetToNearest(state.yaw, Math.PI)) / LAND_TOLERANCE,
     Math.abs(offsetToNearest(state.pitch, Math.PI * 2)) / LAND_PITCH_TOLERANCE,
     Math.abs(offsetToNearest(state.boardFlip, Math.PI * 2)) / LAND_ROLL_TOLERANCE,
   );
+  // A command is a promise to complete and catch the move. Touching down with
+  // one still active (or queued behind it) is a bail even if it was started so
+  // late that the board has only moved a few degrees. This is the clean risk
+  // language: one more move either fits in the air or it does not.
+  return incompleteTrickCount(state) > 0 ? Math.max(orientationError, 1.12) : orientationError;
 }
 
 /**
@@ -652,8 +872,9 @@ function judgeLanding(state, hooks) {
       score,
       quality,
       name,
-      halves: Math.floor(state.spinTravelled / Math.PI),
-      flips: Math.floor(state.flipTravelled / (Math.PI * 2)),
+      halves: completedCount(state, 'spin'),
+      flips: completedCount(state, 'flip'),
+      boardFlips: completedCount(state, 'boardFlip'),
       grab: state.grabSeconds,
       airTime: state.airTime,
       // A sloppy-but-legal landing pays less than a stomped one, so the gap
@@ -705,6 +926,19 @@ function judgeLanding(state, hooks) {
   state.rollRate = 0;
   state.boardFlipTravelled = 0;
   state.boardFlipRate = 0;
+  state.trickActive.spin = 0;
+  state.trickActive.flip = 0;
+  state.trickActive.boardFlip = 0;
+  state.trickQueue.spin.length = 0;
+  state.trickQueue.flip.length = 0;
+  state.trickQueue.boardFlip.length = 0;
+  state.completedTrickMoves.length = 0;
+  state.trickBufferSide.spin = 0;
+  state.trickBufferSide.flip = 0;
+  state.trickBufferSide.boardFlip = 0;
+  state.trickBufferTimer.spin = 0;
+  state.trickBufferTimer.flip = 0;
+  state.trickBufferTimer.boardFlip = 0;
   state.landingAssist = 0;
   state.landingAssistSpent.yaw = 0;
   state.landingAssistSpent.pitch = 0;
@@ -778,6 +1012,16 @@ export function stepRider(state, segment, input, dt, hooks = {}) {
     14,
     dt,
   );
+  // Read fresh edges while the pop is loading so a fast chord can lead the
+  // release by a handful of frames. Once beginAir runs, the buffered command
+  // is consumed in the same tick as the launch.
+  if (state.riderState === RIDER.GROUND) {
+    captureGroundTrickInputs(state, {
+      steer,
+      pitch: locked ? 0 : input.pitch,
+      roll: locked ? 0 : input.roll,
+    }, dt);
+  }
 
   // --- lateral and rotational intent --------------------------------------
   if (state.riderState === RIDER.AIR) {
@@ -785,17 +1029,17 @@ export function stepRider(state, segment, input, dt, hooks = {}) {
     if (input.grab && !locked) state.grabSeconds += dt;
     state.lateralVelocity += steer * AIR_STEER_FORCE * dt;
     state.lateralVelocity *= Math.exp(-0.9 * dt);
-    if (state.airTime >= HOP_SPIN_DELAY) {
-      state.spinRate = steer * AIR_SPIN_RATE;
-      state.flipRate = (locked ? 0 : input.pitch) * AIR_FLIP_RATE;
-      // The board flip. Alex: "there should be tricks where your flip your
-      // board as well." The BOARD -- so this drives `boardFlip`, which the rig
-      // applies to the deck alone. Driving `roll` here inverted the rider too,
-      // and a rider on their side in mid-air reads as a crash.
-      state.boardFlipRate = (locked ? 0 : input.roll) * AIR_ROLL_RATE;
-      if (Math.abs(input.roll) > 0.2) state.boardFlipSide = Math.sign(input.roll);
-      if (Math.abs(steer) > 0.2) state.spinSide = Math.sign(steer);
-    }
+    // Queue BEFORE driving the targets. A direction flick on the exact release
+    // frame therefore moves the rider this frame; the old 130 ms dead zone ate
+    // that natural chord completely and made fast hands feel like missed input.
+    queueAirTricks(state, {
+      steer,
+      pitch: locked ? 0 : input.pitch,
+      roll: locked ? 0 : input.roll,
+    }, dt, hooks);
+    state.spinRate = trickTargetRate(state.yaw, state.spinTarget, AIR_SPIN_RATE);
+    state.flipRate = trickTargetRate(state.pitch, state.flipTarget, AIR_FLIP_RATE);
+    state.boardFlipRate = trickTargetRate(state.boardFlip, state.boardFlipTarget, AIR_ROLL_RATE);
     // How long until this lands, from the trajectory rather than from a guess.
     // Solving the fall exactly is what lets the window be stated in seconds --
     // the value that matters is "can the player see the ground coming", and
@@ -816,17 +1060,16 @@ export function stepRider(state, segment, input, dt, hooks = {}) {
       ? clamp(1 - timeToImpact / LAND_ASSIST_WINDOW, 0, 1)
       : 0;
     if (assist > 0) {
-      // Input tapers out rather than being cut, so a player still holding the
-      // spin does not feel the controls go dead -- the board just stops
-      // arguing with the ground.
-      const taper = 1 - assist;
-      state.spinRate *= taper;
-      state.flipRate *= taper;
-      state.boardFlipRate *= taper;
+      // Authored commands keep their full motor rate all the way to the catch.
+      // Slowing an active move here made a nominally finishable last-second
+      // kickflip bail simply because it entered the assist window. The pull
+      // below already skips active/queued channels; it only squares idle axes.
       // Spend from a fixed budget, tracked per channel. Once it is gone the
       // orientation is whatever the player left it at, which is the whole
       // reason a wild miss is still a miss.
       const pull = (channel, value, step) => {
+        const commandChannel = channel === 'yaw' ? 'spin' : (channel === 'pitch' ? 'flip' : channel);
+        if (state.trickActive[commandChannel] || state.trickQueue[commandChannel].length) return 0;
         const off = offsetToNearest(value, step);
         const room = Math.max(0, LAND_ASSIST_MAX - state.landingAssistSpent[channel]);
         if (room <= 0 || off === 0) return 0;
@@ -838,10 +1081,21 @@ export function stepRider(state, segment, input, dt, hooks = {}) {
       state.pitch += pull('pitch', state.pitch, Math.PI * 2);
       state.boardFlip += pull('boardFlip', state.boardFlip, Math.PI * 2);
     }
-    state.yaw += state.spinRate * dt;
-    state.pitch += state.flipRate * dt;
+    state.yaw = advanceTrickTarget(state.yaw, state.spinTarget, state.spinRate, dt);
+    state.pitch = advanceTrickTarget(state.pitch, state.flipTarget, state.flipRate, dt);
+    // The board channel is advanced separately so the rider stays upright.
+    state.boardFlip = advanceTrickTarget(
+      state.boardFlip,
+      state.boardFlipTarget,
+      state.boardFlipRate,
+      dt,
+    );
+    // Completing a legal unit is the catch. It is the only moment a move is
+    // added to the ledger or allowed to score.
+    completeTrickCommands(state, hooks);
+    // Roll is still the whole-body authored rail/space channel and stays
+    // continuous.
     state.roll += state.rollRate * dt;
-    state.boardFlip += state.boardFlipRate * dt;
     state.spinTravelled += Math.abs(state.spinRate) * dt;
     state.flipTravelled += Math.abs(state.flipRate) * dt;
     state.rollTravelled += Math.abs(state.rollRate) * dt;
@@ -872,7 +1126,9 @@ export function stepRider(state, segment, input, dt, hooks = {}) {
     // The settle owns pitch while it runs. Easing it here at the same time
     // made the two fight, and the loser was the player: pitch ended a full
     // flip away from level and then got dragged back at 54 rad/s.
-    if (state.landingSettle <= 0) state.pitch = expApproach(state.pitch, 0, 9, dt);
+    if (state.landingSettle <= 0 && !state.settleJustFinished) {
+      state.pitch = expApproach(state.pitch, 0, 9, dt);
+    }
   }
 
   // A rail mouth is checked against the distance travelled THIS tick, so a
@@ -1023,6 +1279,7 @@ export function joinRail(state, rail, hooks = {}) {
   state.spinTravelled = 0;
   state.flipTravelled = 0;
   state.grabSeconds = 0;
+  clearTrickLedger(state);
   state.trickCharge = 0;
   state.trickTier = 0;
   state.landingSettle = 0;
@@ -1086,6 +1343,10 @@ export function settleRider(state, steer = 0) {
   state.boardFlip = 0;
   state.boardFlipRate = 0;
   state.boardFlipTravelled = 0;
+  clearTrickLedger(state);
+  state.spinTarget = 0;
+  state.flipTarget = 0;
+  state.boardFlipTarget = 0;
   state.grabSeconds = 0;
   state.popCharge = 0;
   state.popLoading = false;
@@ -1129,6 +1390,7 @@ export function beginGrind(state, profile, hooks = {}) {
   state.grabSeconds = 0;
   state.spinTravelled = 0;
   state.flipTravelled = 0;
+  clearTrickLedger(state);
   state.airTime = 0;
   snapPose(state, 0);
   hooks.onGrindStart?.({ side });

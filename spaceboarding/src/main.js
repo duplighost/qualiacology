@@ -155,12 +155,18 @@ function replayAnimation(element, className) {
 
 function updateTrickBanner(events, state) {
   for (const item of events) {
-    if (item.type === 'trick-landed' || item.type === 'rail-payout' || item.type === 'grind-payout') {
+    if (item.type === 'trick-complete') {
+      if (!item.name) continue;
+      elements.trickMove.textContent = item.name;
+      if (state.comboCount <= 0) {
+        elements.trickScore.textContent = `+${Math.round((item.score ?? 0) * 1000).toLocaleString()}`;
+      }
+    } else if (item.type === 'trick-landed' || item.type === 'rail-payout' || item.type === 'grind-payout') {
       if (!item.name) continue;
       elements.trickMove.textContent = item.name;
       replayAnimation(elements.trickMove, 'hit');
     } else if (item.type === 'blown') {
-      elements.trickMove.textContent = 'BAILED';
+      elements.trickMove.textContent = item.name ? `BAILED ${item.name}` : 'BAILED';
       replayAnimation(elements.trickMove, 'hit');
     } else if (item.type === 'combo-cashed') {
       elements.trickScore.textContent = item.score.toLocaleString();
@@ -599,6 +605,7 @@ function gameFrame(now) {
         accumulator -= FIXED_STEP;
         steps += 1;
       }
+      if (steps > 0 && qaInput === null) input.consumeTransient();
       updateTrickBanner(frameEvents, state);
       if (isFirstActiveFrame) firstActiveFramePending = false;
       if (profileFrame) endPhase('simulation');
@@ -955,6 +962,7 @@ function installQaSurface() {
       const ticks = Math.max(0, Math.min(200000, Number(count) | 0));
       for (let i = 0; i < ticks; i += 1) {
         stepRace(state, input.read(), FIXED_STEP);
+        input.consumeTransient();
         captureEvents(events, state.events);
       }
       updateTrickBanner(events, state);

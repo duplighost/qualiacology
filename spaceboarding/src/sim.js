@@ -567,7 +567,10 @@ function addBoost(state, amount, type, data = {}, options = {}) {
     state.comboBank += full * (1 - COMBO_IMMEDIATE_SHARE);
     state.comboSeconds = Math.max(state.comboSeconds, duration);
     state.comboCount += 1;
-    state.comboScore += Math.round(amount * 1000);
+    // Race power and skate score are related but not identical. Trick tiers
+    // keep the speed economy bounded; completed-move score keeps a kickflip
+    // meaningfully different from a long generic grab inside that same tier.
+    state.comboScore += Math.round((options.scoreValue ?? amount) * 1000);
     if (data.name) state.comboMoves.push(data.name);
   }
   event(state, type, {
@@ -594,6 +597,10 @@ function cashCombo(state) {
     state.comboCount = 0;
     state.comboScore = 0;
     state.comboMoves.length = 0;
+    state.comboSeconds = 0;
+    state.comboGroundTimer = 0;
+    state.comboTimer = 0;
+    state.combo = 1;
     return;
   }
   const multiplier = 1 + Math.min(2.5, state.combo * 0.06);
@@ -619,8 +626,13 @@ function cashCombo(state) {
   state.comboCount = 0;
   state.comboScore = 0;
   state.comboSeconds = 0;
-  state.comboGroundTimer = COMBO_GROUND_WINDOW;
+  state.comboGroundTimer = 0;
   state.comboMoves.length = 0;
+  // Cashing is the end of the chain, not merely emptying its wallet. Leaving
+  // these alive let a later trick inherit a multiplier from a combo the HUD
+  // had already declared finished.
+  state.comboTimer = 0;
+  state.combo = 1;
 }
 
 // The whole speed model, in one place, so it can never be half-changed.
@@ -1112,6 +1124,26 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
         loaded: Number(loaded.toFixed(3)),
         impulse: Number(impulse.toFixed(2)),
       }),
+      // One audible/visible click per committed move. This fires on the input
+      // edge, not when a score tier eventually changes, so the player gets an
+      // immediate answer to the exact finger gesture they just made.
+      onTrickInput: ({ channel, side, queued }) => event(state, 'trick-input', {
+        intensity: channel === 'boardFlip' ? 0.42 : 0.32,
+        channel,
+        side,
+        queued,
+      }),
+      // The catch: this is when an authored move has actually finished and is
+      // allowed onto the score ledger. It is separate from the press so sound,
+      // pose and HUD can distinguish "I heard you" from "you made it".
+      onTrickComplete: ({ channel, side, name, score, completed }) => event(state, 'trick-complete', {
+        intensity: channel === 'boardFlip' ? 0.52 : 0.42,
+        channel,
+        side,
+        name,
+        score: Number(score.toFixed(3)),
+        completed,
+      }),
       // Every new flame is an event, because a tier ladder is only a skill
       // ladder if the player can see which rung they are on -- and here they
       // see it WHILE STILL IN THE AIR, before choosing to keep spinning or
@@ -1124,7 +1156,7 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
       // Landing a trick is the whole ground economy now. Alex cut drift and
       // put the boost meter here: "the boost meter will be filled by landing
       // tricks."
-      onTrick: ({ tier, score, quality, halves, flips, grab, airTime, strength, seconds, color, name }) => {
+      onTrick: ({ tier, score, quality, halves, flips, boardFlips, grab, airTime, strength, seconds, color, name }) => {
         addBoost(
           state,
           strength,
@@ -1135,6 +1167,7 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
             score: Number(score.toFixed(3)),
             halves,
             flips,
+            boardFlips,
             grab: Number(grab.toFixed(2)),
             airTime: Number(airTime.toFixed(2)),
             color,
@@ -1144,6 +1177,7 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
             power: strength,
             duration: seconds,
             comboGain: 0.1 + tier * 0.08,
+            scoreValue: score * (0.6 + quality * 0.4),
             // A stomped landing announces itself louder than a scraped one.
             minimumIntensity: 0.3 + tier * 0.16 + quality * 0.2,
           },
@@ -1185,12 +1219,14 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
           name,
         });
       },
-      onLand: ({ airTime, clean, quality, tier }) => event(state, 'land', {
+      onLand: ({ airTime, clean, quality, tier, score, name }) => event(state, 'land', {
         intensity: clamp(airTime * 1.2, 0.25, 1),
         airTime: Number(airTime.toFixed(3)),
         clean,
         quality: Number(quality.toFixed(3)),
         tier,
+        score: Number(score.toFixed(3)),
+        name,
       }),
       onCopingPop: ({ speed, side }) => event(state, 'coping-pop', {
         intensity: clamp(speed / 26, 0.3, 1),
@@ -1382,6 +1418,9 @@ export function raceSnapshot(state) {
     yaw: Number(state.yaw.toFixed(4)),
     roll: Number(state.roll.toFixed(4)),
     boardFlip: Number(state.boardFlip.toFixed(4)),
+    spinRate: Number(state.spinRate.toFixed(4)),
+    flipRate: Number(state.flipRate.toFixed(4)),
+    boardFlipRate: Number(state.boardFlipRate.toFixed(4)),
     lift: Number(state.lift.toFixed(4)),
     liftVelocity: Number(state.liftVelocity.toFixed(4)),
     riderState: state.riderState,
@@ -1421,12 +1460,25 @@ export function raceSnapshot(state) {
     trickCharge: Number(state.trickCharge.toFixed(4)),
     trickMeter: Number(state.trickMeter.toFixed(4)),
     trickTier: state.trickTier,
+    trickActive: { ...state.trickActive },
+    trickQueue: {
+      spin: state.trickQueue.spin.length,
+      flip: state.trickQueue.flip.length,
+      boardFlip: state.trickQueue.boardFlip.length,
+    },
+    trickMovesCompleted: state.completedTrickMoves.length,
     trickTierCounts: [...state.trickTierCounts],
     spinSide: state.spinSide,
     stance: state.stance,
     crouch: Number(state.crouch.toFixed(4)),
     popCharge: Number(state.popCharge.toFixed(4)),
     landingQuality: Number(state.landingQuality.toFixed(3)),
+    combo: Number(state.combo.toFixed(3)),
+    comboTimer: Number(state.comboTimer.toFixed(3)),
+    comboGroundTimer: Number(state.comboGroundTimer.toFixed(3)),
+    comboBank: Number(state.comboBank.toFixed(4)),
+    comboCount: state.comboCount,
+    comboScore: state.comboScore,
     wallContactCooldown: Number(state.wallContactCooldown.toFixed(4)),
     wallContactSide: state.wallContactSide,
     railSkimming: state.railSkimming,
