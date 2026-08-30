@@ -129,7 +129,12 @@ export function buildBelfry() {
    * swing, walk into the eye of it, then leave low while it recovers.     */
   b.block(2860, 294, 240, 80, 'wall');
   b.enemy('censer', 2990, GROUND, { facing: -1 });
-  b.block(3110, 290, 170, 136, 'wall');
+  /* 96, not 170. "Leave low while it recovers" only works if leaving low is
+   * quick: clearing a slot costs (width + 26) px of travel and a slide carries
+   * 138. At 170 you came out 58px short and crept the rest at 66px/s with a
+   * censer winding up behind you — the opposite of the escape this room is
+   * describing. Same arithmetic that broke THE LOW ROAD in chapter 1. */
+  b.block(3110, 290, 96, 136, 'wall');
   b.prop('hint', 3130, GROUND - 18, { glyph: 'crouch' });
   b.pickup('heart', 3240, GROUND - 18);
   b.prop('lantern', 2830, GROUND, { h: 68, groundY: GROUND });

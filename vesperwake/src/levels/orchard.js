@@ -3,7 +3,13 @@
  * Movement budget this level is designed against (from config.js):
  *   full jump apex     86px  (3.6 cells)  -> mandatory rises never exceed 72
  *   full jump distance ~125px             -> safe gaps <=105, hard gaps <=122
- *   quickstep          ~112px, grounded   -> never required to cross a gap
+ *   quickstep          ~113px, grounded   -> never required to cross a gap
+ *   SLIDE (down+step)  ~138px, grounded   -> a low passage must cost less than
+ *                                            (138 - 26 player width) = 112px
+ *                                            of tunnel, or you come out short
+ *                                            and creep. This number was missing
+ *                                            from this list and THE LOW ROAD
+ *                                            was built 152 wide because of it.
  *   dive bounce        ~37px per bounce   -> chains give real height
  *
  * The chapter teaches the whole moveset in the order you need it, then asks
@@ -81,9 +87,17 @@ export function buildOrchard() {
   /* -------- 3. THE LOW ROAD ---------------------------------------- *
    * A collapsed lintel. 44px of clearance: a crouch fits, a stand does not,
    * and the tomb above is 220px tall so you cannot go over it. There is no
-   * text — the shape of the hole is the instruction.                       */
+   * text — the shape of the hole is the instruction.
+   *
+   * WIDTH IS LOAD-BEARING. Clearing this in one slide costs (width + 26) px
+   * of travel, and a slide only carries 138. At the original 152 wide that
+   * needed 178 — you came out 40px short, stuck under the lintel creeping at
+   * 66px/s for the better part of a second, which is exactly as bad as it
+   * sounds. 96 needs 122, so one slide clears it with real margin, and the
+   * crouch-walk for anyone who has not met the quickstep yet is 1.8s
+   * instead of 2.7s. THE SAINTGLASS TOMB IS 110 FOR THE SAME REASON.        */
   b.prop('hint', 1004, GROUND - 66, { glyph: 'crouch' });
-  b.block(1030, GROUND - 220, 152, 176, 'tomb');
+  b.block(1030, GROUND - 220, 96, 176, 'tomb');
   b.prop('headstone', 1200, GROUND, { h: 28, w: 20 });
   b.pickup('heart', 1108, GROUND - 22);
   b.zone('the low road', 1010, 1240);
@@ -139,6 +153,13 @@ export function buildOrchard() {
    * puts the way up directly under your feet — the climb should never be a
    * thing you walk past without seeing */
   b.ledge(2894, 412, 96, 'grave');
+  /* ...and it stands on a plinth, which is not decoration. Without it the
+   * slab's underside sat 44px off the ground — the exact clearance THE LOW
+   * ROAD spent a whole beat teaching you means "crouch through here". So the
+   * first step of the climb advertised itself as a tunnel, and sliding into
+   * it put you nose-first into the terrace wall ten pixels later. Filling the
+   * slot to the wall at 3000 removes the lie. */
+  b.block(2894, 426, 106, 44, 'grave');
   b.ledge(2756, 354, 96, 'bough');
   b.ledge(2894, 296, 96, 'grave');
   b.ledge(2756, 238, 96, 'bough');
