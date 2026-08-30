@@ -1,7 +1,7 @@
 {
   "name": "KICKMOON",
   "short_name": "KICKMOON",
-  "description": "A first-person collectathon on a real spherical moon, built around one unstoppable boomerang ball.",
+  "description": "A first-person three-world collectathon on real spherical moons, built around one unstoppable boomerang ball.",
   "start_url": "./",
   "display": "fullscreen",
   "background_color": "#000005",
