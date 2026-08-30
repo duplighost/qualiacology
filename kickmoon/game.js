@@ -34,7 +34,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '7.0.0-three-worlds';
+  const GAME_VERSION = '7.0.1-three-worlds';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -3692,12 +3692,16 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const group = new T.Group();
       group.name = `${profile.id.toUpperCase()} SHIP · ${theme.name} → ${spec.destination.toUpperCase()}`;
       const hullMaterial = new T.MeshStandardMaterial({
-        color: theme.dark, emissive: theme.accent, emissiveIntensity: .46,
-        roughness: .28, metalness: .86,
+        color: theme.dark, emissive: theme.accent, emissiveIntensity: .22,
+        roughness: .38, metalness: .82,
       });
       const accentMaterial = new T.MeshStandardMaterial({
         color: theme.secondary, emissive: theme.accent, emissiveIntensity: 2.85,
         roughness: .14, metalness: .76,
+      });
+      const trimMaterial = new T.MeshStandardMaterial({
+        color: theme.secondary, emissive: theme.accent, emissiveIntensity: 1.05,
+        roughness: .24, metalness: .82,
       });
       const electricMaterial = new T.MeshBasicMaterial({
         color: theme.accent, transparent: true, opacity: .9,
@@ -3713,7 +3717,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       deck.receiveShadow = true;
       deck.castShadow = true;
       group.add(deck);
-      const deckHalo = new T.Mesh(new T.TorusGeometry(31.5, 1.1, 8, 64), accentMaterial);
+      // The halo animates independently. Sharing its material with the prow and
+      // one wing made the whole ship flash asymmetrically into a flat bloom.
+      const deckHalo = new T.Mesh(new T.TorusGeometry(31.5, 1.1, 8, 64), accentMaterial.clone());
       deckHalo.rotation.x = Math.PI / 2;
       deckHalo.position.y = 18.05;
       group.add(deckHalo);
@@ -3723,7 +3729,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           : spec.destination === 'lava'
             ? new T.ConeGeometry(13, 31, 7)
             : new T.IcosahedronGeometry(13, 1),
-        accentMaterial,
+        trimMaterial,
       );
       prow.position.z = -49;
       if (spec.destination === 'lava') prow.rotation.x = -Math.PI / 2;
@@ -3736,7 +3742,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
             : spec.destination === 'lava'
               ? new T.ConeGeometry(5.5, 34, 5)
               : new T.BoxGeometry(34, 2.8, 15),
-          side > 0 ? accentMaterial : hullMaterial,
+          trimMaterial,
         );
         if (spec.destination === 'water') {
           wing.scale.set(29, 2.4, 15);
@@ -3759,7 +3765,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         engine.rotation.x = Math.PI / 2;
         engine.position.set(Math.cos(angle) * 12, Math.sin(angle) * 8, 42);
         group.add(engine); engines.push(engine);
-        const plume = this.makeGlowSprite(spec.destination === 'lava' ? this.glowGold : this.glowCyan, 15, .55);
+        const plume = this.makeGlowSprite(spec.destination === 'water' ? this.glowCyan : this.glowGold, 12.5, .4);
         plume.position.set(engine.position.x, engine.position.y, 51);
         group.add(plume);
       }
@@ -16912,6 +16918,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // This state never exists on the original moon, whose movement law is
       // deliberately frozen to the certified feel fingerprint.
       this.grind = null;
+      this.grindReleaseActive = false;
       // Local vertical and tangent frame. On the sphere the frame is
       // parallel-transported as the player walks, so yaw/pitch keep their
       // meaning while "up" slowly becomes somewhere else. The frame maps
@@ -17811,19 +17818,21 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         // debug frame. MMB owns grapple reeling; E/RMB owns recall; C falls.
         if (this.ball.mode === 'anchored') {
           const ball = this.ball;
-          if (ball.anchor?.interworldDestination) this.cancelInterworldCharge(ball.anchor);
-          if (ball.anchor?.railTransit) ball.anchor.active = false;
-          ball.anchor = null;
-          ball.anchorTimer = 0;
-          ball.mode = 'returning';
-          ball.returnReason = 'snap';
-          ball.snapReturn = true;
-          ball.returnTime = 0;
-          ball.returnStuck = 0;
-          ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
-          ball.lastTetherPathLength = Infinity;
-          this.player.grappling = false;
-          world.particles.burst(ball.position, 0x75efff, 14, 7, .55, .1);
+          if (ball.anchor?.railTransit) this.releaseRailTransitAnchor(false, true);
+          else {
+            if (ball.anchor?.interworldDestination) this.cancelInterworldCharge(ball.anchor);
+            ball.anchor = null;
+            ball.anchorTimer = 0;
+            ball.mode = 'returning';
+            ball.returnReason = 'snap';
+            ball.snapReturn = true;
+            ball.returnTime = 0;
+            ball.returnStuck = 0;
+            ball.lastReturnDistance = ball.position.distanceTo(this.player.position);
+            ball.lastTetherPathLength = Infinity;
+            this.player.grappling = false;
+            world.particles.burst(ball.position, 0x75efff, 14, 7, .55, .1);
+          }
         }
         // While an enemy holds the ball, every tap fights the grip too.
         if (this.ball.mode === 'caught') this.ball.snapTimer += .2;
@@ -17980,6 +17989,50 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (prior && !next) this.releaseMoonlineRide(true);
       player.transportCar = next;
     }
+    releaseRailTransitAnchor(jump = false, snap = false) {
+      const player = this.player;
+      const ball = this.ball;
+      const anchor = ball.anchor;
+      if (ball.mode !== 'anchored' || !anchor?.railTransit) return false;
+      if (jump) this.cancelMoonfall();
+
+      // Moving conductors can contribute more than 100 m/s to the reel. A
+      // manual exit keeps authored sideways momentum up to the settled sprint
+      // ceiling, but bounds local vertical speed to the ordinary jump envelope
+      // so letting go is a choice rather than an accidental launch into orbit.
+      const vertical = vspeedOf(player.velocity, player.up);
+      tangentOf(player.velocity, player.up, this.tangentScratch);
+      if (this.tangentScratch.lengthSq() > 26 * 26) this.tangentScratch.setLength(26);
+      player.velocity.copy(this.tangentScratch);
+      setVspeed(player.velocity, player.up, jump ? 16 : clamp(vertical, -16, 16));
+      player.grappling = false;
+      player.grounded = false;
+      if (jump) player.jumpsUsed = 1;
+      else player.jumpsUsed = Math.min(player.jumpsUsed, 1);
+      player.jumpBuffer = 0;
+      player.coyote = 0;
+      player.flung = Math.max(player.flung, .24);
+
+      anchor.active = false;
+      anchor.finished = false;
+      ball.anchor = null;
+      ball.anchorTimer = 0;
+      ball.mode = 'returning';
+      ball.returnReason = snap ? 'snap' : jump ? 'rail-jump' : 'grapple-release';
+      ball.snapReturn = snap;
+      ball.returnTime = 0;
+      ball.returnStuck = 0;
+      ball.velocity.copy(player.velocity).multiplyScalar(.62);
+      ball.lastReturnDistance = ball.position.distanceTo(player.position);
+      ball.lastTetherPathLength = Infinity;
+      this.grappleArmed = 0;
+      this.grappleReel = 0;
+      this.addStyle(16, 720, 'RAIL EJECT', '#83efff');
+      world.pulseRing(anchor.position, new T.Color(anchor.rail?.tint ?? 0x63e4ff), 9, .36, true);
+      world.particles.burst(anchor.position, anchor.rail?.tint ?? 0x63e4ff, jump ? 24 : 16, jump ? 10 : 7, .58, .08);
+      audio.jump(jump);
+      return true;
+    }
     releasePlanetGrind(jump = false, endOfRail = false) {
       const player = this.player;
       const state = player.grind;
@@ -17991,6 +18044,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       player.velocity.copy(this.grindTangent).multiplyScalar(state.direction * exitSpeed);
       player.velocity.addScaledVector(up, jump ? 16.5 : endOfRail ? 9.2 : 4.5);
       player.grind = null;
+      // The release begins inside a boot-capture volume, and authored stations
+      // can share several rail ends. Ignore the whole local rail cluster until
+      // the launched player has genuinely cleared it; otherwise jump, manual
+      // release, and endpoint eject can reattach on the very next fixed step.
+      player.grindReleaseActive = true;
       player.grounded = false;
       player.jumpsUsed = jump ? 1 : Math.min(player.jumpsUsed, 1);
       player.coyote = 0;
@@ -18013,15 +18071,22 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (!state) {
         // A rail catches boots only while airborne and close to its actual
         // world-space tube. Running under one cannot vacuum the player up.
+        if (player.grounded) player.grindReleaseActive = false;
         if (player.grounded || player.moonfallActive) return false;
         let bestRail = null;
         let bestDistanceSq = Infinity;
         let bestDistance = 0;
         let bestDirection = 1;
+        let insideReleaseZone = false;
         for (const rail of surface?.rails || EMPTY_SOLIDS) {
           if (!rail.bootGrind) continue;
           nearestTransitPoint(rail.path, player.position, this.grindNearest);
           const capture = rail.bootRadius + player.radius;
+          if (player.grindReleaseActive) {
+            const clearRadius = capture + player.radius;
+            if (this.grindNearest.distanceSq <= clearRadius * clearRadius) insideReleaseZone = true;
+            continue;
+          }
           if (this.grindNearest.distanceSq > capture * capture
             || this.grindNearest.distanceSq >= bestDistanceSq) continue;
           const tangentSpeed = player.velocity.dot(this.grindNearest.tangent);
@@ -18035,6 +18100,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           if (Math.abs(tangentSpeed) > 2.5) bestDirection = tangentSpeed >= 0 ? 1 : -1;
           else bestDirection = this.horizontalForward(this.tempA).dot(this.grindNearest.tangent) >= 0 ? 1 : -1;
         }
+        if (player.grindReleaseActive) {
+          if (!insideReleaseZone) player.grindReleaseActive = false;
+          return false;
+        }
         if (!bestRail) return false;
         state = {
           rail: bestRail,
@@ -18046,6 +18115,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           lean: 0,
         };
         player.grind = state;
+        player.grindReleaseActive = false;
         player.grounded = false;
         player.coyote = 0;
         player.jumpBuffer = 0;
@@ -18118,6 +18188,12 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       else player.coyote = Math.max(0, player.coyote - dt);
 
       if (this.updatePlanetGrind(dt, frame, edgeFrame)) return;
+
+      // Boot grinds own Space first. If the buffered edge was instead pressed
+      // on a moving ball conductor, turn it into the same immediate eject and
+      // preserve that input even when hit stop swallowed the original frame.
+      if (player.jumpBuffer > 0 && this.ball.mode === 'anchored'
+        && this.ball.anchor?.railTransit) this.releaseRailTransitAnchor(true, false);
 
       const canGroundJump = player.coyote > 0 && player.jumpsUsed === 0;
       const canAirJump = !player.grounded && player.jumpsUsed < 2;
@@ -19441,6 +19517,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       } else {
         this.player.grappling = false;
         audio.recall(false, 0);
+        if (anchor.railTransit && !this.player.moonfallActive) {
+          this.releaseRailTransitAnchor(false, false);
+          return;
+        }
         ball.anchorTimer += dt;
         ball.lastTetherPathLength = ball.tetherPathLength;
         if (ball.anchorTimer > 4.8) {
