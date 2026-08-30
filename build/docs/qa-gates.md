@@ -37,12 +37,6 @@ canvas back. Serve the repo first
   black by construction — it samples inside `game.render`. Calibrated
   2026-08-12 against known-good production (passes) and the 0.6.1 tree at
   `90d9b16` (correctly fails).
-- `node build/qa/starling-boot-check.mjs http://localhost:4173/starling/` —
-  asserts birds on screen, a swerve visibly lights the flock, and the one
-  that matters: a stoop into an unwarned flock kills and the same stoop into
-  a warned one does not (has caught two real bugs). Time everything off
-  `falcon.t`, never the wall clock — the game runs on a clamped simulation
-  delta.
 - `node build/qa/the-last-room-boot-check.mjs http://localhost:4173/the-last-room/`
   — real ENTER gesture, architectural state + spatial audio, all 15 painting
   textures load, storage-disabled boot, Axe over the game, real 390px touch
