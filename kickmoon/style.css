@@ -1393,6 +1393,42 @@ body.pointer-locked .home-link {
   pointer-events: none;
 }
 
+/* The grapple is a distinct traversal verb, especially for ship sockets. It
+   deliberately sits left of DROP and JUMP, leaving the right-hand ball pad
+   free for the existing kick / recall / Moonfall grammar. The button itself
+   has no printed word: the bright tether-and-spark glyph is the affordance. */
+body.touch-enabled .touch-action--grapple {
+  display: grid !important;
+  right: calc(max(18px, env(safe-area-inset-right)) + 144px) !important;
+  bottom: max(28px, env(safe-area-inset-bottom)) !important;
+  width: 52px !important;
+  height: 52px !important;
+  border-color: rgba(255, 214, 107, .78);
+  background: radial-gradient(circle at 34% 28%, rgba(255, 250, 212, .56), rgba(209, 157, 44, .42) 38%, rgba(20, 13, 5, .84));
+  color: #fff2ad;
+  box-shadow: inset 0 0 20px rgba(255, 224, 104, .16), 0 0 20px rgba(255, 194, 56, .22), 0 8px 24px rgba(0, 0, 0, .32);
+}
+
+#touchGrapple svg {
+  width: 29px;
+  height: 29px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4.5;
+  filter: drop-shadow(0 0 4px rgba(255, 240, 164, .72));
+}
+
+@media (max-width: 340px) {
+  body.touch-enabled .touch-action--grapple {
+    right: calc(max(10px, env(safe-area-inset-right)) + 138px) !important;
+    width: 48px !important;
+    height: 48px !important;
+  }
+}
+
 @media (max-width: 520px), (max-height: 430px) {
   .home-link {
     left: max(10px, env(safe-area-inset-left));
