@@ -167,6 +167,21 @@ if (capturePath) {
 }
 await mobileContext.close();
 const gameResourceUrls = Array.from(resourceUrls);
+const isNetlifyPreviewToolResource = (url) => {
+  if (!base.hostname.startsWith("deploy-preview-")) return false;
+  const resource = new URL(url);
+  if (resource.hostname === "app.netlify.com") {
+    return resource.pathname.startsWith("/cdp/")
+      || resource.pathname.startsWith("/access-control/bb-api/");
+  }
+  if (resource.hostname === "cdn.segment.com") {
+    return resource.pathname.startsWith("/analytics")
+      || resource.pathname.startsWith("/v1/projects/");
+  }
+  return resource.hostname === "sessions.bugsnag.com";
+};
+const externalGameResourceUrls = gameResourceUrls.filter((url) => new URL(url).origin !== base.origin);
+const unexpectedExternalResourceUrls = externalGameResourceUrls.filter((url) => !isNetlifyPreviewToolResource(url));
 
 const catalogResults = [];
 let cardCaptureBytes = 0;
@@ -243,7 +258,10 @@ check(afterTouch.player.x !== beforeTouch.player.x, `held touch control moves th
 check(catalogResults.length === 3 && catalogResults.every((item) => new URL(item.currentSrc).pathname.startsWith("/assets/catalog/games/i-seent-it-") && new URL(item.currentSrc).pathname.endsWith(".avif")), `catalog selects I SEENT IT AVIF tiers at DPR 1/2/3 (${catalogResults.map((item) => `${item.dpr}x:${new URL(item.currentSrc).pathname.split("/").at(-1)}`).join(", ")})`);
 check(catalogResults.every((item) => Math.abs(item.naturalWidth / item.naturalHeight - 16 / 9) < 0.01), `every displayed catalog tier preserves the 16:9 master (${catalogResults.map((item) => `${item.naturalWidth}x${item.naturalHeight}`).join(", ")})`);
 check(catalogResults.every((item) => item.href === "/i-seent-it/"), "catalog card links to the canonical game route at every DPR");
-check(gameResourceUrls.every((url) => new URL(url).origin === base.origin), "game loads no external runtime resources");
+check(unexpectedExternalResourceUrls.length === 0, `game loads no external runtime resources${unexpectedExternalResourceUrls.length ? `: ${unexpectedExternalResourceUrls.slice(0, 4).join(" | ")}` : ""}`);
+if (externalGameResourceUrls.length > 0 && unexpectedExternalResourceUrls.length === 0) {
+  console.log(`INFO ignored ${externalGameResourceUrls.length} provider-injected Netlify deploy-preview toolbar resources`);
+}
 check(gameResourceUrls.filter((url) => new URL(url).pathname.includes("/assets/")).every((url) => new URL(url).pathname.startsWith(`${base.pathname}assets/`)), "hashed runtime assets stay under the game route");
 if (capturePath) check(captureBytes > 30000, `representative capture contains rendered pixels (${captureBytes} bytes)`);
 if (capturePath) check(mobileCaptureBytes > 15000, `representative mobile capture contains rendered pixels (${mobileCaptureBytes} bytes)`);
