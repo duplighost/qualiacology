@@ -13,11 +13,12 @@ export function create(ctx) {
   hud.innerHTML = `
     <div id="vignette"></div>
     <div id="dmg-vignette"></div>
+    <div id="shield-vignette"></div>
     <div id="hurt-vignette"></div>
     <canvas id="reticle" width="220" height="220"></canvas>
     <canvas id="dmgdir" width="360" height="360"></canvas>
     <div id="ammo"><span class="mag">30</span> <span class="res">/ 210</span></div>
-    <div id="vitals"><span class="pips"></span><span class="hp">100</span></div>
+    <div id="vitals"><span class="pips"></span><span class="hp">100</span><span class="shield"></span></div>
     <div id="banner"></div>
     <div id="salvage-confirm"><strong>SALVAGE SECURED</strong> <small>+45 AMMO // +20 HEALTH</small></div>
     <div class="shell" id="shell">
@@ -34,11 +35,12 @@ export function create(ctx) {
   const salvageConfirm = el('salvage-confirm');
   const salvageDetail = salvageConfirm.querySelector('small');
   const ammoEl = el('ammo'), ammoMag = ammoEl.querySelector('.mag'), ammoRes = ammoEl.querySelector('.res');
-  const vitalsEl = el('vitals'), hpNum = vitalsEl.querySelector('.hp'), hpPips = vitalsEl.querySelector('.pips');
+  const vitalsEl = el('vitals'), hpNum = vitalsEl.querySelector('.hp');
+  const shieldNum = vitalsEl.querySelector('.shield'), hpPips = vitalsEl.querySelector('.pips');
   const PIPS = 5;
   for (let i = 0; i < PIPS; i++) hpPips.appendChild(document.createElement('i'));
   const pipEls = [...hpPips.children];
-  const dmgV = el('dmg-vignette'), hurtV = el('hurt-vignette');
+  const dmgV = el('dmg-vignette'), shieldV = el('shield-vignette'), hurtV = el('hurt-vignette');
   const ret = el('reticle').getContext('2d');
   const dd = el('dmgdir').getContext('2d');
 
@@ -47,8 +49,8 @@ export function create(ctx) {
 
   let marker = null;            // {kind, age}
   let bannerT = 99, bannerHold = 2.4;
-  let dmgFlash = 0;
-  let dmgDirs = [];             // {angle, age}
+  let dmgFlash = 0, shieldFlash = 0;
+  let dmgDirs = [];             // {angle, age, shield}
   let pendingAmmo = null, pendingT = 0;
   let shownAmmo = { ammo: 30, reserve: 210 };
   let reloadFeedback = null;
@@ -68,7 +70,16 @@ export function create(ctx) {
     if (fromDir) {
       const cam = ctx.systems.camera;
       const worldA = Math.atan2(fromDir.x, fromDir.z);
-      dmgDirs.push({ angle: worldA + cam.yaw + Math.PI, age: 0 });
+      dmgDirs.push({ angle: worldA + cam.yaw + Math.PI, age: 0, shield: false });
+      if (dmgDirs.length > 4) dmgDirs.shift();
+    }
+  });
+  ctx.bus.on('player:shield-hit', ({ fromDir }) => {
+    shieldFlash = 1;
+    if (fromDir) {
+      const cam = ctx.systems.camera;
+      const worldA = Math.atan2(fromDir.x, fromDir.z);
+      dmgDirs.push({ angle: worldA + cam.yaw + Math.PI, age: 0, shield: true });
       if (dmgDirs.length > 4) dmgDirs.shift();
     }
   });
@@ -79,6 +90,10 @@ export function create(ctx) {
     setBanner(`WATCH ${ROMAN[wave] || wave}`, wave === 1 ? 'hold until dawn' : wave === final ? 'the last of the night' : '');
   });
   ctx.bus.on('wave:clear', () => setBanner('CLEAR', 'breathe'));
+  ctx.bus.on('rock:upgrade', ({ kind, value }) => {
+    if (kind === 'cinder') setBanner('CINDER CORE', value > 0 ? `${value} charged rounds` : 'charge full');
+    else if (kind === 'aegis') setBanner('AEGIS CORE', value > 0 ? `+${value} shield` : 'shield full');
+  });
   ctx.bus.on('supply:collect', ({ kind, ammo, heal, awardAmmo, awardHeal }) => {
     if (kind !== 'satellite') return;
     const ammoGain = Number.isFinite(ammo) ? ammo : (awardAmmo ?? 45);
@@ -258,11 +273,14 @@ export function create(ctx) {
       if (d.age > 1.1) { dmgDirs.splice(i, 1); continue; }
       const cam = ctx.systems.camera;
       const rel = d.angle - cam.yaw;
-      const alpha = (1 - d.age / 1.1) * 0.8;
-      dd.strokeStyle = `rgba(255,90,120,${alpha})`;
-      dd.lineWidth = 5;
+      const alpha = (1 - d.age / 1.1) * (d.shield ? 0.9 : 0.8);
+      dd.strokeStyle = d.shield
+        ? `rgba(93,247,255,${alpha})`
+        : `rgba(255,90,120,${alpha})`;
+      dd.lineWidth = d.shield ? 4 : 5;
       dd.beginPath();
-      dd.arc(180, 180, 120, rel - Math.PI / 2 - 0.4, rel - Math.PI / 2 + 0.4);
+      const radius = d.shield ? 128 : 120;
+      dd.arc(180, 180, radius, rel - Math.PI / 2 - 0.4, rel - Math.PI / 2 + 0.4);
       dd.stroke();
     }
   }
@@ -290,7 +308,9 @@ export function create(ctx) {
 
       // health vignettes
       dmgFlash = Math.max(0, dmgFlash - dt * 6);
+      shieldFlash = Math.max(0, shieldFlash - dt * 7.5);
       dmgV.style.opacity = dmgFlash * 0.9;
+      shieldV.style.opacity = shieldFlash * 0.82;
       const hp = ctx.systems.player.hp;
       const lowHp = clamp01((42 - hp) / 42);
       hurtV.style.opacity = lowHp * (0.55 + Math.sin(ctx.time * (3 + lowHp * 4)) * 0.18);
@@ -299,6 +319,8 @@ export function create(ctx) {
       // five pips that drain, and a number you only read if you want it
       const shown = Math.max(0, Math.ceil(hp));
       hpNum.textContent = shown;
+      const shield = Math.max(0, Math.ceil(ctx.systems.player.shield || 0));
+      shieldNum.textContent = shield > 0 ? `+${shield}` : '';
       const filled = hp / 100 * PIPS;
       for (let i = 0; i < PIPS; i++) {
         const f = clamp01(filled - i);
@@ -306,6 +328,7 @@ export function create(ctx) {
         pipEls[i].style.transform = `scaleY(${0.55 + f * 0.45})`;
       }
       vitalsEl.className = hp <= 25 ? 'crit' : hp <= 55 ? 'low' : '';
+      vitalsEl.classList.toggle('shielded', shield > 0);
       vitalsEl.style.opacity = ctx.state === 'playing'
         ? (hp <= 25 ? 0.85 + Math.sin(ctx.time * 7) * 0.15 : 1)
         : 0;

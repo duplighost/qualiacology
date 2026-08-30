@@ -11,7 +11,7 @@ import { TAU, clamp, clamp01, lerp } from '../engine/math.js';
 const BANDS = [[26, 34], [44, 28], [70, 24], [Infinity, 20]];  // [maxRange, dmg], 2 m blends
 const ZONES = { head: 1.60, torso: 1.00, limb: 0.85, plate: 0.55, vent: 2.40 };
 const MARK_RANK = { normal: 0, deflect: 1, head: 2, weak: 3, kill: 4 };
-const DROPS = { thrall: 14, chorister: 20, warden: 40 };
+const DROPS = { thrall: 14, chorister: 20, warden: 40, planet: 28 };
 const MAX_DROPS = 16;
 
 function bandDamage(dist) {
@@ -99,7 +99,12 @@ export function create(ctx) {
       const res = enemies.damage(eHit.enemy, dmg, { zone: eHit.zone, dir, point: eHit.point, dist });
       const deflected = eHit.zone === 'plate';
       const shotPower = boosted ? 1.30 : 1;
-      ctx.systems.fx.impact(deflected ? 'deflect' : 'flesh', eHit.point, _v.copy(dir).negate(), (deflected ? 0.7 : 1) * shotPower);
+      // The siege-moon is readable by material as well as marker: crust
+      // fractures like rock, while a placed aperture hit discharges energy.
+      const impactKind = eHit.enemy.species === 'planet'
+        ? (eHit.zone === 'vent' ? 'energy' : 'rock')
+        : (deflected ? 'deflect' : 'flesh');
+      ctx.systems.fx.impact(impactKind, eHit.point, _v.copy(dir).negate(), (deflected ? 0.7 : 1) * shotPower);
       if (res.killed) {
         setMarker('kill', dmg / 34, 0);
         ctx.systems.fx.hitstop(0.07);
@@ -162,7 +167,7 @@ export function create(ctx) {
      * Technology owns the metal response even when its generic collider kind
      * predates the surface tag; natural colliders and terrain stay hard rock.
      */
-    meleeSurface(origin, dir, range) {
+    meleeSurface(origin, dir, range, damage = 130, damageReach = range) {
       const world = ctx.systems.world;
       const cHit = world.rayColliders(origin, dir, range);
       // marchGround samples every 0.7 m. Give it one look-ahead sample so a
@@ -177,12 +182,26 @@ export function create(ctx) {
           || cHit.collider?.surface === 'metal'
           || cHit.collider?.kind === 'field-bastion';
         hit.kind = technology ? 'metal' : 'rock';
-        ctx.systems.fx.impact(hit.kind, hit.point, _meleeNormal.copy(dir).negate(), 1.25);
+        const isBreakable = cHit.collider?.breakableId !== undefined;
+        // Breakables own their one rock burst so a crack/break does not also
+        // pay the generic surface impact cost. The assisted target trace may
+        // remain longer than the physical buttstroke to preserve cover, but
+        // only a collider inside the authored reach may take melee damage.
+        if (!isBreakable) {
+          ctx.systems.fx.impact(hit.kind, hit.point, _meleeNormal.copy(dir).negate(), 1.25);
+        }
+        if (isBreakable && cHit.t <= damageReach + 1e-4) {
+          hit.breakable = world.strikeBreakable?.(
+            cHit.collider, damage, hit.point, _meleeNormal.copy(dir).negate(),
+          ) || null;
+        }
       } else if (gHit) {
         hit = gHit;
         ctx.systems.fx.impact(hit.kind, hit.point, _n, 1.18);
       }
-      if (hit) ctx.bus.emit('combat:melee:surface', { kind: hit.kind, point: hit.point });
+      if (hit) ctx.bus.emit('combat:melee:surface', {
+        kind: hit.kind, point: hit.point, breakable: hit.breakable || null,
+      });
       return hit;
     },
     reset() {

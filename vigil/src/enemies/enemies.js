@@ -1,6 +1,6 @@
 // Enemy manager: boot-built pools (spawn allocates nothing), a small state
-// machine per enemy, squad tokens (max 3 committed attackers, ONE rationed
-// leap), separation from a frozen snapshot, damped vertical ground-follow
+// machine per enemy, squad tokens (max 2 committed attackers), persistent
+// three-tier routing, separation from a frozen snapshot, damped ground-follow
 // (never hard-snapped — Eclipse's jitter), the telegraph law (>=320 ms, tell
 // on a shootable part, audio on frame 1, late attacks CANCELLED), budgeted
 // flinch, threshold staggers, and deaths that decay their glow over 2.6 s so
@@ -9,20 +9,21 @@
 import * as THREE from 'three';
 import { TAU, DEG, clamp, clamp01, lerp, damp, dampAngle } from '../engine/math.js';
 import { SPECIES, BUILDERS } from './species.js';
-import { CFG as RELAY, onRamp } from '../world/structure.js';
+import {
+  CFG as RELAY, onRamp, onSpiral, tierForY, spiralWaypoints,
+} from '../world/structure.js';
 
-const POOL = { thrall: 20, warden: 3, chorister: 6 };
+const POOL = { thrall: 20, warden: 3, chorister: 6, planet: 2 };
 const MAX_ATTACKERS = 2;   // the token that makes a pack a rhythm, not a blender
 const FLINCH_BUDGET = 0.180;
 const STAGGER_T = 0.620, STAGGER_IMMUNITY = 2.2, STAGGER_WINDOW = 0.4;
-const BOLT_POOL = 8;
+const BOLT_POOL = 12;
 
 export function create(ctx) {
   const scene = ctx.scene;
   const world = ctx.systems.world;
   const rng = ctx.rng.fork('enemies');
   const all = [];
-  let leapGroupLast = -99;
   let lastProgress = 0;        // sim time of the last kill or spawn (stalemate watch)
 
   /* ---------------- build pools at boot ---------------- */
@@ -39,7 +40,10 @@ export function create(ctx) {
         hp: 0, grounded: true,
         gait: 0, burstT: 0, moving: false,
         stateT: 0, attackKind: 'lunge', committed: false,
-        leapCd: 0, leapVel: new THREE.Vector3(), airborne: false,
+        attackCd: 0, attackDir: new THREE.Vector3(), airborne: false,
+        aimDir: new THREE.Vector3(0, -0.2, 1),
+        orbitAngle: 0, orbitRadius: 0, orbitAltitude: 0,
+        orbitSpeed: 0, orbitDir: 1, attackGrace: 0, firePulse: 0,
         ventT: rng.next() * 4.5, ventOpen: false,
         staggerT: 0, immuneT: 0, windowDmg: 0, windowT: 0,
         flinchT: 99, flinch: new THREE.Vector3(),
@@ -51,6 +55,7 @@ export function create(ctx) {
         routeBest: Infinity, routeNoProgressT: 0, routeRetries: 0,
         routeDetour: false, routeDetourX: 0, routeDetourZ: 0,
         routeAvoidSide: uid % 2 ? 1 : -1,
+        routeIndex: 0,
         relocations: 0,
         slotSeed: rng.next() * TAU,
       });
@@ -67,16 +72,30 @@ export function create(ctx) {
   const bolts = new THREE.InstancedMesh(boltGeo, boltMat, BOLT_POOL);
   bolts.frustumCulled = false;
   scene.add(bolts);
+  const boltRingGeo = new THREE.TorusGeometry(0.30, 0.045, 5, 16);
+  const boltRings = new THREE.InstancedMesh(boltRingGeo, boltMat, BOLT_POOL);
+  boltRings.frustumCulled = false;
+  scene.add(boltRings);
   const boltState = [];
-  for (let i = 0; i < BOLT_POOL; i++) boltState.push({ live: false, age: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3() });
+  for (let i = 0; i < BOLT_POOL; i++) boltState.push({
+    live: false, age: 0, pos: new THREE.Vector3(), prev: new THREE.Vector3(),
+    vel: new THREE.Vector3(), gravity: 12, damage: 34, radius: 1.45,
+    maxAge: 6, scale: 1, kind: 'chorister',
+  });
   let boltCursor = 0;
   const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s1 = new THREE.Vector3(1, 1, 1);
+  const _up = new THREE.Vector3(0, 1, 0), _zAxis = new THREE.Vector3(0, 0, 1);
+  const _boltTravel = new THREE.Vector3(), _boltFacing = new THREE.Vector3();
+  const _hurtDir = new THREE.Vector3();
 
   function fireBolt(from, target, lead) {
     const b = boltState[boltCursor];
     boltCursor = (boltCursor + 1) % BOLT_POOL;
-    b.live = true; b.age = 0;
+    b.live = true; b.age = 0; b.kind = 'chorister';
+    b.gravity = 12; b.damage = SPECIES.chorister.dmg; b.radius = 1.45;
+    b.maxAge = 6; b.scale = 1;
     b.pos.copy(from);
+    b.prev.copy(from);
     // lobbed ballistic solve: flat velocity toward the LED target point,
     // vy solves the drop over flight time. Leading 0.6x the player's velocity
     // makes strafing a dodge you must keep performing, not a stalemate.
@@ -89,6 +108,20 @@ export function create(ctx) {
     b.vel.set(dx / T, (target.y - from.y) / T + 0.5 * 12 * T, dz / T);
   }
 
+  function firePlanetBolt(from, target, lead) {
+    const b = boltState[boltCursor];
+    boltCursor = (boltCursor + 1) % BOLT_POOL;
+    b.live = true; b.age = 0; b.kind = 'planet';
+    b.gravity = 0; b.damage = SPECIES.planet.dmg; b.radius = 1.72;
+    b.maxAge = 6.5; b.scale = 1.65;
+    b.pos.copy(from); b.prev.copy(from);
+    const dist = from.distanceTo(target);
+    const travel = clamp(dist / SPECIES.planet.boltSpeed, 0.35, 3.4);
+    _projectileTarget.copy(target);
+    if (lead) _projectileTarget.addScaledVector(lead, Math.min(0.25, travel * 0.18));
+    b.vel.subVectors(_projectileTarget, from).normalize().multiplyScalar(SPECIES.planet.boltSpeed);
+  }
+
   /* ---------------- spawn / despawn ---------------- */
   function spawn(species, x, z, opts = {}) {
     const e = all.find(o => o.species === species && !o.alive && o.state !== 'corpse');
@@ -97,10 +130,22 @@ export function create(ctx) {
     e.state = 'approach';
     e.stateT = 0;
     e.hp = e.def.hp * (opts.hpScale || 1);
-    e.pos.set(x, world.groundAt(x, z, 200), z);
+    if (e.def.flying) {
+      e.orbitAngle = Math.atan2(z, x);
+      e.orbitRadius = clamp(Math.hypot(x, z) || e.def.orbitRMin, e.def.orbitRMin, e.def.orbitRMax);
+      e.orbitAltitude = RELAY.upperY + lerp(e.def.orbitAltitudeMin, e.def.orbitAltitudeMax, rng.next());
+      e.orbitSpeed = lerp(e.def.orbitAngularSpeedMin, e.def.orbitAngularSpeedMax, rng.next());
+      e.orbitDir = e.id % 2 ? -1 : 1;
+      e.attackGrace = e.def.initialAttackGrace;
+      e.pos.set(x, opts.y ?? e.orbitAltitude, z);
+      e.aimDir.set(0, -0.2, 1).normalize();
+    } else {
+      e.pos.set(x, world.groundAt(x, z, 200), z);
+      e.attackGrace = 0;
+    }
     e.vel.set(0, 0, 0);
     e.yaw = Math.atan2(-(ctx.systems.player.pos.x - x), -(ctx.systems.player.pos.z - z));
-    e.committed = false; e.airborne = false;
+    e.committed = false; e.airborne = false; e.attackCd = 0; e.firePulse = 0;
     e.staggerT = 0; e.immuneT = 0; e.windowDmg = 0;
     e.flinchT = 99; e.deathT = 0;
     e.stallT = 0; e.stallPos.copy(e.pos);
@@ -108,6 +153,7 @@ export function create(ctx) {
     e.routing = false; e.routeMode = 'none'; e.routeStage = 'none';
     e.routeBest = Infinity; e.routeNoProgressT = 0; e.routeRetries = 0;
     e.routeDetour = false; e.relocations = 0;
+    e.routeIndex = 0;
     e.built.group.visible = true;
     e.enraged = false;
     lastProgress = ctx.time;
@@ -162,7 +208,7 @@ export function create(ctx) {
       e.state = 'corpse';
       e.deathT = 0;
       const J = clamp(dmg * 0.70, 8, 320);
-      const mf = e.species === 'warden' ? 3 : e.species === 'chorister' ? 1.6 : 1;
+      const mf = e.species === 'planet' ? 18 : e.species === 'warden' ? 3 : e.species === 'chorister' ? 1.6 : 1;
       e.vel.copy(dir).multiplyScalar(Math.min(J * 0.055 / mf, 7));
       e.vel.y = Math.max(e.vel.y, 1.2);
       e.airborne = true;
@@ -176,6 +222,9 @@ export function create(ctx) {
 
   /* ---------------- bullet raycast vs sphere zones ---------------- */
   const _oc = new THREE.Vector3(), _c = new THREE.Vector3();
+  const _projectileTarget = new THREE.Vector3();
+  const _planetTarget = new THREE.Vector3(), _planetOrigin = new THREE.Vector3();
+  const _planetRay = new THREE.Vector3();
   function raycast(origin, dir, maxT) {
     let best = null;
     for (const e of all) {
@@ -183,11 +232,15 @@ export function create(ctx) {
       const cy = Math.cos(e.yaw), sy = Math.sin(e.yaw);
       for (const z of e.built.zones) {
         // zone center in world space (rotate local by yaw)
-        _c.set(
-          e.pos.x + z.x * cy + z.z * sy,
-          e.pos.y + z.y,
-          e.pos.z - z.x * sy + z.z * cy,
-        );
+        if (z.aimed && e.def.flying) {
+          _c.copy(e.pos).addScaledVector(e.aimDir, z.radialOffset || 0);
+        } else {
+          _c.set(
+            e.pos.x + z.x * cy + z.z * sy,
+            e.pos.y + z.y,
+            e.pos.z - z.x * sy + z.z * cy,
+          );
+        }
         _oc.subVectors(_c, origin);
         const tca = _oc.dot(dir);
         if (tca < 0 || tca > maxT) continue;
@@ -212,26 +265,34 @@ export function create(ctx) {
   const _sep = new THREE.Vector3(), _to = new THREE.Vector3(), _tgt = new THREE.Vector3();
 
   /**
-   * Tier routing: the deck is only reachable by ramp, so an enemy whose
-   * target is on another tier walks the ramp instead of grinding into the
-   * structure's flank. Waypoints are a full body-length ahead (the Eclipse
-   * lesson: lookahead shorter than a frame's travel fights damped velocity
-   * and produces the jitter) and the corridor is held by clamping the
-   * steering target, never by writing position.
+   * Three-tier routing. Ground <-> deck owns the two broad ramps; deck <->
+   * lunar tier owns one ordered helix. An enemy keeps its current transition
+   * until it reaches a landing, so the height classifier can never make it
+   * oscillate halfway up a slope. Position is never rewritten or teleported.
    */
-  const onDeckTier = (y) => y > RELAY.deckY - 1.5;
   const ROUTE_SIDE_Z = RELAY.rampW / 2 + 1.5;
   const ROUTE_EXIT_X = RELAY.deckOut + 1.2;
   const ROUTE_BYPASS_X = RELAY.rampFoot + 1.2;
   const ROUTE_FOOT_X = RELAY.rampFoot + 2.4;
   const ROUTE_HEAD_X = RELAY.rampHead + 0.6;
   const ROUTE_REACH = 0.85;
+  const SPIRAL_APPROACH_R = RELAY.spiralOuter + 1.42;
+  const SPIRAL_UP = spiralWaypoints('up');
+  const SPIRAL_DOWN = spiralWaypoints('down');
+
+  function angleDelta(target, current) {
+    let d = target - current;
+    while (d > Math.PI) d -= TAU;
+    while (d < -Math.PI) d += TAU;
+    return d;
+  }
 
   function resetRoute(e) {
     e.routing = false;
     e.routeMode = 'none'; e.routeStage = 'none';
     e.routeBest = Infinity; e.routeNoProgressT = 0; e.routeRetries = 0;
     e.routeDetour = false;
+    e.routeIndex = 0;
   }
 
   function setRouteStage(e, stage) {
@@ -239,6 +300,20 @@ export function create(ctx) {
     e.routeStage = stage;
     e.routeBest = Infinity; e.routeNoProgressT = 0; e.routeRetries = 0;
     e.routeDetour = false;
+  }
+
+  function nearestSpiralIndex(e, route) {
+    let best = 0, bestD2 = Infinity;
+    for (let i = 0; i < route.length; i++) {
+      const p = route[i];
+      const dx = e.pos.x - p.x, dz = e.pos.z - p.z;
+      // Height matters enough to distinguish the two addresses on either side
+      // of the seam, but not enough to reject a body damped below the surface.
+      const dy = (e.pos.y - p.y) * 0.35;
+      const d2 = dx * dx + dz * dz + dy * dy;
+      if (d2 < bestD2) { bestD2 = d2; best = i; }
+    }
+    return best;
   }
 
   function setRouteGoal(e, x, z) {
@@ -285,24 +360,15 @@ export function create(ctx) {
     return true;
   }
 
-  /**
-   * Persistent tier route. A low enemy beneath the deck first exits beside a
-   * rail, follows the rail outside its solid end, turns through the mouth,
-   * then climbs. Core/pylon blockers get a persisted tangent waypoint. The
-   * route is changed only on waypoint completion or measured lack of progress.
-   */
-  function tierWaypoint(e, targetY, dt) {
-    const wantHigh = onDeckTier(targetY);
-    const amHigh = onDeckTier(e.pos.y);
+  function rampWaypoint(e, direction) {
     const mySign = onRamp(e.pos.x, e.pos.z);
     const midSlope = mySign !== 0
       && e.pos.y > RELAY.rampFootY + 1.0
       && e.pos.y < RELAY.deckY - 1.5;
-    if (wantHigh === amHigh && !midSlope) { resetRoute(e); return false; }
 
-    if (wantHigh) {
-      if (e.routeMode !== 'up') {
-        e.routeMode = 'up'; e.routing = true;
+    if (direction === 'up') {
+      if (e.routeMode !== 'ramp-up') {
+        e.routeMode = 'ramp-up'; e.routing = true;
         e.routeSign = e.pos.x >= 0 ? 1 : -1;
         e.routeSide = e.pos.z >= 0 ? 1 : -1;
         e.routeAvoidSide = e.id % 2 ? 1 : -1;
@@ -329,8 +395,8 @@ export function create(ctx) {
       }
       setRouteGoal(e, gx, gz);
     } else {
-      if (e.routeMode !== 'down') {
-        e.routeMode = 'down'; e.routing = true;
+      if (e.routeMode !== 'ramp-down') {
+        e.routeMode = 'ramp-down'; e.routing = true;
         e.routeSign = mySign || (e.pos.x >= 0 ? 1 : -1);
         setRouteStage(e, 'head');
       }
@@ -340,6 +406,110 @@ export function create(ctx) {
       if (e.routeStage === 'head') setRouteGoal(e, e.routeSign * ROUTE_HEAD_X, 0);
       else setRouteGoal(e, e.routeSign * ROUTE_FOOT_X, 0);
     }
+    return midSlope;
+  }
+
+  function spiralWaypoint(e, direction) {
+    const route = direction === 'up' ? SPIRAL_UP : SPIRAL_DOWN;
+    const mode = `spiral-${direction}`;
+    if (e.routeMode !== mode) {
+      e.routeMode = mode;
+      e.routing = true;
+      // A body may share X/Z with a different flight above/below it. Resume
+      // only if physically on the helix; otherwise circle on its current floor
+      // to the correct guarded landing before crossing the rail opening.
+      if (onSpiral(e.pos.x, e.pos.z, e.pos.y)) {
+        e.routeStage = mode;
+        e.routeIndex = nearestSpiralIndex(e, route);
+      } else {
+        e.routeStage = `${mode}-approach`;
+        e.routeIndex = 0;
+      }
+      e.routeBest = Infinity; e.routeNoProgressT = 0; e.routeRetries = 0;
+      e.routeDetour = false;
+    }
+
+    if (e.routeStage === `${mode}-approach`) {
+      const targetA = direction === 'up' ? RELAY.spiralLowerA : RELAY.spiralUpperA;
+      const currentA = Math.atan2(e.pos.z, e.pos.x);
+      const radial = Math.hypot(e.pos.x, e.pos.z);
+      const da = angleDelta(targetA, currentA);
+      let goalA = currentA;
+      if (Math.abs(radial - SPIRAL_APPROACH_R) <= 0.62) {
+        goalA += clamp(da, -0.34, 0.34);
+      }
+      const gx = Math.cos(goalA) * SPIRAL_APPROACH_R;
+      const gz = Math.sin(goalA) * SPIRAL_APPROACH_R;
+      const close = Math.hypot(e.pos.x - gx, e.pos.z - gz) < 0.82;
+      if (Math.abs(da) < 0.105 && Math.abs(radial - SPIRAL_APPROACH_R) < 0.82) {
+        e.routeStage = mode;
+        e.routeBest = Infinity; e.routeNoProgressT = 0; e.routeDetour = false;
+      } else {
+        setRouteGoal(e, gx, gz);
+        if (close) { e.routeBest = Infinity; e.routeNoProgressT = 0; }
+        return false;
+      }
+    }
+
+    let goal = route[Math.min(e.routeIndex, route.length - 1)];
+    let distance = Math.hypot(e.pos.x - goal.x, e.pos.z - goal.z);
+    // Consume more than one close point after a coarse test step. This keeps
+    // deterministic QA and clamped real frames on the exact same route.
+    while (distance < (goal.landing ? 1.05 : 0.78) && e.routeIndex < route.length - 1) {
+      e.routeIndex++;
+      goal = route[e.routeIndex];
+      distance = Math.hypot(e.pos.x - goal.x, e.pos.z - goal.z);
+      e.routeBest = Infinity; e.routeNoProgressT = 0;
+    }
+    setRouteGoal(e, goal.x, goal.z);
+    return e.routeIndex >= route.length - 1 && distance < 1.05;
+  }
+
+  /** Persistent tier route across both manufactured transitions. */
+  function tierWaypoint(e, targetY, dt) {
+    const targetTier = tierForY(targetY);
+    const currentTier = tierForY(e.pos.y);
+    const onHelix = onSpiral(e.pos.x, e.pos.z, e.pos.y)
+      && e.pos.y > RELAY.deckY + 0.45
+      && e.pos.y < RELAY.upperY - 0.45;
+    const myRamp = onRamp(e.pos.x, e.pos.z);
+    const midRamp = myRamp !== 0
+      && e.pos.y > RELAY.rampFootY + 0.7
+      && e.pos.y < RELAY.deckY - 0.8;
+
+    let transition = null;
+    if (onHelix || e.routeMode.startsWith('spiral-')) {
+      transition = e.routeMode.startsWith('spiral-')
+        ? e.routeMode
+        : (targetY >= e.pos.y - 0.25 ? 'spiral-up' : 'spiral-down');
+      // Once a landing is reached, re-evaluate the remaining tier chain.
+      const done = spiralWaypoint(e, transition.endsWith('up') ? 'up' : 'down');
+      if (done) {
+        resetRoute(e);
+        return tierWaypoint(e, targetY, dt);
+      }
+    } else if (midRamp || e.routeMode.startsWith('ramp-')) {
+      transition = e.routeMode.startsWith('ramp-')
+        ? e.routeMode
+        : (targetTier > 0 && targetY >= e.pos.y - 0.25 ? 'ramp-up' : 'ramp-down');
+      rampWaypoint(e, transition.endsWith('up') ? 'up' : 'down');
+      if (!midRamp && ((transition === 'ramp-up' && currentTier >= 1)
+          || (transition === 'ramp-down' && currentTier === 0))) {
+        resetRoute(e);
+        return tierWaypoint(e, targetY, dt);
+      }
+    } else if (currentTier < targetTier) {
+      transition = currentTier === 0 ? 'ramp-up' : 'spiral-up';
+      if (transition === 'ramp-up') rampWaypoint(e, 'up');
+      else spiralWaypoint(e, 'up');
+    } else if (currentTier > targetTier) {
+      transition = currentTier === 2 ? 'spiral-down' : 'ramp-down';
+      if (transition === 'ramp-down') rampWaypoint(e, 'down');
+      else spiralWaypoint(e, 'down');
+    } else {
+      resetRoute(e);
+      return false;
+    }
 
     e.routing = true;
     if (e.routeDetour) {
@@ -347,7 +517,11 @@ export function create(ctx) {
         e.routeDetour = false; e.routeBest = Infinity; e.routeNoProgressT = 0;
       }
     }
-    if (!e.routeDetour) {
+    // The helical route is already a clearance-certified centreline. Generic
+    // tangent detours would send bodies through its rails; collision plus the
+    // ordered next point is the correct recovery there.
+    const approachingSpiralLanding = e.routeStage.endsWith('-approach');
+    if (!e.routeDetour && (!e.routeMode.startsWith('spiral-') || approachingSpiralLanding)) {
       const blocker = world.firstCircleBlocker(
         e.pos.x, e.pos.z, e.routeGoalX, e.routeGoalZ, e.def.radius, e.pos.y, 0.10,
       );
@@ -366,9 +540,19 @@ export function create(ctx) {
       e.routeAvoidSide *= -1;
       e.routeDetour = false;
       if (e.routeRetries === 2 && (e.routeStage === 'exit' || e.routeStage === 'bypass')) e.routeSide *= -1;
-      if (e.routeRetries >= 3 && e.routeMode === 'up') {
+      if (e.routeRetries >= 3 && e.routeMode === 'ramp-up') {
         e.routeSign *= -1; e.routeRetries = 0;
         setRouteStage(e, Math.hypot(e.pos.x, e.pos.z) < RELAY.deckOut + 1.2 ? 'exit' : 'bypass');
+      } else if (e.routeRetries >= 3 && e.routeMode.startsWith('spiral-')) {
+        const route = e.routeMode === 'spiral-up' ? SPIRAL_UP : SPIRAL_DOWN;
+        if (onSpiral(e.pos.x, e.pos.z, e.pos.y)) {
+          e.routeStage = e.routeMode;
+          e.routeIndex = nearestSpiralIndex(e, route);
+        } else {
+          e.routeStage = `${e.routeMode}-approach`;
+          e.routeIndex = 0;
+        }
+        e.routeRetries = 0;
       }
       e.routeBest = Infinity; e.routeNoProgressT = 0;
       ctx.bus.emit('enemy:route-replan', { id: e.id, stage: e.routeStage });
@@ -384,6 +568,121 @@ export function create(ctx) {
     return n;
   }
 
+  function planetCommitCount() {
+    let n = 0;
+    for (const e of all) if (e.alive && e.species === 'planet' && e.committed) n++;
+    return n;
+  }
+
+  function planetLineOfSight(e) {
+    const p = ctx.systems.player;
+    _planetTarget.set(p.pos.x, p.eyeY, p.pos.z);
+    _planetOrigin.copy(e.pos).addScaledVector(e.aimDir, 1.92);
+    _planetRay.subVectors(_planetTarget, _planetOrigin);
+    const dist = _planetRay.length();
+    if (dist < 1) return true;
+    _planetRay.multiplyScalar(1 / dist);
+    const maxT = Math.max(0, dist - p.radius - 0.35);
+    const cHit = world.rayColliders(_planetOrigin, _planetRay, maxT);
+    const gHit = world.marchGround(_planetOrigin, _planetRay, cHit ? cHit.t : maxT);
+    return !cHit && !gHit;
+  }
+
+  function updatePlanet(e, dt) {
+    const p = ctx.systems.player;
+    const def = e.def;
+    e.attackGrace = Math.max(0, e.attackGrace - dt);
+    e.firePulse = Math.max(0, e.firePulse - dt * 6.5);
+
+    // A slow, fully simulated world-space orbit. The body never follows the
+    // camera and never enters ground routing/collision.
+    const orbitScale = e.staggerT > 0 ? 0.28 : 1;
+    e.orbitAngle += e.orbitSpeed * e.orbitDir * orbitScale * dt;
+    const tx = Math.cos(e.orbitAngle) * e.orbitRadius;
+    const tz = Math.sin(e.orbitAngle) * e.orbitRadius;
+    let wantX = (tx - e.pos.x) * 1.15;
+    let wantZ = (tz - e.pos.z) * 1.15;
+    const wantSpeed = Math.hypot(wantX, wantZ);
+    if (wantSpeed > 2.8) { wantX *= 2.8 / wantSpeed; wantZ *= 2.8 / wantSpeed; }
+    e.vel.x = damp(e.vel.x, wantX, 2.5, dt);
+    e.vel.z = damp(e.vel.z, wantZ, 2.5, dt);
+    e.pos.x += e.vel.x * dt;
+    e.pos.z += e.vel.z * dt;
+    const hover = e.orbitAltitude + Math.sin(ctx.time * def.orbitBobHz + e.id * 1.7) * def.orbitBobAmp;
+    e.pos.y = damp(e.pos.y, hover, 2.6, dt);
+
+    _planetTarget.set(p.pos.x, p.eyeY, p.pos.z);
+    e.aimDir.subVectors(_planetTarget, e.pos);
+    const distance = e.aimDir.length();
+    if (distance > 1e-5) e.aimDir.multiplyScalar(1 / distance);
+    else e.aimDir.set(0, -1, 0);
+
+    if (e.staggerT > 0) {
+      e.staggerT = Math.max(0, e.staggerT - dt);
+      e.telegraphCharge = 0;
+      e.committed = false;
+    } else if (e.state === 'approach') {
+      e.stateT += dt;
+      e.telegraphCharge = 0;
+      if (e.attackGrace <= 0 && e.attackCd <= 0 && e.stateT > 0.6
+          && distance >= def.engage[0] && distance <= def.engage[1]
+          && commitCount() < MAX_ATTACKERS && planetCommitCount() < 1
+          && planetLineOfSight(e)) {
+        e.state = 'windup'; e.stateT = 0; e.committed = true;
+        ctx.bus.emit('enemy:telegraph', {
+          id: e.id, species: e.species, pos: e.pos, kind: 'planetBolt',
+        });
+      }
+    } else if (e.state === 'windup') {
+      e.stateT += dt;
+      e.telegraphCharge = clamp01(e.stateT / def.telegraph);
+      if (e.stateT >= def.telegraph) {
+        if (!planetLineOfSight(e) || distance < def.engage[0] || distance > def.engage[1]) {
+          e.state = 'recover'; e.stateT = 0; e.committed = false;
+        } else {
+          e.state = 'attack'; e.stateT = 0; e.struck = false;
+          ctx.bus.emit('enemy:attack', {
+            id: e.id, species: e.species, pos: e.pos, kind: 'planetBolt',
+          });
+        }
+        e.telegraphCharge = 0;
+      }
+    } else if (e.state === 'attack') {
+      e.stateT += dt;
+      if (!e.struck && e.stateT >= def.releaseAt) {
+        e.struck = true;
+        _planetOrigin.copy(e.pos).addScaledVector(e.aimDir, 1.92);
+        _planetTarget.set(p.pos.x, p.eyeY, p.pos.z);
+        firePlanetBolt(_planetOrigin, _planetTarget, p.vel);
+        e.firePulse = 1;
+        ctx.bus.emit('enemy:planet-bolt', { species: 'planet', kind: 'planet', pos: e.pos });
+      }
+      if (e.stateT >= def.attack) { e.state = 'recover'; e.stateT = 0; }
+    } else if (e.state === 'recover') {
+      e.stateT += dt;
+      e.committed = false;
+      if (e.stateT >= def.recover) {
+        e.state = 'approach'; e.stateT = 0; e.attackCd = 0.65;
+      }
+    }
+
+    const b = e.built;
+    b.group.position.copy(e.pos);
+    b.group.rotation.set(0, 0, 0);
+    b.animate(b.parts, {
+      time: ctx.time + e.id,
+      aimDir: e.aimDir,
+      charge: e.telegraphCharge || 0,
+      firePulse: e.firePulse,
+      coil: e.telegraphCharge || 0,
+      moveAmp: 0,
+      gait: 0,
+      bank: 0,
+      swing: 0,
+      ventOpen: 0,
+    });
+  }
+
   function updateEnemy(e, dt, snapN) {
     const p = ctx.systems.player;
     const def = e.def;
@@ -393,7 +692,7 @@ export function create(ctx) {
     e.windowT += dt;
     if (e.windowT > STAGGER_WINDOW) e.windowDmg = 0;
     e.immuneT = Math.max(0, e.immuneT - dt);
-    e.leapCd = Math.max(0, e.leapCd - dt);
+    e.attackCd = Math.max(0, e.attackCd - dt);
     if (e.flashT !== undefined && e.flashT < 0.2) {
       e.flashT += dt;
       if (e.flashT >= 0.06) {
@@ -413,6 +712,11 @@ export function create(ctx) {
       e.ventT = (e.ventT + dt) % def.ventCycle;
       e.ventOpen = e.ventT < def.ventOpen;
       e.built.ventMat.emissiveIntensity = e.ventOpen ? 2.9 : 0.55;
+    }
+
+    if (def.flying) {
+      updatePlanet(e, dt);
+      return;
     }
 
     // stagger lock
@@ -472,9 +776,17 @@ export function create(ctx) {
             }
           }
           _sep.clampLength(0, 2.5);
-          // on a ramp, shoving sideways walks bodies into the rails — let the
-          // queue form along the climb instead (resolve on velocity, never pos)
+          // On authored climbs, radial/lateral shoves walk bodies into solid
+          // rails. Project onto the route tangent so a dense pack queues along
+          // the path while still preserving physical separation.
           if (onRamp(e.pos.x, e.pos.z)) _sep.z *= 0.15;
+          if (onSpiral(e.pos.x, e.pos.z, e.pos.y)) {
+            const rr = Math.hypot(e.pos.x, e.pos.z) || 1;
+            const tx = -e.pos.z / rr, tz = e.pos.x / rr;
+            const along = _sep.x * tx + _sep.z * tz;
+            _sep.x = tx * along;
+            _sep.z = tz * along;
+          }
 
           const desiredX = _to.x * want + _sep.x * 2.2;
           const desiredZ = _to.z * want + _sep.z * 2.2;
@@ -508,13 +820,15 @@ export function create(ctx) {
           const reachable = e.species === 'chorister'
             ? true
             : Math.abs(p.pos.y - e.pos.y) < 2.5;
-          if (inBand && paused && reachable && e.stateT > 0.4 && commitCount() < MAX_ATTACKERS) {
+          if (inBand && paused && reachable && !e.routing
+              && e.stateT > 0.4 && commitCount() < MAX_ATTACKERS) {
             if (e.species === 'thrall') {
-              const wantLeap = distToPlayer > def.lungeRange && distToPlayer < 14
-                && e.leapCd <= 0 && (ctx.time - leapGroupLast) > 4.5;
-              if (wantLeap || distToPlayer <= def.lungeRange) {
-                e.attackKind = wantLeap ? 'leap' : 'lunge';
-                if (wantLeap) { leapGroupLast = ctx.time; e.leapCd = def.leapCdInd; }
+              const clear = world.corridorClear(
+                e.pos.x, e.pos.z, p.pos.x, p.pos.z, e.def.radius * 0.45, e.pos.y, 0.02,
+              );
+              if (distToPlayer <= def.lungeRange && e.attackCd <= 0 && clear) {
+                e.attackKind = 'lunge';
+                e.attackCd = def.lungeCooldown;
                 e.state = 'windup'; e.stateT = 0; e.committed = true;
                 ctx.bus.emit('enemy:telegraph', { id: e.id, species: e.species, pos: e.pos, kind: e.attackKind });
               }
@@ -545,16 +859,8 @@ export function create(ctx) {
               e.state = 'recover'; e.stateT = 0; e.committed = false;
             } else {
               e.state = 'attack'; e.stateT = 0; e.struck = false;
-              if (e.attackKind === 'leap') {
-                const T = clamp(d2p / 12.6, 0.20, 0.48);
-                e.leapVel.set(
-                  (p.pos.x + p.vel.x * 0.26 - e.pos.x) / T, 0,
-                  (p.pos.z + p.vel.z * 0.26 - e.pos.z) / T,
-                );
-                const dy = world.groundAt(p.pos.x, p.pos.z, p.pos.y + 1) - e.pos.y;
-                e.leapVel.y = dy / T + 0.5 * 15.8 * T;
-                e.airborne = true;
-                e.vel.copy(e.leapVel);
+              if (e.attackKind === 'lunge') {
+                e.attackDir.set(p.pos.x - e.pos.x, 0, p.pos.z - e.pos.z).normalize();
               }
               ctx.bus.emit('enemy:attack', { id: e.id, species: e.species, pos: e.pos, kind: e.attackKind });
             }
@@ -567,25 +873,17 @@ export function create(ctx) {
           e.stateT += dt;
           const d2p = Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z);
           if (e.attackKind === 'lunge') {
-            _to.set(p.pos.x - e.pos.x, 0, p.pos.z - e.pos.z).normalize();
             const k = def.lungeSpeed * (0.25 + 0.75 * Math.pow(clamp01(e.stateT / def.lungeMs), 2));
-            e.vel.x = _to.x * k; e.vel.z = _to.z * k;
-            if (!e.struck && d2p < 1.9 + p.radius) {
+            e.vel.x = e.attackDir.x * k; e.vel.z = e.attackDir.z * k;
+            const clear = world.corridorClear(
+              e.pos.x, e.pos.z, p.pos.x, p.pos.z, e.def.radius * 0.35, e.pos.y, 0.01,
+            );
+            if (!e.struck && clear && d2p < 1.25 + p.radius) {
               e.struck = true;
-              p.hurt(def.dmg, _to);
+              p.hurt(def.dmg, e.attackDir);
               ctx.bus.emit('enemy:strike', { id: e.id, species: e.species });
             }
             if (e.stateT >= def.lungeMs) { e.state = 'recover'; e.stateT = 0; }
-          } else if (e.attackKind === 'leap') {
-            if (!e.airborne) {
-              if (!e.struck && d2p < 2.8) {
-                e.struck = true;
-                _to.set(p.pos.x - e.pos.x, 0, p.pos.z - e.pos.z).normalize();
-                p.hurt(def.dmg, _to);
-                ctx.bus.emit('enemy:strike', { id: e.id, species: e.species });
-              }
-              e.state = 'recover'; e.stateT = 0;
-            }
           } else if (e.attackKind === 'sweep') {
             if (!e.struck && e.stateT >= def.strikeAt) {
               e.struck = true;
@@ -604,8 +902,13 @@ export function create(ctx) {
             if (!e.struck && e.stateT >= def.releaseAt) {
               e.struck = true;
               _c.set(e.pos.x, e.pos.y + 1.62, e.pos.z);
-              fireBolt(_c, new THREE.Vector3(p.pos.x, world.groundAt(p.pos.x, p.pos.z, p.pos.y + 1) + 0.6, p.pos.z), p.vel);
-              ctx.bus.emit('enemy:bolt', { pos: e.pos });
+              _projectileTarget.set(
+                p.pos.x,
+                world.groundAt(p.pos.x, p.pos.z, p.pos.y + 1) + 0.6,
+                p.pos.z,
+              );
+              fireBolt(_c, _projectileTarget, p.vel);
+              ctx.bus.emit('enemy:bolt', { pos: e.pos, species: e.species, kind: 'chorister' });
             }
             if (e.stateT >= def.attack) { e.state = 'recover'; e.stateT = 0; }
           }
@@ -695,7 +998,7 @@ export function create(ctx) {
       time: ctx.time + e.id,
       gait: e.gait,
       moveAmp: clamp01(spd / def.speed),
-      coil: e.state === 'windup' ? e.telegraphCharge * (e.attackKind === 'leap' ? 1 : 0.6) : 0,
+      coil: e.state === 'windup' ? e.telegraphCharge * 0.6 : 0,
       bank,
       swing,
       ventOpen: e.ventOpen ? 1 : 0,
@@ -731,6 +1034,15 @@ export function create(ctx) {
     const glow = Math.max(0, 1 - e.deathT / 2.6);
     for (let i = 0; i < b.glowMats.length; i++) {
       b.glowMats[i].emissiveIntensity = e.glowBase[i] * glow * glow;
+    }
+    // A siege moon has already fallen from 28–34 m and completed its full
+    // 2.6 s glow death long before this point. Return that scarce two-actor
+    // pool after the physical fall instead of reserving it for the grounded
+    // roster's 45 s battlefield-history window; late Watch VIII/IX kills can
+    // otherwise starve the next wave's authored sky order.
+    if (e.species === 'planet' && e.deathT > 8) {
+      release(e);
+      return;
     }
     if (e.deathT > 45) {
       b.group.position.y -= dt * 0.33;      // sink, never pop
@@ -781,7 +1093,7 @@ export function create(ctx) {
       // frozen separation snapshot
       let n = 0;
       for (const e of all) {
-        if (e.alive && n < 64) {
+        if (e.alive && !e.def.flying && n < 64) {
           snapX[n] = e.pos.x; snapZ[n] = e.pos.z; snapR[n] = e.def.radius;
           n++;
         }
@@ -791,31 +1103,74 @@ export function create(ctx) {
         else if (e.state === 'corpse') updateCorpse(e, dt);
       }
 
-      // bolts
+      // pooled chorister/planet projectiles. Planet rounds are straight and
+      // non-homing; the previous-to-current sweep makes every registered rail,
+      // floor, and core meaningful cover even on a clamped 50 ms frame.
       let dirty = false;
       for (let i = 0; i < BOLT_POOL; i++) {
         const b = boltState[i];
-        if (!b.live) { _m4.makeScale(0, 0, 0); bolts.setMatrixAt(i, _m4); dirty = true; continue; }
+        if (!b.live) {
+          _m4.makeScale(0, 0, 0);
+          bolts.setMatrixAt(i, _m4); boltRings.setMatrixAt(i, _m4);
+          dirty = true; continue;
+        }
         b.age += dt;
-        b.vel.y -= 12 * dt;
+        b.prev.copy(b.pos);
+        b.vel.y -= b.gravity * dt;
         b.pos.addScaledVector(b.vel, dt);
-        const g = world.groundAt(b.pos.x, b.pos.z, b.pos.y + 1);
-        const hitGround = b.pos.y <= g + 0.1;
-        const dx = p.pos.x - b.pos.x, dy = (p.pos.y + 0.9) - b.pos.y, dz = p.pos.z - b.pos.z;
-        const hitPlayer = dx * dx + dy * dy + dz * dz < 1.45;   // ~1.05 + pad: dodging, not luck
-        if (hitGround || hitPlayer || b.age > 6) {
+        _boltTravel.subVectors(b.pos, b.prev);
+        const travel = _boltTravel.length();
+        let worldT = Infinity;
+        if (travel > 1e-6) {
+          _boltTravel.multiplyScalar(1 / travel);
+          const cHit = world.rayColliders(b.prev, _boltTravel, travel);
+          const gHit = world.marchGround(b.prev, _boltTravel, cHit ? cHit.t : travel);
+          if (cHit) worldT = cHit.t;
+          if (gHit) worldT = Math.min(worldT, gHit.t);
+        }
+        const pcx = p.pos.x, pcy = p.pos.y + 0.9, pcz = p.pos.z;
+        const sx = b.pos.x - b.prev.x, sy = b.pos.y - b.prev.y, sz = b.pos.z - b.prev.z;
+        const ll = sx * sx + sy * sy + sz * sz;
+        const playerU = ll > 1e-8 ? clamp(
+          ((pcx - b.prev.x) * sx + (pcy - b.prev.y) * sy + (pcz - b.prev.z) * sz) / ll,
+          0, 1,
+        ) : 0;
+        const qx = b.prev.x + sx * playerU, qy = b.prev.y + sy * playerU, qz = b.prev.z + sz * playerU;
+        const pdx = pcx - qx, pdy = pcy - qy, pdz = pcz - qz;
+        const playerT = playerU * travel;
+        const hitPlayer = pdx * pdx + pdy * pdy + pdz * pdz < b.radius * b.radius
+          && playerT <= worldT + 1e-4;
+        const hitWorld = worldT <= travel + 1e-4;
+        if (hitWorld || hitPlayer || b.age > b.maxAge) {
+          if (hitWorld && travel > 1e-6) b.pos.copy(b.prev).addScaledVector(_boltTravel, worldT);
           b.live = false;
-          ctx.systems.fx.impact('energy', b.pos, new THREE.Vector3(0, 1, 0), 1.4);
-          if (hitPlayer) p.hurt(SPECIES.chorister.dmg, new THREE.Vector3(dx, 0, dz).normalize().negate());
-          ctx.bus.emit('enemy:boltland', { pos: b.pos, hitPlayer });
+          ctx.systems.fx.impact('energy', b.pos, _up, b.kind === 'planet' ? 1.85 : 1.4);
+          if (hitPlayer) {
+            _hurtDir.set(b.pos.x - p.pos.x, 0, b.pos.z - p.pos.z).normalize();
+            p.hurt(b.damage, _hurtDir);
+          }
+          ctx.bus.emit('enemy:boltland', { pos: b.pos, hitPlayer, species: b.kind, kind: b.kind });
           continue;
         }
         const pulse = 1 + Math.sin(b.age * 21) * 0.2;
-        _m4.compose(b.pos, _q, _s1.set(pulse, pulse, pulse));
+        const coreScale = pulse * b.scale;
+        _m4.compose(b.pos, _q.identity(), _s1.set(coreScale, coreScale, coreScale));
         bolts.setMatrixAt(i, _m4);
+        if (b.kind === 'planet') {
+          _boltFacing.copy(b.vel).normalize();
+          _q.setFromUnitVectors(_zAxis, _boltFacing);
+          const ringScale = b.scale * (1.0 + Math.sin(b.age * 15) * 0.13);
+          _m4.compose(b.pos, _q, _s1.set(ringScale, ringScale, ringScale));
+          boltRings.setMatrixAt(i, _m4);
+        } else {
+          _m4.makeScale(0, 0, 0); boltRings.setMatrixAt(i, _m4);
+        }
         dirty = true;
       }
-      if (dirty) bolts.instanceMatrix.needsUpdate = true;
+      if (dirty) {
+        bolts.instanceMatrix.needsUpdate = true;
+        boltRings.instanceMatrix.needsUpdate = true;
+      }
     },
   };
 }

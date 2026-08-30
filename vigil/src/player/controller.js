@@ -32,7 +32,7 @@ export function create(ctx) {
   let stepParity = 0;
   let eyeSpring = new Spring(7.5, 0.62);   // landing dip
   let slideEye = new Spring(9, 0.68);      // slide drop overshoot
-  let hp = 100, sinceHurt = 99, dead = false;
+  let hp = 100, shield = 0, sinceHurt = 99, dead = false;
   const HIT_GRACE = 0.35;      // three simultaneous lunges must not triple-tap
   let fallDamageAccum = 0;
 
@@ -105,6 +105,7 @@ export function create(ctx) {
     get slideT() { return slideT; },
     get bobPhase() { return bobPhase; },
     get hp() { return hp; },
+    get shield() { return shield; },
     get dead() { return dead; },
     get speed() { return Math.hypot(vel.x, vel.z); },
     get landDip() { return eyeSpring.value; },
@@ -112,9 +113,21 @@ export function create(ctx) {
     hurt(amount, fromDir) {
       if (dead || ctx.state !== 'playing' || ctx.debug.god) return;
       if (sinceHurt < HIT_GRACE) return;
-      hp -= amount;
+      const absorbed = Math.min(shield, amount);
+      const hpDamage = Math.max(0, amount - absorbed);
+      shield -= absorbed;
+      hp -= hpDamage;
       sinceHurt = 0;
-      ctx.bus.emit('player:hurt', { amount, fromDir, hp });
+      // A full Aegis catch is not flesh damage. Keep shield contact on its own
+      // channel so presentation can stay cyan and synthetic; partial catches
+      // emit both events, with `amount` truthfully naming the HP loss.
+      if (absorbed > 0) ctx.bus.emit('player:shield-hit', {
+        amount: absorbed, absorbed, incoming: amount, fromDir, hp, shield,
+        depleted: shield <= 0,
+      });
+      if (hpDamage > 0) ctx.bus.emit('player:hurt', {
+        amount: hpDamage, incoming: amount, absorbed, fromDir, hp, shield,
+      });
       if (hp <= 0) {
         hp = 0;
         dead = true;
@@ -122,11 +135,17 @@ export function create(ctx) {
       }
     },
     heal(v) { hp = Math.min(100, hp + v); },
+    addShield(v) {
+      const got = Math.min(Math.max(0, v), 50 - shield);
+      shield += got;
+      if (got > 0) ctx.bus.emit('player:shield', { amount: got, shield });
+      return got;
+    },
     reset() {
       pos.set(world.playerStart.x, 0, world.playerStart.z);
       pos.y = world.groundAt(pos.x, pos.z, 50);
       vel.set(0, 0, 0);
-      hp = 100; dead = false; sinceHurt = 99;
+      hp = 100; shield = 0; dead = false; sinceHurt = 99;
       sliding = false; crouched = false; sprinting = false;
       standingClear = true;
       grounded = true; sinceGround = 0; jumpBuffered = -1;

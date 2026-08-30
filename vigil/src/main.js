@@ -85,7 +85,7 @@ const VG = window.__VG = {
   ready: false,
   bootStage: 'init',
   bootError: null,
-  version: '0.3.0-impact',
+  version: '0.4.0-lunar-siege',
 };
 
 /* ---------------- resize: ONE handler, one authority ---------------- */
@@ -216,6 +216,7 @@ ctx.bus.on('run:won', () => setState('won'));
 ctx.bus.on('ui:start', startOrResume);
 
 function resetRun() {
+  ctx.systems.world.reset?.();
   ctx.systems.player.reset();
   ctx.systems.enemies.reset();
   ctx.systems.director.reset();
@@ -312,6 +313,7 @@ Object.assign(VG, {
       fps: Math.round(fpsValue * 10) / 10,
       pos: S.player ? { x: S.player.pos.x, y: S.player.pos.y, z: S.player.pos.z } : null,
       hp: S.player?.hp,
+      shield: S.player?.shield,
       wave: S.director?.wave,
       alive: S.enemies?.aliveCount,
       queued: S.director?.queued,
