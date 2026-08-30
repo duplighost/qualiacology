@@ -3,27 +3,25 @@
 <head>
 <meta charset="utf-8">
 <title>LIL BIG BANG | Qualiacology</title>
-<meta name="description" content="LIL BIG BANG is a browser microgame reel: twenty-two games a few seconds each, most of them built out of the games already on this site." />
+<meta name="description" content="LIL BIG BANG is a browser microgame reel: twenty-seven games a few seconds each, most of them built out of the games already on this site." />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Qualiacology" />
 <meta property="og:title" content="LIL BIG BANG | Qualiacology" />
-<meta property="og:description" content="Twenty-two microgames, a few seconds each, and it speeds up. You get four moons." />
+<meta property="og:description" content="Twenty-seven microgames, a few seconds each, and it speeds up. You get four moons." />
 <meta property="og:url" content="https://qualiacology.com/lil-big-bang/" />
 <meta property="og:image" content="https://qualiacology.com/assets/games/lil-big-bang-card-clean.webp" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="LIL BIG BANG | Qualiacology" />
-<meta name="twitter:description" content="Twenty-two microgames, a few seconds each, and it speeds up. You get four moons." />
+<meta name="twitter:description" content="Twenty-seven microgames, a few seconds each, and it speeds up. You get four moons." />
 <meta name="twitter:image" content="https://qualiacology.com/assets/games/lil-big-bang-card-clean.webp" />
 <link rel="canonical" href="https://qualiacology.com/lil-big-bang/" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%2314081f'/><circle cx='32' cy='32' r='14' fill='%23fff3d6'/><circle cx='38' cy='27' r='11' fill='%2314081f'/></svg>">
 <style>
-  /* the site's home pill, in this game's palette. It sits over the left tip of the fuse,
-     so it dims while a run is live and comes back between games — the same courtesy
-     behind-you pays by hiding its pill during pointer lock. */
+  /* The site's return pill, in this game's palette. It dims while a round is live so the
+     one-thumb field stays clean, then comes back between games. */
   .home-link{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));z-index:200;color:#ffd166;text-decoration:none;font:800 11px/1.2 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-radius:999px;background:rgba(20,8,31,.62);border:1px solid rgba(255,113,206,.38);backdrop-filter:blur(8px);transition:opacity .25s}
   .home-link:hover,.home-link:focus-visible{color:#fff3d6;border-color:rgba(255,113,206,.85);opacity:1!important;outline:0}
   .home-link.playing{opacity:.22}
-  /* landmarks only — display:contents keeps these out of layout, so the canvas is untouched */
   nav.site-nav,main.game-root{display:contents}
 </style>
 <!-- No maximum-scale / user-scalable=no. Blocking pinch-zoom locks out anyone who needs
@@ -36,18 +34,20 @@
 <style>
   html, body { margin:0; padding:0; background:#14081f; height:100%; overflow:hidden;
     -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
-    overscroll-behavior:none; touch-action:none; }
-  #c { position:fixed; inset:0; display:block; touch-action:none; }
-  #rotate { position:fixed; inset:0; background:#14081f; color:#fff3d6; z-index:10;
+    overscroll-behavior:none; touch-action:pinch-zoom; }
+  #c { position:fixed; inset:0; display:block; touch-action:pinch-zoom; }
+  #rotate { position:fixed; inset:0; background:radial-gradient(circle at 50% 42%,#3a1550 0,#14081f 46%,#08030e 100%); color:#fff3d6; z-index:10;
     display:none; align-items:center; justify-content:center; text-align:center;
-    font:700 22px "Segoe UI", system-ui, sans-serif; }
+    font:900 24px "Arial Black","Segoe UI Black",system-ui,sans-serif; letter-spacing:.04em;
+    text-shadow:-3px 3px 0 #ff71ce,3px -2px 0 #29718f; box-shadow:inset 0 0 0 6px #ffd166; }
+  #rotate span { font-family:"Consolas","Courier New",monospace; letter-spacing:.08em; text-shadow:none; }
 </style>
 </head>
 <body>
 <nav class="site-nav" aria-label="Site"><a class="home-link" href="/">Qualiacology</a></nav>
 <script>
 /* Dim the home pill while a round is live. Guarded end to end: if the debug API is ever
-   absent this does nothing at all rather than throwing on a player's phone. */
+   absent this does nothing rather than throwing on a player's phone. */
 (function () {
   try {
     var a = document.querySelector('.home-link');
@@ -71,7 +71,7 @@
    Shell laws: fixed-timestep accumulator (shell owns the clock), one
    AudioContext, no iframes, cartridges keep their own worlds.
    ========================================================================== */
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const SAVE_KEY = 'lbb_save_v1';
 
 const CFG = {
@@ -276,6 +276,7 @@ const Audio2 = (() => {
   }
   function duckMusic(sec) {
     if (!ctx) return;
+    /* AudioParam scheduling is absolute even though cartridge SFX delays are relative. */
     const t = ctx.currentTime;
     musicBus.gain.cancelScheduledValues(t);
     musicBus.gain.setValueAtTime(0.12, t);
@@ -359,24 +360,39 @@ const Audio2 = (() => {
 const Input = (() => {
   const s = { down: false, x: 195, y: 500, justDown: false, justUp: false, downX: 0, downY: 0, downAt: 0, upAt: 0 };
   let toLogical = (x, y) => [x, y];
+  let lastTouchAt = -1000;
   function bind(el, map) {
     toLogical = map;
     const dn = (e) => {
+      const isTouch = !!e.changedTouches;
+      if (isTouch) {
+        lastTouchAt = performance.now();
+        /* A second finger belongs to browser zoom, not the cartridge. Do not cancel it. */
+        if (e.touches && e.touches.length > 1) { s.down = false; return; }
+      } else if (performance.now() - lastTouchAt < 800) return; // synthetic mouse after touch
       const p = e.changedTouches ? e.changedTouches[0] : e;
       const [x, y] = toLogical(p.clientX, p.clientY);
       s.down = true; s.justDown = true; s.x = x; s.y = y; s.downX = x; s.downY = y; s.downAt = performance.now() / 1000;
-      e.preventDefault();
+      if (!isTouch) e.preventDefault();
     };
     const mv = (e) => {
+      const isTouch = !!e.changedTouches;
+      if (isTouch) {
+        lastTouchAt = performance.now();
+        if (e.touches && e.touches.length > 1) { s.down = false; return; }
+      } else if (performance.now() - lastTouchAt < 800) return;
       const p = e.changedTouches ? e.changedTouches[0] : e;
       const [x, y] = toLogical(p.clientX, p.clientY);
       s.x = x; s.y = y;
-      e.preventDefault();
+      if (!isTouch) e.preventDefault();
     };
     const up = (e) => {
+      const isTouch = !!e.changedTouches;
+      if (isTouch) lastTouchAt = performance.now();
+      else if (performance.now() - lastTouchAt < 800) return;
       if (e.changedTouches) { const p = e.changedTouches[0]; const [x, y] = toLogical(p.clientX, p.clientY); s.x = x; s.y = y; }
       s.down = false; s.justUp = true; s.upAt = performance.now() / 1000;
-      e.preventDefault();
+      if (!isTouch) e.preventDefault();
     };
     el.addEventListener('touchstart', dn, { passive: false });
     el.addEventListener('touchmove', mv, { passive: false });
@@ -534,7 +550,7 @@ const Shell = (() => {
     fg.save(); renderCart(fg); fg.restore();
     if (result === 'won') {
       run.wins++; run.streak++;
-      run.souvenirs.push({ id: cartDef.id, hue: (run.gameNum * 47) % 360 });
+      run.souvenirs.push({ id: cartDef.id, family: cartDef.family, hue: (run.gameNum * 47) % 360 });
       Audio2.winSting(run.streak);
       Save.d.best = Math.max(Save.d.best, run.wins);
       Save.d.bestStreak = Math.max(Save.d.bestStreak, run.streak);
@@ -550,7 +566,11 @@ const Shell = (() => {
     stampBeat = Audio2.beatLen();
     setState('stamp');
     /* preload the next pick during the stamp */
-    if (run.lives > 0) nextDef = pickNext();
+    if (run.lives > 0) {
+      const n = run.gameNum + 1;
+      const boss = lastResult !== 'start' && n % CFG.BOSS_EVERY === 0 && REG.some(r => r.boss);
+      nextDef = boss ? REG.find(r => r.boss) : pickNext();
+    }
   }
   function setState(s) { state = s; stateT = 0; }
 
@@ -578,8 +598,8 @@ const Shell = (() => {
       case 'title': {
         if (inp.justDown) {
           Audio2.init();
-          if (inp.y > CFG.H - 120 && inp.x > CFG.W - 90) { setState('calib'); calibTaps = []; break; }
-          if (inp.y > CFG.H - 120 && inp.x < 90) { Audio2.setSound(!Save.d.sound); break; }
+          if (inp.y > 638 && inp.x > CFG.W - 110) { setState('calib'); calibTaps = []; break; }
+          if (inp.y > 638 && inp.x < 110) { Audio2.setSound(!Save.d.sound); break; }
           newRun();
           setState('stamp'); lastResult = 'start'; stampBeat = Audio2.beatLen();
           fg.fillStyle = SHELL.void; fg.fillRect(0, 0, CFG.W, CFG.H);
@@ -610,7 +630,6 @@ const Shell = (() => {
           const n = run.gameNum + 1;
           if (lastResult !== 'start' && n % CFG.BOSS_EVERY === 0 && REG.some(r => r.boss)) {
             run.gameNum++; setState('bossdoor');
-            nextDef = REG.find(r => r.boss);
             break;
           }
           if (lastResult === 'won' && run.wins % CFG.WINS_PER_SPEEDUP === 0 && run.wins > 0 && !cartDef?.boss && Audio2.bpm < CFG.BPM_MAX) {
@@ -660,8 +679,8 @@ const Shell = (() => {
         break;
       }
     }
-    // Edge input belongs to one simulation step. Keep it queued across RAFs
-    // that render without updating, then consume it before any catch-up step.
+    // Edge input belongs to one simulation step. Keep it queued across RAFs that render
+    // without updating, then consume it before any catch-up step.
     Input.endFrame();
   }
   function advance(isBoss) {
@@ -705,6 +724,7 @@ const Shell = (() => {
 
   /* starfield for shell screens */
   const stars = []; { const r = mulberry32(7); for (let i = 0; i < 90; i++) stars.push({ x: r() * CFG.W, y: r() * CFG.H, s: r() * 1.5 + .4, p: r() * TAU }); }
+  const shellBits = []; { const r = mulberry32(1987); for (let i = 0; i < 42; i++) shellBits.push({ a: r() * TAU, d: 30 + r() * 230, z: 1 + r() * 4, p: r() * TAU }); }
   function drawStars(t, warp) {
     for (const s of stars) {
       const a = .3 + .7 * Math.abs(Math.sin(s.p + t * 2));
@@ -716,51 +736,121 @@ const Shell = (() => {
     g.globalAlpha = 1;
   }
 
+  /* Shell typography and motion primitives. These belong here, not in cartridges: the
+     donor worlds stay recognisable while the reel itself gets one loud visual language. */
+  function heavyToFit(text, maxWidth, maxSize, minSize = 18) {
+    let size = maxSize;
+    while (size > minSize) {
+      g.font = FONT.heavy(size);
+      if (g.measureText(text).width <= maxWidth) break;
+      size -= 2;
+    }
+    return size;
+  }
+  function familyInk(family) {
+    return family === 'tap' ? SHELL.gold : family === 'drag' ? SHELL.cyan :
+      family === 'release' ? SHELL.pink : family === 'hold' ? '#9cffc7' :
+      family === 'mash' ? '#ff8b5c' : SHELL.cream;
+  }
+  function drawRadialBurst(cx, cy, inner, outer, count, rot, color, alpha) {
+    g.save(); g.translate(cx, cy); g.rotate(rot); g.strokeStyle = color;
+    g.globalAlpha = alpha; g.lineWidth = 2;
+    for (let i = 0; i < count; i++) {
+      const a = i / count * TAU;
+      g.beginPath(); g.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+      g.lineTo(Math.cos(a) * (outer - (i % 3) * 8), Math.sin(a) * (outer - (i % 3) * 8)); g.stroke();
+    }
+    g.restore();
+  }
+  function drawOrbit(cx, cy, rx, ry, rot, color, alpha, width = 2) {
+    g.save(); g.translate(cx, cy); g.rotate(rot); g.strokeStyle = color;
+    g.globalAlpha = alpha; g.lineWidth = width; g.beginPath(); g.ellipse(0, 0, rx, ry, 0, 0, TAU); g.stroke(); g.restore();
+  }
+  function drawShellBits(cx, cy, t, spread, color) {
+    g.save(); g.translate(cx, cy);
+    for (let i = 0; i < shellBits.length; i++) {
+      const b = shellBits[i], rr = b.d * spread, a = b.a + t * (i % 2 ? .16 : -.12);
+      const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+      g.globalAlpha = .16 + .42 * Math.abs(Math.sin(b.p + t * 3));
+      g.fillStyle = i % 5 === 0 ? SHELL.pink : i % 3 === 0 ? SHELL.cyan : color;
+      g.save(); g.translate(x, y); g.rotate(a + t); g.fillRect(-b.z * .5, -b.z * 2.2, b.z, b.z * 4.4); g.restore();
+    }
+    g.restore(); g.globalAlpha = 1;
+  }
+
   function drawTitle() {
     const t = stateT;
+    const CX = CFG.W / 2;
+    const bg = g.createRadialGradient(CX, 430, 20, CX, 430, 500);
+    bg.addColorStop(0, '#32124a'); bg.addColorStop(.42, SHELL.void2); bg.addColorStop(1, '#09040f');
+    g.fillStyle = bg; g.fillRect(0, 0, CFG.W, CFG.H);
     drawStars(t, 0);
-    g.textAlign = 'center';
-    g.fillStyle = SHELL.cream;
-    g.font = FONT.heavy(58);
-    g.save();
-    g.translate(CFG.W / 2, 300);
-    const ph = beatPhase(); const pop = 1 + 0.03 * Math.max(0, 1 - ph * 4);
-    g.scale(pop, pop);
-    g.shadowColor = SHELL.pink; g.shadowOffsetY = 5; g.shadowBlur = 0;
-    g.fillText('LIL BIG', 0, -30);
-    g.fillText('BANG', 0, 34);
+    drawRadialBurst(CX, 455, 92, 255, 28, t * .045, SHELL.pink, .16);
+    drawOrbit(CX, 455, 142, 48, -.25 + Math.sin(t * .3) * .08, SHELL.cyan, .38, 2.2);
+    drawOrbit(CX, 455, 170, 64, .42, SHELL.gold, .22, 1.4);
+    drawShellBits(CX, 455, t, .72, SHELL.cream);
+    /* The title gets a singularity, not the mascot. Lil Big Bang stays rare: special
+       events, boss door and game over only. */
+    const pulse = 1 + Math.sin(t * 4.4) * .045;
+    g.save(); g.translate(CX, 455); g.scale(pulse, pulse); g.rotate(t * .06);
+    const core = g.createRadialGradient(-18, -22, 3, 0, 0, 86);
+    core.addColorStop(0, '#fffdf2'); core.addColorStop(.18, SHELL.gold);
+    core.addColorStop(.52, SHELL.pink); core.addColorStop(.76, '#32134f'); core.addColorStop(1, '#09040f');
+    g.fillStyle = core; g.beginPath(); g.arc(0, 0, 84, 0, TAU); g.fill();
+    g.fillStyle = '#09040f'; g.beginPath(); g.arc(12, -8, 45, 0, TAU); g.fill();
+    g.strokeStyle = SHELL.cream; g.lineWidth = 3; g.beginPath(); g.arc(0, 0, 88, .35, TAU - .35); g.stroke();
     g.restore();
-    g.shadowColor = 'transparent';
-    g.font = FONT.mono(13); g.fillStyle = SHELL.plum;
-    g.fillText('a qualiacology microgame reel', CFG.W / 2, 380);
-    if (Save.d.best > 0) { g.fillStyle = SHELL.gold; g.fillText('best · ' + Save.d.best, CFG.W / 2, 412); }
+
+    /* Album-logo treatment: offset inks, hard underline and a tiny registration mark. */
+    g.textAlign = 'center';
+    g.save(); g.translate(CX, 180);
+    const ph = beatPhase(), pop = 1 + .035 * Math.max(0, 1 - ph * 4);
+    g.scale(pop, pop); g.font = FONT.heavy(58);
+    g.fillStyle = 'rgba(122,231,255,.62)'; g.fillText('LIL BIG', 4, -27); g.fillText('BANG', 4, 37);
+    g.fillStyle = 'rgba(255,113,206,.70)'; g.fillText('LIL BIG', -4, -21); g.fillText('BANG', -4, 43);
+    g.fillStyle = SHELL.cream; g.fillText('LIL BIG', 0, -24); g.fillText('BANG', 0, 40);
+    g.fillStyle = SHELL.gold; g.fillRect(-114, 56, 228, 5);
+    g.restore();
+    g.font = FONT.mono(11); g.fillStyle = SHELL.plum;
+    g.fillText('QUALIACOLOGY // ' + REG.filter(r => !r.boss && !r.debugOnly).length + ' MICROGAMES // ONE THUMB', CX, 278);
+    if (Save.d.best > 0) {
+      g.fillStyle = 'rgba(10,5,18,.72)'; g.fillRect(CX - 45, 302, 90, 28);
+      g.strokeStyle = SHELL.gold; g.lineWidth = 1.5; g.strokeRect(CX - 45, 302, 90, 28);
+      g.font = FONT.mono(11); g.fillStyle = SHELL.gold; g.fillText('BEST // ' + Save.d.best, CX, 321);
+    }
     const ph2 = beatPhase();
-    g.globalAlpha = .5 + .5 * Math.abs(Math.sin(ph2 * Math.PI));
-    g.font = FONT.heavy(26); g.fillStyle = SHELL.gold;
-    g.fillText('TAP TO BANG', CFG.W / 2, 560);
+    g.globalAlpha = .62 + .38 * Math.abs(Math.sin(ph2 * Math.PI));
+    g.fillStyle = SHELL.gold; g.fillRect(CX - 104, 570, 208, 54);
+    g.fillStyle = SHELL.void; g.font = FONT.heavy(24); g.fillText('TAP TO BANG', CX, 605);
     g.globalAlpha = 1;
     g.font = FONT.mono(12); g.fillStyle = SHELL.plum; g.textAlign = 'left';
-    g.fillText(Save.d.sound ? '♪ on' : '♪ off', 18, CFG.H - 60);
+    g.fillText(Save.d.sound ? '♪ on' : '♪ off', 18, 660);
     g.textAlign = 'right';
-    g.fillText('calibrate ⚙', CFG.W - 18, CFG.H - 60);
+    g.fillText('calibrate ⚙', CFG.W - 18, 660);
     g.textAlign = 'center';
     g.fillText('v' + VERSION, CFG.W / 2, CFG.H - 24);
   }
   function drawCalib() {
+    const CX = CFG.W / 2, CY = 455;
+    const bg = g.createRadialGradient(CX, CY, 12, CX, CY, 430);
+    bg.addColorStop(0, 'rgba(122,231,255,.22)'); bg.addColorStop(.5, SHELL.void2); bg.addColorStop(1, '#08030e');
+    g.fillStyle = bg; g.fillRect(0, 0, CFG.W, CFG.H);
     drawStars(stateT, 0);
     g.textAlign = 'center';
     g.fillStyle = SHELL.cream; g.font = FONT.heavy(24);
-    g.fillText('TAP THE BEAT', CFG.W / 2, 300);
+    g.fillText('TAP THE BEAT', CX, 270);
     g.font = FONT.bold(15); g.fillStyle = SHELL.plum;
-    g.fillText('eight taps, right on the kick', CFG.W / 2, 336);
+    g.fillText('eight taps, right on the kick', CX, 306);
     const ph = beatPhase();
-    const r = 40 + 24 * (1 - ph);
-    g.strokeStyle = SHELL.cyan; g.lineWidth = 4;
-    g.beginPath(); g.arc(CFG.W / 2, 470, r, 0, TAU); g.stroke();
+    const r = 42 + 90 * (1 - ph);
+    drawRadialBurst(CX, CY, 72, 178, 24, stateT * .12, SHELL.cyan, .16);
+    drawOrbit(CX, CY, 132, 38, stateT * .28, SHELL.pink, .35, 2);
+    g.strokeStyle = SHELL.cyan; g.lineWidth = 4 + (1 - ph) * 3;
+    g.globalAlpha = .35 + ph * .65; g.beginPath(); g.arc(CX, CY, r, 0, TAU); g.stroke(); g.globalAlpha = 1;
     g.fillStyle = SHELL.gold;
-    g.beginPath(); g.arc(CFG.W / 2, 470, 12, 0, TAU); g.fill();
+    g.beginPath(); g.arc(CX, CY, 14 + (1 - ph) * 5, 0, TAU); g.fill();
     g.font = FONT.mono(14); g.fillStyle = SHELL.cream;
-    g.fillText(calibTaps.length + ' / 8', CFG.W / 2, 570);
+    g.fillText(String(calibTaps.length).padStart(2, '0') + ' / 08', CX, 610);
   }
   function drawMoons(y) {
     const cx = CFG.W / 2, gap = 34;
@@ -795,12 +885,15 @@ const Shell = (() => {
   function drawStamp() {
     const bl = stampBeat;
     const t = stateT / bl;                              // 0..1 across the beat
-    /* frozen frame beneath, crushing to a point in the last 40% */
+    const CX = CFG.W / 2, CY = CFG.H / 2;
+    const accent = nextDef ? familyInk(nextDef.family) : SHELL.gold;
+    /* Frozen donor frame beneath. It is sucked into the shell's record-portal in the
+       final 40%, making the handoff feel causal instead of like a canvas swap. */
     g.save();
     if (t > 0.6) {
       const c = easeIn((t - 0.6) / 0.4);
-      const s = 1 - c * 0.97;
-      g.translate(CFG.W / 2, CFG.H / 2); g.rotate(c * 0.5); g.scale(s, s); g.translate(-CFG.W / 2, -CFG.H / 2);
+      const s = 1 - c * 0.94;
+      g.translate(CX, CY); g.rotate(c * 1.15); g.scale(s, s); g.translate(-CX, -CY);
     }
     g.drawImage(freeze, 0, 0);
     /* Push the frozen frame back so the shell's verdict always wins the eye. Cartridges
@@ -809,6 +902,18 @@ const Shell = (() => {
     g.fillStyle = lastResult === 'lost' ? 'rgba(26,9,36,.62)' : 'rgba(20,8,31,.30)';
     g.fillRect(0, 0, CFG.W, CFG.H);
     g.restore();
+    const portalIn = clamp((t - .22) / .38, 0, 1);
+    if (portalIn > 0) {
+      const pr = 44 + easeOut(portalIn) * 104;
+      const well = g.createRadialGradient(CX, CY + 20, 4, CX, CY + 20, pr * 1.7);
+      well.addColorStop(0, 'rgba(4,1,8,.98)'); well.addColorStop(.35, 'rgba(20,8,31,.92)');
+      well.addColorStop(.7, accent + '33'); well.addColorStop(1, 'rgba(20,8,31,0)');
+      g.fillStyle = well; g.fillRect(0, 180, CFG.W, 500);
+      drawRadialBurst(CX, CY + 20, pr * .74, pr * 1.28, 22, stateT * -1.5, accent, .25 + portalIn * .35);
+      drawOrbit(CX, CY + 20, pr, pr * .29, stateT * 2.2, accent, .75, 4);
+      drawOrbit(CX, CY + 20, pr * .82, pr * .20, -stateT * 2.7, SHELL.cream, .32, 2);
+      drawShellBits(CX, CY + 20, stateT * 2, .5 + portalIn * .38, accent);
+    }
     /* a soft scrim exactly where the stamp lands, so it reads over ANY cartridge art */
     if (lastResult !== 'start') {
       const sc = g.createRadialGradient(CFG.W / 2, 232, 20, CFG.W / 2, 232, 210);
@@ -820,21 +925,24 @@ const Shell = (() => {
     if (lastResult !== 'start' && t < 0.75) {
       const st = clamp(t / 0.18, 0, 1);
       g.save();
-      g.translate(CFG.W / 2, 240);
+      g.translate(CX, 234);
       g.rotate(-0.09);
       g.scale(backOut(st) * (lastResult === 'won' ? 1 : 1), backOut(st));
       g.textAlign = 'center';
       g.font = FONT.heavy(64);
       if (lastResult === 'won') {
         g.fillStyle = SHELL.gold;
-        g.fillText('NICE!', 0, 0);
+        g.fillText(run.streak > 2 ? 'NASTY!' : 'NICE!', 0, 0);
       } else {
         g.fillStyle = SHELL.plum;
         g.fillText('OOPS.', 0, 0);
         if (lastLine) { g.font = FONT.bold(15); g.fillStyle = SHELL.cream; g.fillText(lastLine, 0, 40); }
       }
       g.restore();
-      drawMoons(120);
+      /* score tape: result, score, streak, and moons are one readable object. */
+      g.fillStyle = 'rgba(9,4,15,.78)'; g.fillRect(22, 68, CFG.W - 44, 72);
+      g.strokeStyle = lastResult === 'won' ? SHELL.gold : SHELL.pink; g.lineWidth = 2; g.strokeRect(22, 68, CFG.W - 44, 72);
+      drawMoons(118);
       /* the gloved hand steals a moon */
       if (lastResult === 'lost') {
         const hx = lerp(CFG.W + 60, CFG.W / 2 + (run.lives - (CFG.LIVES - 1) / 2) * 34, easeInOut(clamp(t / 0.5, 0, 1)));
@@ -851,23 +959,37 @@ const Shell = (() => {
       }
       /* score tick */
       g.textAlign = 'center'; g.font = FONT.mono(14); g.fillStyle = SHELL.cream;
-      g.fillText(run.wins + '', CFG.W / 2, 92);
+      g.textAlign = 'left'; g.fillStyle = SHELL.cream; g.fillText('SCORE ' + run.wins, 38, 94);
+      g.textAlign = 'right'; g.fillStyle = run.streak > 1 ? SHELL.cyan : SHELL.plum;
+      g.fillText(run.streak > 1 ? 'x' + run.streak + ' STREAK' : 'KEEP BANGING', CFG.W - 38, 94);
     }
     /* next command over it (from 35%) */
-    const showCmd = (nextDef && run.lives > 0);
+    const n = run.gameNum + 1;
+    const bossPending = lastResult !== 'start' && n % CFG.BOSS_EVERY === 0 && REG.some(r => r.boss);
+    const speedPending = lastResult === 'won' && run.wins % CFG.WINS_PER_SPEEDUP === 0 && run.wins > 0 && !cartDef?.boss && Audio2.bpm < CFG.BPM_MAX;
+    /* A ceremony is itself the next transmission. Do not tease a normal cartridge and
+       then interrupt it with SPEED UP or swap it for a boss behind the player's back. */
+    const showCmd = (nextDef && run.lives > 0 && !bossPending && !speedPending);
     if (showCmd && t > 0.35) {
       const ct = clamp((t - 0.35) / 0.2, 0, 1);
       g.save();
-      g.translate(CFG.W / 2, CFG.H / 2 + 30);
+      g.translate(CX, CY + 34);
       g.scale(backOut(ct), backOut(ct));
       g.textAlign = 'center';
-      g.font = FONT.heavy(nextDef.command.length > 9 ? 40 : 52);
+      const commandSize = heavyToFit(nextDef.command, CFG.W - 38, 54, 26);
+      g.font = FONT.heavy(commandSize);
+      g.fillStyle = 'rgba(255,113,206,.58)'; g.fillText(nextDef.command, -5, 5);
+      g.fillStyle = 'rgba(122,231,255,.58)'; g.fillText(nextDef.command, 5, -4);
       g.fillStyle = SHELL.cream;
       g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowOffsetY = 4;
       g.fillText(nextDef.command, 0, 0);
       g.restore();
       g.shadowColor = 'transparent';
-      drawGlyph(CFG.W / 2, CFG.H / 2 + 92, nextDef.family, 26);
+      g.textAlign = 'center'; g.font = FONT.mono(10); g.fillStyle = accent;
+      g.fillText('NEXT TRANSMISSION // ' + nextDef.title.toUpperCase(), CX, CY - 24);
+      g.globalAlpha = .22 + .2 * Math.sin(stateT * 18);
+      drawGlyph(CX, CY + 112, nextDef.family, 68);
+      g.globalAlpha = 1;
     }
     /* detonation flash at the very end */
     if (t > 0.94) { g.fillStyle = `rgba(255,251,233,${(t - 0.94) * 12})`; g.fillRect(0, 0, CFG.W, CFG.H); }
@@ -889,6 +1011,18 @@ const Shell = (() => {
     heat.addColorStop(0.5, `rgba(255,113,206,${0.03 + rise * 0.16})`);
     heat.addColorStop(1, 'rgba(20,8,31,0)');
     g.fillStyle = heat; g.fillRect(0, 0, CFG.W, CFG.H);
+
+    /* A tunnel made from the old tempo: each ring is a beat being overtaken. */
+    g.save(); g.translate(CX, CY + 28); g.rotate(stateT * .35);
+    for (let i = 0; i < 8; i++) {
+      const u = (i / 8 + rise * .48) % 1;
+      const rr = 24 + easeIn(u) * 330;
+      g.globalAlpha = (1 - u) * .42 + .05;
+      g.strokeStyle = i % 2 ? SHELL.pink : SHELL.cyan;
+      g.lineWidth = 1 + (1 - u) * 5;
+      g.beginPath(); g.arc(0, 0, rr, 0, TAU); g.stroke();
+    }
+    g.restore(); g.globalAlpha = 1;
 
     /* WARP: stars stretch from points into long streaks racing outward from centre */
     const warp = easeIn(rise) * 1 + post * 0.35;
@@ -946,24 +1080,74 @@ const Shell = (() => {
     const shown = post > 0 ? Math.min(CFG.BPM_MAX, Audio2.bpm + CFG.BPM_STEP) : Audio2.bpm;
     g.fillText(shown + ' BPM', CX, CY + 28);
 
+    /* Split-flap numerals punch the acceleration into the bottom third without asking
+       the player to stop and read a ceremony. */
+    if (rise > .12) {
+      g.save(); g.translate(CX, CFG.H - 116); g.rotate(-.035);
+      g.fillStyle = 'rgba(8,3,14,.84)'; g.fillRect(-112, -43, 224, 72);
+      g.strokeStyle = post > 0 ? SHELL.gold : SHELL.cyan; g.lineWidth = 3; g.strokeRect(-112, -43, 224, 72);
+      g.font = FONT.heavy(42); g.fillStyle = SHELL.cream;
+      const from = String(Audio2.bpm).padStart(3, '0');
+      const to = String(Math.min(CFG.BPM_MAX, Audio2.bpm + CFG.BPM_STEP)).padStart(3, '0');
+      g.fillText(post > 0 ? to : from, -30, 9);
+      g.font = FONT.mono(12); g.fillStyle = post > 0 ? SHELL.gold : SHELL.plum; g.fillText('BPM', 68, 5);
+      g.restore();
+    }
+
     if (post > 0) { g.fillStyle = `rgba(255,251,233,${(1 - post) * 0.30})`; g.fillRect(0, 0, CFG.W, CFG.H); }
   }
   function drawBossdoor() {
-    const t = stateT / (Audio2.beatLen() * 4);
-    g.fillStyle = '#0a0512'; g.fillRect(0, 0, CFG.W, CFG.H);
-    drawStars(stateT * 0.3, 0);
-    /* keyhole of light collapsing */
-    const r = lerp(CFG.W, 40, easeInOut(clamp(t * 1.4, 0, 1)));
-    g.fillStyle = SHELL.gold;
-    g.globalAlpha = 0.12;
-    g.beginPath(); g.arc(CFG.W / 2, CFG.H / 2 - 40, r, 0, TAU); g.fill();
-    g.globalAlpha = 1;
+    const t = clamp(stateT / (Audio2.beatLen() * 4), 0, 1);
+    const CX = CFG.W / 2, CY = 354;
+    g.fillStyle = '#08030e'; g.fillRect(0, 0, CFG.W, CFG.H);
+    drawStars(stateT * .25, 0);
+    const warning = g.createRadialGradient(CX, CY, 10, CX, CY, 430);
+    warning.addColorStop(0, `rgba(255,113,206,${.18 + t * .24})`);
+    warning.addColorStop(.55, 'rgba(83,22,104,.16)'); warning.addColorStop(1, 'rgba(8,3,14,0)');
+    g.fillStyle = warning; g.fillRect(0, 0, CFG.W, CFG.H);
+    drawRadialBurst(CX, CY, 90, 270, 32, -stateT * .22, SHELL.pink, .28);
+
+    /* Two brutal mechanical shutters; the mouth between them is the next game's stage. */
+    const open = easeOut(clamp((t - .58) / .36, 0, 1));
+    const jawGap = 28 + open * 260;
+    g.save(); g.translate(CX, CY);
+    for (const side of [-1, 1]) {
+      g.fillStyle = side < 0 ? '#241036' : '#1b0b2b';
+      g.beginPath(); g.moveTo(side * 8, -208); g.lineTo(side * 205, -208); g.lineTo(side * 205, 208); g.lineTo(side * 8, 208); g.closePath(); g.fill();
+      g.strokeStyle = SHELL.plum; g.lineWidth = 3; g.stroke();
+      for (let y = -164; y <= 164; y += 48) {
+        const tip = side * (jawGap / 2);
+        g.fillStyle = y % 96 === 0 ? SHELL.cream : SHELL.gold;
+        g.beginPath(); g.moveTo(side * 10, y - 16); g.lineTo(tip, y); g.lineTo(side * 10, y + 16); g.closePath(); g.fill();
+      }
+    }
+    g.restore();
+    /* The shutters slide apart late, but their teeth remain pointed at the playfield. */
+    if (open > 0) {
+      g.save(); g.beginPath(); g.rect(CX - jawGap / 2, CY - 230, jawGap, 460); g.clip();
+      g.fillStyle = '#08030e'; g.fillRect(CX - jawGap / 2, CY - 230, jawGap, 460);
+      drawStars(stateT * 3, open * 1.3); g.restore();
+    }
+
     g.textAlign = 'center';
-    g.font = FONT.heavy(54); g.fillStyle = SHELL.pink;
-    g.fillText('BOSS', CFG.W / 2, CFG.H / 2 - 20);
-    drawMascot(CFG.W / 2, CFG.H - 210, Math.min(1, t * 2), stateT, { scale: 1.5, pose: 'hype', grill: 0.75 });
-    g.font = FONT.mono(13); g.fillStyle = SHELL.plum;
-    g.fillText('he pulled up', CFG.W / 2, CFG.H - 96);
+    g.save(); g.translate(CX, 142); g.rotate(-.045);
+    const slam = backOut(clamp(t * 4, 0, 1)); g.scale(slam, slam);
+    g.font = FONT.heavy(62); g.fillStyle = SHELL.cyan; g.fillText('BOSS', 5, -3);
+    g.fillStyle = SHELL.pink; g.fillText('BOSS', -5, 4);
+    g.fillStyle = SHELL.cream; g.fillText('BOSS', 0, 0);
+    g.restore();
+    g.font = FONT.mono(12); g.fillStyle = SHELL.gold; g.fillText('ROUND ' + run.gameNum + ' // FOUR-BEAT WARNING', CX, 188);
+
+    /* Four locks burst in sequence with the beat, preserving the four-moon mythology. */
+    for (let i = 0; i < 4; i++) {
+      const x = CX + (i - 1.5) * 42, lit = t * 4 > i;
+      g.strokeStyle = lit ? SHELL.gold : SHELL.plum; g.lineWidth = lit ? 3 : 1.5;
+      g.beginPath(); g.arc(x, 600, 13, 0, TAU); g.stroke();
+      if (lit) { g.fillStyle = SHELL.gold; g.beginPath(); g.arc(x, 600, 5, 0, TAU); g.fill(); }
+    }
+    drawMascot(CFG.W - 68, 682, Math.min(1, t * 2.4), stateT, { scale: .90, pose: 'hype', grill: .82 });
+    g.textAlign = 'left'; g.font = FONT.mono(11); g.fillStyle = SHELL.plum;
+    g.fillText(open > .4 ? 'DOOR IS HAVING REGRETS' : 'HE PULLED UP', 22, 680);
   }
   /* LIL BIG BANG himself. The brief: cute proportions with one wrong detail, swagger over
      adorable — never a Nintendo toddler. Snapback cocked and GLUED to the squash, crescent-
@@ -1171,7 +1355,7 @@ const Shell = (() => {
     /* the constellation: one star per win, traced in over ~1.2s with real glow */
     const rng = mulberry32(run.seed);
     const pts = [];
-    const N = Math.max(1, run.wins);
+    const N = Math.min(run.wins, 36);
     for (let i = 0; i < N; i++) {
       /* spiral-ish placement so long runs read as a shape, not confetti */
       const a = i * 2.399 + rng() * 0.5, rr = 26 + Math.sqrt(i + 1) * 46;
@@ -1179,23 +1363,29 @@ const Shell = (() => {
     }
     const drawn = clamp(age * 9, 0, pts.length);
     /* lines trace between the stars as they appear */
-    g.strokeStyle = 'rgba(255,243,214,.34)'; g.lineWidth = 1.2;
-    g.beginPath();
-    for (let i = 0; i < Math.floor(drawn); i++) {
-      const p = pts[i];
-      i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y);
+    g.lineWidth = 1.2;
+    for (let i = 1; i < Math.floor(drawn); i++) {
+      const a = pts[i - 1], b = pts[i], s = run.souvenirs[i] || { hue: 42 };
+      g.strokeStyle = `hsla(${s.hue},85%,72%,.36)`;
+      g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
     }
-    g.stroke();
     for (let i = 0; i < Math.floor(drawn); i++) {
       const p = pts[i], pop = clamp((drawn - i) * 3, 0, 1);
       const last = i === pts.length - 1;
       const rad = (last ? 4.4 : i % 4 === 3 ? 3.4 : 2.4) * (0.6 + 0.4 * pop);
+      const s = run.souvenirs[i] || { hue: 42, family: 'tap' };
       const gl = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad * 5);
-      gl.addColorStop(0, last ? 'rgba(255,209,102,.55)' : 'rgba(255,243,214,.34)');
+      gl.addColorStop(0, `hsla(${s.hue},90%,72%,${last ? .62 : .38})`);
       gl.addColorStop(1, 'rgba(255,243,214,0)');
       g.fillStyle = gl; g.beginPath(); g.arc(p.x, p.y, rad * 5, 0, TAU); g.fill();
-      g.fillStyle = last ? SHELL.gold : SHELL.cream;
-      g.beginPath(); g.arc(p.x, p.y, rad, 0, TAU); g.fill();
+      g.fillStyle = last ? SHELL.gold : `hsl(${s.hue},88%,74%)`;
+      g.strokeStyle = g.fillStyle; g.lineWidth = 1.5;
+      g.beginPath();
+      if (s.family === 'drag') { g.moveTo(p.x, p.y - rad * 1.6); g.lineTo(p.x + rad * 1.4, p.y); g.lineTo(p.x, p.y + rad * 1.6); g.lineTo(p.x - rad * 1.4, p.y); g.closePath(); g.fill(); }
+      else if (s.family === 'release') { g.moveTo(p.x, p.y - rad * 1.5); g.lineTo(p.x + rad * 1.4, p.y + rad); g.lineTo(p.x - rad * 1.4, p.y + rad); g.closePath(); g.fill(); }
+      else if (s.family === 'hold') { g.rect(p.x - rad, p.y - rad, rad * 2, rad * 2); g.fill(); }
+      else if (s.family === 'inhibit') { g.arc(p.x, p.y, rad * 1.25, 0, TAU); g.stroke(); }
+      else { g.arc(p.x, p.y, rad, 0, TAU); g.fill(); }
     }
 
     /* the mixtape title, slamming in once the sky is drawn */
@@ -1218,12 +1408,12 @@ const Shell = (() => {
       }
     }
     /* the moon in his grill waxes full — he has been wearing it all game */
-    drawMascot(cx, 700, Math.min(1, age * 1.6), t,
-      { scale: 1.45, grill: clamp((age - 0.9) * 0.9, 0, 1) });
+    drawMascot(cx, 748, Math.min(1, age * 1.6), t,
+      { scale: 1.20, grill: clamp((age - 0.9) * 0.9, 0, 1) });
     const ph = beatPhase();
     g.globalAlpha = .55 + .45 * Math.abs(Math.sin(ph * Math.PI));
     g.font = FONT.heavy(18); g.fillStyle = SHELL.gold;
-    g.fillText('TAP TO GO AGAIN', cx, CFG.H - 54);
+    g.fillText('TAP TO GO AGAIN', cx, CFG.H - 178);
     g.globalAlpha = 1;
   }
 
@@ -12761,6 +12951,2369 @@ const Shell = (() => {
      the only rest in twenty-two games.
    - The food is chosen at create() and never re-rolled, so a seed always lands in the same
      dish. That is what makes a run's screenshots reproducible.
+*/
+
+/* ===== carts/34-goodnight.js ===== */
+/* GOODNIGHT, BLOCK — ride the blackout relay; the bicycle is the generator */
+(function () {
+  const TAU = Math.PI * 2;
+  const PAL = {
+    void: '#030817', sky: '#071126', skySoft: '#0c1b34', asphalt: '#111d2c',
+    wet: '#17283a', edge: '#263a4b', sidewalk: '#283747', rain: '#8bbbd1',
+    paper: '#f2eedc', warm: '#ffc36d', hot: '#fff0bd', amber: '#ff9f56',
+    cyan: '#88e8eb', cyanHot: '#d7ffff', green: '#9de0b1', red: '#ff796f',
+  };
+  const NOTES = [62, 66, 69, 74, 78, 81];
+  const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const normAngle = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+  function rgba(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function rr(g, x, y, w, h, r) {
+    g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+
+  registerGame({
+    id: 'goodnight', title: 'GOODNIGHT, BLOCK', command: 'LIGHT IT!', family: 'drag', slotBeats: 8,
+    create(env) {
+      const W = env.W, H = env.H, diff = clamp(env.difficulty | 0, 0, 2);
+      const CX = 195, CY = 286, RX = 128, RY = 116;
+      const START = Math.PI / 2, NEED = TAU * 0.88;
+      const ROAD_HALF = [39, 34, 30][diff];
+      const perimeter = TAU * Math.sqrt((RX * RX + RY * RY) * 0.5);
+      const rideSeconds = 8 * env.beatLen() * 0.82;
+      const SPEED = perimeter * 0.88 / rideSeconds;
+      const TURN = [7.2, 6.8, 6.4][diff];
+      const route = (a, extra) => ({
+        x: CX + Math.cos(a) * (RX + (extra || 0)),
+        y: CY + Math.sin(a) * (RY + (extra || 0)),
+      });
+
+      const start = route(START);
+      let x = start.x, y = start.y, heading = Math.PI;
+      let t = 0, armedT = 0, wasArmed = false, lastDown = false, everDown = false;
+      let progress = 0, lastA = START, laneError = 0, offT = 0, wrongT = 0;
+      let inputFreshT = 9, lastPX = 0, lastPY = 0, pointerWasDown = false;
+      let done = 'pending', fail = '', flash = 0, shake = 0, winT = 0;
+      let lit = 0, pedal = 0, wheel = 0, cueT = 0, lastCue = -1;
+      const sparks = [], rings = [];
+      const rain = [];
+      for (let i = 0; i < 52; i++) rain.push({
+        x: env.rng() * W, y: env.rng() * H, len: 5 + env.rng() * 12,
+        sp: 150 + env.rng() * 130, a: 0.12 + env.rng() * 0.24,
+      });
+      const windows = [];
+      for (let row = 0; row < 3; row++) for (let col = 0; col < 6; col++) {
+        windows.push({ x: 126 + col * 25, y: 221 + row * 31, ph: env.rng() * TAU });
+      }
+
+      function burst(px, py, n, color, speed) {
+        for (let i = 0; i < n && sparks.length < 120; i++) {
+          const a = env.rng() * TAU, v = speed * (0.35 + env.rng() * 0.75);
+          sparks.push({ x: px, y: py, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+            life: 0.35 + env.rng() * 0.45, max: 0.8, color, r: 1.2 + env.rng() * 2.4 });
+        }
+      }
+      function ring(px, py, color, life, r) {
+        rings.push({ x: px, y: py, color, life, max: life, r: r || 8 });
+        if (rings.length > 16) rings.shift();
+      }
+      function pedalSound() {
+        env.audio.noise({ dur: 0.026, vol: 0.07, hp: 1850, lp: 7200 });
+        env.audio.tone({ f: 92, f2: 136, type: 'triangle', dur: 0.075, vol: 0.055 });
+      }
+      function segmentSound(i) {
+        const n = NOTES[Math.min(NOTES.length - 1, i % NOTES.length)];
+        env.audio.tone({ f: midi(n), f2: midi(n) * 1.015, type: 'sine', dur: 0.18, vol: 0.12 });
+        env.audio.tone({ f: midi(n) * 0.5, type: 'triangle', dur: 0.14, vol: 0.035 });
+      }
+      function deliverySound() {
+        [0, 4, 7, 12].forEach((n, i) => env.audio.tone({
+          f: midi(57 + n), type: i < 2 ? 'triangle' : 'sine', dur: 0.58,
+          vol: i === 0 ? 0.16 : 0.09, t: i * 0.045,
+        }));
+        env.audio.noise({ dur: 0.34, vol: 0.08, hp: 2800 });
+      }
+      function failSound() {
+        env.audio.tone({ f: 118, f2: 39, type: 'sawtooth', dur: 0.42, vol: 0.14 });
+        env.audio.noise({ dur: 0.28, vol: 0.09, lp: 540 });
+      }
+      function finish() {
+        if (done !== 'pending') return;
+        done = 'won'; winT = 0; flash = 0.62; shake = 9;
+        lit = 12; burst(x, y, 42, PAL.hot, 230); ring(x, y, PAL.hot, 0.8, 14);
+        deliverySound();
+      }
+      function lose(why) {
+        if (done !== 'pending') return;
+        done = 'lost'; fail = why; shake = 6; flash = 0.18;
+        burst(x, y, 18, PAL.red, 130); failSound();
+      }
+
+      function step(dt, inp) {
+        t += dt; lastDown = !!inp.down;
+        const armed = env.armed();
+        if (armed && !wasArmed) { lastA = Math.atan2((y - CY) / RY, (x - CX) / RX); progress = 0; }
+        wasArmed = armed;
+        if (armed) armedT += dt;
+
+        for (let i = 0; i < rain.length; i++) {
+          const d = rain[i]; d.y += d.sp * dt; d.x -= d.sp * 0.14 * dt;
+          if (d.y > H + 14) { d.y -= H + 28; d.x += W; }
+          if (d.x < -12) d.x += W + 24;
+        }
+        for (let i = sparks.length - 1; i >= 0; i--) {
+          const p = sparks[i]; p.life -= dt;
+          if (p.life <= 0) { sparks.splice(i, 1); continue; }
+          p.vx *= Math.exp(-2.4 * dt); p.vy = p.vy * Math.exp(-2.0 * dt) + 34 * dt;
+          p.x += p.vx * dt; p.y += p.vy * dt;
+        }
+        for (let i = rings.length - 1; i >= 0; i--) {
+          const r = rings[i]; r.life -= dt; r.r += dt * 72;
+          if (r.life <= 0) rings.splice(i, 1);
+        }
+        flash = Math.max(0, flash - dt * 1.7); shake = Math.max(0, shake - dt * 22);
+        if (done !== 'pending') { winT += dt; wheel += SPEED * dt / 12; return; }
+
+        let aim;
+        if (inp.down) {
+          const moved = !pointerWasDown || Math.hypot(inp.x - lastPX, inp.y - lastPY) > 2;
+          inputFreshT = moved ? 0 : inputFreshT + dt;
+          lastPX = inp.x; lastPY = inp.y; pointerWasDown = true; everDown = true;
+          const here = Math.atan2((y - CY) / RY, (x - CX) / RX);
+          const finger = Math.atan2((inp.y - CY) / RY, (inp.x - CX) / RX);
+          let ahead = finger - here; while (ahead <= 0) ahead += TAU;
+          if (ahead < 1.58) aim = { x: inp.x, y: inp.y };
+          // A real finger sends motion in bursts. Once the bicycle passes the latest point,
+          // keep the bar following the relay briefly instead of turning backward to chase it.
+          // The grace expires, so parking one thumb still rides out of the lane and loses.
+          else if (inputFreshT < 1.08) aim = route(here + 0.5);
+          else heading -= dt * (0.13 + diff * 0.025);
+        } else {
+          pointerWasDown = false; inputFreshT = 9;
+          if (!armed) {
+            const a = Math.atan2((y - CY) / RY, (x - CX) / RX);
+            aim = route(a + 0.52);
+          } else {
+            // The dynamo keeps pulling; an unattended handlebar slowly opens the turn.
+            heading -= dt * (0.13 + diff * 0.025);
+          }
+        }
+        if (aim) {
+          const want = Math.atan2(aim.y - y, aim.x - x);
+          const turn = clamp(normAngle(want - heading), -TURN * dt, TURN * dt);
+          heading += turn;
+        }
+        const drive = armed ? 1 : 0.82;
+        x += Math.cos(heading) * SPEED * drive * dt;
+        y += Math.sin(heading) * SPEED * drive * dt;
+        wheel += SPEED * drive * dt / 12;
+        pedal += SPEED * drive * dt / 33;
+        cueT -= dt;
+        if (inp.down && cueT <= 0) { cueT = 0.24; pedalSound(); }
+
+        const ax = (x - CX) / RX, ay = (y - CY) / RY;
+        const q = Math.hypot(ax, ay) || 0.001;
+        laneError = Math.abs(q - 1) * ((RX + RY) * 0.5);
+        const a = Math.atan2(ay, ax);
+        if (armed) {
+          const da = normAngle(a - lastA);
+          if (Math.abs(da) < 0.42) {
+            if (da >= 0) { progress += da; wrongT = Math.max(0, wrongT - dt * 1.6); }
+            else if (da < -0.001) wrongT += dt;
+          }
+          if (laneError > ROAD_HALF) offT += dt;
+          else offT = Math.max(0, offT - dt * 2.2);
+          const nextLit = Math.min(11, Math.floor(clamp(progress / NEED, 0, 0.999) * 12));
+          if (nextLit > lit) {
+            for (let k = lit + 1; k <= nextLit; k++) {
+              const p = route(START + NEED * k / 11);
+              ring(p.x, p.y, PAL.cyan, 0.34, 7); segmentSound(k);
+            }
+            lit = nextLit;
+          }
+          if (progress >= NEED && laneError <= ROAD_HALF) finish();
+          else if (offT > [0.5, 0.42, 0.34][diff]) lose('lane');
+          else if (wrongT > 0.52) lose('wrong');
+        }
+        lastA = a;
+      }
+
+      function drawBlock(g) {
+        g.fillStyle = '#050a13'; rr(g, 104, 184, 181, 134, 5); g.fill();
+        g.fillStyle = '#0b1420'; g.fillRect(111, 199, 167, 114);
+        g.fillStyle = '#121d29';
+        for (let i = 0; i < 5; i++) g.fillRect(116 + i * 34, 168 - (i % 2) * 8, 27, 28 + (i % 2) * 8);
+        g.fillStyle = '#243443'; g.fillRect(96, 315, 197, 8);
+        for (let i = 0; i < windows.length; i++) {
+          const w = windows[i], awake = done === 'won' || (winT > i * 0.018);
+          if (awake) {
+            const halo = g.createRadialGradient(w.x + 7, w.y + 8, 1, w.x + 7, w.y + 8, 22);
+            halo.addColorStop(0, rgba(PAL.hot, 0.23)); halo.addColorStop(1, rgba(PAL.warm, 0));
+            g.fillStyle = halo; g.fillRect(w.x - 15, w.y - 15, 44, 46);
+          }
+          g.fillStyle = awake ? (Math.sin(t * 3 + w.ph) > -0.8 ? PAL.warm : PAL.hot) : '#0a111b';
+          g.fillRect(w.x, w.y, 14, 17);
+          g.strokeStyle = awake ? rgba(PAL.hot, 0.75) : '#1b2a37'; g.lineWidth = 1; g.strokeRect(w.x, w.y, 14, 17);
+          g.fillStyle = awake ? '#7b4d28' : '#02050a'; g.fillRect(w.x + 6.5, w.y, 1, 17);
+        }
+        g.fillStyle = done === 'won' ? PAL.hot : '#111923'; rr(g, 181, 277, 27, 36, 2); g.fill();
+      }
+
+      function drawBike(g) {
+        const bright = done === 'won' ? 1 : clamp(0.28 + progress / NEED * 0.72, 0.28, 1);
+        g.save(); g.translate(x, y); g.rotate(heading);
+        const cone = g.createLinearGradient(7, 0, 76, 0);
+        cone.addColorStop(0, rgba(PAL.hot, 0.18 * bright)); cone.addColorStop(1, rgba(PAL.hot, 0));
+        g.fillStyle = cone; g.beginPath(); g.moveTo(7, -9); g.lineTo(82, -29); g.lineTo(82, 29); g.lineTo(7, 9); g.closePath(); g.fill();
+        g.strokeStyle = '#03060a'; g.lineWidth = 4;
+        for (const wx of [-12, 13]) { g.beginPath(); g.ellipse(wx, 0, 9, 3.6, 0, 0, TAU); g.stroke(); }
+        g.strokeStyle = PAL.cyan; g.lineWidth = 2; g.beginPath(); g.moveTo(-12, 0); g.lineTo(3, -7); g.lineTo(13, 0); g.lineTo(-3, 1); g.closePath(); g.stroke();
+        g.beginPath(); g.moveTo(3, -7); g.lineTo(-3, 1); g.lineTo(4, 8); g.stroke();
+        g.fillStyle = PAL.paper; g.beginPath(); g.arc(2, -9, 4.2, 0, TAU); g.fill();
+        g.fillStyle = PAL.hot; g.beginPath(); g.arc(16, 0, 2.7, 0, TAU); g.fill();
+        g.strokeStyle = rgba(PAL.cyanHot, 0.75); g.lineWidth = 1.5;
+        for (let i = 0; i < 12; i++) {
+          const a = i / 12 * TAU + wheel, r0 = 10.5, r1 = i < Math.ceil(bright * 12) ? 14 : 11.5;
+          g.beginPath(); g.moveTo(Math.cos(a) * r0 - 12, Math.sin(a) * r0 * 0.42);
+          g.lineTo(Math.cos(a) * r1 - 12, Math.sin(a) * r1 * 0.42); g.stroke();
+        }
+        g.restore();
+      }
+
+      function render(g) {
+        const sky = g.createLinearGradient(0, 0, 0, H);
+        sky.addColorStop(0, PAL.void); sky.addColorStop(0.65, PAL.sky); sky.addColorStop(1, '#02050b');
+        g.fillStyle = sky; g.fillRect(0, 0, W, H);
+        g.save();
+        if (shake > 0.2) g.translate(Math.sin(t * 91) * shake * 0.42, Math.cos(t * 77) * shake * 0.32);
+
+        // Wet ground and the near-complete relay lane.
+        g.fillStyle = '#08111d'; g.fillRect(0, 98, W, 470);
+        g.strokeStyle = PAL.sidewalk; g.lineWidth = ROAD_HALF * 2 + 22;
+        g.beginPath(); g.ellipse(CX, CY, RX, RY, 0, 0, TAU); g.stroke();
+        g.strokeStyle = PAL.asphalt; g.lineWidth = ROAD_HALF * 2;
+        g.beginPath(); g.ellipse(CX, CY, RX, RY, 0, 0, TAU); g.stroke();
+        g.strokeStyle = rgba(PAL.rain, 0.13); g.lineWidth = 2; g.setLineDash([18, 23]);
+        g.beginPath(); g.ellipse(CX, CY, RX, RY, 0, 0, TAU); g.stroke(); g.setLineDash([]);
+
+        // The wire closes behind the bicycle: a circuit, not a progress bar.
+        if (progress > 0) {
+          g.strokeStyle = rgba(PAL.cyan, 0.34); g.lineWidth = 11; g.lineCap = 'round';
+          g.beginPath(); g.ellipse(CX, CY, RX, RY, 0, START, START + clamp(progress, 0, NEED)); g.stroke();
+          g.strokeStyle = PAL.cyanHot; g.lineWidth = 2.2;
+          g.beginPath(); g.ellipse(CX, CY, RX, RY, 0, START, START + clamp(progress, 0, NEED)); g.stroke();
+        }
+        for (let i = 0; i < 12; i++) {
+          const a = START + NEED * i / 11, p = route(a), on = i <= lit || done === 'won';
+          g.fillStyle = on ? rgba(PAL.cyan, 0.2) : 'rgba(0,0,0,.32)'; g.beginPath(); g.arc(p.x, p.y, on ? 9 : 6, 0, TAU); g.fill();
+          g.fillStyle = on ? PAL.cyanHot : '#415160'; g.beginPath(); g.arc(p.x, p.y, 3.1, 0, TAU); g.fill();
+        }
+        drawBlock(g);
+
+        // First-play steering cue: the cream relay ring is always a little ahead.
+        if (done === 'pending' && armedT < 1.55) {
+          const a = Math.atan2((y - CY) / RY, (x - CX) / RX), p = route(a + 0.5);
+          const pulse = 1 + Math.sin(t * 9) * 0.13;
+          g.strokeStyle = rgba(PAL.paper, 0.82 - armedT * 0.28); g.lineWidth = 2; g.setLineDash([3, 6]);
+          g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo((x + p.x) * 0.5, Math.min(y, p.y) - 18, p.x, p.y); g.stroke(); g.setLineDash([]);
+          g.beginPath(); g.arc(p.x, p.y, 13 * pulse, 0, TAU); g.stroke();
+          g.fillStyle = PAL.paper; g.beginPath(); g.arc(p.x, p.y, 3.3, 0, TAU); g.fill();
+        }
+        drawBike(g);
+
+        for (let i = 0; i < rings.length; i++) {
+          const r = rings[i]; g.globalAlpha = clamp(r.life / r.max, 0, 1);
+          g.strokeStyle = r.color; g.lineWidth = 2.3; g.beginPath(); g.arc(r.x, r.y, r.r, 0, TAU); g.stroke();
+        }
+        g.globalAlpha = 1;
+        for (let i = 0; i < sparks.length; i++) {
+          const p = sparks[i]; g.globalAlpha = clamp(p.life / p.max, 0, 1);
+          g.fillStyle = p.color; g.beginPath(); g.arc(p.x, p.y, p.r, 0, TAU); g.fill();
+        }
+        g.globalAlpha = 1;
+        for (let i = 0; i < rain.length; i++) {
+          const d = rain[i]; g.strokeStyle = rgba(PAL.rain, d.a); g.lineWidth = 1;
+          g.beginPath(); g.moveTo(d.x, d.y); g.lineTo(d.x - d.len * 0.14, d.y + d.len); g.stroke();
+        }
+        if (done === 'lost') {
+          g.fillStyle = rgba(PAL.red, 0.11); g.fillRect(0, 0, W, H);
+          g.strokeStyle = PAL.red; g.lineWidth = 3; g.beginPath(); g.moveTo(x - 16, y - 16); g.lineTo(x + 16, y + 16); g.stroke();
+        }
+        if (flash > 0) { g.fillStyle = rgba(done === 'won' ? PAL.hot : PAL.red, flash * 0.38); g.fillRect(0, 0, W, H); }
+        g.restore();
+      }
+
+      function hint() {
+        if (done !== 'pending') return lastDown ? { type: 'up' } : { type: 'wait', ms: 200 };
+        const a = Math.atan2((y - CY) / RY, (x - CX) / RX), p = route(a + 0.53);
+        return { type: 'down', x: p.x, y: p.y };
+      }
+
+      return {
+        step, render, result: () => done,
+        timeout() { if (done === 'pending') lose(everDown ? 'time' : 'never'); return done === 'won' ? 'won' : 'lost'; },
+        line() {
+          if (done === 'won') return 'THE WHOLE BLOCK ANSWERED.';
+          if (fail === 'lane') return 'THE RELAY LOST YOU IN THE DARK.';
+          if (fail === 'wrong') return 'THE CURRENT ONLY RUNS ONE WAY.';
+          if (fail === 'never') return 'THE BLOCK WAITED IN BLACK.';
+          return 'ONE WINDOW ALMOST WOKE.';
+        },
+        hint,
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - The cartridge opens already moving on GOODNIGHT, BLOCK's blackout bicycle. During count-in
+     a visible cream relay ring leads it around the lane; touch-and-drag takes that steering over.
+   - The player must stay inside the oval relay road and travel 0.88 turns in the authored direction.
+     Twelve cyan relay contacts light behind the bicycle; leaving the lane, riding backward, or timing
+     out loses. No circular finger gesture or mash counter substitutes for the ride itself.
+   - Dynamo feedback is carried by the wheel's twelve live arcs, headlamp cone, rising relay-note ladder,
+     wet-road circuit wake, and the building's eighteen windows. Winning wakes the entire dark block.
+   - hint() holds one pointer and moves it to a point 0.53 radians ahead of the physical bicycle; it never
+     lifts mid-ride. A passed steering point gets 1.08s of forward-relay grace so ordinary touch-event
+     gaps cannot turn the bicycle backward; a parked pointer outlives that grace and still loses.
+     timeout() is binary and cannot convert an existing win to a loss.
+   BUG-IS-GAME (do not fix):
+   - The bicycle never stops generating just because the thumb lifts. It keeps coasting on the last bar
+     angle and drifts open, so a tiny correction can save a line but abandoning the glass cannot.
+*/
+
+/* ===== carts/35-fetch.js ===== */
+/* FETCH — press throws, hold keeps the courier out, release brings it home */
+(function () {
+  const TAU = Math.PI * 2;
+  const C = {
+    black: '#03050c', fog: '#05060c', blue: '#2c3852', slate: '#48545c',
+    stone: '#7b898f', bone: '#cfc9bb', boneHi: '#eee9dc', socket: '#030303',
+    skin: '#8d8178', skinDark: '#4a403c', sleeve: '#131110', lamp: '#b6cfdd',
+    tether: '#8a5f55', brass: '#b08d4a', cream: '#f2eedc', red: '#6f3030',
+  };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function rgba(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
+  }
+  function rr(g, x, y, w, h, r) {
+    g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+
+  registerGame({
+    id: 'fetch', title: 'FETCH', command: 'CALL IT BACK!', family: 'release', slotBeats: 8, minGame: 5,
+    create(env) {
+      const W = env.W, H = env.H, diff = clamp(env.difficulty | 0, 0, 2);
+      const HAND = { x: 195, y: 522 };
+      const KEY = { x: 145 + env.rng() * 100, y: 177 - diff * 9 };
+      const LAUNCH_SPEED = [425, 465, 505][diff];
+      const RETURN_FLOOR = [420, 455, 490][diff];
+      const RETURN_CAP = [650, 700, 750][diff];
+      const RETURN_BEND = 15;                 // donor snap-return bend rate
+      const CATCH_R = 27;                     // 2D read of donor catchRadius 1.35
+      const returnSide = env.rng() < 0.5 ? -1 : 1;
+      let t = 0, armedT = 0, lastDown = false, everDown = false;
+      let mode = 'held', done = 'pending', announced = 'pending', announceT = 0;
+      let fetched = false, earlyCalls = 0, fail = '', attempt = 0;
+      let x = HAND.x, y = HAND.y, vx = 0, vy = 0, rot = 0, spin = 0;
+      let flightT = 0, returnT = 0, impactT = 0, catchT = 0;
+      let shake = 0, flash = 0, impactFlash = 0, keySwing = env.rng() * TAU;
+      const trail = [], bits = [], rings = [];
+      const graves = [];
+      for (let i = 0; i < 9; i++) graves.push({
+        x: 18 + i * 47 + (env.rng() - 0.5) * 18,
+        y: 340 + env.rng() * 105, w: 24 + env.rng() * 16, h: 35 + env.rng() * 34,
+        lean: (env.rng() - 0.5) * 0.18,
+      });
+      const motes = [];
+      for (let i = 0; i < 28; i++) motes.push({ x: env.rng() * W, y: 90 + env.rng() * 390, ph: env.rng() * TAU, r: 0.5 + env.rng() * 1.3 });
+
+      function burst(px, py, n, color, speed) {
+        for (let i = 0; i < n && bits.length < 120; i++) {
+          const a = env.rng() * TAU, v = speed * (0.3 + env.rng() * 0.85);
+          bits.push({ x: px, y: py, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+            life: 0.35 + env.rng() * 0.52, max: 0.87, r: 1.2 + env.rng() * 3, color });
+        }
+      }
+      function ring(px, py, color, life, r) {
+        rings.push({ x: px, y: py, color, life, max: life, r: r || 8 });
+        if (rings.length > 14) rings.shift();
+      }
+      function launchSound() {
+        env.audio.tone({ f: 82, f2: 136, type: 'sawtooth', dur: 0.46, vol: 0.10 });
+        env.audio.tone({ f: 174, f2: 116, type: 'triangle', dur: 0.34, vol: 0.06 });
+        env.audio.noise({ dur: 0.22, vol: 0.075, hp: 430, lp: 1700 });
+      }
+      function impactSound() {
+        env.audio.tone({ f: 104, f2: 47, type: 'sine', dur: 0.18, vol: 0.22 });
+        env.audio.noise({ dur: 0.11, vol: 0.16, hp: 950, lp: 4300 });
+        env.audio.tone({ f: 1760, f2: 1220, type: 'triangle', dur: 0.055, vol: 0.08 });
+      }
+      function returnSound(withKey) {
+        env.audio.noise({ dur: 0.38, vol: 0.09, hp: 500, lp: 2400 });
+        env.audio.tone({ f: 118, f2: withKey ? 238 : 172, type: 'sawtooth', dur: 0.34, vol: 0.075 });
+      }
+      function catchSound(withKey) {
+        env.audio.tone({ f: 164, f2: 74, type: 'sine', dur: 0.16, vol: 0.19 });
+        env.audio.noise({ dur: 0.045, vol: 0.13, hp: 1450, lp: 5200 });
+        if (withKey) {
+          env.audio.tone({ f: 880, type: 'triangle', dur: 0.34, vol: 0.10 });
+          env.audio.tone({ f: 1320, type: 'sine', dur: 0.42, vol: 0.07, t: 0.045 });
+        }
+      }
+      function loseSound() {
+        env.audio.tone({ f: 72, f2: 28, type: 'sawtooth', dur: 0.6, vol: 0.16 });
+        env.audio.noise({ dur: 0.42, vol: 0.08, lp: 420 });
+      }
+
+      function launch() {
+        if (mode !== 'held' || done !== 'pending') return;
+        mode = 'outbound'; everDown = true; flightT = 0; impactT = 0; catchT = 0;
+        x = HAND.x; y = HAND.y - 25;
+        const dx = KEY.x - x, dy = KEY.y - y, d = Math.hypot(dx, dy) || 1;
+        vx = dx / d * LAUNCH_SPEED; vy = dy / d * LAUNCH_SPEED;
+        spin = returnSide * 8.5; trail.length = 0;
+        burst(x, y, 12, C.bone, 105); ring(x, y, C.lamp, 0.34, 9); launchSound();
+      }
+      function takeKey() {
+        mode = 'poised'; fetched = true; impactT = 0; vx = 0; vy = 0;
+        x = KEY.x; y = KEY.y + 17; shake = 11; impactFlash = 0.32; flash = 0.13;
+        burst(x, y, 34, C.boneHi, 250); burst(x, y, 14, C.brass, 160);
+        ring(x, y, C.boneHi, 0.65, 12); impactSound();
+      }
+      function beginReturn(hasKey) {
+        if (mode !== 'outbound' && mode !== 'poised') return;
+        if (!hasKey) { earlyCalls++; attempt++; }
+        mode = 'returning'; returnT = 0;
+        const dx = HAND.x - x, dy = HAND.y - y, d = Math.hypot(dx, dy) || 1;
+        const inherited = Math.max(RETURN_FLOOR, Math.hypot(vx, vy) * 0.93 + 80);
+        const speed = Math.min(RETURN_CAP, inherited);
+        // Keep outbound momentum but guarantee a homeward component. The rest bends, never brakes.
+        const ix = vx / (Math.hypot(vx, vy) || 1), iy = vy / (Math.hypot(vx, vy) || 1);
+        const hx = dx / d, hy = dy / d;
+        let bx = ix * 0.32 + hx * 0.68, by = iy * 0.32 + hy * 0.68;
+        const bd = Math.hypot(bx, by) || 1; bx /= bd; by /= bd;
+        vx = bx * speed; vy = by * speed; spin = returnSide * 3.1;
+        ring(x, y, hasKey ? C.cream : C.tether, 0.48, 10); returnSound(hasKey);
+      }
+      function catchSkull() {
+        const won = fetched;
+        x = HAND.x; y = HAND.y; vx = 0; vy = 0; mode = won ? 'caught' : 'held'; catchT = 0;
+        shake = won ? 8 : 3; flash = won ? 0.34 : 0.08;
+        burst(x, y - 18, won ? 28 : 10, won ? C.cream : C.bone, won ? 180 : 85);
+        ring(x, y - 20, won ? C.cream : C.tether, 0.55, 10); catchSound(won);
+        if (won) { done = 'won'; announceT = 0.22; }
+      }
+      function lose(why) {
+        if (done !== 'pending') return;
+        done = 'lost'; announced = 'lost'; fail = why; shake = 7; flash = 0.22;
+        loseSound();
+      }
+
+      function step(dt, inp) {
+        t += dt; lastDown = !!inp.down;
+        if (env.armed()) armedT += dt;
+        keySwing += dt * 2.2;
+        shake = Math.max(0, shake - dt * 24); flash = Math.max(0, flash - dt * 1.8);
+        impactFlash = Math.max(0, impactFlash - dt * 1.7);
+        for (let i = bits.length - 1; i >= 0; i--) {
+          const p = bits[i]; p.life -= dt;
+          if (p.life <= 0) { bits.splice(i, 1); continue; }
+          p.vx *= Math.exp(-2.1 * dt); p.vy = p.vy * Math.exp(-1.8 * dt) + 72 * dt;
+          p.x += p.vx * dt; p.y += p.vy * dt;
+        }
+        for (let i = rings.length - 1; i >= 0; i--) {
+          const r = rings[i]; r.life -= dt; r.r += dt * 95;
+          if (r.life <= 0) rings.splice(i, 1);
+        }
+        if (done === 'won') {
+          catchT += dt;
+          announceT -= dt; if (announceT <= 0) announced = 'won';
+          return;
+        }
+        if (done === 'lost') return;
+
+        // Alex's FETCH grammar, compressed to one button: press throws, hold keeps it out,
+        // release brings it home. An early release is legible and recoverable, but empty.
+        if (inp.justDown && mode === 'held') launch();
+        if (mode === 'outbound' && inp.justUp) beginReturn(false);
+
+        if (mode === 'outbound') {
+          flightT += dt;
+          const dx = KEY.x - x, dy = KEY.y + 17 - y, d = Math.hypot(dx, dy) || 1;
+          const bend = 1 - Math.exp(-8.5 * dt);
+          const speed = Math.max(LAUNCH_SPEED, Math.hypot(vx, vy));
+          let ux = vx / speed, uy = vy / speed;
+          ux += (dx / d - ux) * bend; uy += (dy / d - uy) * bend;
+          const u = Math.hypot(ux, uy) || 1; vx = ux / u * speed; vy = uy / u * speed;
+          x += vx * dt; y += vy * dt; rot += spin * dt;
+          trail.push({ x, y, a: 1 }); if (trail.length > 17) trail.shift();
+          if (d < 22) takeKey();
+        } else if (mode === 'poised') {
+          impactT += dt; rot += Math.sin(t * 8) * dt * 0.16;
+          x = KEY.x + Math.sin(t * 3.2) * 2.2; y = KEY.y + 17 + Math.cos(t * 4.1) * 1.4;
+          // A release on the same simulation frame as impact was still an early call. The
+          // visible white impact ring must exist before the release can become the answer.
+          if (inp.justUp && impactT > 0.001) beginReturn(true);
+        } else if (mode === 'returning') {
+          returnT += dt;
+          const dx = HAND.x - x, dy = HAND.y - y, d = Math.hypot(dx, dy) || 1;
+          const current = Math.hypot(vx, vy) || RETURN_FLOOR;
+          const speed = Math.min(RETURN_CAP, Math.max(RETURN_FLOOR, current));
+          const hx = dx / d, hy = dy / d;
+          const arc = returnSide * Math.sin(clamp(returnT / 0.72, 0, 1) * Math.PI) * clamp(d / 330, 0, 1) * 0.48;
+          let tx = hx - hy * arc, ty = hy + hx * arc;
+          const td = Math.hypot(tx, ty) || 1; tx /= td; ty /= td;
+          const bend = 1 - Math.exp(-RETURN_BEND * dt);
+          let ux = vx / speed, uy = vy / speed;
+          ux += (tx - ux) * bend; uy += (ty - uy) * bend;
+          const ud = Math.hypot(ux, uy) || 1; vx = ux / ud * speed; vy = uy / ud * speed;
+          x += vx * dt; y += vy * dt; rot += spin * dt;
+          trail.push({ x, y, a: 1 }); if (trail.length > 17) trail.shift();
+          if (d < CATCH_R || returnT > 1.65) catchSkull();
+        } else if (mode === 'held') {
+          x += (HAND.x - x) * clamp(dt * 14, 0, 1);
+          y += (HAND.y - y) * clamp(dt * 14, 0, 1); rot *= Math.exp(-8 * dt);
+        }
+        for (let i = 0; i < trail.length; i++) trail[i].a *= Math.exp(-5.5 * dt);
+      }
+
+      function drawKey(g, px, py, held) {
+        g.save(); g.translate(px, py); g.rotate(held ? -0.7 : Math.sin(keySwing) * 0.13); g.scale(held ? 0.72 : 1, held ? 0.72 : 1);
+        g.strokeStyle = C.brass; g.lineWidth = 4; g.lineCap = 'round';
+        g.beginPath(); g.arc(0, 0, 8, 0, TAU); g.moveTo(5.5, 5.5); g.lineTo(27, 27); g.lineTo(31, 23); g.moveTo(21, 21); g.lineTo(25, 17); g.stroke();
+        g.strokeStyle = rgba(C.cream, 0.55); g.lineWidth = 1; g.beginPath(); g.arc(-1, -1, 5, 0, TAU); g.stroke();
+        g.restore();
+      }
+
+      function drawHands(g, open) {
+        const spread = open ? 18 : 4, close = mode === 'caught' ? clamp(catchT / 0.24, 0, 1) : 0;
+        for (const side of [-1, 1]) {
+          g.save(); g.translate(HAND.x + side * (42 + spread * (1 - close)), HAND.y + 34 - close * 11); g.scale(side, 1);
+          g.rotate(side * (open ? -0.17 : 0.05));
+          g.fillStyle = C.sleeve; g.beginPath(); g.moveTo(-30, 116); g.lineTo(35, 116); g.lineTo(23, 51); g.lineTo(-11, 49); g.closePath(); g.fill();
+          g.fillStyle = C.skin; rr(g, -16, 16, 42, 63, 18); g.fill();
+          g.strokeStyle = C.skinDark; g.lineWidth = 1.2; rr(g, -16, 16, 42, 63, 18); g.stroke();
+          const curl = open ? 0 : 8;
+          for (let i = 0; i < 4; i++) {
+            g.save(); g.translate(-13 + i * 11.2, 22 - Math.abs(i - 1.5) * 3);
+            g.rotate(-0.13 + i * 0.075 + side * 0.015);
+            g.fillStyle = C.skin; rr(g, -4.2, -31 + curl, 9.2, 39 - curl, 4.5); g.fill();
+            g.strokeStyle = C.skinDark; g.lineWidth = 1; rr(g, -4.2, -31 + curl, 9.2, 39 - curl, 4.5); g.stroke(); g.restore();
+          }
+          g.save(); g.translate(-17, 32); g.rotate(-0.72); g.fillStyle = C.skin;
+          rr(g, -5, -4, 12, 35, 6); g.fill(); g.strokeStyle = C.skinDark; rr(g, -5, -4, 12, 35, 6); g.stroke(); g.restore();
+          g.restore();
+        }
+      }
+
+      function drawSkull(g, px, py, scale, alpha) {
+        g.save(); g.globalAlpha = alpha === undefined ? 1 : alpha; g.translate(px, py); g.rotate(rot); g.scale(scale, scale);
+        const halo = g.createRadialGradient(0, 0, 8, 0, 0, 72);
+        halo.addColorStop(0, rgba(C.lamp, mode === 'returning' ? 0.26 : 0.18)); halo.addColorStop(1, rgba(C.lamp, 0));
+        g.fillStyle = halo; g.fillRect(-76, -76, 152, 152);
+        g.fillStyle = C.bone; g.strokeStyle = '#292925'; g.lineWidth = 2.2;
+        g.beginPath(); g.ellipse(0, -7, 30, 34, 0, 0, TAU); g.fill(); g.stroke();
+        g.beginPath(); g.ellipse(-23, 13, 12, 13, -0.35, 0, TAU); g.ellipse(23, 13, 12, 13, 0.35, 0, TAU); g.fill(); g.stroke();
+        g.fillStyle = C.socket;
+        g.beginPath(); g.ellipse(-12, -9, 8, 10, -0.12, 0, TAU); g.ellipse(12, -9, 8, 10, 0.12, 0, TAU); g.fill();
+        g.beginPath(); g.moveTo(0, 0); g.lineTo(-5, 10); g.lineTo(5, 10); g.closePath(); g.fill();
+        g.strokeStyle = '#2c2924'; g.fillStyle = C.bone; g.lineWidth = 2;
+        g.beginPath(); g.arc(0, 20, 22, 0.18, Math.PI - 0.18); g.lineTo(-17, 34); g.quadraticCurveTo(0, 43, 17, 34); g.closePath(); g.fill(); g.stroke();
+        g.fillStyle = C.boneHi;
+        for (let i = 0; i < 7; i++) { const tx = -15 + i * 5; g.fillRect(tx, 22, 3.7, 10); }
+        g.strokeStyle = rgba(C.boneHi, 0.55); g.lineWidth = 1.2; g.beginPath(); g.arc(-7, -20, 15, 3.6, 5.15); g.stroke();
+        if (fetched) drawKey(g, -3, 29, true);
+        g.restore();
+      }
+
+      function render(g) {
+        const bg = g.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, C.black); bg.addColorStop(0.58, '#0a111c'); bg.addColorStop(1, '#020307');
+        g.fillStyle = bg; g.fillRect(0, 0, W, H);
+        g.save();
+        if (shake > 0.2) g.translate(Math.sin(t * 94) * shake * 0.44, Math.cos(t * 79) * shake * 0.34);
+        const moon = g.createRadialGradient(304, 80, 3, 304, 80, 126);
+        moon.addColorStop(0, rgba(C.lamp, 0.18)); moon.addColorStop(1, rgba(C.blue, 0));
+        g.fillStyle = moon; g.fillRect(150, 0, 240, 250);
+
+        // The same damp graveyard material hierarchy: near-black world, blue fog, pale bone.
+        g.fillStyle = '#10151b'; g.beginPath(); g.moveTo(0, 421); g.quadraticCurveTo(110, 385, 205, 419); g.quadraticCurveTo(310, 373, W, 408); g.lineTo(W, 650); g.lineTo(0, 650); g.closePath(); g.fill();
+        for (let i = 0; i < graves.length; i++) {
+          const h = graves[i]; g.save(); g.translate(h.x, h.y); g.rotate(h.lean);
+          g.fillStyle = i % 2 ? '#313b40' : '#3c474c'; rr(g, -h.w / 2, -h.h, h.w, h.h + 13, h.w * 0.42); g.fill();
+          g.strokeStyle = rgba(C.stone, 0.42); g.lineWidth = 1.2; rr(g, -h.w / 2, -h.h, h.w, h.h + 13, h.w * 0.42); g.stroke();
+          g.strokeStyle = 'rgba(4,5,8,.45)'; g.beginPath(); g.moveTo(0, -h.h + 8); g.lineTo(0, -10); g.moveTo(-7, -h.h + 19); g.lineTo(7, -h.h + 19); g.stroke(); g.restore();
+        }
+        // The authored tree-key fetch, compressed to one readable target.
+        g.strokeStyle = '#171716'; g.lineWidth = 19; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(-12, 112); g.quadraticCurveTo(102, 103, KEY.x + 48, 127); g.quadraticCurveTo(274, 141, 402, 91); g.stroke();
+        g.strokeStyle = '#302923'; g.lineWidth = 3; g.beginPath(); g.moveTo(KEY.x, 123); g.lineTo(KEY.x, KEY.y - 10); g.stroke();
+        if (!fetched) drawKey(g, KEY.x, KEY.y, false);
+
+        for (let i = 0; i < motes.length; i++) {
+          const m = motes[i], ma = 0.08 + 0.08 * Math.sin(t * 0.9 + m.ph);
+          g.fillStyle = rgba(C.lamp, ma); g.beginPath(); g.arc(m.x + Math.sin(t * 0.2 + m.ph) * 5, m.y, m.r, 0, TAU); g.fill();
+        }
+
+        const away = mode !== 'held' && mode !== 'caught';
+        if (away) {
+          const tension = mode === 'returning' ? 0.78 : mode === 'poised' ? 0.62 : 0.44;
+          g.strokeStyle = rgba(C.tether, tension); g.lineWidth = mode === 'returning' ? 1.8 : 1.2;
+          g.beginPath(); g.moveTo(HAND.x, HAND.y + 8);
+          g.quadraticCurveTo((HAND.x + x) * 0.5 + returnSide * 18, (HAND.y + y) * 0.5 + 36, x, y); g.stroke();
+        }
+        // Flight afterimages keep it an object on a tether, never a bullet reticle.
+        for (let i = 0; i < trail.length; i++) {
+          const q = trail[i]; if (q.a < 0.03) continue;
+          drawSkull(g, q.x, q.y, 0.42 + i / Math.max(1, trail.length - 1) * 0.16, q.a * 0.17);
+        }
+        drawHands(g, away || mode === 'returning');
+        drawSkull(g, x, y, mode === 'held' || mode === 'caught' ? 1.06 : 0.78, 1);
+
+        // Before the throw, the cream rim says HOLD. After impact, it turns home and opens.
+        if (done === 'pending' && armedT < 1.55 && mode === 'held') {
+          const p = 1 + Math.sin(t * 9) * 0.12;
+          g.strokeStyle = rgba(C.cream, 0.82 - armedT * 0.27); g.lineWidth = 2; g.setLineDash([4, 7]);
+          g.beginPath(); g.arc(HAND.x, HAND.y - 4, 54 * p, 0, TAU); g.stroke();
+          g.beginPath(); g.moveTo(HAND.x, HAND.y - 58); g.quadraticCurveTo((HAND.x + KEY.x) * 0.5 + 28, 278, KEY.x, KEY.y + 17); g.stroke(); g.setLineDash([]);
+        }
+        if (mode === 'poised') {
+          const p = 18 + Math.sin(t * 12) * 4;
+          g.strokeStyle = C.cream; g.lineWidth = 3; g.beginPath(); g.arc(x, y, p, 0.18, Math.PI * 1.82); g.stroke();
+          g.fillStyle = C.cream;
+          for (let i = 0; i < 3; i++) {
+            const u = i / 2, px = x + (HAND.x - x) * (0.28 + u * 0.36), py = y + (HAND.y - y) * (0.28 + u * 0.36);
+            g.beginPath(); g.moveTo(px, py + 7); g.lineTo(px - 6, py - 5); g.lineTo(px + 6, py - 5); g.closePath(); g.fill();
+          }
+        }
+        for (let i = 0; i < rings.length; i++) {
+          const r = rings[i]; g.globalAlpha = clamp(r.life / r.max, 0, 1); g.strokeStyle = r.color; g.lineWidth = 2.2;
+          g.beginPath(); g.arc(r.x, r.y, r.r, 0, TAU); g.stroke();
+        }
+        g.globalAlpha = 1;
+        for (let i = 0; i < bits.length; i++) {
+          const p = bits[i]; g.globalAlpha = clamp(p.life / p.max, 0, 1); g.fillStyle = p.color;
+          g.beginPath(); g.arc(p.x, p.y, p.r, 0, TAU); g.fill();
+        }
+        g.globalAlpha = 1;
+        if (impactFlash > 0) { g.strokeStyle = rgba(C.boneHi, impactFlash * 2); g.lineWidth = 8 * impactFlash; g.beginPath(); g.arc(KEY.x, KEY.y + 17, 68 * (1 - impactFlash) + 20, 0, TAU); g.stroke(); }
+        if (done === 'lost') { g.fillStyle = rgba(C.red, 0.18); g.fillRect(0, 0, W, H); }
+        if (flash > 0) { g.fillStyle = rgba(done === 'lost' ? C.red : C.cream, flash * 0.38); g.fillRect(0, 0, W, H); }
+        g.restore();
+      }
+
+      function hint() {
+        if (done !== 'pending') return lastDown ? { type: 'up' } : { type: 'wait', ms: 200 };
+        if (mode === 'held') return { type: 'down', x: HAND.x, y: HAND.y + 55 };
+        if (mode === 'outbound') return { type: 'down', x: HAND.x, y: HAND.y + 55 };
+        if (mode === 'poised') return impactT > 0.08 ? { type: 'up' } : { type: 'wait', ms: 40 };
+        return { type: 'wait', ms: 45 };
+      }
+
+      return {
+        step, render, result: () => announced,
+        timeout() {
+          if (done === 'won') return 'won';
+          if (done === 'pending') lose(mode === 'poised' ? 'held' : !everDown ? 'never' : earlyCalls ? 'early' : 'away');
+          return 'lost';
+        },
+        line() {
+          if (done === 'won') return 'IT CAME HOME WITH THE KEY.';
+          if (fail === 'held') return 'IT WAITED FOR YOUR CALL.';
+          if (fail === 'early') return 'YOU CALLED BEFORE IT HAD SOMETHING.';
+          if (fail === 'never') return 'THE HANDS WAITED EMPTY.';
+          return 'THE TETHER WENT QUIET.';
+        },
+        hint,
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - FETCH is a named later-run showcase (minGame 5), not an anonymous projectile skin.
+     The first-person hands cradle the authored pale skull; the skull lights the dark graveyard,
+     leaves on a living filament, strikes the tree key, carries it visibly in its teeth, and returns.
+   - One button preserves the donor's exact grammar: press throws, hold keeps it out, release brings
+     it home. Releasing before the white impact returns an empty skull and permits one costly retry;
+     releasing after impact curves the key-bearing skull into the open hands and wins on the catch.
+   - Return speed never decreases. Its inherited velocity bends exponentially at the donor's snap
+     rate and adds a deterministic side arc; there is no aiming reticle, shot count, or generic target HP.
+   - hint() performs hold -> wait for impact -> release and wins at every difficulty. timeout() is binary,
+     preserves an already-caught win, and distinguishes never-called, early-called, and held-out failures.
+   BUG-IS-GAME (do not fix):
+   - Calling too soon is not an instant fail. The empty tooth-clack and lost travel time teach the
+     relationship physically, then the same hands receive the same skull and offer the verb again.
+*/
+
+/* ===== carts/37-pilot.js ===== */
+/* PILOT LIGHT — pass one living spark into the only body the city can safely wake */
+(function () {
+  registerGame({
+    id: 'pilot',
+    title: 'PILOT LIGHT',
+    command: 'PASS IT!',
+    family: 'tap',
+    slotBeats: 6,
+    create(env) {
+      var W = env.W, H = env.H, TAU = Math.PI * 2;
+      var D = Math.max(0, Math.min(2, env.difficulty | 0));
+      var clamp = function (v, a, b) { return v < a ? a : v > b ? b : v; };
+      var lerp = function (a, b, k) { return a + (b - a) * k; };
+      var smooth = function (k) { return k * k * (3 - 2 * k); };
+      var dist = function (a, b, c, d) { return Math.hypot(c - a, d - b); };
+
+      /* Donor-native body identities and exact core colours. */
+      var TYPES = {
+        runner: { name: 'COURIER', w: 38, h: 56, range: 470, color: '#72edff', accent: '#fff4d8' },
+        kite: { name: 'KITE', w: 50, h: 34, range: 535, color: '#ff73b6', accent: '#ffe5f3' },
+        ram: { name: 'RAM', w: 60, h: 58, range: 415, color: '#ffbd67', accent: '#fff1cc' },
+      };
+      var BG_TOP = '#08101c', BG_BOTTOM = '#102a39', FOG = '#2d6f78';
+      var DEAD = '#536170', DARK = '#03070c', CREAM = '#fff4d8';
+
+      function rgba(hex, a) {
+        var n = parseInt(hex.slice(1), 16);
+        return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+      }
+      function rr(g, x, y, w, h, r) {
+        r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+        g.beginPath();
+        g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r);
+        g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r);
+        g.arcTo(x, y, x + w, y, r); g.closePath();
+      }
+      function center(s) { return { x: s.x + s.w * 0.5, y: s.y + s.h * 0.48 }; }
+      function hash(n) { var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+
+      /* The city is authored once. Recomputing its trigonometric hash field and issuing one
+         canvas stroke per rain drop was expensive enough to miss frames on the shell's DPR-2
+         surface. Keep the exact deterministic geometry, but batch the moving rain into one
+         path and reuse the static skyline coordinates. */
+      var skyline = [], rain = [];
+      for (var cityLayer = 0; cityLayer < 3; cityLayer++) {
+        var cityBase = 460 + cityLayer * 50;
+        var cityBuildings = [];
+        for (var cityI = 0; cityI < 9; cityI++) {
+          var cityW = 45 + hash(cityI * 17 + cityLayer * 31) * 50;
+          var cityH = 80 + hash(cityI * 29 + cityLayer * 7) * (150 - cityLayer * 18);
+          var cityX = cityI * 54 - 24 + cityLayer * 18;
+          var cityWindows = [];
+          if (cityLayer === 1) {
+            for (var cityY = cityBase - cityH + 18; cityY < cityBase - 16; cityY += 28) {
+              if (hash(cityI * 71 + cityY) > 0.42) cityWindows.push(cityY);
+            }
+          }
+          cityBuildings.push({ x: cityX, y: cityBase - cityH, w: cityW, h: cityH, windows: cityWindows });
+        }
+        skyline.push({ base: cityBase, buildings: cityBuildings });
+      }
+      for (var rainI = 0; rainI < 52; rainI++) {
+        rain.push({
+          x: hash(rainI * 47 + 3) * W,
+          y: hash(rainI * 83 + 9) * H,
+          speed: 28 + hash(rainI) * 60,
+          fall: 120 + hash(rainI * 2) * 100,
+          len: 10 + hash(rainI * 13) * 18,
+        });
+      }
+
+      /* Liang-Barsky, as used by the donor's transferBlocked path. */
+      function segRect(ax, ay, bx, by, r) {
+        var t0 = 0, t1 = 1, dx = bx - ax, dy = by - ay;
+        var p = [-dx, dx, -dy, dy];
+        var q = [ax - r.x, r.x + r.w - ax, ay - r.y, r.y + r.h - ay];
+        for (var i = 0; i < 4; i++) {
+          if (Math.abs(p[i]) < 0.0001) { if (q[i] < 0) return false; }
+          else {
+            var z = q[i] / p[i];
+            if (p[i] < 0) { if (z > t1) return false; if (z > t0) t0 = z; }
+            else { if (z < t0) return false; if (z < t1) t1 = z; }
+          }
+        }
+        return true;
+      }
+
+      function makeBody(type, cx, cy) {
+        var d = TYPES[type];
+        return {
+          type: type, x: cx - d.w / 2, y: cy - d.h * 0.48, w: d.w, h: d.h,
+          active: false, lit: false, dormant: true, targetable: true, broken: false,
+          pulse: 0, phase: env.rng() * TAU, wrong: 0,
+        };
+      }
+
+      /* Every required read is above y=562. The active pilot waits just beneath them. */
+      var spots = [
+        { x: 66, y: 188 }, { x: 194, y: 151 }, { x: 322, y: 194 },
+        { x: 119, y: 350 }, { x: 278, y: 354 },
+      ];
+      /* Rotate the authored layout under the seed instead of randomising during render. */
+      var turn = (env.rng() * spots.length) | 0;
+      spots = spots.slice(turn).concat(spots.slice(0, turn));
+      var count = [3, 4, 5][D];
+      var bodyKinds = ['kite', 'runner', 'ram', 'kite', 'runner'];
+      var bodies = [];
+      for (var bi = 0; bi < count; bi++) bodies.push(makeBody(bodyKinds[(bi + turn) % bodyKinds.length], spots[bi].x, spots[bi].y));
+
+      var active = makeBody('runner', W / 2, 506);
+      active.active = active.lit = true; active.dormant = false;
+      var safeIndex = (env.rng() * bodies.length) | 0;
+      var safe = bodies[safeIndex];
+      var obstacles = [];
+
+      /* One intact path; every decoy is honestly excluded by the donor's candidate rules:
+         broken body, non-targetable drained body, or a solid city door across the ray. */
+      var invalidNo = 0;
+      var ac = center(active), sc = center(safe);
+      for (var ii = 0; ii < bodies.length; ii++) {
+        if (ii === safeIndex) continue;
+        var b = bodies[ii], bc = center(b), mode = invalidNo++ % 3;
+        if (mode === 0) {
+          b.broken = true; b.targetable = true;
+        } else if (mode === 1) {
+          var mx = lerp(ac.x, bc.x, 0.73), my = lerp(ac.y, bc.y, 0.73);
+          var door = { x: mx - 18, y: my - 30, w: 36, h: 60, color: TYPES[b.type].color };
+          /* Never let a decoy's door cross the selected body's ray. */
+          if (segRect(ac.x, ac.y, sc.x, sc.y, door)) b.targetable = false;
+          else obstacles.push(door);
+        } else {
+          b.targetable = false;
+        }
+      }
+
+      function transferBlocked(ax, ay, bx, by) {
+        for (var i = 0; i < obstacles.length; i++) if (segRect(ax, ay, bx, by, obstacles[i])) return true;
+        return false;
+      }
+      function candidates() {
+        if (!active) return [];
+        var a = center(active), range = TYPES[active.type].range;
+        return bodies.filter(function (s) {
+          var c = center(s);
+          return s !== active && !s.broken && s.targetable &&
+            dist(a.x, a.y, c.x, c.y) <= range && !transferBlocked(a.x, a.y, c.x, c.y);
+        });
+      }
+
+      var done = 'pending', transfer = null;
+      var t = 0, armedT = 0, shake = 0, flash = 0, snuff = 0;
+      var particles = [];
+      var flameMax = env.beatLen() * [5.2, 4.8, 4.45][D];
+      var flame = flameMax, lifeBeat = Math.ceil(flame / env.beatLen());
+
+      function burst(x, y, color, n, speed, gravity) {
+        for (var i = 0; i < n && particles.length < 100; i++) {
+          var a = env.rng() * TAU, sp = speed * (0.25 + env.rng() * 0.75);
+          particles.push({
+            x: x + (env.rng() - 0.5) * 6, y: y + (env.rng() - 0.5) * 6,
+            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+            life: 0.3 + env.rng() * 0.36, max: 0.66,
+            size: 1.5 + env.rng() * 4, color: color, gravity: gravity ? 430 : 0,
+          });
+        }
+      }
+      function transferSound(distance) {
+        var n = clamp(distance / 535, 0, 1), f = 330 + 250 * n;
+        env.audio.tone({ f: f, type: 'sawtooth', dur: 0.17, vol: 0.14 });
+        env.audio.tone({ f: f * 1.5, type: 'sine', dur: 0.23, vol: 0.10, t: 0.03 });
+        env.audio.noise({ dur: 0.09, vol: 0.045, hp: 1800 });
+      }
+      function reject(body, x, y) {
+        if (body) { body.wrong = 1; body.pulse = 0.7; }
+        shake = Math.max(shake, 1.8);
+        env.audio.tone({ f: 105, type: 'square', dur: 0.06, vol: 0.055 });
+        burst(x, y - 18, DEAD, 5, 65, true);
+      }
+      function attemptTransfer(target) {
+        if (!active || transfer || done !== 'pending') return false;
+        var list = candidates();
+        if (!target || list.indexOf(target) < 0) {
+          var rc = target ? center(target) : center(active);
+          reject(target, rc.x, rc.y);
+          return false;
+        }
+
+        var from = active, a = center(from), b = center(target);
+        var d = dist(a.x, a.y, b.x, b.y), nx = (b.x - a.x) / Math.max(1, d), ny = (b.y - a.y) / Math.max(1, d);
+        var normalX = -ny, normalY = nx;
+        var arc = clamp(d * 0.15, 35, 78) * (a.y > b.y ? -0.25 : -1);
+        var cx = (a.x + b.x) / 2 + normalX * arc;
+        var cy = (a.y + b.y) / 2 + normalY * arc - Math.min(55, d * 0.08);
+
+        from.active = false; from.lit = true; from.dormant = false; from.pulse = 1;
+        target.dormant = false; target.lit = true; target.broken = false; target.pulse = 1;
+        transfer = {
+          from: from, to: target, ax: a.x, ay: a.y, bx: b.x, by: b.y,
+          cx: cx, cy: cy, t: 0, duration: clamp(d / 1780, 0.13, 0.29), dx: nx, dy: ny,
+        };
+        active = null;
+        transferSound(d);
+        shake = 2.4;
+        burst(a.x, a.y, TYPES[from.type].color, 12, 230, false);
+        return true;
+      }
+      function finishTransfer() {
+        var q = transfer, s = q.to;
+        s.active = s.lit = true; s.dormant = false; s.pulse = 1;
+        active = s; transfer = null; done = 'won'; flash = 1; shake = 8;
+        var c = center(s), col = TYPES[s.type].color;
+        burst(c.x, c.y, col, 28, 260, false);
+        [0, 3, 7, 12].forEach(function (n, i) {
+          env.audio.tone({ f: 220 * Math.pow(2, n / 12), type: i % 2 ? 'triangle' : 'sine', dur: 0.34, vol: 0.12, t: i * 0.045 });
+        });
+      }
+      function lose() {
+        if (!env.armed() || done !== 'pending') return;
+        done = 'lost'; flame = 0; snuff = 1; shake = 5;
+        if (active) active.lit = false;
+        env.audio.tone({ f: 160, f2: 52, type: 'sawtooth', dur: 0.42, vol: 0.16 });
+        env.audio.noise({ dur: 0.28, vol: 0.11, lp: 520 });
+        var c = active ? center(active) : { x: W / 2, y: 480 };
+        burst(c.x, c.y, DEAD, 18, 115, true);
+      }
+      function hitBody(x, y) {
+        var all = bodies.concat(active ? [active] : []), best = null, bestD = 1e9;
+        for (var i = 0; i < all.length; i++) {
+          var c = center(all[i]), radius = Math.max(all[i].w, all[i].h) * 0.6 + 24;
+          var d = dist(x, y, c.x, c.y);
+          if (d <= radius && d < bestD) { best = all[i]; bestD = d; }
+        }
+        return best;
+      }
+
+      function updateParticles(dt) {
+        for (var i = particles.length - 1; i >= 0; i--) {
+          var p = particles[i];
+          p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.gravity * dt;
+          p.vx *= Math.pow(0.18, dt);
+          p.life -= dt;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+      }
+
+      function drawCity(g) {
+        var sky = g.createLinearGradient(0, 0, 0, H);
+        sky.addColorStop(0, BG_TOP); sky.addColorStop(1, BG_BOTTOM);
+        g.fillStyle = sky; g.fillRect(0, 0, W, H);
+
+        /* Sleeping skyline and donor WAKE rain. */
+        for (var layer = 0; layer < skyline.length; layer++) {
+          var city = skyline[layer];
+          g.fillStyle = layer === 0 ? 'rgba(45,111,120,.08)' : layer === 1 ? 'rgba(13,31,43,.70)' : 'rgba(3,9,15,.94)';
+          for (var i = 0; i < city.buildings.length; i++) {
+            var building = city.buildings[i];
+            g.fillRect(building.x, building.y, building.w, building.h);
+            if (layer === 1) {
+              g.fillStyle = 'rgba(114,237,255,.10)';
+              for (var wi = 0; wi < building.windows.length; wi++) g.fillRect(building.x + 12, building.windows[wi], 6, 3);
+              g.fillStyle = 'rgba(13,31,43,.70)';
+            }
+          }
+        }
+        g.strokeStyle = 'rgba(168,216,232,.14)'; g.lineWidth = 1.2;
+        g.beginPath();
+        for (var r = 0; r < rain.length; r++) {
+          var drop = rain[r];
+          var rx = (drop.x + t * drop.speed) % W;
+          var ry = (drop.y + t * drop.fall) % H;
+          g.moveTo(rx, ry); g.lineTo(rx - 4, ry + drop.len);
+        }
+        g.stroke();
+
+        g.fillStyle = 'rgba(2,6,11,.94)'; g.fillRect(0, 548, W, H - 548);
+        g.strokeStyle = rgba(FOG, 0.34); g.lineWidth = 2;
+        g.beginPath(); g.moveTo(0, 548); g.lineTo(W, 548); g.stroke();
+        g.fillStyle = 'rgba(114,237,255,.055)';
+        for (var gx = 0; gx < W; gx += 36) g.fillRect(gx, 590 + (gx % 72 ? 24 : 0), 22, 3);
+
+        g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+        g.font = '700 12px "Segoe UI",system-ui,sans-serif';
+        g.fillStyle = 'rgba(203,215,223,.25)'; g.fillText('WAKE  /  ONE SPARK', 20, 78);
+      }
+
+      function drawDoor(g, o) {
+        g.save();
+        g.fillStyle = 'rgba(8,11,17,.96)'; g.strokeStyle = rgba(o.color, 0.58); g.lineWidth = 3;
+        g.fillRect(o.x, o.y, o.w, o.h); g.strokeRect(o.x + 1, o.y + 1, o.w - 2, o.h - 2);
+        g.fillStyle = rgba(o.color, 0.18);
+        for (var y = o.y + 10; y < o.y + o.h; y += 15) g.fillRect(o.x + 5, y, o.w - 10, 2);
+        g.restore();
+      }
+
+      function drawRunner(g, s, d) {
+        g.strokeStyle = rgba(d.accent, s.broken ? 0.28 : 0.82);
+        g.fillStyle = s.lit ? rgba(d.color, 0.22) : 'rgba(25,31,39,.82)';
+        g.lineWidth = 3; g.lineCap = 'round';
+        g.lineWidth = 6; g.beginPath(); g.moveTo(-8, 14); g.lineTo(-10, 27); g.moveTo(8, 14); g.lineTo(10, 27); g.stroke();
+        rr(g, -15, -18, 30, 37, 10); g.fill(); g.stroke();
+        rr(g, -12, -30, 24, 15, 7); g.fill(); g.stroke();
+        g.fillStyle = s.lit ? d.accent : 'rgba(130,145,155,.38)';
+        g.beginPath(); g.arc(5, -23, 3.2, 0, TAU); g.fill();
+      }
+      function drawKite(g, s, d) {
+        var flap = Math.sin(t * 8 + s.phase) * 3;
+        g.strokeStyle = rgba(d.accent, s.broken ? 0.28 : 0.86);
+        g.fillStyle = s.lit ? rgba(d.color, 0.25) : 'rgba(27,27,39,.82)'; g.lineWidth = 3;
+        g.beginPath(); g.moveTo(-25, 1); g.quadraticCurveTo(-10, -15 - flap, 0, -5);
+        g.quadraticCurveTo(10, -15 - flap, 25, 1); g.lineTo(10, 11); g.quadraticCurveTo(0, 4, -10, 11); g.closePath();
+        g.fill(); g.stroke();
+        g.fillStyle = s.lit ? d.accent : 'rgba(140,130,150,.38)'; g.beginPath(); g.arc(0, -1, 7, 0, TAU); g.fill();
+        g.strokeStyle = rgba(d.color, 0.55); g.lineWidth = 2; g.beginPath();
+        g.moveTo(-18, 5); g.lineTo(-27, 14); g.moveTo(18, 5); g.lineTo(27, 14); g.stroke();
+      }
+      function drawRam(g, s, d) {
+        g.strokeStyle = rgba(d.accent, s.broken ? 0.28 : 0.84);
+        g.fillStyle = s.lit ? rgba(d.color, 0.24) : 'rgba(34,30,27,.84)'; g.lineWidth = 3.5;
+        rr(g, -27, -22, 54, 44, 9); g.fill(); g.stroke();
+        g.fillStyle = s.lit ? rgba(d.color, 0.32) : 'rgba(80,68,58,.34)'; rr(g, -20, -15, 40, 29, 6); g.fill();
+        g.strokeStyle = rgba(d.accent, 0.72); g.beginPath();
+        g.moveTo(-27, -12); g.lineTo(-38, -19); g.lineTo(-34, -4);
+        g.moveTo(27, -12); g.lineTo(38, -19); g.lineTo(34, -4); g.stroke();
+        g.fillStyle = s.lit ? d.accent : 'rgba(160,145,125,.40)'; g.beginPath(); g.arc(10, -5, 4.5, 0, TAU); g.fill();
+        g.lineWidth = 6; g.beginPath(); g.moveTo(-17, 21); g.lineTo(-18, 28); g.moveTo(17, 21); g.lineTo(18, 28); g.stroke();
+      }
+
+      function drawBody(g, s) {
+        var c = center(s), d = TYPES[s.type], selected = done === 'pending' && s === safe;
+        g.save(); g.translate(c.x, c.y);
+        var pulseScale = 1 + s.pulse * 0.12; g.scale(pulseScale, pulseScale);
+        if (s.lit || s.active || selected) {
+          g.strokeStyle = rgba(d.color, s.active ? 0.60 : selected ? 0.38 : 0.25);
+          g.lineWidth = s.active ? 4 : 2;
+          for (var ring = 0; ring < 2; ring++) {
+            g.globalAlpha = 1 - ring * 0.55;
+            g.beginPath(); g.arc(0, 0, Math.max(s.w, s.h) * 0.62 + 5 + ring * 7 + Math.sin(t * 2.4 + s.phase) * 2, 0, TAU); g.stroke();
+          }
+          g.globalAlpha = 1;
+        }
+        if (s.type === 'runner') drawRunner(g, s, d); else if (s.type === 'kite') drawKite(g, s, d); else drawRam(g, s, d);
+
+        if (s.broken) {
+          g.strokeStyle = '#ff577d'; g.lineWidth = 3; g.beginPath();
+          g.moveTo(-18, -24); g.lineTo(-4, -8); g.lineTo(-12, 4); g.lineTo(16, 23); g.stroke();
+        } else if (!s.targetable && s !== safe) {
+          g.strokeStyle = rgba(DEAD, 0.72); g.lineWidth = 3; g.beginPath(); g.moveTo(-14, 0); g.lineTo(14, 0); g.stroke();
+        }
+        if (s.wrong > 0) {
+          g.globalAlpha = s.wrong; g.strokeStyle = '#ff577d'; g.lineWidth = 4;
+          g.beginPath(); g.arc(0, 0, Math.max(s.w, s.h) * 0.72 + 10, 0, TAU); g.stroke(); g.globalAlpha = 1;
+        }
+        g.restore();
+      }
+
+      function drawTargeting(g) {
+        if (!active || transfer || done !== 'pending') return;
+        var list = candidates(); if (!list.length) return;
+        var target = list[0], a = center(active), b = center(target), d = TYPES[active.type];
+        g.save();
+        g.strokeStyle = rgba(d.color, 0.38); g.lineWidth = 3;
+        g.setLineDash([7, 11]); g.lineDashOffset = -t * 35;
+        g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); g.setLineDash([]);
+        g.strokeStyle = rgba(TYPES[target.type].color, 0.92); g.lineWidth = 3;
+        g.beginPath(); g.arc(b.x, b.y, Math.max(target.w, target.h) * 0.7 + 10 + Math.sin(t * 5) * 3, 0, TAU); g.stroke();
+
+        /* The shared cream marking makes the selected recipient the first read. */
+        if (t < 1.5) {
+          var p8 = 1 - ((env.beatPhase() * 2) % 1);
+          g.globalAlpha = (0.22 + 0.52 * p8) * Math.min(1, (1.5 - t) * 3);
+          g.strokeStyle = env.ink; g.lineWidth = 3;
+          g.beginPath(); g.arc(b.x, b.y, Math.max(target.w, target.h) * 0.82 + 18, 0, TAU); g.stroke();
+          g.globalAlpha = 1;
+        }
+        g.restore();
+      }
+
+      function transferPoint(q) {
+        var k = smooth(clamp(q.t / q.duration, 0, 1)), u = 1 - k;
+        return {
+          x: u * u * q.ax + 2 * u * k * q.cx + k * k * q.bx,
+          y: u * u * q.ay + 2 * u * k * q.cy + k * k * q.by,
+        };
+      }
+      function drawTransfer(g) {
+        if (!transfer) return;
+        var q = transfer, p = transferPoint(q);
+        g.save(); g.lineCap = 'round';
+        var grad = g.createLinearGradient(q.ax, q.ay, q.bx, q.by);
+        grad.addColorStop(0, TYPES[q.from.type].color); grad.addColorStop(1, TYPES[q.to.type].color);
+        for (var i = 0; i < 3; i++) {
+          g.globalAlpha = 0.18 + i * 0.20; g.strokeStyle = grad; g.lineWidth = 14 - i * 5;
+          g.beginPath(); g.moveTo(q.ax, q.ay); g.quadraticCurveTo(q.cx, q.cy, p.x, p.y); g.stroke();
+        }
+        g.globalAlpha = 0.18; g.fillStyle = '#dffcff'; g.beginPath(); g.arc(p.x, p.y, 24, 0, TAU); g.fill();
+        g.globalAlpha = 1; g.fillStyle = '#fff9df'; g.beginPath(); g.arc(p.x, p.y, 8 + Math.sin(t * 22) * 2, 0, TAU); g.fill();
+        g.restore();
+      }
+
+      function drawFlame(g) {
+        if (!active || (done === 'lost' && snuff <= 0)) return;
+        var c = center(active), d = TYPES[active.type];
+        var life = done === 'won' ? 1 : clamp(flame / flameMax, 0, 1);
+        var flick = Math.sin(t * 19 + active.phase) * (2 + 3 * life);
+        var fy = c.y - Math.max(active.h * 0.18, 8);
+
+        g.save();
+        g.strokeStyle = rgba(d.color, 0.28); g.lineWidth = 3;
+        g.beginPath(); g.arc(c.x, c.y, Math.max(active.w, active.h) * 0.72 + 11, -Math.PI / 2, -Math.PI / 2 + TAU * life); g.stroke();
+        g.globalAlpha = 0.18 + 0.18 * life; g.fillStyle = d.color;
+        g.beginPath(); g.arc(c.x, fy, 18 + 8 * life, 0, TAU); g.fill();
+        g.globalAlpha = 1;
+        g.fillStyle = d.color; g.beginPath();
+        g.moveTo(c.x, fy - 10 - 17 * life); g.bezierCurveTo(c.x + 13 + flick, fy - 5, c.x + 12, fy + 13, c.x, fy + 16);
+        g.bezierCurveTo(c.x - 12, fy + 13, c.x - 11 - flick * 0.35, fy - 3, c.x, fy - 10 - 17 * life); g.fill();
+        g.fillStyle = CREAM; g.beginPath();
+        g.moveTo(c.x, fy - 7 - 8 * life); g.quadraticCurveTo(c.x + 7, fy + 3, c.x, fy + 10);
+        g.quadraticCurveTo(c.x - 7, fy + 3, c.x, fy - 7 - 8 * life); g.fill();
+        g.restore();
+      }
+
+      return {
+        step(dt, inp) {
+          t += dt;
+          shake *= Math.pow(0.015, dt); flash *= Math.pow(0.01, dt); snuff *= Math.pow(0.04, dt);
+          for (var i = 0; i < bodies.length; i++) {
+            bodies[i].pulse = Math.max(0, bodies[i].pulse - dt * 2.7);
+            bodies[i].wrong = Math.max(0, bodies[i].wrong - dt * 2.8);
+          }
+          if (active) { active.pulse = Math.max(0, active.pulse - dt * 2.7); active.wrong = Math.max(0, active.wrong - dt * 2.8); }
+          updateParticles(dt);
+          if (done !== 'pending') return;
+
+          if (transfer) {
+            transfer.t += dt;
+            if (transfer.t >= transfer.duration) finishTransfer();
+            return;
+          }
+
+          if (env.armed()) {
+            armedT += dt; flame -= dt;
+            var nb = Math.ceil(Math.max(0, flame) / env.beatLen());
+            if (nb < lifeBeat && nb > 0) {
+              lifeBeat = nb;
+              env.audio.tone({ f: 145 + nb * 24, type: 'sine', dur: 0.055, vol: 0.045 });
+            }
+            if (flame <= 0) { lose(); return; }
+          }
+
+          if (inp.justDown) {
+            var body = hitBody(inp.x, inp.y);
+            if (body && body !== active) attemptTransfer(body);
+            else reject(body, inp.x, inp.y);
+          }
+        },
+
+        render(g) {
+          g.save();
+          if (shake > 0.2) g.translate((hash(t * 73.1) - 0.5) * shake, (hash(t * 111.7) - 0.5) * shake);
+          drawCity(g);
+
+          /* Narrow sleeping-body plinths keep the cast readable without turning into UI cards. */
+          for (var i = 0; i < bodies.length; i++) {
+            var c = center(bodies[i]), col = TYPES[bodies[i].type].color;
+            g.fillStyle = 'rgba(3,7,12,.86)'; rr(g, c.x - 43, c.y + 34, 86, 11, 5); g.fill();
+            g.strokeStyle = rgba(col, 0.18); g.lineWidth = 1.5; g.stroke();
+          }
+          drawTargeting(g);
+          for (var oi = 0; oi < obstacles.length; oi++) drawDoor(g, obstacles[oi]);
+          for (var bi = 0; bi < bodies.length; bi++) drawBody(g, bodies[bi]);
+          if (active && bodies.indexOf(active) < 0) drawBody(g, active);
+          drawTransfer(g); drawFlame(g);
+
+          for (var pi = 0; pi < particles.length; pi++) {
+            var p = particles[pi];
+            g.globalAlpha = clamp(p.life / p.max, 0, 1); g.fillStyle = p.color;
+            g.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+          }
+          g.globalAlpha = 1;
+
+          if (done === 'won') {
+            g.fillStyle = 'rgba(255,244,216,' + (0.08 + flash * 0.28) + ')'; g.fillRect(-20, -20, W + 40, H + 40);
+            g.textAlign = 'center'; g.font = '900 24px "Arial Black","Segoe UI Black",sans-serif';
+            g.fillStyle = CREAM; g.fillText('THE LIGHT STAYED', W / 2, 446);
+          } else if (done === 'lost') {
+            g.fillStyle = 'rgba(2,5,9,' + (0.22 + snuff * 0.28) + ')'; g.fillRect(-20, -20, W + 40, H + 40);
+            g.textAlign = 'center'; g.font = '900 23px "Arial Black","Segoe UI Black",sans-serif';
+            g.fillStyle = rgba(DEAD, 0.92); g.fillText('ONE SPARK, OUT.', W / 2, 446);
+          }
+          g.restore();
+        },
+
+        result: function () { return done; },
+        timeout: function () { if (done === 'pending') lose(); return done; },
+        line: function () { return 'you left the light between bodies'; },
+        hint: function () {
+          if (done !== 'pending' || transfer) return { type: 'wait', ms: 120 };
+          var list = candidates();
+          if (!list.length) return { type: 'wait', ms: 120 };
+          var c = center(list[0]); return { type: 'tap', x: c.x, y: c.y };
+        },
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - Exactly one recipient survives candidates(): it is intact, targetable, within the active
+     body's donor range, and its center-to-center ray crosses no authored city door.
+   - The safe body is always above y=562 and receives the donor's animated dashed ray, coloured
+     target ring, plus the shared cream eighth-note rim for the first 1.5 seconds.
+   - Tapping that body starts the donor quadratic transfer with duration clamp(distance/1780,
+     0.13, 0.29); reaching it lights and activates the recipient and returns 'won'.
+   - Tapping a cracked, drained, door-blocked, active, or empty location rejects with the donor
+     105Hz square thunk but does not steal the attempt; the shrinking pilot flame keeps burning.
+   - After 5.2/4.8/4.45 beats of armed time by difficulty, the flame snuffs and result becomes
+     'lost'; input during count-in cannot produce a loss, and slot timeout also returns 'lost'.
+   - All body selection, phases, particles, and layout rotation use env.rng; render uses only a
+     deterministic hash for rain and shake and consumes no randomness.
+   BUG-IS-GAME (do not fix):
+   - A body can remain visibly lit after the spark leaves it. In PILOT LIGHT, lit and controlled
+     are different states; the abandoned body is part of the living network, not a dead husk.
+   - An invalid explicit transfer simply refuses instead of killing the pilot. The donor's
+     attemptTransfer rejects non-candidates; the dying flame is the cost of guessing.
+   - The spark traverses a curved quadratic path even when the straight ray is clear. That little
+     airborne bow is the donor's hand-feel and must not be flattened into a UI line.
+*/
+
+/* ===== carts/38-starling.js ===== */
+/* STARLING — one committed bank sends the warning through the flock before the falcon lands. */
+(function () {
+  registerGame({
+    id: 'starling',
+    title: 'STARLING',
+    command: 'WARN THEM!',
+    family: 'drag',
+    slotBeats: 8,
+    create(env) {
+      const W = env.W, H = env.H, TAU = Math.PI * 2, R = env.rng;
+      const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+      const MARK = 1.85;              // donor MARK 1.55, opened slightly for a one-shot reel read
+      const STOOP = 1.0;              // donor STOOP, unchanged
+      const BANK_TRIGGER = 0.92;      // donor committed-turn threshold, in radians
+      const BANK_PER_PIXEL = 0.011;   // ~84 px of coherent horizontal travel = one committed bank
+      const BANK_DECAY = 3.4;         // donor decay: a reversal cancels the warning
+      const WAVE_SPEED = 360;         // portrait-scaled donor 780 px/s
+      const WAVE_WIDTH = 42;
+      const ALARM_ARMED = 0.30;       // donor survival threshold
+      const SKY0 = '#171727', SKY1 = '#4a3651', SKY2 = '#b87372';
+      const NIGHT = '#11131c', PALE = '#e8ddd0', WARNING = '#e7b35d';
+
+      const targetSide = R() < 0.5 ? -1 : 1;
+      const tx = targetSide < 0 ? 112 : 278;
+      const ty = 292 + (R() - 0.5) * 22;
+      const falconSide = R() < 0.5 ? -1 : 1;
+      const fsx = clamp(tx + falconSide * (132 + R() * 34), 54, W - 54);
+      const fsy = 112 + R() * 22;
+      const birds = [];
+      const feathers = [];
+
+      /* A dense, visibly marked patch plus the rest of the murmuration. The target flag is
+         only gameplay bookkeeping; all birds can receive and visibly relay the wave. */
+      for (let i = 0; i < 28; i++) {
+        const a = R() * TAU, rr = Math.sqrt(R());
+        birds.push({
+          bx: tx + Math.cos(a) * rr * 58,
+          by: ty + Math.sin(a) * rr * 46,
+          phase: R() * TAU,
+          size: 2.4 + R() * 1.8,
+          target: true,
+          alarm: 0,
+          alertAt: -1,
+          dead: false,
+        });
+      }
+      for (let i = 0; i < 48; i++) {
+        const a = R() * TAU, rr = Math.sqrt(R());
+        const cx = targetSide < 0 ? 244 : 146;
+        birds.push({
+          bx: cx + Math.cos(a) * rr * 142,
+          by: 330 + Math.sin(a) * rr * 105,
+          phase: R() * TAU,
+          size: 2.1 + R() * 1.6,
+          target: false,
+          alarm: 0,
+          alertAt: -1,
+          dead: false,
+        });
+      }
+
+      let t = 0, done = 'pending', failMode = '';
+      let playerX = W * 0.5, playerY = 520, playerDir = -Math.PI / 2, playerRoll = 0;
+      let bank = 0, dragging = false, wave = null, waveNotes = 0;
+      let strikeDone = false, resolveAge = 0, shake = 0, flash = 0, cuePlayed = false;
+
+      function birdPos(b) {
+        return {
+          x: b.bx + Math.sin(t * 2.1 + b.phase) * (b.target ? 5 : 8),
+          y: b.by + Math.cos(t * 1.7 + b.phase * 1.3) * (b.target ? 4 : 7),
+        };
+      }
+
+      function emitWave(direction) {
+        if (wave || done !== 'pending') return;
+        playerDir += direction * 1.08;
+        playerRoll = direction;
+        wave = { x: playerX, y: playerY, r: 0, strength: 1 };
+        shake = 3;
+        env.audio.noise({ dur: 0.12, vol: 0.10, hp: 1100, lp: 5200 });
+        env.audio.tone({ f: 330, f2: 610, type: 'triangle', dur: 0.22, vol: 0.16 });
+      }
+
+      function burstFeathers(killed) {
+        const n = killed ? 42 : 30;
+        for (let i = 0; i < n; i++) {
+          const a = R() * TAU, sp = 45 + R() * (killed ? 210 : 150);
+          feathers.push({
+            x: tx + (R() - 0.5) * 36,
+            y: ty + (R() - 0.5) * 24,
+            vx: Math.cos(a) * sp,
+            vy: Math.sin(a) * sp - (killed ? 30 : 80),
+            rot: R() * TAU,
+            vr: (R() - 0.5) * 12,
+            life: 0.65 + R() * 0.55,
+            max: 1.2,
+          });
+        }
+      }
+
+      function resolveStrike() {
+        if (strikeDone) return;
+        strikeDone = true;
+        let killed = 0;
+        for (const b of birds) {
+          if (!b.target) continue;
+          if (b.alarm < ALARM_ARMED) { b.dead = true; killed++; }
+        }
+        resolveAge = 0;
+        flash = 0.8;
+        shake = killed ? 15 : 10;
+        burstFeathers(killed);
+        if (killed) {
+          failMode = wave ? 'late' : 'silent';
+          if (env.armed()) done = 'lost';
+          env.audio.noise({ dur: 0.28, vol: 0.26, lp: 1200 });
+          env.audio.tone({ f: 180, f2: 52, type: 'sawtooth', dur: 0.36, vol: 0.18 });
+        } else {
+          done = 'won';
+          env.audio.tone({ f: 392, type: 'triangle', dur: 0.34, vol: 0.16 });
+          env.audio.tone({ f: 587, type: 'triangle', dur: 0.34, vol: 0.14, t: 0.06 });
+          env.audio.tone({ f: 784, type: 'sine', dur: 0.42, vol: 0.12, t: 0.13 });
+        }
+      }
+
+      function drawBird(g, x, y, size, dir, alarm, dead) {
+        g.save();
+        g.translate(x, y);
+        g.rotate(dead ? dir + Math.PI * 0.55 : dir);
+        const spread = dead ? 0.2 : alarm >= ALARM_ARMED ? 1.05 : 0.58 + Math.sin(t * 11 + x) * 0.18;
+        g.strokeStyle = dead ? 'rgba(17,19,28,0.38)' : NIGHT;
+        g.lineWidth = Math.max(1.1, size * 0.72);
+        g.lineCap = 'round';
+        g.beginPath();
+        g.moveTo(-size * 2.2, size * spread);
+        g.quadraticCurveTo(-size * 0.8, -size * spread, 0, 0);
+        g.quadraticCurveTo(size * 0.8, -size * spread, size * 2.2, size * spread);
+        g.stroke();
+        if (alarm >= ALARM_ARMED && !dead) {
+          g.fillStyle = PALE;
+          g.beginPath(); g.arc(0, 0, Math.max(0.9, size * 0.38), 0, TAU); g.fill();
+        }
+        g.restore();
+      }
+
+      function drawFalcon(g, x, y, dir, scale) {
+        g.save(); g.translate(x, y); g.rotate(dir); g.scale(scale, scale);
+        const wing = 8 + Math.sin(t * 9) * 3;
+        g.fillStyle = '#090b10';
+        g.beginPath();
+        g.moveTo(16, 0);
+        g.quadraticCurveTo(2, -4, -wing, -17);
+        g.quadraticCurveTo(-6, -1, -15, 2);
+        g.quadraticCurveTo(-5, 5, -wing, 17);
+        g.quadraticCurveTo(3, 6, 16, 0);
+        g.closePath(); g.fill();
+        g.fillStyle = WARNING;
+        g.beginPath(); g.arc(8, -2, 1.4, 0, TAU); g.fill();
+        g.restore();
+      }
+
+      return {
+        step(dt, inp) {
+          t += dt;
+          resolveAge += done === 'pending' ? 0 : dt;
+          shake = Math.max(0, shake - dt * 18);
+          flash = Math.max(0, flash - dt * 2.6);
+          if (!cuePlayed && t > 0.24) {
+            cuePlayed = true;
+            env.audio.tone({ f: 164, f2: 146, type: 'triangle', dur: 0.28, vol: 0.08 });
+          }
+
+          if (done === 'pending') {
+            if (inp.justDown) dragging = true;
+            if (dragging && (inp.down || inp.justUp)) {
+              const travel = inp.x - inp.downX;
+              const rawBank = travel * BANK_PER_PIXEL;
+              bank += (rawBank - bank) * (1 - Math.exp(-22 * dt));
+              playerX += (clamp(W * 0.5 + travel * 0.34, 92, W - 92) - playerX) * (1 - Math.exp(-18 * dt));
+              playerRoll += (clamp(rawBank, -1, 1) - playerRoll) * (1 - Math.exp(-12 * dt));
+              if (Math.abs(rawBank) >= BANK_TRIGGER && t < MARK + STOOP) emitWave(rawBank < 0 ? -1 : 1);
+            } else {
+              bank *= Math.exp(-BANK_DECAY * dt);
+              playerRoll *= Math.exp(-4.5 * dt);
+            }
+            if (inp.justUp) dragging = false;
+          }
+
+          /* The explicit front is the donor mechanic: it travels at a fixed speed and each
+             bird arms only when the band physically reaches it. */
+          if (wave && !strikeDone) {
+            wave.r += WAVE_SPEED * dt;
+            for (const b of birds) {
+              if (b.alertAt >= 0) continue;
+              const p = birdPos(b);
+              const d = Math.hypot(p.x - wave.x, p.y - wave.y);
+              if (Math.abs(d - wave.r) <= WAVE_WIDTH) {
+                b.alarm = 1;
+                b.alertAt = t;
+                if (b.target && waveNotes < 3) {
+                  waveNotes++;
+                  env.audio.tone({ f: 520 + waveNotes * 95, type: 'sine', dur: 0.08, vol: 0.045 });
+                }
+              }
+            }
+          }
+          for (const b of birds) if (b.alarm > 0) b.alarm = Math.max(0, b.alarm - dt * 0.08);
+
+          if (!strikeDone && t >= MARK + STOOP) resolveStrike();
+          /* A loss is never allowed to resolve in the count-in. The strike happens well after
+             every supported count-in, but this keeps the contract explicit. */
+          if (strikeDone && done === 'pending' && env.armed()) done = 'lost';
+
+          for (let i = feathers.length - 1; i >= 0; i--) {
+            const f = feathers[i];
+            f.life -= dt; f.vy += 120 * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt;
+            if (f.life <= 0) feathers.splice(i, 1);
+          }
+        },
+
+        render(g) {
+          const phase = t < MARK ? 'mark' : t < MARK + STOOP ? 'stoop' : 'pass';
+          let fx = fsx, fy = fsy, fdir = Math.atan2(ty - fsy, tx - fsx);
+          if (phase === 'mark') {
+            fx += Math.sin(t * 1.7) * 12; fy += Math.sin(t * 5.2) * 6;
+            fdir = Math.atan2(ty - fy, tx - fx);
+          } else {
+            const k = clamp((t - MARK) / STOOP, 0, 1);
+            const e = k * k * (3 - 2 * k) * 0.35 + k * k * 0.65;
+            fx = fsx + (tx - fsx) * e;
+            fy = fsy + (ty - fsy) * e;
+            if (phase === 'pass') { fx += Math.cos(fdir) * resolveAge * 430; fy += Math.sin(fdir) * resolveAge * 430; }
+          }
+          const hx = Math.sin((t * 60 + 1.7) * 12.9898) * 43758.5453;
+          const hy = Math.sin((t * 60 + 9.1) * 78.233) * 43758.5453;
+          const sx = shake > 0 ? ((hx - Math.floor(hx)) - 0.5) * shake : 0;
+          const sy = shake > 0 ? ((hy - Math.floor(hy)) - 0.5) * shake : 0;
+
+          g.save(); g.translate(sx, sy);
+          const sky = g.createLinearGradient(0, 0, 0, H);
+          sky.addColorStop(0, SKY0); sky.addColorStop(0.52, SKY1); sky.addColorStop(1, SKY2);
+          g.fillStyle = sky; g.fillRect(-30, -30, W + 60, H + 60);
+          g.fillStyle = 'rgba(238,189,152,0.10)';
+          for (let y = 92; y < 610; y += 46) g.fillRect(0, y + Math.sin(y * 0.03) * 7, W, 1);
+
+          /* The mark is legible without colour: a solid falcon, a dashed dive vector, and
+             two breathing impact ovals around the dense patch it is tracking. */
+          if (!strikeDone) {
+            g.save(); g.setLineDash([7, 9]); g.lineDashOffset = -t * 28;
+            g.strokeStyle = 'rgba(232,221,208,0.48)'; g.lineWidth = 2;
+            g.beginPath(); g.moveTo(fx, fy); g.lineTo(tx, ty); g.stroke(); g.restore();
+            const markPulse = 1 + Math.sin(t * 7) * 0.08;
+            g.strokeStyle = 'rgba(17,19,28,0.55)'; g.lineWidth = 2;
+            g.beginPath(); g.ellipse(tx, ty, 66 * markPulse, 52 * markPulse, 0, 0, TAU); g.stroke();
+            g.setLineDash([3, 7]); g.lineDashOffset = t * 22;
+            g.beginPath(); g.ellipse(tx, ty, 78, 61, 0, 0, TAU); g.stroke(); g.setLineDash([]);
+          }
+
+          if (wave && !strikeDone) {
+            g.strokeStyle = 'rgba(232,221,208,0.17)'; g.lineWidth = WAVE_WIDTH * 1.25;
+            g.beginPath(); g.arc(wave.x, wave.y, wave.r, 0, TAU); g.stroke();
+            g.strokeStyle = 'rgba(231,179,93,0.82)'; g.lineWidth = 3;
+            g.beginPath(); g.arc(wave.x, wave.y, wave.r, 0, TAU); g.stroke();
+            g.strokeStyle = 'rgba(17,19,28,0.45)'; g.lineWidth = 1;
+            g.beginPath(); g.arc(wave.x, wave.y, Math.max(0, wave.r - 8), 0, TAU); g.stroke();
+          }
+
+          for (const b of birds) {
+            const p = birdPos(b);
+            let x = p.x, y = p.y;
+            if (strikeDone && !b.dead) {
+              const a = Math.atan2(p.y - ty, p.x - tx);
+              x += Math.cos(a) * resolveAge * 92; y += Math.sin(a) * resolveAge * 58;
+            }
+            if (strikeDone && b.dead) y += resolveAge * resolveAge * 95;
+            const face = b.alarm >= ALARM_ARMED && wave
+              ? Math.atan2(p.y - wave.y, p.x - wave.x)
+              : -Math.PI / 2 + Math.sin(t * 1.3 + b.phase) * 0.22;
+            drawBird(g, x, y, b.size, face, b.alarm, b.dead);
+          }
+
+          drawFalcon(g, fx, fy, fdir, phase === 'stoop' ? 1.18 : 1);
+
+          /* The player is one larger bird. Roll and a curved wake make the required bank a
+             body motion, while the cream rim is the anthology's shared first-1.5s mark. */
+          g.save(); g.translate(playerX, playerY); g.rotate(playerDir); g.scale(1, 1 - Math.abs(playerRoll) * 0.18);
+          g.fillStyle = PALE; g.beginPath(); g.ellipse(0, 0, 7, 12, 0, 0, TAU); g.fill();
+          g.strokeStyle = NIGHT; g.lineWidth = 4; g.lineCap = 'round';
+          g.beginPath(); g.moveTo(-4, 1); g.quadraticCurveTo(-18, 7 + playerRoll * 7, -26, 1);
+          g.moveTo(4, 1); g.quadraticCurveTo(18, 7 - playerRoll * 7, 26, 1); g.stroke();
+          g.restore();
+          if (t < 1.5 && !wave) {
+            const p8 = 0.5 + 0.5 * Math.sin(env.beatPhase() * Math.PI * 4);
+            g.globalAlpha = 0.28 + p8 * 0.48; g.strokeStyle = env.ink; g.lineWidth = 2;
+            g.beginPath(); g.arc(playerX, playerY, 28 + p8 * 4, 0, TAU); g.stroke();
+            g.globalAlpha = 1;
+            const sgn = targetSide;
+            g.strokeStyle = 'rgba(255,243,214,0.48)'; g.lineWidth = 3; g.lineCap = 'round';
+            g.beginPath();
+            g.arc(playerX, playerY, 45, sgn < 0 ? -0.3 : Math.PI + 0.3, sgn < 0 ? -2.35 : Math.PI + 2.35, sgn < 0);
+            g.stroke();
+          }
+
+          for (const f of feathers) {
+            g.save(); g.translate(f.x, f.y); g.rotate(f.rot);
+            g.globalAlpha = clamp(f.life / f.max, 0, 1);
+            g.strokeStyle = strikeDone && done === 'won' ? PALE : NIGHT; g.lineWidth = 1.5;
+            g.beginPath(); g.moveTo(-5, 0); g.quadraticCurveTo(0, -2, 7, 0); g.stroke(); g.restore();
+          }
+          g.restore();
+
+          if (flash > 0) {
+            g.fillStyle = done === 'won' ? 'rgba(232,221,208,' + (flash * 0.18).toFixed(3) + ')'
+              : 'rgba(17,19,28,' + (flash * 0.30).toFixed(3) + ')';
+            g.fillRect(0, 0, W, H);
+          }
+        },
+
+        result: () => done,
+        timeout() {
+          if (done === 'pending') {
+            done = 'lost'; failMode = wave ? 'late' : 'silent';
+            flash = 0.65; shake = 10;
+          }
+          return done;
+        },
+        line: () => failMode === 'late' ? 'THE NEWS ARRIVED AFTER DINNER' : 'THE FLOCK MISSED YOUR MEMO',
+        hint() {
+          if (done !== 'pending' || wave) return { type: 'wait', ms: 160 };
+          return {
+            type: 'drag',
+            x: W * 0.5,
+            y: playerY,
+            x2: W * 0.5 + targetSide * 128,
+            y2: playerY - 34,
+            ms: 170,
+          };
+        },
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - A coherent horizontal drag of >=84 px crosses the donor BANK_TRIGGER 0.92; reversing back
+     across the start cancels the signed bank, while a committed bank emits exactly one wave.
+   - The explicit wave front advances 360 px/s with a 42px band; each bird becomes alarmed only
+     when that front physically crosses it, and alarmed birds open their wing silhouette and gain
+     a pale body dot, so propagation remains readable without hue.
+   - The falcon marks for 1.85s, then follows the donor's 1.0s accelerating stoop. At impact every
+     target bird below alarm 0.30 dies; zero deaths wins, one or more loses, never while unarmed.
+   - The marked flock is cued by density, two animated oval outlines, and a dashed moving dive
+     vector from the solid falcon silhouette; the answer is not encoded by colour alone.
+   - A win produces an outward flock break, 30 feathers, 10px shake, pale flash and a 392/587/784
+     chord; a loss drops calm silhouettes, throws 42 feathers and plays noise plus 180->52Hz fall.
+   - hint() performs one 128px committed bank toward the marked side and waits after the wave.
+   BUG-IS-GAME (do not fix):
+   - The alarm wave is circular even though the player visibly banks left or right. Turning is the
+     trigger, not an aimed projectile; the news leaves the bird in every direction, as in STARLING.
+   - Alarm decays at only 0.08/s in this cut. A clean warning during the mark stays believed through
+     the stoop; the difficulty is committing before impact, not guessing a secret millisecond.
+*/
+
+/* ===== carts/39-sumi.js ===== */
+/* SUMI — one crisp brush tip, one soft ink stroke, four authored gates down the mountain. */
+(function () {
+  registerGame({
+    id: 'sumi',
+    title: 'SUMI',
+    command: 'ONE STROKE!',
+    family: 'drag',
+    slotBeats: 10,
+    create(env) {
+      const W = env.W, H = env.H, D = env.difficulty | 0, R = env.rng, TAU = Math.PI * 2;
+      const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+      const damp = (a, b, l, dt) => b + (a - b) * Math.exp(-l * dt);
+      const PAPER = '#efe6d2', PAPER_HI = '#f8f0df', PAPER_LO = '#d8c8ad';
+      const INK = '#1c140e', DRY = '#3a2b22', WASH = '#7f7465', SEAL = '#c1362b';
+      const GOLD = '#d9a441';
+      const LANE_L = 38, LANE_R = W - 38, BRUSH_Y = 294;
+      const SCALE_Y = 0.58, THICK = 54, FINISH = 1080;
+      const SPEED = [280, 300, 320][D];
+      const GAP = [150, 132, 116][D];
+      const TIP_STIFF = [24, 30, 38][D]; // donor: higher heat/tier sharpens the gameplay tip
+      const INK_SOFT = 10.5;              // donor cosmetic stroke spring, never the hitbox
+      const pattern = R() < 0.5 ? 0 : 1;
+      const centers = pattern ? [270, 124, 244, 126] : [120, 266, 148, 268];
+      const ats = [180, 430, 680, 930];
+      const gates = centers.map((cx, i) => ({
+        at: ats[i],
+        cx,
+        /* The first gate is the donor's generous gate-field teacher at every difficulty.
+           Its 180px opening includes the neutral centre even when the authored centre sits
+           left or right, so an instinctive first touch can bend into the stroke instead of
+           becoming an unrecoverable blot. Later gates carry the real difficulty widths. */
+        gap: i === 0 ? 180 : GAP - (i === 3 ? 8 : i === 2 ? 4 : 0),
+        passed: false,
+        grazed: false,
+        seed: R() * 1000,
+      }));
+      const fibers = [];
+      for (let i = 0; i < 42; i++) fibers.push({
+        y: R() * H, x: R() * W, len: 28 + R() * 130, a: 0.025 + R() * 0.045,
+      });
+
+      let t = 0, dist = 0, done = 'pending', failMode = '';
+      let targetX = W * 0.5, tipX = W * 0.5, inkX = W * 0.5;
+      let lastInputX = W * 0.5, dragTravel = 0, crossed = 0;
+      let heat = 0, grazeGate = -1, grazeSfx = 0;
+      let blot = null, stamp = 0, shake = 0, flash = 0;
+      const stroke = [{ x: inkX, d: 0, w: 4.2 }];
+      const flecks = [];
+      let lastSample = 0;
+
+      function addFlecks(x, y, n, vermilion) {
+        for (let i = 0; i < n; i++) {
+          if (flecks.length >= 80) flecks.shift();
+          const a = -Math.PI / 2 + (R() - 0.5) * 2.3, sp = 30 + R() * 130;
+          flecks.push({
+            x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+            life: 0.35 + R() * 0.42, max: 0.77, r: 0.8 + R() * 1.8,
+            c: vermilion ? SEAL : (heat > 2.2 && i % 3 === 0 ? GOLD : INK),
+          });
+        }
+      }
+
+      function lose(kind) {
+        if (done !== 'pending' || !env.armed()) return;
+        done = 'lost'; failMode = kind;
+        blot = { x: tipX, y: BRUSH_Y, r: 34, seed: R() * TAU };
+        shake = 13; flash = 0.65;
+        addFlecks(tipX, BRUSH_Y, 28, false);
+        env.audio.noise({ dur: 0.28, vol: 0.28, lp: 1050 });
+        env.audio.tone({ f: 126, f2: 54, type: 'sine', dur: 0.34, vol: 0.18 });
+      }
+
+      function win() {
+        if (done !== 'pending') return;
+        done = 'won'; stamp = 1; shake = 9; flash = 0.52;
+        addFlecks(W - 84, 150, 32, true);
+        /* The donor's silence-then-hanko sequence compressed into one scheduled impact: the
+           result frame already contains the seal, while the ear still gets the held breath. */
+        env.audio.noise({ dur: 0.05, vol: 0.035, hp: 2500 });
+        env.audio.noise({ dur: 0.16, vol: 0.27, lp: 1500, t: 0.14 });
+        env.audio.tone({ f: 196, type: 'triangle', dur: 0.42, vol: 0.17, t: 0.14 });
+        env.audio.tone({ f: 294, type: 'triangle', dur: 0.34, vol: 0.11, t: 0.20 });
+      }
+
+      function screenY(worldD) { return BRUSH_Y + (worldD - dist) * SCALE_Y; }
+
+      function rockNoise(seed, i) {
+        const n = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
+        return n - Math.floor(n);
+      }
+
+      function drawRock(g, x0, x1, y0, y1, seed, side) {
+        if (x1 <= x0) return;
+        const n = 7;
+        g.fillStyle = INK;
+        g.beginPath();
+        if (side < 0) {
+          g.moveTo(x0, y0 - 8); g.lineTo(x1, y0 - 8);
+          for (let i = 0; i <= n; i++) {
+            const y = y0 + (y1 - y0) * i / n;
+            g.lineTo(x1 - rockNoise(seed, i) * 13, y);
+          }
+          g.lineTo(x0, y1 + 8);
+        } else {
+          g.moveTo(x1, y0 - 8); g.lineTo(x0, y0 - 8);
+          for (let i = 0; i <= n; i++) {
+            const y = y0 + (y1 - y0) * i / n;
+            g.lineTo(x0 + rockNoise(seed, i) * 13, y);
+          }
+          g.lineTo(x1, y1 + 8);
+        }
+        g.closePath(); g.fill();
+        g.globalAlpha = 0.22; g.strokeStyle = PAPER_HI; g.lineWidth = 1.2;
+        for (let k = 0; k < 3; k++) {
+          const yy = y0 + (y1 - y0) * (0.25 + k * 0.24);
+          g.beginPath(); g.moveTo(x0 + 5, yy); g.lineTo(x1 - 5, yy + rockNoise(seed + 4, k) * 5 - 2.5); g.stroke();
+        }
+        g.globalAlpha = 1;
+      }
+
+      function drawBlot(g, b) {
+        g.fillStyle = INK; g.beginPath();
+        for (let i = 0; i <= 18; i++) {
+          const a = i / 18 * TAU;
+          const rr = b.r * (0.72 + 0.34 * Math.abs(Math.sin(a * 2.3 + b.seed)));
+          const x = b.x + Math.cos(a) * rr, y = b.y + Math.sin(a) * rr;
+          i ? g.lineTo(x, y) : g.moveTo(x, y);
+        }
+        g.closePath(); g.fill();
+        g.globalAlpha = 0.66;
+        for (let i = 0; i < 5; i++) {
+          const a = b.seed + i * 1.7;
+          g.beginPath(); g.arc(b.x + Math.cos(a) * b.r * 1.65,
+            b.y + Math.sin(a) * b.r * 1.35, b.r * 0.12, 0, TAU); g.fill();
+        }
+        g.globalAlpha = 1;
+      }
+
+      return {
+        step(dt, inp) {
+          t += dt;
+          shake = Math.max(0, shake - dt * 22);
+          flash = Math.max(0, flash - dt * 2.8);
+          grazeSfx = Math.max(0, grazeSfx - dt);
+
+          /* A very quick tap can begin and end between fixed simulation steps. Preserve its
+             position from the queued edge even when `down` is already false by the next step;
+             otherwise a legitimate flick occasionally leaves the brush aimed at the old gate. */
+          if (inp.justDown) {
+            lastInputX = inp.x;
+            if (done === 'pending') targetX = clamp(inp.x, LANE_L + 8, LANE_R - 8);
+          }
+          if (inp.down && done === 'pending') {
+            targetX = clamp(inp.x, LANE_L + 8, LANE_R - 8);
+            dragTravel += Math.abs(inp.x - lastInputX);
+            lastInputX = inp.x;
+          }
+          /* The gameplay point is crisp; the calligraphic body remains soft. They may never be
+             collapsed to one value: the donor's make-or-break is that beauty cannot add latency. */
+          tipX = damp(tipX, targetX, TIP_STIFF, dt);
+          inkX = damp(inkX, tipX, INK_SOFT, dt);
+
+          if (done === 'pending' && env.armed()) {
+            const speed = SPEED * (1 + clamp(heat / 3, 0, 1) * 0.16);
+            dist += speed * dt;
+            let grazing = false;
+
+            for (let i = 0; i < gates.length; i++) {
+              const q = gates[i];
+              const half = q.gap * 0.5;
+              const left = q.cx - half, right = q.cx + half;
+              const within = Math.abs(dist - q.at) <= THICK * 0.5;
+              if (within) {
+                if (tipX - 7 < left || tipX + 7 > right) {
+                  lose('blot');
+                  break;
+                }
+                const edge = Math.min(tipX - left, right - tipX);
+                if (edge < 27) {
+                  grazing = true;
+                  if (grazeGate !== i) {
+                    grazeGate = i; heat = clamp(heat + 0.22, 0, 3);
+                    addFlecks(tipX, BRUSH_Y - 8, 7, false);
+                    env.audio.tone({ f: 440 + i * 82, type: 'triangle', dur: 0.12, vol: 0.09 });
+                  }
+                }
+              }
+              if (!q.passed && dist > q.at + THICK * 0.5) {
+                q.passed = true; crossed++;
+                env.audio.tone({ f: 294 * Math.pow(2, crossed * 2 / 12), type: 'sine', dur: 0.1, vol: 0.055 });
+              }
+            }
+            if (done === 'pending') {
+              heat = clamp(heat + (grazing ? 1.55 : -0.48) * dt, 0, 3);
+              if (!grazing) grazeGate = -1;
+              if (dist >= FINISH) win();
+            }
+          }
+
+          if (dist - lastSample >= 5 && stroke.length < 360) {
+            const width = 4.2 + clamp(heat / 3, 0, 1) * 8.5;
+            stroke.push({ x: inkX, d: dist, w: width });
+            lastSample = dist;
+          }
+          for (let i = flecks.length - 1; i >= 0; i--) {
+            const f = flecks[i];
+            f.life -= dt; f.vy += 70 * dt; f.x += f.vx * dt; f.y += f.vy * dt;
+            if (f.life <= 0) flecks.splice(i, 1);
+          }
+        },
+
+        render(g) {
+          const hx = Math.sin((t * 60 + 4.2) * 12.9898) * 43758.5453;
+          const hy = Math.sin((t * 60 + 8.7) * 78.233) * 43758.5453;
+          const sx = shake ? ((hx - Math.floor(hx)) - 0.5) * shake : 0;
+          const sy = shake ? ((hy - Math.floor(hy)) - 0.5) * shake : 0;
+          g.save(); g.translate(sx, sy);
+
+          g.fillStyle = PAPER; g.fillRect(-24, -24, W + 48, H + 48);
+          const warm = clamp(heat / 3, 0, 1);
+          g.fillStyle = 'rgba(208,151,82,' + (warm * 0.075).toFixed(3) + ')';
+          g.fillRect(-24, -24, W + 48, H + 48);
+          g.fillStyle = PAPER_LO; g.fillRect(0, 0, 22, H); g.fillRect(W - 22, 0, 22, H);
+          g.fillStyle = 'rgba(75,56,42,0.16)';
+          for (let y = 18; y < H; y += 24) { g.fillRect(0, y, 22, 2); g.fillRect(W - 22, y + 8, 22, 2); }
+          for (const f of fibers) {
+            g.strokeStyle = 'rgba(58,43,34,' + f.a.toFixed(3) + ')'; g.lineWidth = 1;
+            g.beginPath(); g.moveTo(f.x, f.y); g.lineTo(Math.min(W, f.x + f.len), f.y + 1); g.stroke();
+          }
+
+          /* A pale mountain wash lives behind the playable ink. */
+          g.fillStyle = 'rgba(127,116,101,0.10)';
+          g.beginPath(); g.moveTo(22, 214); g.lineTo(112, 92); g.lineTo(180, 178);
+          g.lineTo(257, 66); g.lineTo(W - 22, 190); g.lineTo(W - 22, 250); g.lineTo(22, 250); g.closePath(); g.fill();
+
+          /* Finish gate, then rocks, then the player's ink: obstacle ink is dry and opaque;
+             the living stroke is wet and translucent at its feathered edge. */
+          const finishY = screenY(FINISH);
+          if (finishY > -50 && finishY < H + 50) {
+            g.strokeStyle = SEAL; g.lineWidth = 4; g.setLineDash([14, 8]);
+            g.beginPath(); g.moveTo(LANE_L, finishY); g.lineTo(LANE_R, finishY); g.stroke(); g.setLineDash([]);
+          }
+          for (let i = 0; i < gates.length; i++) {
+            const q = gates[i], yy = screenY(q.at), hh = THICK * SCALE_Y;
+            if (yy < -70 || yy > H + 70) continue;
+            const left = q.cx - q.gap * 0.5, right = q.cx + q.gap * 0.5;
+            drawRock(g, LANE_L, left, yy - hh * 0.5, yy + hh * 0.5, q.seed, -1);
+            drawRock(g, right, LANE_R, yy - hh * 0.5, yy + hh * 0.5, q.seed + 19, 1);
+            g.strokeStyle = DRY; g.lineWidth = 3;
+            g.beginPath();
+            g.moveTo(left - 8, yy - hh * 0.72);
+            g.quadraticCurveTo(q.cx, yy - hh * 0.95, right + 8, yy - hh * 0.72);
+            g.stroke();
+          }
+
+          if (stroke.length > 1) {
+            g.lineCap = 'round'; g.lineJoin = 'round';
+            for (let i = 1; i < stroke.length; i++) {
+              const a = stroke[i - 1], b = stroke[i];
+              const ya = BRUSH_Y - (dist - a.d) * SCALE_Y;
+              const yb = BRUSH_Y - (dist - b.d) * SCALE_Y;
+              if ((ya < -40 && yb < -40) || (ya > H + 40 && yb > H + 40)) continue;
+              g.strokeStyle = 'rgba(28,20,14,0.72)'; g.lineWidth = (a.w + b.w) * 0.92;
+              g.beginPath(); g.moveTo(a.x, ya); g.lineTo(b.x, yb); g.stroke();
+              g.strokeStyle = 'rgba(239,230,210,0.13)'; g.lineWidth = Math.max(1, (a.w + b.w) * 0.18);
+              g.beginPath(); g.moveTo(a.x - 1, ya); g.lineTo(b.x - 1, yb); g.stroke();
+            }
+          }
+          g.strokeStyle = 'rgba(28,20,14,0.82)'; g.lineWidth = 8 + heat * 2.4; g.lineCap = 'round';
+          const last = stroke[stroke.length - 1];
+          g.beginPath();
+          g.moveTo(last.x, BRUSH_Y - (dist - last.d) * SCALE_Y);
+          g.lineTo(inkX, BRUSH_Y); g.lineTo(tipX, BRUSH_Y); g.stroke();
+
+          /* Crisp nib: this, not inkX, is the collision point. */
+          g.save(); g.translate(tipX, BRUSH_Y);
+          g.fillStyle = INK; g.beginPath(); g.moveTo(0, -10); g.quadraticCurveTo(7, 0, 0, 15);
+          g.quadraticCurveTo(-7, 0, 0, -10); g.fill();
+          g.fillStyle = 'rgba(255,240,220,0.26)'; g.beginPath(); g.arc(-2, -2, 1.7, 0, TAU); g.fill();
+          g.restore();
+
+          if (t < 1.5 && done === 'pending') {
+            const p8 = 0.5 + 0.5 * Math.sin(env.beatPhase() * Math.PI * 4);
+            g.globalAlpha = 0.28 + p8 * 0.48; g.strokeStyle = env.ink; g.lineWidth = 2;
+            g.beginPath(); g.arc(tipX, BRUSH_Y, 24 + p8 * 3, 0, TAU); g.stroke();
+            g.globalAlpha = 1;
+            const first = gates.find(q => !q.passed) || gates[0];
+            g.save(); g.setLineDash([4, 7]); g.strokeStyle = 'rgba(193,54,43,0.42)'; g.lineWidth = 2;
+            g.beginPath(); g.moveTo(tipX, BRUSH_Y + 30);
+            g.quadraticCurveTo((tipX + first.cx) * 0.5, BRUSH_Y + 58, first.cx, screenY(first.at) - 26);
+            g.stroke(); g.restore();
+          }
+
+          if (blot) drawBlot(g, blot);
+          for (const f of flecks) {
+            g.globalAlpha = clamp(f.life / f.max, 0, 1); g.fillStyle = f.c;
+            g.beginPath(); g.arc(f.x, f.y, f.r, 0, TAU); g.fill();
+          }
+          g.globalAlpha = 1;
+
+          /* Four dry marks count the authored gates without a word or a number. */
+          for (let i = 0; i < 4; i++) {
+            g.strokeStyle = i < crossed ? SEAL : 'rgba(58,43,34,0.25)';
+            g.lineWidth = i < crossed ? 4 : 2;
+            g.beginPath(); g.moveTo(W * 0.5 - 39 + i * 26, 54); g.lineTo(W * 0.5 - 27 + i * 26, 46); g.stroke();
+          }
+
+          if (stamp) {
+            const x = W - 82, y = 142, s = 52;
+            g.save(); g.translate(x, y); g.rotate(0.07);
+            g.strokeStyle = SEAL; g.lineWidth = 5; g.strokeRect(-s * 0.5, -s * 0.5, s, s);
+            g.fillStyle = SEAL;
+            g.fillRect(-15, -16, 5, 31); g.fillRect(-1, -18, 5, 36); g.fillRect(12, -14, 5, 28);
+            g.fillRect(-18, -5, 34, 5); g.fillRect(-14, 10, 30, 5);
+            g.restore();
+          }
+          g.restore();
+
+          if (flash > 0) {
+            g.fillStyle = done === 'won' ? 'rgba(193,54,43,' + (flash * 0.16).toFixed(3) + ')'
+              : 'rgba(28,20,14,' + (flash * 0.22).toFixed(3) + ')';
+            g.fillRect(0, 0, W, H);
+          }
+        },
+
+        result: () => done,
+        timeout() {
+          if (done === 'pending') {
+            failMode = 'unfinished';
+            if (env.armed()) lose('unfinished');
+            else done = 'lost';
+          }
+          return done === 'won' ? 'won' : 'lost';
+        },
+        line: () => failMode === 'unfinished' ? 'THE SCROLL KEPT GOING WITHOUT YOU' : 'THE BRUSH REMEMBERED THAT ROCK',
+        hint() {
+          if (done !== 'pending') return { type: 'wait', ms: 180 };
+          let next = gates[gates.length - 1];
+          for (const q of gates) if (!q.passed && q.at + THICK * 0.5 >= dist) { next = q; break; }
+          /* Once that destination is installed, stop generating redundant CDP gestures while
+             the damped tip travels and the paper advances. One touch per gate is both closer to
+             a real continuous hand and prevents a no-op tap from occupying the entire interval
+             before the next authored gate. */
+          if (Math.abs(targetX - next.cx) < 0.5) return { type: 'wait', ms: 70 };
+          /* One positional touch, not the harness's multi-step drag. In a real browser the QA
+             driver's nominal 105ms drag expands to twelve CDP coordinate conversions/moves and
+             can consume more than four seconds — longer than this whole stroke. A tap sets the
+             same targetX through the same pointer path, releases cleanly for the next cartridge,
+             and lets the donor's crisp damped tip perform the actual lateral travel on-screen. */
+          return { type: 'tap', x: next.cx, y: BRUSH_Y + 28 };
+        },
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - While armed the paper auto-descends 280/300/320 world-px/s at difficulty 0/1/2 through
+     four fixed gates at depths 180/430/680/930; crossing FINISH 1080 resolves 'won'.
+   - tipX follows the thumb with damp lambda 24/30/38 and is the 7px collision point; inkX
+     follows tipX separately at lambda 10.5 and alone determines the persistent rendered stroke.
+   - Entering a 54px-deep gate outside its visible gap immediately paints a 34px irregular blot,
+     throws 28 ink flecks, shakes 13px and loses; timeout also loses. Neither can lose unarmed.
+   - Each clean gate increments one of four dry top marks. Grazing within 27px of a rock edge adds
+     heat, flecks and a rising pluck; heat widens/darkens the stroke and raises descent at most 16%.
+   - The win frame already contains the 52px vermilion hanko, 32 seal flecks and a delayed dry
+     stamp impact, so the shell cannot cut away before SUMI's authored print payoff is visible.
+   - hint() places one brief QA touch at the next authored gap; the crisp damped nib visibly travels
+     there, and the touch releases before the next cartridge. Human input remains continuous drag.
+   BUG-IS-GAME (do not fix):
+   - The wet ink visibly lags the nib and can pass through a rock after the nib has cleared it. The
+     nib is truth; the soft trail is the painting. Making the pretty line the hitbox breaks SUMI.
+   - A graze makes the scroll slightly faster while making tip control sharper. Nerve improves the
+     hand instead of sabotaging it; do not add high-heat steering lag.
+*/
+
+/* ===== carts/40-breakline.js ===== */
+/* BREAKLINE — identify the owner of the closing bullet wall and break only that source. */
+(function () {
+  registerGame({
+    id: 'breakline',
+    title: 'BREAKLINE',
+    command: 'BREAK THE SOURCE!',
+    family: 'tap',
+    slotBeats: 13,
+    minGame: 5,
+    create(env) {
+      const W = env.W, H = env.H, D = env.difficulty | 0, R = env.rng, TAU = Math.PI * 2;
+      const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+      const CHAR = '#10110f', BONE = '#e8e0cf', LIVE = '#ef3d20';
+      const BLUE = '#b9e4ff', WARN = '#e0ad2f', EMBER = '#9e745f';
+      const N = D === 0 ? 2 : 3;
+      const PLAYER_X = W * 0.5, PLAYER_Y = 650;
+      const sourceXs = N === 2 ? [108, 282] : [68, 195, 322];
+      const correct = (R() * N) | 0;
+      const owners = [];
+      const bullets = [];
+      const parts = [];
+      for (let i = 0; i < N; i++) owners.push({
+        id: i, x: sourceXs[i], y: 166 + (i % 2) * 18, style: i, alive: true, pulse: R() * TAU,
+      });
+
+      /* The barrier uses one stable ownerId. All live fire is vermilion; the ownership read is
+         geometric: PIN diamonds, COMB blocks, and ANCHOR rings match their source silhouettes. */
+      const wallN = [9, 11, 13][D];
+      for (let j = 0; j < wallN; j++) {
+        const span = 300 / (wallN - 1);
+        bullets.push({
+          ownerId: correct,
+          style: owners[correct].style,
+          x: 45 + j * span,
+          y: 370 + Math.sin(j * 0.82) * 12,
+          vx: 0,
+          vy: [42, 49, 56][D],
+          r: 10,
+          age: 0,
+          blocking: true,
+          state: 'live',
+          seed: R(),
+          collapseElapsed: 0,
+          collapseDuration: 0,
+          sx: 0, sy: 0, cx: 0, cy: 0, dx: 0, dy: 0,
+        });
+      }
+      for (let i = 0; i < N; i++) {
+        if (i === correct) continue;
+        const o = owners[i];
+        for (let j = 0; j < 6; j++) {
+          const side = o.x < W * 0.5 ? -1 : 1;
+          bullets.push({
+            ownerId: i,
+            style: o.style,
+            x: clamp(o.x + side * (12 + j * 11) + Math.sin(j) * 9, 24, W - 24),
+            y: 270 + j * 42 + (i % 2) * 18,
+            vx: side * (8 + j * 2),
+            vy: 18 + j * 2,
+            r: 9,
+            age: 0,
+            blocking: false,
+            state: 'live',
+            seed: R(),
+            collapseElapsed: 0,
+            collapseDuration: 0,
+            sx: 0, sy: 0, cx: 0, cy: 0, dx: 0, dy: 0,
+          });
+        }
+      }
+
+      let t = 0, done = 'pending', failMode = '';
+      let chosen = -1, choiceT = 0, shake = 0, flash = 0, routeWake = 0;
+      let missPulse = 0, corePulse = 0;
+
+      function bezier(b, q) {
+        const u = 1 - q;
+        return {
+          x: u * u * b.sx + 2 * u * q * b.cx + q * q * b.dx,
+          y: u * u * b.sy + 2 * u * q * b.cy + q * q * b.dy,
+        };
+      }
+
+      function beginCollapse(b, o) {
+        if (b.state !== 'live') return;
+        b.state = 'collapsing';
+        b.collapseElapsed = 0;
+        b.collapseDuration = 0.35 + b.seed * 0.35; // donor law: deterministic 0.35–0.70s
+        b.sx = b.x; b.sy = b.y; b.dx = o.x; b.dy = o.y;
+        const dx = o.x - b.x, dy = o.y - b.y;
+        const len = Math.max(1, Math.hypot(dx, dy));
+        const curl = (b.seed < 0.5 ? -1 : 1) * Math.min(48, len * 0.24);
+        b.cx = b.x + dx * 0.43 + (-dy / len) * curl + b.vx * 0.045;
+        b.cy = b.y + dy * 0.43 + (dx / len) * curl + b.vy * 0.045;
+      }
+
+      function burst(x, y, n, col) {
+        for (let i = 0; i < n; i++) {
+          if (parts.length >= 110) parts.shift();
+          const a = R() * TAU, sp = 60 + R() * 260;
+          parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+            life: 0.45 + R() * 0.55, max: 1, size: 2 + R() * 4, col: col || BONE });
+        }
+      }
+
+      function chooseOwner(index) {
+        if (chosen >= 0 || done !== 'pending') return;
+        const o = owners[index];
+        chosen = index; choiceT = 0; o.alive = false;
+        let collapsed = 0;
+        for (const b of bullets) if (b.ownerId === index && b.state === 'live') {
+          beginCollapse(b, o); collapsed++;
+        }
+        shake = index === correct ? 13 : 8;
+        flash = 0.72;
+        burst(o.x, o.y, Math.min(34, 16 + collapsed), index === correct ? BONE : WARN);
+        /* Mechanical inhalation + resonant strike + paper-dry return, compressed from donor. */
+        env.audio.tone({ f: 510, f2: 145, type: 'sawtooth', dur: 0.32, vol: 0.18 });
+        env.audio.tone({ f: index === correct ? 880 : 330, type: 'triangle', dur: 0.22, vol: 0.16, t: 0.08 });
+        env.audio.noise({ dur: 0.24, vol: 0.18, hp: 700, lp: 2600, t: 0.09 });
+      }
+
+      function lose(kind) {
+        if (done !== 'pending' || !env.armed()) return;
+        done = 'lost'; failMode = kind; shake = 16; flash = 0.85;
+        burst(PLAYER_X, PLAYER_Y, 26, LIVE);
+        env.audio.tone({ f: 104, f2: 46, type: 'sine', dur: 0.45, vol: 0.24 });
+        env.audio.noise({ dur: 0.2, vol: 0.18, lp: 850 });
+      }
+
+      function win() {
+        if (done !== 'pending') return;
+        done = 'won'; routeWake = 1; shake = 12; flash = 0.68;
+        burst(PLAYER_X, 500, 34, BLUE);
+        env.audio.tone({ f: 220, type: 'triangle', dur: 0.42, vol: 0.15 });
+        env.audio.tone({ f: 330, type: 'triangle', dur: 0.42, vol: 0.14, t: 0.06 });
+        env.audio.tone({ f: 440, type: 'triangle', dur: 0.5, vol: 0.13, t: 0.13 });
+      }
+
+      function drawGlyph(g, style, x, y, size, fill, dead) {
+        g.save(); g.translate(x, y);
+        g.globalAlpha = dead ? 0.32 : 1;
+        g.fillStyle = fill; g.strokeStyle = CHAR; g.lineWidth = Math.max(1.5, size * 0.15);
+        if (style === 0) { // PINS — lance/diamond with one axial cut
+          g.beginPath(); g.moveTo(0, -size * 1.35); g.lineTo(size * 0.52, 0);
+          g.lineTo(0, size * 1.35); g.lineTo(-size * 0.52, 0); g.closePath(); g.fill(); g.stroke();
+          g.strokeStyle = BONE; g.lineWidth = Math.max(1, size * 0.12);
+          g.beginPath(); g.moveTo(0, -size * 0.65); g.lineTo(0, size * 0.62); g.stroke();
+        } else if (style === 1) { // COMBS — broad block with three visible teeth
+          g.fillRect(-size * 0.85, -size * 0.62, size * 1.7, size * 1.15);
+          g.strokeRect(-size * 0.85, -size * 0.62, size * 1.7, size * 1.15);
+          g.fillStyle = CHAR;
+          for (let k = -1; k <= 1; k++) g.fillRect(k * size * 0.42 - size * 0.09, size * 0.08, size * 0.18, size * 0.58);
+        } else { // ANCHORS — hub and four bearings; hollow is the invariant
+          g.beginPath(); g.arc(0, 0, size, 0, TAU); g.fill(); g.stroke();
+          g.fillStyle = CHAR; g.beginPath(); g.arc(0, 0, size * 0.38, 0, TAU); g.fill();
+          g.strokeStyle = fill; g.lineWidth = Math.max(2, size * 0.22);
+          g.beginPath(); g.moveTo(-size * 1.35, 0); g.lineTo(size * 1.35, 0);
+          g.moveTo(0, -size * 1.35); g.lineTo(0, size * 1.35); g.stroke();
+        }
+        if (dead) {
+          g.strokeStyle = LIVE; g.lineWidth = 3;
+          g.beginPath(); g.moveTo(-size, -size); g.lineTo(size, size);
+          g.moveTo(size, -size); g.lineTo(-size, size); g.stroke();
+        }
+        g.restore();
+      }
+
+      function drawEmitter(g, o) {
+        const breathe = 1 + Math.sin(t * 4 + o.pulse) * 0.06;
+        g.save(); g.translate(o.x, o.y); g.scale(breathe, breathe);
+        g.strokeStyle = o.alive ? BONE : 'rgba(232,224,207,0.28)'; g.lineWidth = 3;
+        g.beginPath(); g.arc(0, 0, 35, 0, TAU); g.stroke();
+        g.beginPath(); g.moveTo(-42, 0); g.lineTo(-31, 0); g.moveTo(31, 0); g.lineTo(42, 0); g.stroke();
+        drawGlyph(g, o.style, 0, 0, 14, o.alive ? LIVE : EMBER, !o.alive);
+        g.restore();
+      }
+
+      return {
+        step(dt, inp) {
+          t += dt;
+          shake = Math.max(0, shake - dt * 24);
+          flash = Math.max(0, flash - dt * 2.7);
+          missPulse = Math.max(0, missPulse - dt * 3);
+          corePulse += dt;
+          if (chosen >= 0) choiceT += dt;
+
+          if (done === 'pending' && inp.justDown && chosen < 0) {
+            let nearest = -1, best = 72;
+            for (let i = 0; i < owners.length; i++) {
+              const d = Math.hypot(inp.x - owners[i].x, inp.y - owners[i].y);
+              if (d < best) { best = d; nearest = i; }
+            }
+            if (nearest >= 0) chooseOwner(nearest);
+            else {
+              missPulse = 1;
+              env.audio.tone({ f: 190, type: 'square', dur: 0.045, vol: 0.045 });
+            }
+          }
+
+          for (const b of bullets) {
+            if (b.state === 'live') {
+              b.age += dt;
+              if (env.armed()) {
+                b.x += b.vx * dt; b.y += b.vy * dt;
+                if (!b.blocking) b.x += Math.sin(t * 2.2 + b.seed * TAU) * 4 * dt;
+              }
+            } else if (b.state === 'collapsing') {
+              b.collapseElapsed += dt;
+              const q = clamp(b.collapseElapsed / b.collapseDuration, 0, 1);
+              const e = 1 - Math.pow(1 - q, 3);
+              const p = bezier(b, e); b.x = p.x; b.y = p.y;
+              if (q >= 1) b.state = 'inactive';
+            }
+          }
+
+          if (done === 'pending' && chosen >= 0 && choiceT >= 0.76) {
+            if (chosen === correct) win();
+            else lose('wrong');
+          }
+          if (done === 'pending' && chosen < 0 && env.armed()) {
+            for (const b of bullets) {
+              if (b.state !== 'live' || !b.blocking) continue;
+              if (Math.hypot(b.x - PLAYER_X, b.y - PLAYER_Y) < b.r + 12) { lose('hit'); break; }
+            }
+          }
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const p = parts[i];
+            p.life -= dt; p.vy += 120 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+            if (p.life <= 0) parts.splice(i, 1);
+          }
+        },
+
+        render(g) {
+          const hx = Math.sin((t * 60 + 2.4) * 12.9898) * 43758.5453;
+          const hy = Math.sin((t * 60 + 7.3) * 78.233) * 43758.5453;
+          const sx = shake ? ((hx - Math.floor(hx)) - 0.5) * shake : 0;
+          const sy = shake ? ((hy - Math.floor(hy)) - 0.5) * shake : 0;
+          g.save(); g.translate(sx, sy);
+          g.fillStyle = CHAR; g.fillRect(-30, -30, W + 60, H + 60);
+
+          /* Screenprint architecture and halftone — deliberately low contrast and flat. */
+          g.strokeStyle = 'rgba(232,224,207,0.11)'; g.lineWidth = 2;
+          for (let x = 26; x < W; x += 52) { g.beginPath(); g.moveTo(x, 88); g.lineTo(x, H); g.stroke(); }
+          for (let y = 96; y < H; y += 56) { g.beginPath(); g.moveTo(18, y); g.lineTo(W - 18, y); g.stroke(); }
+          g.fillStyle = 'rgba(232,224,207,0.09)';
+          for (let y = 110; y < 610; y += 18) for (let x = 18 + ((y / 18) % 2) * 7; x < W; x += 18) {
+            g.beginPath(); g.arc(x, y, 1.2, 0, TAU); g.fill();
+          }
+
+          /* The route is physically present from craft to exit. The owner-scoped wall is the
+             only thing crossing both rails. */
+          g.strokeStyle = 'rgba(185,228,255,0.28)'; g.lineWidth = 3;
+          g.beginPath(); g.moveTo(160, 724); g.lineTo(160, 228); g.moveTo(230, 724); g.lineTo(230, 228); g.stroke();
+          g.setLineDash([7, 9]); g.lineDashOffset = -t * 36;
+          g.strokeStyle = routeWake ? BLUE : 'rgba(185,228,255,0.18)'; g.lineWidth = routeWake ? 4 : 2;
+          g.beginPath(); g.moveTo(PLAYER_X, PLAYER_Y - 20); g.lineTo(PLAYER_X, 226); g.stroke(); g.setLineDash([]);
+
+          /* Ownership cords: every source gets the same treatment. The player reads geometry,
+             not a privileged highlight and not colour. */
+          if (chosen < 0 && t < 2.4) {
+            g.save(); g.setLineDash([2, 7]); g.lineDashOffset = -t * 20;
+            g.strokeStyle = 'rgba(232,224,207,0.24)'; g.lineWidth = 1.3;
+            for (const o of owners) {
+              let shown = 0;
+              for (const b of bullets) {
+                if (b.ownerId !== o.id || b.state !== 'live' || shown++ > 3) continue;
+                g.beginPath(); g.moveTo(o.x, o.y + 28); g.quadraticCurveTo(o.x, (o.y + b.y) * 0.5, b.x, b.y); g.stroke();
+              }
+            }
+            g.restore();
+          }
+
+          for (const o of owners) drawEmitter(g, o);
+
+          /* Collapsing fire renders first, immediately subordinate and nonlethal. */
+          for (const b of bullets) {
+            if (b.state !== 'collapsing') continue;
+            const q = clamp(b.collapseElapsed / b.collapseDuration, 0, 1);
+            const e0 = Math.max(0, 1 - Math.pow(1 - Math.max(0, q - 0.09), 3));
+            const tail = bezier(b, e0);
+            g.globalAlpha = 0.62 * (1 - q * 0.55);
+            g.strokeStyle = BONE; g.lineWidth = 2.2; g.lineCap = 'round';
+            g.beginPath(); g.moveTo(tail.x, tail.y); g.lineTo(b.x, b.y); g.stroke();
+            drawGlyph(g, b.style, b.x, b.y, b.r * (0.72 - q * 0.22), EMBER, false);
+          }
+          g.globalAlpha = 1;
+
+          /* Live projectiles are last among hazards: saturated, outlined, and shape-certain. */
+          for (const b of bullets) if (b.state === 'live') {
+            drawGlyph(g, b.style, b.x, b.y, b.r, LIVE, false);
+            if (b.blocking) {
+              g.strokeStyle = 'rgba(239,61,32,0.18)'; g.lineWidth = 2;
+              g.beginPath(); g.moveTo(b.x, b.y - 18); g.lineTo(b.x, b.y + 18); g.stroke();
+            }
+          }
+
+          for (const p of parts) {
+            g.globalAlpha = clamp(p.life / p.max, 0, 1); g.fillStyle = p.col;
+            g.save(); g.translate(p.x, p.y); g.rotate(p.vx * 0.01);
+            g.fillRect(-p.size * 0.5, -1, p.size, 2); g.restore();
+          }
+          g.globalAlpha = 1;
+
+          /* Zero-inertia vector craft and its exact collision core. */
+          const lift = routeWake ? Math.min(76, choiceT * 80) : 0;
+          g.save(); g.translate(PLAYER_X, PLAYER_Y - lift);
+          g.fillStyle = BLUE;
+          g.beginPath(); g.moveTo(0, -21); g.lineTo(13, 17); g.lineTo(0, 10); g.lineTo(-13, 17); g.closePath(); g.fill();
+          g.fillStyle = CHAR; g.beginPath(); g.arc(0, 3, 5.5, 0, TAU); g.fill();
+          g.strokeStyle = BLUE; g.lineWidth = 2;
+          g.beginPath(); g.arc(0, 3, 8 + Math.sin(corePulse * 7) * 1.2, 0, TAU); g.stroke();
+          g.restore();
+
+          if (routeWake) {
+            g.strokeStyle = BLUE; g.lineWidth = 4; g.lineCap = 'square';
+            for (let i = 0; i < 5; i++) {
+              const y = 560 - i * 68;
+              g.beginPath(); g.moveTo(178, y + 12); g.lineTo(195, y - 5); g.lineTo(212, y + 12); g.stroke();
+            }
+          }
+
+          /* Shared mark wraps the entire target bank, preserving the choice instead of secretly
+             outlining the answer. Every source remains comfortably in the top third. */
+          if (t < 1.5 && chosen < 0) {
+            const p8 = 0.5 + 0.5 * Math.sin(env.beatPhase() * Math.PI * 4);
+            g.globalAlpha = 0.24 + p8 * 0.42; g.strokeStyle = env.ink; g.lineWidth = 2;
+            const x0 = N === 2 ? 54 : 25, x1 = N === 2 ? 336 : 365, y0 = 108, y1 = 228;
+            g.beginPath();
+            g.moveTo(x0 + 28, y0); g.lineTo(x0, y0); g.lineTo(x0, y0 + 28);
+            g.moveTo(x1 - 28, y0); g.lineTo(x1, y0); g.lineTo(x1, y0 + 28);
+            g.moveTo(x0, y1 - 28); g.lineTo(x0, y1); g.lineTo(x0 + 28, y1);
+            g.moveTo(x1, y1 - 28); g.lineTo(x1, y1); g.lineTo(x1 - 28, y1); g.stroke();
+            g.globalAlpha = 1;
+          }
+          if (missPulse > 0) {
+            g.globalAlpha = missPulse * 0.6; g.strokeStyle = WARN; g.lineWidth = 2;
+            g.beginPath(); g.arc(PLAYER_X, 235, 24 + (1 - missPulse) * 45, 0, TAU); g.stroke(); g.globalAlpha = 1;
+          }
+          g.restore();
+
+          if (flash > 0) {
+            const col = chosen === correct ? '185,228,255' : '239,61,32';
+            g.fillStyle = 'rgba(' + col + ',' + (flash * 0.17).toFixed(3) + ')'; g.fillRect(0, 0, W, H);
+          }
+        },
+
+        result: () => done,
+        timeout() {
+          if (done === 'pending') {
+            if (env.armed()) lose(chosen >= 0 && chosen !== correct ? 'wrong' : 'timeout');
+            else { done = 'lost'; failMode = 'timeout'; }
+          }
+          return done === 'won' ? 'won' : 'lost';
+        },
+        line() {
+          if (failMode === 'wrong') return 'YOU BROKE THE ALIBI, NOT THE SOURCE';
+          if (failMode === 'hit') return 'THE LINE CLOSED AROUND YOU';
+          return 'THE WALL KEPT ITS PAPERWORK';
+        },
+        hint: () => done !== 'pending' || chosen >= 0
+          ? { type: 'wait', ms: 180 }
+          : { type: 'tap', x: owners[correct].x, y: owners[correct].y },
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - Difficulty 0 presents two emitters and difficulty 1/2 three. Each source and every one of
+     its bullets share a PIN/COMB/ANCHOR silhouette plus internal cuts; all live fire remains the
+     same vermilion, so ownership never depends on hue.
+   - The blocking wall contains 9/11/13 bullets with one stable ownerId. Choosing an emitter marks
+     only that owner dead and changes only matching live bullets to collapsing/nonlethal immediately.
+   - Every collapsed bullet follows its own deterministic quadratic curl back to the death position
+     in 0.35–0.70s, renders below live fire with an inward tail, then becomes inactive permanently.
+   - Tapping the wall's owner waits 0.76s for the collapse to read, then opens a blue chevron route
+     and wins. Tapping another owner retracts that owner's side fire while the wall remains, then loses.
+   - With no choice, the owner-scoped wall advances at 42/49/56 px/s toward the visible 5.5px player
+     core and can hit for a loss; timeout also loses. No loss is set while env.armed() is false.
+   - slotBeats 13 and minGame 5 make this a later, longer special without setting boss; hint() taps
+     the actual blocking owner and otherwise waits through the visible collapse.
+   BUG-IS-GAME (do not fix):
+   - Destroying the wrong source still causes a beautiful, fully lawful collapse of its own bullets.
+     The game never cheats to preserve the wall: it simply retracts the fire you chose, not the fire
+     you needed gone.
+   - The correct answer is exposed by shape cords during the opening 2.4s. BREAKLINE is a causal read,
+     not a memory quiz; do not hide ownership to manufacture difficulty.
 */
 
 
