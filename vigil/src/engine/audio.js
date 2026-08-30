@@ -212,6 +212,30 @@ export function create(ctx) {
   B.meleeSolid = [0, 1].map(i => clickBuf(134 + i, 0.18,
     [[94 + i * 11, 0.95], [188 + i * 17, 0.36], [720 + i * 90, 0.18]],
     [3600, 520, 0.075], 0.042, 2.15));
+  // Breakable lunar stone owns two heavier states than an ordinary surface
+  // tap. Both are baked here: event-time work is buffer playback only.
+  B.rockCrack = [0, 1].map(i => clickBuf(138 + i, 0.34,
+    [[72 + i * 8, 1.0], [146 + i * 13, 0.48], [390 + i * 47, 0.24]],
+    [2100 + i * 180, 150, 0.62], 0.092, 2.65));
+  B.rockBreak = [0, 1].map(i => synth(0.68, (d, len) => {
+    const noise = wn(1450 + i * 53);
+    let low = 0, phase = 0, ring = 0;
+    for (let k = 0; k < len; k++) {
+      const t = k / SR;
+      const n = noise();
+      low += (n - low) * 0.038;
+      const f = lerp(84 + i * 7, 31 + i * 3, clamp01(t / 0.24));
+      phase += 2 * Math.PI * f / SR;
+      ring += 2 * Math.PI * (520 + i * 73) / SR;
+      const impact = Math.sin(phase) * Math.exp(-t / 0.19) * 0.92;
+      const fracture = low * Math.exp(-t / 0.23) * 1.15;
+      const stoneRing = Math.sin(ring) * Math.exp(-t / 0.055) * 0.22;
+      const tail = low * Math.exp(-Math.max(0, t - 0.17) / 0.26) * 0.28;
+      d[k] = (impact + fracture + stoneRing + tail) * Math.min(1, t / 0.0025);
+    }
+    tanhDrive(d, 2.5);
+    norm(d, 0.94);
+  }));
   // Close, wet body contact is deliberately absent from bullet impacts. A
   // falling low tone supplies mass while two correlated noise bands make the
   // short squeeze/release read as anatomy rather than another hard surface.
@@ -255,6 +279,21 @@ export function create(ctx) {
         + Math.sin(p3) * e3 * 0.22) * attack;
     }
     norm(d, 0.88);
+  });
+  B.rockUpgrade = synth(0.48, (d, len) => {
+    let p1 = 0, p2 = 0, p3 = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / SR;
+      const rise = clamp01(t / 0.34);
+      p1 += 2 * Math.PI * lerp(410, 820, rise) / SR;
+      p2 += 2 * Math.PI * lerp(615, 1230, rise) / SR;
+      p3 += 2 * Math.PI * lerp(1025, 2050, rise) / SR;
+      const env = Math.min(1, t / 0.006) * Math.exp(-Math.max(0, t - 0.30) / 0.09);
+      const charge = 0.32 + rise * 0.68;
+      d[i] = (Math.sin(p1) * 0.50 + Math.sin(p2) * 0.31 + Math.sin(p3) * 0.14)
+        * env * charge;
+    }
+    norm(d, 0.86);
   });
   // kill confirm: two-note 1.9 -> 2.6 kHz, 90 ms apart
   B.markKill = synth(0.24, (d, len) => {
@@ -300,6 +339,25 @@ export function create(ctx) {
         * Math.min(t / 0.4, 1) * Math.exp(-Math.max(0, t - 0.7) / 0.4) * 0.4;
     }
   }));
+  B.vocalPlanet = [0, 1].map(i => synth(1.85, (d, len) => {
+    const noise = wn(1700 + i * 71);
+    let p1 = 0, p2 = 0, p3 = 0, low = 0;
+    for (let k = 0; k < len; k++) {
+      const t = k / SR;
+      const drift = Math.sin(t * (2.1 + i * 0.27)) * 4.5;
+      p1 += 2 * Math.PI * (38 + i * 4 + drift) / SR;
+      p2 += 2 * Math.PI * (57 + i * 6 - drift * 0.34) / SR;
+      p3 += 2 * Math.PI * (91 + i * 9 + drift * 0.18) / SR;
+      low += (noise() - low) * 0.012;
+      const attack = Math.min(1, t / 0.24);
+      const release = Math.exp(-Math.max(0, t - 0.86) / 0.48);
+      const throb = 0.82 + Math.sin(2 * Math.PI * (3.2 + i * 0.3) * t) * 0.18;
+      d[k] = (Math.sin(p1) * 0.64 + Math.sin(p2) * 0.34
+        + Math.sin(p3) * 0.17 + low * 0.42) * attack * release * throb;
+    }
+    tanhDrive(d, 1.75);
+    norm(d, 0.82);
+  }));
   B.telegraph = synth(0.36, (d, len) => {
     let ph = 0;
     for (let k = 0; k < len; k++) {
@@ -308,9 +366,45 @@ export function create(ctx) {
       d[k] = (Math.sin(ph) * 0.6 + Math.sin(ph * 1.5) * 0.25) * Math.min(t / 0.03, 1) * (1 - t / 0.4);
     }
   });
+  // The siege-moon tell spans its entire 1.1 s combat windup. A rising
+  // harmonic lattice carries direction; a low pressure bed carries scale.
+  B.planetCharge = synth(1.12, (d, len) => {
+    const noise = wn(1777);
+    let p1 = 0, p2 = 0, p3 = 0, low = 0;
+    for (let k = 0; k < len; k++) {
+      const t = k / SR;
+      const u = clamp01(t / 1.10);
+      const curve = u * u;
+      p1 += 2 * Math.PI * lerp(72, 430, curve) / SR;
+      p2 += 2 * Math.PI * lerp(144, 860, curve) / SR;
+      p3 += 2 * Math.PI * lerp(310, 1720, curve) / SR;
+      low += (noise() - low) * 0.018;
+      const rise = 0.13 + u * 0.87;
+      const fade = 1 - clamp01((t - 1.075) / 0.045);
+      d[k] = (Math.sin(p1) * 0.48 + Math.sin(p2) * 0.25
+        + Math.sin(p3) * 0.12 + low * 0.17) * rise * fade;
+    }
+    tanhDrive(d, 1.55);
+    norm(d, 0.84);
+  });
+  B.planetDischargeSub = synth(0.38, (d, len) => {
+    let phase = 0;
+    for (let i = 0; i < len; i++) {
+      const t = i / SR;
+      phase += 2 * Math.PI * lerp(62, 27, clamp01(t / 0.16)) / SR;
+      const env = t < 0.004 ? t / 0.004 : Math.exp(-(t - 0.004) / 0.16);
+      d[i] = Math.sin(phase) * env;
+    }
+    tanhDrive(d, 1.8);
+    norm(d, 0.90);
+  });
+  B.planetDischargeMetal = clickBuf(1788, 0.31,
+    [[430, 0.72], [790, 0.44], [1380, 0.23], [2760, 0.12]],
+    [5200, 620, 0.56], 0.072, 2.35);
 
   /* ---------------- playback ---------------- */
   function play(b, { gain = 1, rate = 1, when = 0, bus = sfxBus, pos = null } = {}) {
+    if (!b) return null;
     const src = A.createBufferSource();
     src.buffer = b;
     src.playbackRate.value = rate;
@@ -404,7 +498,25 @@ export function create(ctx) {
   }
 
   /* ---------------- event wiring ---------------- */
-  const V = { thrall: B.vocalThrall, warden: B.vocalWarden, chorister: B.vocalChorister };
+  const V = {
+    thrall: B.vocalThrall,
+    warden: B.vocalWarden,
+    chorister: B.vocalChorister,
+    planet: B.vocalPlanet,
+  };
+  let lastPlanetDischarge = -99;
+  function planetDischarge(pos) {
+    // Support either the dedicated or generic projectile event without a
+    // same-frame double hit if an emitter intentionally publishes both.
+    if (A.currentTime - lastPlanetDischarge < 0.025) return;
+    lastPlanetDischarge = A.currentTime;
+    play(B.planetDischargeSub, {
+      gain: 0.62, rate: 0.96 + rng.next() * 0.05, bus: bodyBus, pos,
+    });
+    play(B.planetDischargeMetal, {
+      gain: 0.56, rate: 0.96 + rng.next() * 0.07, pos,
+    });
+  }
   function wire() {
     const bus = ctx.bus;
     bus.on('weapon:fire', ({ subT, lowAmmo, boosted }) => gunshot(subT, lowAmmo, boosted));
@@ -452,6 +564,13 @@ export function create(ctx) {
       play(B.gear[0], { gain: 0.2, rate: 0.85 });
     });
     bus.on('player:hurt', () => play(B.hurt, { gain: 0.55 }));
+    bus.on('player:shield-hit', ({ absorbed }) => {
+      const pool = B.impactEnergy;
+      play(pool[Math.floor(rng.next() * pool.length)], {
+        gain: 0.30 + clamp01(absorbed / 25) * 0.18,
+        rate: 1.18 + rng.next() * 0.08,
+      });
+    });
     bus.on('player:slide', () => play(B.surf[2], { gain: 0.4, rate: 0.6 }));
     bus.on('brass:tink', ({ pos }) => play(B.tink[Math.floor(rng.next() * 4)], { gain: 0.12, pos }));
     bus.on('combat:marker', ({ kind, dense }) => {
@@ -473,14 +592,45 @@ export function create(ctx) {
     });
     bus.on('enemy:vocal', ({ species, pos }) => {
       const pool = V[species];
+      if (!pool?.length) return;
       play(pool[Math.floor(rng.next() * pool.length)], { gain: 0.5, rate: 0.94 + rng.next() * 0.12, pos });
     });
-    bus.on('enemy:telegraph', ({ pos }) => play(B.telegraph, { gain: 0.55, pos }));
-    bus.on('enemy:bolt', ({ pos }) => play(B.boltFly, { gain: 0.5, pos }));
+    bus.on('enemy:telegraph', ({ species, pos }) => play(
+      species === 'planet' ? B.planetCharge : B.telegraph,
+      { gain: species === 'planet' ? 0.68 : 0.55, pos },
+    ));
+    bus.on('enemy:bolt', ({ species, kind, pos }) => {
+      if (species === 'planet' || kind?.startsWith('planet')) planetDischarge(pos);
+      else play(B.boltFly, { gain: 0.5, pos });
+    });
+    bus.on('enemy:planet-bolt', ({ pos }) => planetDischarge(pos));
+    bus.on('enemy:planet-fire', ({ pos }) => planetDischarge(pos));
     bus.on('enemy:rumble', () => play(B.rumble, { gain: 0.8 }));
     bus.on('enemy:die', ({ pos }) => play(B.impactFlesh[0], { gain: 0.5, rate: 0.6, pos }));
     bus.on('enemy:stagger', ({ pos }) => play(B.magSeat, { gain: 0.3, rate: 0.5, pos }));
     bus.on('combat:pickup', () => play(B.pickup, { gain: 0.35 }));
+    bus.on('rock:crack', ({ point, pos }) => {
+      const pool = B.rockCrack;
+      play(pool[Math.floor(rng.next() * pool.length)], {
+        gain: 0.62, rate: 0.91 + rng.next() * 0.08, pos: point || pos,
+      });
+      play(B.meleeSolid[0], {
+        gain: 0.24, rate: 0.72 + rng.next() * 0.05, pos: point || pos,
+      });
+    });
+    bus.on('rock:break', ({ point, pos }) => {
+      const pool = B.rockBreak;
+      play(pool[Math.floor(rng.next() * pool.length)], {
+        gain: 0.76, rate: 0.94 + rng.next() * 0.07, pos: pos || point,
+      });
+      play(B.impactRock[Math.floor(rng.next() * B.impactRock.length)], {
+        gain: 0.42, rate: 0.68 + rng.next() * 0.07, pos: pos || point,
+      });
+    });
+    bus.on('rock:upgrade', ({ kind, pos }) => {
+      play(B.pickup, { gain: 0.40, rate: kind === 'cinder' ? 1.08 : 0.96, pos });
+      play(B.rockUpgrade, { gain: 0.36, rate: kind === 'cinder' ? 1.07 : 0.98, pos });
+    });
     bus.on('supply:drop', ({ pos }) => play(B.podDrop, { gain: 0.6, pos }));
     bus.on('supply:crash-open', ({ pos }) => play(B.salvageOpen, { gain: 0.42, pos }));
     bus.on('supply:crash-reward', ({ pos }) => play(B.salvageReward, { gain: 0.36, pos }));

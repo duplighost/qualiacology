@@ -88,6 +88,7 @@ export function create(ctx) {
   let reloading = null;                    // base timeline + active-reload state
   let dryLatch = false, emptyAutoT = -1;
   let boostedRounds = 0;
+  let coreBoostRounds = 0;                  // geode charge persists across reloads
   let heat = 0, roundsRecent = 0;
   const fireTimes = [];                    // ideal sim-time of each shot (feel gate)
   let melee = null;                        // {t, phase, target, struck, resolved, outcome}
@@ -186,7 +187,9 @@ export function create(ctx) {
 
   function emitAmmo() {
     ctx.bus.emit('weapon:ammo', {
-      ammo, reserve, boosted: boostedRounds > 0, boostedRounds,
+      ammo, reserve, boosted: boostedRounds > 0 || coreBoostRounds > 0,
+      boostedRounds: boostedRounds > 0 ? boostedRounds : Math.min(ammo, coreBoostRounds),
+      coreBoostRounds,
     });
   }
 
@@ -268,9 +271,10 @@ export function create(ctx) {
   }
 
   function fire(subT) {
-    const boosted = boostedRounds > 0;
+    const boosted = boostedRounds > 0 || coreBoostRounds > 0;
     ammo--;
-    if (boosted) boostedRounds = Math.max(0, boostedRounds - 1);
+    if (boostedRounds > 0) boostedRounds = Math.max(0, boostedRounds - 1);
+    else if (coreBoostRounds > 0) coreBoostRounds--;
     chambered = ammo > 0;
     fireCount++;
     const idx = shotIndex++;
@@ -345,7 +349,9 @@ export function create(ctx) {
     ammoState: () => ({
       ammo, reserve, reloading: !!reloading,
       reserveMax: RESERVE_MAX,
-      boosted: boostedRounds > 0, boostedRounds,
+      boosted: boostedRounds > 0 || coreBoostRounds > 0,
+      boostedRounds: boostedRounds > 0 ? boostedRounds : Math.min(ammo, coreBoostRounds),
+      coreBoostRounds,
     }),
     reloadState: () => {
       if (!reloading) return null;
@@ -378,10 +384,21 @@ export function create(ctx) {
       if (got > 0) emitAmmo();
       return got;
     },
+    empowerMagazine(rounds = MAG) {
+      const wanted = Math.max(0, Math.min(MAG, Math.round(rounds)));
+      const before = coreBoostRounds;
+      coreBoostRounds = Math.min(MAG * 2, coreBoostRounds + wanted);
+      const got = coreBoostRounds - before;
+      if (got > 0) {
+        emitAmmo();
+        ctx.bus.emit('weapon:empower', { rounds: got, coreBoostRounds });
+      }
+      return got;
+    },
     dump: () => ({
       ammo, reserve, adsT, spreadDeg: currentCone(), bloom, kickPitch, kickYaw,
       shotIndex, fireClock, sprintOutTimer, reloading: api.reloadState(),
-      heat, fireCount, boostedRounds, emptyAutoT,
+      heat, fireCount, boostedRounds, coreBoostRounds, emptyAutoT,
       viewmodel: vm.debugState?.(),
     }),
     reset() {
@@ -389,7 +406,7 @@ export function create(ctx) {
       fireClock = INTERVAL;                 // primed: the first pull is instant
       shotIndex = 0; kickPitch = 0; kickYaw = 0; bloom = 0;
       adsT = 0; reloading = null; dryLatch = false; emptyAutoT = -1;
-      boostedRounds = 0; heat = 0; fireCount = 0;
+      boostedRounds = 0; coreBoostRounds = 0; heat = 0; fireCount = 0;
       fireTimes.length = 0;
       melee = null; meleeBuffered = 0; meleeCount = 0;
       vm.onReloadEnd();
@@ -448,7 +465,7 @@ export function create(ctx) {
             if (target) {
               const contactD = meleeTargetContact(target);
               surface = ctx.systems.combat.meleeSurface(
-                _meleeOrigin, _meleeTargetDir, contactD,
+                _meleeOrigin, _meleeTargetDir, contactD, MELEE.damage, MELEE.range,
               );
             }
             if (target && !surface) {
@@ -467,7 +484,7 @@ export function create(ctx) {
             } else {
               if (!surface) {
                 cam.aimDir(_dir);
-                surface = ctx.systems.combat.meleeSurface(_meleeOrigin, _dir, MELEE.range);
+                surface = ctx.systems.combat.meleeSurface(_meleeOrigin, _dir, MELEE.range, MELEE.damage);
               }
               melee.resolved = true;
               if (surface) {
@@ -603,7 +620,7 @@ export function create(ctx) {
       vm.update(dt, {
         adsT, firing, sinceShot, ammo, mag: MAG, heat, roundsRecent,
         sprintT: p.sprinting ? 1 : 0, reloading, melee, meleeSpec: MELEE,
-        boostedRounds,
+        boostedRounds: boostedRounds > 0 ? boostedRounds : Math.min(ammo, coreBoostRounds),
       });
     },
 
