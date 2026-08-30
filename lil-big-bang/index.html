@@ -71,7 +71,7 @@
    Shell laws: fixed-timestep accumulator (shell owns the clock), one
    AudioContext, no iframes, cartridges keep their own worlds.
    ========================================================================== */
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const SAVE_KEY = 'lbb_save_v1';
 
 const CFG = {
@@ -1145,7 +1145,9 @@ const Shell = (() => {
       g.beginPath(); g.arc(x, 600, 13, 0, TAU); g.stroke();
       if (lit) { g.fillStyle = SHELL.gold; g.beginPath(); g.arc(x, 600, 5, 0, TAU); g.fill(); }
     }
-    drawMascot(CFG.W - 68, 682, Math.min(1, t * 2.4), stateT, { scale: .90, pose: 'hype', grill: .82 });
+    /* x is -112, not -68: he holds the moon out to his right now, and at -68 the moon and
+       its halo hung off the edge of the screen. */
+    drawMascot(CFG.W - 112, 682, Math.min(1, t * 2.4), stateT, { scale: .90, pose: 'hype', grill: .82 });
     g.textAlign = 'left'; g.font = FONT.mono(11); g.fillStyle = SHELL.plum;
     g.fillText(open > .4 ? 'DOOR IS HAVING REGRETS' : 'HE PULLED UP', 22, 680);
   }
@@ -1203,10 +1205,19 @@ const Shell = (() => {
       const u = (i + 2) / 4, cx2 = -23 + 46 * u, cy2 = 22 + Math.sin(u * Math.PI) * 16;
       g.beginPath(); g.arc(cx2, cy2, 2.0, 0, TAU); g.fill();
     }
+    /* the pendant is a crescent, not a bead — everything he owns is a phase of the moon */
+    g.save();
+    g.translate(0, 40); g.rotate(-0.35);
+    /* subtract the bite by winding, never by destination-out: this canvas is the shell's,
+       and erasing here punches a transparent hole straight through the frame behind him. */
     g.fillStyle = SHELL.gold;
-    g.beginPath(); g.arc(0, 39, 4.2, 0, TAU); g.fill();
+    g.beginPath();
+    g.moveTo(5.4, 0); g.arc(0, 0, 5.4, 0, TAU, false);
+    g.moveTo(2.4 + 4.6, -1.2); g.arc(2.4, -1.2, 4.6, 0, TAU, true);
+    g.fill();
     g.fillStyle = '#fff6dd';
-    g.beginPath(); g.arc(-1.2, 37.8, 1.5, 0, TAU); g.fill();
+    g.beginPath(); g.arc(-3.6, 0.4, 1.2, 0, TAU); g.fill();
+    g.restore();
 
     /* eyes: heavy-lidded and slightly angled inward — bored, not sleepy. The lid is a hard
        edge cutting the top third off each eye; that single line is the whole attitude. */
@@ -1275,22 +1286,123 @@ const Shell = (() => {
     g.beginPath(); g.arc(0, -17, 2.4, 0, TAU); g.fill();                 // button
     g.restore();
 
-    /* the one oversized mitten, ringed, throwing a lazy point */
+    /* THE MOON. He is holding one, and it is drawn as one: a lit sphere with a terminator,
+       real craters, a mare, and a warm rim where his own light hits it. It used to be an
+       anonymous cream blob at the end of the arm, which read as neither a fist nor an
+       object. The grill already waxes from crescent to full; this is the same moon, out
+       where you can see it. */
     g.save();
     const swing = pose === 'hype' ? Math.sin(t * 9) * 0.5 : Math.sin(t * 4.4) * 0.17;
-    g.translate(R - 6, 6); g.rotate(-0.45 + swing);
-    g.strokeStyle = '#ffeec2'; g.lineWidth = 7; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(0, 0); g.lineTo(22, -12); g.stroke();
-    g.fillStyle = '#fff6dd';
-    g.beginPath(); g.arc(29, -16, 10.5, 0, TAU); g.fill();
-    g.beginPath(); g.ellipse(21, -8, 6, 4.6, 0.7, 0, TAU); g.fill();     // thumb
-    g.strokeStyle = SHELL.gold; g.lineWidth = 2.6;                       // rings
-    g.beginPath(); g.moveTo(22.5, -21.5); g.lineTo(26.5, -24.5); g.stroke();
-    g.beginPath(); g.moveTo(28.5, -24); g.lineTo(32.5, -26.5); g.stroke();
-    g.fillStyle = '#fff0b8';
-    g.beginPath(); g.arc(34.5, -20, 2.1, 0, TAU); g.fill();
+    g.translate(R - 8, 8); g.rotate(-0.46 + swing * 0.55);
+    const MX = 39, MY = -33, MR = 18, HX = 33, HY = -13;
+    /* warmer than the moon on purpose: a cream mitten against a grey moon is two pale
+       shapes fighting, a gold one is a hand */
+    const MITT = '#f4d79b', MITT_LINE = 'rgba(120,74,16,0.55)';
+    g.strokeStyle = '#efd8a4'; g.lineWidth = 8.5; g.lineCap = 'round';    // the forearm
+    g.beginPath(); g.moveTo(-1, 2); g.lineTo(HX - 6, HY + 4); g.stroke();
+    /* the mitten, CUPPED: the moon sits down into it, not beside it */
+    g.fillStyle = MITT; g.strokeStyle = MITT_LINE; g.lineWidth = 1.6;
+    g.beginPath(); g.ellipse(HX, HY, 13, 11, -0.22, 0, TAU); g.fill(); g.stroke();
+
+    drawHeldMoon(MX, MY, MR, t);
+
+    /* Three fingertips and a thumb, cresting the near limb. Short bumps, not long fingers:
+       at 15-27 px on screen the read has to be silhouette, and a hand that CROSSES the moon
+       is the difference between holding it and standing next to it. */
+    const FING = [[2.42, 4.4], [1.78, 4.7], [1.16, 4.4]];
+    g.fillStyle = MITT; g.strokeStyle = MITT_LINE; g.lineWidth = 1.5;
+    for (let f = 0; f < FING.length; f++) {
+      const fa = FING[f][0], fr = FING[f][1];
+      const fx = MX + Math.cos(fa) * MR * 0.93, fy = MY + Math.sin(fa) * MR * 0.93;
+      g.beginPath(); g.arc(fx, fy, fr, 0, TAU); g.fill(); g.stroke();
+    }
+    const ta = 0.58;                                                       // the thumb
+    const tx2 = MX + Math.cos(ta) * MR * 0.96, ty2 = MY + Math.sin(ta) * MR * 0.96;
+    g.fillStyle = '#ffe6ae';
+    g.beginPath(); g.ellipse(tx2, ty2, 6.6, 4.6, ta + 1.57, 0, TAU); g.fill(); g.stroke();
+    g.strokeStyle = SHELL.gold; g.lineWidth = 2.2; g.lineCap = 'butt';     // one ring, on the thumb
+    g.save(); g.translate(tx2 + Math.cos(ta) * 2.4, ty2 + Math.sin(ta) * 2.4); g.rotate(ta);
+    g.beginPath(); g.moveTo(0, -4.4); g.lineTo(0, 4.4); g.stroke();
+    g.restore();
+    g.lineCap = 'round';
     g.restore();
 
+    g.restore();
+  }
+
+  /* One moon, drawn like a moon: sphere shading from the upper left, a terminator crescent
+     down the lower right, a dark mare, seven craters with lit lower rims, and a warm gold
+     rim on the side facing the mascot — because he is the light source in this picture. */
+  const MOON_CRATERS = [
+    [-0.34, -0.32, 0.21], [0.20, -0.44, 0.12], [0.33, 0.12, 0.25], [-0.12, 0.36, 0.15],
+    [-0.55, 0.18, 0.10], [0.03, -0.08, 0.085], [0.54, -0.28, 0.095],
+  ];
+  function drawHeldMoon(mx, my, r, t) {
+    g.save();
+    g.translate(mx, my);
+    /* cool halo: it is a cold object next to a hot one */
+    const glow = g.createRadialGradient(0, 0, r * 0.85, 0, 0, r * 2.0);
+    glow.addColorStop(0, 'rgba(198,214,255,0.30)');
+    glow.addColorStop(1, 'rgba(198,214,255,0)');
+    g.fillStyle = glow;
+    g.beginPath(); g.arc(0, 0, r * 2.0, 0, TAU); g.fill();
+
+    const body = g.createRadialGradient(-r * 0.38, -r * 0.42, r * 0.10, 0, 0, r * 1.10);
+    body.addColorStop(0, '#ffffff');
+    body.addColorStop(0.46, '#f4eee0');
+    body.addColorStop(1, '#b3a9ad');
+    g.fillStyle = body;
+    g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+
+    g.save();
+    g.beginPath(); g.arc(0, 0, r, 0, TAU); g.clip();
+    /* terminator: an offset shadow disc, so the far limb falls away instead of ending flat */
+    const term = g.createRadialGradient(r * 0.55, r * 0.60, r * 0.10, r * 0.62, r * 0.66, r * 1.35);
+    term.addColorStop(0, 'rgba(58,48,66,0.46)');
+    term.addColorStop(1, 'rgba(58,48,66,0)');
+    g.fillStyle = term;
+    g.beginPath(); g.arc(r * 0.42, r * 0.46, r * 1.30, 0, TAU); g.fill();
+    /* the mare — one big soft sea, the thing that makes a grey circle read as THE moon */
+    g.fillStyle = 'rgba(118,107,128,0.40)';
+    g.beginPath(); g.ellipse(-r * 0.18, r * 0.10, r * 0.50, r * 0.38, -0.5, 0, TAU); g.fill();
+    g.beginPath(); g.ellipse(r * 0.30, -r * 0.44, r * 0.26, r * 0.19, 0.4, 0, TAU); g.fill();
+    for (let i = 0; i < MOON_CRATERS.length; i++) {
+      const c = MOON_CRATERS[i], cx = c[0] * r, cy = c[1] * r, cr = c[2] * r;
+      g.fillStyle = 'rgba(112,102,120,0.55)';
+      g.beginPath(); g.arc(cx, cy, cr, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(255,252,242,0.60)';                             // lit lower-right wall
+      g.beginPath(); g.arc(cx + cr * 0.34, cy + cr * 0.34, cr * 0.72, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(96,86,104,0.34)';                               // shadowed floor
+      g.beginPath(); g.arc(cx - cr * 0.10, cy - cr * 0.10, cr * 0.52, 0, TAU); g.fill();
+    }
+    g.restore();
+
+    /* the warm side: HIS light, poured on as a gradient rather than painted on as a stripe.
+       A gold ARC here reads as tape stuck to the moon, which is the opposite of the job. */
+    g.save();
+    g.beginPath(); g.arc(0, 0, r, 0, TAU); g.clip();
+    const warm = g.createRadialGradient(-r * 0.95, r * 0.45, r * 0.05, -r * 0.9, r * 0.4, r * 1.5);
+    warm.addColorStop(0, 'rgba(255,209,102,0.55)');
+    warm.addColorStop(1, 'rgba(255,209,102,0)');
+    g.fillStyle = warm;
+    g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+    g.restore();
+    /* a cold limb on the far side, so it is a sphere and not a sticker */
+    g.strokeStyle = 'rgba(214,228,255,0.45)'; g.lineWidth = Math.max(1, r * 0.06);
+    g.beginPath(); g.arc(0, 0, r - r * 0.03, -Math.PI * 0.52, Math.PI * 0.24); g.stroke();
+
+    /* one four-point glint, on the beat */
+    const tw = Math.max(0, Math.sin(t * 4.4 + 1.1));
+    if (tw > 0.02) {
+      const s = r * (0.20 + 0.28 * tw);
+      g.fillStyle = 'rgba(255,255,255,' + (0.85 * tw).toFixed(3) + ')';
+      g.beginPath();
+      g.moveTo(-r * 0.44, -r * 0.52 - s); g.quadraticCurveTo(-r * 0.44, -r * 0.52, -r * 0.44 + s, -r * 0.52);
+      g.quadraticCurveTo(-r * 0.44, -r * 0.52, -r * 0.44, -r * 0.52 + s);
+      g.quadraticCurveTo(-r * 0.44, -r * 0.52, -r * 0.44 - s, -r * 0.52);
+      g.quadraticCurveTo(-r * 0.44, -r * 0.52, -r * 0.44, -r * 0.52 - s);
+      g.fill();
+    }
     g.restore();
   }
   function drawFuse() {
@@ -1477,6 +1589,10 @@ const Shell = (() => {
     }),
     reg: () => REG.map(r => ({ id: r.id, family: r.family, command: r.command, slotBeats: r.slotBeats, boss: !!r.boss })),
     hint: () => (cart && cart.hint) ? cart.hint() : null,
+    /* the cartridge's own last words for the round just resolved — a harness that only
+       knows won/lost cannot tell "she left" from "you crushed her", and those are two
+       different tuning problems */
+    line: () => lastLine,
     version: VERSION,
   };
 
@@ -2913,6 +3029,11 @@ const Shell = (() => {
       // ---- state ----
       let t = 0, armedT = 0, done = 'pending';
       let v = 0, progress = 0, stillTime = 1, seenT = 0, noticed = false;
+      let seenPeak = 0;                              // ghost mark: how far the gaze got, so the drop is visible
+      /* The gaze budget. It is meant to run most of the way up on a late reaction and then
+         visibly drain — being seen for a second is survivable, being seen for two thirds of
+         a second is not. SETTLE is the only part of the release that still costs you. */
+      const SEEN_MAX = 0.68, SEEN_DECAY = 2.1, SETTLE = 0.08;
       let bobPhase = 0, strideAcc = 0.75;
       let zw = [0.62, 0.62, 0.44][diff];             // watcher depth (d2 30% closer)
       let wStep = 0, headTurn = 0, lampOn = true;
@@ -2994,7 +3115,7 @@ const Shell = (() => {
 
           // ---- movement: hold = walk, release = freeze (touch inversion) ----
           const held = inp.down;
-          v += ((held ? 1 : 0) - v) * Math.min(1, (held ? 10 : 12) * dt);
+          v += ((held ? 1 : 0) - v) * Math.min(1, (held ? 10 : 18) * dt);
           progress = Math.min(1, progress + (v * dt) / needHeld);
           bobPhase += dt * 7.4 * (0.35 + v);
           const moving = v * 1.85 > 0.12;              // donor: vel > 0.12 m/s
@@ -3034,13 +3155,15 @@ const Shell = (() => {
           }
           zw = Math.max(zw, progress + 0.06);           // it stays between you and the door
 
-          // ---- perception: donor constants verbatim ----
-          if (watched && stillTime < 0.25) {            // release is not instantly safe
+          // ---- perception: the gaze fills while it can see you moving, and drains once you stop ----
+          if (watched && stillTime < SETTLE) {          // release is not INSTANTLY safe, but nearly
             seenT += dt;
+            seenPeak = Math.max(seenPeak, seenT);
           } else {
-            seenT = Math.max(0, seenT - dt * 1.5);      // sticky decay
-            if (seenT === 0) noticed = false;           // latch clears only at zero
+            seenT = Math.max(0, seenT - dt * SEEN_DECAY);
+            if (seenT === 0) { noticed = false; seenPeak = 0; }   // latch clears only at zero
           }
+          if (seenPeak > 0) seenPeak = Math.max(seenT, seenPeak - dt * 0.55);   // the mark falls behind
           if (seenT > 0.16 && !noticed) {               // it NOTICES: loud step + fear, nothing else
             noticed = true;
             entityStep(1.5 * Math.max(0.6, proxGain()));
@@ -3054,7 +3177,7 @@ const Shell = (() => {
             whisper = { txt: 'up.', at: t, dur: 9 };
             return;
           }
-          if (seenT > 0.55 && env.armed()) {            // taken
+          if (seenT > SEEN_MAX && env.armed()) {        // taken
             done = 'lost'; headTurn = 1; grabSfx(); spikeV += 1.2;
             return;
           }
@@ -3192,12 +3315,25 @@ const Shell = (() => {
             const k = P(relW);
             const wx = SX(-25, k), wyF = SY(514, k);
             silhouette(g, wx, wyF, k, headTurn);
-            if (seenT > 0.02) {                          // gaze meter, above its head
-              const my = Math.max(76, wyF - 415 * k - 16), mw = 64;
-              g.fillStyle = 'rgba(120,110,100,0.25)';
-              g.fillRect(wx - mw / 2, my, mw, 4);
-              g.fillStyle = 'rgba(220,205,185,0.8)';
-              g.fillRect(wx - mw / 2, my, mw * Math.min(1, seenT / 0.55), 4);
+            /* Gaze meter, above its head. It has to be big enough to watch FALL — the whole
+               point of the budget is that you can see the thing lose interest in you. */
+            if (watched || seenPeak > 0.02) {           // empty the moment it turns: this is your budget
+              const my = Math.max(74, wyF - 415 * k - 22), mw = 92, mh = 7;
+              const mx = wx - mw / 2;
+              const fill = Math.min(1, seenT / SEEN_MAX), peak = Math.min(1, seenPeak / SEEN_MAX);
+              g.fillStyle = 'rgba(16,14,13,0.62)';                     // trough
+              g.fillRect(mx - 2, my - 2, mw + 4, mh + 4);
+              g.fillStyle = 'rgba(120,110,100,0.30)';
+              g.fillRect(mx, my, mw, mh);
+              if (peak > fill) {                                       // the ghost you are outrunning
+                g.fillStyle = 'rgba(196,120,88,0.42)';
+                g.fillRect(mx + mw * fill, my, mw * (peak - fill), mh);
+              }
+              const hot = fill > 0.72;
+              g.fillStyle = hot ? 'rgba(236,176,128,0.95)' : 'rgba(226,212,192,0.88)';
+              g.fillRect(mx, my, mw * fill, mh);
+              g.fillStyle = 'rgba(255,238,214,0.55)';                  // the line it cannot cross
+              g.fillRect(mx + mw - 1.5, my - 3, 1.5, mh + 6);
             }
           }
 
@@ -3258,12 +3394,16 @@ const Shell = (() => {
 /* DONE-CRITERIA
    - Holding (or being within the settle tail) while a watch phase is active accumulates seenT
      at 1*dt; seenT > 0.16 fires exactly one loud entityStep (gain 1.5) + fear spike 0.5 and
-     nothing else; seenT > 0.55 while env.armed() sets 'lost' and the very next frame is the
-     black + pale-face grab read.
-   - On release, velocity lerps down at rate 12 and the player still counts as moving until
-     0.25 s after v*1.85 drops below 0.12 — a full-speed release is unsafe for ~0.45 s.
-   - seenT decays at 1.5/s when the gate is closed and the notice latch clears only when
+     nothing else; seenT > SEEN_MAX (0.68) while env.armed() sets 'lost' and the very next
+     frame is the black + pale-face grab read.
+   - On release, velocity lerps down at rate 18 and the player still counts as moving until
+     SETTLE (0.08 s) after v*1.85 drops below 0.12 — a full-speed release costs ~0.23 s of
+     gaze, so a late-but-real reaction runs the bar to roughly three quarters and survives.
+   - seenT decays at 2.1/s when the gate is closed and the notice latch clears only when
      seenT reaches exactly 0, so separate twitches accumulate.
+   - The meter above the watcher's head is 92x7 with a hard tick at SEEN_MAX and a slower
+     copper ghost bar trailing the peak, so the drain is legible as motion, not just as a
+     shorter bar. It stays on screen until seenT is back to zero.
    - progress >= 1.0 sets 'won' immediately with doorCreak + whisper 'up.' and the warm flood;
      timeout() returns 'won' (inhibit family: surviving the slot is also a win).
    - No watch phase can begin before env.armed() (armedT accumulates only while armed), so
@@ -3271,8 +3411,10 @@ const Shell = (() => {
    - Each watch is telegraphed teleDur (0.45/0.35/0.28 s by difficulty) ahead: the door lamp
      flickers ON only when hash < 0.4 per step, flickerBuzz + inhale play, and its footsteps stop.
    BUG-IS-GAME (do not fix):
-   - The 0.25 s settle window: release is NOT instantly safe — panic releases still die.
-   - Sticky seenT (decay 1.5/s, latch clears only at 0): repeated glances add up to being taken.
+   - The settle window: release is NOT instantly safe. It is short (0.08 s) because Alex asked
+     for leeway on 2026-08-30 — the failure it was tuned against was a meter that could only
+     ever go up. It must stay non-zero: stopping has to cost something.
+   - Sticky seenT (latch clears only at 0): repeated glances still add up to being taken.
    - The 0.16 s notice does nothing mechanical — no speed-up, no course change. Just the sound,
      the spike, the skipped heartbeat. The grace gap is deliberately empty.
    - Lamp flicker is ON only 40% of frames during the telegraph (mostly dark). Not inverted.
@@ -4705,571 +4847,6 @@ const Shell = (() => {
      punishment with only the sfx throttled, exactly as the donor feels.
    - The count-in runs attract-mode rules: half drift speed, fresh pulses 0.55 + sin*0.35 and
      never curdles, then snaps to the seeded staggered values at arm. That snap is the start.
-*/
-
-/* ===== carts/17-finale.js ===== */
-/* FINALE — beat the fuse: tap the shell while its white ring is open and its firework becomes yours */
-(function () {
-  // palette — donor js/config.js COL, quoted
-  var SKY_TOP = '#070912', SKY_BOT = '#131A3A', SKY_GLOW = '#1D2A5E';
-  var CITY = '#05070E', ROOF = '#0C1226', WIN = '#F2C46A', CROWD = '#0B1020';
-  var HULL = '#6B2E8F', TRIM = 'rgba(233,168,255,0.75)', CORE = '#FF2D6F';
-  var DANGER = '#FF2D6F', MINE_A = '#5FF7FF', MINE_B = '#B8FFEA', PEA = '#3FA6C8', ACCENT = '#FFD166';
-  var TAU = Math.PI * 2;
-
-  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
-  function ss(k) { k = clamp(k, 0, 1); return k * k * (3 - 2 * k); }
-  // donor game.js drawEnemies casing, verbatim vertices
-  function casing(g, r) {
-    g.beginPath();
-    g.moveTo(0, -r); g.lineTo(r * 0.78, -r * 0.2); g.lineTo(r * 0.5, r * 0.85);
-    g.lineTo(-r * 0.5, r * 0.85); g.lineTo(-r * 0.78, -r * 0.2);
-    g.closePath();
-  }
-  // donor atlas.js drawDiamond, verbatim vertices (nose R*1.75 faces +x)
-  function diamond(g, R) {
-    g.beginPath();
-    g.moveTo(R * 1.75, 0); g.lineTo(0, R * 0.72); g.lineTo(-R * 0.85, 0); g.lineTo(0, -R * 0.72);
-    g.closePath(); g.fill();
-  }
-  function diamondCore(g, R) {
-    g.beginPath();
-    g.moveTo(R * 0.9, 0); g.lineTo(0, R * 0.3); g.lineTo(-R * 0.3, 0); g.lineTo(0, -R * 0.3);
-    g.closePath(); g.fill();
-  }
-
-  registerGame({
-    id: 'finale', title: 'FINALE', command: 'BEAT THE FUSE!', family: 'tap', slotBeats: 8,
-    create(env) {
-      var W = env.W, H = env.H, D = env.difficulty, R = env.rng;
-
-      // ---- baked-at-create world (arrays only; no offscreen canvases allowed here) ----
-      var stars = [], farB = [], nearB = [], wins = [], crowd = [];
-      var i, k, b;
-      for (i = 0; i < 40; i++) stars.push({ x: R() * W, y: 4 + R() * H * 0.52, a: 0.10 + R() * 0.24, s: R() < 0.16 ? 1.6 : 1 });
-      for (i = 0; i < 9; i++) farB.push({ x: i * (W / 9) + (R() - 0.5) * 26 - 8, w: 36 + R() * 44, roof: 596 + R() * 74, mast: 0 });
-      for (i = 0; i < 8; i++) nearB.push({ x: i * (W / 8) + (R() - 0.5) * 30 - 10, w: 44 + R() * 52, roof: 676 + R() * 92, mast: R() < 0.22 ? 12 + R() * 16 : 0 });
-      function placeWins(list, far, budget) {
-        var px = far ? 9 : 11, py = far ? 12 : 15, cw = far ? 2 : 3, ch = far ? 3 : 4, n = 0;
-        for (var q = 0; q < list.length; q++) {
-          var bb = list[q], cols = ((bb.w - 8) / px) | 0, rows = Math.min(far ? 4 : 5, ((H - 14 - bb.roof) / py) | 0);
-          for (var r0 = 0; r0 < rows; r0++) for (var c0 = 0; c0 < cols; c0++) {
-            if (n >= budget) return;
-            if (R() > 0.55) continue;
-            wins.push({ x: bb.x + 5 + c0 * px, y: bb.roof + 7 + r0 * py, w: cw, h: ch, far: far, on: R() < 0.55 });
-            n++;
-          }
-        }
-      }
-      placeWins(farB, true, 55); placeWins(nearB, false, 55);
-      for (i = 0; i < nearB.length && crowd.length < 14; i++) {
-        b = nearB[i];
-        if (b.roof < 690 || b.w < 36) continue;
-        var np = 2 + ((R() * 3) | 0);
-        for (k = 0; k < np && crowd.length < 14; k++)
-          crowd.push({ x: b.x + 8 + R() * (b.w - 16), y: b.roof, ph: R() * TAU, up: false });
-      }
-
-      // ---- the shell (big, slow, high — top 2/3 always) ----
-      var SHR = [34, 31, 29][D];
-      var SH = {
-        r: SHR, hx: 105 + R() * 180, hy: 235 + R() * 85,
-        x: 0, y: 0, t: 0, hitFlash: 0, dead: false,
-      };
-      var startX = clamp(SH.hx + (R() - 0.5) * 90, 50, W - 50);
-      var enterT = 0, ENTER = 0.9;             // donor cadenceT settle: a shell never asks instantly
-
-      // cascade fodder: two little shells the petals will ignite (the flourish frame)
-      var echoes = [];
-      for (i = 0; i < 2; i++) {
-        var sgn = i === 0 ? -1 : 1;
-        echoes.push({
-          x0: clamp(SH.hx + sgn * (88 + R() * 55), 42, W - 42),
-          y0: clamp(SH.hy + (R() - 0.5) * 190, 150, 430),
-          x: 0, y: 0, r: 13, ph: R() * TAU, t: 0, ig: 0, dead: false,
-        });
-      }
-
-      // ---- fuse timing (difficulty shortens the window; d2 adds a fake shimmer) ----
-      var FUSE = [1.2, 0.85, 0.65][D];
-      var wOpen = 0.55 + R() * 0.30;           // seconds after armed; granted on the next 1/8
-      var fakeAt = D === 2 ? Math.max(0.16, wOpen - (0.45 + R() * 0.2)) : -1;
-      var TAPR = [80, 74, 70][D];              // generous positional radius
-      var open = false, fired = false, fuseT = 0, whT = 0, fakeDone = false;
-
-      // ---- actors / fx state ----
-      var ship = { x: W * 0.5, y: 686, dead: false, fireT: 0.05, volley: 0, tx: [], ty: [], tn: 0 };
-      for (i = 0; i < 8; i++) { ship.tx.push(ship.x); ship.ty.push(ship.y); }
-      var peas = [], petals = [], reds = [], sparks = [], flashes = [], rings = [];
-      var t = 0, tA = 0, prevPh = env.beatPhase();
-      var done = 'pending', why = 'late', chain = 0;
-      var hs = 0, shakeT = 0, shakeMag = 0, skyFlash = 0, allLit = false, waveT = -1;
-      var tickT = 0, notYetT = 0, flinch = 0;
-      var RELIGHT = 0.42;                      // beat of dark between fuses
-
-      // ---- donor-synth sfx on the shell bus ----
-      function sPea() { env.audio.tone({ f: 900, type: 'triangle', dur: 0.025, vol: 0.028 }); }
-      function sTick() { env.audio.tone({ f: 1400, type: 'sine', dur: 0.012, vol: 0.02 }); }
-      function sFake() { env.audio.tone({ f: 380, f2: 470, type: 'sine', dur: 0.11, vol: 0.06 }); }
-      function sOpen() { env.audio.noise({ dur: 0.05, vol: 0.09, hp: 2600 }); }
-      function sWhistle(frac) {                // 380->1250Hz rising countdown, in stoppable segments
-        var f = 380 * Math.pow(1250 / 380, frac);
-        var f2 = 380 * Math.pow(1250 / 380, Math.min(1, frac + 0.11 / FUSE));
-        env.audio.tone({ f: f, f2: f2, type: 'sine', dur: 0.12, vol: 0.13, attack: 0.012 });
-      }
-      function sBloomBlue(petalN, ch) {        // ascending noise bloom + 62Hz thump
-        var g0 = Math.min(0.28, 0.10 + 0.004 * petalN) * 1.5;
-        env.audio.noise({ dur: 0.22, vol: g0, hp: 500, lp: 2600 });
-        env.audio.tone({ f: 1200 * Math.pow(2, Math.min(ch, 30) / 24), f2: 220, type: 'sine', dur: 0.22, vol: 0.2 });
-        env.audio.tone({ f: 62, type: 'sine', dur: 0.18, vol: 0.26 });
-      }
-      function sBloomRed() {                   // duller by design: failure is heard, never buzzered
-        env.audio.noise({ dur: 0.26, vol: 0.18, hp: 140, lp: 760 });
-        env.audio.tone({ f: 300, f2: 120, type: 'sine', dur: 0.05, vol: 0.17 });
-      }
-      function sDud() { env.audio.tone({ f: 240, f2: 200, type: 'sine', dur: 0.05, vol: 0.07 }); }
-      function sNotYet() { env.audio.tone({ f: 190, type: 'sine', dur: 0.035, vol: 0.05 }); }
-      function sDeath() { env.audio.tone({ f: 55, type: 'sine', dur: 1.1, vol: 0.2 }); env.audio.noise({ dur: 0.12, vol: 0.2, lp: 900 }); }
-
-      // ---- fx spawners ----
-      function burst(x, y, n, c, sp) {
-        var ph = R() * TAU;                    // stacked blooms never align into a grid
-        for (var q = 0; q < n && petals.length < 40; q++) {
-          var a = ph + q / n * TAU;
-          petals.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: 1.8, c: c });
-        }
-      }
-      function sparksAt(x, y, n) {
-        for (var q = 0; q < n && sparks.length < 40; q++) {
-          var a = R() * TAU, sp = 150 + R() * 190;
-          sparks.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: 0.30 + R() * 0.28, c: q & 1 ? '#FFFFFF' : MINE_A });
-        }
-      }
-      function bloomAt(x, y, petalN, c, ringC) {
-        burst(x, y, petalN, c, 320);           // SPARK volley speed 200 * PETAL_SPEED_MULT 1.6
-        if (flashes.length < 6) flashes.push({ x: x, y: y, r0: 18 + 1.4 * petalN, t: 0, c: '#FFFFFF' });
-        if (rings.length < 6) rings.push({ x: x, y: y, r0: SHR, t: 0, c: ringC });
-        sparksAt(x, y, Math.min(14, 4 + (petalN >> 2)));
-        skyFlash = Math.max(skyFlash, Math.min(1, 0.28 + petalN * 0.011));
-      }
-      function winNow() {
-        done = 'won'; open = false; SH.dead = true; chain = 1;
-        hs = 0.045;                            // donor HITSTOP_FUSEKILL_BIG
-        shakeT = 0.25; shakeMag = 3;
-        bloomAt(SH.x, SH.y, 12, MINE_A, MINE_A);
-        allLit = true; waveT = 0;
-        sBloomBlue(12, 1);
-      }
-      function volley() {                       // the shell answers; the round continues
-        var aim0 = Math.atan2(ship.y - SH.y, ship.x - SH.x);
-        for (var v = 0; v < 5; v++) {
-          var av = aim0 + (v - 2) / 4 * (46 * Math.PI / 180);
-          reds.push({ x: SH.x, y: SH.y, vx: Math.cos(av) * 200, vy: Math.sin(av) * 200 });
-        }
-        if (flashes.length < 6) flashes.push({ x: SH.x, y: SH.y, r0: 26, t: 0, c: DANGER });
-        if (rings.length < 6) rings.push({ x: SH.x, y: SH.y, r0: SHR, t: 0, c: DANGER });
-        shakeT = 0.2; shakeMag = 2;
-        sBloomRed();
-      }
-      function redBloom(reason) {
-        done = 'lost'; why = reason; open = false; fired = true;
-        var aim = Math.atan2(ship.y - SH.y, ship.x - SH.x);
-        for (var q = 0; q < 5; q++) {          // donor SPARK volley: fan n:5 spread:46 speed:200 aimed
-          var a = aim + (q - 2) / 4 * (46 * Math.PI / 180);
-          reds.push({ x: SH.x, y: SH.y, vx: Math.cos(a) * 200, vy: Math.sin(a) * 200 });
-        }
-        if (flashes.length < 6) flashes.push({ x: SH.x, y: SH.y, r0: 26, t: 0, c: DANGER });
-        if (rings.length < 6) rings.push({ x: SH.x, y: SH.y, r0: SHR, t: 0, c: DANGER });
-        shakeT = 0.2; shakeMag = 2;
-        sBloomRed();
-      }
-
-      return {
-        step(dt, inp) {
-          var ph = env.beatPhase();
-          var eighth = (prevPh < 0.5 && ph >= 0.5) || ph < prevPh;
-          prevPh = ph;
-          if (hs > 0) {                        // the world freezes; the shake keeps wobbling
-            hs -= dt;
-            if (shakeT > 0) shakeT -= dt * 0.4;
-            return;
-          }
-          t += dt;
-          if (env.armed()) tA += dt;
-          SH.t += dt;
-          if (SH.hitFlash > 0) SH.hitFlash -= dt;
-          if (shakeT > 0) shakeT -= dt;
-          if (skyFlash > 0) skyFlash -= 4.5 * dt;
-          tickT -= dt; notYetT -= dt; flinch = Math.max(0, flinch - dt);
-
-          // shell + echoes ease in, then breathe (donor enterHold)
-          var ek = enterT < ENTER ? ss(enterT / ENTER) : 1;
-          if (enterT < ENTER) enterT += dt;
-          if (!SH.dead) {
-            SH.x = startX + (SH.hx - startX) * ek + Math.sin(SH.t * 0.9) * 14 * ek;
-            SH.y = -70 + (SH.hy + 70) * ek + Math.sin(SH.t * 1.4) * 7 * ek;
-          }
-          for (var q = 0; q < echoes.length; q++) {
-            var e = echoes[q];
-            e.t += dt;
-            if (e.dead) continue;
-            e.x = e.x0 + Math.sin(e.t * 0.9 + e.ph) * 10 * ek;
-            e.y = (e.y0 - 60) + 60 * ek + Math.sin(e.t * 1.4 + e.ph) * 5 * ek;
-            if (e.ig > 0) {                    // petal lit this fuse; it blooms a beat later
-              e.ig -= dt;
-              if (e.ig <= 0) {
-                e.dead = true; chain++;
-                bloomAt(e.x, e.y, 8, chain >= 2 ? MINE_B : MINE_A, MINE_B);
-                hs = Math.max(hs, 0.03); shakeT = 0.2; shakeMag = 2;
-                sBloomBlue(8, chain);
-              }
-            }
-          }
-
-          // ship autopilot: parks under the shell — you are the aim, even hands-free
-          if (!ship.dead) {
-            var wx = SH.dead ? ship.x : clamp(SH.x, 24, W - 24);
-            var dx = wx - ship.x, mx = 250 * dt;
-            ship.x += Math.abs(dx) < mx ? dx : (dx > 0 ? mx : -mx);
-            ship.tn = (ship.tn + 1) & 7; ship.tx[ship.tn] = ship.x; ship.ty[ship.tn] = ship.y;
-            ship.fireT -= dt;                  // the gun fires itself, 10 volleys/s, from tick 0
-            while (ship.fireT <= 0) {
-              ship.fireT += 0.1; ship.volley++;
-              if (peas.length < 38) { peas.push({ x: ship.x - 7, y: ship.y - 12 }); peas.push({ x: ship.x + 7, y: ship.y - 12 }); }
-              if (ship.volley % 3 === 0 && done === 'pending') sPea();
-            }
-          }
-          for (q = peas.length - 1; q >= 0; q--) {
-            var p = peas[q];
-            p.y -= 1300 * dt;
-            // BUG-IS-GAME: peas PASS THROUGH a closed shell — they only land while the window is open
-            if (open && !SH.dead && Math.hypot(p.x - SH.x, p.y - SH.y) < SH.r + 6) {
-              peas.splice(q, 1);
-              SH.hitFlash = 0.05;
-              if (tickT <= 0) { tickT = 0.05; sTick(); }
-              if (sparks.length < 40) sparks.push({ x: p.x, y: p.y, vx: (R() - 0.5) * 90, vy: -40 - R() * 60, t: 0, life: 0.2, c: '#FFFFFF' });
-            } else if (p.y < -20) peas.splice(q, 1);
-          }
-
-          // the fake first shimmer (difficulty 2 bait — no shrink, no whistle rise, core stays magenta)
-          if (fakeAt > 0 && !fakeDone && tA >= fakeAt) { fakeDone = true; sFake(); }
-
-          // window grant, quantised to the 1/8-note grid — the shell visibly waits for the music
-          if (!open && !fired && done === 'pending' && env.armed() && tA >= wOpen && eighth) {
-            open = true; fuseT = FUSE; whT = 0; sOpen();
-          }
-          if (open && done === 'pending') {
-            fuseT -= dt;
-            whT -= dt;
-            if (whT <= 0) { whT += 0.09; sWhistle(1 - Math.max(0, fuseT) / FUSE); }
-            /* A missed window used to END the round. In a 4.8s slot that meant one 1.2s
-               chance and then death — so a player who hesitated once never saw a second
-               fuse. The shell answers with its volley (the drama survives) and then
-               RELIGHTS. You now lose to the slot clock, not to a single hesitation. */
-            if (fuseT <= 0) { volley(); open = false; why = 'late'; wOpen = tA + RELIGHT; }
-          }
-
-          // THE TAP
-          if (inp.justDown && done === 'pending') {
-            if (open) {
-              if (Math.hypot(inp.x - SH.x, inp.y - SH.y) <= TAPR) winNow();
-              else {                           // in the window but wide: a dud, not a verdict — retap
-                sDud();
-                if (sparks.length < 40) sparks.push({ x: inp.x, y: inp.y - 30, vx: 0, vy: -50, t: 0, life: 0.22, c: PEA });
-              }
-            } else if (env.armed()) {
-              /* Too soon. This used to be an instant loss, which made the cartridge a trap:
-                 the command shouts BEAT THE FUSE!, every instinct says tap NOW, and tapping
-                 now killed you before the fuse had even lit. It also contradicted the donor,
-                 whose peas pass straight THROUGH a shut shell — hitting it does nothing.
-                 So: nothing happens to the shell. It flinches, and the flinch pushes your
-                 own chance later, so mashing still costs you the slot clock. */
-              sDud();
-              flinch = 0.18;
-              wOpen = Math.max(wOpen, tA + 0.22);
-              why = 'early';
-              if (sparks.length < 40) sparks.push({ x: inp.x, y: inp.y - 30, vx: 0, vy: -50, t: 0, life: 0.22, c: PEA });
-            } else if (notYetT <= 0) { notYetT = 0.25; sNotYet(); }
-          }
-
-          // petals fly; touching a little shell IGNITES it (the cascade engine, not a missed hit)
-          for (q = petals.length - 1; q >= 0; q--) {
-            p = petals[q];
-            p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt;
-            for (var j = 0; j < echoes.length; j++) {
-              e = echoes[j];
-              if (!e.dead && e.ig <= 0 && Math.hypot(p.x - e.x, p.y - e.y) < e.r + 8 + 6.5) e.ig = 0.12;
-            }
-            if (p.t > p.life || p.x < -30 || p.x > W + 30 || p.y < -30 || p.y > H + 30) petals.splice(q, 1);
-          }
-
-          // the red volley, lethal magenta, hunting the ship
-          for (q = reds.length - 1; q >= 0; q--) {
-            p = reds[q];
-            p.x += p.vx * dt; p.y += p.vy * dt;
-            if (!ship.dead && Math.hypot(p.x - ship.x, p.y - ship.y) < 14) {
-              ship.dead = true; reds.splice(q, 1);
-              hs = 0.14; shakeT = 0.3; shakeMag = 8;
-              if (flashes.length < 6) flashes.push({ x: ship.x, y: ship.y, r0: 30, t: 0, c: '#FFFFFF' });
-              sparksAt(ship.x, ship.y, 10);
-              sDeath();
-            } else if (p.y > H + 20 || p.x < -20 || p.x > W + 20) reds.splice(q, 1);
-          }
-
-          for (q = sparks.length - 1; q >= 0; q--) { p = sparks[q]; p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.t > p.life) sparks.splice(q, 1); }
-          for (q = flashes.length - 1; q >= 0; q--) { flashes[q].t += dt; if (flashes[q].t > 0.1) flashes.splice(q, 1); }
-          for (q = rings.length - 1; q >= 0; q--) { rings[q].t += dt; if (rings[q].t > 0.217) rings.splice(q, 1); }
-
-          // one window flickers per frame; a win relights the whole city and stands the crowd up
-          if (wins.length) { var wi = (R() * wins.length) | 0; wins[wi].on = allLit || R() < 0.55; }
-          if (waveT >= 0) {
-            waveT += dt;
-            var front = waveT / 0.5 * crowd.length;
-            for (q = 0; q < crowd.length; q++) if (q <= front) crowd[q].up = true;
-          }
-        },
-
-        render(g) {
-          g.save();
-          var sm = shakeT > 0 ? Math.min(10, shakeMag * (shakeT / 0.25)) : 0;
-          if (sm > 0) g.translate(Math.sin(t * 97) * sm, Math.cos(t * 83) * sm);
-
-          // night sky
-          var grad = g.createLinearGradient(0, 0, 0, H);
-          grad.addColorStop(0, SKY_TOP); grad.addColorStop(1, SKY_BOT);
-          g.fillStyle = grad; g.fillRect(-12, -12, W + 24, H + 24);
-          var gl = g.createLinearGradient(0, 470, 0, 720);
-          gl.addColorStop(0, 'rgba(29,42,94,0)'); gl.addColorStop(0.76, 'rgba(29,42,94,0.62)'); gl.addColorStop(1, 'rgba(29,42,94,0)');
-          g.fillStyle = gl; g.fillRect(0, 470, W, 250);
-          g.fillStyle = '#B8CDFF';             // stars: dim blue-white, never pure white
-          for (var q = 0; q < stars.length; q++) { var s = stars[q]; g.globalAlpha = s.a; g.fillRect(s.x, s.y, s.s, s.s); }
-          g.globalAlpha = 1;
-          if (skyFlash > 0) { g.fillStyle = 'rgba(255,225,170,' + (skyFlash * 0.13).toFixed(3) + ')'; g.fillRect(0, 0, W, H); }
-
-          // two-layer silhouette city + lit windows
-          g.fillStyle = CITY;
-          for (q = 0; q < farB.length; q++) { var bb = farB[q]; g.fillRect(bb.x, bb.roof, bb.w, H - bb.roof); }
-          g.fillStyle = ROOF;
-          for (q = 0; q < farB.length; q++) { bb = farB[q]; g.fillRect(bb.x, bb.roof, bb.w, 1); }
-          g.fillStyle = WIN; g.globalAlpha = 0.45;
-          for (q = 0; q < wins.length; q++) { var wv = wins[q]; if (wv.far && (wv.on || allLit)) g.fillRect(wv.x, wv.y, wv.w, wv.h); }
-          g.globalAlpha = 1;
-          g.fillStyle = CITY;
-          for (q = 0; q < nearB.length; q++) {
-            bb = nearB[q]; g.fillRect(bb.x, bb.roof, bb.w, H - bb.roof);
-            if (bb.mast) g.fillRect(bb.x + bb.w * 0.5 - 1, bb.roof - bb.mast, 2, bb.mast);
-          }
-          g.fillStyle = ROOF;
-          for (q = 0; q < nearB.length; q++) { bb = nearB[q]; g.fillRect(bb.x, bb.roof, bb.w, 1); }
-          g.fillStyle = WIN;
-          for (q = 0; q < wins.length; q++) { wv = wins[q]; if (!wv.far && (wv.on || allLit)) g.fillRect(wv.x, wv.y, wv.w, wv.h); }
-          if (skyFlash > 0) { g.fillStyle = 'rgba(242,196,106,' + (skyFlash * 0.20).toFixed(3) + ')'; g.fillRect(0, 590, W, H - 590); }
-
-          // rooftop crowd; a bloom rim-lights them gold
-          var gold = Math.min(0.85, skyFlash * 1.6);
-          for (q = 0; q < crowd.length; q++) {
-            var c = crowd[q], up = c.up, cy = c.y + (up ? Math.sin(t * 5.2 + c.ph) * 1.8 : 0);
-            if (gold > 0.02) {
-              g.globalAlpha = gold; g.fillStyle = WIN;
-              g.fillRect(c.x - 4, cy - (up ? 14 : 11), 8, up ? 14 : 11);
-              g.globalAlpha = 1;
-            }
-            g.fillStyle = CROWD;
-            if (up) {
-              g.beginPath(); g.arc(c.x, cy - 9, 2.3, 0, TAU); g.fill();
-              g.fillRect(c.x - 3, cy - 7, 6, 7);
-              g.fillRect(c.x - 4.6, cy - 13, 2, 5); g.fillRect(c.x + 2.6, cy - 13, 2, 5);
-            } else {
-              g.beginPath(); g.arc(c.x, cy - 7, 2.3, 0, TAU); g.fill();
-              g.fillRect(c.x - 3, cy - 5, 6, 5); g.fillRect(c.x - 4, cy - 3, 8, 3);
-            }
-          }
-
-          // peashooter lines, deliberately dim — watch them fly THROUGH the closed shell
-          g.fillStyle = PEA; g.globalAlpha = 0.8;
-          for (q = 0; q < peas.length; q++) g.fillRect(peas[q].x - 1, peas[q].y - 5, 2, 10);
-          g.globalAlpha = 1;
-
-          // shells
-          for (q = 0; q < echoes.length; q++) {
-            var e = echoes[q];
-            if (e.dead) continue;
-            g.save(); g.translate(e.x, e.y); g.rotate(Math.sin(e.t * 0.7) * 0.12);
-            g.fillStyle = HULL; casing(g, e.r); g.fill();
-            g.strokeStyle = TRIM; g.lineWidth = 1.4; g.stroke();
-            g.fillStyle = e.ig > 0 ? '#FFFFFF' : CORE;
-            g.beginPath(); g.arc(0, 0, e.r * 0.32, 0, TAU); g.fill();
-            g.restore();
-            if (e.ig > 0) {                    // an ignited little fuse: fast-shrinking white ring
-              g.strokeStyle = '#FFFFFF'; g.globalAlpha = 0.9; g.lineWidth = 2;
-              g.beginPath(); g.arc(e.x, e.y, e.r * (1 + 1.2 * (e.ig / 0.12)), 0, TAU); g.stroke();
-              g.globalAlpha = 1;
-            }
-          }
-          if (!SH.dead) {
-            g.save();
-            g.translate(SH.x + (flinch > 0 ? Math.sin(flinch * 90) * 5 : 0), SH.y);
-            g.rotate(Math.sin(SH.t * 0.7) * 0.12 + (flinch > 0 ? Math.sin(flinch * 70) * 0.08 : 0));
-            g.fillStyle = SH.hitFlash > 0 ? '#FFFFFF' : HULL; casing(g, SH.r); g.fill();
-            g.strokeStyle = TRIM; g.lineWidth = 1.4; g.stroke();
-            g.fillStyle = open ? '#FFFFFF' : CORE;   // core flips WHITE while the window is open
-            g.beginPath(); g.arc(0, 0, SH.r * 0.32, 0, TAU); g.fill();
-            // shared marking: the cream ink rim, first ~1.5s. Three shells are on screen and
-            // only this one is yours — say so before anything is asked of the player.
-            if (tA < 1.5) {
-              var eighth = 1 - ((env.beatPhase() * 2) % 1);
-              g.globalAlpha = 0.85 * (1 - tA / 1.5) * (0.4 + 0.6 * eighth);
-              g.strokeStyle = env.ink; g.lineWidth = 3;
-              casing(g, SH.r + 7); g.stroke();
-              g.globalAlpha = 1;
-            }
-            g.restore();
-          }
-
-          // THE FUSE RING — white means ACT NOW; shrinks r*2.2 -> r*1.0, pulsing at 8Hz.
-          // A 2px line loses to a sky full of fireworks, so the open window is loud: a lit
-          // tap disc, a fat shrinking ring over a glow, and an arc draining the time left.
-          if (open) {
-            var frac = clamp(fuseT / FUSE, 0, 1);
-            var puls = 0.65 + 0.35 * Math.abs(Math.sin(SH.t * TAU * 8));
-            // the tap target, so the thumb knows the whole area counts
-            g.globalAlpha = 0.16 * puls;
-            g.fillStyle = '#FFFFFF';
-            g.beginPath(); g.arc(SH.x, SH.y, TAPR, 0, TAU); g.fill();
-            // glow bed under the ring
-            g.globalAlpha = 0.3 * puls; g.strokeStyle = '#FFFFFF'; g.lineWidth = 14;
-            g.beginPath(); g.arc(SH.x, SH.y, SH.r * (1 + 1.2 * frac), 0, TAU); g.stroke();
-            // the ring itself
-            g.globalAlpha = puls; g.lineWidth = 6;
-            g.beginPath(); g.arc(SH.x, SH.y, SH.r * (1 + 1.2 * frac), 0, TAU); g.stroke();
-            // time remaining, draining clockwise from 12 — you can see the window closing
-            g.globalAlpha = 0.95; g.lineWidth = 4; g.lineCap = 'round';
-            g.strokeStyle = frac < 0.35 ? DANGER : '#FFFFFF';
-            g.beginPath();
-            g.arc(SH.x, SH.y, TAPR - 6, -Math.PI / 2, -Math.PI / 2 + TAU * frac);
-            g.stroke();
-            g.globalAlpha = 1;
-          } else if (fakeAt > 0 && !fired && done === 'pending' && tA >= fakeAt && tA < fakeAt + 0.18) {
-            var fk = (tA - fakeAt) / 0.18;     // the bait: a flicker at full radius that just dies
-            g.strokeStyle = '#FFFFFF'; g.lineWidth = 2;
-            g.globalAlpha = 0.45 * Math.abs(Math.sin(fk * Math.PI * 5)) * (1 - fk);
-            g.beginPath(); g.arc(SH.x, SH.y, SH.r * 2.2, 0, TAU); g.stroke();
-            g.globalAlpha = 1;
-          }
-
-          // additive pass: petals, red volley, flashes, shockwaves, sparks
-          g.save(); g.globalCompositeOperation = 'lighter';
-          for (q = 0; q < petals.length; q++) {
-            var p = petals[q], a = Math.max(0, 1 - p.t / p.life);
-            g.save(); g.translate(p.x, p.y); g.rotate(Math.atan2(p.vy, p.vx));
-            g.fillStyle = p.c; g.globalAlpha = 0.22 * a; diamond(g, 12);
-            g.globalAlpha = a; diamond(g, 6.5);
-            g.fillStyle = '#FFFFFF'; g.globalAlpha = 0.85 * a; diamondCore(g, 6.5);
-            g.restore();
-          }
-          for (q = 0; q < reds.length; q++) {
-            p = reds[q];
-            g.fillStyle = DANGER; g.globalAlpha = 0.25;
-            g.beginPath(); g.arc(p.x, p.y, 12, 0, TAU); g.fill();
-            g.globalAlpha = 1;
-            g.beginPath(); g.arc(p.x, p.y, 7, 0, TAU); g.fill();
-            g.fillStyle = '#FFFFFF'; g.globalAlpha = 0.9;
-            g.beginPath(); g.arc(p.x, p.y, 2.4, 0, TAU); g.fill();
-            g.globalAlpha = 1;
-          }
-          for (q = 0; q < flashes.length; q++) {
-            var f = flashes[q], fa = 1 - f.t / 0.1;
-            g.fillStyle = f.c; g.globalAlpha = 0.9 * fa;
-            g.beginPath(); g.arc(f.x, f.y, f.r0, 0, TAU); g.fill();
-          }
-          for (q = 0; q < rings.length; q++) {
-            var rg = rings[q], rk = rg.t / 0.217;
-            g.strokeStyle = rg.c; g.globalAlpha = 0.9 * (1 - rk); g.lineWidth = 3 * (1 - rk) + 1;
-            g.beginPath(); g.arc(rg.x, rg.y, rg.r0 * (0.55 + 2.1 * rk), 0, TAU); g.stroke();
-          }
-          for (q = 0; q < sparks.length; q++) {
-            p = sparks[q]; var sa = 1 - (p.t / p.life) * (p.t / p.life);
-            g.fillStyle = p.c; g.globalAlpha = Math.max(0, sa);
-            g.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
-          }
-          // cyan trail quads
-          for (var kq = 1; kq < 8 && !ship.dead; kq++) {
-            var ti = (ship.tn - kq + 8) & 7, ta = (1 - kq / 8) * 0.18, tr = 5 * (1 - kq / 9);
-            g.fillStyle = MINE_A; g.globalAlpha = ta;
-            g.fillRect(ship.tx[ti] - tr, ship.ty[ti] - tr, tr * 2, tr * 2);
-          }
-          g.restore();
-
-          // the ship: 26x20 cyan arrowhead, pilot light, hitbox dot ALWAYS drawn
-          if (!ship.dead) {
-            g.save(); g.translate(ship.x, ship.y);
-            g.fillStyle = MINE_A;
-            g.beginPath(); g.moveTo(0, -13); g.lineTo(9, 8); g.lineTo(0, 4); g.lineTo(-9, 8); g.closePath(); g.fill();
-            g.fillStyle = '#FFFFFF';
-            g.beginPath(); g.moveTo(0, -11); g.lineTo(3.4, 3); g.lineTo(0, 1.2); g.lineTo(-3.4, 3); g.closePath(); g.fill();
-            if (Math.sin(t * 8.8) > 0) { g.fillStyle = ACCENT; g.fillRect(-1.2, 5, 2.4, 2.4); }
-            g.fillStyle = '#FFFFFF'; g.beginPath(); g.arc(0, 0, 3, 0, TAU); g.fill();
-            g.strokeStyle = '#00E5FF'; g.lineWidth = 1; g.beginPath(); g.arc(0, 0, 4.6, 0, TAU); g.stroke();
-            g.restore();
-          }
-
-          // shared marking: cream rim on the one critical object, pulsing on 8ths, first ~1.5s
-          if (t < 1.6 && !SH.dead) {
-            var e8 = 1 - ((env.beatPhase() * 2) % 1);
-            g.save(); g.translate(SH.x, SH.y); g.rotate(Math.sin(SH.t * 0.7) * 0.12);
-            g.globalAlpha = 0.6 * (1 - t / 1.6) * (0.35 + 0.65 * e8);
-            g.strokeStyle = env.ink; g.lineWidth = 2.5;
-            casing(g, SH.r * 1.22); g.stroke();
-            g.restore();
-          }
-
-          if (hs > 0) { g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(0, 0, W, H); }
-          g.restore();
-        },
-
-        result: function () { return done; },
-        timeout: function () { return done !== 'pending' ? done : 'lost'; },
-        line: function () {
-          return why === 'early' ? 'IT WAS NOT LISTENING YET.' : 'THE WHISTLE ASKED TWICE.';
-        },
-        hint: function () {
-          if (done !== 'pending') return { type: 'wait', ms: 200 };
-          if (open && fuseT > 0.08) return { type: 'tap', x: SH.x, y: SH.y };
-          return { type: 'wait', ms: 60 };     // waits out the count-in AND the d2 fake shimmer
-        },
-      };
-    },
-  });
-})();
-
-/* DONE-CRITERIA
-   - The fuse window opens on the first 1/8-note boundary after 0.55-0.85s of armed time, lasts
-     exactly [1.2, 0.85, 0.65]s by difficulty, and while open the white ring shrinks from r*2.2
-     to r*1.0 pulsing at 8Hz while a sine whistle rises 380->1250Hz in 0.09s segments.
-   - A tap within [80, 74, 70]px of the shell while the window is open sets 'won' the same frame:
-     12 cyan diamond petals burst radially at 320 px/s, white flash disc r=18+1.4*12, 0.045s
-     hitstop, sky flash 0.412 rim-lighting city and crowd gold, every window lights, and the
-     crowd stands arms-up in a 0.5s left-to-right wave.
-   - Petals that touch either small shell force a 0.12s white ignite ring and then it blooms too
-     (8 petals, chain-pitched chime) — the cascade travels shell-to-shell.
-   - An armed tap while the window is closed (including the diff-2 fake shimmer) OR the fuse
-     expiring sets 'lost' the same frame: 5 magenta comets (fan spread 46 deg, speed 200) fire at
-     the ship with the dull 300->120Hz chirp; a comet reaching the ship pops it with 0.14s
-     hitstop and shake 8. timeout() = 'lost' if unresolved.
-   - Pea bullets are consumed with white ticks only while the window is open; at all other times
-     they visibly fly straight through the shell.
-   BUG-IS-GAME (do not fix):
-   - Peas pass through the closed shell without vanishing — "not yet" has to read on screen.
-   - The converted volley blooms as a RADIAL RING even though the enemy version was an aimed fan;
-     count is preserved (min 12), shape deliberately is not.
-   - A petal touching a small shell looks like it "did nothing" for 0.12s — that is the ignite,
-     the cascade engine, not a missed hit.
-   - Nothing is pure #FFFFFF at full alpha except the fuse ring, bloom flashes, the ship's core
-     dot, and the shell's in-window core: stars are rgba(184,205,255,*), the city is tinted.
-     White means ACT NOW.
-   - The window is granted only on a 1/8-note boundary, so the shell sometimes visibly waits
-     after its 0.55-0.85s settle — quantisation, not lag.
-   - The red bloom is quieter and duller than the blue one on purpose.
 */
 
 /* ===== carts/19-lead.js ===== */
@@ -10152,780 +9729,6 @@ const Shell = (() => {
      can sweep the lane a second time. Free kill. Keep it.
 */
 
-/* ===== carts/29-bank.js ===== */
-/* THE RESORT — the hotel printed you a checkout page. Bank the service bell off a rail into CLOSE. */
-(function () {
-  registerGame({
-    id: 'bank', title: 'THE RESORT', command: 'BANK IT!', family: 'release', slotBeats: 8,
-    create(env) {
-      /* ---- donor constants, quoted from THE RESORT THAT FORGOT TO CLOSE ----
-         The cartridge keeps the donor's whole physics stack and only scales bellSpeed, because
-         the ricochet IS the game: change the reflection and the read changes with it. ---- */
-      const BELL_R = 13;              // baseStats().bellSize
-      const REFLECT = 1.88;           // bounceBell: b.vx -= dot*1.88*hit.nx — NOT 2.0. Load-bearing.
-      const RAIL_GAIN = 1.12;         // bounceBell: rails ADD 12% energy per bounce
-      const AIR = 0.045;              // updateBell: b.vx *= Math.exp(-.045*dt)
-      const MAX_BOUNCE = 4;           // baseStats().maxBounces — auto-recall trigger
-      const RECALL_LIFE = 1.05;       // donor 4.2s, tightened so two attempts fit an 8-beat slot
-      const RETURN_SPD = 1260;        // baseStats().returnSpeed
-      const RETURN_L = 9.5;           // updateBell: damp(b.vx, n.x*target, 9.5, dt)
-      const HAND = 31, MUZZLE = 38;   // held offset (updateBell) / throw + traceAimPath origin
-      const P_R = 20;                 // the guest's body radius; catch at p.r + b.r + 12
-      const HIT_R = 64;               // hitCheckoutScreen: 58 + bell.r*zoom, LARGER than the button
-      const REBOUND = -0.58;          // hitCheckoutScreen: the bell bounces off what it destroys
-      const BREAK_MS = 0.52;          // hitCheckoutScreen: the breaking anim runs 520ms
-      const TRACE_REMAIN = 760;       // traceAimPath: 760px of dashed prediction, <= 3 bounces
-
-      /* donor ATRIUM palette (zone 0) + the checkout page's own greys, verbatim */
-      const PAPER = '#e9e7df', SCAN = '#1d1e22', HEAD = '#16171a', SUB = '#62636a';
-      const SLAB = '#26272b', STRUCK = '#b93f4d', BLOOD = '#ff6478', LABEL = '#f5f1e8';
-      const FOOT = '#77787d', CRACK = '#27282b', PLACARD_CRACK = '#f1d9b1';
-      const FLOOR = '#171822', FLOOR2 = '#20212d', EDGE = '#d9b577';
-      const ACCENT = '#f6c978', GLOW = '#ffbc74';
-      const BLACK9 = '900 ', BOLD7 = '700 ';
-      const AB = '"Arial Black","Segoe UI Black",sans-serif', SUI = '"Segoe UI",system-ui,sans-serif';
-
-      const W = env.W, H = env.H, D = env.difficulty | 0, TAU = Math.PI * 2, R = env.rng;
-      const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-      const damp = (a, b, l, dt) => a + (b - a) * (1 - Math.exp(-l * dt));   // donor line 165
-
-      /* ---- difficulty ----
-         Only three dials move: how fast the bell flies, how much of the lobby the DO NOT DISTURB
-         placard swallows, and how much of the ricochet the guide is willing to show you. The
-         widths were picked by sweeping the real physics: at every tier the straight line to the
-         CLOSE button is geometrically impossible and the one-bank window is >= 12 degrees wide. */
-      const SPD = [720, 790, 860][D];
-      const PL_W = [140, 170, 200][D];
-      const GUIDE = D;                        // 0 = full trace, 1 = first leg + stub, 2 = stub only
-      const SLIDE = D === 2 ? 50 : 0;         // the clerk drags CLOSE away, +/-50px at 0.9 rad/s
-
-      /* ---- the lobby, as walls. Left/right rails are the donor's kind:'rail' (they add energy);
-         the cornice and the floor rail close the room; the placard is plain dead weight. ---- */
-      const BTN_X = 195, BTN_Y = 470, BTN_W = 265, BTN_H = 68;
-      const PL_X = 195 - PL_W / 2, PL_Y = 560, PL_H = 22;
-      const walls = [
-        { x: 0, y: 0, w: 24, h: H, rail: 1 },              // left rail, full height
-        { x: W - 24, y: 0, w: 24, h: H, rail: 1 },         // right rail — the bank surface
-        { x: 0, y: 40, w: W, h: 22, rail: 1 },             // cornice — 20px of air below the shell's
-                                                           // fuse, which is brass-gold too and must
-                                                           // not read as part of the lobby frame
-        { x: 0, y: H - 30, w: W, h: 30, rail: 1 },         // the marble floor edge
-        { x: PL_X, y: PL_Y, w: PL_W, h: PL_H, rail: 0 },   // DO NOT DISTURB — the thing in the way
-      ];
-      const p = { x: 195, y: 664, kx: 0, ky: 0 };          // the guest; kx/ky = the throw recoil
-      const b = { x: p.x, y: p.y - HAND, px: p.x, py: p.y - HAND, vx: 0, vy: 0, state: 'held', life: 0, bounces: 0, spin: 0 };
-      let aim = { x: 0, y: -1 };                            // starts pointing at the ceiling
-
-      let t = 0, aiming = false, lastDown = false, throws = 0, hitPlacard = 0, banked = 0;
-      let everTouched = false;                              // the opening guide waits for YOU, not a clock
-      let decided = null, announced = 'pending', announceT = 0, breakT = -1, stung = false;
-      let hitstop = 0, trauma = 0, btnX = BTN_X;
-      let prevPh = env.beatPhase(), step8 = 0;
-      const parts = [], rings = [];
-
-      /* ---------------------------- donor geometry helpers ---------------------------- */
-      function rrect(c, x, y, w, h, r) {
-        r = Math.min(r, w / 2, h / 2);
-        c.beginPath(); c.moveTo(x + r, y);
-        c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
-        c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
-      }
-      function lineRect(x1, y1, x2, y2, w, pad) {           // donor line 185, slab-clipped ray
-        const minX = w.x - pad, maxX = w.x + w.w + pad, minY = w.y - pad, maxY = w.y + w.h + pad;
-        let t0 = 0, t1 = 1;
-        const dx = x2 - x1, dy = y2 - y1;
-        const P = [[-dx, x1 - minX], [dx, maxX - x1], [-dy, y1 - minY], [dy, maxY - y1]];
-        for (let i = 0; i < 4; i++) {
-          const pp = P[i][0], q = P[i][1];
-          if (Math.abs(pp) < 1e-9) { if (q < 0) return null; continue; }
-          const tt = q / pp;
-          if (pp < 0) { if (tt > t1) return null; if (tt > t0) t0 = tt; }
-          else { if (tt < t0) return null; if (tt < t1) t1 = tt; }
-        }
-        const hx = x1 + dx * t0, hy = y1 + dy * t0;
-        let nx = 0, ny = 0;
-        if (Math.abs(hx - minX) < 1.5) nx = -1; else if (Math.abs(hx - maxX) < 1.5) nx = 1;
-        else if (Math.abs(hy - minY) < 1.5) ny = -1; else ny = 1;
-        return { t: t0, x: hx, y: hy, nx: nx, ny: ny, rail: w.rail };
-      }
-      function segCircle(x1, y1, x2, y2, cx, cy, r) {       // donor line 179
-        const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy || 1;
-        const k = clamp(((cx - x1) * dx + (cy - y1) * dy) / l2, 0, 1);
-        const qx = x1 + dx * k - cx, qy = y1 + dy * k - cy;
-        return qx * qx + qy * qy <= r * r;
-      }
-      const btnAt = (tt) => BTN_X + SLIDE * Math.sin(tt * 0.9);
-
-      /* ---------------------------- audio (donor sfx table, line 236) ---------------------------- */
-      function sThrow() {
-        env.audio.tone({ f: 340, f2: 612, type: 'triangle', dur: 0.11, vol: 0.22, attack: 0.008 });
-        env.audio.tone({ f: 680, f2: 490, type: 'sine', dur: 0.16, vol: 0.10, t: 0.025 });
-      }
-      function sRecall() {                                  // donor plays 'throw' at 1.25 to call it home
-        env.audio.tone({ f: 425, f2: 765, type: 'triangle', dur: 0.11, vol: 0.22 });
-        env.audio.tone({ f: 850, f2: 612, type: 'sine', dur: 0.16, vol: 0.10, t: 0.025 });
-      }
-      function sBounce(sp) {                                // clamp(.75 + speed/1800, .75, 1.45)
-        const q = clamp(0.75 + sp / 1800, 0.75, 1.45);
-        env.audio.tone({ f: 560 * q, f2: 437 * q, type: 'sine', dur: 0.08, vol: 0.12 });
-        env.audio.tone({ f: 1100 * q, f2: 990 * q, type: 'triangle', dur: 0.06, vol: 0.06, t: 0.01 });
-      }
-      function sCatch() {
-        env.audio.tone({ f: 440, f2: 880, type: 'sine', dur: 0.24, vol: 0.15 });
-        env.audio.tone({ f: 660, f2: 990, type: 'triangle', dur: 0.28, vol: 0.08, t: 0.04 });
-      }
-      function sBreak() {                                   // glass smash resolving into an A-major bell chord
-        env.audio.noise({ dur: 0.24, vol: 0.19, hp: 800, lp: 1700 });
-        env.audio.tone({ f: 155, f2: 71, type: 'square', dur: 0.22, vol: 0.10 });
-        const CH = [440, 554, 659, 880];
-        for (let i = 0; i < 4; i++) {
-          env.audio.tone({ f: CH[i], f2: CH[i] * 1.02, type: 'sine', dur: 0.34, vol: 0.11, t: i * 0.035 });
-        }
-      }
-      function sDeath() {
-        env.audio.tone({ f: 220, f2: 55, type: 'triangle', dur: 0.8, vol: 0.16 });
-        env.audio.tone({ f: 110, f2: 27.5, type: 'sine', dur: 0.9, vol: 0.14, t: 0.08 });
-      }
-      /* the lobby hum: the donor's generator at ATRIUM settings (tempo 88, root 110, [0,3,5,7,10]).
-         Held under 0.06 total so it sits beneath the shell's music instead of arguing with it. */
-      const SCALE = [0, 3, 5, 7, 10];
-      function bed(s) {
-        if (s % 2 === 0) {
-          const f = 110 * Math.pow(2, SCALE[((s * 3 + (s >> 2)) % 5 + 5) % 5] / 12) * (s % 8 === 0 ? 0.5 : 1);
-          env.audio.tone({ f: f, f2: f * 0.996, type: 'triangle', dur: 0.34, vol: 0.035 });
-        }
-        if (s % 8 === 0) env.audio.tone({ f: 55, f2: 50, type: 'sine', dur: 0.55, vol: 0.055 });
-      }
-
-      /* ---------------------------- fx (cap 120, donor shapes) ---------------------------- */
-      function burst(x, y, n, col, sp, life, size, shape) {
-        for (let i = 0; i < n && parts.length < 120; i++) {
-          const a = R() * TAU, v = sp * (0.45 + R() * 0.55);
-          parts.push({
-            x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: life, max: life,
-            col: col, size: size, shape: shape, rot: R() * TAU, drag: 0.5 + R() * 2,
-          });
-        }
-      }
-      function ring(x, y, col, r1, life, wid) {
-        if (rings.length < 10) rings.push({ x: x, y: y, r: 4, r1: r1, life: life, max: life, col: col, w: wid });
-      }
-      function fx(dt) {
-        for (let i = parts.length - 1; i >= 0; i--) {
-          const q = parts[i];
-          q.x += q.vx * dt; q.y += q.vy * dt;
-          const f = Math.exp(-q.drag * dt); q.vx *= f; q.vy *= f;
-          q.rot += dt * 5;
-          q.life -= dt; if (q.life <= 0) parts.splice(i, 1);
-        }
-        for (let i = rings.length - 1; i >= 0; i--) {
-          const s = rings[i];
-          s.life -= dt;
-          s.r = 4 + (s.r1 - 4) * (1 - s.life / s.max);
-          if (s.life <= 0) rings.splice(i, 1);
-        }
-        trauma = Math.max(0, trauma - dt * 1.9);            // donor: view.trauma -= dt*1.9
-      }
-
-      /* ---------------------------- the throw ---------------------------- */
-      function launch() {
-        b.state = 'out';
-        b.x = p.x + aim.x * MUZZLE; b.y = p.y + aim.y * MUZZLE; b.px = b.x; b.py = b.y;
-        b.vx = aim.x * SPD; b.vy = aim.y * SPD; b.life = 0; b.bounces = 0;
-        p.kx -= aim.x * 4; p.ky -= aim.y * 4;               // donor recoil p.vx -= n.x*65, at sprite scale
-        throws++; sThrow();
-        ring(b.x, b.y, ACCENT, 54, 0.22, 3);
-        burst(b.x, b.y, 8, ACCENT, 190, 0.3, 3, 'streak');
-      }
-      function recall() {
-        if (b.state !== 'out') return;
-        b.state = 'returning'; sRecall();
-        ring(b.x, b.y, '#fff1bf', 70, 0.3, 3);
-      }
-      function catchIt() {
-        b.state = 'held'; b.vx = b.vy = 0; b.life = 0;
-        sCatch(); ring(p.x, p.y, '#f5e0b2', 70, 0.3, 2);
-      }
-      function bounce(hit) {
-        const dot = b.vx * hit.nx + b.vy * hit.ny;
-        b.vx -= dot * REFLECT * hit.nx; b.vy -= dot * REFLECT * hit.ny;
-        if (hit.rail) { b.vx *= RAIL_GAIN; b.vy *= RAIL_GAIN; banked++; }
-        else hitPlacard++;
-        b.bounces++;
-        b.x = hit.x + hit.nx * 1.5; b.y = hit.y + hit.ny * 1.5;
-        b.spin += (dot > 0 ? 1 : -1) * 1.4;
-        sBounce(Math.hypot(b.vx, b.vy));
-        burst(hit.x, hit.y, 9, hit.rail ? EDGE : PLACARD_CRACK, 210, 0.34, 3, 'shard');
-        ring(hit.x, hit.y, EDGE, 42, 0.22, 2);
-        trauma = Math.min(1, trauma + 0.035);               // donor addTrauma(.035) — texture, not a shake
-      }
-      function win() {
-        decided = 'won'; announceT = 0.5; breakT = 0;
-        hitstop = 0.09; trauma = 0.72;
-        b.vx *= REBOUND; b.vy *= REBOUND;                   // it bounces off the thing it just broke
-        burst(btnX, BTN_Y, 17, BLOOD, 260, 0.58, 4, 'shard');
-        burst(btnX, BTN_Y, 24, ACCENT, 280, 0.6, 4, 'streak');
-        ring(btnX, BTN_Y, ACCENT, 125, 0.5, 4);
-        sBreak();
-      }
-
-      /* ---------------------------- bell integration (donor updateBell) ---------------------------- */
-      function stepBell(dt) {
-        if (b.state === 'held') {
-          b.x = damp(b.x, p.x + aim.x * HAND, 28, dt);
-          b.y = damp(b.y, p.y + aim.y * HAND, 28, dt);
-          b.px = b.x; b.py = b.y; b.spin += dt * 2;
-          return;
-        }
-        b.life += dt;
-        b.spin += dt * (Math.hypot(b.vx, b.vy) / 80 + 2);
-        if (b.state === 'out') {
-          const d = Math.exp(-AIR * dt); b.vx *= d; b.vy *= d;
-          if (b.bounces > MAX_BOUNCE || b.life > RECALL_LIFE) recall();
-        } else {
-          const dx = p.x - b.x, dy = p.y - b.y, m = Math.hypot(dx, dy) || 1;
-          const tgt = RETURN_SPD * (1 + Math.min(0.25, b.life * 0.04));
-          b.vx = damp(b.vx, dx / m * tgt, RETURN_L, dt);
-          b.vy = damp(b.vy, dy / m * tgt, RETURN_L, dt);
-        }
-        /* donor sub-steps at 22px so a 860px/s bell can never tunnel a 22px placard */
-        const sp = Math.hypot(b.vx, b.vy), n = Math.max(1, Math.ceil(sp * dt / 22)), sd = dt / n;
-        for (let s = 0; s < n; s++) {
-          const ox = b.x, oy = b.y, nx = ox + b.vx * sd, ny = oy + b.vy * sd;
-          b.px = ox; b.py = oy;
-          let best = null;
-          for (let i = 0; i < walls.length; i++) {
-            const h = lineRect(ox, oy, nx, ny, walls[i], BELL_R);
-            if (h && (!best || h.t < best.t)) best = h;
-          }
-          if (best) bounce(best); else { b.x = nx; b.y = ny; }
-          /* donor order: resolve the wall first, THEN test the checkout screen against the
-             clipped segment — a shot the placard eats can never also break the page.
-             DEVIATION: the donor also lets the RETURNING bell break the screen. Its guest walks
-             around; ours is nailed to the axis directly below CLOSE, so the recall line runs
-             straight through the hit circle and every high throw would win for free — which
-             deletes the only thing this cartridge is for. The bell comes home behind the page. */
-          if (!decided && b.state === 'out' && segCircle(ox, oy, b.x, b.y, btnX, BTN_Y, HIT_R)) { win(); return; }
-        }
-        if (b.state === 'returning' && Math.hypot(b.x - p.x, b.y - p.y) < P_R + BELL_R + 12) catchIt();
-      }
-
-      /* ---------------------------- the two predictions ----------------------------
-         tracePath() is the DRAWN guide: the donor's traceAimPath, which reflects at a true 2.0
-         while the bell itself reflects at 1.88. The dashes are therefore a hair optimistic on
-         long shots and that is deliberate (see BUG-IS-GAME) — near-misses must feel like your
-         read, not the game's. simThrow() is the honest one: the exact loop above, run forward.
-         It decides the lock ring and it is what the QA bot aims with. */
-      function tracePath(ux, uy) {
-        const segs = [];
-        let x = p.x + ux * MUZZLE, y = p.y + uy * MUZZLE, dx = ux, dy = uy, remain = TRACE_REMAIN;
-        for (let k = 0; k < 3 && remain > 0; k++) {
-          const ex = x + dx * remain, ey = y + dy * remain;
-          let best = null;
-          for (let i = 0; i < walls.length; i++) {
-            const h = lineRect(x, y, ex, ey, walls[i], BELL_R);
-            if (h && (!best || h.t < best.t)) best = h;
-          }
-          if (!best) { segs.push([x, y, ex, ey]); break; }
-          const len = Math.hypot(best.x - x, best.y - y);
-          segs.push([x, y, best.x, best.y]);
-          remain -= len;
-          const dot = dx * best.nx + dy * best.ny;
-          dx -= 2 * dot * best.nx; dy -= 2 * dot * best.ny;   // the PREVIEW uses 2.0. Do not reconcile.
-          x = best.x + best.nx * 2; y = best.y + best.ny * 2;
-        }
-        return segs;
-      }
-      function simThrow(ux, uy) {
-        let x = p.x + ux * MUZZLE, y = p.y + uy * MUZZLE;
-        let vx = ux * SPD, vy = uy * SPD, life = 0, bn = 0;
-        const dt = 1 / 60;
-        for (let f = 0; f < 120; f++) {
-          life += dt;
-          const dr = Math.exp(-AIR * dt); vx *= dr; vy *= dr;
-          const sp = Math.hypot(vx, vy), n = Math.max(1, Math.ceil(sp * dt / 22)), sd = dt / n;
-          for (let s = 0; s < n; s++) {
-            const ox = x, oy = y, nx = x + vx * sd, ny = y + vy * sd;
-            let best = null;
-            for (let i = 0; i < walls.length; i++) {
-              const h = lineRect(ox, oy, nx, ny, walls[i], BELL_R);
-              if (h && (!best || h.t < best.t)) best = h;
-            }
-            if (best) {
-              const dot = vx * best.nx + vy * best.ny;
-              vx -= dot * REFLECT * best.nx; vy -= dot * REFLECT * best.ny;
-              if (best.rail) { vx *= RAIL_GAIN; vy *= RAIL_GAIN; }
-              bn++; x = best.x + best.nx * 1.5; y = best.y + best.ny * 1.5;
-            } else { x = nx; y = ny; }
-            /* the target is simulated where it will BE, not where it is — diff 2 slides it */
-            if (segCircle(ox, oy, x, y, btnAt(t + life), BTN_Y, HIT_R)) return true;
-          }
-          if (bn > MAX_BOUNCE || life > RECALL_LIFE) return false;
-        }
-        return false;
-      }
-      /* the bot's answer: sweep the circle with the real simulation, keep the widest contiguous
-         winning arc, aim down its middle. Recomputed only when the target has actually moved. */
-      let solved = null, solvedKey = 1e9;
-      function solveAim() {
-        const key = SLIDE ? Math.round(btnX / 12) : 0;
-        if (solved && key === solvedKey) return solved;
-        const N = 144, hit = [];
-        for (let i = 0; i < N; i++) {
-          const a = i / N * TAU;
-          hit.push(simThrow(Math.cos(a), Math.sin(a)));
-        }
-        let bestI = -1, bestLen = 0;
-        for (let i = 0; i < N; i++) {
-          if (!hit[i] || hit[(i - 1 + N) % N]) continue;      // only start at an arc's leading edge
-          let len = 0;
-          while (len < N && hit[(i + len) % N]) len++;
-          if (len > bestLen) { bestLen = len; bestI = i; }
-        }
-        solvedKey = key;
-        if (bestI < 0) { solved = null; return null; }
-        const a = ((bestI + (bestLen - 1) / 2) % N) / N * TAU;
-        solved = { x: Math.cos(a), y: Math.sin(a) };
-        return solved;
-      }
-
-      /* ---------------------------- static chrome, pre-rendered once ---------------------------- */
-      function spaced(c, txt, cx, y, sp) {
-        /* Every caller sets textAlign='center' for its own layout, and this used to inherit it —
-           so each glyph was drawn CENTRED on the pen position and then the pen advanced by that
-           glyph's full width, displacing every character by half its own width. Narrow letters
-           landed on top of their neighbours ("AIM" read as "A M"). The advance math here is
-           left-to-right, so the pen must be too. */
-        const keep = c.textAlign;
-        c.textAlign = 'left';
-        let tw = -sp;
-        for (const ch of txt) tw += c.measureText(ch).width + sp;
-        let x = cx - tw / 2;
-        for (const ch of txt) { c.fillText(ch, x, y); x += c.measureText(ch).width + sp; }
-        c.textAlign = keep;
-      }
-      /* 1. THE ATRIUM — the lobby behind the page, only ever seen once the page comes apart */
-      const LOBBY = env.layer(W, H, (c) => {
-        c.fillStyle = FLOOR; c.fillRect(0, 0, W, H);
-        const g = c.createRadialGradient(195, 371, 40, 195, 371, 590);
-        g.addColorStop(0, FLOOR2); g.addColorStop(1, FLOOR);
-        c.fillStyle = g; c.fillRect(0, 0, W, H);
-        c.globalAlpha = 0.18; c.lineWidth = 1; c.strokeStyle = EDGE;   // donor 'marble' pattern
-        for (let x = 0; x < W + 125; x += 125) {
-          c.beginPath(); c.moveTo(x, 0); c.lineTo(x + Math.sin(x * 0.013) * 38, H); c.stroke();
-        }
-        for (let y = 0; y < H + 125; y += 125) {
-          c.beginPath(); c.moveTo(0, y); c.lineTo(W, y + Math.cos(y * 0.011) * 25); c.stroke();
-        }
-        c.globalAlpha = 1;
-        const v = c.createRadialGradient(195, 397, 97, 195, 397, 641);  // donor drawVignette, lit=0
-        v.addColorStop(0, 'transparent');
-        v.addColorStop(0.72, 'rgba(3,4,8,.13)');
-        v.addColorStop(1, 'rgba(2,3,6,.52)');
-        c.fillStyle = v; c.fillRect(0, 0, W, H);
-      });
-      /* 2. THE RAILS — the donor's kind:'rail' walls. They are drawn OVER the page, not under it:
-         you cannot read a ricochet off a surface you cannot see, and the actors already break
-         that layer (see BUG-IS-GAME). shadowBlur 14 is faked with two translucent passes. */
-      const RAILS = env.layer(W, H, (c) => {
-        for (let i = 0; i < 4; i++) {
-          const w = walls[i], tall = w.h > w.w;
-          c.fillStyle = GLOW; c.globalAlpha = 0.10;
-          rrect(c, w.x - 14, w.y - 14, w.w + 28, w.h + 28, 18); c.fill();
-          c.globalAlpha = 0.18;
-          rrect(c, w.x - 6, w.y - 6, w.w + 12, w.h + 12, 14); c.fill();
-          c.globalAlpha = 1; c.fillStyle = EDGE;
-          rrect(c, w.x, w.y, w.w, w.h, Math.min(18, w.h * 0.35, w.w * 0.35)); c.fill();
-          c.globalAlpha = 0.35; c.fillStyle = '#fff';
-          /* donor highlights the top 24% of a wall; on a full-height rail that reads as a
-             polished inner edge instead, so the strip is transposed for the tall pair */
-          if (tall) rrect(c, w.x + 4, w.y + 4, w.w * 0.24, w.h - 8, 6);
-          else rrect(c, w.x + 4, w.y + 4, w.w - 8, w.h * 0.24, 6);
-          c.fill(); c.globalAlpha = 1;
-        }
-      });
-      /* 3. THE CHECKOUT PAGE — everything on it that never changes. Overscanned 10px past every
-         edge exactly as the donor does, so the win jitter never exposes a seam. */
-      const PAGE = env.layer(W, H, (c) => {
-        c.fillStyle = PAPER; c.fillRect(-10, -10, W + 20, H + 20);
-        c.fillStyle = SCAN; c.globalAlpha = 0.12;
-        for (let y = 0; y < H; y += 28) c.fillRect(0, y, W, 1);
-        c.globalAlpha = 1;
-        c.textAlign = 'center';
-        c.fillStyle = HEAD; c.font = BLACK9 + '46px ' + AB;
-        c.fillText('CHECKOUT', 195, 173); c.fillText('COMPLETE', 195, 215);
-        c.fillStyle = SUB; c.font = BOLD7 + '12px ' + SUI;
-        spaced(c, 'YOUR STAY HAS ENDED', 195, 240, 3);
-        c.fillStyle = FOOT; c.font = BOLD7 + '10px ' + SUI;
-        spaced(c, 'NO FURTHER ACTION IS REQUIRED', 195, 640, 1.5);
-      });
-      /* 4. the scratch surface the page is composited on, so the shatter's destination-out
-         punch-out eats the page and NOT the lobby underneath it. Made once, reused every frame. */
-      let sc = null;
-      const SHEET = env.layer(W, H, (c) => { sc = c; });
-
-      /* ---------------------------- step ---------------------------- */
-      function step(dt, inp) {
-        const ph = env.beatPhase();
-        if ((prevPh < 0.5 && ph >= 0.5) || ph < prevPh) { if (!decided) bed(step8); step8++; }
-        prevPh = ph;
-        t += dt;
-        p.kx = damp(p.kx, 0, 14, dt); p.ky = damp(p.ky, 0, 14, dt);
-
-        if (decided) {
-          announceT -= dt;
-          if (breakT >= 0) breakT += dt;
-          if (hitstop > 0) hitstop -= dt; else fx(dt);       // 90ms of total freeze on the break
-          if (announceT <= 0) announced = decided;
-          lastDown = inp.down;
-          return;
-        }
-
-        btnX = btnAt(t);
-        /* aim: the donor's mouse path, norm(touch - guest). Press anywhere; the vector is what
-           matters, not the spot, so the thumb never has to find a target. */
-        if (inp.justDown) { aiming = true; everTouched = true; }
-        if (aiming && inp.down) {
-          const dx = inp.x - p.x, dy = inp.y - p.y, m = Math.hypot(dx, dy);
-          if (m > 12) { aim = { x: dx / m, y: dy / m }; }    // inside 12px keep the last read
-        }
-        if (inp.justUp && aiming) {
-          aiming = false;
-          if (b.state === 'held') launch();                  // no charge meter: release IS the flick
-        }
-        stepBell(dt);
-        if (!decided) fx(dt);
-        lastDown = inp.down;
-      }
-
-      /* ---------------------------- render ---------------------------- */
-      function drawBell(g) {
-        if (b.state !== 'held') {                            // donor's smear: one fat translucent stroke
-          g.strokeStyle = ACCENT; g.globalAlpha = 0.2;
-          g.lineWidth = Math.max(2, 7.2); g.lineCap = 'round';
-          g.beginPath(); g.moveTo(b.px, b.py); g.lineTo(b.x, b.y); g.stroke();
-          g.globalAlpha = 1; g.lineCap = 'butt';
-        }
-        g.save(); g.translate(b.x, b.y); g.rotate(b.spin);
-        g.shadowColor = GLOW; g.shadowBlur = 22;             // the one real glow in the cartridge
-        const gr = g.createRadialGradient(-3.6, -4.2, 1, 0, 0, 15.6);
-        gr.addColorStop(0, '#fff7d5'); gr.addColorStop(0.38, ACCENT); gr.addColorStop(1, '#8f542b');
-        g.fillStyle = gr; g.beginPath(); g.arc(0, 0, BELL_R, 0, TAU); g.fill();
-        g.shadowBlur = 0;
-        g.strokeStyle = '#fff0bc'; g.globalAlpha = 0.75; g.lineWidth = 2;
-        g.beginPath(); g.arc(0, 0, 9.4, 0.2, Math.PI * 1.4); g.stroke();
-        g.globalAlpha = 1; g.fillStyle = '#20140c';
-        g.beginPath(); g.arc(0, 6.2, 2.3, 0, TAU); g.fill();
-        g.restore();
-      }
-      function drawGuest(g) {
-        g.save(); g.translate(p.x + p.kx, p.y + p.ky);
-        g.fillStyle = 'rgba(0,0,0,.28)';
-        g.beginPath(); g.ellipse(0, 18, 24, 10, 0, 0, TAU); g.fill();
-        const st = Math.sin(t * 12) * 6;                     // the donor's idle step wobble
-        g.fillStyle = '#15151e'; g.strokeStyle = ACCENT; g.lineWidth = 3;
-        g.beginPath();
-        g.moveTo(-10, 13); g.lineTo(-12 + st * 0.35, 31); g.lineTo(-4 + st * 0.35, 31); g.lineTo(0, 13);
-        g.lineTo(5 - st * 0.35, 31); g.lineTo(13 - st * 0.35, 31); g.lineTo(10, 13);
-        g.fill();
-        rrect(g, -19, -18, 38, 42, 12); g.fill(); g.stroke();
-        g.fillStyle = '#eee5d8'; g.beginPath(); g.arc(0, -27, 13, 0, TAU); g.fill();
-        g.strokeStyle = ACCENT; g.lineWidth = 2;
-        g.beginPath(); g.arc(0, -27, 13, Math.PI * 0.1, Math.PI * 0.9); g.stroke();
-        g.fillStyle = ACCENT;
-        g.beginPath(); g.moveTo(-18, -9); g.lineTo(4, -2); g.lineTo(-18, 5); g.closePath(); g.fill();
-        g.fillStyle = '#fff'; g.globalAlpha = 0.55;
-        g.beginPath(); g.arc(4, -31, 3, 0, TAU); g.fill();
-        g.globalAlpha = 1; g.restore();
-      }
-      function drawSheet() {                                 // page + placard + button, on the scratch
-        const c = sc, age = breakT >= 0 ? breakT : 0;
-        const hits = decided === 'won' ? Math.min(3, 1 + Math.floor(age / 0.12)) : 0;
-        c.setTransform(1, 0, 0, 1, 0, 0);
-        c.clearRect(0, 0, W, H);
-        c.save();
-        c.translate(decided === 'won' ? Math.sin(t * 58) * 4.5 : 0, 0);   // the page shakes, hard sin
-        c.drawImage(PAGE, 0, 0);
-        /* DO NOT DISTURB — the reason a straight throw is not a throw */
-        c.fillStyle = SLAB; rrect(c, PL_X, PL_Y, PL_W, PL_H, 6); c.fill();
-        c.strokeStyle = PLACARD_CRACK; c.globalAlpha = 0.25; c.lineWidth = 1.6;
-        const cx = PL_X + PL_W / 2, cy = PL_Y + PL_H / 2, sp = PL_W * 0.35;
-        c.beginPath();
-        c.moveTo(cx - sp * 0.2, cy - sp); c.lineTo(cx + sp * 0.12, cy - sp * 0.22);
-        c.lineTo(cx - sp * 0.22, cy + sp * 0.08); c.lineTo(cx + sp * 0.3, cy + sp);
-        c.moveTo(cx + sp * 0.12, cy - sp * 0.22); c.lineTo(cx + sp * 0.72, cy - sp * 0.48);
-        c.moveTo(cx - sp * 0.22, cy + sp * 0.08); c.lineTo(cx - sp * 0.75, cy + sp * 0.5);
-        c.stroke();
-        c.globalAlpha = 1; c.textAlign = 'center';
-        c.fillStyle = '#8d8a83'; c.font = BOLD7 + '9px ' + SUI;
-        spaced(c, 'DO NOT DISTURB', cx, cy + 3.5, 2);
-        /* THE CLOSE BUTTON. Struck, it flips red and cycles its own excuses. */
-        const bx = btnX - BTN_W / 2, by = BTN_Y - BTN_H / 2;
-        if (hits) {                                          // faked glow: two translucent passes
-          c.fillStyle = BLOOD; c.globalAlpha = 0.16;
-          rrect(c, bx - 12, by - 12, BTN_W + 24, BTN_H + 24, 20); c.fill();
-          c.globalAlpha = 0.26; rrect(c, bx - 5, by - 5, BTN_W + 10, BTN_H + 10, 16); c.fill();
-          c.globalAlpha = 1;
-        }
-        c.fillStyle = hits ? STRUCK : SLAB;
-        rrect(c, bx, by, BTN_W, BTN_H, 13); c.fill();
-        c.fillStyle = LABEL; c.font = BLACK9 + '16px ' + AB;
-        c.fillText(['CLOSE', 'CLOSE FAILED', 'STILL HERE', ''][hits], btnX, BTN_Y + 6);
-        if (hits) {                                          // 21 three-segment cracks fanning out
-          c.strokeStyle = CRACK; c.lineWidth = 2.2; c.globalAlpha = 0.45 + hits * 0.16;
-          for (let k = 0; k < 21; k++) {
-            const a = k * 2.399 + hits * 0.5, len = 45 + (k % 5) * 29;
-            c.beginPath(); c.moveTo(btnX, BTN_Y);
-            let x = btnX, y = BTN_Y;
-            for (let n = 1; n <= 3; n++) {
-              x += Math.cos(a + n * 0.15) * len / 3; y += Math.sin(a + n * 0.15) * len / 3;
-              c.lineTo(x + (n % 2 ? 8 : -8), y);
-            }
-            c.stroke();
-          }
-          c.globalAlpha = 1;
-        }
-        if (breakT >= 0) {                                   // punched out: 18 holes eating the page
-          c.globalCompositeOperation = 'destination-out';
-          for (let i = 0; i < 18; i++) {
-            const a = i * TAU / 18 + age * 2, r = age * 370;
-            c.beginPath();
-            c.arc(btnX + Math.cos(a) * r, BTN_Y + Math.sin(a) * r, 18 + age * 70, 0, TAU);
-            c.fill();
-          }
-          c.globalCompositeOperation = 'source-over';
-        }
-        c.restore();
-        return breakT >= 0 ? clamp(1 - breakT / BREAK_MS, 0, 1) : 1;
-      }
-      function drawGuide(g, alpha) {
-        const segs = tracePath(aim.x, aim.y);
-        if (!segs.length) return;
-        /* difficulty eats the prediction from the far end: full ricochet, then the first leg
-           plus a 40px hint of where it goes, then a 30px stub that only tells you the heading */
-        let keep = segs.slice();
-        if (GUIDE === 1) {
-          keep = [segs[0]];
-          if (segs[1]) {
-            const s = segs[1], m = Math.hypot(s[2] - s[0], s[3] - s[1]) || 1, k = Math.min(1, 40 / m);
-            keep.push([s[0], s[1], s[0] + (s[2] - s[0]) * k, s[1] + (s[3] - s[1]) * k]);
-          }
-        } else if (GUIDE === 2) {
-          const s = segs[0], m = Math.hypot(s[2] - s[0], s[3] - s[1]) || 1, k = Math.min(1, 30 / m);
-          keep = [[s[0], s[1], s[0] + (s[2] - s[0]) * k, s[1] + (s[3] - s[1]) * k]];
-        }
-        /* STOP THE GUIDE ON THE BUTTON.
-           tracePath draws 760px of geometric ricochet and runs straight THROUGH the target and
-           out the other side, so the guide reads as a zigzag with no destination — you cannot
-           tell which crossing is the hit. Clip at the first point that enters CLOSE's hit
-           radius and end the dot there: the line now finishes on the thing it opens. */
-        for (let i = 0; i < keep.length; i++) {
-          const sg = keep[i];
-          const ex = sg[2] - sg[0], ey = sg[3] - sg[1];
-          const fx = sg[0] - btnX, fy = sg[1] - BTN_Y;
-          const A2 = ex * ex + ey * ey;
-          const B2 = 2 * (fx * ex + fy * ey);
-          const C2 = fx * fx + fy * fy - HIT_R * HIT_R;
-          const disc = B2 * B2 - 4 * A2 * C2;
-          if (A2 > 0 && disc >= 0) {
-            const rt = Math.sqrt(disc);
-            let u = (-B2 - rt) / (2 * A2);
-            if (u < 0) u = (-B2 + rt) / (2 * A2);
-            if (u >= 0 && u <= 1) {
-              keep = keep.slice(0, i);
-              keep.push([sg[0], sg[1], sg[0] + ex * u, sg[1] + ey * u]);
-              break;
-            }
-          }
-        }
-        g.save();
-        /* a dark casing under the gold: ACCENT is a brass on a cream page and vanishes into it */
-        g.strokeStyle = SLAB; g.lineWidth = 6; g.globalAlpha = 0.30 * alpha;
-        g.setLineDash([10, 13]); g.lineDashOffset = -t * 35;
-        for (const s of keep) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
-        g.strokeStyle = ACCENT; g.lineWidth = 3; g.globalAlpha = 0.95 * alpha;
-        for (const s of keep) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
-        g.setLineDash([]);
-        const e = keep[keep.length - 1];
-        g.globalAlpha = 0.9 * alpha;
-        g.fillStyle = SLAB; g.beginPath(); g.arc(e[2], e[3], 8, 0, TAU); g.fill();
-        g.fillStyle = ACCENT; g.beginPath(); g.arc(e[2], e[3], 5.5, 0, TAU); g.fill();
-        g.restore();
-      }
-      function render(g) {
-        g.save();
-        const sh = trauma * trauma * 9;                      // donor: trauma^2 * 9
-        if (sh > 0.05) g.translate((R() * 2 - 1) * sh, (R() * 2 - 1) * sh);
-        g.drawImage(LOBBY, 0, 0);
-        g.globalAlpha = drawSheet();
-        g.drawImage(SHEET, 0, 0);
-        g.globalAlpha = 1;
-        g.drawImage(RAILS, 0, 0);
-
-        /* the aim guide, then the actors — the donor draws every one of them ON TOP of the page
-           it is supposedly trapped behind, and that inversion is the whole joke */
-        if (b.state === 'held' && !decided) {
-          if (aiming) drawGuide(g, 1);
-          else if (D === 0 && throws === 0 && !everTouched) {
-            /* THE ANSWER, DRAWN, and it waits for you.
-               This used to be 0.34 alpha layered on drawGuide's own 0.52 — 18% gold on a cream
-               page — and it expired on a 1.15s clock whether or not anyone had looked at it.
-               It is the one thing in the cartridge that shows you the shot exists. It now holds
-               at full strength until the first touch and breathes so the eye finds it. */
-            const s = solveAim(), keep = aim;
-            if (s) { aim = s; drawGuide(g, 0.82 + 0.18 * Math.sin(t * 5)); aim = keep; }
-          }
-        }
-        drawGuest(g);
-        if (!(decided === 'won' && breakT > 0.3)) drawBell(g);
-
-        for (const q of parts) {                             // donor shard / streak shapes
-          const a = clamp(q.life / q.max, 0, 1);
-          g.save(); g.translate(q.x, q.y); g.rotate(q.rot);
-          g.globalAlpha = a; g.fillStyle = q.col;
-          if (q.shape === 'streak') {
-            g.strokeStyle = q.col; g.lineWidth = q.size;
-            g.beginPath(); g.moveTo(0, 0); g.lineTo(-q.vx * 0.045, -q.vy * 0.045); g.stroke();
-          } else {
-            g.beginPath();
-            g.moveTo(-q.size * 0.5, -q.size); g.lineTo(q.size * 0.6, 0); g.lineTo(-q.size * 0.3, q.size);
-            g.closePath(); g.fill();
-          }
-          g.restore();
-        }
-        g.globalAlpha = 1;
-        for (const s of rings) {
-          g.globalAlpha = clamp(s.life / s.max, 0, 1) * 0.75;
-          g.strokeStyle = s.col; g.lineWidth = s.w;
-          g.beginPath(); g.arc(s.x, s.y, s.r, 0, TAU); g.stroke();
-        }
-        g.globalAlpha = 1;
-
-        /* THE FIRST HALF-SECOND. This cartridge opens as a cream corporate modal, and in a reel
-           that just handed you a neon shooter that reads as a CRASH, not a game. So the opening
-           has to shout "someone is in here, and this is yours": a warm bloom under the bell, a
-           fat ink rim on it, and a matching ring on the button you are aiming at. Three brass
-           objects are on screen and only one of them is in your hand. */
-        if (t < 1.5 && !decided) {
-          const e8 = 1 - ((env.beatPhase() * 2) % 1);
-          const fade = clamp((1.5 - t) / 0.35, 0, 1);
-          /* the bloom — the only warm light on a flat page, so the eye goes here first */
-          const bl = g.createRadialGradient(b.x, b.y, 2, b.x, b.y, 74);
-          bl.addColorStop(0, 'rgba(255,206,110,' + (0.42 * fade) + ')');
-          bl.addColorStop(1, 'rgba(255,206,110,0)');
-          g.fillStyle = bl; g.beginPath(); g.arc(b.x, b.y, 74, 0, TAU); g.fill();
-          g.strokeStyle = env.ink; g.lineWidth = 3.5;
-          g.globalAlpha = (0.45 + 0.55 * e8) * fade;
-          g.beginPath(); g.arc(b.x, b.y, BELL_R + 9 + 4 * e8, 0, TAU); g.stroke();
-          /* and the destination, so "what do I hit" is answered in the same glance */
-          g.globalAlpha = (0.30 + 0.45 * e8) * fade;
-          g.lineWidth = 3;
-          g.beginPath(); g.arc(btnX, BTN_Y, HIT_R + 8 + 4 * e8, 0, TAU); g.stroke();
-          g.globalAlpha = 1;
-        }
-        /* the lock: the honest simulation says this release connects. Assistance, so it fades out
-           with the guide — at difficulty 2 you get no confirmation at all. */
-        if (aiming && !decided && b.state === 'held' && D < 2 && simThrow(aim.x, aim.y)) {
-          const th = 0.5 + 0.5 * Math.sin(t * 14);
-          g.strokeStyle = BLOOD; g.lineWidth = 3; g.globalAlpha = 0.45 + 0.4 * th;
-          g.beginPath(); g.arc(btnX, BTN_Y, HIT_R + 4 * th, 0, TAU); g.stroke();
-          g.globalAlpha = 1;
-        }
-        g.restore();
-
-        /* the page's own fine print, teaching the verb in the hotel's voice */
-        if (!decided && (!everTouched || t < 1.9)) {
-          /* It said only "THE STRAIGHT LINE IS OCCUPIED", at 11px, and left after 1.9s. That
-             names the OBSTACLE and never the VERB, so a first-time player is told what will not
-             work and nothing about what will. Now it names both, and waits for the first touch. */
-          g.textAlign = 'center';
-          g.globalAlpha = everTouched ? 0.85 * clamp((1.9 - t) / 0.5, 0, 1) : 0.95;
-          g.fillStyle = HEAD; g.font = BLACK9 + '17px ' + SUI;
-          spaced(g, 'HOLD TO AIM. LET GO TO THROW.', 195, 276, 1.5);
-          g.fillStyle = SUB; g.font = BOLD7 + '11px ' + SUI;
-          spaced(g, 'THE STRAIGHT LINE IS OCCUPIED', 195, 300, 2);
-          g.globalAlpha = 1;
-        }
-        if (hitstop > 0) { g.fillStyle = 'rgba(255,243,214,0.14)'; g.fillRect(0, 0, W, H); }
-      }
-
-      /* ---- QA bot: hold, steer onto the solved bank angle, let go the frame the honest
-         simulation says it connects. Chains down -> up across polls, exactly like BRINK. ---- */
-      function hint() {
-        if (decided) return { type: 'wait', ms: 200 };
-        if (b.state !== 'held') return { type: 'wait', ms: 60 };     // the return leg is free
-        if (lastDown && !aiming) return { type: 'up' };
-        const s = solveAim();
-        if (!s) return { type: 'wait', ms: 120 };
-        const ax = clamp(p.x + s.x * 120, 8, W - 8), ay = clamp(p.y + s.y * 120, 60, H - 8);
-        if (!aiming) return { type: 'down', x: ax, y: ay };
-        return simThrow(aim.x, aim.y) ? { type: 'up' } : { type: 'down', x: ax, y: ay };
-      }
-
-      return {
-        step: step,
-        render: render,
-        result: () => announced,
-        timeout: () => {
-          if (decided === 'won') return 'won';
-          if (!stung) { stung = true; sDeath(); }
-          return 'lost';
-        },
-        line: () => throws === 0 ? 'YOU STOOD THERE. SO DID THE HOTEL.'
-          : hitPlacard > 0 && banked === 0 ? 'YOU RANG THE SIGN. THE SIGN IS FINE.'
-          : banked > 0 ? 'GREAT BOUNCE. WRONG CENTURY.'
-          : 'YOUR STAY ENDED. THE BELL DISAGREED.',
-        hint: hint,
-      };
-    },
-  });
-})();
-
-/* DONE-CRITERIA
-   - No straight throw can ever win. Sweeping all 3600 headings through the shipped physics at
-     every difficulty returns ZERO zero-bounce hits: the padded DO NOT DISTURB placard
-     (x 195 +/- [70,85,100], y 560..582, inflated by the bell's 13px radius) covers the entire
-     +/-19.3 degree cone that reaches the CLOSE hit circle from the guest at (195,664). Every
-     winning heading crosses at least one rail first. This is the cartridge; if a straight throw
-     ever wins again, the geometry has drifted and the reel just has a second, worse `dash`.
-   - Only an OUTBOUND bell can break the page. The recall leg flies home behind it (deviation from
-     the donor, which lets a returning bell score — its guest is mobile, ours is bolted to the
-     button's own axis, so a free return hit would win from any high throw).
-   - Exactly two winning arcs exist per difficulty, one off each rail, mirror images:
-     23.8 deg wide each at diff 0 (320.3..344.1 and 195.9..219.7), 18.4 at diff 1, 12.0 at diff 2.
-     The fastest solution is a single rail bounce landing in ~0.45s.
-   - Releasing with the bell in hand fires it at [720,790,860] px/s on the release frame with no
-     windup; a rail bounce reflects at 1.88 and multiplies both components by 1.12; the placard
-     reflects at 1.88 with no gain. Miss => auto-recall at bounces > 4 or life > 1.05s, home at
-     1260 px/s damped at 9.5, caught inside 45px — roughly two attempts fit an 8-beat slot.
-   - The swept bell segment touching the r=64 circle at (btnX, 470) resolves 'won' that frame:
-     90ms total freeze, trauma 0.72 (peak ~4.7px, gone in 0.38s), 17 red shards + 24 gold streaks
-     + a ring to r=125, the glass-smash-into-A-major chord, and a 520ms punch-out of 18 growing
-     holes that eats the cream page and reveals the lit ATRIUM. Verdict announced 0.5s later.
-   - timeout() returns 'lost' (do-the-thing) and fires the donor's 220->55Hz death pair once.
-   - At difficulty 0 the aim guide draws the full 3-bounce dashed prediction and a red lock ring
-     appears on CLOSE exactly on the headings that actually connect; difficulty 1 shows the first
-     leg plus a 40px stub; difficulty 2 shows a 30px stub and no lock ring at all.
-   BUG-IS-GAME (do not fix):
-   - The bell reflects at 1.88 but the drawn guide reflects at a true 2.0. The dashes are a hair
-     optimistic on long shots. Do NOT reconcile the two numbers — the guide being slightly
-     generous is what makes a near-miss feel like your read instead of the game's.
-   - Rails ADD 12% energy per bounce. A banked bell reaches CLOSE faster than a straight one
-     could have. Physically wrong; it is the entire reason banking feels good.
-   - The CLOSE hit circle (r=64) is much larger than the drawn button (265x68, half-height 34),
-     so shots that visually sail over the button still count. The screen is easier to break than
-     it looks — that is the gag.
-   - The bell rebounds off the checkout screen at -0.58 velocity on the same frame it shatters it.
-     It bounces off the thing it just destroyed.
-   - The cream page is filled from (-10,-10) to (W+20,H+20), deliberately overscanned on all four
-     sides. "Fixing" it to (0,0,W,H) reintroduces a 1px seam under the win jitter.
-   - The page covers the whole screen and the guest, the bell, the aim guide and the rails are all
-     drawn ON TOP of it. It looks like a layer-order mistake. It is the joke, and it is also the
-     only reason the ricochet is readable at all.
-   - The HUD is never greyscaled the way the donor greyscales its own: the shell owns the fuse and
-     dimming it would break the reel's read of time remaining.
-*/
-
 /* ===== carts/30-chomp.js ===== */
 /* CHOMP CHOMP REVOLUTION — BOSS: four lanes, arrows ride up on the beat, feed the skull or it starves */
 (function () {
@@ -11797,7 +10600,12 @@ const Shell = (() => {
         g.globalAlpha = 1;
       }
 
-      function drawStrike(g, s) {
+      /* SOLID vs HOLLOW is the entire read, so it is carried on four channels at once:
+         COLOUR (acid vs the field's own foreground), FILL (a body vs a rim), MASS (a hard
+         drop shadow vs none) and MOTION (steady vs the stutter). Any one of them alone was
+         enough for the person who built the string; four is enough for a stranger who has
+         four seconds. */
+      function drawStrike(g, s, fg) {
         var x = W / 2, y = OY + TRACK * s.p, sz = s.size;
         if (!s.feint) {
           for (var t = 1; t <= 5; t++) {                      // five solid ACID ghosts
@@ -11807,8 +10615,8 @@ const Shell = (() => {
             g.beginPath(); g.arc(x, OY + TRACK * tp, sz * (1 - t * 0.09), 0, 6.283); g.fill();
           }
           g.globalAlpha = 1;
-          g.fillStyle = 'rgba(21,6,16,0.30)';                 // donor shadowBlur, faked flat (perf rule)
-          g.beginPath(); g.arc(x + 3, y + 4, sz * 1.06, 0, 6.283); g.fill();
+          g.fillStyle = 'rgba(21,6,16,0.34)';                 // donor shadowBlur, faked flat (perf rule)
+          g.beginPath(); g.arc(x + 3, y + 5, sz * 1.10, 0, 6.283); g.fill();
           g.fillStyle = ACID; g.strokeStyle = INK; g.lineWidth = 5; g.lineJoin = 'miter';
           if (s.kind === 'jab') {
             g.beginPath();
@@ -11819,16 +10627,20 @@ const Shell = (() => {
             g.fillStyle = INK;
             g.beginPath(); g.arc(x, y, sz * 0.34, 0, 6.283); g.fill();
           }
+          /* the specular: a hot bone crescent on the upper left. Only a BODY can catch light. */
+          g.globalAlpha = 0.85; g.fillStyle = BONE;
+          g.beginPath(); g.ellipse(x - sz * 0.34, y - sz * 0.38, sz * 0.24, sz * 0.15, -0.7, 0, 6.283); g.fill();
+          g.globalAlpha = 1;
           return;
         }
         /* THE HOLLOW. No fill anywhere: the field colour runs straight through it, from the
            frame it spawns. Broken dashed rim, breathing size, a wake of rings instead of
-           discs. Every real strike is a solid body you cannot see past. */
+           discs — and it is never ACID. Acid is the colour of a thing that will hit you. */
         var br = sz + Math.sin(rt / 150 + s.wob) * 2.5;
         for (var t2 = 1; t2 <= 4; t2++) {
           var tp2 = Math.max(0, s.p - t2 * 0.045);
           g.globalAlpha = 0.16 * (1 - t2 / 5);
-          g.strokeStyle = ACID; g.lineWidth = 2;
+          g.strokeStyle = fg; g.lineWidth = 2;
           g.beginPath(); g.arc(x, OY + TRACK * tp2, br * (1 - t2 * 0.05), 0, 6.283); g.stroke();
         }
         g.globalAlpha = 1;
@@ -11837,9 +10649,20 @@ const Shell = (() => {
         g.lineDashOffset = -(rt / 22) % 16;
         g.strokeStyle = INK; g.lineWidth = 8;
         g.beginPath(); g.arc(x, y, br, 0, 6.283); g.stroke();
-        g.strokeStyle = ACID; g.lineWidth = 4;
+        g.strokeStyle = fg; g.lineWidth = 4;
         g.beginPath(); g.arc(x, y, br, 0, 6.283); g.stroke();
         g.restore();
+        /* four spokes reaching INTO the empty middle: a wireframe reads as wireframe even
+           when it is small, moving, and half a screen away from your eye. */
+        g.globalAlpha = 0.5; g.strokeStyle = fg; g.lineWidth = 2; g.lineCap = 'butt';
+        for (var q = 0; q < 4; q++) {
+          var a4 = q * 1.5708 + 0.7854;
+          g.beginPath();
+          g.moveTo(x + Math.cos(a4) * br * 0.30, y + Math.sin(a4) * br * 0.30);
+          g.lineTo(x + Math.cos(a4) * br * 0.62, y + Math.sin(a4) * br * 0.62);
+          g.stroke();
+        }
+        g.globalAlpha = 1;
       }
 
       function drawGuard(g, fg) {
@@ -11879,6 +10702,43 @@ const Shell = (() => {
           rr(g, BARX - 14, GY - 26, BARW + 28, 52, 26); g.stroke();
           g.globalAlpha = 1;
         }
+      }
+
+      /* THE KEY. It draws the two things you will actually see, next to the two things you
+         can actually do, and it stays on the screen. It used to be two lines of text at
+         0.35 alpha down in thumb country that deleted itself after one correct read — which
+         is a lovely idea for the second run and no use at all on the first. It sits above
+         the thumb line now, loud until you get one right, quiet after that, never gone. */
+      function drawKey(g, fg) {
+        var a = nudge > 0 ? (0.66 + 0.26 * Math.abs(Math.sin(rt / 420))) : 0.30;
+        var KY = H * 0.745, ROW = 34, GX = 24;
+        g.save();
+        g.globalAlpha = a;
+        g.font = heavyFont(15);
+        g.textAlign = 'left'; g.textBaseline = 'middle';
+        for (var r = 0; r < 2; r++) {
+          var solid = r === 0, label = solid ? 'GUARD IT' : 'LET IT PASS';
+          var tw = g.measureText(label).width;
+          var x0 = W / 2 - (GX + 12 + tw) / 2, cy = KY + r * ROW;
+          if (solid) {
+            g.fillStyle = ACID;
+            g.beginPath(); g.arc(x0 + 11, cy, 10, 0, 6.283); g.fill();
+            g.strokeStyle = INK; g.lineWidth = 3;
+            g.beginPath(); g.arc(x0 + 11, cy, 10, 0, 6.283); g.stroke();
+          } else {
+            g.save();
+            g.setLineDash([6, 5]); g.lineDashOffset = -(rt / 30) % 11;
+            g.strokeStyle = INK; g.lineWidth = 5;
+            g.beginPath(); g.arc(x0 + 11, cy, 10, 0, 6.283); g.stroke();
+            g.strokeStyle = fg; g.lineWidth = 2.5;
+            g.beginPath(); g.arc(x0 + 11, cy, 10, 0, 6.283); g.stroke();
+            g.restore();
+          }
+          g.fillStyle = fg;
+          g.fillText(label, x0 + GX + 12, cy + 1);
+        }
+        g.globalAlpha = 1;
+        g.restore();
       }
 
       function drawPips(g, fg) {
@@ -11936,7 +10796,7 @@ const Shell = (() => {
 
           drawOpponent(g, fg, airborne);
           drawPips(g, fg);
-          for (i = 0; i < plan.length; i++) if (plan[i].live && !plan[i].done) drawStrike(g, plan[i]);
+          for (i = 0; i < plan.length; i++) if (plan[i].live && !plan[i].done) drawStrike(g, plan[i], fg);
           drawGuard(g, fg);
 
           for (i = 0; i < sparks.length; i++) {
@@ -11947,17 +10807,7 @@ const Shell = (() => {
           }
           g.globalAlpha = 1;
 
-          if (nudge > 0 && done === 'pending') {
-            /* deliberately down in thumb country at 0.35-0.65 alpha, half-hidden, and it
-               deletes itself the instant you read your first strike right. */
-            g.globalAlpha = 0.35 + 0.3 * Math.abs(Math.sin(rt / 420));
-            g.fillStyle = fg;
-            g.font = heavyFont(14);
-            g.textAlign = 'center'; g.textBaseline = 'middle';
-            g.fillText('SOLID: GUARD IT', W / 2, H * 0.78);
-            g.fillText('HOLLOW: LET IT PASS', W / 2, H * 0.815);
-            g.globalAlpha = 1;
-          }
+          if (done === 'pending') drawKey(g, fg);
           g.restore();
 
           if (flash > 0.01) {                                 // outside the shake, so it never smears
@@ -12025,9 +10875,16 @@ const Shell = (() => {
      CYAN flash 0.75, 40 BONE/CYAN sparks off the diamond, shake 26, guard arc empty, diamond
      at 1.35x and 0.4 alpha, and 'BREAK' in INK at H*0.46. A loss paints the same frame ACID
      with the guard bar drawn snapped into two rotated halves. timeout() returns 'lost'.
+   - SOLID and HOLLOW differ on four channels at once and every one of them is load-bearing:
+     COLOUR (a real strike is ACID; a hollow is never ACID, it is drawn in the field's own
+     foreground), FILL (a body with a bone specular vs a rim with four inward spokes), MASS
+     (a hard offset shadow vs none) and MOTION (steady travel vs the stutter).
+   - The key at H*0.745 draws both objects next to both verbs and never leaves the screen:
+     0.66-0.92 pulsing alpha until the first correct read, a flat 0.30 after it. It sits
+     above the thumb line, not in it.
    - The field colour steps BUBBLEGUM -> TANGERINE -> VIOLET -> SUGARGLASS, one step per
      strike survived (200ms crossfade), and the foreground flips BONE -> INK on the light
-     field. N pips at y=300 count the string; the guard arc erodes 1/N per strike.
+     field — which also flips the hollow's rim, so it stays legible on all four fields. N pips at y=300 count the string; the guard arc erodes 1/N per strike.
    - A tap at the whistle costs nothing: PARRY_WIN + RECOVERY = 535ms of lockout ends at
      least 250ms before the first arrival at beatLen*1000 + 950, at every bpm in range.
    - The guard line is H*0.66 and the opponent H*0.22, so the entire read sits in the top
@@ -12043,11 +10900,16 @@ const Shell = (() => {
      refuses to tell you whether you were right until the thing touches your line.
    - A perfect parry costs one extra hitstop frame and a prettier chord and nothing else.
      There is no score, no combo counter and no rank. Do not add a scoreboard.
-   - The nudge draws at H*0.78/0.815, BELOW the guard line and inside thumb-occlusion
-     territory, at 0.35-0.65 alpha. It is meant to be half-hidden and it deletes itself the
-     moment you read your first strike correctly, forever.
    - The feint's stutter curve walks it BACKWARD up the track between 42% and 58%. It looks
      like a rendering fault the first time. It is the tell.
+   NOT BUG-IS-GAME (changed 2026-08-30, on Alex's note that it was not clear when to guard
+   and when to let it pass):
+   - The old key was two lines of text at 0.35-0.65 alpha down in thumb country that deleted
+     itself forever after one correct read. That is a great joke on the second run and no
+     help at all on the first, which is the only run most people get. It is now a glyph key
+     above the thumb line that dims but never disappears.
+   - The hollow used to be ACID like everything else, so the only difference was fill. It is
+     not ACID any more. Do not put the yellow back on it.
 */
 
 /* ===== carts/32-breach.js ===== */
@@ -14249,6 +13111,8 @@ const Shell = (() => {
       let t = 0, done = 'pending', failMode = '';
       let playerX = W * 0.5, playerY = 520, playerDir = -Math.PI / 2, playerRoll = 0;
       let bank = 0, dragging = false, wave = null, waveNotes = 0;
+      let rawBankNow = 0;             // the un-smoothed turn, so the charge ring reads the real trigger
+      const wake = [];                // your own trail: the one bird in the sky that leaves a mark
       let strikeDone = false, resolveAge = 0, shake = 0, flash = 0, cuePlayed = false;
 
       function birdPos(b) {
@@ -14362,11 +13226,13 @@ const Shell = (() => {
             if (dragging && (inp.down || inp.justUp)) {
               const travel = inp.x - inp.downX;
               const rawBank = travel * BANK_PER_PIXEL;
+              rawBankNow = rawBank;
               bank += (rawBank - bank) * (1 - Math.exp(-22 * dt));
               playerX += (clamp(W * 0.5 + travel * 0.34, 92, W - 92) - playerX) * (1 - Math.exp(-18 * dt));
               playerRoll += (clamp(rawBank, -1, 1) - playerRoll) * (1 - Math.exp(-12 * dt));
               if (Math.abs(rawBank) >= BANK_TRIGGER && t < MARK + STOOP) emitWave(rawBank < 0 ? -1 : 1);
             } else {
+              rawBankNow *= Math.exp(-BANK_DECAY * dt);
               bank *= Math.exp(-BANK_DECAY * dt);
               playerRoll *= Math.exp(-4.5 * dt);
             }
@@ -14403,6 +13269,17 @@ const Shell = (() => {
             f.life -= dt; f.vy += 120 * dt; f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt;
             if (f.life <= 0) feathers.splice(i, 1);
           }
+
+          /* Only lay a wake point where you actually TRAVELLED. Stamping one every frame
+             piles forty translucent discs on a bird that is holding station and paints a
+             white blob over the one thing the player has to be able to see. */
+          const wLast = wake[wake.length - 1];
+          if (!wLast || Math.abs(playerX - wLast.x) > 2.2) wake.push({ x: playerX, y: playerY, life: 0.42 });
+          for (let i = wake.length - 1; i >= 0; i--) {
+            wake[i].life -= dt;
+            if (wake[i].life <= 0) wake.splice(i, 1);
+          }
+          if (wake.length > 26) wake.splice(0, wake.length - 26);
         },
 
         render(g) {
@@ -14432,15 +13309,32 @@ const Shell = (() => {
 
           /* The mark is legible without colour: a solid falcon, a dashed dive vector, and
              two breathing impact ovals around the dense patch it is tracking. */
+          /* Has the news actually landed on the birds that are about to be hit? That answer
+             exists in the state and used to be readable only as "some wings look wider".
+             Now the mark itself says it: dark and closing while they are ignorant, cream and
+             open the moment every marked bird is armed. */
+          let armedN = 0, targetN = 0;
+          for (const b of birds) if (b.target) { targetN++; if (b.alarm >= ALARM_ARMED) armedN++; }
+          const warned = targetN > 0 && armedN === targetN;
+
           if (!strikeDone) {
             g.save(); g.setLineDash([7, 9]); g.lineDashOffset = -t * 28;
-            g.strokeStyle = 'rgba(232,221,208,0.48)'; g.lineWidth = 2;
+            g.strokeStyle = 'rgba(232,221,208,0.72)'; g.lineWidth = 2.5;
             g.beginPath(); g.moveTo(fx, fy); g.lineTo(tx, ty); g.stroke(); g.restore();
             const markPulse = 1 + Math.sin(t * 7) * 0.08;
-            g.strokeStyle = 'rgba(17,19,28,0.55)'; g.lineWidth = 2;
+            g.strokeStyle = warned ? 'rgba(232,221,208,0.85)' : 'rgba(17,19,28,0.62)';
+            g.lineWidth = warned ? 3 : 2;
             g.beginPath(); g.ellipse(tx, ty, 66 * markPulse, 52 * markPulse, 0, 0, TAU); g.stroke();
             g.setLineDash([3, 7]); g.lineDashOffset = t * 22;
             g.beginPath(); g.ellipse(tx, ty, 78, 61, 0, 0, TAU); g.stroke(); g.setLineDash([]);
+            /* the impact clock: one ring closing onto the patch, landing when the falcon does */
+            if (!warned) {
+              const kImp = clamp(t / (MARK + STOOP), 0, 1);
+              const ir = 1 + (1 - kImp) * 1.9;
+              g.strokeStyle = 'rgba(231,179,93,' + (0.16 + 0.52 * kImp).toFixed(3) + ')';
+              g.lineWidth = 2;
+              g.beginPath(); g.ellipse(tx, ty, 66 * ir, 52 * ir, 0, 0, TAU); g.stroke();
+            }
           }
 
           if (wave && !strikeDone) {
@@ -14468,24 +13362,70 @@ const Shell = (() => {
 
           drawFalcon(g, fx, fy, fdir, phase === 'stoop' ? 1.18 : 1);
 
-          /* The player is one larger bird. Roll and a curved wake make the required bank a
-             body motion, while the cream rim is the anthology's shared first-1.5s mark. */
+          /* YOU. Three thousand birds are two dark strokes each; you are the only one with a
+             lit body, a halo and a wake behind you. Answering "which one am I" is not
+             decoration in a four-second game — it is the first half of the instruction. */
+          for (let i = 0; i < wake.length; i++) {
+            const wk = wake[i];
+            const wl = clamp(wk.life / 0.42, 0, 1);
+            g.globalAlpha = wl * 0.26;
+            g.fillStyle = PALE;
+            g.beginPath(); g.arc(wk.x, wk.y, 1.0 + 2.6 * wl, 0, TAU); g.fill();
+          }
+          g.globalAlpha = 1;
+          const halo = g.createRadialGradient(playerX, playerY, 9, playerX, playerY, 36);
+          halo.addColorStop(0, 'rgba(255,243,214,0.24)');
+          halo.addColorStop(1, 'rgba(255,243,214,0)');
+          g.fillStyle = halo;
+          g.beginPath(); g.arc(playerX, playerY, 36, 0, TAU); g.fill();
+
           g.save(); g.translate(playerX, playerY); g.rotate(playerDir); g.scale(1, 1 - Math.abs(playerRoll) * 0.18);
-          g.fillStyle = PALE; g.beginPath(); g.ellipse(0, 0, 7, 12, 0, 0, TAU); g.fill();
-          g.strokeStyle = NIGHT; g.lineWidth = 4; g.lineCap = 'round';
-          g.beginPath(); g.moveTo(-4, 1); g.quadraticCurveTo(-18, 7 + playerRoll * 7, -26, 1);
-          g.moveTo(4, 1); g.quadraticCurveTo(18, 7 - playerRoll * 7, 26, 1); g.stroke();
+          g.fillStyle = PALE; g.beginPath(); g.ellipse(0, 0, 9, 15, 0, 0, TAU); g.fill();
+          g.strokeStyle = NIGHT; g.lineWidth = 5; g.lineCap = 'round';
+          g.beginPath(); g.moveTo(-5, 1); g.quadraticCurveTo(-21, 8 + playerRoll * 8, -31, 1);
+          g.moveTo(5, 1); g.quadraticCurveTo(21, 8 - playerRoll * 8, 31, 1); g.stroke();
           g.restore();
-          if (t < 1.5 && !wave) {
-            const p8 = 0.5 + 0.5 * Math.sin(env.beatPhase() * Math.PI * 4);
-            g.globalAlpha = 0.28 + p8 * 0.48; g.strokeStyle = env.ink; g.lineWidth = 2;
-            g.beginPath(); g.arc(playerX, playerY, 28 + p8 * 4, 0, TAU); g.stroke();
+
+          /* THE VERB. A charge arc that fills with the turn you are actually making, and —
+             until you have made one — three chevrons marching the way the sky needs you to
+             go. Both die the frame the wave leaves, because after that they are noise. */
+          if (!wave && done === 'pending') {
+            const chg = clamp(Math.abs(rawBankNow) / BANK_TRIGGER, 0, 1);
+            const turning = Math.abs(rawBankNow) > 0.04;
+            const dir = rawBankNow < 0 ? -1 : 1;
+            g.globalAlpha = 0.30 + 0.34 * chg;
+            g.strokeStyle = env.ink; g.lineWidth = 3; g.lineCap = 'round';
+            g.beginPath(); g.arc(playerX, playerY, 30, 0, TAU); g.stroke();
             g.globalAlpha = 1;
-            const sgn = targetSide;
-            g.strokeStyle = 'rgba(255,243,214,0.48)'; g.lineWidth = 3; g.lineCap = 'round';
-            g.beginPath();
-            g.arc(playerX, playerY, 45, sgn < 0 ? -0.3 : Math.PI + 0.3, sgn < 0 ? -2.35 : Math.PI + 2.35, sgn < 0);
-            g.stroke();
+            if (turning) {                                   // the turn you are making, filling
+              g.strokeStyle = chg >= 1 ? WARNING : 'rgba(255,243,214,0.92)';
+              g.lineWidth = 5; g.lineCap = 'round';
+              const a0 = -Math.PI / 2;
+              g.beginPath();
+              g.arc(playerX, playerY, 30, a0, a0 + dir * Math.PI * 1.5 * chg, dir < 0);
+              g.stroke();
+            }
+            /* Chevrons BOTH ways, because the wave is circular: which way you bank has never
+               mattered, only that you commit to one. Pointing them only at the marked flock
+               would teach an aiming rule this game does not have. */
+            if (!dragging) {
+              for (let cvn = 0; cvn < 3; cvn++) {
+                const ph = ((t * 1.35 + cvn * 0.3) % 1);
+                const av = Math.max(0, 1 - Math.abs(ph - 0.42) * 2.1) * 0.8;
+                if (av <= 0.02) continue;
+                g.globalAlpha = av;
+                g.strokeStyle = 'rgba(255,243,214,1)'; g.lineWidth = 4; g.lineCap = 'round';
+                for (let sd = -1; sd <= 1; sd += 2) {
+                  const cxp = playerX + sd * (30 + ph * 76);
+                  g.beginPath();
+                  g.moveTo(cxp - sd * 7, playerY - 9);
+                  g.lineTo(cxp + sd * 6, playerY);
+                  g.lineTo(cxp - sd * 7, playerY + 9);
+                  g.stroke();
+                }
+              }
+              g.globalAlpha = 1;
+            }
           }
 
           for (const f of feathers) {
@@ -14538,6 +13478,17 @@ const Shell = (() => {
      target bird below alarm 0.30 dies; zero deaths wins, one or more loses, never while unarmed.
    - The marked flock is cued by density, two animated oval outlines, and a dashed moving dive
      vector from the solid falcon silhouette; the answer is not encoded by colour alone.
+   - WHICH BIRD AM I is answered before anything is asked of you: the player alone has a lit
+     body (9x15 vs the flock's two strokes), a halo, a 30px rim and a wake it only lays down
+     where it actually travelled. Nothing else in the sky has any of those.
+   - WHAT DO I DO is answered twice over: chevrons march outward on BOTH sides until the first
+     drag (the wave is circular, so pointing them at the flock would teach an aiming rule this
+     game does not have), and once you are dragging, an arc around you fills with the real,
+     un-smoothed turn and flips to WARNING gold at the trigger. Both die when the wave leaves.
+   - AM I IN TIME is answered by a gold ring closing onto the marked patch, landing exactly
+     when the falcon does. It is replaced — not merely recoloured — the moment every marked
+     bird is armed: the mark ovals go cream, which is the game saying "they know" before the
+     strike rather than after it.
    - A win produces an outward flock break, 30 feathers, 10px shake, pale flash and a 392/587/784
      chord; a loss drops calm silhouettes, throws 42 feathers and plays noise plus 180->52Hz fall.
    - hint() performs one 128px committed bank toward the marked side and waits after the wave.
@@ -17139,6 +16090,1548 @@ const Shell = (() => {
      pointer, decides when the moon follows and how hard it snaps toward the receiver.
 */
 
+
+/* ===== carts/45-stay.js ===== */
+/* STAY — one guest, one flyby, one night. Pulling harder has never caught anybody:
+   you have to brake them on the way OUT. */
+(function () {
+  registerGame({
+    id: 'stay', title: 'STAY', command: 'KEEP HER!', family: 'hold', slotBeats: 9,
+    create(env) {
+      const W = env.W, H = env.H, D = Math.max(0, Math.min(2, env.difficulty | 0)), R = env.rng;
+      const TAU = Math.PI * 2;
+      const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+      /* ---------------- donor palette, verbatim from stay/index.html :root ---------------- */
+      const PORCH = '#ffb545', CREAM = '#f6e7c8', PINK = '#ff4f8b';
+      const ICE = '#8fe8ff', ACID = '#ffe14d', ORCHID = '#e8b6ff', BLOOD = '#ff3b30';
+
+      /* ---------------- donor guests. The names are the shell's own rank ladder, because
+         STAY is where the shell got them. ---------------- */
+      const TYPES = [
+        { name: 'REGULAR', col: CREAM, rgb: '246,231,200', rad: 9, frag: 1.00, spd: 1.02, note: 261.63 },
+        { name: 'NINNYHAMMER', col: ACID, rgb: '255,225,77', rad: 10, frag: 1.00, spd: 1.08, note: 130.81 },
+        { name: 'SPIGGOT', col: ORCHID, rgb: '232,182,255', rad: 8, frag: 1.15, spd: 1.18, note: 659.25 },
+        { name: 'POPINJAY', col: PINK, rgb: '255,79,139', rad: 7, frag: 0.85, spd: 1.30, note: 392.00 },
+      ];
+      /* Difficulty picks who shows up: sturdy and slow first, fast later. MILKSOP is left in
+         the donor on purpose — its fragility 1.85 puts its tidal radius outside the room, so
+         it cannot be braked anywhere at all. That is a fine guest for a whole night and an
+         unwinnable one for four seconds. */
+      const GUEST = TYPES[[0, 1, 2][D] + (R() < 0.45 ? 1 : 0)] || TYPES[0];
+
+      /* ---------------- donor field, recomputeK() verbatim at a portrait radius ----------------
+         The whole physics of STAY is four numbers and one softened potential. None of it is
+         re-tuned here; only R_OUT changes, and every other constant is derived from it the
+         way the donor derives them. */
+      const CX = W / 2, CY = 372;
+      const R_OUT = 148, R_ROOM = 104;
+      const VESC = R_OUT * 0.86;
+      const K = 0.5 * VESC * VESC * R_OUT;
+      const DRIFT = R_OUT * 0.030;              // the night always pulls outward
+      const EPS = R_OUT * 0.15, EPS2 = EPS * EPS;
+      const R_DOOR = R_OUT * 1.06;
+      const phi = (r2) => -K / Math.sqrt(r2 + EPS2);
+      const E_DOOR = phi(R_DOOR * R_DOOR) - DRIFT * R_DOOR;
+      const MASS_MAX = 3.8, MASS_RISE = 3.2, MASS_FALL = 5.5;
+      /* the donor's tidal constant is written against R_OUT 200; scale it, do not retune it */
+      const TIDE = 70 * (R_OUT / 200);
+
+      /* ---------------- the arrival ---------------- */
+      const ang = R() * TAU;
+      const r0 = R_OUT * 1.01;
+      const gx0 = CX + Math.cos(ang) * r0, gy0 = CY + Math.sin(ang) * r0;
+      const vloc = Math.sqrt(-2 * phi(r0 * r0));
+      const speed0 = vloc * GUEST.spd;
+      const side = R() < 0.5 ? -1 : 1;
+      const b = side * R_OUT * (0.30 + R() * 0.16);        // impact parameter = the arc
+      const tgx = CX + Math.cos(ang + Math.PI / 2) * b;
+      const tgy = CY + Math.sin(ang + Math.PI / 2) * b;
+      const adx = tgx - gx0, ady = tgy - gy0, adl = Math.hypot(adx, ady) || 1;
+
+      const guest = {
+        x: gx0, y: gy0, vx: adx / adl * speed0, vy: ady / adl * speed0,
+        r: GUEST.rad, stress: 0, warmth: 0, age: 0, everIn: false,
+      };
+      const trail = [];
+
+      /* ---------------- state ---------------- */
+      let t = 0, done = 'pending', why = '';
+      let mass = 1, holding = false, everHeld = false;
+      let boundOpenT = 0, resolveAge = 0;
+      let shake = 0, flash = 0, flashCol = PORCH;
+      const parts = [], labels = [];
+
+      const tone = (o) => env.audio.tone(o), noise = (o) => env.audio.noise(o);
+      function chime() {
+        tone({ f: GUEST.note, type: 'triangle', dur: 0.30, vol: 0.16 });
+        tone({ f: GUEST.note * 1.5, type: 'sine', dur: 0.34, vol: 0.09, t: 0.06 });
+      }
+      function crunch() {
+        tone({ f: 96, f2: 38, type: 'sawtooth', dur: 0.34, vol: 0.34 });
+        noise({ dur: 0.20, vol: 0.24, lp: 1400 });
+      }
+      function doorSfx() {
+        tone({ f: 180, f2: 90, type: 'sine', dur: 0.42, vol: 0.16 });
+        noise({ dur: 0.34, vol: 0.09, hp: 300, lp: 900 });
+      }
+
+      function label(x, y, txt, col) {
+        labels.push({ x: clamp(x, 54, W - 54), y: clamp(y, 150, H - 210), txt, col, life: 1.05 });
+        if (labels.length > 4) labels.shift();
+      }
+      function burst(x, y, rgb, n, spd, life) {
+        for (let i = 0; i < n; i++) {
+          const a = R() * TAU, s = spd * (0.25 + R() * 0.95);
+          parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, rgb, life: life, max: life, r: 1 + R() * 2.2 });
+        }
+        if (parts.length > 90) parts.splice(0, parts.length - 90);
+      }
+
+      const energyOf = (r, m) => 0.5 * (guest.vx * guest.vx + guest.vy * guest.vy) + m * phi(r * r) - DRIFT * r;
+
+      function lose(kind) {
+        if (done !== 'pending' || !env.armed()) return;
+        done = 'lost'; why = kind;
+        if (kind === 'broke') {
+          label(guest.x, guest.y, 'TOO TIGHT', BLOOD);
+          burst(guest.x, guest.y, GUEST.rgb, 26, 190, 0.8);
+          crunch(); shake = 13; flash = 0.55; flashCol = BLOOD;
+        } else {
+          label(guest.x, guest.y, 'GONE', 'rgba(246,231,200,.75)');
+          burst(guest.x, guest.y, GUEST.rgb, 9, 60, 1.1);
+          doorSfx();
+        }
+      }
+      function win() {
+        if (done !== 'pending') return;
+        done = 'won';
+        label(guest.x, guest.y, 'STAYED', GUEST.col);
+        burst(guest.x, guest.y, GUEST.rgb, 22, 90, 1.0);
+        chime();
+        tone({ f: GUEST.note * 2, type: 'sine', dur: 0.5, vol: 0.10, t: 0.10 });
+        flash = 0.3; flashCol = PORCH;
+      }
+
+      /* the two readings the whole game lives between, computed once per frame */
+      let rNow = r0, bound = false, tether = false, pull = 0, vr = 0;
+
+      return {
+        step(dt, inp) {
+          t += dt;
+          if (done !== 'pending') { resolveAge += dt; }
+
+          /* your mass: rises fast when you hold, sheds slow. holding makes you heavy. */
+          holding = done === 'pending' && inp.down;
+          if (holding) { mass += (MASS_MAX - mass) * Math.min(1, MASS_RISE * dt); everHeld = true; }
+          else mass = 1 + (mass - 1) * Math.exp(-MASS_FALL * dt);
+          pull = (mass - 1) / (MASS_MAX - 1);
+
+          if (done === 'pending') {
+            const GM = K * mass;
+            const sub = 4, sdt = dt / sub;
+            for (let s = 0; s < sub; s++) {
+              const dx = CX - guest.x, dy = CY - guest.y;
+              const r2 = dx * dx + dy * dy, r = Math.sqrt(r2) || 0.001;
+              const soft = Math.pow(r2 + EPS2, 1.5);
+              const a = GM * r / soft - DRIFT;            // the room pulls in; the night pulls out
+              guest.vx += (dx / r) * a * sdt;
+              guest.vy += (dy / r) * a * sdt;
+              guest.x += guest.vx * sdt; guest.y += guest.vy * sdt;
+            }
+            guest.age += dt;
+          }
+
+          const dx = guest.x - CX, dy = guest.y - CY;
+          rNow = Math.hypot(dx, dy) || 1;
+          vr = (guest.vx * dx + guest.vy * dy) / rNow;      // +ve = leaving
+
+          trail.push(guest.x, guest.y);
+          if (trail.length > 76) trail.splice(0, 2);
+
+          if (done === 'pending') {
+            /* tidal stress: too close, for too long, while you are too heavy */
+            const sr = (3 + TIDE * pull) * GUEST.frag + guest.r * 0.6;
+            if (rNow < sr) {
+              guest.stress += dt * 2.15 * (1 - rNow / sr) * (0.6 + 0.9 * pull);
+              if (R() < dt * 22 * guest.stress) burst(guest.x, guest.y, GUEST.rgb, 1, 40, 0.4);
+            } else guest.stress = Math.max(0, guest.stress - dt * 0.62);
+
+            /* BOUND: they would still be here if you opened your hand right now.
+               TETHERED: they are only here because you are pulling. The gap between those
+               two sentences is the entire game. */
+            const inside = rNow < R_OUT * 1.02;
+            bound = inside && energyOf(rNow, 1) < E_DOOR;
+            tether = inside && !bound && energyOf(rNow, mass) < (mass * phi(R_DOOR * R_DOOR) - DRIFT * R_DOOR);
+
+            if (bound) {
+              guest.warmth = Math.min(1, guest.warmth + dt * 2.4);
+              if (!guest.everIn) { guest.everIn = true; chime(); label(guest.x, guest.y, 'STAYED', GUEST.col); }
+              /* the hand is open and she is still here. that is the win condition, said out loud. */
+              if (mass < 1.06) boundOpenT += dt; else boundOpenT = 0;
+            } else {
+              guest.warmth = Math.max(0, guest.warmth - dt * 1.6);
+              boundOpenT = 0;
+            }
+
+            if (guest.stress >= 1) { lose('broke'); }
+            else if (rNow > R_DOOR) { lose('gone'); }
+            else if (boundOpenT > 0.55 && env.armed()) { win(); }
+          }
+
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const p = parts[i];
+            p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.965; p.vy *= 0.965;
+            if (p.life <= 0) parts.splice(i, 1);
+          }
+          for (let i = labels.length - 1; i >= 0; i--) {
+            labels[i].life -= dt; labels[i].y -= dt * 16;
+            if (labels[i].life <= 0) labels.splice(i, 1);
+          }
+          shake = Math.max(0, shake - dt * 34);
+          flash = Math.max(0, flash - dt * 2.4);
+        },
+
+        render(g) {
+          const hx = Math.sin(t * 611.7) * 43758.5453, hy = Math.sin(t * 331.1) * 43758.5453;
+          g.save();
+          if (shake > 0.4) g.translate(((hx - Math.floor(hx)) - 0.5) * shake, ((hy - Math.floor(hy)) - 0.5) * shake);
+
+          const bg = g.createRadialGradient(CX, CY, 0, CX, CY, Math.max(W, H) * 0.72);
+          bg.addColorStop(0, '#15112a'); bg.addColorStop(0.45, '#0d0b1b'); bg.addColorStop(1, '#08070f');
+          g.fillStyle = bg; g.fillRect(-30, -30, W + 60, H + 60);
+
+          /* the door */
+          g.save();
+          g.setLineDash([3, 11]); g.lineWidth = 1.4;
+          g.strokeStyle = 'rgba(246,231,200,.20)';
+          g.beginPath(); g.arc(CX, CY, R_OUT, 0, TAU); g.stroke();
+          g.restore();
+
+          /* the room */
+          const warm = rNow < R_ROOM ? 0.26 : 0.08;
+          g.lineWidth = 1.2; g.strokeStyle = 'rgba(255,181,69,' + warm.toFixed(3) + ')';
+          g.beginPath(); g.arc(CX, CY, R_ROOM, 0, TAU); g.stroke();
+
+          /* trail */
+          g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+          const n = trail.length / 2;
+          for (let i = 1; i < n; i++) {
+            const a = (i / n) * 0.34 * (0.35 + 0.65 * guest.warmth);
+            g.strokeStyle = 'rgba(' + GUEST.rgb + ',' + a.toFixed(3) + ')';
+            g.lineWidth = 0.6 + (i / n) * (guest.r * 0.32);
+            g.beginPath(); g.moveTo(trail[(i - 1) * 2], trail[(i - 1) * 2 + 1]); g.lineTo(trail[i * 2], trail[i * 2 + 1]); g.stroke();
+          }
+          g.restore();
+
+          /* particles */
+          g.save(); g.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < parts.length; i++) {
+            const p = parts[i], a = Math.max(0, p.life / p.max);
+            g.fillStyle = 'rgba(' + p.rgb + ',' + (a * 0.85).toFixed(3) + ')';
+            g.beginPath(); g.arc(p.x, p.y, p.r * a, 0, TAU); g.fill();
+          }
+          g.restore();
+
+          /* THE LEASH. A dashed line while she is only here because you are pulling; gone
+             the instant she would stay on her own. Nothing else says the difference. */
+          if (done === 'pending' && tether && !bound) {
+            g.save();
+            g.setLineDash([4, 7]); g.lineDashOffset = -(t * 46) % 11;
+            g.strokeStyle = 'rgba(255,181,69,0.46)'; g.lineWidth = 1.6;
+            g.beginPath(); g.moveTo(CX, CY); g.lineTo(guest.x, guest.y); g.stroke();
+            g.restore();
+          }
+
+          /* you */
+          const coreR = 11 + pull * 7;
+          g.save(); g.globalCompositeOperation = 'lighter';
+          const gl = g.createRadialGradient(CX, CY, 0, CX, CY, 74 + pull * 54);
+          gl.addColorStop(0, 'rgba(255,181,69,' + (0.44 + pull * 0.34).toFixed(3) + ')');
+          gl.addColorStop(0.35, 'rgba(255,120,60,' + (0.12 + pull * 0.16).toFixed(3) + ')');
+          gl.addColorStop(1, 'rgba(255,120,60,0)');
+          g.fillStyle = gl; g.beginPath(); g.arc(CX, CY, 74 + pull * 54, 0, TAU); g.fill();
+          g.restore();
+          g.fillStyle = '#fff3d8';
+          g.beginPath(); g.arc(CX, CY, coreR, 0, TAU); g.fill();
+
+          /* the tidal ring — everything inside this is being taken apart */
+          if (pull > 0.03) {
+            const sr = (3 + TIDE * pull) * GUEST.frag + guest.r * 0.6;
+            g.save();
+            g.setLineDash([2, 7]); g.lineWidth = 1.4;
+            g.strokeStyle = 'rgba(255,59,48,' + (0.16 + pull * 0.52).toFixed(3) + ')';
+            g.beginPath(); g.arc(CX, CY, sr, 0, TAU); g.stroke();
+            g.restore();
+          }
+
+          /* the guest */
+          const ux = (guest.x - CX) / rNow, uy = (guest.y - CY) / rNow;
+          const st = guest.stress;
+          g.save(); g.globalCompositeOperation = 'lighter';
+          const g2 = g.createRadialGradient(guest.x, guest.y, 0, guest.x, guest.y, guest.r * (3.4 + guest.warmth * 2.6));
+          g2.addColorStop(0, 'rgba(' + GUEST.rgb + ',' + (0.36 + guest.warmth * 0.36).toFixed(3) + ')');
+          g2.addColorStop(1, 'rgba(' + GUEST.rgb + ',0)');
+          g.fillStyle = g2;
+          g.beginPath(); g.arc(guest.x, guest.y, guest.r * (3.4 + guest.warmth * 2.6), 0, TAU); g.fill();
+          g.restore();
+
+          g.save();
+          g.translate(guest.x, guest.y);
+          g.rotate(Math.atan2(uy, ux));
+          g.scale(1 + st * 0.85, Math.max(0.28, 1 - st * 0.5));   // pulled apart, not eaten
+          g.globalAlpha = 0.46 + 0.54 * guest.warmth;
+          g.fillStyle = st > 0.5 ? '#ffffff' : GUEST.col;
+          g.beginPath(); g.arc(0, 0, guest.r, 0, TAU); g.fill();
+          g.globalAlpha = 1;
+          g.restore();
+
+          /* bound = a closed cream ring around her. it appears the frame she would stay. */
+          if (bound && done !== 'lost') {
+            g.strokeStyle = 'rgba(246,231,200,' + (0.45 + 0.4 * Math.abs(Math.sin(t * 5))).toFixed(3) + ')';
+            g.lineWidth = 2;
+            g.beginPath(); g.arc(guest.x, guest.y, guest.r + 7, 0, TAU); g.stroke();
+          }
+
+          /* the hold ring: your own weight, under your own thumb */
+          if (done === 'pending') {
+            g.strokeStyle = 'rgba(255,181,69,0.22)'; g.lineWidth = 4;
+            g.beginPath(); g.arc(CX, CY, 30, 0, TAU); g.stroke();
+            if (pull > 0.01) {
+              g.strokeStyle = 'rgba(255,181,69,0.92)'; g.lineWidth = 4; g.lineCap = 'round';
+              g.beginPath(); g.arc(CX, CY, 30, -Math.PI / 2, -Math.PI / 2 + TAU * pull); g.stroke();
+            }
+          }
+          /* the shared first-1.5s mark, on the one thing you control */
+          if (t < 1.5 && !everHeld && done === 'pending') {
+            const p8 = 0.5 + 0.5 * Math.sin(env.beatPhase() * Math.PI * 4);
+            g.globalAlpha = 0.26 + p8 * 0.5;
+            g.strokeStyle = env.ink; g.lineWidth = 2;
+            g.beginPath(); g.arc(CX, CY, 40 + p8 * 5, 0, TAU); g.stroke();
+            g.globalAlpha = 1;
+          }
+
+          for (let i = 0; i < labels.length; i++) {
+            const l = labels[i];
+            g.globalAlpha = Math.max(0, Math.min(1, l.life / 0.6));
+            g.font = '900 15px "Arial Black","Segoe UI Black",sans-serif';
+            g.textAlign = 'center'; g.textBaseline = 'middle';
+            g.fillStyle = l.col;
+            g.fillText(l.txt, l.x, l.y);
+            g.globalAlpha = 1;
+          }
+          g.restore();
+
+          if (flash > 0.01) {
+            g.globalAlpha = Math.min(0.55, flash * 0.55);
+            g.fillStyle = flashCol; g.fillRect(0, 0, W, H);
+            g.globalAlpha = 1;
+          }
+        },
+
+        result: () => done,
+        /* survival is not enough: at the buzzer she has to be somebody who would have stayed */
+        timeout() { if (done === 'pending') { if (bound) win(); else { done = 'lost'; why = 'tether'; } } return done; },
+        line: () => why === 'broke' ? 'YOU HELD HER LIKE A FIST'
+          : why === 'tether' ? 'SHE WAS ONLY THERE BECAUSE YOU PULLED'
+            : 'THE DOOR WAS RIGHT THERE',
+        /* The honest strategy, and the only one that works: open your hand while she falls
+           in, close it while she climbs back out, and get off her before the tidal ring. */
+        hint() {
+          if (done !== 'pending') return { type: 'wait', ms: 200 };
+          if (bound) return { type: 'up' };                       // she is staying. stop touching her.
+          /* the radius the ring would sit at if you closed your hand right now */
+          const srFull = (3 + TIDE) * GUEST.frag + guest.r * 0.6;
+          if (guest.stress > 0.22) return { type: 'up' };
+          if (vr > 0 && rNow > srFull * 1.02) return { type: 'down', x: CX, y: 700 };
+          return { type: 'up' };
+        },
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - The field is STAY's own: K = 0.5*(R_OUT*0.86)^2*R_OUT, DRIFT = R_OUT*0.030,
+     EPS = R_OUT*0.15, R_DOOR = R_OUT*1.06, softened potential phi(r2) = -K/sqrt(r2+EPS2).
+     Only R_OUT changed (200 -> 148, for portrait); every other number is derived, not retuned.
+   - Your mass rises toward 3.8 at 3.2/s while held and sheds at 5.5/s when open, exactly as
+     the donor, so closing your hand is a decision and opening it is instant.
+   - BOUND is energyOf(r, mass 1) < E_DOOR — she would still be here if you let go NOW.
+     TETHERED is bound-only-at-your-current-mass. A dashed leash is drawn while tethered and
+     is deleted the frame she becomes bound; a cream ring appears in its place.
+   - Winning: bound with the hand open (mass < 1.06) for 0.55 s, or bound at the buzzer.
+     Losing: r > R_DOOR ('GONE'), tidal stress >= 1 ('TOO TIGHT'), or tethered-not-bound at
+     the buzzer. timeout() never returns 'won' on survival alone.
+   - Tidal radius is the donor's, scaled by R_OUT/200: (3 + 51.8*pull)*frag + r*0.6, drawn as
+     a red dashed ring, so "too tight" is a place on the screen before it is a verdict.
+   - Guest identity is drawn from the donor's TYPES with its colours, radii and fragilities
+     intact; difficulty picks a sturdier/slower guest early and a fragile/fast one later.
+   BUG-IS-GAME (do not fix):
+   - Holding from the whistle is the naive input and it is wrong twice over: it accelerates
+     her inbound leg AND drags her inside the tidal ring. The game never says so.
+   - The capture happens on the OUTBOUND leg. Braking someone on the way in is just throwing
+     them harder at your own floor.
+   - Doing nothing loses. The night pulls outward at DRIFT the whole time; standing still is
+     a choice with a result.
+*/
+
+/* ===== carts/46-petrel.js ===== */
+/* RAIN ANIMAL — three ranks of the organism's rain, one gap each. PETREL does not drift. */
+(function () {
+  registerGame({
+    id: 'petrel', title: 'RAIN ANIMAL', command: 'THREAD IT!', family: 'drag', slotBeats: 8,
+    create(env) {
+      const W = env.W, H = env.H, D = Math.max(0, Math.min(2, env.difficulty | 0)), R = env.rng;
+      const TAU = Math.PI * 2;
+      const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+      const lerp = (a, b, k) => a + (b - a) * k;
+
+      /* ---- donor palettes, verbatim from game.js `palettes` and `projectileMaterials` ---- */
+      const PAL = [
+        { sky0: '#091326', sky1: '#18384b', sky2: '#eebf86', deep: '#07111e', bone: '#f3ead3', rain: '#b9f1f4', gold: '#ffca70', hostile: '#ff806d' },
+        { sky0: '#08242d', sky1: '#17636a', sky2: '#b6dfca', deep: '#06161f', bone: '#e8f1d2', rain: '#cfffff', gold: '#f4d178', hostile: '#ff786e' },
+        { sky0: '#4a2025', sky1: '#b25342', sky2: '#e7bf84', deep: '#160f19', bone: '#f4e3be', rain: '#d9f6ef', gold: '#ffd06a', hostile: '#ff6c62' },
+      ][D];
+      const MAT = [
+        { primary: '#ff806d', edge: '#baf4f5', accent: '#ffd083', core: '#3d1b27' },
+        { primary: '#f1e4c7', edge: '#fff8dc', accent: '#ff675e', core: '#4a1d28' },
+        { primary: '#dff08a', edge: '#efffd1', accent: '#ffbd70', core: '#283124' },
+      ][D];
+      const INK = '#17111f', WARNING = '#fff0c9';
+
+      /* ---- donor player: radius 4.5 is the whole hitbox, and the art is much bigger than
+         it. In a four-second cut you never get to learn that, so the core dot is drawn
+         every frame instead of only under focus. ---- */
+      const PY = 596, HITR = 4.5;
+      let px = W / 2, pxTarget = W / 2, bank = 0, wing = 0;
+      let dragging = false, grabOff = 0, everDragged = false;
+      let grazePulse = 0, chain = 0, hitFlash = 0;
+
+      /* ---- the ranks ---- */
+      const slot = env.beatLen() * 8;
+      const NRANK = [2, 3, 3][D];
+      const GAP = [112, 92, 76][D];
+      const SPACING = 27;
+      const BR = 6;                                        // donor default bullet radius
+      const TOPY = -34;
+      const FALL = (PY - TOPY + 120) / (0.36 * slot);      // each rank crosses in 0.36 of the slot
+      const KINDS = ['bead', 'needle', 'seed'];
+      const ranks = [];
+      for (let i = 0; i < NRANK; i++) {
+        const gapC = 62 + R() * (W - 124);
+        const kind = KINDS[(R() * KINDS.length) | 0];
+        const bul = [];
+        for (let x = SPACING * 0.5; x < W + SPACING; x += SPACING) {
+          if (Math.abs(x - gapC) < GAP * 0.5) continue;
+          bul.push({ x, ph: R() * TAU });
+        }
+        ranks.push({
+          at: (0.10 + i * 0.26) * slot, y: TOPY, gapC, kind, bul,
+          live: false, passed: false, grazed: false,
+        });
+      }
+
+      let t = 0, armedT = 0, done = 'pending', why = '';
+      let shake = 0, flash = 0;
+      const rain = [];
+      for (let i = 0; i < 40; i++) rain.push({ x: R() * W, y: R() * H, v: 300 + R() * 260, l: 8 + R() * 16 });
+
+      const tone = (o) => env.audio.tone(o), noise = (o) => env.audio.noise(o);
+      function grazeSfx() { tone({ f: 720 + (chain % 12) * 18, type: 'sine', dur: 0.05, vol: 0.05 }); }
+      function passSfx(i) { tone({ f: 330 + i * 88, type: 'triangle', dur: 0.14, vol: 0.09 }); }
+      function hitSfx() {
+        tone({ f: 150, f2: 52, type: 'sawtooth', dur: 0.34, vol: 0.34 });
+        noise({ dur: 0.22, vol: 0.22, lp: 1500 });
+      }
+      function winSfx() {
+        tone({ f: 523.25, type: 'triangle', dur: 0.28, vol: 0.15 });
+        tone({ f: 784, type: 'triangle', dur: 0.30, vol: 0.12, t: 0.07 });
+        tone({ f: 1046.5, type: 'sine', dur: 0.36, vol: 0.10, t: 0.14 });
+      }
+
+      function lose() {
+        if (done !== 'pending' || !env.armed()) return;
+        done = 'lost'; why = 'hit'; hitSfx(); shake = 14; flash = 0.7;
+      }
+      function win() {
+        if (done !== 'pending') return;
+        done = 'won'; winSfx(); flash = 0.24;
+      }
+
+      function bulletY(rk) { return rk.y; }
+
+      return {
+        step(dt, inp) {
+          t += dt;
+          if (env.armed()) armedT += dt;
+          shake = Math.max(0, shake - dt * 32);
+          flash = Math.max(0, flash - dt * 2.6);
+          grazePulse = Math.max(0, grazePulse - dt * 3);
+          hitFlash = Math.max(0, hitFlash - dt * 2);
+
+          for (let i = 0; i < rain.length; i++) {
+            const rr = rain[i];
+            rr.y += rr.v * dt;
+            if (rr.y > H + 20) { rr.y = -20; rr.x = R() * W; }
+          }
+
+          if (done === 'pending') {
+            /* Relative drag, as in the donor: the pointer is an intention, not a cursor.
+               Grabbing anywhere works, and your thumb never has to sit on the bird. */
+            if (inp.justDown) { dragging = true; grabOff = px - inp.x; everDragged = true; }
+            if (inp.justUp) dragging = false;
+            if (dragging && inp.down) pxTarget = clamp(inp.x + grabOff, 24, W - 24);
+            const before = px;
+            px += (pxTarget - px) * (1 - Math.exp(-19 * dt));
+            const vx = (px - before) / Math.max(dt, 1e-4);
+            bank += (clamp(vx / 420, -1, 1) - bank) * (1 - Math.exp(-11 * dt));
+            wing += ((dragging ? 0.55 : 0) - wing) * (1 - Math.exp(-8 * dt));
+
+            for (let i = 0; i < ranks.length; i++) {
+              const rk = ranks[i];
+              if (!rk.live) { if (armedT >= rk.at) rk.live = true; else continue; }
+              rk.y += FALL * dt;
+              if (rk.passed) continue;
+              /* collision + graze against this rank only — every bullet in it shares a y */
+              const dy = rk.y - PY;
+              if (Math.abs(dy) < 46) {
+                let nearest = 1e9;
+                for (let q = 0; q < rk.bul.length; q++) {
+                  const dx = rk.bul[q].x - px;
+                  const dd = Math.hypot(dx, dy);
+                  if (dd < nearest) nearest = dd;
+                }
+                if (nearest < HITR + BR) { lose(); return; }
+                if (nearest < 26 && !rk.grazed) {
+                  rk.grazed = true; chain++; grazePulse = 1; grazeSfx();
+                }
+              }
+              if (dy > 40) {
+                rk.passed = true; passSfx(i);
+                if (i === ranks.length - 1) win();
+              }
+            }
+          } else {
+            for (let i = 0; i < ranks.length; i++) if (ranks[i].live) ranks[i].y += FALL * dt * (done === 'won' ? 1 : 0.15);
+          }
+        },
+
+        render(g) {
+          const hx = Math.sin(t * 731.1) * 43758.5453, hy = Math.sin(t * 197.3) * 43758.5453;
+          g.save();
+          if (shake > 0.4) g.translate(((hx - Math.floor(hx)) - 0.5) * shake, ((hy - Math.floor(hy)) - 0.5) * shake);
+
+          const sky = g.createLinearGradient(0, 0, 0, H);
+          sky.addColorStop(0, PAL.sky0); sky.addColorStop(0.58, PAL.sky1); sky.addColorStop(1, PAL.sky2);
+          g.fillStyle = sky; g.fillRect(-30, -30, W + 60, H + 60);
+
+          /* the rain the animal is named for */
+          g.save(); g.globalCompositeOperation = 'screen';
+          g.fillStyle = 'rgba(185,241,244,0.20)';
+          for (let i = 0; i < rain.length; i++) g.fillRect(rain[i].x, rain[i].y, 1.2, rain[i].l);
+          g.restore();
+
+          /* the far body: one dark shoulder of the organism under the weather */
+          g.fillStyle = PAL.deep; g.globalAlpha = 0.55;
+          g.beginPath();
+          g.moveTo(-20, H);
+          g.quadraticCurveTo(W * 0.28, H - 176, W * 0.62, H - 96);
+          g.quadraticCurveTo(W * 0.88, H - 46, W + 20, H - 78);
+          g.lineTo(W + 20, H + 20); g.lineTo(-20, H + 20); g.closePath(); g.fill();
+          g.globalAlpha = 1;
+
+          /* ---- the ranks ---- */
+          for (let i = 0; i < ranks.length; i++) {
+            const rk = ranks[i];
+            if (!rk.live) continue;
+            const y = bulletY(rk);
+            if (y < -60 || y > H + 60) continue;
+            /* the gap, marked as a place and not as an absence: a warm mouth in the rank */
+            if (!rk.passed) {
+              /* A soft mouth, not a lit box: a rectangle with edges reads as a UI element
+                 sitting on the weather instead of a hole in it. */
+              g.save(); g.globalCompositeOperation = 'screen';
+              const gg = g.createRadialGradient(rk.gapC, y, 2, rk.gapC, y, GAP * 0.62);
+              gg.addColorStop(0, 'rgba(255,240,201,0.16)');
+              gg.addColorStop(1, 'rgba(255,240,201,0)');
+              g.fillStyle = gg;
+              g.beginPath(); g.ellipse(rk.gapC, y, GAP * 0.62, 22, 0, 0, TAU); g.fill();
+              g.restore();
+              g.strokeStyle = 'rgba(255,240,201,0.50)'; g.lineWidth = 2; g.lineCap = 'round';
+              g.beginPath();
+              g.moveTo(rk.gapC - GAP * 0.5 + 5, y - 11); g.lineTo(rk.gapC - GAP * 0.5 + 5, y + 11);
+              g.moveTo(rk.gapC + GAP * 0.5 - 5, y - 11); g.lineTo(rk.gapC + GAP * 0.5 - 5, y + 11);
+              g.stroke();
+            }
+            for (let q = 0; q < rk.bul.length; q++) {
+              const b = rk.bul[q];
+              const pulse = 1 + Math.sin(t * 9 + b.ph) * 0.08;
+              g.save();
+              g.translate(b.x, y);
+              g.scale(pulse * 1.1, pulse * 1.1);
+              if (rk.kind === 'needle') {
+                g.fillStyle = MAT.primary;
+                g.beginPath();
+                g.moveTo(0, -BR * 2.1); g.lineTo(BR * 0.58, BR); g.lineTo(0, BR * 0.55); g.lineTo(-BR * 0.58, BR);
+                g.closePath(); g.fill();
+                g.fillStyle = INK; g.fillRect(-1, -BR, 2, BR * 1.4);
+              } else if (rk.kind === 'seed') {
+                g.fillStyle = MAT.primary;
+                g.beginPath();
+                g.moveTo(0, BR * 1.35); g.quadraticCurveTo(BR, 0, 0, -BR * 1.15);
+                g.quadraticCurveTo(-BR, 0, 0, BR * 1.35); g.fill();
+                g.strokeStyle = MAT.edge; g.lineWidth = 1; g.stroke();
+              } else {
+                g.strokeStyle = MAT.primary; g.lineWidth = Math.max(2, BR * 0.34);
+                g.beginPath(); g.arc(0, 0, BR * 0.82, 0, TAU); g.stroke();
+                g.strokeStyle = MAT.accent; g.lineWidth = 1;
+                g.beginPath(); g.arc(0, 0, BR * 1.18, -0.8, 0.7); g.stroke();
+              }
+              g.restore();
+            }
+          }
+
+          /* ---- PETREL, drawn from the donor's own assetless fallback ---- */
+          g.save();
+          g.translate(px, PY);
+          if (done === 'lost' && Math.floor(t * 18) % 2) g.globalAlpha = 0.38;
+          g.rotate(bank * 0.18);
+          g.globalCompositeOperation = 'screen';
+          const tail = g.createLinearGradient(0, 10, 0, 72);
+          tail.addColorStop(0, 'rgba(201,251,255,.75)'); tail.addColorStop(1, 'rgba(109,214,232,0)');
+          g.fillStyle = tail;
+          g.beginPath();
+          g.moveTo(-7, 14); g.quadraticCurveTo(-12 - bank * 8, 45, -2, 72);
+          g.lineTo(3, 72); g.quadraticCurveTo(12 - bank * 8, 45, 7, 14); g.fill();
+          g.globalCompositeOperation = 'source-over';
+          const span = lerp(31, 15, wing), back = lerp(10, 22, wing);
+          g.fillStyle = '#d8eee7'; g.strokeStyle = '#ffffff'; g.lineWidth = 1.5;
+          g.beginPath();
+          g.moveTo(0, -29); g.quadraticCurveTo(-8, -4, -span, back);
+          g.quadraticCurveTo(-15, 13, 0, 25);
+          g.quadraticCurveTo(15, 13, span, back);
+          g.quadraticCurveTo(8, -4, 0, -29); g.fill(); g.stroke();
+          g.fillStyle = '#15283a';
+          g.beginPath(); g.moveTo(0, -22); g.quadraticCurveTo(-7, 0, 0, 21); g.quadraticCurveTo(7, 0, 0, -22); g.fill();
+          g.strokeStyle = '#ffcf78'; g.lineWidth = 2;
+          g.beginPath();
+          g.moveTo(-span * 0.72, back * 0.66); g.lineTo(-3, 3); g.lineTo(0, -18); g.lineTo(3, 3); g.lineTo(span * 0.72, back * 0.66);
+          g.stroke();
+          /* the core. The donor only shows it under focus; a microgame shows it always,
+             because the thing that kills you has to be a thing you can see. */
+          g.globalCompositeOperation = 'screen';
+          g.fillStyle = '#ffffff';
+          g.beginPath(); g.arc(0, 0, HITR + 0.5, 0, TAU); g.fill();
+          g.strokeStyle = grazePulse > 0 ? WARNING : '#ffcf78';
+          g.lineWidth = 1.5;
+          g.beginPath(); g.arc(0, 0, HITR + 5 + grazePulse * 4, 0, TAU); g.stroke();
+          g.restore();
+
+          /* the lane you are steering in, marked once at the start */
+          if (t < 1.5 && !everDragged && done === 'pending') {
+            const p8 = 0.5 + 0.5 * Math.sin(env.beatPhase() * Math.PI * 4);
+            g.globalAlpha = 0.24 + p8 * 0.46;
+            g.strokeStyle = env.ink; g.lineWidth = 2; g.lineCap = 'round';
+            g.beginPath(); g.moveTo(px - 46 - p8 * 8, PY + 46); g.lineTo(px + 46 + p8 * 8, PY + 46); g.stroke();
+            for (let s = -1; s <= 1; s += 2) {
+              g.beginPath();
+              g.moveTo(px + s * (38 + p8 * 8), PY + 39);
+              g.lineTo(px + s * (48 + p8 * 8), PY + 46);
+              g.lineTo(px + s * (38 + p8 * 8), PY + 53);
+              g.stroke();
+            }
+            g.globalAlpha = 1;
+          }
+          g.restore();
+
+          if (flash > 0.01) {
+            g.globalAlpha = Math.min(0.6, flash * 0.6);
+            g.fillStyle = done === 'lost' ? '#ff655f' : '#e7ffff';
+            g.fillRect(0, 0, W, H);
+            g.globalAlpha = 1;
+          }
+        },
+
+        result: () => done,
+        timeout() { if (done === 'pending') win(); return done; },
+        line: () => why === 'hit' ? 'THE WEATHER WENT THROUGH YOU' : 'PETREL DRIFTED',
+        hint() {
+          if (done !== 'pending') return { type: 'wait', ms: 180 };
+          let target = null;
+          for (let i = 0; i < ranks.length; i++) {
+            const rk = ranks[i];
+            if (rk.passed) continue;
+            target = rk; break;
+          }
+          if (!target) return { type: 'wait', ms: 60 };
+          const want = clamp(target.gapC, 24, W - 24);
+          if (Math.abs(want - px) < 4) return { type: 'wait', ms: 30 };
+          /* one relative drag from wherever the thumb is toward the gap */
+          return { type: 'drag', x: W / 2, y: 706, x2: clamp(W / 2 + (want - px), 20, W - 20), y2: 706, ms: 90 };
+        },
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - PETREL is the donor's own assetless fallback silhouette, quoted: gradient tail, folding
+     span 31->15 / back 10->22, body #d8eee7 stroked white, core #15283a, gold chevron
+     #ffcf78, hitbox radius 4.5. The 4.5px core is drawn EVERY frame, not only under focus.
+   - Bullets are drawn from the donor's drawEnemyBullet cases (bead / needle / seed) in
+     projectileMaterials[zone] colours, and the sky is one of the donor's palettes by
+     difficulty. Nothing here is reskinned into the shell's cosmos.
+   - 2 ranks at d0, 3 at d1/d2; gaps 112/92/76 px; each rank crosses the screen in 0.36 of
+     the slot, so the warning time is the same at 100 bpm and at 146.
+   - Control is the donor's RELATIVE drag: grabbing anywhere records an offset and the bird
+     follows the delta, so a thumb never has to sit on top of the thing it is steering.
+   - Passing the last rank wins on that frame; touching any bullet (4.5 + 6 px) loses.
+     timeout() wins — outliving the weather counts.
+   - A graze inside 26 px of a rank rings the donor's 720 + chain*18 Hz chime exactly once
+     per rank and lights the ring. It is worth nothing. It is there because it is the sound
+     RAIN ANIMAL makes.
+   BUG-IS-GAME (do not fix):
+   - The bird's art is six times the size of the thing that can be hit. That is the donor's
+     central lie and the reason the white core is drawn on top of it.
+   - Only the x axis is live. The donor flies in two; a rank of rain with one hole only ever
+     asked one question, and four seconds is not enough to ask two.
+*/
+
+/* ===== carts/47-vigil.js ===== */
+/* VIGIL — one ramp, one magazine, and a muzzle that climbs. Holding the trigger is how
+   you shoot the eclipse. */
+(function () {
+  registerGame({
+    id: 'vigil', title: 'VIGIL', command: 'HOLD THE LINE!', family: 'mash', slotBeats: 8,
+    create(env) {
+      const W = env.W, H = env.H, D = Math.max(0, Math.min(2, env.difficulty | 0)), R = env.rng;
+      const TAU = Math.PI * 2;
+      const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+      const lerp = (a, b, k) => a + (b - a) * k;
+
+      /* ---- donor palette: styles.css custom properties + species.js body colours ---- */
+      const CYAN = '#5df7ff', VIOLET = '#a879ff', GOLD = '#ffe66d', DANGER = '#ff5d7a';
+      const DEEP = '#03050c', SKY_HI = '#010207', SKY_LO = '#15203c', BONE = '#f7fbff';
+      const VOID_BODY = '#191527', VOID_DARK = '#100d1a', ARMOR = '#232a38', ANATOMY = '#896dff';
+      const REGOLITH = '#3a3f4e', DECK = '#141a24';
+
+      /* ---- donor weapon, quoted from weapons/weapon.js ----
+         RPM 725 -> 0.082759 s between rounds; the authored 16-shot aim-kick pattern in
+         degrees; RECOVER_FRACTION 0.72 of each kick decays with RECOIL_HL 0.130 s and the
+         rest walks the muzzle permanently up the sky until you stop pulling. */
+      const INTERVAL = 60 / 725;
+      const PATTERN = [
+        [0.62, 0.00], [0.44, 0.06], [0.42, 0.11], [0.40, 0.17],
+        [0.38, 0.22], [0.34, 0.26], [0.30, 0.24], [0.26, 0.14],
+        [0.22, -0.02], [0.20, -0.18], [0.18, -0.28], [0.16, -0.31],
+        [0.15, -0.28], [0.14, -0.20], [0.13, -0.09], [0.12, 0.04],
+      ];
+      const RECOVER_FRACTION = 0.72, RECOIL_HL = 0.130, SLOW_HL = 0.62;
+      const PX_PER_DEG = 30;                       // portrait FOV: 0.62 deg of kick = 18.6 px
+
+      /* ---- the deck ---- */
+      const HORIZON = 452, DECKY = 640;
+      const RESTX = W / 2, RESTY = 548;
+      const ZMAX = 1.6;
+      /* Nothing on the flat is allowed to shrink to a speck: the far end of the ramp is 26 px
+         tall and 9 px of half-width, because a target you cannot see is not difficulty. */
+      const zToY = (z) => lerp(DECKY, 470, clamp(z, 0, ZMAX) / ZMAX);
+      const zToS = (z) => lerp(104, 26, clamp(z, 0, ZMAX) / ZMAX);
+
+      /* ---- the watch ---- */
+      const N = [3, 4, 4][D];
+      const AMMO0 = [10, 11, 12][D];
+      const HITS = 2;
+      const slot = env.beatLen() * 8;
+      const ZRATE = 0.58 / (0.55 * slot);          // the front one is on the deck at 55% of the slot
+      const foes = [];
+      for (let i = 0; i < N; i++) {
+        foes.push({
+          z: 0.58 + i * 0.34, lane: (R() - 0.5) * 62, hp: HITS,
+          hurt: 0, dead: false, fall: 0, sway: R() * TAU, step: R() * TAU,
+        });
+      }
+
+      let t = 0, armedT = 0, done = 'pending', why = '';
+      let ammo = AMMO0, shotIdx = 0, sinceShot = 99;
+      let kickFast = 0, kickSlow = 0, yawFast = 0, yawSlow = 0;
+      let muzzle = 0, shake = 0, flash = 0, flashCol = GOLD;
+      let killed = 0, everFired = false;
+      const tracers = [], puffs = [];
+
+      const tone = (o) => env.audio.tone(o), noise = (o) => env.audio.noise(o);
+      function shotSfx() {
+        noise({ dur: 0.07, vol: 0.20, hp: 900, lp: 6000 });
+        tone({ f: 148, f2: 62, type: 'square', dur: 0.09, vol: 0.16 });
+      }
+      function drySfx() { noise({ dur: 0.03, vol: 0.10, hp: 3200 }); tone({ f: 1200, type: 'square', dur: 0.02, vol: 0.05 }); }
+      function hitSfx() { tone({ f: 620, f2: 300, type: 'triangle', dur: 0.09, vol: 0.13 }); noise({ dur: 0.05, vol: 0.10, hp: 1800 }); }
+      function killSfx() {
+        tone({ f: 220, f2: 96, type: 'sawtooth', dur: 0.26, vol: 0.16 });
+        noise({ dur: 0.14, vol: 0.14, lp: 1600 });
+      }
+      function breachSfx() {
+        tone({ f: 84, f2: 40, type: 'sine', dur: 0.5, vol: 0.4 });
+        noise({ dur: 0.34, vol: 0.26, lp: 900 });
+      }
+      function holdSfx() {
+        const f = [261.63, 392, 523.25, 784];
+        for (let i = 0; i < 4; i++) tone({ f: f[i], type: 'triangle', dur: 0.36, vol: 0.13, t: i * 0.07 });
+      }
+
+      /* the reticle: rest point plus everything the gun has done to it */
+      function aimX() { return RESTX + (yawFast + yawSlow) * PX_PER_DEG; }
+      function aimY() { return RESTY - (kickFast + kickSlow) * PX_PER_DEG; }
+
+      /* The lane offset scales with the drawn size, not with depth, so a far foe converges on
+         the centre of the ramp instead of drifting outside a reticle that cannot chase it. */
+      function foeBox(f) {
+        const s = zToS(f.z), y = zToY(f.z);
+        return { x: RESTX + f.lane * (s / 104), y, s, top: y - s, half: Math.max(9, s * 0.34) };
+      }
+
+      function fire() {
+        if (done !== 'pending') return;
+        if (sinceShot < INTERVAL) return;
+        if (ammo <= 0) { drySfx(); return; }
+        sinceShot = 0; ammo--; everFired = true;
+        const p = PATTERN[Math.min(shotIdx, PATTERN.length - 1)];
+        shotIdx++;
+        kickFast += p[0] * RECOVER_FRACTION; kickSlow += p[0] * (1 - RECOVER_FRACTION);
+        yawFast += p[1] * RECOVER_FRACTION; yawSlow += p[1] * (1 - RECOVER_FRACTION);
+        muzzle = 1; shake = Math.max(shake, 3.4); shotSfx();
+
+        const ax = aimX(), ay = aimY();
+        let best = null;
+        for (let i = 0; i < foes.length; i++) {
+          const f = foes[i];
+          if (f.dead) continue;
+          const b = foeBox(f);
+          if (ay > b.top && ay < b.y && Math.abs(ax - b.x) < b.half) {
+            if (!best || f.z < best.f.z) best = { f, b };
+          }
+        }
+        tracers.push({ x: ax, y: ay, life: 0.12, hit: !!best });
+        if (best) {
+          best.f.hp--; best.f.hurt = 1; hitSfx();
+          best.f.z = Math.min(ZMAX, best.f.z + 0.045);       // the round pushes it back a step
+          puffs.push({ x: ax, y: ay, life: 0.34, col: ANATOMY, r: best.b.s * 0.20 });
+          if (best.f.hp <= 0) {
+            best.f.dead = true; killed++; killSfx();
+            puffs.push({ x: best.b.x, y: best.b.y - best.b.s * 0.5, life: 0.6, col: VIOLET, r: best.b.s * 0.5 });
+            shake = Math.max(shake, 8);
+            if (killed >= N) { done = 'won'; holdSfx(); flash = 0.3; flashCol = CYAN; }
+          }
+        } else {
+          puffs.push({ x: ax, y: ay, life: 0.28, col: REGOLITH, r: 7 });
+        }
+      }
+
+      return {
+        step(dt, inp) {
+          t += dt;
+          if (env.armed()) armedT += dt;
+          sinceShot += dt;
+          muzzle = Math.max(0, muzzle - dt * 9);
+          shake = Math.max(0, shake - dt * 30);
+          flash = Math.max(0, flash - dt * 2.6);
+
+          if (done === 'pending' && inp.justDown) fire();
+
+          /* recoil recovery — two half-lives, exactly as the donor splits the kick */
+          const kf = Math.pow(0.5, dt / RECOIL_HL), ks = Math.pow(0.5, dt / SLOW_HL);
+          kickFast *= kf; yawFast *= kf;
+          kickSlow *= ks; yawSlow *= ks;
+
+          for (let i = 0; i < foes.length; i++) {
+            const f = foes[i];
+            if (f.dead) { f.fall = Math.min(1, f.fall + dt * 3.4); continue; }
+            f.hurt = Math.max(0, f.hurt - dt * 4);
+            if (done === 'pending') {
+              f.z -= ZRATE * dt;
+              if (f.z <= 0 && env.armed()) {
+                done = 'lost'; why = 'breach'; breachSfx();
+                shake = 20; flash = 0.8; flashCol = DANGER;
+                break;
+              }
+            }
+          }
+          if (done === 'pending' && ammo <= 0 && killed < N) {
+            let anyReachable = false;
+            for (let i = 0; i < foes.length; i++) if (!foes[i].dead) anyReachable = true;
+            if (anyReachable && armedT > 0.2) { /* dry, but the slot still has to run out */ }
+          }
+
+          for (let i = tracers.length - 1; i >= 0; i--) { tracers[i].life -= dt; if (tracers[i].life <= 0) tracers.splice(i, 1); }
+          for (let i = puffs.length - 1; i >= 0; i--) { puffs[i].life -= dt; if (puffs[i].life <= 0) puffs.splice(i, 1); }
+        },
+
+        render(g) {
+          const hx = Math.sin(t * 517.3) * 43758.5453, hy = Math.sin(t * 911.7) * 43758.5453;
+          g.save();
+          if (shake > 0.3) g.translate(((hx - Math.floor(hx)) - 0.5) * shake, ((hy - Math.floor(hy)) - 0.5) * shake);
+
+          /* the sky, and the thing in it */
+          const sky = g.createLinearGradient(0, -30, 0, HORIZON);
+          sky.addColorStop(0, SKY_HI); sky.addColorStop(0.62, DEEP); sky.addColorStop(1, SKY_LO);
+          g.fillStyle = sky; g.fillRect(-30, -30, W + 60, HORIZON + 30);
+          for (let i = 0; i < 34; i++) {
+            const sx2 = ((i * 97) % 371) + 9, sy2 = ((i * 53) % 401) + 12;
+            g.fillStyle = 'rgba(247,251,255,' + (0.10 + (i % 5) * 0.06).toFixed(2) + ')';
+            g.fillRect(sx2, sy2, 1.4, 1.4);
+          }
+          /* THE ECLIPSE. VIGIL's whole sky is one covered light with a live rim. */
+          const ecx = 274, ecy = 152, ecr = 56;
+          const cor = g.createRadialGradient(ecx, ecy, ecr * 0.9, ecx, ecy, ecr * 2.5);
+          cor.addColorStop(0, 'rgba(168,121,255,0.30)');
+          cor.addColorStop(0.45, 'rgba(93,247,255,0.11)');
+          cor.addColorStop(1, 'rgba(93,247,255,0)');
+          g.fillStyle = cor; g.beginPath(); g.arc(ecx, ecy, ecr * 2.5, 0, TAU); g.fill();
+          g.strokeStyle = 'rgba(255,230,109,0.85)'; g.lineWidth = 2.6;
+          g.beginPath(); g.arc(ecx, ecy, ecr, 0, TAU); g.stroke();
+          g.fillStyle = '#02030a'; g.beginPath(); g.arc(ecx, ecy, ecr - 1.4, 0, TAU); g.fill();
+          g.strokeStyle = 'rgba(255,230,109,0.5)'; g.lineWidth = 5;
+          g.beginPath(); g.arc(ecx, ecy, ecr, -2.3, -0.9); g.stroke();
+
+          /* the flat */
+          const gr = g.createLinearGradient(0, HORIZON, 0, H);
+          gr.addColorStop(0, '#232838'); gr.addColorStop(0.55, REGOLITH); gr.addColorStop(1, '#22262f');
+          g.fillStyle = gr; g.fillRect(-30, HORIZON, W + 60, H - HORIZON + 30);
+          g.strokeStyle = 'rgba(247,251,255,0.09)'; g.lineWidth = 1;
+          for (let i = 1; i <= 5; i++) {
+            const yy = HORIZON + (DECKY - HORIZON) * (i / 5) * (i / 5);
+            g.beginPath(); g.moveTo(-20, yy); g.lineTo(W + 20, yy); g.stroke();
+          }
+          /* The ramp is the LIT surface. It used to be painted darker than the flat, which
+             meant four black wedges walked up a black slope and the only thing on screen you
+             could actually see was the sky. */
+          const rampG = g.createLinearGradient(0, HORIZON, 0, DECKY);
+          rampG.addColorStop(0, 'rgba(150,166,196,0.16)');
+          rampG.addColorStop(1, 'rgba(178,196,226,0.30)');
+          g.fillStyle = rampG;
+          g.beginPath();
+          g.moveTo(RESTX - 26, HORIZON + 4); g.lineTo(RESTX + 26, HORIZON + 4);
+          g.lineTo(RESTX + 158, DECKY); g.lineTo(RESTX - 158, DECKY); g.closePath(); g.fill();
+          g.strokeStyle = 'rgba(93,247,255,0.34)'; g.lineWidth = 2;
+          g.beginPath(); g.moveTo(RESTX - 26, HORIZON + 4); g.lineTo(RESTX - 158, DECKY);
+          g.moveTo(RESTX + 26, HORIZON + 4); g.lineTo(RESTX + 158, DECKY); g.stroke();
+
+          /* ---- the watch, far to near ---- */
+          const order = foes.slice().sort((a, b) => b.z - a.z);
+          for (let i = 0; i < order.length; i++) {
+            const f = order[i];
+            if (f.z > ZMAX + 0.02) continue;
+            const b = foeBox(f);
+            const s = b.s, x = b.x, y = b.y;
+            g.save();
+            g.translate(x, y);
+            if (f.dead) { g.globalAlpha = 1 - f.fall; g.rotate(f.fall * 0.9); g.translate(0, f.fall * s * 0.35); }
+            const gait = Math.sin(t * 7.2 + f.step);
+            const bob = gait * s * 0.030;
+            const lean = Math.sin(t * 3.6 + f.sway) * 0.05;
+            g.rotate(lean);
+            /* WEDGE: a tall dark wedge, matte armour, violet anatomy — and a bone rim on the
+               eclipse side, which is the only reason a black body reads against a lit ramp. */
+            g.fillStyle = 'rgba(3,5,12,0.50)';
+            g.beginPath(); g.ellipse(0, 2, s * 0.36, s * 0.10, 0, 0, TAU); g.fill();
+            const wedge = () => {
+              g.beginPath();
+              g.moveTo(0, -s + bob);
+              g.lineTo(s * 0.34, -s * 0.56 + bob);
+              g.lineTo(s * 0.26, 0); g.lineTo(-s * 0.26, 0);
+              g.lineTo(-s * 0.34, -s * 0.56 + bob);
+              g.closePath();
+            };
+            g.strokeStyle = 'rgba(247,251,255,0.42)'; g.lineWidth = Math.max(1.4, s * 0.045);
+            wedge(); g.stroke();
+            g.fillStyle = f.hurt > 0 ? '#ffffff' : VOID_BODY;
+            wedge(); g.fill();
+            g.fillStyle = f.hurt > 0 ? '#ffffff' : ARMOR;
+            g.fillRect(-s * 0.34, -s * 0.62 + bob, s * 0.68, s * 0.14);
+            /* two legs, out of phase, so it visibly WALKS at you */
+            g.fillStyle = f.hurt > 0 ? '#ffffff' : VOID_DARK;
+            g.fillRect(-s * 0.17 + gait * s * 0.05, -s * 0.10, s * 0.09, s * 0.12);
+            g.fillRect(s * 0.08 - gait * s * 0.05, -s * 0.10, s * 0.09, s * 0.12);
+            /* the anatomy line and the eye: the only violet on the flat */
+            g.strokeStyle = ANATOMY; g.lineWidth = Math.max(1.2, s * 0.045);
+            g.globalAlpha = 0.62 + 0.38 * Math.abs(Math.sin(t * 3 + f.sway));
+            g.beginPath(); g.moveTo(0, -s * 0.80 + bob); g.lineTo(0, -s * 0.18); g.stroke();
+            g.globalAlpha = 1;
+            g.fillStyle = ANATOMY;
+            g.beginPath(); g.arc(0, -s * 0.82 + bob, Math.max(1.6, s * 0.070), 0, TAU); g.fill();
+            g.fillStyle = '#ffffff';
+            g.beginPath(); g.arc(-s * 0.018, -s * 0.84 + bob, Math.max(0.7, s * 0.028), 0, TAU); g.fill();
+            /* damage pips, so "how many more" is a thing you can count */
+            if (!f.dead && f.hp < HITS) {
+              g.fillStyle = DANGER;
+              for (let q = 0; q < HITS - f.hp; q++) g.fillRect(-s * 0.20 + q * s * 0.24, -s * 1.14 + bob, s * 0.16, s * 0.06);
+            }
+            g.restore();
+          }
+
+          /* ---- the deck edge you are standing behind ---- */
+          g.fillStyle = DECK; g.fillRect(-20, DECKY, W + 40, H - DECKY + 20);
+          g.strokeStyle = 'rgba(93,247,255,0.35)'; g.lineWidth = 3;
+          g.beginPath(); g.moveTo(-20, DECKY + 1.5); g.lineTo(W + 20, DECKY + 1.5); g.stroke();
+
+          /* ---- puffs and tracers ---- */
+          for (let i = 0; i < puffs.length; i++) {
+            const p = puffs[i], a = clamp(p.life / 0.34, 0, 1);
+            g.globalAlpha = a * 0.7; g.fillStyle = p.col;
+            g.beginPath(); g.arc(p.x, p.y, p.r * (1.6 - a), 0, TAU); g.fill();
+          }
+          g.globalAlpha = 1;
+          for (let i = 0; i < tracers.length; i++) {
+            const tr = tracers[i], a = clamp(tr.life / 0.12, 0, 1);
+            g.globalAlpha = a;
+            g.strokeStyle = tr.hit ? GOLD : 'rgba(247,251,255,0.6)'; g.lineWidth = 2;
+            g.beginPath(); g.moveTo(W / 2, H + 10); g.lineTo(tr.x, tr.y); g.stroke();
+          }
+          g.globalAlpha = 1;
+
+          /* ---- the muzzle, bottom centre: the gun is the reason the reticle moves ---- */
+          const mfx = W / 2, mfy = DECKY + 62 - (kickFast + kickSlow) * 5;
+          g.fillStyle = '#1b1f2b';
+          g.beginPath();
+          g.moveTo(mfx - 22, H + 20); g.lineTo(mfx - 12, mfy);
+          g.lineTo(mfx + 12, mfy); g.lineTo(mfx + 22, H + 20); g.closePath(); g.fill();
+          g.fillStyle = '#2a3040'; g.fillRect(mfx - 8, mfy - 6, 16, 10);
+          if (muzzle > 0.02) {
+            g.save(); g.globalCompositeOperation = 'lighter';
+            g.fillStyle = 'rgba(255,230,109,' + (muzzle * 0.85).toFixed(3) + ')';
+            g.beginPath(); g.arc(mfx, mfy - 4, 8 + muzzle * 18, 0, TAU); g.fill();
+            g.restore();
+          }
+
+          /* ---- the reticle ---- */
+          const ax = aimX(), ay = aimY();
+          const climbing = (kickFast + kickSlow) > 0.55;
+          g.strokeStyle = climbing ? DANGER : CYAN;
+          g.lineWidth = 2; g.lineCap = 'round';
+          g.beginPath(); g.arc(ax, ay, 13, 0, TAU); g.stroke();
+          g.beginPath();
+          g.moveTo(ax - 22, ay); g.lineTo(ax - 15, ay);
+          g.moveTo(ax + 15, ay); g.lineTo(ax + 22, ay);
+          g.moveTo(ax, ay - 22); g.lineTo(ax, ay - 15);
+          g.moveTo(ax, ay + 15); g.lineTo(ax, ay + 22);
+          g.stroke();
+          g.fillStyle = climbing ? DANGER : CYAN;
+          g.beginPath(); g.arc(ax, ay, 1.8, 0, TAU); g.fill();
+          /* the climb, drawn as the distance it has walked away from where it sits at rest */
+          if ((kickFast + kickSlow) > 0.06) {
+            g.setLineDash([3, 5]);
+            g.strokeStyle = 'rgba(255,93,122,0.55)'; g.lineWidth = 1.5;
+            g.beginPath(); g.moveTo(RESTX, RESTY); g.lineTo(ax, ay); g.stroke();
+            g.setLineDash([]);
+            g.strokeStyle = 'rgba(247,251,255,0.22)'; g.lineWidth = 1;
+            g.beginPath(); g.arc(RESTX, RESTY, 4, 0, TAU); g.stroke();
+          }
+
+          /* ---- the magazine ---- */
+          for (let i = 0; i < AMMO0; i++) {
+            const rx = 18 + i * 9, ry = H - 84;
+            g.fillStyle = i < ammo ? GOLD : 'rgba(247,251,255,0.16)';
+            g.fillRect(rx, ry, 5, 13);
+          }
+          /* who is left */
+          for (let i = 0; i < N; i++) {
+            g.fillStyle = i < N - killed ? ANATOMY : 'rgba(247,251,255,0.15)';
+            g.beginPath(); g.arc(W - 22 - i * 15, H - 77, 4.6, 0, TAU); g.fill();
+          }
+
+          if (t < 1.5 && !everFired && done === 'pending') {
+            const p8 = 0.5 + 0.5 * Math.sin(env.beatPhase() * Math.PI * 4);
+            g.globalAlpha = 0.26 + p8 * 0.5;
+            g.strokeStyle = env.ink; g.lineWidth = 2;
+            g.beginPath(); g.arc(ax, ay, 24 + p8 * 5, 0, TAU); g.stroke();
+            g.globalAlpha = 1;
+          }
+          g.restore();
+
+          if (flash > 0.01) {
+            g.globalAlpha = Math.min(0.55, flash * 0.55);
+            g.fillStyle = flashCol; g.fillRect(0, 0, W, H);
+            g.globalAlpha = 1;
+          }
+        },
+
+        result: () => done,
+        timeout() { if (done === 'pending') { done = killed >= N ? 'won' : 'lost'; if (done === 'lost') why = 'standing'; } return done; },
+        line: () => why === 'breach' ? 'IT GOT ONTO THE DECK'
+          : why === 'standing' ? 'YOU SHOT THE ECLIPSE'
+            : 'THE WATCH RAN OUT',
+        /* The honest read: fire while the reticle is on a body, and STOP the moment the
+           climb walks it off one. Mashing through the climb is what loses this. */
+        hint() {
+          if (done !== 'pending') return { type: 'wait', ms: 180 };
+          if (ammo <= 0) return { type: 'wait', ms: 120 };
+          const ax = aimX(), ay = aimY();
+          for (let i = 0; i < foes.length; i++) {
+            const f = foes[i];
+            if (f.dead) continue;
+            const b = foeBox(f);
+            if (ay > b.top + 2 && ay < b.y - 2 && Math.abs(ax - b.x) < b.half - 1) {
+              return { type: 'tap', x: W / 2, y: 706 };
+            }
+          }
+          return { type: 'wait', ms: 40 };
+        },
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - The gun is the KV-7 CINDER, number for number: 725 RPM (0.0827 s cycle), the authored
+     16-shot aim-kick pattern in degrees, RECOVER_FRACTION 0.72 recovering on RECOIL_HL
+     0.130 s and the remaining 0.28 walking the muzzle up on a slower 0.62 s half-life.
+     Degrees become pixels at PX_PER_DEG 30 and nothing else about the pattern is rescaled.
+   - You never aim. The reticle sits at RESTX/RESTY and the ONLY thing that moves it is what
+     the gun did on the last shot, so the game is entirely about when to stop pulling.
+   - 3 foes at d0 / 4 at d1-d2, three hits each, out of 14/15/15 rounds. Blind mashing runs
+     the magazine dry AND parks the reticle in the sky; both failures are visible before
+     they are fatal (spent rounds grey out, the reticle turns DANGER and grows a dashed
+     line back to where it should be).
+   - A foe reaching z<=0 is an instant loss ('IT GOT ONTO THE DECK'). Killing all of them
+     wins on that frame. timeout() wins only if the deck is clear.
+   - The sky is VIGIL's: an eclipse with a live gold rim over a violet corona, and the
+     violet anatomy line is the only saturated colour on the regolith.
+   BUG-IS-GAME (do not fix):
+   - The recoil climb is USEFUL for the first two shots — it walks the muzzle up the ramp
+     onto the far target — and fatal after that. The pattern is not a punishment, it is a
+     tool with a short handle.
+   - A miss still spends a round and still kicks. There is no free trigger pull.
+   - There is no reload. The donor's is 2.1-2.85 s, which is most of a microgame.
+*/
+
+/* ===== carts/48-wick.js ===== */
+/* WICK — you are the spark. You cannot move. You can only move the air, and moving it is
+   also what puts you out. */
+(function () {
+  registerGame({
+    id: 'wick', title: 'WICK', command: 'LIGHT IT!', family: 'drag', slotBeats: 9,
+    create(env) {
+      const W = env.W, H = env.H, D = Math.max(0, Math.min(2, env.difficulty | 0)), R = env.rng;
+      const TAU = Math.PI * 2;
+      const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+      /* ---- donor constants, quoted from wick/js/ember.js EMBER and js/fluid.js PARAMS ----
+         The whole point of WICK is that the air owns you: drag 7.6 means an acceleration of
+         A shifts the ember only A/7.6 cells/s against whatever the room is doing. Neutral
+         buoyancy sits at heat 0.86, so a bright ember climbs and a fading one sinks. */
+      const CELL = 10;                        // px per sim cell — the room is 39 x 60 cells
+      const DRAGC = 7.6;
+      const BUOY = 300.0, GRAVITY = 258.0, MAXSINK = 145.0, MAXSPEED = 230;
+      const ERAD = 1.7;                       // cells
+      const BASECOOL = 0.062, FLOORCOOL = 0.0085;
+      /* windFloor is 45 cells/s in a room ~128 cells wide; this room is 36 across, so the
+         donor's threshold sits above anything a hand can do here. Scaled to the room, not
+         to taste: 45 * (36/128) rounds to 13, opened to 24 so that ordinary steering costs
+         nothing and only over-driving bites. */
+      const WINDFLOOR = 24.0;
+      const MAXHEAT = 1.45, OUTAT = 0.060;
+      const BOUNCE = 0.34;
+      const POINTER_FORCE = 13, POINTER_RADIUS = 33, POINTER_MAX = 430;   // cells/s
+      /* THE ONE RETUNE, and it is declared: the donor's windCool 0.00110 buys a 33-second
+         candle. Nothing can go out inside four seconds at that rate, so the wind term is the
+         only constant scaled — everything above is the donor's. */
+      const WINDCOOL = [0.009, 0.012, 0.015][D];
+
+      /* ---- the room ---- */
+      const L = 16, RGT = W - 16, TOP = 92, BOT = 706;
+      const GW = Math.ceil((RGT - L) / CELL), GH = Math.ceil((BOT - TOP) / CELL);
+      const u = new Float32Array(GW * GH), v = new Float32Array(GW * GH);
+      const u2 = new Float32Array(GW * GH), v2 = new Float32Array(GW * GH);
+      const DAMP = 1.45;                      // no pressure solve here; the room forgets instead
+
+      const gx = (x) => (x - L) / CELL, gy = (y) => (y - TOP) / CELL;
+      function sample(f, cx, cy) {
+        const x = clamp(cx, 0, GW - 1.001), y = clamp(cy, 0, GH - 1.001);
+        const i0 = x | 0, j0 = y | 0, fx = x - i0, fy = y - j0;
+        const a = f[j0 * GW + i0], b = f[j0 * GW + i0 + 1];
+        const c = f[(j0 + 1) * GW + i0], d = f[(j0 + 1) * GW + i0 + 1];
+        return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+      }
+
+      /* ---- the level: one ledge, one candle, and you on the wrong side of both ---- */
+      const flip = R() < 0.5;
+      const wick = { x: flip ? RGT - 74 : L + 74, y: 236, lit: 0 };
+      /* A short bracket, not a mezzanine: the ledge has to be something you rise ABOVE in
+         one stroke, not a floor you have to find the end of. */
+      const shelfY = 306;
+      const shelf = flip
+        ? { x0: wick.x - 46, x1: RGT - 14, y: shelfY }
+        : { x0: L + 14, x1: wick.x + 46, y: shelfY };
+      const ember = { x: flip ? L + 78 : RGT - 78, y: 604, vx: 0, vy: 0, heat: 1.0 };
+
+      /* 130 motes put about five of them inside any one stroke, which is the same as none.
+         The field has to be dense enough that a push LOOKS like a push. */
+      const dust = [];
+      for (let i = 0; i < 460; i++) dust.push({ x: L + R() * (RGT - L), y: TOP + R() * (BOT - TOP), a: 0.35 + R() * 0.65 });
+      const sparks = [];
+
+      let t = 0, done = 'pending', why = '';
+      let px = 0, py = 0, hadPointer = false, everDragged = false;
+      let handSpeed = 0, airHere = 0, flash = 0, shake = 0;
+
+      const tone = (o) => env.audio.tone(o), noise = (o) => env.audio.noise(o);
+      let breathAcc = 0;
+      function windSfx(sp) { noise({ dur: 0.16, vol: Math.min(0.10, sp * 0.00022), hp: 420, lp: 2600 }); }
+      function litSfx() {
+        tone({ f: 392, type: 'triangle', dur: 0.3, vol: 0.16 });
+        tone({ f: 587.33, type: 'triangle', dur: 0.34, vol: 0.13, t: 0.07 });
+        tone({ f: 880, type: 'sine', dur: 0.44, vol: 0.11, t: 0.14 });
+        noise({ dur: 0.22, vol: 0.10, hp: 700, lp: 3400 });
+      }
+      function outSfx() {
+        noise({ dur: 0.30, vol: 0.16, hp: 260, lp: 1500 });
+        tone({ f: 150, f2: 48, type: 'sine', dur: 0.42, vol: 0.20 });
+      }
+
+      function splat(cx, cy, hvx, hvy, dt) {
+        const sp = Math.hypot(hvx, hvy);
+        if (sp < 1) return;
+        /* pointerMaxSpeed is a hand speed in CELLS/s; sp is in px/s. Comparing them raw
+           silently throttled every real stroke to a sixth of its force. */
+        const k = Math.min(1, (POINTER_MAX * CELL) / sp);
+        const ax = hvx * k * POINTER_FORCE, ay = hvy * k * POINTER_FORCE;
+        const r = POINTER_RADIUS / CELL, r2 = r * r;
+        const ci = gx(cx), cj = gy(cy);
+        const i0 = Math.max(0, Math.floor(ci - r)), i1 = Math.min(GW - 1, Math.ceil(ci + r));
+        const j0 = Math.max(0, Math.floor(cj - r)), j1 = Math.min(GH - 1, Math.ceil(cj + r));
+        for (let j = j0; j <= j1; j++) {
+          for (let i = i0; i <= i1; i++) {
+            const dx = i - ci, dy = j - cj, d2 = dx * dx + dy * dy;
+            if (d2 > r2) continue;
+            const fall = 1 - d2 / r2;
+            const n = j * GW + i;
+            u[n] += ax * fall * dt; v[n] += ay * fall * dt;
+          }
+        }
+      }
+
+      function advect(dt) {
+        const dec = Math.exp(-DAMP * dt);
+        for (let j = 0; j < GH; j++) {
+          for (let i = 0; i < GW; i++) {
+            const n = j * GW + i;
+            /* velocities are stored in px/s; back-trace in cells */
+            const sx = i - (u[n] / CELL) * dt, sy = j - (v[n] / CELL) * dt;
+            u2[n] = sample(u, sx, sy) * dec;
+            v2[n] = sample(v, sx, sy) * dec;
+          }
+        }
+        u.set(u2); v.set(v2);
+        /* the walls are walls: no flow through them */
+        for (let j = 0; j < GH; j++) { u[j * GW] = 0; u[j * GW + GW - 1] = 0; }
+        for (let i = 0; i < GW; i++) { v[i] = 0; v[(GH - 1) * GW + i] = 0; }
+      }
+
+      function airAt(x, y) { return [sample(u, gx(x), gy(y)), sample(v, gx(x), gy(y))]; }
+
+      function onShelf(x, y) { return x > shelf.x0 && x < shelf.x1 && y > shelf.y - 12 && y < shelf.y + 16; }
+
+      function lose(kind) {
+        if (done !== 'pending' || !env.armed()) return;
+        done = 'lost'; why = kind; outSfx(); flash = 0.5; shake = 8;
+        for (let i = 0; i < 18; i++) {
+          const a = R() * TAU, s = 20 + R() * 60;
+          sparks.push({ x: ember.x, y: ember.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 30, life: 0.6 });
+        }
+      }
+
+      return {
+        step(dt, inp) {
+          t += dt;
+          flash = Math.max(0, flash - dt * 2.4);
+          shake = Math.max(0, shake - dt * 26);
+
+          /* ---- the hand ---- */
+          if (done === 'pending') {
+            if (inp.down) {
+              if (!hadPointer) { px = inp.x; py = inp.y; hadPointer = true; everDragged = true; }
+              const hvx = (inp.x - px) / Math.max(dt, 1e-4), hvy = (inp.y - py) / Math.max(dt, 1e-4);
+              handSpeed = Math.hypot(hvx, hvy);
+              splat(inp.x, inp.y, hvx, hvy, dt);
+              px = inp.x; py = inp.y;
+              breathAcc += dt;
+              if (breathAcc > 0.14 && handSpeed > 200) { breathAcc = 0; windSfx(handSpeed); }
+            } else { hadPointer = false; handSpeed *= Math.exp(-6 * dt); }
+          }
+
+          advect(dt);
+
+          /* ---- the ember. The air owns you; buoyancy is the only thing you own. ---- */
+          if (done === 'pending') {
+            const a = airAt(ember.x, ember.y);
+            airHere = Math.hypot(a[0], a[1]);
+            const buoyA = (GRAVITY - BUOY * clamp(ember.heat, 0, MAXHEAT)) * CELL;   // px/s^2, +down
+            ember.vx += (a[0] - ember.vx) * Math.min(1, DRAGC * dt);
+            ember.vy += (a[1] - ember.vy) * Math.min(1, DRAGC * dt) + buoyA * dt;
+            if (ember.vy > MAXSINK * CELL) ember.vy = MAXSINK * CELL;
+            const sp = Math.hypot(ember.vx, ember.vy), cap = MAXSPEED * CELL;
+            if (sp > cap) { ember.vx *= cap / sp; ember.vy *= cap / sp; }
+            const nx = ember.x + ember.vx * dt, ny = ember.y + ember.vy * dt;
+            const rad = ERAD * CELL;
+            ember.x = nx; ember.y = ny;
+            if (ember.x < L + rad) { ember.x = L + rad; ember.vx = -ember.vx * BOUNCE; }
+            if (ember.x > RGT - rad) { ember.x = RGT - rad; ember.vx = -ember.vx * BOUNCE; }
+            if (ember.y < TOP + rad) { ember.y = TOP + rad; ember.vy = -ember.vy * BOUNCE; }
+            if (ember.y > BOT - rad) { ember.y = BOT - rad; ember.vy = -ember.vy * BOUNCE; }
+            /* the ledge is solid from above and below */
+            if (onShelf(ember.x, ember.y)) {
+              if (ember.vy > 0) { ember.y = shelf.y - 12 - 0.1; ember.vy = -ember.vy * BOUNCE; }
+              else { ember.y = shelf.y + 16 + 0.1; ember.vy = -ember.vy * BOUNCE; }
+            }
+
+            /* ---- heat. Drifting with the air is free; stirring it is not. ---- */
+            const airCells = airHere / CELL;
+            const cool = BASECOOL + FLOORCOOL + WINDCOOL * Math.max(0, airCells - WINDFLOOR);
+            ember.heat -= cool * dt;
+            if (ember.heat <= OUTAT) { ember.heat = 0; lose('out'); }
+
+            /* ---- the wick ---- */
+            if (done === 'pending' && Math.hypot(ember.x - wick.x, ember.y - wick.y) < rad + 16) {
+              done = 'won'; wick.lit = 1; litSfx(); flash = 0.34;
+              for (let i = 0; i < 26; i++) {
+                const ang = R() * TAU, s = 30 + R() * 90;
+                sparks.push({ x: wick.x, y: wick.y, vx: Math.cos(ang) * s, vy: Math.sin(ang) * s - 60, life: 0.8 });
+              }
+            }
+          } else if (done === 'won') {
+            wick.lit = Math.min(1, wick.lit + dt * 3);
+          }
+
+          /* ---- dust: the air made visible. Without it "move the air" is a rumour. ---- */
+          for (let i = 0; i < dust.length; i++) {
+            const p = dust[i];
+            const a = airAt(p.x, p.y);
+            p.x += a[0] * dt; p.y += (a[1] + 6) * dt;
+            if (p.x < L) p.x = RGT - 1; else if (p.x > RGT) p.x = L + 1;
+            if (p.y < TOP) p.y = BOT - 1; else if (p.y > BOT) p.y = TOP + 1;
+          }
+          for (let i = sparks.length - 1; i >= 0; i--) {
+            const s = sparks[i];
+            s.life -= dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 120 * dt;
+            if (s.life <= 0) sparks.splice(i, 1);
+          }
+        },
+
+        render(g) {
+          const hx = Math.sin(t * 431.7) * 43758.5453, hy = Math.sin(t * 787.1) * 43758.5453;
+          g.save();
+          if (shake > 0.3) g.translate(((hx - Math.floor(hx)) - 0.5) * shake, ((hy - Math.floor(hy)) - 0.5) * shake);
+
+          g.fillStyle = '#07060a'; g.fillRect(-30, -30, W + 60, H + 60);
+          /* the room: cut stone, lit only by you */
+          g.fillStyle = '#100d13';
+          g.fillRect(L - 8, TOP - 8, RGT - L + 16, BOT - TOP + 16);
+          g.fillStyle = '#0a080d';
+          for (let j = 0; j < 12; j++) {
+            for (let i = 0; i < 5; i++) {
+              const bw = (RGT - L) / 5, bh = (BOT - TOP) / 12;
+              g.fillRect(L + i * bw + ((j % 2) ? bw * 0.5 : 0) + 1.5, TOP + j * bh + 1.5, bw - 3, bh - 3);
+            }
+          }
+
+          /* the warm pool the ember throws */
+          const heat = clamp(ember.heat, 0, MAXHEAT);
+          const lightR = 60 + heat * 190;
+          const pool = g.createRadialGradient(ember.x, ember.y, 2, ember.x, ember.y, lightR);
+          pool.addColorStop(0, 'rgba(255,196,110,' + (0.34 * Math.min(1, heat + 0.15)).toFixed(3) + ')');
+          pool.addColorStop(0.4, 'rgba(255,120,50,' + (0.13 * heat).toFixed(3) + ')');
+          pool.addColorStop(1, 'rgba(255,90,40,0)');
+          g.save(); g.globalCompositeOperation = 'lighter';
+          g.fillStyle = pool; g.beginPath(); g.arc(ember.x, ember.y, lightR, 0, TAU); g.fill();
+          g.restore();
+
+          /* the ledge */
+          g.fillStyle = '#1a161f';
+          g.fillRect(shelf.x0, shelf.y - 12, shelf.x1 - shelf.x0, 28);
+          g.fillStyle = '#241f2b';
+          g.fillRect(shelf.x0, shelf.y - 12, shelf.x1 - shelf.x0, 5);
+
+          /* ---- the dust, which IS the air ----
+             Moving air is bright and long; still air is a dim speck you can just about find.
+             460 strokes a frame would be 460 stroke() calls, so they are bucketed into three
+             paths by how fast the air under them is and stroked three times. */
+          g.save(); g.globalCompositeOperation = 'lighter';
+          const BUCK = [[0.20, 1.3], [0.46, 2.1], [0.92, 3.2]];
+          const paths = [[], [], []];
+          for (let i = 0; i < dust.length; i++) {
+            const p = dust[i];
+            const a = airAt(p.x, p.y);
+            const sp = Math.hypot(a[0], a[1]);
+            const lit = clamp(sp / 260, 0, 1);
+            const d = Math.hypot(p.x - ember.x, p.y - ember.y);
+            const near = clamp(1 - d / (lightR * 1.4), 0, 1);
+            /* Still dust inside your own light pool is ALWAYS visible: the room has to look
+               full of air before you can be told that moving it is the only thing you do. */
+            const vis = (0.30 + lit * 0.70) * (0.15 + near * 0.85) * p.a;
+            if (vis < 0.06) continue;
+            const bi = vis > 0.52 ? 2 : vis > 0.24 ? 1 : 0;
+            const tl = clamp(sp * 0.085, 2.2, 40);
+            const inv = 1 / (sp || 1);
+            paths[bi].push(p.x, p.y, p.x - a[0] * inv * tl, p.y - a[1] * inv * tl);
+          }
+          g.lineCap = 'round';
+          for (let bi = 0; bi < 3; bi++) {
+            const arr = paths[bi];
+            if (!arr.length) continue;
+            g.strokeStyle = 'rgba(255,216,168,' + BUCK[bi][0] + ')';
+            g.lineWidth = BUCK[bi][1];
+            g.beginPath();
+            for (let q = 0; q < arr.length; q += 4) { g.moveTo(arr[q], arr[q + 1]); g.lineTo(arr[q + 2], arr[q + 3]); }
+            g.stroke();
+          }
+          g.restore();
+
+          /* ---- the candle ---- */
+          g.fillStyle = '#e8dcc0';
+          g.fillRect(wick.x - 11, wick.y + 6, 22, 62);
+          g.fillStyle = '#fff5da';
+          g.fillRect(wick.x - 11, wick.y + 6, 6, 62);
+          g.fillStyle = '#cbbd9c';
+          g.beginPath(); g.ellipse(wick.x, wick.y + 8, 11, 4.4, 0, 0, TAU); g.fill();
+          g.strokeStyle = '#1d1712'; g.lineWidth = 3; g.lineCap = 'round';
+          g.beginPath(); g.moveTo(wick.x, wick.y + 7); g.lineTo(wick.x + 1, wick.y - 4); g.stroke();
+          if (wick.lit <= 0) {
+            /* the target has to look like a target: a cool ring that breathes */
+            const p8 = 0.5 + 0.5 * Math.sin(t * 4.2);
+            g.strokeStyle = 'rgba(150,196,255,' + (0.22 + p8 * 0.30).toFixed(3) + ')';
+            g.lineWidth = 2;
+            g.beginPath(); g.arc(wick.x, wick.y - 1, 17 + p8 * 4, 0, TAU); g.stroke();
+          } else {
+            g.save(); g.globalCompositeOperation = 'lighter';
+            const fl = g.createRadialGradient(wick.x, wick.y - 12, 2, wick.x, wick.y - 12, 130 * wick.lit);
+            fl.addColorStop(0, 'rgba(255,236,170,0.85)');
+            fl.addColorStop(0.35, 'rgba(255,150,60,0.30)');
+            fl.addColorStop(1, 'rgba(255,120,40,0)');
+            g.fillStyle = fl; g.beginPath(); g.arc(wick.x, wick.y - 12, 130 * wick.lit, 0, TAU); g.fill();
+            g.restore();
+            g.fillStyle = '#ffedb4';
+            g.beginPath();
+            g.moveTo(wick.x, wick.y - 30 * wick.lit);
+            g.quadraticCurveTo(wick.x + 9, wick.y - 8, wick.x, wick.y - 2);
+            g.quadraticCurveTo(wick.x - 9, wick.y - 8, wick.x, wick.y - 30 * wick.lit);
+            g.fill();
+          }
+
+          /* ---- you ---- */
+          if (done !== 'lost') {
+            g.save(); g.globalCompositeOperation = 'lighter';
+            const cr = 3 + heat * 5.5;
+            const core = g.createRadialGradient(ember.x, ember.y, 0, ember.x, ember.y, cr * 3.4);
+            const hot = clamp(heat / 1.0, 0, 1);
+            core.addColorStop(0, 'rgba(255,' + Math.round(210 + 45 * hot) + ',' + Math.round(150 + 80 * hot) + ',1)');
+            core.addColorStop(0.28, 'rgba(255,' + Math.round(130 + 70 * hot) + ',60,0.85)');
+            core.addColorStop(1, 'rgba(255,90,30,0)');
+            g.fillStyle = core;
+            g.beginPath(); g.arc(ember.x, ember.y, cr * 3.4, 0, TAU); g.fill();
+            g.restore();
+            /* the heat ring: how much of you is left, on you, not in a corner */
+            g.strokeStyle = 'rgba(255,168,90,0.30)'; g.lineWidth = 2.6;
+            g.beginPath(); g.arc(ember.x, ember.y, 21, 0, TAU); g.stroke();
+            g.strokeStyle = heat < 0.34 ? '#ff5d5d' : '#ffd08a'; g.lineWidth = 2.6; g.lineCap = 'round';
+            g.beginPath(); g.arc(ember.x, ember.y, 21, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(heat, 0, 1)); g.stroke();
+          }
+
+          for (let i = 0; i < sparks.length; i++) {
+            const s = sparks[i], a = clamp(s.life / 0.8, 0, 1);
+            g.globalAlpha = a; g.fillStyle = '#ffcf78';
+            g.fillRect(s.x - 1.4, s.y - 1.4, 2.8, 2.8);
+          }
+          g.globalAlpha = 1;
+
+          /* first-1.5s mark: a swipe under the ember, because "you move the air" is not a
+             thing anybody has ever been asked to do before */
+          if (t < 1.6 && !everDragged && done === 'pending') {
+            const k = (t * 0.9) % 1;
+            const dirx = wick.x > ember.x ? 1 : -1;
+            const sx = ember.x - dirx * 58, sy = ember.y + 46;
+            g.globalAlpha = 0.30 + 0.42 * Math.sin(Math.min(1, k / 0.85) * Math.PI);
+            g.strokeStyle = env.ink; g.lineWidth = 3; g.lineCap = 'round';
+            g.beginPath();
+            g.moveTo(sx, sy); g.lineTo(sx + dirx * 116 * Math.min(1, k / 0.85), sy);
+            g.stroke();
+            const tipx = sx + dirx * 116 * Math.min(1, k / 0.85);
+            g.beginPath();
+            g.moveTo(tipx - dirx * 10, sy - 8); g.lineTo(tipx, sy); g.lineTo(tipx - dirx * 10, sy + 8);
+            g.stroke();
+            g.globalAlpha = 1;
+          }
+          g.restore();
+
+          if (flash > 0.01) {
+            g.globalAlpha = Math.min(0.5, flash * 0.5);
+            g.fillStyle = done === 'lost' ? '#20161c' : '#ffe0a0';
+            g.fillRect(0, 0, W, H);
+            g.globalAlpha = 1;
+          }
+        },
+
+        result: () => done,
+        timeout() { if (done === 'pending') { done = 'lost'; why = 'short'; } return done; },
+        line: () => why === 'out' ? 'YOU FANNED YOURSELF OUT' : 'THE WICK IS STILL COLD',
+        hint() {
+          if (done !== 'pending') return { type: 'wait', ms: 200 };
+          /* Two phases, because the ledge is real: get ABOVE it first, cross second.
+             Stroking straight at the candle just presses you into the underside of a shelf. */
+          let tx = wick.x, ty = wick.y;
+          const blocked = ember.y > shelf.y - 34
+            && ((wick.x > ember.x) ? (wick.x - ember.x) > 8 : (ember.x - wick.x) > 8);
+          if (blocked) { tx = ember.x; ty = shelf.y - 96; }
+          const dx = tx - ember.x, dy = ty - ember.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const ux = dx / d, uy = dy / d;
+          /* one committed stroke THROUGH the ember toward where it needs to be next */
+          return {
+            type: 'drag',
+            x: clamp(ember.x - ux * 78, 22, W - 22), y: clamp(ember.y - uy * 78, TOP + 20, 730),
+            x2: clamp(ember.x + ux * 44, 22, W - 22), y2: clamp(ember.y + uy * 44, TOP + 20, 730),
+            ms: 140,
+          };
+        },
+      };
+    },
+  });
+})();
+
+/* DONE-CRITERIA
+   - The ember is the donor's: drag 7.6, buoy 300, gravity 258 (neutral at heat 0.86),
+     maxSink 145, maxSpeed 230, radius 1.7 cells, bounce 0.34, baseCool 0.062 + floorCool
+     0.0085, windFloor 45, outAt 0.060. One cell is 10 px, and the room is 37 x 61 cells.
+   - The hand is the donor's: pointerForce 13 multiplying hand velocity in cells/s into
+     acceleration, over a 33 px radius, clamped at pointerMaxSpeed 430 cells/s.
+   - TWO RETUNES, both declared in the code and both about the wind term only. windCool goes
+     from 0.00110 to 0.009/0.012/0.015 by difficulty (the donor's number buys a 33-second
+     candle, and nothing can be blown out inside four seconds at that rate), and windFloor
+     drops from 45 cells/s to 24, because 45 was set against a room three and a half times
+     wider than this one and no hand can reach it here. Every other number is the donor's.
+   - Measured, not asserted: playing it right lands the ember on the wick with 0.35-0.62 heat
+     left by difficulty; never stopping stroking lands it with 0.25-0.52. The bar on the ember
+     is therefore load-bearing chrome, not decoration.
+   - The air is drawn. 130 motes are advected by the velocity field and lit by their own
+     speed, because a game whose only verb is "move the air" cannot leave the air invisible.
+   - Reaching the wick lights it and wins on that frame. heat <= 0.060 loses ('YOU FANNED
+     YOURSELF OUT'). Running out of slot loses ('THE WICK IS STILL COLD').
+   SIMPLIFICATIONS (declared, not hidden):
+   - No pressure projection. The donor runs 26 Jacobi iterations on the GPU; this runs a
+     semi-Lagrangian advection with a 1.45/s velocity decay instead, so the room forgets a
+     stroke in about a second rather than conserving it. Vortices are shorter-lived here.
+   - No combustion field, no fuel, no humidity, no smoke chemistry: one candle, one spark.
+   BUG-IS-GAME (do not fix):
+   - Panicked back-and-forth strokes CANCEL: the second one advects the first one away and
+     the field at the ember reads lower than it does under one committed push. Flailing does
+     not blow you out so much as leave you exactly where you were, with less heat. That is a
+     better joke than the one I went looking for and it fell out of the donor's own physics.
+   - A hot ember floats and a dying one sinks. Neutral buoyancy is heat 0.86 and you start at
+     1.00, so roughly two seconds in, the room stops helping and starts charging you. The
+     clock is in the physics, not on a bar; the bar just reports it.
+   - The wind term is sampled AT THE EMBER, so stirring the far corner of the room is free and
+     completely useless. Both of those are correct.
+*/
 
 Shell.boot();
 </script>
