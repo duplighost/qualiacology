@@ -135,11 +135,6 @@
 /lead.html  /lead/  301!
 /rope       /lead/  302
 
-# --- STARLING ---
-/starling.html  /starling/  301!
-/murmuration    /starling/  302
-/flock          /starling/  302
-
 # --- BOON MOOTS ---
 # /boon-moots used to be a joke alias for Rocket Shoes. There is now an actual
 # game called BOON MOOTS, so the slug takes its own name back. /moon-boots is
@@ -161,12 +156,6 @@
 /spaceboarding.html /spaceboarding/  301!
 /board              /spaceboarding/  302
 /drop-in            /spaceboarding/  302
-
-# --- STAY ---
-/stay.html   /stay/  301!
-/hold        /stay/  302
-/orbit       /stay/  302
-/last-call   /stay/  302
 
 # --- RAIN ANIMAL ---
 /rain-animal.html  /rain-animal/  301!

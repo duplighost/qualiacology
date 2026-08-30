@@ -42,10 +42,11 @@ and skim it once before your first big change to this repo.
 - **Canvas 2D: a path with thousands of subpaths falls off a cliff.**
   Batching many small shapes into one path and filling once is the usual
   advice and it is wrong past ~1000 subpaths — the rasteriser goes
-  superlinear. In STARLING, 3,000 birds cost 45ms as one fill, 15ms in
-  chunks of 1000, 2.2ms in chunks of 100 — identical geometry, and spreading
-  the birds out doesn't change it. Fill in small batches. A sprite atlas with
-  one `drawImage` per bird measured slower than plain batching.
+  superlinear. In STARLING (since retired), 3,000 birds cost 45ms as one
+  fill, 15ms in chunks of 1000, 2.2ms in chunks of 100 — identical geometry,
+  and spreading the birds out doesn't change it. Fill in small batches. A
+  sprite atlas with one `drawImage` per bird measured slower than plain
+  batching.
 
 ## CSS traps
 

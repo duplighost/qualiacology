@@ -56,6 +56,8 @@ const retiredRoutes = [
     "goodnight-little-gods",
     "potlight",
     "relay-eclipse",
+    "starling",
+    "stay",
     "sundog",
     "the-dead-keep-playing",
     "the-lag",
@@ -69,6 +71,16 @@ const retiredRoutes = [
   // short links (/ninefold, /burn, /nine-worlds) are NOT here: they now point
   // at SPACEBOARDING, which replaced it.
   "/ninefold-burn.html",
+  // STARLING and STAY came off the shelf 2026-08-30 with nothing replacing
+  // them, so their legacy .html and every vanity short link they owned were
+  // deleted rather than repointed, and are asserted gone here.
+  "/starling.html",
+  "/murmuration",
+  "/flock",
+  "/stay.html",
+  "/hold",
+  "/orbit",
+  "/last-call",
 ];
 const results = [];
 const failures = [];

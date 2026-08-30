@@ -113,19 +113,6 @@
       "actionLabel": "Stand on it"
     },
     {
-      "slug": "starling",
-      "title": "STARLING",
-      "descriptor": "One-bird murmuration",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/starling-card-clean.webp",
-      "alt": "Thousands of starlings against a dusk sky over bare winter trees, a pale wave of alarm rolling out through the dark flock from one warm-lit bird, a falcon holding above them",
-      "summary": "You are one bird in three thousand. You cannot tell the flock anything — you can only turn, and the birds beside you turn a beat later, and theirs a beat after that. The wave of it crosses the whole murmuration faster than any bird can fly. The falcon hunts the calmest part of it, so turning early is the same as not turning at all.",
-      "metaDescription": "STARLING is a browser game about one bird in a murmuration of three thousand. Turn hard and the alarm travels outward faster than any bird can fly. The falcon stoops nine times before dark.",
-      "controls": "Mouse or touch to steer · A D or arrows turn · M mute · R again",
-      "actionLabel": "Fly with them"
-    },
-    {
       "slug": "lead",
       "title": "LEAD",
       "descriptor": "One-rope dog walk",
@@ -360,20 +347,6 @@
       "controls": "A D steer and spin · Space hold to load, release to pop · W S flip · Q E board flip · Shift grab · M mute · P or Esc pause",
       "actionLabel": "Drop in",
       "duration": "A minute or two"
-    },
-    {
-      "slug": "stay",
-      "title": "STAY",
-      "descriptor": "One-button orbit keeper",
-      "group": "worlds",
-      "featured": false,
-      "image": "/assets/games/stay-card-clean.webp",
-      "alt": "A warm orange light at the centre of a dark screen with small coloured guests curving around it on glowing trails, inside a dashed circle marked as the door",
-      "summary": "Hold to pull. Let go to let them go. Everyone who shows up is already leaving, and the only way to keep one is to catch them on the way out — hold too long and you pull them apart instead. One night, from nine until whenever the room empties.",
-      "metaDescription": "STAY is a one-button browser game about holding people in orbit for one night. Hold to pull them closer, let go to let them settle. Hold too tight and they come apart.",
-      "controls": "Hold anywhere · or hold Space · that is the whole game",
-      "actionLabel": "Hold on",
-      "duration": "A few minutes"
     },
     {
       "slug": "rain-animal",
