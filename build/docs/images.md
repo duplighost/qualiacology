@@ -30,6 +30,37 @@ python build/qa/catalog-art.py audit     # perceptual check; REQUIRED after ANY 
   nowhere else. The audit compares each tier against its master and is the
   ONLY gate that looks at pixels — build, validator, route smoke, and
   `npm run qa` all pass happily while a card shows another game's art.
+- **Renaming a master orphans the OG tags on that game's own page.**
+  `site-data.json` drives the hubs, but each game folder's `index.html` is a
+  hand-edited static page carrying its own absolute `og:image` /
+  `twitter:image` pointing at a file in `assets/`. A rename updates
+  site-data and leaves those behind, and nothing catches it: build,
+  validator, route smoke and the art audit all pass while every link
+  preview 404s. That is exactly how FETCH lost its thumbnail — commit
+  `2651319` renamed its master and `fetch/index.html` plus
+  `fetch/ending/index.html` kept pointing at the old hash for weeks. After
+  ANY rename, grep the old filename across `**/index.html`, and sweep the
+  whole site with:
+
+  ```sh
+  # every og/twitter image URL on the site, with its live status code
+  grep -rho 'content="https://qualiacology.com/[^"]*"' --include=index.html . |
+    grep -iE '\.(webp|jpg|jpeg|png|gif)"' | tr -d '"' | sed 's/content=//' |
+    sort -u |
+    while read -r u; do
+      printf '%s  %s\n' "$(curl -sI -o /dev/null -w '%{http_code}' "$u")" "$u"
+    done | sort
+  ```
+
+- **OG images are jpg/png at 1200x630 in `assets/og/`, never webp.** iMessage,
+  Facebook, LinkedIn and Slack do not render a WebP `og:image` — the link
+  arrives with no thumbnail at all. A game page may point OG at its 16:9
+  card master only if that master is a jpg; otherwise give it a
+  `assets/og/<slug>-og-v<N>.jpg` cut and set `og:image:width|height` to
+  match. Cropping 1280x720 to 1200x630 drops 48 rows — check what is at the
+  top and bottom before centring the crop (FETCH's moon sits in the top 40px,
+  so its cut comes entirely off the bottom).
+
 - **`catalog-art.py build` re-encodes every tier on the site** (~120 dirty
   files even for one slug). Run it, then `git checkout --` the catalog paths
   you did not mean to change, THEN rebuild the hubs — the `?v=` hashes are
