@@ -1078,7 +1078,7 @@ export class DuelGame {
     if (move.length < .01) return new THREE.Vector3();
     const forward = _v1.set(0,0,-1).applyQuaternion(this.camera.quaternion);
     forward.y = 0; forward.normalize();
-    const right = _v2.crossVectors(forward, _up).normalize().multiplyScalar(-1);
+    const right = _v2.crossVectors(forward, _up).normalize();
     return new THREE.Vector3().addScaledVector(forward, move.y).addScaledVector(right, move.x).normalize();
   }
 

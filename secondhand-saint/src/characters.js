@@ -1274,29 +1274,6 @@ function makeSkirtGeometry({
   return geometry;
 }
 
-function makeTailoredCuirassFaceGeometry(width, height, depth) {
-  const shape = new THREE.Shape();
-  shape.moveTo(0, height * .5);
-  shape.bezierCurveTo(-width * .16, height * .53, -width * .44, height * .42, -width * .49, height * .2);
-  shape.bezierCurveTo(-width * .53, -height * .05, -width * .42, -height * .34, -width * .3, -height * .47);
-  shape.lineTo(0, -height * .53);
-  shape.lineTo(width * .3, -height * .47);
-  shape.bezierCurveTo(width * .42, -height * .34, width * .53, -height * .05, width * .49, height * .2);
-  shape.bezierCurveTo(width * .44, height * .42, width * .16, height * .53, 0, height * .5);
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth,
-    steps: 1,
-    curveSegments: 18,
-    bevelEnabled: true,
-    bevelSegments: 3,
-    bevelSize: depth * .42,
-    bevelThickness: depth * .38,
-  });
-  geometry.translate(0, 0, -depth * .5);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
 // Nera's authored shell has pearl armour across the shoulder blades, but the
 // hair and cape cover it, so from behind she has no shoulder line at all and
 // reads as a pointed column. This adds the one shape the character has always
@@ -1328,42 +1305,6 @@ function buildAuthoredShoulderYoke(ctx, bones, surfaces) {
 
   const yoke = new THREE.Group();
   yoke.name = 'high pearl gorget assembly';
-
-  // A single close-fitted shell carries the gorget all the way down over the
-  // authored torso. It follows the same silhouette instead of changing Nera's
-  // form, but replaces the broken-up bare/front read with one continuous suit.
-  const highCuirass = makeOrganicGeometry([
-    [shoulderHalf * .08, shoulderHalf * .96, shoulderHalf * .76, 0, shoulderHalf * .26],
-    [-shoulderHalf * .34, shoulderHalf * 1.43, shoulderHalf * 1.08, 0, shoulderHalf * .25],
-    [-shoulderHalf * 1.06, shoulderHalf * 1.48, shoulderHalf * 1.18, 0, shoulderHalf * .22],
-    [-shoulderHalf * 1.78, shoulderHalf * 1.30, shoulderHalf * .96, 0, shoulderHalf * .14],
-    [-shoulderHalf * 2.5, shoulderHalf * .98, shoulderHalf * .78, 0, shoulderHalf * .08],
-  ], 32);
-  ctx.mesh(yoke, highCuirass, ivory, {
-    name: 'continuous high pearl duelist cuirass',
-    position: [0, -shoulderHalf * .1, 0],
-    receiveShadow: true,
-  });
-  const breastplate = makeTailoredCuirassFaceGeometry(
-    shoulderHalf * .98,
-    shoulderHalf * 2.16,
-    shoulderHalf * .09,
-  );
-  for (const side of [-1, 1]) {
-    ctx.mesh(yoke, breastplate, ivory, {
-      name: `${side < 0 ? 'left' : 'right'} sculpted pearl high breastplate face`,
-      position: [side * shoulderHalf * .41, -shoulderHalf * 1.21, shoulderHalf * 1.08],
-      rotation: [0, side * .16, side * -.018],
-      receiveShadow: true,
-    });
-  }
-  const sternum = new THREE.BoxGeometry(shoulderHalf * .115, shoulderHalf * 1.78, shoulderHalf * .07, 1, 5, 1);
-  ctx.mesh(yoke, sternum, gold, {
-    name: 'high cuirass sternum blade',
-    position: [0, -shoulderHalf * 1.04, shoulderHalf * 1.2],
-    rotation: [0, 0, Math.PI * .01],
-    receiveShadow: true,
-  });
 
   // The collar hugs the neck. A wide flare here reads as a flat shelf across
   // the chest from the front rather than as armour, so it stays close.
@@ -1519,62 +1460,6 @@ function buildAuthoredHair(ctx, bones, surface) {
   });
   hair.frustumCulled = false;
   return hair;
-}
-
-// The imported face has survived enough speculative surgery. This suit-matched
-// helmet solves the read at the silhouette level: pearl side shells, a smoked
-// cyan face shield, and a deliberate rear port where the authored crimson hair
-// remains the loudest shape. It is head-local and therefore inherits every
-// existing animation without touching the retarget or the frozen GLB.
-function buildAuthoredHelmet(ctx, bones, surfaces) {
-  const head = bones.get('head');
-  if (!head) return null;
-  const helmet = new THREE.Group();
-  helmet.name = 'Nera open-back saintfall helmet';
-  helmet.position.set(0, .03, .027);
-
-  const shellOptions = [
-    { start: 2.34, length: 2.06, side: 'left' },
-    { start: 5.02, length: 2.05, side: 'right' },
-  ];
-  shellOptions.forEach(({ start, length, side }) => {
-    const geometry = new THREE.SphereGeometry(1, 28, 16, start, length, .08, 2.72);
-    ctx.mesh(helmet, geometry, surfaces.ivory, {
-      name: `${side} pearl helmet shell`,
-      scale: [.113, .156, .142],
-      receiveShadow: true,
-    });
-  });
-
-  const visorGeometry = new THREE.SphereGeometry(1, 30, 16, .76, 1.62, .56, 1.9);
-  ctx.mesh(helmet, visorGeometry, surfaces.visor, {
-    name: 'smoked cyan saintfall visor',
-    position: [0, -.004, .009],
-    scale: [.108, .15, .148],
-    castShadow: false,
-    receiveShadow: true,
-  });
-
-  const brow = new THREE.BoxGeometry(.16, .016, .024, 5, 1, 1);
-  ctx.mesh(helmet, brow, surfaces.gold, {
-    name: 'helmet visor brow',
-    position: [0, .066, .139],
-    rotation: [-.12, 0, 0],
-    receiveShadow: true,
-  });
-  for (const side of [-1, 1]) {
-    const temple = new THREE.BoxGeometry(.023, .118, .035, 1, 4, 1);
-    ctx.mesh(helmet, temple, surfaces.gold, {
-      name: `${side < 0 ? 'left' : 'right'} helmet temple rail`,
-      position: [side * .102, -.012, .088],
-      rotation: [.08, side * -.16, side * -.08],
-      receiveShadow: true,
-    });
-  }
-
-  head.add(helmet);
-  helmet.traverse((object) => { object.frustumCulled = false; });
-  return helmet;
 }
 
 function normalizeAuthoredPlayerMaterials(root) {
@@ -2183,17 +2068,10 @@ function createPlayerVisualBridge(authoredShell, {
             map: makeHairStriationTexture(),
             side: THREE.DoubleSide,
           }),
-          visor: new THREE.MeshPhysicalMaterial({
-            name: 'neraSaintfallVisor', color: 0x07141d, roughness: 0.12, metalness: 0.46,
-            transmission: 0.08, transparent: true, opacity: 0.86, depthWrite: true,
-            envMapIntensity: 1.5, emissive: new THREE.Color(0x0b5160), emissiveIntensity: 0.34,
-            side: THREE.DoubleSide,
-          }),
         };
         buildAuthoredShoulderYoke(ctx, bones, surfaces);
         buildAuthoredWaistArmour(ctx, bones, surfaces);
         buildAuthoredHair(ctx, bones, surfaces.hair);
-        buildAuthoredHelmet(ctx, bones, surfaces);
       }
       mode = 'authored';
       updatePose();

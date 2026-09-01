@@ -96,6 +96,17 @@ const homeDuringPlay = await page.evaluate(() => {
   };
 });
 
+await page.keyboard.down("KeyD");
+await page.waitForTimeout(180);
+await page.keyboard.up("KeyD");
+await page.waitForTimeout(80);
+const rightPosition = await page.evaluate(() => window.__DUEL_QA__.snapshot().player.position);
+await page.keyboard.down("KeyA");
+await page.waitForTimeout(280);
+await page.keyboard.up("KeyA");
+await page.waitForTimeout(80);
+const leftPosition = await page.evaluate(() => window.__DUEL_QA__.snapshot().player.position);
+
 // Lock on, close the distance, then keep swinging. Landing a hit depends on
 // range, so one swing from wherever she happens to be is a flaky assertion.
 await page.keyboard.press("KeyQ");
@@ -180,6 +191,10 @@ check(boot.visual?.finitePose === true, "authored pose is finite");
 check(assetUrls.length > 0 && assetUrls.every((url) => new URL(url).pathname.startsWith(`${base.pathname}assets/`)),
   `the character model loads from inside ${base.pathname} (${assetUrls.length} glb request(s))`);
 check(play.mode === "playing", `real START click begins the duel (${play.mode})`);
+check(rightPosition[0] > startPosition[0] + 0.15,
+  `real D moves toward screen-right (${startPosition[0].toFixed(2)} -> ${rightPosition[0].toFixed(2)})`);
+check(leftPosition[0] < rightPosition[0] - 0.15,
+  `real A reverses toward screen-left (${rightPosition[0].toFixed(2)} -> ${leftPosition[0].toFixed(2)})`);
 check(moved > 0.5, `real W moves her (${moved.toFixed(2)} m)`);
 check(play.boss.hp < bossHpBefore, `real attacks land damage (${bossHpBefore} -> ${play.boss.hp})`);
 check(Number.isFinite(playVisual?.gripError) && playVisual.gripError <= 0.8, `greatblade stays in her hand (gripError ${playVisual?.gripError})`);
