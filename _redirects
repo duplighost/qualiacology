@@ -163,3 +163,9 @@
 # --- THE LAST ROOM ---
 /the-last-room.html  /the-last-room/  301!
 /last-room           /the-last-room/  302
+
+# --- SECONDHAND SAINT ---
+/secondhand-saint.html  /secondhand-saint/  301!
+/saint                  /secondhand-saint/  302
+/vespera                /secondhand-saint/  302
+/dial                   /secondhand-saint/  302
