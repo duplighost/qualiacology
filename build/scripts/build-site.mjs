@@ -520,15 +520,6 @@ function psychopharmacologyPage() {
       </div>
     </section>
 
-    <div class="container">
-      <aside class="server-notice" aria-labelledby="notice-title">
-        <p class="eyebrow" id="notice-title">${escapeHtml(psych.notice.eyebrow)}</p>
-        <p class="notice-body">${escapeHtml(psych.notice.body)}</p>
-        <p class="notice-lede">${escapeHtml(psych.notice.lede)}</p>
-        <p class="notice-answer">${escapeHtml(psych.notice.answer)}</p>
-      </aside>
-    </div>
-
     <section class="section" id="community" aria-labelledby="community-title">
       <div class="container">
         <div class="section-heading">
@@ -558,6 +549,15 @@ function psychopharmacologyPage() {
         </div>
       </div>
     </section>
+
+    <div class="container">
+      <aside class="server-notice" aria-labelledby="notice-title">
+        <p class="eyebrow" id="notice-title">${escapeHtml(psych.notice.eyebrow)}</p>
+        <p class="notice-body">${escapeHtml(psych.notice.body)}</p>
+        <p class="notice-lede">${escapeHtml(psych.notice.lede)}</p>
+        <p class="notice-answer">${escapeHtml(psych.notice.answer)}</p>
+      </aside>
+    </div>
   </main>`;
 
   return page({
