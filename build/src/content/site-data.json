@@ -398,6 +398,20 @@
       "duration": "A minute or two"
     },
     {
+      "slug": "arc",
+      "title": "ARC",
+      "descriptor": "Throw-the-road skate game",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/arc-card-clean.webp",
+      "alt": "A skater grinding a streak of amber light hanging over black water at night, its reflection beneath, a small black bird racing back along the line",
+      "summary": "There's no road until you throw one. You carry a swift whose tail is made of light: throw it and the tail hangs in the air as a rail. Ride the rail. It ends in mid-air over black water, so call the swift back — it eats the road on the way — and catching it at speed throws you into the next throw. Three big slow animals in the way, and a dam at the end.",
+      "metaDescription": "ARC is a browser skate game in a drowned valley at night. Throw a swift whose tail hangs in the air as a grind rail, ride it, call it back along its own line, and the catch flings you into the next throw.",
+      "controls": "Hold left mouse to throw, longer for further · skate onto the tail to ride · right mouse to call it back · WASD skate, lean, tuck, drag a foot · Space hop or pop off · M mute · Esc pause",
+      "actionLabel": "Throw one",
+      "duration": "Twenty minutes or so"
+    },
+    {
       "slug": "the-last-room",
       "title": "THE LAST ROOM",
       "descriptor": "An endless house",
