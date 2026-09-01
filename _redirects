@@ -160,3 +160,8 @@
 /saint                  /secondhand-saint/  302
 /vespera                /secondhand-saint/  302
 /dial                   /secondhand-saint/  302
+
+# --- ARC ---
+/arc.html   /arc/  301!
+/throw      /arc/  302
+/swift      /arc/  302
