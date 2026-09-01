@@ -1841,34 +1841,53 @@ body.touch-enabled .touch-pad > span {
   display: none;
 }
 
-/* MOONCRESCENT COUNTER — the one number the HUD may print (Alex's amendment
-   to the no-HUD law, 2026-08-20). A quiet gold crescent and a count. */
+/* COLLECTIBLE BANK — three distinct shapes share one left-side home. Water
+   and Lava add a narrow 2,000-seal meter; the centre movement lane stays bare. */
 #stoneCounter {
   position: absolute;
   left: 24px;
   bottom: 20px;
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 13px;
+  min-height: 34px;
+  padding: 5px 8px 5px 7px;
+  border: 1px solid rgba(190, 221, 239, .12);
+  border-radius: 14px;
+  background: linear-gradient(108deg, rgba(2, 7, 14, .62), rgba(12, 8, 18, .34));
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .26), inset 0 0 16px rgba(93, 171, 204, .04);
   font-family: 'Chakra Petch', 'Segoe UI', monospace;
-  font-size: 27px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: .1em;
-  background: linear-gradient(105deg, #d99114 8%, #ffd66b 28%, #fff7e0 40%, #ffd66b 52%, #d99114 88%);
-  background-size: 260% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  letter-spacing: .06em;
+  color: #fff1bc;
   filter: drop-shadow(0 1px 1px rgba(0, 3, 8, .96)) drop-shadow(0 0 10px rgba(255, 190, 60, .5));
-  animation: stoneShimmer 3.6s linear infinite;
   pointer-events: none;
   transform-origin: left center;
 }
+#stoneCounter[data-planet="water"] {
+  color: #b9ffff;
+  border-color: rgba(105, 239, 255, .2);
+  filter: drop-shadow(0 1px 1px rgba(0, 3, 8, .96)) drop-shadow(0 0 10px rgba(69, 221, 255, .34));
+}
+#stoneCounter[data-planet="lava"] {
+  color: #ffe39a;
+  border-color: rgba(255, 113, 48, .2);
+  filter: drop-shadow(0 1px 1px rgba(0, 3, 8, .96)) drop-shadow(0 0 10px rgba(255, 91, 30, .34));
+}
+.collectible-cell {
+  display: grid;
+  grid-template-columns: 18px auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 43px;
+}
+.collectible-icon { display: block; width: 17px; height: 17px; }
 @keyframes stoneShimmer {
   from { background-position: 130% 0; }
   to { background-position: -130% 0; }
 }
-#stoneCounter.bump { animation: stoneShimmer 3.6s linear infinite, stoneBump .26s cubic-bezier(.2, 1.6, .4, 1); }
+#stoneCounter.bump { animation: stoneBump .26s cubic-bezier(.2, 1.6, .4, 1); }
 @keyframes stoneBump {
   0% { transform: scale(1); }
   40% { transform: scale(1.32); }
@@ -1876,14 +1895,64 @@ body.touch-enabled .touch-pad > span {
 }
 .stone-crescent {
   position: relative;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: radial-gradient(circle at 34% 38%, #fff6d8, #ffb42a 58%, #a86a06);
   -webkit-mask: radial-gradient(circle at 74% 32%, transparent 55%, #000 57%);
   mask: radial-gradient(circle at 74% 32%, transparent 55%, #000 57%);
   filter: drop-shadow(0 1px 1px rgba(0, 3, 8, .96)) drop-shadow(0 0 8px rgba(255, 190, 60, .92));
 }
+.collectible-rare {
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff 0 13%, #ffb8df 36%, #b44eea 68%, #32104e 100%);
+  box-shadow: 0 0 9px rgba(255, 114, 198, .72), inset 0 -2px 4px rgba(29, 2, 45, .7);
+}
+.collectible-route {
+  box-sizing: border-box;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  transform: rotate(-25deg) scaleY(.72);
+  box-shadow: 0 0 8px currentColor, inset 0 0 5px currentColor;
+}
+#stoneCounter[data-planet="lava"] .collectible-rare {
+  border-radius: 2px;
+  transform: rotate(45deg) scale(.82);
+  background: radial-gradient(circle at 32% 27%, #fff, #ffe277 38%, #ff6a19 72%, #401008);
+}
+#planetCollectibleTarget {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  column-gap: 2px;
+  min-width: 58px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(205, 230, 244, .16);
+  font-size: 14px;
+  color: inherit;
+}
+#planetCollectibleTarget small { font-size: 8px; opacity: .58; letter-spacing: 0; }
+.collectible-gate {
+  grid-column: 1 / -1;
+  position: relative;
+  display: block;
+  width: 54px;
+  height: 3px;
+  margin-top: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(117, 146, 171, .24);
+}
+#planetCollectibleGateFill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  box-shadow: 0 0 7px currentColor;
+  transition: width .18s ease-out;
+}
+#stoneCounter[data-planet="moon"] #planetCollectibleTarget { display: none; }
 #stoneCounter.milestone .stone-crescent::after {
   content: "";
   position: absolute;
@@ -1897,7 +1966,7 @@ body.touch-enabled .touch-pad > span {
   to { transform: scale(2.1); opacity: 0; }
 }
 
-/* BOSS TROPHY SOCKETS — six glass dots above the crescent counter, each
+/* BOSS TROPHY SOCKETS — seven glass dots above the crescent counter, each
    lighting in its core's own colour when that boss falls. */
 #coreCounter {
   position: absolute;
@@ -1930,13 +1999,13 @@ body.touch-enabled .touch-pad > span {
   100% { transform: scale(1); }
 }
 
-/* THREE WORLD CROWNS — three distinct rows at bottom centre. Shape, order,
+/* THREE WORLD CROWNS — three distinct rows on the right edge. Shape, order,
    luminance and colour all repeat the progression state. */
 #planetBossCounter {
   position: absolute;
-  left: 50%;
-  bottom: 17px;
-  transform: translateX(-50%);
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
   display: grid;
   grid-template-rows: repeat(3, 13px);
   gap: 5px;
@@ -1952,7 +2021,7 @@ body.touch-enabled .touch-pad > span {
 .planet-boss-row {
   --world-tint: #ffd66b;
   display: grid;
-  grid-template-columns: 13px repeat(3, 9px) 11px 12px;
+  grid-template-columns: 13px repeat(5, 9px) 11px 12px;
   align-items: center;
   gap: 6px;
   height: 13px;
@@ -2001,6 +2070,13 @@ body.touch-enabled .touch-pad > span {
 .planet-boss-socket[data-slot="regional-0"] { border-radius: 50%; }
 .planet-boss-socket[data-slot="regional-1"] { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .planet-boss-socket[data-slot="regional-2"] { transform: rotate(45deg); border-radius: 1px; }
+.planet-boss-socket[data-slot="regional-3"] {
+  border-radius: 50% 50% 2px 2px;
+  clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+}
+.planet-boss-socket[data-slot="regional-4"] {
+  clip-path: polygon(50% 0, 63% 35%, 100% 50%, 63% 65%, 50% 100%, 37% 65%, 0 50%, 37% 35%);
+}
 .planet-boss-socket[data-slot="final"] {
   width: 11px;
   height: 11px;
@@ -2019,7 +2095,97 @@ body.touch-enabled .touch-pad > span {
 .planet-boss-socket.flash { animation: coreFlash .8s cubic-bezier(.2, 1.6, .4, 1); }
 
 @media (max-width: 680px) {
-  #planetBossCounter { bottom: 68px; transform: translateX(-50%) scale(.88); }
+  #planetBossCounter { right: 10px; top: 88px; transform: scale(.82); transform-origin: top right; }
+  #stoneCounter { left: 12px; bottom: 72px; transform: scale(.88); transform-origin: left bottom; }
+}
+
+@media (orientation: portrait) and (max-width: 680px) {
+  /* Portrait keeps the entire lower movement/aiming lane free. The economy is
+     a slim vertical instrument at the far-left shoulder, above touch travel. */
+  #stoneCounter {
+    top: calc(max(10px, env(safe-area-inset-top)) + 72px);
+    bottom: auto;
+    left: max(10px, env(safe-area-inset-left));
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    width: 72px;
+    min-height: 0;
+    padding: 7px 6px;
+    transform: scale(.88);
+    transform-origin: left top;
+  }
+  #stoneCounter .collectible-cell {
+    grid-template-columns: 15px 1fr;
+    gap: 5px;
+    min-width: 0;
+    width: 100%;
+    font-size: 14px;
+  }
+  #stoneCounter .collectible-icon { width: 14px; height: 14px; }
+  #stoneCounter .stone-crescent { width: 15px; height: 15px; }
+  #planetCollectibleTarget {
+    min-width: 0;
+    width: 100%;
+    padding: 5px 0 0;
+    border-left: 0;
+    border-top: 1px solid rgba(205, 230, 244, .16);
+    font-size: 12px;
+  }
+  .collectible-gate { width: 100%; }
+  #coreCounter {
+    top: calc(max(10px, env(safe-area-inset-top)) + 204px);
+    bottom: auto;
+    left: max(12px, env(safe-area-inset-left));
+    width: 72px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  /* Short landscape screens need the same narrow shoulder instrument as
+     portrait. A four-digit pickup bump must never swell across the player's
+     lower steering/aim lane. */
+  #stoneCounter {
+    top: calc(max(8px, env(safe-area-inset-top)) + 54px);
+    bottom: auto;
+    left: max(10px, env(safe-area-inset-left));
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    width: 72px;
+    min-height: 0;
+    padding: 6px;
+    transform: scale(.84);
+    transform-origin: left top;
+  }
+  #stoneCounter .collectible-cell {
+    grid-template-columns: 15px 1fr;
+    gap: 5px;
+    min-width: 0;
+    width: 100%;
+    font-size: 14px;
+  }
+  #stoneCounter .collectible-icon { width: 14px; height: 14px; }
+  #stoneCounter .stone-crescent { width: 15px; height: 15px; }
+  #planetCollectibleTarget {
+    min-width: 0;
+    width: 100%;
+    padding: 4px 0 0;
+    border-left: 0;
+    border-top: 1px solid rgba(205, 230, 244, .16);
+    font-size: 12px;
+  }
+  .collectible-gate { width: 100%; }
+  #coreCounter {
+    top: calc(max(8px, env(safe-area-inset-top)) + 184px);
+    bottom: auto;
+    left: max(12px, env(safe-area-inset-left));
+    width: 72px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
 }
 
 /* SUIT LIGHTS — bottom right, one visor-glass pip per hit point. Lost pips
@@ -2061,13 +2227,30 @@ body.touch-enabled .touch-pad > span {
 #suitMeter[data-critical="true"] .suit-pip:not(.lost) {
   animation: pipBreathe 1.05s ease-in-out infinite;
 }
+
+/* On touch, the lower-right corner belongs to JUMP and the right-hand gesture
+   surface. Dock suit health beneath the pause control instead; portrait moves
+   it below the compact three-world crown rail. */
+body.touch-enabled #suitMeter {
+  top: calc(max(10px, env(safe-area-inset-top)) + 50px);
+  right: max(14px, env(safe-area-inset-right));
+  bottom: auto;
+}
+
+@media (orientation: portrait) and (max-width: 680px) {
+  body.touch-enabled #suitMeter {
+    top: calc(max(10px, env(safe-area-inset-top)) + 146px);
+    right: max(12px, env(safe-area-inset-right));
+  }
+}
+
 @keyframes pipBreathe {
   0%, 100% { transform: scale(1); box-shadow: 0 1px 1px rgba(0, 3, 8, .94), 0 0 9px rgba(120, 226, 255, .6), inset 0 -4px 5px rgba(5, 29, 54, .58); }
   50% { transform: scale(1.22); box-shadow: 0 1px 1px rgba(0, 3, 8, .94), 0 0 16px rgba(255, 120, 120, .84), inset 0 -3px 5px rgba(70, 10, 20, .54); }
 }
 
 /* ============================================================
-   TITLE SCULPT (8.0.1)
+   TITLE SCULPT (8.1.0)
    The rendered game is the cover art. The launch UI only names it,
    states the one-ball law, and gets out of the player's way.
    ============================================================ */
