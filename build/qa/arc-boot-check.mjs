@@ -21,7 +21,10 @@ page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(`console.error: ${m.text()}`); });
 page.on('requestfailed', (r) => errors.push(`requestfailed: ${r.url()}`));
 page.on('response', (r) => { if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url()}`); });
-page.on('request', (r) => { const u = new URL(r.url()); const t = new URL(target); if (u.host !== t.host && !/^(data|blob):/.test(r.url()) && u.host !== 'app.netlify.com') offsite.push(r.url()); });
+// Netlify injects its deploy-preview drawer (and its Segment/Bugsnag telemetry) into previews
+// only; that is the host reaching out, not the game. Exact hosts, so a real leak still fails.
+const NETLIFY_PREVIEW_HOSTS = new Set(['app.netlify.com', 'cdn.segment.com', 'api.segment.io', 'sessions.bugsnag.com', 'notify.bugsnag.com', 'netlify-cdp-loader.netlify.app']);
+page.on('request', (r) => { const u = new URL(r.url()); const t = new URL(target); if (u.host !== t.host && !/^(data|blob):/.test(r.url()) && !NETLIFY_PREVIEW_HOSTS.has(u.host)) offsite.push(r.url()); });
 
 await page.goto(target, { waitUntil: 'load' });
 await page.waitForFunction(() => document.body.dataset.gameReady === 'true', null, { timeout: 120000 });
