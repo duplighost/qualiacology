@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#010204" />
-  <meta name="application-version" content="7.0.1-three-worlds" />
+  <meta name="application-version" content="8.0.1-authored-worlds" />
   <meta name="description" content="KICKMOON is a first-person three-world lunar action game: one persistent boomerang ball, a water moon, and a lava moon." />
   <title>KICKMOON: Three Worlds | Qualiacology</title>
   <link rel="canonical" href="https://qualiacology.com/kickmoon/" />
@@ -72,6 +72,10 @@
            colour. No words, no numbers — a glance says how many remain.
            (Alex, 2026-08-21: "have a boss thing counter at the bottom too.") -->
       <div id="coreCounter" aria-hidden="true"></div>
+      <!-- Three world-crown rows. Each uses a world sigil plus three regional
+           shapes, a larger local-final socket and a mastery star. No labels or
+           numbers are needed, and colour is never the only distinction. -->
+      <div id="planetBossCounter" aria-hidden="true"></div>
       <!-- Suit lights, bottom right: one glass pip per hit point, mirroring
            the crescent counter across the screen. The visor still frosts —
            this is the readable copy of that feeling.
@@ -101,43 +105,44 @@
       <button id="touchPause" class="touch-pause" type="button" aria-label="Pause game">II</button>
     </div>
 
-    <section id="startOverlay" class="overlay start-overlay" role="dialog" aria-modal="true" aria-labelledby="startTitle" aria-describedby="startCopy">
-      <div class="start-orbit start-orbit--one" aria-hidden="true"></div>
-      <div class="start-orbit start-orbit--two" aria-hidden="true"></div>
+    <section id="startOverlay" class="overlay start-overlay" role="dialog" aria-modal="true" aria-labelledby="startTitle" aria-describedby="startLaw">
       <div class="overlay-panel start-panel">
-        <div id="startKicker">LUNAR COMBAT PROTOCOL // FAST CORE</div>
-        <h1 id="startTitle"><span>KICKMOON</span><small>// kick ball, lunar velocity</small></h1>
-        <p id="startCopy">Three moons are a weapon. Kick the ball, steer it hard with your aim, snap it home before the rhythm dies, and turn every impossible cliff into momentum.</p>
-        <div class="start-law"><span aria-hidden="true">◉</span><strong>ONE BALL.</strong> EVERY MOVE. IT ALWAYS COMES HOME.</div>
-        <!-- Controls live here, where reading costs nothing, instead of on a
-             permanent bar across the bottom of the moon. -->
-        <div id="controlsHint" aria-label="Controls">
-          <div class="control-set keyboard-hints">
-            <span><kbd>WASD</kbd> MOVE</span>
-            <span><kbd>MOUSE</kbd> LOOK / STEER</span>
-            <span><kbd>LMB</kbd> KICK</span>
-            <span><kbd>RMB</kbd> RECALL / LOOP SPIN</span>
-            <span><kbd>MMB</kbd> GRAPPLE</span>
-            <span><kbd>SPACE</kbd> JUMP x2 · <kbd>C</kbd> DROP</span>
-          </div>
-          <div class="control-set gamepad-hints">
-            <span><kbd>LS</kbd> MOVE</span>
-            <span><kbd>RS</kbd> LOOK / CURVE</span>
-            <span><kbd>RT</kbd> KICK</span>
-            <span><kbd>LT</kbd> GUIDE / CALL</span>
-            <span><kbd>RB</kbd> GRAPPLE</span>
-            <span><kbd>A</kbd> DOUBLE JUMP</span>
-            <span><kbd>B/X</kbd> SPIN · <kbd>Y</kbd> DROP</span>
-          </div>
+        <h1 id="startTitle"><span>KICKMOON</span></h1>
+        <p id="startCopy" class="start-error" aria-live="assertive" hidden></p>
+        <div id="startLaw" class="start-law"><strong>ONE BALL.</strong> <span>EVERY MOVE. IT ALWAYS COMES HOME.</span></div>
+        <div class="start-actions">
+          <button id="startButton" class="primary-button" type="button">
+            <span>PLAY</span>
+            <small id="startActionHint">CLICK TO LOCK VIEW</small>
+          </button>
+          <details class="start-controls-drawer">
+            <summary>CONTROLS</summary>
+            <!-- Controls remain one deliberate action away instead of sitting
+                 between the player and the moon. -->
+            <div id="controlsHint" aria-label="Controls">
+              <div class="control-set keyboard-hints">
+                <span><kbd>WASD</kbd> MOVE</span>
+                <span><kbd>MOUSE</kbd> LOOK / STEER</span>
+                <span><kbd>LMB</kbd> KICK</span>
+                <span><kbd>RMB</kbd> RECALL / LOOP SPIN</span>
+                <span><kbd>MMB</kbd> GRAPPLE</span>
+                <span><kbd>SPACE</kbd> JUMP x2 · <kbd>C</kbd> DROP</span>
+              </div>
+              <div class="control-set gamepad-hints">
+                <span><kbd>LS</kbd> MOVE</span>
+                <span><kbd>RS</kbd> LOOK / CURVE</span>
+                <span><kbd>RT</kbd> KICK</span>
+                <span><kbd>LT</kbd> GUIDE / CALL</span>
+                <span><kbd>RB</kbd> GRAPPLE</span>
+                <span><kbd>A</kbd> DOUBLE JUMP</span>
+                <span><kbd>B/X</kbd> SPIN · <kbd>Y</kbd> DROP</span>
+              </div>
+            </div>
+          </details>
         </div>
-        <button id="startButton" class="primary-button" type="button">
-          <span>ENTER THE MOON</span>
-          <small id="startActionHint">CLICK TO LOCK VIEW</small>
-        </button>
         <div class="loading-track" role="progressbar" aria-label="Loading lunar surface" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div id="loadingMeter"></div>
         </div>
-        <div class="start-meta"><span>HEADPHONES RECOMMENDED</span><span>THREE WORLDS // DESKTOP // CONTROLLER // TOUCH</span></div>
       </div>
     </section>
 
