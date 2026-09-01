@@ -321,6 +321,8 @@ export class CameraDirector {
       launchRigScreenTarget: 0.052,
       launchRigPosition: [0, 0, 0],
       launchRigLook: [0, 0, 0],
+      courseYaw: 0,
+      surfacePoseDriven: false,
       framingSafety: {
         enabled: this.framingSafetyEnabled,
         active: false,
@@ -411,8 +413,33 @@ export class CameraDirector {
 
     const lateral = finite(state.lateral);
     const lift = Math.max(0, finite(state.lift));
-    const yaw = finite(state.yaw);
-    const vehicleRoll = finite(state.roll);
+    // `state.yaw` has several owners on a planet: near the ground it is the
+    // board's small course-relative steering angle, but in the air it is the
+    // trick motor's accumulated spin pose (PI per committed 180), and after
+    // the finish it is the authored sideways-stop pose. Feeding a pose channel
+    // into the chase rigs made every 180 drag the camera several units sideways
+    // and made the finish camera orbit with the car instead of showing it turn.
+    //
+    // Keep the camera in course space. A grounded switch stance is equivalent
+    // to forward for framing, while airborne, rail/grind, landing-settle and
+    // finish pose yaw/roll belong to the vehicle presentation only. Track
+    // curvature, lateral travel, trick framing weight, boost/release FOV and
+    // trauma remain authored inputs below.
+    const surfacePoseDriven = context.isSurface
+      && (
+        state.riderState === 'air'
+        || state.riderState === 'rail'
+        || state.riderState === 'grind'
+        || finite(state.landingSettle) > 0
+        || state.finished === true
+      );
+    const stanceYaw = context.isSurface ? finite(state.stance) * Math.PI : 0;
+    const courseYawRaw = finite(state.yaw) - stanceYaw;
+    const courseYaw = Math.atan2(Math.sin(courseYawRaw), Math.cos(courseYawRaw));
+    const yaw = surfacePoseDriven ? 0 : courseYaw;
+    const vehicleRoll = surfacePoseDriven ? 0 : finite(state.roll);
+    this.diagnostics.courseYaw = Number(yaw.toFixed(4));
+    this.diagnostics.surfacePoseDriven = surfacePoseDriven;
     // The drift camera became the TRICK camera: it frames the board while a
     // trick is charging in the air, which is when the player most needs to see
     // their own orientation to judge the landing.

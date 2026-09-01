@@ -1,4 +1,4 @@
-export const BUILD_ID = 'spaceboarding-0.1.0';
+export const BUILD_ID = 'spaceboarding-0.2.0';
 export const GAME_TITLE = 'SPACEBOARDING';
 
 export const CONTROL_GRAMMAR = Object.freeze({

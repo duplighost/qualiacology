@@ -26,6 +26,14 @@ import {
 } from './rider.js';
 
 export const FIXED_STEP = 1 / 120;
+// Crossing the line starts a short, authored powerslide. Longitudinal speed
+// reaches zero before the existing finish card arrives (1.25 s), while the
+// board turns a quarter turn relative to the road and presents the rider in
+// profile. The names describe what the player sees, not an extra race phase:
+// finishTime and finalPosition are still captured on the exact crossing tick.
+export const FINISH_STOP_SECONDS = 1.02;
+export const FINISH_TURN_DELAY = 0.055;
+export const FINISH_TURN_SECONDS = 0.76;
 // Upstream this was SPACE_WEAPONS_ARM_FRACTION: the point where the guns armed
 // after launch. Space combat is cut (see docs/PLAN.md — firing auto-locked and
 // always hit, so there was nothing to aim and nothing to miss), but the same
@@ -222,6 +230,8 @@ export function normalizeInput(input = {}) {
   };
 }
 
+const FINISH_NEUTRAL_INPUT = Object.freeze(normalizeInput());
+
 export function createRaceState(options = {}) {
   const short = Boolean(options.short);
   const seed = Number.isFinite(Number(options.seed)) ? Number(options.seed) >>> 0 : 0x9e9d11e5;
@@ -247,7 +257,7 @@ export function createRaceState(options = {}) {
     hitFlash: 0,
   }));
   return {
-    build: '0.1.0',
+    build: '0.2.0',
     seed,
     randomCounter: 0,
     short,
@@ -346,6 +356,18 @@ export function createRaceState(options = {}) {
     events: [],
     finishTime: null,
     finalPosition: null,
+    finishPhase: 'racing',
+    finishElapsed: 0,
+    finishEntrySpeed: 0,
+    finishEntryYaw: 0,
+    finishEntryPitch: 0,
+    finishEntryRoll: 0,
+    finishEntryBoardFlip: 0,
+    finishTargetYaw: 0,
+    finishTurnDirection: 0,
+    finishDistance: 0,
+    finishStopTime: null,
+    finishStopProgress: null,
   };
 }
 
@@ -365,6 +387,14 @@ export function getSegmentFraction(state) {
 
 export function getMorphState(state) {
   const segment = currentSegment(state);
+  // The final planet ends at a finish line, not at another launch. Without
+  // this boundary-aware guard the last 17% still ran the ordinary planet ->
+  // space morph: the board became a rocket under the checker arch and the
+  // stopped finish pose looked like it was hovering in space. Keep the final
+  // vehicle in its surface identity for the whole finishing straight.
+  if (segment.type === 'planet' && state.segmentIndex >= state.finalSegmentIndex) {
+    return { morph: 0, launch: 0, landing: 0, surface: 1 };
+  }
   return morphAt(segment, state.segmentProgress, state.short);
 }
 
@@ -955,19 +985,207 @@ function stepGlide(state, segment, input, dt) {
   }
 }
 
+function finishSidewaysTarget(yaw, direction) {
+  // Sideways orientations repeat every PI. Pick the first one in the chosen
+  // turn direction so the finish never twitches through the shorter arc in
+  // the opposite direction when the rider arrives slightly off square.
+  const side = Math.sign(direction) || 1;
+  let target = Math.round((yaw - Math.PI * 0.5) / Math.PI) * Math.PI + Math.PI * 0.5;
+  if (side > 0) {
+    while (target <= yaw + 1e-5) target += Math.PI;
+  } else {
+    while (target >= yaw - 1e-5) target -= Math.PI;
+  }
+  return target;
+}
+
+function cancelFinishTricks(state) {
+  // The line owns the board now. Inputs are ignored after the crossing, and
+  // any unfinished motor is cancelled at its current pose rather than being
+  // allowed to finish another trick beneath the victory skid.
+  for (const channel of ['spin', 'flip', 'boardFlip']) {
+    if (state.trickActive) state.trickActive[channel] = 0;
+    if (state.trickQueue?.[channel]) state.trickQueue[channel].length = 0;
+    if (state.trickInputSide) state.trickInputSide[channel] = 0;
+    if (state.trickRepeatTimer) state.trickRepeatTimer[channel] = 0;
+    if (state.trickBufferSide) state.trickBufferSide[channel] = 0;
+    if (state.trickBufferTimer) state.trickBufferTimer[channel] = 0;
+  }
+  if (state.completedTrickMoves) state.completedTrickMoves.length = 0;
+  state.spinTarget = state.yaw;
+  state.flipTarget = state.pitch;
+  state.boardFlipTarget = state.boardFlip;
+  state.spinRate = 0;
+  state.flipRate = 0;
+  state.boardFlipRate = 0;
+  state.trickCharge = 0;
+  state.trickMeter = 0;
+  state.trickTier = 0;
+  state.popCharge = 0;
+  state.popLoading = false;
+  state.grabSeconds = 0;
+
+  // No authored final course currently ends on a rail, but a future layout
+  // should not be able to leave the rider grinding forever at speed zero.
+  if (state.riderState === RIDER.RAIL || state.riderState === RIDER.GRIND) {
+    state.riderState = RIDER.AIR;
+    state.railShape = null;
+    state.railIndex = -1;
+    state.railSeconds = 0;
+    state.grindSide = 0;
+    state.grindSeconds = 0;
+    state.heightVelocity = Math.max(0, state.heightVelocity);
+  }
+}
+
+function beginFinish(state, lineProgress) {
+  state.finished = true;
+  state.finishTime = state.time;
+  state.finalPosition = state.position;
+  // Put the truth exactly on the stripe. The overshoot belongs to the next
+  // fixed step of the skid, not to the race clock that has already stopped.
+  state.segmentProgress = lineProgress;
+  state.finishPhase = 'turning';
+  state.finishElapsed = 0;
+  state.finishEntrySpeed = Math.max(0, state.speed);
+  state.finishEntryYaw = state.yaw;
+  state.finishEntryPitch = state.pitch;
+  state.finishEntryRoll = state.roll;
+  state.finishEntryBoardFlip = state.boardFlip;
+  // Turn toward the road centre when there is a clear side to turn from. In
+  // the middle, honour the rider's last steering side so the move still feels
+  // connected to the run they just drove.
+  state.finishTurnDirection = Math.abs(state.lateral) > 0.25
+    ? -Math.sign(state.lateral)
+    : (state.lastSteerSide || 1);
+  state.finishTargetYaw = finishSidewaysTarget(state.yaw, state.finishTurnDirection);
+  state.finishDistance = 0;
+  state.finishStopTime = null;
+  state.finishStopProgress = null;
+  state.overspeed = 0;
+  state.boost = 0;
+  state.boostPower = 0;
+  state.boostTimer = 0;
+  state.boostDuration = 0;
+  state.drafting = false;
+  cancelFinishTricks(state);
+  state.lastHop = false;
+  state.lastInput = FINISH_NEUTRAL_INPUT;
+  event(state, 'finish', { intensity: 1, position: state.finalPosition });
+}
+
+function stepFinish(state, dt) {
+  state.time += dt;
+  state.segmentElapsed += dt;
+
+  if (state.finishPhase === 'stopped') {
+    // A stopped race is an invariant, not a target the speed spring can begin
+    // chasing again. Keep player input and every motion channel dead while the
+    // world, particles and finish UI are still free to animate around it.
+    state.speed = 0;
+    state.lateralVelocity = 0;
+    state.yaw = state.finishTargetYaw;
+    state.roll = 0;
+    state.pitch = 0;
+    state.boardFlip = 0;
+    state.spinRate = 0;
+    state.flipRate = 0;
+    state.boardFlipRate = 0;
+    state.crouch = 0;
+    state.lift = state.arcHeight + state.height;
+    state.liftVelocity = state.arcVelocity + state.heightVelocity;
+    // The player's race is over; everybody else's is not. Let the field clear
+    // the line so a frozen rival cannot be run into by the player's authored
+    // runout and sit inside the sideways hero pose. Standings remain the exact
+    // crossing result even while those vehicles continue through the shot.
+    const lockedPosition = state.finalPosition ?? state.position;
+    updateRivals(state, dt);
+    state.position = lockedPosition;
+    state.lastHop = false;
+    state.lastInput = FINISH_NEUTRAL_INPUT;
+    return state;
+  }
+
+  state.finishElapsed += dt;
+  const segment = currentSegment(state);
+
+  // Let a rider who crossed in the air come down through the same swept
+  // resolver as every other landing. The finish takes over trick and steering
+  // intent, but it does not teleport the board to the road.
+  if (segment.type === 'planet') stepRider(state, segment, FINISH_NEUTRAL_INPUT, dt);
+  else stepRiderSpace(state, segment, FINISH_NEUTRAL_INPUT, dt);
+  riderPose(state, FINISH_NEUTRAL_INPUT, dt);
+
+  // Final planets do not use the launch arc, but bleed any residual scripted
+  // lift safely in case a later course puts the line inside a transition.
+  state.arcVelocity -= 17 * dt;
+  state.arcVelocity *= Math.exp(-0.8 * dt);
+  state.arcHeight = Math.max(0, state.arcHeight + state.arcVelocity * dt);
+  if (state.arcHeight <= 0 && state.arcVelocity < 0) state.arcVelocity = 0;
+
+  const stopT = clamp(state.finishElapsed / FINISH_STOP_SECONDS, 0, 1);
+  const stopEase = smoothstep(0, 1, stopT);
+  state.speed = state.finishEntrySpeed * (1 - stopEase);
+  const travelled = state.speed * dt;
+  state.segmentProgress += travelled;
+  state.globalProgress += travelled;
+  state.finishDistance += travelled;
+  reconcileToProfile(state, segment);
+  const lockedPosition = state.finalPosition ?? state.position;
+  updateRivals(state, dt);
+  state.position = lockedPosition;
+
+  const turnT = smoothstep(
+    FINISH_TURN_DELAY,
+    FINISH_TURN_DELAY + FINISH_TURN_SECONDS,
+    state.finishElapsed,
+  );
+  state.yaw = lerp(state.finishEntryYaw, state.finishTargetYaw, turnT);
+  state.pitch = lerp(state.finishEntryPitch, 0, turnT);
+  state.boardFlip = lerp(state.finishEntryBoardFlip, 0, turnT);
+  // A compact counter-lean makes the quarter turn read as a powerslide rather
+  // than a model rotating on a display plinth. It returns to dead level before
+  // speed reaches zero.
+  const skidLean = state.finishTurnDirection * Math.sin(Math.PI * turnT) * 0.28 * (1 - stopEase * 0.35);
+  state.roll = lerp(state.finishEntryRoll, 0, turnT) + skidLean;
+  state.crouch = Math.sin(Math.PI * stopT) * 0.24;
+  state.lateralVelocity *= Math.exp(-8 * dt);
+  if (stopT >= 1) state.lateralVelocity = 0;
+
+  state.lift = state.arcHeight + state.height;
+  state.liftVelocity = state.arcVelocity + state.heightVelocity;
+  state.lastHop = false;
+  state.lastInput = FINISH_NEUTRAL_INPUT;
+
+  state.finishPhase = turnT < 1 ? 'turning' : 'stopping';
+  const grounded = state.riderState === RIDER.GROUND && state.height <= 0.001 && state.arcHeight <= 0.001;
+  if (stopT >= 1 && grounded) {
+    state.finishPhase = 'stopped';
+    state.speed = 0;
+    state.lateralVelocity = 0;
+    state.yaw = state.finishTargetYaw;
+    state.roll = 0;
+    state.pitch = 0;
+    state.boardFlip = 0;
+    state.crouch = 0;
+    state.finishStopTime = state.time;
+    state.finishStopProgress = state.globalProgress;
+    event(state, 'finish-stop', {
+      intensity: 0.72,
+      side: state.finishTurnDirection,
+      distance: Number(state.finishDistance.toFixed(2)),
+    });
+  }
+  return state;
+}
+
 function transitionSegment(state) {
   let segment = currentSegment(state);
   let length = segmentLength(segment, state.short);
   while (state.segmentProgress >= length && !state.finished) {
     const excess = state.segmentProgress - length;
     if (state.segmentIndex >= state.finalSegmentIndex) {
-      state.finished = true;
-      state.finishTime = state.time;
-      state.finalPosition = state.position;
-      state.segmentProgress = length;
-      state.boostPower = 1;
-      state.boostTimer = 3;
-      event(state, 'finish', { intensity: 1, position: state.finalPosition });
+      beginFinish(state, length);
       break;
     }
     const previous = segment;
@@ -1035,21 +1253,7 @@ export function stepRace(state, rawInput, rawDt = FIXED_STEP) {
     state.lastInput = input;
     return state;
   }
-  if (state.finished) {
-    const finishSegment = currentSegment(state);
-    state.time += dt;
-    stepSpeedBand(state, finishSegment, dt);
-    // Even the victory lap moves through the rider, so there is no second
-    // integrator anywhere that could put the board somewhere illegal.
-    if (finishSegment.type === 'planet') stepRider(state, finishSegment, input, dt);
-    else stepRiderSpace(state, finishSegment, input, dt);
-    riderPose(state, input, dt);
-    state.lift = state.arcHeight + state.height;
-    state.globalProgress += state.speed * dt;
-    state.lastHop = input.hop;
-    state.lastInput = input;
-    return state;
-  }
+  if (state.finished) return stepFinish(state, dt);
   state.time += dt;
   state.segmentElapsed += dt;
   const segment = currentSegment(state);
@@ -1398,6 +1602,15 @@ export function raceSnapshot(state) {
     started: state.started,
     finished: state.finished,
     time: Number(state.time.toFixed(3)),
+    finishTime: state.finishTime === null ? null : Number(state.finishTime.toFixed(3)),
+    finishPhase: state.finishPhase,
+    finishElapsed: Number(state.finishElapsed.toFixed(4)),
+    finishEntrySpeed: Number(state.finishEntrySpeed.toFixed(4)),
+    finishTargetYaw: Number(state.finishTargetYaw.toFixed(4)),
+    finishTurnDirection: state.finishTurnDirection,
+    finishDistance: Number(state.finishDistance.toFixed(3)),
+    finishStopTime: state.finishStopTime === null ? null : Number(state.finishStopTime.toFixed(3)),
+    finishStopProgress: state.finishStopProgress === null ? null : Number(state.finishStopProgress.toFixed(3)),
     mode: segment.type,
     segmentIndex: state.segmentIndex,
     segmentId: segment.id,
