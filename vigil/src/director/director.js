@@ -23,6 +23,8 @@ const ALIVE_CAP = 16;
 const MIN_SPAWN_DIST = 14, VIEW_CONE = Math.PI / 4, SPAWN_GAP = 0.6;
 const BANDS = { thrall: [16, 28], chorister: [24, 38], warden: [30, 44] };
 const SPAWN_RADII = { thrall: 0.42, chorister: 0.5, warden: 0.85 };
+const PLANET_RING_MIN = 32, PLANET_RING_MAX = 43;
+const PLANET_FIRST_AT = 18.0, PLANET_SECOND_AT = 34.0;
 const SILENCE_S = 7.0;
 const CRASH_COUNT = 2;
 const CRASH_AMMO = 45, CRASH_HEAL = 20;
@@ -668,6 +670,16 @@ export function create(ctx) {
     const squeezeBearing = contactBearing + rng.sign() * (1.9 + rng.next() * 0.8);
     enqueue('chorister', wave >= 3 ? 2 : 1, squeezeBearing, 8.0, 4.0);
     enqueue('thrall', bodies(4), squeezeBearing, 9.0, 1.5);
+    // ORBITAL PRESSURE: introduced only after the ground roster has been
+    // learned. Counts and timings are authored, never body-scaled by wave or
+    // mercy; planet speed, damage and telegraph remain species-owned.
+    if (wave >= 3) {
+      const firstPlanetBearing = facing - side * (1.42 + rng.next() * 0.28);
+      enqueue('planet', 1, firstPlanetBearing, PLANET_FIRST_AT, 1);
+      if (wave >= 8) {
+        enqueue('planet', 1, firstPlanetBearing + Math.PI, PLANET_SECOND_AT, 1);
+      }
+    }
     // ANCHOR at +28 s from wave 2: rumble first, then the warden(s)
     if (wave >= 2) {
       enqueue('warden', wave >= 6 ? 2 : 1, contactBearing + Math.PI + (rng.next() - 0.5), 28.0, 8);
@@ -679,14 +691,48 @@ export function create(ctx) {
 
   /* ---------------- spawn legality ---------------- */
   const _v = new THREE.Vector3();
+  function outsideViewCone(x, z, p, facing) {
+    let da = Math.atan2(z - p.pos.z, x - p.pos.x) - facing;
+    while (da > Math.PI) da -= TAU;
+    while (da < -Math.PI) da += TAU;
+    return Math.abs(da) >= VIEW_CONE;
+  }
+
+  /**
+   * A planet is already in its navigation medium: choose a world-space orbit
+   * point, not a terrain spawn. It still obeys the human-facing spawn laws —
+   * player distance, view cone, arena bounds and the shared cadence/cap — but
+   * never asks terrain or body occupancy to validate empty sky.
+   */
+  function trySpawnPlanet(order, p, world, enemies, facing) {
+    for (let attempt2 = 0; attempt2 < 12; attempt2++) {
+      const spread = 0.38 * (1 + attempt2 * 0.24);
+      const a = order.bearing + (rng.next() - 0.5) * spread;
+      const r = lerp(PLANET_RING_MIN, PLANET_RING_MAX, Math.sqrt(rng.next()));
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      if (Math.hypot(x, z) > world.playRadius - 3) continue;
+      if (Math.hypot(x - p.pos.x, z - p.pos.z) < MIN_SPAWN_DIST) continue;
+      if (!outsideViewCone(x, z, p, facing)) continue;
+      const e = enemies.spawn('planet', x, z);
+      if (e) {
+        sinceSpawn = 0;
+        return true;
+      }
+      return false; // both pooled siege moons are already live
+    }
+    return false;
+  }
+
   function trySpawn(order) {
     const p = ctx.systems.player;
     const world = ctx.systems.world;
     const enemies = ctx.systems.enemies;
     if (enemies.aliveCount >= ALIVE_CAP) return false;
     if (sinceSpawn < SPAWN_GAP) return false;
-    const [rMin, rMax] = BANDS[order.species];
     const facing = playerBearing();
+    if (order.species === 'planet') return trySpawnPlanet(order, p, world, enemies, facing);
+    const [rMin, rMax] = BANDS[order.species];
     for (let attempt2 = 0; attempt2 < 12; attempt2++) {
       const a = order.bearing + (rng.next() - 0.5) * 0.7 * (1 + attempt2 * 0.3);
       const r = rMin + Math.sqrt(rng.next()) * (rMax - rMin);
@@ -699,10 +745,7 @@ export function create(ctx) {
       const groundY = world.terrainHeight(x, z);
       const spawnRadius = SPAWN_RADII[order.species] ?? 0.5;
       if (!world.canOccupyCircle(x, z, spawnRadius, groundY, 0.18)) continue;
-      let da = Math.atan2(z - p.pos.z, x - p.pos.x) - facing;
-      while (da > Math.PI) da -= TAU;
-      while (da < -Math.PI) da += TAU;
-      if (Math.abs(da) < VIEW_CONE) continue;             // never in the view cone
+      if (!outsideViewCone(x, z, p, facing)) continue;    // never in the view cone
       const e = enemies.spawn(order.species, x, z);
       if (e) {
         sinceSpawn = 0;

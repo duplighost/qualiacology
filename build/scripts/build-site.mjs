@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkCatalog } from "./expected.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Publish target defaults to the site repo root (one level above build/), so
@@ -53,10 +54,7 @@ function assert(condition, message) {
 
 function validateData() {
   assert(existsSync(outputRoot), `Missing output root: ${outputRoot}`);
-  assert(games.length === 27, `Expected 27 games, found ${games.length}`);
-  assert(albums.length === 12, `Expected 12 albums, found ${albums.length}`);
-  assert(games.filter((item) => item.featured).length === 3, "Exactly three games must be featured");
-  assert(albums.filter((item) => item.featured).length === 3, "Exactly three albums must be featured");
+  checkCatalog(assert);
 
   for (const [label, records] of [["game", games], ["album", albums]]) {
     const slugs = records.map((item) => item.slug);
@@ -64,6 +62,17 @@ function validateData() {
     for (const item of records) {
       assert(item.slug && item.title && item.summary && item.image, `Incomplete ${label} record: ${item.slug || "unknown"}`);
       assert(existsSync(join(outputRoot, item.image.slice(1))), `Missing ${label} image: ${item.image}`);
+      // Optional tall cut for the homepage principal. Declare the master's real pixel
+      // size here so the build never has to decode an image; catalog-art.py checks the
+      // declaration against the file. Only slot 1 of the featured row reads it, so it
+      // is dead weight on a game that is not featured first - say so rather than
+      // letting someone wonder why their new art never appears.
+      if (item.featuredImage) {
+        const tall = item.featuredImage;
+        assert(tall.src && tall.width > 0 && tall.height > 0, `${label} ${item.slug}: featuredImage needs src, width, height`);
+        assert(!item.image.endsWith(".svg"), `${label} ${item.slug}: featuredImage cannot pair with an SVG card`);
+        assert(existsSync(join(outputRoot, tall.src.slice(1))), `Missing ${label} featuredImage: ${tall.src}`);
+      }
     }
   }
 
@@ -169,7 +178,7 @@ function footer() {
   </button>`;
 }
 
-function head({ title, description, path, schema, image = "/assets/visuals/qualiacology-social-1200x630-v2.jpg" }) {
+function head({ title, description, path, schema, image = "/assets/visuals/qualiacology-social-1200x630-v3.jpg" }) {
   const url = `${site.origin}${path}`;
   return `
   <meta charset="utf-8">
@@ -218,17 +227,17 @@ function heroPicture() {
   // Phones get a 3:2 cut of the same plate. At 390w that renders 239px tall, against
   // 201px for the 16:9 punch-out and 140px if the authored 41:16 simply carried down -
   // so the small screen gets the biggest picture, not the widest one.
-  const phone = "/assets/visuals/qualiacology-candy-city-portrait";
+  const phone = "/assets/visuals/qualiacology-candy-city-v2-portrait";
   return `<picture>
     <source media="(max-width: 44.99rem)" type="image/avif" srcset="${phone}-640.avif 640w, ${phone}-960.avif 960w" sizes="calc(100vw - 2rem)">
     <source media="(max-width: 44.99rem)" type="image/webp" srcset="${phone}-640.webp 640w, ${phone}-960.webp 960w" sizes="calc(100vw - 2rem)">
-    <source type="image/avif" srcset="/assets/visuals/qualiacology-candy-city-640.avif 640w, /assets/visuals/qualiacology-candy-city-960.avif 960w, /assets/visuals/qualiacology-candy-city-1280.avif 1280w, /assets/visuals/qualiacology-candy-city-1640.avif 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
-    <source type="image/webp" srcset="/assets/visuals/qualiacology-candy-city-640.webp 640w, /assets/visuals/qualiacology-candy-city-960.webp 960w, /assets/visuals/qualiacology-candy-city-1280.webp 1280w, /assets/visuals/qualiacology-candy-city-1640.webp 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
-    <img src="/assets/visuals/qualiacology-candy-city-1640.jpg" width="1640" height="640" alt="A candy-loving ghost in a dark rain-soaked neon city, holding a lollipop and a bag of Ghost Pops" fetchpriority="high" decoding="async">
+    <source type="image/avif" srcset="/assets/visuals/qualiacology-candy-city-v2-640.avif 640w, /assets/visuals/qualiacology-candy-city-v2-960.avif 960w, /assets/visuals/qualiacology-candy-city-v2-1280.avif 1280w, /assets/visuals/qualiacology-candy-city-v2-1640.avif 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
+    <source type="image/webp" srcset="/assets/visuals/qualiacology-candy-city-v2-640.webp 640w, /assets/visuals/qualiacology-candy-city-v2-960.webp 960w, /assets/visuals/qualiacology-candy-city-v2-1280.webp 1280w, /assets/visuals/qualiacology-candy-city-v2-1640.webp 1640w" sizes="(min-width: 1280px) 1216px, calc(100vw - 2rem)">
+    <img src="/assets/visuals/qualiacology-candy-city-v2-1640.jpg" width="1640" height="640" alt="A candy-loving ghost in a dark rain-soaked neon city, holding a lollipop and a bag of Ghost Pops" fetchpriority="high" decoding="async">
   </picture>`;
 }
 
-function catalogPicture(item, type, eager = false) {
+function catalogPicture(item, type, eager = false, principal = false) {
   const isGame = type === "games";
   // 1200/900 exist because the plate rail makes cards 440px wide, and a 2x screen then
   // needs 880 device px - the 800w file was already under-resolving at the OLD 386px.
@@ -236,28 +245,44 @@ function catalogPicture(item, type, eager = false) {
   // Intrinsic size must match the real art (16:9 games, 1:1 albums) so the
   // browser reserves the right box and nothing shifts while images load.
   const dimensions = isGame ? [800, 450] : [600, 600];
-  const sizes = isGame ? "(min-width: 1120px) 31vw, (min-width: 720px) 48vw, 86vw" : "(min-width: 1120px) 31vw, (min-width: 720px) 48vw, 86vw";
+  // The homepage principal is NOT a 31vw card - it is the 1.85fr column of a 1.85/1
+  // grid, so it runs 59-61vw until `.plate-bleed > *` caps the shelf at 100rem, past
+  // which it is a flat 1020px. Describing it as 31vw made the browser pick the 480w
+  // file for an 875px slot: a 1.8x upscale on the largest, first-painted image on the
+  // site. Slightly generous on purpose - `sizes` that over-asks costs bytes, `sizes`
+  // that under-asks costs the picture.
+  const principalSizes = "(min-width: 1664px) 1020px, (min-width: 720px) 62vw, 86vw";
+  const cardSizes = "(min-width: 1120px) 31vw, (min-width: 720px) 48vw, 86vw";
+  const sizes = principal ? principalSizes : cardSizes;
   const loading = eager ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
 
   if (item.image.endsWith(".svg")) {
     return `<img src="${escapeHtml(versioned(item.image))}" width="${dimensions[0]}" height="${dimensions[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">`;
   }
 
-  const root = `/assets/catalog/${type}/${item.slug}`;
+  // A game may ship a SECOND master cut for the homepage principal, whose frame runs
+  // square-to-portrait rather than 16/9 (see the featured-fill rule in site.css). It
+  // cannot simply replace `image`, because that one is also the /games/ shelf card and
+  // that grid IS 16/9. Optional, and only the principal slot ever reads it: without it
+  // the principal just crops the 16/9 master, which is what every game does today.
+  const tall = principal && item.featuredImage ? item.featuredImage : null;
+  const root = `/assets/catalog/${type}/${item.slug}${tall ? "-featured" : ""}`;
+  const fallback = tall ? tall.src : item.image;
+  const box = tall ? [tall.width, tall.height] : dimensions;
   const src = (width, ext) => `${escapeHtml(versioned(`${root}-${width}.${ext}`))} ${width}w`;
   const set = (ext) => widths.map((width) => src(width, ext)).join(", ");
   return `<picture>
     <source type="image/avif" srcset="${set("avif")}" sizes="${sizes}">
     <source type="image/webp" srcset="${set("webp")}" sizes="${sizes}">
-    <img src="${escapeHtml(versioned(item.image))}" width="${dimensions[0]}" height="${dimensions[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">
+    <img src="${escapeHtml(versioned(fallback))}" width="${box[0]}" height="${box[1]}" alt="${escapeHtml(item.alt)}" ${loading} decoding="async">
   </picture>`;
 }
 
-function gameCard(game, index, { eager = false } = {}) {
+function gameCard(game, index, { eager = false, principal = false } = {}) {
   // Controls are post-decision information sitting in the pre-decision slot: eight
   // tracked items telling you how to play a thing you have not chosen yet. They stay
   // on each game's own page, where they answer a question you are actually asking.
-  // Play times stay here - 3 of 27 games report one, and that IS a choosing signal.
+  // Play times stay here - 3 of 28 games report one, and that IS a choosing signal.
   const metadata = [game.duration].filter(Boolean);
   const secondaryAction = game.secondary
     ? `\n          <a class="button button-quiet" href="${escapeHtml(game.secondary.href)}">${escapeHtml(game.secondary.label)}</a>`
@@ -266,7 +291,7 @@ function gameCard(game, index, { eager = false } = {}) {
     <article class="work-card">
       <span class="card-index" aria-hidden="true"></span>
       <a class="card-media" href="${routeForGame(game)}">
-        ${catalogPicture(game, "games", eager)}
+        ${catalogPicture(game, "games", eager, principal)}
       </a>
       <div class="card-body">
         <p class="card-kicker">${escapeHtml(game.descriptor)}</p>
@@ -404,7 +429,7 @@ function homepage() {
       </div>
       <div class="plate-bleed">
         <ul class="card-list homepage-shelf" data-featured-games="${featuredGames.length}">
-          ${featuredGames.map((item, index) => gameCard(item, index, { eager: index === 0 })).join("\n")}
+          ${featuredGames.map((item, index) => gameCard(item, index, { eager: index === 0, principal: index === 0 })).join("\n")}
         </ul>
       </div>
     </section>

@@ -45,12 +45,31 @@ page.on('console', (m) => { if (m.type() === 'error' && !/favicon/i.test(m.text(
 
 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90000 });
 await page.waitForFunction(() => window.__FETCH?.ready === true, null, { timeout: 90000 });
+// The polished cold boot intentionally keeps Wake up disabled until the Game
+// constructor has returned and its real click listener exists. __FETCH is
+// exposed at the tail of that constructor, so waiting on the API alone leaves
+// a tiny race in which a synthetic click can land on the still-disabled
+// control. A player cannot click a disabled button; test the same contract.
+await page.waitForFunction(() => {
+  const start = document.querySelector('#title [data-action="start"]');
+  return start && start.disabled === false;
+}, null, { timeout: 90000 });
 
 // Install the in-frame sampler BEFORE starting, then start through the real
 // title click rather than the debug API.
 await page.evaluate(() => {
   const g = window.__game;
-  window.__boot = { samples: [], t0: performance.now() };
+  window.__boot = { samples: [], t0: performance.now(), titleFrames: 0, presentation: null };
+  // Count live title frames until entry. This distinguishes the new intentional
+  // shader-link gate (painted HTML stays responsive) from the old multi-second
+  // main-thread freeze, even though both delay the first WebGL frame.
+  const titleBeat = () => {
+    if (!g.started) {
+      window.__boot.titleFrames++;
+      requestAnimationFrame(titleBeat);
+    }
+  };
+  requestAnimationFrame(titleBeat);
   const realRender = g.render.bind(g);
   g.render = function patched(...args) {
     const out = realRender(...args);
@@ -92,10 +111,27 @@ await page.evaluate(() => {
 await page.evaluate(() => {
   const el = document.querySelector('#title [data-action="start"]') || document.querySelector('#title');
   el?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const title = document.querySelector('#title');
+  const mark = title?.querySelector('.return-mark');
+  const markStyle = mark ? getComputedStyle(mark) : null;
+  window.__boot.presentation = {
+    waking: !!title?.classList.contains('waking'),
+    buttonDisabled: !!document.querySelector('#title [data-action="start"]')?.disabled,
+    titleVisible: !title?.classList.contains('hidden'),
+    markAnimation: markStyle?.animationName || 'none',
+    markPlayState: markStyle?.animationPlayState || 'paused',
+  };
 });
 
-// PHASE 1 -- the real-click boot: wait out the authored ~4s fade, then play
-// a little, the way a player would, and read the lit skull-less room.
+// PHASE 1 -- the real-click boot: the cold driver's asynchronous link queue is
+// deliberately allowed to vary, but it must hand over inside the acceptance
+// ceiling. Start the authored ~4s fade clock at that real hand-over, not at the
+// click; a fixed post-click sleep made this check fail early precisely when the
+// title remained responsive enough for its JavaScript timer to fire on time.
+await page.waitForFunction(() => window.__game?.started === true, null, {
+  timeout: 18000,
+  polling: 50,
+});
 await page.waitForTimeout(5200);
 for (let i = 0; i < 8; i++) {
   await page.keyboard.down('KeyW'); await page.waitForTimeout(260); await page.keyboard.up('KeyW');
@@ -126,6 +162,9 @@ const r = await page.evaluate(() => {
     arrivalState: g.bedroomArrival ? g.bedroomArrival.state : null,
     msToWorld: firstLit ? firstLit.ms : null,
     litSpanFrames: best,
+    titleFrames: window.__boot.titleFrames,
+    presentation: window.__boot.presentation,
+    entryLatencyMs: window.__FETCH.warm().entryLatencyMs,
   };
 });
 
@@ -161,7 +200,17 @@ const ok = (cond, msg) => { console.log(`${cond ? 'PASS' : 'FAIL'} ${msg}`); if 
 console.log(JSON.stringify(r, null, 2));
 ok(r.frames > 60, `render ran (${r.frames} sampled frames)`);
 ok(r.started === true, 'the real title click started the game');
-ok(r.msToWorld !== null && r.msToWorld < 12000, `world on screen (${r.msToWorld}ms)`);
+ok(r.presentation?.waking && r.presentation?.buttonDisabled && r.presentation?.titleVisible,
+  'the title visibly acknowledges the press while the world warms');
+ok(r.presentation?.markAnimation === 'waking-turn' && r.presentation?.markPlayState === 'running',
+  `the loading mark stays animated (${r.presentation?.markAnimation}, ${r.presentation?.markPlayState})`);
+ok(r.msToWorld < 2000 || r.titleFrames > 12,
+  `the title remains responsive during a gated start (${r.titleFrames} frames)`);
+// Full KHR shader-link settlement is now deliberately paid behind that live
+// HTML title so the first WebGL draw cannot recreate the old 7-9 second tab
+// freeze. Keep a real ceiling, with headroom above the measured cold-driver
+// queue, while separately proving the wait itself is visibly alive above.
+ok(r.msToWorld !== null && r.msToWorld < 18000, `world on screen (${r.msToWorld}ms)`);
 ok(r.litSpanFrames > 90, `a lit world holds on screen while playing (${r.litSpanFrames} contiguous frames post-fade)`);
 ok(r.act !== 'bedroom' || r.skullMode === 'gone', `the new opening boots empty-handed (mode ${r.skullMode}, arrival ${r.arrivalState})`);
 console.log(JSON.stringify(h, null, 2));

@@ -1,5 +1,6 @@
-// The three silhouettes — WEDGE / ANVIL / MAST (Cinderbloom's law of three:
-// a roster you learn in one encounter, identifiable in fog at 40 m). Violet
+// Four silhouettes — WEDGE / ANVIL / MAST / ORB. The grounded trio is learned
+// first; the distant siege-moon arrives later as a separate sky-pressure read.
+// Violet
 // anatomy carries the threat hue; armor is matte dark. Each build returns
 // named parts for procedural animation, sphere hit zones, and the per-enemy
 // emissive handles (telegraph / hit flash / death glow).
@@ -14,12 +15,12 @@ const ARMOR = 0x232a38;
 
 export const SPECIES = {
   thrall: {
-    hp: 55, speed: 6.4, maxRunSpeed: 6.6, height: 1.1, radius: 0.42, mass: 46,
-    burstMs: 0.6, pauseMs: 0.35,
-    lungeRange: 4.2, strikeRange: 7.6, standoff: 3.2,
-    telegraph: 0.320, attack: 0.470, recover: 0.380, dmg: 22,
-    leapCdInd: 5.5, lungeSpeed: 11.0, lungeMs: 0.26,
-    engage: [0, 15], drop: 14,
+    hp: 55, speed: 4.9, maxRunSpeed: 5.1, height: 1.1, radius: 0.42, mass: 46,
+    burstMs: 0.58, pauseMs: 0.42,
+    lungeRange: 3.25, strikeRange: 4.0, standoff: 2.8,
+    telegraph: 0.400, attack: 0.470, recover: 0.580, dmg: 18,
+    lungeCooldown: 2.8, lungeSpeed: 7.8, lungeMs: 0.28,
+    engage: [0, 7.5], drop: 14,
   },
   warden: {
     hp: 340, speed: 2.8, height: 2.4, radius: 0.85, mass: 900,
@@ -35,6 +36,19 @@ export const SPECIES = {
     strikeRange: 40, standoff: 24, minRange: 13,
     telegraph: 0.850, attack: 0.240, releaseAt: 0.10, recover: 1.500, dmg: 34,
     boltSpeed: 9.0, engage: [18, 40], drop: 20,
+  },
+  planet: {
+    flying: true,
+    hp: 190, speed: 0, height: 3.6, radius: 1.8, mass: 1100,
+    burstMs: 1e9, pauseMs: 0,
+    strikeRange: 72, standoff: 38, minRange: 16,
+    telegraph: 1.100, attack: 0.240, releaseAt: 0.10, recover: 2.750, dmg: 26,
+    boltSpeed: 13.5, engage: [16, 72], drop: 28,
+    orbitRMin: 32, orbitRMax: 43,
+    orbitAltitudeMin: 10, orbitAltitudeMax: 16,
+    orbitAngularSpeedMin: 0.032, orbitAngularSpeedMax: 0.052,
+    orbitBobAmp: 1.15, orbitBobHz: 0.34,
+    initialAttackGrace: 1.5,
   },
 };
 
@@ -102,7 +116,7 @@ function buildThrall() {
       }
       parts.torso.position.y = 0.66 + Math.abs(Math.sin(a.gait)) * 0.05 * a.moveAmp;
       parts.torso.rotation.x = a.coil * -0.35 + Math.sin(a.gait * 2) * 0.03 * a.moveAmp;
-      parts.torso.position.z = a.coil * 0.22;      // coil-back = leap is coming
+      parts.torso.position.z = a.coil * 0.22;      // coil-back = short lunge tell
       parts.torso.rotation.z = a.bank * 0.4;
     },
   };

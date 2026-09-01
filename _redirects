@@ -17,6 +17,12 @@
 /fly     /glide/            302
 /luma    /   302
 /visualizer /  302
+
+# --- I SEENT IT ---
+/i-seent-it.html  /i-seent-it/  301!
+/seent             /i-seent-it/  302
+/custody           /i-seent-it/  302
+
 # --- retired toys (links land home) ---
 /banana         /   302
 /banana.html    /   302
@@ -32,6 +38,11 @@
 /bang               /lil-big-bang/            302
 /rockets            /rocket-shoes/            302
 /moon-boots         /rocket-shoes/            302
+
+# --- Thurible ---
+/thur               /thurible/                302
+/censer             /thurible/                302
+/incense            /thurible/                302
 
 # --- Marrow ---
 /marrow.html        /marrow/                  301!
@@ -124,11 +135,6 @@
 /lead.html  /lead/  301!
 /rope       /lead/  302
 
-# --- STARLING ---
-/starling.html  /starling/  301!
-/murmuration    /starling/  302
-/flock          /starling/  302
-
 # --- BOON MOOTS ---
 # /boon-moots used to be a joke alias for Rocket Shoes. There is now an actual
 # game called BOON MOOTS, so the slug takes its own name back. /moon-boots is
@@ -138,17 +144,18 @@
 /pocket-moon      /boon-moots/  302
 /spiggot          /boon-moots/  302
 
-# --- NINEFOLD BURN ---
-/ninefold-burn.html /ninefold-burn/  301!
-/ninefold           /ninefold-burn/  302
-/burn               /ninefold-burn/  302
-/nine-worlds        /ninefold-burn/  302
-
-# --- STAY ---
-/stay.html   /stay/  301!
-/hold        /stay/  302
-/orbit       /stay/  302
-/last-call   /stay/  302
+# --- SPACEBOARDING (replaced NINEFOLD BURN, 2026-08-29) ---
+# The three vanity links NINEFOLD BURN owned are repointed at its successor
+# rather than dropped, which is the same call /vesper got when VESPERBANE came
+# off the shelf and VESPERWAKE stayed. The game's own route and its legacy
+# .html are NOT repointed: they name a page that no longer exists, so they 404
+# and are asserted 404 in route-smoke's retiredRoutes.
+/ninefold           /spaceboarding/  302
+/burn               /spaceboarding/  302
+/nine-worlds        /spaceboarding/  302
+/spaceboarding.html /spaceboarding/  301!
+/board              /spaceboarding/  302
+/drop-in            /spaceboarding/  302
 
 # --- RAIN ANIMAL ---
 /rain-animal.html  /rain-animal/  301!
@@ -156,3 +163,9 @@
 # --- THE LAST ROOM ---
 /the-last-room.html  /the-last-room/  301!
 /last-room           /the-last-room/  302
+
+# --- SECONDHAND SAINT ---
+/secondhand-saint.html  /secondhand-saint/  301!
+/saint                  /secondhand-saint/  302
+/vespera                /secondhand-saint/  302
+/dial                   /secondhand-saint/  302

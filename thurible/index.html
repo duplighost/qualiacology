@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#06050a">
+  <meta name="description" content="THURIBLE is a full 3D third-person action game. Circle the mouse to spin the chained weapon around you, or flick it forward.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:title" content="THURIBLE | Qualiacology">
+  <meta property="og:description" content="Circle the mouse to spin the chained weapon around you, or flick it forward.">
+  <meta property="og:url" content="https://qualiacology.com/thurible/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/thurible-card-clean.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="THURIBLE | Qualiacology">
+  <meta name="twitter:description" content="Circle the mouse to spin the chained weapon around you, or flick it forward.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/thurible-card-clean.webp">
+  <link rel="canonical" href="https://qualiacology.com/thurible/">
+  <title>THURIBLE | Qualiacology</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23050409'/%3E%3Ccircle cx='32' cy='35' r='17' fill='%23563a26' stroke='%23d29a59' stroke-width='3'/%3E%3Ccircle cx='32' cy='35' r='8' fill='%23ff9a3f'/%3E%3Cpath d='M32 18V7' stroke='%23d29a59' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <nav aria-label="Site"><a class="home-link" href="/">Qualiacology</a></nav>
+  <main id="game" aria-label="THURIBLE 3D game">
+    <canvas id="view" tabindex="0" aria-label="Third-person game view"></canvas>
+    <div id="grade" aria-hidden="true"></div>
+    <div id="vignette" aria-hidden="true"></div>
+
+    <section id="title" class="panel open" aria-labelledby="title-word">
+      <div class="sigil" aria-hidden="true"><i></i><i></i><i></i></div>
+      <h1 id="title-word">THURIBLE</h1>
+      <p class="subtitle">THE LONG NAVE</p>
+      <button id="begin" type="button" aria-label="Enter the nave"><i aria-hidden="true"></i></button>
+      <p class="dedication">for Alex · swung by Milo</p>
+    </section>
+
+    <div id="hud" class="hidden" aria-hidden="true">
+      <div id="candles" aria-label="Three candles remaining">
+        <i class="candle"><b></b></i><i class="candle"><b></b></i><i class="candle"><b></b></i>
+      </div>
+      <div id="wave-mark" aria-hidden="true"></div>
+      <div id="heat-orbit" aria-hidden="true"><i></i></div>
+      <div id="gesture" aria-hidden="true"><i></i><b></b></div>
+      <p id="hint"></p>
+    </div>
+
+    <div id="announcement" aria-hidden="true"><span></span><b></b></div>
+
+    <section id="end" class="panel" aria-label="Run ended">
+      <p class="sr-only" id="end-kicker"></p>
+      <h2 class="sr-only" id="end-title"></h2>
+      <p class="sr-only" id="end-copy"></p>
+      <button id="again" type="button" aria-label="Begin again"><i aria-hidden="true"></i></button>
+    </section>
+
+    <button id="sound" type="button" hidden aria-label="Mute sound"><i></i><i></i><i></i></button>
+    <button id="pause" type="button" hidden aria-label="Pause game"></button>
+    <div id="pause-card" role="status" aria-label="Paused"><i aria-hidden="true"></i></div>
+    <div id="webgl-error" role="alert">This nave needs WebGL 2 and hardware acceleration.</div>
+  </main>
+  <script defer src="./game.js"></script>
+</body>
+</html>

@@ -128,6 +128,14 @@ const WARDEN_GLOW_PROTO = emissivePrototype('warden-violet', 0x241d3d, 0.9);
 const WARDEN_VENT_PROTO = emissivePrototype('warden-vent-violet', 0x2a1f4d, 0.6);
 const CHORISTER_GLOW_PROTO = emissivePrototype('chorister-violet', 0x241d3d, 1.0);
 const CHORISTER_SAC_PROTO = emissivePrototype('chorister-sac-violet', 0x2a1f4d, 1.2);
+const PLANET_CRUST_MAT = surface('planet-lunar-crust', 0x737b89, { roughness: 0.94, metalness: 0.035 });
+const PLANET_CRATER_MAT = surface('planet-crater-shadow', 0x2d3240, { roughness: 0.97, metalness: 0.025 });
+const PLANET_CAGE_MAT = surface('planet-armillary-cage', 0x202938, { roughness: 0.58, metalness: 0.61 });
+const PLANET_APERTURE_PROTO = emissivePrototype('planet-target-aperture', 0x241d3d, 1.28);
+
+const PLANET_VIOLET = new THREE.Color(VIOLET);
+const PLANET_AMBER = new THREE.Color(0xffb35d);
+const NEG_Z = new THREE.Vector3(0, 0, -1);
 
 function addMesh(parent, geometry, material, name, x = 0, y = 0, z = 0) {
   const mesh = new THREE.Mesh(geometry, material);
@@ -140,6 +148,161 @@ function addMesh(parent, geometry, material, name, x = 0, y = 0, z = 0) {
   mesh.receiveShadow = !emissive;
   parent.add(mesh);
   return mesh;
+}
+
+/* -------------------------------------------------------------------------
+ * PLANET — hostile siege moon / world-space orbital artillery
+ * Four meshes: deformed lunar crust, dark crater inlays, armillary cage,
+ * and the protruding reactive aperture. All geometry is boot-built and all
+ * opaque materials are shared; only the aperture material is actor-local.
+ * ---------------------------------------------------------------------- */
+
+const PLANET_CRATERS = [
+  { n: new THREE.Vector3(0.34, 0.57, -0.75).normalize(), size: 0.34, depth: 0.18, squash: 0.86 },
+  { n: new THREE.Vector3(-0.71, 0.21, -0.67).normalize(), size: 0.25, depth: 0.13, squash: 1.18 },
+  { n: new THREE.Vector3(0.82, -0.36, -0.44).normalize(), size: 0.22, depth: 0.11, squash: 0.78 },
+  { n: new THREE.Vector3(-0.29, -0.78, 0.56).normalize(), size: 0.30, depth: 0.15, squash: 1.06 },
+  { n: new THREE.Vector3(0.12, 0.91, 0.40).normalize(), size: 0.18, depth: 0.08, squash: 0.92 },
+  { n: new THREE.Vector3(0.65, 0.18, 0.74).normalize(), size: 0.16, depth: 0.07, squash: 1.12 },
+];
+
+function planetCrustGeometry() {
+  const geometry = new THREE.IcosahedronGeometry(1, 4);
+  const position = geometry.getAttribute('position');
+  const p = new THREE.Vector3();
+  for (let i = 0; i < position.count; i++) {
+    p.fromBufferAttribute(position, i).normalize();
+    // Low-amplitude, deterministic macro relief breaks the perfect sphere
+    // before the authored crater bowls and raised rims are applied.
+    let radius = 1.78
+      + Math.sin(p.x * 17.3 + p.z * 8.1) * 0.026
+      + Math.sin(p.y * 23.7 - p.x * 5.4) * 0.017
+      + Math.sin((p.x + p.y + p.z) * 31.9) * 0.010;
+    for (const crater of PLANET_CRATERS) {
+      const angle = Math.acos(Math.max(-1, Math.min(1, p.dot(crater.n))));
+      const u = angle / crater.size;
+      if (u >= 1.18) continue;
+      if (u < 1) {
+        const bowl = 1 - u * u;
+        radius -= crater.depth * bowl * bowl;
+      }
+      const rim = Math.exp(-Math.pow((u - 0.96) / 0.105, 2));
+      radius += crater.depth * 0.32 * rim;
+    }
+    position.setXYZ(i, p.x * radius, p.y * radius, p.z * radius);
+  }
+  position.needsUpdate = true;
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function radialPiece(geometry, normal, radius, sx = 1, sy = 1, sz = 1) {
+  return {
+    geometry,
+    position: normal.clone().multiplyScalar(radius),
+    quaternion: new THREE.Quaternion().setFromUnitVectors(UP, normal),
+    scale: new THREE.Vector3(sx, sy, sz),
+  };
+}
+
+const PLANET_CRUST_GEO = planetCrustGeometry();
+const PLANET_CRATER_DISC = new THREE.CylinderGeometry(1, 0.82, 0.075, 14, 1, false);
+const PLANET_CRATER_GEO = mergeRigid(
+  ...PLANET_CRATERS.map((crater, i) => radialPiece(
+    PLANET_CRATER_DISC,
+    crater.n,
+    1.78 - crater.depth + 0.018,
+    crater.size * (1.24 + (i % 2) * 0.08) * crater.squash,
+    1,
+    crater.size * 1.24 / crater.squash,
+  )),
+);
+
+const PLANET_RING = new THREE.TorusGeometry(2.08, 0.055, 6, 48);
+const PLANET_NODE = new THREE.DodecahedronGeometry(0.105, 0);
+const PLANET_CAGE_GEO = mergeRigid(
+  at(PLANET_RING),
+  at(PLANET_RING, 0, 0, 0, 0.64, 0.15, 0.08),
+  at(PLANET_RING, 0, 0, 0, -0.47, 0.42, -0.18),
+  ...[
+    [2.08, 0, 0], [-2.08, 0, 0], [0, 2.08, 0], [0, -2.08, 0],
+    [0, 0, 2.08], [0, 0, -2.08],
+  ].map(([x, y, z]) => at(PLANET_NODE, x, y, z)),
+);
+
+const PLANET_APERTURE_GEO = mergeRigid(
+  at(new THREE.CylinderGeometry(0.31, 0.47, 0.26, 12, 1, false), 0, 0, 0, -PI / 2),
+  at(new THREE.TorusGeometry(0.49, 0.072, 7, 20), 0, 0, -0.13),
+  ...[0, 1, 2].map(i => at(
+    new THREE.ConeGeometry(0.085, 0.30, 5),
+    Math.cos(i * PI * 2 / 3) * 0.55,
+    Math.sin(i * PI * 2 / 3) * 0.55,
+    0.02,
+    PI / 2,
+    0,
+    -i * PI * 2 / 3,
+  )),
+);
+
+function buildPlanet() {
+  const group = new THREE.Group();
+  group.name = 'planet';
+  const apertureGlow = reactiveMaterial(PLANET_APERTURE_PROTO, group.uuid);
+
+  const body = new THREE.Group();
+  body.name = 'lunar-body';
+  group.add(body);
+  addMesh(body, PLANET_CRUST_GEO, PLANET_CRUST_MAT, 'deformed-cratered-crust');
+  addMesh(body, PLANET_CRATER_GEO, PLANET_CRATER_MAT, 'crater-shadow-inlays');
+
+  const cage = addMesh(group, PLANET_CAGE_GEO, PLANET_CAGE_MAT, 'counter-rotating-armillary');
+
+  // AI may pass a world-space aimDir to animate(). The pivot keeps the
+  // visible aperture and the aimed weak-zone contract on the same -Z axis.
+  const aimPivot = new THREE.Group();
+  aimPivot.name = 'targeting-pivot';
+  group.add(aimPivot);
+  const aperture = addMesh(
+    aimPivot, PLANET_APERTURE_GEO, apertureGlow, 'reactive-target-aperture', 0, 0, -1.82,
+  );
+  aperture.castShadow = false;
+  aperture.receiveShadow = false;
+
+  const aimScratch = new THREE.Vector3();
+  return {
+    group,
+    glowMats: [apertureGlow],
+    armorMats: [],
+    parts: { body, cage, aimPivot, aperture },
+    aimAxis: { x: 0, y: 0, z: -1 },
+    zones: [
+      // The aperture protrudes beyond the torso sphere, so its nearer sphere
+      // wins ray selection when the player actually places a shot on it.
+      { x: 0, y: 0, z: -1.82, r: 0.50, zone: 'vent', aimed: true, radialOffset: 1.82 },
+      { x: 0, y: 0, z: 0, r: 1.76, zone: 'torso' },
+    ],
+    animate(parts, a = {}) {
+      const time = Number.isFinite(a.time) ? a.time : 0;
+      const charge = Math.max(0, Math.min(1, a.charge ?? a.coil ?? 0));
+      const firePulse = Math.max(0, Math.min(1, a.firePulse ?? 0));
+      parts.body.rotation.y = time * 0.105;
+      parts.body.rotation.x = Math.sin(time * 0.23) * 0.065;
+      parts.cage.rotation.y = -time * 0.165;
+      parts.cage.rotation.x = 0.18 + Math.sin(time * 0.31) * 0.10;
+      parts.cage.rotation.z = Math.sin(time * 0.19) * 0.08;
+
+      if (a.aimDir && aimScratch.copy(a.aimDir).lengthSq() > 1e-8) {
+        aimScratch.normalize();
+        parts.aimPivot.quaternion.setFromUnitVectors(NEG_Z, aimScratch);
+      }
+
+      const apertureScale = 1 + charge * 0.20 + firePulse * 0.24;
+      parts.aperture.scale.setScalar(apertureScale);
+      apertureGlow.emissive.copy(PLANET_VIOLET).lerp(PLANET_AMBER, charge * charge);
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------
@@ -457,4 +620,5 @@ export const BUILDERS = {
   thrall: buildThrall,
   warden: buildWarden,
   chorister: buildChorister,
+  planet: buildPlanet,
 };

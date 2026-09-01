@@ -1,0 +1,614 @@
+:root {
+  color-scheme: dark;
+  --accent: #ff5f2e;
+  --secondary: #ffd17a;
+  --speed: 0;
+  --boost: .1;
+  --trick: 0;
+  --trick-tier: 0;
+  --trick-flame: transparent;
+  --flash: 0;
+  --safe-top: max(16px, env(safe-area-inset-top));
+  --safe-right: max(18px, env(safe-area-inset-right));
+  --safe-bottom: max(18px, env(safe-area-inset-bottom));
+  --safe-left: max(18px, env(safe-area-inset-left));
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #020307;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #020307;
+  color: #f7fbff;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button { font: inherit; }
+
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: 0;
+  background: radial-gradient(circle at 50% 40%, #25100b, #020307 65%);
+}
+
+.fx,
+.fx > div {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.speed-wash {
+  opacity: calc(var(--speed) * .07 + var(--boost) * .08);
+  background: radial-gradient(circle at 50% 55%, transparent 0 45%, color-mix(in srgb, var(--accent) 8%, transparent) 74%, transparent 92%);
+  filter: blur(calc(7px + var(--boost) * 3px));
+  transform: scale(calc(1 + var(--boost) * .025));
+  mix-blend-mode: screen;
+  transition: opacity 100ms linear;
+}
+
+/* Form made visible. Sharpness measures how much technique is being earned
+   right now - it rises on drifts, tricks and grinds and bleeds away within a
+   few seconds of sloppy driving. The rivals no longer read it (Phase 7 gave
+   them their own pace lines), so it is not a hidden race variable any more:
+   it is simply the frame running hot in the world's accent while the player is
+   racing well. Deliberately an edge effect - it must never compete with the
+   road for attention. */
+.edge-heat {
+  opacity: calc(var(--sharpness, 0) * .85);
+  /* Transparent through the middle. A full-frame wash reads instantly but
+     lifts the blacks and costs contrast on the road, and the road is the
+     thing the player is actually steering. Keeping the heat in the periphery
+     keeps the signal at the edge of vision, where a driver feels it. */
+  background:
+    radial-gradient(ellipse 62% 58% at 50% 62%,
+      transparent 0 62%,
+      color-mix(in srgb, var(--accent) 42%, transparent) 128%),
+    linear-gradient(to top, color-mix(in srgb, var(--accent) 20%, transparent) 0, transparent 16%);
+  mix-blend-mode: screen;
+  transition: opacity 260ms ease-out;
+}
+
+.impact-flash {
+  opacity: var(--flash);
+  background: radial-gradient(circle at 50% 58%, white 0, color-mix(in srgb, var(--secondary) 75%, transparent) 13%, color-mix(in srgb, var(--accent) 40%, transparent) 33%, transparent 70%);
+  mix-blend-mode: screen;
+}
+
+.vignette {
+  background: radial-gradient(ellipse at center, transparent 48%, rgba(0, 0, 4, calc(.16 + var(--speed) * .08)) 100%);
+  box-shadow: inset 0 0 72px rgba(0, 0, 0, .24);
+}
+
+.grain {
+  opacity: .026;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+  animation: grain 170ms steps(2) infinite;
+}
+
+@keyframes grain {
+  0% { transform: translate(-1%, 1%); }
+  50% { transform: translate(1%, -1%); }
+  100% { transform: translate(0); }
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 500ms ease;
+  text-shadow: 0 2px 14px #000, 0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+body[data-race-status="racing"] .hud,
+body[data-race-status="finished"] .hud { opacity: 1; }
+
+.world-readout {
+  position: absolute;
+  top: var(--safe-top);
+  left: var(--safe-left);
+  display: grid;
+  gap: 3px;
+  letter-spacing: .18em;
+}
+
+.world-count {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--secondary);
+}
+
+.world-name {
+  font-size: clamp(12px, 1.4vw, 18px);
+  font-weight: 850;
+}
+
+.race-readout {
+  position: absolute;
+  top: var(--safe-top);
+  right: var(--safe-right);
+}
+
+.position {
+  font-size: clamp(32px, 5vw, 58px);
+  font-style: italic;
+  font-weight: 950;
+  line-height: .8;
+  letter-spacing: -.08em;
+}
+
+.position small {
+  margin-left: 5px;
+  font-size: .28em;
+  letter-spacing: .03em;
+  color: var(--secondary);
+}
+
+.speed-readout {
+  position: absolute;
+  bottom: calc(var(--safe-bottom) + 2px);
+  left: var(--safe-left);
+  display: grid;
+  justify-items: start;
+  transform: skewX(-7deg);
+  line-height: .82;
+}
+
+.speed-number {
+  font-size: clamp(24px, 3vw, 36px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 950;
+  letter-spacing: -.065em;
+}
+
+.speed-unit {
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .5em;
+  color: var(--secondary);
+  transform: translateX(.25em);
+}
+
+.burn-meter {
+  position: absolute;
+  left: var(--safe-left);
+  bottom: calc(var(--safe-bottom) + 47px);
+  display: flex;
+  gap: 7px;
+  transform: none;
+}
+
+.burn-meter i {
+  width: 25px;
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, .16);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .1);
+}
+
+.burn-meter i:nth-child(1) { background: linear-gradient(90deg, var(--accent) calc(var(--boost) * 300%), rgba(255,255,255,.16) 0); }
+.burn-meter i:nth-child(2) { background: linear-gradient(90deg, var(--accent) calc((var(--boost) - .333) * 300%), rgba(255,255,255,.16) 0); }
+.burn-meter i:nth-child(3) { background: linear-gradient(90deg, var(--secondary) calc((var(--boost) - .666) * 300%), rgba(255,255,255,.16) 0); }
+/* While a drift is charged the meter frame takes the flame colour, so the HUD
+   and the board agree about which tier is lit without adding a word. */
+.burn-meter { box-shadow: 0 0 0 1px var(--trick-flame), 0 0 12px -2px var(--trick-flame); transition: box-shadow 120ms linear; }
+
+.corner-button {
+  position: absolute;
+  right: var(--safe-right);
+  bottom: var(--safe-bottom);
+  border: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: rgba(255,255,255,.24);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: .5;
+  transition: color 160ms ease, opacity 160ms ease;
+}
+.corner-button:hover,
+.corner-button:focus-visible { color: #fff; opacity: 1; }
+
+.stage-card {
+  /* Segment identity already lives in the permanent one-line HUD. Keep the
+     announcement available to assistive tech without duplicating it over the
+     racing line. */
+  position: absolute;
+  z-index: 7;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0 !important;
+}
+
+.stage-card.show {
+  animation: none;
+}
+
+.stage-card span,
+.stage-card p {
+  margin: 0;
+  color: var(--secondary);
+  font-size: clamp(7px, .7vw, 9px);
+  font-weight: 900;
+  letter-spacing: .34em;
+}
+
+.stage-card h2 {
+  display: none;
+}
+
+@keyframes stage-card {
+  0% { opacity: 0; transform: translateX(-12px) skewX(-4deg); filter: blur(3px); }
+  16%, 54% { opacity: .88; transform: translateX(0) skewX(-4deg); filter: blur(0); }
+  100% { opacity: 0; transform: translateX(10px) skewX(-4deg); filter: blur(2px); }
+}
+
+.start-screen,
+.pause-screen,
+.finish-screen,
+.fatal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  background: radial-gradient(circle at 50% 58%, rgba(48, 13, 5, .14), rgba(1, 2, 7, .76) 60%, #010207 100%);
+  transition: opacity 600ms ease, visibility 600ms;
+}
+
+.start-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(115deg, transparent 0 44%, color-mix(in srgb, var(--accent) 15%, transparent) 44.15% 44.35%, transparent 44.5%),
+    linear-gradient(65deg, transparent 0 54%, color-mix(in srgb, var(--secondary) 9%, transparent) 54.1% 54.22%, transparent 54.4%);
+  opacity: .9;
+}
+
+.start-screen.dismissed {
+  display: none;
+}
+
+.title-lockup {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.eyebrow,
+.tagline,
+.start-hint {
+  margin: 0;
+  font-size: clamp(8px, 1.1vw, 12px);
+  font-weight: 900;
+  letter-spacing: .33em;
+  color: rgba(255,255,255,.62);
+}
+
+.title-lockup h1 {
+  margin: 15px 0 9px;
+  font-size: clamp(68px, 13.7vw, 174px);
+  font-weight: 1000;
+  font-style: italic;
+  line-height: .67;
+  letter-spacing: -.095em;
+  transform: skewX(-4deg);
+  text-shadow: 0 0 45px rgba(255, 82, 31, .2), 0 8px 0 rgba(0,0,0,.28);
+}
+
+.title-lockup h1 span {
+  color: var(--accent);
+  text-shadow: 0 0 25px color-mix(in srgb, var(--accent) 60%, transparent), 0 0 80px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.tagline { color: var(--secondary); }
+
+#start,
+#resume,
+#restart {
+  min-width: 190px;
+  min-height: 52px;
+  margin-top: 30px;
+  border: 1px solid color-mix(in srgb, var(--accent) 65%, white);
+  border-radius: 2px;
+  padding: 12px 30px;
+  color: #fff;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 72%, #190400), color-mix(in srgb, var(--accent) 27%, #030309));
+  box-shadow: 0 0 28px color-mix(in srgb, var(--accent) 30%, transparent), inset 0 0 19px rgba(255,255,255,.07);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .22em;
+  cursor: pointer;
+}
+
+#start:hover,
+#resume:hover,
+#restart:hover,
+#start:focus-visible,
+#resume:focus-visible,
+#restart:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 4px;
+  transform: scale(1.04);
+}
+
+.control-whisper {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 24px;
+  margin-top: 24px;
+  color: rgba(255,255,255,.56);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: .12em;
+}
+
+.control-whisper b { color: #fff; }
+/* The one line that says what the game IS. There is no throttle, and a player
+   arriving from the game this was forked out of will hold W expecting a boost
+   -- that game bound W to SURGE and said so on this exact widget. */
+.control-whisper .control-note {
+  flex-basis: 100%;
+  margin-top: 4px;
+  color: rgba(255,255,255,.38);
+  letter-spacing: .16em;
+}
+.start-hint { margin-top: 15px; opacity: .45; animation: breathe 1.9s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .9; } }
+
+.pause-screen[hidden],
+.finish-screen[hidden],
+.fatal[hidden] { display: none; }
+
+.pause-screen div,
+.finish-core,
+.fatal { text-align: center; }
+.pause-screen p,
+.finish-core p,
+.fatal p { font-size: 11px; font-weight: 900; letter-spacing: .26em; color: var(--secondary); }
+.finish-core h2 { margin: 0; font-size: clamp(82px, 18vw, 220px); font-style: italic; line-height: .8; letter-spacing: -.09em; text-shadow: 0 0 50px color-mix(in srgb, var(--accent) 45%, transparent); }
+#finish-time { color: #fff; font-variant-numeric: tabular-nums; }
+
+.touch-controls {
+  position: fixed;
+  z-index: 12;
+  inset: auto var(--safe-right) var(--safe-bottom) var(--safe-left);
+  display: none;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+body[data-race-status="racing"] .touch-controls { opacity: 1; }
+
+.steer-zone {
+  --steer-x: 0%;
+  position: relative;
+  width: min(42vw, 260px);
+  height: 86px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 44px;
+  background: linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.08), rgba(255,255,255,.03));
+  box-shadow: inset 0 0 30px rgba(0,0,0,.25);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.steer-zone i {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 58px;
+  height: 58px;
+  border: 2px solid color-mix(in srgb, var(--accent) 65%, white);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 14%, rgba(0,0,0,.45));
+  box-shadow: 0 0 25px color-mix(in srgb, var(--accent) 24%, transparent);
+  transform: translate(calc(-50% + var(--steer-x)), -50%);
+  transition: transform 80ms linear;
+}
+
+.steer-arrow { position: absolute; top: 50%; transform: translateY(-54%); color: rgba(255,255,255,.46); font-size: 28px; }
+.steer-arrow.left { left: 18px; }
+.steer-arrow.right { right: 18px; }
+
+.touch-actions { display: flex; align-items: end; gap: 12px; pointer-events: none; }
+.touch-button {
+  width: 70px;
+  height: 70px;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 50%;
+  color: #fff;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 36%, transparent), rgba(0,0,0,.45));
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 18%, transparent), inset 0 0 18px rgba(255,255,255,.06);
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: .12em;
+  pointer-events: auto;
+  touch-action: none;
+}
+.touch-button.hop { width: 88px; height: 88px; border-color: color-mix(in srgb, var(--accent) 60%, white); }
+.touch-button.hop span {
+  display: grid;
+  gap: 2px;
+  translate: var(--flick-x, 0px) var(--flick-y, 0px);
+  transition: translate 70ms linear;
+}
+.touch-button.hop small { font-size: .52em; letter-spacing: .17em; opacity: .58; }
+.touch-button.is-held { transform: scale(.9); background-color: color-mix(in srgb, var(--accent) 52%, #160300); box-shadow: 0 0 35px var(--accent); }
+
+.fatal { z-index: 50; background: #03040a; }
+.fatal h2 { font-size: clamp(34px, 7vw, 72px); margin: 0; }
+noscript { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 30px; background: #020307; }
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+html.force-touch .touch-controls { display: flex; }
+
+@media (pointer: coarse) {
+  .touch-controls { display: flex; }
+  .corner-button { bottom: calc(var(--safe-bottom) + 102px); }
+  .speed-readout {
+    bottom: calc(var(--safe-bottom) + 104px);
+    left: 50%;
+    justify-items: center;
+    transform: translateX(-50%) skewX(-7deg);
+  }
+  .burn-meter {
+    bottom: calc(var(--safe-bottom) + 171px);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 560px) {
+  .title-lockup h1 { font-size: clamp(62px, 23vw, 108px); }
+  .eyebrow { max-width: 290px; line-height: 1.7; }
+  .control-whisper { max-width: 310px; gap: 8px 13px; }
+  .stage-card { top: calc(var(--safe-top) + 42px); left: var(--safe-left); }
+  .world-name { max-width: 54vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .touch-controls { gap: 8px; }
+  .steer-zone { width: 42vw; height: 76px; }
+  .steer-zone i { width: 52px; height: 52px; }
+  .touch-button { width: 62px; height: 62px; }
+  .touch-button.hop { width: 78px; height: 78px; }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+  .title-lockup h1 { font-size: min(22vh, 94px); margin: 8px 0; line-height: .72; }
+  .eyebrow, .tagline, .start-hint { font-size: 7px; }
+  #start { min-height: 44px; margin-top: 15px; }
+  .control-whisper { margin-top: 13px; }
+  .touch-controls { inset-block-end: max(8px, env(safe-area-inset-bottom)); }
+  .steer-zone { height: 66px; width: 31vw; }
+  .steer-zone i { width: 46px; height: 46px; }
+  .touch-button { width: 56px; height: 56px; }
+  .touch-button.hop { width: 68px; height: 68px; }
+  .speed-readout { bottom: calc(var(--safe-bottom) + 72px); }
+  .burn-meter { bottom: calc(var(--safe-bottom) + 128px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grain { animation: none; opacity: .035; }
+  .speed-wash { opacity: calc(var(--speed) * .12); filter: blur(3px); }
+  .stage-card.show { animation-duration: .65s; }
+  .start-hint { animation: none; }
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}
+
+/* --- the trick banner -----------------------------------------------------
+
+   Sits right of centre and low, out of the road's vanishing point and out of
+   the way of the rider, who is the thing being watched. Nothing here ever
+   takes a click or holds a frame: it is pure readout.
+
+   The colour comes from --trick-flame, which the renderer already publishes
+   for the charged tier, so the banner is the same colour as the flame under
+   the board without either knowing about the other. */
+.trick-banner {
+  position: absolute;
+  right: 5vw;
+  bottom: 22vh;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  pointer-events: none;
+  text-align: right;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-shadow: 0 2px 14px rgba(0,0,0,.85);
+}
+
+.trick-move {
+  font-size: clamp(18px, 3.2vw, 42px);
+  line-height: 1;
+  color: #fff;
+  opacity: 0;
+  transform: translate3d(26px, 0, 0) skewX(-9deg);
+}
+/* Snaps in, drifts out. A trick is an impact, so the arrival has no easing to
+   speak of and the exit has all of it. */
+.trick-move.hit {
+  animation: trick-move-in 900ms cubic-bezier(.12, .82, .2, 1) forwards;
+}
+@keyframes trick-move-in {
+  0%   { opacity: 0; transform: translate3d(34px, 0, 0) skewX(-14deg); }
+  9%   { opacity: 1; transform: translate3d(0, 0, 0) skewX(-9deg); }
+  62%  { opacity: 1; transform: translate3d(0, 0, 0) skewX(-9deg); }
+  100% { opacity: 0; transform: translate3d(-16px, -10px, 0) skewX(-9deg); }
+}
+
+.trick-chain {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: clamp(13px, 1.9vw, 24px);
+  color: var(--trick-flame, #fff);
+  opacity: 0;
+  transition: opacity 220ms ease-out;
+}
+.trick-chain.alive { opacity: .92; }
+/* The cash-out. One pulse, on the frame the boost actually fires. */
+.trick-chain.cashed { animation: trick-cash 620ms ease-out forwards; }
+@keyframes trick-cash {
+  0%   { opacity: 1; transform: scale(1); }
+  14%  { opacity: 1; transform: scale(1.28); }
+  70%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+.trick-multiplier { opacity: .8; font-size: .78em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .trick-move.hit { animation: trick-move-fade 900ms linear forwards; }
+  .trick-chain.cashed { animation: trick-move-fade 620ms linear forwards; }
+  @keyframes trick-move-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+}

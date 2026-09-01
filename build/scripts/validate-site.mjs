@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkCatalog, expected } from "./expected.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const rootArgument = process.argv.find((argument) => argument.startsWith("--root="))?.slice(7);
@@ -74,10 +75,7 @@ function jsonLd(html) {
   return JSON.parse(match[1]);
 }
 
-assert(data.games.length === 27, "Canonical game total is not 27");
-assert(data.albums.length === 12, "Canonical album total is not 12");
-assert(data.games.filter((item) => item.featured).length === 3, "Featured game total is not 3");
-assert(data.albums.filter((item) => item.featured).length === 3, "Featured album total is not 3");
+checkCatalog(assert);
 assert(!existsSync(join(outputRoot, "blackthorn-manor")), "Blackthorn directory must not exist");
 assert(!existsSync(join(outputRoot, "assets", "brand", "pikachu-forest.webp")), "Replaced hero asset must not remain in deploy");
 assert(!existsSync(join(outputRoot, "book.html")), "Retired book page must not exist");
@@ -126,8 +124,8 @@ assert(!publicHubText.includes("friendship that is allowed to be ordinary"), "Re
 assert(!publicHubText.includes("the pharmacology matters. so do the people."), "Rejected generic server CTA remains in public hub");
 assert(!publicHubText.includes("the three things the server is built to hold together"), "Rejected server filler remains in public hub");
 
-assert((home.match(/data-catalog-game="/g) || []).length === 3, "Homepage must feature three games");
-assert((home.match(/data-catalog-album="/g) || []).length === 3, "Homepage must feature three releases");
+assert((home.match(/data-catalog-game="/g) || []).length === expected.featuredGames, `Homepage must feature ${expected.featuredGames} games`);
+assert((home.match(/data-catalog-album="/g) || []).length === expected.featuredAlbums, `Homepage must feature ${expected.featuredAlbums} releases`);
 assert((gamesPage.match(/data-catalog-game="/g) || []).length === data.games.length, "Game card count does not match canonical data");
 assert((musicPage.match(/data-catalog-album="/g) || []).length === data.albums.length, "Album card count does not match canonical data");
 assert(jsonLd(gamesPage).mainEntity.numberOfItems === data.games.length, "Game JSON-LD count mismatch");

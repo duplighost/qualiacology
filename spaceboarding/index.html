@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- The canvas and the touch pads already set touch-action:none, so play is
+       unaffected by page zoom; blocking it page-wide only stopped low-vision
+       players enlarging the finish card. Same call as thrown/index.html. -->
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#05060a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="SPACEBOARDING is a browser race across three worlds ridden standing on a rocket skateboard. No throttle: land tricks and grind rails for every scrap of speed, and the board unfolds into a glider between worlds.">
+  <title>SPACEBOARDING | Qualiacology</title>
+  <link rel="canonical" href="https://qualiacology.com/spaceboarding/">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="SPACEBOARDING | Qualiacology">
+  <meta property="og:description" content="Worlds run end to end without stopping, ridden standing up. Speed is earned, never given.">
+  <meta property="og:url" content="https://qualiacology.com/spaceboarding/">
+  <meta property="og:image" content="https://qualiacology.com/assets/games/spaceboarding-card-clean.webp">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="720">
+  <meta property="og:image:alt" content="A rider standing on a lit board on a red canyon road, white speed streaks tearing past on both sides, a violet rival riding alongside">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SPACEBOARDING | Qualiacology">
+  <meta name="twitter:description" content="Worlds run end to end without stopping, ridden standing up. Speed is earned, never given.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/spaceboarding-card-clean.webp">
+  <meta name="twitter:image:alt" content="A rider standing on a lit board on a red canyon road, white speed streaks tearing past on both sides, a violet rival riding alongside">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=0.1.0">
+  <style>
+    /* Home pill. Sits above the game's own UI, and borrows --accent so it
+       shifts colour with whichever world you are on. */
+    .home-link{position:fixed;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));
+      z-index:2147483647;display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:0 13px;
+      color:rgba(238,240,247,.9);text-decoration:none;
+      font:600 10px/1.2 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;letter-spacing:.18em;
+      text-transform:uppercase;border:1px solid rgba(238,240,247,.24);border-radius:4px;
+      background:rgba(5,6,10,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      opacity:.36;transition:opacity .18s ease,border-color .18s ease;}
+    .home-link:hover,.home-link:focus-visible{opacity:1;border-color:var(--accent,#ff5f2e);outline:0;}
+    @media (pointer:coarse){.home-link{opacity:.3;}}
+    @media (max-width:600px){
+      .home-link{width:40px;height:40px;padding:0;display:grid;place-items:center;font-size:0;}
+      .home-link::after{content:'Q.';font:600 13px/1 ui-sans-serif,system-ui,sans-serif;letter-spacing:.02em;color:rgba(238,240,247,.92);}
+    }
+    /* The start and finish cards own the screen; the pill would collide with
+       the title lockup, so it steps aside until the race is actually running. */
+    body:not([data-race-status="racing"]):not([data-race-status="paused"]) .home-link{opacity:.62;}
+  </style>
+</head>
+<body data-build-id="spaceboarding-0.1.0" data-game-ready="false" data-race-status="booting" data-quality-tier="high">
+  <a class="home-link" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology"><span aria-hidden="true">&#8592;</span> <span>Qualiacology</span></a>
+  <canvas id="game" aria-label="SPACEBOARDING 3D racing game"></canvas>
+
+  <div class="fx" aria-hidden="true">
+    <div class="speed-wash"></div>
+    <div class="edge-heat"></div>
+    <div class="impact-flash"></div>
+    <div class="vignette"></div>
+    <div class="grain"></div>
+  </div>
+
+  <header id="hud" class="hud" aria-label="Race status">
+    <div class="world-readout">
+      <span id="world-count" class="world-count">I / IX</span>
+      <span id="world-name" class="world-name">SCORIA RUN</span>
+    </div>
+    <div class="race-readout">
+      <span id="position" class="position">2<small>/4</small></span>
+    </div>
+    <div class="speed-readout">
+      <span id="speed" class="speed-number">1551</span>
+      <span class="speed-unit">KM/S</span>
+    </div>
+    <div id="burn-meter" class="burn-meter" aria-label="Burn charge">
+      <i></i><i></i><i></i>
+    </div>
+    <button id="mute" class="corner-button" type="button" aria-label="Mute audio">SOUND</button>
+  </header>
+
+  <!-- The trick banner. Alex: "we can throw the name of the trick and the
+       point value onto the screen in a cool way when you do a trick."
+
+       Two lines that do different jobs. The MOVE is what you just did and it
+       replaces itself every trick. The CHAIN underneath is the run so far --
+       it accumulates while the combo is alive and flashes its total when the
+       combo cashes, which is the same moment the boost fires. -->
+  <section id="trick-banner" class="trick-banner" aria-live="off">
+    <div id="trick-move" class="trick-move"></div>
+    <div id="trick-chain" class="trick-chain">
+      <span id="trick-score" class="trick-score"></span>
+      <span id="trick-multiplier" class="trick-multiplier"></span>
+    </div>
+  </section>
+
+  <section id="stage-card" class="stage-card" aria-live="polite">
+    <span id="stage-index">WORLD I</span>
+    <h2 id="stage-name">SCORIA RUN</h2>
+    <p id="stage-epithet">THE FORGE IS BREATHING</p>
+  </section>
+
+  <section id="start-screen" class="start-screen">
+    <div class="title-lockup">
+      <h1>SPACE<br><span>BOARDING</span></h1>
+      <p class="tagline">SPEED IS EARNED.</p>
+      <button id="start" type="button">DROP IN</button>
+      <div class="control-whisper" aria-label="Controls">
+        <span><b>A D</b> STEER · AIR TAP / HOLD SPIN</span>
+        <span><b>SPACE</b> QUICK LOAD · RELEASE POP</span>
+        <span><b>W S</b> TAP FRONT / BACKFLIP</span>
+        <span><b>Q E</b> TAP KICK / HEELFLIP</span>
+        <span><b>SHIFT</b> GRAB</span>
+        <span class="control-note">TAP AGAIN TO STACK. LAND THE LINE FOR SPEED.</span>
+      </div>
+      <p class="start-hint">PRESS ANY CONTROL</p>
+    </div>
+  </section>
+
+  <section id="pause-screen" class="pause-screen" hidden>
+    <div>
+      <p>HELD</p>
+      <button id="resume" type="button">GO</button>
+    </div>
+  </section>
+
+  <section id="finish-screen" class="finish-screen" hidden>
+    <div class="finish-core">
+      <p id="finish-kicker">&nbsp;</p>
+      <h2 id="finish-place">1ST</h2>
+      <p id="finish-time">04:19.284</p>
+      <button id="restart" type="button">AGAIN</button>
+    </div>
+  </section>
+
+  <div id="touch-controls" class="touch-controls" aria-label="Touch controls">
+    <div class="steer-zone" data-control="steer" aria-label="Steer">
+      <span class="steer-arrow left">‹</span>
+      <i></i>
+      <span class="steer-arrow right">›</span>
+    </div>
+    <div class="touch-actions">
+      <button class="touch-button grab" data-control="grab" type="button"><span>GRAB</span></button>
+      <button class="touch-button hop" data-control="hop" type="button" aria-label="Hold to load and release to hop. Drag before release to flip."><span>HOP<small>FLICK</small></span></button>
+    </div>
+  </div>
+
+  <div id="fatal" class="fatal" hidden role="alert">
+    <h2>IT BROKE</h2>
+    <p id="fatal-message">This browser could not start the 3D race.</p>
+  </div>
+  <div id="announcer" class="sr-only" aria-live="polite"></div>
+  <output id="autotest-result" hidden></output>
+
+  <noscript>SPACEBOARDING requires JavaScript and WebGL.</noscript>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.min.js",
+        "three/addons/": "./vendor/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="./src/boot.js?v=0.1.0"></script>
+</body>
+</html>

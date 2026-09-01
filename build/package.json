@@ -7,6 +7,7 @@
     "build": "node scripts/build-site.mjs",
     "validate": "node scripts/validate-site.mjs --root=..",
     "smoke": "node scripts/route-smoke.mjs --root=..",
+    "preflight": "node scripts/preflight.mjs",
     "qa:skyshard-world": "node qa/skyshard-world-layout-check.mjs",
     "qa:skyshard-progression": "node qa/skyshard-progression-contract-check.mjs",
     "qa": "node qa/browser-qa.mjs"
