@@ -15,6 +15,41 @@
     "tiktok": "https://www.tiktok.com/@duplighost",
     "suno": "https://suno.com/@doopliss"
   },
+  "psych": {
+    "notice": {
+      "eyebrow": "Important",
+      "body": "I am not a doctor. I'm an insane person on the internet. We try to help as many people as possible here with questions.",
+      "lede": "But if you really want an answer to a medical question that is not a guess:",
+      "answer": "Ask your doctor."
+    },
+    "rules": {
+      "eyebrow": "The rules",
+      "title": "House rules",
+      "copy": "Thanks for helping keep the server thoughtful, welcoming, and organized.",
+      "items": [
+        {
+          "title": "Abide by TOS",
+          "note": "Follow platform rules and community standards."
+        },
+        {
+          "title": "Be friendly to others",
+          "note": "Criticize ideas, not people."
+        },
+        {
+          "title": "No sourcing or selling",
+          "note": "No sourcing to any products or selling."
+        },
+        {
+          "title": "Keep recreational drug talk in the recreational channel",
+          "note": "Visit the roles channel to opt in."
+        },
+        {
+          "title": "If it could offend someone, post it in the controversial channel",
+          "note": "Visit the roles channel to opt in."
+        }
+      ]
+    }
+  },
   "games": [
     {
       "slug": "lil-big-bang",

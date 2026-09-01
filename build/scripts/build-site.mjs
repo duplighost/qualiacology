@@ -18,7 +18,7 @@ const rootArgument = process.argv.find((a) => a.startsWith("--root="))?.slice(7)
 const outputRoot = rootArgument ? resolve(projectRoot, rootArgument) : resolve(projectRoot, "..");
 const sourceRoot = join(projectRoot, "src");
 const data = JSON.parse(readFileSync(join(sourceRoot, "content", "site-data.json"), "utf8"));
-const { site, games, albums } = data;
+const { site, games, albums, psych } = data;
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -496,6 +496,17 @@ function psychopharmacologyPage() {
     about: ["Psychopharmacology", "Peer support", "Psychiatric medicine"],
   };
 
+  // Numbers are a CSS counter on .rules-list, never emitted here — see site.css.
+  const rules = psych.rules.items
+    .map(
+      (rule) => `
+          <li>
+            <h3>${escapeHtml(rule.title)}</h3>
+            <p>${escapeHtml(rule.note)}</p>
+          </li>`,
+    )
+    .join("");
+
   const main = `<main id="main-content">
     <section class="subhero">
       <div class="container subhero-grid">
@@ -509,6 +520,15 @@ function psychopharmacologyPage() {
       </div>
     </section>
 
+    <div class="container">
+      <aside class="server-notice" aria-labelledby="notice-title">
+        <p class="eyebrow" id="notice-title">${escapeHtml(psych.notice.eyebrow)}</p>
+        <p class="notice-body">${escapeHtml(psych.notice.body)}</p>
+        <p class="notice-lede">${escapeHtml(psych.notice.lede)}</p>
+        <p class="notice-answer">${escapeHtml(psych.notice.answer)}</p>
+      </aside>
+    </div>
+
     <section class="section" id="community" aria-labelledby="community-title">
       <div class="container">
         <div class="section-heading">
@@ -521,6 +541,17 @@ function psychopharmacologyPage() {
           <article class="community-card"><h3>Saturdays · 4 PM ET</h3><p>Live voice chats — discussion, support, and figuring things out together.</p></article>
           <article class="community-card"><h3>Warm and blunt</h3><p>Credible, warm, and blunt enough to be useful when the subject is too important for fake certainty.</p></article>
         </div>
+      </div>
+    </section>
+
+    <section class="section" id="rules" aria-labelledby="rules-title">
+      <div class="container">
+        <div class="section-heading">
+          <div><p class="eyebrow">${escapeHtml(psych.rules.eyebrow)}</p><h2 id="rules-title">${escapeHtml(psych.rules.title)}</h2></div>
+          <div class="section-heading-copy"><p>${escapeHtml(psych.rules.copy)}</p></div>
+        </div>
+        <ol class="rules-list">${rules}
+        </ol>
         <div class="button-row section-action">
           <a class="button button-primary external-link" href="${escapeHtml(site.discord)}" ${external}>Join the Discord</a>
           <a class="button external-link" href="${escapeHtml(site.chatgptGroup)}" ${external}>ChatGPT group chat</a>
