@@ -1579,6 +1579,93 @@ body[data-page="psych"] .subhero h1 {
   font-size: 0.92rem;
 }
 
+/* The Discord welcome, translated. Both plates are the server's own words set in the
+   site's own type — not the posters pasted in as pictures, which would be unreadable
+   at 390px, invisible to a screen reader, and 1.5MB of text-as-JPEG. Ruled plates, no
+   glow: the hero aura is already this view's one aura. */
+.server-notice {
+  margin-top: clamp(2.5rem, 6vw, 4rem);
+  padding: clamp(1.25rem, 3.5vw, 2rem);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--wing);
+  background: var(--surface);
+}
+
+.server-notice .eyebrow {
+  margin-bottom: 0.9rem;
+}
+
+.notice-body {
+  max-width: 44rem;
+  margin-bottom: 1.15rem;
+  color: var(--text-soft);
+  font-size: clamp(1rem, 2.6vw, 1.15rem);
+}
+
+.notice-lede {
+  max-width: 44rem;
+  margin-bottom: 0.55rem;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+/* The poster's punchline, kept as a punchline. Display scale in the room's colour is
+   the loudest this page gets; it costs nothing from the discipline budget. */
+.notice-answer {
+  margin-bottom: 0;
+  color: var(--wing);
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 5.5vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+/* House rules: one rule per row, numeral in the room's colour. The numeral is a CSS
+   counter, not template output — same reason as the card index: reordering or adding a
+   rule in site-data.json can then never leave a stale number behind it. */
+.rules-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  counter-reset: houserule;
+  gap: 1.6rem;
+  list-style: none;
+}
+
+.rules-list > li {
+  display: grid;
+  min-width: 0;
+  padding-top: 1.3rem;
+  border-top: 1px solid var(--line);
+  counter-increment: houserule;
+  gap: 0.6rem 1.5rem;
+}
+
+.rules-list > li::before {
+  align-self: start;
+  color: var(--wing);
+  content: counter(houserule, decimal-leading-zero);
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.rules-list h3 {
+  margin-bottom: 0;
+  font-size: clamp(1.15rem, 3.4vw, 1.5rem);
+}
+
+.rules-list p {
+  max-width: 44rem;
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
 /* The filter rail: a printed index tab bar, latched in the room's color. */
 .filter-shell {
   position: sticky;
@@ -1802,6 +1889,16 @@ body[data-page="psych"] .subhero h1 {
 }
 
 @media (min-width: 45rem) {
+  /* Wide enough for a number gutter: the numeral spans both text rows so the rule and
+     its note hang off one left edge. Below this it stacks, numeral first. */
+  .rules-list > li {
+    grid-template-columns: 3.25rem minmax(0, 1fr);
+  }
+
+  .rules-list > li::before {
+    grid-row: 1 / span 2;
+  }
+
   .hero-art img {
     aspect-ratio: 41 / 16;
   }
