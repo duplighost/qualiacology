@@ -257,7 +257,7 @@
           const script = document.createElement('script');
           script.type = 'module';
           script.crossOrigin = '';
-          script.src = './assets/index-cute-fast-stable-v82.js?v=82';
+          script.src = './assets/index-cute-fast-stable-v83.js?v=83';
           script.addEventListener('error', () => {
             rememberRuntimeError('The Glide game module failed to load.');
             showFallback('The forest could not finish loading. Refresh once, or try a current browser with hardware acceleration enabled.');
@@ -277,12 +277,17 @@
 
               if (game.__uprightGlidePatched) return;
               game.__uprightGlidePatched = true;
-              game.__glideMotionPatchVersion = 'v82-fast-stable-climbstick';
+              game.__glideMotionPatchVersion = 'v83-grounded-c-brake';
 
               const { player, squirrel } = game;
               if (game.engine && game.engine.renderer && game.engine.renderer.setPixelRatio && !game.__renderCostCapped) {
                 game.__renderCostCapped = true;
-                game.engine.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35));
+                const renderRatio = Math.min(window.devicePixelRatio || 1, 1);
+                game.engine.renderer.setPixelRatio(renderRatio);
+                if (game.engine.composer) {
+                  game.engine.composer.setPixelRatio?.(renderRatio);
+                  game.engine.composer.setSize?.(window.innerWidth, window.innerHeight);
+                }
                 if (game.sky && game.sky.sun && game.sky.sun.shadow && game.sky.sun.shadow.mapSize) {
                   game.sky.sun.shadow.mapSize.set(1024, 1024);
                   if (game.sky.sun.shadow.map) game.sky.sun.shadow.map.dispose();
@@ -291,18 +296,22 @@
               }
               if (!game.__groundDiveInputInstalled) {
                 game.__groundDiveInputInstalled = true;
-                game.__diveHeld = false;
-                const setDiveHeld = (event, held) => {
-                  if (event.code !== 'ControlLeft' && event.code !== 'ControlRight' && event.code !== 'KeyF') return;
+                game.__dropHeld = false;
+                const setDropHeld = (event, held) => {
+                  if (event.code !== 'KeyC') return;
+                  if (held && (event.ctrlKey || event.metaKey || event.altKey)) return;
+                  game.__dropHeld = held;
                   game.__diveHeld = held;
+                  document.documentElement.dataset.glideDropHeld = held ? '1' : '0';
                   document.documentElement.dataset.glideDiveHeld = held ? '1' : '0';
                   document.documentElement.dataset.glideGroundLock = held ? '1' : '0';
-                  event.preventDefault();
                 };
-                window.addEventListener('keydown', (event) => setDiveHeld(event, true));
-                window.addEventListener('keyup', (event) => setDiveHeld(event, false));
+                window.addEventListener('keydown', (event) => setDropHeld(event, true));
+                window.addEventListener('keyup', (event) => setDropHeld(event, false));
                 window.addEventListener('blur', () => {
+                  game.__dropHeld = false;
                   game.__diveHeld = false;
+                  document.documentElement.dataset.glideDropHeld = '0';
                   document.documentElement.dataset.glideDiveHeld = '0';
                   document.documentElement.dataset.glideGroundLock = '0';
                 });
@@ -322,7 +331,15 @@
               player.pitch = clamp(player.pitch, -0.42, 0.42);
               if (squirrel.bodyG) squirrel.bodyG.rotation.z = 0;
 
-              const snapToGround = (subject, maxHeight = 2.75, dampHorizontal = false) => {
+              const capHorizontalSpeed = (subject, maxSpeed) => {
+                if (!subject?.velocity) return;
+                const speed = Math.hypot(subject.velocity.x || 0, subject.velocity.z || 0);
+                if (speed <= maxSpeed || speed < 0.001) return;
+                const scale = maxSpeed / speed;
+                subject.velocity.x *= scale;
+                subject.velocity.z *= scale;
+              };
+              const snapToGround = (subject, maxHeight = 2.75) => {
                 if (!game.biomeAt || !subject?.position) return false;
                 const biome = game.biomeAt(subject.position.x, subject.position.z);
                 const ground = biome.ground + 0.28;
@@ -331,10 +348,6 @@
                 subject.position.y = ground;
                 if (subject.velocity) {
                   subject.velocity.y = 0;
-                  if (dampHorizontal) {
-                    subject.velocity.x *= 0.42;
-                    subject.velocity.z *= 0.42;
-                  }
                 }
                 subject.state = 'ground';
                 subject.climbTree = null;
@@ -343,18 +356,18 @@
                 subject.roll = 0;
                 return true;
               };
-              const snapToGroundIfHeld = (subject, maxHeight = 2.75) => game.__diveHeld && snapToGround(subject, maxHeight, true);
+              const snapToGroundIfHeld = (subject, maxHeight = 2.75) => game.__dropHeld && snapToGround(subject, maxHeight);
               const settleLowGroundRun = (subject, input, maxHeight = 0.9) => {
                 if (subject?.state === 'climb') return false;
                 const wantsLaunch = game.__manualLaunchRequested || input?.action || input?._actionEdge;
-                if (game.__diveHeld || wantsLaunch || subject?.velocity?.y > 1.4) return false;
+                if (game.__dropHeld || wantsLaunch || subject?.velocity?.y > 1.4) return false;
                 return snapToGround(subject, maxHeight);
               };
 
               const oldTryGrabTree = player._tryGrabTree && player._tryGrabTree.bind(player);
               if (oldTryGrabTree) {
                 player._tryGrabTree = function eagerTryGrabTree(fromGround) {
-                  if (game.__diveHeld) return false;
+                  if (game.__dropHeld) return false;
                   return oldTryGrabTree(fromGround);
                 };
               }
@@ -392,21 +405,40 @@
                 game.__manualLaunchControlsInstalled = true;
                 const dropFromClimb = () => {
                   if (player.state !== 'climb') return;
-                  const facing = Number.isFinite(player.facing) ? player.facing : 0;
+                  let outwardX = player.surfaceNormal?.x || 0;
+                  let outwardZ = player.surfaceNormal?.z || 0;
+                  let outwardLength = Math.hypot(outwardX, outwardZ);
+                  if (outwardLength < 0.08 && player.climbTree) {
+                    outwardX = player.position.x - (player.climbTree.x || 0);
+                    outwardZ = player.position.z - (player.climbTree.z || 0);
+                    outwardLength = Math.hypot(outwardX, outwardZ);
+                  }
+                  if (outwardLength < 0.08) {
+                    const facing = Number.isFinite(player.facing) ? player.facing : 0;
+                    outwardX = Math.sin(facing);
+                    outwardZ = Math.cos(facing);
+                    outwardLength = 1;
+                  }
+                  outwardX /= outwardLength;
+                  outwardZ /= outwardLength;
+                  const carryX = (player.velocity?.x || 0) * 0.18;
+                  const carryZ = (player.velocity?.z || 0) * 0.18;
                   player.state = 'air';
                   player.climbTree = null;
                   player.climbSeg = null;
-                  player.pitch = -0.42;
+                  player.pitch = -0.24;
                   player.roll = 0;
                   player._grabCooldown = 1.2;
-                  player.velocity?.set?.(Math.sin(facing) * 18, -3.5, Math.cos(facing) * 18);
+                  player.position.x += outwardX * 0.32;
+                  player.position.z += outwardZ * 0.32;
+                  player.velocity?.set?.(carryX + outwardX * 2.2, -4.5, carryZ + outwardZ * 2.2);
                   game.__leftLaunchPerch = true;
                   game.camera?.addShake?.(0.08);
                 };
                 window.addEventListener('keydown', (event) => {
                   if (event.code === 'Space' && player.state === 'climb') {
                     game.__manualLaunchRequested = true;
-                  } else if ((event.code === 'ControlLeft' || event.code === 'ControlRight' || event.code === 'KeyF') && player.state === 'climb') {
+                  } else if (event.code === 'KeyC' && !event.ctrlKey && !event.metaKey && !event.altKey && player.state === 'climb') {
                     dropFromClimb();
                   }
                 });
@@ -417,19 +449,18 @@
                 player._ground = function steadierGround(dt, input, camera) {
                   const savedAction = input?.action;
                   const savedActionEdge = input?._actionEdge;
-                  if (game.__diveHeld && input) {
+                  if (game.__dropHeld && input) {
                     input.action = false;
                     input._actionEdge = false;
                   }
-                  game.__allowGroundAutoGrab = !!(!game.__diveHeld && input?.action && input?.move && input.move.y > 0.15);
                   oldGround(dt, input, camera);
-                  game.__allowGroundAutoGrab = false;
-                  if (game.__diveHeld && input) {
+                  if (game.__dropHeld && input) {
                     input.action = savedAction;
                     input._actionEdge = savedActionEdge;
                   }
-                  if (game.__diveHeld) {
+                  if (game.__dropHeld) {
                     snapToGroundIfHeld(this, 3.2);
+                    capHorizontalSpeed(this, 5.5);
                   } else {
                     settleLowGroundRun(this, input, 1.15);
                   }
@@ -440,9 +471,10 @@
               if (oldAir) {
                 player._air = function uprightAir(dt, input, camera) {
                   oldAir(dt, input, camera);
-                  if (game.__diveHeld) {
-                    this.velocity.y -= 28 * dt;
-                    this.pitch = -0.42;
+                  if (game.__dropHeld) {
+                    if (this.state === 'air') this.velocity.y = Math.max(-11, this.velocity.y - 22 * dt);
+                    capHorizontalSpeed(this, 9);
+                    this.pitch = -0.34;
                     this.roll *= 0.7;
                     snapToGroundIfHeld(this, 3.4);
                   } else {
@@ -450,7 +482,7 @@
                     // that was killing low glides and making the animal feel stalled.
                   }
                   const horizSpeed = Math.hypot(this.velocity?.x || 0, this.velocity?.z || 0);
-                  if (this.state === 'air' && horizSpeed < 12 && this.velocity) {
+                  if (!game.__dropHeld && this.state === 'air' && horizSpeed < 12 && this.velocity) {
                     const facing = Number.isFinite(this.facing) ? this.facing : 0;
                     const rescue = Math.min(12, horizSpeed + 18 * dt);
                     this.velocity.x = Math.sin(facing) * rescue;
@@ -535,6 +567,7 @@
               let nextScan = 0;
               let lastTreeTouch = 0;
               let lastFrame = performance.now();
+              const touchPoint = new Vec3();
 
               const fract = (value) => value - Math.floor(value);
               const hash = (x, z, salt) => fract(Math.sin(x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453);
@@ -565,9 +598,9 @@
               const makeMesh = (template, color, emissive, opacity) => {
                 const mesh = template.clone(false);
                 mesh.material = makeMaterial(template, color, emissive, opacity);
-                mesh.castShadow = true;
+                mesh.castShadow = false;
                 mesh.receiveShadow = true;
-                mesh.frustumCulled = false;
+                mesh.frustumCulled = true;
                 return mesh;
               };
 
@@ -765,18 +798,6 @@
                   site.motes.push({ mesh: mote, a, speed: 0.25 + hash(tree.x, tree.z, 170 + i) * 0.4, y: mote.position.y });
                 }
 
-                const LightCtor = game.hollow && game.hollow.light && game.hollow.light.constructor;
-                if (LightCtor && sites.length < 4) {
-                  try {
-                    const light = new LightCtor(palette.glow, 0.08, 8, 2);
-                    light.position.set(0, 1.1, 0);
-                    group.add(light);
-                    site.light = light;
-                  } catch (error) {
-                    site.light = null;
-                  }
-                }
-
                 sites.push(site);
                 return site;
               };
@@ -864,7 +885,7 @@
                   if (site.light) site.light.intensity = 0.05 + site.glow * 0.34 + site.pulse * 0.5;
 
                   site.items.forEach((item, index) => {
-                    const world = new Vec3(
+                    const world = touchPoint.set(
                       site.center.x + item.mesh.position.x,
                       site.center.y + item.mesh.position.y,
                       site.center.z + item.mesh.position.z
@@ -981,9 +1002,9 @@
               const makeMesh = (template, color, emissive = 0, opacity = 1) => {
                 const mesh = template.clone(false);
                 mesh.material = makeMaterial(template, color, emissive, opacity);
-                mesh.castShadow = true;
+                mesh.castShadow = false;
                 mesh.receiveShadow = true;
-                mesh.frustumCulled = false;
+                mesh.frustumCulled = true;
                 return mesh;
               };
 
@@ -1037,7 +1058,7 @@
               const installFluff = () => {
                 if (game.__fluffInstalled) return;
                 game.__fluffInstalled = true;
-                document.documentElement.dataset.glideCharacterPolish = 'cute-animal-v82-fast-stable-climbstick';
+                document.documentElement.dataset.glideCharacterPolish = 'cute-animal-v83-grounded-c-brake';
               };
 
               const findVistaOrigin = () => {
@@ -1125,7 +1146,7 @@
 
               const movePlayerToPerch = () => {
                 const hashName = (location.hash || '').replace('#', '').toLowerCase();
-                if (hashName && hashName !== 'start' && hashName !== 'perch') return;
+                if (hashName !== 'perch') return;
                 if (game.__startedAtHighPerch) return;
                 const tree = buildLaunchPerch();
                 const seg = tree.startSegment;
@@ -1176,53 +1197,20 @@
                 ['Crystal Reed Pool',5,'crystal','crystal',1],['Teal Shard Garden',5,'crystal','crystal',0],['Singing Marsh Stones',5,'marsh','shell',1],['Glass Frog Step',5,'marsh','shell',1],['Luminous Reed Maze',5,'marsh','crystal',1],
                 ['Obsidian Firefly Bowl',6,'ember','ember',0],['Warm Coal Stair',6,'ember','ember',0],['Basalt Bell Fork',6,'ember','pebble',0],['Orange Ash Spring',6,'ember','ember',1],['Cinder Moon Arch',6,'ember','pebble',0]
               ].map((entry, index) => ({ name: entry[0], kind: entry[1], theme: entry[2], toy: entry[3], water: !!entry[4], index, batch: Math.floor(index / 10) + 1 }));
-
-              const destinationQuality = (kind, x, z) => {
-                let total = 0;
-                let matching = 0;
-                let snow = 0;
-                let flowers = 0;
-                let usable = 0;
-                for (let dx = -240; dx <= 240; dx += 80) {
-                  for (let dz = -240; dz <= 240; dz += 80) {
-                    const info = game.biomeAt(x + dx, z + dz);
-                    total += 1;
-                    snow += info.snow;
-                    flowers += info.flower;
-                    if (info.ground > -2) usable += 1;
-                    if (kind === 3 ? info.snow > 0.55 : kind === 0 ? info.flower > 0.42 : info.kind === kind) matching += 1;
-                  }
-                }
-                return {
-                  ratio: matching / total,
-                  snow: snow / total,
-                  flowers: flowers / total,
-                  usable: usable / total
-                };
-              };
-
-              const findNearbyBiome = (kind, x, z, index) => {
-                let best = null;
-                let bestScore = -Infinity;
-                for (let radius = 0; radius <= 3400; radius += 96) {
-                  for (let angle = 0; angle < twoPi; angle += 0.38) {
-                    const px = x + Math.cos(angle + index * 0.07) * radius;
-                    const pz = z + Math.sin(angle + index * 0.07) * radius;
-                    const info = game.biomeAt(px, pz);
-                    const match = kind === 3 ? info.snow > 0.5 : kind === 0 ? info.flower > 0.45 : info.kind === kind;
-                    if (!match || info.ground < -2) continue;
-                    const quality = destinationQuality(kind, px, pz);
-                    const targetQuality = kind === 3 ? quality.snow : kind === 0 ? quality.flowers : quality.ratio;
-                    const borderPenalty = kind === 4 || kind === 5 || kind === 6 || kind === 2 ? quality.snow * 230 + Math.max(0, 0.35 - quality.ratio) * 420 : 0;
-                    const score = (kind === info.kind ? 90 : 0) + targetQuality * 650 + quality.usable * 80 + info.ground * 2 - borderPenalty - radius * 0.025;
-                    if (score > bestScore) {
-                      bestScore = score;
-                      best = { x: px, y: info.ground, z: pz, info, quality };
-                    }
-                  }
-                }
-                return best || { x, y: game.biomeAt(x, z).ground, z, info: game.biomeAt(x, z) };
-              };
+              // These are the exact deterministic results of the old multi-million-sample startup search.
+              // Keeping them authored here preserves every destination while letting play begin immediately.
+              const destinationPositions = [
+                [2977.327, 10.44, -871.834], [1959.935, 7.66, -534.391], [3000.23, 6.83, -800.136], [2074.472, 0.89, 286.975], [1972.115, 4.82, 248.177],
+                [2326.698, 6.44, 1610.454], [2999.037, 7.53, -787.127], [2191.424, 0.19, 1276.566], [2202.99, -0.12, 1511.459], [2145.9, 0.1, 1415.527],
+                [1789.4, 7.33, 3204.131], [2767.979, 2.73, 1524.028], [46.932, 9.89, 2809.996], [413.356, 1.94, 109.53], [174.18, 1.57, 109.156],
+                [297.029, 6.67, 2840.506], [-2411.46, 2.82, 2227.992], [159.197, 10.21, 65.928], [-574.465, 4.63, 1340.018], [-575.665, 6.27, 1288.246],
+                [759.598, 1.73, -375.235], [-865.236, 3.12, -1208.234], [854.227, 3.05, -515.016], [1056.102, 9.4, -354.313], [1015.101, 8.48, -511.439],
+                [-894.722, 5.68, -1040.584], [59.533, -0.02, -1165.791], [-940.195, 5.94, -1204.879], [44.743, 0, -1249.694], [-923.35, 8.71, -1257.672],
+                [2896.007, 4.17, 1084.95], [-890, 11.37, -989.887], [2023.24, 8.72, -2495.056], [-872.849, 7.71, -923.845], [2465.002, 9.73, -1556.85],
+                [682.101, 11.28, -2292.104], [685.337, 13.14, -2273.512], [463.39, 6, -2192.847], [463.592, 0.62, -2278.146], [2181.528, -1.05, -2858.43],
+                [2990.903, 0.17, -2171.029], [930.396, 4.45, -3972.408], [3204.056, -0.14, -1864.231], [3068.106, 9.85, -1948.441], [3063.21, 7.14, -1912.463],
+                [5282.078, 3.33, -1801.875], [3292.657, 2.38, -867.824], [5304.864, 4.05, -1801.069], [5058.51, -0.22, -2024.189], [3797.283, 7.48, 1743.767]
+              ];
 
               const addToy = (group, dest, color, x, y, z, radius, type) => {
                 const mesh = addBlob(group, color, x, y, z, radius, radius, radius, type === 'crystal' ? 0.22 : 0.035, 1);
@@ -1325,9 +1313,14 @@
                 const key = `${info.kind}:${Math.round(player.x / 130)}:${Math.round(player.z / 130)}`;
                 if (key === game.__biomeAccentKey) return;
                 game.__biomeAccentKey = key;
-                clearGroup(accentRoot);
                 const ground = game.biomeAt(player.x, player.z).ground;
                 accentRoot.position.set(player.x, ground + 0.18, player.z);
+                if (game.__biomeAccentKind === info.kind) {
+                  document.documentElement.dataset.glideAccentKind = String(info.kind);
+                  return;
+                }
+                game.__biomeAccentKind = info.kind;
+                clearGroup(accentRoot);
                 const addRingBlob = (color, i, radius, height, sx, sy, sz, glow = 0.03, opacity = 1) => {
                   const a = i / 18 * twoPi + hash(i, info.kind, 8) * 0.65;
                   const r = radius + hash(i, info.kind, 9) * 11;
@@ -1423,24 +1416,23 @@
               };
 
               const placeDestinations = () => {
-                if (destinations.length) return;
-                const origin = vistaOrigin || findVistaOrigin();
-                destinationSpecs.forEach((spec, index) => {
-                  const angle = index / destinationSpecs.length * twoPi + (index % 5) * 0.08;
-                  const radius = 420 + (index % 10) * 135 + spec.batch * 95;
-                  const target = findNearbyBiome(spec.kind, origin.x + Math.cos(angle) * radius, origin.z + Math.sin(angle) * radius, index);
-                  const group = new Group();
-                  group.position.set(target.x, target.y + 0.28, target.z);
-                  group.rotation.y = -angle;
-                  destinationRoot.add(group);
-                  addDestinationDetails(group, spec);
-                  const dest = { spec, group, pos: group.position.clone(), radius: 13 + (index % 4), discovered: false, pulse: 0, thermal: spec.theme === 'arch' || spec.theme === 'aurora' || spec.theme === 'crystal' || spec.theme === 'ember' };
-                  destinations.push(dest);
-                  toys.forEach((toy) => {
-                    if (!toy.dest) toy.dest = dest;
-                  });
-                  if (dest.thermal) thermals.push({ dest, radius: 18, lastSound: 0 });
+                const index = destinations.length;
+                if (index >= destinationSpecs.length) return;
+                const spec = destinationSpecs[index];
+                const position = destinationPositions[index];
+                const angle = index / destinationSpecs.length * twoPi + (index % 5) * 0.08;
+                const group = new Group();
+                group.visible = false;
+                group.position.set(position[0], position[1], position[2]);
+                group.rotation.y = -angle;
+                destinationRoot.add(group);
+                addDestinationDetails(group, spec);
+                const dest = { spec, group, pos: group.position.clone(), radius: 13 + (index % 4), discovered: false, pulse: 0, thermal: spec.theme === 'arch' || spec.theme === 'aurora' || spec.theme === 'crystal' || spec.theme === 'ember' };
+                destinations.push(dest);
+                toys.forEach((toy) => {
+                  if (!toy.dest) toy.dest = dest;
                 });
+                if (dest.thermal) thermals.push({ dest, radius: 18, lastSound: 0 });
               };
 
               const updateFakeTrees = () => {
@@ -1513,7 +1505,7 @@
                 let found = 0;
                 destinations.forEach((dest) => {
                   const distance = distXZ(player, dest.pos);
-                  dest.group.visible = distance < 520 || dest.spec.batch === 1;
+                  dest.group.visible = distance < 520;
                   if (distance < dest.radius && !dest.discovered) {
                     dest.discovered = true;
                     dest.pulse = 1;
@@ -1569,18 +1561,20 @@
                 });
 
                 moveToys(dt, now);
-                document.documentElement.dataset.glideDestinationCount = String(destinations.length);
-                document.documentElement.dataset.glideDestinationFound = String(found);
-                document.documentElement.dataset.glideToyCount = String(toys.length);
-                document.documentElement.dataset.glideBiomeLabels = biomeNames.join('|');
-                document.documentElement.dataset.glideHighPerch = game.__startedAtHighPerch ? '1' : '0';
-                document.documentElement.dataset.glideFluff = String(fluffRoot.children.length);
+                if (now >= (game.__nextExpansionDiagnostics || 0)) {
+                  game.__nextExpansionDiagnostics = now + 500;
+                  document.documentElement.dataset.glideDestinationCount = String(destinations.length);
+                  document.documentElement.dataset.glideDestinationFound = String(found);
+                  document.documentElement.dataset.glideToyCount = String(toys.length);
+                  document.documentElement.dataset.glideBiomeLabels = biomeNames.join('|');
+                  document.documentElement.dataset.glideHighPerch = game.__startedAtHighPerch ? '1' : '0';
+                  document.documentElement.dataset.glideFluff = String(fluffRoot.children.length);
+                }
                 requestAnimationFrame(updateExpansion);
               };
 
               installPause();
               installFluff();
-              buildLaunchPerch();
               requestAnimationFrame(updateExpansion);
               game.__worldExpansion = { root, destinationRoot, accentRoot, destinations, toys, waters, thermals, biomeNames, fakeTrees };
             };
@@ -1595,6 +1589,9 @@
               game.__biomeRoutesInstalled = true;
 
               let lastAppliedRoute = '';
+              const biomeDiagnosticParams = new URLSearchParams(location.search);
+              const liveBiomeDiagnostics = biomeDiagnosticParams.get('qa') === '1' || biomeDiagnosticParams.get('debug') === '1';
+              let biomeDiagnosticsTimer = 0;
               const resolveRoute = () => {
                 const current = (location.hash || '').replace('#', '').toLowerCase();
                 if (current === 'snowforest' || current === 'snowy' || current === 'snow' || current === 'winter') return { kind: 3, mode: current };
@@ -1721,8 +1718,12 @@
                 document.documentElement.dataset.glideBiomeCounts = sample.counts.join(',');
                 document.documentElement.dataset.glideBiomes = sample.counts.map((count, index) => `${index}:${count}`).join('|');
                 document.documentElement.dataset.glideBiomeMode = route.mode;
-                requestAnimationFrame(updateBiomeDiagnostics);
+                if (liveBiomeDiagnostics) {
+                  clearTimeout(biomeDiagnosticsTimer);
+                  biomeDiagnosticsTimer = setTimeout(() => requestAnimationFrame(updateBiomeDiagnostics), 2000);
+                }
               };
+              window.addEventListener('hashchange', () => requestAnimationFrame(updateBiomeDiagnostics));
               requestAnimationFrame(updateBiomeDiagnostics);
             };
 
@@ -1733,6 +1734,7 @@
                   const info = game.debugInfo();
                   const rootData = document.documentElement.dataset;
                   rootData.glideReady = '1';
+                  rootData.glideVersion = String(game.__glideMotionPatchVersion || '');
                   rootData.glideState = String(info.state || '');
                   rootData.glideSpeed = String(info.speed ?? '');
                   rootData.glideChunks = String(info.chunks ?? '');
@@ -1751,7 +1753,7 @@
                   rememberRuntimeError(error && error.message || error);
                 }
               }
-              requestAnimationFrame(publishHealth);
+              setTimeout(() => requestAnimationFrame(publishHealth), 500);
             };
 
             requestAnimationFrame(patchUprightGlide);
@@ -1804,6 +1806,12 @@
         <rect x="14" y="6" width="32" height="50" rx="16" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.25)" stroke-width="2"/>
         <line x1="30" y1="10" x2="30" y2="26" stroke="rgba(0,0,0,0.25)" stroke-width="2"/>
         <path d="M30 64 q-10 6 -16 12 M30 64 q10 6 16 12" stroke="rgba(255,255,255,0.85)" stroke-width="3" fill="none" stroke-linecap="round"/>
+      </svg>
+      <!-- C brake / drop glyph -->
+      <svg viewBox="0 0 60 80" fill="none" aria-hidden="true">
+        <rect x="11" y="7" width="38" height="38" rx="8" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.25)" stroke-width="2"/>
+        <text x="30" y="34" text-anchor="middle" fill="rgba(80,90,70,0.94)" font-family="system-ui, sans-serif" font-size="24" font-weight="800">C</text>
+        <path d="M30 52v18m-8-8 8 8 8-8" stroke="rgba(255,255,255,0.9)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
   </body>
