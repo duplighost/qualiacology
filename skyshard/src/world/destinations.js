@@ -11,11 +11,18 @@ import { G } from '../state.js';
 import { mats, place, addCullable, canvasTex } from './props.js';
 import { discover } from '../player/abilities.js';
 import { sfx } from '../core/audio.js';
+import { juice } from '../fx/juice.js';
 import { save } from '../core/save.js';
 import { makeRng } from '../core/rng.js';
 import { hasSkill } from '../progression/constellation.js';
 import { worldSurface } from './materials.js';
-import { isTrialComplete } from './trialdata.js';
+import { destinationStatus } from './destinationstatus.js';
+import {
+  buildMajorMonument,
+  beginMonumentCollapse,
+  settleMonument,
+  updateMonument,
+} from './monuments.js';
 
 const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
 const cyl = (r0, r1, h, seg, mat) => new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg), mat);
@@ -28,6 +35,7 @@ export class Destinations {
     this.doors = [];      // { x, z, r, dest }
     this.beacons = [];    // { mesh, dest }
     this.pickups = [];    // world shards on pedestals { x, y, z, mesh, id }
+    this.sites = new Map(); // retained destination presentation + completion state
     this.time = 0;
 
     this._buildSpire();
@@ -36,16 +44,29 @@ export class Destinations {
       const g = new THREE.Group();
       g.position.set(d.x, d.y, d.z);
       scene.add(g);
-      addCullable(g, d.x, d.z);   // fog wall = draw wall (beacons stay visible)
+      // The five giant progression silhouettes remain visible on the horizon.
+      // Trial/minor detail still respects the existing fog-wall draw budget.
+      if (d.kind !== 'major') addCullable(g, d.x, d.z);
+      const site = {
+        dest: d, group: g, door: null, beacon: null, monument: null,
+        progress: null, dustT: 0, collapseBeat: 0,
+      };
+      this.sites.set(d.id, site);
       const builder = this['_' + d.id] || (d.kind === 'trial' ? this._trial : null);
       if (builder) builder.call(this, g, d);
       this._regionalDressing(g, d);
+      if (d.kind === 'major') site.monument = buildMajorMonument(scene, g, d, collide);
       g.traverse((o) => { if (o.isMesh && o.castShadow === undefined) o.castShadow = true; });
 
-      if (d.enter) this._door(g, d, g.userData.door);
-      if (d.kind === 'major') this._beacon(d, 60, 1.6);
-      else if (d.kind === 'trial') this._beacon(d, 38, 1.0);
-      else this._beacon(d, 22, 0.5);
+      if (d.enter) site.door = this._door(g, d, g.userData.door);
+      if (d.kind === 'major') site.beacon = this._beacon(d, 92, 2.35);
+      else if (d.kind === 'trial') site.beacon = this._beacon(d, 38, 1.0);
+      else site.beacon = this._beacon(d, 22, 0.5);
+
+      site.progress = destinationStatus(G.save, d);
+      // Reloads reconstruct the permanent aftermath without replaying a three-
+      // second collapse off camera.
+      if (site.monument && site.progress.complete) settleMonument(site.monument);
     }
   }
 
@@ -66,7 +87,9 @@ export class Destinations {
     if (local.ry) veil.rotation.y = local.ry;
     group.add(veil);
     const wx = d.x + local.x, wz = d.z + local.z; // rotation of group is 0 for all
-    this.doors.push({ x: wx, z: wz, r: 1.2, dest: d, veil });
+    const door = { x: wx, z: wz, r: 1.2, dest: d, veil };
+    this.doors.push(door);
+    return door;
   }
 
   _beacon(d, height, radius) {
@@ -78,7 +101,9 @@ export class Destinations {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(d.x, d.y + height / 2 + 4, d.z);
     this.scene.add(mesh);
-    this.beacons.push({ mesh, dest: d });
+    const beacon = { mesh, dest: d };
+    this.beacons.push(beacon);
+    return beacon;
   }
 
   _shardPedestal(g, d, lx, lz) {
@@ -699,13 +724,50 @@ export class Destinations {
       }
     }
 
-    // beacons: shimmer; majors go dark once their boss is down, minors once found
+    // Reward ownership, not boss death, changes the world. Because destination
+    // updates pause inside, a newly claimed guardian verb triggers this collapse
+    // on the first frame outside: the player exits into the spectacle.
+    for (const site of this.sites.values()) {
+      const next = destinationStatus(G.save, site.dest);
+      if (site.monument && next.complete && !site.progress?.complete) {
+        if (beginMonumentCollapse(site.monument)) {
+          site.dustT = 0;
+          site.collapseBeat = 0;
+          sfx('slam', { pitch: 0.42, gain: 1.1 });
+          juice.shake(1.05);
+          G.postfx?.pulse(1.25);
+          G.hud?.whisper('THE SKYSHARD YIELDS', 2.8);
+        }
+      }
+      if (site.monument) {
+        updateMonument(site.monument, dt, t);
+        if (site.monument.collapsing) {
+          const p = site.monument.collapseT;
+          if (site.collapseBeat === 0 && p >= 0.38) {
+            site.collapseBeat = 1;
+            sfx('slam', { pitch: 0.6, gain: 0.85 });
+            juice.shake(0.7);
+          } else if (site.collapseBeat === 1 && p >= 0.74) {
+            site.collapseBeat = 2;
+            sfx('slam', { pitch: 0.28, gain: 1.2 });
+            juice.shake(1.0);
+            G.postfx?.pulse(0.72);
+          }
+          site.dustT -= dt;
+          if (site.dustT <= 0) {
+            site.dustT = 0.16;
+            G.particles?.burst('impact', site.dest.x, site.dest.y + 2 + p * 9, site.dest.z, 10,
+              { color: REGIONS[site.dest.region].key, sizeMult: 1.5 + p });
+          }
+        }
+      }
+      site.progress = next;
+    }
+
+    // Beacons describe actual completion. Entering a room or merely killing its
+    // guardian cannot extinguish the objective while the reward is still there.
     for (const b of this.beacons) {
-      const done = b.dest.kind === 'major'
-        ? G.save.bossesDown[b.dest.boss]
-        : b.dest.kind === 'trial'
-          ? isTrialComplete(G.save, b.dest)
-          : (b.dest.enter ? G.save.entered[b.dest.id] : G.save.found['shard-' + b.dest.id]);
+      const done = destinationStatus(G.save, b.dest).complete;
       const remembered = done && b.dest.kind === 'trial' && hasSkill('ruin-memory');
       b.mesh.visible = !done || remembered;
       if (b.mesh.visible) b.mesh.material.opacity = remembered
@@ -718,7 +780,13 @@ export class Destinations {
     for (const door of this.doors) {
       const d2 = (door.x - px) ** 2 + (door.z - pz) ** 2;
       door.veil.material.opacity = 0.25 + Math.sin(t * 2.2) * 0.1 + (d2 < 36 ? 0.25 : 0);
-      if (d2 < door.r * door.r) entering = door.dest;
+      if (d2 < door.r * door.r) {
+        // Optional integration point for authored forecourt bosses. The manager
+        // owns feedback/debouncing; destinations remain completely functional
+        // when no world-boss system is installed.
+        if (G.worldBosses?.isSealed?.(door.dest)) G.worldBosses.blocked?.(door.dest);
+        else entering = door.dest;
+      }
     }
 
     // discovery ceremony

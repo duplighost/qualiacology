@@ -79,6 +79,15 @@ own notes or memory. Last verified: 2026-08-27.
     biome-specific ruins out of the wrong weather and prevents one destination
     shell from swallowing another landmark's approach. Usage: from `build/`,
     run `npm run qa:skyshard-world`.
+  - `build/qa/skyshard-progression-contract-check.mjs` — **run this before
+    shipping any SKYSHARD progression, destination-completion, interior, boss,
+    Aster, upgrade, reward, or loadout change.** It parses every gameplay module
+    and asserts the cross-system contracts that are easy to regress: reward-
+    owned guardian completion, retained collapsed monuments, scene-owned
+    interior enemies, flush optional routes, staged challenge UI, distinct
+    Aster motes, death-loss currency, persistent skins, late constellation
+    capstones, and isolated forecourt-boss saves. Usage: from `build/`, run
+    `npm run qa:skyshard-progression`.
   - `build/qa/fetch-boot-check.mjs` — **run this before shipping any FETCH
     change.** Boots the game the way a player does (real title click, no
     `?test=1`) and asserts the world is on screen AND the skull is visible in

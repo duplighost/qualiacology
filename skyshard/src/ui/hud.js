@@ -25,9 +25,23 @@ export class Hud {
     this.bossFill = this.bossEl.querySelector('.fill');
     this.hurtEl = document.getElementById('hurt');
     this.faderEl = document.getElementById('fader');
+    this.rewardEl = document.getElementById('reward-toast');
+    this.rewardKind = this.rewardEl?.querySelector('.kind');
+    this.rewardName = this.rewardEl?.querySelector('.name');
+    this.rewardDetail = this.rewardEl?.querySelector('.detail');
+    this.challengeEl = document.getElementById('challenge-progress');
+    this.challengeName = document.getElementById('challenge-name');
+    this.challengeStage = document.getElementById('challenge-stage');
+    this.challengeFill = this.challengeEl?.querySelector('.fill');
     this.verbEls = {};
     this.whisperTimer = 0;
     this.hurtLevel = 0;
+    this.rewardQueue = [];
+    this.rewardTimer = 0;
+    this.rewardActive = false;
+    this.challengeId = null;
+    this.challengeTimer = 0;
+    this.challengeAnnounce = '';
     this._pipCount = -1; this._pipMax = -1;
 
     for (const key of Object.keys(VERB_ICONS)) {
@@ -115,6 +129,102 @@ export class Hud {
     this.whisperEl.style.opacity = 1;
     clearTimeout(this.whisperTimer);
     this.whisperTimer = setTimeout(() => { this.whisperEl.style.opacity = 0; }, seconds * 1000);
+  }
+
+  // Rewards have their own queued ceremony so a discovery whisper or kill
+  // chain can never overwrite the thing the player just earned.
+  reward({ kind = 'REWARD EARNED', name, detail = '', duration = 3600 } = {}) {
+    if (!name || !this.rewardEl) return;
+    this.rewardQueue.push({ kind, name, detail, duration: Math.max(1200, duration) });
+    if (!this.rewardActive) this._showNextReward();
+  }
+
+  _showNextReward() {
+    const next = this.rewardQueue.shift();
+    if (!next || !this.rewardEl) { this.rewardActive = false; return; }
+    this.rewardActive = true;
+    this.rewardKind.textContent = next.kind;
+    this.rewardName.textContent = next.name;
+    this.rewardDetail.textContent = next.detail;
+    this.rewardDetail.hidden = !next.detail;
+    this.rewardEl.removeAttribute('aria-hidden');
+    this.rewardEl.classList.remove('show');
+    void this.rewardEl.offsetWidth;
+    this.rewardEl.classList.add('show');
+    clearTimeout(this.rewardTimer);
+    this.rewardTimer = setTimeout(() => {
+      this.rewardEl?.classList.remove('show');
+      this.rewardEl?.setAttribute('aria-hidden', 'true');
+      this.rewardTimer = setTimeout(() => this._showNextReward(), 280);
+    }, next.duration);
+  }
+
+  // One bottom-center progress readout is shared by optional expeditions,
+  // battle shrines, and one-step shard rooms. Callers own the stage truth;
+  // the HUD only presents it. Object and positional forms are both accepted.
+  challengeStart(id, label, total = 1, value = 0, detail = '') {
+    const c = typeof id === 'object' ? id : { id, label, total, value, detail };
+    if (!c?.id || !this.challengeEl) return;
+    clearTimeout(this.challengeTimer);
+    this.challengeId = String(c.id);
+    this.challengeName.textContent = c.label || 'CHALLENGE';
+    this.challengeEl.classList.remove('complete');
+    this.challengeEl.classList.add('show');
+    this.challengeEl.removeAttribute('aria-hidden');
+    this.challengeUpdate({ ...c, id: this.challengeId });
+  }
+
+  challengeUpdate(id, value, total, detail = '', label = '') {
+    const c = typeof id === 'object' ? id : { id, value, total, detail, label };
+    if (!c?.id || !this.challengeEl) return;
+    if (this.challengeId !== String(c.id)) {
+      this.challengeStart({ id: c.id, label: c.label || 'CHALLENGE', total: c.total || 1, value: c.value || 0, detail: c.detail || '' });
+      return;
+    }
+    const max = Math.max(1, Math.floor(c.total || 1));
+    const now = Math.max(0, Math.min(max, Math.floor(c.value || 0)));
+    if (c.label) this.challengeName.textContent = c.label;
+    const count = `${now} / ${max}`;
+    const stage = c.detail ? `${c.detail} · ${count}` : count;
+    this.challengeStage.textContent = stage;
+    this.challengeFill.style.width = `${(now / max) * 100}%`;
+    this.challengeEl.dataset.value = String(now);
+    this.challengeEl.dataset.total = String(max);
+    const spoken = `${this.challengeName.textContent}. ${stage}.`;
+    this.challengeEl.setAttribute('aria-valuemin', '0');
+    this.challengeEl.setAttribute('aria-valuemax', String(max));
+    this.challengeEl.setAttribute('aria-valuenow', String(now));
+    this.challengeEl.setAttribute('aria-valuetext', c.detail ? `${c.detail}. ${now} of ${max}` : `${now} of ${max}`);
+    if (spoken !== this.challengeAnnounce) {
+      this.challengeAnnounce = spoken;
+      this.challengeEl.setAttribute('aria-label', spoken);
+    }
+  }
+
+  challengeComplete(id, label = '', detail = 'COMPLETE', holdMs = 2400) {
+    const c = typeof id === 'object' ? id : { id, label, detail, holdMs };
+    const key = c.id || this.challengeId;
+    if (!key || !this.challengeEl) return;
+    const total = Math.max(1, Number(c.total || this.challengeEl.dataset.total || 1));
+    if (this.challengeId !== String(key)) this.challengeStart({ id: key, label: c.label || 'CHALLENGE', total, value: total, detail: c.detail || 'COMPLETE' });
+    this.challengeUpdate({ id: key, label: c.label, total, value: total, detail: c.detail || 'COMPLETE' });
+    this.challengeEl.classList.add('complete');
+    clearTimeout(this.challengeTimer);
+    this.challengeTimer = setTimeout(() => this.challengeHide(key), Math.max(900, c.holdMs || 2400));
+  }
+
+  challengeHide(id = this.challengeId, delayMs = 0) {
+    const key = id && typeof id === 'object' ? id.id : id;
+    if (key && this.challengeId !== String(key)) return;
+    clearTimeout(this.challengeTimer);
+    if (delayMs > 0) {
+      this.challengeTimer = setTimeout(() => this.challengeHide(key), delayMs);
+      return;
+    }
+    this.challengeEl?.classList.remove('show', 'complete');
+    this.challengeEl?.setAttribute('aria-hidden', 'true');
+    this.challengeId = null;
+    this.challengeAnnounce = '';
   }
 
   bossShow(name) {

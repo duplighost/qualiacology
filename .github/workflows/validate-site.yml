@@ -45,6 +45,9 @@ jobs:
       - name: Verify SKYSHARD authored-world layout
         run: npm run qa:skyshard-world
 
+      - name: Verify SKYSHARD progression contracts
+        run: npm run qa:skyshard-progression
+
       - name: Require generated files to be current
         working-directory: .
         shell: bash

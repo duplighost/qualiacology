@@ -19,6 +19,7 @@ const DEFAULTS = () => ({
   aster: 0,             // enemy soul motes collected; optional constellation currency
   skills: {},           // purchased constellation node ids
   trialsDown: {},       // optional ruin expedition ids cleared
+  worldBossesDown: {},  // optional apex forecourt wardens cleared
   relics: {},           // cosmetic relic ids collected
   activeRelic: null,    // one presentation relic equipped at a time
   finalGateShown: false,
@@ -42,7 +43,7 @@ export function loadSave() {
         // preserving all known and unknown scalar fields from the old file.
         const base = state;
         state = { ...base, ...parsed };
-        for (const key of ['abilities', 'altFires', 'bossesDown', 'found', 'entered', 'skins', 'skills', 'trialsDown', 'relics']) {
+        for (const key of ['abilities', 'altFires', 'bossesDown', 'found', 'entered', 'skins', 'skills', 'trialsDown', 'worldBossesDown', 'relics']) {
           const incoming = parsed[key];
           state[key] = { ...base[key], ...(incoming && typeof incoming === 'object' ? incoming : {}) };
         }

@@ -50,8 +50,8 @@ export const TRIAL_DESTS = [
   make({ id: 'rainbell', region: 'vale', x: -185, z: 520, y: 5.8, name: 'Rainbell Aqueduct', layout: 'aqueduct',
     boss: 'bellweather', bossName: 'BELLWEATHER', bossShape: 'bell', hp: 56, fly: 2.0, radius: 1.6, speed: 2.8, arenaR: 8, minion: 'puff', relic: RELICS.raincoat,
     path: [[0, 48], [-14, 34], [-4, 12], [16, -7], [0, -46]] }),
-  make({ id: 'mossglass', region: 'vale', x: 225, z: 545, y: 6.5, name: 'Mossglass Cloister', layout: 'cloister',
-    boss: 'vesper-hart', bossName: 'THE VESPER HART', bossShape: 'hart', hp: 62, fly: 1.0, radius: 1.7, speed: 3.6, arenaR: 9, minion: 'hopper', relic: RELICS.verdantGlass,
+  make({ id: 'mossglass', region: 'vale', x: 225, z: 545, y: 6.5, name: 'Mossglass Cloister', layout: 'cloister', apex: true,
+    boss: 'vesper-hart', bossName: 'THE VESPER HART', bossShape: 'hart', hp: 96, fly: 1.0, radius: 1.7, speed: 3.8, arenaR: 10, minion: 'hopper', relic: RELICS.verdantGlass,
     path: [[0, 48], [16, 34], [16, 4], [-16, 4], [-16, -24], [0, -47]] }),
 
   // Ember Flats — industrial scars, glass optics, rib kilns, and spectacle.
@@ -64,8 +64,8 @@ export const TRIAL_DESTS = [
   make({ id: 'suncut', region: 'ember', x: -550, z: 110, y: 7.0, name: 'Suncut Labyrinth', layout: 'lensmaze',
     boss: 'noon-widow', bossName: 'THE NOON WIDOW', bossShape: 'widow', hp: 64, fly: 2.1, radius: 1.6, speed: 3.7, arenaR: 8, minion: 'hound', relic: RELICS.heatHaze,
     path: [[0, 48], [18, 33], [-17, 20], [17, 4], [-17, -14], [0, -47]] }),
-  make({ id: 'ashenamphitheater', region: 'ember', x: -450, z: -150, y: 8.8, name: 'Ashen Amphitheater', layout: 'amphitheater',
-    boss: 'crown-of-nails', bossName: 'CROWN OF NAILS', bossShape: 'crown', hp: 76, fly: 0.4, radius: 2.0, speed: 2.8, arenaR: 11, minion: 'turret', relic: RELICS.arenaStandard,
+  make({ id: 'ashenamphitheater', region: 'ember', x: -450, z: -150, y: 8.8, name: 'Ashen Amphitheater', layout: 'amphitheater', apex: true,
+    boss: 'crown-of-nails', bossName: 'CROWN OF NAILS', bossShape: 'crown', hp: 112, fly: 0.4, radius: 2.0, speed: 3.1, arenaR: 12, minion: 'turret', relic: RELICS.arenaStandard,
     path: [[0, 48], [-18, 31], [0, 13], [18, -4], [0, -24], [0, -48]] }),
 
   // Frostmere — drowned galleries, wind architecture, bones, and prisms.
@@ -75,8 +75,8 @@ export const TRIAL_DESTS = [
   make({ id: 'rimewind', region: 'frost', x: -480, z: -450, y: 7.8, name: 'Rimewind Nave', layout: 'windnave',
     boss: 'canon-gale', bossName: 'CANON GALE', bossShape: 'organ', hp: 68, fly: 2.4, radius: 1.7, speed: 3.0, arenaR: 9, minion: 'wisp', relic: RELICS.windchime,
     path: [[0, 48], [15, 32], [4, 12], [-15, -5], [-4, -25], [0, -48]] }),
-  make({ id: 'glacierossuary', region: 'frost', x: -250, z: -550, y: 10.0, name: 'Glacier Ossuary', layout: 'ossuary',
-    boss: 'ivory-melt', bossName: 'THE IVORY MELT', bossShape: 'bonewheel', hp: 74, fly: 0.8, radius: 2.0, speed: 2.5, arenaR: 9, minion: 'golem', relic: RELICS.boneConstellation,
+  make({ id: 'glacierossuary', region: 'frost', x: -250, z: -550, y: 10.0, name: 'Glacier Ossuary', layout: 'ossuary', apex: true,
+    boss: 'ivory-melt', bossName: 'THE IVORY MELT', bossShape: 'bonewheel', hp: 122, fly: 0.8, radius: 2.0, speed: 2.8, arenaR: 11, minion: 'golem', relic: RELICS.boneConstellation,
     path: [[0, 48], [-17, 36], [-17, 10], [13, 10], [13, -21], [0, -48]] }),
   make({ id: 'mirrortarn', region: 'frost', x: -70, z: -430, y: 6.8, name: 'Mirror Tarn', layout: 'prismtarn',
     boss: 'saint-refraction', bossName: 'SAINT REFRACTION', bossShape: 'prism', hp: 66, fly: 2.0, radius: 1.7, speed: 3.3, arenaR: 10, minion: 'wisp', relic: RELICS.mirrorcoat,
@@ -92,8 +92,8 @@ export const TRIAL_DESTS = [
   make({ id: 'floodedreliquary', region: 'mycel', x: 520, z: 280, y: 1.8, name: 'Flooded Reliquary', layout: 'floodcrypt',
     boss: 'drowned-mycel', bossName: 'THE DROWNED MYCEL', bossShape: 'jelly', hp: 64, fly: 2.2, radius: 1.8, speed: 2.4, arenaR: 10, minion: 'gasbag', relic: RELICS.boglight,
     path: [[0, 48], [-16, 32], [2, 15], [17, -1], [-4, -21], [0, -48]] }),
-  make({ id: 'capcathedral', region: 'mycel', x: 575, z: -75, y: 4.0, name: 'Cathedral of Caps', layout: 'capcathedral',
-    boss: 'velvet-bishop', bossName: 'THE VELVET BISHOP', bossShape: 'bishop', hp: 72, fly: 1.6, radius: 1.9, speed: 2.7, arenaR: 9, minion: 'creeper', relic: RELICS.velvetCrown,
+  make({ id: 'capcathedral', region: 'mycel', x: 575, z: -75, y: 4.0, name: 'Cathedral of Caps', layout: 'capcathedral', apex: true,
+    boss: 'velvet-bishop', bossName: 'THE VELVET BISHOP', bossShape: 'bishop', hp: 132, fly: 1.6, radius: 1.9, speed: 3.0, arenaR: 11, minion: 'creeper', relic: RELICS.velvetCrown,
     path: [[0, 48], [0, 30], [16, 13], [0, -3], [-16, -20], [0, -48]] }),
 
   // The Shatter — impossible architecture, orbits, redaction, and judgment.
@@ -106,8 +106,8 @@ export const TRIAL_DESTS = [
   make({ id: 'mirrorarchive', region: 'shatter', x: 520, z: -350, y: 20.0, name: 'Mirror Archive', layout: 'archive',
     boss: 'redaction-angel', bossName: 'REDACTION ANGEL', bossShape: 'pages', hp: 76, fly: 2.4, radius: 1.7, speed: 3.8, arenaR: 9, minion: 'sentinel', relic: RELICS.redaction, teleports: true,
     path: [[0, 48], [-17, 33], [17, 33], [17, 4], [-17, 4], [-17, -25], [0, -48]] }),
-  make({ id: 'suspendedtribunal', region: 'shatter', x: 400, z: -540, y: 20.5, name: 'Suspended Tribunal', layout: 'tribunal',
-    boss: 'last-bailiff', bossName: 'THE LAST BAILIFF', bossShape: 'bailiff', hp: 82, fly: 1.8, radius: 2.1, speed: 2.8, arenaR: 11, minion: 'drone', relic: RELICS.nightglass, teleports: true,
+  make({ id: 'suspendedtribunal', region: 'shatter', x: 400, z: -540, y: 20.5, name: 'Suspended Tribunal', layout: 'tribunal', apex: true,
+    boss: 'last-bailiff', bossName: 'THE LAST BAILIFF', bossShape: 'bailiff', hp: 148, fly: 1.8, radius: 2.1, speed: 3.2, arenaR: 12, minion: 'drone', relic: RELICS.nightglass, teleports: true,
     path: [[0, 48], [18, 31], [0, 15], [-18, -1], [0, -19], [18, -32], [0, -49]] }),
 ];
 

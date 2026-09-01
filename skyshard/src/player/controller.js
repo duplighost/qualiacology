@@ -37,8 +37,14 @@ export class Player {
     this.grappleCd = 0;
     this.stream = null;        // riding a wind stream (streams.js drives us)
 
-    this.pips = G.save.maxPips ?? P.startPips;
-    this.maxPips = G.save.maxPips ?? P.startPips;
+    // Save maxPips remains the shard-earned base (cap 8). Deep Vessel is
+    // derived at runtime so an old owner gets it immediately and reloads can
+    // never persist then add the same bonus a second time.
+    const savedPips = Number(G.save.maxPips);
+    this.baseMaxPips = Math.min(P.maxPipsCap, Math.max(P.startPips,
+      Number.isFinite(savedPips) ? Math.floor(savedPips) : P.startPips));
+    this.maxPips = this._derivedMaxPips();
+    this.pips = this.maxPips;
     this.iFrames = 0;
     this.dead = false;
     this.lastLanternUsed = false;
@@ -335,10 +341,26 @@ export class Player {
     return true;
   }
 
+  _derivedMaxPips() {
+    return this.baseMaxPips + (hasSkill('quiet-camp') ? 1 : 0);
+  }
+
+  syncMaxPips({ healGain = false } = {}) {
+    const before = this.maxPips;
+    this.maxPips = this._derivedMaxPips();
+    const gained = Math.max(0, this.maxPips - before);
+    this.pips = healGain && gained > 0
+      ? Math.min(this.maxPips, this.pips + gained)
+      : Math.min(this.pips, this.maxPips);
+    G.hud?.setPips(this.pips, this.maxPips);
+    return gained;
+  }
+
   addPip() {
-    this.maxPips = Math.min(CFG.player.maxPipsCap, this.maxPips + 1);
+    this.baseMaxPips = Math.min(CFG.player.maxPipsCap, this.baseMaxPips + 1);
+    this.maxPips = this._derivedMaxPips();
     this.pips = this.maxPips;
-    G.save.maxPips = this.maxPips;
+    G.save.maxPips = this.baseMaxPips;
     G.hud?.setPips(this.pips, this.maxPips);
   }
 
