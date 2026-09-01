@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#010204" />
-  <meta name="application-version" content="8.0.1-authored-worlds" />
+  <meta name="application-version" content="8.1.1-rail-safety-palette" />
   <meta name="description" content="KICKMOON is a first-person three-world lunar action game: one persistent boomerang ball, a water moon, and a lava moon." />
   <title>KICKMOON: Three Worlds | Qualiacology</title>
   <link rel="canonical" href="https://qualiacology.com/kickmoon/" />
@@ -64,15 +64,20 @@
 
       <!-- Screen-reader-only mirror of the world-space state. Sighted players
            get all of this visually; this exists so the game stays narratable. -->
-      <!-- The one number the HUD is allowed to print: the crescent count.
-           An explicit amendment to the no-HUD law (Alex, 2026-08-20):
-           "A counter for the number of collectibles you have should exist." -->
-      <div id="stoneCounter" aria-hidden="true"><i class="stone-crescent"></i><span id="stoneCount">0</span></div>
-      <!-- Boss trophies: six quiet sockets that light with each core's own
+      <!-- One compact collectible bank. Three shapes stay in the same place on
+           every world; the narrow fourth readout is only the Water/Lava 2,000
+           seal total. Nothing occupies the aiming/movement lane at screen foot. -->
+      <div id="stoneCounter" data-planet="moon" aria-hidden="true">
+        <span class="collectible-cell" data-kind="common"><i class="collectible-icon stone-crescent"></i><span id="stoneCount">0</span></span>
+        <span class="collectible-cell" data-kind="rare"><i class="collectible-icon collectible-rare"></i><span id="rareCount">0</span></span>
+        <span class="collectible-cell" data-kind="route"><i class="collectible-icon collectible-route"></i><span id="routeCount">0</span></span>
+        <span id="planetCollectibleTarget"><b id="planetCollectibleTotal">0</b><small>/2000</small><i class="collectible-gate"><b id="planetCollectibleGateFill"></b></i></span>
+      </div>
+      <!-- Boss trophies: seven quiet sockets that light with each core's own
            colour. No words, no numbers — a glance says how many remain.
            (Alex, 2026-08-21: "have a boss thing counter at the bottom too.") -->
       <div id="coreCounter" aria-hidden="true"></div>
-      <!-- Three world-crown rows. Each uses a world sigil plus three regional
+      <!-- Three world-crown rows. Each uses a world sigil plus five regional
            shapes, a larger local-final socket and a mastery star. No labels or
            numbers are needed, and colour is never the only distinction. -->
       <div id="planetBossCounter" aria-hidden="true"></div>

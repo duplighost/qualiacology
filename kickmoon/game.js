@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.0.1-authored-worlds';
+  const GAME_VERSION = '8.1.1-rail-safety-palette';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -133,12 +133,30 @@
   const THREE_CROWN_STORAGE_KEY = 'kickmoon-three-crowns-v1';
   const FIXED_DT = 1 / 120;
   const TAU = Math.PI * 2;
+  const ALTERNATE_COLLECTION_TARGET = 2000;
+  const ALTERNATE_REGIONAL_TOTAL = 5;
+  const ALTERNATE_REGIONAL_REQUIRED = 4;
+  const ALTERNATE_COLLECTIBLE_COUNTS = Object.freeze({
+    common: 2800,
+    rare: 480,
+    route: 320,
+  });
+  // A spit is visible and its landing mark is live for this long before it
+  // can hurt the player. In particular, standing beside Cindermaw's exposed
+  // mouth must never turn a newly spawned projectile into a zero-frame hit.
+  const LAVA_PROJECTILE_ARM_TIME = .68;
+  // The first thing the player gets on every exterior is control, not aggro.
+  // These are real world-space sanctuaries: enemies do not pursue while the
+  // player is inside, stop attack windups, and cannot deal contact damage.
+  const SPAWN_SANCTUARY_RADII = Object.freeze({ moon: 72, water: 88, lava: 88 });
   const UP = new T.Vector3(0, 1, 0);
   const ZERO = new T.Vector3();
   const EMPTY_SOLIDS = Object.freeze([]);
   const makeAlternateWorldProgress = () => ({
-    common: 0, rare: 0, route: 0,
-    regionalBosses: [false, false, false], regionalDefeated: 0,
+    common: 0, rare: 0, route: 0, collected: 0,
+    collectionTarget: ALTERNATE_COLLECTION_TARGET,
+    regionalBosses: Array(ALTERNATE_REGIONAL_TOTAL).fill(false), regionalDefeated: 0,
+    regionalRequired: ALTERNATE_REGIONAL_REQUIRED,
     finalUnlocked: false, bossDefeated: false,
     complete: false, visited: false,
   });
@@ -348,7 +366,8 @@
   [
     'hud', 'startOverlay', 'startButton', 'startActionHint', 'startTitle', 'startCopy',
     'crosshair', 'hitMarker', 'damageVignette', 'visorFrost', 'rewardFlash', 'srState',
-    'stoneCounter', 'stoneCount', 'coreCounter', 'planetBossCounter', 'suitMeter',
+    'stoneCounter', 'stoneCount', 'rareCount', 'routeCount', 'planetCollectibleTarget',
+    'planetCollectibleTotal', 'planetCollectibleGateFill', 'coreCounter', 'planetBossCounter', 'suitMeter',
     'chargeUI', 'chargeFill', 'controlsHint', 'soundButton',
     'fullscreenButton', 'qualityButton', 'pauseOverlay', 'winOverlay',
     'winSummary', 'winTime', 'winScore', 'winRank', 'restartButton',
@@ -888,6 +907,20 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     }
     path.totalLength = total;
     return path;
+  }
+  class SampledTransitCurve extends T.Curve {
+    constructor(points) {
+      super();
+      this.points = points;
+      this.arcLengthDivisions = Math.max(256, points.length * 2);
+    }
+    getPoint(t, target = new T.Vector3()) {
+      const last = this.points.length - 1;
+      if (last <= 0) return this.points[0] ? target.copy(this.points[0]) : target.set(0, 0, 0);
+      const scaled = clamp(t, 0, 1) * last;
+      const index = Math.min(last - 1, Math.floor(scaled));
+      return target.copy(this.points[index]).lerp(this.points[index + 1], scaled - index);
+    }
   }
   function sampleTransitPath(path, distance, target = {}) {
     const total = Math.max(.001, path.totalLength);
@@ -3303,6 +3336,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.makeLights();
       this.makeSky();
       this.makePlanetSmiles();
+      this.makeVictorySky();
       // The inherited surface used to be hundreds of unrelated top-level
       // scene children. Capture those children, without changing their build
       // order or transforms, so an interworld swap can hide the WHOLE moon.
@@ -3378,9 +3412,16 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           heightAt: (x, z) => this.sampleStaticTerrainHeight(x, z),
           terrain: null,
           platforms: [], structures: [], slabs: [], solids: [], rails: [],
+          railPresentation: {
+            policy: 'active-plus-nearest-two', physicsAuthority: 'unchanged-cleared-physical-polyline',
+            totalRails: 0, selectedRails: 0, activeRails: 0, renderedRails: 0,
+            nearestPrimary: null, nearestSecondary: null,
+            maskedRoutePickups: 0, unmaskedRoutePickups: 0, updatedAt: 0,
+          },
           vehicles: [], collectibles: [], enemies: [], bosses: [], hazards: [],
           launchPads: [], breakables: [],
           spawn: { x: 0, z: 120, altitude: null, yaw: 0 },
+          spawnSafetyRadius: SPAWN_SANCTUARY_RADII[id],
         };
       };
       this.planetSurfaces.set('moon', {
@@ -3395,6 +3436,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         hazards: LAVA_FIELDS, launchPads: this.launchPads,
         breakables: this.breakables,
         spawn: { x: 0, z: 120, altitude: this.sampleTerrainHeight(0, 120), yaw: 0 },
+        spawnSafetyRadius: SPAWN_SANCTUARY_RADII.moon,
       });
       this.planetSurfaces.set('water', emptySurface('water'));
       this.planetSurfaces.set('lava', emptySurface('lava'));
@@ -3409,7 +3451,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       surface.width = surface.height = size;
       const ctx = surface.getContext('2d');
       const water = id === 'water';
-      ctx.fillStyle = water ? '#063743' : '#09070a';
+      ctx.fillStyle = water ? '#063743' : '#6a2f20';
       ctx.fillRect(0, 0, size, size);
       const hash = (index, lane = 0) => {
         const value = Math.sin(index * 91.733 + lane * 47.117 + (water ? 13.71 : 81.03)) * 43758.5453;
@@ -3435,8 +3477,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
         }
       } else {
-        // Obsidian plates separated by branching incandescent seams. Width
-        // and luminance both carry danger, so lava never relies on red alone.
+        // Warm iron-rich volcanic plates separated by incandescent seams.
+        // Glossy black is reserved for the collectible-bearing cache rocks;
+        // the planet itself must read as a varied furnace landscape.
         for (let i = 0; i < 34; i++) {
           const x = hash(i, 1) * size, y = hash(i, 2) * size;
           ctx.beginPath(); ctx.moveTo(x, y);
@@ -3450,10 +3493,10 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         }
         ctx.shadowBlur = 0;
         for (let i = 0; i < 210; i++) {
-          const tone = Math.floor(12 + hash(i, 5) * 22);
+          const tone = Math.floor(38 + hash(i, 5) * 42);
           ctx.fillStyle = i % 19 === 0
             ? 'rgba(255,157,48,.38)'
-            : `rgba(${tone + 13},${tone + 5},${tone + 8},.5)`;
+            : `rgba(${tone + 48},${tone + 4},${Math.max(16, tone - 12)},.58)`;
           ctx.fillRect(hash(i, 6) * size, hash(i, 7) * size,
             .7 + hash(i, 8) * 3.1, .7 + hash(i, 9) * 2.4);
         }
@@ -3503,7 +3546,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         profile.heightAt = (x, z) => this.sampleStaticTerrainHeight(x, z);
         profile.theme = water
           ? { accent: 0x68efff, hot: 0xff80b8, dark: 0x032631 }
-          : { accent: 0xff5a20, hot: 0xffd34f, dark: 0x150302 };
+          : { accent: 0xff6a2c, hot: 0xffd34f, dark: 0x47160d };
 
         const terrainMap = this.makePlanetTexture(id);
         const terrainMaterial = water
@@ -3513,9 +3556,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
             side: T.DoubleSide,
           })
           : new T.MeshStandardMaterial({
-            map: terrainMap, emissiveMap: terrainMap, color: 0x342127,
-            emissive: 0x7d1207, emissiveIntensity: .44, roughness: .74,
-            metalness: .24, side: T.DoubleSide,
+            map: terrainMap, emissiveMap: terrainMap, color: 0xf39a61,
+            emissive: 0x481006, emissiveIntensity: .2, roughness: .78,
+            metalness: .08, side: T.DoubleSide,
           });
         const terrain = new T.Mesh(sharedTerrain, terrainMaterial);
         terrain.name = water ? 'ABYSSAL SEABED' : 'GLOBAL MAGMA CRUST';
@@ -3528,8 +3571,8 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         const atmosphere = new T.Mesh(
           new T.SphereGeometry(PLANET.radius + (water ? 178 : 132), 64, 32),
           new T.MeshBasicMaterial({
-            color: water ? 0x0a91ad : 0x631010,
-            transparent: true, opacity: water ? .12 : .045,
+            color: water ? 0x0a91ad : 0x6b160c,
+            transparent: true, opacity: water ? .12 : .05,
             side: T.BackSide, depthWrite: false, blending: T.AdditiveBlending,
           }),
         );
@@ -3538,15 +3581,20 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         root.add(atmosphere);
         profile.atmosphere = atmosphere;
 
-        this.makePlanetTraversalRails(profile);
         this.makePlanetPlatforms(profile, water);
         if (water) this.makeWaterWorldFeatures(profile);
         else this.makeLavaWorldFeatures(profile);
         this.makePlanetMonuments(profile, water);
+        this.makePlanetProps(profile, water);
         this.makePlanetRegionalBosses(profile, water);
         this.makeAlternateBoss(profile, water);
         this.makePlanetMasteryRelic(profile, water);
-        this.makePlanetProps(profile, water);
+        // Rails are routed only after every platform, monument and boss court
+        // exists. Both their renderer and their physical grip are built from
+        // the same obstacle-cleared polyline, so a later landmark cannot be
+        // dropped through a route and a smoothing spline cannot cut back into
+        // a solid after the clearance pass.
+        this.makePlanetTraversalRails(profile);
         this.makePlanetCollectibles(profile, water);
         this.makePlanetBreakables(profile, water);
         this.makePlanetLaunchPads(profile, water);
@@ -3612,19 +3660,71 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         spec.points.map(point => new T.Vector3(point.x, point.alt, point.z)),
         !!spec.closed, 'catmullrom', .16,
       );
-      const path = finalizeTransitPath(makeTransitPath(
-        chartCurve.getSpacedPoints(spec.closed ? 176 : 128), !!spec.closed,
-      ));
-      const curve = new T.CatmullRomCurve3(path.worldSamples.map(point => point.clone()), !!spec.closed, 'catmullrom', .16);
+      let chartSamples = chartCurve.getSpacedPoints(spec.closed ? 176 : 128);
+      // A rail is one authority: the same obstacle-cleared chart samples feed
+      // both TubeGeometry and every grind/grapple query. Earlier builds made a
+      // pretty spline first and added authored scenery later, so rails visibly
+      // tunneled through platforms, monuments and the worlds' landmarks.
+      const clearanceRecords = [
+        ...(profile.platforms || EMPTY_SOLIDS),
+        ...(profile.structures || EMPTY_SOLIDS),
+        ...(profile.solids || EMPTY_SOLIDS),
+      ];
+      let raisedSamples = 0;
+      let maximumLift = 0;
+      const clearSample = (sample) => {
+        const ground = profile.heightAt(sample.x, sample.z);
+        let safeAltitude = Math.max(sample.y, ground + (profile.id === 'water' ? 12 : 16));
+        for (const obstacle of clearanceRecords) {
+          if (!Number.isFinite(obstacle?.x) || !Number.isFinite(obstacle?.z)) continue;
+          const radius = Math.max(1, surfaceCollisionRadius(obstacle));
+          const distance = surfaceDistanceAt(sample.x, sample.z, obstacle.x, obstacle.z);
+          const apron = radius + (spec.radius ?? 1.14) + 7;
+          if (distance >= apron) continue;
+          const top = Number.isFinite(obstacle.top)
+            ? obstacle.top
+            : Number.isFinite(obstacle.altitude) ? obstacle.altitude + (obstacle.radius || 0) : ground;
+          const crown = 7 + (1 - clamp(distance / apron, 0, 1)) * 7;
+          safeAltitude = Math.max(safeAltitude, top + crown);
+        }
+        if (safeAltitude > sample.y + .01) {
+          raisedSamples++;
+          maximumLift = Math.max(maximumLift, safeAltitude - sample.y);
+          sample.y = safeAltitude;
+        }
+        return sample;
+      };
+      for (const sample of chartSamples) clearSample(sample);
+      // Insert and clear two generations of midpoints. This makes the physical
+      // polyline dense enough that a segment cannot dive through the side of a
+      // narrow slab between two otherwise safe control samples.
+      for (let pass = 0; pass < 2; pass++) {
+        const dense = [];
+        for (let index = 0; index < chartSamples.length - 1; index++) {
+          dense.push(chartSamples[index]);
+          dense.push(clearSample(new T.Vector3().copy(chartSamples[index])
+            .lerp(chartSamples[index + 1], .5)));
+        }
+        dense.push(chartSamples[chartSamples.length - 1]);
+        chartSamples = dense;
+      }
+      const path = finalizeTransitPath(makeTransitPath(chartSamples, !!spec.closed));
+      // A Catmull spline can overshoot back into a collider after its control
+      // samples have been cleared. The visible tube now follows the exact same
+      // sampled polyline used by grind, grapple and nearest-point physics.
+      const curve = new SampledTransitCurve(path.worldSamples.map(point => point.clone()));
       const spineMaterial = new T.MeshStandardMaterial({
         color: spec.dark ?? 0x101722, emissive: spec.dark ?? 0x101722,
-        emissiveIntensity: .72, roughness: .28, metalness: .84,
+        emissiveIntensity: profile.id === 'water' ? .38 : .55,
+        roughness: profile.id === 'water' ? .18 : .2, metalness: .84,
+        transparent: true, opacity: 0, depthWrite: false,
       });
       const conductorMaterial = new T.MeshStandardMaterial({
         color: spec.tint, emissive: spec.tint, emissiveIntensity: 2.65,
         roughness: .16, metalness: .72,
+        transparent: true, opacity: 0, depthWrite: false,
       });
-      const segments = spec.closed ? 128 : Math.max(56, Math.min(112, spec.points.length * 18));
+      const segments = Math.max(96, path.worldSamples.length - 1);
       const spine = new T.Mesh(new T.TubeGeometry(curve, segments, spec.radius ?? 1.14, 8, !!spec.closed), spineMaterial);
       const conductor = new T.Mesh(new T.TubeGeometry(curve, segments, spec.conductorRadius ?? .27, 6, !!spec.closed), conductorMaterial);
       spine.name = `${profile.id.toUpperCase()} · ${spec.label || 'TRANSIT RAIL'}`;
@@ -3638,6 +3738,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         new T.TorusGeometry((spec.radius ?? 1.14) + .9, .34, 8, 28),
         conductorMaterial.clone(),
       );
+      // The grip is independently gated below. Do not inherit the rail's
+      // initial hidden opacity or the nearest active route would have no hook.
+      grip.material.opacity = 1;
       grip.userData.kbLifted = true;
       grip.frustumCulled = false;
       profile.root.add(grip);
@@ -3655,6 +3758,17 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         bootGrind: !!spec.bootGrind,
         bootRadius: spec.bootRadius ?? ((spec.radius ?? 1.14) + 1.12),
         bootOffset: spec.bootOffset ?? ((spec.radius ?? 1.14) + .62),
+        // Presentation samples a coarse version of the already-cleared
+        // physical path. It never makes or modifies a gameplay spline.
+        presentation: 0, presentationSelected: false, presentationActive: false,
+        presentationDistanceSq: Infinity,
+        presentationSpineOpacity: profile.id === 'water' ? .4 : .72,
+        presentationProbeStride: Math.max(1,
+          Math.floor(Math.max(1, path.worldSamples.length - 1) / 72)),
+        clearance: {
+          raisedSamples, maximumLift, checkedObstacles: clearanceRecords.length,
+          denseSamples: path.chartSamples.length, renderAuthority: 'cleared-physical-polyline',
+        },
       };
       anchor.rail = rail;
       if (spec.arrival) {
@@ -3668,6 +3782,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       grip.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), sample.tangent);
       grip.visible = profile.id === this.activePlanet && this.activeLayer === 'surface';
       profile.rails.push(rail);
+      if (profile.railPresentation) profile.railPresentation.totalRails = profile.rails.length;
       return rail;
     }
     makePlanetTraversalRails(profile) {
@@ -3713,8 +3828,8 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           points, tint: water ? (index % 2 ? 0x73f5ff : 0xff78ba) : (index % 2 ? 0xffd34f : 0xff3b17),
           dark: water ? 0x062939 : 0x190605,
           cruiseSpeed: water ? 69 + index : 74 + index * 1.4,
-          radius: water ? .92 : 1.28,
-          conductorRadius: water ? .24 : .32,
+          radius: water ? .42 : .56,
+          conductorRadius: water ? .1 : .14,
           bootGrind: true,
         });
       }
@@ -4003,15 +4118,77 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       fx.aperture.material.opacity = .08 + Math.sin(progress * Math.PI) * .34;
       fx.aperture.scale.setScalar(1 + Math.sin(progress * Math.PI) * 1.7);
     }
-    updateSurfaceTransitMotion(profile, dt, clock) {
+    updateSurfaceTransitMotion(profile, dt, clock, gameState = null) {
+      // Moon conductors retain their original presentation. Alternate-world
+      // rails use the player-relative layer below to protect authored landmark
+      // silhouettes without touching the cleared path, anchor, or boot volumes.
+      if (!profile || profile.id === 'moon') return;
+      const rails = profile.rails || EMPTY_SOLIDS;
       const forwardAxis = this.surfaceTransitForward || (this.surfaceTransitForward = new T.Vector3(0, 0, 1));
       const previous = this.surfaceTransitPrevious || (this.surfaceTransitPrevious = new T.Vector3());
       const sample = this.surfaceTransitSample || (this.surfaceTransitSample = {
         position: new T.Vector3(), tangent: new T.Vector3(), chart: new T.Vector3(),
       });
-      for (const rail of profile?.rails || EMPTY_SOLIDS) {
-        // Moon rails are already advanced by the original expansion motion.
-        if (profile.id === 'moon') break;
+      const playerPosition = gameState?.player?.position || null;
+      const grindRail = gameState?.player?.grind?.rail || null;
+      const ballAnchor = gameState?.ball?.anchor || null;
+      let nearestPrimary = null;
+      let nearestSecondary = null;
+      let nearestPrimarySq = Infinity;
+      let nearestSecondarySq = Infinity;
+      let activeRails = 0;
+
+      // Scalar segment projection keeps the hot loop allocation-free. About
+      // 72 segments per rail are enough to rank local routes on a 420 m world;
+      // gameplay continues to query every dense physical segment elsewhere.
+      for (const rail of rails) {
+        rail.presentationActive = rail === grindRail || ballAnchor === rail.anchor || rail.anchor.active;
+        if (rail.presentationActive) activeRails++;
+        if (!playerPosition) {
+          rail.presentationDistanceSq = Infinity;
+          continue;
+        }
+        const samples = rail.path.worldSamples;
+        const last = samples.length - 1;
+        const stride = rail.presentationProbeStride;
+        let distanceSq = Infinity;
+        if (last <= 0 && samples[0]) distanceSq = samples[0].distanceToSquared(playerPosition);
+        for (let index = 0; index < last; index += stride) {
+          const nextIndex = Math.min(last, index + stride);
+          const start = samples[index];
+          const end = samples[nextIndex];
+          const segmentX = end.x - start.x;
+          const segmentY = end.y - start.y;
+          const segmentZ = end.z - start.z;
+          const offsetX = playerPosition.x - start.x;
+          const offsetY = playerPosition.y - start.y;
+          const offsetZ = playerPosition.z - start.z;
+          const lengthSq = segmentX * segmentX + segmentY * segmentY + segmentZ * segmentZ;
+          const amount = lengthSq > .000001 ? clamp(
+            (offsetX * segmentX + offsetY * segmentY + offsetZ * segmentZ) / lengthSq, 0, 1,
+          ) : 0;
+          const deltaX = start.x + segmentX * amount - playerPosition.x;
+          const deltaY = start.y + segmentY * amount - playerPosition.y;
+          const deltaZ = start.z + segmentZ * amount - playerPosition.z;
+          const candidateSq = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+          if (candidateSq < distanceSq) distanceSq = candidateSq;
+        }
+        rail.presentationDistanceSq = distanceSq;
+        if (distanceSq < nearestPrimarySq) {
+          nearestSecondary = nearestPrimary;
+          nearestSecondarySq = nearestPrimarySq;
+          nearestPrimary = rail;
+          nearestPrimarySq = distanceSq;
+        } else if (distanceSq < nearestSecondarySq) {
+          nearestSecondary = rail;
+          nearestSecondarySq = distanceSq;
+        }
+      }
+
+      const exteriorVisible = profile.id === this.activePlanet && this.activeLayer === 'surface';
+      let selectedRails = 0;
+      let renderedRails = 0;
+      for (const rail of rails) {
         const anchor = rail.anchor;
         previous.copy(anchor.position);
         if (anchor.active) {
@@ -4037,12 +4214,60 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         else anchor.velocity.set(0, 0, 0);
         rail.grip.position.copy(anchor.position);
         rail.grip.quaternion.setFromUnitVectors(forwardAxis, sample.tangent);
-        rail.grip.visible = profile.id === this.activePlanet && this.activeLayer === 'surface';
+        const selected = !playerPosition || rail.presentationActive
+          || rail === nearestPrimary || rail === nearestSecondary;
+        rail.presentationSelected = selected;
+        if (selected) selectedRails++;
+        // Local and active routes recover in this exact frame. Routes leaving
+        // the local set dissolve for half a second, then stop submitting their
+        // dense tube geometries entirely.
+        rail.presentation = selected ? 1 : damp(rail.presentation, 0, 7.5, dt);
+        if (rail.presentation < .006) rail.presentation = 0;
+        rail.spine.material.opacity = rail.presentationSpineOpacity * rail.presentation;
+        rail.conductor.material.opacity = rail.presentation;
+        const rendered = exteriorVisible && rail.presentation > 0;
+        rail.spine.visible = rendered;
+        rail.conductor.visible = rendered;
+        rail.grip.visible = exteriorVisible && selected;
+        if (rendered) renderedRails++;
         rail.conductor.material.emissiveIntensity = 2.35 + Math.sin(clock * 5 + rail.path.totalLength * .01) * .58;
+      }
+
+      // Route ribbons remain live collectible records with unchanged matrices,
+      // positions, values and collision checks. Only their instance submission
+      // follows the corresponding rail's presentation selection.
+      let routeMatricesChanged = false;
+      let maskedRoutePickups = 0;
+      let unmaskedRoutePickups = 0;
+      for (const pickup of profile.collectibles || EMPTY_SOLIDS) {
+        if (!pickup.routeRail || !pickup.alive || pickup.collecting
+          || pickup.hidden || pickup.enabled === false) continue;
+        const visible = !!pickup.routeRail.presentationSelected;
+        if (visible) unmaskedRoutePickups++; else maskedRoutePickups++;
+        if (pickup.routePresentationVisible === visible) continue;
+        pickup.routePresentationVisible = visible;
+        pickup.mesh.setMatrixAt(pickup.index, visible ? pickup.matrix : ZERO_MATRIX);
+        routeMatricesChanged = true;
+      }
+      if (routeMatricesChanged && profile.collectibleMeshByKind?.route) {
+        profile.collectibleMeshByKind.route.instanceMatrix.needsUpdate = true;
+      }
+
+      const telemetry = profile.railPresentation;
+      if (telemetry) {
+        telemetry.totalRails = rails.length;
+        telemetry.selectedRails = selectedRails;
+        telemetry.activeRails = activeRails;
+        telemetry.renderedRails = renderedRails;
+        telemetry.nearestPrimary = nearestPrimary?.id || null;
+        telemetry.nearestSecondary = nearestSecondary?.id || null;
+        telemetry.maskedRoutePickups = maskedRoutePickups;
+        telemetry.unmaskedRoutePickups = unmaskedRoutePickups;
+        telemetry.updatedAt = clock;
       }
     }
     updateInterworldVehicles(profile, dt, clock, gameState = null) {
-      this.updateSurfaceTransitMotion(profile, dt, clock);
+      this.updateSurfaceTransitMotion(profile, dt, clock, gameState);
       for (const vehicle of profile?.vehicles || EMPTY_SOLIDS) {
         vehicle.cooldown = Math.max(0, vehicle.cooldown - dt);
         vehicle.receiverNode.updateMatrixWorld(true);
@@ -4409,7 +4634,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         meteorMesh.setMatrixAt(index, ZERO_MATRIX);
         markerMesh.setMatrixAt(index, ZERO_MATRIX);
         meteors.push({
-          index, active: false, age: 0, duration: 1.15,
+          index, active: false, age: 0, duration: 1.35,
           startX: 0, startZ: 0, startAlt: 0,
           targetX: 0, targetZ: 0, targetAlt: 0, hit: false,
         });
@@ -4419,6 +4644,46 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       meteorMesh.visible = false;
       markerMesh.visible = false;
       hazardGroup.add(meteorMesh, markerMesh);
+
+      const debrisCount = 48;
+      const debrisMesh = new T.InstancedMesh(
+        new T.TetrahedronGeometry(1, 1),
+        new T.MeshStandardMaterial({
+          color: 0x241833, emissive: 0x8d245d, emissiveIntensity: 1.35,
+          roughness: .38, metalness: .62, transparent: true, opacity: 1,
+          vertexColors: true,
+        }), debrisCount,
+      );
+      debrisMesh.name = 'ECLIPSE MAW · EXPLOSION DEBRIS';
+      debrisMesh.frustumCulled = false;
+      debrisMesh.visible = false;
+      const debris = [];
+      for (let index = 0; index < debrisCount; index++) {
+        debrisMesh.setMatrixAt(index, ZERO_MATRIX);
+        debrisMesh.setColorAt(index, new T.Color([
+          0xffd34f, 0xb566ff, 0x69efff, 0xff3b47, 0x251833,
+        ][index % 5]));
+        debris.push({
+          index, position: new T.Vector3(), velocity: new T.Vector3(),
+          quaternion: new T.Quaternion(), spinAxis: new T.Vector3(),
+          scale: 1, spin: 0,
+        });
+      }
+      debrisMesh.instanceMatrix.needsUpdate = true;
+      if (debrisMesh.instanceColor) debrisMesh.instanceColor.needsUpdate = true;
+      const explosionNova = new T.Mesh(
+        new T.SphereGeometry(1, 32, 18),
+        new T.MeshBasicMaterial({
+          color: 0xfff0a8, transparent: true, opacity: 0,
+          depthWrite: false, wireframe: true, blending: T.AdditiveBlending,
+        }),
+      );
+      explosionNova.name = 'ECLIPSE MAW · THREE-WORLD NOVA';
+      explosionNova.visible = false;
+      const explosionFlash = this.makeGlowSprite(this.glowGold, 1, 0);
+      explosionFlash.name = 'ECLIPSE MAW · EXPLOSION FLASH';
+      explosionFlash.visible = false;
+      hazardGroup.add(debrisMesh, explosionNova, explosionFlash);
 
       const waterArena = this.planetSurfaces.get('water')?.boss?.arena;
       const lavaArena = this.planetSurfaces.get('lava')?.boss?.arena;
@@ -4441,6 +4706,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         group, hazardGroup, body, jaw, teeth, coronas,
         waterEyes, lavaLocks, claws, moonClaws, heart, heartGlow,
         attackRing, zipTrails, meteorMesh, markerMesh, meteors, bases,
+        debrisMesh, debris, explosionNova, explosionFlash, explosionAge: 0, debrisActive: false,
         planet: 'water', phase: 'sealed', alive: true, engaged: false,
         heartHp: 5, maxHeartHp: 5, heartRadius: 5.5,
         bodyRadius: 27, position: new T.Vector3(), heartPosition: new T.Vector3(),
@@ -4452,6 +4718,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         transitStartQuaternion: new T.Quaternion(),
         scratchMatrix: new T.Matrix4(), scratchPosition: new T.Vector3(),
         scratchQuaternion: new T.Quaternion(), scratchScale: new T.Vector3(),
+        explosionUp: new T.Vector3(), explosionEast: new T.Vector3(), explosionNorth: new T.Vector3(),
       };
       this.placeEclipseMawAt('water');
       group.visible = false;
@@ -4508,6 +4775,15 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       maw.heartHp = maw.maxHeartHp;
       maw.hitFlash = 0;
       maw.deathTimer = 0;
+      maw.debrisActive = false;
+      maw.explosionAge = 0;
+      maw.debrisMesh.visible = false;
+      maw.explosionNova.visible = false;
+      maw.explosionFlash.visible = false;
+      maw.explosionNova.material.opacity = 0;
+      maw.explosionFlash.material.opacity = 0;
+      for (const shard of maw.debris) maw.debrisMesh.setMatrixAt(shard.index, ZERO_MATRIX);
+      maw.debrisMesh.instanceMatrix.needsUpdate = true;
       for (const node of [...maw.waterEyes, ...maw.lavaLocks, ...maw.moonClaws]) {
         node.alive = true;
         node.mesh.visible = false;
@@ -4523,6 +4799,82 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       }
       this.placeEclipseMawAt('water');
       this.configureEclipseMawPhase(savedComplete ? 'defeated' : 'sealed');
+    }
+    beginEclipseExplosion() {
+      const maw = this.eclipseMaw;
+      if (!maw) return false;
+      maw.group.updateMatrixWorld(true);
+      maw.body.getWorldPosition(maw.position);
+      maw.debrisActive = true;
+      maw.explosionAge = 0;
+      maw.debrisMesh.visible = true;
+      maw.debrisMesh.material.opacity = 1;
+      maw.explosionNova.visible = true;
+      maw.explosionNova.position.copy(maw.position);
+      maw.explosionNova.scale.setScalar(1);
+      maw.explosionNova.material.opacity = 1;
+      maw.explosionFlash.visible = true;
+      maw.explosionFlash.position.copy(maw.position);
+      maw.explosionFlash.scale.setScalar(24);
+      maw.explosionFlash.material.opacity = 1;
+      maw.explosionUp.copy(dirAt(maw.position, maw.explosionUp));
+      maw.explosionEast.set(0, 1, 0).cross(maw.explosionUp);
+      if (maw.explosionEast.lengthSq() < 1e-6) maw.explosionEast.set(1, 0, 0).cross(maw.explosionUp);
+      maw.explosionEast.normalize();
+      maw.explosionNorth.crossVectors(maw.explosionUp, maw.explosionEast).normalize();
+      for (const shard of maw.debris) {
+        const angle = shard.index * 2.3999632297;
+        const planar = 19 + (shard.index % 9) * 2.7;
+        const lift = 8 + (shard.index * 7 % 13) * 1.55;
+        shard.position.copy(maw.position)
+          .addScaledVector(maw.explosionEast, Math.cos(angle) * (2 + shard.index % 4))
+          .addScaledVector(maw.explosionNorth, Math.sin(angle) * (2 + shard.index % 4));
+        shard.velocity.copy(maw.explosionEast).multiplyScalar(Math.cos(angle) * planar)
+          .addScaledVector(maw.explosionNorth, Math.sin(angle) * planar)
+          .addScaledVector(maw.explosionUp, lift);
+        shard.quaternion.setFromEuler(new T.Euler(angle * .31, angle * .53, angle * .19));
+        shard.spinAxis.set(
+          Math.sin(angle * 1.7), .35 + (shard.index % 5) * .13, Math.cos(angle * 1.3),
+        ).normalize();
+        shard.spin = 2.2 + shard.index % 7 * .48;
+        shard.scale = 1.1 + shard.index % 6 * .42;
+        maw.scratchScale.setScalar(shard.scale);
+        maw.scratchMatrix.compose(shard.position, shard.quaternion, maw.scratchScale);
+        maw.debrisMesh.setMatrixAt(shard.index, maw.scratchMatrix);
+      }
+      maw.debrisMesh.instanceMatrix.needsUpdate = true;
+      return true;
+    }
+    updateEclipseExplosion(dt) {
+      const maw = this.eclipseMaw;
+      if (!maw?.debrisActive) return;
+      maw.explosionAge += dt;
+      const life = clamp(maw.explosionAge / 2.8, 0, 1);
+      for (const shard of maw.debris) {
+        maw.scratchPosition.copy(dirAt(shard.position, maw.scratchPosition));
+        shard.velocity.addScaledVector(maw.scratchPosition, -5.8 * dt);
+        shard.position.addScaledVector(shard.velocity, dt);
+        maw.scratchQuaternion.setFromAxisAngle(shard.spinAxis, shard.spin * dt);
+        shard.quaternion.multiply(maw.scratchQuaternion);
+        const size = shard.scale * (1 - smoothstep(.62, 1, life));
+        maw.scratchScale.setScalar(Math.max(.001, size));
+        maw.scratchMatrix.compose(shard.position, shard.quaternion, maw.scratchScale);
+        maw.debrisMesh.setMatrixAt(shard.index, maw.scratchMatrix);
+      }
+      maw.debrisMesh.instanceMatrix.needsUpdate = true;
+      maw.debrisMesh.material.opacity = 1 - smoothstep(.62, 1, life);
+      maw.explosionNova.scale.setScalar(4 + life * 118);
+      maw.explosionNova.rotation.y += dt * 1.8;
+      maw.explosionNova.rotation.z -= dt * 1.1;
+      maw.explosionNova.material.opacity = (1 - life) * .82;
+      maw.explosionFlash.scale.setScalar(24 + life * 185);
+      maw.explosionFlash.material.opacity = Math.max(0, 1 - life * 1.9);
+      if (life >= 1) {
+        maw.debrisActive = false;
+        maw.debrisMesh.visible = false;
+        maw.explosionNova.visible = false;
+        maw.explosionFlash.visible = false;
+      }
     }
     eclipseEligible(gameState) {
       if (!gameState) return false;
@@ -4618,7 +4970,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         );
         meteor.active = true;
         meteor.age = 0;
-        meteor.duration = 1.05 + launched * .12;
+        meteor.duration = 1.35 + launched * .14;
         meteor.startX = maw.baseX;
         meteor.startZ = maw.baseZ;
         meteor.startAlt = maw.baseAltitude + 78 + launched * 7;
@@ -4692,10 +5044,17 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       }
       if (state.lifecycle === 'victory') {
         maw.deathTimer = Math.max(0, maw.deathTimer - dt);
-        const life = maw.deathTimer / 2.8;
-        maw.group.rotation.z += dt * (2 + (1 - life) * 7);
-        maw.group.scale.setScalar(Math.max(.01, life));
-        for (const corona of maw.coronas) corona.material.opacity = .2 + (1 - life) * .75;
+        const elapsed = 2.8 - maw.deathTimer;
+        const fracture = clamp(elapsed / .9, 0, 1);
+        maw.hazardGroup.visible = true;
+        this.updateEclipseExplosion(dt);
+        maw.group.rotation.z += dt * (2 + fracture * 9);
+        const bodyScale = elapsed < .22
+          ? 1 + Math.sin(elapsed / .22 * Math.PI) * .3
+          : 1 - smootherstep(.22, .86, elapsed);
+        maw.group.scale.setScalar(Math.max(.01, bodyScale));
+        maw.group.visible = elapsed < .9;
+        for (const corona of maw.coronas) corona.material.opacity = .2 + fracture * .75;
         if (cosmeticRandom() < dt * 28) {
           this.particles?.burst(maw.position, cosmeticRandom() < .5 ? 0xffd34f : 0xb56bff, 6, 24, .7, .16);
         }
@@ -4798,7 +5157,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         maw.attackRing.material.opacity = clamp(1 - maw.waveRadius / 118, 0, .72);
         if (maw.attackHitSerial !== maw.attackSerial
           && radial >= maw.wavePrevious - 3 && radial <= maw.waveRadius + 3
-          && player.y < maw.baseAltitude + 18) {
+          && radial >= 9 && player.y < maw.baseAltitude + 5.2) {
           maw.attackHitSerial = maw.attackSerial;
           gameState.damagePlayer({ position: maw.position });
           setVspeed(gameState.player.velocity, gameState.player.up,
@@ -4810,7 +5169,15 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         }
       }
       maw.attackTimer -= dt;
-      if (maw.attackTimer > 0) return;
+      if (maw.attackTimer > 0) {
+        if (state.phase !== 'lava' && maw.attackTimer <= 1.35) {
+          const warning = 1 - maw.attackTimer / 1.35;
+          maw.attackRing.visible = true;
+          maw.attackRing.scale.setScalar(9 + warning * 109);
+          maw.attackRing.material.opacity = .12 + warning * .52;
+        }
+        return;
+      }
       maw.attackTimer = state.phase === 'lava' ? 3.1 : 3.65;
       maw.attackSerial++;
       maw.attackHitSerial = -1;
@@ -4924,6 +5291,8 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       maw.waveActive = false;
       maw.attackRing.visible = false;
       this.clearEclipseMeteors();
+      this.beginEclipseExplosion();
+      this.revealVictoryAurora(true);
       gameState.savedEclipseMaw = true;
       gameState.saveEclipseMaw();
       gameState.score += 50000;
@@ -5074,11 +5443,15 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           { id: 'reefjaw', name: 'REEFJAW', siteIndex: 1, mechanic: 'breach', hp: 3 },
           { id: 'bell-manta', name: 'THE BELL MANTA', siteIndex: 4, mechanic: 'wing-bells', hp: 3 },
           { id: 'pearl-kraken', name: 'PEARL KRAKEN', siteIndex: 7, mechanic: 'grapple-pearls', hp: 3 },
+          { id: 'glass-crab', name: 'THE GLASS CRAB', siteIndex: 10, mechanic: 'mirror-claws', hp: 3 },
+          { id: 'tide-serpent', name: 'TIDE SERPENT', siteIndex: 11, mechanic: 'current-scales', hp: 3 },
         ]
         : [
           { id: 'chainbear', name: 'CHAINBEAR', siteIndex: 6, mechanic: 'chain-locks', hp: 4 },
           { id: 'cindermaw', name: 'CINDERMAW', siteIndex: 9, mechanic: 'spit-window', hp: 4 },
           { id: 'ashback', name: 'ASHBACK', siteIndex: 11, mechanic: 'moonfall-plates', hp: 4 },
+          { id: 'obsidian-ram', name: 'OBSIDIAN RAM', siteIndex: 1, mechanic: 'charge-horns', hp: 4 },
+          { id: 'forge-wyrm', name: 'FORGE WYRM', siteIndex: 4, mechanic: 'rail-scales', hp: 4 },
         ];
       const darkMaterial = new T.MeshStandardMaterial({
         color: water ? 0x123b50 : 0x161117,
@@ -5180,6 +5553,97 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
               position: new T.Vector3(), radius: 2.8, baseScale: pearl.scale.clone() });
           }
           core = addMesh(group, new T.SphereGeometry(2.6, 22, 16), brightMaterial.clone(), [0, 13.4, -7.8]);
+        } else if (spec.id === 'glass-crab') {
+          body = addMesh(group, new T.DodecahedronGeometry(7.2, 1), paleMaterial.clone(),
+            [0, 8.6, 0], [1.38, .54, 1.04]);
+          addMesh(group, new T.SphereGeometry(6.4, 22, 14), darkMaterial.clone(),
+            [0, 8.1, 1.4], [1.42, .42, 1.02]);
+          for (let legIndex = 0; legIndex < 6; legIndex++) {
+            const side = legIndex < 3 ? -1 : 1;
+            const lane = legIndex % 3;
+            const leg = addMesh(group, new T.CylinderGeometry(.62, .88, 9.5, 7), darkMaterial.clone(),
+              [side * (7.4 + lane * 1.8), 4.2, -3.4 + lane * 3.3], null,
+              [.18 + lane * .08, 0, side * .78]);
+            limbs.push(leg);
+          }
+          for (const side of [-1, 1]) {
+            const arm = addMesh(group, new T.CylinderGeometry(1.05, 1.45, 9.5, 8), paleMaterial.clone(),
+              [side * 9.3, 8.8, -4.3], null, [0, 0, side * .82]);
+            const claw = addMesh(group, new T.TorusKnotGeometry(2.05, .58, 44, 8, 2, 3), brightMaterial.clone(),
+              [side * 13.1, 10.2, -7.2], [.9, .72, .82], [Math.PI / 2, 0, side * .35]);
+            limbs.push(arm, claw);
+            weakNodes.push({ index: weakNodes.length, group: claw, mesh: claw, alive: true,
+              position: new T.Vector3(), radius: 3.15, baseScale: claw.scale.clone() });
+            addMesh(group, new T.SphereGeometry(.88, 12, 8), brightMaterial.clone(),
+              [side * 2.65, 10.8, -6], [1, .72, .5]);
+          }
+          core = addMesh(group, new T.IcosahedronGeometry(2.45, 1), brightMaterial.clone(), [0, 8.3, -7.6]);
+        } else if (spec.id === 'tide-serpent') {
+          body = addMesh(group, new T.SphereGeometry(6.8, 22, 14), darkMaterial.clone(),
+            [0, 10.2, 0], [.78, .72, 1.78]);
+          for (let segment = 0; segment < 5; segment++) {
+            const z = 8 + segment * 7;
+            const sway = Math.sin(segment * 1.7) * 3.4;
+            const scale = 1 - segment * .11;
+            const coil = addMesh(group, new T.SphereGeometry(5.4, 18, 12),
+              segment % 2 ? paleMaterial.clone() : darkMaterial.clone(),
+              [sway, 8.5 + Math.cos(segment) * 1.2, z], [scale, .62 * scale, 1.05 * scale]);
+            limbs.push(coil);
+          }
+          for (let nodeIndex = 0; nodeIndex < 3; nodeIndex++) {
+            const z = -2 + nodeIndex * 7;
+            const scale = addMesh(group, new T.OctahedronGeometry(2.25, 1), brightMaterial.clone(),
+              [Math.sin(nodeIndex * 2.2) * 2.4, 14.1 - nodeIndex * .5, z]);
+            weakNodes.push({ index: nodeIndex, group: scale, mesh: scale, alive: true,
+              position: new T.Vector3(), radius: 2.9, baseScale: scale.scale.clone() });
+          }
+          for (const side of [-1, 1]) {
+            const fin = addMesh(group, new T.ConeGeometry(4.2, 10.5, 5), paleMaterial.clone(),
+              [side * 7.4, 10.2, 2], [1, .26, 1], [0, 0, side * 1.18]);
+            wings.push(fin);
+          }
+          core = addMesh(group, new T.SphereGeometry(2.45, 20, 14), brightMaterial.clone(), [0, 10.4, -7.1]);
+        } else if (spec.id === 'obsidian-ram') {
+          body = addMesh(group, new T.DodecahedronGeometry(7.7, 1), darkMaterial.clone(),
+            [0, 9.4, 1.5], [1.22, .92, 1.5]);
+          addMesh(group, new T.SphereGeometry(5.8, 20, 13), paleMaterial.clone(),
+            [0, 12.8, -6.2], [1.12, .92, .96]);
+          for (const side of [-1, 1]) {
+            const horn = addMesh(group, new T.TorusGeometry(5.2, 1.05, 9, 34, Math.PI * 1.42),
+              paleMaterial.clone(), [side * 4.9, 14.5, -7], null,
+              [Math.PI / 2, side * .22, side < 0 ? Math.PI * .74 : -Math.PI * .74]);
+            const lock = addMesh(group, new T.OctahedronGeometry(2.25, 0), brightMaterial.clone(),
+              [side * 7.7, 13.7, -10.4], [1, 1.35, 1]);
+            limbs.push(horn);
+            weakNodes.push({ index: weakNodes.length, group: lock, mesh: lock, alive: true,
+              position: new T.Vector3(), radius: 2.9, baseScale: lock.scale.clone() });
+          }
+          core = addMesh(group, new T.IcosahedronGeometry(2.65, 1), brightMaterial.clone(), [0, 11.8, -10.7]);
+        } else if (spec.id === 'forge-wyrm') {
+          body = addMesh(group, new T.SphereGeometry(7.4, 22, 14), darkMaterial.clone(),
+            [0, 10.2, 0], [.9, .82, 1.8]);
+          for (let segment = 0; segment < 6; segment++) {
+            const z = 7 + segment * 6.5;
+            const sway = Math.sin(segment * 1.45) * 3.1;
+            const scale = 1 - segment * .1;
+            const coil = addMesh(group, new T.DodecahedronGeometry(5.2, 0),
+              segment % 2 ? paleMaterial.clone() : darkMaterial.clone(),
+              [sway, 8.2 + Math.cos(segment * 1.1) * 1.4, z], [scale, .68 * scale, 1.02 * scale]);
+            limbs.push(coil);
+          }
+          for (let nodeIndex = 0; nodeIndex < 3; nodeIndex++) {
+            const scaleMesh = addMesh(group, new T.TetrahedronGeometry(2.65, 1), brightMaterial.clone(),
+              [Math.sin(nodeIndex * 2.1) * 2.7, 14.6, 1.8 + nodeIndex * 7.2], null,
+              [.25, nodeIndex * .42, 0]);
+            weakNodes.push({ index: nodeIndex, group: scaleMesh, mesh: scaleMesh, alive: true,
+              position: new T.Vector3(), radius: 3.05, baseScale: scaleMesh.scale.clone() });
+          }
+          for (const side of [-1, 1]) {
+            const horn = addMesh(group, new T.ConeGeometry(1.15, 7.2, 6), paleMaterial.clone(),
+              [side * 4.7, 14.7, -5.2], null, [Math.PI * .62, 0, side * .35]);
+            wings.push(horn);
+          }
+          core = addMesh(group, new T.IcosahedronGeometry(2.7, 1), brightMaterial.clone(), [0, 10.5, -8.1]);
         } else if (spec.id === 'chainbear' || spec.id === 'ashback') {
           body = addMesh(group, new T.SphereGeometry(7.8, 22, 15), darkMaterial.clone(),
             [0, 10.2, 0], spec.id === 'ashback' ? [1.3, .92, 1.55] : [1.18, 1.25, .92]);
@@ -5250,8 +5714,10 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         attackRing.position.y = .28;
         attackRing.visible = false;
         group.add(attackRing);
-        const presentationScale = water ? 1.24
-          : spec.id === 'cindermaw' ? 2.05 : spec.id === 'chainbear' ? 1.88 : 1.72;
+        const presentationScale = water ? (spec.id === 'tide-serpent' ? 1.32 : 1.24)
+          : spec.id === 'cindermaw' ? 2.05
+            : spec.id === 'chainbear' ? 1.88
+              : spec.id === 'obsidian-ram' ? 1.68 : spec.id === 'forge-wyrm' ? 1.62 : 1.72;
         this.placePlanetObject(group, arena.x, ground, arena.z, arena.facingYaw);
         group.scale.setScalar(presentationScale);
         profile.root.add(group);
@@ -5267,10 +5733,16 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           baseX: arena.x, baseZ: arena.z, baseAltitude: ground,
           chartPosition: new T.Vector3(arena.x, ground + 10 * presentationScale, arena.z),
           position: body.getWorldPosition(new T.Vector3()),
-          radius: (spec.id === 'bell-manta' ? 17 : spec.id === 'pearl-kraken' ? 13 : 12.5) * presentationScale,
+          radius: (spec.id === 'bell-manta' ? 17
+            : spec.id === 'pearl-kraken' || spec.id === 'glass-crab' ? 13
+              : spec.id === 'tide-serpent' || spec.id === 'forge-wyrm' ? 15 : 12.5) * presentationScale,
           coreRadius: 3.4 * presentationScale, threatRadius: water ? 128 : 148,
           motionTime: index * .83, attackTimer: 1.8 + index * .5,
           attackSerial: 0, attackHitSerial: -1, projectileSerial: -1,
+          attackWarning: 1.35, attackWave: 0, waveRadius: 0, wavePrevious: 0,
+          waveMax: spec.mechanic === 'wing-bells' ? 62
+            : spec.mechanic === 'current-scales' ? 58
+              : spec.mechanic === 'grapple-pearls' ? 50 : water ? 48 : 52,
           hitFlash: 0, deadTimer: 0,
           bodyBaseScale: body.scale.clone(), bodyBasePosition: body.position.clone(),
           groupBaseQuaternion: group.quaternion.clone(), groupBaseScale: group.scale.clone(),
@@ -5289,7 +5761,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     makeAlternateBoss(profile, water) {
       const site = profile.sites[8];
       const arena = this.makePlanetBossArena(
-        profile, water, water ? 'abyssal-nautilus' : 'caldera-tyrant', site, 3, true,
+        profile, water, water ? 'abyssal-nautilus' : 'caldera-tyrant', site, ALTERNATE_REGIONAL_TOTAL, true,
       );
       const ground = arena.top;
       const group = new T.Group();
@@ -5424,11 +5896,11 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       profile.bosses.push(boss);
       profile.boss = boss;
 
-      // Three regional victories peel these physical iris ribs away. The final
-      // creature is hidden behind the silhouette until then, so the unlock is
-      // world motion instead of a message box.
+      // Five regional marks surround the seal; any four can peel it once the
+      // world has also yielded 2,000 collectibles. The optional fifth encounter
+      // mirrors the original Moon's four-of-five boss freedom.
       const sealGroup = new T.Group();
-      sealGroup.name = water ? 'NAUTILUS COURT · THREE-PEARL IRIS' : 'TYRANT COURT · THREE-FORGE IRIS';
+      sealGroup.name = water ? 'NAUTILUS COURT · FIVE-PEARL IRIS' : 'TYRANT COURT · FIVE-FORGE IRIS';
       const sealMaterial = new T.MeshStandardMaterial({
         color: water ? 0x153f58 : 0x160f15,
         emissive: water ? 0x075873 : 0x681006,
@@ -5449,8 +5921,8 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       sealGroup.add(iris);
       const sealRibs = [];
       const sealOrbits = [];
-      for (let index = 0; index < 3; index++) {
-        const angle = index * TAU / 3;
+      for (let index = 0; index < ALTERNATE_REGIONAL_TOTAL; index++) {
+        const angle = index * TAU / ALTERNATE_REGIONAL_TOTAL;
         const rib = new T.Mesh(
           water ? new T.TorusGeometry(17, 1.35, 8, 48, Math.PI * 1.2)
             : new T.BoxGeometry(6.5, 31, 8.5),
@@ -5506,7 +5978,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       profile.root.add(group);
       profile.mastery = {
         group, core, rings, complete: false, pulse: 0,
-        thresholds: { common: 60, rare: 18, route: 18 },
+        thresholds: { common: 1800, rare: 300, route: 200, total: 3000 },
       };
       profile.mastered = false;
     }
@@ -5764,6 +6236,119 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         color: 0x123f58, emissive: 0x052a3a, emissiveIntensity: .48,
         roughness: .68, metalness: .08,
       });
+      const coralRoseMaterial = new T.MeshPhysicalMaterial({
+        color: 0xff609f, emissive: 0x9b164f, emissiveIntensity: 1.48,
+        roughness: .42, metalness: .02, clearcoat: .62, clearcoatRoughness: .2,
+        side: T.DoubleSide,
+      });
+      const coralSunMaterial = new T.MeshPhysicalMaterial({
+        color: 0xffbe45, emissive: 0xa7460e, emissiveIntensity: 1.42,
+        roughness: .47, metalness: .03, clearcoat: .52, clearcoatRoughness: .24,
+        side: T.DoubleSide,
+      });
+      const coralTealMaterial = new T.MeshPhysicalMaterial({
+        color: 0x48f0c5, emissive: 0x087c78, emissiveIntensity: 1.32,
+        roughness: .5, metalness: .02, clearcoat: .55, clearcoatRoughness: .22,
+        side: T.DoubleSide,
+      });
+
+      const branchBetween = (start, end, baseRadius, tipRadius, sides = 7) => {
+        const direction = end.clone().sub(start);
+        const length = direction.length();
+        const geometry = new T.CylinderGeometry(tipRadius, baseRadius, length, sides, 1, false);
+        const quaternion = new T.Quaternion().setFromUnitVectors(UP, direction.normalize());
+        const midpoint = start.clone().add(end).multiplyScalar(.5);
+        geometry.applyMatrix4(new T.Matrix4().compose(midpoint, quaternion, ONE_SCALE));
+        return geometry;
+      };
+      // One instance now reads as a whole coral colony rather than one cone.
+      // Forked silhouettes and planar gorgonian webs survive at a distance and
+      // stop the old torus family from reading as candy-cane plumbing.
+      const branchCoralGeometry = mergeStaticGeometries([
+        branchBetween(new T.Vector3(0, 0, 0), new T.Vector3(0, 1.35, 0), .2, .14),
+        branchBetween(new T.Vector3(0, .72, 0), new T.Vector3(-.66, 1.62, .08), .15, .08),
+        branchBetween(new T.Vector3(0, .82, 0), new T.Vector3(.72, 1.76, -.06), .15, .075),
+        branchBetween(new T.Vector3(-.38, 1.24, .05), new T.Vector3(-.9, 2.08, .16), .095, .045, 6),
+        branchBetween(new T.Vector3(.43, 1.36, -.04), new T.Vector3(1.02, 2.16, -.12), .09, .04, 6),
+        branchBetween(new T.Vector3(0, 1.18, 0), new T.Vector3(.04, 2.28, .1), .12, .04, 6),
+        branchBetween(new T.Vector3(-.64, 1.62, .08), new T.Vector3(-1.13, 1.88, -.08), .07, .035, 6),
+        branchBetween(new T.Vector3(.7, 1.74, -.06), new T.Vector3(1.15, 1.98, .1), .065, .035, 6),
+      ]);
+      const fanParts = [];
+      // A gorgonian fan is a fractal colony, not a ruled grid. This deterministic
+      // branching tree keeps open water between limbs, forks at different
+      // angles and depths, and grows jewel tips so every silhouette survives
+      // the squint test as coral rather than fencing or a paper hand fan.
+      const growFanBranch = (start, angle, length, radius, depth, phase) => {
+        const bend = Math.sin(phase * 1.71 + depth * .63) * .075;
+        const end = new T.Vector3(
+          start.x + Math.sin(angle + bend) * length,
+          start.y + Math.cos(angle) * length,
+          start.z + Math.sin(phase * 2.37 + depth * .91) * length * .12,
+        );
+        fanParts.push(branchBetween(start, end, radius, radius * .66, 5));
+        if (depth <= 0) {
+          const tip = new T.OctahedronGeometry(radius * 1.45, 0);
+          tip.applyMatrix4(new T.Matrix4().makeTranslation(end.x, end.y, end.z));
+          fanParts.push(tip);
+          return;
+        }
+        const spread = .19 + depth * .047
+          + Math.sin(phase * 1.29 + depth) * .035;
+        const leftLength = length * (.69 + Math.sin(phase * 2.1) * .035);
+        const rightLength = length * (.7 + Math.cos(phase * 1.8) * .035);
+        growFanBranch(end, angle - spread, leftLength, radius * .7, depth - 1, phase + 1.37);
+        growFanBranch(end, angle + spread * .92, rightLength, radius * .69, depth - 1, phase + 2.11);
+      };
+      const fanRoot = new T.Vector3(0, 0, 0);
+      const fanTrunk = new T.Vector3(.02, .3, .03);
+      fanParts.push(branchBetween(fanRoot, fanTrunk, .14, .11, 6));
+      // Three low forks spread the colony from its base; no long naked trunk
+      // means the result reads as a broad sea fan instead of a terrestrial tree.
+      growFanBranch(fanTrunk, -.29, .74, .108, 3, .37);
+      growFanBranch(fanTrunk, .3, .72, .105, 3, 2.41);
+      growFanBranch(fanTrunk, .015, .65, .092, 2, 4.73);
+      const fanCoralGeometry = mergeStaticGeometries(fanParts);
+      const brainParts = [];
+      for (let lobe = 0; lobe < 7; lobe++) {
+        const angle = lobe * TAU / 6;
+        // The clustered silhouette carries the brain-coral read; subdivision
+        // only multiplied the same tiny lobe across hundreds of colonies and
+        // pushed Water above its real-GPU triangle ceiling. Keep each lobe
+        // jewel-faceted and spend the budget on whole authored bouquets.
+        const geometry = new T.DodecahedronGeometry(lobe ? .58 : .78, 0);
+        const position = lobe
+          ? new T.Vector3(Math.cos(angle) * .57, .42 + (lobe % 2) * .15, Math.sin(angle) * .5)
+          : new T.Vector3(0, .58, 0);
+        const scale = lobe ? new T.Vector3(1, .82, 1) : new T.Vector3(1.12, .88, 1.08);
+        geometry.applyMatrix4(new T.Matrix4().compose(position, new T.Quaternion(), scale));
+        brainParts.push(geometry);
+      }
+      const brainCoralGeometry = mergeStaticGeometries(brainParts);
+      const bladeParts = [];
+      for (let blade = 0; blade < 5; blade++) {
+        const geometry = new T.PlaneGeometry(.7 - blade * .045, 1, 1, 11);
+        const attribute = geometry.getAttribute('position');
+        for (let vertex = 0; vertex < attribute.count; vertex++) {
+          const y = attribute.getY(vertex) + .5;
+          const taper = .13 + Math.sin(y * Math.PI) * .87;
+          attribute.setX(vertex, attribute.getX(vertex) * taper
+            + Math.sin(y * Math.PI * 1.55 + blade * .78) * (.14 + blade * .018));
+          attribute.setZ(vertex, Math.sin(y * Math.PI * 2.25 + blade * .61) * .075);
+          attribute.setY(vertex, y);
+        }
+        attribute.needsUpdate = true;
+        geometry.computeVertexNormals();
+        const bladeYaw = blade * TAU / 5 + .18;
+        geometry.applyMatrix4(new T.Matrix4().makeRotationY(bladeYaw));
+        geometry.applyMatrix4(new T.Matrix4().makeTranslation(
+          Math.cos(bladeYaw) * (blade % 2 ? .12 : .22),
+          0,
+          Math.sin(bladeYaw) * (blade % 2 ? .12 : .22),
+        ));
+        bladeParts.push(geometry);
+      }
+      const kelpGeometry = mergeStaticGeometries(bladeParts);
 
       // Re-render the ninety-six connective decks as three reef families. The
       // physical records remain untouched, but the repeated cyan silo and its
@@ -5831,16 +6416,56 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       sanctuaryTopMesh.rotation.x = -Math.PI / 2;
       sanctuaryTopMesh.position.y = sanctuaryHeight + .04;
       sanctuary.add(sanctuaryTopMesh);
-      for (let arch = 0; arch < 5; arch++) {
-        const angle = arch * TAU / 5 + .31;
+      const sanctuaryFanGrove = [
+        { x: -19, z: 8, yaw: .56, sx: 4.15, sy: 5.55 },
+        { x: -9, z: 13, yaw: .2, sx: 5.2, sy: 6.45 },
+        { x: 3, z: 11, yaw: -.18, sx: 3.95, sy: 5.35 },
+        { x: 16, z: 5, yaw: -.6, sx: 3.25, sy: 4.55 },
+        { x: -21, z: -9, yaw: 1.05, sx: 3.05, sy: 4.15 },
+        { x: 0, z: -18, yaw: 3.08, sx: 2.55, sy: 3.55 },
+        { x: 18, z: -11, yaw: -2.25, sx: 2.25, sy: 3.15 },
+      ];
+      for (let arch = 0; arch < sanctuaryFanGrove.length; arch++) {
+        const spec = sanctuaryFanGrove[arch];
         const shellArch = new T.Mesh(
-          new T.TorusGeometry(7.5 + arch % 2 * 1.8, .72, 8, 34, Math.PI * 1.18),
-          arch % 2 ? pearlMaterial : shellMaterial,
+          fanCoralGeometry,
+          [coralRoseMaterial, coralSunMaterial, coralTealMaterial][arch % 3],
         );
-        shellArch.position.set(Math.cos(angle) * 17, sanctuaryHeight + 5.5, Math.sin(angle) * 17);
-        shellArch.rotation.set(0, -angle + Math.PI / 2, angle + .2);
+        shellArch.position.set(spec.x, sanctuaryHeight, spec.z);
+        shellArch.rotation.set(0, spec.yaw, 0);
+        shellArch.scale.set(spec.sx, spec.sy, spec.sx * .72);
         sanctuary.add(shellArch);
       }
+      const sanctuaryCarpetMaterial = coralTealMaterial.clone();
+      sanctuaryCarpetMaterial.vertexColors = true;
+      const sanctuaryCarpet = new T.InstancedMesh(
+        brainCoralGeometry, sanctuaryCarpetMaterial, 30,
+      );
+      sanctuaryCarpet.name = 'TIDAL CATHEDRAL · BRAIN-CORAL FOREGROUND CARPET';
+      sanctuaryCarpet.castShadow = true;
+      sanctuaryCarpet.receiveShadow = true;
+      for (let coral = 0; coral < 30; coral++) {
+        const angle = coral * 2.3999632297 + .42;
+        const radius = 7 + (coral * 11 % 18);
+        features.scratchPosition.set(
+          Math.cos(angle) * radius,
+          sanctuaryHeight + .12,
+          Math.sin(angle) * radius * .72 - 3,
+        );
+        features.scratchQuaternion.setFromAxisAngle(UP, angle * .41);
+        const scale = 1.15 + coral % 5 * .24;
+        features.scratchScale.set(scale * (coral % 2 ? 1.32 : .9), scale, scale);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        sanctuaryCarpet.setMatrixAt(coral, features.scratchMatrix);
+        sanctuaryCarpet.setColorAt(coral, new T.Color([
+          0xff6fae, 0xffca62, 0x67f0c4, 0x8f7dff, 0xff8c52,
+        ][coral % 5]));
+      }
+      sanctuaryCarpet.instanceMatrix.needsUpdate = true;
+      if (sanctuaryCarpet.instanceColor) sanctuaryCarpet.instanceColor.needsUpdate = true;
+      sanctuary.add(sanctuaryCarpet);
       for (let lamp = 0; lamp < 9; lamp++) {
         const angle = lamp * TAU / 9;
         const pearl = new T.Mesh(new T.SphereGeometry(.65 + lamp % 2 * .2, 12, 8), pearlMaterial);
@@ -5934,21 +6559,21 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       // instanced families keep the horizon dense without multiplying draw calls.
       const coralFamilies = [
         {
-          geometry: new T.CylinderGeometry(.22, .68, 1, 6),
+          geometry: branchCoralGeometry,
           material: new T.MeshStandardMaterial({
             color: 0xff79ae, emissive: 0x8d1654, emissiveIntensity: 1.35,
             roughness: .72, vertexColors: true,
           }),
         },
         {
-          geometry: new T.TorusGeometry(1, .16, 6, 24, Math.PI * 1.35),
+          geometry: fanCoralGeometry,
           material: new T.MeshStandardMaterial({
             color: 0xffbd55, emissive: 0xa44a12, emissiveIntensity: 1.42,
-            roughness: .58, vertexColors: true,
+            roughness: .58, vertexColors: true, side: T.DoubleSide,
           }),
         },
         {
-          geometry: new T.DodecahedronGeometry(1, 1),
+          geometry: brainCoralGeometry,
           material: new T.MeshStandardMaterial({
             color: 0x8b78ff, emissive: 0x39219c, emissiveIntensity: 1.5,
             roughness: .84, vertexColors: true,
@@ -5956,14 +6581,15 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         },
       ];
       for (let family = 0; family < coralFamilies.length; family++) {
-        const coralMesh = new T.InstancedMesh(coralFamilies[family].geometry, coralFamilies[family].material, 72);
+        const coralMesh = new T.InstancedMesh(coralFamilies[family].geometry, coralFamilies[family].material, 144);
         coralMesh.name = ['BRANCH CORAL', 'FAN CORAL', 'BRAIN CORAL'][family];
         coralMesh.castShadow = family !== 1;
         coralMesh.receiveShadow = true;
         coralMesh.frustumCulled = false;
         coralMesh.userData.kbLifted = true;
-        for (let index = 0; index < 72; index++) {
-          const site = profile.sites[index % profile.sites.length];
+        for (let index = 0; index < 144; index++) {
+          const reefSites = [0, 1, 4, 6, 7, 11, 2, 5];
+          const site = profile.sites[reefSites[index % reefSites.length]];
           const angle = index * 2.3999632297 + family * 1.13;
           const distance = 18 + (index * 19 % 94);
           const host = index % 2 === 0
@@ -5976,13 +6602,13 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           const ground = profile.heightAt(at.x, at.z);
           const altitude = host ? host.top + .12 : Math.max(ground + .15, waterLevel + .12);
           const height = 2.2 + (index * 7 % 9) * .72;
-          chartLift(at.x, altitude + (family === 0 ? height * .5 : 1.7), at.z, features.scratchPosition);
+          chartLift(at.x, altitude + .08, at.z, features.scratchPosition);
           features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
             .multiply(new T.Quaternion().setFromAxisAngle(UP, angle + index * .17));
           features.scratchScale.set(
-            family === 1 ? 2.4 + index % 4 : family === 2 ? 1.4 + index % 3 * .4 : .7 + index % 3 * .18,
-            family === 0 ? height : family === 1 ? 2.1 + index % 3 * .45 : 1.1 + index % 4 * .28,
-            family === 1 ? 2.4 + index % 4 : family === 2 ? 1.2 + index % 2 * .35 : .7 + index % 3 * .18,
+            family === 1 ? 2.7 + index % 4 * .52 : family === 2 ? 1.8 + index % 3 * .42 : 1.55 + index % 3 * .24,
+            family === 0 ? 2.15 + height * .28 : family === 1 ? 2.7 + index % 3 * .52 : 1.45 + index % 4 * .31,
+            family === 1 ? 1.05 + index % 3 * .16 : family === 2 ? 1.65 + index % 2 * .38 : 1.5 + index % 3 * .22,
           );
           features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
           coralMesh.setMatrixAt(index, features.scratchMatrix);
@@ -5997,44 +6623,155 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       }
 
       const kelpSite = profile.sites[1];
-      const kelpGeometry = new T.CylinderGeometry(.16, .72, 1, 5);
       const kelpMaterial = new T.MeshStandardMaterial({
-        color: 0x36c57a, emissive: 0x063f2a, emissiveIntensity: .65,
-        roughness: .72, vertexColors: true,
+        color: 0xb8ffd1, emissive: 0x0a5e3a, emissiveIntensity: .92,
+        roughness: .44, vertexColors: true, side: T.DoubleSide,
       });
-      const kelpMesh = new T.InstancedMesh(kelpGeometry, kelpMaterial, 64);
-      kelpMesh.name = 'KELP FOREST · 64 SWAYING FRONDS';
+      const kelpMesh = new T.InstancedMesh(kelpGeometry, kelpMaterial, 112);
+      kelpMesh.name = 'KELP FOREST · 112 SWAYING BLADE CLUSTERS';
       kelpMesh.castShadow = true;
       kelpMesh.frustumCulled = false;
       kelpMesh.userData.kbLifted = true;
-      for (let index = 0; index < 64; index++) {
-        const angle = index * 2.3999632297;
-        const distance = 14 + (index * 17 % 86);
+      for (let index = 0; index < 112; index++) {
+        const angle = index * 2.3999632297 + (index >= 92 ? .8 : index >= 56 ? .35 : 0);
+        // Dense high canopy, a flowing middle ribbon, then a sparse outer
+        // fringe: the same 112 clusters now describe a forest instead of a
+        // uniform field of planted props.
+        const distance = index < 56 ? 10 + (index * 13 % 34)
+          : index < 92 ? 42 + (index * 19 % 38)
+            : 82 + (index * 23 % 32);
         let at = surfaceOffsetChartAt(kelpSite.x, kelpSite.z, Math.cos(angle), Math.sin(angle), distance, {});
         at = this.relocateFromInterworld(at.x, at.z, 1.2, 6100 + index);
         const ground = profile.heightAt(at.x, at.z);
         const base = Math.max(ground + .05, waterLevel - 2.2);
-        const height = 7 + index % 8 * 1.35;
-        features.kelpRecords.push({ x: at.x, z: at.z, base, height, phase: index * .73, yaw: angle });
-        chartLift(at.x, base + height * .5, at.z, features.scratchPosition);
+        const height = index < 56 ? 12 + index % 8 * 1.55
+          : index < 92 ? 9 + index % 7 * 1.4
+            : 6.5 + index % 6 * 1.15;
+        const width = 1.12 + index % 4 * .19;
+        const depth = .92 + index % 3 * .16;
+        const lean = .08 + index % 5 * .025;
+        features.kelpRecords.push({
+          x: at.x, z: at.z, base, height, width, depth, lean,
+          phase: index * .73, yaw: angle,
+        });
+        chartLift(at.x, base, at.z, features.scratchPosition);
         features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
           .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
-        features.scratchScale.set(.72 + index % 3 * .16, height, .72 + index % 2 * .12);
+        features.scratchEuler.set(lean, 0, lean * .46);
+        features.scratchQuaternion.multiply(new T.Quaternion().setFromEuler(features.scratchEuler));
+        features.scratchScale.set(width, height, depth);
         features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
         kelpMesh.setMatrixAt(index, features.scratchMatrix);
-        kelpMesh.setColorAt(index, new T.Color(index % 4 === 0 ? 0x78e85c : index % 3 === 0 ? 0x18a88d : 0x27bf67));
+        kelpMesh.setColorAt(index, new T.Color(index % 4 === 0 ? 0x7dff62 : index % 3 === 0 ? 0x2ad7b1 : 0x42ef88));
       }
       kelpMesh.instanceMatrix.needsUpdate = true;
       if (kelpMesh.instanceColor) kelpMesh.instanceColor.needsUpdate = true;
       profile.root.add(kelpMesh);
       features.kelpMesh = kelpMesh;
 
+      // Low-alpha shafts give the submerged places depth and make the kelp
+      // read as a forest from across the curvature instead of a field of dark
+      // sticks. They are scenery only: no invisible collision and no gameplay
+      // meaning is assigned to their colour.
+      const causticGeometry = new T.CylinderGeometry(.18, 1, 1, 8, 1, true);
+      const causticMaterial = new T.MeshBasicMaterial({
+        color: 0x8ff9ff, transparent: true, opacity: .075,
+        side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending,
+        vertexColors: true,
+      });
+      const causticShafts = new T.InstancedMesh(causticGeometry, causticMaterial, 24);
+      causticShafts.name = 'KELP FOREST · CAUSTIC LIGHT CURTAINS';
+      causticShafts.frustumCulled = false;
+      causticShafts.userData.kbLifted = true;
+      for (let index = 0; index < 24; index++) {
+        const site = index % 3 === 0 ? spawnSite : kelpSite;
+        const angle = index * 2.3999632297 + .27;
+        const distance = 12 + (index * 23 % 88);
+        const at = surfaceOffsetChartAt(site.x, site.z, Math.cos(angle), Math.sin(angle), distance, {});
+        const ground = profile.heightAt(at.x, at.z);
+        const height = 24 + index % 7 * 5.5;
+        chartLift(at.x, Math.max(ground, waterLevel - 1.5) + height * .5, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()));
+        features.scratchScale.set(4.6 + index % 4 * 1.8, height, 4.6 + index % 3 * 1.5);
+        features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
+        causticShafts.setMatrixAt(index, features.scratchMatrix);
+        causticShafts.setColorAt(index, new T.Color(index % 4 === 0 ? 0xff91d2 : 0x78f3ff));
+      }
+      causticShafts.instanceMatrix.needsUpdate = true;
+      if (causticShafts.instanceColor) causticShafts.instanceColor.needsUpdate = true;
+      profile.root.add(causticShafts);
+      features.causticShafts = causticShafts;
+
+      const bouquetParts = [];
+      const bouquetTransforms = [
+        [brainCoralGeometry, new T.Vector3(0, 0, 0), new T.Vector3(.72, .72, .72), 0],
+        [branchCoralGeometry, new T.Vector3(-.58, .4, .18), new T.Vector3(.58, .78, .58), -.42],
+        [branchCoralGeometry, new T.Vector3(.62, .32, -.16), new T.Vector3(.52, .68, .52), .5],
+        [fanCoralGeometry, new T.Vector3(.05, .3, .18), new T.Vector3(.48, .62, .48), .12],
+      ];
+      for (const [source, position, scale, yaw] of bouquetTransforms) {
+        const geometry = source.clone();
+        geometry.applyMatrix4(new T.Matrix4().compose(
+          position, new T.Quaternion().setFromAxisAngle(UP, yaw), scale,
+        ));
+        bouquetParts.push(geometry);
+      }
+      const bouquetGeometry = mergeStaticGeometries(bouquetParts);
+      const bouquetMaterial = new T.MeshPhysicalMaterial({
+        color: 0xffffff, emissive: 0x4b164c, emissiveIntensity: 1.15,
+        roughness: .48, clearcoat: .54, clearcoatRoughness: .22,
+        vertexColors: true, side: T.DoubleSide,
+      });
+      const bouquetCount = 144;
+      const bouquets = new T.InstancedMesh(bouquetGeometry, bouquetMaterial, bouquetCount);
+      bouquets.name = 'TIDAL CATHEDRAL · CORAL BOUQUET MEADOWS';
+      bouquets.castShadow = true;
+      bouquets.receiveShadow = true;
+      bouquets.frustumCulled = false;
+      bouquets.userData.kbLifted = true;
+      for (let index = 0; index < bouquetCount; index++) {
+        const site = index % 3 === 0 ? profile.sites[0]
+          : index % 3 === 1 ? profile.sites[1] : profile.sites[4];
+        const localIndex = Math.floor(index / 3);
+        const clusterIndex = localIndex % 4;
+        const clusterAngle = [.3, 1.86, 3.36, 5.14][clusterIndex]
+          + (site.index || 0) * .19;
+        const clusterDistance = [18, 37, 59, 82][clusterIndex];
+        const centre = surfaceOffsetChartAt(
+          site.x, site.z, Math.cos(clusterAngle), Math.sin(clusterAngle), clusterDistance, {},
+        );
+        const angle = localIndex * 2.3999632297 + clusterIndex * .41;
+        const distance = 3.5 + (localIndex * 7 % 17);
+        let at = surfaceOffsetChartAt(centre.x, centre.z, Math.cos(angle), Math.sin(angle), distance, {});
+        at = this.relocateFromInterworld(at.x, at.z, 2.6, 6400 + index);
+        const ground = profile.heightAt(at.x, at.z);
+        chartLift(at.x, Math.max(ground + .08, waterLevel + .04), at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, angle + index * .11));
+        const size = [2.35, 1.92, 1.52, 1.2][clusterIndex] + index % 3 * .19;
+        features.scratchScale.set(size * (index % 2 ? 1.18 : .92), size, size);
+        features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
+        bouquets.setMatrixAt(index, features.scratchMatrix);
+        bouquets.setColorAt(index, new T.Color([
+          0xff6cae, 0xffc74d, 0x58f2c0, 0x8c75ff, 0xff8158, 0x4bd9ef,
+        ][index % 6]));
+      }
+      bouquets.instanceMatrix.needsUpdate = true;
+      if (bouquets.instanceColor) bouquets.instanceColor.needsUpdate = true;
+      profile.root.add(bouquets);
+      features.bouquets = bouquets;
+
       this.makeWaterLandmarkFeatures(profile, features, {
         reefMaterial, shellMaterial, pearlMaterial, deepMaterial,
+        coralRoseMaterial, coralSunMaterial, coralTealMaterial,
+        branchCoralGeometry, fanCoralGeometry, brainCoralGeometry,
       });
     }
     makeWaterLandmarkFeatures(profile, features, materials) {
-      const { reefMaterial, shellMaterial, pearlMaterial, deepMaterial } = materials;
+      const {
+        reefMaterial, shellMaterial, pearlMaterial, deepMaterial,
+        branchCoralGeometry, fanCoralGeometry, brainCoralGeometry,
+      } = materials;
       const waterLevel = features.waterLevel;
 
       const whaleSite = profile.sites[2];
@@ -6065,14 +6802,58 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.placePlanetObject(whale, whaleSite.x, whaleGround, whaleSite.z, -.32);
       profile.root.add(whale);
       features.whale = whale;
+      features.whaleCollision = [];
+      const whaleYaw = -.32;
+      const whaleForwardX = Math.cos(whaleYaw);
+      const whaleForwardZ = Math.sin(whaleYaw);
+      const whaleSideX = -whaleForwardZ;
+      const whaleSideZ = whaleForwardX;
       for (let vertebra = 0; vertebra < 9; vertebra++) {
-        const at = surfaceOffsetChartAt(whaleSite.x, whaleSite.z, 1, 0, -28 + vertebra * 7, {});
-        const top = whaleGround + 9.55;
-        this.registerAuthoredPlanetPlatform(
-          profile, `water-whalefall-spine-${vertebra}`, at.x, at.z, top, whaleGround + 6.2, 3.4,
-          { collisionScale: .9, sideScale: .92, family: 'whalefall' },
+        const at = surfaceOffsetChartAt(
+          whaleSite.x, whaleSite.z, whaleForwardX, whaleForwardZ, -28 + vertebra * 7, {},
         );
+        const top = whaleGround + 9.55;
+        const record = this.registerAuthoredPlanetPlatform(
+          profile, `water-whalefall-spine-${vertebra}`, at.x, at.z, top, whaleGround + 6.2, 3.4,
+          { collisionScale: .9, sideScale: .92, family: 'whalefall', whaleBone: 'spine' },
+        );
+        features.whaleCollision.push(record);
       }
+      // The old whale only collided along nine points of its spine. Every rib
+      // and the enormous skull were ghosts. Curved side posts leave the arch
+      // walk-through open while making the actual bone silhouette physical.
+      for (let rib = 0; rib < 9; rib++) {
+        const along = -27 + rib * 6.7;
+        const ribReach = 5.4 + rib * .34;
+        for (const side of [-1, 1]) {
+          for (let tier = 0; tier < 2; tier++) {
+            const forward = surfaceOffsetChartAt(
+              whaleSite.x, whaleSite.z, whaleForwardX, whaleForwardZ, along, {},
+            );
+            const sideways = surfaceOffsetChartAt(
+              forward.x, forward.z, whaleSideX * side, whaleSideZ * side,
+              ribReach + tier * 2.25, {},
+            );
+            const bottom = whaleGround + 1.9 + tier * 2.9;
+            const top = whaleGround + 10.8 + tier * 3.7 + rib * .16;
+            const record = this.registerAuthoredPlanetPlatform(
+              profile, `water-whalefall-rib-${rib}-${side < 0 ? 'port' : 'starboard'}-${tier}`,
+              sideways.x, sideways.z, top, bottom, 1.35 + tier * .12,
+              { collisionScale: .96, sideScale: 1, family: 'whalefall', whaleBone: 'rib', rib, side },
+            );
+            features.whaleCollision.push(record);
+          }
+        }
+      }
+      const skullAt = surfaceOffsetChartAt(
+        whaleSite.x, whaleSite.z, whaleForwardX, whaleForwardZ, 39, {},
+      );
+      const skullCollision = this.registerAuthoredPlanetPlatform(
+        profile, 'water-whalefall-skull', skullAt.x, skullAt.z,
+        whaleGround + 14.4, whaleGround + 3.1, 9.1,
+        { collisionScale: .94, sideScale: .98, family: 'whalefall', whaleBone: 'skull' },
+      );
+      features.whaleCollision.push(skullCollision);
 
       const holeSite = profile.sites[3];
       const holeGround = profile.heightAt(holeSite.x, holeSite.z);
@@ -6125,7 +6906,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const reefGardenSites = [0, 1, 4, 6, 7, 11];
       const bouquetSpecs = [
         {
-          geometry: new T.DodecahedronGeometry(1, 1),
+          geometry: brainCoralGeometry,
           material: new T.MeshStandardMaterial({
             color: 0xff6fae, emissive: 0xb61562, emissiveIntensity: 1.7,
             roughness: .68, vertexColors: true,
@@ -6133,7 +6914,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           name: 'REEF GARDENS · BRAIN CORAL',
         },
         {
-          geometry: new T.TorusGeometry(1, .18, 7, 28, Math.PI * 1.42),
+          geometry: fanCoralGeometry,
           material: new T.MeshStandardMaterial({
             color: 0xffc558, emissive: 0xb94d0f, emissiveIntensity: 1.82,
             roughness: .5, side: T.DoubleSide, vertexColors: true,
@@ -6141,7 +6922,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           name: 'REEF GARDENS · SUN FANS',
         },
         {
-          geometry: new T.CylinderGeometry(.16, .62, 1, 7),
+          geometry: branchCoralGeometry,
           material: new T.MeshStandardMaterial({
             color: 0x60edc1, emissive: 0x087c72, emissiveIntensity: 1.65,
             roughness: .62, vertexColors: true,
@@ -6151,13 +6932,13 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       ];
       for (let family = 0; family < bouquetSpecs.length; family++) {
         const spec = bouquetSpecs[family];
-        const mesh = new T.InstancedMesh(spec.geometry, spec.material, 48);
+        const mesh = new T.InstancedMesh(spec.geometry, spec.material, 96);
         mesh.name = spec.name;
         mesh.castShadow = family !== 1;
         mesh.receiveShadow = true;
         mesh.frustumCulled = false;
         mesh.userData.kbLifted = true;
-        for (let index = 0; index < 48; index++) {
+        for (let index = 0; index < 96; index++) {
           const site = profile.sites[reefGardenSites[index % reefGardenSites.length]];
           const angle = index * 2.3999632297 + family * .78;
           const distance = 11 + (index * 13 % 34);
@@ -6165,13 +6946,13 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           const ground = profile.heightAt(at.x, at.z);
           const base = Math.max(ground + .18, waterLevel + .16);
           const height = 3.8 + (index % 6) * .92;
-          chartLift(at.x, base + (family === 2 ? height * .5 : 2.1), at.z, features.scratchPosition);
+          chartLift(at.x, base + .08, at.z, features.scratchPosition);
           features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
             .multiply(new T.Quaternion().setFromAxisAngle(UP, angle + index * .21));
           features.scratchScale.set(
-            family === 0 ? 1.6 + index % 4 * .38 : family === 1 ? 3.1 + index % 3 * .65 : .86 + index % 2 * .18,
-            family === 2 ? height : family === 1 ? 2.5 + index % 2 * .45 : 1.1 + index % 3 * .24,
-            family === 0 ? 1.35 + index % 3 * .32 : family === 1 ? 3.1 + index % 3 * .65 : .86 + index % 2 * .18,
+            family === 0 ? 1.35 + index % 4 * .22 : family === 1 ? 1.65 + index % 3 * .32 : 1.1 + index % 2 * .18,
+            family === 2 ? 1.5 + height * .16 : family === 1 ? 1.8 + index % 2 * .35 : 1.08 + index % 3 * .2,
+            family === 0 ? 1.18 + index % 3 * .22 : family === 1 ? .72 + index % 2 * .12 : 1.1 + index % 2 * .18,
           );
           features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
           mesh.setMatrixAt(index, features.scratchMatrix);
@@ -6404,14 +7185,14 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       for (const fan of features.fans) fan.group.rotation.z += dt * fan.speed * fan.direction;
       for (let index = 0; index < features.kelpRecords.length; index++) {
         const kelp = features.kelpRecords[index];
-        const bend = Math.sin(time * 1.2 + kelp.phase) * .13
+        const bend = kelp.lean + Math.sin(time * 1.2 + kelp.phase) * .13
           + Math.sin(time * .47 + kelp.phase * .31) * .055;
-        chartLift(kelp.x, kelp.base + kelp.height * .5, kelp.z, features.scratchPosition);
+        chartLift(kelp.x, kelp.base, kelp.z, features.scratchPosition);
         features.scratchQuaternion.copy(liftQuatAt(kelp.x, kelp.z, features.scratchQuaternion));
         features.scratchYawQuaternion.setFromAxisAngle(UP, kelp.yaw);
         features.scratchBendQuaternion.setFromEuler(features.scratchEuler.set(bend, 0, bend * .68));
         features.scratchQuaternion.multiply(features.scratchYawQuaternion).multiply(features.scratchBendQuaternion);
-        features.scratchScale.set(.72 + index % 3 * .16, kelp.height, .72 + index % 2 * .12);
+        features.scratchScale.set(kelp.width, kelp.height, kelp.depth);
         features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
         features.kelpMesh.setMatrixAt(index, features.scratchMatrix);
       }
@@ -6486,6 +7267,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     rewardWaterInteraction(profile, gameState, kind, position, label, value = 1) {
       const progress = gameState.worldProgress[profile.id];
       progress[kind] += value;
+      progress.collected += value;
       gameState.score += 650 * value;
       gameState.style = clamp(gameState.style + 4 * value, 0, 100);
       gameState.rewardFlash = Math.max(gameState.rewardFlash, .52);
@@ -6630,7 +7412,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const basaltCanvas = document.createElement('canvas');
       basaltCanvas.width = basaltCanvas.height = 256;
       const basaltCtx = basaltCanvas.getContext('2d');
-      basaltCtx.fillStyle = '#100d12';
+      basaltCtx.fillStyle = '#5c2b20';
       basaltCtx.fillRect(0, 0, 256, 256);
       for (let plate = 0; plate < 58; plate++) {
         const cx = (Math.sin(plate * 83.117) * 43758.5453 % 1 + 1) % 1 * 256;
@@ -6645,7 +7427,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           if (!corner) basaltCtx.moveTo(x, y); else basaltCtx.lineTo(x, y);
         }
         basaltCtx.closePath();
-        basaltCtx.fillStyle = plate % 5 === 0 ? '#2f252d' : plate % 3 === 0 ? '#211a22' : '#18141a';
+        basaltCtx.fillStyle = plate % 5 === 0 ? '#a85d3c' : plate % 3 === 0 ? '#7d3f30' : '#52291f';
         basaltCtx.fill();
         basaltCtx.strokeStyle = plate % 4 === 0 ? 'rgba(255,198,72,.84)' : 'rgba(255,61,17,.58)';
         basaltCtx.lineWidth = plate % 4 === 0 ? 2.2 : 1.25;
@@ -6655,7 +7437,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       for (let spark = 0; spark < 240; spark++) {
         const x = (Math.sin(spark * 19.17) * 18473.71 % 1 + 1) % 1 * 256;
         const y = (Math.sin(spark * 73.93 + 8) * 34917.11 % 1 + 1) % 1 * 256;
-        basaltCtx.fillStyle = spark % 7 === 0 ? 'rgba(255,206,91,.8)' : 'rgba(115,85,91,.38)';
+        basaltCtx.fillStyle = spark % 7 === 0 ? 'rgba(255,206,91,.8)' : 'rgba(181,112,78,.46)';
         basaltCtx.fillRect(x, y, spark % 7 === 0 ? 2 : 1, spark % 7 === 0 ? 2 : 1);
       }
       const basaltTexture = new T.CanvasTexture(basaltCanvas);
@@ -6665,30 +7447,32 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       basaltTexture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
 
       const basaltMaterial = new T.MeshStandardMaterial({
-        map: basaltTexture, color: 0x211d23, emissive: 0x170605,
-        emissiveIntensity: .24, roughness: .9, metalness: .2,
+        map: basaltTexture, color: 0xf0a06a, emissive: 0x431208,
+        emissiveIntensity: .2, roughness: .74, metalness: .1,
       });
       const obsidianMaterial = new T.MeshPhysicalMaterial({
-        color: 0x0b0c13, emissive: 0x1e0506, emissiveIntensity: .32,
-        roughness: .28, metalness: .5, clearcoat: .52, clearcoatRoughness: .34,
+        // General structures are ironstone, not black glass. The actual glossy
+        // black obsidian identity belongs exclusively to treasure caches below.
+        color: 0xb96056, emissive: 0x4d120c, emissiveIntensity: .38,
+        roughness: .4, metalness: .48, clearcoat: .35, clearcoatRoughness: .2,
       });
       const forgeMaterial = new T.MeshStandardMaterial({
-        color: 0x39262a, emissive: 0x651006, emissiveIntensity: .66,
-        roughness: .54, metalness: .66,
+        color: 0xc77b5a, emissive: 0x5c1208, emissiveIntensity: .5,
+        roughness: .42, metalness: .58,
       });
       const goldMaterial = new T.MeshStandardMaterial({
         color: 0xffcf64, emissive: 0xd54a08, emissiveIntensity: 1.85,
         roughness: .25, metalness: .72,
       });
       const cooledMaterial = new T.MeshStandardMaterial({
-        color: 0x28424e, emissive: 0x07506a, emissiveIntensity: .42,
+        color: 0x526b72, emissive: 0x0b4b59, emissiveIntensity: .38,
         roughness: .86, metalness: .18,
       });
       features.materials = { basaltMaterial, obsidianMaterial, forgeMaterial, goldMaterial, cooledMaterial };
 
-      const furnaceSky = new T.HemisphereLight(0xff8f48, 0x10000a, .56);
+      const furnaceSky = new T.HemisphereLight(0xffcb8b, 0x101833, 1.52);
       furnaceSky.name = 'WALKING FURNACE · ASH SKY LIGHT';
-      const furnaceSun = new T.DirectionalLight(0xffce83, .78);
+      const furnaceSun = new T.DirectionalLight(0xffe4ba, 2.05);
       furnaceSun.name = 'WALKING FURNACE · FORGE SUN';
       furnaceSun.position.set(-160, 300, 210);
       furnaceSun.castShadow = false;
@@ -6713,7 +7497,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const sanctuaryBottom = spawnGround - 1.1;
       const sanctuaryHeight = sanctuaryTop - sanctuaryBottom;
       const sanctuary = new T.Group();
-      sanctuary.name = 'FURNACE CROWN · OBSIDIAN SANCTUARY';
+      sanctuary.name = 'FURNACE CROWN · BASALT SANCTUARY';
       const sanctuaryBase = new T.Mesh(
         new T.CylinderGeometry(29, 32, sanctuaryHeight, 18), basaltMaterial,
       );
@@ -6724,7 +7508,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         const angle = ray * TAU / 12;
         const plate = new T.Mesh(
           new T.BoxGeometry(7.5, .72, 18 + ray % 3 * 3.2),
-          ray % 4 === 0 ? forgeMaterial : obsidianMaterial,
+          ray % 4 === 0 ? forgeMaterial : basaltMaterial,
         );
         plate.position.set(Math.cos(angle) * 18, sanctuaryHeight + .12, Math.sin(angle) * 18);
         plate.rotation.y = -angle;
@@ -6747,7 +7531,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.placePlanetObject(sanctuary, spawnSite.x, sanctuaryBottom, spawnSite.z, -.04);
       profile.root.add(sanctuary);
       const spawnPlatform = this.registerAuthoredPlanetPlatform(
-        profile, 'lava-obsidian-sanctuary', spawnSite.x, spawnSite.z,
+        profile, 'lava-basalt-sanctuary', spawnSite.x, spawnSite.z,
         sanctuaryTop, sanctuaryBottom, 31,
         { collisionScale: .96, sideScale: 1, supportDepth: sanctuaryHeight + .5, group: sanctuary, sanctuary: true },
       );
@@ -6755,23 +7539,68 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       features.sanctuary = sanctuary;
       features.sanctuaryCrown = crownRing;
 
-      // Preserve the 96 inherited collision records but give them three actual
-      // basalt/forge silhouettes instead of the repeated cooling-rim cylinder.
+      // Preserve all 96 inherited platform records and their exact collision
+      // cylinders, but draw each as three overlapping, offset shelves. The old
+      // single normalized lump was stretched by the full record height and
+      // read as a debug column from every long view.
+      const stackedColumnGeometry = (family) => {
+        const parts = [];
+        const layers = [
+          { y: -.31, height: .42, bottom: .94, top: .78, x: -.025, z: .035 },
+          { y: .025, height: .33, bottom: .8, top: .64, x: .11, z: -.085 },
+          { y: .345, height: .34, bottom: .68, top: .5, x: -.14, z: .11 },
+        ];
+        for (let layer = 0; layer < layers.length; layer++) {
+          const spec = layers[layer];
+          const sides = 5 + ((family + layer) % 3);
+          const geometry = new T.CylinderGeometry(
+            spec.top, spec.bottom, spec.height, sides, 1, false,
+          );
+          const position = new T.Vector3(
+            spec.x * (family === 1 ? 1.3 : 1), spec.y,
+            spec.z * (family === 2 ? 1.22 : 1),
+          );
+          const quaternion = new T.Quaternion().setFromEuler(new T.Euler(
+            (layer - 1) * .035,
+            family * .41 + layer * .73,
+            (family - 1) * .025 + (layer === 1 ? .035 : -.02),
+          ));
+          const scale = new T.Vector3(
+            1 + (layer === 0 ? .05 : 0), 1,
+            .82 + ((family + layer) % 3) * .075,
+          );
+          geometry.applyMatrix4(new T.Matrix4().compose(position, quaternion, scale));
+          parts.push(geometry);
+        }
+        return mergeStaticGeometries(parts);
+      };
       const connectiveFamilies = [
-        { geometry: new T.CylinderGeometry(1.06, .76, 1, 8), material: basaltMaterial.clone(), name: 'BASALT TABLES' },
-        { geometry: new T.CylinderGeometry(.82, 1.08, 1, 6), material: obsidianMaterial.clone(), name: 'OBSIDIAN ANVILS' },
-        { geometry: new T.CylinderGeometry(1, .64, 1, 10), material: forgeMaterial.clone(), name: 'FORGE CROWNS' },
+        { geometry: stackedColumnGeometry(0), material: basaltMaterial.clone(), name: 'FRACTURED BASALT STACKS' },
+        { geometry: stackedColumnGeometry(1), material: cooledMaterial.clone(), name: 'COOLED IRONSTONE SHELVES' },
+        { geometry: stackedColumnGeometry(2), material: forgeMaterial.clone(), name: 'BROKEN FORGE TERRACES' },
       ];
+      const columnTopAccentGeometry = new T.TorusGeometry(1, .045, 5, 12, Math.PI * 1.48);
+      const columnHorizontalRing = new T.Quaternion().setFromEuler(new T.Euler(Math.PI / 2, 0, 0));
       for (let family = 0; family < connectiveFamilies.length; family++) {
         const spec = connectiveFamilies[family];
         spec.material.vertexColors = true;
         spec.material.needsUpdate = true;
         const mesh = new T.InstancedMesh(spec.geometry, spec.material, 32);
+        const topAccents = new T.InstancedMesh(
+          columnTopAccentGeometry,
+          new T.MeshStandardMaterial({
+            color: family === 1 ? 0x6f8fff : family === 2 ? 0xff9140 : 0xa4c7dd,
+            emissive: family === 1 ? 0x243f9a : family === 2 ? 0xa72a08 : 0x264e68,
+            emissiveIntensity: .82, roughness: .28, metalness: .66,
+            transparent: true, opacity: family === 1 ? .5 : .34,
+          }), 32,
+        );
         mesh.name = `WALKING FURNACE · ${spec.name}`;
+        topAccents.name = `WALKING FURNACE · ${spec.name} · TOP CRACKS`;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        mesh.frustumCulled = false;
-        mesh.userData.kbLifted = true;
+        mesh.frustumCulled = topAccents.frustumCulled = false;
+        mesh.userData.kbLifted = topAccents.userData.kbLifted = true;
         for (let slot = 0; slot < 32; slot++) {
           const recordIndex = 1 + family + slot * 3;
           const record = profile.platforms[recordIndex];
@@ -6782,14 +7611,25 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           features.scratchScale.set(record.radius, height, record.radius);
           features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
           mesh.setMatrixAt(slot, features.scratchMatrix);
+
+          chartLift(record.x, record.top + .1, record.z, features.scratchPosition);
+          features.scratchQuaternion.copy(liftQuatAt(record.x, record.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, recordIndex * .29 + family * .23))
+            .multiply(columnHorizontalRing);
+          const accentRadius = record.radius * (family === 1 ? .5 : .54);
+          features.scratchScale.setScalar(accentRadius);
+          features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
+          topAccents.setMatrixAt(slot, features.scratchMatrix);
           mesh.setColorAt(slot, new T.Color([
-            0x18141a, 0x32252a, 0x4b1c16, 0x211b22, 0x642417, 0x131217,
+            0x8c432f, 0xb05c3b, 0x6b3840, 0x9c5035, 0x72515a, 0x5a3027,
           ][(recordIndex + family) % 6]));
         }
         mesh.instanceMatrix.needsUpdate = true;
+        topAccents.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-        profile.root.add(mesh);
+        profile.root.add(mesh, topAccents);
         features.platformMeshes.push(mesh);
+        features.trimMeshes.push(topAccents);
       }
 
       // Sixty low basalt islands finally put playable ground on the lava
@@ -6800,7 +7640,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         new T.CylinderGeometry(.86, 1.06, 1, 9),
         new T.CylinderGeometry(1.08, .72, 1, 6),
       ];
-      const lowMaterials = [basaltMaterial.clone(), obsidianMaterial.clone(), cooledMaterial.clone()];
+      const lowMaterials = [basaltMaterial.clone(), forgeMaterial.clone(), cooledMaterial.clone()];
       const horizontalRing = new T.Quaternion().setFromEuler(new T.Euler(Math.PI / 2, 0, 0));
       for (let family = 0; family < 3; family++) {
         lowMaterials[family].vertexColors = true;
@@ -6913,7 +7753,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           const summitBottom = summitRecord.top - .8;
           const summit = new T.Mesh(
             new T.CylinderGeometry(13.5, 16, summitTop - summitBottom, 9),
-            routeIndex ? obsidianMaterial : forgeMaterial,
+            routeIndex ? cooledMaterial : forgeMaterial,
           );
           this.placePlanetObject(summit, summitRecord.x, summitBottom + (summitTop - summitBottom) * .5, summitRecord.z, routeIndex * .4);
           profile.root.add(summit);
@@ -6933,7 +7773,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
 
       const bridgeSite = profile.sites[6];
       const bridgeMesh = new T.InstancedMesh(
-        new T.CylinderGeometry(1, 1, 1, 8), obsidianMaterial.clone(), 18,
+        new T.CylinderGeometry(1, 1, 1, 8), forgeMaterial.clone(), 18,
       );
       const chainMesh = new T.InstancedMesh(
         new T.TorusGeometry(1, .12, 6, 18), forgeMaterial.clone(), 18,
@@ -7059,7 +7899,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           group.add(ring);
           rings.push(ring);
         }
-        const grate = new T.Mesh(new T.CylinderGeometry(3.4, 4.2, .75, 10), obsidianMaterial);
+        const grate = new T.Mesh(new T.CylinderGeometry(3.4, 4.2, .75, 10), cooledMaterial);
         grate.position.y = .38;
         group.add(grate);
         this.placePlanetObject(group, at.x, base, at.z, angle);
@@ -7111,7 +7951,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         const base = profile.heightAt(at.x, at.z) + .15;
         const group = new T.Group();
         group.name = `LAVA SPITTER ${index + 1}`;
-        const body = new T.Mesh(new T.SphereGeometry(3.4, 16, 11), obsidianMaterial.clone());
+        const body = new T.Mesh(new T.SphereGeometry(3.4, 16, 11), forgeMaterial.clone());
         body.scale.set(1, 1.25, 1);
         const mouth = new T.Mesh(new T.TorusGeometry(1.35, .48, 8, 24), goldMaterial.clone());
         mouth.position.set(0, 2.1, -2.55);
@@ -7152,6 +7992,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         features.projectiles.push({
           index, active: false, age: 0, position: new T.Vector3(), velocity: new T.Vector3(),
           targetX: 0, targetZ: 0, markerTop: 0, radius: 1.1, hitPlayer: false,
+          armingTime: LAVA_PROJECTILE_ARM_TIME,
         });
       }
       projectileMesh.instanceMatrix.needsUpdate = true;
@@ -7163,6 +8004,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     rewardLavaInteraction(profile, gameState, kind, position, label, value = 1) {
       const progress = gameState.worldProgress[profile.id];
       progress[kind] += value;
+      progress.collected += value;
       gameState.score += 720 * value;
       gameState.style = clamp(gameState.style + 4.5 * value, 0, 100);
       gameState.rewardFlash = Math.max(gameState.rewardFlash, .56);
@@ -7254,6 +8096,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       projectile.active = true;
       projectile.age = 0;
       projectile.hitPlayer = false;
+      projectile.armingTime = LAVA_PROJECTILE_ARM_TIME;
       projectile.position.copy(spitter.mouthPosition);
       projectile.targetX = playerChart.x;
       projectile.targetZ = playerChart.z;
@@ -7263,7 +8106,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       );
       chartLift(projectile.targetX, projectile.markerTop + .85,
         projectile.targetZ, features.scratchTarget);
-      const flightTime = 1.12 + (spitter.index % 3) * .08;
+      const flightTime = 1.35 + (spitter.index % 3) * .09;
       const gravity = features.scratchPlayer.copy(dirAt(projectile.position, features.scratchPlayer))
         .multiplyScalar(-18);
       projectile.velocity.copy(features.scratchTarget).sub(projectile.position)
@@ -7291,8 +8134,10 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         projectile.position.addScaledVector(projectile.velocity, dt);
         const chart = toChartVec(features.scratchBall.copy(projectile.position));
         const floor = this.floorHeight(chart.x, chart.z, chart.y + 4);
-        const hitPlayer = projectile.position.distanceTo(gameState.player.position)
-          <= projectile.radius + gameState.player.radius + .35;
+        const damageArmed = projectile.age >= (projectile.armingTime ?? LAVA_PROJECTILE_ARM_TIME);
+        const hitPlayer = damageArmed
+          && projectile.position.distanceTo(gameState.player.position)
+            <= projectile.radius + gameState.player.radius + .35;
         const grounded = chart.y <= floor + projectile.radius;
         if (hitPlayer || grounded || projectile.age > 3.8) {
           if (hitPlayer && !projectile.hitPlayer) {
@@ -7327,10 +8172,14 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const features = profile.lavaFeatures;
       if (!features) return;
       const time = Number.isFinite(clock) ? clock : (gameState?.time || 0);
-      features.materials.basaltMaterial.emissiveIntensity = .22 + Math.sin(time * 1.7) * .04;
-      features.materials.obsidianMaterial.emissiveIntensity = .3 + Math.sin(time * 2.2) * .07;
-      features.materials.forgeMaterial.emissiveIntensity = .62 + Math.sin(time * 3.4) * .14;
-      features.materials.goldMaterial.emissiveIntensity = 1.72 + Math.sin(time * 5.1) * .32;
+      features.materials.basaltMaterial.emissiveIntensity = .16 + Math.sin(time * 1.7) * .025;
+      features.materials.obsidianMaterial.emissiveIntensity = .22 + Math.sin(time * 2.2) * .045;
+      features.materials.forgeMaterial.emissiveIntensity = .34 + Math.sin(time * 3.4) * .08;
+      features.materials.goldMaterial.emissiveIntensity = 1.45 + Math.sin(time * 5.1) * .26;
+      if (features.obsidianCacheMesh) {
+        features.obsidianCacheMesh.material.emissiveIntensity = .62 + Math.sin(time * .9) * .075;
+        features.obsidianCacheSeams.material.opacity = .22 + (Math.sin(time * 2.2) * .5 + .5) * .11;
+      }
       if (features.sanctuary) {
         features.sanctuaryCrown.material.emissiveIntensity = 1.7 + Math.sin(time * 4.2) * .38;
       }
@@ -7508,9 +8357,10 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     }
     makeLavaScenery(profile, features) {
       const { basaltMaterial, obsidianMaterial, forgeMaterial, goldMaterial } = features.materials;
+      const sceneryHorizontalRing = new T.Quaternion().setFromEuler(new T.Euler(Math.PI / 2, 0, 0));
       const scenerySpecs = [
         { geometry: new T.DodecahedronGeometry(1, 0), material: basaltMaterial.clone(), name: 'BASALT BOULDER FIELDS' },
-        { geometry: new T.BoxGeometry(1, 1, 1), material: obsidianMaterial.clone(), name: 'FURNACE CHIMNEYS' },
+        { geometry: new T.BoxGeometry(1, 1, 1), material: forgeMaterial.clone(), name: 'COPPER FURNACE CHIMNEYS' },
         { geometry: new T.TorusGeometry(1, .16, 6, 20), material: forgeMaterial.clone(), name: 'FOUNDRY CHAIN RELICS' },
       ];
       for (let family = 0; family < scenerySpecs.length; family++) {
@@ -7541,13 +8391,180 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           );
           features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
           mesh.setMatrixAt(index, features.scratchMatrix);
-          mesh.setColorAt(index, new T.Color(index % 6 === 0 ? 0x6a2618 : index % 4 === 0 ? 0x463238 : 0x181319));
+          mesh.setColorAt(index, new T.Color(index % 6 === 0 ? 0xb4603f : index % 4 === 0 ? 0x7c3d34 : 0x56302a));
         }
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         profile.root.add(mesh);
         features.sceneryMeshes.push(mesh);
       }
+
+      // Ninety-six authored obsidian caches are the Lava world's collectible
+      // gardens: glossy black cooled stones, clustered by named place, with a
+      // restrained ember seam instead of another field of red cylinders.
+      features.obsidianCaches = [];
+      const cacheCount = 96;
+      const rocksPerCache = 5;
+      const rockCount = cacheCount * rocksPerCache;
+      const cacheGeometry = new T.DodecahedronGeometry(1, 0);
+      const cacheAccentGeometry = new T.TorusGeometry(1, .025, 5, 18, Math.PI * 1.28);
+      const cacheMaterial = new T.MeshPhysicalMaterial({
+        // These collectible-bearing stones alone own the glossy black-glass
+        // language. Neutral planes catch the forge light; ember cracks and the
+        // treasure itself supply colour instead of tinting the whole rock blue.
+        color: 0xffffff, emissive: 0x07090d, emissiveIntensity: .16,
+        roughness: .11, metalness: .86, clearcoat: 1, clearcoatRoughness: .045,
+        vertexColors: true,
+      });
+      const seamMaterial = new T.MeshBasicMaterial({
+        color: 0xff8b3d, transparent: true, opacity: .26,
+        depthWrite: false, blending: T.AdditiveBlending,
+        vertexColors: true,
+      });
+      const cacheRocks = new T.InstancedMesh(cacheGeometry, cacheMaterial, rockCount);
+      const cacheSeams = new T.InstancedMesh(cacheAccentGeometry, seamMaterial, rockCount);
+      cacheRocks.name = 'OBSIDIAN CACHE GARDENS · 480 HARDENED-LAVA STONES';
+      cacheSeams.name = 'OBSIDIAN CACHE GARDENS · RESTRAINED TOP CRACKS';
+      cacheRocks.castShadow = true;
+      cacheRocks.receiveShadow = true;
+      cacheRocks.frustumCulled = cacheSeams.frustumCulled = false;
+      cacheRocks.userData.kbLifted = cacheSeams.userData.kbLifted = true;
+      let rockIndex = 0;
+      for (let cacheIndex = 0; cacheIndex < cacheCount; cacheIndex++) {
+        const siteIndex = cacheIndex % profile.sites.length;
+        const site = profile.sites[siteIndex];
+        const band = Math.floor(cacheIndex / profile.sites.length);
+        const angle = cacheIndex * 2.3999632297 + .41;
+        const distance = 22 + band * 12.5 + cacheIndex % 3 * 4.2;
+        let centre = surfaceOffsetChartAt(site.x, site.z, Math.cos(angle), Math.sin(angle), distance, {});
+        centre = this.relocateFromInterworld(centre.x, centre.z, 7.8, 11800 + cacheIndex);
+        const centreGround = profile.heightAt(centre.x, centre.z);
+        const cacheRecord = this.registerAuthoredPlanetPlatform(
+          profile, `lava-obsidian-cache-${cacheIndex}`, centre.x, centre.z,
+          centreGround + 7.7, centreGround - .8, 7.2,
+          {
+            collisionScale: .92, sideScale: .97, supportDepth: 8.9,
+            family: 'obsidian-cache', siteIndex, cacheIndex,
+          },
+        );
+        features.obsidianCaches.push(cacheRecord);
+        for (let stone = 0; stone < rocksPerCache; stone++) {
+          const stoneAngle = angle + stone * TAU / (rocksPerCache - 1 || 1) + .27;
+          const stoneDistance = stone === 0 ? 0 : 3.2 + (stone % 2) * 1.25;
+          const at = stone === 0 ? centre : surfaceOffsetChartAt(
+            centre.x, centre.z, Math.cos(stoneAngle), Math.sin(stoneAngle), stoneDistance, {},
+          );
+          const ground = profile.heightAt(at.x, at.z);
+          const sx = stone === 0 ? 5.25 : 2.05 + (cacheIndex + stone) % 3 * .52;
+          const sy = stone === 0 ? 4.35 : 1.75 + (cacheIndex * 3 + stone) % 4 * .44;
+          const sz = stone === 0 ? 4.75 : 2.05 + (cacheIndex + stone * 2) % 3 * .48;
+          chartLift(at.x, ground + sy * .76, at.z, features.scratchPosition);
+          features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromEuler(
+              features.scratchEuler.set(stone * .31, stoneAngle + cacheIndex * .13, stone * .19),
+            ));
+          features.scratchScale.set(sx, sy, sz);
+          features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
+          cacheRocks.setMatrixAt(rockIndex, features.scratchMatrix);
+          cacheRocks.setColorAt(rockIndex, new T.Color([
+            0x06070a, 0x0c0e12, 0x15171c, 0x110d12, 0x090a0d,
+          ][(cacheIndex + stone) % 5]));
+
+          chartLift(at.x, stone === 0 ? cacheRecord.top + .12 : ground + sy * 1.58,
+            at.z, features.scratchPosition);
+          features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, stoneAngle + cacheIndex * .13))
+            .multiply(sceneryHorizontalRing);
+          const crackRadius = stone === 0 ? 2.3 : .86 + (cacheIndex + stone) % 3 * .16;
+          features.scratchScale.setScalar(crackRadius);
+          features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
+          cacheSeams.setMatrixAt(rockIndex, features.scratchMatrix);
+          cacheSeams.setColorAt(rockIndex, new T.Color(
+            stone === 0 && cacheIndex % 4 === 0 ? 0xffc05a
+              : stone % 3 === 0 ? 0xff7b32 : 0xb94b24,
+          ));
+          rockIndex++;
+        }
+      }
+      cacheRocks.instanceMatrix.needsUpdate = cacheSeams.instanceMatrix.needsUpdate = true;
+      if (cacheRocks.instanceColor) cacheRocks.instanceColor.needsUpdate = true;
+      if (cacheSeams.instanceColor) cacheSeams.instanceColor.needsUpdate = true;
+      profile.root.add(cacheRocks, cacheSeams);
+      features.obsidianCacheMesh = cacheRocks;
+      features.obsidianCacheSeams = cacheSeams;
+
+      // Ember-glass blossoms break up the inherited platform skyline without
+      // stealing the glossy-black identity of collectible-bearing caches.
+      const blossomParts = [];
+      for (let spike = 0; spike < 7; spike++) {
+        const angle = spike * TAU / 7 + .19;
+        const geometry = new T.ConeGeometry(.28 + spike % 3 * .07, 1, 5, 1, false);
+        const height = .72 + spike % 4 * .13;
+        const position = new T.Vector3(
+          Math.cos(angle) * (.22 + spike % 2 * .12),
+          height * .43,
+          Math.sin(angle) * (.22 + spike % 2 * .12),
+        );
+        const quaternion = new T.Quaternion().setFromEuler(new T.Euler(
+          Math.sin(angle) * .34, angle, -Math.cos(angle) * .34,
+        ));
+        const scale = new T.Vector3(1, height, 1);
+        geometry.applyMatrix4(new T.Matrix4().compose(position, quaternion, scale));
+        blossomParts.push(geometry);
+      }
+      const blossomGeometry = mergeStaticGeometries(blossomParts);
+      const blossomCount = 108;
+      const blossomMaterial = new T.MeshPhysicalMaterial({
+        color: 0x7a2530, emissive: 0x67120b, emissiveIntensity: .82,
+        roughness: .24, metalness: .64, clearcoat: .72, clearcoatRoughness: .12,
+        vertexColors: true,
+      });
+      const blossomAccentGeometry = new T.TorusGeometry(.34, .024, 5, 11, Math.PI * 1.38);
+      const blossomEdgeMaterial = new T.MeshBasicMaterial({
+        color: 0x8595ff, transparent: true, opacity: .38,
+        depthWrite: false, blending: T.AdditiveBlending,
+        vertexColors: true,
+      });
+      const blossoms = new T.InstancedMesh(blossomGeometry, blossomMaterial, blossomCount);
+      const blossomEdges = new T.InstancedMesh(blossomAccentGeometry, blossomEdgeMaterial, blossomCount);
+      blossoms.name = 'WALKING FURNACE · EMBER GLASS BLOSSOMS';
+      blossomEdges.name = 'WALKING FURNACE · EMBER GLASS ROOT GLEAMS';
+      blossoms.castShadow = true;
+      blossoms.receiveShadow = true;
+      blossoms.frustumCulled = blossomEdges.frustumCulled = false;
+      blossoms.userData.kbLifted = blossomEdges.userData.kbLifted = true;
+      for (let index = 0; index < blossomCount; index++) {
+        const site = profile.sites[index % profile.sites.length];
+        const angle = index * 2.3999632297 + .63;
+        const ring = Math.floor(index / profile.sites.length);
+        const distance = 17 + ring * 10.5 + index % 3 * 3.5;
+        let at = surfaceOffsetChartAt(site.x, site.z, Math.cos(angle), Math.sin(angle), distance, {});
+        at = this.relocateFromInterworld(at.x, at.z, 4.6, 12500 + index);
+        const ground = profile.heightAt(at.x, at.z);
+        const size = 4.2 + index % 6 * 1.05;
+        chartLift(at.x, ground + .08, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
+        features.scratchScale.set(size * (.78 + index % 2 * .14), size * (1.15 + index % 4 * .17), size);
+        features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
+        blossoms.setMatrixAt(index, features.scratchMatrix);
+        blossoms.setColorAt(index, new T.Color(index % 5 === 0 ? 0xa93838 : index % 3 === 0 ? 0x7b3345 : 0xc05a32));
+
+        chartLift(at.x, ground + .16, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, angle))
+          .multiply(sceneryHorizontalRing);
+        features.scratchScale.setScalar(size * (.82 + index % 3 * .08));
+        features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
+        blossomEdges.setMatrixAt(index, features.scratchMatrix);
+        blossomEdges.setColorAt(index, new T.Color(index % 4 === 0 ? 0xff8646 : index % 3 === 0 ? 0x55dfff : 0x7d70ff));
+      }
+      blossoms.instanceMatrix.needsUpdate = blossomEdges.instanceMatrix.needsUpdate = true;
+      if (blossoms.instanceColor) blossoms.instanceColor.needsUpdate = true;
+      if (blossomEdges.instanceColor) blossomEdges.instanceColor.needsUpdate = true;
+      profile.root.add(blossoms, blossomEdges);
+      features.obsidianBlossoms = blossoms;
+      features.obsidianBlossomEdges = blossomEdges;
 
       // Giant furnace teeth at the two summit sites turn the skyline into an
       // authored destination before the player ever reaches the first step.
@@ -7560,7 +8577,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           const angle = index * TAU / count;
           const tooth = new T.Mesh(
             new T.ConeGeometry(2.4 + index % 3, 18 + index % 4 * 5, 5),
-            index % 3 === 0 ? goldMaterial : obsidianMaterial,
+            index % 3 === 0 ? goldMaterial : forgeMaterial,
           );
           tooth.position.set(Math.cos(angle) * (21 + index % 2 * 5), 9 + index % 4 * 2.5, Math.sin(angle) * (21 + index % 2 * 5));
           tooth.rotation.z = Math.cos(angle) * .24;
@@ -7624,9 +8641,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         const group = new T.Group();
         group.name = site.name;
         const dark = new T.MeshStandardMaterial({
-          color: water ? (index % 2 ? 0x123f5a : 0x18574f) : (index % 2 ? 0x241113 : 0x100b0c),
-          emissive: water ? 0x073743 : 0x5d0b03,
-          emissiveIntensity: water ? .48 : .85, roughness: .72, metalness: water ? .08 : .34,
+          color: water ? (index % 2 ? 0x123f5a : 0x18574f) : (index % 2 ? 0x111722 : 0x03050a),
+          emissive: water ? 0x073743 : 0x280503,
+          emissiveIntensity: water ? .48 : .38, roughness: water ? .72 : .38, metalness: water ? .08 : .58,
         });
         const bright = new T.MeshStandardMaterial({
           color: water ? (index % 3 === 0 ? 0xff8fc7 : 0x66eeea) : (index % 3 === 0 ? 0xffd34f : 0xff4b1e),
@@ -7733,14 +8750,37 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     makePlanetCollectibles(profile, water) {
       profile.collectibles.length = 0;
       profile.collectibleMeshes = [];
+      profile.collectibleAbsorbing = [];
+      profile.collectibleFields = [];
+      profile.collectibleMeshByKind = {};
+      const platformBuckets = profile.sites.map(() => []);
+      for (const platform of profile.platforms) {
+        let bestIndex = 0;
+        let bestDistance = Infinity;
+        for (let siteIndex = 0; siteIndex < profile.sites.length; siteIndex++) {
+          const site = profile.sites[siteIndex];
+          const distance = surfaceDistanceAt(platform.x, platform.z, site.x, site.z);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = siteIndex;
+          }
+        }
+        platformBuckets[bestIndex].push(platform);
+      }
+      for (let siteIndex = 0; siteIndex < platformBuckets.length; siteIndex++) {
+        if (!platformBuckets[siteIndex].length) platformBuckets[siteIndex].push(...profile.platforms);
+      }
       const specs = [
-        { kind: 'common', count: 260, lowCount: 150, value: 1,
-          geometry: water ? new T.SphereGeometry(.48, 10, 8) : new T.ConeGeometry(.42, 1.3, 5),
+        { kind: 'common', count: ALTERNATE_COLLECTIBLE_COUNTS.common, value: 1, clusterSize: 18,
+          // Thousands of tiny pickups need a crisp silhouette, not invisible
+          // micro-tessellation. Spend that half-million-triangle budget on the
+          // reef itself while retaining three unmistakable pickup shapes.
+          geometry: water ? new T.IcosahedronGeometry(.52, 0) : new T.ConeGeometry(.42, 1.3, 5),
           color: water ? 0xa9ffff : 0xff7b30, emissive: water ? 0x36d9ff : 0xff2100 },
-        { kind: 'rare', count: 50, value: 5,
-          geometry: water ? new T.TorusKnotGeometry(.52, .14, 40, 6) : new T.OctahedronGeometry(.72, 0),
+        { kind: 'rare', count: ALTERNATE_COLLECTIBLE_COUNTS.rare, value: 5, clusterSize: 8,
+          geometry: water ? new T.TorusKnotGeometry(.54, .15, 18, 4) : new T.OctahedronGeometry(.72, 0),
           color: water ? 0xffb4df : 0xffe27a, emissive: water ? 0xff4da6 : 0xff8a00 },
-        { kind: 'route', count: 37, value: 2,
+        { kind: 'route', count: ALTERNATE_COLLECTIBLE_COUNTS.route, value: 2, clusterSize: 1,
           geometry: new T.TorusGeometry(.62, .14, 6, 18),
           color: water ? 0x6fefff : 0xfff1a1, emissive: water ? 0x00bfff : 0xff3a00 },
       ];
@@ -7752,17 +8792,55 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         const mesh = new T.InstancedMesh(spec.geometry, material, spec.count);
         mesh.name = `${profile.id.toUpperCase()} ${spec.kind.toUpperCase()} COLLECTIBLES`;
         mesh.userData.kbHighCount = spec.count;
-        mesh.userData.kbLowCount = spec.lowCount ?? spec.count;
+        // Quality changes geometry/shadows, never the economy. Every player
+        // gets comfortably more than the 2,000 pickups required by the seal.
+        mesh.userData.kbLowCount = spec.count;
         mesh.count = this.quality === 'LOW' ? mesh.userData.kbLowCount : mesh.userData.kbHighCount;
         mesh.frustumCulled = false;
         const matrix = new T.Matrix4(), position = new T.Vector3(), quaternion = new T.Quaternion();
+        const fieldMap = new Map();
         for (let i = 0; i < spec.count; i++) {
-          const platform = profile.platforms[(i * (spec.kind === 'common' ? 7 : spec.kind === 'rare' ? 13 : 19) + (spec.kind === 'route' ? 3 : 0)) % profile.platforms.length];
-          const angle = i * 2.3999632297 + (spec.kind === 'rare' ? .7 : spec.kind === 'route' ? 1.4 : 0);
-          const reach = spec.kind === 'common' ? (i % 5) * 2.1 : spec.kind === 'rare' ? platform.radius * .52 : platform.radius * .72;
-          let x = platform.x + Math.cos(angle) * reach;
-          let z = platform.z + Math.sin(angle) * reach;
-          let altitude = platform.top + (spec.kind === 'rare' ? 3.2 : 2.15);
+          const siteIndex = i % profile.sites.length;
+          const localIndex = Math.floor(i / profile.sites.length);
+          const clusterIndex = Math.floor(localIndex / spec.clusterSize);
+          const slot = localIndex % spec.clusterSize;
+          const bucket = platformBuckets[siteIndex];
+          const nonSpawnBucket = bucket.filter(candidate => !candidate.sanctuary);
+          const spawnX = profile.spawnPlatform?.x ?? profile.sites[0].x;
+          const spawnZ = profile.spawnPlatform?.z ?? profile.sites[0].z;
+          const spawnSafeBucket = nonSpawnBucket.filter(candidate =>
+            surfaceDistanceAt(candidate.x, candidate.z, spawnX, spawnZ)
+              > surfaceCollisionRadius(candidate) + 14);
+          const cacheBucket = !water && spec.kind === 'rare'
+            ? spawnSafeBucket.filter(candidate => candidate.family === 'obsidian-cache')
+            : spawnSafeBucket;
+          const placementBucket = cacheBucket.length ? cacheBucket
+            : spawnSafeBucket.length ? spawnSafeBucket
+              : nonSpawnBucket.length ? nonSpawnBucket : bucket;
+          // A tiny authored welcome ring is visible from the first frame, but
+          // entering a planet never vacuums a hundred pickups before the player
+          // has moved. All other fields explicitly avoid the spawn sanctuary.
+          const welcomeRing = spec.kind === 'common' && siteIndex === 0 && localIndex < 12;
+          const platform = welcomeRing ? profile.spawnPlatform : placementBucket[
+            (clusterIndex * (spec.kind === 'rare' ? 5 : 7) + siteIndex) % placementBucket.length
+          ];
+          const ringCount = spec.kind === 'common' ? 9 : 8;
+          const ring = Math.floor(slot / ringCount);
+          const angle = slot / ringCount * TAU + clusterIndex * .71 + siteIndex * .29;
+          const nestedLavaCache = !water && spec.kind === 'rare'
+            && platform.family === 'obsidian-cache';
+          const reach = welcomeRing ? 22 + slot % 3 * 2.4
+            : nestedLavaCache ? 1.05 + slot % 3 * .58
+              : Math.min(Math.max(1.35, platform.radius * .58),
+                (spec.kind === 'rare' ? 2.1 : 2.6) + ring * (spec.kind === 'rare' ? 2.1 : 2.8));
+          const offset = surfaceOffsetChartAt(
+            platform.x, platform.z, Math.cos(angle), Math.sin(angle), reach, {},
+          );
+          let x = offset.x;
+          let z = offset.z;
+          let altitude = platform.top
+            + (nestedLavaCache ? .3 : spec.kind === 'rare' ? 3.15 : 2.05)
+            + Math.sin(slot * 1.7 + clusterIndex) * (nestedLavaCache ? .16 : .42);
           let routeRail = null;
           let routeDistance = null;
           if (spec.kind === 'route') {
@@ -7773,15 +8851,34 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
             routeRail = rail;
             routeDistance = rail.path.totalLength * ((lane + 1) / (laneCount + 1));
             let sample = sampleTransitPath(rail.path, routeDistance, {});
-            // The site-to-site rail itself may skim a later-added ship
-            // footprint. Keep its breadcrumb on this exact rail, but walk it
-            // deterministically back toward the route until the pickup is
-            // visible and collectable rather than buried in a colossal hull.
-            for (let attempt = 1; this.interworldScatterReserved(sample.chart.x, sample.chart.z, .72)
-              && attempt <= 24; attempt++) {
-              routeDistance = Math.max(rail.path.totalLength * .045,
-                routeDistance - rail.path.totalLength * .032);
-              sample = sampleTransitPath(rail.path, routeDistance, {});
+            // The site-to-site rail itself may pass above a later-added ship
+            // footprint. Search both directions for the nearest clear piece
+            // of that exact rail so a breadcrumb never hides inside the hull
+            // or ascent lane. Searching only backward used to strand the first
+            // few ribbons against the route's minimum-distance clamp.
+            if (this.interworldScatterReserved(sample.chart.x, sample.chart.z, .72)) {
+              const nominalDistance = routeDistance;
+              const minimumDistance = rail.path.totalLength * .045;
+              const maximumDistance = rail.path.totalLength * .955;
+              const searchStep = rail.path.totalLength / 256;
+              let clear = null;
+              for (let attempt = 1; attempt <= 256 && !clear; attempt++) {
+                for (const direction of [-1, 1]) {
+                  const candidateDistance = clamp(
+                    nominalDistance + direction * attempt * searchStep,
+                    minimumDistance, maximumDistance,
+                  );
+                  const candidate = sampleTransitPath(rail.path, candidateDistance, {});
+                  if (!this.interworldScatterReserved(candidate.chart.x, candidate.chart.z, .72)) {
+                    clear = { distance: candidateDistance, sample: candidate };
+                    break;
+                  }
+                }
+              }
+              if (clear) {
+                routeDistance = clear.distance;
+                sample = clear.sample;
+              }
             }
             x = sample.chart.x;
             z = sample.chart.z;
@@ -7792,20 +8889,46 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
             .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
           matrix.compose(position, quaternion, ONE_SCALE);
           mesh.setMatrixAt(i, matrix);
+          const fieldId = spec.kind === 'route'
+            ? `${routeRail.id}-ribbon`
+            : `${profile.sites[siteIndex].id}-${spec.kind}-cache-${clusterIndex}`;
+          let field = fieldMap.get(fieldId);
+          if (!field) {
+            field = {
+              id: fieldId, kind: spec.kind, site: profile.sites[siteIndex].name,
+              siteIndex, pattern: spec.kind === 'route' ? 'rail-ribbon'
+                : spec.kind === 'rare' ? (water ? 'reef-treasure-cache' : 'obsidian-cache')
+                  : (water ? 'coral-garden-ring' : 'hardened-rock-ring'),
+              count: 0,
+            };
+            fieldMap.set(fieldId, field);
+          }
+          field.count++;
           profile.collectibles.push({
             id: `${profile.id}-${spec.kind}-${i}`, planet: profile.id,
             kind: spec.kind, value: spec.value, index: i, mesh,
             alive: true, enabled: i < mesh.count,
-            matrix: matrix.clone(), position: position.clone(),
-            chartPosition: new T.Vector3(x, altitude, z), phase: i * .73,
-            routeRail, routeDistance,
+            matrix: matrix.clone(), position: position.clone(), homePosition: position.clone(),
+            quaternion: quaternion.clone(), homeQuaternion: quaternion.clone(),
+            chartPosition: new T.Vector3(x, altitude, z),
+            homeChartPosition: new T.Vector3(x, altitude, z), phase: i * .73,
+            fieldId, siteIndex, hidden: false, collecting: false,
+            routeRail, routeDistance, routePresentationVisible: true,
           });
         }
         mesh.instanceMatrix.needsUpdate = true;
         mesh.userData.kbLifted = true;
         profile.root.add(mesh);
         profile.collectibleMeshes.push(mesh);
+        profile.collectibleMeshByKind[spec.kind] = mesh;
+        profile.collectibleFields.push(...fieldMap.values());
       }
+      profile.collectibleSupply = {
+        ...ALTERNATE_COLLECTIBLE_COUNTS,
+        total: Object.values(ALTERNATE_COLLECTIBLE_COUNTS).reduce((sum, count) => sum + count, 0),
+        target: ALTERNATE_COLLECTION_TARGET,
+        fields: profile.collectibleFields.length,
+      };
     }
     makePlanetBreakables(profile, water) {
       const count = 187;
@@ -7839,9 +8962,27 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         profile.breakables.push({
           id: `${profile.id}-breakable-${i}`, index: i, mesh,
           alive: true, radius: radius * 1.2, position: position.clone(), matrix: matrix.clone(),
+          containedPickups: [],
         });
       }
+      // A visible majority of the economy lives in paths and named gardens,
+      // while every breakable also has a real treasure inside it. These 187
+      // pickups begin physically hidden and pop into the world when struck.
+      const hideable = profile.collectibles.filter(pickup => pickup.kind !== 'route');
+      const hiddenIndices = new Set();
+      for (let index = 0; index < profile.breakables.length && index < hideable.length; index++) {
+        let pickupIndex = (index * 37 + (water ? 11 : 23)) % hideable.length;
+        while (hiddenIndices.has(pickupIndex)) pickupIndex = (pickupIndex + 1) % hideable.length;
+        hiddenIndices.add(pickupIndex);
+        const pickup = hideable[pickupIndex];
+        const item = profile.breakables[index];
+        pickup.hidden = true;
+        pickup.containerId = item.id;
+        item.containedPickups.push(pickup);
+        pickup.mesh.setMatrixAt(pickup.index, ZERO_MATRIX);
+      }
       mesh.instanceMatrix.needsUpdate = true;
+      for (const collectibleMesh of profile.collectibleMeshes) collectibleMesh.instanceMatrix.needsUpdate = true;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.userData.kbLifted = true;
@@ -7890,14 +9031,21 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const ballReach = flying ? 7 + gameState.ball.velocity.length() * .035 : 2.7;
       const touched = new Set();
       for (const pickup of profile.collectibles) {
-        if (!pickup.alive || !pickup.enabled) continue;
-        if (pickup.position.distanceToSquared(ball) > ballReach * ballReach
-          && pickup.position.distanceToSquared(player) > 8.2 ** 2) continue;
+        if (!pickup.alive || !pickup.enabled || pickup.hidden || pickup.collecting) continue;
+        const ballDistanceSq = pickup.position.distanceToSquared(ball);
+        const playerDistanceSq = pickup.position.distanceToSquared(player);
+        if (ballDistanceSq > ballReach * ballReach && playerDistanceSq > 8.2 ** 2) continue;
         pickup.alive = false;
-        pickup.mesh.setMatrixAt(pickup.index, ZERO_MATRIX);
+        pickup.collecting = true;
+        pickup.absorbAge = 0;
+        pickup.absorbDuration = pickup.kind === 'rare' ? .34 : pickup.kind === 'route' ? .28 : .22;
+        pickup.absorbFrom = pickup.position.clone();
+        pickup.absorbTarget = ballDistanceSq <= playerDistanceSq ? 'ball' : 'player';
+        profile.collectibleAbsorbing.push(pickup);
         touched.add(pickup.mesh);
         const progress = gameState.worldProgress[profile.id];
         progress[pickup.kind]++;
+        progress.collected++;
         gameState.score += pickup.value * 90;
         gameState.style = clamp(gameState.style + pickup.value * 1.5, 0, 100);
         this.particles?.burst(pickup.position, profile.theme.accent, 10 + pickup.value * 4, 7, .55, .12);
@@ -7932,7 +9080,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       if (!seal) return;
       const progress = gameState.worldProgress[profile.id];
       const time = Number.isFinite(clock) ? clock : gameState.time;
-      if (progress.regionalDefeated >= 3 && !profile.boss.unlocked) {
+      if (progress.regionalDefeated >= ALTERNATE_REGIONAL_REQUIRED
+        && progress.collected >= ALTERNATE_COLLECTION_TARGET
+        && !profile.boss.unlocked) {
         this.unlockAlternateFinal(profile, gameState);
       }
       seal.opening = damp(seal.opening, seal.open ? 1 : 0, 2.4, dt);
@@ -7945,7 +9095,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         orbit.material.opacity = .32 + earned * .68;
       }
       for (const rib of seal.ribs) {
-        const angle = rib.index * TAU / 3;
+        const angle = rib.index * TAU / seal.ribs.length;
         const earned = progress.regionalBosses[rib.index] ? 1 : 0;
         const peel = Math.max(earned * .38, seal.opening);
         rib.mesh.position.copy(rib.basePosition);
@@ -7980,7 +9130,10 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       audio.win();
       gameState.addStyle(30, 5600, `${boss.name} FALLS`,
         profile.id === 'water' ? '#9ffcff' : '#ffd34f');
-      if (progress.regionalDefeated >= 3) this.unlockAlternateFinal(profile, gameState);
+      if (progress.regionalDefeated >= ALTERNATE_REGIONAL_REQUIRED
+        && progress.collected >= ALTERNATE_COLLECTION_TARGET) {
+        this.unlockAlternateFinal(profile, gameState);
+      }
       return true;
     }
     resolveRegionalBosses(profile, gameState) {
@@ -8165,27 +9318,50 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         boss.attackTimer -= boss.engaged ? dt : 0;
         if (!boss.engaged) {
           boss.attackTimer = Math.max(boss.attackTimer, 1.25);
+          boss.attackWave = 0;
           boss.attackRing.visible = false;
-        } else if (boss.attackTimer <= .72 && boss.attackTimer > 0) {
-          const charge = 1 - boss.attackTimer / .72;
+        } else if (boss.attackWave > 0) {
+          boss.attackWave -= dt;
+          boss.wavePrevious = boss.waveRadius;
+          boss.waveRadius = Math.min(boss.waveMax, boss.waveRadius + dt * (profile.id === 'water' ? 32 : 35));
           boss.attackRing.visible = true;
-          boss.attackRing.material.opacity = .16 + charge * .62;
-          boss.attackRing.scale.setScalar(.72 + charge * (boss.mechanic === 'wing-bells' ? 3 : 1.6));
-        } else if (boss.attackTimer <= 0) {
-          boss.attackTimer = 2.5 + boss.index * .32;
-          boss.attackSerial++;
-          boss.attackRing.visible = false;
-          const attackRadius = (boss.mechanic === 'wing-bells' ? 46
-            : boss.mechanic === 'grapple-pearls' ? 34 : 28) * boss.groupBaseScale.x;
-          if (radial < attackRadius && boss.attackHitSerial !== boss.attackSerial) {
+          boss.attackRing.material.opacity = clamp(.76 - boss.waveRadius / boss.waveMax * .38, .2, .76);
+          boss.attackRing.scale.setScalar(boss.waveRadius / (12 * boss.groupBaseScale.x));
+          const playerClearance = playerChart.y - boss.arena.top;
+          if (boss.attackHitSerial !== boss.attackSerial
+            && radial >= boss.wavePrevious - 2.8 && radial <= boss.waveRadius + 2.8
+            && radial >= 8.5 && playerClearance < 5.2) {
             boss.attackHitSerial = boss.attackSerial;
             gameState.damagePlayer({ position: boss.chartPosition });
             setVspeed(gameState.player.velocity, gameState.player.up,
               Math.max(vspeedOf(gameState.player.velocity, gameState.player.up), 10));
           }
-          world.pulseRing(boss.position, new T.Color(profile.theme.hot), attackRadius, .55, true);
-          this.particles?.burst(boss.position, profile.theme.hot, 34, 15, .78, .18);
-          audio.impact(.76, 'alien');
+          if (boss.waveRadius >= boss.waveMax || boss.attackWave <= 0) {
+            boss.attackWave = 0;
+            boss.attackRing.visible = false;
+          }
+        } else if (boss.mechanic !== 'spit-window'
+          && boss.attackTimer <= boss.attackWarning && boss.attackTimer > 0) {
+          const charge = 1 - boss.attackTimer / boss.attackWarning;
+          const warnedRadius = lerp(8.5, boss.waveMax, charge);
+          boss.attackRing.visible = true;
+          boss.attackRing.material.opacity = .13 + charge * .61;
+          boss.attackRing.scale.setScalar(warnedRadius / (12 * boss.groupBaseScale.x));
+        } else if (boss.attackTimer <= 0) {
+          boss.attackTimer = 3.05 + boss.index * .18;
+          boss.attackSerial++;
+          boss.attackHitSerial = -1;
+          boss.attackRing.visible = false;
+          // Cindermaw already owns a marked physical projectile. The old
+          // generic pulse stacked an invisible unavoidable hit on top of it.
+          if (boss.mechanic !== 'spit-window') {
+            boss.attackWave = 2.2;
+            boss.waveRadius = 8.5;
+            boss.wavePrevious = 8.5;
+            world.pulseRing(boss.position, new T.Color(profile.theme.hot), 12, .42, true);
+            this.particles?.burst(boss.position, profile.theme.hot, 34, 15, .78, .18);
+            audio.impact(.76, 'alien');
+          }
         }
       }
     }
@@ -8202,6 +9378,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         boss.attackTimer = 1.8 + boss.index * .5;
         boss.attackSerial = 0;
         boss.attackHitSerial = -1;
+        boss.attackWave = 0;
+        boss.waveRadius = 0;
+        boss.wavePrevious = 0;
         boss.projectileSerial = -1;
         boss.hitFlash = 0;
         boss.deadTimer = 0;
@@ -8302,6 +9481,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       for (const node of boss.signatureNodes || EMPTY_SOLIDS) node.group.visible = false;
       gameState.worldProgress[profile.id].bossDefeated = true;
       gameState.savePlanetCrown(profile.id, false);
+      this.revealPlanetConstellation(profile.id, true);
       gameState.score += 12000;
       gameState.rewardFlash = 1;
       this.particles?.burst(boss.position, profile.theme.hot, 150, 31, 1.7, .45);
@@ -8330,6 +9510,24 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       gameState.stats.breaks++;
       gameState.score += 45;
       this.particles?.burst(item.position, profile.theme.accent, 13, 8 + force * .1, .6, .15);
+      for (let index = 0; index < (item.containedPickups?.length || 0); index++) {
+        const pickup = item.containedPickups[index];
+        if (!pickup.alive) continue;
+        pickup.hidden = false;
+        const localUp = dirAt(item.position, new T.Vector3());
+        const tangentForward = new T.Vector3(0, 0, 1).addScaledVector(localUp, -localUp.z);
+        if (tangentForward.lengthSq() < 1e-6) tangentForward.set(1, 0, 0).addScaledVector(localUp, -localUp.x);
+        tangentForward.normalize();
+        pickup.position.copy(item.position)
+          .addScaledVector(localUp, 2.4 + index * .7)
+          .addScaledVector(tangentForward, (index - .5) * 1.3);
+        toChartVec(pickup.chartPosition.copy(pickup.position));
+        pickup.quaternion.copy(liftQuatAt(pickup.chartPosition.x, pickup.chartPosition.z, new T.Quaternion()));
+        const revealMatrix = new T.Matrix4().compose(pickup.position, pickup.quaternion, ONE_SCALE);
+        pickup.mesh.setMatrixAt(pickup.index, revealMatrix);
+        pickup.mesh.instanceMatrix.needsUpdate = true;
+        world.pulseRing(pickup.position, new T.Color(profile.theme.hot), 4.5, .34, true);
+      }
       audio.impact(clamp(force / 38, .2, .9), 'rock');
       return true;
     }
@@ -8337,7 +9535,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       profile.atmosphere.rotation.y += dt * (profile.id === 'water' ? .025 : -.012);
       profile.terrainMaterial.emissiveIntensity = profile.id === 'water'
         ? .62 + Math.sin(clock * .7) * .1
-        : .42 + Math.sin(clock * 2.3) * .09;
+        : .22 + Math.sin(clock * 2.3) * .045;
       if (profile.deckRimMesh) {
         profile.deckRimMesh.material.emissiveIntensity = profile.id === 'water'
           ? 2.05 + Math.sin(clock * 1.7) * .42
@@ -8384,6 +9582,33 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         mesh.rotation.set(0, 0, 0);
         mesh.material.emissiveIntensity = 2.1 + Math.sin(clock * 3.2) * .38;
       }
+      if (profile.collectibleAbsorbing?.length) {
+        const matrix = new T.Matrix4();
+        const position = new T.Vector3();
+        const quaternion = new T.Quaternion();
+        const scale = new T.Vector3();
+        const touchedMeshes = new Set();
+        for (let index = profile.collectibleAbsorbing.length - 1; index >= 0; index--) {
+          const pickup = profile.collectibleAbsorbing[index];
+          pickup.absorbAge += dt;
+          const raw = clamp(pickup.absorbAge / pickup.absorbDuration, 0, 1);
+          const amount = smootherstep(0, 1, raw);
+          const target = pickup.absorbTarget === 'ball' ? gameState.ball.position : gameState.player.position;
+          position.copy(pickup.absorbFrom).lerp(target, amount);
+          quaternion.copy(pickup.quaternion)
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, amount * TAU * 1.8));
+          const size = Math.max(.001, 1 - amount * amount);
+          scale.setScalar(size);
+          matrix.compose(position, quaternion, scale);
+          pickup.mesh.setMatrixAt(pickup.index, raw >= 1 ? ZERO_MATRIX : matrix);
+          touchedMeshes.add(pickup.mesh);
+          if (raw >= 1) {
+            pickup.collecting = false;
+            profile.collectibleAbsorbing.splice(index, 1);
+          }
+        }
+        for (const mesh of touchedMeshes) mesh.instanceMatrix.needsUpdate = true;
+      }
       if (profile.id === 'water') this.updateWaterWorldVisuals(profile, dt, gameState, clock);
       if (profile.id === 'lava') this.updateLavaWorldVisuals(profile, dt, gameState, clock);
       this.updatePlanetFinalSeal(profile, dt, gameState, clock);
@@ -8393,6 +9618,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const progress = gameState.worldProgress[profile.id];
       if (!mastery || !progress || mastery.complete) return false;
       const ready = progress.bossDefeated
+        && progress.collected >= mastery.thresholds.total
         && progress.common >= mastery.thresholds.common
         && progress.rare >= mastery.thresholds.rare
         && progress.route >= mastery.thresholds.route;
@@ -8518,16 +9744,16 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           }
           if (boss.attackHitSerial !== boss.attackSerial
             && radial >= previousRadius - 3 && radial <= boss.attackRadius + 3
-            && Math.abs(gameState.playerChartVec.y - profile.heightAt(gameState.playerChartVec.x, gameState.playerChartVec.z)) < 14) {
+            && radial >= 8.5 && gameState.playerChartVec.y - boss.arena.top < 5.2) {
             boss.attackHitSerial = boss.attackSerial;
             gameState.damagePlayer({ position: boss.chartPosition });
             setVspeed(gameState.player.velocity, gameState.player.up,
               Math.max(vspeedOf(gameState.player.velocity, gameState.player.up), 9));
           }
         } else {
-          const charge = clamp(boss.signatureTimer / .72, 0, 1);
-          const eruption = smoothstep(.68, .86, boss.signatureTimer)
-            * (1 - smoothstep(1.18, 1.35, boss.signatureTimer));
+          const charge = clamp(boss.signatureTimer / 1.15, 0, 1);
+          const eruption = smoothstep(1.05, 1.2, boss.signatureTimer)
+            * (1 - smoothstep(1.5, 1.72, boss.signatureTimer));
           boss.telegraph.visible = false;
           for (const node of boss.signatureNodes) {
             node.group.visible = true;
@@ -8556,8 +9782,8 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         return;
       }
       boss.attackTimer -= dt;
-      if (boss.attackTimer <= .9 && boss.attackTimer > 0) {
-        boss.telegraphTimer = 1 - boss.attackTimer / .9;
+      if (boss.attackTimer <= 1.35 && boss.attackTimer > 0) {
+        boss.telegraphTimer = 1 - boss.attackTimer / 1.35;
         boss.telegraph.visible = true;
         boss.telegraph.scale.setScalar(1 + boss.telegraphTimer * .5);
         boss.telegraph.material.opacity = .14 + boss.telegraphTimer * .55;
@@ -8566,7 +9792,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       if (boss.attackTimer <= 0) {
         boss.attackTimer = Math.max(2.35, 3.5 - (boss.maxHp - boss.hp) * .22 - (boss.maxArmor - boss.armorHp) * .12);
         boss.telegraphTimer = 0;
-        boss.attackWave = 1.35;
+        boss.attackWave = profile.id === 'water' ? 1.75 : 1.85;
         boss.attackRadius = 8;
         boss.signatureTimer = 0;
         boss.attackSerial++;
@@ -8594,8 +9820,18 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       }
       for (const pickup of profile.collectibles) {
         pickup.alive = true;
-        pickup.mesh.setMatrixAt(pickup.index, pickup.matrix);
+        pickup.collecting = false;
+        pickup.absorbAge = 0;
+        pickup.hidden = !!pickup.containerId;
+        pickup.position.copy(pickup.homePosition);
+        pickup.chartPosition.copy(pickup.homeChartPosition);
+        pickup.quaternion.copy(pickup.homeQuaternion);
+        const routeVisible = !pickup.routeRail || pickup.routeRail.presentationSelected;
+        pickup.mesh.setMatrixAt(pickup.index,
+          pickup.hidden || !routeVisible ? ZERO_MATRIX : pickup.matrix);
+        if (pickup.routeRail) pickup.routePresentationVisible = !!routeVisible;
       }
+      if (profile.collectibleAbsorbing) profile.collectibleAbsorbing.length = 0;
       for (const mesh of profile.collectibleMeshes) mesh.instanceMatrix.needsUpdate = true;
       for (const item of profile.breakables) {
         item.alive = true;
@@ -8886,6 +10122,149 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.makeNebulae();
       this.makeHomeWorld();
       this.makeMeteors();
+    }
+    makeVictorySky() {
+      const shapeSpecs = {
+        moon: {
+          name: 'MOONHEART CONSTELLATION · THE KICKED CRESCENT',
+          color: 0xffdf73, direction: new T.Vector3(-.66, .46, -.92),
+          points: [[-8, 7], [-12, 2], [-11, -4], [-7, -9], [-1, -11], [4, -8], [7, -3], [4, -5], [0, -6], [-3, -4], [-4, 0], [-2, 4], [2, 6], [7, 5], [11, 1]],
+          edges: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[13,14],[10,13]],
+        },
+        water: {
+          name: 'LIVING TIDE CONSTELLATION · THE LEAPING WHALE',
+          color: 0x77f5ff, direction: new T.Vector3(.72, .56, -.88),
+          points: [[-13,1],[-9,4],[-4,6],[1,6],[6,4],[10,1],[13,4],[12,-1],[15,-4],[10,-3],[6,-6],[1,-7],[-4,-6],[-8,-3],[-11,-1],[-6,0],[-1,1],[4,1]],
+          edges: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[5,7],[7,8],[7,9],[9,10],[10,11],[11,12],[12,13],[13,14],[14,0],[14,15],[15,16],[16,17],[17,5],[2,12]],
+        },
+        lava: {
+          name: 'WALKING FURNACE CONSTELLATION · THE OBSIDIAN BEAR',
+          color: 0xff9b42, direction: new T.Vector3(.05, .78, 1),
+          points: [[-9,6],[-6,10],[-2,8],[2,8],[6,10],[9,6],[8,1],[6,-5],[2,-9],[-2,-9],[-6,-5],[-8,1],[-4,3],[0,1],[4,3],[-3,-2],[3,-2],[0,-5]],
+          edges: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,0],[0,12],[12,13],[13,14],[14,5],[12,15],[15,17],[17,16],[16,14],[2,13],[3,13]],
+        },
+      };
+      this.victoryConstellations = {};
+      const glow = radialTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0)', 64);
+      for (const [planet, spec] of Object.entries(shapeSpecs)) {
+        const group = new T.Group();
+        group.name = spec.name;
+        const pointPositions = new Float32Array(spec.points.length * 3);
+        for (let index = 0; index < spec.points.length; index++) {
+          pointPositions[index * 3] = spec.points[index][0];
+          pointPositions[index * 3 + 1] = spec.points[index][1];
+          pointPositions[index * 3 + 2] = 0;
+        }
+        const pointGeometry = new T.BufferGeometry();
+        pointGeometry.setAttribute('position', new T.BufferAttribute(pointPositions, 3));
+        const pointMaterial = new T.PointsMaterial({
+          map: glow, color: spec.color, size: 6.2, sizeAttenuation: false,
+          transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+          blending: T.AdditiveBlending,
+        });
+        const stars = new T.Points(pointGeometry, pointMaterial);
+        const linePositions = new Float32Array(spec.edges.length * 6);
+        for (let index = 0; index < spec.edges.length; index++) {
+          const [a, b] = spec.edges[index];
+          linePositions.set([spec.points[a][0], spec.points[a][1], 0,
+            spec.points[b][0], spec.points[b][1], 0], index * 6);
+        }
+        const lineGeometry = new T.BufferGeometry();
+        lineGeometry.setAttribute('position', new T.BufferAttribute(linePositions, 3));
+        const lineMaterial = new T.LineBasicMaterial({
+          color: spec.color, transparent: true, opacity: 0,
+          depthWrite: false, depthTest: false, blending: T.AdditiveBlending,
+        });
+        const lines = new T.LineSegments(lineGeometry, lineMaterial);
+        group.add(lines, stars);
+        group.position.copy(spec.direction).normalize().multiplyScalar(1080);
+        group.lookAt(PLANET.centre);
+        group.scale.setScalar(6.5);
+        group.userData.kbSky = true;
+        group.userData.targetVisible = false;
+        group.userData.reveal = 0;
+        group.userData.planet = planet;
+        group.visible = true;
+        this.scene.add(group);
+        skyMaterial(group);
+        this.victoryConstellations[planet] = { group, stars, lines, reveal: 0, target: 0 };
+      }
+
+      this.auroraUniforms = { time: { value: 0 }, reveal: { value: 0 } };
+      const auroraMaterial = new T.ShaderMaterial({
+        uniforms: this.auroraUniforms,
+        vertexShader: `
+          varying vec3 vSkyDir;
+          void main() {
+            vSkyDir = normalize(position);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform float time;
+          uniform float reveal;
+          varying vec3 vSkyDir;
+          void main() {
+            float longitude = atan(vSkyDir.z, vSkyDir.x);
+            float latitude = vSkyDir.y;
+            float foldA = .2 + .17 * sin(longitude * 2.7 + time * .11) + .045 * sin(longitude * 11.0 - time * .31);
+            float foldB = .48 + .12 * sin(longitude * 3.9 - time * .08 + 1.7);
+            float foldC = .02 + .09 * sin(longitude * 5.2 + time * .16 + 4.1);
+            float curtainA = exp(-abs(latitude - foldA) * 13.0);
+            float curtainB = exp(-abs(latitude - foldB) * 18.0);
+            float curtainC = exp(-abs(latitude - foldC) * 21.0);
+            float striation = .7 + .3 * pow(abs(sin(longitude * 23.0 + latitude * 17.0 + time * .25)), 2.0);
+            float veil = (curtainA * 1.08 + curtainB * .86 + curtainC * .62)
+              * striation * smoothstep(-.38, .08, latitude);
+            float bloom = (exp(-abs(latitude - foldA) * 5.5) * .2
+              + exp(-abs(latitude - foldB) * 7.0) * .14) * smoothstep(-.4, .12, latitude);
+            vec3 cyan = vec3(.12, 1.0, .84);
+            vec3 violet = vec3(.66, .28, 1.0);
+            vec3 gold = vec3(1.0, .7, .24);
+            vec3 colour = mix(cyan, violet, smoothstep(.16, .62, latitude));
+            colour = mix(colour, gold, curtainB * .3);
+            float intensity = min(1.35, veil + bloom);
+            gl_FragColor = vec4(colour * intensity * reveal,
+              min(.84, intensity * .7) * reveal);
+          }
+        `,
+        transparent: true, depthWrite: false, depthTest: false,
+        side: T.BackSide, blending: T.AdditiveBlending,
+      });
+      this.victoryAurora = new T.Mesh(new T.SphereGeometry(1180, 72, 40), auroraMaterial);
+      this.victoryAurora.name = 'ECLIPSE AFTERMATH · PERMANENT AURORA SKY';
+      this.victoryAurora.position.copy(PLANET.centre);
+      this.victoryAurora.renderOrder = -8;
+      this.victoryAurora.userData.kbSky = true;
+      this.victoryAurora.userData.targetVisible = false;
+      this.scene.add(this.victoryAurora);
+      skyMaterial(this.victoryAurora);
+    }
+    revealPlanetConstellation(planet, visible = true, immediate = false) {
+      const constellation = this.victoryConstellations?.[planet];
+      if (!constellation) return false;
+      constellation.target = visible ? 1 : 0;
+      constellation.group.userData.targetVisible = !!visible;
+      if (immediate) constellation.reveal = constellation.target;
+      return true;
+    }
+    revealVictoryAurora(visible = true, immediate = false) {
+      if (!this.victoryAurora) return false;
+      this.victoryAurora.userData.targetVisible = !!visible;
+      if (immediate) this.auroraUniforms.reveal.value = visible ? 1 : 0;
+      return true;
+    }
+    applyVictorySkyState(gameState, immediate = false) {
+      if (!gameState) return false;
+      this.revealPlanetConstellation('moon', !!(gameState.endgameComplete || gameState.savedMoonheart), immediate);
+      this.revealPlanetConstellation('water', !!(
+        gameState.worldProgress?.water?.bossDefeated || gameState.savedPlanetCrowns?.water?.boss
+      ), immediate);
+      this.revealPlanetConstellation('lava', !!(
+        gameState.worldProgress?.lava?.bossDefeated || gameState.savedPlanetCrowns?.lava?.boss
+      ), immediate);
+      this.revealVictoryAurora(!!(gameState.eclipseState?.complete || gameState.savedEclipseMaw), immediate);
+      return true;
     }
     // Deep colour behind the stars. Four enormous additive sprites, which cost
     // four draw calls and turn a black backdrop into a place.
@@ -18178,7 +19557,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       const themes = {
         moon: { background: 0x000006, fog: 0x02030c, density: .00072, exposure: 1.18 },
         water: { background: 0x00131d, fog: 0x063746, density: .0036, exposure: 1.12 },
-        lava: { background: 0x120100, fog: 0x2a0702, density: .0027, exposure: 1.08 },
+        lava: { background: 0x17050a, fog: 0x4a170f, density: .00142, exposure: 1.2 },
       };
       const theme = themes[next];
       this.scene.background.setHex(theme.background);
@@ -18253,9 +19632,12 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const exteriorVisible = planet === this.activePlanet && next === 'surface';
         for (const vehicle of profile.vehicles || EMPTY_SOLIDS) vehicle.group.visible = exteriorVisible;
         for (const rail of profile.rails || EMPTY_SOLIDS) {
-          if (rail.spine) rail.spine.visible = exteriorVisible;
-          if (rail.conductor) rail.conductor.visible = exteriorVisible;
-          if (rail.grip) rail.grip.visible = exteriorVisible;
+          const presentationAware = planet !== 'moon' && !!profile.railPresentation;
+          const submitted = !presentationAware || (rail.presentation || 0) > 0;
+          const selected = !presentationAware || !!rail.presentationSelected;
+          if (rail.spine) rail.spine.visible = exteriorVisible && submitted;
+          if (rail.conductor) rail.conductor.visible = exteriorVisible && submitted;
+          if (rail.grip) rail.grip.visible = exteriorVisible && selected;
         }
       }
       this.syncLayerCollectibles(next);
@@ -20013,6 +21395,21 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         face.scale.setScalar(Math.max(.001, reveal * bounce));
         face.rotation.z = Math.sin(this.elapsed * 1.35 + face.position.x * .01) * .018;
       }
+      for (const constellation of Object.values(this.victoryConstellations || {})) {
+        constellation.reveal = damp(constellation.reveal, constellation.target, 1.8, dt);
+        const reveal = smootherstep(0, 1, constellation.reveal);
+        constellation.stars.material.opacity = reveal * (.72 + Math.sin(this.elapsed * 2.1
+          + constellation.group.position.x * .004) * .18);
+        constellation.lines.material.opacity = reveal * .44;
+        constellation.group.scale.setScalar(6.5 * (.92 + reveal * .08));
+        constellation.group.rotation.z += dt * .006 * (constellation.group.userData.planet === 'water' ? -1 : 1);
+      }
+      if (this.victoryAurora && this.auroraUniforms) {
+        this.auroraUniforms.time.value = this.elapsed;
+        const target = this.victoryAurora.userData.targetVisible ? 1 : 0;
+        this.auroraUniforms.reveal.value = damp(this.auroraUniforms.reveal.value, target, .72, dt);
+        this.victoryAurora.rotation.y += dt * .004;
+      }
       if (this.skyTime) this.skyTime.value = this.elapsed;
       this.updateMeteors(dt);
       this.stars.rotation.y += dt * .00035;
@@ -20396,7 +21793,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       const themeLight = this.activePlanet === 'water'
         ? { sun: 3.35, ambient: .72, sunColor: 0x9ddfff, ambientSky: 0x247a8e, ambientGround: 0x020b12 }
         : this.activePlanet === 'lava'
-          ? { sun: 3.8, ambient: .52, sunColor: 0xffc173, ambientSky: 0x6a1608, ambientGround: 0x090000 }
+          ? { sun: 3.8, ambient: .58, sunColor: 0xffc173, ambientSky: 0x8b2e16, ambientGround: 0x351009 }
           : { sun: 4.65, ambient: .43, sunColor: 0xffedcf, ambientSky: 0x91c4ff, ambientGround: 0x110817 };
       this.sun.color.setHex(themeLight.sunColor);
       this.ambient.color.setHex(themeLight.ambientSky);
@@ -20581,14 +21978,19 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             : type === 'snowman' ? 3 : type === 'phantom' ? 4 : type === 'banker' ? 4
               : type === 'snatcher' ? 2 : type === 'burrower' ? 3 : type === 'bellbug' ? 2
                 : type === 'ribbonback' ? 3 : 1;
+      this.railTarget = type === 'tideeel' || type === 'railwyrm';
       const planetStats = {
-        reefskate: [2.15, 2], jellybell: [1.8, 2], shellback: [2.25, 3], tideeel: [1.65, 2],
-        cinderhopper: [2.05, 2], railwyrm: [1.8, 2], forgeback: [2.35, 3], flarecaster: [1.75, 2],
+        reefskate: [2.15, 2], jellybell: [1.8, 2], shellback: [2.25, 3], tideeel: [1.65, 1],
+        cinderhopper: [2.05, 2], railwyrm: [1.8, 1], forgeback: [2.35, 3], flarecaster: [1.75, 2],
       }[type];
       if (planetStats) {
         this.radius = planetStats[0];
         this.maxHp = planetStats[1];
       }
+      // Rail creatures are deliberate moving targets. Their player-contact
+      // body remains honest, while the ball gets a broad forgiving lane so a
+      // rail-speed HOME ball or quick kick reliably turns them into confetti.
+      this.ballHitRadius = this.radius + (this.railTarget ? 1.45 : 0);
       this.hp = this.maxHp;
       this.alive = true;
       this.phase = Number.isFinite(options.phase) ? options.phase : enemyRandom() * TAU;
@@ -20762,6 +22164,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.eclipseState = makeEclipseState(this.savedEclipseMaw);
       world.resetEclipseMaw(this.savedEclipseMaw);
       world.setPlanetSmiles(false);
+      world.applyVictorySkyState(this, true);
       this.lastContact = null;
       this.guidePointScratch = new T.Vector3();
       this.guideDirectionScratch = new T.Vector3();
@@ -21060,7 +22463,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             // first safe deck and its near approach free of spawn-overlapping
             // enemies while preserving the exact 104-body roster elsewhere.
             for (let offset = 0; offset < profile.platforms.length
-              && Math.hypot(platform.x - profile.spawn.x, platform.z - profile.spawn.z) < 46; offset++) {
+              && surfaceDistanceAt(platform.x, platform.z, profile.spawn.x, profile.spawn.z)
+                < profile.spawnSafetyRadius + 14; offset++) {
               platformIndex = (platformIndex + 11) % profile.platforms.length;
               platform = profile.platforms[platformIndex];
             }
@@ -21088,6 +22492,23 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         }
         profile.enemies = this.enemies.filter(enemy => enemy.planet === planet);
       }
+    }
+    applySpawnSanctuary(enemy, sanctuaryActive) {
+      if ((enemy.layer || 'surface') !== 'surface' || !sanctuaryActive) {
+        enemy.spawnProtected = false;
+        return false;
+      }
+
+      enemy.spawnProtected = true;
+      enemy.attackArmed = false;
+      enemy.tensing = 0;
+      enemy.dropping = 0;
+      enemy.surgeTimer = 0;
+      enemy.attackCooldown = Math.max(enemy.attackCooldown, .45);
+      // Keep authored placements and ambient idle motion byte-stable. The
+      // sanctuary suppresses pursuit, attacks, voices, and contact damage; it
+      // does not rewrite the original Moon's ball/enemy choreography.
+      return true;
     }
     savePlanetCrown(planet, mastery = false) {
       const saved = this.savedPlanetCrowns?.[planet];
@@ -21281,6 +22702,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       world.resetInterworldVehicles();
       world.resetEclipseMaw(this.savedEclipseMaw);
       world.setPlanetSmiles(false);
+      world.applyVictorySkyState(this, true);
       this.spawnEnemies();
       world.particles.clear();
       world.ringField.clear();
@@ -24069,7 +25491,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const center = fromChartVec(enemy.position.clone());
         center.addScaledVector(dirAt(center, this.tempB), enemy.radius * .7);
         const distance = center.distanceTo(ball.position);
-        if (distance > enemy.radius + ball.radius) continue;
+        if (distance > (enemy.ballHitRadius || enemy.radius) + ball.radius) continue;
         const normal = ball.position.clone().sub(center).normalize();
         if (enemy.summit && world.fracture.active) {
           // Progression-locked enemies used to be intangible ghosts the ball
@@ -24181,8 +25603,15 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       enemy.deadTimer = .82;
       enemy.velocity.copy(enemy.position).sub(ballChart).normalize().multiplyScalar(10).addScaledVector(UP, 8);
       this.stats.kills++;
-      this.addStyle(enemy.type === 'warden' ? 34 : enemy.type === 'shield' ? 25 : 12, enemy.type === 'warden' ? 5000 : enemy.type === 'shield' ? 2400 : 700, enemy.type === 'warden' ? 'CROWN SHATTERED' : enemy.type === 'shield' ? 'CARAPACE BROKEN' : 'MOONSMASH', '#ffd66b');
-      world.particles.burst(hitPosition, 0xffdf79, enemy.type === 'warden' ? 72 : 36, enemy.type === 'warden' ? 24 : 16, 1.15, .45);
+      const railSmash = !!enemy.railTarget;
+      this.addStyle(enemy.type === 'warden' ? 34 : enemy.type === 'shield' ? 25 : railSmash ? 16 : 12,
+        enemy.type === 'warden' ? 5000 : enemy.type === 'shield' ? 2400 : railSmash ? 1050 : 700,
+        enemy.type === 'warden' ? 'CROWN SHATTERED' : enemy.type === 'shield' ? 'CARAPACE BROKEN'
+          : railSmash ? 'RAIL SMASH' : 'MOONSMASH',
+        railSmash ? '#8ff8ff' : '#ffd66b');
+      world.particles.burst(hitPosition, railSmash ? 0x8ff8ff : 0xffdf79,
+        enemy.type === 'warden' ? 72 : railSmash ? 52 : 36,
+        enemy.type === 'warden' ? 24 : railSmash ? 20 : 16, 1.15, .45);
       if ((enemy.planet || 'moon') === 'moon') {
         world.spawnStones(hitPosition, clamp(1 + enemy.maxHp, 2, 6), 2.6);
       } else {
@@ -25246,6 +26675,16 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       toChartVec(this.playerChartVec.copy(player.position));
       toChartVec(this.ballChartVec.copy(this.ball.position));
       chartFrameAt(player.position, this.playerChart);
+      const activeSurface = world.planetSurfaces.get(world.activePlanet);
+      const activeSpawn = activeSurface?.spawn;
+      const activeSpawnRadius = activeSurface?.spawnSafetyRadius
+        || SPAWN_SANCTUARY_RADII[world.activePlanet] || 0;
+      // This value is identical for every active enemy, so calculate the
+      // geodesic distance once per frame rather than once per roster member.
+      const spawnSanctuaryActive = world.activeLayer === 'surface' && !!activeSpawn
+        && activeSpawnRadius > 0
+        && surfaceDistanceAt(this.playerChartVec.x, this.playerChartVec.z,
+          activeSpawn.x, activeSpawn.z) <= activeSpawnRadius;
       for (const enemy of this.enemies) {
         const visual = enemy.visual;
         if ((enemy.layer || 'surface') !== world.activeLayer
@@ -25272,8 +26711,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           if (enemy.deadTimer <= 0) visual.group.visible = false;
           continue;
         }
+        const spawnProtected = this.applySpawnSanctuary(enemy, spawnSanctuaryActive);
         if ((enemy.planet || 'moon') !== 'moon') {
-          this.updateAlternateEnemy(enemy, visual, dt, player);
+          this.updateAlternateEnemy(enemy, visual, dt, player, spawnProtected);
           continue;
         }
         const summitLocked = enemy.summit && world.fracture.active;
@@ -25301,7 +26741,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         // pitched by species, so the moon tells you what is behind you without
         // a single word on screen. Capped at three voices a frame so a
         // garrison is a texture and not an alarm.
-        if (horizontalDistance < ENEMY_VOICE_RANGE) {
+        if (!spawnProtected && horizontalDistance < ENEMY_VOICE_RANGE) {
           enemy.voice -= dt;
           if (enemy.voice <= 0 && this.voicesThisFrame < 3) {
             const near = 1 - horizontalDistance / ENEMY_VOICE_RANGE;
@@ -25327,7 +26767,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         }
         const activeRange = enemy.type === 'warden' ? 80 : enemy.type === 'banker' ? 66
           : enemy.type === 'floater' || enemy.type === 'bellbug' ? 58 : 46;
-        if (!summitLocked && horizontalDistance < activeRange && enemy.stun <= 0) {
+        if (!spawnProtected && !summitLocked && horizontalDistance < activeRange && enemy.stun <= 0) {
           const desiredFacing = Math.atan2(toPlayer.x, toPlayer.z);
           if (enemy.type === 'shield' || enemy.type === 'warden' || enemy.type === 'banker') {
             const target = this.ballChartVec.clone().sub(enemy.position);
@@ -25777,7 +27217,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             enemy.position.y - this.playerChartVec.y,
           )
           : enemy.position.distanceTo(this.playerChartVec);
-        if (playerDistance < enemy.radius + player.radius + .6 && player.damageCooldown <= 0 && !summitLocked) {
+        if (!spawnProtected && playerDistance < enemy.radius + player.radius + .6
+          && player.damageCooldown <= 0 && !summitLocked) {
           // Moonfall owns the whole descent. Letting the legacy stomp contact
           // fire first bounced the player off an enemy before the authored
           // ground shockwave could exist, turning C into an accidental old
@@ -25857,7 +27298,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       const frame = chartFrameAt(this.enemySurfaceWorld, this.enemySurfaceFrame);
       enemy.facing = Math.atan2(enemy.surfaceVelocity.dot(frame.ex), enemy.surfaceVelocity.dot(frame.ez));
     }
-    updateAlternateEnemy(enemy, visual, dt, player) {
+    updateAlternateEnemy(enemy, visual, dt, player, spawnProtected = false) {
       const distance = surfaceDistanceAt(
         this.playerChartVec.x, this.playerChartVec.z,
         enemy.position.x, enemy.position.z,
@@ -25870,7 +27311,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       const armoured = enemy.type === 'shellback' || enemy.type === 'forgeback';
       enemy.tensing = Math.max(0, enemy.tensing - dt);
       enemy.surgeTimer = Math.max(0, (enemy.surgeTimer || 0) - dt);
-      if (distance < ENEMY_VOICE_RANGE) {
+      if (!spawnProtected && distance < ENEMY_VOICE_RANGE) {
         enemy.voice -= dt;
         if (enemy.voice <= 0 && this.voicesThisFrame < 3) {
           const near = 1 - distance / ENEMY_VOICE_RANGE;
@@ -25926,7 +27367,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.moveAlternateEnemySurface(
           enemy, this.playerChartVec.x, this.playerChartVec.z, 0, 0, 6, dt,
         );
-        if (distance < 34 && !enemy.attackArmed && enemy.attackCooldown <= 0) {
+        if (!spawnProtected && distance < 34 && !enemy.attackArmed && enemy.attackCooldown <= 0) {
           enemy.attackArmed = true;
           enemy.tensing = .82;
           world.pulseRing(fromChartVec(enemy.position.clone()),
@@ -25955,7 +27396,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           }
         }
       } else {
-        const active = distance < (skate ? 72 : hopper ? 62 : 54);
+        const active = !spawnProtected && distance < (skate ? 72 : hopper ? 62 : 54);
         let speed = skate ? 10.5 : hopper ? 6.8 : armoured ? 4.3 : 6;
         if (skate && enemy.attackCooldown <= 0 && active) {
           enemy.tensing = .46;
@@ -26010,7 +27451,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       } else visual.group.scale.setScalar(1);
       const contactDistance = fromChartVec(this.enemySurfaceWorld.copy(enemy.position))
         .distanceTo(player.position);
-      if (contactDistance < enemy.radius + player.radius + .55 && player.damageCooldown <= 0) {
+      if (!spawnProtected && contactDistance < enemy.radius + player.radius + .55
+        && player.damageCooldown <= 0) {
         if (player.moonfallActive) return;
         if (vspeedOf(player.velocity, player.up) < -3 && this.playerChartVec.y > enemy.position.y + enemy.radius * .5) {
           this.damageAlien(enemy, 1, 'stomp');
@@ -27961,6 +29403,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           world.pulseRing(star.group.position, new T.Color(0xffffff), 76, 1.2);
           world.pulseRing(star.group.position, new T.Color(0xffd66b), 54, 1.45);
           world.setPlanetSmiles(true);
+          world.revealPlanetConstellation('moon', true);
           audio.impact(1, 'glass');
           audio.win();
           this.shake = 1;
@@ -28818,18 +30261,47 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       world.update(FIXED_DT, this);
     }
     syncUI() {
-      // The crescent counter: the one number the HUD prints, by explicit
-      // amendment to the no-HUD law (Alex, 2026-08-20).
-      if (ui.stoneCount && this.lastStoneCount !== this.drops) {
-        const previousDrops = this.lastStoneCount;
-        this.lastStoneCount = this.drops;
-        ui.stoneCount.textContent = String(this.drops);
+      // One stable three-shape bank across all worlds. The original Moon keeps
+      // its total crescent economy while also showing the rare full-moon and
+      // authored-route finds; Water and Lava expose their three exact ledgers.
+      const hudPlanet = world.activePlanet;
+      const moonRouteCollected = hudPlanet === 'moon'
+        ? (world.expansionCollectibles || EMPTY_SOLIDS).reduce((count, pickup) => count + (pickup.alive ? 0 : 1), 0)
+        : 0;
+      const activeProgress = hudPlanet === 'moon' ? null : this.worldProgress[hudPlanet];
+      const collectibleHud = hudPlanet === 'moon'
+        ? { common: this.drops, rare: this.stats.fullmoons || 0, route: moonRouteCollected, total: this.drops, target: null }
+        : {
+          common: activeProgress?.common || 0,
+          rare: activeProgress?.rare || 0,
+          route: activeProgress?.route || 0,
+          total: activeProgress?.collected || 0,
+          target: activeProgress?.collectionTarget || ALTERNATE_COLLECTION_TARGET,
+        };
+      const collectibleHudKey = `${hudPlanet}:${collectibleHud.common}:${collectibleHud.rare}:${collectibleHud.route}:${collectibleHud.total}`;
+      if (ui.stoneCount && this.lastCollectibleHudKey !== collectibleHudKey) {
+        const previousPlanet = this.lastCollectibleHudPlanet;
+        const previousTotal = previousPlanet === hudPlanet ? (this.lastCollectibleHudTotal || 0) : 0;
+        this.lastCollectibleHudKey = collectibleHudKey;
+        this.lastCollectibleHudPlanet = hudPlanet;
+        this.lastCollectibleHudTotal = collectibleHud.total;
+        ui.stoneCount.textContent = String(collectibleHud.common);
+        if (ui.rareCount) ui.rareCount.textContent = String(collectibleHud.rare);
+        if (ui.routeCount) ui.routeCount.textContent = String(collectibleHud.route);
+        if (ui.planetCollectibleTotal) ui.planetCollectibleTotal.textContent = String(collectibleHud.total);
+        if (ui.planetCollectibleGateFill) {
+          ui.planetCollectibleGateFill.style.width = `${clamp(collectibleHud.total / (collectibleHud.target || 1), 0, 1) * 100}%`;
+        }
         if (ui.stoneCounter) {
+          ui.stoneCounter.dataset.planet = hudPlanet;
           ui.stoneCounter.classList.remove('bump');
           ui.stoneCounter.classList.remove('milestone');
           void ui.stoneCounter.offsetWidth;
-          ui.stoneCounter.classList.add('bump');
-          if (Math.floor(this.drops / 50) > Math.floor(previousDrops / 50)) ui.stoneCounter.classList.add('milestone');
+          if (collectibleHud.total > previousTotal) ui.stoneCounter.classList.add('bump');
+          const milestoneSize = hudPlanet === 'moon' ? 50 : 500;
+          if (Math.floor(collectibleHud.total / milestoneSize) > Math.floor(previousTotal / milestoneSize)) {
+            ui.stoneCounter.classList.add('milestone');
+          }
         }
       }
       // Boss trophy sockets: build once from the core table, then light
@@ -28869,7 +30341,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             const sigil = document.createElement('i');
             sigil.className = 'planet-world-sigil';
             row.appendChild(sigil);
-            for (const slot of ['regional-0', 'regional-1', 'regional-2', 'final', 'mastery']) {
+            for (const slot of [
+              'regional-0', 'regional-1', 'regional-2', 'regional-3', 'regional-4', 'final', 'mastery',
+            ]) {
               const socket = document.createElement('i');
               socket.className = 'planet-boss-socket';
               socket.dataset.slot = slot;
@@ -28880,21 +30354,18 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         }
         const moonComplete = this.savedMoonheart || this.endgameComplete;
         const crownStates = {
-          moon: moonComplete
-            ? [true, true, true, true, true]
-            : [
-              this.cores.has('ember') && this.cores.has('piton'),
-              this.cores.has('kite') && this.cores.has('comet'),
-              this.cores.has('roc') && this.cores.has('colossus'),
-              false, false,
-            ],
+          moon: [
+            this.cores.has('ember'), this.cores.has('piton'), this.cores.has('kite'),
+            this.cores.has('comet'), this.cores.has('roc') || this.cores.has('colossus'),
+            moonComplete, false,
+          ],
           water: [
-            ...this.worldProgress.water.regionalBosses.map(value => value || this.savedPlanetCrowns.water.boss),
+            ...this.worldProgress.water.regionalBosses,
             this.worldProgress.water.bossDefeated || this.savedPlanetCrowns.water.boss,
             this.worldProgress.water.complete || this.savedPlanetCrowns.water.mastery,
           ],
           lava: [
-            ...this.worldProgress.lava.regionalBosses.map(value => value || this.savedPlanetCrowns.lava.boss),
+            ...this.worldProgress.lava.regionalBosses,
             this.worldProgress.lava.bossDefeated || this.savedPlanetCrowns.lava.boss,
             this.worldProgress.lava.complete || this.savedPlanetCrowns.lava.mastery,
           ],
@@ -29324,7 +30795,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           rails: surface.rails?.map(rail => ({
             id: rail.id, length: rail.path.totalLength, bootGrind: !!rail.bootGrind,
             cruiseSpeed: rail.cruiseSpeed,
+            presentationSelected: rail.presentationSelected !== false,
+            presentationOpacity: rail.presentation ?? 1,
+            presentationDistanceSq: rail.presentationDistanceSq ?? null,
           })) || [],
+          railPresentation: surface.railPresentation ? { ...surface.railPresentation } : null,
           mastery: surface.mastery ? {
             complete: !!surface.mastery.complete,
             thresholds: { ...surface.mastery.thresholds },
