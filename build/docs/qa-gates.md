@@ -23,10 +23,12 @@ Read this when running or writing tests, or measuring anything in a browser.
 
 ## Per-game boot checks (run before shipping a change to that game)
 
-All three exist for the same reason: counter-based suites passed while the
+They all exist for the same reason: counter-based suites passed while the
 player saw nothing. They boot the page the way a player does and read the
 canvas back. Serve the repo first
-(`node build/scripts/static-server.mjs --root=. --port=4173`).
+(`node build/scripts/static-server.mjs --root=. --port=4173`). The full set is
+whatever `build/qa/*-boot-check.mjs` currently holds — the ones worth calling
+out are below.
 
 - `node build/qa/fetch-boot-check.mjs http://localhost:4173/fetch/` — real
   title click, no `?test=1` (which skips the shader warmup); asserts the
@@ -41,6 +43,14 @@ canvas back. Serve the repo first
   — real ENTER gesture, architectural state + spatial audio, all 15 painting
   textures load, storage-disabled boot, Axe over the game, real 390px touch
   layout.
+- `node build/qa/secondhand-saint-boot-check.mjs http://localhost:4173/secondhand-saint/`
+  — real START click and real keys; asserts the **authored** player shell
+  bound rather than the procedural fallback, since the fallback boots green
+  and still looks wrong. Also checks all 20 bone mappings, that the greatblade
+  stays in her hand, that swings land damage, that pointer lock takes the
+  Qualiacology pill off screen and gives it back, and Axe over the game. It is
+  keyboard/mouse/gamepad only, so 390px is checked for a clean page and a way
+  home, not for playability.
 
 ## Measuring anything in a browser
 

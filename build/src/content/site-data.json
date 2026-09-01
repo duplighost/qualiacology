@@ -100,6 +100,19 @@
       "actionLabel": "Enter the Moon"
     },
     {
+      "slug": "secondhand-saint",
+      "title": "SECONDHAND SAINT",
+      "descriptor": "One-boss sword duel",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/secondhand-saint-card-clean.webp",
+      "alt": "A red-haired duelist in pearl armour stands on a vast blue clock-face arena with her blade drawn, facing a black and gold saint with a skull mask and two magenta eyes beneath a great clock",
+      "summary": "Saint Vespera is holding a second that was never hers. One arena, one blade, three phases — deflect what she throws and put it back through her. Steal back the second she buried.",
+      "metaDescription": "SECONDHAND SAINT is a browser one-boss 3D character-action game. Duel Saint Vespera across three phases on a clock-face arena, deflect her missiles back into her, and take back the second she buried.",
+      "controls": "WASD move · Space rise · LMB or J quick · RMB or K heavy · Shift dodge · E or L deflect · F or O chase · R or I threadshot · Q lock · X unmake",
+      "actionLabel": "Cross the dial"
+    },
+    {
       "slug": "boon-moots",
       "title": "BOON MOOTS",
       "descriptor": "Round-moon horde arcade",
