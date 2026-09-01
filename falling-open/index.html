@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-build="falling-open-1.0.0">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080b14">
+  <meta name="description" content="FALLING OPEN is a one-thumb storm descent: open an umbrella to catch hostile rain, then let go to send every drop home.">
+  <title>FALLING OPEN | Qualiacology</title>
+  <link rel="canonical" href="https://qualiacology.com/falling-open/">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Qualiacology">
+  <meta property="og:title" content="FALLING OPEN | Qualiacology">
+  <meta property="og:description" content="Open an umbrella to catch hostile rain, then let go to send every drop home.">
+  <meta property="og:url" content="https://qualiacology.com/falling-open/">
+  <meta property="og:image" content="https://qualiacology.com/assets/og/falling-open-og-v1.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="FALLING OPEN | Qualiacology">
+  <meta name="twitter:description" content="Open an umbrella to catch hostile rain, then let go to send every drop home.">
+  <meta name="twitter:image" content="https://qualiacology.com/assets/og/falling-open-og-v1.jpg">
+  <link rel="stylesheet" href="styles.css?v=1.0.0">
+</head>
+<body>
+  <a class="home-link" href="/" aria-label="Return to Qualiacology" title="Return to Qualiacology"><span aria-hidden="true">←</span><span>Qualiacology</span></a>
+  <main id="app" aria-label="FALLING OPEN game">
+    <div id="game-shell">
+      <canvas id="game" width="900" height="1400" tabindex="0" role="application" aria-label="FALLING OPEN. Hold to open the umbrella and steer. Release to dive and return captured rain."></canvas>
+      <button id="start" class="cover" type="button" aria-label="Begin FALLING OPEN">
+        <span class="eyebrow">one umbrella / all the weather</span>
+        <strong>FALLING<br>OPEN</strong>
+        <span class="prompt"><i class="umbrella-icon" aria-hidden="true"></i> hold to open · let go to fall</span>
+      </button>
+      <div id="corner-controls" aria-label="Game controls">
+        <button id="pause-button" type="button" aria-label="Pause game">Ⅱ</button>
+        <button id="mute-button" type="button" aria-label="Mute audio">♪</button>
+      </div>
+      <div id="pause-panel" class="panel" hidden>
+        <h2>weather held</h2>
+        <button id="resume-button" type="button">keep falling</button>
+        <button id="restart-button" type="button">start this movement again</button>
+      </div>
+      <div id="end-panel" class="panel end" hidden>
+        <span class="eyebrow">the rain remembers</span>
+        <h2>FALLING<br>OPEN</h2>
+        <p id="end-stats"></p>
+        <button id="again-button" type="button">fall again</button>
+      </div>
+      <div id="touch-origin" aria-hidden="true"></div>
+      <div id="sr-status" class="sr-only" aria-live="polite"></div>
+    </div>
+    <p id="outside-help">A/D or arrows + hold Space · mouse hold/drag · touch anywhere · gamepad</p>
+  </main>
+  <script type="module" src="src/main.js?v=1.0.0"></script>
+</body>
+</html>

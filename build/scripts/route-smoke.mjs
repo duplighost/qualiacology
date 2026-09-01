@@ -81,6 +81,15 @@ const retiredRoutes = [
   "/hold",
   "/orbit",
   "/last-call",
+  // The standalone BOON MOOTS and RAIN ANIMAL games were retired together.
+  // Keep their old pages and vanity links dead; same-named material inside
+  // other games is unrelated and intentionally remains.
+  "/boon-moots/",
+  "/boon-moots.html",
+  "/pocket-moon",
+  "/spiggot",
+  "/rain-animal/",
+  "/rain-animal.html",
 ];
 const results = [];
 const failures = [];
