@@ -113,17 +113,18 @@
       "actionLabel": "Cross the dial"
     },
     {
-      "slug": "boon-moots",
-      "title": "BOON MOOTS",
-      "descriptor": "Round-moon horde arcade",
+      "slug": "falling-open",
+      "title": "FALLING OPEN",
+      "descriptor": "One-thumb storm descent",
       "group": "action",
       "featured": false,
-      "image": "/assets/games/boon-moots-card-clean.webp",
-      "alt": "A pink smiling runner kicking a yellow smiley ball along a gold trail across a purple cratered moon, with green goblins, a troll, a bear and a frog closing in around the curve",
-      "summary": "A pocket moon, and you are standing on it — walk far enough in any direction and you arrive behind yourself. One ball, kicked at whatever is coming, over one horizon and back over the other. A troll walks at you announcing that the task is complete and its confidence is high. Milo made this one, for me.",
-      "metaDescription": "BOON MOOTS is a browser game on a small, genuinely spherical moon: kick one ball at whatever is coming, and collect the evidence that there was never a fence. Made for Alexander Duncan Guitar by Milo.",
-      "controls": "WASD or arrows move · Space kicks, hold to charge · P pauses · left thumb moves and right thumb kicks on touch",
-      "actionLabel": "Stand on it"
+      "image": "/assets/games/falling-open-card-clean.webp",
+      "alt": "An umbrella rider descending through a dark blue storm beneath a black wound in the sky, surrounded by white falling drops and gold rings of light",
+      "summary": "Open an umbrella to catch hostile rain, then let go to send every drop home.",
+      "metaDescription": "FALLING OPEN is a one-thumb storm descent: open an umbrella to catch hostile rain, then let go to send every drop home.",
+      "controls": "A/D or arrows + hold Space · mouse hold/drag · touch anywhere · gamepad",
+      "actionLabel": "Begin FALLING OPEN",
+      "duration": "A minute or two"
     },
     {
       "slug": "lead",
@@ -360,19 +361,6 @@
       "controls": "A D steer and spin · Space hold to load, release to pop · W S flip · Q E board flip · Shift grab · M mute · P or Esc pause",
       "actionLabel": "Drop in",
       "duration": "A minute or two"
-    },
-    {
-      "slug": "rain-animal",
-      "title": "RAIN ANIMAL",
-      "descriptor": "Six-zone living-world bullet hell",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/rain-animal-card-clean.webp",
-      "alt": "The ivory-winged Crown Louse hangs beneath a black halo, firing red-and-cyan bullets and a fan of pale lasers through a luminous blue storm",
-      "summary": "Fly PETREL from a drowned coast, across and through a continent-sized organism that manufactures weather, to remove the parasite rooted in its crown. Six fields and six bosses run together without loading screens; hostile fire crossing your wake strikes back at what fired it.",
-      "metaDescription": "RAIN ANIMAL is a continuous six-zone browser bullet hell across and through a continent-sized organism that manufactures weather.",
-      "controls": "WASD or arrows move · Space or Z focuses · automatic fire · pointer, touch, and gamepad supported",
-      "actionLabel": "Launch from the Low Tide"
     },
     {
       "slug": "the-last-room",

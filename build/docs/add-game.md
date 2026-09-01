@@ -18,17 +18,13 @@ touching site.css/site.js/templates.
    Everything on this site is self-contained and offline-capable, so before
    it ships:
    - Replace any external font/CDN link with a self-hosted copy in
-     `assets/fonts/` plus its licence in `assets/fonts/licenses/` (BOON MOOTS
-     pulled Anton off Google Fonts; it is now `assets/fonts/anton-latin.woff2`,
-     OFL 1.1).
-   - Replace host-only APIs with a browser fallback that cannot throw. BOON
-     MOOTS saved through `window.storage`, which does not exist here, so
-     progress vanished on refresh — it now falls back to namespaced
-     `localStorage` inside try/catch (a private window throws on first write).
+     `assets/fonts/` plus its licence in `assets/fonts/licenses/`.
+   - Replace host-only APIs with a browser fallback that cannot throw.
+     Progress storage should fall back to namespaced `localStorage` inside
+     try/catch (a private window can throw on first write).
    - Run axe over the game itself — `npm run qa` only covers the four hub
      pages. Watch for unreachable keyboard scroll areas and
-     `user-scalable=no` (zoom-blocking; removed from THROWN and BOON MOOTS
-     for this reason).
+     `user-scalable=no` (zoom-blocking; removed from THROWN for this reason).
    - Its text is the contributor's voice — do not edit it (iron rule 2).
 
 3. **Card art** — full pipeline, specs, and traps in `images.md`. Short form:

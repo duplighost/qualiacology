@@ -23,9 +23,8 @@ Last verified: 2026-08-29.
    charged, occasionally profane. No marketing taglines, no hype words
    ("Small worlds with sharp teeth" got an agent in trouble once). Reuse his
    existing lines; when unsure, ask. Games contributed by others keep their
-   own words (BOON MOOTS is Milo's gift — exhibits, ranks, dedication and
-   all): shell them, fix accessibility, never edit their text. Only the hub
-   catalog entry is Alex's copy.
+   own words: shell them, fix accessibility, never edit their text. Only the
+   hub catalog entry is Alex's copy.
 
 3. **The four hub pages are generated — never edit them directly.**
    `index.html`, `games/`, `music/`, `psychopharmacology/` are build output.
