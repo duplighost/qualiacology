@@ -186,6 +186,29 @@ export class EffectsSystem {
     }
   }
 
+  precompile(renderer, camera) {
+    // WebGLRenderer.compile skips invisible scene branches. Every pooled
+    // effect begins hidden, which otherwise moves shader compilation to the
+    // player's first parry/heavy/special and can cause a long D3D11 driver
+    // stall on older hardware. Reveal one representative of each pooled
+    // program only while compiling; no frame is rendered in this state.
+    const representatives = [
+      this.warnings[0]?.mesh,
+      this.lineWarnings[0]?.mesh,
+      this.shockwaves[0]?.mesh,
+      this.impactSlashes[0]?.group,
+      this.sectorWarnings[0]?.group,
+      ...this.trails.map((trail) => trail.mesh),
+    ].filter(Boolean);
+    const visibility = representatives.map((object) => object.visible);
+    representatives.forEach((object) => { object.visible = true; });
+    try {
+      renderer.compile(this.scene, camera);
+    } finally {
+      representatives.forEach((object, index) => { object.visible = visibility[index]; });
+    }
+  }
+
   spawnParticle(position, velocity, color, size = .16, life = .5, gravity = -5, drag = 1.4) {
     const i = this.cursor++ % this.maxParticles;
     const p = this.particles[i];

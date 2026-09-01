@@ -4,6 +4,12 @@ const midi = (note) => 440 * Math.pow(2, (note - 69) / 12);
 const PHASE_MUSIC_GAIN = [0, .17, .205, .235];
 const PHASE_BPM = [0, 108, 122, 136];
 const ROOTS = [38, 39, 34, 33, 38, 41, 36, 33];
+const ENCOUNTER_BPM = [PHASE_BPM, [0, 98, 114, 128], [0, 116, 132, 148]];
+const ENCOUNTER_ROOTS = [
+  ROOTS,
+  [45, 40, 43, 38, 45, 48, 41, 43],
+  [29, 31, 26, 24, 29, 36, 27, 24],
+];
 const PULSE_PATTERN = [12, 7, 15, 10, 12, 18, 7, 10];
 const GLASS_PATTERN = [24, 19, 22, 15, 17, 27, 22, 19];
 
@@ -31,6 +37,7 @@ export class AudioEngine {
     this.muted = muted;
     this.started = false;
     this.phase = 1;
+    this.encounter = 0;
     this.step = 0;
     this.nextBeat = 0;
     this.lastUpdateTime = 0;
@@ -155,6 +162,19 @@ export class AudioEngine {
     const now = this.context.currentTime;
     this.music.gain.cancelScheduledValues(now);
     this.music.gain.setTargetAtTime(this.musicBaseGain, now, .38);
+    this._setLayerTargets(this.phase, now);
+  }
+
+  setEncounter(index = 0) {
+    this.encounter = clamp(Math.round(Number(index) || 0), 0, 2);
+    this.step = 0;
+    this.ending = '';
+    if (!this.context) return;
+    this.nextBeat = this.context.currentTime + .06;
+    this.lastUpdateTime = this.context.currentTime;
+    const now = this.context.currentTime;
+    if (this.reverbReturn) this.reverbReturn.gain.setTargetAtTime([.22, .34, .18][this.encounter], now, .35);
+    if (this.musicVerbSend) this.musicVerbSend.gain.setTargetAtTime([.2, .34, .14][this.encounter], now, .35);
     this._setLayerTargets(this.phase, now);
   }
 
@@ -351,7 +371,7 @@ export class AudioEngine {
     const horizon = now + .32;
     while (this.nextBeat < horizon) {
       this._musicStep(this.step++, this.nextBeat);
-      this.nextBeat += 60 / PHASE_BPM[this.phase] / 2;
+      this.nextBeat += 60 / (ENCOUNTER_BPM[this.encounter]?.[this.phase] || PHASE_BPM[this.phase]) / 2;
     }
   }
 
@@ -360,7 +380,8 @@ export class AudioEngine {
     const eighth = step % 8;
     const bar = Math.floor(step / 8);
     const phrase = Math.floor(step / 32);
-    const rootMidi = ROOTS[bar % ROOTS.length];
+    const roots = ENCOUNTER_ROOTS[this.encounter] || ROOTS;
+    const rootMidi = roots[bar % roots.length];
     const root = midi(rootMidi);
     const intensity = clamp((this.phase - 1) * .28 + this.threat * .38
       + this.momentum * .24 + this.stress * .12, 0, 1);
@@ -387,14 +408,15 @@ export class AudioEngine {
 
     if ((this.phase >= 2 || intensity > .52) && (this.phase === 3 || eighth % 2 === 0)) {
       const mutation = phrase % 3 === 2 && eighth === 6 ? phraseTurn : 0;
-      const note = rootMidi + PULSE_PATTERN[(eighth + phrase) % PULSE_PATTERN.length] + mutation;
+      const patternOffset = this.encounter === 1 ? 2 : this.encounter === 2 ? 5 : 0;
+      const note = rootMidi + PULSE_PATTERN[(eighth + phrase + patternOffset) % PULSE_PATTERN.length] + mutation;
       const accent = eighth === 0 || eighth === 4;
       this._tone({ freq: midi(note), endFreq: midi(note - (accent ? 0 : 5)), type: this.phase === 3 ? 'sawtooth' : 'square', duration: this.phase === 3 ? .095 : .12, gain: (accent ? .011 : .0075) + intensity * .004, attack: .003, when: time, pan: eighth % 4 < 2 ? -.16 : .16, destination: this.musicLayers.pulse, priority: 0 });
     }
 
     const glassBeat = (bar + phrase) % 2 ? 2 : 5;
     if (eighth === glassBeat && this._musicVariation(bar, 20) > (this.phase === 1 ? .18 : .36)) {
-      const note = rootMidi + GLASS_PATTERN[(bar + phrase) % GLASS_PATTERN.length]
+      const note = rootMidi + GLASS_PATTERN[(bar + phrase + this.encounter * 2) % GLASS_PATTERN.length]
         + (phrase % 4 === 3 ? phraseTurn : 0);
       this._chime(midi(note), time, .012 + this.momentum * .006, .36 + this.phase * .05);
     }
@@ -649,6 +671,81 @@ export class AudioEngine {
     this._bump({ threat: .36, stress: .12 });
     this._duckMusic(.58, .56);
     this.setPhase(targetPhase);
+  }
+
+  anchorBreak(count = 1, total = 3) {
+    if (!this.context || !this._gate('mirror-anchor-break', .08)) return;
+    const time = this.context.currentTime;
+    const root = 620 + count * 86;
+    this._noise({ duration: .24, gain: .105, highpass: 2100, lowpass: 15000, when: time, destination: this.sfxSpace, priority: 3 });
+    [1, 1.25, 1.5, 2.02].forEach((ratio, index) => this._tone({
+      freq: root * ratio,
+      endFreq: root * ratio * (index % 2 ? .54 : 1.42),
+      type: index % 2 ? 'triangle' : 'sine',
+      duration: .28 + index * .045,
+      gain: .07 / (1 + index * .24),
+      attack: .002,
+      when: time + index * .012,
+      pan: (index - 1.5) * .16,
+      destination: this.sfxSpace,
+      priority: 3,
+    }));
+    this._bump({ momentum: .18, threat: -.08 });
+    if (count >= total) this._duckMusic(.55, .44);
+  }
+
+  nodeBreak(count = 1, total = 3) {
+    if (!this.context || !this._gate('crown-node-break', .07)) return;
+    const time = this.context.currentTime;
+    this._tone({ freq: 1260 + count * 95, endFreq: 260, type: 'sawtooth', duration: .19, gain: .09, attack: .002, when: time, destination: this.sfxSpace, priority: 3 });
+    this._tone({ freq: 94, endFreq: 44, type: 'sine', duration: .3, gain: .072, attack: .002, when: time, priority: 3 });
+    this._noise({ duration: .16, gain: .095, highpass: 780, lowpass: 10800, when: time, priority: 3 });
+    this._bump({ momentum: .16, threat: -.05 });
+    if (count >= total) this._duckMusic(.58, .48);
+  }
+
+  wardOpen(strategy = 'mirror') {
+    if (!this.context || !this._gate(`ward-open-${strategy}`, .4)) return;
+    const time = this.context.currentTime;
+    const notes = strategy === 'tether' ? [38, 45, 50, 57, 62] : [57, 64, 69, 73, 76];
+    notes.forEach((note, index) => this._tone({
+      freq: midi(note), endFreq: midi(note + (strategy === 'tether' ? -7 : 5)),
+      type: index % 2 ? 'triangle' : 'sine', duration: .52 + index * .035,
+      gain: .05 / (1 + index * .12), attack: .008, when: time + index * .035,
+      pan: (index - 2) * .12, destination: this.sfxSpace, priority: 3,
+    }));
+    this._noise({ duration: .44, gain: .11, highpass: strategy === 'tether' ? 70 : 1300, lowpass: strategy === 'tether' ? 2600 : 14800, attack: .02, when: time, destination: this.sfxSpace, priority: 3 });
+    this._duckMusic(.62, .52);
+  }
+
+  gravityWell() {
+    if (!this.context || !this._gate('gravity-well', .16)) return;
+    const time = this.context.currentTime;
+    this._tone({ freq: 72, endFreq: 31, type: 'sine', duration: .72, gain: .065, attack: .12, when: time, destination: this.sfxSpace, priority: 2 });
+    this._tone({ freq: 286, endFreq: 61, type: 'sawtooth', duration: .5, gain: .028, attack: .05, when: time, destination: this.sfxSpace, priority: 2 });
+  }
+
+  gravityCollapse() {
+    if (!this.context || !this._gate('gravity-collapse', .12)) return;
+    const time = this.context.currentTime;
+    this._noise({ duration: .34, gain: .15, highpass: 42, lowpass: 2800, when: time, priority: 3 });
+    this._tone({ freq: 118, endFreq: 27, type: 'square', duration: .42, gain: .13, attack: .002, when: time, priority: 3 });
+    this._tone({ freq: 1720, endFreq: 210, type: 'sine', duration: .2, gain: .045, attack: .002, when: time + .02, destination: this.sfxSpace, priority: 3 });
+    this._duckMusic(.5, .38);
+  }
+
+  travel(from = 0, to = 1) {
+    this.ending = '';
+    if (!this.context) return;
+    const time = this.context.currentTime;
+    this._noise({ duration: 1.5, gain: .085, highpass: 42, lowpass: 1700, attack: .28, when: time, destination: this.sfxSpace, priority: 3 });
+    [31, 38, 45, 52, 59, 66].forEach((note, index) => this._tone({
+      freq: midi(note), endFreq: midi(note + 12 + to * 2), type: index < 2 ? 'sawtooth' : 'sine',
+      duration: 1.1 + index * .08, gain: .042 / (1 + index * .16), attack: .08,
+      when: time + index * .075, pan: (index - 2.5) * .12,
+      destination: index < 2 ? this.sfxSpace : this.musicLayers?.air || this.music, priority: 3,
+    }));
+    this._duckMusic(.72, 1.35);
   }
 
   special() {

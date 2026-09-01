@@ -101,7 +101,10 @@ const homeDuringPlay = await page.evaluate(() => {
 await page.keyboard.press("KeyQ");
 await page.waitForTimeout(250);
 await page.keyboard.down("KeyW");
-await page.waitForTimeout(1400);
+// The campaign opens Vespera at sword range. Move enough to prove the real
+// WASD path without walking through the authored opening and out to the arena
+// boundary before the first swing.
+await page.waitForTimeout(240);
 await page.keyboard.up("KeyW");
 await page.waitForTimeout(250);
 for (let swing = 0; swing < 6; swing += 1) {
@@ -167,7 +170,7 @@ const check = (condition, message) => {
   if (!condition) failures.push(message);
 };
 
-check(boot.buildId === "secondhand-saint-1.5.0", `exact build id (${boot.buildId})`);
+check(boot.buildId === "secondhand-saint-2.0.0", `exact build id (${boot.buildId})`);
 check(!boot.bootError, `boot reports no error (${boot.bootError || "none"})`);
 check(boot.renderer?.webgl2 === true, "WebGL2 context");
 check(boot.visual?.mode === "authored", `authored player shell bound, not the procedural fallback (${boot.visual?.mode})`);
