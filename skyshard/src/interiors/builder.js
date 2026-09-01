@@ -13,6 +13,7 @@ import { INTERIORS } from './defs.js';
 import { makeTrialDef } from './trials.js';
 import { makeFinalDef } from './finalrealm.js';
 import { isTrialCleared, isTrialRewardPending } from '../world/trialdata.js';
+import { isMajorRewardPending } from '../world/destinationstatus.js';
 import { sfx } from '../core/audio.js';
 import { music } from '../core/music.js';
 import { save } from '../core/save.js';
@@ -21,6 +22,110 @@ import { spawnFinalBoss } from '../combat/finalboss.js';
 import { makeRng } from '../core/rng.js';
 
 const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+
+function decorateRoomShell(ctx, w, d, h, opts, wallMat) {
+  if (opts.architecture === false) return;
+  const key = new THREE.Color(...ctx.region.key);
+  const accent = new THREE.MeshStandardMaterial({
+    color: key.clone().multiplyScalar(0.38), emissive: key, emissiveIntensity: 0.5,
+    roughness: 0.42, metalness: ctx.dest.region === 'shatter' ? 0.46 : 0.12,
+  });
+  const shadow = wallMat.clone();
+  shadow.color?.multiplyScalar?.(0.58);
+  shadow.roughness = Math.max(0.78, shadow.roughness || 0);
+
+  // A floor medallion gives the player an immediate center/scale read. It is a
+  // flush inlay, never another collider or ankle-height ledge.
+  const medallion = new THREE.Mesh(
+    new THREE.RingGeometry(Math.min(w, d) * 0.12, Math.min(w, d) * 0.19, 24),
+    new THREE.MeshBasicMaterial({ color: key, transparent: true, opacity: 0.22, depthWrite: false, fog: false }),
+  );
+  medallion.rotation.x = -Math.PI / 2;
+  medallion.position.y = 0.012;
+  ctx.scene.add(medallion);
+
+  // Buttresses and repeated vault ribs turn a featureless box into a readable
+  // nave while hugging the shell, clear of the fight/navigation floor.
+  const aisle = Math.max(5.5, Math.min(10, d / (ctx.dest.kind === 'major' ? 7 : 4)));
+  const sideX = w / 2 - 0.72;
+  for (let z = -d / 2 + aisle; z <= d / 2 - aisle; z += aisle) {
+    for (const side of [-1, 1]) {
+      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.52, Math.max(3.5, h - 0.8), 8), shadow);
+      p.position.set(side * sideX, (h - 0.8) / 2, z);
+      p.castShadow = true;
+      p.receiveShadow = true;
+      ctx.scene.add(p);
+    }
+    if (w >= 10 && h >= 7) {
+      const radius = Math.max(2, w / 2 - 0.85);
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(radius, ctx.dest.kind === 'major' ? 0.24 : 0.15, 6, 24, Math.PI), accent);
+      rib.position.set(0, 0.72, z);
+      rib.scale.y = Math.max(0.45, (h - 1.2) / radius);
+      ctx.scene.add(rib);
+    }
+  }
+
+  // Layered back-wall architecture replaces the old single flat mural read.
+  const backZ = -d / 2 + 0.28;
+  for (const x of [-w * 0.24, 0, w * 0.24]) {
+    const blade = box(Math.max(0.28, w * 0.018), h * 0.58, 0.18, x === 0 ? accent : shadow);
+    blade.position.set(x, h * 0.48, backZ);
+    blade.rotation.z = x * -0.002;
+    ctx.scene.add(blade);
+  }
+  const rose = new THREE.Mesh(new THREE.TorusGeometry(Math.min(3.8, w * 0.13), 0.13, 7, 28), accent);
+  rose.position.set(0, h * 0.68, backZ + 0.14);
+  ctx.scene.add(rose);
+
+  const lightZ = Math.min(d / 2 - 4, 8);
+  addGlow(-Math.min(7, w * 0.3), Math.min(h - 1, 4.5), lightZ, ctx.region.key, 0.75);
+  addGlow(Math.min(7, w * 0.3), Math.min(h - 1, 4.5), lightZ, ctx.region.key, 0.75);
+}
+
+function buildExitAperture(scene, dest, spawn, spawnY, exitOffset) {
+  const key = new THREE.Color(...REGIONS[dest.region].key);
+  const m = mats();
+  const frameMat = m.stone.clone();
+  frameMat.color?.lerp?.(key, 0.16);
+  frameMat.roughness = 0.86;
+  const aperture = new THREE.Group();
+  aperture.name = `return-aperture-${dest.id}`;
+  aperture.position.set(spawn.x, spawnY, spawn.z + exitOffset);
+
+  for (const side of [-1, 1]) {
+    const post = box(0.34, 3.15, 0.5, frameMat);
+    post.position.set(side * 1.08, 1.55, 0);
+    post.rotation.z = side * -0.055;
+    aperture.add(post);
+  }
+  const lintel = box(2.55, 0.38, 0.56, frameMat);
+  lintel.position.set(0, 3.0, 0);
+  aperture.add(lintel);
+  const sill = box(2.2, 0.08, 0.7, frameMat);
+  sill.position.set(0, 0.02, 0);
+  aperture.add(sill);
+
+  // A hollow halo reads as a return threshold from either direction without
+  // presenting a reflective/additive rectangle behind the player's spawn.
+  const veil = new THREE.Mesh(
+    new THREE.TorusGeometry(1.02, 0.075, 7, 30),
+    new THREE.MeshBasicMaterial({
+      color: key, transparent: true, opacity: 0.34,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }),
+  );
+  veil.position.y = 1.48;
+  veil.scale.y = 1.34;
+  aperture.add(veil);
+  for (let i = 0; i < 5; i++) {
+    const rune = new THREE.Mesh(new THREE.OctahedronGeometry(0.075 + (i % 2) * 0.025, 0), veil.material);
+    const a = Math.PI * (0.16 + i * 0.17);
+    rune.position.set(Math.cos(a) * 1.08, 1.48 + Math.sin(a) * 1.37, 0.05);
+    aperture.add(rune);
+  }
+  scene.add(aperture);
+  return { aperture, veil };
+}
 
 export class InteriorManager {
   constructor() {
@@ -87,6 +192,7 @@ export class InteriorManager {
           scene.add(ceil);
           collide.addBox(-w / 2, -d / 2, w / 2, d / 2, h, h + 0.4);
         }
+        decorateRoomShell(ctx, w, d, h, opts, wallMat);
         return ctx;
       },
 
@@ -175,28 +281,22 @@ export class InteriorManager {
     const collide = new ColliderField(() => 0);
     scene.fog = new THREE.FogExp2(new THREE.Color(...(def.fog || [0.04, 0.05, 0.07])), def.fogDensity ?? 0.03);
     scene.background = new THREE.Color(...(def.fog || [0.02, 0.025, 0.04]));
+    scene.environment = G.worldScene?.environment || null;
 
     setGlowCtx('interior');
     const ctx = this._makeCtx(scene, collide, dest);
     def.build(ctx);
     setGlowCtx('world');
 
-    // entry/exit veil at the door (player walks in facing -z → spawns at +z edge)
-    const veil = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.8, 2.6),
-      new THREE.MeshBasicMaterial({
-        color: new THREE.Color(...REGIONS[dest.region].key), transparent: true, opacity: 0.3,
-        blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, fog: false,
-      })
-    );
+    // Player walks in facing -z and returns through an architectural aperture,
+    // not a mirror-like glowing plane sitting behind their head.
     const spawn = def.spawn || { x: 0, z: 8, yaw: 0 };
     const spawnY = spawn.y ?? 0;
     const exitOffset = def.exitOffset ?? 1.2;
-    veil.position.set(spawn.x, spawnY + 1.3, spawn.z + exitOffset);
-    scene.add(veil);
+    const { aperture, veil } = buildExitAperture(scene, dest, spawn, spawnY, exitOffset);
 
     this.active = {
-      dest, def, scene, collide, ctx, veil,
+      dest, def, scene, collide, ctx, aperture, veil,
       exitAt: { x: spawn.x, z: spawn.z + exitOffset, r: 1.0, y: spawnY },
       packsSpawned: false,
       boss: null,
@@ -211,7 +311,8 @@ export class InteriorManager {
       for (const encounter of ctx.encounters || []) {
         encounter.cleared = true;
         encounter.spawned = true;
-        encounter.gate.visible = false;
+        if (encounter.open) encounter.open(true);
+        else encounter.gate.visible = false;
         encounter.collider.dead = true;
       }
       // A boss victory is saved immediately so it cannot be farmed. If play
@@ -219,11 +320,16 @@ export class InteriorManager {
       // here so refresh, death, or walking out can never strand it.
       if (isTrialRewardPending(G.save, dest)) this._spawnRewardPedestal(this.active);
     }
+    // Guardian defeat is persisted before its verb is claimed. Rebuild the
+    // exact pending reward on re-entry so leaving, refreshing, or dying cannot
+    // strand a canonical movement/weapon upgrade.
+    if (isMajorRewardPending(G.save, dest)) this._spawnRewardPedestal(this.active);
     if (dest.kind === 'final' && G.save.finalDefeated) {
       for (const encounter of ctx.encounters || []) {
         encounter.cleared = true;
         encounter.spawned = true;
-        encounter.gate.visible = false;
+        if (encounter.open) encounter.open(true);
+        else encounter.gate.visible = false;
         encounter.collider.dead = true;
       }
     }
@@ -239,6 +345,7 @@ export class InteriorManager {
     G.scene = scene;
     G.interior = this.active;
     G.mode = 'interior';
+    G.enemies.setScene(scene);
 
     // shared light rig + camera (it carries the viewmodel) + fx pools follow
     scene.add(G.camera);
@@ -249,6 +356,7 @@ export class InteriorManager {
     G.sun.target.position.set(0, 0, 0);
     G.hemi.intensity = (def.hemiIntensity ?? 0.45) * 4.2;
     if (def.hemiColor) G.hemi.color.setRGB(...def.hemiColor);
+    if (def.hemiGround) G.hemi.groundColor.setRGB(...def.hemiGround);
     G.rovers.moveTo(scene);
     G.particles.moveTo(scene);
     G.motes.moveTo(scene);
@@ -289,6 +397,7 @@ export class InteriorManager {
     G.scene = G.worldScene;
     G.interior = null;
     G.mode = 'world';
+    G.enemies.setScene(G.worldScene);
 
     G.worldScene.add(G.camera);
     G.worldScene.add(G.sun, G.sun.target, G.hemi);
@@ -340,7 +449,8 @@ export class InteriorManager {
       const td = Math.hypot(pl.pos.x - encounter.trigger.x, pl.pos.z - encounter.trigger.z);
       if (!encounter.spawned && td < encounter.trigger.r) {
         encounter.spawned = true;
-        encounter.gate.material.opacity = 0.36;
+        const sealMaterial = encounter.gate.material || encounter.gate.userData?.sealMaterial;
+        if (sealMaterial) sealMaterial.opacity = 0.36;
         sfx('bossroar', { pitch: 1.8, gain: 0.35 });
         for (const spawn of encounter.spawns) {
           G.enemies.spawn(spawn.type, spawn.x, spawn.z, {
@@ -353,13 +463,23 @@ export class InteriorManager {
           G.enemies.pending.some((e) => e.tag === encounter.tag);
         if (!alive) {
           encounter.cleared = true;
-          encounter.gate.visible = false;
+          if (encounter.open) encounter.open(false);
+          else encounter.gate.visible = false;
           encounter.collider.dead = true;
           sfx('chime', { pitch: encounter.id === 'sanctum' ? 1.28 : 1.06 });
           G.postfx?.pulse(0.35);
           G.particles?.burst('soul', encounter.trigger.x, 2.2, encounter.gate.position.z, 18,
             { color: REGIONS[a.dest.region].key, sizeMult: 1.3 });
           G.hud?.whisper(encounter.id === 'sanctum' ? 'THE NAME WAKES' : 'THE RUIN ANSWERS', 1.8);
+          if (a.dest.kind === 'trial') {
+            G.hud?.challengeUpdate?.({
+              id: `trial:${a.dest.id}`,
+              label: a.dest.name,
+              total: 4,
+              value: encounter.id === 'sanctum' ? 2 : 1,
+              detail: encounter.id === 'sanctum' ? 'SANCTUM CLEARED' : 'THRESHOLD CLEARED',
+            });
+          }
         }
       }
     }
@@ -411,6 +531,11 @@ export class InteriorManager {
     a.bossLock = false;
     a.boss = null;
     this._spawnRewardPedestal(a);
+    if (a.dest.kind === 'trial') {
+      G.hud?.challengeUpdate?.({
+        id: `trial:${a.dest.id}`, label: a.dest.name, total: 4, value: 3, detail: 'CLAIM THE RELIC',
+      });
+    }
   }
 
   _spawnRewardPedestal(a) {

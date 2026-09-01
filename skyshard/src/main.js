@@ -24,7 +24,7 @@ import { enhanceEnemyPresentation, enhanceSparkcaster } from './fx/visualdetail.
 import { Hud } from './ui/hud.js';
 import { Player } from './player/controller.js';
 import { Weapon } from './player/weapon.js';
-import { grantReward } from './player/abilities.js';
+import { grantReward, ownsGuardianReward } from './player/abilities.js';
 import { Terrain, terrainHeight } from './world/terrain.js';
 import { Sky } from './world/sky.js';
 import { ColliderField } from './world/collision.js';
@@ -42,12 +42,13 @@ import { killChain } from './combat/damage.js';
 import { InteriorManager } from './interiors/builder.js';
 import { DESTS, SPAWN, SPIRE } from './world/destdata.js';
 import { dominantRegion } from './world/regions.js';
-import { TRIAL_DESTS } from './world/trialdata.js';
+import { TRIAL_DESTS, isTrialCleared, isTrialComplete } from './world/trialdata.js';
 import { Constellation } from './progression/constellation.js';
 import { RelicSystem } from './progression/relics.js';
 import { ModernWorld } from './world/modernworld.js';
 import { Stormglass } from './world/stormglass.js';
 import { EndgameGate, FINAL_DEST, ORIGINAL_GUARDIANS } from './world/endgame.js';
+import { WorldBosses } from './world/worldbosses.js';
 
 const canvas = document.getElementById('c');
 const loadFill = document.getElementById('loadfill');
@@ -259,6 +260,7 @@ async function boot() {
 
   G.constellation = new Constellation();
   G.relics = new RelicSystem();
+  G.worldBosses = new WorldBosses(worldScene);
 
   G.postfx = new PostFX(renderer);
   if (FX_LOW) G.postfx.enabled = false;
@@ -474,22 +476,44 @@ function wireGameEvents() {
     sfx('shard');
     G.postfx.pulse(0.5);
     if (G.save.shards % 3 === 0) {
+      const before = G.player.maxPips;
       G.player.addPip();
       sfx('unlock');
-      G.hud.whisper('THE VESSEL DEEPENS', 3.4);
+      if (G.player.maxPips > before) {
+        G.hud.reward({ kind: 'HEALTH DEEPENED', name: '+1 MAX HEALTH', detail: `${G.player.maxPips} WOUNDS HELD` });
+      } else {
+        G.hud.whisper('THE VESSEL IS FULL', 2.2);
+      }
     } else {
       G.hud.whisper(`${3 - (G.save.shards % 3)} MORE`, 1.6);
     }
+    const minor = G.interior?.dest?.kind === 'minor' ? G.interior.dest : null;
+    if (minor) G.hud.challengeComplete({ id: `minor:${minor.id}`, label: minor.name, total: 1, detail: 'SHARD CLAIMED' });
   };
 
-  G.onRewardTaken = (key) => grantReward(key);
+  G.onRewardTaken = (key) => {
+    const dest = G.interior?.dest;
+    grantReward(key);
+    if (dest?.kind === 'major') {
+      G.hud.challengeComplete({ id: `guardian:${dest.id}`, label: dest.name, total: 1, detail: 'POWER CLAIMED', holdMs: 3200 });
+    }
+  };
 
   G.onSoulCollected = (at) => {
     G.constellation?.collect(1);
     G.relics?.onSoul(at);
   };
 
-  G.onRelicTaken = (relic) => G.relics?.unlock(relic);
+  G.onRelicTaken = (relic) => {
+    const dest = G.interior?.dest;
+    G.relics?.unlock(relic);
+    if (dest?.kind === 'trial') {
+      G.hud.challengeComplete({ id: `trial:${dest.id}`, label: dest.name, total: 4, detail: 'RELIC CLAIMED', holdMs: 3200 });
+    }
+  };
+  G.onSkillBought = (id) => {
+    if (id === 'quiet-camp') G.player?.syncMaxPips({ healGain: true });
+  };
   G.onCompassPoint = (dest) => G.modernWorld?.pointTo(dest);
 
   G.onFinalVictory = () => {
@@ -522,8 +546,15 @@ function wireGameEvents() {
   G.onPlayerDeath = async () => {
     if (dead) return;
     dead = true;
+    const lostAster = Math.max(0, G.save.aster || 0);
+    G.save.aster = 0;
+    G.motes?.discardUnclaimed?.();
+    G.worldBosses?.onPlayerDeath?.();
+    save();
+    G.constellation?.sync();
+    G.hud.challengeHide();
     music.setIntensity(0);
-    G.hud.whisper('THE SPIRE REMEMBERS YOU', 2.8);
+    G.hud.whisper(lostAster > 0 ? `${lostAster} ASTER SCATTERED · THE SPIRE REMEMBERS YOU` : 'THE SPIRE REMEMBERS YOU', 2.8);
     sfx('bossdie', { pitch: 1.6, gain: 0.5 });
     await G.hud.fade(600);
     if (G.interior) G.interiors.exit();
@@ -545,6 +576,7 @@ function wireGameEvents() {
     transition = true;
     await G.hud.fade();
     G.interiors.exit();
+    G.hud.challengeHide();
     G.terrain.buildAround(G.player.pos.x, G.player.pos.z);
     transition = false;
   };
@@ -560,8 +592,26 @@ async function enterInterior(dest) {
   if (transition) return;
   transition = true;
   await G.hud.fade();
-  G.interiors.enter(dest);
+  const entered = G.interiors.enter(dest);
+  if (entered) startInteriorChallenge(dest);
   transition = false;
+}
+
+function startInteriorChallenge(dest) {
+  if (dest.kind === 'minor' && !G.save.found['shard-' + dest.id]) {
+    G.hud.challengeStart({ id: `minor:${dest.id}`, label: dest.name, total: 1, value: 0, detail: 'FIND THE SHARD' });
+  } else if (dest.kind === 'trial' && !isTrialComplete(G.save, dest)) {
+    const cleared = isTrialCleared(G.save, dest);
+    G.hud.challengeStart({
+      id: `trial:${dest.id}`, label: dest.name, total: 4, value: cleared ? 3 : 0,
+      detail: cleared ? 'CLAIM THE RELIC' : 'CROSS THE THRESHOLD',
+    });
+  } else if (dest.kind === 'major' && !ownsGuardianReward(G.save, dest.reward)) {
+    G.hud.challengeStart({
+      id: `guardian:${dest.id}`, label: dest.name, total: 1, value: 0,
+      detail: G.save.bossesDown[dest.boss] ? 'CLAIM THE POWER' : 'FACE THE GUARDIAN',
+    });
+  }
 }
 
 // ---- debug/test surface ---------------------------------------------------------
@@ -570,17 +620,22 @@ function wireDebug() {
     G,
     state: () => ({
       mode: G.mode, paused, pos: { x: G.player.pos.x, y: G.player.pos.y, z: G.player.pos.z },
-      pips: G.player.pips, region: dominantRegion(G.player.pos.x, G.player.pos.z),
+      pips: G.player.pips, maxPips: G.player.maxPips, baseMaxPips: G.player.baseMaxPips,
+      region: dominantRegion(G.player.pos.x, G.player.pos.z),
       enemies: G.enemies.list.length, fps: G.debug.fps, drawCalls: G.debug.drawCalls, tris: G.debug.tris,
       abilities: { ...G.save.abilities }, altFires: { ...G.save.altFires },
       bossesDown: { ...G.save.bossesDown }, boss: G.boss ? { hp: G.boss.hp, key: G.boss.key } : null,
       interior: G.interior ? G.interior.dest.id : null,
       aster: G.save.aster || 0, skills: { ...G.save.skills }, trialsDown: { ...G.save.trialsDown },
       relics: { ...G.save.relics }, activeRelic: G.save.activeRelic || null,
+      skins: { ...G.save.skins }, skin: G.save.skin || 'default',
+      worldBosses: G.worldBosses?.snapshot?.() || null,
+      lastPrimary: { damage: G.weapon.lastPrimaryDamage, comet: G.weapon.lastPrimaryComet, cycle: G.weapon.primaryCycle },
       finalGateShown: !!G.save.finalGateShown, finalDefeated: !!G.save.finalDefeated,
       content: {
         bossDestinations: DESTS.filter((d) => d.kind === 'major' || d.kind === 'trial').length,
         trials: TRIAL_DESTS.length,
+        worldBosses: G.worldBosses?.snapshot?.().total || 0,
       },
     }),
     teleport(x, z) {
@@ -600,6 +655,8 @@ function wireDebug() {
     giveAster(n = 100) { G.constellation.collect(n); },
     buySkill(id) { return G.constellation.buy(id); },
     equipRelic(id) { return G.relics.equip(id); },
+    equipSkin(id) { return G.relics.equipSkin(id); },
+    die() { G.player.pips = 0; G.player.dead = true; return G.onPlayerDeath?.(); },
     defeatBoss() { if (G.boss && !G.boss.dead) G.boss._die?.(); },
     completeMain() {
       for (const key of ORIGINAL_GUARDIANS) G.save.bossesDown[key] = true;
@@ -611,10 +668,11 @@ function wireDebug() {
       G.enemies.spawn(type, G.player.pos.x + dx, G.player.pos.z + dz, { ctx: G.mode === 'world' ? 'world' : 'interior' });
     },
     enter(id) {
-      const d = G.destinations.doors.find((door) => door.dest.id === id)?.dest;
-      if (d) enterInterior(d);
+      const d = G.destinations.doors.find((door) => door.dest.id === id)?.dest
+        || G.destinations.sites.get(id)?.dest;
+      return d ? enterInterior(d) : false;
     },
-    exitInterior() { G.requestExitInterior(); },
+    exitInterior() { return G.requestExitInterior(); },
     wipe() { wipeSave(); location.reload(); },
     setPaused(v) { paused = v; },
     fire(down = true) { G.input.mouseDown[0] = down; if (down) G.input.mousePressed[0] = true; },
@@ -721,6 +779,7 @@ function loop(tMs) {
     G.sky.update(rawDt, t, pl.pos.x, pl.pos.z, G.worldScene, G.sun, G.hemi);
     G.streams.update(rawDt, t);
     G.features.update(rawDt, t);
+    G.worldBosses?.update(rawDt, t);
     G.livingWorld.update(rawDt, t);
     G.modernWorld?.update(rawDt, t);
     G.stormglass?.update(rawDt, t);

@@ -51,6 +51,16 @@ out are below.
   Qualiacology pill off screen and gives it back, and Axe over the game. It is
   keyboard/mouse/gamepad only, so 390px is checked for a clean page and a way
   home, not for playability.
+- `cd build && npm run qa:skyshard-world` — required after any SKYSHARD
+  authored-world placement change. It verifies that every major, minor, trial,
+  threshold, and wonder remains in its declared biome and that authored
+  footprints preserve at least 20m of edge clearance.
+- `cd build && npm run qa:skyshard-progression` — required after any SKYSHARD
+  progression, completion, interior, boss, Aster, upgrade, reward, or loadout
+  change. It parses every gameplay module and asserts reward-owned guardian
+  completion, retained collapsed monuments, scene-owned interior enemies,
+  flush optional routes, staged challenge UI, distinct Aster motes, death-loss
+  currency, persistent skins, late capstones, and isolated forecourt-boss saves.
 
 ## Measuring anything in a browser
 

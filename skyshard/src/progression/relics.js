@@ -7,6 +7,7 @@ import { G } from '../state.js';
 import { save } from '../core/save.js';
 import { sfx } from '../core/audio.js';
 import { RELIC_BY_ID, TRIAL_DESTS } from '../world/trialdata.js';
+import { SKINS } from '../world/features.js';
 
 const relicOrder = TRIAL_DESTS.map((d) => d.relic.id);
 
@@ -21,8 +22,27 @@ export class RelicSystem {
     this.group.renderOrder = 3;
     this.listEl = document.getElementById('relic-list');
     this.detailEl = document.getElementById('relic-detail');
+    this.skinListEl = document.getElementById('skin-list');
+    this.skinDetailEl = document.getElementById('skin-detail');
     this._buildList();
+    this._buildSkins();
     this.sync();
+  }
+
+  _buildSkins() {
+    if (!this.skinListEl) return;
+    this.skinListEl.innerHTML = '';
+    for (const [id, skin] of Object.entries(SKINS)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'skin-chip';
+      button.dataset.skin = id;
+      button.style.setProperty('--skin-body', `#${skin.body.toString(16).padStart(6, '0')}`);
+      button.style.setProperty('--skin-glow', `#${skin.glow.toString(16).padStart(6, '0')}`);
+      button.innerHTML = `<span class="skin-swatch" aria-hidden="true"></span><span>${skin.name}</span><small class="skin-state"></small>`;
+      button.addEventListener('click', () => this.equipSkin(id));
+      this.skinListEl.appendChild(button);
+    }
   }
 
   _buildList() {
@@ -50,7 +70,11 @@ export class RelicSystem {
     this.sync();
     sfx('unlock');
     G.postfx?.pulse(1.05);
-    G.hud?.whisper(fresh ? `${relic.name} · RELIC AWAKENED` : `${relic.name} · EQUIPPED`, 3.3);
+    if (fresh) {
+      G.hud?.reward({ kind: 'RELIC AWAKENED', name: relic.name, detail: 'EQUIPPED · TAB OPENS THE RELIC VAULT' });
+    } else {
+      G.hud?.whisper(`${relic.name} · EQUIPPED`, 2.2);
+    }
   }
 
   equip(id) {
@@ -62,6 +86,17 @@ export class RelicSystem {
     return true;
   }
 
+  equipSkin(id) {
+    if (!SKINS[id] || (id !== 'default' && !G.save.skins[id])) return false;
+    G.save.skin = id;
+    G.weapon?.applySkin(id);
+    save();
+    this.syncSkins();
+    sfx('pickup', { gain: 0.9 });
+    G.hud?.whisper(`${SKINS[id].name} · EQUIPPED`, 1.8);
+    return true;
+  }
+
   sync() {
     this.active = RELIC_BY_ID[G.save.activeRelic] || null;
     for (const button of this.listEl?.querySelectorAll('.relic-chip') || []) {
@@ -70,12 +105,41 @@ export class RelicSystem {
       button.classList.toggle('owned', owned);
       button.classList.toggle('equipped', this.active?.id === id);
       button.disabled = !owned;
+      button.setAttribute('aria-pressed', this.active?.id === id ? 'true' : 'false');
       const relic = RELIC_BY_ID[id];
+      const label = button.querySelector('span:last-child');
+      if (label) label.textContent = owned ? relic.name : 'UNDISCOVERED';
       button.setAttribute('aria-label', owned ? `${relic.name}. ${relic.description}. ${this.active?.id === id ? 'Equipped' : 'Equip'}` : 'Undiscovered relic');
     }
-    if (this.detailEl) this.detailEl.textContent = this.active ? `${this.active.name} — ${this.active.description}` : 'Choose one awakened relic. Relics change the world, never your numbers.';
+    const relicCount = relicOrder.filter((id) => G.save.relics[id]).length;
+    if (this.detailEl) this.detailEl.textContent = this.active
+      ? `${relicCount} / ${relicOrder.length} FOUND · ${this.active.name} EQUIPPED — ${this.active.description}`
+      : `${relicCount} / ${relicOrder.length} FOUND · NONE EQUIPPED · RELICS CHANGE PRESENTATION, NEVER YOUR NUMBERS`;
     this._rebuildCompanion();
     G.weapon?.setRelicAccent?.(this.active);
+    this.syncSkins();
+  }
+
+  syncSkins() {
+    if (!SKINS[G.save.skin]) G.save.skin = 'default';
+    const active = G.save.skin || 'default';
+    for (const button of this.skinListEl?.querySelectorAll('.skin-chip') || []) {
+      const id = button.dataset.skin;
+      const owned = id === 'default' || !!G.save.skins[id];
+      const equipped = owned && active === id;
+      button.classList.toggle('owned', owned);
+      button.classList.toggle('equipped', equipped);
+      button.disabled = !owned;
+      button.setAttribute('aria-pressed', equipped ? 'true' : 'false');
+      button.setAttribute('aria-label', owned
+        ? `${SKINS[id].name}. ${equipped ? 'Equipped' : 'Equip Sparkcaster skin'}`
+        : `${SKINS[id].name}. Locked battle-shrine skin`);
+      const state = button.querySelector('.skin-state');
+      if (state) state.textContent = equipped ? 'EQUIPPED' : owned ? 'OWNED' : 'LOCKED';
+    }
+    const shrineSkins = Object.keys(SKINS).filter((id) => id !== 'default');
+    const earned = shrineSkins.filter((id) => G.save.skins[id]).length;
+    if (this.skinDetailEl) this.skinDetailEl.textContent = `${earned} / ${shrineSkins.length} SHRINE FINISHES EARNED · ${SKINS[active].name} EQUIPPED`;
   }
 
   _rebuildCompanion() {
@@ -162,4 +226,3 @@ export class RelicSystem {
     }
   }
 }
-

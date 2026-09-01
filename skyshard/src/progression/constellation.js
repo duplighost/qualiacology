@@ -1,6 +1,7 @@
 // Enemy soul motes become Aster and fund a small optional constellation.
-// Every node is a sidegrade, readability aid, or recovery affordance; none
-// grants damage, health capacity, a guardian verb, or a weapon evolution.
+// Most stars are readability or recovery affordances. The two costly capstones
+// are deliberately tangible: Deep Vessel holds one extra wound and Trophy
+// Round turns every fourth primary shot into a heavy three-damage comet.
 
 import { G } from '../state.js';
 import { save } from '../core/save.js';
@@ -15,7 +16,7 @@ export const SKILL_BRANCHES = [
       { id: 'core-sight', name: 'CORE SIGHT', cost: 8, description: 'Wounded enemies reveal their core nearby.' },
       { id: 'resonant-hit', name: 'RESONANT HIT', cost: 14, requires: 'core-sight', description: 'Precision hits ring harder and brighter.' },
       { id: 'chain-memory', name: 'CHAIN MEMORY', cost: 22, requires: 'resonant-hit', description: 'The kill-chain breath lasts 0.35s longer.' },
-      { id: 'trophy-light', name: 'TROPHY LIGHT', cost: 34, requires: 'chain-memory', description: 'Named victories kindle the Spire reliquary.' },
+      { id: 'trophy-light', name: 'TROPHY ROUND', cost: 34, requires: 'chain-memory', description: 'Every fourth Sparkcaster shot becomes a three-damage comet.' },
     ],
   },
   {
@@ -24,7 +25,7 @@ export const SKILL_BRANCHES = [
       { id: 'soul-draw', name: 'SOUL DRAW', cost: 8, description: 'Aster notices you from farther away.' },
       { id: 'kind-vessel', name: 'KIND VESSEL', cost: 14, requires: 'soul-draw', description: 'Health motes travel faster; drops stay unchanged.' },
       { id: 'last-lantern', name: 'LAST LANTERN', cost: 22, requires: 'kind-vessel', description: 'Once per visit, a full soul streak catches a fatal blow.' },
-      { id: 'quiet-camp', name: 'QUIET CAMP', cost: 34, requires: 'last-lantern', description: 'Cleared sanctums mend you slowly out of combat.' },
+      { id: 'quiet-camp', name: 'DEEP VESSEL', cost: 34, requires: 'last-lantern', description: 'Hold one extra wound; cleared sanctums mend you out of combat.' },
     ],
   },
   {
@@ -52,7 +53,8 @@ export class Constellation {
     this.touchButton = document.getElementById('t-skill');
     this.closeButton = document.getElementById('constellation-close');
     this.opened = false;
-    this.firstCollectShown = (G.save.aster || 0) > 0;
+    this.firstCollectShown = (G.save.aster || 0) > 0 ||
+      ['skills', 'relics', 'skins'].some((key) => Object.values(G.save[key] || {}).some(Boolean));
     this.campT = 0;
     this.bellT = 8;
     this.compassT = 5;
@@ -182,6 +184,11 @@ export class Constellation {
     this._status(`${node.name} AWAKENS`);
     this.sync();
     G.onSkillBought?.(id);
+    G.hud?.reward(id === 'quiet-camp'
+      ? { kind: 'VESSEL DEEPENED', name: node.name, detail: '+1 MAX HEALTH · CLEARED SANCTUMS MEND YOU' }
+      : id === 'trophy-light'
+        ? { kind: 'SPARKCASTER AWAKENED', name: node.name, detail: 'EVERY FOURTH SHOT BECOMES A THREE-DAMAGE COMET' }
+        : { kind: 'CONSTELLATION AWAKENED', name: node.name, detail: node.description });
     return true;
   }
 

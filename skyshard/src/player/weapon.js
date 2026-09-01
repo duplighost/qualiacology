@@ -14,6 +14,7 @@ import { Pool } from '../core/pool.js';
 import { clamp01, damp } from '../core/math.js';
 import { SKINS } from '../world/features.js';
 import { save } from '../core/save.js';
+import { hasSkill } from '../progression/constellation.js';
 
 const W = CFG.weapon;
 const _dir = new THREE.Vector3();
@@ -38,6 +39,9 @@ export class Weapon {
     this.seekerCd = 0;
     this.kickback = 0;         // viewmodel z recoil
     this.swayX = 0; this.swayY = 0;
+    this.primaryCycle = 0;     // Trophy Round: every fourth primary is heavy
+    this.lastPrimaryDamage = W.damage;
+    this.lastPrimaryComet = false;
 
     // ---- viewmodel ----
     this.rig = new THREE.Group();
@@ -115,7 +119,8 @@ export class Weapon {
 
   // cosmetic skins from battle shrines: colors and light only, never numbers
   applySkin(key) {
-    const sk = SKINS[key] || SKINS.default;
+    const resolved = SKINS[key] ? key : 'default';
+    const sk = SKINS[resolved];
     this.skinMats.body.color.setHex(sk.body);
     this.skinMats.body.emissive.setHex(sk.body);
     this.skinMats.barrel.color.setHex(sk.barrel);
@@ -126,7 +131,7 @@ export class Weapon {
     for (const mat of this.accentMats) mat.color.setHex(sk.glow);
     this.baseTracerColor = sk.tracer;
     this.tracerColor = this.relic?.effect === 'weapon' ? new THREE.Color(...this.relic.color).getHex() : sk.tracer;
-    this.skinKey = key;
+    this.skinKey = resolved;
   }
 
   setRelicAccent(relic) {
@@ -140,12 +145,13 @@ export class Weapon {
   }
 
   cycleSkin() {
-    const owned = ['default', ...Object.keys(G.save.skins).filter((k) => G.save.skins[k])];
+    const owned = Object.keys(SKINS).filter((k) => k === 'default' || G.save.skins[k]);
     const idx = owned.indexOf(this.skinKey || 'default');
     const next = owned[(idx + 1) % owned.length];
     this.applySkin(next);
     G.save.skin = next;
     save();
+    G.relics?.syncSkins?.();
     sfx('pickup', { gain: 1.1 });
     G.hud?.whisper(SKINS[next].name, 1.4);
   }
@@ -254,6 +260,12 @@ export class Weapon {
   }
 
   firePrimary() {
+    const trophyRound = hasSkill('trophy-light');
+    this.primaryCycle = trophyRound ? (this.primaryCycle + 1) % 4 : 0;
+    const comet = trophyRound && this.primaryCycle === 0;
+    const shotDamage = comet ? 3 : W.damage;
+    this.lastPrimaryDamage = shotDamage;
+    this.lastPrimaryComet = comet;
     const { from, dir } = this._aimRay();
     const eHit = this._rayEnemies(from, dir, W.range);
     const wHit = G.collide.raycast(from.x, from.y, from.z, dir.x, dir.y, dir.z, W.range, (this._scr ||= []));
@@ -262,10 +274,10 @@ export class Weapon {
     if (eHit && (!wHit || eHit.t < wHit.t)) {
       endX = eHit.point.x; endY = eHit.point.y; endZ = eHit.point.z;
       if (eHit.isBossPart) {
-        G.boss.onHit(eHit.e, W.damage, { kind: 'shot', dir: { x: dir.x, y: dir.y, z: dir.z }, point: eHit.point });
+        G.boss.onHit(eHit.e, shotDamage, { kind: 'shot', dir: { x: dir.x, y: dir.y, z: dir.z }, point: eHit.point, comet });
       } else {
-        hitEnemy(eHit.e, W.damage * (eHit.headshot ? W.headshotMult : 1), {
-          kind: 'shot', dir: { x: dir.x, y: dir.y, z: dir.z }, point: eHit.point, headshot: eHit.headshot,
+        hitEnemy(eHit.e, shotDamage * (eHit.headshot ? W.headshotMult : 1), {
+          kind: 'shot', dir: { x: dir.x, y: dir.y, z: dir.z }, point: eHit.point, headshot: eHit.headshot, comet,
         });
       }
     } else if (wHit) {
@@ -273,21 +285,28 @@ export class Weapon {
       if (wHit.item?.breakable) {
         G.breakables.break_(wHit.item.breakable, { x: dir.x, y: dir.y, z: dir.z });
       } else {
-        G.particles?.burst('impact', wHit.x, wHit.y, wHit.z, 4, { dir: { x: -dir.x, y: 0.4, z: -dir.z } });
-        G.rovers?.pulse(wHit.x, wHit.y, wHit.z, [0.7, 0.85, 1], 0.8, 14, 6);
+        G.particles?.burst('impact', wHit.x, wHit.y, wHit.z, comet ? 12 : 4, {
+          dir: { x: -dir.x, y: 0.4, z: -dir.z }, color: comet ? [1, .78, .32] : undefined,
+          sizeMult: comet ? 1.45 : 1,
+        });
+        G.rovers?.pulse(wHit.x, wHit.y, wHit.z, comet ? [1, .68, .24] : [0.7, 0.85, 1], comet ? 2.2 : 0.8, comet ? 8 : 14, comet ? 12 : 6);
       }
       G.onShotHitWorld?.(wHit);
     }
 
     // feel: kick, flash, tracer, voice by evolution level
-    juice.kick(W.kickPitch, (Math.random() - 0.5) * 0.004);
-    juice.fov(0.8);
-    this.kickback = Math.min(0.09, this.kickback + 0.045);
-    sfx(this.level >= 2 ? 'shoot2' : 'shoot');
+    juice.kick(W.kickPitch * (comet ? 2.5 : 1), (Math.random() - 0.5) * (comet ? 0.008 : 0.004));
+    juice.fov(comet ? 2.4 : 0.8);
+    if (comet) juice.shake(0.14);
+    this.kickback = Math.min(comet ? 0.13 : 0.09, this.kickback + (comet ? 0.085 : 0.045));
+    sfx(this.level >= 2 || comet ? 'shoot2' : 'shoot', comet ? { pitch: 0.72, gain: 1.2 } : undefined);
+    if (comet) sfx('chime', { pitch: 1.7, gain: 0.2 });
     this.muzzle.getWorldPosition(_tmp);
-    G.particles?.burst('muzzle', _tmp.x, _tmp.y, _tmp.z, 2);
-    G.rovers?.pulse(_tmp.x, _tmp.y, _tmp.z, [0.6, 0.85, 1], 1.6, 16, 8);
-    this._tracer(_tmp.x, _tmp.y, _tmp.z, endX, endY, endZ, this.tracerColor, 0.03);
+    G.particles?.burst('muzzle', _tmp.x, _tmp.y, _tmp.z, comet ? 6 : 2,
+      comet ? { color: [1, .76, .28], sizeMult: 1.45 } : undefined);
+    G.rovers?.pulse(_tmp.x, _tmp.y, _tmp.z, comet ? [1, .7, .26] : [0.6, 0.85, 1], comet ? 1.8 : 1.6, comet ? 18 : 16, comet ? 9 : 8);
+    this._tracer(_tmp.x, _tmp.y, _tmp.z, endX, endY, endZ, comet ? 0xffd06a : this.tracerColor,
+      comet ? 0.085 : 0.03, comet ? 0.13 : 0.07);
   }
 
   fireLance() {

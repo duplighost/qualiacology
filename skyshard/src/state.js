@@ -35,6 +35,7 @@ export const G = {
   destinations: null,
   livingWorld: null,
   modernWorld: null,
+  worldBosses: null,
   endgame: null,
   collide: null,        // active collider field (world's or interior's)
   worldCollide: null,

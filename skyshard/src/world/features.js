@@ -446,6 +446,10 @@ export class Features {
           sh.state = 'fight';
           sh.wave = 1;
           sh.waveT = 0.8;
+          G.hud?.challengeStart({
+            id: `shrine:${sh.id}`, label: `BATTLE SHRINE · ${REGIONS[sh.region].name}`,
+            total: 2, value: 0, detail: 'FIRST WAVE',
+          });
           sfx('bossroar', { pitch: 1.8, gain: 0.5 });
           sfx('discover', { pitch: 0.7, gain: 0.6 });
           juice.shake(0.25);
@@ -460,6 +464,10 @@ export class Features {
           if (sh.wave === 1) {
             sh.wave = 2;
             sh.waveT = 1.2;
+            G.hud?.challengeUpdate({
+              id: `shrine:${sh.id}`, label: `BATTLE SHRINE · ${REGIONS[sh.region].name}`,
+              total: 2, value: 1, detail: 'FINAL WAVE',
+            });
             sfx('bossroar', { pitch: 2.1, gain: 0.4 });
             this._spawnWave(sh, 4);
           } else {
@@ -469,6 +477,7 @@ export class Features {
         // wandering too far abandons the fight (it forgives; it does not forget)
         if (d2 > 45 * 45) {
           sh.state = 'dormant';
+          G.hud?.challengeHide(`shrine:${sh.id}`);
           for (const e of [...G.enemies.list]) if (e.tag === 'shrine' + sh.id) G.enemies.remove(e, false);
           G.enemies.pending = G.enemies.pending.filter((p) => p.tag !== 'shrine' + sh.id);
         }
@@ -485,6 +494,10 @@ export class Features {
     juice.slowmo('kill3');
     G.particles?.burst('soul', sh.x, sh.y + 1.8, sh.z, 26, { color: sh.keyColor, sizeMult: 1.4 });
     G.rovers?.pulse(sh.x, sh.y + 2, sh.z, sh.keyColor, 4, 5, 18);
+    G.hud?.challengeComplete({
+      id: `shrine:${sh.id}`, label: `BATTLE SHRINE · ${REGIONS[sh.region].name}`,
+      total: 2, detail: 'COMPLETE', holdMs: 2800,
+    });
 
     // the pay-out: this region's skin, then Soulfire when all ten burn
     const skinKey = REGION_SKIN[sh.region];
@@ -495,7 +508,11 @@ export class Features {
     if (granted) {
       G.save.skin = granted;
       G.weapon?.applySkin(granted);
-      G.hud?.whisper(SKINS[granted].name + ' — T TO SWAP', 4.2);
+      G.relics?.syncSkins?.();
+      G.hud?.reward({
+        kind: 'NEW SPARKCASTER SKIN', name: SKINS[granted].name,
+        detail: 'EQUIPPED · TAB OPENS THE WARDROBE · T CYCLES SKINS',
+      });
     } else {
       G.hud?.whisper('THE STONE REMEMBERS', 2.4);
     }
