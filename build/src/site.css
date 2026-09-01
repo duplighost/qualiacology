@@ -1666,6 +1666,12 @@ body[data-page="psych"] .subhero h1 {
   font-size: 0.94rem;
 }
 
+/* The last rule has no bottom rule under it, so the default section-action gap reads
+   as if the buttons belong to rule 05. Give the door its own air. */
+.rules-list + .section-action {
+  margin-top: clamp(2rem, 4.5vw, 3rem);
+}
+
 /* The filter rail: a printed index tab bar, latched in the room's color. */
 .filter-shell {
   position: sticky;
