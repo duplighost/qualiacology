@@ -515,6 +515,14 @@ try {
   }));
   const coldCompleteWallMs = performance.now() - navigationWallStart;
 
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => {
+    const veil = document.querySelector('#veil');
+    return document.documentElement.dataset.glideTitle === 'entered'
+      && veil?.classList.contains('title-entered')
+      && Number.parseFloat(getComputedStyle(veil).opacity || '1') <= 0.05;
+  });
+
   const snapshot = async () => page.evaluate(() => {
     const game = window.__GAME;
     const renderer = game?.engine?.renderer;
@@ -791,7 +799,7 @@ try {
   const hardwareWebGl = gpuIdentityKnown
     && !/swiftshader|software|llvmpipe|\bwarp\b|microsoft basic render/i.test(rendererText);
   check('HTTP response is successful', response?.ok(), response?.status() ?? null, '2xx');
-  check('v83 game wrapper is loaded', startup.version === 'v83-grounded-c-brake', startup.version, 'v83-grounded-c-brake');
+  check('v84 game wrapper is loaded', startup.version === 'v84-mobile-hold-title', startup.version, 'v84-mobile-hold-title');
   check('GLIDE reports ready', startup.ready === '1', startup.ready, '1');
   check('No runtime/browser/resource failures', failures.length === 0, failures, '[]');
   check('Hardware WebGL identity is available', gpuIdentityKnown, startup.gpu, 'non-empty vendor or renderer');

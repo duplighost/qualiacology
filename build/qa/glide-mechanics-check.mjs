@@ -146,6 +146,18 @@ try {
     && window.__GAME?.__worldExpansion
     && document.documentElement.dataset.glideReady === "1"
   ), null, { timeout: 120_000, polling: "raf" });
+  await page.waitForFunction(() => (
+    document.documentElement.dataset.glideTitle === "ready"
+    && document.querySelector("#veil")?.classList.contains("title-ready")
+    && !document.querySelector("#veil")?.classList.contains("title-entered")
+  ), null, { timeout: 5_000, polling: "raf" });
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => {
+    const veil = document.querySelector("#veil");
+    return document.documentElement.dataset.glideTitle === "entered"
+      && veil?.classList.contains("title-entered")
+      && Number.parseFloat(getComputedStyle(veil).opacity || "1") <= 0.05;
+  }, null, { timeout: 5_000, polling: "raf" });
 
   // Install a small, read-only QA bridge. It owns deterministic fixtures and
   // observation only; every behavior under test still comes from real keys.
@@ -166,11 +178,14 @@ try {
     };
 
     const clearHeldFlags = () => {
-      game.__dropHeld = false;
-      game.__diveHeld = false;
-      rootData.glideDropHeld = "0";
-      rootData.glideDiveHeld = "0";
-      rootData.glideGroundLock = "0";
+      if (game.__clearDropSources) game.__clearDropSources();
+      else {
+        game.__dropHeld = false;
+        game.__diveHeld = false;
+        rootData.glideDropHeld = "0";
+        rootData.glideDiveHeld = "0";
+        rootData.glideGroundLock = "0";
+      }
     };
 
     const clearInput = () => {
@@ -210,6 +225,9 @@ try {
           dropHeld: rootData.glideDropHeld || "0",
           diveHeld: rootData.glideDiveHeld || "0",
           groundLock: rootData.glideGroundLock || "0",
+          dropSources: rootData.glideDropSources || "",
+          rightHold: rootData.glideRightHold || "",
+          title: rootData.glideTitle || "",
         },
         inputKeys: [...(game.input?.keys || [])],
       };
@@ -466,14 +484,6 @@ try {
   });
 
   await waitFrames(30);
-  // The wordless control hint is intentionally delayed after the veil clears
-  // and then fades in over one second. Wait for the authored reveal so the
-  // grounded-spawn artifact proves both physical contact and first-use input.
-  await page.waitForFunction(() => {
-    const hint = document.querySelector("#hint");
-    if (!hint || !hint.classList.contains("show") || hint.classList.contains("gone")) return false;
-    return Number.parseFloat(getComputedStyle(hint).opacity || "0") >= 0.75;
-  }, null, { timeout: 5_000, polling: "raf" });
 
   // Phase 1: the ordinary route must begin truly grounded, not visually
   // disguised while its physics state is attached to a synthetic perch.
@@ -484,7 +494,7 @@ try {
   const idleDrift = distance3(initial.position, idleEnd.position);
   report.phases.defaultSpawn = { initial, idleEnd, idleDrift };
 
-  check(initial.patch === "v83-grounded-c-brake", `v83 motion patch is active (${initial.patch})`);
+  check(initial.patch === "v84-mobile-hold-title", `v84 motion patch is active (${initial.patch})`);
   check(initial.state === "ground", `default spawn uses ground state (${initial.state})`);
   check(!initial.hasClimbTree && !initial.hasClimbSegment, "default spawn has no synthetic climb attachment");
   check(initial.datasets.highPerch === "0" && !initial.startedAtHighPerch, "default route does not start on the high perch");
