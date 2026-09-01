@@ -65,7 +65,14 @@ const assetUrls = await page.evaluate(() => performance.getEntriesByType("resour
   .map((entry) => entry.name)
   .filter((name) => name.endsWith(".glb")));
 
-const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+// Excluding iframes because Netlify injects its deploy-preview toolbar as one,
+// and that widget trips aria-required-children on its own role="tablist". It
+// is not our markup and it does not exist in production, so scoring it would
+// make this gate fail only on previews. The game itself ships no iframes.
+const axe = await new AxeBuilder({ page })
+  .exclude("iframe")
+  .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+  .analyze();
 const seriousAxe = axe.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
 
 // A real click on the real button, then real keys.
