@@ -51,6 +51,15 @@ out are below.
   Qualiacology pill off screen and gives it back, and Axe over the game. It is
   keyboard/mouse/gamepad only, so 390px is checked for a clean page and a way
   home, not for playability.
+- `node build/qa/glide-mechanics-check.mjs http://localhost:4173/glide/`
+  and `node build/qa/glide-mobile-check.mjs http://localhost:4173/glide/`
+  — required after GLIDE movement, tree, title, keyboard, or touch changes. The
+  desktop check reproduces real trunk contact and physical C behavior; the
+  mobile check drives real two-thumb CDP input, distinguishes stationary holds
+  from camera swipes and quick double taps, proves tree-to-ground detachment,
+  and captures the persistent title at phone and desktop sizes. Use
+  `glide-performance-check.mjs` as well for renderer, streaming, or weather
+  performance changes.
 - `cd build && npm run qa:skyshard-world` — required after any SKYSHARD
   authored-world placement change. It verifies that every major, minor, trial,
   threshold, and wonder remains in its declared biome and that authored

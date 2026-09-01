@@ -37,23 +37,57 @@
       .home-link { position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 12; color: rgba(32,49,30,.72); text-decoration: none; font: 800 11px/1.2 system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; padding: 8px 10px; border-radius: 999px; background: rgba(255,250,230,.44); border: 1px solid rgba(54,84,46,.16); backdrop-filter: blur(8px); }
       .home-link:hover, .home-link:focus-visible { color: #20311e; border-color: rgba(54,84,46,.36); outline: none; }
 
-      /* Wordless loading veil: a soft sun that breathes, then fades. */
+      /* A minimal title held over GLIDE's own forest until the first ready input. */
       #veil {
         position: fixed; inset: 0; z-index: 10;
-        display: flex; align-items: center; justify-content: center;
-        background: radial-gradient(120% 120% at 50% 35%, #f7f1cf 0%, #d7ecae 45%, #a9d189 100%);
-        transition: opacity 1.2s ease;
+        overflow: hidden;
+        color: #fff8da;
+        background-color: #20311e;
+        transition:
+          opacity 0.36s cubic-bezier(.22,.7,.24,1),
+          visibility 0s linear 0.36s,
+          background-color 0.72s ease;
+        pointer-events: none;
       }
-      #veil.hidden { opacity: 0; pointer-events: none; }
-      #veil .orb {
-        width: 64px; height: 64px; border-radius: 50%;
-        background: radial-gradient(circle at 40% 35%, #fff6d8, #ffd980 60%, #f4b24a 100%);
-        box-shadow: 0 0 40px 14px rgba(255, 214, 130, 0.7);
-        animation: breathe 2.4s ease-in-out infinite;
+      #veil.hidden { opacity: 0; visibility: hidden; }
+      #veil.hidden:not(.title-entered) { opacity: 1; visibility: visible; }
+      #veil.title-ready { background-color: transparent; }
+      #veil .title-art {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        object-fit: cover; object-position: 50% 48%;
+        filter: brightness(.82) saturate(1.04);
+        transition: opacity 0.72s ease;
       }
-      @keyframes breathe {
-        0%, 100% { transform: scale(0.82); opacity: 0.78; }
-        50%      { transform: scale(1.12); opacity: 1; }
+      #veil.title-ready .title-art { opacity: 0; }
+      #veil .title-word {
+        position: absolute;
+        left: 50%; bottom: max(8vh, calc(env(safe-area-inset-bottom) + 34px));
+        text-indent: 0.31em;
+        transform: translateX(-50%) scale(0.985);
+        color: inherit;
+        font: 900 clamp(3.8rem, 10vw, 8.4rem)/0.86 ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
+        letter-spacing: 0.31em;
+        text-shadow: 0 3px 0 rgba(32,49,30,.46), 0 16px 54px rgba(0,0,0,.68);
+        opacity: 0.78;
+        animation: title-breathe 2.8s ease-in-out infinite;
+      }
+      #veil.title-ready .title-word { opacity: 1; animation-duration: 4.8s; }
+      @keyframes title-breathe {
+        0%, 100% { transform: translateX(-50%) translateY(0) scale(0.985); }
+        50%      { transform: translateX(-50%) translateY(-0.35vh) scale(1); }
+      }
+      @media (max-aspect-ratio: 3 / 4) {
+        #veil .title-art { object-position: 50% 48%; }
+        #veil .title-word {
+          bottom: max(9vh, calc(env(safe-area-inset-bottom) + 38px));
+          font-size: clamp(3.2rem, 17vw, 5.4rem);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #veil { transition-duration: 0.2s; }
+        #veil .title-art { transition-duration: 0.2s; }
+        #veil .title-word { animation: none; transform: translateX(-50%); }
       }
       /* Subtle hint glyphs for first-time players (no text). Fade away on first input. */
       #hint {
@@ -65,6 +99,7 @@
       #hint.show { opacity: 0.9; }
       #hint.gone { opacity: 0 !important; }
       #hint svg { width: 46px; height: 46px; }
+      #veil:not(.title-entered) ~ #hint { opacity: 0 !important; }
 
       /* Wordless breathing vignette while idle. */
       #idle {
@@ -173,7 +208,10 @@
             const veil = document.getElementById('veil');
             const fallback = document.getElementById('fallback');
             const message = document.querySelector('[data-fallback-detail]');
-            if (veil) veil.classList.add('hidden');
+            if (veil) {
+              veil.classList.add('title-entered', 'hidden');
+              veil.setAttribute('aria-hidden', 'true');
+            }
             if (message && detail) message.textContent = detail;
             if (fallback) fallback.hidden = false;
           };
@@ -182,6 +220,39 @@
           } else {
             render();
           }
+        };
+
+        let titleReady = false;
+        let titleIntentPending = false;
+        const titleInputEvents = ['keydown', 'pointerdown', 'touchstart', 'wheel'];
+        document.documentElement.dataset.glideTitle = 'loading';
+        const enterTitle = (event) => {
+          if (event?.target?.closest?.('.home-link')) return;
+          if (event?.type === 'keydown') {
+            if (event.repeat || ['Control', 'Alt', 'Meta', 'Shift'].includes(event.key)) return;
+          }
+          if (!titleReady) {
+            titleIntentPending = true;
+            document.documentElement.dataset.glideTitle = 'loading-input';
+            return;
+          }
+          const veil = document.getElementById('veil');
+          if (!veil || veil.classList.contains('title-entered')) return;
+          veil.classList.add('title-entered', 'hidden');
+          veil.setAttribute('aria-hidden', 'true');
+          document.documentElement.dataset.glideTitle = 'entered';
+          for (const eventName of titleInputEvents) window.removeEventListener(eventName, enterTitle);
+        };
+        for (const eventName of titleInputEvents) {
+          window.addEventListener(eventName, enterTitle, { passive: true });
+        }
+        window.__GLIDE_TITLE_READY = () => {
+          if (titleReady) return;
+          titleReady = true;
+          const veil = document.getElementById('veil');
+          veil?.classList.add('title-ready');
+          document.documentElement.dataset.glideTitle = 'ready';
+          if (titleIntentPending) enterTitle();
         };
 
         const requestedHash = (location.hash || '').replace('#', '').toLowerCase();
@@ -277,7 +348,7 @@
 
               if (game.__uprightGlidePatched) return;
               game.__uprightGlidePatched = true;
-              game.__glideMotionPatchVersion = 'v83-grounded-c-brake';
+              game.__glideMotionPatchVersion = 'v84-mobile-hold-title';
 
               const { player, squirrel } = game;
               if (game.engine && game.engine.renderer && game.engine.renderer.setPixelRatio && !game.__renderCostCapped) {
@@ -297,24 +368,213 @@
               if (!game.__groundDiveInputInstalled) {
                 game.__groundDiveInputInstalled = true;
                 game.__dropHeld = false;
-                const setDropHeld = (event, held) => {
-                  if (event.code !== 'KeyC') return;
-                  if (held && (event.ctrlKey || event.metaKey || event.altKey)) return;
+                const dropSources = new Set();
+                const publishDropState = () => {
+                  const held = dropSources.size > 0;
                   game.__dropHeld = held;
                   game.__diveHeld = held;
+                  game.__dropSources = dropSources;
                   document.documentElement.dataset.glideDropHeld = held ? '1' : '0';
                   document.documentElement.dataset.glideDiveHeld = held ? '1' : '0';
                   document.documentElement.dataset.glideGroundLock = held ? '1' : '0';
+                  document.documentElement.dataset.glideDropSources = [...dropSources].join(',');
                 };
-                window.addEventListener('keydown', (event) => setDropHeld(event, true));
-                window.addEventListener('keyup', (event) => setDropHeld(event, false));
-                window.addEventListener('blur', () => {
-                  game.__dropHeld = false;
-                  game.__diveHeld = false;
-                  document.documentElement.dataset.glideDropHeld = '0';
-                  document.documentElement.dataset.glideDiveHeld = '0';
-                  document.documentElement.dataset.glideGroundLock = '0';
+                const setDropSource = (source, held) => {
+                  const wasHeld = dropSources.size > 0;
+                  if (held) dropSources.add(source);
+                  else dropSources.delete(source);
+                  publishDropState();
+                  if (!wasHeld && dropSources.size > 0 && player.state === 'climb') {
+                    game.__dropFromClimb?.();
+                  }
+                };
+                const clearDropSources = () => {
+                  dropSources.clear();
+                  publishDropState();
+                };
+                game.__setDropSource = setDropSource;
+                game.__clearDropSources = clearDropSources;
+
+                const setKeyboardDropHeld = (event, held) => {
+                  if (event.code !== 'KeyC') return;
+                  if (held && (event.ctrlKey || event.metaKey || event.altKey)) return;
+                  setDropSource('keyboard-c', held);
+                };
+                window.addEventListener('keydown', (event) => setKeyboardDropHeld(event, true));
+                window.addEventListener('keyup', (event) => setKeyboardDropHeld(event, false));
+
+                const canvas = game.engine?.renderer?.domElement;
+                let rightHold = null;
+                const holdDelayMs = 220;
+                const holdSlop = () => clamp(Math.min(innerWidth, innerHeight) * 0.025, 10, 18);
+                const nativeSetAction = game.input?._setAction?.bind(game.input);
+                let insideTouchStart = false;
+                let touchReleaseType = '';
+                let pendingTouchAction = null;
+                let actionReplayGeneration = 0;
+                if (canvas && nativeSetAction) {
+                  canvas.addEventListener('touchstart', () => {
+                    insideTouchStart = true;
+                    queueMicrotask(() => { insideTouchStart = false; });
+                  }, { capture: true, passive: true });
+                  const markTouchRelease = (event) => {
+                    touchReleaseType = event.type;
+                    queueMicrotask(() => { touchReleaseType = ''; });
+                  };
+                  window.addEventListener('touchend', markTouchRelease, { capture: true, passive: true });
+                  window.addEventListener('touchcancel', markTouchRelease, { capture: true, passive: true });
+                  game.input._setAction = function classifyTouchAction(held) {
+                    if (held && insideTouchStart) {
+                      actionReplayGeneration += 1;
+                      pendingTouchAction = { id: null, forwarded: false };
+                      this.action = false;
+                      this._actionEdge = false;
+                      return;
+                    }
+                    if (!held && pendingTouchAction && touchReleaseType) {
+                      const pending = pendingTouchAction;
+                      pendingTouchAction = null;
+                      if (touchReleaseType === 'touchend' && !pending.forwarded) {
+                        const replayGeneration = ++actionReplayGeneration;
+                        nativeSetAction(true);
+                        requestAnimationFrame(() => {
+                          if (replayGeneration === actionReplayGeneration && !pendingTouchAction) nativeSetAction(false);
+                        });
+                      } else {
+                        actionReplayGeneration += 1;
+                        nativeSetAction(false);
+                      }
+                      return;
+                    }
+                    actionReplayGeneration += 1;
+                    nativeSetAction(held);
+                  };
+                }
+                const forwardPendingTouchAction = () => {
+                  if (!pendingTouchAction || pendingTouchAction.forwarded || !nativeSetAction) return;
+                  pendingTouchAction.forwarded = true;
+                  actionReplayGeneration += 1;
+                  nativeSetAction(true);
+                };
+                const discardPendingTouchAction = () => {
+                  pendingTouchAction = null;
+                  actionReplayGeneration += 1;
+                  nativeSetAction?.(false);
+                };
+                const setRightHoldState = (state, reason = '') => {
+                  game.__rightHoldState = state;
+                  document.documentElement.dataset.glideRightHold = state;
+                  document.documentElement.dataset.glideRightHoldReason = reason;
+                };
+                const clearRightHold = (reason = 'released') => {
+                  if (rightHold?.timer) clearTimeout(rightHold.timer);
+                  rightHold = null;
+                  setDropSource('right-hold', false);
+                  setRightHoldState('idle', reason);
+                };
+                const beginRightHold = (event) => {
+                  if (!canvas || event.target !== canvas) return;
+                  for (const touch of event.changedTouches) {
+                    if (touch.identifier !== game.input?._lookTouchId) continue;
+                    if (game.input?.action || game.input?._actionEdge) {
+                      setRightHoldState('action', 'native-double-tap');
+                      continue;
+                    }
+                    clearRightHold('replaced');
+                    rightHold = {
+                      id: touch.identifier,
+                      startX: touch.clientX,
+                      startY: touch.clientY,
+                      lastX: touch.clientX,
+                      lastY: touch.clientY,
+                      active: false,
+                      timer: 0
+                    };
+                    if (pendingTouchAction) pendingTouchAction.id = touch.identifier;
+                    const candidate = rightHold;
+                    setRightHoldState('candidate');
+                    candidate.timer = setTimeout(() => {
+                      if (rightHold !== candidate || game.input?._lookTouchId !== candidate.id) return;
+                      if (Math.hypot(candidate.lastX - candidate.startX, candidate.lastY - candidate.startY) > holdSlop()) {
+                        forwardPendingTouchAction();
+                        clearRightHold('camera-drag');
+                        return;
+                      }
+                      if (game.input?.action || game.input?._actionEdge) {
+                        clearRightHold('native-double-tap');
+                        return;
+                      }
+                      candidate.active = true;
+                      discardPendingTouchAction();
+                      game.input._lastRightTap = 0;
+                      setDropSource('right-hold', true);
+                      setRightHoldState('active');
+                    }, holdDelayMs);
+                  }
+                };
+                const moveRightHold = (event) => {
+                  if (!rightHold) return;
+                  for (const touch of event.changedTouches) {
+                    if (touch.identifier !== rightHold.id) continue;
+                    rightHold.lastX = touch.clientX;
+                    rightHold.lastY = touch.clientY;
+                    const distance = Math.hypot(touch.clientX - rightHold.startX, touch.clientY - rightHold.startY);
+                    const limit = holdSlop() * (rightHold.active ? 1.6 : 1);
+                    if (distance > limit) {
+                      forwardPendingTouchAction();
+                      clearRightHold('camera-drag');
+                    }
+                  }
+                };
+                const endRightHold = (event) => {
+                  if (event.type === 'touchcancel') {
+                    const cancelledRightTouch = !rightHold
+                      || game.input?._lookTouchId === null
+                      || [...event.changedTouches].some((touch) => touch.identifier === rightHold.id);
+                    if (cancelledRightTouch) {
+                      discardPendingTouchAction();
+                      clearRightHold('touch-cancel');
+                    }
+                    return;
+                  }
+                  if (!rightHold) {
+                    if (game.input?._lookTouchId === null) setRightHoldState('idle', 'released');
+                    return;
+                  }
+                  for (const touch of event.changedTouches) {
+                    if (touch.identifier === rightHold.id) clearRightHold('released');
+                  }
+                };
+                canvas?.addEventListener('touchstart', beginRightHold, { passive: true });
+                canvas?.addEventListener('touchmove', moveRightHold, { passive: true });
+                window.addEventListener('touchend', endRightHold, { passive: true });
+                window.addEventListener('touchcancel', endRightHold, { passive: true });
+
+                const clearInputLifecycle = (reason) => {
+                  if (rightHold?.timer) clearTimeout(rightHold.timer);
+                  rightHold = null;
+                  discardPendingTouchAction();
+                  if (game.input) {
+                    game.input._moveTouchId = null;
+                    game.input._lookTouchId = null;
+                    game.input.move?.set?.(0, 0);
+                    game.input.look?.set?.(0, 0);
+                    game.input.keys?.clear?.();
+                    game.input.action = false;
+                    game.input._actionEdge = false;
+                    game.input.sprint = false;
+                    game.input._lastRightTap = 0;
+                  }
+                  clearDropSources();
+                  setRightHoldState('idle', reason);
+                };
+                window.addEventListener('blur', () => clearInputLifecycle('blur'));
+                window.addEventListener('pagehide', () => clearInputLifecycle('pagehide'));
+                document.addEventListener('visibilitychange', () => {
+                  if (document.hidden) clearInputLifecycle('hidden');
                 });
+                publishDropState();
+                setRightHoldState('idle');
               }
               if (game.critters?.update && !game.__launchCrittersPatched) {
                 game.__launchCrittersPatched = true;
@@ -435,11 +695,10 @@
                   game.__leftLaunchPerch = true;
                   game.camera?.addShake?.(0.08);
                 };
+                game.__dropFromClimb = dropFromClimb;
                 window.addEventListener('keydown', (event) => {
                   if (event.code === 'Space' && player.state === 'climb') {
                     game.__manualLaunchRequested = true;
-                  } else if (event.code === 'KeyC' && !event.ctrlKey && !event.metaKey && !event.altKey && player.state === 'climb') {
-                    dropFromClimb();
                   }
                 });
               }
@@ -1058,7 +1317,7 @@
               const installFluff = () => {
                 if (game.__fluffInstalled) return;
                 game.__fluffInstalled = true;
-                document.documentElement.dataset.glideCharacterPolish = 'cute-animal-v83-grounded-c-brake';
+                document.documentElement.dataset.glideCharacterPolish = 'cute-animal-v84-mobile-hold-title';
               };
 
               const findVistaOrigin = () => {
@@ -1735,6 +1994,7 @@
                   const rootData = document.documentElement.dataset;
                   rootData.glideReady = '1';
                   rootData.glideVersion = String(game.__glideMotionPatchVersion || '');
+                  window.__GLIDE_TITLE_READY?.();
                   rootData.glideState = String(info.state || '');
                   rootData.glideSpeed = String(info.speed ?? '');
                   rootData.glideChunks = String(info.chunks ?? '');
@@ -1779,7 +2039,18 @@
         <a href="/">Back to Qualiacology</a>
       </div>
     </div>
-    <div id="veil"><div class="orb"></div></div>
+    <div id="veil" aria-labelledby="glide-title">
+      <img
+        class="title-art"
+        src="../assets/catalog/games/glide-800.webp"
+        srcset="../assets/catalog/games/glide-480.webp 480w, ../assets/catalog/games/glide-800.webp 800w, ../assets/catalog/games/glide-1200.webp 1200w"
+        sizes="100vw"
+        alt=""
+        decoding="async"
+        fetchpriority="high"
+      />
+      <h1 id="glide-title" class="title-word">GLIDE</h1>
+    </div>
     <div id="cozy"></div>
     <div id="idle"></div>
     <div id="photo"><div class="bar top"></div><div class="bar bottom"></div></div>
