@@ -933,6 +933,53 @@ function makeRibbonGeometry(
   return geometry;
 }
 
+const FINISH_CHECKER_COLUMNS = 14;
+const FINISH_CHECKER_ROWS = 4;
+const FINISH_CHECKER_DEPTH = 4.8;
+const FINISH_CHECKER_CELLS = FINISH_CHECKER_COLUMNS * FINISH_CHECKER_ROWS;
+
+/**
+ * One indexed, vertex-coloured mesh keeps the entire checker band to one draw.
+ * Cells do not share vertices because neighbouring checks must keep hard colour
+ * edges without a texture or an additional material pass.
+ */
+function makeFinishCheckerGeometry() {
+  const positions = new Float32Array(FINISH_CHECKER_CELLS * 4 * 3);
+  const colors = new Float32Array(FINISH_CHECKER_CELLS * 4 * 3);
+  const parity = new Uint8Array(FINISH_CHECKER_CELLS * 4);
+  const indices = new Uint16Array(FINISH_CHECKER_CELLS * 6);
+  let cell = 0;
+  for (let row = 0; row < FINISH_CHECKER_ROWS; row += 1) {
+    const z0 = -FINISH_CHECKER_DEPTH * 0.5 + FINISH_CHECKER_DEPTH * row / FINISH_CHECKER_ROWS;
+    const z1 = -FINISH_CHECKER_DEPTH * 0.5 + FINISH_CHECKER_DEPTH * (row + 1) / FINISH_CHECKER_ROWS;
+    for (let column = 0; column < FINISH_CHECKER_COLUMNS; column += 1) {
+      const x0 = -1 + 2 * column / FINISH_CHECKER_COLUMNS;
+      const x1 = -1 + 2 * (column + 1) / FINISH_CHECKER_COLUMNS;
+      const vertex = cell * 4;
+      positions.set([
+        x0, 0, z0,
+        x1, 0, z0,
+        x1, 0, z1,
+        x0, 0, z1,
+      ], vertex * 3);
+      parity.fill((row + column) & 1, vertex, vertex + 4);
+      indices.set([
+        vertex, vertex + 3, vertex + 1,
+        vertex + 1, vertex + 3, vertex + 2,
+      ], cell * 6);
+      cell += 1;
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.name = 'finish-checker-band';
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', setAttrDynamic(new THREE.BufferAttribute(colors, 3)));
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  geometry.userData.checkerParity = parity;
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
 // BufferGeometry.computeVertexNormals is intentionally general-purpose: it
 // allocates several Vector3 scratch objects and repeatedly crosses the
 // BufferAttribute accessor boundary for every triangle. These ribbons are
@@ -2099,6 +2146,9 @@ class TireTrailPool {
     this.count = count;
     this.cursor = 0;
     this.timer = 0;
+    this.finishSkidActive = false;
+    this.finishSkidRemaining = 0;
+    this.finishSkidEmissions = 0;
     this.dummy = new THREE.Object3D();
     this.color = new THREE.Color();
     this.marks = Array.from({ length: count }, () => ({ x: 0, y: -10000, z: 0, yaw: 0, life: 0, heat: 0, tint: null }));
@@ -2135,13 +2185,34 @@ class TireTrailPool {
     // scuffs the road where the board came down.
     const grinding = state.riderState === 'grind';
     const settling = (state.landingSettle ?? 0) > 0;
-    if (dt > 0 && (grinding || settling) && this.timer <= 0) {
-      this.timer = 0.022;
-      const sideShift = Math.sin(state.yaw) * 1.45;
+    const finishSkidPhase = state.finishPhase === 'turning' || state.finishPhase === 'stopping';
+    if (finishSkidPhase && !this.finishSkidActive) this.finishSkidRemaining = 0.92;
+    this.finishSkidActive = finishSkidPhase;
+    if (finishSkidPhase) this.finishSkidRemaining = Math.max(0, this.finishSkidRemaining - dt);
+    else this.finishSkidRemaining = 0;
+    const finishSkidding = finishSkidPhase && this.finishSkidRemaining > 0;
+    if (dt > 0 && (grinding || settling || finishSkidding) && this.timer <= 0) {
+      this.timer = finishSkidding ? 0.028 : 0.022;
       const tint = state.trickTier > 0 ? TRICK_TIER_COLOR[state.trickTier - 1] : null;
-      const heat = grinding ? 0.85 : clamp(state.landingQuality ?? 0, 0.2, 1);
-      this.spawn(state.lateral - 1.05 + sideShift, 1.48, state.yaw, heat, tint);
-      this.spawn(state.lateral + 1.05 + sideShift, 1.48, state.yaw, heat, tint);
+      const heat = finishSkidding
+        ? 0.94
+        : (grinding ? 0.85 : clamp(state.landingQuality ?? 0, 0.2, 1));
+      if (finishSkidding) {
+        // Rotate both the tail offset and wheel spread with the board. At the
+        // promised sideways stop the marks therefore become a genuine pair of
+        // transverse arcs instead of two forward-facing decals under the car.
+        const yawSin = Math.sin(state.yaw);
+        const yawCos = Math.cos(state.yaw);
+        const tailX = state.lateral + yawSin * 1.48;
+        const tailZ = yawCos * 1.48;
+        this.spawn(tailX - yawCos * 1.05, tailZ + yawSin * 1.05, state.yaw, heat, null);
+        this.spawn(tailX + yawCos * 1.05, tailZ - yawSin * 1.05, state.yaw, heat, null);
+        this.finishSkidEmissions += 2;
+      } else {
+        const sideShift = Math.sin(state.yaw) * 1.45;
+        this.spawn(state.lateral - 1.05 + sideShift, 1.48, state.yaw, heat, tint);
+        this.spawn(state.lateral + 1.05 + sideShift, 1.48, state.yaw, heat, tint);
+      }
     }
     for (let i = 0; i < this.count; i += 1) {
       const mark = this.marks[i];
@@ -2180,6 +2251,9 @@ class TireTrailPool {
   clear() {
     this.cursor = 0;
     this.timer = 0;
+    this.finishSkidActive = false;
+    this.finishSkidRemaining = 0;
+    this.finishSkidEmissions = 0;
     this.dummy.position.set(0, -10000, 0);
     this.dummy.rotation.set(0, 0, 0);
     this.dummy.scale.setScalar(0.001);
@@ -2193,6 +2267,7 @@ class TireTrailPool {
       mark.yaw = 0;
       mark.life = 0;
       mark.heat = 0;
+      mark.tint = null;
       this.mesh.setMatrixAt(i, this.dummy.matrix);
       this.mesh.setColorAt(i, this.color);
     }
@@ -2760,6 +2835,23 @@ export class RaceRenderer {
     this.cameraY = 4.5;
     this.cameraLookX = 0;
     this.cameraRoll = 0;
+    if (this.finishLine) this.finishLine.visible = false;
+    if (this.finishLineState) {
+      Object.assign(this.finishLineState, {
+        visible: false,
+        segmentId: null,
+        finalSegmentIndex: null,
+        progress: null,
+        logicalProgress: 0,
+        localDistance: null,
+        crossed: false,
+        roadHalfWidth: null,
+        bank: null,
+        coursePosition: null,
+        renderPosition: null,
+        activeDrawCalls: 0,
+      });
+    }
     if (this.planetMeshes) {
       for (const planet of this.planetMeshes) {
         planet.rotation.set(0, 0, 0);
@@ -6095,7 +6187,12 @@ export class RaceRenderer {
    */
   updateApproachPalette(state, segment) {
     const fraction = getSegmentFraction(state);
-    const next = COURSE[state.segmentIndex + 1];
+    // A slice finish is a real endpoint even though COURSE contains later
+    // optional worlds. Do not tint the final straight toward an unreachable
+    // crossing or dress the finish as a launch.
+    const next = state.segmentIndex < state.finalSegmentIndex
+      ? COURSE[state.segmentIndex + 1]
+      : null;
     const look = segmentLook(segment, this.quality);
     if (!next || state.finished) {
       this.applyLook(look);
@@ -6845,6 +6942,65 @@ export class RaceRenderer {
       this.worldRoot.add(group);
       return group;
     });
+
+    // A literal finish, not a HUD promise: one checker mesh and one three-piece
+    // instanced arch. Neither casts a shadow, so it costs exactly two main-pass
+    // draws while visible and nothing in the shadow pass.
+    this.finishLine = new THREE.Group();
+    this.finishLine.name = 'physical-finish-line';
+    this.finishLine.visible = false;
+    this.finishChecker = new THREE.Mesh(
+      makeFinishCheckerGeometry(),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        vertexColors: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+      }),
+    );
+    this.finishChecker.name = 'finish-checker-band';
+    this.finishChecker.position.y = 0.17;
+    this.finishChecker.castShadow = false;
+    this.finishChecker.receiveShadow = false;
+    this.finishLine.add(this.finishChecker);
+    this.finishMarkers = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
+      3,
+    );
+    this.finishMarkers.name = 'finish-line-markers';
+    this.finishMarkers.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.finishMarkers.frustumCulled = false;
+    this.finishMarkers.castShadow = false;
+    this.finishMarkers.receiveShadow = false;
+    this.finishLine.add(this.finishMarkers);
+    this.worldRoot.add(this.finishLine);
+    this.finishLinePaletteSegmentId = null;
+    this.finishLineBright = new THREE.Color();
+    this.finishLineDark = new THREE.Color(0x07090d);
+    this.finishLineMarkerColor = new THREE.Color();
+    this.finishLineSecondaryColor = new THREE.Color();
+    this.finishLineState = {
+      visible: false,
+      segmentId: null,
+      finalSegmentIndex: null,
+      progress: null,
+      logicalProgress: 0,
+      localDistance: null,
+      crossed: false,
+      roadHalfWidth: null,
+      bank: null,
+      coursePosition: null,
+      renderPosition: null,
+      checkerCells: FINISH_CHECKER_CELLS,
+      markerInstances: 3,
+      drawables: 2,
+      activeDrawCalls: 0,
+    };
 
     this.launchAperture = new THREE.Group();
     const apertureMetal = new THREE.MeshStandardMaterial({
@@ -9037,9 +9193,13 @@ export class RaceRenderer {
    * Where the neighbouring segments' curves have to sit to meet this one's
    * ends. Constant for a frame, so it is resolved once rather than per row.
    */
-  trackSeam(index, segment) {
+  trackSeam(index, segment, finalSegmentIndex = COURSE.length - 1) {
     const seam = this.trackSeamScratch;
-    seam.next = COURSE[index + 1] ?? null;
+    // The default three-world race ends before the rest of COURSE. Treat its
+    // configured final segment as a terminal road, otherwise the rolling
+    // surface blends into the unreachable next crossing and falls away under
+    // the sideways finish pose.
+    seam.next = index < finalSegmentIndex ? (COURSE[index + 1] ?? null) : null;
     seam.previous = COURSE[index - 1] ?? null;
     seam.length = segment.length;
     if (seam.next) {
@@ -9144,7 +9304,7 @@ export class RaceRenderer {
       ?? (openingResponseCandidate?.preuploaded ? openingResponseCandidate : null);
     const workBankActivated = !isStaticScoria && !openingResponse;
     if (workBankActivated) this.activateNextTrackWorkGeometry();
-    const seam = this.trackSeam(state.segmentIndex, segment);
+    const seam = this.trackSeam(state.segmentIndex, segment, state.finalSegmentIndex);
     const coursePhase = COURSE_PHASE[state.segmentIndex] ?? 0;
     // The origin every row is measured from has to be stitched as well, or the
     // rows move smoothly while the point they are drawn relative to jumps.
@@ -9766,6 +9926,92 @@ export class RaceRenderer {
     cachedTrack.quality = this.quality;
     cachedTrack.current = current;
     return { current, samples };
+  }
+
+  updateFinishLine(state, segment, currentSample) {
+    const telemetry = this.finishLineState;
+    const finalSegmentIndex = Number.isInteger(state.finalSegmentIndex)
+      ? state.finalSegmentIndex
+      : COURSE.length - 1;
+    const isFinalSegment = state.segmentIndex === finalSegmentIndex;
+    const progress = segment.length;
+    const localDistance = isFinalSegment ? progress - this.logicalProgress : null;
+    const visible = isFinalSegment
+      && localDistance > -120
+      && localDistance < this.trackRows * this.trackSpacing - 40;
+    this.finishLine.visible = visible;
+    Object.assign(telemetry, {
+      visible,
+      segmentId: isFinalSegment ? segment.id : null,
+      finalSegmentIndex,
+      progress: isFinalSegment ? progress : null,
+      logicalProgress: this.logicalProgress,
+      localDistance,
+      crossed: isFinalSegment && localDistance <= 0,
+      roadHalfWidth: null,
+      bank: null,
+      coursePosition: null,
+      renderPosition: null,
+      activeDrawCalls: visible ? telemetry.drawables : 0,
+    });
+    if (!visible) return;
+
+    const sample = trackSample(segment, progress);
+    if (this.finishLinePaletteSegmentId !== segment.id) {
+      this.finishLinePaletteSegmentId = segment.id;
+      this.finishLineBright
+        .setHex(segment.accent)
+        .lerp(this.trackColors.white, 0.52)
+        .multiplyScalar(1.18);
+      const colors = this.finishChecker.geometry.getAttribute('color');
+      const parity = this.finishChecker.geometry.userData.checkerParity;
+      for (let vertex = 0; vertex < parity.length; vertex += 1) {
+        const color = parity[vertex] ? this.finishLineDark : this.finishLineBright;
+        colors.setXYZ(vertex, color.r, color.g, color.b);
+      }
+      colors.needsUpdate = true;
+      this.finishLineMarkerColor
+        .setHex(segment.accent)
+        .lerp(this.trackColors.white, 0.28)
+        .multiplyScalar(1.22);
+      this.finishLineSecondaryColor
+        .setHex(segment.secondary)
+        .lerp(this.trackColors.white, 0.46)
+        .multiplyScalar(1.2);
+      this.finishMarkers.setColorAt(0, this.finishLineMarkerColor);
+      this.finishMarkers.setColorAt(1, this.finishLineBright);
+      this.finishMarkers.setColorAt(2, this.finishLineSecondaryColor);
+      this.finishMarkers.instanceColor.needsUpdate = true;
+    }
+
+    this.finishLine.position.set(
+      sample.x - currentSample.x,
+      sample.y - currentSample.y,
+      -localDistance,
+    );
+    this.finishLine.rotation.set(0, 0, sample.bank);
+    this.finishChecker.scale.set(sample.width * 0.98, 1, 1);
+    for (let marker = 0; marker < 3; marker += 1) {
+      if (marker === 2) {
+        this.dummy.position.set(0, 11.55, 0);
+        this.dummy.rotation.set(0, 0, 0);
+        this.dummy.scale.set((sample.width + 1.35) * 2, 0.82, 0.82);
+        this.dummy.updateMatrix();
+        this.finishMarkers.setMatrixAt(marker, this.dummy.matrix);
+        continue;
+      }
+      const side = marker === 0 ? -1 : 1;
+      this.dummy.position.set(side * (sample.width + 0.96), 5.78, 0);
+      this.dummy.rotation.set(0, 0, 0);
+      this.dummy.scale.set(0.82, 11.56, 0.82);
+      this.dummy.updateMatrix();
+      this.finishMarkers.setMatrixAt(marker, this.dummy.matrix);
+    }
+    this.finishMarkers.instanceMatrix.needsUpdate = true;
+    telemetry.roadHalfWidth = sample.width;
+    telemetry.bank = sample.bank;
+    telemetry.coursePosition = [sample.x, sample.y, -progress];
+    telemetry.renderPosition = this.finishLine.position.toArray();
   }
 
   updateGates(state, segment, currentSample) {
@@ -10664,7 +10910,7 @@ export class RaceRenderer {
     // second of a segment is on the far side of the boundary. Unstitched, that
     // was the OLD curve extrapolated past its end one frame and the NEW curve
     // the next -- the camera's aim swinging between two different roads.
-    const seam = this.trackSeam(state.segmentIndex, segment);
+    const seam = this.trackSeam(state.segmentIndex, segment, state.finalSegmentIndex);
     const next = this.seamSample(
       segment.shortId === 'planet-1'
         ? sampleScoriaTrackInto(segment, this.logicalProgress + 80, this.scoriaFlowSamples.camera)
@@ -10763,6 +11009,7 @@ export class RaceRenderer {
     const morph = getMorphState(state);
     const inStormglassTouchdown = segment.shortId === 'planet-2' && this.logicalProgress < 855;
     this.decorRoot.visible = !inStormglassTouchdown;
+    this.updateFinishLine(state, segment, current);
     this.updateGates(state, segment, current);
     this.updateLaunchFallaway(state, segment);
     if (rendererProfile) markRendererProfile('gatesAndFallawayMs');
@@ -11903,6 +12150,48 @@ export class RaceRenderer {
     }).filter(Boolean);
   }
 
+  finishLineDiagnostics() {
+    const state = this.finishLineState;
+    const round = (value) => Number.isFinite(value) ? Number(value.toFixed(4)) : null;
+    const vector = (values) => Array.isArray(values) ? values.map(round) : null;
+    if (!state) {
+      return {
+        visible: false,
+        segmentId: null,
+        finalSegmentIndex: null,
+        progress: null,
+        logicalProgress: 0,
+        localDistance: null,
+        crossed: false,
+        roadHalfWidth: null,
+        bank: null,
+        coursePosition: null,
+        renderPosition: null,
+        checkerCells: FINISH_CHECKER_CELLS,
+        markerInstances: 3,
+        drawables: 2,
+        activeDrawCalls: 0,
+      };
+    }
+    return {
+      visible: state.visible,
+      segmentId: state.segmentId,
+      finalSegmentIndex: state.finalSegmentIndex,
+      progress: round(state.progress),
+      logicalProgress: round(state.logicalProgress),
+      localDistance: round(state.localDistance),
+      crossed: state.crossed,
+      roadHalfWidth: round(state.roadHalfWidth),
+      bank: round(state.bank),
+      coursePosition: vector(state.coursePosition),
+      renderPosition: vector(state.renderPosition),
+      checkerCells: state.checkerCells,
+      markerInstances: state.markerInstances,
+      drawables: state.drawables,
+      activeDrawCalls: state.activeDrawCalls,
+    };
+  }
+
   presentationTelemetry({ canonical = false } = {}) {
     const round = (value, places = 6) => Number((Number.isFinite(value) ? value : 0).toFixed(places));
     const summarizeFlow = (items = []) => {
@@ -11986,7 +12275,13 @@ export class RaceRenderer {
         timer: round(this.tireTrails?.timer ?? 0),
         lifeSum: round(trailLifeSum),
         positionSum: round(trailPositionSum, 4),
+        finishSkid: {
+          active: Boolean(this.tireTrails?.finishSkidActive),
+          remaining: round(this.tireTrails?.finishSkidRemaining ?? 0),
+          emissions: this.tireTrails?.finishSkidEmissions ?? 0,
+        },
       },
+      finishLine: this.finishLineDiagnostics(),
       combat: this.combatFX?.diagnostics().presentation ?? null,
     };
     if (!canonical) {
@@ -12043,6 +12338,7 @@ export class RaceRenderer {
       renderer: this.renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1',
       maxTextureSize: this.renderer.capabilities.maxTextureSize,
       camera: this.cameraDirector.getDiagnostics(),
+      finishLine: this.finishLineDiagnostics(),
       combat: this.combatFX.diagnostics(),
       bloom: this.bloomTelemetry(),
       startup: this.startupTimings,
@@ -12118,6 +12414,7 @@ export class RaceRenderer {
     const launchRoadGeometry = launch.geometryMetadata?.road;
     const launchHeatGeometry = launch.geometryMetadata?.heat;
     return {
+      finishLine: this.finishLineDiagnostics(),
       launch: {
         active: this.launchFallaway.visible,
         apertureVisible: Boolean(this.launchAperture.visible),
