@@ -1,4 +1,13 @@
 import * as THREE from '../vendor/three.module.min.js';
+import {
+  ENCOUNTERS,
+  CAMPAIGN_ATTACKS,
+  TRANSIT_TIMELINE,
+  encounterByIndex,
+  phaseBounds,
+  phaseForHealth,
+  transitBeat,
+} from './campaign-data.js';
 
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -7,6 +16,82 @@ const damp = (current, target, lambda, dt) => THREE.MathUtils.lerp(current, targ
 const angleDelta = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 const moveAngle = (current, target, maxDelta) => current + clamp(angleDelta(current, target), -maxDelta, maxDelta);
 const crossed = (previous, current, threshold) => previous < threshold && current >= threshold;
+
+export const BOSS_EVENT_GEOMETRY_KINDS = Object.freeze([
+  'arc', 'shadowArc', 'line', 'aimLine', 'mirrorBeam', 'aimAoe',
+  'lowRing', 'outer', 'lane', 'laneCross', 'sectors',
+]);
+
+export function bossEventAim(event = {}, aim, aimAngle = 0) {
+  const position = aim.clone();
+  const sideX = Math.cos(aimAngle);
+  const sideZ = -Math.sin(aimAngle);
+  const forwardX = Math.sin(aimAngle);
+  const forwardZ = Math.cos(aimAngle);
+  position.x += sideX * (event.offsetX || 0) + forwardX * (event.offsetZ || 0);
+  position.z += sideZ * (event.offsetX || 0) + forwardZ * (event.offsetZ || 0);
+  return position;
+}
+
+export function bossDistanceToRay(point, origin, angle, range) {
+  const dx = point.x - origin.x;
+  const dz = point.z - origin.z;
+  const fx = Math.sin(angle);
+  const fz = Math.cos(angle);
+  const along = dx * fx + dz * fz;
+  if (along < -.5 || along > range) return Infinity;
+  return Math.abs(dx * fz - dz * fx);
+}
+
+export function bossEventHits(event, {
+  playerPosition,
+  bossPosition,
+  attackFacing = 0,
+  aimAngle = 0,
+  aim = playerPosition,
+  laneAngle = 0,
+}) {
+  const groundedEnough = playerPosition.y < .95;
+  if (event.jumpSafe && !groundedEnough) return false;
+  const dx = playerPosition.x - bossPosition.x;
+  const dz = playerPosition.z - bossPosition.z;
+  const distance = Math.hypot(dx, dz);
+  if (event.kind === 'arc' || event.kind === 'shadowArc') {
+    const angle = Math.atan2(dx, dz);
+    const facing = event.kind === 'shadowArc' ? aimAngle : attackFacing;
+    return distance <= event.range && Math.abs(angleDelta(facing, angle)) <= event.arc * .5;
+  }
+  if (event.kind === 'line') {
+    return bossDistanceToRay(playerPosition, bossPosition, attackFacing, event.range) <= event.width;
+  }
+  if (event.kind === 'aimLine' || event.kind === 'mirrorBeam') {
+    return bossDistanceToRay(playerPosition, bossPosition, aimAngle, event.range) <= event.width;
+  }
+  if (event.kind === 'aimAoe') {
+    const eventAim = bossEventAim(event, aim, aimAngle);
+    return Math.hypot(playerPosition.x - eventAim.x, playerPosition.z - eventAim.z) <= event.radius;
+  }
+  if (event.kind === 'lowRing') return distance >= event.inner && distance <= event.outer && groundedEnough;
+  if (event.kind === 'outer') return Math.hypot(playerPosition.x, playerPosition.z) > event.safeRadius;
+  if (event.kind === 'lane') {
+    const angle = laneAngle + event.angleOffset;
+    return Math.abs(playerPosition.x * Math.cos(angle) - playerPosition.z * Math.sin(angle)) <= event.width;
+  }
+  if (event.kind === 'laneCross') {
+    // Preserve the authored diagonal used by both the warning and the original
+    // shipping hit test rather than introducing a boundary change during the
+    // testability extraction.
+    const diagonal = .707;
+    const left = Math.abs(playerPosition.x * diagonal - playerPosition.z * diagonal);
+    const right = Math.abs(playerPosition.x * diagonal + playerPosition.z * diagonal);
+    return Math.min(left, right) <= event.width;
+  }
+  if (event.kind === 'sectors') {
+    const sector = Math.floor(((Math.atan2(playerPosition.z, playerPosition.x) + TAU) % TAU) / (TAU / 4));
+    return sector % 2 === event.dangerParity;
+  }
+  return false;
+}
 
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -86,7 +171,7 @@ export const PLAYER_ACTIONS = Object.freeze({
   special: { duration: .88, hit: .45, range: 30, arc: TAU, damage: 172, poise: 65, hitstop: .11, move: 12, family: 'special', meter: 0, special: true }
 });
 
-const BOSS_PHASE_POOLS = Object.freeze({ 1: 2000, 2: 2400, 3: 3000 });
+const BOSS_PHASE_POOLS = ENCOUNTERS[0].phasePools;
 export const BOSS_HEALTH = Object.freeze({
   max: BOSS_PHASE_POOLS[1] + BOSS_PHASE_POOLS[2] + BOSS_PHASE_POOLS[3],
   phase2Threshold: BOSS_PHASE_POOLS[2] + BOSS_PHASE_POOLS[3],
@@ -102,7 +187,7 @@ export const DEFENSE_WINDOWS = Object.freeze({
   missileVisibleGrace: .22,
 });
 
-export const BOSS_ATTACKS = Object.freeze({
+const LEGACY_BOSS_ATTACKS = Object.freeze({
   measureCut: {
     phase: 1, anim: 'slash', duration: 1.72, telegraph: .46, cue: 'cut', punish: .39, recoveryStart: 1.33,
     events: [
@@ -189,6 +274,11 @@ export const BOSS_ATTACKS = Object.freeze({
   }
 });
 
+// Keep the complete roster on the public combat manifest while retaining the
+// original Vespera-only object above as a readable historical tuning record.
+// Legacy QA receives a filtered manifest from main.js when `?duel=1` is used.
+export const BOSS_ATTACKS = CAMPAIGN_ATTACKS;
+
 const PHASE_ATTACKS = {
   1: ['measureCut', 'plumbDrop', 'noonRing', 'spearline'],
   2: ['orbitShear', 'triangulation', 'zenithDive', 'coronaCage'],
@@ -209,7 +299,11 @@ function horizontalDistance(a, b) { return Math.hypot(a.x - b.x, a.z - b.z); }
 function facingTo(from, to) { return Math.atan2(to.x - from.x, to.z - from.z); }
 
 export class DuelGame {
-  constructor({ renderer, scene, camera, world, playerRig, bossRig, effects, audio, input, ui, seed = 1337 }) {
+  constructor({
+    renderer, scene, camera, world, playerRig, bossRig, effects, audio, input, ui,
+    seed = 1337,
+    campaignEnabled = true,
+  }) {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
@@ -221,6 +315,12 @@ export class DuelGame {
     this.input = input;
     this.ui = ui;
     this.seed = seed >>> 0;
+    this.campaignEnabled = Boolean(campaignEnabled);
+    this.encounterIndex = 0;
+    this.encounterTime = 0;
+    this.campaignTime = 0;
+    this.gravityWells = [];
+    this.travel = { from: 0, to: 0, switched: false, duration: TRANSIT_TIMELINE.duration };
     this.rng = new RNG(this.seed);
     this.mode = 'title';
     this.paused = false;
@@ -258,17 +358,31 @@ export class DuelGame {
     this._createTrails();
     this._createMissilePool();
     this._bindUI();
+    this._applyEncounterPresentation({ immediate: true });
     this._syncTransforms();
   }
 
+  _encounter() { return encounterByIndex(this.encounterIndex); }
+
+  _phaseBounds(phase = this.boss?.phase || 1) {
+    return phaseBounds(this._encounter(), phase);
+  }
+
   _initState() {
+    const encounter = this._encounter();
+    const [playerX, playerY, playerZ] = encounter.playerStart;
+    const [bossX, bossY, bossZ] = encounter.bossStart;
     this.player = {
-      position: new THREE.Vector3(0, 0, 8.5),
+      position: new THREE.Vector3(playerX, playerY, playerZ),
       velocity: new THREE.Vector3(),
       facing: Math.PI,
       hp: 100,
       maxHp: 100,
-      resolve: 2,
+      // The original compact duel keeps its two authored second chances. The
+      // longer mechanic-led campaign encounters get one additional stolen
+      // second so a solved multi-phase fight is not erased by one hostile
+      // overlap near the end.
+      resolve: encounter.strategy === 'duel' ? 2 : 3,
       action: 'idle',
       actionTime: 0,
       previousActionTime: 0,
@@ -301,11 +415,11 @@ export class DuelGame {
       dodgeDirection: new THREE.Vector3(0,0,-1)
     };
     this.boss = {
-      position: new THREE.Vector3(0, 0, -2.5),
+      position: new THREE.Vector3(bossX, bossY, bossZ),
       velocity: new THREE.Vector3(),
       facing: 0,
-      hp: BOSS_HEALTH.max,
-      maxHp: BOSS_HEALTH.max,
+      hp: encounter.health.max,
+      maxHp: encounter.health.max,
       phase: 1,
       action: 'bossIdle',
       actionId: null,
@@ -337,6 +451,14 @@ export class DuelGame {
       orbitStun: 0,
       reflectedMissileHits: 0,
       missileTutorialShown: false,
+      mechanicSealed: encounter.strategy !== 'duel',
+      mechanicBroken: 0,
+      mechanicBrokenIndices: [],
+      mechanicTotal: encounter.mechanicTargets?.[0] || 0,
+      mechanicOpen: encounter.strategy === 'duel',
+      mechanicOpenProgress: encounter.strategy === 'duel' ? 1 : 0,
+      exposureTime: 0,
+      activeNode: 0,
     };
     this.stats = {
       startTime: 0,
@@ -350,6 +472,9 @@ export class DuelGame {
       reflectedMissileDamage: 0,
       maxMeter: 0,
       phaseEntries: [1],
+      encounterEntries: [this.encounterIndex],
+      encounterClears: [],
+      encounterTimes: {},
       victory: false,
     };
   }
@@ -554,7 +679,7 @@ export class DuelGame {
   }
 
   setPaused(paused, source = 'input') {
-    if (!['playing', 'victorySequence'].includes(this.mode)) return;
+    if (!['playing', 'victorySequence', 'travelSequence'].includes(this.mode)) return;
     this.paused = paused;
     this.ui.setPaused(paused);
     this.input.clearHeld();
@@ -580,14 +705,90 @@ export class DuelGame {
     this._event('game.rematch', { rematchCount: this.rematchCount });
   }
 
+  _applyEncounterPresentation({ immediate = false, configureMechanic = true } = {}) {
+    const encounter = this._encounter();
+    this.world.setEncounter?.(this.encounterIndex, { immediate });
+    this.world.setPhase?.(this.boss?.phase || 1, { immediate });
+    this.bossRig.setEncounter?.(this.encounterIndex);
+    this.bossRig.setPhase?.(this.boss?.phase || 1);
+    this.audio.setEncounter?.(this.encounterIndex);
+    this.audio.setPhase?.(this.boss?.phase || 1);
+    this.ui.setEncounter?.(encounter, {
+      index: this.encounterIndex,
+      total: this.campaignEnabled ? ENCOUNTERS.length : 1,
+    });
+    if (configureMechanic && this.boss) this._configureEncounterMechanic({ silent: true });
+  }
+
+  _configureEncounterMechanic({ silent = false } = {}) {
+    const encounter = this._encounter();
+    const b = this.boss;
+    const total = encounter.mechanicTargets?.[Math.max(0, b.phase - 1)] || 0;
+    b.mechanicTotal = total;
+    b.mechanicBroken = 0;
+    b.mechanicBrokenIndices = [];
+    b.mechanicSealed = encounter.strategy !== 'duel';
+    b.mechanicOpen = encounter.strategy === 'duel';
+    b.mechanicOpenProgress = b.mechanicOpen ? 1 : 0;
+    b.activeNode = 0;
+    b.exposureTime = 0;
+    b.invulnerable = b.mechanicSealed || b.action === 'transition';
+    const state = {
+      strategy: encounter.strategy,
+      sealed: b.mechanicSealed,
+      broken: b.mechanicBroken,
+      total: b.mechanicTotal,
+      openProgress: b.mechanicOpenProgress,
+      activeNode: b.activeNode,
+      brokenIndices: [...b.mechanicBrokenIndices],
+    };
+    this.world.setMechanicState?.(state);
+    this.bossRig.setMechanicState?.(state);
+    this.ui.setMechanic?.({ ...state, label: encounter.mechanicLabel || '' });
+    if (!silent && encounter.strategy === 'mirror') this.ui.callout('LET HER SEE HERSELF', 'cyan');
+    if (!silent && encounter.strategy === 'tether') this.ui.callout('THREADSHOT THE CROWN', 'amber');
+  }
+
+  _loadEncounter(index, { preserveCampaign = false } = {}) {
+    const aggregate = preserveCampaign ? this.stats : null;
+    this.encounterIndex = Math.max(0, Math.min(ENCOUNTERS.length - 1, Math.round(index || 0)));
+    this.encounterTime = 0;
+    this._initState();
+    if (aggregate) {
+      this.stats = {
+        ...this.stats,
+        startTime: aggregate.startTime,
+        damage: aggregate.damage,
+        parries: aggregate.parries,
+        missileReflections: aggregate.missileReflections,
+        missileReturns: aggregate.missileReturns,
+        swordReturns: aggregate.swordReturns,
+        deflectReturns: aggregate.deflectReturns,
+        reflectedMissileDamage: aggregate.reflectedMissileDamage,
+        maxMeter: aggregate.maxMeter,
+        encounterEntries: [...aggregate.encounterEntries, this.encounterIndex],
+        encounterClears: [...aggregate.encounterClears],
+        encounterTimes: { ...aggregate.encounterTimes },
+      };
+    }
+    this._applyEncounterPresentation({ immediate: true });
+  }
+
   _resetFight(reason, rematch) {
     const oldEvents = this.events;
-    this._initState();
+    const preserveCampaign = this.campaignEnabled && !rematch && this.encounterIndex > 0;
+    if (rematch) {
+      this.campaignTime = 0;
+      this._loadEncounter(0, { preserveCampaign: false });
+    } else {
+      this._loadEncounter(this.encounterIndex, { preserveCampaign });
+    }
     this.events = oldEvents;
     this.worldGeneration++;
     this.mode = 'playing';
     this.paused = false;
     this.fightTime = 0;
+    this.encounterTime = 0;
     this.hitstop = 0;
     this.slowMotion = 1;
     this.cameraShake = 0;
@@ -604,10 +805,10 @@ export class DuelGame {
     this._victoryFracture = false;
     this.rng.reset(this.seed);
     this.effects.clear();
+    this.gravityWells.length = 0;
     this._clearMissiles();
     this.audio.stopAll();
     this.audio.reset();
-    this.world.setPhase?.(1, { immediate: true });
     this.playerRig.setPhase?.(1);
     this.playerRig.setSeams?.(0);
     this.bossRig.setPhase?.(1);
@@ -620,7 +821,8 @@ export class DuelGame {
     this.ui.hideResult();
     this.ui.setPaused(false);
     this.ui.showGame();
-    this.ui.callout(rematch ? 'THE DIAL REMEMBERS' : 'RISE ON THE BEAT', 'amber');
+    const encounter = this._encounter();
+    this.ui.callout(rematch ? 'THE SAINTS REMEMBER' : encounter.strategy === 'duel' ? 'RISE ON THE BEAT' : 'RISE · THE HUNT CONTINUES', 'amber');
     this._syncTransforms();
     document.getElementById('game')?.focus();
     document.getElementById('game')?.requestPointerLock?.().catch?.(() => {});
@@ -658,6 +860,8 @@ export class DuelGame {
 
     this.tick++;
     this.fightTime += dt;
+    this.campaignTime += dt;
+    if (this.mode === 'playing') this.encounterTime += dt;
     this.player.shotCooldown = Math.max(0, this.player.shotCooldown - dt);
     this.player.invulnerable = Math.max(0, this.player.invulnerable - dt);
     this.player.comboTime = Math.max(0, this.player.comboTime - dt);
@@ -685,9 +889,12 @@ export class DuelGame {
       this._updatePlayer(simDt);
       this._updateBoss(simDt);
       this._updateMissiles(simDt);
+      this._updateGravityWells(simDt);
       this._resolveSeparation();
     } else if (this.mode === 'victorySequence') {
       this._updateVictorySequence(simDt);
+    } else if (this.mode === 'travelSequence') {
+      this._updateTravelSequence(simDt);
     } else if (this.mode === 'deathSequence') {
       this._updateDeathSequence(simDt);
     }
@@ -860,7 +1067,10 @@ export class DuelGame {
     this.player.actionsUsed.add(action);
     this.player.lastAcceptedAction = action;
     this.player.lastAcceptedTick = this.tick;
-    this._event('player.action.start', { action, device: this.input.lastDevice });
+    this._event('player.action.start', {
+      action,
+      device: this.input.lastActionDevice || this.input.lastDevice,
+    });
   }
 
   _moveDirection() {
@@ -988,6 +1198,10 @@ export class DuelGame {
       return;
     }
     if (b.dead) return;
+    if (this._encounter().strategy === 'tether' && b.mechanicSealed && action === 'shot') {
+      if (horizontalDistance(p.position, b.position) <= attack.range + 3) this._breakCrownTether();
+      return;
+    }
     let hit = false;
     const distance = horizontalDistance(p.position, b.position);
     if (attack.ranged || attack.special) hit = distance <= attack.range;
@@ -1002,7 +1216,12 @@ export class DuelGame {
     if (b.invulnerable) {
       this.effects.sparks(contact, 0xc5c8d2, 10, 3.2);
       this.audio.hit(.45);
-      this.ui.callout('DIAL SEALED', 'danger');
+      const sealedCallout = this._encounter().strategy === 'mirror'
+        ? 'PRISM WARD · BAIT THE GAZE'
+        : this._encounter().strategy === 'tether'
+          ? 'CROWN SEALED · USE THREADSHOT'
+          : 'DIAL SEALED';
+      this.ui.callout(sealedCallout, 'danger');
       return;
     }
 
@@ -1063,6 +1282,99 @@ export class DuelGame {
     }
   }
 
+  _syncMechanicState() {
+    const encounter = this._encounter();
+    const b = this.boss;
+    const state = {
+      strategy: encounter.strategy,
+      sealed: b.mechanicSealed,
+      broken: b.mechanicBroken,
+      total: b.mechanicTotal,
+      openProgress: b.mechanicOpenProgress,
+      activeNode: b.activeNode,
+      brokenIndices: [...b.mechanicBrokenIndices],
+      exposureTime: b.exposureTime,
+    };
+    this.world.setMechanicState?.(state);
+    this.bossRig.setMechanicState?.(state);
+    this.ui.setMechanic?.({ ...state, label: encounter.mechanicLabel || '' });
+  }
+
+  _breakCrownTether() {
+    const b = this.boss;
+    // The crown's relight/phase-change pose is the readable reset beat between
+    // exposure cycles. Threadshot previously bypassed ordinary invulnerability
+    // and could cut the next node during that animation before it was actually
+    // presented to the player.
+    if (!b.mechanicSealed || b.mechanicBroken >= b.mechanicTotal
+      || b.dead || b.action === 'transition') return false;
+    const node = this.bossRig.nodes?.[b.activeNode];
+    const contact = new THREE.Vector3();
+    if (node?.core?.getWorldPosition) node.core.getWorldPosition(contact);
+    else contact.copy(b.position).add(_v1.set(0, 2.4, 0));
+    b.mechanicBroken++;
+    b.activeNode = Math.min(Math.max(0, b.mechanicTotal - 1), b.mechanicBroken);
+    this.player.hitConfirmed = true;
+    this.player.combo++;
+    this.player.comboTime = 2.7;
+    this._gainMeter(7, 'crownTether');
+    this.effects.burst(contact, 0xffcf6b, 34, 7.5);
+    this.effects.shockwave(contact, 0xa977ff, 3.2, .34);
+    this.audio.nodeBreak?.(b.mechanicBroken, b.mechanicTotal);
+    this.hitstop = Math.max(this.hitstop, .045);
+    this.cameraShake = Math.max(this.cameraShake, .42);
+    this.cameraShakeTime = .14;
+    this.ui.callout(`${b.mechanicBroken} / ${b.mechanicTotal} CROWN TETHER${b.mechanicBroken === 1 ? '' : 'S'} CUT`, 'amber');
+    this._event('mechanic.tether.break', { broken: b.mechanicBroken, total: b.mechanicTotal });
+    if (b.mechanicBroken >= b.mechanicTotal) this._openBossMechanic('tether');
+    else this._syncMechanicState();
+    return true;
+  }
+
+  _openBossMechanic(strategy) {
+    const b = this.boss;
+    const p = this.player;
+    const encounter = this._encounter();
+    let recovered = 0;
+    b.mechanicSealed = false;
+    b.mechanicOpen = true;
+    b.mechanicOpenProgress = 1;
+    b.invulnerable = false;
+    b.poise = 0;
+    b.actionId = null;
+    b.action = 'stagger';
+    b.actionTime = 0;
+    b.duration = strategy === 'tether' ? 1.18 : 1.0;
+    b.stunned = true;
+    b.telegraphing = false;
+    b.punishable = true;
+    if (strategy === 'tether') {
+      b.exposureTime = encounter.exposureDuration?.[b.phase] || 9;
+      // A complete crown sever releases the saintglass charge Cathedra was
+      // feeding into its furnace. Unlike Lacrima's small per-prism return,
+      // this is one larger reward for finishing the full precision sequence.
+      recovered = Math.min(10, p.maxHp - p.hp);
+      p.hp += recovered;
+      if (recovered > 0) {
+        this.effects.burst(p.position.clone().add(_v1.set(0, 1.1, 0)), 0xffca61, 18, 4.2);
+        this.effects.shockwave(p.position, 0xa977ff, 1.7, .28);
+      }
+      this.ui.callout('STAR-EATER DRAGGED DOWN', 'amber');
+    } else {
+      this.ui.callout('PRISM WARD SHATTERED', 'cyan');
+    }
+    this.audio.wardOpen?.(strategy);
+    this.effects.shockwave(b.position, strategy === 'tether' ? 0xffca61 : 0x7ff9ff, 8.5, .56);
+    this._syncMechanicState();
+    this._event('mechanic.open', {
+      strategy,
+      phase: b.phase,
+      duration: b.exposureTime,
+      recovered,
+      playerHp: p.hp,
+    });
+  }
+
   _contactPoint() {
     return this.player.position.clone().lerp(this.boss.position, .7).add(_v1.set(0, 1.45, 0));
   }
@@ -1111,17 +1423,13 @@ export class DuelGame {
     this.input.vibrate(55 + Math.min(80, damage), clamp(damage / 180, .12, .75), clamp(damage / 100, .25, 1));
     this._event('combat.hit', { source: 'player', target: 'boss', attack: action, damage: Number(damage.toFixed(1)), bossHp: Number(b.hp.toFixed(1)), hitstop });
 
-    const poiseThreshold = b.phase === 1 ? 105 : b.phase === 2 ? 125 : 150;
+    const poiseThreshold = this._encounter().poise?.[b.phase] || (b.phase === 1 ? 105 : b.phase === 2 ? 125 : 150);
     if (b.poise >= poiseThreshold && !['transition','death'].includes(b.action)) this._staggerBoss(action === 'launcher' ? 1.0 : .82);
     if (b.hp <= 0 && before > 0) {
       this._defeatBoss();
       return;
     }
-    const desiredPhase = b.hp <= BOSS_HEALTH.phase3Threshold
-      ? 3
-      : b.hp <= BOSS_HEALTH.phase2Threshold
-        ? 2
-        : 1;
+    const desiredPhase = phaseForHealth(this._encounter(), b.hp);
     if (desiredPhase > b.phase) this._enterPhase(desiredPhase);
   }
 
@@ -1496,6 +1804,9 @@ export class DuelGame {
   _updateBoss(dt) {
     const b = this.boss;
     if (b.dead) return;
+    const encounter = this._encounter();
+    const orbiting = (encounter.strategy === 'duel' && b.phase === 3)
+      || (encounter.strategy === 'tether' && b.mechanicSealed);
     b.orbitStun = Math.max(0, b.orbitStun - dt);
     b.previousActionTime = b.actionTime;
     b.actionTime += dt;
@@ -1504,11 +1815,12 @@ export class DuelGame {
     // contact makes an honest wind-up become an animation lie.
     if (!b.actionId) b.facing = moveAngle(b.facing, facingTo(b.position, this.player.position), dt * 8);
     b.poise = Math.max(0, b.poise - dt * 4.5);
-    if (b.phase === 3) this._updateFinalBossOrbit(dt, b.action === 'transition');
+    if (orbiting) this._updateFinalBossOrbit(dt, b.action === 'transition');
+    else if (encounter.strategy === 'tether' && b.mechanicOpen) this._updateTetherExposure(dt);
 
     if (b.action === 'transition') {
       if (b.actionTime >= b.duration) {
-        b.invulnerable = false;
+        b.invulnerable = b.mechanicSealed;
         b.action = 'bossIdle';
         b.actionId = null;
         b.actionTime = 0;
@@ -1532,7 +1844,7 @@ export class DuelGame {
         return b.actionTime >= Math.max(0, event.t - lead) && b.actionTime < event.t;
       });
       b.punishable = b.actionTime >= attack.recoveryStart;
-      if (b.phase !== 3) this._moveBossDuringAttack(attack, dt);
+      if (!orbiting) this._moveBossDuringAttack(attack, dt);
       this._updateBossWarnings(attack);
       attack.events.forEach((event, index) => {
         if (!b.hitEvents.has(index) && crossed(b.previousActionTime, b.actionTime, event.t)) {
@@ -1554,7 +1866,7 @@ export class DuelGame {
 
     b.cooldown -= dt;
     const distance = horizontalDistance(b.position, this.player.position);
-    if (b.phase === 3) {
+    if (orbiting) {
       if (b.cooldown <= 0 && b.actionTime >= .2) this._chooseBossAttack(distance);
       return;
     }
@@ -1601,6 +1913,46 @@ export class DuelGame {
     b.facing = moveAngle(b.facing, facingTo(b.position, this.player.position), dt * (transitioning ? 3.5 : 7.5));
   }
 
+  _updateTetherExposure(dt) {
+    const b = this.boss;
+    if (!b.mechanicOpen || b.dead || b.action === 'transition') return;
+    b.exposureTime = Math.max(0, b.exposureTime - dt);
+    const targetAngle = facingTo(b.position, this.player.position);
+    const targetDistance = 4.35;
+    const targetX = this.player.position.x - Math.sin(targetAngle) * targetDistance;
+    const targetZ = this.player.position.z - Math.cos(targetAngle) * targetDistance;
+    b.position.x = damp(b.position.x, targetX, 2.4, dt);
+    b.position.y = damp(b.position.y, 0, 5.5, dt);
+    b.position.z = damp(b.position.z, targetZ, 2.4, dt);
+    if (b.exposureTime <= 0) this._resealCrown();
+  }
+
+  _resealCrown() {
+    const b = this.boss;
+    if (this._encounter().strategy !== 'tether' || b.dead || b.mechanicSealed) return;
+    b.mechanicSealed = true;
+    b.mechanicOpen = false;
+    b.mechanicOpenProgress = 0;
+    b.mechanicBroken = 0;
+    b.mechanicBrokenIndices = [];
+    b.activeNode = 0;
+    b.exposureTime = 0;
+    b.invulnerable = true;
+    b.action = 'transition';
+    b.actionId = null;
+    b.actionTime = 0;
+    b.duration = 1.05;
+    b.stunned = false;
+    b.telegraphing = false;
+    b.punishable = false;
+    b.orbitAngle = Math.atan2(b.position.x, b.position.z);
+    this._syncMechanicState();
+    this.ui.callout('THE CROWN RELIGHTS', 'danger');
+    this.audio.transition?.(b.phase);
+    this.effects.shockwave(b.position, 0x8c63ff, 7.2, .5);
+    this._event('mechanic.tether.reseal', { phase: b.phase });
+  }
+
   _moveBossDuringAttack(attack, dt) {
     const b = this.boss;
     let speed = 0;
@@ -1620,34 +1972,38 @@ export class DuelGame {
   }
 
   _clampBoss() {
-    if (this.boss.phase === 3) return;
-    const radius = this.boss.phase === 3 ? 13.5 : 15.5;
+    const encounter = this._encounter();
+    if ((encounter.strategy === 'duel' && this.boss.phase === 3)
+      || (encounter.strategy === 'tether' && this.boss.mechanicSealed)) return;
+    const radius = Math.max(8, (encounter.arenaRadius || 18) - 1.15);
     const r = Math.hypot(this.boss.position.x, this.boss.position.z);
     if (r > radius) { this.boss.position.x *= radius / r; this.boss.position.z *= radius / r; }
   }
 
   _chooseBossAttack(distance) {
     const b = this.boss;
+    const encounter = this._encounter();
     if (!this._bossFramed()) {
       this.player.locked = true;
       b.cooldown = .32;
       this._event('camera.safety.reacquire', { reason: 'boss-offscreen' });
       return;
     }
-    let candidates = [...PHASE_ATTACKS[b.phase]];
-    if (b.phase === 3) {
+    let candidates = [...(encounter.phaseAttacks[b.phase] || PHASE_ATTACKS[b.phase])];
+    if (encounter.strategy === 'tether' && b.mechanicOpen) {
+      candidates = [...(encounter.exposureAttacks || candidates)];
+    } else if (encounter.strategy === 'mirror' && b.mechanicSealed) {
+      const gaze = candidates.find((id) => BOSS_ATTACKS[id]?.events?.some((event) => event.kind === 'mirrorBeam'));
+      if (gaze && (b.passiveTime > 1.8 || !b.attacksSeen.has(gaze))) candidates = [gaze];
+    } else if (encounter.strategy === 'duel' && b.phase === 3) {
       if (b.passiveTime > 4.6) candidates = ['totality', 'hourbreak'];
       else candidates = candidates.filter((id) => id !== b.lastAttack);
-    } else if (b.passiveTime > 3.1 && b.phase >= 2) candidates = ['coronaCage'];
-    else if (distance > 8) candidates = [b.phase === 1 ? 'spearline' : 'coronaCage'];
+    } else if (encounter.strategy === 'duel' && b.passiveTime > 3.1 && b.phase >= 2) candidates = ['coronaCage'];
+    else if (encounter.strategy === 'duel' && distance > 8) candidates = [b.phase === 1 ? 'spearline' : 'coronaCage'];
     else candidates = candidates.filter((id) => id !== b.lastAttack);
-    if (!candidates.length) candidates = [...PHASE_ATTACKS[b.phase]];
-    const openingOrders = {
-      1: ['measureCut','plumbDrop','noonRing','spearline'],
-      2: ['orbitShear','zenithDive','triangulation','coronaCage'],
-      3: ['twinMeridian','totality','hourbreak','blackSpearline'],
-    };
-    const unseen = openingOrders[b.phase].find((id) => !b.attacksSeen.has(id));
+    if (!candidates.length) candidates = [...(encounter.phaseAttacks[b.phase] || PHASE_ATTACKS[b.phase])];
+    const openingOrders = encounter.openingOrders;
+    const unseen = openingOrders[b.phase].find((id) => !b.attacksSeen.has(id) && candidates.includes(id));
     const id = unseen || candidates[this.rng.int(candidates.length)];
     this._startBossAttack(id);
   }
@@ -1688,6 +2044,8 @@ export class DuelGame {
       laneCross: .56,
       sectors: .68,
       missile: .74,
+      mirrorBeam: .72,
+      gravityWell: .7,
     };
     return Math.min(event.t, leadByKind[event.kind] ?? .5);
   }
@@ -1700,6 +2058,10 @@ export class DuelGame {
       const warningStart = Math.max(0, event.t - lead);
       if (b.actionTime + 1e-6 < warningStart) return;
       b.warningEvents.add(index);
+      if (event.retarget) {
+        b.aim.copy(this.player.position);
+        b.aimAngle = facingTo(b.position, b.aim);
+      }
       this._spawnBossEventTelegraph(event, lead);
       if (index > 0) {
         this.audio.telegraph(event.kind === 'missile' ? 'cast' : attack.cue);
@@ -1716,7 +2078,8 @@ export class DuelGame {
 
   _spawnBossEventTelegraph(event, duration) {
     const b = this.boss;
-    const pink = b.phase === 3 ? 0xd9a0ff : 0xff5ca8;
+    const encounter = this._encounter();
+    const pink = encounter.phaseAccent?.[b.phase - 1] || (b.phase === 3 ? 0xd9a0ff : 0xff5ca8);
     const bossPosition = () => b.position.clone().setY(.035);
     const line = (angle, range, width, lineDuration, followBoss = true) => {
       const from = bossPosition();
@@ -1746,10 +2109,12 @@ export class DuelGame {
         follow: this.bossRig.group,
       });
       for (const side of [-1, 1]) line(facing + side * event.arc * .5, event.range, .075, duration);
-    } else if (event.kind === 'aimLine') {
+    } else if (event.kind === 'aimLine' || event.kind === 'mirrorBeam') {
       line(b.aimAngle, event.range, event.width, duration);
     } else if (event.kind === 'aimAoe') {
-      this.effects.warning({ position: b.aim.clone().setY(.035), radius: event.radius, duration, color: pink, from: 1.7 });
+      this.effects.warning({ position: this._eventAim(event).setY(.035), radius: event.radius, duration, color: pink, from: 1.7 });
+    } else if (event.kind === 'gravityWell') {
+      this.effects.warning({ position: this._eventAim(event).setY(.035), radius: event.radius, duration, color: 0x9c6dff, from: .16 });
     } else if (event.kind === 'lowRing') {
       this.effects.warning({ position: bossPosition(), radius: event.outer, duration, color: 0xf4ae53, from: .12, follow: this.bossRig.group });
     } else if (event.kind === 'outer') {
@@ -1780,7 +2145,7 @@ export class DuelGame {
 
   _spawnBossTelegraph(attack) {
     const b = this.boss;
-    const pink = b.phase === 3 ? 0xd9a0ff : 0xff5ca8;
+    const pink = this._encounter().phaseAccent?.[b.phase - 1] || (b.phase === 3 ? 0xd9a0ff : 0xff5ca8);
     const bossPosition = () => b.position.clone().setY(.035);
     this._updateBossWarnings(attack);
     // Melee arcs are read from the weapon pose and committed facing; a modest
@@ -1801,6 +2166,10 @@ export class DuelGame {
     }
   }
 
+  _eventAim(event = {}) {
+    return bossEventAim(event, this.boss.aim, this.boss.aimAngle);
+  }
+
   _resolveBossHit(event, attackId, eventIndex) {
     const p = this.player, b = this.boss;
     if (event.kind === 'missile') {
@@ -1817,17 +2186,37 @@ export class DuelGame {
       });
       return;
     }
+    if (event.kind === 'gravityWell') {
+      this._spawnGravityWell(event, attackId, eventIndex);
+      this._event('boss.attack.active', {
+        move: attackId,
+        event: eventIndex,
+        kind: event.kind,
+        launched: true,
+        wouldHit: false,
+        framed: this._bossFramed(),
+      });
+      return;
+    }
+    const mirrorIntercepted = event.kind === 'mirrorBeam'
+      && this._resolveMirrorBeam(event, attackId, eventIndex);
     const framed = this._bossFramed();
-    const wouldHit = framed && this._bossEventHits(event);
-    const impactPos = event.kind === 'aimAoe' ? b.aim.clone() : p.position.clone();
+    const wouldHit = !mirrorIntercepted && framed && this._bossEventHits(event);
+    const impactPos = event.kind === 'aimAoe' ? this._eventAim(event) : p.position.clone();
     impactPos.y = .12;
     if (event.kind === 'lowRing' || event.kind === 'outer' || event.kind === 'sectors' || event.kind === 'laneCross') this.effects.shockwave(event.kind === 'outer' ? new THREE.Vector3(0,.04,0) : b.position, event.kind === 'lowRing' ? 0xf4ae53 : 0xff5ca8, event.outer || 10, .32);
-    if (['aimAoe','line','aimLine','lane','laneCross','sectors'].includes(event.kind)) this.effects.burst(impactPos, b.phase === 3 ? 0xb879ff : 0xff5ca8, 18, 5);
-    this.world.pulse?.(impactPos, 0xff5ca8, .6);
+    if (!mirrorIntercepted && ['aimAoe','line','aimLine','mirrorBeam','lane','laneCross','sectors'].includes(event.kind)) this.effects.burst(impactPos, this._encounter().phaseAccent?.[b.phase - 1] || 0xff5ca8, 18, 5);
+    if (!mirrorIntercepted) this.world.pulse?.(impactPos, this._encounter().accent || 0xff5ca8, .6);
     this.audio.bossRelease?.(event.kind, b.phase);
     this.cameraShake = Math.max(this.cameraShake, .35);
     this.cameraShakeTime = .12;
-    this._event('boss.attack.active', { move: attackId, event: eventIndex, wouldHit, framed });
+    this._event('boss.attack.active', {
+      move: attackId,
+      event: eventIndex,
+      wouldHit,
+      framed,
+      mirrorIntercepted,
+    });
     if (!wouldHit || p.action === 'death') return;
 
     const parryActive = p.action === 'parry'
@@ -1903,45 +2292,120 @@ export class DuelGame {
     this._damagePlayer(event.damage, event.knock || 2.5, attackId);
   }
 
+  _resolveMirrorBeam(event, attackId, eventIndex) {
+    const b = this.boss;
+    const p = this.player;
+    if (this._encounter().strategy !== 'mirror' || !b.mechanicSealed) return false;
+    const candidates = (this.world.mechanicTargets?.() || [])
+      .filter((target) => this._distanceToRay(target.position, b.position, b.aimAngle, event.range) <= event.width + 1.05)
+      .sort((left, right) => horizontalDistance(left.position, b.position) - horizontalDistance(right.position, b.position));
+    const target = candidates[0];
+    if (!target || b.mechanicBrokenIndices.includes(target.index)) return false;
+    b.mechanicBrokenIndices.push(target.index);
+    b.mechanicBroken = b.mechanicBrokenIndices.length;
+    const impact = target.position.clone().add(_v1.set(0, 1.9, 0));
+    this.effects.burst(impact, 0xbafcff, 46, 8.5);
+    this.effects.shockwave(target.position, 0xff91e2, 4.8, .42);
+    this.world.pulse?.(target.position, 0x83f8ff, .9);
+    this.audio.anchorBreak?.(b.mechanicBroken, b.mechanicTotal);
+    this.hitstop = Math.max(this.hitstop, .06);
+    this.slowMotion = Math.min(this.slowMotion, .62);
+    this.cameraShake = Math.max(this.cameraShake, .58);
+    this.cameraShakeTime = .18;
+    // Lacrima stole vitality into the living mirrors. Baiting her beam into a
+    // prism returns a small, visible portion of it, rewarding mastery of this
+    // encounter's core strategy without turning ordinary sword hits into
+    // passive sustain.
+    const recovered = Math.min(5, p.maxHp - p.hp);
+    p.hp += recovered;
+    if (recovered > 0) {
+      this.effects.burst(p.position.clone().add(_v2.set(0, 1.05, 0)), 0x83f8ff, 14, 3.8);
+      this.effects.shockwave(p.position, 0xbafcff, 1.45, .24);
+    }
+    this.ui.callout(`${b.mechanicBroken} / ${b.mechanicTotal} PRISM${b.mechanicBroken === 1 ? '' : 'S'} BROKEN`, 'cyan');
+    this._event('mechanic.mirror.break', {
+      move: attackId,
+      event: eventIndex,
+      target: target.index,
+      broken: b.mechanicBroken,
+      total: b.mechanicTotal,
+      recovered,
+      playerHp: p.hp,
+    });
+    if (b.mechanicBroken >= b.mechanicTotal) this._openBossMechanic('mirror');
+    else this._syncMechanicState();
+    return true;
+  }
+
+  _spawnGravityWell(event, attackId, eventIndex) {
+    const position = this._eventAim(event).setY(.04);
+    const well = {
+      id: `${attackId}:${eventIndex}:${this.tick}`,
+      position,
+      age: 0,
+      duration: Math.max(.4, event.duration || 2.8),
+      radius: event.radius || 4.5,
+      pull: event.pull || 10,
+      damage: event.damage || 18,
+      collapsed: false,
+    };
+    this.gravityWells.push(well);
+    this.effects.warning({ position: position.clone(), radius: well.radius, duration: well.duration, color: 0x8c63ff, from: .12 });
+    this.effects.shockwave(position, 0x5c37c8, well.radius * .58, .45);
+    this.world.pulse?.(position, 0x8e66ff, .82);
+    this.audio.gravityWell?.();
+    this._event('mechanic.gravity.spawn', {
+      id: well.id,
+      position: position.toArray().map((value) => Number(value.toFixed(2))),
+      radius: well.radius,
+      duration: well.duration,
+    });
+  }
+
+  _updateGravityWells(dt) {
+    if (!this.gravityWells.length) return;
+    const p = this.player;
+    for (const well of this.gravityWells) {
+      well.age += dt;
+      const dx = well.position.x - p.position.x;
+      const dz = well.position.z - p.position.z;
+      const distance = Math.hypot(dx, dz) || .001;
+      const reach = well.radius * 1.85;
+      if (distance < reach && well.age < well.duration) {
+        const strength = well.pull * Math.pow(1 - distance / reach, 1.45);
+        p.velocity.x += dx / distance * strength * dt;
+        p.velocity.z += dz / distance * strength * dt;
+      }
+      if (!well.collapsed && well.age >= well.duration) {
+        well.collapsed = true;
+        this.effects.burst(well.position.clone().add(_v1.set(0, .35, 0)), 0xc7a2ff, 58, 8.2);
+        this.effects.shockwave(well.position, 0xffc85e, well.radius * 1.22, .5);
+        this.cameraShake = Math.max(this.cameraShake, .62);
+        this.cameraShakeTime = .18;
+        if (distance <= well.radius && p.invulnerable <= 0 && p.action !== 'special') {
+          this._damagePlayer(well.damage, 4.2, 'gravityWell', _v2.set(-dx, 0, -dz));
+        }
+        this.audio.gravityCollapse?.();
+        this._event('mechanic.gravity.collapse', { id: well.id, hit: distance <= well.radius });
+      }
+    }
+    this.gravityWells = this.gravityWells.filter((well) => well.age < well.duration + .16);
+  }
+
   _bossEventHits(event) {
-    const p = this.player, b = this.boss;
-    const groundedEnough = p.position.y < .95;
-    if (event.jumpSafe && !groundedEnough) return false;
-    const dx = p.position.x - b.position.x;
-    const dz = p.position.z - b.position.z;
-    const distance = Math.hypot(dx,dz);
-    if (event.kind === 'arc' || event.kind === 'shadowArc') {
-      const angle = Math.atan2(dx,dz);
-      const facing = event.kind === 'shadowArc' ? b.aimAngle : b.attackFacing;
-      return distance <= event.range && Math.abs(angleDelta(facing, angle)) <= event.arc * .5;
-    }
-    if (event.kind === 'line') return this._distanceToRay(p.position, b.position, b.attackFacing, event.range) <= event.width;
-    if (event.kind === 'aimLine') return this._distanceToRay(p.position, b.position, b.aimAngle, event.range) <= event.width;
-    if (event.kind === 'aimAoe') return horizontalDistance(p.position, b.aim) <= event.radius;
-    if (event.kind === 'lowRing') return distance >= event.inner && distance <= event.outer && groundedEnough;
-    if (event.kind === 'outer') return Math.hypot(p.position.x,p.position.z) > event.safeRadius;
-    if (event.kind === 'lane') {
-      const angle = b.laneAngle + event.angleOffset;
-      return Math.abs(p.position.x * Math.cos(angle) - p.position.z * Math.sin(angle)) <= event.width;
-    }
-    if (event.kind === 'laneCross') {
-      const a = Math.abs(p.position.x * .707 - p.position.z * .707);
-      const c = Math.abs(p.position.x * .707 + p.position.z * .707);
-      return Math.min(a,c) <= event.width;
-    }
-    if (event.kind === 'sectors') {
-      const sector = Math.floor(((Math.atan2(p.position.z,p.position.x) + TAU) % TAU) / (TAU/4));
-      return sector % 2 === event.dangerParity;
-    }
-    return false;
+    const b = this.boss;
+    return bossEventHits(event, {
+      playerPosition: this.player.position,
+      bossPosition: b.position,
+      attackFacing: b.attackFacing,
+      aimAngle: b.aimAngle,
+      aim: b.aim,
+      laneAngle: b.laneAngle,
+    });
   }
 
   _distanceToRay(point, origin, angle, range) {
-    const dx = point.x - origin.x, dz = point.z - origin.z;
-    const fx = Math.sin(angle), fz = Math.cos(angle);
-    const along = dx * fx + dz * fz;
-    if (along < -.5 || along > range) return Infinity;
-    return Math.abs(dx * fz - dz * fx);
+    return bossDistanceToRay(point, origin, angle, range);
   }
 
   _bossFramed() {
@@ -1961,9 +2425,11 @@ export class DuelGame {
 
   _damagePlayer(damage, knock, source, impulse = null) {
     const p = this.player;
-    p.hp = Math.max(0, p.hp - damage);
-    p.damageTaken += damage;
-    this.stats.damage += damage;
+    const encounterScale = source === 'qa' ? 1 : (this._encounter().incomingDamageScale || 1);
+    const resolvedDamage = Math.max(1, Math.round(damage * encounterScale));
+    p.hp = Math.max(0, p.hp - resolvedDamage);
+    p.damageTaken += resolvedDamage;
+    this.stats.damage += resolvedDamage;
     p.meter = Math.max(0, p.meter - 22);
     p.combo = 0;
     p.comboTime = 0;
@@ -1983,7 +2449,7 @@ export class DuelGame {
     this.cameraShakeTime = .2;
     this.hitstop = Math.max(this.hitstop, .045);
     this.input.vibrate(150, .85, .65);
-    this._event('player.damage', { damage, source, hp: p.hp });
+    this._event('player.damage', { damage: resolvedDamage, source, hp: p.hp });
     if (p.hp <= 0) {
       if (p.resolve > 0) {
         p.resolve--;
@@ -2014,6 +2480,7 @@ export class DuelGame {
 
   _enterPhase(phase) {
     const b = this.boss;
+    const encounter = this._encounter();
     b.phase = phase;
     b.action = 'transition';
     b.actionId = null;
@@ -2025,17 +2492,20 @@ export class DuelGame {
     b.cooldown = .5;
     b.attacksSeen.clear();
     b.telegraphing = false;
-    if (phase === 3) {
+    if ((encounter.strategy === 'duel' && phase === 3) || encounter.strategy === 'tether') {
       b.orbitAngle = Math.atan2(b.position.x, b.position.z);
       b.orbitDirection = this.rng.next() < .5 ? -1 : 1;
       this._clearMissiles('phase-transition');
     }
+    this.gravityWells.length = 0;
     this.world.setPhase?.(phase);
     this.bossRig.setPhase?.(phase);
+    this._configureEncounterMechanic({ silent: true });
     this.audio.transition(phase);
-    this.effects.shockwave(b.position, phase === 3 ? 0xb774ff : 0xf4ae53, phase === 3 ? 13 : 9, .75);
-    this.effects.burst(b.position.clone().add(_v1.set(0,1.8,0)), phase === 3 ? 0xb774ff : 0xf4ae53, 70, 10);
-    this.ui.callout(phase === 2 ? 'THE DIAL BREAKS' : 'THE MERIDIAN RUPTURES', phase === 3 ? 'danger' : 'amber');
+    const phaseColor = encounter.phaseAccent?.[phase - 1] || (phase === 3 ? 0xb774ff : 0xf4ae53);
+    this.effects.shockwave(b.position, phaseColor, phase === 3 ? 13 : 9, .75);
+    this.effects.burst(b.position.clone().add(_v1.set(0,1.8,0)), phaseColor, 70, 10);
+    this.ui.callout(encounter.phaseCallouts?.[phase] || `PHASE ${phase}`, encounter.phaseTone?.[phase] || (phase === 3 ? 'danger' : 'amber'));
     this.stats.phaseEntries.push(phase);
     this._event('boss.phase.enter', { phase });
   }
@@ -2055,6 +2525,7 @@ export class DuelGame {
   _defeatBoss() {
     const b = this.boss;
     const p = this.player;
+    const encounter = this._encounter();
     b.dead = true;
     b.hp = 0;
     b.action = 'death';
@@ -2076,12 +2547,19 @@ export class DuelGame {
     this.mode = 'victorySequence';
     this._clearMissiles('boss-defeat');
     this.sequenceTime = 0;
-    this.stats.clearTime = this.fightTime;
-    this.stats.victory = true;
+    this.stats.encounterTimes[encounter.id] = Number(this.encounterTime.toFixed(3));
+    if (!this.stats.encounterClears.includes(this.encounterIndex)) this.stats.encounterClears.push(this.encounterIndex);
+    this.stats.clearTime = this.campaignEnabled ? this.campaignTime : this.fightTime;
+    this.stats.victory = !this.campaignEnabled || this.encounterIndex >= ENCOUNTERS.length - 1;
     this.effects.burst(b.position.clone().add(_v1.set(0,2,0)), 0xf4ae53, 110, 12);
     this.effects.shockwave(b.position, 0xf4ae53, 14, .85);
     this.audio.rupture();
-    this._event('boss.defeat', { clearTime: this.stats.clearTime });
+    this._event('boss.defeat', {
+      encounter: encounter.id,
+      encounterIndex: this.encounterIndex,
+      clearTime: this.stats.clearTime,
+      encounterTime: Number(this.encounterTime.toFixed(3)),
+    });
   }
 
   _updateDeathSequence(dt) {
@@ -2143,10 +2621,78 @@ export class DuelGame {
     }
     if (this.sequenceTime > 1.7 && !this._victorySound) { this._victorySound = true; this.audio.victory(); }
     if (this.sequenceTime > 2.3 && !this.resultVisible()) {
+      if (this.campaignEnabled && this.encounterIndex < ENCOUNTERS.length - 1) {
+        this._beginTravelSequence();
+        return;
+      }
       document.exitPointerLock?.();
       this.ui.showResult({ victory: true, time: this.stats.clearTime, rank: this.player.styleName, damage: this.stats.damage, parries: this.stats.parries });
       this._event('game.victory', { stats: { ...this.stats } });
     }
+  }
+
+  _beginTravelSequence() {
+    const from = this.encounterIndex;
+    const to = from + 1;
+    this.mode = 'travelSequence';
+    this.sequenceTime = 0;
+    this.travel = { from, to, switched: false, duration: TRANSIT_TIMELINE.duration };
+    this.gravityWells.length = 0;
+    this._clearMissiles('campaign-transit');
+    this.world.beginTransit?.(from, to);
+    this.ui.showTransit?.({ from: this._encounter(), to: encounterByIndex(to) });
+    this.audio.travel?.(from, to);
+    this._event('campaign.transit.begin', { from, to });
+  }
+
+  _switchTravelEncounter() {
+    if (this.travel.switched) return;
+    this.travel.switched = true;
+    const oldEvents = this.events;
+    this._loadEncounter(this.travel.to, { preserveCampaign: true });
+    this.events = oldEvents;
+    this.effects.clear();
+    this.gravityWells.length = 0;
+    this._clearMissiles();
+    this.playerRig.group.visible = false;
+    this.bossRig.group.visible = false;
+    this._event('campaign.encounter.loaded', {
+      encounter: this._encounter().id,
+      encounterIndex: this.encounterIndex,
+    });
+  }
+
+  _updateTravelSequence(dt) {
+    this.sequenceTime += dt;
+    const beat = transitBeat(this.sequenceTime / this.travel.duration);
+    const progress = beat.progress;
+    this.world.updateTransit?.(progress, this.time);
+    if (beat.actorsHidden) {
+      this.playerRig.group.visible = false;
+      this.bossRig.group.visible = false;
+    }
+    if (beat.swapped && !this.travel.switched) this._switchTravelEncounter();
+    this.ui.updateTransit?.(progress, { from: encounterByIndex(this.travel.from), to: encounterByIndex(this.travel.to) });
+    if (!beat.complete) return;
+
+    if (!this.travel.switched) this._switchTravelEncounter();
+    this.world.endTransit?.();
+    this.playerRig.group.visible = true;
+    this.bossRig.group.visible = true;
+    if (this.bossRig.weapon) this.bossRig.weapon.visible = true;
+    this.mode = 'playing';
+    this.sequenceTime = 0;
+    this._victorySound = false;
+    this._victoryFracture = false;
+    this.ui.hideTransit?.();
+    this.ui.showGame();
+    this.input.clearHeld();
+    this.input.clearBuffers();
+    this._configureEncounterMechanic({ silent: false });
+    this._syncTransforms();
+    document.getElementById('game')?.focus();
+    document.getElementById('game')?.requestPointerLock?.().catch?.(() => {});
+    this._event('campaign.transit.end', { encounter: this._encounter().id, encounterIndex: this.encounterIndex });
   }
 
   _resolveSeparation() {
@@ -2166,6 +2712,7 @@ export class DuelGame {
 
   _syncTransforms() {
     const p = this.player, b = this.boss;
+    const encounter = this._encounter();
     this.playerRig.group.position.copy(p.position);
     this.playerRig.group.rotation.y = p.facing;
     this.bossRig.group.position.copy(b.position);
@@ -2174,11 +2721,46 @@ export class DuelGame {
     if (!(this.mode === 'victorySequence' && this.resultVisible())) {
       this.playerRig.update?.({ action: playerAnim, actionTime: p.actionTime, moveSpeed: Math.hypot(p.velocity.x,p.velocity.z), airborne: !p.grounded, airJumps: p.airJumps, verticalVelocity: p.vy, facing: p.facing, healthRatio: p.hp/p.maxHp, telegraph: 0, stunned: p.action === 'hit', dead: p.action === 'death', victory: this.mode === 'victorySequence' }, this.time, 1/60);
     }
-    this.bossRig.update?.({ action: b.action, move: b.actionId || '', actionTime: b.actionTime, moveSpeed: Math.hypot(b.velocity.x,b.velocity.z), airborne: b.phase === 3 || (['dive','cast'].includes(b.action) && b.phase >= 2), facing: b.facing, healthRatio: b.hp/b.maxHp, telegraph: b.telegraphing ? 1-clamp01(b.actionTime/(BOSS_ATTACKS[b.actionId]?.telegraph || 1)) : 0, stunned: b.stunned, dead: b.dead, victory: false, phase: b.phase }, this.time, 1/60);
+    this.bossRig.update?.({
+      action: b.action,
+      move: b.actionId || '',
+      actionTime: b.actionTime,
+      moveSpeed: Math.hypot(b.velocity.x,b.velocity.z),
+      airborne: (encounter.strategy === 'duel' && b.phase === 3)
+        || (encounter.strategy === 'tether' && b.mechanicSealed)
+        || (['dive','cast','bombard','gravity'].includes(b.action) && b.phase >= 2),
+      facing: b.facing,
+      healthRatio: b.hp/b.maxHp,
+      telegraph: b.telegraphing ? 1-clamp01(b.actionTime/(BOSS_ATTACKS[b.actionId]?.telegraph || 1)) : 0,
+      stunned: b.stunned,
+      dead: b.dead,
+      victory: false,
+      phase: b.phase,
+      encounter: encounter.id,
+      mechanicSealed: b.mechanicSealed,
+      mechanicOpen: b.mechanicOpen,
+      mechanicBroken: b.mechanicBroken,
+      mechanicTotal: b.mechanicTotal,
+      exposureTime: b.exposureTime,
+    }, this.time, 1/60);
   }
 
   _updateCamera(dt) {
     const p = this.player, b = this.boss;
+    if (this.mode === 'travelSequence') {
+      const desired = this.world.transitCameraPosition || this.camera.position;
+      const target = this.world.transitCameraTarget || new THREE.Vector3(0, 1.5, 0);
+      this.camera.position.lerp(desired, 1 - Math.exp(-6.5 * dt));
+      this.camera.lookAt(target);
+      this.camera.fov = damp(this.camera.fov, 62, 5, dt);
+      this.camera.updateProjectionMatrix();
+      this.camera.updateMatrixWorld();
+      this.ui.positionTelegraph(50, 31, false);
+      return;
+    }
+    const encounter = this._encounter();
+    const airborneBoss = (encounter.strategy === 'duel' && b.phase === 3)
+      || (encounter.strategy === 'tether' && b.mechanicSealed);
     const camInput = this.input.consumeCamera();
     if (!p.locked) {
       this.cameraYaw -= camInput.x * .00225;
@@ -2189,7 +2771,7 @@ export class DuelGame {
       MIN_CAMERA_DISTANCE,
       MAX_CAMERA_DISTANCE,
     );
-    const focusWeight = p.locked ? (b.phase === 3 ? .34 : .255) : 0;
+    const focusWeight = p.locked ? (airborneBoss ? .34 : .255) : 0;
     const focus = _v1.copy(p.position).lerp(b.position, focusWeight).add(_v2.set(0,1.5,0));
     let nearestInbound = null;
     let nearestInboundDistance = Infinity;
@@ -2214,14 +2796,14 @@ export class DuelGame {
       const combatDistance = horizontalDistance(p.position, b.position);
       const sideAmount = THREE.MathUtils.lerp(3.05, 1.38, clamp01((combatDistance - 3) / 11));
       const side = _v3.crossVectors(_up, away).multiplyScalar(sideAmount);
-      phasePullback = b.phase === 3
+      phasePullback = airborneBoss
         ? clamp(
           (combatDistance - 6) * .12 + PHASE_THREE_CAMERA_COMPENSATION,
           1.0 + PHASE_THREE_CAMERA_COMPENSATION,
           3.0 + PHASE_THREE_CAMERA_COMPENSATION,
         )
         : 0;
-      const height = b.phase === 3 ? 4.15 : 3.28;
+      const height = airborneBoss ? 4.15 : 3.28;
       desired = p.position.clone().addScaledVector(away, this.cameraDistance + phasePullback).add(side).add(new THREE.Vector3(0,height,0));
       this.cameraYaw = Math.atan2(away.x, away.z);
     } else {
@@ -2239,7 +2821,7 @@ export class DuelGame {
     this.cameraCollisionCorrection = Math.max(0, desiredRadius - preferredCameraRadius);
     const edgeAssist = clamp01(this.cameraCollisionCorrection / 4.5);
     if (edgeAssist > 0) {
-      desired.y += edgeAssist * (b.phase === 3 ? 1.15 : .85);
+      desired.y += edgeAssist * (airborneBoss ? 1.15 : .85);
       if (p.locked) {
         focus.copy(p.position).lerp(b.position, THREE.MathUtils.lerp(focusWeight, .32, edgeAssist));
         focus.y += THREE.MathUtils.lerp(1.5, 1.44, edgeAssist);
@@ -2275,7 +2857,7 @@ export class DuelGame {
     const hostileMissiles = this.missiles?.some((missile) => missile.active && !missile.reflected) ? 1 : 0;
     const fovTarget = 56.5
       + edgeAssist * 4.2
-      + (b.phase === 3 ? 4.2 : 0)
+      + (airborneBoss ? 4.2 : 0)
       + hostileMissiles * 1.5
       + (['dodge','chase','special'].includes(p.action) ? 3.4 : 0)
       + (b.actionId === 'totality' ? 1.8 : 0);
@@ -2322,7 +2904,7 @@ export class DuelGame {
         ? BOSS_WEAPON_CAMERA_SHOW_DISTANCE
         : BOSS_WEAPON_CAMERA_HIDE_DISTANCE
     );
-    this.bossWeaponCameraOccluded = !weaponDriven && (weaponDistanceRisk || weaponScreenRisk);
+    this.bossWeaponCameraOccluded = this.encounterIndex === 0 && !weaponDriven && (weaponDistanceRisk || weaponScreenRisk);
     if (this.bossRig.weapon) this.bossRig.weapon.visible = !this.bossWeaponCameraOccluded;
     if (this.renderer.domElement?.dataset) {
       this.renderer.domElement.dataset.bossWeaponCameraDistance = this.bossWeaponCameraDistance.toFixed(3);
@@ -2410,12 +2992,27 @@ export class DuelGame {
         finite: finiteVec(missile.position) && finiteVec(missile.velocity),
       };
     });
-    const phaseFloor = b.phase === 1 ? BOSS_HEALTH.phase2Threshold : b.phase === 2 ? BOSS_HEALTH.phase3Threshold : 0;
-    const phaseCeiling = b.phase === 1 ? BOSS_HEALTH.max : b.phase === 2 ? BOSS_HEALTH.phase2Threshold : BOSS_HEALTH.phase3Threshold;
+    const bounds = this._phaseBounds(b.phase);
+    const encounter = this._encounter();
+    const orbiting = (encounter.strategy === 'duel' && b.phase === 3)
+      || (encounter.strategy === 'tether' && b.mechanicSealed);
     return {
-      buildId: 'secondhand-saint-1.5.0', bootId: this.bootId, rendererInstanceId: this.rendererInstanceId,
+      buildId: 'secondhand-saint-2.0.0', bootId: this.bootId, rendererInstanceId: this.rendererInstanceId,
       tick: this.tick, mode: this.mode, paused: this.paused, focused: document.hasFocus(),
       timeOrigin: performance.timeOrigin, fightTime: Number(this.fightTime.toFixed(3)), hitstop: Number(this.hitstop.toFixed(4)),
+      campaign: {
+        enabled: this.campaignEnabled,
+        encounterIndex: this.encounterIndex,
+        encounterCount: this.campaignEnabled ? ENCOUNTERS.length : 1,
+        encounterId: encounter.id,
+        area: encounter.area,
+        bossName: encounter.bossName,
+        strategy: encounter.strategy,
+        encounterTime: Number(this.encounterTime.toFixed(3)),
+        campaignTime: Number(this.campaignTime.toFixed(3)),
+        clears: [...this.stats.encounterClears],
+        travel: { ...this.travel, progress: this.mode === 'travelSequence' ? clamp01(this.sequenceTime / this.travel.duration) : 0 },
+      },
       qa: { debugMutationCount: this.debugMutationCount },
       input: { ...this.input.snapshot(), lastAcceptedAction: p.lastAcceptedAction, lastAcceptedTick: p.lastAcceptedTick },
       player: {
@@ -2426,15 +3023,25 @@ export class DuelGame {
       },
       boss: {
         position: b.position.toArray().map(v=>Number(v.toFixed(3))), facing: Number(b.facing.toFixed(3)), hp: Number(b.hp.toFixed(1)), maxHp: b.maxHp, phase: b.phase,
-        phaseHp: Number(Math.max(0, b.hp - phaseFloor).toFixed(1)), phaseMaxHp: phaseCeiling - phaseFloor,
+        phaseHp: Number(Math.max(0, b.hp - bounds.floor).toFixed(1)), phaseMaxHp: bounds.max,
         action: b.action, attack: b.actionId, actionTime: Number(b.actionTime.toFixed(3)), telegraphing: b.telegraphing, punishable: b.punishable, invulnerable: b.invulnerable,
         poise: Number(b.poise.toFixed(1)), stunned: b.stunned, dead: b.dead, onScreen: this._bossFramed(), finite: finiteVec(b.position),
-        orbiting: b.phase === 3 && !b.dead,
+        orbiting: orbiting && !b.dead,
         orbitRadius: Number(Math.hypot(b.position.x, b.position.z).toFixed(3)),
         orbitHeight: Number(b.position.y.toFixed(3)),
         orbitStun: Number(b.orbitStun.toFixed(3)),
-        unreachable: b.phase === 3,
+        unreachable: orbiting,
         reflectedMissileHits: b.reflectedMissileHits,
+        mechanic: {
+          strategy: encounter.strategy,
+          sealed: b.mechanicSealed,
+          open: b.mechanicOpen,
+          broken: b.mechanicBroken,
+          total: b.mechanicTotal,
+          activeNode: b.activeNode,
+          exposureTime: Number(b.exposureTime.toFixed(3)),
+          brokenIndices: [...b.mechanicBrokenIndices],
+        },
       },
       camera: {
         position: this.camera.position.toArray().map(v=>Number(v.toFixed(3))),
@@ -2467,7 +3074,11 @@ export class DuelGame {
         cameraVisibleSightlineHourGates: this.world.cameraVisibleSightlineHourGates || 0,
         cameraCompositionFocusCount: this.world.cameraCompositionFocusCount || 0,
         playerOutOfBounds: Math.hypot(p.position.x,p.position.z) > this._currentPlayerRadius() + .1,
-        bossOutOfBounds: Math.hypot(b.position.x,b.position.z) > (b.phase === 3 ? (this.world.finalBossOrbitRadius || 18.5) + 1.2 : 16),
+        bossOutOfBounds: Math.hypot(b.position.x,b.position.z) > (orbiting ? (this.world.finalBossOrbitRadius || 18.5) + 1.2 : (encounter.arenaRadius || 18) + .2),
+        mechanicTargets: (this.world.mechanicTargets?.() || []).map((target) => ({
+          index: target.index,
+          position: target.position.toArray().map((value) => Number(value.toFixed(3))),
+        })),
       },
       missiles: {
         capacity: this.missiles.length,
@@ -2477,6 +3088,14 @@ export class DuelGame {
         reflected: activeMissiles.filter((missile) => missile.reflected).length,
         entries: activeMissiles,
       },
+      gravityWells: this.gravityWells.map((well) => ({
+        id: well.id,
+        position: well.position.toArray().map((value) => Number(value.toFixed(3))),
+        age: Number(well.age.toFixed(3)),
+        duration: well.duration,
+        radius: well.radius,
+        collapsed: well.collapsed,
+      })),
       runtime: {
         draws: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures,
         particles: this.effects.snapshot().particles, warnings: this.effects.snapshot().warnings, missiles: activeMissiles.length, audioVoices: this.audio.snapshot().voices, sceneChildren: this.scene.children.length
@@ -2490,12 +3109,10 @@ export class DuelGame {
 
   _configureDebugPhase(phase, { settleWorld = false } = {}) {
     const b = this.boss;
+    const encounter = this._encounter();
+    const bounds = phaseBounds(encounter, phase);
     b.phase = phase;
-    b.hp = phase === 1
-      ? BOSS_HEALTH.max
-      : phase === 2
-        ? BOSS_HEALTH.phase2Threshold - 20
-        : BOSS_HEALTH.phase3Threshold - 20;
+    b.hp = phase === 1 ? encounter.health.max : Math.max(bounds.floor + 1, bounds.ceiling - 20);
     b.invulnerable = false;
     b.action = 'bossIdle';
     b.actionId = null;
@@ -2508,17 +3125,20 @@ export class DuelGame {
     b.orbitStun = 0;
     this.world.setPhase?.(phase);
     this.bossRig.setPhase?.(phase);
-    if (phase === 3) {
+    this._configureEncounterMechanic({ silent: true });
+    const orbiting = (encounter.strategy === 'duel' && phase === 3)
+      || (encounter.strategy === 'tether' && b.mechanicSealed);
+    if (orbiting) {
       const radius = this.world.finalBossOrbitRadius || 18.55;
       const height = this.world.finalBossFlightHeight || 5.2;
       b.orbitAngle = Math.PI;
       b.orbitDirection = 1;
       b.position.set(0, height, -radius);
-      this.player.position.set(0, 0, 8.5);
+      this.player.position.fromArray(encounter.playerStart);
       this.player.facing = Math.PI;
       b.facing = facingTo(b.position, this.player.position);
     } else {
-      b.position.set(0, 0, -2.5);
+      b.position.fromArray(encounter.bossStart);
       b.facing = 0;
     }
     if (settleWorld && this.world.update) {
@@ -2561,17 +3181,57 @@ export class DuelGame {
       const attackId = name.slice('attack:'.length);
       const attack = BOSS_ATTACKS[attackId];
       if (!attack) throw new Error(`unknown boss attack scenario: ${attackId}`);
+      const attackEncounter = ENCOUNTERS.findIndex((entry) => entry.id === (attack.encounter || 'vespera'));
+      if (attackEncounter >= 0) this.encounterIndex = attackEncounter;
       this._resetFight(`qa-${attackId}`, false);
       this._configureDebugPhase(attack.phase, { settleWorld: attack.phase === 3 });
       this.boss.cooldown = 0;
       this._startBossAttack(attackId);
     }
-    else if (name === 'phase2') { this.boss.hp = BOSS_HEALTH.phase2Threshold; this._enterPhase(2); }
-    else if (name === 'phase3') { this.boss.hp = BOSS_HEALTH.phase3Threshold; this._enterPhase(3); }
+    else if (name.startsWith('encounter:')) {
+      const key = name.slice('encounter:'.length).toLowerCase();
+      const numeric = Number(key);
+      const index = Number.isFinite(numeric)
+        ? clamp(Math.round(numeric), 0, ENCOUNTERS.length - 1)
+        : Math.max(0, ENCOUNTERS.findIndex((entry) => entry.id === key));
+      const oldEvents = this.events;
+      this._loadEncounter(index, { preserveCampaign: false });
+      this.events = oldEvents;
+      this.mode = 'playing';
+      this.ui.showGame();
+      this._syncTransforms();
+    }
+    else if (name === 'phase2') { this._configureDebugPhase(2, { settleWorld: true }); }
+    else if (name === 'phase3') { this._configureDebugPhase(3, { settleWorld: true }); }
     else if (name === 'victory') {
+      if (this.campaignEnabled && this.encounterIndex !== ENCOUNTERS.length - 1) {
+        const oldEvents = this.events;
+        this._loadEncounter(ENCOUNTERS.length - 1, { preserveCampaign: false });
+        this.events = oldEvents;
+      }
       this._configureDebugPhase(3, { settleWorld: true });
       this.boss.hp = 1;
       this._damageBoss(5,0,.01,'qa',this.boss.position.clone());
+    }
+    else if (name === 'transit') {
+      const oldEvents = this.events;
+      this._loadEncounter(0, { preserveCampaign: false });
+      this.events = oldEvents;
+      this.mode = 'playing';
+      this.ui.showGame();
+      this._configureDebugPhase(3, { settleWorld: true });
+      this.boss.hp = 1;
+      this._damageBoss(5, 0, .01, 'qa', this.boss.position.clone());
+      // Shipping play keeps the full 2.3 s collapse. This named QA scenario
+      // begins at its advertised transit boundary so deterministic capture is
+      // not coupled to a focus-sensitive cutscene prelude.
+      if (this.campaignEnabled && this.mode === 'victorySequence') {
+        this._beginTravelSequence();
+        // Land the deterministic scenario inside the radial star-drive. The
+        // ordinary campaign path never calls this block; its 5.6 s timing is
+        // still advanced exclusively by the fixed-step game loop.
+        for (let index = 0; index < 126; index += 1) this._updateTravelSequence(1 / 60);
+      }
     }
     else if (name === 'portrait') {
       this._resetFight('qa-portrait', false);
@@ -2602,7 +3262,7 @@ export class DuelGame {
       this._syncTransforms();
     }
     else if (name === 'death') { this.player.resolve = 0; this._damagePlayer(999,0,'qa'); }
-    else if (name === 'totality') { this._resetFight('qa-totality', false); this._configureDebugPhase(3, { settleWorld: true }); this.boss.cooldown = 0; this._startBossAttack('totality'); }
+    else if (name === 'totality') { this.encounterIndex = 0; this._resetFight('qa-totality', false); this._configureDebugPhase(3, { settleWorld: true }); this.boss.cooldown = 0; this._startBossAttack('totality'); }
     else if (name === 'missile-sword' || name === 'missile-deflect') return this._configureDebugMissileScenario(name);
     else if (name === 'parry') { this._startBossAttack(this.boss.phase === 3 ? 'twinMeridian' : 'measureCut'); }
     return this.snapshot();

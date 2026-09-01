@@ -1,4 +1,5 @@
 import * as THREE from '../vendor/three.module.min.js';
+import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js';
 
 const TAU = Math.PI * 2;
 const ARENA_RADIUS = 18.25;
@@ -527,6 +528,251 @@ function markShadows(root, castShadow, receiveShadow) {
     object.castShadow = castShadow;
     object.receiveShadow = receiveShadow;
   });
+}
+
+// Meridian's monumental silhouettes need to receive the key light, but making
+// every small statue finger, gate tick and pylon fitting render into the same
+// shadow map multiplied phase-I work without adding a readable shadow at the
+// combat camera. Keep the handful of broad structural silhouettes here; the
+// phase-II machinery opts in only while it is raised, and the distant final
+// orbit stays beauty-pass-only above the chasm. All authored geometry remains
+// lit and visible, and still receives Nera/Vespera's shadows.
+const MERIDIAN_SHADOW_OWNER = /^(?:arena-load-bearing-slab|suspended-meridian-undercroft|camera-occludable-dial-lip-segments|dial-lip-teeth)/;
+
+function applyMeridianShadowBudget(root) {
+  let casterCount = 0;
+  root.traverse((object) => {
+    if (!object.isMesh && !object.isInstancedMesh) return;
+    let owner = object;
+    let keepCaster = false;
+    while (owner) {
+      if (MERIDIAN_SHADOW_OWNER.test(owner.name || '')) {
+        keepCaster = true;
+        break;
+      }
+      if (owner === root) break;
+      owner = owner.parent;
+    }
+    object.castShadow = keepCaster;
+    if (keepCaster) casterCount += 1;
+  });
+  root.userData.shadowCasterCount = casterCount;
+}
+
+function mergeStaticMeshesByMaterial(root, {
+  batchName = 'batched-static-architecture',
+  excludeAncestorName = '',
+} = {}) {
+  root.updateMatrixWorld(true);
+  const inverseRoot = root.matrixWorld.clone().invert();
+  const buckets = new Map();
+  root.traverse((object) => {
+    if (!object.isMesh || object.isInstancedMesh || Array.isArray(object.material)) return;
+    let ancestor = object;
+    while (ancestor && ancestor !== root) {
+      if (excludeAncestorName && ancestor.name === excludeAncestorName) return;
+      ancestor = ancestor.parent;
+    }
+    const attributes = Object.keys(object.geometry.attributes).sort().join(',');
+    const key = `${object.material.uuid}|${object.geometry.index ? 'indexed' : 'plain'}|${attributes}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(object);
+  });
+
+  for (const objects of buckets.values()) {
+    if (objects.length < 2) continue;
+    const transformed = objects.map((object) => {
+      const geometry = object.geometry.clone();
+      geometry.applyMatrix4(inverseRoot.clone().multiply(object.matrixWorld));
+      return geometry;
+    });
+    const mergedGeometry = mergeGeometries(transformed, false);
+    transformed.forEach((geometry) => geometry.dispose());
+    if (!mergedGeometry) continue;
+    const merged = new THREE.Mesh(mergedGeometry, objects[0].material);
+    merged.name = `${batchName}-${objects[0].material.name || 'surface'}`;
+    merged.castShadow = objects.some((object) => object.castShadow);
+    merged.receiveShadow = objects.some((object) => object.receiveShadow);
+    objects.forEach((object) => object.parent?.remove(object));
+    root.add(merged);
+  }
+  root.updateMatrixWorld(true);
+}
+
+function createInstancedPrototypeBatch(prototype, roots, name) {
+  prototype.updateMatrixWorld(true);
+  const inversePrototype = prototype.matrixWorld.clone().invert();
+  const buckets = new Map();
+  const instanceMatrix = new THREE.Matrix4();
+
+  prototype.traverse((object) => {
+    if (!object.isMesh && !object.isInstancedMesh) return;
+    if (Array.isArray(object.material)) return;
+    const key = `${object.geometry.uuid}|${object.material.uuid}`;
+    if (!buckets.has(key)) {
+      buckets.set(key, {
+        geometry: object.geometry,
+        material: object.material,
+        castShadow: false,
+        receiveShadow: false,
+        localMatrices: [],
+      });
+    }
+    const bucket = buckets.get(key);
+    bucket.castShadow ||= object.castShadow;
+    bucket.receiveShadow ||= object.receiveShadow;
+    const objectLocal = inversePrototype.clone().multiply(object.matrixWorld);
+    if (object.isInstancedMesh) {
+      for (let index = 0; index < object.count; index += 1) {
+        object.getMatrixAt(index, instanceMatrix);
+        bucket.localMatrices.push(objectLocal.clone().multiply(instanceMatrix));
+      }
+    } else {
+      bucket.localMatrices.push(objectLocal);
+    }
+  });
+
+  const group = new THREE.Group();
+  group.name = name;
+  const batches = [];
+  for (const bucket of buckets.values()) {
+    const mesh = new THREE.InstancedMesh(
+      bucket.geometry,
+      bucket.material,
+      roots.length * bucket.localMatrices.length,
+    );
+    mesh.name = `${name}-${bucket.material.name || 'surface'}`;
+    mesh.castShadow = bucket.castShadow;
+    mesh.receiveShadow = bucket.receiveShadow;
+    mesh.frustumCulled = false;
+    group.add(mesh);
+    batches.push({ mesh, localMatrices: bucket.localMatrices });
+  }
+
+  const composed = new THREE.Matrix4();
+  function refresh() {
+    for (const root of roots) root.updateMatrix();
+    for (const batch of batches) {
+      let cursor = 0;
+      for (const root of roots) {
+        for (const localMatrix of batch.localMatrices) {
+          composed.multiplyMatrices(root.matrix, localMatrix);
+          batch.mesh.setMatrixAt(cursor, composed);
+          cursor += 1;
+        }
+      }
+      batch.mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+  refresh();
+  return { group, refresh };
+}
+
+// The Meridian contains many separately moving or camera-occludable pieces, so
+// flattening them into one static geometry would break its authored motion.
+// BatchedMesh preserves a matrix and visibility bit for every piece while
+// issuing one multi-draw submission per compatible material/shadow class.
+function createDynamicMeridianBatches(root) {
+  const sourceLayer = 31;
+  const buckets = new Map();
+  const candidates = [];
+
+  root.traverse((object) => {
+    if (!object.isMesh || object.isSkinnedMesh || object.isInstancedMesh || object.isBatchedMesh) return;
+    if (!object.geometry?.attributes?.position || !object.material || Array.isArray(object.material)) return;
+    if (object.material.transparent || object.material.isShaderMaterial || object.morphTargetInfluences
+      || object.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) return;
+    candidates.push(object);
+  });
+
+  for (const object of candidates) {
+    const attributes = Object.keys(object.geometry.attributes).sort().join(',');
+    const key = [
+      object.material.uuid,
+      object.geometry.index ? 'indexed' : 'plain',
+      attributes,
+      object.castShadow ? 'caster' : 'beauty-only',
+      object.receiveShadow ? 'receiver' : 'unshadowed',
+      object.renderOrder,
+    ].join('|');
+    if (!buckets.has(key)) buckets.set(key, {
+      material: object.material,
+      castShadow: object.castShadow,
+      receiveShadow: object.receiveShadow,
+      renderOrder: object.renderOrder,
+      objects: [],
+    });
+    buckets.get(key).objects.push(object);
+  }
+
+  const batches = [];
+  const inverseBatch = new THREE.Matrix4();
+  const localMatrix = new THREE.Matrix4();
+  for (const bucket of buckets.values()) {
+    if (bucket.objects.length < 2) continue;
+    let maxVertexCount = 0;
+    let maxIndexCount = 0;
+    for (const object of bucket.objects) {
+      maxVertexCount += object.geometry.attributes.position.count;
+      maxIndexCount += object.geometry.index?.count || 0;
+    }
+    const batch = new THREE.BatchedMesh(
+      bucket.objects.length,
+      maxVertexCount,
+      maxIndexCount,
+      bucket.material,
+    );
+    batch.name = `dynamic Meridian batch — ${bucket.material.name || 'surface'}`;
+    batch.castShadow = bucket.castShadow;
+    batch.receiveShadow = bucket.receiveShadow;
+    batch.renderOrder = bucket.renderOrder;
+    batch.frustumCulled = false;
+    batch.perObjectFrustumCulled = true;
+    batch.sortObjects = false;
+    batch.userData.dynamicMeridianBatch = true;
+    root.add(batch);
+
+    const entries = bucket.objects.map((source) => {
+      const instanceId = batch.addGeometry(source.geometry);
+      source.layers.set(sourceLayer);
+      return { source, instanceId };
+    });
+    batches.push({ batch, entries });
+  }
+
+  function effectivelyVisible(source) {
+    let object = source;
+    while (object && object !== root) {
+      if (!object.visible) return false;
+      object = object.parent;
+    }
+    return true;
+  }
+
+  function sync() {
+    root.updateMatrixWorld(true);
+    for (const { batch, entries } of batches) {
+      batch.updateMatrixWorld(true);
+      inverseBatch.copy(batch.matrixWorld).invert();
+      for (const { source, instanceId } of entries) {
+        localMatrix.multiplyMatrices(inverseBatch, source.matrixWorld);
+        batch.setMatrixAt(instanceId, localMatrix);
+        batch.setVisibleAt(instanceId, effectivelyVisible(source));
+      }
+    }
+  }
+
+  return {
+    batches,
+    sourceCount: batches.reduce((total, bucket) => total + bucket.entries.length, 0),
+    sync,
+    dispose() {
+      for (const { batch } of batches) {
+        batch.removeFromParent();
+        batch.dispose();
+      }
+    },
+  };
 }
 
 function buildWitnessStatue(materials) {
@@ -1230,8 +1476,32 @@ export function createWorld(scene, renderer) {
     root.add(seam);
 
     arenaGroup.add(root);
-    fractureSectors.push({ root, angle, parity, phase: sectorIndex * 0.71 });
+    fractureSectors.push({ root, plate, seam, angle, parity, phase: sectorIndex * 0.71 });
   }
+  const makeFractureBatch = (geometry, surface, count, name, renderOrder = 0) => {
+    const batch = new THREE.InstancedMesh(geometry, surface, count);
+    batch.name = name;
+    batch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    batch.frustumCulled = false;
+    batch.visible = false;
+    batch.castShadow = false;
+    batch.receiveShadow = renderOrder === 0;
+    batch.renderOrder = renderOrder;
+    arenaGroup.add(batch);
+    return batch;
+  };
+  const fractureBatches = {
+    light: makeFractureBatch(fractureSectorGeometry, materials.floorAlt, 6, 'six-batched-light-separating-dial-sectors'),
+    dark: makeFractureBatch(fractureSectorGeometry, materials.floorDark, 6, 'six-batched-dark-separating-dial-sectors'),
+    seams: makeFractureBatch(fractureSeamGeometry, fractureGlowMaterial, 12, 'twelve-batched-exposed-gold-seams', 3),
+  };
+  const fractureBatchList = Object.values(fractureBatches);
+  const fractureBatchInverse = new THREE.Matrix4();
+  const fractureBatchMatrix = new THREE.Matrix4();
+  fractureSectors.forEach((sector) => {
+    sector.plate.visible = false;
+    sector.seam.visible = false;
+  });
 
   const ringDefinitions = [
     [4.42, 4.62, materials.brass],
@@ -1661,10 +1931,48 @@ export function createWorld(scene, renderer) {
       shutterRoot,
       shutter,
       bladeRoot,
+      blade,
+      tip,
+      collar,
+      inlay,
       parity,
       baseAngle: angle,
     });
   }
+
+  // Preserve the independently moving escapement exactly, but submit its
+  // repeated geometry in six dynamic batches instead of forty meshes. Hidden
+  // source objects remain as transform pivots; their world matrices feed the
+  // instances and never enter the beauty or shadow passes themselves.
+  const makePhaseMachineryBatch = (geometry, surface, count, name) => {
+    const batch = new THREE.InstancedMesh(geometry, surface, count);
+    batch.name = name;
+    batch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    batch.frustumCulled = false;
+    batch.visible = false;
+    batch.castShadow = false;
+    batch.receiveShadow = true;
+    arenaGroup.add(batch);
+    return batch;
+  };
+  const phaseMachineryBatches = {
+    shutterTrim: makePhaseMachineryBatch(shutterGeometry, materials.stoneTrim, 4, 'four-batched-light-dial-shutters'),
+    shutterDark: makePhaseMachineryBatch(shutterGeometry, materials.stoneDark, 4, 'four-batched-dark-dial-shutters'),
+    blades: makePhaseMachineryBatch(bladeGeometry, materials.stoneTrim, 8, 'eight-batched-escapement-blades'),
+    tips: makePhaseMachineryBatch(bladeTipGeometry, materials.brass, 8, 'eight-batched-escapement-tips'),
+    collars: makePhaseMachineryBatch(bladeCollarGeometry, materials.brassDark, 8, 'eight-batched-escapement-collars'),
+    inlays: makePhaseMachineryBatch(bladeInlayGeometry, materials.glow, 8, 'eight-batched-escapement-inlays'),
+  };
+  const phaseMachineryBatchList = Object.values(phaseMachineryBatches);
+  const phaseMachineryInverse = new THREE.Matrix4();
+  const phaseMachineryMatrix = new THREE.Matrix4();
+  phaseTwoStructures.forEach((structure) => {
+    structure.shutter.visible = false;
+    structure.blade.visible = false;
+    structure.tip.visible = false;
+    structure.collar.visible = false;
+    structure.inlay.visible = false;
+  });
 
   const centralDial = new THREE.Mesh(
     new THREE.CylinderGeometry(4.52, 4.6, 0.09, 64),
@@ -1707,12 +2015,16 @@ export function createWorld(scene, renderer) {
   arenaGroup.add(hub);
 
   const crackRandom = seededRandom(0xb16c10c);
+  const crackGroup = new THREE.Group();
+  crackGroup.name = 'eleven-batched-flat-dial-fractures';
+  arenaGroup.add(crackGroup);
   for (let crack = 0; crack < 11; crack += 1) {
     const mark = new THREE.Mesh(makeFlatCrackGeometry(crackRandom, 7.2, 18.6), materials.ink);
     mark.position.y = 0.061;
     mark.receiveShadow = true;
-    arenaGroup.add(mark);
+    crackGroup.add(mark);
   }
+  mergeStaticMeshesByMaterial(crackGroup, { batchName: 'batched-eleven-flat-dial-fractures' });
 
   // Four cardinal gates frame the fight; the diagonal witnesses watch from detached plinths.
   const gatePrototype = buildHourGate(materials);
@@ -1726,6 +2038,13 @@ export function createWorld(scene, renderer) {
     gate.rotation.y = angle;
     gate.scale.setScalar(0.56);
     arenaGroup.add(gate);
+    // Collapse repeated stone/brass sub-parts inside each independently
+    // occludable gate. The pendulum remains a separate animated mesh and the
+    // eleven tick marks remain instanced.
+    mergeStaticMeshesByMaterial(gate, {
+      batchName: `batched-cardinal-hour-gate-${gateIndex + 1}`,
+      excludeAncestorName: 'gate-pendulum-pivot',
+    });
     hourGates.push(gate);
     const pendulumPivot = gate.getObjectByName('gate-pendulum-pivot');
     if (pendulumPivot) {
@@ -1740,25 +2059,41 @@ export function createWorld(scene, renderer) {
   }
 
   const witnessPrototype = buildWitnessStatue(materials);
+  const witnessRoots = [];
   for (let witnessIndex = 0; witnessIndex < 4; witnessIndex += 1) {
     const angle = Math.PI * 0.25 + witnessIndex / 4 * TAU;
-    const witness = witnessPrototype.clone(true);
+    const witness = new THREE.Object3D();
+    witness.name = `veiled-hour-witness-placement-${witnessIndex + 1}`;
     witness.position.set(Math.sin(angle) * 22.15, floorY - 0.02, Math.cos(angle) * 22.15);
     witness.rotation.y = angle + Math.PI;
     witness.scale.setScalar(witnessIndex % 2 === 0 ? 1.03 : 0.94);
-    arenaGroup.add(witness);
+    witnessRoots.push(witness);
   }
+  const witnessBatch = createInstancedPrototypeBatch(
+    witnessPrototype,
+    witnessRoots,
+    'four-instanced-veiled-hour-witnesses',
+  );
+  arenaGroup.add(witnessBatch.group);
 
   const pylonPrototype = buildNeedlePylon(materials, phaseMaterials);
+  const pylonRoots = [];
   for (let pylonIndex = 0; pylonIndex < 8; pylonIndex += 1) {
     const angle = Math.PI / 8 + pylonIndex / 8 * TAU;
-    const pylon = pylonPrototype.clone(true);
+    const pylon = new THREE.Object3D();
+    pylon.name = `meridian-needle-pylon-placement-${pylonIndex + 1}`;
     pylon.position.set(Math.sin(angle) * 21.1, floorY - 0.02, Math.cos(angle) * 21.1);
     pylon.rotation.y = angle;
     pylon.scale.setScalar(pylonIndex % 2 === 0 ? 0.88 : 0.73);
-    arenaGroup.add(pylon);
+    pylonRoots.push(pylon);
     floaters.push({ object: pylon, baseY: pylon.position.y, phase: pylonIndex * 0.7, amount: 0.045, sway: false });
   }
+  const pylonBatch = createInstancedPrototypeBatch(
+    pylonPrototype,
+    pylonRoots,
+    'eight-instanced-meridian-needle-pylons',
+  );
+  arenaGroup.add(pylonBatch.group);
 
   // Lighting: one deliberate shadow-casting key, with inexpensive non-shadow accents.
   const hemisphere = new THREE.HemisphereLight(0xa9c8e1, 0x17101a, 1.18);
@@ -1770,7 +2105,10 @@ export function createWorld(scene, renderer) {
   keyLight.position.set(-14, 28, 11);
   keyLight.target.position.set(0, 0, 0);
   keyLight.castShadow = true;
-  keyLight.shadow.mapSize.set(2048, 2048);
+  // Match the campaign arenas' 1024px key. The previous 2048px map made the
+  // already mesh-rich Meridian redraw four times as many shadow pixels as the
+  // new encounters for no gameplay-distance gain on Nera's silhouette.
+  keyLight.shadow.mapSize.set(1024, 1024);
   keyLight.shadow.camera.near = 1;
   keyLight.shadow.camera.far = 72;
   keyLight.shadow.camera.left = -28;
@@ -1788,29 +2126,6 @@ export function createWorld(scene, renderer) {
   rimLight.target.position.set(0, 2, 0);
   rimLight.castShadow = false;
   skyGroup.add(rimLight, rimLight.target);
-
-  const underLight = new THREE.PointLight(COLORS.phaseBlue, 44, 62, 1.75);
-  underLight.name = 'non-shadow-undercroft-glow';
-  underLight.position.set(0, -8.5, 0);
-  underLight.castShadow = false;
-  skyGroup.add(underLight);
-
-  const fractureStormLight = new THREE.PointLight(COLORS.phaseGold, 0, 54, 2);
-  fractureStormLight.name = 'phase-two-gold-storm-light';
-  fractureStormLight.position.set(-8, 10, 5);
-  fractureStormLight.castShadow = false;
-  skyGroup.add(fractureStormLight);
-
-  const ruptureStormLight = new THREE.PointLight(COLORS.phaseViolet, 0, 52, 1.8);
-  ruptureStormLight.name = 'phase-three-violet-chasm-light';
-  ruptureStormLight.position.set(0, -2.5, 0);
-  ruptureStormLight.castShadow = false;
-  skyGroup.add(ruptureStormLight);
-
-  const pulseLight = new THREE.PointLight(COLORS.phaseBlue, 0, 16, 2);
-  pulseLight.name = 'non-shadow-impact-echo';
-  pulseLight.castShadow = false;
-  skyGroup.add(pulseLight);
 
   const skyMaterial = makeSkyMaterial();
   const skyDome = new THREE.Mesh(new THREE.SphereGeometry(132, 48, 28), skyMaterial);
@@ -1995,6 +2310,12 @@ export function createWorld(scene, renderer) {
     pulsePool.push({ mesh, material, active: false, elapsed: 0, duration: 1, strength: 1 });
   }
 
+  applyMeridianShadowBudget(arenaGroup);
+  const meridianBatches = createDynamicMeridianBatches(arenaGroup);
+  meridianBatches.sync();
+  arenaGroup.userData.dynamicBatchCount = meridianBatches.batches.length;
+  arenaGroup.userData.dynamicBatchSourceCount = meridianBatches.sourceCount;
+
   let disposed = false;
   let phaseGoal = 0;
   let phaseBlend = 0;
@@ -2002,9 +2323,6 @@ export function createWorld(scene, renderer) {
   let phaseThreeBlend = 0;
   let lastUpdateTime = 0;
   let lastCombatIntensity = 0;
-  let pulseLightLife = 0;
-  let pulseLightDuration = 0.36;
-  let pulseLightStrength = 0;
   const activePhaseColor = new THREE.Color(COLORS.phaseBlue);
   const phaseBlue = new THREE.Color(COLORS.phaseBlue);
   const phaseGold = new THREE.Color(COLORS.phaseGold);
@@ -2015,9 +2333,9 @@ export function createWorld(scene, renderer) {
   const phaseColdLight = new THREE.Color(0xc7ecff);
   const phaseWarmLight = new THREE.Color(0xff9a45);
   const phaseVioletLight = new THREE.Color(0xc884ff);
-  const phaseGroundCold = new THREE.Color(0x17101a);
-  const phaseGroundWarm = new THREE.Color(0x3b0b04);
-  const phaseGroundVoid = new THREE.Color(0x09000f);
+  const phaseGroundCold = new THREE.Color(0x201926);
+  const phaseGroundWarm = new THREE.Color(0x4c1207);
+  const phaseGroundVoid = new THREE.Color(0x16031f);
   const cloudColdColors = [0x46647e, 0x607b92, 0x8eafc4].map((hex) => new THREE.Color(hex));
   const cloudWarmColors = [0x6d2116, 0x98351c, 0xd46a2a].map((hex) => new THREE.Color(hex));
   const cloudVoidColors = [0x21122f, 0x39204f, 0x6b3d82].map((hex) => new THREE.Color(hex));
@@ -2101,7 +2419,10 @@ export function createWorld(scene, renderer) {
     // Its huge projected curves repeatedly crossed readable combat space even
     // when only four distant sectors survived. The floor rim, cardinal gates,
     // witnesses, pylons, collision and arena radius remain fully independent.
-    if (!compositionFocuses.length) return;
+    if (!compositionFocuses.length) {
+      meridianBatches.sync();
+      return;
+    }
     const boundaryMask = boundarySegmentOcclusionMask(
       boundarySegmentAngles,
       cameraOrPosition,
@@ -2143,6 +2464,7 @@ export function createWorld(scene, renderer) {
       }
       boundarySegments.instanceMatrix.needsUpdate = true;
     }
+    meridianBatches.sync();
   }
 
   function pulse(position, color = COLORS.phaseBlue, strength = 1) {
@@ -2165,11 +2487,21 @@ export function createWorld(scene, renderer) {
     entry.material.color.set(color);
     entry.material.opacity = Math.min(0.92, 0.48 + normalizedStrength * 0.2);
 
-    pulseLight.position.copy(entry.mesh.position);
-    pulseLight.position.y += 1.15;
-    pulseLight.color.set(color);
-    pulseLightLife = pulseLightDuration;
-    pulseLightStrength = normalizedStrength;
+  }
+
+  function precompile(camera) {
+    // Arena impact echoes are pooled and hidden at boot. Their toneMapped:false
+    // variant is distinct from the ordinary effect rings, so compile one while
+    // temporarily visible instead of making the first boss release pay for it.
+    const representative = pulsePool[0]?.mesh;
+    if (!renderer?.compile || !camera || !representative) return;
+    const wasVisible = representative.visible;
+    representative.visible = true;
+    try {
+      renderer.compile(scene, camera);
+    } finally {
+      representative.visible = wasVisible;
+    }
   }
 
   function update(t = 0, dt = 0, intensity = 0) {
@@ -2202,6 +2534,8 @@ export function createWorld(scene, renderer) {
     const phaseTwoAmount = phaseTwoBlend * phaseTwoBlend * (3 - 2 * phaseTwoBlend);
     const ruptureAmount = closureAmount;
 
+    arenaGroup.updateWorldMatrix(true, false);
+    fractureBatchInverse.copy(arenaGroup.matrixWorld).invert();
     for (let index = 0; index < fractureSectors.length; index += 1) {
       const sector = fractureSectors[index];
       const separatedRadius = fractureSectorMiddle
@@ -2217,9 +2551,24 @@ export function createWorld(scene, renderer) {
         + sector.parity * phaseTwoAmount * 0.032
         + sector.parity * ruptureAmount * 0.047;
       sector.root.rotation.z = ruptureAmount * sector.parity * (0.11 + (index % 4) * 0.018);
+      sector.plate.updateWorldMatrix(true, false);
+      sector.seam.updateWorldMatrix(true, false);
+      const plateBatch = index % 2 === 0 ? fractureBatches.light : fractureBatches.dark;
+      plateBatch.setMatrixAt(Math.floor(index / 2),
+        fractureBatchMatrix.multiplyMatrices(fractureBatchInverse, sector.plate.matrixWorld));
+      fractureBatches.seams.setMatrixAt(index,
+        fractureBatchMatrix.multiplyMatrices(fractureBatchInverse, sector.seam.matrixWorld));
     }
+    fractureBatchList.forEach((batch) => {
+      batch.visible = true;
+      batch.instanceMatrix.needsUpdate = true;
+    });
     fractureGlowMaterial.opacity = phaseTwoAmount * (0.46 + Math.sin(safeTime * 4.4) * 0.08);
 
+    const phaseMachineryVisible = phaseTwoAmount > 0.006 || ruptureAmount > 0.006;
+    const castMachineryShadow = phaseTwoAmount > 0.08 && ruptureAmount < 0.22;
+    arenaGroup.updateWorldMatrix(true, false);
+    phaseMachineryInverse.copy(arenaGroup.matrixWorld).invert();
     for (let index = 0; index < phaseTwoStructures.length; index += 1) {
       const structure = phaseTwoStructures[index];
       const shutterRadius = 19 + ruptureAmount * (1.25 + (index % 3) * 0.18);
@@ -2245,7 +2594,36 @@ export function createWorld(scene, renderer) {
         + structure.parity * phaseTwoAmount * 0.035
         + structure.parity * ruptureAmount * 0.16;
       structure.bladeRoot.rotation.z = structure.parity * (phaseTwoAmount * 0.085 + ruptureAmount * 0.18);
+
+      structure.shutter.updateWorldMatrix(true, false);
+      structure.blade.updateWorldMatrix(true, false);
+      structure.tip.updateWorldMatrix(true, false);
+      structure.collar.updateWorldMatrix(true, false);
+      structure.inlay.updateWorldMatrix(true, false);
+      const shutterBatch = index % 2 === 0
+        ? phaseMachineryBatches.shutterTrim
+        : phaseMachineryBatches.shutterDark;
+      const shutterSlot = Math.floor(index / 2);
+      shutterBatch.setMatrixAt(shutterSlot,
+        phaseMachineryMatrix.multiplyMatrices(phaseMachineryInverse, structure.shutter.matrixWorld));
+      phaseMachineryBatches.blades.setMatrixAt(index,
+        phaseMachineryMatrix.multiplyMatrices(phaseMachineryInverse, structure.blade.matrixWorld));
+      phaseMachineryBatches.tips.setMatrixAt(index,
+        phaseMachineryMatrix.multiplyMatrices(phaseMachineryInverse, structure.tip.matrixWorld));
+      phaseMachineryBatches.collars.setMatrixAt(index,
+        phaseMachineryMatrix.multiplyMatrices(phaseMachineryInverse, structure.collar.matrixWorld));
+      phaseMachineryBatches.inlays.setMatrixAt(index,
+        phaseMachineryMatrix.multiplyMatrices(phaseMachineryInverse, structure.inlay.matrixWorld));
     }
+    phaseMachineryBatchList.forEach((batch) => {
+      batch.visible = phaseMachineryVisible;
+      batch.instanceMatrix.needsUpdate = phaseMachineryVisible;
+    });
+    phaseMachineryBatches.shutterTrim.castShadow = castMachineryShadow;
+    phaseMachineryBatches.shutterDark.castShadow = castMachineryShadow;
+    phaseMachineryBatches.blades.castShadow = castMachineryShadow;
+    phaseMachineryBatches.tips.castShadow = castMachineryShadow;
+    phaseMachineryBatches.collars.castShadow = castMachineryShadow;
 
     ruptureGroup.visible = ruptureAmount > 0.006;
     bossOrbitGroup.visible = ruptureAmount > 0.006;
@@ -2328,16 +2706,17 @@ export function createWorld(scene, renderer) {
       floater.object.position.y = floater.baseY + Math.sin(safeTime * 0.72 + floater.phase) * floater.amount * (1 + phaseBlend * 0.55);
       if (floater.sway) floater.object.rotation.z = Math.sin(safeTime * 0.43 + floater.phase) * 0.025 * (1 + combatIntensity);
     }
+    pylonBatch.refresh();
 
     for (const material of phaseMaterials) {
       material.emissive.copy(activePhaseColor);
       material.color.copy(activePhaseColor).lerp(phaseBone, 0.38);
       material.emissiveIntensity = 1.35 + combatIntensity * 0.75 + lightning * 0.85;
     }
-    underLight.color.copy(activePhaseColor);
-    underLight.intensity = 36 + phaseBlend * 18 + ruptureAmount * 22 + combatIntensity * 15 + lightning * 28;
-    fractureStormLight.intensity = phaseTwoAmount * (30 + combatIntensity * 15 + lightning * 22);
-    ruptureStormLight.intensity = ruptureAmount * (46 + combatIntensity * 22 + lightning * 30);
+    // Phase III's violet lift is carried by the animated emissive chasm walls,
+    // sky shader, hemisphere and both directional keys. A full-arena point
+    // light repeated the same colour story across every physical material and
+    // pushed the four-missile Totality peak over a refresh interval.
     hemisphere.color.copy(phaseColdLight).lerp(phaseWarmLight, warmSkyAmount).lerp(phaseVioletLight, voidSkyAmount);
     hemisphere.groundColor.copy(phaseGroundCold).lerp(phaseGroundWarm, warmSkyAmount).lerp(phaseGroundVoid, voidSkyAmount);
     hemisphere.intensity = 1.08 + phaseTwoAmount * 0.2 + lightning * 0.18;
@@ -2374,20 +2753,14 @@ export function createWorld(scene, renderer) {
         entry.material.opacity = 0;
       }
     }
-
-    if (pulseLightLife > 0) {
-      pulseLightLife = Math.max(0, pulseLightLife - safeDelta);
-      const pulseAmount = pulseLightLife / pulseLightDuration;
-      pulseLight.intensity = pulseAmount * pulseAmount * (22 + pulseLightStrength * 31);
-    } else {
-      pulseLight.intensity = 0;
-    }
+    meridianBatches.sync();
   }
 
   function dispose() {
     if (disposed) return;
     disposed = true;
     scene.remove(arenaGroup, skyGroup);
+    meridianBatches.dispose();
     disposeHierarchy(arenaGroup);
     disposeHierarchy(skyGroup);
 
@@ -2431,6 +2804,7 @@ export function createWorld(scene, renderer) {
     setPhase,
     setCameraOcclusion,
     pulse,
+    precompile,
     dispose,
   };
 }

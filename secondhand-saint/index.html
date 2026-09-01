@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#070812">
-  <meta name="description" content="SECONDHAND SAINT is a browser one-boss 3D sword duel. Saint Vespera keeps a second that was not hers to keep, and you have three phases to take it back.">
+  <meta name="description" content="SECONDHAND SAINT is a three-boss 3D character-action campaign. You play Nera, the Unbound, stealing back three buried seconds from three Saints across three entirely different arenas.">
   <title>SECONDHAND SAINT | Qualiacology</title>
   <link rel="canonical" href="https://qualiacology.com/secondhand-saint/" />
   <meta property="og:site_name" content="Qualiacology" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="SECONDHAND SAINT | Qualiacology" />
-  <meta property="og:description" content="One arena, one blade, three phases. Deflect what she throws back into her. Steal back the second she buried." />
+  <meta property="og:description" content="Three Saints. Three arenas. Steal back the seconds they buried." />
   <meta property="og:url" content="https://qualiacology.com/secondhand-saint/" />
   <meta property="og:image" content="https://qualiacology.com/assets/og/secondhand-saint-og-v1.jpg" />
   <meta property="og:image:width" content="1200" />
@@ -18,7 +18,7 @@
   <meta property="og:image:alt" content="A red-haired duelist in pearl armour standing on a vast blue clock-face arena, facing a black-and-gold masked saint across the dial" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SECONDHAND SAINT | Qualiacology" />
-  <meta name="twitter:description" content="One arena, one blade, three phases. Steal back the second she buried." />
+  <meta name="twitter:description" content="Three Saints. Three arenas. Steal back the seconds they buried." />
   <meta name="twitter:image" content="https://qualiacology.com/assets/og/secondhand-saint-og-v1.jpg" />
   <meta name="twitter:image:alt" content="A red-haired duelist facing a black-and-gold masked saint across a vast blue clock-face arena" />
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
@@ -63,9 +63,9 @@
 
     <section id="title-card" class="panel title-card" aria-labelledby="game-title">
       <div class="sigil" aria-hidden="true"><i></i><i></i><i></i></div>
-      <p class="eyebrow">AN ORIGINAL ONE-BOSS ACTION GAME</p>
+      <p class="eyebrow">AN ORIGINAL THREE-SAINT ACTION CAMPAIGN</p>
       <h1 id="game-title"><span>SECONDHAND</span><strong>SAINT</strong></h1>
-      <p class="tagline">Steal back the second she buried.</p>
+      <p class="tagline">Steal back the seconds they buried.</p>
       <button id="start-button" type="button">CROSS THE DIAL <kbd>ENTER</kbd></button>
       <p class="start-note">Headphones recommended · keyboard, mouse, or gamepad</p>
     </section>
@@ -74,8 +74,8 @@
       <div class="boss-hud">
         <div class="boss-heading">
           <span id="phase-name">I · THE MEASURED HAND</span>
-          <strong>SAINT VESPERA</strong>
-          <em>KEEPER OF THE BORROWED SECOND</em>
+          <strong id="boss-name">SAINT VESPERA</strong>
+          <em id="boss-title">KEEPER OF THE BORROWED SECOND</em>
         </div>
         <div id="boss-health-track" class="boss-track" role="progressbar" aria-label="Saint Vespera health" aria-valuemin="0" aria-valuemax="7400" aria-valuenow="7400" aria-valuetext="Phase I, 2,000 of 2,000 phase health">
           <i id="boss-health"></i>
@@ -83,6 +83,11 @@
           <b class="phase-break phase-two-break" aria-hidden="true"></b>
         </div>
         <div id="phase-health" class="phase-health" aria-hidden="true">PHASE RESERVE · 2,000 / 2,000</div>
+        <div id="mechanic-readout" class="mechanic-readout" aria-hidden="true">
+          <span id="mechanic-label">PRISM ANCHORS</span>
+          <div id="mechanic-pips" class="mechanic-pips"></div>
+          <em id="mechanic-hint">BAIT THE GAZE</em>
+        </div>
       </div>
 
       <div class="player-hud">
@@ -107,6 +112,17 @@
       <div class="reticle" id="reticle" aria-hidden="true"><i></i><b></b></div>
     </section>
 
+    <section id="transit-cinematic" class="transit-cinematic" aria-hidden="true">
+      <div class="transit-grain" aria-hidden="true"></div>
+      <div class="transit-copy">
+        <p id="transit-kicker">WOUNDLIGHT // SAINTFALL VECTOR</p>
+        <h2 id="transit-area">THE MIRROR TIDE</h2>
+        <strong id="transit-boss">LACRIMA · THE GLASS WIDOW</strong>
+        <div class="transit-rule"><i id="transit-progress"></i></div>
+        <em id="transit-status">BOARDING</em>
+      </div>
+    </section>
+
     <div id="controls" class="controls" aria-hidden="true">
       <div><kbd>WASD</kbd><span>MOVE</span></div>
       <div><kbd>SPACE</kbd><span>RISE</span></div>
@@ -125,7 +141,7 @@
       <h2>PAUSED</h2>
       <p><kbd>ESC</kbd> or <kbd>P</kbd> to return</p>
       <button id="resume-button" type="button">RESUME</button>
-      <button id="restart-button" class="quiet" type="button">RESTART DUEL</button>
+      <button id="restart-button" class="quiet" type="button">RESTART ENCOUNTER</button>
     </section>
 
     <section id="result-panel" class="panel result-panel" aria-hidden="true">
@@ -144,7 +160,7 @@
     <aside id="status-line" role="status">Loading the Meridian…</aside>
     <button id="mute-button" type="button" aria-label="Toggle sound">SOUND ON</button>
   </main>
-  <noscript>SECONDHAND SAINT requires JavaScript and WebGL2.</noscript>
+  <noscript>SECONDHAND SAINT requires JavaScript.</noscript>
   <script>
     // The duel takes the mouse. Fold the home pill away while it has it, so it
     // never sits over the fight, and bring it back the moment lock is released.

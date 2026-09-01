@@ -1,4 +1,5 @@
 import * as THREE from '../vendor/three.module.min.js';
+import { mergeGeometries } from '../vendor/addons/utils/BufferGeometryUtils.js';
 
 // SECONDHAND SAINT character rigs
 // --------------------------------
@@ -85,7 +86,7 @@ function resolvePhase(value) {
   return 1;
 }
 
-// Only the large silhouette-defining surfaces enter the 2048px arena shadow
+// Only the large silhouette-defining surfaces enter the arena shadow
 // pass. The rigs keep every close-up mesh in the beauty pass, but asking the
 // key light to redraw eyelashes, individual knuckles, filigree and tiny clock
 // teeth contributed no readable gameplay shadow and more than doubled the
@@ -97,14 +98,185 @@ function resolvePhase(value) {
 // in-file node names therefore tagged two empty Groups and left every armour,
 // cape and hair primitive as a non-caster, so the whole character was lit flat
 // with only the bare body mesh dropping shadow.
-const PLAYER_SHADOW_CASTERS = /sculpted human face|voluminous crimson hair crown|deep crimson rear hair mantle|continuous flexible duelist cuirass foundation|sculpted pearl (?:cuirass|dorsal)|layered scapular|pearl gauntlet articulated palm|fitted bracer|outer forearm plate|pauldron|ink-stroke blade|fitted duelist waist|pearl armoured hip foundation|sculpted pearl duelist boot|faceted knee underform|tapered greave|battle-skirt|crimson asymmetric inner panel|continuous tailored torso|continuous (?:arm|leg)|gorget|Nera_Armor_(?:Hard|Cloth)(?:_Mesh)?[0-9_]*(?:_export)?|Nera_Basemesh_Source[._]?(?:culturalibre_hair_17)?_export|Nera_Original_Hair_Cards_export/i;
-const BOSS_SHADOW_CASTERS = /hood cavity|reliquary hood fold|pointed hood brow|judgement mask|rear cowl|cathedral cuirass|sternum reliquary|cathedral mantle|mantle reliquary plate|cannon main housing|cannon rear turbine|reliquary hand articulated palm|porcelain forearm shell|greatblade|calligraphic mourning wing upper|mourning wing terminal|transforming war blade|reliquary waist|reliquary pelvis|reliquary foot|clockwork knee|porcelain greave|vestment|trailing chasuble|void stole|continuous cathedral|continuous vestment/i;
+const PLAYER_SHADOW_CASTERS = /voluminous crimson hair crown|deep crimson rear hair mantle|continuous flexible duelist cuirass foundation|sculpted pearl (?:cuirass|dorsal)|pauldron|ink-stroke blade|pearl armoured hip foundation|battle-skirt|crimson asymmetric inner panel|continuous tailored torso|continuous (?:arm|leg)|Nera_Armor_(?:Hard|Cloth)(?:_Mesh)?[0-9_]*(?:_export)?|Nera_Basemesh_Source[._]?(?:culturalibre_hair_17)?_export|Nera_Original_Hair_Cards_export/i;
+const BOSS_SHADOW_CASTERS = /vespera shadow proxy/i;
 
 function applyCharacterShadowBudget(root, essentialPattern) {
   root.traverse((object) => {
     if (!object.isMesh) return;
     object.castShadow = essentialPattern.test(object.name || '');
   });
+}
+
+// Procedural rigs are authored from many small, readable plates. Geometry that
+// shares one articulation parent and one material can be submitted as a single
+// mesh without changing its pixels or animation: the parent bone still carries
+// the whole batch. Individually animated/queried meshes stay protected.
+function mergeStaticSiblingMeshes(root, protectedObjects, registerGeometry) {
+  const visit = (parent) => {
+    for (const child of [...parent.children]) {
+      if (!child.isMesh && !child.isInstancedMesh) visit(child);
+    }
+
+    const buckets = new Map();
+    for (const object of [...parent.children]) {
+      if (!object.isMesh || object.isSkinnedMesh || object.isInstancedMesh
+        || object.children.length || protectedObjects.has(object) || Array.isArray(object.material)) continue;
+      const attributes = Object.keys(object.geometry.attributes).sort().join(',');
+      const key = [
+        object.material.uuid,
+        object.geometry.index ? 'indexed' : 'plain',
+        attributes,
+        object.visible ? 'visible' : 'hidden',
+        object.renderOrder,
+      ].join('|');
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(object);
+    }
+
+    for (const objects of buckets.values()) {
+      if (objects.length < 2) continue;
+      const transformed = objects.map((object) => {
+        object.updateMatrix();
+        const geometry = object.geometry.clone();
+        geometry.applyMatrix4(object.matrix);
+        return geometry;
+      });
+      const mergedGeometry = mergeGeometries(transformed, false);
+      transformed.forEach((geometry) => geometry.dispose());
+      if (!mergedGeometry) continue;
+      mergedGeometry.computeBoundingSphere();
+      registerGeometry(mergedGeometry);
+      const merged = new THREE.Mesh(mergedGeometry, objects[0].material);
+      merged.name = `batched ${objects.map((object) => object.name).join(' + ')}`;
+      merged.castShadow = objects.some((object) => object.castShadow);
+      merged.receiveShadow = objects.some((object) => object.receiveShadow);
+      merged.visible = objects[0].visible;
+      merged.renderOrder = objects[0].renderOrder;
+      objects.forEach((object) => parent.remove(object));
+      parent.add(merged);
+    }
+  };
+  visit(root);
+}
+
+// Vespera's silhouette is made from many independently articulated relic
+// plates. Merging only siblings preserves the animation, but still asks WebGL
+// to submit more than a hundred tiny meshes every frame. BatchedMesh lets those
+// pieces keep their own live matrices and visibility while sharing one draw per
+// material/shadow class. The original Objects stay in the rig on an unused
+// layer so animation markers, missile muzzles and authored transforms remain
+// inspectable; only their pixels move through the dynamic batches.
+function createDynamicCharacterBatches(root) {
+  const sourceLayer = 31;
+  const buckets = new Map();
+  const candidates = [];
+
+  root.traverse((object) => {
+    if (!object.isMesh || object.isSkinnedMesh || object.isInstancedMesh || object.isBatchedMesh) return;
+    if (!object.geometry?.attributes?.position || !object.material || Array.isArray(object.material)) return;
+    if (object.material.transparent || object.morphTargetInfluences
+      || object.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) {
+      // Transparent pieces need object-level depth sorting. Morph targets and
+      // custom render hooks likewise retain their ordinary Mesh submission.
+      return;
+    }
+    candidates.push(object);
+  });
+
+  for (const object of candidates) {
+    const attributes = Object.keys(object.geometry.attributes).sort().join(',');
+    const key = [
+      object.material.uuid,
+      object.geometry.index ? 'indexed' : 'plain',
+      attributes,
+      object.castShadow ? 'caster' : 'beauty-only',
+      object.receiveShadow ? 'receiver' : 'unshadowed',
+      object.renderOrder,
+    ].join('|');
+    if (!buckets.has(key)) buckets.set(key, {
+      material: object.material,
+      castShadow: object.castShadow,
+      receiveShadow: object.receiveShadow,
+      renderOrder: object.renderOrder,
+      objects: [],
+    });
+    buckets.get(key).objects.push(object);
+  }
+
+  const batches = [];
+  const inverseBatch = new THREE.Matrix4();
+  const localMatrix = new THREE.Matrix4();
+
+  for (const bucket of buckets.values()) {
+    // A one-object batch adds matrix-texture overhead without saving a draw.
+    if (bucket.objects.length < 2) continue;
+    let maxVertexCount = 0;
+    let maxIndexCount = 0;
+    for (const object of bucket.objects) {
+      maxVertexCount += object.geometry.attributes.position.count;
+      maxIndexCount += object.geometry.index?.count || 0;
+    }
+
+    const batch = new THREE.BatchedMesh(
+      bucket.objects.length,
+      maxVertexCount,
+      maxIndexCount,
+      bucket.material,
+    );
+    batch.name = `dynamic Vespera batch — ${bucket.material.name || 'surface'}`;
+    batch.castShadow = bucket.castShadow;
+    batch.receiveShadow = bucket.receiveShadow;
+    batch.renderOrder = bucket.renderOrder;
+    batch.frustumCulled = false;
+    batch.perObjectFrustumCulled = false;
+    batch.sortObjects = false;
+    batch.userData.dynamicCharacterBatch = true;
+    root.add(batch);
+
+    const entries = bucket.objects.map((source) => {
+      // Three r161's BatchedMesh uses one geometry slot as one independently
+      // transformed item; repeated source geometry is copied into another slot.
+      const instanceId = batch.addGeometry(source.geometry);
+      source.layers.set(sourceLayer);
+      return { source, instanceId };
+    });
+    batches.push({ batch, entries });
+  }
+
+  function effectivelyVisible(source) {
+    let object = source;
+    while (object && object !== root) {
+      if (!object.visible) return false;
+      object = object.parent;
+    }
+    return true;
+  }
+
+  function sync() {
+    root.updateMatrixWorld(true);
+    for (const { batch, entries } of batches) {
+      batch.updateMatrixWorld(true);
+      inverseBatch.copy(batch.matrixWorld).invert();
+      for (const { source, instanceId } of entries) {
+        localMatrix.multiplyMatrices(inverseBatch, source.matrixWorld);
+        batch.setMatrixAt(instanceId, localMatrix);
+        batch.setVisibleAt(instanceId, effectivelyVisible(source));
+      }
+    }
+  }
+
+  return {
+    batches,
+    sourceCount: batches.reduce((total, bucket) => total + bucket.entries.length, 0),
+    sync,
+    dispose() {
+      for (const { batch } of batches) {
+        batch.removeFromParent();
+        batch.dispose();
+      }
+    },
+  };
 }
 
 function makeShapeGeometry(points, depth = 0.04, bevel = 0.008) {
@@ -1102,6 +1274,29 @@ function makeSkirtGeometry({
   return geometry;
 }
 
+function makeTailoredCuirassFaceGeometry(width, height, depth) {
+  const shape = new THREE.Shape();
+  shape.moveTo(0, height * .5);
+  shape.bezierCurveTo(-width * .16, height * .53, -width * .44, height * .42, -width * .49, height * .2);
+  shape.bezierCurveTo(-width * .53, -height * .05, -width * .42, -height * .34, -width * .3, -height * .47);
+  shape.lineTo(0, -height * .53);
+  shape.lineTo(width * .3, -height * .47);
+  shape.bezierCurveTo(width * .42, -height * .34, width * .53, -height * .05, width * .49, height * .2);
+  shape.bezierCurveTo(width * .44, height * .42, width * .16, height * .53, 0, height * .5);
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    steps: 1,
+    curveSegments: 18,
+    bevelEnabled: true,
+    bevelSegments: 3,
+    bevelSize: depth * .42,
+    bevelThickness: depth * .38,
+  });
+  geometry.translate(0, 0, -depth * .5);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 // Nera's authored shell has pearl armour across the shoulder blades, but the
 // hair and cape cover it, so from behind she has no shoulder line at all and
 // reads as a pointed column. This adds the one shape the character has always
@@ -1133,6 +1328,42 @@ function buildAuthoredShoulderYoke(ctx, bones, surfaces) {
 
   const yoke = new THREE.Group();
   yoke.name = 'high pearl gorget assembly';
+
+  // A single close-fitted shell carries the gorget all the way down over the
+  // authored torso. It follows the same silhouette instead of changing Nera's
+  // form, but replaces the broken-up bare/front read with one continuous suit.
+  const highCuirass = makeOrganicGeometry([
+    [shoulderHalf * .08, shoulderHalf * .96, shoulderHalf * .76, 0, shoulderHalf * .26],
+    [-shoulderHalf * .34, shoulderHalf * 1.43, shoulderHalf * 1.08, 0, shoulderHalf * .25],
+    [-shoulderHalf * 1.06, shoulderHalf * 1.48, shoulderHalf * 1.18, 0, shoulderHalf * .22],
+    [-shoulderHalf * 1.78, shoulderHalf * 1.30, shoulderHalf * .96, 0, shoulderHalf * .14],
+    [-shoulderHalf * 2.5, shoulderHalf * .98, shoulderHalf * .78, 0, shoulderHalf * .08],
+  ], 32);
+  ctx.mesh(yoke, highCuirass, ivory, {
+    name: 'continuous high pearl duelist cuirass',
+    position: [0, -shoulderHalf * .1, 0],
+    receiveShadow: true,
+  });
+  const breastplate = makeTailoredCuirassFaceGeometry(
+    shoulderHalf * .98,
+    shoulderHalf * 2.16,
+    shoulderHalf * .09,
+  );
+  for (const side of [-1, 1]) {
+    ctx.mesh(yoke, breastplate, ivory, {
+      name: `${side < 0 ? 'left' : 'right'} sculpted pearl high breastplate face`,
+      position: [side * shoulderHalf * .41, -shoulderHalf * 1.21, shoulderHalf * 1.08],
+      rotation: [0, side * .16, side * -.018],
+      receiveShadow: true,
+    });
+  }
+  const sternum = new THREE.BoxGeometry(shoulderHalf * .115, shoulderHalf * 1.78, shoulderHalf * .07, 1, 5, 1);
+  ctx.mesh(yoke, sternum, gold, {
+    name: 'high cuirass sternum blade',
+    position: [0, -shoulderHalf * 1.04, shoulderHalf * 1.2],
+    rotation: [0, 0, Math.PI * .01],
+    receiveShadow: true,
+  });
 
   // The collar hugs the neck. A wide flare here reads as a flat shelf across
   // the chest from the front rather than as armour, so it stays close.
@@ -1290,6 +1521,62 @@ function buildAuthoredHair(ctx, bones, surface) {
   return hair;
 }
 
+// The imported face has survived enough speculative surgery. This suit-matched
+// helmet solves the read at the silhouette level: pearl side shells, a smoked
+// cyan face shield, and a deliberate rear port where the authored crimson hair
+// remains the loudest shape. It is head-local and therefore inherits every
+// existing animation without touching the retarget or the frozen GLB.
+function buildAuthoredHelmet(ctx, bones, surfaces) {
+  const head = bones.get('head');
+  if (!head) return null;
+  const helmet = new THREE.Group();
+  helmet.name = 'Nera open-back saintfall helmet';
+  helmet.position.set(0, .03, .027);
+
+  const shellOptions = [
+    { start: 2.34, length: 2.06, side: 'left' },
+    { start: 5.02, length: 2.05, side: 'right' },
+  ];
+  shellOptions.forEach(({ start, length, side }) => {
+    const geometry = new THREE.SphereGeometry(1, 28, 16, start, length, .08, 2.72);
+    ctx.mesh(helmet, geometry, surfaces.ivory, {
+      name: `${side} pearl helmet shell`,
+      scale: [.113, .156, .142],
+      receiveShadow: true,
+    });
+  });
+
+  const visorGeometry = new THREE.SphereGeometry(1, 30, 16, .76, 1.62, .56, 1.9);
+  ctx.mesh(helmet, visorGeometry, surfaces.visor, {
+    name: 'smoked cyan saintfall visor',
+    position: [0, -.004, .009],
+    scale: [.108, .15, .148],
+    castShadow: false,
+    receiveShadow: true,
+  });
+
+  const brow = new THREE.BoxGeometry(.16, .016, .024, 5, 1, 1);
+  ctx.mesh(helmet, brow, surfaces.gold, {
+    name: 'helmet visor brow',
+    position: [0, .066, .139],
+    rotation: [-.12, 0, 0],
+    receiveShadow: true,
+  });
+  for (const side of [-1, 1]) {
+    const temple = new THREE.BoxGeometry(.023, .118, .035, 1, 4, 1);
+    ctx.mesh(helmet, temple, surfaces.gold, {
+      name: `${side < 0 ? 'left' : 'right'} helmet temple rail`,
+      position: [side * .102, -.012, .088],
+      rotation: [.08, side * -.16, side * -.08],
+      receiveShadow: true,
+    });
+  }
+
+  head.add(helmet);
+  helmet.traverse((object) => { object.frustumCulled = false; });
+  return helmet;
+}
+
 function normalizeAuthoredPlayerMaterials(root) {
   const materials = new Set();
   const textures = new Set();
@@ -1347,6 +1634,10 @@ function normalizeAuthoredPlayerMaterials(root) {
       if ('clearcoatRoughness' in material) material.clearcoatRoughness = 0.18;
       if ('specularIntensity' in material) material.specularIntensity = 0.78;
       material.specularColor?.setHex(0xffead0);
+      if (material.emissive) {
+        material.emissive.setHex(0x18120c);
+        material.emissiveIntensity = 0.1;
+      }
     } else if (isGoldArmor) {
       material.color?.setHex(0xd4a14a);
       if ('metalness' in material) material.metalness = 0.8;
@@ -1437,6 +1728,10 @@ function normalizeAuthoredPlayerMaterials(root) {
       if ('sheen' in material) material.sheen = 0.4;
       material.sheenColor?.setHex(0xffbfa2);
       if ('sheenRoughness' in material) material.sheenRoughness = 0.85;
+      if (material.emissive) {
+        material.emissive.setHex(0x1d0905);
+        material.emissiveIntensity = 0.13;
+      }
     }
     if (name.includes('low-poly')) {
       // Eyes need a specular catchlight more than they need a colour. Wet and
@@ -1888,10 +2183,17 @@ function createPlayerVisualBridge(authoredShell, {
             map: makeHairStriationTexture(),
             side: THREE.DoubleSide,
           }),
+          visor: new THREE.MeshPhysicalMaterial({
+            name: 'neraSaintfallVisor', color: 0x07141d, roughness: 0.12, metalness: 0.46,
+            transmission: 0.08, transparent: true, opacity: 0.86, depthWrite: true,
+            envMapIntensity: 1.5, emissive: new THREE.Color(0x0b5160), emissiveIntensity: 0.34,
+            side: THREE.DoubleSide,
+          }),
         };
         buildAuthoredShoulderYoke(ctx, bones, surfaces);
         buildAuthoredWaistArmour(ctx, bones, surfaces);
         buildAuthoredHair(ctx, bones, surfaces.hair);
+        buildAuthoredHelmet(ctx, bones, surfaces);
       }
       mode = 'authored';
       updatePose();
@@ -2175,6 +2477,8 @@ export function createPlayerRig(authoredShell = null) {
     clearcoatRoughness: 0.27,
     specularIntensity: 0.72,
     specularColor: 0xfff0d8,
+    emissive: 0x18120c,
+    emissiveIntensity: 0.1,
   });
   const graphite = material('neraAntiqueGold', {
     color: 0xd0a251,
@@ -2239,8 +2543,8 @@ export function createPlayerRig(authoredShell = null) {
     color: 0xd19a88,
     roughness: 0.49,
     metalness: 0,
-    emissive: 0x000000,
-    emissiveIntensity: 0,
+    emissive: 0x1d0905,
+    emissiveIntensity: 0.13,
     bumpMap: skinDetail,
     bumpScale: 0.009,
     physical: true,
@@ -4029,6 +4333,16 @@ export function createBossRig() {
     roughness: 0.58,
     metalness: 0.62,
   });
+  // Depth-only broad forms replace tens of thousands of decorative shadow
+  // triangles. They draw no colour or depth into the beauty pass, but the key
+  // light still receives Vespera's articulated combat silhouette.
+  const shadowProxy = material('vesperaShadowProxy', {
+    color: 0x000000,
+    roughness: 1,
+    metalness: 0,
+    colorWrite: false,
+    depthWrite: false,
+  }, false);
 
   const group = joint(null, 'Saint Vespera — boss rig');
   group.userData.character = 'Saint Vespera';
@@ -4848,6 +5162,76 @@ export function createBossRig() {
   });
   const seams = buildBossSeams(ctx, chest, { seamHousing, telegraph });
 
+  const shadowProxyOptions = { castShadow: true, receiveShadow: false };
+  mesh(chest, geometry.capsule, shadowProxy, {
+    ...shadowProxyOptions,
+    name: 'vespera shadow proxy torso',
+    position: [0, -0.04, -0.02],
+    scale: [0.62, 0.72, 0.4],
+  });
+  mesh(pelvis, geometry.capsule, shadowProxy, {
+    ...shadowProxyOptions,
+    name: 'vespera shadow proxy pelvis',
+    position: [0, -0.09, 0],
+    scale: [0.47, 0.46, 0.34],
+  });
+  mesh(head, geometry.lowSphere, shadowProxy, {
+    ...shadowProxyOptions,
+    name: 'vespera shadow proxy hood',
+    position: [0, 0.04, -0.02],
+    scale: [0.38, 0.44, 0.36],
+  });
+  for (const [side, shoulder, elbow, hip, knee] of [
+    [-1, leftShoulder, leftElbow, leftHip, leftKnee],
+    [1, rightShoulder, rightElbow, rightHip, rightKnee],
+  ]) {
+    mesh(shoulder, geometry.capsule, shadowProxy, {
+      ...shadowProxyOptions,
+      name: `vespera shadow proxy ${side < 0 ? 'left' : 'right'} upper arm`,
+      position: [0, -0.22, 0],
+      scale: [0.18, 0.4, 0.18],
+    });
+    mesh(elbow, geometry.capsule, shadowProxy, {
+      ...shadowProxyOptions,
+      name: `vespera shadow proxy ${side < 0 ? 'left' : 'right'} forearm`,
+      position: [0, -0.2, 0],
+      scale: [0.15, 0.36, 0.15],
+    });
+    mesh(hip, geometry.capsule, shadowProxy, {
+      ...shadowProxyOptions,
+      name: `vespera shadow proxy ${side < 0 ? 'left' : 'right'} thigh`,
+      position: [0, -0.25, 0],
+      scale: [0.21, 0.46, 0.21],
+    });
+    mesh(knee, geometry.capsule, shadowProxy, {
+      ...shadowProxyOptions,
+      name: `vespera shadow proxy ${side < 0 ? 'left' : 'right'} lower leg`,
+      position: [0, -0.23, 0],
+      scale: [0.17, 0.42, 0.17],
+    });
+  }
+  mesh(backRobe, geometry.box, shadowProxy, {
+    ...shadowProxyOptions,
+    name: 'vespera shadow proxy trailing chasuble',
+    position: [0, -0.72, -0.08],
+    scale: [0.62, 1.42, 0.18],
+  });
+  mesh(weapon, geometry.box, shadowProxy, {
+    ...shadowProxyOptions,
+    name: 'vespera shadow proxy execution spear',
+    position: [0, 1.06, 0],
+    scale: [0.15, 2.14, 0.11],
+  });
+  for (const { pivot, side } of shoulderCannons) {
+    mesh(pivot, geometry.cylinder, shadowProxy, {
+      ...shadowProxyOptions,
+      name: `vespera shadow proxy ${side < 0 ? 'left' : 'right'} shoulder cannon`,
+      position: [0, 0, -0.02],
+      rotation: [HALF_PI, 0, 0],
+      scale: [0.5, 0.82, 0.5],
+    });
+  }
+
   const animated = [
     body, pelvis, spine, chest, neck, head,
     leftShoulder, leftElbow, leftHand, rightShoulder, rightElbow, rightHand,
@@ -4868,6 +5252,7 @@ export function createBossRig() {
   let phaseTarget = 1;
   let phaseValue = 1;
   let previousAction = 'bossidle';
+  let dynamicBatches = null;
   const reaction = { strength: 0, side: 1, lift: 0, kind: 'hit', armored: true };
 
   function setSeams(count) {
@@ -5316,15 +5701,33 @@ export function createBossRig() {
       [violetCore, violetCore.emissiveIntensity],
     ]);
     applyMaterialFlash(ctx.flashables, flash, overrides);
+    dynamicBatches?.sync();
   }
 
   function dispose() {
+    dynamicBatches?.dispose();
     ctx.dispose(group);
   }
 
   setSeams(seams.length);
   setPhase(1);
+  const protectedBossObjects = new Set([
+    core,
+    weapon,
+    weaponTip,
+    ...seams,
+    ...animated,
+    ...shoulderCannons.flatMap(({ pivot, upperDoor, lowerDoor, muzzle }) => [pivot, upperDoor, lowerDoor, muzzle]),
+    ...haloSegments.flatMap(({ joint: haloJoint, mesh: haloMesh }) => [haloJoint, haloMesh]),
+    ...ornaments.flatMap(({ pivot, ornament }) => [pivot, ornament]),
+    ...phaseStreamers.flatMap(({ pivot, tip }) => [pivot, tip]),
+  ].filter(Boolean));
+  mergeStaticSiblingMeshes(group, protectedBossObjects, ctx.addGeometry);
   applyCharacterShadowBudget(group, BOSS_SHADOW_CASTERS);
+  dynamicBatches = createDynamicCharacterBatches(group);
+  dynamicBatches.sync();
+  group.userData.dynamicBatchCount = dynamicBatches.batches.length;
+  group.userData.dynamicBatchSourceCount = dynamicBatches.sourceCount;
 
   return {
     group,

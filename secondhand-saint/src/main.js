@@ -1,7 +1,10 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { GLTFLoader } from '../vendor/addons/loaders/GLTFLoader.js';
 import { createWorld } from './world.js';
-import { createPlayerRig, createBossRig } from './characters.js';
+import { createCampaignWorld } from './campaign-world.js';
+import { createPlayerRig } from './characters.js';
+import { createBossRoster } from './boss-roster.js';
+import { ENCOUNTERS } from './campaign-data.js';
 import { InputManager } from './input.js';
 import { AudioEngine } from './audio.js';
 import { EffectsSystem } from './effects.js';
@@ -12,9 +15,13 @@ const params = new URLSearchParams(location.search);
 const QA = params.get('qa') === '1';
 const AUTO_START = params.get('autostart') === '1';
 const MUTED = params.get('mute') === '1';
+const DUEL_ONLY = params.get('duel') === '1';
+const DEBUG_ENCOUNTER = params.get('encounter');
+const DEBUG_SCENARIO = params.get('scenario');
 const SEED = Number(params.get('seed') || 1337) >>> 0;
 const QUALITY = params.get('quality') || 'high';
 const SIM_DT = 1 / 60;
+const PLAYER_ASSET_ID = 'nera-player-v016';
 
 const canvas = document.getElementById('game');
 const ui = new GameUI();
@@ -52,17 +59,17 @@ function loadPlayerAuthoredShell() {
       // clone is useful for download UIs, but Chromium reports its deliberately
       // cancelled clone as a failed request even when the GLB parsed correctly.
       const response = await fetch(assetUrl.href, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Nera v015 request failed with HTTP ${response.status}`);
+      if (!response.ok) throw new Error(`${PLAYER_ASSET_ID} request failed with HTTP ${response.status}`);
       const gltf = await loader.parseAsync(
         await response.arrayBuffer(),
         new URL('./', assetUrl).href,
       );
       const authoredScene = gltf.scene || gltf.scenes?.[0];
-      if (!authoredScene?.isObject3D) throw new Error('Nera v015 did not contain a scene root');
-      authoredScene.name = 'Nera v015 authored player shell';
+      if (!authoredScene?.isObject3D) throw new Error(`${PLAYER_ASSET_ID} did not contain a scene root`);
+      authoredScene.name = `${PLAYER_ASSET_ID} authored player shell`;
       return Object.freeze({
         scene: authoredScene,
-        assetId: 'nera-player-v016',
+        assetId: PLAYER_ASSET_ID,
         assetUuid: authoredScene.uuid,
         loadCount: playerShellLoadCount,
         error: null,
@@ -71,7 +78,7 @@ function loadPlayerAuthoredShell() {
       console.warn('[SECONDHAND SAINT] authored player shell unavailable; using procedural fallback', error);
       return Object.freeze({
         scene: null,
-        assetId: 'nera-player-v016',
+        assetId: PLAYER_ASSET_ID,
         assetUuid: null,
         loadCount: playerShellLoadCount,
         error: String(error?.message || error),
@@ -112,42 +119,31 @@ async function init() {
     camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, .06, 420);
     camera.position.set(0, 5, 17);
 
-    world = createWorld(scene, renderer);
+    const meridian = createWorld(scene, renderer);
+    world = createCampaignWorld(scene, renderer, meridian);
     bootStage = 'player-visual';
     const playerShell = await loadPlayerAuthoredShell();
     bootStage = 'characters';
     playerRig = createPlayerRig(playerShell);
-    bossRig = createBossRig();
+    bossRig = createBossRoster();
     scene.add(playerRig.group, bossRig.group);
-    // Nera's own two-light rig, parented to her so it survives any facing.
-    // The arena is a 1.7%-reflectance floor and both world lights are cold, so
-    // without this she is a dark shape on a dark ground. Local +Z is forward.
-    //
-    // The rim sits in FRONT of her, i.e. on the side away from a behind-the-
-    // shoulder camera, and grazes her shoulders, hair mass and cape edge back
-    // toward the lens. That outline is what separates her from the floor, and
-    // it works regardless of how dark her albedo is.
-    const playerRimLight = new THREE.PointLight(0xfff0d8, 6.4, 3.4, 2);
-    playerRimLight.name = 'nera-silhouette-rim-light';
-    playerRimLight.position.set(.24, 2.34, .78);
-    playerRig.group.add(playerRimLight);
-
-    // The camera-side fill only has to keep her from going solid black. Its
-    // range is deliberately short: the previous single light reached 4.8 m and
-    // spilled onto the floor directly beneath her, lifting the background by
-    // as much as it lifted her and cancelling its own contrast.
-    const playerReadabilityLight = new THREE.PointLight(0xb6efff, 2.05, 2.7, 2);
-    playerReadabilityLight.name = 'nera-local-readability-light';
-    playerReadabilityLight.position.set(-.42, 2.05, -.72);
-    playerRig.group.add(playerReadabilityLight);
+    // Nera's readability floor is authored into her own materials. Player-
+    // attached lights still enter every physical shader in the scene, so the
+    // arena keys own form and her ivory/crimson values own separation.
 
     bootStage = 'systems';
     effects = new EffectsSystem(scene, { maxParticles: QUALITY === 'low' ? 560 : 900 });
     input = new InputManager(canvas);
     audio = new AudioEngine({ muted: MUTED });
-    game = new DuelGame({ renderer, scene, camera, world, playerRig, bossRig, effects, audio, input, ui, seed: SEED });
+    game = new DuelGame({
+      renderer, scene, camera, world, playerRig, bossRig, effects, audio, input, ui,
+      seed: SEED,
+      campaignEnabled: !DUEL_ONLY,
+    });
 
     bootStage = 'warmup';
+    meridian.precompile?.(camera);
+    effects.precompile?.(renderer, camera);
     renderer.compile(scene, camera);
     renderer.render(scene, camera);
     world.update?.(0, 0, .2);
@@ -161,6 +157,8 @@ async function init() {
     installQA();
     window.dispatchEvent(new CustomEvent('secondhand-saint-ready'));
     game._event('game.ready', rendererSummary());
+    if (QA && DEBUG_ENCOUNTER) game.debugScenario(`encounter:${DEBUG_ENCOUNTER}`);
+    if (QA && DEBUG_SCENARIO) game.debugScenario(DEBUG_SCENARIO);
     if (AUTO_START) queueMicrotask(() => game.start());
     requestAnimationFrame(loop);
   } catch (error) {
@@ -241,6 +239,58 @@ function rendererSummary() {
   };
 }
 
+function sceneGraphSummary() {
+  if (!scene) return [];
+  return scene.children.map((root) => {
+    const totals = {
+      meshes: 0,
+      visibleMeshes: 0,
+      shadowCasters: 0,
+      visibleTriangles: 0,
+      visibleShadowTriangles: 0,
+      estimatedBeautyPasses: 0,
+      estimatedShadowPasses: 0,
+      transparentMeshes: 0,
+      doubleSidedTransparentMeshes: 0,
+    };
+    const visit = (object, parentVisible) => {
+      const hierarchyVisible = parentVisible && object.visible;
+      const rendered = hierarchyVisible && object.layers.test(camera.layers);
+      if (object.isMesh || object.isInstancedMesh) {
+        totals.meshes += 1;
+        if (rendered) {
+          const positionCount = object.geometry?.attributes?.position?.count || 0;
+          const triangleCount = (object.geometry?.index?.count || positionCount) / 3;
+          const groups = object.geometry?.groups || [];
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          const activeMaterials = Array.isArray(object.material) && groups.length
+            ? groups.map((group) => materials[group.materialIndex]).filter(Boolean)
+            : materials.filter(Boolean);
+          totals.visibleMeshes += 1;
+          totals.visibleTriangles += Math.round(triangleCount * (object.isInstancedMesh ? object.count : 1));
+          for (const material of activeMaterials) {
+            const transparent = Boolean(material.transparent && material.opacity > 0);
+            const doublePass = transparent && material.side === THREE.DoubleSide && !material.forceSinglePass;
+            totals.estimatedBeautyPasses += doublePass ? 2 : 1;
+            if (transparent) totals.transparentMeshes += 1;
+            if (doublePass) totals.doubleSidedTransparentMeshes += 1;
+          }
+          if (object.castShadow) {
+            totals.shadowCasters += 1;
+            totals.visibleShadowTriangles += Math.round(
+              triangleCount * (object.isInstancedMesh ? object.count : 1),
+            );
+            totals.estimatedShadowPasses += Math.max(1, activeMaterials.length);
+          }
+        }
+      }
+      object.children.forEach((child) => visit(child, hierarchyVisible));
+    };
+    visit(root, true);
+    return { name: root.name || root.type, visible: root.visible, ...totals };
+  });
+}
+
 function gameplayHash() {
   if (!game) return 'unready';
   const snap = game.snapshot();
@@ -265,8 +315,8 @@ function captureNextFrame() {
 
 function installQA() {
   const readOnly = {
-    version: '1.5.0',
-    buildId: 'secondhand-saint-1.5.0',
+    version: '2.0.0',
+    buildId: 'secondhand-saint-2.0.0',
     get ready() { return ready; },
     get bootStage() { return bootStage; },
     get bootError() { return bootError; },
@@ -276,6 +326,7 @@ function installQA() {
     eventsSince: (sequence) => game?.eventsSince(sequence) || [],
     perfSummary: () => game?.perfSummary() || {},
     rendererSummary,
+    sceneGraphSummary,
     captureNextFrame,
     visualSnapshot: () => playerRig?.visualSnapshot?.() || Object.freeze({
       mode: 'procedural-fallback',
@@ -289,8 +340,11 @@ function installQA() {
     }),
     manifests: Object.freeze({
       playerActions: PLAYER_ACTIONS,
-      bossAttacks: BOSS_ATTACKS,
+      bossAttacks: DUEL_ONLY
+        ? Object.freeze(Object.fromEntries(Object.entries(BOSS_ATTACKS).filter(([, attack]) => !attack.encounter || attack.encounter === 'vespera')))
+        : BOSS_ATTACKS,
       bossHealth: BOSS_HEALTH,
+      encounters: ENCOUNTERS,
       defenseWindows: DEFENSE_WINDOWS,
       missiles: Object.freeze({
         capacity: 12,

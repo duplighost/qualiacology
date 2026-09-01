@@ -22,6 +22,7 @@ export class InputManager {
     this.element = element;
     this.down = new Set();
     this.pressedAt = new Map();
+    this.pressedDevice = new Map();
     this.releasedAt = new Map();
     this.consumedAt = new Map();
     this.cameraDX = 0;
@@ -29,6 +30,7 @@ export class InputManager {
     this.wheel = 0;
     this.usingGamepad = false;
     this.lastDevice = 'keyboard';
+    this.lastActionDevice = 'keyboard';
     this.enabled = true;
     this.gamepadDown = new Map();
     this.bufferSeconds = 0.18;
@@ -49,7 +51,7 @@ export class InputManager {
       this._recordRaw(event);
       if (!this.enabled) return;
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(event.code)) event.preventDefault();
-      if (!event.repeat) this._pressCode(event.code, performance.now() / 1000);
+      if (!event.repeat) this._pressCode(event.code, performance.now() / 1000, 'keyboard');
       this.down.add(event.code);
       this.lastDevice = 'keyboard';
     }, { passive: false });
@@ -62,7 +64,7 @@ export class InputManager {
       this._recordRaw(event);
       if (!this.enabled) return;
       const code = `Mouse${event.button}`;
-      this._pressCode(code, performance.now() / 1000);
+      this._pressCode(code, performance.now() / 1000, 'mouse');
       this.down.add(code);
       this.lastDevice = 'mouse';
       if (event.button !== 0) event.preventDefault();
@@ -97,9 +99,12 @@ export class InputManager {
     else this.untrustedEventCount++;
   }
 
-  _pressCode(code, now) {
+  _pressCode(code, now, device = this.lastDevice) {
     const action = KEY_ACTION.get(code);
-    if (action && !this.down.has(code)) this.pressedAt.set(action, now);
+    if (action && !this.down.has(code)) {
+      this.pressedAt.set(action, now);
+      this.pressedDevice.set(action, device);
+    }
   }
 
   beginFrame(now = performance.now() / 1000) {
@@ -132,7 +137,10 @@ export class InputManager {
     for (const [action, index] of Object.entries(map)) {
       const isDown = Boolean(pad.buttons[index]?.pressed || pad.buttons[index]?.value > 0.55);
       const wasDown = Boolean(this.gamepadDown.get(action));
-      if (isDown && !wasDown) this.pressedAt.set(action, now);
+      if (isDown && !wasDown) {
+        this.pressedAt.set(action, now);
+        this.pressedDevice.set(action, 'gamepad');
+      }
       this.gamepadDown.set(action, isDown);
       activity ||= isDown;
     }
@@ -148,6 +156,7 @@ export class InputManager {
     if (pressed == null || this.now - pressed > buffer) return false;
     if ((this.consumedAt.get(action) ?? -1) >= pressed) return false;
     this.consumedAt.set(action, pressed);
+    this.lastActionDevice = this.pressedDevice.get(action) || this.lastDevice;
     return true;
   }
 
@@ -204,6 +213,7 @@ export class InputManager {
 
   clearBuffers() {
     this.pressedAt.clear();
+    this.pressedDevice.clear();
     this.consumedAt.clear();
     this.releasedAt.clear();
   }

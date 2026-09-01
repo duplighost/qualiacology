@@ -62,6 +62,21 @@ button { color: inherit; }
 .boss-track .phase-three-break { left: 40.541%; }
 .boss-track .phase-two-break { left: 72.973%; }
 .phase-health { margin-top: 5px; color: rgba(215,221,236,.7); font: 400 8px/1 var(--mono); letter-spacing: .12em; text-align: right; text-shadow: 0 2px 8px #000; }
+.mechanic-readout { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 11px; width: min(460px, 82%); margin: 8px auto 0; padding: 7px 11px; color: #d9faff; background: linear-gradient(90deg, transparent, rgba(7,19,32,.76) 15%, rgba(7,19,32,.76) 85%, transparent); border-top: 1px solid rgba(111,242,255,.22); border-bottom: 1px solid rgba(111,242,255,.1); filter: drop-shadow(0 4px 9px #000); transition: opacity .22s, transform .22s; }
+.mechanic-readout[aria-hidden='true'] { opacity: 0; transform: translateY(-4px); }
+.mechanic-readout > span, .mechanic-readout > em { font: 500 7px/1 var(--mono); letter-spacing: .14em; white-space: nowrap; }
+.mechanic-readout > span { text-align: right; color: rgba(210,235,244,.72); }
+.mechanic-readout > em { text-align: left; color: #8cecf6; font-style: normal; }
+.mechanic-pips { display: flex; gap: 6px; }
+.mechanic-pips i { position: relative; width: 17px; height: 7px; border: 1px solid rgba(151,246,255,.72); background: rgba(87,228,241,.24); box-shadow: inset 0 0 7px rgba(103,230,239,.45), 0 0 8px rgba(103,230,239,.26); transform: skewX(-22deg); transition: .2s; }
+.mechanic-pips i.broken { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.16); box-shadow: none; transform: skewX(-22deg) scaleY(.45); }
+.mechanic-pips i.active { background: var(--amber); border-color: #fff2c5; box-shadow: 0 0 13px var(--amber); animation: mechanic-active .55s ease-in-out infinite alternate; }
+.mechanic-readout.open { border-color: rgba(244,174,83,.35); }
+.mechanic-readout.open > em { color: var(--amber); }
+@keyframes mechanic-active { to { filter: brightness(1.65); transform: skewX(-22deg) scale(1.16); } }
+
+#game-shell[data-encounter='lacrima'] .boss-track i { background: linear-gradient(90deg, #246779, #67f5ff 55%, #fff0ff); box-shadow: 0 0 18px #67f5ff; }
+#game-shell[data-encounter='cathedra'] .boss-track i { background: linear-gradient(90deg, #6f2b25, #ff754f 45%, #ffc95d); box-shadow: 0 0 18px #ff8c52; }
 
 .player-hud { position: absolute; left: max(28px, env(safe-area-inset-left)); bottom: max(68px, calc(env(safe-area-inset-bottom) + 58px)); width: 268px; filter: drop-shadow(0 4px 12px #000); }
 .player-name { display: flex; align-items: baseline; gap: 9px; }
@@ -107,6 +122,20 @@ kbd { padding: 2px 4px; color: #e8edf7; background: rgba(255,255,255,.08); borde
 .combat-callout.show { animation: callout .7s ease-out; }
 @keyframes callout { 0% { opacity: 0; transform: translate(-50%,14px) skewX(-8deg) scale(.75); } 15%,60% { opacity: 1; transform: translate(-50%,0) skewX(-8deg) scale(1.08); } 100% { opacity: 0; transform: translate(-50%,-14px) skewX(-8deg); } }
 
+.transit-cinematic { --transit-progress: 0; position: absolute; z-index: 18; inset: 0; pointer-events: none; overflow: hidden; opacity: 1; visibility: visible; transition: opacity .35s, visibility .35s; }
+.transit-cinematic[aria-hidden='true'] { opacity: 0; visibility: hidden; }
+.transit-cinematic::before, .transit-cinematic::after { content: ''; position: absolute; z-index: 2; left: 0; right: 0; height: clamp(54px, 10vh, 112px); background: #010104; box-shadow: 0 0 45px #000; transform: scaleY(calc(.55 + var(--transit-progress) * .45)); transition: transform .08s linear; }
+.transit-cinematic::before { top: 0; transform-origin: top; }
+.transit-cinematic::after { bottom: 0; transform-origin: bottom; }
+.transit-grain { position: absolute; inset: 0; opacity: .16; background-image: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.04) 3px 4px), radial-gradient(circle at 50% 50%, transparent 35%, rgba(0,0,0,.65)); mix-blend-mode: screen; }
+.transit-copy { position: absolute; z-index: 3; left: clamp(28px, 7vw, 110px); bottom: clamp(86px, 15vh, 160px); width: min(760px, calc(100vw - 56px)); text-shadow: 0 4px 24px #000; }
+.transit-copy p { margin: 0 0 10px; color: var(--amber); font: 500 9px/1 var(--mono); letter-spacing: .32em; }
+.transit-copy h2 { margin: 0; max-width: 900px; color: #f4f2ec; font: italic 800 clamp(44px, 7.8vw, 112px)/.78 var(--display); letter-spacing: -.035em; text-transform: uppercase; }
+.transit-copy > strong { display: block; margin-top: 17px; color: #aef7ff; font: 500 clamp(10px, 1.1vw, 15px)/1 var(--mono); letter-spacing: .19em; }
+.transit-rule { width: min(520px, 70vw); height: 2px; margin-top: 22px; overflow: hidden; background: rgba(255,255,255,.16); }
+.transit-rule i { display: block; width: 100%; height: 100%; transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, var(--cyan), #fff, var(--amber)); box-shadow: 0 0 14px var(--cyan); }
+.transit-copy > em { display: block; margin-top: 8px; color: rgba(229,236,244,.62); font: 400 8px/1 var(--mono); font-style: normal; letter-spacing: .2em; }
+
 .compact { width: min(420px, calc(100vw - 40px)); padding: 34px; }
 .compact h2 { margin: 0 0 15px; font: italic 800 58px/.8 var(--display); letter-spacing: .04em; }
 .compact p:not(.eyebrow) { color: var(--muted); font: 400 11px var(--mono); }
@@ -139,6 +168,9 @@ kbd { padding: 2px 4px; color: #e8edf7; background: rgba(255,255,255,.08); borde
   .boss-hud { width: calc(100vw - 34px); }
   .boss-heading { grid-template-columns: 1fr; gap: 3px; }
   .boss-heading span, .boss-heading em { display: none; }
+  .mechanic-readout { width: 94%; grid-template-columns: auto 1fr; }
+  .mechanic-readout > span { display: none; }
+  .mechanic-readout > em { font-size: 6px; }
   .controls { bottom: max(8px, env(safe-area-inset-bottom)); width: calc(100vw - 18px); box-sizing: border-box; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px 3px; padding: 7px 6px 8px; }
   .controls div { min-width: 0; }
   .controls kbd { padding-inline: 2px; font-size: 7.5px; }
@@ -153,5 +185,5 @@ kbd { padding: 2px 4px; color: #e8edf7; background: rgba(255,255,255,.08); borde
 
 @media (prefers-reduced-motion: reduce) {
   .panel, .controls { transition-duration: .01ms; }
-  #impact-flash.flash, .combat-callout.show, .cadence-ring b.ready { animation-duration: .01ms; animation-iteration-count: 1; }
+  #impact-flash.flash, .combat-callout.show, .cadence-ring b.ready, .mechanic-pips i.active { animation-duration: .01ms; animation-iteration-count: 1; }
 }
