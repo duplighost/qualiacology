@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.2.0-world-parity';
+  const GAME_VERSION = '8.2.1-rim-spring-sightlines';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -18872,9 +18872,14 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         { x: -700, z: -260, radius: 7, height: 160 },
       // THE LANTERNS. Past 1050 m the moon had nothing tall enough to steer
       // by -- no landmarks, no enemies, one breakable, across a tenth of the
-      // surface. These are what you navigate the outer ice with: 46-68 m, so
-      // each one clears the 37.9 m horizon from over 200 m away and you can
-      // always see the next. They join this.platforms with everything else
+      // surface. These are what you navigate the outer ice with. NOTE: the
+      // heights in the specs below are 85-126 m. This comment used to say
+      // "46-68 m" -- that was the FIRST pass, which measured invisible at
+      // 200 m and was raised. Do not size a replacement from that number.
+      // The sight law is d(h) = 37.9 + 420*acos(420/(420+h)): 85 m clears the
+      // horizon at 285 m, 126 m at 329 m. Clearing the horizon is necessary
+      // but NOT sufficient -- angular width decides legibility, which is why
+      // these are 8-10 m in radius. You can always see the next one. They join this.platforms with everything else
       // here, so the ball banks off them and the grapple climbs them for
       // free, and each wears a full moon on its crown -- lit until you take
       // it. Authored, not scattered: zero worldRandom draws.
@@ -19633,11 +19638,32 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       }
 
       // THE RIM SPRINGS. A ring of much stronger pads sitting just past the
-      // old map edge, all the way round. They are visible from inside the map,
-      // which is the whole job: the answer to "why would I go out there" has
-      // to be something you can SEE from in here, and the answer to "how" has
-      // to be better than walking. Hit one and the wander band is two seconds
-      // away instead of thirty.
+      // old map edge, all the way round. They have to be visible from inside
+      // the map, which is the whole job: the answer to "why would I go out
+      // there" has to be something you can SEE from in here, and the answer to
+      // "how" has to be better than walking. Hit one and the wander band is two
+      // seconds away instead of thirty.
+      //
+      // THEY WERE NOT VISIBLE (fixed 2026-09-02). The pad is a flat ring about
+      // .12 m proud of the ground, sitting 402-454 m out. On this sphere the
+      // sight law is d(h) = 37.9 + 420*acos(420/(420+h)), so .12 m clears the
+      // horizon at 48 m and the torus tube at 56 m. From anywhere you would
+      // actually stand inside the map they were simply not there -- nine
+      // traversal shortcuts no player could find, while the comment above
+      // asserted the opposite. This is the working-but-illegible failure this
+      // project keeps re-learning.
+      //
+      // Each pad now carries a 38-46 m mast with a lit crown. 38 m clears the
+      // horizon at 209 m, so the ring reads from well inside the map, which is
+      // what was always promised. It is deliberately NOT landmark-scale: THE
+      // NEEDLE is 160 m and THE LANTERNS are 85-126 m, and those are what you
+      // steer the whole moon by. A spring is the mid-range "here is the way
+      // out" marker and must not compete with them. Horizon clearance alone is
+      // not legibility either -- angular width decides it (see THE SCALE
+      // LESSON), so the mast is 3.4 m at the base rather than a wire.
+      //
+      // Zero worldRandom draws added: the mast varies off i, and the single
+      // existing worldRandom() call per spring stays exactly where it was.
       for (let i = 0; i < 9; i++) {
         const angle = (i / 9) * TAU + .21;
         const reach = 402 + (i % 3) * 26;
@@ -19651,11 +19677,26 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           new T.CylinderGeometry(2.7, 2.95, .2, 32),
           new T.MeshStandardMaterial({ color: 0x2c2312, emissive: 0xc07a12, emissiveIntensity: 2.1, roughness: .38, metalness: .62 }),
         );
-        group.add(ring, inner);
+        const mastHeight = 38 + (i % 3) * 4;
+        const mast = new T.Mesh(
+          new T.CylinderGeometry(1.15, 3.4, mastHeight, 9),
+          new T.MeshStandardMaterial({
+            color: 0x2c2312, emissive: 0x8d5a0d, emissiveIntensity: .72,
+            roughness: .52, metalness: .58,
+          }),
+        );
+        mast.position.y = mastHeight / 2;
+        mast.castShadow = true;
+        const crown = new T.Mesh(new T.OctahedronGeometry(3.2, 0), this.materials.gold);
+        crown.position.y = mastHeight + 1.6;
+        crown.castShadow = true;
+        const crownGlow = this.makeGlowSprite(this.glowGold, 17, .34);
+        crownGlow.position.y = mastHeight + 1.6;
+        group.add(ring, inner, mast, crown, crownGlow);
         group.position.set(x, y, z);
         this.scene.add(group);
         this.launchPads.push({
-          id: `rim-spring-${i}`, group, ring, inner,
+          id: `rim-spring-${i}`, group, ring, inner, mast, crown, crownGlow, mastHeight,
           position: new T.Vector3(x, y, z), radius: 3.5, impulse: 27, cooldown: 0,
           phase: worldRandom() * TAU,
         });
@@ -24820,6 +24861,17 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       });
       this.launchPads.forEach(pad => {
         pad.cooldown = Math.max(0, pad.cooldown - dt);
+        // NOT CULLED, deliberately. The obvious optimisation is to hide each
+        // rim-spring mast past its own horizon (~232 m), since the moon
+        // occludes it there and the frustum does not know that -- the same
+        // overdraw trap the sky-furniture cull documents. It was written and
+        // then removed, because `pad.position` is CHART space (see the pad
+        // trigger, which compares it against the player chart frame and runs
+        // it through chartLift to get world) while the obvious player vector
+        // is WORLD space. Comparing them is the exact chart/world confusion
+        // this codebase already has a scar over. 27 extra draws against a
+        // 1,200 budget is not worth a silent space bug; if it ever matters,
+        // do the comparison in chart space with its own scratch vector.
         pad.ring.rotation.z += dt * (pad.cooldown > 0 ? 4.8 : 1.35);
         const pulse = .5 + Math.sin(this.elapsed * 4 + pad.phase) * .5;
         if ('emissiveIntensity' in pad.inner.material) {
