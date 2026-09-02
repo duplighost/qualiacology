@@ -214,6 +214,19 @@
       "actionLabel": "Enter THE EATEN PATH"
     },
     {
+      "slug": "curfew",
+      "title": "CURFEW",
+      "descriptor": "open-world night horror",
+      "group": "horror",
+      "featured": false,
+      "image": "/assets/games/curfew-card-clean.webp",
+      "alt": "A torch beam on the forest floor at night, pale trunks closing in on both sides of a back road",
+      "summary": "One county of forest and back roads, and the sun does not come back. Walk or drive between the last lit places, shoot what comes out of the trees, and take a little of the map back every time you get somewhere.",
+      "metaDescription": "CURFEW is a first-person open-world horror game set in one dark county of forest and back roads where the sun does not come back.",
+      "controls": "WASD + mouse - Shift to sprint - F for the torch - E for the car - headphones recommended",
+      "actionLabel": "Go outside"
+    },
+    {
       "slug": "rocket-shoes",
       "title": "Rocket Shoes",
       "descriptor": "Arcade",
