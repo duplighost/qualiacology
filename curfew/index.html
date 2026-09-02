@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="CURFEW is a browser horror game set in one county of forest and back roads where the sun does not come back. Walk or drive between the last lit places, shoot what comes out of the trees, and take the map back one light at a time.">
+<title>CURFEW | Qualiacology</title>
+<link rel="canonical" href="https://qualiacology.com/curfew/">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:type" content="website">
+<meta property="og:title" content="CURFEW | Qualiacology">
+<meta property="og:description" content="One county, all forest, and the sun does not come back. Go outside.">
+<meta property="og:url" content="https://qualiacology.com/curfew/">
+<meta property="og:image" content="https://qualiacology.com/assets/og/curfew-og-v1.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A dark forest road at night lit by a single torch beam, tall pines closing in on both sides">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="CURFEW | Qualiacology">
+<meta name="twitter:description" content="One county, all forest, and the sun does not come back. Go outside.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/og/curfew-og-v1.jpg">
+<meta name="twitter:image:alt" content="A dark forest road at night lit by a single torch beam, tall pines closing in on both sides">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<rect width='64' height='64' fill='%2307090c'/><circle cx='32' cy='27' r='11' fill='none' stroke='%23c9d4e6' stroke-width='3'/></svg>">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/jsm/"
+  }
+}
+</script>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #07090c; }
+  body { font: 400 14px/1.5 "Palatino Linotype", Palatino, Georgia, serif; color: #c9d4e6; }
+  #gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  /* Everything below is title / pause only. There are no words during play. */
+  #shell { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+           background: #07090c; transition: opacity .7s ease; }
+  #shell.gone { opacity: 0; pointer-events: none; }
+  #shell .wrap { width: min(560px, 86vw); text-align: center; }
+  #shell h1 { font-size: clamp(30px, 6vw, 62px); letter-spacing: .46em; text-indent: .46em;
+              font-weight: 400; color: #e6ecf6; }
+  #shell .sub { margin: 14px 0 30px; font-size: 12px; letter-spacing: .30em;
+                text-transform: uppercase; opacity: .42; }
+  #shell .bar { height: 2px; background: #161c25; }
+  #shell .bar i { display: block; height: 100%; width: 0; background: #8fa4c4; transition: width .25s ease; }
+  #shell .stage { margin-top: 12px; font-size: 11px; letter-spacing: .18em;
+                  text-transform: uppercase; opacity: .35; min-height: 1.4em; }
+  #shell button { margin-top: 26px; padding: 12px 30px; font: inherit; font-size: 13px;
+                  letter-spacing: .26em; text-transform: uppercase; color: #e6ecf6;
+                  background: transparent; border: 1px solid #2b3543; cursor: pointer; }
+  #shell button:hover { background: #10161e; }
+  #shell button[disabled] { opacity: .25; cursor: default; }
+  #shell .err { margin-top: 18px; color: #d2705e; font: 12px/1.45 ui-monospace, monospace;
+                text-align: left; white-space: pre-wrap; max-height: 30vh; overflow: auto; }
+
+  /* site home pill (added by build-site-copy.mjs) */
+  .home-link { position: fixed; z-index: 40;
+    left: max(14px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top));
+    font: 400 11px/1 "Palatino Linotype", Palatino, Georgia, serif;
+    letter-spacing: .26em; text-transform: uppercase; text-decoration: none;
+    color: #c9d4e6; opacity: .30; padding: 8px 12px; border: 1px solid #232c39;
+    background: rgba(7, 9, 12, .62); transition: opacity .2s ease; }
+  .home-link:hover, .home-link:focus-visible { opacity: .85; }
+  .home-link:focus-visible { outline: 2px solid #8fa4c4; outline-offset: 2px; }
+  body.locked .home-link { display: none; }
+</style>
+</head>
+<body>
+<a class="home-link" href="/">Qualiacology</a>
+<canvas id="gl"></canvas>
+
+<!-- Boot shell. It exists so the first-launch shader compile reads as loading
+     rather than as a hang, and so nothing is rendered before it is warm. -->
+<div id="shell">
+  <div class="wrap">
+    <h1>CURFEW</h1>
+    <div class="sub">the sun does not come back</div>
+    <div class="bar"><i id="bootbar"></i></div>
+    <div class="stage" id="bootstage">waking</div>
+    <button id="enter" disabled>Go outside</button>
+    <div class="err" id="booterr" hidden></div>
+  </div>
+</div>
+
+<script>
+// The site copy hides its home pill under pointer lock; harmless standalone.
+document.addEventListener('pointerlockchange', () => {
+  document.body.classList.toggle('locked', !!document.pointerLockElement);
+});
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
