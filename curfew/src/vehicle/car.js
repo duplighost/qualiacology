@@ -58,7 +58,7 @@
 
 import * as THREE from 'three';
 import { CFG } from '../config.js';
-import { clamp, clamp01, damp, lerp, ease, TAU } from '../engine/math.js';
+import { clamp, clamp01, damp, dampAngle, lerp, ease, TAU } from '../engine/math.js';
 import { ACTIONS } from '../engine/input.js';
 import { MASK } from '../world/collision.js';
 import { buildCarBody, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR, DOOR_HINGE } from './carbody.js';
@@ -76,7 +76,27 @@ const MAX_REV_ON = 7.0;           // [mossway game.js:1827-1828]
 const MAX_REV_OFF = 4.5;
 const CREEP_ON = 4.2, CREEP_OFF = 2.8;   // [mossway game.js:1832]
 const HARD_BRAKE_LAMBDA = 8.5;    // [mossway game.js:1834] space
-const STEER_LAMBDA = 7.0;         // [mossway game.js:1842]
+const STEER_LAMBDA = 7.0;         // [mossway game.js:1842] 0.15 s to 63% of lock, measured
+const ROLL_LEAN = 0.023;          // rad of body lean at full lock and top speed (= MOSSWAY's
+                                  // 0.66 lock * 0.035; the lock is a radius now, see _integrate)
+// The pilot's proportional controller (PEACHFUL) was tuned against MOSSWAY's 0.18 rad/s of
+// yaw at its 9.5 m/s cruise. The ROUND 5 lock gives 0.96 rad/s at that speed, so its command
+// is scaled to the authority it was tuned with; measured, it still parks 1.4 m from its stop
+// point with a peak yaw rate of 0.07 rad/s (tests/car.mjs; 0.08 on master).
+const PILOT_STEER = 0.19;
+// THE VIEW TURNS WITH THE CAR (verification round 1). cam.yaw is world-fixed aim and the
+// seat only clamped it to heading +-1.48, so with a lock that turns 54 deg/s at 10 m/s a
+// held turn with the mouse still swung the nose out of frame inside a second and pinned
+// the view on the A-pillar (measured: 75 deg of lag at 1.5 s, the clamp engaged at 1.67 s).
+// Now the heading delta of every driving step is carried into cam.yaw (_carryLook), so the
+// mouse is an offset FROM THE NOSE, which is what MOSSWAY's "look added to the heading"
+// meant. During the 0.35 s reparent the yaw is eased to the nose at this rate, so a player
+// who walked up to the door facing the car does not take the seat looking at the passenger
+// window: e^-(9 * 0.35) = 4% of the entry offset is left when the door shuts.
+const ENTER_LOOK_LAMBDA = 9.0;
+// Rim turns per radian of front-wheel angle: a 12:1 box, so full lock at rest (~19 degrees)
+// is the ~200 degrees of rim MOSSWAY's 5.6 * 0.66 drew, and at 23 m/s the rim moves ~40.
+const RIM_RATIO = 11.0;
 const SAMPLE_FWD = 2.2, SAMPLE_SIDE = 1.25;   // [mossway game.js:1855-1856]
 const TILT_LAMBDA = 5.2;          // [mossway game.js:1865-1866]
 const BOB_LAMBDA = 8.0;           // [mossway game.js:1873]
@@ -253,6 +273,7 @@ export class Car {
     this.travel = 0;
     this.wheelRot = 0;
     this.hitCooldown = 0;
+    this.lockNow = 0;       // the wheel angle at full lock for the current speed (_integrate)
 
     // ---- fix 2: prev/curr, lerped by present(alpha). Nothing else may draw the car.
     this.prevX = 0; this.prevY = 0; this.prevZ = 0;
@@ -317,6 +338,7 @@ export class Car {
     // are spaced off it, so a half-second hotwire still gets three of them.
     this.hotwireTotal = K.hotwire;
     this.refuseLatch = false;
+    this._cruise = null;          // test door, see setCruise()
 
     // ---- pilot
     this.pilotX = 0; this.pilotZ = 0;
@@ -468,6 +490,84 @@ export class Car {
 
   /** Test door: one honk, consumed by the next step. */
   honk() { this._synthHorn = true; }
+
+  /**
+   * Test door: pin the speed at `v` m/s (null to let go). The steering integrator, the
+   * contacts and the tilt all run exactly as they do in play; only the speed clamp at the
+   * end of _integrate is overridden. tests/car.mjs measures the full-lock radius with this,
+   * because a circle leaves the road inside a second and the off-road cap then makes
+   * "hold 22 m/s" impossible through the throttle. Never set from game code.
+   */
+  setCruise(v) { this._cruise = (typeof v === 'number' && Number.isFinite(v)) ? v : null; }
+
+  /**
+   * warm(): link every program the car will ever need behind the title fade (verification
+   * round 1). main.js warm() reveals every hidden object, calls each system's warmup() in
+   * manifest order, and post (manifest 101, after us) renders ONE real frame through the
+   * composer with everything revealed; then it hides everything again and renders the
+   * first real frame. Two of the car's programs were missing from that warm frame, both
+   * measured on master 24d5101 with tests/artifacts/probe-programs-D.mjs:
+   *
+   *   1. the shadow-DEPTH variants of curfew-car (car-shell, car-door-panel, and the
+   *      INSTANCED car-wheels): the moon is not placed until lights.present() runs, so in
+   *      the warm frame its shadow box is the DirectionalLight default — at (0, 1, 0)
+   *      looking straight down at the origin, near 1: the box is y <= 0 within 70 m of
+   *      the origin — and the body stood at (0, 0, 0) with its wheels above the plane.
+   *      programs 71 -> 72 the moment _place()/placeAt() made the body visible.
+   *   2. the INSTANCED main variant of curfew-car (the wheels' HDR program): renderer
+   *      compile() links the SCREEN variants of both (it is called with no target bound),
+   *      but the play variants link only when the composer's frame draws the mesh into
+   *      the HDR buffer, and the wheels at (0, 0, 0) are 1.7 m straight below the warm
+   *      camera at (0, 1.68, 0): outside a 68 degree frustum. 72 -> 73 thirteen seconds
+   *      into a drive.
+   *
+   * So for the warm frame the body stands 6 m ahead of the camera, its root 1 m below
+   * the moon target's level: every part of it is in the camera's frustum, and its lower
+   * half is inside the shadow box, degenerate or real (the target is on the box's axis).
+   * The car is not placed, no event fires, present() early-returns while !exists, and
+   * the next _sync() puts the root where the car is.
+   *
+   * MEASURED, both builds, tests/artifacts/probe-progs3.mjs (2026-09-03), as
+   * ready / after the title card's own frames / on foot / car placed / seated / after 20 s:
+   *   master 24d5101:  68 / 71 / 71 / 72 / 72 / 73     — two link during play
+   *   this branch:     71 / 74 / 74 / 74 / 74 / 74     — none link during play
+   * The three that link at ready are the car's, linked here. The three the title card links
+   * are the same three on both builds and are not the car's; the title card is not play.
+   * tests/car.mjs asserts all of it: nothing links from the title onward, across placeAt,
+   * the walk to the door, the seat and a 20 s drive. If a lane moves the moon before warm()
+   * one day, those checks are the tripwire.
+   */
+  warmup() {
+    if (!this.body) return;
+    const L = this._lights;
+    const moon = L && L.moon;
+    const t = moon && moon.target ? moon.target.position : null;
+    const cam = this.ctx.camera;
+    if (!cam) return;
+    _v.set(0, 0, -1).applyQuaternion(cam.quaternion);
+    const x = cam.position.x + _v.x * 6.0, z = cam.position.z + _v.z * 6.0;
+    const y = (t ? t.y : 0) - 1.0;
+    this.body.root.position.set(x, y, z);
+    this.body.root.rotation.set(0, 0, 0, 'YXZ');
+    this.body.root.updateMatrixWorld(true);
+    // And one real render of the scene into post's HDR buffer, right here, with the body
+    // standing there. Moving the body alone was not enough — the depth variants still
+    // linked at placeAt; this render links them too, and after it nothing links at
+    // placement, at the door, in the seat or over the suite's 20 s drive (the table above
+    // is the measurement). It is one extra frame behind the title fade, drawn into the same
+    // target the composer's RenderPass draws into, so every program it links is a program
+    // play uses — never a screen variant. Why the composer's own warm frame does not draw
+    // the shadow pass for these casters was not found; this render is measured to, and the
+    // suite's program checks are the tripwire either way.
+    const R = this.ctx.renderer, post = this.ctx.systems.get('post'), scene = this.ctx.scene;
+    if (R && scene) {
+      const prev = R.getRenderTarget();
+      const target = post && typeof post.hdrTarget === 'function' ? post.hdrTarget() : null;
+      R.setRenderTarget(target);
+      R.render(scene, cam);
+      R.setRenderTarget(prev);
+    }
+  }
 
   _useHeld() {
     if (this._synthUse) return true;
@@ -903,6 +1003,7 @@ export class Car {
 
     // The seat yaw clamp moves AIM, so it belongs to the step, not to present. camera is
     // manifest 12 and has already integrated this step's look by the time we run.
+    this._carryLook(dt);
     this._clampSeatLook();
 
     // The engine is a disturbance for as long as it runs, wherever it is.
@@ -967,7 +1068,7 @@ export class Car {
     const throttle = this.speed < want ? 1 : 0;
     const brake = this.speed > want + 0.6 ? 1 : 0;
 
-    this._integrate(dt, steerIn, throttle, brake, 0);
+    this._integrate(dt, steerIn * PILOT_STEER, throttle, brake, 0);
 
     if (remaining <= PILOT_ARRIVE || (this.speed < 0.10 && remaining < 6)) {
       this.speed = 0;
@@ -1035,8 +1136,11 @@ export class Car {
   _doorPoint(out) {
     const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
     const rx = Math.cos(this.heading), rz = -Math.sin(this.heading);
-    out.x = this.x + rx * DOOR.x + fx * DOOR.z;
-    out.z = this.z + rz * DOOR.x + fz * DOOR.z;
+    // DOOR.z is local (forward = -Z), so it rides MINUS the forward vector. This used to
+    // add it, which put the handle 0.6 m aft of the aperture — the same one-sign mirror
+    // that put the camera in the back seat (see present()).
+    out.x = this.x + rx * DOOR.x - fx * DOOR.z;
+    out.z = this.z + rz * DOOR.x - fz * DOOR.z;
     return out;
   }
 
@@ -1351,10 +1455,12 @@ export class Car {
   /* ---------------------------------------------------- MOSSWAY kinematics  */
 
   /**
-   * donor: donors/mossway/game.js:1813-1876 (updateVehicle), verbatim numbers, hosted in
-   * PEACHFUL's basis (Desktop/peachful/src/vehicle.js:117-121 _syncBasis — Three's local
-   * forward is -Z, so fwd = (-sin, 0, -cos) and right = (cos, 0, -sin)). Every constant
-   * that CFG.car owns is read from CFG; the rest carry their donor line above.
+   * donor: donors/mossway/game.js:1813-1876 (updateVehicle) for the SPEED half only — the
+   * throttle, brake, creep, drag and caps, verbatim numbers — hosted in PEACHFUL's basis
+   * (Desktop/peachful/src/vehicle.js:117-121 _syncBasis — Three's local forward is -Z, so
+   * fwd = (-sin, 0, -cos) and right = (cos, 0, -sin)). The STEERING half is not MOSSWAY's
+   * any more (round 5, below): a bicycle model with a speed-keyed lock, this project's own.
+   * Every constant that CFG.car owns is read from CFG; the rest carry their donor line above.
    */
   _integrate(dt, steerIn, throttle, brake, hardBrake) {
     const roads = this._roads, terr = this._terrain;
@@ -1384,12 +1490,23 @@ export class Car {
     // Hunter is 1.2 m/s slower than you" arithmetic is written against 23.0, so the soft
     // approach is kept and the number is made true.
     this.speed = clamp(this.speed, -maxReverse, maxForward);
+    if (this._cruise !== null) this.speed = this._cruise;   // test door only, see setCruise()
 
-    // steering lock shrinks with speed [mossway game.js:1841; CFG.car.steerLock/Shrink/ShrinkAt]
-    const limit = K.steerLock * (1 - Math.min(Math.abs(this.speed) / K.steerShrinkAt, K.steerShrink));
-    this.steer = damp(this.steer, steerIn * limit, STEER_LAMBDA, dt);
-    const effect = 0.045 * this.speed / (1 + Math.abs(this.speed) * 0.018);
-    this.heading = wrapAngle(this.heading + this.steer * effect * dt);
+    // THE LOCK IS A RADIUS (ROUND 5, Alex: "take turns down smaller roads filled with trees
+    // ... really easy and responsive"). MOSSWAY's lock/shrink/effect triple turned a 54 m
+    // circle at 10 m/s, measured (CFG.car.turn carries the before/after table). Now a plain
+    // bicycle model: the full-lock radius is R(v) = rMin + rCubic * v^3, the wheel angle at
+    // full lock is atan(wheelbase / R), and the heading turns at v * tan(steer) / wheelbase.
+    // `steer` IS the front wheel angle in radians — present() draws the wheels and the rim
+    // off it directly, so what you see the wheels do is what the car does. The damp is the
+    // steering rate: 0.15 s to 63% of lock, back within 0.05 rad of centre in 0.25 s of
+    // letting go (measured, tests/car.mjs; 0.35 s on master, whose lock was a bigger angle).
+    const v = Math.abs(this.speed);
+    const R = K.turn.rMin + K.turn.rCubic * v * v * v;
+    const lock = Math.atan(K.wheelbase / R);
+    this.lockNow = lock;
+    this.steer = damp(this.steer, steerIn * lock, STEER_LAMBDA, dt);
+    this.heading = wrapAngle(this.heading + this.speed * Math.tan(this.steer) / K.wheelbase * dt);
 
     const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
     this.x += fx * this.speed * dt;
@@ -1422,8 +1539,12 @@ export class Car {
     // POSITIVE roll, and a left turn wants a NEGATIVE one, because a body leans OUT of a
     // corner and not into it. Both signs were wrong on the first pass and both are
     // invisible in a number; they show up the moment you look at the horizon.
+    // The lean is keyed to the FRACTION of lock, not the wheel angle: the lock is a few
+    // degrees at 23 m/s now (CFG.car.turn), and 0.023 is what MOSSWAY's 0.66 * 0.035
+    // reached at full lock, so the body leans exactly as far as it did.
+    const steerN = this.lockNow > 0 ? clamp(this.steer / this.lockNow, -1, 1) : 0;
     const wantRoll = Math.atan2(hr - hl, SAMPLE_SIDE * 2) * 0.72
-      - this.steer * Math.min(Math.abs(this.speed) / K.onRoad, 1) * 0.035;
+      - steerN * Math.min(Math.abs(this.speed) / K.onRoad, 1) * ROLL_LEAN;
     this.pitch = damp(this.pitch, clamp(wantPitch, -K.pitchClamp, K.pitchClamp), TILT_LAMBDA, dt);
     this.roll = damp(this.roll, clamp(wantRoll, -K.rollClamp, K.rollClamp), TILT_LAMBDA, dt);
 
@@ -1507,9 +1628,21 @@ export class Car {
 
     if (!hit) return;
 
-    // The scrub, time-based. CFG.car.treeHit = { targetMul: 0.35, lambda: 12 }.
+    // The scrub, time-based. CFG.car.treeHit = { targetMul: 0.35, lambda: 12, glance: 0.12 }.
+    //
+    // ROUND 5. It scrubbed the same whether you drove INTO the trunk or brushed past it,
+    // so threading a spur through trees was a crash every time a wing touched bark. The
+    // scrub now scales with how square-on the contact is: `into` is the dot of the direction
+    // of travel with the trunk's normal (1 = head-on, 0 = a graze along the flank), and the
+    // damp target runs from targetMul at head-on to 1 - (1 - targetMul) * glance for a graze.
+    // Measured at 6 m/s (tests/car.mjs): head-on still stops the car; a graze that kept
+    // 1.34 m/s before keeps most of its speed now. The slide-off nudge below is unchanged.
     const before = this.speed;
-    this.speed = damp(this.speed, this.speed * K.treeHit.targetMul, K.treeHit.lambda, dt);
+    const vs = this.speed >= 0 ? 1 : -1;
+    const into = clamp01(-(fx * vs * nx + fz * vs * nz));
+    const shaped = K.treeHit.glance + (1 - K.treeHit.glance) * into;
+    const mul = 1 - (1 - K.treeHit.targetMul) * shaped;
+    this.speed = damp(this.speed, this.speed * mul, K.treeHit.lambda, dt);
 
     // The nudge: steer along the trunk rather than into it. The tangent is the normal
     // turned 90 degrees; take whichever of the two is closer to where we are pointing.
@@ -1719,7 +1852,9 @@ export class Car {
     const wheels = this.body.wheels;
     for (let i = 0; i < WHEEL_OFFSETS.length; i++) {
       const w = WHEEL_OFFSETS[i];
-      _e.set(wheelRot, w.front ? steer * 0.92 : 0, 0, 'YXZ');
+      // `steer` is the front wheel angle itself (CFG.car.turn): the wheels are drawn at
+      // the angle the kinematics turn on, no scaling.
+      _e.set(wheelRot, w.front ? steer : 0, 0, 'YXZ');
       _q.setFromEuler(_e);
       _pos.set(w.x, w.y, w.z);
       _m.compose(_pos, _q, _s);
@@ -1729,7 +1864,7 @@ export class Car {
     // The rim group is tilted back on its column, so its local +Z points up-and-back —
     // at the driver. A positive rotation about it reads counter-clockwise from the seat,
     // which is what a left turn looks like from behind a steering wheel.
-    this.body.steer.rotation.z = steer * 5.6;
+    this.body.steer.rotation.z = steer * RIM_RATIO;
 
     /* ---- the door, and the light behind it ---- */
     // The one part of this prop that is a VERB. Both are interpolated, so the swing is
@@ -1743,10 +1878,11 @@ export class Car {
       const fx0 = -Math.sin(h), fz0 = -Math.cos(h);
       const swing = doorA * 0.62;
       const lx0 = DOOR_HINGE.x - swing * 0.55, lz0 = DOOR_HINGE.z + 0.62;
+      // lz0 is local (forward = -Z): minus the forward vector, like the seat and the door.
       this.cabinHandle.setPosition(
-        x + rx0 * lx0 + fx0 * lz0,
+        x + rx0 * lx0 - fx0 * lz0,
         y + bob + 1.05,
-        z + rz0 * lx0 + fz0 * lz0,
+        z + rz0 * lx0 - fz0 * lz0,
       );
       if (this.cabinHandle.setIntensity) this.cabinHandle.setIntensity(CABIN_POOL * cabin);
     }
@@ -1803,11 +1939,34 @@ export class Car {
     const cam = this.ctx.camera;
     if (!cam) return;
 
-    const fx2 = -Math.sin(h), fz2 = -Math.cos(h);
-    const rx2 = Math.cos(h), rz2 = -Math.sin(h);
-    const sx = x + rx2 * SEAT.x + fx2 * SEAT.z;
-    const sy = y + bob * 0.46 + SEAT.y;
-    const sz = z + rz2 * SEAT.x + fz2 * SEAT.z;
+    //
+    // ROUND 5, ALEX'S FOURTH PLAYTEST: "it seems to put you in the back seat and you can't
+    // see the road well." He was right and this is the line. SEAT is a LOCAL offset in the
+    // body's frame — carbody.js builds the dash, the binnacle, the glass line and both
+    // pillars around (-0.31, 1.66, -0.50) with forward = -Z, so z = -0.50 is half a metre
+    // FORWARD of the origin, between the A-pillars. This composed it as x + fwd * z, and a
+    // negative z along the forward vector is half a metre BEHIND the origin: local +0.50,
+    // behind the B-pillar, eye-to-eye with the driver's headrest. Measured with the GEOMETRY
+    // instrument in tests/car.mjs (rays through the real camera against the car's meshes —
+    // the differential luma masks cannot see dark paint over dark road and under-read this
+    // 2-3x, verification round 1): at rest the car covered 71.8% of the frame's centre band
+    // and 98.3% of its middle third, and the column you steer into was blocked for the whole
+    // band. After: 12.9% and 5.5%, the column open down 94% of the band — the A-pillar at
+    // the edge and the bonnet's far edge under the road. At 15 m/s on a 13% climb the body
+    // pitches nose-up 0.11 and a band of bodywork swings up across the view: 32.9% and
+    // 23.1%, the column still open down 65% of the band. A local point (lx, ly, lz) is
+    // right * lx + (local +Z) * lz, and local +Z is MINUS the forward vector.
+    //
+    // And it rides the body's WHOLE rotation, not the heading alone: the body pitches
+    // nose-up 0.109 rad on the 13% climb the suite drives, and a seat composed from the
+    // heading only sat 0.18 m ahead of and 0.04 m below the real seat there, with the dash
+    // that much closer to the eye. Same Euler and order as root.rotation above, so the
+    // camera is exactly where carbody.js put the seat, whatever the road is doing.
+    _e.set(pitch, h, roll, 'YXZ');
+    _v.set(SEAT.x, SEAT.y, SEAT.z).applyEuler(_e);
+    const sx = x + _v.x;
+    const sy = y + bob * 0.46 + _v.y;
+    const sz = z + _v.z;
 
     // the reparent: 0.35 s of ease, never a cut, and the player keeps the mouse the
     // whole way. Alex's law: never take the camera away at the scary moment.
@@ -1851,6 +2010,27 @@ export class Car {
   }
 
   /**
+   * The view rides the nose. Written in step, before the clamp, because cam.yaw is AIM and
+   * aim is truth: player/camera.js latches currYaw in its own present(), so a write here is
+   * interpolated across the frame like the mouse is (camera.js:268-272). Driving: the
+   * heading delta of this step — the wheel AND the tree nudge, whatever _integrate did — is
+   * added to the yaw, so the mouse is an offset from the nose and a held turn keeps the
+   * road in frame. Entering: the yaw is eased toward the nose for the 0.35 s of the
+   * reparent only (the hotwire that follows leaves the mouse alone), at ENTER_LOOK_LAMBDA.
+   * The pilot's arriving mode and the exit do not touch the view: nobody is in the seat.
+   */
+  _carryLook(dt) {
+    const cam = this._camera;
+    if (!cam || typeof cam.yaw !== 'number') return;
+    if (this.mode === 'driving') {
+      const dh = angleDelta(this.prevHeading, this.heading);
+      if (dh !== 0) cam.yaw = wrapAngle(cam.yaw + dh);
+    } else if (this.mode === 'entering' && this.enterT < REPARENT) {
+      cam.yaw = wrapAngle(dampAngle(cam.yaw, this.heading, ENTER_LOOK_LAMBDA, dt));
+    }
+  }
+
+  /**
    * The seat yaw clamp, +-1.48 rad [CFG.car.seat.yawClamp]. Written in step (not
    * present) because it moves AIM, and aim is truth. It widens to a full circle during
    * the 0.35 s reparent so that entering never yanks the view — the clamp arrives with
@@ -1861,6 +2041,10 @@ export class Car {
     if (!cam) return;
     const inSeat = this.mode === 'driving' || this.mode === 'entering';
     if (!inSeat) return;
+    // The clamp is measured from the nose, and since _carryLook the nose moves the view
+    // with it, so in play this only ever bites when the player has looked over a shoulder
+    // and the car turns further the same way. It is measured, not assumed: tests/car.mjs
+    // holds full lock at 10 m/s with the mouse still and the clamp never engages.
     const t = this.mode === 'driving' ? 1 : clamp01(this.enterT / REPARENT);
     const width = lerp(Math.PI, SEAT.yawClamp, t);
     const d = angleDelta(this.heading, cam.yaw);

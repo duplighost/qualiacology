@@ -37,6 +37,12 @@ const P = CFG.player;
 // Requested in docs/HANDOFF.md; local consts meanwhile so nothing is invented silently.
 const STICK = 0.42;            // [vigil controller.js:13] ground stick band, keeps you glued going downhill
 const AIR_CAP = 1.40;          // [vigil controller.js:10] air-control cap; bhop cannot exist
+// How far above terrain.heightAt the solver's own floor has to be before this file believes
+// it is a COLLIDER top rather than the same terrain sample by another name. The solver reads
+// the identical analytic field (collision.js groundHeight -> terrain.heightAt), so on open
+// ground the two agree to the bit and this branch is never taken; 2 cm is the same slack the
+// airborne test below already uses. Round 5, integrator item 2.
+const COLLIDER_FLOOR_EPS = 0.02;
 const CROUCH_ADS = 1.55;       // [vigil controller.js:9]
 const SLIDE_COOLDOWN = 1.10;   // [vigil controller.js:15]
 const SLIDE_FRIC_A = 3.40, SLIDE_FRIC_B = 1.60;   // [vigil controller.js slide physics]
@@ -793,11 +799,22 @@ export class PlayerController {
     // horizontal step travelled 2 * vel * dt: WALK 4.35 played as 8.7, SPRINT as 13.2,
     // tac-sprint as 18.4, and every feel number lifted from VIGIL was wrong by exactly 2x
     // while looking superficially fine. Only integrate here when there is no solver.
+    //
+    // AND IT ALSO ANSWERS `grounded`. resolveCapsule finds the support under the feet,
+    // puts the feet on it and reports the flag (collision.js:978 and :1017). This file used
+    // to throw that answer away and re-derive the ground from terrain.heightAt alone, so a
+    // body standing on a collider top — the filling-station canopy, the shop roof, the crate
+    // stair — was metres above terrain, read as AIRBORNE, ran the air branch (no friction,
+    // AIR_CAP, no jump) and coasted off the edge. Measured on the shipped tree: canopy
+    // centre grounded=false, 1.40 m/s still on release, never stopped in 10 s, drift 4.51 m,
+    // FELL at 3.1 s, where the terrain control stopped in 0.12 s and drifted 0.23 m.
+    let solverFloor = -Infinity;
     if (col && col.resolveCapsule) {
       const r = col.resolveCapsule(this.pos, this.vel, P.RADIUS, this.bodyHeight, dt);
       if (r) {
         if (r.pos && r.pos !== this.pos) this.pos.copy(r.pos);
         if (r.recovered) { this.vel.x = 0; this.vel.z = 0; }
+        if (r.grounded) solverFloor = this.pos.y;
       }
     } else {
       this.pos.x += this.vel.x * dt;
@@ -822,10 +839,18 @@ export class PlayerController {
       // upward: being under the world is never an acceptable resting state.
       if (gBack - this.pos.y <= P.STEP_UP) { this.vel.x = 0; this.vel.z = 0; }
       g = gBack;
+      // We just moved back to where the step started, so the solver's floor was measured at
+      // an (x, z) the body no longer occupies. Drop it rather than stand on a stale answer.
+      solverFloor = -Infinity;
     }
 
-    if (this.pos.y <= g + (this.vel.y <= 0 ? STICK : 0) && this.vel.y <= 0.001) {
-      this.pos.y = g;
+    // THE FLOOR IS WHICHEVER IS HIGHER: the terrain field, or the collider top the solver
+    // actually put the feet on. Only a floor ABOVE the terrain here can be a collider — the
+    // case heightAt cannot see — so everywhere else this is `g` and nothing changed.
+    const floorY = solverFloor > g + COLLIDER_FLOOR_EPS ? solverFloor : g;
+
+    if (this.pos.y <= floorY + (this.vel.y <= 0 ? STICK : 0) && this.vel.y <= 0.001) {
+      this.pos.y = floorY;
       // Ground state is committed BEFORE the landing beat, because the beat can start a
       // slide (drop-roll) and _startSlide() refuses while the body still reads as airborne.
       this.vel.y = 0;
@@ -857,8 +882,10 @@ export class PlayerController {
         }
       }
     } else {
-      this.grounded = this.pos.y <= g + 0.02 && this.vel.y <= 0;
+      this.grounded = this.pos.y <= floorY + 0.02 && this.vel.y <= 0;
       this.sinceGround += dt;
+      // The under-terrain rescue stays on `g`: being below the TERRAIN is the unacceptable
+      // state, and a collider top is never the thing you have to be pushed up out of.
       if (!this.grounded && this.pos.y < g) {
         this.pos.y = g; this.vel.y = Math.max(0, this.vel.y);
         this.grounded = true; this.sinceGround = 0;

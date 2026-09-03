@@ -389,6 +389,14 @@ function frame(now) {
   if (wantPause !== ctx.paused) {
     ctx.paused = wantPause;
     ctx.time.scale = 1;                       // never resume inside a hitstop
+    // NO KEY PRESSED BEHIND THE CARD REACHES THE FIRST STEP BACK. input.js keeps every edge
+    // until endStep() clears it, and no step runs while paused, so a Space tapped while the
+    // card was up ("is it stuck?") launched a measured 0.88 m jump the instant the game
+    // resumed (verification round 1), and an Escape tapped there re-paused it. clear() puts
+    // every held action up and empties the buffer; endStep(0) drops the pressed/released
+    // edges it leaves behind. Both are input.js's public frame API, called from the loop that
+    // already owns endStep.
+    if (!wantPause && ctx.input) { ctx.input.clear(); ctx.input.endStep(0); }
     ctx.bus.emit('game:paused', wantPause);
   }
   if (ctx.paused) {

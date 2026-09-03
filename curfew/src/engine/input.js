@@ -58,6 +58,10 @@ const KEYMAP = Object.freeze({
   KeyF: 'torch',
   KeyE: 'use',
   KeyH: 'horn',
+  // ROUND 5 (NEXT.md item 3): the arsenal. Q cycles the owned weapons, 1 and 2 pick a slot.
+  // weapons/weapon.js reads these through held() on the same edge path as reload.
+  KeyQ: 'swap',
+  Digit1: 'slot1', Digit2: 'slot2',
   Escape: 'menu',
 });
 

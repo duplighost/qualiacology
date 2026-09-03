@@ -58,6 +58,7 @@ import CFG from '../config.js';
 import { Rng, TAU, clamp, clamp01, lerp, noise1D, smoothstep } from '../engine/math.js';
 import {
   MAJORS, MAJOR_BY_ID, MINOR_KINDS, MINOR_SPACING, MINOR_OFFSET, REGION_TINT, DEFAULT_TINT,
+  CAMPFIRE_OFFSET, CAMPFIRE_NEAR_R,
 } from './placedata.js';
 import { BUILDERS, MINOR_BUILDERS, apron, beaconGeometry, GLOW } from './sites.js';
 
@@ -89,6 +90,35 @@ const BEACON_OPACITY = 0.085;   // was 0.20, measured p50 112 against an open sk
 // ART.md 0.5's ration of saturation to the lamp, the aviation red, the embers and the glints.
 const BEACON_DESAT = 0.55;
 const BEACON_DIE_S = 1.6;         // FILAMENT's wakemix crossfade, so a claim reads as one beat
+
+/* ------------------------------------------------ the beacon at a distance (round 5) --
+ * Alex, playtest 4: "some of the things that seem like waypoints in the distance are a bit
+ * confusing when they're marked in your view and you can't see them yet."
+ *
+ * MEASURED 2026-09-03 (docs/ROUND-5/E-places.md, flora hidden so the column itself is what
+ * is measured): the beacon's mean luminance delta over its backdrop was 24-29 at 300 m, at
+ * 460 m and at 900 m alike — a column that is exactly as bright at a kilometre as it is in
+ * the yard is a MARKER, which is what he called it. A thing in the air fades with the air.
+ * So the beacon's opacity now falls with distance: full inside BEACON_FULL_R, down to
+ * BEACON_FAR_K of itself by BEACON_FADE_R and flat beyond, one smoothstep, continuous
+ * through the PROXY_R handover (which sits inside the fade, where the curve is smooth). Past
+ * PROXY_R the column is also widened a little (BEACON_FAR_WIDEN) so a distant beacon is a
+ * soft column rather than a 4-pixel line — the same light spread over more air. Both are
+ * per-mesh (material.opacity, mesh.scale), on the one shared program: no new material.
+ */
+const BEACON_FULL_R = 300;
+const BEACON_FADE_R = 700;
+const BEACON_FAR_K = 0.34;
+const BEACON_FAR_WIDEN = 1.9;
+const BEACON_WIDEN_FROM = PROXY_R;
+const BEACON_WIDEN_TO = 1100;
+
+// Campfires (round 5): the near band is CAMPFIRE_NEAR_R and the release band is that plus
+// this, the same acquire/release rule as the majors' NEAR_HYSTERESIS, sized to a fire and
+// not to a yard. progress.js banks on the broadcast through its own 6 s cooldown.
+const CAMPFIRE_HYST = 3.0;
+// No trunk inside this of a fire's ring: the ring is 0.85 m, the lean-to reaches 3.7 m.
+const CAMPFIRE_CLEAR_R = 5.0;
 
 // Manual aerial perspective for the fog-free landmark materials. FLOORED, never zero:
 // MARROW crushed its moonlit distance to unreadable black and it cost a whole round.
@@ -284,6 +314,14 @@ export class Places {
     this._t = 0;
     this._nodeList = [];          // flat: iterating a Map allocates an iterator per frame
     this._flickers = [];          // body glows that breathe (the dying headlight)
+    this._embers = [];            // resident campfire glows, breathed in present()
+    this._campfires = [];         // every authored campfire {i, x, z, ...}, for proximity
+    this.nearFire = -1;           // index into _campfires we are currently AT, or -1
+    this._fireT = 0;              // the campfire's own place:near heartbeat
+    // Test knob (tests/sites.mjs): false restores the pre-round-5 beacon — constant opacity,
+    // no far widening — so the fade can be measured against itself on one screen.
+    this.beaconFade = true;
+    this._minorsBuilt = false;    // the table is built once, by init() or by the first sightClear()
     this._built = false;
     this._initDone = false;
     this.flatsRegistered = false;
@@ -747,6 +785,10 @@ export class Places {
         const fi = this._flickers.indexOf(b);
         if (fi >= 0) { this._flickers[fi] = this._flickers[this._flickers.length - 1]; this._flickers.pop(); }
       }
+      if (b.ember) {
+        const ei = this._embers.indexOf(b);
+        if (ei >= 0) { this._embers[ei] = this._embers[this._embers.length - 1]; this._embers.pop(); }
+      }
       if (b.group) {
         this.group.remove(b.group);
         b.group.traverse((o) => {
@@ -865,13 +907,20 @@ export class Places {
     let glowMesh = null;
     if (glowGeo) {
       glowMesh = new THREE.Mesh(glowGeo, this.matGlow.clone());
-      glowMesh.material.color.set(GLOW.lamp);
+      // A builder may name its own glow (the campfire is GLOW.ember, the stack tops' colour;
+      // ART 0.5 rations saturation to exactly that set). Default stays the lamp.
+      glowMesh.material.color.set(k.glowColour || GLOW.lamp);
+      glowMesh.name = 'minor-glow-' + m.kind;
       glowMesh.renderOrder = 4;
       g.add(glowMesh);
     }
     this.group.add(g);
-    const body = { id: null, group: g, glow: glowMesh, kind: 'minor', minorKind: m.kind, flicker: !!k.flicker, seed: m.i };
+    const body = {
+      id: null, group: g, glow: glowMesh, kind: 'minor', minorKind: m.kind,
+      flicker: !!k.flicker, ember: !!(k.ember && glowMesh), seed: m.i,
+    };
     if (body.flicker && glowMesh) this._flickers.push(body);
+    if (body.ember) this._embers.push(body);
     return body;
   }
 
@@ -932,6 +981,8 @@ export class Places {
   }
 
   _buildMinorTable() {
+    if (this._minorsBuilt) return;
+    this._minorsBuilt = true;
     const roads = this._sys('roads');
     const terrain = this._sys('terrain');
     const chunks = this._sys('chunks');
@@ -971,24 +1022,60 @@ export class Places {
       if (blocked) continue;
 
       const kind = this._chooseMinor(since, lastKind, rnd, rint);
-      for (const k of MINOR_KINDS) since[k.id] = (k.id === kind) ? 0 : since[k.id] + 1;
-      lastKind = kind;
+      // The since-counters and the never-stack rule advance only once the site is actually
+      // placed (below), so a kind refused by the ground here is drawn again at the next road
+      // point instead of counting as served — with the counters advanced up here, every
+      // rejected campfire was a campfire the rationing believed it had built.
 
-      // sit it off the verge, on the side with the gentler ground
+      // sit it off the verge, on the side with the gentler ground. An `offRoad` kind (the
+      // campfire) sits well back in the trees instead — 18-40 m, CAMPFIRE_OFFSET — where it
+      // is a glow you see from the road and walk toward, not a prop on the verge.
       const tx = (bx - ax) / seg, tz = (bz - az) / seg;
       const px = -tz, pz = tx;
-      const off = MINOR_OFFSET.min + rnd() * (MINOR_OFFSET.max - MINOR_OFFSET.min);
+      const kdef = MINOR_KINDS[this._minorIndex(kind)];
+      const OFF = kdef && kdef.offRoad ? CAMPFIRE_OFFSET : MINOR_OFFSET;
+      const off = OFF.min + rnd() * (OFF.max - OFF.min);
       const s = rnd() < 0.5 ? -1 : 1;
       let mx = bx + px * off * s, mz = bz + pz * off * s;
-      if (terrain && terrain.slopeAt && terrain.slopeAt(mx, mz) > 0.45) {
+      if (kdef && kdef.offRoad) {
+        // An off-road site has more ways to be wrong: a bank, a yard the road only
+        // skirted, or another stretch of the loop doubling back under it. Try both sides at
+        // the drawn offset and then at the nearest one before giving the road point up.
+        const okAt = (x, z) => {
+          if (terrain && terrain.slopeAt && terrain.slopeAt(x, z) > 0.45) return false;
+          for (const d of MAJORS) if (Math.hypot(x - d.x, z - d.z) < MAJOR_KEEPOUT) return false;
+          return roads.roadDistance(x, z) >= 9;
+        };
+        let placed = false;
+        for (const o of [off, OFF.min]) {
+          for (const side of [s, -s]) {
+            const tx2 = bx + px * o * side, tz2 = bz + pz * o * side;
+            if (okAt(tx2, tz2)) { mx = tx2; mz = tz2; placed = true; break; }
+          }
+          if (placed) break;
+        }
+        if (!placed) continue;
+      } else if (terrain && terrain.slopeAt && terrain.slopeAt(mx, mz) > 0.45) {
         mx = bx - px * off * s; mz = bz - pz * off * s;
         if (terrain.slopeAt(mx, mz) > 0.55) continue;     // both sides are a bank
       }
+
+      for (const k of MINOR_KINDS) since[k.id] = (k.id === kind) ? 0 : since[k.id] + 1;
+      lastKind = kind;
 
       const yaw = Math.atan2(bx - mx, bz - mz);           // face the road
       const age = hub ? clamp01(Math.hypot(mx - hub.x, mz - hub.z) / 1650) : 0.5;
       const rec = { i: idx++, kind, x: mx, z: mz, yaw, age };
       this.minors.push(rec);
+      // A LIT kind (placedata: the campfire) joins the proximity list. Keyed on the table's
+      // own flag, not on offRoad, so a future off-road prop that is not a fire does not
+      // broadcast lit: true. The id string is made HERE, once: the heartbeat in step()
+      // must not concatenate (CONTRACT: the hot path allocates nothing).
+      if (kdef && kdef.lit) {
+        rec.fire = this._campfires.length;
+        rec.fireId = 'campfire-' + rec.fire;
+        this._campfires.push(rec);
+      }
       const key = chunks && chunks.chunkIdAt
         ? String(chunks.chunkIdAt(mx, mz))
         : (Math.floor(mx / CHUNK) + '|' + Math.floor(mz / CHUNK));
@@ -997,7 +1084,13 @@ export class Places {
       arr.push(rec);
     }
     this._note('minor sites: ' + this.minors.length + ' over ' +
-      (roads.totalLength ? Math.round(roads.totalLength()) : '?') + ' m of road');
+      (roads.totalLength ? Math.round(roads.totalLength()) : '?') + ' m of road, ' +
+      this._campfires.length + ' campfires off it');
+  }
+
+  _minorIndex(kind) {
+    for (let i = 0; i < MINOR_KINDS.length; i++) if (MINOR_KINDS[i].id === kind) return i;
+    return -1;
   }
 
   /* ------------------------------------------------------------------ *
@@ -1095,6 +1188,17 @@ export class Places {
    */
   sightClear(x, z) {
     if (!this._sightGrid) this._buildSightGrid();
+    // Round 5: a campfire is a CLEARING. flora.js:1095 already asks this before every trunk,
+    // so a fire's ring and lean-to get the same courtesy as a sight corridor — at
+    // CAMPFIRE_CLEAR_R, a dozen distance tests per candidate tree at plant time and nothing
+    // in step(). The table is built here if the forest asks before init() has run (the boot
+    // ring plants under chunks.init, #8, before this system's init, #10).
+    if (!this._minorsBuilt) this._buildMinorTable();
+    for (let k = 0; k < this._campfires.length; k++) {
+      const f = this._campfires[k];
+      const dx = x - f.x, dz = z - f.z;
+      if (dx * dx + dz * dz < CAMPFIRE_CLEAR_R * CAMPFIRE_CLEAR_R) return true;
+    }
     const N = this._sightN, HALF = this._sightHalf;
     const i = Math.floor((x + HALF) / SIGHT_CELL);
     const j = Math.floor((z + HALF) / SIGHT_CELL);
@@ -1323,10 +1427,53 @@ export class Places {
         this._fillNear(held);
         this.ctx.bus.emit('place:near', _nearPayload);
       }
-    } else {
-      this._nearT = 0;
-      this._nearFlags = -1;
+      this.nearFire = -1;
+      this._fireT = 0;
+      return;
     }
+    this._nearT = 0;
+    this._nearFlags = -1;
+
+    // --- campfires (round 5): a LIT FIRE off the road, on the same acquire/release rule --
+    // A major's yard always wins (above). Otherwise, inside CAMPFIRE_NEAR_R of a fire's ring
+    // you are AT it and the same heartbeat broadcasts {major: false, lit: true}, which is
+    // what progression/progress.js:460 banks on. Released past the band plus CAMPFIRE_HYST.
+    let fire = this.nearFire >= 0 ? this._campfires[this.nearFire] : null;
+    if (fire && Math.hypot(px - fire.x, pz - fire.z) > CAMPFIRE_NEAR_R + CAMPFIRE_HYST) {
+      fire = null; this.nearFire = -1;
+    }
+    if (!fire) {
+      let bd = CAMPFIRE_NEAR_R * CAMPFIRE_NEAR_R, bi = -1;
+      for (let i = 0; i < this._campfires.length; i++) {
+        const f = this._campfires[i];
+        const dx = px - f.x, dz = pz - f.z, dd = dx * dx + dz * dz;
+        if (dd < bd) { bd = dd; bi = i; }
+      }
+      if (bi >= 0) { this.nearFire = bi; fire = this._campfires[bi]; this._fireT = NEAR_REPEAT_S; }
+    }
+    if (fire) {
+      this._fireT += dt;
+      if (this._fireT >= NEAR_REPEAT_S) {
+        this._fireT = 0;
+        const p = _nearPayload;
+        p.id = fire.fireId; p.name = '';
+        p.major = false; p.lit = true; p.hub = false;
+        p.x = fire.x; p.z = fire.z; p.discovered = true; p.claimed = false;
+        this.ctx.bus.emit('place:near', p);
+      }
+    }
+  }
+
+  /** The unclaimed major nearest a point, for the map board's rim arrow. */
+  nearestUnclaimed(x, z) {
+    let best = null, bd = Infinity;
+    for (let i = 0; i < MAJORS.length; i++) {
+      const d = MAJORS[i];
+      if (this.claimed.has(d.id)) continue;
+      const dd = Math.hypot(x - d.x, z - d.z);
+      if (dd < bd) { bd = dd; best = d; }
+    }
+    return best;
   }
 
   /** Record which whisper radii we are standing in, without discovering any of them. */
@@ -1492,26 +1639,71 @@ export class Places {
       board.mesh.material.dispose();
       board.mesh = null;
     }
-    if (!this.found.size) return;
     const s = board.spec;
     const HALF = CFG.world.SIZE * 0.5;
     const parts = [];
+    // Board-plane placement: (u, v) are metres across and up the paper from its centre;
+    // the board's normal is its yaw, so u runs along (cos yaw, 0, -sin yaw).
+    const place = (g, u, v, lift) => {
+      g.rotateY(s.yaw);
+      const off = lift || 0;
+      g.translate(s.x + u * Math.cos(s.yaw) - Math.sin(s.yaw) * off, s.y + v, s.z + u * -Math.sin(s.yaw) - Math.cos(s.yaw) * off);
+      return g;
+    };
+    const tint = (g, hex, k) => {
+      _col.set(hex);
+      const n = g.attributes.position.count;
+      const c = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { c[i * 3] = _col.r * k; c[i * 3 + 1] = _col.g * k; c[i * 3 + 2] = _col.b * k; }
+      g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+      parts.push(g);
+      return g;
+    };
+    // THE MARKS (round 5, Alex: "I haven't figured out exactly how the location system
+    // works yet"). Two marks, the kit's own line-drawing style, and a legend of the same two
+    // in the board's corner so the paper teaches its own reading: an EMPTY RING is a place
+    // you have found, a FILLED DISC is a place you have claimed and lit. No words.
+    const ring = () => new THREE.RingGeometry(0.030, 0.046, 18);
+    const disc = () => new THREE.CircleGeometry(0.046, 18);
     for (const id of this.found) {
       const d = MAJOR_BY_ID[id];
       if (!d) continue;
       const u = clamp(d.x / HALF, -1, 1) * (s.w * 0.44);
       const v = clamp(-d.z / HALF, -1, 1) * (s.h * 0.44);
       const claimed = this.claimed.has(id);
-      const g = new THREE.PlaneGeometry(claimed ? 0.075 : 0.05, claimed ? 0.075 : 0.05);
-      g.rotateY(s.yaw);
-      g.translate(s.x + u * Math.cos(s.yaw), s.y + v, s.z + u * -Math.sin(s.yaw));
-      _col.set(REGION_TINT[d.region] || DEFAULT_TINT);
-      const n = g.attributes.position.count;
-      const c = new Float32Array(n * 3);
-      const k = claimed ? 1 : 0.35;
-      for (let i = 0; i < n; i++) { c[i * 3] = _col.r * k; c[i * 3 + 1] = _col.g * k; c[i * 3 + 2] = _col.b * k; }
-      g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-      parts.push(g);
+      tint(place(claimed ? disc() : ring(), u, v), REGION_TINT[d.region] || DEFAULT_TINT, claimed ? 1 : 0.55);
+    }
+    // the legend, bottom-left of the paper: ring, then disc, then a short bar
+    {
+      const lu = -s.w * 0.44, lv = -s.h * 0.44;
+      tint(place(ring(), lu + 0.06, lv + 0.05), 0xffffff, 0.55);
+      tint(place(disc(), lu + 0.20, lv + 0.05), 0xffffff, 1);
+    }
+    // THE ARROW at the paper's edge: from the station's own place on the map, along the
+    // bearing to the nearest unclaimed beacon, a short shaft and a head just inside the rim.
+    // That is the whole teaching: the board says which way the next light is. Rebuilt on
+    // every claim, because _claim sets _pinsDirty.
+    {
+      const hub = MAJOR_BY_ID['filling-station'];
+      const target = hub ? this.nearestUnclaimed(hub.x, hub.z) : null;
+      if (hub && target) {
+        const bx = target.x - hub.x, bz = -(target.z - hub.z);
+        const bl = Math.hypot(bx, bz) || 1;
+        const dx = bx / bl, dz = bz / bl;                  // paper-space direction (u, v)
+        const u0 = clamp(hub.x / HALF, -1, 1) * (s.w * 0.44);
+        const v0 = clamp(-hub.z / HALF, -1, 1) * (s.h * 0.44);
+        const lim = (o, dir, L) => dir > 1e-6 ? (L - o) / dir : dir < -1e-6 ? (-L - o) / dir : Infinity;
+        const t = Math.min(lim(u0, dx, s.w * 0.47), lim(v0, dz, s.h * 0.47));
+        const tipU = u0 + dx * t, tipV = v0 + dz * t;
+        const ang = Math.atan2(dz, dx);
+        const shaft = new THREE.PlaneGeometry(0.16, 0.014);
+        shaft.rotateZ(ang);
+        shaft.translate(-dx * 0.11, -dz * 0.11, 0);
+        const head = new THREE.CircleGeometry(0.038, 3);
+        head.rotateZ(ang);
+        tint(place(shaft, tipU, tipV), 0xffffff, 0.9);
+        tint(place(head, tipU, tipV), 0xffffff, 0.9);
+      }
     }
     if (!parts.length) return;
     let geo = parts[0];
@@ -1669,7 +1861,14 @@ export class Places {
         else if (mv.role !== 'brazier') mv.mesh.rotation.z = ang;
       }
       if (rec.beacon && rec.beacon.visible) {
-        rec.beacon.material.opacity = BEACON_OPACITY * rec.beaconLevel;
+        // The distance fade and the far widening (see the BEACON_* block at the top). Both
+        // are smoothsteps of the same distance the proxy uses, so the handover at PROXY_R is
+        // a point on a smooth curve rather than a step.
+        const on = this.beaconFade ? 1 : 0;
+        const fade = 1 - on * (1 - BEACON_FAR_K) * smoothstep(BEACON_FULL_R, BEACON_FADE_R, dist);
+        rec.beacon.material.opacity = BEACON_OPACITY * rec.beaconLevel * fade;
+        const widen = 1 + on * (BEACON_FAR_WIDEN - 1) * smoothstep(BEACON_WIDEN_FROM, BEACON_WIDEN_TO, dist);
+        rec.beacon.scale.x = widen; rec.beacon.scale.z = widen;
       }
     }
 
@@ -1678,6 +1877,13 @@ export class Places {
       const b = this._flickers[i];
       const f = noise1D(this._t * 3.1 + b.seed * 0.37, 1, 7);
       b.glow.material.opacity = f > 0.18 ? clamp(0.35 + f, 0.2, 1) : 0.04;
+    }
+    // the campfires breathe, the way the stack tops do (works, above), each on its own seed
+    for (let i = 0; i < this._embers.length; i++) {
+      const b = this._embers[i];
+      // noise1D runs -1..1 (the works' 0.72 + 0.28 band is 0.44-1.0); a fire never falls
+      // below 0.4 of itself, or the read from the road blinks out between breaths.
+      b.glow.material.opacity = 0.70 + 0.30 * noise1D(this._t + b.seed * 1.7, 0.55, 5 + (b.seed % 7));
     }
   }
 
@@ -1724,6 +1930,8 @@ export class Places {
   isClaimed(id) { return this.claimed.has(id); }
   majorCount() { return MAJORS.length; }
   minorCount() { return this.minors.length; }
+  /** Every campfire, with its position. A copy; tests and tools read it. */
+  campfires() { return this._campfires.map(f => ({ id: f.fireId, x: f.x, z: f.z, yaw: f.yaw })); }
 
   /** Force a claim, for tests and for the integrator's screenshot rig. */
   claim(id) {
@@ -1738,9 +1946,11 @@ export class Places {
     return {
       majors: MAJORS.length,
       minors: this.minors.length,
+      campfires: this._campfires.length,
       found: this.found.size,
       claimed: this.claimed.size,
       near: this.near,
+      nearFire: this.nearFire,
       flats: this.flatsRegistered,
       flatSeam: this.flatSeam,
       sightCorridors: this._sightList ? this._sightList.length : 0,

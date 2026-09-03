@@ -294,10 +294,15 @@ export class Progress {
     this._deathStep = -1;
 
     // --- draft ------------------------------------------------------------------
-    // TRUE ships the reduction: at a lit fire a level's point deals three cards and takes
-    // one, rocket-shoes autoGrant() style, because there is no paper map to ink them on yet.
-    // Set false the day a draft surface exists and pendingDraft/pick() drive it.
-    this.autoDraft = true;
+    // FALSE, since round 5: the draft has a surface — the pause card (ui/hud.js
+    // _refreshTree), the one screen where words are legal. Alex, fourth playtest: "i have not
+    // really seen a skill tree." A level-up deals three (_checkLevel); a lit fire deals three
+    // if none are waiting (_maybeDraft); a pause deals three if a point is unspent and nothing
+    // is waiting (_wire, game:paused); the card calls pick(i), which deals again at once when
+    // a point is left over. TRUE is the old reduction —
+    // deal three and take one, rocket-shoes autoGrant() style — still reachable through
+    // config({progress:{autoDraft:true}}) for a test that wants the tree to fill itself.
+    this.autoDraft = false;
     this.draftCards = null;
 
     this._audit = null;        // filled by _selfTest() at init, read by ready()
@@ -451,6 +456,7 @@ export class Progress {
       // A claim is always somewhere lit. This is the arrival beat's other half.
       this.bank('claim');
       this.save.mark();
+      this._doorShut();
     });
 
     // places.js:108 emits the WHOLE place and reuses one scalar object:
@@ -477,7 +483,15 @@ export class Progress {
     on('level:up', (p) => { void p; });   // ours; listed so the channel is obviously live
 
     on('weapon:reload', (p) => { if (p.phase !== 'cancel') this._verb('reload'); });
-    on('car:entered', () => this._verb('drive'));
+    on('car:entered', () => { this._verb('drive'); this._doorShut(); });
+
+    // THE PAUSE IS THE SURFACE'S MOMENT. If a point is unspent and no cards are waiting (a
+    // returning save; a pick that left change), deal, so the card has something to show.
+    // Raw subscription: the payload is a boolean and the wrapper above would make it {}.
+    // This runs before hud's listener because progress precedes hud in the manifest.
+    this._unsub.push(b.on('game:paused', (v) => {
+      if (v === true && !this.autoDraft && this.points > 0 && !this.draftCards) this.draft(3);
+    }));
 
     // The four bus channels this system already sees, now published to the registry so a node
     // can act on them without another lane learning that the node exists. Every one of these
@@ -624,8 +638,25 @@ export class Progress {
     this._publish();
     if (up) {
       this._stat.levelUps++;
+      // THE DEAL HAPPENS ON THE LEVEL, not only at a lit fire (round 5, lane B): the three
+      // cards wait on the pause card for the next Escape. Dealt before level:up is emitted so
+      // hud's refresh on that event already sees them.
+      if (!this.autoDraft && this.points > 0) this.draft(3);
       this.ctx.bus.emit('level:up', { level: L });
     }
+  }
+
+  /**
+   * A door closed behind you. nodes.js declares onDoorShut for quiet_3 (Shut the Door) and
+   * NOTHING emitted it — NEXT.md item 1 verified the node dead. There are no doors yet; the
+   * two the county does have are the car's and a claimed place's, so both run it here, from
+   * the bus, the way onHurt/onLand/onNoise are. The position is the player's, read lazily,
+   * because car:entered carries null.
+   */
+  _doorShut() {
+    const p = this.ctx.systems.get('player');
+    const x = p && p.pos ? p.pos.x : 0, z = p && p.pos ? p.pos.z : 0;
+    this.hooks.run('onDoorShut', this.ctx, x, z);
   }
 
   _points() {
@@ -1128,22 +1159,30 @@ export class Progress {
     return this.draftCards;
   }
 
+  /**
+   * Take a dealt card. If a point is still unspent afterwards, DEAL AGAIN AT ONCE: measured
+   * in verification round 1, a pick that left change showed "Level 10 · 8 to spend" with the
+   * cards gone and nothing to click, and spending K points cost K Escape/click cycles — the
+   * project's working-but-illegible failure mode on the very surface built to cure it. The
+   * card's click handler re-renders after this returns, so the new three are on screen in the
+   * same pause. draft() returns null when the pool is empty, so a full tree ends the deals.
+   */
   pick(i) {
     if (!this.draftCards || !this.draftCards[i]) return false;
     const ok = this.buy(this.draftCards[i].id);
-    if (ok) this.draftCards = null;
+    if (ok) this.draftCards = this.points > 0 ? this.draft(3) : null;
     return ok;
   }
 
   /**
-   * At a lit fire, spend what is spendable. THE REDUCTION: DESIGN section 6 wants the three
-   * cards inked on the underside of the paper map and the player to choose one. The map does
-   * not exist yet and a menu mid-play is forbidden, so this deals the three and takes one —
-   * rocket-shoes draft.js:41-49's own answer to the same problem ("No menu, no pause — pure
-   * flow"). Set this.autoDraft = false the day there is a surface to draw the cards on.
+   * At a lit fire. With autoDraft false (the shipping default since round 5) this deals
+   * three if a point is unspent and nothing is waiting, and the pause card shows them. With
+   * autoDraft true it is the old reduction — deal three and take one, rocket-shoes
+   * draft.js:41-49 ("No menu, no pause — pure flow") — kept for tests that want the tree to
+   * fill itself without a click.
    */
   _maybeDraft() {
-    if (!this.autoDraft) { if (this.points > 0) this.draft(3); return; }
+    if (!this.autoDraft) { if (this.points > 0 && !this.draftCards) this.draft(3); return; }
     let guard = 0;
     while (this.points > 0 && guard++ < 8) {
       const cards = this.draft(3);
@@ -1265,6 +1304,8 @@ export class Progress {
       level: this.level, levelFrac: +levelFrac(this.total()).toFixed(3),
       nextAt: xpForLevel(this.level + 1),
       points: this.points, spent: this.spent,
+      autoDraft: this.autoDraft,
+      draft: this.draftCards ? this.draftCards.map((c) => c.id) : null,
       owned: this._ownedList(), auto: Array.from(this._auto),
       found: this.found.size, claimed: this.claimed.size, roadBuckets: this.roadLit.size,
       motes: this._liveMotes(), lit: this.lit, streak: this.streak,

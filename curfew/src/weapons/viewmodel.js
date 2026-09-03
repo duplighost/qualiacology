@@ -79,6 +79,84 @@ import CFG from '../config.js';
 const REST_POS = new THREE.Vector3(0.1400, -0.1180, -0.3200);
 const REST_ROT = new THREE.Euler(-0.024, 0.038, 0.052);
 
+/* ---------------- ROUND 5: two guns, one pose stack ----------------
+ * NEXT.md item 3 — "other guns should be obtainable". The KV-7 carbine is earned by claiming
+ * The Weeping Mine (weapon.js grant()) and it needs its OWN silhouette, hip pose, ADS pose,
+ * muzzle anchor and brass anchor. Both guns are built at boot, in the SAME four material
+ * instances (no new program can link during play), and the one not in the hands is
+ * visible = false. Everything per-weapon lives in this table; everything shared (springs,
+ * sway, bob, lag, melee, the flash, the brass pool) is untouched and reads `this.cur`.
+ *
+ * The carbine's numbers are VIGIL's, lifted from the readable donor:
+ *   donor: C:/Users/Alex/Projects/vigil-handoff/vigil-enhanced/src/weapons/viewmodel.js:14-20
+ *     REST  (0.0975, -0.0880, -0.2820) rot (-0.024, 0.038, 0.052)
+ *     SIGHT (0, 0.0680, -0.0790), ADS_DIST 0.155, MUZZLE (0, 0.012, -0.472)
+ * The CINDER carbine is 0.47 m long (butt at +0.199), so VIGIL's rest z puts the butt 8 cm
+ * from the eye — the fault the bolt's re-pose above fixed (a 0.84 m rifle at that z put its
+ * butt plate 2.6 cm from the eye) does not apply, and the donor HIP pose is kept as authored
+ * (moved down/right after measurement, see the table's own comment). ADS_DIST IS the donor's
+ * 0.155 again (verification round 3): round 1 had moved it to 0.28 to stop the aimed carbine
+ * being a slab, which worked but spent a number Alex has already held. What was actually
+ * wrong is the OPTIC MOUNT, not the eye relief — the sight sat 0.068 up, level with the top
+ * rail, so the rail and its slots stacked into the bottom of the ring and the window was 80 px
+ * up and 20 px down. The optic is on a riser now (sight.y 0.084) and both faults go with one
+ * geometry number; see the table's own comment for the two-axis sweep.
+ * `boltThrow` scales the bolt-carrier travel: the carbine has no bolt throw (cycle 0), only a
+ * hold-open on empty, and its handle does not lift. `brass` is the ejection anchor in eye
+ * space (right, forward, down): the carbine's port sits 5 cm further back than the rifle's.
+ */
+const POSES = {
+  bolt: {
+    rest: REST_POS, rot: REST_ROT, scale: 0.96,
+    sight: new THREE.Vector3(0, 0.0735, 0.0300), adsDist: 0.155,
+    muzzle: new THREE.Vector3(0, 0.014, -0.5850),
+    boltThrow: 1.0, boltLift: -0.55,
+    brass: { right: 0.16, fwd: 0.30, down: 0.06 },
+  },
+  carbine: {
+    // Started at VIGIL's rest (0.0975, -0.0880, -0.2820) and MEASURED (tests/weapon.mjs (f),
+    // frame A hip): 15.76% of the frame, dot at x 65% / y 55% — the reflex sight sat just
+    // right of the frame centre, in the middle of the read, the same fault the rifle's
+    // re-pose above names. Down and right, like the rifle; see the report for the sweep.
+    rest: new THREE.Vector3(0.1180, -0.1060, -0.2950), rot: new THREE.Euler(-0.024, 0.038, 0.052), scale: 1.0,
+    // THE RISER (verification round 3). adsDist is VIGIL's 0.155 again. sight.y is the ONE
+    // number that moved: the donor mounts the optic at 0.068, level with the top rail (top at
+    // 0.054, its slots at 0.0605), so at full ADS the rail runs forward UNDER the sight line
+    // and stacks up into the bottom of the ring in perspective. The ring was a window you
+    // could only see out of UPWARDS, and a body you put the dot on was behind your own rail.
+    // Round 1 answered that by pushing the eye relief out to 0.28, which shrank the whole
+    // gun instead of unblocking the ring - and spent a number Alex has held.
+    // MEASURED (tests/artifacts/r3-F-aperture.mjs; flat road -1335,-345, pitch 0, adsT 1,
+    // torch on, 1200x675; OPAQUE-BODY mask = render with the glass and dot meshes hidden,
+    // minus render with vm.root hidden, diff > 12; aperture = pixels walked from the dot to
+    // the first body pixel):
+    //   adsDist  sight.y   aperture up/down/l/r    frame %   lower-half %   x extent
+    //   0.155     0.068      80 /  20 / 79 / 77      37.4        69.3        0 - 100 %  (VIGIL)
+    //   0.28      0.068      42 /  14 / 43 / 41      18.5        35.5       24 -  76 %  (round 1)
+    //   0.155     0.078      80 /  53 / 78 / 77      23.3        41.2       16 -  84 %
+    //   0.155     0.084      80 /  62 / 78 / 77      19.5        33.6       17 -  83 %  <- this
+    //   0.155     0.090      80 /  67 / 79 / 77      16.6        27.6       23 -  77 %
+    //   bolt                 47 /  35 / 49 / 46      13.3        21.2       35 -  70 %  (for scale)
+    // At 0.084 the ring is open 78% of its radius BELOW the dot (the bolt's scope: 74%), the
+    // aimed gun hides a third of the lower half instead of two thirds, and both flanks are
+    // clear - the pack circles, and a body coming in low from the side used to be behind your
+    // own gun. Cutting the two rail slots forward of the sight was measured too and is worth
+    // 1 px (the handguard's top strip is the next blocker), so the geometry is untouched.
+    // Above 0.084 the ring keeps opening but the optic starts to look like a periscope; 0.090
+    // was measured and left on the table. The see-through and sight-on-centre-ray checks in
+    // tests/weapon.mjs (f) hold (the dot is on the centre ray by construction: adsPosFor
+    // solves the ADS pose from the sight, so moving the sight moves the gun, not the dot).
+    // The frame / lower-half / x columns above are the SWEEP's instrument (the render-and-diff
+    // mask, which grows with how bright the night is). The suite pins the same three numbers
+    // on a PAINTED silhouette instead, which does not, and reads 19.3-21.3 / 33.4-35.3 /
+    // x 8.8-16.8 here against VIGIL's 27.1 / 50.1 / x 0-99.9. Both refute the same way.
+    sight: new THREE.Vector3(0, 0.0840, -0.0790), adsDist: 0.155,
+    muzzle: new THREE.Vector3(0, 0.012, -0.472),
+    boltThrow: 0.30, boltLift: 0,
+    brass: { right: 0.14, fwd: 0.24, down: 0.05 },
+  },
+};
+
 // The model is also slightly too big for the lens, because a 0.84 m rifle is not a 0.47 m
 // carbine. Scale is applied to the GUN group, about the action, so the pose offsets above stay
 // in honest camera-space metres and the springs, sway, bob and melee amplitudes underneath
@@ -91,21 +169,26 @@ const REST_ROT = new THREE.Euler(-0.024, 0.038, 0.052);
 // rather than held by them.
 const VM_SCALE = 0.96;
 
-// Scope optical centre in gun space. The ADS pose is solved from it so the
-// reticle lands on the world camera's centre ray to the pixel.
-const SIGHT = new THREE.Vector3(0, 0.0735, 0.0300);
-const ADS_DIST = 0.155;                       // eye to reticle when aimed
-// Solved from the scale, not hard-coded: the sight axis rides the model, so a model scaled
-// about the action moves the axis with it and the ADS pose has to follow or the reticle walks
-// off the world camera's centre ray. At VM_SCALE 1 this is VIGIL's number exactly.
-const adsPosFor = (scale, out) => out.set(0, -SIGHT.y * scale, -(ADS_DIST + SIGHT.z * scale));
+// Scope optical centre in gun space (POSES.bolt.sight, and the carbine's own in POSES.carbine).
+// The ADS pose is solved from it so the reticle lands on the world camera's centre ray to
+// the pixel. Solved from the scale, not hard-coded: the sight axis rides the model, so a model
+// scaled about the action moves the axis with it and the ADS pose has to follow or the reticle
+// walks off the world camera's centre ray. At scale 1 this is VIGIL's number exactly.
+const adsPosFor = (sight, adsDist, scale, out) =>
+  out.set(0, -sight.y * scale, -(adsDist + sight.z * scale));
 
-// A bolt rifle is long. The crown sits well forward of the carbine's -0.472.
-const MUZZLE = new THREE.Vector3(0, 0.014, -0.5850);
+// A bolt rifle is long. The crown sits well forward of the carbine's -0.472. Per-weapon now
+// (POSES.*.muzzle); this.muzzle is the selected gun's.
 const FLASH_AHEAD = 0.070;                    // see THE CINDERBLOOM CLAMP above
 
 const SPRINT_POS = new THREE.Vector3(0.075, -0.045, -0.020);
 const SPRINT_ROT = new THREE.Euler(-14 * DEG, 8 * DEG, 32 * DEG);
+// The swap (ROUND 5) is the sprint-out motion — the donor motion for "the gun leaves the
+// hands" — plus a drop and a nose-down that take it fully out of frame at the midpoint,
+// which is the instant weapon.js changes the gun. Measured on the swap screenshot: the
+// gun's share of the frame at the bottom of the swap is what says it left.
+const SWAP_DROP = new THREE.Vector3(0.02, -0.19, 0.03);
+const SWAP_ROT = new THREE.Euler(-34 * DEG, 0, 0);
 
 // The viewmodel's own lens. The world's 68 / 74 / 55 are untouchable (ART.md 0.6); this one is
 // not — it is this file's own, and it was swept:
@@ -119,7 +202,15 @@ const SPRINT_ROT = new THREE.Euler(-14 * DEG, 8 * DEG, 32 * DEG);
 // top of it would only make the rifle small. So VIGIL's 48 / 44 stands.
 const FOV_HIP = 48, FOV_ADS = 44;
 
-const BRASS_N = 24;                           // a bolt gun does not need 48
+// A bolt gun did not need VIGIL's 48, and 24 was that. The carbine (ROUND 5) dumps 30 cases
+// in 2.48 s against a 6 s case life, so at 24 the pool wrapped inside one magazine: 6 of 30
+// cases were recycled while still live - a case on the ground teleported back to the port
+// (measured by the verifier, verification round 1). 36 held one magazine and still recycled
+// 14 when a second burst followed inside the case life (measured, tests/weapon.mjs (d)); a
+// mag dump, the 2.1 s reload and a second dump are 60 cases in ~7 s, and VIGIL's 48 is the
+// number that holds that with the first cases expiring as the last ones leave. The
+// InstancedMesh is the same one draw at any count.
+const BRASS_N = 48;
 
 /* ---------------- the grade, applied to the gun in its own scene ---------------
  * ART.md 6.1.1 asks for the gun to be drawn INSIDE the composer, between RenderPass and
@@ -193,7 +284,8 @@ const C = {
   DIP: 12, JOLT: 13, BOLTS: 14, SPRINT: 15, ADS: 16,
   BOLTZ: 17, MAG_Y: 18, MAG_X: 19, MAG_RZ: 20,
   SWING: 21, LIFT: 22, RELOADW: 23, BOB: 24, MAGVIS: 25,
-  N: 26,
+  SWAP: 26,                                   // ROUND 5: 0..1 how far the gun is lowered
+  N: 27,
 };
 
 /* ---------------- module scratch. present/step allocate nothing. ------- */
@@ -231,12 +323,19 @@ export class Viewmodel {
     this.vmScale = VM_SCALE;
     this.fovHip = FOV_HIP;
     this.fovAds = FOV_ADS;
+    // ROUND 5: the selected gun's own anchors, copied out of POSES by _selectGun().
+    this.sight = new THREE.Vector3();
+    this.adsDist = 0.155;
+    this.muzzle = new THREE.Vector3();
+    this.guns = {};                 // id -> { group, bolt, dot, mag, pose }
+    this.cur = null;
+    this.curId = '';
 
     this._buildLights();
     this._buildGun();
     this._buildFlash();
     this._buildBrass();
-    this._applyPose();
+    this._selectGun('bolt');        // pose, anchors and visibility for the M0 gun
 
     /* ---- springs. VIGIL's freq/damping pairs, unchanged. ---- */
     this.kickPos = new Spring3(16, 0.50);
@@ -279,7 +378,33 @@ export class Viewmodel {
   /** Scale is on the GUN group, about the action, so the camera-space pose stays in metres. */
   _applyPose() {
     this.gun.scale.setScalar(this.vmScale);
-    adsPosFor(this.vmScale, this.adsPos);
+    adsPosFor(this.sight, this.adsDist, this.vmScale, this.adsPos);
+  }
+
+  /**
+   * ROUND 5: put weapon `id` in the frame. The other gun's group goes visible = false (it
+   * stays in the scene, in the same material instances, so nothing compiles), the pose
+   * anchors are copied out of POSES, and the flash meshes move to the new crown. Called from
+   * step() the step vmState.weapon changes — which weapon.js does at the bottom of the swap.
+   */
+  _selectGun(id) {
+    const g = this.guns[id];
+    if (!g || g === this.cur) return;
+    if (this.cur) this.cur.group.visible = false;
+    this.cur = g; this.curId = id;
+    g.group.visible = true;
+    const P = g.pose;
+    this.restPos.copy(P.rest);
+    this.restRot.copy(P.rot);
+    this.vmScale = P.scale;
+    this.sight.copy(P.sight);
+    this.adsDist = P.adsDist;
+    this.muzzle.copy(P.muzzle);
+    this.bolt = g.bolt;
+    this.dot = g.dot;
+    this._applyPose();
+    if (this.flashCore) this.flashCore.position.copy(this.muzzle);
+    if (this.flashCone) this.flashCone.position.set(this.muzzle.x, this.muzzle.y, this.muzzle.z - 0.14);
   }
 
   /**
@@ -510,7 +635,37 @@ export class Viewmodel {
       return geo;
     };
 
-    const g = this.gun;
+    // Shared unlit materials, ONE instance each, so the carbine adds no material of its own:
+    // the port shadow, the coated glass and the amber dot are the same objects on both guns.
+    this._portMat = new THREE.MeshBasicMaterial({ color: 0x04060a });
+    this._glassMat = new THREE.MeshBasicMaterial({
+      color: 0x16283a, transparent: true, opacity: 0.10, depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this._dotMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0.320, 0.092, 0.016), toneMapped: false,
+      transparent: true, opacity: 1.0, depthWrite: false, side: THREE.DoubleSide,
+    });
+    // Both guns hang off this.gun (the pose/scale group). Each gets its own child group so
+    // one line toggles which is in the frame.
+    const boltGroup = new THREE.Group();
+    boltGroup.name = 'vm-bolt-rifle';
+    this.gun.add(boltGroup);
+    const carbineGroup = new THREE.Group();
+    carbineGroup.name = 'vm-carbine';
+    carbineGroup.visible = false;
+    this.gun.add(carbineGroup);
+    this.guns.bolt = this._buildBolt(boltGroup, { add, tube, ridgedBox, wood, blued, matte });
+    this.guns.carbine = this._buildCarbine(carbineGroup, { add, tube, ridgedBox, blued, matte, brassM });
+
+    // Nothing on a viewmodel may ever be frustum-culled: the gun sits inside
+    // the near plane's shadow and three's bounding-sphere test gets it wrong.
+    this.gun.traverse(o => { o.frustumCulled = false; });
+  }
+
+  /** The M0 bolt rifle, exactly as it shipped. Returns the per-weapon record. */
+  _buildBolt(g, K) {
+    const { add, tube, ridgedBox, wood, blued, matte } = K;
     // receiver + barrel: the long line that says "rifle" from the first frame
     add(g, ridgedBox(0.050, 0.062, 0.235, 3), blued, 0, 0, -0.045);
     add(g, tube(0.0125, 0.42), blued, 0, 0.014, -0.375);
@@ -527,20 +682,20 @@ export class Viewmodel {
     add(g, new THREE.BoxGeometry(0.006, 0.020, 0.005), blued, 0, -0.044, -0.008);   // trigger
 
     // the bolt: a group so the whole assembly throws back and forward
-    this.bolt = new THREE.Group();
-    g.add(this.bolt);
-    this.bolt.position.set(0, 0, 0);
-    add(this.bolt, tube(0.0105, 0.120, 8), blued, 0.0, 0.021, -0.010);
-    add(this.bolt, new THREE.BoxGeometry(0.030, 0.009, 0.009), blued, 0.020, 0.018, 0.030);  // stem
-    add(this.bolt, new THREE.SphereGeometry(0.0115, 8, 6), blued, 0.036, 0.012, 0.030);      // knob
+    const bolt = new THREE.Group();
+    g.add(bolt);
+    bolt.position.set(0, 0, 0);
+    add(bolt, tube(0.0105, 0.120, 8), blued, 0.0, 0.021, -0.010);
+    add(bolt, new THREE.BoxGeometry(0.030, 0.009, 0.009), blued, 0.020, 0.018, 0.030);  // stem
+    add(bolt, new THREE.SphereGeometry(0.0115, 8, 6), blued, 0.036, 0.012, 0.030);      // knob
     // ejection port shadow: a near-black sliver so the port reads as a HOLE and
     // the bolt's travel is legible against it in moonlight.
-    add(g, new THREE.BoxGeometry(0.002, 0.026, 0.070),
-      new THREE.MeshBasicMaterial({ color: 0x04060a }), 0.0255, 0.020, -0.010);
+    add(g, new THREE.BoxGeometry(0.002, 0.026, 0.070), this._portMat, 0.0255, 0.020, -0.010);
 
     // scope. The reticle is a real illuminated dot: the gun has to be aimable
     // in a county with no daylight, and a black crosshair on a black hillside
     // is the working-but-illegible failure mode this project is named for.
+    const SIGHT = POSES.bolt.sight;
     const sg = new THREE.Group();
     g.add(sg);
     sg.position.set(0, SIGHT.y, 0);
@@ -560,10 +715,7 @@ export class Viewmodel {
     // open bore it is what a coated lens actually is — a faint cool tint you see the county
     // through. depthWrite off so a transparent disc cannot punch the depth of the world
     // behind it, and it sits just inside the ocular rather than across the whole aperture.
-    add(sg, new THREE.CircleGeometry(0.0180, 20), new THREE.MeshBasicMaterial({
-      color: 0x16283a, transparent: true, opacity: 0.10, depthWrite: false,
-      side: THREE.DoubleSide,
-    }), 0, 0, 0.0435);
+    add(sg, new THREE.CircleGeometry(0.0180, 20), this._glassMat, 0, 0, 0.0435);
     // The dot sits ON the sight axis, so sightScreenOffset() measures the real ADS alignment
     // rather than an approximation of it.
     //
@@ -611,15 +763,103 @@ export class Viewmodel {
     // at ADS — exactly when it is the thing being used, because the HUD's own cone crosshair
     // (ui/hud.js, ART.md 6.2's "reticle") fades out as you aim. The two reads hand over.
     const DOT_Z = 0.0585;                     // scope tube rear cap is at +0.055
-    this.dot = add(sg, new THREE.CircleGeometry(0.0013, 10), new THREE.MeshBasicMaterial({
-      color: new THREE.Color(0.320, 0.092, 0.016), toneMapped: false,
-      transparent: true, opacity: 1.0, depthWrite: false, side: THREE.DoubleSide,
-    }), 0, 0, DOT_Z);
-    this.dot.renderOrder = 5;
+    const dot = add(sg, new THREE.CircleGeometry(0.0013, 10), this._dotMat, 0, 0, DOT_Z);
+    dot.renderOrder = 5;
 
-    // Nothing on a viewmodel may ever be frustum-culled: the gun sits inside
-    // the near plane's shadow and three's bounding-sphere test gets it wrong.
-    g.traverse(o => { o.frustumCulled = false; });
+    return { group: g, bolt, dot, mag: null, pose: POSES.bolt };
+  }
+
+  /**
+   * ROUND 5: the KV-7 CINDER carbine — the only gun Alex has held and blessed (DESIGN §0.16).
+   * Geometry lifted piece by piece from the readable donor, in the SAME material instances
+   * as the rifle (blued for anodized/steel, matte for polymer/ceramic, brass for the few
+   * bright fittings) so no program links when it first appears:
+   *   donor: C:/Users/Alex/Projects/vigil-handoff/vigil-enhanced/src/weapons/viewmodel.js:96-210
+   * What is NOT lifted, on purpose: the cyan emissive conduit and the tinted magazine window
+   * (each is a new material), the two gloved hands (the rifle has none; two guns with one
+   * pair of hands between them would be the odd one), the chamfer helper (gfx/shapes.js is
+   * VIGIL's; the rifle's ridgedBox breaks the flat the same way, ART.md 6.1.2), and the 13
+   * rail slots and 10 vents (7 and 6 here — a viewmodel scene draw is a draw).
+   */
+  _buildCarbine(g, K) {
+    const { add, tube, ridgedBox, blued, matte, brassM } = K;
+    const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+
+    // Upper/lower receiver, side armour, rear cap, top rail. donor :96-104
+    add(g, ridgedBox(0.072, 0.076, 0.300, 3), blued, 0, 0.004, -0.075);
+    add(g, B(0.066, 0.060, 0.130), matte, 0, -0.035, 0.012);
+    add(g, B(0.068, 0.062, 0.030), blued, 0, -0.002, 0.086);
+    for (const x of [-0.039, 0.039]) add(g, B(0.007, 0.052, 0.174), matte, x, 0.002, -0.066);
+    add(g, ridgedBox(0.058, 0.012, 0.340, 3), blued, 0, 0.048, -0.090);
+    for (let i = 0; i < 7; i++) add(g, B(0.056, 0.007, 0.017), matte, 0, 0.057, 0.055 - i * 0.046);
+
+    // Right-side ejection port and chamber glint. donor :112-113
+    add(g, B(0.003, 0.029, 0.078), this._portMat, 0.0405, 0.010, -0.052);
+    add(g, B(0.0018, 0.015, 0.046), brassM, 0.0426, 0.012, -0.052);
+    const sel = new THREE.CylinderGeometry(0.008, 0.008, 0.004, 12);
+    sel.rotateZ(Math.PI / 2);
+    add(g, sel, brassM, 0.042, -0.016, 0.056, 0, 0, 0.28);            // selector, donor :123-125
+
+    // Handguard with inset panels and vents. donor :129-138
+    add(g, ridgedBox(0.082, 0.074, 0.225, 3), matte, 0, 0.003, -0.325);
+    add(g, B(0.054, 0.007, 0.178), blued, 0, 0.042, -0.318);
+    add(g, B(0.054, 0.007, 0.164), blued, 0, -0.039, -0.318);
+    for (const x of [-0.044, 0.044]) {
+      add(g, B(0.006, 0.044, 0.172), blued, x, 0.002, -0.318);
+      for (let i = 0; i < 3; i++) {
+        add(g, B(0.0035, 0.014, 0.017), this._portMat, x > 0 ? 0.0475 : -0.0475, 0.007, -0.255 - i * 0.052);
+      }
+    }
+
+    // Gas block, barrel, vented muzzle device ending at MUZZLE. donor :142-147
+    add(g, B(0.052, 0.050, 0.038), blued, 0, 0.020, -0.419);
+    add(g, tube(0.011, 0.130, 12), blued, 0, 0.012, -0.407);
+    add(g, tube(0.018, 0.038, 8), blued, 0, 0.012, -0.453);
+
+    // Buffer tube, layered stock, grip, trigger guard, trigger. donor :150-163
+    add(g, tube(0.017, 0.140, 8), blued, 0, 0.004, 0.105);
+    add(g, B(0.054, 0.064, 0.095), matte, 0, -0.005, 0.143);
+    add(g, B(0.057, 0.070, 0.018), matte, 0, -0.009, 0.190);
+    add(g, B(0.048, 0.018, 0.110), matte, 0, 0.033, 0.132);
+    add(g, B(0.038, 0.085, 0.052), matte, 0, -0.075, 0.035, 0.32);
+    const guardGeo = new THREE.TorusGeometry(0.024, 0.003, 6, 18, Math.PI);
+    guardGeo.rotateY(Math.PI / 2);
+    add(g, guardGeo, blued, 0, -0.050, -0.006, 0, 0, Math.PI);
+    add(g, B(0.004, 0.025, 0.004), blued, 0, -0.045, -0.015, -0.18);
+
+    // The magazine, as one group so the reload choreography can drop it. donor :167-176
+    const mag = new THREE.Group();
+    g.add(mag);
+    mag.position.set(0, -0.075, -0.045);
+    mag.rotation.x = 0.14;
+    add(mag, B(0.056, 0.130, 0.075), matte, 0, -0.050, 0);
+    add(mag, B(0.061, 0.012, 0.082), blued, 0, -0.116, 0.002);
+    for (let i = 0; i < 3; i++) add(mag, B(0.059, 0.006, 0.078), blued, 0, -0.018 - i * 0.033, 0);
+
+    // Charging handle: the one moving part. donor :179-184
+    const bolt = new THREE.Group();
+    bolt.position.set(0.043, 0.020, -0.030);
+    g.add(bolt);
+    add(bolt, B(0.018, 0.016, 0.050), blued, 0, 0, 0);
+    add(bolt, new THREE.SphereGeometry(0.008, 10, 6), brassM, 0.011, 0, 0.012);
+
+    // Reflex optic at SIGHT: housing, two posts, a top bar, the ring, the glass and the dot.
+    // An open ring — nothing sits on the optical axis but a 0.10-opacity disc and the dot, so
+    // the sight is see-through by construction (the rifle's scope was a sealed tube once).
+    // donor :188-210
+    const SIGHT = POSES.carbine.sight;
+    const sg = new THREE.Group();
+    g.add(sg);
+    sg.position.copy(SIGHT);
+    add(sg, B(0.046, 0.012, 0.056), blued, 0, -0.021, 0);
+    for (const x of [-0.017, 0.017]) add(sg, B(0.006, 0.038, 0.012), blued, x, -0.001, 0.012);
+    add(sg, B(0.040, 0.006, 0.012), blued, 0, 0.018, 0.012);
+    add(sg, new THREE.TorusGeometry(0.016, 0.0022, 6, 24), blued, 0, 0, 0.012);
+    add(sg, new THREE.CircleGeometry(0.0145, 24), this._glassMat, 0, 0, 0.011);
+    const dot = add(sg, new THREE.CircleGeometry(0.0016, 10), this._dotMat, 0, 0, 0.013);
+    dot.renderOrder = 5;
+
+    return { group: g, bolt, dot, mag, pose: POSES.carbine };
   }
 
   _buildFlash() {
@@ -659,7 +899,7 @@ export class Viewmodel {
     this.flashCore = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.26), coreMat);
     this.flashCore.visible = false;
     this.flashCore.frustumCulled = false;
-    this.flashCore.position.copy(MUZZLE);
+    this.flashCore.position.copy(POSES.bolt.muzzle);   // re-anchored per weapon by _selectGun
     this.gun.add(this.flashCore);
 
     this.coneMat = new THREE.MeshBasicMaterial({
@@ -668,7 +908,8 @@ export class Viewmodel {
     });
     this.flashCone = new THREE.Mesh(new THREE.ConeGeometry(0.048, 0.28, 10, 1, true), this.coneMat);
     this.flashCone.rotation.x = -Math.PI / 2;
-    this.flashCone.position.set(MUZZLE.x, MUZZLE.y, MUZZLE.z - 0.14);
+    const M0 = POSES.bolt.muzzle;
+    this.flashCone.position.set(M0.x, M0.y, M0.z - 0.14);
     this.flashCone.visible = false;
     this.flashCone.frustumCulled = false;
     this.gun.add(this.flashCone);
@@ -720,6 +961,10 @@ export class Viewmodel {
           x: this.restPos.x, y: this.restPos.y, z: this.restPos.z,
           scale: this.vmScale, fovHip: this.fovHip, fovAds: this.fovAds,
         }),
+        // ROUND 5
+        weapon: () => this.curId,
+        guns: () => Object.keys(this.guns),
+        gunGroup: (id) => (this.guns[id] ? this.guns[id].group : null),
       };
     }
   }
@@ -739,13 +984,20 @@ export class Viewmodel {
     this.camera.updateProjectionMatrix();
   }
 
-  /** Compile every viewmodel program at boot, flash included. */
+  /**
+   * Compile every viewmodel program at boot, flash included — and BOTH guns revealed, so
+   * the carbine's geometry is uploaded now rather than on the frame it is first granted.
+   * (Its materials are the rifle's, so no program could link then anyway; this is the
+   * buffer upload.)
+   */
   warmup() {
     this.flashCore.visible = true;
     this.flashCone.visible = true;
+    for (const id in this.guns) this.guns[id].group.visible = true;
     if (this.ctx.renderer) this.ctx.renderer.compile(this.scene, this.camera);
     this.flashCore.visible = false;
     this.flashCone.visible = false;
+    for (const id in this.guns) this.guns[id].group.visible = (this.guns[id] === this.cur);
   }
 
   _sys(id) { return this.ctx.systems && this.ctx.systems.get(id); }
@@ -763,6 +1015,10 @@ export class Viewmodel {
     // ---- drain the gun's pulse queue. weapons is manifest entry 11 and we
     // are 12, so this is the same step with zero latency.
     wep.drainPulses((pu) => this._onPulse(pu, st));
+
+    // ---- ROUND 5: the gun in the hands follows the published id. weapon.js changes it at
+    // the bottom of the swap, when the viewmodel is fully lowered (see C.SWAP below).
+    if (st.weapon !== this.curId) this._selectGun(st.weapon);
 
     this.prevS.set(this.currS);
 
@@ -794,16 +1050,23 @@ export class Viewmodel {
     // ---- the bolt throw. A bolt gun's whole identity is that the shot is
     // followed by WORK: lift, pull, push, drop. It runs inside the 1.09 s
     // interval so the cadence is the animation, not a cooldown number.
+    // Per weapon: the carbine has no bolt throw (cycleLen 0) and only a short hold-open,
+    // so the travel is scaled by POSES.*.boltThrow.
     let boltZ = 0;
     const cyc = st.cycleLen;
+    const throwK = this.cur ? this.cur.pose.boltThrow : 1;
     if (cyc > 0 && this.boltAnim < cyc) {
       const u = this.boltAnim / cyc;
       if (u < 0.42) boltZ = 0.062 * ease.outQuad(u / 0.42);
       else if (u < 0.86) boltZ = 0.062 * (1 - ease.inQuad((u - 0.42) / 0.44)) - 0.0015;
       else boltZ = 0;
     } else if (st.empty && !st.reloading) {
-      boltZ = 0.062;                          // held open on empty: it SHOWS you
+      boltZ = 0.062 * throwK;                 // held open on empty: it SHOWS you
     }
+
+    // ---- ROUND 5: the swap. A half-sine over the swap: fully lowered at the midpoint,
+    // which is the step weapon.js changes the gun.
+    const swapLower = (st.swapping && st.swapT >= 0) ? Math.sin(Math.PI * clamp01(st.swapT)) : 0;
 
     // ---- reload choreography (the mag/floorplate body track)
     let magY = -0.042, magX = 0, magRZ = 0, magVis = 1;
@@ -865,6 +1128,7 @@ export class Viewmodel {
     s[C.BOLTZ] = boltZ; s[C.MAG_Y] = magY; s[C.MAG_X] = magX; s[C.MAG_RZ] = magRZ;
     s[C.MAGVIS] = magVis;
     s[C.SWING] = swing; s[C.LIFT] = lift; s[C.RELOADW] = rw; s[C.BOB] = bobAmp;
+    s[C.SWAP] = swapLower;
 
     this._stepBrass(dt, p, cam);
   }
@@ -1009,8 +1273,9 @@ export class Viewmodel {
     _rgt.set(cy, 0, -sy);
     _fwd.set(-sy, 0, -cy);
     const eye = p.eyeY !== undefined ? p.eyeY : p.pos.y + CFG.player.EYE;
-    b.pos.set(p.pos.x, eye - 0.06, p.pos.z)
-      .addScaledVector(_rgt, 0.16).addScaledVector(_fwd, 0.30);
+    const anchor = this.cur ? this.cur.pose.brass : POSES.bolt.brass;   // per weapon (ROUND 5)
+    b.pos.set(p.pos.x, eye - anchor.down, p.pos.z)
+      .addScaledVector(_rgt, anchor.right).addScaledVector(_fwd, anchor.fwd);
     b.prev.copy(b.pos);
     const j = () => 1 + (this.brassRng.next() * 2 - 1) * 0.12;
     b.vel.copy(_rgt).multiplyScalar(2.10 * j());
@@ -1041,10 +1306,16 @@ export class Viewmodel {
     _v.copy(this.restPos).lerp(this.adsPos, a);
     _e.set(this.restRot.x * (1 - a), this.restRot.y * (1 - a), this.restRot.z * (1 - a));
 
-    // ---- sprint cant
-    const sp = ease.inOutQuad(_S[C.SPRINT]) * (1 - a);
+    // ---- sprint cant, and the swap (ROUND 5) which rides the same pose and then keeps
+    // going: down and nose-first out of the bottom of the frame.
+    const sw = _S[C.SWAP];
+    const sp = Math.max(ease.inOutQuad(_S[C.SPRINT]) * (1 - a), sw);
     _v.x += SPRINT_POS.x * sp; _v.y += SPRINT_POS.y * sp; _v.z += SPRINT_POS.z * sp;
     _e.x += SPRINT_ROT.x * sp; _e.y += SPRINT_ROT.y * sp; _e.z += SPRINT_ROT.z * sp;
+    if (sw > 0) {
+      _v.x += SWAP_DROP.x * sw; _v.y += SWAP_DROP.y * sw; _v.z += SWAP_DROP.z * sw;
+      _e.x += SWAP_ROT.x * sw;
+    }
 
     // ---- melee: a horizontal buttstroke ACROSS the frame, never a thrust. Z
     // motion is the one axis a first-person camera reads worst.
@@ -1102,9 +1373,19 @@ export class Viewmodel {
     this.gun.position.copy(_v);
     this.gun.rotation.copy(_e);
 
-    // ---- moving parts
+    // ---- moving parts. The rifle's bolt handle lifts while back; the carbine's charging
+    // handle does not (POSES.*.boltLift).
+    const P = this.cur ? this.cur.pose : POSES.bolt;
     this.bolt.position.z = _S[C.BOLTZ] + _S[C.BOLTS] * 0.004;
-    this.bolt.rotation.z = _S[C.BOLTZ] > 0.001 ? -0.55 : 0;   // handle lifted while back
+    this.bolt.rotation.z = _S[C.BOLTZ] > 0.001 ? P.boltLift : 0;
+    // The carbine's magazine follows the reload choreography (the rifle has a floorplate).
+    const mag = this.cur ? this.cur.mag : null;
+    if (mag) {
+      mag.position.y = -0.075 + (_S[C.MAG_Y] + 0.042);
+      mag.position.x = _S[C.MAG_X];
+      mag.rotation.z = _S[C.MAG_RZ];
+      mag.visible = _S[C.MAGVIS] > 0.5;
+    }
 
     // ---- viewmodel lens, hip -> ADS
     const vfov = lerp(this.fovHip, this.fovAds, ease.inOutQuad(_S[C.ADS]));
@@ -1128,7 +1409,8 @@ export class Viewmodel {
       const env = Math.exp(-ft / 0.018);
       const scale = lerp(1, 0.55, this.flashAds);
       this.flashCore.scale.setScalar(scale);
-      this.flashCore.position.set(MUZZLE.x, MUZZLE.y, MUZZLE.z - this.flashAds * 0.06);
+      const MZ = this.muzzle;                 // the selected gun's crown (ROUND 5)
+      this.flashCore.position.set(MZ.x, MZ.y, MZ.z - this.flashAds * 0.06);
       this.viewFlash.intensity = 2.6 * env * lerp(1, 0.55, this.flashAds);
       // 7 cm AHEAD of the crown. THE CINDERBLOOM CLAMP, top of file.
       //
@@ -1145,7 +1427,7 @@ export class Viewmodel {
       // frame from the gun's own transform: the crown through localToWorld, which already
       // carries the pose, the recoil, the sway and the scale, then the fixed 7 cm forward.
       // Measured after: 0.0700 m, in every pose.
-      this.gun.localToWorld(_v3.set(MUZZLE.x, MUZZLE.y, MUZZLE.z));
+      this.gun.localToWorld(_v3.set(MZ.x, MZ.y, MZ.z));
       _v3.z -= FLASH_AHEAD;
       this.viewFlash.position.copy(_v3);
       // Keep the borrowed world rover riding the real muzzle.
@@ -1169,7 +1451,7 @@ export class Viewmodel {
       if (h && h.inUse && h.gen === this.muzzleGen && h.setPosition) {
         // Same standoff law as the near-field light above: transform the CROWN, then step the
         // fixed 7 cm forward in camera space, so the model's scale cannot shrink the clamp.
-        this.gun.localToWorld(_v2.set(MUZZLE.x, MUZZLE.y, MUZZLE.z));
+        this.gun.localToWorld(_v2.set(MZ.x, MZ.y, MZ.z));
         _v2.z -= FLASH_AHEAD;
         // Viewmodel space is camera-relative; convert through the world camera.
         if (this.ctx.camera) _v2.applyMatrix4(this.ctx.camera.matrixWorld);
@@ -1240,6 +1522,7 @@ export class Viewmodel {
 
   dump() {
     return {
+      weapon: this.curId, swap: this.currS[C.SWAP],
       fov: this.camera.fov, adsT: this.currS[C.ADS],
       sight: this.sightScreenOffset(),
       boltZ: this.currS[C.BOLTZ],
