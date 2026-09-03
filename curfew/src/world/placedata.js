@@ -273,6 +273,21 @@ export function terrainRegionOf(id) {
  * from overlapping when the road doubles back on itself.
  * ------------------------------------------------------------------ */
 export const MINOR_KINDS = Object.freeze([
+  // ROUND 5 (Alex, playtest 4): "it shouldn't be that vacant. There should be areas with at
+  // least cool scenery... maybe little campfire spots." The campfire is the first minor that
+  // lives OFF the road (`offRoad`: 18-40 m out, see CAMPFIRE_OFFSET) and is visible from it:
+  // a stone ring with embers that breathe, a lean-to, a dropped pack. It is a LIT FIRE in
+  // DESIGN section 6's sense — standing at one banks carried XP through `place:near`
+  // (places.js emits {major: false, lit: true} within CAMPFIRE_NEAR_R) — with no inventory
+  // and no new system. Weighted for roughly one in six minors (53 minors over 11.1 km of
+  // road, measured 2026-09-03), so 8-12 across the county after the off-road rejections.
+  // FIRST in the table on purpose: _chooseMinor serves starvation in table order and the
+  // table is over-subscribed (the reciprocals of the starve counts sum past 1), so the last
+  // row is the one that never wins a tie — measured at 5 campfires however it was weighted.
+  // `lit` is what puts a kind on places.js's proximity list (place:near {lit: true} within
+  // CAMPFIRE_NEAR_R); `offRoad` is only where it sits. Keep them separate: a future off-road
+  // wreck is scenery, not a fire.
+  { id: 'campfire', weight: 7.0, minSince: 2, starve: 5, bulk: 3.0, offRoad: true, lit: true },
   { id: 'fence', weight: 5.0, minSince: 1, starve: 7, bulk: 4.0 },
   { id: 'waystone', weight: 3.4, minSince: 2, starve: 9, bulk: 1.2 },
   { id: 'culvert', weight: 2.6, minSince: 3, starve: 12, bulk: 2.6 },
@@ -284,6 +299,14 @@ export const MINOR_KINDS = Object.freeze([
   { id: 'poster', weight: 2.4, minSince: 3, starve: 12, bulk: 1.0 },
   { id: 'gear', weight: 2.0, minSince: 4, starve: 14, bulk: 1.6 },
 ]);
+
+/** How far off the centreline an `offRoad` minor sits: in the trees, but in sight of the
+ *  road it was placed from (a glow at 18-40 m through pines reads; at 60 it is gone). */
+export const CAMPFIRE_OFFSET = Object.freeze({ min: 18, max: 40 });
+
+/** Within this of a campfire's ring you are AT it: place:near fires with lit: true and
+ *  progression banks. Sized to the ring plus a body, so you have to walk up to the fire. */
+export const CAMPFIRE_NEAR_R = 4.0;
 
 export const MINOR_BY_ID = Object.freeze(
   MINOR_KINDS.reduce((m, k) => { m[k.id] = k; return m; }, Object.create(null)),

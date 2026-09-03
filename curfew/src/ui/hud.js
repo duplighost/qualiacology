@@ -46,6 +46,12 @@
 //   * ONE screen-reader line, class "sr-only", which no sighted player ever sees.
 //   * A pause card that DOES list the controls, because reading costs nothing when the game
 //     is stopped, and because a game nobody can find the crouch key in is not scarier.
+//   * THE TREE, on that same card (round 5, lane B). Alex, fourth playtest: "I forget if we
+//     have a skill tree or not from xp, but we should have one... i have not really seen a
+//     skill tree." It existed, 24 nodes, and the game dealt and picked for him with no
+//     surface. Now the pause card shows the level as a word, the six branches with owned
+//     nodes by name, and the three dealt cards as buttons. Words are legal here and nowhere
+//     else; tests/progression.mjs still walks the page during play and finds none.
 //
 // WHAT IS DELIBERATELY NOT HERE: ammo. DESIGN says ammo is "the magazine window and the last
 // three tracers" — both of those live on the gun, and the gun is weapons/viewmodel.js. The
@@ -68,6 +74,9 @@
 
 import { CFG } from '../config.js';
 import { clamp, clamp01, DEG, TAU } from '../engine/math.js';
+// Pure data, no ctx, same owner (progression). The card lists every branch and every node
+// once at build time and rewrites them by text afterwards.
+import { BRANCHES, NODES } from '../progression/nodes.js';
 
 /* ---------------------------------------------------------------- constants -- */
 // No CFG.hud block exists; config.js belongs to the engine owner and is deep-frozen. Every
@@ -195,6 +204,25 @@ const INV_A = 0.80;
 
 const SR_PERIOD_S = 2.0;        // the screen-reader line is rewritten at most this often
 
+// Fixed steps after a resume during which a 'menu' edge is ignored. MEASURED (tests/pause.mjs,
+// first run of the round-5 card): an Escape pressed WHILE PAUSED is not lost — input.js keeps
+// the edge until the next fixed step, which is the first step after the click back in — so
+// honouring it re-paused the game exactly one step (0.0167 s on the clock) after every resume.
+// That is Alex's "multiple levels of pause screen", reproduced by his second press.
+// Since verification round 1, main.js clears every input edge on the resume transition
+// (main.js frame(), the game:paused false branch), so no stale edge of any key reaches a
+// step; this guard stays as the second fence for the one key that could re-pause.
+const MENU_ARM_STEPS = 3;
+
+// The card shows on game:paused true ONLY once the pointer lock has been held at least once
+// this page (input:lock true). Entering the game emits game:paused true while the lock
+// request is still in flight, and the lock lands 10-40 ms later (measured: 1 frame headless,
+// 3 frames with a 40 ms lock in verification round 1); a frame-counted delay flashed the
+// whole card over the fading title whenever the lock took longer than the count. If the
+// lock never lands (Chrome refused it), the pause is real and the card shows after this
+// much wall time so the player is not left with a frozen world and no way out.
+const CARD_LATE_MS = 500;
+
 const INK = '#e8eef8';
 const SHADE = 'rgba(4,6,9,0.72)';
 
@@ -205,6 +233,8 @@ const CONTROLS = [
   ['Aim', 'Right mouse'],
   ['Melee', 'V or middle mouse'],
   ['Reload', 'R'],
+  // Round 5 lane F (the gun) adds a second weapon and Q swaps. Same round, same card.
+  ['Swap weapon', 'Q'],
   ['Sprint', 'Shift'],
   ['Crouch and slide', 'Ctrl or C'],
   ['Jump and mantle', 'Space'],
@@ -236,16 +266,51 @@ const CSS = `
 #curfew-life { position: absolute; left: 0; bottom: 0; width: 100%; display: block; }
 #curfew-hud .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden;
               clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
-#curfew-pause { position: fixed; inset: 0; z-index: 24; display: grid; place-items: center;
+/* The pause card. A flex overlay with the card on margin:auto: centred when it fits,
+   scrollable from the top when it does not (a grid place-items:center clips a tall card's
+   head). The 52 px top pad and the narrow-window left pad keep the site's home pill, which
+   lives in the top-left 170 x 44 px and reappears whenever the lock is lost, off the words. */
+#curfew-pause { position: fixed; inset: 0; z-index: 24; display: flex; overflow-y: auto;
+              box-sizing: border-box; padding: 52px 16px 20px;
               background: rgba(5,7,10,0.86); pointer-events: auto;
               font: 400 14px/1.6 "Palatino Linotype", Palatino, Georgia, serif; color: #c9d4e6; }
 #curfew-pause[hidden] { display: none !important; }
-#curfew-pause .card { width: min(460px, 84vw); }
-#curfew-pause dl { display: grid; grid-template-columns: 1fr auto; gap: 7px 26px; }
+#curfew-pause .card { width: min(620px, 84vw); margin: auto; }
+@media (max-width: 1000px) { #curfew-pause { padding-left: 180px; } }
+#curfew-pause .rule { height: 1px; background: #1b2431; margin: 0 0 18px; }
+#curfew-pause .rule.mid { margin: 18px 0; }
+/* THE TREE: the level as a word, six branches, owned nodes by name, the rest as dots. */
+#curfew-pause .lvl { font-size: 17px; letter-spacing: .10em; color: #e8eef8; margin: 0 0 12px; }
+#curfew-pause .lvl .pts { font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+              opacity: .5; margin-left: 14px; }
+#curfew-pause .br { display: grid; grid-template-columns: 64px 1fr; gap: 0 18px;
+              align-items: baseline; margin: 0 0 3px; }
+#curfew-pause .bn { opacity: .52; letter-spacing: .12em; text-transform: uppercase; font-size: 11px; }
+#curfew-pause .bl { display: flex; flex-wrap: wrap; gap: 0 16px; font-size: 13px; letter-spacing: .04em; }
+#curfew-pause .bl span { opacity: .5; }
+#curfew-pause .bl span.own { opacity: .92; color: #e8eef8; }
+/* THE DEAL: three cards after a level; a click takes one. Dim is "not affordable yet". */
+#curfew-pause .deal { margin: 14px 0 0; }
+#curfew-pause .deal[hidden] { display: none !important; }
+#curfew-pause .take { font-size: 11px; letter-spacing: .22em; text-transform: uppercase;
+              opacity: .42; margin: 0 0 8px; }
+#curfew-pause .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+#curfew-pause .cards button { display: block; width: 100%; text-align: left; cursor: pointer;
+              font: inherit; color: #c9d4e6; background: rgba(4,6,9,0.72);
+              border: 1px solid #1b2431; border-radius: 2px; padding: 10px 12px 9px; }
+#curfew-pause .cards button[hidden] { display: none !important; }
+#curfew-pause .cards button:hover { border-color: #c9d4e6; }
+#curfew-pause .cards button.dim { opacity: .35; cursor: default; }
+#curfew-pause .cards button.dim:hover { border-color: #1b2431; }
+#curfew-pause .cn { display: block; color: #e8eef8; font-size: 14px; letter-spacing: .06em; }
+#curfew-pause .cl { display: block; font-size: 12px; line-height: 1.45; opacity: .74; margin: 4px 0 6px; }
+#curfew-pause .cc { display: block; font-size: 10px; letter-spacing: .20em;
+              text-transform: uppercase; opacity: .5; }
+/* THE CONTROLS, two columns of pairs now that the tree sits above them. */
+#curfew-pause dl { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 5px 22px; margin: 0; }
 #curfew-pause dt { opacity: .52; letter-spacing: .12em; text-transform: uppercase;
               font-size: 11px; align-self: center; }
-#curfew-pause dd { text-align: right; font-size: 13px; letter-spacing: .06em; opacity: .86; }
-#curfew-pause .rule { height: 1px; background: #1b2431; margin: 0 0 18px; }
+#curfew-pause dd { text-align: right; font-size: 13px; letter-spacing: .06em; opacity: .86; margin: 0; }
 #curfew-pause .foot { margin-top: 22px; font-size: 11px; letter-spacing: .22em;
               text-transform: uppercase; opacity: .32; text-align: center; }
 `;
@@ -313,6 +378,14 @@ export class Hud {
 
     this.paused = false;
     this.pauseBuilt = false;
+    // THE CARD FOLLOWS THE ENGINE'S PAUSE, gated on the lock having been held; see _onPaused().
+    this._lockHeld = false;    // input:lock true has arrived at least once this page
+    this._pausedAtMs = 0;      // performance.now() at the last game:paused true
+    this._sinceResume = 0;     // fixed steps since the pause last lifted; see step()
+    // The tree's elements, built once in _buildPause() and rewritten by text in _refreshTree().
+    this.lvEl = null; this.ptsEl = null; this.takeEl = null;
+    this.branchEls = null;     // one { nodes, spans } per branch, nodes in tier order
+    this.dealEl = null; this.cardEls = null;
 
     this.srT = 0; this.srLast = '';
     this._dirty = true;
@@ -472,8 +545,11 @@ export class Hud {
     // A card is now yours. progression/progress.js emits this for a purchase AND for an
     // auto-granted tier-0, and both deserve the same mark: the auto-grant is the moment the
     // tree teaches itself, and a lesson nobody can see is not a lesson.
-    on('node:bought', () => this._pulse('node', GRANT_LIFE));
-    on('level:up', () => this._pulse('level', LEVEL_LIFE));
+    // No _refreshTree() here: both arrive inside a fixed step (progress.step -> _verb / bank),
+    // and the card is hidden during play, so a rewrite then is DOM work inside step() for a
+    // surface nobody can see. Every path that SHOWS the card refreshes it (_onPaused, pick).
+    on('node:bought', () => { this._pulse('node', GRANT_LIFE); });
+    on('level:up', () => { this._pulse('level', LEVEL_LIFE); });
 
     // NOT `this.hp = 0` any more. Setting it here hid the killing blow from the tracker in
     // step(), so the LAST piece of the arc — the bite that actually killed him, the one he
@@ -493,7 +569,15 @@ export class Hud {
       this.restoreT = 0;
       this._dirty = true; this._lifeDirty = true;
     });
-    on('input:clickthrough', () => { if (this.paused) this.pause(false); });
+    // THE PAUSE, and the one event the card follows. main.js:387 keys the pause off pointer
+    // lock. The payload is a boolean, not a bag, so it does not go through the wrapper above
+    // (which would turn false into {}). A canvas click while unlocked ('input:clickthrough')
+    // is handled by main.js:588 -> enterGame() -> requestLock(), and the card hides when the
+    // lock lands and the pause lifts; this file no longer listens for it.
+    this._unsub.push(b.on('game:paused', (v) => this._onPaused(v === true)));
+    // The lock itself (engine/input.js _onLockChange, a boolean). The card is armed only once
+    // this has been true; see CARD_LATE_MS and _onPaused().
+    this._unsub.push(b.on('input:lock', (v) => { if (v === true) this._lockHeld = true; }));
   }
 
   /* ------------------------------------------------------------------ events -- */
@@ -591,62 +675,231 @@ export class Hud {
   /* ------------------------------------------------------------------- pause -- */
 
   _buildPause() {
-    const card = document.createElement('div');
+    const el = (tag, cls, text) => {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    };
+
+    const card = el('div', '');
     card.id = 'curfew-pause';
     card.hidden = true;
 
-    const wrap = document.createElement('div');
-    wrap.className = 'card';
-    const rule = document.createElement('div');
-    rule.className = 'rule';
-    wrap.appendChild(rule);
+    const wrap = el('div', 'card');
+    wrap.appendChild(el('div', 'rule'));
 
-    const dl = document.createElement('dl');
+    // THE TREE. Built once: a level line, then one row per branch holding one span per node
+    // in tier order. _refreshTree() writes the node's name into an owned span and a dot into
+    // the rest, so the shape of the tree is visible before a single card is taken.
+    // The whole tree sits in one block that swallows the press: a click on a branch row or a
+    // dot (what anyone does to a skill tree) must not throw the player back under the lock.
+    // Only the overlay, the controls and the foot line resume.
+    const tree = el('div', 'tree');
+    tree.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
+
+    const lvl = el('div', 'lvl');
+    this.lvEl = el('span', '', 'Level 1');
+    // The points span carries its own separator so the line READS as one sentence in
+    // textContent too ("Level 10 · 9 to spend", not "Level 109 to spend").
+    this.ptsEl = el('span', 'pts', '');
+    lvl.appendChild(this.lvEl); lvl.appendChild(this.ptsEl);
+    tree.appendChild(lvl);
+
+    this.branchEls = [];
+    for (let b = 0; b < BRANCHES.length; b++) {
+      const br = BRANCHES[b];
+      const row = el('div', 'br');
+      row.appendChild(el('div', 'bn', br.name));
+      const list = el('div', 'bl');
+      const nodes = [];
+      for (let i = 0; i < NODES.length; i++) if (NODES[i].branch === br.id) nodes.push(NODES[i]);
+      nodes.sort((p, q) => p.tier - q.tier);
+      const spans = [];
+      for (let i = 0; i < nodes.length; i++) {
+        const s = el('span', '', '\u00b7');
+        spans.push(s); list.appendChild(s);
+      }
+      row.appendChild(list);
+      tree.appendChild(row);
+      this.branchEls.push({ nodes, spans });
+    }
+
+    // THE DEAL. progress deals three on a level-up (progress.js _checkLevel), again after a
+    // pick that leaves a point (pick), and they wait here for the next Escape. Three buttons,
+    // built once, hidden until there is a deal.
+    const deal = el('div', 'deal');
+    deal.hidden = true;
+    this.takeEl = el('div', 'take', 'take one');
+    deal.appendChild(this.takeEl);
+    const cards = el('div', 'cards');
+    this.cardEls = [];
+    for (let i = 0; i < 3; i++) {
+      const btn = el('button', '');
+      btn.type = 'button';
+      btn.hidden = true;
+      const name = el('span', 'cn', '');
+      const line = el('span', 'cl', '');
+      const cost = el('span', 'cc', '');
+      btn.appendChild(name); btn.appendChild(line); btn.appendChild(cost);
+      // The card's own mousedown asks for the lock back. Taking a card must NOT resume the
+      // game, so the press stops here, and the click buys.
+      btn.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); e.preventDefault();
+        const prog = this.ctx.systems.get('progress');
+        if (prog && typeof prog.pick === 'function') prog.pick(i);
+        this._refreshTree();        // pick() nulls the deal AFTER node:bought has fired
+      });
+      cards.appendChild(btn);
+      this.cardEls.push({ btn, name, line, cost });
+    }
+    deal.appendChild(cards);
+    tree.appendChild(deal);
+    wrap.appendChild(tree);
+    this.dealEl = deal;
+
+    wrap.appendChild(el('div', 'rule mid'));
+
+    const dl = el('dl', '');
     for (const [what, how] of CONTROLS) {
-      const dt = document.createElement('dt'); dt.textContent = what;
-      const dd = document.createElement('dd'); dd.textContent = how;
-      dl.appendChild(dt); dl.appendChild(dd);
+      dl.appendChild(el('dt', '', what));
+      dl.appendChild(el('dd', '', how));
     }
     wrap.appendChild(dl);
 
-    const foot = document.createElement('div');
-    foot.className = 'foot';
-    foot.textContent = 'click to go back out';
-    wrap.appendChild(foot);
+    wrap.appendChild(el('div', 'foot', 'click to go back out'));
 
     card.appendChild(wrap);
-    card.addEventListener('mousedown', (e) => { e.preventDefault(); this.pause(false); });
+    card.addEventListener('mousedown', (e) => { e.preventDefault(); this._resume(); });
     document.body.appendChild(card);
     this.pauseEl = card;
     this.pauseBuilt = true;
   }
 
   /**
-   * Shown ONLY on an explicit menu press (Esc), never on a lost pointer lock — a headless
-   * page that never acquires lock would otherwise sit on a card full of words, and words on
-   * screen during play is the one thing this file may not do.
+   * ONE ESCAPE = ONE STATE.
    *
-   * NOTE: this stops nothing. The loop is main.js's and this file may not touch it. The card
-   * dims the world and takes the pointer; a request for the engine to gate simStep on
-   * hud.isPaused() is filed in docs/HANDOFF.md P-1.
+   * ALEX, fourth playtest: "the pause button does pause the game. but it is jenky. there are
+   * like multiple levels of pause screen so its hard to get out of."
+   *
+   * MEASURED before this rewrite (docs/ROUND-5/B-pause-tree.md): the browser drops pointer
+   * lock on Escape and main.js:387 pauses the sim on the lost lock; this card used to toggle
+   * on ITS OWN key read in step() — which does not run while the sim is paused. So one press
+   * gave a frozen world with a cursor and no card, a second sometimes gave the card, and one
+   * Escape/click cycle left the page with paused=false and the card VISIBLE over a running
+   * game. Two states, two owners.
+   *
+   * Now there is one owner. The card follows game:paused and nothing else: no key shows it,
+   * no key hides it. A menu press that reaches step() while locked exits pointer lock and
+   * does nothing more — losing the lock IS the pause. The only way out is a click: card
+   * mousedown -> _resume() -> input.requestLock() -> lock acquired -> main.js unpauses ->
+   * game:paused false -> the card hides. The card never hides itself.
+   *
+   * IT NEVER SHOWS AT ENTRY. Entering the game emits game:paused true on frame N (playing,
+   * lock requested, not yet held) and false when the lock lands — one frame later headless,
+   * three with a 40 ms lock (verification round 1). A card that flipped on the event, or
+   * after a counted number of frames, flashed over the fading title whenever the lock took
+   * longer than the count. So the card is armed only once the lock has been HELD on this
+   * page (input:lock true, engine/input.js:234): an entry pause is a pause before the first
+   * lock and shows nothing; an Escape pause is a pause after it and shows at the very next
+   * present(). The one exception is a lock that never lands (Chrome refused it): after
+   * CARD_LATE_MS of wall time the pause is real whatever the lock did, and the card shows so
+   * the player has a way out. The pointerlockchange event cannot fire inside a synchronous
+   * frame() call, so _lockHeld cannot flip between main.js's pause check and this present.
+   *
+   * Never on a page that never took lock: ?test=1 and __CURFEW.noLock never emit
+   * game:paused (main.js:387), so a headless suite never sits on a card full of words.
    */
+  _onPaused(on) {
+    if (on) {
+      this.paused = true;
+      this._pausedAtMs = performance.now();
+      this._refreshTree();      // progress (earlier in the manifest) has already dealt
+    } else {
+      this._sinceResume = 0;
+      this.pause(false);
+    }
+    this._dirty = true;
+  }
+
+  /** Show or hide the card. Asks for nothing; the lock is requested by _resume() only. */
   pause(on) {
     const v = !!on;
-    if (v === this.paused) return;
     this.paused = v;
-    if (this.pauseEl) this.pauseEl.hidden = !v;
-    if (!v && this.ctx.input && this.ctx.input.requestLock) this.ctx.input.requestLock();
+    // Written only on a change: a MutationObserver on the attribute is how the gate counts
+    // the card's transitions, and a same-value write would still make a record.
+    if (this.pauseEl && this.pauseEl.hidden !== !v) this.pauseEl.hidden = !v;
     this._dirty = true;
   }
 
   isPaused() { return this.paused; }
+
+  /** The click on the card. Ask for the lock; main.js lifts the pause when it lands. */
+  _resume() {
+    if (this.ctx.input && this.ctx.input.requestLock) this.ctx.input.requestLock();
+  }
+
+  /**
+   * THE TREE'S SURFACE. Rewrites the level line, the six branches and the dealt cards BY
+   * TEXT into elements built once. Runs on game:paused true, node:bought, level:up and a
+   * pick — never per frame — so the few strings it makes are made a few times a level.
+   */
+  _refreshTree() {
+    const prog = this.ctx.systems.get('progress');
+    if (!prog || !this.lvEl) return;
+    const owned = typeof prog.ownedSet === 'function' ? prog.ownedSet() : null;
+    const level = typeof prog.level === 'number' ? prog.level : 1;
+    const points = typeof prog.points === 'number' ? prog.points : 0;
+    this.lvEl.textContent = 'Level ' + level;
+    this.ptsEl.textContent = points <= 0 ? '' : ' \u00b7 ' + points + ' to spend';
+    for (let b = 0; b < this.branchEls.length; b++) {
+      const row = this.branchEls[b];
+      for (let i = 0; i < row.nodes.length; i++) {
+        const n = row.nodes[i];
+        const own = !!(owned && owned.has(n.id));
+        const s = row.spans[i];
+        s.textContent = own ? n.name : '\u00b7';
+        if (s.className !== (own ? 'own' : '')) s.className = own ? 'own' : '';
+      }
+    }
+    const cards = prog.draftCards;
+    const show = Array.isArray(cards) && cards.length > 0;
+    this.dealEl.hidden = !show;
+    let anyCan = false;
+    for (let i = 0; i < this.cardEls.length; i++) {
+      const c = this.cardEls[i];
+      const n = show && cards[i] ? cards[i] : null;
+      c.btn.hidden = !n;
+      if (!n) continue;
+      c.name.textContent = n.name;
+      c.line.textContent = n.line;
+      c.cost.textContent = n.cost === 1 ? 'one point' : n.cost + ' points';
+      const can = typeof prog.canBuy === 'function' && prog.canBuy(n.id);
+      if (can) anyCan = true;
+      c.btn.className = can ? '' : 'dim';
+    }
+    // Three dim cards under "take one" said nothing about WHY none could be taken
+    // (verification round 1: reachable at level 2 once every tier-0 has auto-granted and
+    // every pool card costs 2). Dim means not affordable yet, and now the line says so.
+    if (show) this.takeEl.textContent = anyCan ? 'take one' : 'nothing you can afford yet';
+  }
 
   /* -------------------------------------------------------------------- loop -- */
 
   step(dt) {
     this._t += dt;
     const inp = this.ctx.input;
-    if (inp && inp.pressed && inp.pressed('menu')) this.pause(!this.paused);
+    this._sinceResume++;
+    // A menu press that reaches the sim while locked. Chrome normally eats Escape and drops
+    // the lock itself; if the key gets here, do the same thing and NOTHING else. The lost
+    // lock is the pause and the card follows the pause. No key ever hides the card.
+    // Ignored for MENU_ARM_STEPS after a resume: a press made while paused arrives here as a
+    // stale edge on the first step back and would re-pause the game (see the constant).
+    if (this._sinceResume > MENU_ARM_STEPS && inp && inp.pressed && inp.pressed('menu')
+      && !this.paused && document.pointerLockElement && document.exitPointerLock) {
+      document.exitPointerLock();
+    }
 
     for (let i = 0; i < MARK_POOL; i++) {
       const m = this.marks[i];
@@ -712,6 +965,11 @@ export class Hud {
   present(alpha) {
     void alpha;
     if (!this.enabled || !this.g || !this.ctx.ready) return;
+
+    // The card: at the first present of a pause once the lock has been held on this page,
+    // or after CARD_LATE_MS if it never was (see _onPaused). No counter, no allocation.
+    if (this.paused && this.pauseEl && this.pauseEl.hidden
+      && (this._lockHeld || performance.now() - this._pausedAtMs >= CARD_LATE_MS)) this.pause(true);
 
     this._readWeapon();
     this._readThreats();
@@ -1280,6 +1538,8 @@ export class Hud {
       hp: this.hp, hpShown: +this.hpShown.toFixed(1),
       vignette: +this.vigA.toFixed(3), tremor: +this.tremor.toFixed(3),
       marks, arcs, pulses, grants, paused: this.paused,
+      card: !!(this.pauseEl && !this.pauseEl.hidden), lockHeld: this._lockHeld,
+      deal: !!(this.dealEl && !this.dealEl.hidden),
       // THE HEALTH READOUT, as numbers a gate can hold on to.
       // `lifeFrac` is the LENGTH of the arc; `lifeAlpha`/`lifeWidth` are the VALUE, and the
       // pair is the whole design: quiet at full, loud near death, never a hue.

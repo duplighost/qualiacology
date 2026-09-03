@@ -98,8 +98,11 @@ const vignette = (u, v) => soft(Math.abs(u)) * soft(Math.abs(v));
 const PANE_WINDOW = (u, v) => vignette(u, v) * (0.20 + 0.34 * (0.5 + 0.5 * v));
 /** A fluorescent tube seen from underneath: hot along the middle, dying at the end caps. */
 const PANE_TUBE = (u, v) => soft(Math.abs(u) * 0.6) * soft(Math.abs(v)) * 0.50;
-/** The pool of light a fixture throws back onto the soffit above it. */
-const PANE_WASH = (u, v) => 0.13 * (1 - u * u) * (1 - v * v);
+// There is deliberately no PANE_WASH any more. "The pool of light a fixture throws back onto
+// the soffit" was a 12 x 7.8 m horizontal additive sheet under the Filling Station canopy,
+// and it is what Alex reported as "a translucent square overlay across the screen". A pane
+// is a fixture or a window: vertical, or small. tests/sites.mjs pins the largest horizontal
+// glow part in the county at 2 m^2.
 /** An illuminated sign face: even, but with a rim and a little grime in one corner. */
 const PANE_SIGN = (u, v) => vignette(u, v) * (0.34 - 0.09 * u * v);
 /** A rose window: bright at the boss, falling to the tracery. */
@@ -132,6 +135,24 @@ export const GLOW = {
    null in older builds — hence the explicit normalisation.
    ========================================================================== */
 
+/**
+ * THE PANE LEDGER. Every glow pane any builder has ever laid is recorded here by its size
+ * and hang — build time only, a bounded Map keyed by shape — so tests/sites.mjs can assert
+ * the law the translucent square taught: no horizontal additive pane larger than ~2 m^2
+ * anywhere in the county. A pane is horizontal when it was rotated about X by a right
+ * angle (rx of +-PI/2), which is how the wash quad was hung and how the ember beds and the
+ * hanging lamps still are. Read through paneRecords().
+ */
+const _panes = new Map();
+function recordPane(w, h, rx) {
+  const horizontal = Math.abs(Math.abs(rx || 0) - Math.PI * 0.5) < 0.05;
+  const key = w.toFixed(2) + 'x' + h.toFixed(2) + (horizontal ? 'H' : 'V');
+  let r = _panes.get(key);
+  if (!r) { r = { w, h, area: +(w * h).toFixed(3), horizontal, n: 0 }; _panes.set(key, r); }
+  r.n++;
+}
+export function paneRecords() { return Array.from(_panes.values()); }
+
 class Kit {
   constructor() { this.parts = []; }
 
@@ -155,6 +176,8 @@ class Kit {
   }
 
   box(w, h, d, x, y, z, col, ry, rx, rz) {
+    // a flat box on the glow kit is a horizontal sheet by another name: on the ledger
+    if (this.additive && h <= 0.3 && !rx && !rz) recordPane(w, d, Math.PI * 0.5);
     return this.at(new THREE.BoxGeometry(w, h, d), col, x, y, z, ry, rx, rz);
   }
 
@@ -172,6 +195,7 @@ class Kit {
 
   /** A vertical quad facing +Z before `ry`. Used for windows, posters, signs, map pins. */
   quad(w, h, x, y, z, col, ry, rx) {
+    if (this.additive) recordPane(w, h, rx);    // a glow quad is a pane without a profile
     return this.at(new THREE.PlaneGeometry(w, h), col, x, y, z, ry, rx, 0);
   }
 
@@ -188,6 +212,7 @@ class Kit {
    * budget of 2.4 M (gate H.4 row 17) is free.
    */
   pane(w, h, x, y, z, profile, ry, rx, segW, segH) {
+    recordPane(w, h, rx);
     const g = new THREE.PlaneGeometry(w, h, segW || 8, segH || 8);
     const p = g.attributes.position, n = p.count;
     const c = new Float32Array(n * 3);
@@ -232,7 +257,11 @@ class Kit {
 }
 
 /** A builder allocates three kits: opaque body, the tall silhouette, and the glow. */
-function kits() { return { solid: new Kit(), glow: new Kit() }; }
+function kits() {
+  const glow = new Kit();
+  glow.additive = true;     // the ledger records this kit's sheets whatever method laid them
+  return { solid: new Kit(), glow };
+}
 
 /**
  * The real ground under a LOCAL point of this site, in world metres.
@@ -301,6 +330,29 @@ function shell(k, api, ox, oz, w, d, h, yaw, col, doorW) {
   put((gap + side) * 0.5, -hd, side, t);
   // lintel over the doorway, so the opening reads as a door and not as a missing wall
   k.box(gap, 0.5, t, ox + (-hd) * sy, api.padY + h - 0.25, oz + (-hd) * cy, col, yaw);
+}
+
+/**
+ * A short glow column on the GLOW kit: an open tapered cylinder whose vertex colour falls to
+ * nothing at the top, the beacon's own construction at prop scale. `gain` scales the whole
+ * profile so a campfire is a fire and not a lighthouse. Reads from every bearing, which is
+ * what a flat ember bed cannot do (see the works stacks).
+ */
+function glowColumn(k, x, y, z, r, h, gain) {
+  const g = new THREE.CylinderGeometry(r * 0.35, r, h, 8, 1, true);
+  g.translate(0, h * 0.5, 0);
+  const n = g.attributes.position.count;
+  const c = new Float32Array(n * 3);
+  const py = g.attributes.position.array;
+  for (let i = 0; i < n; i++) {
+    const t = clamp(1 - py[i * 3 + 1] / h, 0, 1);
+    const v = gain * t * t;
+    c[i * 3] = v; c[i * 3 + 1] = v; c[i * 3 + 2] = v;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  g.translate(x, y, z);
+  k.parts.push(g);
+  return g;
 }
 
 /** A four-legged lattice mast or headframe, in the site's local frame. */
@@ -453,25 +505,150 @@ export const BUILDERS = {
       // Bright area falls from 86 m^2 to about 5, the gradient gives the soffit somewhere
       // to be in the 48-127 band ART 0.2 says the frame has nothing in, and the housings
       // put four dark edges across the light so it has internal structure to read.
+      //
+      // ROUND 5 (Alex, playtest 4): "I'm seeing some kind of translucent square overlay
+      // across the screen at many points." That was the fourth glow part here: a 12 x 7.8 m
+      // HORIZONTAL additive pane at lamp height (PANE_WASH, "the pool of light the fixtures
+      // throw back on the soffit"). Measured from under the canopy looking up it filled the
+      // whole frame at a flat orange, and from the forecourt at any angle it read as a
+      // translucent rectangle floating under the roof, hard-edged at the slab
+      // (tests/shots/round5-E-canopy-up-before.png). A soffit is lit by its fixtures and by
+      // what the light lands on, never by a sheet of glass in the air. Deleted. The three
+      // tubes are the fixtures and they stay; the fascia below gives the slab an edge to
+      // read as a made thing instead of a plaster plank.
       const lampY = api.padY + ch - 0.30;
       for (const lx of [-3.9, 0, 3.9]) {
         k.solid.box(0.66, 0.15, cd - 2.0, lx, lampY - 0.07, 0, C.slate);
-        k.glow.pane(0.34, cd - 2.6, lx, lampY - 0.16, 0, PANE_TUBE, 0, Math.PI * 0.5, 2, 12);
+        k.glow.pane(0.30, cd - 2.8, lx, lampY - 0.16, 0, PANE_TUBE, 0, Math.PI * 0.5, 2, 12);
       }
-      k.glow.pane(cw - 1.0, cd - 1.2, 0, lampY, 0, PANE_WASH, 0, Math.PI * 0.5, 10, 8);
-      // two pump islands
+      // the fascia: a dark band round the slab edge, and a drip rail under it
+      k.solid.box(cw + 0.10, 0.42, 0.12, 0, api.padY + ch + 0.06, -cd * 0.5 - 0.02, C.slate);
+      k.solid.box(cw + 0.10, 0.42, 0.12, 0, api.padY + ch + 0.06, cd * 0.5 + 0.02, C.slate);
+      k.solid.box(0.12, 0.42, cd + 0.10, -cw * 0.5 - 0.02, api.padY + ch + 0.06, 0, C.slate);
+      k.solid.box(0.12, 0.42, cd + 0.10, cw * 0.5 + 0.02, api.padY + ch + 0.06, 0, C.slate);
+      // THE CANOPY IS A ROOF YOU CAN STAND ON (Alex: "It would also be cool if you could
+      // get on top of this stuff"). One standable slab collider; walking under it at ground
+      // level never touches it (feet padY, head padY + 1.8, slab from padY + 4.325).
+      api.emit({
+        kind: 'obb', x: 0, z: 0, halfX: cw * 0.5, halfZ: cd * 0.5, yaw: 0,
+        y0: api.padY + ch - 0.275, y1: api.padY + ch + 0.275, tag: 'wall', standable: true,
+      });
+      // two pump islands. The old single 1.7 m block over the whole island was an invisible
+      // wall; now the kerb and the pump tops carry their own colliders. MEASURED (round 5
+      // verification): the 0.30 m kerb is walked THROUGH at ground level, not stood on —
+      // controller.js STICK (0.42) snaps a body back to terrain from anything lower than
+      // that, whatever collision reports as support — so `standable` on the kerb only stops
+      // it being a wall. The pump TOP (padY + 1.85) is a floor, reachable from the canopy.
       for (const iz of [-2.4, 2.4]) {
         k.solid.box(3.6, 0.30, 1.5, 0, api.padY + 0.15, iz, C.ash);
-        k.solid.box(0.75, 1.55, 0.55, -0.9, api.padY + 1.05, iz, C.plaster);
-        k.solid.box(0.75, 1.55, 0.55, 0.9, api.padY + 1.05, iz, C.plaster);
         api.emit({
-          kind: 'obb', x: 0, z: iz, halfX: 1.8, halfZ: 0.8, yaw: 0,
-          y0: api.padY, y1: api.padY + 1.7, tag: 'metal',
+          kind: 'obb', x: 0, z: iz, halfX: 1.8, halfZ: 0.75, yaw: 0,
+          y0: api.padY, y1: api.padY + 0.30, tag: 'stone', standable: true,
         });
+        for (const px of [-0.9, 0.9]) {
+          k.solid.box(0.75, 1.55, 0.55, px, api.padY + 1.05, iz, C.plaster);
+          k.solid.box(0.55, 0.30, 0.04, px, api.padY + 1.45, iz - 0.29, C.dark);   // the display
+          k.solid.box(0.08, 0.34, 0.10, px + 0.26, api.padY + 0.95, iz - 0.30, C.dark);   // the nozzle
+          api.emit({
+            kind: 'obb', x: px, z: iz, halfX: 0.375, halfZ: 0.275, yaw: 0,
+            y0: api.padY + 0.30, y1: api.padY + 1.85, tag: 'metal', standable: true,
+          });
+        }
       }
       // the shop
       shell(k.solid, api, -10.5, 0.5, 10, 7, 3.6, 0, C.plaster, 2.4);
       k.solid.gable(10.6, 7.6, api.padY + 3.6, 1.1, -10.5, 0, 0.5, C.slate, 0);
+      // THE SHOP ROOF IS A FLOOR. Measured 2026-09-03 (docs/ROUND-5/E-places.md): standing on
+      // any collider top the player controller reads airborne (controller.js:860 clamps to
+      // terrain.heightAt), so there is no jump and no mantle off a crate, and the mantle
+      // probe (controller.js:1057) reads terrain only. The only climb the shipped controller
+      // can make is a STAIR of risers inside STEP_UP + STEP_TOL = 0.60 m. So the roof is
+      // five standable strips nested about the ridge that follow the gable's pitch in
+      // quarter-metre steps, and the way up to it is the crate stair against the back wall
+      // below, which tops out at the WEST EAVE — the nested strips all share the back edge,
+      // so the only place their walls are inside a step of a 3.3 m crate is where the pitch
+      // is lowest (measured: at the ridge column the stair was a dead end, probe 3).
+      {
+        const gx = -10.5, gz = 0.5, halfD = 4.05, eaveTop = api.padY + 3.78;
+        // The inner strips start 1.0 m in from the crate column's footprint (x -15.41..-14.59
+        // plus the body's 0.36): a strip wall inside that reach is a 0.7 m step and a dead end.
+        const strips = [[5.3, 0], [3.5, 0.22], [2.5, 0.44], [1.5, 0.67], [0.5, 0.92]];
+        for (const [hx, rise] of strips) {
+          api.emit({
+            kind: 'obb', x: gx, z: gz, halfX: hx, halfZ: halfD, yaw: 0,
+            y0: api.padY + 3.0, y1: eaveTop + rise, tag: 'wall', standable: true,
+          });
+        }
+        // the plant box on the +x pitch: the last step, level with the canopy top
+        k.solid.box(2.3, 0.90, 1.6, -7.75, api.padY + 4.40, 1.2, C.metal);
+        k.solid.box(0.5, 0.22, 0.5, -7.3, api.padY + 4.96, 1.2, C.dark);     // the vent hood
+        api.emit({
+          kind: 'obb', x: -7.75, z: 1.2, halfX: 1.15, halfZ: 0.8, yaw: 0,
+          y0: api.padY + 3.9, y1: api.padY + 4.85, tag: 'metal', standable: true,
+        });
+      }
+      // THE CRATE STAIR, against the back wall: six columns of stacked crates rising 0.55 m
+      // a column, from the yard up to the west eave. Each column is one standable collider.
+      for (let i = 0; i < 6; i++) {
+        const cx = -10.9 - i * 0.82, cz = 4.95, top = 0.55 * (i + 1);
+        for (let j = 0; j <= i; j++) {
+          const jit = api.rng.range(-0.05, 0.05);
+          k.solid.box(0.78, 0.50, 0.78, cx + jit, api.padY + 0.275 + j * 0.55, cz - jit, C.plank,
+            api.rng.range(-0.08, 0.08));
+          k.solid.box(0.80, 0.05, 0.80, cx + jit, api.padY + 0.53 + j * 0.55, cz - jit, C.wood);
+        }
+        api.emit({
+          kind: 'obb', x: cx, z: cz, halfX: 0.41, halfZ: 0.41, yaw: 0,
+          y0: api.padY - 0.2, y1: api.padY + top, tag: 'wood', standable: true,
+        });
+      }
+      // FORECOURT CLUTTER (Alex: "they don't look like they have any detail"). Every piece
+      // emits its own collider in the statement that places it.
+      // a tyre stack by the north-east post
+      for (let j = 0; j < 4; j++) {
+        k.solid.tube(0.36, 0.36, 0.22, 10, 4.3 + api.rng.range(-0.04, 0.04), api.padY + 0.11 + j * 0.23,
+          5.1 + api.rng.range(-0.04, 0.04), C.dark, 0, 0, 0);
+        k.solid.cyl(0.36, 0.36, 0.06, 10, 4.3, api.padY + 0.11 + j * 0.23, 5.1, C.slate);
+      }
+      api.emit({ kind: 'circle', x: 4.3, z: 5.1, r: 0.40, y0: api.padY - 0.2, y1: api.padY + 0.92, tag: 'wood', standable: true });
+      // three oil drums at the shop's back corner
+      for (const [dx, dz, lean] of [[-4.5, 4.7, 0], [-3.8, 5.2, 0], [-4.4, 5.6, 0.9]]) {
+        if (lean) {
+          k.solid.cyl(0.29, 0.29, 0.88, 10, dx, api.padY + 0.30, dz, C.rust, 0, 0, Math.PI * 0.5);
+          api.emit({ kind: 'obb', x: dx, z: dz, halfX: 0.44, halfZ: 0.30, yaw: 0, y0: api.padY - 0.2, y1: api.padY + 0.58, tag: 'metal', standable: true });
+        } else {
+          k.solid.cyl(0.29, 0.29, 0.88, 10, dx, api.padY + 0.44, dz, C.rust);
+          k.solid.cyl(0.30, 0.30, 0.04, 10, dx, api.padY + 0.87, dz, C.dark);
+          api.emit({ kind: 'circle', x: dx, z: dz, r: 0.30, y0: api.padY - 0.2, y1: api.padY + 0.88, tag: 'metal', standable: true });
+        }
+      }
+      // the ice chest under the shop window, and the bench under the map board
+      k.solid.box(1.3, 0.90, 0.72, -13.6, api.padY + 0.45, -3.72, C.plaster);
+      k.solid.box(1.3, 0.06, 0.74, -13.6, api.padY + 0.92, -3.72, C.dark);
+      api.emit({ kind: 'obb', x: -13.6, z: -3.72, halfX: 0.65, halfZ: 0.36, yaw: 0, y0: api.padY - 0.2, y1: api.padY + 0.95, tag: 'metal', standable: true });
+      k.solid.box(1.7, 0.07, 0.42, -8.4, api.padY + 0.46, -3.72, C.plank);
+      for (const bx of [-9.1, -7.7]) k.solid.box(0.08, 0.44, 0.40, bx, api.padY + 0.22, -3.72, C.metal);
+      api.emit({ kind: 'obb', x: -8.4, z: -3.72, halfX: 0.85, halfZ: 0.21, yaw: 0, y0: api.padY - 0.2, y1: api.padY + 0.50, tag: 'wood', standable: true });
+      // a bin by the door
+      k.solid.cyl(0.27, 0.24, 0.85, 9, -6.4, api.padY + 0.42, -3.9, C.metal);
+      k.solid.cyl(0.29, 0.29, 0.06, 9, -6.4, api.padY + 0.87, -3.9, C.dark);
+      api.emit({ kind: 'circle', x: -6.4, z: -3.9, r: 0.28, y0: api.padY - 0.2, y1: api.padY + 0.88, tag: 'metal', standable: true });
+      // pallets by the sign, one with a drum still on it
+      for (const [px, pz, ry] of [[2.6, -5.9, 0.15], [3.9, -5.5, -0.35]]) {
+        k.solid.box(1.2, 0.14, 1.0, px, api.padY + 0.07, pz, C.wood, ry);
+        api.emit({ kind: 'obb', x: px, z: pz, halfX: 0.6, halfZ: 0.5, yaw: ry, y0: api.padY - 0.2, y1: api.padY + 0.14, tag: 'wood', standable: true });
+      }
+      k.solid.cyl(0.29, 0.29, 0.88, 10, 3.9, api.padY + 0.58, -5.5, C.rust);
+      api.emit({ kind: 'circle', x: 3.9, z: -5.5, r: 0.30, y0: api.padY, y1: api.padY + 1.02, tag: 'metal', standable: true });
+      // the air-line post between the pumps and the east posts
+      k.solid.cyl(0.06, 0.07, 1.1, 6, 4.2, api.padY + 0.55, 0, C.metal);
+      k.solid.box(0.32, 0.26, 0.22, 4.2, api.padY + 1.22, 0, C.rust);
+      api.emit({ kind: 'circle', x: 4.2, z: 0, r: 0.14, y0: api.padY - 0.2, y1: api.padY + 1.35, tag: 'metal' });
+      // the phone box at the shop's far end, glass dark
+      k.solid.box(1.0, 2.45, 1.0, -17.0, api.padY + 1.225, -1.6, C.rust);
+      k.solid.quad(0.78, 1.7, -17.0, api.padY + 1.35, -2.11, C.glass, Math.PI);
+      k.solid.quad(0.78, 1.7, -17.51, api.padY + 1.35, -1.6, C.glass, -Math.PI * 0.5);
+      api.emit({ kind: 'obb', x: -17.0, z: -1.6, halfX: 0.5, halfZ: 0.5, yaw: 0, y0: api.padY - 0.2, y1: api.padY + 2.45, tag: 'metal', standable: true });
       // the shop window: four panes behind a frame, a blind pulled half down over the top
       // of them, and a gradient that is brightest at the fitting and dies at the sill
       k.glow.pane(3.0, 1.4, -13.6, api.padY + 2.1, -3.06, PANE_WINDOW, Math.PI, 0, 8, 8);
@@ -1423,6 +1600,88 @@ export const MINOR_BUILDERS = {
     k.solid.cyl(0.05, 0.05, 0.24, 6, api.rng.range(-0.8, 0.8), api.padY + 0.05, api.rng.range(-0.8, 0.8),
       C.metal, api.rng.range(0, TAU), Math.PI * 0.5);
     api.emit({ kind: 'circle', x: 0, z: 0, r: 0.62, y0: api.padY - 0.2, y1: api.padY + 0.6, tag: 'wood' });
+    return k;
+  },
+
+  /**
+   * A campfire, OFF the road (placedata CAMPFIRE_OFFSET) and visible from it: somebody sat
+   * out the night here, and the embers are still going. A stone ring, a bed of embers that
+   * breathes (places.js runs it off the sim clock, like the stack tops), a log to sit on, a
+   * lean-to of poles under a tarp, and the pack they left. It is a LIT FIRE: places.js
+   * broadcasts place:near {lit: true} at it, so carried XP banks here. No light is created:
+   * the embers are the shared additive material at GLOW.ember, and every bright part is
+   * under a square metre, low, and read through the stones in front of it.
+   *
+   * The site's local +Z faces the road (places.js sets yaw to look at it), so the lean-to
+   * stands on -Z with its open side to the fire and the road: you see the glow in front of it.
+   */
+  campfire(api) {
+    const k = kits();
+    const gy = api.padY;
+    // the ring: nine stones, each on the ground under it
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * TAU + api.rng.range(-0.12, 0.12);
+      const r = 0.72 + api.rng.range(-0.05, 0.05);
+      const s = api.rng.range(0.26, 0.40);
+      const lx = Math.cos(a) * r, lz = Math.sin(a) * r;
+      const g = groundY(api, lx, lz);
+      k.solid.box(s, s * 0.7, s * 0.85, lx, g + s * 0.30, lz, C.stone, api.rng.range(0, TAU), 0, api.rng.range(-0.2, 0.2));
+    }
+    // the ash bed and the embers: a hot core seen from above, and a glow COLUMN that fades
+    // out at head height so the fire reads from the road side-on — a flat bed is edge-on
+    // at 25 m through pines and measured invisible from the verge (probe, 2026-09-03), the
+    // same lesson as the stack tops above.
+    k.solid.cyl(0.52, 0.40, 0.14, 10, 0, gy + 0.05, 0, C.ash);
+    k.glow.pane(0.90, 0.90, 0, gy + 0.16, 0, PANE_LAMP, 0, -Math.PI * 0.5, 8, 8);
+    glowColumn(k.glow, 0, gy + 0.10, 0, 0.42, 1.5, 0.62);
+    for (let i = 0; i < 5; i++) {
+      k.solid.cyl(0.03, 0.05, api.rng.range(0.35, 0.6), 4, api.rng.range(-0.25, 0.25), gy + 0.20,
+        api.rng.range(-0.25, 0.25), C.dark, api.rng.range(0, TAU), api.rng.range(0.9, 1.4));
+    }
+    api.emit({ kind: 'circle', x: 0, z: 0, r: 0.85, y0: gy - 0.2, y1: gy + 0.32, tag: 'stone', standable: true });
+    // the sitting log, to one side of the fire — never between the fire and the road, or it
+    // hides the bottom of the glow from a verge 25 m away (measured, probe 8)
+    {
+      const side = api.rng.next() < 0.5 ? -1 : 1;
+      const a = api.rng.range(-0.3, 0.3);
+      const lx = side * 1.7, lz = Math.sin(a) * 0.6;
+      const g = groundY(api, lx, lz);
+      k.solid.cyl(0.19, 0.22, 1.9, 7, lx, g + 0.19, lz, C.wood, a + Math.PI * 0.5, 0, Math.PI * 0.5);
+      api.emit({ kind: 'obb', x: lx, z: lz, halfX: 0.95, halfZ: 0.22, yaw: a + Math.PI * 0.5, y0: g - 0.2, y1: g + 0.40, tag: 'wood', standable: true });
+    }
+    // the lean-to: two poles, a ridge, and a tarp hung over it, open toward the fire and the
+    // road. places.js yaws a minor so its local +Z faces the road (yaw = atan2(road - site)),
+    // so the shelter stands on -Z, BEHIND the fire as seen from the verge. The first cut had
+    // it on +Z and the tarp was a pale sheet between the road and every campfire in the
+    // county: measured 0 px of glow from eight of ten road points (tests/sites.mjs).
+    {
+      const cz = -2.6, w = 2.4, h = 1.7;
+      const gL = groundY(api, -w * 0.5, cz), gR = groundY(api, w * 0.5, cz);
+      k.solid.cyl(0.04, 0.05, h + 0.2, 5, -w * 0.5, gL + h * 0.5, cz, C.wood, 0, 0, 0.08);
+      k.solid.cyl(0.04, 0.05, h + 0.2, 5, w * 0.5, gR + h * 0.5, cz, C.wood, 0, 0, -0.08);
+      const ridgeY = (gL + gR) * 0.5 + h;
+      k.solid.cyl(0.03, 0.03, w + 0.3, 4, 0, ridgeY, cz, C.wood, 0, 0, Math.PI * 0.5);
+      // the tarp: one sloped sheet from the ridge back (-Z) and down to the ground behind.
+      // Dark canvas (C.slate), not cloth: a pale sheet was the brightest thing at the site.
+      const drop = 1.9;
+      const len = Math.hypot(h, drop);
+      k.solid.quad(w + 0.2, len, 0, ridgeY - h * 0.5, cz - drop * 0.5, C.slate, 0, Math.atan2(drop, h));
+      api.emit({ kind: 'obb', x: 0, z: cz - 1.0, halfX: w * 0.5 + 0.1, halfZ: 1.1, yaw: 0, y0: (gL + gR) * 0.5 - 0.2, y1: ridgeY, tag: 'wood' });
+    }
+    // the pack they dropped, and a tin
+    {
+      const px = api.rng.range(0.9, 1.4), pz = api.rng.range(0.6, 1.2);
+      const g = groundY(api, px, pz);
+      k.solid.box(0.46, 0.38, 0.30, px, g + 0.19, pz, C.cloth, api.rng.range(0, TAU), 0, api.rng.range(-0.3, 0.3));
+      k.solid.box(0.18, 0.06, 0.34, px, g + 0.40, pz, C.dark, api.rng.range(0, TAU));
+      k.solid.cyl(0.05, 0.05, 0.09, 6, px - 0.4, g + 0.045, pz + 0.3, C.metal);
+      api.emit({ kind: 'circle', x: px, z: pz, r: 0.30, y0: g - 0.2, y1: g + 0.42, tag: 'wood', standable: true });
+    }
+    k.glowColour = GLOW.ember;
+    k.ember = true;      // places.js breathes it off the sim clock
+    // The lit broadcast (place:near {lit: true} within CAMPFIRE_NEAR_R) is keyed on the
+    // kind's `lit` flag in placedata's MINOR_KINDS, not on anything this builder returns:
+    // places.js reads the table before any body exists.
     return k;
   },
 };

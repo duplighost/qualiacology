@@ -52,7 +52,18 @@ export const CFG = {
       p95Max: 34,           // KNOWN ISSUE: chunk-build hitches. Was 22 and never met.
       drawsMax: 1400,       // 193-249 at M0; enemies, places and the car all add draws
       trisMax: 8e6,         // 6.0 M measured at 3 ms; the old 1.5 M was a pre-build guess
-      programsMax: 72,      // PROVISIONAL for M1; 38 at M0. Replace with the measured number.
+      // MEASURED 2026-09-03, GTX 980M, 1600x900, on the merged round-5 tree. The count is
+      // 74 at the end of warm() and it is STILL 74 in every state the game reaches: on foot,
+      // after streaming new chunks, with all four weapons owned / drawn / aimed / fired, at a
+      // claimed and lit place, in the black hour, with 12 bodies out, with the car placed,
+      // entered and driven, and with the pause card up. It does not move once, which is the
+      // law this budget exists to serve (tests/car.mjs asserts it across a 20 s drive;
+      // tests/sites.mjs across nine states including the county's west side). 72 was the
+      // provisional M1 guess and it went RED the moment lane D's car.warmup() moved the
+      // car's shadow-depth variants from "links when the car first appears" (a law break)
+      // to "linked at boot" (what the boot shell is for). 78 = the measured 74 plus four,
+      // which is one new material family of headroom and not a licence for six.
+      programsMax: 78,
       coldBootMaxS: 15,     // 0.9 s measured
     },
   },
@@ -183,12 +194,33 @@ export const CFG = {
   car: {
     onRoad: 23.0, offRoad: 12.2,
     accelOn: 7.0, accelOff: 4.6, brake: 10,
-    steerLock: 0.66, steerShrink: 0.36, steerShrinkAt: 38,
+    // ROUND 5 — Alex, fourth playtest: "The car needs better control. I'd like to be able to
+    // take turns down smaller roads filled with trees and have the driving be really easy and
+    // responsive." MOSSWAY's steerLock 0.66 / steerShrink 0.36 at 38 / effect
+    // 0.045*v/(1+0.018*v) was tuned for MOSSWAY's wide loop: measured through the real
+    // integrator on master 24d5101 (tests/car.mjs, 2026-09-03, wheel at full lock, speed
+    // held) the turning radius was 50 m at 8 m/s, 55 m at 10, 61 m at 12, 68 m at 15 and
+    // 75 m at 22 — a 90 degree turn in 8.7 s at 10 m/s, and no forest spur can be taken at
+    // that radius. Now a bicycle model whose full-lock radius is a function of speed:
+    //   R(v) = rMin + rCubic * v^3      lock(v) = atan(wheelbase / R(v))
+    //   yaw rate = v * tan(steer) / wheelbase
+    // so the wheel angle the wheels are DRAWN at is the one the kinematics use. Measured
+    // after (same suite, same road): 9.2 m at 8 m/s, 10.6 at 10, 12.7 at 12, 17.5 at 15,
+    // 38.7 at 22, 43.1 at 23. The band Alex asked for (8-15 m/s) turns inside 18 m — a 90
+    // degree turn in 1.7 s — and the cap is not a hairpin. The caps above are DESIGN
+    // numbers and are untouched.
+    turn: { rMin: 7.5, rCubic: 0.00284 },
     wheelbase: 2.55,
     pitchClamp: 0.22, rollClamp: 0.18,
     // MOSSWAY scrubs speed *= 0.58 PER FRAME on a tree hit - the one frame-rate-dependent
-    // line in that file. Made time-based here.
-    treeHit: { targetMul: 0.35, lambda: 12 },
+    // line in that file. Made time-based here. ROUND 5: the scrub scales with how square-on
+    // the contact is — a head-on trunk still damps toward targetMul, a graze along the
+    // flank damps toward 1 - (1 - targetMul) * glance, so threading trees costs a brush and
+    // not a crash. Measured at 6 m/s, no throttle, a trunk 1.15 m off the spine (tests/car.mjs):
+    // the graze kept 1.34 m/s before and keeps 2.61 after (3.59 with no trunk at all); a
+    // head-on still stops the car at 6.4 m. The gain is confined to the outer ~0.3 m of the
+    // 1.32 m contact radius when coasting (0.5 m off: 0.39 m/s; 0.8 m: 0.94; 1.0 m: 1.85).
+    treeHit: { targetMul: 0.35, lambda: 12, glance: 0.12 },
     seat: { x: -0.31, y: 1.66, z: -0.50, yawClamp: 1.48, fov: 68, fovFast: 74.5 },
     spawn: { min: 40, max: 90, minPlayerToMajor: 120, roadWithin: 60, lostBeyond: 300, pilotLast: 30 },
     hotwire: 1.6,

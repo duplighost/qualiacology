@@ -127,8 +127,12 @@ export const HOOK_POINTS = Object.freeze([
   { name: 'secondWind', kind: 'reduce', runner: 'player', base: 'null',
     at: 'player/controller.js hurt(), immediately before _die()',
     sig: '(spec|null, ctx) -> {seconds}|null' },
-  { name: 'onDoorShut', kind: 'run', runner: 'places', sig: '(ctx, x, z)',
-    at: 'world/places.js when a door closes behind the player' },
+  // Declared for places; RUN BY PROGRESS since round 5. There are no doors to close yet, so
+  // the car door (car:entered) and a claimed place's door (place:claimed) are the two, and
+  // progress runs it from the bus like onHurt/onLand/onNoise. When places grows a real door
+  // it takes this line back and progress drops its two.
+  { name: 'onDoorShut', kind: 'run', runner: 'progress', sig: '(ctx, x, z)',
+    at: 'progression/progress.js _doorShut() from car:entered and place:claimed' },
 ]);
 
 export const HOOK_NAMES = Object.freeze(HOOK_POINTS.map((h) => h.name));
@@ -351,8 +355,9 @@ export const NODES = Object.freeze([
     line: 'A door closed behind you ends the argument.',
     install: (s, hooks) => {
       void s;
-      // Two triggers, one effect. `onDoorShut` is the real one and belongs to places; until
-      // doors exist, crossing into a place is the same beat and progress already hears it.
+      // Two triggers, one effect. `onDoorShut` runs on the car door and on claiming a place
+      // (progress.js _doorShut); crossing into a lit place is the same beat and progress
+      // already hears it. Before round 5 nothing ran onDoorShut at all.
       const shut = (ctx, x, z) => {
         const p = sys(ctx, 'player');
         const px = Number.isFinite(x) ? x : (p && p.pos ? p.pos.x : 0);
