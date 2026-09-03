@@ -80,3 +80,15 @@ needs Alex — do not substitute your own.
 - **No new site copy is pending.** Nothing in the redesign invented a word;
   the one stale clause (`/games/` intro naming controls) was deleted with
   Alex's explicit yes, not rewritten.
+
+## Site copy vs Projects source
+
+Most games here are a copy of, or generated from, a folder under
+`C:\Users\Alex\Projects\<game>`. The two have diverged in both directions:
+VIGIL's site copy (v0.4) is weeks newer than its Projects folder (v0.1)
+because of direct-to-main commits, while other games' Projects folders are
+ahead of the site. Before copying either way, compare dates and versions
+(`git log -1 -- <game>/` here, and the project's own docs/STATUS.md), and
+write down in that STATUS.md which copy won. Games with a generator script
+(`build-site-copy.mjs`, `build.mjs --site`, `npm run site:sync`) must be
+regenerated, never hand-edited on the site side.
