@@ -92,10 +92,43 @@ const NOISE_LAND_MAX = 26.0;   // a bolt-action. A hard landing is the loudest t
 // eyes are, sinks like a body giving up, and the county goes on running around you for four
 // seconds — which is worse, and is the point.
 const DEATH_S = 4.0;            // killing blow -> respawn
+// The lowest the eye may ever sit above the ground the body is standing on. Above the near
+// plane, above a destination's raised apron, and low enough that a death still reads as
+// going down hard.
+const EYE_FLOOR = 0.42;
 const DEATH_SINK = 0.95;        // m the eye settles by across the beat
 const DEATH_SINK_LAMBDA = 1.9;  // damped: a collapse, not an elevator
 const RESPAWN_RING = 6.0;       // m out from a place's centre when the centre is a building
 const RESPAWN_PROBES = 8;       // fixed ring, never ctx.rng: a respawn has to be reproducible
+
+/**
+ * ALEX PLAYED IT, 2026-09-02: "the spot i spawn and and return to when i die kills me quite
+ * quickly and I am never sure why." MEASURED with tools/whatkilledme.mjs --play 75: he died
+ * at 30.0 s, was back on 78 hp at 45.0 s and dead again at 58.4 s, in the same place, to the
+ * same pack, which the director's _onDeath() does not clear — it cancels pending ORDERS and
+ * leaves every body that is already up exactly where it is, adjacent, alerted.
+ *
+ * Three things answer that, and two of them are mine:
+ *
+ *  1. RESPAWN_INVULN — a window in which damage cannot land at all. 2.5 s is the number:
+ *     a hound closes at ~3 m/s and the bites in the trace landed 1.0-5.0 s apart, so this
+ *     buys one refused bite and the beginning of a second, which is the difference between
+ *     "I came back and died" and "I came back and ran". It is NOT a soft damage reduction:
+ *     partial mitigation is unreadable, and a window the player cannot see the edge of is a
+ *     mechanic he will never learn to use. ui/hud.js draws it as a closing arc that empties
+ *     over exactly these seconds, so the edge is visible before it arrives.
+ *  2. RESPAWN_AWAY — come back on the FAR SIDE of the place from the body you left. The ring
+ *     probes are ordered outward from the bearing pointing away from the death site instead
+ *     of always starting at angle 0, so the respawn is still perfectly reproducible (no rng,
+ *     derived from two positions) but it no longer hands you back to the same jaw.
+ *  3. NOT MINE: the pack itself. player:respawn now carries `clearRadius` and the death
+ *     coordinates so the director can sweep the ground before it gives the body back.
+ *     Requested in docs/HANDOFF.md.
+ */
+const RESPAWN_INVULN = 2.5;     // s of true immunity after coming back
+const RESPAWN_AWAY = 18.0;      // if you died within this of the respawn point, ring out
+const RESPAWN_AWAY_RING = 12.0; // m of that ring — far enough that a committed body must re-close
+const RESPAWN_CLEAR_R = 26.0;   // m the director is asked to clear around the returning body
 
 // Mantle. CFG.player.mantle carries reach/clearance/cooldown/tiers; these are the probe
 // geometry DUSKFALL used (controller.js:289-330) expressed against our terrain field.
@@ -156,7 +189,16 @@ let _preX = 0, _preZ = 0;      // pre-integration footprint, for the wall back-o
 // rewritten in place. Listeners must READ these synchronously and never retain them, which
 // is the same contract enemies.js already keeps for its own `noise` scratch.
 const _diedPayload = { x: 0, y: 0, z: 0 };
-const _respawnPayload = { x: 0, y: 0, z: 0 };
+// Declared with every field it will ever carry, at module load: a payload that grows a
+// property on the second death is a shape V8 re-optimises at the worst possible moment, and
+// a listener that reads `clearRadius` must never see undefined on the first respawn.
+const _respawnPayload = {
+  x: 0, y: 0, z: 0,
+  invuln: RESPAWN_INVULN,     // s of immunity the body is coming back with
+  clearRadius: RESPAWN_CLEAR_R, // m the director is asked to sweep around x,z
+  fromX: 0, fromZ: 0,         // where the body died — the other place worth sweeping
+  movedM: 0,                  // how far the respawn point was pushed off the place centre
+};
 const _stepPayload = { sprint: false, tac: false, crouch: false, speed: 0, parity: 0, pos: null };
 const _landPayload = { speed: 0, pos: null };
 const _noisePayload = { x: 0, z: 0, radius: 0, source: 'step' };
@@ -227,6 +269,14 @@ export class PlayerController {
     this.dead = false;
     this.deathT = 0;                  // seconds into the death beat
     this.deathDrop = 0;               // m the eye has sunk; added into eyeY, nothing else
+    // Where the killing blow landed, so the respawn can put the body somewhere else and the
+    // director can be told which ground to sweep.
+    this.deathX = 0; this.deathZ = 0;
+    // THE RESPAWN WINDOW. > 0 means hurt() refuses outright. `invulnMax` exists so the HUD
+    // can draw the fraction remaining without knowing this file's constant — a window nobody
+    // can see the edge of is a mechanic nobody learns.
+    this.invuln = 0;
+    this.invulnMax = RESPAWN_INVULN;
 
     // ---- carried by the car. See setCarried() / carryTo().
     this.carried = false;
@@ -339,7 +389,14 @@ export class PlayerController {
     // The death sink rides the SAME channel every other eye motion does, which is how the
     // camera can sink without anybody taking the camera away: player/camera.js reads
     // renderEyeY and knows nothing about dying.
-    return this.pos.y + drop + this.landSpring.value - this.deathDrop;
+    // FOUR SEPARATE CHANNELS SUBTRACT FROM THE EYE — the crouch lerp, the slide dip, the
+    // land spring and the death sink — and nothing was stopping them from summing to more
+    // than the eye had. Two of them together already did. This is the floor: the camera may
+    // sink, collapse and dip, and it may never end up in the soil, whatever combination
+    // arrives. Cheap, unconditional, and it makes the whole class impossible rather than the
+    // one case that was reported.
+    const eye = this.pos.y + drop + this.landSpring.value - this.deathDrop;
+    return Math.max(eye, this.pos.y + EYE_FLOOR);
   }
 
   /** Stride length in metres for the current posture. ONE table, ONE clock. */
@@ -352,6 +409,9 @@ export class PlayerController {
   // ---------------------------------------------------------------- verbs
   hurt(amount, fromDir) {
     if (this.dead || this.ctx.debug?.god) return;
+    // The respawn window. TRUE immunity, not a multiplier: partial mitigation across a 2.5 s
+    // window is invisible, and the whole point of this window is that it can be seen.
+    if (this.invuln > 0) return;
     if (this.sinceHurt < HIT_GRACE) return;
     this.hp -= amount;
     this.sinceHurt = 0;
@@ -375,6 +435,8 @@ export class PlayerController {
     this.hp = 0;
     this.deathT = 0;
     this.deathDrop = 0;
+    this.deathX = this.pos.x; this.deathZ = this.pos.z;
+    this.invuln = 0;
     this.vel.set(0, 0, 0);
     this.sliding = false; this.slideT = 0; this._slideDipped = false;
     this.sprinting = false; this.tacSprinting = false; this.tacT = 0;
@@ -412,13 +474,32 @@ export class PlayerController {
 
     // The centre of a place is usually a building. Fixed ring, never ctx.rng: a respawn
     // has to land in the same spot twice for a test to mean anything.
+    //
+    // TWO reasons to leave the centre now, and the second is the one he felt. The old one:
+    // the centre is a wall. The new one: YOU DIED HERE. If the killing blow landed within
+    // RESPAWN_AWAY of the point we are about to hand him back at, the thing that landed it
+    // is still standing on that point — so the probes are walked outward from the bearing
+    // pointing AWAY from the death site (0, +1, -1, +2, -2 ... in steps of TAU/8) and the
+    // first that can hold a standing body wins. Still no rng and still reproducible: the
+    // answer is a pure function of two positions.
     const col = this._collision;
-    if (col && col.canOccupy && !col.canOccupy(bx, bz, P.RADIUS, P.STAND_H)) {
+    const centreBlocked = !!(col && col.canOccupy && !col.canOccupy(bx, bz, P.RADIUS, P.STAND_H));
+    const dxd = bx - this.deathX, dzd = bz - this.deathZ;
+    const diedOnTop = Math.hypot(dxd, dzd) < RESPAWN_AWAY;
+    if (centreBlocked || diedOnTop) {
+      const ring = diedOnTop ? RESPAWN_AWAY_RING : RESPAWN_RING;
+      // Degenerate case (died exactly on the point) falls back to the body's own facing,
+      // which is at least not the centre.
+      const away = (dxd * dxd + dzd * dzd) > 1e-6 ? Math.atan2(dzd, dxd) : this.yaw;
+      const ox = bx, oz = bz;
       for (let i = 0; i < RESPAWN_PROBES; i++) {
-        const a = (i / RESPAWN_PROBES) * TAU;
-        const cx = bx + Math.cos(a) * RESPAWN_RING;
-        const cz = bz + Math.sin(a) * RESPAWN_RING;
-        if (col.canOccupy(cx, cz, P.RADIUS, P.STAND_H)) { bx = cx; bz = cz; break; }
+        const k = (i + 1) >> 1;
+        const a = away + (i & 1 ? 1 : -1) * k * (TAU / RESPAWN_PROBES);
+        const cx = ox + Math.cos(a) * ring;
+        const cz = oz + Math.sin(a) * ring;
+        if (!col || !col.canOccupy || col.canOccupy(cx, cz, P.RADIUS, P.STAND_H)) {
+          bx = cx; bz = cz; break;
+        }
       }
     }
 
@@ -433,10 +514,17 @@ export class PlayerController {
     this.sliding = false; this.slideT = 0; this.slideViewT = 0; this.slideCooldown = 0;
     this.tacSprinting = false; this.tacT = 0; this.tacCooldown = 0;
     this.bobPhase = 0;
+    // The window opens BEFORE the event, so a listener that reads player.invuln on the same
+    // frame sees it armed rather than zero.
+    this.invuln = RESPAWN_INVULN;
     // teleport() re-syncs prev == curr, which is exactly right for a single placement:
     // without it present(alpha) draws one frame of streak across the whole county.
     this.teleport(bx, bz);
     _respawnPayload.x = this.pos.x; _respawnPayload.y = this.pos.y; _respawnPayload.z = this.pos.z;
+    _respawnPayload.invuln = RESPAWN_INVULN;
+    _respawnPayload.clearRadius = RESPAWN_CLEAR_R;
+    _respawnPayload.fromX = this.deathX; _respawnPayload.fromZ = this.deathZ;
+    _respawnPayload.movedM = +Math.hypot(this.pos.x - this.deathX, this.pos.z - this.deathZ).toFixed(2);
     this.ctx.bus.emit('player:respawn', _respawnPayload);
   }
 
@@ -501,7 +589,7 @@ export class PlayerController {
 
   reset() {
     this.hp = P.health.max; this.dead = false; this.sinceHurt = 99;
-    this.deathT = 0; this.deathDrop = 0; this.carried = false;
+    this.deathT = 0; this.deathDrop = 0; this.carried = false; this.invuln = 0;
     this.sliding = false; this.crouched = false; this.sprinting = false;
     this.tacSprinting = false; this.tacT = 0; this.tacCooldown = 0;
     this.bobPhase = 0;
@@ -532,11 +620,25 @@ export class PlayerController {
     this.prevYaw = this.currYaw;
     this.prevEyeY = this.currEyeY;
 
+    // The respawn window burns in ONE place, above every early return, so it cannot be
+    // paused by being carried, by dying again, or by any branch added later. It is zero
+    // while dead, so the death beat costs it nothing.
+    if (this.invuln > 0) this.invuln = Math.max(0, this.invuln - dt);
+
     // ---- the death beat ------------------------------------------------------
     // No fade, no cut, no spectator. The eye sinks on the same channel a slide uses and
     // everything else in the county keeps stepping around you for four seconds.
     if (this.dead) {
       this.deathT += dt;
+      // CROUCH OUT FIRST. This branch returns before the crouch damp at the bottom of step(),
+      // so dying crouched left crouchT pinned at 1 for the whole beat — and the death sink is
+      // sized for a STANDING eye. Crouched eye 1.06 minus a 0.95 sink puts the camera at
+      // ground + 0.11 m: in the dirt, under the near plane, and under a destination's raised
+      // floor. That is exactly what Alex saw — "when i died i kind of sank down... i could
+      // see more underneath. There was an enemy underneath the ground" — and it is why the
+      // buried hounds were visible from there and nowhere else.
+      this.crouchT = damp(this.crouchT, 0, CROUCH_OUT, dt);
+      this.slideViewT = damp(this.slideViewT, 0, SLIDE_VIEW_OUT, dt);
       this.deathDrop = damp(this.deathDrop, DEATH_SINK, DEATH_SINK_LAMBDA, dt);
       stepSpring(this.landSpring, dt);
       stepSpring(this.eyeSpring, dt);
@@ -1021,6 +1123,8 @@ export class PlayerController {
       dead: this.dead,
       deathT: this.deathT,
       carried: this.carried,
+      invuln: +this.invuln.toFixed(3),
+      invulnMax: this.invulnMax,
     };
   }
 

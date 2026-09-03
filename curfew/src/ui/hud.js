@@ -2,10 +2,24 @@
 //
 // ALEX'S LAW, WHICH OUTRANKS EVERY OTHER CONSIDERATION IN THIS FILE:
 // "Delete words from game UI. Show state through in-world visuals so the player feels it,
-// rather than reads it." So: no ammo counter, no health bar, no XP number, no level, no
-// objective, no minimap, no damage numbers, no compass, no prompt, no name of anything.
+// rather than reads it." So: no ammo counter, no XP number, no level, no objective, no
+// minimap, no damage numbers, no compass, no prompt, no name of anything.
 // tests/progression.mjs walks every text node in the document during play and fails on one
 // visible glyph. That test is not an obstacle to work around; it is this file's spec.
+//
+// AND THE ONE AMENDMENT HE MADE HIMSELF, 2026-09-02, after the first human playtest:
+// "plus, a healthbar is something we do need."
+//
+// He is the judge, so the readout exists — and it is built to the SPIRIT of his law rather
+// than against it. The law was never "withhold state"; it is "do not make the player READ
+// what he could FEEL". Health is the one thing in this game that cannot be felt: the
+// vignette and the tremor below are BANDS that say nothing at all above 35 hp, and he died
+// from full in fifteen seconds having never seen anything move. So he gets a readout with
+// NO number, NO glyph, NO label and NO colour code — a shallow arc at the bottom of the
+// frame that answers "how close am I" by LENGTH and "how hard was that" by the size of the
+// piece it just lost. See THE LIFE ARC below. The vignette and the tremor stay: they are
+// what a low-health state should FEEL like, and they were only ever wrong as the ONLY
+// signal.
 //
 // WHAT IS ALLOWED TO EXIST, AND WHY EACH ONE EARNED IT
 //   * A crosshair that IS the weapon's live cone in pixels. A static crosshair over a growing
@@ -13,10 +27,16 @@
 //   * A hit marker whose SHAPE says normal / armoured / weak point / kill. Shape, not colour:
 //     a marker read by hue is a marker half the room cannot read, and shape survives being
 //     4 px across in the corner of the eye.
-//   * Health as a vignette and a tremor. Never a bar. The tremor is on the VIGNETTE, never on
-//     the camera — "never take the camera away" is the horror law and it has no exceptions,
-//     including for feedback the player would probably enjoy.
-//   * A brief arc for the direction damage came from. It fades in under a second.
+//   * Health as a vignette and a tremor, AND as the life arc he asked for. The tremor is on
+//     the VIGNETTE, never on the camera — "never take the camera away" is the horror law and
+//     it has no exceptions, including for feedback the player would probably enjoy.
+//   * A brief arc for the direction damage came from, with a tick that points along it.
+//   * A chevron for each committed thing at your BACK, for as long as it is there. Eleven of
+//     the thirteen hits in his first session came from behind him, every one of them legally
+//     telegraphed where he could not see it. The mark deletes itself the instant you turn
+//     toward it, which is how "turn around" gets taught without a word.
+//   * The respawn window, drawn as a closing arc. Invulnerability the player cannot see is a
+//     mechanic he will never learn to use.
 //   * A ring pulse when a mote lands, so getting paid reaches the screen even when the mote
 //     arrives from behind you — and two slower rings for a card taken, three for a level.
 //     Those two were added after the second audit: a purchase used to acknowledge itself with
@@ -86,6 +106,93 @@ const TREMOR_FROM_HP = 35;      // below this the frame starts to shake
 const TREMOR_HZ = 8.5;
 const TREMOR_PX = 2.6;          // at 0 hp. Never applied to the camera.
 
+/* ---------------------------------------------------- THE LIFE ARC (new) ----
+ * ALEX, 2026-09-02, after the first human playtest: "plus, a healthbar is
+ * something we do need." He is the judge, so he gets one — and it gets built to the SPIRIT
+ * of his own standing law rather than against it.
+ *
+ * The law was never "withhold state". It is "do not make the player READ what he could
+ * FEEL". Health is the one number in this game that cannot be felt: the vignette and the
+ * tremor above are BANDS, they only start speaking below 35 hp, and by then the answer he
+ * needs — how many more bites do I have — has already been decided. He was at 34 hp with no
+ * way to know it, and he died from full in fifteen seconds without ever seeing a number move.
+ *
+ * So: no number, no glyph, no corner box, no colour code. A shallow arc across the bottom of
+ * the frame, and it answers two questions pre-attentively:
+ *
+ *   HOW CLOSE AM I TO DYING     -> LENGTH. It shrinks symmetrically toward the centre, so
+ *                                  the read works in peripheral vision where position, not
+ *                                  hue, is what survives. And VALUE: at full health it is a
+ *                                  0.10-alpha thread nobody looks at; at a quarter it is a
+ *                                  thick bright bar that breathes. Quiet when you are fine,
+ *                                  impossible to ignore when you are not.
+ *   DID THAT HURT A LOT         -> the GHOST. The piece that was just taken stays lit where
+ *                                  it was for GHOST_LIFE and burns off. Its LENGTH is the
+ *                                  damage. A 22-point hound bite and a 6-point graze are
+ *                                  different-sized objects on screen, in the same instant.
+ *
+ * Regen settles it back; because CFG.player.health.regenCeiling is 40, it visibly stops at
+ * two fifths and stays there, which teaches the ceiling without a word about it.
+ *
+ * It is drawn on its OWN canvas, full width and LIFE_H tall at the bottom edge, because the
+ * reticle canvas is 640 px and centred and this belongs at the rim of vision. That canvas is
+ * repainted only when something on it actually moved.
+ */
+const LIFE_H = 132;             // CSS px of the bottom canvas
+const LIFE_BOTTOM = 20;         // px from the viewport bottom to the apex of the arc
+const LIFE_HALF = 0.34;         // half-width of the arc as a fraction of the viewport
+const LIFE_RISE = 54;           // px the centre of the arc rises above its ends
+const LIFE_A_FULL = 0.10;       // ink alpha at 100 hp — a thread, nothing more
+const LIFE_A_DEAD = 0.86;       // ink alpha as it approaches 0
+const LIFE_W_FULL = 1.7;        // stroke, design px, at 100 hp
+const LIFE_W_DEAD = 6.4;        // stroke at 0
+const LIFE_TROUGH_A = 0.40;     // the empty part of the arc, at 0 hp; scales with the loss
+const LIFE_BREATH_FROM = 0.34;  // below this fraction the bar starts to breathe
+const LIFE_BREATH_HZ = [0.85, 2.30];  // at the threshold, and at death's door
+const GHOST_LIFE = 0.72;        // s a lost segment stays lit
+const GHOST_POOL = 4;
+const RESTORE_LIFE = 0.85;      // s of "you are whole again" after a respawn
+const LIFE_EPS = 0.12;          // hp of movement worth a repaint
+
+/* ------------------------------------------------- THE THREAT MARKS (new) ---
+ * ALEX: "basically the whole time im hearing sounds and seeing directions marked like I'm
+ * being hit" — and he still could not tell what was happening. MEASURED, 75 s of walking
+ * from the spawn without shooting: eleven of thirteen hits came from BEHIND him, dot -1.00,
+ * -0.99, -0.96, -0.94 against camera forward, from a hound standing 0.0-2.2 m away.
+ *
+ * The damage arc below is a FADE. It says "something hit you from over there", once, and
+ * then it is gone while the thing that hit you is still standing there. That is a receipt,
+ * not a warning, and he was reading a stream of receipts.
+ *
+ * So: a mark that PERSISTS while the threat does, and stops existing the moment you turn to
+ * face it. One chevron per committed body that is inside THREAT_R and OUTSIDE your forward
+ * cone, on a ring at the edge of the reticle, pointing outward at its bearing. Weight is
+ * distance; a body in its wind-up throbs. Turn toward it and it is gone — which is the whole
+ * lesson, taught by the mark deleting itself rather than by anybody saying it.
+ *
+ * It is not a radar: it cannot show you anything in front of you, anything past 20 m, or
+ * anything that has not committed to you. What it shows is exactly the case the camera
+ * cannot — the thing at your back.
+ */
+const THREAT_R = 20;            // m; past this you are not being attacked, you are being stalked
+const THREAT_NEAR = 3.5;        // m at which a mark is at full weight
+const THREAT_CONE = 0.90;       // rad (~52 deg) each side of forward = "you can see it"
+const THREAT_POOL = 4;          // more marks than this is a wall, not a warning
+const THREAT_A = [0.20, 0.72];  // alpha at THREAT_R and at THREAT_NEAR
+const THREAT_HZ = 5.5;          // the wind-up throb
+
+/* ---------------------------------------------- THE RESPAWN WINDOW (new) ----
+ * player/controller.js gives the body RESPAWN_INVULN seconds in which damage cannot land.
+ * Invulnerability the player cannot see is a mechanic he will never learn to use, so it is
+ * drawn: a second arc riding just above the life arc, starting full and CLOSING to nothing
+ * across exactly those seconds. Same gesture, same geometry, one hair brighter — the family
+ * resemblance is the point, because it says "this is also about staying alive" without
+ * saying anything.
+ */
+const INV_GAP = 9;              // px above the life arc
+const INV_SPAN_MUL = 0.86;      // slightly narrower, so the two arcs are never confused
+const INV_A = 0.80;
+
 const SR_PERIOD_S = 2.0;        // the screen-reader line is rewritten at most this often
 
 const INK = '#e8eef8';
@@ -101,6 +208,13 @@ const CONTROLS = [
   ['Sprint', 'Shift'],
   ['Crouch and slide', 'Ctrl or C'],
   ['Jump and mantle', 'Space'],
+  // ALEX, first playtest: "I've made it to the car. i have no idea how to get into the car
+  // lol." The door is KeyE and the horn is KeyH (engine/input.js:59-60, adopted from the
+  // vehicle lane's shim) and NEITHER was on this card — the one surface in CURFEW where
+  // words are legal, because the game is stopped and reading costs nothing. A verb the
+  // player cannot find is a verb that does not exist.
+  ['Get in the car', 'E'],
+  ['Horn', 'H'],
   ['Torch', 'F'],
   ['Pause', 'Esc'],
 ];
@@ -117,6 +231,9 @@ const CSS = `
               background: radial-gradient(ellipse at 50% 52%,
                 rgba(0,0,0,0) 38%, rgba(6,3,3,0.55) 78%, rgba(9,2,2,0.92) 100%); }
 #curfew-ret { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); }
+/* The life arc. Bottom edge, full width, its own surface so the 640 px reticle canvas is
+   not cleared for a thing that lives at the rim of vision. */
+#curfew-life { position: absolute; left: 0; bottom: 0; width: 100%; display: block; }
 #curfew-hud .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden;
               clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 #curfew-pause { position: fixed; inset: 0; z-index: 24; display: grid; place-items: center;
@@ -143,6 +260,7 @@ export class Hud {
     this.enabled = typeof document !== 'undefined';
 
     this.root = null; this.vig = null; this.canvas = null; this.g = null;
+    this.lifeCanvas = null; this.lg = null;
     this.srEl = null; this.pauseEl = null;
 
     this.R = RET_MAX; this.dpr = 1;
@@ -171,6 +289,27 @@ export class Hud {
     for (let i = 0; i < PULSE_POOL; i++) {
       this.pulses[i] = { live: false, t: 0, streak: 0, kind: 'mote', life: PULSE_LIFE };
     }
+    // The pieces of the life arc that were just taken. `a` and `b` are FRACTIONS of the arc,
+    // not hp, so the ghost stays where the loss happened no matter what regen does after.
+    this.ghosts = new Array(GHOST_POOL);
+    for (let i = 0; i < GHOST_POOL; i++) this.ghosts[i] = { live: false, a: 0, b: 0, t: 0 };
+    // Threat marks. Fixed pool, written in place; `paintRel` is what was last DRAWN, which
+    // is how the reticle avoids repainting for a bearing that moved a thousandth of a radian.
+    this.threats = new Array(THREAT_POOL);
+    for (let i = 0; i < THREAT_POOL; i++) {
+      this.threats[i] = { live: false, rel: 0, w: 0, hot: false, paintRel: 99, paintW: -1 };
+    }
+    this.threatN = 0;
+
+    this._threatPainted = 0;
+    // Declared here, not grown on first use: the arc's solved circle, rewritten in place.
+    this._geom = { cx: 0, cy: 0, r: 0, span: 0, apexY: 0 };
+
+    this.invuln = 0; this.invulnMax = 1;
+    this.restoreT = 99;             // s since the last respawn; >= RESTORE_LIFE is "settled"
+    this.lifeH = LIFE_H;
+    this._lifeDirty = true;
+    this._lifePaintedHp = -1;
 
     this.paused = false;
     this.pauseBuilt = false;
@@ -207,6 +346,10 @@ export class Hud {
     canvas.id = 'curfew-ret';
     root.appendChild(canvas);
 
+    const life = document.createElement('canvas');
+    life.id = 'curfew-life';
+    root.appendChild(life);
+
     document.body.appendChild(root);
 
     // The screen-reader line is a SIBLING of the aria-hidden layer, and carries the class
@@ -221,9 +364,11 @@ export class Hud {
     document.body.appendChild(sr);
 
     this.root = root; this.vig = vig; this.canvas = canvas; this.srEl = sr;
+    this.lifeCanvas = life;
     // NOT `desynchronized`: this canvas is only repainted when something moved, and a
     // low-latency surface is allowed to present a frame that was never redrawn.
     this.g = canvas.getContext('2d', { alpha: true });
+    this.lg = life.getContext('2d', { alpha: true });
 
     this._buildPause();
     this.resize();
@@ -233,7 +378,10 @@ export class Hud {
     this._wire();
   }
 
-  ready() { return !this.enabled || !!(this.canvas && this.g && this.root && this.pauseEl); }
+  ready() {
+    return !this.enabled
+      || !!(this.canvas && this.g && this.lifeCanvas && this.lg && this.root && this.pauseEl);
+  }
 
   dispose() {
     for (const off of this._unsub) { try { off(); } catch (e) { void e; } }
@@ -243,6 +391,7 @@ export class Hud {
       if (el && el.parentNode) el.parentNode.removeChild(el);
     }
     this.root = this.vig = this.canvas = this.g = this.srEl = this.pauseEl = null;
+    this.lifeCanvas = this.lg = null;
   }
 
   resize() {
@@ -258,6 +407,43 @@ export class Hud {
     // Work in CSS pixels inside the canvas; the backing store scale is set once, here.
     this.g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this._dirty = true;
+
+    if (this.lifeCanvas) {
+      // Tall enough to hold the arc's own rise plus the invulnerability arc above it, and
+      // never taller than a fifth of the frame — on a short window the arc flattens rather
+      // than eating the picture.
+      this.lifeH = Math.round(Math.min(LIFE_H, this.vh * 0.20));
+      this.lifeCanvas.style.height = this.lifeH + 'px';
+      this.lifeCanvas.width = Math.round(this.vw * this.dpr);
+      this.lifeCanvas.height = Math.round(this.lifeH * this.dpr);
+      this.lg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this._lifeDirty = true;
+    }
+  }
+
+  /**
+   * The one circle both bottom arcs are struck from, in life-canvas CSS pixels. Solved from
+   * three points — the two ends and the apex — so the shape is authored as "this wide, this
+   * much rise" and the radius falls out, rather than the other way round where a window
+   * resize silently changes how curved it is.
+   *
+   * Writes into a preallocated struct: present() must not allocate.
+   */
+  _lifeGeom() {
+    const G = this._geom;
+    const halfW = this.vw * LIFE_HALF;
+    // The ENDS sit LIFE_BOTTOM above the viewport floor and the apex rises above them, so
+    // the whole figure — including the invulnerability arc riding over the apex — is inside
+    // the canvas at any window height. Clamped so a short window flattens the curve rather
+    // than pushing it off the top.
+    const rise = Math.max(6, Math.min(LIFE_RISE, this.lifeH - LIFE_BOTTOM - 16));
+    const r = (halfW * halfW + rise * rise) / (2 * rise);
+    G.apexY = this.lifeH - LIFE_BOTTOM - rise;
+    G.cx = this.vw * 0.5;
+    G.cy = G.apexY + r;          // the centre sits far below the frame; we draw the crown
+    G.r = r;
+    G.span = Math.asin(clamp(halfW / r, 0, 1));
+    return G;
   }
 
   /* -------------------------------------------------------------------- bus -- */
@@ -289,7 +475,24 @@ export class Hud {
     on('node:bought', () => this._pulse('node', GRANT_LIFE));
     on('level:up', () => this._pulse('level', LEVEL_LIFE));
 
-    on('player:died', () => { this.hpLead = 0; this.hp = 0; this._dirty = true; });
+    // NOT `this.hp = 0` any more. Setting it here hid the killing blow from the tracker in
+    // step(), so the LAST piece of the arc — the bite that actually killed him, the one he
+    // most needs to see the size of — was the only loss that never produced a ghost.
+    on('player:died', () => { this._dirty = true; this._lifeDirty = true; });
+
+    // Coming back. The arc snaps full rather than sweeping up to it (a respawn is not a
+    // heal, and an arc that fills over half a second reads like one), old ghosts are dropped
+    // because they belong to a body that is now dead, and the invulnerability window starts
+    // being drawn from its own payload rather than from a constant this file duplicates.
+    on('player:respawn', (p) => {
+      const max = CFG.player.health.max;
+      this.hp = max; this.hpShown = max; this.hpLead = 0;
+      for (let i = 0; i < GHOST_POOL; i++) this.ghosts[i].live = false;
+      this.invulnMax = (typeof p.invuln === 'number' && p.invuln > 0) ? p.invuln : this.invulnMax;
+      this.invuln = this.invulnMax;
+      this.restoreT = 0;
+      this._dirty = true; this._lifeDirty = true;
+    });
     on('input:clickthrough', () => { if (this.paused) this.pause(false); });
   }
 
@@ -364,6 +567,25 @@ export class Hud {
     slot.life = life || PULSE_LIFE;
     slot.streak = (!big && prog) ? prog.streak : 0;
     this._dirty = true;
+  }
+
+  /**
+   * A piece of the life arc was just taken. Recorded in FRACTIONS of the arc, not in hp, so
+   * the ghost stays exactly where the loss happened no matter what regen does afterwards —
+   * and so its LENGTH on screen is the size of the bite, which is the whole question Alex
+   * could not answer: "things are killing me quickly no matter where i run", with no way to
+   * tell a 22-point hound from a graze.
+   */
+  _loss(a, b) {
+    if (!(b > a)) return;
+    let slot = null, oldest = -1;
+    for (let i = 0; i < GHOST_POOL; i++) {
+      const q = this.ghosts[i];
+      if (!q.live) { slot = q; break; }
+      if (q.t > oldest) { oldest = q.t; slot = q; }
+    }
+    slot.live = true; slot.a = a; slot.b = b; slot.t = 0;
+    this._lifeDirty = true;
   }
 
   /* ------------------------------------------------------------------- pause -- */
@@ -448,18 +670,41 @@ export class Hud {
       this._dirty = true;
     }
 
+    for (let i = 0; i < GHOST_POOL; i++) {
+      const q = this.ghosts[i];
+      if (!q.live) continue;
+      q.t += dt;
+      if (q.t > GHOST_LIFE) q.live = false;
+      this._lifeDirty = true;
+    }
+
     // Health: the ear first, the eye 200 ms later.
+    const max = CFG.player.health.max;
     const player = this.ctx.systems.get('player');
     if (player) {
       const hp = player.hp;
       // ONLY a drop arms the lead. controller.js:539 regenerates hp EVERY step, so arming on
       // any change at all would re-arm the 200 ms timer every frame and the vignette would
       // freeze at the value it had when the regen started and never open back up.
-      if (hp < this.hp - 0.01) this.hpLead = READOUT_LEAD_S;
+      if (hp < this.hp - 0.01) {
+        this.hpLead = READOUT_LEAD_S;
+        this._loss(clamp01(hp / max), clamp01(this.hp / max));
+      }
       this.hp = hp;
       if (this.hpLead > 0) this.hpLead -= dt;
       else this.hpShown += (this.hp - this.hpShown) * (1 - Math.exp(-VIG_LAMBDA * dt));
+
+      // The respawn window, read straight off the body. A window nobody can see the edge of
+      // is a mechanic nobody learns, so this is drawn, and it is drawn from the OWNER's
+      // number rather than from a copy of it here.
+      const iv = typeof player.invuln === 'number' ? player.invuln : 0;
+      if (Math.abs(iv - this.invuln) > 0.001) { this.invuln = iv; this._lifeDirty = true; }
+      if (typeof player.invulnMax === 'number' && player.invulnMax > 0) {
+        this.invulnMax = player.invulnMax;
+      }
     }
+    if (Math.abs(this.hpShown - this._lifePaintedHp) > LIFE_EPS) this._lifeDirty = true;
+    this.restoreT += dt;
 
     this.srT += dt;
   }
@@ -469,7 +714,9 @@ export class Hud {
     if (!this.enabled || !this.g || !this.ctx.ready) return;
 
     this._readWeapon();
+    this._readThreats();
     this._paintVignette();
+    this._paintLife();
     this._speak();
 
     // Repaint only when something moved. A full 640 px clear every frame for a crosshair that
@@ -495,6 +742,84 @@ export class Hud {
     const dry = (w.ammo | 0) <= 0 && !w.reloading;
     if (dry !== this.dry) { this.dry = dry; this._dirty = true; }
     this.conePx = this._conePx(this.cone);
+  }
+
+  /**
+   * WHAT IS AT YOUR BACK, refreshed every presented frame.
+   *
+   * Eleven of the thirteen hits in the first playtest came from behind him and every one of
+   * them was legally telegraphed — where he could not see it. This is the only readout in
+   * the file that answers a question the camera cannot, and it is deliberately narrow:
+   *
+   *   - only bodies that have committed to you (alerted, aware, or mid-swing),
+   *   - only inside THREAT_R,
+   *   - only OUTSIDE your forward cone.
+   *
+   * That last clause is what stops it being a radar, and it is also the lesson: the mark
+   * deletes itself the instant you turn toward it, so "turn around" is taught by the mark's
+   * own behaviour instead of by a caption.
+   *
+   * Reads siblings lazily, allocates nothing, and touches at most 46 pooled records
+   * (enemies/species.js POOL sums to 46).
+   */
+  _readThreats() {
+    const prevN = this.threatN;
+    for (let i = 0; i < THREAT_POOL; i++) this.threats[i].live = false;
+    this.threatN = 0;
+
+    const en = this.ctx.systems.get('enemies');
+    const player = this.ctx.systems.get('player');
+    const cam = this.ctx.systems.get('camera');
+    const list = en ? (typeof en.list === 'function' ? en.list() : en.all) : null;
+    if (list && player && cam && !player.dead && !this.inCar) {
+      // Same aim basis the damage arc uses: forward from the camera's yaw, screen-right
+      // derived from it rather than assumed. camera.js:149.
+      const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw);
+      const px = player.pos.x, pz = player.pos.z;
+      for (let i = 0; i < list.length; i++) {
+        const e = list[i];
+        if (!e || !e.alive || !e.pos) continue;
+        const st = e.state;
+        // A body running away, dormant or dying is not a threat, and marking it would make
+        // the mark mean "an enemy exists", which is exactly the wallpaper to avoid.
+        if (st === 'flee' || st === 'dead' || st === 'dormant') continue;
+        const committed = !!e.alerted || (e.aware | 0) > 0
+          || st === 'approach' || st === 'windup' || st === 'attack';
+        if (!committed) continue;
+        const dx = e.pos.x - px, dz = e.pos.z - pz;
+        const d = Math.hypot(dx, dz);
+        if (d > THREAT_R || d < 1e-4) continue;
+        const sx = dx / d, sz = dz / d;
+        const rel = Math.atan2(-sx * fz + sz * fx, sx * fx + sz * fz);
+        if (Math.abs(rel) < THREAT_CONE) continue;      // you are looking straight at it
+        const w = clamp01((THREAT_R - d) / (THREAT_R - THREAT_NEAR));
+        let slot = null;
+        if (this.threatN < THREAT_POOL) slot = this.threats[this.threatN++];
+        else {
+          // Full: the nearest four win, so a pack never buries the one about to bite.
+          let lo = 2, li = -1;
+          for (let k = 0; k < THREAT_POOL; k++) {
+            if (this.threats[k].w < lo) { lo = this.threats[k].w; li = k; }
+          }
+          if (li < 0 || lo >= w) continue;
+          slot = this.threats[li];
+        }
+        slot.live = true; slot.rel = rel; slot.w = w;
+        slot.hot = st === 'windup' || st === 'attack';
+      }
+    }
+
+    // Repaint only for a change the eye could resolve — a bearing that moved a thousandth of
+    // a radian is not a change, and a mark in its wind-up throb animates and always is.
+    let changed = this.threatN !== prevN;
+    for (let i = 0; i < THREAT_POOL && !changed; i++) {
+      const q = this.threats[i];
+      if (!q.live) continue;
+      if (q.hot || Math.abs(q.rel - q.paintRel) > 0.02 || Math.abs(q.w - q.paintW) > 0.02) {
+        changed = true;
+      }
+    }
+    if (changed) this._dirty = true;
   }
 
   /** donor: cinderbloom src/ui/hud.js:1392-1394, verbatim geometry. */
@@ -538,6 +863,136 @@ export class Hud {
     if (Math.abs(dx - this._trX) < 1 && Math.abs(dy - this._trY) < 1) return;
     this._trX = dx; this._trY = dy;
     this.vig.style.transform = 'translate(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) + 'px)';
+  }
+
+  /* ------------------------------------------------------------- the life arc -- */
+
+  /**
+   * THE HEALTH READOUT HE ASKED FOR. No number, no glyph, no label, no colour code — it
+   * survives tests/progression.mjs's no-words walk by construction, because it is four
+   * strokes on a canvas.
+   *
+   * Four layers, in this order:
+   *   1. the TROUGH — where the arc used to reach. Absent at full health, because a frame
+   *      decoration that is always there is not a readout, and this one has to read as
+   *      something that CLOSES.
+   *   2. what is LEFT — shrinking symmetrically toward the centre. Length is the answer.
+   *   3. the GHOSTS — the pieces taken in the last three quarters of a second, still lit
+   *      where they were. Length is how hard that hit.
+   *   4. the RESPAWN WINDOW — a second arc above the first, emptying across exactly the
+   *      seconds of immunity the body actually has.
+   *
+   * Alpha and stroke width both climb as health falls, so at 100 hp this is a 0.10-alpha
+   * hairline nobody looks at, and at 15 hp it is a thick breathing bar at the bottom of the
+   * frame that cannot be ignored. That is the whole of "quiet at full, impossible near
+   * death", and none of it is hue: it survives being seen in the far periphery of a dark
+   * forest, which colour does not.
+   */
+  /**
+   * The VALUE half of the readout — ink alpha and stroke width against health — kept in two
+   * one-line methods so `state()` reports the numbers that are actually PAINTED. Every
+   * instrument in this project that reported something adjacent to what it measured cost a
+   * round (AGENTS.md rule 3, and seven of them in STATUS.md).
+   */
+  _lifeInk() {
+    const low = 1 - clamp01(this.hpShown / CFG.player.health.max);
+    return LIFE_A_FULL + (LIFE_A_DEAD - LIFE_A_FULL) * Math.pow(low, 1.35);
+  }
+
+  _lifeStroke() {
+    const low = 1 - clamp01(this.hpShown / CFG.player.health.max);
+    return LIFE_W_FULL + (LIFE_W_DEAD - LIFE_W_FULL) * Math.pow(low, 1.2);
+  }
+
+  _paintLife() {
+    const g = this.lg;
+    if (!g) return;
+    const max = CFG.player.health.max;
+    const frac = clamp01(this.hpShown / max);
+    const rest = this.restoreT < RESTORE_LIFE ? 1 - this.restoreT / RESTORE_LIFE : 0;
+    const breathing = frac > 0.001 && frac < LIFE_BREATH_FROM;
+    let ghosting = false;
+    for (let i = 0; i < GHOST_POOL; i++) if (this.ghosts[i].live) { ghosting = true; break; }
+    // Everything that animates on its own forces a frame; everything else waits for a change
+    // worth more than LIFE_EPS of hp. At full health, settled, this paints nothing at all.
+    if (!this._lifeDirty && !ghosting && !breathing && rest <= 0 && this.invuln <= 0) return;
+    this._lifeDirty = false;
+    this._lifePaintedHp = this.hpShown;
+
+    g.clearRect(0, 0, this.vw, this.lifeH);
+    if (this.paused) return;
+
+    const G = this._lifeGeom();
+    const u = Math.max(0.75, this.vw / 1600);
+    const low = 1 - frac;
+    const TOP = -Math.PI * 0.5;         // canvas angle of the crown of the circle
+    g.lineCap = 'round';
+
+    // Breath: slow at the threshold, faster as it approaches nothing. MOTION is what the far
+    // periphery reports, long before any shape or value resolves there.
+    let breath = 1;
+    if (breathing) {
+      const k = 1 - clamp01(frac / LIFE_BREATH_FROM);
+      const hz = LIFE_BREATH_HZ[0] + (LIFE_BREATH_HZ[1] - LIFE_BREATH_HZ[0]) * k;
+      breath = 0.74 + 0.26 * (0.5 + 0.5 * Math.sin(this._t * TAU * hz));
+    }
+
+    /* 1. the trough — what has been taken ----------------------------------- */
+    if (low > 0.012) {
+      g.globalAlpha = LIFE_TROUGH_A * Math.pow(low, 0.7);
+      g.strokeStyle = SHADE;
+      g.lineWidth = (LIFE_W_FULL + (LIFE_W_DEAD - LIFE_W_FULL) * low) * u;
+      g.beginPath(); g.arc(G.cx, G.cy, G.r, TOP - G.span, TOP + G.span); g.stroke();
+    }
+
+    /* 2. what is left ------------------------------------------------------- */
+    const half = G.span * frac;
+    if (half > 0.0008) {
+      g.globalAlpha = clamp01(this._lifeInk() * breath + rest * 0.55);
+      g.strokeStyle = INK;
+      g.lineWidth = this._lifeStroke()
+        * u * (breathing ? 0.88 + 0.24 * breath : 1) * (1 + rest * 0.75);
+      g.beginPath(); g.arc(G.cx, G.cy, G.r, TOP - half, TOP + half); g.stroke();
+    }
+
+    /* 3. the ghosts — the size of the bite ---------------------------------- */
+    for (let i = 0; i < GHOST_POOL; i++) {
+      const q = this.ghosts[i];
+      if (!q.live) continue;
+      const t = clamp01(q.t / GHOST_LIFE);
+      // Full for the first fifth, then out: it is a flash that leaves a measurement behind,
+      // not a bar that drains.
+      g.globalAlpha = (t < 0.18 ? 1 : 1 - (t - 0.18) / 0.82) * 0.92;
+      g.strokeStyle = INK;
+      g.lineWidth = LIFE_W_DEAD * (1 - 0.5 * t) * u;
+      const a0 = G.span * q.a, a1 = G.span * q.b;
+      if (a1 - a0 < 1e-4) continue;
+      g.beginPath(); g.arc(G.cx, G.cy, G.r, TOP + a0, TOP + a1); g.stroke();
+      g.beginPath(); g.arc(G.cx, G.cy, G.r, TOP - a1, TOP - a0); g.stroke();
+    }
+
+    /* 4. the respawn window ------------------------------------------------- */
+    // Riding INV_GAP px above the life arc, on the same centre, so it is unmistakably part
+    // of the same family and unmistakably not the same thing. It starts full and closes to
+    // nothing across the body's own invulnerability seconds: the edge of the window is
+    // visible before it arrives, which is the only reason to draw a window at all.
+    if (this.invuln > 0 && this.invulnMax > 0) {
+      const f = clamp01(this.invuln / this.invulnMax);
+      const spanI = G.span * INV_SPAN_MUL * f;
+      const rI = G.r + INV_GAP;
+      if (spanI > 0.0008) {
+        g.globalAlpha = INV_A * 0.55;
+        g.strokeStyle = SHADE;
+        g.lineWidth = 5.2 * u;
+        g.beginPath(); g.arc(G.cx, G.cy, rI, TOP - spanI, TOP + spanI); g.stroke();
+        g.globalAlpha = INV_A;
+        g.strokeStyle = INK;
+        g.lineWidth = 2.1 * u;
+        g.beginPath(); g.arc(G.cx, G.cy, rI, TOP - spanI, TOP + spanI); g.stroke();
+      }
+    }
+
+    g.globalAlpha = 1;
   }
 
   /* ------------------------------------------------------------- the reticle -- */
@@ -643,7 +1098,49 @@ export class Hud {
       g.strokeStyle = INK;
       g.lineWidth = 3.0 * u * a.amt;
       g.beginPath(); g.arc(c, c, dr, mid - span, mid + span); g.stroke();
+      // ...and a tick pointing OUT along the bearing. An arc alone says "somewhere on this
+      // side of you"; the tick says "there". It costs two lines and it is the difference
+      // between a receipt and an instruction.
+      const ca = Math.cos(mid), sa = Math.sin(mid);
+      g.lineWidth = 2.6 * u;
+      g.beginPath();
+      g.moveTo(c + ca * (dr + 6 * u), c + sa * (dr + 6 * u));
+      g.lineTo(c + ca * (dr + 15 * u), c + sa * (dr + 15 * u));
+      g.stroke();
     }
+
+    /* ---- what is at your back, for as long as it is there -------------------- */
+    // Outside the damage arc's ring, so the two never sit on top of each other: the arc is a
+    // thing that happened, these are things that are still happening.
+    const tr = R * 0.42;
+    for (let i = 0; i < THREAT_POOL; i++) {
+      const q = this.threats[i];
+      if (!q.live) continue;
+      q.paintRel = q.rel; q.paintW = q.w;
+      const mid = q.rel - Math.PI * 0.5;      // canvas 0 rad is screen right; ahead is -90
+      // A body in its wind-up throbs. That is the 320 ms he was never shown, moved to where
+      // he can see it — and it is the only state change this mark makes, so a throb means
+      // exactly one thing.
+      const throb = q.hot ? 0.70 + 0.30 * Math.sin(this._t * TAU * THREAT_HZ) : 1;
+      const al = (THREAT_A[0] + (THREAT_A[1] - THREAT_A[0]) * q.w) * throb;
+      const len = (5.0 + 5.5 * q.w) * u * (q.hot ? 1.3 : 1);
+      const wing = (4.6 + 3.2 * q.w) * u;
+      const ca = Math.cos(mid), sa = Math.sin(mid);
+      const rIn = tr, rOut = tr + len;
+      for (let pass = 0; pass < 2; pass++) {
+        g.globalAlpha = al * (pass === 0 ? 0.70 : 1);
+        g.strokeStyle = pass === 0 ? SHADE : INK;
+        g.lineWidth = (pass === 0 ? 4.6 : 2.0) * u;
+        g.lineCap = 'butt';
+        g.beginPath();
+        // A chevron with its point OUTWARD: the shape itself is an arrow at the bearing.
+        g.moveTo(c + ca * rIn - sa * wing, c + sa * rIn + ca * wing);
+        g.lineTo(c + ca * rOut, c + sa * rOut);
+        g.lineTo(c + ca * rIn + sa * wing, c + sa * rIn - ca * wing);
+        g.stroke();
+      }
+    }
+    this._threatPainted = this.threatN;
 
     g.globalAlpha = 1;
   }
@@ -741,7 +1238,15 @@ export class Hud {
     const prog = this.ctx.systems.get('progress');
     const carry = prog && prog.carryStep >= 0
       ? [', carrying a little', ', carrying a good deal', ', carrying a great deal'][prog.carryStep] : '';
-    const line = health + ammo + carry + '.';
+    // The threat marks and the respawn window, in words, for the one reader who cannot see
+    // either. Same rule as the rest of this line: bands, never numbers.
+    let hot = false;
+    for (let i = 0; i < THREAT_POOL; i++) if (this.threats[i].live && this.threats[i].hot) hot = true;
+    const behind = this.threatN <= 0 ? ''
+      : hot ? ', something is about to strike from behind you'
+        : this.threatN > 1 ? ', several things are behind you' : ', something is behind you';
+    const shielded = this.invuln > 0 ? ', briefly untouchable' : '';
+    const line = health + ammo + carry + behind + shielded + '.';
     if (line === this.srLast) return;
     this.srLast = line;
     this.srEl.textContent = line;
@@ -751,8 +1256,18 @@ export class Hud {
 
   state() {
     let marks = 0, arcs = 0, pulses = 0, grants = 0;
+    let ghosts = 0, ghostSpan = 0, threatsHot = 0;
     for (let i = 0; i < MARK_POOL; i++) if (this.marks[i].live) marks++;
     for (let i = 0; i < ARC_POOL; i++) if (this.arcs[i].live) arcs++;
+    for (let i = 0; i < GHOST_POOL; i++) {
+      const q = this.ghosts[i];
+      if (!q.live) continue;
+      ghosts++;
+      // The LENGTH of the largest live ghost, as a fraction of the arc. This is the number a
+      // test can assert against "did the readout show him how big that bite was".
+      ghostSpan = Math.max(ghostSpan, q.b - q.a);
+    }
+    for (let i = 0; i < THREAT_POOL; i++) if (this.threats[i].live && this.threats[i].hot) threatsHot++;
     for (let i = 0; i < PULSE_POOL; i++) {
       const q = this.pulses[i];
       if (!q.live) continue;
@@ -765,7 +1280,17 @@ export class Hud {
       hp: this.hp, hpShown: +this.hpShown.toFixed(1),
       vignette: +this.vigA.toFixed(3), tremor: +this.tremor.toFixed(3),
       marks, arcs, pulses, grants, paused: this.paused,
-      canvas: { r: this.R, dpr: this.dpr },
+      // THE HEALTH READOUT, as numbers a gate can hold on to.
+      // `lifeFrac` is the LENGTH of the arc; `lifeAlpha`/`lifeWidth` are the VALUE, and the
+      // pair is the whole design: quiet at full, loud near death, never a hue.
+      lifeFrac: +clamp01(this.hpShown / CFG.player.health.max).toFixed(3),
+      lifeAlpha: +this._lifeInk().toFixed(3),
+      lifeWidth: +this._lifeStroke().toFixed(2),
+      ghosts, ghostSpan: +ghostSpan.toFixed(3),
+      invuln: +this.invuln.toFixed(2), invulnMax: +this.invulnMax.toFixed(2),
+      restoring: this.restoreT < RESTORE_LIFE,
+      threats: this.threatN, threatsHot,
+      canvas: { r: this.R, dpr: this.dpr, lifeH: this.lifeH },
       // The only text this system owns, so a test can assert its content and its invisibility
       // in the same breath.
       sr: this.srLast,

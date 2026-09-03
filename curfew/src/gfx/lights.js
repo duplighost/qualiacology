@@ -79,8 +79,13 @@ const MOON_TINT_R = 0xbf / 255, MOON_TINT_G = 0x52 / 255, MOON_TINT_B = 0x36 / 2
  * HEMI_GROUND is CURFEW's ENTIRE warm-below term (ART.md 0.5: cold from above, warm and
  * very dim from below). 0x1d2620 is a green-grey and the bounce off a forest floor is not.
  */
-const HEMI_INTENSITY = 5.0;      // was CFG.lights.hemi.intensity 4.5
-const AMBIENT_INTENSITY = 1.1;   // was CFG.lights.ambient.intensity 2.0
+// These were local constants while the art round measured them, with a note in HANDOFF asking
+// the integrator to move them into config and delete the locals. Config now carries the
+// measured values (hemi 6.8, ambient 1.55, from the tools/lightsweep.mjs ladder), so the
+// locals are gone and this reads the one source again. A local that shadows config is a
+// second source of truth, and the sweep spent a run measuring a number the game was not using.
+const HEMI_INTENSITY = CFG.lights.hemi.intensity;
+const AMBIENT_INTENSITY = CFG.lights.ambient.intensity;
 const HEMI_GROUND = 0x241f18;    // was CFG.lights.hemi.ground 0x1d2620
 
 /* 1.4 — THE BLACK HOUR IS NOT BLACK.

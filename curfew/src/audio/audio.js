@@ -392,6 +392,45 @@ const OCC_FLUSH_S = 0.25;
 const OCC_FLUSH_M = 1.5;       // listener movement that invalidates the cache
 const SPEC_RING = 24;          // pooled option objects; the hot path allocates nothing
 
+/* ==========================================================================
+   THE MIX TRIAGE — every cue in this game is one of three things.
+   ==========================================================================
+   Alex's first playtest, verbatim: "basically the whol time im hearing sounds
+   and seeing directions marked like I'm being hit." That is the worst thing a
+   horror mix can be told. It was not that the mix was too loud; it was that
+   nothing in it was RANKED, so a twig snap, a bird leaving and a hound closing
+   on his back all arrived as the same undifferentiated event audio and he read
+   every one of them as damage. A mix that cries wolf continuously has spent the
+   only currency it has.
+
+   So every play in this lane now carries a CLASS, and the class is a promise:
+
+     THREAT   "you are about to be hurt, or you have just been hurt."
+              Four cues and no more: the rear-strike tell, the in-view
+              telegraph, the earshot tick, and the damage signature. Every one
+              of them lives on `busEarshot` — above the 1.6 kHz mix law, in the
+              2.5-5.5 kHz pinna band nothing else may enter — and the first and
+              last of them DUCK the entire rest of the mix under themselves.
+     WORLD    "this is a real object doing a real thing": your steps, your gun,
+              impacts, a place breathing its own name, a door on its hinge.
+     FLAVOUR  "the county is alive": the bed, the subtractions, the soft dread
+              beats. It is scenery. It may never be mistaken for a threat, and
+              it is the class that gets out of the way.
+
+   The census is on state() as `cue` and `cueByName`, so "the mix cries wolf" is
+   a number and not an opinion.
+   ========================================================================== */
+export const CUE_THREAT = 'threat';
+export const CUE_WORLD = 'world';
+export const CUE_FLAVOUR = 'flavour';
+
+// How far the rest of the mix steps back under a THREAT cue that means contact
+// is imminent, and how fast it comes back. Only the rear-strike tell and the
+// damage signature spend this — a duck on every earshot tick would pump.
+const THREAT_DUCK_DB = 7.0;
+const THREAT_DUCK_ATTACK = 0.012;
+const THREAT_DUCK_BACK = 0.34;
+
 /* --------------------------------------------------------------------------
    THE TENSION LINK. director/tension.js publishes one number and one corner:
    `setTension(t)` and `setBedLowpass(hz)`, from TENSION_TABLE's bedLowpassHi
@@ -456,11 +495,11 @@ const DREAD = {
   // the watcher being GONE, which is worse than the watcher
   withdraw: { n: 'dr_withdraw', v: 2, gain: 0.55, bus: 'creatures', send: 0.30, occl: true,  pri: 2, prop: 0,  rlo: 0.94, rhi: 1.06, threat: false },
   eyes:     { n: 'dr_eyes',     v: 3, gain: 0.42, bus: 'creatures', send: 0.10, occl: true,  pri: 2, prop: 0,  rlo: 0.94, rhi: 1.08, threat: false },
-  lantern:  { n: 'dr_lantern',  v: 3, gain: 0.55, bus: 'world',     send: 0.30, occl: true,  pri: 2, prop: 0,  rlo: 0.96, rhi: 1.05, threat: false },
+  lantern:  { n: 'dr_lantern',  v: 3, gain: 0.55, bus: 'world',     send: 0.30, occl: true,  pri: 2, prop: 0,  rlo: 0.96, rhi: 1.05, threat: false, cls: CUE_WORLD },
   // the same lantern, further off and dulled: the light that was there is not.
   // An alias with its own row, never a second bake — it IS that object leaving.
-  lanternGone: { n: 'dr_lantern', v: 3, gain: 0.34, bus: 'world',  send: 0.42, occl: true,  pri: 2, prop: 0,  rlo: 0.84, rhi: 0.90, threat: false, lpHz: 1800 },
-  door:     { n: 'dr_door',     v: 2, gain: 0.60, bus: 'world',     send: 0.40, occl: true,  pri: 2, prop: 0,  rlo: 0.94, rhi: 1.06, threat: false },
+  lanternGone: { n: 'dr_lantern', v: 3, gain: 0.34, bus: 'world',  send: 0.42, occl: true,  pri: 2, prop: 0,  rlo: 0.84, rhi: 0.90, threat: false, lpHz: 1800, cls: CUE_WORLD },
+  door:     { n: 'dr_door',     v: 2, gain: 0.60, bus: 'world',     send: 0.40, occl: true,  pri: 2, prop: 0,  rlo: 0.94, rhi: 1.06, threat: false, cls: CUE_WORLD },
   // BEING CAUGHT LOOKING. director/auditor.js:488 fires this the instant the
   // player's viewport has held an active event for 1.5 s — the payoff of the whole
   // Auditor loop and the game's reward for CHOOSING to look at the frightening
@@ -561,7 +600,11 @@ export class Audio {
       plays: 0, voices: 0, peakVoices: 0, steals: 0, reclaims: 0,
       rays: 0, occHits: 0, shots: 0, updMs: 0,
       dread: 0, dreadUnknown: 0, whispers: 0,
+      // THE MIX CENSUS. One counter per class and one per buffer name, so the
+      // question "is this mix crying wolf" has an answer with a number in it.
+      cueThreat: 0, cueWorld: 0, cueFlavour: 0, threatDucks: 0,
     };
+    this._cueByName = Object.create(null);
 
     this.rng = ctx.rng.fork('audio');
     this.guns = new GunAudio(ctx, this);
@@ -699,13 +742,27 @@ export class Audio {
     this.preMaster = g(1);
     this.preMaster.connect(this.reflexGain);
 
+    // THE THREAT DUCK. Everything below the mix law — the world, the creatures,
+    // the weapons, the whole county — passes through this one gain, and
+    // `busEarshot` does not: it goes straight to preMaster. So when a threat cue
+    // that means CONTACT IS IMMINENT fires, the entire rest of the game steps
+    // 7 dB back underneath it for a third of a second and the cue is alone.
+    //
+    // This is the answer to "the whole time im hearing sounds like I'm being
+    // hit". The mix could not previously rank anything: a twig, a bird and a
+    // hound arriving at his back all had the same claim on his attention. Now
+    // exactly two events in the game can take the room — the rear-strike tell
+    // and the damage he just took — and everything else gets out of their way.
+    this.threatDuckGain = g(1);
+    this.threatDuckGain.connect(this.preMaster);
+
     // THE MIX LAW. 4th order = two cascaded 12 dB/oct biquads.
     this.mixLP1 = c.createBiquadFilter();
     this.mixLP1.type = 'lowpass'; this.mixLP1.frequency.value = MIX_LP_HZ; this.mixLP1.Q.value = 0.541;
     this.mixLP2 = c.createBiquadFilter();
     this.mixLP2.type = 'lowpass'; this.mixLP2.frequency.value = MIX_LP_HZ; this.mixLP2.Q.value = 1.307;
     this.mixLP1.connect(this.mixLP2);
-    this.mixLP2.connect(this.preMaster);
+    this.mixLP2.connect(this.threatDuckGain);
 
     // The 400 Hz punch carve. Everything except a player shot's own body.
     this.dipEQ = c.createBiquadFilter();
@@ -1054,7 +1111,7 @@ export class Audio {
       x: null, y: 0, z: 0, gain: 1, rate: 1, bus: 'world', when: undefined, delay: 0,
       send: undefined, air: true, occl: true, lpHz: 0, filterHz: 1400, toneDb: 0,
       dur: undefined, offset: 0, propagate: false, priority: 3,
-      ref: 0, roll: 0, maxDist: 0,
+      ref: 0, roll: 0, maxDist: 0, cls: CUE_WORLD, _name: '',
     };
   }
 
@@ -1070,6 +1127,7 @@ export class Audio {
     s.when = undefined; s.delay = 0; s.send = undefined; s.air = true; s.occl = true;
     s.lpHz = 0; s.filterHz = 1400; s.toneDb = 0; s.dur = undefined; s.offset = 0;
     s.propagate = false; s.priority = 3; s.ref = 0; s.roll = 0; s.maxDist = 0;
+    s.cls = CUE_WORLD; s._name = '';
     return s;
   }
 
@@ -1140,14 +1198,26 @@ export class Audio {
       else src.start(when, o.offset || 0);
     } catch (e) { this._release(v); return null; }
     this._stats.plays++;
+    // THE CENSUS. Counted where the sound is actually scheduled, never where it
+    // is requested: a cue that was refused a voice was not heard, and a triage
+    // built on intentions rather than on plays would be measuring the wrong mix.
+    const cls = o.cls || CUE_WORLD;
+    if (cls === CUE_THREAT) this._stats.cueThreat++;
+    else if (cls === CUE_FLAVOUR) this._stats.cueFlavour++;
+    else this._stats.cueWorld++;
+    if (o._name) this._cueByName[o._name] = (this._cueByName[o._name] | 0) + 1;
     return v;
   }
 
-  play(name, o) { return this.playBuf(this.buf[name], o || this.spec()); }
+  play(name, o) {
+    const s = o || this.spec();
+    s._name = name;
+    return this.playBuf(this.buf[name], s);
+  }
 
   playAt(name, x, y, z, o) {
     const s = o || this.spec();
-    s.x = x; s.y = y; s.z = z;
+    s.x = x; s.y = y; s.z = z; s._name = name;
     return this.playBuf(this.buf[name], s);
   }
 
@@ -1217,6 +1287,10 @@ export class Audio {
     s.priority = d.pri;
     s.lpHz = d.lpHz || 0;
     s.propagate = d.prop > 0 && this.distToListener(px, py, pz) > d.prop;
+    // EVERY DREAD BEAT IS FLAVOUR unless its row says otherwise. Not one of them
+    // means 'you are about to be hurt' — that is the entire point of the class.
+    s.cls = d.cls || CUE_FLAVOUR;
+    s._name = name;
     const v = this.playBuf(this.buf[name], s);
 
     // --- what the beat does to the rest of the mix ---------------------------
@@ -1246,6 +1320,23 @@ export class Audio {
    * firefight cannot fight the punch for the bed — the later schedule simply
    * wins, which is what you want.
    */
+  /**
+   * TAKE THE ROOM. Spent by exactly two cues — the rear-strike tell and the
+   * damage signature — and by nothing else, ever. The moment a third caller
+   * appears this stops being a rank and becomes a pump, which is the fault it
+   * was built to cure.
+   */
+  threatDuck(db, T0) {
+    if (!this.actx || this.silent || !this.threatDuckGain) return;
+    const T = Math.max(T0 || this.now, this.actx.currentTime);
+    const gn = this.threatDuckGain.gain;
+    const d = db === undefined ? THREAT_DUCK_DB : db;
+    gn.cancelScheduledValues(T);
+    gn.setTargetAtTime(dB(-d), T, THREAT_DUCK_ATTACK);
+    gn.setTargetAtTime(1, T + THREAT_DUCK_ATTACK * 5 + 0.06, THREAT_DUCK_BACK / 3);
+    this._stats.threatDucks++;
+  }
+
   _bedDuck(db, T0, attack, back) {
     if (!this.actx || this.silent) return;
     const T = Math.max(T0 || this.now, this.actx.currentTime);
@@ -1307,6 +1398,7 @@ export class Audio {
     s.roll = bell ? 0.9 : 1.25;
     s.maxDist = bell ? 400 : 140;
     this._stats.whispers++;
+    s.cls = CUE_WORLD; s._name = buf;
     if (this.bed) this.bed.onDreadBeat();
     return this.playBuf(this.buf[buf], s);
   }
@@ -1690,7 +1782,8 @@ export class Audio {
       fadeOut(b, sr, 0.05);
       this.reg('land', [normalizeTo(b, 0.95)]);
     }
-    // the player taking damage: a breath, not a grunt sample
+    // the player taking damage: a breath, not a grunt sample. This is the BODY
+    // layer of a hit and it is no longer the whole of it — see `dmg` below.
     for (let v = 0; v < 3; v++) {
       const b = new Float32Array(N(0.46));
       noiseFill(b, rn);
@@ -1700,6 +1793,89 @@ export class Audio {
       biquad(b, sr, 'hp', 130, 0.7);
       fadeOut(b, sr, 0.05);
       this.reg('hurt' + v, [normalizeTo(b, 0.8)]);
+    }
+    this._bakeDamage(sr, rn, N);
+  }
+
+  /* ------------------------------------------------------ THE DAMAGE CUE -- */
+
+  /**
+   * "basically the whol time im hearing sounds and seeing directions marked
+   *  like I'm being hit... things are killing me quickly no matter where i run."
+   *
+   * He could not tell he was being damaged except by reading the direction
+   * marks, and the reason is in the graph, not in the bake: a hit played
+   * `hurt0..2` — a soft, band-limited breath — on the WORLD bus, which means it
+   * arrived behind the same 4th-order 1.6 kHz lowpass, the same reverb send and
+   * the same duck as the wind, the crickets and his own boots. The single most
+   * important event in the game was mixed as ambience.
+   *
+   * So damage gets a SIGNATURE, and it obeys four rules:
+   *
+   *  1. IT IS NOT DIRECTIONAL. A hit happened to YOU. It is a flat voice, dead
+   *     centre, at a fixed level: no panner, no air absorption, no distance.
+   *     "Am I being hurt" must never require looking at anything.
+   *  2. IT IS ABOVE THE MIX LAW. It plays on `busEarshot`, which bypasses both
+   *     the 1.6 kHz lowpass and the threat duck, so nothing in the county can
+   *     be in front of it.
+   *  3. IT IS A PURE TONE, and nothing else in CURFEW is. Every other sound in
+   *     this project is noise, grains, a damped cluster or a sweep. One clean
+   *     3.15 kHz sine ringing in the middle of your head is unmistakable by
+   *     construction — a player who has heard it once cannot confuse it with a
+   *     branch, a bird, a footstep or the bed.
+   *  4. THE RING IS THE READOUT. Three lengths, chosen by how much health is
+   *     left: 0.32 s while you are fine, 1.9 s when you are nearly dead. He
+   *     asked for a health bar and he gets one; this is the same information
+   *     arriving through the ear, felt rather than read, and it is the half of
+   *     it that works in peripheral vision because it is not in vision at all.
+   */
+  _bakeDamage(sr, rn, N) {
+    // ---- THE IMPACT. Dry, instantaneous, and bright enough that it cannot be
+    //      mistaken for anything the 1.6 kHz county is allowed to make.
+    {
+      const b = new Float32Array(N(0.30));
+      // (a) the slam: full-band noise with no attack at all
+      {
+        const n = new Float32Array(N(0.05));
+        noiseFill(n, rn);
+        biquad(n, sr, 'bp', 900, 0.55);
+        envAD(n, sr, 0.0002, 0.014);
+        mixInto(b, n, 0.95);
+      }
+      // (b) the snap that carries it over the mix: a hard band at 3.9 kHz. This
+      //     is the part he hears when six other things are already sounding.
+      {
+        const n = new Float32Array(N(0.06));
+        noiseFill(n, rn);
+        biquad(n, sr, 'bp', 3900, 1.4);
+        biquad(n, sr, 'bp', 3900, 1.4);
+        envAD(n, sr, 0.0002, 0.011);
+        mixInto(b, n, 0.85);
+      }
+      // (c) the body: what it feels like, not what it sounds like
+      sweepSine(b, sr, 128, 52, 0.035, 0.055, 0.85);
+      damped(b, sr, 72, 0.075, 0.55);
+      saturate(b, 2.2, 0.6);          // a blow is not clean
+      biquad(b, sr, 'hp', 42, 0.7);
+      fadeOut(b, sr, 0.04);
+      this.reg('dmg', [normalizeTo(b, 0.98)]);
+    }
+
+    // ---- THE RING. One sine. The length IS the health readout.
+    const RINGS = [[0.32, 0.55], [0.90, 0.78], [1.90, 1.00]];
+    for (let v = 0; v < RINGS.length; v++) {
+      const tau = RINGS[v][0], amp = RINGS[v][1];
+      const b = new Float32Array(N(tau * 3.4 + 0.12));
+      // 3.15 kHz sits in EARSHOT's band, where the ear localises and where
+      // nothing else in this game is allowed to be continuous.
+      damped(b, sr, 3150, tau, amp);
+      damped(b, sr, 3150 * 1.0021, tau * 0.9, amp * 0.35, 1.4);   // the beat in it
+      // it swells INTO the ear rather than starting: the blow lands, then the
+      // ringing arrives behind it, which is the order it happens in a head.
+      const rise = Math.round(0.030 * sr);
+      for (let i = 0; i < rise && i < b.length; i++) b[i] *= i / rise;
+      fadeOut(b, sr, Math.min(0.12, tau * 0.5));
+      this.reg('dmg_ring' + v, [normalizeTo(b, 0.72)]);
     }
   }
 
@@ -2201,6 +2377,15 @@ export class Audio {
       occHits: this._stats.occHits,
       openness: +this._open.toFixed(3),
       reflexDb: +this._reflexDb.toFixed(2),
+      // THE MIX CENSUS. `cue.flavour` running away from `cue.threat` is the
+      // measurable form of "the whole time I'm hearing sounds like I'm being hit".
+      cue: {
+        threat: this._stats.cueThreat,
+        world: this._stats.cueWorld,
+        flavour: this._stats.cueFlavour,
+      },
+      cueByName: Object.assign(Object.create(null), this._cueByName),
+      threatDucks: this._stats.threatDucks,
       buffers: Object.keys(this.buf).length,
       updMs: +this._stats.updMs.toFixed(3),
       bed: this.bed ? this.bed.state() : null,

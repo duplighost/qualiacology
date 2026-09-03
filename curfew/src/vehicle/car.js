@@ -61,7 +61,7 @@ import { CFG } from '../config.js';
 import { clamp, clamp01, damp, lerp, ease, TAU } from '../engine/math.js';
 import { ACTIONS } from '../engine/input.js';
 import { MASK } from '../world/collision.js';
-import { buildCarBody, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR } from './carbody.js';
+import { buildCarBody, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR, DOOR_HINGE } from './carbody.js';
 
 const K = CFG.car;
 const SP = K.spawn;
@@ -83,8 +83,44 @@ const BOB_LAMBDA = 8.0;           // [mossway game.js:1873]
 const GROUND_LAMBDA = 12.0;       // [peachful vehicle.js:99] damp to ground, not snap
 const HIT_COOLDOWN = 0.45;        // [mossway game.js:1809]
 
-const ENTER_RANGE = 2.2;          // DESIGN section 3: hold E within 2.2 m of the driver door
-const HOLD_TIME = 0.40;           // DESIGN section 3
+/* ---------------------------------------------------------------------------
+ * THE ENTRY VERB, rewritten 2026-09-02 on Alex's first playtest.
+ *
+ * "I've made it to the car. i have no idea how to get into the car lol."
+ *
+ * He found it, he wanted it, he could not use it. The verb was "hold E for 0.4 s within
+ * 2.2 m of the driver door" and nothing anywhere in the world said any part of that. The
+ * project runs under a no-captions law and that law is right, but a rule against captions
+ * is not a rule against making a verb DISCOVERABLE — so the fix is entirely in the world:
+ *
+ *   1. THE DOOR IS THE AFFORDANCE. carbody.js cuts a real aperture in the driver's flank
+ *      and hangs a real hinged door in it. Parked, it stands ajar with a courtesy light on
+ *      the card. A player who walks up to a car in a forest and sees an open driver's door
+ *      with a light inside does not need a prompt.
+ *   2. PROXIMITY ANSWERS. Inside ANSWER_RANGE the door swings the rest of the way open, the
+ *      courtesy light comes up, and it creaks while it does it. He stood next to it and it
+ *      did nothing at all; stillness reads as broken exactly the way silence does.
+ *   3. THE HOLD IS GONE. A hold exists to stop an accidental entry and nobody accidentally
+ *      walks into a car in a forest at night. It is a TAP now, at a radius generous enough
+ *      that anywhere you can touch the car is somewhere you can get into it — and because
+ *      there is no hold, there is no invisible progress bar to have to show.
+ * ------------------------------------------------------------------------- */
+// Measured to the driver's door, which sits a metre off the spine: 3.6 m from that point
+// covers the whole driver's flank, both ends of the car and the far side of the bonnet.
+const ENTER_RANGE = 3.6;
+// ...and the belt-and-braces clause: anywhere within this of the car's own centre counts,
+// so walking up to the passenger wing and pressing E is not a refusal for a reason nobody
+// could see. 2.9 m is a metre past the widest part of the shell.
+const ENTER_RANGE_CENTRE = 2.9;
+// The door answers you from here. Deliberately much larger than the entry radius: the point
+// is that the car reacts BEFORE you are close enough to use it, so the approach itself
+// teaches that this thing is openable.
+const ANSWER_RANGE = 9.0;
+const ANSWER_LAMBDA = 4.2;        // how fast the door swings to its target
+const DOOR_AJAR = 0.34;           // parked and nobody near: a hand's width of gap, and a
+                                  // slice of the courtesy light showing through it
+const REFUSE_RANGE = 16;          // press E further out than the entry radius and the car
+                                  // still answers, once, with a handle rattle
 const REPARENT = 0.35;            // DESIGN section 3: the camera moves, it never cuts
 const EXIT_OFFSET = 1.20;         // DESIGN section 3: 1.2 m off the driver side
 const EXIT_MAX_SPEED = 1.6;       // you cannot step out of a moving car; the refusal has a sound
@@ -113,6 +149,20 @@ const PARK_DARK_S = 6.5;
 // borrow() call and the cool-down scaling both need it and two literals that must agree is
 // how they stop agreeing. A CFG.car.lamp block is requested in docs/HANDOFF.md.
 const HEAD_POOL = 3.2;
+
+// THE COURTESY LIGHT. A parked car finishes its cool-down completely dark (PARK_DARK_S
+// above), which is correct for the headlamp — the beam is what makes you visible, and
+// ctx.shared.lit is the whole "seeing is how you are seen" trade. But a car that goes
+// COMPLETELY dark in a black forest is a car you cannot find and cannot read, and Alex
+// found exactly that. So the beam still goes out and this stays: one borrowed rover, warm,
+// weak, at the open door. At 2.4 candela against lights.js's LIT_ROVER_REF of 24 it adds
+// about 0.05 to `lit` while you are standing in the doorway and nothing at all from 6 m —
+// so it costs you something to stand there, which is the honest trade, and it never
+// approaches the 0.52 the headlight beam was pinning it at.
+const CABIN_POOL = 2.4;
+const CABIN_BORROW_R = 30;        // m: past this the rover is released. The emissive strips
+                                  // still draw, so the car keeps its warm line at distance.
+const CABIN_LAMBDA = 3.0;
 
 const HORN_NOISE_R = 46;          // the horn ITSELF, before any node makes it a lure
 const HORN_COOLDOWN = 1.6;
@@ -208,6 +258,15 @@ export class Car {
     this.prevX = 0; this.prevY = 0; this.prevZ = 0;
     this.prevHeading = 0; this.prevPitch = 0; this.prevRoll = 0; this.prevBob = 0;
     this.prevWheelRot = 0; this.prevSteer = 0;
+    // The door and the courtesy light are simulation state like everything else: they are
+    // stepped, they keep prev/curr, and present() lerps them. A door that snapped between
+    // fixed steps would be the CINDERBLOOM teleport on the one part of this prop the
+    // player is being asked to read.
+    this.doorA = 0; this.prevDoorA = 0;
+    this.cabin = 0; this.prevCabin = 0;
+    this.cabinHandle = null;
+    this._creaked = false;        // the swing-wide creak fires once per approach
+    this._useConsumed = false;    // a held key acts on its first frame and then shuts up
 
     // ---- lifecycle
     this.exists = false;
@@ -326,6 +385,7 @@ export class Car {
   // stripped test build — every read of it is lazy, at use, behind a guard, and every
   // call site below still does the right thing when it returns undefined.
   get _progress() { return this.ctx.systems.get('progress'); }
+  get _audio() { return this.ctx.systems.get('audio'); }
 
   async init() {
     this.rng = this.ctx.rng ? this.ctx.rng.fork('car') : null;
@@ -447,6 +507,35 @@ export class Car {
       z: z === undefined ? this.z : z,
       radius, source,
     });
+  }
+
+  /**
+   * MEASURED THIS ROUND, and it is the reason "he stood next to it and it did nothing":
+   * NOTHING IN THIS FILE HAS EVER MADE A SOUND. Every beat the car has — the arrival, the
+   * door creak, the refusal, the crank, the horn, the impact — went out on the 'noise'
+   * bus, and the only listener on that channel in the whole game is director/director.js
+   * (`director.js:377`). audio.js subscribes to `car:entered` / `car:exited` and to nothing
+   * else this file emits. So the car was audible to the AI and inaudible to the player, on
+   * a beat whose own header says "the arrival is heard before it is seen".
+   *
+   * `audio.dread(kind, x, y, z, gain)` is the audio lane's public, pooled, HRTF-panned,
+   * occlusion-tested door — `audio.js:1168` — and `DREAD.door` is a real baked door creak
+   * (`audio.js:463`, `dr_door`). It is a stand-in and it is honest about being one: proper
+   * car foley (a latch, a starter, an idle) is requested from the audio lane in
+   * docs/HANDOFF.md. Silence reads as broken, and a stand-in that plays beats a request
+   * that has not landed yet.
+   *
+   * Every call still emits on 'noise' as well — that is what the director hears, and the
+   * two jobs are not the same job.
+   */
+  _say(kind, gain, x, y, z) {
+    const a = this._audio;
+    if (!a || typeof a.dread !== 'function') return;
+    a.dread(kind,
+      x === undefined ? this.x : x,
+      y === undefined ? this.y + 1.0 : y,
+      z === undefined ? this.z : z,
+      gain === undefined ? 1 : gain);
   }
 
   /* ---------------------------------------------------------------- spawning */
@@ -649,6 +738,8 @@ export class Car {
     this.heading = bestH;
     this.speed = PILOT_CRUISE;
     this.steer = 0; this.pitch = 0; this.roll = 0; this.bob = 0;
+    this.doorA = 0; this.cabin = 0;   // it arrives shut and dark, and opens when it stops
+    this._creaked = false;
     this.pilotX = stopX; this.pilotZ = stopZ;
 
     this.exists = true;
@@ -671,6 +762,7 @@ export class Car {
     this.prevHeading = this.heading;
     this.prevPitch = this.pitch; this.prevRoll = this.roll; this.prevBob = this.bob;
     this.prevWheelRot = this.wheelRot; this.prevSteer = this.steer;
+    this.prevDoorA = this.doorA; this.prevCabin = this.cabin;
   }
 
   /* ----------------------------------------------------------------- lights */
@@ -775,6 +867,7 @@ export class Car {
     this.prevHeading = this.heading;
     this.prevPitch = this.pitch; this.prevRoll = this.roll; this.prevBob = this.bob;
     this.prevWheelRot = this.wheelRot; this.prevSteer = this.steer;
+    this.prevDoorA = this.doorA; this.prevCabin = this.cabin;
 
     this.hitCooldown -= dt;
     this.spawnCooldown -= dt;
@@ -801,6 +894,12 @@ export class Car {
       case 'exiting': this._stepExiting(dt); break;
       default: break;
     }
+
+    // The door and the courtesy light, every mode. This is the whole of the discoverability
+    // fix and it runs outside the mode switch on purpose: the door has an opinion in all
+    // six modes and the one that used to be missing was "parked, and somebody is walking
+    // toward me".
+    this._stepDoor(dt);
 
     // The seat yaw clamp moves AIM, so it belongs to the step, not to present. camera is
     // manifest 12 and has already integrated this step's look by the time we run.
@@ -879,6 +978,11 @@ export class Car {
       this.coolLeft = COOL_TICKS;
       this.coolT = COOL_GAP;
       this._noise('car:door-chime', 24);
+      // IT PARKS AND THE DOOR COMES OPEN. The arrival used to end with a mesh standing
+      // still in the dark; it now ends with the one thing in the county that is a verb.
+      // `_creaked` is re-armed here so the swing-wide creak still fires when he walks up.
+      this._creaked = false;
+      this._say('door', 0.6);
       this._placeRoof();
     }
   }
@@ -927,42 +1031,120 @@ export class Car {
     this._pollEnter(dt);
   }
 
-  /**
-   * Hold E for 0.4 s within 2.2 m of the driver door. THE DOOR CREAKS: an interaction
-   * that answers with nothing reads as broken, and so does a refusal, so pressing at a
-   * car you cannot reach makes its own (much smaller) sound.
-   */
-  _pollEnter(dt) {
-    const p = this._player;
-    if (!p || p.dead) { this.holdT = 0; return; }
-
-    // driver door in world space
+  /** The driver's door handle, in world space. Writes into `out` — allocates nothing. */
+  _doorPoint(out) {
     const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
     const rx = Math.cos(this.heading), rz = -Math.sin(this.heading);
-    const doorX = this.x + rx * DOOR.x + fx * DOOR.z;
-    const doorZ = this.z + rz * DOOR.x + fz * DOOR.z;
-    const d = Math.hypot(p.pos.x - doorX, p.pos.z - doorZ);
+    out.x = this.x + rx * DOOR.x + fx * DOOR.z;
+    out.z = this.z + rz * DOOR.x + fz * DOOR.z;
+    return out;
+  }
 
-    const held = this._useHeld();
-    if (!held) {
-      this.holdT = 0;
-      this.refuseLatch = false;
-      return;
-    }
-    if (d > ENTER_RANGE) {
-      // a press at something out of reach: one dry latch, once, then silence until the
-      // key comes up. The world always answers.
-      if (!this.refuseLatch && d < 9) {
-        this.refuseLatch = true;
-        this._noise('car:handle-refuse', 6, doorX, doorZ);
+  /** How far the player is from being able to get in: the door, or the car, whichever is
+   *  the kinder read. Returns Infinity when there is no player to measure. */
+  _reach() {
+    const p = this._player;
+    if (!p || !p.pos) return Infinity;
+    const o = this._doorOut || (this._doorOut = { x: 0, z: 0 });
+    this._doorPoint(o);
+    const dDoor = Math.hypot(p.pos.x - o.x, p.pos.z - o.z);
+    const dCar = Math.hypot(p.pos.x - this.x, p.pos.z - this.z);
+    // Scaled so that "in range" is one comparison against 1 for both clauses at once.
+    return Math.min(dDoor / ENTER_RANGE, dCar / ENTER_RANGE_CENTRE) * ENTER_RANGE;
+  }
+
+  /**
+   * THE DOOR. Parked, it stands ajar; you walk up, it swings wide and the courtesy light
+   * comes up with it; you get in, it shuts on you. Every one of those is a fixed-step
+   * target and a damp, so it interpolates and so it cannot fight the frame rate.
+   *
+   * The rover is borrowed only while somebody is near enough to see it land on anything,
+   * and it is released the moment they are not: the census is pinned at 13 and the eight
+   * rovers are shared with the muzzle, the eyes, the motes and the embers.
+   */
+  _stepDoor(dt) {
+    if (!this.body) return;
+    let wantDoor = 0, wantCabin = 0, near = Infinity;
+
+    if (this.mode === 'idle' || this.mode === 'exiting') {
+      const p = this._player;
+      near = (p && !p.dead) ? this._reach() : Infinity;
+      // 1 at the entry radius, 0 at ANSWER_RANGE. This is the "proximity must ANSWER"
+      // clause: the car starts opening for you well before you can use it.
+      const t = ease.outCubic(clamp01((ANSWER_RANGE - near) / (ANSWER_RANGE - ENTER_RANGE)));
+      wantDoor = lerp(DOOR_AJAR, 1, t);
+      // dim but never off while it is parked — that dim line is how you find it again
+      wantCabin = lerp(0.34, 1, t);
+      if (this.mode === 'exiting') { wantDoor = 1; wantCabin = 1; }
+      // ONE creak per approach, on the way in, and it re-arms only when you have properly
+      // walked away. A sound that retriggers on the edge of its own trigger is a stutter.
+      if (!this._creaked && near < ANSWER_RANGE * 0.72) {
+        this._creaked = true;
+        const o = this._doorPoint(this._doorOut || (this._doorOut = { x: 0, z: 0 }));
+        this._noise('car:door-swing', 14, o.x, o.z);
+        this._say('door', 0.55, o.x, this.y + 1.05, o.z);
+      } else if (this._creaked && near > ANSWER_RANGE + 4) {
+        this._creaked = false;
       }
-      this.holdT = 0;
-      return;
+    } else if (this.mode === 'entering') {
+      // it shuts on you as the camera arrives, which is the confirmation that the tap took
+      wantDoor = 0; wantCabin = clamp01(1 - this.enterT / (REPARENT * 0.8));
+    } else {
+      wantDoor = 0; wantCabin = 0;      // arriving, driving
     }
-    this.holdT += dt;
-    if (this.holdT >= HOLD_TIME) {
-      this.holdT = 0;
-      this._beginEnter();
+
+    this.doorA = damp(this.doorA, wantDoor, ANSWER_LAMBDA, dt);
+    this.cabin = damp(this.cabin, wantCabin, CABIN_LAMBDA, dt);
+
+    // the borrowed rover: warm light actually landing on the ground beside the door
+    const L = this._lights;
+    const wantRover = this.cabin > 0.06 && near < CABIN_BORROW_R;
+    if (wantRover && !this.cabinHandle && L && L.borrow) {
+      const o = this._doorPoint(this._doorOut || (this._doorOut = { x: 0, z: 0 }));
+      this.cabinHandle = L.borrow('cabin', o.x, this.y + 1.05, o.z, 0xffc27a, CABIN_POOL * this.cabin, 0);
+    } else if (!wantRover && this.cabinHandle) {
+      L && L.release(this.cabinHandle);
+      this.cabinHandle = null;
+    }
+  }
+
+  /** Let the courtesy rover go, wherever we are in the lifecycle. */
+  _releaseCabin() {
+    if (!this.cabinHandle) return;
+    const L = this._lights;
+    if (L) L.release(this.cabinHandle);
+    this.cabinHandle = null;
+  }
+
+  /**
+   * TAP E, anywhere you could touch the car. No hold: a hold exists to prevent an
+   * accidental entry and nobody accidentally walks into a car in a forest at night, and
+   * the 0.4 s one this replaces was an invisible progress bar on an undiscoverable verb.
+   *
+   * `_useConsumed` is what makes a held key a tap: we act on the first frame the key is
+   * down and then say nothing until it comes up. It is also what stops the exit's own tap
+   * from walking you straight back into the seat on the next frame.
+   *
+   * A press out of reach still answers — one handle rattle, once — because a refusal that
+   * makes no sound is indistinguishable from a game that is not listening, which is
+   * exactly what he experienced.
+   */
+  _pollEnter(dt) {
+    void dt;
+    const p = this._player;
+    const held = this._useHeld();
+    if (!held) { this._useConsumed = false; this.refuseLatch = false; this.holdT = 0; return; }
+    if (this._useConsumed) return;
+    this._useConsumed = true;
+    if (!p || p.dead) return;
+
+    const d = this._reach();
+    if (d <= ENTER_RANGE) { this.holdT = 0; this._beginEnter(); return; }
+    if (d < REFUSE_RANGE && !this.refuseLatch) {
+      this.refuseLatch = true;
+      const o = this._doorPoint(this._doorOut || (this._doorOut = { x: 0, z: 0 }));
+      this._noise('car:handle-refuse', 6, o.x, o.z);
+      this._say('branch', 0.30, o.x, this.y + 1.05, o.z);
     }
   }
 
@@ -999,6 +1181,8 @@ export class Car {
     }
 
     this._noise('car:door-creak', 18);
+    this._say('door', 0.85);
+    this._useConsumed = true;     // the key that got you in does not also get you out
     this._setHeadlights(true);
   }
 
@@ -1024,6 +1208,11 @@ export class Car {
       if (pip > this.crankPips && before > 0) {
         this.crankPips = pip;
         this._noise('car:crank', 22);
+        // AND THE PLAYER HEARS IT. The first entry after a spawn is a 1.6 s hotwire in
+        // which, until this line, absolutely nothing happened — no sound, no picture, no
+        // motion — and then the car was suddenly running. 1.6 s of nothing is exactly how
+        // long it takes to conclude that a control did not work.
+        this._say('branch', 0.42, this.x, this.y + 1.2, this.z);
       }
       if (this.hotwireT > 0) return;
       this.hotwired = true;
@@ -1052,18 +1241,23 @@ export class Car {
     this._ram(dt);
     this._horn(dt);
 
-    // exit: the same 0.4 s hold, and it refuses at speed with a sound.
-    if (this._useHeld()) {
-      if (Math.abs(this.speed) > EXIT_MAX_SPEED) {
-        if (!this.refuseLatch) { this.refuseLatch = true; this._noise('car:door-refuse', 8); }
-        this.holdT = 0;
-      } else {
-        this.holdT += dt;
-        if (this.holdT >= HOLD_TIME) { this.holdT = 0; this._beginExit(); }
-      }
-    } else {
-      this.holdT = 0;
+    // exit: the SAME tap that got you in, so there is one verb to learn and not two, and
+    // it still refuses above walking pace — with a sound, because a refusal that makes no
+    // sound is the bug this whole round is about.
+    if (!this._useHeld()) {
+      this._useConsumed = false;
       this.refuseLatch = false;
+      this.holdT = 0;
+    } else if (!this._useConsumed) {
+      this._useConsumed = true;
+      if (Math.abs(this.speed) > EXIT_MAX_SPEED) {
+        this.refuseLatch = true;
+        this._noise('car:door-refuse', 8);
+        this._say('branch', 0.30);
+      } else {
+        this.holdT = 0;
+        this._beginExit();
+      }
     }
   }
 
@@ -1075,6 +1269,10 @@ export class Car {
     this.coolLeft = COOL_TICKS;
     this.coolT = COOL_GAP;
     this._noise('car:door-creak', 18);
+    this._say('door', 0.85);
+    // You get out and the door is standing open behind you with the light on, which is
+    // both the truth and the thing that makes the car findable again from the treeline.
+    this._creaked = true;         // you are AT it; the approach creak re-arms when you leave
 
     // BLOCKER 1. You turn it off when you get out. Without this the census SpotLight the
     // headlights own stayed lit for the rest of the session and ctx.shared.lit stayed
@@ -1469,6 +1667,9 @@ export class Car {
     this.holdT = 0;
     this.hornT = 0;
     this.refuseLatch = false;
+    this._useConsumed = true;     // a key still down through a death does not re-enter
+    this._creaked = false;
+    this._releaseCabin();
     // BLOCKER 1, and this one is unconditional: it runs even when the player was not in
     // the car, because death and respawn are exactly the moments a car left lit somewhere
     // out on the loop would go on pinning ctx.shared.lit with nobody near it. No cool-down
@@ -1503,6 +1704,8 @@ export class Car {
     const bob = lerp(this.prevBob, this.bob, a);
     const steer = lerp(this.prevSteer, this.steer, a);
     const wheelRot = lerp(this.prevWheelRot, this.wheelRot, a);
+    const doorA = lerp(this.prevDoorA, this.doorA, a);
+    const cabin = lerp(this.prevCabin, this.cabin, a);
 
     const root = this.body.root;
     root.position.set(x, y + bob, z);
@@ -1527,6 +1730,26 @@ export class Car {
     // at the driver. A positive rotation about it reads counter-clockwise from the seat,
     // which is what a left turn looks like from behind a steering wheel.
     this.body.steer.rotation.z = steer * 5.6;
+
+    /* ---- the door, and the light behind it ---- */
+    // The one part of this prop that is a VERB. Both are interpolated, so the swing is
+    // smooth at any frame rate and the light comes up with it rather than in steps.
+    if (this.body.setDoor) this.body.setDoor(doorA);
+    if (this.body.setCabin) this.body.setCabin(cabin);
+    if (this.cabinHandle) {
+      // the rover rides the door's own hinge arc, so the pool of warm light on the ground
+      // swings out with the panel instead of sitting in the middle of a shut car
+      const rx0 = Math.cos(h), rz0 = -Math.sin(h);
+      const fx0 = -Math.sin(h), fz0 = -Math.cos(h);
+      const swing = doorA * 0.62;
+      const lx0 = DOOR_HINGE.x - swing * 0.55, lz0 = DOOR_HINGE.z + 0.62;
+      this.cabinHandle.setPosition(
+        x + rx0 * lx0 + fx0 * lz0,
+        y + bob + 1.05,
+        z + rz0 * lx0 + fz0 * lz0,
+      );
+      if (this.cabinHandle.setIntensity) this.cabinHandle.setIntensity(CABIN_POOL * cabin);
+    }
 
     /* ---- the working headlamp ---- */
     if (this.headlightsOn) {
@@ -1665,6 +1888,14 @@ export class Car {
       hotwireTotal: this.hotwireTotal,
       tris: this.body ? this.body.tris : 0,
       holdT: this.holdT,
+      // THE ENTRY VERB, so it can be argued with by a number. `reach` is the distance the
+      // rule actually tests (the kinder of door-anchored and centre-anchored); `canEnter`
+      // is whether a tap right now would take. Both exist because "I have no idea how to
+      // get into the car" was unanswerable from the old state bag.
+      door: this.doorA, cabin: this.cabin,
+      reach: this._reach(), enterRange: ENTER_RANGE,
+      canEnter: this.mode === 'idle' && this._reach() <= ENTER_RANGE,
+      cabinLit: !!this.cabinHandle,
       // WHY THE CAR DID NOT COME. A rule that silently declines is indistinguishable from
       // a rule that never runs, and for three rounds this one was the former while being
       // reported as the latter. `why` is the last check's verdict, the counters are the
@@ -1699,6 +1930,11 @@ export class Car {
     this.mode = 'idle';
     this.hotwired = false;
     this.engineOn = false;
+    // A car placed by a test rig or a screenshot pose is a PARKED car, and a parked car in
+    // this game stands open with its light on. Seeded rather than left at zero so a rig
+    // that renders one frame gets the door it would get after a second of play.
+    this.doorA = DOOR_AJAR; this.cabin = 0.34;
+    this._creaked = false;
     this._sync();
     this.body.root.visible = true;
     // Lit, then parked — which means the park cool-down in _stepIdle will dim it out over
@@ -1716,6 +1952,7 @@ export class Car {
     this._carrySeated = false;
     this._fovLast = NaN;
     this._removeRoof();
+    this._releaseCabin();
     // Same blocker, last door. This used to release the borrowed rover and leave the
     // census SpotLight burning at a car that no longer exists — a disposed system that
     // goes on lighting the player is the purest form of working-but-wrong. It runs before

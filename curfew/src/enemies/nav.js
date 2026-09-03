@@ -205,6 +205,55 @@ export function observed(ctx, x, y, z, coneDot, maxRange) {
 }
 
 /**
+ * WHERE IS THIS THING RELATIVE TO WHAT THE PLAYER IS LOOKING AT?
+ *
+ * Returns the cosine between the camera's forward — flattened to the ground,
+ * the plane every enemy decision is already made in — and the bearing to
+ * (x, z): +1 dead ahead, 0 exactly beside, -1 directly behind the head.
+ *
+ * This exists because of a measurement, not a theory. `tools/whatkilledme.mjs
+ * --play 75`, run on 2026-09-02 exactly as Alex played — walk forward from the
+ * spawn, never shoot — recorded fifteen hits and ELEVEN of them came from
+ * behind him: bearings of -1.00, -0.99, -0.96, -0.94, -0.79, -0.69. Every one
+ * of those hits obeyed the telegraph law and every one of those telegraphs
+ * fired where he could not receive it. A 320 ms rim flare behind the player's
+ * head is not a tell, and "I am never sure why" is what that measures as in a
+ * chair.
+ *
+ * It is the CHEAP half of observed(): no raycast and no range test, so it is
+ * affordable on every perception tick for every body. It answers 1 — "in front
+ * of you" — when there is no camera at all, so a headless harness with no view
+ * never deadlocks a pack that is waiting to be seen.
+ */
+export function bearingDot(ctx, x, z) {
+  const p = sysOf(ctx, 'player');
+  const cam = sysOf(ctx, 'camera');
+  if (!p || !cam || typeof cam.aimDir !== 'function') return 1;
+  cam.aimDir(_aim);
+  const fl = Math.sqrt(_aim.x * _aim.x + _aim.z * _aim.z);
+  if (fl < 1e-5) return 1;
+  const dx = x - p.pos.x, dz = z - p.pos.z;
+  const d = Math.sqrt(dx * dx + dz * dz);
+  if (d < 1e-5) return 1;
+  return (dx * _aim.x + dz * _aim.z) / (d * fl);
+}
+
+/**
+ * The angle the player is FACING, in the same convention the ring slots use: a
+ * point at angle `a` and radius `r` is (p.x + cos(a) * r, p.z + sin(a) * r).
+ * A body that has to come round into view steers to an arc measured off this.
+ * Returns null when there is no camera, and every caller reads that as "nobody
+ * is looking, come straight in".
+ */
+export function aimAngle(ctx) {
+  const cam = sysOf(ctx, 'camera');
+  if (!cam || typeof cam.aimDir !== 'function') return null;
+  cam.aimDir(_aim);
+  if (Math.abs(_aim.x) < 1e-6 && Math.abs(_aim.z) < 1e-6) return null;
+  return Math.atan2(_aim.z, _aim.x);
+}
+
+/**
  * Is the point inside the TORCH beam? The Pale's whole rule, and the poacher's
  * accuracy trade, are both this number. The torch is a real light in the census
  * so its state comes from lights.torchOn(), never from an input flag.
@@ -401,5 +450,6 @@ export function faceYaw(fromX, fromZ, toX, toZ) {
 
 export default {
   NAV, steer, progress, resetProgress, relocate, observed, lit, visible,
+  bearingDot, aimAngle,
   groundY, slope, followGround, SepGrid, faceYaw, angleDelta, sysOf,
 };

@@ -14,7 +14,7 @@
 // draw between them. Only the things that MOVE are separate: the four wheels (one
 // InstancedMesh), the steering rim, the working lamp, the glass.
 //
-// FIVE MATERIALS, THREE PROGRAMS (audit 2026-09-02; ART.md 7.1, same day). Three bakes
+// SIX MATERIALS, THREE PROGRAMS (audit 2026-09-02; ART.md 7.1, same day). Three bakes
 // every distinct material CONFIG into its own shader program, and the budget for those is
 // ONE number that lives in CFG.render.budget.programsMax — nothing here restates it, because
 // four files used to restate it four different ways and none of them agreed with config. A
@@ -28,11 +28,18 @@
 //   `bodyMat`   Standard + vertexColors — shell, wheels, steering rim, dead lamp
 //   `chromeMat` Standard + vertexColors, roughness 0.62 / metalness 0.88 — ART.md 7.1's
 //               one highlight: the flank moulding, bumpers, grille bars, handles, bezels
-//   `lampMat` / `tailMat`  Standard + vertexColors, emissive amber and emissive red
-// — those four are ONE program between them. Plus `glassMat` (Basic, the only transparent
+//   `lampMat` / `tailMat` / `cabinMat`  Standard + vertexColors, emissive amber, emissive
+//               red, and the courtesy warm of the open driver's door — added the day Alex
+//               played it and said he could not work out how to get in
+// — those five are ONE program between them. Plus `glassMat` (Basic, the only transparent
 // thing) and the shadow-depth variant. Measured: adding chromeMat left
 // renderer.info.programs.length unchanged. If a later round puts a MAP on any of them that
 // stops being true, because a map IS a define. Re-measure if you do.
+//
+// RE-MEASURED 2026-09-02 when cabinMat was added, by A/B on the real page: with the whole
+// car on screen `renderer.info.programs.length` goes 71 -> 72, and it goes 71 -> 72 with
+// the two glow meshes pointed at `bodyMat` instead. Identical. The car costs ONE program
+// and the courtesy light costs none of it.
 //
 // vertexColors is safe here and is NOT the PALEHOLLOW grass bug (flora.js:693): every
 // part that reaches mergeGeometries has a `color` attribute written by `part()`, so
@@ -65,6 +72,31 @@ export const DOOR = Object.freeze({ x: -1.00, y: 1.05, z: -0.30 });   // driver 
 export const LAMP_GOOD = Object.freeze({ x: -0.66, y: 1.02, z: NOSE_Z - 0.04 });
 export const LAMP_DEAD = Object.freeze({ x: 0.66, y: 1.02, z: NOSE_Z - 0.04 });
 export const WHEEL_RADIUS = WHEEL_R;
+
+/* ---------------------------------------------------------- THE DOORWAY -----
+ * ALEX PLAYED IT: "I've made it to the car. i have no idea how to get into the car lol."
+ *
+ * He found it, he wanted it, and the car answered him with nothing at all. The entry verb
+ * existed (hold E within 2.2 m of a point on the driver's flank) and NOTHING in the world
+ * said so: the shell was one closed box, every panel line was a 2 cm dark strip, and the
+ * only moving part on the whole prop was the wheels. A rule against captions is not a rule
+ * against making a verb discoverable — so the DOOR is the caption now.
+ *
+ * The driver's door is cut OUT of the shell (a real aperture with a black liner behind it)
+ * and rebuilt as its own hinged group that stands ajar whenever the car is parked, swings
+ * wide when you walk up to it, and shuts on you when you get in. A player who walks up to a
+ * car in a forest and sees an open driver's door with a light on inside does not need a
+ * prompt, and that is the whole of this block.
+ * -------------------------------------------------------------------------- */
+// The hole in the flank. z is along the car (forward is -Z), y is off the ground.
+const AP_Z0 = -0.92, AP_Z1 = 0.30;      // 1.22 m of doorway
+const AP_Y0 = 0.80, AP_Y1 = 1.24;       // sill to waist
+const SKIN = 0.16;                      // flank skin thickness — the door is this thick too
+const CORE_HX = BODY_HX - SKIN;         // 0.77: the body under the skin
+/** Hinge, car-local. The front edge of the aperture, which is where a car door hinges. */
+export const DOOR_HINGE = Object.freeze({ x: -0.90, y: 0, z: AP_Z0 });
+/** Radians at full open. 60 degrees is a door you could not mistake for a shut one. */
+export const DOOR_OPEN_MAX = 1.05;
 export const WHEEL_OFFSETS = Object.freeze([
   Object.freeze({ x: -TRACK, y: WHEEL_R, z: -HALF_WB, front: true }),
   Object.freeze({ x: TRACK, y: WHEEL_R, z: -HALF_WB, front: true }),
@@ -180,6 +212,19 @@ export function buildCarBody(rng) {
   // chromeMat comment below for why a second material here costs no shader program.
   const chromeParts = [];
   const PC = (geo, colour, opts) => { chromeParts.push(part(geo, colour, Object.assign({ seed }, opts))); };
+  // THE DOOR. Three collectors, because the door is three materials' worth of the same
+  // three materials the rest of the car already uses — bodyMat, chromeMat and the new
+  // cabinMat — so it costs three draw calls and NO shader program (see chromeMat's note:
+  // Three keys programs off the FEATURE set, and emissive/roughness/metalness are uniforms).
+  // Every position below is DOOR-LOCAL: car-local minus DOOR_HINGE, so the group rotates
+  // about the front edge of the aperture the way a car door actually does.
+  const doorParts = [], doorChromeParts = [], glowParts = [], sillGlowParts = [];
+  const PD = (geo, colour, opts) => { doorParts.push(part(geo, colour, Object.assign({ seed }, opts))); };
+  const PDC = (geo, colour, opts) => { doorChromeParts.push(part(geo, colour, Object.assign({ seed }, opts))); };
+  const PDG = (geo, colour, opts) => { glowParts.push(part(geo, colour, Object.assign({ seed }, opts))); };
+  const PSG = (geo, colour, opts) => { sillGlowParts.push(part(geo, colour, Object.assign({ seed }, opts))); };
+  const dx_ = (x) => x - DOOR_HINGE.x;
+  const dz_ = (z) => z - DOOR_HINGE.z;
   // A chrome bar, not a chrome box. THIS is the highlight: a box has one normal across its
   // whole face, so it is either entirely in the moon's specular lobe or entirely out of it
   // (which is exactly the flat-plate diagnosis viewmodel.js reached, ART.md 6.0). A bar's
@@ -191,7 +236,25 @@ export function buildCarBody(rng) {
   };
 
   // lower body: sill to waist. 0.62 -> 1.24.
-  P(box(BODY_HX * 2, 0.62, 4.10), C_PAINT, { y: 0.93, z: 0.02, rust: 0.85 });
+  //
+  // THE APERTURE. This used to be one solid box, which is why there was no way to show a
+  // door standing open: there was no hole for it to stand open in front of. It is now a
+  // core plus flank skins, and the driver's skin is broken around a real 1.22 x 0.44 m
+  // doorway. The liner behind it is C_DARK with no rust, so what you see through the
+  // opening is the darkest value on the car — at night a doorway reads as a HOLE, and a
+  // hole in a pale-ish flank is visible from much further out than any 2 cm panel line.
+  P(box(CORE_HX * 2, 0.62, 4.10), C_PAINT, { y: 0.93, z: 0.02, rust: 0.85 });
+  P(box(SKIN, 0.62, 4.10), C_PAINT, { x: BODY_HX - SKIN * 0.5, y: 0.93, z: 0.02, rust: 0.85 });
+  // driver flank, fore and aft of the doorway, plus the sill strip underneath it
+  P(box(SKIN, 0.62, AP_Z0 + 2.03), C_PAINT,
+    { x: -(BODY_HX - SKIN * 0.5), y: 0.93, z: (-2.03 + AP_Z0) * 0.5, rust: 0.85 });
+  P(box(SKIN, 0.62, 2.07 - AP_Z1), C_PAINT,
+    { x: -(BODY_HX - SKIN * 0.5), y: 0.93, z: (AP_Z1 + 2.07) * 0.5, rust: 0.85 });
+  P(box(SKIN, AP_Y0 - 0.62, AP_Z1 - AP_Z0), C_PAINT,
+    { x: -(BODY_HX - SKIN * 0.5), y: (0.62 + AP_Y0) * 0.5, z: (AP_Z0 + AP_Z1) * 0.5, rust: 1.0 });
+  // the liner: what the doorway is a hole INTO
+  P(box(0.03, AP_Y1 - AP_Y0, AP_Z1 - AP_Z0), C_DARK,
+    { x: -(CORE_HX + 0.016), y: (AP_Y0 + AP_Y1) * 0.5, z: (AP_Z0 + AP_Z1) * 0.5 });
   // rocker panels — the rustiest thing on any car left in a field
   P(box(BODY_HX * 2 + 0.04, 0.20, 3.60), C_PAINT_LO, { y: 0.68, z: 0.02, rust: 1.0 });
   // bonnet, sloping very slightly down to the nose
@@ -251,19 +314,58 @@ export function buildCarBody(rng) {
   // and the tolerance is about +-10 degrees before the lobe falls away — which covers every
   // slope a road in this county actually has.
   const MOULD_TILT = 0.29;            // rad, ~16.6 deg: (moon elevation + eye elevation) / 2
-  for (const sx of [-1, 1]) {
-    PC(box(0.05, 0.110, 3.30), C_CHROME,
-      { x: sx * (BODY_HX + 0.022), y: 0.965, z: 0.02, rz: sx * MOULD_TILT, rust: 0.30 });
+  // The passenger flank keeps the measured 3.30 m strip whole. The DRIVER'S flank is now
+  // three abutting segments — fore of the doorway, the door's own, aft of the doorway — and
+  // they meet with no gap, so a shut door still presents one unbroken 3.30 m run and the
+  // 110 px contiguous-highlight measurement above is unchanged. An OPEN door breaks it into
+  // 0.71 m and 1.37 m, which is the point: the streak snapping in two at 40 m is itself the
+  // read that something on that car is standing open.
+  PC(box(0.05, 0.110, 3.30), C_CHROME,
+    { x: BODY_HX + 0.022, y: 0.965, z: 0.02, rz: MOULD_TILT, rust: 0.30 });
+  PC(box(0.05, 0.110, AP_Z0 + 1.63), C_CHROME,
+    { x: -(BODY_HX + 0.022), y: 0.965, z: (-1.63 + AP_Z0) * 0.5, rz: -MOULD_TILT, rust: 0.30 });
+  PC(box(0.05, 0.110, 1.67 - AP_Z1), C_CHROME,
+    { x: -(BODY_HX + 0.022), y: 0.965, z: (AP_Z1 + 1.67) * 0.5, rz: -MOULD_TILT, rust: 0.30 });
+
+  // door shut lines, cut as recessed dark strips so the doors are legible as doors. The
+  // driver's front two are gone: they used to draw the edges of a door that could not
+  // open, and they now sit inside the aperture, which is a hole and needs no line drawn
+  // around it.
+  P(box(0.02, 0.60, 0.03), C_DARK, { x: -(BODY_HX + 0.005), y: 0.95, z: 1.44 });
+  PC(box(0.05, 0.05, 0.20), C_CHROME, { x: BODY_HX + 0.02, y: 1.10, z: -0.30, rust: 0.4 });
+  for (const z of [-0.88, 0.28, 1.44]) {
+    P(box(0.02, 0.60, 0.03), C_DARK, { x: BODY_HX + 0.005, y: 0.95, z });
   }
 
-  // door shut lines, cut as recessed dark strips so the doors are legible as doors
-  for (const sx of [-1, 1]) {
-    P(box(0.02, 0.60, 0.03), C_DARK, { x: sx * (BODY_HX + 0.005), y: 0.95, z: -0.88 });
-    P(box(0.02, 0.60, 0.03), C_DARK, { x: sx * (BODY_HX + 0.005), y: 0.95, z: 0.28 });
-    P(box(0.02, 0.60, 0.03), C_DARK, { x: sx * (BODY_HX + 0.005), y: 0.95, z: 1.44 });
-    // handles
-    PC(box(0.05, 0.05, 0.20), C_CHROME, { x: sx * (BODY_HX + 0.02), y: 1.10, z: -0.30, rust: 0.4 });
-  }
+  /* ------------------------------------------------------- the door itself -- */
+  // Everything here is DOOR-LOCAL. It reads as a door from any angle because it has the
+  // three things a door has and a panel does not: thickness, a window frame above the
+  // waist, and a handle that catches the moon on the outside face.
+  PD(box(SKIN, 0.56, AP_Z1 - AP_Z0), C_PAINT,
+    { x: dx_(-(BODY_HX - SKIN * 0.5)), y: 0.96, z: dz_((AP_Z0 + AP_Z1) * 0.5), rust: 0.85 });
+  // the inner card. Pale leather ON PURPOSE (0.072 linear against the shell's 0.150 is
+  // still darker than the paint) because this is the face the cabin glow lands on, and a
+  // black card would swallow the one warm thing on the whole prop.
+  PD(box(0.035, 0.48, 1.14), C_LEATHER,
+    { x: dx_(-(CORE_HX + 0.005)), y: 0.99, z: dz_((AP_Z0 + AP_Z1) * 0.5), rust: 0.12 });
+  // window frame: a U above the waist. Empty — the glass is wound down, which is why the
+  // frame never doubles the greenhouse's own dark pane when the door swings out.
+  PD(box(0.05, 0.05, 1.20), C_GLASSFRAME, { x: dx_(-0.895), y: 1.745, z: dz_(-0.31), rust: 0.5 });
+  PD(box(0.05, 0.52, 0.06), C_GLASSFRAME, { x: dx_(-0.895), y: 1.50, z: dz_(AP_Z1 - 0.045), rust: 0.5 });
+  PD(box(0.05, 0.52, 0.06), C_GLASSFRAME, { x: dx_(-0.895), y: 1.50, z: dz_(AP_Z0 + 0.035), rust: 0.5 });
+  // the handle, and the door's own segment of the chrome strip
+  PDC(box(0.05, 0.05, 0.20), C_CHROME, { x: dx_(-(BODY_HX + 0.02)), y: 1.10, z: dz_(-0.30), rust: 0.4 });
+  PDC(box(0.05, 0.110, AP_Z1 - AP_Z0), C_CHROME,
+    { x: dx_(-(BODY_HX + 0.022)), y: 0.965, z: dz_((AP_Z0 + AP_Z1) * 0.5), rz: -MOULD_TILT, rust: 0.30 });
+  // THE LIGHT ON INSIDE. A courtesy strip along the top of the door card. It is the only
+  // warm thing on a parked car and it swings out with the door, so from in front of the
+  // car it is a warm horizontal line hanging off the flank in a county with no other warm
+  // pixels in it. Emissive only — the census is pinned and this file creates no light.
+  PDG(box(0.024, 0.05, 1.06), [0.055, 0.040, 0.026],
+    { x: dx_(-(CORE_HX - 0.008)), y: 1.215, z: dz_((AP_Z0 + AP_Z1) * 0.5) });
+  // and the same glow on the doorway sill, which is what you see straight THROUGH the hole
+  PSG(box(0.03, 0.045, AP_Z1 - AP_Z0 - 0.06), [0.055, 0.040, 0.026],
+    { x: -(CORE_HX + 0.030), y: AP_Y0 + 0.045, z: (AP_Z0 + AP_Z1) * 0.5 });
 
   /* --------------------------------------------------- the place you sit --- */
   const S = CFG.car.seat;             // (-0.31, 1.66, -0.50); everything below frames it
@@ -406,6 +508,59 @@ export function buildCarBody(rng) {
   chrome.name = 'car-chrome';
   root.add(chrome);
 
+  /* ----------------------------------------------------------- the cabin --- */
+  // ONE material for both glow strips, and it lands in bodyMat's program: Standard +
+  // vertexColors + fog, differing only by `emissive` and `emissiveIntensity`, which are
+  // uniforms and not defines (the same argument tailMat has always run on). Measured
+  // below with tools/programs.mjs; if a later round puts a MAP on it that stops being
+  // true. `emissiveIntensity` starts at 0 — car.js owns when the light is on.
+  const cabinMat = new THREE.MeshStandardMaterial({
+    vertexColors: true, emissive: 0xffc27a, emissiveIntensity: 0.0, roughness: 0.55, fog: true,
+  });
+  cabinMat.name = 'curfew-car-cabin';
+
+  /* ------------------------------------------------------------- the door -- */
+  // A Group whose origin IS the hinge, so `door.rotation.y` is the only thing that ever
+  // moves and car.js interpolates one scalar. Negative y opens it: rotY sends a point at
+  // +z out to +x, and the driver's side is -x.
+  const door = new THREE.Group();
+  door.name = 'car-door';
+  door.position.set(DOOR_HINGE.x, DOOR_HINGE.y, DOOR_HINGE.z);
+  door.rotation.order = 'YXZ';
+
+  const doorGeo = mergeGeometries(doorParts, false);
+  for (let i = 0; i < doorParts.length; i++) doorParts[i].dispose();
+  if (!doorGeo) throw new Error('carbody: door merge returned null');
+  const doorMesh = new THREE.Mesh(doorGeo, bodyMat);
+  doorMesh.castShadow = true;          // an open door casts a shape on the ground, which is
+  doorMesh.receiveShadow = true;       // half of how you read that it is open at all
+  doorMesh.name = 'car-door-panel';
+  door.add(doorMesh);
+
+  const doorChromeGeo = mergeGeometries(doorChromeParts, false);
+  for (let i = 0; i < doorChromeParts.length; i++) doorChromeParts[i].dispose();
+  if (!doorChromeGeo) throw new Error('carbody: door chrome merge returned null');
+  const doorChrome = new THREE.Mesh(doorChromeGeo, chromeMat);
+  doorChrome.castShadow = false;
+  doorChrome.receiveShadow = true;
+  doorChrome.name = 'car-door-chrome';
+  door.add(doorChrome);
+
+  const glowGeo = mergeGeometries(glowParts, false);
+  for (let i = 0; i < glowParts.length; i++) glowParts[i].dispose();
+  if (!glowGeo) throw new Error('carbody: door glow merge returned null');
+  const doorGlow = new THREE.Mesh(glowGeo, cabinMat);
+  doorGlow.name = 'car-door-glow';
+  door.add(doorGlow);
+  root.add(door);
+
+  const sillGlowGeo = mergeGeometries(sillGlowParts, false);
+  for (let i = 0; i < sillGlowParts.length; i++) sillGlowParts[i].dispose();
+  if (!sillGlowGeo) throw new Error('carbody: sill glow merge returned null');
+  const sillGlow = new THREE.Mesh(sillGlowGeo, cabinMat);
+  sillGlow.name = 'car-sill-glow';
+  root.add(sillGlow);
+
   /* ------------------------------------------------------------- windows --- */
   // One mesh, one material, both sides, no depth write: the glass is a haze you look
   // THROUGH, and at night that is all glass is. Not a mirror — no second render.
@@ -518,11 +673,15 @@ export function buildCarBody(rng) {
 
   return {
     root, wheels, steer, lampGood,
+    doorGroup: door,
     lampDead: null,                   // merged into the shell; the key stays for callers
-    materials: [bodyMat, chromeMat, glassMat, lampMat, tailMat],   // five materials, THREE programs
+    // six materials, THREE programs — cabinMat differs from bodyMat by two uniforms
+    materials: [bodyMat, chromeMat, glassMat, lampMat, tailMat, cabinMat],
     tris: Math.round(tris),
     roofY: ROOF_Y,
     door: DOOR,
+    hinge: DOOR_HINGE,
+    openMax: DOOR_OPEN_MAX,
     lampOffsets: { good: LAMP_GOOD, dead: LAMP_DEAD },
 
     /**
@@ -534,15 +693,39 @@ export function buildCarBody(rng) {
       tailMat.emissiveIntensity = tailOn ? 0.85 : 0.0;
     },
 
+    /**
+     * THE DOOR, 0 shut .. 1 wide open. One scalar, because car.js interpolates it between
+     * fixed steps and a pose with two of anything in it is a pose that can disagree
+     * with itself.
+     */
+    setDoor(t) {
+      door.rotation.y = -clamp01(t) * DOOR_OPEN_MAX;
+    },
+
+    /**
+     * The courtesy light, 0..1. Deliberately weak at the top end: 1.35 puts the strip at
+     * roughly 120 on the 0-255 frame, which is bright enough to be the one warm thing in
+     * the county and short of the 150 that ART.md 0.3 row 12 reserves for lamps and
+     * glints. It is the only thing on a cold parked car that says "still here".
+     */
+    setCabin(level) {
+      cabinMat.emissiveIntensity = clamp01(level) * 1.35;
+    },
+
     dispose() {
       shellGeo.dispose();
       chromeGeo.dispose();
+      doorGeo.dispose();
+      doorChromeGeo.dispose();
+      glowGeo.dispose();
+      sillGlowGeo.dispose();
       if (glass) glass.geometry.dispose();
       wheelGeo.dispose();
       steerGeo.dispose();
       lensGeo.dispose();
       tailGeo.dispose();
-      bodyMat.dispose(); chromeMat.dispose(); glassMat.dispose(); lampMat.dispose(); tailMat.dispose();
+      bodyMat.dispose(); chromeMat.dispose(); glassMat.dispose();
+      lampMat.dispose(); tailMat.dispose(); cabinMat.dispose();
       if (root.parent) root.parent.remove(root);
     },
   };
