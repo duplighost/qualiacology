@@ -153,6 +153,31 @@ function makeBus() {
 
 const ctx = {
   ready: false,
+  // READY IS NOT PLAYING, and conflating the two gave away the whole opening.
+  //
+  // boot() sets ready and then calls startLoop() IMMEDIATELY — the simulation runs for the
+  // entire time the title card is up, and enterGame() only fades the card and asks for
+  // pointer lock. So the director had already been placing hounds while the player read the
+  // words, and standing at the title made the pack CLOSER. Worse, the ninety fixed steps boot
+  // runs to settle the chunk ring happen before ready is even set, so the opening grace — a
+  // 90 m bubble around where the player starts — did not exist yet and the director could
+  // spawn inside it freely. Measured from a real page load: four hounds already 31-36 m out
+  // at the first frame the player could move.
+  //
+  // `playing` is set exactly once, when the shell comes down, which is the same instant for
+  // the button, for a click-through after Escape, and for ?test=1. Anything that means "the
+  // player has the controls now" keys off THIS, never off ready.
+  playing: false, playT: 0,
+  // ESCAPE MUST ACTUALLY STOP THE WORLD. It did not. The HUD drew a pause card and the
+  // simulation kept stepping underneath it: measured, three real seconds behind that card
+  // advanced the clock 3.03 s and stepped 182 frames, and a hound can finish you while you
+  // are reading the controls. Alex found it by suspecting it.
+  //
+  // The rule is POINTER LOCK, not the card, because losing the lock is what actually means
+  // "the player is not playing": Escape, alt-tab, a click outside the window, the browser
+  // stealing focus, the tab going to the background. All of them should stop the county, and
+  // keying off the card would only have covered the first.
+  paused: false,
   bootStage: 'waking',
   bootError: null,
   version: VERSION,
@@ -289,6 +314,7 @@ function simStep(dt) {
   }
 
   ctx.time.t += dt;
+  if (ctx.playing) ctx.playT += dt;
   ctx.time.step++;
   for (let i = 0; i < stepList.length; i++) stepList[i].step(dt);
 
@@ -353,6 +379,26 @@ function frame(now) {
   // A 10 fps stall plays as slow motion, not as a teleport. [CFG.loop.DT_CLAMP, duskfall]
   const dtRaw = Math.min(DT_CLAMP, Math.max(0, (now - last) / 1000));
   last = now;
+
+  // ---- the pause ------------------------------------------------------------------------
+  // Nothing steps. The frame is still PRESENTED, so the card sits over a live-looking world
+  // and a resize still works, but no fixed step runs, dt is zero for anything that reads it,
+  // and the accumulator is emptied so resuming cannot pay back the debt in one lurch.
+  const wantPause = ctx.playing && !TEST_MODE && !API.noLock
+    && (document.hidden || !document.pointerLockElement);
+  if (wantPause !== ctx.paused) {
+    ctx.paused = wantPause;
+    ctx.time.scale = 1;                       // never resume inside a hitstop
+    ctx.bus.emit('game:paused', wantPause);
+  }
+  if (ctx.paused) {
+    acc = 0;
+    ctx.time.dt = 0;
+    ctx.time.alpha = 0;
+    try { renderFrame(); if (ctx.input) ctx.input.endFrame(); } catch (e) { /* reported below */ }
+    return;
+  }
+
   ctx.time.dt = dtRaw;
   frameMs[frameN % RING] = dtRaw * 1000;
   frameN++;
@@ -439,6 +485,9 @@ async function warm() {
 
 function dismissShell() {
   if (shellEl && !shellEl.classList.contains('gone')) shellEl.classList.add('gone');
+  // The single place every entry path goes through: the button, the click-through after
+  // Escape, and ?test=1, which skips the title entirely.
+  if (!ctx.playing) { ctx.playing = true; ctx.playT = 0; }
 }
 
 function enterGame() {

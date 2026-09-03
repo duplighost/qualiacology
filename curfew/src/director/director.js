@@ -144,6 +144,65 @@ const ORDER_RESPECIES_AT = 3;  // tries before the order asks for a different sp
 const ORDER_MAX_TRIES = 8;     // tries before the order is dropped and the slot freed
 const ORDER_STALL_S = 30;      // orders outstanding + no spawn for this long = wedged
 
+/* ------------------------------------------------ THE GROUND, NOT THE ORDERS --
+ *
+ * ALEX PLAYED IT, 2026-09-02: "the spot i spawn and and return to when i die kills me
+ * quite quickly and I am never sure why... things are killing me quickly no matter where
+ * i run."
+ *
+ * MEASURED, `node tools/whatkilledme.mjs --play 75` — walking forward from the spawn with
+ * no other input, exactly as he did: 11 hits, 2 deaths, and **ONE spawn event in the whole
+ * 75 seconds**. Every hit was a hound; ten of eleven came from something he was not
+ * looking at, at a bearing dot of -1.00 to -0.72 against the camera's forward.
+ *
+ * So the opening grace above worked perfectly and protected the wrong thing. It stops
+ * ORDERS. What was killing him was the pack that was ALREADY ALIVE and already on him —
+ * the county held its breath around a fight that had already started. And the respawn put
+ * him back into that same fight: dead at 37.7 s, hit again at 48.1 s, dead again at 67 s,
+ * same clearing, same hounds, still alive, still adjacent.
+ *
+ * The fix is that the grace now applies to BODIES as well as to orders, and death buys a
+ * clearing rather than a fresh seat in the same fight. Two windows, one mechanism:
+ *
+ *   the opening  — for openingGraceS, nothing hostile may stand within OPENING_CLEAR_R of
+ *                  the player. The radius RAMPS to zero over openingRampS, exactly as the
+ *                  headcount ease does, so the county comes back rather than switching on.
+ *   the respawn  — a death buys RESPAWN_CLEAR_R of cleared ground for RESPAWN_CLEAR_S, a
+ *                  wider circle in which nothing may be ORDERED for RESPAWN_QUIET_S, and
+ *                  the same eased headcount the opening gets.
+ *
+ * AND IT MAY NEVER BE A VANISH. He already reported bodies that "seem to run into me and
+ * then disappear" — that perception is real (a hound walks through the capsule and bites
+ * from behind) even though its cause is not a despawn, and a real disappearance in front
+ * of him would confirm a bug he does not have. So a body the player can actually SEE is
+ * never moved: it is put back to sleep where it stands and walks off under its own power.
+ * Only a body he cannot see is pushed out, and the destination is behind him, out of the
+ * cone, on legal ground, 40-66 m away — a walk back, not a deletion.
+ */
+const OPENING_CLEAR_R = 20;    // m. Every measured bite landed inside 2.2 m; 20 is a walk.
+const RESPAWN_CLEAR_R = 34;    // m of ground a death buys back
+const RESPAWN_CLEAR_S = 14;    // s the clearing is actively held
+const RESPAWN_QUIET_R = 48;    // m in which no order may be PLACED after a death...
+const RESPAWN_QUIET_S = 22;    // ...for this long. Wider than the clearing on purpose: a
+                               // body ordered onto the rim walks in during the clearing.
+const RESPAWN_EASE = 0.35;     // the opening's ease, re-armed by a death
+const RESPAWN_EASE_S = 20;
+const RESPAWN_RAMP_S = 30;
+const EVICT_OUT = [40, 66];    // where a pushed-out body lands, metres from the player
+const EVICT_TRIES = 24;        // half of them insisting on the rear hemisphere
+const EVICT_PER_TICK = 2;      // never a mass teleport; the sweep runs at CENSUS_HZ
+const EVICT_REAR_DOT = -0.20;  // "somewhere the player is walking away from"
+const CLEAR_ENGAGE_S = 8;      // s after weapon:fire in which the clearing stands aside
+
+/* ---------------------------------------------------------- AND SAY WHY --------
+ * "I am never sure why" is a director problem as much as an enemies one. The census
+ * already walks every body; THREAT_SLOTS of that walk are kept, and a copy is frozen into
+ * a ring on every player:hurt, so `state().hurtLog` answers "what was near the player,
+ * awake, and committed, at the moment he took damage" in one command instead of one round.
+ */
+const THREAT_SLOTS = 6;
+const HURT_LOG = 10;
+
 /* -------------------------------------------------------------------- roster -- */
 //
 // Only the fields that decide WHERE and WHEN a body appears live here. hp, damage,
@@ -232,6 +291,7 @@ export class Director {
     this._silenceT = 0;            // protected silence after a clear
     this._stingerT = 0;            // 3.2 s of nothing after a dread stinger
     this._sinceContact = 0;
+    this._sinceFire = 1e9;         // he has not chosen a fight yet
     this._censusT = 0;
     this._clearArmed = false;
     this._killedWhileNear = false;  // set by enemy:killed; see _census
@@ -283,6 +343,49 @@ export class Director {
     this._orderCount = 0;
     this._sinceOrderSpawn = 0;     // watchdog clock: seconds since the last body arrived
     this._stallLogged = false;
+
+    /* ---- the clearing: the opening bubble and the respawn, as GROUND ---- */
+    // Three circles at most, and they are preallocated: the opening's (around the player,
+    // which walks with him), the respawn's (around the ground he was handed back), and the
+    // death's (around the jaw he left — player/controller.js:117-122 sends both points and
+    // says the pack is mine to sweep).
+    this._clearX = new Float64Array(3);
+    this._clearZ = new Float64Array(3);
+    this._clearR2 = new Float64Array(3);
+    this._clearN = 0;
+    this._respawnPos = null;       // {x, z} of the last respawn, or null
+    this._deathPos = null;         // {x, z} of where the body was left, or null
+    this._respawnR = RESPAWN_CLEAR_R;   // the radius the player lane asked for
+    this._respawnClearT = 0;       // s of active eviction left
+    this._respawnQuietT = 0;       // s of the wider no-order circle left
+    this._respawnEaseT = 0;        // s of eased headcount left (ease + ramp)
+    this.clearR = 0;               // the live clear radius, published on state()
+    this.evicted = 0;              // bodies pushed out of the clearing
+    this.slept = 0;                // bodies stood down where they stood (he could see them)
+    this.evictRefused = 0;         // no legal ground to push one out to
+    this.clearSuspended = 0;       // sweeps skipped because he had chosen the fight
+    this._evictQ = new Array(EVICT_PER_TICK).fill(null);
+    this._evictN = 0;
+
+    /* ---- the threat table, and the ring that freezes it on every hit ---- */
+    this._threats = new Array(THREAT_SLOTS);
+    for (let i = 0; i < THREAT_SLOTS; i++) {
+      this._threats[i] = { species: '', d: 0, dot: 0, aware: 0, hunting: false,
+        committed: false, state: '', pressure: true, dy: 0 };
+    }
+    this._threatN = 0;
+    this._thX = 0; this._thZ = 0;
+    this.hurts = 0;
+    this._hurtLog = new Array(HURT_LOG);
+    for (let i = 0; i < HURT_LOG; i++) {
+      const near = new Array(THREAT_SLOTS);
+      for (let j = 0; j < THREAT_SLOTS; j++) {
+        near[j] = { species: '', d: 0, dot: 0, aware: 0, hunting: false,
+          committed: false, state: '', pressure: true, dy: 0 };
+      }
+      this._hurtLog[i] = { on: false, t: 0, n: 0, clearR: 0, near };
+    }
+    this._hurtHead = 0;
 
     this._cand = makeCandidates(CAND_TRIES);
     // Timestamps of recent cone entries. Seeded far in the past on purpose: a zero-filled
@@ -358,6 +461,49 @@ export class Director {
       if (dx * dx + dz * dz < this._tcS2) this._tcHit = true;
     };
 
+    // The eviction sweep. Collects, never acts: mutating a body's state while the enemies
+    // lane's own array is being walked is how a sibling's iteration order becomes my bug.
+    this._fnEvict = (b, raw) => {
+      if (this._evictN >= EVICT_PER_TICK) return;
+      if (!b.pressure) return;                       // horror is dread's, not mine (DESIGN §4)
+      let hit = false;
+      for (let i = 0; i < this._clearN; i++) {
+        const dx = b.x - this._clearX[i], dz = b.z - this._clearZ[i];
+        if (dx * dx + dz * dz <= this._clearR2[i]) { hit = true; break; }
+      }
+      if (!hit) return;
+      this._evictQ[this._evictN++] = raw;
+    };
+
+    // The threat table: the THREAT_SLOTS nearest bodies, nearest first, filled in place.
+    this._fnThreat = (b, raw) => {
+      const dx = b.x - this._thX, dz = b.z - this._thZ;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (this._threatN === THREAT_SLOTS && d >= this._threats[THREAT_SLOTS - 1].d) return;
+      // insertion, on a fixed array, so nothing is allocated and nothing is sorted twice
+      let at = this._threatN < THREAT_SLOTS ? this._threatN : THREAT_SLOTS - 1;
+      while (at > 0 && this._threats[at - 1].d > d) {
+        const hi = this._threats[at], lo = this._threats[at - 1];
+        this._threats[at] = lo; this._threats[at - 1] = hi;
+        at--;
+      }
+      const t = this._threats[at];
+      t.species = b.species;
+      t.d = +d.toFixed(2);
+      // THE NUMBER THAT NAMES HIS COMPLAINT. +1 is dead ahead, -1 is directly behind his
+      // head. Ten of the eleven measured hits were below 0.2 and six were below -0.9.
+      t.dot = d > 0.01 ? +(((dx * this._fx + dz * this._fz) / d).toFixed(2)) : 0;
+      t.aware = typeof raw.aware === 'number' ? raw.aware : (b.alerted ? 1 : 0);
+      t.hunting = b.hunting;
+      t.committed = raw.committed === true;
+      t.state = typeof raw.state === 'string' ? raw.state : '';
+      t.pressure = b.pressure;
+      const terrain = this._sys('terrain');
+      const g = terrain ? terrain.heightAt(b.x, b.z) : b.y;
+      t.dy = Number.isFinite(g) ? +(b.y - g).toFixed(2) : 0;
+      if (this._threatN < THREAT_SLOTS) this._threatN++;
+    };
+
     this._fnWake = (b, raw) => {
       const dx = b.x - this._wkX, dz = b.z - this._wkZ;
       if (dx * dx + dz * dz > this._wkR2) return;
@@ -375,8 +521,10 @@ export class Director {
     // runs, so nothing that emits during boot can be missed.
     const bus = ctx.bus;
     bus.on('noise', (e) => this._onNoise(e));
-    bus.on('weapon:fire', () => { this._sinceContact = 0; });
-    bus.on('player:hurt', () => { this._sinceContact = 0; });
+    bus.on('weapon:fire', () => { this._sinceContact = 0; this._sinceFire = 0; });
+    // AND SAY WHY. Every hit freezes the live threat table into the ring, so the next
+    // playtest's "I am never sure why" is one `state().hurtLog` away from an answer.
+    bus.on('player:hurt', () => { this._sinceContact = 0; this._logHurt(); });
     // A kill inside the census ring is what makes the next emptying of that ring a CLEAR
     // rather than a disengagement. See _census.
     bus.on('enemy:killed', () => {
@@ -385,6 +533,9 @@ export class Director {
     });
     bus.on('dread:stinger', () => { this._stingerT = D.dread.postLoudQuietS; });
     bus.on('player:died', () => { this._onDeath(); });
+    // player/controller.js:440 emits this with {x, y, z}, and the payload is SHARED SCRATCH
+    // (controller.js:159) — read the numbers here, never keep the object.
+    bus.on('player:respawn', (e) => this._onRespawn(e));
   }
 
   async init() {
@@ -637,9 +788,14 @@ export class Director {
 
     // The opening clock starts when the world becomes playable, not when this system was
     // built, and the bubble is anchored wherever the player actually stood at that moment.
-    if (this.ctx.ready) {
+    // ctx.playing, NOT ctx.ready. ready is true while the title card is still up and the
+    // loop is already running; keying the opening grace off it meant the clock ran, and the
+    // pack closed, while the player read the words. See the note beside ctx.playing in
+    // main.js. The engine owns the authoritative clock; this mirrors it so the lane still
+    // runs if a future host never sets it.
+    if (this.ctx.playing) {
       if (!this._startPos) this._startPos = { x: this._px, z: this._pz };
-      this._playT += dt;
+      this._playT = this.ctx.playT !== undefined ? this.ctx.playT : this._playT + dt;
     }
 
     // The camera's REAL forward, flattened. Matches player/camera.js:148-155 aimDir with
@@ -664,8 +820,12 @@ export class Director {
 
     this._sinceSpawn += dt;
     this._sinceContact += dt;
+    if (this._sinceFire < 1e8) this._sinceFire += dt;
     if (this._silenceT > 0) this._silenceT -= dt;
     if (this._stingerT > 0) this._stingerT -= dt;
+    if (this._respawnClearT > 0) this._respawnClearT -= dt;
+    if (this._respawnQuietT > 0) this._respawnQuietT -= dt;
+    if (this._respawnEaseT > 0) this._respawnEaseT -= dt;
 
     // Noise decays on a half-life: a shot is loud for a few seconds, not forever.
     if (this.noise > 0) this.noise *= Math.pow(0.5, dt / NOISE_HALFLIFE);
@@ -678,6 +838,10 @@ export class Director {
     if (this._censusT <= 0) {
       this._censusT = 1 / CENSUS_HZ;
       this._census();
+      // The ground, after the count. It rides the census because it needs the same walk of
+      // the same list, and because 4 Hz is fast enough: a hound closes about 1.2 m between
+      // ticks, so nothing crosses a 20 m ring in the gap.
+      this._stepClearing();
     }
 
     this._stepBudget();
@@ -740,6 +904,331 @@ export class Director {
     let n = 0;
     for (let i = 0; i < 8; i++) if (this._t - this._coneEntries[i] < 1) n++;
     return n;
+  }
+
+  /* =========================================================================
+     THE CLEARING — the grace applied to BODIES, not just to orders.
+     See the header block above OPENING_CLEAR_R for the measurement that put it here.
+     ========================================================================= */
+
+  /**
+   * The opening's clear radius right now. Full inside openingGraceS, then ramping to zero
+   * over openingRampS — the same shape as _openingEase, for the same reason: the county
+   * has to come back rather than switch on, or the first thing that happens after 75
+   * quiet seconds is a hound already inside your capsule.
+   */
+  _openingClearR() {
+    const C = this.ctx.cfg.director;
+    if (!(C.openingGraceS > 0)) return 0;
+    const t = this._playT;
+    if (t <= C.openingGraceS) return OPENING_CLEAR_R;
+    const k = Math.min(1, (t - C.openingGraceS) / Math.max(0.001, C.openingRampS));
+    return OPENING_CLEAR_R * (1 - k);
+  }
+
+  /** 0..1 headcount multiplier for the seconds after a death. Eased, then ramped back. */
+  _respawnEase() {
+    if (this._respawnEaseT <= 0) return 1;
+    const ramp = this._respawnEaseT - RESPAWN_EASE_S;
+    if (ramp >= 0) return RESPAWN_EASE;               // still inside the flat ease
+    const k = Math.min(1, -ramp / Math.max(0.001, RESPAWN_RAMP_S));
+    return RESPAWN_EASE + (1 - RESPAWN_EASE) * k;
+  }
+
+  /** True while a death still forbids an ORDER being placed at (x, z). */
+  _inRespawnBubble(x, z) {
+    if (this._respawnQuietT <= 0 || !this._respawnPos) return false;
+    const R = Math.max(RESPAWN_QUIET_R, this._respawnR * 1.4);
+    const dx = x - this._respawnPos.x, dz = z - this._respawnPos.z;
+    if (dx * dx + dz * dz < R * R) return true;
+    if (!this._deathPos) return false;
+    const ex = x - this._deathPos.x, ez = z - this._deathPos.z;
+    return ex * ex + ez * ez < R * R;
+  }
+
+  /**
+   * One eviction sweep, over up to three circles: the opening's, which walks with the
+   * PLAYER because he is walking; the respawn's, around the ground he was handed back; and
+   * the death's, around the jaw he was taken out of. `clearR` on state() is the largest of
+   * them, which is what a tool wants to print.
+   */
+  _stepClearing() {
+    const openR = this._openingClearR();
+    const respOn = this._respawnClearT > 0 && this._respawnPos;
+    const respR = respOn ? this._respawnR : 0;
+    const r = Math.max(openR, respR);
+    this.clearR = r;
+    if (r <= 0) return;
+
+    // THE CLEARING IS FOR THE PLAYER WHO IS WALKING, NOT THE PLAYER WHO IS SHOOTING.
+    // Pulling the trigger is a choice to engage, and a clearing that stands down or moves
+    // the thing he just shot at is a worse bug than the one it exists to fix — his report
+    // is about being killed by what he could not see, not about being denied a fight he
+    // asked for. It also keeps this out of the way of tests/enemies.mjs's duel, which is
+    // the same situation stated as a gate.
+    if (this._sinceFire < CLEAR_ENGAGE_S) { this.clearSuspended++; return; }
+
+    this._clearN = 0;
+    if (openR > 0) {
+      this._clearX[0] = this._px; this._clearZ[0] = this._pz;
+      this._clearR2[0] = openR * openR; this._clearN = 1;
+    }
+    if (respOn) {
+      const i = this._clearN;
+      this._clearX[i] = this._respawnPos.x; this._clearZ[i] = this._respawnPos.z;
+      this._clearR2[i] = respR * respR; this._clearN = i + 1;
+      if (this._deathPos) {
+        const j = this._clearN;
+        this._clearX[j] = this._deathPos.x; this._clearZ[j] = this._deathPos.z;
+        this._clearR2[j] = respR * respR; this._clearN = j + 1;
+      }
+    }
+    if (this._clearN === 0) return;
+
+    this._evictN = 0;
+    this._forEachBody(this._fnEvict);
+    for (let i = 0; i < this._evictN; i++) {
+      const raw = this._evictQ[i];
+      this._evictQ[i] = null;
+      this._clearOne(raw);
+    }
+    this._evictN = 0;
+  }
+
+  /**
+   * Clear ONE body out of the clearing.
+   *
+   * IT MAY NEVER VANISH IN FRONT OF HIM. He reported bodies that "seem to run into me and
+   * then disappear" — the cause is a pass-through and a rear attack, not a despawn, and a
+   * real despawn on screen would hand him evidence for a bug he does not have. So a body
+   * the player can actually see is only STOOD DOWN where it stands: it forgets him, it
+   * releases its attack token through the enemies lane's own recover state, and it walks
+   * off under its own power. Only something he cannot see is moved, and it is moved to
+   * legal ground 40-66 m behind him — a walk back, not a deletion.
+   */
+  _clearOne(raw) {
+    if (!raw) return;
+    // Where a stood-down body goes looking: the far side of itself from the player, which
+    // is the one direction that is definitely not toward him. `heardX/heardZ` is a search
+    // point, not a target (enemies.js:706-708), so handing it the PLAYER's coordinate —
+    // which is what enemies.loseTrail does, correctly, for a player who broke line of
+    // sight — would walk the thing back into the clearing it was just taken out of.
+    const p = raw.pos || raw.position;
+    const ex = p ? p.x : raw.x, ez = p ? p.z : raw.z;
+    const ax = ex + (ex - this._px), az = ez + (ez - this._pz);
+
+    if (this._seenByPlayer(raw)) { this._standDown(raw, ax, az); this.slept++; return; }
+    if (this._evictPoint()) {
+      this._pushOut(raw, _placed.x, _placed.y, _placed.z);
+      this.evicted++;
+    } else {
+      // No legal ground to put it on. Refusing to move it is right — clipping a body
+      // through a trunk is the placement failure this whole file exists to avoid — so it
+      // stands down where it is and gets another chance on the next tick.
+      this.evictRefused++;
+      this._standDown(raw, ax, az);
+      this.slept++;
+    }
+  }
+
+  /**
+   * Can the player see this body right now? The 90 deg cone as a dot against the camera's
+   * real forward — the same law the spawn placement uses, so "he can see it" means exactly
+   * one thing in this file — plus an occlusion check where collision offers one, because a
+   * body behind a treeline inside the cone is not visible and refusing to move it is how a
+   * clearing runs out of candidates in a forest (enemies/nav.js:281-283 makes the same call).
+   */
+  _seenByPlayer(raw) {
+    const p = raw.pos || raw.position;
+    const x = p ? p.x : raw.x, z = p ? p.z : raw.z;
+    const y = p ? p.y : (raw.y || 0);
+    const dx = x - this._px, dz = z - this._pz;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d < 0.01) return false;                        // inside his capsule: never visible
+    if ((dx * this._fx + dz * this._fz) / d <= COS_CONE) return false;
+    const col = this._sys('collision');
+    if (col && typeof col.segmentClear === 'function') {
+      const ey = this._py + PLAYER_EYE;
+      try { return !!col.segmentClear(this._px, ey, this._pz, x, y + SPAWN_EYE, z); }
+      catch (e) { return true; }
+    }
+    return true;
+  }
+
+  /**
+   * Somewhere the player is walking AWAY from: outside the view cone, outside the
+   * clearing, off the road, on ground that will hold a body. Writes _placed and returns
+   * true, or returns false and refuses — the same contract as _place().
+   *
+   * The first half of the tries insist on the rear hemisphere (dot < -0.20). The second
+   * half fall back to the cone law alone, so a player backed against the rim still gets an
+   * answer instead of a stand-down every tick.
+   */
+  _evictPoint() {
+    const terrain = this._sys('terrain');
+    if (!terrain) return false;
+    const collision = this._sys('collision');
+    const roads = this._sys('roads');
+    const rng = this._rng();
+    const px = this._px, pz = this._pz;
+
+    for (let i = 0; i < EVICT_TRIES; i++) {
+      const want = i < (EVICT_TRIES >> 1) ? EVICT_REAR_DOT : COS_CONE;
+      const a = rng.next() * Math.PI * 2;
+      // sqrt for a uniform annulus sample, not linear (cinderbloom director.js:640-642)
+      const d = lerp(EVICT_OUT[0], EVICT_OUT[1], Math.sqrt(rng.next()));
+      const x = px + Math.sin(a) * d, z = pz + Math.cos(a) * d;
+      const dx = x - px, dz = z - pz;
+      if ((dx * this._fx + dz * this._fz) / d >= want) continue;
+      if (terrain.beyondRim && terrain.beyondRim(x, z)) continue;
+      const h = terrain.heightAt(x, z);
+      if (!Number.isFinite(h) || h < DEEP_Y) continue;
+      const reg = terrain.regionAt(x, z);
+      if (reg && reg.id === REGION_MARSH && h < WATER_Y) continue;
+      if (!(terrain.slopeAt(x, z) <= MAX_SLOPE)) continue;
+      if (roads && typeof roads.roadDistance === 'function'
+        && roads.roadDistance(x, z) < CFG.roads.width + 1.5) continue;
+      // Outside the clearing it is being pushed out of — measured from the CLEARING's
+      // centre, not the player's, or a body evicted from a respawn circle the player has
+      // already walked away from lands straight back inside it and churns every tick.
+      // NOT the opening/respawn ORDER bubbles: those govern where a body may ARRIVE, and
+      // during the opening the 90 m order bubble covers every point this solver can reach,
+      // so consulting it here refused every candidate and turned the whole eviction into a
+      // stand-down. A body being pushed out is not a new arrival.
+      let inside = false;
+      for (let c = 0; c < this._clearN; c++) {
+        const cdx = x - this._clearX[c], cdz = z - this._clearZ[c];
+        if (cdx * cdx + cdz * cdz < this._clearR2[c]) { inside = true; break; }
+      }
+      if (inside) continue;
+      if (collision && typeof collision.canOccupy === 'function'
+        && !collision.canOccupy(x, z, 0.42, 1.70)) continue;
+      _placed.x = x; _placed.y = h; _placed.z = z;
+      _placed.dist = d; _placed.cover = 0; _placed.los = false; _placed.score = 0;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Move a body, and leave it in a state the enemies lane can carry on from. The field
+   * set is theirs, not invented here: enemies.js:1173-1178 is the one place that lane
+   * moves a body itself, and this is that idiom — never interpolate a relocation, or the
+   * body draws one frame of streak across the county. Everything is guarded: an enemies
+   * lane with a different record shape degrades to a stand-down rather than to a throw.
+   */
+  _pushOut(raw, x, y, z) {
+    const p = raw.pos;
+    if (!p || typeof p.set !== 'function') { this._standDown(raw, x, z); return; }
+    p.set(x, y, z);
+    if (raw.prevPos && raw.currPos) { raw.prevPos.copy(p); raw.currPos.copy(p); }
+    if (raw.vel && typeof raw.vel.set === 'function') raw.vel.set(0, 0, 0);
+    raw.airborne = false;
+    raw.homeX = x; raw.homeZ = z;
+    raw._navValid = false; raw.navBest = undefined;
+    this._standDown(raw, x, z);
+  }
+
+  /**
+   * Stand a body down: it forgets the player and searches the point it is given instead.
+   *
+   * The field set is copied from the enemies lane's own loseTrail (enemies.js:684-712),
+   * which is the same law told from the player's side. The state flip is the important
+   * half: a body caught mid-windup holds an ATTACK TOKEN (enemies.js:_takeToken), and the
+   * counter behind it is private. Dropping it into 'recover' makes that lane call its own
+   * _uncommit on its next step, so the token comes back through their code and this file
+   * never touches their count.
+   */
+  _standDown(raw, awayX, awayZ) {
+    raw.aware = 0;
+    raw.memT = 0;
+    raw.hunt = false;
+    raw.huntSpeedMul = 1;
+    raw.alerted = false;
+    raw.heardX = awayX; raw.heardZ = awayZ;
+    raw.navBest = undefined;
+    const s = raw.state;
+    if (s === 'windup' || s === 'attack') { raw.state = 'recover'; raw.stateT = 0; }
+    raw.telegraphCharge = 0;
+    this._setHunt(raw, false);
+  }
+
+  _onRespawn(e) {
+    // The payload is shared scratch (player/controller.js:190-199): read the numbers, keep
+    // nothing. It carries the radius the player lane is ASKING for and both points worth
+    // sweeping — where he comes back, and the jaw he was taken out of. Honour the ask; fall
+    // back to this file's own number only if the field is missing, because a director that
+    // silently substitutes its own radius makes that lane's comment a lie.
+    const x = e && Number.isFinite(e.x) ? e.x : this._px;
+    const z = e && Number.isFinite(e.z) ? e.z : this._pz;
+    this._respawnR = (e && Number.isFinite(e.clearRadius) && e.clearRadius > 0)
+      ? e.clearRadius : RESPAWN_CLEAR_R;
+    if (!this._respawnPos) this._respawnPos = { x: 0, z: 0 };
+    this._respawnPos.x = x; this._respawnPos.z = z;
+    if (e && Number.isFinite(e.fromX) && Number.isFinite(e.fromZ)) {
+      if (!this._deathPos) this._deathPos = { x: 0, z: 0 };
+      this._deathPos.x = e.fromX; this._deathPos.z = e.fromZ;
+    } else this._deathPos = null;
+    this._respawnClearT = RESPAWN_CLEAR_S;
+    this._respawnQuietT = RESPAWN_QUIET_S;
+    this._respawnEaseT = RESPAWN_EASE_S + RESPAWN_RAMP_S;
+    // NOW, not at the next census tick. He measured a hit 10.4 s after coming back and hp
+    // at 34 by 55 s; the first frame of a new life is the one that must already be clear.
+    // step() has not run since the teleport, so the cached player read is a life out of
+    // date and the occlusion ray in _seenByPlayer would be cast from the corpse.
+    this._px = x; this._pz = z;
+    const pl = this._sys('player');
+    if (pl && pl.pos) this._py = pl.pos.y;
+    else if (e && Number.isFinite(e.y)) this._py = e.y;
+    this._stepClearing();
+  }
+
+  /* =========================================================================
+     AND SAY WHY — the threat table and the hurt ring.
+     ========================================================================= */
+
+  /** Fill _threats with the THREAT_SLOTS nearest bodies, nearest first. */
+  _sweepThreats() {
+    this._threatN = 0;
+    for (let i = 0; i < THREAT_SLOTS; i++) this._threats[i].d = Infinity;
+    this._thX = this._px; this._thZ = this._pz;
+    this._forEachBody(this._fnThreat);
+  }
+
+  /** Freeze the live table into the ring. Called on player:hurt and nowhere else. */
+  _logHurt() {
+    this._sweepThreats();
+    this.hurts++;
+    const rec = this._hurtLog[this._hurtHead];
+    this._hurtHead = (this._hurtHead + 1) % HURT_LOG;
+    rec.on = true;
+    rec.t = +this._t.toFixed(2);
+    rec.n = this._threatN;
+    rec.clearR = +this.clearR.toFixed(1);
+    for (let i = 0; i < this._threatN; i++) {
+      const s = this._threats[i], d = rec.near[i];
+      d.species = s.species; d.d = s.d; d.dot = s.dot; d.aware = s.aware;
+      d.hunting = s.hunting; d.committed = s.committed; d.state = s.state;
+      d.pressure = s.pressure; d.dy = s.dy;
+    }
+  }
+
+  /** The ring, oldest first, as plain data. Allocates — state() is not a hot path. */
+  _hurtLogOut() {
+    const out = [];
+    for (let k = 0; k < HURT_LOG; k++) {
+      const rec = this._hurtLog[(this._hurtHead + k) % HURT_LOG];
+      if (!rec.on) continue;
+      const near = [];
+      for (let i = 0; i < rec.n; i++) {
+        const s = rec.near[i];
+        near.push({ species: s.species, d: s.d, dot: s.dot, aware: s.aware,
+          hunting: s.hunting, committed: s.committed, state: s.state,
+          pressure: s.pressure, dy: s.dy });
+      }
+      out.push({ t: rec.t, clearR: rec.clearR, near });
+    }
+    return out;
   }
 
   /* ------------------------------------------------------------------ storms -- */
@@ -810,7 +1299,13 @@ export class Director {
     if (clock && clock.cycle < 3) { tgt *= D.firstCyclesEase; cap *= D.firstCyclesEase; }
     // And the opening minute is eased harder still, ramping rather than switching on. See
     // the note beside CFG.director.openingGraceS: the measured opening was a respawn loop.
-    const oe = this._openingEase();
+    // ...and a death re-arms exactly that ease. He died twice in 75 s in the same clearing;
+    // coming back into a full-strength headcount is the second half of why.
+    //
+    // The SMALLER of the two, never their product. Dying inside the opening would otherwise
+    // multiply 0.35 by 0.35 and run the county at an eighth strength, which is not "eased",
+    // it is switched off — and a cap that small blocks the drain outright.
+    const oe = Math.min(this._openingEase(), this._respawnEase());
     tgt *= oe; cap *= oe;
     this.target = tgt; this.cap = cap;
     return tgt;
@@ -840,6 +1335,11 @@ export class Director {
   }
 
   _stepBudget() {
+    // NOTHING SPAWNS BEFORE THE PLAYER CAN MOVE. boot() runs ninety fixed steps to settle the
+    // chunk ring before the title is even dismissible, and this system steps through all of
+    // them: without this line the county had already staffed itself by the first frame the
+    // player saw, inside a bubble that did not exist yet.
+    if (!this.ctx.playing) return;
     const target = this._targets();
 
     // Pity. 90 s of night with no contact forces ONE spawn at the next covered site
@@ -1015,6 +1515,16 @@ export class Director {
   _stepWatchdog(dt) {
     this._sinceOrderSpawn += dt;
     if (this._orderCount === 0) { this._sinceOrderSpawn = 0; this._stallLogged = false; return; }
+    // A FULL COUNTY IS NOT A WEDGED QUEUE. The drain's cap gates are the pressure budget
+    // doing its job, and a queue waiting behind them is running late by design. Counting
+    // that as a stall made the watchdog shout on the console the moment the headcount ease
+    // (the opening's, or a death's) met a field that other lanes had already populated —
+    // which is a watchdog crying wolf at exactly the times the ease is most correct.
+    // A real wedge is orders outstanding with ROOM to put them; that is what survives here.
+    if (this.head >= this.cap || this.aliveTotal >= this.cap * ALIVE_CAP_MUL) {
+      this._sinceOrderSpawn = 0;
+      return;
+    }
     if (this._sinceOrderSpawn < ORDER_STALL_S) return;
 
     for (let i = 0; i < ORDER_POOL; i++) this._orders[i].live = false;
@@ -1131,6 +1641,10 @@ export class Director {
       // and the opening bubble, which is the same idea in time rather than in space: the
       // first minute of a fresh session belongs to the player learning where they are.
       if (this._inOpeningBubble(x, z)) continue;
+      // and the respawn bubble, which is the same idea again: for RESPAWN_QUIET_S after a
+      // death nothing may be ORDERED anywhere near the ground he came back to. Wider than
+      // the clearing on purpose — a body placed on the rim walks in during the clearing.
+      if (this._inRespawnBubble(x, z)) continue;
 
       // never on top of a live body
       if (this._tooClose(x, z, R.spacing)) continue;
@@ -1312,6 +1826,36 @@ export class Director {
       sinceContact: +this._sinceContact.toFixed(1),
       permit: this.permitOk(),
       coneEntries: this._coneEntryRate(),
+
+      /* ---- the clearing ---- */
+      playT: +this._playT.toFixed(1),
+      clearR: +this.clearR.toFixed(1),
+      openingEase: +this._openingEase().toFixed(2),
+      respawnEase: +this._respawnEase().toFixed(2),
+      respawnClearT: +Math.max(0, this._respawnClearT).toFixed(1),
+      respawnQuietT: +Math.max(0, this._respawnQuietT).toFixed(1),
+      evicted: this.evicted,
+      slept: this.slept,
+      evictRefused: this.evictRefused,
+      clearSuspended: this.clearSuspended,
+      sinceFire: this._sinceFire < 1e8 ? +this._sinceFire.toFixed(1) : -1,
+
+      /* ---- AND SAY WHY. `dot` is the number his report is about: +1 dead ahead, -1
+         directly behind his head. `hurtLog` is every hit he has taken this run with the
+         same table frozen at the instant of the hit. ---- */
+      hurts: this.hurts,
+      threats: (() => {
+        this._sweepThreats();
+        const out = [];
+        for (let i = 0; i < this._threatN; i++) {
+          const s = this._threats[i];
+          out.push({ species: s.species, d: s.d, dot: s.dot, aware: s.aware,
+            hunting: s.hunting, committed: s.committed, state: s.state,
+            pressure: s.pressure, dy: s.dy });
+        }
+        return out;
+      })(),
+      hurtLog: this._hurtLogOut(),
     };
   }
 

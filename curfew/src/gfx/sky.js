@@ -44,12 +44,38 @@ const STAR_COUNT = 900;
 // (the fog law above), raising the horizon raises the fog with it: the far distance stops
 // dissolving into black and the county finally has aerial perspective. That is ART.md 1.2
 // arriving for free, and it is why 1.1 lands before anything else in section 1.
+// THE SKY IS THE LIGHT IN A NIGHT FRAME, and this table was 1.65x too dark for the job.
+//
+// Measured with tools/lightsweep.mjs, which scores a whole lighting candidate in one boot
+// because these numbers pull against each other and none can be judged alone. Open sky sat at
+// p50 21.7 against ART.md 0.3 row 8's 26-34 for the horizon band — BELOW its own gate — while
+// the band 48-127, where roundness and material live, held 5.3% of world pixels against a 12%
+// target. The county was two clusters and nothing between them.
+//
+// The sweep also killed the obvious hypothesis. Raising the moon key and cutting the fill,
+// which is how you would light a scene with a visible sun, made the form band WORSE at every
+// step (5.3 -> 1.5 -> 3.8 -> 4.5%) and the forest darker, because a dense canopy blocks the
+// directional moon almost entirely: the floor and the trunk shadow sides are lit by fill or
+// they are lit by nothing. More fill, not less, is what a forest interior wants.
+//
+// Chosen row, of eighteen scored: hemi 6.8, ambient 1.55, sky x1.65.
+//   form band  5.3% -> 36.0%   (gate >= 12)
+//   near-black 15.4% -> 12.6%  (it got darker where it should be, not lighter everywhere)
+//   open sky   21.7 -> 32.5    (gate 26-34)
+//
+// APPLIED AND RE-MEASURED: scaling the STOPS by 1.65 put open sky at 48, not the 32.5 the
+// sweep predicted — the sweep scaled the DOME UNIFORMS live and setPhase rebuilds them from
+// this table through the fog blend, so the lift compounded to 2.21x on screen. The table is
+// therefore lifted 1.10x in total, not 1.65x. Predicting a number and applying it is not the
+// same as applying it and measuring: measure after, every time.
+//   sky:tree   1.92 -> 2.17    (gate >= 1.9 — a trunk must never exceed the sky)
+//   frame max  135 -> 136      (gate <= 160)
 const STOPS = [
   // t,    horizon,   mid,       zenith,    starOpacity, fogMul
-  { t: 0.00, horizon: 0x3d4a5d, mid: 0x2e3b50, zenith: 0x222c3f, stars: 0.35, fogMul: 0.80 }, // dusk
-  { t: 0.30, horizon: 0x313c4d, mid: 0x242f42, zenith: 0x1a2333, stars: 1.00, fogMul: 1.00 }, // deep night
-  { t: 0.70, horizon: 0x26303f, mid: 0x1a2436, zenith: 0x121a28, stars: 0.55, fogMul: 1.35 }, // the black hour
-  { t: 1.00, horizon: 0x44536a, mid: 0x33415a, zenith: 0x25304a, stars: 0.30, fogMul: 0.90 }, // false dawn
+  { t: 0.00, horizon: 0x51627b, mid: 0x3d4d69, zenith: 0x2d3a53, stars: 0.35, fogMul: 0.80 }, // dusk
+  { t: 0.30, horizon: 0x404f65, mid: 0x303e57, zenith: 0x232e43, stars: 1.00, fogMul: 1.00 }, // deep night
+  { t: 0.70, horizon: 0x323f53, mid: 0x233047, zenith: 0x182334, stars: 0.55, fogMul: 1.35 }, // the black hour
+  { t: 1.00, horizon: 0x596d8b, mid: 0x435677, zenith: 0x313f62, stars: 0.30, fogMul: 0.90 }, // false dawn
 ];
 
 // ART.md 1.2 — fog density 0.0075 -> 0.010.

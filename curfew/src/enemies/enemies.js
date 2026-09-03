@@ -50,7 +50,7 @@ import {
 import { buildBody, makeImpostor, makeBasic, whiteTex, REVEAL } from './bodies.js';
 import {
   NAV, steer, progress, resetProgress, relocate, observed, lit, visible,
-  groundY, followGround, SepGrid, faceYaw,
+  groundY, followGround, SepGrid, faceYaw, bearingDot, aimAngle,
 } from './nav.js';
 
 /* --------------------------------------------------------------------------
@@ -60,8 +60,138 @@ import {
 const PERCEPT_EVERY = 6;          // frames between perception ticks per body
 const PERCEPT_DREAD = 4;          // 0.067 s: under the Standing Kind's 0.08 s retest
 const MAX_ATTACKERS = CFG.director.maxAttackers;   // 2 — the token that makes a pack a rhythm
-const ATTACK_BREATH = 0.42;       // seconds between any two commits in the whole field
 const RING_SLOTS = 8;
+
+// How long a NON-dormant body takes to unfold from its 0.34 spawn squash. The dormant species
+// climb out of the ground over their own riseTime; everything else is stepping out from behind
+// something and should be whole by the time the eye finds it. Short enough that it is never the
+// thing you are looking at, long enough that the first frame is still partial, which is the rule
+// the squash exists to serve.
+const QUICK_RISE_S = 0.22;
+
+/**
+ * The lowest point of a built rig, in its own local space, with every transform its parts
+ * carry applied. Zero would mean the origin is exactly on the sole of the foot.
+ */
+function measureFootPlane(group) {
+  let minY = Infinity;
+  group.updateWorldMatrix(true, true);
+  group.traverse((o) => {
+    if (!o.geometry) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    const bb = o.geometry.boundingBox;
+    if (!bb) return;
+    const e = o.matrixWorld.elements;
+    for (let i = 0; i < 8; i++) {
+      const x = (i & 1) ? bb.max.x : bb.min.x;
+      const y = (i & 2) ? bb.max.y : bb.min.y;
+      const z = (i & 4) ? bb.max.z : bb.min.z;
+      const wy = e[1] * x + e[5] * y + e[9] * z + e[13];
+      if (wy < minY) minY = wy;
+    }
+  });
+  return Number.isFinite(minY) ? minY : 0;
+}
+
+/* ==========================================================================
+   THE FIRST PLAYTEST, 2026-09-02. Alex played CURFEW and the whole of his
+   report about combat is legibility, not difficulty:
+
+     "the spot i spawn and return to when i die kills me quite quickly and I am
+      never sure why. I've seen some enemies that move very quickly and seem to
+      run into me and then disappear... things are killing me quickly no matter
+      where i run."
+
+   `node tools/whatkilledme.mjs --play 75` reproduces it exactly — walk forward
+   from the spawn, never shoot — and the numbers under his words are:
+
+     * 11 of 13 hits came from BEHIND him. Camera-forward bearings of -1.00,
+       -0.99, -0.96, -0.94, -0.79, -0.69. The telegraph law was satisfied every
+       single time, off screen, where a tell is not a tell.
+     * the attacker's distance was 0.0 m on three hits and 0.6-2.2 m on the
+       rest. The hound was standing INSIDE the player capsule: it ran through
+       him, came out behind, and bit from there. That is the whole of "run into
+       me and then disappear" — nothing was under the terrain (zero samples in
+       75 s) and nothing despawned within 12 m (zero).
+     * hits landed 0.5 to 1.8 s apart and killed him in 4.6 to 9.5 s from first
+       contact. That is a metronome, not a pack.
+
+   The five constants below are the answer, and every one of them buys
+   LEGIBILITY rather than mercy. The hound still does 22 and still kills in
+   five bites: what changes is that he can see each of them coming, back away
+   from the animal instead of standing in it, and get a breath between them.
+   ========================================================================== */
+
+/* A body is not allowed to be inside you. Separation is `def.radius +
+   CFG.player.RADIUS + CONTACT_PAD`, resolved the way collision resolves
+   everything else — push out along the contact normal and kill only the
+   INWARD component of the velocity, so a hound that reaches you stops at
+   contact range and strikes from there instead of walking through your chest.
+   Every strike range in the roster clears this with room: hound contact 0.84 m
+   against strikeRange 1.90, pallbearer 0.94 against a 0.96 m committed point,
+   the Pale 0.66 against a 0.85 m grab. Nothing loses its reach. */
+const CONTACT_PAD = 0.06;
+
+/* THE FRONT-COMMIT LAW. A crowd body may only commit to a strike from inside
+   the player's forward hemisphere. 0.30 is 72 degrees off the camera axis:
+   just outside the 100-degree screen edge at fov 68 / 16:9, which is the
+   nearest a tell can be and still be a thing you catch in the corner of your
+   eye rather than a thing you are told about afterwards. Dogs in every game
+   this one is modelled on circle before they come in, and that circle is why
+   they are frightening instead of annoying — you watch it and you know. */
+const FRONT_DOT = 0.30;
+
+/* AND IT COMES ROUND BY STANDING SOMEWHERE ELSE, not by orbiting.
+
+   The first attempt at this bolted a circling waypoint onto the approach, and
+   the county produced ZERO hits in 120 s — which is not a fix, it is a
+   different bug. The reason is arithmetic: a hound cruises at 7.5 m/s through
+   a 600/350 burst gait, which is 4.7 m/s of travel, against a 4.35 m/s walk.
+   There is no 20 m arc inside a 0.35 m/s margin. A body that spends its whole
+   surplus on lateral travel falls behind, trips the stuck watchdog, and gets
+   relocated to the far side of the county.
+
+   So the arc is not a manoeuvre, it is WHERE THE RING IS. The eight ring slots
+   are anchored to the player's FACING instead of to world space and spread
+   across +-RING_ARC of it. A pack still surrounds — 132 degrees is both your
+   flanks and everything between them — and it still drifts, but no slot parks
+   a body in the one bearing where its telegraph cannot be received. Chasing a
+   slot 3.2 m off your shoulder is chasing YOU, so it costs a body nothing it
+   was not already spending.
+
+   1.15 rad is 66 degrees, whose cosine is 0.41: every slot in the arc, even
+   the outermost, clears FRONT_DOT with margin. Widen this past ~1.25 and the
+   edge slots become bodies that can never legally attack from where they stand. */
+const RING_ARC = 1.15;
+
+/* A body CAN still strike from outside the cone — the Hunter off its leash in
+   the black hour, the two dread species whose whole rule is that they move
+   where you are not looking, and a pack member that has spent FRONT_PATIENCE
+   seconds unable to reach your front because the trees will not let it. When
+   that happens the windup is nearly doubled and it goes out on the bus as a
+   `rear` telegraph so the audio lane can put a loud, positioned cue in the
+   2.5-5.5 kHz band its earshot ticker already reserves for things behind you.
+   An unseeable tell has to be an AUDIBLE one, and a longer one. */
+const REAR_TELEGRAPH_MUL = 1.85;
+const FRONT_PATIENCE = 5.0;
+
+/* THE RECOVERY BREATH, in three parts, because "five bites 1.1 s apart" is one
+   animal cycling as fast as its own state machine allows and two tokens
+   interleaving underneath it.
+     ATTACK_BREATH   — no two commits anywhere in the field inside this.
+     FIELD_RECOVERY  — and once one LANDS, the whole pack waits. This is the
+                       beat that makes it read as something working on you.
+     BREAKOFF_S      — the body that connected disengages: it circles OUT to
+                       BREAKOFF_MUL x standoff, refuses the token, and comes
+                       back. A thing that never leaves is a hazard; a thing
+                       that leaves and returns is an animal.
+   Lowering `dmg` was the other option and it is the wrong one — it makes the
+   hound feel weak, which is the opposite of what this game wants from it. */
+const ATTACK_BREATH = 1.10;
+const FIELD_RECOVERY = 1.90;
+const BREAKOFF_S = 3.20;
+const BREAKOFF_MUL = 1.75;
+const RECOMMIT_MISS = 0.85;       // a whiff costs less than a landed bite
 const RING_SPIN = 0.30;           // rad/s: 0.55x a circling body, so the ring drifts
 const FLINCH_BUDGET = 0.180;      // seconds between body flinches, so a burst is not a seizure
 const STAGGER_T = 0.620, STAGGER_IMMUNITY = 2.2, STAGGER_WINDOW = 0.40;
@@ -113,6 +243,13 @@ const _evt = {
   // every kill carries xp > 0 and the Pale and the Standing Kind pay 0 by law;
   // this is the field that lets that assertion filter instead of fail.
   owner: '',
+  // TRUE when this telegraph is firing OUTSIDE the player's forward hemisphere
+  // — the Hunter off its leash, either dread body, or a pack member the trees
+  // have boxed in. The audio lane's request in docs/HANDOFF.md is for a loud,
+  // distinct, POSITIONED cue on exactly this flag: a visual tell behind the
+  // player's head is not a tell, and eleven of the thirteen hits in the first
+  // playtest were behind him.
+  rear: false,
 };
 
 /**
@@ -144,6 +281,7 @@ function evtReset(e, kind) {
   _evt.xp = 0;
   _evt.dmg = 0;
   _evt.zone = '';
+  _evt.rear = e ? !!e.rearStrike : false;
   return _evt;
 }
 // nav.relocate only ever reads .def off the record it is handed, so the trickle
@@ -173,6 +311,10 @@ export class Enemies {
     this._t = 0;
     this._commit = 0;             // live attack tokens spent
     this._breathT = 99;
+    // Seconds since ANY body's strike last landed on the player. The whole
+    // field breathes after a hit connects — see FIELD_RECOVERY.
+    this._landedT = 99;
+    this._rearStrikes = 0;        // telemetry: strikes that fired outside the cone
     this._ringPhase = 0;
     this._slots = new Int32Array(RING_SLOTS).fill(-1);
     this._lastTrickle = 0;
@@ -202,6 +344,8 @@ export class Enemies {
     this.bolts = null;
     this.boltState = [];
     this._boltCursor = 0;
+    /** species -> metres to lift the drawn group so its feet sit on the ground. */
+    this.footLift = new Map();
     this.sep = new SepGrid(96);
     this._unsub = [];
   }
@@ -224,6 +368,16 @@ export class Enemies {
         scene.add(built.group);
         this.all.push(makeRecord(uid++, key, def, built, this.rng));
       }
+      // THE FOOT PLANE. A rig is authored around its own origin and there is no rule that
+      // says the lowest vertex lands exactly on it — the hound's is 0.13 m below, measured,
+      // constant, on every frame and every instance. present() puts the ORIGIN on the ground,
+      // so those thirteen centimetres are paws buried in the dirt.
+      //
+      // Measured once here rather than per frame: a bounding box per body per frame across
+      // forty-six bodies is real cost, and the answer never changes. Anything that moves the
+      // rig at runtime (the rise squash, stagger, the death fall) is applied on top of this
+      // and is supposed to move it.
+      this.footLift.set(key, -measureFootPlane(this.all[this.all.length - 1].built.group));
       // one instanced card per species: every body past the LOD line lives here,
       // so a field of forty is six draws.
       const imp = makeImpostor(key, count);
@@ -799,6 +953,9 @@ export class Enemies {
     e.prevYaw = e.currYaw = e.yaw;
     e.stateT = 0; e.burstT = 0; e.gait = 0; e.prevGait = 0; e.currGait = 0;
     e.committed = false; e.struck = false; e.airborne = false;
+    e.frontDot = 1; e.frontDeniedT = 0; e.rearStrike = false;
+    e.telegraphS = def.telegraph;
+    e.breakoffT = 0; e.recommitT = 0; e.seenT = 0;
     e.staggerT = 0; e.immuneT = 0; e.windowDmg = 0; e.windowT = 0;
     e.flinchT = 99; e.flinch.set(0, 0, 0);
     e.deathT = 0; e.flashT = 99;
@@ -829,8 +986,28 @@ export class Enemies {
       e.riseSquash = 0.0;
       e.built.group.visible = false;
     } else {
-      e.state = def.dormant ? 'rise' : 'approach';
-      e.riseT = def.riseTime || 0.55;
+      // EVERY BODY THAT STARTS SQUASHED MUST ENTER THE STATE THAT UNSQUASHES IT.
+      //
+      // This line used to read `def.dormant ? 'rise' : 'approach'` while the two lines under
+      // it set riseSquash to 0.34 for EVERYONE. riseSquash is advanced back toward 1 in
+      // exactly one place — the 'rise' handler below — so a hound, a poacher or a Hunter went
+      // straight to 'approach' and stayed at 0.34 for the whole of its life. present() then
+      // scaled it to a third of its height and pushed it 0.62 body-heights into the earth,
+      // every frame, forever.
+      //
+      // Alex found it by playing: "these are totally often underground... a few partial
+      // enemies that were sticking out of the ground coming at me", and "possibly a hound
+      // flying through the air sideways" — which is what a body 0.6 m under the terrain
+      // looks like when it crosses a slope. Measured at the spawn: drawn group 0.57-0.64 m
+      // below terrain, drawn scale.y 0.31-0.36, the top of the bounding box under the ground.
+      // Its pos.y was correct to a centimetre the entire time, which is why three passes of
+      // instrumentation that sampled the SIMULATION pose reported nothing wrong.
+      //
+      // The design is good and stays: no first sight is ever a whole body standing in the
+      // open. A non-dormant species just rises FAST — it is stepping out from behind a trunk,
+      // not climbing out of a grave.
+      e.state = 'rise';
+      e.riseT = def.dormant ? (def.riseTime || 0.55) : QUICK_RISE_S;
       e.riseDur = e.riseT;
       e.riseSquash = 0.34;
       e.built.group.visible = true;
@@ -859,6 +1036,7 @@ export class Enemies {
     this._t += dt;
     this._noiseT += dt;
     this._breathT += dt;
+    this._landedT += dt;
     this._ringPhase = (this._ringPhase + RING_SPIN * dt) % TAU;
 
     const p = this._sys('player');
@@ -919,6 +1097,10 @@ export class Enemies {
     e.obsSelf = observed(this.ctx, e.pos.x, eyeY, e.pos.z,
       def.coneDot === undefined ? 0.28 : def.coneDot,
       def.coneRange === undefined ? 60 : def.coneRange);
+    // Where it is standing relative to what the player is LOOKING at. No
+    // raycast; this is the front-commit law's only input, and it is the number
+    // whatkilledme.mjs prints as `facing`.
+    e.frontDot = bearingDot(this.ctx, e.pos.x, e.pos.z);
     const shared = this.ctx.shared;
     e.playerLit = shared && typeof shared.lit === 'number' ? shared.lit
       : (this._torchOn() ? 1 : 0);
@@ -968,6 +1150,13 @@ export class Enemies {
     e.leapCd = Math.max(0, e.leapCd - dt);
     e.screamCd = Math.max(0, e.screamCd - dt);
     e.memT = Math.max(0, e.memT - dt);
+    // the breath after a bite, and the shorter one after a whiff
+    e.breakoffT = Math.max(0, e.breakoffT - dt);
+    e.recommitT = Math.max(0, e.recommitT - dt);
+    // how long it has been continuously inside the player's attention. It is
+    // what makes "how long had he been able to see it before it hit him"
+    // answerable, which is the question whatkilledme.mjs was built to ask.
+    if (e.obsSelf) e.seenT += dt; else e.seenT = 0;
     if (e.memT <= 0 && e.aware > 0 && def.owner === OWNER.PRESSURE) e.aware = 0;
     // the plain-boolean mirror the director and audio read (their handoffs);
     // aware is 0/1/2 and neither lane should have to know that
@@ -1028,10 +1217,13 @@ export class Enemies {
         // broadcast on frame 1.
         e.vel.x = damp(e.vel.x, 0, 10, dt);
         e.vel.z = damp(e.vel.z, 0, 10, dt);
-        e.telegraphCharge = clamp01(e.stateT / def.telegraph);
+        // e.telegraphS, not def.telegraph: a windup that fired outside the
+        // player's cone runs REAR_TELEGRAPH_MUL longer, because the only
+        // channel it has is the audio cue and a cue needs time to be acted on.
+        e.telegraphCharge = clamp01(e.stateT / e.telegraphS);
         e.built.telegraph(e.telegraphCharge);
         e.yaw = dampAngle(e.yaw, faceYaw(e.pos.x, e.pos.z, p.pos.x, p.pos.z), 7, dt);
-        if (e.stateT >= def.telegraph) {
+        if (e.stateT >= e.telegraphS) {
           const d = Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z);
           const reach = def.id === 'poacher' ? def.strikeRange
             : (def.lungeRange || def.strikeRange) * 1.6 + 3.0;
@@ -1064,7 +1256,13 @@ export class Enemies {
         this._uncommit(e);
         e.vel.x = damp(e.vel.x, 0, 6, dt);
         e.vel.z = damp(e.vel.z, 0, 6, dt);
-        if (e.stateT >= def.recover) { e.state = 'approach'; e.stateT = 0; e.burstT = 0; }
+        if (e.stateT >= def.recover) {
+          e.state = 'approach'; e.stateT = 0; e.burstT = 0;
+          // Even a whiff costs a beat. Without this a hound whose strike missed
+          // re-committed on the next pause, which is the same metronome the
+          // playtest measured, only with the damage spread over more attempts.
+          e.recommitT = Math.max(e.recommitT, RECOMMIT_MISS);
+        }
         break;
       }
 
@@ -1122,9 +1320,27 @@ export class Enemies {
       e.memT = Math.max(e.memT, def.memAlert);
     }
 
-    // ---- the target: a RING SLOT, so a pack surrounds instead of stacking
-    const standoff = def.standoff;
-    const a = this._ringPhase + (e.slot >= 0 ? e.slot : 0) * (TAU / RING_SLOTS);
+    // ---- the target: a RING SLOT, so a pack surrounds instead of stacking.
+    //      A body still spending its BREAKOFF breath rings out to a readable
+    //      distance instead: it bit you, and now it leaves and comes back.
+    const breaking = e.breakoffT > 0;
+    const standoff = breaking ? def.standoff * BREAKOFF_MUL : def.standoff;
+    const slot = e.slot >= 0 ? e.slot : (e.id % RING_SLOTS);
+    // THE RING IS ANCHORED TO YOUR FACE. See RING_ARC: an aware crowd body's
+    // slot lives in the front arc, so it arrives where its telegraph can be
+    // received. A body that has spent FRONT_PATIENCE failing to get there is
+    // boxed in and keeps the old world-space ring, because at that point the
+    // near-doubled windup and the rear audio cue are what it is paying with
+    // instead. Everything dread-owned keeps the world ring by law.
+    const fa = (def.owner === OWNER.PRESSURE && e.aware > 0
+      && e.frontDeniedT < FRONT_PATIENCE) ? aimAngle(this.ctx) : null;
+    let a;
+    if (fa !== null) {
+      const u = RING_SLOTS > 1 ? (slot / (RING_SLOTS - 1)) * 2 - 1 : 0;
+      a = fa + u * RING_ARC + Math.sin(this._ringPhase + slot) * 0.10;
+    } else {
+      a = this._ringPhase + slot * (TAU / RING_SLOTS);
+    }
     let tx = p.pos.x + Math.cos(a) * standoff;
     let tz = p.pos.z + Math.sin(a) * standoff;
 
@@ -1191,8 +1407,12 @@ export class Enemies {
     // ---- the attack decision
     const inBand = e.dist >= def.engage[0] && e.dist <= def.engage[1];
     const paused = def.burst > 100 || !e.moving;      // move OR attack
-    if (inBand && paused && e.stateT > 0.35 && e.aware > 0 && e.los
-      && this._takeToken(e)) {
+    const wants = inBand && e.aware > 0 && e.los;
+    // THE FRONT-COMMIT LAW. It is asked BEFORE the token so that being behind
+    // the player costs a body patience rather than a token, and asked with
+    // `wants` so patience only accrues while it is genuinely trying.
+    const mayCommit = this._frontGate(e, dt, wants);
+    if (wants && paused && mayCommit && e.stateT > 0.35 && this._takeToken(e)) {
       const wantLeap = def.lungeRange && e.dist > def.lungeRange && e.dist < 9.5
         && e.leapCd <= 0 && (this._t - this._squadLeapAt) > def.squadLeapGap;
       if (wantLeap) {
@@ -1207,11 +1427,7 @@ export class Enemies {
         this._uncommit(e);
         return;
       }
-      e.state = 'windup'; e.stateT = 0;
-      e.built.telegraph(0.001);
-      evtReset(e, e.attackKind);
-      _evt.y = e.pos.y + def.height * 0.6;
-      this.ctx.bus.emit('enemy:telegraph', _evt);   // AUDIO ON FRAME 1
+      this._beginWindup(e, e.attackKind, 0.6);       // AUDIO ON FRAME 1
     }
 
     // facing
@@ -1277,11 +1493,7 @@ export class Enemies {
     if (e.aware === 2 && !e.holdFire && e.los && e.dist <= def.strikeRange && e.stateT > 0.4
       && this._takeToken(e)) {
       e.attackKind = 'bolt';
-      e.state = 'windup'; e.stateT = 0;
-      e.built.telegraph(0.001);
-      evtReset(e, 'aim');
-      _evt.y = e.pos.y + def.height * 0.8;
-      this.ctx.bus.emit('enemy:telegraph', _evt);
+      this._beginWindup(e, 'aim', 0.8);
     }
 
     if (e.aware > 0) e.yaw = dampAngle(e.yaw, faceYaw(e.pos.x, e.pos.z, e.heardX, e.heardZ), 6, dt);
@@ -1306,14 +1518,22 @@ export class Enemies {
 
   _attack(e, dt, p) {
     const def = e.def;
+    // XZ FOR THE APPROACH, BUT NOT FOR THE BLOW. Every range test in this file was a plan
+    // distance, so a body standing on the dirt could strike a player standing on a
+    // destination's raised floor above it, or on a bank, or a storey up — through the floor,
+    // with nothing on screen. The horizontal reach is unchanged; a strike now also has to be
+    // within a body's own height vertically, which is the difference between a dog biting you
+    // and a dog biting the underside of the ground you are standing on.
     const d = Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z);
+    const dyAbs = Math.abs((p.pos.y + CFG.player.EYE * 0.45) - (e.pos.y + def.height * 0.5));
+    const inReachY = dyAbs <= def.height * 0.9 + 0.55;
 
     if (e.attackKind === 'lunge') {
       _dir.set(p.pos.x - e.pos.x, 0, p.pos.z - e.pos.z);
       if (_dir.lengthSq() > 1e-6) _dir.normalize();
       const k = def.lungeSpeed * (0.25 + 0.75 * Math.pow(clamp01(e.stateT / def.lungeTime), 2));
       e.vel.x = _dir.x * k; e.vel.z = _dir.z * k;
-      if (!e.struck && d < def.strikeRange + CFG.player.RADIUS) {
+      if (!e.struck && inReachY && d < def.strikeRange + CFG.player.RADIUS) {
         e.struck = true;
         this._hurtPlayer(e, p, _dir);
       }
@@ -1323,7 +1543,7 @@ export class Enemies {
 
     if (e.attackKind === 'leap') {
       if (!e.airborne) {
-        if (!e.struck && d < def.strikeRange + 0.9) {
+        if (!e.struck && inReachY && d < def.strikeRange + 0.9) {
           e.struck = true;
           _dir.set(p.pos.x - e.pos.x, 0, p.pos.z - e.pos.z).normalize();
           this._hurtPlayer(e, p, _dir);
@@ -1351,7 +1571,10 @@ export class Enemies {
     if (!e.struck && e.stateT >= def.strikeAt) {
       e.struck = true;
       const dxp = p.pos.x - e.strikeX, dzp = p.pos.z - e.strikeZ;
-      if (Math.hypot(dxp, dzp) < def.strikeRange + CFG.player.RADIUS) {
+      // The committed-point strike gets the same vertical reach test as the other two:
+      // a pallbearer swinging at the spot you were standing must not connect through a floor.
+      const dyC = Math.abs((p.pos.y + CFG.player.EYE * 0.45) - (e.pos.y + def.height * 0.5));
+      if (dyC <= def.height * 0.9 + 0.55 && Math.hypot(dxp, dzp) < def.strikeRange + CFG.player.RADIUS) {
         _dir.set(p.pos.x - e.pos.x, 0, p.pos.z - e.pos.z);
         if (_dir.lengthSq() > 1e-6) _dir.normalize(); else _dir.set(0, 0, 1);
         this._hurtPlayer(e, p, _dir);
@@ -1371,6 +1594,17 @@ export class Enemies {
 
   _hurtPlayer(e, p, dir) {
     if (typeof p.hurt === 'function') p.hurt(e.def.dmg, dir);
+
+    // THE RECOVERY BREATH. Measured before this landed: five bites 0.5-1.8 s
+    // apart, dead 4.6 s after first contact, with no gap a player could use to
+    // do anything about it. So a landed hit costs the FIELD a beat and costs
+    // the BODY a disengagement — it rings out to BREAKOFF_MUL x its standoff,
+    // refuses the token, and comes back. Bodies with no standoff (the Pale, the
+    // Standing Kind) do not break off: backing away is not what either of them
+    // is, and their own 1.4-1.6 s recover already paces them.
+    this._landedT = 0;
+    if (e.def.standoff > 0) e.breakoffT = BREAKOFF_S;
+
     const fx = this._sys('fx');
     // fx.trauma is a NUMBER (fx.js:52); the setter is addTrauma (fx.js:232).
     // Calling it threw a TypeError inside step() the moment trauma went
@@ -1427,11 +1661,8 @@ export class Enemies {
     e.yaw = dampAngle(e.yaw, faceYaw(e.pos.x, e.pos.z, p.pos.x, p.pos.z), 4, dt);
 
     if (e.dist <= def.strikeRange && this._takeToken(e)) {
-      e.state = 'windup'; e.stateT = 0; e.attackKind = 'strike';
-      e.built.telegraph(0.001);
-      evtReset(e, 'grab');
-      _evt.y = e.pos.y + def.height * 0.7;
-      this.ctx.bus.emit('enemy:telegraph', _evt);
+      e.attackKind = 'strike';
+      this._beginWindup(e, 'grab', 0.7);
     }
   }
 
@@ -1471,23 +1702,78 @@ export class Enemies {
     }
 
     if (e.dist <= def.strikeRange && !e.obsSelf && this._takeToken(e)) {
-      e.state = 'windup'; e.stateT = 0; e.attackKind = 'strike';
-      e.built.telegraph(0.001);
-      evtReset(e, 'reach');
-      _evt.y = e.pos.y + def.height * 0.8;
-      this.ctx.bus.emit('enemy:telegraph', _evt);
+      e.attackKind = 'strike';
+      this._beginWindup(e, 'reach', 0.8);
     }
   }
 
   /* ------------------------------------------------------------ integrate -- */
 
+  /**
+   * THE PLAYER IS SOLID.
+   *
+   * Measured 2026-09-02, `whatkilledme.mjs --play 75`: the attacker's distance
+   * was 0.0 m on three of thirteen hits and 0.6-2.2 m on the rest. The hound
+   * was standing INSIDE the player capsule — it walked through him, came out
+   * the other side, and bit from behind. In his words: "some enemies... seem to
+   * run into me and then disappear. maybe some of those are beneath the
+   * ground?" Nothing was beneath the ground (zero samples in 75 s) and nothing
+   * despawned near him (zero). This was the whole of it.
+   *
+   * Resolved the way collision.resolveCapsule resolves everything else: push
+   * out along the contact normal to exactly the touching distance, and remove
+   * only the INWARD component of the velocity, so a body sliding past keeps its
+   * tangential speed and a body pressing in stops dead instead of shuddering.
+   * A creature you can be inside cannot be aimed at, cannot be backed away
+   * from, and reads as a rendering fault rather than an animal.
+   *
+   * Every strike in the roster still reaches from contact: hound 0.84 m against
+   * a 1.90 m bite, hunter 0.90 against 2.40, pallbearer 0.94 against a 0.96 m
+   * committed point, the Pale 0.66 against a 0.85 m grab. Nothing is nerfed;
+   * the animal simply stops at your chest instead of in it.
+   */
+  _pushOffPlayer(e) {
+    const p = this._sys('player');
+    if (!p || !p.pos) return;
+    const minD = e.def.radius + CFG.player.RADIUS + CONTACT_PAD;
+    let dx = e.pos.x - p.pos.x, dz = e.pos.z - p.pos.z;
+    let d = Math.sqrt(dx * dx + dz * dz);
+    if (d >= minD) return;
+    if (d < 1e-4) {
+      // exactly coincident: push it back out the way it is facing, which is
+      // the only direction that is not arbitrary
+      dx = -Math.sin(e.yaw); dz = -Math.cos(e.yaw); d = 1;
+    }
+    const nx = dx / d, nz = dz / d;
+    e.pos.x = p.pos.x + nx * minD;
+    e.pos.z = p.pos.z + nz * minD;
+    const into = e.vel.x * nx + e.vel.z * nz;
+    if (into < 0) { e.vel.x -= nx * into; e.vel.z -= nz * into; }
+  }
+
   _integrate(e, dt) {
     const def = e.def;
     if (e.airborne) {
       e.vel.y -= GRAVITY * dt;
+      const ax = e.pos.x, az = e.pos.z;
       e.pos.x += e.vel.x * dt;
       e.pos.y += e.vel.y * dt;
       e.pos.z += e.vel.z * dt;
+      // A LEAP OBEYS WALLS. This branch used to integrate raw — the grounded path below has
+      // had an occupancy test since it was written, and the airborne one had nothing — so a
+      // hound that committed to a leap flew through the filling station and bit the player
+      // on the other side of it. Reported from play: "they come through the building at you
+      // anyway." Same cheap test the grounded path uses: if the landing spot is inside
+      // something, stop at the wall and drop out of the leap rather than passing through it.
+      const colA = this._sys('collision');
+      if (colA && typeof colA.canOccupy === 'function'
+        && !colA.canOccupy(e.pos.x, e.pos.z, def.radius, Math.min(def.height, 1.9))) {
+        e.pos.x = ax; e.pos.z = az;
+        e.vel.x = 0; e.vel.z = 0;
+        if (e.vel.y > 0) e.vel.y = 0;                 // it hit a wall, it does not climb it
+      }
+      // a leap lands ON you, never THROUGH you
+      this._pushOffPlayer(e);
       const g = groundY(this.ctx, e.pos.x, e.pos.z);
       if (e.pos.y <= g && e.vel.y <= 0) {
         e.pos.y = g; e.airborne = false; e.vel.y = 0;
@@ -1515,6 +1801,10 @@ export class Enemies {
         e.pos.x = bx; e.pos.z = bz; e.vel.x = 0; e.vel.z = 0;
       }
     }
+
+    // LAST, after the trunk slide, or the step-back above would put a body the
+    // trees rejected straight back inside the player's chest.
+    this._pushOffPlayer(e);
 
     followGround(this.ctx, e, dt);
     e.gait += Math.hypot(e.vel.x, e.vel.z) * dt * (def.form === 'quadruped' ? 2.6 : 1.7);
@@ -1595,6 +1885,59 @@ export class Enemies {
     this._releaseSlot(e);
   }
 
+  /* ------------------------------------------------- the front-commit law -- */
+
+  /**
+   * MAY THIS BODY COMMIT FROM WHERE IT IS STANDING?
+   *
+   * Eleven of the thirteen hits in Alex's first playtest came from behind him,
+   * each with a perfectly legal 320 ms visual windup that happened off screen.
+   * A tell the player cannot receive is not a tell, so a crowd body has to
+   * enter his forward hemisphere before it is allowed to strike. Until it does,
+   * _approach walks it round.
+   *
+   * Three exemptions, and each of them is a design the game already has:
+   *   - the two DREAD species. The Pale and the Standing Kind exist to be
+   *     behind you; forcing them round would delete both of them.
+   *   - the Hunter off its leash in the black hour (`leashed === false`,
+   *     director.js:807). That is the one authored ambush in the game.
+   *   - a body BOXED IN: FRONT_PATIENCE seconds of wanting to attack and never
+   *     reaching the front, because the trees or the rest of the pack will not
+   *     let it. It comes in from where it is rather than orbiting for ever.
+   *
+   * All three pay for it: _beginWindup sees `frontDot` under FRONT_DOT and
+   * nearly doubles the windup, and the telegraph goes out with `rear: true` so
+   * the audio lane can put a positioned cue where the eyes cannot go.
+   *
+   * @param wants  is it actually trying to attack right now? Patience only
+   *               accrues while it is, or a body walking past on its way
+   *               somewhere else would earn an ambush it never wanted.
+   */
+  _frontGate(e, dt, wants) {
+    if (e.def.owner === OWNER.DREAD || e.leashed === false) return true;
+    if (e.frontDot >= FRONT_DOT) { e.frontDeniedT = 0; return true; }
+    if (wants) e.frontDeniedT += dt;
+    return e.frontDeniedT >= FRONT_PATIENCE;
+  }
+
+  /**
+   * Enter the windup. ONE place, so the telegraph law cannot be satisfied four
+   * different ways: the rim flare starts, the length of the tell is decided
+   * from where the body is standing relative to the player's eye, and the event
+   * goes out on frame 1 carrying that decision.
+   */
+  _beginWindup(e, kind, yOff) {
+    const def = e.def;
+    e.state = 'windup'; e.stateT = 0;
+    e.rearStrike = e.frontDot < FRONT_DOT;
+    e.telegraphS = def.telegraph * (e.rearStrike ? REAR_TELEGRAPH_MUL : 1);
+    if (e.rearStrike) this._rearStrikes++;
+    e.built.telegraph(0.001);
+    evtReset(e, kind);                       // reads e.rearStrike into _evt.rear
+    _evt.y = e.pos.y + def.height * yOff;
+    this.ctx.bus.emit('enemy:telegraph', _evt);
+  }
+
   /* ----------------------------------------------------------- the tokens -- */
 
   _takeToken(e) {
@@ -1605,6 +1948,13 @@ export class Enemies {
     if (INCAR_BLOCKED[e.species] && this.ctx.shared && this.ctx.shared.inCar) return false;
     if (this._commit >= MAX_ATTACKERS) return false;
     if (this._breathT < ATTACK_BREATH) return false;   // the recovery breath
+    // AND THE WHOLE FIELD BREATHES AFTER ONE LANDS. Two tokens interleaving at
+    // the old 0.42 s breath is what put five bites 0.5-1.8 s apart and killed
+    // him in 4.6 s from first contact. This is the beat that turns a metronome
+    // into something working on you.
+    if (this._landedT < FIELD_RECOVERY) return false;
+    // the body that just bit him is circling out and is not allowed back in yet
+    if (e.breakoffT > 0 || e.recommitT > 0) return false;
     e.committed = true;
     this._commit++;
     this._breathT = 0;
@@ -1930,6 +2280,12 @@ export class Enemies {
       const yaw = e.prevYaw + dyaw * alpha;
       const gait = e.prevGait + (e.currGait - e.prevGait) * alpha;
       const squash = e.prevSquash + (e.currSquash - e.prevSquash) * alpha;
+      // A live body that is neither dormant nor rising can never be squashed: if some future
+      // state forgets to finish the unfold, this is the line that keeps it out of the ground
+      // rather than another playtest. tests/enemies.mjs asserts it from the drawn pose.
+      if (e.alive && e.state !== 'rise' && e.state !== 'dormant' && e.riseSquash < 1) {
+        e.riseSquash = 1; e.prevSquash = 1; e.currSquash = 1;
+      }
 
       const ddx = x - camX, ddy = (y + e.def.height * 0.5) - camY, ddz = z - camZ;
       const dist = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
@@ -1957,7 +2313,10 @@ export class Enemies {
 
       const g = e.built.group;
       g.visible = true;
-      g.position.set(x, y, z);
+      // + the foot plane, scaled the way the body is: a squashed body's feet are nearer its
+      // origin in the same proportion, so the lift has to squash with it or the rise animation
+      // pops the body up out of the ground at the end instead of finishing flush.
+      g.position.set(x, y + (this.footLift.get(e.species) || 0) * e.scale * squash, z);
       g.rotation.y = yaw;
       const S = e.scale;
       g.scale.set(S, S * squash, S);
@@ -2041,6 +2400,7 @@ export class Enemies {
 
   telemetry() {
     let alive = 0, dormant = 0, corpses = 0, far = 0, committed = 0, draws = 0;
+    let breaking = 0;
     const byKind = {};
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
@@ -2051,6 +2411,7 @@ export class Enemies {
       alive++;
       if (e.lodFar) far++;
       if (e.committed) committed++;
+      if (e.breakoffT > 0) breaking++;
       byKind[e.species] = (byKind[e.species] || 0) + 1;
     }
     for (let i = 0; i < this.impostorList.length; i++) {
@@ -2063,6 +2424,17 @@ export class Enemies {
       spawned: this._spawned, killed: this._killed,
       refused: this._refused, cancelled: this._cancelled,
       maxAttackers: MAX_ATTACKERS,
+      // The playtest numbers, so the next round can measure the same things
+      // whatkilledme.mjs measures without re-deriving them from the bus.
+      // rearStrikes  windups that fired outside the player's cone at all. Every
+      //              one of these ran REAR_TELEGRAPH_MUL long and shipped
+      //              `rear: true` for the audio lane.
+      // breakingOff  bodies currently spending their post-bite disengagement.
+      // sinceHitS    seconds since anything landed on the player: the field's
+      //              own recovery breath, in the open.
+      rearStrikes: this._rearStrikes,
+      breakingOff: breaking,
+      sinceHitS: +this._landedT.toFixed(2),
       autonomous: this.autonomous,
       directorJammed: this.directorJammed,
       sinceAskS: this._t - this._lastAsk,
@@ -2080,6 +2452,8 @@ export class Enemies {
     for (let i = 0; i < BOLT_POOL; i++) this.boltState[i].live = false;
     this._slots.fill(-1);
     this._commit = 0;
+    // the field's breath is per-encounter state, not per-session
+    this._breathT = 99; this._landedT = 99;
   }
 
   /**
@@ -2162,6 +2536,19 @@ function makeRecord(id, species, def, built, rng) {
     stateT: 0, burstT: 0, moving: false, speedWant: 0,
     attackKind: 'strike', committed: false, struck: false,
     strikeX: 0, strikeZ: 0,
+    // The playtest fields, declared HERE with everything else — a record that
+    // grows a property mid-fight is a shape V8 re-optimises mid-fight.
+    // frontDot   the camera-forward bearing to this body, refreshed on the
+    //            perception tick. It is the number the front-commit law reads.
+    // frontDeniedT  seconds it has WANTED to commit and been behind you.
+    // rearStrike whether the windup it is in fired outside your cone.
+    // telegraphS the windup this particular commit is actually running, which
+    //            is def.telegraph, or REAR_TELEGRAPH_MUL x it from behind.
+    // breakoffT  it just bit you: circle out and refuse the token this long.
+    // recommitT  a shorter refusal after a miss or a cancel.
+    // seenT      how long it has been continuously inside your attention.
+    frontDot: 1, frontDeniedT: 0, rearStrike: false, telegraphS: 0,
+    breakoffT: 0, recommitT: 0, seenT: 0,
     airborne: false, leapCd: 0,
     telegraphCharge: 0,
     staggerT: 0, immuneT: 0, windowDmg: 0, windowT: 0,

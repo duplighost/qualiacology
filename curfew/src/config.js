@@ -170,8 +170,8 @@ export const CFG = {
     // ('the house feels empty' meant lighting, twice). A sweep of hemi/ambient/albedo
     // against the ground and treeline bands settled here: ground 27, treeline 20, under
     // 8% black. Dark enough to want the torch, light enough to read as shape.
-    hemi:  { sky: 0x6b82ad, ground: 0x241f18, intensity: 5.0 },
-    ambient: { colour: 0x44556e, intensity: 1.1 },
+    hemi:  { sky: 0x6b82ad, ground: 0x241f18, intensity: 6.8 },
+    ambient: { colour: 0x44556e, intensity: 1.55 },
     rovers: { count: 8, distance: 18, decay: 1.8, reseat: 0.4 },   // [skyshard rovers.js]
     // MARROW's post-fix torch. It was 980 cd and blew every near wall to white:
     // "all I see is the flashlight on the wall". Start here and go DOWN, never up.

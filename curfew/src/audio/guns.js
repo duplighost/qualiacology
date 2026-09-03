@@ -34,7 +34,7 @@ import { CFG } from '../config.js';
 import { clamp, clamp01 } from '../engine/math.js';
 import {
   dB, noiseFill, biquad, biquadSweep, envAD, fadeOut, damped, sweepSine,
-  grains, saturate, normalizeTo, mixInto,
+  grains, saturate, normalizeTo, mixInto, CUE_THREAT,
 } from './audio.js';
 
 const sat = clamp01;
@@ -619,6 +619,7 @@ export class GunAudio {
     const s = A.spec();
     s.x = x; s.y = y; s.z = z;
     s.bus = 'weapons'; s.gain = 0.7; s.send = 0.08; s.priority = 1; s.occl = false;
+    s.cls = CUE_THREAT;                // a round past your ear IS 'you are being shot at'
     s.rate = 0.9 + this.rng.next() * 0.25;
     return A.play('whizz' + (this.shotIndex & 1), s);
   }

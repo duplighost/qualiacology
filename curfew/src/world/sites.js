@@ -38,6 +38,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, clamp } from '../engine/math.js';
+// The county's material break-up field, three octaves in world space. The chunk ground and
+// the road ribbon already take it (chunks.js:679, :787); the destination aprons never did,
+// and an apron is the single largest surface in the opening frame.
+import { groundDetail } from './terrain.js';
 
 /* ==========================================================================
    Palette. LINEAR-space albedos, in the same band terrain.js settled on after
@@ -1431,9 +1435,18 @@ export const MINOR_BUILDERS = {
    seam between the yard and the hill is closed even when the disc has to be rolled back
    (see the note in places.js about terrain.ready()).
    ========================================================================== */
+// Slightly under the chunk ground's 0.55: made ground is meant to read as made, so it keeps
+// a little of its evenness rather than pretending to be forest floor.
+const APRON_DETAIL_AMP = 0.42;
+
 export function apron(api, radius, col) {
   const k = new Kit();
-  const N = 28, RINGS = 4, LIFT = 0.08;
+  // 28 x 4 put 113 vertices under a 40 m disc — one every three and a half metres, which
+  // cannot carry material detail however it is coloured, and it is why the apron measured as
+  // one flat plane across 40% of the opening frame. 56 x 12 is 673 vertices, roughly one per
+  // 1.2 m, matching the chunk ground's own density, and it is still a rounding error against
+  // a two-million-triangle county.
+  const N = 56, RINGS = 12, LIFT = 0.08;
   const pos = [], nor = [], uv = [], idx = [];
   // PROJECTED ON THE HEIGHTFIELD, never authored above it. That is roads.js's own rule for
   // its ribbon ("the ribbon is PROJECTED onto the heightfield, never authored above it, so
@@ -1441,15 +1454,20 @@ export function apron(api, radius, col) {
   // heightAt IS the pad and this comes out perfectly flat; where it did not, the yard
   // drapes over the real hill. One rule, right in both worlds, and it can never disagree
   // with the surface collision is standing the player on.
+  // Sampled at the WORLD position of each vertex, so the apron's break-up is continuous with
+  // the chunk ground it meets at its edge — the seam between made ground and real ground is
+  // where a flat pad announces itself.
+  const det = [];
+  const detAt = (cx, cz) => groundDetail(api.wx(cx, cz), api.wz(cx, cz));
   pos.push(0, api.heightAt(api.wx(0, 0), api.wz(0, 0)) + LIFT, 0);
-  nor.push(0, 1, 0); uv.push(0.5, 0.5);
+  nor.push(0, 1, 0); uv.push(0.5, 0.5); det.push(detAt(0, 0));
   for (let r = 1; r <= RINGS; r++) {
     const rr = radius * (r / RINGS);
     for (let i = 0; i < N; i++) {
       const a = (i / N) * TAU;
       const cx = Math.cos(a) * rr, cz = Math.sin(a) * rr;
       pos.push(cx, api.heightAt(api.wx(cx, cz), api.wz(cx, cz)) + LIFT, cz);
-      nor.push(0, 1, 0);
+      nor.push(0, 1, 0); det.push(detAt(cx, cz));
       uv.push(0.5 + Math.cos(a) * 0.5 * (r / RINGS), 0.5 + Math.sin(a) * 0.5 * (r / RINGS));
     }
   }
@@ -1467,6 +1485,18 @@ export function apron(api, radius, col) {
   g.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(uv), 2));
   g.setIndex(idx);
   k.push(g, col || C.ash);
+  // Kit.push writes ONE flat colour across every vertex. Modulate it in place by the field,
+  // centred on 1 so the apron's mean value does not move — ART.md 3.1 says give the ground
+  // spread, not exposure, and marks its mean "do not darken".
+  const ca = g.getAttribute('color');
+  if (ca && det.length === ca.count) {
+    const arr = ca.array;
+    for (let i = 0; i < ca.count; i++) {
+      const m = 1 + APRON_DETAIL_AMP * det[i];
+      arr[i * 3] *= m; arr[i * 3 + 1] *= m; arr[i * 3 + 2] *= m;
+    }
+    ca.needsUpdate = true;
+  }
   return k.build();
 }
 

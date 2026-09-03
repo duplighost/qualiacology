@@ -42,6 +42,7 @@ import { clamp, clamp01, lerp } from '../engine/math.js';
 import {
   noiseFill, pinkFill, brownFill, biquad, biquadSweep, envAD, fadeOut,
   damped, sweepSine, grains, normalizeTo, mixInto, toAudioBuffer,
+  CUE_THREAT, CUE_WORLD, CUE_FLAVOUR,
 } from './audio.js';
 
 /* --------------------------------------------------------------------------
@@ -739,6 +740,7 @@ export class Bed {
     s.rate = rate || 1;
     s.send = 0.25;
     s.priority = 3;                    // the bed never takes a reserved ray
+    s.cls = CUE_FLAVOUR;               // the county being alive. It is scenery.
     s.propagate = dist > 60;
     return A.play(name, s);
   }
@@ -765,12 +767,13 @@ export class Bed {
     const h = A.spec();
     h.x = px; h.y = py + 0.06; h.z = pz;
     h.bus = 'world'; h.gain = 0.30 * hard; h.rate = rate; h.send = 0.10 * this._tail;
+    h.cls = CUE_WORLD;
     h.air = false; h.occl = false;
     A.play('heel' + (v % 3), h);
 
     const s = A.spec();
     s.x = px; s.y = py + 0.04; s.z = pz;
-    s.bus = 'world'; s.gain = 0.55 * hard; s.rate = rate;
+    s.bus = 'world'; s.gain = 0.55 * hard; s.rate = rate; s.cls = CUE_WORLD;
     // THE LAST SUBTRACTION lives here: the send is scaled by _tail, so once the
     // world got smaller your own steps stop coming back off the trees.
     s.send = 0.30 * this._tail;
@@ -783,6 +786,7 @@ export class Bed {
       const g = A.spec();
       g.x = px; g.y = py + 1.1; g.z = pz;
       g.bus = 'world'; g.gain = 0.22 * hard; g.rate = 1 + this.rngStep.range(-0.06, 0.06);
+      g.cls = CUE_WORLD;
       g.send = 0.14 * this._tail; g.occl = false;
       A.play('gear' + (v % 4), g);
     }
@@ -813,7 +817,7 @@ export class Bed {
     const sp = clamp01((p.speed || 0) / 12);
     const s = A.spec();
     s.x = this._px; s.y = this._py; s.z = this._pz;
-    s.bus = 'world'; s.gain = 0.45 + 0.5 * sp; s.rate = 1 - sp * 0.12;
+    s.bus = 'world'; s.gain = 0.45 + 0.5 * sp; s.rate = 1 - sp * 0.12; s.cls = CUE_WORLD;
     s.send = 0.22 * this._tail; s.occl = false;
     A.play('land', s);
     this._quiet = 0;
@@ -822,12 +826,64 @@ export class Bed {
     // player can learn. player/controller.js emits it on 'player:land'.
   }
 
+  /**
+   * A HIT MUST SOUND LIKE A HIT. Alex's first playtest: he could not tell he was
+   * being damaged except from the direction marks on screen. This used to be one
+   * soft breath on the WORLD bus — behind the 1.6 kHz mix law, the reverb send
+   * and the duck, mixed exactly like the wind. Three layers now, in this order,
+   * and the order is the point:
+   *
+   *   1. THE ROOM STEPS BACK. Everything below the mix law drops 7 dB for a
+   *      third of a second, and the ear's own reflex pulls the whole mix down
+   *      the way a gunshot does. You do not hear this happen; you hear
+   *      everything else stop.
+   *   2. THE SIGNATURE lands in the hole that leaves — flat, centred, above the
+   *      mix law, unmistakable, the one pure tone in the game.
+   *   3. THE BREATH follows it, still on the world bus, still a body. It is now
+   *      the colour on the hit rather than the whole of it.
+   *
+   * `p.hp` is the health remaining (controller.js:358 publishes it). It picks
+   * the ring, so how long the ear rings after a blow IS how close you are to
+   * dying — the readout he asked for, arriving where he does not have to look.
+   */
   hurt(p) {
     const A = this.A;
     if (!A.baked || A.silent) return;
+    const T = A.now;
+
+    // 1. take the room, and spend the stapedius reflex on it
+    A.threatDuck(undefined, T);
+    if (A._reflexHit) A._reflexHit(T + 0.004);
+
+    // 2. THE SIGNATURE. Flat voice, no panner, no air, no occlusion, no reverb:
+    //    it happened to you, not somewhere.
+    const amt = clamp01((p.amount || 10) / 40);
+    const d = A.spec();
+    d.bus = 'earshot';                 // above the mix law and above the duck
+    d.gain = 0.78 + 0.30 * amt;
+    d.rate = 1.03 - 0.10 * amt;        // a bigger blow is a lower one
+    d.send = 0; d.air = false; d.occl = false;
+    d.cls = CUE_THREAT;
+    A.play('dmg', d);
+
+    // 3. THE RING, chosen by what is left of you. 0.32 s while you are fine,
+    //    1.9 s when you are nearly gone.
+    const hp = (typeof p.hp === 'number' && isFinite(p.hp)) ? p.hp : 100;
+    const ring = p.fatal || hp <= 30 ? 2 : hp <= 62 ? 1 : 0;
+    const r = A.spec();
+    r.bus = 'earshot';
+    r.gain = 0.30 + 0.22 * ring + 0.10 * amt;
+    r.rate = 1; r.send = 0; r.air = false; r.occl = false;
+    r.delay = 0.035;                   // the blow lands, THEN the ear rings
+    r.cls = CUE_THREAT;
+    A.play('dmg_ring' + ring, r);
+
+    // 4. the body under it, unchanged in character and no longer load-bearing
     const s = A.spec();
-    s.bus = 'world'; s.gain = clamp01(0.4 + (p.amount || 10) / 90); s.send = 0.30;
+    s.bus = 'creatures';               // a body, not weather
+    s.gain = clamp01(0.34 + (p.amount || 10) / 120); s.send = 0.22;
     s.rate = 0.95 + this.rngStep.next() * 0.1;
+    s.cls = CUE_THREAT;
     A.play('hurt' + ((this.rngStep.next() * 3) | 0), s);
     this._quiet = 0;
   }

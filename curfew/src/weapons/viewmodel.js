@@ -475,8 +475,17 @@ export class Viewmodel {
       parent.add(m);
       return m;
     };
-    const tube = (r, len, seg = 10) => {
-      const g = new THREE.CylinderGeometry(r, r, len, seg, 1);
+    // THE SIXTH ARGUMENT IS `openEnded` AND IT DEFAULTS TO FALSE, so every "tube" on this
+    // gun was a SEALED CYLINDER with a lid on each end. Alex, playtest 3: "i can't look down
+    // whatever its called. the guns sights. because when i use the iron sites or whatever, it
+    // it just block and i cant see through it. there a dot on it. but the spot where you would
+    // see through is black." That black spot is the scope tube's rear cap, 3.5 mm behind the
+    // aiming dot, and it had been there for the whole life of the file — an earlier round even
+    // found the cap while chasing an invisible dot, moved the DOT in front of it, and left the
+    // lid in place. Aiming down the sights is a core verb of a first-person game and it was
+    // looking at a wall.
+    const tube = (r, len, seg = 10, open = false) => {
+      const g = new THREE.CylinderGeometry(r, r, len, seg, 1, open);
       g.rotateX(Math.PI / 2);
       return g;
     };
@@ -535,13 +544,25 @@ export class Viewmodel {
     const sg = new THREE.Group();
     g.add(sg);
     sg.position.set(0, SIGHT.y, 0);
-    add(sg, tube(0.0195, 0.200), matte, 0, 0, -0.045);
-    add(sg, tube(0.0260, 0.048), matte, 0, 0, -0.152);            // objective bell
-    add(sg, tube(0.0225, 0.036), matte, 0, 0, 0.026);             // ocular
+    // Open at both ends, and DoubleSide so the far half of the bore wall still renders —
+    // with front-face culling an open tube shows the world through its own sides and reads as
+    // a floating ring. `side` is render state, not a shader define, so this clone shares the
+    // matte program and costs no extra compile.
+    const bore = matte.clone();
+    bore.side = THREE.DoubleSide;
+    bore.name = 'vm-bore';
+    add(sg, tube(0.0195, 0.200, 12, true), bore, 0, 0, -0.045);
+    add(sg, tube(0.0260, 0.048, 12, true), bore, 0, 0, -0.152);   // objective bell
+    add(sg, tube(0.0225, 0.036, 12, true), bore, 0, 0, 0.026);    // ocular
     add(sg, new THREE.BoxGeometry(0.030, 0.016, 0.016), blued, 0, -0.022, -0.112);
     add(sg, new THREE.BoxGeometry(0.030, 0.016, 0.016), blued, 0, -0.022, 0.004);
-    add(sg, new THREE.CircleGeometry(0.0205, 20), new THREE.MeshBasicMaterial({
-      color: 0x0a1620, transparent: true, opacity: 0.30, side: THREE.DoubleSide,
+    // The ocular glass. At 0.30 over a CLOSED tube this was simply a darker lid; over an
+    // open bore it is what a coated lens actually is — a faint cool tint you see the county
+    // through. depthWrite off so a transparent disc cannot punch the depth of the world
+    // behind it, and it sits just inside the ocular rather than across the whole aperture.
+    add(sg, new THREE.CircleGeometry(0.0180, 20), new THREE.MeshBasicMaterial({
+      color: 0x16283a, transparent: true, opacity: 0.10, depthWrite: false,
+      side: THREE.DoubleSide,
     }), 0, 0, 0.0435);
     // The dot sits ON the sight axis, so sightScreenOffset() measures the real ADS alignment
     // rather than an approximation of it.
