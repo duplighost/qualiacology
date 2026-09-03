@@ -142,6 +142,47 @@ const MANTLE_LEAD = 0.55;      // m ahead of the body shell we probe for a lip
 const MANTLE_IN = 5.5;         // m/s of inward carry so the pop lands ON the ledge [duskfall:322]
 const MANTLE_VEL_AWAY = -1.5;  // do not yank someone who is clearly moving away [duskfall:318]
 
+// ---- CLIMBING. Round 6, lane E. ----------------------------------------------------
+// Alex, fifth playtest (2026-09-03): "I'm not sure why I can't climb up stuff either. That
+// would be fun. Like dying light style parkour stuff." Fourth: "it would be cool if you could
+// get on top of this stuff."
+//
+// The terrain mantle above is DUSKFALL's ballistic pop and it stays exactly as it was for
+// terrain lips (tests/collision.mjs pins it). It cannot climb a COLLIDER: the inward carry
+// is projected out by the very wall it is trying to top (measured on the course in
+// tests/climb.mjs before this block existed: a 1.9 m wall stopped the body at 2.44 m, its
+// face minus the radius, and nothing rose). So a collider ledge is climbed KINEMATICALLY —
+// the body is carried from where it is to the landing on a curve, the solver is not run
+// while it is carried, and it ends standing on the top with a soft landing. Three verbs:
+//   GRAB   airborne, a lip in the hands' band: catch, hang (climb.hangS), pull up (climb.pullS).
+//   MANTLE grounded (or airborne under the hands), a top inside reach: pull straight up.
+//   VAULT  sprinting into a thin waist-high obstacle with a clear far side: over it, no jump.
+// Aim is never touched by any of them (the FLARE rule). The hands are lane D1's viewmodel
+// and there is no hand animation: the eye's curve and the landing are the whole read.
+// The feel numbers (the hands' band, the hang, the pull, the vault window) are CFG.player.climb;
+// the locals below are probe geometry and the shape of the curves.
+const CL = P.climb;
+const CLIMB_NONE = 0, CLIMB_HANG = 1, CLIMB_PULL = 2, CLIMB_VAULT = 3;
+const MANTLE_LEAD2 = 0.36;     // a second probe one more radius out: a lip you run at is not always one shell away
+const MANTLE_MIN_RISE = 0.62;  // STEP_UP + STEP_TOL + 0.02: anything lower the solver steps onto, and a step is not a climb
+const PULL_LIFT_END = 0.72;    // fraction of the pull by which the feet reach the top
+const PULL_OVER_START = 0.30;  // fraction of the pull at which the body starts moving over the lip
+const LAND_IN = 0.30;          // m past the probe point the feet come to rest, so the footprint is well on the top
+const CLIMB_HEAVE = 0.06;      // m the eye dips through the eye spring as the pull begins (a heave, not a hop)
+const VAULT_LAND_SPEED = 1.8;  // a vault's far-side plant: barely an event
+const VAULT_SCAN = 0.25;       // m between the probes that find the obstacle and measure its thickness
+const VAULT_SIGHT = 2;         // scan steps past the first probe a vault may first be sighted at (covers the mantle's second probe)
+const VAULT_BEYOND = 0.40;     // m past the far face the feet land
+const VAULT_TRIGGER = 1.00;    // m from the body's centre to the near face when the vault starts (sighted earlier, held until here)
+const VAULT_DIP = 0.12;        // m the eye dips through the eye spring as the hand plants
+const VAULT_CLEAR = 0.05;      // m the feet pass over the obstacle's top
+const STEP_SMOOTH_MIN = 0.10;  // m of instantaneous floor change (a step onto a crate) routed through the eye spring.
+                               // Only a step ON or OFF a COLLIDER top counts (repair 1): terrain CAN move the feet
+                               // this far in one frame — tac-sprint down the county rim's 39 deg slope is 0.105 m,
+                               // and speedMul 1.25 puts ordinary 28 deg ground at 0.101 — and there the eye rode
+                               // 0.21 m high going downhill (measured). Open ground is the eye's own business.
+const _climbPayload = { kind: 'mantle', top: 0, x: 0, z: 0 };
+
 /**
  * MEASURED BUG, 2026-09-02, and it is not mine to fix in place: engine/math.js is shared
  * and read-only. Spring.update() picks its substep count from ceil(dt*w/1.2), which only
@@ -206,6 +247,8 @@ const _respawnPayload = {
   movedM: 0,                  // how far the respawn point was pushed off the place centre
 };
 const _stepPayload = { sprint: false, tac: false, crouch: false, speed: 0, parity: 0, pos: null };
+const _rayO = { x: 0, y: 0, z: 0 };   // the grab's wall-finding ray, module scratch
+const _rayD = { x: 0, y: 0, z: 0 };
 const _landPayload = { speed: 0, pos: null };
 const _noisePayload = { x: 0, z: 0, radius: 0, source: 'step' };
 
@@ -257,6 +300,19 @@ export class PlayerController {
     // ---- mantle
     this.mantleCooldown = 0;
 
+    // ---- climb (grab / pull / vault): the body is carried, the solver does not run
+    this.climb = CLIMB_NONE;
+    this.climbT = 0;
+    this.climbDur = 0;
+    this.climbX0 = 0; this.climbY0 = 0; this.climbZ0 = 0;   // where the carry starts
+    this.climbX1 = 0; this.climbY1 = 0; this.climbZ1 = 0;   // where the feet end (on the top)
+    this.climbDirX = 0; this.climbDirZ = 0;                 // unit, into the lip
+    this.climbTop = 0;                                      // the top's height, for the vault's arc
+    this.climbSpeed = 0;                                    // horizontal speed on entry (the vault keeps 0.85x)
+    this.climbLX = 0; this.climbLZ = 0;                     // a grab's landing, decided at the catch
+    this.climbRefuse = false;                               // let go of a lip: no climb until the feet land
+    this.floorWasCollider = false;                          // last frame's floor was a collider top (the step-up smoothing gate)
+
     // ---- the ONE stride clock. Nothing else may keep a locomotion timer.
     this.bobPhase = 0;
     this.stepParity = 0;
@@ -268,6 +324,10 @@ export class PlayerController {
     // impulse, against the integrator we actually run. See unitImpulsePeak().
     this.slideImpulse = P.slide.overshoot
       / unitImpulsePeak(P.springs.eye[0], P.springs.eye[1], CFG.loop.FIXED);
+    // The same solve for the climb's heave and the vault's hand-plant dip.
+    const eyeUnit = unitImpulsePeak(P.springs.eye[0], P.springs.eye[1], CFG.loop.FIXED);
+    this.heaveImpulse = CLIMB_HEAVE / eyeUnit;
+    this.vaultImpulse = VAULT_DIP / eyeUnit;
 
     // ---- health [CFG.player.health; FLARE feel.js:232 shape]
     this.hp = P.health.max;
@@ -425,7 +485,16 @@ export class PlayerController {
     if (this.hp <= 0) this._die();
   }
 
-  heal(v) { this.hp = Math.min(P.health.max, this.hp + v); }
+  heal(v) { this.hp = Math.min(this.hpMax, this.hp + v); }
+
+  /**
+   * THE BODY BRANCH'S 'hpMax' (round 6, lane G registers it; lane E reads it). Alex: "Things
+   * that work to make your health bigger." Every ceiling in this file reads THIS and never
+   * CFG.player.health.max directly, so buying the node raises the initial hp, the respawn hp,
+   * the heal ceiling and the regen ceiling together. With no progression system, or with the
+   * stat unregistered, it is exactly CFG.player.health.max and nothing changes.
+   */
+  get hpMax() { return this._stat('hpMax', P.health.max); }
 
   /**
    * The killing blow. THE ONLY EMITTER of player:died in the game (integrator decision 3):
@@ -446,6 +515,7 @@ export class PlayerController {
     this.vel.set(0, 0, 0);
     this.sliding = false; this.slideT = 0; this._slideDipped = false;
     this.sprinting = false; this.tacSprinting = false; this.tacT = 0;
+    this.climb = CLIMB_NONE;
     this.jumpBuffered = -1;
     _diedPayload.x = this.pos.x; _diedPayload.y = this.pos.y; _diedPayload.z = this.pos.z;
     this.ctx.bus.emit('player:died', _diedPayload);
@@ -510,7 +580,7 @@ export class PlayerController {
     }
 
     this.dead = false;
-    this.hp = P.health.max;
+    this.hp = this.hpMax;
     this.sinceHurt = 0;          // the regen delay restarts; coming back is not a free top-up
     this.deathT = 0;
     this.deathDrop = 0;
@@ -519,6 +589,7 @@ export class PlayerController {
     this.crouched = false; this.crouchHeld = false; this.crouchT = 0;
     this.sliding = false; this.slideT = 0; this.slideViewT = 0; this.slideCooldown = 0;
     this.tacSprinting = false; this.tacT = 0; this.tacCooldown = 0;
+    this.climb = CLIMB_NONE;
     this.bobPhase = 0;
     // The window opens BEFORE the event, so a listener that reads player.invuln on the same
     // frame sees it armed rather than zero.
@@ -554,6 +625,7 @@ export class PlayerController {
       this.sprinting = false; this.tacSprinting = false; this.tacT = 0;
       this.crouched = false; this.crouchHeld = false;
       this.jumpBuffered = -1;
+      this.climb = CLIMB_NONE;
       this.grounded = true; this.sinceGround = 0;
       // Deliberately NOT _sync(): collapsing prev/curr here is the bug this door exists
       // to fix, not the fix.
@@ -589,12 +661,13 @@ export class PlayerController {
     if (typeof yaw === 'number') this.yaw = yaw;
     this.sliding = false; this.slideT = 0; this.slideViewT = 0;
     this.tacSprinting = false; this.tacT = 0;
+    this.climb = CLIMB_NONE;
     this.grounded = true; this.sinceGround = 0;
     this._sync();
   }
 
   reset() {
-    this.hp = P.health.max; this.dead = false; this.sinceHurt = 99;
+    this.hp = this.hpMax; this.dead = false; this.sinceHurt = 99;
     this.deathT = 0; this.deathDrop = 0; this.carried = false; this.invuln = 0;
     this.sliding = false; this.crouched = false; this.sprinting = false;
     this.tacSprinting = false; this.tacT = 0; this.tacCooldown = 0;
@@ -691,10 +764,17 @@ export class PlayerController {
     if (hasInput) _wish.normalize();
 
     // ---- headroom: can this body stand up where it is? [vigil v0.4:49-57] ----
+    // ROUND 6, lane E: asked at the FEET'S OWN HEIGHT (collision.fits), not canOccupy's,
+    // which puts the feet on the terrain. On a crate top the terrain-level body overlapped
+    // the crate it was standing on, read "no headroom", and CROUCHED — measured: every
+    // collider top under 1.8 m tall was stood on at eye 1.06 and 2.10 m/s, the crate stair
+    // included, since the day it shipped. canOccupy stays as the fallback for a solver
+    // without fits().
     const col = this._collision;
-    this.standingClear = !col || !col.canOccupy
-      ? true
-      : col.canOccupy(this.pos.x, this.pos.z, P.RADIUS, P.STAND_H);
+    this.standingClear = !col ? true
+      : col.fits ? col.fits(this.pos.x, this.pos.z, this.pos.y, P.RADIUS, P.STAND_H)
+      : col.canOccupy ? col.canOccupy(this.pos.x, this.pos.z, P.RADIUS, P.STAND_H)
+      : true;
 
     // ---- sprint + tac-sprint ------------------------------------------------
     const wep = this._weapons;
@@ -704,6 +784,15 @@ export class PlayerController {
     // Snapshot the edges BEFORE anything consumes them; committed at the end of the step.
     const edgeJump = this._pressed('jump'), edgeSprint = this._pressed('sprint');
     const edgeTac = this._pressed('tacsprint');
+
+    // ---- a climb in progress: the body is carried, nothing below runs -------------
+    // Sprint, crouch, slide, jump, the solver and gravity all wait. The edges are still
+    // consumed so a Space tapped mid-pull does not launch a jump the instant the feet land.
+    if (this.climb !== CLIMB_NONE) {
+      this._stepClimb(dt, hasInput);
+      this._stepTail(dt, sprintHeld, this._held('crouch'));
+      return;
+    }
 
     if (edgeSprint) {
       // Double-tap-and-hold enters tac-sprint. First tap is an ordinary sprint, so the
@@ -779,14 +868,22 @@ export class PlayerController {
       }
     }
 
-    // ---- mantle -------------------------------------------------------------
-    // Deliberately BEFORE gravity so the pop is not eaten by the same frame's fall.
-    if (hasInput) this._tryMantle();
+    // ---- mantle / grab / vault ----------------------------------------------
+    // Deliberately BEFORE gravity so the pop is not eaten by the same frame's fall. A climb
+    // that starts here carries the body from this frame on: the solver below must not run
+    // against the wall the body is now being lifted over.
+    if (hasInput) this._tryClimb();
+    if (this.climb !== CLIMB_NONE) {
+      this._stepClimb(dt, hasInput);
+      this._stepTail(dt, sprintHeld, wantCrouch);
+      return;
+    }
 
     // ---- gravity + integrate -----------------------------------------------
     this.vel.y -= P.GRAVITY * dt;
     const wasAirborne = !this.grounded;
     const fallSpeed = -this.vel.y;
+    const preY = this.pos.y;                  // for the step-up smoothing below
     _preX = this.pos.x; _preZ = this.pos.z;   // kept for the wall back-out below
 
     // ---- horizontal collision, then the ground clamp ------------------------
@@ -847,7 +944,8 @@ export class PlayerController {
     // THE FLOOR IS WHICHEVER IS HIGHER: the terrain field, or the collider top the solver
     // actually put the feet on. Only a floor ABOVE the terrain here can be a collider — the
     // case heightAt cannot see — so everywhere else this is `g` and nothing changed.
-    const floorY = solverFloor > g + COLLIDER_FLOOR_EPS ? solverFloor : g;
+    const floorIsCollider = solverFloor > g + COLLIDER_FLOOR_EPS;
+    const floorY = floorIsCollider ? solverFloor : g;
 
     if (this.pos.y <= floorY + (this.vel.y <= 0 ? STICK : 0) && this.vel.y <= 0.001) {
       this.pos.y = floorY;
@@ -857,31 +955,24 @@ export class PlayerController {
       this.grounded = true;
       this.sinceGround = 0;
       if (wasAirborne && fallSpeed > LAND_MIN_SPEED) {
-        const dip = clamp(fallSpeed * LAND_DIP_GAIN, 0, LAND_DIP_MAX);
-        this.landSpring.nudge(-dip * LAND_DIP_IMPULSE);
-        _landPayload.speed = fallSpeed; _landPayload.pos = this.pos;
-        this.ctx.bus.emit('player:land', _landPayload);
-        // A landing is a NOISE whether or not the speakers are working. Scaled by how hard
-        // it was, so dropping off a kerb is not the same broadcast as dropping off a roof.
-        this._emitNoise(
-          lerp(NOISE_LAND_MIN, NOISE_LAND_MAX, clamp01(fallSpeed / FALL_FREE)), 'land');
-        // ~5.8 m is free; stepping off something tall stings without reading as a death
-        // sentence for one slip. [vigil]
-        if (fallSpeed > FALL_FREE) {
-          // LEGS / drop-roll: with the node owned, a fall that would have hurt costs
-          // nothing IF you were holding crouch when you touched down — and the speed you
-          // arrived with carries on into a slide instead of being eaten by the floor.
-          // It is a decision made in the air, not a passive damage reduction, which is
-          // why it is gated on the held input and not merely on owning the node.
-          if (this.crouchHeld && this._stat('dropRoll', 0) > 0) {
-            this.slideCooldown = 0;       // a roll is never refused by the slide cooldown
-            this._startSlide();           // no-op below entrySpeed: a straight drop lands soft
-          } else {
-            this.hurt((fallSpeed - FALL_FREE) * FALL_HP_PER, null);
-          }
-        }
+        this._land(fallSpeed);
+      } else if (!wasAirborne && (floorIsCollider || this.floorWasCollider)) {
+        // THE STEP-UP JOLT (round 6, lane E; NEXT.md section 3). A grounded body whose floor
+        // moved by more than a terrain frame's worth — the solver stepping the feet onto a
+        // 0.30 m kerb, or off it — used to move the EYE by that much in one frame: measured
+        // 16.5 m/s up onto a 0.30 m crate and 19.5 m/s off it at walk, against a landing
+        // spring whose hardest excursion is a few m/s. The feet still move at once (the solver
+        // is right about where the body is); the eye is held back by the same amount on its
+        // spring and rises through it, so a kerb reads as a step and not as a teleport.
+        // Only when the step is ON or OFF a collider top: on terrain the feet follow the
+        // ground however steep it is, and the eye follows the feet (repair 1: tac-sprint down
+        // the rim's 39 deg slope moved the feet 0.105 m a frame and the eye rode 0.21 m high).
+        const dy = this.pos.y - preY;
+        if (dy > STEP_SMOOTH_MIN || dy < -STEP_SMOOTH_MIN) this.eyeSpring.value -= dy;
       }
+      this.floorWasCollider = floorIsCollider;
     } else {
+      this.floorWasCollider = false;
       this.grounded = this.pos.y <= floorY + 0.02 && this.vel.y <= 0;
       this.sinceGround += dt;
       // The under-terrain rescue stays on `g`: being below the TERRAIN is the unacceptable
@@ -924,6 +1015,11 @@ export class PlayerController {
       }
     }
 
+    this._stepTail(dt, sprintHeld, wantCrouch);
+  }
+
+  /** The end of every walking step and of every carried-by-a-climb step: springs, regen, edges, commit. */
+  _stepTail(dt, sprintHeld, wantCrouch) {
     stepSpring(this.landSpring, dt);
     stepSpring(this.eyeSpring, dt);
 
@@ -940,12 +1036,46 @@ export class PlayerController {
   }
 
   /**
+   * The landing beat: the dip, the event, the noise, the damage. One place, so a climb that
+   * ends on a roof lands the way a drop onto it does — softly, through the same spring and
+   * the same bus event — and never through a second copy of the rule.
+   */
+  _land(fallSpeed) {
+    const dip = clamp(fallSpeed * LAND_DIP_GAIN, 0, LAND_DIP_MAX);
+    this.landSpring.nudge(-dip * LAND_DIP_IMPULSE);
+    _landPayload.speed = fallSpeed; _landPayload.pos = this.pos;
+    this.ctx.bus.emit('player:land', _landPayload);
+    // A landing is a NOISE whether or not the speakers are working. Scaled by how hard
+    // it was, so dropping off a kerb is not the same broadcast as dropping off a roof.
+    this._emitNoise(
+      lerp(NOISE_LAND_MIN, NOISE_LAND_MAX, clamp01(fallSpeed / FALL_FREE)), 'land');
+    // ~5.8 m is free; stepping off something tall stings without reading as a death
+    // sentence for one slip. [vigil]
+    if (fallSpeed > FALL_FREE) {
+      // LEGS / drop-roll: with the node owned, a fall that would have hurt costs
+      // nothing IF you were holding crouch when you touched down — and the speed you
+      // arrived with carries on into a slide instead of being eaten by the floor.
+      // It is a decision made in the air, not a passive damage reduction, which is
+      // why it is gated on the held input and not merely on owning the node.
+      if (this.crouchHeld && this._stat('dropRoll', 0) > 0) {
+        this.slideCooldown = 0;       // a roll is never refused by the slide cooldown
+        this._startSlide();           // no-op below entrySpeed: a straight drop lands soft
+      } else {
+        this.hurt((fallSpeed - FALL_FREE) * FALL_HP_PER, null);
+      }
+    }
+  }
+
+  /**
    * Slow regen back to the ceiling and no further — a lit fire is still the only full heal.
    * BODY: 'second wind' lifts the ceiling 40 -> 70. Read at use, one place, so the carried
    * branch and the walking branch can never disagree about how much health comes back.
    */
   _regen(dt) {
-    const ceiling = this._stat('regenCeiling', P.health.regenCeiling);
+    // The ceiling is a PROPORTION of the body: 40 of 100 stays 40 of 100 when 'hpMax' lifts
+    // the maximum to 130, so 'second wind' (70) and a bigger body compound instead of one
+    // silently capping the other.
+    const ceiling = this._stat('regenCeiling', P.health.regenCeiling) * (this.hpMax / P.health.max);
     if (this.sinceHurt > P.health.regenDelay && this.hp > 0 && this.hp < ceiling) {
       this.hp = Math.min(ceiling, this.hp + P.health.regenRate * dt);
     }
@@ -978,8 +1108,13 @@ export class PlayerController {
 
   // ---------------------------------------------------------------- movement parts
   _speedCap(adsT) {
-    if (this.tacSprinting) return P.tacSprint.speed;
-    let cap = this.crouched ? P.CROUCH : this.sprinting ? P.SPRINT : P.WALK;
+    // 'speedMul' (round 6, lane G registers it): Alex, "things that work to make you faster".
+    // It multiplies WALK, SPRINT and TAC and nothing else — the crouch, the ADS walk, the
+    // slide and the air cap are untouched, so a faster body still has a quiet gait and a
+    // steady aim. Absent, it is exactly 1 and every number here is the one he played.
+    const mul = this._stat('speedMul', 1);
+    if (this.tacSprinting) return P.tacSprint.speed * mul;
+    let cap = this.crouched ? P.CROUCH : this.sprinting ? P.SPRINT * mul : P.WALK * mul;
     if (adsT > 0.5) cap = this.crouched ? CROUCH_ADS : P.ADS_WALK;
     return cap;
   }
@@ -1072,24 +1207,35 @@ export class PlayerController {
   // AIM IS RETAINED THROUGH THE POP. We never touch yaw or pitch here; the camera owns them
   // and nothing in this file writes them. That is the FLARE rule, and it is the difference
   // between a vault and a cutscene.
-  _tryMantle() {
-    if (this.mantleCooldown > 0) return;
+  /**
+   * ROUND 6, lane E: the probe now sees the TERRAIN, the COLLIDER FIELD (collision.ledgeHeight,
+   * the contract in BRIEF-COMMON) and the CAR ROOF (car.roofHeightAt, lane H's contract,
+   * guarded). Two probe points for colliders: one shell ahead as before, and one radius
+   * further, because a lip you are running at is not always exactly one shell away. The
+   * terrain keeps the single probe so the eight places in the county where DUSKFALL's pop
+   * can fire (tests/collision.mjs) are exactly the eight they were.
+   *
+   * Every gate the pop had is kept: velocity into the lip, somewhere to stand on top, the
+   * cooldown, and aim untouched. What changed is what happens for a collider: the pop cannot
+   * top a wall (its inward carry is projected out by the wall it is climbing — measured), so
+   * a collider ledge is climbed kinematically by _startPull, and a lip caught mid-air in the
+   * hands' band is a GRAB (hang, then pull), and a thin waist-high thing hit at a sprint is a
+   * VAULT.
+   */
+  _tryClimb() {
+    if (this.mantleCooldown > 0 || this.climb !== CLIMB_NONE || this.carried) return;
+    // A let-go grab refuses every climb until the feet are back on something: without this,
+    // crouch + forward re-mantled the very lip you just let go of, every 0.35 s, for ever.
+    if (this.climbRefuse) { if (this.grounded) this.climbRefuse = false; else return; }
     const M = P.mantle;
     const terr = this._terrain;
     if (!terr) return;
+    const col = this._collision;
+    const sees = !!(col && col.ledgeHeight && col.fits);
 
-    // Probe one body-shell ahead of the wish direction. That is the lip you are walking into.
-    const px = this.pos.x + _wish.x * (P.RADIUS + MANTLE_LEAD);
-    const pz = this.pos.z + _wish.z * (P.RADIUS + MANTLE_LEAD);
-    const top = terr.heightAt(px, pz);
-    const rise = top - this.pos.y;
-
-    // Below the step-up height the body walks over it; above the reach nothing can be done.
-    // The two tiers are the ledges the world is authored to: a kerb and a car roof.
     // LEGS: 'long arms' lifts the reach 2.90 -> 3.60, which is the whole node — a wall that
     // refused you before now answers. Read at use so buying it changes the world instantly.
     const reach = this._stat('mantleReach', M.reach);
-    if (rise <= Math.max(P.STEP_UP, M.tiers[0]) || rise > reach) return;
 
     // Intent: never yank someone who is moving away from the lip they are facing.
     // (DUSKFALL also tested wishInto because it probed a platform CENTRE that need not lie
@@ -1098,19 +1244,320 @@ export class PlayerController {
     const velInto = this.vel.x * _wish.x + this.vel.z * _wish.z;
     if (velInto < MANTLE_VEL_AWAY) return;
 
-    // There has to be somewhere to land: a body's worth of clear space on top.
-    const col = this._collision;
-    if (col && col.canOccupy && !col.canOccupy(px, pz, P.RADIUS, P.CROUCH_H)) return;
+    // Probe one body-shell ahead of the wish direction. That is the lip you are walking into.
+    const lead1 = P.RADIUS + MANTLE_LEAD;
+    const p1x = this.pos.x + _wish.x * lead1, p1z = this.pos.z + _wish.z * lead1;
+    const lead2 = lead1 + MANTLE_LEAD2;
+    const p2x = this.pos.x + _wish.x * lead2, p2z = this.pos.z + _wish.z * lead2;
 
-    // Math.max so a mantle never ROBS an already-faster ascent - brushing a lip mid-jump
-    // only ever helps. [duskfall:320]
-    this.vel.y = Math.max(this.vel.y, Math.sqrt(2 * P.GRAVITY * (rise + M.clearance)));
-    this.vel.x += _wish.x * MANTLE_IN;
-    this.vel.z += _wish.z * MANTLE_IN;
-    this.mantleCooldown = M.cooldown;
+    // ---- 1. THE GRAB: airborne, moving into a lip the hands can reach. ----------------
+    // The band is on the EYE: eyeY - 0.40 to eyeY + 0.50 (+ what 'Reach' adds). A wall
+    // brushed mid-air whose top is above the band, or that has no top to stand on, or no
+    // headroom over it, is a wall and not a hold: ledgeHeight refuses it, and the body falls.
+    // "Moving into" is the HELD direction (the probe runs along the wish), not the velocity:
+    // a body that jumped at a wall is pressed against it at the apex with its inward
+    // velocity already projected out by the sweep, and that is exactly the moment the hands
+    // close on the lip. A stricter gate on velocity refused every wall jump (measured).
+    //
+    // ASK FROM THE REAL FEET (repair 1). ledgeHeight admits an UNFLAGGED top only within
+    // STEP_UP of the feet it is given (a kerb you can step onto you can stand on). The first
+    // build passed the BOTTOM OF THE HANDS' BAND as the feet, so every unflagged top inside
+    // [eye - 0.40, eye + 0.20] was a ledge to the grab: tree trunks (2.2-3.4 m circles with no
+    // flag), lamp posts, wrecks. Measured: 16 of 40 trees near the suite's strip were grabbed
+    // and the body left standing on the trunk collider inside the foliage. The feet go in as
+    // the feet, the reach runs to the top of the band, and only a top INSIDE the band is a
+    // hold — an unflagged top is then admitted only within STEP_UP of the feet, which is
+    // under the hands and never a grab.
+    if (sees && !this.grounded) {
+      const lo = this.pos.y + P.EYE - CL.handsLo;
+      const hi = this.pos.y + P.EYE + CL.handsHi + (reach - M.reach);
+      let top = col.ledgeHeight(p1x, p1z, this.pos.y, P.RADIUS, hi - this.pos.y);
+      let px = p1x, pz = p1z;
+      if (top !== null && top < lo) top = null;
+      if (top === null) {
+        top = col.ledgeHeight(p2x, p2z, this.pos.y, P.RADIUS, hi - this.pos.y); px = p2x; pz = p2z;
+        if (top !== null && top < lo) top = null;
+      }
+      if (top === null) { top = this._roofAt(p1x, p1z, lo, hi - lo); px = p1x; pz = p1z; }
+      if (top !== null) { this._startGrab(top, px, pz); return; }
+    }
+
+    // ---- 2. THE VAULT: sprinting into a thin, waist-high thing with a clear far side. --
+    // 1 = vaulting from this frame; 2 = a vault target sighted but still out of range, which
+    // holds the mantle off it (the mantle's second probe reaches further than a vault wants
+    // to start from, and won the race to every fence by a few frames — measured).
+    if (sees && this.grounded && (this.sprinting || this.tacSprinting) && velInto > P.WALK) {
+      if (this._tryVault(col, lead1)) return;
+    }
+
+    // ---- 3. THE MANTLE: the highest of terrain, collider top and car roof at the probe. -
+    const tTop = terr.heightAt(p1x, p1z);
+    let cTop = -Infinity, cx = p1x, cz = p1z;
+    if (sees) {
+      const a = col.ledgeHeight(p1x, p1z, this.pos.y, P.RADIUS, reach);
+      if (a !== null) cTop = a;
+      else {
+        const b = col.ledgeHeight(p2x, p2z, this.pos.y, P.RADIUS, reach);
+        if (b !== null) { cTop = b; cx = p2x; cz = p2z; }
+      }
+    }
+    const rTop = this._roofAt(p1x, p1z, this.pos.y, reach);
+    if (rTop !== null && rTop > cTop) { cTop = rTop; cx = p1x; cz = p1z; }
+
+    if (tTop >= cTop) {
+      // A TERRAIN lip: DUSKFALL's pop, exactly as it was.
+      const rise = tTop - this.pos.y;
+      // Below the step-up height the body walks over it; above the reach nothing can be done.
+      // The two tiers are the ledges the world is authored to: a kerb and a car roof.
+      if (rise <= Math.max(P.STEP_UP, M.tiers[0]) || rise > reach) return;
+      // There has to be somewhere to land: a body's worth of clear space on top.
+      if (col && col.canOccupy && !col.canOccupy(p1x, p1z, P.RADIUS, P.CROUCH_H)) return;
+      // Math.max so a mantle never ROBS an already-faster ascent - brushing a lip mid-jump
+      // only ever helps. [duskfall:320]
+      this.vel.y = Math.max(this.vel.y, Math.sqrt(2 * P.GRAVITY * (rise + M.clearance)));
+      this.vel.x += _wish.x * MANTLE_IN;
+      this.vel.z += _wish.z * MANTLE_IN;
+      this.mantleCooldown = M.cooldown;
+      this.grounded = false;
+      this.sinceGround = P.COYOTE + 1;
+      this._endSlide();
+      return;
+    }
+
+    // A COLLIDER (or car roof) top. Anything under MANTLE_MIN_RISE the solver already steps
+    // onto — the crate stair, a kerb — and a step is not a climb. AIRBORNE there are no legs
+    // to push with: a top at or above the hands' band is the grab's (section 1, which refused
+    // it this frame), and only a top BELOW the hands is hopped onto mid-jump. Without this the
+    // full 2.90 m reach applied in the air and the pull fired on every lip a frame before the
+    // hands could have closed on it — the grab never happened once (measured).
+    const rise = cTop - this.pos.y;
+    if (rise < MANTLE_MIN_RISE || rise > reach) return;
+    if (!this.grounded && rise >= P.EYE - CL.handsLo) return;
+    this._startPull(cTop, cx, cz, this.pos.x, this.pos.y, this.pos.z,
+      CL.pullMinS + (CL.pullMaxS - CL.pullMinS) * clamp01((rise - 1.0) / 1.9), 'mantle');
+  }
+
+  /** The car roof as a ledge (lane H's contract: car.roofHeightAt(x, z) -> number | null). Guarded. */
+  _roofAt(x, z, feetY, maxRise) {
+    const sys = this.ctx.systems;
+    const car = sys ? sys.get('car') : null;
+    if (!car || typeof car.roofHeightAt !== 'function') return null;
+    const h = car.roofHeightAt(x, z);
+    if (typeof h !== 'number' || h !== h) return null;
+    if (h <= feetY + 0.001 || h > feetY + maxRise) return null;
+    const col = this._collision;
+    if (col && col.fits && !col.fits(x, z, h, P.RADIUS, P.CROUCH_H)) return null;
+    return h;
+  }
+
+  /** Is `top` still the ledge at (x, z)? Used to push the landing a little further onto it. */
+  _topAt(x, z, top) {
+    const col = this._collision;
+    if (col && col.ledgeHeight) {
+      const h = col.ledgeHeight(x, z, top - 0.10, P.RADIUS, 0.20);
+      if (h !== null && Math.abs(h - top) < 0.02) return true;
+    }
+    const r = this._roofAt(x, z, top - 0.10, 0.20);
+    return r !== null && Math.abs(r - top) < 0.02;
+  }
+
+  /**
+   * THE VAULT. Sprinting into a 0.60-1.20 m top that is thin along the run (a fence, a wreck's
+   * hood, a low wall), with somewhere to land on the far side within a step of the feet and
+   * room to stand there: over it, no jump press, climb.vault.keep of the speed kept. Never
+   * into a wall: the far side is tested for a standing body just past the face AND at the
+   * landing. The obstacle need not be standable — a vault never stands on it — but a roof is
+   * not a fence: past climb.vault.maxThick the top is still there and this returns false, and
+   * the mantle takes it instead.
+   */
+  _tryVault(col, lead1) {
+    const V = CL.vault;
+    const feet = this.pos.y;
+    const lo = feet + V.lo - 0.01, span = V.hi - V.lo + 0.01;
+    // Sight the obstacle: the first probe from one shell ahead that sees a top in the band.
+    // The sighting reaches as far as the mantle's second probe, or the mantle would win the
+    // race to a fence by a few frames (measured: a 0.12 m fence was pulled onto, not vaulted).
+    let top = null, d0 = 0;
+    for (let k = 0; k <= VAULT_SIGHT && top === null; k++) {
+      d0 = lead1 + VAULT_SCAN * k;
+      top = col.ledgeHeight(this.pos.x + _wish.x * d0, this.pos.z + _wish.z * d0, lo, P.RADIUS, span, true);
+    }
+    if (top === null) return 0;
+    // Walk the probe on along the run until the top is gone: that is the far face, give or
+    // take one scan step. Anything still there past maxThick is a roof, not a fence.
+    let far = -1;
+    for (let k = 1; k <= 9; k++) {
+      const d = d0 + VAULT_SCAN * k;
+      const t = col.ledgeHeight(this.pos.x + _wish.x * d, this.pos.z + _wish.z * d, lo, P.RADIUS, span, true);
+      if (t === null || Math.abs(t - top) > 0.15) { far = d; break; }
+    }
+    if (far < 0) return 0;
+    // The far face lies inside the last scan step. Bisect it three times (to ~3 cm), then
+    // take off the footprint inflation the probe sees the top through — without this the
+    // landing sat half a metre past the face and a 0.32 s vault took 0.50 (measured).
+    let seen = far - VAULT_SCAN, gone = far;
+    for (let k = 0; k < 3; k++) {
+      const mid = 0.5 * (seen + gone);
+      const t = col.ledgeHeight(this.pos.x + _wish.x * mid, this.pos.z + _wish.z * mid, lo, P.RADIUS, span, true);
+      if (t === null || Math.abs(t - top) > 0.15) gone = mid; else seen = mid;
+    }
+    const faceD = 0.5 * (seen + gone) - P.RADIUS * 0.55;
+    const landD = faceD + P.RADIUS + VAULT_BEYOND;
+    const lx = this.pos.x + _wish.x * landD, lz = this.pos.z + _wish.z * landD;
+    const support = col.supportHeight ? col.supportHeight(lx, lz, feet, P.RADIUS, P.STEP_UP) : feet;
+    if (Math.abs(support - feet) > V.lo) return 0;                     // a ditch, or a stack
+    if (!col.fits(lx, lz, support, P.RADIUS, P.STAND_H)) return 0;      // a wall behind it
+    const nx = this.pos.x + _wish.x * (faceD + P.RADIUS + 0.05), nz = this.pos.z + _wish.z * (faceD + P.RADIUS + 0.05);
+    if (!col.fits(nx, nz, support, P.RADIUS, P.STAND_H)) return 0;      // a wall right behind it
+    // The near face: the same bisection from the first sighting back toward the body.
+    let nearSeen = d0, nearGone = Math.max(P.RADIUS, d0 - VAULT_SCAN);
+    for (let k = 0; k < 3; k++) {
+      const mid = 0.5 * (nearSeen + nearGone);
+      const t = col.ledgeHeight(this.pos.x + _wish.x * mid, this.pos.z + _wish.z * mid, lo, P.RADIUS, span, true);
+      if (t === null || Math.abs(t - top) > 0.15) nearGone = mid; else nearSeen = mid;
+    }
+    const nearD = 0.5 * (nearSeen + nearGone) + P.RADIUS * 0.55;
+    // The thickness is face to face, both bisected with the inflation taken off; the coarse
+    // scan alone read a 1.2 m hood as 1.85 (0.2 m of inflation each side and a scan step).
+    if (faceD - nearD > V.maxThick) return 0;                          // a roof, not a fence
+    if (nearD > VAULT_TRIGGER) return 2;                               // sighted; not yet
+    const speed = Math.hypot(this.vel.x, this.vel.z);
+    const dur = Math.max(V.time, landD / (speed * V.keep));
+    this._beginClimb(CLIMB_VAULT, dur, this.pos.x, feet, this.pos.z, lx, support, lz, top, 'vault');
+    this.climbSpeed = speed;
+    this.eyeSpring.nudge(-this.vaultImpulse);      // the hand plants; the eye dips, then rises over
+    return 1;
+  }
+
+  /** The grab: catch the lip (a 0.10 s ease to the hang pose against the face), hang, then pull. */
+  _startGrab(top, px, pz) {
+    const col = this._collision;
+    // Find the face: a ray just under the lip, along the wish. The hang pose is one radius
+    // short of it. No face (a slab on posts): hang where the hands closed.
+    let hx = this.pos.x, hz = this.pos.z;
+    if (col && col.raycast) {
+      _rayO.x = this.pos.x; _rayO.y = top - 0.30; _rayO.z = this.pos.z;
+      _rayD.x = _wish.x; _rayD.y = 0; _rayD.z = _wish.z;
+      const hit = col.raycast(_rayO, _rayD, P.RADIUS + MANTLE_LEAD + MANTLE_LEAD2 + 0.5, col.MASK ? col.MASK.SOLID : 1);
+      if (hit && hit.hit) {
+        const d = Math.max(0, hit.t - P.RADIUS - 0.03);
+        hx = this.pos.x + _wish.x * d; hz = this.pos.z + _wish.z * d;
+      }
+    }
+    // The hang pose: the eye under the lip, between a chin-up and full stretch, moved as
+    // little as possible from where the hands closed. The feet follow from the eye.
+    const eyeHang = clamp(this.pos.y + P.EYE, top - CL.hangEyeBelow[1], top - CL.hangEyeBelow[0]);
+    this._beginClimb(CLIMB_HANG, CL.catchS + CL.hangS, this.pos.x, this.pos.y, this.pos.z,
+      hx, eyeHang - P.EYE, hz, top, 'grab');
+    // where the feet will end, decided now and kept
+    let lx = px + _wish.x * LAND_IN, lz = pz + _wish.z * LAND_IN;
+    if (!this._topAt(lx, lz, top)) { lx = px; lz = pz; }
+    this.climbLX = lx; this.climbLZ = lz;
+  }
+
+  /** The pull: from (x0, y0, z0) to standing on `top`, over `dur` seconds. Lift first, then over. */
+  _startPull(top, px, pz, x0, y0, z0, dur, kind) {
+    let lx = px + _wish.x * LAND_IN, lz = pz + _wish.z * LAND_IN;
+    if (!this._topAt(lx, lz, top)) { lx = px; lz = pz; }
+    this._beginClimb(CLIMB_PULL, dur, x0, y0, z0, lx, top, lz, top, kind);
+    this.eyeSpring.nudge(-this.heaveImpulse);     // the heave: a dip, then the rise through it
+  }
+
+  _beginClimb(kind, dur, x0, y0, z0, x1, y1, z1, top, name) {
+    this.climb = kind;
+    this.climbT = 0;
+    this.climbDur = dur;
+    this.climbX0 = x0; this.climbY0 = y0; this.climbZ0 = z0;
+    this.climbX1 = x1; this.climbY1 = y1; this.climbZ1 = z1;
+    this.climbDirX = _wish.x; this.climbDirZ = _wish.z;
+    this.climbTop = top;
+    this.climbSpeed = Math.hypot(this.vel.x, this.vel.z);
+    this.vel.set(0, 0, 0);
     this.grounded = false;
     this.sinceGround = P.COYOTE + 1;
+    this.jumpBuffered = -1;
     this._endSlide();
+    if (kind !== CLIMB_VAULT) {
+      // A climb interrupts the chase verb the way a slide does, and its cooldown starts.
+      this.sprinting = false;
+      if (this.tacSprinting) { this.tacSprinting = false; this.tacCooldown = P.tacSprint.cooldown; }
+    }
+    _climbPayload.kind = name; _climbPayload.top = top;
+    _climbPayload.x = x1; _climbPayload.z = z1;
+    this.ctx.bus.emit('player:climb', _climbPayload);
+  }
+
+  /** The carried body, one fixed step. Aim is never touched here. */
+  _stepClimb(dt, hasInput) {
+    this.climbT += dt;
+    this.vel.set(0, 0, 0);
+    this.grounded = false;
+    this.sinceGround = P.COYOTE + 1;
+    this.crouched = false;
+    this.slideViewT = damp(this.slideViewT, 0, SLIDE_VIEW_OUT, dt);
+    const u = this.climbDur > 0 ? clamp01(this.climbT / this.climbDur) : 1;
+
+    if (this.climb === CLIMB_HANG) {
+      // Holding crouch, or pushing away from the lip, lets go.
+      const away = hasInput && (_wish.x * this.climbDirX + _wish.z * this.climbDirZ) < -0.5;
+      if (this._held('crouch') || away) { this._dropClimb(); return; }
+      const c = ease.outQuad(clamp01(this.climbT / CL.catchS));
+      this.pos.x = lerp(this.climbX0, this.climbX1, c);
+      this.pos.y = lerp(this.climbY0, this.climbY1, c);
+      this.pos.z = lerp(this.climbZ0, this.climbZ1, c);
+      this.crouchT = damp(this.crouchT, 0, CROUCH_OUT, dt);
+      if (u >= 1) {
+        // the hang is over: pull from the hang pose to the landing decided at the grab
+        this._startPull(this.climbTop, this.climbLX, this.climbLZ, this.pos.x, this.pos.y, this.pos.z, CL.pullS, 'pull');
+      }
+      return;
+    }
+
+    if (this.climb === CLIMB_PULL) {
+      // The head goes up first, then the body swings over the lip.
+      const lift = ease.inOutQuad(clamp01(u / PULL_LIFT_END));
+      const over = ease.inOutQuad(clamp01((u - PULL_OVER_START) / (1 - PULL_OVER_START)));
+      this.pos.y = lerp(this.climbY0, this.climbY1, lift);
+      this.pos.x = lerp(this.climbX0, this.climbX1, over);
+      this.pos.z = lerp(this.climbZ0, this.climbZ1, over);
+      this.crouchT = damp(this.crouchT, 0, CROUCH_OUT, dt);
+      if (u >= 1) this._endClimb();
+      return;
+    }
+
+    // THE VAULT: straight across at constant speed, the feet on an arc that clears the top,
+    // the legs tucked over it (crouchT) so the eye rides lower than the feet's arc.
+    this.pos.x = lerp(this.climbX0, this.climbX1, u);
+    this.pos.z = lerp(this.climbZ0, this.climbZ1, u);
+    const base = lerp(this.climbY0, this.climbY1, u);
+    const hump = Math.max(0, this.climbTop + VAULT_CLEAR - 0.5 * (this.climbY0 + this.climbY1));
+    this.pos.y = base + hump * Math.sin(Math.PI * u);
+    this.crouchT = damp(this.crouchT, u < 0.65 ? 1 : 0, u < 0.65 ? CROUCH_IN : CROUCH_OUT, dt);
+    if (this.tacSprinting) this.tacT += dt;
+    if (u >= 1) this._endClimb();
+  }
+
+  /** The feet land on the top: a soft landing through the same beat every landing uses. */
+  _endClimb() {
+    const vault = this.climb === CLIMB_VAULT;
+    this.pos.x = this.climbX1; this.pos.y = this.climbY1; this.pos.z = this.climbZ1;
+    this.climb = CLIMB_NONE;
+    this.grounded = true;
+    this.sinceGround = 0;
+    const out = vault ? this.climbSpeed * CL.vault.keep : CL.outSpeed;
+    this.vel.x = this.climbDirX * out; this.vel.z = this.climbDirZ * out; this.vel.y = 0;
+    this.mantleCooldown = P.mantle.cooldown;
+    this._land(vault ? VAULT_LAND_SPEED : CL.landSpeed);
+  }
+
+  /** Let go of the lip. Falls from the hang; nothing is climbed again until the feet land. */
+  _dropClimb() {
+    this.climb = CLIMB_NONE;
+    this.climbRefuse = true;
+    this.vel.set(0, 0, 0);
+    this.grounded = false;
+    this.sinceGround = P.COYOTE + 1;
+    this.mantleCooldown = P.mantle.cooldown;
   }
 
   // ---------------------------------------------------------------- presentation
@@ -1145,6 +1592,8 @@ export class PlayerController {
       sprinting: this.sprinting,
       tacSprinting: this.tacSprinting,
       tacCooldown: this.tacCooldown,
+      climb: this.climb,
+      hpMax: this.hpMax,
       eyeY: this.eyeY,
       bobPhase: this.bobPhase,
       dead: this.dead,

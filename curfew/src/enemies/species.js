@@ -99,7 +99,12 @@ export const FORM = Object.freeze({
 export const SPECIES = {
 
   /* ---------------------------------------------------------------- HOUND --
-     The crowd. Packs of 2-3 (3-7 in the black hour). Burst gait so it never
+     The crowd. ROUND 6 (playtest 5, 2026-09-03: "There are wayyyy too many...
+     Very quickly they accumulate and just follow you everywhere"): an order
+     ARRIVES as 1-2 hounds (3-4 in the black hour), never as a gang. A pack
+     ASSEMBLES around the player over a minute; it is not allowed to land.
+     tools/arrivals.mjs measured the old 2-3 landing as five hounds in 0.6 s.
+     Burst gait so it never
      beelines: 600 ms of travel, 350 ms of stillness, and it may only commit to
      an attack DURING a pause — move OR attack, never both.
      donor: vigil/src/enemies/species.js:16-24 (thrall) — Alex played this. */
@@ -115,7 +120,7 @@ export const SPECIES = {
     lungeRange: 4.20, lungeSpeed: 11.0, lungeTime: 0.26,
     leapCooldown: 5.5, squadLeapGap: 4.5,   // one squad leap token per 4.5 s
     retreatBelow: 0.25,                     // hp fraction: it breaks for cover
-    packMin: 2, packMax: 3, packBlack: 7,
+    packMin: 1, packMax: 2, packBlack: 4,   // ARRIVAL size, see the header; director.js _packSize mirrors it
     notice: 30, memAlert: 8.0,      // it smells you at 30 m with a clear line
     deathNoise: 14,
     countsAs: 0.5,                          // hounds count half against headcount
@@ -257,10 +262,11 @@ export const SPECIES = {
 
 export const ROSTER = Object.keys(SPECIES);
 
-/* Pool sizes. Allocated at boot; spawn() never allocates. The alive cap in the
-   black hour is 24 (DESIGN §4 headcount), hounds count 0.5, so 16 hounds + 8
-   pallbearers covers a full storm with room for the dread bodies on top —
-   which are outside the cap by law and therefore need their own slots. */
+/* Pool sizes. Allocated at boot; spawn() never allocates. Since round 6 the
+   live pressure ceiling is CFG.director.aliveMax = 14 (was 26; DESIGN §4), so
+   the pool is generous rather than tight: a corpse holds its slot for 45 s
+   before it sinks, and the dread bodies are outside the cap by law and need
+   their own slots. */
 export const POOL = Object.freeze({
   hound: 16, pallbearer: 8, hunter: 3, poacher: 8, pale: 6, standing: 5,
 });

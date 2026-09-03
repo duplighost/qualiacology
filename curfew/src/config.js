@@ -118,6 +118,74 @@ export const CFG = {
     lodHysteresis: 0.1,
     alphaTest: 0.30,        // coverage-preserving mips [cinderbloom]
     wind: { gain: 0.22, gustHz: 0.13 },
+    // ROUND 6, lane F. Alex: "The woods hardly has anything in it." Four instanced
+    // understory templates planted by the same loop as the trees, one InstancedMesh per
+    // KIND per chunk (never per variant), materialised with the near ring and dropped with
+    // it, so the near-ring draw bill grows by at most four per chunk. Densities are per
+    // terrain region (pines / fields / marsh / ridge, the order of terrain.REGIONS) and are
+    // multiplied by the cover field, so a stand of pines is thick with fern and a clearing
+    // is not. Everything with a top you can stand on emits a standable collider in the loop.
+    understory: {
+      fernCell: 2.4,                       // m; one candidate per cell
+      fernAccept: [0.78, 0.20, 0.44, 0.26],
+      fernSize: [0.7, 1.15],               // m across, the brief's range
+      fernRadius: 42,                      // m; fern cards live under the grass rule (grassRadius 42), not the near ring: MEASURED, the near ring reaches dMin 45 so 60 hid nothing
+      logCell: 9.0,
+      logAccept: [0.42, 0.14, 0.24, 0.16],
+      logLength: [3.0, 7.0],
+      logRadius: [0.20, 0.29],             // top <= STEP_UP + tolerance: you walk onto it
+      stumpCell: 8.0,
+      stumpAccept: [0.30, 0.22, 0.12, 0.10],
+      stumpHeight: [0.35, 0.60],
+      boulderCell: 7.0,
+      boulderAccept: [0.08, 0.05, 0.03, 0.55],   // ridge ground is where the rock is
+      boulderSize: [0.8, 2.4],
+      siteClear: 5.5,                      // m; none of it on a road-side minor's pad
+      // ms a step for planting the understory OFF the chunk:built frame, net of what the
+      // frame's chunk builds already took (flora.js _plantPending). MEASURED 2026-09-03:
+      // planted inside the build, a chunk cost 8.3 ms median against master's 2.6.
+      budgetMs: 1.5,
+    },
+  },
+
+  // ---- wilds (ROUND 6, lane F): the off-road county ---------------------------
+  // Alex: "There should be those things from dying light 2 in the vehicle expansion where
+  // there are the wooden places you can climb up in the wilderness... cool items on the
+  // map more. Extra xp." One site per ~280 m cell where one fits, planned from one seeded
+  // stream, streamed with the chunk ring, every platform standable, every cache one-shot.
+  wilds: {
+    cell: 280,              // m; the planning grid. 120 cells inside the county, ~118 fit
+    maxRadius: 1750,        // m from the centre; past this the rim fence is rising
+    roadClear: 60,          // m from any centreline
+    majorClear: 120,        // m from any major
+    slopeMax: 0.25,
+    waterY: 1.5,            // the reservoir bed is -4.7; below this is water
+    separation: 110,        // m between any two sites (cells are 280, so this only bites at seams)
+    towerApart: 420,        // m between two lookout towers
+    // per-kind quotas, in the order they are served from the shuffled cell list
+    counts: { tower: 13, stand: 27, ruin: 18, wreck: 28, camp: 28 },
+    cacheChance: { tower: 1.0, stand: 0.5, ruin: 0.34, wreck: 0.30, camp: 0.30 },
+    buildWithin: 220,       // m; a site's body streams in inside this ...
+    disposeBeyond: 264,     // ... and out past this (hysteresis, so a boundary cannot thrash)
+    foundR: 20,             // wild:found on the first approach inside this
+    cacheR: 1.15,           // a cache is TAKEN by walking into it
+    xp: { found: 40, climbed: 100, cache: [120, 220] },   // DESIGN section 6; cache is region-scaled
+    ammo: [12, 24],         // pickup:ammo {n}
+    // a tower is 6 or 7 flights of (landing + 5 treads + landing) at 0.42 a tread, i.e.
+    // 12.6 or 14.7 m to the platform plus a 2.35 m roof and a lantern mast: 17.0 / 19.1 m
+    // to the lantern. Towers are dealt to the HIGHEST kept cells first, in a 20 m clearing,
+    // so the platform looks over the canopy of the ground below it rather than into it.
+    tower: { flights: [6, 7], rise: 0.42, tread: 0.55, width: 0.92 },
+    // rise 0.42 like the tower's (was 0.45): the rungs now climb from the ground at the
+    // stair's foot, which the detail octave puts up to 1.2 m under the pad, and 0.42 keeps
+    // a tenth of a metre under STEP_UP for the ground's own bumps on the approach.
+    stand: { height: [4.0, 5.0], rise: 0.42, run: 0.36 },
+    horizonLanterns: 3,     // the nearest towers' lanterns are never distance-culled
+    // the halo: a lantern's depth-free glint, hidden inside 'from' (no X-ray of the trunk
+    // beside you), full size by 'full', then scaled by d / scaleAt so it holds its pixels
+    // with distance. MEASURED: the depth-tested lantern is 0 px from 150 m with the forest
+    // in (wilds.js _ensureBuilt); 'scaleAt' 80 puts ~2 m of pane at 150 m.
+    halo: { from: 45, full: 90, scaleAt: 80 },
   },
 
   // ---- player [vigil controller.js — Alex played this and said "feels good"] ----
@@ -136,6 +204,24 @@ export const CFG = {
     stride: { walk: 1.42, sprint: 1.86, crouch: 1.18 },
     tacSprint: { speed: 9.20, time: 4.0, cooldown: 6.0 },   // [cinderbloom spec, NEVER BUILT — risk #1]
     mantle: { reach: 2.90, clearance: 0.65, cooldown: 0.35, tiers: [0.35, 1.95] },  // [duskfall]
+    // ROUND 6 (2026-09-03), Alex, fifth playtest: "I'm not sure why I can't climb up stuff
+    // either. That would be fun. Like dying light style parkour stuff." The mantle above is
+    // DUSKFALL's terrain pop and is unchanged; a COLLIDER top (crate, wall, roof, fence, car)
+    // is climbed kinematically by controller.js _tryClimb: a GRAB from the air (catch, hang,
+    // pull), a MANTLE from the ground (pull), a VAULT at a sprint (over, no jump press).
+    // Every number here is measured in tests/climb.mjs.
+    climb: {
+      handsLo: 0.40, handsHi: 0.50,          // the grab band on the EYE: eyeY - 0.40 .. eyeY + 0.50 (+ what 'Reach' adds)
+      catchS: 0.10, hangS: 0.12, pullS: 0.50, // the grab: ease to the hang pose, hang, pull up
+      // The EYE hangs between these two distances UNDER the lip, moving as little as it can
+      // from where the hands closed: arms at full stretch is 0.50, a chin-up is 0.10. A hang
+      // with the eye ABOVE the lip read as a hop (tests/shots, the first hang PNG).
+      hangEyeBelow: [0.10, 0.50],
+      pullMinS: 0.34, pullMaxS: 0.70,         // a ground mantle's pull, at 1.0 m .. 2.9 m of rise
+      vault: { lo: 0.60, hi: 1.20, maxThick: 1.40, time: 0.32, keep: 0.85 },
+      outSpeed: 1.6,                          // m/s carried over the lip at the end
+      landSpeed: 2.2,                         // the soft landing every climb ends with (no fall damage possible)
+    },
     health: { max: 100, regenDelay: 6.0, regenRate: 9, regenCeiling: 40 },
     springs: { eye: [9, 1.0], landing: [8, 0.6], punch: [11, 0.55], lean: [7, 0.9] },
   },
@@ -224,6 +310,25 @@ export const CFG = {
     seat: { x: -0.31, y: 1.66, z: -0.50, yawClamp: 1.48, fov: 68, fovFast: 74.5 },
     spawn: { min: 40, max: 90, minPlayerToMajor: 120, roadWithin: 60, lostBeyond: 300, pilotLast: 30 },
     hotwire: 1.6,
+    // ROUND 6 — Alex, fifth playtest: "I want to be able to hit the mobsters." The base ram is
+    // the car's (DESIGN section 3) and needs no node: at >= `speed`, enemies.ramHit runs and the
+    // car scrubs a fraction of its speed per body it hit, keyed to def.mass — scrubLight at
+    // massLight (a hound, 46) rising to scrubHeavy at massHeavy (a pallbearer, 210); a Hunter
+    // (150) prices at 0.28 between them. keepFloor is the least of its speed a ram can leave
+    // the car with, so no ram stops it dead, and nothing about a ram touches the heading. The
+    // WHEEL 'Ram' node (hook 'ramClean') makes a hit at >= cleanSpeed cost NO speed: the clean
+    // pop. Measured through the real integrator (tests/car.mjs, 2026-09-03): one hound at
+    // 12 m/s leaves 10.2 m/s and 0.0 degrees of heading change.
+    ram: { speed: 8.0, cleanSpeed: 12.0, scrubLight: 0.15, scrubHeavy: 0.35, massLight: 46, massHeavy: 210, keepFloor: 0.40 },
+    // "It's not super smooth." Full throttle into a trunk used to grind at ~0.7 m/s for ever
+    // (round 5's D report): the throttle and the head-on scrub balanced there, the slide-off
+    // nudge was scaled by speed / 14 (5% of itself at 0.7 m/s), and dead head-on its choice of
+    // side flipped with float noise every step. Now the side is chosen once per contact and
+    // kept, and the time spent under stuckSpeed with the throttle held and bark in contact
+    // ramps the nudge's gain to stuckGain over stuckRamp seconds — capped there, because the
+    // full rate is a 5 rad/s spin and the view rides the nose. Measured (tests/car.mjs): from
+    // a dead stop against a 0.3 m trunk, full throttle is free of it inside 1.5 s.
+    trunk: { stuckSpeed: 2.5, stuckRamp: 0.50, stuckGain: 0.45 },
   },
 
   // ---- audio ----------------------------------------------------------------
@@ -240,7 +345,17 @@ export const CFG = {
   director: {
     spawn: { minDist: 14, viewCone: 90, minGapS: 0.6, frustumEntriesPerS: 2, annulus: [26, 56] },
     silenceS: 7,
-    targets: { dusk: [5, 10], deepNight: [9, 18], storm: [14, 24] },
+    // ROUND 6 (playtest 5, 2026-09-03): HALVED. Alex, twice in one message: "There are
+    // wayyyy too many" and "the biggest problem we have is the enemies. There's too many.
+    // Very quickly they accumulate and just follow you everywhere." Were dusk [5, 10],
+    // night [9, 18], storm [14, 24]. Head units, hounds count 0.5: dusk 2.5 is five dogs.
+    targets: { dusk: [2.5, 5], deepNight: [4.5, 8], storm: [7, 11] },
+    // and the hard ceiling on live pressure bodies at ANY distance (was 26 in enemies.js).
+    aliveMax: 14,
+    // ARRIVAL. No more than maxBodies bodies may arrive inside any windowS seconds outside
+    // the black hour (blackMaxBodies inside it). A pack assembles; it never lands. Measured
+    // before this existed: five hounds in 0.6 s (tools/arrivals.mjs, docs/NEXT.md 4a).
+    arrival: { windowS: 6, maxBodies: 2, blackMaxBodies: 4 },
     firstCyclesEase: 0.7,
     // THE OPENING. Measured 2026-09-02 on a fresh boot: walking forward from the spawn with
     // no other input, the first hit landed at 8.4 s and the player was dead at 19.5 s — five
@@ -256,7 +371,8 @@ export const CFG = {
     openingGraceS: 75,
     openingGraceR: 90,
     openingEase: 0.35,
-    openingRampS: 60,
+    openingRampS: 150,      // ROUND 6: was 60. The county comes back over two and a half minutes,
+                            // and a death re-arms the same grace and the same ramp (director.js).
     telegraphMinS: 0.320,
     maxAttackers: 2,
     huntBeyond: 80, huntSpeedMul: 1.72,

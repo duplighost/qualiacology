@@ -113,8 +113,131 @@ const HUNT_FAR = D.huntBeyond;         // 80 m — past this an alerted body com
 // held 26 bodies of which not one ever came inside 70 m, the headcount read 0, and the
 // director spent 31,000 frames behind its own alive cap. HUNT exists so the action always
 // finds the player; a release band above engagement range is HUNT that never delivers.
-const HUNT_RELEASE = ANNULUS[0];       // 26 m — it is here, its own AI owns it now
-const HUNT_MUL = D.huntSpeedMul;       // 1.72
+// ROUND 5 (playtest 4, "they never seem to go away and keep tracking me down"): the release
+// moved from 26 m to HUNT_NEAR. Inside the fight band the ring, the standoff and the
+// breakoff own the pace, and a body arriving at 11 m/s into 26 m is a body that reads as
+// teleporting. The 72 m oscillation above does NOT come back, for two reasons that are
+// both in enemies.js now: (1) a hunting body steers to the LAST-KNOWN point and holds its
+// memory only while it is on that trail, so a hunt that cannot close is a hunt that ends
+// with the body standing down, never one that re-commits for ever; (2) every pressure
+// species' base speed beats a walking player (4.35), so a hunt released at 40 m still
+// closes. tests/pack.mjs 6b is the regression guard: three hounds from 90-100 m reach
+// 30 m inside 30 s. MEASURED 2026-09-03 (see docs/ROUND-5/A-pack.md).
+const HUNT_NEAR = 40;
+const HUNT_RELEASE = HUNT_NEAR;
+const HUNT_MUL = D.huntSpeedMul;       // 1.72 — capped by the enemies lane at 11.0 m/s
+
+// THE THERMOSTAT COUNTS WHAT IS HUNTING YOU. The 70 m ring is right for the unaware, and
+// it was famine's whole cause for the aware: a pack chasing you from 90 m counted for
+// nothing, the ring read empty, and the director restocked it — over and over, while the
+// pack was still coming. An alerted or hunting pressure body now counts toward head out to
+// HEAD_FAR, whatever ring it is in.
+const HEAD_FAR = 160;
+
+// THE COUNTY GOES QUIET AGAIN. The only thing that can make the live count go DOWN without
+// a kill. A pressure body that is UNAWARE, beyond CULL_R, outside the view cone, and has
+// been all three for CULL_S, is released through the enemies lane's own release path
+// (enemies.cull). Never on screen, never inside the fight; the player cannot tell it from
+// a body that walked off. Dread-owned bodies are not the director's to cull (DESIGN §4).
+// tools/frozen.mjs measured the count only ever going UP before this existed.
+const CULL_R = 240;
+const CULL_S = 20;
+const CULL_PER_TICK = 2;       // never a mass despawn; the sweep runs at CENSUS_HZ
+
+/* THE QUIET RELEASE — the cooling half of the thermostat, and the half that was missing.
+   ==========================================================================
+   ROUND 5, second pass. The far cull above needs 240 m of SEPARATION, so it only ever fires
+   for a player who sprints across the county or dies and respawns elsewhere. A verifier
+   measured the case Alex was actually describing — a player who stays out in it and is
+   followed — and the county never released anything at all. MEASURED here on 2026-09-03,
+   standing on the county loop for 150 s with the director as it ships
+   (tests/artifacts/ring-stand-before.txt): fifteen live bodies, head 10.0 against a target
+   of 6.3, culled 0, and the census line byte-identical from t 248 s to t 355 s. Six of those
+   fifteen were UNAWARE, standing at 36-44 m on their own home points, behind the player,
+   having been so continuously for over 120 s. Nothing in this file could touch them: `_cool`
+   below only takes ALERTED bodies, and the far cull only takes bodies 240 m out. A
+   thermostat that can only add is a ratchet, which is Alex's sentence.
+
+   So: while the census reads more head than the target wants, ONE body per tick goes back
+   into the pool — the FARTHEST body that is
+     pressure-owned      (dread is never the director's, DESIGN section 4)
+     UNAWARE             (it does not know where he is; a body on his trail is the fight)
+     not dormant         (a body in the ground is not the crowd he is complaining about, it
+                          costs nothing to leave, and rising out of a grave is the game's
+                          best first sight)
+     BEHIND HIS SHOULDER LINE (dot < 0 on the camera's real forward. The camera's horizontal
+                          half-angle is 50.2 deg at fov 68 and 16:9, so 90 deg off axis is
+                          40 deg of margin outside the frustum, not a hairline; tests/pack.mjs
+                          projects every release through the REAL camera matrices and asserts
+                          it was off screen, because asserting this rule with this rule's own
+                          arithmetic would prove nothing)
+     not inside the observation cone at all (obsSelf)
+     beyond QUIET_R      (never inside the fight band, and past the 40 m impostor line)
+     and has been ALL of that continuously for QUIET_S.
+   The dwell is the point: eight seconds of him not looking, not knowing and not being known.
+   A release then reads exactly like the thing walking off into the dark, which is what a
+   county that lets go is supposed to look like. It is counted in `culled` with the far cull
+   (both go through enemies.cull, so there is one release path in the game) and separately as
+   `quiet`, and the closest distance anything was ever released at is kept as `quietMinD` so
+   a regression shows up as a number instead of in a playtest.
+   ========================================================================== */
+const QUIET_R = 35;            // m: never nearer than this
+const QUIET_DOT = 0;           // behind the shoulder line, on the camera's real forward
+const QUIET_S = 8;             // s of continuous unaware-unseen-unwatched before a release
+const QUIET_PER_TICK = 1;      // one at a time: the pack thins, it never blinks out
+const QUIET_MARGIN = 0.5;      // head units over target before a body INSIDE the ring goes
+// ...and outside the ring, no permission is needed at all. An unaware pressure body beyond
+// NEAR_R counts ZERO toward head (see _fnCensus: only the alerted are counted past 70 m), so
+// it is not stock the thermostat is holding — it is the halo this file's own HUNT_RELEASE
+// note describes, "26 bodies of which not one ever came inside 70 m, the headcount read 0".
+// Releasing it can never starve the county, because the county was never counting it; if the
+// director wants a body it will place one in the annulus, where a body is supposed to arrive
+// from. MEASURED 2026-09-03: with the ring-only rule, one 150 s local run released 6 bodies
+// and the next released 1, because head hovers within COOL_MARGIN of the target whenever the
+// pack on him is most of the headcount. With this clause the halo goes every time.
+const QUIET_FREE_R = 70;
+
+// THE THERMOSTAT COOLS. MEASURED 2026-09-03 (tests/pack.mjs 6c, first run): a player
+// WALKING a road at 4.35 m/s cannot shed a hound (7.5 m/s in 600/350 ms bursts, 4.7 m/s
+// on average) on open tarmac with a line of sight, so every body that ever noticed him
+// stayed on him — 20 of 20 live bodies aware for the whole 150 s, head 12.5 against a
+// target that had eased to 6.3, fifteen bites, and nothing ever left because the only
+// verb this file had was "spawn more". A thermostat that only heats is a ratchet. So:
+// while head exceeds the target by COOL_MARGIN, once per COOL_EVERY the FARTHEST alerted
+// pressure body that is not mid-attack is stood down through the enemies lane
+// (enemies.standDown): it loses him where it stands, turns for home, reads as "it stopped
+// following", and a release takes it later. Counted as `stoodDown`.
+//
+// ROUND 5, second pass. The first pass also required the body to be outside the view cone,
+// unobserved and beyond 30 m, and MEASURED (tests/pack.mjs d, 2026-09-03) that made it
+// almost dead: a player pacing one stretch of road ends up with seventeen live bodies, all
+// seventeen AWARE and all of them inside 30 m, head 10.0 against a target of 6.3, and the
+// cooling half fired 4 times in 150 s because not one body could pass those three gates.
+// The county could not shed and the census line stood still for 110 s — the verifier's
+// blocker, in a second shape.
+//
+// The three gates were a DESPAWN's safety rules applied to a thing that is not a despawn.
+// Standing down does not remove anything: the body keeps existing, keeps being drawn, and
+// turns and walks away. Seeing that happen is the horror rhythm, not a glitch — it is the
+// thing Alex is asking for in the same sentence. So the observability gates become a
+// PREFERENCE instead of a veto (COOL_UNSEEN, below: a body he cannot see always outranks a
+// body he can, and a seen one is only ever called off when nothing unseen qualifies), and
+// COOL_MIN_R comes down to the edge of the bite, so the pack standing on him can thin.
+// enemies.standDown() still refuses a body in windup or attack, so nothing ever turns away
+// mid-lunge.
+const COOL_MARGIN = 0.5;       // head units over target before anything is stood down (one hound; was 1.0 before round 6 halved the targets)
+const COOL_EVERY = 2.0;        // seconds between stand-downs: the pack thins, it does not vanish
+// ROUND 6 (BRIEF-A item 3): the round-5 verifier measured a body called off at 23.6 m DEAD AHEAD,
+// four inside the camera frustum, and one body stood down 37 times in 200 s. So the three
+// observability gates are LAW again, and measured against the real frame this time: never a
+// body inside COOL_MIN_R, never one committed or in the air, never one that is ON SCREEN --
+// _onScreen, from the camera's fov and aspect, not the 90 degree spawn cone, whose 45 degree
+// half-angle sits INSIDE the 50 degree half-width of the frame at fov 68 / 16:9. That gap is
+// where "dead ahead" lived. The oscillation is enemies.js's CALM_S.
+const COOL_MIN_R = 25;         // m: never the body that is on him -- the bite IS the fight
+const SCREEN_MARGIN = 0.14;    // rad (8 deg) of slack outside the frame edge: "seen" errs wide
+const DIR_CALM_S = 20;         // s a body this file stands down refuses to re-acquire him (= enemies.js CALM_S)
+const COOL_UNSEEN = 1000;      // rank bonus, in metres, for a body he cannot currently see
 
 // The headcount target is measured inside 70 m, which is correct and is also not a cap on
 // anything. MEASURED on the harness: a player walking away at 4.35 m/s from bodies chasing
@@ -122,6 +245,22 @@ const HUNT_MUL = D.huntSpeedMul;       // 1.72
 // field of 137 live ones. The target is a target; THIS is the cap. VIGIL's ALIVE_CAP (16,
 // director.js:22) is the same law for a much smaller arena.
 const ALIVE_CAP_MUL = 2.0;     // total live pressure bodies, any distance, <= cap * this
+const ALIVE_MAX = D.aliveMax || 14;   // ...and never more than this, whatever the cap (ROUND 6, CFG.director.aliveMax)
+
+/* THE ARRIVAL WINDOW -- ROUND 6, playtest 5, the loudest complaint twice over: "There are
+   wayyyy too many... Very quickly they accumulate and just follow you everywhere."
+   MEASURED on the shipped build with tools/arrivals.mjs (docs/NEXT.md 4a): 200 s of walking a
+   road produced 2 pallbearers, then FIVE hounds in 0.6 s, four in 0.9 s, five in 0.6 s. A body
+   essentially never arrived alone: one composition rolled several orders, each hound order
+   was a pack of 2-3, and _drain released one order per 0.6 s. So: a hound order is now 1-2
+   (species.js packMin/packMax, 3-4 in the black hour), and no more than ARRIVE_MAX bodies may
+   arrive inside any ARRIVE_WINDOW_S seconds outside the black hour (ARRIVE_MAX_BLACK inside
+   it). A pack is allowed to ASSEMBLE around the player over a minute; it is not allowed to
+   land. The spawn laws underneath (>= 14 m, outside the cone, cover, the 600 ms gap) stand. */
+const ARRIVE_WINDOW_S = (D.arrival && D.arrival.windowS) || 6;
+const ARRIVE_MAX = (D.arrival && D.arrival.maxBodies) || 2;
+const ARRIVE_MAX_BLACK = (D.arrival && D.arrival.blackMaxBodies) || 4;
+const ARRIVE_RING = 16;        // arrival timestamps kept; 16 covers any window the config can ask for
 
 const CONTACT_R = 25;          // a body this close counts as contact, so pity does not fire
 const PITY_S = 90;             // [design §4 "90 s of night with no contact"]
@@ -180,14 +319,25 @@ const ORDER_STALL_S = 30;      // orders outstanding + no spawn for this long = 
  * cone, on legal ground, 40-66 m away — a walk back, not a deletion.
  */
 const OPENING_CLEAR_R = 20;    // m. Every measured bite landed inside 2.2 m; 20 is a walk.
-const RESPAWN_CLEAR_R = 34;    // m of ground a death buys back
-const RESPAWN_CLEAR_S = 14;    // s the clearing is actively held
-const RESPAWN_QUIET_R = 48;    // m in which no order may be PLACED after a death...
-const RESPAWN_QUIET_S = 22;    // ...for this long. Wider than the clearing on purpose: a
-                               // body ordered onto the rim walks in during the clearing.
-const RESPAWN_EASE = 0.35;     // the opening's ease, re-armed by a death
-const RESPAWN_EASE_S = 20;
-const RESPAWN_RAMP_S = 30;
+// ROUND 6 (playtest 5: "If you respawn, I don't even know if they go away, or if more just
+// respawn super fast"). They did not go away: 34 m for 14 s was the whole clearing, and every
+// hunting body outside it kept its state and converged again; enemies.js had no listener at
+// all. A NEW LIFE NOW BEGINS THE WAY THE FIRST ONE DOES: every pressure body loses the trail
+// (enemies.respawnClear), everything inside RESPAWN_RELEASE_R he cannot see goes back to the
+// pool, everything he can see is stood down and walks off, no order is placed inside
+// RESPAWN_QUIET_R for the full opening grace, RESPAWN_CLEAR_R is held for the full grace, and
+// the headcount ease is the opening's own -- grace and ramp, not 20 + 30 s. tests/pack.mjs
+// scenario e measures it: zero aware at t+1 s, nothing inside 40 m for the grace, and the
+// first arrival after the grace is a single.
+const RESPAWN_CLEAR_R = 40;    // m of ground a death buys back (the player lane asks 34; the larger wins)
+const RESPAWN_CLEAR_S = D.openingGraceS;   // s the clearing is actively held: the whole grace
+const RESPAWN_RELEASE_R = 90;  // m: unseen pressure bodies inside this are released on the respawn frame
+const RESPAWN_QUIET_R = 120;   // m in which no order may be PLACED after a death...
+const RESPAWN_QUIET_S = D.openingGraceS;   // ...for the whole grace
+const RESPAWN_EASE = D.openingEase;        // the opening's ease, re-armed by a death
+const RESPAWN_EASE_S = D.openingGraceS;
+const RESPAWN_RAMP_S = D.openingRampS;
+const RESPAWN_Q = 64;          // the sweep's queue: larger than the whole pool (46)
 const EVICT_OUT = [40, 66];    // where a pushed-out body lands, metres from the player
 const EVICT_TRIES = 24;        // half of them insisting on the rear hemisphere
 const EVICT_PER_TICK = 2;      // never a mass teleport; the sweep runs at CENSUS_HZ
@@ -302,6 +452,16 @@ export class Director {
     this.aliveNear = 0;            // raw bodies inside 70 m
     this.aliveTotal = 0;           // every live pressure body, any distance — the hard cap
     this.hunting = 0;              // how many are converging
+    this.headFar = 0;              // of head, the alerted/hunting bodies counted from beyond 70 m
+    this.culled = 0;               // bodies released far away, unseen (see CULL_R)
+    this._cullQ = new Array(CULL_PER_TICK).fill(null);
+    this._cullN = 0;
+    this.quiet = 0;                // of culled, the ones the QUIET RELEASE took (see QUIET_R)
+    this.quietMinD = Infinity;     // the closest anything was ever released at, in metres
+    this._quietBest = null; this._quietBestD = 0;
+    this.stoodDown = 0;            // surplus bodies the thermostat stood down (see COOL_MARGIN)
+    this._coolT = COOL_EVERY;
+    this._coolBest = null; this._coolBestD = 0;
     this.target = 0;
     this.cap = 0;
 
@@ -338,7 +498,7 @@ export class Director {
     /* ---- the order pool. Orders are reused slots; nothing is allocated to queue one. ---- */
     this._orders = new Array(ORDER_POOL);
     for (let i = 0; i < ORDER_POOL; i++) {
-      this._orders[i] = { live: false, species: 'hound', bearing: 0, at: 0, hold: false, tries: 0 };
+      this._orders[i] = { live: false, species: 'hound', bearing: 0, at: 0, hold: false, tries: 0, pack: 0 };
     }
     this._orderCount = 0;
     this._sinceOrderSpawn = 0;     // watchdog clock: seconds since the last body arrived
@@ -366,6 +526,17 @@ export class Director {
     this.clearSuspended = 0;       // sweeps skipped because he had chosen the fight
     this._evictQ = new Array(EVICT_PER_TICK).fill(null);
     this._evictN = 0;
+    /* ---- ROUND 6: the respawn sweep and the arrival window ---- */
+    this.respawnReleased = 0;      // bodies released to the pool on a respawn (unseen, inside 90 m)
+    this.respawnDormant = 0;       // of those, the ones that were asleep in the ground
+    this.respawnSlept = 0;         // bodies stood down on a respawn (he could see them)
+    this._respQ = new Array(RESPAWN_Q).fill(null);
+    this._respN = 0;
+    this._rsX = 0; this._rsZ = 0;
+    this._arrivals = new Float64Array(ARRIVE_RING).fill(-1e9);
+    this._arriveHead = 0;
+    this.windowed = 0;             // drain passes an order waited behind the arrival window
+    this._pitch = 0;
 
     /* ---- the threat table, and the ring that freezes it on every hit ---- */
     this._threats = new Array(THREAT_SLOTS);
@@ -400,7 +571,7 @@ export class Director {
        FORTY per placement solve — 1.9 MB of garbage over two simulated minutes on the
        harness. They are built once here, and they communicate through the _c* scratch
        fields below instead of through captured locals. ---- */
-    this._cHead = 0; this._cNear = 0; this._cTotal = 0; this._cHunting = 0;
+    this._cHead = 0; this._cNear = 0; this._cTotal = 0; this._cHunting = 0; this._cHeadFar = 0;
     this._cHuntNear = false; this._cContact = false; this._cPermitR2 = 0;
     this._tcX = 0; this._tcZ = 0; this._tcS2 = 0; this._tcHit = false;
     this._wkX = 0; this._wkZ = 0; this._wkR2 = 0;
@@ -416,6 +587,12 @@ export class Director {
           const R = ROSTER[b.species];
           this._cHead += R ? R.head : 1;
           this._cNear++;
+        } else if (b.alerted && d <= HEAD_FAR) {
+          // it is coming; an empty ring with a pack on the way is not famine
+          const R = ROSTER[b.species];
+          const h = R ? R.head : 1;
+          this._cHead += h;
+          this._cHeadFar += h;
         }
       }
       if (d < CONTACT_R) this._cContact = true;
@@ -426,13 +603,16 @@ export class Director {
       // dread permit 97.1% of the time and the layer never once fired.
       if (b.pressure && b.hunting && d2 < this._cPermitR2) this._cHuntNear = true;
 
-      // HUNT. Past 80 m an ALERTED pressure body stops flavouring and converges at +72%,
-      // and it holds that until it is INSIDE 26 m — see the HUNT_RELEASE note above.
+      // HUNT. Past 80 m an ALERTED pressure body stops flavouring and converges at +72%
+      // (capped at 11 m/s by the enemies lane), on the LAST-KNOWN point, and it holds that
+      // until it is inside HUNT_NEAR or its memory runs out — see the HUNT_RELEASE note.
       // Dread-owned species are exempt (DESIGN §4 ownership rule).
       if (b.pressure) {
         const on = raw.hunt === true;
         if (!on && b.alerted && d > HUNT_FAR) { this._setHunt(raw, true); this._cHunting++; }
-        else if (on && d < HUNT_RELEASE) this._setHunt(raw, false);
+        // released inside the fight band, AND the moment its memory of the player runs
+        // out: a hunt is a thing an alerted body does, never a flag that outlives it.
+        else if (on && (d < HUNT_RELEASE || !b.alerted)) this._setHunt(raw, false);
         else if (on) this._cHunting++;
       }
 
@@ -453,6 +633,43 @@ export class Director {
         this._coneHead = (this._coneHead + 1) & 7;
       }
       raw._dirInCone = inCone;
+
+      // THE FAR CULL. Dwell, not a snapshot: CULL_S of being unaware, far and unseen.
+      // The dwell lives on the record (_dirFarT, declared in enemies.js makeRecord) so
+      // nothing is allocated and a recycled body starts from zero (enemies._spawnOne).
+      if (b.pressure && !b.alerted && !inCone && d > CULL_R && !this._onScreen(b.x, b.y, b.z, raw)) {
+        raw._dirFarT = (raw._dirFarT || 0) + 1 / CENSUS_HZ;
+        if (raw._dirFarT >= CULL_S && this._cullN < CULL_PER_TICK) this._cullQ[this._cullN++] = raw;
+      } else raw._dirFarT = 0;
+
+      // THE QUIET RELEASE (see the QUIET_R block above). Same dwell shape as the far cull, a
+      // much tighter test of "he cannot see it", and one candidate — the farthest — per tick.
+      // `dot` is the same number `inCone` is built from, read against 0 rather than COS_CONE:
+      // strictly behind the shoulder line, not merely outside the spawn cone.
+      const dot = d > 0.01 ? (dx * this._fx + dz * this._fz) / d : 1;
+      if (b.pressure && !b.alerted && d > QUIET_R && dot < QUIET_DOT
+        && raw.obsSelf !== true && raw.state !== 'dormant'
+        && !this._onScreen(b.x, b.y, b.z, raw)) {
+        raw._dirQuietT = (raw._dirQuietT || 0) + 1 / CENSUS_HZ;
+        if (raw._dirQuietT >= QUIET_S && d > this._quietBestD) {
+          this._quietBest = raw; this._quietBestD = d;
+        }
+      } else raw._dirQuietT = 0;
+
+      // THE COOLING CANDIDATE: the farthest alerted pressure body the player cannot see
+      // and that is not in the middle of hitting him. Collected here, acted on in _census
+      // after the walk, and only while head is over the target (see COOL_MARGIN).
+      // `_coolBestD` holds a RANK, not a distance: metres plus COOL_UNSEEN if the player
+      // cannot currently see it. Farthest wins, and unseen always beats seen.
+      // ROUND 6: the three gates are LAW (see COOL_MIN_R): outside 25 m, not committed, not
+      // in the air, and NOT ON SCREEN through the real frame. Unseen-by-occlusion still ranks
+      // above merely off-frame.
+      if (b.pressure && b.alerted && d > COOL_MIN_R
+        && raw.committed !== true && raw.airborne !== true && raw.state === 'approach'
+        && !this._onScreen(b.x, b.y, b.z, raw)) {
+        const rank = d + (raw.obsSelf === true ? 0 : COOL_UNSEEN);
+        if (rank > this._coolBestD) { this._coolBest = raw; this._coolBestD = rank; }
+      }
     };
 
     this._fnTooClose = (b) => {
@@ -502,6 +719,22 @@ export class Director {
       const g = terrain ? terrain.heightAt(b.x, b.z) : b.y;
       t.dy = Number.isFinite(g) ? +(b.y - g).toFixed(2) : 0;
       if (this._threatN < THREAT_SLOTS) this._threatN++;
+    };
+
+    // The respawn sweep. Collects every non-dormant pressure body inside RESPAWN_RELEASE_R
+    // of the point he came back to; _onRespawn decides release or stand-down per body.
+    this._fnRespawn = (b, raw) => {
+      if (!b.pressure || this._respN >= RESPAWN_Q) return;
+      // DORMANT BODIES GO TOO. The first draft skipped them ("in the ground: not the crowd")
+      // and MEASURED (tests/pack.mjs e, 2026-09-03, tests/artifacts/r6a-pack-run5.txt): two
+      // pallbearers asleep inside 70 m of the Filling Station counted 2 head against a target
+      // eased to 1.1-1.7, and the county placed NOTHING for the whole 120 s after a respawn --
+      // alive 0, head 2, from t+6 s to t+121 s. A body under the ground is unseen by
+      // definition, so it is released with the rest (BRIEF-A item 4: every unseen body inside
+      // 90 m). _onRespawn skips the frame test for it.
+      const dx = b.x - this._rsX, dz = b.z - this._rsZ;
+      if (dx * dx + dz * dz > RESPAWN_RELEASE_R * RESPAWN_RELEASE_R) return;
+      this._respQ[this._respN++] = raw;
     };
 
     this._fnWake = (b, raw) => {
@@ -697,11 +930,11 @@ export class Director {
   }
 
   /** Wake everything inside a noise radius, on the WORLD POINT that made the sound. */
-  _wake(x, z, radius) {
+  _wake(x, z, radius, source) {
     const en = this._sys('enemies');
     try {
-      if (en && typeof en.wakeAll === 'function') { en.wakeAll(x, z, radius); return; }
-      if (en && typeof en.wake === 'function') { en.wake(x, z, radius); return; }
+      if (en && typeof en.wakeAll === 'function') { en.wakeAll(x, z, radius, source); return; }
+      if (en && typeof en.wake === 'function') { en.wake(x, z, radius, source); return; }
     } catch (e) { /* fall through */ }
     this._wkX = x; this._wkZ = z; this._wkR2 = radius * radius;
     this._forEachBody(this._fnWake);
@@ -804,6 +1037,7 @@ export class Director {
     const yaw = cam ? cam.yaw : (player.yaw || 0);
     this._fx = -Math.sin(yaw);
     this._fz = -Math.cos(yaw);
+    this._pitch = cam && typeof cam.pitch === 'number' ? cam.pitch : 0;
 
     const terrain = this._sys('terrain');
     if (terrain) {
@@ -838,6 +1072,13 @@ export class Director {
     if (this._censusT <= 0) {
       this._censusT = 1 / CENSUS_HZ;
       this._census();
+      // THE DEAD-MAN'S HANDLE IS FOR A JAMMED DIRECTOR, NOT A HOLDING ONE (enemies.heartbeat):
+      // while the opening grace, the respawn bubble or a silence holds the county empty on
+      // purpose, say so, or the enemies lane's trickle fills the bubble for us.
+      if (this._holding()) {
+        const enH = this._sys('enemies');
+        if (enH && typeof enH.heartbeat === 'function') { try { enH.heartbeat(); } catch (e) { /* optional */ } }
+      }
       // The ground, after the count. It rides the census because it needs the same walk of
       // the same list, and because 4 Hz is fast enough: a hound closes about 1.2 m between
       // ticks, so nothing crosses a 20 m ring in the gap.
@@ -864,13 +1105,23 @@ export class Director {
     const permitR = D.permitRadius * clamp(this._speed / CFG.player.SPRINT, 1, 2.4);
     this._cPermitR2 = permitR * permitR;
 
+    this._cHeadFar = 0;
+    this._cullN = 0;
+    this._coolBest = null; this._coolBestD = 0;
+    this._quietBest = null; this._quietBestD = 0;
     this._forEachBody(this._fnCensus);
+    // Collected during the walk, acted on after it: releasing a body while the enemies
+    // lane's own array is being walked is how a sibling's iteration order becomes my bug.
+    this._cullFar();
+    this._quietRelease();
+    this._cool();
 
     if (this._cContact) this._sinceContact = 0;
     this.head = this._cHead;
     this.aliveNear = this._cNear;
     this.aliveTotal = this._cTotal;
     this.hunting = this._cHunting;
+    this.headFar = this._cHeadFar;
     this._huntNear = this._cHuntNear;
     const near = this._cNear;
 
@@ -897,6 +1148,77 @@ export class Director {
       if (this._killedWhileNear) this._silenceT = D.silenceS;
       this._killedWhileNear = false;
     }
+  }
+
+  /**
+   * Release the bodies the census queued. Through enemies.cull() and nothing else: that
+   * is the enemies lane's own release path (it frees the ring slot, the attack token and
+   * the record), and a director writing `alive = false` on someone else's record is a
+   * corpse that never sinks. If the lane ships no cull(), nothing is released and the
+   * count simply does not come down — a famine is not this file's failure mode, a vanish
+   * on screen would be.
+   */
+  _cullFar() {
+    if (this._cullN === 0) return;
+    const en = this._sys('enemies');
+    for (let i = 0; i < this._cullN; i++) {
+      const raw = this._cullQ[i];
+      this._cullQ[i] = null;
+      if (!raw || !en || typeof en.cull !== 'function') continue;
+      let ok = false;
+      try { ok = !!en.cull(raw); } catch (e) { ok = false; }
+      if (ok) { this.culled++; raw._dirFarT = 0; }
+    }
+    this._cullN = 0;
+  }
+
+  /**
+   * THE QUIET RELEASE. The cooling half that actually reaches a player who stays local —
+   * see the QUIET_R block at the top of this file for the measurement that forced it. One
+   * body per census tick, the farthest that has been unaware, behind his shoulder line,
+   * unobserved and beyond QUIET_R for QUIET_S. Inside the 70 m ring it also needs the head
+   * the census just read to be over the target (QUIET_MARGIN); outside it, nothing — see the
+   * QUIET_FREE_R note. Through enemies.cull() like the far cull, so there is exactly one
+   * release path in the game and a body never has two owners on its way out.
+   *
+   * `target` here is last tick's — it is written after the walk — which is a quarter of a
+   * second stale and is the same number _cool() has always used.
+   */
+  _quietRelease() {
+    const raw = this._quietBest;
+    const d = this._quietBestD;
+    this._quietBest = null; this._quietBestD = 0;
+    if (!raw || QUIET_PER_TICK < 1) return;
+    if (d <= QUIET_FREE_R && this._cHead <= this.target + QUIET_MARGIN) return;
+    const en = this._sys('enemies');
+    if (!en || typeof en.cull !== 'function') return;
+    let ok = false;
+    try { ok = !!en.cull(raw); } catch (e) { ok = false; }
+    if (!ok) return;
+    this.culled++; this.quiet++;
+    if (d < this.quietMinD) this.quietMinD = d;
+    raw._dirQuietT = 0; raw._dirFarT = 0;
+  }
+
+  /**
+   * The thermostat's other half. One body per COOL_EVERY, and only while the census reads
+   * more head than the target wants (COOL_MARGIN): the highest-ranked alerted body — the
+   * farthest, preferring one he cannot see (COOL_UNSEEN) — is stood down through
+   * enemies.standDown(), the enemies lane's own verb, so the body forgets him exactly the
+   * way its memory running out would have. NOTHING IS REMOVED HERE; the body walks away.
+   * If the lane ships no standDown(), nothing happens and the county simply stays warm.
+   */
+  _cool() {
+    this._coolT += 1 / CENSUS_HZ;
+    const raw = this._coolBest;
+    if (!raw || this._coolT < COOL_EVERY) return;
+    if (this._cHead <= this.target + COOL_MARGIN) return;
+    const en = this._sys('enemies');
+    if (!en || typeof en.standDown !== 'function') return;
+    let ok = false;
+    try { ok = !!en.standDown(raw); } catch (e) { ok = false; }
+    if (ok) { this.stoodDown++; this._coolT = 0; }
+    this._coolBest = null; this._coolBestD = 0;
   }
 
   /** Cone entries inside the last second. */
@@ -1045,7 +1367,8 @@ export class Director {
     const dx = x - this._px, dz = z - this._pz;
     const d = Math.sqrt(dx * dx + dz * dz);
     if (d < 0.01) return false;                        // inside his capsule: never visible
-    if ((dx * this._fx + dz * this._fz) / d <= COS_CONE) return false;
+    // ROUND 6: the FRAME, not the 90 degree spawn cone, which is narrower than the frame
+    if (!this._onScreen(x, y, z, raw)) return false;
     const col = this._sys('collision');
     if (col && typeof col.segmentClear === 'function') {
       const ey = this._py + PLAYER_EYE;
@@ -1145,6 +1468,9 @@ export class Director {
     raw.hunt = false;
     raw.huntSpeedMul = 1;
     raw.alerted = false;
+    // ROUND 6: the calm (enemies.js CALM_S), or the next perception tick takes him back
+    if (typeof raw.calmT === 'number') raw.calmT = DIR_CALM_S;
+    if (typeof raw.stoodDownN === 'number') raw.stoodDownN++;
     raw.heardX = awayX; raw.heardZ = awayZ;
     raw.navBest = undefined;
     const s = raw.state;
@@ -1161,8 +1487,10 @@ export class Director {
     // silently substitutes its own radius makes that lane's comment a lie.
     const x = e && Number.isFinite(e.x) ? e.x : this._px;
     const z = e && Number.isFinite(e.z) ? e.z : this._pz;
-    this._respawnR = (e && Number.isFinite(e.clearRadius) && e.clearRadius > 0)
-      ? e.clearRadius : RESPAWN_CLEAR_R;
+    // The player lane asks for 34 m (controller.js RESPAWN_CLEAR_R); round 6 holds 40 for the
+    // whole grace. The larger of the two, so its ask is honoured and never shrunk.
+    this._respawnR = Math.max(RESPAWN_CLEAR_R,
+      (e && Number.isFinite(e.clearRadius) && e.clearRadius > 0) ? e.clearRadius : 0);
     if (!this._respawnPos) this._respawnPos = { x: 0, z: 0 };
     this._respawnPos.x = x; this._respawnPos.z = z;
     if (e && Number.isFinite(e.fromX) && Number.isFinite(e.fromZ)) {
@@ -1180,6 +1508,49 @@ export class Director {
     const pl = this._sys('player');
     if (pl && pl.pos) this._py = pl.pos.y;
     else if (e && Number.isFinite(e.y)) this._py = e.y;
+    const cam = this._sys('camera');
+    if (cam) {
+      this._fx = -Math.sin(cam.yaw); this._fz = -Math.cos(cam.yaw);
+      this._pitch = typeof cam.pitch === 'number' ? cam.pitch : 0;
+    }
+
+    // ROUND 6, THE COUNTY CLEARS. The queue is already empty (_onDeath). The trail: every
+    // pressure body forgets him (enemies.respawnClear -- the lane hears the event itself too,
+    // and the call is idempotent). Then the sweep: inside RESPAWN_RELEASE_R, what he cannot
+    // see is released to the pool through enemies.cull, the one release path in the game;
+    // what he CAN see is stood down where it stands and walks off. Never a vanish in frame.
+    const en = this._sys('enemies');
+    if (en && typeof en.respawnClear === 'function') {
+      try { en.respawnClear(x, z); } catch (err) { /* the sweep below still stands them down */ }
+    }
+    this._rsX = x; this._rsZ = z; this._respN = 0;
+    this._forEachBody(this._fnRespawn);
+    for (let i = 0; i < this._respN; i++) {
+      const raw = this._respQ[i];
+      this._respQ[i] = null;
+      if (!raw) continue;
+      const bp = raw.pos || raw.position;
+      const ex = bp ? bp.x : raw.x, ez = bp ? bp.z : raw.z;
+      let released = false;
+      // never inside COOL_MIN_R (the 25 m law holds for every release path), never in frame
+      const dR = Math.hypot(ex - x, ez - z);
+      const under = raw.state === 'dormant';         // in the ground: unseen at any distance
+      if ((under || (dR >= COOL_MIN_R && !this._seenByPlayer(raw))) && en && typeof en.cull === 'function') {
+        try { released = !!en.cull(raw); } catch (err) { released = false; }
+      }
+      if (released) { this.respawnReleased++; if (under) this.respawnDormant++; }
+      else if (under) { /* the pool refused it: it stays asleep where it is */ }
+      else {
+        // it walks OFF: its home goes to the far side of itself, or a body whose home is the
+        // ground he came back to would turn round and walk back to him unaware
+        const ax = ex + (ex - x), az = ez + (ez - z);
+        raw.homeX = ax; raw.homeZ = az;
+        this._standDown(raw, ax, az);
+        this.respawnSlept++;
+      }
+    }
+    this._respN = 0;
+    this._sinceContact = 0;
     this._stepClearing();
   }
 
@@ -1326,6 +1697,14 @@ export class Director {
     return D.openingEase + (1 - D.openingEase) * k;
   }
 
+  /** Is this director deliberately holding the county quiet right now? See the heartbeat. */
+  _holding() {
+    const C = this.ctx.cfg.director;
+    return (C.openingGraceS > 0 && this._playT <= C.openingGraceS)
+      || this._respawnQuietT > 0
+      || this._silenceT > 0;
+  }
+
   /** True while the opening bubble still forbids a spawn at (x, z). */
   _inOpeningBubble(x, z) {
     const D = this.ctx.cfg.director;
@@ -1358,7 +1737,10 @@ export class Director {
     // --- roll a composition. donor: rocket-shoes director.js:49-64 ---
     // 74% now, 26% held as reinforcement (DESIGN §4). Reinforcement orders carry hold=true
     // and are released by _drain when their time comes OR when <=2 bodies remain.
-    let budget = (target - this.head) * 1.35;
+    // Never under 1: with round 6's halved targets an eased dusk target is 0.6 head, and a
+    // budget of 0.83 could order nothing at all -- a county switched off rather than eased.
+    // The arrival window and the spawn laws pace what this rolls.
+    let budget = Math.max(1, (target - this.head) * 1.35);
     const firstBudget = budget * 0.74;
     const bearing = this._sectorBearing();
     let at = 0, guard = 24, spentFirst = 0;
@@ -1414,7 +1796,7 @@ export class Director {
       const o = this._orders[i];
       if (o.live) continue;
       o.live = true; o.species = species; o.bearing = bearing;
-      o.at = this._t + at; o.hold = hold; o.tries = 0;
+      o.at = this._t + at; o.hold = hold; o.tries = 0; o.pack = 0;
       this._orderCount++;
       return o;
     }
@@ -1433,8 +1815,10 @@ export class Director {
     // first one at 60 Hz would otherwise drown the second.
     if (!this._pressurePermit()) { this.blocked++; return; }
     if (this.head >= this.cap) { this.blocked++; return; }
-    if (this.aliveTotal >= this.cap * ALIVE_CAP_MUL) { this.blocked++; return; }
+    if (this.aliveTotal >= this._aliveCap()) { this.blocked++; return; }
     if (this._coneEntryRate() >= SP.frustumEntriesPerS) { this.blocked++; return; }
+    const arrived = this._arrivedRecently();
+    const arriveMax = this._arriveMax();
 
     for (let i = 0; i < ORDER_POOL; i++) {
       const o = this._orders[i];
@@ -1445,6 +1829,12 @@ export class Director {
       } else if (this._t < o.at) continue;
 
       const R = ROSTER[o.species] || ROSTER.hound;
+      // THE ARRIVAL WINDOW (ROUND 6). This order's bodies plus everything that arrived inside
+      // the last ARRIVE_WINDOW_S must fit under the window's cap, or the order waits: a pair
+      // waits behind a single and a single may still go. The pack size is rolled ONCE, at
+      // the first attempt, and kept on the order so the window and the spawn agree.
+      if (!(o.pack > 0)) o.pack = this._packSize(o.species);
+      if (arrived + o.pack > arriveMax) { this.windowed++; continue; }
       if (!this._place(o.species, o.bearing, R)) {
         // BLOCKED ORDERS DEFER (vigil director.js:12) — but see _failOrder: they no longer
         // defer for ever. Widen the sector a little each time so a jammed bearing
@@ -1453,13 +1843,13 @@ export class Director {
         this._failOrder(o, 0.35);
         return;
       }
-      const handle = this._spawnBody(o.species, _placed.x, _placed.y, _placed.z,
-        this._packSize(o.species));
+      const handle = this._spawnBody(o.species, _placed.x, _placed.y, _placed.z, o.pack);
       if (!handle) {
         // The pool is jammed, or this species cannot be fielded at all.
         this._failOrder(o, 0.5);
         return;
       }
+      for (let k = 0; k < o.pack; k++) this._stampArrival();
       o.live = false;
       this._orderCount--;
       this.spawned++;
@@ -1521,10 +1911,15 @@ export class Director {
     // (the opening's, or a death's) met a field that other lanes had already populated —
     // which is a watchdog crying wolf at exactly the times the ease is most correct.
     // A real wedge is orders outstanding with ROOM to put them; that is what survives here.
-    if (this.head >= this.cap || this.aliveTotal >= this.cap * ALIVE_CAP_MUL) {
+    if (this.head >= this.cap || this.aliveTotal >= this._aliveCap()) {
       this._sinceOrderSpawn = 0;
       return;
     }
+    // Nor is DESIGNED silence: the 7 s after a clear (and a live-A/B `silence` from
+    // config()) hold every order on purpose, and a queue waiting out a silence is not
+    // wedged. Measured 2026-09-03: a suite that silences the director for one scenario
+    // got this warning on the console 30 s later, for a queue that was doing as told.
+    if (this._silenceT > 0) { this._sinceOrderSpawn = 0; return; }
     if (this._sinceOrderSpawn < ORDER_STALL_S) return;
 
     for (let i = 0; i < ORDER_POOL; i++) this._orders[i].live = false;
@@ -1544,13 +1939,70 @@ export class Director {
     }
   }
 
-  /** Hounds pack 2-3, and 3-7 in the black hour (DESIGN §4). Everything else is one. */
+  /**
+   * A hound order ARRIVES as 1-2, and 3-4 in the black hour (ROUND 6; species.js packMin /
+   * packMax / packBlack say the same numbers). Everything else is one. The pack still
+   * assembles: this is how many land in one spawn event, not how many hunt you.
+   */
   _packSize(species) {
     if (species !== 'hound') return 1;
+    // While the headcount is still eased -- the opening, or the life after a death -- a hound
+    // arrives ALONE. A new life begins the way the first one does (BRIEF-A item 4).
+    if (this._openingEase() < 1 || this._respawnEase() < 1) return 1;
     const rng = this._rng();
     return this._phase() === 'black'
-      ? 3 + Math.floor(rng.next() * 5)
-      : 2 + Math.floor(rng.next() * 2);
+      ? 3 + Math.floor(rng.next() * 2)
+      : 1 + Math.floor(rng.next() * 2);
+  }
+
+  /** The hard ceiling on live pressure bodies right now (see ALIVE_MAX). */
+  _aliveCap() { return Math.min(this.cap * ALIVE_CAP_MUL, ALIVE_MAX); }
+
+  /** The arrival window's cap for the current phase. */
+  _arriveMax() { return this._phase() === 'black' ? ARRIVE_MAX_BLACK : ARRIVE_MAX; }
+
+  /** Bodies that arrived inside the last ARRIVE_WINDOW_S. */
+  _arrivedRecently() {
+    let n = 0;
+    for (let i = 0; i < ARRIVE_RING; i++) if (this._t - this._arrivals[i] < ARRIVE_WINDOW_S) n++;
+    return n;
+  }
+
+  _stampArrival() {
+    this._arrivals[this._arriveHead] = this._t;
+    this._arriveHead = (this._arriveHead + 1) % ARRIVE_RING;
+  }
+
+  /**
+   * IS ANY PART OF THIS BODY INSIDE THE FRAME? The real camera's fov and aspect, the sim's own
+   * yaw and pitch (the THREE camera's matrices are only refreshed at present(), which a stepped
+   * test may not have run since the aimer turned), and SCREEN_MARGIN of slack outside every
+   * edge so the answer errs toward "seen". Feet, middle and head are tested, because a body
+   * whose head is in frame is a body that would vanish in frame. tests/pack.mjs projects the
+   * same three points through the real matrices for every release and every stand-down and
+   * asserts this never disagreed.
+   */
+  _onScreen(x, y, z, raw) {
+    const cam3 = this.ctx.camera;
+    const fov = cam3 && cam3.fov > 0 ? cam3.fov : 68;
+    const aspect = cam3 && cam3.aspect > 0 ? cam3.aspect : 16 / 9;
+    const half = fov * 0.5 * Math.PI / 180;
+    const vHalf = half + SCREEN_MARGIN;
+    const hHalf = Math.atan(Math.tan(half) * aspect) + SCREEN_MARGIN;
+    const dx = x - this._px, dz = z - this._pz;
+    const dh = Math.sqrt(dx * dx + dz * dz);
+    if (dh < 0.01) return true;
+    const along = dx * this._fx + dz * this._fz;
+    const side = dx * this._fz - dz * this._fx;
+    if (Math.abs(Math.atan2(side, along)) > hHalf) return false;
+    const h = raw && raw.def && raw.def.height > 0 ? raw.def.height * (raw.scale || 1) : 2.2;
+    const ey = this._py + PLAYER_EYE;
+    for (let k = 0; k < 3; k++) {
+      const py = y + (k === 0 ? 0.05 : (k === 1 ? h * 0.5 : h));
+      const el = Math.atan2(py - ey, dh);
+      if (Math.abs(el - this._pitch) <= vHalf) return true;
+    }
+    return false;
   }
 
   /**
@@ -1758,7 +2210,7 @@ export class Director {
     // Everything inside the radius wakes, on the point that MADE the sound — not on the
     // player's live coordinate, which would turn every noise into a wallhack
     // (fetch director.js:1288-1292).
-    this._wake(x, z, radius);
+    this._wake(x, z, radius, e.source);
 
     // One loud choice may invite company, with a hard cap and real forgiveness once the
     // debt drains (fetch :1286-1299). Quiet play is genuinely quieter.
@@ -1798,6 +2250,13 @@ export class Director {
       target: +this.target.toFixed(2),
       cap: +this.cap.toFixed(2),
       hunting: this.hunting,
+      headFar: +this.headFar.toFixed(2),
+      culled: this.culled,
+      quiet: this.quiet,
+      // Infinity does not survive JSON.stringify, and a probe that read null as 0 would
+      // report the worst possible answer. -1 means "nothing has been released yet".
+      quietMinD: this.quietMinD === Infinity ? -1 : +this.quietMinD.toFixed(1),
+      stoodDown: this.stoodDown,
       danger: +(this.shared.danger || 1).toFixed(3),
       storm: +this.storm.toFixed(3),
       stormPhase: this._stormPhase,
@@ -1836,6 +2295,14 @@ export class Director {
       respawnQuietT: +Math.max(0, this._respawnQuietT).toFixed(1),
       evicted: this.evicted,
       slept: this.slept,
+      // ROUND 6
+      respawnReleased: this.respawnReleased,
+      respawnDormant: this.respawnDormant,
+      respawnSlept: this.respawnSlept,
+      windowed: this.windowed,
+      arrived: this._arrivedRecently(),
+      arriveMax: this._arriveMax(),
+      aliveCap: +this._aliveCap().toFixed(1),
       evictRefused: this.evictRefused,
       clearSuspended: this.clearSuspended,
       sinceFire: this._sinceFire < 1e8 ? +this._sinceFire.toFixed(1) : -1,

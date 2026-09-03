@@ -5,6 +5,7 @@
 //
 // THE SHAPE: a three-stage ray sharing ONE shrinking bestT.
 //   1. enemy hit zones   (ctx.systems 'enemies' — does not exist in M0)
+//   1b. the boss's zones  (ctx.systems 'kneeler', ROUND 6 — plate, head, two vents)
 //   2. chunk-local colliders (collision.raycast — trees, props, buildings)
 //   3. the analytic ground march (terrain.marchRay — no mesh is ever raycast)
 // Each stage is handed the best t found so far as its maxT, so world geometry
@@ -191,7 +192,7 @@ export class Combat {
    */
   _trace(ox, oy, oz, dx, dy, dz, maxT) {
     const s = _stage;
-    s.hit = false; s.t = maxT; s.kind = 'dirt'; s.zone = null; s.enemy = null; s.exit = false;
+    s.hit = false; s.t = maxT; s.kind = 'dirt'; s.zone = null; s.enemy = null; s.exit = false; s.boss = false;
 
     _o.set(ox, oy, oz);
     _d.set(dx, dy, dz);
@@ -207,6 +208,20 @@ export class Combat {
       }
     }
 
+    // ---- stage 1b: the boss's zones (ROUND 6, lane C). Same shape as stage 1, read
+    // lazily (kneeler is manifest entry 26 and combat is 15), taking the NEARER hit so a
+    // hound standing in front of the Kneeler still catches the round first. The stage
+    // record carries `boss` so resolveShot hands the damage to the right owner.
+    const kneeler = this._sys('kneeler');
+    if (kneeler && kneeler.raycast) {
+      const b = kneeler.raycast(_o, _d, s.t);
+      if (b && b.t < s.t) {
+        s.hit = true; s.t = b.t; s.kind = 'flesh'; s.zone = b.zone || 'plate'; s.enemy = b.enemy; s.boss = true;
+        s.x = b.point.x; s.y = b.point.y; s.z = b.point.z;
+        s.nx = -dx; s.ny = -dy; s.nz = -dz;
+      }
+    }
+
     // ---- stage 2: chunk-local colliders, capped by stage 1
     const collision = this._sys('collision');
     if (collision && collision.raycast) {
@@ -217,7 +232,7 @@ export class Combat {
       // Stage 2 asks about colliders. Stage 3 owns the ground.
       const c = collision.raycast(_o, _d, s.t, collision.MASK ? collision.MASK.SHOT : 2);
       if (c && c.hit !== false && c.t < s.t) {
-        s.hit = true; s.t = c.t; s.enemy = null; s.zone = null;
+        s.hit = true; s.t = c.t; s.enemy = null; s.zone = null; s.boss = false;
         // collision publishes the tag the placer gave it (flora tags trunks 'tree').
         s.kind = TAG_SURFACE[c.tag] || 'wood';
         if (c.point) { s.x = c.point.x; s.y = c.point.y; s.z = c.point.z; }
@@ -234,7 +249,7 @@ export class Combat {
     if (terrain && terrain.marchRay) {
       const gt = terrain.marchRay(ox, oy, oz, dx, dy, dz, s.t);
       if (gt !== null && gt !== undefined && gt < s.t) {
-        s.hit = true; s.t = gt; s.enemy = null; s.zone = null; s.kind = 'dirt';
+        s.hit = true; s.t = gt; s.enemy = null; s.zone = null; s.boss = false; s.kind = 'dirt';
         s.x = ox + dx * gt; s.y = oy + dy * gt; s.z = oz + dz * gt;
         if (terrain.normalAt) {
           terrain.normalAt(s.x, s.z, _tmp);
@@ -316,15 +331,18 @@ export class Combat {
       const zmul = h.zone ? (h.zone === 'head' ? def.headMul : (ZONE_MUL[h.zone] || 1)) : 1;
       const penMul = pens > 0 ? Math.max(0.20, 1 - traversedCm / Math.max(0.001, PEN_CM[h.kind] ?? 1)) : 1;
       // Round UP off zero: armour and angle decide HOW MUCH, never WHETHER.
-      const dmg = Math.max(1, Math.round(base * zmul * penMul));
+      // HANDS 'damageMul' (ROUND 6, lane G registers it; lane C reads it): a multiplier on
+      // every round, base 1, so with nothing owned a shot resolves exactly as it did.
+      const dmg = Math.max(1, Math.round(base * zmul * penMul * this._perk('damageMul', 1)));
 
       const deflected = h.zone === 'plate';
       let killed = false;
 
       if (h.enemy) {
-        const enemies = this._sys('enemies');
-        const res = enemies && enemies.damage
-          ? enemies.damage(h.enemy, dmg, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
+        // the boss owns its own hp (enemies/kneeler.js); everything else is the pool's
+        const owner = this._sys(h.boss ? 'kneeler' : 'enemies');
+        const res = owner && owner.damage
+          ? owner.damage(h.enemy, dmg, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
           : { killed: false };
         killed = !!res.killed;
       }
@@ -528,11 +546,11 @@ export class Combat {
 /* One shared hit record and one shared exit record. The trace fills them and
    the caller consumes them before the next call — no per-shot allocation. */
 const _stage = {
-  hit: false, t: 0, kind: 'dirt', zone: null, enemy: null, exit: false,
+  hit: false, t: 0, kind: 'dirt', zone: null, enemy: null, exit: false, boss: false,
   x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0,
 };
 const _exitRec = {
-  hit: true, t: 0, kind: 'dirt', zone: null, enemy: null, exit: true,
+  hit: true, t: 0, kind: 'dirt', zone: null, enemy: null, exit: true, boss: false,
   x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0,
 };
 

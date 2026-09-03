@@ -44,6 +44,15 @@ export const NAV = Object.freeze({
   PROGRESS_EPS: 0.35,           // metres of improvement that counts as progress
   PATIENCE: 6.0,                // seconds without progress before it is stuck
   STUCK_MIN_DIST: 16,           // never relocate something already on top of you
+  // OUTRUN IS NOT STUCK. ROUND 5, MEASURED (tests/pack.mjs 6a, 2026-09-03): four hounds
+  // chasing a sprinter at 6.7 m/s made "no progress" on a ring target receding faster than
+  // they moved, were declared stuck after PATIENCE, and relocate() put them back 22-46 m
+  // from the player — 27 relocations in 80 s, a hound teleporting to his side every six
+  // seconds for as long as it lived. That was the quietest of the three "they always know
+  // where I am" bugs. Stuck now also means the body itself has barely moved: less than
+  // this fraction of its cruise speed, averaged over the patience window. A body
+  // scrabbling at a trunk moves at ~0; a body being outrun moves at full cruise.
+  STUCK_MOVE_FRAC: 0.22,
 
   // Relocation, and the director's placement laws it must not break
   // (CFG.director.spawn: minDist 14, viewCone 90, annulus 26-56).
@@ -155,6 +164,7 @@ export function resetProgress(e, tx, tz) {
   const dx = tx - e.pos.x, dz = tz - e.pos.z;
   e.navBest = Math.sqrt(dx * dx + dz * dz);
   e.navBestT = 0;
+  e.navMoved = 0; e.navLastX = e.pos.x; e.navLastZ = e.pos.z;
 }
 
 /**
@@ -162,6 +172,11 @@ export function resetProgress(e, tx, tz) {
  * getting closer for NAV.PATIENCE seconds. Distance, not position: a body
  * circling a target at a constant radius is not stuck, it is orbiting, and a
  * position-delta watchdog would relocate it for doing its job.
+ *
+ * AND the body has to have actually stopped (NAV.STUCK_MOVE_FRAC): the metres
+ * it covered over the window are accumulated from its real position, so a
+ * chaser being outrun — moving flat out toward a target that is leaving faster
+ * than it can follow — is never "stuck", only slower than the player.
  */
 export function progress(e, dt, tx, tz) {
   const dx = tx - e.pos.x, dz = tz - e.pos.z;
@@ -169,10 +184,16 @@ export function progress(e, dt, tx, tz) {
   if (e.navBest === undefined || d < e.navBest - NAV.PROGRESS_EPS) {
     e.navBest = d;
     e.navBestT = 0;
+    e.navMoved = 0; e.navLastX = e.pos.x; e.navLastZ = e.pos.z;
     return false;
   }
+  const mx = e.pos.x - e.navLastX, mz = e.pos.z - e.navLastZ;
+  e.navMoved = (e.navMoved || 0) + Math.sqrt(mx * mx + mz * mz);
+  e.navLastX = e.pos.x; e.navLastZ = e.pos.z;
   e.navBestT = (e.navBestT || 0) + dt;
-  return e.navBestT > NAV.PATIENCE;
+  if (e.navBestT <= NAV.PATIENCE) return false;
+  const cruise = e.def && e.def.speed > 0 ? e.def.speed : 3;
+  return e.navMoved < cruise * NAV.STUCK_MOVE_FRAC * e.navBestT;
 }
 
 /* -------------------------------------------------------------- attention -- */

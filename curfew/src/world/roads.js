@@ -553,6 +553,28 @@ function emitRun(rt, i0, i1, half, heightFn, lift, pos, uv, idx) {
 }
 
 /* ------------------------------------------------------------------ *
+ * ROUND 6 (lane G, ADDITIVE): the routes as {x, z} polylines for the
+ * pause card's map (ui/hud.js _drawMap). The RESAMPLED spline, thinned
+ * to one point every ROUTE_PL_STEP samples (24 m at RC.sample 2), so
+ * the drawn road is the road the travelled wash is painted on — the 21
+ * authored control points of the loop sit tens of metres off the
+ * asphalt between them. Built once at module load, frozen; a closed
+ * route repeats its first point at the end so a consumer strokes it
+ * without knowing which kind it is.
+ * ------------------------------------------------------------------ */
+const ROUTE_PL_STEP = 12;
+const ROUTE_POLYLINES = Object.freeze(ROUTES.map((rt) => {
+  const out = [];
+  for (let i = 0; i < rt.n; i += ROUTE_PL_STEP) {
+    out.push(Object.freeze({ x: SX[rt.start + i], z: SZ[rt.start + i] }));
+  }
+  const last = rt.start + rt.n - 1;
+  if (rt.closed) out.push(out[0]);
+  else out.push(Object.freeze({ x: SX[last], z: SZ[last] }));
+  return Object.freeze(out);
+}));
+
+/* ------------------------------------------------------------------ *
  * The system.
  * ------------------------------------------------------------------ */
 
@@ -585,6 +607,14 @@ export class Roads {
   totalLength() { return TOTAL_LENGTH; }
   loopLength() { return ROUTES[0].length; }
   sites() { return M0_SITES; }
+  /**
+   * Round 6 (G): `[[{x, z}, ...], ...]`, one polyline per route, for the pause-card map.
+   * NOT `routes()`: the constructor already owns `this.routes` (the ROUTES meta table, an
+   * instance property) and an instance property shadows a prototype method — measured, the
+   * first probe found `roads.routes is not a function`. The cross-lane contract named
+   * routes(); the consumer (ui/hud.js) is this lane's own, so the name changed on this side.
+   */
+  routePolylines() { return ROUTE_POLYLINES; }
 
   ready() { return elevReady && SEG_N > 0 && CELL_ITEMS !== null; }
   dispose() { }

@@ -203,7 +203,97 @@ const LOD_NEAR = 40;              // full rig inside this
 const LOD_HYST = 0.10;            // DESIGN's hysteresis, as a fraction of LOD_NEAR
 const GRAVITY = CFG.player.GRAVITY;
 const BOLT_POOL = 14;
-const CAP_ALIVE = 26;             // hard ceiling on pressure bodies; dread is outside it
+const CAP_ALIVE = CFG.director.aliveMax || 14;   // hard ceiling on pressure bodies (ROUND 6: 26 -> 14, CFG.director.aliveMax); dread is outside it
+/* THE RAM (BRIEF-A item 6, the contract lane H drives against). ramHit() at >= 8 m/s hurts by
+   momentum and staggers + throws; at RAM_KILL_SPEED a hound or a pallbearer dies outright and
+   the Hunter is staggered and thrown RAM_THROW_M. The car never kills the Hunter: DESIGN 4's
+   Hunter row is "faster than sprint, slower than tac-sprint and the car" -- the car wins that
+   chase by leaving, never by hitting. tests/enemies.mjs measures the throw off the world. */
+const RAM_KILL_SPEED = 12;
+const RAM_THROW_M = 6;
+const RAM_THROW_VY = 6.0;         // m/s up: airtime 2 vy / g = 0.55 s at GRAVITY 22
+
+/* ==========================================================================
+   THE PACK LETS GO — playtest 4, 2026-09-02.
+
+   Alex: "There are a massive amount of enemies which seems like too many who
+   never seem to go away and keep tracking me down. probably either spawn rate
+   or maybe they still always know where i am or something else."
+
+   They did always know where he was, and it was two lines. A HUNTING body
+   steered to the player's LIVE coordinate (the old `tx = p.pos.x` in
+   _approach), and the hunt flag, once raised past 80 m, was only ever lowered
+   inside 26 m — so a body whose memory of him had run out (aware 0) kept
+   converging on his real position at +72% anyway. Measured before the fix
+   with tools/frozen.mjs: the live count only ever went up, 0 -> 1 -> 3 -> 5
+   over 150 s, and nothing ever released a body short of a kill.
+
+   The law now: a hunt homes on the LAST-KNOWN point (heardX/heardZ, refreshed
+   only by a line of sight or a noise), a body that arrives there without
+   reacquiring him searches on its memory clock and then stands down, and a
+   body that has lost him reads as scenery again — it drifts to the point,
+   then home. The +72% survives for the FAR convergence the 80 m law is for,
+   but it is capped BELOW TAC-SPRINT.
+
+   ROUND 5, second pass. The first pass capped it at CFG.car.offRoad - 1.2 =
+   11.0 m/s and DESIGN was edited to claim "the car off-road (12.2) and
+   tac-sprint outrun a pack". That was false on the tac-sprint half and a
+   verifier caught it: tac-sprint is 9.20 m/s (config.js:126), so an 11.0 m/s
+   hunting body outran a tac-sprinting player by 1.8 m/s, and DESIGN §4's own
+   Hunter row already states the law the sentence was meant to restate —
+   "faster than sprint, slower than tac-sprint and the car". The design wins,
+   so the cap comes down under tac-sprint rather than the doc being softened.
+   It is also derived from the PLAYER block now, not the car block: the car is
+   another lane's file this round, and a constant that moves when a sibling
+   retunes a vehicle is a constant that makes this doc wrong silently.
+   tests/pack.mjs 6b MEASURES the fastest half-second a hunting hound covers
+   and asserts it under both numbers, read off CFG at runtime.
+   ========================================================================== */
+const HUNT_SPEED_CAP = CFG.player.tacSprint.speed - 0.4;   // 8.80 m/s: tac-sprint (9.20) and the car (12.2) both beat it
+const HUNT_ARRIVE_R = 6;          // m: "it reached the last-known point" — memory decays from here
+const HUNT_TRAIL_MAX_S = 30;      // s: the longest a trail may hold a memory open
+const LOST_R = 60;                // m: lose him this far away and it goes home; nearer, it searches the spot
+const HOME_R = 3;                 // m: close enough to the search point to turn for home
+
+/* THE CALM. ROUND 6, from round 5's verifier: a body the director called off turned for home
+   and re-committed seconds later -- 60 stand-downs in 200 s, 37 of them on ONE body -- because
+   nothing stopped it noticing the player again on the very next perception tick. A stood-down
+   body now carries CALM_S seconds in which it does not re-acquire him: not by sight, not by his
+   footsteps, not by another body's scream or the director's relay. Three things end it early,
+   each of them something HE did or the county did: he fires (hear() source 'shot', or he hurts
+   it), he walks inside CALM_NEAR_R of it, or the black hour begins. tests/pack.mjs asserts no
+   body is stood down more than twice in 200 s. */
+const CALM_S = 20;
+const CALM_NEAR_R = 12;
+const CALM_HARD_S = 5;            // the first seconds of a calm are absolute: no near exception (see _calmHolds)
+
+/* THE STALL WATCHDOG. NEXT.md 4b left one body unexplained: a pallbearer at 4.2 m, hp 12 of 90,
+   state approach, motionless for 6 s. Whatever it thought it was doing, an aware body that is not
+   committed to a strike and is not moving is what Alex reads as "they freeze". After
+   one still window (STALL_WIN_S) in approach it gives up its ring slot for a fresh one and
+   re-probes the trees; after two it BREAKS OFF into the flee state -- a body that
+   visibly moves away and comes back. Measured by tools/frozen.mjs --play; the flee state has a
+   minimum length so the break-off is a retreat and not a one-frame flicker. */
+const STALL_WIN_S = 0.8;          // s per window: re-slot after one still window, break off after two. A body that
+                                  // stops mid-window is caught inside three (2.4 s), under the probe's 2.5 s
+                                  // (r6a-frozen-play-150c.txt: 1.1 s windows let one hound stand 2.6 s at 48 m)
+const STALL_NET_M = 0.5;          // m of NET drift per window that counts as moving (0.62 m/s; a hound averages 4.7)
+const FLEE_MIN_S = 1.2;
+const CORNERED_S = 8.0;           // s a body that could not retreat stops trying to and fights instead
+// The first form of this watchdog measured drift from an anchor that moved whenever the body
+// had drifted 5 cm from it -- and MEASURED (tools/frozen.mjs --play, 2026-09-03,
+// tests/artifacts/r6a-frozen-play-150.txt) a hound grinding into a trunk stepped 6 cm forward and
+// was slid 6 cm back EVERY FRAME, reset the anchor every frame, read as "moving" for 56.6 s, and
+// stallT never left 0.1. The probe, sampling every sixth frame at the same phase, read it as still
+// the whole time. So the drift is NET, per window, and a jitter has no net.
+//
+// AND A CORNERED BODY FIGHTS. NEXT.md 4b's unexplained pallbearer -- 4.2 m, hp 12 of 90, motionless
+// for 6 s -- was the low-hp retreat (retreatBelow) sending a body straight away from the player into
+// a trunk, where the flee state had no watchdog and the body stood there, and then returned it to
+// approach for 0.6 s and sent it again. MEASURED 2026-09-03 (r6a-frozen-play-150b.txt): three
+// pallbearers at 5-6 m, hp 12, flee/approach/flee, and one FROZEN in flee at 16 m for 6 s. A flee
+// that makes no net progress in one window is a retreat that does not exist: the body is marked
+// cornered for CORNERED_S, the retreat rule is suspended, and it comes back at him.
 
 /* Autonomous trickle. director/director.js does not exist yet. Rather than ship
    a roster nobody can meet, this system spawns for itself UNTIL a director
@@ -332,6 +422,15 @@ export class Enemies {
     // published as awareCount so nobody has to walk the pool with a closure to
     // get it.
     this._awareNow = 0;
+    this._huntNow = 0;            // pressure bodies with the hunt flag up, same pass
+    this._lost = 0;               // memories that ran out (see _lose)
+    this._culled = 0;             // bodies the director released far away (see cull)
+    this._stoodDown = 0;          // bodies the director called off (see standDown)
+    this._relocated = 0;          // stuck-watchdog relocations (aware bodies only now)
+    this._respawnCleared = 0;     // bodies that forgot him on a respawn (see respawnClear)
+    this._stalls = 0;             // stall watchdog break-offs (see STALL_WIN_S)
+    this._cornered = 0;           // retreats that made no progress and turned into a fight (CORNERED_S)
+    this._black = false;          // the phase is the black hour, decided once a step
     this._warmed = false;
     this._warnedSpecies = null;   // lazily made: an unknown species id is warned about ONCE
 
@@ -441,6 +540,17 @@ export class Enemies {
 
     this._unsub.push(bus.on('noise', (p) => {
       if (p && p.source !== 'enemy') this.hear(p.x, p.z, p.radius, p.source || 'world');
+    }));
+
+    // ROUND 6: THE COUNTY CLEARS ON A RESPAWN. This lane had no listener at all (playtest 5:
+    // "If you respawn, I don't even know if they go away"). The director does the release
+    // sweep and the bubble (director.js _onRespawn); this lane's half is that every pressure
+    // body forgets him, and it happens even with no director in the manifest.
+    this._unsub.push(bus.on('player:respawn', (p) => {
+      const pl = this._sys('player');
+      const x = p && Number.isFinite(p.x) ? p.x : (pl && pl.pos ? pl.pos.x : 0);
+      const z = p && Number.isFinite(p.z) ? p.z : (pl && pl.pos ? pl.pos.z : 0);
+      this.respawnClear(x, z);
     }));
 
     // NOTE: there is deliberately no 'player:land' subscription. The player
@@ -574,13 +684,36 @@ export class Enemies {
     e.huntSpeedMul = on ? (mul || CFG.director.huntSpeedMul) : 1;
   }
 
+  /**
+   * THE DIRECTOR IS HOLDING, NOT JAMMED. The dead-man's handle (DIRECTOR_JAM_S) reads 25 s
+   * with no order and zero live bodies as a jammed sibling and resumes the trickle. A director
+   * that is deliberately holding the county empty -- the opening grace, the bubble after a
+   * respawn, a silence -- is not jammed, and the trickle resuming inside its bubble is exactly
+   * the thing the bubble forbids (MEASURED, tests/pack.mjs e: two pallbearers placed 29 m from
+   * a fresh respawn at t+53 s, by this lane, through relocate()). The director stamps this
+   * while it holds; outside those windows the handle keeps its meaning.
+   */
+  heartbeat() { this._lastAsk = this._t; }
+
+  /**
+   * Does the CALM stop this body re-acquiring him right now? For its first CALM_HARD_S seconds a
+   * calm is absolute; after that, his standing inside CALM_NEAR_R ends it. MEASURED (tests/pack.mjs
+   * e, r6a-pack-final1.txt): a body the respawn sweep stood down inside 12 m of where he came
+   * back noticed him again on the next tick, and the new life began with a body on him.
+   */
+  _calmHolds(e) {
+    if (!(e.calmT > 0)) return false;
+    if (e.calmT > CALM_S - CALM_HARD_S) return true;
+    return !(e.dist < CALM_NEAR_R);
+  }
+
   /** The black hour: the Hunter comes off the leash, the poachers go quiet. */
   setLeash(e, on) { this._lastAsk = this._t; if (e) e.leashed = !!on; }
   setHoldFire(e, on) { this._lastAsk = this._t; if (e) e.holdFire = !!on; }
 
   /** Wake everything inside a noise radius. Alias of hear(), which is the same law. */
-  wakeAll(x, z, radius) { this._lastAsk = this._t; this.hear(x, z, radius, 'director'); }
-  wake(x, z, radius) { this._lastAsk = this._t; this.hear(x, z, radius, 'director'); }
+  wakeAll(x, z, radius, source) { this._lastAsk = this._t; this.hear(x, z, radius, source || 'director'); }
+  wake(x, z, radius, source) { this._lastAsk = this._t; this.hear(x, z, radius, source || 'director'); }
 
   /**
    * The car's one call into this lane (car's HANDOFF section 4): a ram kills a
@@ -596,19 +729,33 @@ export class Enemies {
       const dx = e.pos.x - x, dz = e.pos.z - z;
       if (dx * dx + dz * dz > (r + e.def.radius) * (r + e.def.radius)) continue;
       hits++;
-      // Momentum, not a magic number: a two-tonne car at 8 m/s ends a 210 kg
-      // pallbearer and rocks a 150 kg Hunter, and the same line does both.
-      const dmg = Math.round(speed * speed * 2.6 / Math.max(40, e.def.mass) * 100);
+      // Momentum, not a magic number: speed squared over mass. At 8 m/s a 46 kg hound takes
+      // 361 and dies, a 210 kg pallbearer takes 79 of 90 and is thrown. At RAM_KILL_SPEED a
+      // hound or a pallbearer dies outright whatever its hp, and the Hunter is the exception
+      // written at RAM_KILL_SPEED above: the car never kills it, it staggers and throws it.
+      let dmg = Math.max(12, Math.round(speed * speed * 2.6 / Math.max(40, e.def.mass) * 100));
+      const hunter = e.def.id === 'hunter';
+      if (speed >= RAM_KILL_SPEED && !hunter) dmg = Math.max(dmg, e.hp + 1);
+      if (hunter) {
+        // damage() multiplies a staggered body's damage by 1.25; the cap has to survive that
+        const mul = e.staggerT > 0 ? 1.25 : 1;
+        if (Math.round(dmg * mul) >= e.hp) dmg = Math.max(1, Math.floor((e.hp - 1) / mul));
+      }
       _v.set(x, e.pos.y + e.def.height * 0.5, z);
-      const res = this.damage(e, Math.max(12, dmg), { zone: 'torso', point: _v, dist: 2 });
+      const res = this.damage(e, dmg, { zone: 'torso', point: _v, dist: 2 });
       if (!res.killed) {
         // a survivor is STAGGERED and thrown, never merely nudged
         e.staggerT = STAGGER_T;
         e.immuneT = STAGGER_T + STAGGER_IMMUNITY * 0.5;
         this._uncommit(e);
         if (e.state === 'windup' || e.state === 'attack') { e.state = 'recover'; e.stateT = 0; }
-        const kick = Math.min(speed * 0.55, 9);
-        e.vel.set((dirX || 0) * kick, 2.2, (dirZ || 0) * kick);
+        // The throw is a flight: horizontal kick x airtime (2 vy / g) is the distance, so
+        // RAM_THROW_M at RAM_KILL_SPEED and proportionally less below it. _integrate's airborne
+        // path lands it and item 5's corpse path drops it if it died in the air.
+        const k = clamp(speed / RAM_KILL_SPEED, 0.45, 1.25);
+        const vy = RAM_THROW_VY * k;
+        const kick = RAM_THROW_M * k / Math.max(0.2, 2 * vy / GRAVITY);
+        e.vel.set((dirX || 0) * kick, vy, (dirZ || 0) * kick);
         e.airborne = true;
       }
     }
@@ -716,6 +863,7 @@ export class Enemies {
     // anything that is hurt is awake, and a dormant thing that is shot RISES
     if (e.state === 'dormant') this._wake(e);
     if (e.def.owner === OWNER.PRESSURE) e.aware = 2;
+    e.calmT = 0;                                        // he shot it: the calm is over
     e.memT = e.def.memHunt || 9;
     e.heardX = p ? p.pos.x : e.pos.x;
     e.heardZ = p ? p.pos.z : e.pos.z;
@@ -759,6 +907,10 @@ export class Enemies {
       }
       if (!e.alive) continue;
       if (e.def.owner === OWNER.DREAD) continue;   // horror does not answer a gunshot
+      // THE CALM (CALM_S). A body that was called off does not answer footsteps, screams,
+      // pops or the director's relays; his gun ends it, and so does his standing next to it.
+      if (source === 'shot') e.calmT = 0;
+      else if (this._calmHolds(e)) continue;
       e.heardX = x; e.heardZ = z;
       if (e.aware < 1) e.aware = 1;
       e.memT = Math.max(e.memT, e.def.memAlert || 6);
@@ -975,6 +1127,9 @@ export class Enemies {
     e.reveal = REVEAL.FLOOR;
     e.navBest = undefined; e.navBestT = 0; e._navValid = false;
     e.lodFar = true;
+    e.trailT = 0; e.lostAt = 0; e._dirFarT = 0; e._dirQuietT = 0;
+    e.calmT = 0; e.stallT = 0; e.stallAX = x; e.stallAZ = z; e.stallN = 0; e.stoodDownN = 0; e.corneredT = 0;
+    e.gen++;
 
     // EVERY FIRST SIGHT IS PARTIAL BY CONSTRUCTION. A dormant species starts in
     // the ground and rises; everything else starts squashed at 0.34 and unfolds
@@ -1041,6 +1196,7 @@ export class Enemies {
 
     const p = this._sys('player');
     if (!p) return;
+    this._black = this._phase() === PHASE.BLACK;
 
     // frozen separation snapshot, then everybody reads the SAME crowd
     this.sep.begin();
@@ -1052,12 +1208,14 @@ export class Enemies {
     this._commit = 0;
     this._aliveNow = 0;
     this._awareNow = 0;
+    this._huntNow = 0;
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
       if (!e.alive) continue;
       this._aliveNow++;
       if (e.committed) this._commit++;
       if (e.aware > 0 && e.def.owner === OWNER.PRESSURE) this._awareNow++;
+      if (e.hunt) this._huntNow++;
     }
 
     // THE DEAD-MAN'S HANDLE, decided ONCE a step. `autonomous` is read per body
@@ -1149,7 +1307,24 @@ export class Enemies {
     e.immuneT = Math.max(0, e.immuneT - dt);
     e.leapCd = Math.max(0, e.leapCd - dt);
     e.screamCd = Math.max(0, e.screamCd - dt);
-    e.memT = Math.max(0, e.memT - dt);
+    // the calm runs down; the black hour ends it outright (the roster changes, the leash comes off)
+    if (e.calmT > 0) e.calmT = this._black ? 0 : Math.max(0, e.calmT - dt);
+    if (e.corneredT > 0) e.corneredT = Math.max(0, e.corneredT - dt);
+    // MEMORY runs out when it cannot see or hear you — except on a TRAIL. A hunting body
+    // converging on the point it last knew you at holds what it knows until it gets there
+    // (HUNT_ARRIVE_R) or HUNT_TRAIL_MAX_S passes, then searches there on the ordinary clock.
+    // Without this the hound's 8 s could not outlast a 100 m run at 6.9 m/s and HUNT
+    // never delivered; with it the trail ends where it ended, never on your coordinate.
+    if (e.hunt && e.aware > 0 && def.owner === OWNER.PRESSURE) {
+      const hx = e.heardX - e.pos.x, hz = e.heardZ - e.pos.z;
+      e.trailT += dt;
+      if (!(hx * hx + hz * hz > HUNT_ARRIVE_R * HUNT_ARRIVE_R && e.trailT < HUNT_TRAIL_MAX_S)) {
+        e.memT = Math.max(0, e.memT - dt);
+      }
+    } else {
+      e.trailT = 0;
+      e.memT = Math.max(0, e.memT - dt);
+    }
     // the breath after a bite, and the shorter one after a whiff
     e.breakoffT = Math.max(0, e.breakoffT - dt);
     e.recommitT = Math.max(0, e.recommitT - dt);
@@ -1157,7 +1332,7 @@ export class Enemies {
     // what makes "how long had he been able to see it before it hit him"
     // answerable, which is the question whatkilledme.mjs was built to ask.
     if (e.obsSelf) e.seenT += dt; else e.seenT = 0;
-    if (e.memT <= 0 && e.aware > 0 && def.owner === OWNER.PRESSURE) e.aware = 0;
+    if (e.memT <= 0 && e.aware > 0 && def.owner === OWNER.PRESSURE) this._lose(e);
     // the plain-boolean mirror the director and audio read (their handoffs);
     // aware is 0/1/2 and neither lane should have to know that
     e.alerted = e.aware > 0;
@@ -1187,8 +1362,14 @@ export class Enemies {
 
     if (e.staggerT > 0) {
       e.staggerT -= dt;
-      e.vel.x = damp(e.vel.x, 0, 8, dt);
-      e.vel.z = damp(e.vel.z, 0, 8, dt);
+      // A BODY IN THE AIR KEEPS ITS MOMENTUM. The ram staggers AND throws (ramHit), and this
+      // branch was damping the throw to nothing at rate 8 from the first airborne frame:
+      // MEASURED (tests/enemies.mjs, 2026-09-03) a Hunter kicked at 11 m/s for a 6 m flight
+      // landed 2.63 m away. The damping is the landing's, not the flight's.
+      if (!e.airborne) {
+        e.vel.x = damp(e.vel.x, 0, 8, dt);
+        e.vel.z = damp(e.vel.z, 0, 8, dt);
+      }
       this._integrate(e, dt);
       return;
     }
@@ -1275,7 +1456,23 @@ export class Enemies {
         e.vel.z = damp(e.vel.z, s.z * want, 8, dt);
         e.moving = true;
         e.yaw = dampAngle(e.yaw, Math.atan2(-e.vel.x, -e.vel.z), 8, dt);
-        if (e.stateT > 4.5 || e.hp > def.hp * 0.4) { e.state = 'approach'; e.stateT = 0; }
+        // CORNERED (see CORNERED_S): a retreat with no net progress in one window is over
+        e.stallT += dt;
+        if (e.stallT >= STALL_WIN_S) {
+          const fx = e.pos.x - e.stallAX, fz = e.pos.z - e.stallAZ;
+          e.stallAX = e.pos.x; e.stallAZ = e.pos.z; e.stallT = 0;
+          if (fx * fx + fz * fz <= STALL_NET_M * STALL_NET_M) {
+            e.corneredT = CORNERED_S;
+            e.state = 'approach'; e.stateT = 0; e.stallN = 0;
+            this._cornered++;
+            break;
+          }
+        }
+        // FLEE_MIN_S: a break-off is a visible retreat, whether it was hp or the stall
+        // watchdog that sent it; the old form returned a healthy body on the next frame.
+        if (e.stateT > FLEE_MIN_S && (e.stateT > 4.5 || e.hp > def.hp * 0.4)) {
+          e.state = 'approach'; e.stateT = 0; e.stallT = 0; e.stallN = 0; e.stallAX = e.pos.x; e.stallAZ = e.pos.z;
+        }
         break;
       }
 
@@ -1288,8 +1485,9 @@ export class Enemies {
 
     // hp < 25%: break for cover. It is a hound rule but every crowd unit reads
     // better for it — a thing that never disengages is a target, not an animal.
-    if (def.retreatBelow && e.hp < def.hp * def.retreatBelow && e.stateT > 0.6) {
+    if (def.retreatBelow && e.corneredT <= 0 && e.hp < def.hp * def.retreatBelow && e.stateT > 0.6) {
       e.state = 'flee'; e.stateT = 0; this._uncommit(e);
+      e.stallT = 0; e.stallN = 0; e.stallAX = e.pos.x; e.stallAZ = e.pos.z;
       return;
     }
 
@@ -1301,21 +1499,33 @@ export class Enemies {
     // the node harness, 5400 frames, zero commits. A clear line inside the
     // species' notice range is enough; carrying a light stretches it by 60%,
     // which is the same torch trade the poacher's accuracy charges you for.
-    if (e.aware === 0 && e.los) {
+    if (e.aware === 0 && e.los && !this._calmHolds(e)) {
       // off the leash (the black hour, director.js:807) it does not need to
       // notice you: it already knows.
       const reach = e.leashed === false ? 1e9 : def.notice * (1 + (e.playerLit || 0) * 0.6);
       if (e.dist <= reach) {
         e.aware = 1;
         e.memT = def.memAlert;
+        e.calmT = 0;
+        // THE sees HOLE (NEXT.md 4b): off the leash a body notices him from beyond 1.6x its
+        // notice range, where the sees test below never refreshes the last-known point, and
+        // it then steered to its own spawn. Noticing him IS knowing where he is, at that instant.
+        e.heardX = p.pos.x; e.heardZ = p.pos.z;
         evtReset(e, 'notice');
         _evt.y = e.pos.y + def.height * 0.7;
         this.ctx.bus.emit('enemy:telegraph', _evt);   // it ANSWERS. Silence reads as broken.
       }
     }
-    // while it can see you it always knows where you are; the memory is what
-    // runs out when it cannot
-    if (e.aware > 0 && e.los && e.dist < def.notice * 1.6) {
+    // while it can see you INSIDE ITS SENSES it always knows where you are; the
+    // memory is what runs out when it cannot. `sees` is the one rule for "knows
+    // where you are right now": a line, inside 1.6x the species' notice range
+    // (a hound's 48 m). It refreshes the last-known point and anchors the ring.
+    // ROUND 5, MEASURED: an earlier draft let a HUNTING body refresh on any line
+    // out to the 120 m LOS test, and four hounds then followed a sprinter down a
+    // straight road at 40-80 m for the whole 80 s run without ever losing him.
+    // A hunt homes on the trail's END; only the senses move the end.
+    const sees = e.aware > 0 && e.los && e.dist < def.notice * 1.6;
+    if (sees) {
       e.heardX = p.pos.x; e.heardZ = p.pos.z;
       e.memT = Math.max(e.memT, def.memAlert);
     }
@@ -1341,8 +1551,13 @@ export class Enemies {
     } else {
       a = this._ringPhase + slot * (TAU / RING_SLOTS);
     }
-    let tx = p.pos.x + Math.cos(a) * standoff;
-    let tz = p.pos.z + Math.sin(a) * standoff;
+    // The ring is anchored on where it KNOWS you are: your live position while it sees
+    // you (the same `sees` as the memory refresh), the last-known point when it does not.
+    // Anchoring an alerted body's ring on p.pos regardless of sight was the 26-80 m half
+    // of "they always know where I am".
+    const ax = sees ? p.pos.x : e.heardX, az = sees ? p.pos.z : e.heardZ;
+    let tx = ax + Math.cos(a) * standoff;
+    let tz = az + Math.sin(a) * standoff;
 
     // ---- HUNT: past 80 m an alerted PRESSURE body stops flavouring and
     // converges. Dread-owned bodies are exempt by law and never get here.
@@ -1359,10 +1574,15 @@ export class Enemies {
     }
     let want = def.speed;
     if (e.hunt) {
-      want *= e.huntSpeedMul || CFG.director.huntSpeedMul;
-      tx = p.pos.x; tz = p.pos.z;
+      // THE LAST-KNOWN POINT, never the live one, and never faster than the car off-road.
+      want = Math.min(want * (e.huntSpeedMul || CFG.director.huntSpeedMul), HUNT_SPEED_CAP);
+      tx = e.heardX; tz = e.heardZ;
     } else if (e.aware === 0 && e.memT <= 0) {
-      // unalerted: drift to the last thing it heard, or hold station
+      // unalerted: search the last thing it heard, then go home, then hold station.
+      // Scenery again — which is the whole horror rhythm, and what "never seem to go
+      // away" was missing.
+      const hx = e.heardX - e.pos.x, hz = e.heardZ - e.pos.z;
+      if (hx * hx + hz * hz < HOME_R * HOME_R) { e.heardX = e.homeX; e.heardZ = e.homeZ; }
       tx = e.heardX; tz = e.heardZ;
       want = def.speed * 0.42;
     }
@@ -1384,16 +1604,62 @@ export class Enemies {
     e.vel.x = damp(e.vel.x, dsx, 9, dt);
     e.vel.z = damp(e.vel.z, dsz, 9, dt);
 
-    // ---- the stuck watchdog, and the ONE place a body may be moved
-    if (progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
+    // ---- THE STALL WATCHDOG (STALL_WIN_S / STALL_NET_M). NET drift per window, not
+    // velocity: a body grinding into a trunk has a velocity and no motion. Aware only -- an
+    // unaware body holding station is scenery, and scenery is allowed to stand still.
+    if (e.aware > 0) {
+      e.stallT += dt;
+      if (e.stallT >= STALL_WIN_S) {
+        const ax = e.pos.x - e.stallAX, az = e.pos.z - e.stallAZ;
+        e.stallAX = e.pos.x; e.stallAZ = e.pos.z; e.stallT = 0;
+        if (ax * ax + az * az > STALL_NET_M * STALL_NET_M) e.stallN = 0;
+        else {
+          e.stallN++;
+          if (e.stallN >= 2) {
+            e.stallN = 0;
+            // FAR FROM HIM, THE ONE PLACE A BODY MAY BE MOVED (nav.js relocate: unseen, 22-46 m,
+            // aware bodies only). MEASURED (tests/pack.mjs b, r6a-pack-final1.txt): three hounds
+            // alerted at 90-100 m, grinding through a thicket, were read as stalled and sent
+            // FLEEING -- away from him -- every 1.6 s, and never came inside 57 m. A chaser
+            // scrabbling at a trunk is what relocate() was written for; the break-off is for a
+            // body near him, where a teleport would be in his face.
+            if (e.dist > NAV.STUCK_MIN_DIST && relocate(this.ctx, e, this.placeRng, _pt)) {
+              e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
+              e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
+              e.vel.set(0, 0, 0);
+              e._navValid = false;
+              e.stallAX = e.pos.x; e.stallAZ = e.pos.z;
+              this._relocated++;
+              resetProgress(e, tx, tz);
+              return;
+            }
+            e.state = 'flee'; e.stateT = 0; this._uncommit(e);
+            this._stalls++;
+            return;
+          }
+          this._releaseSlot(e); this._claimSlot(e);
+          e._navValid = false;
+        }
+      }
+    } else { e.stallT = 0; e.stallN = 0; e.stallAX = e.pos.x; e.stallAZ = e.pos.z; }
+
+    // ---- the stuck watchdog, and the ONE place a body may be moved.
+    // AWARE bodies only. relocate() lands a body 22-46 m from the PLAYER, unseen — right
+    // for a chaser scrabbling at a trunk, and a wallhack for a body that had lost him:
+    // an unaware body holding station is "stuck" by this measure after PATIENCE seconds
+    // and was being teleported back to his side every six seconds for as long as it
+    // lived. That is a second, quieter "they always know where I am". A body that is
+    // not chasing anyone is never moved.
+    if (e.aware > 0 && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
       if (relocate(this.ctx, e, this.placeRng, _pt)) {
         e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
         e.prevPos.copy(e.pos); e.currPos.copy(e.pos);   // never interpolate a relocation
         e.vel.set(0, 0, 0);
         e._navValid = false;
+        this._relocated++;
       }
       resetProgress(e, tx, tz);
-    }
+    } else if (e.aware === 0) resetProgress(e, tx, tz);
 
     // ---- the hunter's scream: it does not sneak, it recruits
     if (def.screamRadius && e.aware > 0 && e.screamCd <= 0 && e.dist < 46) {
@@ -1421,7 +1687,10 @@ export class Enemies {
         this._squadLeapAt = this._t;
       } else if (def.lungeRange && e.dist <= def.lungeRange) {
         e.attackKind = 'lunge';
-      } else if (e.dist <= def.strikeRange + 1.1) {
+      } else if (e.dist <= def.strikeRange + (e.corneredT > 0 ? 2.6 : 1.1)) {
+        // a CORNERED body (see CORNERED_S) commits from where it stands: MEASURED a pallbearer
+        // at 2.4 m, 0.34 m outside this reach, taking the token and dropping it every frame
+        // for 6 s (r6a-frozen-play-150d.txt). It swings, and may miss, and that reads.
         e.attackKind = 'strike';
       } else {
         this._uncommit(e);
@@ -1441,8 +1710,12 @@ export class Enemies {
     // UNAWARE -> ALERTED -> HUNTING, with memories. It sees you by your LIGHT
     // and by what you shoot; a dark, quiet player is genuinely not seen.
     if (e.aware === 0) {
-      const sees = e.los && e.dist < 60 && (e.playerLit > 0.15 || e.dist < 22);
-      if (sees) { e.aware = 1; e.memT = def.memAlert; e.heardX = p.pos.x; e.heardZ = p.pos.z; }
+      // the CALM holds here too (round 6): a called-off poacher does not re-acquire him by
+      // sight for CALM_S unless he is inside CALM_NEAR_R. Measured before this line existed:
+      // one poacher stood down five times in eight seconds (tests/pack.mjs c).
+      const sees = e.los && e.dist < 60 && (e.playerLit > 0.15 || e.dist < 22)
+        && !this._calmHolds(e);
+      if (sees) { e.aware = 1; e.memT = def.memAlert; e.calmT = 0; e.heardX = p.pos.x; e.heardZ = p.pos.z; }
     } else if (e.aware === 1) {
       if (e.los && e.dist < 55) {
         e.aware = 2; e.memT = def.memHunt;
@@ -1479,14 +1752,16 @@ export class Enemies {
     e.vel.x = damp(e.vel.x, s.x * want + _sep.x * 2.0, 8, dt);
     e.vel.z = damp(e.vel.z, s.z * want + _sep.z * 2.0, 8, dt);
 
-    if (progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
+    // aware only — see the note on the same watchdog in _approach
+    if (e.aware > 0 && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
       if (relocate(this.ctx, e, this.placeRng, _pt)) {
         e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
         e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
         e.homeX = _pt.x; e.homeZ = _pt.z;
+        this._relocated++;
       }
       resetProgress(e, tx, tz);
-    }
+    } else if (e.aware === 0) resetProgress(e, tx, tz);
 
     // holdFire is the black hour's other half: the poachers go quiet
     // (director.js:809). They still stalk; they just stop shooting.
@@ -1826,6 +2101,8 @@ export class Enemies {
     e.hunt = false; e.huntSpeedMul = 1;
     e.state = 'corpse';
     e.deathT = 0;
+    // a corpse has no stagger, no immunity and no calm: see _stepCorpse for the freeze this fixes
+    e.staggerT = 0; e.immuneT = 0; e.calmT = 0;
     this._uncommit(e);
     this._releaseSlot(e);
     // the corpse leaves ALONG the shot, not into it: _dir points from the
@@ -1856,6 +2133,21 @@ export class Enemies {
 
   _stepCorpse(e, dt) {
     e.deathT += dt;
+    // THE DEATH FREEZE (playtest 5: "Often they just freeze when they die. I'm not sure why").
+    // staggerT was only ever run down in the ALIVE step, and present() drew the stagger wobble
+    // BEFORE the corpse fall -- so a body killed while staggered (a ram, a burst inside the
+    // 400 ms window, where it also takes x1.25 and so dies MORE often exactly then) kept
+    // staggerT > 0 for ever and stood upright, wobbling, never falling. The corpse runs every
+    // timer down now, _kill zeroes them, and present() draws the corpse first. tools/frozen.mjs
+    // --states kills one of every species in every state and measures the DRAWN pose;
+    // tests/enemies.mjs asserts the staggered case and fails with this reverted.
+    if (e.staggerT > 0) e.staggerT = Math.max(0, e.staggerT - dt);
+    if (e.immuneT > 0) e.immuneT = Math.max(0, e.immuneT - dt);
+    e.flinchT += dt;
+    e.windowT += dt;
+    // a body killed mid-rise finishes unfolding on its way down, so it is never a squashed
+    // corpse two thirds under the ground (present() sinks a squashed body on purpose)
+    if (e.riseSquash < 1) e.riseSquash = Math.min(1, e.riseSquash + dt * 1.6);
     if (e.airborne || e.pos.y > groundY(this.ctx, e.pos.x, e.pos.z) + 0.05) {
       e.vel.y -= GRAVITY * dt;
       e.pos.x += e.vel.x * dt;
@@ -1880,9 +2172,108 @@ export class Enemies {
     e.alive = false;
     e.dead = true;
     e.alerted = false;
+    e.hunt = false; e.huntSpeedMul = 1;
     e.state = 'dead';
     e.built.group.visible = false;
     this._releaseSlot(e);
+  }
+
+  /**
+   * ITS MEMORY OF YOU RAN OUT. The one place a pressure body stops knowing where
+   * you are: no aggro, no hunt, no +72%, and the search point is where the trail
+   * ended — never your live coordinate, and never a snap to attention elsewhere.
+   * Beyond LOST_R it turns for home at once; nearer, it drifts to the spot it
+   * last knew you at and sniffs there (the unaware branch of _approach), which
+   * is what a dog that lost you nearby does.
+   */
+  _lose(e) {
+    e.aware = 0;
+    e.alerted = false;
+    e.hunt = false; e.huntSpeedMul = 1;
+    e.trailT = 0;
+    e.navBest = undefined;
+    e.lostAt = e.dist || 0;
+    if (e.lostAt > LOST_R) { e.heardX = e.homeX; e.heardZ = e.homeZ; }
+    this._lost++;
+  }
+
+  /**
+   * THE FAR CULL — the director's one release verb (director.js _fnCensus /
+   * _cullFar). A PRESSURE body that is unaware, far beyond anything the player
+   * can see, and has been so for a while, goes back into the pool through this
+   * lane's own release path: it is never on screen and it is never inside the
+   * fight, so nothing vanishes in front of him. Dread-owned bodies are not the
+   * director's to cull (DESIGN §4) and are refused here as well as there.
+   * Returns true if a body was released.
+   */
+  cull(e) {
+    this._lastAsk = this._t;
+    if (!e || !e.alive || e.def.owner !== OWNER.PRESSURE) return false;
+    this._uncommit(e);
+    this._release(e);
+    this._culled++;
+    return true;
+  }
+
+  /**
+   * STAND DOWN — the director's cooling verb (director.js _cool, COOL_MARGIN). A
+   * PRESSURE body that is following the player as part of a surplus the thermostat
+   * does not want forgets him exactly the way its memory running out would (_lose),
+   * and turns for home from where it stands rather than searching the spot it last
+   * knew him at — it is not a dog that lost the scent, it is a dog that was called
+   * off. The director only asks for bodies the player cannot see; a body mid-attack
+   * is refused here as well as there. Dread is never the director's. Returns true if
+   * the body stood down.
+   */
+  standDown(e) {
+    this._lastAsk = this._t;
+    if (!e || !e.alive || e.def.owner !== OWNER.PRESSURE || e.aware <= 0) return false;
+    // never mid-strike and never mid-air: a body called off in a lunge changes its mind in
+    // front of him
+    if (e.state === 'windup' || e.state === 'attack' || e.airborne) return false;
+    this._uncommit(e);
+    this._lose(e);
+    // ROUND 6: the round-5 verifier's oscillation. _lose left memT alone and nothing stopped
+    // the next perception tick noticing him again, so the body turned for home and turned
+    // back, twenty times. The memory is cleared and the CALM begins (CALM_S).
+    e.memT = 0;
+    e.calmT = CALM_S;
+    e.stoodDownN++;
+    e.heardX = e.homeX; e.heardZ = e.homeZ;
+    this._stoodDown++;
+    return true;
+  }
+
+  /**
+   * A NEW LIFE BEGINS THE WAY THE FIRST ONE DID. player:respawn (playtest 5: "If you respawn,
+   * I don't even know if they go away, or if more just respawn super fast" -- they did not go
+   * away; this lane had no listener at all). EVERY pressure body loses the trail -- not
+   * "beyond" some radius, all of them: no aware, no memory, no hunt, no token, the calm on, a
+   * windup or a strike cancelled into recover, and its search point set to its home. The
+   * director then releases what is inside 90 m and unseen and stands down what he can see
+   * (director.js _onRespawn); this is the half that is this lane's. Returns how many cleared.
+   */
+  respawnClear(x, z) {
+    this._lastAsk = this._t;
+    let n = 0;
+    for (let i = 0; i < this.all.length; i++) {
+      const e = this.all[i];
+      if (!e.alive || e.def.owner !== OWNER.PRESSURE) continue;
+      if (e.state === 'dormant') continue;
+      this._uncommit(e);
+      if (e.state === 'windup' || e.state === 'attack') { e.state = 'recover'; e.stateT = 0; }
+      e.aware = 0; e.alerted = false;
+      e.memT = 0; e.trailT = 0;
+      e.hunt = false; e.huntSpeedMul = 1;
+      e.calmT = CALM_S;
+      e.telegraphCharge = 0;
+      e.built.telegraph(0);
+      e.heardX = e.homeX; e.heardZ = e.homeZ;
+      e.navBest = undefined;
+      n++;
+    }
+    this._respawnCleared += n;
+    return n;
   }
 
   /* ------------------------------------------------- the front-commit law -- */
@@ -2000,6 +2391,10 @@ export class Enemies {
     e.built.group.visible = true;
     e.aware = 1;
     e.memT = 12;
+    // THE sees HOLE (NEXT.md 4b): a risen body had no last-known point and steered to its
+    // own grave. It rises knowing where he was the instant it woke.
+    const pw = this._sys('player');
+    if (pw && pw.pos) { e.heardX = pw.pos.x; e.heardZ = pw.pos.z; }
     this._emitNoise(e.pos.x, e.pos.z, 16, 'enemy');
     evtReset(e, 'rise');
     this.ctx.bus.emit('enemy:telegraph', _evt);
@@ -2299,9 +2694,18 @@ export class Enemies {
         e.built.group.visible = false;
         const rec = this.impostors.get(e.species);
         if (rec && rec.n < rec.mesh.instanceMatrix.count) {
-          const h = e.def.height * e.scale * squash;
-          const w = h * rec.mesh.userData.aspect;
-          // camera-facing card, upright: yaw only, so it never lies down
+          let h = e.def.height * e.scale * squash;
+          let w = h * rec.mesh.userData.aspect;
+          // camera-facing card, upright: yaw only, so it never lies down -- and a CORPSE card
+          // FLATTENS with the rig's own 0.55 s fall (to 30% of its height, half again as
+          // wide), because a body killed past the 40 m line was a standing silhouette for
+          // ever: rolling the card would raise its width into height, so it lies down by
+          // shape instead. tools/frozen.mjs --states, the impostor row, reads the instance.
+          if (e.state === 'corpse') {
+            const fall = clamp01(e.deathT / 0.55);
+            h *= 1 - 0.7 * fall;
+            w *= 1 + 0.5 * fall;
+          }
           _q.setFromAxisAngle(_UP, Math.atan2(camX - x, camZ - z));
           _v.set(x, y, z);
           _sc.set(w, h, 1);
@@ -2330,15 +2734,16 @@ export class Enemies {
         g.position.z += Math.cos(gait * 24 + e.id) * 0.045 * remaining;
       }
 
-      // stagger and flinch read on the body, at render time only
-      if (e.staggerT > 0) {
-        g.position.y -= 0.26 * Math.sin(Math.PI * clamp01(1 - e.staggerT / STAGGER_T));
-        g.rotation.z = Math.sin(e.staggerT * 34) * 0.08;
-      } else if (e.state === 'corpse') {
+      // THE CORPSE FIRST, then stagger and flinch: a dead body falls whatever it was doing when
+      // it died. The old order let a live stagger timer keep a corpse upright (_stepCorpse).
+      if (e.state === 'corpse') {
         const fall = clamp01(e.deathT / 0.55);
         g.rotation.z = fall * (Math.PI / 2) * (e.deathSpin > 0 ? 1 : -1) * 0.92;
         g.rotation.y = yaw + e.deathSpin * Math.min(e.deathT, 0.5);
         g.position.y += 0.2 * (1 - fall);
+      } else if (e.staggerT > 0) {
+        g.position.y -= 0.26 * Math.sin(Math.PI * clamp01(1 - e.staggerT / STAGGER_T));
+        g.rotation.z = Math.sin(e.staggerT * 34) * 0.08;
       } else {
         g.rotation.z = 0;
       }
@@ -2400,7 +2805,7 @@ export class Enemies {
 
   telemetry() {
     let alive = 0, dormant = 0, corpses = 0, far = 0, committed = 0, draws = 0;
-    let breaking = 0;
+    let breaking = 0, calm = 0;
     const byKind = {};
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
@@ -2412,6 +2817,7 @@ export class Enemies {
       if (e.lodFar) far++;
       if (e.committed) committed++;
       if (e.breakoffT > 0) breaking++;
+      if (e.calmT > 0) calm++;
       byKind[e.species] = (byKind[e.species] || 0) + 1;
     }
     for (let i = 0; i < this.impostorList.length; i++) {
@@ -2444,6 +2850,24 @@ export class Enemies {
       // crouched approach is genuinely quieter than a walking one rather than
       // merely feeling like it.
       awarePressure: this._awareNow,
+      // THE PACK LETS GO — the four numbers playtest 4 needed and did not have.
+      // hunting     bodies with the hunt flag up right now
+      // lost        memories that ran out since boot (a pack standing down)
+      // culled      bodies the director released far away, unseen
+      // relocated   stuck-watchdog relocations; aware bodies only, since round 5
+      hunting: this._huntNow,
+      lost: this._lost,
+      culled: this._culled,
+      stoodDown: this._stoodDown,
+      relocated: this._relocated,
+      // ROUND 6
+      // calm           bodies still inside their CALM_S after a stand-down
+      // respawnCleared bodies that forgot him on a respawn
+      // stalls         stall-watchdog break-offs (an aware body that stopped moving)
+      calm,
+      respawnCleared: this._respawnCleared,
+      stalls: this._stalls,
+      cornered: this._cornered,
     };
   }
 
@@ -2564,11 +2988,23 @@ function makeRecord(id, species, def, built, rng) {
     // `p.zone || p.e.lastZone`, so a wrong answer is a wrong reward.
     lastZone: 'torso', lastMelee: false,
     aware: 0, memT: 0, heardX: 0, heardZ: 0, homeX: 0, homeZ: 0,
+    // trailT   seconds this hunt has been on its trail (see the memory clause in _stepEnemy)
+    // lostAt   metres from the player when its memory last ran out, for the dump
+    // _dirInCone / _dirFarT / _dirQuietT   the DIRECTOR's bookkeeping on this record
+    //          (director.js _fnCensus): declared here so the shape is fixed at boot.
+    trailT: 0, lostAt: 0, _dirInCone: false, _dirFarT: 0, _dirQuietT: 0,
+    // ROUND 6
+    // calmT       seconds a stood-down body refuses to re-acquire him (CALM_S)
+    // gen         spawn generation of this slot, so a probe can tell one life from the next
+    // stallT      the stall watchdog's window clock; stallN its count of still windows (STALL_WIN_S)
+    // stoodDownN  how many times THIS life was called off (tests/pack.mjs: <= 2 per 200 s)
+    calmT: 0, gen: 0, stallT: 0, stallAX: 0, stallAZ: 0, stallN: 0, stoodDownN: 0, corneredT: 0,
     band: 1, aim: 0, screamCd: 0,
     tickT: 0, tick: 0, observedT: 0,
     dist: undefined, los: false, litSelf: false, obsSelf: false, playerLit: 0,
     reveal: 1, lodFar: true,
     navBest: undefined, navBestT: 0,
+    navMoved: 0, navLastX: 0, navLastZ: 0,      // nav.js progress(): metres really covered
     _navYaw: rng.next() * TAU, _navValid: false, _navBlocked: false,
     anim: { gait: 0, moveAmp: 0, coil: 0, swing: 0, bank: 0, aim: 0, tick: 0 },
   };

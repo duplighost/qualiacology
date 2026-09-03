@@ -1459,6 +1459,12 @@ export class Dread {
     else S.observed = Math.max(0, S.observed - d * 2);
 
     if (!S.vanishing) {
+      // ROUND 6 (lane G): LAMP's Resolve, the hook nothing ran (NEXT.md 3). ONE read, here,
+      // at the reveal decision — nodes.js HOOK_POINTS 'resolveWatchers'. With the node owned
+      // and the torch on, what the beam has found HOLDS: it no longer leaves the instant you
+      // look away, nor once you have stared long enough. The withdrawal at 8 m and the ttl
+      // are untouched, so it is still a thing that goes, on its own terms.
+      const resolved = this._resolveWatchers();
       // The withdrawal. Closing to 8 m is the gut punch, and it beats every other exit.
       if (dxz < D.watcherGone) {
         S.vanishing = true; S.vt = 0; S.approached = true;
@@ -1468,10 +1474,10 @@ export class Dread {
         this.answer('withdraw', S.x, S.y + 1.4, S.z, 1);
         const fx = this._sys('fx');
         if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(0.05);
-      } else if (S.seen && !watched && S.observed <= 0) {
+      } else if (!resolved && S.seen && !watched && S.observed <= 0) {
         // [marrow entity.js:388-391] the starer is gone the instant you look away.
         S.vanishing = true; S.vt = 0;
-      } else if (S.observed > D.watcherDwell + dxz * 0.04 || S.t > S.ttl) {
+      } else if ((!resolved && S.observed > D.watcherDwell + dxz * 0.04) || S.t > S.ttl) {
         S.vanishing = true; S.vt = 0;
       }
     }
@@ -1483,6 +1489,20 @@ export class Dread {
       }
     }
     S.sway += d * 0.9;
+  }
+
+  /**
+   * ROUND 6 (lane G): the one read of 'resolveWatchers'. The hook runs whenever a watcher is
+   * stepped, so progress.hookReport() counts it; the ANSWER is only yes with the torch on,
+   * because the node is "what the BEAM finds". Lazy sibling reads, nothing retained.
+   */
+  _resolveWatchers() {
+    const prog = this._sys('progress');
+    if (!prog || typeof prog.perk !== 'function') return false;
+    const yes = prog.perk('resolveWatchers', false) === true;
+    if (!yes) return false;
+    const lights = this._sys('lights');
+    return !!(lights && typeof lights.torchOn === 'function' && lights.torchOn());
   }
 
   _stepRunner(d) {

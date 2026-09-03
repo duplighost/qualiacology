@@ -9,6 +9,12 @@
 //   why the weapon can read lookDelta and give the player's counter-input first claim on
 //   the recoil accumulator.
 //
+// ROUND 6 (lane H): the FOV has ONE writer, this file. The car's speed FOV used to be a
+// second writer of cam.fov in vehicle/car.js present(); measured with tools/carsmooth.mjs the
+// two fought and the speed FOV reached the screen only while the speed was changing (a 6.7 /
+// 10.2 / 13.0 degree second difference at 12 / 18 / 23 m/s, the one presentation-side jitter
+// the table found). It is now a BIAS handed in through setFovBias() and carried by fovNow.
+//
 // Two structural things beyond VIGIL:
 //   1. prev/curr for yaw and pitch, lerped by present(alpha). VIGIL composed the camera
 //      inside the sim step; CURFEW's loop is fixed-step with interpolated rendering, so
@@ -98,6 +104,7 @@ export class PlayerCamera {
     this.sprintT = 0;
     this.tacT = 0;
     this.fovNow = CFG.render.fov;      // ONE damped FOV clock: base / sprint / ADS all on it
+    this.fovBias = 0;                  // ...plus whatever another lane adds (the car's speed term)
 
     this._lookDone = false;
   }
@@ -143,6 +150,15 @@ export class PlayerCamera {
   }
 
   addTrauma(v) { this.trauma = Math.min(1, this.trauma + v); }
+
+  /**
+   * A FOV term another lane adds on top of base / sprint / ADS — the car's speed FOV
+   * (vehicle/car.js _driveFov, round 6). Degrees; 0 clears it. It rides the SAME damped
+   * fovNow clock (CFG.camera.fovDamp), so cam.fov has exactly one writer and nothing can
+   * fight it for the projection matrix. Read in step(); a value set after our step lands
+   * on the next one, which is one fixed step of latency on a term the speed itself damps.
+   */
+  setFovBias(v) { this.fovBias = Number.isFinite(v) ? v : 0; }
 
   /** Aim kick: the ONE thing allowed to move truth, because it must move bullets too. */
   addAimKick(pitchRad, yawRad) {
@@ -237,6 +253,7 @@ export class PlayerCamera {
     const adsEase = ease.inOutQuad(adsT);
     let target = lerp(CFG.render.fov, C.fovSprint + TAC_FOV_EXTRA * this.tacT, ease.outCubic(this.sprintT));
     target = lerp(target, C.fovAds, adsEase);
+    target += this.fovBias;             // the car's speed term (setFovBias), same clock
     if (wep && wep.fovPunch) target += wep.fovPunch;
     this.fovNow = damp(this.fovNow, target, C.fovDamp, dt);
 
@@ -322,7 +339,7 @@ export class PlayerCamera {
 
   /** For window.__CURFEW.state(). */
   state() {
-    return { yaw: this.yaw, pitch: this.pitch, fov: this.fovNow, trauma: this.trauma };
+    return { yaw: this.yaw, pitch: this.pitch, fov: this.fovNow, fovBias: this.fovBias, trauma: this.trauma };
   }
 
   dispose() {}

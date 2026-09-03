@@ -51,7 +51,7 @@
 //
 // THE WHEEL BRANCH OF THE SKILL TREE IS WIRED HERE. progression/nodes.js declares four
 // hook points whose `runner` is 'car' and every one of them names a call site in this
-// file: 'hotwireS' (_beginEnter), 'ramMinSpeed' (_ram), 'onHorn' (_horn) and 'wearRepair'
+// file: 'hotwireS' (_beginEnter), 'ramClean' (_ram, round 6), 'onHorn' (_horn) and 'wearRepair'
 // (_stepIdle's parked branch). Until this round none of them was ever called, so the whole
 // branch was four cards that bought nothing. progress is read LAZILY through `_progress`,
 // it is manifest #20 against our #19, and every call site works with it absent.
@@ -61,7 +61,7 @@ import { CFG } from '../config.js';
 import { clamp, clamp01, damp, dampAngle, lerp, ease, TAU } from '../engine/math.js';
 import { ACTIONS } from '../engine/input.js';
 import { MASK } from '../world/collision.js';
-import { buildCarBody, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR, DOOR_HINGE } from './carbody.js';
+import { buildCarBody, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR, DOOR_HINGE, FOOTPRINT } from './carbody.js';
 
 const K = CFG.car;
 const SP = K.spawn;
@@ -154,7 +154,13 @@ const PILOT_CRUISE = 9.5;         // m/s the pilot holds on its approach
 const PILOT_BRAKE_AT = 13.0;      // start shedding speed this far out
 const PILOT_ARRIVE = 1.4;         // close enough: cut the engine
 
-const RAM_SPEED = 8.0;            // DESIGN section 3: kills a pallbearer at >= 8 m/s
+// THE RAM (round 6, lane H). CFG.car.ram carries the base speed (DESIGN section 3: 8 m/s,
+// no node), the WHEEL node's clean-pop speed and the scrub-by-mass table; CFG.car.trunk the
+// stuck-against-a-trunk escape. Both guarded with the shipped numbers, so a config block that
+// has not merged yet still drives.
+const RAM = K.ram || { speed: 8.0, cleanSpeed: 12.0, scrubLight: 0.15, scrubHeavy: 0.35, massLight: 46, massHeavy: 210, keepFloor: 0.40 };
+const TRUNK = K.trunk || { stuckSpeed: 2.5, stuckRamp: 0.50, stuckGain: 0.45 };
+const CONTACT_MEMORY = 0.12;      // s without a hit before a trunk contact counts as over
 const RAM_RADIUS = 2.4;
 const RAM_EVERY = 0.20;
 
@@ -229,12 +235,16 @@ const RELAX_CONE_MIN = 65;        // m. Last-resort candidates may be ahead, but
                                   // out — at 65 m in this fog a cold, dark car is not visible,
                                   // and the pilot still drives the last 30 m so you hear it.
 
-// AUDIT FIX. player/camera.js also writes cam.fov every frame. If both lanes write
-// whenever they see a value that is not their own, each one's write looks like a change
-// to the other and the pair recompiles the projection matrix every single frame for the
-// whole drive. So this file compares against ITS OWN last written target, never against
-// cam.fov, and writes only when that target actually moved.
-const FOV_EPS = 0.02;
+// ROUND 6, LANE H — THE FOV HAS ONE OWNER. This file used to write cam.fov itself in
+// present(), comparing against its own last write (an epsilon of 0.02) so as not to fight
+// player/camera.js, which writes cam.fov every frame. Measured with tools/carsmooth.mjs on the
+// round-5 build: the camera's write won on every frame the car's target had not moved by more
+// than the epsilon, so at a HELD speed the speed FOV was simply absent (68) and it reached the
+// screen only while the speed was changing — a 6.7 / 10.2 / 13.0 degree second difference at
+// 12 / 18 / 23 m/s, the one presentation-side jitter the table found. Now the car never
+// touches cam.fov: _driveFov hands the camera a speed term in the STEP through
+// camera.setFovBias(), and the camera's single damped fovNow clock (CFG.camera.fovDamp)
+// carries it to the screen.
 
 /* Module scratch. The hot path allocates nothing (CONTRACT). */
 const _v = new THREE.Vector3();
@@ -348,12 +358,18 @@ export class Car {
 
     // ---- camera reparent
     this.fromX = 0; this.fromY = 0; this.fromZ = 0;
-    this.fovNow = SEAT.fov;
-    // The fov the camera lane was holding when we took the seat, and the last fov THIS
-    // file wrote. `_fovLast` is NaN whenever we do not own the fov, so the first frame of
-    // an entry always writes and the camera lane gets it back untouched on exit.
-    this.baseFov = (CFG.render && CFG.render.fov) || SEAT.fov;
-    this._fovLast = NaN;
+    // The speed term this file last handed the camera (camera.setFovBias, round 6). Kept
+    // only so state() can report it: the camera owns cam.fov outright.
+    this.fovBias = 0;
+    // The trunk escape (round 6): seconds spent slow, throttle held, against a trunk.
+    this.stuckT = 0;
+    this._throttle = 0;
+    // Which way the car slides off the trunk it is touching: +1 / -1, chosen once per
+    // contact and kept until the contact ends (0 = no contact). See _resolveContacts.
+    this._slideSide = 0;
+    this._sinceHit = 99;
+    // The last ram, for state() and tests/car.mjs. Written in place on the fixed step.
+    this._ramLast = { hits: 0, n: 0, mass: 0, before: 0, after: 0, keep: 1, clean: false };
 
     // ---- the carry (see _carryPlayer). `_carried` is what WE asked for; the player lane
     // owns whether it took, and owns player:died / player:respawn (integrator decision 3).
@@ -847,6 +863,7 @@ export class Car {
     this.hotwired = false;      // every spawn is a fresh hotwire
     this.engineOn = true;
     this.hitCooldown = 0;
+    this.stuckT = 0;
     this.spawnCooldown = SPAWN_COOLDOWN;
     this._sync();
     this._removeRoof();
@@ -956,6 +973,24 @@ export class Car {
       }
     }
     this._roofPlaced = false;
+  }
+
+  /**
+   * For lane E's mantle (round 6, BRIEF-COMMON contract): the top of the car body if (x, z)
+   * is over its footprint — in the car's yawed local frame — else null. The same answer the
+   * three parked roof circles give (_placeRoof: y + ROOF_Y), but true while the car is
+   * moving too, and a box rather than three circles so a foot on the bonnet or the tailgate
+   * is over the car. Pure; allocates nothing; null while no car exists.
+   */
+  roofHeightAt(x, z) {
+    if (!this.exists) return null;
+    const dx = x - this.x, dz = z - this.z;
+    const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
+    const rx = Math.cos(this.heading), rz = -Math.sin(this.heading);
+    const lx = dx * rx + dz * rz;          // local X: + is the passenger side
+    const lz = -(dx * fx + dz * fz);       // local Z: forward is -Z, so the nose is negative
+    if (lx < -FOOTPRINT.hx || lx > FOOTPRINT.hx || lz < FOOTPRINT.z0 || lz > FOOTPRINT.z1) return null;
+    return this.y + ROOF_Y;
   }
 
   /* ------------------------------------------------------------------- step */
@@ -1256,9 +1291,6 @@ export class Car {
     const cam = this.ctx.camera;
     if (cam) {
       this.fromX = cam.position.x; this.fromY = cam.position.y; this.fromZ = cam.position.z;
-      // the fov the camera lane was holding on foot: the reparent blends out of it and
-      // the exit blends back into it, so we hand the value back exactly as we found it.
-      if (typeof cam.fov === 'number') this.baseFov = cam.fov;
     } else { this.fromX = this.x; this.fromY = this.y + SEAT.y; this.fromZ = this.z; }
     this.mode = 'entering';
     this.enterT = 0;
@@ -1271,8 +1303,8 @@ export class Car {
     this.hotwireT = this.hotwired ? 0 : this.hotwireTotal;
     this.crankPips = 0;
     this.ctx.shared.inCar = true;
-    this.fovNow = this.baseFov;
-    this._fovLast = NaN;
+    this.stuckT = 0;
+    this._setFovBias(0);          // the speed term starts at zero and rides the reparent up
     this._removeRoof();
 
     // Freeze the body, then place it ONCE. teleport() collapses prev/curr, which is
@@ -1298,6 +1330,7 @@ export class Car {
     // the player rides with the car from the moment the door shuts, so the world streams
     // around the CAR and the torch, the moon box and the chunk ring all follow it.
     this._carryPlayer();
+    this._driveFov(clamp01(this.enterT / REPARENT));
 
     if (this.enterT < REPARENT) return;
 
@@ -1342,6 +1375,7 @@ export class Car {
 
     this._integrate(dt, steerIn, throttle, brake, hardBrake ? 1 : 0);
     this._carryPlayer();
+    this._driveFov(1);
     this._ram(dt);
     this._horn(dt);
 
@@ -1443,11 +1477,12 @@ export class Car {
   _stepExiting(dt) {
     this._settle(dt);
     this.enterT += dt;
+    this._driveFov(1 - clamp01(this.enterT / REPARENT));
     if (this.enterT < REPARENT) return;
     this.mode = 'idle';
     this.ctx.shared.inCar = false;
     this.spawnCooldown = SPAWN_COOLDOWN;
-    this._fovLast = NaN;          // the camera lane owns cam.fov again from here
+    this._setFovBias(0);          // the seat's speed term leaves with the seat
     this._placeRoof();
     this._emit('car:exited', null);
   }
@@ -1463,6 +1498,7 @@ export class Car {
    * Every constant that CFG.car owns is read from CFG; the rest carry their donor line above.
    */
   _integrate(dt, steerIn, throttle, brake, hardBrake) {
+    this._throttle = throttle ? 1 : 0;   // _resolveContacts: the trunk escape counts throttle-held time
     const roads = this._roads, terr = this._terrain;
     const rd = roads ? roads.roadDistance(this.x, this.z) : 99;
     const onRoad = rd < ON_ROAD_D;
@@ -1626,7 +1662,23 @@ export class Car {
       }
     }
 
-    if (!hit) return;
+    // THE TRUNK ESCAPE (round 6, lane H — "It's not super smooth"). Full throttle into a
+    // trunk used to grind at ~0.7 m/s for ever (round 5's D report): the throttle's 7 m/s^2
+    // and the head-on scrub reached equilibrium there, and the slide-off nudge below is
+    // scaled by speed / 14, so at 0.7 m/s it was 5% of itself and never turned the car off
+    // the bark. Now the time spent slow, throttle held, in contact is counted, and the nudge
+    // ramps to its full rate over CFG.car.trunk.stuckRamp seconds of it: the car turns along
+    // the trunk and drives off. Letting go, or reversing, zeroes the count.
+    // "In contact" has a short memory: the depenetration pushes the car clear by a centimetre
+    // and the very next step reads no hit, then the throttle puts it back — so a bare `hit`
+    // flickered every other step and the count never got past 0.1 s (measured). Contact ends
+    // when nothing has touched for CONTACT_MEMORY seconds.
+    if (hit) this._sinceHit = 0; else this._sinceHit += dt;
+    const touching = hit || this._sinceHit < CONTACT_MEMORY;
+    if (touching && this._throttle && Math.abs(this.speed) < TRUNK.stuckSpeed) this.stuckT += dt;
+    else this.stuckT = 0;
+
+    if (!hit) { if (!touching) this._slideSide = 0; return; }
 
     // The scrub, time-based. CFG.car.treeHit = { targetMul: 0.35, lambda: 12, glance: 0.12 }.
     //
@@ -1645,12 +1697,32 @@ export class Car {
     this.speed = damp(this.speed, this.speed * mul, K.treeHit.lambda, dt);
 
     // The nudge: steer along the trunk rather than into it. The tangent is the normal
-    // turned 90 degrees; take whichever of the two is closer to where we are pointing.
+    // turned 90 degrees; take whichever of the two is closer to where we are pointing —
+    // and KEEP IT for the rest of the contact (round 6). Exactly head-on the dot below is
+    // zero and float noise decides its sign every step, so the nudge turned left, then
+    // right, and the car ground on the bark going nowhere. The side is chosen once, on the
+    // first step of a contact: by the wheel if the player is steering, else by the dot.
     const tx = -nz, tz = nx;
-    const s = (tx * fx + tz * fz) >= 0 ? 1 : -1;
+    if (this._slideSide === 0) {
+      const dot = tx * fx + tz * fz;
+      // the tangent's leftness: left = (fz, -fx) in this basis (right is (-fz, fx))
+      const leftness = tx * fz - tz * fx;
+      if (Math.abs(this.steer) > 0.02 && Math.abs(dot) < 0.35) {
+        this._slideSide = (this.steer > 0 ? 1 : -1) * (leftness >= 0 ? 1 : -1);
+      } else {
+        this._slideSide = dot >= 0 ? 1 : -1;
+      }
+    }
+    const s = this._slideSide;
     const want = Math.atan2(-tx * s, -tz * s);   // inverse of fwd = (-sin, 0, -cos)
     const dh = angleDelta(this.heading, want);
-    this.heading = wrapAngle(this.heading + dh * clamp01(Math.abs(before) / 14) * 3.2 * dt);
+    // ROUND 6: the nudge's gain is the speed OR the time spent stuck, whichever is larger
+    // (the accounting above): at 0.7 m/s the speed term is 0.05 and the car sat on the
+    // bark; after stuckRamp seconds with the throttle held it is stuckGain — capped there,
+    // because the full rate at 90 degrees off the tangent is 5 rad/s, which is a spin and
+    // not a slide, and the view rides the nose.
+    const gain = Math.max(clamp01(Math.abs(before) / 14), TRUNK.stuckGain * clamp01(this.stuckT / TRUNK.stuckRamp));
+    this.heading = wrapAngle(this.heading + dh * gain * 3.2 * dt);
 
     const lost = Math.abs(before) - Math.abs(this.speed);
     if (this.hitCooldown <= 0 && lost > 0.35) {
@@ -1679,39 +1751,91 @@ export class Car {
   /* ----------------------------------------------------------------- ram -- */
 
   /**
-   * A ram kills a pallbearer above 8 m/s and staggers a Hunter (DESIGN section 3). The
-   * enemies system is another lane and is read lazily; if it does not expose ramHit the
-   * car simply drives through nothing and no test lies about it. Requested in HANDOFF.
+   * THE RAM, round 6 (lane H). Alex, fifth playtest: "I want to be able to hit the mobsters."
+   *
+   * This ran only above progress.perk('ramMinSpeed', Infinity) — Infinity ON PURPOSE, so the
+   * WHEEL 'Ram' node would be worth a point — and that contradicted DESIGN section 3, which
+   * makes ramming a property of the car ("ram kills a pallbearer at >= 8 m/s and staggers a
+   * Hunter") and gives the node a DIFFERENT job ("a hit >= 12 m/s pops a body instead of
+   * scrubbing speed"). He drove into them and nothing happened. Now:
+   *
+   *   - at >= CFG.car.ram.speed (8 m/s) enemies.ramHit runs with no node at all; lane A does
+   *     the damage by momentum, the stagger and the throw, and returns how many it caught;
+   *   - the car PAYS for what it hit: each body scrubs a fraction of the speed keyed to its
+   *     def.mass — scrubLight at massLight (a hound) rising to scrubHeavy at massHeavy (a
+   *     pallbearer), so a hound is a bump and a pallbearer is a hit — floored at keepFloor,
+   *     so no ram ever stops the car dead, and nothing here touches the heading;
+   *   - the node (hook 'ramClean', base false) makes a hit at >= cleanSpeed (12 m/s) cost NO
+   *     speed: the clean pop DESIGN describes.
+   *
+   * The bodies are READ off enemies.list() before the hit, with the same disc test ramHit
+   * uses, to price it — and never written: lane A owns them. If ramHit reports more bodies
+   * than the pricing saw, the difference is priced at the heavy rate, so a hit is never free
+   * by accident. A thud goes out on 'noise' as 'car:ram' (the director's ear) and, until the
+   * audio lane keys a real one to it (docs/ROUND-6/HANDOFF-H.md), as the dread pool's dry
+   * wood at full gain — silence reads as broken. Allocates nothing.
    */
   _ram(dt) {
     this.ramT -= dt;
     if (this.ramT > 0) return;
-    // WHEEL 2, 'Ram' — hook 'ramMinSpeed', base Infinity (nodes.js:121-122). The base is
-    // Infinity ON PURPOSE: with the node unowned the car rams NOTHING, which is the whole
-    // reason the card is worth a point. This file used to ram unconditionally at 8 m/s,
-    // which meant the node bought the player something they already had. With progress out
-    // of the manifest entirely we fall back to DESIGN's 8 m/s so an M0 build still behaves.
-    const pr = this._progress;
-    const minSpeed = (pr && typeof pr.perk === 'function')
-      ? pr.perk('ramMinSpeed', Infinity) : RAM_SPEED;
-    if (!(Math.abs(this.speed) >= minSpeed)) return;
+    const speed = Math.abs(this.speed);
+    if (!(speed >= RAM.speed)) return;
     this.ramT = RAM_EVERY;
     const en = this._enemies;
     if (!en || typeof en.ramHit !== 'function') return;
     const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
     const s = this.speed > 0 ? 1 : -1;
-    const hits = en.ramHit(
-      this.x + fx * s * 2.1, this.z + fz * s * 2.1,
-      RAM_RADIUS, Math.abs(this.speed), fx * s, fz * s,
-    );
-    // A ram is not free. enemies.ramHit returns how many it caught (enemies.js:455), so
-    // the car pays for exactly the bodies it actually hit and never for a swing at air.
-    if (hits > 0) {
-      this.wear = clamp01(this.wear + WEAR_PER_RAM_HIT * hits);
-      if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true);
-      this._noise('car:ram', 30);
-      const fxs = this._fx;
-      if (fxs && typeof fxs.addTrauma === 'function') fxs.addTrauma(clamp01(hits * 0.18) * 0.6);
+    const cx = this.x + fx * s * 2.1, cz = this.z + fz * s * 2.1;
+
+    // The node is read on every ram tick, hit or miss: hookReport() counts calls, and a hook
+    // point that is only asked when a body happens to be in the disc looks dead all evening.
+    const pr = this._progress;
+    const owned = !!((pr && typeof pr.perk === 'function') ? pr.perk('ramClean', false) : false);
+
+    // Price the hit BEFORE it lands: what is in the disc, by mass.
+    let keep = 1, mass = 0, n = 0;
+    const list = typeof en.list === 'function' ? en.list() : en.all;
+    if (list && list.length) {
+      const r = RAM_RADIUS + 0.4;
+      for (let i = 0; i < list.length; i++) {
+        const e = list[i];
+        if (!e || !e.alive || !e.pos || !e.def) continue;
+        const dx = e.pos.x - cx, dz = e.pos.z - cz;
+        const rr = r + (e.def.radius || 0);
+        if (dx * dx + dz * dz > rr * rr) continue;
+        const m = typeof e.def.mass === 'number' ? e.def.mass : RAM.massHeavy;
+        const frac = RAM.scrubLight + (RAM.scrubHeavy - RAM.scrubLight)
+          * clamp01((m - RAM.massLight) / (RAM.massHeavy - RAM.massLight));
+        keep *= 1 - frac;
+        mass += m; n++;
+      }
+    }
+
+    const hits = en.ramHit(cx, cz, RAM_RADIUS, speed, fx * s, fz * s);
+    const L = this._ramLast;
+    L.hits = hits; L.n = n; L.mass = mass; L.before = this.speed;
+    if (!(hits > 0)) { L.keep = 1; L.after = this.speed; L.clean = false; return; }
+    for (let k = n; k < hits; k++) keep *= 1 - RAM.scrubHeavy;
+    keep = Math.max(keep, RAM.keepFloor);
+    const clean = owned && speed >= RAM.cleanSpeed;
+    if (clean) keep = 1;
+    this.speed *= keep;
+    L.keep = keep; L.after = this.speed; L.clean = clean;
+
+    // A ram is not free: the car pays for exactly the bodies it actually hit, never for a
+    // swing at air.
+    this.wear = clamp01(this.wear + WEAR_PER_RAM_HIT * hits);
+    if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true);
+    this._noise('car:ram', 30);
+    this._say('branch', 1.0, cx, this.y + 0.9, cz);
+    const fxs = this._fx;
+    if (fxs) {
+      if (typeof fxs.addTrauma === 'function') fxs.addTrauma(clamp01(hits * 0.18) * 0.6 + (1 - keep) * 0.5);
+      if (fxs.impact) {
+        _v.set(cx, this.y + 0.9, cz);
+        _dir.set(-fx * s, 0, -fz * s);
+        fxs.impact('flesh', _v, _dir, clamp01(speed / RAM.cleanSpeed));
+      }
     }
   }
 
@@ -1796,7 +1920,8 @@ export class Car {
     const wasIn = !!(this.ctx.shared && this.ctx.shared.inCar);
     this._setCarried(false);
     this._carrySeated = false;
-    this._fovLast = NaN;
+    this._setFovBias(0);
+    this.stuckT = 0;
     this.holdT = 0;
     this.hornT = 0;
     this.refuseLatch = false;
@@ -1989,24 +2114,30 @@ export class Car {
     cam.rotation.x += pitch * 0.12 * t;
     cam.rotation.z += roll * 0.50 * t;
 
-    // FOV 68 -> 74.5 with speed [CFG.car.seat.fov / .fovFast]
-    //
-    // AUDIT FIX. This used to compute `lerp(cam.fov, this.fovNow, t)` and write whenever
-    // the result differed from cam.fov. player/camera.js writes cam.fov too, so each
-    // lane read the other's value as a change of its own and both called
-    // updateProjectionMatrix() every frame of every drive. Now: blend from the fov we
-    // took the seat with, compare against OUR OWN last write, and write only when our
-    // target really moved. `_fovLast` is NaN whenever we do not own the fov, and NaN
-    // fails the epsilon test, so the first frame of an entry always writes.
-    const want = lerp(SEAT.fov, SEAT.fovFast, clamp01(Math.abs(this.speed) / K.onRoad));
-    const dt = (this.ctx.time && this.ctx.time.dt) || CFG.loop.FIXED;
-    this.fovNow = damp(this.fovNow, want, 3.0, dt);
-    const target = t >= 1 ? this.fovNow : lerp(this.baseFov, this.fovNow, t);
-    if (!(Math.abs(target - this._fovLast) <= FOV_EPS)) {
-      this._fovLast = target;
-      cam.fov = target;
-      cam.updateProjectionMatrix();
-    }
+    // The FOV is NOT written here (round 6, lane H). The speed term goes to the camera lane
+    // in the STEP (_driveFov -> camera.setFovBias) and player/camera.js present() is the one
+    // writer of cam.fov. Two writers were measured to leave the speed FOV off the screen at
+    // any held speed (the note at the top of the file; tests/car.mjs pins 60 frames at 23).
+  }
+
+  /**
+   * THE SPEED FOV, round 6 (lane H). 68 -> 74.5 across 0 -> 23 m/s [CFG.car.seat.fov /
+   * .fovFast], as a BIAS handed to the camera lane's one damped fovNow clock
+   * (player/camera.js setFovBias; damped there by CFG.camera.fovDamp). `t` is the reparent
+   * blend — 0 -> 1 over the entry, 1 -> 0 over the exit — so the term arrives and leaves
+   * with the seat and the camera lane's own base is what it blends from. Written in STEP,
+   * never in present(): the old present-side damp ran on the frame dt and lost the fight
+   * for cam.fov (the note at the top of the file).
+   */
+  _driveFov(t) {
+    const want = (SEAT.fovFast - SEAT.fov) * clamp01(Math.abs(this.speed) / K.onRoad) * clamp01(t);
+    this._setFovBias(want);
+  }
+
+  _setFovBias(v) {
+    this.fovBias = v;
+    const cam = this._camera;
+    if (cam && typeof cam.setFovBias === 'function') cam.setFovBias(v);
   }
 
   /**
@@ -2070,6 +2201,12 @@ export class Car {
       lampFade: this.lampFade,
       wear: this.wear,
       hotwireTotal: this.hotwireTotal,
+      fovBias: this.fovBias,
+      stuckT: this.stuckT,
+      // THE LAST RAM (round 6): what it hit, what it cost, and whether the node made it clean.
+      ram: { hits: this._ramLast.hits, n: this._ramLast.n, mass: this._ramLast.mass,
+        before: this._ramLast.before, after: this._ramLast.after, keep: this._ramLast.keep,
+        clean: this._ramLast.clean },
       tris: this.body ? this.body.tris : 0,
       holdT: this.holdT,
       // THE ENTRY VERB, so it can be argued with by a number. `reach` is the distance the
@@ -2134,7 +2271,7 @@ export class Car {
   dispose() {
     this._setCarried(false);      // never leave the player frozen in a car that is gone
     this._carrySeated = false;
-    this._fovLast = NaN;
+    this._setFovBias(0);
     this._removeRoof();
     this._releaseCabin();
     // Same blocker, last door. This used to release the borrowed rover and leave the

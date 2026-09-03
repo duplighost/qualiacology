@@ -755,6 +755,77 @@ export class Collision {
     return this._isClear(x, z, feet, rad, h);
   }
 
+  // Public headroom test at an EXPLICIT foot height: is a capsule with its feet at feetY free
+  // of every blocking collider? canOccupy answers for a body on the ground; a mantle needs
+  // the same answer for a body standing on a ledge the ground knows nothing about.
+  fits(x, z, feetY, radius, height) {
+    const rad = radius > 0 ? radius : CFG.player.RADIUS;
+    const h = height > 0 ? height : CFG.player.STAND_H;
+    return this._isClear(x, z, feetY, rad, h);
+  }
+
+  // -------------------------------------------------------------------------
+  // ledgeHeight — THE MANTLE'S EYES. Round 6, lane E (contract: docs/ROUND-6/BRIEF-COMMON.md).
+  //
+  // Alex, fifth playtest: "I'm not sure why I can't climb up stuff either." The mantle in
+  // controller.js probed terrain.heightAt alone, and every crate, wall, roof and fence in the
+  // county is a collider, so the verb answered nothing he walked up to.
+  //
+  // Returns the HIGHEST collider top at (x, z) that
+  //   - lies above feetY and no more than maxRise above it,
+  //   - is a floor (F_STANDABLE) or low enough to step onto — the same rule _bestSupport
+  //     stands on, so a tree trunk (a circle with a 2.2-12 m top and no flag) is never a ledge
+  //     and a lamp post is never a ledge,
+  //   - the point is genuinely over, by the 0.55x footprint inflation _bestSupport uses (so a
+  //     fingernail of overlap does not summon a climb),
+  //   - and has headroom for a CROUCHED body standing on it — a shelf under a ceiling refuses.
+  // or null. `anyTop` (optional) admits a non-standable top as well: the vault passes OVER a
+  // fence and never stands on it, so a fence the world did not flag standable may still be
+  // vaulted, but never mantled (a body left standing on it would fall through).
+  //
+  // No allocation. One gather; the headroom test walks the SAME gathered list, because
+  // _isClear would gather the identical centre and radius (rad + 0.1) and a second gather
+  // would overwrite the candidates mid-loop.
+  //
+  // feetY MUST BE THE FEET. The step-up exemption below is measured from it, so a caller
+  // that passes some other height (the grab once passed the bottom of the hands' band,
+  // eye - 0.40) turns every unflagged top within STEP_UP of THAT height into a ledge: tree
+  // trunks, lamp posts, wrecks. Measured, repair 1: 16 of 40 trees near tests/climb.mjs's
+  // strip were grabbed and stood on. Ask from the feet with a longer maxRise and filter the
+  // answer instead (controller.js _tryClimb section 1).
+  // -------------------------------------------------------------------------
+  ledgeHeight(x, z, feetY, radius, maxRise, anyTop) {
+    const rad = radius > 0 ? radius : CFG.player.RADIUS;
+    const rise = maxRise > 0 ? maxRise : CFG.player.mantle.reach;
+    const stepUp = CFG.player.STEP_UP;
+    const crouchH = CFG.player.CROUCH_H;
+    const n = this._gather(x, z, rad + 0.1);
+    let best = -Infinity;
+    for (let k = 0; k < n; k++) {
+      const i = this._near[k];
+      if (!(this._mask[i] & MASK.SOLID)) continue;
+      const top = this._y1[i];
+      if (top <= best) continue;
+      if (top > feetY + rise + EPS) continue;
+      if (top <= feetY + EPS) continue;                       // at or under the feet: not a ledge
+      const standable = (this._flags[i] & F_STANDABLE) !== 0;
+      if (!standable && !anyTop && top > feetY + stepUp + STEP_TOL + EPS) continue;
+      if (!this._footprintHit(i, x, z, rad * 0.55)) continue;
+      // headroom for a crouched body whose feet are on this top
+      const head = top + crouchH;
+      let clear = true;
+      for (let m = 0; m < n; m++) {
+        const j = this._near[m];
+        if (j === i) continue;
+        if (!this._blocks(j, top, head, true, stepUp)) continue;
+        if (this._overlap(j, x, z, rad)) { clear = false; break; }
+      }
+      if (!clear) continue;
+      best = top;
+    }
+    return best > -Infinity ? best : null;
+  }
+
   // -------------------------------------------------------------------------
   // depenetration — push out of everything currently overlapped, up to 4 passes,
   // projecting velocity on each contact. [vanta depenetratePlayer :1673-1714]

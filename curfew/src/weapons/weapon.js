@@ -41,6 +41,9 @@
 import * as THREE from 'three';
 import { TAU, DEG, clamp, clamp01, lerp } from '../engine/math.js';
 import CFG from '../config.js';
+// Data only (placedata.js imports no THREE and touches no scene): the `reward` column, a
+// weapon def id on the rows whose claim hands you a gun. Read at use, never captured.
+import { MAJORS, MAJOR_BY_ID } from '../world/placedata.js';
 
 const CORE = CFG.weapons.core;
 const MELEE = CFG.weapons.melee;
@@ -160,22 +163,29 @@ const MAXT = 300;                 // metres a shot is allowed to travel
    Two things, both in this file:
    1. The magazine reloads itself the moment it empties (see step(), the
       AUTO-RELOAD block). No trigger hold, no press.
-   2. An arsenal: `owned`, has(), grant(), swap(), slot(). Claiming THE WEEPING
-      MINE (the county's works; DESIGN §0.16 called it "Ashfall Works") grants
-      the KV-7 carbine. The grant is wired to the bus channel 'place:claimed'
-      and, for a returning save, read LAZILY at the first step off progress.claimed
-      (progress.js restores the save's claimed list into its OWN Set; places.js
-      only seeds startClaimed and never restores a claim - verification round 1
-      measured the first cut, which asked places, coming back with the bolt alone).
+   2. An arsenal: `owned`, has(), grant(), swap(), slot(). Claiming a place whose
+      placedata row carries `reward` grants that gun. The grant is wired to the bus
+      channel 'place:claimed' and, for a returning save, read LAZILY at the first
+      step off progress.claimed (progress.js restores the save's claimed list into
+      its OWN Set; places.js only seeds startClaimed and never restores a claim -
+      verification round 1 measured the first cut, which asked places, coming back
+      with the bolt alone).
+
+   ROUND 6 (Alex, fifth playtest: "I'm assuming there are other guns, right? I haven't
+   found any... Those would be great rewards for completing areas"). Round 5's single
+   GRANT_AT / GRANT_WEAPON pair is gone: every `reward` row in placedata.js grants on
+   its claim — the Drowned Light's revolver, Jackfield's shotgun, the Weeping Mine's
+   carbine — and a gun you already own pays a FULL RESERVE of its ammo instead, so a
+   second visit is never nothing. Lane F's caches speak `pickup:ammo {n}` on the bus and
+   that lands on the gun in the hands through addReserve(n).
    ------------------------------------------------------------------------- */
-const GRANT_AT = 'weeping-mine';
-const GRANT_WEAPON = 'carbine';
 // A swap is lower-then-raise through the viewmodel's sprint-out pose. The gun changes at
 // the midpoint, when it is fully out of frame.
 const SWAP_S = 0.45;
 
 /* ---- module-level scratch. The hot path allocates nothing. ---- */
 const _dir = new THREE.Vector3();
+const _aim0 = new THREE.Vector3();       // the aim at the trigger pull, before the kick (fire())
 const _right = new THREE.Vector3();
 const _upv = new THREE.Vector3();
 const _mdir = new THREE.Vector3();
@@ -230,9 +240,18 @@ export class Weapons {
     this._in = { fire: false, aim: false, reload: false, melee: false, sprint: false, swap: false, slot1: false, slot2: false };
 
     // The grant. 'place:claimed' {id, xp} is places.js's own channel (CONTRACT bus vocabulary).
+    // ROUND 6: the row's `reward` decides the gun; an owned gun is paid a full reserve.
+    // 'pickup:ammo' {n} is lane F's caches: rounds for the gun in the hands.
+    this.rewardCount = 0;          // grants + ammo payments made through the reward path
+    this.ammoPickups = 0;
     if (ctx.bus && typeof ctx.bus.on === 'function') {
       ctx.bus.on('place:claimed', (p) => {
-        if (p && p.id === GRANT_AT) this.grant(GRANT_WEAPON);
+        const row = p && p.id !== undefined ? MAJOR_BY_ID[p.id] : null;
+        if (row && row.reward) this.reward(row.reward);
+      });
+      ctx.bus.on('pickup:ammo', (p) => {
+        const n = p ? Math.floor(+p.n) : 0;
+        if (n > 0) { this.ammoPickups++; this.addReserve(n); }
       });
     }
 
@@ -382,6 +401,10 @@ export class Weapons {
         swap: () => this.swap(),
         slot: (n) => this.slot(n),
         ammoState: () => this.ammoState(),
+        // ROUND 6
+        reward: (id) => this.reward(id),
+        addReserve: (n) => this.addReserve(n),
+        reserveOf: (id) => this.reserveOf(id),
       };
     }
   }
@@ -414,6 +437,42 @@ export class Weapons {
     // So a refused grant-swap is QUEUED and step() begins it the first step the hands are free.
     if (!this._beginSwap(id)) this._pendingSwap = id;
     return true;
+  }
+
+  /**
+   * ROUND 6: what a claim pays. A gun you do not own is GRANTED (and rises into the hands,
+   * grant()'s own notice); a gun you already own is paid a full reserve of its ammo, into its
+   * own record — or straight into the hands if it is the gun you are holding. Returns
+   * 'grant', 'ammo' or null (no such def).
+   */
+  reward(id) {
+    if (!CFG.weapons.defs[id] || !EXTRA[id]) return null;
+    if (!this.has(id)) {
+      this.grant(id);
+      this.rewardCount++;
+      return 'grant';
+    }
+    this.addReserveTo(id, CFG.weapons.defs[id].reserve);
+    this.rewardCount++;
+    return 'ammo';
+  }
+
+  /** Rounds in reserve for `id`: the live gun's, or its parked record's. */
+  reserveOf(id) {
+    if (this.def && this.def.id === id) return this.reserve;
+    const rec = this._rec[id];
+    return rec ? rec.reserve : 0;
+  }
+
+  /** addReserve() aimed at a specific gun, whether or not it is in the hands. */
+  addReserveTo(id, n) {
+    if (this.def && this.def.id === id) return this.addReserve(n);
+    const rec = this._rec[id], base = CFG.weapons.defs[id];
+    if (!rec || !base) return 0;
+    const max = base.reserve * 2;                 // the same ceiling select() gives the live gun
+    const got = Math.max(0, Math.min(n, max - rec.reserve));
+    rec.reserve += got;
+    return got;
   }
 
   /** Q: cycle to the next owned weapon. */
@@ -462,11 +521,18 @@ export class Weapons {
     this._arsenalSynced = true;
     const pl = this._sys('places');
     const pr = this._sys('progress');
-    const viaPlaces = !!pl && (typeof pl.isClaimed === 'function'
-      ? pl.isClaimed(GRANT_AT)
-      : !!(pl.claimed && pl.claimed.has && pl.claimed.has(GRANT_AT)));
-    const viaProgress = !!(pr && pr.claimed && typeof pr.claimed.has === 'function' && pr.claimed.has(GRANT_AT));
-    if (viaPlaces || viaProgress) this.grant(GRANT_WEAPON, { quiet: true });
+    // ROUND 6: every reward row, not one. A returning save that holds a place owns its gun
+    // from the first step, quietly; the ammo a second claim pays is not replayed (it was
+    // paid when it happened, and the save does not carry reserves).
+    for (let i = 0; i < MAJORS.length; i++) {
+      const d = MAJORS[i];
+      if (!d.reward) continue;
+      const viaPlaces = !!pl && (typeof pl.isClaimed === 'function'
+        ? pl.isClaimed(d.id)
+        : !!(pl.claimed && pl.claimed.has && pl.claimed.has(d.id)));
+      const viaProgress = !!(pr && pr.claimed && typeof pr.claimed.has === 'function' && pr.claimed.has(d.id));
+      if (viaPlaces || viaProgress) this.grant(d.reward, { quiet: true });
+    }
   }
 
   ready() { return !!this.def && this.pulses.length > 0; }
@@ -522,6 +588,7 @@ export class Weapons {
       owned: this.owned.slice(), swapT: this.swapT, swapTo: this.swapTo,
       pendingSwap: this._pendingSwap,
       autoReload: this._autoReload, grantCount: this.grantCount, swapCount: this.swapCount,
+      rewardCount: this.rewardCount, ammoPickups: this.ammoPickups,
       blocksSprint: this.wantsSprintCancel,
       adsT: this.adsT, spreadDeg: this._cone(), bloom: this.bloom,
       kickPitch: this.kickPitch, kickYaw: this.kickYaw,
@@ -860,9 +927,20 @@ export class Weapons {
     // No extra first-shot multiplier: the authored table's opener IS the boost.
     // Applying it twice double-counts and breaks the pattern's degree sum.
 
-    // CHANNEL 1 — aim kick. This moves the BULLETS. It is written into the
+    // CHANNEL 1 — aim kick. This moves the BULLETS THAT FOLLOW. It is written into the
     // camera's yaw/pitch (the only aim truth) and mirrored into an accumulator
     // that only CORE.recoilReturn of ever comes back.
+    //
+    // ROUND 6 repair: the ray of THIS shot is taken from the aim BEFORE the kick lands.
+    // MEASURED 2026-09-03 (tests/artifacts/r1-bellhit-2.txt): standing still, full ADS, inside
+    // the first-shot-perfect window (cone 0, shotIndex 0), the bolt's round left 2.2 degrees
+    // ABOVE the crosshair from every one of four stances (aimDir y 0.516 -> fired dy 0.549),
+    // because the opener's pitch kick was added to cam.pitch and then cam.aimDir() built the
+    // ray from the kicked camera. That put the round 1.35 m over the Bell Tower's bell at 35 m
+    // and made the rule below ("shot 1 is exact") a promise the gun never kept. The pattern's
+    // numbers are untouched: the kick still moves the aim, for the next round.
+    cam.aimDir(_aim0);
+    const yaw0 = cam.yaw;
     cam.pitch += pk * mA * DEG;
     cam.yaw += -yk * mA * DEG;               // +yaw pattern = right = negative world yaw
     this.kickPitch += pk * mA;
@@ -898,8 +976,8 @@ export class Weapons {
     const tracerRound = (this.fireCount % 3 === 0) || this.ammo < Math.max(2, d.mag * 0.1);
 
     for (let k = 0; k < pellets; k++) {
-      cam.aimDir(_dir);
-      _right.set(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+      _dir.copy(_aim0);                        // the aim at the trigger pull, not after the kick
+      _right.set(Math.cos(yaw0), 0, -Math.sin(yaw0));
       _upv.crossVectors(_right, _dir).normalize();
       const u = this.spreadRng.next(), a = this.spreadRng.next() * TAU;
       const r = cone * Math.sqrt(u);
@@ -1032,8 +1110,13 @@ export class Weapons {
     if (this.cycle > 0) this.cycle = Math.max(0, this.cycle - dt);
 
     // ---- ADS. Interruptible, never restarts. vigil weapon.js:305-308.
+    // ROUND 6 (NEXT.md item 3): a reload the GUN started at zero no longer drops the sight
+    // — measured on this branch before the change: aiming the bolt dry took the sight away
+    // for 2.75 s (from 0.62 s to 3.35 s after the last shot, adsT to 0), every time the gun
+    // emptied while aimed. An auto reload keeps the sight up through its non-cancelable
+    // window; a reload the player pressed R for still lowers it, as it always has.
     const wantAds = i.aim && !p.sprinting && !this.melee && !swapping
-      && !(this.reloading && !this.reloading.cancelable) && !dead;
+      && !(this.reloading && !this.reloading.cancelable && !this.reloading.auto) && !dead;
     this.adsT = clamp01(this.adsT + (wantAds ? dt / CORE.adsIn : -dt / CORE.adsOut));
     this.fullyAdsFor = this.adsT >= 0.999 ? this.fullyAdsFor + dt : 0;
 
