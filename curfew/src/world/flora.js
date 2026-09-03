@@ -234,6 +234,16 @@ const PAL = {
   // times. Narrowed to 1 : 1.05 : 0.90 at matched luminance: Rec.709 luma goes
   // 0.1371 -> 0.1360, i.e. -0.8%, so §2.1's measured "ground +- 5" stands.
   grass: [0.131, 0.138, 0.118],
+  // ROUND 6, lane F: the understory. A fern is a shade plant and sits a step under the
+  // grass it grows through; cut wood on a stump top is the one pale thing on the floor
+  // (the same intent as the birch, at prop scale); rock is the ridge's own cliff albedo
+  // (terrain.js REGIONS[3].cliff) so a boulder reads as the hill it broke off.
+  fern: [0.094, 0.118, 0.078],
+  cut: [0.172, 0.140, 0.096],
+  // Was REGIONS[3].cliff, 0.148: under the torch at 3 m a boulder blew out to a white
+  // blob (tests/shots/r6F-understory-torch.png, first pass). A rock is lit by the torch
+  // from arm's length far more often than a cliff is; a step under the ridge ground.
+  stone: [0.108, 0.104, 0.100],
 };
 
 // Species archetypes. `kind` drives the silhouette; the county is 42% Pines so
@@ -649,9 +659,156 @@ function makeGrassTexture() {
 }
 
 // ---------------------------------------------------------------------------
+// THE UNDERSTORY (ROUND 6, lane F). Alex: "The woods hardly has anything in it."
+//
+// Four templates, each built ONCE at unit scale and instanced per chunk exactly like
+// the trees: one InstancedMesh per KIND per chunk, never per variant, so the near ring's
+// draw bill grows by at most four per chunk. They are planted by the same loop, from the
+// same seeded hash grid, with the same road / sight-corridor / pad exclusions, and every
+// one with a top emits its standable collider AT THE MOMENT IT IS ACCEPTED - a log you
+// cannot walk along is a log you fall through, which is CINDERBLOOM's tree bug at knee
+// height. They live and die with the near ring (_buildNear / _dropNear): a 0.5 m log at
+// 80 m under this fog is nothing, so there is no mid or far representation and no card.
+//
+//   fern     matGrass  (the alpha-cut blade map, wind, the 42 m rim shrink)   no collider
+//   log      matNear   (bark, the form term, the near-band dissolve)          2 standable OBBs
+//   stump    matNear                                                          standable circle
+//   boulder  matNear                                                          standable circle
+//
+// Nothing here is a new material: matGrass and matNear already exist and are linked at
+// boot, so the understory costs zero programs. tests/wilds.mjs asserts that.
+// ---------------------------------------------------------------------------
+const UNDER_KINDS = ['fern', 'log', 'stump', 'boulder'];
+// The grass-over-the-roof probe (see _buildGrass): a top this far over the ground is a roof.
+const ROOF_OVER = 2.4;
+const ROOF_PROBE_RISE = 40;
+const GRASS_PROBE_R = 0.30;
+const UNDER_CAP = { fern: 1200, log: 96, stump: 96, boulder: 96 };
+const UNDER_STRIDE = 16;
+// THE UNDERSTORY IS PLANTED OFF THE chunk:built FRAME (round 6 repair, MEASURED 2026-09-03
+// on the verifier's 23 m/s drive, 185 chunk builds, loaded machine): planted inside the
+// build, a chunk cost 8.3 ms median / 23 ms max against master's 2.6 / 7.9 - a dropped frame
+// per chunk while driving. So buildChunk only marks the record pending and _plantPending
+// spends CFG.flora.understory.budgetMs a step on the nearest pending chunks, at most this
+// many, and only what the frame's chunk builds have not already spent. A chunk that reaches
+// the near ring still pending is planted then (_buildNear), so no chunk is ever shown
+// without its floor and its colliders.
+const UNDER_PLANTS_PER_STEP = 4;
+const UNDER_SLOPE_E = 0.75;          // the fern's two-sample slope epsilon (terrain's GRAD_E)
+const byDMinDesc = (a, b) => b.dMin - a.dMin;      // the queue is popped from its end
+const nowMs = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
+  ? () => performance.now()
+  : () => Date.now();
+const FERN_TINT_MUL = 1.9;      // against the grass's 2.4: a shade plant, one step darker
+
+/** Non-indexed, with the `color` and `aWind` attributes every flora material expects. */
+function finishGeo(geo, col, wind, jitter, topCol, topFrom) {
+  const ni = geo.index ? geo.toNonIndexed() : geo;
+  if (ni !== geo) geo.dispose();
+  const n = ni.attributes.position.count;
+  const c = new Float32Array(n * 3);
+  const w = new Float32Array(n);
+  const p = ni.attributes.position;
+  for (let i = 0; i < n; i++) {
+    const j = 1 - jitter + (((i * 2654435761) >>> 0) % 1000) / 1000 * jitter * 2;
+    const src = (topCol && p.getY(i) >= topFrom) ? topCol : col;
+    c[i * 3] = src[0] * j; c[i * 3 + 1] = src[1] * j; c[i * 3 + 2] = src[2] * j;
+    w[i] = wind;
+  }
+  ni.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  ni.setAttribute('aWind', new THREE.BufferAttribute(w, 1));
+  ni.computeBoundingBox();
+  ni.computeBoundingSphere();
+  return ni;
+}
+
+/** A fern clump: seven fronds leaning outward from one root, y in [0, 1] so the grass
+ *  material's tip weight and rim shrink read it exactly as they read a blade card. Unit
+ *  size; the instance matrix carries the 0.6-1.1 m spread. 7 x 4 = 28 triangles. */
+function makeFernGeometry() {
+  const parts = [];
+  for (let i = 0; i < 9; i++) {
+    // a broad frond: the blade map stretched over 0.7 units reads as fronds, not grass
+    const g = new THREE.PlaneGeometry(0.70, 1.0, 1, 2);
+    g.translate(0, 0.5, 0);
+    g.rotateX(-0.66 - (i % 3) * 0.12);            // lean the frond over, tip outward
+    g.rotateY(i * 2.3999632 + 0.4);                // golden angle: never two fronds aligned
+    parts.push(g);
+  }
+  const merged = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  merged.computeBoundingBox();
+  merged.computeBoundingSphere();
+  return merged;
+}
+
+/** A deadfall log, unit length along +X, resting on y = 0, radius 1 (the instance matrix
+ *  carries length in x and radius in y/z). Two broken branch stubs and two end faces so it
+ *  reads as a fallen tree and not a pipe. */
+function makeLogGeometry() {
+  const parts = [];
+  const r = 1;
+  parts.push(finishGeo(new THREE.CylinderGeometry(r * 0.86, r, 1, 8, 1, false)
+    .rotateZ(-Math.PI * 0.5).translate(0, r, 0), PAL.barkDark, 0.0, 0.10));
+  // stubs: short cones off the top-side, one at each third
+  for (const [x, a] of [[-0.18, 0.7], [0.22, -0.9]]) {
+    const s = new THREE.ConeGeometry(r * 0.22, r * 1.1, 5, 1, false);
+    s.translate(0, r * 0.55, 0);
+    s.rotateZ(a);
+    s.translate(x, r * 0.9, 0);
+    parts.push(finishGeo(s, PAL.barkDark, 0.0, 0.10));
+  }
+  const merged = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  merged.computeBoundingBox();
+  merged.computeBoundingSphere();
+  return merged;
+}
+
+/** A stump: a flared, closed cylinder of unit radius and unit height with the cut face
+ *  in the pale `cut` colour. Unit; the matrix carries radius (x, z) and height (y). */
+function makeStumpGeometry() {
+  const g = new THREE.CylinderGeometry(0.82, 1.18, 1, 8, 1, false);
+  g.translate(0, 0.5, 0);
+  return finishGeo(g, PAL.barkDark, 0.0, 0.10, PAL.cut, 0.98);
+}
+
+/** A boulder: the canopy blob generator with a stone colour and a flat squash, centred so
+ *  the bottom quarter is buried. Unit radius. */
+function makeBoulderGeometry(seed) {
+  const g = blobGeometry(0, 0.55, 0, 1.0, 1, PAL.stone, 1.0, 0.0, 0.78, seed);
+  // blobGeometry paints a vertical gradient tuned for foliage (0.42..1.28); rock wants a
+  // narrower one, so the colours are re-laid here: lit top, a darker underside.
+  const p = g.attributes.position, c = g.attributes.color;
+  for (let i = 0; i < p.count; i++) {
+    const ly = clamp01((p.getY(i) - 0.55) / 0.78 * 0.5 + 0.5);
+    const k = lerp(0.62, 1.12, ly) * (0.94 + (((i * 2654435761) >>> 0) % 1000) / 1000 * 0.12);
+    c.setXYZ(i, PAL.stone[0] * k, PAL.stone[1] * k, PAL.stone[2] * k);
+  }
+  c.needsUpdate = true;
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
+  return g;
+}
+
+// ---------------------------------------------------------------------------
 // Module scratch. Nothing below allocates inside step() or present().
 // ---------------------------------------------------------------------------
 const _treeBuf = new Float32Array(MAX_TREES_PER_CHUNK * TREE_STRIDE);
+const _underBuf = {};
+const _underTintBuf = {};
+for (const k of UNDER_KINDS) {
+  _underBuf[k] = new Float32Array(UNDER_CAP[k] * UNDER_STRIDE);
+  _underTintBuf[k] = new Float32Array(UNDER_CAP[k] * 3);
+}
+const _rw = new Float64Array(4);          // terrain.regionWeights scratch
+const _minorsNear = [];                    // the road-side minors around one chunk, per build
+const _trunkBuf = new Float32Array(MAX_TREES_PER_CHUNK * 3);   // x, z, trunkR of one chunk's trees, per understory pass
+const _uPos = new THREE.Vector3();
+const _uEuler = new THREE.Euler();
+const _uQuat = new THREE.Quaternion();
+const _uScale = new THREE.Vector3();
+const _uMat = new THREE.Matrix4();
 const _order = new Int32Array(MAX_TREES_PER_CHUNK);
 const _orderList = [];
 const _moonDir = new THREE.Vector3(0.4, 0.85, 0.3).normalize();
@@ -678,6 +835,24 @@ export class Flora {
     this._grassQueue = [];
     this._densityLever = 1;
     this._treeCount = 0;
+    // ROUND 6 (NEXT.md section 3, "grass tufts draw over the roof when you look straight
+    // down from the eave"): _buildGrass can refuse a card whose ground has a standable top
+    // more than ROOF_OVER above it (collision.supportHeight). MEASURED 2026-09-03 with an
+    // intersection mask (pixels that change when the grass is hidden AND when the shop body
+    // is hidden) over 96 vantages on the station's roof: 22 px worst with this OFF, 23 px
+    // ON, every one an anti-aliased roof edge - the observation does not reproduce on this
+    // build. What the test DOES remove is cards inside trunks (113 of 131 samples) and
+    // inside ruin / cabin walls (18), which nobody sees, at 6x the grass build cost (6
+    // chunks relaid: 23 ms off, 145 ms on - a 20 ms hitch per chunk build, the p95 this
+    // budget chases). So it ships OFF and stays as the A/B knob tests/wilds.mjs measures.
+    this.roofExclude = false;
+    // ROUND 6 repair: the understory is planted by _plantPending, off the chunk:built frame
+    // (see UNDER_PLANTS_PER_STEP). understoryDefer false plants it inside buildChunk again -
+    // the A/B arm tests/wilds.mjs times against this one; never flipped by the game.
+    this.understoryDefer = true;
+    this._underQueue = [];       // chunk records with underPending, nearest planted first
+    this._buildMsThisStep = 0;   // what buildChunk took from the frame before flora.step ran
+    this._underPass = { chunks: 0, ms: 0, maxMs: 0, forced: 0, steps: 0, stepMaxMs: 0 };
     this._mode = 'wait';         // wait -> events | self
     this._waited = 0;
     this._built = false;
@@ -735,6 +910,11 @@ export class Flora {
       });
       if (this.chunks.size) this._mode = 'events';
     }
+    // The boot ring's understory is planted HERE, under the title, with no budget: the
+    // player spawns onto a finished floor. Everything the streamer builds after this is
+    // planted by _plantPending, off the build frame.
+    while (this._underQueue.length) this._plantOne(this._underQueue.pop());
+    this._buildMsThisStep = 0;
   }
 
   /** Templates, materials and the impostor atlas. Idempotent, safe to call early */
@@ -769,6 +949,15 @@ export class Flora {
     this.grassTex = makeGrassTexture();
     this.matGrass = this._makeGrassMaterial();
     this.grassGeo = this._makeGrassGeometry();
+
+    // --- the understory templates (ROUND 6) ---------------------------------
+    this.underGeo = {
+      fern: makeFernGeometry(),
+      log: makeLogGeometry(),
+      stump: makeStumpGeometry(),
+      boulder: makeBoulderGeometry(this.seed + 977),
+    };
+    this._underCount = { fern: 0, log: 0, stump: 0, boulder: 0 };
 
     // --- impostor atlas ---------------------------------------------------
     const ok = this.impostors.bake(this.templates.map((t) => ({
@@ -1036,6 +1225,9 @@ export class Flora {
     const id = chunkId !== undefined && chunkId !== null ? String(chunkId) : this._selfId(cx, cz);
     if (this.chunks.has(id)) return this.chunks.get(id);
     if (this._mode !== 'events' && chunkId !== undefined && chunkId !== null) this._adoptEvents();
+    // This build rides the chunk:built frame; _plantPending leaves that frame alone for
+    // whatever it took (no clock under the deterministic flag: the count rule applies).
+    const tBuild = this._det() ? 0 : nowMs();
 
     const terrain = this._sys('terrain');
     const roads = this._sys('roads');
@@ -1057,6 +1249,11 @@ export class Flora {
     // test it: a corridor has to be clear of anything TALL, not mown.
     const places = this._sys('places');
     const hasSight = places && typeof places.sightClear === 'function';
+    // ROUND 6: the wilds (manifest #11, after us) own every off-road site. A tower stands
+    // in a clearing and a ruin's wall is not planted through; the pad test is theirs and
+    // is read lazily, per candidate, exactly like the sight corridors above.
+    const wilds = this._sys('wilds');
+    const hasPad = wilds && typeof wilds.padClear === 'function';
 
     const CH = CFG.world.CHUNK;
     const ox = cx * CH, oz = cz * CH;
@@ -1093,6 +1290,7 @@ export class Flora {
         // authored mask (DESIGN §2, CFG.roads.plantExclude).
         if (hasRoad && roads.roadDistance(wx, wz) < exclude) continue;
         if (hasSight && places.sightClear(wx, wz)) continue;
+        if (hasPad && wilds.padClear(wx, wz)) continue;
         if (hasSlope && terrain.slopeAt(wx, wz) > SLOPE_REJECT) continue;
 
         const wy = terrain.heightAt(wx, wz);
@@ -1154,7 +1352,8 @@ export class Flora {
       // A 2.2-3.2x elder is the worst possible thing to leave standing in a
       // sight corridor, so it takes the same test.
       const okSight = !hasSight || !places.sightClear(wx, wz);
-      if (okRoad && okSlope && okSight) {
+      const okPad = !hasPad || !wilds.padClear(wx, wz);
+      if (okRoad && okSlope && okSight && okPad) {
         const wy = terrain.heightAt(wx, wz);
         const ti = subset[(hashI(cx, cz, this.seed + 83) * subset.length) | 0];
         const tpl = this.templates[ti];
@@ -1196,6 +1395,13 @@ export class Flora {
     for (let i = 0; i < n; i++) _order[i] = _orderList[i];
 
     const rec = this._pack(id, cx, cz, n, [minX, minY, minZ, maxX, maxY, maxZ]);
+    // ---- THE UNDERSTORY: pending, planted by _plantPending off this frame -------
+    // It is refused where it would lie through one of this chunk's trunks, so the pass
+    // reads the packed cards (position, size, template) back; the template prefix is
+    // kept for the fern's conifer weighting.
+    rec.subset = subset;
+    rec.underBounds = [ox, 0, oz, ox + CH, 1, oz + CH];
+    rec.underPending = true;
     this.chunks.set(id, rec);
     this._treeCount += n;
 
@@ -1204,6 +1410,9 @@ export class Flora {
     rec.gkey = gk; rec.skey = sk;
     this._joinGroup(gk, cx >> 1, cz >> 1, id);
     this._joinSuper(sk, cx >> 2, cz >> 2, id);
+    if (this.understoryDefer) this._underQueue.push(rec);
+    else this._plantOne(rec);                    // the A/B arm: inside the build frame
+    if (tBuild) this._buildMsThisStep += nowMs() - tBuild;
     return rec;
   }
 
@@ -1266,8 +1475,330 @@ export class Flora {
     return {
       id, cx, cz, trees: n, streams, cards, bounds,
       nearMeshes: null, grass: null, grassWanted: false,
+      under: [], underCount: 0, underMeshes: null, underBounds: null,
       dMin: 0, dMax: 0,
     };
+  }
+
+  /**
+   * THE UNDERSTORY PLANTING PASS (ROUND 6, lane F). Runs from _plantPending (or _plantOne
+   * at the near ring / at boot), OFF the chunk:built frame - see UNDER_PLANTS_PER_STEP.
+   * One hash grid per kind, one candidate per cell, the accept probability authored per
+   * terrain region (CFG.flora.understory) times the cover field, and every rejection the
+   * trees take: the road field, the sight corridors, a wild's pad, a road-side minor's pad,
+   * a major's apron, the slope. A log or a stump is also refused where it would lie through
+   * one of THIS chunk's trunks, read back from the packed cards into _trunkBuf.
+   *
+   * THE ORDER OF THE TESTS IS THE COST. MEASURED 2026-09-03 (the 23 m/s drive, 185 builds):
+   * this pass was 5.7 ms of an 8.3 ms build when every candidate paid cover + heightAt +
+   * regionWeights before its hash was even looked at, and slopeAt (four heightAt calls)
+   * before the pads. Now the free hash is tested against an upper bound of the accept
+   * probability first (the region blend can never exceed the largest authored accept), the
+   * cover field next, the road field, and only a candidate that survived all of those pays
+   * the height, the region blend, the pads and, last, the slope. The fern's slope is two
+   * forward samples that reuse its own height.
+   *
+   * COLLIDERS ARE EMITTED AS EACH INSTANCE IS ACCEPTED, under the owning chunk's id, and
+   * every one of them is standable: a deadfall log is two OBB halves so a log lying along
+   * a bank keeps its top under STEP_UP at both ends; a stump and a boulder are circles.
+   * A fern emits nothing (collision.js lists 'fern' as scenery by name).
+   *
+   * Returns { streams: [{ kind, count, mat, tint }], total, minY, maxY }.
+   */
+  _plantUnderstory(rec) {
+    const U = CFG.flora.understory;
+    const CH = CFG.world.CHUNK;
+    const S = this.seed;
+    const cx = rec.cx, cz = rec.cz, id = rec.id;
+    const ox = cx * CH, oz = cz * CH;
+    const subset = rec.subset || [];
+    const terrain = this._sys('terrain');
+    const roads = this._sys('roads');
+    const places = this._sys('places');
+    const wilds = this._sys('wilds');
+    const collision = this._sys('collision');
+    if (!terrain || typeof terrain.heightAt !== 'function') return { streams: [], total: 0, minY: 0, maxY: 1 };
+    // this chunk's trunks: x, z, trunk radius, from the packed cards (size = halfWidth * scale)
+    const nTrees = rec.trees, cards = rec.cards;
+    for (let i = 0; i < nTrees; i++) {
+      const tpl = this.templates[cards.tpl[i] | 0];
+      const sc = tpl.halfWidth > 0 ? cards.size[i * 2] / tpl.halfWidth : 1;
+      _trunkBuf[i * 3] = cards.pos[i * 3];
+      _trunkBuf[i * 3 + 1] = cards.pos[i * 3 + 2];
+      _trunkBuf[i * 3 + 2] = tpl.trunkR * sc;
+    }
+    const hasRoad = roads && typeof roads.roadDistance === 'function';
+    const hasSight = places && typeof places.sightClear === 'function';
+    const hasPad = wilds && typeof wilds.padClear === 'function';
+    const hasRW = typeof terrain.regionWeights === 'function';
+    const hasSlope = typeof terrain.slopeAt === 'function';
+    const canCollide = collision && typeof collision.addCollider === 'function';
+    const excludeGrass = CFG.roads.plantExclude.grass;
+    const excludeTree = CFG.roads.plantExclude.tree;
+    const clearR2 = U.siteClear * U.siteClear;
+
+    // The road-side minors within a chunk of this one: nothing is planted on their pads.
+    // places builds its table lazily on the first sightClear(), so ask once first.
+    _minorsNear.length = 0;
+    if (hasSight) places.sightClear(ox + CH * 0.5, oz + CH * 0.5);
+    const mbc = places && places.minorsByChunk;
+    if (mbc && typeof mbc.get === 'function') {
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const arr = mbc.get((cx + dx) + '|' + (cz + dz));
+          if (arr) for (let i = 0; i < arr.length; i++) _minorsNear.push(arr[i]);
+        }
+      }
+    }
+    // A major's apron: made ground, and nothing grows through asphalt.
+    const flats = typeof terrain.flats === 'function' ? terrain.flats() : null;
+
+    const onPad = (x, z) => {
+      for (let i = 0; i < _minorsNear.length; i++) {
+        const m = _minorsNear[i];
+        const dx = x - m.x, dz = z - m.z;
+        if (dx * dx + dz * dz < clearR2) return true;
+      }
+      if (flats) {
+        for (let i = 0; i < flats.length; i++) {
+          const f = flats[i];
+          const dx = x - f.x, dz = z - f.z;
+          const rr = f.r * 0.86;
+          if (dx * dx + dz * dz < rr * rr) return true;
+        }
+      }
+      return hasPad && wilds.padClear(x, z);
+    };
+    const regionP = (accept, x, z, y) => {
+      if (!hasRW) return accept[0];
+      terrain.regionWeights(x, z, y, _rw);
+      return accept[0] * _rw[0] + accept[1] * _rw[1] + accept[2] * _rw[2] + accept[3] * _rw[3];
+    };
+    // The largest authored accept of a kind: the region blend is a convex sum, so no
+    // candidate's probability can exceed it and a hash above it is refused for free.
+    const maxAccept = (accept) => {
+      let m = hasRW ? 0 : accept[0];
+      if (hasRW) for (let i = 0; i < 4; i++) if (accept[i] > m) m = accept[i];
+      return m;
+    };
+    // Two forward samples that reuse the candidate's own height: half of slopeAt's cost.
+    const slope2 = (x, z, y) => {
+      const hx = (terrain.heightAt(x + UNDER_SLOPE_E, z) - y) / UNDER_SLOPE_E;
+      const hz = (terrain.heightAt(x, z + UNDER_SLOPE_E) - y) / UNDER_SLOPE_E;
+      return 1 - 1 / Math.sqrt(hx * hx + hz * hz + 1);
+    };
+    // Is a trunk of this chunk within `pad` of the segment (ax,az)-(bx,bz)?
+    const trunkNear = (ax, az, bx, bz, pad) => {
+      const ex = bx - ax, ez = bz - az;
+      const len2 = ex * ex + ez * ez;
+      for (let i = 0; i < nTrees; i++) {
+        const o = i * 3;
+        const tx = _trunkBuf[o], tz = _trunkBuf[o + 1], tr = _trunkBuf[o + 2];
+        let t = len2 > 0 ? ((tx - ax) * ex + (tz - az) * ez) / len2 : 0;
+        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+        const dx = tx - (ax + ex * t), dz = tz - (az + ez * t);
+        const lim = tr + pad;
+        if (dx * dx + dz * dz < lim * lim) return true;
+      }
+      return false;
+    };
+
+    const counts = { fern: 0, log: 0, stump: 0, boulder: 0 };
+    let minY = Infinity, maxY = -Infinity;
+    const put = (kind, x, y, z, yaw, tilt, sx, sy, sz, tr, tg, tb) => {
+      const k = counts[kind];
+      if (k >= UNDER_CAP[kind]) return false;
+      _uPos.set(x, y, z);
+      _uEuler.set(0, yaw, tilt, 'YZX');
+      _uQuat.setFromEuler(_uEuler);
+      _uScale.set(sx, sy, sz);
+      _uMat.compose(_uPos, _uQuat, _uScale);
+      _uMat.toArray(_underBuf[kind], k * UNDER_STRIDE);
+      const t = _underTintBuf[kind];
+      t[k * 3] = tr; t[k * 3 + 1] = tg; t[k * 3 + 2] = tb;
+      counts[kind] = k + 1;
+      if (y - 1 < minY) minY = y - 1;
+      if (y + sy * 2 + 1 > maxY) maxY = y + sy * 2 + 1;
+      return true;
+    };
+
+    // --- ferns: dense under conifers, thin in birch, thick where the cover is ---------
+    {
+      let con = 0;
+      for (let i = 0; i < subset.length; i++) if (this.templates[subset[i]].kind === 'conifer') con++;
+      const conMul = 0.45 + 0.55 * (con / Math.max(1, subset.length));
+      const bound = maxAccept(U.fernAccept) * conMul;
+      const cell = U.fernCell;
+      const gx0 = Math.floor(ox / cell), gx1 = Math.ceil((ox + CH) / cell);
+      const gz0 = Math.floor(oz / cell), gz1 = Math.ceil((oz + CH) / cell);
+      for (let gz = gz0; gz < gz1; gz++) {
+        for (let gx = gx0; gx < gx1; gx++) {
+          const h3 = hashI(gx, gz, S + 103);
+          if (h3 > bound) continue;                        // free: over the largest accept
+          const wx = (gx + 0.10 + hashI(gx, gz, S + 101) * 0.80) * cell;
+          const wz = (gz + 0.10 + hashI(gx, gz, S + 102) * 0.80) * cell;
+          if (wx < ox || wz < oz || wx >= ox + CH || wz >= oz + CH) continue;
+          const cover = this.coverAt(wx, wz);
+          const cm = conMul * (0.20 + 0.80 * cover);
+          if (h3 > bound * (0.20 + 0.80 * cover)) continue;   // one fbm: over the cover's bound
+          if (hasRoad && roads.roadDistance(wx, wz) < excludeGrass) continue;
+          const wy = terrain.heightAt(wx, wz);
+          if (h3 > regionP(U.fernAccept, wx, wz, wy) * cm) continue;
+          if (onPad(wx, wz)) continue;
+          if (slope2(wx, wz, wy) > 0.62) continue;
+          const size = lerp(U.fernSize[0], U.fernSize[1], hashI(gx, gz, S + 104));
+          const yaw = hashI(gx, gz, S + 105) * TAU;
+          const v = (0.74 + hashI(gx, gz, S + 106) * 0.50 - cover * 0.10) * FERN_TINT_MUL;
+          // the frond template spreads ~1.2 units across at unit height; fern is wider than tall
+          put('fern', wx, wy - 0.03, wz, yaw, 0, size / 1.2, size * 0.72, size / 1.2,
+            PAL.fern[0] * v, PAL.fern[1] * v, PAL.fern[2] * v);
+        }
+      }
+    }
+
+    // --- deadfall logs: 3-7 m, lying along the ground, two standable halves ------------
+    {
+      const cell = U.logCell;
+      const bound = maxAccept(U.logAccept);
+      const gx0 = Math.floor(ox / cell), gx1 = Math.ceil((ox + CH) / cell);
+      const gz0 = Math.floor(oz / cell), gz1 = Math.ceil((oz + CH) / cell);
+      for (let gz = gz0; gz < gz1; gz++) {
+        for (let gx = gx0; gx < gx1; gx++) {
+          const h3 = hashI(gx, gz, S + 113);
+          if (h3 > bound) continue;
+          const wx = (gx + 0.15 + hashI(gx, gz, S + 111) * 0.70) * cell;
+          const wz = (gz + 0.15 + hashI(gx, gz, S + 112) * 0.70) * cell;
+          if (wx < ox || wz < oz || wx >= ox + CH || wz >= oz + CH) continue;
+          const cover = this.coverAt(wx, wz);
+          const cm = 0.30 + 0.70 * cover;
+          if (h3 > bound * cm) continue;
+          if (hasRoad && roads.roadDistance(wx, wz) < excludeTree) continue;
+          const wy = terrain.heightAt(wx, wz);
+          if (h3 > regionP(U.logAccept, wx, wz, wy) * cm) continue;
+          if (hasSight && places.sightClear(wx, wz)) continue;
+          if (onPad(wx, wz)) continue;
+          if (hasSlope && terrain.slopeAt(wx, wz) > 0.45) continue;
+          const L = lerp(U.logLength[0], U.logLength[1], hashI(gx, gz, S + 114));
+          const r = lerp(U.logRadius[0], U.logRadius[1], hashI(gx, gz, S + 115));
+          const yaw = hashI(gx, gz, S + 116) * TAU;
+          const ux = Math.cos(yaw), uz = -Math.sin(yaw);        // world direction of local +X
+          const ax = wx - ux * L * 0.5, az = wz - uz * L * 0.5;
+          const bx = wx + ux * L * 0.5, bz = wz + uz * L * 0.5;
+          if (hasRoad && (roads.roadDistance(ax, az) < excludeTree || roads.roadDistance(bx, bz) < excludeTree)) continue;
+          // both ENDS, not the centre alone: a 7 m log whose centre clears a pad by a metre
+          // still lays three metres of standable trunk across a stair's foot (MEASURED
+          // 2026-09-03, tests/wilds.mjs: a log half 4.0 m from stand w87, pad 4.5)
+          if (onPad(ax, az) || onPad(bx, bz)) continue;
+          const gA = terrain.heightAt(ax, az), gB = terrain.heightAt(bx, bz);
+          if (Math.abs(gA - gB) > 0.9) continue;              // it would float or bury an end
+          if (trunkNear(ax, az, bx, bz, r + 0.20)) continue;
+          const tilt = clamp(Math.atan2(gB - gA, L), -0.12, 0.12);
+          const y = wy - 0.02;
+          const v = 0.80 + hashI(gx, gz, S + 117) * 0.36;
+          if (!put('log', wx, y, wz, yaw, tilt, L, r, r, v, v * 0.98, v * 0.94)) break;
+          if (canCollide) {
+            const rise = Math.tan(tilt) * L * 0.25;
+            for (let hh = -1; hh <= 1; hh += 2) {
+              collision.addCollider({
+                kind: 'obb', x: wx + ux * L * 0.25 * hh, z: wz + uz * L * 0.25 * hh,
+                halfX: L * 0.25, halfZ: r, yaw,
+                y0: y - 0.5, y1: y + 2 * r + rise * hh, tag: 'log', standable: true,
+              }, id);
+            }
+          }
+        }
+      }
+    }
+
+    // --- stumps -----------------------------------------------------------------
+    {
+      const cell = U.stumpCell;
+      const bound = maxAccept(U.stumpAccept);
+      const gx0 = Math.floor(ox / cell), gx1 = Math.ceil((ox + CH) / cell);
+      const gz0 = Math.floor(oz / cell), gz1 = Math.ceil((oz + CH) / cell);
+      for (let gz = gz0; gz < gz1; gz++) {
+        for (let gx = gx0; gx < gx1; gx++) {
+          const h3 = hashI(gx, gz, S + 123);
+          if (h3 > bound) continue;
+          const wx = (gx + 0.15 + hashI(gx, gz, S + 121) * 0.70) * cell;
+          const wz = (gz + 0.15 + hashI(gx, gz, S + 122) * 0.70) * cell;
+          if (wx < ox || wz < oz || wx >= ox + CH || wz >= oz + CH) continue;
+          const cover = this.coverAt(wx, wz);
+          const cm = 0.35 + 0.65 * cover;
+          if (h3 > bound * cm) continue;
+          if (hasRoad && roads.roadDistance(wx, wz) < excludeTree) continue;
+          const wy = terrain.heightAt(wx, wz);
+          if (h3 > regionP(U.stumpAccept, wx, wz, wy) * cm) continue;
+          if (hasSight && places.sightClear(wx, wz)) continue;
+          if (onPad(wx, wz)) continue;
+          const r = lerp(0.22, 0.42, hashI(gx, gz, S + 124));
+          const h = lerp(U.stumpHeight[0], U.stumpHeight[1], hashI(gx, gz, S + 125));
+          if (trunkNear(wx, wz, wx, wz, r + 0.10)) continue;
+          if (hasSlope && terrain.slopeAt(wx, wz) > 0.5) continue;
+          const v = 0.82 + hashI(gx, gz, S + 126) * 0.30;
+          if (!put('stump', wx, wy - 0.06, wz, hashI(gx, gz, S + 127) * TAU, 0, r, h + 0.06, r, v, v * 0.98, v * 0.95)) break;
+          if (canCollide) {
+            collision.addCollider({
+              kind: 'circle', x: wx, z: wz, r: r * 1.05,
+              y0: wy - 0.4, y1: wy + h, tag: 'stump', standable: true,
+            }, id);
+          }
+        }
+      }
+    }
+
+    // --- boulders: clustered, on ridge ground -----------------------------------
+    {
+      const cell = U.boulderCell;
+      const bound = maxAccept(U.boulderAccept);
+      const gx0 = Math.floor(ox / cell), gx1 = Math.ceil((ox + CH) / cell);
+      const gz0 = Math.floor(oz / cell), gz1 = Math.ceil((oz + CH) / cell);
+      for (let gz = gz0; gz < gz1; gz++) {
+        for (let gx = gx0; gx < gx1; gx++) {
+          const h3 = hashI(gx, gz, S + 134);
+          if (h3 > bound) continue;
+          const wx = (gx + 0.15 + hashI(gx, gz, S + 131) * 0.70) * cell;
+          const wz = (gz + 0.15 + hashI(gx, gz, S + 132) * 0.70) * cell;
+          if (wx < ox || wz < oz || wx >= ox + CH || wz >= oz + CH) continue;
+          // a cluster field: rock comes in falls, not as an even scatter
+          const cl = fbm2(wx * 0.018, wz * 0.018, S + 133, 2);
+          const cm = cl > 0.56 ? 1.0 : 0.18;
+          if (h3 > bound * cm) continue;
+          if (hasRoad && roads.roadDistance(wx, wz) < excludeTree) continue;
+          const wy = terrain.heightAt(wx, wz);
+          if (h3 > regionP(U.boulderAccept, wx, wz, wy) * cm) continue;
+          if (hasSight && places.sightClear(wx, wz)) continue;
+          if (onPad(wx, wz)) continue;
+          const size = lerp(U.boulderSize[0], U.boulderSize[1], hashI(gx, gz, S + 135) * hashI(gx, gz, S + 136));
+          const s = size * 0.5;
+          if (trunkNear(wx, wz, wx, wz, s + 0.10)) continue;
+          if (hasSlope && terrain.slopeAt(wx, wz) > 0.70) continue;
+          const v = 0.84 + hashI(gx, gz, S + 137) * 0.30;
+          if (!put('boulder', wx, wy - 0.05, wz, hashI(gx, gz, S + 138) * TAU, 0, s, s, s, v, v, v * 0.98)) break;
+          if (canCollide) {
+            collision.addCollider({
+              kind: 'circle', x: wx, z: wz, r: s * 0.88,
+              y0: wy - 0.6, y1: wy - 0.05 + 1.28 * s, tag: 'rock', standable: true,
+            }, id);
+          }
+        }
+      }
+    }
+
+    const streams = [];
+    let total = 0;
+    for (let i = 0; i < UNDER_KINDS.length; i++) {
+      const kind = UNDER_KINDS[i], c = counts[kind];
+      if (!c) continue;
+      streams.push({
+        kind, count: c,
+        mat: _underBuf[kind].slice(0, c * UNDER_STRIDE),
+        tint: _underTintBuf[kind].slice(0, c * 3),
+      });
+      total += c;
+    }
+    if (!total) { minY = 0; maxY = 1; }
+    return { streams, total, minY, maxY };
   }
 
   /**
@@ -1316,6 +1847,8 @@ export class Flora {
     this._dropGrass(rec);
     this.chunks.delete(id);
     this._treeCount -= rec.trees;
+    rec.underPending = false;                    // a dead queue entry; _plantPending drops it
+    for (const s of rec.under) this._underCount[s.kind] -= s.count;
 
     const g = this.groups.get(rec.gkey);
     if (g) {
@@ -1354,6 +1887,8 @@ export class Flora {
   // -------------------------------------------------------------------------
   step(dt) {
     this._ensureBuilt();
+    const det = this._det();
+    const t0 = det ? 0 : nowMs();              // the understory's budget clock (never under the flag)
 
     if (this._mode === 'wait') {
       this._waited += dt;
@@ -1378,6 +1913,7 @@ export class Flora {
     const farOut = this.bandFar.y;
     const shadowR = CFG.render.shadow.distance;
     const grassR = CFG.flora.grassRadius;
+    const fernR = CFG.flora.understory.fernRadius;
     let budget = BUILDS_PER_STEP;
     let grassBudget = GRASS_BUILDS_PER_STEP;
 
@@ -1398,6 +1934,14 @@ export class Flora {
       if (rec.nearMeshes) {
         const cast = rec.dMin < shadowR;
         for (const m of rec.nearMeshes) { m.visible = true; m.castShadow = cast; }
+        if (rec.underMeshes) {
+          // a fern is an alpha-tested double-sided card on the grass shader: the dearest
+          // pixels in the forest, and a few of them past fernRadius under this fog. Logs,
+          // stumps and rock ride the near ring like the trunks they lie among. MEASURED
+          // 2026-09-03 (tests/perf.mjs, loaded machine): worst median 9.8 -> 8.0 ms.
+          const fernOk = rec.dMin < fernR;
+          for (const m of rec.underMeshes) { m.visible = m.userData.fern ? fernOk : true; if (m.userData.casts) m.castShadow = cast; }
+        }
       }
 
       const wantGrass = rec.dMin < grassR;
@@ -1434,6 +1978,63 @@ export class Flora {
       else if (!want && s.mesh) this._releaseSuper(s);
       if (s.mesh) s.mesh.visible = true;
     }
+
+    // --- the understory, off the build frame ---------------------------------
+    this._plantPending(t0, det);
+    this._buildMsThisStep = 0;
+  }
+
+  _det() {
+    const d = this.ctx && this.ctx.debug;
+    return !!(d && d.flags && d.flags.deterministicChunks);
+  }
+
+  /**
+   * Plant the nearest pending chunks inside CFG.flora.understory.budgetMs, measured from
+   * the start of this step and net of what buildChunk already took from the frame (chunks
+   * steps before flora, so a frame that built a chunk has already paid). A frame that built
+   * nothing always plants at least one, so the queue can never starve; at most
+   * UNDER_PLANTS_PER_STEP a step. Under ctx.debug.flags.deterministicChunks it is exactly
+   * one a step and no clock is read (chunks.js's rule, kept here).
+   */
+  _plantPending(t0, det) {
+    const q = this._underQueue;
+    if (!q.length) return;
+    q.sort(byDMinDesc);                        // in place; nearest at the end
+    const budget = CFG.flora.understory.budgetMs;
+    const spent = this._buildMsThisStep;
+    const P = this._underPass;
+    const tp = det ? 0 : nowMs();
+    let n = 0;
+    while (q.length && n < UNDER_PLANTS_PER_STEP) {
+      if (det) { if (n >= 1) break; }
+      else if ((spent > 0 || n > 0) && spent + (nowMs() - t0) >= budget) break;
+      if (this._plantOne(q.pop())) n++;
+    }
+    if (n && !det) {
+      P.steps++;
+      const ms = nowMs() - tp;
+      if (ms > P.stepMaxMs) P.stepMaxMs = ms;
+    }
+  }
+
+  /** Plant one pending chunk now. False if it is no longer resident or already planted. */
+  _plantOne(rec) {
+    if (!rec || !rec.underPending) return false;
+    if (this.chunks.get(rec.id) !== rec) { rec.underPending = false; return false; }
+    const t = nowMs();
+    const under = this._plantUnderstory(rec);
+    rec.underPending = false;
+    rec.under = under.streams;
+    rec.underCount = under.total;
+    rec.underBounds[1] = under.minY;
+    rec.underBounds[4] = under.maxY;
+    for (const s of under.streams) this._underCount[s.kind] += s.count;
+    const P = this._underPass;
+    const ms = nowMs() - t;
+    P.chunks++; P.ms += ms;
+    if (ms > P.maxMs) P.maxMs = ms;
+    return true;
   }
 
   /**
@@ -1488,7 +2089,13 @@ export class Flora {
   // materialisation
   // -------------------------------------------------------------------------
   _buildNear(rec) {
-    if (rec.nearMeshes || !rec.trees) { rec.nearMeshes = rec.nearMeshes || []; return; }
+    if (rec.nearMeshes) return;
+    // A chunk that reached the near ring still pending is planted now: the floor and its
+    // colliders exist before anything of this chunk can be walked on. Counted, so the
+    // report can say how often the budgeted pass was outrun (MEASURED: never on a drive).
+    if (rec.underPending) { this._underPass.forced++; this._plantOne(rec); }
+    this._buildUnder(rec);
+    if (!rec.trees) { rec.nearMeshes = []; return; }
     const out = [];
     for (const s of rec.streams) {
       const tpl = this.templates[s.ti];
@@ -1514,9 +2121,42 @@ export class Flora {
   }
 
   _dropNear(rec) {
+    if (rec.underMeshes) {
+      for (const m of rec.underMeshes) { this.group.remove(m); m.dispose(); }
+      rec.underMeshes = null;
+    }
     if (!rec.nearMeshes) return;
     for (const m of rec.nearMeshes) { this.group.remove(m); m.dispose(); }
     rec.nearMeshes = null;
+  }
+
+  /** The understory's meshes: one InstancedMesh per kind, on materials that already exist,
+   *  built and dropped with the near ring. A fern rides matGrass (alpha map, wind, the
+   *  42 m rim shrink); everything else rides matNear (bark, the form term, the dissolve). */
+  _buildUnder(rec) {
+    if (rec.underMeshes || !rec.under || !rec.under.length) return;
+    const out = [];
+    for (const s of rec.under) {
+      const isFern = s.kind === 'fern';
+      const mesh = new THREE.InstancedMesh(this.underGeo[s.kind], isFern ? this.matGrass : this.matNear, s.count);
+      mesh.name = 'flora-under-' + s.kind + '-' + rec.id;
+      mesh.instanceMatrix.array.set(s.mat);
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(s.tint.slice(), 3);
+      mesh.instanceColor.needsUpdate = true;
+      mesh.count = s.count;
+      mesh.frustumCulled = true;
+      mesh.matrixAutoUpdate = false;
+      mesh.updateMatrix();
+      mesh.receiveShadow = true;
+      mesh.castShadow = !isFern;
+      mesh.userData.casts = !isFern;
+      mesh.userData.fern = isFern;
+      this._setBounds(mesh, rec.underBounds);
+      this.group.add(mesh);
+      out.push(mesh);
+    }
+    rec.underMeshes = out;
   }
 
   _buildGroup(gk, g) {
@@ -1640,6 +2280,18 @@ export class Flora {
     const roads = this._sys('roads');
     const hasRoad = roads && typeof roads.roadDistance === 'function';
     const exclude = CFG.roads.plantExclude.grass;
+    // ROUND 6 (NEXT.md section 3): "grass tufts draw over the roof when you look down from
+    // the station eave". Grass is materialised in step(), inside 42 m, long after every
+    // site in the chunk has emitted its colliders, so a roof CAN be asked about here: a
+    // standable or steppable top more than ROOF_OVER above the ground under a card is a
+    // roof, a canopy, a platform, and the card is not laid. supportHeight's window is
+    // [feet - 0.48, feet + rise + 0.08], so feet = ground + ROOF_OVER + 0.48 and rise = 40 m
+    // asks for exactly "anything with a top from ROOF_OVER up". A tree's own collider
+    // (top ~2.2-3.6 m over the ground, radius the trunk) is inside that window only for
+    // the broadest trunks and only inside the trunk's own footprint, where no card can be
+    // seen anyway.
+    const collision = this._sys('collision');
+    const hasSupport = this.roofExclude && collision && typeof collision.supportHeight === 'function';
     const CH = CFG.world.CHUNK;
     const ox = rec.cx * CH, oz = rec.cz * CH;
     const cell = GRASS_CELL;
@@ -1657,6 +2309,7 @@ export class Flora {
         const wz = oz + (gz + hashI(ix, iz, this.seed + 23)) * cell;
         if (hasRoad && roads.roadDistance(wx, wz) < exclude) continue;
         const wy = terrain.heightAt(wx, wz);
+        if (hasSupport && collision.supportHeight(wx, wz, wy + ROOF_OVER + 0.48, GRASS_PROBE_R, ROOF_PROBE_RISE) > wy + ROOF_OVER) continue;
         const yaw = hashI(ix, iz, this.seed + 24) * TAU;
         const w = 0.20 + hashI(ix, iz, this.seed + 25) * 0.16;
         const h = 0.30 + hashI(ix, iz, this.seed + 26) * 0.46;
@@ -1808,19 +2461,57 @@ export class Flora {
     for (const [sk, s] of this.supers) { s.dirty = true; this._dirtySupers.add(sk); }
   }
 
+  /** Drop and relay every resident grass card now, with no budget. For the A/B in
+   *  tests/wilds.mjs after flipping roofExclude; never called by the game. */
+  rebuildGrass() {
+    let n = 0;
+    for (const rec of this.chunks.values()) {
+      if (!rec.grass) continue;
+      this._dropGrass(rec);
+      this._buildGrass(rec);
+      n++;
+    }
+    return n;
+  }
+
+  /** The resident chunk with the most understory in it, for the perf pose. */
+  densestUnderstory() {
+    let best = null;
+    for (const rec of this.chunks.values()) {
+      if (!best || rec.underCount > best.underCount) best = rec;
+    }
+    if (!best) return null;
+    return {
+      id: best.id, cx: best.cx, cz: best.cz, count: best.underCount, trees: best.trees,
+      kinds: best.under.map((s) => s.kind + ':' + s.count).join(' '),
+    };
+  }
+
   stats() {
-    let near = 0, mid = 0, far = 0, grass = 0;
+    let near = 0, mid = 0, far = 0, grass = 0, under = 0;
     for (const rec of this.chunks.values()) {
       if (rec.nearMeshes) for (const m of rec.nearMeshes) if (m.visible) near++;
+      if (rec.underMeshes) for (const m of rec.underMeshes) if (m.visible) under++;
       if (rec.grass && rec.grass.visible) grass++;
     }
     for (const g of this.groups.values()) if (g.meshes) for (const m of g.meshes) if (m.visible) mid++;
     for (const s of this.supers.values()) if (s.mesh && s.mesh.visible) far++;
+    let pending = 0;
+    for (const rec of this.chunks.values()) if (rec.underPending) pending++;
+    const P = this._underPass;
     return {
       trees: this._treeCount,
       chunks: this.chunks.size,
       templates: this.templates.length,
-      draws: { near, mid, far, grass, total: near + mid + far + grass },
+      draws: { near, mid, far, grass, under, total: near + mid + far + grass + under },
+      understory: {
+        fern: this._underCount.fern, log: this._underCount.log,
+        stump: this._underCount.stump, boulder: this._underCount.boulder,
+      },
+      understoryPass: {
+        pending, chunks: P.chunks, ms: +P.ms.toFixed(1), maxMs: +P.maxMs.toFixed(2),
+        forced: P.forced, steps: P.steps, stepMaxMs: +P.stepMaxMs.toFixed(2), defer: this.understoryDefer,
+      },
       impostors: this.impostors.baked,
       mode: this._mode,
       notes: this._notes.slice(),
@@ -1840,6 +2531,7 @@ export class Flora {
     if (this.matGrass) this.matGrass.dispose();
     if (this.grassTex) this.grassTex.dispose();
     if (this.grassGeo) this.grassGeo.dispose();
+    if (this.underGeo) { for (const k of UNDER_KINDS) if (this.underGeo[k]) this.underGeo[k].dispose(); this.underGeo = null; }
     this.impostors.dispose();
     if (this.group.parent) this.group.parent.remove(this.group);
     this._built = false;

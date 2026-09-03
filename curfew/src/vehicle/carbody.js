@@ -68,6 +68,8 @@ const WHEEL_W = 0.26;
 const NOSE_Z = -2.14;                  // front bumper face
 const TAIL_Z = 2.16;                   // rear bumper face
 export const ROOF_Y = 1.97;            // top of the roof plate — the mantle target
+/** The body's footprint, car-local (forward is -Z): car.js roofHeightAt answers inside it. */
+export const FOOTPRINT = Object.freeze({ hx: BODY_HX, z0: NOSE_Z, z1: TAIL_Z });
 export const DOOR = Object.freeze({ x: -1.00, y: 1.05, z: -0.30 });   // driver door, local
 export const LAMP_GOOD = Object.freeze({ x: -0.66, y: 1.02, z: NOSE_Z - 0.04 });
 export const LAMP_DEAD = Object.freeze({ x: 0.66, y: 1.02, z: NOSE_Z - 0.04 });

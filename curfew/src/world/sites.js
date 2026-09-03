@@ -38,10 +38,14 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, clamp } from '../engine/math.js';
+import CFG from '../config.js';           // ROUND 6: roadApproach reads CFG.player.STEP_UP
 // The county's material break-up field, three octaves in world space. The chunk ground and
 // the road ribbon already take it (chunks.js:679, :787); the destination aprons never did,
 // and an apron is the single largest surface in the opening frame.
 import { groundDetail } from './terrain.js';
+// ROUND 6: Blackthorn Manor is compiled from its own room tables in manor.js and handed
+// this file's kit vocabulary through a factory, so there is no import cycle.
+import { makeManorBuilder } from './manor.js';
 
 /* ==========================================================================
    Palette. LINEAR-space albedos, in the same band terrain.js settled on after
@@ -427,6 +431,14 @@ function yardWall(k, api, radius, height, gapDir, col) {
     while (da > Math.PI) da -= TAU;
     while (da < -Math.PI) da += TAU;
     if (Math.abs(da) < 0.30) continue;
+    // ROUND 6 (lane D2's route audit): and two more on the ROAD side. Both callers put the
+    // gate at -PI/2 (local -Z) on the belief that -Z faces the road; places.js sends local
+    // +Z to the road point, so the gate faced the back of the yard and the approach steps
+    // (roadApproach) landed against a closed wall. A yard on a road has a gate on the road.
+    let dr = a - Math.PI * 0.5;
+    while (dr > Math.PI) dr -= TAU;
+    while (dr < -Math.PI) dr += TAU;
+    if (Math.abs(dr) < 0.30) continue;
     const x = Math.cos(a) * radius, z = Math.sin(a) * radius;
     const seg = (TAU / N) * radius * 1.12;
     const h = height * (0.72 + 0.28 * Math.abs(Math.sin(i * 2.7)));
@@ -434,9 +446,14 @@ function yardWall(k, api, radius, height, gapDir, col) {
     // it is used on. Each segment stands on the ground it is actually over and steps down
     // the hill the way a dry-stone wall does; at padY they hovered on the low side.
     const gy = groundY(api, x, z);
-    k.box(seg, h + 0.3, 0.42, x, gy + h * 0.5 - 0.15, z, col, -a);
+    // TANGENTIAL. rotateY(-a) sends a box's long axis along the RADIUS (measured for the
+    // lighthouse stair and again here, tests/manor.mjs: a body fit at a segment's
+    // tangential end and not at its radial end), so this ring was 22 spokes with
+    // 6 m gaps between them. -(a + PI/2) lays each length along the ring.
+    const yaw = -(a + Math.PI * 0.5);
+    k.box(seg, h + 0.3, 0.42, x, gy + h * 0.5 - 0.15, z, col, yaw);
     api.emit({
-      kind: 'obb', x, z, halfX: seg * 0.5, halfZ: 0.21, yaw: -a,
+      kind: 'obb', x, z, halfX: seg * 0.5, halfZ: 0.21, yaw,
       y0: gy - 0.3, y1: gy + h, tag: 'wall',
     });
   }
@@ -601,6 +618,34 @@ export const BUILDERS = {
           kind: 'obb', x: cx, z: cz, halfX: 0.41, halfZ: 0.41, yaw: 0,
           y0: api.padY - 0.2, y1: api.padY + top, tag: 'wood', standable: true,
         });
+      }
+      // ROUND 6 (NEXT.md 3, lane E's leftover): THE CRATE STAIR YOU CANNOT FIND. It stands
+      // behind the shop, out of sight of the pumps and the forecourt. Three things now say
+      // "round here": a work lamp on a bracket off the shop's back-east corner, hung 1.2 m
+      // proud of the wall so it is in the line of sight from BOTH pumps (measured: the ray
+      // from (0.9, -2.4) clears the east wall's z extent by 0.5 m and the gable's x extent
+      // by 0.1 m; tests/manor.mjs raycasts it); a tin of paint kicked over at that corner
+      // whose spill runs along the back wall to the first crate; and a glint on the first
+      // crate's lid where the spill ends. No new light: the lamp and the glint are the
+      // shared additive material, small and vertical or on the ledger under a square metre.
+      {
+        const bx = -5.6, bz = 4.0, by = api.padY + 3.55;
+        k.solid.box(0.08, 0.08, 1.3, bx, by, bz + 0.65, C.metal);                      // the bracket
+        k.solid.box(0.10, 0.6, 0.10, bx, by - 0.3, bz + 0.05, C.metal);                // its stay
+        k.solid.cone(0.26, 0.24, 8, bx, by - 0.10, bz + 1.25, C.slate);               // the hood
+        k.glow.pane(0.34, 0.34, bx, by - 0.25, bz + 1.25, PANE_LAMP, 0, -Math.PI * 0.5, 6, 6);
+        glowColumn(k.glow, bx, by - 0.30, bz + 1.25, 0.30, 0.9, 0.5);
+        // the paint: the tin on its side at the corner, and the spill along the wall
+        const tinX = -5.9, tinZ = 4.85;
+        k.solid.cyl(0.13, 0.13, 0.18, 8, tinX, api.padY + 0.13, tinZ, C.metal, 0.4, 0, Math.PI * 0.5);
+        k.solid.cyl(0.13, 0.13, 0.02, 8, tinX + 0.1, api.padY + 0.13, tinZ, C.paper, 0.4, 0, Math.PI * 0.5);
+        const spill = [[-6.3, 4.9, 0.9, 0.55], [-7.4, 4.95, 1.0, 0.40], [-8.5, 4.9, 1.1, 0.32], [-9.6, 4.95, 1.0, 0.28], [-10.5, 4.55, 0.7, 0.45]];
+        for (const [sx, sz, sw, sd] of spill) {
+          k.solid.quad(sw, sd, sx, api.padY + 0.012, sz, C.paper, api.rng.range(-0.2, 0.2), -Math.PI * 0.5);
+        }
+        // the smear up the first crate's east face, and the glint on its lid
+        k.solid.quad(0.30, 0.42, -10.47, api.padY + 0.24, 4.95, C.paper, Math.PI * 0.5, 0);
+        k.glow.pane(0.28, 0.28, -10.9, api.padY + 0.58, 4.95, PANE_LAMP, 0, -Math.PI * 0.5, 5, 5);
       }
       // FORECOURT CLUTTER (Alex: "they don't look like they have any detail"). Every piece
       // emits its own collider in the statement that places it.
@@ -907,12 +952,16 @@ export const BUILDERS = {
     },
     body(api) {
       const k = kits();
-      // nave running north from the tower
-      const nw = 17, nd = 30, nh = 15;
-      shell(k.solid, api, 0, 20, nw, nd, nh, 0, C.stone, 3.0);
-      k.solid.gable(nw + 1.0, nd + 1.0, api.padY + nh, 4.2, 0, 0, 20, C.slate, 0);
+      // nave running north from the tower. ROUND 6 (lane D2's route audit): 18 m deep, not
+      // 30. MEASURED 2026-09-03: the road runs past this yard at local z 28.9 and a 30 m
+      // nave from z 5 reached z 35 - the loop road passed THROUGH the nave between its side
+      // walls (tests/shots/r6-D2-cathedral-road.png), and its back wall stood on the far
+      // verge. At 18 m it stops at z 23, on the pad, short of the bank the road sits above.
+      const nw = 17, nd = 18, nh = 15;
+      shell(k.solid, api, 0, 14, nw, nd, nh, 0, C.stone, 3.0);
+      k.solid.gable(nw + 1.0, nd + 1.0, api.padY + nh, 4.2, 0, 0, 14, C.slate, 0);
       // buttresses down both flanks
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 3; i++) {
         const bz = 8 + i * 6.5;
         for (const sx of [-1, 1]) {
           k.solid.box(1.5, 9.0, 3.0, sx * (nw * 0.5 + 0.9), api.padY + 4.5, bz, C.stone);
@@ -923,7 +972,7 @@ export const BUILDERS = {
         }
       }
       // lancet windows
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 2; i++) {
         for (const sx of [-1, 1]) {
           const ly = sx > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
           k.glow.pane(1.0, 3.4, sx * (nw * 0.5 + 0.03), api.padY + 7.5, 11 + i * 6.5,
@@ -1068,25 +1117,193 @@ export const BUILDERS = {
   // The Drowned Light. Light it and its beam is the county's compass: 80 m of it,
   // sweeping at 0.22 rad/s (DESIGN section 2, PALEHOLLOW landmarks.js).
   lighthouse: {
+    // ROUND 6 (Alex, playtest 5): "And I can't even go into the lighthouse to load a cool
+    // environment. Or not load by walk up stairs." The tower was a closed tube on a solid
+    // circle collider with the claim at a door slab outside its foot. It is a CLIMB now:
+    // a doorway at the foot facing the road, 81 wedge treads spiralling up the inside of
+    // the tower around a central post to the lamp room on the gallery, and a low wall up
+    // there you can look over. The claim is the lamp (placedata claim.dy 36.7).
+    //
+    // The numbers that make it walkable on the shipped controller, measured rather than
+    // assumed: a tread RISE of 0.453 m (36.7 / 81) is under CFG.player.STEP_UP (0.52) so
+    // it is a step going up, and under collision.js GROUND_SNAP (0.48) so it is a step
+    // going DOWN as well — a 0.5 m riser is a fall on the way back. 14 treads a turn is
+    // 6.3 m of rise a turn, which is the headroom over any tread. The tower's wall is a
+    // ring of OBB segments in three height bands (collision has no hollow circle), the
+    // gallery floor is a ring of standable segments, and the lamp-room floor is a 216-deg
+    // sector so the stair can arrive through the remaining 144.
     landmark(api) {
       const k = kits();
-      // ART 4.1 — SIZE. 28 px at 2 km. The tower keeps its 3.6 m foot (the claim door
-      // stands at z 4.3 and a fatter base would bury it) and gains height and a broader
-      // head instead: 36 m to the gallery, which is an ordinary size for a light that is
-      // supposed to be seen from the far side of a county.
+      // ART 4.1 — SIZE. 28 px at 2 km. The tower keeps its 3.6 m foot and gains height
+      // and a broader head instead: 36 m to the gallery, which is an ordinary size for a
+      // light that is supposed to be seen from the far side of a county.
       const H = 36;
-      k.solid.tube(3.1, 3.6, H, 14, 0, api.padY + H * 0.5, 0, C.plaster);
-      k.solid.cyl(4.6, 4.6, 0.7, 14, 0, api.padY + H + 0.35, 0, C.metal);      // gallery
-      k.solid.tube(2.6, 2.6, 3.2, 10, 0, api.padY + H + 2.2, 0, C.metal);      // lamp room
-      k.solid.cone(3.3, 2.4, 10, 0, api.padY + H + 5.0, 0, C.slate);
-      api.emit({
-        kind: 'circle', x: 0, z: 0, r: 3.3,
-        y0: api.padY - 0.3, y1: api.padY + H + 6, tag: 'wall',
-      });
-      // The lamp itself: a vertical cylinder inside the lamp room, not the horizontal quad
+      const F = H + 0.7;                       // the gallery / lamp-room floor
+      const wallR = (y) => 3.6 - 0.5 * clamp(y / H, 0, 1);     // the tube's taper
+      // the doorway faces the road: places.js sends local +Z to the road point (its
+      // comment says -Z; the arithmetic and tests/manor.mjs say +Z), so the door is at +Z
+      const DOOR_A = Math.PI * 0.5;
+      const DOOR_HALF = 0.7 / 3.6;             // half-angle of a 1.4 m doorway at the foot
+      const DOOR_H = 2.6;
+      // tangential OBB yaw for a segment whose centre sits at angle `a`: local +x must
+      // be the tangent (-sin a, cos a). Three's rotateY(t) sends +x to (cos t, -sin t),
+      // so t = -(a + PI/2). MEASURED 2026-09-03: rotateY(-a) is RADIAL, not tangential.
+      const tangYaw = (a) => -(a + Math.PI * 0.5);
+      // Three's CylinderGeometry measures theta from +z toward +x: theta = PI/2 - a.
+      const theta = (a) => Math.PI * 0.5 - a;
+
+      // ---- the tower: a sector tube at the foot with the doorway cut out, a full tube above
+      {
+        const g = new THREE.CylinderGeometry(wallR(2.8), 3.6, 2.8, 16, 1, true,
+          theta(DOOR_A) + DOOR_HALF, TAU - 2 * DOOR_HALF);
+        g.translate(0, api.padY + 1.4, 0);
+        k.solid.push(g, C.plaster);
+        k.solid.tube(3.1, wallR(2.8), H - 2.8, 16, 0, api.padY + 2.8 + (H - 2.8) * 0.5, 0, C.plaster);
+        // THE INSIDE IS DARK. The tube is one DoubleSide surface, so its inner face wore
+        // the same 0.265 plaster as the outside and the stairwell measured as a white
+        // room under the torch (tests/shots/r6-D2-light-stair-foot.png, first cut). A
+        // liner 6 cm inside it in C.dark is what a stairwell nobody has whitewashed in
+        // thirty years looks like, and it is what the torch has to find its way up.
+        const liner = new THREE.CylinderGeometry(wallR(2.8) - 0.06, 3.54, 2.8, 16, 1, true,
+          theta(DOOR_A) + DOOR_HALF, TAU - 2 * DOOR_HALF);
+        liner.translate(0, api.padY + 1.4, 0);
+        k.solid.push(liner, C.dark);
+        k.solid.tube(3.04, wallR(2.8) - 0.06, H - 2.8, 16, 0, api.padY + 2.8 + (H - 2.8) * 0.5, 0, C.dark);
+        // the doorway: jambs and a lintel, so it reads as a doorway and not as a crack
+        const dx = Math.cos(DOOR_A) * 3.5, dz = Math.sin(DOOR_A) * 3.5;
+        const tx = -Math.sin(DOOR_A), tz = Math.cos(DOOR_A);
+        for (const s of [-1, 1]) {
+          k.solid.box(0.24, DOOR_H + 0.2, 0.6, dx + tx * s * 0.82, api.padY + DOOR_H * 0.5, dz + tz * s * 0.82, C.dark, tangYaw(DOOR_A));
+        }
+        k.solid.box(1.9, 0.32, 0.6, dx, api.padY + DOOR_H + 0.1, dz, C.dark, tangYaw(DOOR_A));
+        // the door itself, hanging open outward beside the opening
+        k.solid.box(1.4, 2.4, 0.1, dx + tx * 1.2 - 0.5 * Math.cos(DOOR_A), api.padY + 1.2, dz + tz * 1.2 - 0.5 * Math.sin(DOOR_A), C.wood, tangYaw(DOOR_A) + 1.2);
+      }
+      // ---- the wall colliders: 16 tangential segments in three bands, the doorway's
+      //      segment in the lowest band replaced by its lintel
+      {
+        const N = 16;
+        const bands = [[-0.3, 12], [12, 24], [24, H + 0.7]];
+        for (const [b0, b1] of bands) {
+          const r = wallR((b0 + b1) * 0.5);
+          for (let i = 0; i < N; i++) {
+            const a = (i / N) * TAU - Math.PI;
+            let da = a - DOOR_A;
+            while (da > Math.PI) da -= TAU;
+            while (da < -Math.PI) da += TAU;
+            const isDoor = b0 < 0 && Math.abs(da) < (Math.PI / N) * 0.99;
+            api.emit({
+              kind: 'obb', x: Math.cos(a) * r, z: Math.sin(a) * r, halfX: 0.72, halfZ: 0.25, yaw: tangYaw(a),
+              y0: api.padY + (isDoor ? DOOR_H : b0), y1: api.padY + b1, tag: 'wall',
+            });
+          }
+        }
+      }
+      // ---- the post, the treads and the handrail
+      const N_TREADS = 81, PER_TURN = 14;
+      const RISE = F / N_TREADS;                                  // 0.453
+      const STEP_A = TAU / PER_TURN;
+      const POST_R = 0.9;
+      const A0 = DOOR_A + STEP_A;              // tread 1 is one step round from the doorway
+      k.solid.cyl(POST_R, POST_R, F + 0.3, 12, 0, api.padY + (F - 0.3) * 0.5, 0, C.dark);
+      api.emit({ kind: 'circle', x: 0, z: 0, r: POST_R, y0: api.padY - 0.3, y1: api.padY + F, tag: 'metal' });
+      for (let i = 1; i <= N_TREADS; i++) {
+        const top = api.padY + RISE * i;
+        const a = A0 + STEP_A * (i - 1);
+        const rOut = wallR(RISE * i) - 0.3;
+        const g = new THREE.CylinderGeometry(rOut, rOut, 0.22, 3, 1, false, theta(a) - STEP_A * 0.5, STEP_A);
+        g.translate(0, top - 0.11, 0);
+        k.solid.push(g, i % 2 ? C.metal : C.slate);
+        // the collider: a rectangle from the post to the wall, as wide as the wedge is at
+        // its outer rim, so the rim is covered and only the inner ends overlap
+        const rc = (POST_R + rOut) * 0.5;
+        api.emit({
+          kind: 'obb', x: Math.cos(a) * rc, z: Math.sin(a) * rc,
+          halfX: (rOut - POST_R) * 0.5, halfZ: 0.55, yaw: -a,
+          y0: top - 0.22, y1: top, tag: 'metal', standable: true,
+        });
+        // a handrail on the post side, 0.9 m over each tread
+        const hr = POST_R + 0.22;
+        k.solid.box(0.06, 0.06, 0.62, Math.cos(a) * hr, top + 0.9, Math.sin(a) * hr, C.rust, tangYaw(a));
+        if (i % 3 === 0) k.solid.box(0.04, 0.9, 0.04, Math.cos(a) * hr, top + 0.45, Math.sin(a) * hr, C.rust);
+      }
+      // ---- the gallery: an annulus on the tower head with a low wall round its rim
+      {
+        const ring = new THREE.RingGeometry(2.9, 4.6, 24, 1);
+        ring.rotateX(-Math.PI * 0.5);
+        ring.translate(0, api.padY + F, 0);
+        k.solid.push(ring, C.metal);
+        const under = new THREE.RingGeometry(2.9, 4.6, 24, 1);
+        under.rotateX(Math.PI * 0.5);
+        under.translate(0, api.padY + H, 0);
+        k.solid.push(under, C.dark);
+        k.solid.tube(4.6, 4.6, 0.7, 24, 0, api.padY + H + 0.35, 0, C.metal);      // the rim
+        k.solid.tube(4.6, 4.6, 1.0, 24, 0, api.padY + F + 0.5, 0, C.metal);        // the low wall
+        const N = 12;
+        for (let i = 0; i < N; i++) {
+          const a = (i / N) * TAU;
+          api.emit({
+            kind: 'obb', x: Math.cos(a) * 3.75, z: Math.sin(a) * 3.75, halfX: 1.05, halfZ: 0.85, yaw: tangYaw(a),
+            y0: api.padY + H, y1: api.padY + F, tag: 'metal', standable: true,
+          });
+          api.emit({
+            kind: 'obb', x: Math.cos(a) * 4.45, z: Math.sin(a) * 4.45, halfX: 1.25, halfZ: 0.15, yaw: tangYaw(a),
+            y0: api.padY + F, y1: api.padY + F + 1.0, tag: 'metal',
+          });
+        }
+      }
+      // ---- the lamp room: a 2.9 m tube on the gallery with a doorway onto it, a floor
+      //      that is a 216-degree sector (the stair arrives through the rest), the lamp on
+      //      its pedestal, and the cap
+      const LAMP_DOOR_A = A0 + STEP_A * (N_TREADS - 1) + Math.PI * 0.55;   // across the room from the arrival
+      const ARRIVE_A = A0 + STEP_A * (N_TREADS - 1);
+      {
+        const gap = 0.55 / 2.9;
+        const g = new THREE.CylinderGeometry(2.9, 2.9, 3.2, 16, 1, true, theta(LAMP_DOOR_A) + gap, TAU - 2 * gap);
+        g.translate(0, api.padY + F + 1.6, 0);
+        k.solid.push(g, C.metal);
+        k.solid.cone(3.5, 2.4, 12, 0, api.padY + F + 3.2 + 1.2, 0, C.slate);
+        const N = 12;
+        for (let i = 0; i < N; i++) {
+          const a = (i / N) * TAU;
+          let da = a - LAMP_DOOR_A;
+          while (da > Math.PI) da -= TAU;
+          while (da < -Math.PI) da += TAU;
+          if (Math.abs(da) < (Math.PI / N) * 0.99) continue;
+          api.emit({
+            kind: 'obb', x: Math.cos(a) * 2.9, z: Math.sin(a) * 2.9, halfX: 0.8, halfZ: 0.15, yaw: tangYaw(a),
+            y0: api.padY + F, y1: api.padY + F + 3.2, tag: 'metal',
+          });
+        }
+        // the floor sector: from 8 degrees past the arrival, round 216 degrees
+        const S0 = ARRIVE_A + 0.14, SPAN = TAU * 0.6;
+        const fl = new THREE.CylinderGeometry(2.9, 2.9, 0.2, 14, 1, false, theta(S0 + SPAN), SPAN);
+        fl.translate(0, api.padY + F - 0.1, 0);
+        k.solid.push(fl, C.metal);
+        const NW = 9;
+        for (let i = 0; i < NW; i++) {
+          const a = S0 + SPAN * (i + 0.5) / NW;
+          api.emit({
+            kind: 'obb', x: Math.cos(a) * 1.45, z: Math.sin(a) * 1.45, halfX: 1.45, halfZ: 2.9 * Math.tan(SPAN / NW * 0.5), yaw: -a,
+            y0: api.padY + F - 0.2, y1: api.padY + F, tag: 'metal', standable: true,
+          });
+        }
+        // the rail along the floor's far edge, over the well (the open side)
+        const ra = S0 + SPAN;
+        k.solid.box(2.0, 0.06, 0.06, Math.cos(ra) * 1.9, api.padY + F + 1.0, Math.sin(ra) * 1.9, C.rust, -ra);
+        for (const rr of [1.1, 1.9, 2.7]) k.solid.box(0.05, 1.0, 0.05, Math.cos(ra) * rr, api.padY + F + 0.5, Math.sin(ra) * rr, C.rust);
+        api.emit({
+          kind: 'obb', x: Math.cos(ra) * 1.9, z: Math.sin(ra) * 1.9, halfX: 1.0, halfZ: 0.08, yaw: -ra,
+          y0: api.padY + F, y1: api.padY + F + 1.05, tag: 'metal',
+        });
+        // the pedestal: 0.7 m, one step too tall to climb, so the lamp is looked at
+        k.solid.cyl(0.8, 0.9, 0.7, 12, 0, api.padY + F + 0.35, 0, C.dark);
+        api.emit({ kind: 'circle', x: 0, z: 0, r: 0.9, y0: api.padY + F - 0.1, y1: api.padY + F + 0.7, tag: 'metal' });
+      }
+      // The lamp itself: a vertical cylinder in the lamp room, not the horizontal quad
       // that was there before. A flat plate at 32 m is edge-on from every road in the
       // county — the same fault as the mast lamp and the ember caps.
-      k.glow.cyl(2.3, 2.3, 3.0, 10, 0, api.padY + H + 2.2, 0, [1, 1, 1]);
+      k.glow.cyl(1.4, 1.4, 2.0, 10, 0, api.padY + F + 1.9, 0, [1, 1, 1]);
       // the beam, authored around the lamp so places.js can turn it. An open cone laid on
       // its side: 80 m long, widening to 9 m, additive and never fogged.
       const bk = new Kit();
@@ -1096,7 +1313,7 @@ export const BUILDERS = {
       bk.push(beam, [1, 1, 1]);
       return {
         solid: k.solid.build(), glow: k.glow.build(), glowColour: GLOW.white,
-        moving: [{ geo: bk.build(), colour: GLOW.white, role: 'beam', x: 0, y: api.padY + H + 2.2, z: 0, rate: 0.22 }],
+        moving: [{ geo: bk.build(), colour: GLOW.white, role: 'beam', x: 0, y: api.padY + F + 1.9, z: 0, rate: 0.22 }],
       };
     },
     body(api) {
@@ -1106,9 +1323,8 @@ export const BUILDERS = {
       k.solid.gable(9.6, 7.0, api.padY + 3.4, 1.2, 9, 0, 3, C.slate, 0.3);
       k.glow.pane(1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, PANE_WINDOW, Math.PI + 0.3, 0, 6, 5);
       sash(k.solid, 1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, C.dark, Math.PI + 0.3, 0, 2, 2, 0.07, 0.09);
-      // the door at the tower foot — the claim
-      const c = api.site.claim;
-      k.solid.box(1.5, 2.4, 0.22, c.dx, api.padY + 1.2, c.dz, C.wood);
+      // ROUND 6: the claim is the lamp at the top of the stair (landmark). The door at the
+      // foot is the tower's own doorway now, facing the road; nothing is claimed down here.
       // breakwater
       for (let i = 0; i < 22; i++) {
         const a = -0.9 + (i / 22) * 2.6;
@@ -1243,7 +1459,15 @@ export const BUILDERS = {
   tower: {
     landmark(api) {
       const k = kits();
-      const H = 22;
+      // ROUND 6 (lane D2's route audit): the shaft is 19 m, not 22, and the belfry above it
+      // is 6.9 m tall instead of 4.5. MEASURED 2026-09-03: with a 22 m solid shaft the bell
+      // (claim.dy 24.4, its skirt at 23.45) hangs above the shaft's top edge, and from the
+      // ground the shaft's own near face hides it inside 48 m - from the pad (r < 21) it
+      // could never be seen, and from the road, 5.3 m lower, it needed 60 m and a gap in
+      // the pines. A bell you cannot see is a place you cannot finish. Now the bell hangs
+      // INSIDE the open belfry and clears the shaft from 16 m on the pad and 20 m on the
+      // road; the silhouette's height is unchanged (30.3 m to the spire's tip).
+      const H = 19;
       k.solid.box(6.4, H, 6.4, 0, api.padY + H * 0.5, 0, C.stone);
       api.emit({
         kind: 'obb', x: 0, z: 0, halfX: 3.2, halfZ: 3.2, yaw: 0,
@@ -1252,10 +1476,10 @@ export const BUILDERS = {
       // the open belfry: four corner posts and a cap, so the bell reads as hanging in air
       for (let i = 0; i < 4; i++) {
         const sx = (i & 1) ? 1 : -1, sz = (i & 2) ? 1 : -1;
-        k.solid.box(0.75, 4.2, 0.75, sx * 2.8, api.padY + H + 2.1, sz * 2.8, C.stone);
+        k.solid.box(0.75, 6.6, 0.75, sx * 2.8, api.padY + H + 3.3, sz * 2.8, C.stone);
       }
-      k.solid.box(7.6, 0.6, 7.6, 0, api.padY + H + 4.5, 0, C.stone);
-      k.solid.cone(5.2, 4.4, 4, 0, api.padY + H + 7.0, 0, C.slate);
+      k.solid.box(7.6, 0.6, 7.6, 0, api.padY + H + 6.9, 0, C.stone);
+      k.solid.cone(5.2, 4.4, 4, 0, api.padY + H + 9.4, 0, C.slate);
       // the bell, on its own pivot so it can swing when it is rung
       const bk = new Kit();
       bk.tube(1.05, 0.55, 1.7, 12, 0, -0.95, 0, C.rust);
@@ -1333,7 +1557,11 @@ export const BUILDERS = {
       sash(k.solid, 3.0, 2.0, 0, api.padY + 7.6, -d * 0.5 - 0.05, C.plank, Math.PI, 0, 3, 3, 0.09, 0.10);
       // stone walls out into the field. 31 m from the centre at the ends, past the 26 m
       // level core, so each length sits on the ground it crosses.
+      // ROUND 6 (lane D2's route audit): a gate. The wall ran unbroken across the road side
+      // of the yard (the road is at local +Z; the approach steps land at x 2-5), so the one
+      // way in from the road was over a 1.4 m wall. Two lengths left out where a gate is.
       for (let i = 0; i < 18; i++) {
+        if (i === 9 || i === 10) continue;
         const lx = -26 + i * 3.0;
         const gy = groundY(api, lx, 17);
         k.solid.box(3.0, 1.4, 0.5, lx, gy + 0.55 - 0.15, 17, C.stone);
@@ -1371,6 +1599,12 @@ export const BUILDERS = {
     },
   },
 };
+
+/* ------------------------------------------------------------------- manor */
+// Blackthorn Manor (ROUND 6, Alex: "if any of my haunted mansion from previous games made it
+// in as destinations"). The whole builder lives in manor.js; it gets this file's kit,
+// palette and pane profiles and returns the same { landmark, body } shape as the rest.
+BUILDERS.manor = makeManorBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 
 /* ==========================================================================
    MINOR SITES.
@@ -1698,8 +1932,124 @@ export const MINOR_BUILDERS = {
 // a little of its evenness rather than pretending to be forest floor.
 const APRON_DETAIL_AMP = 0.42;
 
+/* ------------------------------------------------------------- the road approach --
+ * ROUND 6 (lane D2's route audit, 2026-09-03). Walking the real controller from the road to
+ * every claim found five pads a body cannot get onto: the road runs past the yard at
+ * 25-30 m, roads.js baked its spline elevations before the pads registered their discs
+ * (the boot note from places._measureSeam), and where the two disagree the ground is a
+ * step of 3.0-5.8 m over about a metre and a half - a wall to controller.js, which backs
+ * out of any rise past STEP_UP. MEASURED at the road point nearest each centre, road minus
+ * pad, along local +Z (places.js sends local +Z to the road point): cathedral +5.8,
+ * chapel -5.8, bell-tower -5.3, jackfield +4.5, garden-of-rest +3.0, drowned-light -2.6,
+ * relay -0.7 over 6 m (a 0.27 grade, walkable), the other five 0.
+ *
+ * So every major measures its own seam at build time and, where the seam is more than a
+ * step, cuts a flight of stone steps into it: on the lower side's level ground, running
+ * ALONG the bank (a flight straight up a 5 m bank would have to be steeper than the bank,
+ * and APPROACH_RISE caps it at 0.68), with a slab at the upper level bridging the bank
+ * from the top of the flight to the upper ground, and a parapet down each side so it
+ * reads as a cut in a wall and not as a ledge. Built from the ground it measures, so a
+ * site whose seam is under a step builds nothing and the whole thing disappears by itself
+ * the day roads.js re-bakes after the pads exist. Every step is a standable collider
+ * emitted as it is placed; tests/manor.mjs walks every one of them.
+ */
+const APPROACH_RISE = 0.42, APPROACH_RUN = 0.62, APPROACH_W = 2.0;
+// What each site built, by id, in its LOCAL frame: null when the seam was under a step.
+// tests/manor.mjs walks foot -> top -> pad on every one that exists.
+const APPROACHES = new Map();
+export function approachFor(id) { return APPROACHES.has(id) ? APPROACHES.get(id) : null; }
+// Where a building stands across the road side at x 0, the flight is cut beside it: the
+// cathedral's nave is 17 m wide and runs to z 35, past the pad's edge and up to the road.
+const APPROACH_X = { cathedral: -17 };
+function roadApproach(k, api, radius) {
+  APPROACHES.set(api.site.id, null);
+  const pad = api.padY;
+  const ax = APPROACH_X[api.site.kind] || 0;
+  const g = (lz) => api.heightAt(api.wx(ax, lz), api.wz(ax, lz));
+  const zMax = radius / 0.86 + 6;
+  // the pad's edge: the last quarter-metre out along +Z that is still at pad level
+  let padEnd = 0;
+  for (let z = 6; z <= zMax; z += 0.25) { if (Math.abs(g(z) - pad) <= 0.25) padEnd = z; else break; }
+  if (padEnd < 6 || padEnd >= zMax - 1) return;
+  APPROACHES.set(api.site.id, { padEnd });
+  // the far side of the bank: the first point past it where the ground is level for a
+  // full two metres. MEASURED 2026-09-03 at the bell tower: a quarter-metre test stopped
+  // on a shoulder 0.27 m above the road, and the first riser came out at 0.69 - a wall.
+  let roadStart = -1, maxGrade = 0;
+  for (let z = padEnd; z <= zMax; z += 0.25) {
+    const a = g(z), b = g(z + 0.25), c = g(z + 1.0), d2 = g(z + 2.0);
+    const grade = Math.abs(b - a) / 0.25;
+    if (grade > maxGrade) maxGrade = grade;
+    // a road has a crown (0.1 m over a metre, measured at the bell tower); a shoulder
+    // climbs faster than that
+    if (z > padEnd + 0.5 && Math.abs(b - a) < 0.05 && Math.abs(c - a) < 0.12 && Math.abs(d2 - a) < 0.25 && Math.abs(a - pad) > CFG.player.STEP_UP) { roadStart = z; break; }
+  }
+  APPROACHES.set(api.site.id, { padEnd, roadStart, maxGrade: +maxGrade.toFixed(2) });
+  if (roadStart < 0) return;
+  // the flight's foot sits at the lowest (road below) or highest (road above) ground in
+  // its own 2.5 m band, so its first riser is never a wall
+  let roadY = g(roadStart);
+  for (let z = roadStart; z <= roadStart + 2.5; z += 0.25) { const v = g(z); if ((v < pad && v < roadY) || (v > pad && v > roadY)) roadY = v; }
+  const drop = roadY - pad;
+  APPROACHES.set(api.site.id, { padEnd, roadStart, maxGrade: +maxGrade.toFixed(2), drop: +drop.toFixed(2) });
+  if (Math.abs(drop) <= CFG.player.STEP_UP || maxGrade < 1.0) return;
+
+  const lowY = Math.min(pad, roadY), highY = Math.max(pad, roadY), rise = highY - lowY;
+  const steps = Math.ceil(rise / APPROACH_RISE);
+  const run = APPROACH_RUN, L = steps * run;
+  const roadLower = roadY < pad;
+  // the flight's z band: on the lower side's level ground, hard against the bank
+  const zA = roadLower ? roadStart + 0.3 : padEnd - 0.3 - APPROACH_W;
+  const zB = zA + APPROACH_W, zc = (zA + zB) * 0.5;
+  const x0 = ax - L * 0.5, base = lowY - 0.4;
+  for (let s = 0; s < steps; s++) {
+    const top = lowY + Math.min(rise, APPROACH_RISE * (s + 1));
+    const xc = x0 + run * (s + 0.5);
+    k.box(run + 0.02, top - base, APPROACH_W, xc, (top + base) * 0.5, zc, C.stone);
+    api.emit({
+      kind: 'obb', x: xc, z: zc, halfX: run * 0.5, halfZ: APPROACH_W * 0.5, yaw: 0,
+      y0: base, y1: top, tag: 'stone', standable: true,
+    });
+  }
+  // the bridge at the upper level: over the last step, out past the flight's end, and
+  // across the bank to the upper ground
+  const bz0 = roadLower ? padEnd - 0.6 : zA, bz1 = roadLower ? zB : roadStart + 0.6;
+  const bx0 = x0 + L - run, bx1 = x0 + L + 1.4;
+  k.box(bx1 - bx0, 0.5, bz1 - bz0, (bx0 + bx1) * 0.5, highY - 0.25, (bz0 + bz1) * 0.5, C.stone);
+  api.emit({
+    kind: 'obb', x: (bx0 + bx1) * 0.5, z: (bz0 + bz1) * 0.5, halfX: (bx1 - bx0) * 0.5, halfZ: (bz1 - bz0) * 0.5, yaw: 0,
+    y0: highY - 0.5, y1: highY, tag: 'stone', standable: true,
+  });
+  APPROACHES.set(api.site.id, {
+    padEnd, roadStart, maxGrade: +maxGrade.toFixed(2), drop: +drop.toFixed(2), steps, roadLower,
+    // the walk: onto the foot of the flight, up it, onto the bridge, onto the upper ground
+    foot: { x: x0 + 0.4, z: zc }, top: { x: x0 + L - run * 0.5, z: zc },
+    bridge: { x: (bx0 + bx1) * 0.5, z: roadLower ? padEnd - 0.3 : roadStart + 0.3 },
+    landing: { x: (bx0 + bx1) * 0.5, z: roadLower ? padEnd - 2.5 : roadStart + 2.5 },
+  });
+  // parapets down both sides of the flight, sloped with it. The bank-side one stops where
+  // the bridge leaves the flight (it stood across the bridge on the first cut, measured:
+  // the walker rounded its end onto the last 0.4 m of the slab).
+  const pitch = Math.atan2(rise, L);
+  const bankSide = roadLower ? zA - 0.16 : zB + 0.16, farSide = roadLower ? zB + 0.16 : zA - 0.16;
+  const full = Math.hypot(L, rise) + 0.4;
+  k.box(full, 0.9, 0.32, x0 + L * 0.5, lowY + rise * 0.5 + 0.55, farSide, C.stone, 0, 0, pitch);
+  api.emit({
+    kind: 'obb', x: x0 + L * 0.5, z: farSide, halfX: full * 0.5, halfZ: 0.16, yaw: 0,
+    y0: lowY - 0.3, y1: highY + 1.0, tag: 'wall',
+  });
+  const cut = (bx0 - 0.3) - (x0 - 0.2);                 // the bank-side parapet's run
+  const cutRise = rise * cut / L;
+  k.box(Math.hypot(cut, cutRise), 0.9, 0.32, x0 - 0.2 + cut * 0.5, lowY + cutRise * 0.5 + 0.55, bankSide, C.stone, 0, 0, pitch);
+  api.emit({
+    kind: 'obb', x: x0 - 0.2 + cut * 0.5, z: bankSide, halfX: Math.hypot(cut, cutRise) * 0.5, halfZ: 0.16, yaw: 0,
+    y0: lowY - 0.3, y1: lowY + cutRise + 1.0, tag: 'wall',
+  });
+}
+
 export function apron(api, radius, col) {
   const k = new Kit();
+  roadApproach(k, api, radius);
   // 28 x 4 put 113 vertices under a 40 m disc — one every three and a half metres, which
   // cannot carry material detail however it is coloured, and it is why the apron measured as
   // one flat plane across 40% of the opening frame. 56 x 12 is 673 vertices, roughly one per

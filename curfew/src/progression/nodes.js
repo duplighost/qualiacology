@@ -2,13 +2,15 @@
 // Owner: progression. Pure data + pure functions. No THREE, no ctx, no side effects, so
 // tests/progression.mjs and anybody else can import it without booting a renderer.
 //
-// THE ONE LAW OF THIS FILE: EVERY NODE CHANGES A VERB, NOT A NUMBER.
-// "+8% damage" is a node the player can never feel and can never describe to somebody else.
-// Every row below either adds a thing you can DO (drop-roll, hold breath, a horn, a focus
-// click) or changes the shape of a verb you already have (a reload you can sprint out of and
-// come back to; a slide-cancel that keeps its speed). The few plain numbers that survive —
-// tac-sprint seconds, mantle reach, the regen ceiling — are all the SIZE of a verb, which is
-// the only kind of number worth a card.
+// THE FIRST LAW OF THIS FILE, AMENDED IN ROUND 6: EVERY TIER HAS SOMETHING HE CAN FEEL.
+// The first shape of this law was "every node changes a verb, not a number", and it bought
+// 24 subtle verbs (drop-roll, an active-reload window, a soft step) and not one thing that
+// made the body bigger. Alex, fifth playtest: "Things that work to make your health bigger.
+// Things that work to make you faster or stronger or whatever makes sense that isn't in the
+// current xp system. Actually, most of the cool stuff should just be in the xp system." So
+// three plain numbers now live in the bag — hpMax, speedMul, damageMul — and the three
+// branches he named by feel (BLOOD, LEGS, HANDS) each buy them at two of their four tiers.
+// The verbs that survived are the ones a player can describe to somebody else.
 //
 // THE SECOND LAW, ADDED AFTER THE SECOND AUDIT: THE HOOK REGISTRY IS THE CONTRACT.
 // The first shape of this file wrote forty-odd keys into a `stats` bag and trusted five other
@@ -17,17 +19,17 @@
 // because they registered a HOOK. A key nobody reads fails silently forever; a hook nobody
 // runs is countable, and `progress.hookReport()` counts it.
 //
-// So every node now INSTALLS ITS OWN EFFECT into the registry. The node carries the code. No
+// So every node INSTALLS ITS OWN EFFECT into the registry. The node carries the code. No
 // sibling switches on a node id, and no sibling has to remember a key name — it calls ONE
 // named hook point at ONE named line, and every node that cares is already listening.
 // `HOOK_POINTS` below names every point, who RUNS it, and the exact call site.
 //
-// FIVE VALUES SURVIVE AS STATS, and only because another lane samples them inside its own
+// NINE VALUES SURVIVE AS STATS, and only because another lane samples them inside its own
 // physics every step, where a function call per frame would be the wrong shape: dropRoll,
-// tacSprintTime, slideCancelKeep, mantleReach, regenCeiling. Each has a row in
-// `STAT_CONTRACT` naming the exact file, the exact CFG number it replaces, and the fallback.
-// `baseStats()` holds those and nothing else, so "a key with no consumer" is now an assertion
-// a gate can make rather than a thing an audit has to discover.
+// tacSprintTime, slideCancelKeep, mantleReach, regenCeiling, and — since round 6 — hpMax,
+// speedMul, damageMul. Each has a row in `STAT_CONTRACT` naming the exact file, the exact CFG
+// number it replaces, and the fallback. `baseStats()` holds those and nothing else, so "a key
+// with no consumer" is an assertion a gate can make rather than a thing an audit discovers.
 //
 // donor: palehollow/src/progress.js:10-40 — the {id, branch, tier, cost, apply(s)} row shape
 //   and :66-74 recompute(), where stats are rebuilt FROM SCRATCH on every purchase rather
@@ -38,7 +40,9 @@
 //   an INSTALLER: it registers behaviour. Nothing anywhere in CURFEW is allowed to branch on
 //   a node id, so the tree can grow without touching another lane.
 // donor: qualiacology/rocket-shoes/src/systems/draft.js:22-34 — weighted 3-card dealing,
-//   ported to progress.js (this file only supplies the pool and the weights).
+//   ported to progress.js (this file only supplies the pool and the weights). Since round 6
+//   nothing on the pause card deals: the whole tree is on the card and a click buys a node.
+//   draft() and the pool survive for autoDraft tests only.
 
 /* ------------------------------------------------------------------ branches -- */
 
@@ -104,22 +108,25 @@ export const HOOK_POINTS = Object.freeze([
     at: 'combat/combat.js the penetration test', sig: '(cm, ctx, material) -> cm' },
   { name: 'penExits', kind: 'reduce', runner: 'weapons', base: '0',
     at: 'combat/combat.js the exit-count loop', sig: '(n, ctx) -> n' },
+  // ROUND 6 (lane G): run by gfx/lights.js present(), inside the torch block — the beam's
+  // angle and heat are set by name there, and the two reads live beside them.
   { name: 'torchFocus', kind: 'reduce', runner: 'lights', base: 'null',
-    at: 'gfx/lights.js the torch update', sig: '(spec|null, ctx) -> {angle,stunS,costS}|null' },
+    at: 'gfx/lights.js present(), the torch block', sig: '(spec|null, ctx) -> {angle,stunS,costS}|null' },
   { name: 'highBeam', kind: 'reduce', runner: 'lights', base: 'null',
-    at: 'gfx/lights.js the torch update', sig: '(spec|null, ctx) -> {seconds}|null' },
+    at: 'gfx/lights.js present(), the torch block', sig: '(spec|null, ctx) -> {seconds}|null' },
   { name: 'eyeshineMul', kind: 'reduce', runner: 'enemies', base: '1',
     at: 'enemies/enemies.js the eye-glint range test', sig: '(mul, ctx) -> mul' },
+  // ROUND 6 (lane G): run by director/dread.js _stepWatcher(), the withdrawal decision.
   { name: 'resolveWatchers', kind: 'reduce', runner: 'dread', base: 'false',
-    at: 'director/dread.js the watcher reveal', sig: '(bool, ctx) -> bool' },
+    at: 'director/dread.js _stepWatcher(), the watcher reveal', sig: '(bool, ctx) -> bool' },
   { name: 'noiseRadius', kind: 'reduce', runner: 'player',
     base: 'the radius about to be emitted',
     at: 'player/controller.js the footstep noise emit; weapons/weapon.js _fire()',
     sig: '(radius, ctx, source) -> radius' },
   { name: 'hotwireS', kind: 'reduce', runner: 'car', base: 'CFG.car.hotwire',
     at: 'vehicle/car.js the hotwire timer', sig: '(seconds, ctx) -> seconds' },
-  { name: 'ramMinSpeed', kind: 'reduce', runner: 'car', base: 'Infinity',
-    at: 'vehicle/car.js _ram()', sig: '(mps, ctx) -> mps' },
+  { name: 'ramClean', kind: 'reduce', runner: 'car', base: 'false',
+    at: 'vehicle/car.js _ram()', sig: '(bool, ctx) -> bool' },
   { name: 'wearRepair', kind: 'reduce', runner: 'car', base: '0',
     at: 'vehicle/car.js the parked branch', sig: '(perMinute, ctx) -> perMinute' },
   { name: 'onHorn', kind: 'run', runner: 'car', sig: '(ctx, x, z)',
@@ -143,7 +150,7 @@ export const HOOK_BY_NAME = Object.freeze(
 /* --------------------------------------------------------------- base stats -- */
 
 /**
- * THE STAT CONTRACT — five keys now, not forty, because a value only earns a key if another
+ * THE STAT CONTRACT — nine keys now, not forty, because a value only earns a key if another
  * lane samples it INSIDE ITS OWN PHYSICS EVERY STEP. Everything else is a hook and carries
  * its own code.
  *
@@ -151,8 +158,10 @@ export const HOOK_BY_NAME = Object.freeze(
  * Every read is counted; `progress.statReport()` names any key nothing has ever read, and a
  * gate asserts that list is empty.
  *
- * The defaults are the M0 game exactly as it ships today, so `baseStats()` with no nodes owned
- * is a no-op on every system.
+ * The defaults are the game exactly as it ships today, so `baseStats()` with no nodes owned
+ * is a no-op on every system. THE FALLBACK LAW: every reader falls back to its CFG number
+ * when progress is absent, and progress boots whether or not anybody reads a key — a stat
+ * with no reader yet is a dead number, never a dead game.
  */
 export function baseStats() {
   return {
@@ -162,6 +171,11 @@ export function baseStats() {
     slideCancelKeep: 0.85,  // fraction of speed kept when a slide is cancelled EARLY
     mantleReach: 2.90,      // metres of ledge the mantle probe accepts
     regenCeiling: 40,       // hp the passive regen climbs to
+    // ROUND 6 — the three he asked for by name. "make your health bigger", "faster",
+    // "stronger". Plain multipliers, base = CFG's own numbers, read by E (body) and C (gun).
+    hpMax: 100,             // CFG.player.health.max; Thick Skin 120, Iron 150
+    speedMul: 1.0,          // every ground speed of the body; Long Stride 1.06, Wind 1.12
+    damageMul: 1.0,         // every round the gun lands; Heavy Rounds 1.12, Through 1.25
   };
 }
 
@@ -203,6 +217,23 @@ export const STAT_CONTRACT = Object.freeze({
     replaces: 'CFG.player.health.regenCeiling', fallback: 40,
     note: 'Both sites, or the ceiling is 70 in one branch and 40 in the other.',
   }),
+  // ROUND 6, lane G registers; lane E reads the first two through _stat, lane C the third
+  // through _perk-style lazy reads. BRIEF-COMMON cross-lane contract table.
+  hpMax: Object.freeze({
+    file: 'src/player/controller.js', site: 'every read of P.health.max (the clamp, the respawn fill, heal())',
+    replaces: 'CFG.player.health.max', fallback: 100,
+    note: 'The body clamps hp to this and exposes it as player.hpMax so ui/hud.js can draw the arc against it.',
+  }),
+  speedMul: Object.freeze({
+    file: 'src/player/controller.js', site: 'the ground speed resolve (walk, sprint, tac-sprint, crouch)',
+    replaces: null, fallback: 1.0,
+    note: 'Multiply every ground target speed. Never the car, never a fall.',
+  }),
+  damageMul: Object.freeze({
+    file: 'src/combat/combat.js', site: 'the damage roll, before the zone multiplier',
+    replaces: null, fallback: 1.0,
+    note: 'Multiply the damage of every round the gun lands. Melee too.',
+  }),
 });
 
 /* ------------------------------------------------------------- hook payloads -- */
@@ -227,6 +258,16 @@ const WEAR_REPAIR     = 0.1;    // wheel_4, wear per minute while parked somewhe
 const STILL_HEART_SPD = 0.4;    // quiet_4, m/s
 const STILL_HEART_M   = 6;      // quiet_4, metres
 const SHUT_DOOR_M     = 12;     // quiet_3, metres
+
+// ROUND 6 — the numbers with teeth. Two steps each, the second the whole of it.
+const HP_THICK_SKIN   = 120;    // blood_2
+const HP_IRON         = 150;    // blood_4
+const SPEED_STRIDE    = 1.06;   // legs_2
+const SPEED_WIND      = 1.12;   // legs_4
+const DMG_HEAVY       = 1.12;   // hands_2
+const DMG_THROUGH     = 1.25;   // hands_4
+const TAC_SPRINT_CUT  = 6.5;    // legs_3, seconds
+const MANTLE_WIND     = 3.60;   // legs_4, metres
 
 /* ------------------------------------------------------------------ helpers -- */
 // Every one of these reaches a sibling LAZILY, at the moment the hook runs, and retains
@@ -269,26 +310,29 @@ function dropDistantHunts(ctx, x, z, beyond) {
 /* -------------------------------------------------------------------- nodes -- */
 
 // A node is an INSTALLER (rocket-shoes items.js:7-31): `install(stats, hooks, rank)` writes
-// one of the five surviving stats, or registers hooks, or both. `rank` is how many times this
+// one of the nine surviving stats, or registers hooks, or both. `rank` is how many times this
 // node is owned — always 1 today, passed anyway so a future stacking node needs no signature
-// change.
+// change. `line` is the ONE sentence the pause card prints under the name: what it buys, in
+// words he can repeat. Under sixty characters so it holds two lines on the card.
 
 export const NODES = Object.freeze([
-  /* ---- LEGS: the county gets smaller. All four are frame-sampled stats. -------- */
+  /* ---- LEGS: the county gets smaller ------------------------------------------ */
   { id: 'legs_1', branch: 'legs', tier: 0, cost: 1, name: 'Drop-roll',
     line: 'A long fall ends in a slide instead of a stop.',
     install: (s) => { s.dropRoll = 1; } },
-  { id: 'legs_2', branch: 'legs', tier: 1, cost: 2, name: 'Long Wind',
-    line: 'The sprint that costs you holds for six and a half seconds.',
-    install: (s) => { s.tacSprintTime = 6.5; } },
+  { id: 'legs_2', branch: 'legs', tier: 1, cost: 2, name: 'Long Stride',
+    line: 'Six per cent faster on your feet, everywhere.',
+    install: (s) => { s.speedMul = SPEED_STRIDE; } },
   { id: 'legs_3', branch: 'legs', tier: 2, cost: 3, name: 'Cut',
-    line: 'Standing out of a slide keeps all of it.',
-    install: (s) => { s.slideCancelKeep = 1.0; } },
-  { id: 'legs_4', branch: 'legs', tier: 3, cost: 5, name: 'Reach',
-    line: 'Second-storey windows are a handhold.',
-    install: (s) => { s.mantleReach = 3.60; } },
+    line: 'The hard sprint holds longer, and a slide keeps its speed.',
+    install: (s) => { s.tacSprintTime = TAC_SPRINT_CUT; s.slideCancelKeep = 1.0; } },
+  { id: 'legs_4', branch: 'legs', tier: 3, cost: 5, name: 'Wind',
+    line: 'Twelve per cent faster, and a second storey is a handhold.',
+    // The WHOLE multiplier, not a second step on top of Long Stride: installs run in tier
+    // order and this row is what the stat reads once both are owned.
+    install: (s) => { s.speedMul = SPEED_WIND; s.mantleReach = MANTLE_WIND; } },
 
-  /* ---- HANDS: the gun answers faster ------------------------------------------ */
+  /* ---- HANDS: the gun answers harder ------------------------------------------ */
   { id: 'hands_1', branch: 'hands', tier: 0, cost: 1, name: 'Active',
     line: 'There is a moment in the reload. Take it, or jam.',
     install: (s, hooks) => {
@@ -297,23 +341,27 @@ export const NODES = Object.freeze([
       // null; there is no flag to read and no second key that could disagree with it.
       hooks.on('reloadWindow', 'hands_1', () => ACTIVE_RELOAD);
     } },
-  { id: 'hands_2', branch: 'hands', tier: 1, cost: 2, name: 'Carry',
-    line: 'Run out of a reload and come back to where you left it.',
-    install: (s, hooks) => { void s; hooks.on('reloadResume', 'hands_2', () => true); } },
+  { id: 'hands_2', branch: 'hands', tier: 1, cost: 2, name: 'Heavy Rounds',
+    line: 'Every round you land hits twelve per cent harder.',
+    install: (s) => { s.damageMul = DMG_HEAVY; } },
   { id: 'hands_3', branch: 'hands', tier: 2, cost: 3, name: 'Hold',
-    line: 'Two and a half seconds where the sight does not drift.',
-    install: (s, hooks) => { void s; hooks.on('holdBreath', 'hands_3', () => HOLD_BREATH); } },
-  { id: 'hands_4', branch: 'hands', tier: 3, cost: 5, name: 'Through',
-    line: 'The round leaves the far side.',
+    line: 'The sight stops drifting, and a reload you ran out of resumes.',
     install: (s, hooks) => {
       void s;
+      hooks.on('holdBreath', 'hands_3', () => HOLD_BREATH);
+      hooks.on('reloadResume', 'hands_3', () => true);
+    } },
+  { id: 'hands_4', branch: 'hands', tier: 3, cost: 5, name: 'Through',
+    line: 'A quarter harder, and the round leaves the far side.',
+    install: (s, hooks) => {
+      s.damageMul = DMG_THROUGH;
       hooks.on('penCm', 'hands_4', (cm) => (typeof cm === 'number' ? cm * PEN_MUL : cm));
       hooks.on('penExits', 'hands_4', (n) => (n | 0) + 1);
     } },
 
   /* ---- LAMP: what the light is for -------------------------------------------- */
   { id: 'lamp_1', branch: 'lamp', tier: 0, cost: 1, name: 'Focus',
-    line: 'Squeeze the beam. A Hunter stops for most of a second.',
+    line: 'Aim with the torch on and the beam squeezes tight.',
     install: (s, hooks) => { void s; hooks.on('torchFocus', 'lamp_1', () => TORCH_FOCUS); } },
   { id: 'lamp_2', branch: 'lamp', tier: 1, cost: 2, name: 'Eyeshine',
     line: 'Eyes catch the light twice as far out.',
@@ -323,7 +371,7 @@ export const NODES = Object.freeze([
     line: 'What the beam finds stops being a suggestion.',
     install: (s, hooks) => { void s; hooks.on('resolveWatchers', 'lamp_3', () => true); } },
   { id: 'lamp_4', branch: 'lamp', tier: 3, cost: 5, name: 'High Beam',
-    line: 'Everything inside the cone is blind for a moment.',
+    line: 'For a moment after it comes on, the torch burns twice as hot.',
     install: (s, hooks) => { void s; hooks.on('highBeam', 'lamp_4', () => HIGH_BEAM); } },
 
   /* ---- QUIET: the loudness economy -------------------------------------------- */
@@ -340,7 +388,7 @@ export const NODES = Object.freeze([
       });
     } },
   { id: 'quiet_2', branch: 'quiet', tier: 1, cost: 2, name: 'Cold Barrel',
-    line: 'The first shot at something that has not seen you is a small sound.',
+    line: 'The first shot at something that has not seen you is small.',
     install: (s, hooks) => {
       void s;
       hooks.on('noiseRadius', 'quiet_2', (r, ctx, source) => {
@@ -371,7 +419,7 @@ export const NODES = Object.freeze([
       });
     } },
   { id: 'quiet_4', branch: 'quiet', tier: 3, cost: 5, name: 'Still Heart',
-    line: 'Crouched and barely moving, you stop being a thing they are following.',
+    line: 'Crouched and barely moving, they stop following you.',
     install: (s, hooks) => {
       void s;
       // Runs off progress's OWN step, so it needs nothing from anybody. Costs one distance
@@ -390,11 +438,13 @@ export const NODES = Object.freeze([
     install: (s, hooks) => { void s; hooks.on('hotwireS', 'wheel_1', () => HOTWIRE_S); } },
   { id: 'wheel_2', branch: 'wheel', tier: 1, cost: 2, name: 'Ram',
     line: 'At speed, a body is not an obstacle.',
-    // The base is Infinity, so with this node unowned the car rams NOTHING. That is the
-    // point of the card: today car.js:1037 rams unconditionally and the node buys nothing.
+    // ROUND 6 (lane H). The base ram is the CAR'S (DESIGN section 3: 8 m/s, no node) — Alex
+    // drove into them and nothing happened, because the old base here was Infinity. This node
+    // is the CLEAN POP DESIGN gives it: at >= CFG.car.ram.cleanSpeed (12 m/s, RAM_MIN_SPEED
+    // above) a hit costs the car no speed at all. car.js _ram() reads 'ramClean', base false.
     install: (s, hooks) => {
       void s;
-      hooks.on('ramMinSpeed', 'wheel_2', (v) => Math.min(v, RAM_MIN_SPEED));
+      hooks.on('ramClean', 'wheel_2', () => true);
     } },
   { id: 'wheel_3', branch: 'wheel', tier: 2, cost: 3, name: 'Horn',
     line: 'Call everything awake to the car. Then get out and walk away.',
@@ -426,21 +476,9 @@ export const NODES = Object.freeze([
   { id: 'blood_1', branch: 'blood', tier: 0, cost: 1, name: 'Ceiling',
     line: 'You come back further on your own.',
     install: (s) => { s.regenCeiling = 70; } },
-  { id: 'blood_2', branch: 'blood', tier: 1, cost: 2, name: 'Second Wind',
-    line: 'Once a cycle, the end of you is two and a half seconds of running.',
-    install: (s, hooks) => {
-      void s;
-      // ONCE A CYCLE, and the node keeps its own latch in a closure. A recompute re-installs
-      // the node and re-arms it, which is the same shape as buying it — correct either way,
-      // and nothing outside this row knows the latch exists.
-      let spent = false;
-      hooks.on('secondWind', 'blood_2', (v) => {
-        if (spent) return v;
-        spent = true;
-        return SECOND_WIND;
-      });
-      hooks.on('onPhase', 'blood_2', (ctx, phase) => { void ctx; if (phase === 'dusk') spent = false; });
-    } },
+  { id: 'blood_2', branch: 'blood', tier: 1, cost: 2, name: 'Thick Skin',
+    line: 'A fifth more health. Twenty points of it.',
+    install: (s) => { s.hpMax = HP_THICK_SKIN; } },
   { id: 'blood_3', branch: 'blood', tier: 2, cost: 3, name: 'Quick Clot',
     line: 'Killing it starts the mending.',
     // The node that proved the registry: it was the only one of the 24 that ever did
@@ -455,15 +493,23 @@ export const NODES = Object.freeze([
         }
       });
     } },
-  { id: 'blood_4', branch: 'blood', tier: 3, cost: 5, name: 'False Dawn',
-    line: 'When the light lies to you, it mends you anyway.',
+  { id: 'blood_4', branch: 'blood', tier: 3, cost: 5, name: 'Iron',
+    line: 'Fifty more health, and once a cycle the end of you is a run.',
     install: (s, hooks) => {
-      void s;
-      hooks.on('onPhase', 'blood_4', (ctx, phase) => {
-        if (phase !== 'dawn') return;
-        const p = sys(ctx, 'player');
-        if (p && typeof p.heal === 'function') p.heal(ctx.cfg.player.health.max);
+      // The WHOLE number, like Wind: 150 is what the body reads once Thick Skin and Iron
+      // are both owned, not 120 + 30 applied in some order.
+      s.hpMax = HP_IRON;
+      // Second wind, ONCE A CYCLE, and the node keeps its own latch in a closure. A recompute
+      // re-installs the node and re-arms it, which is the same shape as buying it — correct
+      // either way, and nothing outside this row knows the latch exists. Round 5 sold this
+      // as its own tier-1 card; it is the top of BLOOD now, where dying is the subject.
+      let spent = false;
+      hooks.on('secondWind', 'blood_4', (v) => {
+        if (spent) return v;
+        spent = true;
+        return SECOND_WIND;
       });
+      hooks.on('onPhase', 'blood_4', (ctx, phase) => { void ctx; if (phase === 'dusk') spent = false; });
     } },
 ]);
 
@@ -563,6 +609,7 @@ export function levelFrac(totalXp) {
  * The pool a 3-card draft may deal from: unowned, prereq satisfied, affordable is NOT a
  * filter (a card you cannot afford yet is a reason to keep the point).
  * donor: qualiacology/rocket-shoes/src/systems/draft.js:15-19 availableItems().
+ * ROUND 6: nothing on the pause card deals any more; the pool serves autoDraft tests only.
  */
 export function draftPool(owned) {
   const out = [];

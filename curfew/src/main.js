@@ -60,6 +60,8 @@ import * as carMod from './vehicle/car.js';
 import * as progressMod from './progression/progress.js';
 import * as audioMod from './audio/audio.js';
 import * as hudMod from './ui/hud.js';
+import * as kneelerMod from './enemies/kneeler.js';   // ROUND 6, lane C
+import * as wildsMod from './world/wilds.js';         // ROUND 6, lane F
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -81,6 +83,7 @@ const SYSTEMS = [
   ['flora', floraMod],
   ['places', placesMod],       // AFTER roads and terrain: its constructor reads sites() and
                                // registers flats, and BEFORE chunks stream anything in
+  ['wilds', wildsMod],         // ROUND 6: the off-road county — towers, caches, ruins. AFTER places
   // -- the body -------------------------------------------------------------------------
   ['player', playerMod],
   ['camera', cameraMod],       // presents after player because it reads renderPos
@@ -91,6 +94,7 @@ const SYSTEMS = [
   ['enemies', enemiesMod],
   ['director', directorMod],   // AFTER enemies: it validates its roster against species
   ['dread', dreadMod],         // AFTER director: the two gate each other every step
+  ['kneeler', kneelerMod],     // ROUND 6: the guardian at three places. Outside the pool, after the pool
   // -- the loop -------------------------------------------------------------------------
   ['car', carMod],
   ['progress', progressMod],

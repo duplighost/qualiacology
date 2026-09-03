@@ -654,6 +654,9 @@ export class Audio {
     // beat inside the first ten seconds and the first place you walk past has to
     // be able to say its own name. A beat with no bake is a silent beat.
     await this._slice('audio: dread', () => { this._bakeDread(); this._bakeWhisper(); });
+    // ROUND 6, lane C: the Kneeler's five sounds. On the boot path for the same reason the
+    // dread beats are: the first place you walk past may be guarded, and silence reads as broken.
+    await this._slice('audio: kneeler', () => this._bakeKneeler());
 
     this.baked = true;
     this.bed.start();
@@ -2210,6 +2213,103 @@ export class Audio {
    * to EARSHOT, and a whisper shouting into it would cost the rear ticker the
    * one channel that makes it work.
    */
+  /* ------------------------------------------------------- THE KNEELER -- */
+
+  /**
+   * ROUND 6, lane C. The boss's voice: five one-shots, positional, on the
+   * creatures bus, so it is countable by ear from where it stands. Alex: "I hope
+   * there are bosses somewhere." A boss you cannot hear coming is a jump-scare,
+   * and the design (section 4) gives it 1.4 s of ground rumble BEFORE it stands
+   * precisely so it is not one. Every buffer here is baked at half rate: none of
+   * them has content above 8 kHz, and the creature bus is lowpassed at 1.6 kHz
+   * anyway (the EARSHOT band above it is reserved).
+   *
+   *   kn_rumble  1.4 s of sub. Brown noise under 90 Hz with a 38 -> 24 Hz swell:
+   *              felt more than heard, which is what a ground rumble is.
+   *   kn_stand   a wet crack: the snap of the branch bake with the wood's body
+   *              dropped to 70 Hz and a wet grain bed 0.3 s long behind it.
+   *   kn_sweep   the whoosh. A band-pass sweep 320 -> 1400 -> 380 Hz over 0.55 s
+   *              with a slow attack — on the TELEGRAPH frame, never the hit frame.
+   *   kn_vent    the hiss while the vents are open: pink noise through a 900 Hz
+   *              band, 1.1 s, with a 60 ms attack.
+   *   kn_death   a long exhale, 2.6 s: pink noise sweeping 700 -> 220 Hz over a
+   *              70 -> 30 Hz sub, decaying to nothing.
+   */
+  _bakeKneeler() {
+    const sr = Math.max(16000, Math.round(this.sr / 2));
+    const r = this.ctx.rng.fork('audio:kneeler');
+    const rn = () => r.next();
+    const N = (s) => Math.round(s * sr);
+    const reg = (n, ch) => this.reg(n, ch, sr);
+
+    // ---- RUMBLE
+    {
+      const b = new Float32Array(N(1.6));
+      brownFill(b, rn, 1.0);
+      biquad(b, sr, 'lp', 90, 0.7, 0, 2);
+      // a swell that peaks two thirds of the way in, then drops for the stand
+      for (let i = 0; i < b.length; i++) {
+        const t = i / sr;
+        const env = t < 1.05 ? Math.pow(t / 1.05, 1.6) : Math.max(0, 1 - (t - 1.05) / 0.55);
+        b[i] *= env;
+      }
+      sweepSine(b, sr, 38, 24, 1.3, 1.2, 0.55, 0.05);
+      fadeOut(b, sr, 0.10);
+      reg('kn_rumble', [normalizeTo(b, 0.95)]);
+    }
+
+    // ---- STAND: the wet crack
+    {
+      const b = new Float32Array(N(0.85));
+      grains(b, sr, rn, { count: 9, from: 0, span: 0.020, len: [0.0008, 0.003], hp: 900, lp: 7000, amp: 0.45, decay: 0.6 });
+      damped(b, sr, 620, 0.006, 0.9, 0, 0.010);
+      damped(b, sr, 1400, 0.003, 0.5, 0, 0.010);
+      damped(b, sr, 70, 0.060, 0.9, 0, 0.012);     // the body of it, an octave under the branch
+      sweepSine(b, sr, 180, 55, 0.18, 0.16, 0.6, 0.02);
+      grains(b, sr, rn, { count: 34, from: 0.03, span: 0.32, len: [0.002, 0.009], hp: 260, lp: 1800, amp: 0.40, decay: 2.2 });
+      biquad(b, sr, 'hp', 45, 0.7);
+      fadeOut(b, sr, 0.06);
+      reg('kn_stand', [normalizeTo(b, 0.95)]);
+    }
+
+    // ---- SWEEP: the whoosh
+    {
+      const b = new Float32Array(N(0.55));
+      noiseFill(b, rn);
+      biquadSweep(b, sr, 'bp', 320, 1400, 1.1, 0.28, 1.4);
+      const c = new Float32Array(b.length);
+      noiseFill(c, rn);
+      biquadSweep(c, sr, 'bp', 1400, 380, 1.1, 0.27, 1.2);
+      mixInto(b, c, 1.0, Math.round(0.27 * sr));
+      envAD(b, sr, 0.12, 0.22, 0.10, 1);
+      biquad(b, sr, 'hp', 120, 0.7);
+      fadeOut(b, sr, 0.05);
+      reg('kn_sweep', [normalizeTo(b, 0.9)]);
+    }
+
+    // ---- VENT: the hiss
+    {
+      const b = new Float32Array(N(1.15));
+      pinkFill(b, rn, 1.0);
+      biquad(b, sr, 'bp', 900, 0.6, 0, 2);
+      envAD(b, sr, 0.06, 0.55, 0.45, 1);
+      fadeOut(b, sr, 0.08);
+      reg('kn_vent', [normalizeTo(b, 0.7)]);
+    }
+
+    // ---- DEATH: the exhale
+    {
+      const b = new Float32Array(N(2.6));
+      pinkFill(b, rn, 1.0);
+      biquadSweep(b, sr, 'lp', 700, 220, 0.8, 2.2, 1.6);
+      envAD(b, sr, 0.08, 1.1, 0.30, 1);
+      sweepSine(b, sr, 70, 30, 2.0, 1.4, 0.7, 0.05);
+      biquad(b, sr, 'hp', 40, 0.7);
+      fadeOut(b, sr, 0.30);
+      reg('kn_death', [normalizeTo(b, 0.95)]);
+    }
+  }
+
   _bakeWhisper() {
     const sr = Math.max(16000, Math.round(this.sr / 2));
     const r = this.ctx.rng.fork('audio:whisper');

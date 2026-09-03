@@ -54,6 +54,7 @@
 //   - Sibling systems are read LAZILY, at use, never captured at construction.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import CFG from '../config.js';
 import { Rng, TAU, clamp, clamp01, lerp, noise1D, smoothstep } from '../engine/math.js';
 import {
@@ -194,6 +195,104 @@ const CLAIM_FLASH_S = 1.4;        // the rover a claim borrows, then releases by
 const NEAR_HYSTERESIS = 12;       // metres, so place:near cannot chatter on a boundary
 const MAJOR_KEEPOUT = 70;         // no minor site inside this of a major
 
+/* ------------------------------------------------ the claim is a THING you DO (round 6) --
+ * Alex, fifth playtest (2026-09-03): "I have no idea how you finish places. That first place
+ * I get to there really isn't a door. The lights come on after I fuck with it a while, and
+ * it's really hard to tell that the lights even do come on."
+ *
+ * Before this round a touch claim was an invisible 2.6 m circle the player's feet crossed —
+ * no fixture to see, no verb to press, no sound before the beat. Now every `touch` row
+ * carries a FIXTURE at its claim point (built below, in _buildLandmark, from primitives on
+ * the materials this file already owns: no new program), and the claim is a HOLD:
+ *
+ *   - the fixture is a waist-high iron switch post with a knife-blade lever and a GLINT: a
+ *     small additive lamp on top that breathes on a CLAIM_GLINT_S cycle while the place is
+ *     unclaimed and burns steady once it is yours. The glint is what you see from the road.
+ *   - inside CLAIM_REACH of it, facing it (CLAIM_FACE is the cosine), with your feet within
+ *     CLAIM_DY_TOL of its base (so a claim on the ground cannot be made from a roof above
+ *     it, and the lighthouse's lamp-room claim at claim.dy ~20 m works from the lamp room),
+ *     HOLDING `use` (KeyE) for CLAIM_HOLD_S throws the lever. The first frame of the hold
+ *     emits place:claimStart {id} and a metal handle sound; the lever tracks the hold;
+ *     letting go early snaps it back and claims nothing; the full hold runs _claim.
+ *   - a press that is refused — no fixture in reach, the wrong side of it, a place already
+ *     claimed — answers with a DEAD click when a fixture is within CLAIM_ANSWER_R. Silence
+ *     reads as broken; a dead click reads as "not here, not like that".
+ *
+ * The two `shoot` rows (Gallowsfen's hanging lamp, the Bell Tower's bell) keep their verb
+ * and gain a glint of their own at the target, so the thing to shoot is the thing that winks.
+ *
+ * CLAIM_DY_TOL: 2.0 m. The station's shop eave is 3.7 m over its pad and its canopy 4.9 m,
+ * so a fixture on the pad is out of reach from either; a jump rises 0.88 m (tests/sites.mjs
+ * roof feel), so a hop cannot break the hold.
+ */
+const CLAIM_REACH = 2.4;          // m from the fixture, on the ground plane
+const CLAIM_FACE = 0.5;           // cosine of the look-to-fixture angle (60 degrees)
+const CLAIM_HOLD_S = 0.6;         // seconds of held E that throw the lever
+const CLAIM_DY_TOL = 2.0;         // m of feet height either side of the fixture's base
+const CLAIM_ANSWER_R = 6.0;       // a refused press answers (dead click) within this
+const CLAIM_GLINT_S = 2.4;        // the glint's breath, unclaimed
+const CLAIM_GLINT_FLOOR = 0.22;   // the breath's trough (of full)
+const CLAIM_GLINT_LIT = 0.95;     // the glint once the place is yours: steady
+const CLAIM_GLINT_GROW = 1.8;     // and its halo grows to this once lit: a lamp, not a pilot light
+const LEVER_THROWN = -1.75;       // rad about the hinge (X): up at rest, out and down thrown
+const LEVER_SNAP = 7.0;           // 1/s: a released lever falls back inside 0.15 s
+// The fixture stands this far PROUD of the claim point along its own facing, so a switch on
+// a door or a cabinet (sites.js puts a slab at every claim point) is mounted on its face
+// rather than buried in it. Inside the 0.3 m tests/sites.mjs allows between the two.
+const FIXTURE_PROUD = 0.28;
+// The glint's halo is an additive tube, and at arm's length any additive tube is a hard-
+// edged wedge (the ember column lesson, NEXT.md section 2). Same fade: full past 12 m,
+// gone by 4 m, on the vertex colours; the bead stays, because a bead is what a lamp is up
+// close. The lever and the plate are what you read at 2 m; the glint is for 30.
+const GLINT_FADE_NEAR = 4;
+const GLINT_FADE_FAR = 12;
+// A shoot row's glint is this much bigger than a switch post's: the lamp and the bell are read
+// from 18-60 m, where a 0.11 m bead is four pixels.
+const SHOOT_GLINT_SCALE = 1.6;
+// The yard lamp: while you stand in a CLAIMED place's near band, ONE rover is borrowed at
+// its fixture's lamp and held until you leave (ttl 0 = until released; one handle at a
+// time, because you are only ever at one place). It is the light that comes on: the ground,
+// the post and the door it is mounted on are lit by it, which no additive pane can do. The
+// pool seats the nearest eight of thirty-two logical borrows, so a lamp you walked away
+// from would cost a slot for nothing — hence held only while near.
+// MEASURED 2026-09-03 at the Drowned Light's fixture, 1.8 m out, torch off, clock frozen, the
+// frame 2 s after the claim (tests/artifacts/d1-lamp-check*.txt, d1-lamp-sweep.txt): hung on
+// the post's head, 0.28 m off the door slab, the lamp saturated the slab (ART over-150 2.0%
+// against the 1.5% budget) for a frame mean of x1.20 at 18 cd; 0.5 m out at 24 cd still 1.9%;
+// 0.9 m out at 24 cd — a bracket lamp over the side you stand on — 0.76% over-150, x1.30, and
+// x1.66 against the same frame with the lamp put out (x1.62 at the mill). The over-150 share
+// also DRIFTS down by half over the ten seconds after a claim (dread's grade settling), so
+// every number here is the 2 s one, the brightest. The brief's 1.6 over "before" would need
+// 36+ cd, a floodlight; the beacon dying and the carried XP light banking both work against it.
+const CLAIM_LAMP_I = 24.0;
+const CLAIM_LAMP_OUT = 0.9;       // m in front of the post, along its facing
+const CLAIM_LAMP_Y = 2.1;         // m above the fixture's foot: the head of the post
+// Which way a fixture faces: its front (the plate, the lever) points AWAY from the site's
+// centre, which is the side you walk up to it from — except where the claim point stands
+// in front of a building that is not the centre. Local (x, z) unit directions.
+const FIXTURE_FACE = Object.freeze({
+  'garden-of-rest': [0, -1],      // the lamp in front of the far mausoleum's door: face the graves
+});
+// The beat's ripple: the site's lamps ignite outward from the fixture over RIPPLE_S, each
+// vertex of the merged glow geometry fading in over RIPPLE_EDGE once its turn comes. Per-
+// vertex colour on the ONE shared additive material — no new material, no new program.
+const RIPPLE_S = 1.2;
+const RIPPLE_EDGE = 0.25;
+const RIPPLE_MAX = 24;            // ignitions that can run at once (twelve majors, a landmark and a body each)
+
+/* ------------------------------------------- the campfire's ember column fade (round 6) --
+ * NEXT.md section 2: the column glowColumn() lays over a fire exists so a fire reads side-on
+ * from the road at 25 m through pines (a flat ember bed measured invisible from the verge),
+ * and at arm's length it is a hard-edged additive wedge: 27,344 differential pixels at 3 m,
+ * measured on this branch before the fade (tests/artifacts/d1-baseline.txt). A distance
+ * fade, not a deletion: the column's vertex colours are scaled by smoothstep(EMBER_FADE_NEAR,
+ * EMBER_FADE_FAR, distance to the camera) — full past 20 m, gone by 6 m — in present(), on the
+ * one shared additive material, and only rewritten when the factor actually moves. The ember
+ * BED under it is untouched, so standing at the fire you still stand at a fire.
+ */
+const EMBER_FADE_NEAR = 6;
+const EMBER_FADE_FAR = 20;
+
 /* ------------------------------------------------ the destination loop (WARNING 41) --
  * MEASURED 2026-09-02, tests/world-game.mjs: the player is teleported to 8 m from the
  * Filling Station, settles 240 frames, walks, settles again — and ends ONE METRE from it
@@ -246,6 +345,7 @@ const _nearPayload = {
 };
 const _foundPayload = { id: '', xp: 0 };
 const _claimPayload = { id: '', xp: 0 };
+const _claimStartPayload = { id: '' };
 const _xpPayload = { amount: 0, x: 0, y: 0, z: 0, reason: '' };
 const _noisePayload = { x: 0, z: 0, radius: 0, source: '' };
 const _v2 = { x: 0, z: 0 };
@@ -267,6 +367,119 @@ function advanceAngle(mv, delta) {
   if (c > TAU) { c -= TAU; mv.prev -= TAU; }
   else if (c < -TAU) { c += TAU; mv.prev += TAU; }
   mv.curr = c;
+}
+
+/* ==========================================================================
+   THE FIXTURE KIT (round 6). Primitives in, three geometries out, every one carrying the
+   `color` attribute the shared vertex-colour materials need (a geometry without it renders
+   BLACK under vertexColors: true — three keys the define on the material, not the geometry).
+   Authored in the site's local frame about the claim point: (0, 0, 0) is the fixture's foot.
+   Build time only; nothing here runs in step() or present().
+   ========================================================================== */
+
+// Linear albedos. ROUND 6 repair: the fixture is DARKER than the cabinets it stands beside, on
+// purpose. MEASURED 2026-09-03 at the Drowned Light, 1.8 m out, facing the switch (tests/artifacts/
+// r1-probe-fixture-before.txt, r1-cause.txt): with the post at sites.js's iron (0.13) it read
+// 2,503 pixels of > 20 luma contrast against the door behind it torch OFF, and 0 torch ON; the
+// same post at a tenth of that albedo read 18,123 torch off (a black post on a moonlit door is a
+// silhouette; a grey one IS the door) and, torch on, 16,315 at 140 cd, 6,275 at 560 cd with the
+// bloom put out - and 0 at 560 cd with the bloom on, at ANY albedo, because the UnrealBloom of a
+// door at HDR ~30 under 560 cd at arm's length paints a wash over the centre of the frame and the
+// grade's shoulder flattens what is left to one plate at 128-159 luma (0% of the frame above
+// 160). That wash is post.js's and the torch's (HANDOFF-D1.md section 8); what a material can do
+// is be dark, so the switch reads the moment either moves. The lever is BRASS, the one pale thing
+// on the post: the handle he watches move is the brightest thing on it torch off.
+const FX_METAL = [0.030, 0.032, 0.036];   // dark iron: the post, the hinge boss, the stalk
+const FX_RUST = [0.176, 0.098, 0.062];    // the cabinet head (sites.js's rust, unchanged)
+const FX_DARK = [0.024, 0.025, 0.028];    // the plate behind the lever
+const FX_WOOD = [0.036, 0.027, 0.020];    // a mill's, a barn's, the lighthouse's post
+const FX_STONE = [0.044, 0.044, 0.043];   // a cathedral's, a chapel's, the cemetery's
+const FX_BRASS = [0.40, 0.29, 0.11];      // the lever's blade and knob
+
+function fxColour(geo, r, g, b) {
+  const n = geo.attributes.position.count;
+  const c = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { c[i * 3] = r; c[i * 3 + 1] = g; c[i * 3 + 2] = b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return geo;
+}
+function fxMerge(parts) {
+  if (!parts.length) return null;
+  const out = parts.length === 1 ? parts[0] : mergeGeometries(parts, false);
+  if (parts.length > 1) for (const g of parts) g.dispose();
+  if (out) out.computeBoundingSphere();
+  return out;
+}
+
+/**
+ * The switch post. A post to waist height, a cabinet head with a plate on its front (-Z),
+ * and a stalk for the lamp. `kind` picks the post's material so a mill's switch is wood
+ * and a cathedral's is stone, but the SHAPE is one shape: he learns it once.
+ */
+function fixtureSolid(kind) {
+  const post = kind === 'mill' || kind === 'barn' || kind === 'lighthouse' ? FX_WOOD
+    : kind === 'cathedral' || kind === 'chapel' || kind === 'cemetery' ? FX_STONE : FX_METAL;
+  const parts = [];
+  const put = (geo, col, x, y, z) => { geo.translate(x, y, z); parts.push(fxColour(geo, col[0], col[1], col[2])); };
+  put(new THREE.CylinderGeometry(0.055, 0.07, 1.55, 8), post, 0, 0.675, 0);          // the post, -0.1..1.45
+  put(new THREE.BoxGeometry(0.34, 0.30, 0.24), FX_RUST, 0, 1.60, 0);                  // the head
+  put(new THREE.BoxGeometry(0.26, 0.20, 0.02), FX_DARK, 0, 1.58, -0.13);              // the plate
+  put(new THREE.BoxGeometry(0.08, 0.05, 0.06), FX_METAL, 0, 1.48, -0.15);             // the hinge boss
+  put(new THREE.CylinderGeometry(0.02, 0.02, 0.12, 6), FX_METAL, 0, 1.81, 0);         // the lamp stalk
+  return fxMerge(parts);
+}
+
+/** The knife-blade lever, authored UP from its hinge at the origin. rotation.x throws it. */
+function fixtureLever() {
+  const parts = [];
+  const blade = new THREE.BoxGeometry(0.06, 0.34, 0.03);
+  blade.translate(0, 0.17, 0);
+  parts.push(fxColour(blade, FX_BRASS[0], FX_BRASS[1], FX_BRASS[2]));
+  const knob = new THREE.SphereGeometry(0.045, 8, 6);
+  knob.translate(0, 0.35, 0);
+  parts.push(fxColour(knob, FX_BRASS[0], FX_BRASS[1], FX_BRASS[2]));
+  return fxMerge(parts);
+}
+
+/**
+ * The glint: a lamp bead and a soft halo column over it, on the shared additive material.
+ * The bead is full white in the vertex colour; the halo is an open tapered tube whose colour
+ * dies toward its top (the beacon's own construction at prop scale, sites.js glowColumn), so
+ * it reads from every bearing and never has an edge. Sized so that at 30 m the halo is about
+ * 8 x 14 px on a 1600 x 900 frame — a thing, not a dead pixel — and measured in
+ * tests/sites.mjs from that distance with the torch off.
+ * `y` is the bead's height above the fixture's foot; `sc` scales the whole lamp (a shoot row's
+ * is SHOOT_GLINT_SCALE: read from 18-60 m, never at arm's length).
+ */
+function fixtureGlint(y, sc = 1) {
+  const parts = [];
+  // MEASURED 2026-09-03 (tests/artifacts/d1-beat-1.txt): a 0.075 m bead under a 0.17 x 0.58
+  // halo at 0.55 read 8-39 px at 30 m against a moonlit plaster wall — a dead pixel. The
+  // lamp is a lamp now: a 0.11 m bead and a 0.30 x 0.90 halo that starts at 0.9 and dies
+  // to nothing at its top, ~15 x 23 px at 30 m.
+  const bead = new THREE.SphereGeometry(0.11 * sc, 10, 7);
+  bead.translate(0, y, 0);
+  parts.push(fxColour(bead, 1, 1, 1));
+  const h = 0.90 * sc, r = 0.30 * sc;
+  const halo = new THREE.CylinderGeometry(r * 0.35, r, h, 8, 1, true);
+  halo.translate(0, h * 0.5, 0);
+  {
+    const n = halo.attributes.position.count;
+    const c = new Float32Array(n * 3);
+    const py = halo.attributes.position.array;
+    for (let i = 0; i < n; i++) {
+      const t = clamp(1 - py[i * 3 + 1] / h, 0, 1);
+      const v = 0.9 * t * Math.sqrt(t);
+      c[i * 3] = v; c[i * 3 + 1] = v; c[i * 3 + 2] = v;
+    }
+    halo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  }
+  halo.translate(0, y - 0.34 * sc, 0);
+  parts.push(halo);
+  const beadCount = bead.attributes.position.count;
+  const out = fxMerge(parts);
+  if (out) out.userData.haloFrom = beadCount;    // the halo's first vertex, for the fade
+  return out;
 }
 
 /* ==========================================================================
@@ -316,6 +529,19 @@ export class Places {
     this._flickers = [];          // body glows that breathe (the dying headlight)
     this._embers = [];            // resident campfire glows, breathed in present()
     this._campfires = [];         // every authored campfire {i, x, z, ...}, for proximity
+    // ROUND 6: the claim verb. `_hold` is the fixture being thrown (a node record) or null;
+    // `_holdT` is seconds into the hold; `_usePrev` derives the press edge from the held
+    // boolean the way weapons does, so no second input path exists. `_ignitions` is the
+    // fixed pool of lamp ripples in flight (see RIPPLE_*): never grown in step().
+    this._hold = null;
+    this._holdT = 0;
+    this._usePrev = false;
+    this._ignitions = [];
+    this._lamp = null;            // the yard lamp's rover handle, or null (see _lampStep)
+    this._lampId = null;
+    this.claimStarts = 0;         // counters for tests: holds begun, refused, completed
+    this.claimRefusals = 0;
+    this.claimHolds = 0;
     this.nearFire = -1;           // index into _campfires we are currently AT, or -1
     this._fireT = 0;              // the campfire's own place:near heartbeat
     // Test knob (tests/sites.mjs): false restores the pre-round-5 beacon — constant opacity,
@@ -602,6 +828,12 @@ export class Places {
         beaconLevel: d.startClaimed ? 0 : 1,
         proxy: false,
         bellT: -1, bellClock: BELL_PERIOD_S * 0.6,
+        // ROUND 6: the claim fixture — world position of its foot, its lever and its glint
+        // (both entries of `moving`), and the lever's throw 0..1. Built in _buildLandmark.
+        fixture: null,
+        // ROUND 6: the ignition ripple — the landmark glow's record, and the span in metres
+        // from the claim point over every lamp on the site (landmark and body together).
+        ignite: null, rippleMin: Infinity, rippleMax: 0,
       });
     }
   }
@@ -637,6 +869,8 @@ export class Places {
       g.renderOrder = 4;
       rec.node.add(g);
       rec.glow = g;
+      // ROUND 6: the landmark's lamps ripple at the claim too (see _rippleRecord)
+      if (d.claim && (d.claim.how === 'touch' || d.claim.how === 'shoot')) rec.ignite = this._rippleRecord(g.geometry, d, rec);
     }
     if (out && out.moving && out.moving.length) {
       rec.moving = [];
@@ -663,6 +897,9 @@ export class Places {
         rec.moving.push({ mesh, role: mv.role, rate, glow: isGlow, prev: 0, curr: 0 });
       }
     }
+
+    // ROUND 6: the claim fixture (touch rows) or the target's glint (shoot rows).
+    this._buildFixture(d, rec, api);
 
     // The beacon. Only an UNCLAIMED major casts one, and it is the only wayfinding in
     // CURFEW. Its geometry is authored from the pad up so the proxy transform (which
@@ -695,6 +932,113 @@ export class Places {
     }
 
     this.landGroup.add(rec.node);
+  }
+
+  /**
+   * ROUND 6: the fixture at the claim point. Lives on the LANDMARK node — persistent, never
+   * streamed, never culled — so it exists from boot at every site and its glint reads from
+   * the road whether or not the body chunk is resident. Its solid shares the landmark's own
+   * material instance (the distance tint and the proxy depth toggle come for free); the
+   * lever is a `moving` entry (role 'lever', rotation.x written in present from prev/curr);
+   * the glint is a `moving` glow entry (role 'glint') on a clone of the shared additive
+   * material. A `shoot` row gets the glint alone, at its target.
+   *
+   * The fixture's world position is cached here (the node's yaw and padY are final by the
+   * time _buildLandmark runs) so _proximity reads two numbers per row and computes nothing.
+   */
+  _buildFixture(d, rec, api) {
+    const c = d.claim;
+    if (!c || (c.how !== 'touch' && c.how !== 'shoot')) return;
+    const dy = +c.dy || 0;
+    const touch = c.how === 'touch';
+    const px = +c.dx || 0, pz = +c.dz || 0;             // the row's claim point, local
+    // Facing (touch rows): away from the centre, or the override. The fixture itself stands
+    // FIXTURE_PROUD along that facing so it is mounted on whatever slab sites.js put here.
+    let fdx = 0, fdz = -1;
+    if (touch) {
+      const ov = FIXTURE_FACE[d.id];
+      if (ov) { fdx = ov[0]; fdz = ov[1]; }
+      else { const L = Math.hypot(px, pz); if (L > 1e-3) { fdx = px / L; fdz = pz / L; } }
+    }
+    const faceYaw = Math.atan2(-fdx, -fdz);               // rotation.y that points local -Z at (fdx, fdz)
+    const lx = touch ? px + fdx * FIXTURE_PROUD : px;
+    const lz = touch ? pz + fdz * FIXTURE_PROUD : pz;
+    const ly = rec.padY + dy;
+    const cy = Math.cos(rec.yaw), sy = Math.sin(rec.yaw);
+    const fx = {
+      how: c.how,
+      lx, ly, lz,
+      wx: d.x + lx * cy + lz * sy,
+      wz: d.z - lx * sy + lz * cy,
+      wy: ly,
+      // the facing in WORLD (the side you walk up from): the yard lamp hangs along it
+      fwx: fdx * cy + fdz * sy,
+      fwz: -fdx * sy + fdz * cy,
+      lever: null, glint: null,
+      k: this.claimed.has(d.id) ? 1 : 0,        // the lever's throw, 0 up .. 1 thrown
+      grow: this.claimed.has(d.id) ? 1 : 0,     // the glint's growth into a lamp, 0..1
+      halo: null,                               // { base, from } for the halo fade
+      haloK: -1,
+    };
+    rec.fixture = fx;
+    if (!rec.moving) rec.moving = [];
+
+    if (touch) {
+      const solidMat = rec.solid ? rec.solid.material : this.matLand.clone();
+      const body = new THREE.Mesh(fixtureSolid(d.kind), solidMat);
+      body.name = 'land-fixture-' + d.id;
+      body.position.set(lx, ly, lz);
+      body.rotation.y = faceYaw;
+      body.castShadow = true;
+      body.receiveShadow = true;
+      body.frustumCulled = false;
+      rec.node.add(body);
+      const lever = new THREE.Mesh(fixtureLever(), solidMat);
+      lever.name = 'land-lever-' + d.id;
+      // The hinge is on the plate's face, 0.17 out along the facing; the throw is about the
+      // hinge's OWN axis, so the facing is applied after it (order YXZ: Z, then X, then Y).
+      lever.position.set(lx + fdx * 0.17, ly + 1.48, lz + fdz * 0.17);
+      lever.rotation.order = 'YXZ';
+      lever.rotation.y = faceYaw;
+      lever.frustumCulled = false;
+      rec.node.add(lever);
+      const mv = { mesh: lever, role: 'lever', rate: 0, glow: false, prev: fx.k * LEVER_THROWN, curr: fx.k * LEVER_THROWN };
+      rec.moving.push(mv);
+      fx.lever = mv;
+      // A post you cannot walk through, emitted with the geometry like every other collider.
+      api.emit({ kind: 'circle', x: lx, z: lz, r: 0.22, y0: ly - 0.3, y1: ly + 1.75, tag: 'metal' });
+    }
+
+    // The glint: on the switch's stalk for a touch row; AT the target for a shoot row. The
+    // lamp's sits on the lamp. The bell's sits on the bell's CROWN, 0.5 m above its pivot.
+    // MEASURED 2026-09-03 (tests/artifacts/r1-bearings-before.txt): at its mouth (-1.0) it was
+    // inside the bell's skirt and read 0 px from every one of eight bearings at 18 / 30 / 45 m,
+    // forest in or hidden. The tower's own top edge (22 m, sites.js) hides everything below
+    // ~24.4 m from 45 m out and below ~25.3 m from 30 m on the road side, where the ground is
+    // 5-7 m under the pad; 24.9 m is inside the bell's collider (23.1-25.1 m) so a shot at the
+    // wink rings the bell, and above the edge from where the bell can be seen at all.
+    const gy = touch ? 1.94 : (d.kind === 'tower' ? 0.5 : 0);
+    const gm = this.matGlow.clone();
+    gm.color.set(GLOW.lamp);
+    gm.opacity = 0;
+    const geo = fixtureGlint(gy, touch ? 1 : SHOOT_GLINT_SCALE);
+    const glint = new THREE.Mesh(geo, gm);
+    glint.name = 'land-glint-' + d.id;
+    glint.position.set(lx, ly + gy, lz);
+    geo.translate(0, -gy, 0);                             // scale about the bead, not the foot
+    glint.frustumCulled = false;
+    glint.renderOrder = 4;
+    rec.node.add(glint);
+    const gmv = { mesh: glint, role: 'glint', rate: 0, glow: true, prev: 0, curr: 0 };
+    rec.moving.push(gmv);
+    fx.glint = gmv;
+    // The halo fade record: the bead's vertices are first (fixtureGlint merges bead, halo).
+    const col = geo.attributes.color;
+    if (col) {
+      const base = new Float32Array(col.array.length);
+      base.set(col.array);
+      fx.halo = { base, from: geo.userData.haloFrom || 0 };
+    }
   }
 
   /* ------------------------------------------------------------------ *
@@ -789,6 +1133,11 @@ export class Places {
         const ei = this._embers.indexOf(b);
         if (ei >= 0) { this._embers[ei] = this._embers[this._embers.length - 1]; this._embers.pop(); }
       }
+      if (b.ignite && b.ignite.t >= 0) {
+        const ii = this._ignitions.indexOf(b);
+        if (ii >= 0) { this._ignitions[ii] = this._ignitions[this._ignitions.length - 1]; this._ignitions.pop(); }
+        b.ignite.t = -1;
+      }
       if (b.group) {
         this.group.remove(b.group);
         b.group.traverse((o) => {
@@ -853,7 +1202,16 @@ export class Places {
     }
     this.group.add(g);
 
-    const body = { id: d.id, group: g, glow: glowMesh, kind: 'major' };
+    const body = { id: d.id, group: g, glow: glowMesh, kind: 'major', ignite: null };
+    // ROUND 6: the ignition ripple. Every vertex of the merged glow geometry gets its turn
+    // by distance from the claim point (local frame, same as the geometry), 0..1 over the
+    // site. Base colours are copied once, here; the ripple writes base * s(t) per frame for
+    // RIPPLE_S + RIPPLE_EDGE seconds and then the base back. Nothing allocates in step().
+    // The landmark's glow (rec.ignite, built in _buildLandmark) ripples with it, on the one
+    // span rec.rippleMin..rec.rippleMax that covers both.
+    if (glowMesh && d.claim && (d.claim.how === 'touch' || d.claim.how === 'shoot')) {
+      body.ignite = this._rippleRecord(glowMesh.geometry, d, rec);
+    }
     if (out.mapBoard) {
       this._board = { siteId: d.id, group: g, spec: out.mapBoard, mesh: null };
       this._pinsDirty = true;
@@ -918,9 +1276,34 @@ export class Places {
     const body = {
       id: null, group: g, glow: glowMesh, kind: 'minor', minorKind: m.kind,
       flicker: !!k.flicker, ember: !!(k.ember && glowMesh), seed: m.i,
+      fade: null,
     };
     if (body.flicker && glowMesh) this._flickers.push(body);
-    if (body.ember) this._embers.push(body);
+    if (body.ember) {
+      // ROUND 6: the column fade (EMBER_FADE_*). The campfire's glow is ONE merged geometry:
+      // the ember bed, a flat pane at padY + 0.16, and the column, an open tube whose rings
+      // sit at padY + 0.10 and padY + 1.60 (sites.js campfire, glowColumn). The column's
+      // vertices are every vertex NOT at the bed's height; the mask and the base colours
+      // are taken here, once, and present() scales the column by distance. If the builder
+      // ever lays the bed elsewhere the mask reads empty and the fade is inert, never wrong:
+      // tests/sites.mjs pins the counts (81 bed, 18 column).
+      const geo = glowMesh.geometry;
+      const col = geo.attributes.color, pos = geo.attributes.position;
+      if (col && pos) {
+        const n = pos.count;
+        const mask = new Uint8Array(n);
+        let nCol = 0;
+        for (let i = 0; i < n; i++) {
+          if (Math.abs(pos.getY(i) - (padY + 0.16)) > 0.03) { mask[i] = 1; nCol++; }
+        }
+        if (nCol > 0 && nCol < n) {
+          const base = new Float32Array(col.array.length);
+          base.set(col.array);
+          body.fade = { geo, base, mask, k: -1, nCol, nBed: n - nCol };
+        }
+      }
+      this._embers.push(body);
+    }
     return body;
   }
 
@@ -1284,6 +1667,11 @@ export class Places {
         : kind === 'works' ? 0.70
           : kind === 'lighthouse' ? 0.55 : 0.24;
       rec.glowLevel += ((claimed ? 1 : idle) - rec.glowLevel) * clamp01(dt * 2.2);
+      // ROUND 6: the glint grows into a lamp over the ripple, once the place is yours.
+      if (rec.fixture) {
+        const g = rec.fixture.grow;
+        rec.fixture.grow = claimed ? Math.min(1, g + dt / RIPPLE_S) : Math.max(0, g - dt / RIPPLE_S);
+      }
       if (rec.beacon) {
         const target = claimed ? 0 : 1;
         rec.beaconLevel += (target - rec.beaconLevel) * clamp01(dt / BEACON_DIE_S * 2.4);
@@ -1299,7 +1687,20 @@ export class Places {
           // county's compass and it is switched off until you have already found it."
           // Claiming it does not start the beam; it brings the beam up to full.
           else if (mv.role === 'beam') advanceAngle(mv, mv.rate * dt);
-          else if (mv.role === 'brazier') { /* no rotation: it burns, it does not turn */ }
+          else if (mv.role === 'brazier' || mv.role === 'glint') { /* no rotation: a lamp */ }
+          else if (mv.role === 'lever') {
+            // The throw tracks the hand while the hold runs, holds at 1 once the place is
+            // claimed, and falls back at LEVER_SNAP when the hand lets go. prev/curr, so a
+            // 144 Hz monitor sees the blade move and not step.
+            const fx = rec.fixture;
+            let k = fx ? fx.k : 0;
+            const target = claimed ? 1 : (this._hold === rec ? clamp01(this._holdT / CLAIM_HOLD_S) : 0);
+            if (target >= k) k = target;
+            else k = Math.max(target, k - LEVER_SNAP * dt);
+            if (fx) fx.k = k;
+            mv.prev = mv.curr;
+            mv.curr = k * LEVER_THROWN;
+          }
           else if (mv.role === 'bell') {
             if (rec.bellT >= 0) {
               rec.bellT += dt;
@@ -1317,6 +1718,30 @@ export class Places {
           }
         }
       }
+    }
+
+    // --- the ignition ripples in flight (round 6) --------------------------
+    for (let i = this._ignitions.length - 1; i >= 0; i--) {
+      const b = this._ignitions[i];
+      const ig = b.ignite;
+      if (!ig || ig.t < 0) { this._ignitions[i] = this._ignitions[this._ignitions.length - 1]; this._ignitions.pop(); continue; }
+      ig.t += dt;
+      const col = ig.geo.attributes.color;
+      const arr = col.array, base = ig.base, off = ig.off;
+      const done = ig.t >= RIPPLE_S + RIPPLE_EDGE;
+      // `off` is metres from the claim point; the site's span (landmark and body together,
+      // whichever of them are built) maps it to 0..1: 0 at the nearest lamp, 1 at the
+      // farthest, so the first lamp ignites the frame the lever lands.
+      const r = ig.rec, lo = r.rippleMin, span = r.rippleMax - lo;
+      const k = span > 1e-3 ? RIPPLE_S / span : 0;
+      for (let v = 0; v < off.length; v++) {
+        const t0 = (off[v] - lo) * k;
+        const s = done ? 1 : smoothstep(t0, t0 + RIPPLE_EDGE, ig.t);
+        const j = v * 3;
+        arr[j] = base[j] * s; arr[j + 1] = base[j + 1] * s; arr[j + 2] = base[j + 2] * s;
+      }
+      col.needsUpdate = true;
+      if (done) { ig.t = -1; this._ignitions[i] = this._ignitions[this._ignitions.length - 1]; this._ignitions.pop(); }
     }
 
     this._drainWhispers();
@@ -1362,6 +1787,11 @@ export class Places {
     // hysteresis only ever looked at `nearest`, so it could not see how far we were from
     // the place it was still holding.
     let heldD = Infinity, held = null;
+    // ROUND 6: the fixture in reach (the one the hold would throw), and the nearest fixture
+    // of any kind (the one a refused press answers from).
+    const cam = this._sys('camera');
+    const lookX = cam ? -Math.sin(cam.yaw) : 0, lookZ = cam ? -Math.cos(cam.yaw) : -1;
+    let cand = null, candD = Infinity, anyFx = null, anyFxD = Infinity;
     for (let i = 0; i < MAJORS.length; i++) {
       const d = MAJORS[i];
       const dx = px - d.x, dz = pz - d.z;
@@ -1377,19 +1807,24 @@ export class Places {
         if (!this.found.has(d.id)) this._discover(d);
       }
 
-      // --- claim: touch ---------------------------------------------------
+      // --- claim: the fixture in reach (round 6; the invisible circle is gone) -------
       const c = d.claim;
-      if (c && c.how === 'touch' && !this.claimed.has(d.id) && dist < d.nearR + 20) {
+      if (c && c.how === 'touch' && dist < d.nearR + 20) {
         const rec = this.nodes.get(d.id);
-        if (!rec) continue;
-        const cy = Math.cos(rec.yaw), sy = Math.sin(rec.yaw);
-        const wx = d.x + c.dx * cy + c.dz * sy;
-        const wz = d.z - c.dx * sy + c.dz * cy;
-        if (Math.hypot(px - wx, pz - wz) < c.r && Math.abs(py - rec.padY) < 4.5) {
-          this._claim(d, wx, rec.padY + 1.2, wz);
-        }
+        const fx = rec ? rec.fixture : null;
+        if (!fx) continue;
+        const fdx = fx.wx - px, fdz = fx.wz - pz;
+        const fd = Math.sqrt(fdx * fdx + fdz * fdz);
+        if (fd < anyFxD) { anyFxD = fd; anyFx = rec; }
+        if (this.claimed.has(d.id) || fd >= CLAIM_REACH) continue;
+        if (Math.abs(py - fx.wy) >= CLAIM_DY_TOL) continue;
+        // facing: the look direction against the bearing to the fixture, on the ground
+        const dot = fd > 1e-3 ? (fdx * lookX + fdz * lookZ) / fd : 1;
+        if (dot < CLAIM_FACE) continue;
+        if (fd < candD) { candD = fd; cand = rec; }
       }
     }
+    this._holdStep(dt, cand, anyFx, anyFxD);
 
     // --- place:near, with hysteresis so a boundary cannot chatter ---------
     //
@@ -1409,6 +1844,7 @@ export class Places {
       this._nearT = NEAR_REPEAT_S;      // broadcast on this very step
       this._nearFlags = -1;
     }
+    this._lampStep(held);
 
     // WARNING 41. place:near is a BROADCAST, not an edge. It used to fire once, on entry,
     // and never again however long you stood there — so a listener that subscribed a
@@ -1462,6 +1898,92 @@ export class Places {
         this.ctx.bus.emit('place:near', p);
       }
     }
+  }
+
+  /**
+   * THE VERB (round 6). `use` is read off ctx.input's held set — the same boolean the car
+   * reads for its door — and the press edge is derived here, as weapons derives its own.
+   *
+   *   press with a fixture in reach     -> the hold begins: place:claimStart, a handle sound
+   *   press with none (one within 6 m)  -> a dead click, and nothing else
+   *   held, still in reach, 0.6 s       -> _claim at the fixture
+   *   let go early, or step away        -> the lever falls back; nothing happened
+   *
+   * In the car the key is the car's; nothing here answers. The car ALSO answers a tap of E
+   * on foot within its own reach, so a fixture two metres from a parked car would take the
+   * hold and the car the seat on the same frame: the seat wins, the hold is dropped the step
+   * ctx.shared.inCar goes true.
+   */
+  _holdStep(dt, cand, anyFx, anyFxD) {
+    const inp = this.ctx ? this.ctx.input : null;
+    const use = !!(inp && typeof inp.held === 'function' && inp.held('use'));
+    const pressed = use && !this._usePrev;
+    this._usePrev = use;
+    const inCar = !!(this.ctx && this.ctx.shared && this.ctx.shared.inCar);
+
+    if (!use || inCar) {
+      if (this._hold) { this._hold = null; this._holdT = 0; }
+      return;
+    }
+    if (pressed) {
+      if (cand) {
+        this._hold = cand;
+        this._holdT = 0;
+        this.claimStarts++;
+        _claimStartPayload.id = cand.def.id;
+        this.ctx.bus.emit('place:claimStart', _claimStartPayload);
+        const fx = cand.fixture;
+        this._say('lantern', 0.9, fx.wx, fx.wy + 1.5, fx.wz);
+      } else if (anyFx && anyFxD < CLAIM_ANSWER_R) {
+        this.claimRefusals++;
+        const fx = anyFx.fixture;
+        this._say('lanternGone', 0.7, fx.wx, fx.wy + 1.5, fx.wz);
+      }
+      return;
+    }
+    if (!this._hold) return;
+    if (cand !== this._hold) {                 // stepped away, turned away, or it got claimed
+      this._hold = null; this._holdT = 0;
+      return;
+    }
+    this._holdT += dt;
+    if (this._holdT >= CLAIM_HOLD_S) {
+      const rec = this._hold, fx = rec.fixture;
+      this._hold = null; this._holdT = 0;
+      this.claimHolds++;
+      this._claim(rec.def, fx.wx, fx.wy + 1.2, fx.wz);
+    }
+  }
+
+  /**
+   * THE YARD LAMP (round 6, see CLAIM_LAMP_*). One rover, borrowed at the fixture of the
+   * CLAIMED place you are standing in, released the step you leave its band or it stops
+   * being the place you are at. Never more than one; nothing when the pool is empty (it is
+   * asked again next step). The census is untouched: borrow/release is the only way a
+   * dynamic light exists here.
+   */
+  _lampStep(held) {
+    const rec = held && this.claimed.has(held.id) ? this.nodes.get(held.id) : null;
+    const fx = rec && rec.fixture && rec.fixture.how === 'touch' ? rec.fixture : null;
+    const wantId = fx ? held.id : null;
+    if (this._lamp && this._lampId !== wantId) {
+      const lights = this._sys('lights');
+      if (lights && typeof lights.release === 'function') lights.release(this._lamp);
+      this._lamp = null; this._lampId = null;
+    }
+    if (wantId && !this._lamp) {
+      const lights = this._sys('lights');
+      if (!lights || typeof lights.borrow !== 'function') return;
+      const h = lights.borrow('claim-lamp', fx.wx + fx.fwx * CLAIM_LAMP_OUT, fx.wy + CLAIM_LAMP_Y, fx.wz + fx.fwz * CLAIM_LAMP_OUT, GLOW.lamp, CLAIM_LAMP_I, 0);
+      if (h) { this._lamp = h; this._lampId = wantId; }
+    }
+  }
+
+  /** A sound at a point, through the audio lane's pooled door, and nothing if it is absent. */
+  _say(kind, gain, x, y, z) {
+    const audio = this._sys('audio');
+    if (!audio || typeof audio.dread !== 'function') return;
+    audio.dread(kind, x, y, z, gain);
   }
 
   /** The unclaimed major nearest a point, for the map board's rim arrow. */
@@ -1555,6 +2077,11 @@ export class Places {
     if (!this.found.has(d.id)) this._discover(d);
     this._pinsDirty = true;
     this._applyState();
+    // ROUND 6: the lamps ignite in a ripple out from the fixture, the latch sounds at the
+    // object, and one bell — the beat has to be unmissable from where he is standing.
+    this._igniteBody(d.id);
+    this._say('door', 0.8, wx, wy + 0.4, wz);
+    this._whisperQ.push('~' + d.id);   // '~' = the bell
 
     const lights = this._sys('lights');
     if (lights && lights.borrow) {
@@ -1575,6 +2102,63 @@ export class Places {
     this.ctx.bus.emit('noise', _noisePayload);
 
     this._whisperQ.push('!' + d.id);   // '!' = the claim tone, not the name
+  }
+
+  /**
+   * Start the ripple on a resident body's glow: colours to zero now, then base * s(t) per
+   * step (see step()). A body not resident is nothing to ripple — it will be built lit.
+   */
+  _igniteBody(id) {
+    // the landmark's lamps (the lamp room, the rose window, the stack tops) ...
+    const rec = this.nodes.get(id);
+    if (rec && rec.ignite) this._igniteStart(rec);
+    // ... and the body's (the windows, the yard lamps), if the body is resident
+    for (const list of this.bodies.values()) {
+      for (let i = 0; i < list.length; i++) {
+        const b = list[i];
+        if (b.id !== id || !b.ignite) continue;
+        this._igniteStart(b);
+        return;
+      }
+    }
+  }
+
+  /** Zero one glow's colours now and put its holder in flight; step() ripples them back. */
+  _igniteStart(holder) {
+    const ig = holder.ignite;
+    if (ig.t >= 0) return;                       // already running
+    if (this._ignitions.length >= RIPPLE_MAX) return;
+    ig.t = 0;
+    ig.geo.attributes.color.array.fill(0);
+    ig.geo.attributes.color.needsUpdate = true;
+    this._ignitions.push(holder);
+  }
+
+  /**
+   * ROUND 6: the ripple record for one glow geometry — base colours copied once, and every
+   * vertex's distance in metres from the claim point (local frame, same as the geometry).
+   * Widens rec.rippleMin / rec.rippleMax, the span step() maps to 0..1, so a landmark
+   * built at boot and a body built when its chunk streams in ripple on one clock. Build
+   * time only; nothing here runs in step().
+   */
+  _rippleRecord(geo, d, rec) {
+    const col = geo.attributes.color, pos = geo.attributes.position;
+    if (!col || !pos) return null;
+    const n = pos.count;
+    const base = new Float32Array(col.array.length);
+    base.set(col.array);
+    const off = new Float32Array(n);
+    const cx = +d.claim.dx || 0, cz = +d.claim.dz || 0, cyy = rec.padY + (+d.claim.dy || 0);
+    let maxD = rec.rippleMax, minD = rec.rippleMin;
+    for (let i = 0; i < n; i++) {
+      const dx = pos.getX(i) - cx, dyy = pos.getY(i) - cyy, dz = pos.getZ(i) - cz;
+      const dd = Math.sqrt(dx * dx + dyy * dyy + dz * dz);
+      off[i] = dd;
+      if (dd > maxD) maxD = dd;
+      if (dd < minD) minD = dd;
+    }
+    rec.rippleMax = maxD; rec.rippleMin = minD;
+    return { geo, base, off, t: -1, rec };
   }
 
   _gainXp(amount, x, y, z, reason) {
@@ -1816,7 +2400,9 @@ export class Places {
         // depth-testing in every mode, and the county occludes them like anything else.
         if (rec.glow) rec.glow.material.depthTest = true;
         if (rec.beacon) rec.beacon.material.depthTest = true;
-        if (rec.moving) for (const mv of rec.moving) mv.mesh.material.depthTest = !proxy;
+        // The glint is additive and small: it depth-tests in every mode, for the same reason
+        // the glow and the beacon do (a lamp painted over a trunk two metres away is a bug).
+        if (rec.moving) for (const mv of rec.moving) mv.mesh.material.depthTest = mv.role === 'glint' ? true : !proxy;
       }
 
       // Manual aerial perspective, floored. A fog that erases is how MARROW lost its
@@ -1848,17 +2434,44 @@ export class Places {
           // the place is yours, so it rides the DISTANCE tint alone and not glowLevel —
           // glowLevel is "are your lamps on", and this is somebody else's fire.
           mv.mesh.material.opacity = tintGlow * (0.42 + 0.56 * noise1D(this._t, 0.7, 23));
+        } else if (mv.role === 'glint') {
+          // ROUND 6: the claim's lamp. It breathes on CLAIM_GLINT_S while the place is not
+          // yours — a slow, even breath, so the eye reads a lamp and not a fault — and burns
+          // steady at CLAIM_GLINT_LIT once it is, its halo grown to CLAIM_GLINT_GROW. It
+          // rides the distance tint alone: it is the one light at a site that is on BEFORE
+          // the claim, by design.
+          const fx = rec.fixture;
+          const breath = 0.5 + 0.5 * Math.sin((this._t / CLAIM_GLINT_S) * TAU);
+          mv.mesh.material.opacity = tintGlow * (claimedHere ? CLAIM_GLINT_LIT
+            : CLAIM_GLINT_FLOOR + (1 - CLAIM_GLINT_FLOOR) * breath);
+          if (fx) {
+            const sc = 1 + (CLAIM_GLINT_GROW - 1) * fx.grow;
+            mv.mesh.scale.setScalar(sc);
+            // The halo fade (GLINT_FADE_*), quantised so a still camera never uploads.
+            if (fx.halo) {
+              const gdx = fx.wx - cx, gdz = fx.wz - cz;
+              const hk = Math.round(smoothstep(GLINT_FADE_NEAR, GLINT_FADE_FAR, Math.sqrt(gdx * gdx + gdz * gdz)) * 64) / 64;
+              if (hk !== fx.haloK) {
+                fx.haloK = hk;
+                const ga = mv.mesh.geometry.attributes.color;
+                const arr = ga.array, base = fx.halo.base;
+                for (let j = fx.halo.from * 3; j < arr.length; j++) arr[j] = base[j] * hk;
+                ga.needsUpdate = true;
+              }
+            }
+          }
         } else if (mv.glow) {
           // The beam turns unclaimed at a fifth of its lit strength (ART 4.2's gk * 0.22):
           // a dying light, not a working one. Claiming it brings it up.
           mv.mesh.material.opacity = gk * (claimedHere ? 0.85 : 0.22);
         }
         // THE interpolation. sails and wheel turn about their own Z (they are authored
-        // face-on), the beam sweeps about Y, and the bell swings about Z. A brazier does
-        // not turn at all, and writing rotation.z = 0 on it every frame is free.
+        // face-on), the beam sweeps about Y, the bell swings about Z and the lever throws
+        // about its hinge, X. A brazier and a glint do not turn at all.
         const ang = mv.prev + (mv.curr - mv.prev) * a;
         if (mv.role === 'beam') mv.mesh.rotation.y = ang;
-        else if (mv.role !== 'brazier') mv.mesh.rotation.z = ang;
+        else if (mv.role === 'lever') mv.mesh.rotation.x = ang;
+        else if (mv.role !== 'brazier' && mv.role !== 'glint') mv.mesh.rotation.z = ang;
       }
       if (rec.beacon && rec.beacon.visible) {
         // The distance fade and the far widening (see the BEACON_* block at the top). Both
@@ -1884,6 +2497,23 @@ export class Places {
       // noise1D runs -1..1 (the works' 0.72 + 0.28 band is 0.44-1.0); a fire never falls
       // below 0.4 of itself, or the read from the road blinks out between breaths.
       b.glow.material.opacity = 0.70 + 0.30 * noise1D(this._t + b.seed * 1.7, 0.55, 5 + (b.seed % 7));
+      // ROUND 6: the column fade. k is quantised to 1/64 so a still camera never uploads.
+      const fd = b.fade;
+      if (fd) {
+        const gp = b.group.position;
+        const ddx = gp.x - cx, ddz = gp.z - cz;
+        const k = Math.round(smoothstep(EMBER_FADE_NEAR, EMBER_FADE_FAR, Math.sqrt(ddx * ddx + ddz * ddz)) * 64) / 64;
+        if (k !== fd.k) {
+          fd.k = k;
+          const arr = fd.geo.attributes.color.array, base = fd.base, mask = fd.mask;
+          for (let v = 0; v < mask.length; v++) {
+            if (!mask[v]) continue;
+            const j = v * 3;
+            arr[j] = base[j] * k; arr[j + 1] = base[j + 1] * k; arr[j + 2] = base[j + 2] * k;
+          }
+          fd.geo.attributes.color.needsUpdate = true;
+        }
+      }
     }
   }
 
@@ -1928,6 +2558,25 @@ export class Places {
 
   isFound(id) { return this.found.has(id); }
   isClaimed(id) { return this.claimed.has(id); }
+  /**
+   * ROUND 6: where a place's claim fixture (or a shoot row's target) stands, in world metres,
+   * with the lever's throw and the verb. A copy; tests and tools read it. Null for a row with
+   * no claim point (the hub).
+   */
+  fixtureOf(id) {
+    const rec = this.nodes.get(id);
+    const fx = rec ? rec.fixture : null;
+    if (!fx) return null;
+    return { id, how: fx.how, x: fx.wx, y: fx.wy, z: fx.wz, k: fx.k, claimed: this.claimed.has(id) };
+  }
+  /** The hold in progress: { id, t } or null. */
+  holdState() {
+    return this._hold ? { id: this._hold.def.id, t: this._holdT } : null;
+  }
+  /** Ember-column fade records of the resident campfires, for the suite (counts and factors). */
+  emberFades() {
+    return this._embers.map(b => b.fade ? { k: b.fade.k, nCol: b.fade.nCol, nBed: b.fade.nBed, x: b.group.position.x, z: b.group.position.z } : null);
+  }
   majorCount() { return MAJORS.length; }
   minorCount() { return this.minors.length; }
   /** Every campfire, with its position. A copy; tests and tools read it. */
@@ -1951,6 +2600,9 @@ export class Places {
       claimed: this.claimed.size,
       near: this.near,
       nearFire: this.nearFire,
+      hold: this.holdState(),
+      claimStarts: this.claimStarts, claimRefusals: this.claimRefusals, claimHolds: this.claimHolds,
+      ignitions: this._ignitions.length,
       flats: this.flatsRegistered,
       flatSeam: this.flatSeam,
       sightCorridors: this._sightList ? this._sightList.length : 0,
@@ -1966,6 +2618,11 @@ export class Places {
   }
 
   dispose() {
+    if (this._lamp) {
+      const lights = this._sys('lights');
+      if (lights && typeof lights.release === 'function') lights.release(this._lamp);
+      this._lamp = null; this._lampId = null;
+    }
     for (const key of Array.from(this.bodies.keys())) this.disposeChunk(key);
     if (this.landGroup) {
       this.landGroup.traverse((o) => {

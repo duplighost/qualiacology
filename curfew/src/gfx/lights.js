@@ -198,6 +198,7 @@ export class Lights {
     // so it cannot be free and it cannot be the default.
     this._torchOn = false;
     this._torchIntensity = CFG.lights.torch.hot;
+    this._torchLitT = 99;         // seconds since the torch came on (round 6, High Beam)
     this._headlightOn = false;
 
     // ---- the moon's arc. Driven by world/clock.js through setMoonArc(). --------
@@ -417,8 +418,11 @@ export class Lights {
   /* ---------------------------------------------------------------- switches -- */
 
   setTorch(on) {
+    const was = this._torchOn;
     this._torchOn = !!on;
     this.torch.intensity = this._torchOn ? this._torchIntensity : 0;
+    // ROUND 6 (lane G): the seconds since the torch came ON, for LAMP's High Beam (present).
+    if (this._torchOn && !was) this._torchLitT = 0;
   }
   torchOn() { return this._torchOn; }
 
@@ -813,6 +817,22 @@ export class Lights {
     // flick shows you the dark for a beat. CFG.lights.torch.lag / .ahead.
     if (this._torchOn) {
       const T = CFG.lights.torch;
+      // ROUND 6 (lane G): the two LAMP hooks nothing ran (NEXT.md 3). ONE read each, here,
+      // where the beam's angle and heat are set by name — nodes.js HOOK_POINTS 'torchFocus'
+      // and 'highBeam'. Focus: aiming with the torch on squeezes the cone to the spec's
+      // angle. High Beam: for the spec's seconds after the torch comes on it burns at twice
+      // its heat. Both are uniforms on a light that already exists: no light is added and
+      // no program links. With no node owned both reads return null and nothing changes.
+      this._torchLitT += dt;
+      const prog = this.ctx.systems.get('progress');
+      const focus = prog && typeof prog.perk === 'function' ? prog.perk('torchFocus', null) : null;
+      const beam = prog && typeof prog.perk === 'function' ? prog.perk('highBeam', null) : null;
+      const inp = this.ctx.input;
+      const aiming = !!(inp && typeof inp.held === 'function' && inp.held('aim'));
+      const angle = focus && aiming && typeof focus.angle === 'number' ? focus.angle : T.angle;
+      if (this.torch.angle !== angle) this.torch.angle = angle;
+      const hot = beam && typeof beam.seconds === 'number' && this._torchLitT < beam.seconds ? 2 : 1;
+      this.torch.intensity = this._torchIntensity * hot;
       camera.getWorldDirection(_fwd);
       // The torch sits at the eye; the offset is left to the viewmodel owner to author.
       this.torch.position.copy(p);

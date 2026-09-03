@@ -60,7 +60,19 @@ import { SaveBlob } from './save.js';
 // docs/HANDOFF.md P-4 for a `CFG.progress` block. Nothing below is a magic number twice.
 
 const SAVE_KEY = 'curfew.progress';
-const SAVE_VERSION = 1;
+// 2 since round 6: the `visited` bitmap and the `fires` list joined the blob. A version-1
+// blob still loads — save.js merges per key and the new fields take their defaults.
+const SAVE_VERSION = 2;
+
+// WHERE HE HAS BEEN. Alex, fifth playtest: "a large map in the menu that shows where you've
+// been and if you've finished places". A 64 x 64 grid of travelled cells over the 4 x 4 km
+// county (62.5 m a cell), one bit each, sampled from the player's position once a second and
+// kept in the save as a 1024-character hex string (4096 bits). The pause card draws it as
+// the wash that tells the dark county from the walked one. Recorded here, drawn in ui/hud.js.
+const VISITED_N = 64;
+const VISITED_CELLS = VISITED_N * VISITED_N;
+const VISITED_HEX_LEN = VISITED_CELLS / 4;
+const VISITED_EVERY_STEPS = 60;     // once a second at the fixed step
 
 const MAX_MOTES = 24;           // a shotgun into a pack is the worst case; 24 is generous
 const MOTE_FREE_S = 0.28;       // DESIGN section 6: free flight before the homing starts
@@ -230,6 +242,8 @@ export class Progress {
       cycleCount: 0,
       witnessed: 0,
       lastHub: '',
+      visited: '',      // the travelled-cell bitmap, hex, VISITED_HEX_LEN chars; '' = nowhere yet
+      fires: [],        // campfire ids he has stood at (place:near, lit, not a major)
     }));
     // The blob is assembled ONCE, inside the write, instead of five Array.from() calls on
     // every step of the debounce window (roadLit alone can be hundreds of entries).
@@ -240,6 +254,15 @@ export class Progress {
     this.found = new Set();
     this.claimed = new Set();
     this.roadLit = new Set();
+    this.fires = new Set();
+
+    // The travelled cells, one byte each, preallocated; `visitedCount` is kept beside it so
+    // nobody has to walk 4096 cells to know whether the map is still blank.
+    this.visited = new Uint8Array(VISITED_CELLS);
+    this.visitedCount = 0;
+    this._visitedTick = 0;
+    this._visitedHex = '';        // the last encoding written, reused while nothing changed
+    this._visitedDirty = false;
 
     this.hooks = makeHooks();
     // ONE raw object for the life of the system, refilled in place by _recompute(). Nothing
@@ -328,6 +351,8 @@ export class Progress {
     for (const id of d.found) this.found.add(id);
     for (const id of d.claimed) this.claimed.add(id);
     for (const b of d.roadLit) this.roadLit.add(b | 0);
+    if (Array.isArray(d.fires)) for (const id of d.fires) if (typeof id === 'string') this.fires.add(id);
+    this._decodeVisited(d.visited);
 
     this._recompute();
     // Derive the level from the loaded total DIRECTLY rather than through _checkLevel(),
@@ -357,6 +382,7 @@ export class Progress {
         hookReport: () => this.hookReport(),
         statReport: () => this.statReport(),
         perk: (name, value, a) => this.perk(name, value, a),
+        visited: () => this.visitedGrid(),
         wipe: () => { this.save.reset(); },
       };
     }
@@ -466,6 +492,13 @@ export class Progress {
     on('place:near', (p) => {
       this.hooks.run('onPlaceNear', this.ctx, p);
       if (p.lit === true || p.hub === true) this._tryBank('hub');
+      // A campfire he has stood at is a place the map may show (round 6). places.js gives a
+      // fire the id 'campfire-N' and marks it lit and not a major; nothing else has both.
+      if (p.lit === true && p.major !== true && typeof p.id === 'string' && p.id.indexOf('campfire-') === 0
+        && !this.fires.has(p.id)) {
+        this.fires.add(p.id);
+        this.save.mark();
+      }
     });
 
     on('xp:gained', (p) => {
@@ -485,13 +518,8 @@ export class Progress {
     on('weapon:reload', (p) => { if (p.phase !== 'cancel') this._verb('reload'); });
     on('car:entered', () => { this._verb('drive'); this._doorShut(); });
 
-    // THE PAUSE IS THE SURFACE'S MOMENT. If a point is unspent and no cards are waiting (a
-    // returning save; a pick that left change), deal, so the card has something to show.
-    // Raw subscription: the payload is a boolean and the wrapper above would make it {}.
-    // This runs before hud's listener because progress precedes hud in the manifest.
-    this._unsub.push(b.on('game:paused', (v) => {
-      if (v === true && !this.autoDraft && this.points > 0 && !this.draftCards) this.draft(3);
-    }));
+    // ROUND 6: the pause no longer deals. The whole tree is on the card and a click buys a
+    // node (ui/hud.js _buildPause); `draft()` is reached only by autoDraft and by tests.
 
     // The four bus channels this system already sees, now published to the registry so a node
     // can act on them without another lane learning that the node exists. Every one of these
@@ -638,10 +666,8 @@ export class Progress {
     this._publish();
     if (up) {
       this._stat.levelUps++;
-      // THE DEAL HAPPENS ON THE LEVEL, not only at a lit fire (round 5, lane B): the three
-      // cards wait on the pause card for the next Escape. Dealt before level:up is emitted so
-      // hud's refresh on that event already sees them.
-      if (!this.autoDraft && this.points > 0) this.draft(3);
+      // ROUND 6: no deal on the level. The point waits; the whole tree is on the pause card
+      // and the card says how many points there are to spend (ui/hud.js _refreshTree).
       this.ctx.bus.emit('level:up', { level: L });
     }
   }
@@ -1035,6 +1061,85 @@ export class Progress {
     this.award(XP_ROAD_PER_100M, player.pos.x, player.pos.y + 1, player.pos.z, 'road');
   }
 
+  /* ------------------------------------------------------- where he has been -- */
+
+  /**
+   * Once a second, the cell under the player's feet is marked. In the car the body rides
+   * along (car.js carryTo), so driving paints the road the same as walking it. Nothing here
+   * allocates: one index, one byte, one flag.
+   */
+  _stepVisited() {
+    if ((++this._visitedTick % VISITED_EVERY_STEPS) !== 0) return;
+    const player = this.ctx.systems.get('player');
+    if (!player || !player.pos) return;
+    const i = this.visitedIndex(player.pos.x, player.pos.z);
+    if (i < 0 || this.visited[i]) return;
+    this.visited[i] = 1;
+    this.visitedCount++;
+    this._visitedDirty = true;
+    this.save.mark();
+  }
+
+  /** The cell index for a world position, or -1 outside the county square. */
+  visitedIndex(x, z) {
+    const size = (this.ctx.cfg && this.ctx.cfg.world && this.ctx.cfg.world.SIZE) || CFG.world.SIZE;
+    const half = size * 0.5;
+    const cx = Math.floor((x + half) / size * VISITED_N);
+    const cz = Math.floor((z + half) / size * VISITED_N);
+    if (cx < 0 || cz < 0 || cx >= VISITED_N || cz >= VISITED_N) return -1;
+    return cz * VISITED_N + cx;
+  }
+
+  /**
+   * The bitmap for the map. `cells` is the LIVE array, handed out read-only by convention
+   * (the card reads it once per pause); `n` is the side; `count` how many are set.
+   */
+  visitedGrid() {
+    return { cells: this.visited, n: VISITED_N, count: this.visitedCount };
+  }
+
+  /** The campfires he has stood at, as ids. hud.js matches them against places' list. */
+  firesFound() { return this.fires; }
+
+  /**
+   * Hex in, cells out. Tolerant of everything a blob can carry: not a string, the wrong
+   * length, a character that is not hex — every such cell is simply not visited. A corrupt
+   * map must never hang the boot (save.js rule 1) and must never throw here.
+   */
+  _decodeVisited(hex) {
+    const cells = this.visited;
+    cells.fill(0);
+    let count = 0;
+    if (typeof hex === 'string' && hex.length > 0) {
+      const n = Math.min(hex.length, VISITED_HEX_LEN);
+      for (let i = 0; i < n; i++) {
+        const v = parseInt(hex.charAt(i), 16);
+        if (!(v >= 0)) continue;                 // NaN: not hex, not visited
+        for (let b = 0; b < 4; b++) {
+          if (v & (1 << b)) { cells[i * 4 + b] = 1; count++; }
+        }
+      }
+    }
+    this.visitedCount = count;
+    this._visitedHex = '';
+    this._visitedDirty = true;
+  }
+
+  /** Cells in, hex out — only when something changed since the last encoding. */
+  _encodeVisited() {
+    if (!this._visitedDirty && this._visitedHex) return this._visitedHex;
+    const cells = this.visited;
+    const out = new Array(VISITED_HEX_LEN);
+    for (let i = 0; i < VISITED_HEX_LEN; i++) {
+      const v = (cells[i * 4] ? 1 : 0) | (cells[i * 4 + 1] ? 2 : 0)
+        | (cells[i * 4 + 2] ? 4 : 0) | (cells[i * 4 + 3] ? 8 : 0);
+      out[i] = v.toString(16);
+    }
+    this._visitedHex = out.join('');
+    this._visitedDirty = false;
+    return this._visitedHex;
+  }
+
   /* ---------------------------------------------------------- auto-granting -- */
 
   /** First use of a branch's verb grants its tier-0 node, free. The tree teaches itself. */
@@ -1175,14 +1280,13 @@ export class Progress {
   }
 
   /**
-   * At a lit fire. With autoDraft false (the shipping default since round 5) this deals
-   * three if a point is unspent and nothing is waiting, and the pause card shows them. With
-   * autoDraft true it is the old reduction — deal three and take one, rocket-shoes
-   * draft.js:41-49 ("No menu, no pause — pure flow") — kept for tests that want the tree to
-   * fill itself without a click.
+   * At a lit fire. With autoDraft false (the shipping default) nothing happens here since
+   * round 6: the tree is on the pause card and the point waits to be clicked. With autoDraft
+   * true it is the old reduction — deal three and take one, rocket-shoes draft.js:41-49 ("No
+   * menu, no pause — pure flow") — kept for tests that want the tree to fill itself.
    */
   _maybeDraft() {
-    if (!this.autoDraft) { if (this.points > 0 && !this.draftCards) this.draft(3); return; }
+    if (!this.autoDraft) return;
     let guard = 0;
     while (this.points > 0 && guard++ < 8) {
       const cards = this.draft(3);
@@ -1256,6 +1360,7 @@ export class Progress {
     this._stepCorpse(dt);
     this._stepRoad();
     this._stepVerbs();
+    this._stepVisited();
 
     // Every node that needs a frame runs here, from OUR step, so a per-frame perk needs
     // nothing at all from the lane it acts on. Zero installers is a Map miss and a return.
@@ -1308,6 +1413,7 @@ export class Progress {
       draft: this.draftCards ? this.draftCards.map((c) => c.id) : null,
       owned: this._ownedList(), auto: Array.from(this._auto),
       found: this.found.size, claimed: this.claimed.size, roadBuckets: this.roadLit.size,
+      visited: this.visitedCount, fires: this.fires.size,
       motes: this._liveMotes(), lit: this.lit, streak: this.streak,
       carryStep: this.carryStep, carryI: +this.carryI.toFixed(2),
       // The banking loop, visible: what lights published, how long it has been held, and
@@ -1421,6 +1527,8 @@ export class Progress {
     d.found = Array.from(this.found);
     d.claimed = Array.from(this.claimed);
     d.roadLit = Array.from(this.roadLit);
+    d.fires = Array.from(this.fires);
+    d.visited = this._encodeVisited();
     d.level = this.level;
   }
 

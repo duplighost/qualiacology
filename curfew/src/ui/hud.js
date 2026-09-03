@@ -38,7 +38,7 @@
 //   * The respawn window, drawn as a closing arc. Invulnerability the player cannot see is a
 //     mechanic he will never learn to use.
 //   * A ring pulse when a mote lands, so getting paid reaches the screen even when the mote
-//     arrives from behind you — and two slower rings for a card taken, three for a level.
+//     arrives from behind you — and two slower rings for a node bought, three for a level.
 //     Those two were added after the second audit: a purchase used to acknowledge itself with
 //     a chime and nothing else, so with the audio lane disabled — every headless run — buying
 //     a node was completely silent AND completely invisible. Speed and COUNT tell the three
@@ -46,12 +46,26 @@
 //   * ONE screen-reader line, class "sr-only", which no sighted player ever sees.
 //   * A pause card that DOES list the controls, because reading costs nothing when the game
 //     is stopped, and because a game nobody can find the crouch key in is not scarier.
-//   * THE TREE, on that same card (round 5, lane B). Alex, fourth playtest: "I forget if we
-//     have a skill tree or not from xp, but we should have one... i have not really seen a
-//     skill tree." It existed, 24 nodes, and the game dealt and picked for him with no
-//     surface. Now the pause card shows the level as a word, the six branches with owned
-//     nodes by name, and the three dealt cards as buttons. Words are legal here and nowhere
-//     else; tests/progression.mjs still walks the page during play and finds none.
+//   * THE TREE, on that same card. Round 5 (lane B) put the level as a word, the six branches
+//     and a three-card deal there. Alex, fifth playtest: "I want a good skill tree that is not
+//     automatic that is intuitive and the player can use." A deal of three random cards is not
+//     a tree you USE, it is a slot machine you accept — so since round 6 (lane G) the WHOLE
+//     tree is on the card: six branch rows, four tiers each, every node a button with its name
+//     and one line of what it buys, in four states (owned / affordable / locked / not yet
+//     affordable), and a click on an affordable one buys it. No deal, no randomness. The
+//     points to spend are a word. Words are legal here and nowhere else; tests/progression.mjs
+//     still walks the page during play and finds none.
+//   * THE MAP, above the tree on the same card (round 6, lane G). Alex: "A minimap or at the
+//     least a large map in the menu that shows where you've been and if you've finished
+//     places would be nice." DESIGN decision 19 stands — nothing is marked on the HUD — and
+//     this is not the HUD: it is the paper map, on the one surface where the game is stopped.
+//     A canvas, county-square, drawn from live state each time the card shows and never per
+//     step: the roads, the majors in three states (unfound faint, found named, claimed lit in
+//     the region's tint), the campfires and wilds he has found, the car, himself as an arrow,
+//     and WHERE HE HAS BEEN as a soft wash over a 64 x 64 travelled-cell bitmap that
+//     progression/progress.js records once a second and keeps in the save. The unexplored
+//     county stays dark. Words on the map: place names, once found; no legend, no compass, no
+//     coordinates.
 //
 // WHAT IS DELIBERATELY NOT HERE: ammo. DESIGN says ammo is "the magazine window and the last
 // three tracers" — both of those live on the gun, and the gun is weapons/viewmodel.js. The
@@ -71,12 +85,17 @@
 //   rotating ring plus a cross rather than more ticks, and the weak-point chevron pair.
 // donor: cinderbloom src/game/combat.js:1298-1312 `_marker` — MARK_RANK, so a plain hit
 //   arriving 40 ms after a kill cannot overwrite the kill.
+// donor: palehollow src/progress.js:95-106 — the 64 x 64 reveal grid drawn onto a canvas,
+//   which DESIGN section 2 names for the paper map. Here the grid is progress.js's and the
+//   canvas is a DOM element on the card rather than a texture in the hand.
 
 import { CFG } from '../config.js';
 import { clamp, clamp01, DEG, TAU } from '../engine/math.js';
 // Pure data, no ctx, same owner (progression). The card lists every branch and every node
-// once at build time and rewrites them by text afterwards.
+// once at build time and rewrites their STATE afterwards; the names and lines never change.
 import { BRANCHES, NODES } from '../progression/nodes.js';
+// Pure data, read-only: the majors' positions, names and region tints for the map.
+import { MAJORS, REGION_TINT, DEFAULT_TINT } from '../world/placedata.js';
 
 /* ---------------------------------------------------------------- constants -- */
 // No CFG.hud block exists; config.js belongs to the engine owner and is deep-frozen. Every
@@ -96,7 +115,7 @@ const PULSE_POOL = 5;
 // A NODE BOUGHT AND A LEVEL GAINED, and they are here for the reason the second audit found
 // everywhere else: the only acknowledgement either of them had was a chime, and the chime is
 // baked through the audio lane, which returns early with the AudioContext dead — every
-// headless run, and any browser with autoplay hard-blocked. Buying a card is one of the four
+// headless run, and any browser with autoplay hard-blocked. Buying a node is one of the four
 // things Alex asked for by name and it must reach the screen without Web Audio.
 // Still no words and no number: a slow ring is a different SHAPE from the mote's fast one,
 // and the level ring is a slower, wider version of the same gesture, so the two read as the
@@ -146,6 +165,11 @@ const TREMOR_PX = 2.6;          // at 0 hp. Never applied to the camera.
  * It is drawn on its OWN canvas, full width and LIFE_H tall at the bottom edge, because the
  * reticle canvas is 640 px and centred and this belongs at the rim of vision. That canvas is
  * repainted only when something on it actually moved.
+ *
+ * ROUND 6: the arc's whole length is the body's OWN maximum — player.hpMax when the body
+ * exposes it (lane E reads the tree's hpMax stat), CFG's 100 otherwise, and never less than
+ * the hp actually held, so Thick Skin makes the arc no longer at full and the readout never
+ * draws a fraction the body does not have.
  */
 const LIFE_H = 132;             // CSS px of the bottom canvas
 const LIFE_BOTTOM = 20;         // px from the viewport bottom to the apex of the arc
@@ -226,6 +250,33 @@ const CARD_LATE_MS = 500;
 const INK = '#e8eef8';
 const SHADE = 'rgba(4,6,9,0.72)';
 
+/* ------------------------------------------------------------- THE MAP ----
+ * County-square, MAP_PX a side, in the card's own palette so it never reads as a HUD: the
+ * ground is the card's own dark, the roads and marks are the card's ink at low alpha, and
+ * the ONE hue on it is a claimed place in its region's tint — the same colour its beacon
+ * put in the sky. The travelled wash is the ink at MAP_WASH_A, drawn as overlapping discs a
+ * little larger than a cell so the edge of the walked county is soft rather than a grid.
+ * Everything below is measured against the PNGs in docs/ROUND-6/G-card.md.
+ */
+const MAP_PX = 440;             // CSS px, square
+const MAP_GROUND = '#0b0e13';   // the paper: darker than the card so the wash reads on it
+const MAP_EDGE = '#1b2431';     // the card's rule colour
+const MAP_WASH_A = 0.10;        // alpha of one travelled disc; overlaps build to ~0.27. MEASURED
+                                // at 0.075 (round6-G-suite-card-driven.png, first run): a
+                                // smear the eye had to look for. 0.10 reads at a glance and the
+                                // roads (0.32) still sit clearly above it.
+const MAP_WASH_R = 1.15;        // disc radius in cells
+const MAP_ROAD_A = 0.32;
+const MAP_ROAD_W = 1.4;
+const MAP_UNFOUND_A = 0.22;     // a faint mark; the beacons already show them in the world
+const MAP_FOUND_A = 0.86;
+const MAP_NAME_FONT = '10.5px "Palatino Linotype", Palatino, Georgia, serif';
+const MAP_NAME_DX = 7;          // px from the mark to its name
+const MAP_NAME_FLIP = 92;       // px from the right edge past which a name sits on the left
+const MAP_ARROW = 11;           // px, the player's arrow, tip to base
+const MAP_CAR_L = 9;            // px, the car's rectangle
+const MAP_CAR_W = 5;
+
 const CONTROLS = [
   ['Move', 'W A S D'],
   ['Look', 'Mouse'],
@@ -233,8 +284,9 @@ const CONTROLS = [
   ['Aim', 'Right mouse'],
   ['Melee', 'V or middle mouse'],
   ['Reload', 'R'],
-  // Round 5 lane F (the gun) adds a second weapon and Q swaps. Same round, same card.
-  ['Swap weapon', 'Q'],
+  // Round 5 lane F (the gun) adds a second weapon and Q swaps; round 6 lane D1 adds the
+  // digits. Same round, same card.
+  ['Swap weapon', 'Q or 1 / 2'],
   ['Sprint', 'Shift'],
   ['Crouch and slide', 'Ctrl or C'],
   ['Jump and mantle', 'Space'],
@@ -243,7 +295,10 @@ const CONTROLS = [
   // vehicle lane's shim) and NEITHER was on this card — the one surface in CURFEW where
   // words are legal, because the game is stopped and reading costs nothing. A verb the
   // player cannot find is a verb that does not exist.
-  ['Get in the car', 'E'],
+  // ROUND 6, lane D1 (BRIEF-G item 5): E is also the claim verb, held. Alex, fifth
+  // playtest: "I have no idea how you finish places."
+  ['Use, get in the car', 'E'],
+  ['Claim a place', 'hold E'],
   ['Horn', 'H'],
   ['Torch', 'F'],
   ['Pause', 'Esc'],
@@ -275,37 +330,48 @@ const CSS = `
               background: rgba(5,7,10,0.86); pointer-events: auto;
               font: 400 14px/1.6 "Palatino Linotype", Palatino, Georgia, serif; color: #c9d4e6; }
 #curfew-pause[hidden] { display: none !important; }
-#curfew-pause .card { width: min(620px, 84vw); margin: auto; }
+#curfew-pause .card { width: min(1240px, 94vw); margin: auto; }
 @media (max-width: 1000px) { #curfew-pause { padding-left: 180px; } }
 #curfew-pause .rule { height: 1px; background: #1b2431; margin: 0 0 18px; }
 #curfew-pause .rule.mid { margin: 18px 0; }
-/* THE TREE: the level as a word, six branches, owned nodes by name, the rest as dots. */
-#curfew-pause .lvl { font-size: 17px; letter-spacing: .10em; color: #e8eef8; margin: 0 0 12px; }
+/* THE MAP AND THE TREE, side by side when the window is wide enough, the map first. One
+   block, and it swallows the press: a click anywhere on it must never resume the game. */
+#curfew-pause .top { display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 0 28px;
+              align-items: start; }
+@media (max-width: 1180px) { #curfew-pause .top { grid-template-columns: minmax(0, 1fr); gap: 18px 0; } }
+#curfew-pause .map { display: block; width: 440px; height: 440px; max-width: 100%;
+              border: 1px solid #1b2431; border-radius: 2px; background: #0b0e13; }
+/* THE TREE: the level and the points as words, then six branch rows of four node buttons. */
+#curfew-pause .lvl { font-size: 17px; letter-spacing: .10em; color: #e8eef8; margin: 0 0 10px; }
 #curfew-pause .lvl .pts { font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
-              opacity: .5; margin-left: 14px; }
-#curfew-pause .br { display: grid; grid-template-columns: 64px 1fr; gap: 0 18px;
-              align-items: baseline; margin: 0 0 3px; }
-#curfew-pause .bn { opacity: .52; letter-spacing: .12em; text-transform: uppercase; font-size: 11px; }
-#curfew-pause .bl { display: flex; flex-wrap: wrap; gap: 0 16px; font-size: 13px; letter-spacing: .04em; }
-#curfew-pause .bl span { opacity: .5; }
-#curfew-pause .bl span.own { opacity: .92; color: #e8eef8; }
-/* THE DEAL: three cards after a level; a click takes one. Dim is "not affordable yet". */
-#curfew-pause .deal { margin: 14px 0 0; }
-#curfew-pause .deal[hidden] { display: none !important; }
-#curfew-pause .take { font-size: 11px; letter-spacing: .22em; text-transform: uppercase;
-              opacity: .42; margin: 0 0 8px; }
-#curfew-pause .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-#curfew-pause .cards button { display: block; width: 100%; text-align: left; cursor: pointer;
+              opacity: .55; margin-left: 14px; }
+#curfew-pause .br { display: grid; grid-template-columns: 56px repeat(4, minmax(0, 1fr));
+              gap: 0 8px; align-items: stretch; margin: 0 0 6px; }
+#curfew-pause .bn { opacity: .52; letter-spacing: .12em; text-transform: uppercase; font-size: 11px;
+              align-self: center; }
+/* A NODE. Four states, told apart by VALUE and by edge, never by hue:
+     own   held. Bright, a filled ground and a solid left edge. No cost, it is paid.
+     can   affordable now. Bright, a lit border, a pointer, and it brightens under the mouse.
+     poor  the tier below is yours but the points are not there yet. Half.
+     lock  the tier below is not yours. Faint, but the line is still readable. */
+#curfew-pause .nd { display: block; width: 100%; box-sizing: border-box; text-align: left;
               font: inherit; color: #c9d4e6; background: rgba(4,6,9,0.72);
-              border: 1px solid #1b2431; border-radius: 2px; padding: 10px 12px 9px; }
-#curfew-pause .cards button[hidden] { display: none !important; }
-#curfew-pause .cards button:hover { border-color: #c9d4e6; }
-#curfew-pause .cards button.dim { opacity: .35; cursor: default; }
-#curfew-pause .cards button.dim:hover { border-color: #1b2431; }
-#curfew-pause .cn { display: block; color: #e8eef8; font-size: 14px; letter-spacing: .06em; }
-#curfew-pause .cl { display: block; font-size: 12px; line-height: 1.45; opacity: .74; margin: 4px 0 6px; }
-#curfew-pause .cc { display: block; font-size: 10px; letter-spacing: .20em;
-              text-transform: uppercase; opacity: .5; }
+              border: 1px solid #1b2431; border-left: 3px solid #1b2431; border-radius: 2px;
+              padding: 6px 9px 6px; cursor: default; opacity: .55; }
+#curfew-pause .nd .cn { display: flex; justify-content: space-between; align-items: baseline;
+              gap: 0 6px; color: #e8eef8; font-size: 13px; letter-spacing: .05em; line-height: 1.3; }
+#curfew-pause .nd .cc { font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase;
+              opacity: .55; white-space: nowrap; }
+#curfew-pause .nd .cl { display: block; font-size: 10.5px; line-height: 1.35; opacity: .74;
+              margin: 3px 0 0; }
+#curfew-pause .nd.own { opacity: 1; border-color: #34425a; border-left-color: #c9d4e6;
+              background: rgba(201,212,230,0.075); }
+#curfew-pause .nd.own .cc { display: none; }
+#curfew-pause .nd.can { opacity: 1; cursor: pointer; border-color: #6f7f99; border-left-color: #6f7f99; }
+#curfew-pause .nd.can:hover { border-color: #e8eef8; border-left-color: #e8eef8;
+              background: rgba(201,212,230,0.06); }
+#curfew-pause .nd.poor { opacity: .55; }
+#curfew-pause .nd.lock { opacity: .30; }
 /* THE CONTROLS, two columns of pairs now that the tree sits above them. */
 #curfew-pause dl { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 5px 22px; margin: 0; }
 #curfew-pause dt { opacity: .52; letter-spacing: .12em; text-transform: uppercase;
@@ -314,6 +380,12 @@ const CSS = `
 #curfew-pause .foot { margin-top: 22px; font-size: 11px; letter-spacing: .22em;
               text-transform: uppercase; opacity: .32; text-align: center; }
 `;
+
+/** 0xrrggbb -> '#rrggbb'. Card-time only; never on a frame. */
+function hex6(n) {
+  const s = (n >>> 0).toString(16);
+  return '#' + '000000'.slice(s.length) + s;
+}
 
 /* -------------------------------------------------------------------- system -- */
 
@@ -327,6 +399,7 @@ export class Hud {
     this.root = null; this.vig = null; this.canvas = null; this.g = null;
     this.lifeCanvas = null; this.lg = null;
     this.srEl = null; this.pauseEl = null;
+    this.mapCanvas = null; this.mg = null;
 
     this.R = RET_MAX; this.dpr = 1;
     this.vw = 1600; this.vh = 900;
@@ -338,6 +411,7 @@ export class Hud {
     this.dry = false;
     this.inCar = false;
     this.hp = CFG.player.health.max;
+    this.hpMax = CFG.player.health.max;     // the body's own maximum; see _readHpMax()
     this.hpShown = CFG.player.health.max;   // lags hp by READOUT_LEAD_S
     this.hpLead = 0;
     this.vigA = 0;
@@ -382,10 +456,14 @@ export class Hud {
     this._lockHeld = false;    // input:lock true has arrived at least once this page
     this._pausedAtMs = 0;      // performance.now() at the last game:paused true
     this._sinceResume = 0;     // fixed steps since the pause last lifted; see step()
-    // The tree's elements, built once in _buildPause() and rewritten by text in _refreshTree().
-    this.lvEl = null; this.ptsEl = null; this.takeEl = null;
-    this.branchEls = null;     // one { nodes, spans } per branch, nodes in tier order
-    this.dealEl = null; this.cardEls = null;
+    // The tree's elements, built once in _buildPause() and restated in _refreshTree().
+    this.lvEl = null; this.ptsEl = null;
+    this.nodeEls = null;       // one { node, btn } per NODES row, in NODES order
+    // What the map last drew, as numbers a test can hold: rewritten in place by _drawMap().
+    this.mapInfo = {
+      drawn: 0, painted: 0, roads: 0, names: 0, found: 0, claimed: 0, unfound: 0,
+      fires: 0, wilds: 0, car: false, arrowX: -1, arrowY: -1, carX: -1, carY: -1,
+    };
 
     this.srT = 0; this.srLast = '';
     this._dirty = true;
@@ -453,7 +531,8 @@ export class Hud {
 
   ready() {
     return !this.enabled
-      || !!(this.canvas && this.g && this.lifeCanvas && this.lg && this.root && this.pauseEl);
+      || !!(this.canvas && this.g && this.lifeCanvas && this.lg && this.root && this.pauseEl
+        && this.mapCanvas && this.mg);
   }
 
   dispose() {
@@ -465,6 +544,7 @@ export class Hud {
     }
     this.root = this.vig = this.canvas = this.g = this.srEl = this.pauseEl = null;
     this.lifeCanvas = this.lg = null;
+    this.mapCanvas = this.mg = null;
   }
 
   resize() {
@@ -491,6 +571,13 @@ export class Hud {
       this.lifeCanvas.height = Math.round(this.lifeH * this.dpr);
       this.lg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       this._lifeDirty = true;
+    }
+    // The map's backing store follows the DPR; it is redrawn at the next show, not here.
+    if (this.mapCanvas) {
+      this.mapCanvas.width = Math.round(MAP_PX * this.dpr);
+      this.mapCanvas.height = Math.round(MAP_PX * this.dpr);
+      this.mg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      if (this.paused && this.pauseEl && !this.pauseEl.hidden) this._drawMap();
     }
   }
 
@@ -542,12 +629,13 @@ export class Hud {
       this._pulse('mote', PULSE_LIFE);
     });
 
-    // A card is now yours. progression/progress.js emits this for a purchase AND for an
+    // A node is now yours. progression/progress.js emits this for a purchase AND for an
     // auto-granted tier-0, and both deserve the same mark: the auto-grant is the moment the
     // tree teaches itself, and a lesson nobody can see is not a lesson.
-    // No _refreshTree() here: both arrive inside a fixed step (progress.step -> _verb / bank),
+    // No _refreshTree() here: both arrive inside a fixed step (progress.step -> _verb / buy),
     // and the card is hidden during play, so a rewrite then is DOM work inside step() for a
-    // surface nobody can see. Every path that SHOWS the card refreshes it (_onPaused, pick).
+    // surface nobody can see. Every path that SHOWS the card refreshes it (pause(true), a
+    // node click).
     on('node:bought', () => { this._pulse('node', GRANT_LIFE); });
     on('level:up', () => { this._pulse('level', LEVEL_LIFE); });
 
@@ -561,7 +649,7 @@ export class Hud {
     // because they belong to a body that is now dead, and the invulnerability window starts
     // being drawn from its own payload rather than from a constant this file duplicates.
     on('player:respawn', (p) => {
-      const max = CFG.player.health.max;
+      const max = this._readHpMax();
       this.hp = max; this.hpShown = max; this.hpLead = 0;
       for (let i = 0; i < GHOST_POOL; i++) this.ghosts[i].live = false;
       this.invulnMax = (typeof p.invuln === 'number' && p.invuln > 0) ? p.invuln : this.invulnMax;
@@ -689,75 +777,64 @@ export class Hud {
     const wrap = el('div', 'card');
     wrap.appendChild(el('div', 'rule'));
 
-    // THE TREE. Built once: a level line, then one row per branch holding one span per node
-    // in tier order. _refreshTree() writes the node's name into an owned span and a dot into
-    // the rest, so the shape of the tree is visible before a single card is taken.
-    // The whole tree sits in one block that swallows the press: a click on a branch row or a
-    // dot (what anyone does to a skill tree) must not throw the player back under the lock.
-    // Only the overlay, the controls and the foot line resume.
-    const tree = el('div', 'tree');
-    tree.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
+    // THE MAP AND THE TREE, one block, and the block swallows the press: a click on the map
+    // or on a node (what anyone does to a skill tree) must not throw the player back under
+    // the lock. Only the overlay, the controls and the foot line resume.
+    const top = el('div', 'top');
+    top.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
 
+    const map = el('canvas', 'map');
+    map.id = 'curfew-map';
+    map.width = MAP_PX; map.height = MAP_PX;
+    top.appendChild(map);
+    this.mapCanvas = map;
+    this.mg = map.getContext('2d', { alpha: false });
+
+    // THE TREE. Built once: a level line, then one row per branch holding one button per
+    // tier. The name, the cost and the line are written here and never again; _refreshTree()
+    // restates only each button's STATE, so the shape of the whole tree is on the card from
+    // level 1 and a level-1 player can read what every tier will buy.
+    const tree = el('div', 'tree');
     const lvl = el('div', 'lvl');
     this.lvEl = el('span', '', 'Level 1');
     // The points span carries its own separator so the line READS as one sentence in
-    // textContent too ("Level 10 · 9 to spend", not "Level 109 to spend").
+    // textContent too ("Level 10 · 2 points", not "Level 102 points").
     this.ptsEl = el('span', 'pts', '');
     lvl.appendChild(this.lvEl); lvl.appendChild(this.ptsEl);
     tree.appendChild(lvl);
 
-    this.branchEls = [];
+    this.nodeEls = [];
     for (let b = 0; b < BRANCHES.length; b++) {
       const br = BRANCHES[b];
       const row = el('div', 'br');
       row.appendChild(el('div', 'bn', br.name));
-      const list = el('div', 'bl');
       const nodes = [];
       for (let i = 0; i < NODES.length; i++) if (NODES[i].branch === br.id) nodes.push(NODES[i]);
       nodes.sort((p, q) => p.tier - q.tier);
-      const spans = [];
       for (let i = 0; i < nodes.length; i++) {
-        const s = el('span', '', '\u00b7');
-        spans.push(s); list.appendChild(s);
+        const n = nodes[i];
+        const btn = el('button', 'nd lock');
+        btn.type = 'button';
+        btn.dataset.node = n.id;
+        const name = el('span', 'cn', n.name);
+        name.appendChild(el('span', 'cc', n.cost === 1 ? 'one point' : n.cost + ' points'));
+        btn.appendChild(name);
+        btn.appendChild(el('span', 'cl', n.line));
+        // The click buys, when it can; the press never resumes (the block above stops it).
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation(); e.preventDefault();
+          const prog = this.ctx.systems.get('progress');
+          if (prog && typeof prog.buy === 'function' && typeof prog.canBuy === 'function'
+            && prog.canBuy(n.id)) prog.buy(n.id);
+          this._refreshTree();
+        });
+        row.appendChild(btn);
+        this.nodeEls.push({ node: n, btn });
       }
-      row.appendChild(list);
       tree.appendChild(row);
-      this.branchEls.push({ nodes, spans });
     }
-
-    // THE DEAL. progress deals three on a level-up (progress.js _checkLevel), again after a
-    // pick that leaves a point (pick), and they wait here for the next Escape. Three buttons,
-    // built once, hidden until there is a deal.
-    const deal = el('div', 'deal');
-    deal.hidden = true;
-    this.takeEl = el('div', 'take', 'take one');
-    deal.appendChild(this.takeEl);
-    const cards = el('div', 'cards');
-    this.cardEls = [];
-    for (let i = 0; i < 3; i++) {
-      const btn = el('button', '');
-      btn.type = 'button';
-      btn.hidden = true;
-      const name = el('span', 'cn', '');
-      const line = el('span', 'cl', '');
-      const cost = el('span', 'cc', '');
-      btn.appendChild(name); btn.appendChild(line); btn.appendChild(cost);
-      // The card's own mousedown asks for the lock back. Taking a card must NOT resume the
-      // game, so the press stops here, and the click buys.
-      btn.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); });
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation(); e.preventDefault();
-        const prog = this.ctx.systems.get('progress');
-        if (prog && typeof prog.pick === 'function') prog.pick(i);
-        this._refreshTree();        // pick() nulls the deal AFTER node:bought has fired
-      });
-      cards.appendChild(btn);
-      this.cardEls.push({ btn, name, line, cost });
-    }
-    deal.appendChild(cards);
-    tree.appendChild(deal);
-    wrap.appendChild(tree);
-    this.dealEl = deal;
+    top.appendChild(tree);
+    wrap.appendChild(top);
 
     wrap.appendChild(el('div', 'rule mid'));
 
@@ -815,7 +892,6 @@ export class Hud {
     if (on) {
       this.paused = true;
       this._pausedAtMs = performance.now();
-      this._refreshTree();      // progress (earlier in the manifest) has already dealt
     } else {
       this._sinceResume = 0;
       this.pause(false);
@@ -823,13 +899,21 @@ export class Hud {
     this._dirty = true;
   }
 
-  /** Show or hide the card. Asks for nothing; the lock is requested by _resume() only. */
+  /**
+   * Show or hide the card. Asks for nothing; the lock is requested by _resume() only.
+   * THE SHOW IS THE REBUILD: the tree is restated and the map is drawn on the transition
+   * from hidden to shown, and nowhere per step (round 5's rule). The sim is stopped by the
+   * time this runs, so what is drawn is what is true.
+   */
   pause(on) {
     const v = !!on;
     this.paused = v;
     // Written only on a change: a MutationObserver on the attribute is how the gate counts
     // the card's transitions, and a same-value write would still make a record.
-    if (this.pauseEl && this.pauseEl.hidden !== !v) this.pauseEl.hidden = !v;
+    if (this.pauseEl && this.pauseEl.hidden !== !v) {
+      this.pauseEl.hidden = !v;
+      if (v) { this._refreshTree(); this._drawMap(); }
+    }
     this._dirty = true;
   }
 
@@ -841,51 +925,252 @@ export class Hud {
   }
 
   /**
-   * THE TREE'S SURFACE. Rewrites the level line, the six branches and the dealt cards BY
-   * TEXT into elements built once. Runs on game:paused true, node:bought, level:up and a
-   * pick — never per frame — so the few strings it makes are made a few times a level.
+   * THE TREE'S SURFACE. Restates the level line and the state of every node button into
+   * elements built once. Runs when the card shows and after a click — never per frame — so
+   * the few strings it makes are made a few times a pause.
    */
   _refreshTree() {
     const prog = this.ctx.systems.get('progress');
-    if (!prog || !this.lvEl) return;
+    if (!prog || !this.lvEl || !this.nodeEls) return;
     const owned = typeof prog.ownedSet === 'function' ? prog.ownedSet() : null;
     const level = typeof prog.level === 'number' ? prog.level : 1;
     const points = typeof prog.points === 'number' ? prog.points : 0;
     this.lvEl.textContent = 'Level ' + level;
-    this.ptsEl.textContent = points <= 0 ? '' : ' \u00b7 ' + points + ' to spend';
-    for (let b = 0; b < this.branchEls.length; b++) {
-      const row = this.branchEls[b];
-      for (let i = 0; i < row.nodes.length; i++) {
-        const n = row.nodes[i];
-        const own = !!(owned && owned.has(n.id));
-        const s = row.spans[i];
-        s.textContent = own ? n.name : '\u00b7';
-        if (s.className !== (own ? 'own' : '')) s.className = own ? 'own' : '';
+    this.ptsEl.textContent = points <= 0 ? '' : ' · ' + (points === 1 ? 'one point' : points + ' points');
+    for (let i = 0; i < this.nodeEls.length; i++) {
+      const { node: n, btn } = this.nodeEls[i];
+      const own = !!(owned && owned.has(n.id));
+      let cls;
+      if (own) cls = 'nd own';
+      else if (typeof prog.canBuy === 'function' && prog.canBuy(n.id)) cls = 'nd can';
+      else {
+        // Not affordable. Is it the points, or the tier below? A locked tier is faint, a
+        // merely expensive one is half, so a player at level 1 can still see the path.
+        let pre = null;
+        for (let k = 0; k < NODES.length; k++) {
+          const m = NODES[k];
+          if (m.branch === n.branch && m.tier === n.tier - 1) { pre = m; break; }
+        }
+        const open = n.tier === 0 || !!(pre && owned && owned.has(pre.id));
+        cls = open ? 'nd poor' : 'nd lock';
+      }
+      if (btn.className !== cls) btn.className = cls;
+    }
+  }
+
+  /* --------------------------------------------------------------- the map -- */
+
+  /**
+   * The paper map. Drawn from live state each time the card shows; allocates freely,
+   * because it runs a few times a session and never on a frame. Every sibling is read
+   * lazily and guarded: a lane that has not shipped its half (wilds, a campfire list)
+   * draws nothing rather than throwing, and `mapInfo` says what was actually drawn.
+   */
+  _drawMap() {
+    const g = this.mg, c = this.mapCanvas;
+    const I = this.mapInfo;
+    if (!g || !c) return;
+    const S = MAP_PX;
+    const size = (this.ctx.cfg && this.ctx.cfg.world && this.ctx.cfg.world.SIZE) || CFG.world.SIZE;
+    const half = size * 0.5;
+    // North is -Z (the camera at yaw 0 looks down -Z), so -Z goes UP the page.
+    const px = (x) => (x + half) / size * S;
+    const pz = (z) => (z + half) / size * S;
+    const sys = this.ctx.systems;
+    const prog = sys.get('progress');
+    const places = sys.get('places');
+    const roads = sys.get('roads');
+    const player = sys.get('player');
+    const cam = sys.get('camera');
+    const car = sys.get('car');
+    const wilds = sys.get('wilds');
+
+    I.painted = 0; I.roads = 0; I.names = 0; I.found = 0; I.claimed = 0; I.unfound = 0;
+    I.fires = 0; I.wilds = 0; I.car = false; I.arrowX = -1; I.arrowY = -1; I.carX = -1; I.carY = -1;
+
+    /* 0. the paper ----------------------------------------------------------- */
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    g.globalAlpha = 1;
+    g.fillStyle = MAP_GROUND;
+    g.fillRect(0, 0, S, S);
+
+    /* 1. where he has been — the wash ---------------------------------------- */
+    const grid = prog && typeof prog.visitedGrid === 'function' ? prog.visitedGrid() : null;
+    if (grid && grid.cells && grid.n > 0) {
+      const n = grid.n, cell = S / n, r = cell * MAP_WASH_R;
+      g.fillStyle = INK;
+      g.globalAlpha = MAP_WASH_A;
+      for (let i = 0; i < n * n; i++) {
+        if (!grid.cells[i]) continue;
+        const cx = (i % n + 0.5) * cell, cy = (Math.floor(i / n) + 0.5) * cell;
+        g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
+        I.painted++;
+      }
+      g.globalAlpha = 1;
+    }
+
+    /* 2. the roads ----------------------------------------------------------- */
+    // routePolylines(), not routes(): roads.js's constructor owns `this.routes` as a table.
+    const routes = roads && typeof roads.routePolylines === 'function' ? roads.routePolylines() : null;
+    if (Array.isArray(routes)) {
+      g.strokeStyle = INK;
+      g.globalAlpha = MAP_ROAD_A;
+      g.lineWidth = MAP_ROAD_W;
+      g.lineJoin = 'round'; g.lineCap = 'round';
+      for (let r = 0; r < routes.length; r++) {
+        const pl = routes[r];
+        if (!Array.isArray(pl) || pl.length < 2) continue;
+        g.beginPath();
+        g.moveTo(px(pl[0].x), pz(pl[0].z));
+        for (let i = 1; i < pl.length; i++) g.lineTo(px(pl[i].x), pz(pl[i].z));
+        g.stroke();
+        I.roads++;
+      }
+      g.globalAlpha = 1;
+    }
+
+    /* 3. the campfires he has stood at --------------------------------------- */
+    // places.js keeps every authored fire in `_campfires` ({fireId, x, z}); a public
+    // campfires() is requested in HANDOFF-G. progress keeps the ids he has been AT.
+    const fires = prog && typeof prog.firesFound === 'function' ? prog.firesFound() : null;
+    const fireList = places
+      ? (typeof places.campfires === 'function' ? places.campfires()
+        : (Array.isArray(places._campfires) ? places._campfires : null))
+      : null;
+    if (fires && fires.size > 0 && Array.isArray(fireList)) {
+      g.fillStyle = INK;
+      g.globalAlpha = 0.70;
+      for (let i = 0; i < fireList.length; i++) {
+        const f = fireList[i];
+        if (!f || !fires.has(f.fireId)) continue;
+        g.beginPath(); g.arc(px(f.x), pz(f.z), 1.8, 0, TAU); g.fill();
+        I.fires++;
+      }
+      g.globalAlpha = 1;
+    }
+
+    /* 4. the wilds he has found (lane F) ------------------------------------- */
+    const wl = wilds && typeof wilds.list === 'function' ? wilds.list() : null;
+    if (Array.isArray(wl)) {
+      g.strokeStyle = INK; g.fillStyle = INK; g.lineWidth = 1;
+      for (let i = 0; i < wl.length; i++) {
+        const w = wl[i];
+        if (!w || !w.found || !Number.isFinite(w.x) || !Number.isFinite(w.z)) continue;
+        const x = px(w.x), y = pz(w.z);
+        g.globalAlpha = w.climbed ? 0.85 : 0.55;
+        // A small square: climbed is filled, found is hollow. Shape, never hue.
+        if (w.climbed) g.fillRect(x - 2.5, y - 2.5, 5, 5);
+        else g.strokeRect(x - 2.5, y - 2.5, 5, 5);
+        I.wilds++;
+      }
+      g.globalAlpha = 1;
+    }
+
+    /* 5. the majors, three states -------------------------------------------- */
+    const foundSet = places && places.found && typeof places.found.has === 'function' ? places.found
+      : (prog && prog.found && typeof prog.found.has === 'function' ? prog.found : null);
+    const claimedA = places && places.claimed && typeof places.claimed.has === 'function' ? places.claimed : null;
+    const claimedB = prog && prog.claimed && typeof prog.claimed.has === 'function' ? prog.claimed : null;
+    g.font = MAP_NAME_FONT;
+    g.textBaseline = 'middle';
+    for (let i = 0; i < MAJORS.length; i++) {
+      const d = MAJORS[i];
+      const x = px(d.x), y = pz(d.z);
+      const claimed = !!((claimedA && claimedA.has(d.id)) || (claimedB && claimedB.has(d.id)));
+      const found = claimed || !!(foundSet && foundSet.has(d.id));
+      if (claimed) {
+        // Lit, in the region's tint: the one hue on the map, and it is the colour the place
+        // put in the sky when he took it.
+        const tint = hex6(REGION_TINT[d.region] || DEFAULT_TINT);
+        g.globalAlpha = 0.28; g.fillStyle = tint;
+        g.beginPath(); g.arc(x, y, 7.5, 0, TAU); g.fill();
+        g.globalAlpha = 1; g.fillStyle = tint;
+        g.beginPath(); g.arc(x, y, 3.2, 0, TAU); g.fill();
+        I.claimed++;
+      } else if (found) {
+        g.globalAlpha = MAP_FOUND_A; g.strokeStyle = INK; g.lineWidth = 1.2;
+        g.beginPath(); g.arc(x, y, 3.0, 0, TAU); g.stroke();
+        I.found++;
+      } else {
+        g.globalAlpha = MAP_UNFOUND_A; g.fillStyle = INK;
+        g.beginPath(); g.arc(x, y, 1.8, 0, TAU); g.fill();
+        I.unfound++;
+      }
+      if (found) {
+        // The name, once found. To the right unless that runs off the paper.
+        g.globalAlpha = claimed ? 0.95 : MAP_FOUND_A;
+        g.fillStyle = claimed ? hex6(REGION_TINT[d.region] || DEFAULT_TINT) : INK;
+        const left = x > S - MAP_NAME_FLIP;
+        g.textAlign = left ? 'right' : 'left';
+        g.fillText(d.name, left ? x - MAP_NAME_DX : x + MAP_NAME_DX, y);
+        I.names++;
       }
     }
-    const cards = prog.draftCards;
-    const show = Array.isArray(cards) && cards.length > 0;
-    this.dealEl.hidden = !show;
-    let anyCan = false;
-    for (let i = 0; i < this.cardEls.length; i++) {
-      const c = this.cardEls[i];
-      const n = show && cards[i] ? cards[i] : null;
-      c.btn.hidden = !n;
-      if (!n) continue;
-      c.name.textContent = n.name;
-      c.line.textContent = n.line;
-      c.cost.textContent = n.cost === 1 ? 'one point' : n.cost + ' points';
-      const can = typeof prog.canBuy === 'function' && prog.canBuy(n.id);
-      if (can) anyCan = true;
-      c.btn.className = can ? '' : 'dim';
+    g.globalAlpha = 1;
+
+    /* 6. the car ------------------------------------------------------------- */
+    if (car && car.exists && Number.isFinite(car.x) && Number.isFinite(car.z)) {
+      const x = px(car.x), y = pz(car.z);
+      const h = Number.isFinite(car.heading) ? car.heading : 0;
+      g.save();
+      g.translate(x, y);
+      // The car's forward is (-sin h, -cos h) in world x/z (camera convention), which on
+      // the page is (-sin h, -cos h) too, since z goes down the page.
+      g.rotate(Math.atan2(-Math.cos(h), -Math.sin(h)));
+      g.globalAlpha = 0.75; g.strokeStyle = INK; g.lineWidth = 1.2;
+      g.strokeRect(-MAP_CAR_L * 0.5, -MAP_CAR_W * 0.5, MAP_CAR_L, MAP_CAR_W);
+      g.restore();
+      I.car = true; I.carX = +x.toFixed(1); I.carY = +y.toFixed(1);
     }
-    // Three dim cards under "take one" said nothing about WHY none could be taken
-    // (verification round 1: reachable at level 2 once every tier-0 has auto-granted and
-    // every pool card costs 2). Dim means not affordable yet, and now the line says so.
-    if (show) this.takeEl.textContent = anyCan ? 'take one' : 'nothing you can afford yet';
+
+    /* 7. him ------------------------------------------------------------------ */
+    if (player && player.pos) {
+      const x = px(player.pos.x), y = pz(player.pos.z);
+      const yaw = cam && typeof cam.yaw === 'number' ? cam.yaw : (typeof player.yaw === 'number' ? player.yaw : 0);
+      // Forward is (-sin yaw, -cos yaw) in world x/z; on the page that is the same vector.
+      const fx = -Math.sin(yaw), fy = -Math.cos(yaw);
+      const L = MAP_ARROW, W = MAP_ARROW * 0.42;
+      const tipX = x + fx * L * 0.62, tipY = y + fy * L * 0.62;
+      const bx = x - fx * L * 0.38, by = y - fy * L * 0.38;
+      const rx = -fy, ry = fx;
+      for (let pass = 0; pass < 2; pass++) {
+        g.globalAlpha = pass === 0 ? 0.7 : 1;
+        g.strokeStyle = pass === 0 ? SHADE : INK;
+        g.fillStyle = pass === 0 ? SHADE : INK;
+        g.lineWidth = pass === 0 ? 4 : 1;
+        g.lineJoin = 'round';
+        g.beginPath();
+        g.moveTo(tipX, tipY);
+        g.lineTo(bx + rx * W, by + ry * W);
+        g.lineTo(x - fx * L * 0.12, y - fy * L * 0.12);
+        g.lineTo(bx - rx * W, by - ry * W);
+        g.closePath();
+        if (pass === 0) g.stroke(); else g.fill();
+      }
+      I.arrowX = +x.toFixed(1); I.arrowY = +y.toFixed(1);
+    }
+
+    /* 8. the edge ------------------------------------------------------------- */
+    g.globalAlpha = 1;
+    g.strokeStyle = MAP_EDGE; g.lineWidth = 1;
+    g.strokeRect(0.5, 0.5, S - 1, S - 1);
+    I.drawn++;
   }
 
   /* -------------------------------------------------------------------- loop -- */
+
+  /**
+   * The body's own maximum. player.hpMax when the body exposes it (lane E), CFG's number
+   * otherwise, and never less than the hp actually held — the arc must never draw a
+   * fraction the body does not have. A Map lookup and two reads; no allocation.
+   */
+  _readHpMax() {
+    const player = this.ctx.systems.get('player');
+    let m = CFG.player.health.max;
+    if (player && typeof player.hpMax === 'number' && player.hpMax > 0) m = player.hpMax;
+    if (player && typeof player.hp === 'number' && player.hp > m) m = player.hp;
+    return m;
+  }
 
   step(dt) {
     this._t += dt;
@@ -932,7 +1217,8 @@ export class Hud {
     }
 
     // Health: the ear first, the eye 200 ms later.
-    const max = CFG.player.health.max;
+    const max = this._readHpMax();
+    if (max !== this.hpMax) { this.hpMax = max; this._lifeDirty = true; }
     const player = this.ctx.systems.get('player');
     if (player) {
       const hp = player.hp;
@@ -1091,7 +1377,7 @@ export class Hud {
 
   _paintVignette() {
     if (!this.vig) return;
-    const max = CFG.player.health.max;
+    const max = this.hpMax;
     const frac = clamp01(this.hpShown / max);
     // Nothing at full health. The vignette is not a permanent frame decoration; it is a
     // thing that CLOSES, and it can only read as closing if it starts absent.
@@ -1153,19 +1439,19 @@ export class Hud {
    * round (AGENTS.md rule 3, and seven of them in STATUS.md).
    */
   _lifeInk() {
-    const low = 1 - clamp01(this.hpShown / CFG.player.health.max);
+    const low = 1 - clamp01(this.hpShown / this.hpMax);
     return LIFE_A_FULL + (LIFE_A_DEAD - LIFE_A_FULL) * Math.pow(low, 1.35);
   }
 
   _lifeStroke() {
-    const low = 1 - clamp01(this.hpShown / CFG.player.health.max);
+    const low = 1 - clamp01(this.hpShown / this.hpMax);
     return LIFE_W_FULL + (LIFE_W_DEAD - LIFE_W_FULL) * Math.pow(low, 1.2);
   }
 
   _paintLife() {
     const g = this.lg;
     if (!g) return;
-    const max = CFG.player.health.max;
+    const max = this.hpMax;
     const frac = clamp01(this.hpShown / max);
     const rest = this.restoreT < RESTORE_LIFE ? 1 - this.restoreT / RESTORE_LIFE : 0;
     const breathing = frac > 0.001 && frac < LIFE_BREATH_FROM;
@@ -1310,9 +1596,9 @@ export class Hud {
     /* ---- hit markers -------------------------------------------------------- */
     for (let i = 0; i < MARK_POOL; i++) if (this.marks[i].live) this._drawMark(g, c, this.marks[i], u);
 
-    /* ---- a mote landed, a card taken, a level gained ------------------------- */
+    /* ---- a mote landed, a node bought, a level gained ------------------------ */
     // Three readings of one gesture, separated by SPEED and COUNT rather than by hue: the
-    // mote is one fast thin ring, a card is two rings that open slowly behind each other, a
+    // mote is one fast thin ring, a node is two rings that open slowly behind each other, a
     // level is three, slower and wider still. Nothing is written, nothing is named, and every
     // one of them survives the audio lane being dead.
     for (let i = 0; i < PULSE_POOL; i++) {
@@ -1487,7 +1773,7 @@ export class Hud {
   _speak() {
     if (!this.srEl || this.srT < SR_PERIOD_S) return;
     this.srT = 0;
-    const max = CFG.player.health.max;
+    const max = this.hpMax;
     const f = clamp01(this.hpShown / max);
     const health = f > 0.92 ? 'Unhurt' : f > 0.66 ? 'Grazed' : f > 0.4 ? 'Hurt' : f > 0.15 ? 'Badly hurt' : 'Nearly gone';
     const w = this.ctx.systems.get('weapons');
@@ -1530,20 +1816,32 @@ export class Hud {
       const q = this.pulses[i];
       if (!q.live) continue;
       pulses++;
-      if (q.kind !== 'mote') grants++;   // a bought card reached the screen, audio or not
+      if (q.kind !== 'mote') grants++;   // a bought node reached the screen, audio or not
+    }
+    // The tree's buttons by state, counted off the DOM so the test reads what is shown.
+    let own = 0, can = 0, poor = 0, lock = 0;
+    if (this.nodeEls) {
+      for (let i = 0; i < this.nodeEls.length; i++) {
+        const cl = this.nodeEls[i].btn.className;
+        if (cl.indexOf('own') >= 0) own++;
+        else if (cl.indexOf('can') >= 0) can++;
+        else if (cl.indexOf('poor') >= 0) poor++;
+        else lock++;
+      }
     }
     return {
       coneDeg: +this.cone.toFixed(3), conePx: +this.conePx.toFixed(2),
       adsT: +this.adsT.toFixed(3), dry: this.dry, inCar: this.inCar,
-      hp: this.hp, hpShown: +this.hpShown.toFixed(1),
+      hp: this.hp, hpMax: this.hpMax, hpShown: +this.hpShown.toFixed(1),
       vignette: +this.vigA.toFixed(3), tremor: +this.tremor.toFixed(3),
       marks, arcs, pulses, grants, paused: this.paused,
       card: !!(this.pauseEl && !this.pauseEl.hidden), lockHeld: this._lockHeld,
-      deal: !!(this.dealEl && !this.dealEl.hidden),
+      tree: { own, can, poor, lock, points: this.ptsEl ? this.ptsEl.textContent : '' },
+      map: Object.assign({}, this.mapInfo),
       // THE HEALTH READOUT, as numbers a gate can hold on to.
       // `lifeFrac` is the LENGTH of the arc; `lifeAlpha`/`lifeWidth` are the VALUE, and the
       // pair is the whole design: quiet at full, loud near death, never a hue.
-      lifeFrac: +clamp01(this.hpShown / CFG.player.health.max).toFixed(3),
+      lifeFrac: +clamp01(this.hpShown / this.hpMax).toFixed(3),
       lifeAlpha: +this._lifeInk().toFixed(3),
       lifeWidth: +this._lifeStroke().toFixed(2),
       ghosts, ghostSpan: +ghostSpan.toFixed(3),

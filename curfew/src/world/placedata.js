@@ -13,14 +13,16 @@
 //   thing as terrain.regionAt()'s four-kernel field. See the note under REGION_TINT.
 //
 // THE THREE LAWS THIS TABLE IS AUDITED AGAINST (DESIGN section 2, "Destination law"):
-//   1. no two majors within 600 m         — measured minimum below is 677 m (briar <-> bell)
+//   1. no two majors within 600 m         — measured minimum below is 721 m (manor <-> bell;
+//                                            it was 677 m briar <-> bell before ROUND 6)
 //   2. every major has a road within 40 m — measured maximum below is 29.7 m
 //   3. every major sits on a level pad    — every row either carries `flat` or names an
 //      existing disc in `flatId`; slope at every centre measured <= 0.03
 //
 // MEASURED at each centre (heightAt / slopeAt / roadDistance / regionAt, 2026-09-02):
 //   filling-station  h  16.4  slope 0.00  road  0.0   marsh
-//   briar-house      h  35.6  slope 0.00  road  0.0   pines
+//   blackthorn-manor h  35.6  slope 0.00  road 20.0   pines   (ROUND 6: on Briar House's pad,
+//                                                            20 m past the spur end; see the row)
 //   weeping-mine     h  89.4  slope 0.00  road  0.2   fields
 //   relay            h 121.3  slope 0.00  road 27.6   ridge
 //   cathedral        h  86.5  slope 0.00  road 28.9   fields
@@ -122,6 +124,15 @@ export const TERRAIN_REGIONS = Object.freeze(['pines', 'fields', 'marsh', 'ridge
  * twelve silhouettes in it is the answer to "always something in the distance" — but only
  * these five carry a moving, lit feature that reads from across the map.
  * ------------------------------------------------------------------ */
+/* ROUND 6 (2026-09-03, Alex's fifth playtest: "I'm assuming there are other guns, right? I
+ * haven't found any... Those would be great rewards for completing areas" and "I hope there
+ * are bosses somewhere"). Two optional fields on a row:
+ *   reward  a weapon def id ('revolver' | 'shotgun' | 'carbine') granted on the CLAIM of this
+ *           place — weapons/weapon.js reads it off MAJOR_BY_ID on place:claimed. One gun per
+ *           place, never two; a place with no reward field grants nothing.
+ *   boss    a guardian species id ('kneeler') that stands dormant at this place and wakes
+ *           when you come for the claim — enemies/kneeler.js reads it and places itself.
+ * Data only, like everything in this file. */
 export const MAJORS = Object.freeze([
   {
     id: 'filling-station', name: 'The Filling Station',
@@ -138,17 +149,33 @@ export const MAJORS = Object.freeze([
     xpFind: 20, xpClaim: 0, startClaimed: true,
   },
   {
-    id: 'briar-house', name: 'Briar House',
-    x: 410, z: -560, region: 'pines', terrainRegion: 'pines', kind: 'house',
+    // ROUND 6 (Alex, playtest 5): "if any of my haunted mansion from previous games made it
+    // in as destinations. I would like it if they did." Blackthorn Manor, DESIGN 7.5, built
+    // by src/world/manor.js from the donor's own room tables. It REPLACES Briar House's
+    // shell on Briar House's pad: MEASURED 2026-09-03 (tools/manor-probe.mjs), no other
+    // legal site exists — the ten odd loop control points all carry a major, the even
+    // points are ~434 m from their neighbours, and the two spurs' middle points are
+    // 254-500 m from a major. This centre is 20 m along the north spur PAST its end
+    // (road 20.0 m, slope 0.000, regionAt pines), inside the M0 'briar-house' disc's
+    // 21 m level core, so the manor's own 52 m disc registers at the same 35.64 m the road
+    // was baked to and the two discs cannot fight. The road end is at local (0, +19.9)
+    // (places.js sends local +Z to the road point); the house stands 4 m behind the origin
+    // (manor.js HZ) with its front on +Z, so the foot of its front steps lands on the road
+    // end.
+    id: 'blackthorn-manor', name: 'Blackthorn Manor',
+    x: 401.4, z: -542.0, region: 'pines', terrainRegion: 'pines', kind: 'manor',
     lit: false, hub: false,
-    flat: null, flatId: 'briar-house',
-    discoverR: 24, nearR: 70, horizon: false,
-    // the cellar breaker, on the gable end away from the road
-    claim: { how: 'touch', dx: -8.6, dy: 0, dz: 4.2, r: 2.6 },
-    xpFind: 25, xpClaim: 120, startClaimed: false,
+    flat: { radius: 52, blend: 0.62 },
+    discoverR: 30, nearR: 140, horizon: false,
+    // the fuse board in the cellar. dy is 0 because the cellar stands AT GRADE inside the
+    // plinth (manor-data.js, departure 2); dx/dz are manor.js claimLocal() (donor (41, 12)
+    // translated by (-30, -24)) and tests/manor.mjs asserts the row and the builder agree.
+    claim: { how: 'touch', dx: 11.0, dy: 0, dz: -12.0, r: 2.6 },
+    xpFind: 40, xpClaim: 260, startClaimed: false,
   },
   {
     id: 'weeping-mine', name: 'The Weeping Mine',
+    reward: 'carbine', boss: 'kneeler',   // ROUND 6: the carbine is the Kneeler's prize
     x: 917, z: 1150, region: 'works', terrainRegion: 'fields', kind: 'works',
     lit: false, hub: false,
     // roads.js authored this one as 'ashfall-works' (M0_SITES[0], r 46, blend 0.74) and
@@ -170,6 +197,7 @@ export const MAJORS = Object.freeze([
   },
   {
     id: 'cathedral', name: 'The Cathedral of Unlight',
+    boss: 'kneeler',                       // ROUND 6: one Kneeler at the west door
     x: 93.1, z: 1242.6, region: 'ridge', terrainRegion: 'fields', kind: 'cathedral',
     lit: false, hub: false,
     flat: { radius: 50, blend: 0.62 },
@@ -200,11 +228,16 @@ export const MAJORS = Object.freeze([
   },
   {
     id: 'drowned-light', name: 'The Drowned Light',
+    reward: 'revolver',                    // ROUND 6: at the top of the stair, in the lamp room
     x: -1380.3, z: -208.1, region: 'shore', terrainRegion: 'pines', kind: 'lighthouse',
     lit: false, hub: false,
     flat: { radius: 32, blend: 0.62 },
     discoverR: 24, nearR: 90, horizon: true,
-    claim: { how: 'touch', dx: 0, dy: 0, dz: 4.3, r: 2.6 },       // the door at the tower foot
+    // ROUND 6 (Alex: "I can't even go into the lighthouse... Or not load by walk up
+    // stairs"): the claim is the LAMP, in the lamp room at the top of the stair —
+    // 81 treads up the inside of the tower to the gallery floor at 36.7 m (sites.js
+    // lighthouse.landmark). dy is the lamp-room floor; lane D1's height test honours it.
+    claim: { how: 'touch', dx: 0, dy: 36.7, dz: 0, r: 2.2 },
     xpFind: 30, xpClaim: 170, startClaimed: false,
   },
   {
@@ -218,6 +251,7 @@ export const MAJORS = Object.freeze([
   },
   {
     id: 'garden-of-rest', name: 'The Garden of Rest',
+    boss: 'kneeler',                       // ROUND 6: one Kneeler among the graves
     x: -366.6, z: -1606.0, region: 'ridge', terrainRegion: 'ridge', kind: 'cemetery',
     lit: false, hub: false,
     flat: { radius: 40, blend: 0.62 },
@@ -238,6 +272,7 @@ export const MAJORS = Object.freeze([
   },
   {
     id: 'jackfield', name: 'Jackfield Barn',
+    reward: 'shotgun',                     // ROUND 6: in the loft, where DESIGN 7.9 always put it
     x: 1158.9, z: -790.1, region: 'fields', terrainRegion: 'fields', kind: 'barn',
     lit: false, hub: false,
     flat: { radius: 42, blend: 0.62 },
