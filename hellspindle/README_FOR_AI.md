@@ -8,12 +8,25 @@ Alex makes this. He is not a programmer. Talk in folders and copies, not git. Mo
 
 Side-scrolling action. You throw and steer a chained circular saw (the Hellspindle). Hold mouse / right thumb to command it. You can latch the blade on hanging rings and swing. Goreweave curtains are physical bands you cut a hole through.
 
-Twelve districts in one long cathedral, about 38400 px wide, ending at the Red Abbot. Kill enemies for XP. Level raises life and wheel damage. Death keeps the level. Pause shows XP and rooms walked. Click continues a save (`localStorage` key `gorethread-cathedral-v1`). N on the title is a new descent.
+Twelve districts in one long cathedral, about 38400 px wide, ending at the Red
+Abbot. Each district is four heights: the vault (rings only), the gallery, the
+road, and the undercroft under a grate in the floor. Reliquary caches hang on
+the detours.
+
+Kill enemies for XP. Each level hands you a relic; you spend it yourself in the
+Reliquary, six lines, two of which (THE CHAIN, THE TENDON) change the actual
+geometry of what you can reach. Death keeps the level and the relics. Pause
+shows XP and rooms walked. Click continues a save (`localStorage` key
+`gorethread-cathedral-v1`). N on the title is a new descent.
 
 ## Controls
 
-Desktop: A/D move and pump a swing, Space jump/release, hold mouse for the wheel, P/Esc pause, M mute, R checkpoint, F fullscreen.
-Phone: landscape. Left thumb moves (swipe up to jump). Right thumb is the wheel.
+Desktop: A/D move and pump a swing, Space jump/release, S drops through a
+ledge or a grate, hold mouse for the wheel, Tab or E opens the Reliquary,
+P/Esc pause, M mute, R checkpoint, F fullscreen.
+Phone: landscape. Left thumb moves (swipe up to jump, swipe down to drop).
+Right thumb is the wheel. A badge appears in the HUD when a relic is waiting —
+tap it.
 
 ## Files
 
@@ -26,4 +39,5 @@ Phone: landscape. Left thumb moves (swipe up to jump). Right thumb is the wheel.
 
 Do not merge this with another game. Do not invent a HUD. Controls belong on title and pause.
 
-Debug hook: `window.__HELLSPINDLE__` (snapshot, teleport, start, restart).
+Debug hook: `window.__HELLSPINDLE__` (snapshot, world, teleport, latchHook,
+grantXP, openRelics, relicState, start, restart).
