@@ -413,8 +413,11 @@
           this.mouse.x = p.x;
           this.mouse.y = p.y;
           if (e.button === 0) this.mouse.down = true;
-        } else if (p.x < W * 0.48 && !this.leftTouch) {
-          this.leftTouch = { id: e.pointerId, sx: p.x, sy: p.y, x: p.x, y: p.y };
+        } else if (p.x < W * 0.48) {
+          // The left half is the movement thumb and nothing else. A second
+          // finger over here used to fall through to the AIM stick, which then
+          // steered the wheel from the wrong side of the screen.
+          if (!this.leftTouch) this.leftTouch = { id: e.pointerId, sx: p.x, sy: p.y, x: p.x, y: p.y };
         } else if (!this.rightTouch) {
           this.rightTouch = { id: e.pointerId, sx: p.x, sy: p.y, x: p.x, y: p.y };
         } else if (!this.leftTouch) {
@@ -447,9 +450,10 @@
 
       const release = e => {
         e.preventDefault();
-        if (e.pointerType === 'mouse') {
-          if (e.button === 0) this.mouse.down = false;
-        }
+        // pointercancel reports button -1, not 0. Testing for 0 meant a
+        // cancelled mouse pointer never cleared the flag and the wheel stayed
+        // held down for the rest of the session.
+        if (e.pointerType === 'mouse' && e.button <= 0) this.mouse.down = false;
         if (this.leftTouch && this.leftTouch.id === e.pointerId) {
           this.leftTouch = null;
           this.leftJumpLatch = false;
@@ -574,6 +578,14 @@
         const dx = this.pad.axes[2] || 0;
         const dy = this.pad.axes[3] || 0;
         const len = hypot(dx, dy);
+        // A right bumper or trigger counts as holding the wheel. Without it the
+        // stick recentring for an instant let go of the ring you were hanging
+        // from, so keeping a hook meant never letting the stick rest.
+        const gripped = !!(this.pad.buttons[5] && this.pad.buttons[5].pressed) ||
+                        !!(this.pad.buttons[7] && this.pad.buttons[7].pressed);
+        if (len <= 0.18 && gripped) {
+          return { active: true, dx: player.facing, dy: 0, mag: 0.4, angle: player.facing > 0 ? 0 : Math.PI };
+        }
         if (len > 0.18) {
           return {
             active: true,
@@ -1488,7 +1500,7 @@
     relicsOpen: false,
     relicCursor: 0,
     relicNudge: 0,
-    camera: { x: 0, y: 0, targetX: 0, targetY: 0 },
+    camera: { x: 0, y: 0, targetX: 0, targetY: 0, look: 0 },
     fps: 60,
     accumulator: 0,
     lastFrame: performance.now()
@@ -1677,6 +1689,12 @@
     player.streakTimer = 0;
     player.jumpBuffer = 0;
     player.hurtFlash = 0;
+    // A jump pressed during the death fall used to sit in the queue with
+    // nothing consuming it, and came straight back out on the respawn's first
+    // frame. Same for a pause tapped while dead.
+    input.jumpQueued = false;
+    input.pauseQueued = false;
+    input.pressed.clear();
     yoyo.x = player.x + 35;
     yoyo.y = player.y - 48;
     yoyo.prevX = yoyo.x;
@@ -1696,6 +1714,7 @@
     game.paused = false;
     game.deathTimer = 0;
     game.bossDeadTimer = 0;
+    game.camera.look = 0;
     game.camera.x = clamp(player.x - 420, 0, WORLD_W - W);
     game.camera.targetX = game.camera.x;
     game.camera.y = clamp(player.y - H * 0.70, 0, 210);
@@ -3092,7 +3111,12 @@
   // ---------------------------------------------------------------------------
 
   function updateCamera(dt) {
-    let desired = player.x - W * 0.38 + player.vx * 0.32;
+    // Lookahead used to be raw velocity, so the target jumped 115px the instant
+    // she stopped and 230px on a turn, and the camera visibly recoiled chasing
+    // it. Easing the lookahead slower than the camera follows means the target
+    // never presents a step to chase.
+    game.camera.look = lerp(game.camera.look, player.vx * 0.32, 1 - Math.exp(-dt * 3.0));
+    let desired = player.x - W * 0.38 + game.camera.look;
     if (game.bossActive && bossAlive()) {
       const throne = AREAS[AREAS.length - 1];
       desired = clamp(desired, throne.x0 + 40, WORLD_W - W);
@@ -4325,6 +4349,21 @@
     g.restore();
   }
 
+  // Every glowing particle was minting its own radial gradient, every frame,
+  // up to the particle cap. The glow is the same shape every time — only its
+  // colour and radius change — so cache a unit-radius gradient per colour and
+  // let the transform do the sizing.
+  const glowCache = new Map();
+  function particleGlow(g, color) {
+    let grad = glowCache.get(color);
+    if (grad) return grad;
+    grad = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, 'rgba(255,0,0,0)');
+    if (glowCache.size < 64) glowCache.set(color, grad);
+    return grad;
+  }
+
   function drawParticle(g, p) {
     const a = clamp(p.life / p.maxLife, 0, 1);
     g.save();
@@ -4333,11 +4372,11 @@
     g.rotate(p.rot);
     if (p.glow) {
       g.globalCompositeOperation = 'screen';
-      const rg = g.createRadialGradient(0, 0, 0, 0, 0, p.glow);
-      rg.addColorStop(0, p.color);
-      rg.addColorStop(1, 'rgba(255,0,0,0)');
-      g.fillStyle = rg;
-      g.fillRect(-p.glow, -p.glow, p.glow * 2, p.glow * 2);
+      g.save();
+      g.scale(p.glow, p.glow);
+      g.fillStyle = particleGlow(g, p.color);
+      g.fillRect(-1, -1, 2, 2);
+      g.restore();
       g.globalCompositeOperation = 'source-over';
     }
     g.fillStyle = p.color;
@@ -4866,6 +4905,7 @@
       yoyo.y = player.y - PLAYER_H * 0.56 + 5;
       yoyo.vx = 0;
       yoyo.vy = 0;
+      game.camera.look = 0;
       game.camera.x = clamp(player.x - W * 0.38, 0, WORLD_W - W);
       game.camera.y = clamp(player.y - H * 0.70, 0, 210);
       game.camera.targetY = game.camera.y;

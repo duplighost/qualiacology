@@ -268,3 +268,39 @@ than in the walk sheet, so it is scaled to match before compositing — measured
 character height is now 497-504px in idle against 497-502 in walk, which is why
 she does not pop size when she stops moving. The procedural breath is a whisper
 on top now that the poses carry the weight shift themselves.
+
+### Input, camera, and one gradient per particle
+
+A long adversarial diagnostic pass over the original build confirmed the rope
+and collision reads above, and turned up four more that survived into the
+current one.
+
+**A cancelled mouse pointer left the wheel held down forever.** The release
+handler tested `e.button === 0`, but `pointercancel` reports `-1`, so the flag
+never cleared. Reproduced: hold the wheel, fire a pointercancel, and the wheel
+is still active. It clears now.
+
+**A second finger in the left half became the aim stick.** Touch assignment fell
+through from "left zone and the movement thumb is taken" straight to "make it
+the aim stick", so a stray thumb over there steered the wheel from the wrong
+side of the screen. The left half is the movement thumb and nothing else now.
+
+**A controller had to hold the stick deflected to keep a hook.** The right stick
+recentring for an instant read as letting go. A right bumper or trigger counts
+as gripping the wheel now, which is how a controller should hold anything.
+
+**Every glowing particle minted its own radial gradient, every frame.** The glow
+is the same shape each time — only colour and radius change — so it is a cached
+unit gradient per colour, sized by the transform. Radial gradients per frame in
+combat: 7.2 before, 3.0 after, and the cost is now bounded by the number of
+colours rather than by the number of particles on screen.
+
+**The camera recoiled every time she stopped.** Lookahead was raw velocity, so
+the target stepped 115px the instant she stopped and 230px on a turn, and the
+camera visibly lurched chasing it. The lookahead eases slower than the camera
+follows now, so the target never presents a step: worst single-frame camera
+movement on a stop drops from 20.5px to 13.5px.
+
+Also cleared: a jump pressed during the death fall used to sit in the queue with
+nothing consuming it, since updateGame returns early while dead. It is flushed
+on respawn along with a pause tapped at the same time.
