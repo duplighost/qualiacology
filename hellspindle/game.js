@@ -7,19 +7,20 @@
   // ---------------------------------------------------------------------------
 
   const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d', { alpha: false });
-  const scene = document.createElement('canvas');
-  scene.width = canvas.width;
-  scene.height = canvas.height;
-  const sctx = scene.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
 
   const hashSeeded = n => {
     const x = Math.sin(n * 127.1 + 311.7) * 43758.5453123;
     return x - Math.floor(x);
   };
 
-  const W = canvas.width;
-  const H = canvas.height;
+  // The whole game is authored in a fixed 1600x900 design space. The canvas
+  // backing store is sized to what the display can actually resolve and render()
+  // applies the one scale, so a phone never paints more pixels than it owns and
+  // nothing else in the file has to know the difference.
+  const W = 1600;
+  const H = 900;
+  let renderScale = 1;
   const BG_PATHS = [
     'assets/bg_nave.webp',
     'assets/bg_foundry.webp',
@@ -59,6 +60,36 @@
     sprites[key] = image;
   }
   const tilePatterns = { nave: null, foundry: null, spire: null };
+
+  // The painted source frames are three to six times bigger than they are ever
+  // drawn — a 405x671 walk frame lands on screen about 90px tall. Rescaling that
+  // every frame, for every actor, is work the browser has to redo forever. Bake
+  // each size once into a small canvas and blit that instead.
+  const scaledCache = new Map();
+  let scaledCachePixels = 0;
+  const SCALED_CACHE_PIXELS = 7 * 1024 * 1024;
+
+  function scaledSprite(img, w, h) {
+    if (!img || !img.complete || !img.naturalWidth) return img;
+    // Quantise so a pulsing draw height does not mint a new canvas every frame.
+    const dh = Math.max(2, Math.round(h / 3) * 3);
+    if (img.naturalHeight <= dh * 1.3) return img;
+    const dw = Math.max(2, Math.round(dh * img.naturalWidth / img.naturalHeight));
+    const key = img.src + '|' + dw + 'x' + dh;
+    const hit = scaledCache.get(key);
+    if (hit) return hit;
+    if (scaledCachePixels + dw * dh > SCALED_CACHE_PIXELS) return img;
+    const c = document.createElement('canvas');
+    c.width = dw;
+    c.height = dh;
+    const cx = c.getContext('2d');
+    cx.imageSmoothingEnabled = true;
+    if (cx.imageSmoothingQuality) cx.imageSmoothingQuality = 'high';
+    cx.drawImage(img, 0, 0, dw, dh);
+    scaledCache.set(key, c);
+    scaledCachePixels += dw * dh;
+    return c;
+  }
 
   function loadAnim(folder, count) {
     const frames = [];
@@ -102,7 +133,7 @@
     g.scale(facing, opts.scaleY || 1);
     if (opts.alpha != null) g.globalAlpha *= opts.alpha;
     if (opts.flash) { g.shadowColor = '#ffe6d4'; g.shadowBlur = 20; }
-    g.drawImage(img, -w * ax, -drawH + (opts.sit || 2), w, drawH);
+    g.drawImage(scaledSprite(img, w, drawH), -w * ax, -drawH + (opts.sit || 2), w, drawH);
     g.restore();
     return true;
   }
@@ -115,7 +146,7 @@
     g.scale(facing, opts.scaleY || 1);
     if (opts.alpha != null) g.globalAlpha *= opts.alpha;
     if (opts.flash) { g.shadowColor = '#ffe6d4'; g.shadowBlur = 18; }
-    g.drawImage(img, -w * (opts.ax || 0.5), -drawH * (opts.ay || 0.5), w, drawH);
+    g.drawImage(scaledSprite(img, w, drawH), -w * (opts.ax || 0.5), -drawH * (opts.ay || 0.5), w, drawH);
     g.restore();
     return true;
   }
@@ -138,9 +169,41 @@
   const PLAYER_W = 46;
   const PLAYER_H = 82;
   const MAX_CHAIN = 330;
+  // Rope feel. The pump is deliberately arcade-strong: one held key should start
+  // a useful arc from a dead hang without the player having to find the
+  // pendulum's resonant frequency by ear.
+  const SWING_PUMP = 3900;
+  const MAX_SWING = 1120;
+  // How fast the rope is allowed to take up slack, in pixels per second. High
+  // enough that reel-in reads as a yank, low enough that it is a pull and not a
+  // teleport.
+  const ROPE_TAKEUP = 1500;
+  // A pointer that vanishes for a frame — a stray pointercancel on a phone, a
+  // dropped button — should not cost you the ring you are hanging from.
+  const HOLD_GRACE = 0.18;
   const FIXED_DT = 1 / 120;
   const COARSE_POINTER = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   const PARTICLE_CAP = COARSE_POINTER ? 320 : 760;
+
+  // Size the backing store to the display instead of always painting 1600x900.
+  // A phone canvas is usually shown at well under 1600 CSS pixels, so the old
+  // fixed buffer was rendering pixels that got thrown away on the way to the
+  // screen. Capped so a big desktop never supersamples either.
+  function sizeBackingStore() {
+    const rect = canvas.getBoundingClientRect();
+    const cssW = rect.width || canvas.clientWidth || W;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const ceiling = COARSE_POINTER ? 1280 : 1600;
+    const wanted = Math.max(640, Math.min(ceiling, Math.round(cssW * dpr)));
+    const scale = wanted / W;
+    const pxW = Math.round(W * scale);
+    const pxH = Math.round(H * scale);
+    if (canvas.width === pxW && canvas.height === pxH) return;
+    canvas.width = pxW;
+    canvas.height = pxH;
+    renderScale = scale;
+  }
+
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -236,7 +299,7 @@
       g.shadowColor = '#ffe6d4';
       g.shadowBlur = 20;
     }
-    g.drawImage(img, -w * ax, -h + (opts.sit || 2), w, h);
+    g.drawImage(scaledSprite(img, w, h), -w * ax, -h + (opts.sit || 2), w, h);
     g.restore();
     return true;
   }
@@ -253,9 +316,31 @@
       g.shadowColor = '#ffe6d4';
       g.shadowBlur = 18;
     }
-    g.drawImage(img, -w * (opts.ax || 0.5), -h * (opts.ay || 0.5), w, h);
+    g.drawImage(scaledSprite(img, w, h), -w * (opts.ax || 0.5), -h * (opts.ay || 0.5), w, h);
     g.restore();
     return true;
+  }
+
+  // Canvas gradients are objects the browser has to build and hand to the
+  // rasteriser. The masonry alone was minting two or three of them per platform
+  // per frame for shapes that never change. Build each one once, in local
+  // vertical space, and translate to use it.
+  const gradientCache = new Map();
+  function cachedVGradient(g, key, height, stops) {
+    let grad = gradientCache.get(key);
+    if (grad) return grad;
+    grad = g.createLinearGradient(0, 0, 0, height);
+    for (let i = 0; i < stops.length; i++) grad.addColorStop(stops[i][0], stops[i][1]);
+    gradientCache.set(key, grad);
+    return grad;
+  }
+  function cachedRGradient(g, key, r0, r1, stops) {
+    let grad = gradientCache.get(key);
+    if (grad) return grad;
+    grad = g.createRadialGradient(0, 0, r0, 0, 0, r1);
+    for (let i = 0; i < stops.length; i++) grad.addColorStop(stops[i][0], stops[i][1]);
+    gradientCache.set(key, grad);
+    return grad;
   }
 
   function ensurePatterns(g) {
@@ -645,6 +730,11 @@
   // ---------------------------------------------------------------------------
 
   const platforms = [];
+  // Static masonry is bucketed by x once at boot; supportYAt and the collision
+  // queries below read the buckets instead of walking the whole cathedral.
+  const SOLID_BUCKET = 1024;
+  const solidBuckets = [];
+  let solidBucketsBuilt = false;
   const hooks = [];
   const hazards = [];
   const seals = [];
@@ -689,9 +779,16 @@
     invalidateMembraneSolids();
   }
 
+  // Band geometry is fixed for the life of the membrane, so build each rect once
+  // and hand the same object back. handleYoyoCombat asks for all 216 of them
+  // every simulation step; allocating them fresh was pure garbage.
   function membraneBandRect(membrane, index) {
+    let cache = membrane.bandRects;
+    if (!cache) cache = membrane.bandRects = [];
+    let rect = cache[index];
+    if (rect) return rect;
     const inset = 3 + Math.sin(index * 1.71) * 1.8;
-    return {
+    rect = cache[index] = {
       x: membrane.x + inset,
       y: membrane.y + index * membrane.bandH - 1,
       w: membrane.w - inset * 2,
@@ -700,6 +797,7 @@
       membrane,
       bandIndex: index
     };
+    return rect;
   }
 
   let membraneSolidCache = [];
@@ -757,7 +855,18 @@
 
   function supportYAt(px) {
     let best = null;
-    for (const p of platforms) {
+    if (!solidBucketsBuilt) {
+      for (const p of platforms) {
+        if (p.oneWay) continue;
+        if (px < p.x + 6 || px > p.x + p.w - 6) continue;
+        if (best == null || p.y < best) best = p.y;
+      }
+      return best;
+    }
+    const i = Math.max(0, Math.min(solidBuckets.length - 1, Math.floor(px / SOLID_BUCKET)));
+    const bucket = solidBuckets[i];
+    for (let j = 0; j < bucket.length; j++) {
+      const p = bucket[j];
       if (p.oneWay) continue;
       if (px < p.x + 6 || px > p.x + p.w - 6) continue;
       if (best == null || p.y < best) best = p.y;
@@ -949,6 +1058,7 @@
     ropeLength: 220,
     ropeTarget: 220,
     latchCooldown: 0,
+    holdGrace: 0,
     blockedHook: null,
     trail: [],
     hitPulse: 0,
@@ -1440,15 +1550,58 @@
   // Physics helpers.
   // ---------------------------------------------------------------------------
 
-  function getDynamicSolids(aroundX, margin = 2800) {
-    const x0 = aroundX == null ? -1e9 : aroundX - margin;
-    const x1 = aroundX == null ? 1e9 : aroundX + margin;
-    const list = [];
+  // Static masonry never moves, so bucket it by x once and look up the few
+  // buckets a query actually spans. The old version walked every platform and
+  // every live goreweave band on every call — and the rope solver alone calls
+  // this hundreds of times a second — which is several million rectangle tests
+  // per second for a world that is the same shape it was at boot.
+  function buildSolidBuckets() {
+    solidBuckets.length = 0;
+    const count = Math.ceil(WORLD_W / SOLID_BUCKET) + 2;
+    for (let i = 0; i < count; i++) solidBuckets.push([]);
     for (const p of platforms) {
-      if (p.x + p.w < x0 || p.x > x1) continue;
-      list.push(p);
+      const a = Math.max(0, Math.floor(p.x / SOLID_BUCKET));
+      const b = Math.min(count - 1, Math.floor((p.x + p.w) / SOLID_BUCKET));
+      for (let i = a; i <= b; i++) solidBuckets[i].push(p);
     }
-    for (const m of getMembraneSolids()) {
+    solidBucketsBuilt = true;
+  }
+
+  // One shared scratch for throwaway queries, plus dedicated buffers for the
+  // callers that keep the result alive across a whole collision pass.
+  const solidScratch = [];
+  const playerSolids = [];
+  const enemySolids = [];
+  const yoyoSolids = [];
+
+  function getDynamicSolids(aroundX, margin = 2800, out) {
+    if (!solidBucketsBuilt) buildSolidBuckets();
+    const list = out || solidScratch;
+    list.length = 0;
+    if (aroundX == null) {
+      for (const p of platforms) list.push(p);
+      for (const m of getMembraneSolids()) list.push(m);
+      if (game.bossActive && bossAlive()) list.push(bossGateRect());
+      return list;
+    }
+    const x0 = aroundX - margin;
+    const x1 = aroundX + margin;
+    const last = solidBuckets.length - 1;
+    const a = Math.max(0, Math.min(last, Math.floor(x0 / SOLID_BUCKET)));
+    const b = Math.max(0, Math.min(last, Math.floor(x1 / SOLID_BUCKET)));
+    for (let i = a; i <= b; i++) {
+      const bucket = solidBuckets[i];
+      for (let j = 0; j < bucket.length; j++) {
+        const p = bucket[j];
+        if (p.x + p.w < x0 || p.x > x1) continue;
+        // A platform straddling two buckets would otherwise be listed twice.
+        if (i > a && p.x < i * SOLID_BUCKET) continue;
+        list.push(p);
+      }
+    }
+    const bands = getMembraneSolids();
+    for (let i = 0; i < bands.length; i++) {
+      const m = bands[i];
       if (m.x + m.w < x0 || m.x > x1) continue;
       list.push(m);
     }
@@ -1458,6 +1611,7 @@
     }
     return list;
   }
+
 
   function playerRectAt(px, py) {
     return { x: px - PLAYER_W / 2, y: py - PLAYER_H, w: PLAYER_W, h: PLAYER_H };
@@ -1481,22 +1635,6 @@
       if (r.x + r.w > p.x + 4 && r.x < p.x + p.w - 4) return true;
     }
     return false;
-  }
-
-  // Pendulum poses that only nick a floor top are legal: snap onto the ledge
-  // instead of treating the whole masonry block as a filled volume.
-  function pendulumCanStand(px, py) {
-    const rect = playerRectAt(px, py);
-    for (const solid of getDynamicSolids(px)) {
-      if (solid.oneWay) continue;
-      if (!rectsOverlap(rect, solid)) continue;
-      if (solid.membrane || solid.bandIndex != null || solid.bossGate) return false;
-      const onTop = py >= solid.y - 2 && py <= solid.y + 32 &&
-        rect.x + 8 < solid.x + solid.w && rect.x + rect.w - 8 > solid.x;
-      if (onTop) continue;
-      return false;
-    }
-    return true;
   }
 
   function pushCircleOutOfRect(cx, cy, r, rect) {
@@ -1524,7 +1662,7 @@
   }
 
   function resolveYoyoWorld() {
-    const solids = getDynamicSolids(yoyo.x, 900);
+    const solids = getDynamicSolids(yoyo.x, 900, yoyoSolids);
     for (let pass = 0; pass < 3; pass++) {
       let hit = false;
       for (const p of solids) {
@@ -1555,34 +1693,53 @@
   }
 
   function movePlayerAndCollide(dt) {
-    const solids = getDynamicSolids(player.x);
+    const solids = getDynamicSolids(player.x, 2800, playerSolids);
     const rect = () => playerRect();
+    // Hanging ledges are scenery while you are on the rope. Catching an arc on
+    // the lip of a one-way slab was most of what "getting stuck" felt like; now
+    // you pass through them and choose to land by letting go.
+    const swinging = !!yoyo.latched;
     player.wallDir = 0;
 
     player.x += player.vx * dt;
     let r = rect();
+    let blocked = 0;
     for (const p of solids) {
       if (p.oneWay) continue;
       if (!rectsOverlap(r, p)) continue;
-      if (player.vx > 0) {
-        player.x = p.x - PLAYER_W / 2;
-        player.wallDir = 1;
-      } else if (player.vx < 0) {
+      // Resolve out of THIS block, then keep going. The old loop zeroed vx on
+      // the first hit, so a body overlapping two abutting slabs never got out
+      // of the second one and wedged in the seam between them.
+      const outLeft = player.x - (p.x - PLAYER_W / 2);
+      const outRight = (p.x + p.w + PLAYER_W / 2) - player.x;
+      let pushRight;
+      if (player.vx > 0) pushRight = false;
+      else if (player.vx < 0) pushRight = true;
+      else pushRight = outRight < outLeft;
+      if (pushRight) {
         player.x = p.x + p.w + PLAYER_W / 2;
-        player.wallDir = -1;
+        blocked = -1;
+      } else {
+        player.x = p.x - PLAYER_W / 2;
+        blocked = 1;
       }
-      player.vx = 0;
       r = rect();
+    }
+    if (blocked !== 0) {
+      player.wallDir = blocked;
+      // Grazing a corner mid-swing should cost a little speed, not the arc.
+      player.vx = swinging ? -player.vx * 0.2 : 0;
     }
 
     const prevBottom = player.y;
+    const prevTop = prevBottom - PLAYER_H;
     player.y += player.vy * dt;
     player.grounded = false;
     r = rect();
 
     for (const p of solids) {
       if (p.oneWay) {
-        if (player.dropThrough > 0 || input.downHeld()) continue;
+        if (swinging || player.dropThrough > 0 || input.downHeld()) continue;
         const horizontal = r.x + r.w > p.x + 4 && r.x < p.x + p.w - 4;
         if (player.vy >= 0 && prevBottom <= p.y + 6 && player.y >= p.y && horizontal) {
           player.y = p.y;
@@ -1593,13 +1750,23 @@
         continue;
       }
       if (!rectsOverlap(r, p)) continue;
-      if (player.vy > 0) {
+      // Only call it a landing (or a head bonk) when the body actually came
+      // from outside that face this step. Without the check, brushing the SIDE
+      // of a block while descending snapped the player up onto its roof.
+      if (player.vy >= 0 && prevBottom <= p.y + 10) {
         player.y = p.y;
         player.vy = 0;
         player.grounded = true;
-      } else if (player.vy < 0) {
+      } else if (player.vy <= 0 && prevTop >= p.y + p.h - 10) {
         player.y = p.y + p.h + PLAYER_H;
         player.vy = 0;
+      } else {
+        // A genuine side overlap. Push out horizontally instead of wedging.
+        const outLeft = player.x - (p.x - PLAYER_W / 2);
+        const outRight = (p.x + p.w + PLAYER_W / 2) - player.x;
+        if (outRight < outLeft) player.x = p.x + p.w + PLAYER_W / 2;
+        else player.x = p.x - PLAYER_W / 2;
+        if (!swinging) player.vx = 0;
       }
       r = rect();
     }
@@ -1608,7 +1775,7 @@
   }
 
   function moveGroundEnemy(e, dt) {
-    const solids = getDynamicSolids(e.x);
+    const solids = getDynamicSolids(e.x, 2800, enemySolids);
     e.hitWall = false;
     e.x += e.vx * dt;
     let r = enemyRect(e);
@@ -1654,106 +1821,94 @@
     if (e.y > 1120) e.alive = false;
   }
 
+  // The rope.
+  //
+  // The old solver worked by searching for a legal pendulum pose and TELEPORTING
+  // the player onto it, walking outward through neighbouring arcs and shorter
+  // radii when the ideal pose clipped masonry — and letting go of the hook
+  // entirely when nothing in that tiny search window fit. That is why grazing a
+  // slab dropped you, and why a swing that brushed geometry went dead instead of
+  // sliding: every rejected candidate silently deformed the arc.
+  //
+  // This is a constraint instead. The player is an ordinary body moved by
+  // movePlayerAndCollide like everywhere else in the game; the rope only removes
+  // outward radial velocity and takes up slack, and it is a rope, not a rod —
+  // slack does nothing at all, so being closer to the ring than the rope is
+  // long is simply allowed. Nothing here can release the hook. Only the player
+  // lets go.
   function applyGrappleConstraint(dt) {
     if (!yoyo.latched) return;
     const h = yoyo.latched;
-    const pc = playerCenter();
-    let dx = pc.x - h.x;
-    let dy = pc.y - h.y;
-    let dist = hypot(dx, dy) || 1;
-    const nx = dx / dist;
-    const ny = dy / dist;
-    const tx = -ny;
-    const ty = nx;
 
-    yoyo.ropeLength = lerp(yoyo.ropeLength, yoyo.ropeTarget, 1 - Math.exp(-dt * 18));
-    const rope = clamp(yoyo.ropeLength, 105, MAX_CHAIN);
-    const baseAngle = Math.atan2(ny, nx);
-    let placed = false;
-    let chosenX = player.x;
-    let chosenY = player.y;
+    yoyo.ropeLength = clamp(lerp(yoyo.ropeLength, yoyo.ropeTarget, 1 - Math.exp(-dt * 12)), 105, MAX_CHAIN);
 
-    // Search neighboring arcs and shorter radii if the ideal pendulum pose
-    // clips geometry. Floor tops are legal (snap onto them) so a swing that
-    // nicks a slab lands instead of dropping the hook and the player.
-    for (let ring = 0; ring < 12 && !placed; ring++) {
-      const radius = rope - ring * 10;
-      if (radius < 90) break;
-      for (let step = 0; step <= 10; step++) {
-        const signed = step === 0 ? 0 : (step % 2 ? 1 : -1) * Math.ceil(step / 2) * 0.018;
-        const a = baseAngle + signed;
-        const cx = h.x + Math.cos(a) * radius;
-        const cy = h.y + Math.sin(a) * radius;
-        const px = cx;
-        let py = cy + PLAYER_H * 0.56;
-        if (!pendulumCanStand(px, py)) continue;
-        const support = supportYAt(px);
-        if (support != null && Math.abs(py - support) <= 32) py = support;
-        chosenX = px;
-        chosenY = py;
-        placed = true;
-        break;
-      }
-    }
-
-    if (!placed) {
-      const pcNow = playerCenter();
-      const pdx = h.x - pcNow.x;
-      const pdy = h.y - pcNow.y;
-      const plen = hypot(pdx, pdy) || 1;
-      for (const pull of [24, 48, 80]) {
-        const px = player.x + pdx / plen * pull;
-        let py = player.y + pdy / plen * pull;
-        if (!pendulumCanStand(px, py)) continue;
-        const support = supportYAt(px);
-        if (support != null && Math.abs(py - support) <= 32) py = support;
-        chosenX = px;
-        chosenY = py;
-        placed = true;
-        yoyo.ropeLength = clamp(hypot(px - h.x, py - PLAYER_H * 0.56 - h.y), 105, MAX_CHAIN);
-        yoyo.ropeTarget = yoyo.ropeLength;
-        break;
-      }
-    }
-
-    if (!placed) {
-      releaseHook(false);
-      return;
-    }
-
-    player.x = chosenX;
-    player.y = chosenY;
-
-    // Eliminate only radial velocity. Tangential speed—the actual swing—is kept.
-    dx = (player.x - h.x);
-    dy = (player.y - PLAYER_H * 0.56 - h.y);
-    dist = hypot(dx, dy) || 1;
-    const nnx = dx / dist;
-    const nny = dy / dist;
-    const ttx = -nny;
-    const tty = nnx;
-    const radial = player.vx * nnx + player.vy * nny;
-    player.vx -= nnx * radial;
-    player.vy -= nny * radial;
+    const anchorDrop = PLAYER_H * 0.56;
+    let ax = player.x - h.x;
+    let ay = (player.y - anchorDrop) - h.y;
+    let dist = hypot(ax, ay) || 1;
+    let nx = ax / dist;
+    let ny = ay / dist;
+    let tx = -ny;
+    let ty = nx;
 
     const move = input.moveX();
     if (Math.abs(move) > 0.06) {
-      // Convert left/right intention into torque along whichever tangent moves
-      // the body that way. This is deliberately arcade-strong: one held input
-      // can start a useful swing from rest instead of requiring occult rhythm.
-      const tangentDirection = sign0(move * ttx) || sign0(move);
-      const pump = 3900;
-      player.vx += ttx * tangentDirection * pump * dt;
-      player.vy += tty * tangentDirection * pump * dt;
+      // Left/right becomes torque along whichever tangent actually carries the
+      // body that way.
+      const direction = sign0(move * tx) || sign0(move);
+      player.vx += tx * direction * SWING_PUMP * dt;
+      player.vy += ty * direction * SWING_PUMP * dt;
       player.facing = move > 0 ? 1 : -1;
     }
 
-    const tangential = player.vx * ttx + player.vy * tty;
-    const maxSwing = 1120;
-    if (Math.abs(tangential) > maxSwing) {
-      const excess = tangential - clamp(tangential, -maxSwing, maxSwing);
-      player.vx -= ttx * excess;
-      player.vy -= tty * excess;
+    const rope = yoyo.ropeLength;
+    if (dist > rope) {
+      // Taut. Kill only the outward radial component; the tangential speed IS
+      // the swing and is never touched.
+      const radial = player.vx * nx + player.vy * ny;
+      if (radial > 0) {
+        player.vx -= nx * radial;
+        player.vy -= ny * radial;
+      }
+
+      // Take up the slack positionally, capped per step so it reads as a pull.
+      // If the corrected pose is inside geometry the correction is simply
+      // skipped and the rope stretches for a step — the alternative used to be
+      // dropping the player, which is never the right answer.
+      const overshoot = dist - rope;
+      const pull = Math.min(overshoot, ROPE_TAKEUP * dt);
+      if (pull > 0.02) {
+        const px = player.x - nx * pull;
+        const py = player.y - ny * pull;
+        if (!playerPositionBlocked(px, py)) {
+          player.x = px;
+          player.y = py;
+          if (ny > 0.15) {
+            // The rope lifted them; do not let a stale grounded flag from this
+            // step's collision pass glue them back to the floor.
+            player.grounded = false;
+            player.coyote = 0;
+          }
+          ax = player.x - h.x;
+          ay = (player.y - anchorDrop) - h.y;
+          dist = hypot(ax, ay) || 1;
+          nx = ax / dist; ny = ay / dist; tx = -ny; ty = nx;
+        }
+      }
+
+      // Safety valve only: something outside the rope (a checkpoint reset, a
+      // teleport) has torn the player off the arc entirely.
+      if (dist > MAX_CHAIN * 1.6) {
+        releaseHook(false);
+        return;
+      }
+    }
+
+    const tangential = player.vx * tx + player.vy * ty;
+    if (Math.abs(tangential) > MAX_SWING) {
+      const excess = tangential - clamp(tangential, -MAX_SWING, MAX_SWING);
+      player.vx -= tx * excess;
+      player.vy -= ty * excess;
     }
 
     yoyo.x = h.x;
@@ -1780,6 +1935,7 @@
       player.vy += ty * direction * 80 - 155;
     }
     yoyo.blockedHook = h;
+    yoyo.holdGrace = 0;
     yoyo.latched = null;
     yoyo.latchCooldown = boost ? 0.24 : 0.13;
     player.grapple = null;
@@ -1829,7 +1985,14 @@
       yoyo.vy = 0;
       yoyo.targetX = yoyo.x;
       yoyo.targetY = yoyo.y;
-      if (!aim.active) releaseHook(false);
+      // Phones fire pointercancel for all sorts of reasons that are not "the
+      // player let go". Give the grip a beat before it counts as release.
+      if (aim.active) {
+        yoyo.holdGrace = 0;
+      } else {
+        yoyo.holdGrace += dt;
+        if (yoyo.holdGrace >= (COARSE_POINTER ? HOLD_GRACE : 0.05)) releaseHook(false);
+      }
     } else {
       let targetX = pc.x + player.facing * 43;
       let targetY = pc.y + 5;
@@ -1909,7 +2072,14 @@
           // A hook should catch and lift, not nail the player to the lip of the
           // floor. A short automatic take-up gives the pendulum room to exist.
           yoyo.ropeTarget = clamp(yoyo.ropeLength - (player.grounded ? 58 : 22), 150, MAX_CHAIN);
-          if (player.grounded) player.vy = Math.min(player.vy, -95);
+          if (player.grounded) {
+            // A ring should catch and lift, not nail you to the lip of the
+            // floor. Get the body clear so the pendulum has somewhere to exist.
+            player.vy = Math.min(player.vy, -190);
+            player.grounded = false;
+            player.coyote = 0;
+          }
+          yoyo.holdGrace = 0;
           yoyo.x = magnet.x;
           yoyo.y = magnet.y;
           yoyo.vx = 0;
@@ -2483,8 +2653,12 @@
     const effective = ySpeed + yoyo.angularInput * 42 + yoyo.charge * 620;
     const chainHot = yoyo.active && yoyo.charge > 0.34;
 
+    // The wheel is one small disc on a chain. Anything further away than the
+    // chain can reach cannot be hit this step, so do not build its rectangle.
+    const reachX = MAX_CHAIN + 120;
     for (const e of enemies) {
       if (!e.alive || (e.type === 'boss' && !game.bossActive)) continue;
+      if (Math.abs(e.x - yoyo.x) > reachX && Math.abs(e.x - pc.x) > reachX) continue;
       const er = enemyRect(e);
 
       if (e.yoyoCooldown <= 0 && circleRect(yoyo.x, yoyo.y, yoyo.r + 3, er)) {
@@ -2538,6 +2712,8 @@
 
     for (const membrane of seals) {
       if (!membrane.alive) continue;
+      if (yoyo.x + yoyo.r < membrane.x - 8 && pc.x < membrane.x - 8) continue;
+      if (yoyo.x - yoyo.r > membrane.x + membrane.w + 8 && pc.x > membrane.x + membrane.w + 8) continue;
       let hitSomething = false;
       for (let i = 0; i < membrane.bands.length; i++) {
         const band = membrane.bands[i];
@@ -2795,46 +2971,77 @@
     g.restore();
   }
 
-  function drawBackground(g, camX) {
-    const zone = zoneAtX(player.x);
-    const area = AREAS[zone] || AREAS[0];
-    const palette = area.pal;
-    const fallback = g.createLinearGradient(0, 0, 0, H);
-    fallback.addColorStop(0, palette[0]);
-    fallback.addColorStop(0.62, palette[1]);
-    fallback.addColorStop(1, palette[2]);
-    g.fillStyle = fallback;
-    g.fillRect(0, 0, W, H);
+  // One cathedral, not twelve rooms in a row. Near a district line the two
+  // districts are mixed — palette, panorama and the air itself — so the picture
+  // changes the way walking changes it instead of cutting when the title card
+  // fires. The blend is centred on the boundary: it starts BLEND_SPAN before the
+  // line and finishes BLEND_SPAN after it.
+  const BLEND_SPAN = 900;
+  const districtMix = { from: 0, to: 0, t: 0 };
 
-    const image = bgImages[area.bg];
-    if (image && image.complete && image.naturalWidth > 0) {
-      const scale = H / image.naturalHeight;
-      const span = image.naturalWidth * scale;
-      const raw = Math.round(camX * (area.bg === 3 ? 0.08 : 0.16));
-      const offset = Math.round(((raw % span) + span) % span);
-      g.save();
-      g.globalAlpha = 0.98;
-      for (let x = -offset - span; x < W + span; x += span) g.drawImage(image, x, 0, span, H);
-      g.restore();
+  function districtMixAt(x) {
+    const i = areaIndexAt(x);
+    const area = AREAS[i];
+    const toStart = x - area.x0;
+    const toEnd = area.x1 - x;
+    districtMix.from = i;
+    districtMix.to = i;
+    districtMix.t = 0;
+    if (i > 0 && toStart < BLEND_SPAN) {
+      districtMix.from = i - 1;
+      districtMix.to = i;
+      districtMix.t = 0.5 + 0.5 * (toStart / BLEND_SPAN);
+    } else if (i < AREAS.length - 1 && toEnd < BLEND_SPAN) {
+      districtMix.from = i;
+      districtMix.to = i + 1;
+      districtMix.t = 0.5 - 0.5 * (toEnd / BLEND_SPAN);
     }
+    return districtMix;
+  }
 
-    // Soft play-band dim so painted architecture stays behind the actors.
-    const playDim = g.createLinearGradient(0, H * 0.28, 0, H);
-    playDim.addColorStop(0, 'rgba(0,0,0,0)');
-    playDim.addColorStop(0.55, 'rgba(4,1,6,0.10)');
-    playDim.addColorStop(1, 'rgba(2,1,3,0.22)');
-    g.fillStyle = playDim;
-    g.fillRect(0, 0, W, H);
+  const hexCache = new Map();
+  function parseHex(hex) {
+    let v = hexCache.get(hex);
+    if (v) return v;
+    const n = parseInt(hex.slice(1), 16);
+    v = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    hexCache.set(hex, v);
+    return v;
+  }
 
-    // District-specific atmosphere. Continuous motion, fixed particles.
-    const bgId = area.bg;
+  function mixHex(a, b, t) {
+    if (t <= 0) return a;
+    if (t >= 1) return b;
+    const ca = parseHex(a);
+    const cb = parseHex(b);
+    return `rgb(${Math.round(ca[0] + (cb[0] - ca[0]) * t)},${Math.round(ca[1] + (cb[1] - ca[1]) * t)},${Math.round(ca[2] + (cb[2] - ca[2]) * t)})`;
+  }
+
+  function drawPanorama(g, image, camX, parallax, alpha) {
+    if (alpha <= 0.004) return;
+    if (!image || !image.complete || !image.naturalWidth) return;
+    const scale = H / image.naturalHeight;
+    const span = image.naturalWidth * scale;
+    const raw = Math.round(camX * parallax);
+    const offset = Math.round(((raw % span) + span) % span);
+    g.save();
+    g.globalAlpha = alpha;
+    for (let x = -offset - span; x < W + span; x += span) g.drawImage(image, x, 0, span, H);
+    g.restore();
+  }
+
+  // District-specific air. Continuous motion, fixed particles, and now fadeable
+  // so two districts' weather can overlap across a boundary.
+  function drawAtmosphere(g, bgId, zoneSeed, alpha) {
+    if (alpha <= 0.01) return;
     if (bgId === 1 || bgId === 7) {
       g.save();
+      g.globalAlpha = alpha;
       g.globalCompositeOperation = 'screen';
       for (let i = 0; i < (COARSE_POINTER ? 44 : 90); i++) {
         const speed = 22 + (i % 9) * 7;
-        const x = (hash(i * 41 + zone * 71) * (W + 160) + game.time * (6 + i % 5)) % (W + 160) - 80;
-        const y = (hash(i * 73 + zone * 13) * H - game.time * speed + H * 8) % H;
+        const x = (hash(i * 41 + zoneSeed * 71) * (W + 160) + game.time * (6 + i % 5)) % (W + 160) - 80;
+        const y = (hash(i * 73 + zoneSeed * 13) * H - game.time * speed + H * 8) % H;
         const a = 0.10 + hash(i * 19) * 0.30;
         g.fillStyle = bgId === 1 ? `rgba(255,118,43,${a})` : `rgba(255,54,75,${a * 0.72})`;
         g.fillRect(x, y, 1 + (i % 2), 2 + (i % 4));
@@ -2842,26 +3049,78 @@
       g.restore();
     } else if (bgId === 2 || bgId === 4) {
       g.save();
+      g.globalAlpha = alpha;
       g.strokeStyle = 'rgba(130,148,190,0.105)';
       g.lineWidth = 1.2;
+      g.beginPath();
       for (let i = 0; i < (COARSE_POINTER ? 34 : 70); i++) {
         const x = (hash(i * 31) * (W + 260) + game.time * 150) % (W + 260) - 130;
         const y = (hash(i * 53) * H + game.time * (280 + i % 5 * 24)) % H;
-        g.beginPath(); g.moveTo(x, y); g.lineTo(x - 22, y + 54); g.stroke();
+        g.moveTo(x, y); g.lineTo(x - 22, y + 54);
       }
+      g.stroke();
       g.restore();
     } else {
+      g.save();
+      g.globalAlpha = alpha;
       g.fillStyle = 'rgba(196,172,180,0.14)';
       for (let i = 0; i < (COARSE_POINTER ? 28 : 55); i++) {
         const x = (hash(i * 47) * (W + 100) + game.time * (3 + i % 4)) % (W + 100) - 50;
         const y = (hash(i * 79) * H - game.time * (2 + i % 3) + H * 4) % H;
         g.fillRect(x, y, 1, 1);
       }
+      g.restore();
+    }
+  }
+
+  function drawBackground(g, camX) {
+    const mix = districtMixAt(player.x);
+    const from = AREAS[mix.from] || AREAS[0];
+    const to = AREAS[mix.to] || from;
+    const t = mix.from === mix.to ? 0 : smoothstep(clamp(mix.t, 0, 1));
+
+    const fallback = g.createLinearGradient(0, 0, 0, H);
+    fallback.addColorStop(0, mixHex(from.pal[0], to.pal[0], t));
+    fallback.addColorStop(0.62, mixHex(from.pal[1], to.pal[1], t));
+    fallback.addColorStop(1, mixHex(from.pal[2], to.pal[2], t));
+    g.fillStyle = fallback;
+    g.fillRect(0, 0, W, H);
+
+    // Both panoramas ride the same parallax rate through the crossing, so the
+    // two pictures slide together and the seam never reads as two walls.
+    const rateFrom = from.bg === 3 ? 0.08 : 0.16;
+    const rateTo = to.bg === 3 ? 0.08 : 0.16;
+    const parallax = lerp(rateFrom, rateTo, t);
+    if (from.bg === to.bg) {
+      drawPanorama(g, bgImages[from.bg], camX, parallax, 0.98);
+    } else {
+      drawPanorama(g, bgImages[from.bg], camX, parallax, 0.98);
+      drawPanorama(g, bgImages[to.bg], camX, parallax, 0.98 * t);
     }
 
+    // Soft play-band dim so painted architecture stays behind the actors.
+    g.save();
+    g.translate(0, H * 0.28);
+    g.fillStyle = cachedVGradient(g, 'playDim', H * 0.72, [
+      [0, 'rgba(0,0,0,0)'],
+      [0.55, 'rgba(4,1,6,0.10)'],
+      [1, 'rgba(2,1,3,0.22)']
+    ]);
+    g.fillRect(0, -H * 0.28, W, H);
+    g.restore();
+
+    if (from.bg === to.bg) {
+      drawAtmosphere(g, from.bg, mix.from, 1);
+    } else {
+      drawAtmosphere(g, from.bg, mix.from, 1 - t);
+      drawAtmosphere(g, to.bg, mix.to, t);
+    }
+
+    const mistFrom = mix.from === 1 ? 'rgba(88,20,8,0.08)' : 'rgba(45,10,24,0.10)';
+    const mistTo = mix.to === 1 ? 'rgba(88,20,8,0.08)' : 'rgba(45,10,24,0.10)';
     const floorMist = g.createLinearGradient(0, H * 0.70, 0, H);
     floorMist.addColorStop(0, 'rgba(7,4,8,0)');
-    floorMist.addColorStop(0.72, zone === 1 ? 'rgba(88,20,8,0.08)' : 'rgba(45,10,24,0.10)');
+    floorMist.addColorStop(0.72, t < 0.5 ? mistFrom : mistTo);
     floorMist.addColorStop(1, 'rgba(2,1,3,0.28)');
     g.fillStyle = floorMist;
     g.fillRect(0, H * 0.62, W, H * 0.38);
@@ -2889,6 +3148,7 @@
     const zone = p.zone;
     const isFoundry = zone === 1 || zone === 6 || zone === 10;
     const isBone = zone === 2 || zone === 7 || zone === 11;
+    const kind = isFoundry ? 'f' : isBone ? 'b' : 'n';
     ensurePatterns(g);
     const pat = isFoundry ? tilePatterns.foundry : isBone ? tilePatterns.spire : tilePatterns.nave;
 
@@ -2896,35 +3156,42 @@
     g.fillStyle = 'rgba(0,0,0,0.55)';
     g.fillRect(p.x + 8, p.y + 14, p.w, Math.max(18, p.h));
 
+    // Gradients below are authored from y=0 and used under a y-translate, which
+    // is exactly equivalent to the old per-platform ones and lets them be cached.
+    g.translate(0, p.y);
+
     if (pat) {
       g.fillStyle = pat;
-      g.fillRect(p.x, p.y, p.w, p.h);
-      const shade = g.createLinearGradient(0, p.y, 0, p.y + Math.min(p.h, 240));
-      shade.addColorStop(0, 'rgba(0,0,0,0.08)');
-      shade.addColorStop(0.08, 'rgba(0,0,0,0.38)');
-      shade.addColorStop(1, 'rgba(0,0,0,0.72)');
-      g.fillStyle = shade;
-      g.fillRect(p.x, p.y, p.w, p.h);
+      g.fillRect(p.x, 0, p.w, p.h);
+      const shadeH = Math.min(p.h, 240);
+      g.fillStyle = cachedVGradient(g, 'shade' + shadeH, shadeH, [
+        [0, 'rgba(0,0,0,0.08)'],
+        [0.08, 'rgba(0,0,0,0.38)'],
+        [1, 'rgba(0,0,0,0.72)']
+      ]);
+      g.fillRect(p.x, 0, p.w, p.h);
       if (isBone && pat !== tilePatterns.spire) {
         g.fillStyle = 'rgba(24, 14, 38, 0.34)';
-        g.fillRect(p.x, p.y, p.w, p.h);
+        g.fillRect(p.x, 0, p.w, p.h);
       }
     } else {
-      const body = g.createLinearGradient(0, p.y, 0, p.y + Math.min(p.h, 220));
-      body.addColorStop(0, isFoundry ? '#5e271c' : isBone ? '#38202b' : '#3c252d');
-      body.addColorStop(0.05, isFoundry ? '#26100d' : '#1b1218');
-      body.addColorStop(0.42, '#0e0b0f');
-      body.addColorStop(1, '#050406');
-      g.fillStyle = body;
-      g.fillRect(p.x, p.y, p.w, p.h);
+      const bodyH = Math.min(p.h, 220);
+      g.fillStyle = cachedVGradient(g, 'body' + kind + bodyH, bodyH, [
+        [0, isFoundry ? '#5e271c' : isBone ? '#38202b' : '#3c252d'],
+        [0.05, isFoundry ? '#26100d' : '#1b1218'],
+        [0.42, '#0e0b0f'],
+        [1, '#050406']
+      ]);
+      g.fillRect(p.x, 0, p.w, p.h);
     }
 
-    const cap = g.createLinearGradient(0, p.y, 0, p.y + 12);
-    cap.addColorStop(0, isFoundry ? 'rgba(210,140,90,0.38)' : isBone ? 'rgba(180,150,170,0.28)' : 'rgba(210,180,175,0.32)');
-    cap.addColorStop(0.4, 'rgba(12,8,10,0.55)');
-    cap.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = cap;
-    g.fillRect(p.x, p.y, p.w, p.oneWay ? 10 : 12);
+    g.fillStyle = cachedVGradient(g, 'cap' + kind, 12, [
+      [0, isFoundry ? 'rgba(210,140,90,0.38)' : isBone ? 'rgba(180,150,170,0.28)' : 'rgba(210,180,175,0.32)'],
+      [0.4, 'rgba(12,8,10,0.55)'],
+      [1, 'rgba(0,0,0,0)']
+    ]);
+    g.fillRect(p.x, 0, p.w, p.oneWay ? 10 : 12);
+    g.translate(0, -p.y);
     g.fillStyle = 'rgba(255,220,200,0.22)';
     g.fillRect(p.x, p.y, p.w, 2);
 
@@ -2983,16 +3250,22 @@
     g.save();
     g.translate(h.x, h.y);
 
-    const halo = g.createRadialGradient(0, 0, 5, 0, 0, active ? 104 : 73);
-    halo.addColorStop(0, latched ? 'rgba(255,239,224,0.62)' : `rgba(255,83,104,${0.23 + pulse * 0.18})`);
-    halo.addColorStop(0.28, active ? 'rgba(255,35,70,0.25)' : 'rgba(177,16,44,0.13)');
-    halo.addColorStop(1, 'rgba(255,0,40,0)');
-    g.fillStyle = halo; g.fillRect(-115, -115, 230, 230);
+    // Three states, three cached halos; the breathing is carried by alpha.
+    const haloKey = latched ? 'haloLatched' : active ? 'haloActive' : 'haloIdle';
+    g.save();
+    g.globalAlpha = latched ? 1 : 0.72 + pulse * 0.28;
+    g.fillStyle = cachedRGradient(g, haloKey, 5, active ? 104 : 73, [
+      [0, latched ? 'rgba(255,239,224,0.62)' : 'rgba(255,83,104,0.32)'],
+      [0.28, active ? 'rgba(255,35,70,0.25)' : 'rgba(177,16,44,0.13)'],
+      [1, 'rgba(255,0,40,0)']
+    ]);
+    g.fillRect(-115, -115, 230, 230);
+    g.restore();
 
     if (hookPainted) {
       const { w, img } = spriteSize('hook', hookH);
       g.rotate(Math.sin(game.time * 0.55 + h.pulse) * 0.025);
-      g.drawImage(img, -w * 0.492, -hookH * hookAy, w, hookH);
+      g.drawImage(scaledSprite(img, w, hookH), -w * 0.492, -hookH * hookAy, w, hookH);
       g.restore();
       return;
     }
@@ -3260,7 +3533,7 @@
 
     if (sprReady('wheel')) {
       const d = 78 + yoyo.charge * 8;
-      g.drawImage(sprites.wheel, -d / 2, -d / 2, d, d);
+      g.drawImage(scaledSprite(sprites.wheel, d, d), -d / 2, -d / 2, d, d);
       g.restore();
       return;
     }
@@ -3333,7 +3606,7 @@
         const drawH = 152;
         const w = drawH * (img.naturalWidth / img.naturalHeight);
         g.scale(player.facing, 1);
-        g.drawImage(img, -w * 0.50, -drawH + 3, w, drawH);
+        g.drawImage(scaledSprite(img, w, drawH), -w * 0.50, -drawH + 3, w, drawH);
         g.restore();
         return;
       }
@@ -3961,32 +4234,32 @@
     g.fillStyle='rgba(0,0,0,.42)';g.fillRect(0,0,W,10);g.fillRect(0,H-10,W,10);
   }
 
+  // Paint straight onto the visible canvas. The old build composed every frame
+  // into a second, never-displayed canvas and blitted it across at the end; a
+  // canvas that is never presented does not get hardware acceleration, so that
+  // one line was uploading 1600x900 pixels from the CPU every single frame and
+  // eating roughly nine tenths of the frame budget. Browsers already present a
+  // canvas atomically at the end of a rAF callback, and this function never
+  // yields, so there is no half-painted frame to protect against.
   function render() {
-    // Compose the ENTIRE frame offscreen—including HUD, post, title, pause,
-    // death and victory—then touch the visible canvas exactly once. Android
-    // WebViews cannot expose a half-painted frame when there is no half-painted
-    // visible frame to expose.
-    sctx.setTransform(1,0,0,1,0,0);
-    sctx.globalAlpha=1;
-    sctx.globalCompositeOperation='source-over';
-    sctx.imageSmoothingEnabled=true;
-    if (sctx.imageSmoothingQuality) sctx.imageSmoothingQuality = 'high';
-    drawBackground(sctx,game.camera.x);
-    sctx.save();sctx.translate(game.shakeX,game.shakeY);drawWorld(sctx);sctx.restore();
-    drawHUD(sctx);
-    drawTouchControls(sctx);
-    drawZoneTitle(sctx);
-    drawPost(sctx);
-    drawTitle(sctx);
-    drawPause(sctx);
-    drawDeath(sctx);
-    drawVictory(sctx);
-
-    ctx.setTransform(1,0,0,1,0,0);
+    ctx.setTransform(renderScale,0,0,renderScale,0,0);
     ctx.globalAlpha=1;
-    ctx.globalCompositeOperation='copy';
-    ctx.drawImage(scene,0,0);
     ctx.globalCompositeOperation='source-over';
+    ctx.imageSmoothingEnabled=true;
+    // 'low' is the cheap bilinear sampler. Every scaled sprite already goes
+    // through the pre-scaled cache below, so there is nothing left for the
+    // expensive resampler to improve.
+    if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = 'low';
+    drawBackground(ctx,game.camera.x);
+    ctx.save();ctx.translate(game.shakeX,game.shakeY);drawWorld(ctx);ctx.restore();
+    drawHUD(ctx);
+    drawTouchControls(ctx);
+    drawZoneTitle(ctx);
+    drawPost(ctx);
+    drawTitle(ctx);
+    drawPause(ctx);
+    drawDeath(ctx);
+    drawVictory(ctx);
   }
 
   // ---------------------------------------------------------------------------
@@ -4105,7 +4378,8 @@
       yoyo.latched = h; player.grapple = h; yoyo.x = h.x; yoyo.y = h.y;
       yoyo.ropeLength = clamp(hypot(pc.x - h.x, pc.y - h.y), 110, MAX_CHAIN);
       yoyo.ropeTarget = clamp(yoyo.ropeLength - (player.grounded ? 58 : 22), 150, MAX_CHAIN);
-      if (player.grounded) player.vy = Math.min(player.vy, -95);
+      if (player.grounded) { player.vy = Math.min(player.vy, -190); player.grounded = false; player.coyote = 0; }
+      yoyo.holdGrace = 0;
       return true;
     },
     breakMembrane(index = 0, startBand = 7, count = 5) {
@@ -4148,6 +4422,11 @@
       }));
     }
   };
+
+  sizeBackingStore();
+  window.addEventListener('resize', sizeBackingStore);
+  window.addEventListener('orientationchange', () => setTimeout(sizeBackingStore, 120));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', sizeBackingStore);
 
   requestAnimationFrame(frame);
 })();
