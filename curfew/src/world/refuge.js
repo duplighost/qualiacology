@@ -333,6 +333,17 @@ export class Refuge {
         await unit.init();
         this._units.push(unit);
       }
+      // _restore() above ran BEFORE progress read the blob - refuge is manifest 88, progress
+      // is 102 - so progress.flag() answered out of SaveBlob's constructor defaults and a
+      // shelter saved powered with its door shut came back dark and open every time. Restore
+      // again the instant the save is actually live. _restore() is a pure recompute from the
+      // flag and the claim, so running it twice costs nothing and settles on the truth.
+      if (this.ctx && this.ctx.bus) {
+        this.ctx.bus.on('save:loaded', () => {
+          this._restore();
+          for (let i = 0; i < this._units.length; i++) this._units[i]._restore();
+        });
+      }
     }
   }
 
@@ -1074,11 +1085,13 @@ export class Refuge {
       player.heal(player.hpMax);
       this.stats.healed += Math.max(0, player.hp - before);
     }
-    // 2. time passes. clock.cycleT is the one clock; _recompute republishes the phase.
+    // 2. time passes. clock.advance() is the ONE way to move the clock by a span that did
+    // not pass a frame at a time: it emits phase:changed for every boundary it crosses, so
+    // the cycle turns for progression and the Auditor, the director re-rosters, and Iron's
+    // once-a-night latch re-arms. Writing cycleT directly skipped every one of those.
     const clock = this._sys('clock');
-    if (clock && typeof clock.cycleT === 'number') {
-      clock.cycleT += REST_CLOCK_S;
-      if (typeof clock._recompute === 'function') { try { clock._recompute(); } catch (e) { this._note('clock: ' + e.message); } }
+    if (clock && typeof clock.advance === 'function') {
+      try { clock.advance(REST_CLOCK_S); } catch (e) { this._note('clock: ' + e.message); }
     }
     // 3. nothing reached you, and nothing is waiting when you get up
     const enemies = this._sys('enemies');

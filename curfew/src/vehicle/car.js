@@ -1296,7 +1296,11 @@ export class Car {
     // it owned, and only somewhere lit, the car mends itself while it sits.
     const pr = this._progress;
     if (pr && typeof pr.perk === 'function') {
-      const perMin = pr.perk('wearRepair', 0);
+      // The CAR's light, not the player's. ctx.shared.lit is sampled at the player, so it
+      // answered for whoever was holding the torch instead of for the thing being mended.
+      const lg = this._lights;
+      const carLit = lg && typeof lg.placeLitAt === 'function' ? lg.placeLitAt(this.x, this.z) : 0;
+      const perMin = pr.perk('wearRepair', 0, carLit);
       if (perMin > 0 && this.wear > 0) {
         this.wear = Math.max(0, this.wear - perMin * dt / 60);
         if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), false);

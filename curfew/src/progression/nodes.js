@@ -128,7 +128,7 @@ export const HOOK_POINTS = Object.freeze([
   { name: 'ramClean', kind: 'reduce', runner: 'car', base: 'false',
     at: 'vehicle/car.js _ram()', sig: '(bool, ctx) -> bool' },
   { name: 'wearRepair', kind: 'reduce', runner: 'car', base: '0',
-    at: 'vehicle/car.js the parked branch', sig: '(perMinute, ctx) -> perMinute' },
+    at: 'vehicle/car.js the parked branch', sig: '(perMinute, ctx, carLit) -> perMinute' },
   { name: 'onHorn', kind: 'run', runner: 'car', sig: '(ctx, x, z)',
     at: 'vehicle/car.js the horn input' },
   { name: 'secondWind', kind: 'reduce', runner: 'player', base: 'null',
@@ -465,9 +465,14 @@ export const NODES = Object.freeze([
     line: 'Parked somewhere lit, it mends itself.',
     install: (s, hooks) => {
       void s;
-      hooks.on('wearRepair', 'wheel_4', (v, ctx) => {
-        // Somewhere LIT is the condition, and lights already publishes it every step.
-        const lit = ctx && ctx.shared && typeof ctx.shared.lit === 'number' ? ctx.shared.lit : 0;
+      hooks.on('wearRepair', 'wheel_4', (v, ctx, carLit) => {
+        void ctx;
+        // Somewhere LIT is the condition, and it is the CAR that has to be somewhere. This
+        // read ctx.shared.lit, which lights.js samples AT THE PLAYER: the card promises
+        // "parked somewhere lit" and what it delivered was "parked while you stand in light".
+        // car.js hands in lights.placeLitAt(car.x, car.z) - the claimed-place lamp term at
+        // the car - so 0.6 still means about 31 m of a claimed place's own lamps.
+        const lit = typeof carLit === 'number' ? carLit : 0;
         return lit >= 0.6 ? v + WEAR_REPAIR : v;
       });
     } },
@@ -499,17 +504,27 @@ export const NODES = Object.freeze([
       // The WHOLE number, like Wind: 150 is what the body reads once Thick Skin and Iron
       // are both owned, not 120 + 30 applied in some order.
       s.hpMax = HP_IRON;
-      // Second wind, ONCE A CYCLE, and the node keeps its own latch in a closure. A recompute
-      // re-installs the node and re-arms it, which is the same shape as buying it — correct
-      // either way, and nothing outside this row knows the latch exists. Round 5 sold this
-      // as its own tier-1 card; it is the top of BLOOD now, where dying is the subject.
-      let spent = false;
-      hooks.on('secondWind', 'blood_4', (v) => {
-        if (spent) return v;
-        spent = true;
+      // Second wind, ONCE A CYCLE, and the latch lives in the SAVE rather than in a closure.
+      // It used to be a `let spent` declared right here. Every _recompute() re-runs this
+      // installer and rebuilt that closure, so buying ANY other node — a one-point Focus in a
+      // branch Iron has never heard of — handed back a spent Iron. An extra life for the price
+      // of the cheapest card in the tree, as often as you liked, inside one night. The old
+      // comment called that "the same shape as buying it", which is true of buying IRON and
+      // not of buying anything else. Keyed to the clock's cycle number, so it also stops
+      // re-arming on every reload, which the dusk reset could not see either.
+      // Round 5 sold this as its own tier-1 card; it is the top of BLOOD now, where dying is
+      // the subject.
+      hooks.on('secondWind', 'blood_4', (v, ctx) => {
+        const sys = ctx && ctx.systems;
+        const prog = sys ? sys.get('progress') : null;
+        if (!prog || typeof prog.flag !== 'function') return v;
+        const clock = sys.get('clock');
+        // +1 so an absent flag (0) always reads as "never spent", cycle 0 included.
+        const key = (clock && typeof clock.cycle === 'number' ? clock.cycle : 0) + 1;
+        if ((Number(prog.flag('iron:spent')) || 0) === key) return v;
+        prog.flag('iron:spent', key);
         return SECOND_WIND;
       });
-      hooks.on('onPhase', 'blood_4', (ctx, phase) => { void ctx; if (phase === 'dusk') spent = false; });
     } },
 ]);
 

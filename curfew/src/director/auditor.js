@@ -304,6 +304,10 @@ export function createAuditor(ctx, dread) {
     const name = p && (p.phase !== undefined ? p.phase : p);
     if (typeof name === 'string') sawPhaseEvent = true;
     if (name !== 'dusk') return;
+    // The boot announcement carries prev:null so every listener learns the phase it woke in.
+    // It is not a night survived. Counting it opened the game one cycle deep and owing a
+    // barren-cycle debt for a night that had not happened yet.
+    if (p && typeof p === 'object' && !p.prev) return;
     turnCycle();
   }
 

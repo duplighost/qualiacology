@@ -60,6 +60,11 @@ import { SaveBlob } from './save.js';
 // docs/HANDOFF.md P-4 for a `CFG.progress` block. Nothing below is a magic number twice.
 
 const SAVE_KEY = 'curfew.progress';
+// Emitted once, at the end of init(), the moment the blob has been read and progress is
+// consistent. places (manifest 85) and refuge (88) both own world state the save describes
+// and both init BEFORE progress (102), so this is the earliest instant either of them can
+// restore itself from real data. Frozen and reused; it carries no payload, only the moment.
+const _loadedPayload = Object.freeze({});
 // 2 since round 6: the `visited` bitmap and the `fires` list joined the blob. A version-1
 // blob still loads — save.js merges per key and the new fields take their defaults.
 const SAVE_VERSION = 2;
@@ -384,6 +389,9 @@ export class Progress {
     this._publish();
     this._wire();
 
+    // THE SAVE IS LIVE. Anyone who could not read it during their own init restores here.
+    if (this.ctx && this.ctx.bus) this.ctx.bus.emit('save:loaded', _loadedPayload);
+
     if (typeof window !== 'undefined') {
       const T = (window.__CURFEW = window.__CURFEW || {});
       T.progress = {
@@ -560,7 +568,12 @@ export class Progress {
 
     on('phase:changed', (p) => {
       this.hooks.run('onPhase', this.ctx, p.phase);
-      if (p.phase === 'dusk') {
+      // A CYCLE TURNS ONLY ON A REAL TRANSITION. clock.js makes ONE announcement at boot so
+      // every listener learns the phase it woke in, and that one alone carries prev:null.
+      // Counting it made every launch a survived night: a fresh boot reported cycle 1 and the
+      // first bank paid the survival bonus for 17 ms of game time. The onPhase hook above
+      // still runs on the boot announcement — telling the tree what phase it is IS its job.
+      if (p.phase === 'dusk' && p.prev) {
         this.save.data.cycleCount++;
         this.save.data.cyclesOut++;
         this.save.mark();

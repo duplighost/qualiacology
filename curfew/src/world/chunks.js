@@ -42,7 +42,7 @@
 import * as THREE from 'three';
 import { CFG } from '../config.js';
 import { buildChunkData, TIERS } from './chunk-worker.js';
-import { groundDetail, heightAt, normalAt } from './terrain.js';
+import { groundDetail, heightAt, normalAt, flats, flatCount } from './terrain.js';
 
 const CHUNK = CFG.world.CHUNK;                       // 64 m
 
@@ -228,6 +228,7 @@ export class Chunks {
     this.worker = null;
     this.workerReady = false;
     this.workerNote = 'not started';
+    this._flatsSynced = -1;       // disc count last sent to the worker; -1 = never
 
     this.viewRing = DEFAULT_RING_M;
     this._frame = 0;
@@ -360,6 +361,7 @@ export class Chunks {
       w.onmessageerror = () => this._killWorker('worker message error');
       this.worker = w;
       this.workerNote = 'handshaking';
+      this._flatsSynced = -1;     // a fresh realm knows nothing; re-send before it builds
       // Nothing is dispatched until this comes back. That single rule is what keeps a
       // dead or slow worker from ever being able to stall the streamer.
       w.postMessage({ op: 'hello' });
@@ -641,8 +643,30 @@ export class Chunks {
     return null;
   }
 
+  /**
+   * THE PADS, INTO THE WORKER'S REALM, BEFORE IT IS ASKED TO BUILD ANYTHING.
+   *
+   * terrain.js keeps its disc registry in module state and the worker imports its own copy of
+   * that module, seeded from M0_SITES alone. It never saw the fourteen destination pads
+   * places.js registers on the main thread, so it built ground that had never been levelled
+   * while collision — always main-thread heightAt — used the pads. Both builders are live, so
+   * whichever one happened to win a chunk decided whether its ground was right, and the answer
+   * changed run to run. Measured at the Cathedral before this: two neighbouring chunks meeting
+   * at one world point 10.08 m apart, the walkable ground agreeing with neither.
+   *
+   * Registration happens once, in places.init() (manifest #10), and _dispatch() first runs
+   * from step() — after every init. So this sends once and then costs one integer compare.
+   */
+  _syncFlats() {
+    const n = flatCount();
+    if (n === this._flatsSynced) return;
+    this.worker.postMessage({ op: 'flats', flats: flats() });
+    this._flatsSynced = n;
+  }
+
   _dispatch() {
     if (!this.workerReady || !this.worker) return;
+    this._syncFlats();
     for (let i = 0; i < this.queue.length && this.inflight.size < WORKER_INFLIGHT; i++) {
       const e = this.queue[i];
       if (e.dispatched >= 0 || this.queued.get(e.key) !== e) continue;

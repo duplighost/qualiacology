@@ -24,7 +24,7 @@
 
 import { CFG } from '../config.js';
 import { clamp01, lerp, smoothstep } from '../engine/math.js';
-import { heightAt, regionWeights, REGIONS, REGION_COUNT } from './terrain.js';
+import { heightAt, regionWeights, REGIONS, REGION_COUNT, adoptFlats } from './terrain.js';
 import { roadDistance, nearestRoadInfo, buildRibbonData } from './roads.js';
 
 const CHUNK = CFG.world.CHUNK;                 // 64 m
@@ -326,6 +326,14 @@ if (IS_WORKER) {
     // browser refuses module workers, the streamer simply keeps building on the main
     // thread and no chunk can ever be stranded in flight.
     if (m.op === 'hello') { self.postMessage({ op: 'hello', tiers: TIERS.length }); return; }
+
+    // The main thread's pad registry, verbatim, before any build can be asked for. This
+    // realm's terrain module is seeded from M0_SITES alone and cannot see the destination
+    // pads places.js registers during init, so without this every vertex built over a pad
+    // sits metres away from the ground the player actually walks on. See chunks.js
+    // _syncFlats(): it is sent once, before the first dispatch, and again only if the
+    // registry ever changes.
+    if (m.op === 'flats') { adoptFlats(m.flats); return; }
 
     if (m.op === 'build') {
       let payload;
