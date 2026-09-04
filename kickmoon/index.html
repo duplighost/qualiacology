@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#010204" />
-  <meta name="application-version" content="8.4.0-world-composition" />
+  <meta name="application-version" content="8.5.0-passage-and-half-roster" />
   <meta name="description" content="KICKMOON is a first-person three-world lunar action game: one persistent boomerang ball, a water moon, and a lava moon." />
   <title>KICKMOON: Three Worlds | Qualiacology</title>
   <link rel="canonical" href="https://qualiacology.com/kickmoon/" />
@@ -65,13 +65,16 @@
       <!-- Screen-reader-only mirror of the world-space state. Sighted players
            get all of this visually; this exists so the game stays narratable. -->
       <!-- ONE space for collectibles, the same on every moon: this moon's
-           count and how far it is from the 2,000 that opens its final. A
-           pickup may look like a crescent, a full moon or a route ribbon --
-           they are one collectible and each is worth one.
-           (Alex, 2026-09-03.) Nothing occupies the aiming lane at screen foot. -->
+           count and how far it is from whatever it is currently saving for.
+           The denominator is written from the game now, not from here: it is
+           the 1,000 ship fare while a ship on this world is still cold, and
+           the mastery total once both are bought. A pickup may look like a
+           crescent, a full moon or a route ribbon -- they are one collectible
+           and each is worth one. (Alex, 2026-09-03.)
+           Nothing occupies the aiming lane at screen foot. -->
       <div id="stoneCounter" data-planet="moon" aria-hidden="true">
         <span class="collectible-cell" data-kind="common"><i class="collectible-icon stone-crescent"></i><span id="stoneCount">0</span></span>
-        <span id="planetCollectibleTarget"><small>/2000</small><i class="collectible-gate"><b id="planetCollectibleGateFill"></b></i></span>
+        <span id="planetCollectibleTarget"><small id="planetCollectibleTargetValue">/2000</small><i class="collectible-gate"><b id="planetCollectibleGateFill"></b></i></span>
       </div>
       <!-- Boss trophies: seven quiet sockets that light with each core's own
            colour. No words, no numbers — a glance says how many remain.
