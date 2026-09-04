@@ -964,7 +964,14 @@ export class Weapons {
     payload.subT = subT;
     payload.index = idx;
     payload.lowAmmo = this.ammo <= Math.max(1, Math.floor(d.mag * 0.2));
-    payload.loud = d.loud;
+    // ROUND 7 (lane G): quiet_2 "Cold Barrel". HOOK_POINTS names this exact line as the site
+    // and nobody had written it; enemies.js's own comment at :534 says it takes p.loud as
+    // published so the discount happens once, here.
+    {
+      const pr = this.ctx.systems ? this.ctx.systems.get('progress') : null;
+      payload.loud = (pr && typeof pr.perk === 'function')
+        ? pr.perk('noiseRadius', d.loud, 'shot') : d.loud;
+    }
     payload.pellets = pellets;
     payload.spreadDeg = cone / DEG;
     payload.ox = p.pos.x;

@@ -482,7 +482,19 @@ export class PlayerController {
     this.hp -= amount;
     this.sinceHurt = 0;
     this.ctx.bus.emit('player:hurt', { amount, fromDir, hp: this.hp });
-    if (this.hp <= 0) this._die();
+    if (this.hp <= 0) {
+      // ROUND 7 (lane G): 'secondWind', the other half of blood_4 "Iron" — "once a cycle the
+      // end of you is a run". Declared in nodes.js since round 6, never called. Base is null,
+      // so with no node owned this is one property read and a death, exactly as before.
+      const pr = this._sys ? this._sys('progress') : (this.ctx.systems && this.ctx.systems.get('progress'));
+      const wind = (pr && typeof pr.perk === 'function') ? pr.perk('secondWind', null) : null;
+      if (wind && wind.seconds > 0) {
+        this.hp = 1;
+        this.invuln = Math.max(this.invuln, wind.seconds);
+        return;
+      }
+      this._die();
+    }
   }
 
   heal(v) { this.hp = Math.min(this.hpMax, this.hp + v); }
@@ -1092,6 +1104,13 @@ export class PlayerController {
    * place; every listener reads it synchronously.
    */
   _emitNoise(radius, source) {
+    if (!(radius > 0)) return;
+    // ROUND 7 (lane G): the 'noiseRadius' hook, which nodes.js has declared since round 6 with
+    // `at: 'player/controller.js the footstep noise emit'` and which nothing ever ran. quiet_1
+    // "Soft Step" and quiet_2 "Cold Barrel" both key on the SOURCE string. With no node owned
+    // the reduce returns the radius untouched, so a fresh save measures what it always did.
+    const pr = this._sys ? this._sys('progress') : (this.ctx.systems && this.ctx.systems.get('progress'));
+    if (pr && typeof pr.perk === 'function') radius = pr.perk('noiseRadius', radius, source);
     if (!(radius > 0)) return;
     _noisePayload.x = this.pos.x;
     _noisePayload.z = this.pos.z;

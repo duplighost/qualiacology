@@ -272,7 +272,14 @@ export const CFG = {
     rovers: { count: 8, distance: 18, decay: 1.8, reseat: 0.4 },   // [skyshard rovers.js]
     // MARROW's post-fix torch. It was 980 cd and blew every near wall to white:
     // "all I see is the flashlight on the wall". Start here and go DOWN, never up.
-    torch: { hot: 560, angle: 0.80, penumbra: 0.72, spill: 300, lens: 6.0, lensR: 3.4, lag: 11, ahead: 8 },
+    //
+    // ROUND 7: 560 -> 100, and it went down for the last time, because the fault was never the
+    // brightness. It was gfx/lights.js TORCH_DECAY, which was 2.0 — physically correct
+    // inverse-square — so a wall at arm's length took 31x what a wall at ten metres took. The
+    // pair is now decay 1.25 / hot 100, solved so that ten metres out is unchanged and 1.8 m
+    // gets a quarter of the light. The whole derivation and the three lanes that proved it are
+    // in the note above TORCH_DECAY. THESE TWO NUMBERS MOVE TOGETHER OR THE MID FIELD MOVES.
+    torch: { hot: 100, angle: 0.80, penumbra: 0.72, spill: 300, lens: 6.0, lensR: 3.4, lag: 11, ahead: 8 },
     headlight: { intensity: 420, angle: 0.62, distance: 60 },
   },
 

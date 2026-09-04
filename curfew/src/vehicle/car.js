@@ -61,7 +61,7 @@ import { CFG } from '../config.js';
 import { clamp, clamp01, damp, dampAngle, lerp, ease, TAU } from '../engine/math.js';
 import { ACTIONS } from '../engine/input.js';
 import { MASK } from '../world/collision.js';
-import { buildCarBody, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR, DOOR_HINGE, FOOTPRINT } from './carbody.js';
+import { buildCarBody, buildDebrisGeometry, DEBRIS_VERTS, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR, DOOR_HINGE, FOOTPRINT } from './carbody.js';
 
 const K = CFG.car;
 const SP = K.spawn;
@@ -164,6 +164,42 @@ const CONTACT_MEMORY = 0.12;      // s without a hit before a trunk contact coun
 const RAM_RADIUS = 2.4;
 const RAM_EVERY = 0.20;
 
+// THE CRUSH (round 7, lane F). Alex, fifth playtest: "more towards the dying light driving
+// expansion type style. Car that handles great. CAN CRUSH THINGS WITH IT."
+//
+// collision.js owns WHAT breaks and at what speed (BREAKABLE_TAGS, breakSpeed). This owns
+// what it FEELS like, and the whole brief for that is one sentence of his: nothing floaty,
+// "it zips right back to them in a fun way", never "plunk". So:
+//   - the bite is proportional to the mass and it is small. A fence costs 8% of your speed,
+//     a drum 15%, a waystone 29%, and a tick can never cost more than CRUSH_KEEP_FLOOR;
+//   - a thing you clip OFF-CENTRE kicks the nose away from it, once, as an impulse — not a
+//     per-frame torque, which would be frame-rate dependent (the MOSSWAY bug, fix 3);
+//   - debris flies and settles, out of our own geometry (carbody.js buildDebrisGeometry);
+//   - a thud goes out, and the camera takes a short knock.
+// Nothing here stops the car. That is the difference between crushing a fence and hitting one.
+const CRUSH = K.crush || {};
+const CRUSH_R = CRUSH.radius || 1.30;        // the nose disc, a shade wider than the body
+const CRUSH_LEAD = CRUSH.lead || 2.05;       // how far ahead of the axle centre it sits
+const CRUSH_BAND_LO = -0.10;                 // relative to the car's y: the bumper's bottom
+const CRUSH_BAND_HI = 1.55;                  // ...and the top of the bonnet line
+const CRUSH_MASS_REF = CRUSH.massRef || 420; // the mass that would cost a full bite
+const CRUSH_BITE_MIN = 0.03;
+const CRUSH_BITE_MAX = 0.34;
+const CRUSH_KEEP_FLOOR = CRUSH.keepFloor || 0.58;   // no single tick may cost more than this
+const CRUSH_YAW_MAX = CRUSH.yaw || 0.16;     // rad of nose kick for a dead-off-centre heavy
+// The kick is PAID OUT over about a fifth of a second, not written into the heading in one
+// step. Two reasons and they agree: a single-frame heading jump is a discontinuity the eye
+// reads as a teleport (and tests/car.mjs's jerk gate caught it at 0.60 deg against 0.45),
+// and a shove that develops over seven frames is what being knocked sideways feels like.
+// The total angle is identical; only its arrival is spread.
+const CRUSH_KICK_LAMBDA = 13.0;
+const CRUSH_TRAUMA = CRUSH.trauma || 0.46;   // camera knock at the heavy end, short
+const CRUSH_WEAR = 0.010;                    // per kg/100: the county wears the car down too
+const DEBRIS_POOL = 24;                      // pieces in flight at once; one mesh, one draw
+const DEBRIS_LIFE = 2.2;                     // s before a piece is taken down
+const DEBRIS_GRAV = 19.0;
+const DEBRIS_BOUNCE = 0.28;
+
 // BLOCKER 1. A parked car goes DARK, and the going-dark is a beat rather than a switch:
 // the filament falls off over this while the block ticks itself cool, and when it reaches
 // zero the census SpotLight goes out with it and the woods come back. Long enough that
@@ -256,6 +292,10 @@ const _q = new THREE.Quaternion();
 const _e = new THREE.Euler(0, 0, 0, 'YXZ');
 const _s = new THREE.Vector3(1, 1, 1);
 const _pos = new THREE.Vector3();
+// ROUND 7, lane F: the 'world:broke' payload. Module scratch, written in place and emitted;
+// a listener must read it synchronously and never retain it (the same contract as
+// controller.js's player:climb payload).
+const _brokePayload = { x: 0, y: 0, z: 0, mass: 0, n: 0, tag: null };
 
 function wrapAngle(a) {
   a = a % TAU;
@@ -265,6 +305,36 @@ function wrapAngle(a) {
 }
 /** shortest signed angle from a to b */
 function angleDelta(a, b) { return wrapAngle(b - a); }
+
+/**
+ * ROUND 7, lane F. Collapse one bracketed part of a merged site geometry onto its own
+ * centroid. Every triangle in [v0, v1) becomes degenerate and stops covering a pixel;
+ * nothing outside the range moves, so the rest of the site is untouched. Returns the
+ * part's top in the geometry's own frame, which is where the debris starts.
+ *
+ * The range comes from sites.js's Kit.open()/close() and rides on the geometry as
+ * `userData.breakParts` — see the note there.
+ */
+function collapsePart(geo, part) {
+  const attr = geo.attributes.position;
+  const arr = attr.array;
+  const v0 = part.v0, v1 = Math.min(part.v1, attr.count);
+  if (!(v1 > v0)) return 0;
+  let cx = 0, cy = 0, cz = 0, top = -Infinity;
+  for (let v = v0; v < v1; v++) {
+    const k = v * 3;
+    cx += arr[k]; cy += arr[k + 1]; cz += arr[k + 2];
+    if (arr[k + 1] > top) top = arr[k + 1];
+  }
+  const n = v1 - v0;
+  cx /= n; cy /= n; cz /= n;
+  for (let v = v0; v < v1; v++) {
+    const k = v * 3;
+    arr[k] = cx; arr[k + 1] = cy; arr[k + 2] = cz;
+  }
+  attr.needsUpdate = true;
+  return top;
+}
 
 export class Car {
   static id = 'car';
@@ -297,6 +367,13 @@ export class Car {
     this.cabin = 0; this.prevCabin = 0;
     this.cabinHandle = null;
     this._creaked = false;        // the swing-wide creak fires once per approach
+
+    // ---- ROUND 7, lane F: the crush. Allocated on the FIRST break, never at boot: a
+    // page that never drives through anything never pays for the mesh or the arrays.
+    this._deb = null;
+    this._crushLast = { n: 0, mass: 0, before: 0, after: 0, keep: 1, tag: null, yaw: 0 };
+    this.crushCount = 0; this.crushMass = 0;   // lifetime, for the instruments
+    this.kickOwed = 0;         // radians of nose kick still to be paid out (see _payKick)
     this._useConsumed = false;    // a held key acts on its first frame and then shuts up
 
     // ---- lifecycle
@@ -996,6 +1073,9 @@ export class Car {
   /* ------------------------------------------------------------------- step */
 
   step(dt) {
+    // Debris outlives the car: you can crush a fence, park, get out and watch the last
+    // splinters settle. So it steps before any of the early returns below.
+    this._stepDebris(dt);
     if (!this.body) return;
 
     this.prevX = this.x; this.prevY = this.y; this.prevZ = this.z;
@@ -1543,6 +1623,7 @@ export class Car {
     this.lockNow = lock;
     this.steer = damp(this.steer, steerIn * lock, STEER_LAMBDA, dt);
     this.heading = wrapAngle(this.heading + this.speed * Math.tan(this.steer) / K.wheelbase * dt);
+    this._payKick(dt);          // round 7: whatever the last crush shoved the nose by
 
     const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
     this.x += fx * this.speed * dt;
@@ -1550,9 +1631,33 @@ export class Car {
     this.travel += Math.abs(this.speed) * dt;
     this.wheelRot -= this.speed * dt / WHEEL_RADIUS;
 
+    // ROUND 7, lane F: BEFORE the contacts resolve. Anything the nose can go through at
+    // this speed is retired from the collider field right here, so _resolveContacts a line
+    // below never sees it and there is no frame where the car is stopped by a fence it has
+    // already broken.
+    //
+    // THE PILOT CRUSHES TOO, and it has to. Breakables live on the verge and some of them
+    // land inside the road ribbon; a pilot that could not go through a 24 kg crate would
+    // grind to a halt on the approach and the arrival beat — the one Alex hears before he
+    // sees it — would silently stop working. It crushes SILENTLY (no trauma, no thud): the
+    // player is not in the car and a camera knock from 60 m away is a bug, not a beat.
+    this._crushStep(dt, fx, fz);
+
     this._resolveContacts(dt, fx, fz);
 
-    const gy = terr ? terr.heightAt(this.x, this.z) : 0;
+    // ROUND 7, lane F (Alex: "It's not super smooth"). THE CAR RIDES ON ITS WHEELBASE,
+    // NOT ON A POINT. One terrain sample under the centre picks up every ripple the
+    // heightfield has at a 2.55 m scale and hands it straight to the seat; averaging the
+    // two AXLE points is a physical low-pass — it is what having wheels 2.55 m apart
+    // actually does to a body — and it costs one extra heightAt on a step that already
+    // takes four in _tilt. The damp stays exactly where it was: this changes what the car
+    // is following, not how fast it follows it.
+    let gy = 0;
+    if (terr) {
+      const ax = K.wheelbase * 0.5;
+      gy = (terr.heightAt(this.x + fx * ax, this.z + fz * ax)
+          + terr.heightAt(this.x - fx * ax, this.z - fz * ax)) * 0.5;
+    }
     this.y = damp(this.y, gy, GROUND_LAMBDA, dt);
 
     this._tilt(dt, onRoad);
@@ -1839,6 +1944,321 @@ export class Car {
     }
   }
 
+  /* --------------------------------------------------------------- crush -- */
+
+  /**
+   * THE CRUSH, round 7 (lane F). docs/NEXT.md section C: "Crushing things with the car.
+   * Needs breakable colliders across three owners' files." They are one owner's files now.
+   *
+   * Every driving step, one disc at the nose asks the collider field what it can go
+   * through at this speed (collision.crush). Everything it names is ALREADY GONE from the
+   * field by the time this returns — so the sweep two lines further down in _integrate
+   * drives through the hole in the same step, and there is no frame in which the car is
+   * both past the fence and still colliding with it.
+   *
+   * Then we pay for it: a bite of speed by mass, a kick on the nose for anything clipped
+   * off-centre, the geometry taken down, debris thrown, a thud, and a short camera knock.
+   *
+   * Allocates nothing. `col.crush` fills a shared result and we read it before anything
+   * else can call it.
+   */
+  _crushStep(dt, fx, fz) {
+    const col = this._collision;
+    if (!col || typeof col.crush !== 'function') return 0;
+    const speed = Math.abs(this.speed);
+    if (speed < 2.6) return 0;
+    const s = this.speed > 0 ? 1 : -1;
+    // The disc sits at the nose and grows by half a step of travel, so nothing thin slips
+    // between two fixed steps at 23 m/s (0.38 m per step).
+    const cx = this.x + fx * s * CRUSH_LEAD, cz = this.z + fz * s * CRUSH_LEAD;
+    const rad = CRUSH_R + speed * dt * 0.5;
+    const n = col.crush(cx, cz, rad, this.y + CRUSH_BAND_LO, this.y + CRUSH_BAND_HI, speed);
+    const L = this._crushLast;
+    L.n = n; L.before = this.speed; L.after = this.speed; L.keep = 1; L.yaw = 0;
+    if (!n) { L.mass = 0; L.tag = null; return 0; }
+
+    const res = col.crushResult();
+    const rx = Math.cos(this.heading), rz = -Math.sin(this.heading);
+    let keep = 1, kick = 0, heaviest = 0;
+    L.mass = res.mass; L.tag = res.tag[0];
+    for (let i = 0; i < n; i++) {
+      const m = res.m[i];
+      if (m > heaviest) { heaviest = m; L.tag = res.tag[i]; }
+      keep *= 1 - clamp(m / CRUSH_MASS_REF, CRUSH_BITE_MIN, CRUSH_BITE_MAX);
+      // How far off the spine it was, signed: + is the car's right, and a thing on the
+      // right shoves the nose LEFT, which is a rising heading in this basis (_tilt).
+      const lat = (res.x[i] - this.x) * rx + (res.z[i] - this.z) * rz;
+      kick += clamp(lat / CRUSH_R, -1, 1) * clamp01(m / CRUSH_MASS_REF) * CRUSH_YAW_MAX;
+      this._takeDown(res.x[i], res.z[i], res.y[i], m, res.tag[i]);
+    }
+    keep = Math.max(keep, CRUSH_KEEP_FLOOR);
+    this.speed *= keep;
+    // Owed, not applied: _payKick spends it over the next fifth of a second.
+    this.kickOwed = clamp(this.kickOwed + kick, -CRUSH_YAW_MAX * 2, CRUSH_YAW_MAX * 2);
+    L.keep = keep; L.after = this.speed; L.yaw = kick;
+    this.crushCount += n; this.crushMass += res.mass;
+
+    // The car takes something off it too — a bumper full of fence posts is why WHEEL 4's
+    // 'Keep' has anything to repair.
+    this.wear = clamp01(this.wear + CRUSH_WEAR * (res.mass / 100));
+    if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true);
+
+    // A thud, on both channels: 'noise' is what the director hears, dread('branch') is dry
+    // close wood and is the honest stand-in until the audio lane keys a real crash to
+    // source 'car:crush' (docs/ROUND-7/HANDOFF-F.md). The noise goes out whoever is
+    // driving — it is a real disturbance in the county either way — but the thud and the
+    // camera knock belong to the DRIVER, and the driver may be the pilot.
+    const driven = this.mode === 'driving';
+    this._noise('car:crush', 24 + Math.min(res.mass, 200) * 0.09, cx, cz);
+    if (driven) {
+      this._say('branch', clamp(0.55 + res.mass / 260, 0.55, 1.0), cx, this.y + 0.8, cz);
+      const fxs = this._fx;
+      if (fxs && typeof fxs.addTrauma === 'function') {
+        fxs.addTrauma(clamp01(res.mass / 220) * CRUSH_TRAUMA + 0.10);
+      }
+    }
+    // Preallocated, like controller.js's _climbPayload: read it synchronously, never retain
+    // it. The hot path allocates nothing (CONTRACT).
+    _brokePayload.x = cx; _brokePayload.y = this.y + 0.6; _brokePayload.z = cz;
+    _brokePayload.mass = res.mass; _brokePayload.n = n; _brokePayload.tag = L.tag;
+    this._emit('world:broke', _brokePayload);
+    return n;
+  }
+
+  /**
+   * Pay out whatever nose kick a crush still owes, exponentially. Called from _integrate
+   * every driving step, after the steering and before the position update, so the kick and
+   * the wheel go through the same heading and the same interpolation. Costs nothing when
+   * nothing is owed.
+   */
+  _payKick(dt) {
+    if (!this.kickOwed) return;
+    const d = this.kickOwed * (1 - Math.exp(-CRUSH_KICK_LAMBDA * dt));
+    this.kickOwed -= d;
+    if (Math.abs(this.kickOwed) < 1e-5) this.kickOwed = 0;
+    this.heading = wrapAngle(this.heading + d);
+  }
+
+  /**
+   * TAKE THE THING DOWN, and throw what is left of it.
+   *
+   * A destination is ONE merged geometry (sites.js's discipline note), so a broken prop
+   * cannot be a mesh we remove. Instead sites.js brackets each smashable thing with
+   * `k.solid.open()/close()` and writes its VERTEX RANGE onto the finished geometry as
+   * `geometry.userData.breakParts`. Here we find the part whose world position matches the
+   * collider that just broke and collapse those vertices to their own centroid: the
+   * triangles degenerate, the thing is gone, and not one other triangle in the merge moves.
+   *
+   * This READS another lane's scene graph (places.group / wilds.group) and writes one
+   * attribute on one geometry. It never touches their files. A proper
+   * `places.breakPart(x, z)` is requested in docs/ROUND-7/HANDOFF-F.md; until it lands,
+   * this is guarded at every step and a miss costs nothing but the debris being generic.
+   */
+  _takeDown(wx, wz, wy, mass, tag) {
+    let colour = null, top = wy;
+    const sys = this.ctx.systems;
+    for (let s = 0; s < 2; s++) {
+      const owner = sys ? sys.get(s === 0 ? 'places' : 'wilds') : null;
+      const root = owner && owner.group ? owner.group : null;
+      if (!root || !root.children) continue;
+      for (let i = 0; i < root.children.length && !colour; i++) {
+        const site = root.children[i];
+        if (!site) continue;
+        const dx = site.position.x - wx, dz = site.position.z - wz;
+        if (dx * dx + dz * dz > 3600) continue;          // 60 m: not this site
+        site.traverse((o) => {
+          if (colour) return;
+          const geo = o.geometry;
+          const parts = geo && geo.userData ? geo.userData.breakParts : null;
+          if (!parts || !parts.length) return;
+          o.updateWorldMatrix(true, false);
+          for (let p = 0; p < parts.length; p++) {
+            const part = parts[p];
+            if (part.gone) continue;
+            _v.set(part.x, 0, part.z).applyMatrix4(o.matrixWorld);
+            const ex = _v.x - wx, ez = _v.z - wz;
+            if (ex * ex + ez * ez > 1.0) continue;       // within a metre: this is the one
+            colour = part.col || null;
+            top = collapsePart(geo, part);
+            part.gone = true;
+            break;
+          }
+        });
+      }
+      if (colour) break;
+    }
+    this._throwDebris(wx, wy, wz, mass, colour, tag);
+    return !!colour;
+  }
+
+  /** Ensure the debris pool exists. One geometry, one mesh, one draw, no new material. */
+  _debris() {
+    if (this._deb) return this._deb;
+    const scene = this.ctx.scene;
+    if (!scene) return null;
+    // Borrow a material that already exists rather than making one: a new material is a
+    // new shader program against CFG.render.budget.programsMax (AGENTS.md). The places
+    // lane's body material is the right look — this IS their scenery, in pieces.
+    const places = this.ctx.systems ? this.ctx.systems.get('places') : null;
+    const mat = (places && places.matBody) || (this.body && this.body.materials && this.body.materials[0]);
+    if (!mat) return null;
+    const built = buildDebrisGeometry(DEBRIS_POOL);
+    const mesh = new THREE.Mesh(built.geo, mat);
+    mesh.name = 'car-debris';
+    mesh.frustumCulled = false;
+    mesh.castShadow = false; mesh.receiveShadow = false;
+    mesh.visible = false;
+    scene.add(mesh);
+    const n = built.pieces;
+    const d = {
+      geo: built.geo, mesh, base: built.base, baseN: built.baseN, per: built.per, n,
+      live: new Uint8Array(n), next: 0, alive: 0,
+      x: new Float64Array(n), y: new Float64Array(n), z: new Float64Array(n),
+      px: new Float64Array(n), py: new Float64Array(n), pz: new Float64Array(n),
+      vx: new Float64Array(n), vy: new Float64Array(n), vz: new Float64Array(n),
+      a: new Float64Array(n), b: new Float64Array(n), c: new Float64Array(n),
+      pa: new Float64Array(n), pb: new Float64Array(n), pc: new Float64Array(n),
+      wa: new Float64Array(n), wb: new Float64Array(n), wc: new Float64Array(n),
+      life: new Float64Array(n), rest: new Float64Array(n),
+    };
+    this._deb = d;
+    // Every piece starts collapsed to a point, so the very first frame draws nothing.
+    for (let i = 0; i < n; i++) this._parkPiece(i);
+    return d;
+  }
+
+  /** Collapse one piece's vertices to the origin: 24 degenerate triangles, invisible. */
+  _parkPiece(i) {
+    const d = this._deb;
+    const arr = d.geo.attributes.position.array;
+    const v0 = i * d.per * 3, v1 = v0 + d.per * 3;
+    for (let v = v0; v < v1; v++) arr[v] = 0;
+  }
+
+  /**
+   * Throw the pieces. `mass` decides how many and how hard; the car's own heading and speed
+   * decide where they go, so debris always leaves along the direction of travel — which is
+   * the read that says YOU did that, and not that a thing fell over near you.
+   */
+  _throwDebris(wx, wy, wz, mass, colour, tag) {
+    const d = this._debris();
+    if (!d) return 0;
+    const pieces = Math.min(10, 4 + Math.round(mass / 14));
+    const rng = this.ctx.rng ? this.ctx.rng.fork('car-crush') : null;
+    const rnd = () => (rng ? rng.next() : 0.5);
+    const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
+    const s = this.speed >= 0 ? 1 : -1;
+    const spd = Math.min(Math.abs(this.speed), 26);
+    const col = d.geo.attributes.color.array;
+    // 0.6x THE THING'S OWN ALBEDO. The pieces are thrown 1-3 m in front of the bonnet,
+    // which is the core of the headlamp's cone: CFG.lights.headlight is 420 cd with decay
+    // 2, so at 1.5 m that is ~187 lux and an albedo the rest of the county renders at 50
+    // clips to white there. Photographed at tests/shots/f-crush-debris.png. ART.md 1.9's
+    // diagnosis is exactly this — "it blows out because of the albedos it is landing on,
+    // not because of the candela" — and the albedo is the half of it this lane owns.
+    // Flagged for the art owner in docs/ROUND-7/HANDOFF-F.md: it wants a proper measure
+    // against ART 0.3 row 12 (only lamps and glints above 150, on <= 1.5% of the frame).
+    const K6 = 0.6;
+    const r = (colour ? colour[0] : 0.14) * K6;
+    const g = (colour ? colour[1] : 0.13) * K6;
+    const b = (colour ? colour[2] : 0.12) * K6;
+    for (let p = 0; p < pieces; p++) {
+      const i = d.next; d.next = (d.next + 1) % d.n;
+      if (!d.live[i]) d.alive++;
+      d.live[i] = 1;
+      d.x[i] = d.px[i] = wx + (rnd() - 0.5) * 0.9;
+      d.y[i] = d.py[i] = wy + (rnd() - 0.3) * 0.7;
+      d.z[i] = d.pz[i] = wz + (rnd() - 0.5) * 0.9;
+      // Forward with the car, up, and a spray sideways. The forward term is 0.45 of the
+      // car's own speed: fast enough that the pieces stay ahead of you for a beat.
+      const side = (rnd() - 0.5) * 2;
+      d.vx[i] = fx * s * spd * 0.45 + (-fz) * side * (2.4 + rnd() * 3.4) + (rnd() - 0.5) * 1.6;
+      d.vz[i] = fz * s * spd * 0.45 + (fx) * side * (2.4 + rnd() * 3.4) + (rnd() - 0.5) * 1.6;
+      d.vy[i] = 2.6 + rnd() * 4.2 + spd * 0.10;
+      d.a[i] = d.pa[i] = rnd() * TAU; d.b[i] = d.pb[i] = rnd() * TAU; d.c[i] = d.pc[i] = rnd() * TAU;
+      d.wa[i] = (rnd() - 0.5) * 16; d.wb[i] = (rnd() - 0.5) * 16; d.wc[i] = (rnd() - 0.5) * 16;
+      d.life[i] = DEBRIS_LIFE * (0.72 + rnd() * 0.56);
+      d.rest[i] = 0;
+      const v0 = i * d.per * 3;
+      for (let v = 0; v < d.per; v++) {
+        col[v0 + v * 3] = r; col[v0 + v * 3 + 1] = g; col[v0 + v * 3 + 2] = b;
+      }
+    }
+    d.geo.attributes.color.needsUpdate = true;
+    d.mesh.visible = true;
+    return pieces;
+  }
+
+  /** Debris physics. Fixed step, no rendering — present() draws it interpolated. */
+  _stepDebris(dt) {
+    const d = this._deb;
+    if (!d || !d.alive) return;
+    const terr = this._terrain;
+    for (let i = 0; i < d.n; i++) {
+      if (!d.live[i]) continue;
+      d.px[i] = d.x[i]; d.py[i] = d.y[i]; d.pz[i] = d.z[i];
+      d.pa[i] = d.a[i]; d.pb[i] = d.b[i]; d.pc[i] = d.c[i];
+      d.life[i] -= dt;
+      if (d.life[i] <= 0) { d.live[i] = 0; d.alive--; this._parkPiece(i); continue; }
+      if (d.rest[i] > 0) continue;                    // settled: it just lies there
+      d.vy[i] -= DEBRIS_GRAV * dt;
+      d.x[i] += d.vx[i] * dt; d.y[i] += d.vy[i] * dt; d.z[i] += d.vz[i] * dt;
+      d.a[i] += d.wa[i] * dt; d.b[i] += d.wb[i] * dt; d.c[i] += d.wc[i] * dt;
+      const gy = terr ? terr.heightAt(d.x[i], d.z[i]) : 0;
+      if (d.y[i] <= gy + 0.06) {
+        d.y[i] = gy + 0.06;
+        if (d.vy[i] < -1.6) {
+          // one bounce, then it lies down: nothing floaty
+          d.vy[i] = -d.vy[i] * DEBRIS_BOUNCE;
+          d.vx[i] *= 0.48; d.vz[i] *= 0.48;
+          d.wa[i] *= 0.42; d.wb[i] *= 0.42; d.wc[i] *= 0.42;
+        } else {
+          d.vx[i] = 0; d.vy[i] = 0; d.vz[i] = 0;
+          d.wa[i] = d.wb[i] = d.wc[i] = 0;
+          d.rest[i] = 1;
+        }
+      }
+    }
+    if (!d.alive) d.mesh.visible = false;
+  }
+
+  /** Debris presentation. Interpolated (CONTRACT), one attribute upload, one draw. */
+  _presentDebris(a) {
+    const d = this._deb;
+    if (!d || !d.mesh.visible) return;
+    const pos = d.geo.attributes.position.array;
+    const nor = d.geo.attributes.normal.array;
+    const base = d.base, baseN = d.baseN, per = d.per;
+    for (let i = 0; i < d.n; i++) {
+      if (!d.live[i]) continue;
+      const x = lerp(d.px[i], d.x[i], a), y = lerp(d.py[i], d.y[i], a), z = lerp(d.pz[i], d.z[i], a);
+      const ra = d.pa[i] + angleDelta(d.pa[i], d.a[i]) * a;
+      const rb = d.pb[i] + angleDelta(d.pb[i], d.b[i]) * a;
+      const rc = d.pc[i] + angleDelta(d.pc[i], d.c[i]) * a;
+      // A YXZ rotation as nine numbers. No Matrix4, no Euler, no allocation.
+      const sa = Math.sin(ra), ca = Math.cos(ra);
+      const sb = Math.sin(rb), cb = Math.cos(rb);
+      const sc = Math.sin(rc), cc = Math.cos(rc);
+      const m00 = cb * cc + sb * sa * sc, m01 = -cb * sc + sb * sa * cc, m02 = sb * ca;
+      const m10 = ca * sc, m11 = ca * cc, m12 = -sa;
+      const m20 = -sb * cc + cb * sa * sc, m21 = sb * sc + cb * sa * cc, m22 = cb * ca;
+      const o = i * per * 3;
+      for (let v = 0; v < per; v++) {
+        const k = o + v * 3;
+        const bx = base[k], by = base[k + 1], bz = base[k + 2];
+        pos[k] = x + m00 * bx + m01 * by + m02 * bz;
+        pos[k + 1] = y + m10 * bx + m11 * by + m12 * bz;
+        pos[k + 2] = z + m20 * bx + m21 * by + m22 * bz;
+        const nx = baseN[k], ny = baseN[k + 1], nz = baseN[k + 2];
+        nor[k] = m00 * nx + m01 * ny + m02 * nz;
+        nor[k + 1] = m10 * nx + m11 * ny + m12 * nz;
+        nor[k + 2] = m20 * nx + m21 * ny + m22 * nz;
+      }
+    }
+    d.geo.attributes.position.needsUpdate = true;
+    d.geo.attributes.normal.needsUpdate = true;
+  }
+
   /* ---------------------------------------------------------------- horn -- */
 
   /**
@@ -1950,8 +2370,9 @@ export class Car {
    * method leaves the simulation identical and the car a 60 Hz staircase.
    */
   present(alpha) {
-    if (!this.body || !this.exists) return;
     const a = alpha === undefined ? 1 : alpha;
+    this._presentDebris(a);              // outlives the car; drawn before the early return
+    if (!this.body || !this.exists) return;
 
     const x = lerp(this.prevX, this.x, a);
     const y = lerp(this.prevY, this.y, a);
@@ -2207,6 +2628,13 @@ export class Car {
       ram: { hits: this._ramLast.hits, n: this._ramLast.n, mass: this._ramLast.mass,
         before: this._ramLast.before, after: this._ramLast.after, keep: this._ramLast.keep,
         clean: this._ramLast.clean },
+      // THE LAST CRUSH (round 7): what broke, what it cost, how far the nose was kicked,
+      // and the lifetime totals a tool can read after a lap of the county.
+      crush: { n: this._crushLast.n, mass: this._crushLast.mass, tag: this._crushLast.tag,
+        before: this._crushLast.before, after: this._crushLast.after,
+        keep: this._crushLast.keep, yaw: this._crushLast.yaw,
+        total: this.crushCount, totalMass: this.crushMass,
+        debris: this._deb ? this._deb.alive : 0 },
       tris: this.body ? this.body.tris : 0,
       holdT: this.holdT,
       // THE ENTRY VERB, so it can be argued with by a number. `reach` is the distance the
@@ -2246,7 +2674,7 @@ export class Car {
     this.x = x; this.z = z;
     this.y = terr ? terr.heightAt(x, z) : 0;
     this.heading = heading === undefined ? this.heading : heading;
-    this.speed = 0; this.steer = 0;
+    this.speed = 0; this.steer = 0; this.kickOwed = 0;
     this.exists = true;
     this.mode = 'idle';
     this.hotwired = false;
@@ -2288,6 +2716,11 @@ export class Car {
       window.removeEventListener('keydown', this._onKeyDown);
       window.removeEventListener('keyup', this._onKeyUp);
       this._ownsUseKey = false;
+    }
+    if (this._deb) {
+      if (this._deb.mesh.parent) this._deb.mesh.parent.remove(this._deb.mesh);
+      this._deb.geo.dispose();      // the material is borrowed; it is not ours to dispose
+      this._deb = null;
     }
     if (this.body) { this.body.dispose(); this.body = null; }
     if (this.ctx.shared) this.ctx.shared.inCar = false;

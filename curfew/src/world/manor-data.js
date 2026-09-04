@@ -161,7 +161,21 @@ export const DOORS = Object.freeze([
   ['first', 27, 5, 'S', { name: 'the back stairs door' }],
   ['first', 17, 6, 'E', { id: 'eastwing', locked: 'eastwingKey', heavy: true, name: 'the east wing door' }],
   // basement
-  ['basement', 23, 4, 'S', { type: 'arch', w: 1.8, h: 2.2 }],
+  // ROUND 7 lane B. THIS ARCH WAS 1.8 m WIDE ON ONE CELL and the cellar stair is FOUR metres
+  // wide (RAMPS bstair, x 46-50): you came down the flight on the x 48-50 half, met solid
+  // wall, and the route walker climbed back out — measured 2026-09-03, tests/manor.mjs
+  // section (c) ended the descent on the SCULLERY floor at +3.2 instead of at the fuse board
+  // at 0, and `node tools/lane-b-stairs.mjs` shows the wall closed at donor x 48-50, z 10.
+  // Two cells, the second merged, the way the foyer's arch is done: the whole width of the
+  // stair opens into the Cellar and there is nothing to squeeze past in the dark.
+  ['basement', 23, 4, 'S', { type: 'arch', w: 4.0, h: 2.5 }],
+  ['basement', 24, 4, 'S', { type: 'arch', w: 2.6, h: 2.5, merge: true }],
+  // and the third cell, x 44-46, which is the standing strip beside the flight. MEASURED
+  // with `node tools/lane-b-probe.mjs`: with cells 23-24 open the body reaches the cellar
+  // FLOOR (y 0.00, was 3.20) and then jams against this last 2 m of wall at donor (44.6,
+  // 9.5), 4.35 m short of the fuse board. The Cellar Stairs room is the full width of the
+  // wall it shares with the Cellar; there was never a reason for two thirds of it to be shut.
+  ['basement', 22, 4, 'S', { type: 'arch', w: 2.6, h: 2.5, merge: true }],
   ['basement', 24, 5, 'E', { id: 'wineDoor', name: 'the wine cellar door' }],
   ['basement', 22, 6, 'S', { type: 'arch', w: 1.8, h: 2.2 }],
   ['basement', 20, 5, 'W', { type: 'arch', w: 1.8, h: 2.2, mergeTo: 'tunnel' }],
@@ -202,13 +216,20 @@ export const RAMPS = Object.freeze([
 /** Floor cells to omit (stairwell openings): [level, cx0, cz0, cx1, cz1]. [donor :184-189] */
 export const FLOOR_HOLES = Object.freeze([
   ['first', 28, 2, 29, 4],   // over svc1 flight (landing1 floor)
-  ['ground', 23, 2, 24, 4],  // scullery floor over bstair
+  // ROUND 7 lane B: the well is the WHOLE room, cells 22-24, not just the flight's own
+  // two. MEASURED with `node tools/lane-b-probe.mjs`: the cellar stair runs donor x 46-50
+  // inside a room (bstairs) that runs x 44-50, and the ground floor covered that missing
+  // 2 m strip with a slab whose underside is 2.9 m over the pad. A body a metre down the
+  // flight that drifts west has its head in that slab, the solver squeezes it out UPWARD,
+  // and it finishes standing on the servants' hall floor 3.2 m above the fuse board — which
+  // is exactly what tests/manor.mjs has been reporting since round 6 shipped.
+  ['ground', 22, 2, 24, 4],  // scullery / servants' hall floor over the WHOLE stair well
   ['ground', 1, 1, 1, 3],    // chapel floor over crypt steps
 ]);
 /** Ceiling cells to omit (a stair flight passes through). [donor :191-196] */
 export const CEIL_HOLES = Object.freeze([
   ['ground', 28, 2, 29, 4],    // larder ceiling under svc1
-  ['basement', 23, 2, 24, 4],  // cellar-stairs ceiling under bstair
+  ['basement', 22, 2, 24, 4],  // cellar-stairs ceiling under the whole well (see FLOOR_HOLES)
   ['basement', 1, 1, 1, 3],    // crypt ceiling under chapel steps
 ]);
 

@@ -175,6 +175,13 @@ const FORM_RAMP = 0.62;      // dot(n, moon) -> side, scale ...
 const FORM_BIAS = 0.50;      // ... and offset
 const FORM_EDGE = 0.38;      // multiplier where the normal is perpendicular to the view
 
+// ROUND 7, LANE E — the per-template lean ceiling, radians, indexed by template.
+// 0-3 conifer, 4-5 birch, 6-7 broad, 8 snag. A mature conifer holds itself plumb; a birch
+// bends; a dead snag is on its way down. The actual lean is this times pow(hash, 2.2), so
+// the ceiling is what the WORST tree in a stand does, not the average one — measured on
+// screen, a mean lean reads as a hillside and a skewed one reads as a wood.
+const LEAN_BY_KIND = [0.055, 0.062, 0.048, 0.070, 0.095, 0.105, 0.080, 0.088, 0.150];
+
 const TEMPLATE_COUNT = 9;    // GLIDE ships 9 seeded templates; so do we.
 const SLOPE_REJECT = 0.62;   // GLIDE Forest.js:52 rejects > 0.62 for trees
 const GIANT_CHANCE = 0.12;   // GLIDE Forest.js:62
@@ -1451,14 +1458,66 @@ export class Flora {
       const s = byTi.get(ti);
       const k = cursor.get(ti);
       cursor.set(ti, k + 1);
-      // Compose Y-rotation + uniform scale + translation straight into the
-      // instance buffer. three's Matrix4 is column-major; going through an
-      // Object3D dummy per tree would cost three matrix decompositions.
-      const c = Math.cos(yaw), sn = Math.sin(yaw);
+
+      /* ---- ROUND 7, LANE E — NO TREE IN A FOREST IS PLUMB -------------------
+       * Every trunk in this county stood at exactly 90 degrees, which is what
+       * makes tests/shots/E-before/forest.png read as a colonnade rather than
+       * as woods: nine templates, one attitude, and the eye picks up the
+       * repetition instantly because verticals are the one thing it is best at.
+       * A real stand leans. Most trees are within three or four degrees of
+       * plumb and a handful are at eight or ten, and that small spread is a
+       * large part of the difference between "trees" and "posts".
+       *
+       * TWO deterministic hashes of the quantised position, so a tree's lean is
+       * the same on every run and a test can assert one specific trunk. No
+       * a Math dot random call anywhere - the project law and tests/syntax.mjs both
+       * forbid one - no extra stride (TREE_STRIDE stays 10 and
+       * every buffer keeps its layout), no per-tree Quaternion — the 3x3 is
+       * hand-multiplied as Rz(b) * Rx(a) * Ry(yaw), which is ten multiplies
+       * against the three matrix decompositions an Object3D dummy would cost.
+       * The rotation is about the instance ORIGIN, which is the trunk's base,
+       * so a leaning tree stays planted in its own hole.
+       *
+       * LEAN_BY_KIND: a dead snag leans hardest (it is falling), a birch next,
+       * a mature conifer least. HEIGHT VARIATION rides along in the same loop —
+       * a uniform scale gives nine silhouettes at nine sizes, and a separate Y
+       * stretch gives every one of them a different proportion.
+       *
+       * The impostor card below is fed the SAME stretched height, or a tree
+       * would change shape as it crossed the handover band.  */
+      const qx = Math.floor(x * 3.1), qz = Math.floor(z * 3.1);
+      const hA = hashI(qx, qz, this.seed + 613);
+      const hB = hashI(qx, qz, this.seed + 991);
+      const hC = hashI(qx, qz, this.seed + 227);
+      // pow 2.2 on the magnitude: most trees near plumb, a few properly askew
+      const lean = LEAN_BY_KIND[ti] * Math.pow(hA, 2.2);
+      const laz = hB * TAU;
+      // NOT ta/tb: tb is already the tree's tint BLUE, eight lines up. Shadowing it made
+      // this a lineless "unexpected identifier" and the page did not boot at all.
+      const tiltX = lean * Math.cos(laz);
+      const tiltZ = lean * Math.sin(laz);
+      const ca = Math.cos(tiltX), sa = Math.sin(tiltX);
+      const cz2 = Math.cos(tiltZ), sz2 = Math.sin(tiltZ);
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const hMul = 0.88 + hC * 0.30;        // 0.88 - 1.18 on the vertical only
+      const sy2 = sc * hMul;
+
       const m = s.mat, b = k * 16;
-      m[b] = c * sc; m[b + 1] = 0; m[b + 2] = -sn * sc; m[b + 3] = 0;
-      m[b + 4] = 0; m[b + 5] = sc; m[b + 6] = 0; m[b + 7] = 0;
-      m[b + 8] = sn * sc; m[b + 9] = 0; m[b + 10] = c * sc; m[b + 11] = 0;
+      // column 0
+      m[b] = (cz2 * cy - sz2 * sa * sy) * sc;
+      m[b + 1] = (sz2 * cy + cz2 * sa * sy) * sc;
+      m[b + 2] = (-ca * sy) * sc;
+      m[b + 3] = 0;
+      // column 1 — the trunk's own axis, and the only one the height stretch touches
+      m[b + 4] = (-sz2 * ca) * sy2;
+      m[b + 5] = (cz2 * ca) * sy2;
+      m[b + 6] = sa * sy2;
+      m[b + 7] = 0;
+      // column 2
+      m[b + 8] = (cz2 * sy + sz2 * sa * cy) * sc;
+      m[b + 9] = (sz2 * sy - cz2 * sa * cy) * sc;
+      m[b + 10] = (ca * cy) * sc;
+      m[b + 11] = 0;
       m[b + 12] = x; m[b + 13] = y; m[b + 14] = z; m[b + 15] = 1;
       s.tint[k * 3] = tr; s.tint[k * 3 + 1] = tg; s.tint[k * 3 + 2] = tb;
 
@@ -1466,7 +1525,7 @@ export class Flora {
       // function of position and the two shaders have to agree bit for bit.
       cards.pos[i * 3] = x; cards.pos[i * 3 + 1] = y; cards.pos[i * 3 + 2] = z;
       cards.size[i * 2] = tpl.halfWidth * sc;
-      cards.size[i * 2 + 1] = tpl.height * sc;
+      cards.size[i * 2 + 1] = tpl.height * sy2;
       cards.yaw[i] = yaw;
       cards.tpl[i] = ti;
       cards.tint[i * 3] = tr; cards.tint[i * 3 + 1] = tg; cards.tint[i * 3 + 2] = tb;

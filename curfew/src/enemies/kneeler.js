@@ -76,6 +76,8 @@ const K = Object.freeze({
   sweepLunge: 1.40,           // the step it takes INTO the swing (the swing is the step)
   sweepDmg: 45,               // [brief]
   throwM: 4.0,                // metres the player is thrown [brief]
+  throwH: 16.0,               // m/s horizontal, and throwUp is what makes it survive — _throw()
+  throwUp: 4.20,              // m/s up: enough to leave the ground so _stepGround cannot clamp
   carSweep: 4.0,              // it sweeps the car inside this [brief]
   ventEvery: 4.5,             // the vent cycle [DESIGN 4]
   ventOpen: 1.1,              // open for this long, x2.4 [DESIGN 4]
@@ -87,6 +89,17 @@ const K = Object.freeze({
   standOff: [6, 10],          // metres from the claim point [brief]
   flashS: 0.35,               // THE ONE LAW's floor: a hit lights the zone this long
   stirTrauma: 0.30,           // fx.addTrauma per second while it stirs, at 16 m
+  /* THE REVEAL BUDGET IS bodies.js's, UNCHANGED, AND THE MEASUREMENT SAYS SO. ROUND 7 tried
+     to fix tests/boss.mjs (b)'s 10 m torch cell here — the boss reading 47 against a
+     torch-lit ground of 50, i.e. no silhouette at all — by running the ramp further (FAR
+     11 -> 20 -> 30) and dropping the floor (0.34 -> 0.22 -> 0.18). MEASURED: the body moved
+     from 47.0 to 48.0. One luma, for a 46% cut in the albedo the budget hands back. Under the
+     MOON the same body at the same range reads 18.0 against 92.7. So the thing that makes the
+     boss disappear under a torch is not the amount of hide it is showing, it is the torch:
+     it lights the body and the ground it stands on to within 3 luma of each other at 10 m,
+     which is docs/NEXT.md B6's fault ("the pumps are the brightest objects in the frame,
+     which is backwards for a night game") arriving on a body. Written up in
+     docs/ROUND-7/HANDOFF-D.md for whoever owns lights.js. The constants stay bodies.js's. */
 });
 
 /* The species record the rest of the game can read off a Kneeler the way it
@@ -118,7 +131,7 @@ const SLIDE = [0, 0.35, 0.7, 1.05, 1.4, 1.75, -0.35, -0.7, -1.05, -1.4, -1.75];
 const SLIDE_ALL = SLIDE.concat([2.1, 2.5, -2.1, -2.5, Math.PI]);
 const NAV_LOOK = 2.4;        // metres of lookahead a whisker must clear (nav.js LOOKAHEAD is speed-scaled)
 const NAV_HOLD = 0.45;       // seconds a detour heading is held before the whiskers are asked again
-const FAR_MAX = 16;          // road points 36-48 m from the claim that a candidate post is judged from
+const FAR_MAX = 20;          // road points 24-48 m from the claim that a candidate post is judged from
 
 function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -217,7 +230,8 @@ export class Kneeler {
       pos: new THREE.Vector3(), prevPos: new THREE.Vector3(), currPos: new THREE.Vector3(),
       yaw: 0, prevYaw: 0, currYaw: 0,
       post: { x: d.x, z: d.z, yaw: 0 }, postSettled: false, claimX: d.x, claimZ: d.z,
-      roadX: d.x, roadZ: d.z, hasRoad: false, placeTries: 0, resettled: 0, padY: 0, roadSight: false,
+      roadX: d.x, roadZ: d.z, hasRoad: false, placeTries: 0, resettled: 0, padY: 0, roadSight: false, roadEyes: 0, lastSeeCount: 0,
+      homeT: 0, homeBest: 0,
       farRoadX: d.x, farRoadZ: d.z, hasFarRoad: false,
       farPts: new Float64Array(FAR_MAX * 2), farN: 0,   // road points 36-48 m from the claim, spread
       stuckT: 0, slideSide: 1,
@@ -285,7 +299,13 @@ export class Kneeler {
     // road had every ray clear. Sampled here, off the hot path (boot and one re-settle).
     k.hasFarRoad = false; k.farN = 0;
     if (roads && typeof roads.roadDistance === 'function') {
-      for (let r = 36; r <= 48 && k.farN < FAR_MAX; r += 4) {
+      // ROUND 7: the band starts at 24 m, not 36. MEASURED with tools/bodylook.mjs --boss:
+      // at the Garden of Rest the site sits in a hollow and a hill crest stands between it and
+      // every strip of road 36-48 m out, so no candidate post inside the 6-12 m the design
+      // allows could ever be seen and the search had nothing to choose between. From 24-32 m
+      // the driver is over that crest. 'Visible from the road' is a claim about the road, and
+      // the road at 26 m is still the road.
+      for (let r = 24; r <= 48 && k.farN < FAR_MAX; r += 4) {
         for (let a = 0; a < Math.PI * 2 && k.farN < FAR_MAX; a += 0.13) {
           const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
           if (roads.roadDistance(x, z) >= 2.5) continue;
@@ -309,23 +329,71 @@ export class Kneeler {
     // with the body toggled off). "Dormant it is part of the site's silhouette" needs a line
     // from the road to the hump, so the search prefers a legal spot the road can SEE and
     // falls back to any legal spot only when the site offers none (k.roadSight says which).
-    const RADII = [8, 7, 9, 6, 10];
+    /* THE SEARCH IS A SCORE NOW, NOT A FIRST MATCH, and that is ROUND 7's fix for
+       docs/NEXT.md B4: "It reads as a shape from the road at one of its three sites."
+       MEASURED 2026-09-03 with tools/bodylook.mjs --boss, which renders the frame a driver
+       actually gets from the sampled road point, hides ONLY the boss, and counts the pixels
+       that changed against the pixels its bounding box covers:
+
+         the Weeping Mine    4869 px changed in a 76 x 131 box   49% of it was visible
+         the Cathedral       2201 px changed in a 124 x 168 box  11%
+         the Garden of Rest  4206 px changed in a 173 x 239 box  10%
+
+       Two of three were behind something. And the old loop could not do better, because it
+       stopped at the FIRST spot any one road point could see: "seen by one eye out of sixteen,
+       through a gap, at one range" is the weakest possible reading of the test, and it took
+       it every time. It also never asked the one question that decides whether a night
+       silhouette reads at all — is the body ABOVE the ground between it and the road, so it
+       stands against the sky rather than against a hillside (docs/STATUS.md bug 5).
+
+       So: every candidate is scored, the best wins, and the score is
+         10 x (how many sampled road points see it)  +  the metres it stands above the ground
+       halfway between it and the road, capped at 6. Sightlines dominate; relief breaks ties,
+       and a tie is exactly the case the old loop was deciding by array order. */
+    const RADII = [8, 7, 9, 6, 10, 11, 12];
     const ANGLES = [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.6, -1.6, 2.1, -2.1, 2.6, -2.6, Math.PI];
+    const FAR_JUDGE = Math.min(k.farN, 6);   // boot-time cost: 7 x 14 x 6 x 4 rays per settle
     let found = false, seen = false, fx = cx + ux * 8, fz = cz + uz * 8;
-    for (let ri = 0; ri < RADII.length && !seen; ri++) {
-      for (let ai = 0; ai < ANGLES.length && !seen; ai++) {
+    let best = -1;
+    for (let ri = 0; ri < RADII.length; ri++) {
+      for (let ai = 0; ai < ANGLES.length; ai++) {
         const a = ANGLES[ai];
         const ca = Math.cos(a), sa = Math.sin(a);
         const vx = ux * ca - uz * sa, vz = ux * sa + uz * ca;
         const x = cx + vx * RADII[ri], z = cz + vz * RADII[ri];
         if (!legal(x, z)) continue;
         if (!found) { fx = x; fz = z; found = true; }
-        // seen from ANY of the far road points (the one that sees it is recorded as THE far
-        // point, for the suite and the report); the nearest asphalt only decides the facing
-        const far = k.farN > 0 ? this._anyFarSees(k, x, z) : (k.hasRoad ? this._roadSees(k, x, z, k.roadX, k.roadZ) : true);
-        if (far) { fx = x; fz = z; seen = true; }
+        let eyes = 0, rays = 0, witness = -1, bestRays = -1;
+        if (FAR_JUDGE > 0) {
+          for (let j = 0; j < FAR_JUDGE; j++) {
+            const ok = this._roadSees(k, x, z, k.farPts[j * 2], k.farPts[j * 2 + 1]);
+            rays += k.lastSeeCount;
+            if (ok) {
+              eyes++;
+              // the recorded far point is the one that sees it BEST, not the first one that
+              // sees it at all: it is the eye the suite and tools/bodylook.mjs photograph from
+              if (k.lastSeeCount > bestRays) { bestRays = k.lastSeeCount; witness = j; }
+            }
+          }
+        } else if (k.hasRoad) {
+          if (this._roadSees(k, x, z, k.roadX, k.roadZ)) { eyes = 1; rays = k.lastSeeCount; }
+        } else {
+          eyes = 1; rays = 12;
+        }
+        if (eyes === 0) continue;
+        // relief: how far the body's own ground stands above the ground halfway to the eye
+        const ex = witness >= 0 ? k.farPts[witness * 2] : (k.hasRoad ? k.roadX : cx + ux * 40);
+        const ez = witness >= 0 ? k.farPts[witness * 2 + 1] : (k.hasRoad ? k.roadZ : cz + uz * 40);
+        const midY = this._ground((x + ex) * 0.5, (z + ez) * 0.5);
+        const relief = Math.max(0, Math.min(6, this._ground(x, z) - midY));
+        const score = eyes * 10 + rays * 0.5 + relief;
+        if (score > best) {
+          best = score; fx = x; fz = z; seen = true;
+          if (witness >= 0) { k.farRoadX = k.farPts[witness * 2]; k.farRoadZ = k.farPts[witness * 2 + 1]; }
+        }
       }
     }
+    k.roadEyes = best > 0 ? Math.floor(best / 10) : 0;
     k.placeTries++;
     k.postSettled = found;
     k.roadSight = seen;
@@ -429,18 +497,47 @@ export class Kneeler {
     if (!col || typeof col.raycast !== 'function') return true;
     const oy = this._ground(ox, oz) + CFG.player.EYE;
     const gy = this._ground(x, z);
-    const mask = col.MASK ? (col.MASK.SIGHT | col.MASK.GROUND) : 12;
+    /* THE MASK IS THE BUG, and it is why NEXT.md B4 says the boss reads from the road at one
+       site of three. MEASURED 2026-09-03 with tests/artifacts/d-sight.mjs, which fires the
+       same four rays from the same chosen road point under each mask separately:
+
+         weeping-mine   SIGHT 4/4 clear   SOLID 0/4 clear
+         cathedral      SIGHT 4/4 clear   SOLID 0/4 clear
+         garden-of-rest SIGHT 4/4 clear   SOLID 0/4 clear
+
+       AND THAT FIRST READING WAS THE INSTRUMENT, NOT THE GAME. The boss's own collider is a
+       1.30 m circle on MASK.SOLID sitting at the far end of every one of these rays, the rays
+       stop 1.20 m short, and 1.20 < 1.30 — so an un-unseated body blocks its own sightline at
+       every site under SOLID. The probe was not lifting it. With the collider lifted the way
+       _settlePost and _recheck both do, SIGHT, SOLID, SHOT and GROUND all read 4 of 4 clear at
+       all three sites. There is no mask bug. SOLID stays in the mask anyway because it is the
+       mask a destination's WALLS are actually on, and a test that cannot see a wall is not a
+       sight test; every caller already lifts the collider first. */
+    const mask = col.MASK ? (col.MASK.SIGHT | col.MASK.SOLID | col.MASK.GROUND) : 15;
+    /* TWELVE RAYS, NOT FOUR: three columns across the body's width, four heights each.
+       MEASURED 2026-09-03 (tests/artifacts/d-sight.mjs then tools/bodylook.mjs --boss): at the
+       Cathedral all four centre rays were clear and the photograph still had a wall across
+       the left half of the body — 5552 changed pixels inside a 152 x 242 box, 15% of it. A
+       single column of rays cannot tell a body from a body cut in half, and half a silhouette
+       at 36 m is a smudge. The columns are +-0.85 m off the eye line, which is the hide's own
+       half-width. */
+    const wx = -(z - oz), wz = (x - ox);
+    const wl = Math.hypot(wx, wz) || 1;
     let clear = 0;
-    for (let i = 0; i < 4; i++) {
-      const ty = gy + 0.8 + i * 0.8;
-      _dir.set(x - ox, ty - oy, z - oz);
-      const L = _dir.length() || 1;
-      _dir.multiplyScalar(1 / L);
-      _hit.point.set(ox, oy, oz);
-      const h = col.raycast(_hit.point, _dir, L - 1.2, mask);
-      if (!(h && h.hit !== false)) clear++;
+    for (let c = -1; c <= 1; c++) {
+      const sx = x + (wx / wl) * 0.85 * c, sz = z + (wz / wl) * 0.85 * c;
+      for (let i = 0; i < 4; i++) {
+        const ty = gy + 0.8 + i * 0.8;
+        _dir.set(sx - ox, ty - oy, sz - oz);
+        const L = _dir.length() || 1;
+        _dir.multiplyScalar(1 / L);
+        _hit.point.set(ox, oy, oz);
+        const h = col.raycast(_hit.point, _dir, L - 1.2, mask);
+        if (!(h && h.hit !== false)) clear++;
+      }
     }
-    return clear >= 3;
+    k.lastSeeCount = clear;
+    return clear >= 8;
   }
 
   /** A clear line from its chest to his: it never sweeps through a wall. */
@@ -724,6 +821,30 @@ export class Kneeler {
           }
           k.yaw = this._turnToward(k.yaw, hx, hz, dt, 3.0);
           moveAmp = this._moveToward(k, k.post.x, k.post.z, K.chase * K.returnMul, dt, false);
+          /* A BOSS THAT NEVER GETS HOME NEVER RE-ARMS, and nobody is watching. MEASURED
+             2026-09-03 (tests/boss.mjs (g)): the Garden's body turned for home at 20.9 s and
+             was still 22.79 m short of its post 70 s later, with its collider off — so the
+             site had a standing, un-seated, permanently-walking boss in it and the next
+             player to arrive would find no boss at all. The nav whiskers can lose a route
+             through a cemetery of walls and there is no path-finder in this lane to give
+             them; but the ONE case where this matters is the case where the player is
+             already past the leash and cannot see it. So: eight seconds of no progress with
+             him beyond the leash and it is simply home. Guarded on distance so it can never
+             happen where anyone could witness it. */
+          // stuckT only counts the frames where NO heading was legal; a body oscillating
+          // between two legal-but-useless headings is not "stuck" by that measure and was
+          // exactly the failure — so this counts NO PROGRESS toward the post instead.
+          const homeD = Math.hypot(hx, hz);
+          if (homeD < k.homeBest - 0.5 || k.homeBest <= 0) { k.homeBest = homeD; k.homeT = 0; }
+          else k.homeT += dt;
+          if (k.homeT > 8 && dist > K.leash) {
+            k.pos.x = k.post.x; k.pos.z = k.post.z; k.pos.y = this._ground(k.post.x, k.post.z);
+            k.prevPos.copy(k.pos); k.currPos.copy(k.pos);
+            k.yaw = k.post.yaw; k.prevYaw = k.currYaw = k.yaw;
+            k.stuckT = 0; k.homeT = 0; k.homeBest = 0;
+            this._enter(k, 'kneel');
+            this._seat(k);
+          }
           break;
         }
         case 'kneel': {
@@ -849,6 +970,49 @@ export class Kneeler {
     return true;
   }
 
+  /**
+   * THE THROW, and it is a rewrite. docs/NEXT.md B4: "Its 4 m throw only works if you are
+   * standing still." Here is exactly why, from controller.js:1124 _stepGround:
+   *
+   *     if (hasInput) { ... const sp2 = hypot(vel.x, vel.z);
+   *                     if (sp2 > cap) { vel.x *= cap / sp2; vel.z *= cap / sp2; } }
+   *
+   * A GROUNDED player with any movement key held has his horizontal speed clamped to his own
+   * walk cap on the very next fixed step. The old throw wrote 46 m/s into p.vel and the
+   * controller took it back 16 ms later, so a player who was walking — which is every player
+   * who was trying to get away from a 4.40 m thing — moved his own walking speed and no more.
+   * The old comment even names the bug and files it as a handoff. It cannot be fixed in
+   * controller.js from this lane and it does not need to be: the branch above _stepGround is
+   *
+   *     } else if (hasInput) { ... if (add > 0) { accelerate } }
+   *
+   * which only ever ADDS speed and never clamps it. So the answer is to put him in the AIR.
+   * A vertical pop takes the body off the ground, _stepGround does not run, and the horizontal
+   * velocity survives the whole arc whatever he is holding.
+   *
+   * The numbers, against CFG.player.GRAVITY 22 (config.js:197):
+   *   vy 4.60  ->  2 * 4.60 / 22 = 0.418 s of flight
+   *   vh 8.00  ->  3.35 m in the air, plus roughly 0.6 m of ground coast on the far side
+   *   total    ->  about 4 m, which is what DESIGN section 4 asks for, and it now costs the
+   *                same 4 m whether he was standing, walking or sprinting away.
+   * And it reads: 0.4 s off your feet is legible where an instantaneous 4 m slide is not.
+   * Alex: nothing floaty — "it zips right back to them in a fun way".
+   *
+   * `grounded` must be cleared HERE and not left to the next step: _stepGround runs before
+   * gravity and reads the flag the previous step left behind, so one clamping step would
+   * happen before the pop ever took effect.
+   */
+  _throw(p, dx, dz) {
+    if (!p || !p.vel) return;
+    // Never fight a climb: a body on a ledge is owned by the climb solver.
+    if (p.climb !== undefined && p.climb !== 0) return;
+    p.vel.x = dx * K.throwH;
+    p.vel.z = dz * K.throwH;
+    p.vel.y = Math.max(p.vel.y, K.throwUp);
+    if (p.grounded) { p.grounded = false; p.sinceGround = 0; }
+    if (p.sliding) p.sliding = false;   // a slide steers itself and would eat the arc
+  }
+
   _beginSweep(k, dx, dz) {
     this._enter(k, 'sweep');
     k.committed = false; k.struck = false; k.lungeLeft = 0;
@@ -857,7 +1021,13 @@ export class Kneeler {
     k.sweeps++;
     this._seat(k);                                  // it plants
     this._voice(k, 'kn_sweep', 0.95, 20);            // the whoosh is on the TELEGRAPH frame
-    this._telegraph(k, 'windup');
+    // 'swing', not 'windup': earshot.js ATTACK_KINDS (:91) lists strike/lunge/leap/grab/reach/
+    // swing/bite/slam/aim, and ANY other kind is triaged as an awareness beat — a soft, low,
+    // transient-free 'notice' bake classed WORLD. So the boss's 480 ms sweep telegraph was
+    // playing the same cue as a hound noticing you, and the rear-strike tell on busEarshot —
+    // the one cue in the game that takes the room when something you cannot see is about to
+    // hit you — never fired for the biggest attack in the county. One word.
+    this._telegraph(k, 'swing');
   }
 
   /** The arm comes across. 45 through the controller's own hurt(); the car is swept
@@ -899,11 +1069,7 @@ export class Kneeler {
         // (tests/artifacts/probe-c1.mjs): throwM * FRICTION (46 m/s) coasted 3.16 m on open
         // road; the discrete form below is what 4 m actually costs. It is his velocity,
         // written once; a held key caps it the next step (docs/ROUND-6/HANDOFF-C.md).
-        if (p.vel) {
-          const sdt = CFG.loop.FIXED, f = CFG.player.FRICTION * sdt;
-          const v = (K.throwM + 0.07) * f / (sdt * (1 - f));
-          p.vel.x += _dir.x * v; p.vel.z += _dir.z * v;
-        }
+        this._throw(p, _dir.x, _dir.z);
         if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(0.55);
         this._noiseOut(k, 11, 'boss:strike');
       } else {
@@ -1027,6 +1193,24 @@ export class Kneeler {
     if (!this._built) return;
     const cam = this.ctx.camera;
     const camX = cam ? cam.position.x : 0, camY = cam ? cam.position.y : 0, camZ = cam ? cam.position.z : 0;
+    // THE MOON'S BEARING, read once per frame for every body. NEXT.md B4: "fully lit, no
+    // shadow". A real shadow needs castShadow, which links a depth program the first time the
+    // boss enters the cascade — mid-play, which the program budget forbids — so the shadow is
+    // painted and this is where it is aimed. Guarded: no moon, no shadow, and nothing throws.
+    let mx = 0, mz = 1, mup = 0.55;
+    const lights = this._sys('lights');
+    const moon = lights && (lights.moon || lights.sun || lights.dir);
+    if (moon && moon.position && moon.target && moon.target.position) {
+      // lights.js:812 puts the moon at target + dir * D * 2 and MOVES THE TARGET WITH THE
+      // PLAYER, so moon.position is an absolute point that follows him. The bearing is the
+      // DIFFERENCE; using the position on its own would swing the shadow as he walks.
+      const dx = moon.position.x - moon.target.position.x;
+      const dy = moon.position.y - moon.target.position.y;
+      const dz = moon.position.z - moon.target.position.z;
+      const L = Math.hypot(dx, dz) || 1;
+      mx = -dx / L; mz = -dz / L;                 // the shadow falls AWAY from the light
+      mup = Math.abs(dy) / (Math.hypot(dx, dy, dz) || 1);
+    }
     for (let i = 0; i < this.all.length; i++) {
       const k = this.all[i];
       const rig = k.rig;
@@ -1052,6 +1236,7 @@ export class Kneeler {
       _a.side = k.side;
       rig.pose(_a);
       rig.vents(lerp(pr.vent, cu.vent, alpha));
+      if (rig.shadow) rig.shadow(mx, mz, yaw, mup);
 
       // THE REVEAL BUDGET. Held back inside 6 m unless committed to the strike (bodies.js
       // REVEAL, DESIGN section 4), and then THE TORCH'S OWN FALLOFF on top of it. The species
@@ -1099,7 +1284,7 @@ export class Kneeler {
         state: k.state, stateT: k.stateT, hp: k.hp, alive: k.alive,
         stand: k.curr.stand, fold: k.curr.fold, sweep: k.curr.sweep, swing: k.curr.swing,
         ventsOpen: k.ventsOpen, ventT: k.ventT, dist: k.dist,
-        post: { x: k.post.x, z: k.post.z, yaw: k.post.yaw, settled: k.postSettled, roadSight: k.roadSight, sightFinal: k.sightFinal },
+        post: { x: k.post.x, z: k.post.z, yaw: k.post.yaw, settled: k.postSettled, roadSight: k.roadSight, roadEyes: k.roadEyes, sightFinal: k.sightFinal },
         claim: { x: k.claimX, z: k.claimZ },
         road: { x: k.roadX, z: k.roadZ, has: k.hasRoad, farX: k.farRoadX, farZ: k.farRoadZ, hasFar: k.hasFarRoad },
         claimDist: Math.hypot(k.post.x - k.claimX, k.post.z - k.claimZ),

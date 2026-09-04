@@ -607,9 +607,9 @@ export function makeManorBuilder(tools) {
       balustrade(36, 33, 36, 34, 4.2);
       balustrade(56, 4, 56, 10, 4.2);   // landing1 hole, west lip
       balustrade(56, 4, 60, 4, 4.2);    // landing1 hole, north lip
-      balustrade(46, 4, 46, 10, 0);     // cellar stair opening (scullery floor)
+      balustrade(44, 4, 44, 10, 0);     // cellar stair opening (ROUND 7: the well is x 44-50)
       balustrade(50, 4, 50, 10, 0);
-      balustrade(46, 10, 50, 10, 0);
+      balustrade(44, 10, 50, 10, 0);
       balustrade(2, 2, 2, 8, 0);        // chapel crypt steps
       balustrade(4, 2, 4, 8, 0);
       balustrade(2, 8, 4, 8, 0);
@@ -911,12 +911,72 @@ export function makeManorBuilder(tools) {
         for (const sh of [0.4, 0.9, 1.4]) S.box((w || 2.0) - 0.2, 0.06, 0.08, LX(x - 0.26 * s), LY(y + sh), LZ(z - 0.26 * c), PALETTE.plasterOld, ry || 0);
       },
       fuseboard(x, z, y, ry) {
-        // the claim: a breaker cabinet on the wall, the same shape the other majors use
-        const c = Math.cos(ry || 0), s = Math.sin(ry || 0);
-        S.box(0.7, 1.0, 0.24, LX(x), LY(y + 1.35), LZ(z), PALETTE.metal, ry || 0);
-        S.box(0.16, 0.16, 0.34, LX(x - 0.12 * s), LY(y + 1.35), LZ(z - 0.12 * c), PALETTE.rust, ry || 0);   // the handle
-        S.cyl(0.03, 0.03, 1.2, 5, LX(x + 0.2 * c), LY(y + 0.6), LZ(z - 0.2 * s), PALETTE.metal);      // conduit down
-        S.cyl(0.03, 0.03, 1.4, 5, LX(x), LY(y + 2.5), LZ(z), PALETTE.metal);                            // and up
+        // THE CLAIM, rebuilt ROUND 7 lane B. docs/NEXT.md B9: "the cellar breaker washes to
+        // white under the torch." Measured 2026-09-03 (tests/manor.mjs section (d)): the
+        // cellar at the breaker reads mean 98.9, max 155, with 38 % of the frame in two
+        // adjacent 16-wide buckets — one value, wall to fixture. The old board WAS that
+        // failure in three lines: a 0.128 metal slab hung flat on a 0.125 stone wall, so the
+        // thing you have to find measured the same as the thing behind it.
+        //
+        // docs/ART.md's answer is value STRUCTURE, not candela, and the light here cannot be
+        // turned down (the torch is global, ART 1.9). So the fixture is built out of the
+        // BOTTOM of the range instead: a near-black recess cut into the wall, a near-black
+        // frame round it and a near-black door leaf standing open, with one small pale
+        // enamel plate inside barred by dark switch rows. 0.030 albedo against a 0.125 wall
+        // is a 4x luminance ratio whatever the torch does to the wall, which clears FETCH's
+        // legibility law (>= 1.6x at every new read) by a factor of two.
+        const r = ry || 0;
+        const c = Math.cos(r), s = Math.sin(r);
+        // out is the wall's outward normal in donor metres, in is into the wall
+        const ox = -s, oz = -c;
+        const B = [0.030, 0.030, 0.032];      // the recess: the darkest surface in the house
+        const F = [0.048, 0.046, 0.044];      // the frame and the door leaf
+        const P = [0.205, 0.198, 0.180];      // the enamel plate, the only pale thing here
+        // the recess, sunk into the wall so the fixture reads as a HOLE with a thing in it
+        S.box(1.30, 1.50, 0.10, LX(x + ox * 0.02), LY(y + 1.35), LZ(z + oz * 0.02), B, r);
+        // its frame: four dark returns standing proud of the wall
+        S.box(1.44, 0.11, 0.16, LX(x + ox * 0.10), LY(y + 2.15), LZ(z + oz * 0.10), F, r);
+        S.box(1.44, 0.11, 0.16, LX(x + ox * 0.10), LY(y + 0.55), LZ(z + oz * 0.10), F, r);
+        for (const e of [-1, 1]) {
+          S.box(0.11, 1.60, 0.16, LX(x + ox * 0.10 - e * 0.66 * c), LY(y + 1.35), LZ(z + oz * 0.10 + e * 0.66 * s), F, r);
+        }
+        // the cabinet in the recess, and its door hanging open on the left hinge
+        S.box(0.70, 1.00, 0.20, LX(x + ox * 0.13), LY(y + 1.35), LZ(z + oz * 0.13), F, r);
+        S.box(0.66, 0.92, 0.05, LX(x + ox * 0.34 - 0.44 * c), LY(y + 1.35), LZ(z + oz * 0.34 + 0.44 * s), F, r + 1.15);
+        // the enamel plate: 0.36 m^2, the whole pale budget of this fixture
+        S.box(0.50, 0.72, 0.03, LX(x + ox * 0.24), LY(y + 1.35), LZ(z + oz * 0.24), P, r);
+        // three rows of dark switch bodies barring it, so the plate is never a bright slab
+        for (let i = 0; i < 3; i++) {
+          S.box(0.46, 0.09, 0.07, LX(x + ox * 0.28), LY(y + 1.62 - i * 0.26), LZ(z + oz * 0.28), B, r);
+          for (let j = 0; j < 4; j++) {
+            S.box(0.05, 0.13, 0.05, LX(x + ox * 0.30 - (j - 1.5) * 0.13 * c), LY(y + 1.62 - i * 0.26),
+              LZ(z + oz * 0.30 + (j - 1.5) * 0.13 * s), F, r);
+          }
+        }
+        // the handle, and the conduit that comes down the wall and goes up through the ceiling
+        S.box(0.14, 0.14, 0.30, LX(x + ox * 0.30 + 0.30 * c), LY(y + 1.35), LZ(z + oz * 0.30 - 0.30 * s), PALETTE.rust, r);
+        S.cyl(0.045, 0.045, 1.2, 5, LX(x + 0.22 * c + ox * 0.08), LY(y + 0.6), LZ(z - 0.22 * s + oz * 0.08), B);
+        S.cyl(0.045, 0.045, 1.4, 5, LX(x + ox * 0.08), LY(y + 2.5), LZ(z + oz * 0.08), B);
+        S.box(0.24, 0.10, 0.10, LX(x + ox * 0.08), LY(y + 2.20), LZ(z + oz * 0.08), B, r);
+      },
+      /** A DADO. docs/ART.md 0.4: a room at 10 m has to have more than one value in it or it
+       *  is a box. The cellar's stone is 0.125 everywhere and the torch takes all of it to
+       *  the same place, so the lower metre of every cellar wall is laid in a near-black
+       *  course: the room gains a horizon, and the horizon is what tells you how big it is.
+       *  Geometry only — no collider, it stands 0.06 m proud inside a 0.26 m wall. */
+      dado(room, y) {
+        const D = [0.052, 0.050, 0.048], H = 1.05, T = 0.10;
+        const x0 = room.wx0 + 0.06, x1 = room.wx1 - 0.06, z0 = room.wz0 + 0.06, z1 = room.wz1 - 0.06;
+        S.box(x1 - x0, H, T, LX((x0 + x1) / 2), LY(y + H / 2), LZ(z0 + T / 2), D);
+        S.box(x1 - x0, H, T, LX((x0 + x1) / 2), LY(y + H / 2), LZ(z1 - T / 2), D);
+        S.box(T, H, z1 - z0, LX(x0 + T / 2), LY(y + H / 2), LZ((z0 + z1) / 2), D);
+        S.box(T, H, z1 - z0, LX(x1 - T / 2), LY(y + H / 2), LZ((z0 + z1) / 2), D);
+        // and the string course that caps it, one shade up, so the edge is a line not a seam
+        for (const [ax2, az2, w2, d2] of [[(x0 + x1) / 2, z0 + T / 2, x1 - x0, T + 0.06],
+          [(x0 + x1) / 2, z1 - T / 2, x1 - x0, T + 0.06],
+          [x0 + T / 2, (z0 + z1) / 2, T + 0.06, z1 - z0], [x1 - T / 2, (z0 + z1) / 2, T + 0.06, z1 - z0]]) {
+          S.box(w2, 0.07, d2, LX(ax2), LY(y + H + 0.035), LZ(az2), PALETTE.stoneDark);
+        }
       },
     };
 
@@ -1143,6 +1203,7 @@ export function makeManorBuilder(tools) {
           // The board hangs on the wall face (x 40.13 + half its depth); the claim
           // point, where D1's fixture goes and where the player stands, is 0.75 m off it.
           const c = CLAIM_DONOR;
+          V.dado(room, y);
           V.fuseboard(room.wx0 + WALL_T / 2 + 0.12, c.z, y, -Math.PI * 0.5);
           put(V.crate, 2, 0.8, 0.5, 0.9, 0.7);
           put(V.barrel, 0, 0.85, 0.5, 0.9);
@@ -1155,6 +1216,7 @@ export function makeManorBuilder(tools) {
           if (ok(cx, cz, 0.9)) V.crate(cx, cz, y, 0.5, 0.7);
         };
         case 'undercroft': return () => {
+          V.dado(room, y);
           for (const [side, f] of [[3, 0.2], [3, 0.5], [3, 0.8], [1, 0.3], [1, 0.7]]) { const p = wall(side, f, 0.55); if (ok(p.x, p.z, 0.8)) V.crate(p.x, p.z, y, rng.range(-0.2, 0.2), 0.9); }
           put(V.table, 2, 0.5, 0.6, 1.2, 2.0, 0.8);
           for (const f of [0.3, 0.7]) { const p = wall(0, f, 0.5); if (ok(p.x, p.z, 0.7)) V.barrel(p.x, p.z, y); }

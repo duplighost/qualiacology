@@ -130,6 +130,27 @@ const WET_GAIN = 0.20;      // and the same hollow goes COOL: standing water is 
 const AO_FADE_QUADS = 3;
 const SHADE_FLOOR = 0.15;   // no multiplier may take a region albedo to black
 
+// ROUND 7 — THE CANOPY ON THE FLOOR. ART 3.1.2's trunk-root darkening, which the note above
+// says "needs flora to publish its planted positions to the chunk builder". It does not. What
+// a forest floor at night actually wants is not a ring under each trunk, it is the LARGE-SCALE
+// answer to "is there a canopy over me" — and flora already publishes that as a pure
+// deterministic field, `coverAt(x, z)`, the same smoothstep-of-fbm it plants its own stands
+// from (flora.js coverAt). So the two agree by construction: where flora put a dense stand the
+// floor under it is dark, and where it left a clearing the floor is open to the moon.
+//
+// This is the term ART 3.1 row 6 was asking for. The ground is 25.6% of the frame and it was
+// the only large area in it with no value structure at all — one flat sheet at mean 38.7 with
+// a +-10% grain nobody can see at that mean. Lane E, round 7, after the sky, the fog, the mist
+// and the trunk lean were all in: "the ground is the only large area in the frame with nothing
+// on it." A clearing that reads as brighter than the stand around it is also, for free, the
+// wayfinding cue his brief asks for twice — "there should always be something interesting the
+// player is going towards in the distance."
+//
+// Cost: one coverAt per ground vertex, 1,681 on a tier-0 chunk, at build time only. Nothing in
+// step(). Sampled at the vertex, so it costs no texture, no draw call and no program.
+const CANOPY_AO = 0.42;     // a dense stand darkens its floor by up to 42%
+const CANOPY_WARM = 0.10;   // and goes slightly warm: needles, not sky. Blue only, downward.
+
 // The road. matRoad's colour is the CROWN's linear albedo and the profile texture scales
 // down from it across the ribbon. ART.md 3.2.2: "a road at night is legible because it
 // reflects the sky, not because it is a different grey" — so the crown is cool, and it is
@@ -664,6 +685,11 @@ export class Chunks {
     const seg = data.seg, n = seg + 1, quad = data.quad;
     const col = data.colors, nrm = data.normals;
     const x0 = data.x0, z0 = data.z0;
+    // Lazily, once per chunk, never per vertex, and never at construction: flora (#9) is built
+    // after this system (#8) and its boot ring is laid inside our own init(). A chunk built
+    // before flora exists simply gets no canopy term and is re-shaded when it re-tiers.
+    const flora = this._sys ? this._sys('flora') : null;
+    const coverAt = flora && typeof flora.coverAt === 'function' ? flora : null;
     const fade = Math.max(1, Math.min(AO_FADE_QUADS, seg * 0.25));
     const kdiv = AO_K / (2 * quad);
 
@@ -677,6 +703,13 @@ export class Chunks {
 
         // 1. VALUE BREAK-UP. Centred on 0, so the county mean does not move.
         let m = 1 + DETAIL_AMP * groundDetail(wx, wz);
+
+        // 1b. THE CANOPY. Dark under a stand, open in a clearing. See CANOPY_AO.
+        let canopy = 0;
+        if (coverAt) {
+          canopy = coverAt.coverAt(wx, wz);
+          if (canopy > 0) m *= 1 - CANOPY_AO * canopy;
+        }
 
         // 2. CURVATURE. The normal field's divergence is minus the height Laplacian, so
         //    a negative value is a hollow and a positive one is a crown. Faded to zero at
@@ -709,6 +742,12 @@ export class Chunks {
           col[o + 1] *= 1 + w * 0.55;
           col[o + 2] *= 1 + w;
         }
+
+        // 4. AND THE CANOPY GOES THE OTHER WAY. A hollow is lit by the sky and goes cool; a
+        //    floor under a stand is lit by nothing and what colour it keeps is its own —
+        //    needle litter, not sky. Taking blue DOWN is the whole move; adding warmth would
+        //    spend saturation the county does not ration (ART 0.5).
+        if (canopy > 0) col[o + 2] *= 1 - CANOPY_WARM * canopy;
       }
     }
 

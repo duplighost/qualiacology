@@ -862,6 +862,7 @@ export class Enemies {
 
     // anything that is hurt is awake, and a dormant thing that is shot RISES
     if (e.state === 'dormant') this._wake(e);
+    e.staged = false;                       // ROUND 7: a shot ends the tableau, seen or not
     if (e.def.owner === OWNER.PRESSURE) e.aware = 2;
     e.calmT = 0;                                        // he shot it: the calm is over
     e.memT = e.def.memHunt || 9;
@@ -1093,16 +1094,30 @@ export class Enemies {
 
     e.alive = true;
     e.dead = false;
-    e.alerted = def.owner === OWNER.DREAD;
+    // ROUND 7: unless it is a TABLEAU. See the note above STAGED bodies in _stepEnemy.
+    e.alerted = def.owner === OWNER.DREAD && !(opts && opts.staged && !opts.awake);
     e.hunt = false; e.huntSpeedMul = 1;
     e.leashed = true; e.holdFire = false;
     e.hp = def.hp * ((opts && opts.hpScale) || 1);
-    e.pos.set(x, groundY(this.ctx, x, z), z);
+    // ROUND 7. opts.feetY puts a body on a FLOOR — a hay loft, a mezzanine, a ringing
+    // chamber 13 m up — instead of on the terrain. Only a STAGED body may use it, and only
+    // while it holds its post: the moment it notices you it walks, and walking is
+    // followGround's, which is the terrain and nothing else.
+    const feetY = (opts && typeof opts.feetY === 'number') ? opts.feetY : groundY(this.ctx, x, z);
+    e.pos.set(x, feetY, z);
     e.vel.set(0, 0, 0);
     e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
+    // ROUND 7. A STAGED body faces where the scene put it. Three hunters round a fire face
+    // the fire; a body under a blind lies the way it fell. Everything else still turns to
+    // the player as it arrives, which is what a thing stepping out of the trees does.
     const p = this._sys('player');
-    e.yaw = p ? faceYaw(x, z, p.pos.x, p.pos.z) : 0;
+    e.staged = !!(opts && opts.staged);
+    e.yaw = (opts && typeof opts.yaw === 'number') ? opts.yaw
+      : (p ? faceYaw(x, z, p.pos.x, p.pos.z) : 0);
     e.prevYaw = e.currYaw = e.yaw;
+    // Where the scene put it. A staged body is returned to exactly this every step until it
+    // notices you, so a tableau is still a tableau after you have circled it twice.
+    e.stagedX = x; e.stagedZ = z; e.stagedY = feetY; e.stagedYaw = e.yaw;
     e.stateT = 0; e.burstT = 0; e.gait = 0; e.prevGait = 0; e.currGait = 0;
     e.committed = false; e.struck = false; e.airborne = false;
     e.frontDot = 1; e.frontDeniedT = 0; e.rearStrike = false;
@@ -1113,7 +1128,7 @@ export class Enemies {
     e.deathT = 0; e.flashT = 99;
     // a reused record must never inherit the last life's wound
     e.lastZone = 'torso'; e.lastMelee = false;
-    e.aware = def.owner === OWNER.DREAD ? 2 : 0;
+    e.aware = (def.owner === OWNER.DREAD && !(opts && opts.staged && !opts.awake)) ? 2 : 0;
     e.memT = 0;
     e.heardX = e.pos.x; e.heardZ = e.pos.z;
     e.homeX = e.pos.x; e.homeZ = e.pos.z;
@@ -1197,6 +1212,12 @@ export class Enemies {
     const p = this._sys('player');
     if (!p) return;
     this._black = this._phase() === PHASE.BLACK;
+    // LANE G, round 7: the perk that lamp_2 "Eyeshine" buys. Base 1 with no node owned, so a
+    // fresh save measures exactly what it measured before this line existed.
+    {
+      const pr = this._sys('progress');
+      this._eyeMul = (pr && typeof pr.perk === 'function') ? (pr.perk('eyeshineMul', 1) || 1) : 1;
+    }
 
     // frozen separation snapshot, then everybody reads the SAME crowd
     this.sep.begin();
@@ -1251,7 +1272,8 @@ export class Enemies {
     e.los = e.dist < 120 && visible(this.ctx, e.pos.x, eyeY, e.pos.z);
     // "how lit are YOU" — the torch trade. The Pale reads the same number from
     // the other side: it is only frozen while the beam is on IT.
-    e.litSelf = lit(this.ctx, e.pos.x, eyeY, e.pos.z, def.beamDot || 0.82, def.beamRange || 18);
+    e.litSelf = lit(this.ctx, e.pos.x, eyeY, e.pos.z, def.beamDot || 0.82,
+      (def.beamRange || 18) * (this._eyeMul || 1));
     e.obsSelf = observed(this.ctx, e.pos.x, eyeY, e.pos.z,
       def.coneDot === undefined ? 0.28 : def.coneDot,
       def.coneRange === undefined ? 60 : def.coneRange);
@@ -1372,6 +1394,29 @@ export class Enemies {
       }
       this._integrate(e, dt);
       return;
+    }
+
+    // ROUND 7 — A STAGED BODY IS A TABLEAU UNTIL YOU DISTURB IT.
+    //
+    // Alex: "like that fire near the road at the beginning. if we arrange it right, a few
+    // hunters could be around it. so it's both like environmental storytelling and a little
+    // unique place." The whole value is that they are STILL, and arranged, and that YOU choose
+    // to walk in. So while it has not noticed you it holds the pose the scene authored — its
+    // exact spot, its exact facing, no gait, no drift, no sniffing around its own home point —
+    // and it is drawn the entire time. The instant it is aware of you it is an ordinary body
+    // and every rule below applies, including the far cull it was exempt from.
+    if (e.staged) {
+      if (e.aware > 0) {
+        e.staged = false;
+      } else {
+        e.stateT += dt;
+        e.pos.x = e.stagedX; e.pos.z = e.stagedZ; e.pos.y = e.stagedY;
+        e.vel.x = 0; e.vel.y = 0; e.vel.z = 0;
+        e.yaw = e.stagedYaw;
+        e.gait = 0; e.prevGait = 0; e.currGait = 0;
+        e.airborne = false;
+        return;
+      }
     }
 
     switch (def.owner === OWNER.DREAD ? def.id : 'pressure') {
@@ -2209,6 +2254,11 @@ export class Enemies {
   cull(e) {
     this._lastAsk = this._t;
     if (!e || !e.alive || e.def.owner !== OWNER.PRESSURE) return false;
+    // ROUND 7. A STAGED body is part of a place, not part of the pressure the thermostat
+    // is regulating. The whole point of three hunters round a fire is that they are STILL
+    // THERE when you come back, so the far cull may not take one that has never noticed
+    // you. Once it has been woken it is an ordinary body again and the director owns it.
+    if (e.staged && e.aware <= 0) return false;
     this._uncommit(e);
     this._release(e);
     this._culled++;
@@ -2579,6 +2629,18 @@ export class Enemies {
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
       if (!e.alive || e.def.owner !== OWNER.PRESSURE) continue;
+      // ROUND 7, lane C's measurement. The county's staged scenes hold 28 pressure bodies
+      // between them — 8 poachers, 12 hounds, 8 pallbearers — and every one of them keeps its
+      // slot for the life of the save, because cull() refuses to take a staged body that has
+      // never noticed you (that refusal is what makes a scene still be there when you come
+      // back). Counted raw against CAP_ALIVE 14, a player who toured all eighteen scenes and
+      // killed nobody would pin this trickle shut and the county would go quiet on him.
+      //
+      // The reasoning is exactly cull()'s: a body that has never noticed you is part of a
+      // PLACE, not part of the pressure the thermostat is regulating. And it is the right
+      // direction for his loudest complaint of all — the scenes stop eating the arrivals
+      // budget instead of competing with it.
+      if (e.staged && e.aware <= 0) continue;
       alive += 1;
       if (Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z) < TRICKLE_RING) near += e.def.countsAs;
     }

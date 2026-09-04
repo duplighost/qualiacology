@@ -62,6 +62,12 @@ const TAG_SURFACE = Object.freeze({
   tree: 'wood', trunk: 'wood', log: 'wood', plank: 'wood', fence: 'wood',
   rock: 'stone', stone: 'stone', wall: 'stone', building: 'stone',
   metal: 'metal', vehicle: 'metal', tank: 'metal',
+  // ROUND 7 (lane F, request 1b): the tags the crushable roadside furniture carries. Without
+  // these a drum, a tyre stack and a waystone all spark and sound like WOOD when you shoot
+  // them, and they are now the things most often in front of the car and the gun.
+  drum: 'metal', tyres: 'metal', sign: 'metal', letterbox: 'metal',
+  waystone: 'stone', cairn: 'stone',
+  crate: 'wood', pallet: 'wood', aboard: 'wood', stall: 'wood', sapling: 'wood', leg: 'wood',
 });
 
 // Impact colour by surface — the spark burst reads as material before the

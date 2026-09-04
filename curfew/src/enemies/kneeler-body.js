@@ -18,13 +18,17 @@
 //     glow when open through the same emissive trick the eyes use — a second MeshBasic mesh
 //     on the identical config (makeBasic), hidden while the vents are shut. No light.
 //
-// THE MATERIALS ARE BORROWED, NOT REBUILT. bodies.js does not export makeShell, and this
-// lane may not edit it (one owner per file), so the shell Lambert, the glint Basic and the
-// contact disc come off a body the existing factory builds (buildBody) and the rest of that
-// body is thrown away at boot. A shell built here by hand with the same text would share
-// the program only for as long as nobody edited one of the two copies; a shell built by
-// the one factory that exists cannot drift. docs/ROUND-6/HANDOFF-C.md asks for the export
-// and the guarded path below prefers it the day it lands.
+// THE MATERIALS COME OFF bodies.js's OWN FACTORIES. As of ROUND 7 bodies.js exports
+// makeShell() and contactTex() (docs/ROUND-6/HANDOFF-C.md item 1, docs/NEXT.md section E), so
+// the shell Lambert, the glint Basic and the contact disc are built by the one factory that
+// exists and cannot drift out of program-sharing with the six species. The old path — build a
+// whole hound at boot, keep three of its materials and throw the body away — is still below
+// as a guarded fallback and is no longer taken.
+//
+// ROUND 7 REBUILT THE BODY. The round-6 build read as a CARTOON OWL at 3.4 m under the torch
+// (tests/shots/bodylook/before-kneeler-cathedral-near.png): two big round glowing eyes on a
+// smooth ball head, sausage arms, capsule legs. See the note at the top of kneelerSet() for
+// the five rules that replaced it and the measurement behind each one.
 //
 // donor: Projects/qualiacology/fetch/src/enemies.js:18-22 (KIND.kneeler — h 4.4, r 0.9,
 //   chase 6.2, the hit-zone ladder) and :682-763 (buildKneeler — "a load-bearing animal
@@ -46,8 +50,20 @@ import * as bodiesMod from './bodies.js';
    ========================================================================== */
 const VOID = 0x040406;
 const CLOTH = 0x110f0d;     // the hide. Y ~0.005, the darkest cloth in the roster.
-const SKIN = 0x1a1613;      // the limbs, one step lighter so a joint has an edge
-const BONE = 0x36302a;      // spurs, plates, the brow, the claws
+const SKIN = 0x141210;      // the limbs, one step lighter so a joint has an edge
+const BONE = 0x1e1a16;     // spurs, plates, the brow, the claws. MEASURED 2026-09-03 (ROUND 7): at
+                            // 0x36302a the new crest, ribs and jaw blew to near-white under the
+                            // torch at 3.4 m — tests/shots/bodylook/after1-kneeler-garden-of-rest-near.png
+                            // read a PALE SANDSTONE SNOUT, the mannequin fault wearing a new costume.
+                            // and MEASURED AGAIN with tests/artifacts/d-hide.mjs, which turns the
+                            // rim and the albedo off separately in one rAF: mid-sweep at 2.6 m
+                            // under the torch the rim was worth 16 of the 40 mean and the albedo
+                            // the other 24, and tests/boss.mjs (e) reads 125 against a gate of 46.
+                            // The rebuild put FAR more bone on screen than the old body had —
+                            // crest, ribs, plates, jaw, teeth, claws, arm plates — so the same hex
+                            // is three times the area. 0x1e1a16 is 1.6x CLOTH: the bone still
+                            // gives the torch an edge to find, and the crest earns its read at
+                            // range from SHAPE against the sky, which costs no value at all.
 const EYE = 0xffb070;       // an ember. Peak channel 1.0; EYE_GAIN lifts it over bloom.
 const VENT = 0xff7a3a;      // the vents, open
 
@@ -114,6 +130,7 @@ const P = {
   cap: new THREE.CapsuleGeometry(0.5, 1, 3, 7),
   cone3: new THREE.ConeGeometry(0.5, 1, 3),
   cone5: new THREE.ConeGeometry(0.5, 1, 5),
+  cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 6),
 };
 
 /* ==========================================================================
@@ -133,11 +150,11 @@ export const ARM_UPPER = 1.35, ARM_FORE = 1.25, THIGH = 1.00, SHIN = 0.95;
    a vent before it meets the plate; from the front it meets the head or the
    plate first. kneeler.js maps 'vent' back to 'plate' while the vents are shut. */
 export const ZONES = Object.freeze([
-  { x: 0.12, y: 2.05, z: -0.95, r: 0.50, zone: 'head' },
-  { x: -0.45, y: 1.60, z: 0.66, r: 0.36, zone: 'vent' },
-  { x: 0.45, y: 1.60, z: 0.66, r: 0.36, zone: 'vent' },
-  { x: 0.00, y: 1.45, z: -0.05, r: 1.05, zone: 'plate' },
-  { x: 0.00, y: 0.45, z: 0.00, r: 0.75, zone: 'plate' },
+  { x: 0.10, y: 1.24, z: -1.58, r: 0.56, zone: 'head' },
+  { x: -0.46, y: 1.62, z: 0.76, r: 0.36, zone: 'vent' },
+  { x: 0.46, y: 1.62, z: 0.76, r: 0.36, zone: 'vent' },
+  { x: 0.00, y: 1.42, z: -0.05, r: 1.02, zone: 'plate' },
+  { x: 0.00, y: 0.38, z: 0.06, r: 0.82, zone: 'plate' },
 ]);
 
 /* The three key poses. Order: pelvisY, torsoPitch, shoulderRx, shoulderRz,
@@ -167,100 +184,224 @@ export function kneelerSet() {
   if (SET) return SET;
   const w = new Weld();
 
-  // --- the trunk. Pelvis block, a belly, the broad yoke, and the HUMP that is
-  //     the whole silhouette at 40 m — offset to -X because its weight has
-  //     collapsed to one side (donor hump at -0.09/-0.25, scaled and pushed).
-  // MEASURED 2026-09-03 (tests/shots/boss2-cathedral-midsweep.png): the first trunk was a
-  // box chest over a box pelvis with pale knee caps, and at 3 m under the torch it read as a
-  // mannequin — the cylinder-people failure in a different primitive. Nothing below is a box
-  // except the plates and the vent seams: a hide is overlapping ellipsoids, lopsided.
-  w.add(P.sph, 0.05, 0.10, 0.05, CLOTH, { sx: 1.30, sy: 0.72, sz: 0.95, rz: 0.08 });
-  w.add(P.cap, -0.05, 0.75, -0.02, CLOTH, { sx: 1.20, sy: 0.80, sz: 0.90, rz: 0.05 });
-  w.add(P.sph, 0.10, 1.40, -0.12, CLOTH, { sx: 1.95, sy: 0.90, sz: 1.10, rz: -0.08 });   // the yoke
-  w.add(P.sph, -0.35, 1.30, 0.20, CLOTH, { sx: 1.20, sy: 0.85, sz: 1.00, rz: 0.18 });    // the collapsed side
-  w.add(P.sph, -0.25, 1.85, 0.35, CLOTH, { sx: 1.45, sy: 1.00, sz: 1.25, rz: 0.10 });    // the HUMP
-  w.add(P.sph, 0.30, 1.75, 0.15, CLOTH, { sx: 1.00, sy: 0.70, sz: 0.90, rz: -0.12 });
-  // shoulder caps: the low side and the high side are NOT the same height
-  w.add(P.sph, 0.95, 1.55, -0.05, CLOTH, { sx: 0.74, sy: 0.58, sz: 0.74 });
-  w.add(P.sph, -1.00, 1.72, 0.00, CLOTH, { sx: 0.84, sy: 0.66, sz: 0.82 });
-  // the bone ridge along the back: three crooked spurs (donor spineDefs), which
-  // is what makes the folded shape read as a ROOT BALL and not a rock
-  w.add(P.cone3, -0.30, 2.40, 0.35, BONE, { rx: -0.50, rz: 0.30, sx: 0.22, sy: 0.95, sz: 0.22 });
-  w.add(P.cone3, 0.05, 2.55, 0.25, BONE, { rx: -0.35, rz: -0.06, sx: 0.24, sy: 1.10, sz: 0.24 });
-  w.add(P.cone3, 0.38, 2.35, 0.30, BONE, { rx: -0.60, rz: -0.28, sx: 0.20, sy: 0.85, sz: 0.20 });
-  w.add(P.cone3, -0.65, 2.05, 0.55, BONE, { rx: -0.80, rz: 0.55, sx: 0.18, sy: 0.75, sz: 0.18 });
-  w.add(P.cone3, 0.70, 1.95, 0.45, BONE, { rx: -0.70, rz: -0.65, sx: 0.16, sy: 0.70, sz: 0.16 });
-  w.add(P.cone3, -0.15, 2.15, 0.85, BONE, { rx: -1.35, rz: 0.10, sx: 0.17, sy: 0.80, sz: 0.17 });
-  w.add(P.cone3, 0.25, 2.05, 0.90, BONE, { rx: -1.50, rz: -0.20, sx: 0.15, sy: 0.65, sz: 0.15 });
-  // the PLATE: four bone bands across the chest. Shootable at x0.55.
+  /* ------------------------------------------------------------------ WHY THIS IS A REBUILD.
+     MEASURED 2026-09-03, ROUND 7 lane D (tools/bodylook.mjs --boss, PNG
+     tests/shots/bodylook/before-kneeler-cathedral-near.png): at 3.4 m under the torch the old
+     body read as a CARTOON OWL. Two big round glowing eyes dead centre of a smooth ball head,
+     plump sausage arms, capsule legs, every surface a soft overlapping ellipsoid. Nothing in
+     it was wrong in code; it was round, symmetric and front-faced, and those three things are
+     what "cute" is made of. NEXT.md B4 called it a mannequin; the picture says owl. Same bug.
+
+     So the rules for this build, and every one of them is a thing the picture showed:
+
+       1. THE FACE IS NOT ON THE FRONT. The head hangs UNDER and AHEAD of the yoke on a long
+          neck, bowed toward the ground, the way a bear's or a bull's does. You meet the top
+          of a skull before you meet its eyes, and the eyes are set on the SIDES of it.
+       2. THE GLINTS ARE SLITS, NOT MOONS. Two 17 cm x 4.5 cm lozenges recessed under a bone
+          brow, not two 13 cm spheres proud of the socket. A slit blooms into a LINE; a sphere
+          blooms into a headlamp, and a headlamp is a face.
+       3. HARD BONE BREAKS EVERY ROUND. A crest of eleven uneven spurs down the spine, ribs
+          that overhang the flank, plates that stand off the chest, a jaw with teeth. The
+          crest is also the ROAD READ: a jagged edge against the sky resolves at 30 m where a
+          smooth lump does not (docs/STATUS.md bug 5 — at night the sky is the light).
+       4. NOTHING IS SYMMETRIC. The left shoulder is 18 cm higher than the right, the hump sits
+          off to -X, the ribs are offset a rib apart, the crest leans.
+       5. IT IS THIN WHERE A PERSON IS THICK. The chest is 0.78 deep against 1.14 wide, so from
+          the front it is a mass and from the side it is a blade.
+     ---------------------------------------------------------------------------------------- */
+
+  // --- the pelvis and haunches: low, wide, and heavier on one side
+  w.add(P.sph, 0.06, 0.06, 0.10, CLOTH, { sx: 1.44, sy: 0.66, sz: 1.06, rz: 0.10 });
+  w.add(P.sph, -0.32, 0.30, 0.46, CLOTH, { sx: 1.12, sy: 0.74, sz: 0.88, rz: 0.22 });
+  w.add(P.sph, 0.44, 0.22, 0.30, CLOTH, { sx: 0.86, sy: 0.58, sz: 0.76, rz: -0.16 });
+
+  // --- the barrel. NARROW IN Z: 0.78 deep against 1.14 wide, so the thing is a blade from
+  //     the side and a wall from the front. A starved chest, not a ball.
+  w.add(P.cap, -0.02, 0.88, -0.10, CLOTH, { sx: 1.14, sy: 0.86, sz: 0.78, rz: 0.06 });
+  w.add(P.sph, 0.08, 1.24, -0.28, CLOTH, { sx: 1.06, sy: 0.62, sz: 0.66, rz: -0.10 });
+
+  // --- the yoke, TIPPED: the left shoulder rides high and the right has dropped
+  w.add(P.sph, -0.12, 1.66, -0.06, CLOTH, { sx: 2.06, sy: 0.76, sz: 0.92, rz: -0.17 });
+  // --- the HUMP: the weight collapsed to -X and back. The top of the folded shape.
+  w.add(P.sph, -0.42, 2.04, 0.42, CLOTH, { sx: 1.38, sy: 1.04, sz: 1.26, rz: 0.16 });
+  w.add(P.sph, 0.34, 1.80, 0.30, CLOTH, { sx: 0.90, sy: 0.64, sz: 0.86, rz: -0.20 });
+  // shoulder caps at two different heights (the pivots are mirrored to match, see the rig)
+  w.add(P.sph, -1.04, 1.84, -0.02, CLOTH, { sx: 0.92, sy: 0.72, sz: 0.86 });
+  w.add(P.sph, 0.98, 1.54, -0.06, CLOTH, { sx: 0.70, sy: 0.58, sz: 0.72 });
+
+  // --- RIBS. Curved bone spurs standing off the flank, offset one rib between the sides so
+  //     the two halves never line up. These are what a torch finds at 3 m: an edge, not a wall.
+  const RIB = [1.02, 1.26, 1.50, 1.74];
+  for (let i = 0; i < RIB.length; i++) {
+    for (const side of [-1, 1]) {
+      const y = RIB[i] + (side < 0 ? 0.11 : 0);
+      const k = 1 - i * 0.11;
+      w.add(P.cone3, side * (0.72 + i * 0.03), y, 0.06 + i * 0.05, BONE, {
+        rz: side * (1.15 - i * 0.10), rx: -0.28,
+        sx: 0.15 * k, sy: 0.86 * k, sz: 0.15 * k,
+      });
+    }
+  }
+
+  // --- THE CREST. Eleven uneven spurs from the pelvis to the crown of the hump. This is the
+  //     silhouette at 30 m: measured before this build, the boss's box from the road at the
+  //     Cathedral was 124 x 175 px and only 2151 of them were the body, because a smooth lump
+  //     that is 0.19 of its backdrop is a smudge. A saw edge is a shape.
+  const CREST = [
+    [-0.10, 1.02, 0.86, 0.62, -1.05, 0.10],
+    [-0.22, 1.34, 0.92, 0.78, -1.15, 0.26],
+    [-0.06, 1.66, 0.94, 0.92, -1.20, -0.10],
+    [-0.34, 1.92, 0.88, 1.12, -1.05, 0.34],
+    [-0.02, 2.14, 0.80, 1.34, -0.86, -0.06],
+    [-0.48, 2.28, 0.62, 1.18, -0.72, 0.52],
+    [-0.18, 2.46, 0.46, 1.40, -0.55, 0.18],
+    [0.24, 2.30, 0.44, 0.98, -0.62, -0.40],
+    [-0.72, 2.06, 0.28, 0.86, -0.50, 0.74],
+    [0.54, 2.00, 0.26, 0.74, -0.46, -0.66],
+    [-0.06, 2.56, 0.10, 1.06, -0.30, 0.06],
+  ];
+  for (let i = 0; i < CREST.length; i++) {
+    const c = CREST[i];
+    w.add(P.cone3, c[0], c[1], c[2], BONE, {
+      rx: c[4], rz: c[5], sx: 0.19, sy: c[3], sz: 0.19,
+    });
+  }
+
+  // --- the plates: bone bands standing OFF the chest, crooked, so the front is not a sheet
   const PLATES = [
-    [0.10, 0.92, -0.50, 1.10, -0.12], [-0.08, 1.16, -0.55, 1.34, 0.06],
-    [0.14, 1.38, -0.60, 0.95, -0.20], [-0.12, 1.58, -0.62, 1.20, 0.10],
-    [0.40, 1.05, -0.48, 0.45, 0.35],
+    [0.10, 0.86, -0.52, 1.06, -0.14], [-0.10, 1.10, -0.58, 1.30, 0.08],
+    [0.16, 1.32, -0.60, 0.92, -0.22], [-0.14, 1.52, -0.60, 1.16, 0.12],
+    [0.42, 1.00, -0.50, 0.44, 0.36], [-0.44, 0.70, -0.44, 0.52, -0.30],
   ];
   for (let i = 0; i < PLATES.length; i++) {
     const p = PLATES[i];
-    w.add(P.box, p[0], p[1], p[2], BONE, { sx: p[3], sy: 0.065, sz: 0.10, rz: p[4], rx: -0.15 });
-  }
-  // neck, forward and down: the head hangs UNDER the yoke, not on top of it
-  w.add(P.cap, 0.12, 1.95, -0.55, SKIN, { rx: 1.10, sx: 0.40, sy: 0.35, sz: 0.40 });
-
-  // --- the head. Cavity first, the cowl behind it, a brow above, a shallow
-  //     mask, a jaw, then sockets sunk into the front (bodies.js sculptHead order).
-  w.add(P.sph, 0.12, 2.05, -0.95, VOID, { sx: 0.52, sy: 0.60, sz: 0.46 });
-  w.add(P.sph, 0.12, 2.02, -0.78, CLOTH, { sx: 0.62, sy: 0.68, sz: 0.50 });
-  w.add(P.cone3, 0.12, 2.34, -1.00, BONE, { rx: 1.28, rz: Math.PI, sx: 0.52, sy: 0.30, sz: 0.34 });
-  w.add(P.sph, 0.12, 2.04, -1.12, BONE, { sx: 0.38, sy: 0.54, sz: 0.10 });
-  w.add(P.box, 0.14, 1.76, -1.08, BONE, { rx: -0.20, sx: 0.40, sy: 0.13, sz: 0.36 });
-  w.add(P.box, 0.12, 1.86, -1.17, VOID, { sx: 0.26, sy: 0.05, sz: 0.04 });    // the mouth
-  for (const side of [-1, 1]) {
-    w.add(P.sphLo, 0.12 + side * 0.13, 2.11, -1.15, VOID, { sx: 0.19, sy: 0.15, sz: 0.10 });
+    w.add(P.box, p[0], p[1], p[2], BONE, { sx: p[3], sy: 0.070, sz: 0.13, rz: p[4], rx: -0.16 });
   }
 
-  // --- the vents: two VOID seams on the back with bone lips. The glowing lozenge
-  //     that fills each one is a separate mesh (ventGeometry) and is hidden shut.
+  // --- THE NECK. Three segments going forward and DOWN from under the yoke. The head is not
+  //     on top of this animal; it is slung under the front of it, and that one fact is most of
+  //     what stops the shape reading as a person in a costume.
+  w.add(P.cap, 0.06, 1.52, -0.56, SKIN, { rx: 1.02, sx: 0.50, sy: 0.44, sz: 0.50 });
+  w.add(P.cap, 0.09, 1.36, -0.98, SKIN, { rx: 1.24, sx: 0.44, sy: 0.40, sz: 0.44 });
+  w.add(P.cap, 0.10, 1.26, -1.28, SKIN, { rx: 1.36, sx: 0.38, sy: 0.30, sz: 0.38 });
+
+  // --- THE SKULL. Long, narrow, and bowed toward the ground: 1.05 m of it along -Z against
+  //     0.44 m across. Cavity first, then the cranial plate, then the jaw with the mouth void
+  //     between them, then sockets sunk into the SIDES (bodies.js sculptHead order).
+  const HX = 0.10, HY = 1.24, HZ = -1.62;
+  w.add(P.sph, HX, HY, HZ + 0.12, VOID, { sx: 0.52, sy: 0.52, sz: 0.92 });
+  // MEASURED 2026-09-03 (tests/shots/bodylook/after2-kneeler-garden-of-rest-near.png): a full
+  // width BONE cranium and a BONE muzzle made the head one solid pale mass at 3.4 m — a
+  // sandstone snout with nothing dark anywhere on it. So the head is HIDE with a narrow bone
+  // ridge, and bone is spent only where it is an EDGE: the ridge, the brows, the jaw, the
+  // teeth. The VOID cavity is left showing down both flanks, which is where the head gets its
+  // value from at every range.
+  w.add(P.sph, HX, HY + 0.16, HZ + 0.04, CLOTH, { rx: 0.12, sx: 0.46, sy: 0.28, sz: 0.94 });
+  w.add(P.box, HX, HY + 0.28, HZ + 0.02, BONE, { rx: 0.10, sx: 0.11, sy: 0.07, sz: 0.86 });
+  // the muzzle tapers to a point: a skull, not a helmet. Hide over it, bone only at the tip.
+  w.add(P.cone5, HX, HY - 0.02, HZ - 0.50, CLOTH, { rx: -1.57, sx: 0.30, sy: 0.44, sz: 0.28 });
+  w.add(P.cone5, HX, HY - 0.02, HZ - 0.74, BONE, { rx: -1.57, sx: 0.17, sy: 0.16, sz: 0.16 });
+  // temple horns sweeping BACK over the neck
   for (const side of [-1, 1]) {
-    w.add(P.box, side * 0.45, 1.60, 0.60, BONE, { rx: 0.25, sx: 0.40, sy: 0.64, sz: 0.06 });
-    w.add(P.box, side * 0.45, 1.60, 0.635, VOID, { rx: 0.25, sx: 0.28, sy: 0.50, sz: 0.05 });
+    w.add(P.cone3, HX + side * 0.24, HY + 0.24, HZ + 0.34, BONE, {
+      rx: -2.25, rz: side * 0.42, sx: 0.14, sy: 0.92, sz: 0.14,
+    });
+  }
+  // the long lower jaw, hung slightly open
+  w.add(P.box, HX, HY - 0.28, HZ - 0.04, BONE, { rx: -0.12, sx: 0.32, sy: 0.10, sz: 1.00 });
+  // and a VOID gap between the jaw and the head, so the jaw is a separate bone and not a chin
+  w.add(P.box, HX, HY - 0.205, HZ - 0.04, VOID, { rx: -0.11, sx: 0.30, sy: 0.05, sz: 0.98 });
+  // the mouth: a VOID slot the whole length of the jaw. A hole, not a painted line.
+  w.add(P.box, HX, HY - 0.15, HZ - 0.04, VOID, { rx: -0.10, sx: 0.31, sy: 0.15, sz: 0.96 });
+  // teeth, both rows, uneven
+  for (let i = 0; i < 5; i++) {
+    const z = HZ - 0.44 + i * 0.20;
+    const h = 0.11 + (i % 2 ? 0.05 : 0);
+    for (const side of [-1, 1]) {
+      w.add(P.cone3, HX + side * 0.12, HY - 0.10, z, BONE, { rx: Math.PI, sx: 0.06, sy: h, sz: 0.06 });
+      w.add(P.cone3, HX + side * 0.12, HY - 0.235, z + 0.08, BONE, { sx: 0.055, sy: h * 0.9, sz: 0.055 });
+    }
+  }
+  // sockets: deep VOID pits, high and set on the sides of the skull and a little forward
+  for (const side of [-1, 1]) {
+    w.add(P.sphLo, HX + side * 0.215, HY + 0.09, HZ + 0.14, VOID, { sx: 0.24, sy: 0.24, sz: 0.34 });
+  }
+  // a bone brow standing OVER each socket. It hides MOST of the ember and not all of it: at
+  // after2 the brow was 0.10 deep over a socket 4 cm behind it and the glints were simply gone
+  // from every angle, which is not "sunk", it is absent.
+  for (const side of [-1, 1]) {
+    w.add(P.box, HX + side * 0.225, HY + 0.235, HZ + 0.20, BONE, {
+      rz: side * 0.34, rx: -0.14, sx: 0.12, sy: 0.075, sz: 0.40,
+    });
+  }
+
+  // --- the vents: two VOID seams on the back with bone lips, now on the hump's flanks
+  for (const side of [-1, 1]) {
+    w.add(P.box, side * 0.46, 1.62, 0.70, BONE, { rx: 0.25, sx: 0.42, sy: 0.66, sz: 0.06 });
+    w.add(P.box, side * 0.46, 1.62, 0.735, VOID, { rx: 0.25, sx: 0.28, sy: 0.50, sz: 0.05 });
   }
   const shell = w.geometry('kneeler-shell');
 
-  // --- glints: 9 cm embers, proud of the sockets
+  // --- THE GLINTS: slits, recessed. Rule 2 above. 17 x 4.5 cm, sunk 4 cm INSIDE the socket
+  //     mouth so the brow above cuts them from any angle over the head.
   const e = new Weld();
   for (const side of [-1, 1]) {
-    e.add(P.sphLo, 0.12 + side * 0.13, 2.11, -1.23, 0xffffff, { sx: 0.13, sy: 0.11, sz: 0.08 });
+    e.add(P.sphLo, HX + side * 0.235, HY + 0.095, HZ + 0.10, 0xffffff,
+      { rz: side * 0.20, sx: 0.15, sy: 0.048, sz: 0.15 });
   }
   const eyes = e.geometry('kneeler-eyes');
 
   // --- the open vents: two lozenges standing 3 cm proud of the seams
   const v = new Weld();
   for (const side of [-1, 1]) {
-    v.add(P.box, side * 0.45, 1.60, 0.665, 0xffffff, { rx: 0.25, sx: 0.22, sy: 0.42, sz: 0.05 });
+    v.add(P.box, side * 0.46, 1.62, 0.765, 0xffffff, { rx: 0.25, sx: 0.22, sy: 0.44, sz: 0.05 });
   }
   const vents = v.geometry('kneeler-vents');
 
-  // --- limbs, each authored hanging DOWN from its own pivot
+  // --- limbs, each authored hanging DOWN from its own pivot.
+  //     The old arm was one capsule and one capsule: a sausage. This one has a deltoid, a
+  //     taper, three bone plates down the outside and a spur at the elbow.
   const au = new Weld();
-  au.add(P.cap, 0, -ARM_UPPER * 0.5, 0, SKIN, { sx: 0.44, sy: ARM_UPPER * 0.62, sz: 0.44 });
-  au.add(P.sphLo, 0, -ARM_UPPER, 0, SKIN, { sx: 0.44, sy: 0.38, sz: 0.44 });
+  au.add(P.sph, 0, -0.16, 0, CLOTH, { sx: 0.70, sy: 0.62, sz: 0.68 });
+  au.add(P.cap, 0, -ARM_UPPER * 0.52, 0, SKIN, { sx: 0.42, sy: ARM_UPPER * 0.60, sz: 0.38 });
+  for (let i = 0; i < 3; i++) {
+    au.add(P.box, 0.20, -0.42 - i * 0.32, 0.02, BONE, { rz: -0.30 + i * 0.08, sx: 0.10, sy: 0.26, sz: 0.24 });
+  }
+  au.add(P.cone3, 0.12, -ARM_UPPER + 0.06, 0.16, BONE, { rx: -1.9, rz: -0.5, sx: 0.13, sy: 0.42, sz: 0.13 });
+  au.add(P.sphLo, 0, -ARM_UPPER, 0, SKIN, { sx: 0.40, sy: 0.36, sz: 0.40 });
   const armUpper = au.geometry('kneeler-arm');
 
+  // the forearm: a bone blade the whole length of it, and FOUR claws that reach past the hand
   const af = new Weld();
-  af.add(P.cap, 0, -ARM_FORE * 0.5, 0, SKIN, { sx: 0.36, sy: ARM_FORE * 0.62, sz: 0.36 });
-  af.add(P.box, 0, -ARM_FORE - 0.05, -0.10, BONE, { sx: 0.42, sy: 0.22, sz: 0.55 });
-  for (let i = -1; i <= 1; i++) {
-    af.add(P.cone3, i * 0.14, -ARM_FORE - 0.16, -0.42, BONE, { rx: -1.40, sx: 0.07, sy: 0.30 + (i === 0 ? 0.06 : 0), sz: 0.07 });
+  af.add(P.cap, 0, -ARM_FORE * 0.5, 0, SKIN, { sx: 0.34, sy: ARM_FORE * 0.60, sz: 0.30 });
+  af.add(P.box, -0.14, -ARM_FORE * 0.5, 0.02, BONE, { rz: 0.05, sx: 0.07, sy: ARM_FORE * 0.86, sz: 0.20 });
+  af.add(P.box, 0, -ARM_FORE - 0.06, -0.12, BONE, { sx: 0.40, sy: 0.20, sz: 0.50 });
+  const CLAW = [-0.20, -0.07, 0.07, 0.20];
+  for (let i = 0; i < CLAW.length; i++) {
+    const long = i === 1 || i === 2;
+    af.add(P.cone3, CLAW[i], -ARM_FORE - 0.16, -0.44, BONE, {
+      rx: -1.32 - (i % 2) * 0.10, rz: CLAW[i] * 0.9,
+      sx: 0.075, sy: long ? 0.52 : 0.38, sz: 0.075,
+    });
   }
   const armFore = af.geometry('kneeler-fore');
 
+  // the thigh: heavy, with a bone cap over the knee
   const th = new Weld();
-  th.add(P.cap, 0, -THIGH * 0.5, 0, SKIN, { sx: 0.52, sy: THIGH * 0.62, sz: 0.52 });
-  th.add(P.sphLo, 0, -THIGH, 0, SKIN, { sx: 0.48, sy: 0.42, sz: 0.48 });
+  th.add(P.sph, 0, -0.14, 0, CLOTH, { sx: 0.72, sy: 0.60, sz: 0.68 });
+  th.add(P.cap, 0, -THIGH * 0.52, 0, SKIN, { sx: 0.52, sy: THIGH * 0.60, sz: 0.48 });
+  th.add(P.box, 0, -THIGH + 0.04, -0.20, BONE, { rx: 0.20, sx: 0.44, sy: 0.30, sz: 0.10 });
+  th.add(P.sphLo, 0, -THIGH, 0, SKIN, { sx: 0.46, sy: 0.40, sz: 0.46 });
   const thigh = th.geometry('kneeler-thigh');
 
+  // the shin: thin, bladed, on a long three-toed foot
   const sh = new Weld();
-  sh.add(P.cap, 0, -SHIN * 0.5, 0, SKIN, { sx: 0.40, sy: SHIN * 0.62, sz: 0.40 });
-  sh.add(P.box, 0, -SHIN - 0.03, -0.18, BONE, { sx: 0.46, sy: 0.16, sz: 0.80 });
+  sh.add(P.cap, 0, -SHIN * 0.5, 0, SKIN, { sx: 0.36, sy: SHIN * 0.60, sz: 0.34 });
+  sh.add(P.box, 0, -SHIN * 0.5, 0.16, BONE, { sx: 0.16, sy: SHIN * 0.80, sz: 0.06 });
+  sh.add(P.box, 0, -SHIN - 0.04, -0.16, BONE, { sx: 0.42, sy: 0.16, sz: 0.72 });
+  for (let i = -1; i <= 1; i++) {
+    sh.add(P.cone3, i * 0.15, -SHIN - 0.10, -0.52, BONE, { rx: -1.45, sx: 0.07, sy: 0.30, sz: 0.07 });
+  }
   const shin = sh.geometry('kneeler-shin');
 
   SET = { shell, eyes, vents, armUpper, armFore, thigh, shin };
@@ -271,17 +412,33 @@ export function kneelerSet() {
    Materials. Borrowed from the one factory (see the header).
    ========================================================================== */
 function borrowMaterials(rng) {
-  // Preferred path the day bodies.js exports its shell factory (HANDOFF-C).
-  if (typeof bodiesMod.makeShell === 'function') {
-    const shell = bodiesMod.makeShell(0.98, 0.98, 0.98);
+  // THE PREFERRED PATH, and it is live since ROUND 7: bodies.js exports makeShell and
+  // contactTex (docs/ROUND-6/HANDOFF-C.md item 1, docs/NEXT.md section E). The boss no longer
+  // builds a whole hound at boot just to steal three materials off it.
+  if (typeof bodiesMod.makeShell === 'function' && typeof bodiesMod.contactTex === 'function') {
+    const shell = bodiesMod.makeShell(1, 1, 1);
+    const contact = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+      bodiesMod.makeBasic(bodiesMod.contactTex(), 0x000000));
+    contact.material.opacity = 0.72;
+    contact.rotation.x = -Math.PI / 2;
+    // THE PAINTED CAST SHADOW. NEXT.md B4: "fully lit, no shadow". A real one needs
+    // castShadow, and castShadow on a vertexColors Lambert links a DEPTH program the day the
+    // boss first enters the moon's cascade — mid-play, which is the one thing the program
+    // budget forbids (AGENTS.md). So the shadow is PAINTED: the same soft disc, stretched
+    // along the ground away from the moon and laid under the body. One draw, no program, and
+    // at 3 m it is the difference between a thing standing on the ground and a thing floating
+    // over it. Its offset and stretch are written once by the rig from the moon's bearing.
+    const cast = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+      bodiesMod.makeBasic(bodiesMod.contactTex(), 0x000000));
+    cast.material.opacity = 0.46;
+    cast.rotation.x = -Math.PI / 2;
     return {
-      shell,
+      shell, contact, cast,
       eye: bodiesMod.makeBasic(bodiesMod.whiteTex(), new THREE.Color(EYE).multiplyScalar(EYE_GAIN)),
       vent: bodiesMod.makeBasic(bodiesMod.whiteTex(), new THREE.Color(VENT).multiplyScalar(VENT_GAIN)),
-      contact: null,
       reveal: (v) => { shell.userData.reveal = v; const u = shell.userData.uniforms; if (u) u.uReveal.value = v; },
       rimGain: (v) => { shell.userData.rimGain = v; const u = shell.userData.uniforms; if (u) u.uRimGain.value = v; },
-      dispose() { shell.dispose(); },
+      dispose() { shell.dispose(); if (contact.material) contact.material.dispose(); if (cast.material) cast.material.dispose(); },
     };
   }
   // The path that exists today: build a hound, keep its materials and its contact
@@ -350,7 +507,12 @@ export function buildKneelerRig(rng) {
   const arms = [], legs = [];
   for (const side of [-1, 1]) {
     const sh = new THREE.Group();
-    sh.position.set(side * SHOULDER.x, SHOULDER.y, SHOULDER.z);
+    // ASYMMETRY, rule 4: the -X shoulder rides 18 cm higher and 6 cm wider than the +X one,
+    // matching the tipped yoke in the shell. A body whose two halves line up is a mannequin
+    // however good its surface is, and the two halves lining up is the only thing the old
+    // rig and the old shell agreed on.
+    const lift = side < 0 ? 0.18 : 0;
+    sh.position.set(side * (SHOULDER.x + (side < 0 ? 0.07 : 0)), SHOULDER.y + lift, SHOULDER.z);
     torso.add(sh);
     sh.add(mesh(set.armUpper, M.shell));
     const el = new THREE.Group();
@@ -381,15 +543,33 @@ export function buildKneelerRig(rng) {
   contact.frustumCulled = true;
   root.add(contact);
 
+  // The painted cast shadow (see borrowMaterials). It hangs off a pivot in the ROOT's frame,
+  // so it does not rise with the pelvis or pitch with the torso: a shadow stays on the ground.
+  // The pivot's yaw aims the long axis away from the moon; rig.shadow() writes it.
+  const cast = M.cast || null;
+  let castPivot = null;
+  if (cast) {
+    castPivot = new THREE.Group();
+    castPivot.name = 'kneeler-cast';
+    cast.position.set(0, 0.030, 2.4);   // 5 mm under the contact disc, and thrown 2.4 m out
+    cast.scale.set(5.6, 9.4, 1);
+    cast.frustumCulled = true;
+    castPivot.add(cast);
+    root.add(castPivot);
+  }
+
   let drawCount = 0;
   root.traverse((o) => { if (o.isMesh) drawCount++; });
 
   const eyeBase = M.eye.color.clone();
   const ventBase = M.vent.color.clone();
   // The rim is what separates a silhouette from the trees (bodies.js RIM_GAIN 0.055,
-  // ART.md 5.4). A boss carries 1.6x of it: at 4.40 m its edge is most of what the moon
-  // gives you at 40 m, and it is measured in tests/boss.mjs, not argued.
-  const RIM = M.shell.userData.rimGain * 1.6;
+  // ART.md 5.4). A boss carried 1.6x of it, and that was sized for a body of smooth capsules
+  // with almost no grazing geometry on it. The rebuilt hide is crest spurs, ribs, plates,
+  // teeth and claws, and rimF is (1 - dot)^3 — every one of those edges is a rim edge, so the
+  // SAME gain now paints three times as much of the body. Measured mid-sweep at 2.6 m
+  // (tests/artifacts/d-hide.mjs): the rim alone was worth 16 of a 40 mean. 1.10x.
+  const RIM = M.shell.userData.rimGain * 1.10;
   M.rimGain(RIM);
 
   const rig = {
@@ -401,9 +581,26 @@ export function buildKneelerRig(rng) {
     /** 0 = held back in the dark, 1 = fully lit. THE REVEAL BUDGET. */
     reveal(v) { M.reveal(v); },
 
+    /**
+     * Aim the painted cast shadow. (wx, wz) is the WORLD direction the shadow falls in — the
+     * moon's bearing, negated — and yaw is the root's own yaw, because the pivot lives inside
+     * it. Allocation-free; kneeler.js calls it from present().
+     * `up` is how high the moon is: a light overhead throws a short shadow.
+     */
+    shadow(wx, wz, yaw, up) {
+      if (!castPivot) return;
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      const lx = wx * c - wz * s;
+      const lz = wx * s + wz * c;
+      castPivot.rotation.y = Math.atan2(lx, lz);
+      const stretch = 0.55 + 1.7 * (1 - (up < 0 ? 0 : up > 1 ? 1 : up));
+      cast.scale.set(5.6, 9.4 * stretch, 1);
+      cast.position.z = 1.1 + 2.6 * stretch;
+    },
+
     /** 0..1 windup charge: the rim x2 (x3 at full) and the eyes flare. */
     telegraph(v) {
-      M.rimGain(RIM * (1 + v * 3.0));
+      M.rimGain(RIM * (1 + v * 1.8));
       const g = 1 + v * 2.4;
       M.eye.color.setRGB(eyeBase.r * g, eyeBase.g * g, eyeBase.b * g);
     },

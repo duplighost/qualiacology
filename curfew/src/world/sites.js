@@ -158,7 +158,43 @@ function recordPane(w, h, rx) {
 export function paneRecords() { return Array.from(_panes.values()); }
 
 class Kit {
-  constructor() { this.parts = []; }
+  constructor() { this.parts = []; this.breaks = null; this._openIdx = -1; }
+
+  /* ------------------------------------------------------------------ *
+   * BREAKABLE PARTS — ROUND 7, lane F.
+   *
+   * A destination is ONE merged geometry (see the discipline note at the top of this
+   * file), and that is not negotiable: it is why a whole site is two draw calls. But a car
+   * that goes through a fence and leaves the fence standing is this project's signature
+   * failure — a system that runs and never reaches the screen. So a builder brackets the
+   * primitives that belong to one smashable thing:
+   *
+   *     k.solid.open();
+   *     ...the posts and rails...
+   *     k.solid.close(lx, lz, radius, colour);
+   *     api.emit({ ..., tag: 'fence' });
+   *
+   * and `build()` writes the VERTEX RANGE of each bracket onto the finished geometry as
+   * `geometry.userData.breakParts`. `vehicle/car.js` matches a crushed collider to its part
+   * by position and collapses those vertices to a point: the triangles degenerate, the
+   * thing is gone, and nothing else in the merge is touched. Ranges survive the merge
+   * because mergeGeometries concatenates attributes in array order.
+   *
+   * (lx, lz) are the site's OWN local metres, the same frame `api.emit` takes, so a part
+   * and the collider it belongs to can never disagree about where the thing is.
+   * ------------------------------------------------------------------ */
+  open() { this._openIdx = this.parts.length; return this; }
+
+  close(lx, lz, radius, col) {
+    if (this._openIdx < 0 || this.parts.length === this._openIdx) { this._openIdx = -1; return this; }
+    (this.breaks || (this.breaks = [])).push({
+      p0: this._openIdx, p1: this.parts.length,
+      x: +lx || 0, z: +lz || 0, r: radius > 0 ? +radius : 1,
+      col: col || null,
+    });
+    this._openIdx = -1;
+    return this;
+  }
 
   /** Colour a finished, already-transformed geometry and keep it. */
   push(geo, col) {
@@ -252,10 +288,34 @@ class Kit {
   /** Merge and hand over. The kit is empty afterwards and can be reused. */
   build() {
     if (!this.parts.length) return null;
+    // ROUND 7: part index -> first vertex, taken BEFORE the merge, while the parts still
+    // exist. mergeGeometries concatenates attributes in array order, so these offsets are
+    // the merged geometry's own.
+    let breakParts = null;
+    if (this.breaks && this.breaks.length) {
+      const offs = new Array(this.parts.length + 1);
+      let off = 0;
+      for (let i = 0; i < this.parts.length; i++) {
+        offs[i] = off;
+        const p = this.parts[i].attributes.position;
+        off += p ? p.count : 0;
+      }
+      offs[this.parts.length] = off;
+      breakParts = [];
+      for (const b of this.breaks) {
+        const v0 = offs[b.p0], v1 = offs[b.p1];
+        if (!(v1 > v0)) continue;
+        breakParts.push({ x: b.x, z: b.z, r: b.r, v0, v1, col: b.col });
+      }
+    }
+    this.breaks = null; this._openIdx = -1;
     const merged = this.parts.length === 1 ? this.parts[0] : mergeGeometries(this.parts, false);
     if (this.parts.length > 1) for (const g of this.parts) g.dispose();
     this.parts.length = 0;
-    if (merged) merged.computeBoundingSphere();
+    if (merged) {
+      merged.computeBoundingSphere();
+      if (breakParts && breakParts.length) merged.userData.breakParts = breakParts;
+    }
     return merged;
   }
 }
@@ -1624,6 +1684,187 @@ BUILDERS.manor = makeManorBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, 
    notice board of MISSING posters, the dead car). Re-kitted to a rural county road.
    ========================================================================== */
 
+/* ==========================================================================
+   THINGS YOU CAN DRIVE THROUGH — ROUND 7, lane F.
+
+   Alex, fifth playtest: "more towards the dying light driving expansion type style. Car
+   that handles great. CAN CRUSH THINGS WITH IT."
+
+   Each of these is a small roadside thing that a car at road speed goes through: geometry
+   bracketed by k.solid.open()/close() so `vehicle/car.js` can take the triangles down, and
+   ONE collider whose tag puts it on collision.js's BREAKABLE_TAGS table. The tag is the
+   whole opt-in — a builder in any other lane joins by tagging a shape 'crate', 'drum',
+   'sign', 'pallet', 'tyres', 'stall', 'aboard', 'letterbox', 'sapling' or 'fence' and
+   never touches this file (docs/ROUND-7/HANDOFF-F.md).
+
+   Nothing here is load-bearing, nothing here is standable, and nothing here is on the
+   racing line of a road: they sit on the verge, which is where the fun is.
+   ========================================================================== */
+
+/** A county road sign on two legs, leaning the way the last one to hit it left it. */
+function roadSign(k, api, lx, lz, ry) {
+  const gy = groundY(api, lx, lz);
+  const lean = api.rng.range(-0.22, 0.22);
+  k.solid.open();
+  k.solid.cyl(0.045, 0.055, 1.85, 5, lx - 0.30, gy + 0.92, lz, C.metal, ry, 0, lean);
+  k.solid.cyl(0.045, 0.055, 1.85, 5, lx + 0.30, gy + 0.92, lz, C.metal, ry, 0, lean);
+  // NOT C.plaster. A sign board is the brightest thing this lane adds and it stands on the
+  // verge where the headlamp lands square on it; at 0.265 albedo it was the brightest
+  // object in the frame, which is the exact backwardsness docs/NEXT.md B6 complains about
+  // with the filling station's pumps. Weathered enamel, in the same band as C.stone.
+  k.solid.box(1.05, 0.62, 0.05, lx, gy + 1.62, lz, [0.178, 0.172, 0.160], ry, 0, lean);
+  k.solid.box(0.72, 0.10, 0.06, lx, gy + 1.70, lz - 0.04, C.dark, ry, 0, lean);
+  k.solid.box(0.46, 0.09, 0.06, lx - 0.10, gy + 1.52, lz - 0.04, C.dark, ry, 0, lean);
+  k.solid.close(lx, lz, 0.8, C.plaster);
+  api.emit({ kind: 'circle', x: lx, z: lz, r: 0.44, y0: gy - 0.2, y1: gy + 1.95, tag: 'sign' });
+}
+
+/** A letterbox on a post at the end of a track nobody walks up any more. */
+function letterbox(k, api, lx, lz, ry) {
+  const gy = groundY(api, lx, lz);
+  k.solid.open();
+  k.solid.cyl(0.06, 0.075, 1.15, 5, lx, gy + 0.57, lz, C.wood, ry, 0, api.rng.range(-0.1, 0.1));
+  k.solid.box(0.30, 0.26, 0.44, lx, gy + 1.24, lz, C.metal, ry);
+  k.solid.box(0.32, 0.05, 0.05, lx + 0.18, gy + 1.30, lz, C.rust, ry, 0, 0.9);
+  k.solid.close(lx, lz, 0.5, C.metal);
+  api.emit({ kind: 'circle', x: lx, z: lz, r: 0.32, y0: gy - 0.2, y1: gy + 1.42, tag: 'letterbox' });
+}
+
+/** A sandwich board. The lightest thing in the county and it goes at a walking pace. */
+function aboard(k, api, lx, lz, ry) {
+  const gy = groundY(api, lx, lz);
+  k.solid.open();
+  for (const s of [-1, 1]) {
+    k.solid.box(0.72, 1.02, 0.05, lx + s * 0.16, gy + 0.52, lz, C.plank, ry, 0, s * 0.28);
+  }
+  k.solid.box(0.52, 0.34, 0.04, lx - 0.20, gy + 0.62, lz, C.paper, ry, 0, -0.28);
+  k.solid.close(lx, lz, 0.6, C.plank);
+  api.emit({ kind: 'circle', x: lx, z: lz, r: 0.42, y0: gy - 0.2, y1: gy + 1.05, tag: 'aboard' });
+}
+
+/** A trestle stall with its awning half down. Somebody sold something here. */
+function stall(k, api, lx, lz, ry) {
+  const gy = groundY(api, lx, lz);
+  k.solid.open();
+  for (let i = 0; i < 4; i++) {
+    const sx = (i & 1) ? 0.86 : -0.86, sz = (i & 2) ? 0.42 : -0.42;
+    const px = lx + sx * Math.cos(ry) + sz * Math.sin(ry);
+    const pz = lz - sx * Math.sin(ry) + sz * Math.cos(ry);
+    k.solid.cyl(0.05, 0.06, 0.92, 4, px, gy + 0.46, pz, C.wood);
+  }
+  k.solid.box(2.0, 0.09, 1.0, lx, gy + 0.94, lz, C.plank, ry);
+  k.solid.box(2.1, 0.06, 1.1, lx, gy + 1.86, lz, C.cloth, ry, 0, api.rng.range(0.18, 0.34));
+  k.solid.cyl(0.05, 0.05, 1.9, 4, lx - 0.9 * Math.cos(ry), gy + 0.95, lz + 0.9 * Math.sin(ry), C.wood);
+  k.solid.close(lx, lz, 1.4, C.plank);
+  api.emit({
+    kind: 'obb', x: lx, z: lz, halfX: 1.0, halfZ: 0.55, yaw: ry,
+    y0: gy - 0.2, y1: gy + 1.0, tag: 'stall',
+  });
+}
+
+/** A stack of crates. Each crate is its own part and its own collider: they go one at a time. */
+function crates(k, api, lx, lz, n) {
+  let y = 0;
+  for (let i = 0; i < n; i++) {
+    const s = api.rng.range(0.52, 0.68);
+    const ox = lx + api.rng.range(-0.16, 0.16), oz = lz + api.rng.range(-0.16, 0.16);
+    const gy = groundY(api, ox, oz);
+    const ry = api.rng.range(0, TAU);
+    k.solid.open();
+    k.solid.box(s, s * 0.72, s * 0.86, ox, gy + y + s * 0.36, oz, C.plank, ry);
+    k.solid.box(s * 1.03, 0.05, s * 0.10, ox, gy + y + s * 0.36, oz, C.wood, ry);
+    k.solid.close(ox, oz, s, C.plank);
+    api.emit({
+      kind: 'circle', x: ox, z: oz, r: s * 0.5,
+      y0: gy + y - 0.05, y1: gy + y + s * 0.74, tag: 'crate',
+    });
+    y += s * 0.72;
+  }
+}
+
+/** A pallet stack, leaning. */
+function pallets(k, api, lx, lz, ry) {
+  const gy = groundY(api, lx, lz);
+  const n = 3 + ((api.rng.next() * 3) | 0);
+  k.solid.open();
+  for (let i = 0; i < n; i++) {
+    k.solid.box(1.15, 0.11, 0.95, lx + api.rng.range(-0.07, 0.07), gy + 0.07 + i * 0.14,
+      lz + api.rng.range(-0.07, 0.07), C.plank, ry + api.rng.range(-0.09, 0.09));
+  }
+  k.solid.close(lx, lz, 0.9, C.plank);
+  api.emit({
+    kind: 'obb', x: lx, z: lz, halfX: 0.60, halfZ: 0.50, yaw: ry,
+    y0: gy - 0.2, y1: gy + 0.14 * n + 0.06, tag: 'pallet',
+  });
+}
+
+/** An oil drum. The heaviest thing on the breakable table that is not stone. */
+function drum(k, api, lx, lz, down) {
+  const gy = groundY(api, lx, lz);
+  const ry = api.rng.range(0, TAU);
+  k.solid.open();
+  if (down) {
+    k.solid.cyl(0.29, 0.29, 0.88, 10, lx, gy + 0.29, lz, C.rust, ry, 0, Math.PI * 0.5);
+    k.solid.close(lx, lz, 0.6, C.rust);
+    api.emit({ kind: 'circle', x: lx, z: lz, r: 0.44, y0: gy - 0.15, y1: gy + 0.58, tag: 'drum' });
+  } else {
+    k.solid.cyl(0.29, 0.29, 0.88, 10, lx, gy + 0.44, lz, C.rust, ry);
+    k.solid.cyl(0.30, 0.30, 0.05, 10, lx, gy + 0.66, lz, C.metal, ry);
+    k.solid.close(lx, lz, 0.5, C.rust);
+    api.emit({ kind: 'circle', x: lx, z: lz, r: 0.31, y0: gy - 0.15, y1: gy + 0.88, tag: 'drum' });
+  }
+}
+
+/** A stack of tyres. */
+function tyreStack(k, api, lx, lz) {
+  const gy = groundY(api, lx, lz);
+  const n = 3 + ((api.rng.next() * 3) | 0);
+  k.solid.open();
+  for (let i = 0; i < n; i++) {
+    k.solid.tube(0.36, 0.36, 0.22, 10, lx + api.rng.range(-0.05, 0.05), gy + 0.11 + i * 0.21,
+      lz + api.rng.range(-0.05, 0.05), C.dark, api.rng.range(0, TAU));
+  }
+  k.solid.close(lx, lz, 0.6, C.dark);
+  api.emit({
+    kind: 'circle', x: lx, z: lz, r: 0.40,
+    y0: gy - 0.15, y1: gy + 0.21 * n + 0.02, tag: 'tyres',
+  });
+}
+
+/**
+ * THE VERGE. Round 7, lane F, and it is the whole difference between "there are breakable
+ * things in the county" and "you can mow through the small stuff at speed".
+ *
+ * A minor site sits 7.4-12.6 m off the road centreline (placedata MINOR_OFFSET) and
+ * places.js yaws it so its LOCAL +Z faces the road. So local +Z of 2.6-4.4 m puts a prop
+ * 3-10 m from the centreline: the verge, the edge of the drivable ribbon, and the first
+ * thing a car clips when it swerves. Everything on this line is LIGHT — nothing over 30 kg,
+ * so nothing here needs more than 4.3 m/s to go through and nothing here can ever stop you.
+ *
+ * MEASURED, and it is the reason this exists: the first cut put every breakable at the
+ * site's own centre, 8-12 m off the road in the trees, and a car driving the road passed
+ * 9.8 m from the nearest one and broke nothing (tools/f-crush.mjs, first three runs).
+ */
+function verge(k, api, n) {
+  const count = n === undefined ? 3 : n;
+  for (let i = 0; i < count; i++) {
+    const lx = (i - (count - 1) * 0.5) * api.rng.range(4.4, 6.6) + api.rng.range(-1.2, 1.2);
+    // A SPREAD, NOT A RANDOM DRAW, and it is spread on purpose. The site's own distance
+    // from the centreline is drawn from 7.4-12.6 m and a builder cannot see it, so a single
+    // offset lands anywhere from the tarmac to the treeline depending on the draw. Stepping
+    // 6.6 / 5.3 / 4.0 guarantees the FIRST of them is 0.8-6.0 m from the centreline — the
+    // wheel track or the verge, whatever the site drew — and the last is well back on the
+    // grass. (places.js should hand the builder the offset; docs/ROUND-7/HANDOFF-F.md.)
+    const lz = 6.6 - i * 1.3;
+    const pick = api.rng.next();
+    if (pick < 0.28) aboard(k, api, lx, lz, api.rng.range(0, TAU));
+    else if (pick < 0.52) crates(k, api, lx, lz, 1);
+    else if (pick < 0.72) pallets(k, api, lx, lz, api.rng.range(0, TAU));
+    else if (pick < 0.88) letterbox(k, api, lx, lz, api.rng.range(0, TAU));
+    else roadSign(k, api, lx, lz, api.rng.range(0, TAU));
+  }
+}
+
 export const MINOR_BUILDERS = {
 
   /**
@@ -1637,6 +1878,7 @@ export const MINOR_BUILDERS = {
     const k = kits();
     const n = 7;
     let gy0 = api.padY, gyN = api.padY;
+    k.solid.open();                    // ROUND 7: the whole run is one thing a car takes out
     for (let i = 0; i < n; i++) {
       const lx = (i - (n - 1) * 0.5) * 2.3;
       const down = api.rng.next() < 0.34;
@@ -1651,6 +1893,7 @@ export const MINOR_BUILDERS = {
           0, 0, api.rng.range(-0.06, 0.06));
       }
     }
+    k.solid.close(0, 0, 8.4, C.wood);
     // one collider for the run, spanning from the lower end to the top of the higher one
     const lo = Math.min(gy0, gyN), hi = Math.max(gy0, gyN);
     // yaw 0, NOT api.yaw: emit() composes the shape's yaw with the site's own
@@ -1660,6 +1903,12 @@ export const MINOR_BUILDERS = {
       kind: 'obb', x: 0, z: 0, halfX: 8.2, halfZ: 0.18, yaw: 0,
       y0: lo - 0.2, y1: hi + 1.1, tag: 'fence',
     });
+    // ROUND 7: the gatepost furniture. A letterbox at one end and a county sign at the
+    // other, each its own collider and its own part, so a pass down the verge takes three
+    // separate things and the road looks like you were here.
+    letterbox(k, api, -9.4, api.rng.range(-0.5, 0.5), api.rng.range(0, TAU));
+    roadSign(k, api, 9.6, api.rng.range(-0.6, 0.6), api.rng.range(-0.5, 0.5));
+    verge(k, api, 3);
     return k;
   },
 
@@ -1667,10 +1916,15 @@ export const MINOR_BUILDERS = {
   waystone(api) {
     const k = kits();
     const h = api.rng.range(1.3, 1.9);
+    k.solid.open();
     k.solid.box(0.62, h, 0.30, 0, api.padY + h * 0.5, 0, C.stone, api.rng.range(0, TAU), 0,
       api.rng.range(-0.10, 0.10));
     k.solid.box(1.0, 0.2, 0.8, 0, api.padY + 0.1, 0, C.stone);
-    api.emit({ kind: 'circle', x: 0, z: 0, r: 0.45, y0: api.padY - 0.2, y1: api.padY + h, tag: 'stone' });
+    k.solid.close(0, 0, 0.7, C.stone);
+    // ROUND 7: 120 kg. It needs 9.2 m/s, so it stands through everything but a real run at
+    // it — which is the point: the heavy things are the ones worth aiming at.
+    api.emit({ kind: 'circle', x: 0, z: 0, r: 0.45, y0: api.padY - 0.2, y1: api.padY + h, tag: 'waystone' });
+    verge(k, api, 2);
     return k;
   },
 
@@ -1685,6 +1939,7 @@ export const MINOR_BUILDERS = {
     }
     // yaw 0 for the same reason as the fence: emit() adds the site's yaw itself.
     api.emit({ kind: 'obb', x: 0, z: 0, halfX: 1.7, halfZ: 0.3, yaw: 0, y0: api.padY - 0.3, y1: api.padY + 1.2, tag: 'stone' });
+    verge(k, api, 2);
     return k;
   },
 
@@ -1699,6 +1954,12 @@ export const MINOR_BUILDERS = {
         0, sx * 0.10, sz * 0.10);
     }
     api.emit({ kind: 'circle', x: 0, z: 0, r: 2.3, y0: api.padY - 0.2, y1: api.padY + 0.6, tag: 'stone', standable: true });
+    // ROUND 7: the linesmen's leavings round the base — a drum, a tyre stack and a sign on
+    // the verge. The concrete pad stays: it is standable and you drive over it.
+    drum(k, api, api.rng.range(2.6, 3.6), api.rng.range(-2.4, 2.4), api.rng.next() < 0.3);
+    tyreStack(k, api, api.rng.range(-3.6, -2.6), api.rng.range(-2.4, 2.4));
+    roadSign(k, api, api.rng.range(-1.2, 1.2), api.rng.range(3.2, 4.2), api.rng.range(0, TAU));
+    verge(k, api, 3);
     return k;
   },
 
@@ -1706,7 +1967,8 @@ export const MINOR_BUILDERS = {
   blind(api) {
     const k = kits();
     const legH = 2.6;
-    for (let i = 0; i < 4; i++) {
+    k.solid.open();               // ROUND 7: Alex named "deer stands' legs". Take the legs,
+    for (let i = 0; i < 4; i++) { // take the blind — the whole thing comes down together.
       const sx = (i & 1) ? 1 : -1, sz = (i & 2) ? 1 : -1;
       k.solid.cyl(0.09, 0.11, legH, 5, sx * 0.8, api.padY + legH * 0.5, sz * 0.8, C.wood);
     }
@@ -1716,7 +1978,9 @@ export const MINOR_BUILDERS = {
     k.solid.gable(2.3, 2.3, api.padY + legH + 1.5, 0.4, 0, 0, 0, C.rust, 0);
     // the ladder
     for (let i = 0; i < 5; i++) k.solid.box(0.7, 0.06, 0.06, 0, api.padY + 0.4 + i * 0.5, 1.15, C.wood);
-    api.emit({ kind: 'circle', x: 0, z: 0, r: 1.25, y0: api.padY - 0.2, y1: api.padY + legH + 2.2, tag: 'wood' });
+    k.solid.close(0, 0, 1.6, C.plank);
+    api.emit({ kind: 'circle', x: 0, z: 0, r: 1.25, y0: api.padY - 0.2, y1: api.padY + legH + 2.2, tag: 'leg' });
+    verge(k, api, 2);
     return k;
   },
 
@@ -1731,15 +1995,20 @@ export const MINOR_BUILDERS = {
         const lz = r * 4.4 + api.rng.range(-0.6, 0.6);
         const h = api.rng.range(2.6, 4.2);
         const gy = groundY(api, lx, lz);
+        k.solid.open();
         k.solid.cyl(0.13, 0.22, h, 6, lx, gy + h * 0.5 - 0.15, lz, C.wood, 0,
           api.rng.range(-0.10, 0.10), api.rng.range(-0.10, 0.10));
         for (let b = 0; b < 3; b++) {
           k.solid.cyl(0.05, 0.09, api.rng.range(1.0, 1.8), 4, lx, gy + h * 0.86 - 0.15, lz, C.wood,
             api.rng.range(0, TAU), api.rng.range(0.6, 1.1));
         }
-        api.emit({ kind: 'circle', x: lx, z: lz, r: 0.26, y0: gy - 0.2, y1: gy + h, tag: 'tree' });
+        k.solid.close(lx, lz, 0.5, C.wood);
+        // ROUND 7: 'sapling', not 'tree'. A 0.13 m dead orchard stem is Alex's "thin
+        // saplings" and it is the one thing on this table you can mow a whole rank of.
+        api.emit({ kind: 'circle', x: lx, z: lz, r: 0.26, y0: gy - 0.2, y1: gy + h, tag: 'sapling' });
       }
     }
+    verge(k, api, 2);
     return k;
   },
 
@@ -1747,13 +2016,16 @@ export const MINOR_BUILDERS = {
   cairn(api) {
     const k = kits();
     let y = 0;
+    k.solid.open();
     for (let i = 0; i < 9; i++) {
       const s = 0.72 - i * 0.062;
       k.solid.box(s, s * 0.42, s * 0.86, api.rng.range(-0.06, 0.06), api.padY + y + s * 0.21,
         api.rng.range(-0.06, 0.06), C.stone, api.rng.range(0, TAU));
       y += s * 0.40;
     }
-    api.emit({ kind: 'circle', x: 0, z: 0, r: 0.55, y0: api.padY - 0.2, y1: api.padY + y, tag: 'stone' });
+    k.solid.close(0, 0, 0.7, C.stone);
+    api.emit({ kind: 'circle', x: 0, z: 0, r: 0.55, y0: api.padY - 0.2, y1: api.padY + y, tag: 'cairn' });
+    verge(k, api, 2);
     return k;
   },
 
@@ -1781,6 +2053,7 @@ export const MINOR_BUILDERS = {
       y0: api.padY - 0.2, y1: api.padY + 1.7, tag: 'vehicle',
     });
     k.flicker = { x: hx, y: api.padY + 0.72, z: hz };
+    verge(k, api, 3);
     return k;
   },
 
@@ -1800,6 +2073,7 @@ export const MINOR_BUILDERS = {
     const paper = [
       C.paper[0] * (1 - 0.62 * age), C.paper[1] * (1 - 0.66 * age), C.paper[2] * (1 - 0.70 * age),
     ];
+    k.solid.open();
     k.solid.cyl(0.05, 0.06, 1.9, 5, -0.42, api.padY + 0.95, 0, C.wood);
     k.solid.cyl(0.05, 0.06, 1.9, 5, 0.42, api.padY + 0.95, 0, C.wood);
     k.solid.box(1.15, 0.85, 0.05, 0, api.padY + 1.45, 0, C.wood);
@@ -1813,18 +2087,27 @@ export const MINOR_BUILDERS = {
         k.solid.quad(0.22, 0.22, sx * 0.40, api.padY + 1.16, -0.07, paper, Math.PI, sx * 0.9 * age);
       }
     }
-    // the ones that came loose
+    k.solid.close(0, 0, 0.8, paper);
+    api.emit({ kind: 'circle', x: 0, z: 0, r: 0.55, y0: api.padY - 0.2, y1: api.padY + 1.9, tag: 'sign' });
+    // the ones that came loose. OUTSIDE the bracket: paper on the ground is not part of the
+    // board and should still be lying there after the board has gone.
     for (let i = 0; i < 2 + Math.round(age * 2); i++) {
       k.solid.quad(0.34, 0.24, api.rng.range(-1.4, 1.4), api.padY + 0.03, api.rng.range(-1.6, 1.6),
         paper, api.rng.range(0, TAU), -Math.PI * 0.5);
     }
-    api.emit({ kind: 'circle', x: 0, z: 0, r: 0.55, y0: api.padY - 0.2, y1: api.padY + 1.9, tag: 'wood' });
+    // ROUND 7: whoever nailed the notice up was selling something here first. A trestle
+    // stall gone over and two boards, all breakable, all on the verge.
+    stall(k, api, api.rng.range(2.2, 3.2), api.rng.range(-1.2, 1.2), api.rng.range(0, TAU));
+    aboard(k, api, api.rng.range(-2.6, -1.7), api.rng.range(-1.4, 1.4), api.rng.range(0, TAU));
+    aboard(k, api, api.rng.range(1.2, 2.0), api.rng.range(2.0, 3.0), api.rng.range(0, TAU));
+    verge(k, api, 2);
     return k;
   },
 
   /** Search-party gear, left where it was dropped. Nobody came back for it. */
   gear(api) {
     const k = kits();
+    k.solid.open();
     k.solid.box(0.9, 0.55, 0.55, 0, api.padY + 0.28, 0, C.cloth, api.rng.range(0, TAU));
     k.solid.box(0.30, 0.14, 0.22, api.rng.range(0.7, 1.4), api.padY + 0.07, api.rng.range(-0.9, 0.9), C.metal, api.rng.range(0, TAU));
     // a stack of poles for a tent nobody put up
@@ -1840,7 +2123,15 @@ export const MINOR_BUILDERS = {
     // a torch, still pointing at whatever it was pointing at
     k.solid.cyl(0.05, 0.05, 0.24, 6, api.rng.range(-0.8, 0.8), api.padY + 0.05, api.rng.range(-0.8, 0.8),
       C.metal, api.rng.range(0, TAU), Math.PI * 0.5);
-    api.emit({ kind: 'circle', x: 0, z: 0, r: 0.62, y0: api.padY - 0.2, y1: api.padY + 0.6, tag: 'wood' });
+    k.solid.close(0, 0, 0.9, C.cloth);
+    api.emit({ kind: 'circle', x: 0, z: 0, r: 0.62, y0: api.padY - 0.2, y1: api.padY + 0.6, tag: 'kit' });
+    // ROUND 7: what the search party brought and did not take away. Two crates, a pallet
+    // stack and a drum, each one its own collider, so a pass across this lay-by takes four.
+    crates(k, api, api.rng.range(1.8, 2.6), api.rng.range(-2.2, -1.2), 2);
+    crates(k, api, api.rng.range(-2.6, -1.8), api.rng.range(1.2, 2.2), 1);
+    pallets(k, api, api.rng.range(-1.0, 1.0), api.rng.range(2.4, 3.4), api.rng.range(0, TAU));
+    drum(k, api, api.rng.range(2.0, 3.0), api.rng.range(1.4, 2.6), api.rng.next() < 0.4);
+    verge(k, api, 3);
     return k;
   },
 
@@ -2137,4 +2428,11 @@ export function beaconGeometry(height, radius) {
 }
 
 export { C as SITE_COLOURS };
+// ROUND 7: the kit toolkit is shared. New dress modules (dress-station.js,
+// dress-interiors.js, staged.js) build with exactly these helpers so a prop authored in a
+// lane's own file is indistinguishable from one authored here. Nothing below is new code.
+export {
+  C, Kit, kits, groundY, shell, glowColumn, sash, lattice, yardWall,
+  PANE_WINDOW, PANE_TUBE, PANE_SIGN, PANE_ROSE, PANE_LAMP, recordPane,
+};
 export default BUILDERS;

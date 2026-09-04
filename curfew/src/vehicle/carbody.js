@@ -733,4 +733,56 @@ export function buildCarBody(rng) {
   };
 }
 
+/* ==========================================================================
+   DEBRIS — ROUND 7, lane F. What comes off a fence when you drive through it.
+
+   Alex asked to be able to crush things with the car. A collider that quietly disappears
+   is the exact failure this project keeps shipping: it works, and nothing reaches the
+   screen. So a crush throws real geometry.
+
+   ONE merged geometry, ONE mesh, ONE draw call, and NO NEW MATERIAL — car.js hands this
+   the places lane's own body material, which already exists and already has a program, so
+   the light census and the program budget are both untouched (AGENTS.md). Every piece is a
+   little box; car.js writes its vertices each frame from a position and a rotation. The
+   pieces are UNIT-SPACE here and world-space there, which is why the base arrays come back
+   out with the geometry: the sim never allocates.
+
+   `pieces` boxes, each 24 vertices (a BoxGeometry is indexed: 24 verts, 36 indices), so
+   16 pieces is 384 vertices. Rewriting all of them every frame is nothing.
+   ========================================================================== */
+export const DEBRIS_VERTS = 24;
+
+export function buildDebrisGeometry(pieces) {
+  const n = Math.max(1, pieces | 0);
+  const geos = [];
+  for (let i = 0; i < n; i++) {
+    // A spread of shapes: planks, blocks and splinters, so a smashed thing does not read
+    // as a bag of identical dice.
+    const t = i / n;
+    // Kept small on purpose: a piece is thrown 1-3 m in front of the camera, where a 0.8 m
+    // slab fills a third of the frame and reads as a door, not as a splinter. Photographed
+    // at tests/shots/f-crush-debris.png before this was trimmed.
+    const w = 0.09 + (i % 3) * 0.10;
+    const h = 0.05 + ((i * 7) % 5) * 0.035;
+    const d = 0.09 + ((i * 5) % 4) * 0.10 + t * 0.12;
+    const g = new THREE.BoxGeometry(w, h, d);
+    const p = g.attributes.position, c = new Float32Array(p.count * 3);
+    for (let v = 0; v < p.count; v++) { c[v * 3] = 0.14; c[v * 3 + 1] = 0.13; c[v * 3 + 2] = 0.12; }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    geos.push(g);
+  }
+  const geo = mergeGeometries(geos, false);
+  for (const g of geos) g.dispose();
+  // The rest pose, kept so every frame can rebuild from it instead of accumulating drift.
+  const src = geo.attributes.position.array;
+  const srcN = geo.attributes.normal.array;
+  const base = new Float32Array(src.length);
+  base.set(src);
+  const baseN = new Float32Array(srcN.length);
+  baseN.set(srcN);
+  // Nothing culls it: the pieces move far from wherever the bounding sphere was computed.
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
+  return { geo, base, baseN, pieces: n, per: DEBRIS_VERTS };
+}
+
 export default buildCarBody;

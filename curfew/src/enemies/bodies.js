@@ -168,7 +168,7 @@ function shellCacheKey() { return SHELL_CACHE_KEY; }
  * `rim` is a cold edge colour, never the species' own hue: the rim exists to
  * separate a silhouette from the trees, not to make a neon toy.
  */
-function makeShell(tintR, tintG, tintB) {
+export function makeShell(tintR, tintG, tintB) {
   const m = new THREE.MeshLambertMaterial({
     color: new THREE.Color(tintR, tintG, tintB),
     vertexColors: true,          // EVERY geometry fed to this MUST carry `color`
@@ -249,7 +249,12 @@ export function whiteTex() {
 }
 
 let CONTACT_TEX = null;
-function contactTex() {
+/** The soft radial disc every body stands on. Exported because the boss needs the SAME
+    texture for its contact and for its painted cast shadow: a second canvas would be a
+    second texture upload for a picture nobody could tell apart. (docs/ROUND-6/HANDOFF-C.md
+    item 1 asked for this and for makeShell; both are exported now, so kneeler-body.js no
+    longer builds a whole hound at boot just to steal its materials.) */
+export function contactTex() {
   if (CONTACT_TEX) return CONTACT_TEX;
   const N = 64;
   const c = document.createElement('canvas');
@@ -567,6 +572,15 @@ const P = {
 function sculptHead(w, y, s, spec) {
   const bone = spec.bone;
   const cloth = spec.cloth;
+  // A head is not always ON TOP of the shoulders. `spec.dz` pushes the whole head forward
+  // (negative) or back along the body's own -Z, which is how the hunter's skull comes to hang
+  // in FRONT of and BELOW its shoulder blades. Every z below is relative to it, and the socket
+  // depth returned at the end carries it, so eyeGeometry lands the glints in the right holes.
+  const dz = spec.dz || 0;
+  const w0 = w;
+  w = {
+    add(g, x, yy, z, c, o) { w0.add(g, x, yy, z + dz, c, o); return w; },
+  };
 
   // 1. the lightless cavity: a tall ovoid of VOID, set slightly back
   w.add(P.sph, 0, y, 0.012 * s, VOID, {
@@ -632,20 +646,41 @@ function sculptHead(w, y, s, spec) {
   const sockZ = spec.mask ? -0.135 : (spec.smooth || spec.face ? -0.150 : -0.115);
   for (const side of [-1, 1]) {
     w.add(P.sphLo, side * 0.062 * s, y + 0.030 * s, sockZ * s, VOID, {
-      sx: 0.090 * s, sy: 0.070 * s, sz: 0.045 * s,
+      sx: 0.105 * s, sy: 0.062 * s, sz: 0.050 * s,
     });
   }
-  return sockZ;
+  return sockZ + dz / s;
 }
 
 /* Eye glints: their own tiny mesh on the shared MeshBasic program, proud of the
-   sockets so they catch a light in full dark. Two spheres, ~40 triangles. */
+   sockets so they catch a light in full dark. Two lozenges, ~40 triangles.
+
+   THEY ARE SLITS, NOT DISCS, AND THAT IS ROUND 7's DOING. Measured 2026-09-03 with
+   tools/bodylook.mjs at 3 m: every body in the roster wore two round white 68 mm eyeballs
+   the size of coins (tests/shots/bodylook/before-pale-3m-approach-moon.png, and the
+   pallbearer's are worse). A pair of big round symmetric front-facing lights is what a
+   CARTOON face is made of, and five of the six species were wearing one. The Pale read as a
+   Halloween cutout and the pallbearer as a chess pawn with googly eyes.
+
+   The fix cannot be "make them smaller": the whole reason GLINT_SCALE is 2.0 is that below
+   68 mm no pixel at 16 m is fully covered by glint, the covered pixel blends with the black
+   body behind it, its luma drops back under CFG.render.bloom.threshold and the glint neither
+   resolves nor spreads. So the size is kept in the axis that owns that argument — WIDTH —
+   and spent in the axis that owns the cartoon: HEIGHT.
+
+     was  68 x 60 mm  -> 2.1 x 1.9 px at 16 m, and a coin at 3 m
+     now 100 x 38 mm  -> 3.1 x 1.2 px at 16 m, and a gleam at 3 m
+
+   Three whole pixels of width is MORE covered pixel than the disc ever had, so the range read
+   goes up, not down; and a horizontal emissive blooms into a LINE, which is what a low light
+   catching a wet eye actually looks like. tools/bodylook.mjs reports the over-150 pixel count
+   per cell and it is how this was checked at both ends. */
 function eyeGeometry(y, s, sockZ, spread) {
   const w = new Weld();
   const G = GLINT_SCALE;
   for (const side of [-1, 1]) {
-    w.add(P.sphLo, side * spread * s, y + 0.030 * s, (sockZ - 0.028) * s, 0xffffff, {
-      sx: 0.034 * G * s, sy: 0.030 * G * s, sz: 0.024 * G * s,
+    w.add(P.sphLo, side * spread * s, y + 0.030 * s, (sockZ - 0.026) * s, 0xffffff, {
+      sx: 0.050 * G * s, sy: 0.019 * G * s, sz: 0.022 * G * s,
     });
   }
   return w.geometry('eyes');
@@ -665,9 +700,28 @@ function limbGeo(len, rTop, rBot, colour, endGeo) {
     sx: rTop * 2, sy: len * 0.62, sz: rTop * 2,
   });
   if (endGeo) {
-    w.add(P.sphLo, 0, -len - rBot * 0.4, endGeo.z || 0, endGeo.colour, {
-      sx: rBot * 2.0, sy: rBot * 2.4, sz: rBot * 2.2,
-    });
+    if (endGeo.claw) {
+      // A HAND, NOT A KNOB. Measured 2026-09-03 (tools/bodylook.mjs, and it is the loudest
+      // thing in tests/shots/bodylook/before-hunter-3m-approach-torch.png): every limb in the
+      // roster ended in a pale BONE ball 2.4x the wrist, and under a torch those balls are the
+      // brightest thing on the body — two wooden doorknobs hanging off a mannequin. A hand is
+      // a narrow palm and long fingers, and long fingers are also the ONE proportion cue that
+      // survives at 20 m.
+      const c = endGeo.claw;
+      w.add(P.box, 0, -len - rBot * 0.9, -rBot * 0.5, colour, {
+        sx: rBot * 1.7, sy: rBot * 1.9, sz: rBot * 2.6,
+      });
+      for (let i = -1; i <= 1; i++) {
+        w.add(P.cone3, i * rBot * 0.95, -len - rBot * 1.5, -rBot * 1.5, endGeo.colour, {
+          rx: -1.30 - Math.abs(i) * 0.12, rz: i * 0.24,
+          sx: rBot * 0.52, sy: c * (i === 0 ? 1.18 : 1), sz: rBot * 0.52,
+        });
+      }
+    } else {
+      w.add(P.sphLo, 0, -len - rBot * 0.4, endGeo.z || 0, endGeo.colour, {
+        sx: rBot * 2.0, sy: rBot * 2.4, sz: rBot * 2.2,
+      });
+    }
   }
   return w.geometry('limb');
 }
@@ -714,9 +768,20 @@ function buildHound(def) {
   const cloth = def.cloth, skin = def.skin, bone = def.bone;
   const backY = 0.66 * s;
 
-  // barrel chest tapering to the hips: a WEDGE, not a tube
-  w.add(P.box, 0, backY, -0.16 * s, cloth, { sx: 0.42 * s, sy: 0.40 * s, sz: 0.52 * s });
-  w.add(P.box, 0, backY - 0.02 * s, 0.30 * s, cloth, { sx: 0.33 * s, sy: 0.32 * s, sz: 0.48 * s });
+  /* MEASURED 2026-09-03 (ROUND 7): tests/shots/bodylook/before-hound-3m-approach-moon.png is
+     A COFFEE TABLE. Two axis-aligned boxes for a body and four straight sticks under it — at
+     3 m the flat top face and the four hard vertical corners are the whole read, and no
+     amount of rib detail on the flank changes a rectangle into an animal. So the barrel is
+     ellipsoids now, the shoulders stand PROUD of the ribs the way a hunting dog's do, and the
+     line from shoulder to hip DROPS instead of running level. */
+  w.add(P.sph, 0, backY + 0.02 * s, -0.16 * s, cloth, { sx: 0.44 * s, sy: 0.44 * s, sz: 0.60 * s });
+  w.add(P.sph, 0, backY - 0.05 * s, 0.30 * s, cloth, { sx: 0.34 * s, sy: 0.34 * s, sz: 0.50 * s });
+  w.add(P.cap, 0, backY - 0.02 * s, 0.06 * s, cloth, { rx: 1.57, sx: 0.36 * s, sy: 0.34 * s, sz: 0.36 * s });
+  // the shoulder blades ride above the spine — the hunched, loaded look of a thing mid-stalk
+  for (const side of [-1, 1]) {
+    w.add(P.sph, side * 0.16 * s, backY + 0.16 * s, -0.26 * s, cloth,
+      { rz: side * 0.3, sx: 0.20 * s, sy: 0.22 * s, sz: 0.30 * s });
+  }
   // ribs: four shallow bands so the flank has an edge to catch a torch
   for (let i = 0; i < 4; i++) {
     w.add(P.box, 0, backY - 0.02 * s, (-0.30 + i * 0.15) * s, bone,
@@ -727,10 +792,24 @@ function buildHound(def) {
   w.add(P.box, 0, backY + 0.21 * s, 0.02 * s, bone, { sx: 0.075 * s, sy: 0.075 * s, sz: 0.80 * s });
   // neck and the long jaw
   w.add(P.cap, 0, backY + 0.04 * s, -0.46 * s, skin, { rx: 1.35, sx: 0.20 * s, sy: 0.18 * s, sz: 0.20 * s });
-  const headY = backY + 0.06 * s;
-  w.add(P.sph, 0, headY, -0.66 * s, skin, { sx: 0.215 * s, sy: 0.205 * s, sz: 0.250 * s });
-  w.add(P.box, 0, headY - 0.055 * s, -0.83 * s, skin, { sx: 0.135 * s, sy: 0.095 * s, sz: 0.280 * s });
-  w.add(P.box, 0, headY - 0.098 * s, -0.83 * s, VOID, { sx: 0.120 * s, sy: 0.030 * s, sz: 0.265 * s });
+  // the head hangs BELOW the shoulder line and the jaw is half the body's length: a hound
+  // that carries its head low is stalking, and one that carries it level is a labrador
+  const headY = backY - 0.06 * s;
+  w.add(P.sph, 0, headY, -0.68 * s, skin, { sx: 0.215 * s, sy: 0.200 * s, sz: 0.260 * s });
+  w.add(P.box, 0, headY - 0.050 * s, -0.90 * s, skin, { rx: 0.10, sx: 0.130 * s, sy: 0.090 * s, sz: 0.360 * s });
+  w.add(P.box, 0, headY - 0.096 * s, -0.90 * s, VOID, { rx: 0.10, sx: 0.118 * s, sy: 0.034 * s, sz: 0.345 * s });
+  // teeth: six small bone points along the gape, which is the ONE thing that reads at 3 m
+  for (let i = 0; i < 3; i++) {
+    for (const side of [-1, 1]) {
+      w.add(P.cone3, side * 0.048 * s, headY - 0.086 * s, (-1.02 + i * 0.11) * s, bone,
+        { rx: Math.PI, sx: 0.026 * s, sy: 0.055 * s, sz: 0.026 * s });
+    }
+  }
+  // and a hackle ridge: five spines standing up off the neck
+  for (let i = 0; i < 5; i++) {
+    w.add(P.cone3, (i % 2 ? 0.03 : -0.03) * s, backY + (0.24 - i * 0.012) * s, (-0.42 + i * 0.14) * s, bone,
+      { rx: -0.42, rz: (i % 2 ? 0.2 : -0.2), sx: 0.045 * s, sy: 0.20 * s, sz: 0.045 * s });
+  }
   // sockets
   for (const side of [-1, 1]) {
     w.add(P.sphLo, side * 0.078 * s, headY + 0.045 * s, -0.760 * s, VOID,
@@ -741,8 +820,11 @@ function buildHound(def) {
 
   const eyesW = new Weld();
   for (const side of [-1, 1]) {
-    eyesW.add(P.sphLo, side * 0.078 * s, headY + 0.048 * s, -0.786 * s, 0xffffff,
-      { sx: 0.036 * GLINT_SCALE * s, sy: 0.032 * GLINT_SCALE * s, sz: 0.026 * GLINT_SCALE * s });
+    // slits, not discs — see eyeGeometry()'s note. A hound's are angled inward and down,
+    // which is the one line on this body that makes it read as an animal that means it.
+    eyesW.add(P.sphLo, side * 0.082 * s, headY + 0.048 * s, -0.792 * s, 0xffffff,
+      { rz: side * 0.42,
+        sx: 0.052 * GLINT_SCALE * s, sy: 0.019 * GLINT_SCALE * s, sz: 0.024 * GLINT_SCALE * s });
   }
 
   const legL = limbGeo(0.62 * s, 0.062 * s, 0.052 * s, skin,
@@ -761,7 +843,7 @@ function buildHound(def) {
       { x: 0.21 * s, y: 0.60 * s, z: 0.34 * s },
     ],
     zones: [
-      { x: 0, y: headY, z: -0.72 * s, r: 0.24 * s, zone: 'head' },
+      { x: 0, y: headY, z: -0.74 * s, r: 0.26 * s, zone: 'head' },
       { x: 0, y: backY + 0.24 * s, z: 0.02 * s, r: 0.19 * s, zone: 'vent' },
       { x: 0, y: backY, z: -0.10 * s, r: 0.42 * s, zone: 'torso' },
       { x: 0, y: backY - 0.02 * s, z: 0.32 * s, r: 0.31 * s, zone: 'limb' },
@@ -779,21 +861,54 @@ function buildPallbearer(def) {
   const cloth = def.cloth, bone = def.bone;
   const shoulderY = 1.52 * s, headY = 1.76 * s;
 
-  // the bell: two stacked cones, wide at the ground, so no legs are needed
-  w.add(P.cone, 0, 0.42 * s, 0, cloth, { sx: 1.10 * s, sy: 0.94 * s, sz: 0.98 * s });
-  w.add(P.cone, 0, 1.02 * s, 0, cloth, { sx: 0.78 * s, sy: 0.80 * s, sz: 0.72 * s });
-  // hem: a darker band so the body meets the ground instead of hovering over it
-  w.add(P.cyl, 0, 0.055 * s, 0, SEAM, { sx: 1.06 * s, sy: 0.11 * s, sz: 0.96 * s });
-  // chest block + shoulder caps (UNINVITED's silhouette rule)
-  w.add(P.box, 0, shoulderY - 0.16 * s, 0, cloth, { sx: 0.50 * s, sy: 0.38 * s, sz: 0.28 * s });
-  for (const side of [-1, 1]) {
-    w.add(P.sph, side * 0.245 * s, shoulderY - 0.02 * s, 0, cloth,
-      { sx: 0.215 * s, sy: 0.200 * s, sz: 0.205 * s });
+  /* MEASURED 2026-09-03 (ROUND 7, tools/bodylook.mjs):
+     tests/shots/bodylook/before-pallbearer-3m-approach-torch.png is A CHESS PAWN IN A DRESS
+     WEARING A PARTY HAT. Three things did it and none of them was a bug:
+       - the bell was 2.20 m WIDE at 2.05 m tall, built from two 7-sided cones stacked on a
+         cylinder plinth. That is the exact silhouette of a pawn, and the flat facets of a
+         low-segment cone are what make it read as a turned wooden object rather than cloth.
+       - the pointed BONE brow, seen from the front over a hooded head, is a paper hat.
+       - two round white glints on that head finished the cartoon.
+     So the bell is now 1.05 m at the ground, LOPSIDED, made of four offset masses at
+     different rotations with vertical drape folds down it and a ragged hem instead of a
+     plinth; the brow is gone and a low bone bar juts FORWARD over the sockets instead.
+     A shroud is a tall narrow irregular thing. A pawn is a short wide symmetric one. */
+  // the bell: four offset masses, none of them centred, so no two profiles agree
+  w.add(P.cone, -0.03 * s, 0.40 * s, 0.02 * s, cloth, { rz: 0.05, sx: 1.02 * s, sy: 0.90 * s, sz: 0.86 * s });
+  w.add(P.cone, 0.06 * s, 0.74 * s, -0.03 * s, cloth, { rz: -0.09, sx: 0.86 * s, sy: 0.86 * s, sz: 0.74 * s });
+  w.add(P.cone, -0.05 * s, 1.08 * s, 0.02 * s, cloth, { rz: 0.07, sx: 0.68 * s, sy: 0.78 * s, sz: 0.62 * s });
+  w.add(P.sph, 0.11 * s, 0.72 * s, 0.10 * s, cloth, { sx: 0.44 * s, sy: 0.70 * s, sz: 0.36 * s });
+  // drape: six vertical folds down the cloth, so the bell has a grain and catches an edge
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * TAU + 0.4;
+    const r = 0.40 * s;
+    w.add(P.box, Math.cos(a) * r, (0.62 + (i % 2) * 0.10) * s, Math.sin(a) * r, SEAM, {
+      ry: -a, rz: (i % 2 ? 0.05 : -0.06),
+      sx: 0.035 * s, sy: 1.10 * s, sz: 0.16 * s,
+    });
   }
-  const sockZ = sculptHead(w, headY, s, { hood: true, brow: true, mask: true, bone, cloth });
+  // a RAGGED hem, not a plinth: seven tongues of cloth at uneven lengths
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * TAU;
+    const r = 0.46 * s;
+    w.add(P.cone3, Math.cos(a) * r, (0.14 + (i % 3) * 0.05) * s, Math.sin(a) * r, SEAM, {
+      rx: Math.PI, ry: -a, sx: 0.17 * s, sy: (0.26 + (i % 3) * 0.09) * s, sz: 0.13 * s,
+    });
+  }
+  // chest block + shoulder caps (UNINVITED's silhouette rule), narrower than the old one
+  w.add(P.box, 0, shoulderY - 0.16 * s, 0, cloth, { rz: 0.06, sx: 0.44 * s, sy: 0.40 * s, sz: 0.24 * s });
+  for (const side of [-1, 1]) {
+    w.add(P.sph, side * 0.235 * s, shoulderY - (side < 0 ? 0.06 : 0.02) * s, 0, cloth,
+      { sx: 0.200 * s, sy: 0.190 * s, sz: 0.195 * s });
+  }
+  const sockZ = sculptHead(w, headY, s, { hood: true, brow: false, mask: true, bone, cloth });
+  // the brow is a BAR that juts forward over the sockets, not a cone that stands up off the
+  // crown. Same job — one hard edge on the head — without the party hat.
+  w.add(P.box, 0, headY + 0.088 * s, -0.150 * s, bone,
+    { rx: -0.34, sx: 0.230 * s, sy: 0.048 * s, sz: 0.140 * s });
 
   const armGeo = limbGeo(0.34 * s, 0.062 * s, 0.05 * s, cloth, null);
-  const foreGeo = limbGeo(0.30 * s, 0.050 * s, 0.052 * s, cloth, { colour: bone });
+  const foreGeo = limbGeo(0.34 * s, 0.050 * s, 0.052 * s, cloth, { colour: bone, claw: 0.26 * s });
 
   return {
     shell: w.geometry('pallbearer-shell'),
@@ -821,26 +936,61 @@ function buildHunter(def) {
   const s = def.height / 2.20;
   const w = new Weld();
   const cloth = def.cloth, skin = def.skin, bone = def.bone;
-  const hipY = 1.02 * s, shoulderY = 1.78 * s, headY = 1.99 * s;
+  // the head is BELOW the shoulder blades and 14 cm in front of them, not on top of them
+  const hipY = 1.02 * s, shoulderY = 1.78 * s, headY = 1.84 * s;
 
-  w.add(P.box, 0, hipY, 0, skin, { sx: 0.28 * s, sy: 0.22 * s, sz: 0.20 * s });
-  w.add(P.box, 0, hipY + 0.30 * s, 0, skin, { sx: 0.26 * s, sy: 0.42 * s, sz: 0.19 * s });
+  /* MEASURED 2026-09-03 (ROUND 7, tools/bodylook.mjs):
+     tests/shots/bodylook/before-hunter-3m-approach-torch.png is a BROWN WOODEN MANNEQUIN. A
+     box pelvis, a box chest, two even sticks for arms and two for legs, a small dark ball for
+     a head, and two pale knobs for hands. Every proportion the comment above claims — "arms
+     TOO LONG", "no face at all" — is TRUE IN THE CODE and invisible on screen, because the
+     arms hang beside a torso the same width as they are and the head sits on top of the
+     shoulders exactly where a person's does.
+
+     What is actually frightening in a dark forest is a shape you cannot name at 30 m. So:
+       - THE SHOULDERS ARE ABOVE THE HEAD. Two blade-like scapulae rise to 2.06 m while the
+         skull hangs at 1.86 m, thrust forward on a long neck. Nothing with a human outline
+         has that, and it survives to the last pixel of the silhouette.
+       - THE CHEST IS 0.16 DEEP AGAINST 0.50 WIDE. Thin where a person is thick.
+       - THE RIBS ARE OUTSIDE THE SKIN: eight of them, uneven, standing off the flank.
+       - AN EXTRA JOINT. The forearm carries a bone spur at the wrist that reads, at range and
+         at speed, as a second elbow between hand and elbow.
+       - THE HANDS ARE HANDS. Three long fingers, not a doorknob. */
+  w.add(P.box, 0, hipY, 0, skin, { sx: 0.26 * s, sy: 0.22 * s, sz: 0.17 * s });
+  w.add(P.box, 0, hipY + 0.30 * s, 0, skin, { sx: 0.23 * s, sy: 0.42 * s, sz: 0.155 * s });
   // narrow chest, wide clavicle: the wrongness is in the proportion
-  w.add(P.box, 0, shoulderY - 0.20 * s, 0, skin, { sx: 0.50 * s, sy: 0.34 * s, sz: 0.22 * s });
-  for (let i = 0; i < 5; i++) {
-    w.add(P.box, 0, (hipY + 0.30 + i * 0.115) * s, -0.075 * s, bone,
-      { sx: 0.245 * s, sy: 0.028 * s, sz: 0.105 * s });
+  w.add(P.box, 0, shoulderY - 0.24 * s, 0, skin, { sx: 0.50 * s, sy: 0.36 * s, sz: 0.16 * s });
+  // ribs OUTSIDE the flank, four a side, offset one rib between the sides
+  for (let i = 0; i < 4; i++) {
+    for (const side of [-1, 1]) {
+      const y = (hipY + 0.34 + i * 0.20 + (side < 0 ? 0.09 : 0)) * s;
+      w.add(P.cone3, side * 0.15 * s, y, -0.02 * s, bone, {
+        rz: side * 1.22, rx: -0.22,
+        sx: 0.045 * s, sy: 0.32 * s, sz: 0.055 * s,
+      });
+    }
+  }
+  // THE SCAPULAE: two blades rising ABOVE the head, and this is the whole silhouette
+  for (const side of [-1, 1]) {
+    w.add(P.box, side * 0.175 * s, shoulderY + 0.14 * s, 0.055 * s, skin, {
+      rz: side * -0.22, sx: 0.135 * s, sy: 0.46 * s, sz: 0.10 * s,
+    });
+    w.add(P.cone3, side * 0.20 * s, shoulderY + 0.34 * s, 0.05 * s, bone, {
+      rz: side * -0.30, sx: 0.10 * s, sy: 0.30 * s, sz: 0.10 * s,
+    });
   }
   for (const side of [-1, 1]) {
-    w.add(P.sph, side * 0.255 * s, shoulderY - 0.03 * s, 0, skin,
-      { sx: 0.185 * s, sy: 0.175 * s, sz: 0.180 * s });
+    w.add(P.sph, side * 0.255 * s, shoulderY - 0.05 * s, 0, skin,
+      { sx: 0.175 * s, sy: 0.165 * s, sz: 0.165 * s });
   }
-  w.add(P.cap, 0, shoulderY + 0.09 * s, 0, skin, { sx: 0.10 * s, sy: 0.11 * s, sz: 0.10 * s });
-  const sockZ = sculptHead(w, headY, s, { hood: false, brow: true, mask: false, bone, cloth });
+  // the neck goes FORWARD and DOWN out of the chest, so the head hangs in front of the blades
+  w.add(P.cap, 0, shoulderY - 0.06 * s, -0.11 * s, skin,
+    { rx: 0.90, sx: 0.095 * s, sy: 0.18 * s, sz: 0.095 * s });
+  const sockZ = sculptHead(w, headY, s, { hood: false, brow: true, mask: false, bone, cloth, dz: -0.15 * s });
 
   // arms too long: 0.52 upper + 0.54 fore against a 2.20 m body
   const armGeo = limbGeo(0.52 * s, 0.058 * s, 0.05 * s, skin, null);
-  const foreGeo = limbGeo(0.54 * s, 0.046 * s, 0.060 * s, skin, { colour: bone });
+  const foreGeo = limbGeo(0.54 * s, 0.046 * s, 0.060 * s, skin, { colour: bone, claw: 0.30 * s });
   const thighGeo = limbGeo(0.52 * s, 0.075 * s, 0.06 * s, skin, null);
   const shinGeo = footGeo(0.50 * s, skin, SEAM);
 
@@ -858,7 +1008,7 @@ function buildHunter(def) {
       { x: 0.105 * s, y: hipY - 0.06 * s, z: 0, knee: -0.52 * s },
     ],
     zones: [
-      { x: 0, y: headY, z: -0.06 * s, r: 0.24 * s, zone: 'head' },
+      { x: 0, y: headY, z: -0.21 * s, r: 0.24 * s, zone: 'head' },
       { x: 0, y: shoulderY - 0.18 * s, z: 0, r: 0.31 * s, zone: 'torso' },
       { x: 0, y: hipY + 0.28 * s, z: 0, r: 0.27 * s, zone: 'torso' },
       { x: 0, y: hipY - 0.34 * s, z: 0, r: 0.30 * s, zone: 'limb' },
@@ -934,20 +1084,33 @@ function buildPale(def) {
   const bone = def.bone, cloth = def.cloth;
   const hipY = 0.88, shoulderY = 1.36, headY = 1.56;
 
+  /* MEASURED 2026-09-03 (ROUND 7, tools/bodylook.mjs):
+     tests/shots/bodylook/before-pale-3m-approach-moon.png is A HALLOWEEN CUTOUT. A dark
+     lozenge with two big white circles for eyes, HOVERING — because the 0.92 m skirt cone
+     reached the ground and swallowed both legs, so the thing had no feet and no contact with
+     the floor at all. A doll that floats is a balloon.
+     The fix is all silhouette: a SHORT tunic, two long thin porcelain legs standing under it
+     with real feet, and a head 22% too big for the body. Wrong proportion is the entire
+     scare here — this species must never look like a monster, only like a person who is not
+     shaped right. */
   w.add(P.cap, 0, 1.06, 0, cloth, { sx: 0.30, sy: 0.42, sz: 0.24 });
-  w.add(P.cone, 0, 0.44, 0, cloth, { sx: 0.46, sy: 0.92, sz: 0.38 });
+  w.add(P.cone, 0, 0.98, 0, cloth, { sx: 0.42, sy: 0.46, sz: 0.34 });
   for (const side of [-1, 1]) {
     w.add(P.sph, side * 0.165, shoulderY - 0.02, 0, bone, { sx: 0.130, sy: 0.125, sz: 0.128 });
+    // a VOID seam at each shoulder: a doll's arm is SOCKETED, not grown
+    w.add(P.cyl, side * 0.128, shoulderY - 0.02, 0, VOID, { rz: 1.57, sx: 0.115, sy: 0.030, sz: 0.115 });
   }
   w.add(P.cyl, 0, shoulderY + 0.06, 0, bone, { sx: 0.075, sy: 0.115, sz: 0.075 });
-  const sockZ = sculptHead(w, headY, s, { smooth: true, bone, cloth });
+  const HS = 1.22;                                    // the head is 22% too big for the body
+  const sockZ = sculptHead(w, headY, HS, { smooth: true, bone, cloth });
 
   const armGeo = limbGeo(0.44, 0.045, 0.045, bone, { colour: bone });
-  const legGeo = limbGeo(0.46, 0.052, 0.05, bone, { colour: bone });
+  // long enough to reach the floor now that the tunic stops at the hip
+  const legGeo = limbGeo(0.72, 0.048, 0.046, bone, { colour: bone });
 
   return {
     shell: w.geometry('pale-shell'),
-    eyes: eyeGeometry(headY, s, sockZ, 0.058),
+    eyes: eyeGeometry(headY, HS, sockZ, 0.058),
     limb: armGeo, fore: null,
     thigh: legGeo, shin: null,
     joints: [
@@ -959,7 +1122,7 @@ function buildPale(def) {
       { x: 0.078, y: hipY - 0.10, z: 0 },
     ],
     zones: [
-      { x: 0, y: headY, z: -0.04, r: 0.20, zone: 'head' },
+      { x: 0, y: headY, z: -0.04, r: 0.25, zone: 'head' },
       { x: 0, y: 1.10, z: 0, r: 0.26, zone: 'torso' },
       { x: 0, y: 0.52, z: 0, r: 0.30, zone: 'limb' },
     ],

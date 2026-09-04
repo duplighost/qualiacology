@@ -1078,6 +1078,11 @@ export class Wilds {
         const lx = +shape.x || 0, lz = +shape.z || 0;
         const w = {
           kind: shape.kind, tag: shape.tag, standable: shape.standable,
+          // ROUND 7, lane F: the two opt-ins a builder has, carried through the frame
+          // change. `breakable` is a mass in kg (or true, or false to opt a tagged shape
+          // back out); `climbable: false` refuses the mantle a top it should never take.
+          // A shape that says neither behaves exactly as it did.
+          breakable: shape.breakable, climbable: shape.climbable,
           x: ox + lx * cy + lz * sy,
           z: oz - lx * sy + lz * cy,
           y0: shape.y0, y1: shape.y1,
