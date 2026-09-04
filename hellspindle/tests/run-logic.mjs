@@ -309,18 +309,21 @@ console.log('-- world geometry --');
 
   const flying = world.spawns.filter(s => s.type === 'bat' || s.type === 'censer');
   const generatedFlying = flying.filter(s => s.x >= 8550);
-  let buried = 0;
+  // Buried means the hitbox is inside rock. This used to compare each flier
+  // against supportY — the TOPMOST floor at that x — which was the right
+  // answer when a district was one corridor. It is not: a bat legitimately
+  // flying in the undercroft sits below the road, and a vault ledge sits above
+  // everything, so the topmost floor is routinely nowhere near the body.
   const buriedList = [];
   for (const s of generatedFlying) {
-    const floor = supportY(world.platforms, s.x);
-    if (floor == null) continue;
     const half = s.type === 'bat' ? 24 : 37;
-    if (s.y + half > floor - 2) {
-      buried++;
-      buriedList.push(s);
-    }
+    const halfW = s.type === 'bat' ? 26 : 24;
+    const r = { x: s.x - halfW, y: s.y - half, w: halfW * 2, h: half * 2 };
+    const hit = world.platforms.find(p => !p.oneWay
+      && r.x < p.x + p.w && r.x + r.w > p.x && r.y < p.y + p.h && r.y + r.h > p.y);
+    if (hit) buriedList.push({ type: s.type, x: Math.round(s.x), y: Math.round(s.y), inside: hit });
   }
-  assert('no generated flying enemies buried in floors', buried === 0, JSON.stringify(buriedList.slice(0, 5)));
+  assert('no generated flying enemies buried in floors', buriedList.length === 0, JSON.stringify(buriedList.slice(0, 5)));
   assert('generated flying exist (not deleted)', generatedFlying.length >= 18, generatedFlying.length);
 
   let unsafe = 0;
@@ -656,8 +659,30 @@ console.log('\n-- drop-through ledges / wheel vs floors --');
 console.log('\n-- tile / meta maintenance --');
 {
   const meta = JSON.parse(fs.readFileSync(path.join(ROOT, 'assets/sprites/anim/meta.json'), 'utf8'));
-  assert('meta hunter_air is 8 frames', meta.hunter_air.count === 8);
-  assert('meta bat_flap is 18 frames', meta.bat_flap.count === 18);
+  // Pinning individual counts rots the moment a set is redrawn — hunter_air
+  // went 8 -> 11 on purpose and this suite called it a failure. The invariant
+  // worth holding is that meta describes the files that are actually there.
+  const metaMismatch = [];
+  const metaMissing = [];
+  for (const [name, m] of Object.entries(meta)) {
+    const dir = path.join(ROOT, 'assets/sprites/anim', name);
+    if (!fs.existsSync(dir)) { metaMissing.push(name); continue; }
+    const onDisk = fs.readdirSync(dir).filter(f => /^\d\d\.(png|webp)$/.test(f)).length;
+    if (onDisk !== m.count) metaMismatch.push(`${name}: meta ${m.count}, disk ${onDisk}`);
+  }
+  assert('every meta set has its folder', metaMissing.length === 0, metaMissing.join(', '));
+  assert('meta frame counts match the files on disk', metaMismatch.length === 0, metaMismatch.join(' | '));
+
+  // Every set the game loads must exist with the count loadAnim asks for.
+  const gameSrc = fs.readFileSync(path.join(ROOT, 'game.js'), 'utf8');
+  const loadMismatch = [];
+  for (const m of gameSrc.matchAll(/loadAnim\('([a-z_]+)',\s*(\d+)\)/g)) {
+    const dir = path.join(ROOT, 'assets/sprites/anim', m[1]);
+    const onDisk = fs.existsSync(dir)
+      ? fs.readdirSync(dir).filter(f => /^\d\d\.(png|webp)$/.test(f)).length : 0;
+    if (onDisk < Number(m[2])) loadMismatch.push(`${m[1]}: loadAnim ${m[2]}, disk ${onDisk}`);
+  }
+  assert('every loadAnim set has the frames it asks for', loadMismatch.length === 0, loadMismatch.join(' | '));
   const src = fs.readFileSync(path.join(ROOT, 'game.js'), 'utf8');
   assert('tile_spire is used for bone zones', src.includes('isBone ? tilePatterns.spire'));
   assert('obsolete gate coordinate 8525 is gone', !src.includes('8525'));

@@ -466,3 +466,43 @@ open combat, 1.60ms in the boss arena.
 
 Not used yet: the hunter's kick and attack poses. They are good art and there is
 no melee button to hang them on — that is a design decision, not a slice.
+
+### Two stale assertions in the suite that ships
+
+`tests/run-logic.mjs` was reporting two failures, and neither was a defect in
+the game.
+
+**"no generated flying enemies buried in floors" flagged five fliers.** The
+check compared each bat and censer against `supportY` — the TOPMOST solid floor
+at that x — which was the right answer when a district was one corridor and is
+wrong now that it is four heights: a bat legitimately flying in the undercroft
+sits *below* the road, and a vault ledge sits above everything, so the topmost
+floor is routinely nowhere near the body. It tests the actual invariant now —
+does the flier's hitbox overlap a solid rectangle — and the answer across all
+62 generated fliers is no, none of them, which an independent geometry pass
+confirmed before the assertion was touched.
+
+**"meta hunter_air is 8 frames" failed because it is eleven on purpose.**
+Pinning individual frame counts rots the moment a set is redrawn. Three checks
+replace it and cannot rot: every set named in `meta.json` has a folder, every
+`count` matches the files actually on disk, and every `loadAnim` call in
+`game.js` asks for no more frames than exist. That would have caught the
+halved hunter sets on its own.
+
+95 passed, 0 failed.
+
+### One measurement that looked like a regression and was not
+
+The older `regress.mjs` swing sweep reported 41 of 41 swings ending in an
+involuntary drop. Its own comment gives it away — it latches a hook through the
+debug API and never presses the wheel — and the game releases a hook 0.05s
+after the grip goes away, which is the correct behaviour and the whole point of
+the hold-grace fix. Run as an A/B over the same 69 hooks in both directions,
+changing nothing but whether a pointer is held: **48 latched and 48 dropped
+without a grip, 27 latched and 0 dropped with one.** The rope holds when you
+hold it. `swing.mjs`, which does hold the pointer, independently reports 31
+swings and 0 drops.
+
+The parts of that suite that were measuring something real came back clean:
+0 land failures across every solid platform in the world, 0 deaths while
+landing, 0 run-right stalls.
