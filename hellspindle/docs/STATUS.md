@@ -23,9 +23,12 @@ What is true now:
 - Levels hand you a relic. You spend it in the Reliquary when you choose:
   Tab or E, or tap the badge. Six lines, and THE CHAIN and THE TENDON change
   the actual geometry of what you can reach.
-- New hunter and knight sheets, and a real four-pose idle. Air poses are picked
-  by what the body is doing, not by a clock. Landings compress, takeoffs
-  stretch. She is the same size in every state.
+- New hunter and knight. She has twelve walk frames, eight idle and eleven
+  airborne — more than the build shipped with. The air set is ordered by
+  meaning: the leap, a float loop, the fall, the dive, picked off vertical
+  speed rather than a clock. Landings compress, takeoffs stretch. She is the
+  same size in every state and centred on her body, not her sash.
+  The knight is still on six walk frames; no new knight sheet has arrived.
 
 Still true about the picture: knight shield art stays after the shield breaks,
 attacks are a lean, hook hole is a little chewed.

@@ -304,3 +304,48 @@ movement on a stop drops from 20.5px to 13.5px.
 Also cleared: a jump pressed during the death fall used to sit in the queue with
 nothing consuming it, since updateGame returns early while dead. It is flushed
 on respawn along with a pause tapped at the same time.
+
+### Her animation, restored and then some
+
+The first art pass halved her. Grok's sheets carried six walk poses, four air and
+four idle, and the build the game shipped with had twelve, eight and eight — so
+swapping the character in cost half her frames, and that was not called out at
+the time. Eight more sheets arrived; sliced, deduplicated and measured, they
+carry what was missing.
+
+| set | shipped in the rar | first art pass | now |
+| --- | --- | --- | --- |
+| hunter_walk | 12 | 6 | **12** |
+| hunter_idle | 8 | 4 | **8** |
+| hunter_air | 8 | 4 | **11** |
+| knight_walk | 12 | 6 | 6 |
+
+Of 66 cells across the eight sheets only 55 poses are distinct — two sheets are
+byte-identical to each other and two more overlap in eight of twelve cells — so
+everything is fingerprinted and deduplicated before use. One sheet had to be
+sliced on a forced grid: the flail's chain runs between the columns and merges
+them, so column detection found two cells where there are four.
+
+The air set is eleven frames and its ORDER is a contract drawPlayer reads:
+index 0 is the leap, 1 through 8 are a float loop, 9 is the fall, 10 is the
+dive. The eight new airborne poses turned out to be a hang loop rather than a
+jump arc — they have no rise-to-fall progression — so the three arc poses from
+the earlier sheet stay, picked off vertical speed, and the new eight cycle while
+she floats near the apex where a body actually hangs.
+
+Two compositing corrections came out of it. Frames are centred on her BODY now,
+measured from the alpha mass of the top 45 percent of the figure, not on the
+bounding box — her sash streams far enough to one side that a bbox centre put
+the figure visibly off the collision box she is drawn on. And because the sash
+needs headroom, her body only fills 0.747 of the frame, so the draw height moved
+to 197 to keep her standing the same 147px tall the game shipped with.
+
+Cost of tripling her frame count, measured interleaved against the previous
+build in the same session: none. 1.60ms against 1.70ms. Every frame is baked to
+its draw size once and blitted after that.
+
+Not used: three poses of her swinging the chained flail. They are real attack
+art, but the game draws the wheel and its chain itself, from her hand to
+wherever the wheel physically is — art with a chain and a ball painted into it
+would put a second wheel on screen. The mace ball is a detached blob in two of
+the three and could be cut cleanly; the chain in the third is welded to her arm.

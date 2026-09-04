@@ -102,9 +102,9 @@
     return frames;
   }
   const anims = {
-    hunterWalk: loadAnim('hunter_walk', 6),
-    hunterIdle: loadAnim('hunter_idle', 4),
-    hunterAir: loadAnim('hunter_air', 4),
+    hunterWalk: loadAnim('hunter_walk', 12),
+    hunterIdle: loadAnim('hunter_idle', 8),
+    hunterAir: loadAnim('hunter_air', 11),
     knightWalk: loadAnim('knight_walk', 6),
     crawlerWalk: loadAnim('crawler_walk', 8),
     batFlap: loadAnim('bat_flap', 18),
@@ -3970,26 +3970,33 @@
         // Air poses are chosen by what the body is DOING, not by a clock. A
         // time-cycled jump loop reads as a flipbook; picking the rise, the
         // apex, the fall and the dive off vertical speed reads as a jump.
+        // The air set is ordered by meaning, not by time:
+        //   0        the leap        rising hard
+        //   1..8     the float loop  near the apex, where a body actually hangs
+        //   9        the fall        descending
+        //   10       the dive        falling fast, or moving fast on the rope
+        // Eight of those eleven are a hang loop rather than an arc, so they are
+        // cycled while she floats and the three arc poses are picked off speed.
         const air = anims.hunterAir;
         if (animReady(air)) {
           const vy = player.vy;
+          const last = air.length - 1;
           const fast = yoyo.latched && hypot(player.vx, player.vy) > 720;
           let i;
-          if (fast) i = 3;
-          else if (vy < -430) i = 1;
-          else if (vy < -60) i = 0;
-          else if (vy < 420) i = 2;
-          else i = 3;
-          img = air[Math.min(i, air.length - 1)];
+          if (fast || vy > 520) i = last;
+          else if (vy > 210) i = last - 1;
+          else if (vy < -430) i = 0;
+          else i = 1 + (Math.floor(player.animTime * 9) % Math.max(1, last - 2));
+          img = air[clamp(i, 0, last)];
         }
       } else if (player.animState === 'walk') {
-        img = animImg(anims.hunterWalk, player.animTime, 11);
+        img = animImg(anims.hunterWalk, player.animTime, 14);
       } else {
-        img = animImg(anims.hunterIdle, player.animTime, 5);
+        img = animImg(anims.hunterIdle, player.animTime, 6);
       }
       if (!img || !img.complete || !img.naturalWidth) img = animImg(anims.hunterWalk, 0, 1) || sprites.hunter;
       if (img && img.complete && img.naturalWidth) {
-        // The idle loop carries its own weight shift now that there are four
+        // The idle loop carries its own weight shift now that there are eight
         // real poses for it, so the procedural breath is only a whisper on top.
         const breath = player.animState === 'idle' ? Math.sin(game.realTime * 1.9) * 0.005 : 0;
         const sq = player.squash;
@@ -4000,7 +4007,10 @@
         g.rotate(lean * player.facing + swingAngle);
         if (player.invuln > 0) g.globalAlpha = 0.74 + Math.sin(game.realTime * 26) * 0.16;
         if (player.hurtFlash > 0) { g.shadowColor = '#ffe6d4'; g.shadowBlur = 22; }
-        const drawH = 168;
+        // Her body fills 0.747 of the new frame (the rest is headroom for a
+        // sash that streams well past her boots), so the draw height has to be
+        // 197 for her to stand the same 147px tall the game shipped with.
+        const drawH = 197;
         const w = drawH * (img.naturalWidth / img.naturalHeight);
         g.scale(player.facing * scaleX, scaleY);
         g.drawImage(scaledSprite(img, w, drawH), -w * 0.50, -drawH + 3, w, drawH);

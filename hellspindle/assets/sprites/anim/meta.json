@@ -1,18 +1,19 @@
 {
   "hunter_walk": {
-    "count": 6,
-    "w": 541,
+    "count": 12,
+    "w": 409,
     "h": 600
   },
   "hunter_idle": {
-    "count": 4,
-    "w": 541,
+    "count": 8,
+    "w": 409,
     "h": 600
   },
   "hunter_air": {
-    "count": 4,
-    "w": 541,
-    "h": 600
+    "count": 11,
+    "w": 409,
+    "h": 600,
+    "order": "0 leap, 1-8 float, 9 fall, 10 dive"
   },
   "knight_walk": {
     "count": 6,
