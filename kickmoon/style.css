@@ -1841,8 +1841,8 @@ body.touch-enabled .touch-pad > span {
   display: none;
 }
 
-/* COLLECTIBLE BANK — three distinct shapes share one left-side home. Water
-   and Lava add a narrow 2,000-seal meter; the centre movement lane stays bare. */
+/* COLLECTIBLE BANK — ONE shape, one count, one 2,000 meter, on every moon.
+   The centre movement lane stays bare. */
 #stoneCounter {
   position: absolute;
   left: 24px;
@@ -1922,7 +1922,7 @@ body.touch-enabled .touch-pad > span {
 }
 #planetCollectibleTarget {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto;
   align-items: baseline;
   column-gap: 2px;
   min-width: 58px;
@@ -1952,7 +1952,8 @@ body.touch-enabled .touch-pad > span {
   box-shadow: 0 0 7px currentColor;
   transition: width .18s ease-out;
 }
-#stoneCounter[data-planet="moon"] #planetCollectibleTarget { display: none; }
+/* The seal meter is the same promise on all three moons, so it is never
+   hidden on the Moon any more. */
 #stoneCounter.milestone .stone-crescent::after {
   content: "";
   position: absolute;
