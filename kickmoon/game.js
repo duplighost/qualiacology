@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.2.1-rim-spring-sightlines';
+  const GAME_VERSION = '8.3.0-player-repair';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -159,13 +159,32 @@
   const THREE_CROWN_STORAGE_KEY = 'kickmoon-three-crowns-v1';
   const FIXED_DT = 1 / 120;
   const TAU = Math.PI * 2;
-  const ALTERNATE_COLLECTION_TARGET = 2000;
+  // ONE COLLECTIBLE PER MOON, ONE COUNT, ONE GATE. (Alex, 2026-09-03:
+  // "every moon should have one space for collectibles. every moon should
+  // have 2000 of its own type of collectibles as a qualification, plus the
+  // bosses on that moon, to see the final boss on that moon.")
+  // Pickups may still LOOK different -- a crescent, a full moon and a route
+  // ribbon are the same collectible, and every one of them is worth one.
+  const COLLECTION_TARGET = 2000;
+  const ALTERNATE_COLLECTION_TARGET = COLLECTION_TARGET;
+  const MOON_COLLECTION_TARGET = COLLECTION_TARGET;
   const ALTERNATE_REGIONAL_TOTAL = 5;
-  const ALTERNATE_REGIONAL_REQUIRED = 4;
+  // Every regional on the moon, not four of five: the local final is the
+  // reward for clearing the whole moon.
+  const ALTERNATE_REGIONAL_REQUIRED = ALTERNATE_REGIONAL_TOTAL;
   const ALTERNATE_COLLECTIBLE_COUNTS = Object.freeze({
     common: 2800,
     rare: 480,
     route: 320,
+  });
+  // THE BLUE HOLE changes the planet itself. The old landmark was a short
+  // stack of shelves floating over ordinary terrain; this shared description
+  // now drives both the collision height law and the terrain vertex shader.
+  const WATER_BLUE_HOLE = Object.freeze({
+    x: 90, z: -360,
+    innerRadius: 20,
+    outerRadius: 88,
+    depth: 76,
   });
   // A spit is visible and its landing mark is live for this long before it
   // can hurt the player. In particular, standing beside Cindermaw's exposed
@@ -640,8 +659,8 @@
   [
     'hud', 'startOverlay', 'startButton', 'startActionHint', 'startTitle', 'startCopy',
     'crosshair', 'hitMarker', 'damageVignette', 'visorFrost', 'rewardFlash', 'srState',
-    'stoneCounter', 'stoneCount', 'rareCount', 'routeCount', 'planetCollectibleTarget',
-    'planetCollectibleTotal', 'planetCollectibleGateFill', 'coreCounter', 'planetBossCounter', 'suitMeter',
+    'stoneCounter', 'stoneCount', 'planetCollectibleTarget',
+    'planetCollectibleGateFill', 'coreCounter', 'planetBossCounter', 'suitMeter',
     'chargeUI', 'chargeFill', 'controlsHint', 'soundButton',
     'fullscreenButton', 'qualityButton', 'pauseOverlay', 'winOverlay',
     'winSummary', 'winTime', 'winScore', 'winRank', 'restartButton',
@@ -3789,6 +3808,64 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       object.userData.kbLifted = true;
       return object;
     }
+    installWaterDepthShader(material, profile) {
+      const holeDirection = chartDirAt(
+        WATER_BLUE_HOLE.x, WATER_BLUE_HOLE.z, new T.Vector3(),
+      );
+      material.userData.kbWaterDepth = {
+        ...WATER_BLUE_HOLE,
+        authority: 'shared-height-law-and-vertex-displacement',
+      };
+      material.customProgramCacheKey = () => 'kickmoon-water-blue-hole-depth-v1';
+      material.onBeforeCompile = shader => {
+        shader.uniforms.kbPlanetCentre = { value: PLANET.centre.clone() };
+        shader.uniforms.kbHoleDirection = { value: holeDirection.clone() };
+        shader.uniforms.kbPlanetRadius = { value: PLANET.radius };
+        shader.uniforms.kbHoleInnerRadius = { value: WATER_BLUE_HOLE.innerRadius };
+        shader.uniforms.kbHoleOuterRadius = { value: WATER_BLUE_HOLE.outerRadius };
+        shader.uniforms.kbHoleDepth = { value: WATER_BLUE_HOLE.depth };
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', `#include <common>
+uniform vec3 kbPlanetCentre;
+uniform vec3 kbHoleDirection;
+uniform float kbPlanetRadius;
+uniform float kbHoleInnerRadius;
+uniform float kbHoleOuterRadius;
+uniform float kbHoleDepth;
+varying float vKbAbyssDepth;
+float kbBlueHoleWeight(vec3 p) {
+  vec3 radial = normalize(p - kbPlanetCentre);
+  float arc = kbPlanetRadius * acos(clamp(dot(radial, kbHoleDirection), -1.0, 1.0));
+  return 1.0 - smoothstep(kbHoleInnerRadius, kbHoleOuterRadius, arc);
+}`)
+          .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
+vec3 kbNormalRadial = normalize(position - kbPlanetCentre);
+float kbNormalArc = kbPlanetRadius * acos(clamp(dot(kbNormalRadial, kbHoleDirection), -1.0, 1.0));
+float kbNormalT = clamp((kbNormalArc - kbHoleInnerRadius)
+  / max(0.001, kbHoleOuterRadius - kbHoleInnerRadius), 0.0, 1.0);
+vec3 kbTowardHole = kbHoleDirection - kbNormalRadial * dot(kbHoleDirection, kbNormalRadial);
+float kbTowardLength = length(kbTowardHole);
+if (kbTowardLength > 0.0001) {
+  kbTowardHole /= kbTowardLength;
+  float kbSlope = kbHoleDepth * 6.0 * kbNormalT * (1.0 - kbNormalT)
+    / max(0.001, kbHoleOuterRadius - kbHoleInnerRadius);
+  objectNormal = normalize(objectNormal + kbTowardHole * kbSlope);
+}`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+vKbAbyssDepth = kbBlueHoleWeight(position);
+vec3 kbDepthRadial = normalize(transformed - kbPlanetCentre);
+transformed -= kbDepthRadial * (kbHoleDepth * vKbAbyssDepth);`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', `#include <common>
+varying float vKbAbyssDepth;`)
+          .replace('#include <color_fragment>', `#include <color_fragment>
+vec3 kbAbyssColour = vec3(0.006, 0.055, 0.105);
+diffuseColor.rgb = mix(diffuseColor.rgb, kbAbyssColour, vKbAbyssDepth * 0.78);`)
+          .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
+      };
+      material.needsUpdate = true;
+    }
     makeAlternatePlanets() {
       // One immutable closed-state topology is shared by both new render
       // meshes. It is cloned away from the original terrain because crust
@@ -3853,7 +3930,21 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           bossEncounters: [],
           flow: { loops: 3, earnedShortcuts: 2, maximumEmptyTraverseSeconds: 30 },
         };
-        profile.heightAt = (x, z) => this.sampleStaticTerrainHeight(x, z);
+        profile.baseHeightAt = (x, z) => this.sampleStaticTerrainHeight(x, z);
+        profile.heightAt = water
+          ? (x, z) => {
+            const distance = surfaceDistanceAt(
+              x, z, WATER_BLUE_HOLE.x, WATER_BLUE_HOLE.z,
+            );
+            const weight = smootherstep(
+              WATER_BLUE_HOLE.outerRadius, WATER_BLUE_HOLE.innerRadius, distance,
+            );
+            return profile.baseHeightAt(x, z) - WATER_BLUE_HOLE.depth * weight;
+          }
+          : profile.baseHeightAt;
+        profile.terrainDeformation = water
+          ? { ...WATER_BLUE_HOLE, kind: 'geodesic-abyss', visualCollisionParity: true }
+          : null;
         profile.theme = water
           ? { accent: 0x68efff, hot: 0xff80b8, dark: 0x032631 }
           : { accent: 0xff6a2c, hot: 0xffd34f, dark: 0x47160d };
@@ -3870,6 +3961,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
             emissive: 0x481006, emissiveIntensity: .2, roughness: .78,
             metalness: .08, side: T.DoubleSide,
           });
+        if (water) this.installWaterDepthShader(terrainMaterial, profile);
         const terrain = new T.Mesh(sharedTerrain, terrainMaterial);
         terrain.name = water ? 'ABYSSAL SEABED' : 'GLOBAL MAGMA CRUST';
         terrain.receiveShadow = true;
@@ -3912,6 +4004,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         this.makePlanetTraversalRails(profile);
         this.makePlanetCollectibles(profile, water);
         this.makePlanetBreakables(profile, water);
+        this.populatePlanetDiscoveryRoutes(profile, water);
         this.makePlanetLaunchPads(profile, water);
         this.finalizeAlternateWorldAuthorship(profile);
 
@@ -4208,6 +4301,8 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           const vehicle = this.makeInterworldVehicle(profile, spec, theme, index);
           profile.vehicles.push(vehicle);
         });
+        this.makeShipLine(profile);
+        if (profile.id === 'lava') this.makeLavaCooledRoad(profile);
       }
       this.makeHyperspeedFx();
     }
@@ -4231,9 +4326,11 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       ];
       let raisedSamples = 0;
       let maximumLift = 0;
+      const groundClearance = spec.groundClearance
+        ?? (profile.id === 'water' ? 12 : 16);
       const clearSample = (sample) => {
         const ground = profile.heightAt(sample.x, sample.z);
-        let safeAltitude = Math.max(sample.y, ground + (profile.id === 'water' ? 12 : 16));
+        let safeAltitude = Math.max(sample.y, ground + groundClearance);
         for (const obstacle of clearanceRecords) {
           if (!Number.isFinite(obstacle?.x) || !Number.isFinite(obstacle?.z)) continue;
           // A designated arrival deck is the one collider a route is meant to
@@ -4241,10 +4338,17 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           // the full grind volume; treating it like generic scenery would hoist
           // the endpoint fourteen metres above the landing and erase the gate.
           if (spec.terminalLandingId && obstacle.id === spec.terminalLandingId) continue;
+          if (spec.ignoreObstacleIds && spec.ignoreObstacleIds.has(obstacle.id)) continue;
           const radius = Math.max(1, surfaceCollisionRadius(obstacle));
           const distance = surfaceDistanceAt(sample.x, sample.z, obstacle.x, obstacle.z);
           const apron = radius + (spec.radius ?? 1.14) + 7;
           if (distance >= apron) continue;
+          // A low rail may pass honestly below a high sky island. Treating a
+          // shared x/z footprint as a collision regardless of altitude pulled
+          // ordinary district rails into enormous zigzags above both worlds
+          // the moment real sky spaces were added.
+          if (Number.isFinite(obstacle.bottom) && obstacle.skyRouteStep != null
+            && safeAltitude + (spec.radius ?? 1.14) + 5 < obstacle.bottom) continue;
           const top = Number.isFinite(obstacle.top)
             ? obstacle.top
             : Number.isFinite(obstacle.altitude) ? obstacle.altitude + (obstacle.radius || 0) : ground;
@@ -4298,6 +4402,11 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         mesh.frustumCulled = false;
         profile.root.add(mesh);
       }
+      if (profile.id === 'moon') {
+        // Moon conductors are always lit: nothing on this world fades them in.
+        spineMaterial.opacity = .72;
+        conductorMaterial.opacity = 1;
+      }
       const grip = new T.Mesh(
         new T.TorusGeometry((spec.radius ?? 1.14) + .9, .34, 8, 28),
         conductorMaterial.clone(),
@@ -4333,11 +4442,29 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           raisedSamples, maximumLift, checkedObstacles: clearanceRecords.length,
           denseSamples: path.chartSamples.length, renderAuthority: 'cleared-physical-polyline',
         },
+        // Open conductors may be ridden in either direction. Endpoint capture
+        // records tell both physics and QA which solid each end deliberately
+        // meets; they are narrow terminal exceptions, never whole-route
+        // collision exemptions.
+        endpointCapture: {
+          start: new Set(spec.startCaptureIds || EMPTY_SOLIDS),
+          end: new Set(spec.endCaptureIds || EMPTY_SOLIDS),
+        },
       };
       anchor.rail = rail;
-      if (spec.arrival) {
-        rail.arrivalChart = { x: spec.arrival.x, alt: spec.arrival.alt, z: spec.arrival.z };
-        rail.arrivalPosition = chartLift(spec.arrival.x, spec.arrival.alt, spec.arrival.z, new T.Vector3());
+      const startArrival = spec.startArrival || null;
+      const endArrival = spec.endArrival || spec.arrival || null;
+      if (startArrival) {
+        rail.startArrivalChart = { x: startArrival.x, alt: startArrival.alt, z: startArrival.z };
+        rail.startArrivalPosition = chartLift(startArrival.x, startArrival.alt, startArrival.z, new T.Vector3());
+      }
+      if (endArrival) {
+        rail.endArrivalChart = { x: endArrival.x, alt: endArrival.alt, z: endArrival.z };
+        rail.endArrivalPosition = chartLift(endArrival.x, endArrival.alt, endArrival.z, new T.Vector3());
+        // Keep the established end-arrival names for the Moon's existing sky
+        // conductors and external diagnostics.
+        rail.arrivalChart = rail.endArrivalChart;
+        rail.arrivalPosition = rail.endArrivalPosition;
       }
       const sample = sampleTransitPath(path, 0, {});
       anchor.position.copy(sample.position);
@@ -4642,31 +4769,351 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         boarded: false,
       };
       receiver.vehicle = vehicle;
-      // A luminous climb starts close enough to shoot from the terrain and
-      // ends above the physical deck. Reeling onto it remains ordinary MMB
-      // grapple play; no cinematic steals the controls on the ascent.
+      // ---- THE BOARDING GANTRY -------------------------------------------
+      // The climb to a ship used to begin as a bare thread of light hanging
+      // twelve metres over open ground, a hundred and sixty metres from the
+      // hull, and the only way onto it was a well-aimed grapple. (Alex,
+      // 2026-09-03: "the ships that bring you to the different moons must be
+      // easier to get up to. the things that take you up must actually work.
+      // and be easy to spot and use.")
+      //
+      // It begins at a real structure now: a stair you walk up, a lit deck at
+      // the top of it with the rail passing three metres overhead, and a
+      // column of the destination's own colour standing four hundred metres
+      // into the sky. You can see where a ship is boarded from most of the
+      // world, and once you are on the gantry there is no aim to miss --
+      // jump and the rail takes you.
       const outward = spec.z < 0 ? -1 : 1;
-      const startX = spec.x + (index ? 118 : -118);
-      const startZ = spec.z + outward * 112;
-      const startGround = profile.heightAt(startX, startZ);
+      const gantryX = spec.x + (index ? 86 : -86);
+      const gantryZ = spec.z + outward * 80;
+      const gantryGround = profile.heightAt(gantryX, gantryZ);
+      // The foot of the ascent hangs three metres over the pad: high enough to
+      // read as a thing above you, low enough that a single jump reaches it.
+      const railFoot = 3.15;
+      const gantryDeckAltitude = gantryGround + 1.25;
+      const gantryId = `${vehicle.id}-gantry`;
+      const gantryGroup = new T.Group();
+      gantryGroup.name = `${profile.id.toUpperCase()} BOARDING GANTRY · ${theme.name}`;
+      const gantryMaterial = new T.MeshStandardMaterial({
+        color: theme.dark, emissive: theme.accent, emissiveIntensity: .34,
+        roughness: .42, metalness: .78,
+      });
+      const gantryRim = new T.MeshStandardMaterial({
+        color: theme.secondary, emissive: theme.accent, emissiveIntensity: 2.9,
+        roughness: .16, metalness: .7,
+      });
+      // One wide, low, unmissable pad. On the Lava world it is also real
+      // standing ground in a place where the floor burns.
+      const gantrySteps = 0;
+      const gantryDeck = new T.Mesh(new T.CylinderGeometry(17, 15.5, 2.5, 20), gantryMaterial.clone());
+      this.placePlanetObject(gantryDeck, gantryX, gantryDeckAltitude - 1.25, gantryZ, spec.yaw);
+      gantryGroup.add(gantryDeck);
+      const gantryHalo = new T.Mesh(new T.TorusGeometry(17, .34, 8, 48), gantryRim.clone());
+      gantryHalo.rotation.x = Math.PI / 2;
+      this.placePlanetObject(gantryHalo, gantryX, gantryDeckAltitude + .18, gantryZ, spec.yaw);
+      gantryGroup.add(gantryHalo);
+      // A chevron on the pad pointing at the ship, so the pad says which way
+      // it sends you without printing a word.
+      for (let mark = 0; mark < 3; mark++) {
+        const chevron = new T.Mesh(new T.TorusGeometry(4.4 + mark * 2.6, .2, 6, 20, Math.PI * .62), gantryRim.clone());
+        chevron.rotation.x = Math.PI / 2;
+        chevron.rotation.z = Math.atan2(spec.z - gantryZ, spec.x - gantryX) - Math.PI * .31;
+        this.placePlanetObject(chevron, gantryX, gantryDeckAltitude + .3, gantryZ, 0);
+        chevron.rotateY(0);
+        gantryGroup.add(chevron);
+      }
+      this.registerAuthoredPlanetPlatform(profile, gantryId,
+        gantryX, gantryZ, gantryDeckAltitude, gantryDeckAltitude - 3.4, 17,
+        { safe: true, boardingGantry: true, collisionScale: .95, sideScale: .99 });
+      // THE PILLAR OF LIGHT. Not scenery: this is the "where do I board" sign,
+      // and it is deliberately tall enough to clear the horizon wall from a
+      // long way off. It has no collision -- you walk straight through it.
+      const beaconMaterial = new T.MeshBasicMaterial({
+        color: theme.accent, transparent: true, opacity: .3,
+        depthWrite: false, blending: T.AdditiveBlending,
+      });
+      const beacon = new T.Mesh(new T.CylinderGeometry(3.1, 5.4, 300, 12, 1, true), beaconMaterial);
+      this.placePlanetObject(beacon, gantryX, gantryDeckAltitude + 150, gantryZ, spec.yaw);
+      beacon.userData.kbNoCollide = true;
+      gantryGroup.add(beacon);
+      const beaconRings = [];
+      for (let ringIndex = 0; ringIndex < 9; ringIndex++) {
+        const ring = new T.Mesh(new T.TorusGeometry(6.4 - ringIndex * .28, .28, 6, 28), beaconMaterial.clone());
+        ring.material.opacity = .68 - ringIndex * .045;
+        ring.rotation.x = Math.PI / 2;
+        this.placePlanetObject(ring, gantryX, gantryDeckAltitude + 6 + ringIndex * 26, gantryZ, spec.yaw);
+        gantryGroup.add(ring);
+        beaconRings.push({ mesh: ring, index: ringIndex });
+      }
+      const beaconGlow = this.makeGlowSprite(
+        spec.destination === 'lava' ? this.glowGold : this.glowCyan, 46, .8);
+      this.placePlanetObject(beaconGlow, gantryX, gantryDeckAltitude + 5, gantryZ, spec.yaw);
+      gantryGroup.add(beaconGlow);
+      profile.root.add(gantryGroup);
+      vehicle.gantry = {
+        id: gantryId, group: gantryGroup, x: gantryX, z: gantryZ,
+        deckAltitude: gantryDeckAltitude, beacon, beaconRings, beaconGlow,
+      };
+
+      // A luminous climb that begins over the gantry deck and ends above the
+      // ship's own deck. Reeling onto it is still ordinary MMB grapple play,
+      // and it now also catches boots, so a jump off the gantry rides it.
+      const startGround = gantryGround;
+      // Finish on the near edge of the circular deck, not directly under the
+      // receiver.  A centre-deck endpoint sat in the ordinary MMB firing lane:
+      // the just-used ascent caught the ball again before it could cross the
+      // ship's electric receiver.  At this 392 m altitude the spherical chart
+      // stretches horizontal offsets almost 2x in rendered space; fourteen
+      // chart metres is a visible side dock that still sits on the 34 m deck.
+      const deckLandingX = spec.x + (index ? 14 : -14);
+      const deckLandingZ = spec.z;
       const ascentPoints = [];
-      for (let step = 0; step < 8; step++) {
-        const t = step / 7;
-        const eased = smootherstep(0, 1, t);
+      for (let step = 0; step < 10; step++) {
+        const t = step / 9;
+        // The first fifth of the run stays low and level over the pad, so the
+        // foot of the climb is a thing you stand under rather than a thing you
+        // have to catch on the way past. Horizontal travel begins immediately
+        // while the climb waits, avoiding the duplicate opening control points
+        // that made one mirrored spline's launch tangent numerically unstable.
+        const travel = smootherstep(0, 1, t);
+        // Gain deck height before entering the hull footprint.  The old climb
+        // kept rising all the way to the centre of the deck, so the final bend
+        // visibly travelled through the ship's underside even though the
+        // completed ride was later settled onto safe ground.
+        const climb = smootherstep(0, 1, clamp((t - .08) / .64, 0, 1));
         ascentPoints.push({
-          x: lerp(startX, spec.x, eased) + Math.sin(t * Math.PI * 2) * (index ? 18 : -18),
-          z: lerp(startZ, spec.z + 15, eased),
-          alt: lerp(startGround + 4.5, deckTop + 9, t) + Math.sin(t * Math.PI) * 18,
+          x: lerp(gantryX, deckLandingX, travel) + Math.sin(travel * Math.PI) * (index ? 15 : -15),
+          z: lerp(gantryZ, deckLandingZ, travel),
+          alt: lerp(gantryDeckAltitude + railFoot, deckTop + 2.6, climb)
+            + Math.sin(climb * Math.PI) * 14,
         });
       }
+      const ownVehicleIds = [vehicle.deckCollision.id, ...vehicle.solids.map(solid => solid.id)];
       vehicle.ascentRail = this.makeSurfaceTransitRail(profile, {
         id: `${vehicle.id}-ascent`, label: `${theme.name} ASCENT`,
         points: ascentPoints, tint: theme.accent, dark: theme.dark,
         cruiseSpeed: 88, radius: 1.5, conductorRadius: .38, hitRadius: 4.2,
-        softEject: true,
-        arrival: { x: spec.x, alt: deckTop + 1.15, z: spec.z + 15 },
+        softEject: true, bootGrind: true, bootRadius: 5.6,
+        groundClearance: railFoot,
+        ignoreObstacleIds: new Set([gantryId, ...ownVehicleIds]),
+        startCaptureIds: [gantryId],
+        endCaptureIds: ownVehicleIds,
+        startArrival: { x: gantryX, alt: gantryDeckAltitude + .08, z: gantryZ },
+        endArrival: { x: deckLandingX, alt: deckTop + .08, z: deckLandingZ },
       });
       return vehicle;
+    }
+    // ---- THE COOLED ROAD --------------------------------------------------
+    // On the Lava world every square metre of terrain burns; the only safe
+    // standing is an authored deck. That is why the rails read as traps: a
+    // grind ends thirty metres up over open ground and the landing is molten
+    // rock. Measured before this existed, EIGHTEEN OF THIRTY rail rides ended
+    // in the lava -- both endpoint ejects and ordinary mid-ride bail-outs.
+    // (Alex, 2026-09-03: "many Lava grindrails appear to carry the player into
+    // lava.") The old rail suites never saw it because they only checked that
+    // the tube was drawn above the terrain.
+    //
+    // So every rail now has a road under it: a continuous causeway of cooled
+    // basalt crust laid along the rail's own ground track, running ninety
+    // metres past each open end so the eject lands on it. The rails stop being
+    // one-way trips into the floor, the routes become walkable as well as
+    // grindable, and the emptiest parts of this world -- which are exactly the
+    // stretches the long rails cross -- get real ground for the first time.
+    makeLavaCooledRoad(profile) {
+      const SPACING = 56;
+      const DECK_RADIUS = 38;
+      const PLAZA_RADIUS = 54;
+      const LOW_ENOUGH = 88;
+      const seats = [];
+      const claim = (x, z, radius) => {
+        // Never lay crust over an authored deck, a monument or a ship: the
+        // road fills the gaps between this world's architecture, it does not
+        // pave over it.
+        for (const seat of seats) {
+          if (Math.hypot(x - seat.x, z - seat.z) < Math.max(radius, seat.radius) * .62) return false;
+        }
+        for (const deck of profile.platforms || EMPTY_SOLIDS) {
+          if (deck.cooledCrust) continue;
+          if (deck.sanctuary && surfaceDistanceAt(x, z, deck.x, deck.z)
+            < radius * .93 + surfaceCollisionRadius(deck) * .96 + 5) return false;
+          if (Math.hypot(x - deck.x, z - deck.z) < (deck.radius || 0) * .7) return false;
+        }
+        for (const solid of profile.solids || EMPTY_SOLIDS) {
+          if (!solid.underkeep) continue;
+          if (surfaceDistanceAt(x, z, solid.x, solid.z)
+            < radius * .93 + surfaceCollisionRadius(solid) * .96 + 3) return false;
+        }
+        seats.push({ x, z, radius });
+        return true;
+      };
+      for (const rail of profile.rails || EMPTY_SOLIDS) {
+        const samples = rail.path?.chartSamples;
+        if (!samples || samples.length < 2) continue;
+        const isShipRoute = /ascent|ship-line/.test(rail.id);
+        let carried = SPACING;
+        let previous = samples[0];
+        const lay = (x, z, radius) => {
+          const ground = profile.heightAt(x, z);
+          if (!claim(x, z, radius)) return;
+          seats[seats.length - 1].top = ground + 1.35;
+          seats[seats.length - 1].ground = ground;
+        };
+        for (const sample of samples) {
+          carried += Math.hypot(sample.x - previous.x, sample.z - previous.z);
+          previous = sample;
+          if (carried < SPACING) continue;
+          carried = 0;
+          // An ascent is only a road where it is still near the ground.
+          if (sample.y - profile.heightAt(sample.x, sample.z) > LOW_ENOUGH) continue;
+          lay(sample.x, sample.z, DECK_RADIUS);
+        }
+        if (rail.closed) continue;
+        // Ninety metres of run-out past each open end, along the rail's own
+        // exit direction, because that is where an endpoint eject lands.
+        for (const [tip, inner] of [
+          [samples[samples.length - 1], samples[samples.length - 4] || samples[0]],
+          [samples[0], samples[3] || samples[samples.length - 1]],
+        ]) {
+          if (isShipRoute && tip.y - profile.heightAt(tip.x, tip.z) > LOW_ENOUGH) continue;
+          const dx = tip.x - inner.x, dz = tip.z - inner.z;
+          const length = Math.hypot(dx, dz) || 1;
+          const ux = dx / length, uz = dz / length;
+          lay(tip.x, tip.z, PLAZA_RADIUS);
+          for (const reach of [46, 92]) lay(tip.x + ux * reach, tip.z + uz * reach, PLAZA_RADIUS);
+        }
+      }
+      // The ships stand on the burning floor too. Give each hull and each
+      // boarding gantry a plaza, so arriving on this world does not mean
+      // arriving in a fire.
+      for (const vehicle of profile.vehicles || EMPTY_SOLIDS) {
+        lavaPlaza(vehicle.x, vehicle.z, 74);
+        if (vehicle.gantry) {
+          // The pad AND the ground you cross to reach it. Arriving on this
+          // world must not mean arriving in a fire.
+          lavaPlaza(vehicle.gantry.x, vehicle.gantry.z, 54);
+          const toShipX = vehicle.x - vehicle.gantry.x;
+          const toShipZ = vehicle.z - vehicle.gantry.z;
+          const reach = Math.hypot(toShipX, toShipZ) || 1;
+          for (const along of [-88, -44, 44, 88]) {
+            lavaPlaza(vehicle.gantry.x + toShipX / reach * along,
+              vehicle.gantry.z + toShipZ / reach * along, 46);
+          }
+        }
+      }
+      function lavaPlaza(x, z, radius) {
+        for (const seat of seats) {
+          if (Math.hypot(x - seat.x, z - seat.z) < radius * .5) { seat.radius = Math.max(seat.radius, radius); return; }
+        }
+        seats.push({ x, z, radius, top: 0, ground: 0 });
+      }
+      for (const seat of seats) {
+        if (Number.isFinite(seat.top) && seat.top !== 0) continue;
+        seat.ground = profile.heightAt(seat.x, seat.z);
+        seat.top = seat.ground + 1.35;
+      }
+      if (!seats.length) return null;
+
+      // One instanced crust disc and one instanced ember seam. Cooled basalt
+      // is deliberately the DARKEST thing on this world and the molten ground
+      // is the brightest, so "where can I stand" is a value read, not a colour
+      // read, and it survives at a distance and in a bloom.
+      const crustGeometry = new T.CylinderGeometry(1, .94, 1, 11, 1, false);
+      const crustMaterial = new T.MeshStandardMaterial({
+        color: 0x120c0c, emissive: 0x2a0a03, emissiveIntensity: .34,
+        roughness: .96, metalness: .1,
+      });
+      const crust = new T.InstancedMesh(crustGeometry, crustMaterial, seats.length);
+      crust.name = `LAVA · COOLED ROAD (${seats.length} CRUST DECKS)`;
+      crust.castShadow = true;
+      crust.receiveShadow = true;
+      crust.frustumCulled = false;
+      const seamGeometry = new T.TorusGeometry(1, .022, 6, 30);
+      const seamMaterial = new T.MeshStandardMaterial({
+        color: 0xffb26a, emissive: 0xff4d0d, emissiveIntensity: 2.35,
+        roughness: .3, metalness: .4,
+      });
+      const seams = new T.InstancedMesh(seamGeometry, seamMaterial, seats.length);
+      seams.name = 'LAVA · COOLED ROAD EMBER SEAMS';
+      seams.frustumCulled = false;
+      const matrix = new T.Matrix4();
+      const position = new T.Vector3();
+      const quaternion = new T.Quaternion();
+      const scale = new T.Vector3();
+      const records = [];
+      seats.forEach((seat, index) => {
+        chartLift(seat.x, seat.top - 1.35, seat.z, position);
+        liftQuatAt(seat.x, seat.z, quaternion);
+        scale.set(seat.radius, 2.7, seat.radius);
+        matrix.compose(position, quaternion, scale);
+        crust.setMatrixAt(index, matrix);
+        chartLift(seat.x, seat.top + .06, seat.z, position);
+        quaternion.multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI / 2));
+        scale.set(seat.radius * .97, seat.radius * .97, seat.radius * .97);
+        matrix.compose(position, quaternion, scale);
+        seams.setMatrixAt(index, matrix);
+        records.push(this.registerAuthoredPlanetPlatform(profile, `lava-cooled-road-${index}`,
+          seat.x, seat.z, seat.top, seat.top - 3.4, seat.radius,
+          { safe: true, cooledCrust: true, collisionScale: .93, sideScale: .97, supportDepth: 4.2 }));
+      });
+      crust.instanceMatrix.needsUpdate = true;
+      seams.instanceMatrix.needsUpdate = true;
+      for (const mesh of [crust, seams]) {
+        mesh.userData.kbWorldGeometry = true;
+        mesh.userData.kbLifted = true;
+        profile.root.add(mesh);
+      }
+      profile.cooledRoad = { crust, seams, records, seats };
+      return profile.cooledRoad;
+    }
+    // ---- THE SHIP LINE ----------------------------------------------------
+    // (Alex, 2026-09-03: "the two diferent ships on each moon should be
+    // connected with a rail.") A single span at deck height between the two
+    // decks. Both ends sit inside the other ship's deck footprint and point
+    // inward, so reaching the end of the ride puts you down ON the deck
+    // rather than off the far side of it.
+    makeShipLine(profile) {
+      const [from, to] = profile.vehicles;
+      if (!from || !to) return null;
+      // Dock on the mutually facing deck edges.  Centre docking put this line
+      // directly beneath the receiver too, so a normal receiver shot could
+      // grab the ship line instead.  Fourteen chart metres is readable from either
+      // deck and stays inside each high-altitude collision footprint after the
+      // spherical chart-to-render expansion.
+      const inset = 14;
+      const dx = to.x - from.x, dz = to.z - from.z;
+      const span = Math.hypot(dx, dz) || 1;
+      const ux = dx / span, uz = dz / span;
+      const startX = from.x + ux * inset, startZ = from.z + uz * inset;
+      const endX = to.x - ux * inset, endZ = to.z - uz * inset;
+      const points = [];
+      for (let step = 0; step < 9; step++) {
+        const t = step / 8;
+        const arc = Math.sin(t * Math.PI);
+        points.push({
+          x: lerp(startX, endX, t),
+          z: lerp(startZ, endZ, t) - arc * 46,
+          alt: lerp(from.deckTop + 2.6, to.deckTop + 2.6, t) + arc * 34,
+        });
+      }
+      const line = this.makeSurfaceTransitRail(profile, {
+        id: `${profile.id}-ship-line`, label: 'SHIP LINE',
+        points, tint: 0xffe3a1, dark: 0x14121f,
+        cruiseSpeed: 96, radius: 1.42, conductorRadius: .36, hitRadius: 4,
+        softEject: true, bootGrind: true, bootRadius: 5,
+        ignoreObstacleIds: new Set([
+          from.deckCollision.id, to.deckCollision.id,
+          ...from.solids.map(solid => solid.id),
+          ...to.solids.map(solid => solid.id),
+        ]),
+        startCaptureIds: [from.deckCollision.id, ...from.solids.map(solid => solid.id)],
+        endCaptureIds: [to.deckCollision.id, ...to.solids.map(solid => solid.id)],
+        startArrival: { x: startX, alt: from.deckTop + .08, z: startZ },
+        endArrival: { x: endX, alt: to.deckTop + .08, z: endZ },
+      });
+      profile.shipLine = line;
+      from.shipLine = line;
+      to.shipLine = line;
+      return line;
     }
     makeHyperspeedFx() {
       const group = new T.Group();
@@ -6304,16 +6751,17 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
             const angle = -.72 + nodeIndex * .72;
             const geometry = spec.id === 'chainbear'
               ? new T.TorusKnotGeometry(1.65, .42, 36, 7)
-              : new T.DodecahedronGeometry(2.45, 0);
+              : new T.DodecahedronGeometry(3.15, 0);
             const nodeMesh = addMesh(group, geometry, brightMaterial.clone(),
-              [Math.sin(angle) * 5.4, spec.id === 'chainbear' ? 11.4 + nodeIndex * 1.4 : 15.4,
-                spec.id === 'chainbear' ? -6.2 : 2.2 + Math.cos(angle) * 5]);
+              [Math.sin(angle) * (spec.id === 'chainbear' ? 5.4 : 6.2),
+                spec.id === 'chainbear' ? 11.4 + nodeIndex * 1.4 : 14.2 + (nodeIndex === 1 ? 1.35 : 0),
+                spec.id === 'chainbear' ? -6.2 : 9.6 - Math.abs(nodeIndex - 1) * 1.1]);
             weakNodes.push({ index: nodeIndex, group: nodeMesh, mesh: nodeMesh, alive: true,
-              position: new T.Vector3(), radius: spec.id === 'chainbear' ? 2.7 : 3.1,
+              position: new T.Vector3(), radius: spec.id === 'chainbear' ? 2.7 : 3.85,
               baseScale: nodeMesh.scale.clone() });
           }
           core = addMesh(group, new T.IcosahedronGeometry(2.7, 1), brightMaterial.clone(),
-            [0, spec.id === 'chainbear' ? 11.8 : 16, -7.6]);
+            spec.id === 'chainbear' ? [0, 11.8, -7.6] : [0, 10.8, -13.4]);
           limbs.push(head);
         } else {
           // CINDERMAW is a bear reduced to a volcanic mouth: its submerged
@@ -6613,7 +7061,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       profile.root.add(group);
       profile.mastery = {
         group, core, rings, complete: false, pulse: 0,
-        thresholds: { common: 1800, rare: 300, route: 200, total: 3000 },
+        // One ledger. The relic is the "every last one" mark on top of the
+        // 2,000 seal, and it reads the same single count the seal reads.
+        thresholds: { total: 3000 },
       };
       profile.mastered = false;
     }
@@ -6669,6 +7119,19 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         ...extras,
       };
       profile.platforms.push(record);
+      return record;
+    }
+    registerAuthoredPlanetSolid(profile, id, x, z, top, bottom, radius, extras = {}) {
+      // Late discovery routes must be every bit as physical as the district
+      // decks, but they are not allowed to falsify the established 304/350
+      // kernel census. Build with the one platform authority, then move the
+      // finished record into the general solid atlas consumed by the exact
+      // same floor, side and ball solvers.
+      const record = this.registerAuthoredPlanetPlatform(
+        profile, id, x, z, top, bottom, radius, extras,
+      );
+      profile.platforms.splice(profile.platforms.lastIndexOf(record), 1);
+      profile.solids.push(record);
       return record;
     }
     makePlanetPlatforms(profile, water) {
@@ -6798,10 +7261,13 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const waterLevel = -.55;
       const features = {
         waterLevel, platformMeshes: [], coralMeshes: [], kelpRecords: [], fans: [],
-        fanTreads: [], geysers: [], moonfish: [], clams: [], bells: [], tidePath: [], mantas: [],
-        districtArchitecture: [], nestedInteriors: [],
+        fanTreads: [], geysers: [], skyCurrents: [], skyReturnCurrents: [],
+        moonfish: [], clams: [], bells: [], tidePath: [], mantas: [],
+        districtArchitecture: [], nestedInteriors: [], abyssalChambers: [],
+        abyssalCoralMeshes: [], skyReefs: [],
         physicalAuthorship: {
           connectiveDecks: [], blueHoleShelves: [], blueHoleWalls: [],
+          abyssalChambers: [], skyReefs: [],
           fanTreads: [], mantaPlatforms: [], districtPlatforms: [],
         },
         bellStep: 0, bellComplete: false, scratchMatrix: new T.Matrix4(),
@@ -7309,7 +7775,12 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           const authoredIndex = slot * 3 + family;
           const site = profile.sites[authoredIndex % profile.sites.length];
           const angle = authoredIndex * 2.3999632297 + family * .73;
-          const distance = 39 + Math.floor(authoredIndex / 12) * 18 + (authoredIndex % 4) * 5;
+          let distance = 39 + Math.floor(authoredIndex / 12) * 18 + (authoredIndex % 4) * 5;
+          // THE BLUE HOLE owns its whole 88 m throat. Four old generic shelf
+          // instances crossed that volume and one of their deep support
+          // cylinders physically intercepted the new descent. They now make
+          // an outer pressure-lip ring instead of cluttering the abyss.
+          if (site.index === 3) distance = 103 + Math.floor(authoredIndex / 12) * 11;
           let at = surfaceOffsetChartAt(site.x, site.z, Math.cos(angle), Math.sin(angle), distance, {});
           let radius = 6.8 + (authoredIndex * 7 % 8) + family * .8;
           at = this.relocateFromInterworld(at.x, at.z, radius, 4100 + authoredIndex);
@@ -7671,18 +8142,64 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       features.whaleCollision.push(skullCollision);
 
       const holeSite = profile.sites[3];
-      const holeGround = profile.heightAt(holeSite.x, holeSite.z);
+      const holeRim = profile.baseHeightAt(holeSite.x, holeSite.z);
+      const holeFloor = profile.heightAt(holeSite.x, holeSite.z);
+      const measuredHoleDepth = holeRim - holeFloor;
       const blueHole = new T.Group();
-      blueHole.name = 'THE BLUE HOLE · PHYSICAL DESCENDING THROAT';
+      blueHole.name = 'THE BLUE HOLE · SEVENTY-SIX METRE LIVING ABYSS';
       profile.root.add(blueHole);
       features.blueHole = blueHole;
+      features.blueHoleDepth = {
+        ...WATER_BLUE_HOLE,
+        rimAltitude: holeRim,
+        floorAltitude: holeFloor,
+        measuredDepth: measuredHoleDepth,
+        collisionAuthority: 'profile.heightAt',
+        renderAuthority: 'terrainMaterial.userData.kbWaterDepth',
+      };
 
-      // This is a shaft you can read and descend, not five toruses pretending
-      // to be ledges. Twelve reef pylons announce the outer throat; fifteen
-      // broad shell shelves corkscrew down to a central bubble well. Every
-      // visible instance has one exact circular physics record.
+      // From below, the global ocean's front faces disappear. This local,
+      // double-sided moonpool makes the distant surface remain a luminous way
+      // home throughout the descent without turning the whole ocean costly.
+      const moonpoolGeometry = new T.CircleGeometry(WATER_BLUE_HOLE.outerRadius * .91, 64);
+      moonpoolGeometry.rotateX(-Math.PI / 2);
+      const moonpool = new T.Mesh(
+        moonpoolGeometry,
+        new T.MeshPhysicalMaterial({
+          color: 0x4de9ff, emissive: 0x087e9a, emissiveIntensity: .86,
+          transparent: true, opacity: .2, depthWrite: false, side: T.DoubleSide,
+          roughness: .08, metalness: .02, clearcoat: 1,
+        }),
+      );
+      moonpool.name = 'BLUE HOLE · LUMINOUS SURFACE MOONPOOL';
+      this.placePlanetObject(moonpool, holeSite.x, waterLevel + .04, holeSite.z);
+      moonpool.renderOrder = 3;
+      profile.root.add(moonpool);
+      features.blueHoleMoonpool = moonpool;
+
+      // The pressure colour follows the actual terrain bowl. It has no
+      // collision and never masquerades as a wall or floor.
+      const pressureVeil = new T.Mesh(
+        new T.CylinderGeometry(
+          WATER_BLUE_HOLE.innerRadius * .9, WATER_BLUE_HOLE.outerRadius * .9,
+          measuredHoleDepth, 48, 1, true,
+        ),
+        new T.MeshBasicMaterial({
+          color: 0x073466, transparent: true, opacity: .065,
+          depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending,
+        }),
+      );
+      pressureVeil.name = 'BLUE HOLE · PRESSURE VEIL';
+      this.placePlanetObject(
+        pressureVeil, holeSite.x, holeFloor + measuredHoleDepth * .5, holeSite.z,
+      );
+      profile.root.add(pressureVeil);
+      features.blueHolePressureVeil = pressureVeil;
+
+      // Twelve tall reef sentinels make the lip legible from the approach and
+      // extend down to the deformed seabed. They are real support volumes.
       const holeWallMesh = new T.InstancedMesh(
-        new T.CylinderGeometry(.82, 1.08, 1, 10), deepMaterial.clone(), 12,
+        new T.CylinderGeometry(.46, 1.08, 1, 9), deepMaterial.clone(), 12,
       );
       holeWallMesh.name = 'BLUE HOLE · PRESSURE-REEF OUTER THROAT';
       holeWallMesh.castShadow = true;
@@ -7695,13 +8212,13 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         // Fan the two pairs apart into a broad, centred pressure-throat portal.
         const angle = .24 + pylon * TAU / 12 + blueHolePortalSpread[pylon];
         const at = surfaceOffsetChartAt(
-          holeSite.x, holeSite.z, Math.cos(angle), Math.sin(angle), 31.5, {},
+          holeSite.x, holeSite.z, Math.cos(angle), Math.sin(angle), 73, {},
         );
         const localGround = profile.heightAt(at.x, at.z);
-        const bottom = Math.min(localGround - .8, holeGround - 1.2);
-        const top = holeGround + 18.5 + (pylon % 3) * 2.1;
+        const bottom = localGround - 1.2;
+        const top = holeRim + 13.5 + (pylon % 3) * 3.4;
         const height = top - bottom;
-        const radius = 4.2 + (pylon % 2) * .45;
+        const radius = 3.7 + (pylon % 2) * .55;
         chartLift(at.x, bottom + height * .5, at.z, features.scratchPosition);
         features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
           .multiply(new T.Quaternion().setFromAxisAngle(UP, angle + Math.PI / 2));
@@ -7712,7 +8229,10 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         holeWallMesh.setMatrixAt(pylon, features.scratchMatrix);
         const record = this.registerAuthoredPlanetPlatform(
           profile, `water-blue-hole-wall-${pylon}`, at.x, at.z, top, bottom, radius,
-          { collisionScale: .92, sideScale: .96, supportDepth: height + .4, family: 'blue-hole-wall' },
+          {
+            collisionScale: .92, sideScale: .96, supportDepth: height + .4,
+            family: 'blue-hole-wall', siteIndex: 3, biomeId: holeSite.biome,
+          },
         );
         const authority = {
           id: record.id, record, mesh: holeWallMesh, instance: pylon,
@@ -7726,31 +8246,47 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       holeWallMesh.instanceMatrix.needsUpdate = true;
       blueHole.add(holeWallMesh);
 
+      const holeShelfMaterial = deepMaterial.clone();
+      holeShelfMaterial.color.setHex(0x285875);
+      holeShelfMaterial.emissive.setHex(0x07394f);
+      holeShelfMaterial.emissiveIntensity = .82;
+      holeShelfMaterial.roughness = .55;
       const holeShelfMesh = new T.InstancedMesh(
-        new T.CylinderGeometry(1.08, .86, 1, 14), shellMaterial.clone(), 15,
+        new T.CylinderGeometry(1.08, .82, 1, 14), holeShelfMaterial, 15,
+      );
+      const holeShelfRimMaterial = new T.MeshStandardMaterial({
+        color: 0xa6fbff, emissive: 0x2bbbd4, emissiveIntensity: 1.18,
+        roughness: .24, metalness: .3, vertexColors: true,
+        transparent: true, opacity: .76,
+      });
+      const holeShelfRims = new T.InstancedMesh(
+        new T.TorusGeometry(1, .06, 5, 26, Math.PI * 1.34), holeShelfRimMaterial, 15,
       );
       holeShelfMesh.name = 'BLUE HOLE · FIFTEEN DESCENDING SHELL SHELVES';
+      holeShelfRims.name = 'BLUE HOLE · DESCENT GUIDE RIMS';
       holeShelfMesh.castShadow = true;
       holeShelfMesh.receiveShadow = true;
-      holeShelfMesh.frustumCulled = false;
-      holeShelfMesh.userData.kbLifted = true;
+      holeShelfMesh.frustumCulled = holeShelfRims.frustumCulled = false;
+      holeShelfMesh.userData.kbLifted = holeShelfRims.userData.kbLifted = true;
+      const holeHorizontalRing = new T.Quaternion().setFromEuler(
+        new T.Euler(Math.PI / 2, 0, 0),
+      );
+      const holeShelves = [];
       for (let step = 0; step < 15; step++) {
         const centralDock = step === 14;
-        const angle = .32 + step * .46;
-        const distance = centralDock ? 0 : 26 - step * 1.42;
+        const angle = .26 + step * .235;
+        const distance = centralDock ? 0 : 67 - step * 4.35;
         const at = centralDock
           ? { x: holeSite.x, z: holeSite.z }
           : surfaceOffsetChartAt(
             holeSite.x, holeSite.z, Math.cos(angle), Math.sin(angle), distance, {},
           );
-        const top = centralDock ? holeGround + 2.15 : holeGround + 19.1 - step * 1.27;
-        const bottom = top - (centralDock ? 2.7 : 1.55);
-        // The throat tightens physically as well as visually. Keeping the last
-        // four pads broad made their cylinder footprints overlap and the floor
-        // solver snapped a rider upward to the preceding shelf.
-        const radius = centralDock ? 3.8
-          : step >= 10 ? 2.05 + (step % 2) * .16
-            : 4.45 + (step % 3) * .22;
+        const progress = step / 14;
+        const top = lerp(holeRim + 5.2, holeFloor + 3.2, progress);
+        const bottom = top - (centralDock ? 3.2 : 2.15);
+        // Each drop is obvious and irreversible, but consecutive lip gaps
+        // remain short enough for an ordinary running jump or controlled fall.
+        const radius = centralDock ? 7.8 : 6.25 - step * .11;
         chartLift(at.x, bottom + (top - bottom) * .5, at.z, features.scratchPosition);
         features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
           .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
@@ -7759,13 +8295,27 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           features.scratchPosition, features.scratchQuaternion, features.scratchScale,
         );
         holeShelfMesh.setMatrixAt(step, features.scratchMatrix);
+        chartLift(at.x, top + .1, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, angle + Math.PI * .21))
+          .multiply(holeHorizontalRing);
+        features.scratchScale.setScalar(radius * .91);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        holeShelfRims.setMatrixAt(step, features.scratchMatrix);
+        holeShelfRims.setColorAt(
+          step, new T.Color(step % 4 === 0 ? 0xd6539b : step % 2 ? 0x299aae : 0x37a982),
+        );
         const record = this.registerAuthoredPlanetPlatform(
           profile, `water-blue-hole-shelf-${step}`, at.x, at.z, top, bottom, radius,
           {
             collisionScale: .93, sideScale: .98, supportDepth: top - bottom + .35,
             family: 'blue-hole-descent', descentStep: step,
+            siteIndex: 3, biomeId: holeSite.biome,
           },
         );
+        holeShelves.push(record);
         const authority = {
           id: record.id, record, mesh: holeShelfMesh, instance: step,
           role: centralDock ? 'blue-hole-bubble-dock' : 'blue-hole-descending-shelf',
@@ -7777,12 +8327,129 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         features.physicalAuthorship.blueHoleShelves.push(authority);
       }
       holeShelfMesh.instanceMatrix.needsUpdate = true;
-      blueHole.add(holeShelfMesh);
+      holeShelfRims.instanceMatrix.needsUpdate = true;
+      if (holeShelfRims.instanceColor) holeShelfRims.instanceColor.needsUpdate = true;
+      blueHole.add(holeShelfMesh, holeShelfRims);
+      features.blueHoleShelfRims = holeShelfRims;
+
+      // Three broad alcoves at different depths turn the bottom into a place,
+      // not merely the turnaround point of a helix. Their cache sockets are
+      // populated after the fixed 3,600-piece economy is built, so opening
+      // coral here reveals existing Water collectibles rather than minting a
+      // second currency or inflating progression.
+      const chamberMesh = new T.InstancedMesh(
+        new T.CylinderGeometry(1.04, .92, 1, 16), deepMaterial.clone(), 3,
+      );
+      chamberMesh.name = 'BLUE HOLE · THREE ABYSSAL CACHE CHAMBERS';
+      chamberMesh.castShadow = true;
+      chamberMesh.receiveShadow = true;
+      chamberMesh.frustumCulled = false;
+      chamberMesh.userData.kbLifted = true;
+      const chamberSpecs = [
+        [1.08, 14, 5.4, 8.8],
+        [4.15, 18.5, 10.2, 9.6],
+        [5.2, 15.5, 15.1, 8.4],
+      ];
+      for (let index = 0; index < chamberSpecs.length; index++) {
+        const [angle, distance, rise, radius] = chamberSpecs[index];
+        const at = surfaceOffsetChartAt(
+          holeSite.x, holeSite.z, Math.cos(angle), Math.sin(angle), distance, {},
+        );
+        const top = holeFloor + rise;
+        const bottom = top - 2.4;
+        chartLift(at.x, bottom + 1.2, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
+        features.scratchScale.set(radius, 2.4, radius);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        chamberMesh.setMatrixAt(index, features.scratchMatrix);
+        const record = this.registerAuthoredPlanetSolid(
+          profile, `water-blue-hole-chamber-${index}`, at.x, at.z, top, bottom, radius,
+          {
+            collisionScale: .94, sideScale: .98, supportDepth: 2.8,
+            family: 'abyssal-cache-chamber', siteIndex: 3,
+            biomeId: holeSite.biome, chamberIndex: index,
+          },
+        );
+        const authority = {
+          id: record.id, record, mesh: chamberMesh, instance: index,
+          role: 'abyssal-cache-chamber', moving: false,
+        };
+        record.renderAuthority = authority;
+        record.renderMesh = chamberMesh;
+        record.renderIndex = index;
+        features.abyssalChambers.push(record);
+        features.physicalAuthorship.abyssalChambers.push(authority);
+      }
+      chamberMesh.instanceMatrix.needsUpdate = true;
+      blueHole.add(chamberMesh);
+      features.abyssalChamberMesh = chamberMesh;
+
+      const deepCoralMaterials = [
+        materials.coralRoseMaterial.clone(),
+        materials.coralSunMaterial.clone(),
+        materials.coralTealMaterial.clone(),
+      ];
+      const deepCoralHosts = [...holeShelves, ...features.abyssalChambers];
+      for (let family = 0; family < deepCoralMaterials.length; family++) {
+        const coralMesh = new T.InstancedMesh(
+          family === 1 ? fanCoralGeometry : branchCoralGeometry,
+          deepCoralMaterials[family], 24,
+        );
+        coralMesh.name = `BLUE HOLE · BIOLUMINESCENT CORAL FAMILY ${family + 1}`;
+        coralMesh.castShadow = true;
+        coralMesh.frustumCulled = false;
+        coralMesh.userData.kbLifted = true;
+        for (let index = 0; index < 24; index++) {
+          const host = deepCoralHosts[(index * 5 + family * 3) % deepCoralHosts.length];
+          const angle = index * 2.3999632297 + family * .77;
+          const reach = host.radius * (.28 + (index % 5) * .105);
+          const at = surfaceOffsetChartAt(
+            host.x, host.z, Math.cos(angle), Math.sin(angle), reach, {},
+          );
+          chartLift(at.x, host.top + .06, at.z, features.scratchPosition);
+          features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
+          const size = .72 + (index % 4) * .18 + family * .08;
+          features.scratchScale.set(size, size * (1.08 + family * .08), size);
+          features.scratchMatrix.compose(
+            features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+          );
+          coralMesh.setMatrixAt(index, features.scratchMatrix);
+        }
+        coralMesh.instanceMatrix.needsUpdate = true;
+        blueHole.add(coralMesh);
+        features.abyssalCoralMeshes.push(coralMesh);
+        features.coralMeshes.push(coralMesh);
+      }
+
+      const pressureRingGroup = new T.Group();
+      pressureRingGroup.name = 'BLUE HOLE · DEPTH MARKERS';
+      for (let index = 0; index < 4; index++) {
+        const ring = new T.Mesh(
+          new T.TorusGeometry(11 + index * 7.2, .08, 5, 40),
+          new T.MeshBasicMaterial({
+            color: index % 2 ? 0xff79bd : 0x61eeff,
+            transparent: true, opacity: .065, depthWrite: false,
+            blending: T.AdditiveBlending,
+          }),
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 10 + index * (measuredHoleDepth - 17) / 3;
+        pressureRingGroup.add(ring);
+      }
+      this.placePlanetObject(pressureRingGroup, holeSite.x, holeFloor, holeSite.z);
+      profile.root.add(pressureRingGroup);
+      features.blueHolePressureRings = pressureRingGroup;
+      features.abyssalDiscoveryHosts = deepCoralHosts;
       features.nestedInteriors.push({
         id: 'water-feature-interior-blue-hole-throat', featureType: 'nested-interior',
         siteIndex: 3, interactive: false, moving: false,
         mesh: holeShelfMesh, entrance: 'high-pressure-reef',
         exit: 'steerable-central-upwelling', shelves: 15,
+        chambers: 3, depth: measuredHoleDepth,
       });
 
       const engineSite = profile.sites[4];
@@ -8168,27 +8835,28 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.makeWaterDistrictArchitecture(profile, features, {
         reefMaterial, shellMaterial, pearlMaterial, deepMaterial,
       });
+      this.makeWaterSkyReefs(profile, features, materials);
 
       const geyserSpecs = [
         // The zero-distance Blue Hole upwelling is the readable, steerable exit
         // from the descending throat. Horizontal input remains fully live.
-        [3, 0, 0, 38],
+        [3, 0, 0, measuredHoleDepth + 20],
         [1, 18, .2, 23], [1, 47, 2.1, 31], [3, 20, 1.3, 34], [3, 48, 3.4, 42],
         [9, 24, .7, 38], [9, 58, 2.8, 49], [11, 22, 1.9, 36], [11, 52, 4.3, 55],
       ];
       for (let index = 0; index < geyserSpecs.length; index++) {
         const [siteIndex, distance, angle, height] = geyserSpecs[index];
         const blueHoleExit = siteIndex === 3 && distance === 0;
-        const geyserRadius = blueHoleExit ? 7.2 : 4.4;
+        const geyserRadius = blueHoleExit ? 9.2 : 4.4;
         const site = profile.sites[siteIndex];
         const at = surfaceOffsetChartAt(site.x, site.z, Math.cos(angle), Math.sin(angle), distance, {});
         const ground = profile.heightAt(at.x, at.z);
-        const base = Math.max(ground, waterLevel - 2.2);
+        const base = blueHoleExit ? ground + .12 : Math.max(ground, waterLevel - 2.2);
         const group = new T.Group();
         group.name = blueHoleExit ? 'BLUE HOLE · STEERABLE RETURN UPWELLING' : `BUBBLE GEYSER ${index + 1}`;
         const column = new T.Mesh(
           new T.CylinderGeometry(
-            blueHoleExit ? 4.4 : 2.4, blueHoleExit ? 7 : 4.2, height, 14, 1, true,
+            blueHoleExit ? 5.4 : 2.4, blueHoleExit ? 8.7 : 4.2, height, 14, 1, true,
           ),
           new T.MeshBasicMaterial({
             color: 0x8ff8ff, transparent: true, opacity: .12,
@@ -8202,7 +8870,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
           const ring = new T.Mesh(
             new T.TorusGeometry(
-              (blueHoleExit ? 4.25 : 2.4) + ringIndex * (blueHoleExit ? .85 : .55),
+              (blueHoleExit ? 5.1 : 2.4) + ringIndex * (blueHoleExit ? 1.05 : .55),
               blueHoleExit ? .22 : .16, 6, 28,
             ),
             new T.MeshBasicMaterial({
@@ -8237,8 +8905,13 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           group, column, rings, bubbles, phase: index * .71,
           role: blueHoleExit ? 'blue-hole-steerable-exit' : 'district-bubble-geyser',
           steerable: blueHoleExit, liftTicks: 0,
+          visualOpacity: blueHoleExit ? .045 : .1,
+          ringOpacityScale: blueHoleExit ? .3 : 1,
         });
       }
+      features.allCurrents = [
+        ...features.geysers, ...features.skyCurrents, ...features.skyReturnCurrents,
+      ];
 
       const fishBodyMaterial = new T.MeshStandardMaterial({
         color: 0x65f1ff, emissive: 0x126b8c, emissiveIntensity: 1.25,
@@ -8276,6 +8949,433 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       features.fishBodies = fishBodies;
       features.fishTails = fishTails;
       this.updateWaterWorldVisuals(profile, 0, { time: 0 }, 0);
+    }
+    makeWaterSkyReefs(profile, features, materials) {
+      const site = profile.sites[9];
+      const ground = profile.heightAt(site.x, site.z);
+      const layout = [
+        [-14, -8, 52, 10.5],
+        [4, 8, 82, 11.2],
+        [23, -5, 113, 10.4],
+        [40, 10, 145, 12.1],
+        [58, -4, 180, 11.4],
+        [75, 13, 216, 15.2],
+        [57, 36, 168, 12.5],
+        [31, 34, 110, 11.2],
+        [3, 22, 62, 10.8],
+        [-17, 6, 30, 8.8],
+      ];
+      const bodyMaterial = materials.reefMaterial.clone();
+      bodyMaterial.vertexColors = true;
+      bodyMaterial.color.setHex(0xb7fff0);
+      bodyMaterial.emissive.setHex(0x0b6571);
+      bodyMaterial.emissiveIntensity = .94;
+      const rimMaterial = materials.pearlMaterial.clone();
+      rimMaterial.vertexColors = true;
+      rimMaterial.emissiveIntensity = 1.45;
+      rimMaterial.transparent = true;
+      rimMaterial.opacity = .82;
+      const bodyMesh = new T.InstancedMesh(
+        new T.CylinderGeometry(1.04, .62, 1, 14), bodyMaterial, layout.length,
+      );
+      const rimMesh = new T.InstancedMesh(
+        new T.TorusGeometry(1, .075, 5, 26, Math.PI * 1.42), rimMaterial, layout.length,
+      );
+      const undersideRimMesh = new T.InstancedMesh(
+        new T.TorusGeometry(1, .055, 5, 22, Math.PI * 1.12), rimMaterial.clone(), layout.length,
+      );
+      bodyMesh.name = 'LEVIATHAN WAKE · TEN WALKABLE SKY REEFS';
+      rimMesh.name = 'LEVIATHAN WAKE · SKY REEF BREACH RIMS';
+      undersideRimMesh.name = 'LEVIATHAN WAKE · SKY REEF UNDERSIDE CONSTELLATION';
+      bodyMesh.castShadow = true;
+      bodyMesh.receiveShadow = true;
+      bodyMesh.frustumCulled = rimMesh.frustumCulled = undersideRimMesh.frustumCulled = false;
+      bodyMesh.userData.kbLifted = rimMesh.userData.kbLifted = undersideRimMesh.userData.kbLifted = true;
+      const horizontalRing = new T.Quaternion().setFromEuler(
+        new T.Euler(Math.PI / 2, 0, 0),
+      );
+      for (let index = 0; index < layout.length; index++) {
+        const [localX, localZ, rise, radius] = layout[index];
+        const distance = Math.hypot(localX, localZ);
+        const at = surfaceOffsetChartAt(
+          site.x, site.z, localX / distance, localZ / distance, distance, {},
+        );
+        const top = ground + rise;
+        const thickness = 1.55 + index % 3 * .22;
+        const bottom = top - thickness;
+        chartLift(at.x, bottom + thickness * .5, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, index * .39));
+        features.scratchScale.set(radius, thickness, radius);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        bodyMesh.setMatrixAt(index, features.scratchMatrix);
+        bodyMesh.setColorAt(index, new T.Color([
+          0x337d78, 0x316f8d, 0x554f89, 0x328467,
+        ][index % 4]));
+        chartLift(at.x, top + .15, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, index * .83 + .35))
+          .multiply(horizontalRing);
+        features.scratchScale.setScalar(radius * .91);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        rimMesh.setMatrixAt(index, features.scratchMatrix);
+        rimMesh.setColorAt(index, new T.Color(index % 2 ? 0xff9dce : 0x83fff0));
+        chartLift(at.x, bottom + .12, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, index * .83 + Math.PI * 1.12))
+          .multiply(horizontalRing);
+        features.scratchScale.setScalar(radius * .57);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        undersideRimMesh.setMatrixAt(index, features.scratchMatrix);
+        undersideRimMesh.setColorAt(index, new T.Color(index % 2 ? 0x68ecff : 0xff86ca));
+        const record = this.registerAuthoredPlanetSolid(
+          profile, `water-sky-reef-${index}`, at.x, at.z, top, bottom, radius,
+          {
+            collisionScale: .93, sideScale: .98, supportDepth: thickness + .4,
+            family: 'leviathan-sky-reef', siteIndex: 9, biomeId: site.biome,
+            skyRouteStep: index, role: index <= 5 ? 'breach-ascent' : 'safe-drop-return',
+          },
+        );
+        const reef = {
+          id: `water-feature-sky-reef-${index}`,
+          index, record, mesh: bodyMesh, rimMesh, instance: index,
+          siteIndex: 9, rise, radius,
+        };
+        const authority = {
+          id: record.id, record, mesh: bodyMesh, rimMesh, instance: index,
+          role: 'leviathan-sky-reef', moving: false,
+        };
+        record.renderAuthority = authority;
+        record.renderMesh = bodyMesh;
+        record.renderIndex = index;
+        reef.renderAuthority = authority;
+        features.skyReefs.push(reef);
+        features.physicalAuthorship.skyReefs.push(authority);
+      }
+      bodyMesh.instanceMatrix.needsUpdate = true;
+      rimMesh.instanceMatrix.needsUpdate = true;
+      undersideRimMesh.instanceMatrix.needsUpdate = true;
+      if (bodyMesh.instanceColor) bodyMesh.instanceColor.needsUpdate = true;
+      if (rimMesh.instanceColor) rimMesh.instanceColor.needsUpdate = true;
+      if (undersideRimMesh.instanceColor) undersideRimMesh.instanceColor.needsUpdate = true;
+      profile.root.add(bodyMesh, rimMesh, undersideRimMesh);
+      features.skyReefMesh = bodyMesh;
+      features.skyReefRimMesh = rimMesh;
+      features.skyReefUndersideRimMesh = undersideRimMesh;
+
+      // Long soft roots give every sky reef a readable underside. They never
+      // pretend to be footing: each hangs inside the island's silhouette and
+      // ends well above the current that launches from the previous stop.
+      const skyRoots = new T.InstancedMesh(
+        new T.ConeGeometry(1, 1, 7), materials.deepMaterial.clone(), layout.length * 2,
+      );
+      skyRoots.name = 'LEVIATHAN WAKE · HANGING SKY-KELP ROOTS';
+      skyRoots.frustumCulled = false;
+      skyRoots.userData.kbLifted = true;
+      let rootIndex = 0;
+      for (const reef of features.skyReefs) {
+        for (let fork = 0; fork < 2; fork++) {
+          const angle = reef.index * .71 + fork * Math.PI;
+          const reach = reef.record.radius * .2;
+          const at = surfaceOffsetChartAt(
+            reef.record.x, reef.record.z, Math.cos(angle), Math.sin(angle), reach, {},
+          );
+          const length = 7 + (reef.index + fork * 2) % 4 * 2.1;
+          chartLift(at.x, reef.record.bottom - length * .5, at.z, features.scratchPosition);
+          features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()));
+          const width = 1.2 + (reef.index + fork) % 3 * .32;
+          features.scratchScale.set(width, length, width);
+          features.scratchMatrix.compose(
+            features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+          );
+          skyRoots.setMatrixAt(rootIndex++, features.scratchMatrix);
+        }
+      }
+      skyRoots.instanceMatrix.needsUpdate = true;
+      profile.root.add(skyRoots);
+      features.skyReefRoots = skyRoots;
+
+      // Four coral beacons on every reef make the route readable as one
+      // living constellation from the ground and from neighbouring islands.
+      const beaconMaterial = materials.coralRoseMaterial.clone();
+      beaconMaterial.vertexColors = true;
+      const beacons = new T.InstancedMesh(
+        materials.branchCoralGeometry, beaconMaterial, layout.length * 4,
+      );
+      beacons.name = 'LEVIATHAN WAKE · FORTY SKY CORAL BEACONS';
+      beacons.castShadow = true;
+      beacons.frustumCulled = false;
+      beacons.userData.kbLifted = true;
+      let beaconIndex = 0;
+      for (const reef of features.skyReefs) {
+        for (let slot = 0; slot < 4; slot++) {
+          const angle = slot * TAU / 4 + reef.index * .47;
+          const at = surfaceOffsetChartAt(
+            reef.record.x, reef.record.z, Math.cos(angle), Math.sin(angle),
+            reef.record.radius * .66, {},
+          );
+          chartLift(at.x, reef.record.top + .06, at.z, features.scratchPosition);
+          features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
+          const scale = 2.5 + (slot + reef.index) % 3 * .62;
+          features.scratchScale.set(scale, scale * 1.35, scale);
+          features.scratchMatrix.compose(
+            features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+          );
+          beacons.setMatrixAt(beaconIndex, features.scratchMatrix);
+          beacons.setColorAt(beaconIndex, new T.Color([
+            0xff5fa8, 0xffc951, 0x53f1ca, 0x7ccfff,
+          ][beaconIndex % 4]));
+          beaconIndex++;
+        }
+      }
+      beacons.instanceMatrix.needsUpdate = true;
+      if (beacons.instanceColor) beacons.instanceColor.needsUpdate = true;
+      profile.root.add(beacons);
+      features.skyCoralBeacons = beacons;
+      features.coralMeshes.push(beacons);
+
+      // The route begins on its own low reef tongue, outside the busy Wake
+      // centre and outside the returning drop. A player can stand here, read
+      // the whole constellation, and enter the current deliberately.
+      const firstHeading = Math.atan2(layout[0][1], layout[0][0]);
+      const launchAt = surfaceOffsetChartAt(
+        site.x, site.z, Math.cos(firstHeading), Math.sin(firstHeading), 35, {},
+      );
+      const launchGround = profile.heightAt(launchAt.x, launchAt.z);
+      const launchTop = launchGround + 1.35;
+      const launchRadius = 12.2;
+      const launchGroup = new T.Group();
+      launchGroup.name = 'LEVIATHAN WAKE · BREACH CURRENT LAUNCH REEF';
+      const launchBody = new T.Mesh(
+        new T.CylinderGeometry(launchRadius * .88, launchRadius, 2.2, 14), bodyMaterial.clone(),
+      );
+      launchBody.position.y = -1.1;
+      const launchRim = new T.Mesh(
+        new T.TorusGeometry(launchRadius * .78, .18, 6, 34, Math.PI * 1.55),
+        rimMaterial.clone(),
+      );
+      launchRim.rotation.x = Math.PI / 2;
+      launchRim.rotation.z = firstHeading + Math.PI * .12;
+      launchGroup.add(launchBody, launchRim);
+      this.placePlanetObject(launchGroup, launchAt.x, launchTop, launchAt.z, firstHeading);
+      profile.root.add(launchGroup);
+      const launchRecord = this.registerAuthoredPlanetSolid(
+        profile, 'water-sky-current-launch-reef', launchAt.x, launchAt.z,
+        launchTop, launchTop - 2.2, launchRadius,
+        {
+          collisionScale: .94, sideScale: .98, supportDepth: 2.6,
+          family: 'leviathan-sky-launch', siteIndex: 9, biomeId: site.biome,
+          skyRouteStep: -1, role: 'deliberate-current-launch', safe: true,
+        },
+      );
+      features.skyLaunchPedestal = {
+        record: launchRecord, group: launchGroup, body: launchBody, rim: launchRim,
+      };
+
+      // Six steerable currents climb to the breach crown. Each current lifts
+      // from its source footing and bends velocity toward the next visible
+      // reef; the player retains air steering and can bail out at any time.
+      for (let index = 0; index < 6; index++) {
+        const sourceRecord = index === 0
+          ? launchRecord
+          : features.skyReefs[index - 1].record;
+        const target = features.skyReefs[index].record;
+        const source = index === 0 ? sourceRecord : (() => {
+          const previousLayout = layout[index - 1];
+          const nextLayout = layout[index];
+          const dx = nextLayout[0] - previousLayout[0];
+          const dz = nextLayout[1] - previousLayout[1];
+          const length = Math.hypot(dx, dz) || 1;
+          const edge = surfaceOffsetChartAt(
+            sourceRecord.x, sourceRecord.z, dx / length, dz / length,
+            sourceRecord.radius * .58, {},
+          );
+          return { x: edge.x, z: edge.z, top: sourceRecord.top };
+        })();
+        const height = Math.max(22, target.top - source.top + 8);
+        const rise = target.top - source.top;
+        // Player flight applies a deliberate extra downward bite while Space
+        // is released. Solve against that real 25.2 m/s² ascent law; the old
+        // 15.2-only estimate peaked 11–26 m below every promised reef.
+        const flightTime = Math.max(2.2, Math.sqrt(Math.max(0, rise) * 2 / 25.2) * 1.32);
+        const launchDistance = surfaceDistanceAt(source.x, source.z, target.x, target.z);
+        const group = new T.Group();
+        group.name = `LEVIATHAN WAKE · STEERABLE SKY CURRENT ${index + 1}`;
+        const column = new T.Mesh(
+          new T.CylinderGeometry(3.3, 5.7, height, 14, 1, true),
+          new T.MeshBasicMaterial({
+            color: index % 2 ? 0xff89ca : 0x78f8ff,
+            transparent: true, opacity: .13, depthWrite: false,
+            blending: T.AdditiveBlending, side: T.DoubleSide,
+          }),
+        );
+        column.position.y = height * .5;
+        group.add(column);
+        const rings = [];
+        for (let ringIndex = 0; ringIndex < 4; ringIndex++) {
+          const ring = new T.Mesh(
+            new T.TorusGeometry(3.2 + ringIndex * .5, .18, 6, 30),
+            new T.MeshBasicMaterial({
+              color: ringIndex % 2 ? 0xff9dd3 : 0xa0ffff,
+              transparent: true, opacity: .5, depthWrite: false,
+              blending: T.AdditiveBlending,
+            }),
+          );
+          ring.rotation.x = Math.PI / 2;
+          group.add(ring);
+          rings.push(ring);
+        }
+        const bubbles = [];
+        for (let bubbleIndex = 0; bubbleIndex < 6; bubbleIndex++) {
+          const bubble = new T.Mesh(
+            new T.OctahedronGeometry(.48 + bubbleIndex % 3 * .13, 0),
+            new T.MeshBasicMaterial({
+              color: 0xd3ffff, transparent: true, opacity: .48,
+              depthWrite: false, blending: T.AdditiveBlending,
+            }),
+          );
+          group.add(bubble);
+          bubbles.push(bubble);
+        }
+        this.placePlanetObject(group, source.x, source.top, source.z);
+        profile.root.add(group);
+        features.skyCurrents.push({
+          id: `water-feature-sky-current-${index}`,
+          featureType: 'directional-sky-current', siteIndex: 9,
+          index, x: source.x, z: source.z, base: source.top,
+          height, radius: 7.1, group, column, rings, bubbles,
+          phase: 4.2 + index * .79, role: 'leviathan-breach-current',
+          steerable: true, directional: true, active: true, liftTicks: 0,
+          visualOpacity: .09, ringOpacityScale: .78,
+          targetX: target.x, targetZ: target.z, targetAltitude: target.top,
+          targetRadius: surfaceCollisionRadius(target) * (target.collisionScale ?? 1),
+          flightTime, launchDistance,
+          // An explicit apex above the reef leaves time to read and catch the
+          // landing; merely touching its altitude made the highest arcs lie.
+          verticalForce: rise / flightTime + 12.6 * flightTime + 4,
+          tangentForce: launchDistance / flightTime
+            * ((PLANET.radius + Math.max(source.top, target.top)) / PLANET.radius),
+        });
+      }
+
+      // The crown is not a dead end and the way down is not a sequence of
+      // blind leaps. Five always-live edge currents carry the player through
+      // the four lower reefs and back into the Wake. Their rings run downward,
+      // separating the return language from the climbing breach columns at a
+      // glance, while each current still begins with a small controllable hop.
+      for (let index = 0; index < 5; index++) {
+        const sourceIndex = index + 5;
+        const sourceRecord = features.skyReefs[sourceIndex].record;
+        const target = index < 4
+          ? features.skyReefs[sourceIndex + 1].record
+          : {
+            id: 'water-leviathan-wake-return-landing',
+            x: site.x, z: site.z, top: ground, radius: 13,
+          };
+        const sourceLayout = layout[sourceIndex];
+        const targetLayout = index < 4 ? layout[sourceIndex + 1] : [0, 0];
+        const dx = targetLayout[0] - sourceLayout[0];
+        const dz = targetLayout[1] - sourceLayout[1];
+        const directionLength = Math.hypot(dx, dz) || 1;
+        const edge = surfaceOffsetChartAt(
+          sourceRecord.x, sourceRecord.z, dx / directionLength, dz / directionLength,
+          sourceRecord.radius * .68, {},
+        );
+        const rise = target.top - sourceRecord.top;
+        const verticalForce = 19;
+        const flightTime = (
+          verticalForce + Math.sqrt(Math.max(0,
+            verticalForce * verticalForce - 2 * 25.2 * rise))
+        ) / 25.2;
+        const launchDistance = surfaceDistanceAt(edge.x, edge.z, target.x, target.z);
+        const height = 14 + index % 2 * 1.8;
+        const group = new T.Group();
+        group.name = `LEVIATHAN WAKE · RETURN CURRENT ${index + 1}`;
+        const column = new T.Mesh(
+          new T.CylinderGeometry(2.25, 3.7, height, 12, 1, true),
+          new T.MeshBasicMaterial({
+            color: index % 2 ? 0x6de7ff : 0xff87ce,
+            transparent: true, opacity: .115, depthWrite: false,
+            blending: T.AdditiveBlending, side: T.DoubleSide,
+          }),
+        );
+        column.position.y = height * .5;
+        group.add(column);
+        const rings = [];
+        for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
+          const ring = new T.Mesh(
+            new T.TorusGeometry(2.35 + ringIndex * .38, .16, 6, 26),
+            new T.MeshBasicMaterial({
+              color: ringIndex % 2 ? 0xffa1d7 : 0xa6ffff,
+              transparent: true, opacity: .44, depthWrite: false,
+              blending: T.AdditiveBlending,
+            }),
+          );
+          ring.rotation.x = Math.PI / 2;
+          group.add(ring);
+          rings.push(ring);
+        }
+        const bubbles = [];
+        for (let bubbleIndex = 0; bubbleIndex < 4; bubbleIndex++) {
+          const bubble = new T.Mesh(
+            new T.OctahedronGeometry(.38 + bubbleIndex % 2 * .14, 0),
+            new T.MeshBasicMaterial({
+              color: 0xdbffff, transparent: true, opacity: .42,
+              depthWrite: false, blending: T.AdditiveBlending,
+            }),
+          );
+          group.add(bubble);
+          bubbles.push(bubble);
+        }
+        this.placePlanetObject(group, edge.x, sourceRecord.top, edge.z);
+        profile.root.add(group);
+        features.skyReturnCurrents.push({
+          id: `water-feature-sky-return-current-${index}`,
+          featureType: 'directional-sky-return-current', siteIndex: 9,
+          index, x: edge.x, z: edge.z, base: sourceRecord.top,
+          height, radius: 4.4, group, column, rings, bubbles,
+          phase: 9.1 + index * .73, role: 'leviathan-breach-return-current',
+          steerable: true, directional: true, active: true, liftTicks: 0,
+          visualOpacity: .075, ringOpacityScale: .72, flowDirection: -1,
+          cushionHeight: 9, verticalAcceleration: 30, recoveryTime: 6,
+          sourcePlatformId: sourceRecord.id, targetPlatformId: target.id,
+          targetX: target.x, targetZ: target.z, targetAltitude: target.top,
+          targetRadius: surfaceCollisionRadius(target) * (target.collisionScale ?? 1),
+          flightTime, launchDistance, verticalForce,
+          tangentForce: launchDistance / flightTime
+            * ((PLANET.radius + Math.max(sourceRecord.top, target.top)) / PLANET.radius),
+        });
+      }
+
+      const crown = new T.Group();
+      crown.name = 'LEVIATHAN WAKE · BREACH CROWN';
+      for (let index = 0; index < 3; index++) {
+        const arc = new T.Mesh(
+          new T.TorusGeometry(8.4 + index * 2.2, .38, 7, 44, Math.PI * 1.35),
+          index === 1 ? materials.pearlMaterial.clone() : materials.coralTealMaterial.clone(),
+        );
+        arc.rotation.set(Math.PI / 2, index * .42, -.62 + index * .17);
+        crown.add(arc);
+      }
+      this.placePlanetObject(
+        crown, features.skyReefs[5].record.x,
+        features.skyReefs[5].record.top + .2, features.skyReefs[5].record.z,
+      );
+      profile.root.add(crown);
+      features.skyReefCrown = crown;
+      features.skyRoute = {
+        id: 'water-leviathan-breach-route', siteIndex: 9,
+        ascentSteps: 6, returnSteps: 5,
+        maximumRise: Math.max(...features.skyReefs.map(reef => reef.rise)),
+        traversal: 'steerable-current-ascent-and-edge-current-return',
+      };
     }
     makeWaterDistrictArchitecture(profile, features, materials) {
       const { reefMaterial, shellMaterial, pearlMaterial, deepMaterial } = materials;
@@ -8600,18 +9700,28 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       }
       features.kelpMesh.instanceMatrix.needsUpdate = true;
 
-      for (const geyser of features.geysers) {
+      for (const geyser of features.allCurrents || features.geysers) {
+        if (geyser.column) {
+          geyser.column.material.opacity = (geyser.active === false ? .025 : (geyser.visualOpacity ?? .1))
+            + Math.sin(time * 1.4 + geyser.phase) * .025;
+        }
         for (let ringIndex = 0; ringIndex < geyser.rings.length; ringIndex++) {
           const ring = geyser.rings[ringIndex];
-          ring.position.y = (time * (5.2 + ringIndex * .9) + geyser.phase * 3
+          const ringTravel = (time * (5.2 + ringIndex * .9) + geyser.phase * 3
             + ringIndex * geyser.height / 3) % geyser.height;
+          ring.position.y = geyser.flowDirection === -1
+            ? geyser.height - ringTravel : ringTravel;
           const life = ring.position.y / geyser.height;
           ring.scale.setScalar(.72 + life * .62);
-          ring.material.opacity = .18 + (1 - life) * .36;
+          ring.material.opacity = (.18 + (1 - life) * .36)
+            * (geyser.ringOpacityScale ?? 1);
         }
         for (let bubbleIndex = 0; bubbleIndex < geyser.bubbles.length; bubbleIndex++) {
           const bubble = geyser.bubbles[bubbleIndex];
-          const phase = (time * (3.5 + bubbleIndex * .18) + geyser.phase + bubbleIndex * 1.31) % geyser.height;
+          const bubbleTravel = (time * (3.5 + bubbleIndex * .18)
+            + geyser.phase + bubbleIndex * 1.31) % geyser.height;
+          const phase = geyser.flowDirection === -1
+            ? geyser.height - bubbleTravel : bubbleTravel;
           const angle = time * .7 + geyser.phase + bubbleIndex * 2.1;
           bubble.position.set(Math.cos(angle) * (1.1 + bubbleIndex * .31), phase, Math.sin(angle) * (1.1 + bubbleIndex * .31));
           bubble.scale.setScalar(.72 + .24 * Math.sin(time * 2 + bubbleIndex));
@@ -8690,8 +9800,8 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     }
     rewardWaterInteraction(profile, gameState, kind, position, label, value = 1) {
       const progress = gameState.worldProgress[profile.id];
-      progress[kind] += value;
-      progress.collected += value;
+      progress[kind] += 1;
+      progress.collected += 1;
       gameState.score += 650 * value;
       gameState.style = clamp(gameState.style + 4 * value, 0, 100);
       gameState.rewardFlash = Math.max(gameState.rewardFlash, .52);
@@ -8766,29 +9876,171 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       }
       return false;
     }
+    updateDirectionalCurrentFlight(features, playerChart, gameState, dt) {
+      const flight = features.playerDirectionalFlight;
+      if (!flight) return;
+      features.scratchFlightVelocity ||= new T.Vector3();
+      features.scratchFlightDesired ||= new T.Vector3();
+      flight.elapsed += dt;
+      if ((gameState.player.grounded && flight.elapsed > .18)
+        || flight.elapsed >= flight.duration) {
+        features.playerDirectionalFlight = null;
+        return;
+      }
+      chartLift(flight.targetX, playerChart.y, flight.targetZ, features.scratchCurrentTarget);
+      tangentOf(
+        features.scratchCurrentTarget.sub(gameState.player.position),
+        gameState.player.up, features.scratchCurrentTangent,
+      );
+      if (features.scratchCurrentTangent.lengthSq() <= .01) return;
+      features.scratchCurrentTangent.normalize();
+      const distance = surfaceDistanceAt(
+        playerChart.x, playerChart.z, flight.targetX, flight.targetZ,
+      );
+      const remaining = Math.max(.45, flight.nominalTime - flight.elapsed);
+      const settleRadius = flight.targetRadius * .68;
+      // Chart distance is measured on the planet surface, while the player is
+      // travelling around a larger circle at altitude. Without this scale the
+      // same nineteen-metre hop quietly became twenty-three at the crown.
+      const altitudeScale = Math.max(.75,
+        (PLANET.radius + playerChart.y) / PLANET.radius);
+      const desiredSpeed = distance <= settleRadius
+        ? 0
+        : Math.min(
+          flight.maxSpeed,
+          Math.max(0, distance - settleRadius * .7) / remaining * altitudeScale,
+        );
+      tangentOf(
+        gameState.player.velocity, gameState.player.up, features.scratchFlightVelocity,
+      );
+      features.scratchFlightDesired.copy(features.scratchCurrentTangent).multiplyScalar(desiredSpeed)
+        .sub(features.scratchFlightVelocity);
+      const maximumCorrection = flight.acceleration * dt;
+      if (features.scratchFlightDesired.length() > maximumCorrection) {
+        features.scratchFlightDesired.setLength(maximumCorrection);
+      }
+      gameState.player.velocity.add(features.scratchFlightDesired);
+
+      // The current keeps a soft pocket of moving water/air over its promised
+      // landing. Horizontal guidance alone could put the player over the exact
+      // centre while they crossed the thin deck too quickly to be caught. This
+      // only eases an already-descending player who is above and inside the
+      // target; moving away or jumping immediately defeats it.
+      const aboveTarget = playerChart.y - flight.targetAltitude;
+      const verticalSpeed = vspeedOf(gameState.player.velocity, gameState.player.up);
+      if (distance <= flight.targetRadius * .91
+        && aboveTarget > .08 && aboveTarget < (flight.cushionHeight ?? 22)
+        && verticalSpeed < 0) {
+        const desiredFall = -clamp(aboveTarget * .72, 2.4, 6.4);
+        const easedFall = verticalSpeed + Math.min(
+          Math.max(0, desiredFall - verticalSpeed),
+          (flight.verticalAcceleration ?? 44) * dt,
+        );
+        setVspeed(gameState.player.velocity, gameState.player.up, easedFall);
+      }
+    }
     updateWaterWorldGameplay(profile, dt, gameState) {
       const features = profile.waterFeatures;
       if (!features) return;
       const playerChart = toChartVec(features.scratchPlayer.copy(gameState.player.position));
       const ballChart = toChartVec(features.scratchBall.copy(gameState.ball.position));
-      for (const geyser of features.geysers) {
+      features.scratchCurrentTarget ||= new T.Vector3();
+      features.scratchCurrentTangent ||= new T.Vector3();
+      features.scratchFlightVelocity ||= new T.Vector3();
+      features.scratchFlightDesired ||= new T.Vector3();
+      this.updateDirectionalCurrentFlight(features, playerChart, gameState, dt);
+      for (const geyser of features.allCurrents || features.geysers) {
+        if (geyser.active === false) {
+          geyser.playerInside = false;
+          geyser.ballInside = false;
+          continue;
+        }
         const playerDistance = surfaceDistanceAt(playerChart.x, playerChart.z, geyser.x, geyser.z);
-        if (playerDistance < geyser.radius
-          && playerChart.y >= geyser.base - 1.2 && playerChart.y <= geyser.base + geyser.height + 3) {
-          const lift = 9.5 + (1 - playerDistance / geyser.radius) * 7.5;
-          setVspeed(gameState.player.velocity, gameState.player.up,
-            Math.max(vspeedOf(gameState.player.velocity, gameState.player.up), lift));
+        const playerInside = playerDistance < geyser.radius
+          && playerChart.y >= geyser.base - 1.2
+          && playerChart.y <= geyser.base + geyser.height + 3;
+        if (playerInside) {
+          if (geyser.directional) {
+            // A directional current is a launch, not a weak accelerator. The
+            // old per-frame nudge could prove positive motion while every real
+            // flight fell short of its island. On entry, give the player the
+            // authored ballistic components and then return full air control.
+            if (!geyser.playerInside) {
+              chartLift(
+                geyser.targetX, playerChart.y, geyser.targetZ,
+                features.scratchCurrentTarget,
+              );
+              tangentOf(
+                features.scratchCurrentTarget.sub(gameState.player.position),
+                gameState.player.up, features.scratchCurrentTangent,
+              );
+              if (features.scratchCurrentTangent.lengthSq() > .01) {
+                features.scratchCurrentTangent.normalize();
+                const along = gameState.player.velocity.dot(features.scratchCurrentTangent);
+                gameState.player.velocity.addScaledVector(
+                  features.scratchCurrentTangent, (geyser.tangentForce ?? 14) - along,
+                );
+              }
+              setVspeed(
+                gameState.player.velocity, gameState.player.up,
+                Math.max(vspeedOf(gameState.player.velocity, gameState.player.up), geyser.verticalForce ?? 13),
+              );
+              gameState.player.flung = Math.max(gameState.player.flung, .28);
+              features.playerDirectionalFlight = {
+                targetX: geyser.targetX, targetZ: geyser.targetZ,
+                targetAltitude: geyser.targetAltitude,
+                targetRadius: geyser.targetRadius ?? 9,
+                elapsed: 0, nominalTime: geyser.flightTime ?? 2.4,
+                duration: (geyser.flightTime ?? 2.4) + (geyser.recoveryTime ?? 4.2),
+                maxSpeed: Math.max(15, (geyser.tangentForce ?? 10) * 1.55),
+                acceleration: 44,
+                verticalAcceleration: geyser.verticalAcceleration ?? 44,
+                cushionHeight: geyser.cushionHeight ?? 22,
+              };
+            }
+          } else {
+            const lift = (geyser.verticalForce ?? 9.5)
+              + (1 - playerDistance / geyser.radius) * 7.5;
+            setVspeed(gameState.player.velocity, gameState.player.up,
+              Math.max(vspeedOf(gameState.player.velocity, gameState.player.up), lift));
+          }
           gameState.player.grounded = false;
           geyser.liftTicks++;
         }
+        geyser.playerInside = playerInside;
         const ballDistance = surfaceDistanceAt(ballChart.x, ballChart.z, geyser.x, geyser.z);
-        if (ballDistance < geyser.radius + gameState.ball.radius
-          && ballChart.y >= geyser.base - 1.2 && ballChart.y <= geyser.base + geyser.height + 3) {
+        const ballInside = ballDistance < geyser.radius + gameState.ball.radius
+          && ballChart.y >= geyser.base - 1.2
+          && ballChart.y <= geyser.base + geyser.height + 3;
+        if (ballInside) {
           const ballUp = dirAt(gameState.ball.position, gameState.tempA);
-          setVspeed(gameState.ball.velocity, ballUp,
-            Math.max(vspeedOf(gameState.ball.velocity, ballUp), 13));
+          if (geyser.directional) {
+            if (!geyser.ballInside) {
+              chartLift(
+                geyser.targetX, ballChart.y, geyser.targetZ,
+                features.scratchCurrentTarget,
+              );
+              tangentOf(
+                features.scratchCurrentTarget.sub(gameState.ball.position),
+                ballUp, features.scratchCurrentTangent,
+              );
+              if (features.scratchCurrentTangent.lengthSq() > .01) {
+                features.scratchCurrentTangent.normalize();
+                const along = gameState.ball.velocity.dot(features.scratchCurrentTangent);
+                gameState.ball.velocity.addScaledVector(
+                  features.scratchCurrentTangent, (geyser.tangentForce ?? 14) - along,
+                );
+              }
+              setVspeed(gameState.ball.velocity, ballUp,
+                Math.max(vspeedOf(gameState.ball.velocity, ballUp), geyser.verticalForce ?? 13));
+            }
+          } else {
+            setVspeed(gameState.ball.velocity, ballUp,
+              Math.max(vspeedOf(gameState.ball.velocity, ballUp), geyser.verticalForce ?? 13));
+          }
           geyser.liftTicks++;
         }
+        geyser.ballInside = ballInside;
       }
       for (const fish of features.moonfish) {
         if (fish.claimed || fish.leap < 3.5) continue;
@@ -8805,7 +10057,12 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       if (!features) return;
       features.bellStep = 0;
       features.bellComplete = false;
-      for (const geyser of features.geysers) geyser.liftTicks = 0;
+      features.playerDirectionalFlight = null;
+      for (const geyser of features.allCurrents || features.geysers) {
+        geyser.liftTicks = 0;
+        geyser.playerInside = false;
+        geyser.ballInside = false;
+      }
       for (const fish of features.moonfish) fish.claimed = false;
       for (const clam of features.clams) {
         clam.claimed = false;
@@ -8995,8 +10252,10 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const features = {
         platformMeshes: [], trimMeshes: [], sceneryMeshes: [], lowPlatforms: [], mountainSteps: [],
         chainBridge: [], rafts: [], coolingPlates: [], furnaceLifts: [],
+        skyForgePlates: [], skyForgeVents: [], skyReturnVents: [], skyForgeNodes: [],
+        skyForgeStep: 0, skyForgeComplete: false,
         magmaEggs: [], spitters: [], projectiles: [], projectileCursor: 0,
-        physicalAuthorship: { connectiveDecks: [] },
+        physicalAuthorship: { connectiveDecks: [], skyForgePlates: [] },
         scratchMatrix: new T.Matrix4(), scratchPosition: new T.Vector3(),
         scratchTarget: new T.Vector3(), scratchQuaternion: new T.Quaternion(),
         scratchYawQuaternion: new T.Quaternion(), scratchScale: new T.Vector3(),
@@ -9090,7 +10349,36 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
 
       const spawnSite = profile.sites[0];
       const spawnGround = profile.heightAt(spawnSite.x, spawnSite.z);
-      const sanctuaryTop = spawnGround + 4.35;
+      let sanctuaryTop = spawnGround + 4.35;
+      // The sanctuary is a broad disc on real, uneven spherical terrain. Its
+      // old centre-only elevation left the authored 12 m spawn point under a
+      // natural ridge, so the first physics tick snapped the player upward.
+      // Raise the whole visible/collidable sanctuary just enough to clear the
+      // terrain it actually covers.
+      for (const distance of [12, 24]) {
+        for (let sample = 0; sample < 24; sample++) {
+          const angle = sample / 24 * TAU;
+          const at = surfaceOffsetChartAt(
+            spawnSite.x, spawnSite.z, Math.cos(angle), Math.sin(angle), distance, {},
+          );
+          sanctuaryTop = Math.max(sanctuaryTop, profile.heightAt(at.x, at.z) + .72);
+        }
+      }
+      const previewTowardKeepX = profile.sites[1].x - spawnSite.x;
+      const previewTowardKeepZ = profile.sites[1].z - spawnSite.z;
+      const previewTowardKeepLength = Math.hypot(
+        previewTowardKeepX, previewTowardKeepZ,
+      ) || 1;
+      const previewSpawnPoint = surfaceOffsetChartAt(
+        spawnSite.x, spawnSite.z,
+        -previewTowardKeepX / previewTowardKeepLength,
+        -previewTowardKeepZ / previewTowardKeepLength,
+        12, {},
+      );
+      sanctuaryTop = Math.max(
+        sanctuaryTop,
+        profile.heightAt(previewSpawnPoint.x, previewSpawnPoint.z) + .72,
+      );
       const sanctuaryBottom = spawnGround - 1.1;
       const sanctuaryHeight = sanctuaryTop - sanctuaryBottom;
       const sanctuary = new T.Group();
@@ -9504,8 +10792,405 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       features.chainMesh = chainMesh;
 
       this.makeLavaInteractiveFeatures(profile, features);
+      this.makeLavaSkyForge(profile, features);
       this.makeLavaScenery(profile, features);
       this.makeLavaCoolingEclipseAtlas(profile, features);
+    }
+    makeLavaSkyForge(profile, features) {
+      const { basaltMaterial, obsidianMaterial, forgeMaterial, goldMaterial, cooledMaterial } = features.materials;
+      const site = profile.sites[3];
+      const ground = profile.heightAt(site.x, site.z);
+      const layout = [
+        [-16, -10, 55, 11.2],
+        [3, 9, 84, 10.6],
+        [22, -7, 114, 11.4],
+        [40, 12, 147, 12.3],
+        [59, -5, 182, 12.1],
+        [76, 14, 218, 16.2],
+        [55, 38, 168, 13.2],
+        [28, 36, 108, 11.4],
+        [3, 22, 62, 10.9],
+        [-17, 6, 30, 8.9],
+      ];
+      const bodyMaterial = cooledMaterial.clone();
+      bodyMaterial.vertexColors = true;
+      bodyMaterial.color.setHex(0xa4bbc0);
+      bodyMaterial.emissive.setHex(0x194f58);
+      bodyMaterial.emissiveIntensity = .72;
+      const rimMaterial = goldMaterial.clone();
+      rimMaterial.vertexColors = true;
+      rimMaterial.transparent = true;
+      rimMaterial.opacity = .86;
+      const bodyMesh = new T.InstancedMesh(
+        new T.CylinderGeometry(1.05, .6, 1, 8), bodyMaterial, layout.length,
+      );
+      const rimMesh = new T.InstancedMesh(
+        new T.TorusGeometry(1, .095, 5, 24, Math.PI * 1.38), rimMaterial, layout.length,
+      );
+      const undersideRimMesh = new T.InstancedMesh(
+        new T.TorusGeometry(1, .065, 5, 22, Math.PI * 1.08), rimMaterial.clone(), layout.length,
+      );
+      bodyMesh.name = 'GEAR CALDERA · TEN WALKABLE SKY ANVILS';
+      rimMesh.name = 'GEAR CALDERA · SKY ANVIL FORGE SEAMS';
+      undersideRimMesh.name = 'GEAR CALDERA · SKY ANVIL UNDERSIDE EMBERS';
+      bodyMesh.castShadow = true;
+      bodyMesh.receiveShadow = true;
+      bodyMesh.frustumCulled = rimMesh.frustumCulled = undersideRimMesh.frustumCulled = false;
+      bodyMesh.userData.kbLifted = rimMesh.userData.kbLifted = undersideRimMesh.userData.kbLifted = true;
+      const horizontalRing = new T.Quaternion().setFromEuler(
+        new T.Euler(Math.PI / 2, 0, 0),
+      );
+      for (let index = 0; index < layout.length; index++) {
+        const [localX, localZ, rise, radius] = layout[index];
+        const distance = Math.hypot(localX, localZ);
+        const at = surfaceOffsetChartAt(
+          site.x, site.z, localX / distance, localZ / distance, distance, {},
+        );
+        const top = ground + rise;
+        const thickness = 2 + index % 3 * .28;
+        const bottom = top - thickness;
+        chartLift(at.x, bottom + thickness * .5, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, index * .44));
+        features.scratchScale.set(radius, thickness, radius);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        bodyMesh.setMatrixAt(index, features.scratchMatrix);
+        bodyMesh.setColorAt(index, new T.Color([
+          0x344f54, 0x653c36, 0x294b53, 0x714335,
+        ][index % 4]));
+        chartLift(at.x, top + .16, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, index * .79 + .2))
+          .multiply(horizontalRing);
+        features.scratchScale.setScalar(radius * .9);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        rimMesh.setMatrixAt(index, features.scratchMatrix);
+        rimMesh.setColorAt(index, new T.Color(index % 2 ? 0xff6424 : 0xffd35a));
+        chartLift(at.x, bottom + .12, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, index * .79 + Math.PI * 1.08))
+          .multiply(horizontalRing);
+        features.scratchScale.setScalar(radius * .55);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        undersideRimMesh.setMatrixAt(index, features.scratchMatrix);
+        undersideRimMesh.setColorAt(index, new T.Color(index % 2 ? 0xffb13d : 0xff5421));
+        const record = this.registerAuthoredPlanetSolid(
+          profile, `lava-sky-forge-plate-${index}`, at.x, at.z, top, bottom, radius,
+          {
+            collisionScale: .93, sideScale: .98, supportDepth: thickness + .4,
+            family: 'gear-caldera-sky-forge', siteIndex: 3, biomeId: site.biome,
+            skyRouteStep: index, role: index <= 5 ? 'hammer-ascent' : 'cooled-drop-return',
+          },
+        );
+        const authority = {
+          id: record.id, record, mesh: bodyMesh, rimMesh, instance: index,
+          role: 'gear-caldera-sky-anvil', moving: false,
+        };
+        record.renderAuthority = authority;
+        record.renderMesh = bodyMesh;
+        record.renderIndex = index;
+        features.skyForgePlates.push({
+          id: `lava-feature-sky-forge-plate-${index}`,
+          index, record, mesh: bodyMesh, rimMesh, instance: index,
+          siteIndex: 3, rise, radius, renderAuthority: authority,
+        });
+        features.physicalAuthorship.skyForgePlates.push(authority);
+      }
+      bodyMesh.instanceMatrix.needsUpdate = true;
+      rimMesh.instanceMatrix.needsUpdate = true;
+      undersideRimMesh.instanceMatrix.needsUpdate = true;
+      if (bodyMesh.instanceColor) bodyMesh.instanceColor.needsUpdate = true;
+      if (rimMesh.instanceColor) rimMesh.instanceColor.needsUpdate = true;
+      if (undersideRimMesh.instanceColor) undersideRimMesh.instanceColor.needsUpdate = true;
+      profile.root.add(bodyMesh, rimMesh, undersideRimMesh);
+      features.skyForgeMesh = bodyMesh;
+      features.skyForgeRimMesh = rimMesh;
+      features.skyForgeUndersideRimMesh = undersideRimMesh;
+
+      // Cooled slag tapers hang beneath the anvils, giving the route mass and
+      // a forged silhouette from the caldera without adding fake platforms.
+      const slagRoots = new T.InstancedMesh(
+        new T.ConeGeometry(1, 1, 8), basaltMaterial.clone(), layout.length,
+      );
+      slagRoots.name = 'GEAR CALDERA · HANGING COOLED SLAG ROOTS';
+      slagRoots.frustumCulled = false;
+      slagRoots.userData.kbLifted = true;
+      for (const plate of features.skyForgePlates) {
+        const length = 9 + plate.index % 4 * 2.7;
+        chartLift(
+          plate.record.x, plate.record.bottom - length * .5, plate.record.z,
+          features.scratchPosition,
+        );
+        features.scratchQuaternion.copy(liftQuatAt(
+          plate.record.x, plate.record.z, new T.Quaternion(),
+        ));
+        const width = plate.record.radius * (.19 + plate.index % 2 * .035);
+        features.scratchScale.set(width, length, width);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        slagRoots.setMatrixAt(plate.index, features.scratchMatrix);
+      }
+      slagRoots.instanceMatrix.needsUpdate = true;
+      profile.root.add(slagRoots);
+      features.skyForgeSlagRoots = slagRoots;
+
+      // Four short chimneys live entirely inside each collider footprint, so
+      // their strong silhouette never promises a ledge the player cannot use.
+      const chimneyMaterial = forgeMaterial.clone();
+      chimneyMaterial.vertexColors = true;
+      const chimneys = new T.InstancedMesh(
+        new T.ConeGeometry(.72, 3.8, 7), chimneyMaterial, layout.length * 4,
+      );
+      chimneys.name = 'GEAR CALDERA · SKY FORGE CHIMNEY CROWNS';
+      chimneys.castShadow = true;
+      chimneys.frustumCulled = false;
+      chimneys.userData.kbLifted = true;
+      let chimneyIndex = 0;
+      for (const plate of features.skyForgePlates) {
+        for (let slot = 0; slot < 4; slot++) {
+          const angle = slot * TAU / 4 + plate.index * .34;
+          const at = surfaceOffsetChartAt(
+            plate.record.x, plate.record.z, Math.cos(angle), Math.sin(angle),
+            plate.record.radius * .67, {},
+          );
+          chartLift(at.x, plate.record.top + 1.9, at.z, features.scratchPosition);
+          features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
+          const width = 1.45 + (slot + plate.index) % 2 * .42;
+          features.scratchScale.set(width, 1.45 + (plate.index % 3) * .24, width);
+          features.scratchMatrix.compose(
+            features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+          );
+          chimneys.setMatrixAt(chimneyIndex, features.scratchMatrix);
+          chimneys.setColorAt(chimneyIndex, new T.Color(
+            chimneyIndex % 3 ? 0xc96f4c : 0xffbf57,
+          ));
+          chimneyIndex++;
+        }
+      }
+      chimneys.instanceMatrix.needsUpdate = true;
+      if (chimneys.instanceColor) chimneys.instanceColor.needsUpdate = true;
+      profile.root.add(chimneys);
+      features.skyForgeChimneys = chimneys;
+
+      // A cooled launch die sits beyond the caldera's crowded machine centre.
+      // It is safe real footing, and the route's final drop returns to the
+      // centre rather than involuntarily throwing the player straight back up.
+      const firstHeading = Math.atan2(layout[0][1], layout[0][0]);
+      const launchAt = surfaceOffsetChartAt(
+        site.x, site.z, Math.cos(firstHeading), Math.sin(firstHeading), 36, {},
+      );
+      const launchGround = profile.heightAt(launchAt.x, launchAt.z);
+      const launchTop = launchGround + 1.35;
+      const launchRadius = 12.4;
+      const launchGroup = new T.Group();
+      launchGroup.name = 'GEAR CALDERA · SKY FORGE LAUNCH DIE';
+      const launchBody = new T.Mesh(
+        new T.CylinderGeometry(launchRadius * .86, launchRadius, 2.35, 8), cooledMaterial.clone(),
+      );
+      launchBody.position.y = -1.175;
+      const launchRim = new T.Mesh(
+        new T.TorusGeometry(launchRadius * .78, .21, 6, 30, Math.PI * 1.5),
+        goldMaterial.clone(),
+      );
+      launchRim.rotation.x = Math.PI / 2;
+      launchRim.rotation.z = firstHeading + Math.PI * .1;
+      launchGroup.add(launchBody, launchRim);
+      this.placePlanetObject(launchGroup, launchAt.x, launchTop, launchAt.z, firstHeading);
+      profile.root.add(launchGroup);
+      const launchRecord = this.registerAuthoredPlanetSolid(
+        profile, 'lava-sky-forge-launch-die', launchAt.x, launchAt.z,
+        launchTop, launchTop - 2.35, launchRadius,
+        {
+          collisionScale: .94, sideScale: .98, supportDepth: 2.8,
+          family: 'gear-caldera-sky-launch', siteIndex: 3, biomeId: site.biome,
+          skyRouteStep: -1, role: 'deliberate-forge-launch', safe: true,
+        },
+      );
+      features.skyLaunchPedestal = {
+        record: launchRecord, group: launchGroup, body: launchBody, rim: launchRim,
+      };
+
+      // The climb is a six-beat forge phrase. Vent zero is always live; each
+      // correctly struck hammer socket wakes the next vent. Hitting ahead of
+      // the phrase flashes a dark socket but never steals the ball or progress.
+      for (let index = 0; index < 6; index++) {
+        const plate = features.skyForgePlates[index];
+        const group = new T.Group();
+        group.name = `GEAR CALDERA · HAMMER SOCKET ${index + 1}`;
+        const collar = new T.Mesh(
+          new T.CylinderGeometry(2.25, 2.8, 1.05, 8), obsidianMaterial.clone(),
+        );
+        collar.position.y = .52;
+        const core = new T.Mesh(new T.OctahedronGeometry(1.35, 0), goldMaterial.clone());
+        core.position.y = 2.05;
+        group.add(collar, core);
+        this.placePlanetObject(
+          group, plate.record.x, plate.record.top + .08, plate.record.z, index * .44,
+        );
+        profile.root.add(group);
+        group.updateMatrixWorld(true);
+        features.skyForgeNodes.push({
+          id: `lava-feature-sky-forge-node-${index}`,
+          index, plate, group, collar, core, struck: false, flash: 0,
+          position: core.getWorldPosition(new T.Vector3()),
+        });
+      }
+
+      for (let index = 0; index < 6; index++) {
+        const sourceRecord = index === 0
+          ? launchRecord
+          : features.skyForgePlates[index - 1].record;
+        const target = features.skyForgePlates[index].record;
+        const source = index === 0 ? sourceRecord : (() => {
+          const previousLayout = layout[index - 1];
+          const nextLayout = layout[index];
+          const dx = nextLayout[0] - previousLayout[0];
+          const dz = nextLayout[1] - previousLayout[1];
+          const length = Math.hypot(dx, dz) || 1;
+          const edge = surfaceOffsetChartAt(
+            sourceRecord.x, sourceRecord.z, dx / length, dz / length,
+            sourceRecord.radius * .58, {},
+          );
+          return { x: edge.x, z: edge.z, top: sourceRecord.top };
+        })();
+        const height = Math.max(23, target.top - source.top + 8);
+        const rise = target.top - source.top;
+        const flightTime = Math.max(2.2, Math.sqrt(Math.max(0, rise) * 2 / 25.2) * 1.32);
+        const launchDistance = surfaceDistanceAt(source.x, source.z, target.x, target.z);
+        const group = new T.Group();
+        group.name = `GEAR CALDERA · FORGE VENT ${index + 1}`;
+        const column = new T.Mesh(
+          new T.CylinderGeometry(3.1, 5.4, height, 12, 1, true),
+          new T.MeshBasicMaterial({
+            color: index % 2 ? 0xffce57 : 0xff5120,
+            transparent: true, opacity: index === 0 ? .18 : .035,
+            depthWrite: false, side: T.DoubleSide,
+            blending: T.AdditiveBlending,
+          }),
+        );
+        column.position.y = height * .5;
+        group.add(column);
+        const rings = [];
+        for (let ringIndex = 0; ringIndex < 4; ringIndex++) {
+          const ring = new T.Mesh(
+            new T.TorusGeometry(3.1 + ringIndex * .43, .19, 6, 28),
+            new T.MeshBasicMaterial({
+              color: ringIndex % 2 ? 0xffdb67 : 0xff4c17,
+              transparent: true, opacity: index === 0 ? .54 : .08,
+              depthWrite: false, blending: T.AdditiveBlending,
+            }),
+          );
+          ring.rotation.x = Math.PI / 2;
+          group.add(ring);
+          rings.push(ring);
+        }
+        this.placePlanetObject(group, source.x, source.top, source.z);
+        profile.root.add(group);
+        features.skyForgeVents.push({
+          id: `lava-feature-sky-forge-vent-${index}`,
+          index, x: source.x, z: source.z, base: source.top,
+          height, radius: 7, group, column, rings,
+          phase: 3.7 + index * .81, active: index === 0, liftTicks: 0,
+          targetX: target.x, targetZ: target.z, targetAltitude: target.top,
+          targetRadius: surfaceCollisionRadius(target) * (target.collisionScale ?? 1),
+          flightTime, launchDistance,
+          verticalForce: rise / flightTime + 12.6 * flightTime + 4,
+          tangentForce: launchDistance / flightTime
+            * ((PLANET.radius + Math.max(source.top, target.top)) / PLANET.radius),
+        });
+      }
+
+      // Five blue-white quench vents make the descent a playable sentence,
+      // not four precision drops over a lethal planet. They live on the outer
+      // edge of each return anvil, stay active regardless of the hammer phrase,
+      // and deliver the last step to the cooled district floor.
+      for (let index = 0; index < 5; index++) {
+        const sourceIndex = index + 5;
+        const sourceRecord = features.skyForgePlates[sourceIndex].record;
+        const target = index < 4
+          ? features.skyForgePlates[sourceIndex + 1].record
+          : {
+            id: 'lava-gear-caldera-return-landing',
+            x: site.x, z: site.z, top: ground + 1.35, radius: 13,
+          };
+        const sourceLayout = layout[sourceIndex];
+        const targetLayout = index < 4 ? layout[sourceIndex + 1] : [0, 0];
+        const dx = targetLayout[0] - sourceLayout[0];
+        const dz = targetLayout[1] - sourceLayout[1];
+        const directionLength = Math.hypot(dx, dz) || 1;
+        const edge = surfaceOffsetChartAt(
+          sourceRecord.x, sourceRecord.z, dx / directionLength, dz / directionLength,
+          sourceRecord.radius * .68, {},
+        );
+        const rise = target.top - sourceRecord.top;
+        const verticalForce = 19;
+        const flightTime = (
+          verticalForce + Math.sqrt(Math.max(0,
+            verticalForce * verticalForce - 2 * 25.2 * rise))
+        ) / 25.2;
+        const launchDistance = surfaceDistanceAt(edge.x, edge.z, target.x, target.z);
+        const height = 14.5 + index % 2 * 1.7;
+        const group = new T.Group();
+        group.name = `GEAR CALDERA · QUENCH RETURN VENT ${index + 1}`;
+        const column = new T.Mesh(
+          new T.CylinderGeometry(2.2, 3.65, height, 10, 1, true),
+          new T.MeshBasicMaterial({
+            color: index % 2 ? 0xa7f7ff : 0x65d9f2,
+            transparent: true, opacity: .12, depthWrite: false,
+            side: T.DoubleSide, blending: T.AdditiveBlending,
+          }),
+        );
+        column.position.y = height * .5;
+        group.add(column);
+        const rings = [];
+        for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
+          const ring = new T.Mesh(
+            new T.TorusGeometry(2.3 + ringIndex * .4, .17, 6, 24),
+            new T.MeshBasicMaterial({
+              color: ringIndex % 2 ? 0xe4ffff : 0x6de9ff,
+              transparent: true, opacity: .48, depthWrite: false,
+              blending: T.AdditiveBlending,
+            }),
+          );
+          ring.rotation.x = Math.PI / 2;
+          group.add(ring);
+          rings.push(ring);
+        }
+        this.placePlanetObject(group, edge.x, sourceRecord.top, edge.z);
+        profile.root.add(group);
+        features.skyReturnVents.push({
+          id: `lava-feature-sky-return-vent-${index}`,
+          featureType: 'sky-forge-return-vent', siteIndex: 3,
+          index, x: edge.x, z: edge.z, base: sourceRecord.top,
+          height, radius: 4.4, group, column, rings,
+          phase: 8.4 + index * .77, active: true, alwaysActive: true,
+          liftTicks: 0, flowDirection: -1,
+          cushionHeight: 9, verticalAcceleration: 30, recoveryTime: 6,
+          sourcePlatformId: sourceRecord.id, targetPlatformId: target.id,
+          targetX: target.x, targetZ: target.z, targetAltitude: target.top,
+          targetRadius: surfaceCollisionRadius(target) * (target.collisionScale ?? 1),
+          flightTime, launchDistance, verticalForce,
+          tangentForce: launchDistance / flightTime
+            * ((PLANET.radius + Math.max(sourceRecord.top, target.top)) / PLANET.radius),
+        });
+      }
+      features.allSkyForgeVents = [
+        ...features.skyForgeVents, ...features.skyReturnVents,
+      ];
+      features.skyForgeRoute = {
+        id: 'lava-gear-caldera-sky-forge', siteIndex: 3,
+        ascentSteps: 6, returnSteps: 5,
+        maximumRise: Math.max(...features.skyForgePlates.map(plate => plate.rise)),
+        sequence: 'strike-current-strike-current-crown-quench-return',
+      };
     }
     makeLavaCoolingEclipseAtlas(profile, features) {
       // THE COOLING ECLIPSE is an authored atlas, not a density pass. Every
@@ -10528,8 +12213,8 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
     }
     rewardLavaInteraction(profile, gameState, kind, position, label, value = 1) {
       const progress = gameState.worldProgress[profile.id];
-      progress[kind] += value;
-      progress.collected += value;
+      progress[kind] += 1;
+      progress.collected += 1;
       gameState.score += 720 * value;
       gameState.style = clamp(gameState.style + 4.5 * value, 0, 100);
       gameState.rewardFlash = Math.max(gameState.rewardFlash, .56);
@@ -10544,6 +12229,50 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       if (!features || (ball.mode !== 'outbound' && ball.mode !== 'returning')) return false;
       const speed = ball.velocity.length();
       if (speed <= 7) return false;
+
+      for (const node of features.skyForgeNodes) {
+        const id = `lava-sky-forge-node-${node.index}`;
+        node.group.updateMatrixWorld(true);
+        node.core.getWorldPosition(node.position);
+        if (ball.collisionCooldown.has(id)
+          || ball.position.distanceTo(node.position) > 2.5 + ball.radius) continue;
+        ball.collisionCooldown.set(id, .26);
+        node.flash = 1;
+        if (node.index < features.skyForgeStep) {
+          gameState.impact('break', node.position, 0x5ce5ff);
+          audio.impact(.42, 'crystal');
+          return true;
+        }
+        if (node.index !== features.skyForgeStep) {
+          gameState.impact('locked', node.position, 0x6b2520);
+          world.pulseRing(node.position, new T.Color(0x7b2920), 6, .34, true);
+          return true;
+        }
+        node.struck = true;
+        features.skyForgeStep++;
+        const nextVent = features.skyForgeVents[features.skyForgeStep];
+        if (nextVent) nextVent.active = true;
+        gameState.impact('break', node.position, 0xffd34f);
+        world.pulseRing(
+          node.position, new T.Color(0xff9a35), 8 + features.skyForgeStep * 1.6, .42, true,
+        );
+        this.particles?.burst(node.position, 0xffa32d, 28, 13, .72, .18);
+        audio.impact(.66, 'crystal');
+        if (features.skyForgeStep === features.skyForgeNodes.length
+          && !features.skyForgeComplete) {
+          features.skyForgeComplete = true;
+          this.rewardLavaInteraction(
+            profile, gameState, 'route', node.position, 'THE SKY FORGE ANSWERS', 3,
+          );
+        } else {
+          gameState.addStyle(
+            8 + features.skyForgeStep, 480,
+            `HAMMER ${features.skyForgeStep} · VENT AWAKE`, '#ffd35a',
+          );
+        }
+        if (!ball.comet) ball.velocity.multiplyScalar(.97);
+        return true;
+      }
 
       for (const plate of features.coolingPlates) {
         const id = `lava-cooling-plate-${plate.index}`;
@@ -10772,6 +12501,33 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           ring.material.opacity = .18 + (1 - life) * .42;
         }
       }
+      for (const vent of features.allSkyForgeVents || features.skyForgeVents) {
+        const active = vent.active ? 1 : 0;
+        vent.column.material.opacity = .025 + active * (
+          .12 + (Math.sin(time * 2.1 + vent.phase) * .5 + .5) * .07
+        );
+        for (let ringIndex = 0; ringIndex < vent.rings.length; ringIndex++) {
+          const ring = vent.rings[ringIndex];
+          const ringTravel = (time * (8.2 + ringIndex * .72) + vent.phase * 3.1
+            + ringIndex * vent.height / 4) % vent.height;
+          ring.position.y = vent.flowDirection === -1
+            ? vent.height - ringTravel : ringTravel;
+          const life = ring.position.y / vent.height;
+          ring.scale.setScalar(.72 + life * .82);
+          ring.material.opacity = .035 + active * (.22 + (1 - life) * .38);
+        }
+      }
+      for (const node of features.skyForgeNodes) {
+        node.flash = Math.max(0, node.flash - dt * 2.8);
+        const expected = !features.skyForgeComplete && node.index === features.skyForgeStep;
+        node.core.material.color.setHex(node.struck ? 0x73e9ff : expected ? 0xffef8a : 0x7e3427);
+        node.core.material.emissive.setHex(node.struck ? 0x0d8ca5 : expected ? 0xff681d : 0x43120d);
+        node.core.material.emissiveIntensity = node.struck ? 2.5
+          : expected ? 3.8 + Math.sin(time * 6.2) * .85 : .55 + node.flash * 2;
+        node.core.scale.setScalar(
+          node.struck ? .72 : expected ? 1 + Math.sin(time * 6.2) * .09 : .82,
+        );
+      }
       for (const plate of features.coolingPlates) {
         const cooled = clamp(plate.cooledTimer / 1.2, 0, 1);
         plate.material.color.lerpColors(features.materials.forgeMaterial.color,
@@ -10840,6 +12596,89 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         lift.pulse = Math.max(0, lift.pulse - dt * 2.2);
       }
 
+      features.scratchVentTarget ||= new T.Vector3();
+      features.scratchVentTangent ||= new T.Vector3();
+      // Share the same bounded landing assist as Water. Normal air control is
+      // much stronger than this correction, so a player can still peel away;
+      // doing nothing now honours the vent's visible promise and reaches the
+      // anvil instead of missing it by a few metres.
+      features.scratchCurrentTarget = features.scratchVentTarget;
+      features.scratchCurrentTangent = features.scratchVentTangent;
+      this.updateDirectionalCurrentFlight(features, playerChart, gameState, dt);
+      for (const vent of features.allSkyForgeVents || features.skyForgeVents) {
+        if (!vent.active) {
+          vent.playerInside = false;
+          vent.ballInside = false;
+          continue;
+        }
+        const playerDistance = surfaceDistanceAt(playerChart.x, playerChart.z, vent.x, vent.z);
+        const playerInside = playerDistance < vent.radius
+          && playerChart.y >= vent.base - 1.2
+          && playerChart.y <= vent.base + vent.height + 3;
+        if (playerInside) {
+          if (!vent.playerInside) {
+            chartLift(vent.targetX, playerChart.y, vent.targetZ, features.scratchVentTarget);
+            tangentOf(
+              features.scratchVentTarget.sub(gameState.player.position),
+              gameState.player.up, features.scratchVentTangent,
+            );
+            if (features.scratchVentTangent.lengthSq() > .01) {
+              features.scratchVentTangent.normalize();
+              const along = gameState.player.velocity.dot(features.scratchVentTangent);
+              gameState.player.velocity.addScaledVector(
+                features.scratchVentTangent, vent.tangentForce - along,
+              );
+            }
+            setVspeed(
+              gameState.player.velocity, gameState.player.up,
+              Math.max(vspeedOf(gameState.player.velocity, gameState.player.up), vent.verticalForce),
+            );
+            gameState.player.flung = Math.max(gameState.player.flung, .28);
+            features.playerDirectionalFlight = {
+              targetX: vent.targetX, targetZ: vent.targetZ,
+              targetAltitude: vent.targetAltitude,
+              targetRadius: vent.targetRadius ?? 9,
+              elapsed: 0, nominalTime: vent.flightTime,
+              duration: vent.flightTime + (vent.recoveryTime ?? 4.2),
+              maxSpeed: Math.max(15, vent.tangentForce * 1.55),
+              acceleration: 44,
+              verticalAcceleration: vent.verticalAcceleration ?? 44,
+              cushionHeight: vent.cushionHeight ?? 22,
+            };
+          }
+          gameState.player.grounded = false;
+          vent.liftTicks++;
+        }
+        vent.playerInside = playerInside;
+        const ballDistance = surfaceDistanceAt(ballChart.x, ballChart.z, vent.x, vent.z);
+        const ballInside = ballDistance < vent.radius + gameState.ball.radius
+          && ballChart.y >= vent.base - 1.2
+          && ballChart.y <= vent.base + vent.height + 3;
+        if (ballInside) {
+          const ballUp = dirAt(gameState.ball.position, gameState.tempA);
+          if (!vent.ballInside) {
+            chartLift(vent.targetX, ballChart.y, vent.targetZ, features.scratchVentTarget);
+            tangentOf(
+              features.scratchVentTarget.sub(gameState.ball.position),
+              ballUp, features.scratchVentTangent,
+            );
+            if (features.scratchVentTangent.lengthSq() > .01) {
+              features.scratchVentTangent.normalize();
+              const along = gameState.ball.velocity.dot(features.scratchVentTangent);
+              gameState.ball.velocity.addScaledVector(
+                features.scratchVentTangent, vent.tangentForce - along,
+              );
+            }
+            setVspeed(
+              gameState.ball.velocity, ballUp,
+              Math.max(vspeedOf(gameState.ball.velocity, ballUp), vent.verticalForce),
+            );
+          }
+          vent.liftTicks++;
+        }
+        vent.ballInside = ballInside;
+      }
+
       for (const plate of features.coolingPlates) {
         plate.cooledTimer = Math.max(0, plate.cooledTimer - dt);
         const distance = surfaceDistanceAt(playerChart.x, playerChart.z, plate.record.x, plate.record.z);
@@ -10889,6 +12728,25 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const features = profile.lavaFeatures;
       if (!features) return;
       features.projectileCursor = 0;
+      features.skyForgeStep = 0;
+      features.skyForgeComplete = false;
+      features.playerDirectionalFlight = null;
+      for (const node of features.skyForgeNodes) {
+        node.struck = false;
+        node.flash = 0;
+      }
+      for (const vent of features.skyForgeVents) {
+        vent.active = vent.index === 0;
+        vent.liftTicks = 0;
+        vent.playerInside = false;
+        vent.ballInside = false;
+      }
+      for (const vent of features.skyReturnVents) {
+        vent.active = true;
+        vent.liftTicks = 0;
+        vent.playerInside = false;
+        vent.ballInside = false;
+      }
       for (const raft of features.rafts) {
         raft.sink = 0;
         raft.record.top = raft.baseTop;
@@ -11687,6 +13545,102 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       for (const collectibleMesh of profile.collectibleMeshes) collectibleMesh.instanceMatrix.needsUpdate = true;
       profile.breakableMesh = familyMeshes[0];
     }
+    movePlanetPickupToDiscoveryHost(pickup, hostLike, index, hostCount, routeId) {
+      const host = hostLike.record || hostLike;
+      const ring = Math.floor(index / Math.max(1, hostCount));
+      const angle = index * 2.3999632297 + ring * .37;
+      const reach = Math.min(
+        host.radius * .68,
+        2.1 + (ring % 4) * 1.55 + (index % 3) * .5,
+      );
+      const at = surfaceOffsetChartAt(
+        host.x, host.z, Math.cos(angle), Math.sin(angle), reach, {},
+      );
+      const altitude = host.top + 1.25 + (ring % 3) * .42;
+      chartLift(at.x, altitude, at.z, pickup.position);
+      pickup.quaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+        .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
+      pickup.matrix.compose(pickup.position, pickup.quaternion, ONE_SCALE);
+      pickup.homePosition.copy(pickup.position);
+      pickup.homeQuaternion.copy(pickup.quaternion);
+      pickup.chartPosition.set(at.x, altitude, at.z);
+      pickup.homeChartPosition.copy(pickup.chartPosition);
+      pickup.supportAuthorityId = host.id;
+      pickup.discoveryRouteId = routeId;
+      pickup.mesh.setMatrixAt(pickup.index, pickup.matrix);
+    }
+    movePlanetBreakableToDiscoveryHost(item, hostLike, index, hostCount, routeId) {
+      const host = hostLike.record || hostLike;
+      const angle = index * 2.3999632297 + .63;
+      const ring = Math.floor(index / Math.max(1, hostCount));
+      const reach = Math.min(host.radius * .55, 2.8 + (ring % 3) * 1.7);
+      const at = surfaceOffsetChartAt(
+        host.x, host.z, Math.cos(angle), Math.sin(angle), reach, {},
+      );
+      const scale = new T.Vector3();
+      item.matrix.decompose(new T.Vector3(), new T.Quaternion(), scale);
+      const quaternion = liftQuatAt(at.x, at.z, new T.Quaternion())
+        .multiply(new T.Quaternion().setFromEuler(new T.Euler(
+          index * .19, angle, index * .11,
+        )));
+      const altitude = host.top + item.radius * .72;
+      chartLift(at.x, altitude, at.z, item.position);
+      item.matrix.compose(item.position, quaternion, scale);
+      item.mesh.setMatrixAt(item.index, item.matrix);
+      item.platformId = host.id;
+      item.discoveryRouteId = routeId;
+      item.chartPosition = new T.Vector3(at.x, altitude, at.z);
+    }
+    populatePlanetDiscoveryRoutes(profile, water) {
+      const routes = [];
+      const populate = ({ id, siteIndex, hosts, pickupCount, breakableCount }) => {
+        const liveHosts = (hosts || EMPTY_SOLIDS).map(host => host.record || host).filter(Boolean);
+        if (!liveHosts.length) return;
+        const pickups = profile.collectibles.filter(pickup =>
+          pickup.siteIndex === siteIndex && pickup.kind !== 'route' && !pickup.hidden)
+          .slice(0, pickupCount);
+        const breakables = profile.breakables.filter(item => item.siteIndex === siteIndex)
+          .slice(0, breakableCount);
+        for (let index = 0; index < pickups.length; index++) {
+          this.movePlanetPickupToDiscoveryHost(
+            pickups[index], liveHosts[index % liveHosts.length], index, liveHosts.length, id,
+          );
+        }
+        for (let index = 0; index < breakables.length; index++) {
+          // Offset container ownership relative to the visible pickup rings so
+          // a cache reads as a deliberate punctuation mark, not a pile-up.
+          const host = liveHosts[(index * 5 + 2) % liveHosts.length];
+          this.movePlanetBreakableToDiscoveryHost(
+            breakables[index], host, index, liveHosts.length, id,
+          );
+        }
+        routes.push({
+          id, siteIndex, hosts: liveHosts, pickups, breakables,
+          pickupCount: pickups.length, breakableCount: breakables.length,
+          economyAuthority: 'rehosted-existing-single-counter-stock',
+        });
+      };
+      if (water) {
+        const features = profile.waterFeatures;
+        populate({
+          id: 'water-blue-hole-abyssal-discoveries', siteIndex: 3,
+          hosts: features.abyssalDiscoveryHosts, pickupCount: 96, breakableCount: 12,
+        });
+        populate({
+          id: 'water-leviathan-sky-discoveries', siteIndex: 9,
+          hosts: features.skyReefs, pickupCount: 72, breakableCount: 10,
+        });
+      } else {
+        const features = profile.lavaFeatures;
+        populate({
+          id: 'lava-sky-forge-discoveries', siteIndex: 3,
+          hosts: features.skyForgePlates, pickupCount: 84, breakableCount: 12,
+        });
+      }
+      for (const mesh of profile.collectibleMeshes) mesh.instanceMatrix.needsUpdate = true;
+      for (const mesh of profile.breakableMeshes) mesh.instanceMatrix.needsUpdate = true;
+      profile.discoveryRoutes = routes;
+    }
     makePlanetLaunchPads(profile, water) {
       profile.launchPads.length = 0;
       profile.padGroups = [];
@@ -11806,6 +13760,16 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           siteIndex: () => 4, interactive: true, moving: true,
         });
         bindFeatureCollection(features?.geysers, 'bubble-geyser', { interactive: true });
+        bindFeatureCollection(features?.skyCurrents, 'directional-sky-current', {
+          siteIndex: () => 9, interactive: true,
+        });
+        bindFeatureCollection(features?.skyReturnCurrents, 'directional-sky-return-current', {
+          siteIndex: () => 9, interactive: true,
+        });
+        bindFeatureCollection(features?.skyReefs, 'sky-reef', { siteIndex: () => 9 });
+        bindFeatureCollection(features?.abyssalChambers, 'abyssal-cache-chamber', {
+          siteIndex: () => 3,
+        });
         bindFeatureCollection(features?.moonfish, 'moonfish-breach', { interactive: true });
         bindFeatureCollection(features?.clams, 'return-clam', {
           siteIndex: () => 7, interactive: true,
@@ -11826,6 +13790,18 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         bindFeatureCollection(features?.rafts, 'sinking-raft', { interactive: true, moving: true });
         bindFeatureCollection(features?.coolingPlates, 'cooling-plate', { interactive: true });
         bindFeatureCollection(features?.furnaceLifts, 'furnace-lift', { interactive: true });
+        bindFeatureCollection(features?.skyForgeVents, 'sky-forge-vent', {
+          siteIndex: () => 3, interactive: true,
+        });
+        bindFeatureCollection(features?.skyReturnVents, 'sky-forge-return-vent', {
+          siteIndex: () => 3, interactive: true,
+        });
+        bindFeatureCollection(features?.skyForgeNodes, 'sky-forge-hammer-socket', {
+          siteIndex: () => 3, interactive: true,
+        });
+        bindFeatureCollection(features?.skyForgePlates, 'sky-forge-plate', {
+          siteIndex: () => 3,
+        });
         bindFeatureCollection(features?.magmaEggs, 'charged-return-egg', { interactive: true });
         bindFeatureCollection(features?.spitters, 'telegraphed-lava-spitter', { interactive: true });
         bindFeatureCollection(features?.coolingEclipseSites, 'cooling-eclipse-district');
@@ -12349,17 +14325,25 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           const id = `${boss.id}-weak-${node.index}`;
           if (ball.collisionCooldown.has(id)
             || ball.position.distanceTo(node.position) > node.radius + ball.radius) continue;
+          const armorFlightKey = `${boss.id}-armor-flight`;
+          if (boss.mechanic === 'moonfall-plates' && ball.collisionCooldown.has(armorFlightKey)) return true;
           ball.collisionCooldown.set(id, .3);
           const needsGrapple = boss.mechanic === 'grapple-pearls' || boss.mechanic === 'chain-locks';
           const grappled = ball.mode === 'outbound'
             && (gameState.grappleArmed > 0 || ball.grappleShot);
-          if (boss.mechanic === 'moonfall-plates' || (needsGrapple && !grappled)) {
+          // A visible Ashback plate is an honest ball target. Earlier builds
+          // drew three bright polyhedra on its back but explicitly rejected
+          // every ball hit, while a Moonfall anywhere near the body silently
+          // removed the next plate. Moonfall remains the stylish shortcut;
+          // an aimed kick now does exactly what the visible target promises.
+          if (needsGrapple && !grappled) {
             gameState.impact('locked', node.position, profile.theme.accent);
             world.pulseRing(node.position, new T.Color(profile.theme.accent), 5.5, .3, true);
             return true;
           }
           node.alive = false;
           node.mesh.visible = false;
+          if (boss.mechanic === 'moonfall-plates') ball.collisionCooldown.set(armorFlightKey, 30);
           boss.armorHp = Math.max(0, boss.armorHp - 1);
           boss.phase = boss.armorHp > 0 ? 'armour' : 'core';
           if (boss.armorHp === 0) {
@@ -12371,6 +14355,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           gameState.addStyle(16, 920,
             boss.mechanic === 'wing-bells' ? 'WING BELL RUNG'
               : boss.mechanic === 'chain-locks' ? 'CHAIN LOCK TORN'
+                : boss.mechanic === 'moonfall-plates' ? 'ASHBACK PLATE SHATTERED'
                 : 'PEARL TENTACLE PULLED',
             profile.id === 'water' ? '#9ffcff' : '#ffd34f');
           audio.impact(.88, needsGrapple ? 'anchor' : 'crystal');
@@ -12381,6 +14366,9 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         const coreHit = ball.position.distanceTo(corePosition) <= boss.coreRadius + ball.radius;
         const bodyHit = ball.position.distanceTo(boss.position) <= boss.radius + ball.radius;
         if (!coreHit && !bodyHit) continue;
+        const coreFlightKey = `${boss.id}-core-flight`;
+        if (boss.mechanic === 'moonfall-plates' && coreHit
+          && ball.collisionCooldown.has(coreFlightKey)) return true;
         const id = `${boss.id}-body`;
         if (ball.collisionCooldown.has(id)) return true;
         ball.collisionCooldown.set(id, .3);
@@ -12397,6 +14385,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
           return true;
         }
         boss.hp--;
+        if (boss.mechanic === 'moonfall-plates') ball.collisionCooldown.set(coreFlightKey, 30);
         boss.hitFlash = 1;
         boss.phase = boss.hp > 0 ? 'core' : 'defeated';
         gameState.impact(boss.hp <= 0 ? 'break' : 'hurt', corePosition, profile.theme.hot);
@@ -12747,10 +14736,13 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       if (profile.mastery) {
         const progress = gameState.worldProgress[profile.id];
         const thresholds = profile.mastery.thresholds;
+        // Three rings, one ledger: they fill in sequence as the single count
+        // climbs, so the relic still reads as three living orbits.
+        const masteryLevel = clamp(progress.collected / thresholds.total, 0, 1);
         const levels = [
-          clamp(progress.common / thresholds.common, 0, 1),
-          clamp(progress.rare / thresholds.rare, 0, 1),
-          clamp(progress.route / thresholds.route, 0, 1),
+          clamp(masteryLevel * 3, 0, 1),
+          clamp(masteryLevel * 3 - 1, 0, 1),
+          clamp(masteryLevel * 3 - 2, 0, 1),
         ];
         for (let index = 0; index < profile.mastery.rings.length; index++) {
           const ring = profile.mastery.rings[index];
@@ -12816,10 +14808,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       const progress = gameState.worldProgress[profile.id];
       if (!mastery || !progress || mastery.complete) return false;
       const ready = progress.bossDefeated
-        && progress.collected >= mastery.thresholds.total
-        && progress.common >= mastery.thresholds.common
-        && progress.rare >= mastery.thresholds.rare
-        && progress.route >= mastery.thresholds.route;
+        && progress.collected >= mastery.thresholds.total;
       if (!ready) return false;
       mastery.complete = true;
       progress.complete = true;
@@ -12849,7 +14838,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
         const playerChart = chartFrameAt(gameState.player.position, gameState.playerChart);
         const floor = this.floorHeight(playerChart.x, playerChart.z, playerChart.alt + 1.4);
         const terrain = profile.heightAt(playerChart.x, playerChart.z);
-        const onSafeDeck = floor > terrain + 2.5;
+        const onSafeDeck = floor > terrain + .35;
         const touching = !onSafeDeck && playerChart.alt <= terrain + .62;
         gameState.lavaState.touching = touching;
         gameState.lavaState.field = touching ? 'lava-moon-global' : null;
@@ -18374,6 +20363,13 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // and blinked out instantly; these inherit the supplied GPU bob/spin and
       // enter the same two-beat pop-then-home collection ceremony.
       const geometry = this.moondropMesh.geometry.clone();
+      const roadShape = new T.Shape();
+      roadShape.absarc(0, 0, .6, 1.039, 5.244, false);
+      roadShape.absarc(.25, 0, .52, -1.466, 1.466, true);
+      const roadGeometry = new T.ExtrudeGeometry(roadShape, {
+        depth: .16, curveSegments: 3, bevelEnabled: false,
+      });
+      roadGeometry.center();
       const routeTypeFor = (spec, layer) => {
         if (spec.routeType) return spec.routeType;
         const route = String(spec.route || '');
@@ -18385,11 +20381,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         if (/gallery|promenade|bridge|gantry|car|spine|pylon|island|rim/i.test(route)) return 'guide-line';
         return layer === 'surface' ? 'guide-surface' : 'guide-station';
       };
-      const build = (layer, specs, parent) => {
+      const build = (layer, specs, parent, tierGeometry = geometry) => {
         // Reinstall instead of trusting Material.clone: Three.js deliberately
         // drops shader callbacks during clone/copy.
         const material = installCrescentMotion(this.moondropMesh.material.clone(), this.skyTime);
-        const mesh = new T.InstancedMesh(geometry.clone(), material, specs.length);
+        const mesh = new T.InstancedMesh(tierGeometry.clone(), material, specs.length);
         mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
         const phases = new Float32Array(specs.length);
         const matrix = new T.Matrix4();
@@ -18694,6 +20690,156 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         { x: 768, y: gantry.y, z: gantry.z }, 6, 5));
       underArc('driver-earthglass-loop', driver, 78, -.65, .65, 4,
         driver.floor + 3, 5);
+      // ---- THE 2,000 ROAD --------------------------------------------
+      const roadSurfaceStart = surfaceSpecs.length;
+      const roadUnderStart = underSpecs.length;
+      // Every moon now asks for 2,000 of its own collectible, so the Moon's
+      // crescent economy has to run as deep as Water's and Lava's. None of
+      // this is sprinkled. It follows the Moon's own organisation, which is
+      // the thing that makes this world read as organised in the first place:
+      // the sky decks it already built, the walks between its named places,
+      // the rims of its three regions, its landmarks and its launch pads.
+      // The collectible layer IS the road network, so the way the Moon pays
+      // more is by making the road longer -- never by raining crescents on
+      // empty plain. Everything below is deterministic and draws nothing from
+      // worldRandom, so the rest of the world is bit-identical.
+      const surfacePoint = (route, x, y, z, extras = null) => {
+        surfaceSpecs.push({ route, x, y, z, value: 1, ...(extras || {}) });
+      };
+      const surfaceDeckRing = (route, x, z, top, radius, count, phase = 0) => {
+        for (let i = 0; i < count; i++) {
+          const angle = phase + i * TAU / count;
+          surfacePoint(route, x + Math.cos(angle) * radius, top, z + Math.sin(angle) * radius);
+        }
+      };
+      const surfaceGroundRing = (route, x, z, radius, count, phase = 0, lift = 2.2) => {
+        for (let i = 0; i < count; i++) {
+          const angle = phase + i * TAU / count;
+          const px = x + Math.cos(angle) * radius;
+          const pz = z + Math.sin(angle) * radius;
+          surfacePoint(route, px, this.sampleTerrainHeight(px, pz) + lift, pz);
+        }
+      };
+      const surfaceWalk = (route, a, b, count, lift = 2.1) => {
+        for (let i = 0; i < count; i++) {
+          const t = count <= 1 ? .5 : i / (count - 1);
+          const px = lerp(a.x, b.x, t), pz = lerp(a.z, b.z, t);
+          surfacePoint(route, px, this.sampleTerrainHeight(px, pz) + lift, pz);
+        }
+      };
+
+      // 1. EVERY SKY DECK PAYS. The Moon's sky is its signature and it used
+      //    to hand out a single crescent on a third of its slabs. Now every
+      //    deck carries a crown you can see from below, which is also what
+      //    makes the climb worth starting.
+      (this.sky || EMPTY_SOLIDS).forEach((slab, index) => {
+        const radius = clamp(slab.radius * .52, 2.4, 6.4);
+        const crown = slab.radius >= 12 ? 8 : slab.radius >= 8 ? 7 : 5;
+        surfaceDeckRing(`sky-${slab.zone || slab.tier || 'deck'}-crown`,
+          slab.x, slab.z, slab.top + 2.15, radius, crown, index * .734);
+      });
+
+      // 2. THE WALKS. The named places of the Moon, joined by real roads of
+      //    light. The opening course (|x| < 26, z between 40 and 150) is
+      //    deliberately left bare: the first thing you see is the moon, not a
+      //    corridor of pickups.
+      for (const [route, a, b, count] of [
+        ['stair-approach', { x: 0, z: -300 }, { x: 0, z: -560 }, 26],
+        ['stair-crest', { x: 0, z: -560 }, { x: 0, z: -662 }, 12],
+        ['needle-walk', { x: -430, z: -170 }, { x: -620, z: -240 }, 24],
+        ['needle-foot', { x: -620, z: -240 }, { x: -698, z: -276 }, 10],
+        ['orchard-walk', { x: -300, z: 330 }, { x: -430, z: 470 }, 20],
+        ['orchard-return', { x: -430, z: 470 }, { x: -440, z: 380 }, 12],
+        ['rib-west', { x: 200, z: 470 }, { x: 360, z: 540 }, 18],
+        ['rib-span', { x: 360, z: 540 }, { x: 720, z: 260 }, 34],
+        ['rib-return', { x: 720, z: 260 }, { x: 540, z: 405 }, 20],
+        ['bowl-rim', { x: -70, z: 900 }, { x: 0, z: 1032 }, 20],
+        ['bowl-ice', { x: 0, z: 1032 }, { x: 20, z: 1128 }, 12],
+        ['bowl-west', { x: -255, z: 895 }, { x: -70, z: 1010 }, 20],
+        ['perch-walk', { x: -80, z: 730 }, { x: -255, z: 895 }, 22],
+        ['perch-approach', { x: 0, z: 700 }, { x: -80, z: 730 }, 10],
+        ['col-mountain', { x: 430, z: -380 }, { x: 610, z: -505 }, 22],
+        ['snow-country', { x: 200, z: -560 }, { x: 0, z: -560 }, 20],
+        ['snow-approach', { x: 300, z: -400 }, { x: 200, z: -560 }, 18],
+        ['rille-spine', { x: -470, z: 90 }, { x: -380, z: 200 }, 16],
+        ['rille-graben', { x: -540, z: 80 }, { x: -470, z: 90 }, 9],
+        ['thin-place', { x: 383, z: -137 }, { x: 455, z: 60 }, 22],
+        ['long-walk-west', { x: -300, z: -450 }, { x: -430, z: -170 }, 28],
+        ['long-walk-south', { x: 0, z: 400 }, { x: 0, z: 700 }, 26],
+        ['long-walk-east', { x: 455, z: 60 }, { x: 430, z: -380 }, 34],
+        ['orchard-rille', { x: -380, z: 200 }, { x: -300, z: 330 }, 14],
+      ]) surfaceWalk(route, a, b, count);
+
+      // 3. THE THREE REGIONS wear their own rims, so the shape of each place
+      //    is legible from the air before you drop into it.
+      for (const region of this.regions || EMPTY_SOLIDS) {
+        surfaceGroundRing(`${region.id}-rim`, region.x, region.z, region.radius * .94, 24, .21);
+        surfaceGroundRing(`${region.id}-inner-ring`, region.x, region.z, region.radius * .52, 16, .62);
+      }
+
+      // 4. THE LANDMARKS get an approach halo apiece.
+      for (const mark of this.landmarks || EMPTY_SOLIDS) {
+        surfaceGroundRing(`${mark.id}-halo`, mark.x, mark.z, 34, 16, .4, 2.6);
+      }
+
+      // 5. THE LAUNCH PADS read as "shoot from here": a short rising arc in
+      //    front of each one, so a pad announces its own line.
+      (this.launchPads || EMPTY_SOLIDS).forEach((pad, index) => {
+        const px = pad.x ?? pad.position?.x;
+        const pz = pad.z ?? pad.position?.z;
+        if (!Number.isFinite(px) || !Number.isFinite(pz)) return;
+        const heading = index * 2.3999632;
+        for (let step = 1; step <= 5; step++) {
+          const reach = 9 + step * 7;
+          const ax = px + Math.cos(heading) * reach;
+          const az = pz + Math.sin(heading) * reach;
+          surfacePoint(`pad-${index}-launch-arc`, ax,
+            this.sampleTerrainHeight(ax, az) + 3.4 + step * 3.1, az);
+        }
+      });
+
+      // 6. THE STATION, DEEPENED. Each underground room already owns an
+      //    authored constellation; these are its floor plan drawn out -- the
+      //    wall walk you follow round it and the cross you cut through it.
+      UNDERGROUND_ROOMS.forEach((room, index) => {
+        const wall = room.radius * .82;
+        const inner = room.radius * .44;
+        for (let i = 0; i < 26; i++) {
+          const angle = index * .37 + i * TAU / 26;
+          underPoint(`${room.id}-wall-walk`,
+            room.x + Math.cos(angle) * wall, room.floor + 2.4,
+            room.z + Math.sin(angle) * wall);
+        }
+        for (let i = 0; i < 16; i++) {
+          const angle = index * .81 + i * TAU / 16;
+          underPoint(`${room.id}-inner-ring`,
+            room.x + Math.cos(angle) * inner, room.floor + 2.4,
+            room.z + Math.sin(angle) * inner);
+        }
+        for (const axis of [0, Math.PI / 2]) {
+          const heading = axis + index * .19;
+          underLine(`${room.id}-cross`,
+            { x: room.x - Math.cos(heading) * inner, y: room.floor + 2.4, z: room.z - Math.sin(heading) * inner },
+            { x: room.x + Math.cos(heading) * inner, y: room.floor + 2.4, z: room.z + Math.sin(heading) * inner },
+            11);
+        }
+      });
+      // 7. THE CORRIDORS between rooms are walked too, so the station reads
+      //    as one connected place rather than ten separate discs.
+      for (const link of UNDERGROUND_LINKS) {
+        const a = UNDERGROUND_ROOMS[link.a];
+        const b = UNDERGROUND_ROOMS[link.b];
+        if (!a || !b) continue;
+        underLine(`link-${link.id}`,
+          { x: a.x, y: a.floor + 2.4, z: a.z },
+          { x: b.x, y: b.floor + 2.4, z: b.z }, 17);
+      }
+      // Everything the road added is the road tier: same crescent, cheaper
+      // build, because you read these as a LINE of light rather than as a
+      // single gem you have walked up to.
+      for (let i = roadSurfaceStart; i < surfaceSpecs.length; i++) surfaceSpecs[i].road = true;
+      for (let i = roadUnderStart; i < underSpecs.length; i++) underSpecs[i].road = true;
+
       // Constellations are authored against the finished station, not merely
       // sprayed through each room's empty disc. When a route point lands over
       // a dais, island, step or dock, display it above that real surface. This
@@ -18726,9 +20872,37 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const enclosure = this.undergroundInfoAt(spec.x, spec.z);
         if (enclosure) spec.y = clamp(spec.y, enclosure.floor + 1.8, enclosure.ceiling - 2.2);
       }
+      const buildTiered = (layer, specs, parent) => {
+        const authored = specs.filter(spec => !spec.road);
+        const road = specs.filter(spec => spec.road);
+        const primary = build(layer, authored, parent);
+        const roadTier = road.length ? build(layer, road, parent, roadGeometry) : null;
+        return {
+          mesh: primary.mesh,
+          meshes: roadTier ? [primary.mesh, roadTier.mesh] : [primary.mesh],
+          records: roadTier ? [...primary.records, ...roadTier.records] : primary.records,
+        };
+      };
+      // A road is drawn against a floor plan, and a floor plan has walls in
+      // it. The authored constellations were each placed by hand against a
+      // known structure; the road is generated, so it gets an explicit
+      // rejection pass. A crescent inside a column is not a secret, it is a
+      // pickup the player can see and never reach.
+      const clearOfBlockers = (specs, layer) => {
+        const previousLayer = this.activeLayer;
+        this.activeLayer = layer;
+        try {
+          return specs.filter(spec => spec.road
+            ? !this.insideBlocker(spec.x, spec.y, spec.z, .35)
+            : true);
+        } finally {
+          this.activeLayer = previousLayer;
+        }
+      };
+      const clearedUnderSpecs = clearOfBlockers(underSpecs, 'underground');
       this.expansionCollectibleLayers = {
-        surface: build('surface', surfaceSpecs, this.scene),
-        underground: build('underground', underSpecs, this.undergroundGroup),
+        surface: buildTiered('surface', clearOfBlockers(surfaceSpecs, 'surface'), this.scene),
+        underground: buildTiered('underground', clearedUnderSpecs, this.undergroundGroup),
       };
     }
 
@@ -22946,11 +25120,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         if (this.planetRoots[id]) this.planetRoots[id].visible = id === next;
       }
       const moonActive = next === 'moon';
-      if (this.expansionCollectibleLayers?.surface?.mesh) {
-        this.expansionCollectibleLayers.surface.mesh.visible = moonActive && this.activeLayer === 'surface';
+      for (const mesh of this.expansionCollectibleLayers?.surface?.meshes || EMPTY_SOLIDS) {
+        mesh.visible = moonActive && this.activeLayer === 'surface';
       }
-      if (this.expansionCollectibleLayers?.underground?.mesh) {
-        this.expansionCollectibleLayers.underground.mesh.visible = moonActive && this.activeLayer === 'underground';
+      for (const mesh of this.expansionCollectibleLayers?.underground?.meshes || EMPTY_SOLIDS) {
+        mesh.visible = moonActive && this.activeLayer === 'underground';
       }
       for (const enemy of this.enemies || EMPTY_SOLIDS) {
         enemy.visual.group.visible = (enemy.planet || 'moon') === next
@@ -23037,8 +25211,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.moonheart.group.visible = moonActive && next === 'final'
           && (this.moonheart.alive || defeatPhase === 'rupture' || defeatPhase === 'ascent');
       }
-      if (this.expansionCollectibleLayers?.surface?.mesh) this.expansionCollectibleLayers.surface.mesh.visible = moonActive && next === 'surface';
-      if (this.expansionCollectibleLayers?.underground?.mesh) this.expansionCollectibleLayers.underground.mesh.visible = moonActive && next === 'underground';
+      for (const mesh of this.expansionCollectibleLayers?.surface?.meshes || EMPTY_SOLIDS) mesh.visible = moonActive && next === 'surface';
+      for (const mesh of this.expansionCollectibleLayers?.underground?.meshes || EMPTY_SOLIDS) mesh.visible = moonActive && next === 'underground';
       if (this.cannon?.group) this.cannon.group.visible = moonActive && next === 'surface';
       // Interworld hardware belongs to an exterior. The moon root remains
       // alive while its underground/final layers are active, so direct-root
@@ -24948,7 +27122,13 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       }
       // Moondrops ride an inner, faster orbit than the cores, tilted the other
       // way, so a loaded ball reads as two rings turning against each other.
-      const drops = gameState.drops || 0;
+      const activeLedger = this.activePlanet === 'moon'
+        ? { collected: gameState.drops || 0, target: MOON_COLLECTION_TARGET }
+        : {
+          collected: gameState.worldProgress?.[this.activePlanet]?.collected || 0,
+          target: gameState.worldProgress?.[this.activePlanet]?.collectionTarget || ALTERNATE_COLLECTION_TARGET,
+        };
+      const drops = activeLedger.collected;
       const moteCount = Math.min(this.ballVisual.dropMotes.length, drops);
       for (let i = 0; i < this.ballVisual.dropMotes.length; i++) {
         const mote = this.ballVisual.dropMotes[i];
@@ -24962,9 +27142,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.ballDisplayScale = damp(this.ballDisplayScale, targetBallScale, targetBallScale > this.ballDisplayScale ? 15 : 10, dt);
       this.ballGroup.scale.setScalar(this.ballDisplayScale);
       this.ballGlow.material.map = gameState.ball.mode === 'anchored' ? this.glowGold : gameState.ball.mode === 'returning' ? this.glowCyan : this.glowViolet;
-      // Past the six visible motes the halo keeps growing, so collecting the
-      // fortieth drop still shows up on the ball. This is the whole counter.
-      const load = Math.min(1, drops / 46);
+      // Past the six visible motes the halo keeps growing, all the way to the
+      // gate. This is the whole counter, and it is still climbing at 1,900.
+      const load = Math.min(1, drops / Math.max(1, activeLedger.target));
       this.ballGlow.scale.setScalar(4.5 + load * 3.4);
       this.ballGlow.material.opacity = .34 + load * .3 + Math.min(.42, gameState.ball.velocity.length() * .012) + Math.sin(this.elapsed * 8) * .06;
       // Ember heat and comet state are written on the ball, so "this shot is
@@ -26572,11 +28752,15 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // so letting go is a choice rather than an accidental launch into orbit.
       const vertical = vspeedOf(player.velocity, player.up);
       tangentOf(player.velocity, player.up, this.tangentScratch);
-      if (this.tangentScratch.lengthSq() > 26 * 26) this.tangentScratch.setLength(26);
+      // Leave a little headroom for the local vertical rotating beneath the
+      // player during this same spherical fixed step. A nominal 26 m/s clamp
+      // could otherwise read as 27-28 m/s one frame later.
+      if (this.tangentScratch.lengthSq() > 24 * 24) this.tangentScratch.setLength(24);
       player.velocity.copy(this.tangentScratch);
       setVspeed(player.velocity, player.up, jump ? 16 : clamp(vertical, -16, 16));
       player.grappling = false;
       player.grounded = false;
+      player.grindReleaseActive = true;
       if (jump) player.jumpsUsed = 1;
       else player.jumpsUsed = Math.min(player.jumpsUsed, 1);
       player.jumpBuffer = 0;
@@ -26611,18 +28795,46 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       const up = dirAt(sample.position, this.grindUp);
       const exitSpeed = Math.max(24, state.speed * (jump ? .9 : .78));
       tangentOf(sample.tangent, up, this.grindTangent).normalize();
-      player.velocity.copy(this.grindTangent).multiplyScalar(state.direction * exitSpeed);
-      player.velocity.addScaledVector(up, jump ? 16.5 : endOfRail ? 9.2 : 4.5);
+      const atStart = state.distance <= .5;
+      const arrivalChart = atStart
+        ? state.rail.startArrivalChart
+        : (state.rail.endArrivalChart || state.rail.arrivalChart);
+      const arrivalPosition = atStart
+        ? state.rail.startArrivalPosition
+        : (state.rail.endArrivalPosition || state.rail.arrivalPosition);
+      const authoredArrival = !jump && endOfRail
+        && state.rail.softEject && arrivalPosition
+        && (atStart || state.distance >= state.rail.path.totalLength - .5);
+      if (authoredArrival) {
+        // A completed ride owns its destination. Ballistic guesses could put
+        // the capsule beneath a high deck, where collision correctly refused
+        // to let it pass through and the player fell four hundred metres. Seat
+        // the boots on the authored support and return control immediately.
+        const settledPosition = arrivalChart
+          ? chartLift(arrivalChart.x,
+            world.floorHeight(arrivalChart.x, arrivalChart.z, arrivalChart.alt + 1.4),
+            arrivalChart.z, this.tempB)
+          : arrivalPosition;
+        const arrivalUp = dirAt(settledPosition, this.tempC);
+        this.transportQuat.setFromUnitVectors(player.up, arrivalUp);
+        player.frame.premultiply(this.transportQuat);
+        player.up.copy(arrivalUp);
+        player.position.copy(settledPosition);
+        player.velocity.set(0, 0, 0);
+      } else {
+        player.velocity.copy(this.grindTangent).multiplyScalar(state.direction * exitSpeed);
+        player.velocity.addScaledVector(up, jump ? 16.5 : endOfRail ? 9.2 : 4.5);
+      }
       player.grind = null;
       // The release begins inside a boot-capture volume, and authored stations
       // can share several rail ends. Ignore the whole local rail cluster until
       // the launched player has genuinely cleared it; otherwise jump, manual
       // release, and endpoint eject can reattach on the very next fixed step.
-      player.grindReleaseActive = true;
-      player.grounded = false;
-      player.jumpsUsed = jump ? 1 : Math.min(player.jumpsUsed, 1);
-      player.coyote = 0;
-      player.flung = Math.max(player.flung, jump ? .24 : .34);
+      player.grindReleaseActive = !authoredArrival;
+      player.grounded = authoredArrival;
+      player.jumpsUsed = authoredArrival ? 0 : jump ? 1 : Math.min(player.jumpsUsed, 1);
+      player.coyote = authoredArrival ? .14 : 0;
+      player.flung = authoredArrival ? 0 : Math.max(player.flung, jump ? .24 : .34);
       world.particles.burst(player.position.clone().addScaledVector(up, -.45),
         state.rail.tint, jump ? 24 : 14, jump ? 10 : 7, .58, .08);
       audio.jump(jump);
@@ -26631,7 +28843,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     updatePlanetGrind(dt, frame, edgeFrame) {
       const player = this.player;
       const surface = world.currentSurface();
-      if (world.activePlanet === 'moon' || world.activeLayer !== 'surface'
+      if (world.activeLayer !== 'surface'
         || this.planetTransition.active || player.grappling) {
         if (player.grind) this.releasePlanetGrind(false, false);
         return false;
@@ -27982,27 +30194,38 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (anchor.railTransit && anchor.finished) {
         const launch = this.tempA.copy(anchor.pathTangent || anchor.velocity);
         if (launch.lengthSq() < .001) launch.copy(this.horizontalForward(this.tempB));
-        const authoredArrival = !!anchor.rail?.softEject;
-        if (authoredArrival && anchor.rail?.arrivalPosition) {
-          // Open rails end over authored decks in different transported
-          // frames. Solve a short ballistic arrival to the exact deck instead
-          // of trusting the curve's final tangent; input stays live throughout.
-          const delta = this.tempB.copy(anchor.rail.arrivalPosition).sub(this.player.position);
-          const verticalDelta = delta.dot(this.player.up);
-          const planar = this.tempC.copy(delta).addScaledVector(this.player.up, -verticalDelta);
-          const planarDistance = planar.length();
-          const flight = clamp(planarDistance / 9.5, .55, .9);
-          launch.copy(planarDistance > .001 ? planar.multiplyScalar(1 / planarDistance) : this.horizontalForward(planar));
-          launch.multiplyScalar(Math.min(13, planarDistance / flight));
-          launch.addScaledVector(this.player.up, clamp((verticalDelta + 7.6 * flight * flight) / flight, -8.5, 9));
-          this.player.velocity.copy(launch);
+        const arrivalChart = anchor.direction < 0
+          ? anchor.rail?.startArrivalChart
+          : (anchor.rail?.endArrivalChart || anchor.rail?.arrivalChart);
+        const arrivalPosition = anchor.direction < 0
+          ? anchor.rail?.startArrivalPosition
+          : (anchor.rail?.endArrivalPosition || anchor.rail?.arrivalPosition);
+        const authoredArrival = !!anchor.rail?.softEject && !!arrivalPosition;
+        if (authoredArrival) {
+          // The moving grip can finish while the reeled player still trails
+          // several metres below it. Own the promised destination instead of
+          // firing that lagging capsule at the underside of the deck.
+          const settledPosition = arrivalChart
+            ? chartLift(arrivalChart.x,
+              world.floorHeight(arrivalChart.x, arrivalChart.z, arrivalChart.alt + 1.4),
+              arrivalChart.z, this.tempB)
+            : arrivalPosition;
+          const arrivalUp = dirAt(settledPosition, this.tempC);
+          this.transportQuat.setFromUnitVectors(this.player.up, arrivalUp);
+          this.player.frame.premultiply(this.transportQuat);
+          this.player.up.copy(arrivalUp);
+          this.player.position.copy(settledPosition);
+          this.player.velocity.set(0, 0, 0);
+          this.player.coyote = .14;
+          launch.set(0, 0, 0);
         } else {
           launch.normalize().multiplyScalar(Math.max(38, anchor.rail?.cruiseSpeed * .9));
           launch.addScaledVector(this.player.up, 9.5);
           this.player.velocity.lerp(launch, .82);
         }
         this.player.grappling = false;
-        this.player.grounded = false;
+        this.player.grounded = authoredArrival;
+        this.player.grindReleaseActive = !authoredArrival;
         this.player.jumpsUsed = 0;
         this.player.flung = authoredArrival ? 0 : Math.max(this.player.flung, 1.1);
         anchor.active = false;
@@ -28431,7 +30654,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           const taken = moon.position.distanceToSquared(ball) < moonReachSq
             || moon.position.distanceToSquared(player) < 10.9 ** 2;
           if (!taken || !world.takeFullMoon(moon)) continue;
-          this.drops += 5;
+          // A full moon looks different and sounds different. It is still one
+          // collectible, exactly like a crescent.
+          this.drops += 1;
           this.score += 400;
           this.stats.fullmoons = (this.stats.fullmoons || 0) + 1;
           audio.score(true);
@@ -32808,10 +35033,22 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // pinhole. The cannon is the transition, and the player performs it.
     updateEndgame(dt) {
       if (!this.endgameOpen) {
-        const bossesDown = world.regions.filter(region => region.boss && !region.boss.alive).length
-          + (world.roc && !world.roc.alive ? 1 : 0)
-          + (world.colossus && !world.colossus.alive ? 1 : 0);
-        if (bossesDown >= 4 && !world.vane?.alive && !world.bellower?.alive && this.drops >= 240) this.openMoonHole();
+        // The whole roster: three region bosses, the Roc, the Colossus, the
+        // Crownback out on the strata and the Rail Warden down the moonline.
+        // The last two used to be missing, which quietly made "every boss"
+        // mean seven of nine.
+        const moonBosses = [
+          ...world.regions.map(region => region.boss),
+          world.roc, world.colossus, world.strata?.boss, world.moonline?.boss,
+        ].filter(Boolean);
+        const bossRoster = moonBosses.length;
+        const bossesDown = moonBosses.filter(boss => !boss.alive).length;
+        // EVERY boss on this moon -- the whole roster, the sky vane and the
+        // under-bellower -- plus 2,000 of the moon's own collectible. The
+        // roster is counted rather than written down so a new boss tightens
+        // the gate instead of quietly loosening it.
+        if (bossesDown >= bossRoster && !world.vane?.alive && !world.bellower?.alive
+          && this.drops >= MOON_COLLECTION_TARGET) this.openMoonHole();
         return;
       }
       if (world.holePillar) {
@@ -33300,7 +35537,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           && pickup.position.distanceToSquared(this.player.position) <= 8.4 ** 2;
         if (!ballClose && !playerClose) continue;
         if (!world.takeExpansionCollectible(pickup)) continue;
-        this.drops += pickup.value;
+        this.drops += 1;
         this.score += pickup.value > 1 ? 460 : 75;
         if (pickup.value > 1) this.stats.fullmoons = (this.stats.fullmoons || 0) + 1;
         audio.score(pickup.value > 1);
@@ -33401,6 +35638,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         if (playerDistance > 2.1 && ballDistance > 1.65) continue;
         pickup.active = false;
         pickup.group.visible = false;
+        // The shard family looked exactly like a collectible and counted for
+        // nothing at all. It is the same collectible now; the health and the
+        // reset jump stay as its own flavour.
+        this.drops += 1;
         this.player.health = Math.min(this.player.maxHealth, this.player.health + 1);
         this.player.jumpsUsed = 0;
         this.player.jumpBuffer = Math.max(this.player.jumpBuffer, .06);
@@ -33762,7 +36003,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           ? toChartVec(world.bellower.position.clone())
           : new T.Vector3(UNDERGROUND_MOUTHS.crystal.surface.x, groundHeightAt(UNDERGROUND_MOUTHS.crystal.surface.x, UNDERGROUND_MOUTHS.crystal.surface.z) + 2, UNDERGROUND_MOUTHS.crystal.surface.z);
         tint = 0xbf83ff;
-      } else if (this.drops < 240) {
+      } else if (this.drops < MOON_COLLECTION_TARGET) {
         key = `moon-route-${this.drops}`; stage = 9;
         const remaining = (world.expansionCollectibles || EMPTY_SOLIDS).find(item => item.alive && item.layer === world.activeLayer);
         focus = remaining ? toChartVec(remaining.position.clone()) : new T.Vector3(504, groundHeightAt(504, 304) + 12, 304);
@@ -33925,34 +36166,25 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       world.update(FIXED_DT, this);
     }
     syncUI() {
-      // One stable three-shape bank across all worlds. The original Moon keeps
-      // its total crescent economy while also showing the rare full-moon and
-      // authored-route finds; Water and Lava expose their three exact ledgers.
+      // ONE ledger per moon, shown in one place, with the 2,000 that opens
+      // this moon's final always visible beside it. Every pickup on every
+      // moon is worth exactly one, whatever shape it wears.
       const hudPlanet = world.activePlanet;
-      const moonRouteCollected = hudPlanet === 'moon'
-        ? (world.expansionCollectibles || EMPTY_SOLIDS).reduce((count, pickup) => count + (pickup.alive ? 0 : 1), 0)
-        : 0;
       const activeProgress = hudPlanet === 'moon' ? null : this.worldProgress[hudPlanet];
       const collectibleHud = hudPlanet === 'moon'
-        ? { common: this.drops, rare: this.stats.fullmoons || 0, route: moonRouteCollected, total: this.drops, target: null }
+        ? { total: this.drops, target: MOON_COLLECTION_TARGET }
         : {
-          common: activeProgress?.common || 0,
-          rare: activeProgress?.rare || 0,
-          route: activeProgress?.route || 0,
           total: activeProgress?.collected || 0,
           target: activeProgress?.collectionTarget || ALTERNATE_COLLECTION_TARGET,
         };
-      const collectibleHudKey = `${hudPlanet}:${collectibleHud.common}:${collectibleHud.rare}:${collectibleHud.route}:${collectibleHud.total}`;
+      const collectibleHudKey = `${hudPlanet}:${collectibleHud.total}`;
       if (ui.stoneCount && this.lastCollectibleHudKey !== collectibleHudKey) {
         const previousPlanet = this.lastCollectibleHudPlanet;
         const previousTotal = previousPlanet === hudPlanet ? (this.lastCollectibleHudTotal || 0) : 0;
         this.lastCollectibleHudKey = collectibleHudKey;
         this.lastCollectibleHudPlanet = hudPlanet;
         this.lastCollectibleHudTotal = collectibleHud.total;
-        ui.stoneCount.textContent = String(collectibleHud.common);
-        if (ui.rareCount) ui.rareCount.textContent = String(collectibleHud.rare);
-        if (ui.routeCount) ui.routeCount.textContent = String(collectibleHud.route);
-        if (ui.planetCollectibleTotal) ui.planetCollectibleTotal.textContent = String(collectibleHud.total);
+        ui.stoneCount.textContent = String(collectibleHud.total);
         if (ui.planetCollectibleGateFill) {
           ui.planetCollectibleGateFill.style.width = `${clamp(collectibleHud.total / (collectibleHud.target || 1), 0, 1) * 100}%`;
         }
@@ -33962,7 +36194,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           ui.stoneCounter.classList.remove('milestone');
           void ui.stoneCounter.offsetWidth;
           if (collectibleHud.total > previousTotal) ui.stoneCounter.classList.add('bump');
-          const milestoneSize = hudPlanet === 'moon' ? 50 : 500;
+          const milestoneSize = 100;
           if (Math.floor(collectibleHud.total / milestoneSize) > Math.floor(previousTotal / milestoneSize)) {
             ui.stoneCounter.classList.add('milestone');
           }
@@ -34090,8 +36322,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (ui.srState) {
         const planetProgress = this.worldProgress[world.activePlanet];
         const progressLine = planetProgress
-          ? `, ${world.activePlanet} moon, ${planetProgress.common} common, ${planetProgress.rare} rare, ${planetProgress.route} route, boss ${planetProgress.bossDefeated ? 'defeated' : 'active'}`
-          : ', original moon';
+          ? `, ${world.activePlanet} moon, ${planetProgress.collected} of ${planetProgress.collectionTarget} collectibles, ${planetProgress.regionalDefeated} of ${ALTERNATE_REGIONAL_TOTAL} bosses, final ${planetProgress.bossDefeated ? 'defeated' : planetProgress.finalUnlocked ? 'open' : 'sealed'}`
+          : `, original moon, ${this.drops} of ${MOON_COLLECTION_TARGET} collectibles`;
         const line = `${this.ball.mode} ball, suit ${this.player.health} of ${this.player.maxHealth}${progressLine}`;
         if (line !== this.lastSrState) {
           this.lastSrState = line;
@@ -34287,7 +36519,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (name === 'cannon-ready' || name.startsWith('final-')) {
         let retired = 0;
         for (const region of world.regions) {
-          if (!region.boss || retired >= 4) continue;
+          if (!region.boss) continue;
           region.boss.alive = false;
           region.boss.hp = 0;
           region.boss.group.visible = false;
@@ -34298,13 +36530,24 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           world.roc.hp = 0;
           world.roc.group.visible = false;
         }
+        if (world.colossus) {
+          world.colossus.alive = false;
+          world.colossus.hp = 0;
+          world.colossus.group.visible = false;
+        }
+        for (const boss of [world.strata?.boss, world.moonline?.boss]) {
+          if (!boss) continue;
+          boss.alive = false;
+          boss.hp = 0;
+          if (boss.group) boss.group.visible = false;
+        }
         world.vane.alive = false;
         world.vane.group.visible = false;
         world.bellower.alive = false;
         world.bellower.group.visible = false;
         this.expansionState.vaneDefeated = true;
         this.expansionState.bellowerDefeated = true;
-        this.drops = 240;
+        this.drops = MOON_COLLECTION_TARGET;
         this.updateEndgame(FIXED_DT);
       }
       if (name === 'cannon-ready') return this.teleport('cannon');
@@ -35808,7 +38051,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         pipsBefore === game.player.maxHealth && lostPips === game.player.maxHealth - game.player.health && lostPips > 0,
         { pipsBefore, lostPips, health: game.player.health, max: game.player.maxHealth });
 
-      // FULL MOONS: a flying ball drinks one and it pays five.
+      // FULL MOONS: a flying ball drinks one and it pays ONE. It is a bigger
+      // shape with a bigger sound, and it is the same collectible as every
+      // crescent. (Alex, 2026-09-03: "three different collectibles in the
+      // first moon should all be the same collectible. Even though some look
+      // diferent.")
       game.restart();
       game.started = true;
       const fullMoon = world.fullmoons.find(moon => moon.alive);
@@ -35817,9 +38064,72 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       game.ball.mode = 'outbound';
       const moonPayBefore = game.drops;
       game.collectMoondrops();
-      check('full-moons-pay-five',
-        game.drops >= moonPayBefore + 5 && !fullMoon.alive,
+      check('full-moons-pay-one',
+        game.drops === moonPayBefore + 1 && !fullMoon.alive,
         { paid: game.drops - moonPayBefore, taken: !fullMoon.alive });
+
+      // EVERY MOON PICKUP IS THE SAME COLLECTIBLE. A route crescent and a
+      // shard-family pickup each pay exactly one into the same count.
+      game.restart();
+      game.started = true;
+      const routeMoon = (world.expansionCollectibles || EMPTY_SOLIDS)
+        .find(pickup => pickup.alive && pickup.layer === 'surface' && pickup.value > 1);
+      const routePayBefore = game.drops;
+      if (routeMoon) {
+        world.takeExpansionCollectible(routeMoon);
+        game.drops += 1;
+      }
+      check('route-full-moons-pay-one', !!routeMoon && game.drops === routePayBefore + 1,
+        { paid: game.drops - routePayBefore, value: routeMoon?.value });
+
+      game.restart();
+      game.started = true;
+      const shard = world.collectibles.find(pickup => pickup.active);
+      const shardPayBefore = game.drops;
+      if (shard) {
+        game.player.position.copy(shard.group.position);
+        game.ball.position.copy(shard.group.position);
+        game.updatePlaygroundInteractions(FIXED_DT);
+      }
+      check('the-shard-family-is-the-same-collectible',
+        !!shard && !shard.active && game.drops === shardPayBefore + 1,
+        { label: shard?.label, paid: game.drops - shardPayBefore });
+
+      // ONE GATE, EVERY MOON: 2,000, and the counts that gate the two
+      // alternate worlds are a single ledger.
+      check('every-moon-asks-for-the-same-two-thousand',
+        MOON_COLLECTION_TARGET === 2000 && ALTERNATE_COLLECTION_TARGET === 2000
+          && ALTERNATE_REGIONAL_REQUIRED === ALTERNATE_REGIONAL_TOTAL,
+        { moon: MOON_COLLECTION_TARGET, alternate: ALTERNATE_COLLECTION_TARGET,
+          regionalRequired: ALTERNATE_REGIONAL_REQUIRED, regionalTotal: ALTERNATE_REGIONAL_TOTAL });
+
+      // The Moon has to be able to PAY that gate. A 2,000 wall on a world
+      // holding 891 pickups is not a gate.
+      const moonSupply = (world.moondrops || EMPTY_SOLIDS).filter(drop => !drop.spilled).length
+        + (world.fullmoons || EMPTY_SOLIDS).length
+        + (world.expansionCollectibles || EMPTY_SOLIDS).length
+        + (world.collectibles || EMPTY_SOLIDS).length;
+      check('the-moon-can-pay-its-own-gate', moonSupply >= MOON_COLLECTION_TARGET * 1.4,
+        { moonSupply, target: MOON_COLLECTION_TARGET });
+
+      // THE SHIPS. Two ships per world, joined by a rail, each with a gantry
+      // whose deck is one jump under the foot of its ascent.
+      const shipProfile = world.planetSurfaces.get('moon');
+      const shipLine = shipProfile?.shipLine;
+      const gantries = (shipProfile?.vehicles || EMPTY_SOLIDS).map(vehicle => vehicle.gantry);
+      check('the-two-ships-are-joined-by-a-rail',
+        !!shipLine && shipLine.path.totalLength > 700
+          && (shipProfile.vehicles || EMPTY_SOLIDS).length === 2,
+        { line: shipLine?.id, length: Math.round(shipLine?.path?.totalLength || 0) });
+      check('every-ship-has-a-gantry-you-can-walk-up',
+        gantries.length === 2 && gantries.every(gantry => !!gantry)
+          && (shipProfile.vehicles || EMPTY_SOLIDS).every(vehicle => {
+            const foot = vehicle.ascentRail?.path?.chartSamples?.[0];
+            return !!foot && vehicle.ascentRail.bootGrind
+              && foot.y - vehicle.gantry.deckAltitude > 1.5
+              && foot.y - vehicle.gantry.deckAltitude < 6;
+          }),
+        gantries.map(gantry => gantry && ({ id: gantry.id, deck: Math.round(gantry.deckAltitude) })));
       game.restart();
       check('full-moons-respawn-on-restart', world.fullmoons.every(moon => moon.alive),
         { alive: world.fullmoons.filter(moon => moon.alive).length, total: world.fullmoons.length });

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#010204" />
-  <meta name="application-version" content="8.2.1-rim-spring-sightlines" />
+  <meta name="application-version" content="8.3.0-player-repair" />
   <meta name="description" content="KICKMOON is a first-person three-world lunar action game: one persistent boomerang ball, a water moon, and a lava moon." />
   <title>KICKMOON: Three Worlds | Qualiacology</title>
   <link rel="canonical" href="https://qualiacology.com/kickmoon/" />
@@ -13,19 +13,19 @@
   <meta property="og:title" content="KICKMOON: Three Worlds | Qualiacology" />
   <meta property="og:description" content="Kick one ball across three hostile moons. Reach the blue water moon and red lava moon through colossal hyperspeed ships, then bring it home." />
   <meta property="og:url" content="https://qualiacology.com/kickmoon/" />
-  <meta property="og:image" content="https://qualiacology.com/assets/og/kickmoon-og-v1.jpg" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
+  <meta property="og:image" content="https://qualiacology.com/assets/games/kickmoon-card-clean.webp" />
+  <meta property="og:image:width" content="1280" />
+  <meta property="og:image:height" content="720" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="KICKMOON: Three Worlds | Qualiacology" />
   <meta name="twitter:description" content="First-person lunar momentum combat across three worlds. One ball. Every move. It always comes home." />
-  <meta name="twitter:image" content="https://qualiacology.com/assets/og/kickmoon-og-v1.jpg" />
+  <meta name="twitter:image" content="https://qualiacology.com/assets/games/kickmoon-card-clean.webp" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <a class="home-link" href="/" aria-label="Return to Qualiacology"><span aria-hidden="true">←</span> <span class="home-link__name">Qualiacology</span></a>
+  <a class="home-link" href="https://qualiacology.com/" aria-label="Return to Qualiacology"><span aria-hidden="true">←</span> <span class="home-link__name">Qualiacology</span></a>
   <main id="gameRoot" aria-label="KICKMOON">
     <canvas id="gameCanvas" tabindex="0" aria-label="First-person lunar action game"></canvas>
 
@@ -64,14 +64,14 @@
 
       <!-- Screen-reader-only mirror of the world-space state. Sighted players
            get all of this visually; this exists so the game stays narratable. -->
-      <!-- One compact collectible bank. Three shapes stay in the same place on
-           every world; the narrow fourth readout is only the Water/Lava 2,000
-           seal total. Nothing occupies the aiming/movement lane at screen foot. -->
+      <!-- ONE space for collectibles, the same on every moon: this moon's
+           count and how far it is from the 2,000 that opens its final. A
+           pickup may look like a crescent, a full moon or a route ribbon --
+           they are one collectible and each is worth one.
+           (Alex, 2026-09-03.) Nothing occupies the aiming lane at screen foot. -->
       <div id="stoneCounter" data-planet="moon" aria-hidden="true">
         <span class="collectible-cell" data-kind="common"><i class="collectible-icon stone-crescent"></i><span id="stoneCount">0</span></span>
-        <span class="collectible-cell" data-kind="rare"><i class="collectible-icon collectible-rare"></i><span id="rareCount">0</span></span>
-        <span class="collectible-cell" data-kind="route"><i class="collectible-icon collectible-route"></i><span id="routeCount">0</span></span>
-        <span id="planetCollectibleTarget"><b id="planetCollectibleTotal">0</b><small>/2000</small><i class="collectible-gate"><b id="planetCollectibleGateFill"></b></i></span>
+        <span id="planetCollectibleTarget"><small>/2000</small><i class="collectible-gate"><b id="planetCollectibleGateFill"></b></i></span>
       </div>
       <!-- Boss trophies: seven quiet sockets that light with each core's own
            colour. No words, no numbers — a glance says how many remain.
