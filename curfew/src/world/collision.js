@@ -61,7 +61,7 @@ const F_ALIVE = 1;
 const F_STANDABLE = 2;
 const F_AUTHORED = 4;   // skips the oversize reject: an authored long wall is legitimate
 const F_BREAK = 8;      // ROUND 7, lane F: a thing a car goes THROUGH, not into
-const F_NOCLIMB = 16;   // ROUND 7, lane F: never a ledge. A trunk, a post, a pole.
+const F_NOCLIMB = 16;   // semantic refusal: never a ledge. A trunk, a post, a pole.
 
 const KIND_CIRCLE = 0;
 const KIND_OBB = 1;
@@ -383,6 +383,8 @@ export class Collision {
   //   standable:true   its top is a floor you can stand on
   //   authored:true    skip the chunk-sized reject (a real long wall)
   //   nonPhysical:true never bake it (roads, grass, decals)
+  //   breakable:<kg>   the car can crush it; does not change its climb semantics
+  //   climbable:false  never expose its top to a mantle, grab or vault probe
   //   tag / name       string; matched against the non-physical vocabulary
   //   mask             defaults to SOLID|SHOT|SIGHT
   // y0/y1 are absolute world metres. If omitted they default to
@@ -455,18 +457,17 @@ export class Collision {
     this._mass[i] = mass;
     if (mass > 0) this._tel.breakable++;
 
-    // ...and climbability. Three ways a top stops being a ledge, and the first two are
-    // ABSOLUTE — the standable flag does not buy its way past them, because a shape that
-    // says both 'trunk' and 'standable' is a mistake and the refusal is the safer reading:
+    // ...and climbability. These are SEMANTIC, ABSOLUTE refusals — the standable flag does
+    // not buy its way past them, because a shape that says both 'trunk' and 'standable' is
+    // a mistake and the refusal is the safer reading:
     //   climbable: false   the builder said so;
     //   a NON_CLIMB tag    a trunk, a post, a pole, a lamp column;
-    //   breakable          you do not mantle a crate a car drives through, and a body left
-    //                      standing on one when a car takes it would fall. This one DOES
-    //                      yield to an explicit standable flag, so a builder can still
-    //                      author a breakable platform on purpose.
+    // Breakability is deliberately NOT a refusal. F_BREAK only describes what the car can
+    // crush. A tagged fence/rail/gate/hurdle/crate/hood in the vault band must remain visible
+    // to ledgeHeight(..., anyTop=true), while the ordinary mantle/grab path still requires a
+    // standable-or-steppable top and never leaves the player standing on that breakable.
     const noClimb = shape.climbable === false
-      || (tag && NON_CLIMB_TAGS.has(tag))
-      || (mass > 0 && !shape.standable);
+      || (tag && NON_CLIMB_TAGS.has(tag));
 
     this._flags[i] = F_ALIVE
       | (shape.standable ? F_STANDABLE : 0)
@@ -990,8 +991,10 @@ export class Collision {
       // ROUND 7, lane F (docs/NEXT.md B5, Alex: the ledge grab climbs trees). Two refusals
       // that no height arithmetic can reach, because the height arithmetic is not what is
       // wrong: some things are simply not ledges however tall they are.
-      //   1. F_NOCLIMB — the tag said so. A trunk, a post, a pole, a lamp column, anything
-      //      breakable. This is what kept the last tree out of the last forty.
+      //   1. F_NOCLIMB — the builder or semantic tag said so. A trunk, a post, a pole or a
+      //      lamp column. Breakability is a separate car property and never sets this flag.
+      //      This semantic refusal is what keeps the last tree out of the last forty while
+      //      anyTop still lets a vault inspect a crushable fence without standing on it.
       //   2. A ROUND thing with no flat: a circle under MIN_ROUND_LEDGE across that nobody
       //      flagged standable. You cannot get a knee onto a 0.5 m disc.
       // A VAULT (anyTop) takes the same two refusals: you do not vault a tree either.

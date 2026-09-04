@@ -177,9 +177,25 @@ const CL = P.climb;
 const CLIMB_NONE = 0, CLIMB_HANG = 1, CLIMB_PULL = 2, CLIMB_VAULT = 3;
 const MANTLE_LEAD2 = 0.36;     // a second probe one more radius out: a lip you run at is not always one shell away
 // A deliberate Space press gets one farther COLLIDER probe. The ordinary movement mantle,
-// terrain pop, airborne grab, vault and car roof keep their existing reach: this only closes
-// the measured 0.43 m dead band where the station crate looked reachable but Space just hopped.
+// terrain pop, vault and car roof keep their existing reach: this only closes the measured
+// 0.43 m dead band where the station crate looked reachable but Space just hopped.
 const SPACE_CLIMB_EXTRA = 0.50;
+// ROUND 10: Space is an explicit request to get hands onto what the CAMERA is facing. Keep
+// that request through the first 0.22 s of an ordinary jump so an early-airborne lip can be
+// caught, and fan the facing probe only 11 degrees each side. The passive movement mantle
+// below still receives its one exact movement bearing and never inherits this forgiveness.
+const SPACE_CLIMB_INTENT_S = 0.22;
+const SPACE_CLIMB_FAN = 0.20;  // lateral component before normalising: atan(0.20) = 11.3 deg
+// On a running jump a lower neighbour enters the hands band before the taller lip under the
+// reticle. The exact facing/movement rays get this much first refusal; the side fan then
+// joins while the same Space intent is still alive. Standing/walking and queued chains do not
+// need the delay because they are not sweeping several metres of frontage during take-off.
+const SPACE_CLIMB_FAN_DELAY_S = 0.12;
+// A completed pull should flow into the next piece of geometry instead of leaving the player
+// almost stopped behind the full general-purpose refusal cooldown. Dropping a hold still uses
+// the full cooldown; these two numbers apply only to a successful landing.
+const CLIMB_EXIT_KEEP = 0.82;
+const CLIMB_CHAIN_COOLDOWN = 0.12;
 const MANTLE_MIN_RISE = 0.62;  // STEP_UP + STEP_TOL + 0.02: anything lower the solver steps onto, and a step is not a climb
 const PULL_LIFT_END = 0.72;    // fraction of the pull by which the feet reach the top
 const PULL_OVER_START = 0.30;  // fraction of the pull at which the body starts moving over the lip
@@ -318,6 +334,8 @@ export class PlayerController {
 
     // ---- mantle
     this.mantleCooldown = 0;
+    this.spaceClimbIntent = 0;                            // Space may catch a lip during early jump
+    this.climbQueued = false;                             // Space tapped during a carry: climb only on landing
 
     // ---- climb (grab / pull / vault): the body is carried, the solver does not run
     this.climb = CLIMB_NONE;
@@ -681,6 +699,7 @@ export class PlayerController {
       this.sprinting = false; this.tacSprinting = false; this.tacT = 0;
       this.crouched = false; this.crouchHeld = false;
       this.jumpBuffered = -1;
+      this.spaceClimbIntent = 0; this.climbQueued = false;
       this.climb = CLIMB_NONE;
       this.grounded = true; this.sinceGround = 0;
       // Deliberately NOT _sync(): collapsing prev/curr here is the bug this door exists
@@ -718,6 +737,7 @@ export class PlayerController {
     this.sliding = false; this.slideT = 0; this.slideViewT = 0;
     this.downhillSliding = false; this.slideAirT = 0; this.floorWasCollider = false;
     this.tacSprinting = false; this.tacT = 0;
+    this.spaceClimbIntent = 0; this.climbQueued = false;
     this.climb = CLIMB_NONE;
     this.grounded = true; this.sinceGround = 0;
     this._sync();
@@ -729,6 +749,7 @@ export class PlayerController {
     this.sliding = false; this.crouched = false; this.sprinting = false;
     this.downhillSliding = false; this.slideAirT = 0; this.floorWasCollider = false;
     this.tacSprinting = false; this.tacT = 0; this.tacCooldown = 0;
+    this.spaceClimbIntent = 0; this.climbQueued = false;
     this.bobPhase = 0;
     this.init();
   }
@@ -806,6 +827,7 @@ export class PlayerController {
 
     this.slideCooldown = Math.max(0, this.slideCooldown - dt);
     this.mantleCooldown = Math.max(0, this.mantleCooldown - dt);
+    this.spaceClimbIntent = Math.max(0, this.spaceClimbIntent - dt);
     this.tacCooldown = Math.max(0, this.tacCooldown - dt);
     this.sinceSprintPress += dt;
 
@@ -844,9 +866,14 @@ export class PlayerController {
     const edgeTac = this._pressed('tacsprint');
 
     // ---- a climb in progress: the body is carried, nothing below runs -------------
-    // Sprint, crouch, slide, jump, the solver and gravity all wait. The edges are still
-    // consumed so a Space tapped mid-pull does not launch a jump the instant the feet land.
+    // Sprint, crouch, slide, jump, the solver and gravity all wait. Space during this carry
+    // queues a fresh CLIMB request at the landing, never a buffered jump: no accidental
+    // bunny-hop can come out of a pull-up.
     if (this.climb !== CLIMB_NONE) {
+      if (edgeJump) {
+        this.climbQueued = true;
+        this.jumpBuffered = -1;
+      }
       this._stepClimb(dt, hasInput);
       this._stepTail(dt, sprintHeld, this._held('crouch'));
       return;
@@ -913,19 +940,17 @@ export class PlayerController {
     }
 
     // ---- jump buffer + coyote ----------------------------------------------
-    if (edgeJump) this.jumpBuffered = P.JUMP_BUFFER;
+    if (edgeJump) {
+      this.jumpBuffered = P.JUMP_BUFFER;
+      this.spaceClimbIntent = SPACE_CLIMB_INTENT_S;
+    }
     else this.jumpBuffered -= dt;
 
-    // Space is the advertised jump AND mantle key. Previously a standing player pressing
-    // Space at a deliberately climbable lip never called _tryClimb at all (`hasInput` was
-    // false), while Space+forward jumped first and often left the grounded mantle window.
-    // Probe the facing direction before spending the jump. Open ground still falls through
-    // to the exact VIGIL jump below; a successful climb owns the body immediately.
+    // Space is the advertised jump AND climb key. Look where the CAMERA points before spending
+    // the jump, with two small lateral probes, then (only if different) the movement bearing.
+    // Open ground still falls through to the exact VIGIL jump below.
     if (edgeJump && this.climb === CLIMB_NONE) {
-      const facingOnly = !hasInput;
-      if (facingOnly) _wish.copy(_fwd);
-      this._tryClimb(true);
-      if (facingOnly) _wish.set(0, 0, 0);
+      this._trySpaceClimb(hasInput);
       if (this.climb !== CLIMB_NONE) {
         this._stepClimb(dt, hasInput);
         this._stepTail(dt, sprintHeld, wantCrouch);
@@ -954,7 +979,11 @@ export class PlayerController {
     // Deliberately BEFORE gravity so the pop is not eaten by the same frame's fall. A climb
     // that starts here carries the body from this frame on: the solver below must not run
     // against the wall the body is now being lifted over.
-    if (hasInput) this._tryClimb(false);
+    // The explicit Space intent remains alive through early take-off. It receives the same
+    // facing-first fan in the air, which can start a real hands-band grab. Only after that
+    // refuses do we offer the old narrow, movement-directed automatic mantle.
+    if (this.spaceClimbIntent > 0) this._trySpaceClimb(hasInput);
+    if (this.climb === CLIMB_NONE && hasInput) this._tryClimb(false);
     if (this.climb !== CLIMB_NONE) {
       this._stepClimb(dt, hasInput);
       this._stepTail(dt, sprintHeld, wantCrouch);
@@ -1351,6 +1380,57 @@ export class PlayerController {
     return true;
   }
 
+  /**
+   * A deliberate Space climb: camera-facing centre, then the nearer side of a small lateral
+   * fan, then the other side, and finally the exact movement bearing when it is genuinely
+   * different. `_wish` is restored before returning because ground/air movement still owns
+   * that vector for the rest of the fixed step. No allocations, and no widened passive grab.
+   */
+  _trySpaceClimb(hasInput) {
+    if (this.spaceClimbIntent <= 0 || this.mantleCooldown > 0
+        || this.climb !== CLIMB_NONE || this.carried) return false;
+
+    const moveX = _wish.x, moveZ = _wish.z;
+    const side = hasInput && moveX * _right.x + moveZ * _right.z > 0 ? 1 : -1;
+    const horizontalSpeed = Math.hypot(this.vel.x, this.vel.z);
+    const freshRunningJump = this.grounded && this.jumpBuffered > 0
+      && horizontalSpeed > P.WALK + 0.05;
+    const airborneFanReady = SPACE_CLIMB_INTENT_S - this.spaceClimbIntent
+      >= SPACE_CLIMB_FAN_DELAY_S;
+    const allowFan = !freshRunningJump && (this.grounded || airborneFanReady);
+
+    _wish.copy(_fwd);
+    this._tryClimb(true);
+    let caught = this.climb !== CLIMB_NONE || this.mantleCooldown > 0;
+
+    if (!caught && allowFan) {
+      _wish.copy(_fwd).addScaledVector(_right, SPACE_CLIMB_FAN * side).normalize();
+      this._tryClimb(true);
+      caught = this.climb !== CLIMB_NONE || this.mantleCooldown > 0;
+    }
+    if (!caught && allowFan) {
+      _wish.copy(_fwd).addScaledVector(_right, -SPACE_CLIMB_FAN * side).normalize();
+      this._tryClimb(true);
+      caught = this.climb !== CLIMB_NONE || this.mantleCooldown > 0;
+    }
+
+    // A diagonal/back/strafe input may honestly point at a second ledge. Do not repeat almost
+    // the same ray when movement is within the facing fan: centre/left/right already covered it.
+    const moveDotFacing = moveX * _fwd.x + moveZ * _fwd.z;
+    if (!caught && hasInput && moveDotFacing < 0.98) {
+      _wish.set(moveX, 0, moveZ);
+      this._tryClimb(true);
+      caught = this.climb !== CLIMB_NONE || this.mantleCooldown > 0;
+    }
+
+    _wish.set(moveX, 0, moveZ);
+    if (caught) {
+      this.spaceClimbIntent = 0;
+      this.jumpBuffered = -1;
+    }
+    return caught;
+  }
+
   // Mantle: DUSKFALL controller.js:289-330, re-expressed against the analytic terrain field
   // instead of DUSKFALL's platform discs. Reach, clearance, cooldown and the ledge tiers all
   // come from CFG.player.mantle.
@@ -1482,7 +1562,7 @@ export class PlayerController {
       this.vel.y = Math.max(this.vel.y, Math.sqrt(2 * P.GRAVITY * (rise + M.clearance)));
       this.vel.x += _wish.x * MANTLE_IN;
       this.vel.z += _wish.z * MANTLE_IN;
-      this.mantleCooldown = M.cooldown;
+      this.mantleCooldown = CLIMB_CHAIN_COOLDOWN;
       this.grounded = false;
       this.sinceGround = P.COYOTE + 1;
       this._endSlide();
@@ -1709,9 +1789,17 @@ export class PlayerController {
     this.climb = CLIMB_NONE;
     this.grounded = true;
     this.sinceGround = 0;
-    const out = vault ? this.climbSpeed * CL.vault.keep : CL.outSpeed;
+    const out = vault
+      ? this.climbSpeed * CL.vault.keep
+      : Math.max(CL.outSpeed, this.climbSpeed * CLIMB_EXIT_KEEP);
     this.vel.x = this.climbDirX * out; this.vel.z = this.climbDirZ * out; this.vel.y = 0;
-    this.mantleCooldown = P.mantle.cooldown;
+    this.mantleCooldown = CLIMB_CHAIN_COOLDOWN;
+    if (this.climbQueued) {
+      // Start the short window NOW, not when Space was pressed halfway through a long pull.
+      // There is deliberately no jumpBuffered write here: this can chain a climb, never hop.
+      this.spaceClimbIntent = SPACE_CLIMB_INTENT_S;
+      this.climbQueued = false;
+    }
     this._land(vault ? VAULT_LAND_SPEED : CL.landSpeed);
   }
 
@@ -1719,6 +1807,8 @@ export class PlayerController {
   _dropClimb() {
     this.climb = CLIMB_NONE;
     this.climbRefuse = true;
+    this.climbQueued = false;
+    this.spaceClimbIntent = 0;
     this.vel.set(0, 0, 0);
     this.grounded = false;
     this.sinceGround = P.COYOTE + 1;

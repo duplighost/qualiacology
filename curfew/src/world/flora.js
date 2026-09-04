@@ -285,6 +285,10 @@ const BIOME_TINT = Object.freeze([
   Object.freeze([0.76, 1.05, 0.98]),
   Object.freeze([1.10, 1.04, 1.00]),
 ]);
+// Applied to the existing boot-packed instance lean. The ridge also receives a prevailing
+// bearing in _pack, so its trunks agree about the weather instead of forming another plumb
+// colonnade. This changes no positions, radii, counts, colliders, stride or runtime program.
+const BIOME_LEAN_MUL = Object.freeze([1.0, 1.0, 1.18, 1.68]);
 // The floor has to change with the canopy or four forests still read as one carpet of pale
 // spikes. These alter the same crossed-card grass instances—no extra mesh or material.
 const BIOME_GRASS_ACCEPT = Object.freeze([0.32, 0.56, 0.38, 0.18]);
@@ -356,14 +360,40 @@ const _segDir = new THREE.Vector3();
 const _segQuat = new THREE.Quaternion();
 const _segMat = new THREE.Matrix4();
 
-function makeRecipe(rand, ai) {
+// Consume the exact pre-Round-10 template stream and retain the dimensions that feed the
+// semantic trunk collider. New visual decisions use a separate per-template hash stream, so
+// adding a branch to template 0 can never silently change template 8's radius again.
+function consumeLegacyRecipe(rand, ai) {
   const A = ARCHETYPES[ai];
-  const trunkH = lerp(A.h[0], A.h[1], rand());
-  const trunkR = lerp(A.r[0], A.r[1], rand());
-  const lean = (rand() - 0.5) * (A.kind === 'conifer' ? 0.7 : 1.6);
-  const leanDir = rand() * TAU;
+  const base = {
+    trunkH: lerp(A.h[0], A.h[1], rand()),
+    trunkR: lerp(A.r[0], A.r[1], rand()),
+    lean: (rand() - 0.5) * (A.kind === 'conifer' ? 0.7 : 1.6),
+    leanDir: rand() * TAU,
+  };
+  const nB = A.kind === 'snag' ? 3 + ((rand() * 3) | 0)
+    : A.kind === 'birch' ? 3 + ((rand() * 2) | 0)
+      : 4 + ((rand() * 4) | 0);
+  for (let i = 0; i < nB; i++) { rand(); rand(); rand(); rand(); }
+  if (A.kind === 'conifer') {
+    const layers = 4 + ((rand() * 2) | 0);
+    for (let i = 0; i < layers; i++) { rand(); rand(); }
+  } else if (A.kind === 'birch') {
+    for (let i = 0; i < 3 * 7; i++) rand();
+  } else if (A.kind === 'broad') {
+    for (let i = 0; i < 4 * 7; i++) rand();
+  }
+  return base;
+}
+
+function makeRecipe(rand, ai, legacy = null) {
+  const A = ARCHETYPES[ai];
+  const trunkH = legacy ? legacy.trunkH : lerp(A.h[0], A.h[1], rand());
+  const trunkR = legacy ? legacy.trunkR : lerp(A.r[0], A.r[1], rand());
+  const lean = legacy ? legacy.lean : (rand() - 0.5) * (A.kind === 'conifer' ? 0.7 : 1.6);
+  const leanDir = legacy ? legacy.leanDir : rand() * TAU;
   const rec = {
-    kind: A.kind, trunkH, trunkR, lean, leanDir,
+    ai, kind: A.kind, trunkH, trunkR, lean, leanDir,
     bark: A.bark, leaf: A.leaf,
     branches: [], canopy: [],
   };
@@ -372,11 +402,36 @@ function makeRecipe(rand, ai) {
   const topZ = Math.sin(leanDir) * lean;
   rec.top = [topX, trunkH, topZ];
 
+  // Three unequal trunk reaches put an actual line into the silhouette. The old two-piece
+  // trunk had one perfectly straight lower half and one perfectly straight upper half; at
+  // player height thousands of instances therefore read as telephone poles even after their
+  // whole-instance lean. These two small deterministic offsets remain inside the trunk's
+  // collider radius and cost nothing after the nine templates are baked at boot.
+  const bendPhase = leanDir + 0.83 + ai * 0.71;
+  const bendA = trunkR * (0.16 + rand() * 0.14);
+  const bendB = trunkR * (0.10 + rand() * 0.16);
+  rec.trunkPath = [
+    { x: 0, y: 0, z: 0 },
+    {
+      x: topX * 0.16 + Math.cos(bendPhase) * bendA,
+      y: trunkH * 0.32,
+      z: topZ * 0.16 + Math.sin(bendPhase) * bendA,
+    },
+    {
+      x: topX * 0.61 - Math.cos(bendPhase + 0.37) * bendB,
+      y: trunkH * 0.70,
+      z: topZ * 0.61 - Math.sin(bendPhase + 0.37) * bendB,
+    },
+    { x: topX, y: trunkH, z: topZ },
+  ];
+  rec.barkSeed = ai * 31 + Math.floor((bendA + bendB) * 1000);
+
   // Branches. A snag keeps a few broken stubs and NO canopy - that is the whole
   // read of The Burn (DESIGN §2: "pale snags 7-12 m, ash floor, no canopy").
-  const nB = rec.kind === 'snag' ? 3 + ((rand() * 3) | 0)
-    : rec.kind === 'birch' ? 3 + ((rand() * 2) | 0)
-      : 4 + ((rand() * 4) | 0);
+  const nB = rec.kind === 'snag' ? 6 + ((rand() * 3) | 0)
+    : rec.kind === 'birch' ? 4 + ((rand() * 2) | 0)
+      : rec.kind === 'conifer' ? 8 + ((rand() * 3) | 0)
+        : 5 + ((rand() * 2) | 0);
   // ART.md §2.6. The conifer branch start was 0.30 and the canopy base 0.26 of
   // trunkH; with trunkH 14-24 m that put the lowest foliage mass at 3.6-6.2 m,
   // a metre and a half over a 1.68 m eye. That is why the torch lit a ceiling
@@ -384,14 +439,26 @@ function makeRecipe(rand, ai) {
   // survives it), why open sky was 2.4% of frame B, and why you cannot see a
   // landmark from inside the Pines at all. The canopy has to be a roof you walk
   // UNDER, with air between it and your head.
-  const startF = rec.kind === 'conifer' ? 0.42 : 0.45;
+  const startF = rec.kind === 'conifer' ? 0.34
+    : rec.kind === 'snag' ? 0.18
+      : rec.kind === 'broad' ? 0.30 : 0.36;
   for (let i = 0; i < nB; i++) {
-    const t = (i + rand() * 0.6) / nB;
+    const t = rec.kind === 'conifer'
+      ? (((i >> 1) + rand() * 0.16) / Math.max(1, Math.ceil(nB * 0.5) - 0.25))
+      : (i + rand() * 0.55) / nB;
     const f = clamp01(lerp(startF, 0.94, t));
-    const ang = rand() * TAU + i * 2.3999632;    // golden angle keeps them apart
-    const up = rec.kind === 'conifer' ? -0.12 + rand() * 0.30 : 0.35 + rand() * 0.70;
-    const reach = (rec.kind === 'conifer' ? 2.6 - f * 1.4 : rec.kind === 'broad' ? 3.2 : 2.0)
-      * (0.7 + rand() * 0.7) * (rec.kind === 'snag' ? 0.45 : 1);
+    // Conifer branches come in opposed, slowly rotating whorls. Broadleafs retain the golden
+    // angle. The difference is visible in silhouette without another canopy mesh or draw.
+    const ang = rec.kind === 'conifer'
+      ? leanDir + (i & 1) * Math.PI + (i >> 1) * 1.31 + (rand() - 0.5) * 0.24
+      : rand() * TAU + i * 2.3999632;
+    const up = rec.kind === 'conifer' ? -0.18 + rand() * 0.27
+      : rec.kind === 'snag' ? -0.14 + rand() * 0.58
+        : 0.26 + rand() * 0.74;
+    const reach = (rec.kind === 'conifer' ? 3.1 - f * 1.65
+      : rec.kind === 'broad' ? 3.45
+        : rec.kind === 'snag' ? 2.35 : 2.15)
+      * (0.68 + rand() * 0.66) * (rec.kind === 'snag' ? 0.72 : 1);
     rec.branches.push({ f, ang, up, reach, r: Math.max(0.055, trunkR * (0.46 - t * 0.22)) });
   }
 
@@ -432,25 +499,31 @@ function makeRecipe(rand, ai) {
       // spire with sky between the whorls instead of a green cloud on a stick.
       const layers = 4 + ((rand() * 2) | 0);
       for (let i = 0; i < layers; i++) {
-        const fr = i / layers;
+        const fr = layers > 1 ? i / (layers - 1) : 0;
         const y = lerp(trunkH * 0.55, trunkH * 1.05, fr);   // ART.md §2.6, was 0.26 then 0.45
-        const r = lerp(trunkH * 0.095, trunkH * 0.022, fr) * (0.85 + rand() * 0.3);
+        const r = lerp(trunkH * 0.104, trunkH * 0.018, fr) * (0.82 + rand() * 0.36);
+        const turn = rand() * TAU;
         rec.canopy.push({
-          x: topX * (y / trunkH), y, z: topZ * (y / trunkH),
-          r, squash: 0.46 + rand() * 0.12, tint: 0.86 + fr * 0.28, wind: 0.42 + fr * 0.30,
+          x: topX * (y / trunkH) + Math.cos(turn) * r * (0.08 + rand() * 0.12), y,
+          z: topZ * (y / trunkH) + Math.sin(turn) * r * (0.08 + rand() * 0.12),
+          r, squash: 0.24 + rand() * 0.13, tint: 0.86 + fr * 0.28,
+          wind: 0.42 + fr * 0.30, aspect: 0.68 + rand() * 0.66, turn,
+          profile: 'conifer',
         });
       }
     } else if (rec.kind === 'birch') {
       // Same measurement, same lever: was 0.20 and four masses. A birch crown at
       // night is a scribble of twigs with sky through it, never a ball.
       const R = trunkH * 0.150;
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
+        const turn = rand() * TAU;
         rec.canopy.push({
           x: topX + (rand() - 0.5) * R * 1.6,
           y: trunkH * (0.80 + rand() * 0.26),
           z: topZ + (rand() - 0.5) * R * 1.6,
-          r: R * (0.55 + rand() * 0.5), squash: 0.80 + rand() * 0.2,
+          r: R * (0.46 + rand() * 0.46), squash: 0.68 + rand() * 0.32,
           tint: 0.84 + rand() * 0.34, wind: 0.62 + rand() * 0.24,
+          aspect: 0.58 + rand() * 0.82, turn, profile: 'leaf',
         });
       }
     } else {
@@ -458,14 +531,19 @@ function makeRecipe(rand, ai) {
       // the bank and the single biggest contributor to the near ring's optical
       // depth wherever a broad template is in the prefix.
       const R = trunkH * 0.195;
-      rec.canopy.push({ x: topX, y: trunkH * 0.94, z: topZ, r: R * 1.05, squash: 0.86, tint: 1.0, wind: 0.55 });
-      for (let i = 0; i < 4; i++) {
+      rec.canopy.push({
+        x: topX, y: trunkH * 0.94, z: topZ, r: R, squash: 0.72,
+        tint: 1.0, wind: 0.55, aspect: 1.24, turn: rand() * TAU, profile: 'leaf',
+      });
+      for (let i = 0; i < 3; i++) {
+        const turn = rand() * TAU;
         rec.canopy.push({
           x: topX + (rand() - 0.5) * R * 2.4,
           y: trunkH * (0.72 + rand() * 0.34),
           z: topZ + (rand() - 0.5) * R * 2.4,
-          r: R * (0.48 + rand() * 0.42), squash: 0.80 + rand() * 0.24,
+          r: R * (0.44 + rand() * 0.40), squash: 0.64 + rand() * 0.30,
           tint: 0.80 + rand() * 0.38, wind: 0.60 + rand() * 0.26,
+          aspect: 0.62 + rand() * 0.86, turn, profile: 'leaf',
         });
       }
     }
@@ -484,11 +562,31 @@ function makeRecipe(rand, ai) {
  * Tapered segment between two points, carrying a per-vertex `aWind` ramp.
  * Derived from GLIDE donors/forest/src/world/TreeFactory.js:70-100.
  */
-function segmentGeometry(ax, ay, az, bx, by, bz, rA, rB, radial, col, windA, windB) {
+function segmentGeometry(ax, ay, az, bx, by, bz, rA, rB, radial, col, windA, windB, style = null) {
   _segA.set(ax, ay, az); _segB.set(bx, by, bz);
   const len = Math.max(0.01, _segA.distanceTo(_segB));
-  let geo = new THREE.CylinderGeometry(rB, rA, len, radial, 1, true);
+  const axial = style && style.axial ? style.axial : 1;
+  let geo = new THREE.CylinderGeometry(rB, rA, len, radial, axial, true);
   geo.translate(0, len / 2, 0);
+  // Fluting lives in the baked vertex positions, not a normal map or shader variant. It is
+  // deliberately broad-frequency: six useful trunk planes with an irregular base silhouette,
+  // rather than expensive noise that disappears beyond arm's length.
+  if (style && (style.rough || style.flare)) {
+    const lp = geo.attributes.position;
+    const phase = (style.seed || 0) * 0.173 + (style.part || 0) * 1.71;
+    const rough = style.rough || 0, flare = style.flare || 0;
+    for (let i = 0; i < lp.count; i++) {
+      const x = lp.getX(i), y = lp.getY(i), z = lp.getZ(i);
+      const t = clamp01(y / len), ang = Math.atan2(z, x);
+      const furrow = Math.sin(ang * 3 + phase) * 0.58
+        + Math.sin(ang * 5 - phase * 0.7 + t * 2.1) * 0.30
+        + Math.sin(t * TAU * 1.5 + phase) * 0.12;
+      const k = 1 + rough * furrow + flare * (1 - t) * (1 - t);
+      lp.setXYZ(i, x * k, y, z * k);
+    }
+    lp.needsUpdate = true;
+    geo.computeVertexNormals();
+  }
   _segDir.subVectors(_segB, _segA).normalize();
   _segQuat.setFromUnitVectors(_yAxis, _segDir);
   _segMat.makeRotationFromQuaternion(_segQuat);
@@ -502,13 +600,30 @@ function segmentGeometry(ax, ay, az, bx, by, bz, rA, rB, radial, col, windA, win
   const c = new Float32Array(n * 3);
   const w = new Float32Array(n);
   const pos = geo.attributes.position;
-  const dy = Math.max(0.001, by - ay);
+  const normal = geo.attributes.normal;
+  const kind = style && style.kind || '';
+  const phase = (style && style.seed || 0) * 0.119 + (style && style.part || 0) * 0.83;
   for (let i = 0; i < n; i++) {
-    // Bark value jitter: a forest of identically-valued trunks reads as
-    // wallpaper. +-8% is enough to break it without looking speckled.
-    const j = 0.92 + (((i * 2654435761) >>> 0) % 1000) / 1000 * 0.16;
+    const vx = pos.getX(i) - ax, vy = pos.getY(i) - ay, vz = pos.getZ(i) - az;
+    const along = clamp01((vx * _segDir.x + vy * _segDir.y + vz * _segDir.z) / len);
+    const ang = Math.atan2(normal.getZ(i), normal.getX(i));
+    const grain = 0.5 + 0.5 * Math.sin(ang * (kind === 'birch' ? 4 : 6)
+      + along * (kind === 'snag' ? 8.5 : 3.2) + phase);
+    let j = 0.68 + grain * 0.46;
+    if (kind === 'birch') {
+      // The overlay rings below do the large birch marks. These smaller broken flecks stop
+      // the pale areas between them reading as one plastic tube.
+      const fleck = Math.sin(along * TAU * 7.0 + Math.sin(ang * 2 + phase) * 1.2);
+      if (fleck > 0.72) j *= 0.62;
+      else j *= 1.08;
+    } else if (kind === 'snag') {
+      // Long, scorched value tears on dead wood.
+      if (Math.sin(ang * 3 - along * 5 + phase) > 0.52) j *= 0.68;
+    } else if (kind === 'band') {
+      j = 0.84 + grain * 0.16;
+    }
     c[i * 3] = col[0] * j; c[i * 3 + 1] = col[1] * j; c[i * 3 + 2] = col[2] * j;
-    w[i] = lerp(windA, windB, clamp01((pos.getY(i) - ay) / dy));
+    w[i] = lerp(windA, windB, along);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
   geo.setAttribute('aWind', new THREE.BufferAttribute(w, 1));
@@ -520,17 +635,27 @@ function segmentGeometry(ax, ay, az, bx, by, bz, rA, rB, radial, col, windA, win
  * GLIDE donors/forest/src/world/TreeFactory.js:104-140 - low-frequency lumps,
  * NOT per-vertex spikes, or it reads as a broccoli floret.
  */
-function blobGeometry(cx, cy, cz, radius, detail, col, tint, wind, squash, seed) {
+function blobGeometry(cx, cy, cz, radius, detail, col, tint, wind, squash, seed, shape = null) {
   const geo = new THREE.IcosahedronGeometry(radius, detail);
   const p = geo.attributes.position;
   const sx = cx * 0.6 + 11.3, sy = cy * 0.6 - 4.1, sz = cz * 0.6 + 7.7;
+  const aspect = shape && shape.aspect || 1;
+  const turn = shape && shape.turn || 0;
+  const ct = Math.cos(turn), st = Math.sin(turn);
   for (let i = 0; i < p.count; i++) {
     const px = p.getX(i), py = p.getY(i), pz = p.getZ(i);
     const ix = px / radius, iy = py / radius, iz = pz / radius;
     const lump = 1
       + vnoise3(ix * 1.7 + sx, iy * 1.7 + sy, iz * 1.7 + sz, seed) * 0.19
       + vnoise3(ix * 3.6 - sx, iy * 3.6 + sz, iz * 3.6 - sy, seed + 17) * 0.08;
-    p.setXYZ(i, px * lump, py * lump * squash, pz * lump);
+    // A round noise ball is still a round noise ball. Stretch each baked mass on a different
+    // bearing; conifer tiers also widen toward their underside, producing boughs with air
+    // between them instead of identical broccoli crowns. Same icosphere, same triangle bill.
+    const profile = shape && shape.profile === 'conifer'
+      ? clamp(1 - iy * 0.24, 0.72, 1.28) : 1;
+    const ex = px * lump * aspect * profile;
+    const ez = pz * lump / Math.max(0.58, aspect) * profile;
+    p.setXYZ(i, ex * ct - ez * st, py * lump * squash, ex * st + ez * ct);
   }
   geo.translate(cx, cy, cz);
   geo.computeVertexNormals();
@@ -559,6 +684,22 @@ function blobGeometry(cx, cy, cz, radius, detail, col, tint, wind, squash, seed)
   return geo;
 }
 
+/** A point on the baked three-reach trunk. Boot-time only. */
+function trunkPointAt(rec, f) {
+  const path = rec.trunkPath;
+  const u = clamp01(f) * (path.length - 1);
+  const i = Math.min(path.length - 2, Math.floor(u));
+  const t = u - i, a = path[i], b = path[i + 1];
+  return {
+    x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t), z: lerp(a.z, b.z, t),
+  };
+}
+
+function trunkRadiusAt(rec, f) {
+  const top = rec.kind === 'snag' ? 0.10 : rec.kind === 'conifer' ? 0.28 : 0.34;
+  return rec.trunkR * lerp(1, top, Math.pow(clamp01(f), 0.84));
+}
+
 /** Build one template's geometry from its recipe at a detail level (0 = near). */
 function buildTemplateGeometry(rec, lod, seed) {
   const parts = [];
@@ -572,24 +713,76 @@ function buildTemplateGeometry(rec, lod, seed) {
   const radial = lod === 0 ? 6 : 5;
   const detail = lod === 0 ? 1 : 0;
   const tH = rec.trunkH, tR = rec.trunkR;
-  const [tx, , tz] = rec.top;
 
-  // Trunk: two tapered segments so the lean is a curve, not a hinge.
-  parts.push(segmentGeometry(0, 0, 0, tx * 0.45, tH * 0.5, tz * 0.45,
-    tR, tR * 0.72, radial, rec.bark, 0.0, 0.06));
-  parts.push(segmentGeometry(tx * 0.45, tH * 0.5, tz * 0.45, tx, tH, tz,
-    tR * 0.72, tR * (rec.kind === 'snag' ? 0.10 : 0.40), Math.max(3, radial - 1), rec.bark, 0.06, 0.18));
+  // Three unequal reaches, a fast base taper and six broad flutes. The bottom reach gets one
+  // extra axial ring so the flare curves back inside the original trunk radius; the collider
+  // therefore remains exactly the same circle even though the silhouette no longer is.
+  const path = rec.trunkPath;
+  // Mid LOD keeps the bend but joins the first two reaches: player-height bark belongs inside
+  // 72 m, and shipping those axial rings through thousands of mid instances buys no pixel.
+  const reaches = lod === 0 ? [[0, 1], [1, 2], [2, 3]] : [[0, 2], [2, 3]];
+  for (let i = 0; i < reaches.length; i++) {
+    const a = path[reaches[i][0]], b = path[reaches[i][1]];
+    const f0 = a.y / tH, f1 = b.y / tH;
+    let r0 = trunkRadiusAt(rec, f0), r1 = trunkRadiusAt(rec, f1);
+    const flare = i === 0 ? (rec.kind === 'snag' ? 0.23 : 0.18) : 0;
+    const rough = rec.kind === 'birch' ? 0.045 : rec.kind === 'snag' ? 0.11 : 0.075;
+    // Divide out the maximum baked displacement at the base: even the fattest flute stays
+    // inside the radius used by the unchanged semantic tree collider.
+    if (flare) r0 /= 1 + flare + rough;
+    parts.push(segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
+      r0, r1, i === reaches.length - 1 ? Math.max(3, radial - 1) : radial,
+      rec.bark, lerp(0, 0.10, f0), lerp(0.04, 0.18, f1), {
+        axial: lod === 0 && i === 0 ? 2 : 1,
+        rough,
+        flare, kind: rec.kind, seed: seed + rec.barkSeed, part: i,
+      }));
+  }
+
+  // Birch's identity has to survive at eye height. Four irregular dark collars sit just over
+  // the pale baked trunk; they use the same vertex-colour Lambert mesh, not another material
+  // or draw. The mid tree keeps only one collar to remain inside its triangle gate.
+  if (rec.kind === 'birch') {
+    const bands = lod === 0 ? [0.075, 0.14, 0.235, 0.37] : [0.20];
+    for (let i = 0; i < bands.length; i++) {
+      const f0 = bands[i], f1 = f0 + (0.028 + (i & 1) * 0.010);
+      const a = trunkPointAt(rec, f0), b = trunkPointAt(rec, f1);
+      const r0 = trunkRadiusAt(rec, f0) * 1.025, r1 = trunkRadiusAt(rec, f1) * 1.025;
+      parts.push(segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
+        r0, r1, Math.max(4, radial - 1), (i & 1) ? PAL.barkDark : PAL.barkSnag, 0.01, 0.05,
+        { rough: 0.025, kind: 'band', seed: seed + 211, part: i }));
+    }
+  }
+
+  // A snag ends in a split, not a sharpened pole. Its existing trunk is the tallest shard;
+  // these one/two secondary splinters make the broken crown legible from the fen road.
+  if (rec.kind === 'snag') {
+    const start = trunkPointAt(rec, 0.77);
+    const count = lod === 0 ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      const ang = rec.leanDir + 1.1 + i * 2.35;
+      const f = i ? 0.91 : 0.975;
+      const tip = trunkPointAt(rec, f);
+      const reach = tR * (i ? 1.45 : 1.05);
+      parts.push(segmentGeometry(start.x, start.y, start.z,
+        tip.x + Math.cos(ang) * reach, tip.y, tip.z + Math.sin(ang) * reach,
+        tR * (i ? 0.13 : 0.17), tR * 0.025, 3, rec.bark, 0.08, 0.22,
+        { rough: 0.08, kind: 'snag', seed: seed + 307, part: i }));
+    }
+  }
 
   for (let i = 0; i < rec.branches.length; i++) {
     const br = rec.branches[i];
-    if (lod > 0 && rec.kind !== 'snag' && (i & 1)) continue;   // half the twigs at LOD1
-    const ay = tH * br.f;
-    const ax = tx * br.f, az = tz * br.f;
+    if (lod > 0 && (rec.kind === 'snag' ? (i & 1) : (i % 3) !== 0)) continue;
+    const anchor = trunkPointAt(rec, br.f);
+    const ay = anchor.y;
+    const ax = anchor.x, az = anchor.z;
     const bx = ax + Math.cos(br.ang) * br.reach;
     const by = ay + br.up * br.reach;
     const bz = az + Math.sin(br.ang) * br.reach;
     parts.push(segmentGeometry(ax, ay, az, bx, by, bz, br.r, br.r * 0.45,
-      Math.max(3, radial - 2), rec.bark, 0.18, 0.50));
+      Math.max(3, radial - 2), rec.bark, 0.18, 0.50,
+      { rough: 0.045, kind: rec.kind, seed: seed + 401, part: i }));
     if (rec.blobsOnBranch && br.f >= 0.5 && lod === 0) {
       // detail 0 (20 faces), not 1 (80). Measured: with these at detail 1 the
       // broad templates came out at 854 and 1038 triangles against ART.md
@@ -602,7 +795,8 @@ function buildTemplateGeometry(rec, lod, seed) {
       // branch height, which is exactly the band the top of the frame looks
       // through.
       parts.push(blobGeometry(bx, by, bz, br.reach * 0.42, 0, rec.leaf,
-        0.86 + (i % 3) * 0.09, 0.70, 0.92, seed + i * 13));
+        0.86 + (i % 3) * 0.09, 0.70, 0.92, seed + i * 13,
+        { aspect: 0.66 + (i % 3) * 0.24, turn: br.ang, profile: 'leaf' }));
     }
   }
 
@@ -610,7 +804,8 @@ function buildTemplateGeometry(rec, lod, seed) {
     const cn = rec.canopy[i];
     if (lod > 0 && rec.canopy.length > 3 && (i % 3) === 1) continue;   // thin the crown
     parts.push(blobGeometry(cn.x, cn.y, cn.z, cn.r, detail, rec.leaf,
-      cn.tint, cn.wind, cn.squash, seed + i * 29));
+      cn.tint, cn.wind, cn.squash, seed + i * 29,
+      { aspect: cn.aspect, turn: cn.turn, profile: cn.profile }));
   }
 
   const merged = mergeGeometries(parts, false);
@@ -970,7 +1165,12 @@ export class Flora {
     let n = 0;
     const rand = rng ? () => rng.next() : () => { n = (n * 1103515245 + 12345) & 0x7fffffff; return n / 0x7fffffff; };
     for (let i = 0; i < TEMPLATE_COUNT; i++) {
-      const rec = makeRecipe(rand, i % ARCHETYPES.length);
+      const ai = i % ARCHETYPES.length;
+      const legacy = consumeLegacyRecipe(rand, ai);
+      let shapeN = 0;
+      const shapeRand = () => hashI(i * 4099 + shapeN++, ai * 101 + shapeN * 17,
+        this.seed + 1709);
+      const rec = makeRecipe(shapeRand, ai, legacy);
       const g0 = buildTemplateGeometry(rec, 0, this.seed + i * 131);
       const g1 = buildTemplateGeometry(rec, 1, this.seed + i * 131);
       const bb = g0.boundingBox;
@@ -1443,7 +1643,7 @@ export class Flora {
     _orderList.sort((a, b) => _treeBuf[a * TREE_STRIDE + 9] - _treeBuf[b * TREE_STRIDE + 9]);
     for (let i = 0; i < n; i++) _order[i] = _orderList[i];
 
-    const rec = this._pack(id, cx, cz, n, [minX, minY, minZ, maxX, maxY, maxZ]);
+    const rec = this._pack(id, cx, cz, n, [minX, minY, minZ, maxX, maxY, maxZ], regionId);
     // ---- THE UNDERSTORY: pending, planted by _plantPending off this frame -------
     // It is refused where it would lie through one of this chunk's trunks, so the pass
     // reads the packed cards (position, size, template) back; the template prefix is
@@ -1467,7 +1667,7 @@ export class Flora {
   }
 
   /** Pack the scratch tree list into per-template matrix streams + card data. */
-  _pack(id, cx, cz, n, bounds) {
+  _pack(id, cx, cz, n, bounds, regionId = 0) {
     const counts = new Map();
     for (let i = 0; i < n; i++) {
       const ti = _treeBuf[_order[i] * TREE_STRIDE + 5] | 0;
@@ -1533,8 +1733,11 @@ export class Flora {
       const hB = hashI(qx, qz, this.seed + 991);
       const hC = hashI(qx, qz, this.seed + 227);
       // pow 2.2 on the magnitude: most trees near plumb, a few properly askew
-      const lean = LEAN_BY_KIND[ti] * Math.pow(hA, 2.2);
-      const laz = hB * TAU;
+      const lean = LEAN_BY_KIND[ti] * Math.pow(hA, 2.2) * (BIOME_LEAN_MUL[regionId] || 1);
+      // Ridge woodland agrees on a prevailing northwest blow, with enough spread that it is
+      // still a forest and not a copied transform. Other biomes retain a full-circle bearing.
+      // This is baked into the existing instance matrix; no frame work or new attribute.
+      const laz = regionId === 3 ? 5.42 + (hB - 0.5) * 0.72 : hB * TAU;
       // NOT ta/tb: tb is already the tree's tint BLUE, eight lines up. Shadowing it made
       // this a lineless "unexpected identifier" and the page did not boot at all.
       const tiltX = lean * Math.cos(laz);

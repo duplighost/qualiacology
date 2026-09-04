@@ -130,6 +130,8 @@ function rod(k, ax, ay, az, bx, by, bz, r, seg, col) {
 
 /** Old steel: warmer than C.metal, and NOT C.rust. See the note in `carShell`. */
 const RUSTED = [0.128, 0.104, 0.086];
+const RUST_DARK = [0.066, 0.052, 0.044];
+const OLD_IRON = [0.058, 0.063, 0.069];
 
 /**
  * A BODY FACE DOWN. The one prop this whole file needed and the kit did not have.
@@ -220,24 +222,68 @@ function carShell(k, api, lx, lz, yaw, opts) {
     x: lx + px * Math.cos(yaw) + pz * Math.sin(yaw),
     z: lz - px * Math.sin(yaw) + pz * Math.cos(yaw),
   });
-  s.box(4.30, 0.86, 1.86, lx, gy + 0.62, lz, body, yaw, 0, roll);
+  // Three stamped layers fill the old physical envelope but create sill, shoulder and belt
+  // lines under the torch instead of one featureless four-metre cuboid.
+  s.box(4.30, 0.30, 1.86, lx, gy + 0.25, lz, RUST_DARK, yaw, 0, roll);
+  s.box(4.08, 0.34, 1.80, lx, gy + 0.53, lz, body, yaw, 0, roll);
+  s.box(3.84, 0.35, 1.74, lx - 0.08 * Math.cos(yaw), gy + 0.875,
+    lz + 0.08 * Math.sin(yaw), RUST_DARK, yaw, 0, roll);
   {
     const p = put(-0.25, 0);
     s.box(2.10, 0.76, 1.72, p.x, gy + 1.32, p.z, shade(C.dark, 1.0), yaw, 0, roll);
+    // A welded roof plate is the stable roof surface. Keeping it horizontal matters:
+    // the wreck may list, but the climb collider must be something the player can see.
+    s.box(1.72, 0.10, 1.38, p.x, gy + 1.75, p.z, OLD_IRON, yaw);
+    api.emit({
+      kind: 'obb', x: p.x, z: p.z, halfX: 0.86, halfZ: 0.69, yaw,
+      y0: gy + 1.70, y1: gy + 1.80, tag: 'vehicle', standable: true,
+    });
   }
   // glass, dark: a windscreen is a hole at night, not a shine
   {
     const p = put(0.86, 0);
     s.box(0.10, 0.62, 1.52, p.x, gy + 1.34, p.z, C.glass, yaw, 0, roll);
   }
+  // Side glass, sills, bumpers and stamped panel seams are all below the existing physical
+  // crowns. They give the merged shell a car's internal rhythm instead of one long pale box.
+  for (const side of [-1, 1]) {
+    let p = put(-0.25, side * 0.875);
+    s.box(1.44, 0.42, 0.045, p.x, gy + 1.34, p.z, C.glass, yaw, 0, roll);
+    p = put(-0.10, side * 0.95);
+    s.box(3.72, 0.14, 0.055, p.x, gy + 0.35, p.z, RUST_DARK, yaw);
+    for (const sx of [-0.94, 0.48]) {
+      p = put(sx, side * 0.955);
+      s.box(0.045, 0.54, 0.04, p.x, gy + 0.77, p.z, shade(C.dark, 0.62), yaw);
+    }
+  }
+  for (const sx of [-2.13, 2.13]) {
+    const p = put(sx, 0);
+    s.box(0.13, 0.16, 1.72, p.x, gy + 0.45, p.z, OLD_IRON, yaw);
+  }
   if (o.disabled) {
     // Player-facing diagnosis, without HUD copy: the bonnet is reared up, an engine block
     // is exposed, the windscreen is crossed with metal and the exhaust lies on the earth.
     // Even the uncanny headlight tableau must read as a dead machine, not a usable-car bait.
     let p = put(1.35, 0);
-    s.box(1.05, 0.50, 1.34, p.x, gy + 0.96, p.z, shade(C.metal, 0.72), yaw, 0, roll);
+    s.box(1.05, 0.50, 1.34, p.x, gy + 0.96, p.z, OLD_IRON, yaw);
+    for (const ex of [1.08, 1.36, 1.64]) {
+      const rib = put(ex, 0);
+      s.box(0.065, 0.50, 1.36, rib.x, gy + 0.96, rib.z, RUST_DARK, yaw);
+    }
+    api.emit({
+      kind: 'obb', x: p.x, z: p.z, halfX: 0.525, halfZ: 0.67, yaw,
+      y0: gy + 0.71, y1: gy + 1.21, tag: 'metal', standable: true,
+    });
     p = put(2.02, 0);
     s.box(0.10, 1.30, 1.64, p.x, gy + 1.48, p.z, body, yaw, 0, 0.20 + roll);
+    for (const side of [-1, 1]) {
+      const rib = put(2.015, side * 0.52);
+      s.box(0.055, 1.12, 0.075, rib.x, gy + 1.48, rib.z, RUST_DARK, yaw, 0, 0.20 + roll);
+    }
+    api.emit({
+      kind: 'obb', x: p.x, z: p.z, halfX: 0.18, halfZ: 0.82, yaw,
+      y0: gy + 0.80, y1: gy + 2.15, tag: 'metal', climbable: false,
+    });
     const a = put(0.83, -0.72), b = put(0.90, 0.72);
     rod(s, a.x, gy + 1.08, a.z, b.x, gy + 1.62, b.z, 0.035, 4, shade(C.metal, 0.8));
     const c = put(0.83, 0.72), d = put(0.90, -0.72);
@@ -255,7 +301,10 @@ function carShell(k, api, lx, lz, yaw, opts) {
       s.tube(0.33, 0.33, 0.20, 8, q.x, groundY(api, q.x, q.z) + 0.10, q.z, shade(C.dark, 0.9));
       continue;
     }
-    s.tube(0.33, 0.33, 0.22, 8, p.x, gy + 0.33, p.z, shade(C.dark, 0.9), 0, 0, Math.PI * 0.5);
+    s.tube(0.34, 0.34, 0.24, 10, p.x, gy + 0.33, p.z,
+      shade(C.dark, 0.75), yaw, Math.PI * 0.5, 0);
+    s.cyl(0.13, 0.13, 0.255, 8, p.x, gy + 0.33, p.z,
+      OLD_IRON, yaw, Math.PI * 0.5, 0);
   }
   // THE DOORS, and they are the whole sentence of a wreck.
   //
@@ -271,11 +320,13 @@ function carShell(k, api, lx, lz, yaw, opts) {
     for (const side of [-1, 1]) {
       const lp = put(0.30 - 0.51 * ct, side * (0.94 + 0.51 * st));
       s.box(1.02, 0.92, 0.09, lp.x, gy + 1.02, lp.z, body, yaw + side * o.open, 0, roll);
+      s.box(0.70, 0.55, 0.045, lp.x, gy + 1.00, lp.z, RUST_DARK,
+        yaw + side * o.open, 0, roll);
     }
   }
   api.emit({
     kind: 'obb', x: lx, z: lz, halfX: 2.20, halfZ: 0.98, yaw,
-    y0: gy - 0.25, y1: gy + 1.72, tag: 'vehicle',
+    y0: gy - 0.25, y1: gy + 1.05, tag: 'vehicle', standable: true,
   });
   return { gy, put };
 }
