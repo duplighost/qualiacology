@@ -110,6 +110,14 @@
     hunterThrow: loadAnim('hunter_throw', 4),
     knightWalk: loadAnim('knight_walk', 12),
     knightDeath: loadAnim('knight_death', 6),
+    knightAttack: loadAnim('knight_attack', 6),
+    crawlerDeath: loadAnim('crawler_death', 4),
+    batDeath: loadAnim('bat_death', 4),
+    censerDeath: loadAnim('censer_death', 4),
+    executionerDeath: loadAnim('executioner_death', 4),
+    executionerAttack: loadAnim('executioner_attack', 6),
+    bossDeath: loadAnim('boss_death', 4),
+    bossAttack: loadAnim('boss_attack', 6),
     crawlerWalk: loadAnim('crawler_walk', 8),
     batFlap: loadAnim('bat_flap', 18),
     censerFloat: loadAnim('censer_float', 12),
@@ -993,6 +1001,20 @@
   // The walkable top nearest a height you had in mind. Asking simply for the
   // highest slab over a column is the wrong question once a district has a
   // vault above the road and an undercroft beneath it.
+  // Where a body comes to rest: the first surface under it, one-way ledges
+  // included. groundYNear picks the nearest floor in either direction and
+  // skips one-way ledges, which would drop a corpse killed on the gallery
+  // through the gallery.
+  function corpseRestY(px, py) {
+    let best = null;
+    for (const p of platforms) {
+      if (px < p.x + 6 || px > p.x + p.w - 6) continue;
+      if (p.y < py - 2) continue;
+      if (best == null || p.y < best) best = p.y;
+    }
+    return best;
+  }
+
   function groundYNear(px, preferY) {
     let best = null;
     let bestGap = Infinity;
@@ -1339,6 +1361,37 @@
   }
 
   resetEnemies();
+
+  // How far through a swing an enemy is, 0 to 1, across wind-up, strike and
+  // recovery. The attack sheets are authored in that order, so this is all the
+  // indexing they need.
+  function attackPhase(e, windup, strike, recover) {
+    if (e.state === 'windup') return 0.45 * (1 - clamp(e.stateT / windup, 0, 1));
+    if (e.state === 'swing' || e.state === 'slam') return 0.45 + 0.35 * (1 - clamp(e.stateT / strike, 0, 1));
+    if (e.state === 'recover') return 0.80 + 0.20 * (1 - clamp(e.stateT / recover, 0, 1));
+    return 0;
+  }
+
+  // The boss doesn't wind up and recover like the others — he slams, charges,
+  // leaps and summons — so his sheet is posed by hand rather than squeezed
+  // through the three-beat above. Frame 2 lands on the shockwave, not near it.
+  function bossPose(e, n) {
+    const at = i => clamp(i, 0, n - 1);
+    if (e.state === 'slam') {
+      const k = clamp(1 - e.stateT / (e.phase === 2 ? 0.72 : 0.95), 0, 1);
+      return k < 0.30 ? at(0) : k < 0.47 ? at(1) : k < 0.78 ? at(2) : at(3);
+    }
+    if (e.state === 'summon') return clamp(1 - e.stateT / 1.15, 0, 1) < 0.45 ? at(4) : at(5);
+    if (e.state === 'charge') return at(2);
+    if (e.state === 'leap') return at(1);
+    return -1;
+  }
+
+  function deathFrame(frames, e, seconds) {
+    if (!animReady(frames)) return null;
+    const t = Math.max(0, game.time - (e.deadAt == null ? game.time : e.deadAt));
+    return frames[clamp(Math.floor(t / seconds * frames.length), 0, frames.length - 1)];
+  }
 
   function enemyRect(e) {
     return e.flying
@@ -2832,6 +2885,18 @@
       const e = enemies[i];
       if (!e.alive) {
         e.deadTimer -= dt;
+        // A body falls. Flyers used to die in mid-air and hang there fading,
+        // which is the one thing a corpse never does — and the Abbot dies
+        // mid-leap often enough that it applies to him too.
+        if (e.restY == null) {
+          const g0 = corpseRestY(e.x, e.y);
+          e.restY = g0 == null ? e.y : g0;
+        }
+        if (e.y < e.restY) {
+          e.vy = (e.vy || 0) + 2100 * dt;
+          e.y = Math.min(e.restY, e.y + e.vy * dt);
+          if (e.y >= e.restY) e.vy = 0;
+        }
         if (e.deadTimer <= 0 && e.type !== 'boss') enemies.splice(i, 1);
         continue;
       }
@@ -2905,6 +2970,10 @@
     }
     e.alive = false;
     e.deadTimer = e.type === 'boss' ? 99 : 1.4;
+    // Death animations index off elapsed time, not off the countdown, because
+    // the boss's countdown is a placeholder 99 and his fall is timed by
+    // bossDeadTimer instead.
+    e.deadAt = game.time;
     e.vx = knockX * 2;
     e.vy = knockY * 2 - 180;
     game.kills++;
@@ -4176,6 +4245,14 @@
     }
     {
       const img = animImg(anims.crawlerWalk, game.time * 1.35 + e.seed * 6, 12);
+      if (!e.alive) {
+        const d = deathFrame(anims.crawlerDeath, e, 1.4);
+        if (d) {
+          g.save(); g.globalAlpha = clamp(e.deadTimer / 0.45, 0, 1);
+          drawAnimGround(g, d, e.x, e.y, 70, e.facing, { ax: 0.50 });
+          g.restore(); return;
+        }
+      }
       if (img && drawAnimGround(g, img, e.x, e.y, 62, e.facing, { scaleY: coil, ax: 0.55, flash: e.flash > 0 })) return;
     }
     if (drawGroundSprite(g, 'crawler', e.x, e.y, 62, e.facing, { scaleY: coil, ax: 0.58, flash: e.flash > 0 })) return;
@@ -4214,6 +4291,14 @@
     {
       const fps = e.state === 'dive' ? 22 : 14;
       const img = animImg(anims.batFlap, game.time + e.seed * 4, fps);
+      if (!e.alive) {
+        const d = deathFrame(anims.batDeath, e, 1.4);
+        if (d) {
+          g.globalAlpha *= clamp(e.deadTimer / 0.45, 0, 1);
+          drawAnimGround(g, d, 0, 0, 123, 1, { ax: 0.50 });
+          g.restore(); return;
+        }
+      }
       if (img && drawAnimCenter(g, img, 0, 0, 96, 1, { ax: 0.55, ay: 0.50, flash: e.flash > 0 })) { g.restore(); return; }
     }
     if (drawCenterSprite(g, 'bat', 0, 0, 96, 1, { ax: 0.58, ay: 0.48, flash: e.flash > 0 })) { g.restore(); return; }
@@ -4252,7 +4337,12 @@
       let rot = e.state === 'swing' ? -0.12 : e.state === 'windup' ? 0.08 : 0;
       if (!e.alive && animReady(anims.knightDeath)) {
         // He falls once and stays fallen; deadTimer counts down from 1.4.
-        img = animOnce(anims.knightDeath, Math.max(0, 1.4 - e.deadTimer), 6);
+        img = animOnce(anims.knightDeath, Math.max(0, game.time - (e.deadAt == null ? game.time : e.deadAt)), 6);
+        rot = 0;
+      } else if (attacking && animReady(anims.knightAttack)) {
+        // A real swing instead of a walk frame with a lean on it.
+        const ph = attackPhase(e, 0.31, 0.28, 0.44);
+        img = anims.knightAttack[clamp(Math.floor(ph * anims.knightAttack.length), 0, anims.knightAttack.length - 1)];
         rot = 0;
       } else if (attacking) {
         img = (lunge && lunge.complete) ? lunge : animImg(anims.knightWalk, 0, 1);
@@ -4297,6 +4387,14 @@
     if(casting){const rg=g.createRadialGradient(22,42,3,22,42,95);rg.addColorStop(0,'rgba(255,82,46,0.42)');rg.addColorStop(1,'rgba(255,0,20,0)');g.fillStyle=rg;g.fillRect(-80,-55,190,190);}
     {
       const img = animImg(anims.censerFloat, game.time * 0.7 + e.seed * 3, 8);
+      if (!e.alive) {
+        const d = deathFrame(anims.censerDeath, e, 1.4);
+        if (d) {
+          g.globalAlpha *= clamp(e.deadTimer / 0.45, 0, 1);
+          drawAnimGround(g, d, 0, 0, 228, 1, { ax: 0.50 });
+          g.restore(); return;
+        }
+      }
       if (img && drawAnimCenter(g, img, 0, 0, 108, 1, { ax: 0.48, ay: 0.52, flash: e.flash > 0 })) { g.restore(); return; }
     }
     if (drawCenterSprite(g, 'censer', 0, 0, 108, 1, { ax: 0.48, ay: 0.52, flash: e.flash > 0 })) { g.restore(); return; }
@@ -4325,6 +4423,24 @@
     const aura=g.createRadialGradient(0,-82,5,0,-82,boss?150:100);aura.addColorStop(0,boss&&e.phase===2?'rgba(255,35,55,.31)':'rgba(145,18,38,.14)');aura.addColorStop(1,'rgba(255,0,20,0)');g.fillStyle=aura;g.fillRect(-175,-240,350,290);
     {
       const busy = e.state === 'windup' || e.state === 'slam' || e.state === 'recover' || e.state === 'charge' || e.state === 'leap';
+      if (!e.alive) {
+        const dset = boss ? anims.bossDeath : anims.executionerDeath;
+        const d = deathFrame(dset, e, boss ? 3.0 : 1.4);
+        if (d) {
+          g.globalAlpha *= boss ? 1 : clamp(e.deadTimer / 0.45, 0, 1);
+          drawAnimGround(g, d, 0, 0, boss ? 250 : 227, 1, { ax: 0.50 });
+          g.restore(); return;
+        }
+      }
+      const aset = boss ? anims.bossAttack : anims.executionerAttack;
+      if (animReady(aset)) {
+        let ai = -1;
+        if (boss) ai = bossPose(e, aset.length);
+        else if (e.state === 'windup' || e.state === 'slam' || e.state === 'recover') {
+          ai = clamp(Math.floor(attackPhase(e, 0.50, 0.26, 0.62) * aset.length), 0, aset.length - 1);
+        }
+        if (ai >= 0 && drawAnimGround(g, aset[ai], 0, 0, boss ? 215 : 216, 1, { ax: 0.50, flash: e.flash > 0 })) { g.restore(); return; }
+      }
       const frames = boss ? anims.bossIdle : anims.executionerWalk;
       const img = busy
         ? (frames[0] && frames[0].complete ? frames[0] : null)
@@ -4357,11 +4473,11 @@
   }
 
   function drawEnemy(g, e) {
-    // A dying knight keeps drawing until his fall has played out; updateEnemies
-    // removes him the moment deadTimer runs out, which is when the last pose
-    // has been on screen long enough to read.
-    if (!e.alive && e.type !== 'boss' && !(e.type === 'knight' && e.deadTimer > 0)) return;
-    if (e.type === 'boss' && !game.bossActive) return;
+    // A dying enemy keeps drawing until its fall has played out; updateEnemies
+    // removes it the moment deadTimer runs out, which is when the last pose has
+    // been on screen long enough to read.
+    if (!e.alive && e.type !== 'boss' && !(e.deadTimer > 0)) return;
+    if (e.type === 'boss' && !game.bossActive && !(game.bossDeadTimer > 0)) return;
     switch (e.type) {
       case 'crawler': drawCrawler(g, e); break;
       case 'bat': drawBat(g, e); break;
@@ -4947,6 +5063,7 @@
         })),
         boss: boss ? { alive: boss.alive, hp: boss.hp, awake: boss.bossAwake, state: boss.state, x: boss.x, y: boss.y } : null,
         cameraX: game.camera.x,
+        cameraY: game.camera.y,
         zoneTitle: game.zoneTitle,
         relicPoints: player.relicPoints,
         caches: caches.map(c => ({ x: c.x, y: c.y, zone: c.zone, xp: c.xp, taken: !!c.taken })),
@@ -5000,6 +5117,20 @@
     setHealth(value) { player.health = clamp(Number(value) || 0, 0, player.maxHealth); },
     grantXP(amount = 500) { gainXP(Number(amount) || 0); },
     killNow() { killPlayer(); },
+    killEnemiesNear(radius = 900) {
+      let n = 0;
+      for (const e of enemies) {
+        if (!e.alive || e.type === 'boss') continue;
+        if (Math.abs(e.x - player.x) > radius) continue;
+        killEnemy(e, e.x, e.y - e.h * 0.5, 0, -20);
+        n++;
+      }
+      return n;
+    },
+    enemiesNear(radius = 900) {
+      return enemies.filter(e => Math.abs(e.x - player.x) < radius)
+        .map(e => ({ type: e.type, alive: e.alive, x: Math.round(e.x), y: Math.round(e.y), deadTimer: e.deadTimer, state: e.state }));
+    },
     openRelics(open = true) { game.relicsOpen = !!open; },
     relicState() { return { points: player.relicPoints, ranks: Object.assign({}, player.relics), maxHealth: player.maxHealth, power: player.power, chain: MAX_CHAIN, pump: SWING_PUMP, swing: MAX_SWING }; },
     setInvulnerable(seconds = 10) { player.invuln = Math.max(player.invuln, Math.max(0, Number(seconds) || 0)); },

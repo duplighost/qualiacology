@@ -396,3 +396,73 @@ is 1% of a frame budget.
 
 A one-shot animation player was added alongside the looping one. A death that
 loops is a body that gets up again.
+
+### The things that fight you die, and they wind up first
+
+Grok's third and fourth drops. Everything is pulled out as connected components
+and fingerprinted against everything already built, so the sets below are only
+the poses that were actually new — 47 files came in and 13 of them were.
+
+Every enemy in the game has a death now, and three of them have a swing.
+
+| set | frames | drawn at | what it is |
+| --- | --- | --- | --- |
+| crawler_death | 4 | 70px | sprawls flat, ribs out |
+| bat_death | 4 | 123px | crumples wing-spread |
+| censer_death | 4 | 228px | the brazier cracks open and spills |
+| executioner_death | 4 | 227px | goes down under his own axe |
+| boss_death | 4 | 250px | falls flat, wings under him |
+| knight_attack | 6 | 172px | the advance with the blade out |
+| executioner_attack | 6 | 216px | axe cocked behind the head, round, through |
+| boss_attack | 6 | 215px | guard, arms up, crash down, stand, cast |
+
+Each set is composited onto its own canvas sized to that enemy's widest pose, so
+a crawler lying down is 671px wide against a censer's 286 and neither one is
+padded to the other's frame. The draw height per set is derived from how much of
+its own canvas the figure occupies, which is why a crawler corpse is 70px tall
+and a boss corpse is 250 without either of them being hand-tuned.
+
+Three things this forced:
+
+**A dying flier hung in the air.** The corpse code only ever counted down a
+timer, so a bat killed mid-flap stayed at the altitude it died at and faded out
+there, which is the one thing a body never does. Corpses find the ground under
+them and fall to it now, at 2100px/s², and stop when they land. The floor they
+look for is the first surface BELOW them and it counts one-way ledges — the
+existing `groundYNear` picks the nearest solid in either direction and ignores
+one-way entirely, which would have dropped anything killed on the gallery
+straight through the gallery onto the road. Driven in a browser across eighteen
+districts: 71 bodies, 68 landed exactly on the first surface under them, two
+died over a void and stayed where they were, none passed through anything.
+
+**Only knights were allowed to die on screen.** `drawEnemy` returned early on
+`!e.alive` for everything except a knight — that exemption was added when the
+knight was the only one with a death sheet. It is any enemy whose `deadTimer` is
+still running now, which is the same 1.4s window the fade already used.
+
+**The boss doesn't wind up.** His verbs are slam, charge, leap and summon, not
+windup/swing/recover, so feeding him the executioner's three-beat left him on a
+single held frame for every attack he has — and on his idle pose while airborne.
+He has his own pose map now: frame 2 lands on the shockwave rather than near it,
+the leap holds the arms-up wingspread, the charge holds the forward crouch, and
+the summon breaks into the cast frame at the halfway point. The executioner's
+strike constant was 0.30 against a slam that is actually 0.26 long, so the first
+sixth of his swing arc was being skipped; it matches now.
+
+And his death needed two more corrections before it could play at all. Every
+other enemy is timed off a 1.4s countdown, but the boss's countdown is a
+placeholder 99 with the real 3.5s living in `bossDeadTimer`, so indexing the
+sheet by countdown pinned him on frame 0 for a minute and a half. Deaths run off
+the moment of death now, which is the same clock for everyone. And killing him
+clears `bossActive`, which is the flag `drawEnemy` uses to decide whether the
+boss exists — so the frame after he died he stopped being drawn entirely. He
+keeps drawing while his fall plays out. He falls, too: he dies mid-leap often
+enough that leaving him hanging in the air was the same bug the fliers had.
+
+Verified in a browser at readable zoom rather than from the sheets: every enemy
+type killed on screen, cropped around the body, and the corpse confirmed lying
+on the floor it fell to. Frame cost with all eight sets live: 2.40ms median in
+open combat, 1.60ms in the boss arena.
+
+Not used yet: the hunter's kick and attack poses. They are good art and there is
+no melee button to hang them on — that is a design decision, not a slice.

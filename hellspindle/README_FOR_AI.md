@@ -33,11 +33,14 @@ tap it.
 - `index.html` `style.css` `game.js` — the game
 - `assets/bg_*.webp` — district panoramas
 - `assets/sprites/` — characters, wheel, hook, tiles, goreweave
-- `assets/sprites/anim/` — walk/idle/air/flap loops
+- `assets/sprites/anim/` — walk/idle/air/flap loops, plus throws, hurts,
+  deaths for every enemy, and attack cycles for knight, executioner and boss.
+  `meta.json` carries each set's frame count, canvas size and draw height
 - `docs/STATUS.md` — what is true now
 - `AGENTS.md` — short working note
 
 Do not merge this with another game. Do not invent a HUD. Controls belong on title and pause.
 
 Debug hook: `window.__HELLSPINDLE__` (snapshot, world, teleport, latchHook,
-grantXP, openRelics, relicState, start, restart).
+grantXP, openRelics, relicState, killNow, killEnemiesNear, enemiesNear,
+start, restart).

@@ -32,8 +32,16 @@ What is true now:
   cycle cannot flicker.
 - She throws, she recoils when hit, and she dies on the floor she was standing
   on instead of falling through it. So does the knight.
+- Everything that fights you dies on screen now. Crawler, bat, censer,
+  executioner and the Abbot each have their own four-frame death, and a corpse
+  finds the ground under it and falls to it instead of hanging where it died.
+- The knight, the executioner and the Abbot wind up before they hit you. The
+  Abbot has his own posing because his verbs are slam, charge, leap and summon —
+  he crouches into a charge, spreads on a leap, and the crash frame lands on the
+  shockwave rather than near it.
 
 Still true about the picture: knight shield art stays after the shield breaks,
-attacks are a lean, hook hole is a little chewed.
+hook hole is a little chewed. The hunter's kick and attack art is sliced and
+sitting there unused — there is no melee button to hang it on.
 
 Clean break point.
