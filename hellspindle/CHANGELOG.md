@@ -147,3 +147,110 @@ Learned from the other copies without merging them:
 Hunter is now a woman: porcelain mask, red visor, torn crimson coat, idle/walk/air loops. Title still says S DROP.
 
 Clean break point.
+
+## 2026-09-04 — speed, the rope, routes, the Reliquary
+
+### Speed
+
+The frame was composed into a second canvas that never gets shown, then blitted
+onto the visible one. A canvas that is never presented does not get hardware
+acceleration, so that one line uploaded 1600x900 pixels from the CPU every
+frame. Measured in headless Chromium: **29.8ms of a ~30ms frame, about 87% of
+all CPU time, inside a single `drawImage`.** Painting straight onto the visible
+canvas takes the same frame to **0.90ms**. Browsers already present a canvas
+atomically at the end of a rAF callback and `render()` never yields, so the
+tearing the offscreen buffer guarded against cannot happen anyway.
+
+Also:
+- The backing store is sized to what the display can actually resolve instead
+  of always 1600x900. A phone stops painting pixels that get thrown away.
+- Static masonry is bucketed by x. The collision queries were doing two to
+  three million rectangle tests a second against a world that is the same shape
+  it was at boot.
+- Goreweave band rectangles, platform gradients and the hook halo are built
+  once instead of per frame.
+- Oversized source sprites are baked to their draw size once instead of being
+  resampled every frame.
+- The wheel's combat pass skips anything the chain cannot reach.
+
+### The rope
+
+It used to search for a legal pendulum pose and teleport you onto it, walking
+outward through neighbouring arcs when the ideal pose clipped masonry, and
+dropping the hook when nothing in that narrow window fit. That is why grazing a
+slab let go of the ring, and why an arc that brushed geometry went dead instead
+of sliding — every rejected candidate silently deformed the swing.
+
+It is a constraint now. You are an ordinary body moved by the same collision
+code as everything else; the rope only removes outward radial velocity and takes
+up slack, and it is a rope rather than a rod, so being closer to the ring than
+the rope is long is simply allowed. **Nothing in the solver can release the
+hook. Only you do.** Hanging ledges are scenery while you are on the rope, a
+corner graze costs a little speed instead of the whole arc, a latch pops you
+clear of the floor, and a pointer that vanishes for a frame no longer counts as
+letting go.
+
+### Collision
+
+The horizontal pass zeroed velocity on its first hit, so a body overlapping two
+abutting slabs never escaped the second one and wedged in the seam. It resolves
+each block now and stops once at the end. The vertical pass treated any overlap
+while descending as a landing, which snapped a body brushing the side of a block
+up onto its roof; it checks that you actually came from outside that face now.
+
+### The cathedral is one place
+
+The twelve districts cross-fade — palette, panorama and the air itself — over
+900px either side of the line, instead of cutting the moment the title card
+fires.
+
+### Routes
+
+A district is four heights now, not one corridor.
+
+- **The vault**, around y=300. Solid ledges high over the district, each under
+  its own ring. Those rings are out of chain range from the road on purpose:
+  you get up there from the gallery, or with more chain.
+- **The gallery**, around y=545. One-way ledges running the other way round the
+  gaps, so taking it is a choice and not a shortcut.
+- **The road**, y=760. The floor, with the same lethal gaps as before — except
+  one slab in each district is a grate. Hold down on it and you fall through.
+- **The undercroft**, y=960. Under the road, its own gaps, its own reliquary,
+  and a stair of ledges back up so it is a loop and not a trap.
+
+Reliquary caches hang on the routes worth taking. Breaking one is XP. They stay
+broken through death and are saved.
+
+### The Reliquary
+
+Levelling used to silently add life and damage the instant the bar filled. Each
+level hands over a relic now, and nothing happens until you open the Reliquary
+and spend it.
+
+| Relic | Ranks | What it does |
+| --- | --- | --- |
+| THE VESSEL | 5 | +16 life |
+| THE EDGE | 5 | +10% wheel damage |
+| THE CHAIN | 4 | +38px chain — reach, arc width, rings you could not touch |
+| THE TENDON | 4 | +14% pump and swing cap |
+| THE CARRION | 4 | +3 life on kill |
+| THE SPITE | 3 | +45% release fling |
+
+Chain length, pump strength and swing cap were constants; they are derived
+stats now, so THE CHAIN and THE TENDON genuinely change what you can reach and
+how the pendulum behaves.
+
+Tab or E opens it, W/S choose, Space or D spends, Tab or Esc closes. On touch a
+badge appears in the HUD when a relic is waiting: tap it to open, tap a row to
+spend, tap outside to close. Saves made before the Reliquary existed hand their
+banked levels back as points rather than losing them.
+
+### The hunter
+
+New painted sheets, keyed off their magenta background, despilled, and
+composited into one shared canvas per character so she is the same size walking,
+airborne or on the rope. Air poses are chosen by vertical speed — rise, leap,
+fall, dive — rather than cycled on a timer, and the dive comes out at speed on
+the rope. Landing compresses her in proportion to the fall; a hard takeoff
+stretches her. No idle sheet came with the set, so the rest pose is the
+narrowest walk frame with a breath on it.

@@ -742,8 +742,8 @@
   // ---------------------------------------------------------------------------
 
   const platforms = [];
-  // Static masonry is bucketed by x once at boot; supportYAt and the collision
-  // queries below read the buckets instead of walking the whole cathedral.
+  // Static masonry is bucketed by x once at boot so the collision queries read
+  // the buckets instead of walking the whole cathedral.
   const SOLID_BUCKET = 1024;
   const solidBuckets = [];
   let solidBucketsBuilt = false;
@@ -833,14 +833,36 @@
     return list;
   }
 
-  function membraneOpenRun(membrane) {
-    let run = 0;
-    let best = 0;
-    for (const band of membrane.bands) {
-      if (band.hp <= 0) { run++; best = Math.max(best, run); }
-      else run = 0;
+  // Whether a hole is actually a doorway.
+  //
+  // The old test called a curtain breached at four dead bands wherever they
+  // happened to be. Four bands is 104px of hole, which is enough — but only if
+  // the hole sits on the floor. Cut high and the game announced GOREWEAVE
+  // BREACHED while a live band still crossed the doorway, and you walked into
+  // a few pixels of curtain with nothing telling you why you had stopped. This
+  // measures the doorway instead of counting bands: the strip a body has to
+  // pass through, from the floor on either side up by her own height, has to be
+  // clear of live band.
+  function membranePassable(membrane) {
+    const leftFloor = groundYNear(membrane.x - 44, 760);
+    const rightFloor = groundYNear(membrane.x + membrane.w + 44, 760);
+    let floorLo = 760;
+    let floorHi = 760;
+    if (leftFloor != null && rightFloor != null) {
+      floorLo = Math.min(leftFloor, rightFloor);
+      floorHi = Math.max(leftFloor, rightFloor);
+    } else if (leftFloor != null) {
+      floorLo = floorHi = leftFloor;
+    } else if (rightFloor != null) {
+      floorLo = floorHi = rightFloor;
     }
-    return best;
+    const top = floorLo - PLAYER_H - 6;
+    for (let i = 0; i < membrane.bands.length; i++) {
+      if (membrane.bands[i].hp <= 0) continue;
+      const r = membraneBandRect(membrane, i);
+      if (r.y + r.h > top && r.y < floorHi) return false;
+    }
+    return true;
   }
 
   const AREAS = [
@@ -863,27 +885,6 @@
   function areaIndexAt(x) {
     for (let i = AREAS.length - 1; i >= 0; i--) if (x >= AREAS[i].x0) return i;
     return 0;
-  }
-
-  function supportYAt(px) {
-    let best = null;
-    if (!solidBucketsBuilt) {
-      for (const p of platforms) {
-        if (p.oneWay) continue;
-        if (px < p.x + 6 || px > p.x + p.w - 6) continue;
-        if (best == null || p.y < best) best = p.y;
-      }
-      return best;
-    }
-    const i = Math.max(0, Math.min(solidBuckets.length - 1, Math.floor(px / SOLID_BUCKET)));
-    const bucket = solidBuckets[i];
-    for (let j = 0; j < bucket.length; j++) {
-      const p = bucket[j];
-      if (p.oneWay) continue;
-      if (px < p.x + 6 || px > p.x + p.w - 6) continue;
-      if (best == null || p.y < best) best = p.y;
-    }
-    return best;
   }
 
   function bossGateRect() {
@@ -965,40 +966,146 @@
     { type: 'bat', x: 8350, y: 390 }
   );
 
+  // The walkable top nearest a height you had in mind. Asking simply for the
+  // highest slab over a column is the wrong question once a district has a
+  // vault above the road and an undercroft beneath it.
+  function groundYNear(px, preferY) {
+    let best = null;
+    let bestGap = Infinity;
+    for (const p of platforms) {
+      if (p.oneWay) continue;
+      if (px < p.x + 6 || px > p.x + p.w - 6) continue;
+      const gap = Math.abs(p.y - preferY);
+      if (gap < bestGap) { bestGap = gap; best = p.y; }
+    }
+    return best;
+  }
+
+  // Reliquary caches. The reason to leave the road.
+  const caches = [];
+  function cache(x, y, zone, xp) {
+    caches.push({ x, y, zone, xp, taken: false, pulse: hash(x * 0.021) * TAU });
+  }
+
+  // A district is four heights, not one corridor.
+  //
+  //   THE VAULT      y~300   solid ledges you can only reach off a high ring,
+  //                          and some of those rings are out of chain range
+  //                          until THE CHAIN says otherwise
+  //   THE GALLERY    y~545   one-way ledges; a parallel route you can jump to
+  //                          and drop off wherever you like
+  //   THE ROAD       y=760   the floor, with the same lethal gaps as before,
+  //                          except one slab is a grate you can drop through
+  //   THE UNDERCROFT y=960   under the road, its own gaps, its own cache, and
+  //                          a stair of ledges back up
   function buildWing(x0, width, zone, kind) {
     const gaps = 3;
     const gapW = 210 + (kind % 3) * 18;
     const usable = width - 100;
     const slabW = (usable - gaps * gapW) / (gaps + 1);
-    let x = x0 + 16;
     const roster = ['crawler', 'knight', 'bat', 'censer'];
+    const grateSlab = 1 + (kind % 2);     // which road slab is a grate
+    const lastDistrict = zone >= AREAS.length - 1;
+
+    const slabX = [];
+    let x = x0 + 16;
     for (let s = 0; s <= gaps; s++) {
       const floorY = 760 - ((s + kind) % 4 === 2 ? 48 : 0);
-      platform(x, floorY, slabW, 980 - floorY, false, zone);
+      slabX.push({ x, floorY });
+
+      if (s === grateSlab && !lastDistrict) {
+        // A grate: stand on it, hold down, fall into the undercroft.
+        platform(x, floorY, slabW, 30, true, zone);
+      } else {
+        platform(x, floorY, slabW, 70, false, zone);
+      }
+
       const type = roster[(s + kind) % 4];
       const spawnY = (type === 'bat' || type === 'censer') ? floorY - 118 : floorY;
       spawnTemplates.push({ type, x: x + slabW * 0.38, y: spawnY });
       if (s % 2 === 1) spawnTemplates.push({ type: 'bat', x: x + slabW * 0.72, y: 360 + (s % 2) * 30 });
-      if ((s + kind) % 3 === 0) hazard(x + 40, floorY - 24, 130, 24, 'spikes');
-      platform(x + 30, 520 - (s % 2) * 95, 210 + (s % 2) * 30, 34, true, zone);
+      if ((s + kind) % 3 === 0 && s !== grateSlab) hazard(x + 40, floorY - 24, 130, 24, 'spikes');
+
+      // The gallery: reachable with a jump, and it runs the other way round the
+      // gaps so taking it is a real choice rather than a shortcut.
+      platform(x + 30, 545 - (s % 2) * 62, 210 + (s % 2) * 30, 30, true, zone);
+      if (s < gaps) platform(x + slabW + gapW * 0.18, 600 - (s % 2) * 40, gapW * 0.64, 26, true, zone);
+
       if (s < gaps) hook(x + slabW + gapW * 0.5, 345 + (s % 2) * 48, zone);
       x += slabW + gapW;
     }
+    const roadEnd = x - gapW;
+
+    // The vault. Two solid ledges high over the district, each under its own
+    // ring. The rings sit out of reach of the road on purpose — you get up
+    // there from the gallery, or with more chain.
+    const vaultA = x0 + width * 0.30;
+    const vaultB = x0 + width * 0.66;
+    platform(vaultA - 150, 300, 300, 26, false, zone);
+    platform(vaultB - 130, 336, 260, 26, false, zone);
+    hook(vaultA, 204, zone);
+    hook(vaultB, 236, zone);
     hook(x0 + width * 0.48, 328, zone);
+    spawnTemplates.push({ type: 'bat', x: vaultA + 60, y: 236 });
+    spawnTemplates.push({ type: 'censer', x: vaultB - 40, y: 250 });
+    cache(vaultA + 20, 300, zone, 190 + zone * 42);
+
+    // The undercroft.
+    if (!lastDistrict) {
+      const g = slabX[grateSlab];
+      const underX = g.x - 120;
+      const underW = slabW + 240;
+      platform(underX, 960, underW * 0.46, 120, false, zone);
+      platform(underX + underW * 0.66, 960, underW * 0.34, 120, false, zone);
+      hazard(underX + 30, 936, 110, 24, 'spikes');
+      spawnTemplates.push({ type: 'crawler', x: underX + underW * 0.2, y: 960 });
+      spawnTemplates.push({ type: 'bat', x: underX + underW * 0.5, y: 880 });
+      cache(underX + underW * 0.78, 960, zone, 150 + zone * 34);
+      // A stair back up to the road, so the undercroft is a loop and not a trap.
+      // It stands on the far slab and tops out under the grate, which you pass
+      // up through the way any one-way ledge lets you.
+      const stairX = underX + underW * 0.70;
+      platform(stairX, 892, 120, 22, true, zone);
+      platform(stairX + 96, 846, 120, 22, true, zone);
+      platform(stairX + 24, 800, 120, 22, true, zone);
+    }
+
     if (kind === 4 || kind === 6 || kind === 8 || kind === 10) {
       const ex = x0 + width * 0.7;
-      spawnTemplates.push({ type: 'executioner', x: ex, y: supportYAt(ex) || 760 });
+      spawnTemplates.push({ type: 'executioner', x: ex, y: groundYNear(ex, 760) || 760 });
     }
     if (zone < AREAS.length - 1) {
       seals.push(makeMembrane(x0 + width - 96, 290, 112, 470, zone, 18, 28 + zone * 2));
     }
+    return roadEnd;
   }
 
   for (let i = 3; i < AREAS.length; i++) {
     const a = AREAS[i];
     buildWing(a.x0, a.x1 - a.x0, i, i);
   }
-  spawnTemplates.push({ type: 'boss', x: 36880, y: supportYAt(36880) || 760 });
+
+  // The three hand-authored districts get the same shape: a vault over the
+  // nave, a crypt under the foundry, and something worth the trip in each.
+  platform(1180, 300, 300, 26, false, 0);
+  hook(1330, 168, 0);
+  cache(1330, 300, 0, 150);
+  platform(2380, 322, 260, 26, false, 0);
+  hook(2510, 196, 0);
+  cache(2510, 322, 0, 170);
+  spawnTemplates.push({ type: 'bat', x: 1400, y: 232 });
+
+  platform(4300, 300, 300, 26, false, 1);
+  hook(4450, 176, 1);
+  cache(4450, 300, 1, 210);
+  spawnTemplates.push({ type: 'censer', x: 4430, y: 244 });
+
+  platform(7300, 316, 280, 26, false, 2);
+  hook(7440, 188, 2);
+  cache(7440, 316, 2, 230);
+  spawnTemplates.push({ type: 'bat', x: 7500, y: 240 });
+
+  spawnTemplates.push({ type: 'boss', x: 36880, y: groundYNear(36880, 760) || 760 });
 
   function checkpointBlocked(px, py) {
     const rect = { x: px - PLAYER_W / 2, y: py - PLAYER_H, w: PLAYER_W, h: PLAYER_H };
@@ -1010,12 +1117,12 @@
     let x = area.x0 + 90;
     const limit = Math.min(area.x0 + 720, area.x1 - 40);
     for (let i = 0; i < 80; i++) {
-      const y = supportYAt(x);
-      if (y != null && !checkpointBlocked(x, y)) return { x, y };
+      const y = groundYNear(x, 760);
+      if (y != null && Math.abs(y - 760) < 90 && !checkpointBlocked(x, y)) return { x, y };
       x += 12;
       if (x > limit) break;
     }
-    const y = supportYAt(area.x0 + 90);
+    const y = groundYNear(area.x0 + 90, 760);
     return { x: area.x0 + 90, y: y == null ? 760 : y };
   });
 
@@ -1455,7 +1562,8 @@
         maxCombo: game.maxCombo,
         visited: player.visited,
         completed: !!game.completed,
-        seals: seals.map(m => m.bands.map(b => b.hp))
+        seals: seals.map(m => m.bands.map(b => b.hp)),
+        caches: caches.map(c => (c.taken ? 1 : 0))
       }));
     } catch (_) { /* private mode */ }
   }
@@ -1491,8 +1599,11 @@
             seals[i].bands[b].hp = bandHp[b];
           }
           seals[i].alive = seals[i].bands.some(band => band.hp > 0);
-          seals[i].breached = membraneOpenRun(seals[i]) >= 4;
+          seals[i].breached = membranePassable(seals[i]);
         }
+      }
+      if (Array.isArray(s.caches)) {
+        for (let i = 0; i < caches.length && i < s.caches.length; i++) caches[i].taken = !!s.caches[i];
       }
       game.zone = areaIndexAt(player.checkpointX);
       game.zoneTitle = AREAS[game.zone].name;
@@ -1611,6 +1722,7 @@
     player.level = 1;
     player.xp = 0;
     player.visited = [0];
+    for (const c of caches) c.taken = false;
     resetRelics();
     applyPower();
     player.health = player.maxHealth;
@@ -2293,6 +2405,22 @@
     }
 
     for (const hz of hazards) if (rectsOverlap(playerRect(), hz)) damagePlayer(18, sign0(player.x - (hz.x + hz.w / 2)) || 1, -260);
+
+    for (const c of caches) {
+      if (c.taken) continue;
+      if (Math.abs(c.x - player.x) > 150) continue;
+      if (!rectsOverlap(playerRect(), { x: c.x - 30, y: c.y - 96, w: 60, h: 96 })) continue;
+      c.taken = true;
+      gainXP(c.xp);
+      game.zoneTitle = 'RELIQUARY BROKEN';
+      game.zoneTitleTimer = 1.15;
+      sparkBurst(c.x, c.y - 48, 26, 620, '#ffd88a');
+      bloodBurst(c.x, c.y - 48, 12, 380, 0, -0.4);
+      hitStop(0.05, 0.16);
+      addShake(12);
+      audio.seal();
+      saveGame();
+    }
     if (player.y > 1080) killPlayer();
 
     const areaI = areaIndexAt(player.x);
@@ -2302,7 +2430,7 @@
     if (area && player.x > area.x0 + 70 && player.checkpointX < area.x0 + 40) {
       const cp = AREA_CHECKPOINTS[areaI];
       player.checkpointX = cp ? cp.x : area.x0 + 90;
-      player.checkpointY = cp ? cp.y : (supportYAt(player.checkpointX) || 760);
+      player.checkpointY = cp ? cp.y : (groundYNear(player.checkpointX, 760) || 760);
       player.health = Math.min(player.maxHealth, player.health + 22 + areaI * 2);
       saveGame();
       if (areaI === AREAS.length - 1 && !game.completed) {
@@ -2863,8 +2991,7 @@
         break;
       }
 
-      const run = membraneOpenRun(membrane);
-      if (!membrane.breached && run >= 4) {
+      if (!membrane.breached && membranePassable(membrane)) {
         membrane.breached = true;
         membrane.breachFlash = 1;
         game.zoneTitle = 'GOREWEAVE BREACHED';
@@ -3469,6 +3596,48 @@
     }
     g.fillStyle = latched ? '#fff1dc' : '#ff4c68';
     g.beginPath(); g.arc(0, 8, 5 + (active ? pulse * 2 : 0), 0, TAU); g.fill();
+    g.restore();
+  }
+
+  // A cache is a small hung reliquary. It has to read as "worth the detour"
+  // from across a district, so it breathes light rather than sitting still.
+  function drawCache(g, c) {
+    const pulse = 0.5 + Math.sin(game.time * 2.6 + c.pulse) * 0.5;
+    const bob = Math.sin(game.time * 1.5 + c.pulse) * 4;
+    g.save();
+    g.translate(c.x, c.y - 52 + bob);
+
+    g.globalAlpha = 0.35 + pulse * 0.4;
+    g.fillStyle = cachedRGradient(g, 'cacheHalo', 4, 86, [
+      [0, 'rgba(255,226,150,0.55)'],
+      [0.34, 'rgba(226,140,40,0.20)'],
+      [1, 'rgba(210,110,0,0)']
+    ]);
+    g.fillRect(-92, -92, 184, 184);
+    g.globalAlpha = 1;
+
+    // Chain up into the dark.
+    g.strokeStyle = 'rgba(46,32,30,0.85)';
+    g.lineWidth = 3;
+    g.beginPath(); g.moveTo(0, -30); g.lineTo(0, -30 - (c.y - 220)); g.stroke();
+
+    g.rotate(Math.sin(game.time * 0.8 + c.pulse) * 0.06);
+    const body = cachedVGradient(g, 'cacheBody', 54, [
+      [0, '#d8b25e'],
+      [0.3, '#8a5f24'],
+      [0.72, '#3a2410'],
+      [1, '#140c07']
+    ]);
+    g.save();
+    g.translate(0, -27);
+    g.fillStyle = body;
+    g.beginPath();
+    g.moveTo(0, -30); g.lineTo(22, -10); g.lineTo(22, 16); g.lineTo(0, 32); g.lineTo(-22, 16); g.lineTo(-22, -10);
+    g.closePath(); g.fill();
+    g.strokeStyle = '#f0d089'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = `rgba(255,236,182,${0.45 + pulse * 0.55})`;
+    g.beginPath(); g.arc(0, 2, 7 + pulse * 2.5, 0, TAU); g.fill();
+    g.restore();
     g.restore();
   }
 
@@ -4196,6 +4365,7 @@
     for (const p of platforms) if (onScreen(p.x, p.w)) drawPlatform(g, p);
     for (const h of hazards) if (onScreen(h.x, h.w)) drawHazard(g, h);
     for (const h of hooks) if (onScreen(h.x, 40)) drawHook(g, h);
+    for (const c of caches) if (!c.taken && onScreen(c.x, 40)) drawCache(g, c);
     for (const membrane of seals) if (onScreen(membrane.x, membrane.w)) drawSeal(g, membrane);
     drawBossGate(g);
 
@@ -4698,7 +4868,7 @@
       const m = seals[clamp(Number(index) || 0, 0, seals.length - 1) | 0];
       if (!m) return false;
       for (let i = Math.max(0, startBand | 0); i < Math.min(m.bands.length, (startBand | 0) + (count | 0)); i++) m.bands[i].hp = 0;
-      m.breached = membraneOpenRun(m) >= 4; m.alive = m.bands.some(b => b.hp > 0); invalidateMembraneSolids(); return true;
+      m.breached = membranePassable(m); m.alive = m.bands.some(b => b.hp > 0); invalidateMembraneSolids(); return true;
     },
     setHealth(value) { player.health = clamp(Number(value) || 0, 0, player.maxHealth); },
     grantXP(amount = 500) { gainXP(Number(amount) || 0); },
