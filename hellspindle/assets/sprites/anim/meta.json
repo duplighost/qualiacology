@@ -1,23 +1,23 @@
 {
   "hunter_walk": {
-    "count": 12,
-    "w": 405,
-    "h": 671
+    "count": 6,
+    "w": 541,
+    "h": 600
   },
   "hunter_idle": {
-    "count": 8,
-    "w": 282,
-    "h": 670
+    "count": 1,
+    "w": 541,
+    "h": 600
   },
   "hunter_air": {
-    "count": 8,
-    "w": 340,
-    "h": 719
+    "count": 4,
+    "w": 541,
+    "h": 600
   },
   "knight_walk": {
-    "count": 12,
-    "w": 327,
-    "h": 512
+    "count": 6,
+    "w": 389,
+    "h": 520
   },
   "crawler_walk": {
     "count": 8,

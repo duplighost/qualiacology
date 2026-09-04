@@ -102,10 +102,10 @@
     return frames;
   }
   const anims = {
-    hunterWalk: loadAnim('hunter_walk', 12),
-    hunterIdle: loadAnim('hunter_idle', 8),
-    hunterAir: loadAnim('hunter_air', 8),
-    knightWalk: loadAnim('knight_walk', 12),
+    hunterWalk: loadAnim('hunter_walk', 6),
+    hunterIdle: loadAnim('hunter_idle', 1),
+    hunterAir: loadAnim('hunter_air', 4),
+    knightWalk: loadAnim('knight_walk', 6),
     crawlerWalk: loadAnim('crawler_walk', 8),
     batFlap: loadAnim('bat_flap', 18),
     censerFloat: loadAnim('censer_float', 12),
@@ -1040,7 +1040,12 @@
     xp: 0,
     power: 1,
     visited: [0],
-    levelFlash: 0
+    levelFlash: 0,
+    // Animation-only state: a landing compresses her, a takeoff stretches her,
+    // and idle breathes. None of it touches the simulation.
+    squash: 0,
+    airTime: 0,
+    lastVy: 0
   };
 
   const yoyo = {
@@ -2176,8 +2181,25 @@
     player.vy += gravity * dt;
     player.vy = Math.min(player.vy, 1200);
 
+    const wasAirborne = !player.grounded;
+    const fallSpeed = player.vy;
     movePlayerAndCollide(dt);
     applyGrappleConstraint(dt);
+
+    // Squash on impact, stretch on the way up. It reads as weight and costs
+    // nothing but a number.
+    player.squash = approach(player.squash, 0, dt * 7.5);
+    if (player.grounded) {
+      player.airTime = 0;
+      if (wasAirborne && fallSpeed > 240) {
+        player.squash = -clamp(fallSpeed / 1500, 0.10, 0.30);
+        smokePuff(player.x, player.y - 2, fallSpeed > 800 ? 6 : 3, '#32141e');
+      }
+    } else {
+      player.airTime += dt;
+      if (player.vy < -300) player.squash = Math.max(player.squash, clamp(-player.vy / 2600, 0, 0.16));
+    }
+    player.lastVy = player.vy;
 
     if (player.grounded && Math.abs(player.vx) > 100) {
       player.stepTimer -= dt;
@@ -3592,20 +3614,43 @@
     g.restore();
 
     if (sprReady('hunter') || animReady(anims.hunterWalk)) {
-      let frames = anims.hunterIdle;
-      let fps = 8;
-      if (player.animState === 'walk') { frames = anims.hunterWalk; fps = 12; }
-      else if (player.animState === 'air') { frames = anims.hunterAir; fps = 10; }
-      const img = animImg(frames, player.animTime, fps) || sprites.hunter;
+      let img = null;
+      if (player.animState === 'air') {
+        // Air poses are chosen by what the body is DOING, not by a clock. A
+        // time-cycled jump loop reads as a flipbook; picking the rise, the
+        // apex, the fall and the dive off vertical speed reads as a jump.
+        const air = anims.hunterAir;
+        if (animReady(air)) {
+          const vy = player.vy;
+          const fast = yoyo.latched && hypot(player.vx, player.vy) > 720;
+          let i;
+          if (fast) i = 3;
+          else if (vy < -430) i = 1;
+          else if (vy < -60) i = 0;
+          else if (vy < 420) i = 2;
+          else i = 3;
+          img = air[Math.min(i, air.length - 1)];
+        }
+      } else if (player.animState === 'walk') {
+        img = animImg(anims.hunterWalk, player.animTime, 11);
+      } else {
+        img = animImg(anims.hunterIdle, player.animTime, 6);
+      }
+      if (!img || !img.complete || !img.naturalWidth) img = animImg(anims.hunterWalk, 0, 1) || sprites.hunter;
       if (img && img.complete && img.naturalWidth) {
+        // Idle breathes; landings compress; takeoffs stretch.
+        const breath = player.animState === 'idle' ? Math.sin(game.realTime * 1.9) * 0.012 : 0;
+        const sq = player.squash;
+        const scaleY = 1 + sq + breath;
+        const scaleX = 1 - sq * 0.72 - breath * 0.5;
         g.save();
         g.translate(player.x, player.y);
         g.rotate(lean * player.facing + swingAngle);
         if (player.invuln > 0) g.globalAlpha = 0.74 + Math.sin(game.realTime * 26) * 0.16;
         if (player.hurtFlash > 0) { g.shadowColor = '#ffe6d4'; g.shadowBlur = 22; }
-        const drawH = 152;
+        const drawH = 168;
         const w = drawH * (img.naturalWidth / img.naturalHeight);
-        g.scale(player.facing, 1);
+        g.scale(player.facing * scaleX, scaleY);
         g.drawImage(scaledSprite(img, w, drawH), -w * 0.50, -drawH + 3, w, drawH);
         g.restore();
         return;
@@ -3794,9 +3839,10 @@
     }
     {
       const attacking = e.state === 'windup' || e.state === 'swing' || e.state === 'recover' || e.state === 'stagger';
+      const lunge = anims.knightWalk[anims.knightWalk.length - 1];
       const img = attacking
-        ? (anims.knightWalk[4] && anims.knightWalk[4].complete ? anims.knightWalk[4] : animImg(anims.knightWalk, 0, 1))
-        : animImg(anims.knightWalk, game.time * 0.95 + e.seed * 5, 11);
+        ? (lunge && lunge.complete ? lunge : animImg(anims.knightWalk, 0, 1))
+        : animImg(anims.knightWalk, game.time * 0.95 + e.seed * 5, 9);
       const rot = e.state === 'swing' ? -0.12 : e.state === 'windup' ? 0.08 : 0;
       if (img && drawAnimGround(g, img, 0, 0, 136, 1, { ax: 0.48, flash: e.flash > 0, rot })) { g.restore(); return; }
     }
