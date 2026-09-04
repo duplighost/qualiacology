@@ -34,11 +34,10 @@ export const ACTIONS = Object.freeze([
   'forward', 'back', 'left', 'right',
   'jump', 'sprint', 'crouch', 'tacsprint',
   'fire', 'aim', 'reload', 'melee', 'torch',
-  // The car's two verbs. The vehicle lane shipped a shim that binds KeyE and KeyH through
-  // this file's own _down/_up and stands itself down the moment the engine adopts these two
-  // names — so adopting them here is the handover, and the shim becomes dead weight rather
-  // than a second input path competing with this one.
-  'use', 'horn',
+  // The car's verbs. Locate is owned here too: pointer lock makes an otherwise-clickable
+  // corner icon unreachable with a desktop mouse, so KeyL must travel through the same
+  // canonical edge path as every other play verb.
+  'use', 'horn', 'carlocate',
   'menu',
 ]);
 
@@ -58,6 +57,7 @@ const KEYMAP = Object.freeze({
   KeyF: 'torch',
   KeyE: 'use',
   KeyH: 'horn',
+  KeyL: 'carlocate',
   // ROUND 5 (NEXT.md item 3): the arsenal. Q cycles the owned weapons, 1 and 2 pick a slot.
   // weapons/weapon.js reads these through held() on the same edge path as reload.
   KeyQ: 'swap',
@@ -73,6 +73,7 @@ const BUTTON_ACTION = Object.freeze({ 0: 'fire', 1: 'melee', 2: 'aim' });
 const ALIAS = Object.freeze({
   ads: 'aim', shoot: 'fire', attack: 'fire', run: 'sprint', ctrl: 'crouch',
   flashlight: 'torch', light: 'torch', tac: 'tacsprint', tacSprint: 'tacsprint',
+  locate: 'carlocate', carLocate: 'carlocate',
 });
 
 // Reused by consumeLook(). One object for the life of the page: the look is consumed

@@ -54,6 +54,15 @@ const SLIDE_EYE_DROP = 0.82;   // absolute eye height at the bottom of a slide [
 const SLIDE_VIEW_IN = 0.14;    // s to drop into the slide posture [vigil v0.1]
 const SLIDE_VIEW_OUT = 7;      // damped rise back out; the view outlives the physics [vigil v0.4]
 const CROUCH_IN = 12, CROUCH_OUT = 9.5;   // 190/240 ms crouch transition [vigil]
+// Crouch is also the downhill travel verb. Flat VIGIL slides keep every number above;
+// these only open and sustain the same slide when the terrain is actually falling away
+// in the player's travel direction. 0.075 is a 4.3 degree signed grade, enough to reject
+// road crown/noise while accepting the county's authored slopes.
+const DOWNHILL_SLIDE_GRADE = 0.075;
+const DOWNHILL_SLIDE_ENTRY = 2.60; // a walking player can commit to a descent
+const DOWNHILL_DRAG_HI = 0.55, DOWNHILL_DRAG_LO = 0.28;
+const DOWNHILL_FULL_GRADE = 0.22;
+const DOWNHILL_AIR_GRACE = 0.30;   // terrain crests must not cancel the descent verb in one frame
 const HIT_GRACE = 0.35;        // three simultaneous lunges must not triple-tap [vigil]
 const FALL_FREE = 16;          // m/s of impact that is free; ~a 5.8 m drop [vigil]
 const FALL_HP_PER = 8;         // hp per m/s over FALL_FREE [vigil]
@@ -226,6 +235,7 @@ function unitImpulsePeak(freq, damping, dt) {
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const _right = new THREE.Vector3();
+const _groundNormal = new THREE.Vector3(0, 1, 0);
 let _preX = 0, _preZ = 0;      // pre-integration footprint, for the wall back-out
 // Bus payloads are module scratch: step() allocates nothing, and a death that allocates is
 // a death that hitches.
@@ -288,6 +298,8 @@ export class PlayerController {
     this.slideCooldown = 0;
     this.slideViewT = 0;              // camera posture outlives the physical slide [vigil v0.4]
     this.slideDir = new THREE.Vector3();
+    this.downhillSliding = false;     // only this variant receives grade assist / extra time
+    this.slideAirT = 0;
 
     // ---- tac-sprint: the chase verb. Default, no stamina, no HUD. [DESIGN §3, risk #1]
     this.tacSprinting = false;
@@ -634,6 +646,7 @@ export class PlayerController {
     if (v) {
       this.vel.set(0, 0, 0);
       this.sliding = false; this.slideT = 0; this._slideDipped = false;
+      this.downhillSliding = false; this.slideAirT = 0;
       this.sprinting = false; this.tacSprinting = false; this.tacT = 0;
       this.crouched = false; this.crouchHeld = false;
       this.jumpBuffered = -1;
@@ -672,6 +685,7 @@ export class PlayerController {
     this.vel.set(0, 0, 0);
     if (typeof yaw === 'number') this.yaw = yaw;
     this.sliding = false; this.slideT = 0; this.slideViewT = 0;
+    this.downhillSliding = false; this.slideAirT = 0; this.floorWasCollider = false;
     this.tacSprinting = false; this.tacT = 0;
     this.climb = CLIMB_NONE;
     this.grounded = true; this.sinceGround = 0;
@@ -682,6 +696,7 @@ export class PlayerController {
     this.hp = this.hpMax; this.dead = false; this.sinceHurt = 99;
     this.deathT = 0; this.deathDrop = 0; this.carried = false; this.invuln = 0;
     this.sliding = false; this.crouched = false; this.sprinting = false;
+    this.downhillSliding = false; this.slideAirT = 0; this.floorWasCollider = false;
     this.tacSprinting = false; this.tacT = 0; this.tacCooldown = 0;
     this.bobPhase = 0;
     this.init();
@@ -840,8 +855,11 @@ export class PlayerController {
 
     // ---- crouch (held, not toggled) + slide entry [vigil v0.4:13-16] --------
     const wantCrouch = this._held('crouch');
-    if (wantCrouch && !this.crouchHeld && (this.sprinting || this.tacSprinting) && this.grounded) {
-      this._startSlide();
+    if (wantCrouch && !this.crouchHeld && this.grounded) {
+      const grade = hasInput ? this._downhillAlong(_wish.x, _wish.z) : 0;
+      if (this.sprinting || this.tacSprinting || grade >= DOWNHILL_SLIDE_GRADE) {
+        this._startSlide(grade);
+      }
     }
     this.crouchHeld = wantCrouch;
     // You are crouched if you asked to be, if you are sliding, or if the ceiling says so.
@@ -862,6 +880,23 @@ export class PlayerController {
     // ---- jump buffer + coyote ----------------------------------------------
     if (edgeJump) this.jumpBuffered = P.JUMP_BUFFER;
     else this.jumpBuffered -= dt;
+
+    // Space is the advertised jump AND mantle key. Previously a standing player pressing
+    // Space at a deliberately climbable lip never called _tryClimb at all (`hasInput` was
+    // false), while Space+forward jumped first and often left the grounded mantle window.
+    // Probe the facing direction before spending the jump. Open ground still falls through
+    // to the exact VIGIL jump below; a successful climb owns the body immediately.
+    if (edgeJump && this.climb === CLIMB_NONE) {
+      const facingOnly = !hasInput;
+      if (facingOnly) _wish.copy(_fwd);
+      this._tryClimb(true);
+      if (facingOnly) _wish.set(0, 0, 0);
+      if (this.climb !== CLIMB_NONE) {
+        this._stepClimb(dt, hasInput);
+        this._stepTail(dt, sprintHeld, wantCrouch);
+        return;
+      }
+    }
     if (this.jumpBuffered > 0 && this._tryJump()) this.jumpBuffered = -1;
 
     // ---- horizontal move ----------------------------------------------------
@@ -884,7 +919,7 @@ export class PlayerController {
     // Deliberately BEFORE gravity so the pop is not eaten by the same frame's fall. A climb
     // that starts here carries the body from this frame on: the solver below must not run
     // against the wall the body is now being lifted over.
-    if (hasInput) this._tryClimb();
+    if (hasInput) this._tryClimb(false);
     if (this.climb !== CLIMB_NONE) {
       this._stepClimb(dt, hasInput);
       this._stepTail(dt, sprintHeld, wantCrouch);
@@ -994,7 +1029,16 @@ export class PlayerController {
         this.grounded = true; this.sinceGround = 0;
       }
     }
-    if (this.sliding && !this.grounded) this._endSlide();
+    if (this.sliding) {
+      if (this.grounded) this.slideAirT = 0;
+      else {
+        this.slideAirT += dt;
+        // Ordinary VIGIL slides still stop the instant the feet leave support. Downhill
+        // slides tolerate the little ballistic skips produced by real rolling terrain;
+        // a genuine drop still ends the verb after 0.30 s.
+        if (!this.downhillSliding || this.slideAirT > DOWNHILL_AIR_GRACE) this._endSlide();
+      }
+    }
 
     // ---- THE ONE STRIDE CLOCK ----------------------------------------------
     // Camera bob, weapon bob and footstep audio all read bobPhase. Do not add a second.
@@ -1162,7 +1206,16 @@ export class PlayerController {
     this.slideT += dt;
     const fr = SLIDE_FRIC_A + SLIDE_FRIC_B * this.slideT;
     const sp = Math.hypot(this.vel.x, this.vel.z);
-    const ns = Math.max(0, sp - fr * sp * dt * SLIDE_FRIC_MUL - fr * dt);
+    let grade = 0, dragScale = 1;
+    if (this.downhillSliding && sp > 0.01) {
+      grade = this._downhillAlong(this.vel.x / sp, this.vel.z / sp);
+      const relief = clamp01((grade - DOWNHILL_SLIDE_GRADE)
+        / (DOWNHILL_FULL_GRADE - DOWNHILL_SLIDE_GRADE));
+      dragScale = lerp(DOWNHILL_DRAG_HI, DOWNHILL_DRAG_LO, relief);
+    }
+    const ns = Math.max(0, sp
+      - fr * sp * dt * SLIDE_FRIC_MUL * dragScale
+      - fr * dt * dragScale);
     if (sp > 0.01) { this.vel.x *= ns / sp; this.vel.z *= ns / sp; }
     if (hasInput) {
       // Steering only: +-38 deg/s, zero acceleration. A slide is a commitment.
@@ -1177,13 +1230,38 @@ export class PlayerController {
       const vz = this.vel.x * sn + this.vel.z * cs;
       this.vel.x = vx; this.vel.z = vz;
     }
-    if (this.slideT >= P.slide.time || ns < SLIDE_EXIT_SPEED) this._endSlide();
+
+    // The horizontal part of the unit terrain normal points straight downhill. Gravity's
+    // projection through it supplies the missing acceleration; the existing slide cap is
+    // still absolute, so this cannot become a speed exploit or a bunny-hop feeder.
+    if (this.downhillSliding && grade > 0) {
+      this.vel.x += _groundNormal.x * P.GRAVITY * dt;
+      this.vel.z += _groundNormal.z * P.GRAVITY * dt;
+      const assisted = Math.hypot(this.vel.x, this.vel.z);
+      if (assisted > P.slide.cap) {
+        this.vel.x *= P.slide.cap / assisted;
+        this.vel.z *= P.slide.cap / assisted;
+      }
+    }
+
+    const finalSpeed = Math.hypot(this.vel.x, this.vel.z);
+    const descending = this.downhillSliding && this.crouchHeld
+      && grade >= DOWNHILL_SLIDE_GRADE * 0.5;
+    // Crouch remains the descent verb for as long as the ground is genuinely falling away.
+    // The instant it flattens or the player turns across/uphill, the original 0.85 s limit
+    // wins (and usually expires immediately if this was a long hill).
+    const timeLimit = descending ? Infinity : P.slide.time;
+    if (this.slideT >= timeLimit || finalSpeed < SLIDE_EXIT_SPEED) this._endSlide();
   }
 
-  _startSlide() {
+  _startSlide(downhillGrade = 0) {
     const hs = Math.hypot(this.vel.x, this.vel.z);
-    if (hs < P.slide.entrySpeed || this.slideCooldown > 0 || !this.grounded) return;
+    const downhill = downhillGrade >= DOWNHILL_SLIDE_GRADE;
+    const entrySpeed = downhill ? DOWNHILL_SLIDE_ENTRY : P.slide.entrySpeed;
+    if (hs < entrySpeed || this.slideCooldown > 0 || !this.grounded) return;
     this.sliding = true;
+    this.downhillSliding = downhill;
+    this.slideAirT = 0;
     this.slideT = 0;
     this.slideDir.set(this.vel.x, 0, this.vel.z).normalize();
     const s = Math.min(hs * P.slide.boost, P.slide.cap);
@@ -1200,7 +1278,19 @@ export class PlayerController {
   _endSlide() {
     if (!this.sliding) return;
     this.sliding = false;
+    this.downhillSliding = false;
+    this.slideAirT = 0;
     this.slideCooldown = SLIDE_COOLDOWN;
+  }
+
+  /** Signed downhill grade along a unit XZ direction. Terrain normal writes into module
+   * scratch, so both the fixed step and a long descent remain allocation-free. Collider
+   * tops deliberately read as flat: terrain far below a roof cannot pull the body sideways. */
+  _downhillAlong(dx, dz) {
+    const terr = this._terrain;
+    if (!terr || typeof terr.normalAt !== 'function' || this.floorWasCollider) return 0;
+    terr.normalAt(this.pos.x, this.pos.z, _groundNormal);
+    return dx * _groundNormal.x + dz * _groundNormal.z;
   }
 
   _tryJump() {
@@ -1208,13 +1298,20 @@ export class PlayerController {
     this.vel.y = P.JUMP;
     this.grounded = false;
     this.sinceGround = P.COYOTE + 1;
-    if (this.sliding && this.slideT > 0.30) {
-      // LEGS: 'clean break' takes the cancel from 0.85 to 1.0 — slide-cancelling stops
-      // costing anything and becomes a real movement option rather than a compromise.
-      const keep = this._stat('slideCancelKeep', SLIDE_CANCEL_KEEP);
-      this.vel.x *= keep;
-      this.vel.z *= keep;
-      this._endSlide();
+    if (this.sliding) {
+      // A voluntary jump ALWAYS ends the downhill variant. Its short air grace exists only
+      // for terrain falling away under the feet; leaving this flag alive through Space let
+      // _stepSlide project gravity into horizontal speed while the player was airborne.
+      // Ordinary VIGIL slides retain their authored 0.30 s cancel gate.
+      const endDownhill = this.downhillSliding;
+      if (this.slideT > 0.30) {
+        // LEGS: 'clean break' takes the cancel from 0.85 to 1.0 — slide-cancelling stops
+        // costing anything and becomes a real movement option rather than a compromise.
+        const keep = this._stat('slideCancelKeep', SLIDE_CANCEL_KEEP);
+        this.vel.x *= keep;
+        this.vel.z *= keep;
+      }
+      if (endDownhill || this.slideT > 0.30) this._endSlide();
     }
     return true;
   }
@@ -1241,7 +1338,7 @@ export class PlayerController {
    * hands' band is a GRAB (hang, then pull), and a thin waist-high thing hit at a sprint is a
    * VAULT.
    */
-  _tryClimb() {
+  _tryClimb(explicitJump = false) {
     if (this.mantleCooldown > 0 || this.climb !== CLIMB_NONE || this.carried) return;
     // A let-go grab refuses every climb until the feet are back on something: without this,
     // crouch + forward re-mantled the very lip you just let go of, every 0.35 s, for ever.
@@ -1305,7 +1402,8 @@ export class PlayerController {
     // 1 = vaulting from this frame; 2 = a vault target sighted but still out of range, which
     // holds the mantle off it (the mantle's second probe reaches further than a vault wants
     // to start from, and won the race to every fence by a few frames — measured).
-    if (sees && this.grounded && (this.sprinting || this.tacSprinting) && velInto > P.WALK) {
+    if (!explicitJump && sees && this.grounded
+      && (this.sprinting || this.tacSprinting) && velInto > P.WALK) {
       if (this._tryVault(col, lead1)) return;
     }
 
@@ -1608,6 +1706,7 @@ export class PlayerController {
       grounded: this.grounded,
       crouched: this.crouched,
       sliding: this.sliding,
+      downhillSliding: this.downhillSliding,
       sprinting: this.sprinting,
       tacSprinting: this.tacSprinting,
       tacCooldown: this.tacCooldown,

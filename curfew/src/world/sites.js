@@ -1064,12 +1064,29 @@ export const BUILDERS = {
   chapel: {
     landmark(api) {
       const k = kits();
-      k.solid.box(6.0, 19, 6.0, 0, api.padY + 9.5, -4, C.stone);
+      // This used to be one 6 x 19 x 6 solid box. The nave's real doorway is on -Z at
+      // z=-2, exactly inside that box's footprint (-7..-1), so the bell tower sealed the
+      // only entrance while the claim fixture sat tantalisingly beside it. Build the same
+      // silhouette as four walls with aligned front/back doors: the tower is now a porch
+      // through which the player can actually reach the dressed chapel interior.
+      const base = api.padY - 0.3, top = api.padY + 19, H = top - base;
+      const sideX = 2.72, wallT = 0.56, door = 2.4;
+      for (const x of [-sideX, sideX]) {
+        k.solid.box(wallT, H, 6.0, x, (top + base) * 0.5, -4, C.stone);
+        api.emit({ kind: 'obb', x, z: -4, halfX: wallT * 0.5, halfZ: 3.0, yaw: 0, y0: base, y1: top, tag: 'wall' });
+      }
+      const pierW = (6.0 - door) * 0.5;
+      for (const z of [-6.72, -1.28]) {
+        for (const x of [-(door + pierW) * 0.5, (door + pierW) * 0.5]) {
+          k.solid.box(pierW, H, wallT, x, (top + base) * 0.5, z, C.stone);
+          api.emit({ kind: 'obb', x, z, halfX: pierW * 0.5, halfZ: wallT * 0.5, yaw: 0, y0: base, y1: top, tag: 'wall' });
+        }
+        // high lintel, leaving a 2.8 m clear doorway beneath it
+        k.solid.box(door, 16.2, wallT, 0, api.padY + 10.9, z, C.stone);
+        api.emit({ kind: 'obb', x: 0, z, halfX: door * 0.5, halfZ: wallT * 0.5, yaw: 0,
+          y0: api.padY + 2.8, y1: top, tag: 'wall' });
+      }
       k.solid.cone(4.2, 5.4, 4, 0, api.padY + 21.7, -4, C.slate);
-      api.emit({
-        kind: 'obb', x: 0, z: -4, halfX: 3.0, halfZ: 3.0, yaw: 0,
-        y0: api.padY - 0.3, y1: api.padY + 19, tag: 'wall',
-      });
       k.glow.pane(1.3, 2.0, 0, api.padY + 14, -7.05, PANE_WINDOW, Math.PI, 0, 5, 8);
       sash(k.solid, 1.3, 2.0, 0, api.padY + 14, -7.05, C.stone, Math.PI, 0, 2, 3, 0.07, 0.09);
       return { solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.lamp };
