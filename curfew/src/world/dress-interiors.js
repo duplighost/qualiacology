@@ -2,7 +2,7 @@
 //
 // Alex, sixth playtest: "places should have something in them."
 // docs/NEXT.md C0, honestly: "Every other destination is a hollow shell or an exterior, and
-// what you DO at all twelve is identical: walk to a lever and hold E. That sameness is the
+// what you did at the original twelve was identical: walk to a lever and hold E. That sameness is the
 // real reason the county feels thin."
 //
 // This file owns the dress of every major EXCEPT the Filling Station (lane A owns that one,
@@ -281,13 +281,20 @@ export const DRESS = {
       }
     }
     // ---- the dead console ----------------------------------------------------------------
-    solid(S, api, 2.1, 0.78, 0.72, OX, 0.39, OZ - 0.9, IRON, 0, 'metal');
-    S.box(2.0, 0.10, 0.62, OX, api.padY + 0.86, OZ - 1.02, TAR, 0, -0.42);
-    tags(S, api, OX - 0.5, 0.90, OZ - 1.14, 0, 5, 2, 0.11, C.metal);
-    S.box(0.60, 0.44, 0.06, OX + 0.6, api.padY + 1.02, OZ - 0.66, C.glass, 0, -0.30);
-    G.pane(0.52, 0.36, OX + 0.6, api.padY + 1.02, OZ - 0.70, PANE_SIGN, 0, -0.30, 5, 4);
-    S.cyl(0.24, 0.24, 0.05, 8, OX - 1.2, api.padY + 0.24, OZ - 0.2, TAR, 0, Math.PI * 0.5);
-    S.box(0.40, 0.06, 0.42, OX - 1.2, api.padY + 0.50, OZ - 0.2, TAR, 0, 1.2);
+    // It used to stand squarely across the only doorway: an automated corner-turn could
+    // scrape around it, while a player looking in saw a black box and no room. Seat the same
+    // console against the east wall and leave one straight body-width aisle to the racks.
+    {
+      const CX = OX + 2.48, CZ = OZ - 0.45, Y = Math.PI * 0.5;
+      const f = frame(CX, CZ, Y);
+      solid(S, api, 2.1, 0.78, 0.72, CX, 0.39, CZ, IRON, Y, 'metal');
+      S.box(2.0, 0.10, 0.62, f.x(0, -0.12), api.padY + 0.86, f.z(0, -0.12), TAR, Y, -0.42);
+      tags(S, api, f.x(-0.5, -0.24), 0.90, f.z(-0.5, -0.24), Y, 5, 2, 0.11, C.metal);
+      S.box(0.60, 0.44, 0.06, f.x(0.6, 0.24), api.padY + 1.02, f.z(0.6, 0.24), C.glass, Y, -0.30);
+      G.pane(0.52, 0.36, f.x(0.6, 0.20), api.padY + 1.02, f.z(0.6, 0.20), PANE_SIGN, Y, -0.30, 5, 4);
+      S.cyl(0.24, 0.24, 0.05, 8, f.x(-1.2, 0.70), api.padY + 0.24, f.z(-1.2, 0.70), TAR, Y, Math.PI * 0.5);
+      S.box(0.40, 0.06, 0.42, f.x(-1.2, 0.70), api.padY + 0.50, f.z(-1.2, 0.70), TAR, Y, 1.2);
+    }
 
     // ---- cable trays, and the bundle that leaves for the mast ---------------------------
     S.box(0.42, 0.06, 5.2, OX - 2.3, api.padY + 2.55, OZ, IRON);
@@ -327,8 +334,9 @@ export const DRESS = {
 
     return {
       solid: S.build(), glow: G.build(),
-      // One of the Pale, behind the racks, in a 6 x 5 m hut with one door.
-      cast: [{ species: 'pale', lx: OX + 2.2, lz: OZ + 0.9, yaw: Math.PI, awake: false }],
+      // The Pale still owns the Relay encounter, but it watches from the existing lookout
+      // deck. A shut powered room cannot honestly be safe with a horror body already in it.
+      cast: [{ species: 'pale', lx: -2.6, lz: 8.4, ly: 2.90, yaw: Math.PI, awake: false }],
     };
   },
 

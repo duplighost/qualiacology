@@ -33,7 +33,7 @@ const RC = CFG.roads;
 export const ROAD_FAR = 400;
 
 /* ------------------------------------------------------------------ *
- * Authoring: one county loop + two spurs, as polylines.
+ * Authoring: one county loop + two gravel spurs + nine forest lanes.
  * ------------------------------------------------------------------ */
 
 // The loop is authored as a wandering ring rather than 21 typed pairs: two
@@ -61,6 +61,21 @@ export const M0_SITES = [
   { id: 'briar-house', x: 410, z: -560, radius: 30, blend: 0.70 },
 ];
 
+// The secondary graph deliberately uses shared point objects at junctions. It is not
+// decorative paint: every lane enters the same sampled segment table and therefore the
+// same distance field, terrain carve, ribbon builder, map and car-spawn queries as the
+// county loop. Three of the lanes meet at WORKS_JUNCTION; the others leave and rejoin the
+// loop or one of its useful spurs. Optional third values are metres added to the smoothed
+// road base. A short 0 -> lip -> landing -> 0 profile makes a real crest in heightAt(),
+// rather than a mesh-only bump the car and collision would drive straight through.
+const STATION_JUNCTION = [M0_SITES[1].x, M0_SITES[1].z];
+const MANOR_JUNCTION = [M0_SITES[2].x, M0_SITES[2].z];
+const WORKS_JUNCTION = [320, 420];
+
+const jump = (id, approach, crest, landing, recovery) => (
+  { id, approach, crest, landing, recovery }
+);
+
 const ROUTES_SRC = [
   { id: 'county-loop', kind: 'asphalt', closed: true, width: RC.width, pts: LOOP_PTS },
   {
@@ -70,6 +85,99 @@ const ROUTES_SRC = [
   {
     id: 'spur-north', kind: 'gravel', closed: false, width: RC.width * 0.82,
     pts: [LOOP_PTS[17], [490, -980], [520, -790], [M0_SITES[2].x, M0_SITES[2].z]],
+  },
+  {
+    id: 'station-northwest', kind: 'forest', secondary: true, closed: false, width: 3.80,
+    pts: [
+      LOOP_PTS[8], [-1010, 920], [-906.60, 795.77], [-900.61, 777.31, 4.5],
+      [-902.40, 758.65, -0.4], [-915.81, 739.94], [-1010, 650],
+      [-860, 540], [-920, 400], [-740, 330], STATION_JUNCTION,
+    ],
+    jumps: [jump('northwest-pop', 2, 3, 4, 5)],
+  },
+  {
+    id: 'reservoir-road', kind: 'forest', secondary: true, closed: false, width: 3.45,
+    pts: [
+      STATION_JUNCTION, [-660, 150], [-690, 143], [-715, 137],
+      [-744, 130], [-790, 120], [-860, 0], [-760, -90],
+      [-760, -106, 4.8], [-765, -127, -0.5], [-774, -150], [-788, -173],
+      [-830, -220], [-1010, -300], [-1080, -450], LOOP_PTS[12],
+    ],
+    jumps: [jump('reservoir-rise', 7, 8, 9, 10)],
+  },
+  {
+    id: 'witch-road', kind: 'forest', secondary: true, closed: false, width: 3.55,
+    pts: [
+      LOOP_PTS[13], [-830, -870], [-710, -980], [-560, -900], [-430, -760],
+      [-400, -770], [-375, -779], [-345, -790], [-310, -802],
+      [-260, -820], [-100, -700], [-15.66, -725.56], [7.96, -738.55, 4.8],
+      [31.18, -750.12, -0.4], [53.61, -758.15], [80, -760], [220, -650],
+      MANOR_JUNCTION,
+    ],
+    jumps: [jump('witch-hump', 11, 12, 13, 14)],
+  },
+  {
+    id: 'fox-run', kind: 'forest', secondary: true, closed: false, width: 3.35,
+    pts: [
+      MANOR_JUNCTION, [500, -650], [580, -620], [610, -628], [635, -640],
+      [663, -653], [689.68, -661.16], [704.10, -679.45, 4.7],
+      [709.15, -707.94, -0.4], [717.08, -733.68], [730, -740],
+      [850, -650], [920, -780], [1050, -700], LOOP_PTS[19],
+    ],
+    jumps: [jump('fox-lip', 6, 7, 8, 9)],
+  },
+  {
+    id: 'ridge-switchbacks', kind: 'forest', secondary: true, closed: false, width: 3.40,
+    pts: [
+      LOOP_PTS[14], [-650, -1280], [-590, -1160], [-430, -1230], [-300, -1120],
+      [-275, -1145], [-253, -1168], [-230, -1194], [-200, -1224],
+      [-160, -1270], [-65.00, -1187.97], [-43.02, -1172.03, 5.2],
+      [-21.64, -1161.81, -0.45], [-1.59, -1159.73], [0, -1160],
+      [150, -1330], [310, -1240], LOOP_PTS[17],
+    ],
+    jumps: [jump('ridge-kicker', 10, 11, 12, 13)],
+  },
+  {
+    id: 'chapel-backroad', kind: 'forest', secondary: true, closed: false, width: 3.30,
+    pts: [
+      LOOP_PTS[7], [-720, 1250], [-610, 1160], [-500, 1280], [-360, 1160],
+      [-335, 1185], [-312, 1210], [-288, 1237], [-255, 1270],
+      [-230, 1300], [-80, 1160], [9.19, 1230.94], [28.45, 1245.08, 4.8],
+      [53.89, 1257.33, -0.4], [76.74, 1265.87], LOOP_PTS[5],
+    ],
+    jumps: [jump('chapel-crest', 11, 12, 13, 14)],
+  },
+  {
+    id: 'works-cut', kind: 'forest', secondary: true, closed: false, width: 3.90,
+    pts: [
+      STATION_JUNCTION, [-400, 360], [-250, 300], [-120, 430], [30, 350],
+      [113.08, 455.35], [128.46, 476.50, 5.0], [144.50, 492.28, -0.45],
+      [161.62, 500.34], WORKS_JUNCTION, [440, 610], [490, 595], [515, 603],
+      [542, 620], [575, 640], [600, 660], [650, 760], [790, 850],
+      [720, 1010], LOOP_PTS[3],
+    ],
+    jumps: [jump('works-crown', 5, 6, 7, 8)],
+  },
+  {
+    id: 'east-cross', kind: 'forest', secondary: true, closed: false, width: 3.60,
+    pts: [
+      LOOP_PTS[1], [1320, 360], [1190, 500], [1050, 390],
+      [1034.42, 395.51], [1016.24, 408.25, 4.8], [997.36, 426.22, -0.4],
+      [978.31, 447.56], [900, 540], [870, 512], [845, 490], [818, 470], [785, 450],
+      [740, 400], [600, 520], [480, 360], WORKS_JUNCTION,
+    ],
+    jumps: [jump('east-hop', 4, 5, 6, 7)],
+  },
+  {
+    id: 'sawmill-bends', kind: 'forest', secondary: true, closed: false, width: 3.45,
+    pts: [
+      LOOP_PTS[20], [1230, -360], [1120, -210], [970, -330], [820, -160],
+      [790, -180], [765, -195], [738, -210], [705, -228],
+      [660, -250], [560, -80], [420, -30], [500, 130], [486.49, 156.64],
+      [469.08, 171.19, 5.1], [448.00, 184.96, -0.45], [425.86, 199.48],
+      [390, 235], WORKS_JUNCTION,
+    ],
+    jumps: [jump('sawmill-kick', 13, 14, 15, 16)],
   },
 ];
 
@@ -95,10 +203,11 @@ function resample(pts, closed, step) {
     for (let j = 0; j < k; j++) {
       const t = j / k, t2 = t * t, t3 = t2 * t;
       out.push(cr(p0[0], p1[0], p2[0], p3[0], t, t2, t3),
-        cr(p0[1], p1[1], p2[1], p3[1], t, t2, t3));
+        cr(p0[1], p1[1], p2[1], p3[1], t, t2, t3),
+        cr(p0[2] || 0, p1[2] || 0, p2[2] || 0, p3[2] || 0, t, t2, t3));
     }
   }
-  if (!closed) out.push(pts[n - 1][0], pts[n - 1][1]);
+  if (!closed) out.push(pts[n - 1][0], pts[n - 1][1], pts[n - 1][2] || 0);
   return out;
 }
 
@@ -108,28 +217,60 @@ function resample(pts, closed, step) {
  * ------------------------------------------------------------------ */
 
 const ROUTES = [];
-let SX, SZ, SY, SDIST;      // x, z, smoothed y, arc length at each sample
+let SX, SZ, SY, SO, SDIST;  // x, z, smoothed y, authored y offset, arc at each sample
 let SEG_S = null;           // Int32Array: first-sample index of each segment
 let SEG_R = null;           // Int32Array: route index of each segment
 let SEG_N = 0;
 let TOTAL_LENGTH = 0;
+let SECONDARY_LENGTH = 0;
+let JUMP_COUNT = 0;
+const JUNCTION_SAMPLES = [];
 
 {
-  const xs = [], zs = [];
+  const xs = [], zs = [], offsets = [];
   for (let r = 0; r < ROUTES_SRC.length; r++) {
     const src = ROUTES_SRC[r];
     const flat = resample(src.pts, src.closed, RC.sample);
     const start = xs.length;
-    for (let i = 0; i < flat.length; i += 2) { xs.push(flat[i]); zs.push(flat[i + 1]); }
+    for (let i = 0; i < flat.length; i += 3) {
+      xs.push(flat[i]); zs.push(flat[i + 1]); offsets.push(flat[i + 2]);
+    }
+    const jumps = (src.jumps || []).map((j) => {
+      const marker = (idx) => Object.freeze({
+        x: src.pts[idx][0], z: src.pts[idx][1], lift: src.pts[idx][2] || 0,
+      });
+      return Object.freeze({
+        id: j.id,
+        approach: marker(j.approach), crest: marker(j.crest),
+        landing: marker(j.landing), recovery: marker(j.recovery),
+      });
+    });
     ROUTES.push({
       id: src.id, kind: src.kind, width: src.width, closed: src.closed,
-      start, n: (flat.length / 2), length: 0,
+      secondary: !!src.secondary, controlCount: src.pts.length,
+      jumps: Object.freeze(jumps),
+      start, n: (flat.length / 3), length: 0,
     });
+    JUMP_COUNT += jumps.length;
   }
   SX = Float32Array.from(xs);
   SZ = Float32Array.from(zs);
+  SO = Float32Array.from(offsets);
   SY = new Float32Array(SX.length);
   SDIST = new Float32Array(SX.length);
+
+  // Any identical samples are real graph junctions. Keep the earliest route's elevation
+  // authoritative (loop, then legacy spurs, then the new lanes) and pin every later branch
+  // to it while smoothing. That preserves the old roads and prevents a ribbon step where a
+  // narrow lane rejoins them. The correction then diffuses back along each branch.
+  const junctions = new Map();
+  for (let i = 0; i < SX.length; i++) {
+    const key = SX[i].toFixed(3) + '|' + SZ[i].toFixed(3);
+    let group = junctions.get(key);
+    if (!group) { group = []; junctions.set(key, group); }
+    group.push(i);
+  }
+  for (const group of junctions.values()) if (group.length > 1) JUNCTION_SAMPLES.push(group);
 
   // Segment table. A closed route has n segments (the last wraps to the first);
   // an open route has n-1.
@@ -156,13 +297,18 @@ let TOTAL_LENGTH = 0;
     }
     rt.length = d;
     TOTAL_LENGTH += d;
+    if (rt.secondary) SECONDARY_LENGTH += d;
   }
 }
 
-/** Total centreline metres across every authored route (loop + spurs). */
+/** Total centreline metres across every authored route. */
 export function totalRoadLength() { return TOTAL_LENGTH; }
 /** Metres of the county loop alone. */
 export function loopLength() { return ROUTES[0].length; }
+/** Metres authored specifically as the narrow Round 9 secondary network. */
+export function secondaryRoadLength() { return SECONDARY_LENGTH; }
+/** Count of deliberate approach -> crest -> landing profiles in that network. */
+export function jumpCrestCount() { return JUMP_COUNT; }
 
 /** Second endpoint of segment `s` — wraps on a closed route. */
 function segEnd(s) {
@@ -262,6 +408,22 @@ function buildIndex() {
 }
 buildIndex();
 
+// PAD registers one short segment in several neighbouring hash cells. A ring query can
+// therefore meet the same segment repeatedly, which became measurable once Round 9 grew the
+// network from three routes to twelve. Stamp each segment once per query: the answer is
+// bit-for-bit the same, but movement/terrain no longer redo identical projection maths.
+const SEG_SEEN = new Uint32Array(SEG_N);
+let SEG_STAMP = 0;
+
+function nextSegmentStamp() {
+  SEG_STAMP = (SEG_STAMP + 1) >>> 0;
+  if (SEG_STAMP === 0) {
+    SEG_SEEN.fill(0);
+    SEG_STAMP = 1;
+  }
+  return SEG_STAMP;
+}
+
 /** Coarse, always-available lower bound on the distance to any centreline. */
 function coarseDistance(x, z) {
   const cx = Math.floor((x + GRID_HALF) / COARSE);
@@ -292,15 +454,15 @@ export function ensureRoadElevations() {
   if (!baseSampler) {
     throw new Error('roads: no road-base sampler injected (terrain.js must call setRoadBaseSampler)');
   }
-  for (let i = 0; i < SX.length; i++) SY[i] = baseSampler(SX[i], SZ[i]);
+  for (let i = 0; i < SX.length; i++) SY[i] = baseSampler(SX[i], SZ[i]) + SO[i];
 
   // SKYSHARD runs 3 box passes over 2 m stream samples (streams.js:44-49), where
   // only a wisp had to look smooth. A road at the same spacing needs a much wider
   // kernel, so each configured pass runs 8 iterations of the same 1-2-1 filter —
   // a roughly 30 m window, which is what a graded verge actually looks like.
   const tmp = new Float32Array(SY.length);
-  for (const rt of ROUTES) {
-    for (let pass = 0; pass < RC.smoothPasses * 8; pass++) {
+  for (let pass = 0; pass < RC.smoothPasses * 8; pass++) {
+    for (const rt of ROUTES) {
       for (let i = 0; i < rt.n; i++) {
         const c = rt.start + i;
         const p = rt.start + (rt.closed ? (i - 1 + rt.n) % rt.n : Math.max(0, i - 1));
@@ -308,6 +470,10 @@ export function ensureRoadElevations() {
         tmp[c] = (SY[p] + SY[c] * 2 + SY[q]) * 0.25;
       }
       for (let i = 0; i < rt.n; i++) SY[rt.start + i] = tmp[rt.start + i];
+    }
+    for (const group of JUNCTION_SAMPLES) {
+      const y = SY[group[0]];
+      for (let i = 1; i < group.length; i++) SY[group[i]] = y;
     }
   }
   elevReady = true;
@@ -350,6 +516,7 @@ export function nearestRoadInfo(x, z, maxRange = EXACT_RANGE) {
   _nri.hit = false; _nri.dist = ROAD_FAR;
   if (coarseDistance(x, z) > maxRange + COARSE * 1.5) return _nri;
 
+  const stamp = nextSegmentStamp();
   const qx = gx(x), qz = gz(z);
   const maxRing = Math.min(GRID_N, Math.ceil((maxRange + PAD) / CELL) + 1);
   let best = maxRange * maxRange, bs = -1, bt = 0, bpx = 0, bpz = 0;
@@ -369,6 +536,8 @@ export function nearestRoadInfo(x, z, maxRange = EXACT_RANGE) {
         const s0 = CELL_START[ci], s1 = CELL_START[ci + 1];
         for (let k = s0; k < s1; k++) {
           const s = CELL_ITEMS[k];
+          if (SEG_SEEN[s] === stamp) continue;
+          SEG_SEEN[s] = stamp;
           const a = SEG_S[s], b = segEnd(s);
           const ax = SX[a], az = SZ[a];
           const ex = SX[b] - ax, ez = SZ[b] - az;
@@ -468,8 +637,11 @@ export function roadFlatten(x, z) {
   return _flat;
 }
 
-/** True when a point is on the driveable surface (CFG.roads.width, MOSSWAY's rd < 5.7). */
-export function onRoad(x, z) { return roadDistance(x, z) < RC.width; }
+/** True when a point is inside the nearest route's authored driveable width. */
+export function onRoad(x, z) {
+  const info = nearestRoadInfo(x, z, RC.width);
+  return !!(info.hit && info.dist < info.width);
+}
 
 /* ------------------------------------------------------------------ *
  * Ribbon geometry — pure arrays, no THREE. chunks.js turns these into a
@@ -523,8 +695,11 @@ function emitRun(rt, i0, i1, half, heightFn, lift, pos, uv, idx) {
   const base = pos.length / 3;
   for (let i = i0; i <= i1; i++) {
     const c = rt.start + (i % rt.n);
-    const p = rt.start + ((i - 1 + rt.n) % rt.n);
-    const q = rt.start + ((i + 1) % rt.n);
+    // An open lane's endpoint has one neighbour, not the opposite endpoint. Wrapping here
+    // made a dead-end spur's first ribbon frame point across the entire county, producing a
+    // twisted triangle exactly where it met the loop. Closed routes still wrap normally.
+    const p = rt.start + (rt.closed ? ((i - 1 + rt.n) % rt.n) : Math.max(0, i - 1));
+    const q = rt.start + (rt.closed ? ((i + 1) % rt.n) : Math.min(rt.n - 1, i + 1));
     let tx = SX[q] - SX[p], tz = SZ[q] - SZ[p];
     const tl = Math.hypot(tx, tz) || 1;
     tx /= tl; tz /= tl;
@@ -555,14 +730,16 @@ function emitRun(rt, i0, i1, half, heightFn, lift, pos, uv, idx) {
 /* ------------------------------------------------------------------ *
  * ROUND 6 (lane G, ADDITIVE): the routes as {x, z} polylines for the
  * pause card's map (ui/hud.js _drawMap). The RESAMPLED spline, thinned
- * to one point every ROUTE_PL_STEP samples (24 m at RC.sample 2), so
+ * to one point every ROUTE_PL_STEP samples (12 m at RC.sample 2). The tighter
+ * Round 9 cadence is what keeps a narrow switchback on the map instead of
+ * cutting a 24 m chord through the inside of its bend, and is still built once.
  * the drawn road is the road the travelled wash is painted on — the 21
  * authored control points of the loop sit tens of metres off the
  * asphalt between them. Built once at module load, frozen; a closed
  * route repeats its first point at the end so a consumer strokes it
  * without knowing which kind it is.
  * ------------------------------------------------------------------ */
-const ROUTE_PL_STEP = 12;
+const ROUTE_PL_STEP = 6;
 const ROUTE_POLYLINES = Object.freeze(ROUTES.map((rt) => {
   const out = [];
   for (let i = 0; i < rt.n; i += ROUTE_PL_STEP) {
@@ -605,6 +782,8 @@ export class Roads {
   roadFlatten(x, z) { return roadFlatten(x, z); }
   onRoad(x, z) { return onRoad(x, z); }
   totalLength() { return TOTAL_LENGTH; }
+  secondaryLength() { return SECONDARY_LENGTH; }
+  jumpCount() { return JUMP_COUNT; }
   loopLength() { return ROUTES[0].length; }
   sites() { return M0_SITES; }
   /**

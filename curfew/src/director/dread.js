@@ -650,6 +650,10 @@ export class Dread {
    *   - have an unbroken segment from the eye to its head, so nothing materialises
    *     through a trunk or inside a building,
    *   - and, for a crossing beat, have D.minClearance metres clear on both sides.
+   *
+   * The one explicit exception is an Auditor prop already lying on the road. Its caller
+   * may waive only the eye-to-point ray so it can wait beyond a bend; trunk sight and a
+   * crossing's side-to-side clearance remain laws even if that caller passes false.
    * Every refusal is counted; a solver that never refuses is a solver that is not checking.
    */
   /**
@@ -668,7 +672,7 @@ export class Dread {
    * pulled back out of the bark toward the eye — the eyes are on the near face of the tree,
    * and a ray into the centre of a solid cylinder is blocked by the cylinder.
    */
-  _validate(x, z, needClear, trunkR) {
+  _validate(x, z, needClear, trunkR, requireEyeSight = true) {
     const col = this._sys('collision');
     const y = this._groundAt(x, z);
     _cand.x = x; _cand.y = y; _cand.z = z; _cand.ok = false;
@@ -683,9 +687,9 @@ export class Dread {
     if (col) {
       if (!onTrunk && typeof col.canOccupy === 'function' && !col.canOccupy(x, z, 0.34, 1.75)) return _cand;
       if (typeof col.segmentClear === 'function') {
-        this._player(_pos);
-        const ey = this._eyeY();
         if (onTrunk) {
+          this._player(_pos);
+          const ey = this._eyeY();
           // Aim at the near face, one bark thickness short of the centre.
           const bx = x - _pos.x, bz = z - _pos.z;
           const bl = Math.hypot(bx, bz) || 1;
@@ -695,7 +699,11 @@ export class Dread {
           _cand.ok = true;
           return _cand;
         }
-        if (!col.segmentClear(_pos.x, ey, _pos.z, x, y + 1.45, z)) return _cand;
+        if (requireEyeSight) {
+          this._player(_pos);
+          const ey = this._eyeY();
+          if (!col.segmentClear(_pos.x, ey, _pos.z, x, y + 1.45, z)) return _cand;
+        }
         if (needClear > 0) {
           // The whole crossing must be clear, not just its middle — otherwise the runner
           // enters the frame through a tree, which reads as a rendering bug.
@@ -714,7 +722,7 @@ export class Dread {
    * The Auditor's door. `surface` is one of 'road' | 'offroad' | 'trunk' | 'place' |
    * 'anywhere'. Returns the SHARED `_spot` record or null; copy it, never retain it.
    */
-  solvePlacement(surface, rMin, rMax, rng) {
+  solvePlacement(surface, rMin, rMax, rng, allowAuditorRoadOcclusion = false) {
     const r = rng || this.rng;
     this._player(_pos);
     const roads = this._sys('roads');
@@ -807,7 +815,15 @@ export class Dread {
       const dd2 = ddx * ddx + ddz * ddz;
       if (dd2 < rMin * rMin || dd2 > rMax * rMax) { this.stats.refusedOffBand++; continue; }
 
-      const v = this._validate(x, z, 0, trunkR);
+      // Every current `road` Auditor row places a flat print or a borrowed lantern, never
+      // a body. Those props do not materialise through a tree: they wait on the tarmac and
+      // become visible when the road bends/opens. Requiring a clean eye-to-road segment
+      // from inside the treeline gave the entire road family a measured 0% solve rate,
+      // silently deleting wet prints, the wrong reflector/sign and both one-headlight beats.
+      // The exception comes only through the Auditor's facade below; a future direct road
+      // caller remains strict unless it deliberately joins that contract.
+      const waiveEyeSight = allowAuditorRoadOcclusion && surface === 'road';
+      const v = this._validate(x, z, 0, trunkR, !waiveEyeSight);
       if (!v.ok) { this.stats.refusedPlacement++; continue; }
       _spot.x = v.x; _spot.y = v.y; _spot.z = v.z;
       return _spot;
@@ -1663,7 +1679,9 @@ export class Dread {
     const self = this;
     return {
       permitOk: () => self.permitOk(),
-      solvePlacement: (s, a, b, r) => self.solvePlacement(s, a, b, r),
+      // Auditor law 1 forbids body props, and dread-road-placement.mjs pins all five road
+      // rows to prints/lanterns. Only this narrow door may place one beyond the current bend.
+      solvePlacement: (s, a, b, r) => self.solvePlacement(s, a, b, r, s === 'road'),
       commission: (p, x, y, z, o) => self.commission(p, x, y, z, o),
       decommission: (h) => self.decommission(h),
       watching: (x, y, z, c, r) => self.watching(x, y, z, c, r),

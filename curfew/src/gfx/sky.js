@@ -117,10 +117,10 @@ const STAR_COUNT = 1500;     // ROUND 7 lane E: was 900. One Points draw either 
 //   frame max  135 -> 136      (gate <= 160)
 const STOPS = [
   // t,    horizon,   mid,       zenith,    starOpacity, fogMul
-  { t: 0.00, horizon: 0x51627b, mid: 0x3d4d69, zenith: 0x2d3a53, stars: 0.35, fogMul: 0.80 }, // dusk
-  { t: 0.30, horizon: 0x404f65, mid: 0x303e57, zenith: 0x232e43, stars: 1.00, fogMul: 1.00 }, // deep night
-  { t: 0.70, horizon: 0x323f53, mid: 0x233047, zenith: 0x182334, stars: 0.55, fogMul: 1.35 }, // the black hour
-  { t: 1.00, horizon: 0x596d8b, mid: 0x435677, zenith: 0x313f62, stars: 0.30, fogMul: 0.90 }, // false dawn
+  { t: 0.00, horizon: 0x465873, mid: 0x34445f, zenith: 0x26344d, stars: 0.25, fogMul: 0.78 }, // last dusk
+  { t: 0.30, horizon: 0x29374d, mid: 0x1b283b, zenith: 0x111b2b, stars: 1.00, fogMul: 1.00 }, // deep night
+  { t: 0.70, horizon: 0x172235, mid: 0x0d1725, zenith: 0x070e19, stars: 0.45, fogMul: 1.28 }, // the black hour
+  { t: 1.00, horizon: 0x3a4e6c, mid: 0x293b58, zenith: 0x1c2b45, stars: 0.24, fogMul: 0.88 }, // false dawn
 ];
 
 // ART.md 1.2 — fog density 0.0075 -> 0.010.

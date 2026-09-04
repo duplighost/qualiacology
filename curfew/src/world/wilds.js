@@ -22,10 +22,10 @@
 //    STEP_UP of 0.52: the crate stair at the Filling Station climbs this way today and lane
 //    E's mantle is a bonus, never a dependency. tests/wilds.mjs walks every tower with the
 //    real controller through the real input path and measures where the feet got to.
-// 3. ZERO PROGRAMS. matBody and matGlow here are parameter-for-parameter the two materials
-//    places.js already linked at boot (place-body, place-glow); three keys a program on
-//    its parameters, so these share them. tests/wilds.mjs builds a tower at the hub and
-//    asserts the count did not move.
+// 3. PROGRAM STABILITY. matBody stays deliberately unmapped while Round 9's place-body owns
+//    mapped/bumped destination variants; names alone do not imply program identity. matGlow
+//    retains the shared additive family. tests/wilds.mjs builds a tower at the hub and asserts
+//    the measured program count does not move during play.
 // 4. NOTHING ALLOCATES IN step(). Every bus payload is a reused object; the residency and
 //    proximity sweeps are plain loops over a flat array; list() is for the pause card and
 //    allocates on purpose, off the hot path.
@@ -40,7 +40,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import CFG from '../config.js';
-import { clamp, clamp01, lerp, TAU, Rng } from '../engine/math.js';
+import { clamp, clamp01, lerp, smoothstep, TAU, Rng } from '../engine/math.js';
 import { heightAt, slopeAt } from './terrain.js';
 import { roadDistance } from './roads.js';
 import { MAJORS, MAJOR_BY_ID } from './placedata.js';
@@ -60,10 +60,51 @@ const WATER_LIFT = 0.024;
 const POND_RX = 3.8;
 const POND_RZ = 2.8;
 const POND_RELIEF_MAX = 0.65;
+// The old waterholes obey the off-road wild-site law and consequently sit at least sixty
+// metres from every road. That is why a player following the game's actual navigation spine
+// could truthfully report that the county had no water. These five authored moments are a
+// separate landscape layer: one ford ON a forest road and four large pools whose near shore
+// reaches the verge. They are deliberately not appended to `sites`, so wild-site counts,
+// saves, map marks and the off-road placement contract remain exactly what they mean.
+const TRAVEL_WATER_SPECS = Object.freeze([
+  { id: 'ford-blackwater', route: 'reservoir-road', nearX: -900, nearZ: -250, kind: 'ford' },
+  { id: 'pool-station-cut', route: 'station-northwest', nearX: -900, nearZ: 457, kind: 'pool', side: 1 },
+  { id: 'pool-witch-road', route: 'witch-road', nearX: -759, nearZ: -942, kind: 'pool', side: -1 },
+  { id: 'pool-works-cut', route: 'works-cut', nearX: -515, nearZ: 245, kind: 'pool', side: 1 },
+  { id: 'pool-sawmill', route: 'sawmill-bends', nearX: 474, nearZ: 168, kind: 'pool', side: 1 },
+]);
+const TRAVEL_POOL_RX = 13.0;
+const TRAVEL_POOL_RZ = 8.0;
+const TRAVEL_FORD_LEN = 72;
+const TRAVEL_FORD_WIDTH = 8.4;
+const TRAVEL_POOL_OFFSETS = Object.freeze([15, 18, 21, 24]);
+const TRAVEL_WATER_BUILD_R = 250;
+const TRAVEL_WATER_DROP_R = 292;
+// Stronger separation than the old near-black pond. These are linear albedos on the shared
+// body material: deep blue centre, near-black edge, pale sky streak. Geometry and value—not
+// transparency—make them read as water rather than another patch of fog.
+const TRAVEL_WATER_DEEP = Object.freeze([0.022, 0.135, 0.225]);
+const TRAVEL_WATER_EDGE = Object.freeze([0.010, 0.055, 0.092]);
+const TRAVEL_WATER_GLINT = Object.freeze([0.150, 0.178, 0.205]);
+const TRAVEL_WATER_GLINT_BLUE = Object.freeze([0.074, 0.105, 0.140]);
+const TRAVEL_BANK_DARK = Object.freeze([0.025, 0.018, 0.012]);
+const TRAVEL_BANK_CUT = Object.freeze([0.075, 0.052, 0.030]);
+const TRAVEL_BANK_OUTER = Object.freeze([0.050, 0.044, 0.032]);
+const TRAVEL_DOCK = Object.freeze([0.074, 0.050, 0.029]);
 const EVENT_RETRY_S = 2.5;
 const EVENT_RETRY_MAX = 3;
 const EVENT_REARM_R = 34;
 const EVENT_REARM_S = 3.0;
+// A homestead's one physical beat belongs to the frame that presents it, not merely to a
+// 20 m discovery circle. `dread.watching` supplies the real 3-D camera cone and collider LOS.
+const EVENT_WATCH_DOT = 0.70;
+const EVENT_WATCH_R = 16;
+// Alex walks up to disabled cars and presses the same E that enters the live car. A short
+// bonnet shudder plus the existing dull metal-handle bake answers without text or a new asset.
+const WRECK_USE_R = 3.0;
+const WRECK_USE_Y = 2.6;
+const WRECK_SHUDDER_S = 0.35;
+const WRECK_SHUDDER_RAD = 0.15;
 const TREE_ATTACK_S = 1.05;
 const TREE_HIT_AT = 0.48;
 const TREE_HIT_R = 5.2;
@@ -128,6 +169,90 @@ function pondProfileAt(x, z) {
     }
   }
   return { lo, hi, relief: hi - lo };
+}
+
+/** Height envelope under a yawed ellipse. Build-time planning only. */
+function travelPoolProfileAt(x, z, yaw, rx = TRAVEL_POOL_RX, rz = TRAVEL_POOL_RZ) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  let lo = heightAt(x, z), hi = lo;
+  for (let ring = 1; ring <= 8; ring++) {
+    const t = ring / 8;
+    for (let i = 0; i < 40; i++) {
+      const a = i / 40 * TAU;
+      const wobble = 1 + 0.075 * Math.sin(a * 3 + 0.6) + 0.045 * Math.sin(a * 7 - 0.4);
+      const lx = Math.cos(a) * rx * t * wobble;
+      const lz = Math.sin(a) * rz * t * wobble;
+      const wx = x + lx * cy + lz * sy;
+      const wz = z - lx * sy + lz * cy;
+      const y = heightAt(wx, wz);
+      if (y < lo) lo = y;
+      if (y > hi) hi = y;
+    }
+  }
+  return { lo, hi, relief: hi - lo };
+}
+
+/**
+ * Plan the water a road-following player actually meets. The route metadata and thinned
+ * polylines are public roads-system contracts, so this survives a control-point edit without
+ * copying a second road graph into this file. Pool centres are selected from both verges and
+ * four offsets by the shallowest complete footprint; every near shore stays within ~16 m of
+ * the centreline. The ford is centred on the road and aligned so its creek runs across it.
+ */
+export function planTravelWaters(roads) {
+  if (!roads || typeof roads.routePolylines !== 'function' || !Array.isArray(roads.routes)) return [];
+  const lines = roads.routePolylines();
+  const out = [];
+  for (let si = 0; si < TRAVEL_WATER_SPECS.length; si++) {
+    const spec = TRAVEL_WATER_SPECS[si];
+    const ri = roads.routes.findIndex((r) => r && r.id === spec.route);
+    const line = ri >= 0 ? lines[ri] : null;
+    if (!line || line.length < 3) continue;
+    let pi = 1, bestD2 = Infinity;
+    for (let i = 1; i < line.length - 1; i++) {
+      const dx = line[i].x - spec.nearX, dz = line[i].z - spec.nearZ;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestD2) { bestD2 = d2; pi = i; }
+    }
+    const p = line[pi], a = line[pi - 1], b = line[pi + 1];
+    let tx = b.x - a.x, tz = b.z - a.z;
+    const tl = Math.hypot(tx, tz) || 1;
+    tx /= tl; tz /= tl;
+    // Local +X follows the road. Local +Z—and therefore the creek—crosses it.
+    const yaw = Math.atan2(-tz, tx);
+    let x = p.x, z = p.z, profile = null;
+    if (spec.kind === 'pool') {
+      const nx = -tz, nz = tx;
+      let score = Infinity;
+      for (let sidePass = 0; sidePass < 2; sidePass++) {
+        const side = sidePass === 0 ? (spec.side || 1) : -(spec.side || 1);
+        for (let oi = 0; oi < TRAVEL_POOL_OFFSETS.length; oi++) {
+          const off = TRAVEL_POOL_OFFSETS[oi];
+          const qx = p.x + nx * off * side, qz = p.z + nz * off * side;
+          const q = travelPoolProfileAt(qx, qz, yaw);
+          // Relief dominates; distance only breaks near ties in favour of the visible shore.
+          const qScore = q.relief + off * 0.004 + sidePass * 0.025;
+          if (qScore < score) { score = qScore; x = qx; z = qz; profile = q; }
+        }
+      }
+    }
+    const y = heightAt(x, z);
+    const rec = {
+      id: spec.id, kind: 'travel-water', variant: spec.kind, route: spec.route,
+      x, z, y, yaw, cache: false, pad: spec.kind === 'ford' ? 38 : 20, pad2R: 0,
+      cx: Math.floor(x / W.cell), cz: Math.floor(z / W.cell),
+      chunk: Math.floor(x / CHUNK) + '|' + Math.floor(z / CHUNK),
+      rec: null, d2: Infinity,
+      clearRX: spec.kind === 'ford' ? TRAVEL_FORD_WIDTH * 0.5 + 4.5 : TRAVEL_POOL_RX + 7,
+      clearRZ: spec.kind === 'ford' ? TRAVEL_FORD_LEN * 0.5 + 3.5 : TRAVEL_POOL_RZ + 6,
+      waterY: profile ? profile.hi + 0.045 : y + 0.085,
+      waterFloorY: profile ? profile.lo : y,
+      waterRelief: profile ? profile.relief : 0,
+      roadX: p.x, roadZ: p.z,
+    };
+    out.push(rec);
+  }
+  return out;
 }
 
 /* ==========================================================================
@@ -276,6 +401,23 @@ export function planWilds(seed, opts) {
     // unsampled hillside back underneath the level surface.
     s.yaw = s.variant === 'pond' ? 0 : drawnYaw;
     s.pad = PAD_R[s.kind];
+    // A chapel that only resolves after the player walks through its wall of trunks is not a
+    // landmark. Four chapel deals get a real graveyard clearing; the other ruin variants
+    // retain their intimate woodland pads, so this also breaks up the forest rhythm.
+    if (s.variant === 'chapel') {
+      s.pad = 28;
+      // Face the surviving doorway at the nearest roadward direction. The player now comes
+      // upon architecture through an authored approach instead of the chapel presenting a
+      // random back wall to the county's navigation spine.
+      let bestA = 0, bestRoad = Infinity;
+      for (let k = 0; k < 72; k++) {
+        const a = k / 72 * TAU;
+        const rd = roadDistance(s.x + Math.cos(a) * 48, s.z + Math.sin(a) * 48);
+        if (rd < bestRoad) { bestRoad = rd; bestA = a; }
+      }
+      s.approachBearing = bestA;
+      s.yaw = -Math.PI * 0.5 - bestA; // local -Z doorway points toward the road
+    }
     if (s.variant === 'barn' || s.variant === 'farm') s.pad = 14;
     s.cache = r.next() < W.cacheChance[s.kind];
     // A new place whose only prize is scenery is another empty staircase. The authored
@@ -295,6 +437,12 @@ export function planWilds(seed, opts) {
     if (s.kind === 'stand') {
       const cy2 = Math.cos(s.yaw), sy2 = Math.sin(s.yaw);
       s.pad2X = s.x + (-6.0) * sy2; s.pad2Z = s.z + (-6.0) * cy2; s.pad2R = 4.0;
+    } else if (s.variant === 'chapel') {
+      // A second overlapping glade carries the doorway clearing toward the road. Four of
+      // these in 16 km² make the woods change shape without thinning every ruin/waterhole.
+      s.pad2X = s.x + Math.cos(s.approachBearing) * 34;
+      s.pad2Z = s.z + Math.sin(s.approachBearing) * 34;
+      s.pad2R = 16;
     } else { s.pad2X = s.x; s.pad2Z = s.z; s.pad2R = 0; }
     s.flagKey = 'w:' + s.id;
     s.found = false; s.climbed = false; s.taken = false;
@@ -309,6 +457,10 @@ export function planWilds(seed, opts) {
     s.eventLive = false; s.eventPrev = 0; s.eventCurr = 0;
     s.eventRetry = 0; s.eventTries = 0; s.eventSpawned = false;
     s.eventVisit = false; s.eventAway = 0;
+    s.eventViewX = 0; s.eventViewY = 0; s.eventViewZ = 0;
+    s.wreckLive = false; s.wreckPrev = 0; s.wreckCurr = 0;
+    s.wreckX = s.x; s.wreckY = s.y + 1.2; s.wreckZ = s.z;
+    s.wreckBaseTilt = 0;
     s.encounter = '';
     s.encounterDone = false; s.encounterLive = false;
     s.encounterPrev = 0; s.encounterCurr = 0;
@@ -360,6 +512,21 @@ class Kit {
     const c = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { c[i * 3] = col[0]; c[i * 3 + 1] = col[1]; c[i * 3 + 2] = col[2]; }
     geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    this.parts.push(geo);
+    return geo;
+  }
+  /** Accept geometry that already owns a colour attribute (water depth/reflection bands). */
+  pushColored(geoIn) {
+    let geo = geoIn;
+    if (!geo || !geo.attributes || !geo.attributes.position || !geo.attributes.color) return null;
+    // Every ordinary Kit primitive has UVs. BufferGeometryUtils refuses a merge when one
+    // attribute set differs, so procedural coloured surfaces publish inert UVs too.
+    if (!geo.attributes.uv) {
+      geo.setAttribute('uv', new THREE.BufferAttribute(
+        new Float32Array(geo.attributes.position.count * 2), 2,
+      ));
+    }
+    if (geo.index) { const ni = geo.toNonIndexed(); geo.dispose(); geo = ni; }
     this.parts.push(geo);
     return geo;
   }
@@ -847,7 +1014,7 @@ function pondBankSurface(k, api, cx, cz, rx, rz, level) {
       const z = cz + Math.sin(a) * rz * scale * edge;
       const ground = groundY(api, x, z);
       const y = ring === 0 ? level + 0.008
-        : ring === 1 ? Math.max(level + 0.12, ground + 0.035)
+        : ring === 1 ? Math.min(Math.max(level + 0.12, ground + 0.035), ground + 0.79)
           : ground + 0.025;
       nodes.push([x, y, z]);
     }
@@ -899,6 +1066,240 @@ function streamSurface(k, api) {
   terrainSurface(k, api, nodes, indices, WATER);
 }
 
+/** A large level pool whose value bands describe depth before lighting or fog can. */
+function travelPoolSurface(k, level) {
+  const rings = 8, seg = 48;
+  const nodes = [[0, 0]], indices = [];
+  for (let ring = 1; ring <= rings; ring++) {
+    const t = ring / rings;
+    for (let i = 0; i < seg; i++) {
+      const a = i / seg * TAU;
+      const edge = 1 + 0.075 * Math.sin(a * 3 + 0.6) + 0.045 * Math.sin(a * 7 - 0.4);
+      nodes.push([Math.cos(a) * TRAVEL_POOL_RX * t * edge,
+        Math.sin(a) * TRAVEL_POOL_RZ * t * edge, t, a]);
+    }
+  }
+  for (let i = 0; i < seg; i++) indices.push(0, 1 + i, 1 + (i + 1) % seg);
+  for (let ring = 2; ring <= rings; ring++) {
+    const inner = 1 + (ring - 2) * seg, outer = 1 + (ring - 1) * seg;
+    for (let i = 0; i < seg; i++) {
+      const j = (i + 1) % seg;
+      indices.push(inner + i, outer + i, outer + j, inner + i, outer + j, inner + j);
+    }
+  }
+  const pos = new Float32Array(nodes.length * 3);
+  const col = new Float32Array(nodes.length * 3);
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i], t = n[2] || 0;
+    const depth = Math.pow(1 - t, 0.65);
+    const ripple = 0.90 + 0.10 * Math.sin((n[3] || 0) * 9 + t * 17);
+    pos[i * 3] = n[0]; pos[i * 3 + 1] = level; pos[i * 3 + 2] = n[1];
+    col[i * 3] = lerp(TRAVEL_WATER_EDGE[0], TRAVEL_WATER_DEEP[0], depth) * ripple;
+    col[i * 3 + 1] = lerp(TRAVEL_WATER_EDGE[1], TRAVEL_WATER_DEEP[1], depth) * ripple;
+    col[i * 3 + 2] = lerp(TRAVEL_WATER_EDGE[2], TRAVEL_WATER_DEEP[2], depth) * ripple;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setIndex(indices); g.computeVertexNormals();
+  k.pushColored(g);
+}
+
+/** Four readable shore bands: black cut, raised wet bank, then real terrain. */
+function travelPoolBank(k, api, level) {
+  const rings = 4, seg = 48, nodes = [], indices = [];
+  for (let ring = 0; ring < rings; ring++) {
+    const scale = [1.0, 1.10, 1.26, 1.48][ring];
+    for (let i = 0; i < seg; i++) {
+      const a = i / seg * TAU;
+      const edge = 1 + 0.075 * Math.sin(a * 3 + 0.6) + 0.045 * Math.sin(a * 7 - 0.4);
+      const x = Math.cos(a) * TRAVEL_POOL_RX * scale * edge;
+      const z = Math.sin(a) * TRAVEL_POOL_RZ * scale * edge;
+      const gy = groundY(api, x, z);
+      const y = ring === 0 ? level + 0.006
+        : ring === 1 ? Math.max(level + 0.18, gy + 0.08)
+          : ring === 2 ? Math.max(level + 0.09, gy + 0.06) : gy + 0.028;
+      nodes.push([x, y, z, ring]);
+    }
+  }
+  for (let ring = 0; ring < rings - 1; ring++) {
+    for (let i = 0; i < seg; i++) {
+      const j = (i + 1) % seg, a = ring * seg, b = (ring + 1) * seg;
+      indices.push(a + i, b + i, b + j, a + i, b + j, a + j);
+    }
+  }
+  const pos = new Float32Array(nodes.length * 3), col = new Float32Array(nodes.length * 3);
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i], c = n[3] < 1 ? TRAVEL_BANK_DARK
+      : n[3] < 3 ? TRAVEL_BANK_CUT : TRAVEL_BANK_OUTER;
+    pos[i * 3] = n[0]; pos[i * 3 + 1] = n[1]; pos[i * 3 + 2] = n[2];
+    col[i * 3] = c[0]; col[i * 3 + 1] = c[1]; col[i * 3 + 2] = c[2];
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setIndex(indices); g.computeVertexNormals();
+  k.pushColored(g);
+}
+
+/** Terrain-following creek, wide and long enough that both sides of the road remain visible. */
+function travelFordSurface(k, api) {
+  const rows = 81, cols = 7, len = TRAVEL_FORD_LEN;
+  const nodes = [], indices = [];
+  for (let iz = 0; iz < rows; iz++) {
+    const t = iz / (rows - 1), z = (t - 0.5) * len;
+    const cx = Math.sin(t * 8.0 - 1.4) * 0.82;
+    const dxDz = Math.cos(t * 8.0 - 1.4) * 0.82 * 8.0 / len;
+    const inv = 1 / Math.hypot(1, dxDz), nx = inv, nz = -dxDz * inv;
+    const width = TRAVEL_FORD_WIDTH + 0.70 * Math.sin(t * TAU * 2 + 0.7);
+    for (let ix = 0; ix < cols; ix++) {
+      const u = ix / (cols - 1), across = (u - 0.5) * width;
+      nodes.push([cx + nx * across, z + nz * across, u]);
+    }
+  }
+  for (let iz = 0; iz < rows - 1; iz++) {
+    for (let ix = 0; ix < cols - 1; ix++) {
+      const a = iz * cols + ix, b = a + 1, c = a + cols, d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+  const pos = new Float32Array(nodes.length * 3), col = new Float32Array(nodes.length * 3);
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i], centre = 1 - Math.abs(n[2] - 0.5) * 2;
+    const roadShine = 1 + (1 - smoothstep(2.5, 10.5, Math.abs(n[1]))) * 0.78;
+    pos[i * 3] = n[0]; pos[i * 3 + 1] = groundY(api, n[0], n[1]) + 0.105; pos[i * 3 + 2] = n[1];
+    col[i * 3] = lerp(TRAVEL_WATER_EDGE[0], TRAVEL_WATER_DEEP[0], centre) * roadShine;
+    col[i * 3 + 1] = lerp(TRAVEL_WATER_EDGE[1], TRAVEL_WATER_DEEP[1], centre) * roadShine;
+    col[i * 3 + 2] = lerp(TRAVEL_WATER_EDGE[2], TRAVEL_WATER_DEEP[2], centre) * roadShine;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setIndex(indices); g.computeVertexNormals();
+  k.pushColored(g);
+}
+
+/** Raised banks run beside the ford but kneel where the road crosses, so no visual berm. */
+function travelFordBanks(k, api) {
+  const rows = 65, len = TRAVEL_FORD_LEN, nodes = [], indices = [];
+  for (let iz = 0; iz < rows; iz++) {
+    const t = iz / (rows - 1), z = (t - 0.5) * len;
+    const cx = Math.sin(t * 8.0 - 1.4) * 0.82;
+    const dxDz = Math.cos(t * 8.0 - 1.4) * 0.82 * 8.0 / len;
+    const inv = 1 / Math.hypot(1, dxDz), nx = inv, nz = -dxDz * inv;
+    const width = TRAVEL_FORD_WIDTH + 0.70 * Math.sin(t * TAU * 2 + 0.7);
+    const roadKneel = smoothstep(3.6, 7.5, Math.abs(z));
+    for (const side of [-1, 1]) {
+      for (let band = 0; band < 2; band++) {
+        const across = side * (width * 0.5 + band * 1.1);
+        const x = cx + nx * across, qz = z + nz * across, gy = groundY(api, x, qz);
+        nodes.push([x, gy + (band ? 0.035 : lerp(0.025, 0.22, roadKneel)), qz, band]);
+      }
+    }
+  }
+  for (let iz = 0; iz < rows - 1; iz++) {
+    const a = iz * 4, b = a + 4;
+    indices.push(a, b, a + 1, a + 1, b, b + 1);
+    indices.push(a + 2, a + 3, b + 2, a + 3, b + 3, b + 2);
+  }
+  const pos = new Float32Array(nodes.length * 3), col = new Float32Array(nodes.length * 3);
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i], c = n[3] ? TRAVEL_BANK_CUT : TRAVEL_BANK_DARK;
+    pos[i * 3] = n[0]; pos[i * 3 + 1] = n[1]; pos[i * 3 + 2] = n[2];
+    col[i * 3] = c[0]; col[i * 3 + 1] = c[1]; col[i * 3 + 2] = c[2];
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setIndex(indices); g.computeVertexNormals();
+  k.pushColored(g);
+}
+
+/** The road-water landscape body. No light, shader or save slot of its own. */
+function buildTravelWater(api) {
+  const site = api.site, solid = new Kit(), glow = new Kit(), r = api.rng;
+  if (site.variant === 'ford') {
+    travelFordSurface(solid, api);
+    travelFordBanks(solid, api);
+    // Broken, staggered silver-blue facets—not evenly spaced neon bars. Five of them sit
+    // directly in the crossing so the dark ford has readable surface area from the road.
+    for (let i = 0; i < 30; i++) {
+      const z = i < 11 ? r.range(-6.0, 6.0) : r.range(-32, 32);
+      const x = Math.sin(((z / TRAVEL_FORD_LEN) + 0.5) * 8.0 - 1.4) * 0.82;
+      const len = r.range(0.46, i < 11 ? 2.15 : 1.32);
+      const ox = r.range(-2.75, 2.75), oz = r.range(-0.46, 0.46);
+      glow.box(len, 0.014, r.range(0.032, 0.070), x + ox,
+        groundY(api, x + ox, z + oz) + 0.128, z + oz,
+        i % 4 === 0 ? TRAVEL_WATER_GLINT : TRAVEL_WATER_GLINT_BLUE,
+        r.range(-0.24, 0.24));
+    }
+    // Reed walls stop at the road; two broken white stakes announce the ford from either
+    // direction without becoming collision or a UI arrow.
+    for (let i = 0; i < 30; i++) {
+      const z = -34 + i * 2.34;
+      if (Math.abs(z) < 6.5) continue;
+      const side = i & 1 ? 1 : -1;
+      const x = side * (TRAVEL_FORD_WIDTH * 0.5 + 0.45 + r.range(0.0, 0.55));
+      const gy = groundY(api, x, z);
+      solid.strut(x, gy, z, x + r.range(-0.10, 0.10), gy + r.range(0.75, 1.65), z, 0.022, 4, REED);
+    }
+    for (const x of [-5.0, 5.0]) {
+      const gy = groundY(api, x, 0);
+      solid.box(0.16, 1.45, 0.16, x, gy + 0.72, 0, C.stone, 0, 0, x < 0 ? -0.08 : 0.08);
+      glow.box(0.20, 0.12, 0.20, x, gy + 1.44, 0, TRAVEL_WATER_GLINT);
+    }
+  } else {
+    travelPoolSurface(solid, site.waterY);
+    travelPoolBank(solid, api, site.waterY);
+    // Reflections are actual broken facets, not translucent haze and not a Tron ruler.
+    // Adjacent pieces bend into loose arcs; irregular z and alternating cold values keep
+    // the result water-like while remaining readable in the black hour.
+    for (let i = 0; i < 11; i++) {
+      const z = r.range(-5.8, 5.8);
+      const edge = Math.sqrt(Math.max(0, 1 - (z * z) / (TRAVEL_POOL_RZ * TRAVEL_POOL_RZ)));
+      const span = Math.max(0.8, TRAVEL_POOL_RX * edge * r.range(0.15, 0.34));
+      const x = r.range(-0.55, 0.55) * TRAVEL_POOL_RX * edge;
+      const pieces = 1 + (i % 3);
+      for (let j = 0; j < pieces; j++) {
+        const u = pieces === 1 ? 0 : j / (pieces - 1) - 0.5;
+        const len = span / pieces * r.range(0.46, 0.72);
+        const bend = u * u * 0.22 + r.range(-0.055, 0.055);
+        glow.box(len, 0.013, r.range(0.024, 0.046), x + u * span,
+          site.waterY + 0.020 + (j & 1) * 0.002, z + bend,
+          (i + j) % 4 === 0 ? TRAVEL_WATER_GLINT : TRAVEL_WATER_GLINT_BLUE,
+          r.range(-0.16, 0.16) + u * 0.18);
+      }
+    }
+    // A broken dock reaches from the road-facing bank into every pool.
+    const cy = Math.cos(site.yaw), sy = Math.sin(site.yaw);
+    const dx = site.roadX - site.x, dz = site.roadZ - site.z;
+    const roadLZ = dx * sy + dz * cy;
+    const toward = roadLZ < 0 ? -1 : 1;
+    for (let i = 0; i < 8; i++) {
+      const z = toward * (TRAVEL_POOL_RZ + 1.2 - i * 0.82);
+      const gy = Math.max(site.waterY + 0.12, groundY(api, 0, z) + 0.10);
+      solid.box(2.45, 0.10, 0.70, r.range(-0.10, 0.10), gy, z, TRAVEL_DOCK, r.range(-0.06, 0.06));
+    }
+    // Reeds, dead flooded trunks and a half-sunk skiff give three vertical scale cues.
+    for (let i = 0; i < 34; i++) {
+      const a = i / 34 * TAU + r.range(-0.09, 0.09), rr = r.range(0.92, 1.13);
+      const x = Math.cos(a) * TRAVEL_POOL_RX * rr;
+      const z = Math.sin(a) * TRAVEL_POOL_RZ * rr;
+      const gy = groundY(api, x, z);
+      solid.strut(x, gy, z, x + r.range(-0.13, 0.13), gy + r.range(0.7, 1.65), z, 0.022, 4, REED);
+    }
+    for (let i = 0; i < 5; i++) {
+      const a = 0.4 + i * 1.22, x = Math.cos(a) * TRAVEL_POOL_RX * 0.70;
+      const z = Math.sin(a) * TRAVEL_POOL_RZ * 0.70;
+      solid.strut(x, site.waterY - 0.25, z, x + r.range(-0.45, 0.45),
+        site.waterY + r.range(2.1, 4.2), z + r.range(-0.35, 0.35), r.range(0.08, 0.16), 6, C.wood);
+    }
+    solid.box(3.2, 0.28, 0.72, 1.8, site.waterY + 0.04, -0.5, C.dark, -0.35, 0, 0.08);
+    solid.box(2.7, 0.10, 0.48, 1.8, site.waterY + 0.25, -0.5, TRAVEL_DOCK, -0.35, 0, 0.08);
+  }
+  return { solid, glow, cache: null };
+}
+
 /** RUIN / WATERHOLE: a built remnant or one of the little wet places in the forest. */
 function buildRuin(api) {
   const site = api.site;
@@ -906,24 +1307,57 @@ function buildRuin(api) {
   const r = api.rng;
   let cache = null;
   if (site.variant === 'chapel') {
-    // a 6 x 9 shell, walls broken to different heights, a doorway on -Z, a gable end on +Z
-    const w = 3.0, d = 4.5, t = 0.5;
+    // A 8.4 x 12 shell in its own graveyard clearing: large enough to interrupt the woods,
+    // with a broken belfry that reads over the remaining trunks instead of a tiny grey slit.
+    const w = 4.2, d = 6.0, t = 0.55;
     // the +Z end: the tallest wall, its top BROKEN into steps so it is a ruin and not a slab
-    wallSeg(solid, api, -w, d, -1.5, d, 3.1, t, C.stone);
-    wallSeg(solid, api, -1.5, d, 0.4, d, 4.6, t, C.stone);
-    wallSeg(solid, api, 0.4, d, 1.8, d, 5.4, t, C.stone);
-    wallSeg(solid, api, 1.8, d, w, d, 3.6, t, C.stone);
-    solid.box(0.6, 1.4, t + 0.3, -1.0, api.padY + 5.2, d, C.stone, 0);        // the gable stub
+    wallSeg(solid, api, -w, d, -2.1, d, 4.0, t, C.stone);
+    wallSeg(solid, api, -2.1, d, -0.45, d, 6.2, t, C.stone);
+    wallSeg(solid, api, -0.45, d, 1.25, d, 7.2, t, C.stone);
+    wallSeg(solid, api, 1.25, d, w, d, 4.7, t, C.stone);
+    solid.box(0.78, 1.8, t + 0.35, -1.25, api.padY + 7.1, d, C.stone, 0);     // gable tooth
     for (const bx of [-w - 0.35, w + 0.35]) {                                 // buttresses
-      solid.box(0.7, 2.4, 1.1, bx, api.padY + 1.2 - 0.3, d - 0.2, C.stone, 0);
-      api.emit({ kind: 'obb', x: bx, z: d - 0.2, halfX: 0.35, halfZ: 0.55, yaw: 0, y0: api.padY - 0.5, y1: api.padY + 2.1, tag: 'wall' });
+      solid.box(0.78, 3.2, 1.35, bx, api.padY + 1.25, d - 0.25, C.stone, 0);
+      api.emit({ kind: 'obb', x: bx, z: d - 0.25, halfX: 0.39, halfZ: 0.68, yaw: 0, y0: api.padY - 0.5, y1: api.padY + 2.85, tag: 'wall' });
     }
-    wallSeg(solid, api, -w, -d, -w, d, 1.2 + r.range(0, 1.4), t, C.stone);
-    wallSeg(solid, api, w, -d, w, d, 1.0 + r.range(0, 1.6), t, C.stone);
-    wallSeg(solid, api, -w, -d, -1.1, -d, 2.6, t, C.stone);
-    wallSeg(solid, api, 1.1, -d, w, -d, 2.6, t, C.stone);
+    wallSeg(solid, api, -w, -d, -w, d, 1.8 + r.range(0, 1.6), t, C.stone);
+    wallSeg(solid, api, w, -d, w, d, 1.6 + r.range(0, 1.8), t, C.stone);
+    wallSeg(solid, api, -w, -d, -1.25, -d, 3.3, t, C.stone);
+    wallSeg(solid, api, 1.25, -d, w, -d, 3.3, t, C.stone);
     // the window arch in the +Z end: a dark recess and a rose that survived
-    solid.box(1.2, 1.9, 0.12, 0, api.padY + 2.6, d - 0.3, C.dark, 0);
+    solid.box(1.55, 2.25, 0.14, 0.25, api.padY + 3.35, d - 0.34, C.dark, 0);
+    // Scabbed lime render survives in separate islands over the masonry. These patches use
+    // the same linked body material and vertex colours—actual surface break-up, zero new
+    // shader programs, and enough value contrast to stop stone reading as another tree.
+    solid.box(1.25, 1.75, 0.045, -2.75, api.padY + 2.15, d - 0.31, C.plaster, 0);
+    solid.box(1.35, 2.20, 0.045, 2.55, api.padY + 2.45, d - 0.31, C.plaster, 0);
+    solid.box(0.045, 1.55, 2.70, -w + 0.31, api.padY + 1.70, 1.25, C.plaster, 0);
+    solid.box(0.045, 1.35, 2.25, w - 0.31, api.padY + 1.48, -0.80, C.plaster, 0);
+    // The belfry is real architecture, not a marker column: two shattered piers, a lintel,
+    // and the old iron cross. It supplies the far silhouette while the nave rewards arrival.
+    for (const bx of [-1.15, 1.15]) {
+      solid.box(0.72, 3.4, 0.72, bx, api.padY + 7.25, d - 0.05, C.stone, 0);
+      solid.box(0.84, 0.20, 0.86, bx, api.padY + 5.62, d - 0.05, C.dark, 0);
+    }
+    solid.box(3.0, 0.48, 0.76, 0, api.padY + 8.72, d - 0.05, C.stone, 0);
+    solid.strut(-1.5, api.padY + 8.95, d, -0.25, api.padY + 10.15, d, 0.11, 5, C.stone);
+    solid.strut(1.5, api.padY + 8.95, d, 0.25, api.padY + 10.15, d, 0.11, 5, C.stone);
+    solid.box(0.16, 2.2, 0.16, 0, api.padY + 10.1, d, C.metal, 0);
+    solid.box(1.15, 0.16, 0.16, 0, api.padY + 10.25, d, C.metal, 0);
+    // Exposed courses and a few graves give the broad walls texture and make the clearing
+    // legible as a place rather than a single procedural block.
+    for (let y = 1.0; y < 5.8; y += 0.72) {
+      solid.box(3.1, 0.09, t + 0.08, -1.15 + (Math.floor(y * 10) & 1) * 0.35,
+        api.padY + y, d - 0.31, C.dark, 0);
+    }
+    for (let i = 0; i < 8; i++) {
+      const side = i & 1 ? 1 : -1, lx = side * (w + 1.7 + (i % 3) * 0.85);
+      const lz = -d + 1.0 + Math.floor(i / 2) * 2.0, gy = groundY(api, lx, lz);
+      solid.box(0.62, 1.05 + (i % 3) * 0.18, 0.24, lx, gy + 0.52, lz, C.stone, side * 0.08);
+      solid.box(0.76, 0.14, 0.42, lx, gy + 0.06, lz, C.dark, side * 0.08);
+      api.emit({ kind: 'obb', x: lx, z: lz, halfX: 0.38, halfZ: 0.21, yaw: side * 0.08,
+        y0: gy - 0.1, y1: gy + 1.25, tag: 'stone', standable: true });
+    }
     // rubble
     for (let i = 0; i < 9; i++) {
       const lx = r.range(-w + 0.5, w - 0.5), lz = r.range(-d + 0.6, d - 0.6);
@@ -934,8 +1368,8 @@ function buildRuin(api) {
     }
     // a fallen roof beam across the nave
     solid.strut(-w + 0.4, api.padY + 0.3, 1.0, w - 0.4, api.padY + 1.6, 0.2, 0.12, 5, C.wood);
-    if (site.cache) cache = cacheParts(api, 1.6, api.padY, d - 1.2, 0);
-    if (cache) { site.cacheX = api.wx(1.6, d - 1.2); site.cacheZ = api.wz(1.6, d - 1.2); site.cacheY = api.padY; }
+    if (site.cache) cache = cacheParts(api, 2.1, api.padY, d - 1.5, 0);
+    if (cache) { site.cacheX = api.wx(2.1, d - 1.5); site.cacheZ = api.wz(2.1, d - 1.5); site.cacheY = api.padY; }
   } else if (site.variant === 'foundation') {
     // a footing ring you can walk on, a chimney stack, a hearth, one standing post
     const w = 4.0, d = 3.0, t = 0.5;
@@ -1041,6 +1475,7 @@ function buildWreck(api) {
   const solid = new Kit(), glow = new Kit();
   const r = api.rng;
   let cache = null, encounter = null, encounterPosition = null;
+  let wreckBonnet = null, wreckBonnetPosition = null;
   if (site.encounter === 'tracks') {
     // THE TRACKS. Eight strides, each almost as long as the player is tall, alternate
     // through the mud toward one tree whose symmetry is a little too anatomical. The
@@ -1113,8 +1548,24 @@ function buildWreck(api) {
     solid.box(2.1, 0.62, 1.70, -0.25, gy + 1.08, 0, C.dark, yaw, 0, -0.20);
     const eng = put(1.35, 0);
     solid.box(1.05, 0.50, 1.30, eng.x, gy + 0.92, eng.z, C.metal, yaw, 0, -0.12);
-    const hood = put(2.02, 0);
-    solid.box(0.10, 1.35, 1.62, hood.x, gy + 1.45, hood.z, C.rust, yaw, 0, 0.22);
+    // The raised bonnet keeps exactly its old base transform, but owns a lower-edge pivot.
+    // It can now answer the ordinary E-at-a-car instinct with a short dead-latch shudder;
+    // the broad stationary vehicle collider below remains the physical shell throughout.
+    const bonnetH = 1.35, bonnetTilt = 0.22;
+    const bonnetCentre = put(2.02, 0);
+    const bonnetPivot = put(2.02 + Math.sin(bonnetTilt) * bonnetH * 0.5, 0);
+    wreckBonnet = new Kit();
+    wreckBonnet.box(0.10, bonnetH, 1.62, 0, bonnetH * 0.5, 0, C.rust);
+    wreckBonnetPosition = {
+      x: bonnetPivot.x,
+      y: gy + 1.45 - Math.cos(bonnetTilt) * bonnetH * 0.5,
+      z: bonnetPivot.z,
+      yaw,
+      tilt: bonnetTilt,
+    };
+    site.wreckX = api.wx(bonnetCentre.x, bonnetCentre.z);
+    site.wreckY = gy + 1.45;
+    site.wreckZ = api.wz(bonnetCentre.x, bonnetCentre.z);
     // caved roof: two mismatched skins leave a deep black crease down the middle
     for (const side of [-1, 1]) {
       const roof = put(-0.35, side * 0.48);
@@ -1190,7 +1641,7 @@ function buildWreck(api) {
     if (site.cache) cache = cacheParts(api, 1.8, groundY(api, 1.8, -2.2), -2.2, 0.4);
     if (cache) { site.cacheX = api.wx(1.8, -2.2); site.cacheZ = api.wz(1.8, -2.2); site.cacheY = groundY(api, 1.8, -2.2); }
   }
-  return { solid, glow, cache, encounter, encounterPosition };
+  return { solid, glow, cache, encounter, encounterPosition, wreckBonnet, wreckBonnetPosition };
 }
 
 /** CAMP / HOMESTEAD: shelters, an old barn, or the remains of a small farm. */
@@ -1198,7 +1649,7 @@ function buildCamp(api) {
   const site = api.site;
   const solid = new Kit(), glow = new Kit();
   const r = api.rng;
-  let cache = null, event = null, eventPosition = null;
+  let cache = null, event = null, eventPosition = null, eventFocusPosition = null;
   if (site.variant === 'cabin') {
     const w = 2.2, d = 2.8, h = 2.5, t = 0.22;
     const gmin = Math.min(groundY(api, -w, -d), groundY(api, w, -d), groundY(api, -w, d), groundY(api, w, d), api.padY) - 0.4;
@@ -1267,12 +1718,15 @@ function buildCamp(api) {
     // both doors hang visibly open: the invitation and the warning in the same silhouette
     const leftDoorY = groundY(api, -2.05, -6.0);
     solid.box(1.34, 3.35, 0.14, -2.05, leftDoorY + 1.68, -6.0, C.plank, -0.42);
-    // The right leaf is separate: it slams on the first visit, so even the twelve barns
+    // The right leaf is separate: it slams on the first visit, so even the twelve homesteads
     // with no pool-backed figure still own a physical event.
     event = new Kit();
     event.box(1.34, 3.35, 0.14, -0.67, 1.68, 0, C.plank);
     event.strut(-1.22, 0.22, 0.09, -0.12, 3.08, 0.09, 0.055, 4, C.wood);
     eventPosition = { x: 2.72, y: groundY(api, 2.72, -5.42), z: -5.42, yaw: -1.02 };
+    // Explicit visible face beside the open doorway. The moving mesh origin itself sits
+    // inside the front-wall collider and therefore cannot be used as a line-of-sight target.
+    eventFocusPosition = { x: 2.20, y: eventPosition.y + 1.68, z: -6.27 };
     // hay bales / feed trough make an interior rather than an empty shell
     for (let i = 0; i < 5; i++) {
       const lx = i < 3 ? -2.85 : 2.75, lz = -0.5 + (i % 3) * 1.35;
@@ -1326,6 +1780,7 @@ function buildCamp(api) {
     event.cyl(0.30, 0.26, 0.52, 8, 0, 2.62, 0, C.paper);
     event.cone(0.58, 0.42, 8, 0, 3.10, 0, C.slate);
     eventPosition = { x: 5.7, y: groundY(api, 5.7, 1.1), z: 1.1, yaw: -0.72 };
+    eventFocusPosition = { x: eventPosition.x, y: eventPosition.y + 2.10, z: eventPosition.z };
     site.eventX = api.wx(7.0, 1.2); site.eventZ = api.wz(7.0, 1.2); site.eventYaw = site.yaw - Math.PI * 0.5;
     cache = cacheParts(api, 1.4, groundY(api, 1.4, 2.6), 2.6, -0.2);
     site.cacheX = api.wx(1.4, 2.6); site.cacheZ = api.wz(1.4, 2.6); site.cacheY = groundY(api, 1.4, 2.6);
@@ -1364,10 +1819,13 @@ function buildCamp(api) {
     if (site.cache) cache = cacheParts(api, -0.2, gy, len * 0.5 + 0.8, 0.2);
     if (cache) { site.cacheX = api.wx(-0.2, len * 0.5 + 0.8); site.cacheZ = api.wz(-0.2, len * 0.5 + 0.8); site.cacheY = gy; }
   }
-  return { solid, glow, cache, event, eventPosition };
+  return { solid, glow, cache, event, eventPosition, eventFocusPosition };
 }
 
-const BUILDERS = { tower: buildTower, stand: buildStand, ruin: buildRuin, wreck: buildWreck, camp: buildCamp };
+const BUILDERS = {
+  tower: buildTower, stand: buildStand, ruin: buildRuin, wreck: buildWreck, camp: buildCamp,
+  'travel-water': buildTravelWater,
+};
 
 /* ==========================================================================
    The system
@@ -1381,6 +1839,7 @@ export class Wilds {
     this.sites = null;              // planned lazily: flora asks padClear during the boot ring
     this._cellMap = new Map();      // planner cell number -> site, for padClear
     this._byChunk = new Map();      // chunk key -> [site]
+    this._travelWaters = [];        // road water is landscape, not a saved/discovered wild site
     this.group = null;
     this.horizonGroup = null;
     this.matBody = null;
@@ -1391,6 +1850,7 @@ export class Wilds {
     this._horizon = [];             // the persistent lantern meshes
     this._towers = [];
     this._eventSites = [];           // fourteen authored movers; present() need not scan 114 sites
+    this._wreckCars = [];            // dead cars only; E and present() never scan every wild
     this._encounterSite = null;
     this._notes = [];
     this._stats = { sites: 0, resident: 0, built: 0, disposed: 0, found: 0, climbed: 0, caches: 0, takes: 0, colliders: 0, events: 0, eventRefused: 0, encounters: 0, encounterCancelled: 0, treeHits: 0, treeMisses: 0 };
@@ -1422,10 +1882,12 @@ export class Wilds {
     if (this.sites) return this.sites;
     const sites = planWilds(this.seed);
     this.sites = sites;
+    this._travelWaters = planTravelWaters(this._sys('roads'));
     this._cellMap.clear();
     this._byChunk.clear();
     this._towers.length = 0;
     this._eventSites.length = 0;
+    this._wreckCars.length = 0;
     for (let i = 0; i < sites.length; i++) {
       const s = sites[i];
       this._cellMap.set((s.cx + 1000) * 4096 + (s.cz + 1000), s);
@@ -1434,6 +1896,7 @@ export class Wilds {
       arr.push(s);
       if (s.kind === 'tower') this._towers.push(s);
       if (s.eventMode) this._eventSites.push(s);
+      if (s.kind === 'wreck' && s.variant === 'car') this._wreckCars.push(s);
       if (s.encounter) this._encounterSite = s;
     }
     this._stats.sites = sites.length;
@@ -1459,6 +1922,19 @@ export class Wilds {
         }
       }
     }
+    // Five records, only during planting. The broad clear apron is what lets a driver see
+    // blue water and a cut bank from the road instead of another wall of identical trunks.
+    // It follows each water shape rather than clearing an enormous circle around the ford.
+    const waters = this._travelWaters;
+    for (let i = 0; i < waters.length; i++) {
+      const s = waters[i], ex = x - s.x, ez = z - s.z;
+      const cy = Math.cos(s.yaw), sy = Math.sin(s.yaw);
+      const lx = ex * cy - ez * sy, lz = ex * sy + ez * cy;
+      if (s.variant === 'ford') {
+        if (Math.abs(lx) < s.clearRX && Math.abs(lz) < s.clearRZ) return true;
+      } else if ((lx * lx) / (s.clearRX * s.clearRX)
+        + (lz * lz) / (s.clearRZ * s.clearRZ) < 1) return true;
+    }
     return false;
   }
 
@@ -1466,9 +1942,9 @@ export class Wilds {
   _ensureBuilt() {
     if (this._built) return;
     this._built = true;
-    // PARAMETER-IDENTICAL to places.js's place-body and place-glow, on purpose: three
-    // keys a program on the material's parameters, so these share the two programs
-    // places linked at boot and this lane links none. Measured in tests/wilds.mjs.
+    // Deliberately unmapped, unlike Round 9's mapped/bumped place-body. Program stability is
+    // established by the measured boot/runtime census in tests/wilds.mjs, not by assuming
+    // differently configured materials have the same program key.
     this.matBody = new THREE.MeshLambertMaterial({
       vertexColors: true, dithering: true,
       side: THREE.DoubleSide, shadowSide: THREE.FrontSide,
@@ -1622,6 +2098,22 @@ export class Wilds {
       cache = { holder, lid, glint, colliderId: c.colliderId };
       if (site.taken) { lid.rotation.x = -2.0; glint.visible = false; }
     }
+    let wreck = null;
+    if (out.wreckBonnet && !out.wreckBonnet.empty()) {
+      const bp = out.wreckBonnetPosition || { x: 0, y: 0, z: 0, yaw: 0, tilt: 0 };
+      const holder = new THREE.Group();
+      holder.name = 'wild-wreck-bonnet-pivot-' + site.id;
+      holder.position.set(bp.x, bp.y, bp.z);
+      holder.rotation.y = bp.yaw || 0;
+      const hood = new THREE.Mesh(out.wreckBonnet.build(), this.matBody);
+      hood.name = 'wild-wreck-bonnet-' + site.id;
+      hood.rotation.z = bp.tilt || 0;
+      hood.castShadow = true; hood.receiveShadow = true;
+      holder.add(hood);
+      g.add(holder);
+      site.wreckBaseTilt = bp.tilt || 0;
+      wreck = { holder, hood };
+    }
     let event = null;
     if (out.event && !out.event.empty()) {
       const geo = out.event.build();
@@ -1634,6 +2126,10 @@ export class Wilds {
       g.add(event);
       site.eventBaseX = ep.x; site.eventBaseY = ep.y; site.eventBaseZ = ep.z;
       site.eventBaseYaw = ep.yaw || 0;
+      const fp = out.eventFocusPosition || ep;
+      site.eventViewX = api.wx(fp.x, fp.z);
+      site.eventViewY = fp.y;
+      site.eventViewZ = api.wz(fp.x, fp.z);
       if (site.eventDone) site.eventPrev = site.eventCurr = 1;
     }
     let encounter = null;
@@ -1651,7 +2147,7 @@ export class Wilds {
       }
     }
     this.group.add(g);
-    site.rec = { group: g, glow, halo, cache, event, encounter, chunkId };
+    site.rec = { group: g, glow, halo, cache, wreck, event, encounter, chunkId };
     this._stats.built++;
     this._stats.resident++;
     return site.rec;
@@ -1663,6 +2159,9 @@ export class Wilds {
     // Streaming must not finish a scare in an empty chunk. The visible crown, its attack
     // clock and bit 8 remain one lifecycle: an unresolved wind-up is re-armed at pose zero.
     if (site.encounterLive && !site.encounterDone) this._cancelEncounter(site);
+    // A dead latch is never save state. Stream-out cancels the tiny response and a rebuild
+    // recreates the bonnet at its authored base transform.
+    if (site.variant === 'car') this._resetWreck(site);
     site.rec = null;
     this.group.remove(rec.group);
     rec.group.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
@@ -1674,8 +2173,11 @@ export class Wilds {
 
   _chunkGone(key) {
     const arr = this._byChunk.get(key);
-    if (!arr) return;
-    for (let i = 0; i < arr.length; i++) if (arr[i].rec) this._dispose(arr[i]);
+    if (arr) for (let i = 0; i < arr.length; i++) if (arr[i].rec) this._dispose(arr[i]);
+    for (let i = 0; i < this._travelWaters.length; i++) {
+      const s = this._travelWaters[i];
+      if (s.chunk === key && s.rec) this._dispose(s);
+    }
   }
 
   /* ---------------------------------------------------------------- flags -- */
@@ -1815,6 +2317,20 @@ export class Wilds {
       }
     }
 
+    // Road water streams on the same one-build budget as every other wild body. It has no
+    // proximity events, pickup or save flag; this loop is residency and nothing else.
+    const waterBuild2 = TRAVEL_WATER_BUILD_R * TRAVEL_WATER_BUILD_R;
+    const waterDrop2 = TRAVEL_WATER_DROP_R * TRAVEL_WATER_DROP_R;
+    const waters = this._travelWaters;
+    for (let i = 0; i < waters.length; i++) {
+      const s = waters[i], dx = px - s.x, dz = pz - s.z, d2 = dx * dx + dz * dz;
+      s.d2 = d2;
+      if (!s.rec) {
+        if (d2 < waterBuild2 && budget > 0) { this._build(s); budget--; }
+      } else if (d2 > waterDrop2) this._dispose(s);
+    }
+
+    this._stepWrecks(dt, px, py, pz);
     this._stepLanterns(px, py, pz);
   }
 
@@ -1852,7 +2368,71 @@ export class Wilds {
     if (best) this._take(best);
   }
 
+  _stepWrecks(dt, px, py, pz) {
+    const sites = this._wreckCars;
+    for (let i = 0; i < sites.length; i++) if (sites[i].wreckLive) this._advanceWreck(sites[i], dt);
+
+    if (this.ctx.shared && this.ctx.shared.inCar) return;
+    const input = this.ctx.input;
+    if (!input || typeof input.pressed !== 'function' || !input.pressed('use')) return;
+
+    // If the real car would accept this same tap, it owns the verb. A wreck never steals E
+    // from an enterable vehicle merely because both happen to be within the same clearing.
+    const car = this._sys('car');
+    if (car && typeof car.state === 'function') {
+      const state = car.state();
+      if (state && state.canEnter) return;
+    }
+
+    let best = null, bestD2 = WRECK_USE_R * WRECK_USE_R;
+    for (let i = 0; i < sites.length; i++) {
+      const s = sites[i];
+      if (!s.rec || !s.rec.wreck || s.wreckLive || Math.abs(py - s.y) > WRECK_USE_Y) continue;
+      // Reach is around the shell's centre, not the moving bonnet: a player trying either
+      // missing side door or the boot is still unmistakably pressing E at this wreck.
+      const dx = px - s.x, dz = pz - s.z, d2 = dx * dx + dz * dz;
+      if (d2 <= bestD2) { bestD2 = d2; best = s; }
+    }
+    if (best) this._startWreck(best);
+  }
+
+  _startWreck(s) {
+    s.wreckLive = true;
+    s.wreckPrev = s.wreckCurr = 0;
+    const dread = this._sys('dread');
+    if (dread && typeof dread.answer === 'function') {
+      // Existing pooled dull-metal answer: no new voice, buffer, light or render program.
+      dread.answer('lantern-gone', s.wreckX, s.wreckY, s.wreckZ, 0.68);
+    }
+  }
+
+  _advanceWreck(s, dt) {
+    s.wreckPrev = s.wreckCurr;
+    s.wreckCurr = Math.min(1, s.wreckCurr + dt / WRECK_SHUDDER_S);
+    if (s.wreckCurr < 1) return;
+    s.wreckLive = false;
+    s.wreckPrev = s.wreckCurr;
+  }
+
+  _resetWreck(s) {
+    s.wreckLive = false;
+    s.wreckPrev = s.wreckCurr = 0;
+    const hood = s.rec && s.rec.wreck && s.rec.wreck.hood;
+    if (hood) hood.rotation.z = s.wreckBaseTilt;
+  }
+
+  _eventWatched(s) {
+    if ((this.ctx.shared && this.ctx.shared.inCar) || !s.rec || !s.rec.event) return false;
+    const dread = this._sys('dread');
+    return !!(dread && typeof dread.watching === 'function'
+      && dread.watching(s.eventViewX, s.eventViewY, s.eventViewZ, EVENT_WATCH_DOT, EVENT_WATCH_R));
+  }
+
   _tryFarmEvent(s) {
+    // Discovery remains the broad 20 m place circle. The physical beat itself only begins
+    // on a fixed step where its authored prop face is actually in the player's view and LOS.
+    // This check is inside the attempt verb so every bounded pool retry obeys it as well.
+    if (!this._eventWatched(s)) return;
     if (s.eventKind) {
       s.eventTries++;
       const enemies = this._sys('enemies');
@@ -2051,6 +2631,18 @@ export class Wilds {
         }
       }
     }
+    const wrecks = this._wreckCars;
+    if (wrecks) {
+      for (let i = 0; i < wrecks.length; i++) {
+        const w = wrecks[i], hood = w.rec && w.rec.wreck && w.rec.wreck.hood;
+        if (!hood) continue;
+        const q = clamp01(lerp(w.wreckPrev, w.wreckCurr, a));
+        // Two quick, dying mechanical knocks around the lower bonnet hinge. At the first
+        // crest the top edge travels over 15 cm, enough to read without a prompt or a lamp.
+        const pulse = Math.sin(q * Math.PI * 4) * (1 - q);
+        hood.rotation.z = w.wreckBaseTilt + WRECK_SHUDDER_RAD * pulse;
+      }
+    }
     const s = this._encounterSite;
     const m = s && s.rec && s.rec.encounter;
     if (!m) return;
@@ -2063,6 +2655,26 @@ export class Wilds {
   }
 
   /* ------------------------------------------------------------ interface -- */
+  /**
+   * The lookout table, for systems that sample it during play. The array and its records
+   * are the planner's stable objects: callers may read them but must never mutate them.
+   * Unlike list(), this allocates nothing, so the live 30 Hz map can use it without turning
+   * thirteen checkpoint marks into a permanent stream of garbage.
+   *
+   * `climbed` is the activation bit. Deer stands deliberately never enter this table even
+   * though they share wild:climbed and the persisted bit with towers.
+   */
+  lookouts() {
+    if (!this.sites) this._ensurePlan();
+    return this._towers;
+  }
+
+  /** Stable road-water records for the map/visual audit; landscape, never progression. */
+  travelWaters() {
+    if (!this.sites) this._ensurePlan();
+    return this._travelWaters;
+  }
+
   /** lane G's map. Allocates: for the pause card, never for a step. */
   list() {
     const sites = this.sites || this._ensurePlan();
@@ -2094,6 +2706,11 @@ export class Wilds {
   /** Build one site's body now, whatever the distance. For the audit. */
   buildNow(id) { const s = this.site(id); return s ? !!this._build(s) : false; }
   disposeNow(id) { const s = this.site(id); if (s) this._dispose(s); }
+  buildTravelNow(id) {
+    if (!this.sites) this._ensurePlan();
+    const s = this._travelWaters.find((w) => w.id === id);
+    return s ? !!this._build(s) : false;
+  }
 
   stats() { return this._stats; }
   notes() { return this._notes; }
@@ -2114,6 +2731,8 @@ export class Wilds {
     for (let i = 0; i < this._unsubs.length; i++) this._unsubs[i]();
     this._unsubs.length = 0;
     if (this.sites) for (const s of this.sites) this._dispose(s);
+    for (const s of this._travelWaters) this._dispose(s);
+    this._travelWaters.length = 0;
     for (const m of this._horizon) this.horizonGroup.remove(m);
     this._horizon.length = 0;
     if (this._lanternGeo) { this._lanternGeo.dispose(); this._lanternGeo = null; }

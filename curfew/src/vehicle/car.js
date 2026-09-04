@@ -61,6 +61,7 @@ import { CFG } from '../config.js';
 import { clamp, clamp01, damp, dampAngle, lerp, ease, TAU } from '../engine/math.js';
 import { ACTIONS } from '../engine/input.js';
 import { MASK } from '../world/collision.js';
+import { MAJORS } from '../world/placedata.js';
 import { buildCarBody, buildDebrisGeometry, DEBRIS_VERTS, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR, DOOR_HINGE, FOOTPRINT } from './carbody.js';
 
 const K = CFG.car;
@@ -401,6 +402,10 @@ export class Car {
     this.coolLeft = 0;
     this.spawnCheckT = 0;
     this.spawnCooldown = 2.0;
+    // Built once in init: every authored destination with the physical radius of the
+    // flat they occupy. The twice-a-second spawn sweep must neither allocate nor fall back
+    // to roads.sites(), which contains only the three legacy M0 terrain discs.
+    this._spawnSites = null;
     // The dispatch the player earned and then died before it landed. See OWED above.
     this.owed = false;
     this.owedT = 0;
@@ -513,6 +518,7 @@ export class Car {
 
   async init() {
     this.rng = this.ctx.rng ? this.ctx.rng.fork('car') : null;
+    this._spawnSites = this._buildSpawnSites();
 
     // ctx.shared does not exist in the M0 ctx bag; CONTRACT says it must, and it is a
     // flat bag of scalars. Create it if absent, then own exactly one key.
@@ -748,7 +754,33 @@ export class Car {
   /* ---------------------------------------------------------------- spawning */
 
   /**
-   * THE SPAWN RULE, which is the whole design idea. On foot, out past every lit yard,
+   * One stable no-spawn table for every authored destination. `MAJORS` owns the current
+   * centres and most flat radii; the Filling Station and Ashfall reuse two older road-flat
+   * discs, so those two radii are resolved by flatId from roads.sites(). Allocates once at
+   * init, never in the fixed-step spawn sweep.
+   */
+  _buildSpawnSites() {
+    const roads = this._roads;
+    const legacy = roads && typeof roads.sites === 'function' ? roads.sites() : null;
+    const out = new Array(MAJORS.length);
+    for (let i = 0; i < MAJORS.length; i++) {
+      const d = MAJORS[i];
+      let radius = d.flat && Number.isFinite(d.flat.radius) ? d.flat.radius : 0;
+      if (!(radius > 0) && d.flatId && legacy) {
+        for (let j = 0; j < legacy.length; j++) {
+          if (legacy[j].id === d.flatId) { radius = legacy[j].radius || 0; break; }
+        }
+      }
+      // Every shipping row has flat.radius or flatId. These fallbacks make a malformed future
+      // row conservative rather than turning a destination centre into legal spawn ground.
+      if (!(radius > 0)) radius = d.clearR || d.nearR || d.discoverR || 0;
+      out[i] = { id: d.id, x: d.x, z: d.z, radius };
+    }
+    return out;
+  }
+
+  /**
+   * THE SPAWN RULE, which is the whole design idea. On foot, out past every destination yard,
    * within 60 m of a road, and the car >300 m away or lost: put it on the road 40-90 m
    * off, OUTSIDE the 90 degree view cone measured with the camera's REAL forward (the
    * VIGIL law: a spawn measured against the body's yaw pops into view every time the
@@ -786,11 +818,10 @@ export class Car {
     // 'at-a-major' while a car sits 67 m away is technically true and useless.
     if (this.exists && !recall) { D.why = 'car-is-here'; D.carIsHere++; return; }
 
-    // Out past every lit yard. The clearance is each site's OWN radius plus YARD_CLEAR,
-    // and the flat CFG.car.spawn.minPlayerToMajor is the floor under it, so this is the
-    // old 120 m everywhere the old rule applied and it is a shape rather than a guess at
-    // a place with a 46 m yard. (CONFIG CHANGES FOR THE INTEGRATOR, docs/HANDOFF.md.)
-    const sites = roads.sites ? roads.sites() : null;
+    // Out past every authored destination's physical yard. The clearance is its OWN flat
+    // radius plus YARD_CLEAR; CFG's floor is zero, so there is no second invisible 120 m
+    // moat after the player has already left that shape.
+    const sites = this._spawnSites;
     let nearMajor = -1, blocked = false;
     if (sites) {
       for (let i = 0; i < sites.length; i++) {
@@ -884,7 +915,7 @@ export class Car {
         const bx = ddx / (d || 1), bz = ddz / (d || 1);
         const ahead = bx * fx + bz * fz;
         if (ahead > VIEW_CONE_COS && !(relax && d >= RELAX_CONE_MIN)) { D.coneRejects++; continue; }
-        // and it never parks inside a lit yard.
+        // and it never parks inside any authored destination yard.
         if (sites) {
           let inYard = false;
           for (let k = 0; k < sites.length; k++) {

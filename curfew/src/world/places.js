@@ -1,4 +1,4 @@
-// CURFEW — places (manifest #10). Destinations, discovery, claiming, beacons, and the map
+// CURFEW — places (manifest #10). Destinations, discovery, claiming, and the map
 // that fills up.
 //
 // This system owns WHERE YOU ARE GOING. Alex's brief asks for two things at once: a county
@@ -21,12 +21,10 @@
 //    donor: Projects/curfew/donors/hallowind/src/world.js — the fog-free silhouette ring,
 //      re-anchored to the real POI positions instead of a decorative circle.
 //
-// 2. BEACONS. An unclaimed major casts a tall region-coloured column. That is the whole
-//    of the wayfinding: no minimap, no HUD marker, no arrow. It dies on a real claim.
-//    donor: Projects/qualiacology/skyshard/src/world/destinations.js:95-107 (`_beacon`),
-//      read 2026-09-02: an open tapered cylinder, additive, opacity 0.16, fog:false,
-//      92 m for a major. Ported with the taper moved into the vertex colours so one
-//      material serves twelve beacons.
+// 2. WAYFINDING. Fifteen persistent physical landmarks sit on measured road sightlines;
+//    the player-up map and Filling Station map board preserve found/claimed state. A generic
+//    translucent column was tried, then removed in Round 9 after Alex correctly said it looked
+//    like fog and obscured the actual places.
 //
 // 3. DISCOVERY AND CLAIMING. At 24 m a place whispers its name ONCE — a sound, never a
 //    caption — and is found forever. Claiming is the place's own condition (throw the
@@ -61,14 +59,21 @@ import {
   MAJORS, MAJOR_BY_ID, MINOR_KINDS, MINOR_SPACING, MINOR_OFFSET, REGION_TINT, DEFAULT_TINT,
   CAMPFIRE_OFFSET, CAMPFIRE_NEAR_R,
 } from './placedata.js';
-import { BUILDERS, MINOR_BUILDERS, apron, beaconGeometry, GLOW } from './sites.js';
-// ROUND 7. Three lanes add to the county without editing this file. Each module exports a
-// plain map; this file only looks things up in them. A lane owns its own module outright.
-//   dress-station.js    the Filling Station's forecourt and shop        (lane A)
-//   dress-interiors.js  what stands inside the other eleven majors      (lane B)
-//   staged.js           minor sites that have somebody standing at them (lane C)
+import { BUILDERS, MINOR_BUILDERS, apron, majorApproach, GLOW } from './sites.js';
+import {
+  createPlaceSurfaceLibrary, disposePlaceSurfaceLibrary, placeSurfaceFor, projectPlaceSurfaceUVs,
+} from './place-surfaces.js';
+// Round 7 and Round 9 dress modules add to the county without editing this file. Each exports
+// a plain map; this file only looks things up in them, and each module owns its own geometry.
+//   dress-station.js              the Filling Station forecourt and shop
+//   dress-interiors.js            interiors for ten original destination kinds
+//   destination-compounds.js      six fully audited compound rebuilds
+//   destination-compounds-east.js four east/shore compound-yard expansions
+//   staged.js                     minor sites that have somebody standing at them
 import { DRESS as DRESS_STATION } from './dress-station.js';
 import { DRESS as DRESS_INTERIORS } from './dress-interiors.js';
+import { DRESS as DRESS_COMPOUNDS } from './destination-compounds.js';
+import { DRESS as DRESS_COMPOUNDS_EAST } from './destination-compounds-east.js';
 import { STAGED_BUILDERS } from './staged.js';
 
 /**
@@ -81,7 +86,7 @@ import { STAGED_BUILDERS } from './staged.js';
  * `solid` and `glow` are merged into the body's geometry; `cast` is a staged cast (below).
  * A dress that throws is noted and skipped: the destination still builds.
  */
-const DRESS_CHAIN = [DRESS_STATION, DRESS_INTERIORS];
+const DRESS_CHAIN = [DRESS_STATION, DRESS_INTERIORS, DRESS_COMPOUNDS, DRESS_COMPOUNDS_EAST];
 
 /** How close you have to come before a staged cast is placed. Outside the chunk residency
  *  ring so nobody is ever seen popping into a scene in front of you. */
@@ -105,48 +110,21 @@ const PROXY_R = 460;
 // indistinguishable from a trunk standing in it. 1.6 m is one trunk's own radius plus a little.
 const MINOR_BULK_MARGIN = 1.6;
 
-// SKYSHARD's own numbers for a major's beacon (destinations.js:62, `_beacon(d, 92, 2.35)`).
-const BEACON_H = 92;
-// SKYSHARD's 2.35 was sized to an island. At 1.2 km across a 4 km county the proxy shrinks
-// a beacon to PROXY_R/dist, and 2.35 came out ~2 px wide on a 1600-wide frame: present but
-// not a thing you would walk toward. 4.2 measures ~4 px at the far corner and still reads as
-// a column rather than a wall when you are standing under it.
-const BEACON_R = 4.2;
-const BEACON_OPACITY = 0.085;   // was 0.20, measured p50 112 against an open sky of 21.7.
-// ART.md 0.3 row 8 says open sky is the lightest LARGE area in the frame; a 0.10% object at
-// five times its value is not wayfinding, it is a bug the player reports. The region tint is
-// also desaturated toward a value rather than a colour before it reaches the material: a
-// linear R:G:B of 1 : 6.9 : 2.8 was by a distance the most saturated thing on screen, against
-// ART.md 0.5's ration of saturation to the lamp, the aviation red, the embers and the glints.
-const BEACON_DESAT = 0.55;
-const BEACON_DIE_S = 1.6;         // FILAMENT's wakemix crossfade, so a claim reads as one beat
-
-/* ------------------------------------------------ the beacon at a distance (round 5) --
- * Alex, playtest 4: "some of the things that seem like waypoints in the distance are a bit
- * confusing when they're marked in your view and you can't see them yet."
- *
- * MEASURED 2026-09-03 (docs/ROUND-5/E-places.md, flora hidden so the column itself is what
- * is measured): the beacon's mean luminance delta over its backdrop was 24-29 at 300 m, at
- * 460 m and at 900 m alike — a column that is exactly as bright at a kilometre as it is in
- * the yard is a MARKER, which is what he called it. A thing in the air fades with the air.
- * So the beacon's opacity now falls with distance: full inside BEACON_FULL_R, down to
- * BEACON_FAR_K of itself by BEACON_FADE_R and flat beyond, one smoothstep, continuous
- * through the PROXY_R handover (which sits inside the fade, where the curve is smooth). Past
- * PROXY_R the column is also widened a little (BEACON_FAR_WIDEN) so a distant beacon is a
- * soft column rather than a 4-pixel line — the same light spread over more air. Both are
- * per-mesh (material.opacity, mesh.scale), on the one shared program: no new material.
- */
-const BEACON_FULL_R = 300;
-const BEACON_FADE_R = 700;
-const BEACON_FAR_K = 0.34;
-const BEACON_FAR_WIDEN = 1.9;
-const BEACON_WIDEN_FROM = PROXY_R;
-const BEACON_WIDEN_TO = 1100;
-
 // Campfires (round 5): the near band is CAMPFIRE_NEAR_R and the release band is that plus
 // this, the same acquire/release rule as the majors' NEAR_HYSTERESIS, sized to a fire and
 // not to a yard. progress.js banks on the broadcast through its own 6 s cooldown.
 const CAMPFIRE_HYST = 3.0;
+// A fire is approached from its TRUE nearest road point, not merely from the traced sample
+// that proposed it. Curves and doubled-back road branches can make an 18 m perpendicular
+// offset only 8 m from another centreline. Fourteen metres keeps the ring out of the verge
+// while leaving enough of the authored 18-40 m band for deterministic retries.
+const CAMPFIRE_ROAD_CLEAR = 14;
+const CAMPFIRE_SIGHT_STEP = 2.0;
+const CAMPFIRE_EYE_Y = 1.62;
+const CAMPFIRE_GLOW_Y = 0.90;
+// Flora asks sightClear before placing each trunk. A narrow road-to-fire lane keeps the
+// authored glow legible without cutting a broad arcade through the forest.
+const CAMPFIRE_SIGHT_R = 2.8;
 // No trunk inside this of a fire's ring: the ring is 0.85 m, the lean-to reaches 3.7 m.
 const CAMPFIRE_CLEAR_R = 5.0;
 
@@ -158,7 +136,7 @@ const TINT_NEAR = 130, TINT_FAR = 880, TINT_FLOOR = 0.42, TINT_GLOW_FLOOR = 0.66
 
 /* ---------------------------------------------------- the horizon gain (ART 4.1) --
  * MEASURED 2026-09-02, unoccluded silhouette footprint at ~2 km, structure only (no
- * beacon, no glow), in pixels at 1600x900:
+ * glow), in pixels at 1600x900:
  *
  *   cathedral 114   weeping-mine 62   drowned-light 28   relay 21   hollow-mill 21
  *
@@ -195,22 +173,23 @@ const HZ_GAIN_MAX = 2.05;
  * be out of the way, which is not a corridor you can carve at every point of the road
  * network without deforesting the county.
  *
- * What you can do is author the six best ones per landmark and make them the ones where the
+ * What you can do is author the four best ones per landmark and make them the ones where the
  * ROAD ALREADY POINTS AT IT — you round a bend and the cathedral is at the end of the road.
  * Those corridors overlap the asphalt, where CFG.roads.plantExclude has already cleared the
- * verge, so they cost the forest the least and read the best. SIGHT_PER_MAJOR x 5 majors x
- * (2 * SIGHT_HALFW * SIGHT_LEN) is about 3% of the county, not 16%.
+ * verge, so they cost the forest the least and read the best. Round 9 extends that rule from
+ * the five original `horizon` rows to ALL fifteen majors: Alex could not find the smaller
+ * original destinations, and the three new landmarks need the same ordinary-road guarantee.
  *
  * This file OWNS the corridors and publishes them; it cannot plant or unplant a tree.
- * flora.js has to call sightClear(). That request is in docs/HANDOFF.md and until it
- * lands these corridors are measured and inert.
+ * flora.js calls sightClear() before placing trunks, so the measured corridors actively reserve
+ * their narrow road-facing lanes without putting vegetation policy in this module.
  */
 const SIGHT_HALFW = 26;        // m either side of the bearing
-const SIGHT_LEN = 340;         // m from the road point toward the landmark; 286 + margin
-const SIGHT_MIN = 220;         // closer than this and you are inside the yard anyway
-const SIGHT_MAX = 2000;
-const SIGHT_PER_MAJOR = 6;
-const SIGHT_APART = 300;       // m between two corridors on the same landmark
+const SIGHT_LEN = 540;         // enough to open the whole ordinary approach, not a far pinhole
+const SIGHT_MIN = 86;          // the first useful road read, before the discovery whisper
+const SIGHT_MAX = 900;         // a recognisable place, not a one-pixel astronomy exercise
+const SIGHT_PER_MAJOR = 4;
+const SIGHT_APART = 140;       // m between two corridors on the same landmark
 const SIGHT_CELL = 16;         // m; the marking grid, one byte per cell
 
 // DESIGN section 2's horizon reads, verbatim.
@@ -292,8 +271,13 @@ const SHOOT_GLINT_SCALE = 1.6;
 // x1.66 against the same frame with the lamp put out (x1.62 at the mill). The over-150 share
 // also DRIFTS down by half over the ten seconds after a claim (dread's grade settling), so
 // every number here is the 2 s one, the brightest. The brief's 1.6 over "before" would need
-// 36+ cd, a floodlight; the beacon dying and the carried XP light banking both work against it.
-const CLAIM_LAMP_I = 24.0;
+// 36+ cd, a floodlight; the claim response and the carried XP light banking both work against it.
+// A broad yard lamp, not a welding arc on the switch plate. At the pool's 1.8 decay, 24 cd
+// lit the yard but put 4.45% of the frame over luma 150. Measured at the Hollow Mill with
+// the torch off: 6 cd / decay 0.85 gives a 1.42x whole-frame beat with only 1.35% over 150.
+// It changes only the existing PointLight's decay uniform: no extra light or program.
+const CLAIM_LAMP_I = 6.0;
+const CLAIM_LAMP_DECAY = 0.85;
 const CLAIM_LAMP_OUT = 0.9;       // m in front of the post, along its facing
 const CLAIM_LAMP_Y = 2.1;         // m above the fixture's foot: the head of the post
 // Which way a fixture faces: its front (the plate, the lever) points AWAY from the site's
@@ -307,7 +291,7 @@ const FIXTURE_FACE = Object.freeze({
 // vertex colour on the ONE shared additive material — no new material, no new program.
 const RIPPLE_S = 1.2;
 const RIPPLE_EDGE = 0.25;
-const RIPPLE_MAX = 24;            // ignitions that can run at once (twelve majors, a landmark and a body each)
+const RIPPLE_MAX = MAJORS.length * 2; // one landmark and one resident body ignition per major
 
 /* ------------------------------------------- the campfire's ember column fade (round 6) --
  * NEXT.md section 2: the column glowColumn() lays over a fire exists so a fire reads side-on
@@ -327,8 +311,8 @@ const EMBER_FADE_FAR = 20;
  * Filling Station, settles 240 frames, walks, settles again — and ends ONE METRE from it
  * having seen place:near fire ZERO times and place:discovered fire ZERO times. The whisper
  * radius is 24 m. Since "destinations and a map that fills up" is one of the four things
- * Alex asked for by name, and there is no minimap and no quest log by design, that IS the
- * progression loop reading as dead.
+ * Alex asked for by name, and at that measured point there was no minimap or quest log, that
+ * WAS the progression loop reading as dead. Round 8 subsequently added the player-up minimap.
  *
  * The system was not dead. Both of its events had already been consumed BEHIND THE
  * LOADING SCREEN, at the spawn point, before anything in the game was listening. Three
@@ -375,7 +359,6 @@ const _nearPayload = {
 const _foundPayload = { id: '', xp: 0 };
 const _claimPayload = { id: '', xp: 0 };
 const _claimStartPayload = { id: '' };
-const _xpPayload = { amount: 0, x: 0, y: 0, z: 0, reason: '' };
 const _noisePayload = { x: 0, z: 0, radius: 0, source: '' };
 const _v2 = { x: 0, z: 0 };
 const _minorW = new Float64Array(MINOR_KINDS.length);
@@ -500,7 +483,7 @@ function fixtureLever() {
 /**
  * The glint: a lamp bead and a soft halo column over it, on the shared additive material.
  * The bead is full white in the vertex colour; the halo is an open tapered tube whose colour
- * dies toward its top (the beacon's own construction at prop scale, sites.js glowColumn), so
+ * dies toward its top (the shared prop-scale glowColumn profile in sites.js), so
  * it reads from every bearing and never has an edge. Sized so that at 30 m the halo is about
  * 8 x 14 px on a 1600 x 900 frame — a thing, not a dead pixel — and measured in
  * tests/sites.mjs from that distance with the torch off.
@@ -538,6 +521,65 @@ function fixtureGlint(y, sc = 1) {
   return out;
 }
 
+/**
+ * A destination weapon is physically waiting beside the completion fixture BEFORE it is
+ * granted: an open black transit case, with the gun reduced to the silhouette that matters
+ * at road/room scale. Claiming still owns the grant; present() merely removes the prop when
+ * that existing grant has happened. No second pickup or reward path exists here.
+ */
+function prizeCase(reward) {
+  const long = reward === 'revolver' ? 1.90 : 3.15;
+  const GUN_STEEL = [0.285, 0.255, 0.190];
+  const GUN_WOOD = [0.300, 0.135, 0.048];
+  const GUN_MARK = [0.520, 0.330, 0.105];
+  const parts = [];
+  const put = (geo, col, x, y, z, rz = 0) => {
+    if (rz) geo.rotateZ(rz);
+    geo.translate(x, y, z);
+    parts.push(fxColour(geo, col[0], col[1], col[2]));
+  };
+  put(new THREE.BoxGeometry(long, 0.16, 1.02), FX_BOARD, 0, 0.12, 0);
+  put(new THREE.BoxGeometry(long, 0.82, 0.10), FX_DARK, 0, 0.57, 0.50);
+  put(new THREE.BoxGeometry(long + 0.10, 0.08, 0.10), FX_RUST, 0, 0.92, 0.40);
+  for (const s of [-1, 1]) put(new THREE.BoxGeometry(0.10, 0.28, 1.10), FX_RUST,
+    s * (long * 0.5 + 0.01), 0.20, 0);
+  // The full-size, warm steel/wood silhouette lies across nearly the whole matte-black
+  // case. The first cut used 5 cm black barrels on black felt; at three metres the case was
+  // clear and the promised gun was not. These chunky profiles are identification props,
+  // not a second pickup or a replacement for the first-person models.
+  if (reward === 'revolver') {
+    put(new THREE.CylinderGeometry(0.085, 0.085, 0.88, 10), GUN_STEEL,
+      0.44, 0.36, -0.04, Math.PI * 0.5);
+    put(new THREE.BoxGeometry(0.48, 0.28, 0.25), GUN_STEEL, -0.10, 0.34, -0.04);
+    put(new THREE.CylinderGeometry(0.18, 0.18, 0.30, 12), GUN_MARK,
+      -0.05, 0.35, -0.04, Math.PI * 0.5);
+    put(new THREE.BoxGeometry(0.28, 0.62, 0.26), GUN_WOOD,
+      -0.49, 0.11, -0.04, -0.30);
+    put(new THREE.BoxGeometry(0.18, 0.08, 0.20), GUN_MARK, 0.03, 0.55, -0.04);
+  } else {
+    put(new THREE.CylinderGeometry(0.090, 0.090, 1.68, 10), GUN_STEEL,
+      0.58, 0.38, -0.06, Math.PI * 0.5);
+    if (reward === 'shotgun') put(new THREE.CylinderGeometry(0.078, 0.078, 1.63, 10), GUN_STEEL,
+      0.58, 0.31, 0.12, Math.PI * 0.5);
+    put(new THREE.BoxGeometry(0.94, 0.30, 0.30), reward === 'carbine' ? GUN_MARK : GUN_STEEL,
+      -0.43, 0.36, -0.04);
+    put(new THREE.BoxGeometry(0.74, 0.24, 0.34), GUN_WOOD, 0.24, 0.36, -0.04);
+    put(new THREE.BoxGeometry(0.88, 0.48, 0.34), GUN_WOOD,
+      -1.20, 0.27, -0.04, 0.16);
+    if (reward === 'carbine') {
+      put(new THREE.BoxGeometry(0.24, 0.48, 0.24), GUN_STEEL,
+        -0.36, 0.12, -0.04, -0.18);
+      put(new THREE.BoxGeometry(0.34, 0.10, 0.20), GUN_MARK, -0.44, 0.60, -0.04);
+    } else {
+      put(new THREE.BoxGeometry(0.48, 0.12, 0.38), GUN_MARK, 0.30, 0.52, -0.04);
+    }
+  }
+  // Two bright retention straps frame the silhouette without turning it into a glow sign.
+  for (const x of [-long * 0.28, long * 0.28])
+    put(new THREE.BoxGeometry(0.075, 0.035, 0.92), GUN_MARK, x, 0.23, 0);
+  return fxMerge(parts);
+}
+
 /* ==========================================================================
    The system
    ========================================================================== */
@@ -553,7 +595,7 @@ export class Places {
     this.baseSeed = (ctx && ctx.rng ? ctx.rng.fork('places').seed : 20260902) >>> 0;
 
     this.group = null;            // streamed bodies
-    this.landGroup = null;        // persistent landmarks + beacons, never distance-culled
+    this.landGroup = null;        // persistent physical landmarks, never distance-culled
     this.nodes = new Map();       // id -> landmark node record
     this.bodies = new Map();      // chunkKey -> [ body record ]
     this.minors = [];             // authored minor table
@@ -600,9 +642,6 @@ export class Places {
     this.claimHolds = 0;
     this.nearFire = -1;           // index into _campfires we are currently AT, or -1
     this._fireT = 0;              // the campfire's own place:near heartbeat
-    // Test knob (tests/sites.mjs): false restores the pre-round-5 beacon — constant opacity,
-    // no far widening — so the fade can be measured against itself on one screen.
-    this.beaconFade = true;
     this._minorsBuilt = false;    // the table is built once, by init() or by the first sightClear()
     // ROUND 7, staged casts. _casts is the table of scenes that have somebody at them;
     // _castDone is the set that has already been placed this save and must never be
@@ -646,8 +685,8 @@ export class Places {
    * FLATS. Called from init(), with the rest of this lane's sibling reads.
    *
    * terrain.addFlat() levels heightAt() itself, so the mesh, the collision solver, the
-   * planting exclusion and hitscan all agree about where the yard is. Three of the twelve
-   * reuse a disc roads.js already authored, so only nine discs are registered here.
+   * planting exclusion and hitscan all agree about where the yard is. Two of the fifteen
+   * reuse a disc roads.js already authored, so thirteen discs are registered here.
    *
    * WARNING 27, fixed. This used to run in the CONSTRUCTOR — the one deliberate
    * violation of read-siblings-lazily in this file — with a long argument for why the
@@ -669,7 +708,7 @@ export class Places {
    * ONE ORDERING CONSEQUENCE, MEASURED RATHER THAN ASSUMED (see docs/HANDOFF.md).
    * roads.js bakes its smoothed spline elevations in ITS init() (manifest #6) off
    * terrain's roadBase, which is macro + FLATS. Registering here (#10) means those
-   * elevations no longer see our nine discs, so where a pad's level core reaches the
+   * elevations no longer see our thirteen discs, so where a pad's level core reaches the
    * asphalt the road and the yard can disagree about the ground. _measureSeam() below
    * measures that disagreement at every pad and puts the worst number in state(), so a
    * seam is a number somebody can read instead of a cliff somebody walks into.
@@ -828,29 +867,30 @@ export class Places {
   }
 
   /* ------------------------------------------------------------------ *
-   * Materials and groups. THREE materials, and the reason there are exactly three:
+   * Materials and groups. Three template materials, cloned where per-place state is needed:
    *
-   *   matBody  Lambert + vertexColors + dithering + fog. Identical in every
-   *            program-defining respect to chunks.js's `matGround`, so it costs NO new
-   *            shader program. Colour variety rides in the vertex attribute.
-   *   matLand  the same, minus fog. `fog` IS a define, so this is +1 program and it is
-   *            the price of a landmark that survives 1.2 km. Cloned per landmark, because
-   *            each one carries its own distance tint in material.color; clones share the
-   *            program.
+   *   matBody  Lambert + vertexColors + dithering + fog plus the shared destination map and
+   *            bump map. It is not program-identical to chunks.js's unmapped `matGround`.
+   *            Per-body clones exchange texture objects without changing shader defines.
+   *   matLand  the same mapped/bumped family, minus fog. Cloned per landmark because each
+   *            one carries its own distance tint in material.color; clones share the program.
    *   matGlow  Basic + vertexColors, no fog, additive, no depth write. +1 program. Every
-   *            lamp, window, ember, beam and beacon in the county is this one material
+   *            lamp, window, ember and beam in the county is this one material
    *            cloned, tinted by material.color and faded by material.opacity.
    *
-   * Both new programs are linked at BOOT, because the landmark group is in the scene
+   * The required variants are linked at BOOT, because the landmark group is in the scene
    * before main.js's warm() pass runs. Zero programs link during play, which is the law
-   * that actually matters (docs/CONTRACT.md, decision 26).
+   * that actually matters (docs/CONTRACT.md, decision 26); the measured census is authoritative.
    * ------------------------------------------------------------------ */
   _ensureBuilt() {
     if (this._built) return;
     this._built = true;
 
+    this.surfaceTextures = createPlaceSurfaceLibrary();
     this.matBody = new THREE.MeshLambertMaterial({
       vertexColors: true, dithering: true,
+      map: this.surfaceTextures.plaster,
+      bumpMap: this.surfaceTextures.plaster, bumpScale: 0.075,
       // DoubleSide because a merged kit contains single-sided quads (posters, windows,
       // signs) whose facing is authored by hand and a wrong one would be an invisible
       // prop. shadowSide keeps the depth pass single-sided so shadow acne stays away.
@@ -860,6 +900,8 @@ export class Places {
 
     this.matLand = new THREE.MeshLambertMaterial({
       vertexColors: true, dithering: true, fog: false,
+      map: this.surfaceTextures.plaster,
+      bumpMap: this.surfaceTextures.plaster, bumpScale: 0.075,
       side: THREE.DoubleSide, shadowSide: THREE.FrontSide,
     });
     this.matLand.name = 'place-landmark';
@@ -885,10 +927,9 @@ export class Places {
       node.matrixAutoUpdate = true;
       this.nodes.set(d.id, {
         def: d, node, yaw: 0, padY: 0,
-        solid: null, glow: null, beacon: null,
+        solid: null, glow: null, prize: null, built: false,
         moving: null,              // [{ mesh, role, rate }]
         glowLevel: d.startClaimed ? 1 : 0.30,
-        beaconLevel: d.startClaimed ? 0 : 1,
         proxy: false,
         bellT: -1, bellClock: BELL_PERIOD_S * 0.6,
         // ROUND 6: the claim fixture — world position of its foot, its lever and its glint
@@ -906,7 +947,7 @@ export class Places {
    * ------------------------------------------------------------------ */
   _buildLandmark(d) {
     const rec = this.nodes.get(d.id);
-    if (!rec || rec.solid || rec.beacon) return;
+    if (!rec || rec.built) return;
     const B = BUILDERS[d.kind];
     const api = this._apiFor(d, rec, 'landmark');
 
@@ -915,8 +956,25 @@ export class Places {
       try { out = B.landmark(api); } catch (e) { this._note('landmark ' + d.id + ' threw: ' + e.message); }
     }
 
+    // Round 9: the persistent road-side arrival frame and its paired route witnesses. It is
+    // merged into the real landmark — one silhouette, one state ripple, no sign/HUD overlay.
+    // The Filling Station's existing pylon declares approach.existing and returns nothing.
+    try {
+      const ap = majorApproach(api);
+      if (ap) {
+        if (!out) out = { solid: null, glow: null, moving: null, glowColour: ap.glowColour };
+        if (ap.solid) out.solid = out.solid ? mergeGeometries([out.solid, ap.solid], false) : ap.solid;
+        if (ap.glow) out.glow = out.glow ? mergeGeometries([out.glow, ap.glow], false) : ap.glow;
+        if (!out.glowColour) out.glowColour = ap.glowColour;
+      }
+    } catch (e) { this._note('approach ' + d.id + ' threw: ' + e.message); }
+
     if (out && out.solid) {
-      const m = new THREE.Mesh(out.solid, this.matLand.clone());
+      projectPlaceSurfaceUVs(out.solid);
+      const surfaceMat = this.matLand.clone();
+      surfaceMat.map = placeSurfaceFor(this.surfaceTextures, d);
+      surfaceMat.bumpMap = surfaceMat.map;
+      const m = new THREE.Mesh(out.solid, surfaceMat);
       m.name = 'land-' + d.id;
       m.castShadow = false;          // a 77 m spire is never inside the 70 m shadow radius
       m.receiveShadow = true;
@@ -963,37 +1021,9 @@ export class Places {
 
     // ROUND 6: the claim fixture (touch rows) or the target's glint (shoot rows).
     this._buildFixture(d, rec, api);
+    this._buildPrize(d, rec, api);
 
-    // The beacon. Only an UNCLAIMED major casts one, and it is the only wayfinding in
-    // CURFEW. Its geometry is authored from the pad up so the proxy transform (which
-    // scales about the node origin) shrinks it correctly with everything else.
-    if (!d.startClaimed) {
-      // Authored from the pad up, and DEEP enough that the proxy transform — which scales
-      // about the node origin — cannot lift its base off the ground. A 2 km beacon becomes a
-      // 21 m stub under the proxy scale, and a stub you can see both ends of, floating at
-      // chest height, is a decal rather than a landmark. Sinking the foot means the bottom is
-      // always below the horizon whatever the scale does to it.
-      const bg = beaconGeometry(BEACON_H, BEACON_R);
-      bg.translate(0, rec.padY - 24, 0);
-      const bm = this.matGlow.clone();
-      bm.color.set(REGION_TINT[d.region] || DEFAULT_TINT);
-      // Pull it most of the way to its own luminance. The region still reads — a claimed
-      // county should not look identical to an unclaimed one — but as a tinted light rather
-      // than as a saturated bar.
-      {
-        const c = bm.color, y = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-        c.setRGB(c.r + (y - c.r) * BEACON_DESAT, c.g + (y - c.g) * BEACON_DESAT,
-          c.b + (y - c.b) * BEACON_DESAT);
-      }
-      bm.opacity = BEACON_OPACITY;
-      const beacon = new THREE.Mesh(bg, bm);
-      beacon.name = 'beacon-' + d.id;
-      beacon.frustumCulled = false;
-      beacon.renderOrder = 3;
-      rec.node.add(beacon);
-      rec.beacon = beacon;
-    }
-
+    rec.built = true;
     this.landGroup.add(rec.node);
   }
 
@@ -1037,6 +1067,7 @@ export class Places {
       // the facing in WORLD (the side you walk up from): the yard lamp hangs along it
       fwx: fdx * cy + fdz * sy,
       fwz: -fdx * sy + fdz * cy,
+      fdx, fdz, faceYaw,
       lever: null, glint: null,
       k: this.claimed.has(d.id) ? 1 : 0,        // the lever's throw, 0 up .. 1 thrown
       grow: this.claimed.has(d.id) ? 1 : 0,     // the glint's growth into a lamp, 0..1
@@ -1246,6 +1277,7 @@ export class Places {
     }
     const ap = apron(api, rad, null);
     if (ap) {
+      projectPlaceSurfaceUVs(ap, 7);
       const m = new THREE.Mesh(ap, this.matBody);
       m.name = 'apron-' + d.id;
       m.receiveShadow = true;
@@ -1254,7 +1286,11 @@ export class Places {
 
     let glowMesh = null;
     if (out.solid) {
-      const m = new THREE.Mesh(out.solid, this.matBody);
+      projectPlaceSurfaceUVs(out.solid);
+      const surfaceMat = this.matBody.clone();
+      surfaceMat.map = placeSurfaceFor(this.surfaceTextures, d);
+      surfaceMat.bumpMap = surfaceMat.map;
+      const m = new THREE.Mesh(out.solid, surfaceMat);
       m.name = 'body-' + d.id;
       m.castShadow = true; m.receiveShadow = true;
       g.add(m);
@@ -1419,6 +1455,7 @@ export class Places {
     const solid = k.solid && k.solid.build ? k.solid.build() : null;
     const glowGeo = k.glow && k.glow.build ? k.glow.build() : null;
     if (solid) {
+      projectPlaceSurfaceUVs(solid, 3.2);
       const mesh = new THREE.Mesh(solid, this.matBody);
       mesh.castShadow = true; mesh.receiveShadow = true;
       g.add(mesh);
@@ -1581,20 +1618,63 @@ export class Places {
       const off = OFF.min + rnd() * (OFF.max - OFF.min);
       const s = rnd() < 0.5 ? -1 : 1;
       let mx = bx + px * off * s, mz = bz + pz * off * s;
+      let faceX = bx, faceZ = bz;
       if (kdef && kdef.offRoad) {
         // An off-road site has more ways to be wrong: a bank, a yard the road only
-        // skirted, or another stretch of the loop doubling back under it. Try both sides at
-        // the drawn offset and then at the nearest one before giving the road point up.
-        const okAt = (x, z) => {
+        // skirted, another stretch of the loop doubling back under it, or a convex shoulder
+        // hiding the fire from the road. nearestRoadInfo owns one shared scratch object, so
+        // copy every value before heightAt (which itself queries the road field) can reuse it.
+        const roadViewAt = (x, z) => {
           if (terrain && terrain.slopeAt && terrain.slopeAt(x, z) > 0.45) return false;
           for (const d of MAJORS) if (Math.hypot(x - d.x, z - d.z) < MAJOR_KEEPOUT) return false;
-          return roads.roadDistance(x, z) >= 9;
+          const info = roads.nearestRoadInfo(x, z, CAMPFIRE_OFFSET.max + 8);
+          if (!info || !info.hit) return false;
+          const rx = info.x, rz = info.z;
+          const dist = Math.hypot(x - rx, z - rz);
+          // Use the public distance field as an independent guard. The traced anchor may sit
+          // on one route while a second branch curls closer to the candidate.
+          if (dist < CAMPFIRE_ROAD_CLEAR || roads.roadDistance(x, z) < CAMPFIRE_ROAD_CLEAR) return false;
+          if (terrain && typeof terrain.heightAt === 'function') {
+            const eyeY = terrain.heightAt(rx, rz) + CAMPFIRE_EYE_Y;
+            const glowY = terrain.heightAt(x, z) + CAMPFIRE_GLOW_Y;
+            // Keep a margin inside the camera's half-FOV: the road proof deliberately looks
+            // level, as a player does before the glow gives them a reason to turn uphill.
+            if (Math.abs(Math.atan2(glowY - eyeY, dist)) > 0.48) return false;
+            const n = Math.max(2, Math.ceil(dist / CAMPFIRE_SIGHT_STEP));
+            for (let j = 1; j < n; j++) {
+              const t = j / n;
+              const qx = lerp(rx, x, t), qz = lerp(rz, z, t);
+              const sightY = lerp(eyeY, glowY, t);
+              if (terrain.heightAt(qx, qz) > sightY - 0.08) return false;
+            }
+          }
+          return { x: rx, z: rz };
         };
         let placed = false;
-        for (const o of [off, OFF.min]) {
-          for (const side of [s, -s]) {
-            const tx2 = bx + px * o * side, tz2 = bz + pz * o * side;
-            if (okAt(tx2, tz2)) { mx = tx2; mz = tz2; placed = true; break; }
+        // Retrying only the original point used to drop a campfire whenever that one cross-
+        // section was a bank. Search the neighbouring traced samples in a fixed order and a
+        // fixed set of offsets. No new RNG calls: the county remains byte-deterministic, and
+        // a locally bad shoulder moves a fire instead of reducing the authored count.
+        const anchors = [0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 12, -12];
+        const offsets = [off, OFF.min, 24, 30, 36, OFF.max];
+        for (const di of anchors) {
+          const ai = i + di;
+          if (ai < 0 || ai + 1 >= pts.length || !Number.isFinite(pts[ai]) || !Number.isFinite(pts[ai + 1])) continue;
+          const anchor = roads.nearestRoadInfo(pts[ai], pts[ai + 1], 24);
+          if (!anchor || !anchor.hit) continue;
+          const arx = anchor.x, arz = anchor.z, atx = anchor.tx, atz = anchor.tz;
+          const apx = -atz, apz = atx;
+          for (const o of offsets) {
+            for (const side of [s, -s]) {
+              const tx2 = arx + apx * o * side, tz2 = arz + apz * o * side;
+              const view = roadViewAt(tx2, tz2);
+              if (view) {
+                mx = tx2; mz = tz2; faceX = view.x; faceZ = view.z;
+                placed = true;
+                break;
+              }
+            }
+            if (placed) break;
           }
           if (placed) break;
         }
@@ -1607,9 +1687,11 @@ export class Places {
       for (const k of MINOR_KINDS) since[k.id] = (k.id === kind) ? 0 : since[k.id] + 1;
       lastKind = kind;
 
-      const yaw = Math.atan2(bx - mx, bz - mz);           // face the road
+      const yaw = Math.atan2(faceX - mx, faceZ - mz);     // face the true nearest road point
       const age = hub ? clamp01(Math.hypot(mx - hub.x, mz - hub.z) / 1650) : 0.5;
-      const rec = { i: idx++, kind, x: mx, z: mz, yaw, age };
+      const rec = { i: idx++, kind, x: mx, z: mz, yaw, age,
+        roadX: kdef && kdef.offRoad ? faceX : null,
+        roadZ: kdef && kdef.offRoad ? faceZ : null };
       this.minors.push(rec);
       // ROUND 7, lane C: a pine stands in the middle of the lych-gate, and another through the
       // ring of dug-out graves — the same bug as round 6's manor with a forest growing through
@@ -1650,7 +1732,7 @@ export class Places {
   /* ------------------------------------------------------------------ *
    * SIGHT CORRIDORS — ART 4.3.
    *
-   * Six per horizon major, chosen by MEASUREMENT of the road field, not by eye: walk the
+   * Four per major, chosen by MEASUREMENT of the road field, not by eye: walk the
    * traced centreline, score every sample by how nearly the road's own tangent points at
    * the landmark, and keep the best few that are at least SIGHT_APART apart. Those are the
    * places where the road runs AT the thing, so the corridor lies mostly along the asphalt
@@ -1673,7 +1755,6 @@ export class Places {
 
     for (let m = 0; m < MAJORS.length; m++) {
       const d = MAJORS[m];
-      if (!d.horizon) continue;
       const cand = [];
       for (let i = 2; i < pts.length; i += 2) {
         const ax = pts[i - 2], az = pts[i - 1], bx = pts[i], bz = pts[i + 1];
@@ -1688,8 +1769,15 @@ export class Places {
         const align = Math.abs(((bx - ax) * vx + (bz - az) * vz) / (seg * dist));
         cand.push({ x: bx, z: bz, dx: vx / dist, dz: vz / dist, dist, align });
       }
-      cand.sort((p, q) => q.align - p.align);
       const kept = [];
+      // First reserve the CLOSEST ordinary-road reveal. The older alignment-only sort
+      // routinely chose a mathematically straight view 1.2--1.7 km away, then cleared only
+      // the first 340 m of forest. That produced a perfect corridor to absolutely nothing.
+      cand.sort((p, q) => p.dist - q.dist);
+      if (cand.length) kept.push(cand[0]);
+      // Additional reads still favour a road aimed at the place, but distance matters.
+      cand.sort((p, q) => (q.align * 0.72 + (1 - q.dist / SIGHT_MAX) * 0.28)
+        - (p.align * 0.72 + (1 - p.dist / SIGHT_MAX) * 0.28));
       for (let i = 0; i < cand.length && kept.length < SIGHT_PER_MAJOR; i++) {
         const c = cand[i];
         let tooClose = false;
@@ -1699,13 +1787,13 @@ export class Places {
       }
       for (const c of kept) {
         c.id = d.id;
-        c.len = Math.min(SIGHT_LEN, c.dist - 40);
+        c.len = Math.min(SIGHT_LEN, c.dist - 12);
         this._sightList.push(c);
         this._markCorridor(c);
       }
     }
     this._note('sight corridors: ' + this._sightList.length + ' over '
-      + MAJORS.filter(d => d.horizon).length + ' horizon majors');
+      + MAJORS.length + ' majors');
   }
 
   /** Stamp one corridor into the grid. Build time only; nothing here runs in step(). */
@@ -1733,12 +1821,12 @@ export class Places {
   }
 
   /**
-   * TRUE if (x, z) stands in a corridor that a horizon landmark is read down, and therefore
+   * TRUE if (x, z) stands in a corridor that a major landmark is read down, and therefore
    * must not carry anything tall. One array lookup. Built on first call, because flora
    * (#9) plants the boot ring before this system's init() (#10) has run.
    *
-   * flora.js has to call this; see docs/HANDOFF.md. Until it does, this is measured, live,
-   * and inert.
+   * flora.js calls this before placing each trunk, so this live lookup is the vegetation
+   * exclusion that makes the measured corridor physical.
    */
   sightClear(x, z) {
     if (!this._sightGrid) this._buildSightGrid();
@@ -1752,6 +1840,19 @@ export class Places {
       const f = this._campfires[k];
       const dx = x - f.x, dz = z - f.z;
       if (dx * dx + dz * dz < CAMPFIRE_CLEAR_R * CAMPFIRE_CLEAR_R) return true;
+      // Keep only the approach sightline open. Projection onto the finite road-to-ring
+      // segment avoids extending the clearing beyond either end, and 2.8 m is just wide
+      // enough for a trunk crown not to close the glow again at eye height.
+      if (Number.isFinite(f.roadX) && Number.isFinite(f.roadZ)) {
+        const vx = f.x - f.roadX, vz = f.z - f.roadZ;
+        const ll = vx * vx + vz * vz;
+        if (ll > 1e-6) {
+          const t = clamp01(((x - f.roadX) * vx + (z - f.roadZ) * vz) / ll);
+          const qx = f.roadX + vx * t, qz = f.roadZ + vz * t;
+          const sx = x - qx, sz = z - qz;
+          if (sx * sx + sz * sz < CAMPFIRE_SIGHT_R * CAMPFIRE_SIGHT_R) return true;
+        }
+      }
     }
     // ROUND 7 (NEXT.md B1, written out in docs/ROUND-6/HANDOFF-D2.md item 1). A major's
     // yard is a clearing. Until this clause existed the forest was planted straight
@@ -1905,11 +2006,6 @@ export class Places {
       if (rec.fixture) {
         const g = rec.fixture.grow;
         rec.fixture.grow = claimed ? Math.min(1, g + dt / RIPPLE_S) : Math.max(0, g - dt / RIPPLE_S);
-      }
-      if (rec.beacon) {
-        const target = claimed ? 0 : 1;
-        rec.beaconLevel += (target - rec.beaconLevel) * clamp01(dt / BEACON_DIE_S * 2.4);
-        if (rec.beaconLevel < 0.004 && claimed) { rec.beacon.visible = false; rec.beaconLevel = 0; }
       }
       if (rec.moving) {
         for (const mv of rec.moving) {
@@ -2209,7 +2305,7 @@ export class Places {
       const lights = this._sys('lights');
       if (!lights || typeof lights.borrow !== 'function') return;
       const h = lights.borrow('claim-lamp', fx.wx + fx.fwx * CLAIM_LAMP_OUT, fx.wy + CLAIM_LAMP_Y, fx.wz + fx.fwz * CLAIM_LAMP_OUT, GLOW.lamp, CLAIM_LAMP_I, 0);
-      if (h) { this._lamp = h; this._lampId = wantId; }
+      if (h) { h.decay = CLAIM_LAMP_DECAY; this._lamp = h; this._lampId = wantId; }
     }
   }
 
@@ -2249,7 +2345,6 @@ export class Places {
     this._whisperQ.push(d.id);
     _foundPayload.id = d.id; _foundPayload.xp = d.xpFind;
     this.ctx.bus.emit('place:discovered', _foundPayload);
-    this._gainXp(d.xpFind, d.x, this._padOf(d) + 2, d.z, 'discover');
   }
 
   _padOf(d) { const r = this.nodes.get(d.id); return r ? r.padY : 0; }
@@ -2301,7 +2396,7 @@ export class Places {
    * THE CLAIM. It must ANSWER, at the object, in the world, and it must never be a
    * counter. A rover is borrowed for CLAIM_FLASH_S and released by its own ttl (the light
    * census is untouched: borrow/release is the only way a dynamic light exists), the
-   * beacon starts dying, the windows come up, and a low tone leaves the place itself.
+   * map state changes, the windows come up, and a low tone leaves the place itself.
    */
   _claim(d, wx, wy, wz) {
     if (this.claimed.has(d.id)) return;
@@ -2329,7 +2424,6 @@ export class Places {
 
     _claimPayload.id = d.id; _claimPayload.xp = d.xpClaim;
     this.ctx.bus.emit('place:claimed', _claimPayload);
-    this._gainXp(d.xpClaim, wx, wy, wz, 'claim');
 
     // A claim is loud. The director will want to know; until it exists this is free.
     _noisePayload.x = wx; _noisePayload.z = wz; _noisePayload.radius = 55; _noisePayload.source = 'claim';
@@ -2393,13 +2487,6 @@ export class Places {
     }
     rec.rippleMax = maxD; rec.rippleMin = minD;
     return { geo, base, off, t: -1, rec };
-  }
-
-  _gainXp(amount, x, y, z, reason) {
-    if (!amount) return;
-    _xpPayload.amount = amount; _xpPayload.x = x; _xpPayload.y = y; _xpPayload.z = z;
-    _xpPayload.reason = reason;
-    this.ctx.bus.emit('xp:gained', _xpPayload);
   }
 
   _ring(rec) {
@@ -2498,7 +2585,7 @@ export class Places {
       tint(place(disc(), lu + 0.20, lv + 0.05), 0xffffff, 1);
     }
     // THE ARROW at the paper's edge: from the station's own place on the map, along the
-    // bearing to the nearest unclaimed beacon, a short shaft and a head just inside the rim.
+    // bearing to the nearest unclaimed destination, a short shaft and a head just inside the rim.
     // That is the whole teaching: the board says which way the next light is. Rebuilt on
     // every claim, because _claim sets _pinsDirty.
     {
@@ -2576,7 +2663,7 @@ export class Places {
   }
 
   /* ------------------------------------------------------------------ *
-   * present — the landmark transform, the tint, and the beacons.
+   * present — the physical landmark transform and its atmospheric tint.
    *
    * `alpha` IS consumed, by the four things in the county that move continuously: the
    * mill sails, the mine's winding wheel, the lighthouse beam and the bell. Those are
@@ -2627,15 +2714,14 @@ export class Places {
           rec.solid.renderOrder = proxy ? -960 : 0;
         }
         // The SOLID may keep depth off in proxy mode: it draws at renderOrder -960, before
-        // anything else writes depth, so the world still covers it. The additive glow and the
-        // beacon cannot — they are transparent, so they draw AFTER every opaque thing in the
+        // anything else writes depth, so the world still covers it. The additive glow cannot
+        // do that — it is transparent, so it draws AFTER every opaque thing in the
         // scene, and with depth off they paint straight over a trunk two metres from the
         // camera. That is what a player sees as a green bar floating in the forest. They keep
         // depth-testing in every mode, and the county occludes them like anything else.
         if (rec.glow) rec.glow.material.depthTest = true;
-        if (rec.beacon) rec.beacon.material.depthTest = true;
         // The glint is additive and small: it depth-tests in every mode, for the same reason
-        // the glow and the beacon do (a lamp painted over a trunk two metres away is a bug).
+        // the glow does (a lamp painted over a trunk two metres away is a bug).
         if (rec.moving) for (const mv of rec.moving) mv.mesh.material.depthTest = mv.role === 'glint' ? true : !proxy;
       }
 
@@ -2648,6 +2734,7 @@ export class Places {
       const tintGlow = lerp(1, TINT_GLOW_FLOOR, t);
       const gk = tintGlow * rec.glowLevel;
       const claimedHere = this.claimed.has(d.id);
+      if (rec.prize) rec.prize.visible = !claimedHere;
       if (rec.glow) {
         let o = gk;
         // ART 4.2: an aviation lamp blinks because it is an aviation lamp, not because you
@@ -2707,16 +2794,6 @@ export class Places {
         else if (mv.role === 'lever') mv.mesh.rotation.x = ang;
         else if (mv.role !== 'brazier' && mv.role !== 'glint') mv.mesh.rotation.z = ang;
       }
-      if (rec.beacon && rec.beacon.visible) {
-        // The distance fade and the far widening (see the BEACON_* block at the top). Both
-        // are smoothsteps of the same distance the proxy uses, so the handover at PROXY_R is
-        // a point on a smooth curve rather than a step.
-        const on = this.beaconFade ? 1 : 0;
-        const fade = 1 - on * (1 - BEACON_FAR_K) * smoothstep(BEACON_FULL_R, BEACON_FADE_R, dist);
-        rec.beacon.material.opacity = BEACON_OPACITY * rec.beaconLevel * fade;
-        const widen = 1 + on * (BEACON_FAR_WIDEN - 1) * smoothstep(BEACON_WIDEN_FROM, BEACON_WIDEN_TO, dist);
-        rec.beacon.scale.x = widen; rec.beacon.scale.z = widen;
-      }
     }
 
     // the one dying headlight out on the road
@@ -2758,7 +2835,7 @@ export class Places {
   /**
    * The name tests/world-game.mjs asks for. It calls `s.all()` (falling back to `s.places`)
    * and reads `p.major`, so with only list() on the surface it measured zero destinations
-   * and zero majors in a county with twelve of them — a green system failing a red gate on
+   * and zero majors in a county with fifteen of them — a green system failing a red gate on
    * a naming mismatch. The gate is right to ask; this is the answer it asks for.
    */
   all() {
@@ -2813,8 +2890,51 @@ export class Places {
   }
   majorCount() { return MAJORS.length; }
   minorCount() { return this.minors.length; }
-  /** Every campfire, with its position. A copy; tests and tools read it. */
-  campfires() { return this._campfires.map(f => ({ id: f.fireId, x: f.x, z: f.z, yaw: f.yaw })); }
+  /** Stable authored order used by progress persistence and the county map. Callers read;
+   * Places retains ownership so streamed geometry can come and go without renumbering it. */
+  minorList() {
+    if (!this._minorsBuilt) this._buildMinorTable();
+    return this.minors;
+  }
+  /** Every actual ember-bed campfire, with its position. A copy; tests and tools read it.
+   * `_campfires` is the older hot-path name for ALL lit minor refuges; Round 7 added the
+   * hunters' fire, roadblock lamp and dead headlight to that proximity table. Returning those
+   * as campfires made road/ember tools aim at objects that contain no fire at all. */
+  campfires() {
+    const out = [];
+    for (let i = 0; i < this._campfires.length; i++) {
+      const f = this._campfires[i];
+      if (f.kind === 'campfire') out.push({ id: f.fireId, x: f.x, z: f.z, yaw: f.yaw });
+    }
+    return out;
+  }
+
+  /** The visible prize beside the three weapon-grant fixtures. */
+  _buildPrize(d, rec, api) {
+    if (!d.reward || !rec.fixture) return;
+    const fx = rec.fixture;
+    const rx = -fx.fdz, rz = fx.fdx;
+    const side = d.reward === 'revolver' ? 1.48 : 1.72;
+    // The lighthouse's generic perpendicular placement landed the revolver over the open
+    // stairwell beside the centre pedestal. Put it on the actual lamp-room floor sector,
+    // just inside the gallery doorway: visible on arrival, supported underfoot, and still
+    // beside the real claim rather than duplicated at ground level.
+    const lightA = 1.95, lightR = 1.65;
+    const lx = d.id === 'drowned-light' ? Math.cos(lightA) * lightR : fx.lx + rx * side;
+    const lz = d.id === 'drowned-light' ? Math.sin(lightA) * lightR : fx.lz + rz * side;
+    const geo = prizeCase(d.reward);
+    if (!geo) return;
+    const mat = rec.solid ? rec.solid.material : this.matLand.clone();
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = 'land-prize-' + d.id;
+    mesh.position.set(lx, fx.ly, lz);
+    mesh.rotation.y = d.id === 'drowned-light' ? -(lightA + Math.PI * 0.5) : fx.faceYaw;
+    mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false;
+    rec.node.add(mesh);
+    rec.prize = mesh;
+    // No collider: the whole prop disappears with the existing grant. A collider left after
+    // that visual removal would be the exact invisible-wall failure this pass is fixing.
+  }
 
   /** Force a claim, for tests and for the integrator's screenshot rig. */
   claim(id) {
@@ -2847,7 +2967,7 @@ export class Places {
 
   ready() {
     // A genuine wiring check: the landmark group must be in the scene with a node per
-    // major, because a beacon nobody can see is this system failing silently.
+    // major, because a missing physical landmark is this system failing silently.
     return !!(this.landGroup && this.landGroup.parent && this.nodes.size === MAJORS.length);
   }
 
@@ -2869,6 +2989,8 @@ export class Places {
     if (this.group && this.group.parent) this.group.parent.remove(this.group);
     if (this.matBody) this.matBody.dispose();
     if (this.matLand) this.matLand.dispose();
+    disposePlaceSurfaceLibrary(this.surfaceTextures);
+    this.surfaceTextures = null;
     if (this.matGlow) this.matGlow.dispose();
     // No AudioContext to close: this system never opens one. See _drainWhispers.
   }

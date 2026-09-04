@@ -59,7 +59,10 @@ const CROUCH_IN = 12, CROUCH_OUT = 9.5;   // 190/240 ms crouch transition [vigil
 // in the player's travel direction. 0.075 is a 4.3 degree signed grade, enough to reject
 // road crown/noise while accepting the county's authored slopes.
 const DOWNHILL_SLIDE_GRADE = 0.075;
-const DOWNHILL_SLIDE_ENTRY = 2.60; // a walking player can commit to a descent
+// Below the 2.10 m/s crouch cap so holding crouch BEFORE a crest can still become a
+// descent slide once the ground falls away. The old 2.60 threshold made that natural
+// input order mathematically impossible; only a precisely timed press while walking worked.
+const DOWNHILL_SLIDE_ENTRY = 2.00;
 const DOWNHILL_DRAG_HI = 0.55, DOWNHILL_DRAG_LO = 0.28;
 const DOWNHILL_FULL_GRADE = 0.22;
 const DOWNHILL_AIR_GRACE = 0.30;   // terrain crests must not cancel the descent verb in one frame
@@ -173,6 +176,10 @@ const MANTLE_VEL_AWAY = -1.5;  // do not yank someone who is clearly moving away
 const CL = P.climb;
 const CLIMB_NONE = 0, CLIMB_HANG = 1, CLIMB_PULL = 2, CLIMB_VAULT = 3;
 const MANTLE_LEAD2 = 0.36;     // a second probe one more radius out: a lip you run at is not always one shell away
+// A deliberate Space press gets one farther COLLIDER probe. The ordinary movement mantle,
+// terrain pop, airborne grab, vault and car roof keep their existing reach: this only closes
+// the measured 0.43 m dead band where the station crate looked reachable but Space just hopped.
+const SPACE_CLIMB_EXTRA = 0.50;
 const MANTLE_MIN_RISE = 0.62;  // STEP_UP + STEP_TOL + 0.02: anything lower the solver steps onto, and a step is not a climb
 const PULL_LIFT_END = 0.72;    // fraction of the pull by which the feet reach the top
 const PULL_OVER_START = 0.30;  // fraction of the pull at which the body starts moving over the lip
@@ -546,29 +553,53 @@ export class PlayerController {
   }
 
   /**
-   * Come back. Four seconds after the blow, at the nearest DISCOVERED lit place — which is
-   * the whole shape of the M1 loop: the places you claim are the places you can afford to
-   * die near. A death that cannot end is worse than no death at all, so this always has an
-   * answer: the Filling Station starts found and claimed, and the spawn point is the floor
-   * under that.
+   * Come back. Four seconds after the blow, at the nearest activated safe point: either a
+   * DISCOVERED lit major or a lookout the player has climbed. The latter is Alex's dropped
+   * "could serve as a respawn point" half of the wilderness towers. Deer stands share the
+   * climb reward, but wilds.lookouts() excludes them from this rule.
+   *
+   * A death that cannot end is worse than no death at all, so this always has an answer:
+   * the Filling Station starts found and claimed, and spawnX/Z remain the final fallback.
    *
    * The dead flag is cleared and hp restored BEFORE the event, so every listener sees a
    * living player. Input was never taken away, so there is nothing to give back.
    */
   _respawn() {
     let bx = this.spawnX, bz = this.spawnZ;
+    // The body does not travel during the four-second death beat today, but the recorded
+    // killing point is the invariant this decision belongs to. Initialise with the spawn
+    // fallback so a missing places lane cannot let a farther lookout make the answer worse.
+    const fromX = Number.isFinite(this.deathX) ? this.deathX : this.pos.x;
+    const fromZ = Number.isFinite(this.deathZ) ? this.deathZ : this.pos.z;
+    let dx = bx - fromX, dz = bz - fromZ;
+    let bd2 = dx * dx + dz * dz;
     const places = this.ctx.systems ? this.ctx.systems.get('places') : null;
     if (places && typeof places.list === 'function') {
       // list() allocates. This runs once per death, not on the hot path.
       const l = places.list();
-      let bd = Infinity;
       for (let i = 0; i < l.length; i++) {
         const pl = l[i];
         // Discovered AND claimed. places.js turns a place's lamps on when you claim it, so
         // claimed IS lit; a place you have merely seen is a dark building.
         if (!pl.found || !pl.claimed) continue;
-        const d = Math.hypot(pl.x - this.pos.x, pl.z - this.pos.z);
-        if (d < bd) { bd = d; bx = pl.x; bz = pl.z; }
+        dx = pl.x - fromX; dz = pl.z - fromZ;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < bd2) { bd2 = d2; bx = pl.x; bz = pl.z; }
+      }
+    }
+
+    // A tower becomes a checkpoint on the same first feet-on-platform edge that sets its
+    // persistent climbed bit. `lookouts()` is stable and nonallocating; checking the bit here
+    // keeps an ordinary discovered tower and every climbed deer stand out of the candidate set.
+    const wilds = this.ctx.systems ? this.ctx.systems.get('wilds') : null;
+    if (wilds && typeof wilds.lookouts === 'function') {
+      const l = wilds.lookouts();
+      for (let i = 0; i < l.length; i++) {
+        const tower = l[i];
+        if (!tower || !tower.climbed || !Number.isFinite(tower.x) || !Number.isFinite(tower.z)) continue;
+        dx = tower.x - fromX; dz = tower.z - fromZ;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < bd2) { bd2 = d2; bx = tower.x; bz = tower.z; }
       }
     }
 
@@ -855,9 +886,13 @@ export class PlayerController {
 
     // ---- crouch (held, not toggled) + slide entry [vigil v0.4:13-16] --------
     const wantCrouch = this._held('crouch');
-    if (wantCrouch && !this.crouchHeld && this.grounded) {
+    if (wantCrouch && this.grounded && !this.sliding && hasInput) {
       const grade = hasInput ? this._downhillAlong(_wish.x, _wish.z) : 0;
-      if (this.sprinting || this.tacSprinting || grade >= DOWNHILL_SLIDE_GRADE) {
+      // Re-evaluate genuine downhill while the key stays held. A player may crouch on the
+      // flat, cross a crest, then expect gravity to take over; requiring a fresh key edge at
+      // the exact first downhill frame made the feature exist only for its scripted test.
+      if ((!this.crouchHeld && (this.sprinting || this.tacSprinting))
+          || grade >= DOWNHILL_SLIDE_GRADE) {
         this._startSlide(grade);
       }
     }
@@ -1326,10 +1361,11 @@ export class PlayerController {
   /**
    * ROUND 6, lane E: the probe now sees the TERRAIN, the COLLIDER FIELD (collision.ledgeHeight,
    * the contract in BRIEF-COMMON) and the CAR ROOF (car.roofHeightAt, lane H's contract,
-   * guarded). Two probe points for colliders: one shell ahead as before, and one radius
-   * further, because a lip you are running at is not always exactly one shell away. The
-   * terrain keeps the single probe so the eight places in the county where DUSKFALL's pop
-   * can fire (tests/collision.mjs) are exactly the eight they were.
+   * guarded). Two movement probes for colliders: one shell ahead as before, and one radius
+   * further, because a lip you are running at is not always exactly one shell away. A grounded
+   * explicit Space press gets one third probe 0.50 m farther; it is intentional reach, never
+   * automatic magnetism. The terrain keeps the single probe so the eight places in the county
+   * where DUSKFALL's pop can fire (tests/collision.mjs) are exactly the eight they were.
    *
    * Every gate the pop had is kept: velocity into the lip, somewhere to stand on top, the
    * cooldown, and aim untouched. What changed is what happens for a collider: the pop cannot
@@ -1365,6 +1401,14 @@ export class PlayerController {
     const p1x = this.pos.x + _wish.x * lead1, p1z = this.pos.z + _wish.z * lead1;
     const lead2 = lead1 + MANTLE_LEAD2;
     const p2x = this.pos.x + _wish.x * lead2, p2z = this.pos.z + _wish.z * lead2;
+    // The farther Space probe is for a deliberate standing/walking climb, not the first
+    // frame of a running jump. Letting a sprint-speed Space press use it made the controller
+    // pull onto an intermediate crate before the jump existed, stealing the airborne grab.
+    const horizontalSpeed = Math.hypot(this.vel.x, this.vel.z);
+    const allowSpaceReach = explicitJump && this.grounded
+      && !this.sprinting && !this.tacSprinting && horizontalSpeed <= P.WALK + 0.05;
+    const lead3 = lead2 + SPACE_CLIMB_EXTRA;
+    const p3x = this.pos.x + _wish.x * lead3, p3z = this.pos.z + _wish.z * lead3;
 
     // ---- 1. THE GRAB: airborne, moving into a lip the hands can reach. ----------------
     // The band is on the EYE: eyeY - 0.40 to eyeY + 0.50 (+ what 'Reach' adds). A wall
@@ -1416,6 +1460,10 @@ export class PlayerController {
       else {
         const b = col.ledgeHeight(p2x, p2z, this.pos.y, P.RADIUS, reach);
         if (b !== null) { cTop = b; cx = p2x; cz = p2z; }
+        else if (allowSpaceReach) {
+          const c = col.ledgeHeight(p3x, p3z, this.pos.y, P.RADIUS, reach);
+          if (c !== null) { cTop = c; cx = p3x; cz = p3z; }
+        }
       }
     }
     const rTop = this._roofAt(p1x, p1z, this.pos.y, reach);

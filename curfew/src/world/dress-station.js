@@ -360,6 +360,155 @@ function palletStack(k, api) {
 }
 
 /**
+ * THE SERVICE BAY — the Filling Station finally has a second authored volume instead of
+ * ending at one little shop and a canopy.  It is a real open garage: a player can walk
+ * through the raised shutter, circle the car on the lift, read the workbench and tool wall,
+ * and come back out into the forecourt.  The broad wall/roof surfaces inherit the shared
+ * weather maps in places.js; the ribs, patched sheets and exposed block plinth give that
+ * texture enough physical silhouette to survive the dark.
+ *
+ * It sits west of the shop, clear of the refuge door, breaker, phone box and roof-climb
+ * crates.  The open -Z face points at the same arrival side as the shop doorway and old
+ * roadside sign.  Nothing in here is a fake completion fixture or a promoted shed.
+ */
+function serviceBay(k, api) {
+  const x = -23.0, z = -0.2, w = 10.2, d = 9.6, h = 4.65;
+  const hw = w * 0.5, hd = d * 0.5, y = api.padY;
+  const wall = D.enamel, rib = C.rust, block = [0.102, 0.096, 0.086];
+
+  // A dark block plinth, three corrugated walls, and a completely open road-facing bay.
+  k.box(w, 0.72, 0.48, x, y + 0.36, z + hd, block);
+  k.box(0.48, 0.72, d, x - hw, y + 0.36, z, block);
+  k.box(0.48, 0.72, d, x + hw, y + 0.36, z, block);
+  k.box(w, h - 0.58, 0.34, x, y + 0.58 + (h - 0.58) * 0.5, z + hd, wall);
+  k.box(0.34, h - 0.58, d, x - hw, y + 0.58 + (h - 0.58) * 0.5, z, wall);
+  k.box(0.34, h - 0.58, d, x + hw, y + 0.58 + (h - 0.58) * 0.5, z, wall);
+  for (const [cx, cz, hx, hz] of [
+    [x, z + hd, hw, 0.24], [x - hw, z, 0.24, hd], [x + hw, z, 0.24, hd],
+  ]) api.emit({ kind: 'obb', x: cx, z: cz, halfX: hx, halfZ: hz, yaw: 0,
+    y0: y - 0.35, y1: y + h, tag: 'wall' });
+
+  // Corrugation is geometry, not a colour shift: 52 narrow proud ribs plus rusted footings.
+  for (let i = 0; i < 17; i++) {
+    const rx = x - hw + 0.32 + i * (w - 0.64) / 16;
+    k.box(0.075, h - 0.72, 0.08, rx, y + 0.72 + (h - 0.72) * 0.5,
+      z + hd - 0.20, i % 5 === 0 ? rib : D.conduit);
+  }
+  for (const sx of [-1, 1]) for (let i = 0; i < 18; i++) {
+    const rz = z - hd + 0.28 + i * (d - 0.56) / 17;
+    k.box(0.08, h - 0.72, 0.075, x + sx * (hw - 0.20),
+      y + 0.72 + (h - 0.72) * 0.5, rz, i % 6 === 0 ? rib : D.conduit);
+  }
+  for (let i = 0; i < 9; i++) {
+    const rx = x - hw + 0.55 + i * 1.12;
+    k.box(0.72, 0.28, 0.07, rx, y + 0.88 + (i % 3) * 0.08, z + hd - 0.25,
+      i % 2 ? C.rust : D.liningUp, (i % 2 ? 1 : -1) * 0.06);
+  }
+
+  // Deep pitched roof, patched in alternating strips, plus two crooked turbine vents.
+  k.gable(w + 0.75, d + 0.80, y + h, 1.75, x, 0, z, C.slate, 0);
+  for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) {
+    const px = x + sx * (1.0 + i * 0.82);
+    k.box(0.74, 0.055, d - 0.8, px, y + h + 0.63 + (4 - i) * 0.20,
+      z + (i % 2 ? 0.10 : -0.10), i % 2 ? D.conduit : C.rust, 0, 0, -sx * 0.32);
+  }
+  for (const vx of [x - 2.6, x + 2.15]) {
+    k.cyl(0.18, 0.18, 1.25, 10, vx, y + h + 1.70, z + 1.2, D.conduit);
+    k.tube(0.48, 0.34, 0.22, 12, vx, y + h + 2.30, z + 1.2, C.rust);
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3;
+      k.box(0.07, 0.03, 0.64, vx + Math.sin(a) * 0.27, y + h + 2.42,
+        z + 1.2 + Math.cos(a) * 0.27, D.conduit, -a);
+    }
+  }
+
+  // Raised segmented shutter and a battered frame: the opening reads before the contents.
+  k.box(w + 0.25, 0.36, 0.42, x, y + h - 0.12, z - hd, C.rust);
+  for (const sx of [-1, 1]) k.box(0.42, h, 0.48, x + sx * hw, y + h * 0.5, z - hd, C.rust);
+  for (let i = 0; i < 4; i++) {
+    k.box(w - 1.0, 0.58, 0.12, x, y + h - 0.48 - i * 0.57, z - hd + 0.30 + i * 0.16,
+      i % 2 ? D.conduit : D.enamel, 0, -0.18);
+    for (let j = 0; j < 5; j++) k.box(0.045, 0.52, 0.13,
+      x - 3.5 + j * 1.75, y + h - 0.48 - i * 0.57, z - hd + 0.23 + i * 0.16, C.rust);
+  }
+
+  // A two-post lift and a half-repaired estate car create a deliberate interior target.
+  for (const lx of [-2.35, 2.35]) {
+    k.box(0.34, 3.85, 0.52, x + lx, y + 1.93, z + 0.25, C.rust);
+    k.box(0.62, 0.14, 2.7, x + lx * 0.52, y + 1.05, z + 0.25, D.conduit, lx > 0 ? -0.34 : 0.34);
+    api.emit({ kind: 'obb', x: x + lx, z: z + 0.25, halfX: 0.22, halfZ: 0.32,
+      yaw: 0, y0: y - 0.2, y1: y + 3.85, tag: 'metal', climbable: false });
+  }
+  k.box(5.10, 0.28, 0.42, x, y + 3.76, z + 0.25, D.conduit);
+  k.box(1.78, 0.46, 4.18, x, y + 1.36, z + 0.35, [0.080, 0.060, 0.045], 0.04);
+  k.box(1.58, 0.56, 1.82, x, y + 1.82, z + 0.15, C.slate, 0.04);
+  for (const [sx, sz] of [[-0.86, -1.30], [0.86, -1.30], [-0.86, 1.28]])
+    k.cyl(0.30, 0.30, 0.20, 10, x + sx, y + 1.14, z + 0.35 + sz, D.tyre, 0, 0, Math.PI * 0.5);
+  // Missing front wheel, hub and a wheel on the floor explain why it never left.
+  k.cyl(0.14, 0.14, 0.24, 10, x + 0.86, y + 1.14, z + 1.63, C.rust, 0, 0, Math.PI * 0.5);
+  k.cyl(0.34, 0.34, 0.22, 10, x + 2.95, y + 0.34, z + 1.82, D.tyre, 0.4, 0, Math.PI * 0.5);
+  api.emit({ kind: 'obb', x, z: z + 0.35, halfX: 0.95, halfZ: 2.12, yaw: 0.04,
+    y0: y + 0.85, y1: y + 2.18, tag: 'metal', standable: true, climbable: false });
+
+  // Workbench, pegboard and individually silhouetted tools on the back wall.
+  k.box(4.30, 0.86, 0.78, x - 2.45, y + 0.43, z + hd - 0.75, D.timber);
+  k.box(4.45, 1.48, 0.11, x - 2.45, y + 1.62, z + hd - 0.31, D.liningUp);
+  for (let i = 0; i < 34; i++) k.cyl(0.018, 0.018, 0.045, 5,
+    x - 4.35 + (i % 9) * 0.47, y + 1.02 + ((i / 9) | 0) * 0.36,
+    z + hd - 0.23, D.conduit, 0, Math.PI * 0.5, 0);
+  const tools = [[-3.8, 1.65, 0.62, 0.08], [-3.0, 1.78, 0.48, -0.18], [-2.0, 1.52, 0.72, 0.20], [-1.2, 1.72, 0.54, -0.05]];
+  for (const [tx, ty, len, lean] of tools) {
+    k.box(0.07, len, 0.05, x + tx, y + ty, z + hd - 0.20, C.rust, 0, 0, lean);
+    k.box(0.30, 0.10, 0.07, x + tx + Math.sin(lean) * len * 0.42,
+      y + ty + Math.cos(lean) * len * 0.42, z + hd - 0.20, D.conduit, 0, 0, lean);
+  }
+  api.emit({ kind: 'obb', x: x - 2.45, z: z + hd - 0.75, halfX: 2.20, halfZ: 0.42,
+    yaw: 0, y0: y - 0.2, y1: y + 0.9, tag: 'wood', standable: true });
+
+  // Tyre rack and oil drums make the outside flank dense without blocking the refuge route.
+  const rackX = x - hw - 1.25, rackZ = z + 0.9;
+  for (const sx of [-0.52, 0.52]) k.box(0.09, 2.05, 0.09, rackX + sx, y + 1.02, rackZ, C.rust);
+  for (const yy of [0.48, 1.25, 1.92]) {
+    k.box(1.25, 0.08, 0.08, rackX, y + yy, rackZ, C.rust);
+    for (const lx of [-0.36, 0, 0.36]) k.tube(0.28, 0.17, 0.15, 10,
+      rackX + lx, y + yy + 0.18, rackZ, D.tyre, 0, Math.PI * 0.5, 0);
+  }
+  api.emit({ kind: 'obb', x: rackX, z: rackZ, halfX: 0.72, halfZ: 0.34, yaw: 0,
+    y0: y - 0.2, y1: y + 2.15, tag: 'metal', climbable: false });
+  for (let i = 0; i < 4; i++) {
+    const dx = x - hw - 1.05 + (i & 1) * 0.82, dz = z - 2.5 - ((i / 2) | 0) * 0.78;
+    k.cyl(0.31, 0.31, 0.82, 10, dx, y + 0.41, dz, i % 2 ? C.rust : D.enamel);
+    k.cyl(0.25, 0.25, 0.025, 10, dx, y + 0.83, dz, D.conduit);
+    api.emit({ kind: 'circle', x: dx, z: dz, r: 0.33, y0: y - 0.2, y1: y + 0.84,
+      tag: 'metal', standable: true });
+  }
+}
+
+/**
+ * A broken round roadside crown built around the old rectangular price face.  At road scale
+ * it gives the start a unique outline: halo, twin uprights and one fallen lightning blade,
+ * instead of another anonymous white board on a pole.  The open ring never becomes a bright
+ * sheet and its mapped metal actually shows rust/grime as the player closes in.
+ */
+function roadsideCrown(k, api) {
+  const x = 6.6, z = -7.4, y = api.padY;
+  for (const sx of [-1, 1]) {
+    k.box(0.20, 11.3, 0.20, x + sx * 1.36, y + 5.65, z + 0.08, C.rust, 0, 0, sx * 0.025);
+    k.box(0.12, 3.2, 0.12, x + sx * 0.72, y + 9.55, z + 0.08, D.conduit, 0, 0, -sx * 0.52);
+  }
+  const halo = new THREE.TorusGeometry(2.10, 0.16, 7, 28);
+  k.at(halo, C.rust, x, y + 11.55, z + 0.06, 0, 0, -0.08);
+  const inner = new THREE.TorusGeometry(1.54, 0.055, 6, 28);
+  k.at(inner, D.conduit, x, y + 11.55, z + 0.055, 0, 0, -0.08);
+  // Lightning-shaped slash through the ring, with a visibly broken lower segment.
+  k.box(0.34, 2.45, 0.20, x - 0.34, y + 12.12, z + 0.02, C.rust, 0, 0, -0.42);
+  k.box(0.34, 1.65, 0.20, x + 0.32, y + 10.76, z + 0.02, C.rust, 0, 0, -0.42);
+  k.box(0.14, 0.85, 0.14, x + 1.25, y + 9.15, z + 0.08, D.conduit, 0, 0, 0.92);
+  api.emit({ kind: 'circle', x, z, r: 1.65, y0: y - 0.3, y1: y + 11.4,
+    tag: 'metal', climbable: false });
+}
+
+/**
  * THE PUMPS STOP BEING THE BRIGHTEST THING IN THE FRAME.
  *
  * NEXT.md B6, and the brief for this lane in one sentence: "the pumps are the brightest
@@ -774,6 +923,8 @@ export const DRESS = {
     hoseReel(s, api);
     wheelieBins(s, api);
     palletStack(s, api);
+    serviceBay(s, api);
+    roadsideCrown(s, api);
     fallenBoard(s, api);
     cladPumps(s, api);
     eastWall(s, api);

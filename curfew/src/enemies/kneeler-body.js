@@ -131,6 +131,7 @@ const P = {
   cone3: new THREE.ConeGeometry(0.5, 1, 3),
   cone5: new THREE.ConeGeometry(0.5, 1, 5),
   cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 6),
+  torus: new THREE.TorusGeometry(0.5, 0.10, 5, 10),
 };
 
 /* ==========================================================================
@@ -221,13 +222,35 @@ export function kneelerSet() {
   w.add(P.sph, 0.08, 1.24, -0.28, CLOTH, { sx: 1.06, sy: 0.62, sz: 0.66, rz: -0.10 });
 
   // --- the yoke, TIPPED: the left shoulder rides high and the right has dropped
-  w.add(P.sph, -0.12, 1.66, -0.06, CLOTH, { sx: 2.06, sy: 0.76, sz: 0.92, rz: -0.17 });
+  w.add(P.sph, -0.12, 1.66, -0.06, CLOTH, { sx: 1.72, sy: 0.68, sz: 0.78, rz: -0.17 });
   // --- the HUMP: the weight collapsed to -X and back. The top of the folded shape.
   w.add(P.sph, -0.42, 2.04, 0.42, CLOTH, { sx: 1.38, sy: 1.04, sz: 1.26, rz: 0.16 });
   w.add(P.sph, 0.34, 1.80, 0.30, CLOTH, { sx: 0.90, sy: 0.64, sz: 0.86, rz: -0.20 });
   // shoulder caps at two different heights (the pivots are mirrored to match, see the rig)
-  w.add(P.sph, -1.04, 1.84, -0.02, CLOTH, { sx: 0.92, sy: 0.72, sz: 0.86 });
-  w.add(P.sph, 0.98, 1.54, -0.06, CLOTH, { sx: 0.70, sy: 0.58, sz: 0.72 });
+  w.add(P.sph, -1.04, 1.84, -0.02, CLOTH, { sx: 0.68, sy: 0.58, sz: 0.70 });
+  w.add(P.sph, 0.98, 1.54, -0.06, CLOTH, { sx: 0.58, sy: 0.50, sz: 0.60 });
+
+  // A collapsed antler crown grows sideways out of the load-bearing yoke.
+  // These are not decorative spikes on the back: they change the whole outline
+  // at road range and stop the raised body becoming a large gorilla.
+  const ANTLER = [
+    [-0.72, 2.22, 0.04, -0.62, 1.24], [-1.13, 2.52, 0.04, 0.48, 0.82],
+    [-1.34, 2.38, 0.02, -0.88, 0.56], [0.62, 2.05, 0.02, 0.58, 1.04],
+    [0.98, 2.30, 0.01, -0.42, 0.68], [1.16, 2.17, -0.01, 0.92, 0.48],
+  ];
+  for (let i = 0; i < ANTLER.length; i++) {
+    const a = ANTLER[i];
+    w.add(P.cone3, a[0], a[1], a[2], BONE,
+      { rx: -0.12 + (i % 2) * 0.22, rz: a[3], sx: 0.11, sy: a[4], sz: 0.11 });
+  }
+
+  // Four open thoracic hoops replace a single smooth chest wall. Their front
+  // halves catch the torch while the black gaps remain black, even point blank.
+  for (let i = 0; i < 4; i++) {
+    w.add(P.torus, (i % 2 ? 0.05 : -0.04), 0.92 + i * 0.23, -0.40 - i * 0.025, BONE,
+      { rz: (i - 1.5) * 0.035, sx: 1.42 - i * 0.09,
+        sy: 0.76 - i * 0.055, sz: 0.48 });
+  }
 
   // --- RIBS. Curved bone spurs standing off the flank, offset one rib between the sides so
   //     the two halves never line up. These are what a torch finds at 3 m: an edge, not a wall.
@@ -347,7 +370,7 @@ export function kneelerSet() {
   const e = new Weld();
   for (const side of [-1, 1]) {
     e.add(P.sphLo, HX + side * 0.235, HY + 0.095, HZ + 0.10, 0xffffff,
-      { rz: side * 0.20, sx: 0.15, sy: 0.048, sz: 0.15 });
+      { rz: side * 0.20, sx: 0.095, sy: 0.015, sz: 0.070 });
   }
   const eyes = e.geometry('kneeler-eyes');
 

@@ -1,11 +1,11 @@
-// clock — the twenty minutes the whole game is shaped around. Manifest #4. Owner: director.
+// clock — the fourteen-minute lightless cycle the whole game is shaped around. Manifest #4.
 //
 // There is NEVER a day (DESIGN decision 3). The cycle is
 //
-//     dusk 180 s  ->  deep night 660 s  ->  BLACK HOUR 180 s  ->  false dawn 180 s
+//     dusk 90 s  ->  deep night 480 s  ->  BLACK HOUR 180 s  ->  false dawn 90 s
 //
-// = 1200 s, and then it starts again at dusk. False dawn's top is a twenty-second grade,
-// a look and not a lighting regime; nothing here ever produces sun.
+// = 840 s, and then it starts again at dusk. False dawn is a look, not a lighting regime;
+// nothing here ever produces sun.
 //
 // What this file owns:
 //   * ctx.shared.phase  — 'dusk' | 'night' | 'black' | 'dawn'
@@ -48,7 +48,7 @@ const PHASES = [
   { name: 'black', dur: C.blackHourS },
   { name: 'dawn', dur: C.falseDawnS },
 ];
-const CYCLE_S = PHASES.reduce((a, p) => a + p.dur, 0);   // 1200
+const CYCLE_S = PHASES.reduce((a, p) => a + p.dur, 0);   // 840
 
 // Where each phase sits on sky.js's 0..1 LUT (its STOPS are dusk 0.00, deep night 0.30,
 // black hour 0.70, false dawn 1.00). These are the pointer's endpoints, not new colours:
@@ -290,7 +290,7 @@ export class Clock {
 
   /**
    * The sky is written from the INTERPOLATED pointer, like everything else that moves.
-   * It moves at 1/1200 Hz so no human could see the difference — but a system that opts
+   * It moves far below 1 Hz so no human could see the interpolation difference — but a system that opts
    * out of alpha "because it is slow" is how the next thing that opts out gets away with it.
    */
   present(alpha) {

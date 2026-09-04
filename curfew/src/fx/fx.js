@@ -256,6 +256,48 @@ export class Fx {
     return lights.borrow('flash', x, y, z, colour, intensity, life);
   }
 
+  /**
+   * The large, one-shot receipt for a found cache, claimed place or weapon reward.
+   * It deliberately reuses the existing particle draw and one borrowed rover: no new
+   * geometry, material, program or permanent light is born when the player gets paid.
+   * Combat bursts throw debris away from an impact; this rises as a symmetric warm crown,
+   * so it reads as "taken" even when the fixture itself is below the first-person camera.
+   */
+  reward(x, y, z, amount = 1) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
+    const rng = this.rng;
+    const weight = clamp(Math.sqrt(Math.max(1, Number(amount) || 1)) / 8, 0, 1);
+    const count = 28 + Math.round(weight * 12);
+    for (let i = 0; i < count; i++) {
+      const a = TAU * (i / count) + (rng.next() - 0.5) * 0.10;
+      const band = i % 3;
+      const radius = 0.38 + band * 0.24;
+      const lift = 3.8 + band * 1.05 + rng.next() * 1.8;
+      const speed = 1.7 + band * 0.65 + rng.next() * 0.9;
+      // Three close warm values make a solid crown rather than rainbow confetti.
+      const hot = i % 5 === 0;
+      this.spawnParticle(
+        x + Math.cos(a) * radius, y + 0.48 + band * 0.12, z + Math.sin(a) * radius,
+        Math.cos(a) * speed, lift, Math.sin(a) * speed,
+        0.68 + rng.next() * 0.36, 0.048 + band * 0.012,
+        hot ? 1.00 : 0.94, hot ? 0.91 : 0.77, hot ? 0.64 : 0.43,
+        5.8, 1.15, 0.98,
+      );
+    }
+    // A brief vertical spine survives a crowded floor and makes the event readable from
+    // several metres away. It is still the same pooled Points draw as every impact spark.
+    for (let i = 0; i < 8; i++) {
+      const a = TAU * (i / 8);
+      this.spawnParticle(
+        x + Math.cos(a) * 0.18, y + 0.58, z + Math.sin(a) * 0.18,
+        Math.cos(a) * 0.25, 6.8 + i * 0.20, Math.sin(a) * 0.25,
+        0.78 + i * 0.025, 0.085, 1.0, 0.86, 0.55, 5.2, 1.5, 1,
+      );
+    }
+    this.flash(x, y + 1.0, z, 0xf0d49a, 10 + weight * 6, 0.24);
+    this.addTrauma(0.035 + weight * 0.025);
+  }
+
   /* ----------------------------------------------------------------- feel --- */
 
   /** Camera shake fuel, 0..1. The camera owner reads shake(), fx never moves the camera. */

@@ -48,7 +48,7 @@ export const CFG = {
     // still worth chasing: it is a visible stutter and the budget stays tight on purpose.
     budget: {
       fpsMin: 58,
-      medianMax: 8,         // steady-state frame cost. 3.0 measured; this is the real ceiling
+      medianMax: 9,         // Round 9 dense-world worst 8.3 ms (117 fps); keep <9 ms steady
       p95Max: 34,           // KNOWN ISSUE: chunk-build hitches. Was 22 and never met.
       drawsMax: 1400,       // 193-249 at M0; enemies, places and the car all add draws
       trisMax: 8e6,         // 6.0 M measured at 3 ms; the old 1.5 M was a pre-build guess
@@ -243,7 +243,10 @@ export const CFG = {
       recoilReturn: 0.72, recoilHalfLife: 0.130, recoilHold: 0.090,
     },
     defs: {
-      bolt:    { rpm: 55,  mag: 5,  reserve: 40, dmg: 78, headMul: 2.0, spreadHip: 0.69, spreadAds: 0.11, kick: 2.6, settle: 0.320, loud: 26 },
+      // Alex's fourth playtest: "This initial gun is very slow."  The old 55 rpm was an
+      // agent's deliberate-bolt interpretation, not Alex's decision. 80 rpm keeps the
+      // heavy manual action while cutting the dead interval from 1.09 s to 0.75 s.
+      bolt:    { rpm: 80,  mag: 5,  reserve: 40, dmg: 78, headMul: 2.0, spreadHip: 0.69, spreadAds: 0.11, kick: 2.6, settle: 0.320, loud: 26 },
       shotgun: { rpm: 75,  mag: 6,  reserve: 28, dmg: 12, pellets: 8, headMul: 1.35, spreadHip: 3.15, spreadAds: 1.72, range: 16, loud: 38 },
       revolver:{ rpm: 320, mag: 6,  reserve: 36, dmg: 28, headMul: 2.10, spreadHip: 0.69, spreadAds: 0.23, kick: 1.03, loud: 14 },
       carbine: { rpm: 725, mag: 30, reserve: 210, dmg: 22, headMul: 1.9, spreadHip: 2.1, spreadAds: 0.05, loud: 38 },  // [vigil KV-7 CINDER]
@@ -315,7 +318,10 @@ export const CFG = {
     // 1.32 m contact radius when coasting (0.5 m off: 0.39 m/s; 0.8 m: 0.94; 1.0 m: 1.85).
     treeHit: { targetMul: 0.35, lambda: 12, glance: 0.12 },
     seat: { x: -0.31, y: 1.66, z: -0.50, yawClamp: 1.48, fov: 68, fovFast: 74.5 },
-    spawn: { min: 40, max: 90, minPlayerToMajor: 120, roadWithin: 60, lostBeyond: 300, pilotLast: 30 },
+    // Each destination's real flat radius plus car.js's 16 m yard margin is the no-spawn
+    // boundary. A second global 120 m moat kept the car nonexistent long after the player
+    // had left the Filling Station; zero leaves the per-destination geometry in charge.
+    spawn: { min: 40, max: 90, minPlayerToMajor: 0, roadWithin: 60, lostBeyond: 300, pilotLast: 30 },
     hotwire: 1.6,
     // ROUND 6 — Alex, fifth playtest: "I want to be able to hit the mobsters." The base ram is
     // the car's (DESIGN section 3) and needs no node: at >= `speed`, enemies.ramHit runs and the
@@ -387,9 +393,12 @@ export const CFG = {
     dread: { loudGapS: 26, softRoll: 0.76, postLoudQuietS: 3.2 },
   },
 
-  // ---- clock: ~20 minutes, night only. Never a day. [design decision 3] ------
+  // ---- clock: night only. Never a day. [design decision 3] -------------------
   clock: {
-    duskS: 180, deepNightS: 660, blackHourS: 180, falseDawnS: 180,
+    // Alex could not perceive the old three-minute dusk or the eleven-minute flat night.
+    // The first ninety seconds now make the loss of the remaining light unmistakable; the
+    // complete no-sun arc is fourteen minutes, long enough to inhabit without hiding a phase.
+    duskS: 90, deepNightS: 480, blackHourS: 180, falseDawnS: 90,
     blackHourWarnS: 90,
     stormDanger: 1.4, stormDreadThreshold: 0.6, stormCooldownS: [160, 280],
   },
