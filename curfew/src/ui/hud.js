@@ -2,8 +2,9 @@
 //
 // ALEX'S LAW, WHICH OUTRANKS EVERY OTHER CONSIDERATION IN THIS FILE:
 // "Delete words from game UI. Show state through in-world visuals so the player feels it,
-// rather than reads it." So: no ammo counter, no XP number, no level, no objective, no
-// minimap, no damage numbers, no compass, no prompt, no name of anything.
+// rather than reads it." So: no objective prose, no floating damage numbers, no compass,
+// no prompt, no name of anything during play. Alex's current playtest explicitly asks for
+// ammo and a minimap; both are compact painted instruments, with icons and numbers only.
 // tests/progression.mjs walks every text node in the document during play and fails on one
 // visible glyph. That test is not an obstacle to work around; it is this file's spec.
 //
@@ -31,10 +32,13 @@
 //     the VIGNETTE, never on the camera — "never take the camera away" is the horror law and
 //     it has no exceptions, including for feedback the player would probably enjoy.
 //   * A brief arc for the direction damage came from, with a tick that points along it.
-//   * A chevron for each committed thing at your BACK, for as long as it is there. Eleven of
-//     the thirteen hits in his first session came from behind him, every one of them legally
-//     telegraphed where he could not see it. The mark deletes itself the instant you turn
-//     toward it, which is how "turn around" gets taught without a word.
+//   * A compact local map: nearby roads, destinations, the car and the player, without names.
+//     It is a wayfinding instrument rather than a second pause-map.
+//   * Ammo as magazine / reserve, always visible on the weapon's side of the frame. Alex ran
+//     dry without knowing he had ammunition at all; hiding this state is no longer the law.
+//   * One car button. Pressing it briefly puts one unmistakable vehicle-shaped bearing on the
+//     reticle. The old flowing threat chevrons are no longer painted: he could not tell what
+//     they pointed to, so they had stopped communicating.
 //   * The respawn window, drawn as a closing arc. Invulnerability the player cannot see is a
 //     mechanic he will never learn to use.
 //   * A ring pulse when a mote lands, so getting paid reaches the screen even when the mote
@@ -57,8 +61,8 @@
 //     still walks the page during play and finds none.
 //   * THE MAP, above the tree on the same card (round 6, lane G). Alex: "A minimap or at the
 //     least a large map in the menu that shows where you've been and if you've finished
-//     places would be nice." DESIGN decision 19 stands — nothing is marked on the HUD — and
-//     this is not the HUD: it is the paper map, on the one surface where the game is stopped.
+//     places would be nice." The pause map remains the detailed county record; the new live
+//     mini-map is deliberately local, compact and nameless.
 //     A canvas, county-square, drawn from live state each time the card shows and never per
 //     step: the roads, the majors in three states (unfound faint, found named, claimed lit in
 //     the region's tint), the campfires and wilds he has found, the car, himself as an arrow,
@@ -67,11 +71,8 @@
 //     county stays dark. Words on the map: place names, once found; no legend, no compass, no
 //     coordinates.
 //
-// WHAT IS DELIBERATELY NOT HERE: ammo. DESIGN says ammo is "the magazine window and the last
-// three tracers" — both of those live on the gun, and the gun is weapons/viewmodel.js. The
-// only ammo fact this file states is a DRY one: the centre pip goes hollow when the magazine
-// is empty. That is a shape, it is at the point the eye is already on, and it says the one
-// thing the player must not learn by pulling a silent trigger.
+// The gun's magazine window and last-three-tracer language remain useful world feedback. The
+// counter now completes it instead of asking the model alone to carry exact inventory state.
 //
 // donor: cinderbloom src/ui/hud.js:1392-1394 `_conePx` — "Half-angle degrees -> pixels at the
 //   frame's centre", tan(deg) * (vh/2) / tan(vfov/2). That single line is what makes the
@@ -93,7 +94,7 @@ import { CFG } from '../config.js';
 import { clamp, clamp01, DEG, TAU } from '../engine/math.js';
 // Pure data, no ctx, same owner (progression). The card lists every branch and every node
 // once at build time and rewrites their STATE afterwards; the names and lines never change.
-import { BRANCHES, NODES } from '../progression/nodes.js';
+import { BRANCHES, NODES, levelFrac, xpForLevel } from '../progression/nodes.js';
 // Pure data, read-only: the majors' positions, names and region tints for the map.
 import { MAJORS, MINOR_KINDS, REGION_TINT, DEFAULT_TINT } from '../world/placedata.js';
 
@@ -103,6 +104,17 @@ import { MAJORS, MINOR_KINDS, REGION_TINT, DEFAULT_TINT } from '../world/placeda
 
 const RET_MAX = 640;            // CSS px of the reticle canvas, square, centred
 const DPR_CAP = 2;
+
+// The live instruments are deliberately small and painted. Canvas text is allowed here:
+// Alex asked for numbers, while the DOM still contains no visible play-time prose.
+const MINI_PX = 184;
+const MINI_RANGE = 320;          // metres from centre to rim
+// Measured by tools/round8-hud-audit.mjs at ~0.074 ms per paint. Thirty paints a second
+// therefore cost roughly 2.2 ms of one CPU-second while keeping player-up rotation smooth.
+const MINI_PERIOD = 1 / 30;
+const AMMO_W = 154;
+const AMMO_H = 62;
+const LOCATE_LIFE = 5.5;         // one press, one temporary bearing
 
 const MARK_LIFE = { normal: 0.210, weak: 0.240, armoured: 0.240, kill: 0.320 };
 const MARK_RANK = { normal: 0, weak: 2, armoured: 1, kill: 3 };   // combat.js:1303
@@ -192,33 +204,6 @@ const GHOST_LIFE = 0.72;        // s a lost segment stays lit
 const GHOST_POOL = 4;
 const RESTORE_LIFE = 0.85;      // s of "you are whole again" after a respawn
 const LIFE_EPS = 0.12;          // hp of movement worth a repaint
-
-/* ------------------------------------------------- THE THREAT MARKS (new) ---
- * ALEX: "basically the whole time im hearing sounds and seeing directions marked like I'm
- * being hit" — and he still could not tell what was happening. MEASURED, 75 s of walking
- * from the spawn without shooting: eleven of thirteen hits came from BEHIND him, dot -1.00,
- * -0.99, -0.96, -0.94 against camera forward, from a hound standing 0.0-2.2 m away.
- *
- * The damage arc below is a FADE. It says "something hit you from over there", once, and
- * then it is gone while the thing that hit you is still standing there. That is a receipt,
- * not a warning, and he was reading a stream of receipts.
- *
- * So: a mark that PERSISTS while the threat does, and stops existing the moment you turn to
- * face it. One chevron per committed body that is inside THREAT_R and OUTSIDE your forward
- * cone, on a ring at the edge of the reticle, pointing outward at its bearing. Weight is
- * distance; a body in its wind-up throbs. Turn toward it and it is gone — which is the whole
- * lesson, taught by the mark deleting itself rather than by anybody saying it.
- *
- * It is not a radar: it cannot show you anything in front of you, anything past 20 m, or
- * anything that has not committed to you. What it shows is exactly the case the camera
- * cannot — the thing at your back.
- */
-const THREAT_R = 20;            // m; past this you are not being attacked, you are being stalked
-const THREAT_NEAR = 3.5;        // m at which a mark is at full weight
-const THREAT_CONE = 0.90;       // rad (~52 deg) each side of forward = "you can see it"
-const THREAT_POOL = 4;          // more marks than this is a wall, not a warning
-const THREAT_A = [0.20, 0.72];  // alpha at THREAT_R and at THREAT_NEAR
-const THREAT_HZ = 5.5;          // the wind-up throb
 
 /* ---------------------------------------------- THE RESPAWN WINDOW (new) ----
  * player/controller.js gives the body RESPAWN_INVULN seconds in which damage cannot land.
@@ -326,6 +311,7 @@ const CONTROLS = [
   ['Use, get in the car', 'E'],
   ['Claim a place', 'hold E'],
   ['Horn', 'H'],
+  ['Locate car', 'L or car icon'],
   ['Torch', 'F'],
   // ROUND 7. Alex, fifth playtest: "I don't know if there's a map or conquered destinations
   // or something." There is, and it is behind this key, and the card that says so is the one
@@ -349,8 +335,63 @@ const CSS = `
 /* The life arc. Bottom edge, full width, its own surface so the 640 px reticle canvas is
    not cleared for a thing that lives at the rim of vision. */
 #curfew-life { position: absolute; left: 0; bottom: 0; width: 100%; display: block; }
-#curfew-hud .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden;
-              clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+/* This live-region is a BODY SIBLING of #curfew-hud, not its child. Target its id so the
+   words remain available to assistive technology while occupying exactly one clipped pixel. */
+#curfew-sr { position: fixed; left: 0; top: 0; width: 1px; height: 1px;
+              box-sizing: border-box; margin: -1px; padding: 0; border: 0; overflow: hidden;
+              clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+              pointer-events: none; }
+/* LIVE INSTRUMENTS. All visible marks are canvas or CSS geometry: no prose enters play. */
+#curfew-chrome { position: fixed; inset: 0; z-index: 13; pointer-events: none;
+              contain: layout style; transition: opacity .16s ease; }
+#curfew-chrome[hidden] { display: none !important; }
+#curfew-mini { position: absolute; left: max(16px, env(safe-area-inset-left));
+              top: max(16px, env(safe-area-inset-top)); width: 184px; height: 184px;
+              display: block; border: 1px solid rgba(188,205,226,.28); border-radius: 50%;
+              background: rgba(5,8,12,.68);
+              box-shadow: 0 0 0 5px rgba(3,5,8,.24), inset 0 0 32px rgba(0,0,0,.72),
+                          0 12px 34px rgba(0,0,0,.30); opacity: .94; }
+#curfew-ammo { position: absolute; right: max(18px, env(safe-area-inset-right));
+              bottom: max(34px, env(safe-area-inset-bottom)); width: 154px; height: 62px;
+              display: block; filter: drop-shadow(0 4px 10px rgba(0,0,0,.82)); }
+#curfew-car-button { position: absolute; right: max(20px, env(safe-area-inset-right));
+              top: max(20px, env(safe-area-inset-top)); width: 60px; height: 60px;
+              box-sizing: border-box; padding: 0; border: 1px solid rgba(207,220,238,.46);
+              border-radius: 50%; color: #e8eef8; background: rgba(5,8,12,.78);
+              box-shadow: 0 0 0 5px rgba(3,5,8,.22), inset 0 0 18px rgba(0,0,0,.62);
+              pointer-events: auto; touch-action: manipulation; cursor: pointer;
+              -webkit-tap-highlight-color: transparent; }
+#curfew-car-button:focus-visible { outline: 2px solid #e8eef8; outline-offset: 4px; }
+#curfew-car-button:disabled { cursor: default; opacity: .28; border-style: dashed; }
+#curfew-car-button .car-body { position: absolute; left: 18px; top: 24px; width: 22px; height: 11px;
+              box-sizing: border-box; border: 1.5px solid currentColor; border-radius: 3px; }
+#curfew-car-button .car-body::before { content: ''; position: absolute; left: 4px; top: -7px;
+              width: 12px; height: 7px; box-sizing: border-box; border: 1.5px solid currentColor;
+              border-bottom: 0; border-radius: 4px 4px 0 0; }
+#curfew-car-button .car-body::after { content: ''; position: absolute; left: 2px; bottom: -4px;
+              width: 4px; height: 4px; border-radius: 50%; background: currentColor;
+              box-shadow: 14px 0 0 currentColor; }
+#curfew-car-button .car-needle { position: absolute; inset: 4px; opacity: 0;
+              transform: rotate(var(--bearing, 0deg)); transition: opacity .12s ease; }
+#curfew-car-button .car-needle::before { content: ''; position: absolute; left: 50%; top: -1px;
+              width: 0; height: 0; transform: translateX(-50%);
+              border-left: 4px solid transparent; border-right: 4px solid transparent;
+              border-bottom: 0; border-top: 8px solid currentColor; }
+#curfew-car-button.active { border-color: rgba(232,238,248,.96);
+              box-shadow: 0 0 0 5px rgba(3,5,8,.24), 0 0 22px rgba(196,214,238,.34),
+                          inset 0 0 20px rgba(174,199,230,.12); }
+#curfew-car-button.active .car-needle { opacity: 1; }
+#curfew-car-button.active .car-body { animation: curfew-car-beat .72s ease-in-out infinite alternate; }
+@keyframes curfew-car-beat { from { opacity: .62; } to { opacity: 1; } }
+@media (max-width: 620px), (max-height: 620px) {
+  #curfew-mini { width: 142px; height: 142px; left: max(10px, env(safe-area-inset-left));
+                top: max(10px, env(safe-area-inset-top)); }
+  #curfew-ammo { width: 132px; height: 53px; right: max(10px, env(safe-area-inset-right));
+                bottom: max(22px, env(safe-area-inset-bottom)); }
+  #curfew-car-button { width: 54px; height: 54px; right: max(12px, env(safe-area-inset-right));
+                top: max(12px, env(safe-area-inset-top)); }
+  #curfew-car-button .car-body { left: 15px; top: 22px; }
+}
 /* THE PAUSE CARD. A flex overlay with the card on margin:auto: centred when it fits,
    scrollable when it does not (a grid place-items:center clips a tall card's head; margin
    auto does not).
@@ -372,26 +413,71 @@ const CSS = `
               background: linear-gradient(128deg, rgba(5,7,10,0.99) 0%, rgba(5,7,10,0.92) 34%,
                           rgba(5,7,10,0.55) 62%, rgba(5,7,10,0) 100%); }
 #curfew-pause[hidden] { display: none !important; }
-#curfew-pause .card { position: relative; z-index: 1; width: min(1240px, 96vw); margin: auto; }
+#curfew-pause .card { position: relative; z-index: 1; width: min(1320px, 96vw); margin: auto; }
 #curfew-pause .rule { height: 1px; background: #1b2431; margin: 0 0 16px; }
 #curfew-pause .rule.mid { margin: 14px 0; }
 /* THE MAP AND THE TREE, side by side when the window is wide enough, the map first. One
    block, and it swallows the press: a click anywhere on it must never resume the game. */
-#curfew-pause .top { display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 0 28px;
+#curfew-pause .top { display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 0 30px;
               align-items: start; }
 @media (max-width: 1180px) { #curfew-pause .top { grid-template-columns: minmax(0, 1fr); gap: 16px 0; } }
 /* SQUARE AT EVERY WIDTH. It was width:440 height:440 with max-width:100%, so a 270 px column
    drew a 440 px-tall county into a 270 px-wide box and the whole map was stretched. */
 #curfew-pause .map { display: block; width: min(440px, 100%); aspect-ratio: 1 / 1; height: auto;
               margin: 0 auto; border: 1px solid #1b2431; border-radius: 2px; background: #0b0e13; }
-/* THE TREE: the level and the points as words, then six branch rows of four node buttons. */
-#curfew-pause .lvl { font-size: 17px; letter-spacing: .10em; color: #e8eef8; margin: 0 0 9px; }
+/* THE TREE. Six tactile branch circuits rather than a spreadsheet of dim rectangles. */
+#curfew-pause .tree { position: relative; padding: 8px 10px 6px;
+              border: 1px solid rgba(75,92,117,.40); border-radius: 4px;
+              background: linear-gradient(145deg, rgba(12,17,24,.84), rgba(4,7,11,.54));
+              box-shadow: inset 0 1px 0 rgba(232,238,248,.035), 0 18px 54px rgba(0,0,0,.18); }
+#curfew-pause .lvl { display: flex; align-items: baseline; flex-wrap: wrap;
+              font-size: 18px; letter-spacing: .10em; color: #e8eef8; margin: 0 0 9px;
+              padding: 0 2px 7px; border-bottom: 1px solid rgba(85,103,130,.34); }
 #curfew-pause .lvl .pts { font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
-              opacity: .55; margin-left: 14px; }
-#curfew-pause .br { display: grid; grid-template-columns: 56px repeat(4, minmax(0, 1fr));
-              gap: 0 8px; align-items: stretch; margin: 0 0 6px; }
-#curfew-pause .bn { opacity: .52; letter-spacing: .12em; text-transform: uppercase; font-size: 11px;
-              align-self: center; }
+              opacity: .72; margin-left: 14px; }
+#curfew-pause .pause-car { position: relative; flex: 0 0 52px; width: 52px; height: 44px;
+              box-sizing: border-box; margin: -6px 1px -4px auto; padding: 0;
+              color: #e8eef8; background: rgba(4,7,11,.72);
+              border: 1px solid rgba(128,149,178,.56); border-radius: 18px;
+              cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+              box-shadow: inset 0 0 12px rgba(0,0,0,.54); }
+#curfew-pause .pause-car:hover, #curfew-pause .pause-car:focus-visible {
+              border-color: #e8eef8; background: rgba(201,218,241,.10);
+              box-shadow: 0 0 14px rgba(177,203,235,.24), inset 0 0 12px rgba(0,0,0,.42); }
+#curfew-pause .pause-car:disabled { opacity: .28; cursor: default; border-style: dashed; }
+#curfew-pause .pause-car.active { border-color: #e8eef8; }
+#curfew-pause .pause-car .car-body { position: absolute; left: 50%; top: 52%; width: 22px; height: 11px;
+              transform: translate(-50%,-50%); box-sizing: border-box;
+              border: 1.5px solid currentColor; border-radius: 3px; }
+#curfew-pause .pause-car .car-body::before { content: ''; position: absolute; left: 4px; top: -7px;
+              width: 12px; height: 7px; box-sizing: border-box; border: 1.5px solid currentColor;
+              border-bottom: 0; border-radius: 4px 4px 0 0; }
+#curfew-pause .pause-car .car-body::after { content: ''; position: absolute; left: 2px; bottom: -4px;
+              width: 4px; height: 4px; border-radius: 50%; background: currentColor;
+              box-shadow: 14px 0 0 currentColor; }
+/* The label and the rail occupy separate rows inside one progressbar. The old version put
+   the label at top:-18px inside overflow:hidden, so every XP digit existed in the DOM and
+   precisely zero of its pixels reached the player. */
+#curfew-pause .xp { position: relative; height: 15px; margin: -5px 2px 5px; overflow: visible; }
+#curfew-pause .xp::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+              height: 4px; border-radius: 4px; background: rgba(3,5,8,.84);
+              box-shadow: inset 0 0 0 1px rgba(90,110,140,.26); }
+#curfew-pause .xp > i { position: absolute; left: 0; bottom: 0; display: block; width: 0;
+              height: 4px; border-radius: 4px;
+              background: linear-gradient(90deg, #617997, #d4e2f4);
+              box-shadow: 0 0 10px rgba(188,211,239,.54); transition: width .28s ease; }
+#curfew-pause .xp > span { position: absolute; right: 5px; top: 0; font-size: 9px;
+              line-height: 10px; letter-spacing: .12em; opacity: .68; white-space: nowrap; }
+#curfew-pause .br { position: relative; display: grid;
+              grid-template-columns: 62px repeat(4, minmax(0, 1fr));
+              gap: 0 7px; align-items: stretch; margin: 0 0 5px; }
+#curfew-pause .br::after { content: ''; position: absolute; left: 62px; right: 0; bottom: -2px;
+              height: 1px; opacity: .13; background: linear-gradient(90deg, var(--accent), transparent 82%); }
+#curfew-pause .bn { position: relative; opacity: .84; color: var(--accent); letter-spacing: .16em;
+              text-transform: uppercase; font-size: 10.5px; align-self: center; padding-left: 12px; }
+#curfew-pause .bn::before { content: ''; position: absolute; left: 0; top: 50%; width: 4px; height: 22px;
+              transform: translateY(-50%); border: 1px solid var(--accent); border-radius: 4px;
+              box-shadow: 0 0 9px var(--accent); opacity: .78; }
 /* A PHONE. Four tiers across a 360 px window is four 78 px columns, which is a word a line.
    Two across, with the branch name over them, is the same tree in the same order — read down
    the pairs instead of across the row — and every button clears the 44 px touch floor. */
@@ -405,16 +491,23 @@ const CSS = `
      poor  the tier below is yours but the points are not there yet. Half.
      lock  the tier below is not yours. Faint, but the line is still readable. */
 #curfew-pause .nd { position: relative; display: block; width: 100%; box-sizing: border-box;
-              text-align: left; min-height: 44px;
+              text-align: left; min-height: 54px; overflow: hidden;
               font: inherit; color: #c9d4e6; background: rgba(4,6,9,0.72);
-              border: 1px solid #1b2431; border-left: 3px solid #1b2431; border-radius: 2px;
-              padding: 6px 9px 7px; cursor: default; opacity: .55; }
+              border: 1px solid #263246; border-left: 3px solid #263246; border-radius: 3px;
+              padding: 5px 8px 6px; cursor: default; opacity: .62;
+              transition: opacity .16s ease, border-color .16s ease, background .16s ease,
+                          transform .16s ease, box-shadow .16s ease; }
+#curfew-pause .nd::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+              opacity: .16; background: linear-gradient(128deg, var(--accent), transparent 42%); }
 #curfew-pause .nd .cn { display: flex; justify-content: space-between; align-items: baseline;
-              gap: 0 6px; color: #e8eef8; font-size: 13px; letter-spacing: .05em; line-height: 1.3; }
+              gap: 0 6px; color: #e8eef8; font-size: 12.5px; letter-spacing: .05em; line-height: 1.24; }
+#curfew-pause .nd .cm { display: flex; align-items: baseline; gap: 7px; }
+#curfew-pause .nd .ct { min-width: 12px; font-size: 9px; letter-spacing: .08em;
+              color: var(--accent); opacity: .72; }
 #curfew-pause .nd .cc { font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase;
               opacity: .55; white-space: nowrap; }
-#curfew-pause .nd .cl { display: block; font-size: 10.5px; line-height: 1.35; opacity: .74;
-              margin: 3px 0 0; }
+#curfew-pause .nd .cl { display: block; font-size: 10px; line-height: 1.25; opacity: .74;
+              margin: 2px 0 0; }
 /* THE CHAIN. A tier needs the tier below it, and until round 7 the only way to learn that was
    to click a locked node and watch nothing happen. Now the 8 px gap between two nodes in a
    row carries a rule, and the rule LIGHTS once the node on its left is owned — so a branch
@@ -424,19 +517,29 @@ const CSS = `
               width: 9px; height: 1px; background: #1b2431; }
 #curfew-pause .nd.own + .nd::before { background: #6f7f99; }
 @media (max-width: 760px) { #curfew-pause .nd + .nd::before { display: none; } }
-#curfew-pause .nd.own { opacity: 1; border-color: #34425a; border-left-color: #c9d4e6;
-              background: rgba(201,212,230,0.075); }
+#curfew-pause .nd.own { opacity: 1; border-color: color-mix(in srgb, var(--accent) 44%, #34425a);
+              border-left-color: var(--accent);
+              background: linear-gradient(118deg, color-mix(in srgb, var(--accent) 15%, transparent),
+                          rgba(201,212,230,0.055));
+              box-shadow: inset 0 0 20px rgba(180,202,231,.035); }
 #curfew-pause .nd.own .cc { display: none; }
+#curfew-pause .nd.own .ct::after { content: ' ◆'; color: #e8eef8; }
 /* AFFORDABLE NOW. The one state the eye has to find on a card of 24, so it is the brightest
    edge on the card and it does not depend on a hover the phone cannot make. */
 #curfew-pause .nd.can { opacity: 1; cursor: pointer; border-color: #8a9ab5;
-              border-left-color: #e8eef8; background: rgba(201,212,230,0.045); }
-#curfew-pause .nd.can:hover { border-color: #e8eef8; background: rgba(201,212,230,0.09); }
-#curfew-pause .nd.poor { opacity: .55; }
-#curfew-pause .nd.lock { opacity: .30; }
-/* THE CONTROLS. Three pairs to a row on a wide window (fifteen verbs in five rows, which is
-   what keeps the whole card inside a 780 px window), two under 1180, one on a phone. */
-#curfew-pause dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+              border-left-color: #e8eef8; background: rgba(201,212,230,0.055);
+              box-shadow: 0 0 0 1px rgba(232,238,248,.08), inset 0 0 22px rgba(201,218,241,.035); }
+#curfew-pause .nd.can:hover, #curfew-pause .nd.can:focus-visible { border-color: #e8eef8;
+              background: rgba(201,212,230,0.11); transform: translateY(-1px);
+              box-shadow: 0 5px 16px rgba(0,0,0,.28), 0 0 13px color-mix(in srgb, var(--accent) 28%, transparent); }
+#curfew-pause .nd.poor { opacity: .64; }
+#curfew-pause .nd.lock { opacity: .38; filter: saturate(.58); }
+@media (prefers-reduced-motion: reduce) {
+  #curfew-car-button.active .car-body { animation: none; }
+  #curfew-car-button .car-needle, #curfew-pause .xp > i, #curfew-pause .nd { transition: none; }
+}
+/* THE CONTROLS. Four pairs to a row on a wide window, two under 1180, one on a phone. */
+#curfew-pause dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
               gap: 2px 34px; margin: 0; }
 @media (max-width: 1180px) { #curfew-pause dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { #curfew-pause dl { grid-template-columns: minmax(0, 1fr); gap: 5px; } }
@@ -464,6 +567,12 @@ function hex6(n) {
   return '#' + '000000'.slice(s.length) + s;
 }
 
+// The mini-map is a sampled live surface, so cache its palette once instead of converting
+// region integers into strings on every paint.
+const REGION_HEX = Object.create(null);
+for (const id in REGION_TINT) REGION_HEX[id] = hex6(REGION_TINT[id]);
+const DEFAULT_HEX = hex6(DEFAULT_TINT);
+
 /* -------------------------------------------------------------------- system -- */
 
 export class Hud {
@@ -477,6 +586,9 @@ export class Hud {
     this.lifeCanvas = null; this.lg = null;
     this.srEl = null; this.pauseEl = null;
     this.mapCanvas = null; this.mg = null;
+    this.chrome = null; this.miniCanvas = null; this.miniG = null;
+    this.ammoCanvas = null; this.ammoG = null;
+    this.carBtn = null; this.pauseCarBtn = null;
 
     this.R = RET_MAX; this.dpr = 1;
     this.vw = 1600; this.vh = 900;
@@ -487,6 +599,8 @@ export class Hud {
     this.adsT = 0;
     this.dry = false;
     this.inCar = false;
+    this.ammo = -1; this.reserve = -1; this.mag = 1; this.weaponId = '';
+    this.reloadFrac = -1; this._ammoDirty = true; this._ammoLabel = '';
     this.hp = CFG.player.health.max;
     this.hpMax = CFG.player.health.max;     // the body's own maximum; see _readHpMax()
     this.hpShown = CFG.player.health.max;   // lags hp by READOUT_LEAD_S
@@ -509,15 +623,6 @@ export class Hud {
     // not hp, so the ghost stays where the loss happened no matter what regen does after.
     this.ghosts = new Array(GHOST_POOL);
     for (let i = 0; i < GHOST_POOL; i++) this.ghosts[i] = { live: false, a: 0, b: 0, t: 0 };
-    // Threat marks. Fixed pool, written in place; `paintRel` is what was last DRAWN, which
-    // is how the reticle avoids repainting for a bearing that moved a thousandth of a radian.
-    this.threats = new Array(THREAT_POOL);
-    for (let i = 0; i < THREAT_POOL; i++) {
-      this.threats[i] = { live: false, rel: 0, w: 0, hot: false, paintRel: 99, paintW: -1 };
-    }
-    this.threatN = 0;
-
-    this._threatPainted = 0;
     // Declared here, not grown on first use: the arc's solved circle, rewritten in place.
     this._geom = { cx: 0, cy: 0, r: 0, span: 0, apexY: 0 };
 
@@ -534,7 +639,8 @@ export class Hud {
     this._pausedAtMs = 0;      // performance.now() at the last game:paused true
     this._sinceResume = 0;     // fixed steps since the pause last lifted; see step()
     // The tree's elements, built once in _buildPause() and restated in _refreshTree().
-    this.lvEl = null; this.ptsEl = null;
+    this.lvEl = null; this.ptsEl = null; this.lvlWrap = null;
+    this.xpWrap = null; this.xpFill = null; this.xpEl = null;
     this.nodeEls = null;       // one { node, btn } per NODES row, in NODES order
     // What the map last drew, as numbers a test can hold: rewritten in place by _drawMap().
     this.mapInfo = {
@@ -545,6 +651,17 @@ export class Hud {
     // The travelled wash's own surface, built at the bitmap's resolution and reused. See
     // _washImage(): it is what stops the wash being a string of scalloped discs.
     this._wash = null; this._washG = null; this._washCount = -1;
+
+    // The live local map. Roads are immutable and cached by reference on first paint; every
+    // other read stays lazy. The paint cadence is fixed-step time, never a wall timer.
+    this._miniRoutes = null; this._miniT = 0; this._miniDirty = true;
+    this._miniPaints = 0; this._miniRoads = 0; this._miniPlaces = 0; this._miniCar = false;
+    this._miniCarX = -1; this._miniCarY = -1; this._miniCarAngle = 0;
+
+    // One explicit bearing, requested by one explicit button. No threat-direction wallpaper.
+    this.locateT = 0; this.locatorRel = 0; this.locatorDistance = -1;
+    this.locatorLabel = ''; this.locatorMeters = -1;
+    this.carExists = false; this._carBearingPaint = 99;
 
     this.srT = 0; this.srLast = '';
     this._dirty = true;
@@ -584,9 +701,46 @@ export class Hud {
 
     document.body.appendChild(root);
 
-    // The screen-reader line is a SIBLING of the aria-hidden layer, and carries the class
-    // tests/progression.mjs skips (/sr-only|visually-hidden/). It is the one place in CURFEW
-    // where words are allowed during play, because nobody sees them.
+    const chrome = document.createElement('div');
+    chrome.id = 'curfew-chrome';
+    chrome.hidden = true;                 // the title owns the frame until play actually starts
+
+    const mini = document.createElement('canvas');
+    mini.id = 'curfew-mini';
+    mini.setAttribute('aria-hidden', 'true');
+    chrome.appendChild(mini);
+
+    const ammo = document.createElement('canvas');
+    ammo.id = 'curfew-ammo';
+    ammo.setAttribute('role', 'img');
+    ammo.setAttribute('aria-label', 'Ammunition');
+    chrome.appendChild(ammo);
+
+    const carButton = document.createElement('button');
+    carButton.id = 'curfew-car-button';
+    carButton.type = 'button';
+    carButton.disabled = true;
+    carButton.setAttribute('aria-label', 'Locate car');
+    carButton.setAttribute('aria-pressed', 'false');
+    carButton.setAttribute('aria-keyshortcuts', 'L');
+    const carBody = document.createElement('span');
+    carBody.className = 'car-body';
+    carBody.setAttribute('aria-hidden', 'true');
+    const carNeedle = document.createElement('span');
+    carNeedle.className = 'car-needle';
+    carNeedle.setAttribute('aria-hidden', 'true');
+    carButton.appendChild(carNeedle);
+    carButton.appendChild(carBody);
+    carButton.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+    carButton.addEventListener('click', (e) => {
+      e.stopPropagation(); e.preventDefault(); this._locateCar();
+    });
+    chrome.appendChild(carButton);
+    document.body.appendChild(chrome);
+
+    // The screen-reader line is a SIBLING of the aria-hidden layer. Its own id selector clips
+    // it to one pixel; the HUD audit verifies computed geometry instead of trusting a class.
+    // It is the one place in CURFEW where words are allowed during play, because nobody sees it.
     const sr = document.createElement('div');
     sr.id = 'curfew-sr';
     sr.className = 'sr-only';
@@ -597,10 +751,13 @@ export class Hud {
 
     this.root = root; this.vig = vig; this.canvas = canvas; this.srEl = sr;
     this.lifeCanvas = life;
+    this.chrome = chrome; this.miniCanvas = mini; this.ammoCanvas = ammo; this.carBtn = carButton;
     // NOT `desynchronized`: this canvas is only repainted when something moved, and a
     // low-latency surface is allowed to present a frame that was never redrawn.
     this.g = canvas.getContext('2d', { alpha: true });
     this.lg = life.getContext('2d', { alpha: true });
+    this.miniG = mini.getContext('2d', { alpha: true });
+    this.ammoG = ammo.getContext('2d', { alpha: true });
 
     this._buildPause();
     this.resize();
@@ -613,19 +770,22 @@ export class Hud {
   ready() {
     return !this.enabled
       || !!(this.canvas && this.g && this.lifeCanvas && this.lg && this.root && this.pauseEl
-        && this.mapCanvas && this.mg);
+        && this.mapCanvas && this.mg && this.chrome && this.miniCanvas && this.miniG
+        && this.ammoCanvas && this.ammoG && this.carBtn && this.pauseCarBtn);
   }
 
   dispose() {
     for (const off of this._unsub) { try { off(); } catch (e) { void e; } }
     this._unsub.length = 0;
     if (this._onResize) window.removeEventListener('resize', this._onResize);
-    for (const el of [this.root, this.srEl, this.pauseEl, document.getElementById('curfew-hud-css')]) {
+    for (const el of [this.root, this.chrome, this.srEl, this.pauseEl, document.getElementById('curfew-hud-css')]) {
       if (el && el.parentNode) el.parentNode.removeChild(el);
     }
     this.root = this.vig = this.canvas = this.g = this.srEl = this.pauseEl = null;
     this.lifeCanvas = this.lg = null;
     this.mapCanvas = this.mg = null;
+    this.chrome = this.miniCanvas = this.miniG = null;
+    this.ammoCanvas = this.ammoG = this.carBtn = this.pauseCarBtn = null;
   }
 
   resize() {
@@ -652,6 +812,18 @@ export class Hud {
       this.lifeCanvas.height = Math.round(this.lifeH * this.dpr);
       this.lg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       this._lifeDirty = true;
+    }
+    if (this.miniCanvas) {
+      this.miniCanvas.width = Math.round(MINI_PX * this.dpr);
+      this.miniCanvas.height = Math.round(MINI_PX * this.dpr);
+      this.miniG.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this._miniDirty = true;
+    }
+    if (this.ammoCanvas) {
+      this.ammoCanvas.width = Math.round(AMMO_W * this.dpr);
+      this.ammoCanvas.height = Math.round(AMMO_H * this.dpr);
+      this.ammoG.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this._ammoDirty = true;
     }
     // The map's backing store follows the DPR; it is redrawn at the next show, not here.
     if (this.mapCanvas) {
@@ -877,17 +1049,49 @@ export class Hud {
     // level 1 and a level-1 player can read what every tier will buy.
     const tree = el('div', 'tree');
     const lvl = el('div', 'lvl');
+    this.lvlWrap = lvl;
     this.lvEl = el('span', '', 'Level 1');
     // The points span carries its own separator so the line READS as one sentence in
     // textContent too ("Level 10 · 2 points", not "Level 102 points").
     this.ptsEl = el('span', 'pts', '');
     lvl.appendChild(this.lvEl); lvl.appendChild(this.ptsEl);
+    // The production cursor exists here, on the surface the player can actually point at.
+    // It arms the bearing BEFORE asking for lock, so even a slow/refused lock loses nothing.
+    const pauseCar = el('button', 'pause-car');
+    pauseCar.type = 'button';
+    pauseCar.disabled = true;
+    pauseCar.setAttribute('aria-label', 'Locate car and return to game');
+    pauseCar.setAttribute('aria-pressed', 'false');
+    pauseCar.setAttribute('aria-keyshortcuts', 'L');
+    const pauseCarBody = el('span', 'car-body');
+    pauseCarBody.setAttribute('aria-hidden', 'true');
+    pauseCar.appendChild(pauseCarBody);
+    pauseCar.addEventListener('click', (e) => {
+      e.stopPropagation(); e.preventDefault();
+      if (this._locateCar()) this._resume();
+    });
+    lvl.appendChild(pauseCar);
+    this.pauseCarBtn = pauseCar;
+    const xp = el('div', 'xp');
+    xp.setAttribute('role', 'progressbar');
+    xp.setAttribute('aria-label', 'Experience toward next level');
+    xp.setAttribute('aria-valuemin', '0');
+    this.xpFill = el('i', '');
+    this.xpEl = el('span', '', '0 / 275 XP');
+    xp.appendChild(this.xpFill); xp.appendChild(this.xpEl);
+    this.xpWrap = xp;
     tree.appendChild(lvl);
+    // Keep the rail outside .lvl: existing readers intentionally treat .lvl.textContent as
+    // the one exact level/points sentence. The rail is its own second line, visually and in
+    // the accessibility tree.
+    tree.appendChild(xp);
 
     this.nodeEls = [];
     for (let b = 0; b < BRANCHES.length; b++) {
       const br = BRANCHES[b];
       const row = el('div', 'br');
+      row.dataset.branch = br.id;
+      row.style.setProperty('--accent', hex6(br.tint));
       row.appendChild(el('div', 'bn', br.name));
       const nodes = [];
       for (let i = 0; i < NODES.length; i++) if (NODES[i].branch === br.id) nodes.push(NODES[i]);
@@ -897,20 +1101,27 @@ export class Hud {
         const btn = el('button', 'nd lock');
         btn.type = 'button';
         btn.dataset.node = n.id;
-        const name = el('span', 'cn', n.name);
-        name.appendChild(el('span', 'cc', n.cost === 1 ? 'one point' : n.cost + ' points'));
+        btn.style.setProperty('--accent', hex6(br.tint));
+        const name = el('span', 'cn');
+        name.appendChild(el('span', '', n.name));
+        const meta = el('span', 'cm');
+        meta.appendChild(el('span', 'ct', ['I', 'II', 'III', 'IV'][n.tier]));
+        meta.appendChild(el('span', 'cc', n.cost === 1 ? 'one point' : n.cost + ' points'));
+        name.appendChild(meta);
         btn.appendChild(name);
         btn.appendChild(el('span', 'cl', n.line));
         // The click buys, when it can; the press never resumes (the block above stops it).
         btn.addEventListener('click', (e) => {
           e.stopPropagation(); e.preventDefault();
           const prog = this.ctx.systems.get('progress');
+          let bought = false;
           if (prog && typeof prog.buy === 'function' && typeof prog.canBuy === 'function'
-            && prog.canBuy(n.id)) prog.buy(n.id);
+            && prog.canBuy(n.id)) bought = prog.buy(n.id) === true;
           this._refreshTree();
+          if (bought) this._celebrateNode(n.id);
         });
         row.appendChild(btn);
-        this.nodeEls.push({ node: n, btn });
+        this.nodeEls.push({ node: n, btn, row });
       }
       tree.appendChild(row);
     }
@@ -997,6 +1208,7 @@ export class Hud {
       this.pauseEl.hidden = !v;
       if (v) { this._refreshTree(); this._drawMap(); }
     }
+    if (this.chrome) this.chrome.hidden = v || !this.ctx.playing;
     this._dirty = true;
   }
 
@@ -1015,11 +1227,26 @@ export class Hud {
   _refreshTree() {
     const prog = this.ctx.systems.get('progress');
     if (!prog || !this.lvEl || !this.nodeEls) return;
+    const car = this.ctx.systems.get('car');
+    this._setLocatorDisabled(!(car && car.exists) || !!(this.ctx.shared && this.ctx.shared.inCar));
     const owned = typeof prog.ownedSet === 'function' ? prog.ownedSet() : null;
     const level = typeof prog.level === 'number' ? prog.level : 1;
     const points = typeof prog.points === 'number' ? prog.points : 0;
     this.lvEl.textContent = 'Level ' + level;
     this.ptsEl.textContent = points <= 0 ? '' : ' · ' + (points === 1 ? 'one point' : points + ' points');
+    if (this.xpFill && this.xpEl) {
+      const total = typeof prog.total === 'function' ? prog.total() : 0;
+      const from = xpForLevel(level), to = xpForLevel(level + 1);
+      const here = Math.max(0, total - from), span = Math.max(1, to - from);
+      const frac = levelFrac(total);
+      this.xpFill.style.width = (frac * 100).toFixed(1) + '%';
+      this.xpEl.textContent = here + ' / ' + span + ' XP';
+      if (this.xpWrap) {
+        this.xpWrap.setAttribute('aria-valuemax', String(span));
+        this.xpWrap.setAttribute('aria-valuenow', String(Math.min(span, here)));
+        this.xpWrap.setAttribute('aria-valuetext', here + ' of ' + span + ' experience');
+      }
+    }
     for (let i = 0; i < this.nodeEls.length; i++) {
       const { node: n, btn } = this.nodeEls[i];
       const own = !!(owned && owned.has(n.id));
@@ -1038,6 +1265,34 @@ export class Hud {
         cls = open ? 'nd poor' : 'nd lock';
       }
       if (btn.className !== cls) btn.className = cls;
+    }
+  }
+
+  /** Pause-time purchase impact. CSS owns the motion; no timer enters game logic. */
+  _celebrateNode(id) {
+    if (!this.nodeEls) return;
+    for (let i = 0; i < this.nodeEls.length; i++) {
+      const q = this.nodeEls[i];
+      if (q.node.id !== id) continue;
+      // Animation is presentation, never node state. In particular, className must remain
+      // exactly `nd own`: save/debug/test readers all use those four mutually exclusive
+      // classes as the card's truth. WAAPI supplies the same tactile beat without inventing
+      // a fifth state, and reduced-motion players get the immediate state change alone.
+      if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) break;
+      if (q.btn.animate) q.btn.animate([
+        { transform: 'scale(.96)', boxShadow: '0 0 0 0 transparent' },
+        { transform: 'scale(1.025)', boxShadow: '0 0 0 5px color-mix(in srgb, var(--accent) 24%, transparent), 0 0 30px color-mix(in srgb, var(--accent) 46%, transparent)', offset: 0.44 },
+        { transform: 'scale(1)', boxShadow: 'inset 0 0 20px rgba(180,202,231,.035)' },
+      ], { duration: 620, easing: 'cubic-bezier(.17,.84,.32,1)' });
+      if (q.row.animate) q.row.animate([
+        { filter: 'brightness(1.65)' }, { filter: 'brightness(1)' },
+      ], { duration: 620, easing: 'ease-out' });
+      if (this.lvlWrap && this.lvlWrap.animate) this.lvlWrap.animate([
+        { transform: 'translateX(0)', filter: 'brightness(1)' },
+        { transform: 'translateX(3px)', filter: 'brightness(1.65)', offset: 0.35 },
+        { transform: 'translateX(0)', filter: 'brightness(1)' },
+      ], { duration: 460, easing: 'ease-out' });
+      break;
     }
   }
 
@@ -1494,6 +1749,249 @@ export class Hud {
     I.drawn++;
   }
 
+  /* ------------------------------------------------------ live instruments -- */
+
+  _setLocatorDisabled(disabled) {
+    const v = !!disabled;
+    if (this.carBtn && this.carBtn.disabled !== v) this.carBtn.disabled = v;
+    if (this.pauseCarBtn && this.pauseCarBtn.disabled !== v) this.pauseCarBtn.disabled = v;
+  }
+
+  _setLocatorActive(active) {
+    const v = !!active;
+    if (this.carBtn) {
+      this.carBtn.classList.toggle('active', v);
+      this.carBtn.setAttribute('aria-pressed', v ? 'true' : 'false');
+    }
+    if (this.pauseCarBtn) {
+      this.pauseCarBtn.classList.toggle('active', v);
+      this.pauseCarBtn.setAttribute('aria-pressed', v ? 'true' : 'false');
+    }
+  }
+
+  /** The icon button is the whole request: one press arms one temporary car bearing. */
+  _locateCar() {
+    const car = this.ctx.systems.get('car');
+    const inCar = !!(this.ctx.shared && this.ctx.shared.inCar);
+    if (!car || !car.exists || inCar) return false;
+    this.locateT = LOCATE_LIFE;
+    this._setLocatorActive(true);
+    this._dirty = true;
+    this._miniDirty = true;
+    return true;
+  }
+
+  _syncChrome() {
+    if (!this.chrome) return;
+    const show = !!this.ctx.playing && !this.paused;
+    const hidden = !show;
+    if (this.chrome.hidden !== hidden) this.chrome.hidden = hidden;
+  }
+
+  /** Read the car lazily. The bearing uses the same camera basis as a damage arc. */
+  _readCar() {
+    const car = this.ctx.systems.get('car');
+    const player = this.ctx.systems.get('player');
+    const cam = this.ctx.systems.get('camera');
+    const exists = !!(car && car.exists && Number.isFinite(car.x) && Number.isFinite(car.z));
+    if (exists !== this.carExists) {
+      this.carExists = exists;
+      this._miniDirty = true;
+    }
+    this._setLocatorDisabled(!exists || this.inCar);
+    if (!exists || !player || !player.pos || !cam || this.inCar) {
+      this.locatorDistance = -1;
+      this.locatorMeters = -1;
+      this.locatorLabel = '';
+      if (this.locateT > 0) {
+        this.locateT = 0;
+        this._setLocatorActive(false);
+        this._dirty = true;
+      }
+      return;
+    }
+
+    const dx = car.x - player.pos.x, dz = car.z - player.pos.z;
+    const d = Math.hypot(dx, dz) || 0.0001;
+    const sx = dx / d, sz = dz / d;
+    const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw);
+    const rel = Math.atan2(-sx * fz + sz * fx, sx * fx + sz * fz);
+    this.locatorRel = rel;
+    this.locatorDistance = d;
+    const metres = Math.max(0, Math.round(d));
+    if (metres !== this.locatorMeters) {
+      this.locatorMeters = metres;
+      this.locatorLabel = String(metres);
+    }
+    if (this.locateT > 0 && this.carBtn && Math.abs(rel - this._carBearingPaint) > 0.012) {
+      this._carBearingPaint = rel;
+      this.carBtn.style.setProperty('--bearing', (rel / DEG).toFixed(1) + 'deg');
+    }
+  }
+
+  /**
+   * A local, player-up map. It deliberately carries no labels: the pause map owns county
+   * knowledge; this one answers only where the road, a nearby place and the car are now.
+   */
+  _paintMini() {
+    const g = this.miniG;
+    const player = this.ctx.systems.get('player');
+    const cam = this.ctx.systems.get('camera');
+    if (!g || !player || !player.pos || !cam) return;
+    const roads = this.ctx.systems.get('roads');
+    const places = this.ctx.systems.get('places');
+    const prog = this.ctx.systems.get('progress');
+    const car = this.ctx.systems.get('car');
+    if (!this._miniRoutes && roads && typeof roads.routePolylines === 'function') {
+      this._miniRoutes = roads.routePolylines();
+    }
+
+    const S = MINI_PX, c = S * 0.5, rim = c - 7;
+    const scale = rim / MINI_RANGE;
+    const px = player.pos.x, pz = player.pos.z;
+    const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw);
+    const rx = -fz, rz = fx;
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    g.clearRect(0, 0, S, S);
+    g.save();
+    g.beginPath(); g.arc(c, c, rim, 0, TAU); g.clip();
+    g.fillStyle = 'rgba(5,8,12,0.84)'; g.fillRect(0, 0, S, S);
+
+    // Two unlabelled distance rings keep local scale readable without a legend.
+    g.strokeStyle = 'rgba(186,204,226,0.095)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(c, c, rim * 0.5, 0, TAU); g.stroke();
+    g.beginPath(); g.arc(c, c, rim * 0.78, 0, TAU); g.stroke();
+
+    this._miniRoads = 0;
+    const routes = this._miniRoutes;
+    const meta = roads && Array.isArray(roads.routes) ? roads.routes : null;
+    if (Array.isArray(routes)) {
+      g.lineJoin = 'round'; g.lineCap = 'round';
+      for (let pass = 0; pass < 2; pass++) {
+        for (let r = 0; r < routes.length; r++) {
+          const pl = routes[r];
+          if (!pl || pl.length < 2) continue;
+          const loop = !meta || !meta[r] || meta[r].kind === 'asphalt';
+          if (pass === 0 && !loop) continue;
+          g.strokeStyle = pass === 0 ? 'rgba(3,5,8,0.84)' : 'rgba(205,219,238,0.58)';
+          g.lineWidth = pass === 0 ? 4.6 : (loop ? 1.7 : 1.0);
+          g.setLineDash(pass === 1 && !loop ? [3, 3] : []);
+          g.beginPath();
+          for (let i = 0; i < pl.length; i++) {
+            const dx = pl[i].x - px, dz = pl[i].z - pz;
+            const x = c + (dx * rx + dz * rz) * scale;
+            const y = c - (dx * fx + dz * fz) * scale;
+            if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+          }
+          g.stroke();
+          if (pass === 1) this._miniRoads++;
+        }
+      }
+      g.setLineDash([]);
+    }
+
+    // Nearby destinations, no names. Hollow = waiting, solid = claimed.
+    const found = places && places.found && typeof places.found.has === 'function' ? places.found
+      : (prog && prog.found && typeof prog.found.has === 'function' ? prog.found : null);
+    const claimedA = places && places.claimed && typeof places.claimed.has === 'function' ? places.claimed : null;
+    const claimedB = prog && prog.claimed && typeof prog.claimed.has === 'function' ? prog.claimed : null;
+    this._miniPlaces = 0;
+    for (let i = 0; i < MAJORS.length; i++) {
+      const d = MAJORS[i], dx = d.x - px, dz = d.z - pz;
+      if (dx * dx + dz * dz > MINI_RANGE * MINI_RANGE) continue;
+      const x = c + (dx * rx + dz * rz) * scale;
+      const y = c - (dx * fx + dz * fz) * scale;
+      const claimed = !!((claimedA && claimedA.has(d.id)) || (claimedB && claimedB.has(d.id)));
+      const known = claimed || !!(found && found.has(d.id));
+      g.globalAlpha = claimed ? 1 : (known ? 0.84 : 0.38);
+      g.strokeStyle = claimed ? (REGION_HEX[d.region] || DEFAULT_HEX) : INK;
+      g.fillStyle = g.strokeStyle; g.lineWidth = claimed ? 1.8 : 1.1;
+      g.beginPath();
+      g.moveTo(x, y - 4.2); g.lineTo(x + 4.2, y); g.lineTo(x, y + 4.2); g.lineTo(x - 4.2, y);
+      g.closePath();
+      if (claimed) g.fill(); else g.stroke();
+      this._miniPlaces++;
+    }
+    g.globalAlpha = 1;
+
+    // The car only lives on the mini-map while it is inside local range. Beyond that, the
+    // explicit button is the one directional surface and no always-on arrow competes with it.
+    this._miniCar = false; this._miniCarX = -1; this._miniCarY = -1; this._miniCarAngle = 0;
+    if (car && car.exists && Number.isFinite(car.x) && Number.isFinite(car.z)) {
+      const dx = car.x - px, dz = car.z - pz;
+      if (dx * dx + dz * dz <= MINI_RANGE * MINI_RANGE) {
+        const x = c + (dx * rx + dz * rz) * scale;
+        const y = c - (dx * fx + dz * fz) * scale;
+        g.save(); g.translate(x, y);
+        // Canvas rotates clockwise in screen space, while positive CURFEW yaw turns the
+        // world-forward vector toward screen-left.  The player-up relative angle therefore
+        // has the opposite sign from the tempting `car.heading - cam.yaw` expression.
+        const carAngle = cam.yaw - (Number.isFinite(car.heading) ? car.heading : 0);
+        g.rotate(carAngle);
+        g.fillStyle = INK; g.strokeStyle = SHADE; g.lineWidth = 3;
+        g.strokeRect(-3.1, -5.2, 6.2, 10.4); g.fillRect(-2.3, -4.4, 4.6, 8.8);
+        g.restore(); this._miniCar = true; this._miniCarX = x; this._miniCarY = y;
+        this._miniCarAngle = carAngle;
+      }
+    }
+
+    // The player never moves off the centre: the county rotates under the arrow.
+    g.fillStyle = INK; g.strokeStyle = SHADE; g.lineWidth = 3.4;
+    g.beginPath(); g.moveTo(c, c - 8); g.lineTo(c + 5, c + 5.5); g.lineTo(c, c + 3);
+    g.lineTo(c - 5, c + 5.5); g.closePath(); g.stroke(); g.fill();
+    g.restore();
+    g.strokeStyle = 'rgba(205,219,238,0.42)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(c, c, rim + 0.5, 0, TAU); g.stroke();
+    this._miniPaints++;
+    this._miniDirty = false;
+  }
+
+  /** Magazine / reserve, plus a reload clock and a physical row of magazine ticks. */
+  _paintAmmo() {
+    const g = this.ammoG;
+    if (!g) return;
+    const W = AMMO_W, H = AMMO_H;
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = 'rgba(4,7,11,0.70)';
+    g.beginPath(); g.moveTo(18, 3); g.lineTo(W - 2, 3); g.lineTo(W - 2, H - 10);
+    g.lineTo(W - 12, H - 2); g.lineTo(4, H - 2); g.lineTo(4, 18); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(198,214,234,0.30)'; g.lineWidth = 1; g.stroke();
+
+    // A cartridge silhouette makes the two numbers ammunition before either is read.
+    g.strokeStyle = INK; g.lineWidth = 1.3; g.globalAlpha = this.ammo <= 0 ? 0.42 : 0.78;
+    g.beginPath(); g.roundRect(13, 17, 8, 25, 3); g.stroke();
+    g.beginPath(); g.moveTo(13, 22); g.lineTo(21, 22); g.stroke();
+    g.globalAlpha = 1;
+
+    g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+    g.font = '700 30px ui-monospace, Consolas, monospace';
+    g.fillStyle = this.ammo <= 0 ? 'rgba(232,238,248,0.98)' : INK;
+    g.fillText(String(Math.max(0, this.ammo)), 31, 39);
+    g.font = '500 12px ui-monospace, Consolas, monospace';
+    g.fillStyle = 'rgba(201,214,232,0.68)';
+    g.fillText('/ ' + Math.max(0, this.reserve), 86, 38);
+
+    const segments = 8;
+    const live = Math.ceil(clamp01(this.ammo / Math.max(1, this.mag)) * segments);
+    for (let i = 0; i < segments; i++) {
+      g.fillStyle = i < live ? 'rgba(218,229,244,0.78)' : 'rgba(95,112,136,0.20)';
+      g.fillRect(31 + i * 12, 48, 8, i < live ? 3 : 2);
+    }
+    if (this.reloadFrac >= 0) {
+      g.strokeStyle = 'rgba(232,238,248,0.92)'; g.lineWidth = 2;
+      g.beginPath(); g.arc(17, 29.5, 14, -Math.PI * 0.5, -Math.PI * 0.5 + TAU * this.reloadFrac); g.stroke();
+    }
+    const label = (this.weaponId || 'Weapon') + ': ' + Math.max(0, this.ammo)
+      + ' in magazine, ' + Math.max(0, this.reserve) + ' reserve'
+      + (this.reloadFrac >= 0 ? ', reloading' : '');
+    if (label !== this._ammoLabel && this.ammoCanvas) {
+      this._ammoLabel = label;
+      this.ammoCanvas.setAttribute('aria-label', label);
+    }
+    this._ammoDirty = false;
+  }
+
   /* -------------------------------------------------------------------- loop -- */
 
   /**
@@ -1521,6 +2019,11 @@ export class Hud {
     if (this._sinceResume > MENU_ARM_STEPS && inp && inp.pressed && inp.pressed('menu')
       && !this.paused && document.pointerLockElement && document.exitPointerLock) {
       document.exitPointerLock();
+    }
+    // KeyL is not a private HUD listener. It is the canonical carlocate action, latched by
+    // engine/input.js and consumed here on the same fixed-step edge as torch/menu.
+    if (inp && inp.pressed && inp.pressed('carlocate') && !this.paused && this.ctx.playing) {
+      this._locateCar();
     }
 
     for (let i = 0; i < MARK_POOL; i++) {
@@ -1582,6 +2085,19 @@ export class Hud {
     if (Math.abs(this.hpShown - this._lifePaintedHp) > LIFE_EPS) this._lifeDirty = true;
     this.restoreT += dt;
 
+    // The local map is deliberately sampled rather than painted at the simulation rate.
+    // Thirty-hertz geography keeps player-up yaw fluid while the road net stays off hot frames.
+    this._miniT -= dt;
+    if (this._miniT <= 0) {
+      this._miniT = MINI_PERIOD;
+      this._miniDirty = true;
+    }
+    if (this.locateT > 0) {
+      this.locateT = Math.max(0, this.locateT - dt);
+      this._dirty = true;                 // the requested bearing breathes while it exists
+      if (this.locateT === 0) this._setLocatorActive(false);
+    }
+
     this.srT += dt;
   }
 
@@ -1594,8 +2110,13 @@ export class Hud {
     if (this.paused && this.pauseEl && this.pauseEl.hidden
       && (this._lockHeld || performance.now() - this._pausedAtMs >= CARD_LATE_MS)) this.pause(true);
 
+    this._syncChrome();
     this._readWeapon();
-    this._readThreats();
+    this._readCar();
+    if (!this.paused && this.ctx.playing) {
+      if (this._miniDirty) this._paintMini();
+      if (this._ammoDirty) this._paintAmmo();
+    }
     this._paintVignette();
     this._paintLife();
     this._speak();
@@ -1615,92 +2136,33 @@ export class Hud {
     const sh = this.ctx.shared;
     const car = !!(sh && sh.inCar);
     if (car !== this.inCar) { this.inCar = car; this._dirty = true; }
-    if (!w) { this.conePx = 0; return; }
+    if (!w) {
+      this.conePx = 0;
+      if (this.ammo !== 0 || this.reserve !== 0 || this.weaponId) {
+        this.ammo = 0; this.reserve = 0; this.mag = 1; this.weaponId = '';
+        this.reloadFrac = -1; this._ammoDirty = true;
+      }
+      return;
+    }
     this.cone = typeof w.spreadDeg === 'number' ? w.spreadDeg : this.cone;
     // ADS fades the crosshair out, so a change in it must repaint even at a steady cone.
     const ads = typeof w.adsT === 'number' ? w.adsT : 0;
     if (Math.abs(ads - this.adsT) > 0.004) { this.adsT = ads; this._dirty = true; }
     const dry = (w.ammo | 0) <= 0 && !w.reloading;
     if (dry !== this.dry) { this.dry = dry; this._dirty = true; }
+    const ammo = Math.max(0, w.ammo | 0);
+    const reserve = Math.max(0, w.reserve | 0);
+    const mag = Math.max(1, (w.def && w.def.mag) | 0);
+    const weaponId = w.def && (w.def.name || w.def.id) ? String(w.def.name || w.def.id) : '';
+    const reload = w.reloading && typeof w.reloading.t === 'number'
+      ? clamp01(w.reloading.t / Math.max(0.001, Number(w.reloading.dur) || 1)) : -1;
+    if (ammo !== this.ammo || reserve !== this.reserve || mag !== this.mag
+      || weaponId !== this.weaponId || Math.abs(reload - this.reloadFrac) > 0.01) {
+      this.ammo = ammo; this.reserve = reserve; this.mag = mag;
+      this.weaponId = weaponId; this.reloadFrac = reload;
+      this._ammoDirty = true;
+    }
     this.conePx = this._conePx(this.cone);
-  }
-
-  /**
-   * WHAT IS AT YOUR BACK, refreshed every presented frame.
-   *
-   * Eleven of the thirteen hits in the first playtest came from behind him and every one of
-   * them was legally telegraphed — where he could not see it. This is the only readout in
-   * the file that answers a question the camera cannot, and it is deliberately narrow:
-   *
-   *   - only bodies that have committed to you (alerted, aware, or mid-swing),
-   *   - only inside THREAT_R,
-   *   - only OUTSIDE your forward cone.
-   *
-   * That last clause is what stops it being a radar, and it is also the lesson: the mark
-   * deletes itself the instant you turn toward it, so "turn around" is taught by the mark's
-   * own behaviour instead of by a caption.
-   *
-   * Reads siblings lazily, allocates nothing, and touches at most 46 pooled records
-   * (enemies/species.js POOL sums to 46).
-   */
-  _readThreats() {
-    const prevN = this.threatN;
-    for (let i = 0; i < THREAT_POOL; i++) this.threats[i].live = false;
-    this.threatN = 0;
-
-    const en = this.ctx.systems.get('enemies');
-    const player = this.ctx.systems.get('player');
-    const cam = this.ctx.systems.get('camera');
-    const list = en ? (typeof en.list === 'function' ? en.list() : en.all) : null;
-    if (list && player && cam && !player.dead && !this.inCar) {
-      // Same aim basis the damage arc uses: forward from the camera's yaw, screen-right
-      // derived from it rather than assumed. camera.js:149.
-      const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw);
-      const px = player.pos.x, pz = player.pos.z;
-      for (let i = 0; i < list.length; i++) {
-        const e = list[i];
-        if (!e || !e.alive || !e.pos) continue;
-        const st = e.state;
-        // A body running away, dormant or dying is not a threat, and marking it would make
-        // the mark mean "an enemy exists", which is exactly the wallpaper to avoid.
-        if (st === 'flee' || st === 'dead' || st === 'dormant') continue;
-        const committed = !!e.alerted || (e.aware | 0) > 0
-          || st === 'approach' || st === 'windup' || st === 'attack';
-        if (!committed) continue;
-        const dx = e.pos.x - px, dz = e.pos.z - pz;
-        const d = Math.hypot(dx, dz);
-        if (d > THREAT_R || d < 1e-4) continue;
-        const sx = dx / d, sz = dz / d;
-        const rel = Math.atan2(-sx * fz + sz * fx, sx * fx + sz * fz);
-        if (Math.abs(rel) < THREAT_CONE) continue;      // you are looking straight at it
-        const w = clamp01((THREAT_R - d) / (THREAT_R - THREAT_NEAR));
-        let slot = null;
-        if (this.threatN < THREAT_POOL) slot = this.threats[this.threatN++];
-        else {
-          // Full: the nearest four win, so a pack never buries the one about to bite.
-          let lo = 2, li = -1;
-          for (let k = 0; k < THREAT_POOL; k++) {
-            if (this.threats[k].w < lo) { lo = this.threats[k].w; li = k; }
-          }
-          if (li < 0 || lo >= w) continue;
-          slot = this.threats[li];
-        }
-        slot.live = true; slot.rel = rel; slot.w = w;
-        slot.hot = st === 'windup' || st === 'attack';
-      }
-    }
-
-    // Repaint only for a change the eye could resolve — a bearing that moved a thousandth of
-    // a radian is not a change, and a mark in its wind-up throb animates and always is.
-    let changed = this.threatN !== prevN;
-    for (let i = 0; i < THREAT_POOL && !changed; i++) {
-      const q = this.threats[i];
-      if (!q.live) continue;
-      if (q.hot || Math.abs(q.rel - q.paintRel) > 0.02 || Math.abs(q.w - q.paintW) > 0.02) {
-        changed = true;
-      }
-    }
-    if (changed) this._dirty = true;
   }
 
   /** donor: cinderbloom src/ui/hud.js:1392-1394, verbatim geometry. */
@@ -1991,39 +2453,40 @@ export class Hud {
       g.stroke();
     }
 
-    /* ---- what is at your back, for as long as it is there -------------------- */
-    // Outside the damage arc's ring, so the two never sit on top of each other: the arc is a
-    // thing that happened, these are things that are still happening.
-    const tr = R * 0.42;
-    for (let i = 0; i < THREAT_POOL; i++) {
-      const q = this.threats[i];
-      if (!q.live) continue;
-      q.paintRel = q.rel; q.paintW = q.w;
-      const mid = q.rel - Math.PI * 0.5;      // canvas 0 rad is screen right; ahead is -90
-      // A body in its wind-up throbs. That is the 320 ms he was never shown, moved to where
-      // he can see it — and it is the only state change this mark makes, so a throb means
-      // exactly one thing.
-      const throb = q.hot ? 0.70 + 0.30 * Math.sin(this._t * TAU * THREAT_HZ) : 1;
-      const al = (THREAT_A[0] + (THREAT_A[1] - THREAT_A[0]) * q.w) * throb;
-      const len = (5.0 + 5.5 * q.w) * u * (q.hot ? 1.3 : 1);
-      const wing = (4.6 + 3.2 * q.w) * u;
+    /* ---- one requested car bearing ------------------------------------------ */
+    // The old always-on enemy chevrons lived here. They have deliberately been removed: a
+    // stream of identical, unexplained arrows was not information. This arrow exists only
+    // after the car-icon press, lasts LOCATE_LIFE seconds, and shares its pulse with that
+    // icon. One mark, one cause, one meaning.
+    if (this.locateT > 0 && this.carExists && this.locatorDistance >= 0 && !this.inCar) {
+      const mid = this.locatorRel - Math.PI * 0.5;
       const ca = Math.cos(mid), sa = Math.sin(mid);
-      const rIn = tr, rOut = tr + len;
+      const r = R * 0.39;
+      const pulse = 0.88 + 0.12 * Math.sin(this._t * TAU * 2.2);
+      const fade = clamp01(this.locateT / 0.7);
+      const tip = r + 17 * u * pulse, base = r + 2 * u, wing = 6.5 * u;
       for (let pass = 0; pass < 2; pass++) {
-        g.globalAlpha = al * (pass === 0 ? 0.70 : 1);
+        g.globalAlpha = fade * (pass === 0 ? 0.64 : 0.96);
         g.strokeStyle = pass === 0 ? SHADE : INK;
-        g.lineWidth = (pass === 0 ? 4.6 : 2.0) * u;
-        g.lineCap = 'butt';
+        g.fillStyle = pass === 0 ? SHADE : INK;
+        g.lineWidth = (pass === 0 ? 4.8 : 1.8) * u;
+        g.lineJoin = 'round';
         g.beginPath();
-        // A chevron with its point OUTWARD: the shape itself is an arrow at the bearing.
-        g.moveTo(c + ca * rIn - sa * wing, c + sa * rIn + ca * wing);
-        g.lineTo(c + ca * rOut, c + sa * rOut);
-        g.lineTo(c + ca * rIn + sa * wing, c + sa * rIn - ca * wing);
-        g.stroke();
+        g.moveTo(c + ca * tip, c + sa * tip);
+        g.lineTo(c + ca * base - sa * wing, c + sa * base + ca * wing);
+        g.lineTo(c + ca * base + sa * wing, c + sa * base - ca * wing);
+        g.closePath();
+        if (pass === 0) g.stroke(); else g.fill();
       }
+      // An unlabelled number is distance, because it appears at the tip of the car bearing
+      // and nowhere else. Numbers are explicitly allowed during play; prose still is not.
+      g.globalAlpha = fade * 0.90;
+      g.fillStyle = INK;
+      g.font = '600 ' + Math.max(10, Math.round(11 * u)) + 'px ui-monospace, Consolas, monospace';
+      g.textAlign = ca < -0.25 ? 'right' : ca > 0.25 ? 'left' : 'center';
+      g.textBaseline = sa < -0.2 ? 'bottom' : 'top';
+      g.fillText(this.locatorLabel, c + ca * (tip + 8 * u), c + sa * (tip + 8 * u));
     }
-    this._threatPainted = this.threatN;
-
     g.globalAlpha = 1;
   }
 
@@ -2120,15 +2583,8 @@ export class Hud {
     const prog = this.ctx.systems.get('progress');
     const carry = prog && prog.carryStep >= 0
       ? [', carrying a little', ', carrying a good deal', ', carrying a great deal'][prog.carryStep] : '';
-    // The threat marks and the respawn window, in words, for the one reader who cannot see
-    // either. Same rule as the rest of this line: bands, never numbers.
-    let hot = false;
-    for (let i = 0; i < THREAT_POOL; i++) if (this.threats[i].live && this.threats[i].hot) hot = true;
-    const behind = this.threatN <= 0 ? ''
-      : hot ? ', something is about to strike from behind you'
-        : this.threatN > 1 ? ', several things are behind you' : ', something is behind you';
     const shielded = this.invuln > 0 ? ', briefly untouchable' : '';
-    const line = health + ammo + carry + behind + shielded + '.';
+    const line = health + ammo + carry + shielded + '.';
     if (line === this.srLast) return;
     this.srLast = line;
     this.srEl.textContent = line;
@@ -2138,7 +2594,7 @@ export class Hud {
 
   state() {
     let marks = 0, arcs = 0, pulses = 0, grants = 0;
-    let ghosts = 0, ghostSpan = 0, threatsHot = 0;
+    let ghosts = 0, ghostSpan = 0;
     for (let i = 0; i < MARK_POOL; i++) if (this.marks[i].live) marks++;
     for (let i = 0; i < ARC_POOL; i++) if (this.arcs[i].live) arcs++;
     for (let i = 0; i < GHOST_POOL; i++) {
@@ -2149,7 +2605,6 @@ export class Hud {
       // test can assert against "did the readout show him how big that bite was".
       ghostSpan = Math.max(ghostSpan, q.b - q.a);
     }
-    for (let i = 0; i < THREAT_POOL; i++) if (this.threats[i].live && this.threats[i].hot) threatsHot++;
     for (let i = 0; i < PULSE_POOL; i++) {
       const q = this.pulses[i];
       if (!q.live) continue;
@@ -2176,6 +2631,24 @@ export class Hud {
       card: !!(this.pauseEl && !this.pauseEl.hidden), lockHeld: this._lockHeld,
       tree: { own, can, poor, lock, points: this.ptsEl ? this.ptsEl.textContent : '' },
       map: Object.assign({}, this.mapInfo),
+      ammo: {
+        weapon: this.weaponId, magazine: this.ammo, reserve: this.reserve, cap: this.mag,
+        reloading: this.reloadFrac >= 0, reloadFrac: +Math.max(0, this.reloadFrac).toFixed(3),
+      },
+      minimap: {
+        visible: !!(this.chrome && !this.chrome.hidden), paints: this._miniPaints,
+        roads: this._miniRoads, places: this._miniPlaces, car: this._miniCar,
+        carX: +this._miniCarX.toFixed(1), carY: +this._miniCarY.toFixed(1),
+        carAngle: +this._miniCarAngle.toFixed(3), range: MINI_RANGE,
+      },
+      locator: {
+        active: this.locateT > 0,
+        seconds: +this.locateT.toFixed(2),
+        distance: this.locatorDistance < 0 ? -1 : +this.locatorDistance.toFixed(1),
+        bearing: +this.locatorRel.toFixed(3),
+        buttonEnabled: !!(this.carBtn && !this.carBtn.disabled),
+        pauseButtonEnabled: !!(this.pauseCarBtn && !this.pauseCarBtn.disabled),
+      },
       // THE HEALTH READOUT, as numbers a gate can hold on to.
       // `lifeFrac` is the LENGTH of the arc; `lifeAlpha`/`lifeWidth` are the VALUE, and the
       // pair is the whole design: quiet at full, loud near death, never a hue.
@@ -2185,7 +2658,9 @@ export class Hud {
       ghosts, ghostSpan: +ghostSpan.toFixed(3),
       invuln: +this.invuln.toFixed(2), invulnMax: +this.invulnMax.toFixed(2),
       restoring: this.restoreT < RESTORE_LIFE,
-      threats: this.threatN, threatsHot,
+      // Kept as zero-valued compatibility fields for older diagnostic readers. The old
+      // unexplained, always-on threat chevrons are intentionally no longer sampled or drawn.
+      threats: 0, threatsHot: 0,
       canvas: { r: this.R, dpr: this.dpr, lifeH: this.lifeH },
       // The only text this system owns, so a test can assert its content and its invisibility
       // in the same breath.

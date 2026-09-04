@@ -112,6 +112,22 @@ export const STAGED_KINDS = [
  *  has one hue and everything that is not a rationed glow is a value, not a colour. */
 function shade(col, k) { return [col[0] * k, col[1] * k, col[2] * k]; }
 
+/** Lay a cylinder between two points using the public Kit geometry hooks. The staged-site
+ *  kit intentionally has no `strut` convenience method (the wilderness kit is a separate
+ *  implementation), so disabled-car dressing must build its rods explicitly. */
+function rod(k, ax, ay, az, bx, by, bz, r, seg, col) {
+  const dx = bx - ax, dy = by - ay, dz = bz - az;
+  const length = Math.hypot(dx, dy, dz);
+  if (!(length > 0.0001)) return null;
+  const geometry = new THREE.CylinderGeometry(r, r, length, seg, 1, false);
+  geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0),
+    new THREE.Vector3(dx / length, dy / length, dz / length),
+  ));
+  geometry.translate((ax + bx) * 0.5, (ay + by) * 0.5, (az + bz) * 0.5);
+  return k.push(geometry, col);
+}
+
 /** Old steel: warmer than C.metal, and NOT C.rust. See the note in `carShell`. */
 const RUSTED = [0.128, 0.104, 0.086];
 
@@ -213,6 +229,22 @@ function carShell(k, api, lx, lz, yaw, opts) {
   {
     const p = put(0.86, 0);
     s.box(0.10, 0.62, 1.52, p.x, gy + 1.34, p.z, C.glass, yaw, 0, roll);
+  }
+  if (o.disabled) {
+    // Player-facing diagnosis, without HUD copy: the bonnet is reared up, an engine block
+    // is exposed, the windscreen is crossed with metal and the exhaust lies on the earth.
+    // Even the uncanny headlight tableau must read as a dead machine, not a usable-car bait.
+    let p = put(1.35, 0);
+    s.box(1.05, 0.50, 1.34, p.x, gy + 0.96, p.z, shade(C.metal, 0.72), yaw, 0, roll);
+    p = put(2.02, 0);
+    s.box(0.10, 1.30, 1.64, p.x, gy + 1.48, p.z, body, yaw, 0, 0.20 + roll);
+    const a = put(0.83, -0.72), b = put(0.90, 0.72);
+    rod(s, a.x, gy + 1.08, a.z, b.x, gy + 1.62, b.z, 0.035, 4, shade(C.metal, 0.8));
+    const c = put(0.83, 0.72), d = put(0.90, -0.72);
+    rod(s, c.x, gy + 1.08, c.z, d.x, gy + 1.62, d.z, 0.035, 4, shade(C.metal, 0.8));
+    const e0 = put(-1.7, -0.35), e1 = put(-2.9, -0.55);
+    rod(s, e0.x, gy + 0.27, e0.z, e1.x, groundY(api, e1.x, e1.z) + 0.07, e1.z,
+      0.055, 6, shade(C.metal, 0.62));
   }
   for (let i = 0; i < 4; i++) {
     const sx = (i & 1) ? 1.52 : -1.52, sz = (i & 2) ? 0.88 : -0.88;
@@ -692,7 +724,7 @@ export const STAGED_BUILDERS = {
     const k = kits();
     const r = api.rng;
     const yaw = r.range(-0.5, 0.5) + Math.PI * 0.5;   // slewed across, not parked
-    const { gy } = carShell(k, api, -0.6, -1.2, yaw, { rust: true, open: 1.25, wheelOff: true, roll: r.range(-0.10, 0.10) });
+    const { gy } = carShell(k, api, -0.6, -1.2, yaw, { rust: true, open: 1.25, wheelOff: true, disabled: true, roll: r.range(-0.10, 0.10) });
 
     // the boot lid, up
     {
@@ -799,7 +831,7 @@ export const STAGED_BUILDERS = {
   /**
    * HEADLIGHT CAR — "a car with one headlight still burning and something sitting in it".
    *
-   * A car pulled off the road, undamaged, both doors shut, one headlight still on after
+   * A dead car pulled off the road, both doors shut, one headlight still on after
    * however long, and a shape behind the windscreen that does not move. The headlight
    * points AT something: a Pale is standing in the beam eight metres up the track. That is
    * the whole scene, and it reads in one glance from the verge because the beam and the
@@ -820,7 +852,7 @@ export const STAGED_BUILDERS = {
     // re-deriving it: getting that sign wrong is how you light the road you came in on.
     const yaw = 2.42 + r.range(-0.20, 0.20);
     const fwdX = Math.cos(yaw), fwdZ = -Math.sin(yaw);
-    const { gy, put } = carShell(k, api, 0, 0.6, yaw, { rust: false, roll: 0 });
+    const { gy, put } = carShell(k, api, 0, 0.6, yaw, { rust: false, disabled: true, roll: 0 });
     // the occupant
     {
       const p = put(0.35, -0.34);

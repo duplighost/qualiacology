@@ -227,7 +227,9 @@ const CABIN_BORROW_R = 30;        // m: past this the rover is released. The emi
 const CABIN_LAMBDA = 3.0;
 
 const HORN_NOISE_R = 46;          // the horn ITSELF, before any node makes it a lure
-const HORN_COOLDOWN = 1.6;
+// A held horn repeats like a physical horn, but every new tap answers immediately. The old
+// 1.6 s gate returned before reading input's one-step edge, permanently eating valid taps.
+const HORN_REPEAT = 0.55;
 
 // Wear. 0 is a car somebody looked after; 1 is one that will not do much more than crawl.
 // It starts part-worn because it was already abandoned when it found you.
@@ -421,6 +423,13 @@ export class Car {
     this.noiseT = 0;
     this.ramT = 0;
     this.hornT = 0;
+    this.hornHeld = false;
+    this.hornCount = 0;
+    this.hornSoundCount = 0;
+    // A horn press is still a real world/progression event if audio is waking from autoplay
+    // suspension. Owe at most ONE audible answer and settle it on the first runnable step;
+    // a boolean cannot grow into a queue of stale voices while the tab is asleep.
+    this.hornSoundPending = false;
     // The hotwire length the WHEEL branch actually granted for THIS entry. The crank pips
     // are spaced off it, so a half-second hotwire still gets three of them.
     this.hotwireTotal = K.hotwire;
@@ -674,6 +683,11 @@ export class Car {
     if (this._synthHorn) { this._synthHorn = false; return true; }
     const i = this._input;
     return !!(i && i.pressed && i.pressed('horn'));
+  }
+
+  _hornHeld() {
+    const i = this._input;
+    return !!(i && i.held && i.held('horn'));
   }
 
   _axis(neg, pos) {
@@ -939,6 +953,7 @@ export class Car {
     this.mode = 'arriving';
     this.hotwired = false;      // every spawn is a fresh hotwire
     this.engineOn = true;
+    this.hornSoundPending = false;
     this.hitCooldown = 0;
     this.stuckT = 0;
     this.spawnCooldown = SPAWN_COOLDOWN;
@@ -1108,6 +1123,19 @@ export class Car {
       case 'driving': this._stepDriving(dt); break;
       case 'exiting': this._stepExiting(dt); break;
       default: break;
+    }
+
+    // The seat owns the horn from the instant the door shuts, including the hotwire beat.
+    // Previously input was not polled until `driving`, so any H tap during the 1.95 s entry
+    // sequence was cleared by input.endStep and could never arrive here later.
+    if (this.ctx.shared && this.ctx.shared.inCar
+        && (this.mode === 'entering' || this.mode === 'driving')) {
+      this._horn(dt);
+      this._flushHornSound();
+    } else {
+      this.hornT = Math.max(0, this.hornT - dt);
+      this.hornHeld = false;
+      this.hornSoundPending = false;
     }
 
     // The door and the courtesy light, every mode. This is the whole of the discoverability
@@ -1457,7 +1485,6 @@ export class Car {
     this._carryPlayer();
     this._driveFov(1);
     this._ram(dt);
-    this._horn(dt);
 
     // exit: the SAME tap that got you in, so there is one verb to learn and not two, and
     // it still refuses above walking pace — with a sound, because a refusal that makes no
@@ -1484,6 +1511,7 @@ export class Car {
     this.enterT = 0;
     this.engineOn = false;
     this.speed = 0;
+    this.hornSoundPending = false;
     this.coolLeft = COOL_TICKS;
     this.coolT = COOL_GAP;
     this._noise('car:door-creak', 18);
@@ -2273,15 +2301,72 @@ export class Car {
    * with installers and zero lifetime runs is the defect that audit hunts for.
    */
   _horn(dt) {
-    this.hornT -= dt;
-    // The cooldown is tested BEFORE the edge is read, so a honk that lands inside the
-    // cooldown is not silently swallowed out of the test door's one-shot latch.
-    if (this.hornT > 0) return;
-    if (!this._hornPressed()) return;
-    this.hornT = HORN_COOLDOWN;
+    this.hornT = Math.max(0, this.hornT - dt);
+    // Read both doors EVERY fixed step. `pressed` makes every fresh tap immediate even if a
+    // previous honk is still ringing; held is the accessibility/focus fallback and repeats
+    // at a physical, readable cadence without trusting browser key-repeat.
+    const pressed = this._hornPressed();
+    const held = this._hornHeld();
+    const beganHeld = held && !this.hornHeld;
+    this.hornHeld = held;
+    if (!pressed && !beganHeld && !(held && this.hornT <= 0)) return;
+    this.hornT = HORN_REPEAT;
+    this.hornCount++;
     this._noise('car:horn', HORN_NOISE_R);
+    // Input, AI hearing and perk hooks are accepted exactly once here. If the browser's
+    // audio clock is not ready yet, only the audible answer is deferred; repeated presses
+    // while suspended coalesce into the same one-bit debt.
+    this.hornSoundPending = !this._soundHorn();
     const pr = this._progress;
     if (pr && typeof pr.fire === 'function') pr.fire('onHorn', this.x, this.z);
+  }
+
+  /** Settle one horn sound deferred while audio was unavailable; never replay game effects. */
+  _flushHornSound() {
+    if (!this.hornSoundPending || !this._soundHorn()) return false;
+    this.hornSoundPending = false;
+    return true;
+  }
+
+  /**
+   * A short two-tone horn through audio.js's PUBLIC pooled one-shot door. `noise` is an AI
+   * event, not an audible channel, and audio.js does not subscribe to it; that made a
+   * mechanically successful H press sound exactly like a failed one.
+   *
+   * We pitch the existing clean `dmg_ring0` bake down from 3150 Hz to 370 / 466 Hz. At that
+   * pitch, on the world bus, it no longer resembles the dry 3.15 kHz damage cue; the close
+   * interval is the unmistakable old-car horn. More importantly, car.js creates NO raw
+   * AudioNodes: voice limits, scheduling, release, mix law and disposal remain audio.js's.
+   */
+  _soundHorn() {
+    const a = this._audio;
+    const ac = a && (a.audioCtx || a.context || a.actx);
+    // Fast-forward tests and autoplay-blocked/suspended tabs must never accumulate a future
+    // graph. A real E/H gesture resumes audio before this fixed step; if it did not, the AI
+    // noise still fires but no sound is booked into a clock that is not advancing.
+    if (!a || a.enabled !== true || !a.baked || a.silent || !ac || ac.state !== 'running'
+        || typeof a.spec !== 'function' || typeof a.play !== 'function'
+        || typeof a.has !== 'function' || !a.has('dmg_ring0')) return false;
+
+    let voices = 0;
+    for (let n = 0; n < 2; n++) {
+      const rate = (n === 0 ? 370 : 466) / 3150;
+      const s = a.spec();
+      s.x = null;                // the driver hears their own horn centred in the cabin
+      s.gain = n === 0 ? 0.15 : 0.12;
+      s.rate = rate;
+      s.bus = 'world';
+      s.send = 0.08;
+      s.air = false; s.occl = false;
+      s.lpHz = 1800;
+      s.filterHz = 620; s.toneDb = 2.0;
+      s.offset = 0.030;
+      s.dur = rate * 0.31;       // playBuf divides by rate: exactly 0.31 s at either pitch
+      s.priority = 1;
+      if (a.play('dmg_ring0', s)) voices++;
+    }
+    if (voices > 0) this.hornSoundCount++;
+    return voices > 0;
   }
 
   /* --------------------------------------------------------------- carry -- */
@@ -2344,6 +2429,8 @@ export class Car {
     this.stuckT = 0;
     this.holdT = 0;
     this.hornT = 0;
+    this.hornHeld = false;
+    this.hornSoundPending = false;
     this.refuseLatch = false;
     this._useConsumed = true;     // a key still down through a death does not re-enter
     this._creaked = false;
@@ -2624,6 +2711,8 @@ export class Car {
       hotwireTotal: this.hotwireTotal,
       fovBias: this.fovBias,
       stuckT: this.stuckT,
+      horn: { count: this.hornCount, sounds: this.hornSoundCount,
+        held: this.hornHeld, repeatIn: this.hornT, pending: this.hornSoundPending },
       // THE LAST RAM (round 6): what it hit, what it cost, and whether the node made it clean.
       ram: { hits: this._ramLast.hits, n: this._ramLast.n, mass: this._ramLast.mass,
         before: this._ramLast.before, after: this._ramLast.after, keep: this._ramLast.keep,
@@ -2679,6 +2768,7 @@ export class Car {
     this.mode = 'idle';
     this.hotwired = false;
     this.engineOn = false;
+    this.hornSoundPending = false;
     // A car placed by a test rig or a screenshot pose is a PARKED car, and a parked car in
     // this game stands open with its light on. Seeded rather than left at zero so a rig
     // that renders one frame gets the door it would get after a second of play.
@@ -2697,6 +2787,7 @@ export class Car {
   }
 
   dispose() {
+    this.hornSoundPending = false;
     this._setCarried(false);      // never leave the player frozen in a car that is gone
     this._carrySeated = false;
     this._setFovBias(0);
