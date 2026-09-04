@@ -1767,6 +1767,109 @@ body.touch-enabled .touch-pause {
   transition: opacity 320ms ease;
 }
 
+/* WATER ON THE CAMERA. Alex: "maybe even one of those effects in first
+   person where it looks like theres water on the camera. But not full time.
+   maybe when you drop far or when you're on a grind rail."
+
+   Every droplet is one authored radial-gradient given its OWN small tile, so
+   the browser rasterises thirteen postage stamps instead of thirteen
+   full-screen layers. That is the whole performance story of this rule. The
+   pattern is designed, not noise: the aiming lane and the crosshair are left
+   clear, and the drops are weighted to the edges so the middle reads first as
+   the sheet runs off.
+
+   Each drop is concentric on purpose -- a droplet on a lens is a tiny
+   converging lens, so it shows a bright core, a DARK refracted ring and a
+   bright caustic rim. That is also what makes it survive anywhere: the dark
+   half reads over a lit water surface, the bright half reads over a black lava
+   sky, and neither half depends on hue.
+
+   This one deliberately does NOT use mix-blend-mode: screen the way its
+   siblings do. Screen can only brighten, and a droplet that cannot darken
+   vanishes the moment the ocean is bright. No backdrop-filter either: it would
+   force a readback of the live WebGL canvas every frame, and that is the one
+   CSS property that can put this game under its budget on a phone.
+
+   Sizes are in vmin so a drop is the same fraction of the screen on Alex's
+   phone as on a desktop. JS animates only opacity and transform; the gradients
+   never change, so nothing re-rasterises while the water runs off. */
+#visorWater {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform-origin: 50% 44%;
+  background-repeat: no-repeat;
+  background-image:
+    /* two runners: a heavy head with a soft smear above it, the drop and the
+       track it has already left behind on the glass */
+    radial-gradient(ellipse 42% 46% at 50% 50%, rgba(255, 255, 255, .80) 0 7%, rgba(184, 228, 252, .30) 16%, rgba(4, 16, 28, .50) 31% 52%, rgba(228, 250, 255, .72) 63% 73%, rgba(120, 190, 222, .12) 81%, transparent 89%),
+    radial-gradient(ellipse 26% 50% at 50% 62%, rgba(216, 246, 255, .30) 0 26%, rgba(5, 20, 34, .19) 54%, transparent 88%),
+    radial-gradient(ellipse 42% 46% at 50% 50%, rgba(255, 255, 255, .74) 0 7%, rgba(4, 16, 28, .46) 31% 52%, rgba(224, 248, 255, .68) 63% 73%, rgba(150, 208, 236, .10) 81%, transparent 89%),
+    radial-gradient(ellipse 26% 50% at 50% 62%, rgba(210, 242, 255, .26) 0 26%, rgba(5, 20, 34, .16) 54%, transparent 88%),
+    /* six beads with a real lens core: bright point, dark refracted ring,
+       bright caustic rim. A droplet on glass is a tiny converging lens, so
+       the bright middle and the dark ring around it are the true shape. */
+    radial-gradient(ellipse 44% 46% at 50% 47%, rgba(255, 255, 255, .82) 0 7%, rgba(190, 232, 254, .30) 16%, rgba(4, 16, 28, .52) 31% 53%, rgba(230, 251, 255, .74) 64% 73%, rgba(122, 192, 224, .12) 81%, transparent 89%),
+    radial-gradient(ellipse 44% 46% at 50% 47%, rgba(255, 255, 255, .76) 0 8%, rgba(186, 230, 254, .26) 17%, rgba(4, 16, 28, .49) 31% 53%, rgba(226, 250, 255, .70) 64% 74%, rgba(150, 208, 236, .10) 82%, transparent 89%),
+    radial-gradient(ellipse 44% 46% at 50% 47%, rgba(255, 255, 255, .72) 0 9%, rgba(4, 16, 28, .46) 30% 53%, rgba(222, 248, 255, .66) 64% 75%, rgba(150, 208, 236, .10) 83%, transparent 90%),
+    radial-gradient(ellipse 44% 46% at 50% 47%, rgba(255, 255, 255, .68) 0 10%, rgba(4, 16, 28, .43) 30% 53%, rgba(218, 246, 255, .62) 64% 76%, rgba(150, 208, 236, .09) 84%, transparent 90%),
+    radial-gradient(ellipse 44% 46% at 50% 47%, rgba(255, 255, 255, .74) 0 12%, rgba(4, 16, 28, .40) 34% 56%, rgba(222, 248, 255, .60) 66% 78%, rgba(150, 208, 236, .09) 85%, transparent 91%),
+    radial-gradient(ellipse 44% 46% at 50% 47%, rgba(255, 255, 255, .70) 0 13%, rgba(4, 16, 28, .37) 34% 56%, rgba(218, 246, 255, .56) 66% 78%, rgba(150, 208, 236, .08) 85%, transparent 91%),
+    /* six specks, the ones that survive longest */
+    radial-gradient(ellipse 42% 42% at 50% 50%, rgba(255, 255, 255, .78) 0 17%, rgba(5, 18, 32, .36) 40% 58%, rgba(222, 248, 255, .60) 70% 82%, transparent 96%),
+    radial-gradient(ellipse 42% 42% at 50% 50%, rgba(255, 255, 255, .74) 0 17%, rgba(5, 18, 32, .33) 40% 58%, rgba(218, 246, 255, .56) 70% 82%, transparent 96%),
+    radial-gradient(ellipse 42% 42% at 50% 50%, rgba(255, 255, 255, .80) 0 24%, rgba(5, 18, 32, .28) 48% 64%, rgba(220, 247, 255, .50) 76% 88%, transparent 98%),
+    radial-gradient(ellipse 42% 42% at 50% 50%, rgba(255, 255, 255, .76) 0 24%, rgba(5, 18, 32, .25) 48% 64%, rgba(216, 245, 255, .47) 76% 88%, transparent 98%),
+    radial-gradient(ellipse 42% 42% at 50% 50%, rgba(255, 255, 255, .82) 0 30%, rgba(206, 242, 255, .44) 62% 82%, transparent 98%),
+    radial-gradient(ellipse 42% 42% at 50% 50%, rgba(255, 255, 255, .78) 0 30%, rgba(202, 240, 255, .40) 62% 82%, transparent 98%),
+    /* water clinging along the top of the visor -- a wet edge, kept thin so it
+       never turns into fog over the sky */
+    linear-gradient(180deg, rgba(220, 246, 255, .20) 0, rgba(150, 208, 236, .08) 12%, rgba(118, 178, 208, .025) 22%, transparent 34%),
+    /* the wet-lens rim: darkens toward the edge, then catches a bright caustic
+       right at it, so the frame still reads as wet even where no drop happens
+       to land on something busy */
+    radial-gradient(ellipse 52% 56% at 50% 46%, transparent 0 52%, rgba(4, 18, 32, .09) 70%, rgba(4, 18, 32, .27) 89%, rgba(198, 238, 255, .20) 100%);
+  background-size:
+    7vmin 10.4vmin,
+    4.6vmin 20vmin,
+    5.8vmin 8.8vmin,
+    3.8vmin 17vmin,
+    10.6vmin 11.2vmin,
+    8.8vmin 9.4vmin,
+    7.4vmin 7.8vmin,
+    6.2vmin 6.6vmin,
+    5.4vmin 5.6vmin,
+    4.6vmin 4.8vmin,
+    5vmin 5vmin,
+    5.4vmin 5.6vmin,
+    3.4vmin 3.4vmin,
+    3.8vmin 3.8vmin,
+    2.8vmin 2.8vmin,
+    3.1vmin 3.1vmin,
+    100% 100%,
+    100% 100%;
+  background-position:
+    7% 30%,
+    7% 12%,
+    80% 90%,
+    80% 72%,
+    91% 12%,
+    16% 80%,
+    97% 56%,
+    3% 48%,
+    86% 30%,
+    96% 33%,
+    37% 4%,
+    65% 97%,
+    27% 92%,
+    73% 22%,
+    22% 34%,
+    88% 76%,
+    50% 0%,
+    50% 50%;
+}
+
 /* Earning a ball core blooms the whole frame in that core's colour. */
 #rewardFlash {
   position: absolute;
