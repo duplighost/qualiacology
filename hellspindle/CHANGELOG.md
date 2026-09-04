@@ -349,3 +349,50 @@ art, but the game draws the wheel and its chain itself, from her hand to
 wherever the wheel physically is — art with a chain and a ball painted into it
 would put a second wheel on screen. The mace ball is a detached blob in two of
 the three and could be cut cleanly; the chain in the third is welded to her arm.
+
+### She can be hurt, she can die, and she throws the thing
+
+Grok's second drop: 19 files, 18 distinct sheets, 116 figures, 95 distinct poses.
+Sheets are no longer sliced on a guessed grid — a flail's chain crossing a gutter
+merges the columns and breaks grid detection entirely — so every figure is
+pulled out as its own connected component instead, which is what a pose is.
+
+New animation the game has never had:
+
+| set | frames | when |
+| --- | --- | --- |
+| hunter_throw | 4 | the wheel leaves her hand, first 0.42s only |
+| hunter_hurt | 2 | 0.34s of recoil after a hit |
+| hunter_death | 5 | collapse, then three poses settling on the floor |
+| knight_death | 6 | the same, for him |
+
+And the knight is finally off six frames: **knight_walk is 12**, built from two
+same-grade sheets with the second colour-matched to the first channel by channel
+(gain 0.809/0.869/0.873) so the cycle cannot flicker between them. The fourth
+knight sheet is the dark regenerated plate and is left out — mixing grades is
+exactly the flicker the match is there to prevent.
+
+Two things this forced:
+
+**Death used to be a free-fall.** `killPlayer` gave her -240 of upward velocity
+and then dropped her out of the world with no collision, which is fine for a
+faceless sprite and absurd for a body: the lying-down poses read as a corpse
+sinking through the floor. She now collapses onto whatever she was standing on
+and stays there. The old free-fall is kept only for dying in mid-air or down a
+pit, where there is nothing to land on and she is off the bottom of the screen
+regardless.
+
+**A dying knight was never drawn.** drawEnemy returned early on `!e.alive`, so
+his death animation had nowhere to play. Dying knights now keep drawing until
+`deadTimer` runs out — which is exactly when the last pose has been on screen
+long enough to read — and fade over the final 0.45s.
+
+The shared hunter canvas had to grow from 318 to 618 wide to hold a death
+sprawl, which is four times wider than she is tall. Her body fills 0.748 of the
+frame either way, so the draw height stays at 197 and she is the same size she
+has always been. Frame cost went from 1.20ms to 1.40ms measured interleaved
+against the previous build — the player blit is 2.7x the pixels it was, and it
+is 1% of a frame budget.
+
+A one-shot animation player was added alongside the looping one. A death that
+loops is a body that gets up again.

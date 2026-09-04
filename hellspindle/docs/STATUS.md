@@ -28,7 +28,10 @@ What is true now:
   meaning: the leap, a float loop, the fall, the dive, picked off vertical
   speed rather than a clock. Landings compress, takeoffs stretch. She is the
   same size in every state and centred on her body, not her sash.
-  The knight is still on six walk frames; no new knight sheet has arrived.
+  The knight walks on twelve now too, from two sheets colour-matched so the
+  cycle cannot flicker.
+- She throws, she recoils when hit, and she dies on the floor she was standing
+  on instead of falling through it. So does the knight.
 
 Still true about the picture: knight shield art stays after the shield breaks,
 attacks are a lean, hook hole is a little chewed.

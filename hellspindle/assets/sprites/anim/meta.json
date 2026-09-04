@@ -1,23 +1,23 @@
 {
   "hunter_walk": {
     "count": 12,
-    "w": 409,
+    "w": 618,
     "h": 600
   },
   "hunter_idle": {
     "count": 8,
-    "w": 409,
+    "w": 618,
     "h": 600
   },
   "hunter_air": {
     "count": 11,
-    "w": 409,
+    "w": 618,
     "h": 600,
     "order": "0 leap, 1-8 float, 9 fall, 10 dive"
   },
   "knight_walk": {
-    "count": 6,
-    "w": 389,
+    "count": 12,
+    "w": 585,
     "h": 520
   },
   "crawler_walk": {
@@ -44,5 +44,27 @@
     "count": 8,
     "w": 268,
     "h": 512
+  },
+  "hunter_hurt": {
+    "count": 2,
+    "w": 618,
+    "h": 600
+  },
+  "hunter_death": {
+    "count": 5,
+    "w": 618,
+    "h": 600,
+    "order": "collapse then settle"
+  },
+  "hunter_throw": {
+    "count": 4,
+    "w": 618,
+    "h": 600
+  },
+  "knight_death": {
+    "count": 6,
+    "w": 585,
+    "h": 520,
+    "order": "collapse then settle"
   }
 }

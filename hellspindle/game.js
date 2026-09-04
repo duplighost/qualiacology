@@ -105,7 +105,11 @@
     hunterWalk: loadAnim('hunter_walk', 12),
     hunterIdle: loadAnim('hunter_idle', 8),
     hunterAir: loadAnim('hunter_air', 11),
-    knightWalk: loadAnim('knight_walk', 6),
+    hunterHurt: loadAnim('hunter_hurt', 2),
+    hunterDeath: loadAnim('hunter_death', 5),
+    hunterThrow: loadAnim('hunter_throw', 4),
+    knightWalk: loadAnim('knight_walk', 12),
+    knightDeath: loadAnim('knight_death', 6),
     crawlerWalk: loadAnim('crawler_walk', 8),
     batFlap: loadAnim('bat_flap', 18),
     censerFloat: loadAnim('censer_float', 12),
@@ -115,6 +119,14 @@
 
   function animReady(frames) {
     return !!(frames && frames[0] && frames[0].complete && frames[0].naturalWidth > 0);
+  }
+
+  // A death plays once and stays down. animImg loops; this does not.
+  function animOnce(frames, t, fps) {
+    if (!animReady(frames)) return null;
+    const i = clamp(Math.floor(t * fps), 0, frames.length - 1);
+    const img = frames[i];
+    return (img && img.complete && img.naturalWidth) ? img : frames[0];
   }
 
   function animImg(frames, t, fps) {
@@ -1209,7 +1221,10 @@
     // and idle breathes. None of it touches the simulation.
     squash: 0,
     airTime: 0,
-    lastVy: 0
+    lastVy: 0,
+    deathTime: 0,
+    hurtTime: 0,
+    deathFloor: null
   };
 
   const yoyo = {
@@ -1228,6 +1243,7 @@
     ropeTarget: 220,
     latchCooldown: 0,
     holdGrace: 0,
+    throwTime: 0,
     blockedHook: null,
     trail: [],
     hitPulse: 0,
@@ -1689,6 +1705,9 @@
     player.streakTimer = 0;
     player.jumpBuffer = 0;
     player.hurtFlash = 0;
+    player.deathTime = 0;
+    player.hurtTime = 0;
+    player.deathFloor = null;
     // A jump pressed during the death fall used to sit in the queue with
     // nothing consuming it, and came straight back out on the respawn's first
     // frame. Same for a pause tapped while dead.
@@ -1769,6 +1788,12 @@
     player.health = 0;
     player.vx = 0;
     player.vy = -240;
+    // She has a body to fall out of now. If she died standing on something she
+    // collapses onto it and stays there; the old free-fall is kept only for
+    // dying in mid-air or down a pit, where there is nothing to land on and she
+    // is off the bottom of the screen either way.
+    player.deathFloor = player.grounded || player.y < 1000 ? groundYNear(player.x, player.y) : null;
+    player.deathTime = 0;
     game.state = 'dead';
     game.deathTimer = 2.1;
     hitStop(0.12, 0.25);
@@ -2185,6 +2210,7 @@
     const pc = playerCenter();
     const aim = input.aim(player, game.camera);
     yoyo.active = aim.active;
+    yoyo.throwTime = aim.active ? yoyo.throwTime + dt : 0;
 
     if (!aim.active) {
       yoyo.blockedHook = null;
@@ -2333,6 +2359,7 @@
 
   function updatePlayer(dt) {
     player.invuln = Math.max(0, player.invuln - dt);
+    player.hurtTime = Math.max(0, player.hurtTime - dt);
     player.hurtFlash = Math.max(0, player.hurtFlash - dt * 5);
     player.dropThrough = Math.max(0, player.dropThrough - dt);
     player.coyote = player.grounded ? 0.105 : Math.max(0, player.coyote - dt);
@@ -2476,6 +2503,7 @@
 
   function damagePlayer(amount, knockX = 0, knockY = -180) {
     if (player.invuln > 0 || player.dead || game.state !== 'playing') return;
+    player.hurtTime = 0.34;
     amount *= 1 + areaIndexAt(player.x) * 0.06;
     player.health = Math.max(0, player.health - amount);
     player.invuln = 0.78;
@@ -3245,8 +3273,13 @@
 
     if (game.state === 'dead') {
       game.deathTimer -= dt;
+      player.deathTime += dt;
       player.vy += 1800 * dt;
       player.y += player.vy * dt;
+      if (player.deathFloor != null && player.y >= player.deathFloor) {
+        player.y = player.deathFloor;
+        player.vy = 0;
+      }
       updateParticles(dt);
       updateCamera(dt);
       if (game.deathTimer <= 0) restartFromCheckpoint();
@@ -3966,7 +3999,13 @@
 
     if (sprReady('hunter') || animReady(anims.hunterWalk)) {
       let img = null;
-      if (player.animState === 'air') {
+      // Death outranks everything and plays once — she goes down and stays down.
+      if ((game.state === 'dead' || player.dead) && animReady(anims.hunterDeath)) {
+        img = animOnce(anims.hunterDeath, player.deathTime, 7);
+      } else if (player.hurtTime > 0 && animReady(anims.hunterHurt)) {
+        // The recoil, for as long as the hit reads.
+        img = animOnce(anims.hunterHurt, 0.34 - player.hurtTime, 7);
+      } else if (player.animState === 'air') {
         // Air poses are chosen by what the body is DOING, not by a clock. A
         // time-cycled jump loop reads as a flipbook; picking the rise, the
         // apex, the fall and the dive off vertical speed reads as a jump.
@@ -3989,6 +4028,12 @@
           else i = 1 + (Math.floor(player.animTime * 9) % Math.max(1, last - 2));
           img = air[clamp(i, 0, last)];
         }
+      } else if (yoyo.active && !yoyo.latched && yoyo.throwTime < 0.42 && animReady(anims.hunterThrow)) {
+        // The throw itself, not the holding. The set winds the arm back and
+        // snaps it forward over about four tenths of a second, and the game's
+        // own chain leaves her hand at full reach; after that she goes back to
+        // walking or standing with the wheel already out.
+        img = animOnce(anims.hunterThrow, yoyo.throwTime, 11);
       } else if (player.animState === 'walk') {
         img = animImg(anims.hunterWalk, player.animTime, 14);
       } else {
@@ -4010,7 +4055,7 @@
         // Her body fills 0.747 of the new frame (the rest is headroom for a
         // sash that streams well past her boots), so the draw height has to be
         // 197 for her to stand the same 147px tall the game shipped with.
-        const drawH = 197;
+        const drawH = 197;   // her body fills 0.748 of the frame
         const w = drawH * (img.naturalWidth / img.naturalHeight);
         g.scale(player.facing * scaleX, scaleY);
         g.drawImage(scaledSprite(img, w, drawH), -w * 0.50, -drawH + 3, w, drawH);
@@ -4194,6 +4239,7 @@
 
   function drawKnight(g, e) {
     drawActorShadow(g,e,34,0.42);
+    if (!e.alive) { g.save(); g.globalAlpha = clamp(e.deadTimer / 0.45, 0, 1); }
     const wind = e.state === 'windup' ? 1-invLerp(0.31,0,e.stateT) : e.state === 'swing' ? 1 : 0;
     g.save(); g.translate(e.x,e.y); g.scale(e.facing,1);
     if (e.state==='windup') {
@@ -4202,11 +4248,22 @@
     {
       const attacking = e.state === 'windup' || e.state === 'swing' || e.state === 'recover' || e.state === 'stagger';
       const lunge = anims.knightWalk[anims.knightWalk.length - 1];
-      const img = attacking
-        ? (lunge && lunge.complete ? lunge : animImg(anims.knightWalk, 0, 1))
-        : animImg(anims.knightWalk, game.time * 0.95 + e.seed * 5, 9);
-      const rot = e.state === 'swing' ? -0.12 : e.state === 'windup' ? 0.08 : 0;
-      if (img && drawAnimGround(g, img, 0, 0, 136, 1, { ax: 0.48, flash: e.flash > 0, rot })) { g.restore(); return; }
+      let img;
+      let rot = e.state === 'swing' ? -0.12 : e.state === 'windup' ? 0.08 : 0;
+      if (!e.alive && animReady(anims.knightDeath)) {
+        // He falls once and stays fallen; deadTimer counts down from 1.4.
+        img = animOnce(anims.knightDeath, Math.max(0, 1.4 - e.deadTimer), 6);
+        rot = 0;
+      } else if (attacking) {
+        img = (lunge && lunge.complete) ? lunge : animImg(anims.knightWalk, 0, 1);
+      } else {
+        img = animImg(anims.knightWalk, game.time * 0.95 + e.seed * 5, 11);
+      }
+      if (img && drawAnimGround(g, img, 0, 0, 155, 1, { ax: 0.50, flash: e.flash > 0, rot })) {
+        g.restore();
+        if (!e.alive) g.restore();
+        return;
+      }
     }
     if (drawGroundSprite(g, 'knight', 0, 0, 136, 1, { ax: 0.48, flash: e.flash > 0, rot: e.state === 'swing' ? -0.12 : e.state === 'windup' ? 0.08 : 0 })) { g.restore(); return; }
     // Legs.
@@ -4300,7 +4357,10 @@
   }
 
   function drawEnemy(g, e) {
-    if (!e.alive && e.type !== 'boss') return;
+    // A dying knight keeps drawing until his fall has played out; updateEnemies
+    // removes him the moment deadTimer runs out, which is when the last pose
+    // has been on screen long enough to read.
+    if (!e.alive && e.type !== 'boss' && !(e.type === 'knight' && e.deadTimer > 0)) return;
     if (e.type === 'boss' && !game.bossActive) return;
     switch (e.type) {
       case 'crawler': drawCrawler(g, e); break;
@@ -4939,6 +4999,7 @@
     },
     setHealth(value) { player.health = clamp(Number(value) || 0, 0, player.maxHealth); },
     grantXP(amount = 500) { gainXP(Number(amount) || 0); },
+    killNow() { killPlayer(); },
     openRelics(open = true) { game.relicsOpen = !!open; },
     relicState() { return { points: player.relicPoints, ranks: Object.assign({}, player.relics), maxHealth: player.maxHealth, power: player.power, chain: MAX_CHAIN, pump: SWING_PUMP, swing: MAX_SWING }; },
     setInvulnerable(seconds = 10) { player.invuln = Math.max(player.invuln, Math.max(0, Number(seconds) || 0)); },
