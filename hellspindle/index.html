@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#050308" />
+  <title>GORETHREAD // HELLSPINDLE — Fusion 3.0</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="game-shell" aria-label="GORETHREAD HELLSPINDLE game canvas">
+    <canvas id="game" width="1600" height="900"></canvas>
+    <div id="rotate-note">ROTATE TO LANDSCAPE<br><small>THE WHEEL REQUIRES ELBOW ROOM</small></div>
+  </main>
+  <script src="game.js"></script>
+  <script>
+    if (/[?&]autostart=1/.test(location.search)) {
+      window.addEventListener('load', () => {
+        const kick = () => {
+          if (window.__HELLSPINDLE__) window.__HELLSPINDLE__.start();
+          else setTimeout(kick, 50);
+        };
+        setTimeout(kick, 200);
+      });
+    }
+  </script>
+</body>
+</html>

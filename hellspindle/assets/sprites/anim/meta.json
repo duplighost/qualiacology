@@ -1,0 +1,47 @@
+{
+  "hunter_walk": {
+    "count": 12,
+    "w": 405,
+    "h": 671
+  },
+  "hunter_idle": {
+    "count": 8,
+    "w": 282,
+    "h": 670
+  },
+  "hunter_air": {
+    "count": 8,
+    "w": 340,
+    "h": 719
+  },
+  "knight_walk": {
+    "count": 12,
+    "w": 327,
+    "h": 512
+  },
+  "crawler_walk": {
+    "count": 8,
+    "w": 581,
+    "h": 320
+  },
+  "bat_flap": {
+    "count": 18,
+    "w": 391,
+    "h": 384
+  },
+  "censer_float": {
+    "count": 12,
+    "w": 325,
+    "h": 448
+  },
+  "executioner_walk": {
+    "count": 12,
+    "w": 299,
+    "h": 512
+  },
+  "boss_idle": {
+    "count": 8,
+    "w": 268,
+    "h": 512
+  }
+}

@@ -1,0 +1,14 @@
+GORETHREAD // HELLSPINDLE
+
+Open this file:
+  index.html
+
+Keep index.html, style.css, game.js, and the assets folder together.
+
+The Desktop zip's one-file PLAY html is the old flat geometry. This folder is the painted one.
+
+Desktop: A/D move, Space jump, S drops a ledge, hold mouse for the wheel.
+Phone: landscape. Left thumb moves (swipe up jump, swipe down drop). Right thumb is the wheel.
+
+Twelve districts. Kill things to level. Pause shows where you are.
+Click continues a save. N on the title is a new descent.
