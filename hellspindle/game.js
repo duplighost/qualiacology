@@ -1053,18 +1053,23 @@
     // The undercroft.
     if (!lastDistrict) {
       const g = slabX[grateSlab];
-      const underX = g.x - 120;
-      const underW = slabW + 240;
-      platform(underX, 960, underW * 0.46, 120, false, zone);
-      platform(underX + underW * 0.66, 960, underW * 0.34, 120, false, zone);
-      hazard(underX + 30, 936, 110, 24, 'spikes');
-      spawnTemplates.push({ type: 'crawler', x: underX + underW * 0.2, y: 960 });
-      spawnTemplates.push({ type: 'bat', x: underX + underW * 0.5, y: 880 });
-      cache(underX + underW * 0.78, 960, zone, 150 + zone * 34);
-      // A stair back up to the road, so the undercroft is a loop and not a trap.
-      // It stands on the far slab and tops out under the grate, which you pass
-      // up through the way any one-way ledge lets you.
-      const stairX = underX + underW * 0.70;
+      // The landing floor spans the whole grate and then some. Dropping in is
+      // a decision, never a death — the hole in the road has to be somewhere
+      // you can commit to without reading the level first.
+      platform(g.x - 60, 960, slabW + 120, 120, false, zone);
+      hazard(g.x - 34, 936, 104, 24, 'spikes');
+      spawnTemplates.push({ type: 'crawler', x: g.x + slabW * 0.6, y: 960 });
+
+      // One real jump inside the crypt, and the reliquary is on the far side of
+      // it. The gap is the price of the thing.
+      const farX = g.x + slabW + 230;
+      platform(farX, 960, 340, 120, false, zone);
+      cache(farX + 250, 960, zone, 150 + zone * 34);
+      spawnTemplates.push({ type: 'bat', x: farX + 60, y: 872 });
+
+      // The stair out stands under the grate, which you pass back up through
+      // the way any one-way ledge lets you.
+      const stairX = g.x + slabW * 0.62;
       platform(stairX, 892, 120, 22, true, zone);
       platform(stairX + 96, 846, 120, 22, true, zone);
       platform(stairX + 24, 800, 120, 22, true, zone);
