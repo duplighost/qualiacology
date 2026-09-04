@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.3.0-player-repair';
+  const GAME_VERSION = '8.4.0-world-composition';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -3952,13 +3952,15 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const terrainMap = this.makePlanetTexture(id);
         const terrainMaterial = water
           ? new T.MeshPhysicalMaterial({
-            map: terrainMap, color: 0x218ea0, emissive: 0x052b38, emissiveIntensity: .42,
+            map: terrainMap, bumpMap: terrainMap, bumpScale: 1.18,
+            color: 0x218ea0, emissive: 0x052b38, emissiveIntensity: .26,
             roughness: .46, metalness: .08, clearcoat: .55, clearcoatRoughness: .24,
             side: T.DoubleSide,
           })
           : new T.MeshStandardMaterial({
-            map: terrainMap, emissiveMap: terrainMap, color: 0xf39a61,
-            emissive: 0x481006, emissiveIntensity: .2, roughness: .78,
+            map: terrainMap, bumpMap: terrainMap, bumpScale: 1.52,
+            emissiveMap: terrainMap, color: 0xf39a61,
+            emissive: 0x481006, emissiveIntensity: .14, roughness: .78,
             metalness: .08, side: T.DoubleSide,
           });
         if (water) this.installWaterDepthShader(terrainMaterial, profile);
@@ -3966,15 +3968,21 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         terrain.name = water ? 'ABYSSAL SEABED' : 'GLOBAL MAGMA CRUST';
         terrain.receiveShadow = true;
         terrain.userData.kbLifted = true;
-        root.add(terrain);
         profile.terrain = terrain;
         profile.terrainMaterial = terrainMaterial;
+        // Keep the exact shared terrain fidelity, but submit it as the same
+        // twenty independently culled icosahedron faces used by the original
+        // Moon. The alternate worlds previously drew all 327,680 terrain
+        // triangles from every viewpoint. That made their new authored life
+        // compete with invisible far-side rock and pushed ordinary play into
+        // the 66 ms presentation band.
+        this.makeAlternateTerrainRenderChunks(profile, terrain);
 
         const atmosphere = new T.Mesh(
           new T.SphereGeometry(PLANET.radius + (water ? 178 : 132), 64, 32),
           new T.MeshBasicMaterial({
-            color: water ? 0x0a91ad : 0x6b160c,
-            transparent: true, opacity: water ? .12 : .05,
+             color: water ? 0x0a91ad : 0x6b160c,
+             transparent: true, opacity: water ? .075 : .035,
             side: T.BackSide, depthWrite: false, blending: T.AdditiveBlending,
           }),
         );
@@ -3987,7 +3995,6 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         if (water) this.makeWaterWorldFeatures(profile);
         else this.makeLavaWorldFeatures(profile);
         this.makePlanetMonuments(profile, water);
-        this.makePlanetProps(profile, water);
         this.makePlanetRegionalBosses(profile, water);
         this.makeAlternateBoss(profile, water);
         this.makePlanetMasteryRelic(profile, water);
@@ -3996,6 +4003,16 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         // composition. A full district ring plus two cross-links makes three
         // honest loops instead of three flattering numbers in metadata.
         this.makePlanetGroundFlow(profile, water);
+        // The district ring alone still left continent-sized blanks between
+        // its flattering loops. These open-country expeditions cross those
+        // blanks on the terrain itself: no plate stacks, no decorative census
+        // padding, and no requirement to grind a rail in order to find life.
+        this.makePlanetWilderness(profile, water);
+        // Six conspicuous, playable micro-challenges answer the weakest
+        // player-eye views with verbs rather than scenery counts: a safe spur,
+        // a rising five-step orbit, a reward curl, and a moving celestial ring.
+        this.makePlanetGalaxyToys(profile, water);
+        this.makePlanetProps(profile, water);
         // Rails are routed only after every platform, monument and boss court
         // exists. Both their renderer and their physical grip are built from
         // the same obstacle-cleared polyline, so a later landmark cannot be
@@ -4022,6 +4039,50 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         };
       }
       this.setActivePlanet('moon', false);
+    }
+    makeAlternateTerrainRenderChunks(profile, terrain) {
+      const source = terrain.geometry;
+      const positions = source.attributes.position;
+      const faceCount = 20;
+      const root = new T.Group();
+      root.name = `${profile.id.toUpperCase()} TERRAIN · EXACT FRUSTUM SECTORS`;
+      root.userData.kbLifted = true;
+      profile.terrainRenderRoot = root;
+      profile.terrainRenderChunks = [];
+      if (source.index || positions.count % faceCount !== 0) {
+        root.name = `${profile.id.toUpperCase()} TERRAIN · MONOLITH FALLBACK`;
+        root.add(terrain);
+        profile.root.add(root);
+        return;
+      }
+      const verticesPerFace = positions.count / faceCount;
+      const point = new T.Vector3();
+      for (let index = 0; index < faceCount; index++) {
+        const geometry = new T.BufferGeometry();
+        for (const [name, attribute] of Object.entries(source.attributes)) {
+          geometry.setAttribute(name, attribute);
+        }
+        const start = index * verticesPerFace;
+        const end = start + verticesPerFace;
+        geometry.setDrawRange(start, verticesPerFace);
+        geometry.userData.kbTerrainStart = start;
+        geometry.userData.kbTerrainCount = verticesPerFace;
+        const box = new T.Box3();
+        for (let vertex = start; vertex < end; vertex++) {
+          point.fromBufferAttribute(positions, vertex);
+          box.expandByPoint(point);
+        }
+        geometry.boundingBox = box;
+        geometry.boundingSphere = box.getBoundingSphere(new T.Sphere());
+        geometry.boundingSphere.radius += 1;
+        const chunk = new T.Mesh(geometry, terrain.material);
+        chunk.name = `${profile.id}-terrain-sector-${String(index + 1).padStart(2, '0')}`;
+        chunk.receiveShadow = true;
+        chunk.userData.kbLifted = true;
+        root.add(chunk);
+        profile.terrainRenderChunks.push(chunk);
+      }
+      profile.root.add(root);
     }
     makePlanetGroundFlow(profile, water) {
       const edgeSpecs = [
@@ -4123,13 +4184,14 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           const top = ground + (water ? 2.7 : 6.2);
           const bottom = ground - (water ? 1.1 : 1.8);
           const id = `${edge.id}-step-${step}`;
-          edgeSteps.push({
-            id, edgeId: edge.id, edgeIndex, step, segments,
-            fromSiteIndex: edge.fromSiteIndex, toSiteIndex: edge.toSiteIndex,
-            siteIndex: amount < .5 ? edge.fromSiteIndex : edge.toSiteIndex,
-            x: at.x, z: at.z, top, bottom, radius,
-            shortcut: edge.shortcut,
-          });
+           edgeSteps.push({
+             id, edgeId: edge.id, edgeIndex, step, segments,
+             fromSiteIndex: edge.fromSiteIndex, toSiteIndex: edge.toSiteIndex,
+             siteIndex: amount < .5 ? edge.fromSiteIndex : edge.toSiteIndex,
+             x: at.x, z: at.z, top, bottom, radius,
+             tangentX: tangentX / tangentLength, tangentZ: tangentZ / tangentLength,
+             shortcut: edge.shortcut,
+           });
         }
         // A harbour detour can move one sample farther than the nominal
         // twenty-one-metre cadence. Densify the finished physical curve, not
@@ -4154,12 +4216,14 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
               step: left.step + amount, segments,
               fromSiteIndex: edge.fromSiteIndex, toSiteIndex: edge.toSiteIndex,
               siteIndex: amount < .5 ? left.siteIndex : right.siteIndex,
-              x: at.x, z: at.z,
-              top: ground + (water ? 2.7 : 6.2),
-              bottom: ground - (water ? 1.1 : 1.8),
-              radius: lerp(left.radius, right.radius, amount),
-              shortcut: edge.shortcut,
-            });
+               x: at.x, z: at.z,
+               top: ground + (water ? 2.7 : 6.2),
+               bottom: ground - (water ? 1.1 : 1.8),
+               radius: lerp(left.radius, right.radius, amount),
+               tangentX: (right.x - left.x) / Math.max(1e-6, horizontal),
+               tangentZ: (right.z - left.z) / Math.max(1e-6, horizontal),
+               shortcut: edge.shortcut,
+             });
           }
         }
         denseSteps.push(edgeSteps[edgeSteps.length - 1]);
@@ -4167,68 +4231,95 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         authoredSteps.push(...denseSteps);
       }
 
-      const stoneMaterial = new T.MeshStandardMaterial({
-        color: water ? 0x5fc7b8 : 0xb75f43,
-        emissive: water ? 0x074d55 : 0x5a170d,
-        emissiveIntensity: water ? .5 : .44,
-        roughness: water ? .7 : .64,
-        metalness: water ? .08 : .28,
+      // Round Nine joined every district with hundreds of identical cylinders.
+      // It was physically complete but read as a pile of pucks followed by a
+      // void. The same collision samples now support one continuous authored
+      // ribbon per edge: Living Tide grows broad reef causeways, while Cooling
+      // Eclipse lays dark quenched roads with hot seams in the stone itself.
+      const stepById = new Map(authoredSteps.map(step => [step.id, step]));
+      const ribbonPositions = [];
+      const ribbonColors = [];
+      const ribbonIndices = [];
+      const waterPalette = [0x267f78, 0x315f82, 0x4b8f76, 0x554a78, 0x3d8e91];
+      const lavaPalette = [0x713528, 0x8e4731, 0x5c3531, 0xa35b3b, 0x49343a];
+      const appendPoint = (point, color) => {
+        ribbonPositions.push(point.x, point.y, point.z);
+        ribbonColors.push(color.r, color.g, color.b);
+      };
+      const leftTop = new T.Vector3(), rightTop = new T.Vector3();
+      const leftBottom = new T.Vector3(), rightBottom = new T.Vector3();
+      for (const edge of edgeSpecs) {
+        const steps = edge.orderedAuthorityIds.map(id => stepById.get(id)).filter(Boolean);
+        const edgeIndex = steps[0]?.edgeIndex || 0;
+        const edgeColor = new T.Color((water ? waterPalette : lavaPalette)[edgeIndex % 5]);
+        for (let index = 0; index < steps.length; index++) {
+          const step = steps[index];
+          const before = steps[Math.max(0, index - 1)];
+          const after = steps[Math.min(steps.length - 1, index + 1)];
+          const tangentX = after.x - before.x;
+          const tangentZ = after.z - before.z;
+          const tangentLength = Math.hypot(tangentX, tangentZ) || 1;
+          step.tangentX = tangentX / tangentLength;
+          step.tangentZ = tangentZ / tangentLength;
+          const width = step.radius * (water
+            ? .66 + Math.sin(index * .83 + edgeIndex) * .055
+            : .7 + ((index + edgeIndex) % 3) * .035);
+          step.routeWidth = width;
+          const left = surfaceOffsetChartAt(
+            step.x, step.z, -step.tangentZ, step.tangentX, width, {},
+          );
+          const right = surfaceOffsetChartAt(
+            step.x, step.z, step.tangentZ, -step.tangentX, width, {},
+          );
+          chartLift(left.x, step.top + .055, left.z, leftTop);
+          chartLift(right.x, step.top + .055, right.z, rightTop);
+          chartLift(left.x, step.bottom, left.z, leftBottom);
+          chartLift(right.x, step.bottom, right.z, rightBottom);
+          const base = ribbonPositions.length / 3;
+          appendPoint(leftTop, edgeColor);
+          appendPoint(rightTop, edgeColor);
+          appendPoint(leftBottom, edgeColor);
+          appendPoint(rightBottom, edgeColor);
+          if (index > 0) {
+            const previous = base - 4;
+            ribbonIndices.push(
+              previous, previous + 1, base,
+              previous + 1, base + 1, base,
+              previous + 2, previous, base,
+              previous + 2, base, base + 2,
+              previous + 1, previous + 3, base + 3,
+              previous + 1, base + 3, base + 1,
+            );
+          }
+        }
+      }
+      const ribbonGeometry = new T.BufferGeometry();
+      ribbonGeometry.setAttribute('position', new T.Float32BufferAttribute(ribbonPositions, 3));
+      ribbonGeometry.setAttribute('color', new T.Float32BufferAttribute(ribbonColors, 3));
+      ribbonGeometry.setIndex(ribbonIndices);
+      ribbonGeometry.computeVertexNormals();
+      ribbonGeometry.computeBoundingSphere();
+      const ribbonMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: water ? 0x073f4b : 0x4c120b,
+        emissiveIntensity: water ? .44 : .56,
+        roughness: water ? .8 : .7,
+        metalness: water ? .04 : .24,
         vertexColors: true,
+        side: T.DoubleSide,
       });
-      const rimMaterial = new T.MeshStandardMaterial({
-        color: water ? 0xb9ffff : 0xffd071,
-        emissive: water ? 0x20ddeb : 0xc74712,
-        emissiveIntensity: water ? 1.65 : 1.35,
-        roughness: .24, metalness: .52, vertexColors: true,
-      });
-      const stoneMesh = new T.InstancedMesh(
-        new T.CylinderGeometry(1, 1.08, 1, water ? 14 : 12),
-        stoneMaterial, authoredSteps.length,
-      );
-      const rimMesh = new T.InstancedMesh(
-        new T.TorusGeometry(1, .035, 6, water ? 30 : 24),
-        rimMaterial, authoredSteps.length,
-      );
-      stoneMesh.name = water
-        ? 'LIVING TIDE · THREE COHERENT REEF LOOPS'
-        : 'COOLING ECLIPSE · THREE TERRACOTTA CAUSEWAY LOOPS';
-      rimMesh.name = water
-        ? 'REEF LOOP · PEARL WAYFINDING RIMS'
-        : 'TERRACOTTA LOOP · COPPER WAYFINDING SEAMS';
-      stoneMesh.castShadow = true;
-      stoneMesh.receiveShadow = true;
-      stoneMesh.frustumCulled = false;
-      rimMesh.frustumCulled = false;
-      stoneMesh.userData.kbLifted = rimMesh.userData.kbLifted = true;
-      const matrix = new T.Matrix4();
-      const position = new T.Vector3();
-      const quaternion = new T.Quaternion();
-      const scale = new T.Vector3();
-      const horizontal = new T.Quaternion().setFromEuler(new T.Euler(Math.PI / 2, 0, 0));
-      const color = new T.Color();
-      const waterPalette = [0x4fae9f, 0x5797aa, 0x8ac6a6, 0x7c75a8];
-      const lavaPalette = [0xa94e38, 0xc06d4c, 0xd39b70, 0x8e4438];
-      const seamPalette = water
-        ? [0x8ff8ff, 0xffacd6, 0xa5ffd7]
-        : [0xffbf61, 0xff8b49, 0xf0d2a2];
+      const routeMesh = new T.Mesh(ribbonGeometry, ribbonMaterial);
+      routeMesh.name = water
+        ? 'LIVING TIDE · BRAIDED REEF CAUSEWAYS'
+        : 'COOLING ECLIPSE · QUENCHED TERRACOTTA ROADS';
+      routeMesh.castShadow = true;
+      routeMesh.receiveShadow = true;
+      routeMesh.frustumCulled = false;
+      routeMesh.userData.kbLifted = true;
+      profile.root.add(routeMesh);
+
       for (let index = 0; index < authoredSteps.length; index++) {
         const step = authoredSteps[index];
-        chartLift(step.x, step.bottom + (step.top - step.bottom) * .5, step.z, position);
-        quaternion.copy(liftQuatAt(step.x, step.z, new T.Quaternion()));
-        scale.set(step.radius, step.top - step.bottom, step.radius);
-        matrix.compose(position, quaternion, scale);
-        stoneMesh.setMatrixAt(index, matrix);
-        color.setHex((water ? waterPalette : lavaPalette)[step.edgeIndex % 4]);
-        stoneMesh.setColorAt(index, color);
-
-        chartLift(step.x, step.top + .04, step.z, position);
-        quaternion.copy(liftQuatAt(step.x, step.z, new T.Quaternion())).multiply(horizontal);
-        scale.setScalar(step.radius * .83);
-        matrix.compose(position, quaternion, scale);
-        rimMesh.setMatrixAt(index, matrix);
-        color.setHex(seamPalette[step.edgeIndex % seamPalette.length]);
-        rimMesh.setColorAt(index, color);
-
         const record = this.registerAuthoredPlanetPlatform(
           profile, step.id, step.x, step.z, step.top, step.bottom, step.radius,
           {
@@ -4237,33 +4328,1368 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             family: water ? 'reef-ground-flow' : 'cooled-terracotta-ground-flow',
             role: step.shortcut ? 'earned-ground-shortcut' : 'district-ground-alternative',
             routeId: step.edgeId, groundFlow: true, shortcut: step.shortcut,
-            renderMesh: stoneMesh, renderIndex: index,
+            tangentX: step.tangentX, tangentZ: step.tangentZ, routeWidth: step.routeWidth,
+            renderMesh: routeMesh, renderIndex: null,
           },
         );
-        // These are connective world solids, not destination platforms. Keep
-        // the original Moon-parity deck census unchanged while the shared
-        // collision solver still consumes every visible stepping drum.
         const registeredIndex = profile.platforms.lastIndexOf(record);
         if (registeredIndex >= 0) profile.platforms.splice(registeredIndex, 1);
         profile.solids.push(record);
-        record.renderMapping = { record, mesh: stoneMesh, instance: index, moving: false };
+        record.renderMapping = { record, mesh: routeMesh, instance: null, moving: false };
       }
-      stoneMesh.instanceMatrix.needsUpdate = true;
-      rimMesh.instanceMatrix.needsUpdate = true;
-      if (stoneMesh.instanceColor) stoneMesh.instanceColor.needsUpdate = true;
-      if (rimMesh.instanceColor) rimMesh.instanceColor.needsUpdate = true;
-      profile.root.add(stoneMesh, rimMesh);
+
+      // Two paced landmarks per edge turn travel into a sequence of small
+      // discoveries. They sit inside the real causeway footprint and mark the
+      // supports later used for ordinary enemies, breakables and reward trails.
+      const discoveryHosts = edgeSpecs.flatMap(edge => {
+        const steps = edge.orderedAuthorityIds.map(id => stepById.get(id)).filter(Boolean);
+        return [.34, .68].map((amount, stopIndex) => {
+          const step = steps[Math.round((steps.length - 1) * amount)];
+          step.discoveryStop = stopIndex;
+          step.discoveryRouteId = edge.id;
+          return step;
+        });
+      });
+      const makeTranslated = (geometry, x, y, z, sx = 1, sy = 1, sz = 1) => {
+        geometry.applyMatrix4(new T.Matrix4().compose(
+          new T.Vector3(x, y, z), new T.Quaternion(), new T.Vector3(sx, sy, sz),
+        ));
+        return geometry;
+      };
+      const landmarkGeometry = water
+        ? mergeStaticGeometries([
+          makeTranslated(new T.ConeGeometry(.38, 4.8, 6), 0, 2.4, 0),
+          makeTranslated(new T.ConeGeometry(.28, 3.8, 6), -.7, 1.9, .15, 1, 1, .72),
+          makeTranslated(new T.ConeGeometry(.25, 3.35, 6), .68, 1.68, -.1, 1, 1, .72),
+          makeTranslated(new T.OctahedronGeometry(.46, 0), 0, 4.75, 0),
+        ])
+        : mergeStaticGeometries([
+          makeTranslated(new T.BoxGeometry(.52, 4.4, .66), -1.18, 2.2, 0),
+          makeTranslated(new T.BoxGeometry(.52, 4.4, .66), 1.18, 2.2, 0),
+          makeTranslated(new T.BoxGeometry(2.88, .58, .72), 0, 4.12, 0),
+          makeTranslated(new T.OctahedronGeometry(.52, 0), 0, 4.92, 0),
+        ]);
+      const landmarkMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: water ? 0x087b75 : 0x8c270d,
+        emissiveIntensity: water ? .95 : 1.1,
+        roughness: .5,
+        metalness: water ? .03 : .38,
+        vertexColors: true,
+      });
+      const landmarkMesh = new T.InstancedMesh(
+        landmarkGeometry, landmarkMaterial, discoveryHosts.length,
+      );
+      landmarkMesh.name = water
+        ? 'LIVING TIDE · ROUTE CORAL WAYSTATIONS'
+        : 'COOLING ECLIPSE · ROUTE QUENCH GATES';
+      landmarkMesh.castShadow = true;
+      landmarkMesh.receiveShadow = true;
+      landmarkMesh.frustumCulled = false;
+      landmarkMesh.userData.kbLifted = true;
+      const matrix = new T.Matrix4();
+      const position = new T.Vector3();
+      const quaternion = new T.Quaternion();
+      const scale = new T.Vector3();
+      const landmarkColors = water
+        ? [0xff6dad, 0x5df4d0, 0xffc45d, 0x68cfff]
+        : [0xff8c42, 0xffd160, 0x9f5c54, 0x71d8df];
+      for (let index = 0; index < discoveryHosts.length; index++) {
+        const step = discoveryHosts[index];
+        const side = index % 2 ? -1 : 1;
+        const at = surfaceOffsetChartAt(
+          step.x, step.z, -step.tangentZ * side, step.tangentX * side,
+          step.routeWidth * .55, {},
+        );
+        chartLift(at.x, step.top + .08, at.z, position);
+        quaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(
+            UP, Math.atan2(step.tangentZ, step.tangentX),
+          ));
+        const size = water ? 1.15 + index % 3 * .18 : 1.02 + index % 4 * .12;
+        scale.set(size, size * (water ? 1 : 1.12), size);
+        matrix.compose(position, quaternion, scale);
+        landmarkMesh.setMatrixAt(index, matrix);
+        landmarkMesh.setColorAt(index, new T.Color(landmarkColors[index % landmarkColors.length]));
+      }
+      landmarkMesh.instanceMatrix.needsUpdate = true;
+      if (landmarkMesh.instanceColor) landmarkMesh.instanceColor.needsUpdate = true;
+      profile.root.add(landmarkMesh);
       profile.groundFlow = {
         edges: edgeSpecs,
         records: authoredSteps,
-        stoneMesh,
-        rimMesh,
+        routeMesh,
+        landmarkMesh,
+        discoveryHosts,
         loops: [
           { id: `${profile.id}-outer-district-ring`, edgeIds: edgeSpecs.slice(0, 12).map(edge => edge.id) },
           { id: `${profile.id}-canopy-depth-loop`, edgeIds: [edgeSpecs[1].id, edgeSpecs[2].id, edgeSpecs[12].id] },
           { id: `${profile.id}-nave-foundry-loop`, edgeIds: [edgeSpecs[5].id, edgeSpecs[6].id, edgeSpecs[13].id] },
         ],
       };
+    }
+    makePlanetWilderness(profile, water) {
+      // Seventeen deliberate terrain expeditions occupy the negative space between
+      // the twelve named districts. Their control points target the actual
+      // empty sectors found by the whole-sphere survey; unlike the district
+      // decks, they remain walkable country with one readable discovery every
+      // fifty-ish metres. Water grows coral migrations. Lava cools into fault
+      // pilgrimages. The shared topology is only a coverage skeleton; names,
+      // silhouettes, colours and encounter grammar remain planet-specific.
+      const routeSpecs = [
+        { key: 'north-spine', from: 0, to: 8, via: [[0, 520]],
+          waterName: 'SUNWARD MIGRATION', lavaName: 'ASH PROCESSIONAL' },
+        { key: 'northwest-bloom', from: 0, to: 7, via: [[-360, 520]],
+          waterName: 'VIOLET KELP ROAD', lavaName: 'SMOULDERING PSALM' },
+        { key: 'northeast-bloom', from: 0, to: 6, via: [[360, 520]],
+          waterName: 'MANTA NURSERY RUN', lavaName: 'ANVIL MIGRATION' },
+        { key: 'west-descent', from: 5, to: 10, via: [[-760, -390]],
+          waterName: 'BELLWHALE DESCENT', lavaName: 'BLACK BELL FAULT' },
+        { key: 'east-descent', from: 4, to: 11, via: [[760, -390]],
+          waterName: 'CORAL COMET FALL', lavaName: 'DRAGONGLASS FALL' },
+        { key: 'undertow-west', from: 3, to: 10, via: [[-250, -760]],
+          waterName: 'MIDNIGHT UNDERTOW', lavaName: 'ECLIPSE SCAR' },
+        { key: 'undertow-east', from: 3, to: 11, via: [[300, -760]],
+          waterName: 'LANTERNFISH CURRENT', lavaName: 'SUNDERED FURNACE' },
+        { key: 'deep-south', from: 10, to: 11, via: [[0, -960]],
+          waterName: 'GHOST CURRENT', lavaName: 'NIGHT-IRON MERIDIAN' },
+        { key: 'west-horizon', from: 7, to: 5, via: [[-820, -80]],
+          waterName: 'PEARL HORIZON', lavaName: 'COAL KING WALK' },
+        { key: 'east-horizon', from: 6, to: 4, via: [[820, -80]],
+          waterName: 'BRIGHTWATER HORIZON', lavaName: 'GOLD WOUND WALK' },
+        { key: 'northern-arc', from: 7, to: 6,
+          via: [[-360, 700], [0, 730], [360, 700]],
+          waterName: 'WHALESONG LATITUDE', lavaName: 'CROWN OF CINDERS' },
+        { key: 'west-harbour-bypass', from: 3, to: 5,
+          via: [[-250, -455], [-410, -510], [-650, -455]],
+          waterName: 'GLASS EEL BYPASS', lavaName: 'BROKEN KILN BYPASS' },
+        { key: 'east-harbour-bypass', from: 3, to: 4,
+          via: [[245, -455], [420, -500], [650, -445]],
+          waterName: 'MOONJELLY BYPASS', lavaName: 'SPLIT ANVIL BYPASS' },
+        { key: 'northwest-cap', from: 7, to: 9,
+          via: [[-620, 690], [-310, 940]],
+          waterName: 'LEVIATHAN SHOAL', lavaName: 'HELLSTAR SHOULDER' },
+        { key: 'northeast-cap', from: 6, to: 9,
+          via: [[620, 690], [310, 940]],
+          waterName: 'SUNFISH SHOAL', lavaName: 'BRASS SUN SHOULDER' },
+        { key: 'west-outer', from: 5, to: 10,
+          via: [[-950, -20], [-930, -320]],
+          waterName: 'DROWNED LONGITUDE', lavaName: 'COAL KING LONGITUDE' },
+        { key: 'east-outer', from: 4, to: 11,
+          via: [[950, 210], [940, -180]],
+          waterName: 'AURORA LONGITUDE', lavaName: 'TYRANT LONGITUDE' },
+      ];
+      const directionA = new T.Vector3();
+      const directionB = new T.Vector3();
+      const direction = new T.Vector3();
+      const worldPoint = new T.Vector3();
+      const sphericalPoint = (from, to, amount, target = {}) => {
+        chartDirAt(from.x, from.z, directionA);
+        chartDirAt(to.x, to.z, directionB);
+        const theta = Math.acos(clamp(directionA.dot(directionB), -1, 1));
+        const sine = Math.sin(theta);
+        if (theta < 1e-5 || Math.abs(sine) < 1e-5) {
+          direction.copy(directionA).lerp(directionB, amount).normalize();
+        } else {
+          direction.copy(directionA).multiplyScalar(Math.sin((1 - amount) * theta) / sine)
+            .addScaledVector(directionB, Math.sin(amount * theta) / sine).normalize();
+        }
+        worldPoint.copy(direction).multiplyScalar(PLANET.radius).add(PLANET.centre);
+        return chartAt(worldPoint, target);
+      };
+      const nearestSiteIndex = point => {
+        let bestIndex = 0;
+        let bestDistance = Infinity;
+        for (let index = 0; index < profile.sites.length; index++) {
+          const site = profile.sites[index];
+          const distance = surfaceDistanceAt(point.x, point.z, site.x, site.z);
+          if (distance < bestDistance) { bestDistance = distance; bestIndex = index; }
+        }
+        return bestIndex;
+      };
+      const records = [];
+      const routes = [];
+      for (let routeIndex = 0; routeIndex < routeSpecs.length; routeIndex++) {
+        const spec = routeSpecs[routeIndex];
+        const controls = [
+          profile.sites[spec.from],
+          ...spec.via.map(([x, z]) => ({ x, z })),
+          profile.sites[spec.to],
+        ];
+        const routeRecords = [];
+        const safeNodes = [{
+          id: `${profile.id}-wild-${spec.key}-control-0`,
+          x: controls[0].x, z: controls[0].z,
+        }];
+        for (let legIndex = 0; legIndex < controls.length - 1; legIndex++) {
+          const from = controls[legIndex];
+          const to = controls[legIndex + 1];
+          const distance = surfaceDistanceAt(from.x, from.z, to.x, to.z);
+          const segments = Math.max(3, Math.ceil(distance / (water ? 52 : 55)));
+          for (let step = 1; step < segments; step++) {
+            let at = sphericalPoint(from, to, step / segments, {});
+            if (this.interworldScatterReserved(at.x, at.z, 7)) continue;
+            at = this.confineAlternateChart(at.x, at.z, 14);
+            const siteIndex = nearestSiteIndex(at);
+            const ground = profile.heightAt(at.x, at.z);
+            const record = {
+              id: `${profile.id}-wild-${spec.key}-${legIndex}-${step}`,
+              routeId: `${profile.id}-wild-${spec.key}`,
+              routeIndex, legIndex, step, segments,
+              name: water ? spec.waterName : spec.lavaName,
+              x: at.x, z: at.z, top: ground + .12, bottom: ground - .2,
+              radius: water ? 12.5 : 13.5,
+              siteIndex, biomeId: profile.sites[siteIndex].biome,
+              family: water ? 'open-country-coral-migration' : 'open-country-cooled-fault',
+              role: 'wilderness-discovery-host', wilderness: true,
+            };
+            routeRecords.push(record);
+            records.push(record);
+            safeNodes.push(record);
+          }
+          const control = this.confineAlternateChart(to.x, to.z, 14);
+          safeNodes.push({
+            id: `${profile.id}-wild-${spec.key}-control-${legIndex + 1}`,
+            x: control.x, z: control.z,
+          });
+        }
+        for (let index = 0; index < routeRecords.length; index++) {
+          const before = routeRecords[Math.max(0, index - 1)];
+          const after = routeRecords[Math.min(routeRecords.length - 1, index + 1)];
+          const tangentLength = Math.hypot(after.x - before.x, after.z - before.z) || 1;
+          routeRecords[index].tangentX = (after.x - before.x) / tangentLength;
+          routeRecords[index].tangentZ = (after.z - before.z) / tangentLength;
+          routeRecords[index].routeWidth = water ? 10.5 : 11.5;
+          routeRecords[index].routeStep = index;
+          routeRecords[index].routeSteps = routeRecords.length;
+        }
+        routes.push({
+          id: `${profile.id}-wild-${spec.key}`,
+          name: water ? spec.waterName : spec.lavaName,
+          fromSiteIndex: spec.from, toSiteIndex: spec.to,
+          records: routeRecords, safeNodes,
+          family: water ? 'coral-migration' : 'cooled-fault-pilgrimage',
+        });
+      }
+
+      // Routes provide rhythm; these named pockets occupy the remaining
+      // interstitial blind spots and give each long crossing a destination of
+      // its own. They are intentionally few, large and memorable rather than
+      // another even scatter over the globe.
+      const pocketSpecs = [
+        [-550, 140, 'SIREN OSSUARY', 'SOOT RELIQUARY'],
+        [0, -815, 'DARKWATER MOONPOOL', 'MIDNIGHT CRUCIBLE'],
+        [-210, -310, 'GLASS-EEL NURSERY', 'CINDER WASP NEST'],
+        [300, -290, 'JELLY LANTERN BED', 'BROKEN BELLOWS'],
+        [20, -60, 'TIDE MIRROR', 'EMBER MIRROR'],
+        [215, 605, 'SUNFISH CHAPEL', 'BRASS SUN CHAPEL'],
+        [-205, 605, 'WHALESONG GROTTO', 'ASHEN CHOIR LOFT'],
+        [-835, 590, 'PURPLE CURRENT', 'VIOLET SLAG FIELD'],
+        [-850, 100, 'DROWNED AURORA', 'BLACK-SUN SCAR'],
+        [805, 590, 'MANTA HALO', 'GOLD ANVIL HALO'],
+        [850, 180, 'POLAR BLOOM', 'TYRANT BLOOM'],
+        [-260, -820, 'GHOST REEF', 'NIGHT-FIRE ALTAR'],
+        [640, -605, 'DRIFTGLASS RANGE', 'REAPER ANVIL'],
+        [-360, 300, 'EELBONE CROSSING', 'SHATTERED CRUCIBLE'],
+        [-315, -615, 'BLACKWATER FAN', 'ASHMAW FAN'],
+        [-80, 460, 'NORTHSTAR CORAL', 'PYRE CROWN'],
+        [430, -700, 'GHOSTFIN BED', 'SMOKE VIPER BED'],
+        [-615, -595, 'DEADWHALE GARDEN', 'BURNT KING GARDEN'],
+        [180, -660, 'INK COMET', 'COAL COMET'],
+        [-520, -80, 'SALT ORGAN', 'CINDER ORGAN'],
+        [-80, 70, 'TIDECLOCK', 'FIRECLOCK'],
+        [590, 1022, 'ANTIPODAL SUNFAN', 'ANTIPODAL SUNSPIKE'],
+        [-1285, 0, 'ANTIPODAL WHALEBONE', 'ANTIPODAL KINGBONE'],
+        [590, -1022, 'ANTIPODAL NIGHTBLOOM', 'ANTIPODAL NIGHTFIRE'],
+      ];
+      const pockets = pocketSpecs.map(([x, z, waterName, lavaName], index) => {
+        const at = this.confineAlternateChart(x, z, 18);
+        const siteIndex = nearestSiteIndex(at);
+        const ground = profile.heightAt(at.x, at.z);
+        const angle = index * 2.3999632297 + .31;
+        const record = {
+          id: `${profile.id}-wild-pocket-${index}`,
+          routeId: `${profile.id}-wild-pocket-${index}`,
+          routeIndex: routeSpecs.length + index,
+          legIndex: 0, step: 2, segments: 4,
+          routeStep: 0, routeSteps: 1,
+          name: water ? waterName : lavaName,
+          x: at.x, z: at.z, top: ground + .12, bottom: ground - .2,
+          radius: water ? 18 : 20,
+          tangentX: Math.cos(angle), tangentZ: Math.sin(angle),
+          routeWidth: water ? 14 : 15,
+          siteIndex, biomeId: profile.sites[siteIndex].biome,
+          family: water ? 'named-wilderness-reef' : 'named-wilderness-forge',
+          role: 'named-wilderness-pocket', wilderness: true, pocket: true,
+          farCap: Math.hypot(at.x, at.z) > 1250,
+        };
+        records.push(record);
+        return record;
+      });
+
+      // A route must exist under the player's feet, especially on the Lava
+      // world where uncooled terrain hurts.  Densely sample the same geodesic
+      // sentence used by the named landmarks and draw one ground-hugging mat:
+      // reef ribbon for Water, quenched crust for Lava.  The Lava gameplay
+      // check consumes these exact samples as its safe-surface authority.
+      const trailPositions = [];
+      const trailColours = [];
+      const trailIndices = [];
+      const trailPalette = water
+        ? [0x0a373b, 0x102f42, 0x123b32, 0x2b2540, 0x0b3c45]
+        : [0x0e0a0c, 0x151015, 0x1b100e, 0x110e15, 0x211109];
+      const appendTrailPoint = (point, colour) => {
+        trailPositions.push(point.x, point.y, point.z);
+        trailColours.push(colour.r, colour.g, colour.b);
+      };
+      const trailLeft = new T.Vector3();
+      const trailRight = new T.Vector3();
+      const safeSamples = [];
+      for (let routeIndex = 0; routeIndex < routes.length; routeIndex++) {
+        const route = routes[routeIndex];
+        const path = [];
+        for (let nodeIndex = 0; nodeIndex < route.safeNodes.length - 1; nodeIndex++) {
+          const from = route.safeNodes[nodeIndex];
+          const to = route.safeNodes[nodeIndex + 1];
+          const distance = surfaceDistanceAt(from.x, from.z, to.x, to.z);
+          const segments = Math.max(1, Math.ceil(distance / 10.5));
+          for (let step = nodeIndex ? 1 : 0; step <= segments; step++) {
+            const at = sphericalPoint(from, to, step / segments, {});
+            path.push(at);
+          }
+        }
+        route.pathSamples = path;
+        const colour = new T.Color(trailPalette[routeIndex % trailPalette.length]);
+        const width = (water ? 5.15 : 7.4) + routeIndex % 3 * (water ? .34 : .48);
+        for (let index = 0; index < path.length; index++) {
+          const at = path[index];
+          const before = path[Math.max(0, index - 1)];
+          const after = path[Math.min(path.length - 1, index + 1)];
+          const tangentX = after.x - before.x;
+          const tangentZ = after.z - before.z;
+          const tangentLength = Math.hypot(tangentX, tangentZ) || 1;
+          // Independent edge rhythms prevent the mat from becoming a ruler-
+          // straight strip while preserving enough width for ordinary sprint
+          // steering.  The safe radius below uses the narrower visible edge.
+          const leftWidth = width * (.82 + Math.sin(index * .67 + routeIndex * .71) * .14);
+          const rightWidth = width * (.82 + Math.sin(index * .53 + routeIndex * 1.19 + 1.7) * .14);
+          const left = surfaceOffsetChartAt(
+            at.x, at.z, -tangentZ / tangentLength, tangentX / tangentLength, leftWidth, {},
+          );
+          const right = surfaceOffsetChartAt(
+            at.x, at.z, tangentZ / tangentLength, -tangentX / tangentLength, rightWidth, {},
+          );
+          chartLift(left.x, profile.heightAt(left.x, left.z) + .13, left.z, trailLeft);
+          chartLift(right.x, profile.heightAt(right.x, right.z) + .13, right.z, trailRight);
+          const base = trailPositions.length / 3;
+          const leftColour = colour.clone().offsetHSL(0, 0, .025);
+          const rightColour = colour.clone().offsetHSL(0, 0, -.015);
+          appendTrailPoint(trailLeft, leftColour);
+          appendTrailPoint(trailRight, rightColour);
+          if (index > 0) {
+            trailIndices.push(base - 2, base - 1, base, base - 1, base + 1, base);
+          }
+          safeSamples.push({
+            x: at.x, z: at.z,
+            radius: Math.min(leftWidth, rightWidth) * .72,
+            routeId: route.id,
+          });
+        }
+      }
+      // A reward pocket that is merely near a route is still an isolated
+      // island. Give every one its own visible, walkable spur from the nearest
+      // migration/pilgrim road. On Lava the exact same samples become safety
+      // authority, so following the branch can never be a beautifully marked
+      // route into damage.
+      for (let pocketIndex = 0; pocketIndex < pockets.length; pocketIndex++) {
+        const pocket = pockets[pocketIndex];
+        let nearest = null;
+        let nearestDistance = Infinity;
+        for (const route of routes) {
+          for (const sample of route.pathSamples || EMPTY_SOLIDS) {
+            const distance = surfaceDistanceAt(sample.x, sample.z, pocket.x, pocket.z);
+            if (distance < nearestDistance) {
+              nearestDistance = distance;
+              nearest = sample;
+            }
+          }
+        }
+        if (!nearest) continue;
+        const segments = Math.max(2, Math.ceil(nearestDistance / 10.5));
+        const path = [];
+        for (let step = 0; step <= segments; step++) {
+          path.push(sphericalPoint(nearest, pocket, step / segments, {}));
+        }
+        pocket.spurPath = path;
+        pocket.spurRouteId = `${pocket.id}-spur`;
+        pocket.routeDistance = nearestDistance;
+        const colour = new T.Color(trailPalette[(routes.length + pocketIndex) % trailPalette.length]);
+        const width = (water ? 4.45 : 6.2) + pocketIndex % 3 * (water ? .28 : .36);
+        for (let index = 0; index < path.length; index++) {
+          const at = path[index];
+          const before = path[Math.max(0, index - 1)];
+          const after = path[Math.min(path.length - 1, index + 1)];
+          const tangentX = after.x - before.x;
+          const tangentZ = after.z - before.z;
+          const tangentLength = Math.hypot(tangentX, tangentZ) || 1;
+          const edgePulse = .86 + Math.sin(index * .61 + pocketIndex * .73) * .11;
+          const leftWidth = width * edgePulse;
+          const rightWidth = width * (.86 + Math.sin(index * .47 + pocketIndex * 1.11 + 1.9) * .11);
+          const left = surfaceOffsetChartAt(
+            at.x, at.z, -tangentZ / tangentLength, tangentX / tangentLength, leftWidth, {},
+          );
+          const right = surfaceOffsetChartAt(
+            at.x, at.z, tangentZ / tangentLength, -tangentX / tangentLength, rightWidth, {},
+          );
+          chartLift(left.x, profile.heightAt(left.x, left.z) + .14, left.z, trailLeft);
+          chartLift(right.x, profile.heightAt(right.x, right.z) + .14, right.z, trailRight);
+          const base = trailPositions.length / 3;
+          appendTrailPoint(trailLeft, colour.clone().offsetHSL(0, 0, .025));
+          appendTrailPoint(trailRight, colour.clone().offsetHSL(0, 0, -.015));
+          if (index > 0) {
+            trailIndices.push(base - 2, base - 1, base, base - 1, base + 1, base);
+          }
+          safeSamples.push({
+            x: at.x, z: at.z,
+            radius: Math.min(leftWidth, rightWidth) * .72,
+            routeId: pocket.spurRouteId,
+          });
+        }
+      }
+      const trailGeometry = new T.BufferGeometry();
+      trailGeometry.setAttribute('position', new T.Float32BufferAttribute(trailPositions, 3));
+      trailGeometry.setAttribute('color', new T.Float32BufferAttribute(trailColours, 3));
+      trailGeometry.setIndex(trailIndices);
+      trailGeometry.computeVertexNormals();
+      trailGeometry.computeBoundingSphere();
+      const trailMaterial = new T.MeshBasicMaterial({
+        color: 0xffffff,
+        vertexColors: true,
+        transparent: true,
+        opacity: water ? .78 : .94,
+        side: T.DoubleSide,
+      });
+      const trailMesh = new T.Mesh(trailGeometry, trailMaterial);
+      trailMesh.name = water
+        ? 'OPEN COUNTRY · GROUND-HUGGING REEF MIGRATIONS'
+        : 'OPEN COUNTRY · SAFE QUENCHED-CRUST PILGRIM ROADS';
+      trailMesh.receiveShadow = true;
+      trailMesh.frustumCulled = false;
+      trailMesh.userData.kbLifted = true;
+      profile.root.add(trailMesh);
+
+      const transformed = (geometry, {
+        x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0,
+        sx = 1, sy = 1, sz = 1,
+      } = {}) => {
+        geometry.applyMatrix4(new T.Matrix4().compose(
+          new T.Vector3(x, y, z),
+          new T.Quaternion().setFromEuler(new T.Euler(rx, ry, rz)),
+          new T.Vector3(sx, sy, sz),
+        ));
+        return geometry;
+      };
+      const segmentBetween = (from, to, radius, sides = 6) => {
+        const start = new T.Vector3(...from);
+        const end = new T.Vector3(...to);
+        const delta = end.clone().sub(start);
+        const length = delta.length();
+        const geometry = new T.CylinderGeometry(radius * .78, radius, length, sides, 1, false);
+        const position = start.clone().add(end).multiplyScalar(.5);
+        const quaternion = new T.Quaternion().setFromUnitVectors(UP, delta.normalize());
+        geometry.applyMatrix4(new T.Matrix4().compose(position, quaternion, ONE_SCALE));
+        return geometry;
+      };
+
+      // The open-country banks are continuous authored silhouettes, not one
+      // copy-pasted spike per fifty metres. Three low-poly families alternate
+      // along each route: branching coral / kelp / fan reef in Water; basalt
+      // colonnade / broken forge / crater vent in Lava. They are soft scenery
+      // so a fast sprint remains readable and never catches on decorative toes.
+      const waterBankGeometries = [
+        mergeStaticGeometries([
+          transformed(new T.SphereGeometry(1, 7, 5), { y: .42, sx: 2.4, sy: .48, sz: 1.8 }),
+          segmentBetween([0, .4, 0], [0, 4.9, 0], .34),
+          segmentBetween([-.05, 2.05, 0], [-2.05, 5.7, .32], .23, 5),
+          segmentBetween([.03, 2.65, 0], [2.15, 6.55, -.38], .22, 5),
+          segmentBetween([-.12, 3.2, .05], [-.78, 7.05, 1.45], .18, 5),
+          transformed(new T.IcosahedronGeometry(.46, 0), { x: -2.08, y: 5.74, z: .32, sx: 1.5, sy: .72, sz: 1.25 }),
+          transformed(new T.IcosahedronGeometry(.42, 0), { x: 2.18, y: 6.59, z: -.38, sx: 1.45, sy: .68, sz: 1.2 }),
+          transformed(new T.IcosahedronGeometry(.36, 0), { x: -.8, y: 7.08, z: 1.45, sx: 1.42, sy: .66, sz: 1.16 }),
+        ]),
+        mergeStaticGeometries([
+          transformed(new T.SphereGeometry(1, 7, 5), { y: .3, sx: 2.7, sy: .34, sz: 1.7 }),
+          new T.TubeGeometry(new T.CatmullRomCurve3([
+            new T.Vector3(-1.05, .25, 0), new T.Vector3(-1.45, 2.5, .35),
+            new T.Vector3(-.55, 5.3, -.25), new T.Vector3(-1.25, 8.1, .35),
+          ]), 8, .18, 5, false),
+          new T.TubeGeometry(new T.CatmullRomCurve3([
+            new T.Vector3(.1, .25, .35), new T.Vector3(.65, 2.4, -.15),
+            new T.Vector3(.05, 4.8, .45), new T.Vector3(.85, 7.15, -.25),
+          ]), 8, .16, 5, false),
+          new T.TubeGeometry(new T.CatmullRomCurve3([
+            new T.Vector3(1.18, .25, -.22), new T.Vector3(1.55, 1.9, .28),
+            new T.Vector3(1.05, 3.95, -.38), new T.Vector3(1.7, 5.85, .12),
+          ]), 7, .14, 5, false),
+          transformed(new T.OctahedronGeometry(.62, 0), { x: -1.25, y: 8.08, z: .35, sx: 2.2, sy: .42, sz: 1.45 }),
+          transformed(new T.OctahedronGeometry(.54, 0), { x: .86, y: 7.12, z: -.25, sx: 2, sy: .4, sz: 1.4 }),
+          transformed(new T.OctahedronGeometry(.46, 0), { x: 1.72, y: 5.84, z: .12, sx: 1.85, sy: .38, sz: 1.3 }),
+        ]),
+        mergeStaticGeometries([
+          transformed(new T.DodecahedronGeometry(1, 0), { y: .48, sx: 2.6, sy: .52, sz: 1.8 }),
+          ...Array.from({ length: 7 }, (_, branch) => {
+            const spread = (branch - 3) * .67;
+            return segmentBetween([0, .55, 0], [spread, 4.8 + (3 - Math.abs(branch - 3)) * .62, .18 * Math.sin(branch)], .15 + (branch % 2) * .025, 5);
+          }),
+          ...Array.from({ length: 5 }, (_, branch) => {
+            const spread = (branch - 2) * .88;
+            return segmentBetween([spread * .52, 2.65, 0], [spread, 5.2 + (2 - Math.abs(branch - 2)) * .58, .2], .095, 5);
+          }),
+          transformed(new T.TorusGeometry(3.2, .11, 5, 20, Math.PI * 1.42), { y: 3.35, rz: -.18 }),
+        ]),
+      ];
+      const lavaBankGeometries = [
+        mergeStaticGeometries([
+          transformed(new T.DodecahedronGeometry(1, 0), { y: .42, sx: 2.9, sy: .58, sz: 2.15 }),
+          transformed(new T.CylinderGeometry(.72, .94, 6.8, 6), { x: -1.35, y: 3.4, z: .2, rz: -.06 }),
+          transformed(new T.CylinderGeometry(.58, .78, 5.1, 6), { x: .15, y: 2.55, z: -.55, rz: .08 }),
+          transformed(new T.CylinderGeometry(.66, .86, 7.9, 6), { x: 1.48, y: 3.95, z: .32, rz: .05 }),
+          transformed(new T.CylinderGeometry(.42, .6, 3.7, 6), { x: 2.35, y: 1.85, z: -.65, rz: .14 }),
+        ]),
+        mergeStaticGeometries([
+          transformed(new T.DodecahedronGeometry(1, 0), { y: .4, sx: 3.05, sy: .52, sz: 1.9 }),
+          transformed(new T.BoxGeometry(1.05, 7.2, 1.2), { x: -2.05, y: 3.55, rz: -.18 }),
+          transformed(new T.BoxGeometry(1.05, 5.8, 1.2), { x: 2.05, y: 2.85, rz: .24 }),
+          transformed(new T.BoxGeometry(4.35, .86, 1.28), { x: -.18, y: 6.45, rz: -.11 }),
+          transformed(new T.OctahedronGeometry(.5, 0), { x: 1.85, y: 6.35, sx: 1.4, sy: 1.8, sz: 1.18 }),
+        ]),
+        mergeStaticGeometries([
+          transformed(new T.DodecahedronGeometry(1, 0), { y: .4, sx: 3.2, sy: .58, sz: 2.65 }),
+          transformed(new T.TorusGeometry(2.25, .28, 6, 20), { y: .78, rx: Math.PI / 2 }),
+          transformed(new T.CylinderGeometry(.72, 1.15, 4.4, 7), { y: 2.4 }),
+          transformed(new T.ConeGeometry(.42, 3.4, 5), { x: -2.25, y: 1.7, z: .38, rz: -.2 }),
+          transformed(new T.ConeGeometry(.36, 2.9, 5), { x: 2.15, y: 1.45, z: -.5, rz: .25 }),
+          transformed(new T.TorusGeometry(.82, .13, 5, 14), { y: 4.45, rx: Math.PI / 2 }),
+        ]),
+      ];
+      const bankGeometries = water ? waterBankGeometries : lavaBankGeometries;
+      const bankPlacements = bankGeometries.map(() => []);
+      for (let routeIndex = 0; routeIndex < routes.length; routeIndex++) {
+        const path = routes[routeIndex].pathSamples || EMPTY_SOLIDS;
+        for (let index = 2; index < path.length - 2; index++) {
+          if ((index + routeIndex * 2) % 3 !== 0) continue;
+          const at = path[index];
+          // Districts already have their own silhouette and interaction. These
+          // banks start only after the player leaves one and stop before the
+          // next, preventing another pile at either endpoint.
+          if (profile.sites.some(site => surfaceDistanceAt(at.x, at.z, site.x, site.z) < 68)) continue;
+          const before = path[index - 1];
+          const after = path[index + 1];
+          const tangentX = after.x - before.x;
+          const tangentZ = after.z - before.z;
+          const tangentLength = Math.hypot(tangentX, tangentZ) || 1;
+          const sides = (index + routeIndex) % 7 === 0 ? [-1, 1]
+            : [(index + routeIndex) % 2 ? 1 : -1];
+          for (const side of sides) {
+            const family = Math.abs(index + routeIndex * 2 + (side < 0 ? 1 : 0)) % bankGeometries.length;
+            const reach = (water ? 11.5 : 13) + family * 3.1
+              + Math.sin(index * .73 + routeIndex) * 2.1;
+            const scenery = surfaceOffsetChartAt(
+              at.x, at.z,
+              -tangentZ / tangentLength * side,
+              tangentX / tangentLength * side,
+              reach, {},
+            );
+            if (this.interworldScatterReserved(scenery.x, scenery.z, 3.5)) continue;
+            const size = .78 + ((index * 5 + routeIndex * 3 + family) % 7) * .075
+              + ((index + routeIndex) % 17 === 0 ? .42 : 0);
+            bankPlacements[family].push({
+              x: scenery.x, z: scenery.z,
+              yaw: Math.atan2(tangentZ, tangentX) + side * .18,
+              size, routeId: routes[routeIndex].id,
+            });
+          }
+        }
+      }
+      const bankColours = water
+        ? [0x287f77, 0x315f82, 0x935b83, 0x3f947c, 0xb66776, 0x5670a0]
+        : [0x3b2426, 0x642b24, 0x2d2932, 0x87412b, 0x533038, 0x9a5638];
+      const bankMeshes = [];
+      for (let family = 0; family < bankGeometries.length; family++) {
+        const placements = bankPlacements[family];
+        const material = new T.MeshStandardMaterial({
+          color: 0xffffff,
+          emissive: water ? 0x073c42 : 0x4b1008,
+          emissiveIntensity: water ? .4 : .48,
+          roughness: water ? .78 : .9,
+          metalness: water ? .025 : .16,
+          vertexColors: true,
+        });
+        const mesh = new T.InstancedMesh(bankGeometries[family], material, placements.length);
+        mesh.name = water
+          ? `OPEN COUNTRY · CONTINUOUS REEF BANK ${family + 1}`
+          : `OPEN COUNTRY · CONTINUOUS FORGE BANK ${family + 1}`;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.frustumCulled = false;
+        mesh.userData.kbLifted = true;
+        const matrix = new T.Matrix4();
+        const position = new T.Vector3();
+        const quaternion = new T.Quaternion();
+        const scale = new T.Vector3();
+        for (let index = 0; index < placements.length; index++) {
+          const placement = placements[index];
+          const ground = profile.heightAt(placement.x, placement.z);
+          chartLift(placement.x, ground + .04, placement.z, position);
+          quaternion.copy(liftQuatAt(placement.x, placement.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, placement.yaw));
+          scale.set(
+            placement.size * (index % 5 === 0 ? 1.14 : 1),
+            placement.size * (index % 9 === 0 ? 1.22 : 1),
+            placement.size * (index % 4 === 0 ? .88 : 1),
+          );
+          matrix.compose(position, quaternion, scale);
+          mesh.setMatrixAt(index, matrix);
+          mesh.setColorAt(index, new T.Color(bankColours[
+            (index * 3 + family * 2 + placement.routeId.length) % bankColours.length
+          ]));
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        profile.root.add(mesh);
+        bankMeshes.push(mesh);
+      }
+
+      // Irregular embedded stones break the route mat into a trail at eye
+      // level. They are almost flush, visual only, and therefore cannot turn a
+      // road into another obstacle course.
+      const trailDetailHosts = [];
+      for (let routeIndex = 0; routeIndex < routes.length; routeIndex++) {
+        const path = routes[routeIndex].pathSamples || EMPTY_SOLIDS;
+        for (let index = 1; index < path.length - 1; index += 4) {
+          const before = path[index - 1], after = path[index + 1];
+          trailDetailHosts.push({
+            ...path[index],
+            yaw: Math.atan2(after.z - before.z, after.x - before.x),
+            routeIndex, step: index,
+          });
+        }
+      }
+      const trailDetailGeometry = water
+        ? new T.DodecahedronGeometry(1, 0) : new T.BoxGeometry(1, 1, 1);
+      const trailDetailMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: water ? 0x0b5c64 : 0x5c160b,
+        emissiveIntensity: water ? .32 : .46,
+        roughness: .92, metalness: water ? .02 : .1,
+        vertexColors: true,
+      });
+      const trailDetailMesh = new T.InstancedMesh(
+        trailDetailGeometry, trailDetailMaterial, trailDetailHosts.length,
+      );
+      trailDetailMesh.name = water
+        ? 'OPEN COUNTRY · REEF-ROAD SAND DOLLARS'
+        : 'OPEN COUNTRY · QUENCHED ROAD PLATE JOINTS';
+      trailDetailMesh.receiveShadow = true;
+      trailDetailMesh.frustumCulled = false;
+      trailDetailMesh.userData.kbLifted = true;
+      {
+        const matrix = new T.Matrix4();
+        const position = new T.Vector3();
+        const quaternion = new T.Quaternion();
+        const scale = new T.Vector3();
+        for (let index = 0; index < trailDetailHosts.length; index++) {
+          const host = trailDetailHosts[index];
+          chartLift(host.x, profile.heightAt(host.x, host.z) + .18, host.z, position);
+          quaternion.copy(liftQuatAt(host.x, host.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, host.yaw + Math.sin(index) * .2));
+          const length = 1.8 + (index % 4) * .42;
+          scale.set(length, water ? .13 : .09, .72 + (index % 3) * .16);
+          matrix.compose(position, quaternion, scale);
+          trailDetailMesh.setMatrixAt(index, matrix);
+          trailDetailMesh.setColorAt(index, new T.Color(water
+            ? [0x3d7771, 0x476980, 0x655875, 0x2d716d][index % 4]
+            : [0x2a1a1c, 0x3c2020, 0x241f27, 0x4b271f][index % 4]));
+        }
+      }
+      trailDetailMesh.instanceMatrix.needsUpdate = true;
+      if (trailDetailMesh.instanceColor) trailDetailMesh.instanceColor.needsUpdate = true;
+      profile.root.add(trailDetailMesh);
+
+      // Close-range texture is the missing scale between one large landmark
+      // and the terrain map. A very cheap double-sided blade/shard cluster is
+      // instanced along both edges of every main path and pocket spur. Water
+      // reads as continuous seagrass and young coral; Lava as ash reeds and
+      // broken glass crust. Twelve thousand tiny triangles fill the visual
+      // rhythm that hundreds of thousands of distant landmark triangles did
+      // not, without becoming collision confetti.
+      let edgeGrowthGeometry;
+      if (water) {
+        const edgePositions = [];
+        const triangle = (a, b, c) => edgePositions.push(...a, ...b, ...c);
+        for (let blade = 0; blade < 7; blade++) {
+          const x = (blade % 4 - 1.5) * 1.2 + Math.sin(blade * 2.1) * .3;
+          const z = (Math.floor(blade / 4) - .45) * 4.25 + Math.cos(blade * 1.7) * .72;
+          const height = 1.25 + (blade % 4) * .42;
+          const width = .2 + (blade % 3) * .065;
+          const lean = (blade % 2 ? 1 : -1) * (.28 + blade % 3 * .1);
+          const baseLeft = [x - width, 0, z];
+          const baseRight = [x + width, 0, z];
+          const middleLeft = [x - width * .52 + lean * .38, height * .48, z + lean * .16];
+          const middleRight = [x + width * .48 + lean * .38, height * .48, z + lean * .16];
+          const tipLeft = [x - width * .08 + lean, height, z + lean * .35];
+          const tipRight = [x + width * .08 + lean, height, z + lean * .35];
+          triangle(baseLeft, baseRight, middleRight);
+          triangle(baseLeft, middleRight, middleLeft);
+          triangle(middleLeft, middleRight, tipRight);
+          triangle(middleLeft, tipRight, tipLeft);
+        }
+        edgeGrowthGeometry = new T.BufferGeometry();
+        edgeGrowthGeometry.setAttribute(
+          'position', new T.Float32BufferAttribute(edgePositions, 3),
+        );
+        edgeGrowthGeometry.computeVertexNormals();
+        edgeGrowthGeometry.computeBoundingSphere();
+      } else {
+        // Lava's old edge treatment used one huge flat triangle per shard,
+        // producing kilometre after kilometre of identical black teeth. Low
+        // tetrahedral scree and one broken crust plate retain cheap close-range
+        // texture while reading as cooled geology rather than fence spam.
+        edgeGrowthGeometry = mergeStaticGeometries([
+          transformed(new T.TetrahedronGeometry(.72, 0), { x: -1.7, y: .34, z: -1.75, sx: 1.45, sy: .68, sz: 1.08, ry: .3 }),
+          transformed(new T.TetrahedronGeometry(.58, 0), { x: .2, y: .27, z: -2.15, sx: 1.2, sy: .7, sz: 1.35, ry: -.5 }),
+          transformed(new T.TetrahedronGeometry(.78, 0), { x: 1.65, y: .36, z: -.35, sx: 1.55, sy: .62, sz: 1.1, ry: .8 }),
+          transformed(new T.TetrahedronGeometry(.52, 0), { x: -1.05, y: .24, z: 1.75, sx: 1.3, sy: .66, sz: 1.45, ry: -.25 }),
+          transformed(new T.TetrahedronGeometry(.64, 0), { x: 1.3, y: .29, z: 2.05, sx: 1.4, sy: .63, sz: 1.18, ry: .55 }),
+          transformed(new T.BoxGeometry(1.8, .18, 2.5), { x: .05, y: .08, z: .6, ry: .4 }),
+        ]);
+      }
+      const edgeGrowthPlacements = [];
+      const scenicPaths = [
+        ...routes.map((route, index) => ({ path: route.pathSamples, index })),
+        ...pockets.map((pocket, index) => ({ path: pocket.spurPath, index: routes.length + index })),
+      ];
+      for (const scenic of scenicPaths) {
+        const path = scenic.path || EMPTY_SOLIDS;
+        for (let index = 1; index < path.length - 1; index++) {
+          const at = path[index];
+          if (profile.sites.some(site => surfaceDistanceAt(at.x, at.z, site.x, site.z) < 46)) continue;
+          const before = path[index - 1], after = path[index + 1];
+          const tangentX = after.x - before.x;
+          const tangentZ = after.z - before.z;
+          const tangentLength = Math.hypot(tangentX, tangentZ) || 1;
+          const sides = (index + scenic.index) % 2 ? [-1, 1]
+            : [(index + scenic.index) % 4 ? 1 : -1];
+          for (const side of sides) {
+            const reach = (water ? 8.6 : 9.8) + Math.sin(index * .81 + scenic.index) * 1.15;
+            const edge = surfaceOffsetChartAt(
+              at.x, at.z,
+              -tangentZ / tangentLength * side,
+              tangentX / tangentLength * side,
+              reach, {},
+            );
+            if (this.interworldScatterReserved(edge.x, edge.z, 1.2)) continue;
+            edgeGrowthPlacements.push({
+              x: edge.x, z: edge.z,
+              yaw: Math.atan2(tangentZ, tangentX) + (side < 0 ? Math.PI : 0),
+              size: .78 + ((index * 3 + scenic.index * 5) % 7) * .08,
+              pathIndex: scenic.index,
+            });
+          }
+        }
+      }
+      const edgeGrowthMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: water ? 0x063e39 : 0x4b100a,
+        emissiveIntensity: water ? .26 : .38,
+        roughness: .94, metalness: water ? .01 : .08,
+        side: T.DoubleSide, vertexColors: true,
+      });
+      const edgeGrowthMesh = new T.InstancedMesh(
+        edgeGrowthGeometry, edgeGrowthMaterial, edgeGrowthPlacements.length,
+      );
+      edgeGrowthMesh.name = water
+        ? 'OPEN COUNTRY · CONTINUOUS SEAGRASS ROAD EDGES'
+        : 'OPEN COUNTRY · CONTINUOUS ASH-GLASS ROAD EDGES';
+      edgeGrowthMesh.receiveShadow = true;
+      edgeGrowthMesh.frustumCulled = false;
+      edgeGrowthMesh.userData.kbLifted = true;
+      {
+        const matrix = new T.Matrix4();
+        const position = new T.Vector3();
+        const quaternion = new T.Quaternion();
+        const scale = new T.Vector3();
+        const palette = water
+          ? [0x185e57, 0x246b62, 0x315c75, 0x614c69, 0x2c7767]
+          : [0x31191b, 0x4b211e, 0x2c252c, 0x652c22, 0x43242d];
+        for (let index = 0; index < edgeGrowthPlacements.length; index++) {
+          const placement = edgeGrowthPlacements[index];
+          chartLift(placement.x, profile.heightAt(placement.x, placement.z) + .08,
+            placement.z, position);
+          quaternion.copy(liftQuatAt(placement.x, placement.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, placement.yaw));
+          scale.set(placement.size, placement.size * (index % 9 === 0 ? 1.45 : 1), placement.size);
+          matrix.compose(position, quaternion, scale);
+          edgeGrowthMesh.setMatrixAt(index, matrix);
+          edgeGrowthMesh.setColorAt(index, new T.Color(
+            palette[(index * 3 + placement.pathIndex) % palette.length],
+          ));
+        }
+      }
+      edgeGrowthMesh.instanceMatrix.needsUpdate = true;
+      if (edgeGrowthMesh.instanceColor) edgeGrowthMesh.instanceColor.needsUpdate = true;
+      profile.root.add(edgeGrowthMesh);
+
+      // The first wilderness pass proved numerically dense but still looked
+      // like one small ornament every fifty metres.  Build a broad ecology on
+      // both sides of every route sample, leaving the playable centre open.
+      // These are deliberately soft scenery: the large formation beside each
+      // sample remains the physical landmark, while kelp, coral fingers, ash
+      // reeds and ankle-high slag can be run through without snagging a sprint.
+      const corridorParts = [];
+      for (const side of [-1, 1]) {
+        for (let lane = 0; lane < (water ? 3 : 4); lane++) {
+          const x = side * (5.2 + lane % 2 * 1.7);
+          const z = (lane - 1.5) * 4.35 + side * (lane % 2 ? .9 : -.9);
+          const height = water ? 1.35 + lane % 3 * .46 : .82 + lane % 3 * .34;
+          if (water) {
+            corridorParts.push(segmentBetween(
+              [x, .04, z],
+              [x + side * (.24 + lane * .09), height * 1.55, z + (lane % 2 ? .42 : -.34)],
+              .12 + lane * .025, 5,
+            ));
+            corridorParts.push(transformed(
+              new T.OctahedronGeometry(.22 + lane * .035, 0),
+              {
+                x: x + side * (.24 + lane * .09), y: height * 1.57,
+                z: z + (lane % 2 ? .42 : -.34),
+                sx: 1.7, sy: .58, sz: 1.2,
+              },
+            ));
+          } else {
+            corridorParts.push(transformed(
+              new T.DodecahedronGeometry(.46 + lane % 2 * .11, 0),
+              {
+                x, y: .34, z,
+                rz: side * (.16 + lane % 3 * .08),
+                rx: (lane % 2 ? 1 : -1) * .12,
+                sx: 1.5, sy: .72, sz: 1.3,
+              },
+            ));
+          }
+          if (water && lane !== 1) {
+            corridorParts.push(transformed(
+              new T.TorusGeometry(.42 + lane * .06, .07, 5, 11, Math.PI * 1.35),
+              { x, y: height * .78, z, rz: side * .25, rx: .15 },
+            ));
+          }
+        }
+      }
+      const corridorGeometry = mergeStaticGeometries(corridorParts);
+      const corridorMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: water ? 0x0a544c : 0x661407,
+        emissiveIntensity: water ? .92 : .82,
+        roughness: water ? .76 : .88,
+        metalness: water ? .02 : .18,
+        vertexColors: true,
+      });
+      const corridorMesh = new T.InstancedMesh(
+        corridorGeometry, corridorMaterial, records.length,
+      );
+      corridorMesh.name = water
+        ? 'OPEN COUNTRY · WALK-THROUGH KELP AND CORAL BANKS'
+        : 'OPEN COUNTRY · WALK-THROUGH ASH REEDS AND SLAG BANKS';
+      corridorMesh.castShadow = true;
+      corridorMesh.receiveShadow = true;
+      corridorMesh.frustumCulled = false;
+      corridorMesh.userData.kbLifted = true;
+
+      // Every named pocket gets a horizon-sized threshold.  A Water threshold
+      // is a whalebone/coral arch; Lava uses a broken anvil gate.  Only the two
+      // legs are solid, so their visible opening is also the honest route.
+      const pocketGateGeometry = water
+        ? mergeStaticGeometries([
+          transformed(new T.TorusGeometry(7.2, .62, 7, 30, Math.PI), { y: .35 }),
+          transformed(new T.ConeGeometry(1.05, 8.2, 7), { x: -7.2, y: 4.1, rz: -.11 }),
+          transformed(new T.ConeGeometry(1.05, 8.2, 7), { x: 7.2, y: 4.1, rz: .11 }),
+          transformed(new T.OctahedronGeometry(.92, 0), { y: 7.62, sx: 1.55, sy: .72, sz: 1.2 }),
+        ])
+        : mergeStaticGeometries([
+          transformed(new T.BoxGeometry(1.45, 10.8, 1.8), { x: -7.1, y: 5.4, rz: -.1 }),
+          transformed(new T.BoxGeometry(1.45, 10.8, 1.8), { x: 7.1, y: 5.4, rz: .1 }),
+          transformed(new T.BoxGeometry(15.8, 1.25, 2), { y: 10.25 }),
+          transformed(new T.ConeGeometry(1.35, 6.4, 5), { y: 13.7, rz: .05 }),
+        ]);
+      const pocketGateMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: water ? 0x0f7180 : 0x8d1e09,
+        emissiveIntensity: water ? 1.18 : 1.32,
+        roughness: water ? .48 : .66,
+        metalness: water ? .04 : .38,
+        vertexColors: true,
+      });
+      const pocketGateMesh = new T.InstancedMesh(
+        pocketGateGeometry, pocketGateMaterial, pockets.length,
+      );
+      pocketGateMesh.name = water
+        ? 'NAMED WILDERNESS · WHALEBONE CORAL THRESHOLDS'
+        : 'NAMED WILDERNESS · BROKEN ANVIL THRESHOLDS';
+      pocketGateMesh.castShadow = true;
+      pocketGateMesh.receiveShadow = true;
+      pocketGateMesh.frustumCulled = false;
+      pocketGateMesh.userData.kbLifted = true;
+
+      // Each off-road discovery terminates on one broad physical clearing.
+      // Water gets a pale reef shelf; Lava gets unmistakable cooled stone. In
+      // both cases the visible floor and collision record are the same body.
+      const pocketFloorGeometry = new T.CylinderGeometry(1, 1.08, 1, 14, 1, false);
+      const pocketFloorMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: water ? 0x073c44 : 0x35100b,
+        emissiveIntensity: water ? .26 : .38,
+        roughness: water ? .82 : .94,
+        metalness: water ? .025 : .12,
+        vertexColors: true,
+      });
+      const pocketFloorMesh = new T.InstancedMesh(
+        pocketFloorGeometry, pocketFloorMaterial, pockets.length,
+      );
+      pocketFloorMesh.name = water
+        ? 'NAMED WILDERNESS · PHYSICAL REEF CLEARINGS'
+        : 'NAMED WILDERNESS · SAFE COOLED CLEARINGS';
+      pocketFloorMesh.castShadow = true;
+      pocketFloorMesh.receiveShadow = true;
+      pocketFloorMesh.frustumCulled = false;
+      pocketFloorMesh.userData.kbLifted = true;
+
+      const clusterGeometry = water
+        ? mergeStaticGeometries([
+          transformed(new T.SphereGeometry(1, 8, 5), { y: .54, sx: 5.6, sy: .78, sz: 4.15 }),
+          segmentBetween([-.5, .55, 0], [-.62, 5.8, .2], .72, 7),
+          segmentBetween([-.58, 3.4, .1], [-3.55, 8.25, .62], .48, 6),
+          segmentBetween([-.46, 4.15, .08], [3.55, 9.05, -.72], .44, 6),
+          segmentBetween([-.35, 4.9, .16], [1.45, 10.4, 2.15], .35, 6),
+          segmentBetween([-.52, 5.25, .12], [-1.5, 10.9, -2.05], .32, 6),
+          transformed(new T.IcosahedronGeometry(.84, 0), { x: -3.58, y: 8.28, z: .62, sx: 1.55, sy: .68, sz: 1.25 }),
+          transformed(new T.IcosahedronGeometry(.78, 0), { x: 3.58, y: 9.08, z: -.72, sx: 1.48, sy: .66, sz: 1.22 }),
+          transformed(new T.IcosahedronGeometry(.66, 0), { x: 1.48, y: 10.43, z: 2.15, sx: 1.42, sy: .64, sz: 1.18 }),
+          transformed(new T.TorusGeometry(3.75, .18, 6, 24, Math.PI * 1.45), { y: 5.4, rz: -.12 }),
+        ])
+        : mergeStaticGeometries([
+          transformed(new T.DodecahedronGeometry(1, 0), { y: .7, sx: 5.35, sy: 1.08, sz: 4.35 }),
+          transformed(new T.CylinderGeometry(1.05, 1.42, 10.8, 6), { x: -2.75, y: 5.4, z: .42, rz: -.08 }),
+          transformed(new T.CylinderGeometry(.88, 1.18, 8.2, 6), { x: 2.6, y: 4.1, z: -.62, rz: .14 }),
+          transformed(new T.BoxGeometry(1.05, 8.8, 1.18), { x: -2.25, y: 5.4, z: -2.05, rz: -.18 }),
+          transformed(new T.BoxGeometry(1.05, 7.3, 1.18), { x: 2.25, y: 4.65, z: -2.05, rz: .22 }),
+          transformed(new T.BoxGeometry(5.45, .92, 1.24), { x: -.22, y: 8.55, z: -2.05, rz: -.08 }),
+          transformed(new T.TorusGeometry(2.05, .25, 6, 18), { y: 1.02, rx: Math.PI / 2 }),
+          transformed(new T.OctahedronGeometry(.72, 0), { x: -.15, y: 9.4, z: -2.02, sx: 1.25, sy: 1.7, sz: 1.18 }),
+        ]);
+      const clusterMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: water ? 0x063d48 : 0x581207,
+        emissiveIntensity: water ? .58 : .72,
+        roughness: water ? .72 : .86,
+        metalness: water ? .04 : .23,
+      });
+      const clusterMesh = new T.InstancedMesh(clusterGeometry, clusterMaterial, records.length);
+      clusterMesh.name = water
+        ? 'OPEN COUNTRY · CORAL MIGRATION GARDENS'
+        : 'OPEN COUNTRY · COOLED FAULT SHRINES';
+      clusterMesh.castShadow = true;
+      clusterMesh.receiveShadow = true;
+      clusterMesh.frustumCulled = false;
+      clusterMesh.userData.kbLifted = true;
+
+      const beaconHosts = records.filter((record, index) => record.pocket || index % 3 === 1);
+      const beaconGeometry = mergeStaticGeometries([
+        transformed(new T.TorusGeometry(2.25, .16, 5, 20), { y: .2, rx: Math.PI / 2 }),
+        transformed(new T.CylinderGeometry(.15, .34, water ? 11.8 : 14.2, 7),
+          { y: water ? 5.9 : 7.1 }),
+        transformed(water ? new T.OctahedronGeometry(.5, 0) : new T.DodecahedronGeometry(.48, 0),
+          { y: water ? 12.05 : 14.45, sx: 1.45, sy: 1.45, sz: 1.45 }),
+      ]);
+      const beaconMaterial = new T.MeshStandardMaterial({
+        color: water ? 0xa8ffff : 0xffd56b,
+        emissive: water ? 0x27d9ff : 0xff3b08,
+        emissiveIntensity: 3.1,
+        roughness: .2,
+        metalness: .5,
+      });
+      const beaconMesh = new T.InstancedMesh(beaconGeometry, beaconMaterial, beaconHosts.length);
+      beaconMesh.name = water ? 'MIGRATION LANTERNS' : 'FAULTFIRE BEACONS';
+      beaconMesh.frustumCulled = false;
+      beaconMesh.userData.kbLifted = true;
+
+      const matrix = new T.Matrix4();
+      const position = new T.Vector3();
+      const quaternion = new T.Quaternion();
+      const scale = new T.Vector3();
+      const floorPosition = new T.Vector3();
+      const floorQuaternion = new T.Quaternion();
+      const clusterColors = water
+        ? [0x42aa9c, 0x4378a6, 0x8a568d, 0x2d8e86, 0xc07391]
+        : [0x4c2928, 0x713324, 0x3a3135, 0x8c432b, 0x563039];
+      const landmarks = [];
+      const pocketGates = [];
+      const pocketFloors = [];
+      let beaconIndex = 0;
+      let pocketIndex = 0;
+      for (let index = 0; index < records.length; index++) {
+        const host = records[index];
+        const side = (index + host.routeIndex) % 2 ? 1 : -1;
+        let scenery = surfaceOffsetChartAt(
+          host.x, host.z, -host.tangentZ * side, host.tangentX * side,
+          water ? 15.2 : 16.8, {},
+        );
+        if (this.interworldScatterReserved(scenery.x, scenery.z, 4)) scenery = host;
+        const ground = profile.heightAt(scenery.x, scenery.z);
+        const size = ((water ? .82 : .78) + ((index * 7 + host.routeIndex * 3) % 5) * .105)
+          * (host.pocket ? 1.48 : 1);
+        chartLift(scenery.x, ground + .05, scenery.z, position);
+        quaternion.copy(liftQuatAt(scenery.x, scenery.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(
+            UP, Math.atan2(host.tangentZ, host.tangentX) + side * .38,
+          ));
+        scale.set(size * (index % 4 === 0 ? 1.22 : 1), size, size);
+        matrix.compose(position, quaternion, scale);
+        clusterMesh.setMatrixAt(index, matrix);
+        clusterMesh.setColorAt(index, new T.Color(clusterColors[(index + host.routeIndex) % clusterColors.length]));
+        const solid = this.registerAuthoredPlanetSolid(
+          profile, `${host.id}-formation`, scenery.x, scenery.z,
+          ground + (water ? 11.35 : 12.2) * size, ground - .72,
+          (water ? 5.9 : 5.45) * size,
+          {
+            collisionScale: .93, sideScale: .98,
+            safe: false, siteIndex: host.siteIndex,
+            biomeId: host.biomeId,
+            family: water ? 'migration-coral-formation' : 'cooled-fault-formation',
+            role: 'wilderness-landmark', routeId: host.routeId,
+            wilderness: true, renderMesh: clusterMesh, renderIndex: index,
+          },
+        );
+        solid.renderMapping = { record: solid, mesh: clusterMesh, instance: index, moving: false };
+        landmarks.push({ host, record: solid, x: scenery.x, z: scenery.z });
+
+        const hostGround = profile.heightAt(host.x, host.z);
+        chartLift(host.x, hostGround + .06, host.z, position);
+        quaternion.copy(liftQuatAt(host.x, host.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(
+            UP, Math.atan2(host.tangentZ, host.tangentX),
+          ));
+        const corridorScale = .9 + ((index * 5 + host.routeIndex) % 5) * .085;
+        scale.set(corridorScale * (host.pocket ? 1.18 : 1), corridorScale, corridorScale);
+        matrix.compose(position, quaternion, scale);
+        corridorMesh.setMatrixAt(index, matrix);
+        corridorMesh.setColorAt(index, new T.Color(clusterColors[
+          (index * 3 + host.routeIndex + 1) % clusterColors.length
+        ]));
+
+        if (host.pocket) {
+          const floorTop = hostGround + (water ? .62 : .84);
+          const floorBottom = hostGround - .28;
+          chartLift(host.x, (floorTop + floorBottom) * .5, host.z, floorPosition);
+          floorQuaternion.copy(liftQuatAt(host.x, host.z, new T.Quaternion()));
+          scale.set(host.radius * .96, floorTop - floorBottom, host.radius * .96);
+          matrix.compose(floorPosition, floorQuaternion, scale);
+          pocketFloorMesh.setMatrixAt(pocketIndex, matrix);
+          pocketFloorMesh.setColorAt(pocketIndex, new T.Color(water
+            ? [0x285f62, 0x365d72, 0x5f526b, 0x386b61][host.routeIndex % 4]
+            : [0x1c1719, 0x272027, 0x311b19, 0x211d23][host.routeIndex % 4]));
+          const floorRecord = this.registerAuthoredPlanetSolid(
+            profile, `${host.id}-clearing`, host.x, host.z,
+            floorTop, floorBottom, host.radius * .92,
+            {
+              collisionScale: .96, sideScale: .985, safe: true,
+              siteIndex: host.siteIndex, biomeId: host.biomeId,
+              family: water ? 'named-reef-clearing' : 'named-cooled-clearing',
+              role: 'named-wilderness-safe-floor', routeId: host.spurRouteId || host.routeId,
+              wilderness: true, renderMesh: pocketFloorMesh, renderIndex: pocketIndex,
+            },
+          );
+          host.top = floorTop;
+          host.bottom = floorBottom;
+          host.floorAuthorityId = floorRecord.id;
+          pocketFloors.push({ host, record: floorRecord, index: pocketIndex });
+
+          const gateScale = .92 + (host.routeIndex % 4) * .075;
+          scale.set(gateScale, gateScale, gateScale);
+          matrix.compose(position, quaternion, scale);
+          pocketGateMesh.setMatrixAt(pocketIndex, matrix);
+          pocketGateMesh.setColorAt(pocketIndex, new T.Color(
+            water
+              ? [0x79e6d5, 0xff83bd, 0x5da8c9, 0xc995d4][host.routeIndex % 4]
+              : [0x9b3c2a, 0xd06434, 0x593746, 0xa88155][host.routeIndex % 4],
+          ));
+          const gateRecords = [];
+          for (const gateSide of [-1, 1]) {
+            const leg = surfaceOffsetChartAt(
+              host.x, host.z,
+              -host.tangentZ * gateSide, host.tangentX * gateSide,
+              (water ? 7.2 : 7.1) * gateScale, {},
+            );
+            const legGround = profile.heightAt(leg.x, leg.z);
+            gateRecords.push(this.registerAuthoredPlanetSolid(
+              profile, `${host.id}-threshold-${gateSide < 0 ? 'left' : 'right'}`,
+              leg.x, leg.z,
+              legGround + (water ? 8.3 : 10.9) * gateScale,
+              legGround - .38,
+              (water ? 1.1 : 1.22) * gateScale,
+              {
+                collisionScale: .94, sideScale: .98, safe: false,
+                siteIndex: host.siteIndex, biomeId: host.biomeId,
+                family: water ? 'whalebone-threshold' : 'broken-anvil-threshold',
+                role: 'named-wilderness-threshold-leg', routeId: host.routeId,
+                wilderness: true, renderMesh: pocketGateMesh, renderIndex: pocketIndex,
+              },
+            ));
+          }
+          pocketGates.push({ host, index: pocketIndex, records: gateRecords, floor: floorRecord });
+          pocketIndex++;
+        }
+        if (host.pocket || index % 3 === 1) {
+          const beaconScale = .88 + (host.routeIndex % 3) * .1;
+          scale.setScalar(beaconScale);
+          matrix.compose(position, quaternion, scale);
+          beaconMesh.setMatrixAt(beaconIndex++, matrix);
+        }
+      }
+      clusterMesh.instanceMatrix.needsUpdate = true;
+      if (clusterMesh.instanceColor) clusterMesh.instanceColor.needsUpdate = true;
+      corridorMesh.instanceMatrix.needsUpdate = true;
+      if (corridorMesh.instanceColor) corridorMesh.instanceColor.needsUpdate = true;
+      pocketGateMesh.instanceMatrix.needsUpdate = true;
+      if (pocketGateMesh.instanceColor) pocketGateMesh.instanceColor.needsUpdate = true;
+      pocketFloorMesh.instanceMatrix.needsUpdate = true;
+      if (pocketFloorMesh.instanceColor) pocketFloorMesh.instanceColor.needsUpdate = true;
+      beaconMesh.instanceMatrix.needsUpdate = true;
+      profile.root.add(corridorMesh, clusterMesh, pocketFloorMesh, pocketGateMesh, beaconMesh);
+      profile.wilderness = {
+        routes, records, landmarks, pockets, pocketGates, pocketFloors,
+        safeSamples, trailMesh,
+        discoveryHosts: beaconHosts,
+        corridorMesh, clusterMesh, pocketFloorMesh, pocketGateMesh, beaconMesh,
+        bankMeshes, bankPlacements, trailDetailMesh, trailDetailHosts,
+        edgeGrowthMesh, edgeGrowthPlacements,
+        discoveredRoutes: new Set(), discoveredPockets: new Set(), discoveryCooldown: 0,
+        thesis: water
+          ? 'seventeen coral migrations make the ocean between destinations worth following'
+          : 'seventeen cooled fault pilgrimages make the crust between destinations worth crossing',
+      };
+    }
+    makePlanetGalaxyToys(profile, water) {
+      const specs = [
+        [-385, -340, 'RICOCHET REEF', 'METEOR ANVIL'],
+        [-545, 35, 'PEARL ORBIT', 'CINDER ORBIT'],
+        [160, 500, 'COMET KELP STAIR', 'ASH COMET STAIR'],
+        [640, 245, 'SUNFISH PINWHEEL', 'BRASS PINWHEEL'],
+        [435, -345, 'MOONJELLY HELIX', 'MAGMA HELIX'],
+        [-125, -915, 'ABYSSAL BREACH', 'NIGHTFIRE BREACH'],
+      ];
+      const stepGeometry = water
+        ? new T.CylinderGeometry(1, 1.12, 1, 10)
+        : new T.CylinderGeometry(1, 1.08, 1, 6);
+      const stepMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: water ? 0x075866 : 0x461008,
+        emissiveIntensity: water ? .72 : .82,
+        roughness: water ? .64 : .88,
+        metalness: water ? .04 : .2,
+        vertexColors: true,
+      });
+      const stepMesh = new T.InstancedMesh(stepGeometry, stepMaterial, specs.length * 5);
+      stepMesh.name = water
+        ? 'GALAXY TOYS · RISING SHELL ORBITS'
+        : 'GALAXY TOYS · SAFE RISING FORGE ORBITS';
+      stepMesh.castShadow = true;
+      stepMesh.receiveShadow = true;
+      stepMesh.frustumCulled = false;
+      stepMesh.userData.kbLifted = true;
+
+      const spurPositions = [];
+      const spurColours = [];
+      const spurIndices = [];
+      const directionA = new T.Vector3();
+      const directionB = new T.Vector3();
+      const direction = new T.Vector3();
+      const worldPoint = new T.Vector3();
+      const leftPoint = new T.Vector3();
+      const rightPoint = new T.Vector3();
+      const sphericalPoint = (from, to, amount, target = {}) => {
+        chartDirAt(from.x, from.z, directionA);
+        chartDirAt(to.x, to.z, directionB);
+        const theta = Math.acos(clamp(directionA.dot(directionB), -1, 1));
+        const sine = Math.sin(theta);
+        if (theta < 1e-5 || Math.abs(sine) < 1e-5) {
+          direction.copy(directionA).lerp(directionB, amount).normalize();
+        } else {
+          direction.copy(directionA).multiplyScalar(Math.sin((1 - amount) * theta) / sine)
+            .addScaledVector(directionB, Math.sin(amount * theta) / sine).normalize();
+        }
+        worldPoint.copy(direction).multiplyScalar(PLANET.radius).add(PLANET.centre);
+        return chartAt(worldPoint, target);
+      };
+      const appendSpurPoint = (point, colour) => {
+        spurPositions.push(point.x, point.y, point.z);
+        spurColours.push(colour.r, colour.g, colour.b);
+      };
+      const matrix = new T.Matrix4();
+      const position = new T.Vector3();
+      const quaternion = new T.Quaternion();
+      const scale = new T.Vector3();
+      const ringMaterial = new T.MeshStandardMaterial({
+        color: water ? 0xc7ffff : 0xffd573,
+        emissive: water ? 0x25d5f0 : 0xff3508,
+        emissiveIntensity: 2.25, roughness: .18, metalness: .38,
+      });
+      const toys = [];
+      for (let toyIndex = 0; toyIndex < specs.length; toyIndex++) {
+        const [rawX, rawZ, waterName, lavaName] = specs[toyIndex];
+        const centre = this.confineAlternateChart(rawX, rawZ, 24);
+        const name = water ? waterName : lavaName;
+        const baseAngle = toyIndex * 1.71 + .28;
+        const stepPoints = [];
+        for (let step = 0; step < 5; step++) {
+          const angle = baseAngle + step * .96;
+          const reach = 6 + step * 5;
+          stepPoints.push(surfaceOffsetChartAt(
+            centre.x, centre.z, Math.cos(angle), Math.sin(angle), reach, {},
+          ));
+        }
+        const first = stepPoints[0];
+        let nearest = null;
+        let nearestDistance = Infinity;
+        for (const sample of profile.wilderness.safeSamples || EMPTY_SOLIDS) {
+          const distance = surfaceDistanceAt(first.x, first.z, sample.x, sample.z);
+          if (distance < nearestDistance) { nearest = sample; nearestDistance = distance; }
+        }
+        const path = [];
+        const segments = Math.max(2, Math.ceil(nearestDistance / 9.5));
+        for (let step = 0; step <= segments; step++) {
+          path.push(sphericalPoint(nearest, first, step / segments, {}));
+        }
+        const spurColour = new T.Color(water
+          ? [0x12454c, 0x183f55, 0x214c45][toyIndex % 3]
+          : [0x171116, 0x21130f, 0x1a171d][toyIndex % 3]);
+        const halfWidth = water ? 4.35 : 5.6;
+        const spurId = `${profile.id}-galaxy-toy-${toyIndex}-spur`;
+        for (let index = 0; index < path.length; index++) {
+          const at = path[index];
+          const before = path[Math.max(0, index - 1)];
+          const after = path[Math.min(path.length - 1, index + 1)];
+          const tx = after.x - before.x;
+          const tz = after.z - before.z;
+          const length = Math.hypot(tx, tz) || 1;
+          const left = surfaceOffsetChartAt(
+            at.x, at.z, -tz / length, tx / length, halfWidth, {},
+          );
+          const right = surfaceOffsetChartAt(
+            at.x, at.z, tz / length, -tx / length, halfWidth, {},
+          );
+          chartLift(left.x, profile.heightAt(left.x, left.z) + .17, left.z, leftPoint);
+          chartLift(right.x, profile.heightAt(right.x, right.z) + .17, right.z, rightPoint);
+          const base = spurPositions.length / 3;
+          appendSpurPoint(leftPoint, spurColour.clone().offsetHSL(0, 0, .025));
+          appendSpurPoint(rightPoint, spurColour.clone().offsetHSL(0, 0, -.015));
+          if (index > 0) spurIndices.push(base - 2, base - 1, base, base - 1, base + 1, base);
+          profile.wilderness.safeSamples.push({
+            x: at.x, z: at.z, radius: halfWidth * .72, routeId: spurId,
+          });
+        }
+
+        const records = [];
+        for (let step = 0; step < stepPoints.length; step++) {
+          const at = stepPoints[step];
+          const ground = profile.heightAt(at.x, at.z);
+          const top = ground + 1.15 + step * 2.42;
+          const bottom = top - (water ? 1.05 : 1.32);
+          const radius = 4.2 + (step % 2) * .35;
+          chartLift(at.x, (top + bottom) * .5, at.z, position);
+          quaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, baseAngle + step * 1.07));
+          scale.set(radius, top - bottom, radius);
+          matrix.compose(position, quaternion, scale);
+          const instance = toyIndex * 5 + step;
+          stepMesh.setMatrixAt(instance, matrix);
+          stepMesh.setColorAt(instance, new T.Color(water
+            ? [0x328b84, 0x476d91, 0x9b668f, 0x3f9d88, 0xc07786][step]
+            : [0x251c21, 0x3d2422, 0x5b2c22, 0x302833, 0x71351f][step]));
+          const record = this.registerAuthoredPlanetSolid(
+            profile, `${profile.id}-galaxy-toy-${toyIndex}-step-${step}`,
+            at.x, at.z, top, bottom, radius,
+            {
+              collisionScale: .94, sideScale: .98, safe: true,
+              siteIndex: profile.sites.reduce((best, site) =>
+                surfaceDistanceAt(at.x, at.z, site.x, site.z)
+                  < surfaceDistanceAt(at.x, at.z, profile.sites[best].x, profile.sites[best].z)
+                  ? site.index : best, 0),
+              family: water ? 'rising-shell-orbit' : 'safe-forge-orbit',
+              role: 'galaxy-toy-step', routeId: `${profile.id}-galaxy-toy-${toyIndex}`,
+              wilderness: true, renderMesh: stepMesh, renderIndex: instance,
+            },
+          );
+          record.renderMapping = { record, mesh: stepMesh, instance, moving: false };
+          record.name = name;
+          record.tangentX = Math.cos(baseAngle + step * .96);
+          record.tangentZ = Math.sin(baseAngle + step * .96);
+          // Collectible distribution treats every open-country support as a
+          // lane. Give these round islands an explicit lane width so the
+          // offset never becomes NaN before their reward curl is rehomed.
+          record.routeWidth = radius * .68;
+          records.push(record);
+          profile.wilderness.records.push(record);
+        }
+        const final = records.at(-1);
+        const ringGroup = new T.Group();
+        ringGroup.name = `${name} · MOVING CELESTIAL TARGET`;
+        for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
+          const ring = new T.Mesh(
+            new T.TorusGeometry(3.1 + ringIndex * 1.05, .14, 6, 30), ringMaterial,
+          );
+          ring.rotation.set(ringIndex * .7, ringIndex * .5, ringIndex * .83);
+          ringGroup.add(ring);
+        }
+        const core = new T.Mesh(
+          water ? new T.IcosahedronGeometry(.72, 0) : new T.OctahedronGeometry(.78, 0),
+          ringMaterial,
+        );
+        ringGroup.add(core);
+        this.placePlanetObject(ringGroup, final.x, final.top + 4.9, final.z, baseAngle);
+        profile.root.add(ringGroup);
+        const route = {
+          id: `${profile.id}-galaxy-toy-${toyIndex}`,
+          name, records, safeNodes: records,
+          family: water ? 'shell-orbit-microchallenge' : 'forge-orbit-microchallenge',
+          toy: true,
+        };
+        profile.wilderness.routes.push(route);
+        toys.push({
+          id: route.id, name, centre, records, path, spurId, ringGroup, core,
+          rings: [...ringGroup.children].filter(child => child.geometry?.type === 'TorusGeometry'),
+          siteIndex: records[0].siteIndex,
+        });
+      }
+      stepMesh.instanceMatrix.needsUpdate = true;
+      if (stepMesh.instanceColor) stepMesh.instanceColor.needsUpdate = true;
+      profile.root.add(stepMesh);
+      const spurGeometry = new T.BufferGeometry();
+      spurGeometry.setAttribute('position', new T.Float32BufferAttribute(spurPositions, 3));
+      spurGeometry.setAttribute('color', new T.Float32BufferAttribute(spurColours, 3));
+      spurGeometry.setIndex(spurIndices);
+      spurGeometry.computeVertexNormals();
+      spurGeometry.computeBoundingSphere();
+      const spurMesh = new T.Mesh(spurGeometry, new T.MeshBasicMaterial({
+        color: 0xffffff, vertexColors: true, side: T.DoubleSide,
+        transparent: true, opacity: water ? .8 : .96,
+      }));
+      spurMesh.name = water
+        ? 'GALAXY TOYS · REEF APPROACH SPURS'
+        : 'GALAXY TOYS · SAFE QUENCHED APPROACH SPURS';
+      spurMesh.frustumCulled = false;
+      spurMesh.userData.kbLifted = true;
+      profile.root.add(spurMesh);
+      profile.galaxyToys = { toys, stepMesh, spurMesh };
     }
     makeInterworldVehicles() {
       // Every exterior owns two colossal physical ships. Their destination
@@ -4594,6 +6020,20 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           ? rail.path.chartSamples.at(-1).y - terminalLanding.top : 26;
         rail.arrivalLandingId = terminalLanding?.id || null;
         rail.groundAlternative = `${profile.id}-${from.id}-to-${to.id}`;
+        if (!water) {
+          // A rider may jump off anywhere, not only at the authored endpoint.
+          // The glowing conductor is therefore also a promise that the crust
+          // beneath its flight corridor is quenched. Sparse overlapping
+          // samples cover ordinary ejection drift without adding fake floors.
+          rail.bailoutSafetySamples = rail.path.chartSamples
+            .filter((sample, sampleIndex, samples) =>
+              sampleIndex % 4 === 0 || sampleIndex === samples.length - 1)
+            .map(sample => ({
+              x: sample.x, z: sample.z, radius: 24,
+              routeId: `${rail.id}-bailout-safety`, railId: rail.id,
+            }));
+          profile.wilderness.safeSamples.push(...rail.bailoutSafetySamples);
+        }
       }
     }
     makeInterworldVehicle(profile, spec, theme, index) {
@@ -7135,7 +8575,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       return record;
     }
     makePlanetPlatforms(profile, water) {
-      const geometry = new T.CylinderGeometry(1, 1, 1, water ? 14 : 10, 1, false);
+      // These records are compatibility cylinders, but their visible bodies
+      // should read as terrain-grown reef shelves / cooled basalt mesas rather
+      // than ninety-seven identical poker chips.
+      const geometry = new T.CylinderGeometry(1, water ? 1.26 : 1.34, 1,
+        water ? 14 : 10, 1, false);
       const material = new T.MeshStandardMaterial({
         color: water ? 0x2b9e9d : 0x1e1514,
         emissive: water ? 0x06373d : 0x521006,
@@ -7153,10 +8597,14 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       const quaternion = new T.Quaternion();
       const scale = new T.Vector3();
       const color = new T.Color();
-      const rimGeometry = new T.TorusGeometry(1, water ? .075 : .095, 6, water ? 28 : 20);
+      // A partial edge marks the useful side of a footing without encircling
+      // every object in a neon halo. Full rings were the loudest contributor
+      // to the old junk-drawer read.
+      const rimGeometry = new T.TorusGeometry(1, water ? .026 : .032, 5,
+        water ? 24 : 18, Math.PI * 1.28);
       const rimMaterial = new T.MeshStandardMaterial({
         color: 0xffffff, emissive: water ? 0x20dfff : 0xff2c07,
-        emissiveIntensity: water ? 2.25 : 2.8,
+        emissiveIntensity: water ? .68 : .82,
         roughness: .2, metalness: .56, vertexColors: true,
       });
       const rimMesh = new T.InstancedMesh(rimGeometry, rimMaterial, 97);
@@ -7181,19 +8629,22 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         let lateral;
         if (circular) {
           const arc = slot / 8 * TAU + siteIndex * .23;
-          const reach = 29 + (slot % 3) * 8 + (siteIndex % 2) * 4;
+          const reach = 36 + (slot % 3) * 9 + (siteIndex % 2) * 4;
           forward = Math.cos(arc) * reach;
           lateral = Math.sin(arc) * reach;
         } else if (vertical) {
-          forward = 20 + slot * 11;
-          lateral = (slot % 2 ? 1 : -1) * (9 + (slot % 3) * 4.5);
+          forward = 26 + slot * 15;
+          lateral = (slot % 2 ? 1 : -1) * (10 + (slot % 3) * 4.2);
         } else if (suspended) {
-          forward = 18 + slot * 12;
-          lateral = Math.sin((slot + 1) * 1.18) * (15 + slot % 2 * 8);
+          forward = 22 + slot * 15;
+          lateral = Math.sin((slot + 1) * 1.18) * (16 + slot % 2 * 7);
         } else {
           // Broad approach, two challenge lanes, rest, secret, shortcut, exit.
-          forward = 18 + Math.floor(slot / 2) * 21;
-          lateral = (slot % 2 ? 1 : -1) * (12 + Math.floor(slot / 2) * 3.5);
+          // Each lane now occupies a full hundred-metre playable sentence;
+          // paired roles stay jump-close across the route without collapsing
+          // all eight decks and their encounters into the district centre.
+          forward = 22 + Math.floor(slot / 2) * 29;
+          lateral = (slot % 2 ? 1 : -1) * (13 + Math.floor(slot / 2) * 4);
         }
         const localX = Math.cos(heading) * forward - Math.sin(heading) * lateral;
         const localZ = Math.sin(heading) * forward + Math.cos(heading) * lateral;
@@ -7989,11 +9440,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       features.causticShafts = causticShafts;
 
       const bouquetParts = [];
+      const bouquetFanGeometry = new T.TorusGeometry(.72, .075, 5, 12, Math.PI * 1.42);
       const bouquetTransforms = [
-        [brainCoralGeometry, new T.Vector3(0, 0, 0), new T.Vector3(.72, .72, .72), 0],
-        [branchCoralGeometry, new T.Vector3(-.58, .4, .18), new T.Vector3(.58, .78, .58), -.42],
-        [branchCoralGeometry, new T.Vector3(.62, .32, -.16), new T.Vector3(.52, .68, .52), .5],
-        [fanCoralGeometry, new T.Vector3(.05, .3, .18), new T.Vector3(.48, .62, .48), .12],
+        [brainCoralGeometry, new T.Vector3(0, 0, 0), new T.Vector3(.7, .7, .7), 0],
+        [branchCoralGeometry, new T.Vector3(-.32, .34, .1), new T.Vector3(.68, .88, .68), -.38],
+        [bouquetFanGeometry, new T.Vector3(.34, .72, .12), new T.Vector3(.92, 1.18, .8), .52],
       ];
       for (const [source, position, scale, yaw] of bouquetTransforms) {
         const geometry = source.clone();
@@ -8004,37 +9455,36 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       }
       const bouquetGeometry = mergeStaticGeometries(bouquetParts);
       const bouquetMaterial = new T.MeshPhysicalMaterial({
-        color: 0xffffff, emissive: 0x4b164c, emissiveIntensity: 1.15,
+        color: 0xffffff, emissive: 0x39163b, emissiveIntensity: .78,
         roughness: .48, clearcoat: .54, clearcoatRoughness: .22,
         vertexColors: true, side: T.DoubleSide,
       });
       const bouquetCount = 144;
       const bouquets = new T.InstancedMesh(bouquetGeometry, bouquetMaterial, bouquetCount);
-      bouquets.name = 'TIDAL CATHEDRAL · CORAL BOUQUET MEADOWS';
+      bouquets.name = 'OPEN COUNTRY · 144 DISTRIBUTED CORAL COLONIES';
       bouquets.castShadow = true;
       bouquets.receiveShadow = true;
       bouquets.frustumCulled = false;
       bouquets.userData.kbLifted = true;
       for (let index = 0; index < bouquetCount; index++) {
-        const site = index % 3 === 0 ? profile.sites[0]
-          : index % 3 === 1 ? profile.sites[1] : profile.sites[4];
-        const localIndex = Math.floor(index / 3);
-        const clusterIndex = localIndex % 4;
-        const clusterAngle = [.3, 1.86, 3.36, 5.14][clusterIndex]
-          + (site.index || 0) * .19;
-        const clusterDistance = [18, 37, 59, 82][clusterIndex];
-        const centre = surfaceOffsetChartAt(
-          site.x, site.z, Math.cos(clusterAngle), Math.sin(clusterAngle), clusterDistance, {},
+        // The old meadow algorithm packed all 144 colonies into twelve small
+        // knots around only three districts. Keep the same number of readable
+        // coral discoveries, but give every district twelve broad orbit marks
+        // so Water has ecology between authored places instead of warehouses
+        // of overlapping props followed by blank terrain.
+        const site = profile.sites[(index * 5) % profile.sites.length];
+        const orbit = Math.floor(index / profile.sites.length);
+        const angle = orbit * 2.3999632297 + site.index * .43 + .21;
+        const distance = 34 + orbit * 10.5 + (site.index % 3) * 3.4;
+        let at = surfaceOffsetChartAt(
+          site.x, site.z, Math.cos(angle), Math.sin(angle), distance, {},
         );
-        const angle = localIndex * 2.3999632297 + clusterIndex * .41;
-        const distance = 3.5 + (localIndex * 7 % 17);
-        let at = surfaceOffsetChartAt(centre.x, centre.z, Math.cos(angle), Math.sin(angle), distance, {});
         at = this.relocateFromInterworld(at.x, at.z, 2.6, 6400 + index);
         const ground = profile.heightAt(at.x, at.z);
         chartLift(at.x, Math.max(ground + .08, waterLevel + .04), at.z, features.scratchPosition);
         features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
           .multiply(new T.Quaternion().setFromAxisAngle(UP, angle + index * .11));
-        const size = [2.35, 1.92, 1.52, 1.2][clusterIndex] + index % 3 * .19;
+        const size = 1.18 + (orbit % 5) * .2 + index % 3 * .13;
         features.scratchScale.set(size * (index % 2 ? 1.18 : .92), size, size);
         features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
         bouquets.setMatrixAt(index, features.scratchMatrix);
@@ -8196,8 +9646,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       profile.root.add(pressureVeil);
       features.blueHolePressureVeil = pressureVeil;
 
-      // Twelve tall reef sentinels make the lip legible from the approach and
-      // extend down to the deformed seabed. They are real support volumes.
+      // Twelve low, uneven reef sentinels outline the lip without building the
+      // bright picket fence that previously hid the actual drop. They remain
+      // real support volumes, but the open water is now the dominant shape.
       const holeWallMesh = new T.InstancedMesh(
         new T.CylinderGeometry(.46, 1.08, 1, 9), deepMaterial.clone(), 12,
       );
@@ -8216,9 +9667,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         );
         const localGround = profile.heightAt(at.x, at.z);
         const bottom = localGround - 1.2;
-        const top = holeRim + 13.5 + (pylon % 3) * 3.4;
+        const top = holeRim + 7.5 + (pylon % 4) * 2.35;
         const height = top - bottom;
-        const radius = 3.7 + (pylon % 2) * .55;
+        const radius = 3.05 + (pylon % 3) * .38;
         chartLift(at.x, bottom + height * .5, at.z, features.scratchPosition);
         features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
           .multiply(new T.Quaternion().setFromAxisAngle(UP, angle + Math.PI / 2));
@@ -8251,16 +9702,27 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       holeShelfMaterial.emissive.setHex(0x07394f);
       holeShelfMaterial.emissiveIntensity = .82;
       holeShelfMaterial.roughness = .55;
-      const holeShelfMesh = new T.InstancedMesh(
-        new T.CylinderGeometry(1.08, .82, 1, 14), holeShelfMaterial, 15,
-      );
+      const holeShelfGeometry = (() => {
+        const lobe = (radius, x, z, sides) => {
+          const geometry = new T.CylinderGeometry(radius, radius * .8, 1, sides);
+          geometry.applyMatrix4(new T.Matrix4().makeTranslation(x, 0, z));
+          return geometry;
+        };
+        return mergeStaticGeometries([
+          lobe(.74, 0, 0, 11),
+          lobe(.48, -.5, .08, 8),
+          lobe(.42, .48, -.12, 9),
+          lobe(.3, .08, .53, 7),
+        ]);
+      })();
+      const holeShelfMesh = new T.InstancedMesh(holeShelfGeometry, holeShelfMaterial, 15);
       const holeShelfRimMaterial = new T.MeshStandardMaterial({
         color: 0xa6fbff, emissive: 0x2bbbd4, emissiveIntensity: 1.18,
         roughness: .24, metalness: .3, vertexColors: true,
         transparent: true, opacity: .76,
       });
       const holeShelfRims = new T.InstancedMesh(
-        new T.TorusGeometry(1, .06, 5, 26, Math.PI * 1.34), holeShelfRimMaterial, 15,
+        new T.TorusGeometry(.64, .052, 5, 22, Math.PI * .92), holeShelfRimMaterial, 15,
       );
       holeShelfMesh.name = 'BLUE HOLE · FIFTEEN DESCENDING SHELL SHELVES';
       holeShelfRims.name = 'BLUE HOLE · DESCENT GUIDE RIMS';
@@ -8274,8 +9736,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       const holeShelves = [];
       for (let step = 0; step < 15; step++) {
         const centralDock = step === 14;
-        const angle = .26 + step * .235;
-        const distance = centralDock ? 0 : 67 - step * 4.35;
+        // A complete revolution makes each depth beat readable from the one
+        // above it. The old half-turn stacked all fifteen shelves into the same
+        // approach camera and left the opposite wall as dead black water.
+        const angle = -.32 + step * .49;
+        const distance = centralDock ? 0 : 70 - step * 4.3;
         const at = centralDock
           ? { x: holeSite.x, z: holeSite.z }
           : surfaceOffsetChartAt(
@@ -8286,7 +9751,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const bottom = top - (centralDock ? 3.2 : 2.15);
         // Each drop is obvious and irreversible, but consecutive lip gaps
         // remain short enough for an ordinary running jump or controlled fall.
-        const radius = centralDock ? 7.8 : 6.25 - step * .11;
+        const radius = centralDock ? 8.8 : 7.15 - step * .16 + (step % 3) * .28;
         chartLift(at.x, bottom + (top - bottom) * .5, at.z, features.scratchPosition);
         features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
           .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
@@ -8346,9 +9811,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       chamberMesh.frustumCulled = false;
       chamberMesh.userData.kbLifted = true;
       const chamberSpecs = [
-        [1.08, 14, 5.4, 8.8],
-        [4.15, 18.5, 10.2, 9.6],
-        [5.2, 15.5, 15.1, 8.4],
+        [.35, 27, 5.1, 9.8],
+        [2.45, 29, 10.4, 10.8],
+        [4.58, 26, 15.2, 9.4],
       ];
       for (let index = 0; index < chamberSpecs.length; index++) {
         const [angle, distance, rise, radius] = chamberSpecs[index];
@@ -8412,8 +9877,15 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           chartLift(at.x, host.top + .06, at.z, features.scratchPosition);
           features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
             .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
-          const size = .72 + (index % 4) * .18 + family * .08;
-          features.scratchScale.set(size, size * (1.08 + family * .08), size);
+          const chamberGarden = host.family === 'abyssal-cache-chamber';
+          const size = chamberGarden
+            ? 1.65 + (index % 4) * .42 + family * .18
+            : .78 + (index % 4) * .2 + family * .1;
+          features.scratchScale.set(
+            size * (chamberGarden && index % 2 ? 1.28 : 1),
+            size * (chamberGarden ? 1.7 + family * .16 : 1.12 + family * .08),
+            size,
+          );
           features.scratchMatrix.compose(
             features.scratchPosition, features.scratchQuaternion, features.scratchScale,
           );
@@ -8432,7 +9904,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           new T.TorusGeometry(11 + index * 7.2, .08, 5, 40),
           new T.MeshBasicMaterial({
             color: index % 2 ? 0xff79bd : 0x61eeff,
-            transparent: true, opacity: .065, depthWrite: false,
+            transparent: true, opacity: .038, depthWrite: false,
             blending: T.AdditiveBlending,
           }),
         );
@@ -8954,16 +10426,16 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       const site = profile.sites[9];
       const ground = profile.heightAt(site.x, site.z);
       const layout = [
-        [-14, -8, 52, 10.5],
-        [4, 8, 82, 11.2],
-        [23, -5, 113, 10.4],
-        [40, 10, 145, 12.1],
-        [58, -4, 180, 11.4],
-        [75, 13, 216, 15.2],
-        [57, 36, 168, 12.5],
-        [31, 34, 110, 11.2],
-        [3, 22, 62, 10.8],
-        [-17, 6, 30, 8.8],
+        [-64, -38, 48, 14.5],
+        [-82, 4, 78, 13.8],
+        [-66, 65, 111, 11.4],
+        [-8, 103, 145, 16.8],
+        [72, 82, 180, 12.8],
+        [128, 18, 216, 32],
+        [96, -58, 168, 14.6],
+        [35, -94, 110, 12.2],
+        [-33, -78, 62, 14.8],
+        [14, -12, 29, 8.8],
       ];
       const bodyMaterial = materials.reefMaterial.clone();
       bodyMaterial.vertexColors = true;
@@ -8975,14 +10447,27 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       rimMaterial.emissiveIntensity = 1.45;
       rimMaterial.transparent = true;
       rimMaterial.opacity = .82;
-      const bodyMesh = new T.InstancedMesh(
-        new T.CylinderGeometry(1.04, .62, 1, 14), bodyMaterial, layout.length,
-      );
+      const skyReefGeometry = (() => {
+        const lobe = (radius, x, z, sides) => {
+          const geometry = new T.CylinderGeometry(radius, radius * .82, 1, sides);
+          geometry.applyMatrix4(new T.Matrix4().makeTranslation(x, 0, z));
+          return geometry;
+        };
+        // A broad manta/scallop footprint breaks the copied circular-island
+        // silhouette while retaining a generous honest collider at its core.
+        return mergeStaticGeometries([
+          lobe(.76, 0, 0, 11),
+          lobe(.49, -.53, .08, 9),
+          lobe(.49, .53, .08, 9),
+          lobe(.34, 0, .55, 8),
+        ]);
+      })();
+      const bodyMesh = new T.InstancedMesh(skyReefGeometry, bodyMaterial, layout.length);
       const rimMesh = new T.InstancedMesh(
-        new T.TorusGeometry(1, .075, 5, 26, Math.PI * 1.42), rimMaterial, layout.length,
+        new T.TorusGeometry(.52, .07, 5, 22, Math.PI * 1.05), rimMaterial, layout.length,
       );
       const undersideRimMesh = new T.InstancedMesh(
-        new T.TorusGeometry(1, .055, 5, 22, Math.PI * 1.12), rimMaterial.clone(), layout.length,
+        new T.TorusGeometry(.4, .05, 5, 18, Math.PI * .86), rimMaterial.clone(), layout.length,
       );
       bodyMesh.name = 'LEVIATHAN WAKE · TEN WALKABLE SKY REEFS';
       rimMesh.name = 'LEVIATHAN WAKE · SKY REEF BREACH RIMS';
@@ -10801,16 +12286,16 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       const site = profile.sites[3];
       const ground = profile.heightAt(site.x, site.z);
       const layout = [
-        [-16, -10, 55, 11.2],
-        [3, 9, 84, 10.6],
-        [22, -7, 114, 11.4],
-        [40, 12, 147, 12.3],
-        [59, -5, 182, 12.1],
-        [76, 14, 218, 16.2],
-        [55, 38, 168, 13.2],
-        [28, 36, 108, 11.4],
-        [3, 22, 62, 10.9],
-        [-17, 6, 30, 8.9],
+        [-63, -42, 50, 15],
+        [-78, 7, 82, 12.8],
+        [-56, 65, 114, 14.2],
+        [7, 96, 147, 13.4],
+        [76, 62, 182, 15.6],
+        [129, -3, 218, 20.4],
+        [82, -67, 168, 15.2],
+        [24, -91, 108, 13.6],
+        [-38, -69, 62, 12.4],
+        [14, -11, 30, 8.9],
       ];
       const bodyMaterial = cooledMaterial.clone();
       bodyMaterial.vertexColors = true;
@@ -10821,14 +12306,23 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       rimMaterial.vertexColors = true;
       rimMaterial.transparent = true;
       rimMaterial.opacity = .86;
-      const bodyMesh = new T.InstancedMesh(
-        new T.CylinderGeometry(1.05, .6, 1, 8), bodyMaterial, layout.length,
-      );
+      const skyAnvilGeometry = (() => {
+        const core = new T.CylinderGeometry(.8, .67, 1, 8);
+        const table = new T.BoxGeometry(1.82, .34, .72);
+        table.applyMatrix4(new T.Matrix4().makeTranslation(0, .32, 0));
+        const heel = new T.BoxGeometry(.74, .32, 1.08);
+        heel.applyMatrix4(new T.Matrix4().makeTranslation(-.38, .05, 0));
+        const horn = new T.ConeGeometry(.32, .84, 5);
+        horn.rotateZ(-Math.PI / 2);
+        horn.applyMatrix4(new T.Matrix4().makeTranslation(.83, .32, 0));
+        return mergeStaticGeometries([core, table, heel, horn]);
+      })();
+      const bodyMesh = new T.InstancedMesh(skyAnvilGeometry, bodyMaterial, layout.length);
       const rimMesh = new T.InstancedMesh(
-        new T.TorusGeometry(1, .095, 5, 24, Math.PI * 1.38), rimMaterial, layout.length,
+        new T.TorusGeometry(.5, .082, 5, 20, Math.PI * .98), rimMaterial, layout.length,
       );
       const undersideRimMesh = new T.InstancedMesh(
-        new T.TorusGeometry(1, .065, 5, 22, Math.PI * 1.08), rimMaterial.clone(), layout.length,
+        new T.TorusGeometry(.38, .06, 5, 18, Math.PI * .78), rimMaterial.clone(), layout.length,
       );
       bodyMesh.name = 'GEAR CALDERA · TEN WALKABLE SKY ANVILS';
       rimMesh.name = 'GEAR CALDERA · SKY ANVIL FORGE SEAMS';
@@ -12226,16 +13720,31 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
     resolveLavaWorldBall(profile, gameState) {
       const features = profile.lavaFeatures;
       const ball = gameState.ball;
-      if (!features || (ball.mode !== 'outbound' && ball.mode !== 'returning')) return false;
+      if (!features) return false;
+      const movingBall = ball.mode === 'outbound' || ball.mode === 'returning';
+      // A forge vent can deliver the ball exactly onto its promised socket and
+      // the floor solver may settle it one frame before this interaction pass.
+      // A resting ball therefore counts only at the currently expected socket;
+      // every other Lava interaction still requires a real moving strike.
+      const socketArrival = ball.mode === 'ready';
+      if (!movingBall && !socketArrival) return false;
       const speed = ball.velocity.length();
-      if (speed <= 7) return false;
 
       for (const node of features.skyForgeNodes) {
         const id = `lava-sky-forge-node-${node.index}`;
         node.group.updateMatrixWorld(true);
         node.core.getWorldPosition(node.position);
+        const socketReach = node.index === features.skyForgeNodes.length - 1 ? 10 : 5.2;
+        const socketDistance = ball.position.distanceTo(node.position);
+        const settledInExpectedSocket = socketArrival
+          && node.index === features.skyForgeStep
+          && socketDistance <= socketReach + ball.radius;
         if (ball.collisionCooldown.has(id)
-          || ball.position.distanceTo(node.position) > 2.5 + ball.radius) continue;
+          // The visible socket collar is 2.8 m wide. Give an ordinary arcing
+          // ball the whole collar, rather than demanding an invisible 30 cm
+          // bullseye after a two-second sky launch.
+          || socketDistance > socketReach + ball.radius
+          || (!settledInExpectedSocket && (!movingBall || speed <= 7))) continue;
         ball.collisionCooldown.set(id, .26);
         node.flash = 1;
         if (node.index < features.skyForgeStep) {
@@ -12273,6 +13782,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         if (!ball.comet) ball.velocity.multiplyScalar(.97);
         return true;
       }
+
+      if (!movingBall || speed <= 7) return false;
 
       for (const plate of features.coolingPlates) {
         const id = `lava-cooling-plate-${plate.index}`;
@@ -13145,40 +14656,135 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
     }
     makePlanetProps(profile, water) {
       const count = 520;
-      const geometry = water ? new T.ConeGeometry(.7, 8, 6) : new T.ConeGeometry(1.2, 10, 5);
+      const transformed = (geometry, {
+        x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0,
+        sx = 1, sy = 1, sz = 1,
+      } = {}) => {
+        geometry.applyMatrix4(new T.Matrix4().compose(
+          new T.Vector3(x, y, z),
+          new T.Quaternion().setFromEuler(new T.Euler(rx, ry, rz)),
+          new T.Vector3(sx, sy, sz),
+        ));
+        return geometry;
+      };
+      // Each instance is a tiny composition, not the old lone census cone.
+      // Low-poly geometry keeps this entire 520-piece landscape in one draw
+      // call while giving Water vegetation and Lava geology different bodies.
+      const geometry = water
+        ? mergeStaticGeometries([
+          // Low reef undergrowth. The former five-metre tooth with a diamond
+          // cap repeated 520 times and made the ocean resemble a pin factory.
+          transformed(new T.SphereGeometry(.5, 6, 4), { y: .24, sx: 2.25, sy: .46, sz: 1.72 }),
+          transformed(new T.ConeGeometry(.25, 2.65, 6), { x: -.44, y: 1.34, rz: -.32 }),
+          transformed(new T.ConeGeometry(.21, 2.2, 6), { x: .52, y: 1.08, z: .22, rz: .4 }),
+          transformed(new T.ConeGeometry(.16, 1.82, 5), { x: .05, y: .9, z: -.58, rx: -.38 }),
+          transformed(new T.TorusGeometry(.54, .09, 5, 12, Math.PI * 1.38),
+            { x: -.58, y: 2.28, rz: -.22, rx: .16 }),
+          transformed(new T.OctahedronGeometry(.28, 0),
+            { x: .72, y: 1.88, z: .2, sx: 1.5, sy: .5, sz: 1.18 }),
+        ])
+        : mergeStaticGeometries([
+          // Ankle- and waist-high slag rubble; horizon architecture is built
+          // separately. Repeating tall cones here was all silhouette and no
+          // place, the exact visual pile-up this pass is removing.
+          transformed(new T.DodecahedronGeometry(.72, 0), { y: .4, sx: 1.82, sy: .68, sz: 1.56 }),
+          transformed(new T.DodecahedronGeometry(.48, 0), { x: -1.05, y: .35, z: .3, sx: 1.35, sy: .8, sz: 1.18 }),
+          transformed(new T.BoxGeometry(.62, 1.82, .72), { x: .72, y: .88, z: -.24, rz: -.24 }),
+          transformed(new T.BoxGeometry(.46, 1.38, .55), { x: -.48, y: .7, z: -.86, rz: .38 }),
+          transformed(new T.TorusGeometry(.66, .085, 5, 12, Math.PI * 1.42),
+            { y: .42, rx: Math.PI / 2, rz: .22 }),
+        ]);
       const material = new T.MeshStandardMaterial({
-        color: water ? 0x43b69a : 0x251012,
-        emissive: water ? 0x073c46 : 0x751006,
-        emissiveIntensity: water ? .45 : .82,
+        color: 0xffffff,
+        emissive: water ? 0x164f48 : 0x521006,
+        emissiveIntensity: water ? 1.05 : .7,
         roughness: .74, metalness: water ? .02 : .25,
         vertexColors: true,
       });
       const mesh = new T.InstancedMesh(geometry, material, count);
-      mesh.name = water ? 'KELP · CORAL · HYDROTHERMAL GARDENS' : 'BASALT TEETH · BOWSER SPIRES · FURNACES';
+      mesh.name = water
+        ? 'OPEN COUNTRY · 520 KELP AND CORAL GARDEN CLUSTERS'
+        : 'OPEN COUNTRY · 520 BASALT TEETH AND FURNACE CLUSTERS';
       mesh.userData.kbHighCount = 520;
       mesh.userData.kbLowCount = 280;
       mesh.count = this.quality === 'LOW' ? 280 : 520;
+      const accentGeometry = water
+        ? mergeStaticGeometries([
+          transformed(new T.OctahedronGeometry(.24, 0), { x: -.58, y: 2.24, sx: 1.58, sy: .54, sz: 1.2 }),
+          transformed(new T.OctahedronGeometry(.21, 0), { x: .67, y: 1.86, z: .2, sx: 1.42, sy: .56, sz: 1.17 }),
+          transformed(new T.SphereGeometry(.28, 6, 4), { y: .37, sx: 2.1, sy: .34, sz: 1.7 }),
+        ])
+        : mergeStaticGeometries([
+          transformed(new T.TorusGeometry(.72, .095, 5, 14), { y: .62, rx: Math.PI / 2 }),
+          transformed(new T.OctahedronGeometry(.22, 0), { x: .72, y: 1.78 }),
+        ]);
+      const accentMaterial = new T.MeshStandardMaterial({
+        color: water ? 0xff9acb : 0xffb04a,
+        emissive: water ? 0xff3f9d : 0xff3508,
+        emissiveIntensity: water ? 2.15 : 2.5,
+        roughness: .22, metalness: .28,
+      });
+      const accentCount = Math.ceil(count / 5);
+      const accentMesh = new T.InstancedMesh(accentGeometry, accentMaterial, accentCount);
+      accentMesh.name = water ? 'OPEN COUNTRY · CORAL BLOOMS' : 'OPEN COUNTRY · FAULT EMBERS';
+      accentMesh.userData.kbHighCount = accentCount;
+      accentMesh.userData.kbLowCount = Math.ceil(280 / 5);
+      accentMesh.count = this.quality === 'LOW'
+        ? accentMesh.userData.kbLowCount : accentMesh.userData.kbHighCount;
+      accentMesh.frustumCulled = false;
+      accentMesh.userData.kbLifted = true;
       const matrix = new T.Matrix4(), quaternion = new T.Quaternion(), position = new T.Vector3(), scale = new T.Vector3();
       const color = new T.Color();
+      const wildernessHosts = profile.wilderness?.records || EMPTY_SOLIDS;
+      const roadHosts = profile.groundFlow?.discoveryHosts || EMPTY_SOLIDS;
+      const scenicHosts = [...wildernessHosts, ...roadHosts, ...profile.sites];
+      profile.propRecords = [];
+      let accentIndex = 0;
       for (let i = 0; i < count; i++) {
-        const site = profile.sites[i % profile.sites.length];
-        const angle = i * 2.3999632297 + (water ? 1.7 : .4);
-        const reach = 36 + (i * 17 % 150);
-        let x = site.x + Math.cos(angle) * reach;
-        let z = site.z + Math.sin(angle) * reach;
+        // LOW keeps one complete globe-spanning pass; HIGH adds a second
+        // detail pass over the same geography instead of revealing only the
+        // first half of the planet's props.
+        const passIndex = i < 280 ? i : i - 280;
+        const passCount = i < 280 ? 280 : 240;
+        const hostIndex = Math.min(scenicHosts.length - 1,
+          Math.floor(passIndex / passCount * scenicHosts.length));
+        const host = scenicHosts[hostIndex];
+        const angle = i * 2.3999632297 + hostIndex * .41 + (water ? 1.7 : .4);
+        const reach = 7.5 + (i * 17 % 12) + (i >= 280 ? 3.5 : 0);
+        let at;
+        if (host.farCap) {
+          const magnitude = Math.hypot(host.x, host.z) || 1;
+          at = { x: host.x / magnitude * 1305, z: host.z / magnitude * 1305 };
+        } else {
+          at = surfaceOffsetChartAt(
+            host.x, host.z, Math.cos(angle), Math.sin(angle), reach, {},
+          );
+        }
+        let x = at.x;
+        let z = at.z;
         ({ x, z } = this.relocateFromInterworld(x, z, 2.4, i + (water ? 1100 : 1700)));
-        const height = water ? 4 + (i * 13 % 16) : 5 + (i * 19 % 28);
         const base = profile.heightAt(x, z);
-        chartLift(x, base + height / 2, z, position);
+        chartLift(x, base + .06, z, position);
         quaternion.copy(liftQuatAt(x, z, new T.Quaternion()))
           .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
-        scale.set(water ? .65 + i % 4 * .22 : .8 + i % 3 * .35, height / (water ? 8 : 10), water ? .65 + (i + 2) % 4 * .18 : .8 + i % 3 * .35);
+        const size = (water ? .72 : .8) + (i % 5) * .12;
+        const farSight = i % 29 === 0 ? 1.8 : i % 11 === 0 ? 1.28 : 1;
+        scale.set(size * (i % 3 === 0 ? 1.18 : 1), size * farSight,
+          size * ((i + 1) % 4 === 0 ? 1.16 : 1));
         matrix.compose(position, quaternion, scale);
         mesh.setMatrixAt(i, matrix);
         color.setHex(water
-          ? (i % 11 === 0 ? 0xff6fab : i % 5 === 0 ? 0x78e4d5 : 0x176f66)
-          : (i % 9 === 0 ? 0xff4b1e : i % 5 === 0 ? 0x7f2718 : 0x211012));
+          ? [0x1d756e, 0x3f9c82, 0x376f91, 0x8b5d91, 0xd07199][(i + hostIndex) % 5]
+          : [0x2a1719, 0x4b2522, 0x713626, 0x3a2e34, 0x8f442a][(i + hostIndex) % 5]);
         mesh.setColorAt(i, color);
+        if (i % 5 === 0) accentMesh.setMatrixAt(accentIndex++, matrix);
+        profile.propRecords.push({
+          id: `${profile.id}-prop-${i}`, x, z, top: base + (water ? 2.7 : 2.1) * size * farSight,
+          bottom: base, radius: 1.8 * size, siteIndex: host.siteIndex ?? host.index,
+          routeId: host.routeId || `${profile.id}-${host.id}-local-scenery`,
+          family: water ? 'kelp-coral-garden' : 'basalt-furnace-cluster',
+          hostId: host.id, enabledInLow: i < 280,
+        });
       }
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -13186,12 +14792,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       mesh.receiveShadow = true;
       mesh.frustumCulled = false;
       mesh.userData.kbLifted = true;
-      profile.root.add(mesh);
-      // The old 520-cone fields were statistical density without authored
-      // identity. KICKMOON 8 keeps the records for compatibility but renders
-      // the living reef or furnace-specific boulders, chains and chimneys.
-      mesh.visible = false;
+      accentMesh.instanceMatrix.needsUpdate = true;
+      profile.root.add(mesh, accentMesh);
       profile.propMesh = mesh;
+      profile.propAccentMesh = accentMesh;
     }
     makePlanetCollectibles(profile, water) {
       profile.collectibles.length = 0;
@@ -13201,6 +14805,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       profile.collectibleMeshByKind = {};
       const platformBuckets = profile.sites.map(() => []);
       for (const platform of profile.platforms) {
+        if (Number.isInteger(platform.siteIndex)
+          && platform.siteIndex >= 0 && platform.siteIndex < platformBuckets.length) {
+          platformBuckets[platform.siteIndex].push(platform);
+          continue;
+        }
         let bestIndex = 0;
         let bestDistance = Infinity;
         for (let siteIndex = 0; siteIndex < profile.sites.length; siteIndex++) {
@@ -13216,6 +14825,15 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       for (let siteIndex = 0; siteIndex < platformBuckets.length; siteIndex++) {
         if (!platformBuckets[siteIndex].length) platformBuckets[siteIndex].push(...profile.platforms);
       }
+      const connectiveRecords = [
+        ...(profile.groundFlow?.records || EMPTY_SOLIDS),
+        ...(profile.wilderness?.records || EMPTY_SOLIDS),
+      ];
+      const flowBuckets = profile.sites.map((_, siteIndex) =>
+        connectiveRecords.filter(record =>
+          record.siteIndex === siteIndex && !record.shortcut
+            && (record.wilderness
+              || (record.step > 1 && record.step < record.segments - 1))));
       const specs = [
         { kind: 'common', count: ALTERNATE_COLLECTIBLE_COUNTS.common, value: 1, clusterSize: 18,
           // Thousands of tiny pickups need a crisp silhouette, not invisible
@@ -13282,8 +14900,30 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           const welcomeRing = spec.kind === 'common' && siteIndex === 0 && localIndex < 12;
           const contextOrdinal = localIndex % contexts.length;
           const authoredCachePickup = !water && spec.kind === 'rare' && cacheBucket.length > 0;
+          const flowBucket = flowBuckets[siteIndex];
+          // Most common stock, plus half of Water's pearls, now lives through
+          // the connective world instead of being wound into dense spirals on
+          // the same eight destination decks. Lava rares remain inside their
+          // authored black-glass cache geology.
+          const useFlowHost = !welcomeRing && !authoredCachePickup && flowBucket.length > 0
+            && (spec.kind === 'common'
+              ? localIndex % 10 !== 0
+              : water && spec.kind === 'rare' && localIndex % 2 === 0);
+          const flowOrdinal = spec.kind === 'common'
+            ? localIndex - Math.floor(localIndex / 10) - 1
+            : Math.floor(localIndex / 2);
+          // An irrational stride distributes each site's stock across every
+          // available host. The previous integer stride shared factors with
+          // some route lengths and quietly stacked thirty-six pearls on one
+          // causeway sample while neighbouring samples remained bare.
+          const flowIndex = flowBucket.length
+            ? Math.floor(((((flowOrdinal + 1) * .61803398875 + siteIndex * .137) % 1) + 1) % 1
+              * flowBucket.length)
+            : 0;
           const platform = welcomeRing ? profile.spawnPlatform
-            : authoredCachePickup ? placementBucket[localIndex % placementBucket.length]
+            : useFlowHost
+              ? flowBucket[flowIndex]
+              : authoredCachePickup ? placementBucket[localIndex % placementBucket.length]
               : placementBucket[
                 (clusterIndex * (spec.kind === 'rare' ? 5 : 7) + contextOrdinal * 3 + siteIndex)
                   % placementBucket.length
@@ -13305,7 +14945,13 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             : nestedLavaCache ? 1.05 + slot % 3 * .58
               : Math.min(Math.max(1.35, platform.radius * .58),
                 (spec.kind === 'rare' ? 2.1 : 2.6) + ring * (spec.kind === 'rare' ? 2.1 : 2.8));
-          if (!welcomeRing && !nestedLavaCache) {
+          if (useFlowHost) {
+            const routeHeading = Math.atan2(platform.tangentZ || 0, platform.tangentX || 1);
+            const lane = localIndex % 2 ? 1 : -1;
+            angle = routeHeading + lane * Math.PI * .5 + Math.sin(localIndex * 1.7) * .14;
+            reach = Math.min(platform.routeWidth * .58,
+              1.5 + (Math.floor(localIndex / 2) % 4) * 1.35);
+          } else if (!welcomeRing && !nestedLavaCache) {
             const maximumReach = Math.max(1.5, platform.radius * .62);
             if (grammar === 'arrival-spiral') {
               angle = localIndex * .61 + siteIndex * .27;
@@ -13413,6 +15059,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             homeChartPosition: new T.Vector3(x, altitude, z), phase: i * .73,
             fieldId, siteIndex, contextId: context.id,
             destinationId: context.destinationId, supportAuthorityId: platform.id,
+            placementRole: useFlowHost
+              ? platform.wilderness ? 'open-country-discovery' : 'open-world-route'
+              : 'destination-cluster',
             hidden: false, collecting: false,
             routeRail, routeDistance, routePresentationVisible: true,
           });
@@ -13484,6 +15133,21 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const site = profile.sites[siteIndex];
         return surfaceDistanceAt(platform.x, platform.z, site.x, site.z) < 150;
       }));
+      const connectiveRecords = [
+        ...(profile.groundFlow?.records || EMPTY_SOLIDS),
+        ...(profile.wilderness?.records || EMPTY_SOLIDS),
+      ];
+      const flowBuckets = profile.sites.map((_, siteIndex) =>
+        connectiveRecords.filter(record =>
+          record.siteIndex === siteIndex && !record.shortcut
+            && (record.wilderness
+              || (record.step > 1 && record.step < record.segments - 1))
+            && surfaceDistanceAt(
+              record.x, record.z,
+              profile.spawnPlatform?.x ?? profile.sites[0].x,
+              profile.spawnPlatform?.z ?? profile.sites[0].z,
+            )
+              > profile.spawnSafetyRadius + 12));
       const matrix = new T.Matrix4(), position = new T.Vector3(), quaternion = new T.Quaternion(), scale = new T.Vector3();
       for (let i = 0; i < count; i++) {
         const { siteIndex, localIndex } = assignments[i];
@@ -13500,9 +15164,17 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         // containers on its outermost authored footings. This is destination
         // punctuation, not scatter: the last cache tells the player the route
         // really reaches the crown and rewards finishing the sentence.
+        const flowBucket = flowBuckets[siteIndex];
+        const useFlowHost = localIndex < 12 && flowBucket.length > 0;
+        const flowIndex = flowBucket.length
+          ? Math.floor(((((localIndex + 1) * .61803398875
+            + familyIndex * .173 + siteIndex * .097) % 1) + 1) % 1 * flowBucket.length)
+          : 0;
         const platform = outerPlatforms && localIndex >= 12
           ? outerPlatforms[(localIndex - 12) % Math.min(3, outerPlatforms.length)]
-          : bucket[(localIndex * 5 + familyIndex * 3) % bucket.length];
+          : useFlowHost
+            ? flowBucket[flowIndex]
+            : bucket[(localIndex * 5 + familyIndex * 3) % bucket.length];
         const angle = (localIndex % 7) / 7 * TAU + siteIndex * .31 + familyIndex * .17;
         const radius = .88 + (localIndex % 4) * .2;
         const reach = Math.min(platform.radius * .58, 2.2 + (localIndex % 5) * 1.15);
@@ -13518,11 +15190,14 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         mesh.setMatrixAt(meshIndex, matrix);
         const contexts = profile.authorship.collectibleContexts.filter(context => context.siteIndex === siteIndex);
         profile.breakables.push({
-          id: `${profile.id}-breakable-${i}`, index: meshIndex, globalIndex: i, mesh,
-          alive: true, radius: radius * 1.2, position: position.clone(), matrix: matrix.clone(),
-          siteIndex, biomeId: site.biome, family: familySpecs[familyIndex][0].toLowerCase().replaceAll(' ', '-'),
-          role: 'treasure-container', contextId: contexts[localIndex % contexts.length].id,
-          platformId: platform.id, containedPickups: [],
+           id: `${profile.id}-breakable-${i}`, index: meshIndex, globalIndex: i, mesh,
+           alive: true, radius: radius * 1.2, position: position.clone(), matrix: matrix.clone(),
+           siteIndex, biomeId: site.biome, family: familySpecs[familyIndex][0].toLowerCase().replaceAll(' ', '-'),
+           role: useFlowHost
+             ? platform.wilderness ? 'wilderness-treasure-container' : 'route-treasure-container'
+             : 'treasure-container',
+           contextId: contexts[localIndex % contexts.length].id,
+           platformId: platform.id, containedPickups: [],
         });
       }
       // A visible majority of the economy lives in paths and named gardens,
@@ -13593,18 +15268,23 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
     }
     populatePlanetDiscoveryRoutes(profile, water) {
       const routes = [];
+      const rehomedPickups = new Set();
+      const rehomedBreakables = new Set();
       const populate = ({ id, siteIndex, hosts, pickupCount, breakableCount }) => {
         const liveHosts = (hosts || EMPTY_SOLIDS).map(host => host.record || host).filter(Boolean);
         if (!liveHosts.length) return;
         const pickups = profile.collectibles.filter(pickup =>
-          pickup.siteIndex === siteIndex && pickup.kind !== 'route' && !pickup.hidden)
+          pickup.siteIndex === siteIndex && pickup.kind !== 'route' && !pickup.hidden
+            && !rehomedPickups.has(pickup))
           .slice(0, pickupCount);
-        const breakables = profile.breakables.filter(item => item.siteIndex === siteIndex)
+        const breakables = profile.breakables.filter(item =>
+          item.siteIndex === siteIndex && !rehomedBreakables.has(item))
           .slice(0, breakableCount);
         for (let index = 0; index < pickups.length; index++) {
           this.movePlanetPickupToDiscoveryHost(
             pickups[index], liveHosts[index % liveHosts.length], index, liveHosts.length, id,
           );
+          rehomedPickups.add(pickups[index]);
         }
         for (let index = 0; index < breakables.length; index++) {
           // Offset container ownership relative to the visible pickup rings so
@@ -13613,6 +15293,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           this.movePlanetBreakableToDiscoveryHost(
             breakables[index], host, index, liveHosts.length, id,
           );
+          rehomedBreakables.add(breakables[index]);
         }
         routes.push({
           id, siteIndex, hosts: liveHosts, pickups, breakables,
@@ -13624,7 +15305,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const features = profile.waterFeatures;
         populate({
           id: 'water-blue-hole-abyssal-discoveries', siteIndex: 3,
-          hosts: features.abyssalDiscoveryHosts, pickupCount: 96, breakableCount: 12,
+          hosts: features.abyssalDiscoveryHosts, pickupCount: 54, breakableCount: 8,
         });
         populate({
           id: 'water-leviathan-sky-discoveries', siteIndex: 9,
@@ -13635,6 +15316,25 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         populate({
           id: 'lava-sky-forge-discoveries', siteIndex: 3,
           hosts: features.skyForgePlates, pickupCount: 84, breakableCount: 12,
+        });
+      }
+      for (const toy of profile.galaxyToys?.toys || EMPTY_SOLIDS) {
+        populate({
+          id: `${toy.id}-discoveries`, siteIndex: toy.siteIndex,
+          hosts: toy.records, pickupCount: 5, breakableCount: 1,
+        });
+      }
+      // A named place is not a name in metadata.  Each wilderness pocket owns
+      // a compact five-pickup curl and one breakable reward, moved from the
+      // existing single-ledger economy.  This adds discovery punctuation
+      // without minting duplicate collectibles or rebuilding the 2,000 gate.
+      for (const pocket of profile.wilderness?.pockets || EMPTY_SOLIDS) {
+        populate({
+          id: `${pocket.id}-discovery`,
+          siteIndex: pocket.siteIndex,
+          hosts: [pocket],
+          pickupCount: 5,
+          breakableCount: 1,
         });
       }
       for (const mesh of profile.collectibleMeshes) mesh.instanceMatrix.needsUpdate = true;
@@ -13649,11 +15349,25 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         emissive: water ? 0x00a9d2 : 0xff2100, emissiveIntensity: 2.4,
         roughness: .25, metalness: .65,
       });
+      const flightHoopMaterial = new T.MeshStandardMaterial({
+        color: water ? 0xc5ffff : 0xffd36a,
+        emissive: water ? 0x24cfe9 : 0xff3d08,
+        emissiveIntensity: 2.65, roughness: .18, metalness: .42,
+      });
+      const flightHoopGeometry = new T.TorusGeometry(1.55, .12, 6, 24);
+      const arcPickups = new Set();
       for (let i = 0; i < 32; i++) {
         const siteIndex = i < 24 ? Math.floor(i / 3) : 8 + Math.floor((i - 24) / 2);
         const localIndex = i < 24 ? i % 3 : (i - 24) % 2;
         const localPlatforms = profile.platforms.filter(platform =>
           platform.siteIndex === siteIndex && (platform.collisionScale ?? 1) > 0 && !platform.sanctuary);
+        const groundWaystations = (profile.groundFlow?.discoveryHosts || EMPTY_SOLIDS)
+          .filter(host => host.siteIndex === siteIndex && !host.shortcut);
+        const wildernessWaystations = (profile.wilderness?.discoveryHosts || EMPTY_SOLIDS)
+          .filter(host => host.siteIndex === siteIndex);
+        const routeWaystations = wildernessWaystations.length
+          ? [...wildernessWaystations, ...groundWaystations]
+          : groundWaystations;
         // The final reward lift belongs on the actual antipodal crown, not on
         // an arbitrary low deck near its site marker. Besides completing the
         // physical full-planet circuit, this gives the player a readable way
@@ -13661,7 +15375,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const farCapReturn = siteIndex === 11 && localIndex === 1;
         const farthestPlatform = farCapReturn ? [...localPlatforms].sort((a, b) =>
           Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z))[0] : null;
-        const platform = farthestPlatform || localPlatforms[(localIndex * 3 + 1) % localPlatforms.length]
+        const routeLift = !farCapReturn && (localIndex === 0 || localIndex === 2)
+          && routeWaystations.length
+          ? routeWaystations[(siteIndex + i) % routeWaystations.length] : null;
+        const platform = farthestPlatform || routeLift
+          || localPlatforms[(localIndex * 3 + 1) % localPlatforms.length]
           || profile.platforms.find(candidate => (candidate.collisionScale ?? 1) > 0 && !candidate.sanctuary);
         const group = new T.Group();
         const disc = new T.Mesh(new T.CylinderGeometry(2.9, 3.35, .48, 18), padMaterial);
@@ -13672,7 +15390,21 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         inner.rotation.x = -Math.PI / 2;
         inner.position.y = .28;
         group.add(disc, ring, inner);
-        this.placePlanetObject(group, platform.x, platform.top + .18, platform.z, i * .4);
+        const tangentLength = Math.hypot(platform.tangentX || 0, platform.tangentZ || 0);
+        const forwardX = tangentLength > .01 ? platform.tangentX / tangentLength : Math.sin(i * .4);
+        const forwardZ = tangentLength > .01 ? platform.tangentZ / tangentLength : Math.cos(i * .4);
+        const padYaw = Math.atan2(forwardX, forwardZ);
+        const flightHoops = [];
+        if (routeLift) {
+          for (let hoopIndex = 0; hoopIndex < 3; hoopIndex++) {
+            const hoop = new T.Mesh(flightHoopGeometry, flightHoopMaterial);
+            hoop.position.set(0, 3.4 + hoopIndex * 2.25, 3.8 + hoopIndex * 3.25);
+            hoop.scale.setScalar(1 + hoopIndex * .12);
+            group.add(hoop);
+            flightHoops.push(hoop);
+          }
+        }
+        this.placePlanetObject(group, platform.x, platform.top + .18, platform.z, padYaw);
         profile.root.add(group);
         const pad = {
           id: `${profile.id}-launch-${i}`, layer: 'surface', planet: profile.id,
@@ -13682,15 +15414,52 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             / Math.max(1, PLANET.radius + platform.top + .25),
           impulse: water ? 28 + i % 4 * 4 : 34 + i % 5 * 5,
           cooldown: 0, playerCooldown: 0, ballCooldown: 0,
-          phase: i * .91, group, ring, inner, riseRings: [],
+          phase: i * .91, group, ring, inner, riseRings: [], flightHoops,
           siteIndex, biomeId: profile.sites[siteIndex].biome,
           role: farCapReturn ? 'antipodal-return-lift'
-            : localIndex === 0 ? 'route-lift' : localIndex === 1 ? 'reward-lift' : 'shortcut-lift',
+            : routeLift ? 'route-lift' : localIndex === 1 ? 'reward-lift' : 'shortcut-lift',
+          placementRole: routeLift ? 'open-country-flight-arc' : 'district-route-lift',
           platformId: platform.id,
         };
+        if (routeLift) {
+          const candidates = profile.collectibles.filter(pickup =>
+            pickup.kind === 'common' && pickup.siteIndex === siteIndex
+              && !pickup.hidden && !pickup.discoveryRouteId
+              && !arcPickups.has(pickup));
+          const arc = candidates.slice(0, 5);
+          for (let arcIndex = 0; arcIndex < arc.length; arcIndex++) {
+            const pickup = arc[arcIndex];
+            const forwardDistance = 3.1 + arcIndex * 2.55;
+            let at = surfaceOffsetChartAt(
+              platform.x, platform.z, forwardX, forwardZ, forwardDistance, {},
+            );
+            at = surfaceOffsetChartAt(
+              at.x, at.z, -forwardZ, forwardX,
+              Math.sin(arcIndex * 1.7) * .42, {},
+            );
+            const amount = (arcIndex + 1) / (arc.length + 1);
+            const altitude = platform.top + 2.5 + Math.sin(amount * Math.PI) * 6.4;
+            chartLift(at.x, altitude, at.z, pickup.position);
+            pickup.quaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+              .multiply(new T.Quaternion().setFromAxisAngle(UP, padYaw));
+            pickup.matrix.compose(pickup.position, pickup.quaternion, ONE_SCALE);
+            pickup.homePosition.copy(pickup.position);
+            pickup.homeQuaternion.copy(pickup.quaternion);
+            pickup.chartPosition.set(at.x, altitude, at.z);
+            pickup.homeChartPosition.copy(pickup.chartPosition);
+            pickup.supportAuthorityId = platform.id;
+            pickup.discoveryRouteId = `${profile.id}-launch-${i}-flight-arc`;
+            pickup.mesh.setMatrixAt(pickup.index, pickup.matrix);
+            arcPickups.add(pickup);
+          }
+          pad.arcPickups = arc;
+        } else {
+          pad.arcPickups = [];
+        }
         profile.launchPads.push(pad);
         profile.padGroups.push(group);
       }
+      for (const mesh of profile.collectibleMeshes) mesh.instanceMatrix.needsUpdate = true;
     }
     finalizeAlternateWorldAuthorship(profile) {
       const authorship = profile.authorship;
@@ -13844,30 +15613,45 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           z: physical.reduce((sum, record) => sum + record.z, 0) / physical.length,
         } : { x: site.x, z: site.z };
         const contextPrefix = `${profile.id}-${specification.id}-`;
-        const reward = (profile.breakables || EMPTY_SOLIDS)
-          .filter(item => item.siteIndex === specification.siteIndex
-            && !claimedDestinationRewards.has(item.id)
-            && item.contextId?.startsWith(contextPrefix))
-          .map(item => {
-            const point = chartAt(item.position, {});
-            return {
-              item,
-              distance: surfaceDistanceAt(centroid.x, centroid.z, point.x, point.z),
-            };
-          })
-          .sort((left, right) => left.distance - right.distance)[0]?.item
-          || (profile.breakables || EMPTY_SOLIDS)
-            .filter(item => item.siteIndex === specification.siteIndex
-              && !claimedDestinationRewards.has(item.id))
-            .map(item => {
-              const point = chartAt(item.position, {});
-              return {
-                item,
-                distance: surfaceDistanceAt(centroid.x, centroid.z, point.x, point.z),
-              };
-            })
-            .sort((left, right) => left.distance - right.distance)[0]?.item
-          || null;
+        // The economy is intentionally mobile across routes now, so a named
+        // destination cannot blindly claim the first same-context urn and
+        // hope it still lives nearby. Select from the finished live reward
+        // atlas, privilege the destination's own context, and never accept a
+        // far-away token when a local pearl, cinder or lift is available.
+        const rewardCandidates = [];
+        for (const item of profile.breakables || EMPTY_SOLIDS) {
+          if (item.siteIndex !== specification.siteIndex
+            || claimedDestinationRewards.has(item.id)) continue;
+          const point = item.chartPosition || chartAt(item.position, {});
+          rewardCandidates.push({
+            item, point, context: item.contextId?.startsWith(contextPrefix), kindPriority: 0,
+          });
+        }
+        for (const item of profile.collectibles || EMPTY_SOLIDS) {
+          if (item.siteIndex !== specification.siteIndex
+            || claimedDestinationRewards.has(item.id)) continue;
+          const point = item.homeChartPosition || item.chartPosition;
+          rewardCandidates.push({
+            item, point, context: item.contextId?.startsWith(contextPrefix), kindPriority: 4,
+          });
+        }
+        for (const item of profile.launchPads || EMPTY_SOLIDS) {
+          if (item.siteIndex !== specification.siteIndex
+            || claimedDestinationRewards.has(item.id)) continue;
+          rewardCandidates.push({
+            item, point: item.position, context: false, kindPriority: 8,
+          });
+        }
+        const reward = rewardCandidates.map(candidate => {
+          const distance = surfaceDistanceAt(
+            centroid.x, centroid.z, candidate.point.x, candidate.point.z,
+          );
+          return {
+            ...candidate, distance,
+            score: (distance > 105 ? 10000 : 0)
+              + distance + (candidate.context ? 0 : 18) + candidate.kindPriority,
+          };
+        }).sort((left, right) => left.score - right.score)[0]?.item || null;
         if (reward) claimedDestinationRewards.add(reward.id);
         destinations.push({
           id: `${profile.id}-${specification.id}`,
@@ -14721,12 +16505,22 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
     updateAlternatePlanetVisuals(profile, dt, gameState, clock) {
       profile.atmosphere.rotation.y += dt * (profile.id === 'water' ? .025 : -.012);
       profile.terrainMaterial.emissiveIntensity = profile.id === 'water'
-        ? .62 + Math.sin(clock * .7) * .1
-        : .22 + Math.sin(clock * 2.3) * .045;
+        ? .31 + Math.sin(clock * .7) * .055
+        : .145 + Math.sin(clock * 2.3) * .028;
       if (profile.deckRimMesh) {
         profile.deckRimMesh.material.emissiveIntensity = profile.id === 'water'
-          ? 2.05 + Math.sin(clock * 1.7) * .42
-          : 2.55 + Math.sin(clock * 4.1) * .62;
+          ? .62 + Math.sin(clock * 1.7) * .12
+          : .76 + Math.sin(clock * 4.1) * .16;
+      }
+      for (let toyIndex = 0; toyIndex < (profile.galaxyToys?.toys.length || 0); toyIndex++) {
+        const toy = profile.galaxyToys.toys[toyIndex];
+        for (let ringIndex = 0; ringIndex < toy.rings.length; ringIndex++) {
+          toy.rings[ringIndex].rotation.x += dt * (.18 + ringIndex * .09);
+          toy.rings[ringIndex].rotation.z += dt * (.34 + ringIndex * .13)
+            * (ringIndex % 2 ? -1 : 1);
+        }
+        toy.core.rotation.y += dt * (1.1 + toyIndex * .07);
+        toy.core.position.y = Math.sin(clock * 2.1 + toyIndex) * .22;
       }
       for (let i = 0; i < profile.monuments.length; i++) {
         const monument = profile.monuments[i];
@@ -14831,6 +16625,52 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       this.updateRegionalBosses(profile, dt, gameState);
       this.updateAlternateBoss(profile, dt, gameState);
       this.updateAlternateCompletion(profile, gameState);
+      const wilderness = profile.wilderness;
+      if (wilderness) {
+        wilderness.discoveryCooldown = Math.max(0, wilderness.discoveryCooldown - dt);
+        if (wilderness.discoveryCooldown <= 0) {
+          wilderness.discoveryCooldown = .22;
+          const playerChart = chartFrameAt(gameState.player.position, gameState.playerChart);
+          let discovery = null;
+          for (const pocket of wilderness.pockets || EMPTY_SOLIDS) {
+            if (wilderness.discoveredPockets.has(pocket.id)) continue;
+            const distance = surfaceDistanceAt(playerChart.x, playerChart.z, pocket.x, pocket.z);
+            if (distance <= 21 && (!discovery || distance < discovery.distance)) {
+              discovery = { kind: 'pocket', host: pocket, distance };
+            }
+          }
+          if (!discovery) {
+            for (const route of wilderness.routes || EMPTY_SOLIDS) {
+              if (wilderness.discoveredRoutes.has(route.id)) continue;
+              for (const host of route.records) {
+                const distance = surfaceDistanceAt(playerChart.x, playerChart.z, host.x, host.z);
+                if (distance <= 15 && (!discovery || distance < discovery.distance)) {
+                  discovery = { kind: 'route', route, host, distance };
+                }
+              }
+            }
+          }
+          if (discovery) {
+            const pocket = discovery.kind === 'pocket';
+            const id = pocket ? discovery.host.id : discovery.route.id;
+            const name = pocket ? discovery.host.name : discovery.route.name;
+            if (pocket) wilderness.discoveredPockets.add(id);
+            else wilderness.discoveredRoutes.add(id);
+            const colour = profile.id === 'water' ? '#9ffcff' : '#ffd064';
+            gameState.addStyle(
+              pocket ? 14 : 9,
+              pocket ? 620 : 320,
+              pocket ? `FOUND · ${name}` : name,
+              colour,
+            );
+            const altitude = profile.heightAt(discovery.host.x, discovery.host.z) + 1.1;
+            const position = chartLift(
+              discovery.host.x, altitude, discovery.host.z, new T.Vector3(),
+            );
+            world.pulseRing(position, new T.Color(profile.theme.hot), pocket ? 9 : 5.5, .42, true);
+          }
+        }
+      }
       if (profile.id === 'water') this.updateWaterWorldGameplay(profile, dt, gameState);
       if (profile.id === 'lava') {
         gameState.lavaState.damageCooldown = Math.max(0, gameState.lavaState.damageCooldown - dt);
@@ -14839,9 +16679,21 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const floor = this.floorHeight(playerChart.x, playerChart.z, playerChart.alt + 1.4);
         const terrain = profile.heightAt(playerChart.x, playerChart.z);
         const onSafeDeck = floor > terrain + .35;
-        const touching = !onSafeDeck && playerChart.alt <= terrain + .62;
+        // The dark pilgrim roads are quenched terrain, not decorative paint.
+        // Their exact rendered centre samples are also the damage authority, so
+        // a player who follows the visible road can cross Lava on foot while a
+        // shortcut over the glowing crust still burns.
+        const onCooledRoad = !onSafeDeck
+          && (profile.wilderness?.safeSamples || EMPTY_SOLIDS).some(sample => {
+            const dx = playerChart.x - sample.x;
+            const dz = playerChart.z - sample.z;
+            return Math.abs(dx) <= sample.radius && Math.abs(dz) <= sample.radius
+              && dx * dx + dz * dz <= sample.radius * sample.radius;
+          });
+        const touching = !onSafeDeck && !onCooledRoad && playerChart.alt <= terrain + .62;
         gameState.lavaState.touching = touching;
-        gameState.lavaState.field = touching ? 'lava-moon-global' : null;
+        gameState.lavaState.field = touching ? 'lava-moon-global'
+          : onCooledRoad ? 'lava-wilderness-cooled-road' : null;
         if (touching && gameState.lavaState.damageCooldown <= 0) {
           gameState.lavaState.damageCooldown = 1.05;
           gameState.lavaState.hitsTaken++;
@@ -26683,6 +28535,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             ? profile.propMesh.userData.kbLowCount : profile.propMesh.userData.kbHighCount;
           profile.propMesh.castShadow = level === 'HIGH';
         }
+        if (profile.propAccentMesh) {
+          profile.propAccentMesh.count = level === 'LOW'
+            ? profile.propAccentMesh.userData.kbLowCount
+            : profile.propAccentMesh.userData.kbHighCount;
+        }
         for (const mesh of profile.collectibleMeshes || EMPTY_SOLIDS) {
           mesh.count = level === 'LOW' ? mesh.userData.kbLowCount : mesh.userData.kbHighCount;
         }
@@ -28089,6 +29946,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             let platform = null;
             let routeRail = null;
             let routeDistance = null;
+            let guardianSpec = null;
             let x;
             let z;
             let altitude;
@@ -28107,6 +29965,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             } else {
               siteIndex = definition.sites[index % definition.sites.length];
               const occurrence = Math.floor(index / definition.sites.length);
+              guardianSpec = (profile.authorship.guardianSpecs || EMPTY_SOLIDS).find(spec =>
+                spec.type === type && spec.siteIndex === siteIndex
+                && !profile.guardians.some(guardian => guardian.id === spec.id));
               const localPlatforms = profile.platforms.filter(candidate =>
                 candidate.siteIndex === siteIndex
                 && (candidate.collisionScale ?? 1) > 0
@@ -28118,6 +29979,15 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
                 surfaceDistanceAt(candidate.x, candidate.z, profile.spawn.x, profile.spawn.z)
                   >= profile.spawnSafetyRadius + 18);
               const placement = safePlatforms.length ? safePlatforms : localPlatforms;
+              const flowPlatforms = [
+                ...(profile.groundFlow?.records || EMPTY_SOLIDS),
+                ...(profile.wilderness?.records || EMPTY_SOLIDS),
+              ].filter(candidate =>
+                candidate.siteIndex === siteIndex && !candidate.shortcut
+                && (candidate.wilderness
+                  || (candidate.step > 1 && candidate.step < candidate.segments - 1))
+                && surfaceDistanceAt(candidate.x, candidate.z, profile.spawn.x, profile.spawn.z)
+                  >= profile.spawnSafetyRadius + 18);
               const crownPlatforms = siteIndex >= 9
                 ? [...placement].sort((a, b) => Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z))
                 : placement;
@@ -28127,7 +29997,17 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
               // vacant even though it was reachable and richly dressed.
               const antipodalSentinel = siteIndex === 11 && occurrence === 0
                 && definition.strategy === 'dash';
-              platform = (antipodalSentinel ? crownPlatforms[0] : null)
+              const useFlowEncounter = !guardianSpec && !antipodalSentinel
+                && flowPlatforms.length > 0
+                && (occurrence > 0 || (serial + siteIndex) % 3 === 0);
+              const flowIndex = flowPlatforms.length
+                ? Math.floor(((((occurrence + 1) * .61803398875
+                  + serial * .071 + siteIndex * .137) % 1) + 1) % 1 * flowPlatforms.length)
+                : 0;
+              platform = (useFlowEncounter
+                ? flowPlatforms[flowIndex]
+                : null)
+                || (antipodalSentinel ? crownPlatforms[0] : null)
                 || crownPlatforms[(occurrence * 3 + serial + siteIndex) % crownPlatforms.length]
                 || profile.platforms.find(candidate => (candidate.collisionScale ?? 1) > 0 && !candidate.sanctuary);
               angle = siteIndex * .71 + occurrence * 1.37 + (serial % 3) * .44;
@@ -28139,9 +30019,6 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
               z = at.z;
               altitude = platform.top + definition.hover;
             }
-            const guardianSpec = (profile.authorship.guardianSpecs || EMPTY_SOLIDS).find(spec =>
-              spec.type === type && spec.siteIndex === siteIndex
-              && !profile.guardians.some(guardian => guardian.id === spec.id));
             const enemy = new AlienState(`${planet}-${type}-${index}`, type, x, z, angle, {
               planet, layer: 'surface', altitude,
               phase: ((index * 1.6180339 + serial * .173) % 1) * TAU,
@@ -28149,7 +30026,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
               siteIndex, biomeId: profile.sites[siteIndex]?.biome || 'inter-site-current',
               encounterPackId: definition.strategy === 'route'
                 ? `${planet}-rail-${Math.floor(index / 2)}`
-                : `${planet}-${profile.sites[siteIndex].id}-${type}`,
+                : platform?.wilderness
+                  ? `${planet}-${profile.sites[siteIndex].id}-wild-${type}`
+                  : platform?.groundFlow
+                  ? `${planet}-${profile.sites[siteIndex].id}-road-${type}`
+                  : `${planet}-${profile.sites[siteIndex].id}-${type}`,
               guardianId: guardianSpec?.id || null,
               guardianName: guardianSpec?.name || null,
               bossScale: !!guardianSpec,
@@ -30032,6 +31913,17 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             this.resolveBallMoonheart();
           }
         }
+      }
+      // Resolve the one-frame handoff where a directional Lava vent delivers
+      // the ball into the expected hammer socket and HOME settles it before
+      // the ordinary moving-ball interaction pass. This is deliberately
+      // limited to a moving -> ready transition on Lava; carrying a resting
+      // ball around cannot trip unrelated world interactions.
+      if ((modeAtStart === 'outbound' || modeAtStart === 'returning')
+        && ball.mode === 'ready' && world.activePlanet === 'lava'
+        && world.activeLayer === 'surface') {
+        const surface = world.currentSurface();
+        if (surface) world.resolveLavaWorldBall(surface, this);
       }
       const nextLineActive = this.lineHeld || ball.mode === 'returning' || ball.mode === 'anchored'
         || ball.mode === 'caught' || ball.flightSpinTimer > 0 || player.spinTimer > 0;
