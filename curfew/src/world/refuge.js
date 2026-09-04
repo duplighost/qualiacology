@@ -109,6 +109,26 @@ const EXTRA_SPECS = Object.freeze([
     anchors: compactAnchors({ x: -7.5, z: 6.5, yaw: 0, w: 6, d: 5 }, 2.0,
       { x: -1.75, z: -0.25, yaw: 0 }),
   }),
+  Object.freeze({
+    // The Avery House's boiler room is a real refuge inside a real destination. Its fuse
+    // board is the destination claim fixture, so this system adds only the closing door,
+    // sleeping bag and powered lamps—one interaction, one state, no duplicate switch.
+    id: 'avery-house', claimPowered: true, buildBreaker: false, buildBag: true,
+    xpPower: 0, lampIn: 8.5, lampOut: 5.5, lampDecay: 1.28,
+    room: Object.freeze({ x: -1, z: 6, yaw: 0, w: 6, d: 4 }),
+    anchors: Object.freeze({
+      breaker: Object.freeze({ x: -3.75, z: 6, footY: 0, faceYaw: Math.PI * 0.5 }),
+      door: Object.freeze({
+        hingeX: -3.65, hingeZ: 4, width: 1.30, height: 2.22,
+        yaw: 0, open: -1.52, midX: -3, midZ: 4,
+      }),
+      bag: Object.freeze({ x: 1, z: 6, yaw: 0 }),
+      lamps: Object.freeze({
+        bulb: Object.freeze({ x: 1, y: 2.34, z: 6.1 }),
+        door: Object.freeze({ x: -3, y: 2.45, z: 3.82 }),
+      }),
+    }),
+  }),
 ]);
 
 /* ------------------------------------------------------------------ the verbs -- */
@@ -229,7 +249,7 @@ export class Refuge {
     this.siteId = this.spec.id;
     this.anchors = this.spec.anchors;
     this._owner = owner;
-    // The manifest constructs one system. That root owns two additional, independently
+    // The manifest constructs one system. That root owns three additional, independently
     // persistent refuge units and presents them through the same public/test surface.
     this._units = owner ? null : [this];
 
@@ -726,7 +746,7 @@ export class Refuge {
     const p = player && player.pos ? player.pos : null;
     if (!p) return;
 
-    // The two destination refuges use the destination's EXISTING completion fixture as
+    // The destination refuges use each destination's EXISTING completion fixture as
     // their panel. Claiming the lamp/cabinet brings the room up; no duplicate switch sits
     // beside the real one and no second reward path is invented.
     if (this.spec.claimPowered) {

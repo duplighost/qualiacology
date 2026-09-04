@@ -177,7 +177,7 @@ const HZ_GAIN_MAX = 2.05;
  * ROAD ALREADY POINTS AT IT — you round a bend and the cathedral is at the end of the road.
  * Those corridors overlap the asphalt, where CFG.roads.plantExclude has already cleared the
  * verge, so they cost the forest the least and read the best. Round 9 extends that rule from
- * the five original `horizon` rows to ALL fifteen majors: Alex could not find the smaller
+ * the five original `horizon` rows to every major: Alex could not find the smaller
  * original destinations, and the three new landmarks need the same ordinary-road guarantee.
  *
  * This file OWNS the corridors and publishes them; it cannot plant or unplant a tree.
@@ -285,6 +285,7 @@ const CLAIM_LAMP_Y = 2.1;         // m above the fixture's foot: the head of the
 // in front of a building that is not the centre. Local (x, z) unit directions.
 const FIXTURE_FACE = Object.freeze({
   'garden-of-rest': [0, -1],      // the lamp in front of the far mausoleum's door: face the graves
+  'avery-house': [1, 0],          // the basement fuse box is approached from the boiler room's west side
 });
 // The beat's ripple: the site's lamps ignite outward from the fixture over RIPPLE_S, each
 // vertex of the merged glow geometry fading in over RIPPLE_EDGE once its turn comes. Per-
@@ -685,7 +686,7 @@ export class Places {
    * FLATS. Called from init(), with the rest of this lane's sibling reads.
    *
    * terrain.addFlat() levels heightAt() itself, so the mesh, the collision solver, the
-   * planting exclusion and hitscan all agree about where the yard is. Two of the fifteen
+   * planting exclusion and hitscan all agree about where the yard is. Two of the original
    * reuse a disc roads.js already authored, so thirteen discs are registered here.
    *
    * WARNING 27, fixed. This used to run in the CONSTRUCTOR — the one deliberate
@@ -2835,7 +2836,7 @@ export class Places {
   /**
    * The name tests/world-game.mjs asks for. It calls `s.all()` (falling back to `s.places`)
    * and reads `p.major`, so with only list() on the surface it measured zero destinations
-   * and zero majors in a county with fifteen of them — a green system failing a red gate on
+   * and zero majors in a county full of them — a green system failing a red gate on
    * a naming mismatch. The gate is right to ask; this is the answer it asks for.
    */
   all() {

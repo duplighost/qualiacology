@@ -46,6 +46,7 @@ import { groundDetail } from './terrain.js';
 // ROUND 6: Blackthorn Manor is compiled from its own room tables in manor.js and handed
 // this file's kit vocabulary through a factory, so there is no import cycle.
 import { makeManorBuilder } from './manor.js';
+import { makeAveryHouseBuilder } from './avery-house.js';
 
 /* ==========================================================================
    Palette. LINEAR-space albedos, in the same band terrain.js settled on after
@@ -1831,6 +1832,7 @@ export const BUILDERS = {
 // in as destinations"). The whole builder lives in manor.js; it gets this file's kit,
 // palette and pane profiles and returns the same { landmark, body } shape as the rest.
 BUILDERS.manor = makeManorBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
+BUILDERS.avery = makeAveryHouseBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 
 /* ------------------------------------------------------- Round 9 donor landmarks
    A measured road-coverage audit found three 0.65--0.91 km dead legs between the original
@@ -2889,6 +2891,11 @@ function roadApproach(k, api, radius) {
   APPROACHES.set(api.site.id, null);
   const pad = api.padY;
   const ax = APPROACH_X[api.site.kind] || 0;
+  // The Garden's three-metre seam needs a little more breathing room than the standard
+  // cut. Its 2 m flight left only 0.64 m of capsule-centre clearance inside the rails,
+  // narrower than the route's ordinary cornering envelope. Keep every other destination's
+  // established profile; widen the Garden's visible structure and exact colliders together.
+  const approachW = api.site.id === 'garden-of-rest' ? 2.4 : APPROACH_W;
   const g = (lz) => api.heightAt(api.wx(ax, lz), api.wz(ax, lz));
   const zMax = radius / 0.86 + 6;
   // the pad's edge: the last quarter-metre out along +Z that is still at pad level
@@ -2923,8 +2930,8 @@ function roadApproach(k, api, radius) {
   const run = APPROACH_RUN, L = steps * run;
   const roadLower = roadY < pad;
   // the flight's z band: on the lower side's level ground, hard against the bank
-  const zA = roadLower ? roadStart + 0.3 : padEnd - 0.3 - APPROACH_W;
-  const zB = zA + APPROACH_W, zc = (zA + zB) * 0.5;
+  const zA = roadLower ? roadStart + 0.3 : padEnd - 0.3 - approachW;
+  const zB = zA + approachW, zc = (zA + zB) * 0.5;
   const x0 = ax - L * 0.5, base = lowY - 0.4;
   for (let s = 0; s < steps; s++) {
     const top = lowY + Math.min(rise, APPROACH_RISE * (s + 1));
@@ -2934,18 +2941,18 @@ function roadApproach(k, api, radius) {
     // seen side-on from the road: at Drowned Light and the Bell Tower the "way in" hid the
     // destination it was meant to reveal. Collision keeps the full stepped support below,
     // but the visible structure is an open, repaired stair carried on narrow steel piers.
-    k.box(run + 0.03, 0.18, APPROACH_W, xc, top - 0.09, zc,
+    k.box(run + 0.03, 0.18, approachW, xc, top - 0.09, zc,
       s % 3 === 0 ? C.rust : C.slate);
-    k.box(0.12, Math.min(APPROACH_RISE, top - lowY), APPROACH_W,
+    k.box(0.12, Math.min(APPROACH_RISE, top - lowY), approachW,
       xc - run * 0.5 + 0.06, top - Math.min(APPROACH_RISE, top - lowY) * 0.5,
       zc, C.dark);
     if (s === 0 || s === steps - 1 || (s & 1) === 0) {
       const supportH = Math.max(0.18, top - base - 0.18);
       for (const side of [-1, 1]) k.box(0.18, supportH, 0.18,
-        xc, base + supportH * 0.5, zc + side * (APPROACH_W * 0.5 - 0.16), C.dark);
+        xc, base + supportH * 0.5, zc + side * (approachW * 0.5 - 0.16), C.dark);
     }
     api.emit({
-      kind: 'obb', x: xc, z: zc, halfX: run * 0.5, halfZ: APPROACH_W * 0.5, yaw: 0,
+      kind: 'obb', x: xc, z: zc, halfX: run * 0.5, halfZ: approachW * 0.5, yaw: 0,
       y0: base, y1: top, tag: 'stone', standable: true,
     });
   }

@@ -1407,10 +1407,10 @@ export class Hud {
    * A DESTINATION'S OWN SILHOUETTE, in a 2s x 2s box centred on (x, y), standing on y + s.
    *
    * ALEX asked for the map to be "organized or have flow", and the destinations cannot move —
-   * the roads are baked around them. So what the map can do is make each of the fifteen READ
+   * the roads are baked around them. So what the map can do is make every destination READ
    * as the thing it is, from across the card, with no legend and no word: a lighthouse is a
    * tapered tower throwing two rays, a graveyard is three headstones, a barn is a gambrel
-   * roof. Fifteen shapes, one per `kind` in placedata.js. An unknown kind falls back to a ring,
+   * roof. One authored shape per `kind` in placedata.js. An unknown kind falls back to a ring,
    * so a new destination row draws SOMETHING rather than nothing.
    *
    * Stroke only, current strokeStyle and lineWidth: the caller draws it twice, dark then ink,
@@ -1434,6 +1434,15 @@ export class Hud {
         g.lineTo(x + s * 0.82, y);
         g.moveTo(x + s * 0.34, y - s * 0.50); g.lineTo(x + s * 0.34, y - s * 1.15);
         g.lineTo(x + s * 0.58, y - s * 1.15); g.lineTo(x + s * 0.58, y - s * 0.26);
+        break;
+      case 'avery':                          // low crossed roofs and the attached garage wing
+        g.moveTo(x - s, y - s * 0.05); g.lineTo(x - s * 0.48, y - s * 0.62);
+        g.lineTo(x + s * 0.10, y - s * 0.05); g.lineTo(x + s * 0.52, y - s * 0.46);
+        g.lineTo(x + s, y - s * 0.05);
+        g.moveTo(x - s * 0.88, y - s * 0.05); g.lineTo(x - s * 0.88, b);
+        g.lineTo(x + s * 0.88, b); g.lineTo(x + s * 0.88, y - s * 0.05);
+        g.moveTo(x + s * 0.42, y + s * 0.42); g.lineTo(x + s * 0.82, y + s * 0.42);
+        g.moveTo(x - s * 0.62, y + s * 0.36); g.lineTo(x - s * 0.62, b);
         break;
       case 'works':                          // a headframe: an A over a winding wheel
         g.moveTo(x - s, b); g.lineTo(x, y - s); g.lineTo(x + s, b);
@@ -1596,7 +1605,7 @@ export class Hud {
     // A campfire he has warmed himself at (progress.firesFound, ids), and — round 7 — every
     // OTHER minor site he has been within thirty metres of (progress.minorsMet, indices into
     // places' own table). Together they are the reason the county map reads as a route
-    // somebody walked rather than fifteen dots in a black square.
+    // somebody walked rather than destination dots in a black square.
     //
     // The campfire id: places.campfires() renames `fireId` to `id` on the way out, and round
     // 6 read `f.fireId` off the public copy — undefined for every fire, so this layer drew
@@ -1670,7 +1679,7 @@ export class Hud {
       g.globalAlpha = 1;
     }
 
-    /* 5. the fifteen destinations, three states ------------------------------ */
+    /* 5. the destinations, three states -------------------------------------- */
     // ALEX, original brief item 21: "the map has to be organized or have flow." The roads are
     // baked and the destinations cannot move, so the MAP does the organising:
     //   not found  a small hollow diamond and nothing else. Something is there. Go and see.
