@@ -31,7 +31,36 @@ const MAX_BORROWS = 32;
 // exposure of ~1.2. Its `distance` (68 m) has no home in CFG yet; requested in HANDOFF.md.
 const TORCH_DISTANCE = 68;
 const TORCH_COLOUR = 0xffeccb;
-const TORCH_DECAY = 2.0;
+// ROUND 7 — THE NUMBER BEHIND "I have no idea how you finish places", said twice.
+//
+// 2.0 is physically correct inverse-square, and it is the reason nothing in this game can be
+// looked at closely. Illuminance goes as hot / d^decay, so at decay 2 a surface at 1.8 m —
+// the range you stand at to throw a switch — receives (10/1.8)^2 = 31x what a surface at 10 m
+// receives. No material and no tone curve can pull a 31x ratio into one display range, and
+// three separate lanes proved it by trying:
+//
+//   places.js  gave the claim lever a 0.92 x 1.06 m backboard at 0.010 albedo.
+//              Torch off 21,847 -> 83,548 contrast px. Torch ON: 886.
+//   lane A     gave the breaker a 2.90 x 2.40 m corrugated panel at 0.016 in a 0.34 m recess,
+//              16-30x darker than the plaster. Frame mean 160.1 -> 120.6, >200 19.9% -> 1.6%.
+//              Still white. Its own conclusion: "no lane can fix it in a material."
+//   lane E     fixed the grade's shoulder (which was most of B6) and then measured the torch
+//              hotspot already at display 1.0 BEFORE the tone curve — the same input value as
+//              the moon.
+//
+// ART.md 0.6 says "the torch blowing out is not the torch's fault. Fix what it is shining on."
+// We fixed what it is shining on, twice, measured both, and it is still white. It is the torch.
+//
+// 1.25 with hot 100 is solved, not guessed: 100 / 10^1.25 = 5.62, against today's
+// 560 / 10^2 = 5.60. TEN METRES OUT IS UNCHANGED to two significant figures. At 1.8 m it falls
+// from 172.8 to 46.4 — a QUARTER of the near-field light for identical mid-field reach — which
+// is about where lane A measured the breaker reading properly (it read 61,434 px at 140 cd).
+// Past 10 m the beam reaches further, which is the one thing his brief asks for twice
+// ("there should always be something interesting the player is going towards in the distance").
+//
+// The two numbers are the whole lever. If it reads wrong, they are TORCH_DECAY here and
+// CFG.lights.torch.hot in config.js, and they must move together or the mid field moves.
+const TORCH_DECAY = 1.25;
 
 // Moon direction, deep night. Elevation 34 degrees so trunks cast long readable bars and
 // the ground still separates from the sky; azimuth chosen so the light rakes across the

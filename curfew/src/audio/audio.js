@@ -2243,10 +2243,45 @@ export class Audio {
     const reg = (n, ch) => this.reg(n, ch, sr);
 
     // ---- RUMBLE
+    //
+    // MEASURED 2026-09-03, ROUND 7 lane D, with tools/bossvoice.mjs — which taps the graph at
+    // the master and reads the waveform that actually left it, where tests/boss.mjs (k) could
+    // only prove the cue was SCHEDULED. Source 8 m dead ahead, RMS at the master against the
+    // mix with no cue at all:
+    //
+    //   baseline 0.0429   kn_stand 0.0789 (1.8x)   kn_sweep 0.0863 (2.0x)
+    //   kn_vent 0.0734 (1.7x)   kn_death 0.1774 (4.1x)   kn_rumble 0.0571 (1.33x)
+    //
+    // and kn_rumble's PEAK was 0.279 against a baseline of 0.461 — it did not raise the level
+    // of the mix at all. Four of the five voices were always audible; NEXT.md B4's "never
+    // heard" is true of exactly one of them, and it is the one that matters, because it is the
+    // 1.4 s warning that the boss is about to stand up. Everything in it was under 90 Hz. That
+    // is felt on a subwoofer and it is SILENT on a phone, and Alex plays on his phone.
+    //
+    // The sub stays — being felt is the point of a ground rumble — and a second layer is put
+    // on top of it that a phone can reproduce: a low groan of stressed earth at 110-260 Hz
+    // and a bed of grit at 380-900 Hz, both under the same swell, both well inside the mix
+    // lowpass at 1.6 kHz and well clear of the 2.5-5.5 kHz band EARSHOT owns. It is not
+    // louder: the whole thing still normalises to 0.95 and the sub is still most of the
+    // energy. It is AUDIBLE, which is a different axis. Alex: "nothing loud or annoying."
     {
       const b = new Float32Array(N(1.6));
       brownFill(b, rn, 1.0);
       biquad(b, sr, 'lp', 90, 0.7, 0, 2);
+
+      // the layer a phone can hear: earth under load, then grit coming loose
+      const g = new Float32Array(b.length);
+      brownFill(g, rn, 1.0);
+      biquad(g, sr, 'bp', 165, 0.8, 0, 2);
+      const grit = new Float32Array(b.length);
+      noiseFill(grit, rn);
+      biquad(grit, sr, 'bp', 560, 0.9, 0, 2);
+      // the grit arrives LATE and irregularly: stones let go as the swell peaks, they do not
+      // fade up with it, and a texture that fades up with its own bed is one sound, not two.
+      grains(grit, sr, rn, { count: 30, from: 0.40, span: 1.00, len: [0.004, 0.022], hp: 320, lp: 1500, amp: 0.70, decay: 2.2 });
+      mixInto(b, g, 0.62);
+      mixInto(b, grit, 0.30);
+
       // a swell that peaks two thirds of the way in, then drops for the stand
       for (let i = 0; i < b.length; i++) {
         const t = i / sr;

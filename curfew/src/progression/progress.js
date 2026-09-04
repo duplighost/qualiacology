@@ -126,6 +126,26 @@ const CORPSE_DRAW_M = 140;      // beyond this the column costs nothing at all
 
 const ROAD_CHECK_STEPS = 6;     // 0.1 s. At 23 m/s that is 2.3 m against a 100 m bucket.
 
+/* ------------------------------------------ THE MINOR SITES HE HAS MET (round 7, lane G) --
+ * ALEX, original brief item 21: "the map has to be organized or have flow." docs/ALEX-BRIEF
+ * marks it NEVER ADDRESSED. A county map with twelve marks on it and nothing between them
+ * has no flow at all, and the county already has ~53 minor sites strung along the roads —
+ * campfires, wrecks, waystones, and (round 7) staged scenes with people standing at them.
+ * Only the LIT ones were ever recorded, through `fires`, because only a lit kind joins
+ * places' proximity list.
+ *
+ * So progression records the rest itself: once a second, any minor site inside MINOR_MET_R
+ * of the body is remembered, by its index in places' own table, for the life of the save.
+ * It pays no XP (the fires and the wilds already own that beat), it emits nothing, and it
+ * costs one squared-distance test per site per second — 53 of them, off the hot path by a
+ * factor of sixty.
+ *
+ * The set is what the pause-card map draws as "somewhere you have been", which is the layer
+ * that turns a map of twelve dots into a map of a route somebody actually walked.
+ */
+const MINOR_MET_R = 30;             // m. About where a campfire's own glow reads from.
+const MINOR_CHECK_STEPS = 60;       // once a second, on the travelled grid's own beat
+
 // An `xp:gained` from another lane carrying one of these reasons has ALREADY been paid here,
 // from its own domain event. places.js:972 emits 'discover' and 'claim'; if a lane ever adds
 // another double-paying reason, it goes in this set rather than into a special case.
@@ -244,6 +264,7 @@ export class Progress {
       lastHub: '',
       visited: '',      // the travelled-cell bitmap, hex, VISITED_HEX_LEN chars; '' = nowhere yet
       fires: [],        // campfire ids he has stood at (place:near, lit, not a major)
+      minors: [],       // indices into places' minor table of every minor site he has met
     }));
     // The blob is assembled ONCE, inside the write, instead of five Array.from() calls on
     // every step of the debounce window (roadLit alone can be hundreds of entries).
@@ -255,6 +276,8 @@ export class Progress {
     this.claimed = new Set();
     this.roadLit = new Set();
     this.fires = new Set();
+    this.minorsSeen = new Set();    // indices into places' minor table; see MINOR_MET_R
+    this._minorTick = 0;
 
     // The travelled cells, one byte each, preallocated; `visitedCount` is kept beside it so
     // nobody has to walk 4096 cells to know whether the map is still blank.
@@ -335,7 +358,7 @@ export class Progress {
     this._unsub = [];
     this._stat = {
       motesSpawned: 0, motesCredited: 0, motesExpired: 0,
-      kills: 0, banks: 0, deaths: 0, recoveries: 0, levelUps: 0, autoGrants: 0,
+      kills: 0, banks: 0, deaths: 0, recoveries: 0, levelUps: 0, autoGrants: 0, doorsShut: 0,
     };
   }
 
@@ -352,6 +375,9 @@ export class Progress {
     for (const id of d.claimed) this.claimed.add(id);
     for (const b of d.roadLit) this.roadLit.add(b | 0);
     if (Array.isArray(d.fires)) for (const id of d.fires) if (typeof id === 'string') this.fires.add(id);
+    // Tolerant like every other load path here: a blob carrying rubbish in `minors` loads as
+    // an empty set rather than throwing on the boot frame (save.js rule 1).
+    if (Array.isArray(d.minors)) for (const i of d.minors) if (Number.isInteger(i) && i >= 0) this.minorsSeen.add(i);
     this._decodeVisited(d.visited);
 
     this._recompute();
@@ -517,6 +543,12 @@ export class Progress {
 
     on('weapon:reload', (p) => { if (p.phase !== 'cancel') this._verb('reload'); });
     on('car:entered', () => { this._verb('drive'); this._doorShut(); });
+    // ROUND 7 — THE REAL DOOR. `door:shut {x, z}` is the one event the door lane has to emit;
+    // this is the whole of the wiring on progression's side, and quiet_3 "Shut the Door" is
+    // already listening on the other end of it. The full contract is in
+    // docs/ROUND-7/HANDOFF-G.md — in one line: fire it ONCE on the frame the door latches,
+    // never per step, and carry the DOOR's position, not the player's.
+    on('door:shut', (p) => this._doorShut(p.x, p.z));
 
     // ROUND 6: the pause no longer deals. The whole tree is on the card and a click buys a
     // node (ui/hud.js _buildPause); `draft()` is reached only by autoDraft and by tests.
@@ -679,9 +711,13 @@ export class Progress {
    * the bus, the way onHurt/onLand/onNoise are. The position is the player's, read lazily,
    * because car:entered carries null.
    */
-  _doorShut() {
-    const p = this.ctx.systems.get('player');
-    const x = p && p.pos ? p.pos.x : 0, z = p && p.pos ? p.pos.z : 0;
+  _doorShut(dx, dz) {
+    let x = dx, z = dz;
+    if (!Number.isFinite(x) || !Number.isFinite(z)) {
+      const p = this.ctx.systems.get('player');
+      x = p && p.pos ? p.pos.x : 0; z = p && p.pos ? p.pos.z : 0;
+    }
+    this._stat.doorsShut++;
     this.hooks.run('onDoorShut', this.ctx, x, z);
   }
 
@@ -1102,6 +1138,36 @@ export class Progress {
   firesFound() { return this.fires; }
 
   /**
+   * Once a second: every minor site within MINOR_MET_R is remembered by its index. Reads
+   * places' authored table LAZILY and guarded — a build without places, or one whose table
+   * is not built yet, records nothing rather than throwing. `minorList()` is the accessor
+   * asked for in docs/ROUND-7/HANDOFF-G.md; `minors` is the field it will wrap, and this
+   * reads whichever exists so that handoff can land without a change here.
+   */
+  _stepMinors() {
+    if ((++this._minorTick % MINOR_CHECK_STEPS) !== 0) return;
+    const player = this.ctx.systems.get('player');
+    const places = this.ctx.systems.get('places');
+    if (!player || !player.pos || !places) return;
+    const list = typeof places.minorList === 'function' ? places.minorList() : places.minors;
+    if (!Array.isArray(list) || list.length === 0) return;
+    const px = player.pos.x, pz = player.pos.z, r2 = MINOR_MET_R * MINOR_MET_R;
+    for (let k = 0; k < list.length; k++) {
+      const m = list[k];
+      if (!m || !Number.isFinite(m.x)) continue;
+      const i = Number.isInteger(m.i) ? m.i : k;
+      if (this.minorsSeen.has(i)) continue;
+      const dx = m.x - px, dz = m.z - pz;
+      if (dx * dx + dz * dz > r2) continue;
+      this.minorsSeen.add(i);
+      this.save.mark();
+    }
+  }
+
+  /** The minor sites he has stood at, as indices. ui/hud.js draws them on the county map. */
+  minorsMet() { return this.minorsSeen; }
+
+  /**
    * Hex in, cells out. Tolerant of everything a blob can carry: not a string, the wrong
    * length, a character that is not hex — every such cell is simply not visited. A corrupt
    * map must never hang the boot (save.js rule 1) and must never throw here.
@@ -1361,6 +1427,7 @@ export class Progress {
     this._stepRoad();
     this._stepVerbs();
     this._stepVisited();
+    this._stepMinors();
 
     // Every node that needs a frame runs here, from OUR step, so a per-frame perk needs
     // nothing at all from the lane it acts on. Zero installers is a Map miss and a return.
@@ -1413,7 +1480,7 @@ export class Progress {
       draft: this.draftCards ? this.draftCards.map((c) => c.id) : null,
       owned: this._ownedList(), auto: Array.from(this._auto),
       found: this.found.size, claimed: this.claimed.size, roadBuckets: this.roadLit.size,
-      visited: this.visitedCount, fires: this.fires.size,
+      visited: this.visitedCount, fires: this.fires.size, minors: this.minorsSeen.size,
       motes: this._liveMotes(), lit: this.lit, streak: this.streak,
       carryStep: this.carryStep, carryI: +this.carryI.toFixed(2),
       // The banking loop, visible: what lights published, how long it has been held, and
@@ -1528,6 +1595,7 @@ export class Progress {
     d.claimed = Array.from(this.claimed);
     d.roadLit = Array.from(this.roadLit);
     d.fires = Array.from(this.fires);
+    d.minors = Array.from(this.minorsSeen);
     d.visited = this._encodeVisited();
     d.level = this.level;
   }

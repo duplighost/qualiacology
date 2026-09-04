@@ -61,6 +61,8 @@
  * about mood, never about borders, and making the beacon colour depend on a smooth field
  * would mean a destination's own colour changes as you walk around it. Authored wins.
  * ------------------------------------------------------------------ */
+import { STAGED_KINDS } from './staged.js';
+
 export const REGION_TINT = Object.freeze({
   pines: 0x63d08a,    // cold green
   fields: 0xd8c46a,   // dry gold — Jackfield's corn
@@ -163,6 +165,10 @@ export const MAJORS = Object.freeze([
     // (manor.js HZ) with its front on +Z, so the foot of its front steps lands on the road
     // end.
     id: 'blackthorn-manor', name: 'Blackthorn Manor',
+    // ROUND 7 (NEXT.md B1): the yard is a clearing. The footprint reaches 36 m from the
+    // centre on the diagonal and the flat's level core is 32, so 44 clears the house and
+    // its steps and leaves the pines standing at the edge of the lawn.
+    clearR: 44,
     x: 401.4, z: -542.0, region: 'pines', terrainRegion: 'pines', kind: 'manor',
     lit: false, hub: false,
     flat: { radius: 52, blend: 0.62 },
@@ -308,6 +314,10 @@ export function terrainRegionOf(id) {
  * from overlapping when the road doubles back on itself.
  * ------------------------------------------------------------------ */
 export const MINOR_KINDS = Object.freeze([
+  // ROUND 7: the staged scenes. Their rows live with their builders in staged.js so one
+  // lane owns a scene end to end; they are spliced in here so _chooseMinor rations them
+  // exactly like every other kind. Same shape, no special case anywhere downstream.
+  ...STAGED_KINDS,
   // ROUND 5 (Alex, playtest 4): "it shouldn't be that vacant. There should be areas with at
   // least cool scenery... maybe little campfire spots." The campfire is the first minor that
   // lives OFF the road (`offRoad`: 18-40 m out, see CAMPFIRE_OFFSET) and is visible from it:

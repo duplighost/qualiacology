@@ -60,9 +60,60 @@ const MAX_HALF_EXTENT = 24;       // a half-extent past this cannot be a real pr
 const F_ALIVE = 1;
 const F_STANDABLE = 2;
 const F_AUTHORED = 4;   // skips the oversize reject: an authored long wall is legitimate
+const F_BREAK = 8;      // ROUND 7, lane F: a thing a car goes THROUGH, not into
+const F_NOCLIMB = 16;   // ROUND 7, lane F: never a ledge. A trunk, a post, a pole.
 
 const KIND_CIRCLE = 0;
 const KIND_OBB = 1;
+
+// ---------------------------------------------------------------------------
+// BREAKABLE COLLIDERS. ROUND 7, lane F.
+//
+// Alex, fifth playtest: the car should be "more towards the dying light driving expansion
+// type style. Car that handles great. CAN CRUSH THINGS WITH IT."
+//
+// A breakable carries a MASS in kilograms. A body arriving faster than
+// `breakSpeed(mass)` goes through it: the collider is retired on the spot and the mover
+// pays a bite of speed instead of stopping. Nothing here costs the ordinary capsule sweep
+// anything — F_BREAK is read by `crush()` alone, which only the car calls, and only while
+// it is moving. `_blocks`, `_overlap`, `_sweep` and `resolveCapsule` are untouched, so a
+// breakable is a perfectly ordinary solid until something hits it hard enough.
+//
+// A builder opts in with ONE FIELD on the shape it already emits:  breakable: <kg>
+// (or `true`, which means BREAK_DEFAULT). A shape whose TAG is in BREAKABLE_TAGS is
+// breakable at that tag's mass without saying anything at all — which is the route that
+// works today, because places.js's `emit` copies a fixed list of fields and would drop a
+// `breakable` of its own (docs/ROUND-7/HANDOFF-F.md item 1).
+// ---------------------------------------------------------------------------
+const BREAK_DEFAULT = 40;
+// The speed a mover needs to go through a thing of mass m: 2.6 m/s of floor plus 0.055 per
+// kilogram. An A-board goes at 3.3 m/s (a brisk walk in a car), a fence at 4.5, a drum at
+// 6.0, a market stall at 5.4, a waystone at 9.2, the tyre stack at 5.3. Nothing on this
+// table is unbreakable at road speed and nothing on it breaks while you are parking.
+const CRUSH_BASE = 2.6;
+const CRUSH_PER_KG = 0.055;
+export function breakSpeed(mass) { return CRUSH_BASE + mass * CRUSH_PER_KG; }
+
+const BREAKABLE_TAGS = new Map([
+  ['fence', 34], ['rail', 26], ['gate', 30], ['hurdle', 22],
+  ['crate', 24], ['pallet', 16], ['box', 24], ['barrel', 58], ['drum', 62],
+  ['tyres', 48], ['sign', 30], ['aboard', 12], ['letterbox', 20], ['stall', 50],
+  ['waystone', 120], ['cairn', 76], ['sapling', 26], ['stem', 26],
+  ['leg', 44], ['stake', 18], ['bin', 26], ['pot', 14], ['kit', 14], ['bike', 18],
+]);
+
+// Never a ledge, whatever its top is doing. Round things and thin standing things: a body
+// cannot get a knee over a trunk, a post or a lamp column, and Alex's "one climb in forty is
+// a tree" (docs/NEXT.md B5) is exactly this list arriving in the mantle's probe.
+const NON_CLIMB_TAGS = new Set([
+  'tree', 'trunk', 'sapling', 'stem', 'bough',   // NOT 'log': a fallen log is a thing you walk along
+  'post', 'pole', 'stake', 'mast', 'pylon', 'column', 'lamp', 'lamppost', 'streetlight',
+  'signpost', 'aerial', 'chimney', 'pipe', 'wire', 'cable', 'stack', 'cross', 'headstone',
+]);
+// A circle with no standable flag and a radius under this has no flat on top to stand on.
+// A trunk is 0.26-0.88 m; the smallest authored round thing anybody stands on in this
+// county is the pylon pad at 2.3 m, and every one of those is flagged standable anyway.
+const MIN_ROUND_LEDGE = 0.95;
 
 // Anything with one of these tags is scenery, not physics. Grass is here because a grass
 // card must NEVER produce a collider, and road/ribbon because a terrain-following ribbon
@@ -111,6 +162,7 @@ export class Collision {
     this._sin = new Float64Array(this.cap);
     this._y0 = new Float64Array(this.cap);
     this._y1 = new Float64Array(this.cap);
+    this._mass = new Float64Array(this.cap);   // kg; only read when F_BREAK is set
     this._free = [];              // recycled slot indices
 
     // --- broadphase: cell key -> array of slot indices ---
@@ -152,6 +204,18 @@ export class Collision {
     // the player and every creature keep their own without this module holding a roster.
     this._safe = new WeakMap();
 
+    // ROUND 7, lane F. The shared crush result. REUSED, like everything else returned from
+    // this file: read it, or copy what you need, before the next crush() call. Capped at
+    // CRUSH_MAX things in one call so the arrays are allocated once, here, and never again.
+    this._crushMax = 8;
+    this._crush = {
+      n: 0, mass: 0, speedNeeded: 0,
+      x: new Float64Array(this._crushMax), y: new Float64Array(this._crushMax),
+      z: new Float64Array(this._crushMax), m: new Float64Array(this._crushMax),
+      top: new Float64Array(this._crushMax), rad: new Float64Array(this._crushMax),
+      tag: new Array(this._crushMax).fill(null),
+    };
+
     // Shared debugNearest result. Reused, like every other returned object here.
     this._nearest = {
       x: 0, z: 0, radius: 0, kind: 'circle', halfX: 0, halfZ: 0, yaw: 0,
@@ -169,6 +233,10 @@ export class Collision {
       oversize: 0,        // shapes refused for being chunk-sized (a ribbon baked to one box)
       degenerate: 0,      // NaN / zero-radius shapes refused
       noTerrain: 0,       // resolves that ran with no terrain system (ground fell back to 0)
+      breakable: 0,       // live breakable colliders ever added (round 7, lane F)
+      broken: 0,          // how many have been crushed this session
+      brokenMass: 0,      // and their total mass, kg
+      crushes: 0,         // crush() calls
     };
 
     this._terrainSys = null;
@@ -254,6 +322,7 @@ export class Collision {
     this._sin = growF64(this._sin, cap);
     this._y0 = growF64(this._y0, cap);
     this._y1 = growF64(this._y1, cap);
+    this._mass = growF64(this._mass, cap);
     this.cap = cap;
   }
 
@@ -373,9 +442,37 @@ export class Collision {
     this._y0[i] = y0; this._y1[i] = y1;
     this._mask[i] = shape.mask !== undefined ? (shape.mask | 0) : DEFAULT_MASK;
     this._tag[i] = tag || null;
+
+    // ROUND 7, lane F. Breakability: the explicit field first, the tag table second.
+    // `breakable: false` on a shape whose tag is on the table opts back OUT, which is how a
+    // load-bearing fence (the manor's yard rail) stays put while the one on the verge goes.
+    let mass = 0;
+    const bk = shape.breakable;
+    if (bk === false) mass = 0;
+    else if (typeof bk === 'number' && bk > 0) mass = bk;
+    else if (bk === true) mass = BREAK_DEFAULT;
+    else if (tag && BREAKABLE_TAGS.has(tag)) mass = BREAKABLE_TAGS.get(tag);
+    this._mass[i] = mass;
+    if (mass > 0) this._tel.breakable++;
+
+    // ...and climbability. Three ways a top stops being a ledge, and the first two are
+    // ABSOLUTE — the standable flag does not buy its way past them, because a shape that
+    // says both 'trunk' and 'standable' is a mistake and the refusal is the safer reading:
+    //   climbable: false   the builder said so;
+    //   a NON_CLIMB tag    a trunk, a post, a pole, a lamp column;
+    //   breakable          you do not mantle a crate a car drives through, and a body left
+    //                      standing on one when a car takes it would fall. This one DOES
+    //                      yield to an explicit standable flag, so a builder can still
+    //                      author a breakable platform on purpose.
+    const noClimb = shape.climbable === false
+      || (tag && NON_CLIMB_TAGS.has(tag))
+      || (mass > 0 && !shape.standable);
+
     this._flags[i] = F_ALIVE
       | (shape.standable ? F_STANDABLE : 0)
-      | (authored ? F_AUTHORED : 0);
+      | (authored ? F_AUTHORED : 0)
+      | (mass > 0 ? F_BREAK : 0)
+      | (noClimb ? F_NOCLIMB : 0);
     this._stamp[i] = 0;
 
     const ci = this._chunkIndex(chunkId, true);
@@ -412,6 +509,8 @@ export class Collision {
     this._yaw[i] = yaw; this._cos[i] = Math.cos(yaw); this._sin[i] = Math.sin(yaw);
     this._y0[i] = y0; this._y1[i] = y1;
     this._mask[i] = DEFAULT_MASK;
+    this._mass[i] = 0;               // the numeric fast path never makes a breakable
+    this._tag[i] = null;
     this._flags[i] = F_ALIVE | (standable ? F_STANDABLE : 0);
     this._stamp[i] = 0;
     const ci = this._chunkIndex(chunkId, true);
@@ -433,6 +532,7 @@ export class Collision {
   _retire(i, unlinkChunk) {
     this._removeGrid(i);
     this._flags[i] = 0;
+    this._mass[i] = 0;      // a recycled slot must never inherit breakability
     this._gen[i] = (this._gen[i] + 1) & 0xffff;
     if (unlinkChunk) {
       const ci = this._chunk[i];
@@ -502,6 +602,84 @@ export class Collision {
     out.distance = bestD;
     out.id = best * 65536 + this._gen[best];
     return out;
+  }
+
+  // -------------------------------------------------------------------------
+  // crush — ROUND 7, lane F. THE CAR GOING THROUGH THINGS.
+  //
+  // Break every breakable collider that a disc of `radius` at (x, z) reaches between the
+  // heights y0..y1, for a body arriving at `speed` m/s. Each thing is retired the instant
+  // it breaks, so the very next sweep drives through the hole, and the shared result
+  // describes what came apart so the caller can throw the debris and take the geometry
+  // down. Returns the number broken.
+  //
+  // ONE gather, and only when the caller asks — the capsule sweep never sees any of this.
+  // The result object is REUSED; copy what you need before the next call.
+  //
+  // The result:
+  //   n            how many broke (0..8; the 9th in one 0.05 s tick waits for the next)
+  //   mass         their total mass in kg — what the caller charges itself for
+  //   x/y/z[i]     where each one stood (y is the middle of its own band)
+  //   top[i]       its top, rad[i] its footprint radius, m[i] its mass, tag[i] its tag
+  // -------------------------------------------------------------------------
+  crush(x, z, radius, y0, y1, speed, mask) {
+    const res = this._crush;
+    res.n = 0; res.mass = 0; res.speedNeeded = Infinity;
+    if (!(speed > CRUSH_BASE) || !(radius > 0)) return 0;
+    this._tel.crushes++;
+    const want = mask === undefined ? MASK.SOLID : mask;
+    const n = this._gather(x, z, radius + 0.1);
+    for (let k = 0; k < n && res.n < this._crushMax; k++) {
+      const i = this._near[k];
+      if (!(this._flags[i] & F_BREAK)) continue;
+      if (!(this._mask[i] & want)) continue;
+      // vertically apart: a culvert mouth under the road, or a branch over it
+      if (this._y0[i] > y1 || this._y1[i] < y0) continue;
+      const m = this._mass[i];
+      const need = CRUSH_BASE + m * CRUSH_PER_KG;
+      if (speed < need) { if (need < res.speedNeeded) res.speedNeeded = need; continue; }
+      if (!this._footprintHit(i, x, z, radius)) continue;
+      const j = res.n++;
+      res.x[j] = this._x[i]; res.z[j] = this._z[i];
+      res.y[j] = 0.5 * (this._y0[i] + this._y1[i]);
+      res.top[j] = this._y1[i];
+      res.rad[j] = this._r[i];
+      res.m[j] = m;
+      res.tag[j] = this._tag[i];
+      res.mass += m;
+      this._retire(i, true);
+      this._tel.broken++; this._tel.brokenMass += m;
+    }
+    if (res.n) res.speedNeeded = 0;
+    else if (!Number.isFinite(res.speedNeeded)) res.speedNeeded = 0;
+    return res.n;
+  }
+
+  /** The last crush result. Shared scratch — never hold it across another crush(). */
+  crushResult() { return this._crush; }
+
+  /**
+   * How many breakable colliders are live inside a radius, and their total mass. Authoring
+   * and instrumentation only (it widens the gather ring), never the hot path.
+   */
+  breakablesNear(x, z, radius) {
+    const n = this._gather(x, z, radius);
+    let count = 0, mass = 0;
+    for (let k = 0; k < n; k++) {
+      const i = this._near[k];
+      if (!(this._flags[i] & F_BREAK)) continue;
+      if (Math.hypot(this._x[i] - x, this._z[i] - z) > radius + this._r[i]) continue;
+      count++; mass += this._mass[i];
+    }
+    return { count, mass };   // allocates: instrumentation only, never called in step()
+  }
+
+  /** Is this collider id breakable, and at what mass? -1 when the id is dead. */
+  massOf(id) {
+    const i = Math.floor(id / 65536), gen = id % 65536;
+    if (i < 0 || i >= this.count) return -1;
+    if (!(this._flags[i] & F_ALIVE) || this._gen[i] !== gen) return -1;
+    return this._mass[i];
   }
 
   resetTelemetry() {
@@ -809,6 +987,16 @@ export class Collision {
       if (top > feetY + rise + EPS) continue;
       if (top <= feetY + EPS) continue;                       // at or under the feet: not a ledge
       const standable = (this._flags[i] & F_STANDABLE) !== 0;
+      // ROUND 7, lane F (docs/NEXT.md B5, Alex: the ledge grab climbs trees). Two refusals
+      // that no height arithmetic can reach, because the height arithmetic is not what is
+      // wrong: some things are simply not ledges however tall they are.
+      //   1. F_NOCLIMB — the tag said so. A trunk, a post, a pole, a lamp column, anything
+      //      breakable. This is what kept the last tree out of the last forty.
+      //   2. A ROUND thing with no flat: a circle under MIN_ROUND_LEDGE across that nobody
+      //      flagged standable. You cannot get a knee onto a 0.5 m disc.
+      // A VAULT (anyTop) takes the same two refusals: you do not vault a tree either.
+      if (this._flags[i] & F_NOCLIMB) continue;
+      if (!standable && this._kind[i] === KIND_CIRCLE && this._r[i] < MIN_ROUND_LEDGE) continue;
       if (!standable && !anyTop && top > feetY + stepUp + STEP_TOL + EPS) continue;
       if (!this._footprintHit(i, x, z, rad * 0.55)) continue;
       // headroom for a crouched body whose feet are on this top

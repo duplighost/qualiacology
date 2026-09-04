@@ -95,7 +95,7 @@ import { clamp, clamp01, DEG, TAU } from '../engine/math.js';
 // once at build time and rewrites their STATE afterwards; the names and lines never change.
 import { BRANCHES, NODES } from '../progression/nodes.js';
 // Pure data, read-only: the majors' positions, names and region tints for the map.
-import { MAJORS, REGION_TINT, DEFAULT_TINT } from '../world/placedata.js';
+import { MAJORS, MINOR_KINDS, REGION_TINT, DEFAULT_TINT } from '../world/placedata.js';
 
 /* ---------------------------------------------------------------- constants -- */
 // No CFG.hud block exists; config.js belongs to the engine owner and is deep-frozen. Every
@@ -130,7 +130,13 @@ const LEVEL_LIFE = 0.95;
 const READOUT_LEAD_S = 0.200;
 
 const VIG_LAMBDA = 5.0;         // how fast the vignette follows the health band
-const TREMOR_FROM_HP = 35;      // below this the frame starts to shake
+const TREMOR_FROM = 0.35;       // below this FRACTION of the body's own max it starts to shake.
+                                // Round 6 fixed the arc's length to read against player.hpMax
+                                // and left this one an absolute 35 hp, so with Iron bought
+                                // (hpMax 150) the frame did not move until 23% left where a
+                                // plain body gets its warning at 35%. A readout that changes
+                                // its mind about what "nearly dead" means when you buy a node
+                                // is a readout that lies about the node.
 const TREMOR_HZ = 8.5;
 const TREMOR_PX = 2.6;          // at 0 hp. Never applied to the camera.
 
@@ -261,15 +267,35 @@ const SHADE = 'rgba(4,6,9,0.72)';
 const MAP_PX = 440;             // CSS px, square
 const MAP_GROUND = '#0b0e13';   // the paper: darker than the card so the wash reads on it
 const MAP_EDGE = '#1b2431';     // the card's rule colour
-const MAP_WASH_A = 0.10;        // alpha of one travelled disc; overlaps build to ~0.27. MEASURED
-                                // at 0.075 (round6-G-suite-card-driven.png, first run): a
-                                // smear the eye had to look for. 0.10 reads at a glance and the
-                                // roads (0.32) still sit clearly above it.
-const MAP_WASH_R = 1.15;        // disc radius in cells
-const MAP_ROAD_A = 0.32;
-const MAP_ROAD_W = 1.4;
-const MAP_UNFOUND_A = 0.22;     // a faint mark; the beacons already show them in the world
+
+/* ROUND 7 — THE WASH IS A PATH NOW, NOT A STRING OF SCALLOPS.
+ * NEXT.md B9: "the travelled wash draws as scalloped discs". It did: one arc per visited
+ * cell at 0.10 alpha, and where two discs overlapped the alpha doubled, so a walked road
+ * read as a row of bright lenses with dark notches between them — the shape of the DRAWING
+ * METHOD, never the shape of the walk.
+ *
+ * So the wash is composited ONCE, off screen, at the bitmap's own 64 x 64 resolution: a set
+ * cell is opaque, a cell touching one is half, and the whole thing is drawn up to 440 px
+ * with smoothing on. The upscale IS the softness — bilinear over a 6.9x magnification — so
+ * overlapping neighbours can never add, one cell is a soft blot and a walked road is a
+ * continuous band with a feathered edge. One drawImage instead of up to 4096 arcs.
+ */
+const MAP_WASH_A = 0.23;        // alpha of the composited wash. The core reads ~0.27, the
+                                // feathered halo ~0.13, and the loop road (0.52) sits clearly
+                                // above both. MEASURED, tools/g-pausecard.mjs: at 0.34 the
+                                // wash swallowed the loop wherever he had walked it, and the
+                                // road is the thing that has to lead.
+const MAP_WASH_HALO = 112;      // 0-255: how much of a set cell bleeds into its neighbours
+const MAP_LOOP_A = 0.60;        // the county loop: the one road that goes everywhere
+const MAP_LOOP_W = 2.0;
+const MAP_SPUR_A = 0.34;        // a gravel spur: thinner, dashed, so the loop reads as the loop
+const MAP_SPUR_W = 1.2;
+const MAP_CASING_A = 0.10;      // a soft casing under the loop, so it survives the wash
+const MAP_UNFOUND_A = 0.30;     // a faint mark. It says SOMETHING IS HERE and nothing else —
+                                // no glyph, no name: you have not been.
 const MAP_FOUND_A = 0.86;
+const MAP_GLYPH = 6.4;          // half-size of a destination's drawn silhouette, px
+const MAP_MINOR_A = 0.52;       // a minor site he has stood at
 const MAP_NAME_FONT = '10.5px "Palatino Linotype", Palatino, Georgia, serif';
 const MAP_NAME_DX = 7;          // px from the mark to its name
 const MAP_NAME_FLIP = 92;       // px from the right edge past which a name sits on the left
@@ -301,7 +327,11 @@ const CONTROLS = [
   ['Claim a place', 'hold E'],
   ['Horn', 'H'],
   ['Torch', 'F'],
-  ['Pause', 'Esc'],
+  // ROUND 7. Alex, fifth playtest: "I don't know if there's a map or conquered destinations
+  // or something." There is, and it is behind this key, and the card that says so is the one
+  // he only sees AFTER pressing it. Naming the key for what is behind it is the only place
+  // this can be taught without a word on the screen during play.
+  ['Map and skills', 'Esc'],
 ];
 
 const CSS = `
@@ -321,65 +351,112 @@ const CSS = `
 #curfew-life { position: absolute; left: 0; bottom: 0; width: 100%; display: block; }
 #curfew-hud .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden;
               clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
-/* The pause card. A flex overlay with the card on margin:auto: centred when it fits,
-   scrollable from the top when it does not (a grid place-items:center clips a tall card's
-   head). The 52 px top pad and the narrow-window left pad keep the site's home pill, which
-   lives in the top-left 170 x 44 px and reappears whenever the lock is lost, off the words. */
+/* THE PAUSE CARD. A flex overlay with the card on margin:auto: centred when it fits,
+   scrollable when it does not (a grid place-items:center clips a tall card's head; margin
+   auto does not).
+   THE HOME PILL. The site wraps the game and puts a home pill in the top-left 170 x 44 px,
+   and it reappears the moment the lock is lost — which is exactly when this card shows. The
+   52 px top pad keeps the card's resting layout clear of it. Round 6 ALSO indented the whole
+   card by 180 px under 1000 px wide, which on Alex's phone left a 390 px window with a 210 px
+   card: measured 2026-09-03, node buttons 45 px wide by 190 px tall and the map squashed to
+   269 x 440. "mobile is much more important than pc", so the indent is gone and the corner is
+   covered instead — a fixed patch of the overlay's own ground, so any line that scrolls up
+   there is hidden rather than fighting the pill. */
 #curfew-pause { position: fixed; inset: 0; z-index: 24; display: flex; overflow-y: auto;
-              box-sizing: border-box; padding: 52px 16px 20px;
-              background: rgba(5,7,10,0.86); pointer-events: auto;
+              box-sizing: border-box; padding: 52px 14px 20px;
+              background: rgba(5,7,10,0.88); pointer-events: auto;
+              -webkit-overflow-scrolling: touch;
               font: 400 14px/1.6 "Palatino Linotype", Palatino, Georgia, serif; color: #c9d4e6; }
+#curfew-pause::before { content: ''; position: fixed; left: 0; top: 0; width: 250px; height: 86px;
+              z-index: 3; pointer-events: none;
+              background: linear-gradient(128deg, rgba(5,7,10,0.99) 0%, rgba(5,7,10,0.92) 34%,
+                          rgba(5,7,10,0.55) 62%, rgba(5,7,10,0) 100%); }
 #curfew-pause[hidden] { display: none !important; }
-#curfew-pause .card { width: min(1240px, 94vw); margin: auto; }
-@media (max-width: 1000px) { #curfew-pause { padding-left: 180px; } }
-#curfew-pause .rule { height: 1px; background: #1b2431; margin: 0 0 18px; }
-#curfew-pause .rule.mid { margin: 18px 0; }
+#curfew-pause .card { position: relative; z-index: 1; width: min(1240px, 96vw); margin: auto; }
+#curfew-pause .rule { height: 1px; background: #1b2431; margin: 0 0 16px; }
+#curfew-pause .rule.mid { margin: 14px 0; }
 /* THE MAP AND THE TREE, side by side when the window is wide enough, the map first. One
    block, and it swallows the press: a click anywhere on it must never resume the game. */
 #curfew-pause .top { display: grid; grid-template-columns: 440px minmax(0, 1fr); gap: 0 28px;
               align-items: start; }
-@media (max-width: 1180px) { #curfew-pause .top { grid-template-columns: minmax(0, 1fr); gap: 18px 0; } }
-#curfew-pause .map { display: block; width: 440px; height: 440px; max-width: 100%;
-              border: 1px solid #1b2431; border-radius: 2px; background: #0b0e13; }
+@media (max-width: 1180px) { #curfew-pause .top { grid-template-columns: minmax(0, 1fr); gap: 16px 0; } }
+/* SQUARE AT EVERY WIDTH. It was width:440 height:440 with max-width:100%, so a 270 px column
+   drew a 440 px-tall county into a 270 px-wide box and the whole map was stretched. */
+#curfew-pause .map { display: block; width: min(440px, 100%); aspect-ratio: 1 / 1; height: auto;
+              margin: 0 auto; border: 1px solid #1b2431; border-radius: 2px; background: #0b0e13; }
 /* THE TREE: the level and the points as words, then six branch rows of four node buttons. */
-#curfew-pause .lvl { font-size: 17px; letter-spacing: .10em; color: #e8eef8; margin: 0 0 10px; }
+#curfew-pause .lvl { font-size: 17px; letter-spacing: .10em; color: #e8eef8; margin: 0 0 9px; }
 #curfew-pause .lvl .pts { font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
               opacity: .55; margin-left: 14px; }
 #curfew-pause .br { display: grid; grid-template-columns: 56px repeat(4, minmax(0, 1fr));
               gap: 0 8px; align-items: stretch; margin: 0 0 6px; }
 #curfew-pause .bn { opacity: .52; letter-spacing: .12em; text-transform: uppercase; font-size: 11px;
               align-self: center; }
+/* A PHONE. Four tiers across a 360 px window is four 78 px columns, which is a word a line.
+   Two across, with the branch name over them, is the same tree in the same order — read down
+   the pairs instead of across the row — and every button clears the 44 px touch floor. */
+@media (max-width: 760px) {
+  #curfew-pause .br { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0 0 14px; }
+  #curfew-pause .bn { grid-column: 1 / -1; align-self: start; margin: 0 0 1px; }
+}
 /* A NODE. Four states, told apart by VALUE and by edge, never by hue:
      own   held. Bright, a filled ground and a solid left edge. No cost, it is paid.
      can   affordable now. Bright, a lit border, a pointer, and it brightens under the mouse.
      poor  the tier below is yours but the points are not there yet. Half.
      lock  the tier below is not yours. Faint, but the line is still readable. */
-#curfew-pause .nd { display: block; width: 100%; box-sizing: border-box; text-align: left;
+#curfew-pause .nd { position: relative; display: block; width: 100%; box-sizing: border-box;
+              text-align: left; min-height: 44px;
               font: inherit; color: #c9d4e6; background: rgba(4,6,9,0.72);
               border: 1px solid #1b2431; border-left: 3px solid #1b2431; border-radius: 2px;
-              padding: 6px 9px 6px; cursor: default; opacity: .55; }
+              padding: 6px 9px 7px; cursor: default; opacity: .55; }
 #curfew-pause .nd .cn { display: flex; justify-content: space-between; align-items: baseline;
               gap: 0 6px; color: #e8eef8; font-size: 13px; letter-spacing: .05em; line-height: 1.3; }
 #curfew-pause .nd .cc { font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase;
               opacity: .55; white-space: nowrap; }
 #curfew-pause .nd .cl { display: block; font-size: 10.5px; line-height: 1.35; opacity: .74;
               margin: 3px 0 0; }
+/* THE CHAIN. A tier needs the tier below it, and until round 7 the only way to learn that was
+   to click a locked node and watch nothing happen. Now the 8 px gap between two nodes in a
+   row carries a rule, and the rule LIGHTS once the node on its left is owned — so a branch
+   reads left to right as a thing you work along, with no word saying so. On a phone the row
+   is two wide and the chain runs between the pairs, which is still the reading order. */
+#curfew-pause .nd + .nd::before { content: ''; position: absolute; left: -12px; top: 50%;
+              width: 9px; height: 1px; background: #1b2431; }
+#curfew-pause .nd.own + .nd::before { background: #6f7f99; }
+@media (max-width: 760px) { #curfew-pause .nd + .nd::before { display: none; } }
 #curfew-pause .nd.own { opacity: 1; border-color: #34425a; border-left-color: #c9d4e6;
               background: rgba(201,212,230,0.075); }
 #curfew-pause .nd.own .cc { display: none; }
-#curfew-pause .nd.can { opacity: 1; cursor: pointer; border-color: #6f7f99; border-left-color: #6f7f99; }
-#curfew-pause .nd.can:hover { border-color: #e8eef8; border-left-color: #e8eef8;
-              background: rgba(201,212,230,0.06); }
+/* AFFORDABLE NOW. The one state the eye has to find on a card of 24, so it is the brightest
+   edge on the card and it does not depend on a hover the phone cannot make. */
+#curfew-pause .nd.can { opacity: 1; cursor: pointer; border-color: #8a9ab5;
+              border-left-color: #e8eef8; background: rgba(201,212,230,0.045); }
+#curfew-pause .nd.can:hover { border-color: #e8eef8; background: rgba(201,212,230,0.09); }
 #curfew-pause .nd.poor { opacity: .55; }
 #curfew-pause .nd.lock { opacity: .30; }
-/* THE CONTROLS, two columns of pairs now that the tree sits above them. */
-#curfew-pause dl { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 5px 22px; margin: 0; }
+/* THE CONTROLS. Three pairs to a row on a wide window (fifteen verbs in five rows, which is
+   what keeps the whole card inside a 780 px window), two under 1180, one on a phone. */
+#curfew-pause dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 2px 34px; margin: 0; }
+@media (max-width: 1180px) { #curfew-pause dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { #curfew-pause dl { grid-template-columns: minmax(0, 1fr); gap: 5px; } }
+/* Each verb and its key are ONE unit. Round 6 laid the dl out as 1fr auto 1fr auto, which put
+   a third of the card between "MOVE" and "W A S D" and made the reader's eye do the pairing. */
+#curfew-pause .pair { display: flex; justify-content: space-between; align-items: baseline;
+              gap: 0 14px; border-bottom: 1px solid rgba(27,36,49,0.55); padding: 0 0 2px; }
 #curfew-pause dt { opacity: .52; letter-spacing: .12em; text-transform: uppercase;
-              font-size: 11px; align-self: center; }
-#curfew-pause dd { text-align: right; font-size: 13px; letter-spacing: .06em; opacity: .86; margin: 0; }
-#curfew-pause .foot { margin-top: 22px; font-size: 11px; letter-spacing: .22em;
+              font-size: 11px; }
+#curfew-pause dd { text-align: right; font-size: 13px; letter-spacing: .06em; opacity: .86;
+              margin: 0; white-space: nowrap; }
+#curfew-pause .foot { margin-top: 12px; font-size: 11px; letter-spacing: .22em;
               text-transform: uppercase; opacity: .32; text-align: center; }
 `;
+
+/**
+ * kind id -> its MINOR_KINDS row, so the map can tell a fire from a waystone without asking
+ * places. Built once at module load off frozen data; it can never drift from the table.
+ */
+const MINOR_BY_ID = MINOR_KINDS.reduce((m, k) => { m[k.id] = k; return m; }, Object.create(null));
 
 /** 0xrrggbb -> '#rrggbb'. Card-time only; never on a frame. */
 function hex6(n) {
@@ -461,9 +538,13 @@ export class Hud {
     this.nodeEls = null;       // one { node, btn } per NODES row, in NODES order
     // What the map last drew, as numbers a test can hold: rewritten in place by _drawMap().
     this.mapInfo = {
-      drawn: 0, painted: 0, roads: 0, names: 0, found: 0, claimed: 0, unfound: 0,
-      fires: 0, wilds: 0, car: false, arrowX: -1, arrowY: -1, carX: -1, carY: -1,
+      drawn: 0, painted: 0, roads: 0, spurs: 0, names: 0, glyphs: 0,
+      found: 0, claimed: 0, unfound: 0,
+      fires: 0, minors: 0, wilds: 0, car: false, arrowX: -1, arrowY: -1, carX: -1, carY: -1,
     };
+    // The travelled wash's own surface, built at the bitmap's resolution and reused. See
+    // _washImage(): it is what stops the wash being a string of scalloped discs.
+    this._wash = null; this._washG = null; this._washCount = -1;
 
     this.srT = 0; this.srLast = '';
     this._dirty = true;
@@ -840,8 +921,10 @@ export class Hud {
 
     const dl = el('dl', '');
     for (const [what, how] of CONTROLS) {
-      dl.appendChild(el('dt', '', what));
-      dl.appendChild(el('dd', '', how));
+      const pair = el('div', 'pair');
+      pair.appendChild(el('dt', '', what));
+      pair.appendChild(el('dd', '', how));
+      dl.appendChild(pair);
     }
     wrap.appendChild(dl);
 
@@ -960,6 +1043,180 @@ export class Hud {
 
   /* --------------------------------------------------------------- the map -- */
 
+  /* ------------------------------------------------------- the map's drawing kit -- */
+
+  /**
+   * THE TRAVELLED WASH, composited once at the bitmap's own resolution.
+   *
+   * NEXT.md B9: "the travelled wash draws as scalloped discs." It did — one 0.10-alpha arc
+   * per visited cell, so two neighbouring cells overlapped into a bright lens and the gaps
+   * between them stayed dark. The eye read the drawing method, not the walk.
+   *
+   * Here every set cell is written opaque into a 64 x 64 image and every cell TOUCHING one is
+   * written at MAP_WASH_HALO, and the whole image is drawn up to the map with smoothing on.
+   * The 6.9x bilinear magnification IS the softness, and because it is one image, alpha can
+   * never accumulate: a lone cell is a soft blot, a walked road is one continuous band with a
+   * feathered edge, and the cost is one drawImage instead of up to 4096 arcs.
+   *
+   * The canvas is kept and reused; the ImageData is rebuilt only when the bitmap has changed,
+   * which for a paused card is at most once a pause.
+   */
+  _washImage(grid) {
+    if (typeof document === 'undefined') return null;
+    const n = grid.n | 0;
+    if (n <= 0) return null;
+    if (!this._wash || this._wash.width !== n) {
+      this._wash = document.createElement('canvas');
+      this._wash.width = n; this._wash.height = n;
+      this._washG = this._wash.getContext('2d', { alpha: true, willReadFrequently: true });
+      this._washCount = -1;
+    }
+    if (!this._washG) return null;
+    // The count is the whole state of the bitmap for this purpose: cells are only ever SET.
+    if (this._washCount === grid.count) return this._wash;
+    this._washCount = grid.count;
+    const img = this._washG.createImageData(n, n);
+    const d = img.data, cells = grid.cells;
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        let a = 0;
+        if (cells[y * n + x]) a = 255;
+        else {
+          for (let dy = -1; dy <= 1 && !a; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const yy = y + dy, xx = x + dx;
+              if (xx < 0 || yy < 0 || xx >= n || yy >= n) continue;
+              if (cells[yy * n + xx]) { a = MAP_WASH_HALO; break; }
+            }
+          }
+        }
+        const i = (y * n + x) * 4;
+        d[i] = 232; d[i + 1] = 238; d[i + 2] = 248; d[i + 3] = a;   // INK; ImageData is straight, not premultiplied
+      }
+    }
+    this._washG.putImageData(img, 0, 0);
+    return this._wash;
+  }
+
+  /** A four-ray spark: a fire he has stood at. Shape, never hue. */
+  _spark(g, x, y, r, a) {
+    g.globalAlpha = a * 0.55; g.strokeStyle = SHADE; g.lineWidth = 2.6;
+    for (let p = 0; p < 2; p++) {
+      if (p === 1) { g.globalAlpha = a; g.strokeStyle = INK; g.lineWidth = 1; }
+      g.beginPath();
+      g.moveTo(x - r, y); g.lineTo(x + r, y);
+      g.moveTo(x, y - r); g.lineTo(x, y + r);
+      const q = r * 0.52;
+      g.moveTo(x - q, y - q); g.lineTo(x + q, y + q);
+      g.moveTo(x + q, y - q); g.lineTo(x - q, y + q);
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+  }
+
+  /**
+   * A DESTINATION'S OWN SILHOUETTE, in a 2s x 2s box centred on (x, y), standing on y + s.
+   *
+   * ALEX asked for the map to be "organized or have flow", and the destinations cannot move —
+   * the roads are baked around them. So what the map can do is make each of the twelve READ
+   * as the thing it is, from across the card, with no legend and no word: a lighthouse is a
+   * tapered tower throwing two rays, a graveyard is three headstones, a barn is a gambrel
+   * roof. Twelve shapes, one per `kind` in placedata.js. An unknown kind falls back to a ring,
+   * so a new destination row draws SOMETHING rather than nothing.
+   *
+   * Stroke only, current strokeStyle and lineWidth: the caller draws it twice, dark then ink,
+   * which is what keeps it readable standing on a road or on the travelled wash.
+   */
+  _glyph(g, kind, x, y, s) {
+    const b = y + s;                         // the ground line
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    g.beginPath();
+    switch (kind) {
+      case 'station':                        // a canopy on two posts, and a pump under it
+        g.moveTo(x - s, y - s * 0.55); g.lineTo(x + s, y - s * 0.55);
+        g.moveTo(x - s * 0.72, y - s * 0.55); g.lineTo(x - s * 0.72, b);
+        g.moveTo(x + s * 0.72, y - s * 0.55); g.lineTo(x + s * 0.72, b);
+        g.moveTo(x - s * 0.26, b); g.lineTo(x - s * 0.26, y + s * 0.10);
+        g.lineTo(x + s * 0.26, y + s * 0.10); g.lineTo(x + s * 0.26, b);
+        break;
+      case 'manor':                          // a wide house, a steep roof, a chimney
+        g.moveTo(x - s, y); g.lineTo(x, y - s * 0.92); g.lineTo(x + s, y);
+        g.moveTo(x - s * 0.82, y); g.lineTo(x - s * 0.82, b); g.lineTo(x + s * 0.82, b);
+        g.lineTo(x + s * 0.82, y);
+        g.moveTo(x + s * 0.34, y - s * 0.50); g.lineTo(x + s * 0.34, y - s * 1.15);
+        g.lineTo(x + s * 0.58, y - s * 1.15); g.lineTo(x + s * 0.58, y - s * 0.26);
+        break;
+      case 'works':                          // a headframe: an A over a winding wheel
+        g.moveTo(x - s, b); g.lineTo(x, y - s); g.lineTo(x + s, b);
+        g.moveTo(x - s * 0.52, y + s * 0.12); g.lineTo(x + s * 0.52, y + s * 0.12);
+        g.moveTo(x + s * 0.26, y - s * 0.62); g.arc(x, y - s * 0.62, s * 0.26, 0, TAU);
+        break;
+      case 'relay':                          // a lattice mast with two stays
+        g.moveTo(x - s * 0.52, b); g.lineTo(x, y - s); g.lineTo(x + s * 0.52, b);
+        g.moveTo(x - s * 0.34, y + s * 0.22); g.lineTo(x + s * 0.34, y + s * 0.22);
+        g.moveTo(x - s * 0.18, y - s * 0.38); g.lineTo(x + s * 0.18, y - s * 0.38);
+        g.moveTo(x - s * 0.34, y - s * 1.05); g.lineTo(x + s * 0.34, y - s * 1.05);
+        break;
+      case 'cathedral':                      // a wide gable, a rose window, a tall spire
+        g.moveTo(x - s, b); g.lineTo(x - s, y + s * 0.10);
+        g.lineTo(x, y - s * 0.34); g.lineTo(x + s, y + s * 0.10); g.lineTo(x + s, b);
+        g.moveTo(x + s * 0.30, y + s * 0.36); g.arc(x, y + s * 0.36, s * 0.30, 0, TAU);
+        g.moveTo(x, y - s * 0.34); g.lineTo(x, y - s * 1.10);
+        g.moveTo(x - s * 0.30, y - s * 0.82); g.lineTo(x + s * 0.30, y - s * 0.82);
+        break;
+      case 'chapel':                         // one small gable and one small spire
+        g.moveTo(x - s * 0.66, b); g.lineTo(x - s * 0.66, y + s * 0.24);
+        g.lineTo(x, y - s * 0.20); g.lineTo(x + s * 0.66, y + s * 0.24); g.lineTo(x + s * 0.66, b);
+        g.moveTo(x, y - s * 0.20); g.lineTo(x, y - s * 0.86);
+        break;
+      case 'steeple':                        // a spire standing in water
+        g.moveTo(x - s * 0.40, y + s * 0.30); g.lineTo(x, y - s); g.lineTo(x + s * 0.40, y + s * 0.30);
+        g.moveTo(x - s, y + s * 0.46); g.lineTo(x + s, y + s * 0.46);
+        g.moveTo(x - s * 0.80, y + s * 0.86); g.lineTo(x + s * 0.80, y + s * 0.86);
+        break;
+      case 'lighthouse':                     // a tapered tower, a lamp, two rays
+        g.moveTo(x - s * 0.46, b); g.lineTo(x - s * 0.24, y - s * 0.32);
+        g.lineTo(x + s * 0.24, y - s * 0.32); g.lineTo(x + s * 0.46, b);
+        g.moveTo(x - s * 0.28, y - s * 0.32); g.lineTo(x - s * 0.28, y - s * 0.70);
+        g.lineTo(x + s * 0.28, y - s * 0.70); g.lineTo(x + s * 0.28, y - s * 0.32);
+        g.moveTo(x - s, y - s * 0.98); g.lineTo(x - s * 0.44, y - s * 0.60);
+        g.moveTo(x + s, y - s * 0.98); g.lineTo(x + s * 0.44, y - s * 0.60);
+        break;
+      case 'mill':                           // a tower under a four-blade cross
+        g.moveTo(x - s * 0.44, b); g.lineTo(x - s * 0.26, y - s * 0.20);
+        g.lineTo(x + s * 0.26, y - s * 0.20); g.lineTo(x + s * 0.44, b);
+        g.moveTo(x - s * 0.78, y - s * 1.02); g.lineTo(x + s * 0.78, y - s * 0.30);
+        g.moveTo(x + s * 0.78, y - s * 1.02); g.lineTo(x - s * 0.78, y - s * 0.30);
+        break;
+      case 'cemetery':                       // three headstones on a ground line
+        g.moveTo(x - s, b); g.lineTo(x + s, b);
+        for (let k = -1; k <= 1; k++) {
+          const hx = x + k * s * 0.60, top = y + (k === 0 ? -s * 0.42 : -s * 0.06);
+          g.moveTo(hx - s * 0.22, b); g.lineTo(hx - s * 0.22, top);
+          g.arc(hx, top, s * 0.22, Math.PI, 0);
+          g.lineTo(hx + s * 0.22, b);
+        }
+        break;
+      case 'tower':                          // a square bell tower with a pitched cap
+        g.moveTo(x - s * 0.46, b); g.lineTo(x - s * 0.46, y - s * 0.34);
+        g.lineTo(x + s * 0.46, y - s * 0.34); g.lineTo(x + s * 0.46, b);
+        g.moveTo(x - s * 0.68, y - s * 0.34); g.lineTo(x, y - s); g.lineTo(x + s * 0.68, y - s * 0.34);
+        g.moveTo(x - s * 0.22, y + s * 0.18); g.arc(x, y + s * 0.18, s * 0.22, Math.PI, 0);
+        break;
+      case 'barn':                           // a gambrel roof, and the door under it
+        g.moveTo(x - s, b); g.lineTo(x - s, y + s * 0.06);
+        g.lineTo(x - s * 0.56, y - s * 0.48); g.lineTo(x, y - s * 0.86);
+        g.lineTo(x + s * 0.56, y - s * 0.48); g.lineTo(x + s, y + s * 0.06); g.lineTo(x + s, b);
+        g.moveTo(x - s * 0.26, b); g.lineTo(x - s * 0.26, y + s * 0.36);
+        g.lineTo(x + s * 0.26, y + s * 0.36); g.lineTo(x + s * 0.26, b);
+        break;
+      default:                               // a kind this file has never heard of
+        g.moveTo(x + s * 0.6, y); g.arc(x, y, s * 0.6, 0, TAU);
+        break;
+    }
+    g.stroke();
+  }
+
   /**
    * The paper map. Drawn from live state each time the card shows; allocates freely,
    * because it runs a few times a session and never on a frame. Every sibling is read
@@ -985,8 +1242,10 @@ export class Hud {
     const car = sys.get('car');
     const wilds = sys.get('wilds');
 
-    I.painted = 0; I.roads = 0; I.names = 0; I.found = 0; I.claimed = 0; I.unfound = 0;
-    I.fires = 0; I.wilds = 0; I.car = false; I.arrowX = -1; I.arrowY = -1; I.carX = -1; I.carY = -1;
+    I.painted = 0; I.roads = 0; I.spurs = 0; I.names = 0; I.glyphs = 0;
+    I.found = 0; I.claimed = 0; I.unfound = 0;
+    I.fires = 0; I.minors = 0; I.wilds = 0;
+    I.car = false; I.arrowX = -1; I.arrowY = -1; I.carX = -1; I.carY = -1;
 
     /* 0. the paper ----------------------------------------------------------- */
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -995,56 +1254,106 @@ export class Hud {
     g.fillRect(0, 0, S, S);
 
     /* 1. where he has been — the wash ---------------------------------------- */
+    // ONE composited image, not one arc per cell. See MAP_WASH_A. `painted` stays the count
+    // of SET cells, because tests/pause.mjs holds it against progress's own visited count.
     const grid = prog && typeof prog.visitedGrid === 'function' ? prog.visitedGrid() : null;
     if (grid && grid.cells && grid.n > 0) {
-      const n = grid.n, cell = S / n, r = cell * MAP_WASH_R;
-      g.fillStyle = INK;
-      g.globalAlpha = MAP_WASH_A;
-      for (let i = 0; i < n * n; i++) {
-        if (!grid.cells[i]) continue;
-        const cx = (i % n + 0.5) * cell, cy = (Math.floor(i / n) + 0.5) * cell;
-        g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
-        I.painted++;
+      const wash = this._washImage(grid);
+      if (wash) {
+        const sm = g.imageSmoothingEnabled;
+        g.imageSmoothingEnabled = true;
+        if ('imageSmoothingQuality' in g) g.imageSmoothingQuality = 'high';
+        g.globalAlpha = MAP_WASH_A;
+        g.drawImage(wash, 0, 0, S, S);
+        g.globalAlpha = 1;
+        g.imageSmoothingEnabled = sm;
       }
-      g.globalAlpha = 1;
+      I.painted = grid.count | 0;
     }
 
-    /* 2. the roads ----------------------------------------------------------- */
+    /* 2. the roads — the loop, and the two spurs off it ---------------------- */
     // routePolylines(), not routes(): roads.js's constructor owns `this.routes` as a table.
+    // That table is exactly where the KIND lives, though, and the kind is what makes the map
+    // legible: one asphalt loop that goes everywhere, and two gravel spurs that end. Drawn
+    // differently — the loop solid with a soft casing under it, a spur thin and dashed — so
+    // "which way is the way round" is answered before you have read a single name.
     const routes = roads && typeof roads.routePolylines === 'function' ? roads.routePolylines() : null;
+    const meta = roads && Array.isArray(roads.routes) ? roads.routes : null;
     if (Array.isArray(routes)) {
-      g.strokeStyle = INK;
-      g.globalAlpha = MAP_ROAD_A;
-      g.lineWidth = MAP_ROAD_W;
       g.lineJoin = 'round'; g.lineCap = 'round';
-      for (let r = 0; r < routes.length; r++) {
-        const pl = routes[r];
-        if (!Array.isArray(pl) || pl.length < 2) continue;
-        g.beginPath();
-        g.moveTo(px(pl[0].x), pz(pl[0].z));
-        for (let i = 1; i < pl.length; i++) g.lineTo(px(pl[i].x), pz(pl[i].z));
-        g.stroke();
-        I.roads++;
+      for (let pass = 0; pass < 2; pass++) {
+        for (let r = 0; r < routes.length; r++) {
+          const pl = routes[r];
+          if (!Array.isArray(pl) || pl.length < 2) continue;
+          const kind = meta && meta[r] && meta[r].kind ? meta[r].kind : (r === 0 ? 'asphalt' : 'gravel');
+          const loop = kind === 'asphalt';
+          if (pass === 0 && !loop) continue;            // the casing is the loop's alone
+          g.strokeStyle = INK;
+          g.setLineDash(pass === 1 && !loop ? [3.5, 3.0] : []);
+          g.globalAlpha = pass === 0 ? MAP_CASING_A : (loop ? MAP_LOOP_A : MAP_SPUR_A);
+          g.lineWidth = pass === 0 ? MAP_LOOP_W * 3.2 : (loop ? MAP_LOOP_W : MAP_SPUR_W);
+          g.beginPath();
+          g.moveTo(px(pl[0].x), pz(pl[0].z));
+          for (let i = 1; i < pl.length; i++) g.lineTo(px(pl[i].x), pz(pl[i].z));
+          g.stroke();
+          if (pass === 1) { I.roads++; if (!loop) I.spurs++; }
+        }
       }
+      g.setLineDash([]);
       g.globalAlpha = 1;
     }
 
-    /* 3. the campfires he has stood at --------------------------------------- */
-    // places.js keeps every authored fire in `_campfires` ({fireId, x, z}); a public
-    // campfires() is requested in HANDOFF-G. progress keeps the ids he has been AT.
+    /* 3. the small places along the roads he has actually stood at ------------ */
+    // A campfire he has warmed himself at (progress.firesFound, ids), and — round 7 — every
+    // OTHER minor site he has been within thirty metres of (progress.minorsMet, indices into
+    // places' own table). Together they are the reason the county map reads as a route
+    // somebody walked rather than twelve dots in a black square.
+    //
+    // The campfire id: places.campfires() renames `fireId` to `id` on the way out, and round
+    // 6 read `f.fireId` off the public copy — undefined for every fire, so this layer drew
+    // NOTHING for a whole round. Measured 2026-09-03: fires 0 with three fires in the save.
     const fires = prog && typeof prog.firesFound === 'function' ? prog.firesFound() : null;
     const fireList = places
       ? (typeof places.campfires === 'function' ? places.campfires()
         : (Array.isArray(places._campfires) ? places._campfires : null))
       : null;
+    const fireAt = Object.create(null);
     if (fires && fires.size > 0 && Array.isArray(fireList)) {
-      g.fillStyle = INK;
-      g.globalAlpha = 0.70;
       for (let i = 0; i < fireList.length; i++) {
         const f = fireList[i];
-        if (!f || !fires.has(f.fireId)) continue;
-        g.beginPath(); g.arc(px(f.x), pz(f.z), 1.8, 0, TAU); g.fill();
+        const id = f && (f.id !== undefined ? f.id : f.fireId);
+        if (id === undefined || !fires.has(id)) continue;
+        fireAt[Math.round(f.x) + '|' + Math.round(f.z)] = 1;
+        this._spark(g, px(f.x), pz(f.z), 3.4, 0.78);
         I.fires++;
+      }
+    }
+    const met = prog && typeof prog.minorsMet === 'function' ? prog.minorsMet() : null;
+    const minorList = places
+      ? (typeof places.minorList === 'function' ? places.minorList()
+        : (Array.isArray(places.minors) ? places.minors : null))
+      : null;
+    if (met && met.size > 0 && Array.isArray(minorList)) {
+      g.strokeStyle = INK; g.fillStyle = INK; g.lineWidth = 1;
+      for (let i = 0; i < minorList.length; i++) {
+        const m = minorList[i];
+        if (!m || !Number.isFinite(m.x)) continue;
+        const idx = Number.isInteger(m.i) ? m.i : i;
+        if (!met.has(idx)) continue;
+        // A fire already drew itself as a spark above; do not stack a dot on it.
+        if (fireAt[Math.round(m.x) + '|' + Math.round(m.z)]) { I.minors++; continue; }
+        const k = MINOR_BY_ID[m.kind];
+        const x = px(m.x), y = pz(m.z);
+        if (k && k.lit) { this._spark(g, x, y, 3.0, 0.62); }
+        else if (k && k.bulk >= 3.0) {
+          // A place big enough to stand in — a staged scene, an orchard, a roadblock.
+          g.globalAlpha = MAP_MINOR_A;
+          g.beginPath(); g.arc(x, y, 2.3, 0, TAU); g.stroke();
+        } else {
+          g.globalAlpha = MAP_MINOR_A;
+          g.beginPath(); g.arc(x, y, 1.3, 0, TAU); g.fill();
+        }
+        I.minors++;
       }
       g.globalAlpha = 1;
     }
@@ -1066,7 +1375,17 @@ export class Hud {
       g.globalAlpha = 1;
     }
 
-    /* 5. the majors, three states -------------------------------------------- */
+    /* 5. the twelve destinations, three states ------------------------------- */
+    // ALEX, original brief item 21: "the map has to be organized or have flow." The roads are
+    // baked and the destinations cannot move, so the MAP does the organising:
+    //   not found  a small hollow diamond and nothing else. Something is there. Go and see.
+    //   found      the place's OWN SILHOUETTE, in ink, and its name. A lighthouse looks like a
+    //              lighthouse, a barn like a barn, a graveyard like three headstones — so
+    //              "what is over there" is answered by the shape, with no legend to read.
+    //   claimed    the same silhouette in the region's tint, on a soft disc of it: the colour
+    //              the place put in the sky when you took it. It also STOPS being the
+    //              brightest thing on the map, so the unclaimed ones are what the eye goes
+    //              to. That is the flow — the bright shapes are the ones still waiting.
     const foundSet = places && places.found && typeof places.found.has === 'function' ? places.found
       : (prog && prog.found && typeof prog.found.has === 'function' ? prog.found : null);
     const claimedA = places && places.claimed && typeof places.claimed.has === 'function' ? places.claimed : null;
@@ -1078,33 +1397,49 @@ export class Hud {
       const x = px(d.x), y = pz(d.z);
       const claimed = !!((claimedA && claimedA.has(d.id)) || (claimedB && claimedB.has(d.id)));
       const found = claimed || !!(foundSet && foundSet.has(d.id));
-      if (claimed) {
-        // Lit, in the region's tint: the one hue on the map, and it is the colour the place
-        // put in the sky when he took it.
-        const tint = hex6(REGION_TINT[d.region] || DEFAULT_TINT);
-        g.globalAlpha = 0.28; g.fillStyle = tint;
-        g.beginPath(); g.arc(x, y, 7.5, 0, TAU); g.fill();
-        g.globalAlpha = 1; g.fillStyle = tint;
-        g.beginPath(); g.arc(x, y, 3.2, 0, TAU); g.fill();
-        I.claimed++;
-      } else if (found) {
-        g.globalAlpha = MAP_FOUND_A; g.strokeStyle = INK; g.lineWidth = 1.2;
-        g.beginPath(); g.arc(x, y, 3.0, 0, TAU); g.stroke();
-        I.found++;
-      } else {
-        g.globalAlpha = MAP_UNFOUND_A; g.fillStyle = INK;
-        g.beginPath(); g.arc(x, y, 1.8, 0, TAU); g.fill();
+      const tint = hex6(REGION_TINT[d.region] || DEFAULT_TINT);
+      if (!found) {
+        // A hollow diamond, not a dot: at this size a filled dot is indistinguishable from a
+        // minor site he has met, and the two must never be confused.
+        g.globalAlpha = MAP_UNFOUND_A; g.strokeStyle = INK; g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(x, y - 3.1); g.lineTo(x + 3.1, y); g.lineTo(x, y + 3.1); g.lineTo(x - 3.1, y);
+        g.closePath(); g.stroke();
         I.unfound++;
+        continue;
       }
-      if (found) {
-        // The name, once found. To the right unless that runs off the paper.
-        g.globalAlpha = claimed ? 0.95 : MAP_FOUND_A;
-        g.fillStyle = claimed ? hex6(REGION_TINT[d.region] || DEFAULT_TINT) : INK;
-        const left = x > S - MAP_NAME_FLIP;
-        g.textAlign = left ? 'right' : 'left';
-        g.fillText(d.name, left ? x - MAP_NAME_DX : x + MAP_NAME_DX, y);
-        I.names++;
+      if (claimed) {
+        g.globalAlpha = 0.26; g.fillStyle = tint;
+        g.beginPath(); g.arc(x, y, MAP_GLYPH + 3.4, 0, TAU); g.fill();
+        I.claimed++;
+      } else {
+        I.found++;
       }
+      // A dark backing pass under every silhouette, so it survives standing on the wash or on
+      // a road. Value, then ink: the same three-pass rule the reticle is drawn by.
+      g.globalAlpha = 0.75; g.strokeStyle = SHADE; g.lineWidth = 3.0;
+      this._glyph(g, d.kind, x, y, MAP_GLYPH);
+      g.globalAlpha = claimed ? 0.92 : 1;
+      g.strokeStyle = claimed ? tint : INK;
+      g.lineWidth = 1.15;
+      this._glyph(g, d.kind, x, y, MAP_GLYPH);
+      I.glyphs++;
+      // A claimed place has a light burning in it, and the mark says so: a solid dot of the
+      // region's tint at the middle of its own silhouette. It is also what makes "claimed"
+      // measurable on ONE pixel — the halo alone reads as a wash and a test sampling the
+      // centre could not tell the tint from the ink.
+      if (claimed) {
+        g.globalAlpha = 0.96; g.fillStyle = tint;
+        g.beginPath(); g.arc(x, y, 2.1, 0, TAU); g.fill();
+      }
+      // The name, once found. To the right unless that runs off the paper.
+      g.globalAlpha = claimed ? 0.86 : MAP_FOUND_A;
+      g.fillStyle = claimed ? tint : INK;
+      const left = x > S - MAP_NAME_FLIP;
+      g.textAlign = left ? 'right' : 'left';
+      const nx = left ? x - MAP_GLYPH - MAP_NAME_DX : x + MAP_GLYPH + MAP_NAME_DX;
+      g.fillText(d.name, nx, y);
+      I.names++;
     }
     g.globalAlpha = 1;
 
@@ -1117,7 +1452,9 @@ export class Hud {
       // The car's forward is (-sin h, -cos h) in world x/z (camera convention), which on
       // the page is (-sin h, -cos h) too, since z goes down the page.
       g.rotate(Math.atan2(-Math.cos(h), -Math.sin(h)));
-      g.globalAlpha = 0.75; g.strokeStyle = INK; g.lineWidth = 1.2;
+      g.globalAlpha = 0.85; g.strokeStyle = SHADE; g.lineWidth = 3;
+      g.strokeRect(-MAP_CAR_L * 0.5, -MAP_CAR_W * 0.5, MAP_CAR_L, MAP_CAR_W);
+      g.strokeStyle = INK; g.lineWidth = 1.2;
       g.strokeRect(-MAP_CAR_L * 0.5, -MAP_CAR_W * 0.5, MAP_CAR_L, MAP_CAR_W);
       g.restore();
       I.car = true; I.carX = +x.toFixed(1); I.carY = +y.toFixed(1);
@@ -1387,8 +1724,9 @@ export class Hud {
       this.vig.style.opacity = a.toFixed(3);
     }
 
+    const trFrom = TREMOR_FROM * max;
     const hp = this.hpShown;
-    const tr = hp >= TREMOR_FROM_HP ? 0 : clamp01((TREMOR_FROM_HP - hp) / TREMOR_FROM_HP);
+    const tr = hp >= trFrom ? 0 : clamp01((trFrom - hp) / trFrom);
     if (tr <= 0 && this.tremor <= 0) return;
     this.tremor = tr;
     if (tr <= 0) {

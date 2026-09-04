@@ -124,11 +124,39 @@ const GradeShader = {
     uContrastFrom: { value: G.contrastFrom },
     uContrastTo: { value: CONTRAST_TO },
     uContrast: { value: CONTRAST },
-    uKnee: { value: 0.30 },
-    uShoulder: { value: 0.70 },
+    // ROUND 7, LANE E — THE SHOULDER WAS FLATTENING EVERY LIGHT IN THE GAME.
+    //
+    // These were 0.30 and 0.70, and that is a 1.4:1 compression applied to the ENTIRE top
+    // half of the display range. Arithmetic, and it is the whole finding:
+    //
+    //     in     old (0.30/0.70)     new (0.50/0.90)
+    //      77          77                  77
+    //     128         111                 128
+    //     179         128                 162
+    //     217         136                 175
+    //     255         141                 184
+    //
+    // Everything from 128 to 255 came out between 111 and 141. NOTHING IN CURFEW COULD BE
+    // BRIGHT. That single curve is a large part of three separate entries on docs/NEXT.md:
+    // B2 (the claim lever and the Bell Tower glint never reach the screen), B6 ("everything
+    // is one flat blue except the lamp cones and the pumps, and the pumps are the brightest
+    // objects in the frame"), and B4 (the boss reads "fully lit" with no value on it). A
+    // lamp, a muzzle flash, a glint, a claimed place's lit windows and the moon all landed
+    // within thirty luminance points of each other, which is the definition of no value
+    // structure at the top end.
+    //
+    // The shoulder is still here and it is still doing its job — ART.md 1.9's torch, which
+    // reached a near-ground p95 of 211.6 and clipped at 252.6, is what it was built for. It
+    // is a SHOULDER now instead of a ceiling: nothing clips to paper (255 still lands at
+    // 184) and the range from 128 up is available again. Measured after, frame by frame, in
+    // docs/ROUND-7/HANDOFF-E.md.
+    uKnee: { value: 0.50 },
+    uShoulder: { value: 0.90 },
     uBlackFloor: { value: G.blackFloor },
     uGrain: { value: G.grain },
     uVignette: { value: G.vignette },
+    // ROUND 7 lane E: local contrast. See the shader.
+    uLocal: { value: 0.34 },
   },
   vertexShader: /* glsl */`
     varying vec2 vUv;
@@ -142,7 +170,7 @@ const GradeShader = {
     uniform vec2 uResolution;
     uniform float uTime, uDread, uPulse, uTunnel;
     uniform float uContrastFrom, uContrastTo, uContrast, uBlackFloor, uGrain, uVignette;
-    uniform float uKnee, uShoulder;
+    uniform float uKnee, uShoulder, uLocal;
 
     float hash12(vec2 p) {
       return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -156,6 +184,28 @@ const GradeShader = {
     void main() {
       vec3 col = texture2D(tDiffuse, vUv).rgb;
       float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+
+      // --- LOCAL CONTRAST: the torch must CARVE, not wash -----------------------
+      // Four diagonal taps at ~2.6 px, averaged, subtracted, added back. This is the one
+      // operator that can put edge separation into a frame whose whole problem is that
+      // large areas sit at the same value: a trunk against the fog behind it, the boss
+      // against the wall it is standing on, the near ground under the torch hotspot. A
+      // global contrast curve cannot do it — it moves both sides of the edge together, and
+      // ART.md 1.7 measured exactly that (the 48-127 band moved 1.02% -> 1.19% for a whole
+      // window widening).
+      //
+      // WEIGHTED, on purpose, at both ends. In the near-black it would amplify the grain
+      // and the dither into crawling static; at the top it would ring a white halo around
+      // the moon and the lamps. So it lives in the mid tones, which is where shape lives.
+      vec2 tap = 2.6 / max(uResolution, vec2(1.0));
+      vec3 blur = texture2D(tDiffuse, vUv + vec2( tap.x,  tap.y)).rgb
+                + texture2D(tDiffuse, vUv + vec2(-tap.x,  tap.y)).rgb
+                + texture2D(tDiffuse, vUv + vec2( tap.x, -tap.y)).rgb
+                + texture2D(tDiffuse, vUv + vec2(-tap.x, -tap.y)).rgb;
+      float localW = smoothstep(0.030, 0.150, lum) * (1.0 - smoothstep(0.56, 0.92, lum));
+      col += (col - blur * 0.25) * uLocal * localW;
+      col = max(col, vec3(0.0));
+      lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
 
       // --- shadow-protected filmic contrast -------------------------------------
       vec3 curved = (col - 0.5) * (uContrast + uPulse * 0.06 + uDread * 0.10) + 0.5;
@@ -190,15 +240,38 @@ const GradeShader = {
       // --- black floor: nothing ever reaches a dead zero ------------------------
       col = max(col, vec3(uBlackFloor));
 
-      // --- vignette, tightened by the dread tunnel -----------------------------
+      // --- vignette, AND IT IS NOT A BLACK RING --------------------------------
+      // A plain multiply is a black ring: it takes the corner to zero and the corner stops
+      // holding shape, which in a game this dark means the outer sixth of the frame is
+      // simply gone. A lens does not do that. It loses a little light, it loses
+      // SATURATION, and what is left goes cooler because the coating passes blue at the
+      // edge of the field. So: desaturate 45% toward a cold neutral, then take 62% of the
+      // authored darkening. Total corner loss is ~17% instead of ~28%, and the corner still
+      // reads.
       vec2 p = vUv - 0.5;
       float r = length(p) * (1.0 + uTunnel * 0.55);
-      col *= 1.0 - uVignette * smoothstep(0.22, 0.86, r);
+      float vg = smoothstep(0.22, 0.92, r);
+      float amt = uVignette * vg;
+      float vl = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      vec3 edge = mix(col, vec3(vl) * vec3(0.84, 0.91, 1.10), 0.45) * (1.0 - amt * 0.62);
+      col = mix(col, edge, vg);
       col = mix(col, vec3(0.05, 0.0, 0.02), uDread * smoothstep(0.35, 0.85, r) * 0.5);
 
-      // --- grain, then dither ---------------------------------------------------
-      float g = hash12(vUv * uResolution + vec2(uTime * 61.0, uTime * 37.0));
-      col += (g - 0.5) * (uGrain + uDread * 0.045);
+      // --- grain: FILM GRAIN, NOT VIDEO NOISE, then dither ----------------------
+      // Two things separate one from the other, and the old single per-pixel hash had
+      // neither. (1) A CELL. Grain is silver crystals, not pixels; at renderScale 0.75 a
+      // one-pixel hash is resampled to the display and reads as shimmer. Most of the weight
+      // goes on a 1.6 px cell, the rest on the per-pixel hash so the cell never shows its
+      // grid. (2) A CURVE. Film has no grain in the clear base and very little in the
+      // shoulder; it is loudest in the mid tones. Weighting it that way is also what stops
+      // it from crawling in the 40% of a CURFEW frame that sits under luminance 15, which
+      // is where an even grain looks like broken hardware.
+      vec2 cell = floor(gl_FragCoord.xy / 1.6);
+      float g1 = hash12(cell + vec2(uTime * 53.0, uTime * 31.0));
+      float g2 = hash12(gl_FragCoord.xy + vec2(uTime * 97.0, uTime * 23.0));
+      float gr = (g1 - 0.5) * 0.74 + (g2 - 0.5) * 0.26;
+      float gw = 0.26 + 0.96 * smoothstep(0.012, 0.13, lum) * (1.0 - smoothstep(0.40, 0.92, lum));
+      col += gr * (uGrain + uDread * 0.045) * gw;
       col += (bayer4(gl_FragCoord.xy) - 0.5) / 255.0;
 
       gl_FragColor = vec4(max(col, 0.0), 1.0);

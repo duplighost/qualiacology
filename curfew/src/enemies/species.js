@@ -267,8 +267,18 @@ export const ROSTER = Object.keys(SPECIES);
    the pool is generous rather than tight: a corpse holds its slot for 45 s
    before it sinks, and the dread bodies are outside the cap by law and need
    their own slots. */
+// ROUND 7. The county's eighteen staged scenes hold their bodies for the life of the save —
+// cull() refuses to take a tableau that has never noticed you, which is what makes a scene
+// still be there when you come back. Lane C measured the standing demand at poacher 8/8,
+// pallbearer 8/8, standing 5/5, pale 5/6, hound 12/16: no headroom anywhere. Its checker then
+// toured fourteen scenes killing nobody and watched **the second FETCH graveyard land 0 of its
+// 3 bodies** — an empty yard where the whole point was who is in it. Three refusals county-wide,
+// all in the last third of the tour.
+//
+// Raised so the scenes fit with room for the director to still field a fight. A pool slot costs
+// a body record and its merged mesh at boot; it costs no light, no material and no program.
 export const POOL = Object.freeze({
-  hound: 16, pallbearer: 8, hunter: 3, poacher: 8, pale: 6, standing: 5,
+  hound: 18, pallbearer: 12, hunter: 3, poacher: 12, pale: 8, standing: 8,
 });
 
 /* Species allowed to answer a pressure order, in the order a budget prefers

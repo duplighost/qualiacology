@@ -62,6 +62,30 @@ import {
   CAMPFIRE_OFFSET, CAMPFIRE_NEAR_R,
 } from './placedata.js';
 import { BUILDERS, MINOR_BUILDERS, apron, beaconGeometry, GLOW } from './sites.js';
+// ROUND 7. Three lanes add to the county without editing this file. Each module exports a
+// plain map; this file only looks things up in them. A lane owns its own module outright.
+//   dress-station.js    the Filling Station's forecourt and shop        (lane A)
+//   dress-interiors.js  what stands inside the other eleven majors      (lane B)
+//   staged.js           minor sites that have somebody standing at them (lane C)
+import { DRESS as DRESS_STATION } from './dress-station.js';
+import { DRESS as DRESS_INTERIORS } from './dress-interiors.js';
+import { STAGED_BUILDERS } from './staged.js';
+
+/**
+ * Every dress module, in application order. A dress entry is keyed by a major's `kind` OR
+ * its `id` (id wins) and is called AFTER the base builder with the same api and the
+ * builder's own output, so it can read what is already there:
+ *
+ *   dress(api, out) -> { solid, glow, glowColour, cast } | null
+ *
+ * `solid` and `glow` are merged into the body's geometry; `cast` is a staged cast (below).
+ * A dress that throws is noted and skipped: the destination still builds.
+ */
+const DRESS_CHAIN = [DRESS_STATION, DRESS_INTERIORS];
+
+/** How close you have to come before a staged cast is placed. Outside the chunk residency
+ *  ring so nobody is ever seen popping into a scene in front of you. */
+const CAST_PLACE_R = 150;
 
 /* ==========================================================================
    Local constants.
@@ -75,6 +99,11 @@ import { BUILDERS, MINOR_BUILDERS, apron, beaconGeometry, GLOW } from './sites.j
 // chunk residency ring (CFG.world.fog.farWalk + CFG.world.CHUNK = 364 m) so a destination's
 // body has always been streamed out before its silhouette takes over.
 const PROXY_R = 460;
+
+// ROUND 7. How much wider than its declared `bulk` a minor site's clearing is. A scene whose
+// bulk is exactly its geometry gets a trunk standing on its rim, which from the road is
+// indistinguishable from a trunk standing in it. 1.6 m is one trunk's own radius plus a little.
+const MINOR_BULK_MARGIN = 1.6;
 
 // SKYSHARD's own numbers for a major's beacon (destinations.js:62, `_beacon(d, 92, 2.35)`).
 const BEACON_H = 92;
@@ -395,6 +424,16 @@ const FX_DARK = [0.024, 0.025, 0.028];    // the plate behind the lever
 const FX_WOOD = [0.036, 0.027, 0.020];    // a mill's, a barn's, the lighthouse's post
 const FX_STONE = [0.044, 0.044, 0.043];   // a cathedral's, a chapel's, the cemetery's
 const FX_BRASS = [0.40, 0.29, 0.11];      // the lever's blade and knob
+// ROUND 7 (NEXT.md B2). THE BACKBOARD. Round 6 proved the fixture cannot win this fight on
+// albedo: at 560 cd at arm's length the UnrealBloom of whatever is BEHIND the post — a lit
+// door at HDR ~30 — paints a wash across the middle of the frame and the grade's shoulder
+// flattens everything to one plate, at ANY albedo the post could have. So stop fighting the
+// wall and OCCLUDE it. A board behind the head, wide enough to fill the cone you are looking
+// down when you stand at the switch, at an albedo a torch cannot lift. The brass lever then
+// has a black field around it instead of a lit door, which is the whole reason the lever is
+// the one pale thing on the fixture. This is a SHAPE fix, not a brightness fix: nothing here
+// gets brighter, the background gets darker.
+const FX_BOARD = [0.010, 0.010, 0.012];   // the backboard and its cheeks: matte, nearly black
 
 function fxColour(geo, r, g, b) {
   const n = geo.attributes.position.count;
@@ -422,10 +461,27 @@ function fixtureSolid(kind) {
   const parts = [];
   const put = (geo, col, x, y, z) => { geo.translate(x, y, z); parts.push(fxColour(geo, col[0], col[1], col[2])); };
   put(new THREE.CylinderGeometry(0.055, 0.07, 1.55, 8), post, 0, 0.675, 0);          // the post, -0.1..1.45
-  put(new THREE.BoxGeometry(0.34, 0.30, 0.24), FX_RUST, 0, 1.60, 0);                  // the head
-  put(new THREE.BoxGeometry(0.26, 0.20, 0.02), FX_DARK, 0, 1.58, -0.13);              // the plate
+  put(new THREE.CylinderGeometry(0.20, 0.24, 0.10, 10), post, 0, -0.05, 0);           // the foot, so it is planted
+  // ROUND 7: the backboard and its two cheeks. It stands BEHIND the head (+Z is away from
+  // the side you walk up from) and it is the darkest thing at the site. 0.92 x 1.06 m fills
+  // most of the frame at the 1.6 m you stand to throw the lever, so what is behind it stops
+  // reaching the bloom. The cheeks give it two hard vertical edges, which is what makes a
+  // rectangle read as a made thing rather than as a hole.
+  put(new THREE.BoxGeometry(0.92, 1.06, 0.05), FX_BOARD, 0, 1.42, 0.15);              // the board
+  put(new THREE.BoxGeometry(0.06, 1.06, 0.28), FX_BOARD, -0.43, 1.42, 0.02);          // left cheek
+  put(new THREE.BoxGeometry(0.06, 1.06, 0.28), FX_BOARD, 0.43, 1.42, 0.02);           // right cheek
+  put(new THREE.BoxGeometry(0.98, 0.06, 0.34), FX_RUST, 0, 1.98, 0.02);               // the hood over it
+  put(new THREE.BoxGeometry(0.42, 0.42, 0.24), FX_RUST, 0, 1.58, 0);                  // the head
+  put(new THREE.BoxGeometry(0.36, 0.34, 0.02), FX_DARK, 0, 1.56, -0.13);              // the plate
   put(new THREE.BoxGeometry(0.08, 0.05, 0.06), FX_METAL, 0, 1.48, -0.15);             // the hinge boss
-  put(new THREE.CylinderGeometry(0.02, 0.02, 0.12, 6), FX_METAL, 0, 1.81, 0);         // the lamp stalk
+  // The lever's two throw stops, above and below the blade: the only two horizontals on the
+  // plate, so the diagonal the blade makes between them is unmistakable at a glance.
+  put(new THREE.BoxGeometry(0.14, 0.03, 0.05), FX_METAL, 0, 1.79, -0.145);            // the up stop
+  put(new THREE.BoxGeometry(0.14, 0.03, 0.05), FX_METAL, 0, 1.34, -0.145);            // the down stop
+  put(new THREE.CylinderGeometry(0.02, 0.02, 0.12, 6), FX_METAL, 0, 2.02, 0);         // the lamp stalk
+  // The pilot's bezel: a dark ring the glint bead sits inside, so an additive bead the torch
+  // cannot dim is read against something the torch cannot lift either.
+  put(new THREE.CylinderGeometry(0.10, 0.10, 0.05, 12, 1, true), FX_BOARD, 0, 2.10, 0);
   return fxMerge(parts);
 }
 
@@ -548,6 +604,13 @@ export class Places {
     // no far widening — so the fade can be measured against itself on one screen.
     this.beaconFade = true;
     this._minorsBuilt = false;    // the table is built once, by init() or by the first sightClear()
+    // ROUND 7, staged casts. _casts is the table of scenes that have somebody at them;
+    // _castDone is the set that has already been placed this save and must never be
+    // placed again when its chunk streams back in.
+    this._casts = new Map();
+    this._castDone = new Set();
+    this._yards = null;           // ROUND 7: [x, z, r^2] per major. See _buildYards.
+    this._bulks = [];             // ROUND 7: [x, z, r^2] per MINOR, from its kind's `bulk`.
     this._built = false;
     this._initDone = false;
     this.flatsRegistered = false;
@@ -1006,7 +1069,7 @@ export class Places {
       rec.moving.push(mv);
       fx.lever = mv;
       // A post you cannot walk through, emitted with the geometry like every other collider.
-      api.emit({ kind: 'circle', x: lx, z: lz, r: 0.22, y0: ly - 0.3, y1: ly + 1.75, tag: 'metal' });
+      api.emit({ kind: 'circle', x: lx, z: lz, r: 0.30, y0: ly - 0.3, y1: ly + 2.05, tag: 'metal' });
     }
 
     // The glint: on the switch's stalk for a touch row; AT the target for a shoot row. The
@@ -1017,7 +1080,7 @@ export class Places {
     // ~24.4 m from 45 m out and below ~25.3 m from 30 m on the road side, where the ground is
     // 5-7 m under the pad; 24.9 m is inside the bell's collider (23.1-25.1 m) so a shot at the
     // wink rings the bell, and above the edge from where the bell can be seen at all.
-    const gy = touch ? 1.94 : (d.kind === 'tower' ? 0.5 : 0);
+    const gy = touch ? 2.13 : (d.kind === 'tower' ? 0.5 : 0);
     const gm = this.matGlow.clone();
     gm.color.set(GLOW.lamp);
     gm.opacity = 0;
@@ -1074,6 +1137,10 @@ export class Places {
         // collision.js:565, `lx = c*dx - s*dz`), so the world yaw is a plain sum.
         const w = {
           kind: shape.kind, tag: shape.tag, standable: shape.standable,
+          // ROUND 7 (lane F, request 1a): a builder may declare its prop breakable by the car
+          // and climbable by the mantle. Dropping these silently is how a whole feature ships
+          // inert; wilds.js passes them and sites.js could not.
+          breakable: shape.breakable, climbable: shape.climbable,
           x: ox + lx * cy + lz * sy,
           z: oz - lx * sy + lz * cy,
           y0: shape.y0, y1: shape.y1,
@@ -1160,6 +1227,7 @@ export class Places {
     let out = null;
     try { out = B.body(api); } catch (e) { this._note('body ' + d.id + ' threw: ' + e.message); return null; }
     if (!out) return null;
+    out = this._dress(d, rec, api, out);
 
     const g = new THREE.Group();
     g.name = 'place-body-' + d.id;
@@ -1219,8 +1287,98 @@ export class Places {
     return body;
   }
 
+  /**
+   * ROUND 7. Run every dress module over one major's body output and merge what they
+   * return. A dress NEVER replaces the base builder — the colliders, the roof strips and
+   * the claim fixture all live there — it only adds. It may also declare a staged cast.
+   */
+  _dress(d, rec, api, out) {
+    let solid = out.solid, glow = out.glow;
+    for (let i = 0; i < DRESS_CHAIN.length; i++) {
+      const map = DRESS_CHAIN[i];
+      if (!map) continue;
+      const fn = map[d.id] || map[d.kind];
+      if (typeof fn !== 'function') continue;
+      let ex = null;
+      try { ex = fn(api, out); } catch (e) { this._note('dress ' + d.id + ' threw: ' + e.message); continue; }
+      if (!ex) continue;
+      if (ex.solid) solid = solid ? mergeGeometries([solid, ex.solid], false) : ex.solid;
+      if (ex.glow) glow = glow ? mergeGeometries([glow, ex.glow], false) : ex.glow;
+      if (ex.glowColour && !out.glowColour) out.glowColour = ex.glowColour;
+      if (ex.cast) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, ex.cast, rec.padY);
+    }
+    if (solid !== out.solid) { out.solid = solid; if (solid) solid.computeBoundingSphere(); }
+    if (glow !== out.glow) { out.glow = glow; if (glow) glow.computeBoundingSphere(); }
+    return out;
+  }
+
+  /**
+   * ROUND 7 — A STAGED CAST. Alex, sixth playtest: "like that fire near the road at the
+   * beginning. if we arrange it right, a few hunters could be around it. so it's both like
+   * environmental storytelling and a little unique place."
+   *
+   * A builder declares who is standing at its scene, in its OWN local frame, and this
+   * turns that into world positions and remembers them. Nothing is spawned at build time:
+   * the bodies are placed once, when you first come within CAST_PLACE_R, and they are
+   * placed DORMANT so the scene is a tableau until you disturb it. One cast per site for
+   * the life of the save; killing them empties the scene for good, which is the point.
+   *
+   * entries: [{ species, lx, lz, yaw, awake }]
+   */
+  _recordCast(key, ox, oz, yaw, entries, baseY) {
+    if (!entries || !entries.length || this._casts.has(key)) return;
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const cast = [];
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (!e || !e.species) continue;
+      const lx = +e.lx || 0, lz = +e.lz || 0;
+      const c = {
+        species: e.species,
+        x: ox + lx * cy + lz * sy,
+        z: oz - lx * sy + lz * cy,
+        yaw: (+e.yaw || 0) + yaw,
+        awake: !!e.awake,
+      };
+      // ROUND 7, lane B's request: `ly` is metres ABOVE THE SITE'S PAD, so a tableau can
+      // stand on a hay loft, a mezzanine or a ringing floor 13 m up and be seen from the
+      // road. Without it every scene in the county is on the ground. It holds only while
+      // the body holds its post; the moment it comes for you it walks on the terrain.
+      if (typeof e.ly === 'number' && typeof baseY === 'number') c.feetY = baseY + e.ly;
+      cast.push(c);
+    }
+    if (cast.length) this._casts.set(key, { key, x: ox, z: oz, cast, placed: false });
+  }
+
+  /** Place any staged cast the player has walked up to. Once per save, never undone. */
+  _castStep() {
+    if (!this._casts.size) return;
+    const enemies = this._sys('enemies');
+    if (!enemies || typeof enemies.spawn !== 'function') return;
+    const player = this._sys('player');
+    const p = player && player.pos ? player.pos : null;
+    if (!p) return;
+    for (const rec of this._casts.values()) {
+      if (rec.placed) continue;
+      const dx = p.x - rec.x, dz = p.z - rec.z;
+      if (dx * dx + dz * dz > CAST_PLACE_R * CAST_PLACE_R) continue;
+      rec.placed = true;
+      if (this._castDone.has(rec.key)) continue;    // already met, already dealt with
+      this._castDone.add(rec.key);
+      for (let i = 0; i < rec.cast.length; i++) {
+        const c = rec.cast[i];
+        try {
+          enemies.spawn(c.species, c.x, c.z, {
+            awake: c.awake, yaw: c.yaw, staged: true, feetY: c.feetY,
+          });
+        }
+        catch (e) { this._note('cast ' + rec.key + ' ' + c.species + ': ' + e.message); }
+      }
+    }
+  }
+
   _buildMinor(m, chunkKey) {
-    const B = MINOR_BUILDERS[m.kind];
+    const B = STAGED_BUILDERS[m.kind] || MINOR_BUILDERS[m.kind];
     if (!B) return null;
     const terrain = this._sys('terrain');
     const collision = this._sys('collision');
@@ -1238,6 +1396,7 @@ export class Places {
         const lx = +shape.x || 0, lz = +shape.z || 0;
         const w = {
           kind: shape.kind, tag: shape.tag, standable: shape.standable,
+          breakable: shape.breakable, climbable: shape.climbable,   // ROUND 7, lane F 1a
           x: m.x + lx * cy + lz * sy,
           z: m.z - lx * sy + lz * cy,
           y0: shape.y0, y1: shape.y1,
@@ -1246,6 +1405,8 @@ export class Places {
         else w.r = shape.r;
         return collision.addCollider(w, 'place:' + chunkKey);
       },
+      // ROUND 7: who is standing at this scene. See _recordCast. Local frame, like emit().
+      cast: (entries) => this._recordCast('minor:' + m.kind + ':' + m.i, m.x, m.z, m.yaw, entries, padY),
     };
     let k = null;
     try { k = B(api); } catch (e) { this._note('minor ' + m.kind + ' threw: ' + e.message); return null; }
@@ -1450,6 +1611,16 @@ export class Places {
       const age = hub ? clamp01(Math.hypot(mx - hub.x, mz - hub.z) / 1650) : 0.5;
       const rec = { i: idx++, kind, x: mx, z: mz, yaw, age };
       this.minors.push(rec);
+      // ROUND 7, lane C: a pine stands in the middle of the lych-gate, and another through the
+      // ring of dug-out graves — the same bug as round 6's manor with a forest growing through
+      // it, one scale down. BULK has been on every MINOR_KINDS row since round 5 and NOTHING
+      // ANYWHERE READ IT. It is exactly the keep-out radius flora needs, declared honestly by
+      // each kind (1.0 a waystone, 9.5 the graveyard), so sightClear answers TRUE inside it.
+      // A little margin over the declared bulk, so a trunk does not stand on the rim either.
+      if (kdef && kdef.bulk > 0) {
+        const r = kdef.bulk + MINOR_BULK_MARGIN;
+        this._bulks.push(mx, mz, r * r);
+      }
       // A LIT kind (placedata: the campfire) joins the proximity list. Keyed on the table's
       // own flag, not on offRoad, so a future off-road prop that is not a fire does not
       // broadcast lit: true. The id string is made HERE, once: the heartbeat in step()
@@ -1582,11 +1753,73 @@ export class Places {
       const dx = x - f.x, dz = z - f.z;
       if (dx * dx + dz * dz < CAMPFIRE_CLEAR_R * CAMPFIRE_CLEAR_R) return true;
     }
+    // ROUND 7 (NEXT.md B1, written out in docs/ROUND-6/HANDOFF-D2.md item 1). A major's
+    // yard is a clearing. Until this clause existed the forest was planted straight
+    // THROUGH every destination: 116 trunks inside Blackthorn Manor's footprint, a pine
+    // through the grand foyer, 26 within 12 m of the Filling Station's centre. A row's
+    // clearR wins; otherwise the level core of the disc it stands on, which is exactly
+    // where its buildings are.
+    const yards = this._yards || this._buildYards();
+    for (let k = 0; k < yards.length; k += 3) {
+      const dx = x - yards[k], dz = z - yards[k + 1];
+      if (dx * dx + dz * dz < yards[k + 2]) return true;
+    }
+    // ROUND 7: a minor site own bulk. The table is built by _buildMinorTable, which the
+    // campfire loop above has already forced, so this is never stale.
+    const bulks = this._bulks;
+    for (let k = 0; k < bulks.length; k += 3) {
+      const dx = x - bulks[k], dz = z - bulks[k + 1];
+      if (dx * dx + dz * dz < bulks[k + 2]) return true;
+    }
     const N = this._sightN, HALF = this._sightHalf;
     const i = Math.floor((x + HALF) / SIGHT_CELL);
     const j = Math.floor((z + HALF) / SIGHT_CELL);
     if (i < 0 || j < 0 || i >= N || j >= N) return false;
     return this._sightGrid[j * N + i] === 1;
+  }
+
+  /**
+   * ROUND 7. The yard table: [x, z, r^2] per major, built once. A row's own `clearR` wins;
+   * otherwise the LEVEL CORE of whatever disc it stands on, which is exactly where its
+   * buildings are. Two rows (the Filling Station and the Weeping Mine) carry `flat: null`
+   * with a `flatId` because roads.js authored their disc first and two discs on one spot
+   * fight — so those are resolved against terrain's own flat table rather than being answered
+   * zero, which is what a first cut of this did and it left the START AREA, the one place he
+   * complained about, as the one place still planted through.
+   */
+  _buildYards() {
+    const terrain = this._sys('terrain');
+    const flats = terrain && terrain.flats ? terrain.flats() : null;
+    const out = [];
+    for (let k = 0; k < MAJORS.length; k++) {
+      const d = MAJORS[k];
+      let r = +d.clearR || 0;
+      if (!r && d.flat) r = d.flat.radius * d.flat.blend;
+      if (!r && d.flatId && flats) {
+        for (let i = 0; i < flats.length; i++) {
+          // terrain publishes the level core as `rim` (= r * blend, terrain.js:241).
+          if (flats[i].id === d.flatId) { r = flats[i].rim || flats[i].r * 0.72; break; }
+        }
+      }
+      if (r > 0) out.push(d.x, d.z, r * r);
+      else this._note('no clearing for ' + d.id + ': the forest will plant through it');
+    }
+    // Cached only once terrain could answer; otherwise it is rebuilt next call, because
+    // flora (#9) plants the boot ring before this system's init (#10) has run.
+    if (flats) this._yards = out;
+    return out;
+  }
+
+  /** The yards, for tests and tools: [{ id, x, z, r }]. Allocates; off the hot path. */
+  yards() {
+    const t = this._yards || this._buildYards();
+    const out = [];
+    for (let k = 0, i = 0; k < t.length; k += 3) {
+      while (i < MAJORS.length && !(Math.abs(MAJORS[i].x - t[k]) < 1e-6 && Math.abs(MAJORS[i].z - t[k + 1]) < 1e-6)) i++;
+      out.push({ id: i < MAJORS.length ? MAJORS[i].id : '?', x: t[k], z: t[k + 1], r: +Math.sqrt(t[k + 2]).toFixed(1) });
+      i = 0;
+    }
+    return out;
   }
 
   /** The corridor list, for tests and tools. Never mutated by anything downstream. */
@@ -1651,6 +1884,7 @@ export class Places {
     // exact moment boot hands over (main.js:532) and is a scalar read lazily, at use.
     // The props below keep turning through boot on purpose: they want to be warm.
     if (this.ctx && this.ctx.ready) this._proximity(dt);
+    if (this.ctx && this.ctx.ready) this._castStep();
 
     // --- the things that turn --------------------------------------------
     for (let n = 0; n < this._nodeList.length; n++) {
