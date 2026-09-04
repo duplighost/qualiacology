@@ -74,6 +74,18 @@ const C = {
   paper: [0.320, 0.306, 0.270],
 };
 
+// Ordinary climb props live close to the torch, where the broad site palette can wash into
+// pale blocks. These darker, desaturated finishes are confined to the new service routes and
+// wreck shells; mapped destination weather still supplies their small-scale grain.
+const ORDINARY = Object.freeze({
+  timber: Object.freeze([0.072, 0.052, 0.035]),
+  timberAlt: Object.freeze([0.108, 0.077, 0.048]),
+  char: Object.freeze([0.032, 0.033, 0.034]),
+  iron: Object.freeze([0.060, 0.065, 0.071]),
+  rust: Object.freeze([0.096, 0.070, 0.054]),
+  rustDark: Object.freeze([0.054, 0.043, 0.037]),
+});
+
 /* ==========================================================================
    GLOW FALLOFF — the difference between a light and a decal.
 
@@ -398,6 +410,89 @@ function shell(k, api, ox, oz, w, d, h, yaw, col, doorW) {
   put((gap + side) * 0.5, -hd, side, t);
   // lintel over the doorway, so the opening reads as a door and not as a missing wall
   k.box(gap, 0.5, t, ox + (-hd) * sy, api.padY + h - 0.25, oz + (-hd) * cy, col, yaw);
+}
+
+/**
+ * A short, visible route onto one eave of a SMALL shell.
+ *
+ * The roof itself remains a pitched roof, not an invisible flat floor. Four made things
+ * explain every top collision instead: split firewood, a square packing crate, a braced
+ * service awning, and a narrow plank walk fixed under one eave. They rise in a readable
+ * chain beside the right wall. The route is authored only onto selected huts/outbuildings;
+ * calling this from shell() would turn every gable in the county into the same staircase.
+ */
+function smallShellRoute(k, api, ox, oz, w, d, h, yaw) {
+  const hw = w * 0.5, hd = d * 0.5;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const put = (lx, lz) => ({
+    x: ox + lx * cy + lz * sy,
+    z: oz - lx * sy + lz * cy,
+  });
+  const box = (sw, sh, sd, lx, y, lz, col, rz) => {
+    const p = put(lx, lz);
+    k.box(sw, sh, sd, p.x, y, p.z, col, yaw, 0, rz || 0);
+    return p;
+  };
+  const floor = (sw, sd, lx, lz, top, col, tag) => {
+    const p = box(sw, 0.14, sd, lx, top - 0.07, lz, col);
+    api.emit({
+      kind: 'obb', x: p.x, z: p.z, halfX: sw * 0.5, halfZ: sd * 0.5, yaw,
+      y0: top - 0.14, y1: top, tag: tag || 'wood', standable: true,
+    });
+    return p;
+  };
+
+  const woodX = hw + 1.42, woodZ = -hd + 0.58, woodTop = api.padY + 0.42;
+  for (let i = 0; i < 6; i++) {
+    const row = i > 2 ? 1 : 0, slot = i % 3;
+    box(0.24, 0.20, 0.82, woodX + (slot - 1) * 0.28,
+      api.padY + 0.10 + row * 0.22, woodZ,
+      i & 1 ? ORDINARY.timber : ORDINARY.timberAlt, (slot - 1) * 0.04);
+  }
+  const wp = put(woodX, woodZ);
+  api.emit({ kind: 'obb', x: wp.x, z: wp.z, halfX: 0.52, halfZ: 0.47, yaw,
+    y0: api.padY - 0.2, y1: woodTop, tag: 'wood', standable: true });
+
+  const crateX = hw + 1.40, crateZ = -hd + 1.62, crateTop = api.padY + 1.08;
+  box(0.88, 1.02, 0.88, crateX, api.padY + 0.51, crateZ, ORDINARY.timberAlt);
+  box(0.92, 0.07, 0.92, crateX, crateTop - 0.035, crateZ, ORDINARY.timber);
+  for (const s of [-1, 1]) box(0.09, 0.92, 0.92, crateX + s * 0.32,
+    api.padY + 0.51, crateZ, ORDINARY.timber);
+  // Two face braces sit below the exact top; silhouette and standable rectangle stay unchanged.
+  for (const face of [-1, 1]) box(0.09, 0.86, 0.045, crateX,
+    api.padY + 0.50, crateZ + face * 0.455, ORDINARY.timber, face * 0.58);
+  const cp = put(crateX, crateZ);
+  api.emit({ kind: 'obb', x: cp.x, z: cp.z, halfX: 0.46, halfZ: 0.46, yaw,
+    y0: api.padY - 0.2, y1: crateTop, tag: 'wood', standable: true });
+
+  const awnTop = api.padY + Math.min(1.76, h - 0.70);
+  const awnX = hw + 0.98, awnZ = -hd + 2.72;
+  floor(1.62, 2.38, awnX, awnZ, awnTop, ORDINARY.timberAlt, 'wood');
+  for (const dx of [-0.60, -0.20, 0.20, 0.60]) {
+    box(0.045, 0.045, 2.34, awnX + dx, awnTop - 0.115, awnZ, ORDINARY.char);
+  }
+  // Two posts and diagonal knees make the floor read as an awning, not a hovering shelf.
+  for (const lz of [awnZ - 0.90, awnZ + 0.90]) {
+    const p = put(hw + 1.62, lz);
+    k.box(0.12, awnTop - api.padY, 0.12, p.x,
+      (api.padY + awnTop) * 0.5, p.z, ORDINARY.timber, yaw);
+    const q = put(hw + 1.22, lz);
+    k.box(0.10, 0.92, 0.10, q.x, awnTop - 0.42, q.z, ORDINARY.timberAlt, yaw, 0, -0.70);
+  }
+
+  // A real horizontal maintenance strip below ONE eave. Nothing claims the gable pitches.
+  const eaveTop = api.padY + h;
+  const eaveX = hw + 0.42, eaveZ = -hd + Math.min(d - 1.0, 3.32);
+  const eaveD = Math.min(3.25, d - 0.55);
+  floor(1.12, eaveD, eaveX, eaveZ, eaveTop, ORDINARY.timberAlt, 'wood');
+  for (const dx of [-0.40, 0, 0.40]) {
+    box(0.045, 0.045, eaveD - 0.04, eaveX + dx, eaveTop - 0.115,
+      eaveZ, ORDINARY.char);
+  }
+  for (const dz of [-1.0, 1.0]) {
+    const p = put(hw + 0.70, eaveZ + dz);
+    k.box(0.10, 1.25, 0.10, p.x, eaveTop - 0.62, p.z, ORDINARY.timber, yaw, 0, -0.48);
+  }
 }
 
 /**
@@ -949,6 +1044,7 @@ export const BUILDERS = {
       k.solid.box(11.6, 0.4, 11.6, 0, api.padY + 0.2, 0, C.ash);
       shell(k.solid, api, -7.5, 6.5, 6, 5, 3.0, 0, C.plaster, 2.0);
       k.solid.gable(6.4, 5.4, api.padY + 3.0, 0.7, -7.5, 0, 6.5, C.slate, 0);
+      smallShellRoute(k.solid, api, -7.5, 6.5, 6, 5, 3.0, 0);
       const c = api.site.claim;
       k.solid.box(1.2, 1.7, 0.6, c.dx, api.padY + 0.85, c.dz, C.metal);
       k.solid.quad(0.9, 1.2, c.dx, api.padY + 0.95, c.dz - 0.32, C.dark);
@@ -1445,6 +1541,7 @@ export const BUILDERS = {
       // the keeper's cottage
       shell(k.solid, api, 9, 3, 9, 6.5, 3.4, 0.3, C.plaster, 2.2);
       k.solid.gable(9.6, 7.0, api.padY + 3.4, 1.2, 9, 0, 3, C.slate, 0.3);
+      smallShellRoute(k.solid, api, 9, 3, 9, 6.5, 3.4, 0.3);
       k.glow.pane(1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, PANE_WINDOW, Math.PI + 0.3, 0, 6, 5);
       sash(k.solid, 1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, C.dark, Math.PI + 0.3, 0, 2, 2, 0.07, 0.09);
       // ROUND 6: the claim is the lamp at the top of the stair (landmark). The door at the
@@ -1504,6 +1601,7 @@ export const BUILDERS = {
       // lean-to, millstones, a cart
       shell(k.solid, api, 7.5, 4.5, 7, 5, 2.8, 0.6, C.plank, 2.0);
       k.solid.gable(7.4, 5.4, api.padY + 2.8, 0.8, 7.5, 0, 4.5, C.slate, 0.6);
+      smallShellRoute(k.solid, api, 7.5, 4.5, 7, 5, 2.8, 0.6);
       for (let i = 0; i < 3; i++) {
         k.solid.cyl(1.15, 1.15, 0.3, 12, -6 + i * 2.6, api.padY + 0.15, 7 + i * 0.7, C.stone);
       }
@@ -1556,8 +1654,12 @@ export const BUILDERS = {
       const MAUS = [[-10, -6], [0, 14], [10, 2]];
       for (let i = 0; i < 3; i++) {
         const lx = MAUS[i][0], lz = MAUS[i][1];
-        shell(k.solid, api, lx, lz, 4.0, 4.6, 3.0, api.rng.range(-0.2, 0.2), C.stone, 1.4);
-        k.solid.gable(4.4, 5.0, api.padY + 3.0, 0.9, lx, 0, lz, C.slate, 0);
+        const mausYaw = api.rng.range(-0.2, 0.2);
+        shell(k.solid, api, lx, lz, 4.0, 4.6, 3.0, mausYaw, C.stone, 1.4);
+        k.solid.gable(4.4, 5.0, api.padY + 3.0, 0.9, lx, 0, lz, C.slate, mausYaw);
+        // One sexton's service route is enough; repeating it on all three would turn the
+        // graveyard into an obstacle course and erase the mausolea's different reads.
+        if (i === 1) smallShellRoute(k.solid, api, lx, lz, 4.0, 4.6, 3.0, mausYaw);
       }
       k.glow.pane(0.7, 1.0, 0, api.padY + 2.6, 11.5, PANE_LAMP, Math.PI, 0, 6, 8);
       // dead trees, because a cemetery with living trees is a park. 15-22 m out, which is
@@ -2223,32 +2325,51 @@ export const MINOR_BUILDERS = {
   fence(api) {
     const k = kits();
     const n = 7;
-    let gy0 = api.padY, gyN = api.padY;
-    k.solid.open();                    // ROUND 7: the whole run is one thing a car takes out
+    let vaultTop = api.padY + 0.82;
     for (let i = 0; i < n; i++) {
       const lx = (i - (n - 1) * 0.5) * 2.3;
-      const down = api.rng.next() < 0.34;
+      // The centre bay is the guaranteed readable vault. Other bays may have fallen, so
+      // this still looks abandoned without making the interaction depend on one RNG draw.
+      const fell = api.rng.next() < 0.34;
+      const down = i === 3 ? false : fell;
       const h = down ? 0.3 : api.rng.range(1.0, 1.4);
       const gy = groundY(api, lx, 0);
-      if (i === 0) gy0 = gy;
-      if (i === n - 1) gyN = gy;
+      const lean = down ? api.rng.range(0.9, 1.5) : api.rng.range(-0.1, 0.1);
+      // Each visible post is its own break part and collider. The former one-box collider
+      // filled every open bay from earth to rail and made a 16 m invisible wall; it also
+      // meant clipping one end with the car erased the entire fence at once.
+      k.solid.open();
       k.solid.cyl(0.08, 0.10, h + 0.3, 5, lx, gy + h * 0.5 - 0.15, 0, C.wood,
-        0, down ? api.rng.range(0.9, 1.5) : api.rng.range(-0.1, 0.1), api.rng.range(-0.12, 0.12));
+        0, lean, api.rng.range(-0.12, 0.12));
+      k.solid.close(lx, 0, down ? 0.34 : 0.22, C.wood);
+      api.emit({
+        kind: 'circle', x: lx, z: 0, r: down ? 0.32 : 0.14,
+        y0: gy - 0.2, y1: gy + (down ? 0.34 : h), tag: 'fence', climbable: false,
+      });
       if (i < n - 1 && !down) {
-        k.solid.box(2.3, 0.10, 0.06, lx + 1.15, groundY(api, lx + 1.15, 0) + h * 0.66, 0, C.wood,
-          0, 0, api.rng.range(-0.06, 0.06));
+        const rx = lx + 1.15;
+        const railY = groundY(api, rx, 0) + h * 0.66;
+        k.solid.open();
+        k.solid.box(2.3, 0.10, 0.08, rx, railY, 0, C.wood);
+        k.solid.close(rx, 0, 1.18, C.wood);
+        // This thin suspended bar is the actual vault target: its 0.71--0.97 m top is in
+        // the waist-high band, its far side is genuinely empty, and standable deliberately
+        // overrides the usual no-climb rule for breakables. There is no filled floor below.
+        api.emit({
+          kind: 'obb', x: rx, z: 0, halfX: 1.15, halfZ: 0.04, yaw: 0,
+          y0: railY - 0.05, y1: railY + 0.05, tag: 'fence', standable: true,
+        });
+        if (i === 3) vaultTop = railY + 0.05;
       }
     }
-    k.solid.close(0, 0, 8.4, C.wood);
-    // one collider for the run, spanning from the lower end to the top of the higher one
-    const lo = Math.min(gy0, gyN), hi = Math.max(gy0, gyN);
-    // yaw 0, NOT api.yaw: emit() composes the shape's yaw with the site's own
-    // (places.js _buildMinor), so passing api.yaw here turned the collider twice and left
-    // an invisible wall lying across the road at double the fence's angle.
-    api.emit({
-      kind: 'obb', x: 0, z: 0, halfX: 8.2, halfZ: 0.18, yaw: 0,
-      y0: lo - 0.2, y1: hi + 1.1, tag: 'fence',
-    });
+    // Local-space audit hint. The body is still discovered through collision; this merely
+    // names the guaranteed bay so a natural-input proof need not guess which rail survived.
+    api.site.parkourRoute = {
+      kind: 'vault', space: 'local',
+      approach: { x: 1.15, z: 2.35, y: groundY(api, 1.15, 2.35) },
+      target: { x: 1.15, z: 0, y: vaultTop },
+      exit: { x: 1.15, z: -1.65, y: groundY(api, 1.15, -1.65) },
+    };
     // ROUND 7: the gatepost furniture. A letterbox at one end and a county sign at the
     // other, each its own collider and its own part, so a pass down the verge takes three
     // separate things and the road looks like you were here.
@@ -2382,13 +2503,54 @@ export const MINOR_BUILDERS = {
   wreck(api) {
     const k = kits();
     const yaw = api.rng.range(0, TAU);
-    k.solid.box(4.3, 0.85, 1.85, 0, api.padY + 0.62, 0, C.rust, yaw, 0, api.rng.range(-0.12, 0.12));
-    k.solid.box(2.1, 0.75, 1.70, -0.25, api.padY + 1.32, 0, C.dark, yaw);
+    const roll = api.rng.range(-0.12, 0.12);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const put = (x, z) => ({ x: x * cy + z * sy, z: -x * sy + z * cy });
+    // Layered stamped shell reaches the exact old envelope but loses the single toy-block face.
+    k.solid.box(4.30, 0.28, 1.85, 0, api.padY + 0.24, 0, ORDINARY.rustDark, yaw, 0, roll);
+    k.solid.box(4.06, 0.34, 1.78, -0.02, api.padY + 0.49, 0, ORDINARY.rust, yaw, 0, roll);
+    k.solid.box(3.82, 0.22, 1.72, -0.08, api.padY + 0.77, 0, ORDINARY.rustDark, yaw, 0, roll);
+    const cab = put(-0.25, 0);
+    k.solid.box(2.1, 0.75, 1.70, cab.x, api.padY + 1.32, cab.z, ORDINARY.char, yaw);
+    k.solid.box(1.72, 0.08, 1.40, cab.x, api.padY + 1.655, cab.z, ORDINARY.iron, yaw);
+    for (const px of [-1.28, 0.78]) {
+      const p = put(px, 0);
+      k.solid.box(0.055, 0.48, 1.42, p.x, api.padY + 1.34, p.z, C.glass,
+        yaw, 0, px < 0 ? -0.16 : 0.16);
+    }
+    // A buckled but horizontal bonnet skin gives the player the surface the silhouette
+    // promises. The body underneath stays canted; only the made, visible plate is flat.
+    const hood = put(1.42, 0);
+    k.solid.box(1.34, 0.10, 1.50, hood.x, api.padY + 1.07, hood.z, ORDINARY.rustDark, yaw);
+    // Side glass, rockers, stamped seams and steel bumpers turn the merged cuboids into a car
+    // without lifting any dressing above its existing standable hood/cabin tops.
+    for (const side of [-1, 1]) {
+      let p = put(-0.25, side * 0.87);
+      k.solid.box(1.44, 0.42, 0.045, p.x, api.padY + 1.34, p.z, C.glass, yaw);
+      p = put(-0.10, side * 0.94);
+      k.solid.box(3.70, 0.14, 0.055, p.x, api.padY + 0.36, p.z, ORDINARY.rustDark, yaw);
+      for (const sx of [-0.94, 0.48]) {
+        p = put(sx, side * 0.945);
+        k.solid.box(0.045, 0.54, 0.04, p.x, api.padY + 0.76, p.z, ORDINARY.char, yaw);
+      }
+    }
+    for (const sx of [-2.13, 2.13]) {
+      const p = put(sx, 0);
+      k.solid.box(0.13, 0.16, 1.72, p.x, api.padY + 0.45, p.z, ORDINARY.iron, yaw);
+    }
+    for (const sx of [1.08, 1.40, 1.72]) {
+      const p = put(sx, 0);
+      k.solid.box(0.045, 0.11, 1.46, p.x, api.padY + 1.045, p.z, ORDINARY.iron, yaw);
+    }
     for (let i = 0; i < 4; i++) {
       const sx = (i & 1) ? 1.5 : -1.5, sz = (i & 2) ? 0.85 : -0.85;
-      const wx = sx * Math.cos(yaw) + sz * Math.sin(yaw);
-      const wz = -sx * Math.sin(yaw) + sz * Math.cos(yaw);
-      k.solid.tube(0.33, 0.33, 0.22, 8, wx, api.padY + 0.33, wz, C.dark, 0, 0, Math.PI * 0.5);
+      const wheel = put(sx, sz);
+      const wx = wheel.x;
+      const wz = wheel.z;
+      k.solid.tube(0.34, 0.34, 0.24, 10, wx, api.padY + 0.33, wz,
+        ORDINARY.char, yaw, Math.PI * 0.5, 0);
+      k.solid.cyl(0.13, 0.13, 0.255, 8, wx, api.padY + 0.33, wz,
+        ORDINARY.iron, yaw, Math.PI * 0.5, 0);
     }
     // the headlight, on the front-left corner in the car's own frame
     const hx = 2.16 * Math.cos(yaw) + 0.6 * Math.sin(yaw);
@@ -2396,7 +2558,15 @@ export const MINOR_BUILDERS = {
     k.glow.pane(0.42, 0.30, hx, api.padY + 0.72, hz, PANE_LAMP, yaw + Math.PI * 0.5, 0, 6, 5);
     api.emit({
       kind: 'obb', x: 0, z: 0, halfX: 2.2, halfZ: 0.95, yaw,
-      y0: api.padY - 0.2, y1: api.padY + 1.7, tag: 'vehicle',
+      y0: api.padY - 0.2, y1: api.padY + 1.00, tag: 'vehicle',
+    });
+    api.emit({
+      kind: 'obb', x: hood.x, z: hood.z, halfX: 0.67, halfZ: 0.75, yaw,
+      y0: api.padY + 1.02, y1: api.padY + 1.12, tag: 'vehicle', standable: true,
+    });
+    api.emit({
+      kind: 'obb', x: cab.x, z: cab.z, halfX: 1.05, halfZ: 0.85, yaw,
+      y0: api.padY + 0.945, y1: api.padY + 1.695, tag: 'vehicle', standable: true,
     });
     k.flicker = { x: hx, y: api.padY + 0.72, z: hz };
     verge(k, api, 3);

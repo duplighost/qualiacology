@@ -101,6 +101,36 @@ function deck(k, api, x, z, w, d, top, col = OLD_WOOD, yaw = 0, legs = true) {
   }
 }
 
+/**
+ * A route tread with the exact same OBB as `deck`, but a separated merged plank mesh.
+ * Tiny visual seams and irregular fascia stop a climb from reading as stacked shipping
+ * crates; collision remains the original single rectangle so Space traversal is unchanged.
+ */
+function routeDeck(k, api, x, z, w, d, top, col = OLD_WOOD, yaw = 0, trim = TAR) {
+  api.emit({
+    kind: 'obb', x, z, halfX: w * 0.5, halfZ: d * 0.5, yaw,
+    y0: api.padY + top - 0.18, y1: api.padY + top,
+    tag: 'wood', standable: true,
+  });
+  const f = frame(x, z, yaw), gap = 0.035;
+  const boardW = (w - gap * 3) / 4;
+  for (let p = 0; p < 4; p++) {
+    const lx = -w * 0.5 + boardW * 0.5 + p * (boardW + gap);
+    const px = f.x(lx, 0), pz = f.z(lx, 0);
+    k.box(boardW, 0.16, d, px, api.padY + top - 0.08, pz,
+      p === 1 || p === 3 ? col : trim, yaw);
+    for (const lz of [-d * 0.5 + 0.06, d * 0.5 - 0.06]) {
+      k.box(boardW - 0.025, 0.16 + ((p + (lz > 0 ? 1 : 0)) & 1) * 0.045,
+        0.115, f.x(lx, lz), api.padY + top - 0.225, f.z(lx, lz),
+        (p + (lz > 0 ? 1 : 0)) % 3 === 0 ? trim : col, yaw);
+    }
+  }
+  for (const lx of [-w * 0.32, 0, w * 0.32]) {
+    k.box(0.10, 0.21, d - 0.08, f.x(lx, 0), api.padY + top - 0.245,
+      f.z(lx, 0), trim, yaw);
+  }
+}
+
 /** Low risers, usable in either direction, ending at `top` and running along local +z. */
 function steps(k, api, x, z, w, top, yaw = 0, col = OLD_STONE) {
   const n = Math.max(2, Math.ceil(top / 0.40));
@@ -111,6 +141,74 @@ function steps(k, api, x, z, w, top, yaw = 0, col = OLD_STONE) {
     const lz = (i - (n - 1)) * tread;
     const px = f.x(0, lz), pz = f.z(0, lz);
     solidBox(k, api, w, h, tread + 0.05, px, h * 0.5, pz, col, yaw, 'stone', true);
+  }
+}
+
+/** Same step OBBs as `steps`, surfaced as dry-laid courses with an exact-height cap. */
+function coursedSteps(k, api, x, z, w, top, yaw = 0, col = OLD_STONE,
+  accent = GRIME) {
+  const n = Math.max(2, Math.ceil(top / 0.40));
+  const rise = top / n, tread = 0.56;
+  const f = frame(x, z, yaw);
+  for (let i = 0; i < n; i++) {
+    const h = rise * (i + 1), lz = (i - (n - 1)) * tread;
+    const px = f.x(0, lz), pz = f.z(0, lz), d = tread + 0.05;
+    api.emit({
+      kind: 'obb', x: px, z: pz, halfX: w * 0.5, halfZ: d * 0.5, yaw,
+      y0: api.padY, y1: api.padY + h, tag: 'stone', standable: true,
+    });
+    const bodyH = Math.max(0.04, h - 0.055), rows = Math.max(1, Math.ceil(bodyH / 0.27));
+    const rowH = bodyH / rows, sf = frame(px, pz, yaw);
+    for (let r = 0; r < rows; r++) {
+      const inset = ((r + i) % 3) * 0.018;
+      const rowW = w - inset * 2, blocks = 2 + ((r + i) & 1), seam = 0.026;
+      const blockW = (rowW - seam * (blocks - 1)) / blocks;
+      for (let b = 0; b < blocks; b++) {
+        const chip = (r + b + i) % 5 === 0 ? 0.055 : 0;
+        const lx = -rowW * 0.5 + blockW * 0.5 + b * (blockW + seam)
+          + (b === 0 ? chip * 0.5 : (b === blocks - 1 ? -chip * 0.5 : 0));
+        k.box(blockW - chip, Math.max(0.025, rowH - 0.012), d - inset,
+          sf.x(lx, 0), api.padY + r * rowH + (rowH - 0.012) * 0.5,
+          sf.z(lx, 0), (r + b + i) % 4 === 0 ? accent : col, yaw);
+      }
+    }
+    const capGap = 0.026, capW = (w - capGap * 2) / 3;
+    for (let c = 0; c < 3; c++) {
+      const lx = -w * 0.5 + capW * 0.5 + c * (capW + capGap);
+      k.box(capW, 0.055, d, sf.x(lx, 0), api.padY + h - 0.0275,
+        sf.z(lx, 0), (i + c) % 3 === 0 ? accent : col, yaw);
+    }
+  }
+}
+
+/** One unchanged stone OBB represented by broken masonry courses rather than a cuboid. */
+function memorialPlinth(k, api, w, h, d, x, base, z, col, yaw = 0) {
+  api.emit({
+    kind: 'obb', x, z, halfX: w * 0.5, halfZ: d * 0.5, yaw,
+    y0: api.padY + base, y1: api.padY + base + h, tag: 'stone', standable: true,
+  });
+  const bodyH = Math.max(0.04, h - 0.07), rows = Math.max(1, Math.ceil(bodyH / 0.34));
+  const rowH = bodyH / rows, f = frame(x, z, yaw);
+  for (let r = 0; r < rows; r++) {
+    const inset = ((r * 2 + rows) % 3) * 0.020;
+    const rowW = w - inset * 2, rowD = d - inset;
+    const blocks = 2 + (r & 1), seam = 0.024;
+    const blockD = (rowD - seam * (blocks - 1)) / blocks;
+    for (let b = 0; b < blocks; b++) {
+      const chip = (r * 3 + b) % 7 === 0 ? 0.065 : 0;
+      const lz = -rowD * 0.5 + blockD * 0.5 + b * (blockD + seam)
+        + (b === 0 ? chip * 0.5 : (b === blocks - 1 ? -chip * 0.5 : 0));
+      k.box(rowW - chip, Math.max(0.025, rowH - 0.014), blockD,
+        f.x(-chip * 0.25, lz), api.padY + base + r * rowH + (rowH - 0.014) * 0.5,
+        f.z(-chip * 0.25, lz), (r + b) % 5 === 0 ? GRIME : col, yaw);
+    }
+  }
+  const capGap = 0.030, capD = (d - capGap) * 0.5;
+  for (let c = 0; c < 2; c++) {
+    const lz = (c ? 1 : -1) * (capD + capGap) * 0.5;
+    const chip = c === (rows & 1) ? 0.055 : 0;
+    k.box(w - chip, 0.07, capD, f.x(-chip * 0.25, lz),
+      api.padY + base + h - 0.035, f.z(-chip * 0.25, lz), MORTAR, yaw);
   }
 }
 
@@ -192,9 +290,12 @@ function trail(k, api, points, width, colA, colB) {
 /** Visible physical cache. It is scenery beside the real claim, never a second pickup. */
 function openCache(k, api, x, z, yaw, family, contents) {
   const f = frame(x, z, yaw), gy = localGround(api, x, z);
-  solidBox(k, api, 1.55, 0.58, 0.84, x, gy + 0.29, z, family, yaw, 'metal', true);
+  solidBox(k, api, 1.55, 0.58, 0.84, x, gy + 0.29, z, family, yaw, 'metal', false);
   k.box(1.50, 0.10, 0.78, f.x(0, 0.34), api.padY + gy + 0.96, f.z(0, 0.34), family, yaw, -0.72);
   k.box(1.30, 0.08, 0.64, x, api.padY + gy + 0.62, z, COAL, yaw);
+  api.emit({ kind: 'obb', x, z, halfX: 0.65, halfZ: 0.32, yaw,
+    y0: api.padY + gy + 0.58, y1: api.padY + gy + 0.66,
+    tag: 'metal', standable: true });
   for (let i = 0; i < contents; i++) {
     const lx = -0.48 + (i % 4) * 0.32, lz = -0.18 + Math.floor(i / 4) * 0.30;
     const px = f.x(lx, lz), pz = f.z(lx, lz);
@@ -281,6 +382,60 @@ function weepingMine(api) {
       S.cyl(0.42, 0.42, 0.18, 10, px, api.padY + gy + 0.44, pz, COAL, yaw, 0, Math.PI * 0.5);
     }
   }
+
+  // An ore inspector can now climb the thing that dominates the mine's silhouette. A
+  // narrow, braced stair-scaffold rises along the tipple's open south-east leg and lands
+  // on the REAL 8.2 m sorting deck. The route is deliberately outside the tram/claim line.
+  const mineStages = [];
+  const mineX = -4.95, mineStartZ = -5.45, mineCount = 9;
+  const mineLow = Math.max(0.62, localGround(api, mineX, mineStartZ - 1.25) + 0.62);
+  for (let i = 0; i < mineCount; i++) {
+    const t = i / (mineCount - 1);
+    const z = mineStartZ + i * 1.08;
+    const top = mineLow + (8.2 - mineLow) * t;
+    routeDeck(S, api, mineX, z, 1.82, 1.34, top,
+      i % 3 === 0 ? OXIDE : OLD_WOOD, 0, i & 1 ? IRON : TAR);
+    // The route used to read as nine copies of one tan crate. Riveted face straps and an
+    // alternating diagonal turn the same exact tread hull into a tipple inspection stair.
+    // These are merged surface pieces only; collision remains the deck above.
+    const mineFaceZ = z - 0.681;
+    for (const sx of [-0.56, 0, 0.56]) {
+      S.box(0.055, 0.20, 0.032, mineX + sx, api.padY + top - 0.235,
+        mineFaceZ, i & 1 ? IRON : TAR);
+      S.box(0.095, 0.035, 0.038, mineX + sx, api.padY + top - 0.135,
+        mineFaceZ - 0.004, OXIDE);
+    }
+    beamBetween(S, api,
+      [mineX + (i & 1 ? -0.70 : 0.70), top - 0.35, mineFaceZ - 0.012],
+      [mineX + (i & 1 ? 0.70 : -0.70), top - 0.16, mineFaceZ - 0.012],
+      0.024, i % 3 ? OXIDE : IRON, 4);
+    for (const sx of [-0.70, 0.70]) {
+      const gy = localGround(api, mineX + sx, z);
+      const h = Math.max(0.30, top - gy - 0.17);
+      S.box(0.12, h, 0.12, mineX + sx, api.padY + gy + h * 0.5,
+        z, i & 1 ? TAR : IRON);
+    }
+    if (i > 0) {
+      const prev = mineStages[i - 1];
+      for (const sx of [-0.78, 0.78]) beamBetween(S, api,
+        [mineX + sx, prev.top - 0.18, prev.z],
+        [mineX + sx, top - 0.18, z], 0.055, i & 1 ? OXIDE : TAR, 4);
+    }
+    mineStages.push({ x: mineX, z, top });
+  }
+  // The last tread overlaps the existing tipple deck in both axes; no invisible bridge is
+  // needed at the join. A pair of guard standards tells the player this is intentional.
+  for (const x of [mineX - 0.78, mineX + 0.78]) {
+    S.box(0.08, 1.0, 0.08, x, api.padY + 8.65, 3.18, IRON);
+  }
+  api.site.parkourRoute = {
+    kind: 'mine-tipple-scaffold', space: 'local',
+    approach: { x: mineX, z: mineStartZ - 1.35,
+      y: groundY(api, mineX, mineStartZ - 1.35) },
+    target: { x: mineX, z: mineStages[mineStages.length - 1].z, y: api.padY + 8.2 },
+    crown: { x: -7.0, z: 4.2, y: api.padY + 8.2 },
+    stages: mineStages.map((p) => ({ x: p.x, z: p.z, y: api.padY + p.top })),
+  };
 
   // Three furnace houses and the black gaps between them make an assay row, not the old
   // twenty-five-metre brick cliff that swallowed the close view.
@@ -405,7 +560,62 @@ function cathedral(api) {
   }
   S.cyl(1.2, 1.4, 1.1, 10, CX, api.padY + 0.55, CZ, OLD_STONE);
   S.tube(1.0, 1.0, 0.16, 12, CX, api.padY + 1.13, CZ, VERDIGRIS);
-  api.emit({ kind: 'circle', x: CX, z: CZ, r: 1.45, y0: api.padY, y1: api.padY + 1.15, tag: 'stone' });
+  api.emit({ kind: 'circle', x: CX, z: CZ, r: 1.40,
+    y0: api.padY, y1: api.padY + 1.10, tag: 'stone', standable: true });
+
+  // The outer west buttress now carries a restoration scaffold. It climbs parallel to the
+  // cloister instead of occupying its processional lane, and terminates on a visible stone
+  // coping laid over the actual buttress. Every tread is a made timber deck with legs and
+  // braces; none of the flying ribs are silently treated as floors.
+  const catX = -26.0, catButtressZ = 5.8;
+  const catWallBase = localGround(api, catX, catButtressZ);
+  const catCapTop = catWallBase + 7.38;
+  solidBox(S, api, 1.72, 0.18, 2.42, catX, catCapTop - 0.09,
+    catButtressZ, MORTAR, 0, 'stone', true);
+  const catStages = [];
+  const catStartZ = -1.18, catCount = 8;
+  const catLow = Math.max(localGround(api, catX, catStartZ - 1.0) + 0.62, 0.62);
+  for (let i = 0; i < catCount; i++) {
+    const t = i / (catCount - 1), z = catStartZ + i * 0.86;
+    const top = catLow + (catCapTop - 0.62 - catLow) * t;
+    routeDeck(S, api, catX, z, 1.70, 1.24, top,
+      i % 3 === 0 ? VERDIGRIS : OLD_WOOD, 0, i & 1 ? TAR : MORTAR);
+    // Restoration scaffold: individual plank ends, chalked end blocks and a narrow iron
+    // binding replace the old monolithic front face without changing its climb hull.
+    const catFaceZ = z - 0.631;
+    for (let p = 0; p < 4; p++) {
+      const px = catX - 0.60 + p * 0.40;
+      S.box(0.31, 0.135 + (p & 1) * 0.025, 0.030, px,
+        api.padY + top - 0.205 + (p & 1) * 0.008, catFaceZ,
+        (p + i) % 3 === 0 ? VERDIGRIS : OLD_WOOD);
+    }
+    S.box(1.48, 0.035, 0.040, catX, api.padY + top - 0.285,
+      catFaceZ - 0.006, IRON);
+    for (const sx of [-0.70, 0.70]) S.box(0.075, 0.24, 0.038,
+      catX + sx, api.padY + top - 0.235, catFaceZ - 0.008, MORTAR);
+    for (const sx of [-0.66, 0.66]) {
+      const gy = localGround(api, catX + sx, z);
+      const h = Math.max(0.28, top - gy - 0.17);
+      S.box(0.11, h, 0.11, catX + sx, api.padY + gy + h * 0.5, z,
+        i & 1 ? IRON : TAR);
+    }
+    if (i > 0) {
+      const p = catStages[i - 1];
+      beamBetween(S, api, [catX - 0.76, p.top - 0.16, p.z],
+        [catX - 0.76, top - 0.16, z], 0.05, OXIDE, 4);
+      beamBetween(S, api, [catX + 0.76, p.top - 0.16, p.z],
+        [catX + 0.76, top - 0.16, z], 0.05, TAR, 4);
+    }
+    catStages.push({ x: catX, z, top });
+  }
+  api.site.parkourRoute = {
+    kind: 'cathedral-buttress-scaffold', space: 'local',
+    approach: { x: catX, z: catStartZ - 1.12,
+      y: groundY(api, catX, catStartZ - 1.12) },
+    target: { x: catX, z: catButtressZ, y: api.padY + catCapTop },
+    crown: { x: catX, z: catButtressZ, y: api.padY + catCapTop },
+    stages: catStages.map((p) => ({ x: p.x, z: p.z, y: api.padY + p.top })),
+  };
 
   // A reliquary chest makes the brazier/claim end read as a payoff without changing it.
   openCache(S, api, 7.2, -12.4, 0.08, VERDIGRIS, 8);
@@ -434,7 +644,16 @@ function chapel(api) {
   }
   // The hospice veranda is traversable and looks back across the whole chapel court.
   deck(S, api, -7.1, 4.0, 2.1, 13.5, 1.05, OLD_WOOD, 0, true);
-  steps(S, api, -7.1, -3.3, 1.5, 1.05, 0, OLD_STONE);
+  coursedSteps(S, api, -7.1, -3.3, 1.5, 1.05, 0, OLD_STONE, GRIME);
+  // Three dark worn noses and off-centre repair plates make the hospice stair readable as
+  // masonry repaired with salvage, rather than three pale boxes pasted onto the veranda.
+  for (let i = 0; i < 3; i++) {
+    const h = 0.35 * (i + 1), z = -3.3 + (i - 2) * 0.56;
+    S.box(1.28, 0.055, 0.034, -7.1, api.padY + h - 0.065,
+      z - 0.307, i === 1 ? OXIDE : GRIME);
+    S.box(0.24, Math.max(0.10, h * 0.42), 0.030, -7.1 + (i - 1) * 0.31,
+      api.padY + h * 0.42, z - 0.310, i & 1 ? MOSS_STONE : MORTAR);
+  }
   for (let i = 0; i < 6; i++) {
     const z = -1.8 + i * 2.35;
     solidBox(S, api, 0.18, 3.2, 0.18, -6.3, 1.6, z, TAR, 0, 'wood');
@@ -519,6 +738,15 @@ function chapel(api) {
   }
 
   openCache(S, api, 8.1, -4.3, 0.1, OLD_WOOD, 6);
+
+  // Audit note for the route already authored here: the hospice stair meets a broad real
+  // veranda. Do not stamp a second climb over the chapel merely to satisfy a route count.
+  api.site.parkourRoute = {
+    kind: 'chapel-hospice-veranda', space: 'local',
+    approach: { x: -7.1, z: -5.22, y: groundY(api, -7.1, -5.22) },
+    target: { x: -7.1, z: -2.72, y: api.padY + 1.05 },
+    crown: { x: -7.1, z: 4.0, y: api.padY + 1.05 },
+  };
 
   return finish(k);
 }
@@ -662,8 +890,56 @@ function gallowsfen(api) {
     [BX - 2.4, BY + 0.45, BZ + side * 0.82], [BX + 2.4, BY + 0.45, BZ + side * 0.82],
     0.12, OLD_WOOD);
   api.emit({ kind: 'obb', x: BX, z: BZ, halfX: 2.45, halfZ: 0.9, yaw: 0.22,
-    y0: api.padY + BY, y1: api.padY + BY + 0.58, tag: 'wood', standable: true });
+    y0: api.padY + BY + 0.22, y1: api.padY + BY + 0.54,
+    tag: 'wood', standable: true });
   S.box(5.2, 0.08, 0.16, BX + 0.5, api.padY + BY + 0.75, BZ - 0.5, C.wood, -0.5);
+
+  // A drowned maintenance stair climbs the outside of the west transept. Its first tread
+  // grows directly from the existing low stage and its last reaches a new gallery laid on
+  // the three visible transept posts. The central aisle and belfry shot stay completely
+  // open; the hanging roof couples remain scenery, not surprise walkable planes.
+  const fenX = -17.0, fenZ = 5.0;
+  const fenBase = localGround(api, fenX, fenZ);
+  const fenLowerTop = fenBase + 0.92;
+  const fenUpperTop = fenBase + 6.55;
+  deck(S, api, fenX, fenZ, 4.20, 2.30, fenUpperTop, TAR, 0, false);
+  const fenStages = [];
+  for (let i = 0; i < 7; i++) {
+    const z = 0.68 + i * 0.70;
+    const top = fenBase + 1.58 + i * 0.71;
+    routeDeck(S, api, fenX, z, 1.62, 1.16, top,
+      i % 3 === 0 ? OXIDE : OLD_WOOD, 0, i & 1 ? GRIME : TAR);
+    // Water-blackened boards deliberately disagree in width and colour. The tread collider
+    // stays a clean rectangle, but its merged face now reads as salvaged transept timber.
+    const fenFaceZ = z - 0.591;
+    for (let p = 0; p < 3; p++) {
+      const px = fenX - 0.54 + p * 0.54;
+      S.box(0.43 - (p === 1 ? 0.05 : 0), 0.15 + ((p + i) & 1) * 0.035,
+        0.032, px, api.padY + top - 0.22 + (p === 2 ? 0.015 : 0), fenFaceZ,
+        (p + i) % 3 === 0 ? OXIDE : ((p + i) & 1 ? TAR : OLD_WOOD));
+    }
+    for (const sx of [-0.57, 0.57]) S.box(0.065, 0.235, 0.038,
+      fenX + sx, api.padY + top - 0.235, fenFaceZ - 0.006, IRON);
+    for (const sx of [-0.62, 0.62]) {
+      const h = Math.max(0.22, top - fenLowerTop - 0.16);
+      S.box(0.10, h, 0.10, fenX + sx,
+        api.padY + fenLowerTop + h * 0.5, z, i & 1 ? TAR : OXIDE);
+    }
+    if (i > 0) {
+      const p = fenStages[i - 1];
+      beamBetween(S, api, [fenX - 0.70, p.top - 0.14, p.z],
+        [fenX - 0.70, top - 0.14, z], 0.05, TAR, 4);
+    }
+    fenStages.push({ x: fenX, z, top });
+  }
+  api.site.parkourRoute = {
+    kind: 'gallowsfen-transept-gallery', space: 'local',
+    approach: { x: fenX, z: -1.0, y: groundY(api, fenX, -1.0) },
+    mount: { x: fenX, z: 0.55, y: api.padY + fenLowerTop },
+    target: { x: fenX, z: fenZ, y: api.padY + fenUpperTop },
+    crown: { x: fenX, z: fenZ, y: api.padY + fenUpperTop },
+    stages: fenStages.map((p) => ({ x: p.x, z: p.z, y: api.padY + p.top })),
+  };
 
   // Low enough not to occlude the belfry target, close enough to make its prize readable.
   openCache(S, api, -7.0, -2.2, -0.45, VERDIGRIS, 6);
@@ -709,7 +985,17 @@ function hollowMill(api) {
 
   // Banked wagon deck and climb into the loft; the court route stays west of it.
   deck(S, api, 8.4, 8.0, 6.0, 8.0, 2.1, OLD_WOOD, 0, true);
-  steps(S, api, 8.4, 12.5, 2.2, 2.1, 0, OLD_STONE);
+  coursedSteps(S, api, 8.4, 12.5, 2.2, 2.1, 0, OLD_STONE, OXIDE);
+  // Course the wagon stair's enormous road-facing risers. All strips sit inside the real
+  // stone stair silhouette, so movement still sees precisely the six original step boxes.
+  for (let i = 0; i < 6; i++) {
+    const h = 0.35 * (i + 1), z = 12.5 + (i - 5) * 0.56;
+    S.box(1.92, 0.055, 0.034, 8.4, api.padY + h - 0.075,
+      z + 0.307, i % 3 === 0 ? OXIDE : TAR);
+    for (const sx of [-0.54, 0.54]) S.box(0.075, Math.max(0.10, h * 0.46), 0.030,
+      8.4 + sx, api.padY + h * 0.43, z + 0.310,
+      (i + (sx > 0 ? 1 : 0)) & 1 ? MOSS_STONE : GRIME);
+  }
   // Two crooked supports and one brace hold the loft deck without drawing a perfect
   // rectangular prototype frame around the windmill when seen from the forest road.
   for (const x of [6.3, 10.5]) {
@@ -731,6 +1017,50 @@ function hollowMill(api) {
       i % 3 ? TAR : C.plank, Math.PI * 0.5);
   }
   S.box(8.6, 0.18, 2.0, 7.3, api.padY + 8.2, -1.0, SHINGLE, Math.PI * 0.5);
+
+  // A grain-loader stair finally joins the wagon deck to the overhead bridge. The broad
+  // wagon stair already supplies the ground-to-2.1 m opening; six close-set timber stages
+  // then climb in one straight run toward the bridge edge. Uprights start on the visible
+  // wagon deck and sack bundles sit beneath alternating treads, so this reads as mill
+  // equipment rather than six floating game platforms.
+  const millStages = [];
+  for (let i = 0; i < 6; i++) {
+    const z = 8.18 - i * 0.98;
+    const top = 2.72 + i * 0.64;
+    routeDeck(S, api, 7.3, z, 1.72, 1.28, top,
+      i % 3 === 0 ? C.plank : OLD_WOOD, 0, i & 1 ? OXIDE : TAR);
+    // A loader tread is a slatted machine part, not a full beige drawer. Thin batten ends,
+    // a centre seam and rust shoes sit on the visual face only.
+    const millFaceZ = z + 0.651;
+    for (let p = 0; p < 4; p++) S.box(0.32, 0.145, 0.030,
+      7.3 - 0.60 + p * 0.40, api.padY + top - 0.21 + (p & 1) * 0.012,
+      millFaceZ, (p + i) % 3 === 0 ? C.plank : TAR);
+    S.box(0.055, 0.245, 0.038, 7.3, api.padY + top - 0.235,
+      millFaceZ + 0.006, OXIDE);
+    for (const sx of [-0.68, 0.68]) S.box(0.10, 0.075, 0.040,
+      7.3 + sx, api.padY + top - 0.14, millFaceZ + 0.008, IRON);
+    const supportH = top - 2.1 - 0.16;
+    for (const sx of [-0.66, 0.66]) S.box(0.11, supportH, 0.11,
+      7.3 + sx, api.padY + 2.1 + supportH * 0.5, z, i & 1 ? TAR : OXIDE);
+    if ((i & 1) === 0) {
+      for (const sx of [-0.36, 0.36]) S.box(0.55, 0.30, 0.76, 7.3 + sx,
+        api.padY + 2.28, z, i % 3 ? C.cloth : BONE, sx * 0.10);
+    }
+    if (i > 0) {
+      const p = millStages[i - 1];
+      beamBetween(S, api, [6.55, p.top - 0.15, p.z],
+        [6.55, top - 0.15, z], 0.05, OXIDE, 4);
+    }
+    millStages.push({ x: 7.3, z, top });
+  }
+  api.site.parkourRoute = {
+    kind: 'mill-grain-loader', space: 'local',
+    approach: { x: 8.4, z: 14.25, y: groundY(api, 8.4, 14.25) },
+    mount: { x: 8.4, z: 11.9, y: api.padY + 2.1 },
+    target: { x: 7.3, z: 3.05, y: api.padY + 6.0 },
+    crown: { x: 7.3, z: -1.0, y: api.padY + 6.0 },
+    stages: millStages.map((p) => ({ x: p.x, z: p.z, y: api.padY + p.top })),
+  };
 
   // Drying racks, visibly full, occupy the west yard and give it things to walk among.
   for (let r = 0; r < 3; r++) {
@@ -815,6 +1145,56 @@ function gardenOfRest(api) {
       solidBox(S, api, 1.4, 7.0, 1.4, x, gy + 3.5, z, MOSS_STONE, 0, 'wall');
     }
   }
+
+  // One broken run of memorial plinths reaches the west columbarium wall-walk. Each riser
+  // is a visibly solid monument base with a horizontal stone crown; a fresh coping slab on
+  // the actual wall receives the last step. The route stays west of the grave avenue and
+  // does not make either whole columbarium range magically walkable.
+  const gardenWallX = -19.0, gardenZ = 4.8;
+  const gardenWallBase = localGround(api, gardenWallX, 7.5);
+  const gardenCapTop = gardenWallBase + 6.38;
+  solidBox(S, api, 1.28, 0.18, 3.20, gardenWallX, gardenCapTop - 0.09,
+    gardenZ, MORTAR, 0, 'stone', true);
+  const gardenStages = [];
+  const gardenStartX = -12.60, gardenCount = 8;
+  const gardenLow = localGround(api, gardenStartX, gardenZ) + 0.58;
+  for (let i = 0; i < gardenCount; i++) {
+    const t = i / (gardenCount - 1), x = gardenStartX - i * 0.76;
+    const top = gardenLow + (gardenCapTop - 0.58 - gardenLow) * t;
+    const gy = localGround(api, x, gardenZ);
+    const h = Math.max(0.36, top - gy);
+    memorialPlinth(S, api, 1.30 - (i % 3) * 0.06, h, 1.12,
+      x, gy, gardenZ, i & 1 ? MOSS_STONE : OLD_STONE,
+      (i & 1) ? 0.035 : -0.025);
+    // A recessed memorial tablet and a buried cap course give each riser a front and a
+    // history. They remain below `top` and emit no collider, preserving every landing.
+    const plinthW = 1.30 - (i % 3) * 0.06, plinthYaw = (i & 1) ? 0.035 : -0.025;
+    const pf = frame(x, gardenZ, plinthYaw);
+    const plaqueH = Math.min(0.62, Math.max(0.22, h * 0.38));
+    const plaqueY = gy + Math.min(h * 0.52, h - plaqueH * 0.55);
+    const plaqueX = plinthW * 0.5 + 0.008, plaqueCol = i % 3 === 0 ? COAL : GRIME;
+    // An empty four-piece frame reads as a carved tablet; the former filled rectangle read
+    // as yet another box pasted onto the box.
+    for (const lz of [-0.285, 0.285]) S.box(0.032, plaqueH, 0.050,
+      pf.x(plaqueX, lz), api.padY + plaqueY, pf.z(plaqueX, lz), plaqueCol, plinthYaw);
+    for (const sy of [-1, 1]) S.box(0.032, 0.050, 0.62,
+      pf.x(plaqueX, 0), api.padY + plaqueY + sy * (plaqueH * 0.5 - 0.025),
+      pf.z(plaqueX, 0), plaqueCol, plinthYaw);
+    // Chipped side blocks give each plinth a different ruin profile without raising its
+    // walkable top or inventing a second collision surface.
+    S.box(0.42, Math.min(0.54, h * 0.35), 0.34, x + (i & 1 ? 0.42 : -0.42),
+      api.padY + gy + Math.min(0.27, h * 0.18), gardenZ + 0.67,
+      i % 3 ? GRIME : MORTAR, i * 0.07);
+    gardenStages.push({ x, z: gardenZ, top });
+  }
+  api.site.parkourRoute = {
+    kind: 'garden-columbarium-plinths', space: 'local',
+    approach: { x: gardenStartX + 1.18, z: gardenZ,
+      y: groundY(api, gardenStartX + 1.18, gardenZ) },
+    target: { x: gardenWallX, z: gardenZ, y: api.padY + gardenCapTop },
+    crown: { x: gardenWallX, z: gardenZ, y: api.padY + gardenCapTop },
+    stages: gardenStages.map((p) => ({ x: p.x, z: p.z, y: api.padY + p.top })),
+  };
 
   // Mortuary gatehouse: the cemetery needed one unmistakable vertical mass from the road,
   // not another waist-high wall hiding in fog. The open portal remains centred on the grave
