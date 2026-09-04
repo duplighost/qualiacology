@@ -168,12 +168,15 @@
   const WORLD_W = 38400;
   const PLAYER_W = 46;
   const PLAYER_H = 82;
-  const MAX_CHAIN = 330;
+  const BASE_CHAIN = 330;
+  let MAX_CHAIN = BASE_CHAIN;
   // Rope feel. The pump is deliberately arcade-strong: one held key should start
   // a useful arc from a dead hang without the player having to find the
   // pendulum's resonant frequency by ear.
-  const SWING_PUMP = 3900;
-  const MAX_SWING = 1120;
+  const BASE_PUMP = 3900;
+  const BASE_SWING = 1120;
+  let SWING_PUMP = BASE_PUMP;
+  let MAX_SWING = BASE_SWING;
   // How fast the rope is allowed to take up slack, in pixels per second. High
   // enough that reel-in reads as a yank, low enough that it is a pull and not a
   // teleport.
@@ -369,6 +372,7 @@
       this.pauseQueued = false;
       this.leftJumpLatch = false;
       this.lastInputWasTouch = false;
+      this.tapQueue = null;
 
       window.addEventListener('keydown', e => {
         const code = e.code;
@@ -379,7 +383,7 @@
           if (['Escape', 'KeyP'].includes(code)) this.pauseQueued = true;
         }
         this.keys.add(code);
-        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)) e.preventDefault();
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(code)) e.preventDefault();
         audio.ensure();
       }, { passive: false });
 
@@ -400,6 +404,7 @@
         audio.ensure();
         const p = logicalPoint(e);
         this.anyPressed = true;
+        this.tapQueue = { x: p.x, y: p.y };
         this.pointerKind = e.pointerType || 'mouse';
         this.lastInputWasTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
         try { target.setPointerCapture(e.pointerId); } catch (_) { /* no-op */ }
@@ -512,6 +517,12 @@
       return value;
     }
 
+    consumeTap() {
+      const value = this.tapQueue;
+      this.tapQueue = null;
+      return value;
+    }
+
     consumeAny() {
       const value = this.anyPressed;
       this.anyPressed = false;
@@ -580,6 +591,7 @@
     endFrame() {
       this.pressed.clear();
       this.anyPressed = false;
+      this.tapQueue = null;
     }
   }
 
@@ -1011,6 +1023,24 @@
   // Entity state.
   // ---------------------------------------------------------------------------
 
+  // The relics. Six lines, each one changing how she plays rather than only what
+  // her numbers say. Levelling hands over a relic to spend; it never spends
+  // itself.
+  const RELICS = [
+    { key: 'vessel',  name: 'THE VESSEL',   max: 5, blurb: 'More of her left to spend.',
+      rank: r => `+${r * 16} life` },
+    { key: 'edge',    name: 'THE EDGE',     max: 5, blurb: 'The wheel bites deeper.',
+      rank: r => `+${r * 10}% wheel damage` },
+    { key: 'chain',   name: 'THE CHAIN',    max: 4, blurb: 'Longer reach, wider arc, rings you could not touch.',
+      rank: r => `+${r * 38}px chain` },
+    { key: 'tendon',  name: 'THE TENDON',   max: 4, blurb: 'The arc builds faster and carries further.',
+      rank: r => `+${r * 14}% swing` },
+    { key: 'carrion', name: 'THE CARRION',  max: 4, blurb: 'What you kill, you keep a little of.',
+      rank: r => `+${r * 3} life on kill` },
+    { key: 'spite',   name: 'THE SPITE',    max: 3, blurb: 'Letting go throws you harder.',
+      rank: r => `+${r * 45}% release fling` }
+  ];
+
   const player = {
     x: 250,
     y: 760,
@@ -1039,6 +1069,8 @@
     level: 1,
     xp: 0,
     power: 1,
+    relicPoints: 0,
+    relics: { vessel: 0, edge: 0, chain: 0, tendon: 0, carrion: 0, spite: 0 },
     visited: [0],
     levelFlash: 0,
     // Animation-only state: a landing compresses her, a takeoff stretches her,
@@ -1333,6 +1365,9 @@
     victoryTimer: 0,
     kills: 0,
     maxCombo: 0,
+    relicsOpen: false,
+    relicCursor: 0,
+    relicNudge: 0,
     camera: { x: 0, y: 0, targetX: 0, targetY: 0 },
     fps: 60,
     accumulator: 0,
@@ -1352,8 +1387,34 @@
   }
 
   function applyPower() {
-    player.power = 1 + (player.level - 1) * 0.055;
-    player.maxHealth = 100 + (player.level - 1) * 8;
+    const r = player.relics;
+    player.power = 1 + (player.level - 1) * 0.055 + r.edge * 0.10;
+    player.maxHealth = 100 + (player.level - 1) * 8 + r.vessel * 16;
+    player.health = Math.min(player.health, player.maxHealth);
+    MAX_CHAIN = BASE_CHAIN + r.chain * 38;
+    SWING_PUMP = BASE_PUMP * (1 + r.tendon * 0.14);
+    MAX_SWING = BASE_SWING * (1 + r.tendon * 0.14);
+  }
+
+  function relicDef(key) {
+    for (let i = 0; i < RELICS.length; i++) if (RELICS[i].key === key) return RELICS[i];
+    return null;
+  }
+
+  function spendRelic(key) {
+    const def = relicDef(key);
+    if (!def || player.relicPoints <= 0) return false;
+    if (player.relics[key] >= def.max) return false;
+    player.relics[key]++;
+    player.relicPoints--;
+    applyPower();
+    if (key === 'vessel') player.health = Math.min(player.maxHealth, player.health + 16);
+    addShake(6);
+    game.flash = Math.max(game.flash, 0.5);
+    audio.tone(196, 0.28, 'triangle', 0.09, 120);
+    audio.tone(392, 0.4, 'sine', 0.05, 60);
+    saveGame();
+    return true;
   }
 
   function gainXP(amount) {
@@ -1363,13 +1424,15 @@
     while (player.level < 50 && player.xp >= xpToNext(player.level)) {
       player.xp -= xpToNext(player.level);
       player.level++;
+      player.relicPoints++;
       applyPower();
       player.health = Math.min(player.maxHealth, player.health + 16 + player.level);
       leveled = true;
     }
     if (leveled) {
       player.levelFlash = 2.4;
-      game.zoneTitle = 'LEVEL ' + player.level;
+      game.relicNudge = 3.2;
+      game.zoneTitle = 'LEVEL ' + player.level + '  \u2014  A RELIC WAITS';
       game.zoneTitleTimer = 1.9;
       audio.tone(110, 0.35, 'triangle', 0.09, 90);
       audio.tone(220, 0.5, 'sine', 0.06, 50);
@@ -1384,6 +1447,8 @@
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         level: player.level,
         xp: player.xp,
+        relicPoints: player.relicPoints,
+        relics: player.relics,
         checkpointX: player.checkpointX,
         checkpointY: player.checkpointY,
         kills: game.kills,
@@ -1403,6 +1468,15 @@
       if (!s || !s.checkpointX) return false;
       player.level = clamp(s.level || 1, 1, 50);
       player.xp = Math.max(0, s.xp || 0);
+      if (s.relics) {
+        for (const def of RELICS) player.relics[def.key] = clamp(s.relics[def.key] | 0, 0, def.max);
+      }
+      // Saves from before the relics existed banked their levels silently; give
+      // those points back rather than eating them.
+      const spent = RELICS.reduce((n, def) => n + player.relics[def.key], 0);
+      player.relicPoints = s.relicPoints != null
+        ? Math.max(0, s.relicPoints | 0)
+        : Math.max(0, player.level - 1 - spent);
       applyPower();
       player.checkpointX = s.checkpointX;
       player.checkpointY = s.checkpointY || 760;
@@ -1513,6 +1587,13 @@
     syncBossState();
   }
 
+  function resetRelics() {
+    for (const def of RELICS) player.relics[def.key] = 0;
+    player.relicPoints = 0;
+    game.relicsOpen = false;
+    game.relicCursor = 0;
+  }
+
   function restartFullRun() {
     player.checkpointX = 250;
     player.checkpointY = 760;
@@ -1530,6 +1611,7 @@
     player.level = 1;
     player.xp = 0;
     player.visited = [0];
+    resetRelics();
     applyPower();
     player.health = player.maxHealth;
     for (const membrane of seals) resetMembrane(membrane, false);
@@ -1935,9 +2017,10 @@
     const ty = dx / dist;
     const tangential = player.vx * tx + player.vy * ty;
     if (boost) {
+      const spite = 1 + player.relics.spite * 0.45;
       const direction = sign0(tangential) || sign0(input.moveX()) || player.facing;
-      player.vx += tx * direction * 115;
-      player.vy += ty * direction * 80 - 155;
+      player.vx += tx * direction * 115 * spite;
+      player.vy += ty * direction * 80 * spite - 155 * spite;
     }
     yoyo.blockedHook = h;
     yoyo.holdGrace = 0;
@@ -2629,6 +2712,9 @@
   }
 
   function killEnemy(e, hitX, hitY, knockX, knockY) {
+    if (player.relics.carrion > 0 && e.alive) {
+      player.health = Math.min(player.maxHealth, player.health + player.relics.carrion * 3);
+    }
     e.alive = false;
     e.deadTimer = e.type === 'boss' ? 99 : 1.4;
     e.vx = knockX * 2;
@@ -2889,8 +2975,67 @@
     game.titleFade = Math.max(0, game.titleFade - dt * 0.7);
 
     if (input.consumePause() && game.state !== 'title' && game.state !== 'victory') {
-      game.paused = !game.paused;
-      if (game.paused) saveGame();
+      if (game.relicsOpen) game.relicsOpen = false;
+      else {
+        game.paused = !game.paused;
+        if (game.paused) saveGame();
+      }
+    }
+
+    game.relicNudge = Math.max(0, game.relicNudge - dt);
+
+    if (game.state === 'playing' && !game.paused && !game.relicsOpen && player.relicPoints > 0) {
+      const tap = input.tapQueue;
+      const b = RELIC_BADGE;
+      if (tap && tap.x >= b.x && tap.x <= b.x + b.w && tap.y >= b.y && tap.y <= b.y + b.h) {
+        input.consumeTap();
+        game.relicsOpen = true;
+        game.relicNudge = 0;
+        saveGame();
+        audio.tone(320, 0.1, 'triangle', 0.05, 60);
+      }
+    }
+
+    if (game.state === 'playing' && !game.paused && (input.keyPressed('Tab') || input.keyPressed('KeyE'))) {
+      game.relicsOpen = !game.relicsOpen;
+      if (game.relicsOpen) { saveGame(); game.relicNudge = 0; }
+      audio.tone(game.relicsOpen ? 320 : 180, 0.1, 'triangle', 0.05, game.relicsOpen ? 60 : -60);
+    }
+
+    if (game.relicsOpen) {
+      if (game.state !== 'playing') { game.relicsOpen = false; }
+      else {
+        if (input.keyPressed('KeyW') || input.keyPressed('ArrowUp')) {
+          game.relicCursor = (game.relicCursor + RELICS.length - 1) % RELICS.length;
+          audio.tone(300, 0.05, 'square', 0.03, 0);
+        }
+        if (input.keyPressed('KeyS') || input.keyPressed('ArrowDown')) {
+          game.relicCursor = (game.relicCursor + 1) % RELICS.length;
+          audio.tone(300, 0.05, 'square', 0.03, 0);
+        }
+        if (input.keyPressed('Space') || input.keyPressed('Enter') || input.keyPressed('KeyD') || input.keyPressed('ArrowRight')) {
+          if (!spendRelic(RELICS[game.relicCursor].key)) audio.tone(90, 0.08, 'square', 0.03, -30);
+        }
+        const tap = input.consumeTap();
+        if (tap) {
+          let onRow = false;
+          for (const r of relicHit) {
+            if (tap.x >= r.x && tap.x <= r.x + r.w && tap.y >= r.y && tap.y <= r.y + r.h) {
+              onRow = true;
+              game.relicCursor = r.index;
+              if (!spendRelic(r.key)) audio.tone(90, 0.08, 'square', 0.03, -30);
+              break;
+            }
+          }
+          if (!onRow) {
+            game.relicsOpen = false;
+            audio.tone(180, 0.1, 'triangle', 0.05, -60);
+          }
+        }
+        input.consumeJump();
+        audio.update(yoyo, 'paused');
+        return;
+      }
     }
     if (input.keyPressed('KeyM')) audio.toggleMute();
     if (input.keyPressed('KeyF')) {
@@ -4094,6 +4239,15 @@
     g.font='700 12px Georgia,serif';
     g.fillText('LV '+player.level, 370, 99);
 
+    if(player.relicPoints>0){
+      const pulse=0.62+Math.sin(game.realTime*4.4)*0.38;
+      const b=RELIC_BADGE;
+      g.fillStyle=`rgba(96,10,28,${0.5+pulse*0.35})`;roundedRectPath(g,b.x,b.y,b.w,b.h,7);g.fill();
+      g.strokeStyle=`rgba(255,110,132,${0.55+pulse*0.45})`;g.lineWidth=2;g.stroke();
+      g.fillStyle='#ffe7e2';g.font='700 15px Georgia,serif';
+      g.fillText((input.lastInputWasTouch?'TAP':'TAB')+`  \u00b7  ${player.relicPoints} RELIC${player.relicPoints>1?'S':''} WAIT${player.relicPoints>1?'':'S'}`,b.x+14,b.y+23);
+    }
+
     if(player.killStreak>=2&&player.streakTimer>0){g.textAlign='center';g.fillStyle='#f8e5df';g.font=`900 ${24+Math.min(16,player.killStreak)}px Georgia,serif`;g.shadowColor='#e02548';g.shadowBlur=16;g.fillText(`${player.killStreak}× REND`,W/2,96);g.shadowBlur=0;g.textAlign='left';}
 
     // Contextual swing instruction only in the teaching chamber.
@@ -4186,6 +4340,117 @@
       ? 'LEFT THUMB MOVES   •   SWIPE UP JUMP   •   SWIPE DOWN DROP   •   RIGHT THUMB IS THE WHEEL'
       : 'A / D MOVE & PUMP   •   SPACE JUMP & RELEASE   •   S DROP   •   HOLD MOUSE TO COMMAND THE WHEEL',W/2,690);
     g.fillStyle='rgba(188,154,161,.50)';g.font='14px Georgia,serif';g.fillText('TWELVE DISTRICTS  •  THE WHEEL GROWS WITH THE BLOOD YOU SPEND',W/2,730);
+    g.restore();
+  }
+
+  // The reliquary. Levels hand over relics; this is where you spend them, when
+  // you decide to, not the instant the bar fills.
+  const relicHit = [];
+  const RELIC_BADGE = { x: 34, y: 136, w: 234, h: 34 };
+
+  function drawRelics(g) {
+    if (!game.relicsOpen) return;
+    g.save();
+    g.fillStyle = 'rgba(3,1,5,0.88)';
+    g.fillRect(0, 0, W, H);
+
+    const panelW = 980;
+    const panelX = (W - panelW) / 2;
+    const panelY = 96;
+    const rowH = 78;
+    const panelH = 214 + RELICS.length * rowH;
+
+    g.fillStyle = 'rgba(9,4,9,0.96)';
+    g.beginPath();
+    g.moveTo(panelX + 26, panelY);
+    g.lineTo(panelX + panelW - 26, panelY);
+    g.lineTo(panelX + panelW, panelY + 34);
+    g.lineTo(panelX + panelW, panelY + panelH - 34);
+    g.lineTo(panelX + panelW - 26, panelY + panelH);
+    g.lineTo(panelX + 26, panelY + panelH);
+    g.lineTo(panelX, panelY + panelH - 34);
+    g.lineTo(panelX, panelY + 34);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = '#7d2f42';
+    g.lineWidth = 2;
+    g.stroke();
+
+    g.textAlign = 'center';
+    g.fillStyle = '#f2dcdf';
+    g.font = '600 40px Georgia, serif';
+    g.fillText('THE RELIQUARY', W / 2, panelY + 62);
+
+    g.font = '18px Georgia, serif';
+    g.fillStyle = player.relicPoints > 0 ? '#ff7d92' : 'rgba(226,200,205,0.5)';
+    const pts = player.relicPoints;
+    g.fillText(pts > 0 ? (pts === 1 ? 'ONE RELIC UNSPENT' : pts + ' RELICS UNSPENT') : 'NOTHING LEFT TO SPEND', W / 2, panelY + 92);
+
+    // Level and the bar toward the next relic.
+    const need = xpToNext(player.level);
+    const frac = clamp(player.xp / Math.max(1, need), 0, 1);
+    const barW = panelW - 160;
+    const barX = panelX + 80;
+    const barY = panelY + 112;
+    g.fillStyle = '#140a10';
+    roundedRectPath(g, barX, barY, barW, 12, 4); g.fill();
+    g.fillStyle = '#a01b34';
+    roundedRectPath(g, barX, barY, barW * frac, 12, 4); g.fill();
+    g.strokeStyle = 'rgba(255,170,166,0.22)'; g.lineWidth = 1;
+    roundedRectPath(g, barX, barY, barW, 12, 4); g.stroke();
+    g.textAlign = 'left';
+    g.fillStyle = 'rgba(226,200,205,0.62)';
+    g.font = '15px Georgia, serif';
+    g.fillText('LEVEL ' + player.level, barX, barY - 8);
+    g.textAlign = 'right';
+    g.fillText(Math.floor(player.xp) + ' / ' + need, barX + barW, barY - 8);
+
+    relicHit.length = 0;
+    for (let i = 0; i < RELICS.length; i++) {
+      const def = RELICS[i];
+      const rank = player.relics[def.key];
+      const y = panelY + 158 + i * rowH;
+      const selected = i === game.relicCursor;
+      const affordable = player.relicPoints > 0 && rank < def.max;
+      relicHit.push({ key: def.key, index: i, x: panelX + 30, y, w: panelW - 60, h: rowH - 10 });
+
+      if (selected) {
+        g.fillStyle = affordable ? 'rgba(120,18,38,0.55)' : 'rgba(60,40,48,0.32)';
+        g.fillRect(panelX + 30, y, panelW - 60, rowH - 10);
+        g.strokeStyle = affordable ? '#ff5c74' : 'rgba(180,150,155,0.35)';
+        g.lineWidth = 2;
+        g.strokeRect(panelX + 30, y, panelW - 60, rowH - 10);
+      }
+
+      g.textAlign = 'left';
+      g.font = '600 25px Georgia, serif';
+      g.fillStyle = rank >= def.max ? '#8f7a7e' : selected ? '#fff0e6' : '#e2c8cd';
+      g.fillText(def.name, panelX + 54, y + 30);
+
+      g.font = '15px Georgia, serif';
+      g.fillStyle = 'rgba(214,182,188,0.62)';
+      g.fillText(rank > 0 ? def.rank(rank) + '  \u00b7  ' + def.blurb : def.blurb, panelX + 54, y + 54);
+
+      // Rank pips.
+      const pipX = panelX + panelW - 74;
+      for (let r = def.max - 1; r >= 0; r--) {
+        const cx = pipX - (def.max - 1 - r) * 26;
+        g.beginPath();
+        g.arc(cx, y + 34, 8, 0, TAU);
+        if (r < rank) { g.fillStyle = '#ff4f6a'; g.fill(); g.strokeStyle = '#ffd0cf'; }
+        else { g.fillStyle = '#150b11'; g.fill(); g.strokeStyle = 'rgba(180,120,130,0.45)'; }
+        g.lineWidth = 2;
+        g.stroke();
+      }
+    }
+
+    g.textAlign = 'center';
+    g.font = '16px Georgia, serif';
+    g.fillStyle = 'rgba(226,200,205,0.55)';
+    const hint = COARSE_POINTER
+      ? 'Tap a relic to spend  \u00b7  tap outside to close'
+      : 'W / S choose  \u00b7  Space or D spends  \u00b7  Tab or Esc closes';
+    g.fillText(hint, W / 2, panelY + panelH - 26);
     g.restore();
   }
 
@@ -4304,6 +4569,7 @@
     drawPost(ctx);
     drawTitle(ctx);
     drawPause(ctx);
+    drawRelics(ctx);
     drawDeath(ctx);
     drawVictory(ctx);
   }
@@ -4435,6 +4701,9 @@
       m.breached = membraneOpenRun(m) >= 4; m.alive = m.bands.some(b => b.hp > 0); invalidateMembraneSolids(); return true;
     },
     setHealth(value) { player.health = clamp(Number(value) || 0, 0, player.maxHealth); },
+    grantXP(amount = 500) { gainXP(Number(amount) || 0); },
+    openRelics(open = true) { game.relicsOpen = !!open; },
+    relicState() { return { points: player.relicPoints, ranks: Object.assign({}, player.relics), maxHealth: player.maxHealth, power: player.power, chain: MAX_CHAIN, pump: SWING_PUMP, swing: MAX_SWING }; },
     setInvulnerable(seconds = 10) { player.invuln = Math.max(player.invuln, Math.max(0, Number(seconds) || 0)); },
     setPlayerVelocity(vx = 0, vy = 0) { player.vx = Number(vx) || 0; player.vy = Number(vy) || 0; },
     damageBoss(amount = 100) {
