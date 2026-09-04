@@ -95,7 +95,7 @@ export const DEFAULT_TINT = 0x9fb4d8;
 export const TERRAIN_REGIONS = Object.freeze(['pines', 'fields', 'marsh', 'ridge']);
 
 /* ------------------------------------------------------------------ *
- * The fifteen. The original twelve are followed by three landmark-class DUSKFALL
+ * The sixteen. The original twelve are followed by three landmark-class DUSKFALL
  * compositions added only after a measured road-coverage audit found 0.9 km dead legs.
  *
  * claim.how:
@@ -124,7 +124,7 @@ export const TERRAIN_REGIONS = Object.freeze(['pines', 'fields', 'marsh', 'ridge
  *
  * `horizon: true` marks the long-range reads DESIGN section 2 says are never distance-culled.
  * Every row gets a silhouette in the persistent landmark group regardless — a county with
- * fifteen silhouettes in it is the answer to "always something in the distance" — but only
+ * sixteen silhouettes in it is the answer to "always something in the distance" — but only
  * the explicitly flagged rows carry a moving, lit feature that reads from across the map.
  * ------------------------------------------------------------------ */
 /* ROUND 6 (2026-09-03, Alex's fifth playtest: "I'm assuming there are other guns, right? I
@@ -182,6 +182,26 @@ export const MAJORS = Object.freeze([
     // plinth (manor-data.js, departure 2); dx/dz are manor.js claimLocal() (donor (41, 12)
     // translated by (-30, -24)) and tests/manor.mjs asserts the row and the builder agree.
     claim: { how: 'touch', dx: 11.0, dy: 0, dz: -12.0, r: 2.6 },
+    xpFind: 40, xpClaim: 260, startClaimed: false,
+  },
+  {
+    // ROUND 11: Alex asked for his mansions, plural, and for destinations large enough to
+    // justify the drive. The Avery House comes from UNINVITED's authored three-level family
+    // home plan. Its actual garage/front facade is the arrival read: no generic gate.
+    id: 'avery-house', name: 'The Avery House',
+    clearR: 48,
+    // Twelve metres back from the first draft: the road flatten band had reached under
+    // the porch, buried all seven front treads and forced the generic bank stair through
+    // the foyer. Here the lane remains a close 32 m arrival while its shoulder ends beyond
+    // the porch, leaving one continuous road -> bank stair -> front-door walk.
+    x: -442, z: 868, region: 'pines', terrainRegion: 'pines', kind: 'avery',
+    lit: false, hub: false,
+    flat: { radius: 52, blend: 0.62 },
+    approach: { x: 0, z: 40, w: 18, h: 11, style: 'avery', routeX: 0, routeZ: 20, existing: true },
+    discoverR: 30, nearR: 140, horizon: false,
+    // UNINVITED's basement boiler-room fuse board, donor (26.25, 30), translated by
+    // Avery's frozen (-30, -24) house frame. It uses CURFEW's ordinary claim contract.
+    claim: { how: 'touch', dx: -3.75, dy: 0, dz: 6.0, r: 2.6 },
     xpFind: 40, xpClaim: 260, startClaimed: false,
   },
   {

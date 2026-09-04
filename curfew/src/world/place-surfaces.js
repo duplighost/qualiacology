@@ -14,6 +14,7 @@ const TAU = Math.PI * 2;
 const STYLE_BY_KIND = Object.freeze({
   station: 'industrial',
   manor: 'plaster',
+  avery: 'plaster',
   works: 'stone',
   relay: 'metal',
   cathedral: 'stone',

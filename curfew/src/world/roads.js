@@ -33,7 +33,7 @@ const RC = CFG.roads;
 export const ROAD_FAR = 400;
 
 /* ------------------------------------------------------------------ *
- * Authoring: one county loop + two gravel spurs + nine forest lanes.
+ * Authoring: one county loop + two gravel spurs + ten forest lanes.
  * ------------------------------------------------------------------ */
 
 // The loop is authored as a wandering ring rather than 21 typed pairs: two
@@ -71,6 +71,8 @@ export const M0_SITES = [
 const STATION_JUNCTION = [M0_SITES[1].x, M0_SITES[1].z];
 const MANOR_JUNCTION = [M0_SITES[2].x, M0_SITES[2].z];
 const WORKS_JUNCTION = [320, 420];
+const CHAPEL_WEST_JUNCTION = [-610, 1160];
+const CHAPEL_EAST_JUNCTION = [-360, 1160];
 
 const jump = (id, approach, crest, landing, recovery) => (
   { id, approach, crest, landing, recovery }
@@ -140,12 +142,29 @@ const ROUTES_SRC = [
   {
     id: 'chapel-backroad', kind: 'forest', secondary: true, closed: false, width: 3.30,
     pts: [
-      LOOP_PTS[7], [-720, 1250], [-610, 1160], [-500, 1280], [-360, 1160],
+      LOOP_PTS[7], [-720, 1250], CHAPEL_WEST_JUNCTION, [-500, 1280], CHAPEL_EAST_JUNCTION,
       [-335, 1185], [-312, 1210], [-288, 1237], [-255, 1270],
       [-230, 1300], [-80, 1160], [9.19, 1230.94], [28.45, 1245.08, 4.8],
       [53.89, 1257.33, -0.4], [76.74, 1265.87], LOOP_PTS[5],
     ],
     jumps: [jump('chapel-crest', 11, 12, 13, 14)],
+  },
+  {
+    // A narrow crooked lane leaves the chapel backroad, folds down through the trees to
+    // Avery's actual arrival point, then rejoins the same backroad. The shared endpoint
+    // objects make both junctions exact graph facts. Its single modest crest stays more
+    // than 150 m north of the house, well clear of the 52 m pad and front approach.
+    id: 'avery-lane', kind: 'forest', secondary: true, closed: false, width: 3.30,
+    pts: [
+      CHAPEL_WEST_JUNCTION,
+      [-582, 1131], [-605, 1095], [-625, 1065], [-592, 1045, 3.5],
+      [-570, 1000, -0.3], [-548, 982], [-570, 948], [-528, 918], [-488, 931], [-456, 913],
+      [-434, 899],
+      [-409, 916], [-382, 943], [-404, 978], [-369, 1010],
+      [-392, 1045], [-352, 1076], [-381, 1106], [-345, 1134],
+      CHAPEL_EAST_JUNCTION,
+    ],
+    jumps: [jump('avery-rise', 3, 4, 5, 6)],
   },
   {
     id: 'works-cut', kind: 'forest', secondary: true, closed: false, width: 3.90,

@@ -43,10 +43,7 @@
 // window panes that come up when the place is claimed.
 
 import * as THREE from 'three';
-import {
-  CS, GX, GZ, LV, TALL_CEIL, ROOMS, DOORS, OPEN_PAIRS, RAIL_PAIRS, RAIL_SKIP, RAMPS,
-  FLOOR_HOLES, CEIL_HOLES, CLAIM_DONOR, LIT_WINDOWS,
-} from './manor-data.js';
+import * as BLACKTHORN_PLAN from './manor-data.js';
 
 /** donor (x, z) -> site-local: a translation, (x - HX, z - HZ). See THE FRAME above. */
 export const HX = 30, HZ = 24;
@@ -65,7 +62,8 @@ const STEP_RUN = 0.6;
 
 /** Site-local claim point, from the donor-frame claim in manor-data.js. Read by
  *  placedata.js's row (typed there) and asserted equal by tests/manor.mjs. */
-export function claimLocal() {
+export function claimLocal(plan = BLACKTHORN_PLAN) {
+  const { LV, CLAIM_DONOR } = plan;
   const y = LV[CLAIM_DONOR.level].floor + LIFT;
   return { dx: CLAIM_DONOR.x - HX, dy: y, dz: CLAIM_DONOR.z - HZ };
 }
@@ -111,7 +109,12 @@ const PALETTE = {
 /* ==========================================================================
    The compile. One closure per (api, phase) so nothing here lives past the build.
    ========================================================================== */
-export function makeManorBuilder(tools) {
+export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
+  const {
+    CS, GX, GZ, LV, TALL_CEIL, ROOMS, DOORS, OPEN_PAIRS = [], RAIL_PAIRS = [],
+    RAIL_SKIP = [], RAMPS = [], FLOOR_HOLES = [], CEIL_HOLES = [], CLAIM_DONOR,
+    LIT_WINDOWS = [], EXTERIOR = 'blackthorn', FURN_BY_ROOM = null,
+  } = plan;
   const { kits, sash, PANE_WINDOW } = tools;
 
   function compile(api, phase) {
@@ -154,6 +157,9 @@ export function makeManorBuilder(tools) {
       roomsByLevel[level] = [];
       for (const [id, name, x0, z0, x1, z1, opts] of ROOMS[level]) {
         const room = { id, name, level, x0, z0, x1, z1, ...opts };
+        // A donor plan stays mechanically diffable. A CURFEW adapter may dress its rooms
+        // with this compiler's existing prop vocabulary without rewriting the source table.
+        if (!room.furn && FURN_BY_ROOM && FURN_BY_ROOM[id]) room.furn = FURN_BY_ROOM[id];
         room.wx0 = x0 * CS; room.wz0 = z0 * CS; room.wx1 = (x1 + 1) * CS; room.wz1 = (z1 + 1) * CS;
         room.cx = (room.wx0 + room.wx1) / 2; room.cz = (room.wz0 + room.wz1) / 2;
         roomsByLevel[level].push(room);
@@ -303,6 +309,7 @@ export function makeManorBuilder(tools) {
         }
       }
       if (o.type === 'secret') return;                 // the priest hole: an opening now
+      if (o.dynamic === 'refuge') return;              // Refuge owns this one persistent leaf
       const gone = !o.type && rng.next() < 0.25;       // a derelict house loses doors
       if (gone) return;
       // which way it opens: into the declared cell (N/W: the cell is on the - side)
@@ -652,8 +659,10 @@ export function makeManorBuilder(tools) {
       box(0.7, 0.22, 41.4, 'stone', -0.05, 0.11, 20);
       box(0.7, 0.22, 41.4, 'stone', 60.05, 0.11, 20);
 
-      // THE ROOF: hipped, over the first-floor ceiling, 45-degree hips.
-      const eave = LV.first.ceil + CEIL_T, rise = 6.0, ov = 0.7;
+      // THE ROOF: Blackthorn keeps its tall Victorian hip. Avery deliberately sits lower,
+      // then receives two crossing pitches below so the second house cannot read as a clone.
+      const averyExterior = EXTERIOR === 'avery';
+      const eave = LV.first.ceil + CEIL_T, rise = averyExterior ? 2.4 : 6.0, ov = 0.7;
       const ex0 = -ov, ex1 = 60 + ov, ez0 = -ov, ez1 = 40 + ov;
       const hd = (ez1 - ez0) / 2;                          // half depth = hip run
       const ridgeY = eave + rise, rx0 = ex0 + hd, rx1 = ex1 - hd, rz = (ez0 + ez1) / 2;
@@ -687,19 +696,43 @@ export function makeManorBuilder(tools) {
       const idx = new Array(pos.length / 3);
       for (let i = 0; i < idx.length; i++) idx[i] = i;
       g.setIndex(idx);
-      S.push(g, PALETTE.slate);
+      if (averyExterior) g.dispose();
+      else S.push(g, PALETTE.slate);
+      if (averyExterior) {
+        // Late-century country-house cross gables: a long low roof over the domestic
+        // block and a shorter service wing running across it. These are thin pitched
+        // panels, not giant solid boxes, and remain intentionally non-standable.
+        const pitched = (cx, cz, w, d, h, alongX) => {
+          const run = (alongX ? d : w) * 0.5;
+          const len = Math.hypot(run, h);
+          const a = Math.atan2(h, run);
+          if (alongX) {
+            S.box(w + 0.9, 0.30, len, LX(cx), LY(eave + h * 0.5), LZ(cz - run * 0.5), PALETTE.slate, 0, a, 0);
+            S.box(w + 0.9, 0.30, len, LX(cx), LY(eave + h * 0.5), LZ(cz + run * 0.5), PALETTE.slate, 0, -a, 0);
+          } else {
+            S.box(len, 0.30, d + 0.9, LX(cx - run * 0.5), LY(eave + h * 0.5), LZ(cz), PALETTE.slate, 0, 0, -a);
+            S.box(len, 0.30, d + 0.9, LX(cx + run * 0.5), LY(eave + h * 0.5), LZ(cz), PALETTE.slate, 0, 0, a);
+          }
+        };
+        pitched(27, 20, 55, 25, 4.0, true);
+        pitched(46, 20, 20, 35, 3.5, false);
+        box(55.9, 0.30, 0.50, 'dark', 27, eave + 4.05, 20);
+        box(0.50, 0.30, 35.9, 'dark', 46, eave + 3.55, 20);
+      }
       // fascia and the ridge cap
       box(ex1 - ex0 + 0.2, 0.42, 0.18, 'woodDark', 30, eave - 0.1, ez1 + 0.05);
       box(ex1 - ex0 + 0.2, 0.42, 0.18, 'woodDark', 30, eave - 0.1, ez0 - 0.05);
       box(0.18, 0.42, ez1 - ez0 + 0.2, 'woodDark', ex0 - 0.05, eave - 0.1, 20);
       box(0.18, 0.42, ez1 - ez0 + 0.2, 'woodDark', ex1 + 0.05, eave - 0.1, 20);
-      box(rx1 - rx0 + 0.4, 0.3, 0.5, 'dark', 30, ridgeY + 0.05, rz);
-      // CHIMNEYS: four brick stacks through the roof, tall enough to be a read.
+      if (!averyExterior) box(rx1 - rx0 + 0.4, 0.3, 0.5, 'dark', 30, ridgeY + 0.05, rz);
+      // Blackthorn carries four old stacks. Avery gets two short service chimneys; the
+      // attached garage and glass sunroom will do the rest of its silhouette work.
       const roofAt = (x, z) => {
         const dz = Math.abs(z - rz), dxE = Math.min(x - ex0, ex1 - x);
         return eave + rise * Math.max(0, 1 - Math.max(dz, hd - dxE) / hd);
       };
-      for (const [x, z] of [[9, 12], [22, 28], [42, 12], [51, 30]]) {
+      const chimneys = averyExterior ? [[18, 13], [47, 27]] : [[9, 12], [22, 28], [42, 12], [51, 30]];
+      for (const [x, z] of chimneys) {
         const top = roofAt(x, z) + 3.2;
         box(1.5, top - (eave - 1.0), 1.5, 'brick', x, (top + eave - 1.0) / 2, z);
         box(1.9, 0.35, 1.9, 'stone', x, top + 0.17, z);
@@ -711,7 +744,9 @@ export function makeManorBuilder(tools) {
       // THE FRONT STEPS: seven risers from the yard to the front door, 6 m wide, a
       // solid stack so they read as a flight and not as a ladder. The foot lands on
       // the road end (donor z 44.4 = local z +20.4; the road ends at +19.9).
-      const doorX = 29, front = 40 + EXT_T / 2;
+      const frontDoor = DOORS.find(d => d[4] && d[4].id === 'front');
+      const doorX = frontDoor ? (frontDoor[1] + 0.5) * CS : 29;
+      const front = GZ * CS + EXT_T / 2;
       const riser = LIFT / FRONT_STEPS;
       for (let i = 0; i < FRONT_STEPS; i++) {
         const top = -LIFT + riser * (i + 1);
@@ -727,15 +762,30 @@ export function makeManorBuilder(tools) {
         aabb(x - 0.2, -LIFT - 0.3, front, x + 0.2, 0.6, front + STEP_RUN * FRONT_STEPS + 0.2, 'wall');
         box(0.6, 0.6, 0.6, 'stone', x, 0.9, front + STEP_RUN * FRONT_STEPS + 0.1);   // a finial
       }
-      // THE PORCH: two columns on the top step and a slab over the door.
-      for (const sx of [-1, 1]) {
-        const x = doorX + sx * 2.2, z = front + 0.9;
-        S.cyl(0.26, 0.30, 5.8, 10, LX(x), LY(-riser + 2.9), LZ(z), PALETTE.stone);
-        box(0.8, 0.25, 0.8, 'stone', x, -riser + 5.85, z);
-        circle(x, z, 0.32, -riser - 0.2, -riser + 6.0, 'stone');
+      // THE PORCH: Blackthorn keeps its tall columns. Avery gets a low offset concrete
+      // canopy and two narrow posts: family estate, not another Gothic mausoleum.
+      if (averyExterior) {
+        box(7.4, 0.34, 2.7, 'stone', doorX + 0.55, 3.05, front + 0.65);
+        box(7.9, 0.22, 3.1, 'slate', doorX + 0.55, 3.34, front + 0.65);
+        for (const sx of [-1, 1]) {
+          const x = doorX + 0.55 + sx * 3.15, z = front + 1.35;
+          S.cyl(0.13, 0.15, 3.35 + riser, 8, LX(x), LY(1.37), LZ(z), PALETTE.dark);
+          circle(x, z, 0.17, -riser - 0.2, 3.2, 'metal');
+        }
+        // An unmistakable service wing: recessed sectional garage door with horizontal
+        // seams. It is facade language only; the ordinary open front door remains the route.
+        box(10.5, 3.25, 0.18, 'dark', 51.5, 1.62, front + 0.25);
+        for (let i = 0; i < 5; i++) box(10.0, 0.06, 0.08, 'metal', 51.5, 0.35 + i * 0.62, front + 0.36);
+      } else {
+        for (const sx of [-1, 1]) {
+          const x = doorX + sx * 2.2, z = front + 0.9;
+          S.cyl(0.26, 0.30, 5.8, 10, LX(x), LY(-riser + 2.9), LZ(z), PALETTE.stone);
+          box(0.8, 0.25, 0.8, 'stone', x, -riser + 5.85, z);
+          circle(x, z, 0.32, -riser - 0.2, -riser + 6.0, 'stone');
+        }
+        box(6.2, 0.4, 2.4, 'stone', doorX, 6.2, front + 0.6);
+        box(6.6, 0.24, 2.8, 'slate', doorX, 6.55, front + 0.6);
       }
-      box(6.2, 0.4, 2.4, 'stone', doorX, 6.2, front + 0.6);
-      box(6.6, 0.24, 2.8, 'slate', doorX, 6.55, front + 0.6);
       // TWO LANTERNS either side of the door, dark brass: the fixture lane lights the
       // claim, not these; they are the shape of a lit doorway waiting for power.
       for (const sx of [-1, 1]) {
