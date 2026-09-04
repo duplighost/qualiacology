@@ -80,6 +80,15 @@ const PALETTE = {
   wallBlue: [0.125, 0.160, 0.235],
   wallGold: [0.290, 0.225, 0.120],
   wallPlum: [0.215, 0.125, 0.180],
+  // Avery's donor vocabulary. Missing keys used to silently fall back to the pale
+  // plaster below, bleaching almost every room into the same empty white box.
+  wallSage: [0.095, 0.125, 0.090],
+  wallCream: [0.155, 0.140, 0.105],
+  wallWarmGrey: [0.105, 0.105, 0.098],
+  wallBlueLt: [0.085, 0.105, 0.135],
+  wallKidBlue: [0.075, 0.105, 0.145],
+  wallKidPink: [0.145, 0.080, 0.092],
+  tileWhite: [0.145, 0.150, 0.142],
   plaster: [0.265, 0.252, 0.232],
   plasterOld: [0.215, 0.205, 0.180],
   woodMid: [0.180, 0.135, 0.092],
@@ -89,7 +98,10 @@ const PALETTE = {
   marble: [0.300, 0.292, 0.272],
   marblePlain: [0.280, 0.272, 0.255],
   woodFloor: [0.175, 0.132, 0.092],
+  woodFloorLt: [0.145, 0.105, 0.070],
   woodFloorDark: [0.125, 0.095, 0.070],
+  tileFloor: [0.078, 0.082, 0.078],
+  carpetGreyFloor: [0.066, 0.067, 0.070],
   ceiling: [0.240, 0.232, 0.212],
   woodDark: [0.140, 0.108, 0.082],
   doorWood: [0.150, 0.112, 0.080],
@@ -103,6 +115,9 @@ const PALETTE = {
   dark: [0.105, 0.108, 0.115],
   paper: [0.320, 0.306, 0.270],
   facade: [0.190, 0.188, 0.180],
+  averyFacade: [0.082, 0.096, 0.079],
+  averyTrim: [0.105, 0.073, 0.044],
+  ivy: [0.032, 0.054, 0.029],
   plinth: [0.150, 0.150, 0.146],
 };
 
@@ -124,6 +139,7 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
     const rng = api.rng;
     const isLand = phase === 'landmark';
     const isBody = !isLand;
+    const isAvery = EXTERIOR === 'avery';
 
     // ---- frame helpers -----------------------------------------------------------
     const LX = (x) => x - HX, LZ = (z) => z - HZ, LY = (y) => padY + LIFT + y;
@@ -278,6 +294,18 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       if (isLand) {
         S.quad(w, h, LX(gx), LY(cy), LZ(gz), PALETTE.glass, lry, 0);
         sash(S, w, h, LX(gx), LY(cy), LZ(gz), PALETTE.woodDark, lry, 0, w > 1.4 ? 2 : 1, h > 3 ? 4 : 2, 0.07, t * 0.5 + 0.02);
+        // Avery's long facade needed authored rhythm, not sixty identical black squares.
+        // Deterministic boarded windows make the abandonment readable from the road while
+        // preserving the five panes that become a completion beacon.
+        let hash = 0;
+        for (let i = 0; i < key.length; i++) hash = ((hash * 31) + key.charCodeAt(i)) | 0;
+        if (isAvery && LIT_WINDOWS.indexOf(key) < 0 && Math.abs(hash) % 4 === 0) {
+          const proud = outward * (t * 0.5 + 0.10);
+          for (const yy of [-0.24, 0.27]) {
+            if (isX) S.box(w + 0.30, 0.17, 0.13, LX(gx), LY(cy + yy * h), LZ(gz + proud), PALETTE.averyTrim);
+            else S.box(0.13, 0.17, w + 0.30, LX(gx + proud), LY(cy + yy * h), LZ(gz), PALETTE.averyTrim);
+          }
+        }
       } else if (LIT_WINDOWS.indexOf(key) >= 0) {
         // 0.03 outside the glass (so the glass cannot z-fight it) and BEHIND the sash
         // bars, which stand 0.16-0.28 proud of the plane and cut the glow up the way
@@ -476,8 +504,9 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
             }
           }
 
-          const matN = a && !a.void ? (a.wall || 'plaster') : 'facade';
-          const matP = b && !b.void ? (b.wall || 'plaster') : 'facade';
+          const outsideMat = isAvery ? 'averyFacade' : 'facade';
+          const matN = a && !a.void ? (a.wall || 'plaster') : outsideMat;
+          const matP = b && !b.void ? (b.wall || 'plaster') : outsideMat;
           emitWall(axis, ex, ez, yBase, yTop, holes, matN, matP, t, outer, withCollider);
         }
       }
@@ -696,28 +725,27 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       const idx = new Array(pos.length / 3);
       for (let i = 0; i < idx.length; i++) idx[i] = i;
       g.setIndex(idx);
-      if (averyExterior) g.dispose();
-      else S.push(g, PALETTE.slate);
+      // Both houses get a mathematically clean hip shell. Avery's earlier crossed boxes
+      // produced enormous V-shaped blades from player height — spectacular in precisely
+      // the wrong way — so its identity now comes from the facade and entrance pediment.
+      S.push(g, PALETTE.slate);
       if (averyExterior) {
-        // Late-century country-house cross gables: a long low roof over the domestic
-        // block and a shorter service wing running across it. These are thin pitched
-        // panels, not giant solid boxes, and remain intentionally non-standable.
-        const pitched = (cx, cz, w, d, h, alongX) => {
-          const run = (alongX ? d : w) * 0.5;
-          const len = Math.hypot(run, h);
-          const a = Math.atan2(h, run);
-          if (alongX) {
-            S.box(w + 0.9, 0.30, len, LX(cx), LY(eave + h * 0.5), LZ(cz - run * 0.5), PALETTE.slate, 0, a, 0);
-            S.box(w + 0.9, 0.30, len, LX(cx), LY(eave + h * 0.5), LZ(cz + run * 0.5), PALETTE.slate, 0, -a, 0);
-          } else {
-            S.box(len, 0.30, d + 0.9, LX(cx - run * 0.5), LY(eave + h * 0.5), LZ(cz), PALETTE.slate, 0, 0, -a);
-            S.box(len, 0.30, d + 0.9, LX(cx + run * 0.5), LY(eave + h * 0.5), LZ(cz), PALETTE.slate, 0, 0, a);
-          }
-        };
-        pitched(27, 20, 55, 25, 4.0, true);
-        pitched(46, 20, 20, 35, 3.5, false);
-        box(55.9, 0.30, 0.50, 'dark', 27, eave + 4.05, 20);
-        box(0.50, 0.30, 35.9, 'dark', 46, eave + 3.55, 20);
+        const frontSpec = DOORS.find(d => d[4] && d[4].id === 'front');
+        const gableX = frontSpec ? (frontSpec[1] + 0.5) * CS + 0.55 : 29.55;
+        // A compact front pediment gives the road reveal one unmistakable face without
+        // adding a fake tower or another gameplay-blocking structure.
+        const gy = eave - 0.05, gz = 40.24, half = 5.1, peak = 3.8;
+        const ped = new THREE.BufferGeometry();
+        ped.setAttribute('position', new THREE.BufferAttribute(Float32Array.from([
+          ...V(gableX - half, gy, gz), ...V(gableX + half, gy, gz), ...V(gableX, gy + peak, gz),
+        ]), 3));
+        ped.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from([0, 0, 1, 0, 0, 1, 0, 0, 1]), 3));
+        ped.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from([0, 0, 1, 0, 0.5, 1]), 2));
+        ped.setIndex([0, 1, 2]);
+        S.push(ped, PALETTE.averyFacade);
+        const edge = Math.hypot(half, peak), ang = Math.atan2(peak, half);
+        S.box(edge, 0.20, 0.20, LX(gableX - half * 0.5), LY(gy + peak * 0.5), LZ(gz + 0.08), PALETTE.averyTrim, 0, 0, ang);
+        S.box(edge, 0.20, 0.20, LX(gableX + half * 0.5), LY(gy + peak * 0.5), LZ(gz + 0.08), PALETTE.averyTrim, 0, 0, -ang);
       }
       // fascia and the ridge cap
       box(ex1 - ex0 + 0.2, 0.42, 0.18, 'woodDark', 30, eave - 0.1, ez1 + 0.05);
@@ -776,6 +804,31 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
         // seams. It is facade language only; the ordinary open front door remains the route.
         box(10.5, 3.25, 0.18, 'dark', 51.5, 1.62, front + 0.25);
         for (let i = 0; i < 5; i++) box(10.0, 0.06, 0.08, 'metal', 51.5, 0.35 + i * 0.62, front + 0.36);
+
+        // Heavy string courses, corner piers and damp ivy break the institutional slab
+        // into an old family estate. They are facade-only dressing and cannot snag movement.
+        for (const z of [0, 40]) box(60.8, 0.24, 0.30, 'averyTrim', 30, LV.first.floor - 0.08, z + (z ? 0.23 : -0.23));
+        for (const x of [0, 60]) box(0.30, 0.24, 40.8, 'averyTrim', x + (x ? 0.23 : -0.23), LV.first.floor - 0.08, 20);
+        for (const [x, z] of [[0, 0], [60, 0], [0, 40], [60, 40]]) {
+          box(0.62, eave - 0.25, 0.62, 'averyTrim', x, (eave - 0.25) / 2, z);
+        }
+        // The 3.2 m lifted cellar is deliberately real, but it should read as an old
+        // coursed foundation instead of one enormous blank concrete rectangle.
+        for (const y of [-2.15, -1.08]) box(60.8, 0.18, 0.26, 'stoneDark', 30, y, 40.31);
+        for (const x of [5, 13, 21, 39, 47, 55]) box(0.18, 2.85, 0.24, 'stoneDark', x, -1.55, 40.32);
+        for (const x of [7.5, 15.5, 39.0, 56.0]) {
+          const height = 3.4 + (x % 3) * 0.7;
+          box(0.18, height, 0.18, 'ivy', x, height / 2, 40.31);
+          box(1.8, 0.14, 0.18, 'ivy', x + 0.7, height * 0.64, 40.32);
+          box(1.25, 0.12, 0.18, 'ivy', x - 0.45, height * 0.83, 40.32);
+        }
+
+        // A dead formal garden frames the approach but leaves the full stair lane open.
+        for (const sx of [-1, 1]) for (let i = 0; i < 4; i++) {
+          const x = doorX + sx * (5.8 + i * 1.7), z = front + 4.3 + i * 2.15;
+          S.cyl(0.38, 0.62, 1.45 + (i & 1) * 0.35, 7, LX(x), LY(-LIFT + 0.72), LZ(z), PALETTE.ivy);
+          S.box(0.10, 2.0, 0.10, LX(x), LY(-LIFT + 0.95), LZ(z), PALETTE.woodDark, 0, 0, sx * 0.13);
+        }
       } else {
         for (const sx of [-1, 1]) {
           const x = doorX + sx * 2.2, z = front + 0.9;
@@ -808,7 +861,11 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
         for (const r of RAMPS) keepOut.push({ x0: r.x0 - 0.7, z0: r.z0 - 0.7, x1: r.x1 + 0.7, z1: r.z1 + 0.7 });
         for (const [lvl, a, b, c, d] of FLOOR_HOLES) if (lvl === level) keepOut.push({ x0: a * CS - 0.7, z0: b * CS - 0.7, x1: (c + 1) * CS + 0.7, z1: (d + 1) * CS + 0.7 });
         for (const room of roomsByLevel[level]) {
-          if (room.void || !room.furn || room.furn === 'none') continue;
+          if (room.void) continue;
+          // One dark metre at the bottom of every Avery room gives the torch a horizon
+          // and stops even sparsely furnished spaces reading as blank plaster boxes.
+          if (isAvery && room.furn !== 'cellar' && room.furn !== 'undercroft') V.dado(room, y);
+          if (!room.furn || room.furn === 'none') continue;
           const P = propsFor(room, y, doorsHere, keepOut);
           if (P) P();
         }

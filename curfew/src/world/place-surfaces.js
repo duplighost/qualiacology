@@ -14,7 +14,7 @@ const TAU = Math.PI * 2;
 const STYLE_BY_KIND = Object.freeze({
   station: 'industrial',
   manor: 'plaster',
-  avery: 'plaster',
+  avery: 'avery',
   works: 'stone',
   relay: 'metal',
   cathedral: 'stone',
@@ -147,6 +147,19 @@ function plasterPixel(x, y, salt) {
   return [r, g, b];
 }
 
+function averyPixel(x, y) {
+  const base = plasterPixel(x, y, false);
+  const damp = Math.max(0, valueNoise(x, y, 4, 313) - 0.48) * 2.25;
+  const source = Math.max(0, valueNoise(x, 0, 16, 379) - 0.62) * 2.7;
+  const drip = source * (0.2 + 0.8 * y / SIZE);
+  const lichen = Math.max(0, valueNoise(x, y, 16, 421) - 0.69) * 3.1;
+  return [
+    base[0] - 22 - damp * 52 - drip * 66 - lichen * 58,
+    base[1] - 16 - damp * 34 - drip * 51 - lichen * 24,
+    base[2] - 25 - damp * 46 - drip * 58 - lichen * 50,
+  ];
+}
+
 function pixelFor(style, x, y) {
   if (style === 'timber') return timberPixel(x, y);
   if (style === 'stone') return stonePixel(x, y, false);
@@ -154,6 +167,7 @@ function pixelFor(style, x, y) {
   if (style === 'metal') return metalPixel(x, y, false);
   if (style === 'industrial') return metalPixel(x, y, true);
   if (style === 'salt') return plasterPixel(x, y, true);
+  if (style === 'avery') return averyPixel(x, y);
   return plasterPixel(x, y, false);
 }
 
@@ -176,7 +190,7 @@ function makeTexture(style) {
 
 export function createPlaceSurfaceLibrary() {
   const lib = Object.create(null);
-  for (const style of ['timber', 'stone', 'mossStone', 'metal', 'industrial', 'plaster', 'salt']) {
+  for (const style of ['timber', 'stone', 'mossStone', 'metal', 'industrial', 'plaster', 'salt', 'avery']) {
     lib[style] = makeTexture(style);
   }
   return lib;
