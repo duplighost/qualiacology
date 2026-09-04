@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.5.0-passage-and-half-roster';
+  const GAME_VERSION = '8.6.0-lit-worlds';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -670,7 +670,7 @@
   const ui = {};
   [
     'hud', 'startOverlay', 'startButton', 'startActionHint', 'startTitle', 'startCopy',
-    'crosshair', 'hitMarker', 'damageVignette', 'visorFrost', 'rewardFlash', 'srState',
+    'crosshair', 'hitMarker', 'damageVignette', 'visorFrost', 'visorWater', 'rewardFlash', 'srState',
     'stoneCounter', 'stoneCount', 'planetCollectibleTarget', 'planetCollectibleTargetValue',
     'planetCollectibleGateFill', 'coreCounter', 'planetBossCounter', 'suitMeter',
     'chargeUI', 'chargeFill', 'controlsHint', 'soundButton',
@@ -7296,7 +7296,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         new T.ConeGeometry(1.25, 6.5, 6), furnace.clone(), 18,
       );
       const markerMesh = new T.InstancedMesh(
-        new T.TorusGeometry(1, .14, 7, 30),
+        new T.TorusGeometry(.88, .12, 7, 30),
         new T.MeshBasicMaterial({
           color: 0xffd34f, transparent: true, opacity: .76,
           depthWrite: false, blending: T.AdditiveBlending,
@@ -7562,6 +7562,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       return !!(moon && water && lava);
     }
     unlockEclipseMaw(gameState, announce = true) {
+      // Reaching the Maw means all three local finals are down, which cannot
+      // happen without having travelled to both other worlds. Give the passage
+      // back, so a returning save is never asked to buy what it has proven.
+
       const state = gameState?.eclipseState;
       const maw = this.eclipseMaw;
       if (!state || !maw || state.complete || state.unlocked || !this.eclipseEligible(gameState)) return false;
@@ -7580,7 +7584,13 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       for (const planet of ['water', 'lava']) {
         const profile = this.planetSurfaces.get(planet);
         if (profile?.finalSeal) profile.finalSeal.group.visible = false;
-        if (profile?.boss) profile.boss.group.visible = false;
+        // The frame order resolves the ball before it updates the Maw, so this
+        // unlock can fire on the very frame an alternate final dies -- and it
+        // used to erase that boss in the middle of its own death, mid-shrink,
+        // which is exactly the kind of thing that reads as "odd glitchiness
+        // with bosses". A boss still counting down its deadTimer keeps the
+        // screen; updateAlternateBoss hides it when the shrink finishes.
+        if (profile?.boss && !(profile.boss.deadTimer > 0)) profile.boss.group.visible = false;
       }
       if (announce) {
         gameState.rewardFlash = 1;
@@ -7683,7 +7693,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         chartLift(meteor.targetX, meteor.targetAlt + .22, meteor.targetZ, maw.scratchPosition);
         maw.scratchQuaternion.copy(liftQuatAt(meteor.targetX, meteor.targetZ, new T.Quaternion()))
           .multiply(horizontalRing);
-        maw.scratchScale.setScalar(4.5 + Math.sin(t * 12) * .35);
+        maw.scratchScale.setScalar(6.2 + Math.abs(Math.sin(t * 12)) * .3);
         maw.scratchMatrix.compose(maw.scratchPosition, maw.scratchQuaternion, maw.scratchScale);
         maw.markerMesh.setMatrixAt(meteor.index, maw.scratchMatrix);
         if (t < 1) continue;
@@ -7697,7 +7707,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           && surfaceDistanceAt(player.x, player.z, meteor.targetX, meteor.targetZ) < 6.2
           && player.y < meteor.targetAlt + 14) {
           meteor.hit = true;
-          gameState.damagePlayer({ position: impact });
+          gameState.damagePlayerWorld(impact);
           setVspeed(gameState.player.velocity, gameState.player.up,
             Math.max(vspeedOf(gameState.player.velocity, gameState.player.up), 15));
         }
@@ -7709,6 +7719,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       const maw = this.eclipseMaw;
       const state = gameState?.eclipseState;
       if (!maw || !state) return;
+      // The hyperspeed handoff parks the player for 2.65 s behind a wipe. The
+      // Maw kept attacking straight through it, so a wave or a meteor could
+      // land on a body that cannot move, dodge, or even see what hit it. None
+      // of this boss is legible during the tunnel, so it waits the flight out.
+      if (gameState.planetTransition?.active) return;
       if (state.complete && state.lifecycle === 'complete') {
         maw.group.visible = false;
         maw.hazardGroup.visible = false;
@@ -7835,7 +7850,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           && radial >= maw.wavePrevious - 3 && radial <= maw.waveRadius + 3
           && radial >= 9 && player.y < maw.baseAltitude + 5.2) {
           maw.attackHitSerial = maw.attackSerial;
-          gameState.damagePlayer({ position: maw.position });
+          gameState.damagePlayerWorld(maw.position);
           setVspeed(gameState.player.velocity, gameState.player.up,
             Math.max(vspeedOf(gameState.player.velocity, gameState.player.up), 13));
         }
@@ -7887,7 +7902,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         if (!node.alive) continue;
         node.mesh.getWorldPosition(node.position);
         if (ball.position.distanceTo(node.position) > node.radius + ball.radius) continue;
-        if (ball.collisionCooldown.has(node.id)) return true;
+        // An overlap this ball has already been credited for is not a hit.
+        // Answering true anyway told game.update "a Maw frame happened", and
+        // game.update dropped camera, world and HUD for as long as the ball sat
+        // inside the boss -- which is most of a pass through it.
+        if (ball.collisionCooldown.has(node.id)) return false;
         ball.collisionCooldown.set(node.id, .32);
         const charged = ball.mode === 'returning' || ball.launchCharge >= .55 || ball.comet;
         if (state.phase === 'lava' && !charged) {
@@ -7926,7 +7945,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         maw.heart.getWorldPosition(maw.heartPosition);
         if (ball.position.distanceTo(maw.heartPosition) <= maw.heartRadius + ball.radius) {
           const id = 'eclipse-maw-heart';
-          if (ball.collisionCooldown.has(id)) return true;
+          // Cooled down: not a hit, so the frame is not the Maw's to eat.
+          if (ball.collisionCooldown.has(id)) return false;
           ball.collisionCooldown.set(id, .3);
           maw.heartHp--;
           maw.hitFlash = 1;
@@ -7941,7 +7961,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       }
       if (ball.position.distanceTo(maw.position) <= maw.bodyRadius + ball.radius) {
         const id = 'eclipse-maw-body';
-        if (ball.collisionCooldown.has(id)) return true;
+        // Cooled down: not a hit. This is the one that froze whole seconds,
+        // because the body sphere is 27 m across and a ball can sit in it.
+        if (ball.collisionCooldown.has(id)) return false;
         ball.collisionCooldown.set(id, .28);
         const away = ball.position.clone().sub(maw.position);
         if (away.lengthSq() > 1e-6) {
@@ -8779,11 +8801,28 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const circular = /rosette|orbit|court|amphitheatre|ring|machine/.test(site.spatial);
         const vertical = /helix|switchback|skybreak|vertebra|piston|vent|chord/.test(site.spatial);
         const suspended = /catenary|moving|raft|fan/.test(site.spatial);
+        const role = i === 0 ? 'replaced-spawn-record'
+          : ['approach-left', 'approach-right', 'challenge-a', 'challenge-b', 'rest', 'secret', 'shortcut', 'exit'][slot];
+        const radius = water
+          ? 7.5 + (slot % 4) * 2.25 + (role === 'rest' || role === 'exit' ? 3 : 0)
+          : 9 + (slot % 4) * 2.8 + (role === 'rest' || role === 'exit' ? 4 : 0);
+        // Site 8 is the crown-court district on both worlds -- NAUTILUS COURT
+        // and TYRANT COURT -- and its final court is the one arena in the game
+        // dropped on the site centre with the clearance search skipped. So the
+        // amphitheatre ring was seated INSIDE the arena it exists to seat: on
+        // Lava all eight decks rose 12-31 m through a 10 m court floor, which
+        // buried two of the CALDERA TYRANT's six eruption tells and left the
+        // player reading four of six. Push the ring out past the court rim --
+        // same eight decks, same arcs, same census -- so seating is seating
+        // again and the court is a court.
+        const crownCourt = siteIndex === 8 && !water ? 46 : 0;
         let forward;
         let lateral;
         if (circular) {
           const arc = slot / 8 * TAU + siteIndex * .23;
-          const reach = 36 + (slot % 3) * 9 + (siteIndex % 2) * 4;
+          const reach = crownCourt
+            ? crownCourt + radius + 6 + (slot % 3) * 4
+            : 36 + (slot % 3) * 9 + (siteIndex % 2) * 4;
           forward = Math.cos(arc) * reach;
           lateral = Math.sin(arc) * reach;
         } else if (vertical) {
@@ -8806,17 +8845,28 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           : surfaceOffsetChartAt(site.x, site.z, localX, localZ, Math.hypot(localX, localZ), {});
         let x = placement.x;
         let z = placement.z;
-        const role = i === 0 ? 'replaced-spawn-record'
-          : ['approach-left', 'approach-right', 'challenge-a', 'challenge-b', 'rest', 'secret', 'shortcut', 'exit'][slot];
-        const radius = water
-          ? 7.5 + (slot % 4) * 2.25 + (role === 'rest' || role === 'exit' ? 3 : 0)
-          : 9 + (slot % 4) * 2.8 + (role === 'rest' || role === 'exit' ? 4 : 0);
         ({ x, z } = this.relocateFromInterworld(x, z, radius, i + (water ? 100 : 300)));
         const ground = profile.heightAt(x, z);
         const verticalProgress = vertical ? slot : suspended ? Math.sin(slot / 7 * Math.PI) * 4 : slot % 3;
         const rise = water
           ? 3.4 + verticalProgress * (vertical ? 3.35 : 2.2) + (role === 'secret' ? 5 : 0)
-          : 11 + verticalProgress * (vertical ? 6.2 : 4.2) + (role === 'secret' ? 8 : 0);
+          // Alex: "Especially on the lava one we need more of those high up
+          // platforms. a lot more." Almost every Lava deck used to sit within
+          // 27 m of the crust, so a district was a floor plan rather than a
+          // place. The eight decks of a district now climb with the slot: you
+          // approach low, fight in the middle, and leave a district by going
+          // UP. The four vertical-grammar districts -- piston helix, vertebra
+          // switchback, vent chord, crown switchback -- get the steep ladder
+          // and end at 58 m, right under the first forge-stack catwalk.
+          // The ceiling is not taste, it is a measured law: the cooled road
+          // only lays crust under a rail sample still within 88 m of the
+          // crust, and rail clearance lifts a rail to (tallest thing nearby +
+          // up to 14). Ground-rooted footing above ~60 m starts deleting the
+          // walkable road, so everything higher than that is built as sky.
+          // The deck's underside is still ground - 7, so a raised deck grows a
+          // taller column instead of floating off its own shadow.
+          : 12 + verticalProgress * (vertical ? 4.4 : 3.4)
+            + slot * 2.2 + (role === 'secret' ? 4 : 0);
         const top = ground + rise;
         const bottom = ground - (water ? 4 : 7);
         const height = top - bottom;
@@ -8891,12 +8941,23 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       // physics. Moving entries are updated from the same phase authority.
       profile.waterPhysicalAuthorship = features.physicalAuthorship;
 
+      // One uniform object shared by every water program on this world: the
+      // ocean shell, all twenty current columns, the caustic curtains, the sky
+      // ribbons and the falls. One write per frame drives the lot, so nothing
+      // can drift out of phase with anything else.
+      features.waterUniforms = {
+        kbTime: { value: 0 },
+        kbDetail: { value: this.quality === 'LOW' ? 0 : 1 },
+      };
+      features.shoalMap = this.makeWaterShoalMap(profile, waterLevel);
+
       const oceanMaterial = new T.MeshPhysicalMaterial({
         color: 0x159db8, emissive: 0x064d68, emissiveIntensity: .62,
         transparent: true, opacity: .34, depthWrite: false, side: T.FrontSide,
         roughness: .08, metalness: .02, clearcoat: 1, clearcoatRoughness: .08,
         blending: T.NormalBlending,
       });
+      this.installWaterOceanShader(oceanMaterial, features);
       const ocean = new T.Mesh(
         new T.SphereGeometry(PLANET.radius + waterLevel, 192, 96), oceanMaterial,
       );
@@ -9565,11 +9626,17 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       // sticks. They are scenery only: no invisible collision and no gameplay
       // meaning is assigned to their colour.
       const causticGeometry = new T.CylinderGeometry(.18, 1, 1, 8, 1, true);
-      const causticMaterial = new T.MeshBasicMaterial({
+      // These twenty-four shafts were already one instanced draw call in the
+      // right places. What was wrong with them is that they never moved, so
+      // they read as painted cones rather than as light in water. Keep every
+      // instance, give the material the shared column program flowing downward
+      // -- light enters from the surface -- and it costs nothing: no new draw
+      // call, no new triangle, no per-frame CPU.
+      const causticMaterial = this.styleWaterColumnMaterial(new T.MeshBasicMaterial({
         color: 0x8ff9ff, transparent: true, opacity: .075,
         side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending,
         vertexColors: true,
-      });
+      }), features, { height: 1, flow: -1, instanced: true, gain: .55 });
       const causticShafts = new T.InstancedMesh(causticGeometry, causticMaterial, 24);
       causticShafts.name = 'KELP FOREST · CAUSTIC LIGHT CURTAINS';
       causticShafts.frustumCulled = false;
@@ -10484,13 +10551,18 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           new T.CylinderGeometry(
             blueHoleExit ? 5.4 : 2.4, blueHoleExit ? 8.7 : 4.2, height, 14, 1, true,
           ),
-          new T.MeshBasicMaterial({
+          this.styleWaterColumnMaterial(new T.MeshBasicMaterial({
             color: 0x8ff8ff, transparent: true, opacity: .12,
             depthWrite: false, blending: T.AdditiveBlending,
-          }),
+          }), features, { height, phase: index * .37 }),
         );
         column.position.y = height * .5;
-        column.visible = blueHoleExit;
+        // A single assignment of blueHoleExit to column.visible hid eight of
+        // these nine columns, so eight of the world's bubble geysers were
+        // three thin rings and five little spheres around nothing at all.
+        // Alex asked for the water hanging in the air to look better; first it
+        // has to be there. All nine draw now.
+        column.userData.kbNoCollide = true;
         group.add(column);
         const rings = [];
         for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
@@ -10574,6 +10646,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       profile.root.add(fishBodies, fishTails);
       features.fishBodies = fishBodies;
       features.fishTails = fishTails;
+      this.makeWaterLivingScenery(profile, features, materials);
       this.updateWaterWorldVisuals(profile, 0, { time: 0 }, 0);
     }
     makeWaterSkyReefs(profile, features, materials) {
@@ -10849,11 +10922,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         group.name = `LEVIATHAN WAKE · STEERABLE SKY CURRENT ${index + 1}`;
         const column = new T.Mesh(
           new T.CylinderGeometry(3.3, 5.7, height, 14, 1, true),
-          new T.MeshBasicMaterial({
+          this.styleWaterColumnMaterial(new T.MeshBasicMaterial({
             color: index % 2 ? 0xff89ca : 0x78f8ff,
             transparent: true, opacity: .13, depthWrite: false,
             blending: T.AdditiveBlending, side: T.DoubleSide,
-          }),
+          }), features, { height, phase: .21 + index * .53 }),
         );
         column.position.y = height * .5;
         group.add(column);
@@ -10939,11 +11012,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         group.name = `LEVIATHAN WAKE · RETURN CURRENT ${index + 1}`;
         const column = new T.Mesh(
           new T.CylinderGeometry(2.25, 3.7, height, 12, 1, true),
-          new T.MeshBasicMaterial({
+          this.styleWaterColumnMaterial(new T.MeshBasicMaterial({
             color: index % 2 ? 0x6de7ff : 0xff87ce,
             transparent: true, opacity: .115, depthWrite: false,
             blending: T.AdditiveBlending, side: T.DoubleSide,
-          }),
+          }), features, { height, phase: .64 + index * .47 }),
         );
         column.position.y = height * .5;
         group.add(column);
@@ -11254,6 +11327,761 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       features.carriedRiderThisFrame = true;
       return true;
     }
+    // A 256x128 equirectangular sample of the real seabed, taken once at
+    // build time from the same profile.heightAt the physics uses. Depth --
+    // not hue -- is what makes a translucent sphere read as a body of water:
+    // pale over the reef, dark over the abyss, and a foam line exactly where
+    // the two meet. The encoding is signed and square-rooted so the shallows,
+    // where every metre shows, keep about ten byte steps per metre while the
+    // seventy-six metre Blue Hole still fits in the same eight bits.
+    makeWaterShoalMap(profile, waterLevel) {
+      const width = 256, height = 128, range = 90;
+      const data = new Uint8Array(width * height * 4);
+      for (let row = 0; row < height; row++) {
+        const theta = (row + .5) / height * Math.PI;
+        const sinTheta = Math.sin(theta), cosTheta = Math.cos(theta);
+        for (let column = 0; column < width; column++) {
+          const phi = ((column + .5) / width - .5) * TAU;
+          // The shader rebuilds this exact direction from its own object-space
+          // radial, so no three.js sphere-UV convention is trusted anywhere.
+          const dirX = -sinTheta * Math.cos(phi);
+          const dirZ = sinTheta * Math.sin(phi);
+          const horizontal = Math.hypot(dirX, dirZ);
+          let chartX = 0, chartZ = 0;
+          if (horizontal > 1e-9) {
+            const rho = PLANET.radius * Math.atan2(horizontal, cosTheta);
+            chartX = dirX * (rho / horizontal);
+            chartZ = dirZ * (rho / horizontal);
+          }
+          const depth = waterLevel - profile.heightAt(chartX, chartZ);
+          const signed = Math.sign(depth) * Math.sqrt(Math.min(1, Math.abs(depth) / range));
+          const byte = Math.round(clamp(.5 + .5 * signed, 0, 1) * 255);
+          const at = (row * width + column) * 4;
+          data[at] = data[at + 1] = data[at + 2] = byte;
+          data[at + 3] = 255;
+        }
+      }
+      const texture = new T.DataTexture(data, width, height, T.RGBAFormat, T.UnsignedByteType);
+      texture.wrapS = T.RepeatWrapping;
+      texture.wrapT = T.ClampToEdgeWrapping;
+      texture.minFilter = texture.magFilter = T.LinearFilter;
+      texture.generateMipmaps = false;
+      texture.needsUpdate = true;
+      texture.userData.kbShoalRange = range;
+      return texture;
+    }
+    // The living tide. Same onBeforeCompile string surgery as
+    // installWaterDepthShader one world over: no composer, no render target,
+    // no addon. Three things separate water from a pane of tinted glass, and
+    // all three are here -- it goes clear over the reef and opaque over the
+    // abyss, it goes bright and mirror-like at grazing angles, and it moves.
+    installWaterOceanShader(material, features) {
+      const shoalMap = features.shoalMap;
+      const range = shoalMap.userData.kbShoalRange;
+      material.userData.kbLivingTide = {
+        authority: 'shoal-map-depth-grade-travelling-swell-and-fresnel',
+        shoalRange: range, swellAmplitude: .55, waterLevel: features.waterLevel,
+      };
+      material.customProgramCacheKey = () => 'kickmoon-water-living-tide-v1';
+      material.onBeforeCompile = shader => {
+        shader.uniforms.kbTime = features.waterUniforms.kbTime;
+        shader.uniforms.kbDetail = features.waterUniforms.kbDetail;
+        shader.uniforms.kbShoalMap = { value: shoalMap };
+        shader.uniforms.kbShoalRange = { value: range };
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', `#include <common>
+uniform float kbTime;
+varying vec3 vKbDir;
+varying vec3 vKbPole;
+varying float vKbSurge;`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+vKbDir = normalize(position);
+// Constant over the whole shell, so its interpolation is exact. It is the
+// planet's own north in view space, which is all the fragment stage needs to
+// rebuild a tangent frame that agrees with the object-space wave field.
+vKbPole = normalize(normalMatrix * vec3(0.0, 1.0, 0.0));
+// Two long swells, 98 m and 64 m along the surface, summed to a peak of
+// exactly one. Times 0.55 m that is precisely the distance from the ocean
+// shell up to the datum, so a crest can lift the visible waterline and can
+// never climb over ground that already stands above the datum. Nothing in the
+// game collides with this shell, so that is the only honesty it owes.
+vKbSurge = sin(dot(vKbDir, vec3(0.83, 0.19, -0.52)) * 27.0 + kbTime * 0.62) * 0.58
+  + sin(dot(vKbDir, vec3(-0.41, 0.62, 0.67)) * 41.0 - kbTime * 0.83) * 0.42;
+transformed += vKbDir * (vKbSurge * 0.55);`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', `#include <common>
+uniform float kbTime;
+uniform float kbDetail;
+uniform sampler2D kbShoalMap;
+uniform float kbShoalRange;
+varying vec3 vKbDir;
+varying vec3 vKbPole;
+varying float vKbSurge;
+// Slope amplitudes, not metres. The true geometric slope of a half-metre
+// swell on a 420 m sphere is about two degrees and would be invisible, so the
+// shading ripple is authored directly at the scale that reads on a phone.
+// Nobody can see the difference; everybody can see the water.
+vec3 kbRipple(vec3 d, float t) {
+  vec3 g = vec3(0.0);
+  g += vec3(0.83, 0.19, -0.52) * (cos(dot(d, vec3(0.83, 0.19, -0.52)) * 27.0 + t * 0.62) * 0.055);
+  g += vec3(-0.41, 0.62, 0.67) * (cos(dot(d, vec3(-0.41, 0.62, 0.67)) * 41.0 - t * 0.83) * 0.048);
+  g += vec3(0.24, -0.77, 0.59) * (cos(dot(d, vec3(0.24, -0.77, 0.59)) * 67.0 + t * 1.07) * 0.040);
+  g += vec3(-0.71, -0.34, 0.61) * (cos(dot(d, vec3(-0.71, -0.34, 0.61)) * 109.0 - t * 1.41) * 0.030);
+  g += vec3(0.55, 0.68, 0.48) * (cos(dot(d, vec3(0.55, 0.68, 0.48)) * 173.0 + t * 1.93) * 0.021);
+  return g;
+}`)
+          .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+vec3 kbDir = normalize(vKbDir);
+vec2 kbShoalUv = vec2(
+  atan(kbDir.z, -kbDir.x) * 0.15915494 + 0.5,
+  acos(clamp(kbDir.y, -1.0, 1.0)) * 0.31830989);
+float kbSigned = (texture2D(kbShoalMap, kbShoalUv).r - 0.5) * 2.0;
+float kbDepth = kbSigned * abs(kbSigned) * kbShoalRange;
+float kbShallow = 1.0 - smoothstep(0.0, 24.0, kbDepth);
+float kbPoleFade = length(cross(vec3(0.0, 1.0, 0.0), kbDir));
+if (kbDetail > 0.5 && kbPoleFade > 0.02) {
+  // A rotation carries a cross product to the cross product of the images, so
+  // the object-space east/north built from the planet's pole and the
+  // view-space east/north built from vKbPole are the same frame. That is the
+  // whole trick that lets an object-space wave field bend a view-space normal,
+  // per pixel, without a tangent attribute or a normal map.
+  vec3 kbEastObject = normalize(cross(vec3(0.0, 1.0, 0.0), kbDir));
+  vec3 kbNorthObject = cross(kbDir, kbEastObject);
+  vec3 kbEastView = normalize(cross(vKbPole, normal));
+  vec3 kbNorthView = cross(normal, kbEastView);
+  vec3 kbGrad = kbRipple(kbDir, kbTime);
+  float kbFade = smoothstep(0.02, 0.09, kbPoleFade);
+  normal = normalize(normal - (kbEastView * dot(kbGrad, kbEastObject)
+    + kbNorthView * dot(kbGrad, kbNorthObject)) * kbFade);
+}`)
+          .replace('#include <clearcoat_normal_fragment_maps>', `#include <clearcoat_normal_fragment_maps>
+#ifdef USE_CLEARCOAT
+  // The clearcoat layer starts from nonPerturbedNormal, so without this the
+  // glossy top of the water would stay mirror-flat while the surface beneath
+  // it rippled. The specular glint is the ripple's whole point.
+  clearcoatNormal = normal;
+#endif`)
+          .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+float kbFacing = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+float kbFresnel = pow(1.0 - kbFacing, 4.0);
+// The depth grade is a multiple of whatever base colour the world's palette
+// carries, so raising the sky and the lights later raises the sea with them
+// instead of fighting a hard-coded blue baked in here.
+vec3 kbShoalTint = diffuseColor.rgb * vec3(1.42, 1.55, 1.44) + vec3(0.010, 0.030, 0.026);
+vec3 kbAbyssTint = diffuseColor.rgb * vec3(0.26, 0.44, 0.62);
+diffuseColor.rgb = mix(kbAbyssTint, kbShoalTint, kbShallow);
+// Caustics exist where light reaches the floor and where you are looking down
+// into the water, so they are tied to the shoal map and to the view angle
+// rather than sprayed over the sphere. That also kills the grazing shimmer
+// that high-frequency banding would otherwise alias into on a phone.
+float kbLook = smoothstep(0.16, 0.58, kbFacing);
+float kbCausticA = sin(dot(kbDir, vec3(0.77, 0.31, -0.56)) * 214.0 + kbTime * 1.55);
+float kbCausticB = sin(dot(kbDir, vec3(-0.36, 0.71, 0.60)) * 271.0 - kbTime * 1.12);
+float kbCaustic = pow(clamp(kbCausticA * kbCausticB * 0.5 + 0.5, 0.0, 1.0), 6.0)
+  * kbShallow * kbLook * kbDetail;
+// The foam line rides the swell, so the shore breathes in and out instead of
+// sitting on the beach as a painted stripe.
+float kbFoam = (1.0 - smoothstep(0.0, 2.2, abs(kbDepth - vKbSurge * 1.7)))
+  * (0.55 + 0.45 * kbCaustic);
+diffuseColor.rgb += vec3(0.42, 0.62, 0.60) * kbFoam;
+totalEmissiveRadiance += vec3(0.30, 0.86, 0.92) * kbCaustic * 0.34;
+totalEmissiveRadiance += vec3(0.44, 0.90, 1.00) * kbFresnel * 0.30;
+totalEmissiveRadiance += vec3(0.62, 0.88, 0.84) * kbFoam * 0.22;
+roughnessFactor = mix(roughnessFactor, 0.02, kbFresnel * 0.8);
+diffuseColor.a = clamp(diffuseColor.a * mix(0.34, 2.05, smoothstep(0.0, 30.0, kbDepth))
+  + kbFresnel * 0.52 + kbFoam * 0.30, 0.0, 0.95);`);
+      };
+      material.needsUpdate = true;
+      return material;
+    }
+    // One program for every water column on this world: geyser, sky current,
+    // return current, caustic curtain and waterfall. A bright mouth, bands of
+    // bubbles travelling away from it, and a soft end where it comes apart --
+    // all derived from the vertex's own height, so it costs no draw call, no
+    // triangle and no per-frame CPU. `flow` is +1 for a column that rises out
+    // of its mouth and -1 for one that falls out of it.
+    styleWaterColumnMaterial(material, features, options = {}) {
+      const { height = 1, phase = 0, flow = 1, instanced = false, gain = 1 } = options;
+      const key = `kickmoon-water-column-v1-${instanced ? 'instanced' : 'single'}`;
+      material.customProgramCacheKey = () => key;
+      material.onBeforeCompile = shader => {
+        shader.uniforms.kbTime = features.waterUniforms.kbTime;
+        shader.uniforms.kbColumnHeight = { value: height };
+        shader.uniforms.kbColumnPhase = { value: phase };
+        shader.uniforms.kbColumnFlow = { value: flow };
+        shader.uniforms.kbColumnGain = { value: gain };
+        const phaseSource = instanced
+          ? 'vKbColumnPhase = fract(dot(instanceMatrix[3].xyz, vec3(0.0131, 0.0217, 0.0173)));'
+          : 'vKbColumnPhase = kbColumnPhase;';
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', `#include <common>
+uniform float kbColumnHeight;
+uniform float kbColumnPhase;
+varying float vKbColumnT;
+varying float vKbColumnPhase;`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+vKbColumnT = clamp(position.y / max(0.001, kbColumnHeight) + 0.5, 0.0, 1.0);
+${phaseSource}`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', `#include <common>
+uniform float kbTime;
+uniform float kbColumnFlow;
+uniform float kbColumnGain;
+varying float vKbColumnT;
+varying float vKbColumnPhase;`)
+          .replace('#include <color_fragment>', `#include <color_fragment>
+float kbT = kbColumnFlow > 0.0 ? vKbColumnT : 1.0 - vKbColumnT;
+float kbBands = smoothstep(0.52, 0.98, fract(kbT * 2.6 - kbTime * 0.34 + vKbColumnPhase))
+  * (1.0 - kbT * 0.62);
+float kbMouth = pow(1.0 - kbT, 2.6);
+float kbCrown = smoothstep(0.58, 1.0, kbT);
+diffuseColor.rgb += vec3(0.22, 0.48, 0.52) * (kbBands * 0.9 + kbMouth * 1.15) * kbColumnGain;
+diffuseColor.a *= (0.55 + kbMouth * 2.3 + kbBands * 1.35) * (1.0 - kbCrown * 0.86);`);
+      };
+      material.needsUpdate = true;
+      return material;
+    }
+    // Everything built here is scenery you cannot touch, which is exactly what
+    // was asked for. Nothing registers a solid, nothing joins profile.solids,
+    // and every object carries kbNoCollide so no later pass can adopt it.
+    //
+    // Where it goes is decided by the sightline law in docs/STATUS.md:
+    // d(h) = 37.9 + 420*acos(420/(420+h)), saturating at 697.6 m. At eye level
+    // that is 37.9 m, and a three-metre coral head is over the horizon by
+    // about ninety -- so ground scenery is packed inside ninety metres of the
+    // places the player actually stands, and the money goes into the sky,
+    // where a 96 m ribbon is above the horizon from 250 m and a band that
+    // wraps the whole sphere is therefore overhead from everywhere at once.
+    makeWaterLivingScenery(profile, features, materials) {
+      const waterLevel = features.waterLevel;
+      const scenery = {
+        detail: -1, jellies: [], schools: [], rays: [],
+        scratchUp: new T.Vector3(), scratchForward: new T.Vector3(),
+        scratchSide: new T.Vector3(), scratchBasis: new T.Matrix4(),
+      };
+      features.livingScenery = scenery;
+      const noise = (index, salt) =>
+        ((Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453) % 1 + 1) % 1;
+      // Coral and low fish belong under water. Walk the bearing outwards until
+      // the seabed is actually submerged rather than planting a reef on a
+      // beach and hoping nobody swims past it.
+      const submergedNear = (site, angle, distance, minimumDepth) => {
+        let at = surfaceOffsetChartAt(site.x, site.z, Math.cos(angle), Math.sin(angle), distance, {});
+        let ground = profile.heightAt(at.x, at.z);
+        for (let tries = 0; tries < 5 && waterLevel - ground < minimumDepth; tries++) {
+          const bearing = angle + .9 + tries * .77;
+          at = surfaceOffsetChartAt(
+            site.x, site.z, Math.cos(bearing), Math.sin(bearing), distance + 11 + tries * 8, {},
+          );
+          ground = profile.heightAt(at.x, at.z);
+        }
+        return { x: at.x, z: at.z, ground };
+      };
+
+      // ---- Three ribbons of suspended water banding the whole sphere ------
+      // The reference image's glowing water-ribbons. Great circles at 96, 148
+      // and 196 m: high enough to clear every authored silhouette, low enough
+      // that they read as belonging to this planet rather than to the sky.
+      // All three are merged into one mesh, so the entire band system is a
+      // single draw call of about thirteen hundred triangles that is visible
+      // from anywhere on the world.
+      const ribbonSpecs = [
+        [new T.Vector3(.12, .98, .14), 96, 7.4, 0],
+        [new T.Vector3(.74, .42, -.52), 148, 5.6, 1.7],
+        [new T.Vector3(-.58, .36, .73), 196, 9.1, 3.4],
+      ];
+      const ribbonSegments = 216;
+      const ribbonCorners = [[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]];
+      const ribbonVertexCount = ribbonSpecs.length * ribbonSegments * ribbonCorners.length;
+      const ribbonPositions = new Float32Array(ribbonVertexCount * 3);
+      const ribbonFlow = new Float32Array(ribbonVertexCount * 2);
+      let ribbonAt = 0;
+      for (let band = 0; band < ribbonSpecs.length; band++) {
+        const [rawAxis, altitude, halfWidth, phase] = ribbonSpecs[band];
+        const axis = rawAxis.clone().normalize();
+        const first = new T.Vector3(0, 1, 0).cross(axis);
+        if (first.lengthSq() < 1e-6) first.set(1, 0, 0);
+        first.normalize();
+        const second = axis.clone().cross(first).normalize();
+        for (let step = 0; step < ribbonSegments; step++) {
+          for (const corner of ribbonCorners) {
+            const along = (step + corner[0]) / ribbonSegments;
+            const angle = along * TAU;
+            const wobble = Math.sin(angle * 3 + phase) * 4.4 + Math.sin(angle * 7 - phase * 1.7) * 2.2;
+            const reach = PLANET.radius + altitude + wobble;
+            const side = (corner[1] * 2 - 1) * halfWidth
+              + Math.sin(angle * 5 + phase) * halfWidth * .45;
+            const cos = Math.cos(angle), sin = Math.sin(angle);
+            ribbonPositions[ribbonAt * 3] = (first.x * cos + second.x * sin) * reach + axis.x * side;
+            ribbonPositions[ribbonAt * 3 + 1] = (first.y * cos + second.y * sin) * reach + axis.y * side;
+            ribbonPositions[ribbonAt * 3 + 2] = (first.z * cos + second.z * sin) * reach + axis.z * side;
+            ribbonFlow[ribbonAt * 2] = along + band * .37;
+            ribbonFlow[ribbonAt * 2 + 1] = corner[1];
+            ribbonAt++;
+          }
+        }
+      }
+      const ribbonGeometry = new T.BufferGeometry();
+      ribbonGeometry.setAttribute('position', new T.BufferAttribute(ribbonPositions, 3));
+      ribbonGeometry.setAttribute('kbFlow', new T.BufferAttribute(ribbonFlow, 2));
+      ribbonGeometry.computeVertexNormals();
+      ribbonGeometry.computeBoundingSphere();
+      // forceSinglePass matters more than it looks: three draws a transparent
+      // double-sided material twice, back faces then front, so without it
+      // every additive sheet on this world costs two draw calls and twice its
+      // triangles. Nothing here has an inside worth sorting.
+      const ribbonMaterial = new T.MeshBasicMaterial({
+        color: 0xc8f4ff, transparent: true, opacity: .34, side: T.DoubleSide,
+        depthWrite: false, blending: T.AdditiveBlending, forceSinglePass: true,
+      });
+      ribbonMaterial.customProgramCacheKey = () => 'kickmoon-water-ribbon-v1';
+      ribbonMaterial.onBeforeCompile = shader => {
+        shader.uniforms.kbTime = features.waterUniforms.kbTime;
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', `#include <common>
+attribute vec2 kbFlow;
+varying vec2 vKbFlow;`)
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+vKbFlow = kbFlow;`);
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', `#include <common>
+uniform float kbTime;
+varying vec2 vKbFlow;`)
+          .replace('#include <color_fragment>', `#include <color_fragment>
+float kbBody = smoothstep(0.0, 0.58, 1.0 - abs(vKbFlow.y * 2.0 - 1.0));
+float kbStream = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(vKbFlow.x * 118.0 - kbTime * 1.15), 2.6);
+diffuseColor.rgb += vec3(0.30, 0.52, 0.56) * kbStream * kbBody;
+diffuseColor.a *= kbBody * kbStream;`);
+      };
+      const ribbons = new T.Mesh(ribbonGeometry, ribbonMaterial);
+      ribbons.name = 'THE LIVING TIDE · THREE SUSPENDED WATER RIBBONS';
+      ribbons.position.copy(PLANET.centre);
+      ribbons.renderOrder = 1;
+      ribbons.frustumCulled = false;
+      ribbons.userData.kbLifted = true;
+      ribbons.userData.kbNoCollide = true;
+      profile.root.add(ribbons);
+      scenery.ribbons = ribbons;
+
+      // ---- Four great rays crossing the sky -------------------------------
+      // One big silhouette sells the scale of a planet better than a hundred
+      // small ones, and it does it on a phone, where a hundred small ones are
+      // four pixels each. MANTA GARDENS already speaks this language with its
+      // moving platforms; these are the same animal as pure scenery, at
+      // 168-251 m, which the sightline law puts above the horizon from most of
+      // a hemisphere away.
+      const rayGeometry = mergeStaticGeometries([
+        (() => {
+          const disc = new T.SphereGeometry(1, 16, 10);
+          disc.applyMatrix4(new T.Matrix4().makeScale(6.4, .52, 4.1));
+          return disc;
+        })(),
+        (() => {
+          const body = new T.SphereGeometry(1, 10, 7);
+          body.applyMatrix4(new T.Matrix4().compose(
+            new T.Vector3(0, .28, .5), new T.Quaternion(), new T.Vector3(1.5, .95, 3.1),
+          ));
+          return body;
+        })(),
+        (() => {
+          const tail = new T.CylinderGeometry(.075, .34, 7.4, 5, 1, true);
+          tail.applyMatrix4(new T.Matrix4().compose(
+            new T.Vector3(0, .1, -4.5),
+            new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI * .5),
+            ONE_SCALE,
+          ));
+          return tail;
+        })(),
+        ...[-.92, .92].map(side => {
+          const lobe = new T.BoxGeometry(.5, .34, 1.5);
+          lobe.applyMatrix4(new T.Matrix4().makeTranslation(side, .05, 2.5));
+          return lobe;
+        }),
+      ]);
+      const rayMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff, emissive: 0x0d4c74, emissiveIntensity: .92,
+        roughness: .58, metalness: .05, vertexColors: true, side: T.DoubleSide,
+      });
+      const rayMesh = new T.InstancedMesh(rayGeometry, rayMaterial, 4);
+      rayMesh.name = 'THE LIVING TIDE · FOUR GREAT RAYS';
+      rayMesh.frustumCulled = false;
+      rayMesh.userData.kbLifted = true;
+      rayMesh.userData.kbNoCollide = true;
+      const rayOrbits = [
+        [new T.Vector3(.08, .99, .11), 168, .046, 3.1],
+        [new T.Vector3(.81, .32, -.49), 214, -.033, 4.2],
+        [new T.Vector3(-.52, .58, .63), 186, .027, 2.6],
+        [new T.Vector3(.36, -.71, .60), 251, -.021, 5.4],
+      ];
+      for (let index = 0; index < rayOrbits.length; index++) {
+        const [rawAxis, altitude, speed, size] = rayOrbits[index];
+        const axis = rawAxis.clone().normalize();
+        const start = new T.Vector3(0, 1, 0).cross(axis);
+        if (start.lengthSq() < 1e-6) start.set(1, 0, 0);
+        start.normalize().multiplyScalar(PLANET.radius + altitude);
+        scenery.rays.push({
+          axis, start, speed, size, phase: index * 1.31, bob: 3.4 + index * .9,
+        });
+        rayMesh.setColorAt(index, new T.Color([0x8fe6ff, 0xffb2dc, 0xa8ffe4, 0xc0d3ff][index]));
+      }
+      if (rayMesh.instanceColor) rayMesh.instanceColor.needsUpdate = true;
+      profile.root.add(rayMesh);
+      scenery.rayMesh = rayMesh;
+
+      // ---- Ninety-six drifting jellyfish ----------------------------------
+      // The cheapest object in this engine that reads as alive, and the one
+      // that reads best in a fog-lit volume. Sixty sit low in the reef where
+      // the player walks; thirty-six hang between 55 and 130 m, which is where
+      // this world already keeps its sky kelp and its hanging water.
+      const jellyGeometry = mergeStaticGeometries([
+        new T.SphereGeometry(1, 10, 6, 0, TAU, 0, Math.PI * .62),
+        ...[0, 1, 2, 3].map(leg => {
+          const angle = leg * TAU / 4 + .4;
+          const tendril = new T.CylinderGeometry(.045, .085, 2.3, 4, 1, true);
+          tendril.applyMatrix4(new T.Matrix4().makeTranslation(
+            Math.cos(angle) * .46, -1.15, Math.sin(angle) * .46,
+          ));
+          return tendril;
+        }),
+      ]);
+      const jellyMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff, emissive: 0x4a2f7a, emissiveIntensity: 1.55,
+        roughness: .42, metalness: .02, vertexColors: true,
+        transparent: true, opacity: .72, depthWrite: false, side: T.DoubleSide,
+        forceSinglePass: true,
+      });
+      const jellyCount = 96;
+      const jellyMesh = new T.InstancedMesh(jellyGeometry, jellyMaterial, jellyCount);
+      jellyMesh.name = 'THE LIVING TIDE · 96 DRIFTING JELLYFISH';
+      jellyMesh.frustumCulled = false;
+      jellyMesh.userData.kbLifted = true;
+      jellyMesh.userData.kbNoCollide = true;
+      for (let index = 0; index < jellyCount; index++) {
+        const site = profile.sites[index % profile.sites.length];
+        const ring = Math.floor(index / profile.sites.length);
+        const high = ring >= 5;
+        const angle = index * 2.3999632297 + ring * .61;
+        const distance = high ? 20 + noise(index, 3) * 52 : 14 + noise(index, 1) * 68;
+        const at = submergedNear(site, angle, distance, high ? -1e4 : 1.6);
+        const altitude = high
+          ? at.ground + 55 + noise(index, 5) * 76
+          : Math.max(at.ground + 2.6, waterLevel - 26) + noise(index, 7) * 16;
+        scenery.jellies.push({
+          base: chartLift(at.x, altitude, at.z, new T.Vector3()),
+          up: chartDirAt(at.x, at.z, new T.Vector3()),
+          quaternion: liftQuatAt(at.x, at.z, new T.Quaternion()),
+          size: 1.35 + noise(index, 11) * (high ? 3.1 : 1.5),
+          phase: index * .83, pulseSpeed: .82 + noise(index, 13) * .6,
+          bobSpeed: .28 + noise(index, 17) * .3, bobRange: 1.5 + noise(index, 19) * 3.4,
+          spin: (noise(index, 23) - .5) * .22,
+        });
+        jellyMesh.setColorAt(index, new T.Color([
+          0xffa6e6, 0x9fd0ff, 0xc9a8ff, 0x9dffe0, 0xffd0a0, 0xd8b6ff,
+        ][index % 6]));
+      }
+      if (jellyMesh.instanceColor) jellyMesh.instanceColor.needsUpdate = true;
+      profile.root.add(jellyMesh);
+      scenery.jellyMesh = jellyMesh;
+      scenery.jellyLowCount = 40;
+
+      // ---- Twenty schools of bait fish ------------------------------------
+      // Three hundred and twenty fish on one shared geometry, advanced on a
+      // closed analytic loop from absolute time. No per-fish state, so a tab
+      // stall cannot leave half a school behind, and the whole shoal is one
+      // draw call of about four and a half thousand triangles.
+      const baitGeometry = mergeStaticGeometries([
+        (() => {
+          const body = new T.OctahedronGeometry(1, 0);
+          body.applyMatrix4(new T.Matrix4().makeScale(.34, .3, .95));
+          return body;
+        })(),
+        (() => {
+          const tail = new T.ConeGeometry(.34, .62, 3, 1, true);
+          tail.applyMatrix4(new T.Matrix4().compose(
+            new T.Vector3(0, 0, -1.16),
+            new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI * .5),
+            ONE_SCALE,
+          ));
+          return tail;
+        })(),
+      ]);
+      const baitMaterial = new T.MeshStandardMaterial({
+        color: 0xffffff, emissive: 0x1c6f8e, emissiveIntensity: 1.15,
+        roughness: .4, metalness: .1, vertexColors: true,
+      });
+      const schoolCount = 20, perSchool = 16;
+      const baitMesh = new T.InstancedMesh(baitGeometry, baitMaterial, schoolCount * perSchool);
+      baitMesh.name = 'THE LIVING TIDE · TWENTY BAIT SCHOOLS';
+      baitMesh.frustumCulled = false;
+      baitMesh.userData.kbLifted = true;
+      baitMesh.userData.kbNoCollide = true;
+      for (let index = 0; index < schoolCount; index++) {
+        const site = profile.sites[index % profile.sites.length];
+        const high = index >= 14;
+        const angle = index * 2.3999632297 + .74;
+        const at = submergedNear(site, angle, 18 + noise(index, 29) * 66, high ? -1e4 : 2.2);
+        const altitude = high
+          ? at.ground + 44 + noise(index, 31) * 54
+          : Math.max(at.ground + 2.4, waterLevel - 18) + noise(index, 37) * 9;
+        const quaternion = liftQuatAt(at.x, at.z, new T.Quaternion());
+        const school = {
+          centre: chartLift(at.x, altitude, at.z, new T.Vector3()),
+          quaternion,
+          up: chartDirAt(at.x, at.z, new T.Vector3()),
+          east: new T.Vector3(1, 0, 0).applyQuaternion(quaternion),
+          north: new T.Vector3(0, 0, 1).applyQuaternion(quaternion),
+          fish: [],
+        };
+        for (let member = 0; member < perSchool; member++) {
+          const seed = index * 31 + member;
+          const instance = index * perSchool + member;
+          school.fish.push({
+            instance,
+            radius: 3.4 + noise(seed, 41) * 9.5,
+            aspect: .55 + noise(seed, 43) * .7,
+            speed: (.34 + noise(seed, 47) * .26) * (index % 2 ? 1 : -1),
+            phase: member * (TAU / perSchool) + noise(seed, 53) * .5,
+            sway: .7 + noise(seed, 59) * 2.1,
+            size: .82 + noise(seed, 61) * .7,
+          });
+          baitMesh.setColorAt(instance, new T.Color([
+            0xa9f4ff, 0xffe2a4, 0xb7ffd4, 0xffb9e0, 0x9fd8ff,
+          ][(index + member) % 5]));
+        }
+        scenery.schools.push(school);
+      }
+      if (baitMesh.instanceColor) baitMesh.instanceColor.needsUpdate = true;
+      profile.root.add(baitMesh);
+      scenery.baitMesh = baitMesh;
+      scenery.baitHighCount = schoolCount * perSchool;
+      scenery.baitLowCount = 8 * perSchool;
+
+      // ---- Falls off the high edges ---------------------------------------
+      // Off the ten sky reefs, whose 29-216 m rises are the tallest authored
+      // edges on this world, and off the eighteen highest static connective
+      // decks, which is where the player is standing when they look down.
+      // Moving records are excluded on purpose: a fall pinned to the
+      // build-time pose of a Coral Engine tread would hang in empty water.
+      const fallMaterial = this.styleWaterColumnMaterial(new T.MeshBasicMaterial({
+        color: 0xbdf3ff, transparent: true, opacity: .3, side: T.DoubleSide,
+        depthWrite: false, blending: T.AdditiveBlending, forceSinglePass: true,
+      }), features, { height: 1, flow: -1, instanced: true, gain: 1.15 });
+      const fallHosts = [
+        ...(features.skyReefs || []).map(reef => reef.record),
+        ...profile.platforms
+          .filter(record => typeof record.id === 'string' && record.id.startsWith('water-deck-'))
+          .map(record => ({ record, rise: record.top - profile.heightAt(record.x, record.z) }))
+          .sort((a, b) => b.rise - a.rise)
+          .slice(0, 18)
+          .map(entry => entry.record),
+      ].filter(record => record && Number.isFinite(record.top));
+      const fallMesh = new T.InstancedMesh(
+        new T.CylinderGeometry(1, .86, 1, 8, 3, true, 0, Math.PI * .58),
+        fallMaterial, fallHosts.length,
+      );
+      fallMesh.name = `THE LIVING TIDE · ${fallHosts.length} FALLS OFF THE HIGH EDGES`;
+      fallMesh.frustumCulled = false;
+      fallMesh.userData.kbLifted = true;
+      fallMesh.userData.kbNoCollide = true;
+      for (let index = 0; index < fallHosts.length; index++) {
+        const record = fallHosts[index];
+        const angle = index * 2.3999632297 + .31;
+        const radius = record.radius || 6;
+        const at = surfaceOffsetChartAt(
+          record.x, record.z, Math.cos(angle), Math.sin(angle), radius * .93, {},
+        );
+        const drop = clamp(record.top - profile.heightAt(at.x, at.z), 4.5, 74);
+        chartLift(at.x, record.top - drop * .5, at.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, angle + Math.PI));
+        features.scratchScale.set(radius * .52, drop, radius * .52);
+        features.scratchMatrix.compose(
+          features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+        );
+        fallMesh.setMatrixAt(index, features.scratchMatrix);
+      }
+      fallMesh.instanceMatrix.needsUpdate = true;
+      profile.root.add(fallMesh);
+      scenery.fallMesh = fallMesh;
+
+      // ---- Two new coral silhouettes --------------------------------------
+      // Water already had a thousand coral instances and still read as
+      // repetitive, because a thousand instances of three shapes is three
+      // shapes. A plate tower and a barrel-sponge cluster, with a ten-colour
+      // spread instead of six, buy more variety here than another thousand
+      // instances of the old three ever could. They live in their own array so
+      // the seven authored coralMeshes keep their meaning.
+      const towerGeometry = mergeStaticGeometries([
+        new T.CylinderGeometry(.17, .36, 2.7, 6),
+        ...[[.94, .9, .2, 0], [.78, 1.62, -.24, .9], [.6, 2.3, .14, 1.9]].map(spec => {
+          const [plateRadius, plateHeight, offset, yaw] = spec;
+          const plate = new T.CylinderGeometry(plateRadius, plateRadius * .84, .14, 10);
+          plate.applyMatrix4(new T.Matrix4().compose(
+            new T.Vector3(Math.cos(yaw) * offset, plateHeight, Math.sin(yaw) * offset),
+            new T.Quaternion().setFromEuler(new T.Euler(offset * .3, yaw, offset * .22)),
+            ONE_SCALE,
+          ));
+          return plate;
+        }),
+        ...[[-.62, 1.1, .5], [.58, 1.75, -.42]].map(spec => {
+          const [x, y, z] = spec;
+          const branch = new T.CylinderGeometry(.07, .12, .95, 5);
+          branch.applyMatrix4(new T.Matrix4().compose(
+            new T.Vector3(x * .6, y, z * .6),
+            new T.Quaternion().setFromEuler(new T.Euler(z * .7, 0, -x * .8)),
+            ONE_SCALE,
+          ));
+          return branch;
+        }),
+      ]);
+      const spongeGeometry = mergeStaticGeometries(
+        [[0, 0, 1.9, .38], [.72, .26, 1.35, .3], [-.6, -.34, 1.05, .26]].map(spec => {
+          const [x, z, tubeHeight, tubeRadius] = spec;
+          const tube = new T.CylinderGeometry(tubeRadius, tubeRadius * .74, tubeHeight, 9, 1, true);
+          tube.applyMatrix4(new T.Matrix4().compose(
+            new T.Vector3(x, tubeHeight * .5, z),
+            new T.Quaternion().setFromEuler(new T.Euler(z * .22, 0, -x * .2)),
+            ONE_SCALE,
+          ));
+          return tube;
+        }),
+      );
+      const gardenPalette = [
+        0xff5fa8, 0xffb03c, 0x54f0c8, 0x8f6dff, 0xff7a5c,
+        0x46d6ef, 0xffe36a, 0xff9ad4, 0x6affa0, 0xc7a2ff,
+      ];
+      const gardenMaterial = new T.MeshPhysicalMaterial({
+        color: 0xffffff, emissive: 0x2c1246, emissiveIntensity: .82,
+        roughness: .46, metalness: .02, clearcoat: .5, clearcoatRoughness: .24,
+        vertexColors: true, side: T.DoubleSide,
+      });
+      features.gardenMeshes = [];
+      const gardenSpecs = [
+        ['towerMesh', towerGeometry, 144, 'THE LIVING TIDE · 144 PLATE-CORAL TOWERS', 48],
+        ['spongeMesh', spongeGeometry, 168, 'THE LIVING TIDE · 168 BARREL-SPONGE CLUSTERS', 56],
+      ];
+      for (const spec of gardenSpecs) {
+        const [key, geometry, count, name, lowCount] = spec;
+        const mesh = new T.InstancedMesh(geometry, gardenMaterial, count);
+        mesh.name = name;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        mesh.frustumCulled = false;
+        mesh.userData.kbLifted = true;
+        mesh.userData.kbNoCollide = true;
+        mesh.userData.kbLowCount = lowCount;
+        mesh.userData.kbHighCount = count;
+        for (let index = 0; index < count; index++) {
+          const site = profile.sites[(index * 7) % profile.sites.length];
+          const orbit = Math.floor(index / profile.sites.length);
+          const angle = index * 2.3999632297 + site.index * .29;
+          const seeded = submergedNear(site, angle, 18 + orbit * 7.4 + noise(index, 67) * 14, 1.4);
+          const at = this.relocateFromInterworld(seeded.x, seeded.z, 2.2, 7300 + index);
+          const ground = profile.heightAt(at.x, at.z);
+          chartLift(at.x, ground + .06, at.z, features.scratchPosition);
+          features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, angle + index * .17));
+          const size = .8 + noise(index, 71) * 1.5;
+          features.scratchScale.set(size * (.85 + noise(index, 73) * .4), size, size);
+          features.scratchMatrix.compose(
+            features.scratchPosition, features.scratchQuaternion, features.scratchScale,
+          );
+          mesh.setMatrixAt(index, features.scratchMatrix);
+          mesh.setColorAt(index, new T.Color(
+            gardenPalette[(index * 3 + orbit) % gardenPalette.length],
+          ));
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        profile.root.add(mesh);
+        features.gardenMeshes.push(mesh);
+        scenery[key] = mesh;
+      }
+      return scenery;
+    }
+    // Living scenery, advanced from absolute time on closed analytic paths.
+    // Nothing here keeps per-object state, so a tab stall, a pause or a
+    // quality change cannot leave one school half a lap behind another.
+    updateWaterLivingScenery(features, time) {
+      const scenery = features.livingScenery;
+      if (!scenery) return;
+      // Quality is a uniform and an instance count, never a recompile: the
+      // automatic demotion fires mid-play and a recompile there is a hitch you
+      // can feel.
+      const detail = this.quality === 'LOW' ? 0 : 1;
+      if (scenery.detail !== detail) {
+        scenery.detail = detail;
+        features.waterUniforms.kbDetail.value = detail;
+        scenery.jellyMesh.count = detail ? scenery.jellies.length : scenery.jellyLowCount;
+        scenery.baitMesh.count = detail ? scenery.baitHighCount : scenery.baitLowCount;
+        for (const mesh of features.gardenMeshes) {
+          mesh.count = detail ? mesh.userData.kbHighCount : mesh.userData.kbLowCount;
+        }
+      }
+      const position = features.scratchPosition;
+      const quaternion = features.scratchQuaternion;
+      const spin = features.scratchYawQuaternion;
+      const scale = features.scratchScale;
+      const matrix = features.scratchMatrix;
+
+      for (let index = 0; index < scenery.jellyMesh.count; index++) {
+        const jelly = scenery.jellies[index];
+        const pulse = Math.sin(time * jelly.pulseSpeed + jelly.phase);
+        position.copy(jelly.base).addScaledVector(
+          jelly.up, Math.sin(time * jelly.bobSpeed + jelly.phase) * jelly.bobRange,
+        );
+        quaternion.copy(jelly.quaternion)
+          .multiply(spin.setFromAxisAngle(UP, time * jelly.spin + jelly.phase));
+        scale.set(
+          jelly.size * (1 + pulse * .17), jelly.size * (1 - pulse * .24),
+          jelly.size * (1 + pulse * .17),
+        );
+        matrix.compose(position, quaternion, scale);
+        scenery.jellyMesh.setMatrixAt(index, matrix);
+      }
+      scenery.jellyMesh.instanceMatrix.needsUpdate = true;
+
+      const liveFish = scenery.baitMesh.count;
+      for (const school of scenery.schools) {
+        if (school.fish[0].instance >= liveFish) break;
+        for (const fish of school.fish) {
+          const angle = time * fish.speed + fish.phase;
+          position.copy(school.centre)
+            .addScaledVector(school.east, Math.cos(angle) * fish.radius)
+            .addScaledVector(school.north, Math.sin(angle) * fish.radius * fish.aspect)
+            .addScaledVector(school.up, Math.sin(angle * 2 + fish.phase) * fish.sway);
+          // The orbit's tangent in the school's own chart frame is exactly a
+          // yaw of -angle, so a fish built along +Z always swims forwards.
+          quaternion.copy(school.quaternion).multiply(spin.setFromAxisAngle(UP, -angle));
+          scale.setScalar(fish.size);
+          matrix.compose(position, quaternion, scale);
+          scenery.baitMesh.setMatrixAt(fish.instance, matrix);
+        }
+      }
+      scenery.baitMesh.instanceMatrix.needsUpdate = true;
+
+      for (let index = 0; index < scenery.rays.length; index++) {
+        const ray = scenery.rays[index];
+        position.copy(ray.start).applyAxisAngle(ray.axis, time * ray.speed + ray.phase);
+        scenery.scratchUp.copy(position).normalize();
+        position.addScaledVector(scenery.scratchUp, Math.sin(time * .31 + ray.phase) * ray.bob);
+        scenery.scratchForward.crossVectors(ray.axis, scenery.scratchUp).normalize();
+        scenery.scratchSide.crossVectors(scenery.scratchUp, scenery.scratchForward).normalize();
+        scenery.scratchBasis.makeBasis(
+          scenery.scratchSide, scenery.scratchUp, scenery.scratchForward,
+        );
+        quaternion.setFromRotationMatrix(scenery.scratchBasis);
+        const beat = Math.sin(time * .78 + ray.phase);
+        scale.set(ray.size, ray.size * (1 + beat * .16), ray.size * (1 - beat * .05));
+        // ray.start is measured from the planet centre, which is where the
+        // sphere actually is; every other lifted object gets the same offset
+        // through chartLift.
+        position.add(PLANET.centre);
+        matrix.compose(position, quaternion, scale);
+        scenery.rayMesh.setMatrixAt(index, matrix);
+      }
+      scenery.rayMesh.instanceMatrix.needsUpdate = true;
+    }
     updateWaterWorldVisuals(profile, dt, gameState, clock) {
       const features = profile.waterFeatures;
       if (!features) return;
@@ -11265,8 +12093,12 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       features.scratchPlayer ||= new T.Vector3();
       features.scratchBall ||= new T.Vector3();
       features.carriedRiderThisFrame = false;
-      features.ocean.rotation.y += dt * .018;
-      features.ocean.material.opacity = .3 + Math.sin(time * .46) * .035;
+      // The shell no longer yaws. Drifting the whole ocean at 0.018 rad/s over
+      // a seabed that stays put was the old stand-in for motion; travelling
+      // waves are the real thing, and the shoal map the shader reads is nailed
+      // to the ground beneath it, which a spinning shell would have smeared.
+      features.waterUniforms.kbTime.value = time;
+      features.ocean.material.opacity = .34 + Math.sin(time * .46) * .03;
       features.ocean.material.emissiveIntensity = .55 + Math.sin(time * .72) * .11;
       features.shelfRims.material.emissiveIntensity = 1.8 + Math.sin(time * 2.1) * .55;
       for (let index = 0; index < features.coralMeshes.length; index++) {
@@ -11436,6 +12268,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         bell.group.updateMatrixWorld(true);
         bell.clapper.getWorldPosition(bell.position);
       }
+      this.updateWaterLivingScenery(features, time);
     }
     rewardWaterInteraction(profile, gameState, kind, position, label, value = 1) {
       const progress = gameState.worldProgress[profile.id];
@@ -12434,6 +13267,533 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       this.makeLavaSkyForge(profile, features);
       this.makeLavaScenery(profile, features);
       this.makeLavaCoolingEclipseAtlas(profile, features);
+      this.makeLavaVerticalCountry(profile, features);
+    }
+    // THE VERTICAL COUNTRY. Alex asked for "a lot more" high places on this
+    // world and for the reference painting's furniture -- a coiled dragon on
+    // the limb, chains looping the sphere, orbital gear rings, lava pouring
+    // off ledges. Every family below is one instanced mesh sharing one
+    // material, so the whole chapter costs ten draw calls. Nothing here is
+    // footing unless it is registered as a solid in the same breath as its
+    // visible instance; the falls, chains, bands and dragon are scenery and
+    // say so.
+    makeLavaVerticalCountry(profile, features) {
+      const { basaltMaterial, forgeMaterial, goldMaterial, cooledMaterial } = features.materials;
+      const low = this.quality === 'LOW';
+      const position = new T.Vector3();
+      const quaternion = new T.Quaternion();
+      const scale = new T.Vector3();
+      const matrix = new T.Matrix4();
+      const flat = new T.Quaternion().setFromEuler(new T.Euler(Math.PI / 2, 0, 0));
+      const bearingOf = siteIndex => {
+        const site = profile.sites[siteIndex];
+        const next = profile.sites[(siteIndex + 1) % profile.sites.length];
+        return Math.atan2(next.z - site.z, next.x - site.x);
+      };
+      const offsetAt = (site, angle, distance) => surfaceOffsetChartAt(
+        site.x, site.z, Math.cos(angle), Math.sin(angle), distance, {},
+      );
+      const setInstance = (mesh, index, x, alt, z, yaw, sx, sy, sz, extra) => {
+        chartLift(x, alt, z, position);
+        quaternion.copy(liftQuatAt(x, z, new T.Quaternion()));
+        if (yaw) quaternion.multiply(new T.Quaternion().setFromAxisAngle(UP, yaw));
+        if (extra) quaternion.multiply(extra);
+        scale.set(sx, sy, sz);
+        matrix.compose(position, quaternion, scale);
+        mesh.setMatrixAt(index, matrix);
+      };
+
+      // ---- FORGE STACKS -------------------------------------------------
+      // The eight district decks of a vertical-grammar district climb to 58 m
+      // and stop. A forge stack picks the climb up there -- the first catwalk
+      // is a step across from the exit deck -- and carries it to 254 m in
+      // eighteen 11.4 m rungs, spiralling back IN over the district so the
+      // last plate looks down on the whole place you just climbed out of.
+      // Every rung is a registered solid whose collider IS its visible
+      // instance, and every rung declares a skyRouteStep, which is what lets
+      // a grind rail pass honestly underneath one instead of being hoisted
+      // over it and off the cooled road.
+      const stackSites = [4, 5, 11];
+      const stackSteps = 18;
+      const stackBody = (() => {
+        const deck = new T.CylinderGeometry(1, .86, 1, 8);
+        const teeth = [];
+        for (let tooth = 0; tooth < 6; tooth++) {
+          const cone = new T.ConeGeometry(.16, .9, 4);
+          cone.rotateX(Math.PI);
+          cone.applyMatrix4(new T.Matrix4().makeTranslation(
+            Math.cos(tooth / 6 * TAU) * .74, -.72, Math.sin(tooth / 6 * TAU) * .74,
+          ));
+          teeth.push(cone);
+        }
+        return mergeStaticGeometries([deck, ...teeth]);
+      })();
+      const stackBodyMaterial = cooledMaterial.clone();
+      stackBodyMaterial.color.setHex(0x8f6753);
+      stackBodyMaterial.emissive.setHex(0x5a1b0b);
+      stackBodyMaterial.emissiveIntensity = .58;
+      const stackRimMaterial = goldMaterial.clone();
+      stackRimMaterial.emissiveIntensity = .29;
+      const crownPlates = 6;
+      const stackBodyMesh = new T.InstancedMesh(
+        stackBody, stackBodyMaterial, stackSites.length * stackSteps + crownPlates,
+      );
+      const stackRimMesh = new T.InstancedMesh(
+        new T.TorusGeometry(1, .048, 4, 22, Math.PI * 1.32),
+        stackRimMaterial, stackSites.length * stackSteps + crownPlates,
+      );
+      stackBodyMesh.name = 'LAVA · SIXTY FORGE STACK CATWALKS';
+      stackRimMesh.name = 'LAVA · FORGE STACK LANDING SEAMS';
+      // Nothing in this chapter casts a shadow. The sky families live far
+      // above the shadow camera's useful volume, so a cast would have bought
+      // a second draw call each and painted nothing on the crust.
+      stackBodyMesh.receiveShadow = true;
+      stackBodyMesh.frustumCulled = stackRimMesh.frustumCulled = false;
+      stackBodyMesh.userData.kbLifted = stackRimMesh.userData.kbLifted = true;
+      const stackPlates = [];
+      // The spiral's arithmetic does not know where the grind rails run, so
+      // three of its rungs came down inside one. These are the only hand-placed
+      // rungs on the planet. Each is stepped sideways along its own bearing and
+      // reach until it clears BOTH audited rail volumes -- the wide rendered
+      // tube and the narrower physics grip, which are separate authorities and
+      // fail separately -- while the accumulators below stay untouched, so
+      // every other rung and every other gap is exactly where the layout put
+      // it. Bearing is radians about the site, reach is metres further out.
+      const stackNudges = {
+        // Sat 8.4 m inside the LAVA-TO-WATER boarding ascent, which is one of
+        // the six ascents Alex asked to actually work. Now 5.0 m clear of it,
+        // with 6.8 m and 6.3 m edge-to-edge to the rungs either side.
+        '4-11': { bearing: .05, reach: 13 },
+        // These two sat in LAVA-GRIND-5. They step outward together so the gap
+        // between them stays 6.2 m, still one double jump, and the step across
+        // from the district exit deck onto 5-0 stays 7.2 m on a 1.8 m rise.
+        '5-0': { bearing: -.01, reach: 10 },
+        '5-1': { bearing: .05, reach: 21 },
+      };
+      let stackIndex = 0;
+      for (const siteIndex of stackSites) {
+        const site = profile.sites[siteIndex];
+        const ground = profile.heightAt(site.x, site.z);
+        let angle = bearingOf(siteIndex);
+        let distance = 160;
+        for (let step = 0; step < stackSteps; step++) {
+          const progress = step / (stackSteps - 1);
+          const radius = 13.4 - progress * 4.8;
+          const thickness = 3.2;
+          const top = ground + 60 + step * 11.4;
+          const nudge = stackNudges[siteIndex + '-' + step];
+          const bearing = angle + (nudge ? nudge.bearing : 0);
+          const at = offsetAt(site, bearing, distance + (nudge ? nudge.reach : 0));
+          // Hold the chord at 22 m as the spiral tightens, so the gap between
+          // rungs stays one double jump the whole way up rather than opening
+          // to sixty metres out at the rim.
+          const nextDistance = distance - 6.7;
+          angle += 21 / Math.max(12, (distance + nextDistance) * .5);
+          distance = nextDistance;
+          setInstance(
+            stackBodyMesh, stackIndex, at.x, top - thickness * .5, at.z,
+            bearing + step * .27, radius, thickness, radius,
+          );
+          setInstance(
+            stackRimMesh, stackIndex, at.x, top + .1, at.z,
+            bearing + step * .61, radius * .93, radius * .93, radius * .93, flat,
+          );
+          const record = this.registerAuthoredPlanetSolid(
+            profile, `lava-forge-stack-${siteIndex}-${step}`,
+            at.x, at.z, top, top - thickness, radius,
+            {
+              collisionScale: .93, sideScale: .97, supportDepth: thickness + .5,
+              family: 'lava-forge-stack', siteIndex, biomeId: site.biome,
+              skyRouteStep: step, role: 'forge-stack-catwalk', safe: true,
+              staticFooting: true, forgeStack: true,
+            },
+          );
+          record.renderMesh = stackBodyMesh;
+          record.renderIndex = stackIndex;
+          record.renderAuthority = 'same-instanced-catwalk';
+          stackPlates.push({
+            id: `lava-feature-forge-stack-${siteIndex}-${step}`,
+            siteIndex, step, record, rise: top - ground,
+          });
+          stackIndex++;
+        }
+      }
+      // THE CROWN. The sky forge's hammer ascent stops at its 218 m summit
+      // and has done for eleven versions. Six more catwalks spiral in above
+      // it to 281 m, the highest standing place on the planet -- which the
+      // measured sightline law d(h) = 37.9 + 420*acos(420/(420+h)) makes
+      // visible from 428 m away, so it reads from the whole GEAR CALDERA
+      // approach and from both rails either side of it. They are built here
+      // rather than appended to the forge's own layout because that array is
+      // index-wired to the vents, and because these plates want the catwalk
+      // family's look, not another anvil.
+      const crownSite = profile.sites[3];
+      const crownGround = profile.heightAt(crownSite.x, crownSite.z);
+      const crownLayout = [ // [localX, localZ, rise, radius] around site 3
+        [138, 26, 229, 12.6], [123, 52, 240, 11.8], [97, 68, 251, 12.4],
+        [67, 72, 261, 11.2], [39, 60, 271, 12], [19, 36, 281, 16.5],
+      ];
+      for (let step = 0; step < crownLayout.length; step++) {
+        const [localX, localZ, rise, radius] = crownLayout[step];
+        const distance = Math.hypot(localX, localZ);
+        const bearing = Math.atan2(localZ, localX);
+        const thickness = 3.2;
+        const top = crownGround + rise;
+        const at = offsetAt(crownSite, bearing, distance);
+        setInstance(
+          stackBodyMesh, stackIndex, at.x, top - thickness * .5, at.z,
+          bearing + step * .31, radius, thickness, radius,
+        );
+        setInstance(
+          stackRimMesh, stackIndex, at.x, top + .1, at.z,
+          bearing + step * .68, radius * .93, radius * .93, radius * .93, flat,
+        );
+        const record = this.registerAuthoredPlanetSolid(
+          profile, `lava-forge-crown-${step}`,
+          at.x, at.z, top, top - thickness, radius,
+          {
+            collisionScale: .93, sideScale: .97, supportDepth: thickness + .5,
+            family: 'lava-forge-crown', siteIndex: 3, biomeId: crownSite.biome,
+            skyRouteStep: step, role: 'forge-crown-catwalk', safe: true,
+            staticFooting: true, forgeStack: true,
+          },
+        );
+        record.renderMesh = stackBodyMesh;
+        record.renderIndex = stackIndex;
+        record.renderAuthority = 'same-instanced-catwalk';
+        stackPlates.push({
+          id: `lava-feature-forge-crown-${step}`,
+          siteIndex: 3, step, record, rise, crown: true,
+        });
+        stackIndex++;
+      }
+      stackBodyMesh.count = stackIndex;
+      stackRimMesh.count = stackIndex;
+      stackBodyMesh.instanceMatrix.needsUpdate = true;
+      stackRimMesh.instanceMatrix.needsUpdate = true;
+      profile.root.add(stackBodyMesh, stackRimMesh);
+      features.forgeStacks = stackPlates;
+      features.forgeStackMesh = stackBodyMesh;
+
+      // ---- MOLTEN FALLS -------------------------------------------------
+      // The single most "lava planet" thing this world did not have. Every
+      // high ledge now pours. A fall is one open cone with a banded texture,
+      // a bright lip where it goes over, and a pool where it lands: three
+      // instances of two shared meshes, so twenty-four falls cost two draw
+      // calls. They are energy, never footing.
+      const fallCanvas = document.createElement('canvas');
+      fallCanvas.width = 32; fallCanvas.height = 128;
+      const fallCtx = fallCanvas.getContext('2d');
+      const fallGradient = fallCtx.createLinearGradient(0, 0, 0, 128);
+      fallGradient.addColorStop(0, '#fff0c4');
+      fallGradient.addColorStop(.22, '#ff9a30');
+      fallGradient.addColorStop(.72, '#ff5613');
+      fallGradient.addColorStop(1, '#c8320a');
+      fallCtx.fillStyle = fallGradient;
+      fallCtx.fillRect(0, 0, 32, 128);
+      for (let streak = 0; streak < 14; streak++) {
+        const x = (Math.sin(streak * 17.31) * 9187.4 % 1 + 1) % 1 * 32;
+        fallCtx.fillStyle = streak % 3 === 0
+          ? 'rgba(255,247,214,.72)' : 'rgba(255,64,10,.42)';
+        fallCtx.fillRect(x, 0, streak % 3 === 0 ? 1.6 : 3.4, 128);
+      }
+      const fallTexture = new T.CanvasTexture(fallCanvas);
+      fallTexture.colorSpace = T.SRGBColorSpace;
+      fallTexture.wrapS = fallTexture.wrapT = T.RepeatWrapping;
+      // Molten rock is matter, not glow: a fall is an OPAQUE closed stream
+      // with a front-face-only shell. That keeps it out of the transparent
+      // pass, halves its fill, and reads as something with weight -- which is
+      // also what it should look like pouring off a hundred-metre ledge.
+      const fallMaterial = new T.MeshStandardMaterial({
+        map: fallTexture, color: 0xffb968, emissive: 0xff4d0c,
+        emissiveIntensity: .62, roughness: .52, metalness: 0,
+      });
+      const poolMaterial = new T.MeshStandardMaterial({
+        color: 0xffd27a, emissive: 0xff5a10, emissiveIntensity: .62,
+        roughness: .38, metalness: .12,
+      });
+      // Every ledge over 32 m pours, district decks and atlas towers alike,
+      // thinned to an even stride so no one district becomes a curtain of
+      // fire and the falls read as a property of the whole world.
+      const fallCandidates = [
+        ...profile.platforms.filter(deck => deck.authored && Number.isInteger(deck.index)),
+        ...features.coolingEclipseSolids,
+      ].filter(record => (record.collisionScale ?? 1) > 0
+        && record.top - profile.heightAt(record.x, record.z) >= 32);
+      const fallWanted = low ? 12 : 26;
+      const fallStride = Math.max(1, Math.floor(fallCandidates.length / fallWanted));
+      const fallSources = [];
+      for (let pick = 0; pick < fallCandidates.length && fallSources.length < fallWanted; pick += fallStride) {
+        fallSources.push(fallCandidates[pick]);
+      }
+      const fallMesh = new T.InstancedMesh(
+        new T.CylinderGeometry(1, 1.55, 1, 7), fallMaterial,
+        Math.max(1, fallSources.length),
+      );
+      const poolMesh = new T.InstancedMesh(
+        new T.CylinderGeometry(1, .82, 1, 12), poolMaterial,
+        Math.max(2, fallSources.length * 2),
+      );
+      fallMesh.name = 'LAVA · MOLTEN FALLS OFF THE HIGH LEDGES';
+      poolMesh.name = 'LAVA · FALL LIPS AND CATCH POOLS';
+      fallMesh.frustumCulled = poolMesh.frustumCulled = false;
+      fallMesh.userData.kbLifted = poolMesh.userData.kbLifted = true;
+      fallMesh.userData.kbNoCollide = poolMesh.userData.kbNoCollide = true;
+      fallMesh.userData.nonFootingEnergy = poolMesh.userData.nonFootingEnergy = true;
+      for (let index = 0; index < fallSources.length; index++) {
+        const deck = fallSources[index];
+        const angle = index * 2.3999632297;
+        const lip = offsetAt(deck, angle, deck.radius * .96);
+        const floor = profile.heightAt(lip.x, lip.z);
+        const height = Math.max(8, deck.top - floor - .6);
+        const width = Math.min(7.4, deck.radius * .42);
+        setInstance(
+          fallMesh, index, lip.x, deck.top - height * .5, lip.z, angle,
+          width, height, width,
+        );
+        setInstance(
+          poolMesh, index * 2, lip.x, floor + .55, lip.z, angle,
+          width * 2.35, 1.1, width * 2.35,
+        );
+        setInstance(
+          poolMesh, index * 2 + 1, lip.x, deck.top - .25, lip.z, angle,
+          width * 1.24, .7, width * 1.24,
+        );
+      }
+      fallMesh.count = fallSources.length;
+      poolMesh.count = fallSources.length * 2;
+      fallMesh.instanceMatrix.needsUpdate = true;
+      poolMesh.instanceMatrix.needsUpdate = true;
+      profile.root.add(fallMesh, poolMesh);
+      features.lavaFalls = { mesh: fallMesh, poolMesh, count: fallSources.length };
+
+      // ---- CHAINS -------------------------------------------------------
+      // CHAIN FOUNDRY's playable catenary already teaches the word; this
+      // speaks it at district scale. Six spans of real links, hung between
+      // the new gate pylons and across the widest districts. Scenery.
+      const chainMaterial = forgeMaterial.clone();
+      chainMaterial.color.setHex(0x8e5c45);
+      chainMaterial.emissive.setHex(0x53150a);
+      chainMaterial.emissiveIntensity = .29;
+      const chainSpans = [
+        [6, 2.1, 60, 46, 5.3, 60, 46, 30],
+        [6, .6, 66, 34, 3.74, 66, 34, 22],
+        [1, .98, 46, 21, 2.68, 62, 33, 15],
+        [8, .39, 106, 34, 4.58, 106, 34, 44],
+        [3, 0, 130, 50, 3.14159, 130, 50, 46],
+        [9, .31, 54, 20, 2.83, 54, 20, 17],
+      ];
+      // A chain only reads as a chain if its links touch. Each span sizes its
+      // own links from its own arc length, so the 190 m span across TYRANT
+      // COURT gets links you can see from the far side of the district and
+      // the short one over BASALT KEEP does not turn into a rope of boulders.
+      const chainLinksPerSpan = low ? 10 : 14;
+      const chainMesh = new T.InstancedMesh(
+        new T.TorusGeometry(1, .42, 4, 10), chainMaterial,
+        chainSpans.length * chainLinksPerSpan,
+      );
+      chainMesh.name = 'LAVA · SIX DISTRICT CHAIN SPANS';
+      chainMesh.frustumCulled = false;
+      chainMesh.userData.kbLifted = true;
+      chainMesh.userData.kbNoCollide = true;
+      let chainIndex = 0;
+      for (const [siteIndex, angleA, distanceA, riseA, angleB, distanceB, riseB, sag] of chainSpans) {
+        const site = profile.sites[siteIndex];
+        const ground = profile.heightAt(site.x, site.z);
+        const a = offsetAt(site, angleA, distanceA);
+        const b = offsetAt(site, angleB, distanceB);
+        const span = Math.hypot(b.x - a.x, b.z - a.z);
+        const arc = Math.hypot(span, sag * 1.6) + Math.abs(riseB - riseA) * .4;
+        const linkSize = Math.min(11, Math.max(3.2, arc / chainLinksPerSpan * .66));
+        for (let link = 0; link < chainLinksPerSpan; link++) {
+          const progress = (link + .5) / chainLinksPerSpan;
+          const x = a.x + (b.x - a.x) * progress;
+          const z = a.z + (b.z - a.z) * progress;
+          const alt = ground + riseA + (riseB - riseA) * progress
+            - sag * 4 * progress * (1 - progress);
+          const yaw = Math.atan2(b.z - a.z, b.x - a.x);
+          setInstance(
+            chainMesh, chainIndex, x, alt, z, yaw, linkSize, linkSize, linkSize,
+            new T.Quaternion().setFromEuler(new T.Euler(
+              link % 2 ? Math.PI / 2 : 0, 0, Math.PI / 2,
+            )),
+          );
+          chainIndex++;
+        }
+      }
+      chainMesh.count = chainIndex;
+      chainMesh.instanceMatrix.needsUpdate = true;
+      profile.root.add(chainMesh);
+      features.districtChains = chainMesh;
+
+      // ---- ORBITAL BANDS ------------------------------------------------
+      // Two gear rings and one colossal chain wrap the whole sphere well
+      // above every standing place, so the machine reads from any district
+      // and never gets in the way of a jump. The gear rings ride the atlas's
+      // existing energy authority: translucent, non-footing, slowly turning.
+      const bandMaterial = (colour, opacity) => new T.MeshBasicMaterial({
+        color: colour, transparent: true, opacity, depthWrite: false,
+        blending: T.AdditiveBlending,
+      });
+      const gearBands = [];
+      const bandSpecs = [
+        [690, 7.6, 0xff8a34, .24, new T.Euler(1.2, .3, .18), .014, .4],
+        [731, 5.2, 0xffd07a, .2, new T.Euler(.62, 1.1, -.35), -.019, 2.1],
+      ];
+      for (let bandIndex = 0; bandIndex < bandSpecs.length; bandIndex++) {
+        const [radius, tube, colour, opacity, euler, speed, phase] = bandSpecs[bandIndex];
+        const band = new T.Mesh(
+          new T.TorusGeometry(radius, tube, 4, 72), bandMaterial(colour, opacity),
+        );
+        band.name = `LAVA · ORBITAL GEAR BAND ${bandIndex + 1}`;
+        band.position.copy(PLANET.centre);
+        band.rotation.copy(euler);
+        band.frustumCulled = false;
+        band.userData.kbLifted = true;
+        band.userData.kbNoCollide = true;
+        band.userData.nonFootingEnergy = true;
+        profile.root.add(band);
+        gearBands.push({
+          mesh: band, baseRotation: band.rotation.clone(), speed, phase,
+        });
+      }
+      features.coolingEclipseKinetics.push({
+        siteIndex: -1, group: null, rings: gearBands,
+        nonFooting: true, physicalMeshesMoved: false,
+        role: 'orbital-gear-bands',
+      });
+      const orbitChainCount = low ? 84 : 132;
+      const orbitChainMesh = new T.InstancedMesh(
+        new T.TorusGeometry(1, .3, 4, 10), chainMaterial, orbitChainCount,
+      );
+      orbitChainMesh.name = 'LAVA · CHAIN AROUND THE WHOLE WORLD';
+      orbitChainMesh.frustumCulled = false;
+      orbitChainMesh.userData.kbLifted = true;
+      orbitChainMesh.userData.kbNoCollide = true;
+      const orbitTilt = new T.Quaternion().setFromEuler(new T.Euler(.34, .8, .12));
+      const orbitRadius = 712;
+      const orbitLink = 15.5;
+      for (let link = 0; link < orbitChainCount; link++) {
+        const angle = link / orbitChainCount * TAU;
+        position.set(Math.cos(angle) * orbitRadius, Math.sin(angle) * orbitRadius, 0)
+          .applyQuaternion(orbitTilt).add(PLANET.centre);
+        quaternion.copy(orbitTilt).multiply(new T.Quaternion().setFromEuler(new T.Euler(
+          link % 2 ? Math.PI / 2 : 0, 0, angle + Math.PI / 2,
+        )));
+        scale.setScalar(orbitLink);
+        matrix.compose(position, quaternion, scale);
+        orbitChainMesh.setMatrixAt(link, matrix);
+      }
+      orbitChainMesh.instanceMatrix.needsUpdate = true;
+      profile.root.add(orbitChainMesh);
+      features.orbitalBands = { gearBands, orbitChainMesh };
+
+      // ---- THE DRAGON ---------------------------------------------------
+      // DRAGON SPINE has been a name for eleven versions. One big object beats
+      // twenty small ones on a phone, so the district finally gets the animal:
+      // a 172 m vertebral arch leaving the crust and diving back into it, with
+      // a skull at the low end. Pure silhouette -- it is never footing.
+      const spineSite = profile.sites[4];
+      const spineGround = profile.heightAt(spineSite.x, spineSite.z);
+      const spineBearing = bearingOf(4) + 2.6;
+      const spineCount = low ? 18 : 26;
+      const vertebra = (() => {
+        const centrum = new T.SphereGeometry(.62, 7, 5);
+        centrum.scale(1, .8, 1.25);
+        const crest = new T.ConeGeometry(.3, 2.1, 5);
+        crest.applyMatrix4(new T.Matrix4().makeTranslation(0, 1.1, 0));
+        const ribLeft = new T.ConeGeometry(.2, 1.5, 4);
+        ribLeft.rotateZ(1.02);
+        ribLeft.applyMatrix4(new T.Matrix4().makeTranslation(-.62, -.24, 0));
+        const ribRight = new T.ConeGeometry(.2, 1.5, 4);
+        ribRight.rotateZ(-1.02);
+        ribRight.applyMatrix4(new T.Matrix4().makeTranslation(.62, -.24, 0));
+        return mergeStaticGeometries([centrum, crest, ribLeft, ribRight]);
+      })();
+      const boneMaterial = basaltMaterial.clone();
+      boneMaterial.map = null;
+      boneMaterial.color.setHex(0xd9b892);
+      boneMaterial.emissive.setHex(0x6d1c08);
+      boneMaterial.emissiveIntensity = .3;
+      boneMaterial.roughness = .82;
+      boneMaterial.metalness = .06;
+      const spineMesh = new T.InstancedMesh(vertebra, boneMaterial, spineCount);
+      spineMesh.name = 'DRAGON SPINE · THE DRAGON';
+      spineMesh.frustumCulled = false;
+      spineMesh.userData.kbLifted = true;
+      spineMesh.userData.kbNoCollide = true;
+      const spineArch = progress => Math.pow(Math.sin(Math.PI * progress), .72);
+      for (let bone = 0; bone < spineCount; bone++) {
+        const progress = bone / (spineCount - 1);
+        const along = 34 + progress * 268;
+        const at = offsetAt(spineSite, spineBearing, along);
+        const alt = spineGround - 16 + spineArch(progress) * 188;
+        const girth = 5.2 + spineArch(progress) * 7.4;
+        const slope = (spineArch(Math.min(1, progress + .04))
+          - spineArch(Math.max(0, progress - .04))) * 188 / 21.4;
+        setInstance(
+          spineMesh, bone, at.x, alt, at.z, spineBearing + Math.PI / 2,
+          girth, girth * 1.08, girth,
+          new T.Quaternion().setFromAxisAngle(
+            new T.Vector3(1, 0, 0), Math.atan(slope),
+          ),
+        );
+      }
+      spineMesh.instanceMatrix.needsUpdate = true;
+      profile.root.add(spineMesh);
+      const skullGeometry = (() => {
+        const cranium = new T.SphereGeometry(1, 8, 6);
+        cranium.scale(1, .84, 1.5);
+        const snout = new T.ConeGeometry(.62, 2.3, 6);
+        snout.rotateX(Math.PI / 2);
+        snout.applyMatrix4(new T.Matrix4().makeTranslation(0, -.2, 2.1));
+        const hornLeft = new T.ConeGeometry(.26, 2.6, 5);
+        hornLeft.rotateX(-.6);
+        hornLeft.rotateZ(.42);
+        hornLeft.applyMatrix4(new T.Matrix4().makeTranslation(-.62, 1.1, -.5));
+        const hornRight = new T.ConeGeometry(.26, 2.6, 5);
+        hornRight.rotateX(-.6);
+        hornRight.rotateZ(-.42);
+        hornRight.applyMatrix4(new T.Matrix4().makeTranslation(.62, 1.1, -.5));
+        const jaw = new T.BoxGeometry(1.1, .34, 2.1);
+        jaw.applyMatrix4(new T.Matrix4().makeTranslation(0, -.86, 1.2));
+        return mergeStaticGeometries([cranium, snout, hornLeft, hornRight, jaw]);
+      })();
+      const skullAt = offsetAt(spineSite, spineBearing, 12);
+      const skull = new T.Mesh(skullGeometry, boneMaterial);
+      skull.name = 'DRAGON SPINE · THE HEAD';
+      skull.scale.setScalar(9.6);
+      skull.frustumCulled = false;
+      skull.userData.kbNoCollide = true;
+      this.placePlanetObject(
+        skull, skullAt.x, profile.heightAt(skullAt.x, skullAt.z) + 7.2, skullAt.z,
+        spineBearing + Math.PI,
+      );
+      profile.root.add(skull);
+      features.dragon = { spineMesh, skull, bones: spineCount };
+
+      // Four new thermal materials, no new per-frame hook: the atlas's own
+      // trim breath already runs every frame over this list, and molten rock
+      // and hot iron want exactly the breath a thermal collar wants. The two
+      // site indices only pick a phase.
+      features.coolingEclipseTrims.push(
+        { siteIndex: 3, collarMaterial: fallMaterial, capitalMaterial: stackRimMaterial },
+        { siteIndex: 9, collarMaterial: poolMaterial, capitalMaterial: chainMaterial },
+      );
+
+      features.verticalCountry = {
+        thesis: 'CLIMB OUT OF EVERY DISTRICT',
+        forgeStacks: stackPlates.length,
+        forgeStackSites: [...stackSites, 3],
+        crownPlates,
+        highestStack: Math.max(...stackPlates.map(plate => plate.rise)),
+        falls: fallSources.length,
+        chainLinks: chainIndex,
+        orbitalBands: gearBands.length + 1,
+        dragonBones: spineCount,
+        footingAuthority: 'registered-solid-equals-instanced-catwalk',
+        sceneryAuthority: 'no-collide-silhouette-only',
+      };
     }
     makeLavaSkyForge(profile, features) {
       const { basaltMaterial, obsidianMaterial, forgeMaterial, goldMaterial, cooledMaterial } = features.materials;
@@ -12857,6 +14217,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           parts: [
             [0, 42, 3.8, 7, 0], [1.047, 42, 4.2, 11, 1], [2.094, 43, 3.5, 8, 2],
             [3.142, 42, 4.4, 13, 1], [4.189, 43, 3.6, 9, 0], [5.236, 42, 4, 12, 2],
+            [.52, 64, 4.8, 18, 1], [2.09, 64, 4.6, 24, 2], [3.67, 64, 4.8, 20, 2],
+            [5.24, 64, 4.6, 26, 2], [1.31, 86, 5.4, 44, 2],
           ],
         },
         {
@@ -12870,6 +14232,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [3.142, 35, 5.5, 4.5, 0], [3.142, 25, 5, 7, 1], [3.142, 15, 4.6, 10, 2],
             [.65, 25, 4.8, 15, 0], [1.42, 27, 4.4, 12, 1], [2.35, 25, 4.8, 16, 0],
             [4.05, 26, 4.6, 13, 1], [5.1, 27, 4.8, 17, 0], [5.65, 24, 4.4, 11, 2],
+            [.98, 46, 5.4, 21, 2], [1.83, 54, 5.2, 27, 2], [2.68, 62, 5, 33, 2],
+            [4.32, 57, 5.2, 29, 2], [5.18, 48, 5.4, 24, 2],
           ],
         },
         {
@@ -12883,6 +14247,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [.2, 17, 4.8, 5, 0], [.75, 24, 4.2, 9, 1], [1.35, 32, 3.8, 15, 2],
             [2.4, 22, 4.6, 7, 0], [3.25, 31, 4, 13, 2], [4.25, 24, 4.5, 10, 1],
             [5.35, 34, 3.7, 18, 2],
+            [2.85, 22, 3.9, 6, 0], [3.236, 29, 3.8, 11.2, 1], [3.529, 36, 3.8, 16.4, 2],
+            [3.765, 43, 3.7, 21.6, 1], [3.963, 50, 3.7, 26.8, 2], [4.133, 57, 3.6, 32, 1],
+            [4.282, 64, 3.6, 37.2, 2], [4.415, 71, 3.5, 42.4, 1], [4.535, 78, 4.1, 47.6, 2],
           ],
         },
         {
@@ -12896,6 +14263,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [.2, 16, 5.8, 4.5, 0], [.78, 20, 5.3, 7, 1], [1.35, 24, 4.8, 10, 2],
             [2.05, 28, 4.5, 13, 1], [2.85, 31, 4.2, 16, 0], [3.7, 34, 3.9, 19, 2],
             [4.7, 27, 4.6, 11, 1],
+            [5.55, 22, 3.9, 6, 0], [5.936, 29, 3.8, 11.2, 1], [6.229, 36, 3.8, 16.4, 2],
+            [6.465, 43, 3.7, 21.6, 1], [6.663, 50, 3.7, 26.8, 2], [6.833, 57, 3.6, 32, 1],
+            [6.982, 64, 3.6, 37.2, 2], [7.115, 71, 3.5, 42.4, 1], [7.235, 78, 4.1, 47.6, 2],
           ],
         },
         {
@@ -12910,6 +14280,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [.31, 42, 4.6, 13, 1], [.97, 42, 4.6, 18, 2],
             [.34, 61, 5, 18, 0], [.94, 61, 5, 24, 2],
             [.37, 79, 5.2, 23, 1], [.91, 79, 5.2, 29, 2],
+            [2.2, 22, 3.9, 6, 0], [2.586, 29, 3.8, 11.2, 1], [2.879, 36, 3.8, 16.4, 2],
+            [3.115, 43, 3.7, 21.6, 1], [3.313, 50, 3.7, 26.8, 2], [3.483, 57, 3.6, 32, 1],
+            [3.632, 64, 3.6, 37.2, 2], [3.765, 71, 3.5, 42.4, 1], [3.885, 78, 4.1, 47.6, 2],
           ],
         },
         {
@@ -12923,6 +14296,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [1.75, 15, 4.8, 5, 0], [1.95, 22, 4.5, 8, 1], [2.15, 29, 4.2, 11, 2],
             [2.42, 36, 4, 15, 1], [2.72, 31, 3.8, 20, 2], [3.05, 25, 4.2, 17, 1],
             [3.35, 19, 4.5, 13, 0], [3.78, 29, 3.7, 23, 2], [4.18, 37, 3.6, 27, 2],
+            [5.1, 22, 3.9, 6, 0], [5.486, 29, 3.8, 11.2, 1], [5.779, 36, 3.8, 16.4, 2],
+            [6.015, 43, 3.7, 21.6, 1], [6.213, 50, 3.7, 26.8, 2], [6.383, 57, 3.6, 32, 1],
+            [6.532, 64, 3.6, 37.2, 2], [6.665, 71, 3.5, 42.4, 1], [6.785, 78, 4.1, 47.6, 2],
           ],
         },
         {
@@ -12937,6 +14313,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [2.02, 34, 5.2, 12, 1], [5.48, 34, 5.2, 12, 1],
             [.58, 18, 4.2, 9, 2], [3.72, 18, 4.2, 9, 2],
             [.61, 45, 4.8, 17, 1], [3.75, 45, 4.8, 17, 1],
+            [2.1, 60, 6.2, 46, 2], [5.3, 60, 6.2, 46, 2], [.6, 66, 5.2, 34, 1],
+            [3.74, 66, 5.2, 34, 1], [2.18, 40, 5.4, 24, 2],
           ],
         },
         {
@@ -12950,6 +14328,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [.45, 15, 5.4, 5, 0], [.82, 21, 4.9, 8, 1], [1.6, 27, 4.5, 11, 2],
             [2.48, 34, 4.2, 15, 1], [3.35, 39, 4, 19, 2], [4.15, 31, 4.4, 14, 0],
             [5.02, 24, 4.8, 10, 1], [5.35, 18, 5.1, 7, 2],
+            [1.9, 22, 3.9, 6, 0], [2.286, 29, 3.8, 11.2, 1], [2.579, 36, 3.8, 16.4, 2],
+            [2.815, 43, 3.7, 21.6, 1], [3.013, 50, 3.7, 26.8, 2], [3.183, 57, 3.6, 32, 1],
+            [3.332, 64, 3.6, 37.2, 2], [3.465, 71, 3.5, 42.4, 1], [3.585, 78, 4.1, 47.6, 2],
           ],
         },
         {
@@ -12964,6 +14345,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [1.571, 72, 5.6, 16, 2], [2.356, 72, 5.2, 22, 0],
             [3.142, 72, 5.6, 17, 1], [3.927, 72, 5.2, 21, 0],
             [4.712, 72, 5.6, 15, 2], [5.498, 72, 5.2, 19, 1],
+            [.39, 106, 5.6, 34, 2], [2.48, 106, 5.6, 40, 2], [4.58, 106, 5.6, 34, 2],
           ],
         },
         {
@@ -12977,6 +14359,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [0, 19, 6.2, 4, 0], [1.257, 19, 6.2, 4.5, 1], [2.513, 19, 6.2, 4, 2],
             [3.77, 19, 6.2, 4.5, 1], [5.027, 19, 6.2, 4, 0],
             [.63, 37, 5.2, 8, 2], [2.51, 37, 5.2, 8, 1], [4.4, 37, 5.2, 8, 2],
+            [.31, 54, 5.4, 20, 2], [1.57, 54, 5.4, 26, 2], [2.83, 54, 5.4, 20, 2],
+            [4.08, 54, 5.4, 26, 2], [5.34, 54, 5.4, 22, 2],
           ],
         },
         {
@@ -12990,6 +14374,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [.15, 18, 3.4, 7, 0], [.75, 23, 3.1, 11, 1], [1.5, 29, 2.9, 16, 2],
             [2.65, 35, 3.2, 21, 0], [3.28, 34, 3, 18, 1], [4.05, 28, 3.2, 14, 2],
             [4.82, 23, 3, 10, 1], [5.55, 18, 3.4, 8, 0],
+            [.42, 44, 2.8, 26, 2], [1.68, 48, 2.6, 34, 2], [2.94, 44, 2.8, 29, 2],
+            [4.2, 48, 2.6, 37, 2], [5.46, 44, 2.8, 31, 2],
           ],
         },
         {
@@ -13003,6 +14389,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             [.1, 18, 5.5, 4.5, 0], [.25, 25, 5.1, 7, 1], [.4, 32, 4.8, 10, 2],
             [.55, 40, 4.5, 14, 1], [.7, 48, 4.3, 18, 2], [.85, 57, 4.1, 22, 1],
             [3.85, 40, 3.8, 16, 2], [5.35, 46, 3.8, 17, 2], [5.7, 42, 4, 20, 1],
+            [1.4, 22, 3.9, 6, 0], [1.786, 29, 3.8, 11.2, 1], [2.079, 36, 3.8, 16.4, 2],
+            [2.315, 43, 3.7, 21.6, 1], [2.513, 50, 3.7, 26.8, 2], [2.683, 57, 3.6, 32, 1],
+            [2.832, 64, 3.6, 37.2, 2], [2.965, 71, 3.5, 42.4, 1], [3.085, 78, 4.1, 47.6, 2],
           ],
         },
       ];
@@ -16239,7 +17628,19 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         ring.userData.kbNoCollide = true;
         column.add(ring);
       }
-      this.placePlanetObject(column, seal.arena.x, seal.ground + 172, seal.arena.z);
+      // The court centre is the axis the final boss stands on, so this column
+      // used to be drawn straight through the very thing the unlock had just
+      // revealed. Stand it on the court's back rim instead -- behind the boss,
+      // opposite the side its portrait looks in from. From 400 m out a 33 m
+      // sidestep is nothing and the pillar still says "this court is open"
+      // (Alex: "and it has to be clear it is"); from inside the court it now
+      // rises BEHIND the boss and silhouettes it instead of skewering it.
+      const behindYaw = Math.PI / 2 - (seal.arena.facingYaw ?? 0);
+      const stand = surfaceOffsetChartAt(
+        seal.arena.x, seal.arena.z, Math.cos(behindYaw), Math.sin(behindYaw),
+        (seal.arena.radius || 40) * .78, {},
+      );
+      this.placePlanetObject(column, stand.x, seal.ground + 172, stand.z);
       column.userData.kbNoCollide = true;
       profile.root.add(column);
       seal.column = column;
@@ -16514,7 +17915,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           boss.attackRing.visible = true;
           boss.attackRing.material.opacity = clamp(.76 - boss.waveRadius / boss.waveMax * .38, .2, .76);
           boss.attackRing.scale.setScalar(boss.waveRadius / (12 * boss.groupBaseScale.x));
-          const playerClearance = playerChart.y - boss.arena.top;
+          const playerClearance = playerChart.y
+            - this.floorHeight(playerChart.x, playerChart.z, playerChart.y + 8);
           if (boss.attackHitSerial !== boss.attackSerial
             && radial >= boss.wavePrevious - 2.8 && radial <= boss.waveRadius + 2.8
             && radial >= 8.5 && playerClearance < 5.2) {
@@ -17080,7 +18482,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           }
           if (boss.attackHitSerial !== boss.attackSerial
             && radial >= previousRadius - 3 && radial <= boss.attackRadius + 3
-            && radial >= 8.5 && gameState.playerChartVec.y - boss.arena.top < 5.2) {
+            && radial >= 8.5 && gameState.playerChartVec.y
+              - this.floorHeight(gameState.playerChartVec.x, gameState.playerChartVec.z,
+                gameState.playerChartVec.y + 8) < 5.2) {
             boss.attackHitSerial = boss.attackSerial;
             gameState.damagePlayer({ position: boss.chartPosition });
             setVspeed(gameState.player.velocity, gameState.player.up,
@@ -24614,6 +26018,33 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       group.userData.kbLifted = true;
       group.visible = this.activeLayer === 'final';
       this.finalArenaGroup.add(group);
+      // The shockwave's ground band. Two rings of vertices, rewritten every
+      // frame the wave is live, sitting on whatever deck is under them so the
+      // wave climbs the terraces instead of hanging in the air above them.
+      // Off every deck the pair collapses onto a single point and draws
+      // nothing, because nothing standing there can be hit either.
+      const SHOCK_SEGMENTS = 96;
+      const shockRing = new T.Mesh(
+        new T.BufferGeometry(),
+        new T.MeshBasicMaterial({
+          color: 0x63e4ff, transparent: true, opacity: 0, side: T.DoubleSide,
+          blending: T.AdditiveBlending, depthWrite: false, toneMapped: false,
+        }),
+      );
+      shockRing.name = 'moonheart-shock-band';
+      shockRing.userData.kbLifted = true;
+      shockRing.frustumCulled = false;
+      shockRing.visible = false;
+      const shockIndices = [];
+      for (let i = 0; i < SHOCK_SEGMENTS; i++) {
+        const a = i * 2, b = a + 1;
+        const c = ((i + 1) % SHOCK_SEGMENTS) * 2, d = c + 1;
+        shockIndices.push(a, b, d, a, d, c);
+      }
+      shockRing.geometry.setAttribute('position',
+        new T.BufferAttribute(new Float32Array(SHOCK_SEGMENTS * 2 * 3), 3).setUsage(T.DynamicDrawUsage));
+      shockRing.geometry.setIndex(shockIndices);
+      this.finalArenaGroup.add(shockRing);
       this.moonheart = {
         id: 'moonheart', group, core, glow, nodes, armour: nodes, orbitA, orbitB, tideArcs,
         anatomy, ribs, helmet, visor, crown, mantle, hands, up,
@@ -24621,6 +26052,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         phaseHp: 4, coreHp: 4, tideHp: 5, heartHp: 4,
         exposedTimer: 0, spin: 0, hitFlash: 0, totalHits: 0,
         attackSerial: 0, telegraph: 0,
+        shockRing, shockSegments: SHOCK_SEGMENTS,
         shockwave: { active: false, radius: 0, speed: 34, cooldown: 2.6, timer: 2.25, serial: 0 },
         anchors: nodes.map((node, index) => ({
           id: `heart-anchor-${index}`, index, position: node.position, radius: 6.2,
@@ -25983,17 +27415,30 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         group.add(plate);
         plates.push({ mesh: plate, phase: (i / 5) * TAU });
       }
+      // The floor lane IS the hit: a flat wedge from the inner safe pocket out
+      // to the far edge, widening exactly as fast as the angular test does.
+      const laneWedge = (near, far, spread) => {
+        const nearHalf = near * spread, farHalf = far * spread;
+        const wedge = new T.BufferGeometry();
+        wedge.setAttribute('position', new T.Float32BufferAttribute([
+          -nearHalf, 0, near, nearHalf, 0, near, farHalf, 0, far,
+          -nearHalf, 0, near, farHalf, 0, far, -farHalf, 0, far,
+        ], 3));
+        wedge.computeVertexNormals();
+        return wedge;
+      };
       const attackBeams = [];
       for (let i = 0; i < 5; i++) {
         const beam = new T.Mesh(
-          new T.BoxGeometry(3.1, .16, 46),
+          laneWedge(4.8, 47, Math.tan(.105)),
           new T.MeshBasicMaterial({
-            color: 0xaaf7ff, transparent: true, opacity: 0,
+            color: 0xaaf7ff, transparent: true, opacity: 0, side: T.DoubleSide,
             blending: T.AdditiveBlending, depthWrite: false,
           }),
         );
         beam.name = `chandelier-prism-lane-${i}`;
-        beam.position.set(0, floor + .38 - height, 23);
+        // At the boss, not 23m north of it -- rotation happens before position.
+        beam.position.set(0, floor + .38 - height, 0);
         beam.rotation.y = i * TAU / 5;
         beam.visible = false;
         group.add(beam);
@@ -26337,17 +27782,28 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           phase: (i / 4) * TAU, alive: true, orbit: 13 + (i % 2) * 5, radius: 5.2,
         });
       }
+      // Same wedge, same reason -- see the chandelier's lanes.
+      const laneWedge = (near, far, spread) => {
+        const nearHalf = near * spread, farHalf = far * spread;
+        const wedge = new T.BufferGeometry();
+        wedge.setAttribute('position', new T.Float32BufferAttribute([
+          -nearHalf, 0, near, nearHalf, 0, near, farHalf, 0, far,
+          -nearHalf, 0, near, farHalf, 0, far, -farHalf, 0, far,
+        ], 3));
+        wedge.computeVertexNormals();
+        return wedge;
+      };
       const attackSpokes = [];
       for (let i = 0; i < 4; i++) {
         const beam = new T.Mesh(
-          new T.BoxGeometry(2.8, .18, 60),
+          laneWedge(5.5, 61, Math.tan(.105)),
           new T.MeshBasicMaterial({
-            color: 0xffbd42, transparent: true, opacity: 0,
+            color: 0xffbd42, transparent: true, opacity: 0, side: T.DoubleSide,
             blending: T.AdditiveBlending, depthWrite: false,
           }),
         );
         beam.name = `greatwheel-sweep-lane-${i}`;
-        beam.position.set(0, centre + .4 - group.position.y, 30);
+        beam.position.set(0, centre + .4 - group.position.y, 0);
         beam.rotation.y = i * Math.PI / 2;
         beam.visible = false;
         group.add(beam);
@@ -29119,14 +30575,31 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     }
     update(dt, gameState) {
       this.elapsed += dt;
+      // THE WORLD BREATHES WHILE THE GAME IS STOPPED, BUT IT DOES NOT ACT.
+      // Every early return in game.update -- title screen, pause, hit stop --
+      // still calls syncWorldVisuals, and syncWorldVisuals ends here, so this
+      // whole method used to run at 120 Hz with the game switched off. A
+      // blaststone fuse kept burning, so you could light one, press Escape and
+      // lose a heart with the pause menu up; the Eclipse Maw kept running its
+      // whole attack cycle at a player who could not move.
+      // `live` is the rule updateExpansionMotion already follows with its
+      // frame stamp, said out loud: the simulation half runs only on a tick the
+      // run itself is simulating. Everything after this block is cosmetic and
+      // is driven by this.elapsed, which never stops -- stars, planets,
+      // meteors, the aurora, the cyan breath, the landing beacon -- so a paused
+      // world still looks alive. Nothing that can damage, detonate, unlock or
+      // consume is left on that side of the line.
+      const live = !!gameState?.started && !gameState.paused && !(gameState.hitStop > 0);
       if (this.activePlanet === 'moon') {
         this.updateExpansionMotion(dt, gameState);
-        this.updateWorldInteractions(dt, gameState);
+        if (live) this.updateWorldInteractions(dt, gameState);
       } else {
         this.currentSurface()?.updateVisuals?.(dt, gameState, this.elapsed);
       }
-      this.updateInterworldVehicles(this.currentSurface(), dt, this.elapsed, gameState);
-      this.updateEclipseMaw(dt, gameState);
+      if (live) {
+        this.updateInterworldVehicles(this.currentSurface(), dt, this.elapsed, gameState);
+        this.updateEclipseMaw(dt, gameState);
+      }
       // THE LANDING's beacon. Slow, patient, and the brightest thing on that
       // side of the moon: it is the reason you walk over there at all.
       if (this.theLanding) {
@@ -29844,6 +31317,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.lastYaw = 0;
       this.hitStop = 0;
       this.rewardFlash = 0;
+      // Water on the camera: 0 is a dry visor, 1 is a full sheet running off.
+      // Its DOM overlay is #visorWater; lastWetShown is the last value actually
+      // written, so a dry frame costs no DOM work at all.
+      this.wetness = 0;
+      this.lastWetShown = -1;
       this.lastTrick = null;
       this.lastSrState = '';
       this.cores = new Set();
@@ -29963,10 +31441,16 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         }
         this.savedEclipseMaw = !!threeCrownSave?.eclipse?.complete;
         // A save written before the fare existed carries no passage field,
-        // and the right answer for it is "you have not bought anything yet".
+        // and the right answer for it is "you have not bought anything yet" --
+        // unless it also carries a crown, which is proof you already went.
         this.shipPassage.moon = true;
         this.shipPassage.water = !!threeCrownSave?.passage?.water;
         this.shipPassage.lava = !!threeCrownSave?.passage?.lava;
+        // A crown is proof of passage. A save from before the fare existed, or
+        // one whose passage field was lost, still says which worlds you have
+        // beaten -- and you cannot beat a world you never travelled to.
+        if (this.savedPlanetCrowns.water.boss) this.shipPassage.water = true;
+        if (this.savedPlanetCrowns.lava.boss) this.shipPassage.lava = true;
       } catch (ignored) { void ignored; }
       this.eclipseState = makeEclipseState(this.savedEclipseMaw);
       world.resetEclipseMaw(this.savedEclipseMaw);
@@ -30579,6 +32063,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.lastYaw = 0;
       this.hitStop = 0;
       this.rewardFlash = 0;
+      this.wetness = 0;
+      this.lastWetShown = -1;
       this.lastTrick = null;
       this.cores.clear();
       this.drops = 0;
@@ -30661,6 +32147,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       ui.hitMarker?.classList.remove('active');
       if (ui.hitMarker) ui.hitMarker.style.filter = '';
       if (ui.visorFrost) ui.visorFrost.style.opacity = '0';
+      if (ui.visorWater) {
+        ui.visorWater.style.opacity = '0';
+        ui.visorWater.style.visibility = 'hidden';
+      }
       if (ui.rewardFlash) ui.rewardFlash.style.opacity = '0';
       if (!wasStarted) {
         ui.startOverlay?.classList.remove('hidden');
@@ -30890,7 +32380,16 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (world.activePlanet !== 'moon') this.updateBallLaunchPads();
       this.updateBall(dt, actionFrame, edgeFrame);
       this.collectMoondrops();
-      if (world.resolveEclipseMawBall(this)) return;
+      if (world.resolveEclipseMawBall(this)) {
+        // A landed Maw hit freezes simulation the way any impact does, but the
+        // bare return also skipped the camera, the world and the HUD, so the
+        // picture went dead instead of holding. Give it the same tail the hit
+        // stop branch uses and the frame still draws.
+        this.updateCamera(dt * .18);
+        this.syncWorldVisuals();
+        this.syncUI();
+        return;
+      }
 
       if (world.activePlanet !== 'moon') {
         this.updatePlanetSurface(dt);
@@ -31481,6 +32980,13 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           } else {
             player.landingKick = clamp(landingSpeed / 16, .18, 1);
             this.shake = Math.max(this.shake, clamp(landingSpeed * .012, .05, .24));
+            // "maybe when you drop far". A plain jump lands at 16 and a double
+            // jump at 19, so nothing under 24 counts as a drop -- that is a ten
+            // metre step-off or a nineteen metre fall. Ordinary walking never
+            // reaches this branch at all, and ordinary jumps never clear 24.
+            if (world.activePlanet === 'water' && landingSpeed > 24) {
+              this.wetLens(clamp((landingSpeed - 24) / 16, 0, .8));
+            }
             world.particles.burst(player.position.clone().addScaledVector(pf.up, .08), 0xc9d2df, Math.floor(7 + landingSpeed), 4 + landingSpeed * .22, .55, .02);
           }
         }
@@ -31582,6 +33088,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       player.moonfallTime = 0;
       player.moonfallCooldown = MOONFALL_PROFILE.cooldown;
       player.landingKick = 1;
+      // A Moonfall is the biggest thing the boots can do, so it soaks the lens
+      // on every world -- as seawater on water, as thrown spray on lava and the
+      // moon, where wetGain() quiets it. Purely cosmetic: this line reads
+      // landingSpeed and writes nothing the simulation will read back.
+      this.wetLens(clamp(.5 + (landingSpeed - MOONFALL_PROFILE.minImpactSpeed) * .021, .5, 1));
       player.damageCooldown = Math.max(player.damageCooldown, .2);
       player.jumpsUsed = Math.min(player.jumpsUsed, 1);
       player.grounded = false;
@@ -34270,6 +35781,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         boss.telegraph = 1 - boss.attackTimer / tellLength;
         if (!boss.telegraphArmed) {
           boss.telegraphArmed = true;
+          // Choose the lanes when the TELL ARMS, not when the glass fires. The
+          // carousel keeps turning through the tell, so a fire-time choice
+          // drew .95 seconds of floor at the last attack's angle and then
+          // jumped a whole lane-width sideways on the damaging frame.
+          boss.attackAngle = boss.carousel;
           world.pulseRing(boss.position, new T.Color(0x9ff4ff), 18, tellLength, true);
           audio.impact(.48, 'glass');
         }
@@ -34281,7 +35797,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         boss.attackTimer = 3.2 - wounded * .55;
         boss.attackSerial++;
         boss.attackActive = .82;
-        boss.attackAngle = boss.carousel;
+        // The tell already chose these lanes. This only covers a frame so long
+        // it stepped over the entire telegraph window and drew nothing at all.
+        if (!boss.telegraphArmed) boss.attackAngle = boss.carousel;
         boss.attackHitSerial = -1;
         boss.telegraph = 0;
         boss.telegraphArmed = false;
@@ -34299,7 +35817,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         beam.visible = laneStrength > .01;
         beam.material.opacity = laneStrength;
         beam.rotation.y = boss.attackAngle + i * TAU / boss.attackBeams.length;
-        beam.scale.x = boss.attackActive > 0 ? 1.22 : .72 + boss.telegraph * .28;
+        beam.scale.x = boss.attackActive > 0 ? 1.22 : 1;
       }
       if (boss.attackActive > 0 && boss.attackHitSerial !== boss.attackSerial && this.player.grounded) {
         toChartVec(this.playerChartVec.copy(this.player.position));
@@ -34479,6 +35997,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         boss.telegraph = 1 - boss.attackTimer / tellLength;
         if (!boss.telegraphArmed) {
           boss.telegraphArmed = true;
+          // The orrery's spokes are chosen when the amber diagram appears, so
+          // the diagram is where the sweep actually starts from.
+          boss.attackAngle = boss.spin * (.55 + broken * .42);
           world.pulseRing(boss.position, new T.Color(0xffbd42), 20, tellLength, true);
           audio.impact(.5, 'rock');
         }
@@ -34490,7 +36011,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         boss.attackTimer = 3.25 - broken * .15;
         boss.attackSerial++;
         boss.attackActive = 1.05;
-        boss.attackAngle = boss.spin * (.55 + broken * .42);
+        // Same as the chandelier: the tell owns the angle now.
+        if (!boss.telegraphArmed) boss.attackAngle = boss.spin * (.55 + broken * .42);
         boss.attackHitSerial = -1;
         boss.telegraph = 0;
         boss.telegraphArmed = false;
@@ -34509,7 +36031,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         beam.visible = laneStrength > .01;
         beam.material.opacity = laneStrength;
         beam.rotation.y = displayAngle + i * Math.PI / 2;
-        beam.scale.x = boss.attackActive > 0 ? 1.24 : .74 + boss.telegraph * .26;
+        beam.scale.x = boss.attackActive > 0 ? 1.24 : 1;
       }
       if (boss.attackActive > 0 && boss.attackHitSerial !== boss.attackSerial && this.player.grounded) {
         toChartVec(this.playerChartVec.copy(this.player.position));
@@ -37492,13 +39014,46 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           setVspeed(this.player.velocity, this.player.up, Math.max(13.5, vspeedOf(this.player.velocity, this.player.up)));
           this.player.grounded = false;
         }
+        // Draw the band that hits: inner and outer edges at radius -/+ 2.2
+        // chart metres, the same 2.2 the hit test uses, every vertex lifted
+        // onto the sphere. The honest picture of a chart-space circle out here
+        // is a long ribbon rather than a ring, and that is the point -- making
+        // the HIT circular in true metres instead would have brought the wave
+        // to a player on the east or west lip 1.3 seconds sooner, which is a
+        // retune, not a bug fix.
+        const band = heart.shockRing;
+        if (band) {
+          const attribute = band.geometry.attributes.position;
+          for (let i = 0; i < heart.shockSegments; i++) {
+            const angle = i / heart.shockSegments * TAU;
+            const sin = Math.sin(angle), cos = Math.cos(angle);
+            const deck = world.finalFloorHeight(sin * shock.radius, 1130 + cos * shock.radius, 900);
+            const live = deck > -200;
+            const altitude = (live ? deck : 306) + .34;
+            const inner = live ? Math.max(0, shock.radius - 2.2) : shock.radius;
+            const outer = live ? shock.radius + 2.2 : shock.radius;
+            chartLift(sin * inner, altitude, 1130 + cos * inner, this.tempC);
+            attribute.setXYZ(i * 2, this.tempC.x, this.tempC.y, this.tempC.z);
+            chartLift(sin * outer, altitude, 1130 + cos * outer, this.tempC);
+            attribute.setXYZ(i * 2 + 1, this.tempC.x, this.tempC.y, this.tempC.z);
+          }
+          attribute.needsUpdate = true;
+          band.geometry.computeBoundingSphere();
+          band.material.color.setHex(heart.phase === 'armor' ? 0xbf83ff
+            : heart.phase === 'heart' ? 0xffd66b : 0x63e4ff);
+          band.material.opacity = clamp(.86 - shock.radius / 68 * .42, .3, .86);
+          band.visible = true;
+        }
         if (shock.radius > 68) shock.active = false;
-      }
+      } else if (heart.shockRing) heart.shockRing.visible = false;
     }
     updateMoonheartDefeat(dt) {
       const heart = world.moonheart;
       const victory = world.finalVictory;
       if (!heart || !victory || victory.phase === 'hidden' || world.activeLayer !== 'final') return;
+      // Nothing can be hit during the nova, so nothing should still be drawn
+      // sweeping the floor.
+      if (heart.shockRing) heart.shockRing.visible = false;
       victory.time += dt;
       victory.sequenceTime += dt;
       victory.state = victory.phase;
@@ -38451,11 +40006,36 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         if (ui.hitMarker) ui.hitMarker.style.filter = '';
       }, lethal ? 150 : 90);
     }
+    // Water is the only world with an ocean to throw at the visor, so an
+    // ordinary hard landing wets the lens only there. Lava and the original
+    // moon get the lens from a Moonfall slam or a rail, at reduced strength,
+    // where the same droplet shapes read as thrown spray and ash rather than
+    // seawater. player.grind cannot exist on the original moon at all -- that
+    // world's movement law is frozen to a certified feel fingerprint -- so a
+    // rail never wets the lens there. That is correct, not a bug.
+    wetGain() {
+      return world.activePlanet === 'water' ? 1 : world.activePlanet === 'lava' ? .62 : .45;
+    }
+    wetLens(amount) {
+      this.wetness = clamp(Math.max(this.wetness, amount * this.wetGain()), 0, 1);
+    }
     decayFeedback(dt) {
       if (this.styleHold > 0) this.styleHold -= dt;
       else this.style = Math.max(0, this.style - dt * (this.style > 70 ? 6.4 : 3.4));
       this.kickVisual = Math.max(0, this.kickVisual - dt * 4.2);
       this.rewardFlash = Math.max(0, this.rewardFlash - dt * 1.35);
+      // Water on the camera is an EVENT, never a state -- Alex: "But not full
+      // time." A rail holds the lens at a floor that rises with rail speed and
+      // with how long the ride has lasted; everything else drains to nothing.
+      // The drain is front-loaded, so the big sheet sluices off in about nine
+      // tenths of a second and only the last few droplets linger. Nothing
+      // floaty, and it always reaches exactly zero.
+      const grind = this.player.grind;
+      const floor = grind
+        ? clamp(.16 + grind.speed * .0052 + Math.min(grind.time, 3) * .03, .18, .5) * this.wetGain()
+        : 0;
+      if (this.wetness < floor) this.wetness = floor;
+      this.wetness = Math.max(floor, this.wetness - dt * (.72 + this.wetness * .9));
     }
     completeRun() {
       if (this.won || !this.missionPrerequisitesComplete() || !world.goal.open) return false;
@@ -38663,6 +40243,31 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       }
       if (ui.rewardFlash) {
         ui.rewardFlash.style.opacity = String(clamp(this.rewardFlash, 0, 1));
+      }
+      // WATER ON THE CAMERA. The droplet field itself is authored once in CSS.
+      // All that happens here is opacity plus a transform: as the sheet drains
+      // it slides down and scales up, so the drops run off the edges and the
+      // middle clears first, which is what water on a visor actually does.
+      // Writing nothing while dry keeps the ordinary frame at zero DOM work,
+      // and visibility:hidden takes a full-screen blended layer out of the
+      // compositor rather than leaving an invisible one for a phone to
+      // composite every frame.
+      if (ui.visorWater) {
+        const wet = clamp(this.wetness, 0, 1);
+        const shown = Math.round(wet * (.7 + .3 * wet) * 900) / 1000;
+        if (shown !== this.lastWetShown) {
+          this.lastWetShown = shown;
+          if (shown <= 0) {
+            ui.visorWater.style.opacity = '0';
+            ui.visorWater.style.visibility = 'hidden';
+          } else {
+            const run = 1 - wet;
+            ui.visorWater.style.opacity = String(shown);
+            ui.visorWater.style.transform = 'translate3d(0, ' + (run * 3.4).toFixed(2)
+              + 'vmin, 0) scale(' + (1 + run * .14).toFixed(3) + ')';
+            ui.visorWater.style.visibility = 'visible';
+          }
+        }
       }
       // The only text in the build: an off-screen status line so the game
       // stays narratable for screen readers that cannot see the world cues.
@@ -39011,6 +40616,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         },
         cores: [...this.cores],
         drops: this.drops,
+        wetness: this.wetness,
+        lensOpacity: ui.visorWater ? Number(ui.visorWater.style.opacity || 0) : null,
+        lensVisibility: ui.visorWater ? (ui.visorWater.style.visibility || 'hidden') : null,
         planet: world.activePlanet,
         layer: world.activeLayer,
         checkpointPlanet: this.player.checkpointPlanet,
