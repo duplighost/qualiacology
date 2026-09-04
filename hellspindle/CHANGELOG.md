@@ -215,8 +215,14 @@ A district is four heights now, not one corridor.
   gaps, so taking it is a choice and not a shortcut.
 - **The road**, y=760. The floor, with the same lethal gaps as before — except
   one slab in each district is a grate. Hold down on it and you fall through.
-- **The undercroft**, y=960. Under the road, its own gaps, its own reliquary,
-  and a stair of ledges back up so it is a loop and not a trap.
+- **The undercroft**, y=960. Under the road, its own gap, its own reliquary,
+  and a stair of ledges back up so it is a loop and not a trap. The landing
+  floor spans the whole grate, so dropping in is a decision and never a death;
+  the stair out sits behind you as you land, and the reliquary is one jump
+  ahead. That gap is 120px, not 170: a jump you HOLD carries 260px, but a jump
+  you TAP releases early into the 1.85x cut-off gravity and carries 166, and at
+  170 the crypt was demanding a perfect held jump with four pixels of margin.
+  Driven in a browser, that killed a competent run eight times out of eight.
 
 Reliquary caches hang on the routes worth taking. Breaking one is XP. They stay
 broken through death and are saved.

@@ -1057,19 +1057,27 @@
       // a decision, never a death — the hole in the road has to be somewhere
       // you can commit to without reading the level first.
       platform(g.x - 60, 960, slabW + 120, 120, false, zone);
-      hazard(g.x - 34, 936, 104, 24, 'spikes');
       spawnTemplates.push({ type: 'crawler', x: g.x + slabW * 0.6, y: 960 });
 
       // One real jump inside the crypt, and the reliquary is on the far side of
-      // it. The gap is the price of the thing.
-      const farX = g.x + slabW + 230;
+      // it. The gap is the price of the thing, and the spikes are the guard.
+      //
+      // 120px, not 170. A jump you HOLD carries 260px, but a jump you TAP —
+      // which is most of them — releases early into the 1.85x cut-off gravity
+      // and carries 166. At 170 the crypt was demanding a perfect held jump
+      // with four pixels of margin, and it killed a competent run eight times
+      // out of eight. This clears on a tap with room to spare.
+      const farX = g.x + slabW + 180;
       platform(farX, 960, 340, 120, false, zone);
+      hazard(farX + 24, 936, 104, 24, 'spikes');
       cache(farX + 250, 960, zone, 150 + zone * 34);
       spawnTemplates.push({ type: 'bat', x: farX + 60, y: 872 });
 
-      // The stair out stands under the grate, which you pass back up through
-      // the way any one-way ledge lets you.
-      const stairX = g.x + slabW * 0.62;
+      // The stair out stands under the LEFT end of the grate, behind you as you
+      // land. Put it between the drop and the reliquary and every instinct to
+      // run forward carries you up and out of the room instead of across to the
+      // thing you came down for.
+      const stairX = g.x + slabW * 0.06;
       platform(stairX, 892, 120, 22, true, zone);
       platform(stairX + 96, 846, 120, 22, true, zone);
       platform(stairX + 24, 800, 120, 22, true, zone);
@@ -4829,6 +4837,9 @@
         })),
         boss: boss ? { alive: boss.alive, hp: boss.hp, awake: boss.bossAwake, state: boss.state, x: boss.x, y: boss.y } : null,
         cameraX: game.camera.x,
+        zoneTitle: game.zoneTitle,
+        relicPoints: player.relicPoints,
+        caches: caches.map(c => ({ x: c.x, y: c.y, zone: c.zone, xp: c.xp, taken: !!c.taken })),
         bossGate: bossGateRect()
       };
     },

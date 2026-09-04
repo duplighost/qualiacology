@@ -17,7 +17,9 @@ What is true now:
   line, so it reads as one cathedral instead of twelve rooms.
 - Each district has four heights: the vault (rings only), the gallery, the road,
   and the undercroft under a grate in the floor. Reliquary caches hang on the
-  detours. Gaps between slabs are still death.
+  detours. Gaps between the road slabs are still death — those are the swing
+  voids — but the crypt below is fair: you always land, the way out is behind
+  you, and the one gap in there clears on a tapped jump.
 - Levels hand you a relic. You spend it in the Reliquary when you choose:
   Tab or E, or tap the badge. Six lines, and THE CHAIN and THE TENDON change
   the actual geometry of what you can reach.
