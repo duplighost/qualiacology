@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.4.0-world-composition';
+  const GAME_VERSION = '8.5.0-passage-and-half-roster';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -159,19 +159,31 @@
   const THREE_CROWN_STORAGE_KEY = 'kickmoon-three-crowns-v1';
   const FIXED_DT = 1 / 120;
   const TAU = Math.PI * 2;
-  // ONE COLLECTIBLE PER MOON, ONE COUNT, ONE GATE. (Alex, 2026-09-03:
-  // "every moon should have one space for collectibles. every moon should
-  // have 2000 of its own type of collectibles as a qualification, plus the
-  // bosses on that moon, to see the final boss on that moon.")
-  // Pickups may still LOOK different -- a crescent, a full moon and a route
-  // ribbon are the same collectible, and every one of them is worth one.
+  // ONE COLLECTIBLE PER MOON, ONE COUNT. (Alex, 2026-09-03: "every moon
+  // should have one space for collectibles.") Pickups may still LOOK
+  // different -- a crescent, a full moon and a route ribbon are the same
+  // collectible, and every one of them is worth one.
+  // What the count BUYS changed on 2026-09-04: "I actually think its fine
+  // that it only shows one type of collectible, in the UI. but all of them
+  // should count up that one thing. I think they should be used to get to the
+  // other 2 moons/planets after the first one." So this number is no longer a
+  // boss gate. It is the mastery-scale total the ledger still reports against
+  // once the ships are paid for; the fare below is what it actually buys.
   const COLLECTION_TARGET = 2000;
   const ALTERNATE_COLLECTION_TARGET = COLLECTION_TARGET;
   const MOON_COLLECTION_TARGET = COLLECTION_TARGET;
   const ALTERNATE_REGIONAL_TOTAL = 5;
-  // Every regional on the moon, not four of five: the local final is the
-  // reward for clearing the whole moon.
-  const ALTERNATE_REGIONAL_REQUIRED = ALTERNATE_REGIONAL_TOTAL;
+  // HALF A ROSTER OPENS THE LOCAL FINAL. (Alex, 2026-09-04: "THe progression
+  // should optimally be that if deafeat maybe half of the bosses on a moon,
+  // the last boss from that moon is avaialable. and it has to be clear it
+  // is.") Three of five, so the last two regionals stay optional the same way
+  // the original Moon always let part of its roster stay optional.
+  const ALTERNATE_REGIONAL_REQUIRED = Math.ceil(ALTERNATE_REGIONAL_TOTAL / 2);
+  // THE SHIP FARE. (Alex, 2026-09-04: "each cost 1000 collectibles to
+  // activate one of the two ships that go to the other moons.") One price,
+  // one ship, paid out of whichever world's ledger you are standing on. The
+  // MOON destination is never sold: a fare must not be able to strand anyone.
+  const SHIP_FARE = 1000;
   const ALTERNATE_COLLECTIBLE_COUNTS = Object.freeze({
     common: 2800,
     rare: 480,
@@ -659,7 +671,7 @@
   [
     'hud', 'startOverlay', 'startButton', 'startActionHint', 'startTitle', 'startCopy',
     'crosshair', 'hitMarker', 'damageVignette', 'visorFrost', 'rewardFlash', 'srState',
-    'stoneCounter', 'stoneCount', 'planetCollectibleTarget',
+    'stoneCounter', 'stoneCount', 'planetCollectibleTarget', 'planetCollectibleTargetValue',
     'planetCollectibleGateFill', 'coreCounter', 'planetBossCounter', 'suitMeter',
     'chargeUI', 'chargeFill', 'controlsHint', 'soundButton',
     'fullscreenButton', 'qualityButton', 'pauseOverlay', 'winOverlay',
@@ -2126,9 +2138,44 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.tone(note * 2, .13, 'sine', .018, null, .02, this.music);
     }
     damage() {
+      // Alex: "a lot of the sound effect that are that kind of bouncy one
+      // sound exactly like the player being hit." He was right, and the
+      // arithmetic was embarrassing: this used to be a 92 Hz sawtooth, and
+      // impact()'s default branch at strength .36 is a 92.2 Hz sine. Four
+      // cents apart. Worse, he plays on his phone, where nothing under about
+      // 120 Hz is reproduced at all, so the only audible part of either cue
+      // was its noise burst -- 530 Hz here against 680 Hz there. Two sounds,
+      // one arrival. So the identity of a hit moves up into the 300 Hz to
+      // 3 kHz band a phone actually renders, and it gets a gesture that no
+      // other cue in this engine owns.
+      this.note('damage');
       this.ensure();
-      this.tone(92, .28, 'sawtooth', .11, 39);
-      this.noise(.12, .1, 530);
+      // The gesture is a BEAT. Two voices fourteen hertz apart warble against
+      // each other, and both sag a chromatic semitone off F#4 -- the third of
+      // the home chord going flat, which is what a wound sounds like. Nothing
+      // else in this file beats, and nothing else sags by a semitone: the
+      // whole bounce family plunges an octave or more. Triangle carries the
+      // body and sawtooth adds the edge, and their fundamentals are close
+      // enough in level that the warble is the first thing you hear. Because
+      // both voices fall by the same ratio the beat slows from 14 Hz to 13 Hz
+      // as the pitch sags, which costs nothing and makes the cue feel like it
+      // is losing altitude.
+      this.tone(369.99, .19, 'triangle', .058, 349.23);
+      this.tone(383.99, .19, 'sawtooth', .04, 362.44);
+      // A hit still needs weight, so there is a low voice. But it HOLDS its
+      // pitch where every bounce voice slides, and it is gone in 75 ms, under
+      // half the bounce's 160 ms tail, so a hit taken mid-bounce sits on top
+      // of the bounce instead of merging into it. 220 Hz is about the lowest
+      // note a phone speaker still renders honestly.
+      this.tone(220, .075, 'triangle', .06);
+      // Bright and brief. The bounces thump at 680 Hz; this ticks at 2150,
+      // twenty semitones away, and that is the part of the cue a phone puts
+      // across best. Also cheaper than the old burst: a 50 ms buffer draws
+      // less than half the cosmeticRandom this used to pull.
+      this.noise(.05, .04, 2150);
+      // Total peak gain is .198 across four voices, under the .21 the old two
+      // voices already used, because "nothing loud or anooying" -- the
+      // distinctness here is timbre and interval, never volume.
     }
     win() {
       this.ensure();
@@ -3960,7 +4007,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           : new T.MeshStandardMaterial({
             map: terrainMap, bumpMap: terrainMap, bumpScale: 1.52,
             emissiveMap: terrainMap, color: 0xf39a61,
-            emissive: 0x481006, emissiveIntensity: .14, roughness: .78,
+            // Overwritten every frame by updateAlternatePlanetVisuals; kept
+            // in step so a first frame does not flash dark.
+            emissive: 0x481006, emissiveIntensity: 2.72, roughness: .78,
             metalness: .08, side: T.DoubleSide,
           });
         if (water) this.installWaterDepthShader(terrainMaterial, profile);
@@ -3981,8 +4030,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const atmosphere = new T.Mesh(
           new T.SphereGeometry(PLANET.radius + (water ? 178 : 132), 64, 32),
           new T.MeshBasicMaterial({
-             color: water ? 0x0a91ad : 0x6b160c,
-             transparent: true, opacity: water ? .075 : .035,
+             color: water ? 0x18b6d6 : 0xb03a10,
+             transparent: true, opacity: water ? .132 : .086,
             side: T.BackSide, depthWrite: false, blending: T.AdditiveBlending,
           }),
         );
@@ -4661,6 +4710,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         route.pathSamples = path;
         const colour = new T.Color(trailPalette[routeIndex % trailPalette.length]);
         const width = (water ? 5.15 : 7.4) + routeIndex % 3 * (water ? .34 : .48);
+        let previousLeftWidth = 0;
+        let previousRightWidth = 0;
         for (let index = 0; index < path.length; index++) {
           const at = path[index];
           const before = path[Math.max(0, index - 1)];
@@ -4689,9 +4740,33 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           if (index > 0) {
             trailIndices.push(base - 2, base - 1, base, base - 1, base + 1, base);
           }
+          // Safety has to cover the mat that is actually DRAWN. The old
+          // rule took the NARROWER edge and shrank it another 28%, so a wide
+          // band of visibly dark road burned -- Alex, 2026-09-04: "some of the
+          // places on the lava moon it looks like you can walk but im not sure
+          // if you can." Take the wider edge plus a tenth instead.
+          const safeRadius = Math.max(leftWidth, rightWidth) * 1.1;
+          if (index > 0) {
+            // Stations sit up to 10.5 m apart while these circles are 5-8 m
+            // across, so a road that looks continuous had periodic burning
+            // rungs straight down its middle. One midpoint per span closes
+            // them. It happens here rather than by densifying `path`, because
+            // `path` also builds the trail mesh, route.pathSamples, the plate
+            // joints and the pocket-spur search on the Water world too.
+            const midpoint = sphericalPoint(path[index - 1], at, .5, {});
+            safeSamples.push({
+              x: midpoint.x, z: midpoint.z,
+              radius: Math.max(
+                previousLeftWidth + leftWidth, previousRightWidth + rightWidth,
+              ) * .55,
+              routeId: route.id,
+            });
+          }
+          previousLeftWidth = leftWidth;
+          previousRightWidth = rightWidth;
           safeSamples.push({
             x: at.x, z: at.z,
-            radius: Math.min(leftWidth, rightWidth) * .72,
+            radius: safeRadius,
             routeId: route.id,
           });
         }
@@ -4725,6 +4800,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         pocket.routeDistance = nearestDistance;
         const colour = new T.Color(trailPalette[(routes.length + pocketIndex) % trailPalette.length]);
         const width = (water ? 4.45 : 6.2) + pocketIndex % 3 * (water ? .28 : .36);
+        let previousLeftWidth = 0;
+        let previousRightWidth = 0;
         for (let index = 0; index < path.length; index++) {
           const at = path[index];
           const before = path[Math.max(0, index - 1)];
@@ -4749,9 +4826,24 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           if (index > 0) {
             trailIndices.push(base - 2, base - 1, base, base - 1, base + 1, base);
           }
+          // Same law on the branch as on the road it leaves: the safe
+          // circle covers the drawn mat, and a midpoint closes the span.
+          const safeRadius = Math.max(leftWidth, rightWidth) * 1.1;
+          if (index > 0) {
+            const midpoint = sphericalPoint(path[index - 1], at, .5, {});
+            safeSamples.push({
+              x: midpoint.x, z: midpoint.z,
+              radius: Math.max(
+                previousLeftWidth + leftWidth, previousRightWidth + rightWidth,
+              ) * .55,
+              routeId: pocket.spurRouteId,
+            });
+          }
+          previousLeftWidth = leftWidth;
+          previousRightWidth = rightWidth;
           safeSamples.push({
             x: at.x, z: at.z,
-            radius: Math.min(leftWidth, rightWidth) * .72,
+            radius: safeRadius,
             routeId: pocket.spurRouteId,
           });
         }
@@ -6025,13 +6117,31 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           // The glowing conductor is therefore also a promise that the crust
           // beneath its flight corridor is quenched. Sparse overlapping
           // samples cover ordinary ejection drift without adding fake floors.
-          rail.bailoutSafetySamples = rail.path.chartSamples
-            .filter((sample, sampleIndex, samples) =>
-              sampleIndex % 4 === 0 || sampleIndex === samples.length - 1)
-            .map(sample => ({
+          // Every fourth spline sample put a radius-24 circle every 3.7 m:
+          // 1,548 tests a frame for a corridor those same circles cover at
+          // four times the spacing. Walk the ground track in true metres and
+          // keep one every sixteen. The corridor still pinches no narrower
+          // than sqrt(24^2 - 8^2) = 22.6 m, which is the whole ejection drift,
+          // and it is 483 samples instead of 1,548.
+          const railSamples = rail.path.chartSamples;
+          const bailouts = [];
+          let carriedBailout = Infinity;
+          for (let sampleIndex = 0; sampleIndex < railSamples.length; sampleIndex++) {
+            const sample = railSamples[sampleIndex];
+            const previousSample = railSamples[sampleIndex - 1];
+            if (previousSample) {
+              carriedBailout += surfaceDistanceAt(
+                previousSample.x, previousSample.z, sample.x, sample.z,
+              );
+            }
+            if (carriedBailout < 16 && sampleIndex < railSamples.length - 1) continue;
+            carriedBailout = 0;
+            bailouts.push({
               x: sample.x, z: sample.z, radius: 24,
               routeId: `${rail.id}-bailout-safety`, railId: rail.id,
-            }));
+            });
+          }
+          rail.bailoutSafetySamples = bailouts;
           profile.wilderness.safeSamples.push(...rail.bailoutSafetySamples);
         }
       }
@@ -6204,9 +6314,14 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         planet: profile.id, destination: spec.destination, theme,
         x: spec.x, z: spec.z, yaw: spec.yaw, deckTop, boardRadius: 28,
         group, hull, deck, deckHalo, wings, engines,
+        // hullMaterial is shared by the hull AND the deck, trimMaterial by
+        // the prow AND both wings. Holding them here lets one write take a
+        // whole unbought ship down to cold metal instead of chasing six
+        // meshes -- which is exactly the effect wanted below.
+        hullMaterial, trimMaterial,
         receiverNode, receiverRings, electricArcs, receiverCore, receiver,
         deckCollision, solids: vehicleSolids, charge: 0, cooldown: 0, launchCount: 0,
-        boarded: false,
+        boarded: false, refusal: 0,
       };
       receiver.vehicle = vehicle;
       // ---- THE BOARDING GANTRY -------------------------------------------
@@ -6283,7 +6398,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         ring.rotation.x = Math.PI / 2;
         this.placePlanetObject(ring, gantryX, gantryDeckAltitude + 6 + ringIndex * 26, gantryZ, spec.yaw);
         gantryGroup.add(ring);
-        beaconRings.push({ mesh: ring, index: ringIndex });
+        // The authored opacity is remembered rather than recomputed, so a
+        // ship that lights back up returns to exactly the look it was built
+        // with instead of to a second copy of the same sum.
+        beaconRings.push({ mesh: ring, index: ringIndex, base: .68 - ringIndex * .045 });
       }
       const beaconGlow = this.makeGlowSprite(
         spec.destination === 'lava' ? this.glowGold : this.glowCyan, 46, .8);
@@ -6790,8 +6908,12 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
     }
     updateInterworldVehicles(profile, dt, clock, gameState = null) {
       this.updateSurfaceTransitMotion(profile, dt, clock, gameState);
+      // What the player can spend on this world right now, read once.
+      const passage = gameState?.shipPassage || null;
+      const purse = gameState?.ledgerTotal ? gameState.ledgerTotal(profile?.id) : 0;
       for (const vehicle of profile?.vehicles || EMPTY_SOLIDS) {
         vehicle.cooldown = Math.max(0, vehicle.cooldown - dt);
+        vehicle.refusal = Math.max(0, (vehicle.refusal || 0) - dt);
         vehicle.receiverNode.updateMatrixWorld(true);
         vehicle.receiverNode.getWorldPosition(vehicle.receiver.position);
         const charge = clamp(vehicle.charge / .78, 0, 1);
@@ -6800,31 +6922,62 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           && !gameState.eclipseState.complete
           && gameState.eclipseState.lifecycle === 'awaiting-travel'
           && vehicle.destination === gameState.eclipseState.planet ? 1 : 0;
+        // THE FARE, WRITTEN IN LIGHT. A ship whose destination has not been
+        // bought and cannot be bought right now is cold dead metal with its
+        // beacon out. A ship you could buy this second BREATHES, once every
+        // two seconds, and that slow swell is the whole "you can afford this
+        // one now" message: no word, no number, just a thing that starts
+        // living. A paid ship looks exactly as it always did.
+        const dormant = passage ? !passage[vehicle.destination] : false;
+        const dead = dormant && purse < SHIP_FARE;
+        const breathe = .5 + Math.sin(clock * Math.PI) * .5;
+        const life = dead ? .1 : dormant ? .3 + breathe * .7 : 1;
+        vehicle.hullMaterial.emissiveIntensity = .22 * life;
+        vehicle.trimMaterial.emissiveIntensity = 1.05 * life;
+        vehicle.receiverCore.material.emissiveIntensity = 2.85 * life;
         vehicle.receiverCore.rotation.x += dt * (1.7 + charge * 8 + eclipseTarget * 7);
         vehicle.receiverCore.rotation.y -= dt * (2.2 + charge * 11 + eclipseTarget * 10);
         vehicle.receiverCore.scale.setScalar(.82 + Math.sin(clock * (7 + eclipseTarget * 5)) * (.12 + eclipseTarget * .22)
           + charge * .72 + eclipseTarget * .62);
         vehicle.deckHalo.rotation.z += dt * (.24 + charge * 4.8 + eclipseTarget * 4.2);
-        vehicle.deckHalo.material.emissiveIntensity = 2.25 + Math.sin(clock * 3.7) * .5
-          + charge * 4.5 + mastery * 2.2 + eclipseTarget * 5.5;
+        vehicle.deckHalo.material.emissiveIntensity = (2.25 + Math.sin(clock * 3.7) * .5
+          + charge * 4.5 + mastery * 2.2 + eclipseTarget * 5.5) * life;
         for (let index = 0; index < vehicle.receiverRings.length; index++) {
           const ring = vehicle.receiverRings[index];
           ring.rotation.z += dt * (.32 + index * .21 + charge * (1.7 + index * .35)) * (index % 2 ? -1 : 1);
           ring.rotation.y += dt * (.08 + index * .06);
-          ring.material.opacity = ring.material.transparent ? clamp(.45 + charge * .5 + eclipseTarget * .42, 0, 1) : 1;
+          ring.material.opacity = ring.material.transparent
+            ? clamp((.45 + charge * .5 + eclipseTarget * .42) * life, 0, 1) : 1;
           if ('emissiveIntensity' in ring.material) {
-            ring.material.emissiveIntensity = 2.4 + charge * 5.8 + mastery * 2.6 + eclipseTarget * 6.2;
+            ring.material.emissiveIntensity = (2.4 + charge * 5.8 + mastery * 2.6 + eclipseTarget * 6.2) * life;
           }
         }
         for (let index = 0; index < vehicle.electricArcs.length; index++) {
           const arc = vehicle.electricArcs[index];
           arc.rotation.z += dt * (index % 2 ? -1 : 1) * (1.15 + charge * 5.5);
-          arc.material.opacity = clamp(.28 + Math.sin(clock * (9 + index + eclipseTarget * 4) + index) * .18
-            + charge * .5 + eclipseTarget * .48, 0, 1);
+          arc.material.opacity = clamp((.28 + Math.sin(clock * (9 + index + eclipseTarget * 4) + index) * .18
+            + charge * .5 + eclipseTarget * .48) * life, 0, 1);
         }
         for (let index = 0; index < vehicle.engines.length; index++) {
-          vehicle.engines[index].material.emissiveIntensity = 2 + Math.sin(clock * 9 + index) * .55
-            + charge * 3.2 + eclipseTarget * 4.5;
+          vehicle.engines[index].material.emissiveIntensity = (2 + Math.sin(clock * 9 + index) * .55
+            + charge * 3.2 + eclipseTarget * 4.5) * life;
+        }
+        // The gantry column is the "board here" sign, and it had no per-frame
+        // writer at all until now. An unaffordable ship has nothing to say, so
+        // its three hundred metres of light, its nine rings and its pad glow
+        // all go out; the pad itself stays lit and walkable, because on Lava
+        // it is real standing ground in a place where the floor burns.
+        const gantry = vehicle.gantry;
+        if (gantry) {
+          gantry.beacon.visible = !dead;
+          gantry.beaconGlow.visible = !dead;
+          gantry.beacon.material.opacity = .3 * life;
+          gantry.beaconGlow.material.opacity = .8 * life;
+          for (let index = 0; index < gantry.beaconRings.length; index++) {
+            const ring = gantry.beaconRings[index];
+            ring.mesh.visible = !dead;
+            ring.mesh.material.opacity = ring.base * life;
+          }
         }
       }
     }
@@ -6835,6 +6988,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           vehicle.cooldown = 0;
           vehicle.launchCount = 0;
           vehicle.boarded = false;
+          vehicle.refusal = 0;
         }
         for (const rail of profile.rails || EMPTY_SOLIDS) {
           rail.anchor.active = false;
@@ -8752,7 +8906,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       ocean.userData.kbLifted = true;
       profile.root.add(ocean);
       features.ocean = ocean;
-      const tideLight = new T.HemisphereLight(0xa9fbff, 0x071a38, 1.35);
+      const tideLight = new T.HemisphereLight(0xa9fbff, 0x0e5674, 1.62);
       tideLight.name = 'LIVING TIDE · REEF SKY LIGHT';
       const reefSun = new T.DirectionalLight(0xffbddf, 1.45);
       reefSun.name = 'LIVING TIDE · CORAL SUN';
@@ -11811,7 +11965,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       });
       features.materials = { basaltMaterial, obsidianMaterial, forgeMaterial, goldMaterial, cooledMaterial };
 
-      const furnaceSky = new T.HemisphereLight(0xffcb8b, 0x101833, 1.52);
+      const furnaceSky = new T.HemisphereLight(0xffcb8b, 0x4a1108, 1.58);
       furnaceSky.name = 'WALKING FURNACE · ASH SKY LIGHT';
       const furnaceSun = new T.DirectionalLight(0xffe4ba, 2.05);
       furnaceSun.name = 'WALKING FURNACE · FORGE SUN';
@@ -12903,6 +13057,20 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         profile.root.add(patch);
         features.coolingEclipsePatches.push({
           siteIndex, mesh: patch, material, baseEmissive: .16,
+        });
+        // This ring is the strongest "dark shattered ground" signal on the
+        // planet and it was pure paint: no collider, no safe sample, so
+        // standing on it burned. Record it the way it is DRAWN -- an annulus
+        // with a wedge missing every fifth segment -- and let the gameplay
+        // check read that shape directly. Twelve annulus tests a frame beat a
+        // thousand circle samples, and leaving the skipped wedges hot makes
+        // the shattered look literally true: the holes really are holes.
+        (features.coolingStrataRings || (features.coolingStrataRings = [])).push({
+          x: site.x, z: site.z, siteIndex,
+          patchRadius: spec.patchRadius, segments, phase: siteIndex * .07,
+          skipPhase: siteIndex * 2,
+          innerLimit: spec.patchRadius * .23,
+          outerLimit: spec.patchRadius * (.83 + 4 * .045),
         });
         return patch;
       };
@@ -16021,6 +16189,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       boss.group.visible = true;
       boss.group.scale.setScalar(boss.baseScale || 1);
       if (profile.finalSeal) profile.finalSeal.open = true;
+      // Outside the announce block on purpose: the column says "this court is
+      // open", which is true however it came open. Only the noise is optional.
+      this.raiseFinalCourtColumn(profile);
       if (announce) {
         const at = profile.finalSeal?.group.position || boss.position;
         this.particles?.burst(at, profile.theme.hot, 130, 28, 1.45, .4);
@@ -16033,13 +16204,57 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       }
       return true;
     }
+    // The Moon answers an opened final with a pillar of light. These two
+    // worlds had nothing: the seal peeled itself apart in a court you could
+    // be a kilometre away from and never notice happen. (Alex, 2026-09-04:
+    // "and it has to be clear it is.") One tall column in the world's own
+    // accent, built once and afterwards only shown or hidden.
+    raiseFinalCourtColumn(profile) {
+      const seal = profile?.finalSeal;
+      if (!seal) return null;
+      if (seal.column) { seal.column.visible = true; return seal.column; }
+      const column = new T.Group();
+      const shaft = new T.Mesh(
+        new T.CylinderGeometry(4.2, 8.6, 340, 14, 1, true),
+        new T.MeshBasicMaterial({
+          color: profile.theme.accent, transparent: true, opacity: .26,
+          side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending,
+        }),
+      );
+      shaft.userData.kbNoCollide = true;
+      column.add(shaft);
+      // Rings climbing the shaft, so the column reads as a rising thing from
+      // far off rather than as a flat bright stripe painted on the sky.
+      for (let ringIndex = 0; ringIndex < 6; ringIndex++) {
+        const ring = new T.Mesh(
+          new T.TorusGeometry(9.6 - ringIndex * .82, .44, 6, 26),
+          new T.MeshBasicMaterial({
+            color: profile.theme.accent, transparent: true,
+            opacity: .58 - ringIndex * .07,
+            depthWrite: false, blending: T.AdditiveBlending,
+          }),
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = -158 + ringIndex * 36;
+        ring.userData.kbNoCollide = true;
+        column.add(ring);
+      }
+      this.placePlanetObject(column, seal.arena.x, seal.ground + 172, seal.arena.z);
+      column.userData.kbNoCollide = true;
+      profile.root.add(column);
+      seal.column = column;
+      return column;
+    }
     updatePlanetFinalSeal(profile, dt, gameState, clock) {
       const seal = profile.finalSeal;
       if (!seal) return;
       const progress = gameState.worldProgress[profile.id];
       const time = Number.isFinite(clock) ? clock : gameState.time;
+      // Half the regional roster, and nothing else. The collectible clause
+      // that used to stand beside it is the ship fare now. (Alex: "if deafeat
+      // maybe half of the bosses on a moon, the last boss from that moon is
+      // avaialable.")
       if (progress.regionalDefeated >= ALTERNATE_REGIONAL_REQUIRED
-        && progress.collected >= ALTERNATE_COLLECTION_TARGET
         && !profile.boss.unlocked) {
         this.unlockAlternateFinal(profile, gameState);
       }
@@ -16088,8 +16303,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       audio.win();
       gameState.addStyle(30, 5600, `${boss.name} FALLS`,
         profile.id === 'water' ? '#9ffcff' : '#ffd34f');
-      if (progress.regionalDefeated >= ALTERNATE_REGIONAL_REQUIRED
-        && progress.collected >= ALTERNATE_COLLECTION_TARGET) {
+      // The third of five is the moment the court opens, live, with the
+      // announcement and the standing column that goes with it.
+      if (progress.regionalDefeated >= ALTERNATE_REGIONAL_REQUIRED) {
         this.unlockAlternateFinal(profile, gameState);
       }
       return true;
@@ -16378,6 +16594,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         profile.finalSeal.open = false;
         profile.finalSeal.opening = 0;
         profile.finalSeal.group.visible = true;
+        if (profile.finalSeal.column) profile.finalSeal.column.visible = false;
         profile.finalSeal.iris.material.opacity = .94;
         profile.finalSeal.iris.scale.set(1.35, .82, 1.35);
       }
@@ -16506,7 +16723,15 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       profile.atmosphere.rotation.y += dt * (profile.id === 'water' ? .025 : -.012);
       profile.terrainMaterial.emissiveIntensity = profile.id === 'water'
         ? .31 + Math.sin(clock * .7) * .055
-        : .145 + Math.sin(clock * 2.3) * .028;
+        // Cooled basalt is meant to be the darkest thing on this world and the
+        // molten ground the brightest, so "where can I stand" is a value read.
+        // Through an emissive map that averages a fifth brightness, .145 came
+        // out at a fifth of the cooled road's own glow and the read was
+        // inverted. Same one number, raised until ungoverned ground is visibly
+        // live: no new pass, no new draw call, and the map keeps the heat
+        // veined rather than a flat wash. The breath is gentler in proportion
+        // than it was, because this is now a light you can actually see.
+        : 2.72 + Math.sin(clock * 2.3) * .27;
       if (profile.deckRimMesh) {
         profile.deckRimMesh.material.emissiveIntensity = profile.id === 'water'
           ? .62 + Math.sin(clock * 1.7) * .12
@@ -16683,17 +16908,89 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         // Their exact rendered centre samples are also the damage authority, so
         // a player who follows the visible road can cross Lava on foot while a
         // shortcut over the glowing crust still burns.
-        const onCooledRoad = !onSafeDeck
-          && (profile.wilderness?.safeSamples || EMPTY_SOLIDS).some(sample => {
-            const dx = playerChart.x - sample.x;
-            const dz = playerChart.z - sample.z;
-            return Math.abs(dx) <= sample.radius && Math.abs(dz) <= sample.radius
-              && dx * dx + dz * dz <= sample.radius * sample.radius;
-          });
-        const touching = !onSafeDeck && !onCooledRoad && playerChart.alt <= terrain + .62;
+        //
+        // The comparison belongs on the sphere, not in the chart. Chart metres
+        // stretch tangentially by theta/sin(theta) as you leave the pole, so
+        // raw dx/dz against a radius authored in true metres squeezed a 14 m
+        // wide road down to a 1.4 m safe thread out at HELLSTAR RIM while the
+        // mat still drew full width. Every sample gets its unit surface
+        // direction and the squared chord its radius subtends, packed once
+        // into one flat lane -- roads, pocket spurs, galaxy-toy spurs and rail
+        // bailouts all push here and they do not share an object shape, so the
+        // old per-sample field reads were megamorphic. The result is an exact
+        // great-circle test that costs less than the wrong one did.
+        const wilderness = profile.wilderness;
+        const safeSamples = wilderness?.safeSamples || EMPTY_SOLIDS;
+        if (wilderness && wilderness.safeSampleCount !== safeSamples.length) {
+          const packed = new Float64Array(safeSamples.length * 4);
+          const packDirection = new T.Vector3();
+          for (let index = 0; index < safeSamples.length; index++) {
+            const sample = safeSamples[index];
+            chartDirAt(sample.x, sample.z, packDirection);
+            const chord = 2 * Math.sin(Math.min(Math.PI, sample.radius / PLANET.radius) * .5);
+            packed[index * 4] = packDirection.x;
+            packed[index * 4 + 1] = packDirection.y;
+            packed[index * 4 + 2] = packDirection.z;
+            packed[index * 4 + 3] = chord * chord;
+          }
+          wilderness.safeSampleField = packed;
+          wilderness.safeSampleCount = safeSamples.length;
+        }
+        const safeField = wilderness?.safeSampleField;
+        const playerDirection = playerChart.up;
+        let onCooledRoad = false;
+        if (!onSafeDeck && safeField) {
+          const px = playerDirection.x, py = playerDirection.y, pz = playerDirection.z;
+          for (let index = 0; index < safeField.length; index += 4) {
+            const chordSq = safeField[index + 3];
+            const dx = px - safeField[index];
+            if (dx * dx > chordSq) continue;
+            const dz = pz - safeField[index + 2];
+            const flat = dx * dx + dz * dz;
+            if (flat > chordSq) continue;
+            const dy = py - safeField[index + 1];
+            if (flat + dy * dy > chordSq) continue;
+            const sample = safeSamples[index >> 2];
+            if (surfaceDistanceAt(playerChart.x, playerChart.z, sample.x, sample.z)
+              > sample.radius) continue;
+            onCooledRoad = true;
+            break;
+          }
+        }
+        // The twelve cooling-strata rings are drawn as annuli with a wedge
+        // missing every fifth segment. Test them as annuli, so the wedge stays
+        // a real hole you can burn in. That is what makes them read as broken.
+        let onCoolingStrata = false;
+        if (!onSafeDeck && !onCooledRoad) {
+          for (const ring of profile.lavaFeatures?.coolingStrataRings || EMPTY_SOLIDS) {
+            const reach = surfaceDistanceAt(playerChart.x, playerChart.z, ring.x, ring.z);
+            if (reach < ring.innerLimit || reach > ring.outerLimit) continue;
+            const origin = chartDirAt(ring.x, ring.z, new T.Vector3());
+            const heading = playerDirection.clone()
+              .addScaledVector(origin, -playerDirection.dot(origin));
+            if (heading.lengthSq() < 1e-10) continue;
+            heading.normalize().applyQuaternion(
+              liftQuatAt(ring.x, ring.z, new T.Quaternion()).invert(),
+            );
+            const bearing = Math.atan2(heading.z, heading.x) - ring.phase;
+            const slice = ((bearing / TAU * ring.segments) % ring.segments
+              + ring.segments) % ring.segments;
+            const segment = Math.floor(slice);
+            if ((segment + ring.skipPhase) % 5 === 4) continue;
+            const inner = ring.patchRadius
+              * (.23 + Math.min(segment % 3, (segment + 1) % 3) * .018);
+            const outer = ring.patchRadius * (.83 + Math.max(
+              (segment * 7 + ring.siteIndex) % 5, (segment * 11 + ring.siteIndex) % 5,
+            ) * .045);
+            if (reach >= inner && reach <= outer) { onCoolingStrata = true; break; }
+          }
+        }
+        const onCooledGround = onCooledRoad || onCoolingStrata;
+        const touching = !onSafeDeck && !onCooledGround && playerChart.alt <= terrain + .62;
         gameState.lavaState.touching = touching;
         gameState.lavaState.field = touching ? 'lava-moon-global'
-          : onCooledRoad ? 'lava-wilderness-cooled-road' : null;
+          : onCooledRoad ? 'lava-wilderness-cooled-road'
+            : onCoolingStrata ? 'lava-cooling-strata' : null;
         if (touching && gameState.lavaState.damageCooldown <= 0) {
           gameState.lavaState.damageCooldown = 1.05;
           gameState.lavaState.hitsTaken++;
@@ -23980,7 +24277,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       pillar.quaternion.setFromUnitVectors(UP, dirAt(at, this.fxScratch));
       pillar.userData.kbLifted = true;
       this.holePillar = pillar;
-      this.scene.add(pillar);
+      (this.planetRoots?.moon || this.scene).add(pillar);
     }
     // Victory cosmetics. The ball takes the heart's look -- deep space with a
     // burning cyan core. Planet faces are separate reversible objects rather
@@ -26998,8 +27295,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (this.snowField) this.snowField.visible = false;
       const themes = {
         moon: { background: 0x000006, fog: 0x02030c, density: .00072, exposure: 1.18 },
-        water: { background: 0x00131d, fog: 0x063746, density: .0036, exposure: 1.12 },
-        lava: { background: 0x17050a, fog: 0x4a170f, density: .00142, exposure: 1.2 },
+        water: { background: 0x052a41, fog: 0x0d6f8c, density: .00195, exposure: 1.2 },
+        lava: { background: 0x2b0910, fog: 0x7a2411, density: .00108, exposure: 1.26 },
       };
       const theme = themes[next];
       this.scene.background.setHex(theme.background);
@@ -28779,22 +29076,32 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.cannon.wakeTimer = Math.max(0, this.cannon.wakeTimer - dt);
         this.cannon.recoil = damp(this.cannon.recoil || 0, 0, 4.8, dt);
         this.cannon.pulse += dt;
-        const powered = this.cannon.deployed ? 1 : 0;
+        // THE GREAT CANNON CHARGES. It used to be a switch: dead grey metal
+        // until the last boss on the moon fell, then suddenly lit. Alex asked
+        // for the opposite -- "and it has to be clear it is" available -- so
+        // the roster fraction drives the whole fixture and the crystal warms
+        // one boss at a time. A deployed cannon still reads as fully powered,
+        // which keeps every harness that sets deployed by hand honest.
+        const powered = Math.max(this.cannon.deployed ? 1 : 0, clamp(this.cannonCharge || 0, 0, 1));
+        const cold = this.cannonColdTint || (this.cannonColdTint = new T.Color(0x33434b));
+        const lit = this.cannonLitTint || (this.cannonLitTint = new T.Color(0xb8f3ff));
+        const coldGlow = this.cannonColdGlow || (this.cannonColdGlow = new T.Color(0x153743));
+        const litGlow = this.cannonLitGlow || (this.cannonLitGlow = new T.Color(0x2ec7e8));
         const wake = this.cannon.wakeTimer > 0 ? clamp(this.cannon.wakeTimer / 3.6, 0, 1) : 0;
         for (let i = 0; i < this.cannon.rings.length; i++) {
-          this.cannon.rings[i].rotation.z += dt * (powered ? .72 + i * .22 : .08 + i * .025);
+          this.cannon.rings[i].rotation.z += dt * lerp(.08 + i * .025, .72 + i * .22, powered);
           this.cannon.rings[i].material.emissiveIntensity = lerp(.16, 2.1 + Math.sin(clock * 3.6 + i) * .28, powered);
         }
-        this.cannon.crystal.rotation.y += dt * (powered ? 2.15 : .24);
-        this.cannon.crystal.scale.setScalar(1 + Math.sin(clock * (powered ? 5.2 : 1.1)) * (powered ? .09 : .018) + wake * .18);
-        this.cannon.crystal.material.color.setHex(powered ? 0xb8f3ff : 0x33434b);
-        this.cannon.crystal.material.emissive.setHex(powered ? 0x2ec7e8 : 0x153743);
-        this.cannon.crystal.material.emissiveIntensity = powered ? 2.8 + Math.sin(clock * 4.8) * .5 + wake * 2.2 : .35;
-        this.cannon.loadRing.rotation.z += dt * (powered ? 1.4 : .12);
-        this.cannon.loadRing.material.emissiveIntensity = powered ? 2.3 + Math.sin(clock * 4.2) * .45 : .26;
-        this.cannon.loadArrow.material.emissiveIntensity = powered ? 1.8 + Math.sin(clock * 5.4) * .5 : .22;
-        this.cannon.loadArrow.position.y = 17.5 + Math.sin(clock * (powered ? 3.4 : .7)) * (powered ? 1.2 : .25);
-        this.cannon.muzzle.material.emissiveIntensity = powered ? 2.25 + wake * 1.4 : .24;
+        this.cannon.crystal.rotation.y += dt * lerp(.24, 2.15, powered);
+        this.cannon.crystal.scale.setScalar(1 + Math.sin(clock * lerp(1.1, 5.2, powered)) * lerp(.018, .09, powered) + wake * .18);
+        this.cannon.crystal.material.color.copy(cold).lerp(lit, powered);
+        this.cannon.crystal.material.emissive.copy(coldGlow).lerp(litGlow, powered);
+        this.cannon.crystal.material.emissiveIntensity = lerp(.35, 2.8 + Math.sin(clock * 4.8) * .5 + wake * 2.2, powered);
+        this.cannon.loadRing.rotation.z += dt * lerp(.12, 1.4, powered);
+        this.cannon.loadRing.material.emissiveIntensity = lerp(.26, 2.3 + Math.sin(clock * 4.2) * .45, powered);
+        this.cannon.loadArrow.material.emissiveIntensity = lerp(.22, 1.8 + Math.sin(clock * 5.4) * .5, powered);
+        this.cannon.loadArrow.position.y = 17.5 + Math.sin(clock * lerp(.7, 3.4, powered)) * lerp(.25, 1.2, powered);
+        this.cannon.muzzle.material.emissiveIntensity = lerp(.24, 2.25 + wake * 1.4, powered);
         this.cannon.barrelAssembly.position.y = 7 - this.cannon.recoil * 6.5;
         this.cannon.unlockBeam.visible = !!this.cannon.deployed && this.activeLayer === 'surface' && !this.cannon.firing;
         this.cannon.unlockShaft.material.opacity = .12 + Math.sin(clock * 2.4) * .035 + wake * .2;
@@ -29620,6 +29927,15 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         lava: { boss: false, mastery: false },
       };
       this.savedEclipseMaw = false;
+      // THE SHIP PASSAGE. (Alex, 2026-09-04: "I think they should be used to
+      // get to the other 2 moons/planets after the first one. each cost 1000
+      // collectibles to activate one of the two ships that go to the other
+      // moons.") The MOON is always free, so a fare can never strand anyone
+      // on a world with no way home. A bought destination stays bought: this
+      // survives restart() and is written into the save. The ledger it was
+      // paid out of does not survive either.
+      this.shipPassage = { moon: true, water: false, lava: false };
+      this.collectibleSpent = { moon: 0, water: 0, lava: 0 };
       this.lavaState = { touching: false, damageCooldown: 0, hitsTaken: 0, field: null };
       this.cannonFlight = { active: false, time: 0, progress: 0, launched: false };
       this.lastHeartShock = -1;
@@ -29646,6 +29962,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           this.savedPlanetCrowns[planet].mastery = !!saved.mastery;
         }
         this.savedEclipseMaw = !!threeCrownSave?.eclipse?.complete;
+        // A save written before the fare existed carries no passage field,
+        // and the right answer for it is "you have not bought anything yet".
+        this.shipPassage.moon = true;
+        this.shipPassage.water = !!threeCrownSave?.passage?.water;
+        this.shipPassage.lava = !!threeCrownSave?.passage?.lava;
       } catch (ignored) { void ignored; }
       this.eclipseState = makeEclipseState(this.savedEclipseMaw);
       world.resetEclipseMaw(this.savedEclipseMaw);
@@ -29768,6 +30089,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       MOONHOLE.open = false;
       if (world.iceSheen) world.iceSheen.visible = true;
       if (world.holePillar) world.holePillar.visible = false;
+      world.cannonCharge = 0;
       if (world.cannon) {
         world.cannon.deployed = false;
         world.cannon.armed = false;
@@ -30096,32 +30418,65 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // does not rewrite the original Moon's ball/enemy choreography.
       return true;
     }
-    savePlanetCrown(planet, mastery = false) {
-      const saved = this.savedPlanetCrowns?.[planet];
-      if (!saved) return false;
-      saved.boss = true;
-      if (mastery) saved.mastery = true;
+    // ONE WRITER for the whole save blob. There used to be two, each
+    // rebuilding the entire record from its own view of the world, so
+    // whichever ran last quietly erased the other one's field: finishing the
+    // Eclipse Maw rewrote the planet crowns from stale state and vice versa.
+    // Everything that persists goes through here now, paid passage included.
+    writeThreeCrownSave() {
       try {
         localStorage.setItem(THREE_CROWN_STORAGE_KEY, JSON.stringify({
           version: 1,
           water: { ...this.savedPlanetCrowns.water },
           lava: { ...this.savedPlanetCrowns.lava },
           eclipse: { complete: !!this.savedEclipseMaw },
+          passage: { ...this.shipPassage },
         }));
       } catch (ignored) { void ignored; }
       return true;
     }
+    savePlanetCrown(planet, mastery = false) {
+      const saved = this.savedPlanetCrowns?.[planet];
+      if (!saved) return false;
+      saved.boss = true;
+      if (mastery) saved.mastery = true;
+      return this.writeThreeCrownSave();
+    }
     saveEclipseMaw() {
       this.savedEclipseMaw = true;
-      try {
-        localStorage.setItem(THREE_CROWN_STORAGE_KEY, JSON.stringify({
-          version: 1,
-          water: { ...this.savedPlanetCrowns.water },
-          lava: { ...this.savedPlanetCrowns.lava },
-          eclipse: { complete: true },
-        }));
-      } catch (ignored) { void ignored; }
-      return true;
+      return this.writeThreeCrownSave();
+    }
+    // Two ledgers live in this game -- the Moon's scalar and the alternate
+    // worlds' progress records -- and every pickup in all three is worth one
+    // of the same thing. These three read and spend them as though that were
+    // already true, so nothing else has to know which world it is standing on.
+    ledgerTotal(planet = world.activePlanet) {
+      if (planet === 'moon') return this.drops;
+      return this.worldProgress[planet]?.collected || 0;
+    }
+    spendLedger(planet, amount) {
+      const cost = Math.max(0, Math.round(Number(amount) || 0));
+      if (!cost) return 0;
+      // A ledger never goes negative. The HUD counter prints this number and
+      // a minus sign there would be a word on the screen by another name.
+      if (planet === 'moon') {
+        const paid = Math.min(this.drops, cost);
+        this.drops -= paid;
+        this.collectibleSpent.moon += paid;
+        return paid;
+      }
+      const progress = this.worldProgress[planet];
+      if (!progress) return 0;
+      const paid = Math.min(progress.collected, cost);
+      progress.collected -= paid;
+      this.collectibleSpent[planet] = (this.collectibleSpent[planet] || 0) + paid;
+      return paid;
+    }
+    shipFareOwed(planet = world.activePlanet) {
+      for (const vehicle of world.planetSurfaces.get(planet)?.vehicles || EMPTY_SOLIDS) {
+        if (!this.shipPassage[vehicle.destination]) return true;
+      }
+      return false;
     }
     resetStrataEncounter() {
       const strata = world.strata;
@@ -30242,6 +30597,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         water: makeAlternateWorldProgress(),
         lava: makeAlternateWorldProgress(),
       };
+      // The ledgers start again, so what was spent out of them does too.
+      // this.shipPassage deliberately does NOT reset: the ships were bought.
+      this.collectibleSpent = { moon: 0, water: 0, lava: 0 };
       this.eclipseState = makeEclipseState(this.savedEclipseMaw);
       this.lavaState = { touching: false, damageCooldown: 0, hitsTaken: 0, field: null };
       this.cannonFlight = { active: false, time: 0, progress: 0, launched: false };
@@ -31989,6 +32347,16 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     beginPlanetFlight(vehicle) {
       if (!vehicle || this.planetTransition.active || vehicle.planet !== world.activePlanet
         || vehicle.destination === world.activePlanet || vehicle.cooldown > 0) return false;
+      // THE MOMENT OF PAYMENT. A cold ship only lights if the fare is on you
+      // right now, and it is taken here rather than at the ring, so the
+      // collectibles leave the counter at the same instant the engines do.
+      const fareDue = !this.shipPassage[vehicle.destination];
+      if (fareDue) {
+        if (this.ledgerTotal(world.activePlanet) < SHIP_FARE) return false;
+        this.spendLedger(world.activePlanet, SHIP_FARE);
+        this.shipPassage[vehicle.destination] = true;
+        this.writeThreeCrownSave();
+      }
       const previousCount = this.planetTransition.count || 0;
       this.flightVehicle = vehicle;
       this.planetTransition = {
@@ -32014,6 +32382,16 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       world.setHyperspeedFx(true, vehicle.destination, 0, 0, 0, 0);
       world.pulseRing(vehicle.receiver.position, new T.Color(vehicle.theme.accent), 36, .75, true);
       world.particles.burst(vehicle.receiver.position, vehicle.theme.accent, 120, 34, 1.25, .36);
+      if (fareDue) {
+        // The first launch of a ship you just paid for is bigger than every
+        // launch after it. Nothing tells the player they spent a thousand --
+        // the ship does, in its own colour.
+        world.pulseRing(vehicle.receiver.position, new T.Color(vehicle.theme.accent), 96, 1, true);
+        world.particles.burst(vehicle.receiver.position, vehicle.theme.accent, 220, 58, 1.9, .5);
+        world.particles.burst(vehicle.receiver.position, vehicle.theme.secondary, 120, 40, 1.5, .4);
+        this.shake = Math.max(this.shake, .85);
+        this.rewardFlash = 1;
+      }
       audio.impact(1, 'anchor');
       return true;
     }
@@ -36282,6 +36660,19 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           receiverHit = closest.distanceToSquared(receiver.position) <= captureRadius * captureRadius;
         }
         if (vehicle.cooldown > 0 || !receiverHit) continue;
+        // A ship you have not bought and cannot afford this second does not
+        // catch the ball. The ring stays dead and the shot falls through to
+        // the ordinary piton path below, which is the whole answer by itself:
+        // nothing here yet. One quiet closed thunk marks the refusal so it
+        // does not read as a missed throw.
+        if (!this.shipPassage[vehicle.destination]
+          && this.ledgerTotal(world.activePlanet) < SHIP_FARE) {
+          if (!(vehicle.refusal > 0)) {
+            vehicle.refusal = .7;
+            audio.tone(128, .13, 'triangle', .04, 54);
+          }
+          continue;
+        }
         if (this.attachExpansionAnchor(receiver, vehicle.theme.accent,
           vehicle.destination === 'water' ? 'BLUE MAELSTROM'
             : vehicle.destination === 'lava' ? 'RED FURNACE' : 'PEARL COMET')) {
@@ -36919,28 +37310,38 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     }
 
     // ---- THE END OF THE MOON ---------------------------------------------
-    // The supplied boss circuit, the new high and under bosses, and a broad
-    // collectathon threshold deploy a cannon. Nothing carves the terrain and
-    // nothing asks the sphere collision to pretend a second world is inside a
-    // pinhole. The cannon is the transition, and the player performs it.
+    // Half of the moon's nine bosses deploys the cannon. There is no
+    // collectible threshold on it any more: collectibles buy ship passage
+    // now. Nothing carves the terrain and nothing asks the sphere collision
+    // to pretend a second world is inside a pinhole. The cannon is the
+    // transition, and the player performs it.
     updateEndgame(dt) {
       if (!this.endgameOpen) {
-        // The whole roster: three region bosses, the Roc, the Colossus, the
-        // Crownback out on the strata and the Rail Warden down the moonline.
-        // The last two used to be missing, which quietly made "every boss"
-        // mean seven of nine.
+        // THE WHOLE ROSTER, AND IT REALLY IS THE WHOLE ROSTER NOW: three
+        // region bosses, the Roc, the Colossus, the Crownback out on the
+        // strata, the Rail Warden down the moonline, the sky vane and the
+        // under-bellower. Nine. The vane and the bellower used to sit outside
+        // this array and get hand-checked below, which is precisely the
+        // inconsistency the old comment claimed to have fixed.
         const moonBosses = [
           ...world.regions.map(region => region.boss),
           world.roc, world.colossus, world.strata?.boss, world.moonline?.boss,
+          world.vane, world.bellower,
         ].filter(Boolean);
         const bossRoster = moonBosses.length;
         const bossesDown = moonBosses.filter(boss => !boss.alive).length;
-        // EVERY boss on this moon -- the whole roster, the sky vane and the
-        // under-bellower -- plus 2,000 of the moon's own collectible. The
-        // roster is counted rather than written down so a new boss tightens
-        // the gate instead of quietly loosening it.
-        if (bossesDown >= bossRoster && !world.vane?.alive && !world.bellower?.alive
-          && this.drops >= MOON_COLLECTION_TARGET) this.openMoonHole();
+        // HALF THE MOON WAKES THE CANNON. (Alex, 2026-09-04: "THe progression
+        // should optimally be that if deafeat maybe half of the bosses on a
+        // moon, the last boss from that moon is avaialable.") Five of nine.
+        // The 2,000-collectible clause is gone on purpose: collectibles buy
+        // ship passage now, they do not gate a boss. The roster is counted
+        // rather than written down, so a new boss tightens the gate instead
+        // of quietly loosening it.
+        const bossesNeeded = Math.max(1, Math.ceil(bossRoster / 2));
+        // The cannon charges by this fraction rather than switching on, so
+        // the moon shows the progress instead of only announcing the result.
+        world.cannonCharge = clamp(bossesDown / bossesNeeded, 0, 1);
+        if (bossesDown >= bossesNeeded) this.openMoonHole();
         return;
       }
       if (world.holePillar) {
@@ -36948,9 +37349,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           && this.player.position.distanceTo(world.cannon.crystalPosition) > 48;
       }
     }
-    openMoonHole() {
+    openMoonHole(pillarSite = null) {
       if (this.endgameOpen) return;
       this.endgameOpen = true;
+      world.cannonCharge = 1;
       MOONHOLE.open = false;
       world.makeMoonheart();
       world.cannon.deployed = true;
@@ -36963,6 +37365,12 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       world.finalArenaGroup.visible = false;
       world.moonheart.group.visible = false;
       const mouth = world.cannon.crystalPosition;
+      // THE PILLAR. It has been written and never once called since the
+      // cannon replaced the terrain shaft, which left three visibility guards
+      // reading a field that never existed. Alex asked for the moment to be
+      // legible from anywhere: "and it has to be clear it is." A world-scale
+      // column over the cannon says it from the far side of the sphere.
+      world.makeHolePillar(pillarSite || mouth);
       world.particles.burst(mouth, 0x9defff, 90, 26, 1.6, .5);
       world.particles.burst(mouth, 0xffd66b, 50, 20, 1.2, .4);
       world.pulseRing(mouth, new T.Color(0x9defff), 60, 1);
@@ -37732,6 +38140,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.player.yaw, 'debug-transit-origin', true);
       route.vehicle.cooldown = 0;
       route.vehicle.charge = .78;
+      // The debug hook is not a paying customer. Ships cost 1,000 collectibles
+      // in play; a harness that jumps straight onto a route is not testing the
+      // fare, so open the passage rather than making every shot script buy it.
+      this.shipPassage[route.to] = true;
       this.beginPlanetFlight(route.vehicle);
       this.stepWith(route.vehicle ? 2.9 : .1, {});
       return this.getState();
@@ -37838,15 +38250,28 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     updateObjective(force = false) {
       if (world.activePlanet !== 'moon') {
         const surface = world.currentSurface();
-        const nextPickup = (surface?.collectibles || EMPTY_SOLIDS).find(item => item.alive && item.enabled !== false);
+        // The opened court outranks everything else on this world -- that IS
+        // the "it has to be clear it is". Below it the beacon leads to what
+        // the world is actually short of: enough for one ship fare while the
+        // player cannot afford one, then the regionals that peel the seal.
+        // It used to walk the player through every last pickup for the whole
+        // grind and never once point at a boss or at the court.
+        const localFinal = surface?.boss;
+        const finalOpen = !!localFinal?.unlocked && localFinal.alive;
+        const savingForPassage = !finalOpen && this.shipFareOwed(world.activePlanet)
+          && this.ledgerTotal(world.activePlanet) < SHIP_FARE;
+        const nextPickup = savingForPassage
+          ? (surface?.collectibles || EMPTY_SOLIDS).find(item => item.alive && item.enabled !== false)
+          : null;
         const nextEnemy = this.enemies.find(enemy => enemy.alive
           && (enemy.planet || 'moon') === world.activePlanet);
-        const nextBoss = (surface?.bosses || EMPTY_SOLIDS).find(boss => boss.alive);
+        const nextBoss = finalOpen ? localFinal
+          : (surface?.bosses || EMPTY_SOLIDS).find(boss => boss.alive && boss.unlocked);
         const nextVehicle = (surface?.vehicles || EMPTY_SOLIDS)[0];
-        const rawFocus = nextPickup?.chartPosition || nextEnemy?.position || nextBoss?.chartPosition
+        const rawFocus = nextPickup?.chartPosition || nextBoss?.chartPosition || nextEnemy?.position
           || (nextVehicle?.receiver?.position ? toChartVec(nextVehicle.receiver.position.clone()) : null);
         const focus = rawFocus ? new T.Vector3(rawFocus.x, rawFocus.y ?? rawFocus.alt ?? 0, rawFocus.z) : null;
-        const key = `${world.activePlanet}-${nextPickup ? 'collect' : nextEnemy ? 'enemy' : nextBoss ? 'boss' : 'travel'}`;
+        const key = `${world.activePlanet}-${finalOpen ? 'court' : nextPickup ? 'collect' : nextBoss ? 'boss' : nextEnemy ? 'enemy' : 'travel'}`;
         this.stage = 20;
         world.setBeacon(focus, world.activePlanet === 'water' ? 0x69efff : 0xff744a);
         if (force || this.objectiveKey !== key) this.objectiveKey = key;
@@ -37885,21 +38310,38 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         key = 'goal'; stage = 6;
         focus = world.goal.position;
         tint = 0xffd66b;
-      } else if (world.vane?.alive) {
+      } else if (!this.endgameOpen && world.vane?.alive) {
         key = `vane-${world.vane.phase}-${world.vane.hp}`; stage = 7;
         focus = toChartVec(world.vane.position.clone());
         tint = 0xffb42a;
-      } else if (world.bellower?.alive) {
+      } else if (!this.endgameOpen && world.bellower?.alive) {
         key = `bellower-${world.bellower.phase}-${world.bellower.hp}`; stage = 8;
         focus = world.activeLayer === 'underground'
           ? toChartVec(world.bellower.position.clone())
           : new T.Vector3(UNDERGROUND_MOUTHS.crystal.surface.x, groundHeightAt(UNDERGROUND_MOUTHS.crystal.surface.x, UNDERGROUND_MOUTHS.crystal.surface.z) + 2, UNDERGROUND_MOUTHS.crystal.surface.z);
         tint = 0xbf83ff;
-      } else if (this.drops < MOON_COLLECTION_TARGET) {
+      } else if (!this.endgameOpen && this.shipFareOwed('moon') && this.drops < SHIP_FARE) {
+        // Saving for a ship. A bounded nudge, not a chore list: the moment
+        // one fare is affordable the beacon goes back to the bosses, and the
+        // player buys passage whenever they feel like it. Once the cannon is
+        // awake nothing outranks it -- that is the "it has to be clear it is".
         key = `moon-route-${this.drops}`; stage = 9;
         const remaining = (world.expansionCollectibles || EMPTY_SOLIDS).find(item => item.alive && item.layer === world.activeLayer);
         focus = remaining ? toChartVec(remaining.position.clone()) : new T.Vector3(504, groundHeightAt(504, 304) + 12, 304);
         tint = 0x9defff;
+      } else if (!this.endgameOpen && (world.cannonCharge || 0) < 1) {
+        // Half the roster wakes the cannon, so until then the beacon stands
+        // over a boss rather than over a cannon that is still asleep. Same
+        // stage number as the route branch on purpose: this is still "the
+        // moon is not finished yet", and this.stage is read elsewhere.
+        const nextMoonBoss = [
+          ...world.regions.map(region => region.boss),
+          world.roc, world.colossus, world.strata?.boss, world.moonline?.boss,
+          world.vane, world.bellower,
+        ].find(boss => boss?.alive && boss.position);
+        key = `moon-roster-${Math.round((world.cannonCharge || 0) * 100)}`; stage = 9;
+        focus = nextMoonBoss ? toChartVec(nextMoonBoss.position.clone()) : null;
+        tint = 0xff9c6b;
       } else if (!this.endgameOpen) {
         key = 'cannon-waking'; stage = 10;
         focus = new T.Vector3(FINAL_CANNON.x, groundHeightAt(FINAL_CANNON.x, FINAL_CANNON.z) + 10, FINAL_CANNON.z);
@@ -38058,25 +38500,38 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       world.update(FIXED_DT, this);
     }
     syncUI() {
-      // ONE ledger per moon, shown in one place, with the 2,000 that opens
-      // this moon's final always visible beside it. Every pickup on every
-      // moon is worth exactly one, whatever shape it wears.
+      // ONE ledger per moon, shown in one place, with the number it is
+      // currently saving toward beside it. Every pickup on every moon is
+      // worth exactly one, whatever shape it wears.
+      // The denominator is not a constant any more, and it is written from
+      // here rather than hardcoded in the page: while a ship on this world is
+      // still cold it is the 1,000 fare, because that is what the player is
+      // actually saving for; once both are bought it goes back to the mastery
+      // total. (Alex, 2026-09-04: "each cost 1000 collectibles to activate one
+      // of the two ships that go to the other moons.")
       const hudPlanet = world.activePlanet;
+      const hudSurface = world.currentSurface();
       const activeProgress = hudPlanet === 'moon' ? null : this.worldProgress[hudPlanet];
+      const hudTarget = this.shipFareOwed(hudPlanet)
+        ? SHIP_FARE
+        : hudSurface?.mastery?.thresholds?.total
+          || (hudPlanet === 'moon' ? MOON_COLLECTION_TARGET : ALTERNATE_COLLECTION_TARGET);
       const collectibleHud = hudPlanet === 'moon'
-        ? { total: this.drops, target: MOON_COLLECTION_TARGET }
-        : {
-          total: activeProgress?.collected || 0,
-          target: activeProgress?.collectionTarget || ALTERNATE_COLLECTION_TARGET,
-        };
-      const collectibleHudKey = `${hudPlanet}:${collectibleHud.total}`;
+        ? { total: this.drops, target: hudTarget }
+        : { total: activeProgress?.collected || 0, target: hudTarget };
+      const collectibleHudKey = `${hudPlanet}:${collectibleHud.total}:${collectibleHud.target}`;
       if (ui.stoneCount && this.lastCollectibleHudKey !== collectibleHudKey) {
         const previousPlanet = this.lastCollectibleHudPlanet;
         const previousTotal = previousPlanet === hudPlanet ? (this.lastCollectibleHudTotal || 0) : 0;
         this.lastCollectibleHudKey = collectibleHudKey;
         this.lastCollectibleHudPlanet = hudPlanet;
         this.lastCollectibleHudTotal = collectibleHud.total;
-        ui.stoneCount.textContent = String(collectibleHud.total);
+        // A bare non-negative integer, always. Spending clamps at zero, so
+        // this can never print a minus sign at the player.
+        ui.stoneCount.textContent = String(Math.max(0, Math.round(collectibleHud.total)));
+        if (ui.planetCollectibleTargetValue) {
+          ui.planetCollectibleTargetValue.textContent = `/${collectibleHud.target}`;
+        }
         if (ui.planetCollectibleGateFill) {
           ui.planetCollectibleGateFill.style.width = `${clamp(collectibleHud.total / (collectibleHud.target || 1), 0, 1) * 100}%`;
         }
@@ -39987,12 +40442,18 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         !!shard && !shard.active && game.drops === shardPayBefore + 1,
         { label: shard?.label, paid: game.drops - shardPayBefore });
 
-      // ONE GATE, EVERY MOON: 2,000, and the counts that gate the two
-      // alternate worlds are a single ledger.
-      check('every-moon-asks-for-the-same-two-thousand',
-        MOON_COLLECTION_TARGET === 2000 && ALTERNATE_COLLECTION_TARGET === 2000
-          && ALTERNATE_REGIONAL_REQUIRED === ALTERNATE_REGIONAL_TOTAL,
-        { moon: MOON_COLLECTION_TARGET, alternate: ALTERNATE_COLLECTION_TARGET,
+      // HALF A ROSTER OPENS A LOCAL FINAL, AND COLLECTIBLES BUY SHIPS.
+      // (Alex, 2026-09-04: "if deafeat maybe half of the bosses on a moon,
+      // the last boss from that moon is avaialable", and "each cost 1000
+      // collectibles to activate one of the two ships that go to the other
+      // moons.") Half has to be a real half: at least one, and fewer than all
+      // of them, or the word means nothing.
+      check('half-a-roster-opens-each-local-final',
+        SHIP_FARE === 1000
+          && ALTERNATE_REGIONAL_REQUIRED === Math.ceil(ALTERNATE_REGIONAL_TOTAL / 2)
+          && ALTERNATE_REGIONAL_REQUIRED >= 1
+          && ALTERNATE_REGIONAL_REQUIRED < ALTERNATE_REGIONAL_TOTAL,
+        { fare: SHIP_FARE, moon: MOON_COLLECTION_TARGET, alternate: ALTERNATE_COLLECTION_TARGET,
           regionalRequired: ALTERNATE_REGIONAL_REQUIRED, regionalTotal: ALTERNATE_REGIONAL_TOTAL });
 
       // The Moon has to be able to PAY that gate. A 2,000 wall on a world
@@ -41223,6 +41684,17 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     grantAllCores: () => {
       for (const region of world.regions) game.cores.add(region.core);
       return [...game.cores];
+    },
+    // Ships cost 1,000 collectibles. A boarding suite needs to be able to
+    // pay that fare without grinding a world for it. Adds to the world the
+    // player is standing on unless one is named. Not reachable from play.
+    grantCollectibles: (count = 0, planet = null) => {
+      const id = String(planet || world.activePlanet);
+      const amount = Math.max(0, Math.round(Number(count) || 0));
+      if (id === 'moon') game.drops += amount;
+      else if (game.worldProgress[id]) game.worldProgress[id].collected += amount;
+      else return null;
+      return { planet: id, total: game.ledgerTotal(id), fare: SHIP_FARE };
     },
     stepWith: (seconds, controls) => game.stepWith(seconds, controls),
     step: seconds => game.stepWith(seconds, {}),
