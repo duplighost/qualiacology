@@ -1,6 +1,6 @@
 // CURFEW — placedata: the authored destination table.
 //
-// TWELVE majors over the 4 x 4 km county, plus the minor-site vocabulary and the
+// FIFTEEN majors over the 4 x 4 km county, plus the minor-site vocabulary and the
 // rationing weights that space them along the roads. This file is DATA ONLY: it imports
 // no THREE, touches no scene, and every number in it was measured against the real
 // terrain and road field before it was typed (tools/probe, 2026-09-02) rather than
@@ -53,12 +53,12 @@
 // 18 m building footprint is 0.08 m WITH the discs and up to 7.44 m without them.
 
 /* ------------------------------------------------------------------ *
- * Region tint — the colour of a place's beacon column and of the light
+ * Region tint — the colour of a place's map pin and of the light
  * it puts in the sky once it is claimed.
  *
  * These key the AUTHORED region names from DESIGN section 2 (seven of them), not
  * terrain.regionAt()'s four gaussian kernels (pines/fields/marsh/ridge). The two agree
- * about mood, never about borders, and making the beacon colour depend on a smooth field
+ * about mood, never about borders, and making the pin colour depend on a smooth field
  * would mean a destination's own colour changes as you walk around it. Authored wins.
  * ------------------------------------------------------------------ */
 import { STAGED_KINDS } from './staged.js';
@@ -72,7 +72,7 @@ export const REGION_TINT = Object.freeze({
   shore: 0xa8dcff,    // pale ice — the reservoir
 });
 
-/** Fallback so a mistyped region can never produce a black (invisible) beacon. */
+/** Fallback so a mistyped region can never produce a black (invisible) pin or claim light. */
 export const DEFAULT_TINT = 0x9fb4d8;
 
 /* ------------------------------------------------------------------ *
@@ -86,7 +86,7 @@ export const DEFAULT_TINT = 0x9fb4d8;
  * shipping. So every row now also carries `terrainRegion`, and it is not a guess: it is
  * terrain.regionAt()'s own answer at that centre, measured 2026-09-02 and listed in the
  * MEASURED block at the top of this file. Read `terrainRegion` for anything mechanical;
- * read `region` only for the beacon colour and the prose.
+ * read `region` only for the map/claim colour and the prose.
  *
  * They disagree on purpose in four places — the cathedral is authored 'ridge' but stands
  * on ground the field calls 'fields', Gallowsfen is authored 'fen' in pines, and both
@@ -95,7 +95,8 @@ export const DEFAULT_TINT = 0x9fb4d8;
 export const TERRAIN_REGIONS = Object.freeze(['pines', 'fields', 'marsh', 'ridge']);
 
 /* ------------------------------------------------------------------ *
- * The twelve.
+ * The fifteen. The original twelve are followed by three landmark-class DUSKFALL
+ * compositions added only after a measured road-coverage audit found 0.9 km dead legs.
  *
  * claim.how:
  *   'touch'  walk within claim.r of (x+dx, z+dz) — a breaker, a brazier, a winding lamp.
@@ -116,15 +117,15 @@ export const TERRAIN_REGIONS = Object.freeze(['pines', 'fields', 'marsh', 'ridge
  * in when the game begins could never emit `place:discovered`, never whisper its name, and
  * started the map board with a pin already stuck in it. A board that begins EMPTY and
  * fills up is the thing Alex asked for by name. Discovery is ARRIVAL now (places.js,
- * `_proximity`): the hub is found the same way as the other eleven, the first time you
- * walk into its yard, and it pays `xpFind` like the other eleven.
+ * `_proximity`): the hub is found the same way as the other fourteen, the first time you
+ * walk into its yard, and it pays `xpFind` like the other fourteen.
  *
  * `terrainRegion` is terrain.regionAt()'s real answer at that centre — see above.
  *
- * `horizon: true` marks the five reads DESIGN section 2 says are never distance-culled.
+ * `horizon: true` marks the long-range reads DESIGN section 2 says are never distance-culled.
  * Every row gets a silhouette in the persistent landmark group regardless — a county with
- * twelve silhouettes in it is the answer to "always something in the distance" — but only
- * these five carry a moving, lit feature that reads from across the map.
+ * fifteen silhouettes in it is the answer to "always something in the distance" — but only
+ * the explicitly flagged rows carry a moving, lit feature that reads from across the map.
  * ------------------------------------------------------------------ */
 /* ROUND 6 (2026-09-03, Alex's fifth playtest: "I'm assuming there are other guns, right? I
  * haven't found any... Those would be great rewards for completing areas" and "I hope there
@@ -143,6 +144,9 @@ export const MAJORS = Object.freeze([
     // roads.js already authored this disc (M0_SITES[1], r 38, blend 0.72) and the west
     // gravel spur terminates on it. Reuse, never re-declare: two discs on one spot fight.
     flat: null, flatId: 'filling-station',
+    // Road-readable landmark contract. `existing` means the authored sign pylon already is
+    // the arrival frame; every other major gets the same state-witness role from sites.js.
+    approach: { x: 6.6, z: -7.4, w: 3.4, h: 9.4, style: 'station', existing: true },
     discoverR: 24, nearR: 80, horizon: false,
     claim: { how: 'none' },
     // xpFind was 0 while the hub was pre-found and could never pay for it. It is found by
@@ -172,6 +176,7 @@ export const MAJORS = Object.freeze([
     x: 401.4, z: -542.0, region: 'pines', terrainRegion: 'pines', kind: 'manor',
     lit: false, hub: false,
     flat: { radius: 52, blend: 0.62 },
+    approach: { x: 0, z: 39, w: 12, h: 9.6, style: 'manor', routeX: 0, routeZ: 19 },
     discoverR: 30, nearR: 140, horizon: false,
     // the fuse board in the cellar. dy is 0 because the cellar stands AT GRADE inside the
     // plinth (manor-data.js, departure 2); dx/dz are manor.js claimLocal() (donor (41, 12)
@@ -188,6 +193,7 @@ export const MAJORS = Object.freeze([
     // says in its own comment that the road runs through the yard. It does; that is the
     // read as you come round the loop and the headframe stands over you.
     flat: null, flatId: 'ashfall-works',
+    approach: { x: 0, z: 34, w: 14, h: 11.5, style: 'works', routeX: 9, routeZ: 23 },
     discoverR: 24, nearR: 90, horizon: true,
     claim: { how: 'touch', dx: 12.5, dy: 0, dz: -13.9, r: 2.8 },  // the winding-house breaker
     xpFind: 25, xpClaim: 150, startClaimed: false,
@@ -197,6 +203,7 @@ export const MAJORS = Object.freeze([
     x: 1500.5, z: 462.8, region: 'ridge', terrainRegion: 'ridge', kind: 'relay',
     lit: false, hub: false,
     flat: { radius: 34, blend: 0.62 },
+    approach: { x: 0, z: 29, w: 11, h: 9.8, style: 'relay', routeX: 0, routeZ: 20 },
     discoverR: 24, nearR: 80, horizon: true,
     claim: { how: 'touch', dx: 3.2, dy: 0, dz: 5.4, r: 2.6 },     // the cabinet at the mast foot
     xpFind: 25, xpClaim: 150, startClaimed: false,
@@ -207,6 +214,7 @@ export const MAJORS = Object.freeze([
     x: 93.1, z: 1242.6, region: 'ridge', terrainRegion: 'fields', kind: 'cathedral',
     lit: false, hub: false,
     flat: { radius: 50, blend: 0.62 },
+    approach: { x: -17, z: 40, w: 14, h: 12.0, style: 'cathedral', routeX: -17, routeZ: 30 },
     discoverR: 28, nearR: 120, horizon: true,
     claim: { how: 'touch', dx: 3.0, dy: 0, dz: -12.0, r: 3.2 },   // the brazier at the west door
     xpFind: 40, xpClaim: 200, startClaimed: false,
@@ -216,6 +224,7 @@ export const MAJORS = Object.freeze([
     x: -816.4, z: 1414.0, region: 'ridge', terrainRegion: 'ridge', kind: 'chapel',
     lit: false, hub: false,
     flat: { radius: 42, blend: 0.62 },
+    approach: { x: 0, z: 32, w: 11, h: 9.4, style: 'chapel', routeX: 0, routeZ: 24 },
     discoverR: 24, nearR: 70, horizon: false,
     // BESIDE the tower, not in it: the landmark tower stands at local (0, -4) with a 3.0 m
     // half-extent, and a claim point inside a collider is a claim you can never walk to.
@@ -227,6 +236,7 @@ export const MAJORS = Object.freeze([
     x: -1305, z: 579, region: 'fen', terrainRegion: 'pines', kind: 'steeple',
     lit: false, hub: false,
     flat: { radius: 34, blend: 0.62 },
+    approach: { x: 0, z: 29, w: 11, h: 10.2, style: 'steeple', routeX: 0, routeZ: 27 },
     discoverR: 24, nearR: 70, horizon: false,
     // the hanging lamp in the drowned belfry. You have to stand in the water to see it.
     claim: { how: 'shoot', dx: -4.4, dy: 13.4, dz: 0, r: 3.0 },
@@ -238,6 +248,7 @@ export const MAJORS = Object.freeze([
     x: -1380.3, z: -208.1, region: 'shore', terrainRegion: 'pines', kind: 'lighthouse',
     lit: false, hub: false,
     flat: { radius: 32, blend: 0.62 },
+    approach: { x: 0, z: 28, w: 12, h: 11.2, style: 'lighthouse', routeX: 0, routeZ: 24 },
     discoverR: 24, nearR: 90, horizon: true,
     // ROUND 6 (Alex: "I can't even go into the lighthouse... Or not load by walk up
     // stairs"): the claim is the LAMP, in the lamp room at the top of the stair —
@@ -251,6 +262,7 @@ export const MAJORS = Object.freeze([
     x: -996.5, z: -924.6, region: 'pines', terrainRegion: 'pines', kind: 'mill',
     lit: false, hub: false,
     flat: { radius: 34, blend: 0.62 },
+    approach: { x: 0, z: 29, w: 12, h: 10.0, style: 'mill', routeX: 0, routeZ: 25 },
     discoverR: 24, nearR: 80, horizon: true,
     claim: { how: 'touch', dx: 0, dy: 0, dz: 5.2, r: 2.6 },       // wind the lamp at the door
     xpFind: 25, xpClaim: 150, startClaimed: false,
@@ -261,6 +273,7 @@ export const MAJORS = Object.freeze([
     x: -366.6, z: -1606.0, region: 'ridge', terrainRegion: 'ridge', kind: 'cemetery',
     lit: false, hub: false,
     flat: { radius: 40, blend: 0.62 },
+    approach: { x: 0, z: 35, w: 12, h: 10.4, style: 'cemetery', routeX: 0, routeZ: 26 },
     discoverR: 26, nearR: 70, horizon: false,
     claim: { how: 'touch', dx: 0, dy: 0, dz: 10.6, r: 3.0 },      // the lamp on the far mausoleum
     xpFind: 25, xpClaim: 130, startClaimed: false,
@@ -270,6 +283,7 @@ export const MAJORS = Object.freeze([
     x: 493.3, z: -1256.9, region: 'pines', terrainRegion: 'pines', kind: 'tower',
     lit: false, hub: false,
     flat: { radius: 30, blend: 0.62 },
+    approach: { x: 0, z: 26, w: 11, h: 10.8, style: 'tower', routeX: 0, routeZ: 22 },
     discoverR: 24, nearR: 70, horizon: false,
     // donor: Projects/qualiacology/skyshard/src/main.js — the shootable bell. Ringing it
     // from the road is the loudest thing you can do in CURFEW and it lights the tower.
@@ -282,9 +296,55 @@ export const MAJORS = Object.freeze([
     x: 1158.9, z: -790.1, region: 'fields', terrainRegion: 'fields', kind: 'barn',
     lit: false, hub: false,
     flat: { radius: 42, blend: 0.62 },
+    approach: { x: 2, z: 35, w: 13, h: 10.0, style: 'barn', routeX: 2, routeZ: 30 },
     discoverR: 24, nearR: 70, horizon: false,
     claim: { how: 'touch', dx: 0, dy: 0, dz: -7.8, r: 2.8 },      // the loft lantern
     xpFind: 25, xpClaim: 130, startClaimed: false,
+  },
+  {
+    // Round 9 coverage point 1: the roads around the Works junction were 914 m from the
+    // nearest major. This is DUSKFALL's standing-stone composition promoted whole: henge,
+    // lintels, altar and climbable fallen stones, not one stone copied to fill a hole.
+    id: 'standing-stones', name: 'The Standing Stones',
+    x: 435, z: 395, region: 'works', terrainRegion: 'fields', kind: 'stones',
+    lit: false, hub: false, clearR: 42,
+    flat: { radius: 44, blend: 0.62 },
+    approach: { x: 0, z: 31, w: 14, h: 10.2, style: 'stones', routeX: 0, routeZ: 18 },
+    discoverR: 30, nearR: 100, horizon: true,
+    // On the central altar: its nearest clear ground stance is 1.8 m from the proud panel,
+    // inside the 2.4 m use reach and the 2.0 m foot-height tolerance. The focused probe must
+    // search the usable reach band rather than assuming every fixture has room at exactly 1.6 m.
+    claim: { how: 'touch', dx: 0, dy: 1.35, dz: 0, r: 2.8 },
+    xpFind: 35, xpClaim: 180, startClaimed: false,
+  },
+  {
+    // Round 9 coverage point 2: DUSKFALL's Great Tree occupies the western interior road,
+    // with an actual spiral climb and a supply cage on the crown deck.
+    id: 'great-tree', name: 'The Great Tree',
+    x: -260, z: -850, region: 'pines', terrainRegion: 'pines', kind: 'great-tree',
+    lit: false, hub: false, clearR: 50,
+    flat: { radius: 52, blend: 0.62 },
+    approach: { x: 0, z: 31, w: 15, h: 11.8, style: 'great-tree', routeX: 0, routeZ: 20 },
+    discoverR: 32, nearR: 120, horizon: true,
+    // Out on the deck's east shoulder, clear of the trunk and close enough to the edge
+    // that its high lamp reads from the yard below. The original x=2.4 position was
+    // inside the trunk's visible taper and the deck lip hid the glint from the ground.
+    claim: { how: 'touch', dx: 4.2, dy: 12.9, dz: 0.6, r: 2.6 },
+    xpFind: 40, xpClaim: 220, startClaimed: false,
+  },
+  {
+    // Round 9 coverage point 3: the eastern cross-road receives DUSKFALL's rock-arch and
+    // sleeper-monolith vocabulary as one vertical destination with a route onto its crown.
+    id: 'black-rib', name: 'The Black Rib',
+    x: 1392, z: -218, region: 'ridge', terrainRegion: 'ridge', kind: 'rock-arch',
+    lit: false, hub: false, clearR: 40,
+    flat: { radius: 42, blend: 0.62 },
+    approach: { x: 0, z: 34, w: 15, h: 11.0, style: 'rock-arch', routeX: 6, routeZ: 13 },
+    discoverR: 30, nearR: 100, horizon: true,
+    // At the south lip of the crown, directly above the stair's cross-landing. At the
+    // old centre position the crown slab itself hid the lamp from every ground approach.
+    claim: { how: 'touch', dx: 0, dy: 10.2, dz: -3.0, r: 2.8 },
+    xpFind: 35, xpClaim: 190, startClaimed: false,
   },
 ]);
 

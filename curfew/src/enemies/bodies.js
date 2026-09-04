@@ -172,6 +172,9 @@ export function makeShell(tintR, tintG, tintB) {
   const m = new THREE.MeshLambertMaterial({
     color: new THREE.Color(tintR, tintG, tintB),
     vertexColors: true,          // EVERY geometry fed to this MUST carry `color`
+    map: bodySurfaceTex(false),
+    bumpMap: bodySurfaceTex(true),
+    bumpScale: 0.085,
     emissive: 0x000000,
     fog: true,
   });
@@ -190,6 +193,49 @@ export function makeShell(tintR, tintG, tintB) {
   m.onBeforeCompile = shellCompile;
   m.customProgramCacheKey = shellCacheKey;
   return m;
+}
+
+/* One shared skin of old cloth, hide, porcelain and bone. The species colours
+   still come from vertex colour; this only supplies material breakup. Every
+   shell receives both maps, so this remains one Lambert program instead of a
+   per-species shader zoo. The broad stains survive at eight metres, while the
+   thin scratches only appear when the torch is close. */
+const BODY_SURFACE = [null, null];
+function bodySurfaceTex(asBump) {
+  const slot = asBump ? 1 : 0;
+  if (BODY_SURFACE[slot]) return BODY_SURFACE[slot];
+  const N = 128;
+  const data = new Uint8Array(N * N * 4);
+  const hash = (x, y) => {
+    let n = (x * 374761393 + y * 668265263) | 0;
+    n = (n ^ (n >>> 13)) * 1274126177;
+    return (n ^ (n >>> 16)) >>> 0;
+  };
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const coarse = hash(x >> 3, y >> 3) & 31;
+      const fine = hash(x, y) & 15;
+      const bruise = ((x * 3 + y * 5 + (hash(x >> 4, y >> 4) & 31)) % 41) < 7;
+      const cut = ((x + y * 7 + (hash(x >> 2, y >> 2) & 63)) % 79) < 2;
+      let v;
+      if (asBump) v = 92 + coarse * 3 + fine * 2 + (cut ? -54 : 0);
+      else v = 178 + coarse * 2 + fine + (bruise ? -34 : 0) + (cut ? -76 : 0);
+      v = Math.max(28, Math.min(255, v));
+      const p = (y * N + x) * 4;
+      data[p] = data[p + 1] = data[p + 2] = v;
+      data[p + 3] = 255;
+    }
+  }
+  const t = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  t.name = asBump ? 'body-decay-bump' : 'body-decay-colour';
+  t.colorSpace = THREE.NoColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  BODY_SURFACE[slot] = t;
+  return t;
 }
 
 /** Write the reveal uniform, before or after the program has linked. */
@@ -550,6 +596,7 @@ const P = {
   cone: new THREE.ConeGeometry(0.5, 1, 7),
   cone3: new THREE.ConeGeometry(0.5, 1, 3),
   cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 7),
+  torus: new THREE.TorusGeometry(0.5, 0.10, 5, 10),
 };
 
 /* ==========================================================================
@@ -669,18 +716,17 @@ function sculptHead(w, y, s, spec) {
    and spent in the axis that owns the cartoon: HEIGHT.
 
      was  68 x 60 mm  -> 2.1 x 1.9 px at 16 m, and a coin at 3 m
-     now 100 x 38 mm  -> 3.1 x 1.2 px at 16 m, and a gleam at 3 m
+     now  76 x 12 mm  -> 2.4 x 0.4 px at 16 m, and a cut at 3 m
 
-   Three whole pixels of width is MORE covered pixel than the disc ever had, so the range read
-   goes up, not down; and a horizontal emissive blooms into a LINE, which is what a low light
-   catching a wet eye actually looks like. tools/bodylook.mjs reports the over-150 pixel count
-   per cell and it is how this was checked at both ends. */
+   Two cuts together still own roughly five pre-bloom pixels at 16 m, and the threshold spreads
+   their horizontal axis instead of inflating their height back into eyeballs. tools/bodylook.mjs
+   reports the over-150 pixel count per cell and it is how this was checked at both ends. */
 function eyeGeometry(y, s, sockZ, spread) {
   const w = new Weld();
   const G = GLINT_SCALE;
   for (const side of [-1, 1]) {
     w.add(P.sphLo, side * spread * s, y + 0.030 * s, (sockZ - 0.026) * s, 0xffffff, {
-      sx: 0.050 * G * s, sy: 0.019 * G * s, sz: 0.022 * G * s,
+      sx: 0.038 * G * s, sy: 0.006 * G * s, sz: 0.014 * G * s,
     });
   }
   return w.geometry('eyes');
@@ -768,72 +814,106 @@ function buildHound(def) {
   const cloth = def.cloth, skin = def.skin, bone = def.bone;
   const backY = 0.66 * s;
 
-  /* MEASURED 2026-09-03 (ROUND 7): tests/shots/bodylook/before-hound-3m-approach-moon.png is
-     A COFFEE TABLE. Two axis-aligned boxes for a body and four straight sticks under it — at
-     3 m the flat top face and the four hard vertical corners are the whole read, and no
-     amount of rib detail on the flank changes a rectangle into an animal. So the barrel is
-     ellipsoids now, the shoulders stand PROUD of the ribs the way a hunting dog's do, and the
-     line from shoulder to hip DROPS instead of running level. */
-  w.add(P.sph, 0, backY + 0.02 * s, -0.16 * s, cloth, { sx: 0.44 * s, sy: 0.44 * s, sz: 0.60 * s });
-  w.add(P.sph, 0, backY - 0.05 * s, 0.30 * s, cloth, { sx: 0.34 * s, sy: 0.34 * s, sz: 0.50 * s });
-  w.add(P.cap, 0, backY - 0.02 * s, 0.06 * s, cloth, { rx: 1.57, sx: 0.36 * s, sy: 0.34 * s, sz: 0.36 * s });
-  // the shoulder blades ride above the spine — the hunched, loaded look of a thing mid-stalk
+  // A flayed cage, not a coffee table. Five complete ribs stand proud of a
+  // pinched hide core; from the front they make a broad bony vault and from
+  // either flank they disclose the empty depth between each ring.
+  w.add(P.sph, 0, backY, -0.04 * s, skin,
+    { rx: -0.10, sx: 0.32 * s, sy: 0.31 * s, sz: 0.68 * s });
+  w.add(P.sph, 0.04 * s, backY - 0.08 * s, 0.36 * s, cloth,
+    { rx: 0.16, rz: -0.10, sx: 0.30 * s, sy: 0.27 * s, sz: 0.42 * s });
+  for (let i = 0; i < 5; i++) {
+    const z = (-0.30 + i * 0.145) * s;
+    w.add(P.torus, (i % 2 ? 0.018 : -0.014) * s, backY + (i % 2 ? 0.01 : -0.018) * s, z, bone,
+      { rz: (i - 2) * 0.055, sx: (0.94 - i * 0.055) * s,
+        sy: (0.50 - i * 0.035) * s, sz: 0.40 * s });
+  }
+  // Knife scapulae and an uneven vertebral saw remain legible after every
+  // surface detail has collapsed into a single dark pixel.
   for (const side of [-1, 1]) {
-    w.add(P.sph, side * 0.16 * s, backY + 0.16 * s, -0.26 * s, cloth,
-      { rz: side * 0.3, sx: 0.20 * s, sy: 0.22 * s, sz: 0.30 * s });
-  }
-  // ribs: four shallow bands so the flank has an edge to catch a torch
-  for (let i = 0; i < 4; i++) {
-    w.add(P.box, 0, backY - 0.02 * s, (-0.30 + i * 0.15) * s, bone,
-      { sx: 0.435 * s, sy: 0.24 * s, sz: 0.028 * s });
-  }
-  // the spine bloom — a raised dorsal ridge. Shootable ('vent'), and it is the
-  // part that brightens on the windup.
-  w.add(P.box, 0, backY + 0.21 * s, 0.02 * s, bone, { sx: 0.075 * s, sy: 0.075 * s, sz: 0.80 * s });
-  // neck and the long jaw
-  w.add(P.cap, 0, backY + 0.04 * s, -0.46 * s, skin, { rx: 1.35, sx: 0.20 * s, sy: 0.18 * s, sz: 0.20 * s });
-  // the head hangs BELOW the shoulder line and the jaw is half the body's length: a hound
-  // that carries its head low is stalking, and one that carries it level is a labrador
-  const headY = backY - 0.06 * s;
-  w.add(P.sph, 0, headY, -0.68 * s, skin, { sx: 0.215 * s, sy: 0.200 * s, sz: 0.260 * s });
-  w.add(P.box, 0, headY - 0.050 * s, -0.90 * s, skin, { rx: 0.10, sx: 0.130 * s, sy: 0.090 * s, sz: 0.360 * s });
-  w.add(P.box, 0, headY - 0.096 * s, -0.90 * s, VOID, { rx: 0.10, sx: 0.118 * s, sy: 0.034 * s, sz: 0.345 * s });
-  // teeth: six small bone points along the gape, which is the ONE thing that reads at 3 m
-  for (let i = 0; i < 3; i++) {
-    for (const side of [-1, 1]) {
-      w.add(P.cone3, side * 0.048 * s, headY - 0.086 * s, (-1.02 + i * 0.11) * s, bone,
-        { rx: Math.PI, sx: 0.026 * s, sy: 0.055 * s, sz: 0.026 * s });
+    w.add(P.cone3, side * 0.36 * s, backY + 0.19 * s, -0.28 * s, bone,
+      { rx: -0.28, rz: side * 0.72, sx: 0.10 * s, sy: 0.56 * s, sz: 0.10 * s });
+    for (let i = 0; i < 3; i++) {
+      w.add(P.cone3, side * (0.48 - i * 0.025) * s,
+        (backY + 0.10 - i * 0.10) * s, (-0.18 + i * 0.20) * s, bone,
+        { rx: -0.25 + i * 0.18, rz: side * (1.18 - i * 0.12),
+          sx: 0.055 * s, sy: (0.34 - i * 0.035) * s, sz: 0.055 * s });
     }
   }
-  // and a hackle ridge: five spines standing up off the neck
-  for (let i = 0; i < 5; i++) {
-    w.add(P.cone3, (i % 2 ? 0.03 : -0.03) * s, backY + (0.24 - i * 0.012) * s, (-0.42 + i * 0.14) * s, bone,
-      { rx: -0.42, rz: (i % 2 ? 0.2 : -0.2), sx: 0.045 * s, sy: 0.20 * s, sz: 0.045 * s });
+  for (let i = 0; i < 7; i++) {
+    w.add(P.cone3, (i % 2 ? 0.025 : -0.035) * s,
+      backY + (0.24 + (i % 3) * 0.025) * s, (-0.43 + i * 0.135) * s, bone,
+      { rx: -0.38 + i * 0.045, rz: (i % 2 ? 0.18 : -0.24),
+        sx: 0.050 * s, sy: (0.20 + (i % 3) * 0.055) * s, sz: 0.050 * s });
   }
-  // sockets
+
+  // The neck funnels into a black facial cavity. Broken cheek plates frame it;
+  // nothing round and flesh-coloured remains on the front of this animal.
+  w.add(P.cap, 0, backY + 0.02 * s, -0.48 * s, skin,
+    { rx: 1.24, sx: 0.23 * s, sy: 0.22 * s, sz: 0.23 * s });
+  const headY = backY - 0.055 * s;
+  w.add(P.sph, 0, headY + 0.02 * s, -0.70 * s, VOID,
+    { sx: 0.30 * s, sy: 0.25 * s, sz: 0.34 * s });
   for (const side of [-1, 1]) {
-    w.add(P.sphLo, side * 0.078 * s, headY + 0.045 * s, -0.760 * s, VOID,
-      { sx: 0.085 * s, sy: 0.070 * s, sz: 0.050 * s });
+    w.add(P.cone3, side * 0.13 * s, headY + 0.045 * s, -0.905 * s, bone,
+      { rx: -0.22, rz: side * 0.26, sx: 0.14 * s, sy: 0.34 * s, sz: 0.09 * s });
+    // A two-joint antler hook: enormous at eight metres, but swept sideways so
+    // it never reads as a cute pair of upright ears.
+    w.add(P.cone3, side * 0.37 * s, headY + 0.17 * s, -0.72 * s, bone,
+      { rx: -0.26, rz: side * 0.88, sx: 0.075 * s, sy: 0.48 * s, sz: 0.075 * s });
+    w.add(P.cone3, side * 0.56 * s, headY + 0.31 * s, -0.68 * s, bone,
+      { rx: 0.18, rz: side * -0.46, sx: 0.060 * s, sy: 0.34 * s, sz: 0.060 * s });
+    w.add(P.sphLo, side * 0.102 * s, headY + 0.055 * s, -0.875 * s, VOID,
+      { sx: 0.105 * s, sy: 0.074 * s, sz: 0.040 * s });
   }
-  // tail
-  w.add(P.cone, 0, backY - 0.02 * s, 0.62 * s, cloth, { rx: -1.45, sx: 0.11 * s, sy: 0.52 * s, sz: 0.11 * s });
+  w.add(P.cone3, -0.065 * s, headY + 0.16 * s, -0.925 * s, bone,
+    { rx: 1.34, rz: 2.98, sx: 0.19 * s, sy: 0.19 * s, sz: 0.11 * s });
+  w.add(P.box, 0.075 * s, headY - 0.025 * s, -0.938 * s, bone,
+    { rz: -0.20, ry: 0.06, sx: 0.095 * s, sy: 0.22 * s, sz: 0.050 * s });
+  // Two jaw rails leave a genuine central gulf rather than a black line painted
+  // on a snout. Their tips splay like a trap sprung halfway shut.
+  for (const side of [-1, 1]) {
+    w.add(P.cone, side * 0.080 * s, headY - 0.13 * s, -0.99 * s, bone,
+      { rx: -1.42, ry: side * 0.08, rz: side * 0.08,
+        sx: 0.095 * s, sy: 0.58 * s, sz: 0.095 * s });
+    for (let i = 0; i < 4; i++) {
+      w.add(P.cone3, side * (0.048 + i * 0.008) * s, headY - 0.075 * s,
+        (-0.84 - i * 0.105) * s, bone,
+        { rx: Math.PI, sx: 0.026 * s, sy: (0.072 + (i % 2) * 0.035) * s, sz: 0.026 * s });
+    }
+  }
+  w.add(P.cone3, 0.03 * s, backY - 0.01 * s, 0.70 * s, cloth,
+    { rx: -1.32, rz: -0.15, sx: 0.10 * s, sy: 0.64 * s, sz: 0.10 * s });
 
   const eyesW = new Weld();
   for (const side of [-1, 1]) {
     // slits, not discs — see eyeGeometry()'s note. A hound's are angled inward and down,
     // which is the one line on this body that makes it read as an animal that means it.
-    eyesW.add(P.sphLo, side * 0.082 * s, headY + 0.048 * s, -0.792 * s, 0xffffff,
+    eyesW.add(P.sphLo, side * 0.102 * s, headY + 0.055 * s, -0.910 * s, 0xffffff,
       { rz: side * 0.42,
-        sx: 0.052 * GLINT_SCALE * s, sy: 0.019 * GLINT_SCALE * s, sz: 0.024 * GLINT_SCALE * s });
+        sx: 0.040 * GLINT_SCALE * s, sy: 0.005 * GLINT_SCALE * s, sz: 0.014 * GLINT_SCALE * s });
   }
 
-  const legL = limbGeo(0.62 * s, 0.062 * s, 0.052 * s, skin,
-    { colour: bone, z: -0.02 * s });
+  // Reverse-jointed leg and three long toes, all one shared geometry and one
+  // draw per limb. The bent profile replaces four identical dangling sticks.
+  const leg = new Weld();
+  leg.add(P.cap, 0, -0.19 * s, 0.035 * s, skin,
+    { rx: -0.14, sx: 0.15 * s, sy: 0.30 * s, sz: 0.14 * s });
+  leg.add(P.sphLo, 0, -0.37 * s, 0.105 * s, bone,
+    { sx: 0.16 * s, sy: 0.13 * s, sz: 0.18 * s });
+  leg.add(P.cap, 0, -0.50 * s, -0.025 * s, skin,
+    { rx: 0.54, sx: 0.105 * s, sy: 0.23 * s, sz: 0.10 * s });
+  leg.add(P.box, 0, -0.625 * s, -0.135 * s, bone,
+    { sx: 0.18 * s, sy: 0.065 * s, sz: 0.30 * s });
+  for (let i = -1; i <= 1; i++) {
+    leg.add(P.cone3, i * 0.055 * s, -0.64 * s, -0.29 * s, bone,
+      { rx: -1.36, rz: i * 0.16, sx: 0.027 * s,
+        sy: (0.18 - Math.abs(i) * 0.025) * s, sz: 0.027 * s });
+  }
 
   return {
     shell: w.geometry('hound-shell'),
     eyes: eyesW.geometry('hound-eyes'),
-    limb: legL,
+    limb: leg.geometry('hound-leg'),
     fore: null,
     joints: [
       // four hips, front pair then rear pair. y is the pivot height.
@@ -861,60 +941,93 @@ function buildPallbearer(def) {
   const cloth = def.cloth, bone = def.bone;
   const shoulderY = 1.52 * s, headY = 1.76 * s;
 
-  /* MEASURED 2026-09-03 (ROUND 7, tools/bodylook.mjs):
-     tests/shots/bodylook/before-pallbearer-3m-approach-torch.png is A CHESS PAWN IN A DRESS
-     WEARING A PARTY HAT. Three things did it and none of them was a bug:
-       - the bell was 2.20 m WIDE at 2.05 m tall, built from two 7-sided cones stacked on a
-         cylinder plinth. That is the exact silhouette of a pawn, and the flat facets of a
-         low-segment cone are what make it read as a turned wooden object rather than cloth.
-       - the pointed BONE brow, seen from the front over a hooded head, is a paper hat.
-       - two round white glints on that head finished the cartoon.
-     So the bell is now 1.05 m at the ground, LOPSIDED, made of four offset masses at
-     different rotations with vertical drape folds down it and a ragged hem instead of a
-     plinth; the brow is gone and a low bone bar juts FORWARD over the sockets instead.
-     A shroud is a tall narrow irregular thing. A pawn is a short wide symmetric one. */
-  // the bell: four offset masses, none of them centred, so no two profiles agree
-  w.add(P.cone, -0.03 * s, 0.40 * s, 0.02 * s, cloth, { rz: 0.05, sx: 1.02 * s, sy: 0.90 * s, sz: 0.86 * s });
-  w.add(P.cone, 0.06 * s, 0.74 * s, -0.03 * s, cloth, { rz: -0.09, sx: 0.86 * s, sy: 0.86 * s, sz: 0.74 * s });
-  w.add(P.cone, -0.05 * s, 1.08 * s, 0.02 * s, cloth, { rz: 0.07, sx: 0.68 * s, sy: 0.78 * s, sz: 0.62 * s });
-  w.add(P.sph, 0.11 * s, 0.72 * s, 0.10 * s, cloth, { sx: 0.44 * s, sy: 0.70 * s, sz: 0.36 * s });
-  // drape: six vertical folds down the cloth, so the bell has a grain and catches an edge
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * TAU + 0.4;
-    const r = 0.40 * s;
-    w.add(P.box, Math.cos(a) * r, (0.62 + (i % 2) * 0.10) * s, Math.sin(a) * r, SEAM, {
-      ry: -a, rz: (i % 2 ? 0.05 : -0.06),
-      sx: 0.035 * s, sy: 1.10 * s, sz: 0.16 * s,
-    });
-  }
-  // a RAGGED hem, not a plinth: seven tongues of cloth at uneven lengths
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 7) * TAU;
-    const r = 0.46 * s;
-    w.add(P.cone3, Math.cos(a) * r, (0.14 + (i % 3) * 0.05) * s, Math.sin(a) * r, SEAM, {
-      rx: Math.PI, ry: -a, sx: 0.17 * s, sy: (0.26 + (i % 3) * 0.09) * s, sz: 0.13 * s,
-    });
-  }
-  // chest block + shoulder caps (UNINVITED's silhouette rule), narrower than the old one
-  w.add(P.box, 0, shoulderY - 0.16 * s, 0, cloth, { rz: 0.06, sx: 0.44 * s, sy: 0.40 * s, sz: 0.24 * s });
+  // A funeral bier is lashed to its back: four crooked rails and a shoulder
+  // yoke make the silhouette readable before the robe is. It looks burdened by
+  // something much larger than a body, rather than like a person in a dress.
   for (const side of [-1, 1]) {
-    w.add(P.sph, side * 0.235 * s, shoulderY - (side < 0 ? 0.06 : 0.02) * s, 0, cloth,
-      { sx: 0.200 * s, sy: 0.190 * s, sz: 0.195 * s });
+    const lift = side < 0 ? 0.08 : -0.04;
+    w.add(P.box, side * 0.42 * s, (1.10 + lift) * s, 0.16 * s, bone,
+      { rz: side * -0.10, rx: 0.05, sx: 0.075 * s, sy: 1.72 * s, sz: 0.075 * s });
+    w.add(P.cone3, side * 0.48 * s, 1.98 * s, 0.16 * s, bone,
+      { rz: side * -0.22, sx: 0.085 * s, sy: 0.42 * s, sz: 0.085 * s });
   }
-  const sockZ = sculptHead(w, headY, s, { hood: true, brow: false, mask: true, bone, cloth });
-  // the brow is a BAR that juts forward over the sockets, not a cone that stands up off the
-  // crown. Same job — one hard edge on the head — without the party hat.
-  w.add(P.box, 0, headY + 0.088 * s, -0.150 * s, bone,
-    { rx: -0.34, sx: 0.230 * s, sy: 0.048 * s, sz: 0.140 * s });
+  w.add(P.box, -0.02 * s, 1.82 * s, 0.16 * s, bone,
+    { rz: -0.055, sx: 1.10 * s, sy: 0.075 * s, sz: 0.075 * s });
+  w.add(P.box, 0.06 * s, 0.80 * s, 0.17 * s, bone,
+    { rz: 0.07, sx: 0.88 * s, sy: 0.060 * s, sz: 0.060 * s });
 
-  const armGeo = limbGeo(0.34 * s, 0.062 * s, 0.05 * s, cloth, null);
-  const foreGeo = limbGeo(0.34 * s, 0.050 * s, 0.052 * s, cloth, { colour: bone, claw: 0.26 * s });
+  // Layered hanging cloth with real gaps between the tongues. These pieces are
+  // deliberately different lengths; a single cone always turns back into a
+  // pawn as soon as it is seen head-on.
+  w.add(P.cap, -0.03 * s, 1.02 * s, 0, cloth,
+    { rz: 0.055, sx: 0.48 * s, sy: 1.12 * s, sz: 0.34 * s });
+  const panels = [
+    [-0.34, 0.57, 0.12, 0.31, 0.98, 0.10],
+    [-0.13, 0.48, -0.04, 0.28, 1.12, -0.04],
+    [0.12, 0.55, 0.05, 0.30, 0.98, 0.07],
+    [0.35, 0.66, -0.02, 0.27, 0.82, -0.10],
+  ];
+  for (let i = 0; i < panels.length; i++) {
+    const p = panels[i];
+    w.add(P.cone3, p[0] * s, p[1] * s, p[2] * s, i % 2 ? SEAM : cloth,
+      { rx: Math.PI, rz: p[5], sx: p[3] * s, sy: p[4] * s, sz: 0.26 * s });
+  }
+  // Exposed cage bars show through the parted shroud.
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      w.add(P.cone3, side * (0.16 + i * 0.07) * s, (0.96 + i * 0.15) * s, -0.20 * s, bone,
+        { rz: side * (1.08 - i * 0.11), rx: -0.20,
+          sx: 0.040 * s, sy: (0.34 - i * 0.045) * s, sz: 0.040 * s });
+    }
+  }
+  // One shoulder is swallowed by cloth; the other is a bare angular hook.
+  w.add(P.sph, -0.30 * s, shoulderY - 0.01 * s, 0, cloth,
+    { rz: -0.26, sx: 0.32 * s, sy: 0.26 * s, sz: 0.25 * s });
+  w.add(P.cone3, 0.32 * s, shoulderY + 0.04 * s, 0, bone,
+    { rz: -1.18, sx: 0.13 * s, sy: 0.46 * s, sz: 0.13 * s });
+
+  // A deep hood with a broken two-piece mortuary mask. The black vertical
+  // chasm between the plates is broad enough to survive the 8 m screenshot.
+  w.add(P.sph, -0.02 * s, headY, 0.025 * s, VOID,
+    { sx: 0.34 * s, sy: 0.38 * s, sz: 0.28 * s });
+  for (const side of [-1, 1]) {
+    w.add(P.cone3, side * 0.14 * s, headY + 0.02 * s, 0.045 * s, cloth,
+      { rx: 0.25, ry: side * 0.26, rz: side * 0.18,
+        sx: 0.22 * s, sy: 0.54 * s, sz: 0.28 * s });
+  }
+  w.add(P.box, -0.105 * s, headY - 0.005 * s, -0.225 * s, bone,
+    { rz: 0.12, ry: -0.08, sx: 0.135 * s, sy: 0.31 * s, sz: 0.055 * s });
+  w.add(P.box, 0.105 * s, headY - 0.055 * s, -0.215 * s, bone,
+    { rz: -0.18, ry: 0.10, sx: 0.115 * s, sy: 0.25 * s, sz: 0.052 * s });
+  w.add(P.box, 0, headY - 0.035 * s, -0.244 * s, VOID,
+    { sx: 0.055 * s, sy: 0.29 * s, sz: 0.025 * s });
+  for (const side of [-1, 1]) {
+    w.add(P.sphLo, side * 0.083 * s, headY + 0.055 * s, -0.258 * s, VOID,
+      { sx: 0.088 * s, sy: 0.052 * s, sz: 0.035 * s });
+  }
+  const sockZ = -0.270;
+
+  const upper = new Weld();
+  upper.add(P.cap, 0, -0.19 * s, 0, cloth,
+    { rz: -0.10, sx: 0.15 * s, sy: 0.30 * s, sz: 0.14 * s });
+  upper.add(P.cone3, 0.08 * s, -0.26 * s, 0.02 * s, bone,
+    { rz: -0.74, sx: 0.055 * s, sy: 0.30 * s, sz: 0.055 * s });
+  const fore = new Weld();
+  fore.add(P.cap, 0, -0.20 * s, 0, cloth,
+    { rz: 0.08, sx: 0.12 * s, sy: 0.31 * s, sz: 0.11 * s });
+  fore.add(P.box, 0, -0.37 * s, -0.04 * s, bone,
+    { sx: 0.15 * s, sy: 0.09 * s, sz: 0.20 * s });
+  for (let i = -1; i <= 1; i++) {
+    fore.add(P.cone3, i * 0.055 * s, -0.42 * s, -0.18 * s, bone,
+      { rx: -1.30, rz: i * 0.19, sx: 0.032 * s,
+        sy: (0.29 - Math.abs(i) * 0.04) * s, sz: 0.032 * s });
+  }
 
   return {
     shell: w.geometry('pallbearer-shell'),
-    eyes: eyeGeometry(headY, s, sockZ, 0.062),
-    limb: armGeo,
-    fore: foreGeo,
+    eyes: eyeGeometry(headY, s, sockZ, 0.083),
+    limb: upper.geometry('pallbearer-upper'),
+    fore: fore.geometry('pallbearer-fore'),
     joints: [
       { x: -0.245 * s, y: shoulderY - 0.03 * s, z: 0, fore: -0.34 * s },
       { x: 0.245 * s, y: shoulderY - 0.03 * s, z: 0, fore: -0.34 * s },
@@ -936,69 +1049,89 @@ function buildHunter(def) {
   const s = def.height / 2.20;
   const w = new Weld();
   const cloth = def.cloth, skin = def.skin, bone = def.bone;
-  // the head is BELOW the shoulder blades and 14 cm in front of them, not on top of them
-  const hipY = 1.02 * s, shoulderY = 1.78 * s, headY = 1.84 * s;
+  const hipY = 1.02 * s, shoulderY = 1.72 * s, headY = 1.73 * s;
 
-  /* MEASURED 2026-09-03 (ROUND 7, tools/bodylook.mjs):
-     tests/shots/bodylook/before-hunter-3m-approach-torch.png is a BROWN WOODEN MANNEQUIN. A
-     box pelvis, a box chest, two even sticks for arms and two for legs, a small dark ball for
-     a head, and two pale knobs for hands. Every proportion the comment above claims — "arms
-     TOO LONG", "no face at all" — is TRUE IN THE CODE and invisible on screen, because the
-     arms hang beside a torso the same width as they are and the head sits on top of the
-     shoulders exactly where a person's does.
-
-     What is actually frightening in a dark forest is a shape you cannot name at 30 m. So:
-       - THE SHOULDERS ARE ABOVE THE HEAD. Two blade-like scapulae rise to 2.06 m while the
-         skull hangs at 1.86 m, thrust forward on a long neck. Nothing with a human outline
-         has that, and it survives to the last pixel of the silhouette.
-       - THE CHEST IS 0.16 DEEP AGAINST 0.50 WIDE. Thin where a person is thick.
-       - THE RIBS ARE OUTSIDE THE SKIN: eight of them, uneven, standing off the flank.
-       - AN EXTRA JOINT. The forearm carries a bone spur at the wrist that reads, at range and
-         at speed, as a second elbow between hand and elbow.
-       - THE HANDS ARE HANDS. Three long fingers, not a doorknob. */
-  w.add(P.box, 0, hipY, 0, skin, { sx: 0.26 * s, sy: 0.22 * s, sz: 0.17 * s });
-  w.add(P.box, 0, hipY + 0.30 * s, 0, skin, { sx: 0.23 * s, sy: 0.42 * s, sz: 0.155 * s });
-  // narrow chest, wide clavicle: the wrongness is in the proportion
-  w.add(P.box, 0, shoulderY - 0.24 * s, 0, skin, { sx: 0.50 * s, sy: 0.36 * s, sz: 0.16 * s });
-  // ribs OUTSIDE the flank, four a side, offset one rib between the sides
-  for (let i = 0; i < 4; i++) {
-    for (const side of [-1, 1]) {
-      const y = (hipY + 0.34 + i * 0.20 + (side < 0 ? 0.09 : 0)) * s;
-      w.add(P.cone3, side * 0.15 * s, y, -0.02 * s, bone, {
-        rz: side * 1.22, rx: -0.22,
-        sx: 0.045 * s, sy: 0.32 * s, sz: 0.055 * s,
-      });
-    }
+  // A waist like a cable beneath an exposed thoracic cage. The repeated full
+  // hoops are large enough to read as anatomy instead of decorative pixels.
+  w.add(P.cap, 0.035 * s, hipY + 0.22 * s, 0.04 * s, skin,
+    { rz: -0.08, sx: 0.20 * s, sy: 0.56 * s, sz: 0.16 * s });
+  w.add(P.sphLo, -0.035 * s, hipY - 0.02 * s, 0, cloth,
+    { rz: 0.10, sx: 0.31 * s, sy: 0.23 * s, sz: 0.22 * s });
+  for (let i = 0; i < 5; i++) {
+    const y = (1.24 + i * 0.115) * s;
+    w.add(P.torus, (i % 2 ? 0.025 : -0.018) * s, y, -0.005 * s, bone,
+      { rz: (i - 2) * 0.035, sx: (0.72 - i * 0.045) * s,
+        sy: (0.42 - i * 0.025) * s, sz: 0.34 * s });
   }
-  // THE SCAPULAE: two blades rising ABOVE the head, and this is the whole silhouette
+  w.add(P.box, 0, 1.49 * s, 0.09 * s, skin,
+    { sx: 0.13 * s, sy: 0.72 * s, sz: 0.14 * s });
+
+  // Four scapular blades turn the top half into a closing insect trap. The
+  // inner pair rises above the head; the outer pair hooks down toward the arms.
   for (const side of [-1, 1]) {
-    w.add(P.box, side * 0.175 * s, shoulderY + 0.14 * s, 0.055 * s, skin, {
-      rz: side * -0.22, sx: 0.135 * s, sy: 0.46 * s, sz: 0.10 * s,
-    });
-    w.add(P.cone3, side * 0.20 * s, shoulderY + 0.34 * s, 0.05 * s, bone, {
-      rz: side * -0.30, sx: 0.10 * s, sy: 0.30 * s, sz: 0.10 * s,
-    });
+    w.add(P.cone3, side * 0.20 * s, shoulderY + 0.22 * s, 0.08 * s, skin,
+      { rz: side * -0.30, rx: -0.14, sx: 0.16 * s, sy: 0.78 * s, sz: 0.12 * s });
+    w.add(P.cone3, side * 0.39 * s, shoulderY + 0.02 * s, 0.04 * s, bone,
+      { rz: side * 0.78, rx: 0.12, sx: 0.12 * s, sy: 0.70 * s, sz: 0.10 * s });
+    w.add(P.cone3, side * 0.50 * s, shoulderY - 0.06 * s, -0.01 * s, bone,
+      { rz: side * -0.72, rx: -0.18, sx: 0.075 * s, sy: 0.45 * s, sz: 0.075 * s });
+    w.add(P.sphLo, side * 0.31 * s, shoulderY - 0.08 * s, 0, skin,
+      { sx: 0.22 * s, sy: 0.18 * s, sz: 0.18 * s });
   }
-  for (const side of [-1, 1]) {
-    w.add(P.sph, side * 0.255 * s, shoulderY - 0.05 * s, 0, skin,
-      { sx: 0.175 * s, sy: 0.165 * s, sz: 0.165 * s });
-  }
-  // the neck goes FORWARD and DOWN out of the chest, so the head hangs in front of the blades
-  w.add(P.cap, 0, shoulderY - 0.06 * s, -0.11 * s, skin,
-    { rx: 0.90, sx: 0.095 * s, sy: 0.18 * s, sz: 0.095 * s });
-  const sockZ = sculptHead(w, headY, s, { hood: false, brow: true, mask: false, bone, cloth, dz: -0.15 * s });
 
-  // arms too long: 0.52 upper + 0.54 fore against a 2.20 m body
-  const armGeo = limbGeo(0.52 * s, 0.058 * s, 0.05 * s, skin, null);
-  const foreGeo = limbGeo(0.54 * s, 0.046 * s, 0.060 * s, skin, { colour: bone, claw: 0.30 * s });
-  const thighGeo = limbGeo(0.52 * s, 0.075 * s, 0.06 * s, skin, null);
-  const shinGeo = footGeo(0.50 * s, skin, SEAM);
+  // The head is a suspended black seed below the blade tips, with an incomplete
+  // nasal carapace. Bright eyes now live inside a shape, not on a round ball.
+  w.add(P.cap, 0, shoulderY - 0.01 * s, -0.13 * s, skin,
+    { rx: 1.12, sx: 0.12 * s, sy: 0.22 * s, sz: 0.12 * s });
+  w.add(P.sph, 0, headY - 0.04 * s, -0.22 * s, VOID,
+    { sx: 0.28 * s, sy: 0.32 * s, sz: 0.25 * s });
+  w.add(P.cone3, -0.07 * s, headY + 0.10 * s, -0.39 * s, bone,
+    { rx: 1.15, rz: 2.96, sx: 0.23 * s, sy: 0.18 * s, sz: 0.13 * s });
+  w.add(P.box, 0.07 * s, headY - 0.09 * s, -0.42 * s, bone,
+    { rz: -0.16, ry: 0.10, sx: 0.10 * s, sy: 0.25 * s, sz: 0.055 * s });
+  w.add(P.cone3, -0.05 * s, headY - 0.31 * s, -0.33 * s, bone,
+    { rx: Math.PI, rz: -0.20, sx: 0.11 * s, sy: 0.35 * s, sz: 0.10 * s });
+  for (const side of [-1, 1]) {
+    w.add(P.sphLo, side * 0.080 * s, headY + 0.015 * s, -0.455 * s, VOID,
+      { sx: 0.10 * s, sy: 0.055 * s, sz: 0.035 * s });
+  }
+  const sockZ = -0.47;
+
+  // Long limbs, but no smooth sticks: each upper arm is wrapped by a shoulder
+  // blade and each forearm ends in a wrist spur plus four hooked fingers.
+  const upper = new Weld();
+  upper.add(P.cap, 0, -0.25 * s, 0, skin,
+    { rz: -0.10, sx: 0.17 * s, sy: 0.38 * s, sz: 0.14 * s });
+  upper.add(P.cone3, 0.08 * s, -0.24 * s, 0.02 * s, bone,
+    { rz: -0.42, sx: 0.055 * s, sy: 0.48 * s, sz: 0.055 * s });
+  const fore = new Weld();
+  fore.add(P.cap, 0, -0.27 * s, 0, skin,
+    { rz: 0.06, sx: 0.125 * s, sy: 0.42 * s, sz: 0.105 * s });
+  fore.add(P.cone3, -0.10 * s, -0.40 * s, 0.04 * s, bone,
+    { rz: 0.26, rx: -0.50, sx: 0.060 * s, sy: 0.48 * s, sz: 0.060 * s });
+  fore.add(P.box, 0, -0.55 * s, -0.05 * s, bone,
+    { sx: 0.17 * s, sy: 0.08 * s, sz: 0.22 * s });
+  for (let i = -2; i <= 1; i++) {
+    fore.add(P.cone3, i * 0.060 * s + 0.025 * s, -0.59 * s, -0.23 * s, bone,
+      { rx: -1.22 - (i & 1) * 0.13, rz: i * 0.10,
+        sx: 0.030 * s, sy: (0.30 + ((i + 2) % 2) * 0.07) * s, sz: 0.030 * s });
+  }
+  const thigh = new Weld();
+  thigh.add(P.cap, 0, -0.25 * s, 0.025 * s, skin,
+    { rx: -0.10, sx: 0.18 * s, sy: 0.40 * s, sz: 0.15 * s });
+  thigh.add(P.cone3, 0.08 * s, -0.46 * s, 0.10 * s, bone,
+    { rx: -0.45, rz: -0.55, sx: 0.070 * s, sy: 0.38 * s, sz: 0.070 * s });
+  const shin = new Weld();
+  shin.add(P.cap, 0, -0.25 * s, -0.04 * s, skin,
+    { rx: 0.22, sx: 0.13 * s, sy: 0.39 * s, sz: 0.11 * s });
+  shin.add(P.box, 0, -0.51 * s, -0.12 * s, SEAM,
+    { sx: 0.16 * s, sy: 0.07 * s, sz: 0.34 * s });
 
   return {
     shell: w.geometry('hunter-shell'),
-    eyes: eyeGeometry(headY, s, sockZ, 0.062),
-    limb: armGeo, fore: foreGeo,
-    thigh: thighGeo, shin: shinGeo,
+    eyes: eyeGeometry(headY, s, sockZ, 0.080),
+    limb: upper.geometry('hunter-upper'), fore: fore.geometry('hunter-fore'),
+    thigh: thigh.geometry('hunter-thigh'), shin: shin.geometry('hunter-shin'),
     joints: [
       { x: -0.255 * s, y: shoulderY - 0.04 * s, z: 0, fore: -0.52 * s },
       { x: 0.255 * s, y: shoulderY - 0.04 * s, z: 0, fore: -0.52 * s },
@@ -1027,35 +1160,90 @@ function buildPoacher(def) {
   const cloth = def.cloth, skin = def.skin, bone = def.bone;
   const hipY = 0.92 * s, shoulderY = 1.42 * s, headY = 1.62 * s;
 
-  w.add(P.box, 0, hipY - 0.02 * s, 0, cloth, { sx: 0.34 * s, sy: 0.20 * s, sz: 0.23 * s });
-  w.add(P.box, 0, hipY + 0.19 * s, 0, cloth, { sx: 0.32 * s, sy: 0.26 * s, sz: 0.22 * s });
-  w.add(P.box, 0, shoulderY - 0.14 * s, 0, cloth, { sx: 0.46 * s, sy: 0.34 * s, sz: 0.24 * s });
-  // the coat: a skirt of cloth to the knee, which is the read at distance
-  w.add(P.cone, 0, hipY - 0.28 * s, 0, cloth, { sx: 0.56 * s, sy: 0.78 * s, sz: 0.46 * s });
+  // Heavy field coat, split and wind-chewed. One tail is longer and one lapel
+  // hangs loose, so the human silhouette remains readable without becoming a
+  // mannequin made from three stacked boxes.
+  w.add(P.cap, -0.015 * s, 1.17 * s, 0, cloth,
+    { rz: -0.035, sx: 0.48 * s, sy: 0.61 * s, sz: 0.32 * s });
+  w.add(P.cone3, -0.18 * s, 0.76 * s, 0.02 * s, cloth,
+    { rx: Math.PI, rz: 0.08, sx: 0.38 * s, sy: 0.78 * s, sz: 0.34 * s });
+  w.add(P.cone3, 0.19 * s, 0.82 * s, -0.01 * s, SEAM,
+    { rx: Math.PI, rz: -0.11, sx: 0.35 * s, sy: 0.66 * s, sz: 0.32 * s });
+  w.add(P.box, -0.13 * s, 1.26 * s, -0.19 * s, bone,
+    { rz: -0.52, rx: -0.10, sx: 0.09 * s, sy: 0.62 * s, sz: 0.045 * s });
+  w.add(P.box, 0.12 * s, 1.21 * s, -0.19 * s, bone,
+    { rz: 0.42, rx: -0.12, sx: 0.075 * s, sy: 0.55 * s, sz: 0.045 * s });
+
+  // Pack, bedroll and trap hoops break up the back and shoulders. They are
+  // mundane poacher equipment arranged into a threatening outline, not horns
+  // grown from a human enemy.
+  w.add(P.box, 0.04 * s, 1.20 * s, 0.24 * s, SEAM,
+    { rz: 0.06, sx: 0.48 * s, sy: 0.52 * s, sz: 0.22 * s });
+  w.add(P.cyl, -0.02 * s, 1.50 * s, 0.25 * s, cloth,
+    { rz: 1.57, sx: 0.16 * s, sy: 0.55 * s, sz: 0.16 * s });
+  w.add(P.torus, 0.34 * s, 1.22 * s, 0.19 * s, bone,
+    { ry: -0.34, rz: 0.13, sx: 0.38 * s, sy: 0.58 * s, sz: 0.32 * s });
   for (const side of [-1, 1]) {
-    w.add(P.sph, side * 0.215 * s, shoulderY - 0.03 * s, 0, cloth,
-      { sx: 0.190 * s, sy: 0.180 * s, sz: 0.185 * s });
+    w.add(P.sphLo, side * 0.245 * s, shoulderY - (side < 0 ? -0.025 : 0.07) * s, 0, cloth,
+      { sx: (side < 0 ? 0.25 : 0.20) * s, sy: 0.20 * s, sz: 0.21 * s });
   }
-  w.add(P.cyl, 0, shoulderY + 0.06 * s, 0, skin, { sx: 0.11 * s, sy: 0.11 * s, sz: 0.11 * s });
-  const sockZ = sculptHead(w, headY, s, { face: true, cap: true, bone, cloth, skin });
 
-  // the rifle, slung across the chest. The BARREL is the glint that reads
-  // before the body does, so it is bone-bright against a very dark coat.
-  w.add(P.box, 0.10 * s, shoulderY - 0.24 * s, -0.20 * s, bone,
-    { rx: 0.16, ry: -0.30, sx: 0.030 * s, sy: 0.030 * s, sz: 1.05 * s });
-  w.add(P.box, 0.06 * s, shoulderY - 0.34 * s, 0.10 * s, SEAM,
-    { rx: 0.16, ry: -0.30, sx: 0.055 * s, sy: 0.110 * s, sz: 0.30 * s });
+  // Deep hood, wrapped face and a projecting respirator made from scavenged
+  // metal. This is still unmistakably a person with a gun, just one the player
+  // does not want turning its head toward the torch.
+  w.add(P.sph, 0.02 * s, headY, 0, VOID,
+    { sx: 0.29 * s, sy: 0.31 * s, sz: 0.25 * s });
+  for (const side of [-1, 1]) {
+    w.add(P.cone3, side * 0.12 * s, headY + 0.025 * s, 0.025 * s, cloth,
+      { rx: 0.22, ry: side * 0.24, rz: side * 0.16,
+        sx: 0.20 * s, sy: 0.43 * s, sz: 0.25 * s });
+    w.add(P.sphLo, side * 0.071 * s, headY + 0.045 * s, -0.245 * s, VOID,
+      { sx: 0.082 * s, sy: 0.047 * s, sz: 0.034 * s });
+  }
+  w.add(P.box, 0, headY - 0.035 * s, -0.235 * s, skin,
+    { rx: -0.14, sx: 0.19 * s, sy: 0.21 * s, sz: 0.052 * s });
+  w.add(P.cone3, 0, headY - 0.115 * s, -0.33 * s, bone,
+    { rx: -1.57, sx: 0.11 * s, sy: 0.19 * s, sz: 0.11 * s });
+  w.add(P.box, 0, headY - 0.13 * s, -0.351 * s, VOID,
+    { sx: 0.12 * s, sy: 0.025 * s, sz: 0.015 * s });
+  const sockZ = -0.26;
 
-  const armGeo = limbGeo(0.30 * s, 0.058 * s, 0.05 * s, cloth, null);
-  const foreGeo = limbGeo(0.28 * s, 0.046 * s, 0.050 * s, cloth, { colour: skin });
-  const thighGeo = limbGeo(0.42 * s, 0.078 * s, 0.06 * s, cloth, null);
-  const shinGeo = footGeo(0.44 * s, cloth, SEAM);
+  // Rifle drawn across the FRONT in screen space: barrel, stock, receiver and
+  // sight all live in the one merged shell, so its identity no longer vanishes
+  // when the player is looking straight at the shooter.
+  w.add(P.box, 0.08 * s, 1.15 * s, -0.30 * s, bone,
+    { rz: -0.54, rx: -0.04, sx: 0.052 * s, sy: 1.18 * s, sz: 0.052 * s });
+  w.add(P.box, -0.17 * s, 0.77 * s, -0.30 * s, SEAM,
+    { rz: -0.54, sx: 0.15 * s, sy: 0.35 * s, sz: 0.12 * s });
+  w.add(P.box, 0.03 * s, 1.05 * s, -0.34 * s, bone,
+    { rz: -0.54, sx: 0.13 * s, sy: 0.22 * s, sz: 0.10 * s });
+  w.add(P.box, 0.30 * s, 1.40 * s, -0.34 * s, bone,
+    { rz: -0.54, sx: 0.035 * s, sy: 0.18 * s, sz: 0.04 * s });
+
+  const upper = new Weld();
+  upper.add(P.cap, 0, -0.15 * s, 0, cloth,
+    { sx: 0.18 * s, sy: 0.24 * s, sz: 0.16 * s });
+  upper.add(P.box, 0.08 * s, -0.15 * s, 0.015 * s, SEAM,
+    { rz: -0.30, sx: 0.05 * s, sy: 0.28 * s, sz: 0.08 * s });
+  const fore = new Weld();
+  fore.add(P.cap, 0, -0.14 * s, 0, cloth,
+    { sx: 0.14 * s, sy: 0.23 * s, sz: 0.13 * s });
+  fore.add(P.box, 0, -0.29 * s, -0.035 * s, skin,
+    { sx: 0.13 * s, sy: 0.09 * s, sz: 0.18 * s });
+  const thigh = new Weld();
+  thigh.add(P.cap, 0, -0.21 * s, 0, cloth,
+    { sx: 0.19 * s, sy: 0.34 * s, sz: 0.17 * s });
+  const shin = new Weld();
+  shin.add(P.cap, 0, -0.20 * s, 0, cloth,
+    { sx: 0.16 * s, sy: 0.33 * s, sz: 0.145 * s });
+  shin.add(P.box, 0, -0.43 * s, -0.065 * s, SEAM,
+    { sx: 0.20 * s, sy: 0.11 * s, sz: 0.31 * s });
 
   return {
     shell: w.geometry('poacher-shell'),
-    eyes: eyeGeometry(headY, s, sockZ, 0.050),
-    limb: armGeo, fore: foreGeo,
-    thigh: thighGeo, shin: shinGeo,
+    eyes: eyeGeometry(headY, s, sockZ, 0.071),
+    limb: upper.geometry('poacher-upper'), fore: fore.geometry('poacher-fore'),
+    thigh: thigh.geometry('poacher-thigh'), shin: shin.geometry('poacher-shin'),
     joints: [
       { x: -0.215 * s, y: shoulderY - 0.04 * s, z: 0, fore: -0.30 * s },
       { x: 0.215 * s, y: shoulderY - 0.04 * s, z: 0, fore: -0.30 * s },
@@ -1084,38 +1272,107 @@ function buildPale(def) {
   const bone = def.bone, cloth = def.cloth;
   const hipY = 0.88, shoulderY = 1.36, headY = 1.56;
 
-  /* MEASURED 2026-09-03 (ROUND 7, tools/bodylook.mjs):
-     tests/shots/bodylook/before-pale-3m-approach-moon.png is A HALLOWEEN CUTOUT. A dark
-     lozenge with two big white circles for eyes, HOVERING — because the 0.92 m skirt cone
-     reached the ground and swallowed both legs, so the thing had no feet and no contact with
-     the floor at all. A doll that floats is a balloon.
-     The fix is all silhouette: a SHORT tunic, two long thin porcelain legs standing under it
-     with real feet, and a head 22% too big for the body. Wrong proportion is the entire
-     scare here — this species must never look like a monster, only like a person who is not
-     shaped right. */
-  w.add(P.cap, 0, 1.06, 0, cloth, { sx: 0.30, sy: 0.42, sz: 0.24 });
-  w.add(P.cone, 0, 0.98, 0, cloth, { sx: 0.42, sy: 0.46, sz: 0.34 });
-  for (const side of [-1, 1]) {
-    w.add(P.sph, side * 0.165, shoulderY - 0.02, 0, bone, { sx: 0.130, sy: 0.125, sz: 0.128 });
-    // a VOID seam at each shoulder: a doll's arm is SOCKETED, not grown
-    w.add(P.cyl, side * 0.128, shoulderY - 0.02, 0, VOID, { rz: 1.57, sx: 0.115, sy: 0.030, sz: 0.115 });
+  // The Pale is a cracked devotional doll: a black wicker core with porcelain
+  // plates tied over it. Large gaps between the plates prevent the torch from
+  // turning the whole body into one beige plastic toy.
+  const shroud = 0x343330;
+  w.add(P.cap, 0.015, 1.05, 0.02, shroud,
+    { rz: -0.045, sx: 0.29, sy: 0.46, sz: 0.23 });
+  w.add(P.cone3, -0.11, 0.91, 0.015, shroud,
+    { rx: Math.PI, rz: 0.08, sx: 0.30, sy: 0.50, sz: 0.28 });
+  w.add(P.cone3, 0.14, 0.95, -0.02, cloth,
+    { rx: Math.PI, rz: -0.12, sx: 0.28, sy: 0.43, sz: 0.26 });
+  // collar and separated rib plates
+  w.add(P.torus, 0, 1.29, -0.01, bone,
+    { rx: 1.57, sx: 0.49, sy: 0.43, sz: 0.52 });
+  for (let i = 0; i < 4; i++) {
+    for (const side of [-1, 1]) {
+      w.add(P.cone3, side * (0.11 + i * 0.014), 1.09 + i * 0.095, -0.20, bone,
+        { rz: side * (1.12 - i * 0.10), rx: -0.16,
+          sx: 0.038, sy: 0.25 - i * 0.018, sz: 0.040 });
+    }
   }
-  w.add(P.cyl, 0, shoulderY + 0.06, 0, bone, { sx: 0.075, sy: 0.115, sz: 0.075 });
-  const HS = 1.22;                                    // the head is 22% too big for the body
-  const sockZ = sculptHead(w, headY, HS, { smooth: true, bone, cloth });
+  for (let i = 0; i < 3; i++) {
+    w.add(P.cone3, -0.30 - i * 0.045, 1.12 + i * 0.12, -0.04, bone,
+      { rx: -0.12, rz: -1.05 + i * 0.12, sx: 0.050,
+        sy: 0.38 - i * 0.045, sz: 0.050 });
+  }
+  // Socketed shoulders at visibly different heights, one capped and one split.
+  w.add(P.sphLo, -0.19, shoulderY + 0.035, 0, bone,
+    { rz: -0.18, sx: 0.18, sy: 0.16, sz: 0.16 });
+  w.add(P.cone3, 0.19, shoulderY - 0.045, 0, bone,
+    { rz: -1.20, sx: 0.14, sy: 0.37, sz: 0.14 });
+  for (const side of [-1, 1]) {
+    w.add(P.cyl, side * 0.145, shoulderY + (side < 0 ? 0.03 : -0.04), 0, VOID,
+      { rz: 1.57, sx: 0.13, sy: 0.038, sz: 0.13 });
+  }
 
-  const armGeo = limbGeo(0.44, 0.045, 0.045, bone, { colour: bone });
-  // long enough to reach the floor now that the tunic stops at the hip
-  const legGeo = limbGeo(0.72, 0.048, 0.046, bone, { colour: bone });
+  // Oversized head assembled from two misregistered porcelain shells around a
+  // genuine black cleft. The fracture goes from crown to jaw and one half has
+  // slipped lower; it cannot read as a mannequin face from any useful range.
+  w.add(P.sph, 0, headY + 0.015, -0.015, VOID,
+    { sx: 0.36, sy: 0.42, sz: 0.31 });
+  w.add(P.sph, -0.185, headY + 0.085, -0.075, bone,
+    { rz: 0.24, ry: -0.14, sx: 0.31, sy: 0.43, sz: 0.25 });
+  w.add(P.sph, 0.175, headY - 0.115, -0.065, cloth,
+    { rz: -0.34, ry: 0.18, sx: 0.18, sy: 0.25, sz: 0.21 });
+  w.add(P.box, -0.005, headY - 0.015, -0.318, VOID,
+    { rz: -0.10, sx: 0.105, sy: 0.66, sz: 0.026 });
+  // broken halo/crown — five unequal porcelain nails, never a neat tiara
+  const crown = [
+    [-0.31, 1.83, -0.06, -0.80, 0.34], [-0.18, 1.91, -0.03, -0.35, 0.44],
+    [-0.035, 1.95, 0.00, -0.02, 0.50], [0.16, 1.77, -0.02, 0.52, 0.26],
+    [0.29, 1.70, -0.05, 0.92, 0.20],
+  ];
+  for (let i = 0; i < crown.length; i++) {
+    const c = crown[i];
+    w.add(P.cone3, c[0], c[1], c[2], i % 2 ? cloth : bone,
+      { rz: c[3], sx: 0.042, sy: c[4], sz: 0.042 });
+  }
+  // broad empty sockets and a displaced lower face shard
+  w.add(P.sphLo, -0.160, headY + 0.100, -0.325, VOID,
+    { rz: -0.12, sx: 0.115, sy: 0.060, sz: 0.035 });
+  w.add(P.sphLo, 0.170, headY - 0.070, -0.315, VOID,
+    { rz: 0.22, sx: 0.105, sy: 0.050, sz: 0.035 });
+  w.add(P.box, 0.07, headY - 0.21, -0.31, bone,
+    { rz: -0.16, ry: 0.08, sx: 0.16, sy: 0.10, sz: 0.055 });
+
+  const eyes = new Weld();
+  eyes.add(P.sphLo, -0.164, headY + 0.100, -0.352, 0xffffff,
+    { rz: -0.12, sx: 0.060, sy: 0.009, sz: 0.018 });
+  eyes.add(P.sphLo, 0.173, headY - 0.070, -0.342, 0xffffff,
+    { rz: 0.22, sx: 0.043, sy: 0.007, sz: 0.016 });
+
+  const arm = new Weld();
+  arm.add(P.box, 0, -0.18, 0, bone,
+    { rz: 0.055, sx: 0.105, sy: 0.31, sz: 0.10 });
+  arm.add(P.sphLo, 0.02, -0.36, 0, VOID,
+    { sx: 0.13, sy: 0.12, sz: 0.12 });
+  arm.add(P.box, 0.02, -0.51, -0.015, cloth,
+    { rz: -0.04, sx: 0.085, sy: 0.27, sz: 0.08 });
+  for (let i = -1; i <= 1; i++) {
+    arm.add(P.cone3, i * 0.040, -0.68, -0.075, bone,
+      { rx: -1.22, rz: i * 0.14, sx: 0.024,
+        sy: 0.20 - Math.abs(i) * 0.025, sz: 0.024 });
+  }
+  const leg = new Weld();
+  leg.add(P.box, 0, -0.23, 0, bone,
+    { rz: -0.035, sx: 0.115, sy: 0.39, sz: 0.11 });
+  leg.add(P.sphLo, 0.025, -0.46, 0.015, VOID,
+    { sx: 0.13, sy: 0.11, sz: 0.12 });
+  leg.add(P.box, 0.02, -0.60, -0.025, cloth,
+    { rz: 0.045, sx: 0.090, sy: 0.25, sz: 0.085 });
+  leg.add(P.box, 0.02, -0.74, -0.085, bone,
+    { sx: 0.14, sy: 0.075, sz: 0.28 });
 
   return {
     shell: w.geometry('pale-shell'),
-    eyes: eyeGeometry(headY, HS, sockZ, 0.058),
-    limb: armGeo, fore: null,
-    thigh: legGeo, shin: null,
+    eyes: eyes.geometry('pale-eyes'),
+    limb: arm.geometry('pale-arm'), fore: null,
+    thigh: leg.geometry('pale-leg'), shin: null,
     joints: [
-      { x: -0.165, y: shoulderY - 0.03, z: 0 },
-      { x: 0.165, y: shoulderY - 0.03, z: 0 },
+      { x: -0.235, y: shoulderY + 0.070, z: 0, scaleY: 1.55 },
+      { x: 0.175, y: shoulderY - 0.095, z: 0, scaleY: 0.70 },
     ],
     hips: [
       { x: -0.078, y: hipY - 0.10, z: 0 },
@@ -1140,29 +1397,76 @@ function buildStanding(def) {
   const cloth = def.cloth, skin = def.skin, bone = def.bone;
   const hipY = 0.90 * s, shoulderY = 1.40 * s, headY = 1.60 * s;
 
-  w.add(P.box, 0, hipY - 0.02 * s, 0, cloth, { sx: 0.33 * s, sy: 0.20 * s, sz: 0.22 * s });
-  w.add(P.box, 0, hipY + 0.19 * s, 0, cloth, { sx: 0.30 * s, sy: 0.26 * s, sz: 0.21 * s });
-  w.add(P.box, 0, shoulderY - 0.14 * s, 0, cloth, { sx: 0.43 * s, sy: 0.32 * s, sz: 0.23 * s });
-  for (const side of [-1, 1]) {
-    w.add(P.sph, side * 0.200 * s, shoulderY - 0.03 * s, 0, cloth,
-      { sx: 0.180 * s, sy: 0.172 * s, sz: 0.175 * s });
-  }
-  w.add(P.cyl, 0, shoulderY + 0.06 * s, 0, skin, { sx: 0.10 * s, sy: 0.11 * s, sz: 0.10 * s });
-  const sockZ = sculptHead(w, headY, s, { face: true, bone, cloth, skin });
+  // Still recognisably a rural person: a soaked overcoat, scarf, boots and a
+  // shoulder satchel. The horror is wrong posture and an unreadable face, not
+  // fantasy anatomy. Thick overlapping layers finally give it human weight.
+  w.add(P.cap, -0.01 * s, 1.16 * s, 0, cloth,
+    { rz: 0.025, sx: 0.47 * s, sy: 0.58 * s, sz: 0.31 * s });
+  w.add(P.cone3, -0.16 * s, 0.79 * s, 0.01 * s, cloth,
+    { rx: Math.PI, rz: 0.05, sx: 0.35 * s, sy: 0.65 * s, sz: 0.30 * s });
+  w.add(P.cone3, 0.17 * s, 0.82 * s, 0, SEAM,
+    { rx: Math.PI, rz: -0.07, sx: 0.33 * s, sy: 0.59 * s, sz: 0.29 * s });
+  // scarf tail and satchel strap are ordinary details large enough to stop the
+  // chest becoming a featureless black rectangle.
+  w.add(P.torus, 0, 1.43 * s, -0.01 * s, bone,
+    { rx: 1.57, rz: -0.06, sx: 0.43 * s, sy: 0.36 * s, sz: 0.42 * s });
+  w.add(P.box, -0.12 * s, 1.17 * s, -0.185 * s, bone,
+    { rz: -0.47, rx: -0.08, sx: 0.065 * s, sy: 0.68 * s, sz: 0.035 * s });
+  w.add(P.box, 0.25 * s, 0.98 * s, 0.12 * s, SEAM,
+    { rz: -0.08, sx: 0.23 * s, sy: 0.29 * s, sz: 0.16 * s });
+  w.add(P.box, 0.12 * s, 1.14 * s, 0.18 * s, cloth,
+    { rz: 0.10, sx: 0.35 * s, sy: 0.44 * s, sz: 0.15 * s });
+  w.add(P.sphLo, -0.23 * s, shoulderY + 0.015 * s, 0, cloth,
+    { rz: -0.12, sx: 0.24 * s, sy: 0.21 * s, sz: 0.21 * s });
+  w.add(P.sphLo, 0.22 * s, shoulderY - 0.075 * s, 0, cloth,
+    { rz: 0.15, sx: 0.21 * s, sy: 0.19 * s, sz: 0.20 * s });
 
-  const armGeo = limbGeo(0.30 * s, 0.056 * s, 0.048 * s, cloth, null);
-  const foreGeo = limbGeo(0.28 * s, 0.044 * s, 0.048 * s, cloth, { colour: skin });
-  const thighGeo = limbGeo(0.42 * s, 0.076 * s, 0.058 * s, cloth, null);
-  const shinGeo = footGeo(0.44 * s, cloth, SEAM);
+  // The hood is tipped and the head sits too low between uneven shoulders. A
+  // shallow fragment of an otherwise normal face catches the torch; most of
+  // it remains a cavity. No monster crown, no beacon eyes.
+  w.add(P.sph, -0.025 * s, headY - 0.015 * s, -0.005 * s, VOID,
+    { rz: 0.06, sx: 0.29 * s, sy: 0.31 * s, sz: 0.25 * s });
+  w.add(P.sph, -0.035 * s, headY + 0.055 * s, 0.035 * s, cloth,
+    { rz: 0.08, sx: 0.35 * s, sy: 0.29 * s, sz: 0.29 * s });
+  w.add(P.box, -0.03 * s, headY + 0.06 * s, -0.245 * s, cloth,
+    { rz: 0.07, rx: -0.18, sx: 0.34 * s, sy: 0.075 * s, sz: 0.16 * s });
+  w.add(P.box, -0.055 * s, headY - 0.045 * s, -0.263 * s, skin,
+    { rz: 0.08, ry: -0.08, sx: 0.20 * s, sy: 0.22 * s, sz: 0.042 * s });
+  w.add(P.box, 0.075 * s, headY - 0.075 * s, -0.267 * s, VOID,
+    { rz: -0.12, sx: 0.09 * s, sy: 0.20 * s, sz: 0.025 * s });
+  for (const side of [-1, 1]) {
+    w.add(P.sphLo, side * 0.057 * s - 0.035 * s, headY + 0.015 * s, -0.290 * s, VOID,
+      { sx: 0.068 * s, sy: 0.037 * s, sz: 0.025 * s });
+  }
+  const sockZ = -0.30;
+
+  const upper = new Weld();
+  upper.add(P.cap, 0, -0.15 * s, 0, cloth,
+    { sx: 0.18 * s, sy: 0.25 * s, sz: 0.16 * s });
+  upper.add(P.box, 0.07 * s, -0.15 * s, -0.01 * s, SEAM,
+    { rz: -0.22, sx: 0.045 * s, sy: 0.27 * s, sz: 0.075 * s });
+  const fore = new Weld();
+  fore.add(P.cap, 0, -0.14 * s, 0, cloth,
+    { sx: 0.145 * s, sy: 0.23 * s, sz: 0.135 * s });
+  fore.add(P.box, 0, -0.29 * s, -0.025 * s, skin,
+    { sx: 0.13 * s, sy: 0.09 * s, sz: 0.17 * s });
+  const thigh = new Weld();
+  thigh.add(P.cap, 0, -0.21 * s, 0, cloth,
+    { sx: 0.20 * s, sy: 0.34 * s, sz: 0.18 * s });
+  const shin = new Weld();
+  shin.add(P.cap, 0, -0.20 * s, 0, cloth,
+    { sx: 0.17 * s, sy: 0.33 * s, sz: 0.15 * s });
+  shin.add(P.box, 0, -0.43 * s, -0.07 * s, SEAM,
+    { sx: 0.21 * s, sy: 0.11 * s, sz: 0.32 * s });
 
   return {
     shell: w.geometry('standing-shell'),
-    eyes: eyeGeometry(headY, s, sockZ, 0.050),
-    limb: armGeo, fore: foreGeo,
-    thigh: thighGeo, shin: shinGeo,
+    eyes: eyeGeometry(headY, s, sockZ, 0.057),
+    limb: upper.geometry('standing-upper'), fore: fore.geometry('standing-fore'),
+    thigh: thigh.geometry('standing-thigh'), shin: shin.geometry('standing-shin'),
     joints: [
-      { x: -0.200 * s, y: shoulderY - 0.04 * s, z: 0, fore: -0.30 * s },
-      { x: 0.200 * s, y: shoulderY - 0.04 * s, z: 0, fore: -0.30 * s },
+      { x: -0.225 * s, y: shoulderY - 0.015 * s, z: 0, fore: -0.30 * s },
+      { x: 0.215 * s, y: shoulderY - 0.085 * s, z: 0, fore: -0.30 * s },
     ],
     hips: [
       { x: -0.092 * s, y: hipY - 0.04 * s, z: 0, knee: -0.42 * s },
@@ -1277,6 +1581,7 @@ export function buildBody(key, rng) {
     const j = set.joints[i];
     const pivot = new THREE.Group();
     pivot.position.set(j.x, j.y, j.z);
+    if (j.scaleY) pivot.scale.y = j.scaleY;
     group.add(pivot);
     const upper = new THREE.Mesh(set.limb, shell);
     upper.castShadow = false;

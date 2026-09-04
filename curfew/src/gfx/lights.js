@@ -117,24 +117,9 @@ const HEMI_INTENSITY = CFG.lights.hemi.intensity;
 const AMBIENT_INTENSITY = CFG.lights.ambient.intensity;
 const HEMI_GROUND = 0x241f18;    // was CFG.lights.hemi.ground 0x1d2620
 
-/* 1.4 — THE BLACK HOUR IS NOT BLACK.
- * clock.js drives the moon and the sky and nothing else: its own comment says so on purpose
- * ("hemi (4.5) and ambient (2.0) are untouched"). Measured consequence, frame D against
- * frame A: ground moved 38.7 -> 28.9 (0.75x) and the grass did not move at all
- * (143.4 -> 146.1). The hour whose entire job is to be the most frightening thing in the
- * game was costing the county a quarter of its floor and nothing else.
- *
- * So the fill dims with the moon. THE CENSUS IS UNTOUCHED — this is a uniform write on two
- * lights that already exist, exactly like clock's own moon.intensity write.
- *
- * The scale is derived HERE, from clock.redness read lazily at use, rather than pushed from
- * clock._apply(). Two owners writing one light is the bug this file's moon-tint comment
- * spends forty lines on; hemi and ambient belong to the census and the census belongs here.
- * clock is manifest #4 and we are #2, so this reads the redness clock published at the end
- * of the previous step — one fixed step (16 ms) of latency on a value that takes 180 s to
- * travel its whole arc. See docs/HANDOFF.md: clock.js must NOT also write these.
- */
-const FILL_BLACK_MUL = 0.55;     // lerp(1, 0.55, redness), the same shape as MOON_BLACK_MUL
+/* The fill follows the complete dusk/night/black/false-dawn arc. It is derived here from
+ * clock state rather than pushed from clock._apply(), so lights remains the only owner of
+ * hemisphere/ambient intensity. The census is untouched: two existing uniforms move. */
 
 /* ---- ctx.shared.lit: how lit the player is, 0..1 ---------------------------
  * OWNED BY THIS FILE (CONTRACT, "Shared read-only state on ctx") and published every step.
@@ -186,6 +171,9 @@ class RoverHandle {
     this.x = 0; this.y = -1000; this.z = 0;
     this.r = 1; this.g = 1; this.b = 1;
     this.peak = 0;
+    // Reset on every borrow. Most rovers use the shared falloff; a persistent authored
+    // light may soften only this uniform without adding a light or a shader program.
+    this.decay = CFG.lights.rovers.decay;
     this.ttl = 0;        // <= 0 or non-finite means persistent until released
     this.age = 0;
     this.d2 = 0;
@@ -242,10 +230,10 @@ export class Lights {
     // only failed to compound because clock happens to present at manifest #4 and tension
     // applies at #18. Reorder the manifest and the county's only key light saturated to pure
     // red in about a second. Now the worst a reorder can do is cost the tint a frame.
-    // ---- the fill's black-hour dim (ART.md 1.4). 1 at dusk and deep night. ----
+    // ---- the fill's night arc. The remaining dusk now visibly drains away. -----
     // Held explicitly so hemi/ambient intensity is always BASE * scale and can never
     // compound: the light's current intensity is never an input to the maths.
-    this._fillScale = 1;
+    this._fillScale = 0.72;
 
     this._moonTint = 0;
     this._tintBaseR = 0; this._tintBaseG = 0; this._tintBaseB = 0;
@@ -387,6 +375,7 @@ export class Lights {
     _col.set(colour);
     h.r = _col.r; h.g = _col.g; h.b = _col.b;
     h.peak = intensity;
+    h.decay = CFG.lights.rovers.decay;
     h.ttl = ttl;
     h.age = 0;
     h.d2 = 0;
@@ -570,17 +559,17 @@ export class Lights {
    * itself. It is public so a test can pin it and so a later lane has a door instead of a
    * reason to reach into a light.
    *
-   * @param k 0.35..1; anything else is clamped, a non-number is ignored
+   * @param k 0.20..1; anything else is clamped, a non-number is ignored
    */
   setFillScale(k) {
     if (typeof k !== 'number' || !isFinite(k)) return;
-    const c = clamp(k, 0.35, 1);
+    const c = clamp(k, 0.20, 1);
     if (Math.abs(c - this._fillScale) < 1e-4) return;
     this._fillScale = c;
     this._writeFill();
   }
 
-  /** The fill's current black-hour dim, 0.35..1. Tests and the debug HUD. */
+  /** The fill's current night dim, 0.20..1. Tests and the debug HUD. */
   fillScale() { return this._fillScale; }
 
   /** The ONE place hemi.intensity and ambient.intensity are written. */
@@ -620,13 +609,24 @@ export class Lights {
       this._reseat();
     }
 
-    // ART.md 1.4 — the fill follows the moon into the black hour. clock is manifest #4 and
-    // we are #2, so this is read lazily, at use, and never captured: on a build where clock
-    // is absent (M0, a headless test, a lane that lands out of order) redness is simply 0
-    // and the fill sits at its full ART.md 1.3 value, which is the correct default.
+    // Alex's natural play did not reveal any night transition and the carried light felt
+    // pointless. The old fill stayed at 1.0 for dusk plus eleven minutes of deep night and
+    // dimmed only when the red black-hour telegraph arrived. Drive a large, continuous arc
+    // instead: visible last dusk -> dark night -> genuinely black hour -> weak false dawn.
+    // This changes two existing light uniforms only; the 13-light census remains untouched.
     const clock = this.ctx.systems ? this.ctx.systems.get('clock') : null;
-    const redness = clock && typeof clock.redness === 'number' ? clamp01(clock.redness) : 0;
-    this.setFillScale(lerp(1, FILL_BLACK_MUL, redness));
+    let fill = 0.72;
+    if (clock && typeof clock.phase === 'string') {
+      const t = clamp01(clock.phaseT || 0);
+      const ease = t * t * (3 - 2 * t);
+      if (clock.phase === 'dusk') fill = lerp(0.72, 0.40, ease);
+      else if (clock.phase === 'night') {
+        const red = typeof clock.redness === 'number' ? clamp01(clock.redness) : 0;
+        fill = lerp(0.40, 0.28, red);
+      } else if (clock.phase === 'black') fill = 0.22;
+      else if (clock.phase === 'dawn') fill = lerp(0.22, 0.60, ease);
+    }
+    this.setFillScale(fill);
 
     // Published on the STEP, not on present(): enemies (#16), tension (#18) and
     // progression (#20) all read it inside their own step, and a headless
@@ -885,6 +885,7 @@ export class Lights {
       if (!h.inUse) { light.intensity = 0; continue; }
       light.position.set(h.x, h.y, h.z);
       light.color.setRGB(h.r, h.g, h.b);
+      light.decay = h.decay;
       // Distance fade [skyshard rovers.js:56]: a rover that is about to lose its seat is
       // already dim, so the handoff never pops.
       const dx = h.x - p.x, dy = h.y - p.y, dz = h.z - p.z;

@@ -75,6 +75,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import CFG from '../config.js';
 import { clamp, clamp01, lerp, smoothstep, noise1D, TAU } from '../engine/math.js';
 import { ImpostorBank, IMPOSTOR_FROM } from './impostors.js';
+import { planTravelWaters } from './wilds.js';
 
 // ---------------------------------------------------------------------------
 // Local constants that want to be in config.js. Requested in docs/HANDOFF.md;
@@ -96,12 +97,10 @@ const GRASS_ACCEPT = 0.60;
 // instruction for the barks - predict, measure, fine-tune - applies here too.
 // Measured on this build, frame A, grass layer mean by differential mask:
 //   x16  146.9      x1.6  26.2      x2.1  31.9      x2.4  36.0
-// against a ground of 38.9. The response is sub-linear because ACES is already
-// compressing by the time grass reaches the 30s, so it took the sweep above and
-// not one prediction. 2.4 is the value that satisfies the gate ("ground +- 5")
-// and it also survives the terrain lane's ART.md §3.1 target of a 28-36 ground:
-// at 36.0 the grass sits inside +-5 of either end of that band.
-const GRASS_TINT_MUL = 2.4;
+// against a ground of 38.9. That old value match made every torch-lit blade clip into the
+// same pale picket fence. 1.65 keeps the floor a darker layer under the canopy; the biome
+// tint/height signatures above now do the separation instead of raw brightness.
+const GRASS_TINT_MUL = 1.65;
 
 // ---------------------------------------------------------------------------
 // THE FORM TERM. ART.md §0.3's derived gate: "lit side : shadow side across one
@@ -266,6 +265,37 @@ const ARCHETYPES = [
   { kind: 'broad', bark: PAL.barkRed, leaf: PAL.leafDry, h: [9, 14], r: [0.38, 0.60] },
   { kind: 'snag', bark: PAL.barkSnag, leaf: PAL.leafDry, h: [7, 12], r: [0.24, 0.40] },
 ];
+
+// A terrain region that only changes a weighted seed is not a region a player can see.
+// These are explicit silhouette families, in terrain.REGIONS order. Each still selects from
+// the same nine already-baked templates (zero new draw/material/program cost), but a stretch
+// of road now moves through recognisably different woods: cathedral pines, pale birch field,
+// drowned snag fen, wind-beaten ridge. Density/height/value reinforce the species change.
+const BIOME_TEMPLATES = Object.freeze([
+  Object.freeze([2, 0, 1, 3]),     // pines: tall, closed conifer nave
+  Object.freeze([4, 5, 6, 7]),     // fields: pale birch and low broad crowns
+  Object.freeze([8, 7, 5, 3]),     // marsh: snags, dry crowns, sparse crooked conifer
+  Object.freeze([8, 2, 0, 4]),     // ridge: ash snags between high dark spires
+]);
+const BIOME_DENSITY = Object.freeze([1.12, 0.50, 0.62, 0.80]);
+const BIOME_HEIGHT = Object.freeze([1.12, 0.84, 0.92, 1.24]);
+const BIOME_TINT = Object.freeze([
+  Object.freeze([0.83, 0.94, 1.02]),
+  Object.freeze([1.17, 1.10, 0.82]),
+  Object.freeze([0.76, 1.05, 0.98]),
+  Object.freeze([1.10, 1.04, 1.00]),
+]);
+// The floor has to change with the canopy or four forests still read as one carpet of pale
+// spikes. These alter the same crossed-card grass instances—no extra mesh or material.
+const BIOME_GRASS_ACCEPT = Object.freeze([0.32, 0.56, 0.38, 0.18]);
+const BIOME_GRASS_WIDTH = Object.freeze([[0.16, 0.29], [0.24, 0.46], [0.15, 0.27], [0.12, 0.23]]);
+const BIOME_GRASS_HEIGHT = Object.freeze([[0.22, 0.55], [0.30, 0.74], [0.52, 1.06], [0.16, 0.40]]);
+const BIOME_GRASS_TINT = Object.freeze([
+  Object.freeze([0.70, 0.84, 0.90]),   // pine floor: sparse, low, cold
+  Object.freeze([1.14, 1.00, 0.67]),   // field: broad tawny seed heads
+  Object.freeze([0.62, 0.91, 0.92]),   // fen: tall blue-green rushes
+  Object.freeze([0.84, 0.79, 0.69]),   // ridge: short weathered straw
+]);
 
 // ---------------------------------------------------------------------------
 // Deterministic fields. No Math.random anywhere: every one of these is a pure
@@ -706,7 +736,7 @@ const byDMinDesc = (a, b) => b.dMin - a.dMin;      // the queue is popped from i
 const nowMs = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
   ? () => performance.now()
   : () => Date.now();
-const FERN_TINT_MUL = 1.9;      // against the grass's 2.4: a shade plant, one step darker
+const FERN_TINT_MUL = 1.15;     // torch-lit shade plants stay foliage, never pale floor spikes
 
 /** Non-indexed, with the `color` and `aWind` attributes every flora material expects. */
 function finishGeo(geo, col, wind, jitter, topCol, topFrom) {
@@ -842,6 +872,10 @@ export class Flora {
     this._grassQueue = [];
     this._densityLever = 1;
     this._treeCount = 0;
+    // Planned directly from the already-live road graph so the initial flora ring clears
+    // water before the later wilds system exists. Without this, old boot trees survive in
+    // the middle of every new pond even though later streamed chunks are correct.
+    this._travelWaterPads = null;
     // ROUND 6 (NEXT.md section 3, "grass tufts draw over the roof when you look straight
     // down from the eave"): _buildGrass can refuse a card whose ground has a standable top
     // more than ROOF_OVER above it (collision.supportHeight). MEASURED 2026-09-03 with an
@@ -1273,6 +1307,10 @@ export class Flora {
     // draw calls at nearTemplates per chunk - a shader cull cannot do it,
     // because a submitted-but-empty InstancedMesh is still a draw call.
     const subset = this._groupTemplates(cx >> 1, cz >> 1, ox, oz);
+    const regionId = Number.isInteger(subset.regionId) ? subset.regionId : 0;
+    const biomeDensity = BIOME_DENSITY[regionId] || 1;
+    const biomeHeight = BIOME_HEIGHT[regionId] || 1;
+    const biomeTint = BIOME_TINT[regionId] || BIOME_TINT[0];
 
     const gx0 = Math.floor(ox / cell), gx1 = Math.ceil((ox + CH) / cell);
     const gz0 = Math.floor(oz / cell), gz1 = Math.ceil((oz + CH) / cell);
@@ -1292,10 +1330,11 @@ export class Flora {
         if (wx < ox || wz < oz || wx >= ox + CH || wz >= oz + CH) continue;
 
         const cover = this.coverAt(wx, wz);
-        if (h3 > (0.06 + 0.94 * cover) * pFull) continue;
+        if (h3 > Math.min(1, (0.06 + 0.94 * cover) * pFull * biomeDensity)) continue;
         // Roads are a field, not a mesh: excluded by distance, never by an
         // authored mask (DESIGN §2, CFG.roads.plantExclude).
         if (hasRoad && roads.roadDistance(wx, wz) < exclude) continue;
+        if (this._travelWaterClear(wx, wz)) continue;
         if (hasSight && places.sightClear(wx, wz)) continue;
         if (hasPad && wilds.padClear(wx, wz)) continue;
         if (hasSlope && terrain.slopeAt(wx, wz) > SLOPE_REJECT) continue;
@@ -1306,7 +1345,7 @@ export class Flora {
         const h6 = hashI(gx, gz, this.seed + 6);
         const ti = subset[(h4 * subset.length) | 0];
         const tpl = this.templates[ti];
-        const scale = 0.72 + h5 * 0.72;
+        const scale = (0.72 + h5 * 0.72) * biomeHeight;
         const yaw = h6 * TAU;
 
         // ---- COLLIDER, RIGHT HERE, IN THE SAME PASS AS THE INSTANCE --------
@@ -1331,9 +1370,9 @@ export class Flora {
         // Per-tree value jitter, cool toward the clearings so the stands read
         // darker than the gaps and the forest has depth in the value channel.
         const v = 0.80 + hashI(gx, gz, this.seed + 7) * 0.42 - cover * 0.10;
-        _treeBuf[o + 6] = v;
-        _treeBuf[o + 7] = v * (0.98 + hashI(gx, gz, this.seed + 8) * 0.06);
-        _treeBuf[o + 8] = v * (0.94 + hashI(gx, gz, this.seed + 9) * 0.08);
+        _treeBuf[o + 6] = v * biomeTint[0];
+        _treeBuf[o + 7] = v * (0.98 + hashI(gx, gz, this.seed + 8) * 0.06) * biomeTint[1];
+        _treeBuf[o + 8] = v * (0.94 + hashI(gx, gz, this.seed + 9) * 0.08) * biomeTint[2];
         _treeBuf[o + 9] = hashI(gx, gz, this.seed + 11);      // submission rank
         n++;
 
@@ -1360,11 +1399,12 @@ export class Flora {
       // sight corridor, so it takes the same test.
       const okSight = !hasSight || !places.sightClear(wx, wz);
       const okPad = !hasPad || !wilds.padClear(wx, wz);
-      if (okRoad && okSlope && okSight && okPad) {
+      const okWater = !this._travelWaterClear(wx, wz);
+      if (okRoad && okSlope && okSight && okPad && okWater) {
         const wy = terrain.heightAt(wx, wz);
         const ti = subset[(hashI(cx, cz, this.seed + 83) * subset.length) | 0];
         const tpl = this.templates[ti];
-        const scale = 2.2 + hashI(cx, cz, this.seed + 84) * 1.0;
+        const scale = (2.2 + hashI(cx, cz, this.seed + 84) * 1.0) * lerp(1, biomeHeight, 0.55);
         if (canCollide) {
           collision.addCollider({
             kind: 'circle', x: wx, z: wz,
@@ -1375,7 +1415,9 @@ export class Flora {
         _treeBuf[o] = wx; _treeBuf[o + 1] = wy - 0.4; _treeBuf[o + 2] = wz;
         _treeBuf[o + 3] = scale; _treeBuf[o + 4] = hashI(cx, cz, this.seed + 85) * TAU;
         _treeBuf[o + 5] = ti;
-        _treeBuf[o + 6] = 0.92; _treeBuf[o + 7] = 0.92; _treeBuf[o + 8] = 0.88;
+        _treeBuf[o + 6] = 0.92 * biomeTint[0];
+        _treeBuf[o + 7] = 0.92 * biomeTint[1];
+        _treeBuf[o + 8] = 0.88 * biomeTint[2];
         _treeBuf[o + 9] = 0;                       // a giant is never prefix-culled
         n++;
         const rr = tpl.halfWidth * scale, hh = tpl.height * scale;
@@ -1407,6 +1449,7 @@ export class Flora {
     // reads the packed cards (position, size, template) back; the template prefix is
     // kept for the fern's conifer weighting.
     rec.subset = subset;
+    rec.regionId = regionId;
     rec.underBounds = [ox, 0, oz, ox + CH, 1, oz + CH];
     rec.underPending = true;
     this.chunks.set(id, rec);
@@ -1571,6 +1614,9 @@ export class Flora {
     const cx = rec.cx, cz = rec.cz, id = rec.id;
     const ox = cx * CH, oz = cz * CH;
     const subset = rec.subset || [];
+    const regionId = Number.isInteger(rec.regionId) ? rec.regionId : 0;
+    const floorTint = BIOME_GRASS_TINT[regionId] || BIOME_GRASS_TINT[0];
+    const fernScale = [0.88, 0.68, 1.16, 0.62][regionId] || 1;
     const terrain = this._sys('terrain');
     const roads = this._sys('roads');
     const places = this._sys('places');
@@ -1626,7 +1672,7 @@ export class Flora {
           if (dx * dx + dz * dz < rr * rr) return true;
         }
       }
-      return hasPad && wilds.padClear(x, z);
+      return this._travelWaterClear(x, z) || (hasPad && wilds.padClear(x, z));
     };
     const regionP = (accept, x, z, y) => {
       if (!hasRW) return accept[0];
@@ -1705,12 +1751,12 @@ export class Flora {
           if (h3 > regionP(U.fernAccept, wx, wz, wy) * cm) continue;
           if (onPad(wx, wz)) continue;
           if (slope2(wx, wz, wy) > 0.62) continue;
-          const size = lerp(U.fernSize[0], U.fernSize[1], hashI(gx, gz, S + 104));
+          const size = lerp(U.fernSize[0], U.fernSize[1], hashI(gx, gz, S + 104)) * fernScale;
           const yaw = hashI(gx, gz, S + 105) * TAU;
           const v = (0.74 + hashI(gx, gz, S + 106) * 0.50 - cover * 0.10) * FERN_TINT_MUL;
           // the frond template spreads ~1.2 units across at unit height; fern is wider than tall
           put('fern', wx, wy - 0.03, wz, yaw, 0, size / 1.2, size * 0.72, size / 1.2,
-            PAL.fern[0] * v, PAL.fern[1] * v, PAL.fern[2] * v);
+            PAL.fern[0] * v * floorTint[0], PAL.fern[1] * v * floorTint[1], PAL.fern[2] * v * floorTint[2]);
         }
       }
     }
@@ -1875,6 +1921,17 @@ export class Flora {
       if (r && typeof r.id === 'number') regionId = r.id;
       else if (typeof r === 'number') regionId = r;
     }
+    // A region now chooses a silhouette family, not a barely measurable +0.03 score nudge.
+    // Rotate the family per group so a reduced template budget still varies without letting
+    // a marsh randomly turn back into the same four conifers as the pines.
+    if (regionId >= 0 && BIOME_TEMPLATES[regionId]) {
+      const family = BIOME_TEMPLATES[regionId];
+      const start = Math.floor(hashI(gx, gz, this.seed + 97) * family.length) % family.length;
+      const out = [];
+      for (let i = 0; i < want; i++) out.push(family[(start + i) % family.length]);
+      out.regionId = regionId;
+      return out;
+    }
     const score = [];
     for (let i = 0; i < this.templates.length; i++) {
       // Two hashes at different scales: one per group, one over a 4x-coarser
@@ -1886,12 +1943,12 @@ export class Flora {
       // The Pines is 42% of the county: conifers get a thumb on the scale
       // unless the region field says otherwise.
       if (kind === 'conifer') s += 0.18;
-      if (regionId >= 0) s += ((regionId * 7 + i * 13) % 5) * 0.03;
       score.push([s, i]);
     }
     score.sort((a, b) => b[0] - a[0]);
     const out = [];
     for (let i = 0; i < want; i++) out.push(score[i][1]);
+    out.regionId = 0;
     return out;
   }
 
@@ -2351,10 +2408,17 @@ export class Flora {
     // seen anyway.
     const collision = this._sys('collision');
     const hasSupport = this.roofExclude && collision && typeof collision.supportHeight === 'function';
+    const wilds = this._sys('wilds');
+    const hasPad = wilds && typeof wilds.padClear === 'function';
     const CH = CFG.world.CHUNK;
     const ox = rec.cx * CH, oz = rec.cz * CH;
     const cell = GRASS_CELL;
     const nx = Math.floor(CH / cell);
+    const regionId = Number.isInteger(rec.regionId) ? rec.regionId : 0;
+    const grassAccept = BIOME_GRASS_ACCEPT[regionId] ?? GRASS_ACCEPT;
+    const grassWidth = BIOME_GRASS_WIDTH[regionId] || BIOME_GRASS_WIDTH[0];
+    const grassHeight = BIOME_GRASS_HEIGHT[regionId] || BIOME_GRASS_HEIGHT[0];
+    const grassTint = BIOME_GRASS_TINT[regionId] || BIOME_GRASS_TINT[0];
 
     const cap = nx * nx;
     const mat = new Float32Array(cap * 16);
@@ -2363,15 +2427,17 @@ export class Flora {
     for (let gz = 0; gz < nx; gz++) {
       for (let gx = 0; gx < nx; gx++) {
         const ix = rec.cx * nx + gx, iz = rec.cz * nx + gz;
-        if (hashI(ix, iz, this.seed + 21) > GRASS_ACCEPT) continue;
+        if (hashI(ix, iz, this.seed + 21) > grassAccept) continue;
         const wx = ox + (gx + hashI(ix, iz, this.seed + 22)) * cell;
         const wz = oz + (gz + hashI(ix, iz, this.seed + 23)) * cell;
         if (hasRoad && roads.roadDistance(wx, wz) < exclude) continue;
+        if (this._travelWaterClear(wx, wz)) continue;
+        if (hasPad && wilds.padClear(wx, wz)) continue;
         const wy = terrain.heightAt(wx, wz);
         if (hasSupport && collision.supportHeight(wx, wz, wy + ROOF_OVER + 0.48, GRASS_PROBE_R, ROOF_PROBE_RISE) > wy + ROOF_OVER) continue;
         const yaw = hashI(ix, iz, this.seed + 24) * TAU;
-        const w = 0.20 + hashI(ix, iz, this.seed + 25) * 0.16;
-        const h = 0.30 + hashI(ix, iz, this.seed + 26) * 0.46;
+        const w = lerp(grassWidth[0], grassWidth[1], hashI(ix, iz, this.seed + 25));
+        const h = lerp(grassHeight[0], grassHeight[1], hashI(ix, iz, this.seed + 26));
         const c = Math.cos(yaw), sn = Math.sin(yaw);
         const b = n * 16;
         mat[b] = c * w; mat[b + 2] = -sn * w;
@@ -2391,9 +2457,9 @@ export class Flora {
         // hour (143.4 -> 146.1): at that albedo it is saturated in every
         // condition the game can produce. x1.6 puts the effective albedo at
         // ~0.14, i.e. ~1.45x the ground it grows out of, which is what grass is.
-        tint[n * 3] = PAL.grass[0] * v * GRASS_TINT_MUL;
-        tint[n * 3 + 1] = PAL.grass[1] * v * GRASS_TINT_MUL;
-        tint[n * 3 + 2] = PAL.grass[2] * v * GRASS_TINT_MUL;
+        tint[n * 3] = PAL.grass[0] * v * GRASS_TINT_MUL * grassTint[0];
+        tint[n * 3 + 1] = PAL.grass[1] * v * GRASS_TINT_MUL * grassTint[1];
+        tint[n * 3 + 2] = PAL.grass[2] * v * GRASS_TINT_MUL * grassTint[2];
         n++;
       }
     }
@@ -2597,6 +2663,25 @@ export class Flora {
   }
 
   // helpers ------------------------------------------------------------------
+  _travelWaterClear(x, z) {
+    if (!this._travelWaterPads) {
+      const roads = this._sys('roads');
+      if (!roads) return false;
+      this._travelWaterPads = planTravelWaters(roads);
+    }
+    const waters = this._travelWaterPads;
+    for (let i = 0; i < waters.length; i++) {
+      const s = waters[i], dx = x - s.x, dz = z - s.z;
+      const cy = Math.cos(s.yaw), sy = Math.sin(s.yaw);
+      const lx = dx * cy - dz * sy, lz = dx * sy + dz * cy;
+      if (s.variant === 'ford') {
+        if (Math.abs(lx) < s.clearRX && Math.abs(lz) < s.clearRZ) return true;
+      } else if ((lx * lx) / (s.clearRX * s.clearRX)
+        + (lz * lz) / (s.clearRZ * s.clearRZ) < 1) return true;
+    }
+    return false;
+  }
+
   _sys(id) {
     // LAZY, at use, every time. VIGIL's combat.js captured ctx.systems.enemies
     // at construction, before enemies existed, and got undefined.

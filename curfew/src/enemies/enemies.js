@@ -266,6 +266,9 @@ const HOME_R = 3;                 // m: close enough to the search point to turn
 const CALM_S = 20;
 const CALM_NEAR_R = 12;
 const CALM_HARD_S = 5;            // the first seconds of a calm are absolute: no near exception (see _calmHolds)
+// A death buys the whole opening grace, not one ordinary stand-down. This is per body so a
+// shot or direct hit may deliberately re-engage one enemy without waking the entire county.
+const RESPAWN_CALM_S = CFG.director.openingGraceS;
 
 /* THE STALL WATCHDOG. NEXT.md 4b left one body unexplained: a pallbearer at 4.2 m, hp 12 of 90,
    state approach, motionless for 6 s. Whatever it thought it was doing, an aware body that is not
@@ -428,9 +431,11 @@ export class Enemies {
     this._stoodDown = 0;          // bodies the director called off (see standDown)
     this._relocated = 0;          // stuck-watchdog relocations (aware bodies only now)
     this._respawnCleared = 0;     // bodies that forgot him on a respawn (see respawnClear)
+    this._respawnGraceT = 0;      // remaining grace copied onto pressure bodies spawned later
     this._stalls = 0;             // stall watchdog break-offs (see STALL_WIN_S)
     this._cornered = 0;           // retreats that made no progress and turned into a fight (CORNERED_S)
     this._black = false;          // the phase is the black hour, decided once a step
+    this._enteredBlack = false;   // one-frame edge: old calm ends once, new cooling still works
     this._warmed = false;
     this._warnedSpecies = null;   // lazily made: an unknown species id is warned about ONCE
 
@@ -702,6 +707,7 @@ export class Enemies {
    * back noticed him again on the next tick, and the new life began with a body on him.
    */
   _calmHolds(e) {
+    if (e.respawnCalmT > 0) return true;
     if (!(e.calmT > 0)) return false;
     if (e.calmT > CALM_S - CALM_HARD_S) return true;
     return !(e.dist < CALM_NEAR_R);
@@ -860,6 +866,9 @@ export class Enemies {
       this.ctx.bus.emit('enemy:telegraph', _evt);
     }
 
+    // Anything he deliberately hurts is awake, even during a respawn grace. The grace is
+    // per body so choosing this fight does not wake every other pressure body in the county.
+    e.respawnCalmT = 0;
     // anything that is hurt is awake, and a dormant thing that is shot RISES
     if (e.state === 'dormant') this._wake(e);
     e.staged = false;                       // ROUND 7: a shot ends the tableau, seen or not
@@ -902,16 +911,18 @@ export class Enemies {
       if (e.state === 'corpse' || (!e.alive && !e.def.dormant)) continue;
       const d = Math.hypot(e.pos.x - x, e.pos.z - z);
       if (d > radius) continue;
+      // Pulling the trigger is an explicit choice to engage this body. Other noises remain
+      // subject to both the ordinary stand-down calm and the full new-life grace.
+      if (source === 'shot') { e.calmT = 0; e.respawnCalmT = 0; }
       if (e.state === 'dormant') {
-        if (radius >= e.def.wakeNoise * 0.5) this._wake(e);
+        if (radius >= e.def.wakeNoise * 0.5 && !this._calmHolds(e)) this._wake(e);
         continue;
       }
       if (!e.alive) continue;
       if (e.def.owner === OWNER.DREAD) continue;   // horror does not answer a gunshot
       // THE CALM (CALM_S). A body that was called off does not answer footsteps, screams,
       // pops or the director's relays; his gun ends it, and so does his standing next to it.
-      if (source === 'shot') e.calmT = 0;
-      else if (this._calmHolds(e)) continue;
+      if (source !== 'shot' && this._calmHolds(e)) continue;
       e.heardX = x; e.heardZ = z;
       if (e.aware < 1) e.aware = 1;
       e.memT = Math.max(e.memT, e.def.memAlert || 6);
@@ -1143,7 +1154,9 @@ export class Enemies {
     e.navBest = undefined; e.navBestT = 0; e._navValid = false;
     e.lodFar = true;
     e.trailT = 0; e.lostAt = 0; e._dirFarT = 0; e._dirQuietT = 0;
-    e.calmT = 0; e.stallT = 0; e.stallAX = x; e.stallAZ = z; e.stallN = 0; e.stoodDownN = 0; e.corneredT = 0;
+    e.calmT = 0;
+    e.respawnCalmT = def.owner === OWNER.PRESSURE ? this._respawnGraceT : 0;
+    e.stallT = 0; e.stallAX = x; e.stallAZ = z; e.stallN = 0; e.stoodDownN = 0; e.corneredT = 0;
     e.gen++;
 
     // EVERY FIRST SIGHT IS PARTIAL BY CONSTRUCTION. A dormant species starts in
@@ -1207,11 +1220,14 @@ export class Enemies {
     this._noiseT += dt;
     this._breathT += dt;
     this._landedT += dt;
+    if (this._respawnGraceT > 0) this._respawnGraceT = Math.max(0, this._respawnGraceT - dt);
     this._ringPhase = (this._ringPhase + RING_SPIN * dt) % TAU;
 
     const p = this._sys('player');
     if (!p) return;
-    this._black = this._phase() === PHASE.BLACK;
+    const black = this._phase() === PHASE.BLACK;
+    this._enteredBlack = black && !this._black;
+    this._black = black;
     // LANE G, round 7: the perk that lamp_2 "Eyeshine" buys. Base 1 with no node owned, so a
     // fresh save measures exactly what it measured before this line existed.
     {
@@ -1329,8 +1345,14 @@ export class Enemies {
     e.immuneT = Math.max(0, e.immuneT - dt);
     e.leapCd = Math.max(0, e.leapCd - dt);
     e.screamCd = Math.max(0, e.screamCd - dt);
-    // the calm runs down; the black hour ends it outright (the roster changes, the leash comes off)
-    if (e.calmT > 0) e.calmT = this._black ? 0 : Math.max(0, e.calmT - dt);
+    // The black hour takes the old leash off ON ENTRY. This used to erase calm every frame,
+    // including a new thermostat stand-down issued during black; the body then re-acquired on
+    // its next perception tick and the same life yo-yoed. Entry clears pre-black calm, while a
+    // call-off made after the roster flip remains a real call-off and can thin an overfull field.
+    if (e.calmT > 0) e.calmT = this._enteredBlack ? 0 : Math.max(0, e.calmT - dt);
+    // Respawn calm is a different promise: black hour or proximity cannot silently spend a
+    // new life. A shot/direct hit cleared this body's timer before the step reaches here.
+    if (e.respawnCalmT > 0) e.respawnCalmT = Math.max(0, e.respawnCalmT - dt);
     if (e.corneredT > 0) e.corneredT = Math.max(0, e.corneredT - dt);
     // MEMORY runs out when it cannot see or hear you — except on a TRAIL. A hunting body
     // converging on the point it last knew you at holds what it knows until it gets there
@@ -2305,17 +2327,18 @@ export class Enemies {
    */
   respawnClear(x, z) {
     this._lastAsk = this._t;
+    this._respawnGraceT = RESPAWN_CALM_S;
     let n = 0;
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
       if (!e.alive || e.def.owner !== OWNER.PRESSURE) continue;
-      if (e.state === 'dormant') continue;
       this._uncommit(e);
       if (e.state === 'windup' || e.state === 'attack') { e.state = 'recover'; e.stateT = 0; }
       e.aware = 0; e.alerted = false;
       e.memT = 0; e.trailT = 0;
       e.hunt = false; e.huntSpeedMul = 1;
       e.calmT = CALM_S;
+      e.respawnCalmT = RESPAWN_CALM_S;
       e.telegraphCharge = 0;
       e.built.telegraph(0);
       e.heardX = e.homeX; e.heardZ = e.homeZ;
@@ -2938,6 +2961,7 @@ export class Enemies {
     for (let i = 0; i < BOLT_POOL; i++) this.boltState[i].live = false;
     this._slots.fill(-1);
     this._commit = 0;
+    this._respawnGraceT = 0;
     // the field's breath is per-encounter state, not per-session
     this._breathT = 99; this._landedT = 99;
   }
@@ -3060,7 +3084,7 @@ function makeRecord(id, species, def, built, rng) {
     // gen         spawn generation of this slot, so a probe can tell one life from the next
     // stallT      the stall watchdog's window clock; stallN its count of still windows (STALL_WIN_S)
     // stoodDownN  how many times THIS life was called off (tests/pack.mjs: <= 2 per 200 s)
-    calmT: 0, gen: 0, stallT: 0, stallAX: 0, stallAZ: 0, stallN: 0, stoodDownN: 0, corneredT: 0,
+    calmT: 0, respawnCalmT: 0, gen: 0, stallT: 0, stallAX: 0, stallAZ: 0, stallN: 0, stoodDownN: 0, corneredT: 0,
     band: 1, aim: 0, screamCd: 0,
     tickT: 0, tick: 0, observedT: 0,
     dist: undefined, los: false, litSelf: false, obsSelf: false, playerLit: 0,

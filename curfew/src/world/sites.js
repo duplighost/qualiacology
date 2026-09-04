@@ -27,8 +27,8 @@
 // donor: Projects/qualiacology/skyshard/src/world/destinations.js:126-190 (`_shell` — a
 //   building is four solids with a doorway gap, and the collider goes on at the same moment
 //   as the wall), read 2026-09-02.
-// donor: Projects/qualiacology/skyshard/src/world/destinations.js:95-107 (`_beacon`) — the
-//   beacon column geometry is rebuilt in places.js; this file only says how tall.
+// donor history: SKYSHARD's generic marker column was tried and then rejected for CURFEW;
+//   physical silhouettes and authored lights now carry destination visibility.
 // donor: Projects/eaten-path/src/world/props.js:660-700 (`bicycle`, `flyers`) — the
 //   environmental-storytelling minors: someone was here and is not now.
 //
@@ -54,14 +54,18 @@ import { makeManorBuilder } from './manor.js';
    moon, and the M0 lesson was that FETCH's albedos render as a void here.
    ========================================================================== */
 const C = {
-  stone: [0.175, 0.175, 0.170],
+  stone: [0.135, 0.139, 0.133],
   dark: [0.105, 0.108, 0.115],
   slate: [0.085, 0.092, 0.104],
   wood: [0.140, 0.108, 0.082],
   plank: [0.180, 0.148, 0.106],
   metal: [0.128, 0.134, 0.146],
   rust: [0.176, 0.098, 0.062],
-  plaster: [0.265, 0.252, 0.232],
+  // Old plaster was the brightest broad surface in the game and turned every destination
+  // into a blank white block under moon/torch exposure. This is dirty lime render; actual
+  // surface variation now comes from places.js's mapped weather texture and from courses,
+  // ribs and repairs authored into each compound.
+  plaster: [0.180, 0.163, 0.139],
   brick: [0.196, 0.124, 0.100],
   glass: [0.050, 0.062, 0.082],
   soil: [0.098, 0.088, 0.072],
@@ -398,7 +402,7 @@ function shell(k, api, ox, oz, w, d, h, yaw, col, doorW) {
 
 /**
  * A short glow column on the GLOW kit: an open tapered cylinder whose vertex colour falls to
- * nothing at the top, the beacon's own construction at prop scale. `gain` scales the whole
+ * nothing at the top, a shared tapered glow profile at prop scale. `gain` scales the whole
  * profile so a campfire is a fire and not a lighthouse. Reads from every bearing, which is
  * what a flat ember bed cannot do (see the works stacks).
  */
@@ -962,7 +966,7 @@ export const BUILDERS = {
   },
 
   /* -------------------------------------------------------------- cathedral */
-  // The far beacon from the first frame. 77 m to the tip of the spire, on the highest
+  // The far physical landmark from the first frame. 77 m to the tip of the spire, on the highest
   // ground on the north arc, and the rose window is the lamp.
   cathedral: {
     landmark(api) {
@@ -1214,8 +1218,8 @@ export const BUILDERS = {
     // going DOWN as well — a 0.5 m riser is a fall on the way back. 14 treads a turn is
     // 6.3 m of rise a turn, which is the headroom over any tread. The tower's wall is a
     // ring of OBB segments in three height bands (collision has no hollow circle), the
-    // gallery floor is a ring of standable segments, and the lamp-room floor is a 216-deg
-    // sector so the stair can arrive through the remaining 144.
+    // gallery floor is a ring of standable segments, and the lamp-room floor is a 144-deg
+    // sector so the stair has a full head-height opening on both ascent and descent.
     landmark(api) {
       const k = kits();
       // ART 4.1 — SIZE. 28 px at 2 km. The tower keeps its 3.6 m foot and gains height
@@ -1298,12 +1302,14 @@ export const BUILDERS = {
         const g = new THREE.CylinderGeometry(rOut, rOut, 0.22, 3, 1, false, theta(a) - STEP_A * 0.5, STEP_A);
         g.translate(0, top - 0.11, 0);
         k.solid.push(g, i % 2 ? C.metal : C.slate);
-        // the collider: a rectangle from the post to the wall, as wide as the wedge is at
-        // its outer rim, so the rim is covered and only the inner ends overlap
+        // The collider runs from the post to the wall. At halfZ 0.55 adjacent treads
+        // overlapped by more than a player's radius at 0.55. A narrower 0.42 keeps the
+        // ascending body continuously supported; the lamp-room ceiling's explicit
+        // non-climbable flag below is what prevents the false mantle on descent.
         const rc = (POST_R + rOut) * 0.5;
         api.emit({
           kind: 'obb', x: Math.cos(a) * rc, z: Math.sin(a) * rc,
-          halfX: (rOut - POST_R) * 0.5, halfZ: 0.55, yaw: -a,
+          halfX: (rOut - POST_R) * 0.5, halfZ: 0.42, yaw: -a,
           y0: top - 0.22, y1: top, tag: 'metal', standable: true,
         });
         // a handrail on the post side, 0.9 m over each tread
@@ -1337,7 +1343,7 @@ export const BUILDERS = {
         }
       }
       // ---- the lamp room: a 2.9 m tube on the gallery with a doorway onto it, a floor
-      //      that is a 216-degree sector (the stair arrives through the rest), the lamp on
+      //      that is a 144-degree sector (the stair arrives through the rest), the lamp on
       //      its pedestal, and the cap
       const LAMP_DOOR_A = A0 + STEP_A * (N_TREADS - 1) + Math.PI * 0.55;   // across the room from the arrival
       const ARRIVE_A = A0 + STEP_A * (N_TREADS - 1);
@@ -1359,8 +1365,14 @@ export const BUILDERS = {
             y0: api.padY + F, y1: api.padY + F + 3.2, tag: 'metal',
           });
         }
-        // the floor sector: from 8 degrees past the arrival, round 216 degrees
-        const S0 = ARRIVE_A + 0.14, SPAN = TAU * 0.6;
+        // The floor begins far enough past the final tread to leave a body-width stairwell.
+        // At the old +0.14 rad the clear arc was only 0.22-0.28 m across at walking radius:
+        // a body could step UP onto the floor but could not get back into the stairwell.
+        // +0.50 leaves roughly 0.9 m for the 0.72 m capsule and makes the tower two-way.
+        // A 144-degree floor leaves eight tread angles open. The former 216-degree floor
+        // caught the descending player's head on its fourth tread and pushed the body back
+        // upstairs; even a half-room floor met the head before it cleared the slab.
+        const S0 = ARRIVE_A + 0.50, SPAN = TAU * 0.4;
         const fl = new THREE.CylinderGeometry(2.9, 2.9, 0.2, 14, 1, false, theta(S0 + SPAN), SPAN);
         fl.translate(0, api.padY + F - 0.1, 0);
         k.solid.push(fl, C.metal);
@@ -1369,7 +1381,9 @@ export const BUILDERS = {
           const a = S0 + SPAN * (i + 0.5) / NW;
           api.emit({
             kind: 'obb', x: Math.cos(a) * 1.45, z: Math.sin(a) * 1.45, halfX: 1.45, halfZ: 2.9 * Math.tan(SPAN / NW * 0.5), yaw: -a,
-            y0: api.padY + F - 0.2, y1: api.padY + F, tag: 'metal', standable: true,
+            // It is a floor from above and a ceiling from below. Letting the generic ledge
+            // probe call it climbable made held-forward mantle back upstairs on every lap.
+            y0: api.padY + F - 0.2, y1: api.padY + F, tag: 'metal', standable: true, climbable: false,
           });
         }
         // the rail along the floor's far edge, over the well (the open side)
@@ -1388,13 +1402,39 @@ export const BUILDERS = {
       // that was there before. A flat plate at 32 m is edge-on from every road in the
       // county — the same fault as the mast lamp and the ember caps.
       k.glow.cyl(1.4, 1.4, 2.0, 10, 0, api.padY + F + 1.9, 0, [1, 1, 1]);
-      // the beam, authored around the lamp so places.js can turn it. An open cone laid on
-      // its side: 80 m long, widening to 9 m, additive and never fogged.
+      // THE BEAM. The old one was an 80 m open cone with a flat [1,1,1] vertex colour —
+      // effectively a giant white triangular slab rotating over the road. Worse, its radii
+      // were reversed after the Y->Z rotation, so it was 9 m wide AT THE LAMP. That is not
+      // light in mist; it is a wind-turbine blade nailed to the lantern room.
+      //
+      // Two correctly tapered, axially faded skins now widen AWAY from the lens. Their
+      // colours decay in the geometry itself, with a weak warm core inside a very faint
+      // outer falloff. places.js still owns the one shared additive material, claim strength
+      // and 0.22 rad/s sweep; there is no new light and no new moving system.
       const bk = new Kit();
-      const beam = new THREE.CylinderGeometry(0.5, 4.5, 80, 10, 1, true);
-      beam.rotateX(Math.PI * 0.5);
-      beam.translate(0, 0, 40);
-      bk.push(beam, [1, 1, 1]);
+      const beamSkin = (nearR, farR, len, gain, warm) => {
+        // CylinderGeometry is +Y at radiusTop and -Y at radiusBottom. After rotateX(+90)
+        // +Y becomes +Z, hence (farR, nearR): narrow at z=0, broad at z=len.
+        const g = new THREE.CylinderGeometry(farR, nearR, len, 12, 12, true);
+        const p = g.attributes.position, col = new Float32Array(p.count * 3);
+        for (let i = 0; i < p.count; i++) {
+          const t = clamp((p.getY(i) + len * 0.5) / len, 0, 1);
+          // End at almost-black rather than zero so the last two rings interpolate softly.
+          // The small sine breaks the mathematically perfect plate into mist-like bands.
+          const band = 0.88 + 0.12 * Math.sin(t * Math.PI * 9.0);
+          const v = (0.012 + gain * Math.pow(1 - t, 1.45)) * band;
+          col[i * 3] = v;
+          col[i * 3 + 1] = v * (warm ? 0.84 : 0.94);
+          col[i * 3 + 2] = v * (warm ? 0.62 : 0.82);
+        }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        g.rotateX(Math.PI * 0.5);
+        g.translate(0, 0, len * 0.5);
+        // Do not Kit.push(): it would replace the gradient with one flat colour.
+        bk.parts.push(g);
+      };
+      beamSkin(0.22, 2.5, 68, 0.28, false);  // atmospheric outer falloff
+      beamSkin(0.10, 0.95, 48, 0.55, true);  // narrow warm optical core
       return {
         solid: k.solid.build(), glow: k.glow.build(), glowColour: GLOW.white,
         moving: [{ geo: bk.build(), colour: GLOW.white, role: 'beam', x: 0, y: api.padY + F + 1.9, z: 0, rate: 0.22 }],
@@ -1689,6 +1729,295 @@ export const BUILDERS = {
 // in as destinations"). The whole builder lives in manor.js; it gets this file's kit,
 // palette and pane profiles and returns the same { landmark, body } shape as the rest.
 BUILDERS.manor = makeManorBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
+
+/* ------------------------------------------------------- Round 9 donor landmarks
+   A measured road-coverage audit found three 0.65--0.91 km dead legs between the original
+   twelve. These are the three lowest-cost landmark-class compositions already catalogued
+   from DUSKFALL: the henge, Great Tree/treehouse and rock arch/sleeper. They are rebuilt in
+   CURFEW's merged Lambert kit, deterministic RNG and collider vocabulary; no donor light or
+   Standard material crosses the boundary. */
+
+BUILDERS.stones = {
+  landmark(api) {
+    const k = kits(), R = 16.2, COUNT = 12;
+    const tops = [];
+    for (let i = 0; i < COUNT; i++) {
+      const a = i / COUNT * TAU + 0.20;
+      const x = Math.cos(a) * R, z = Math.sin(a) * R;
+      // Twelve 12--16 m rough, tapered megaliths form a thirty-two-metre ring. The old
+      // nine rectangular 8 m pylons read as a tiny brick colonnade; five-sided stones with
+      // different girths, crowns and lean read as geology people dragged here.
+      const h = 13.8 + Math.sin(i * 3.7) * 2.25;
+      const yaw = -(a + Math.PI * 0.5) + Math.sin(i * 2.7) * 0.14;
+      const lean = Math.sin(i * 5.1) * 0.115;
+      const r0 = 1.28 + (i % 3) * 0.14, r1 = 2.02 + (i % 4) * 0.12;
+      const monolith = new THREE.CylinderGeometry(r0, r1, h, 5, 2, false);
+      monolith.scale(1.0 + (i & 1) * 0.12, 1, 0.66 + (i % 3) * 0.06);
+      k.solid.at(monolith, i % 4 === 0 ? C.dark : C.stone,
+        x, api.padY + h * 0.5, z, yaw, 0, lean);
+      // Two broken mineral seams and an offset cap stop even the faceted stones reading as
+      // cloned columns under the shared moss-stone texture.
+      for (let c = 1; c <= 2; c++) {
+        const seam = new THREE.CylinderGeometry(r0 + 0.05, r1 - c * 0.18, 0.18, 5);
+        seam.scale(1.03, 1, 0.72 + (i % 3) * 0.05);
+        k.solid.at(seam, c === 1 ? C.slate : C.rust, x,
+          api.padY + h * (c === 1 ? 0.32 : 0.69), z, yaw, 0, lean);
+      }
+      k.solid.box(r0 * 1.55, 0.55, r0 * 1.28, x + Math.sin(a) * 0.22,
+        api.padY + h + 0.06, z - Math.cos(a) * 0.22, i & 1 ? C.slate : C.dark,
+        yaw + 0.18, 0, lean * 1.5);
+      if (i === 2 || i === 7 || i === 10) {
+        k.glow.box(0.15, h * 0.58, 0.12, x - Math.cos(a) * 0.95,
+          api.padY + h * 0.54, z - Math.sin(a) * 0.75, [0.72, 0.86, 0.76], yaw);
+      }
+      api.emit({ kind: 'circle', x, z, r: r1 * 0.90,
+        y0: api.padY - 0.3, y1: api.padY + h, tag: 'stone', standable: true });
+      tops.push({ x, z, h, a });
+    }
+    // Four trilithons around the ring, with deliberately mismatched capstones.
+    for (const [ia, ib] of [[0, 1], [3, 4], [6, 7], [9, 10]]) {
+      const A = tops[ia], B = tops[ib], x = (A.x + B.x) * 0.5, z = (A.z + B.z) * 0.5;
+      const len = Math.hypot(B.x - A.x, B.z - A.z) + 3.8;
+      const top = Math.max(A.h, B.h) + 0.45;
+      const yaw = Math.atan2(-(B.z - A.z), B.x - A.x);
+      k.solid.box(len, 1.05, 2.35, x, api.padY + top, z, C.slate,
+        yaw + (ia & 1 ? 0.04 : -0.03), 0, ia & 1 ? -0.07 : 0.06);
+      api.emit({ kind: 'obb', x, z, halfX: len * 0.5, halfZ: 1.18, yaw,
+        y0: api.padY + top - 0.53, y1: api.padY + top + 0.53,
+        tag: 'stone', standable: true });
+    }
+    return { solid: k.solid.build(), glow: k.glow.build(), moving: null,
+      glowColour: GLOW.wisp };
+  },
+  body(api) {
+    const k = kits();
+    // Processional path, central altar/claim, and two fallen lintels as hop-up perches.
+    for (let i = 0; i < 9; i++) {
+      const z = 25 - i * 2.35, y = groundY(api, 0, z);
+      k.solid.box(i & 1 ? 3.6 : 4.6, 0.16, 1.65, 0, y + 0.08, z,
+        i % 3 ? C.slate : C.rust, (i & 1) ? 0.08 : -0.06);
+    }
+    k.solid.box(4.6, 1.25, 3.4, 0, api.padY + 0.625, 0, C.dark, 0.16);
+    k.solid.box(3.7, 0.14, 2.6, 0, api.padY + 1.32, 0, C.rust, 0.16);
+    api.emit({ kind: 'obb', x: 0, z: 0, halfX: 2.3, halfZ: 1.7, yaw: 0.16,
+      y0: api.padY - 0.2, y1: api.padY + 1.4, tag: 'stone', standable: true });
+    for (const [x, z, yaw, top] of [[-8, 4, -0.55, 0.75], [8.5, 7, 0.42, 1.05]]) {
+      k.solid.box(8.0, 1.0, 2.2, x, api.padY + top * 0.5, z, C.stone, yaw, 0, 0.08);
+      api.emit({ kind: 'obb', x, z, halfX: 4.0, halfZ: 1.1, yaw,
+        y0: api.padY - 0.2, y1: api.padY + top, tag: 'stone', standable: true });
+    }
+    return { solid: k.solid.build(), glow: null, moving: null, glowColour: GLOW.wisp };
+  },
+};
+
+BUILDERS['great-tree'] = {
+  landmark(api) {
+    const k = kits();
+    const bark = [0.165, 0.087, 0.038], barkDark = [0.052, 0.032, 0.020];
+    // A broad burnt-copper oak, deliberately unlike the county's thin blue-green pines.
+    // The former crown began at 39 m. From the nearest road its base and 13 m deck sat
+    // behind a terrain shoulder while the crown was at/above the player's frame, so the
+    // screenshot contained a gate pointing at empty sky. This crown starts at 20 m, spans
+    // thirty metres and rises to 61 m: a silhouette throughout the ordinary look range,
+    // not a taller pole the player has to aim upward to discover.
+    const leaf = [0.205, 0.112, 0.047], leafDark = [0.102, 0.052, 0.027];
+    const H = 54;
+    k.solid.cyl(1.80, 4.25, H, 11, 0, api.padY + H * 0.5 - 0.8, 0, bark);
+    for (let band = 0; band < 11; band++) k.solid.tube(1.82 + band * 0.16,
+      1.96 + band * 0.18, 0.38, 11, 0, api.padY + 3.3 + band * 4.25, 0,
+      band & 1 ? C.rust : barkDark);
+    api.emit({ kind: 'circle', x: 0, z: 0, r: 1.55,
+      y0: api.padY - 1.2, y1: api.padY + H, tag: 'tree' });
+    // Overlapping, gnarled low-poly masses: a spreading crown rather than one sphere.
+    const blobs = [[0,27,0,9.6],[-7.8,28,1.8,7.2],[7.6,29,-1.4,7.0],
+      [-2.8,34,-7.2,7.0],[3.4,35,7.0,7.2],[-8.2,37,-3.2,6.2],
+      [8.4,38,3.0,6.0],[0,43,0,8.0],[-5.0,47,3.8,5.6],
+      [5.2,48,-3.0,5.4],[0,54,0,5.1],[0,59,0,3.7]];
+    for (let i = 0; i < blobs.length; i++) {
+      const [x, y, z, r] = blobs[i];
+      // SphereGeometry is intentionally low-segment here. IcosahedronGeometry is
+      // non-indexed in this Three build while every trunk/branch primitive is indexed;
+      // BufferGeometryUtils refuses to merge the two and silently handed places.js a null
+      // landmark, leaving only the little approach gate in the world. This keeps the same
+      // faceted crown while satisfying the site's one-merged-mesh contract.
+      const g = new THREE.SphereGeometry(r, 7, 5);
+      g.scale(1 + (i % 3) * 0.08, 0.82 + (i & 1) * 0.12, 1 - (i % 2) * 0.08);
+      g.rotateY(i * 0.61); g.translate(x, api.padY + y, z);
+      k.solid.push(g, i % 3 ? leaf : leafDark);
+    }
+    // Five huge limbs break the pole silhouette below and through the crown. Their exposed
+    // rust-coloured collars and the lightning scar also make real surface breakup at road
+    // distance instead of relying on one flat brown cylinder.
+    for (const [x, y, z, yaw, len, lean] of [[7.0,18,1.0,1.10,17,0.20],
+      [-7.0,23,-2.5,-0.92,18,-0.18],[5.0,30,-5.8,2.25,16,0.16],
+      [-4.8,36,5.8,-2.30,15,-0.15],[3.5,44,2.8,0.68,12,0.20]]) {
+      k.solid.box(len, 1.18, 1.24, x, api.padY + y, z, bark, yaw, 0, lean);
+      k.solid.box(1.55, 1.36, 1.42, x - Math.cos(yaw) * len * 0.30,
+        api.padY + y - Math.sin(lean) * len * 0.30, z + Math.sin(yaw) * len * 0.30,
+        C.rust, yaw, 0, lean);
+    }
+    for (let i = 0; i < 7; i++) k.solid.box(0.42, 3.5, 0.16,
+      -0.20 + Math.sin(i * 2.1) * 0.25, api.padY + 4.0 + i * 3.45,
+      3.60 - i * 0.08, i & 1 ? C.plank : C.rust, 0, 0, i % 3 === 0 ? 0.05 : -0.04);
+    return { solid: k.solid.build(), glow: null, moving: null, glowColour: GLOW.lamp };
+  },
+  body(api) {
+    const k = kits(), bark = [0.090, 0.058, 0.037];
+    // Thirty walkable spiral treads: 0.42 m per tread, five metres headroom per turn.
+    const N = 30, perTurn = 12, r = 3.25;
+    for (let i = 0; i < N; i++) {
+      const a = Math.PI * 0.5 + i * TAU / perTurn, top = 0.42 * (i + 1);
+      const x = Math.cos(a) * r, z = Math.sin(a) * r, yaw = -a;
+      // At 3.25 m radius adjacent 30-degree centres are 1.68 m apart. The former
+      // 1.05 m tangential depth left a 0.63 m hole between every tread: visually a spiral,
+      // physically a fall on tread three. A 1.90 m tread overlaps its neighbours enough
+      // for the 0.72 m capsule while still leaving the stair visibly open.
+      k.solid.box(3.55, 0.20, 1.90, x, api.padY + top - 0.10, z,
+        i % 3 ? C.plank : bark, yaw);
+      api.emit({ kind: 'obb', x, z, halfX: 1.78, halfZ: 0.95, yaw,
+        y0: api.padY + top - 0.20, y1: api.padY + top,
+        tag: 'wood', standable: true, climbable: false });
+      const hr = 4.60;
+      if ((i & 1) === 0) k.solid.box(0.10, 1.0, 0.10, Math.cos(a) * hr,
+        api.padY + top + 0.5, Math.sin(a) * hr, C.rust);
+    }
+    const deckY = 12.9;
+    // A horseshoe deck, with the west/south-west stairwell genuinely open. The former full
+    // cylinder was a ceiling over the final five treads: at 10.5 m the player's head met
+    // its 12.48 m underside and the otherwise walkable spiral threw them back to ground.
+    // Three planked wings retain a substantial treehouse floor around the claim while the
+    // 12.6 m bridge gives the last tread a single ordinary step onto it.
+    const deckSlabs = [[2.55, 0, 6.30, 11.0], [-3.25, 4.55, 5.30, 2.0], [-3.25, -4.55, 5.30, 2.0]];
+    for (const [x, z, w, d] of deckSlabs) {
+      k.solid.box(w, 0.42, d, x, api.padY + deckY - 0.21, z, C.plank);
+      api.emit({ kind: 'obb', x, z, halfX: w * 0.5, halfZ: d * 0.5, yaw: 0,
+        y0: api.padY + deckY - 0.42, y1: api.padY + deckY,
+        tag: 'wood', standable: true, climbable: false });
+    }
+    k.solid.box(3.40, 0.24, 1.35, 0, api.padY + 12.48, -2.65, C.rust);
+    api.emit({ kind: 'obb', x: 0, z: -2.65, halfX: 1.70, halfZ: 0.675, yaw: 0,
+      y0: api.padY + 12.36, y1: api.padY + 12.60,
+      tag: 'wood', standable: true, climbable: false });
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * TAU, x = Math.cos(a) * 5.25, z = Math.sin(a) * 5.25;
+      k.solid.box(0.14, 1.15, 0.14, x, api.padY + deckY + 0.57, z, C.wood);
+      if (i % 3) k.solid.box(2.75, 0.12, 0.12, Math.cos(a - TAU / 24) * 5.15,
+        api.padY + deckY + 0.95, Math.sin(a - TAU / 24) * 5.15, C.wood, -a);
+    }
+    // The visible payoff is an open supply cage around the real completion fixture.
+    // Keep it on the east shoulder with the fixture rather than buried in the trunk's
+    // visible taper. There is still more than a metre of deck in front of the panel and
+    // broad standing room to either side of it.
+    const claimX = +api.site.claim.dx, claimZ = +api.site.claim.dz;
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * TAU, x = claimX + Math.cos(a) * 0.82, z = claimZ + Math.sin(a) * 0.82;
+      k.solid.cyl(0.06, 0.06, 2.1, 6, x, api.padY + deckY + 1.05, z, C.rust);
+    }
+    k.solid.tube(0.82, 0.82, 0.10, 12, claimX, api.padY + deckY + 2.05, claimZ, C.rust);
+    k.solid.box(1.25, 0.58, 0.76, claimX, api.padY + deckY + 0.34, claimZ, C.dark);
+    k.glow.cyl(0.11, 0.11, 1.5, 7, claimX, api.padY + deckY + 1.05, claimZ, [1,1,1]);
+    // Root flare and an abandoned lookout camp make the foot a place too.
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * TAU + 0.2;
+      k.solid.box(7.8, 0.9, 1.2, Math.cos(a) * 2.2, api.padY + 0.36,
+        Math.sin(a) * 2.2, bark, -a, 0, 0.11);
+    }
+    for (const [x,z] of [[-9,8],[-7.2,9.2],[-10.2,5.7]]) {
+      k.solid.box(1.4, 0.75, 1.0, x, api.padY + 0.38, z, C.wood, 0.2);
+      api.emit({ kind:'obb', x, z, halfX:0.7, halfZ:0.5, yaw:0.2,
+        y0:api.padY-0.2, y1:api.padY+0.76, tag:'wood', standable:true });
+    }
+    return { solid: k.solid.build(), glow: k.glow.build(), moving: null,
+      glowColour: GLOW.lamp };
+  },
+};
+
+BUILDERS['rock-arch'] = {
+  landmark(api) {
+    const k = kits();
+    const darkStone = [0.066, 0.071, 0.069], seam = [0.125, 0.079, 0.054];
+    // Seven crooked portals make a 30 m long, 28 m tall stone rib-cage. The earlier two
+    // squat arches and two posts read as another little gate from the road. Repetition in
+    // depth now gives the Black Rib its own impossible skeletal silhouette and makes the
+    // central passage an authored sequence instead of empty apron.
+    const heights = [18.5, 21.5, 24.5, 27.5, 25.0, 22.0, 19.0];
+    for (let i = 0; i < heights.length; i++) {
+      const z = 15 - i * 5.0, h = heights[i];
+      const mid = 1 - Math.abs(i - 3) / 3;
+      const spread = 12.5 + mid * 2.2;
+      const thick = 1.65 + (i % 3) * 0.20;
+      for (const side of [-1, 1]) {
+        const lowLean = side * (0.10 + (i & 1) * 0.025);
+        const highLean = side * (0.43 + (i % 3) * 0.035);
+        k.solid.box(thick + 0.30, h * 0.56, 2.10,
+          side * spread * 0.87, api.padY + h * 0.28, z,
+          i % 3 === 0 ? C.slate : darkStone, i * 0.018 * side, 0, lowLean);
+        k.solid.box(thick, h * 0.57, 1.95,
+          side * spread * 0.47, api.padY + h * 0.69, z,
+          i & 1 ? C.stone : darkStone, -i * 0.014 * side, 0, highLean);
+        // Oxide/mineral collar at the joint: visible breakup on every otherwise dark rib.
+        k.solid.box(thick + 0.42, 0.52, 2.28,
+          side * spread * 0.73, api.padY + h * 0.51, z,
+          seam, i * 0.018 * side, 0, side * 0.25);
+        api.emit({ kind:'obb', x:side * spread * 0.87, z,
+          halfX:(thick + 0.30) * 0.62, halfZ:1.10, yaw:i * 0.018 * side,
+          y0:api.padY-0.3, y1:api.padY+h * 0.58, tag:'stone', standable:true });
+      }
+      // Broken keystones leave a ragged notch along the spine instead of seven clean gates.
+      const capW = 7.3 + (i % 2) * 1.4;
+      k.solid.box(capW, 1.55 + (i % 3) * 0.18, 2.40,
+        (i % 3 - 1) * 0.38, api.padY + h * 0.955, z,
+        i & 1 ? C.slate : darkStone, i * 0.025, 0, (i - 3) * 0.018);
+      // Hanging stone teeth make the tunnel feel ribbed from underneath too.
+      if (i !== 3) for (const side of [-1, 1])
+        k.solid.box(0.72, 2.0 + (i % 2) * 0.8, 0.82,
+          side * (2.1 + (i % 2) * 0.8), api.padY + h * 0.88, z,
+          C.rust, i * 0.03, 0, side * 0.10);
+    }
+    // The stair's useful crown: a compact lookout/claim ledge joining the final body stair
+    // to the existing fixture at +10.2 m. It is a destination action, not area inflation.
+    k.solid.box(9.6, 0.82, 6.8, 0, api.padY + 9.82, -0.5,
+      darkStone, -0.03, 0, 0.035);
+    k.solid.box(6.8, 0.22, 4.8, 0, api.padY + 10.30, -0.5,
+      seam, 0.04, 0, -0.02);
+    api.emit({ kind:'obb', x:0, z:-0.5, halfX:4.8, halfZ:3.4, yaw:-0.03,
+      y0:api.padY+9.35, y1:api.padY+10.25, tag:'stone', standable:true,
+      climbable:false });
+    return {solid:k.solid.build(), glow:null, moving:null, glowColour:GLOW.wisp};
+  },
+  body(api) {
+    const k = kits(), darkStone = [0.066, 0.071, 0.069];
+    // A solid monumental stair climbs the east rib; the last landing crosses onto the
+    // crown where the real completion fixture waits.
+    const N = 21;
+    for (let i = 0; i < N; i++) {
+      const z = 14 - i * 0.92, top = 0.46 * (i + 1), x = 7.0;
+      k.solid.box(2.3, top, 1.02, x, api.padY + top * 0.5, z,
+        i % 4 === 0 ? C.rust : darkStone, 0.04 * Math.sin(i));
+      api.emit({kind:'obb',x,z,halfX:1.15,halfZ:0.51,yaw:0.04*Math.sin(i),
+        y0:api.padY-0.2,y1:api.padY+top,tag:'stone',standable:true,climbable:false});
+    }
+    // The cross-landing connects the last stair to the crown but stops 0.8 m short of the
+    // stair centre in X. Its old collider reached to x=7.1 and presented its 10.08 m side
+    // to a player still on tread 19 at 8.74 m, blocking the final two steps. Once the body
+    // stands on tread 21 it turns left onto the same substantial landing and claim ledge.
+    k.solid.box(6.4, 0.40, 2.4, 3.0, api.padY + 9.88, -4.4, darkStone);
+    api.emit({kind:'obb',x:3.0,z:-4.4,halfX:3.2,halfZ:1.2,yaw:0,
+      y0:api.padY+9.55,y1:api.padY+10.08,tag:'stone',standable:true,climbable:false});
+    // The sleeper-monolith donor shape is the ground-level alternate perch/cover.
+    k.solid.box(11.5, 1.45, 3.2, -11.0, api.padY + 1.05, -5.0, C.stone,
+      -0.58, 0, 0.14);
+    api.emit({kind:'obb',x:-11,z:-5,halfX:5.75,halfZ:1.6,yaw:-0.58,
+      y0:api.padY-0.2,y1:api.padY+1.75,tag:'stone',standable:true});
+    // Shattered blocks form a close arena without narrowing the central arch passage.
+    for (let i=0;i<8;i++) {
+      const a=i/8*TAU, x=Math.cos(a)*16, z=Math.sin(a)*12-2;
+      const h=0.8+(i%3)*0.45;
+      k.solid.box(1.8+(i&1),h,1.5,x,api.padY+h*0.5,z,i%3?C.slate:C.rust,a);
+    }
+    return {solid:k.solid.build(),glow:null,moving:null,glowColour:GLOW.wisp};
+  },
+};
 
 /* ==========================================================================
    MINOR SITES.
@@ -2236,6 +2565,116 @@ export const MINOR_BUILDERS = {
 };
 
 /* ==========================================================================
+   THE MAJOR ARRIVAL FRAME — Round 9.
+
+   The tall landmark answers "what is that?" across the county. This answers "where do I
+   leave the road, and did I finish it?" at ordinary driving/walking distance. Every real
+   major except the already unmistakable Filling Station sign gets one persistent authored
+   frame on its road side, plus paired witness stakes that lead into its real composition.
+   The little lamp in the frame belongs to the site's existing landmark glow: weak/breathing
+   before completion, full after it. No label, arrow, HUD text, or fake interaction.
+   ========================================================================== */
+export function majorApproach(api) {
+  const a = api && api.site ? api.site.approach : null;
+  if (!a || a.existing) return null;
+  const k = kits();
+  const x = +a.x || 0, z = +a.z || 0, w = Math.max(6, +a.w || 8), h = Math.max(7, +a.h || 8);
+  const style = a.style || api.site.kind;
+  const stone = style === 'manor' || style === 'cathedral' || style === 'chapel'
+    || style === 'cemetery' || style === 'tower' || style === 'steeple' || style === 'lighthouse'
+    || style === 'stones' || style === 'rock-arch';
+  const industrial = style === 'works' || style === 'relay';
+  const col = stone ? C.stone : industrial ? C.metal : C.wood;
+  const gy = groundY(api, x, z);
+  const postX = w * 0.5;
+
+  // The clear mouth is never less than five metres: car and player both understand it as
+  // an entrance, while the two uprights remain large enough to survive torch and fog.
+  for (const s of [-1, 1]) {
+    const px = x + s * postX;
+    const py = groundY(api, px, z);
+    if (style === 'lighthouse' || style === 'tower' || style === 'steeple') {
+      k.solid.tube(0.58, 0.78, h, 10, px, py + h * 0.5, z, col);
+      k.solid.cone(0.92, 1.25, style === 'lighthouse' ? 10 : 4, px, py + h + 0.62, z, C.slate);
+      api.emit({ kind: 'circle', x: px, z, r: 0.80, y0: py - 0.3, y1: py + h, tag: 'wall' });
+    } else {
+      const pw = industrial ? 0.62 : 0.82;
+      k.solid.box(pw, h, pw, px, py + h * 0.5, z, col);
+      api.emit({ kind: 'obb', x: px, z, halfX: pw * 0.5, halfZ: pw * 0.5, yaw: 0,
+        y0: py - 0.3, y1: py + h, tag: industrial ? 'metal' : 'wall' });
+    }
+  }
+  k.solid.box(w + 1.0, 0.62, industrial ? 0.48 : 0.72, x, gy + h - 0.42, z, col);
+
+  // Each family has one different crown. The destination behind it remains the actual
+  // unique silhouette; this smaller gesture stops eleven gates becoming copy-paste signs.
+  if (style === 'works') {
+    const len = Math.hypot(w * 0.5, 2.4);
+    k.solid.box(len, 0.28, 0.30, x - w * 0.25, gy + h + 0.55, z, C.rust, 0, 0, 0.45);
+    k.solid.box(len, 0.28, 0.30, x + w * 0.25, gy + h + 0.55, z, C.rust, 0, 0, -0.45);
+  } else if (style === 'relay') {
+    for (const s of [-1, 1]) k.solid.cyl(0.12, 0.12, 2.8, 7, x + s * 1.0, gy + h + 1.1, z, C.metal);
+    k.solid.box(2.4, 0.18, 0.20, x, gy + h + 2.35, z, C.rust);
+  } else if (style === 'mill') {
+    k.solid.box(0.32, 3.8, 0.28, x, gy + h + 0.8, z, C.plank, 0, 0, Math.PI * 0.25);
+    k.solid.box(0.32, 3.8, 0.28, x, gy + h + 0.8, z, C.plank, 0, 0, -Math.PI * 0.25);
+  } else if (style === 'barn') {
+    const len = Math.hypot(w * 0.5, 2.2);
+    k.solid.box(len, 0.34, 0.40, x - w * 0.25, gy + h + 0.52, z, C.rust, 0, 0, 0.46);
+    k.solid.box(len, 0.34, 0.40, x + w * 0.25, gy + h + 0.52, z, C.rust, 0, 0, -0.46);
+  } else if (style === 'manor') {
+    for (const s of [-1, 1]) k.solid.cone(0.72, 1.8, 4, x + s * 2.0, gy + h + 0.9, z, C.slate, Math.PI * 0.25);
+  } else if (style === 'cathedral') {
+    k.solid.cone(1.15, 3.2, 6, x, gy + h + 1.55, z, C.slate);
+  } else if (style === 'cemetery') {
+    k.solid.box(0.34, 2.5, 0.34, x, gy + h + 1.0, z, C.stone);
+    k.solid.box(1.8, 0.34, 0.34, x, gy + h + 1.55, z, C.stone);
+  } else if (style === 'chapel') {
+    k.solid.cone(0.86, 2.2, 4, x, gy + h + 1.0, z, C.slate, Math.PI * 0.25);
+  } else if (style === 'stones') {
+    for (const s of [-1, 0, 1]) k.solid.box(0.70, 3.1 - Math.abs(s) * 0.5, 0.70,
+      x + s * 1.35, gy + h + 1.2, z, s ? C.stone : C.slate, s * 0.14, 0, s * 0.10);
+    k.solid.box(4.1, 0.46, 0.82, x, gy + h + 2.55, z, C.rust, 0, 0, -0.06);
+  } else if (style === 'great-tree') {
+    k.solid.box(0.70, 4.6, 0.70, x, gy + h + 1.8, z, C.wood);
+    k.solid.box(4.6, 0.42, 0.42, x, gy + h + 2.5, z, C.plank, 0, 0, 0.55);
+    k.solid.box(4.6, 0.42, 0.42, x, gy + h + 2.5, z, C.plank, 0, 0, -0.55);
+  } else if (style === 'rock-arch') {
+    for (const s of [-1, 1]) k.solid.box(0.90, 3.2, 1.0, x + s * 1.55,
+      gy + h + 1.2, z, C.slate, 0, 0, s * 0.08);
+    k.solid.box(4.2, 0.75, 1.15, x, gy + h + 2.9, z, C.dark, 0, 0, 0.05);
+  } else {
+    k.solid.tube(0.72, 0.72, 0.42, 12, x, gy + h + 0.35, z, C.rust, Math.PI * 0.5, 0, 0);
+  }
+
+  // The road-facing state witness: a dark cage with a small vertical lamp. It shares the
+  // site's completion ripple, so a claimed place reads as powered from the same approach.
+  k.solid.box(1.42, 1.72, 0.34, x, gy + h - 2.0, z + 0.42, C.dark);
+  k.solid.box(0.18, 2.15, 0.18, x, gy + h - 3.82, z, C.metal);
+  k.glow.pane(0.42, 0.62, x, gy + h - 2.0, z + 0.61, PANE_LAMP, 0, 0, 6, 7);
+  glowColumn(k.glow, x, gy + h - 2.25, z + 0.58, 0.32, 1.15, 0.55);
+
+  // Paired low lamps draw a traversable lane from the frame into the actual site. They do
+  // not pretend to be completion fixtures; they make the route to the real one readable.
+  const tx = Number.isFinite(a.routeX) ? a.routeX : (+api.site.claim.dx || 0);
+  const tz = Number.isFinite(a.routeZ) ? a.routeZ : (+api.site.claim.dz || 0);
+  const vx = tx - x, vz = tz - z, vl = Math.hypot(vx, vz) || 1;
+  const nx = -vz / vl, nz = vx / vl;
+  for (let i = 1; i <= 4; i++) {
+    const t = i / 5, cx = x + vx * t, cz = z + vz * t;
+    for (const s of [-1, 1]) {
+      const px = cx + nx * 1.35 * s, pz = cz + nz * 1.35 * s;
+      const py = groundY(api, px, pz);
+      k.solid.cyl(0.10, 0.14, 0.72, 7, px, py + 0.36, pz, industrial ? C.metal : C.wood);
+      k.glow.pane(0.16, 0.20, px, py + 0.64, pz, PANE_LAMP, 0, 0, 3, 3);
+      api.emit({ kind: 'circle', x: px, z: pz, r: 0.15, y0: py - 0.1, y1: py + 0.72,
+        tag: industrial ? 'metal' : 'wood' });
+    }
+  }
+  return { solid: k.solid.build(), glow: k.glow.build(), glowColour: GLOW.lamp };
+}
+
+/* ==========================================================================
    The apron. Every major stands on one.
 
    A FLATS disc levels the terrain FUNCTION; this levels the LOOK. It is a disc of made
@@ -2320,7 +2759,21 @@ function roadApproach(k, api, radius) {
   for (let s = 0; s < steps; s++) {
     const top = lowY + Math.min(rise, APPROACH_RISE * (s + 1));
     const xc = x0 + run * (s + 0.5);
-    k.box(run + 0.02, top - base, APPROACH_W, xc, (top + base) * 0.5, zc, C.stone);
+    // Draw an actual tread and riser, not a solid column from the lowest ground to every
+    // successive step. Those full-height boxes joined into an enormous pale triangle when
+    // seen side-on from the road: at Drowned Light and the Bell Tower the "way in" hid the
+    // destination it was meant to reveal. Collision keeps the full stepped support below,
+    // but the visible structure is an open, repaired stair carried on narrow steel piers.
+    k.box(run + 0.03, 0.18, APPROACH_W, xc, top - 0.09, zc,
+      s % 3 === 0 ? C.rust : C.slate);
+    k.box(0.12, Math.min(APPROACH_RISE, top - lowY), APPROACH_W,
+      xc - run * 0.5 + 0.06, top - Math.min(APPROACH_RISE, top - lowY) * 0.5,
+      zc, C.dark);
+    if (s === 0 || s === steps - 1 || (s & 1) === 0) {
+      const supportH = Math.max(0.18, top - base - 0.18);
+      for (const side of [-1, 1]) k.box(0.18, supportH, 0.18,
+        xc, base + supportH * 0.5, zc + side * (APPROACH_W * 0.5 - 0.16), C.dark);
+    }
     api.emit({
       kind: 'obb', x: xc, z: zc, halfX: run * 0.5, halfZ: APPROACH_W * 0.5, yaw: 0,
       y0: base, y1: top, tag: 'stone', standable: true,
@@ -2342,24 +2795,34 @@ function roadApproach(k, api, radius) {
     bridge: { x: (bx0 + bx1) * 0.5, z: roadLower ? padEnd - 0.3 : roadStart + 0.3 },
     landing: { x: (bx0 + bx1) * 0.5, z: roadLower ? padEnd - 2.5 : roadStart + 2.5 },
   });
-  // parapets down both sides of the flight, sloped with it. The bank-side one stops where
-  // the bridge leaves the flight (it stood across the bridge on the first cut, measured:
-  // the walker rounded its end onto the last 0.4 m of the slab).
+  // Open handrails down both sides of the flight. The collision rails below deliberately
+  // remain continuous, but the visible bars and posts leave the destination readable
+  // through them. The bank-side one stops where the bridge leaves the flight (it stood
+  // across the bridge on the first cut, measured: the walker rounded its end onto the last
+  // 0.4 m of the slab).
   const pitch = Math.atan2(rise, L);
   const bankSide = roadLower ? zA - 0.16 : zB + 0.16, farSide = roadLower ? zB + 0.16 : zA - 0.16;
   const full = Math.hypot(L, rise) + 0.4;
-  k.box(full, 0.9, 0.32, x0 + L * 0.5, lowY + rise * 0.5 + 0.55, farSide, C.stone, 0, 0, pitch);
+  k.box(full, 0.14, 0.14, x0 + L * 0.5, lowY + rise * 0.5 + 0.92,
+    farSide, C.rust, 0, 0, pitch);
   api.emit({
     kind: 'obb', x: x0 + L * 0.5, z: farSide, halfX: full * 0.5, halfZ: 0.16, yaw: 0,
     y0: lowY - 0.3, y1: highY + 1.0, tag: 'wall',
   });
   const cut = (bx0 - 0.3) - (x0 - 0.2);                 // the bank-side parapet's run
   const cutRise = rise * cut / L;
-  k.box(Math.hypot(cut, cutRise), 0.9, 0.32, x0 - 0.2 + cut * 0.5, lowY + cutRise * 0.5 + 0.55, bankSide, C.stone, 0, 0, pitch);
+  k.box(Math.hypot(cut, cutRise), 0.14, 0.14, x0 - 0.2 + cut * 0.5,
+    lowY + cutRise * 0.5 + 0.92, bankSide, C.rust, 0, 0, pitch);
   api.emit({
     kind: 'obb', x: x0 - 0.2 + cut * 0.5, z: bankSide, halfX: Math.hypot(cut, cutRise) * 0.5, halfZ: 0.16, yaw: 0,
     y0: lowY - 0.3, y1: lowY + cutRise + 1.0, tag: 'wall',
   });
+  // Repeated uprights make the sloping bars legible as handrails even in torchlight.
+  for (let s = 0; s <= steps; s += 2) {
+    const t = s / steps, px = x0 + L * t, py = lowY + rise * t;
+    for (const side of [bankSide, farSide])
+      k.box(0.10, 0.92, 0.10, px, py + 0.46, side, C.rust);
+  }
 }
 
 export function apron(api, radius, col) {
@@ -2422,26 +2885,6 @@ export function apron(api, radius, col) {
     ca.needsUpdate = true;
   }
   return k.build();
-}
-
-/** The beacon column. donor: skyshard destinations.js:95-107 (`_beacon`), read 2026-09-02:
- *  an OPEN cylinder tapering upward, additive, low opacity, never fogged. 92 m for a major
- *  is SKYSHARD's own number for the same job. */
-export function beaconGeometry(height, radius) {
-  const g = new THREE.CylinderGeometry(radius * 0.4, radius, height, 8, 1, true);
-  g.translate(0, height * 0.5, 0);
-  const n = g.attributes.position.count;
-  const c = new Float32Array(n * 3);
-  // fade the column out toward its top in the VERTEX colours, so one material serves
-  // every beacon and the additive falloff costs no shader
-  const py = g.attributes.position.array;
-  for (let i = 0; i < n; i++) {
-    const t = clamp(1 - py[i * 3 + 1] / height, 0, 1);
-    const v = 0.25 + 0.75 * t * t;
-    c[i * 3] = v; c[i * 3 + 1] = v; c[i * 3 + 2] = v;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-  return g;
 }
 
 export { C as SITE_COLOURS };

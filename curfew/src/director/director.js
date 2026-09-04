@@ -238,6 +238,7 @@ const COOL_MIN_R = 25;         // m: never the body that is on him -- the bite I
 const SCREEN_MARGIN = 0.14;    // rad (8 deg) of slack outside the frame edge: "seen" errs wide
 const DIR_CALM_S = 20;         // s a body this file stands down refuses to re-acquire him (= enemies.js CALM_S)
 const COOL_UNSEEN = 1000;      // rank bonus, in metres, for a body he cannot currently see
+const MAX_STAND_DOWNS = 2;     // per spawned life: a thermostat may cool a body, never yo-yo it
 
 // The headcount target is measured inside 70 m, which is correct and is also not a cap on
 // anything. MEASURED on the harness: a player walking away at 4.35 m/s from bodies chasing
@@ -665,6 +666,7 @@ export class Director {
       // in the air, and NOT ON SCREEN through the real frame. Unseen-by-occlusion still ranks
       // above merely off-frame.
       if (b.pressure && b.alerted && d > COOL_MIN_R
+        && (typeof raw.stoodDownN !== 'number' || raw.stoodDownN < MAX_STAND_DOWNS)
         && raw.committed !== true && raw.airborne !== true && raw.state === 'approach'
         && !this._onScreen(b.x, b.y, b.z, raw)) {
         const rank = d + (raw.obsSelf === true ? 0 : COOL_UNSEEN);
@@ -1251,9 +1253,12 @@ export class Director {
   /** 0..1 headcount multiplier for the seconds after a death. Eased, then ramped back. */
   _respawnEase() {
     if (this._respawnEaseT <= 0) return 1;
-    const ramp = this._respawnEaseT - RESPAWN_EASE_S;
-    if (ramp >= 0) return RESPAWN_EASE;               // still inside the flat ease
-    const k = Math.min(1, -ramp / Math.max(0.001, RESPAWN_RAMP_S));
+    // _respawnEaseT starts at grace + ramp and counts DOWN. The old subtraction used
+    // RESPAWN_EASE_S as the transition point, which inverted the two durations: with the
+    // current 75 s grace / 150 s ramp it held the flat 0.35 ease for 150 s, then traversed
+    // only half the ramp in 75 s and jumped to 1. The transition is `ramp seconds remain`.
+    if (this._respawnEaseT > RESPAWN_RAMP_S) return RESPAWN_EASE;
+    const k = Math.min(1, 1 - this._respawnEaseT / Math.max(0.001, RESPAWN_RAMP_S));
     return RESPAWN_EASE + (1 - RESPAWN_EASE) * k;
   }
 
@@ -1835,6 +1840,16 @@ export class Director {
       // the first attempt, and kept on the order so the window and the spawn agree.
       if (!(o.pack > 0)) o.pack = this._packSize(o.species);
       if (arrived + o.pack > arriveMax) { this.windowed++; continue; }
+      // `head` and `aliveTotal` are a census snapshot. The old gates only asked whether the
+      // county was below its ceiling BEFORE this order, so a queued pair or one full-head body
+      // could legally carry the very next census over the advertised hard cap. Reserve the
+      // whole order before placement; an order that does not fit waits for the field to thin.
+      const incomingHead = R.head * o.pack;
+      if (this.head + incomingHead > this.cap + 1e-6
+        || this.aliveTotal + o.pack > this._aliveCap() + 1e-6) {
+        this.blocked++;
+        continue;
+      }
       if (!this._place(o.species, o.bearing, R)) {
         // BLOCKED ORDERS DEFER (vigil director.js:12) — but see _failOrder: they no longer
         // defer for ever. Widen the sector a little each time so a jammed bearing
@@ -1911,7 +1926,7 @@ export class Director {
     // (the opening's, or a death's) met a field that other lanes had already populated —
     // which is a watchdog crying wolf at exactly the times the ease is most correct.
     // A real wedge is orders outstanding with ROOM to put them; that is what survives here.
-    if (this.head >= this.cap || this.aliveTotal >= this._aliveCap()) {
+    if (this.head >= this.cap || this.aliveTotal >= this._aliveCap() || this._ordersCapacityBlocked()) {
       this._sinceOrderSpawn = 0;
       return;
     }
@@ -1937,6 +1952,29 @@ export class Director {
           + ' dropped=' + this.dropped + ' last refusal before the clear: ' + why + ')');
       }
     }
+  }
+
+  /**
+   * The drain reserves an order's WHOLE pack against both caps. That creates one legitimate
+   * waiting state the watchdog's old `head >= cap` test could not see: the county has a
+   * fraction of room, but not enough room for any complete queued order. Treat that as the
+   * same designed capacity wait, then give the order a fresh watchdog window once it fits.
+   */
+  _ordersCapacityBlocked() {
+    const aliveCap = this._aliveCap();
+    let live = false;
+    for (let i = 0; i < ORDER_POOL; i++) {
+      const o = this._orders[i];
+      if (!o.live) continue;
+      live = true;
+      const R = ROSTER[o.species] || ROSTER.hound;
+      // An untried order has not rolled its pack yet. One is the least it can request; if
+      // that fits, this is not a capacity wait and the drain gets to make the real decision.
+      const pack = o.pack > 0 ? o.pack : 1;
+      if (this.head + R.head * pack <= this.cap + 1e-6
+        && this.aliveTotal + pack <= aliveCap + 1e-6) return false;
+    }
+    return live;
   }
 
   /**

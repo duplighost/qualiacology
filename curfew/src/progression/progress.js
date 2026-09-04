@@ -146,11 +146,6 @@ const ROAD_CHECK_STEPS = 6;     // 0.1 s. At 23 m/s that is 2.3 m against a 100 
 const MINOR_MET_R = 30;             // m. About where a campfire's own glow reads from.
 const MINOR_CHECK_STEPS = 60;       // once a second, on the travelled grid's own beat
 
-// An `xp:gained` from another lane carrying one of these reasons has ALREADY been paid here,
-// from its own domain event. places.js:972 emits 'discover' and 'claim'; if a lane ever adds
-// another double-paying reason, it goes in this set rather than into a special case.
-const REDUNDANT_REASONS = new Set(['discover', 'discovery', 'claim', 'place', 'find']);
-
 const CHIME_BASE_HZ = 880;      // the mote chime's fundamental
 const BANK_BELL_HZ = 196;       // one bell, low, once (DESIGN's arrival beat)
 
@@ -529,19 +524,22 @@ export class Progress {
 
     on('xp:gained', (p) => {
       // Other lanes pay on this channel without routing through award(): the Auditor's
-      // witness pay (director/auditor.js:444) and places' own `_gainXp` (places.js:972).
-      // Credit them — EXCEPT the ones this file has already paid from their domain event.
-      // places.js:844 and :963 emit BOTH `place:discovered`/`place:claimed` AND an
-      // `xp:gained` for the same arrival; crediting both would pay for every place twice.
+      // witness pay, refuge receipts and wild caches. Place discovery/claim are domain
+      // events paid through award() above; Places deliberately emits no second xp event.
       if (p._own) return;
-      if (REDUNDANT_REASONS.has(p.reason)) return;
       const n = Number(p.amount) || 0;
-      if (n > 0) this._bank_in(n);
+      if (n > 0) {
+        this._bank_in(n);
+        this._rewardAnswer(n, p.x, p.y, p.z, p.reason);
+      }
     });
 
     on('level:up', (p) => { void p; });   // ours; listed so the channel is obviously live
 
     on('weapon:reload', (p) => { if (p.phase !== 'cancel') this._verb('reload'); });
+    // weapon:granted raises the physical gun into frame. A destination claim has already
+    // produced its one Progress-owned crown/chime; answering this nested event would double it.
+    on('weapon:granted', () => {});
     on('car:entered', () => { this._verb('drive'); this._doorShut(); });
     // ROUND 7 — THE REAL DOOR. `door:shut {x, z}` is the one event the door lane has to emit;
     // this is the whole of the wiring on progression's side, and quiet_3 "Shut the Door" is
@@ -664,10 +662,28 @@ export class Progress {
     const amount = Math.round(Math.max(0, base) * this._phaseMul());
     if (amount <= 0) return 0;
     this._bank_in(amount);
+    this._rewardAnswer(amount, x, y, z, reason);
     this.ctx.bus.emit('xp:gained', {
       amount, x: x || 0, y: y || 0, z: z || 0, reason: reason || 'kill', _own: true,
     });
     return amount;
+  }
+
+  /**
+   * Kills already arrive as a physical homing mote and road XP is deliberately quiet.
+   * Every discrete found/claimed reward gets the larger pooled crown, rising chime and
+   * HUD receipt, so picking something up can no longer be mistaken for merely walking
+   * past it. Missing event coordinates resolve to the player, never to world origin.
+   */
+  _rewardAnswer(amount, x, y, z, reason) {
+    if (reason === 'kill' || reason === 'road') return;
+    const px = Number.isFinite(x) ? x : this._playerAt(0);
+    const py = Number.isFinite(y) ? y : this._playerAt(1) + 0.55;
+    const pz = Number.isFinite(z) ? z : this._playerAt(2);
+    const fx = this.ctx.systems.get('fx');
+    if (fx && typeof fx.reward === 'function') fx.reward(px, py, pz, amount);
+    const weight = clamp01(Math.sqrt(Math.max(1, amount)) / 16);
+    this._chime('xp_gain', px, py, pz, 0.94 + weight * 0.18, 0.58 + weight * 0.12);
   }
 
   /** Add to the carried pile and re-derive the level. Never emits; award() does that. */
@@ -1411,6 +1427,26 @@ export class Progress {
     // The bank: ONE bell, low, long. DESIGN's arrival beat rings once.
     if (!A.has('xp_bank')) {
       A.reg('xp_bank', [mk(1.60, BANK_BELL_HZ, [[1, 0.55], [2.01, 0.24], [2.98, 0.13], [5.4, 0.05]], 2.4, 0.5)], sr);
+    }
+    // A found thing: two close attacks climbing a fifth. Unlike the tiny mote tick and the
+    // low bank bell, this is a bright two-syllable receipt that reads through engine noise.
+    if (!A.has('xp_gain')) {
+      const secs = 0.72;
+      const n = Math.max(1, Math.floor(sr * secs));
+      const b = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const strike = (at, hz, gain) => {
+          const u = t - at;
+          if (u < 0) return 0;
+          const env = Math.exp(-u * 7.2) * (1 - Math.exp(-u * 1050));
+          return (Math.sin(TAU * hz * u) * 0.64
+            + Math.sin(TAU * hz * 2.01 * u) * 0.23
+            + Math.sin(TAU * hz * 3.02 * u) * 0.10) * env * gain;
+        };
+        b[i] = clamp(strike(0, 659.25, 0.46) + strike(0.115, 987.77, 0.54), -1, 1);
+      }
+      A.reg('xp_gain', [b], sr);
     }
   }
 

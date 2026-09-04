@@ -54,6 +54,63 @@ import { ANCHORS } from './dress-station.js';
 
 const SITE_ID = 'filling-station';
 
+/* ------------------------------------------------------------------ refuge sites --
+ * The Filling Station remains the authored first lesson. Round 9 gives that same physical
+ * loop to two BUILDINGS THAT ALREADY EXIST INSIDE REAL MAJORS: the Drowned Light keeper's
+ * cottage and the Relay equipment hut. These are not new destinations and they are not
+ * decorative sheds promoted into fake majors. The transforms below are the exact shell
+ * transforms in sites.js / dress-interiors.js.
+ */
+function compactAnchors(room, doorWidth, bagLocal) {
+  const cy = Math.cos(room.yaw), sy = Math.sin(room.yaw);
+  const at = (x, z) => ({ x: room.x + x * cy + z * sy, z: room.z - x * sy + z * cy });
+  const front = -room.d * 0.5;
+  const hinge = at(-doorWidth * 0.5, front);
+  const mid = at(0, front);
+  const board = at(doorWidth * 0.5 + 0.72, front - 0.03);
+  const bag = at(bagLocal.x, bagLocal.z);
+  const bulb = at(bagLocal.x, bagLocal.z + 0.12);
+  const doorLamp = at(0, front - 0.18);
+  return Object.freeze({
+    breaker: Object.freeze({ x: board.x, z: board.z, footY: 0.78, faceYaw: room.yaw + Math.PI }),
+    door: Object.freeze({
+      hingeX: hinge.x, hingeZ: hinge.z, width: doorWidth, height: 2.42,
+      yaw: room.yaw, open: -1.52, midX: mid.x, midZ: mid.z,
+    }),
+    bag: Object.freeze({ x: bag.x, z: bag.z, yaw: room.yaw + (bagLocal.yaw || 0) }),
+    lamps: Object.freeze({
+      bulb: Object.freeze({ x: bulb.x, y: 2.34, z: bulb.z }),
+      door: Object.freeze({ x: doorLamp.x, y: 2.62, z: doorLamp.z }),
+    }),
+  });
+}
+
+const PRIMARY_SPEC = Object.freeze({
+  id: SITE_ID, anchors: ANCHORS, buildBreaker: true, buildBag: false, xpPower: 90,
+  lampIn: 18, lampOut: 10, lampDecay: 1.05,
+  room: Object.freeze({ x: -10.5, z: 0.5, yaw: 0, w: 10, d: 7 }),
+});
+const EXTRA_SPECS = Object.freeze([
+  Object.freeze({
+    id: 'drowned-light', claimPowered: true, buildBreaker: false, buildBag: false,
+    // Bright enough to be the safe island, low enough to leave wall texture and furniture
+    // visible. The first cut at 22/13 flattened the cottage into a featureless white box.
+    xpPower: 0, lampIn: 8.5, lampOut: 5.5,
+    lampDecay: 1.28,
+    room: Object.freeze({ x: 9, z: 3, yaw: 0.3, w: 9, d: 6.5 }),
+    anchors: compactAnchors({ x: 9, z: 3, yaw: 0.3, w: 9, d: 6.5 }, 2.2,
+      { x: -2.6, z: 0.9, yaw: 0 }),
+  }),
+  Object.freeze({
+    id: 'relay', claimPowered: true, buildBreaker: false, buildBag: true,
+    xpPower: 0, lampIn: 7.5, lampOut: 5.0,
+    lampDecay: 1.32,
+    room: Object.freeze({ x: -7.5, z: 6.5, yaw: 0, w: 6, d: 5 }),
+    anchors: compactAnchors({ x: -7.5, z: 6.5, yaw: 0, w: 6, d: 5 }, 2.0,
+      { x: -1.75, z: -0.25, yaw: 0 }),
+  }),
+]);
+
 /* ------------------------------------------------------------------ the verbs -- */
 const REACH_BREAKER = 2.30;      // m, ground distance to the handle
 const REACH_DOOR = 2.40;         // m, to the middle of the doorway, from EITHER side
@@ -90,20 +147,18 @@ const DOOR_LOSE_R = 0.0;         // metres inside which a body keeps you anyway.
 const REST_FADE_IN = 0.95;       // s to black
 const REST_BLACK = 0.55;         // s of nothing
 const REST_FADE_OUT = 0.22;      // s back. "Getting up must be instant and clean."
-const REST_CLOCK_S = 120;        // s of the county's 1200 s cycle that pass while you sleep
+const REST_CLOCK_S = 120;        // s of the county's 840 s cycle that pass while you sleep
 const REST_XP = 0;               // resting pays no XP: it is not an achievement, it is a bed
 
 /* ------------------------------------------------------------------ the light -- */
 // One rover from lights.borrow(), walked from the bulb to the bulkhead when you step out of
 // the room. NEVER a new light: the census is pinned at 13 (AGENTS.md).
-const LAMP_IN_I = 12.0;           // the bulb over the bed, seen from inside. MEASURED 2026-09-03:
-const LAMP_OUT_I = 6.5;          // 21 cd on a plaster room put 23.5% of the frame over 150.
+const LAMP_IN_I = 18.0;          // a powered refuge is a warm island against the dark county
+const LAMP_OUT_I = 10.0;         // the bulkhead makes the safe doorway legible from its yard
 const LAMP_RANGE = 26.0;         // m from the shop centre; beyond it the rover goes back
 const POWER_RAMP_S = 1.15;       // s for the lamps to come up after the throw
 
 const DRAW_R = 320;              // m; beyond this the refuge's four meshes are not drawn
-
-const XP_POWER = 90;             // the breaker is the station's finish. It pays like a find.
 
 /* ------------------------------------------------------------------ palette -- */
 // Linear albedos. FX_BOARD/FX_BRASS are places.js's own fixture numbers, deliberately reused:
@@ -168,8 +223,15 @@ function bead(parts, x, y, z, r) {
 export class Refuge {
   static id = 'refuge';
 
-  constructor(ctx) {
+  constructor(ctx, spec = PRIMARY_SPEC, owner = null) {
     this.ctx = ctx;
+    this.spec = spec || PRIMARY_SPEC;
+    this.siteId = this.spec.id;
+    this.anchors = this.spec.anchors;
+    this._owner = owner;
+    // The manifest constructs one system. That root owns two additional, independently
+    // persistent refuge units and presents them through the same public/test surface.
+    this._units = owner ? null : [this];
 
     // --- state, all of it. None of this lives on a streamed mesh. -----------
     this.power = false;          // the breaker has been thrown
@@ -234,8 +296,8 @@ export class Refuge {
 
   async init() {
     const places = this._sys('places');
-    const rec = places && places.nodes ? places.nodes.get(SITE_ID) : null;
-    if (!rec) { this._note('places has no node for ' + SITE_ID + ': the refuge cannot stand anywhere'); return; }
+    const rec = places && places.nodes ? places.nodes.get(this.siteId) : null;
+    if (!rec) { this._note('places has no node for ' + this.siteId + ': the refuge cannot stand anywhere'); return; }
     this.ox = rec.def.x; this.oz = rec.def.z;
     this.yaw = rec.yaw || 0;
     this.padY = rec.padY || 0;
@@ -243,14 +305,21 @@ export class Refuge {
 
     this._build();
     this._restore();
-    this._overlayInit();
     this._ready = true;
+    if (!this._owner) {
+      this._overlayInit();
+      for (let i = 0; i < EXTRA_SPECS.length; i++) {
+        const unit = new Refuge(this.ctx, EXTRA_SPECS[i], this);
+        await unit.init();
+        this._units.push(unit);
+      }
+    }
   }
 
   /* ==========================================================================
-     BUILD. Two Lambert-vertexColor meshes and two additive ones, parameter-for-
-     parameter identical to places.js's place-body and place-glow, so THREE
-     shares their already-linked programs and this lane links none.
+     BUILD. Two unmapped Lambert-vertexColor meshes and two additive ones.
+     Round 9's place-body now owns mapped/bumped destination variants, so material
+     names are not a program-identity claim; the measured boot/runtime census is.
      ========================================================================== */
   _build() {
     if (this._built) return;
@@ -269,14 +338,15 @@ export class Refuge {
     this.matGlow.name = 'refuge-glow';
 
     this.group = new THREE.Group();
-    this.group.name = 'refuge';
+    this.group.name = 'refuge-' + this.siteId;
     this.group.position.set(this.ox, 0, this.oz);
     this.group.rotation.y = this.yaw;
     if (scene) scene.add(this.group);
     else this._note('ctx.scene missing at refuge init: nothing will be visible');
 
-    this._buildBreaker();
+    if (this.spec.buildBreaker !== false) this._buildBreaker();
     this._buildDoor();
+    if (this.spec.buildBag) this._buildBag();
     this._buildLamps();
   }
 
@@ -286,8 +356,8 @@ export class Refuge {
    * measurement off a photograph of a real board rather than as world coordinates.
    */
   _buildBreaker() {
-    const b = ANCHORS.breaker;
-    const y0 = this.padY + 0.95;          // the board's foot
+    const b = this.anchors.breaker;
+    const y0 = this.padY + (Number.isFinite(b.footY) ? b.footY : 0.95);
     const parts = [];
     const put = (geo, col, x, y, z, rz) => {
       if (rz) geo.rotateZ(rz);
@@ -333,7 +403,7 @@ export class Refuge {
       geo.rotateY(b.faceYaw);
       geo.translate(this._boardX(), y0, this._boardZ());
       const m = new THREE.Mesh(geo, this.matBody);
-      m.name = 'refuge-breaker';
+      m.name = 'refuge-breaker-' + this.siteId;
       m.castShadow = true; m.receiveShadow = true;
       this.group.add(m);
       this.solid = m;
@@ -355,9 +425,9 @@ export class Refuge {
       hp.push(tint(collar, P_IRON));
       const g = merge(hp);
       const pivot = new THREE.Group();
-      pivot.name = 'refuge-lever';
+      pivot.name = 'refuge-lever-' + this.siteId;
       const m = new THREE.Mesh(g, this.matBody);
-      m.name = 'refuge-lever-mesh';
+      m.name = 'refuge-lever-mesh-' + this.siteId;
       m.castShadow = true;
       pivot.add(m);
       pivot.rotation.y = b.faceYaw;
@@ -378,11 +448,11 @@ export class Refuge {
     this.breakerNZ = Math.cos(this.yaw + b.faceYaw);
   }
 
-  _boardX() { return ANCHORS.breaker.x; }
-  _boardZ() { return ANCHORS.breaker.z; }
+  _boardX() { return this.anchors.breaker.x; }
+  _boardZ() { return this.anchors.breaker.z; }
   /** the board's outward normal in the SITE's local frame */
-  _faceNX() { return Math.sin(ANCHORS.breaker.faceYaw); }
-  _faceNZ() { return Math.cos(ANCHORS.breaker.faceYaw); }
+  _faceNX() { return Math.sin(this.anchors.breaker.faceYaw); }
+  _faceNZ() { return Math.cos(this.anchors.breaker.faceYaw); }
   /**
    * A point in the BOARD's own frame (+X right across the plate, +Y up, +Z out of the wall)
    * into the site's local frame — the same rotateY(faceYaw) then translate that the housing
@@ -390,7 +460,7 @@ export class Refuge {
    * Returns y as a height ABOVE the board's foot.
    */
   _boardToSite(bx, by, bz) {
-    const fy = ANCHORS.breaker.faceYaw, c = Math.cos(fy), s = Math.sin(fy);
+    const fy = this.anchors.breaker.faceYaw, c = Math.cos(fy), s = Math.sin(fy);
     return { x: this._boardX() + c * bx + s * bz, y: by, z: this._boardZ() - s * bx + c * bz };
   }
 
@@ -401,7 +471,7 @@ export class Refuge {
    * thing on it and therefore the thing you aim at.
    */
   _buildDoor() {
-    const d = ANCHORS.door;
+    const d = this.anchors.door;
     const W = d.width, H = d.height;
     const parts = [];
     const put = (geo, col, x, y, z, ry) => {
@@ -438,20 +508,46 @@ export class Refuge {
 
     const geo = merge(parts);
     const pivot = new THREE.Group();
-    pivot.name = 'refuge-door';
+    pivot.name = 'refuge-door-' + this.siteId;
     if (geo) {
       const m = new THREE.Mesh(geo, this.matBody);
-      m.name = 'refuge-door-leaf';
+      m.name = 'refuge-door-leaf-' + this.siteId;
       m.castShadow = true; m.receiveShadow = true;
       pivot.add(m);
     }
     pivot.position.set(d.hingeX, this.padY + 0.03, d.hingeZ);
+    pivot.rotation.y = d.yaw || 0;
     this.group.add(pivot);
     this.leaf = pivot;
 
     this.doorWX = this._wx(d.midX, d.midZ);
     this.doorWZ = this._wz(d.midX, d.midZ);
     this.doorWY = this.padY;
+  }
+
+  /**
+   * The two later refuge rooms already have authored furniture. What they did not have was
+   * the one object that says "you can stop here" without a word: a sleeping bag. It is kept
+   * low and dark so the powered bulb, not a pale mattress, carries the read.
+   */
+  _buildBag() {
+    const b = this.anchors.bag;
+    if (!b) return;
+    const parts = [];
+    const put = (geo, col, x, y, z) => {
+      geo.rotateY(b.yaw || 0);
+      geo.translate(b.x + x, this.padY + y, b.z + z);
+      parts.push(tint(geo, col));
+    };
+    put(new THREE.BoxGeometry(1.08, 0.12, 2.12), [0.125, 0.070, 0.050], 0, 0.08, 0);
+    put(new THREE.BoxGeometry(0.82, 0.18, 0.42), [0.112, 0.100, 0.080], 0, 0.19, -0.72);
+    put(new THREE.BoxGeometry(1.00, 0.08, 0.50), [0.088, 0.052, 0.040], 0, 0.17, 0.68);
+    const geo = merge(parts);
+    if (!geo) return;
+    const m = new THREE.Mesh(geo, this.matBody);
+    m.name = 'refuge-bag-' + this.siteId;
+    m.castShadow = true; m.receiveShadow = true;
+    this.group.add(m);
   }
 
   /**
@@ -462,28 +558,33 @@ export class Refuge {
    * orange trapezoid cost this project a round to learn.
    */
   _buildLamps() {
-    const L = ANCHORS.lamps;
+    const L = this.anchors.lamps;
     const y = this.padY;
     const parts = [];
     // 1. the pilot on the breaker. Small, hard, and the first thing that changes.
     //    The bezel is at BOARD-local (+0.30, 0.90, 0.11); _boardToSite turns that into the
     //    site frame with the same rotateY the housing geometry got, so the bead cannot end
     //    up behind its own ring.
-    {
+    if (this.spec.buildBreaker !== false) {
       const q = this._boardToSite(0.32, 0.94, 0.145);
-      bead(parts, q.x, y + 0.95 + q.y, q.z, 0.038);
-      halo(parts, q.x, y + 0.95 + q.y, q.z, 0.13, 0.34, 0.85);
+      const foot = Number.isFinite(this.anchors.breaker.footY) ? this.anchors.breaker.footY : 0.95;
+      bead(parts, q.x, y + foot + q.y, q.z, 0.038);
+      halo(parts, q.x, y + foot + q.y, q.z, 0.13, 0.34, 0.85);
     }
     // 2. the bulb over the bed. MEASURED first cut: a 0.34 x 0.80 halo overflowed its own
     //    0.20 m shade and put 6% of the frame over 150 from the bed — a lamp reads as a lamp
     //    because of the SHADE it is inside, so the halo has to stay inside it.
-    bead(parts, L.bulb.x, y + L.bulb.y, L.bulb.z, 0.050);
-    halo(parts, L.bulb.x, y + L.bulb.y, L.bulb.z, 0.15, 0.34, 0.42);
+    if (L.bulb) {
+      bead(parts, L.bulb.x, y + L.bulb.y, L.bulb.z, 0.050);
+      halo(parts, L.bulb.x, y + L.bulb.y, L.bulb.z, 0.15, 0.34, 0.42);
+    }
     // 3. the lamp on the crate, throwing down onto the bag
-    bead(parts, L.table.x, y + L.table.y + 0.10, L.table.z, 0.036);
-    halo(parts, L.table.x, y + L.table.y + 0.10, L.table.z, 0.11, 0.22, 0.36);
+    if (L.table) {
+      bead(parts, L.table.x, y + L.table.y + 0.10, L.table.z, 0.036);
+      halo(parts, L.table.x, y + L.table.y + 0.10, L.table.z, 0.11, 0.22, 0.36);
+    }
     // 4. the firebox, which is a fire and not a lamp: low, wide, warm
-    {
+    if (L.stove) {
       const g = new THREE.PlaneGeometry(0.28, 0.22, 6, 5);
       const p = g.attributes.position, cnt = p.count;
       const c = new Float32Array(cnt * 3);
@@ -498,7 +599,7 @@ export class Refuge {
       halo(parts, L.stove.x, y + L.stove.y, L.stove.z - 0.30, 0.20, 0.36, 0.55);
     }
     // 5. the strip over the counter: a tube, hot along the middle, dead at the caps
-    {
+    if (L.counter) {
       const g = new THREE.PlaneGeometry(0.16, 1.10, 3, 10);
       const p = g.attributes.position, cnt = p.count;
       const c = new Float32Array(cnt * 3);
@@ -515,7 +616,7 @@ export class Refuge {
     // 6. THE BULKHEAD OVER THE DOOR, on the OUTSIDE. This is the one lamp the forecourt can
     //    see, and it is the whole teaching beat: you throw the breaker on the east wall, a
     //    light comes on over a door you had not noticed, and you walk to it. No words.
-    {
+    if (L.door) {
       const dl = L.door;
       const g = new THREE.PlaneGeometry(0.26, 0.17, 6, 4);
       const p = g.attributes.position, cnt = p.count;
@@ -526,16 +627,18 @@ export class Refuge {
         c[i * 3] = k; c[i * 3 + 1] = k; c[i * 3 + 2] = k;
       }
       g.setAttribute('color', new THREE.BufferAttribute(c, 3));
-      g.rotateY(Math.PI);
-      g.translate(dl.x, y + dl.y, dl.z - 0.10);
+      const ry = (this.spec.room ? this.spec.room.yaw : 0) + Math.PI;
+      const nx = Math.sin(ry), nz = Math.cos(ry);
+      g.rotateY(ry);
+      g.translate(dl.x + nx * 0.10, y + dl.y, dl.z + nz * 0.10);
       parts.push(g);
-      halo(parts, dl.x, y + dl.y, dl.z - 0.12, 0.30, 0.60, 0.70);
+      halo(parts, dl.x + nx * 0.12, y + dl.y, dl.z + nz * 0.12, 0.30, 0.60, 0.70);
     }
 
     const geo = merge(parts);
     if (!geo) return;
     const m = new THREE.Mesh(geo, this.matGlow);
-    m.name = 'refuge-glow';
+    m.name = this.siteId === SITE_ID ? 'refuge-glow' : 'refuge-glow-' + this.siteId;
     m.renderOrder = 4;
     this.group.add(m);
     this.glow = m;
@@ -583,9 +686,12 @@ export class Refuge {
      ========================================================================== */
   _restore() {
     const prog = this._sys('progress');
-    const v = prog && typeof prog.flag === 'function' ? prog.flag('refuge:' + SITE_ID) : undefined;
+    const v = prog && typeof prog.flag === 'function' ? prog.flag('refuge:' + this.siteId) : undefined;
     const bits = Number(v) || 0;
-    this.power = (bits & 1) !== 0;
+    const places = this._sys('places');
+    this.power = this.spec.claimPowered
+      ? !!(places && typeof places.isClaimed === 'function' && places.isClaimed(this.siteId))
+      : (bits & 1) !== 0;
     this.powerK = this.power ? 1 : 0;
     // The door starts OPEN whatever the save says, unless the save says it was shut AND the
     // power is on. A shut door you did not shut teaches nothing, and the first thing this
@@ -603,17 +709,34 @@ export class Refuge {
   _save() {
     const prog = this._sys('progress');
     if (!prog || typeof prog.flag !== 'function') return;
-    prog.flag('refuge:' + SITE_ID, (this.power ? 1 : 0) | (this.doorK > DOOR_SHUT_AT ? 2 : 0));
+    prog.flag('refuge:' + this.siteId, (this.power ? 1 : 0) | (this.doorK > DOOR_SHUT_AT ? 2 : 0));
   }
 
   /* ==========================================================================
      STEP
      ========================================================================== */
   step(dt) {
+    if (this._owner) { this._stepOne(dt); return; }
+    for (let i = 0; i < this._units.length; i++) this._units[i]._stepOne(dt);
+  }
+
+  _stepOne(dt) {
     if (!this._ready || !(dt > 0)) return;
     const player = this._sys('player');
     const p = player && player.pos ? player.pos : null;
     if (!p) return;
+
+    // The two destination refuges use the destination's EXISTING completion fixture as
+    // their panel. Claiming the lamp/cabinet brings the room up; no duplicate switch sits
+    // beside the real one and no second reward path is invented.
+    if (this.spec.claimPowered) {
+      const places = this._sys('places');
+      const on = !!(places && typeof places.isClaimed === 'function' && places.isClaimed(this.siteId));
+      if (on !== this.power) {
+        if (on) { this.leverK = 1; this._setPower(true); }
+        else { this.power = false; this.leverK = 0; this._save(); }
+      }
+    }
 
     // --- resting takes the whole system over --------------------------------
     if (this.resting) { this._restStep(dt, player, p); this._cullStep(dt); return; }
@@ -633,7 +756,7 @@ export class Refuge {
       this.holdKind = ''; this.holdT = 0;
     } else if (pressed) {
       if (cand === 'door') this._toggleDoor(px, pz);
-      else if (cand === 'breaker' && !this.power && this.throwT < 0) { this.holdKind = 'breaker'; this.holdT = 0; this._say('lantern', 0.85, this.breakerWX, this.breakerWY, this.breakerWZ); }
+      else if (cand === 'breaker' && this.spec.buildBreaker !== false && !this.power && this.throwT < 0) { this.holdKind = 'breaker'; this.holdT = 0; this._say('lantern', 0.85, this.breakerWX, this.breakerWY, this.breakerWZ); }
       else if (cand === 'bed') { this.holdKind = 'bed'; this.holdT = 0; }
       else if (cand === 'breaker' && this.power) { this.stats.refusals++; this._say('lanternGone', 0.6, this.breakerWX, this.breakerWY, this.breakerWZ); }
       else if (cand === 'bed-blocked') { this.stats.refusals++; this._say('lanternGone', 0.5, px, py + 1.2, pz); }
@@ -709,8 +832,8 @@ export class Refuge {
       if (d < bestD) { bestD = d; best = kind; }
     };
     test('door', this.doorWX, this.doorWY, this.doorWZ, REACH_DOOR, true);
-    test('breaker', this.breakerWX, this.breakerWY - 0.65, this.breakerWZ, REACH_BREAKER, true);
-    const b = ANCHORS.bag;
+    if (this.spec.buildBreaker !== false) test('breaker', this.breakerWX, this.breakerWY - 0.65, this.breakerWZ, REACH_BREAKER, true);
+    const b = this.anchors.bag;
     const bx = this._wx(b.x, b.z), bz = this._wz(b.x, b.z);
     test(this._canRest() ? 'bed' : 'bed-blocked', bx, this.padY, bz, REACH_BED, false);
     return best;
@@ -761,7 +884,7 @@ export class Refuge {
       try { prog._doorShut(); this.stats.hookRuns++; }
       catch (e) { this._note('onDoorShut: ' + e.message); }
     }
-    _doorPayload.shut = true; _doorPayload.x = px; _doorPayload.z = pz;
+    _doorPayload.id = this.siteId; _doorPayload.shut = true; _doorPayload.x = px; _doorPayload.z = pz;
     this.ctx.bus.emit('door:shut', _doorPayload);
     this._save();
   }
@@ -782,20 +905,22 @@ export class Refuge {
     const want = this.doorK >= DOOR_SHUT_AT ? 'shut' : (this.doorK <= 0.05 ? 'open' : '');
     if (want === this.doorColliderOn) return;
     this.doorColliderOn = want;
-    if (typeof col.removeChunk === 'function') col.removeChunk('refuge:door');
+    const chunkId = 'refuge:door:' + this.siteId;
+    if (typeof col.removeChunk === 'function') col.removeChunk(chunkId);
     if (!want) return;
-    const d = ANCHORS.door;
+    const d = this.anchors.door;
     // the leaf's midpoint and heading at this rest angle, in the site's local frame
     const th = want === 'shut' ? 0 : d.open;
-    const c = Math.cos(th), s = Math.sin(th), h = d.width * 0.5;
-    const lx = d.hingeX + h * c, lz = d.hingeZ - h * s;
+    const h = d.width * 0.5;
+    const base = d.yaw || 0;
+    const lx = d.hingeX + h * Math.cos(base + th), lz = d.hingeZ - h * Math.sin(base + th);
     col.addCollider({
       kind: 'obb',
       x: this._wx(lx, lz), z: this._wz(lx, lz),
-      halfX: h, halfZ: 0.09, yaw: this.yaw + th,
+      halfX: h, halfZ: 0.09, yaw: this.yaw + base + th,
       y0: this.padY - 0.2, y1: this.padY + d.height,
       tag: 'wall', climbable: false,
-    }, 'refuge:door');
+    }, chunkId);
   }
 
   /* --------------------------------------------------------------- breaker -- */
@@ -807,13 +932,13 @@ export class Refuge {
       // the clunk. A breaker is a heavy thing arriving at a stop, not a click.
       this._say('door', 1.0, this.breakerWX, this.breakerWY, this.breakerWZ);
       this._say('branch', 0.7, this.breakerWX, this.breakerWY, this.breakerWZ);
-      if (XP_POWER > 0) {
-        _xpPayload.amount = XP_POWER;
+      if ((this.spec.xpPower || 0) > 0) {
+        _xpPayload.amount = this.spec.xpPower;
         _xpPayload.x = this.breakerWX; _xpPayload.y = this.breakerWY; _xpPayload.z = this.breakerWZ;
         this.ctx.bus.emit('xp:gained', _xpPayload);
       }
     }
-    _powerPayload.on = on;
+    _powerPayload.id = this.siteId; _powerPayload.on = on;
     this.ctx.bus.emit('refuge:power', _powerPayload);
     this._save();
   }
@@ -836,7 +961,8 @@ export class Refuge {
     const lights = this._sys('lights');
     if (!lights || typeof lights.borrow !== 'function') return;
     const lx = this._lx(px, pz), lz = this._lz(px, pz);
-    const dx = lx + 10.5, dz = lz - 0.5;                  // the shop's local centre
+    const room = this.spec.room || { x: -10.5, z: 0.5, yaw: 0, w: 10, d: 7 };
+    const dx = lx - room.x, dz = lz - room.z;
     const near = this.powerK > 0.02 && (dx * dx + dz * dz) < LAMP_RANGE * LAMP_RANGE;
     if (!near) {
       if (this._lamp) {
@@ -846,24 +972,29 @@ export class Refuge {
       return;
     }
     if (!this._lamp) {
-      const h = lights.borrow('refuge', px, this.padY + 2, pz, GLOW.lamp, 0.0001, 0);
+      const h = lights.borrow('refuge:' + this.siteId, px, this.padY + 2, pz, GLOW.lamp, 0.0001, 0);
       if (!h) return;                                    // pool empty: ask again next step
       this._lamp = h;
+      this._lamp.decay = this.spec.lampDecay || 1.05;
     }
-    // inside the shell, with a little hysteresis at the threshold so it cannot chatter
-    const inside = lx > -15.4 && lx < -5.6
-      && lz > (this._lampWhere === 'in' ? -3.5 : -2.7) && lz < 3.9;
+    // Inverse the room's sub-yaw inside the site's local frame. The outside/inside lamp
+    // handoff follows the actual cottage/hut walls rather than the Filling Station's box.
+    const rcy = Math.cos(room.yaw || 0), rsy = Math.sin(room.yaw || 0);
+    const rx = dx * rcy - dz * rsy, rz = dx * rsy + dz * rcy;
+    const edge = this._lampWhere === 'in' ? 0.34 : 0.12;
+    const inside = Math.abs(rx) < room.w * 0.5 - edge && Math.abs(rz) < room.d * 0.5 - edge;
     this._lampWhere = inside ? 'in' : 'out';
-    const L = ANCHORS.lamps;
+    const L = this.anchors.lamps;
     const a = inside ? L.bulb : L.door;
-    const az = a.z + (inside ? 0 : -0.25);
+    if (!a) return;
     // A handle's position and peak are READ every present (gfx/lights.js:857-868), so the
     // one rover is moved rather than released and re-borrowed. No reseat is forced: the
     // pool re-seats on its own clock and a light that walks is not a light that appeared.
-    this._lamp.x = this._wx(a.x, az);
+    this._lamp.x = this._wx(a.x, a.z);
     this._lamp.y = this.padY + a.y - (inside ? 0.06 : 0.10);
-    this._lamp.z = this._wz(a.x, az);
-    this._lamp.peak = (inside ? LAMP_IN_I : LAMP_OUT_I) * this.powerK;
+    this._lamp.z = this._wz(a.x, a.z);
+    this._lamp.peak = (inside ? (this.spec.lampIn || LAMP_IN_I) : (this.spec.lampOut || LAMP_OUT_I)) * this.powerK;
+    this._lamp.decay = this.spec.lampDecay || 1.05;
   }
 
   /* ------------------------------------------------------------------ rest -- */
@@ -873,7 +1004,7 @@ export class Refuge {
     this.restPhase = 'in';
     this.restAnchorX = p.x; this.restAnchorZ = p.z; this.restAnchorY = p.y;
     this.stats.rests++;
-    _restPayload.x = p.x; _restPayload.z = p.z; _restPayload.seconds = REST_CLOCK_S;
+    _restPayload.id = this.siteId; _restPayload.x = p.x; _restPayload.z = p.z; _restPayload.seconds = REST_CLOCK_S;
     this.ctx.bus.emit('place:rest', _restPayload);
   }
 
@@ -946,22 +1077,31 @@ export class Refuge {
      an opacity is assigned (docs/CONTRACT.md — render interpolation, always).
      ========================================================================== */
   present(alpha) {
-    if (!this._ready) return;
+    if (this._owner) { this._presentOne(alpha); return; }
+    let fade = 0;
+    for (let i = 0; i < this._units.length; i++) fade = Math.max(fade, this._units[i]._presentOne(alpha));
+    if (this._overlay) {
+      const shown = fade > 0.002;
+      this._overlay.style.display = shown ? 'block' : 'none';
+      if (shown) this._overlay.style.opacity = String(fade);
+    }
+  }
+
+  _presentOne(alpha) {
+    if (!this._ready) return 0;
     const a = clamp01(alpha);
     const lever = this._leverPrev + (this._leverCurr - this._leverPrev) * a;
     const door = this._doorPrev + (this._doorCurr - this._doorPrev) * a;
     if (this._leverMesh) this._leverMesh.rotation.z = LEVER_UP + (LEVER_DOWN - LEVER_UP) * lever;
-    if (this.leaf) this.leaf.rotation.y = ANCHORS.door.open * (1 - door);
+    if (this.leaf) {
+      const d = this.anchors.door;
+      this.leaf.rotation.y = (d.yaw || 0) + d.open * (1 - door);
+    }
     if (this.glow) {
       this.matGlow.opacity = this.powerK;
       this.glow.visible = this.group.visible;
     }
-    if (this._overlay) {
-      const f = this._fadePrev + (this._fadeCurr - this._fadePrev) * a;
-      const shown = f > 0.002;
-      this._overlay.style.display = shown ? 'block' : 'none';
-      if (shown) this._overlay.style.opacity = String(f);
-    }
+    return this._fadePrev + (this._fadeCurr - this._fadePrev) * a;
   }
 
   /** Distance culling, done in the step so present() only ever reads it. */
@@ -985,10 +1125,14 @@ export class Refuge {
      THE TEST SURFACE. Everything tests/refuge.mjs asserts is readable here, and
      every setter drives the same code path the player's key does.
      ========================================================================== */
-  state() {
-    const b = ANCHORS.bag;
+  state(id = this.siteId) {
+    if (!this._owner && id !== this.siteId) {
+      const unit = this._units.find(u => u.siteId === id);
+      return unit ? unit.state(unit.siteId) : null;
+    }
+    const b = this.anchors.bag;
     return {
-      ready: this._ready,
+      id: this.siteId, ready: this._ready, claimPowered: !!this.spec.claimPowered,
       power: this.power, powerK: +this.powerK.toFixed(3),
       lever: +this.leverK.toFixed(3), throwing: this.throwT >= 0,
       door: +this.doorK.toFixed(3), doorTarget: this.doorTarget, collider: this.doorColliderOn,
@@ -996,7 +1140,8 @@ export class Refuge {
       canRest: this._canRest(),
       hold: this.holdKind, holdT: +this.holdT.toFixed(3),
       lamp: this._lampWhere || null,
-      overlay: this._overlay ? +(Number(this._overlay.style.opacity) || 0).toFixed(3) : null,
+      overlay: (this._overlay || (this._owner && this._owner._overlay))
+        ? +(Number((this._overlay || this._owner._overlay).style.opacity) || 0).toFixed(3) : null,
       stats: this.stats,
       notes: this._notes.slice(),
       // world anchors, so a test can teleport to them without knowing the site's yaw
@@ -1006,19 +1151,27 @@ export class Refuge {
         // where the leaf STANDS when it is open, so a test can ask the collision field
         // whether an open door is still a solid object
         leafOpen: (() => {
-          const d = ANCHORS.door, th = d.open, h = d.width * 0.5;
-          const lx = d.hingeX + h * Math.cos(th), lz = d.hingeZ - h * Math.sin(th);
+          const d = this.anchors.door, th = d.open, h = d.width * 0.5, base = d.yaw || 0;
+          const lx = d.hingeX + h * Math.cos(base + th), lz = d.hingeZ - h * Math.sin(base + th);
           return [this._wx(lx, lz), this._wz(lx, lz)];
         })(),
         bed: [this._wx(b.x, b.z), this.padY, this._wz(b.x, b.z)],
         normal: [this.breakerNX, this.breakerNZ],
+        doorNormal: (() => {
+          const d = this.anchors.door, a = this.yaw + (d.yaw || 0) + Math.PI;
+          return [Math.sin(a), Math.cos(a)];
+        })(),
         yaw: this.yaw, padY: this.padY,
       },
     };
   }
 
   /** Drive the verbs from a test without synthesising a keypress. */
-  force(what, on) {
+  force(what, on, id = this.siteId) {
+    if (!this._owner && id !== this.siteId) {
+      const unit = this._units.find(u => u.siteId === id);
+      return unit ? unit.force(what, on, unit.siteId) : false;
+    }
     if (what === 'power') { if (on === false) { this.power = false; this.leverK = 0; this._applyPowerNow(); this._save(); } else { this.leverK = 1; this._setPower(true); this._applyPowerNow(); } return true; }
     if (what === 'door') { this.doorTarget = on === false ? 0 : 1; return true; }
     if (what === 'doorNow') {
@@ -1047,18 +1200,35 @@ export class Refuge {
     if (!r) return;
     if (r.power !== undefined) this.force('power', !!r.power);
     if (r.door !== undefined) this.force('doorNow', !!r.door);
+    if (!this._owner && r.sites) {
+      for (const id of Object.keys(r.sites)) {
+        const s = r.sites[id] || {};
+        if (s.power !== undefined) this.force('power', !!s.power, id);
+        if (s.door !== undefined) this.force('doorNow', !!s.door, id);
+      }
+    }
+  }
+
+  /** All three honest refuge loops, as copies. The station remains state()'s default. */
+  refuges() {
+    if (this._owner) return [this.state()];
+    return this._units.map(u => u.state(u.siteId));
   }
 
   ready() { return true; }
 
   dispose() {
+    if (!this._owner && this._units) {
+      for (let i = 1; i < this._units.length; i++) this._units[i].dispose();
+      this._units.length = 1;
+    }
     if (this._lamp) {
       const lights = this._sys('lights');
       if (lights && typeof lights.release === 'function') lights.release(this._lamp);
       this._lamp = null; this._lampWhere = '';
     }
     const col = this._sys('collision');
-    if (col && typeof col.removeChunk === 'function') col.removeChunk('refuge:door');
+    if (col && typeof col.removeChunk === 'function') col.removeChunk('refuge:door:' + this.siteId);
     this.doorColliderOn = '';
     if (this.group) {
       if (this.group.parent) this.group.parent.remove(this.group);
@@ -1067,7 +1237,7 @@ export class Refuge {
     }
     if (this.matBody) { this.matBody.dispose(); this.matBody = null; }
     if (this.matGlow) { this.matGlow.dispose(); this.matGlow = null; }
-    if (this._overlay && this._overlay.parentNode) this._overlay.parentNode.removeChild(this._overlay);
+    if (!this._owner && this._overlay && this._overlay.parentNode) this._overlay.parentNode.removeChild(this._overlay);
     this._overlay = null;
     this._ready = false;
   }

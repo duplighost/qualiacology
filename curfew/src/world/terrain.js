@@ -570,10 +570,10 @@ export class Terrain {
     //     of 29.6. Same pad Y (16.43), slope 0.0000 — 26 m from the disc centre, inside
     //     the 27.4 m fully level core, so the ground under the player did not move at all.
     //
-    // There is no map and no minimap in this game by design: the roads and the beacons ARE
-    // the wayfinding system, and until this line the player booted into a county whose only
-    // road was behind their shoulder. The lit station canopy now reads dead ahead and the
-    // spur runs away west across the lower frame.
+    // At the time of this measurement there was no minimap; Round 8 later added one. Roads
+    // and physical landmarks still have to work as world-space wayfinding, and until this
+    // line the player booted into a county whose only road was behind their shoulder. The lit
+    // station canopy now reads dead ahead and the spur runs away west across the lower frame.
     //
     // If a later round wants the old pose back, the honest fix is a spawn HEADING —
     // camera.js:76 hardcodes `this.yaw = 0` and terrain has no way to ask for another. See

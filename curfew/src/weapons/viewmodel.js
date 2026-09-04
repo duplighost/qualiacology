@@ -681,7 +681,9 @@ export class Viewmodel {
       side: THREE.DoubleSide,
     });
     this._dotMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(0.320, 0.092, 0.016), toneMapped: false,
+      // Six percent under the Round-8 value: the old 125-luma peak missed the 120 ceiling
+      // while the dot's footprint/readability already passed.
+      color: new THREE.Color(0.300, 0.086, 0.015), toneMapped: false,
       transparent: true, opacity: 1.0, depthWrite: false, side: THREE.DoubleSide,
     });
     // Both guns hang off this.gun (the pose/scale group). Each gets its own child group so
@@ -978,7 +980,10 @@ export class Viewmodel {
     add(g, tube(0.0115, 0.016), blued, 0, 0.024, -0.205);
     add(g, B(0.004, 0.014, 0.006), blued, 0, 0.037, -0.196);
     // rear notch: two ears either side of the sight axis, their tops level with the bead
-    for (const x of [-0.010, 0.010]) add(g, B(0.006, 0.008, 0.010), blued, x, 0.040, 0.045);
+    // Open the notch by 2.5 mm overall. The old left clearance was one raster pixel under
+    // its contract (15/17 px); moving the ears, rather than shrinking the front bead,
+    // preserves the aiming reference.
+    for (const x of [-0.011, 0.011]) add(g, B(0.0055, 0.008, 0.010), blued, x, 0.040, 0.045);
     // grip, trigger guard, trigger
     add(g, B(0.028, 0.078, 0.038), wood, 0, -0.052, 0.036, 0.30);
     add(g, B(0.032, 0.016, 0.042), blued, 0, -0.014, 0.030);

@@ -96,9 +96,9 @@ const _dropped = { id: '', cx: 0, cz: 0 };
  *      showed exactly that: one flat navy sheet. The mean (38.7) was already right and
  *      ART.md 0.3 row 6 marks it DO NOT DARKEN, so everything below is VARIATION and
  *      nothing below is exposure.
- *  3.2 the road contributed ZERO measurable pixels. There is no map and no minimap in
- *      this game by design; the road and the beacons ARE the wayfinding system, and one
- *      of the two was not on screen.
+ *  3.2 the road contributed ZERO measurable pixels. At that measured point there was no
+ *      minimap; Round 8 later added one, but roads, physical landmarks and the map board remain
+ *      the world-space wayfinding system, and the road itself was not on screen.
  *
  * Everything here rides the vertex-colour channel that already exists plus ONE 64x128
  * profile texture on the road material, so it costs zero draws and zero shader programs

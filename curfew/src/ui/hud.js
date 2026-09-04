@@ -123,6 +123,7 @@ const MARK_POOL = 6;
 const ARC_LIFE = 0.90;          // damage direction
 const ARC_POOL = 4;
 const PULSE_LIFE = 0.30;        // a mote landed
+const REWARD_LIFE = 0.70;       // a cache/place/weapon-sized reward landed
 const PULSE_POOL = 5;
 // A NODE BOUGHT AND A LEVEL GAINED, and they are here for the reason the second audit found
 // everywhere else: the only acknowledgement either of them had was a chime, and the chime is
@@ -244,7 +245,7 @@ const SHADE = 'rgba(4,6,9,0.72)';
 /* ------------------------------------------------------------- THE MAP ----
  * County-square, MAP_PX a side, in the card's own palette so it never reads as a HUD: the
  * ground is the card's own dark, the roads and marks are the card's ink at low alpha, and
- * the ONE hue on it is a claimed place in its region's tint — the same colour its beacon
+ * the ONE hue on it is a claimed place in its region's tint — the same colour its claim light
  * put in the sky. The travelled wash is the ink at MAP_WASH_A, drawn as overlapping discs a
  * little larger than a cell so the edge of the walked county is soft rather than a grid.
  * Everything below is measured against the PNGs in docs/ROUND-6/G-card.md.
@@ -371,6 +372,11 @@ const CSS = `
 #curfew-car-button .car-body::after { content: ''; position: absolute; left: 2px; bottom: -4px;
               width: 4px; height: 4px; border-radius: 50%; background: currentColor;
               box-shadow: 14px 0 0 currentColor; }
+#curfew-car-button .car-key { position: absolute; right: 5px; bottom: 3px;
+              min-width: 15px; height: 15px; padding: 0 3px; border: 1px solid rgba(232,238,248,.62);
+              border-radius: 3px; background: #080c12; color: #f1f5fb;
+              font: 700 10px/13px ui-monospace, monospace; letter-spacing: 0; text-align: center;
+              box-shadow: 0 2px 7px rgba(0,0,0,.75); }
 #curfew-car-button .car-needle { position: absolute; inset: 4px; opacity: 0;
               transform: rotate(var(--bearing, 0deg)); transition: opacity .12s ease; }
 #curfew-car-button .car-needle::before { content: ''; position: absolute; left: 50%; top: -1px;
@@ -646,7 +652,8 @@ export class Hud {
     this.mapInfo = {
       drawn: 0, painted: 0, roads: 0, spurs: 0, names: 0, glyphs: 0,
       found: 0, claimed: 0, unfound: 0,
-      fires: 0, minors: 0, wilds: 0, car: false, arrowX: -1, arrowY: -1, carX: -1, carY: -1,
+      fires: 0, minors: 0, wilds: 0, checkpoints: 0,
+      car: false, arrowX: -1, arrowY: -1, carX: -1, carY: -1,
     };
     // The travelled wash's own surface, built at the bitmap's resolution and reused. See
     // _washImage(): it is what stops the wash being a string of scalloped discs.
@@ -655,7 +662,8 @@ export class Hud {
     // The live local map. Roads are immutable and cached by reference on first paint; every
     // other read stays lazy. The paint cadence is fixed-step time, never a wall timer.
     this._miniRoutes = null; this._miniT = 0; this._miniDirty = true;
-    this._miniPaints = 0; this._miniRoads = 0; this._miniPlaces = 0; this._miniCar = false;
+    this._miniPaints = 0; this._miniRoads = 0; this._miniPlaces = 0;
+    this._miniCheckpoints = 0; this._miniCar = false;
     this._miniCarX = -1; this._miniCarY = -1; this._miniCarAngle = 0;
 
     // One explicit bearing, requested by one explicit button. No threat-direction wallpaper.
@@ -729,8 +737,15 @@ export class Hud {
     const carNeedle = document.createElement('span');
     carNeedle.className = 'car-needle';
     carNeedle.setAttribute('aria-hidden', 'true');
+    // Alex had to ask whether a keyboard button existed. A hidden binding is no binding:
+    // the live car icon now carries the same L printed by the pause card.
+    const carKey = document.createElement('span');
+    carKey.className = 'car-key';
+    carKey.setAttribute('aria-hidden', 'true');
+    carKey.textContent = 'L';
     carButton.appendChild(carNeedle);
     carButton.appendChild(carBody);
+    carButton.appendChild(carKey);
     carButton.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
     carButton.addEventListener('click', (e) => {
       e.stopPropagation(); e.preventDefault(); this._locateCar();
@@ -878,8 +893,9 @@ export class Hud {
     on('player:hurt', (p) => this._arc(p));
 
     on('xp:gained', (p) => {
-      if (p.reason !== 'kill') return;   // a road metre does not deserve a flash
-      this._pulse('mote', PULSE_LIFE);
+      if (p.reason === 'road') return;   // a road metre does not deserve a flash
+      this._pulse(p.reason === 'kill' ? 'mote' : 'reward',
+        p.reason === 'kill' ? PULSE_LIFE : REWARD_LIFE);
     });
 
     // A node is now yours. progression/progress.js emits this for a purchase AND for an
@@ -891,6 +907,9 @@ export class Hud {
     // node click).
     on('node:bought', () => { this._pulse('node', GRANT_LIFE); });
     on('level:up', () => { this._pulse('level', LEVEL_LIFE); });
+    // A grant raises the new weapon into the hands. Its enclosing claim already emits the
+    // one canonical xp receipt, so weapon:granted must not add a second HUD pulse.
+    on('weapon:granted', () => {});
 
     // NOT `this.hp = 0` any more. Setting it here hid the killing blow from the tracker in
     // step(), so the LAST piece of the arc — the bite that actually killed him, the one he
@@ -1370,13 +1389,28 @@ export class Hud {
   }
 
   /**
+   * An activated lookout: one closed ring around one solid core. It is neither the hollow /
+   * filled wild square nor a campfire's rays, and it communicates the same state on both maps
+   * without adding a word or depending on colour.
+   */
+  _checkpoint(g, x, y, r, a) {
+    g.globalAlpha = a * 0.50; g.strokeStyle = SHADE; g.lineWidth = 3.2;
+    g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke();
+    g.globalAlpha = a; g.strokeStyle = INK; g.fillStyle = INK; g.lineWidth = 1.2;
+    g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke();
+    const core = Math.max(1.7, r * 0.30);
+    g.fillRect(x - core, y - core, core * 2, core * 2);
+    g.globalAlpha = 1;
+  }
+
+  /**
    * A DESTINATION'S OWN SILHOUETTE, in a 2s x 2s box centred on (x, y), standing on y + s.
    *
    * ALEX asked for the map to be "organized or have flow", and the destinations cannot move —
-   * the roads are baked around them. So what the map can do is make each of the twelve READ
+   * the roads are baked around them. So what the map can do is make each of the fifteen READ
    * as the thing it is, from across the card, with no legend and no word: a lighthouse is a
    * tapered tower throwing two rays, a graveyard is three headstones, a barn is a gambrel
-   * roof. Twelve shapes, one per `kind` in placedata.js. An unknown kind falls back to a ring,
+   * roof. Fifteen shapes, one per `kind` in placedata.js. An unknown kind falls back to a ring,
    * so a new destination row draws SOMETHING rather than nothing.
    *
    * Stroke only, current strokeStyle and lineWidth: the caller draws it twice, dark then ink,
@@ -1499,7 +1533,7 @@ export class Hud {
 
     I.painted = 0; I.roads = 0; I.spurs = 0; I.names = 0; I.glyphs = 0;
     I.found = 0; I.claimed = 0; I.unfound = 0;
-    I.fires = 0; I.minors = 0; I.wilds = 0;
+    I.fires = 0; I.minors = 0; I.wilds = 0; I.checkpoints = 0;
     I.car = false; I.arrowX = -1; I.arrowY = -1; I.carX = -1; I.carY = -1;
 
     /* 0. the paper ----------------------------------------------------------- */
@@ -1526,10 +1560,10 @@ export class Hud {
       I.painted = grid.count | 0;
     }
 
-    /* 2. the roads — the loop, and the two spurs off it ---------------------- */
+    /* 2. the roads — the loop, and the eleven branches off it ---------------- */
     // routePolylines(), not routes(): roads.js's constructor owns `this.routes` as a table.
     // That table is exactly where the KIND lives, though, and the kind is what makes the map
-    // legible: one asphalt loop that goes everywhere, and two gravel spurs that end. Drawn
+    // legible: one asphalt loop that carries the county, and eleven secondary roads. Drawn
     // differently — the loop solid with a soft casing under it, a spur thin and dashed — so
     // "which way is the way round" is answered before you have read a single name.
     const routes = roads && typeof roads.routePolylines === 'function' ? roads.routePolylines() : null;
@@ -1562,7 +1596,7 @@ export class Hud {
     // A campfire he has warmed himself at (progress.firesFound, ids), and — round 7 — every
     // OTHER minor site he has been within thirty metres of (progress.minorsMet, indices into
     // places' own table). Together they are the reason the county map reads as a route
-    // somebody walked rather than twelve dots in a black square.
+    // somebody walked rather than fifteen dots in a black square.
     //
     // The campfire id: places.campfires() renames `fireId` to `id` on the way out, and round
     // 6 read `f.fireId` off the public copy — undefined for every fire, so this layer drew
@@ -1621,16 +1655,22 @@ export class Hud {
         const w = wl[i];
         if (!w || !w.found || !Number.isFinite(w.x) || !Number.isFinite(w.z)) continue;
         const x = px(w.x), y = pz(w.z);
-        g.globalAlpha = w.climbed ? 0.85 : 0.55;
-        // A small square: climbed is filled, found is hollow. Shape, never hue.
-        if (w.climbed) g.fillRect(x - 2.5, y - 2.5, 5, 5);
-        else g.strokeRect(x - 2.5, y - 2.5, 5, 5);
+        const checkpoint = w.kind === 'tower' && w.climbed;
+        if (checkpoint) {
+          this._checkpoint(g, x, y, 5.2, 0.92);
+          I.checkpoints++;
+        } else {
+          g.globalAlpha = w.climbed ? 0.85 : 0.55;
+          // A small square: climbed is filled, found is hollow. Shape, never hue.
+          if (w.climbed) g.fillRect(x - 2.5, y - 2.5, 5, 5);
+          else g.strokeRect(x - 2.5, y - 2.5, 5, 5);
+        }
         I.wilds++;
       }
       g.globalAlpha = 1;
     }
 
-    /* 5. the twelve destinations, three states ------------------------------- */
+    /* 5. the fifteen destinations, three states ------------------------------ */
     // ALEX, original brief item 21: "the map has to be organized or have flow." The roads are
     // baked and the destinations cannot move, so the MAP does the organising:
     //   not found  a small hollow diamond and nothing else. Something is there. Go and see.
@@ -1638,7 +1678,7 @@ export class Hud {
     //              lighthouse, a barn like a barn, a graveyard like three headstones — so
     //              "what is over there" is answered by the shape, with no legend to read.
     //   claimed    the same silhouette in the region's tint, on a soft disc of it: the colour
-    //              the place put in the sky when you took it. It also STOPS being the
+    //              of its powered claim state. It also STOPS being the
     //              brightest thing on the map, so the unclaimed ones are what the eye goes
     //              to. That is the flow — the bright shapes are the ones still waiting.
     const foundSet = places && places.found && typeof places.found.has === 'function' ? places.found
@@ -1842,6 +1882,7 @@ export class Hud {
     const places = this.ctx.systems.get('places');
     const prog = this.ctx.systems.get('progress');
     const car = this.ctx.systems.get('car');
+    const wilds = this.ctx.systems.get('wilds');
     if (!this._miniRoutes && roads && typeof roads.routePolylines === 'function') {
       this._miniRoutes = roads.routePolylines();
     }
@@ -1888,6 +1929,27 @@ export class Hud {
         }
       }
       g.setLineDash([]);
+    }
+
+    // Activated lookout checkpoints only. `lookouts()` returns the stable thirteen-record
+    // planner table; using allocating wilds.list() in this 30 Hz paint would manufacture
+    // thousands of short-lived objects a second. Unknown and merely found towers stay off
+    // this local instrument, so it never reveals the woods ahead of the player.
+    this._miniCheckpoints = 0;
+    const lookouts = wilds && typeof wilds.lookouts === 'function' ? wilds.lookouts() : null;
+    if (Array.isArray(lookouts)) {
+      for (let i = 0; i < lookouts.length; i++) {
+        const tower = lookouts[i];
+        if (!tower || !tower.climbed || !Number.isFinite(tower.x) || !Number.isFinite(tower.z)) continue;
+        const dx = tower.x - px, dz = tower.z - pz;
+        if (dx * dx + dz * dz > MINI_RANGE * MINI_RANGE) continue;
+        const x = c + (dx * rx + dz * rz) * scale;
+        const y = c - (dx * fx + dz * fz) * scale;
+        // Larger than the player arrow's waist so the activation still reads while both are
+        // centred on the tower; once the player leaves, the same mark becomes a bearing.
+        this._checkpoint(g, x, y, 8.2, 0.92);
+        this._miniCheckpoints++;
+      }
     }
 
     // Nearby destinations, no names. Hollow = waiting, solid = claimed.
@@ -2396,17 +2458,16 @@ export class Hud {
     /* ---- hit markers -------------------------------------------------------- */
     for (let i = 0; i < MARK_POOL; i++) if (this.marks[i].live) this._drawMark(g, c, this.marks[i], u);
 
-    /* ---- a mote landed, a node bought, a level gained ------------------------ */
-    // Three readings of one gesture, separated by SPEED and COUNT rather than by hue: the
-    // mote is one fast thin ring, a node is two rings that open slowly behind each other, a
-    // level is three, slower and wider still. Nothing is written, nothing is named, and every
-    // one of them survives the audio lane being dead.
+    /* ---- a mote/reward landed, a node bought, a level gained ----------------- */
+    // Four readings of one gesture, separated by SPEED and COUNT rather than by hue. A
+    // discrete cache/place reward gets the same durable double-ring family as a node; the
+    // world crown and rising chime distinguish it, while this receipt survives dead audio.
     for (let i = 0; i < PULSE_POOL; i++) {
       const q = this.pulses[i];
       if (!q.live) continue;
       const life = q.life || PULSE_LIFE;
       const t = clamp01(q.t / life);
-      const rings = q.kind === 'level' ? 3 : q.kind === 'node' ? 2 : 1;
+      const rings = q.kind === 'level' ? 3 : (q.kind === 'node' || q.kind === 'reward') ? 2 : 1;
       // The grant eases OUT (fast then settling) so it reads as arriving rather than as an
       // expanding shockwave, which is what the mote's linear ring already is.
       const e = rings === 1 ? t : 1 - Math.pow(1 - t, 2.2);
@@ -2637,7 +2698,8 @@ export class Hud {
       },
       minimap: {
         visible: !!(this.chrome && !this.chrome.hidden), paints: this._miniPaints,
-        roads: this._miniRoads, places: this._miniPlaces, car: this._miniCar,
+        roads: this._miniRoads, places: this._miniPlaces,
+        checkpoints: this._miniCheckpoints, car: this._miniCar,
         carX: +this._miniCarX.toFixed(1), carY: +this._miniCarY.toFixed(1),
         carAngle: +this._miniCarAngle.toFixed(3), range: MINI_RANGE,
       },
