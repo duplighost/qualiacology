@@ -671,9 +671,9 @@ export const BUILDERS = {
       k.solid.box(1.3, 0.90, 0.72, -13.6, api.padY + 0.45, -3.72, C.plaster);
       k.solid.box(1.3, 0.06, 0.74, -13.6, api.padY + 0.92, -3.72, C.dark);
       api.emit({ kind: 'obb', x: -13.6, z: -3.72, halfX: 0.65, halfZ: 0.36, yaw: 0, y0: api.padY - 0.2, y1: api.padY + 0.95, tag: 'metal', standable: true });
-      k.solid.box(1.7, 0.07, 0.42, -8.4, api.padY + 0.46, -3.72, C.plank);
-      for (const bx of [-9.1, -7.7]) k.solid.box(0.08, 0.44, 0.40, bx, api.padY + 0.22, -3.72, C.metal);
-      api.emit({ kind: 'obb', x: -8.4, z: -3.72, halfX: 0.85, halfZ: 0.21, yaw: 0, y0: api.padY - 0.2, y1: api.padY + 0.50, tag: 'wood', standable: true });
+      k.solid.box(1.7, 0.07, 0.42, -7.4, api.padY + 0.46, -3.72, C.plank);
+      for (const bx of [-8.1, -6.7]) k.solid.box(0.08, 0.44, 0.40, bx, api.padY + 0.22, -3.72, C.metal);
+      api.emit({ kind: 'obb', x: -7.4, z: -3.72, halfX: 0.85, halfZ: 0.21, yaw: 0, y0: api.padY - 0.2, y1: api.padY + 0.50, tag: 'wood', standable: true });
       // a bin by the door
       k.solid.cyl(0.27, 0.24, 0.85, 9, -6.4, api.padY + 0.42, -3.9, C.metal);
       k.solid.cyl(0.29, 0.29, 0.06, 9, -6.4, api.padY + 0.87, -3.9, C.dark);
@@ -705,7 +705,14 @@ export const BUILDERS = {
       k.solid.quad(2.9, 1.8, -8.4, api.padY + 1.9, -3.23, C.paper, Math.PI);
       return {
         solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.lamp,
-        mapBoard: { x: -8.4, y: api.padY + 1.9, z: -3.29, w: 2.7, h: 1.66, yaw: Math.PI },
+        // ROUND 6.1 (Alex, sixth playtest: "it just has a rectangle thing over part of the
+        // doorway"). It did. shell() puts the shop's 2.4 m doorway at local x -11.7..-9.3;
+        // this board is 2.7 wide and stood at x -8.4, so it spanned -9.75..-7.05 and hung
+        // 0.45 m ACROSS the opening, 0.29 m proud of the wall, at eye height (padY+1.07 to
+        // padY+2.73 against an eye of 1.68). Centred on the wall panel beside the door
+        // instead: the panel is -9.3..-5.5, its middle is -7.4, and the board now clears the
+        // doorway by 0.55 m. The bench under it moved the same 1.0 m.
+        mapBoard: { x: -7.4, y: api.padY + 1.9, z: -3.29, w: 2.7, h: 1.66, yaw: Math.PI },
       };
     },
   },
