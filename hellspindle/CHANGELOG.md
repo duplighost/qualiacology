@@ -258,5 +258,13 @@ composited into one shared canvas per character so she is the same size walking,
 airborne or on the rope. Air poses are chosen by vertical speed — rise, leap,
 fall, dive — rather than cycled on a timer, and the dive comes out at speed on
 the rope. Landing compresses her in proportion to the fall; a hard takeoff
-stretches her. No idle sheet came with the set, so the rest pose is the
-narrowest walk frame with a breath on it.
+stretches her.
+
+The idle is four real poses. The full-resolution idle sheet only ever turned up
+inside the GPT handoff zip (`gen/hunter/raw-idle.jpg`, 1408x1408, same magenta
+key, 2x2), never in the direct uploads, so the first pass had faked a rest pose
+from the narrowest walk frame. Her character is drawn 22% larger in that sheet
+than in the walk sheet, so it is scaled to match before compositing — measured
+character height is now 497-504px in idle against 497-502 in walk, which is why
+she does not pop size when she stops moving. The procedural breath is a whisper
+on top now that the poses carry the weight shift themselves.

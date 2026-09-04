@@ -23,8 +23,9 @@ What is true now:
 - Levels hand you a relic. You spend it in the Reliquary when you choose:
   Tab or E, or tap the badge. Six lines, and THE CHAIN and THE TENDON change
   the actual geometry of what you can reach.
-- New hunter and knight sheets. Air poses are picked by what the body is doing,
-  not by a clock. Landings compress, takeoffs stretch.
+- New hunter and knight sheets, and a real four-pose idle. Air poses are picked
+  by what the body is doing, not by a clock. Landings compress, takeoffs
+  stretch. She is the same size in every state.
 
 Still true about the picture: knight shield art stays after the shield breaks,
 attacks are a lean, hook hole is a little chewed.

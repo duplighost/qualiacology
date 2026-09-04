@@ -103,7 +103,7 @@
   }
   const anims = {
     hunterWalk: loadAnim('hunter_walk', 6),
-    hunterIdle: loadAnim('hunter_idle', 1),
+    hunterIdle: loadAnim('hunter_idle', 4),
     hunterAir: loadAnim('hunter_air', 4),
     knightWalk: loadAnim('knight_walk', 6),
     crawlerWalk: loadAnim('crawler_walk', 8),
@@ -3961,12 +3961,13 @@
       } else if (player.animState === 'walk') {
         img = animImg(anims.hunterWalk, player.animTime, 11);
       } else {
-        img = animImg(anims.hunterIdle, player.animTime, 6);
+        img = animImg(anims.hunterIdle, player.animTime, 5);
       }
       if (!img || !img.complete || !img.naturalWidth) img = animImg(anims.hunterWalk, 0, 1) || sprites.hunter;
       if (img && img.complete && img.naturalWidth) {
-        // Idle breathes; landings compress; takeoffs stretch.
-        const breath = player.animState === 'idle' ? Math.sin(game.realTime * 1.9) * 0.012 : 0;
+        // The idle loop carries its own weight shift now that there are four
+        // real poses for it, so the procedural breath is only a whisper on top.
+        const breath = player.animState === 'idle' ? Math.sin(game.realTime * 1.9) * 0.005 : 0;
         const sq = player.squash;
         const scaleY = 1 + sq + breath;
         const scaleX = 1 - sq * 0.72 - breath * 0.5;
