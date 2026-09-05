@@ -188,6 +188,43 @@ export class Clock {
     return true;
   }
 
+  /**
+   * Advance the clock across a span that did NOT pass a frame at a time. The rest at a
+   * shelter is the only caller. It walks to each phase boundary in turn and emits
+   * phase:changed for every boundary it crosses, carrying the real previous phase.
+   *
+   * refuge.js used to do `clock.cycleT += REST_CLOCK_S; clock._recompute()`, which moved
+   * `phase` behind step()'s back. step() compares the phase before and after ITS OWN advance,
+   * so a phase somebody else changed is invisible to it: sleeping from dawn into dusk emitted
+   * nothing at all. The cycle never turned for progression or the Auditor, the director kept
+   * the roster of the phase you lay down in, and Iron's once-a-night latch never re-armed.
+   */
+  advance(seconds) {
+    let remain = Math.max(0, +seconds || 0);
+    if (!remain) return false;
+    let guard = 0;
+    while (remain > 1e-6 && guard++ < 64) {
+      const prevPhase = this.phase;
+      const i = PHASE_INDEX[this.phase];
+      const left = phaseStart(i) + PHASES[i].dur - this.cycleT;
+      const dt = Math.min(remain, Math.max(left, 1e-3));
+      this.cycleT += dt;
+      remain -= dt;
+      this._recompute();
+      if (this.phase !== prevPhase) {
+        _payload.phase = this.phase;
+        _payload.prev = prevPhase;
+        this.ctx.bus.emit('phase:changed', _payload);
+      }
+    }
+    // A rest is a discontinuity, exactly like setPhase's jump: kill the interpolation so
+    // present() does not sweep the sky through the intervening hours in one frame.
+    this._prevSkyT = this._currSkyT = this.skyT;
+    this._prevRed = this._currRed = this.redness;
+    this._appliedSkyT = -1;
+    return true;
+  }
+
   /** Live A/B only. rate 0 freezes the cycle where it stands. */
   setRate(r) { this._rate = Math.max(0, +r || 0); }
 

@@ -318,6 +318,12 @@ export class Combat {
     const extraExits = (this._perk('penExits', 0) | 0) || ((ps && ps.penExtra) | 0);
     const maxPens = MAX_PENS + Math.max(0, extraExits);
     const statPenMul = (ps && ps.penMul) || 1;
+    // HANDS damageMul (Heavy Rounds 1.12, Through 1.25). It is a STAT, written into the
+    // bag by nodes.js:346/357 — not a hook. It was read with _perk() here, which reduces over
+    // the hook registry, and no hook named damageMul exists, so the reduce returned its base
+    // of 1 forever and both nodes bought nothing. Read it the way every other stat in
+    // STAT_CONTRACT is read (controller.js uses _stat for hpMax, speedMul, mantleReach).
+    const statDmgMul = (ps && ps.damageMul) || 1;
 
     let travelled = 0;              // metres already flown through earlier hits
     let traversedCm = 0;            // cm of solid already punched through
@@ -339,7 +345,7 @@ export class Combat {
       // Round UP off zero: armour and angle decide HOW MUCH, never WHETHER.
       // HANDS 'damageMul' (ROUND 6, lane G registers it; lane C reads it): a multiplier on
       // every round, base 1, so with nothing owned a shot resolves exactly as it did.
-      const dmg = Math.max(1, Math.round(base * zmul * penMul * this._perk('damageMul', 1)));
+      const dmg = Math.max(1, Math.round(base * zmul * penMul * statDmgMul));
 
       const deflected = h.zone === 'plate';
       let killed = false;
@@ -470,6 +476,11 @@ export class Combat {
      ------------------------------------------------------------------ */
 
   meleeStrike(enemy, damage) {
+    // STAT_CONTRACT.damageMul says "every round the gun lands. Melee too." The buttstroke
+    // never applied it, for the same reason the bullet did not: nothing read the stat.
+    const _ps = this._progStats();
+    const _dmul = (_ps && _ps.damageMul) || 1;
+    damage = damage * _dmul;
     const p = this._sys('player');
     const enemies = this._sys('enemies');
     if (!enemy || !p) return { killed: false };

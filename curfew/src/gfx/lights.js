@@ -748,6 +748,24 @@ export class Lights {
   }
 
   /**
+   * How lit a POSITION is by claimed places' own lamps, 0..1.
+   *
+   * ctx.shared.lit is a property of the PLAYER: it folds in your torch, the headlights and
+   * every rover borrowed near you, and it is sampled at your feet. That makes it the wrong
+   * question to ask about a car parked half the county away — Keep used to read it and so
+   * repaired a car sitting in the dark whenever the PLAYER stood under a lamp, and refused
+   * to repair one sitting under the lamp whenever the player walked off into the trees.
+   * This is the part of the lit term that belongs to the ground rather than to you.
+   */
+  placeLitAt(x, z) {
+    const pd = this._placeDistance(x, z);
+    if (!(pd < LIT_PLACE_FADE)) return 0;
+    const f = pd <= LIT_PLACE_FULL ? 1
+      : 1 - (pd - LIT_PLACE_FULL) / (LIT_PLACE_FADE - LIT_PLACE_FULL);
+    return clamp01(LIT_PLACE_MAX * clamp01(f));
+  }
+
+  /**
    * Metres to the nearest CLAIMED major place, or Infinity. Claimed is the right test:
    * places.js turns a place's lamps on when you claim it, and the one authored-lit place
    * (the Filling Station, where you wake up) starts claimed. A discovered-but-unclaimed

@@ -247,6 +247,31 @@ export function addFlat(site) {
 // construction. The pad and the road therefore agree about the ground.
 for (let i = 0; i < M0_SITES.length; i++) addFlat(M0_SITES[i]);
 
+/**
+ * Install discs VERBATIM, by id, exactly as another realm's registry holds them.
+ *
+ * THE CHUNK WORKER'S ONLY DOOR, and the reason it exists: this module keeps FLATS in module
+ * state, and world/chunk-worker.js imports its own copy of this module into the Worker realm.
+ * That copy is seeded from M0_SITES and nothing else — it cannot see the fourteen destination
+ * pads places.js registers on the main thread during init. The worker therefore built its
+ * vertices off UNFLATTENED ground while collision, which is always main-thread heightAt, used
+ * the pads. Whichever builder happened to win a chunk decided whether its ground was right.
+ *
+ * Values are copied, never recomputed: addFlat() would re-derive `y` and `rim` and the two
+ * realms could round differently, which is the one thing this must not do.
+ */
+export function adoptFlats(list) {
+  if (!Array.isArray(list)) return FLATS.length;
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i];
+    if (!f || typeof f.id !== 'string') continue;
+    const rec = { id: f.id, x: +f.x, z: +f.z, r: +f.r, rim: +f.rim, y: +f.y };
+    const seen = flatIndex(f.id);
+    if (seen >= 0) FLATS[seen] = rec; else FLATS.push(rec);
+  }
+  return FLATS.length;
+}
+
 /** Read-only view of the disc registry (M1 will add interiors and monuments). */
 export function flats() { return FLATS; }
 

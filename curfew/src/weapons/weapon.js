@@ -1035,6 +1035,7 @@ export class Weapons {
     const cosCone = Math.cos(MELEE_CONE_DEG * DEG);
     const ax = _mdir.x, ay = _mdir.y * S, az = _mdir.z;
     const an = Math.max(1e-4, Math.hypot(ax, ay, az));
+    const col = this._sys('collision');
     let best = null, bestD = Infinity;
     for (const e of enemies.all) {
       if (!e.alive) continue;
@@ -1045,6 +1046,22 @@ export class Weapons {
       if (dd > MELEE_ASSIST + e.def.radius) continue;
       const dot = (vx * ax + vy * ay + vz * az) / (Math.max(1e-4, dd) * an);
       if (dot < cosCone) continue;
+      // ...AND you have to be able to reach it. Range and facing were the whole test, so the
+      // assist locked bodies through walls, shut doors and trunks - every solid in the game is
+      // thinner than the 2.70 m assist. Worst at the refuge, whose door leaf is 0.18 m: the
+      // round-7 beat is get inside and shut it, and you could kill what was scratching at it
+      // from the safe side. combat.meleeSweep() traces properly and always did; the assist
+      // simply pre-empted it. A blocked body is now no target, so the swing falls through to
+      // the sweep and resolves against the wall, with the wall's own thunk.
+      if (col && typeof col.segmentClear === 'function') {
+        const tx = e.pos.x, ty = e.pos.y + e.def.height * 0.5, tz = e.pos.z;
+        const bx = tx - ex, by = ty - ey, bz = tz - ez;
+        const bl = Math.max(1e-4, Math.hypot(bx, by, bz));
+        // Stop short of the body by its own radius: a boss carries a collider and must not
+        // be the thing that refuses the swing. Anything BETWEEN you and it still is.
+        const k = Math.max(0, bl - Math.min(bl * 0.9, e.def.radius + 0.1)) / bl;
+        if (!col.segmentClear(ex, ey, ez, ex + bx * k, ey + by * k, ez + bz * k)) continue;
+      }
       if (dd < bestD) { best = e; bestD = dd; }
     }
     return best;

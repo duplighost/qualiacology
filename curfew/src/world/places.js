@@ -237,6 +237,8 @@ const CLAIM_REACH = 2.4;          // m from the fixture, on the ground plane
 const CLAIM_FACE = 0.5;           // cosine of the look-to-fixture angle (60 degrees)
 const CLAIM_HOLD_S = 0.6;         // seconds of held E that throw the lever
 const CLAIM_DY_TOL = 2.0;         // m of feet height either side of the fixture's base
+const CLAIM_SIGHT_UP = 0.5;       // m up the fixture's body: never test against the ground it stands on
+const CLAIM_SIGHT_BACK = 0.45;    // m short of the fixture, so its OWN housing is never the blocker
 const CLAIM_ANSWER_R = 6.0;       // a refused press answers (dead click) within this
 const CLAIM_GLINT_S = 2.4;        // the glint's breath, unclaimed
 const CLAIM_GLINT_FLOOR = 0.22;   // the breath's trough (of full)
@@ -664,6 +666,12 @@ export class Places {
       ctx.bus.on('chunk:disposed', (p) => { if (p) this.disposeChunk(p.id); });
       ctx.bus.on('weapon:hit', (p) => { if (p) this._onShot(p); });
       ctx.bus.on('phase:changed', () => { this._bellClockSeen = true; this._ringBells(); });
+      // The save's claimed/found lists are restored into progress's OWN Sets, and progress
+      // inits AFTER us, so ours were still empty at that point: a returning save came back
+      // with the county forgotten - claimed scenery dark, discovered places undiscovered,
+      // and every consumer that asks places wrong. weapons worked around it by asking
+      // progress instead (weapon.js:509-518); this restores the real thing for everybody.
+      ctx.bus.on('save:loaded', () => this._restoreFromSave());
     }
   }
 
@@ -2098,6 +2106,7 @@ export class Places {
     const px = player && player.pos ? player.pos.x : 0;
     const pz = player && player.pos ? player.pos.z : 0;
     const py = player && player.pos ? player.pos.y : 0;
+    const eyeY = player && typeof player.eyeY === 'number' ? player.eyeY : py + 1.6;
 
     if (!this._placed) {
       this._placed = true;
@@ -2152,6 +2161,12 @@ export class Places {
         // facing: the look direction against the bearing to the fixture, on the ground
         const dot = fd > 1e-3 ? (fdx * lookX + fdz * lookZ) / fd : 1;
         if (dot < CLAIM_FACE) continue;
+        // ...AND nothing solid in between. Reach, height and facing were the entire test, so
+        // the Manor's claim lever could be thrown from outside the building: the hold ran to
+        // completion through an authored wall 0.7 m from the player with the lever 2.2 m away
+        // on the far side of it. SIGHT-masked, so scrub and railings never refuse a claim you
+        // can plainly see, and stopped short of the fixture so its own housing cannot block.
+        if (!this._claimVisible(eyeY, px, pz, fx)) continue;
         if (fd < candD) { candD = fd; cand = rec; }
       }
     }
@@ -2526,6 +2541,41 @@ export class Places {
         b.glow.material.opacity = on ? 1 : 0;
       }
     }
+  }
+
+  /**
+   * Is there a clear line from the eye to this claim fixture? The ray stops CLAIM_SIGHT_BACK
+   * short of the fixture and aims CLAIM_SIGHT_UP above its base, so the only thing that can
+   * refuse the claim is something standing BETWEEN you and it. Allocation-free: collision's
+   * segmentClear owns its own scratch. Fails OPEN — no collision system means no refusal.
+   */
+  _claimVisible(eyeY, px, pz, fx) {
+    const col = this._sys('collision');
+    if (!col || typeof col.segmentClear !== 'function') return true;
+    let tx = fx.wx, tz = fx.wz;
+    const dx = px - tx, dz = pz - tz;
+    const d = Math.sqrt(dx * dx + dz * dz);
+    if (d > CLAIM_SIGHT_BACK) { tx += (dx / d) * CLAIM_SIGHT_BACK; tz += (dz / d) * CLAIM_SIGHT_BACK; }
+    return col.segmentClear(px, eyeY, pz, tx, fx.wy + CLAIM_SIGHT_UP, tz);
+  }
+
+  /**
+   * Seed found/claimed from the save, the moment progress has actually read it. ADDITIVE:
+   * init()'s startClaimed seeding stands and the saved ids join it, so the Filling Station
+   * is still yours on a blank save. Idempotent - re-running it adds nothing new.
+   */
+  _restoreFromSave() {
+    const prog = this._sys('progress');
+    if (!prog) return;
+    let added = 0;
+    const cl = prog.claimed, fd = prog.found;
+    if (cl && typeof cl.forEach === 'function') {
+      cl.forEach((id) => { if (typeof id === 'string' && !this.claimed.has(id)) { this.claimed.add(id); added++; } });
+    }
+    if (fd && typeof fd.forEach === 'function') {
+      fd.forEach((id) => { if (typeof id === 'string' && !this.found.has(id)) { this.found.add(id); added++; } });
+    }
+    if (added) { this._nearFlags = -1; this._applyState(); }
   }
 
   /* ------------------------------------------------------------------ *
