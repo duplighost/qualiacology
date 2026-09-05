@@ -167,3 +167,8 @@
 /swift      /arc/  302
 /dark       /curfew/  302
 /curfew.html /curfew/                 301!
+
+# --- HELLSPINDLE ---
+/hellspindle.html  /hellspindle/  301!
+/spindle           /hellspindle/  302
+/abbot             /hellspindle/  302
