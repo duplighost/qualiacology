@@ -18,7 +18,8 @@ export function initDraw(c, bc) {
   canvas = c;
   bloomCanvas = bc;
   try {
-    ctx = c && c.getContext ? c.getContext('2d', { alpha: false, desynchronized: true }) : null;
+    // Not desynchronized: on Windows Chrome that presents half-drawn frames.
+    ctx = c && c.getContext ? c.getContext('2d', { alpha: false }) : null;
     bloomCtx = bc && bc.getContext ? bc.getContext('2d') : null;
   } catch (_) {
     ctx = null;

@@ -30,7 +30,8 @@ function roundedRect(ctx, x, y, w, h, r) {
 export class Renderer {
   constructor(canvas, { seed = 7331 } = {}) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+    // Not desynchronized: on Windows Chrome that presents half-drawn frames.
+    this.ctx = canvas.getContext('2d', { alpha: false });
     this.ctx.imageSmoothingEnabled = true;
     this.cameraY = -HEIGHT * 0.6;
     this.lastEvent = 0;
