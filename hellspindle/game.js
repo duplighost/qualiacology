@@ -7,7 +7,12 @@
   // ---------------------------------------------------------------------------
 
   const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  // No desynchronized:true here. It hands the canvas its own low-latency swap
+  // chain, and on Windows Chrome that presents half-drawn frames: the background
+  // art holds while the title, the menu and the hunter strobe in and out. It
+  // bought a few ms of latency nobody could feel and broke the game on the site.
+  // alpha:false is the real win and it stays.
+  const ctx = canvas.getContext('2d', { alpha: false });
 
   const hashSeeded = n => {
     const x = Math.sin(n * 127.1 + 311.7) * 43758.5453123;
