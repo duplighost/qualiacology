@@ -70,6 +70,19 @@
       "actionLabel": "Play LIL BIG BANG"
     },
     {
+      "slug": "hellspindle",
+      "title": "HELLSPINDLE",
+      "descriptor": "Chain-swing action",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/hellspindle-card-clean.webp",
+      "alt": "A hunter hanging from a chain with a spinning blade on the end, above an armoured Abbot on a black throne, in a cathedral lit red by a rose window",
+      "summary": "Twelve districts of cathedral, a chain with a wheel on the end, and the Red Abbot at the far end of it. Swing off the rings, cut through the goreweave, and spend what you kill on a longer chain and a harder wheel.",
+      "metaDescription": "HELLSPINDLE is a browser action game: swing through twelve districts of cathedral on a chain with a wheel on the end and go down to the Red Abbot.",
+      "controls": "A / D move and pump · Space jump and release · S drops a ledge · hold mouse for the wheel · two-thumb touch",
+      "actionLabel": "Descend"
+    },
+    {
       "slug": "i-seent-it",
       "title": "I SEENT IT",
       "descriptor": "Lunar custody arcade",
