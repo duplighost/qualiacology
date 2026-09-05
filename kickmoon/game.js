@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.7.0-one-purse';
+  const GAME_VERSION = '8.8.0-boss-repair';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -482,6 +482,72 @@
     transitDuration: 1.65,
     transitions: [],
   });
+
+  const ECLIPSE_CHECKPOINTS = Object.freeze(['water', 'lava', 'moon', 'moon-heart']);
+  const validEclipseCheckpoint = value => ECLIPSE_CHECKPOINTS.includes(value) ? value : 'water';
+  const bossRay = new T.Raycaster();
+  const bossRayHits = [];
+  const bossNormalMatrix = new T.Matrix3();
+  const sphereSweepTime = (start, end, center, radius) => {
+    const dx = end.x - start.x, dy = end.y - start.y, dz = end.z - start.z;
+    const ox = start.x - center.x, oy = start.y - center.y, oz = start.z - center.z;
+    const c = ox * ox + oy * oy + oz * oz - radius * radius;
+    if (c <= 0) return 0;
+    const a = dx * dx + dy * dy + dz * dz;
+    if (a < 1e-12) return Infinity;
+    const b = ox * dx + oy * dy + oz * dz;
+    const disc = b * b - a * c;
+    if (disc < 0) return Infinity;
+    const t = (-b - Math.sqrt(disc)) / a;
+    return t >= 0 && t <= 1 ? t : Infinity;
+  };
+  function sweepBossContact(ball, meshes, targets, center, radius) {
+    const end = ball.position;
+    // Debug contact probes / transport are not an enormous real projectile.
+    const start = ball.previousPosition && ball.previousPosition.distanceToSquared(end) < 16
+      ? ball.previousPosition : end;
+    if (!Number.isFinite(sphereSweepTime(start, end, center, radius + ball.radius))) return null;
+    let hit = null;
+    for (const target of targets) {
+      target.mesh.getWorldPosition(target.position);
+      const t = sphereSweepTime(start, end, target.position, target.radius + ball.radius);
+      if (Number.isFinite(t) && (!hit || t < hit.t)) {
+        hit = { t, target, position: start.clone().lerp(end, t), normal: null };
+      }
+    }
+    const delta = end.clone().sub(start);
+    const length = delta.length();
+    const direction = length > 1e-7 ? delta.multiplyScalar(1 / length) : ball.velocity.clone().normalize();
+    if (direction.lengthSq() < .5) return hit;
+    const right = new T.Vector3().crossVectors(direction, Math.abs(direction.y) < .9 ? UP : new T.Vector3(1, 0, 0)).normalize();
+    const vertical = new T.Vector3().crossVectors(right, direction).normalize();
+    // Five swept skin rays retain the ball's width on armor edges. Narrow phase
+    // never substitutes a filled bounding sphere for a hollow shell or mouth.
+    for (const [x, y] of [[0, 0], [.7, 0], [-.7, 0], [0, .7], [0, -.7]]) {
+      const leading = ball.radius * Math.sqrt(1 - x * x - y * y);
+      const origin = start.clone().addScaledVector(right, x * ball.radius)
+        .addScaledVector(vertical, y * ball.radius).addScaledVector(direction, -leading);
+      bossRay.set(origin, direction);
+      bossRay.near = 0;
+      bossRay.far = length + leading * 2;
+      bossRayHits.length = 0;
+      for (const mesh of meshes) {
+        if (!mesh.visible) continue;
+        bossRay.intersectObject(mesh, false, bossRayHits);
+      }
+      for (const contact of bossRayHits) {
+        const distance = Math.max(0, contact.distance - leading * 2);
+        const t = length > 1e-7 ? distance / length : 0;
+        if (t > 1 || (hit && t > hit.t + 1e-5)) continue;
+        const normal = contact.face?.normal.clone().applyMatrix3(bossNormalMatrix.getNormalMatrix(contact.object.matrixWorld)).normalize()
+          || direction.clone().negate();
+        if (normal.dot(direction) > 0) normal.negate();
+        hit = { t, target: null, mesh: contact.object, normal, position: start.clone().lerp(end, t) };
+      }
+    }
+    return hit;
+  }
+
   const ONE_SCALE = new T.Vector3(1, 1, 1);
   const WHITE = new T.Color(0xffffff);
   const ZERO_MATRIX = new T.Matrix4().makeScale(0, 0, 0);
@@ -7178,15 +7244,15 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       for (let index = 0; index < eyeSpecs.length; index++) {
         const [x, y] = eyeSpecs[index];
         const socket = new T.Mesh(new T.TorusGeometry(3.25, .92, 10, 40), night.clone());
-        socket.position.set(x, y, -18.1);
+        socket.position.set(x, y - 7.5, -27.2);
         group.add(socket);
         const lens = new T.Mesh(new T.SphereGeometry(2.15, 20, 13), flood.clone());
-        lens.position.set(x, y, -19.25);
+        lens.position.set(x, y - 7.5, -28.4);
         lens.scale.set(1, .82, .5);
         group.add(lens);
         waterEyes.push({
           id: `eclipse-water-eye-${index}`, index, socket, mesh: lens,
-          alive: true, radius: 3.2, position: new T.Vector3(),
+          alive: true, radius: 2.7, position: new T.Vector3(),
           baseScale: lens.scale.clone(),
         });
       }
@@ -7261,7 +7327,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
 
       const heart = new T.Mesh(new T.IcosahedronGeometry(4.2, 2), heartMaterial);
       heart.name = 'ECLIPSE MAW · FINAL HEART';
-      heart.position.set(0, 43.5, -21.5);
+      heart.position.set(0, 40.5, -27.2);
       heart.visible = false;
       group.add(heart);
       const heartGlow = this.makeGlowSprite(this.glowGold, 28, .1);
@@ -7328,7 +7394,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       markerMesh.instanceMatrix.needsUpdate = true;
       meteorMesh.visible = false;
       markerMesh.visible = false;
-      hazardGroup.add(meteorMesh, markerMesh);
+      hazardGroup.add(meteorMesh, markerMesh, attackRing);
 
       const debrisCount = 48;
       const debrisMesh = new T.InstancedMesh(
@@ -7558,8 +7624,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         this.pulseRing(gate.position, new T.Color(0x7d3bff), 18, .5, true);
         return;
       }
-      gameState.spendLedger('water', ECLIPSE_FARE);
-      gameState.eclipsePaid = true;
+      if (!gameState.purchaseEclipsePassage()) {
+        gate.refusal = .9;
+        return;
+      }
       gate.flash = 1;
       gameState.rewardFlash = 1;
       gameState.shake = Math.max(gameState.shake, .62);
@@ -7742,31 +7810,37 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       // 2000.") The three crowns make the Maw possible; ECLIPSE_FARE, paid at
       // the gate standing in the Nautilus Court, makes it happen.
       if (gameState.eclipseFareOwed()) return false;
+      const checkpoint = validEclipseCheckpoint(gameState.eclipseCheckpoint);
+      const destination = checkpoint.startsWith('moon') ? 'moon' : checkpoint;
+      const localBoss = this.planetSurfaces.get(destination)?.boss;
+      if (localBoss?.finishBeforeEclipse && localBoss.alive || localBoss?.deadTimer > 0) return false;
       state.unlocked = true;
-      state.phase = 'water';
-      state.planet = 'water';
+      state.phase = checkpoint;
+      state.planet = destination;
       state.targetPlanet = null;
-      state.lifecycle = this.activePlanet === 'water' ? 'active' : 'awaiting-travel';
+      state.lifecycle = this.activePlanet === destination ? 'active' : 'awaiting-travel';
       state.transitTimer = 0;
       state.transitions.length = 0;
       this.resetEclipseMaw(false);
-      this.placeEclipseMawAt('water');
-      this.configureEclipseMawPhase('water');
-      maw.group.visible = this.activePlanet === 'water';
-      maw.hazardGroup.visible = this.activePlanet === 'water';
+      this.placeEclipseMawAt(destination);
+      this.configureEclipseMawPhase(checkpoint);
+      maw.group.visible = this.activePlanet === destination;
+      maw.hazardGroup.visible = this.activePlanet === destination;
       for (const planet of ['water', 'lava']) {
         const profile = this.planetSurfaces.get(planet);
-        if (profile?.finalSeal) profile.finalSeal.group.visible = false;
+        if (profile?.finalSeal) { profile.finalSeal.open = true; profile.finalSeal.opening = 1; profile.finalSeal.group.visible = false; }
+        if (profile?.boss && !profile.boss.finishBeforeEclipse) profile.boss.eclipseReserved = true;
         // The frame order resolves the ball before it updates the Maw, so this
         // unlock can fire on the very frame an alternate final dies -- and it
         // used to erase that boss in the middle of its own death, mid-shrink,
         // which is exactly the kind of thing that reads as "odd glitchiness
         // with bosses". A boss still counting down its deadTimer keeps the
         // screen; updateAlternateBoss hides it when the shrink finishes.
-        if (profile?.boss && !(profile.boss.deadTimer > 0)) profile.boss.group.visible = false;
+        if (profile?.boss && !profile.boss.finishBeforeEclipse && !(profile.boss.deadTimer > 0)) profile.boss.group.visible = false;
       }
       if (announce) {
         gameState.rewardFlash = 1;
+        gameState.announceEncounter('THE ECLIPSE MAW', checkpoint === 'water' ? 'WATER · KICK THE THREE BRIGHT EYES' : `${destination.toUpperCase()} · YOUR PHASE CHECKPOINT IS READY`);
         gameState.addStyle(50, 15000, 'THE SKY HAS TEETH', '#ff6bd6');
         audio.impact(1, 'alien');
       }
@@ -7780,6 +7854,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       state.targetPlanet = nextPlanet;
       state.transitTimer = 0;
       state.transitions.push({ from: state.planet, to: nextPlanet, duration: state.transitDuration });
+      const checkpointSaved = gameState.saveEclipseCheckpoint(nextPlanet);
+      gameState.announceEncounter(`THE MAW FLEES TO ${nextPlanet.toUpperCase()}`, checkpointSaved
+        ? `FOLLOW THE SHIP BEACON · ${nextPlanet.toUpperCase()} PHASE SAVED`
+        : 'FOLLOW THE SHIP BEACON · CHECKPOINT NOT SAVED — STORAGE UNAVAILABLE');
+      gameState.updateObjective(true);
       maw.group.updateMatrixWorld(true);
       maw.transitStart.copy(maw.group.position);
       maw.transitStartQuaternion.copy(maw.group.quaternion);
@@ -7866,7 +7945,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         chartLift(meteor.targetX, meteor.targetAlt + .22, meteor.targetZ, maw.scratchPosition);
         maw.scratchQuaternion.copy(liftQuatAt(meteor.targetX, meteor.targetZ, new T.Quaternion()))
           .multiply(horizontalRing);
-        maw.scratchScale.setScalar(6.2 + Math.abs(Math.sin(t * 12)) * .3);
+        maw.scratchScale.setScalar(6.2);
         maw.scratchMatrix.compose(maw.scratchPosition, maw.scratchQuaternion, maw.scratchScale);
         maw.markerMesh.setMatrixAt(meteor.index, maw.scratchMatrix);
         if (t < 1) continue;
@@ -7945,6 +8024,16 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         }
         if (t < 1) return;
         const next = state.targetPlanet;
+        const localBoss = this.planetSurfaces.get(next)?.boss;
+        if ((localBoss?.finishBeforeEclipse && localBoss.alive) || localBoss?.deadTimer > 0) {
+          // Remain offstage until an already-engaged rematch and its death
+          // animation finish. No shared court, even during a cross-world handoff.
+          maw.group.visible = false;
+          maw.hazardGroup.visible = false;
+          gameState.announceEncounterOnce(`eclipse-waits-${next}`, 'THE MAW IS APPROACHING', 'FINISH THE CURRENT COURT BATTLE');
+          return;
+        }
+        if (localBoss) localBoss.eclipseReserved = true;
         state.planet = next;
         state.phase = next;
         state.targetPlanet = null;
@@ -8017,11 +8106,13 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         maw.wavePrevious = maw.waveRadius;
         maw.waveRadius += dt * (state.phase === 'moon' || state.phase === 'moon-heart' ? 50 : 38);
         maw.attackRing.visible = true;
-        maw.attackRing.scale.setScalar(maw.waveRadius);
+        this.updateSurfaceAttackRing(maw.attackRing, maw.baseX, maw.baseZ,
+          maw.baseAltitude + 2.6, maw.waveRadius, 3, 2.6);
         maw.attackRing.material.opacity = clamp(1 - maw.waveRadius / 118, 0, .72);
         if (maw.attackHitSerial !== maw.attackSerial
           && radial >= maw.wavePrevious - 3 && radial <= maw.waveRadius + 3
-          && radial >= 9 && player.y < maw.baseAltitude + 5.2) {
+          && radial >= 9 && player.y < maw.baseAltitude + 5.2
+          && player.y + gameState.player.eyeHeight >= maw.baseAltitude) {
           maw.attackHitSerial = maw.attackSerial;
           gameState.damagePlayerWorld(maw.position);
           setVspeed(gameState.player.velocity, gameState.player.up,
@@ -8034,10 +8125,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       }
       maw.attackTimer -= dt;
       if (maw.attackTimer > 0) {
-        if (state.phase !== 'lava' && maw.attackTimer <= 1.35) {
+        if (state.phase !== 'lava' && !maw.waveActive && maw.attackTimer <= 1.35) {
           const warning = 1 - maw.attackTimer / 1.35;
           maw.attackRing.visible = true;
-          maw.attackRing.scale.setScalar(9 + warning * 109);
+          this.updateSurfaceAttackRing(maw.attackRing, maw.baseX, maw.baseZ,
+            maw.baseAltitude + .65, 9, .65, .25);
           maw.attackRing.material.opacity = .12 + warning * .52;
         }
         return;
@@ -8047,6 +8139,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       maw.attackHitSerial = -1;
       if (state.phase === 'lava') this.launchEclipseMeteors(gameState);
       else {
+        if (state.phase === 'moon-heart' || (state.phase === 'moon' && maw.attackSerial % 2 === 0)) this.launchEclipseMeteors(gameState);
         maw.waveActive = true;
         maw.waveRadius = 7;
         maw.wavePrevious = 7;
@@ -8071,10 +8164,17 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       const activeNodes = state.phase === 'water' ? maw.waterEyes
         : state.phase === 'lava' ? maw.lavaLocks
           : state.phase === 'moon' ? maw.moonClaws : EMPTY_SOLIDS;
+      const heartTarget = { id: 'eclipse-maw-heart', mesh: maw.heart, position: maw.heartPosition, radius: maw.heartRadius };
+      const targets = state.phase === 'moon-heart' ? [heartTarget] : activeNodes.filter(node => node.alive);
+      const hull = [maw.body, maw.jaw, ...maw.teeth];
+      if (state.phase === 'water') hull.push(...maw.waterEyes.map(node => node.socket));
+      if (state.phase === 'moon') for (const node of maw.moonClaws) {
+        if (node.alive) hull.push(...node.group.children.filter(mesh => mesh !== node.mesh));
+      }
+      const contact = sweepBossContact(ball, hull, targets, maw.position, 76);
+      if (!contact) return false;
       for (const node of activeNodes) {
-        if (!node.alive) continue;
-        node.mesh.getWorldPosition(node.position);
-        if (ball.position.distanceTo(node.position) > node.radius + ball.radius) continue;
+        if (!node.alive || contact.target !== node) continue;
         // An overlap this ball has already been credited for is not a hit.
         // Answering true anyway told game.update "a Maw frame happened", and
         // game.update dropped camera, world and HUD for as long as the ball sat
@@ -8083,6 +8183,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         ball.collisionCooldown.set(node.id, .32);
         const charged = ball.mode === 'returning' || ball.launchCharge >= .55 || ball.comet;
         if (state.phase === 'lava' && !charged) {
+          gameState.announceEncounter('CHARGE THE KICK', 'HOLD KICK, OR STRIKE THE LOCK WITH A RETURN');
           gameState.impact('locked', node.position, 0xff6b20);
           world.pulseRing(node.position, new T.Color(0xff3b0c), 7, .34, true);
           return true;
@@ -8105,6 +8206,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           else if (state.phase === 'lava') this.beginEclipseTransit('moon', gameState);
           else {
             state.phase = 'moon-heart';
+            const checkpointSaved = gameState.saveEclipseCheckpoint('moon-heart');
+            gameState.announceEncounter('THE LAST HEART', checkpointSaved
+              ? 'KICK THE EXPOSED HEART · DODGE THE MARKED STRIKES'
+              : 'KICK THE EXPOSED HEART · CHECKPOINT NOT SAVED — STORAGE UNAVAILABLE');
             this.configureEclipseMawPhase('moon-heart');
             maw.heart.visible = true;
             maw.heartGlow.visible = true;
@@ -8116,7 +8221,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       }
       if (state.phase === 'moon-heart') {
         maw.heart.getWorldPosition(maw.heartPosition);
-        if (ball.position.distanceTo(maw.heartPosition) <= maw.heartRadius + ball.radius) {
+        if (contact.target === heartTarget) {
           const id = 'eclipse-maw-heart';
           // Cooled down: not a hit, so the frame is not the Maw's to eat.
           if (ball.collisionCooldown.has(id)) return false;
@@ -8132,19 +8237,20 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           return true;
         }
       }
-      if (ball.position.distanceTo(maw.position) <= maw.bodyRadius + ball.radius) {
+      if (!contact.target) {
         const id = 'eclipse-maw-body';
         // Cooled down: not a hit. This is the one that froze whole seconds,
         // because the body sphere is 27 m across and a ball can sit in it.
         if (ball.collisionCooldown.has(id)) return false;
         ball.collisionCooldown.set(id, .28);
-        const away = ball.position.clone().sub(maw.position);
+        const away = contact.normal || ball.position.clone().sub(maw.position);
         if (away.lengthSq() > 1e-6) {
           away.normalize();
           const along = ball.velocity.dot(away);
           if (along < 0 && !ball.comet) ball.velocity.addScaledVector(away, -1.65 * along);
         }
-        gameState.impact('locked', ball.position, 0x9b58d8);
+        if (!ball.comet) ball.position.copy(contact.position).addScaledVector(away, .03);
+        gameState.impact('locked', contact.position, 0x9b58d8);
         return true;
       }
       return false;
@@ -8165,7 +8271,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       this.beginEclipseExplosion();
       this.revealVictoryAurora(true);
       gameState.savedEclipseMaw = true;
-      gameState.saveEclipseMaw();
+      const victorySaved = gameState.saveEclipseMaw();
       gameState.score += 50000;
       gameState.rewardFlash = 1;
       gameState.won = true;
@@ -8176,6 +8282,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       this.particles?.burst(maw.position, 0xb66bff, 180, 36, 1.7, .4);
       audio.win();
       gameState.addStyle(60, 30000, 'THREE WORLDS · ONE TRUE MOON', '#fff0a8');
+      gameState.announceEncounter('THE ECLIPSE IS OVER', victorySaved
+        ? 'THREE WORLDS FREED · KEEP EXPLORING' : 'VICTORY NOT SAVED · PROGRESS IS ONLY AVAILABLE IN THIS SESSION', 7);
+      gameState.updateObjective(true);
+      gameState.syncPauseProgress();
       return true;
     }
     findPlanetBossArena(profile, site, index, radius, water) {
@@ -8684,6 +8794,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         };
         plates.push({
           index, mesh: plate, alive: true, hp: 1, anchor,
+          basePosition: plate.position.clone(),
           baseQuaternion: plate.quaternion.clone(),
           baseEmissiveIntensity: plate.material.emissiveIntensity,
         });
@@ -8711,7 +8822,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       telegraph.rotation.x = Math.PI / 2;
       telegraph.position.y = .35;
       telegraph.visible = false;
-      group.add(telegraph);
+      profile.root.add(telegraph);
       this.placePlanetObject(group, arena.x, ground, arena.z, arena.facingYaw);
       const baseScale = water ? 2.25 : 2.55;
       group.scale.setScalar(baseScale);
@@ -8722,9 +8833,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         // The Tyrant does not borrow the Nautilus pressure wave. Six furnace
         // mouths telegraph on the actual curved terrain, then erupt upward as
         // discrete hazards between the safe decks and grind-lines.
-        for (let index = 0; index < 6; index++) {
+        for (let index = 0; index < 8; index++) {
           const angle = index * TAU / 6 + .28;
-          const reach = index % 2 ? 31 : 21;
+          const reach = index >= 6 ? 0 : index % 2 ? 31 : 21;
           const at = surfaceOffsetChartAt(
             arena.x, arena.z, Math.cos(angle), Math.sin(angle), reach, {},
           );
@@ -8738,7 +8849,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           });
           const vent = new T.Mesh(new T.CylinderGeometry(2.2, 5.8, 26, 9, 1, true), ventMaterial);
           vent.position.y = 13;
-          const marker = new T.Mesh(new T.TorusGeometry(5.6, .48, 7, 36), ventMaterial.clone());
+          const marker = new T.Mesh(new T.TorusGeometry(5.85, .35, 7, 36), ventMaterial.clone());
           marker.rotation.x = Math.PI / 2;
           const node = new T.Group();
           node.name = `CALDERA ERUPTION ${index + 1}`;
@@ -8746,7 +8857,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           this.placePlanetObject(node, x, altitude, z, angle);
           node.visible = false;
           profile.root.add(node);
-          signatureNodes.push({ index, x, z, altitude, group: node, vent, marker, radius: 6.2 });
+          signatureNodes.push({ index, x, z, altitude, group: node, vent, marker, radius: 6.2, active: false });
         }
       }
       const boss = {
@@ -8755,9 +8866,12 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         planet: profile.id, group, body, core, coreGlow, plates, anchors, horns, telegraph, signatureNodes,
         site, arena,
         bodyBaseQuaternion: body.quaternion.clone(), coreBaseQuaternion: core.quaternion.clone(),
+        coreRestPosition: core.position.clone(),
+        coreExposedPosition: new T.Vector3(0, water ? 8.4 : 9.0, water ? -12 : -12.2),
+        coreReveal: 0, victoryCredited: false, eclipseReserved: false, finishBeforeEclipse: false,
         alive: true, unlocked: false, localFinal: true, engaged: false,
         phase: 'sealed', armorHp: 3, maxArmor: 3,
-        hp: 4, maxHp: 4, radius: 10.5 * baseScale, coreRadius: 3.3 * baseScale,
+        hp: 4, maxHp: 4, radius: 10.5 * baseScale, coreRadius: (water ? 2.65 : 2.85) * baseScale,
         attackTimer: 2.8, telegraphTimer: 0, attackSerial: 0, attackHitSerial: -1,
         signatureTimer: 0,
         position: body.getWorldPosition(new T.Vector3()),
@@ -17744,7 +17858,7 @@ diffuseColor.a *= kbBody * kbStream;`);
     unlockAlternateFinal(profile, gameState, announce = true) {
       const progress = gameState.worldProgress[profile.id];
       const boss = profile.boss;
-      if (!progress || !boss || boss.unlocked) return false;
+      if (!progress || !boss || boss.unlocked || gameState.localFinalProgress(profile.id)?.reserved) return false;
       progress.finalUnlocked = true;
       boss.unlocked = true;
       boss.phase = 'armour';
@@ -17760,6 +17874,7 @@ diffuseColor.a *= kbBody * kbStream;`);
         world.pulseRing(at, new T.Color(profile.theme.accent), 42, .9, true);
         audio.win();
         gameState.rewardFlash = 1;
+        gameState.announceEncounter(`${boss.name} AWAKENS`, 'FOLLOW THE LIGHT TO THE OPEN COURT');
         gameState.addStyle(34, 7200,
           profile.id === 'water' ? 'NAUTILUS COURT UNFOLDS' : 'TYRANT COURT UNFORGED',
           profile.id === 'water' ? '#9ffcff' : '#ffd34f');
@@ -17832,6 +17947,15 @@ diffuseColor.a *= kbBody * kbStream;`);
         && !profile.boss.unlocked) {
         this.unlockAlternateFinal(profile, gameState);
       }
+      const local = gameState.localFinalProgress(profile.id);
+      seal.open = !!local?.open;
+      if (local?.reserved || local?.defeated || local?.status === 'previously-defeated') {
+        seal.opening = 1;
+        seal.group.visible = false;
+        if (seal.column) seal.column.visible = false;
+        return;
+      }
+      if (seal.column) seal.column.visible = !!local?.available && !profile.boss.engaged;
       seal.opening = damp(seal.opening, seal.open ? 1 : 0, 2.4, dt);
       for (let index = 0; index < seal.orbits.length; index++) {
         const orbit = seal.orbits[index];
@@ -18182,10 +18306,80 @@ diffuseColor.a *= kbBody * kbStream;`);
       this.resolveAlternateBreakables(profile, gameState);
       return false;
     }
+    updateSurfaceAttackRing(mesh, x, z, altitude, radius, halfWidth = 2.3, height = 1.0) {
+      mesh.position.set(0, 0, 0);
+      mesh.quaternion.identity();
+      mesh.scale.setScalar(1);
+      const geometry = mesh.geometry;
+      const positions = geometry.attributes.position;
+      const radialSegments = geometry.parameters.radialSegments;
+      const tubularSegments = geometry.parameters.tubularSegments;
+      let offset = 0;
+      for (let j = 0; j <= radialSegments; j++) {
+        const tube = j / radialSegments * TAU;
+        const reach = Math.max(.1, radius + Math.cos(tube) * halfWidth);
+        for (let i = 0; i <= tubularSegments; i++) {
+          const angle = i / tubularSegments * TAU;
+          const at = surfaceOffsetChartAt(x, z, Math.cos(angle), Math.sin(angle), reach, {});
+          const p = chartLift(at.x, altitude + Math.sin(tube) * height, at.z, new T.Vector3());
+          positions.setXYZ(offset++, p.x, p.y, p.z);
+        }
+      }
+      positions.needsUpdate = true;
+      geometry.computeBoundingSphere();
+      mesh.userData.attack = { x, z, altitude, radius, halfWidth, height };
+    }
+    clearAlternateBossAttacks(boss) {
+      boss.engaged = false;
+      boss.attackWave = 0;
+      boss.attackTimer = 0;
+      boss.signatureTimer = 0;
+      boss.attackRadius = 0;
+      boss.telegraphTimer = 0;
+      boss.telegraph.visible = false;
+      for (const node of boss.signatureNodes || EMPTY_SOLIDS) {
+        node.active = false;
+        node.group.visible = false;
+      }
+    }
+    completeAlternateBoss(profile, gameState) {
+      const boss = profile.boss;
+      if (!boss?.alive || boss.victoryCredited) return false;
+      boss.victoryCredited = true;
+      boss.alive = false;
+      boss.finishBeforeEclipse = false;
+      boss.phase = 'defeated';
+      boss.deadTimer = 1.65;
+      this.clearAlternateBossAttacks(boss);
+      const progress = gameState.worldProgress[profile.id];
+      progress.bossDefeated = true;
+      progress.finalUnlocked = true;
+      const crownSaved = gameState.savePlanetCrown(profile.id, false);
+      if (profile.finalSeal) {
+        profile.finalSeal.open = true;
+        profile.finalSeal.group.visible = false;
+        if (profile.finalSeal.column) profile.finalSeal.column.visible = false;
+      }
+      this.revealPlanetConstellation(profile.id, true);
+      gameState.score += 12000;
+      gameState.rewardFlash = 1;
+      this.particles?.burst(boss.position, profile.theme.hot, 150, 31, 1.7, .45);
+      this.particles?.burst(boss.position, profile.theme.accent, 90, 23, 1.15, .3);
+      this.pulseRing(boss.position, new T.Color(profile.theme.hot), 48, 1, true);
+      gameState.announceEncounter(`${boss.name} DEFEATED`, !crownSaved
+        ? 'CROWN NOT SAVED · PROGRESS IS ONLY AVAILABLE IN THIS SESSION'
+        : this.eclipseEligible(gameState) ? 'THREE CROWNS EARNED · THE ECLIPSE GATE IS ON WATER'
+          : 'CROWN EARNED · YOUR OTHER WORLDS AWAIT');
+      gameState.updateObjective(true);
+      gameState.syncPauseProgress();
+      audio.win();
+      return true;
+    }
     resolveAlternateBoss(profile, gameState) {
       const boss = profile.boss;
       const ball = gameState.ball;
-      if (!boss?.alive || !boss.unlocked
+      const local = gameState.localFinalProgress(profile.id);
+      if (!boss?.alive || !boss.unlocked || local?.reserved
         || (ball.mode !== 'outbound' && ball.mode !== 'returning')) return false;
       boss.group.updateMatrixWorld(true);
       boss.body.getWorldPosition(boss.position);
@@ -18198,22 +18392,27 @@ diffuseColor.a *= kbBody * kbStream;`);
             profile.id === 'water' ? 'NAUTILUS SHELL' : 'COOLING SEAL');
         }
       }
-      if (ball.collisionCooldown.has(boss.id) || ball.velocity.length() <= 8) return false;
+      if (ball.velocity.length() <= 8) return false;
       const corePosition = boss.core.getWorldPosition(new T.Vector3());
-      const hit = boss.position.distanceTo(ball.position) <= boss.radius + ball.radius;
-      const coreHit = boss.armorHp <= 0 && corePosition.distanceTo(ball.position) <= boss.coreRadius + ball.radius;
-      if (!hit && !coreHit) return false;
-      ball.collisionCooldown.set(boss.id, .3);
-      const away = ball.position.clone().sub(coreHit ? corePosition : boss.position);
-      if (away.lengthSq() < .001) away.copy(gameState.player.up); else away.normalize();
+      const target = { id: `${boss.id}-core`, mesh: boss.core, position: corePosition, radius: boss.coreRadius };
+      const meshes = [boss.body, ...boss.horns, ...boss.plates.filter(p => p.alive).map(p => p.mesh)];
+      const contact = sweepBossContact(ball, meshes, boss.armorHp <= 0 ? [target] : [], boss.position, 50);
+      if (!contact) return false;
+      const coreHit = !!contact.target;
+      const id = coreHit ? target.id : `${boss.id}-shell`;
+      if (ball.collisionCooldown.has(id)) return false;
+      ball.collisionCooldown.set(id, coreHit ? .3 : .16);
+      const away = coreHit ? contact.position.clone().sub(corePosition).normalize() : contact.normal;
       const along = ball.velocity.dot(away);
       if (along < 0 && !ball.comet) ball.velocity.addScaledVector(away, -1.7 * along);
+      if (!ball.comet) ball.position.copy(contact.position).addScaledVector(away, .03);
       boss.hitFlash = 1;
       if (boss.armorHp > 0) {
         const plate = boss.plates.find(entry => entry.alive);
+        if (!plate) return false;
         plate.alive = false;
         plate.mesh.material.emissiveIntensity = 4.5;
-        plate.mesh.scale.set(.72, .72, .72);
+        plate.mesh.scale.setScalar(.72);
         plate.anchor.active = true;
         boss.armorHp--;
         boss.phase = boss.armorHp > 0 ? 'armour' : 'core';
@@ -18223,34 +18422,21 @@ diffuseColor.a *= kbBody * kbStream;`);
         this.particles?.burst(plate.anchor.position, profile.theme.accent, 48, 17, .9, .24);
         if (boss.armorHp === 0) {
           boss.core.scale.setScalar(1);
-          boss.coreGlow.material.opacity = .62;
+          boss.coreGlow.material.opacity = .36;
+          gameState.announceEncounter('CORE EXPOSED', 'KICK THE BRIGHT HEART · KEEP MOVING');
           audio.win();
         }
         return true;
       }
       if (!coreHit) {
-        gameState.impact('locked', ball.position, profile.theme.accent);
+        gameState.impact('locked', contact.position, profile.theme.accent);
         return true;
       }
       boss.hp--;
-      boss.phase = boss.hp > 0 ? 'core' : 'defeated';
       gameState.impact(boss.hp <= 0 ? 'break' : 'hurt', corePosition, profile.theme.hot);
       gameState.addStyle(22, 1400, profile.id === 'water' ? 'PEARL HEART' : 'FURNACE HEART',
         profile.id === 'water' ? '#ff9dd5' : '#ffd65b');
-      if (boss.hp > 0) return true;
-      boss.alive = false;
-      boss.deadTimer = 1.65;
-      boss.telegraph.visible = false;
-      for (const node of boss.signatureNodes || EMPTY_SOLIDS) node.group.visible = false;
-      gameState.worldProgress[profile.id].bossDefeated = true;
-      gameState.savePlanetCrown(profile.id, false);
-      this.revealPlanetConstellation(profile.id, true);
-      gameState.score += 12000;
-      gameState.rewardFlash = 1;
-      this.particles?.burst(boss.position, profile.theme.hot, 150, 31, 1.7, .45);
-      this.particles?.burst(boss.position, profile.theme.accent, 90, 23, 1.15, .3);
-      world.pulseRing(boss.position, new T.Color(profile.theme.hot), 48, 1, true);
-      audio.win();
+      if (boss.hp <= 0) this.completeAlternateBoss(profile, gameState);
       return true;
     }
     resolveAlternateBreakables(profile, gameState) {
@@ -18580,6 +18766,13 @@ diffuseColor.a *= kbBody * kbStream;`);
     updateAlternateBoss(profile, dt, gameState) {
       const boss = profile.boss;
       if (!boss) return;
+      const local = gameState.localFinalProgress(profile.id);
+      if (local?.reserved && boss.alive) {
+        boss.eclipseReserved = true;
+        boss.group.visible = false;
+        this.clearAlternateBossAttacks(boss);
+        return;
+      }
       if (!boss.unlocked) {
         boss.engaged = false;
         boss.group.visible = false;
@@ -18596,11 +18789,16 @@ diffuseColor.a *= kbBody * kbStream;`);
         return;
       }
       boss.group.visible = true;
+      boss.coreReveal = damp(boss.coreReveal || 0, boss.armorHp <= 0 ? 1 : 0, 7, dt);
+      boss.core.position.copy(boss.coreRestPosition).lerp(boss.coreExposedPosition, boss.coreReveal);
+      boss.coreGlow.position.copy(boss.core.position);
       boss.group.updateMatrixWorld(true);
       boss.body.getWorldPosition(boss.position);
       for (const plate of boss.plates) {
         plate.mesh.getWorldPosition(plate.anchor.position);
         if (!plate.alive) {
+          const spread = plate.index - 1;
+          plate.mesh.position.lerp(new T.Vector3(spread * 13, spread === 0 ? 19 : 8, -5), 1 - Math.exp(-4 * dt));
           plate.mesh.rotation.z += dt * (1.2 + plate.index * .4);
           plate.mesh.material.emissiveIntensity = damp(plate.mesh.material.emissiveIntensity, .75, 3, dt);
         }
@@ -18614,6 +18812,8 @@ diffuseColor.a *= kbBody * kbStream;`);
       const radial = surfaceDistanceAt(gameState.playerChartVec.x, gameState.playerChartVec.z,
         boss.chartPosition.x, boss.chartPosition.z);
       boss.engaged = radial < boss.threatRadius;
+      if (boss.engaged) gameState.announceEncounterOnce(boss.id,
+        boss.name, profile.id === 'water' ? 'BREAK THE SHELL · JUMP THE WAVE' : 'BREAK THE SEALS · LEAVE THE MARKED GROUND');
       if (!boss.engaged) {
         boss.attackTimer = Math.max(boss.attackTimer, 1.2);
         boss.telegraphTimer = 0;
@@ -18630,7 +18830,8 @@ diffuseColor.a *= kbBody * kbStream;`);
           const previousRadius = boss.attackRadius;
           boss.attackRadius = Math.min(58, boss.attackRadius + dt * 36);
           boss.telegraph.visible = true;
-          boss.telegraph.scale.setScalar(Math.max(.1, boss.attackRadius / 10));
+          this.updateSurfaceAttackRing(boss.telegraph, boss.arena.x, boss.arena.z,
+            boss.arena.top + 2.6, boss.attackRadius, 3, 2.6);
           boss.telegraph.material.opacity = .62 * Math.min(1, boss.attackWave * 3);
           // A rotating pressure current reaches ahead of the damaging crest:
           // it curls the player around the Nautilus, making the water fight a
@@ -18655,9 +18856,9 @@ diffuseColor.a *= kbBody * kbStream;`);
           }
           if (boss.attackHitSerial !== boss.attackSerial
             && radial >= previousRadius - 3 && radial <= boss.attackRadius + 3
-            && radial >= 8.5 && gameState.playerChartVec.y
-              - this.floorHeight(gameState.playerChartVec.x, gameState.playerChartVec.z,
-                gameState.playerChartVec.y + 8) < 5.2) {
+            && radial >= 8.5
+            && gameState.playerChartVec.y < boss.arena.top + 5.2
+            && gameState.playerChartVec.y + gameState.player.eyeHeight >= boss.arena.top) {
             boss.attackHitSerial = boss.attackSerial;
             gameState.damagePlayer({ position: boss.chartPosition });
             setVspeed(gameState.player.velocity, gameState.player.up,
@@ -18669,18 +18870,20 @@ diffuseColor.a *= kbBody * kbStream;`);
             * (1 - smoothstep(1.5, 1.72, boss.signatureTimer));
           boss.telegraph.visible = false;
           for (const node of boss.signatureNodes) {
-            node.group.visible = true;
+            node.group.visible = !!node.active;
+            if (!node.active) continue;
             node.marker.material.opacity = .16 + charge * .72;
-            node.marker.scale.setScalar(.72 + charge * .32 + Math.sin(gameState.time * 9 + node.index) * .035);
+            node.marker.scale.setScalar(1);
             node.vent.material.opacity = eruption * .9;
-            node.vent.scale.set(1 + eruption * .32, Math.max(.01, eruption), 1 + eruption * .32);
+            node.vent.scale.set(1, Math.max(.01, eruption), 1);
             if (eruption > .25 && cosmeticRandom() < dt * 18) {
               this.particles?.burst(chartLift(node.x, node.altitude + 2, node.z, new T.Vector3()),
                 node.index % 2 ? 0xffd34f : 0xff3b12, 5, 14, .48, .15);
             }
             if (eruption > .45 && boss.attackHitSerial !== boss.attackSerial
               && surfaceDistanceAt(gameState.playerChartVec.x, gameState.playerChartVec.z, node.x, node.z) < node.radius
-              && gameState.playerChartVec.y < node.altitude + 22) {
+              && gameState.playerChartVec.y < node.altitude + 22
+              && gameState.playerChartVec.y + gameState.player.eyeHeight >= node.altitude - .28) {
               boss.attackHitSerial = boss.attackSerial;
               gameState.damagePlayer({ position: new T.Vector3(node.x, node.altitude, node.z) });
               setVspeed(gameState.player.velocity, gameState.player.up,
@@ -18697,8 +18900,9 @@ diffuseColor.a *= kbBody * kbStream;`);
       boss.attackTimer -= dt;
       if (boss.attackTimer <= 1.35 && boss.attackTimer > 0) {
         boss.telegraphTimer = 1 - boss.attackTimer / 1.35;
-        boss.telegraph.visible = true;
-        boss.telegraph.scale.setScalar(1 + boss.telegraphTimer * .5);
+        boss.telegraph.visible = profile.id === 'water';
+        this.updateSurfaceAttackRing(boss.telegraph, boss.arena.x, boss.arena.z,
+          boss.arena.top + .65, 8, .65, .25);
         boss.telegraph.material.opacity = .14 + boss.telegraphTimer * .55;
         boss.body.scale.set(1 + boss.telegraphTimer * .08, 1 - boss.telegraphTimer * .12, 1 + boss.telegraphTimer * .08);
       }
@@ -18710,6 +18914,22 @@ diffuseColor.a *= kbBody * kbStream;`);
         boss.signatureTimer = 0;
         boss.attackSerial++;
         boss.attackHitSerial = -1;
+        if (profile.id === 'lava') {
+          for (const node of boss.signatureNodes) {
+            // Alternate inner / outer sets. Every other cycle adds a committed
+            // center eruption, while leaving an entire radial band safe.
+            node.active = node.index === 7 ? true : node.index === 6 ? boss.attackSerial % 2 === 1
+              : node.index % 2 === boss.attackSerial % 2;
+            if (node.index === 7) {
+              // Commit once, before the 1.15-second wind-up. The warning does
+              // NOT track the astronaut. This also reaches the outer firing lane.
+              node.x = gameState.playerChartVec.x;
+              node.z = gameState.playerChartVec.z;
+              node.altitude = this.floorHeight(node.x, node.z, gameState.playerChartVec.y + 3) + .28;
+              this.placePlanetObject(node.group, node.x, node.altitude, node.z, 0);
+            }
+          }
+        }
         boss.body.scale.setScalar(1);
         world.pulseRing(boss.position, new T.Color(profile.theme.hot), 14, .5, true);
         this.particles?.burst(boss.position, profile.theme.hot, 54, 19, .92, .22);
@@ -18780,6 +19000,12 @@ diffuseColor.a *= kbBody * kbStream;`);
         boss.body.scale.setScalar(1);
         boss.body.quaternion.copy(boss.bodyBaseQuaternion);
         boss.core.scale.setScalar(.32);
+        boss.core.position.copy(boss.coreRestPosition);
+        boss.coreGlow.position.copy(boss.coreRestPosition);
+        boss.coreReveal = 0;
+        boss.victoryCredited = false;
+        boss.eclipseReserved = false;
+        boss.finishBeforeEclipse = false;
         boss.core.quaternion.copy(boss.coreBaseQuaternion);
         boss.coreGlow.material.opacity = .12;
         boss.telegraph.visible = false;
@@ -18797,6 +19023,7 @@ diffuseColor.a *= kbBody * kbStream;`);
           plate.anchor.active = false;
           plate.mesh.visible = true;
           plate.mesh.scale.setScalar(1);
+          plate.mesh.position.copy(plate.basePosition);
           plate.mesh.quaternion.copy(plate.baseQuaternion);
           plate.mesh.material.emissiveIntensity = plate.baseEmissiveIntensity;
         }
@@ -23308,7 +23535,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const [x, y, z] = collarRoute[i];
         const collar = new T.Group();
         collar.position.set(x, y, z);
-        const ring = new T.Mesh(new T.TorusGeometry(5.4, .7, 9, 36), this.materials.gold.clone());
+        const ring = new T.Mesh(new T.TorusGeometry(5.4, .7, 9, 36), this.materials.cyan.clone());
         ring.material.emissiveIntensity = 1.72;
         ring.rotation.x = Math.PI / 2;
         collar.add(ring);
@@ -31333,6 +31560,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (SPHERE_WORLD) restOffset.applyQuaternion(player.frame);
       this.position = player.position.clone().add(restOffset);
       this.velocity = new T.Vector3();
+      this.previousPosition = this.position.clone();
       this.radius = .72;
       this.mode = 'ready'; // ready | outbound | returning | anchored | caught
       this.spin = 0;
@@ -31592,6 +31820,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // per-world record so the ledger can be read back either way.
       this.spentTotal = 0;
       this.eclipsePaid = false;
+      this.eclipseCheckpoint = 'water';
       this.lavaState = { touching: false, damageCooldown: 0, hitsTaken: 0, field: null };
       this.cannonFlight = { active: false, time: 0, progress: 0, launched: false };
       this.lastHeartShock = -1;
@@ -31621,6 +31850,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         // A toll already paid stays paid across a reload. Beating the Maw
         // counts as having paid it, so a completed save is never re-charged.
         this.eclipsePaid = !!(threeCrownSave?.eclipse?.paid || threeCrownSave?.eclipse?.complete);
+        this.eclipseCheckpoint = validEclipseCheckpoint(threeCrownSave?.eclipse?.checkpoint);
         // A save written before the fare existed carries no passage field,
         // and the right answer for it is "you have not bought anything yet" --
         // unless it also carries a crown, which is proof you already went.
@@ -32094,11 +32324,66 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           version: 1,
           water: { ...this.savedPlanetCrowns.water },
           lava: { ...this.savedPlanetCrowns.lava },
-          eclipse: { complete: !!this.savedEclipseMaw, paid: !!this.eclipsePaid },
+          eclipse: { complete: !!this.savedEclipseMaw, paid: !!this.eclipsePaid, checkpoint: validEclipseCheckpoint(this.eclipseCheckpoint) },
           passage: { ...this.shipPassage },
         }));
-      } catch (ignored) { void ignored; }
+      } catch (error) {
+        this.lastSaveError = String(error?.message || error);
+        this.announceEncounter('SAVE UNAVAILABLE', 'PROGRESS IS ONLY AVAILABLE IN THIS SESSION');
+        return false;
+      }
+      this.lastSaveError = null;
       return true;
+    }
+    announceEncounter(title, hint = '', duration = 5.2) {
+      let notice = document.getElementById('encounterNotice');
+      if (!notice) {
+        notice = document.createElement('div');
+        notice.id = 'encounterNotice';
+        notice.setAttribute('role', 'status');
+        notice.setAttribute('aria-live', 'polite');
+        notice.innerHTML = '<strong></strong><span></span>';
+        document.body.appendChild(notice);
+      }
+      notice.firstElementChild.textContent = title;
+      notice.lastElementChild.textContent = hint;
+      notice.hidden = false;
+      this.encounterNoticeUntil = (this.time || 0) + duration;
+    }
+    announceEncounterOnce(id, title, hint) {
+      if (!this.encounterPrompts) this.encounterPrompts = new Set();
+      if (this.encounterPrompts.has(id)) return;
+      this.encounterPrompts.add(id);
+      // Do not overwrite a just-opened court / phase announcement.
+      if ((this.encounterNoticeUntil || 0) > this.time + 2) return;
+      this.announceEncounter(title, hint);
+    }
+    purchaseEclipsePassage() {
+      if (this.eclipsePaid || this.savedEclipseMaw) return true;
+      if (!world.eclipseEligible(this) || this.ledgerTotal() < ECLIPSE_FARE) return false;
+      const spent = this.spentTotal || 0;
+      const waterSpent = this.collectibleSpent.water || 0;
+      const paid = this.spendLedger('water', ECLIPSE_FARE);
+      if (paid !== ECLIPSE_FARE) return false;
+      this.eclipsePaid = true;
+      this.eclipseCheckpoint = 'water';
+      if (!this.writeThreeCrownSave()) {
+        this.eclipsePaid = false;
+        this.spentTotal = spent;
+        this.collectibleSpent.water = waterSpent;
+        this.announceEncounter('PURCHASE NOT SAVED', 'NO COLLECTIBLES SPENT · CHECK BROWSER STORAGE');
+        return false;
+      }
+      // An already-engaged replay may finish; its court cannot be taken mid-hit.
+      for (const planet of ['water', 'lava']) {
+        const boss = world.planetSurfaces.get(planet)?.boss;
+        if (boss?.alive && boss.unlocked && boss.engaged) boss.finishBeforeEclipse = true;
+      }
+      return true;
+    }
+    saveEclipseCheckpoint(phase) {
+      this.eclipseCheckpoint = validEclipseCheckpoint(phase);
+      return this.writeThreeCrownSave();
     }
     savePlanetCrown(planet, mastery = false) {
       const saved = this.savedPlanetCrowns?.[planet];
@@ -32291,7 +32576,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // this.shipPassage deliberately does NOT reset: the ships were bought.
       this.collectibleSpent = { moon: 0, water: 0, lava: 0 };
       this.spentTotal = 0;
-      this.eclipsePaid = false;
+      this.eclipsePaid = !!(this.eclipsePaid || this.savedEclipseMaw);
+      this.encounterPrompts = new Set();
+      this.encounterNoticeUntil = 0;
       this.eclipseState = makeEclipseState(this.savedEclipseMaw);
       this.lavaState = { touching: false, damageCooldown: 0, hitsTaken: 0, field: null };
       this.cannonFlight = { active: false, time: 0, progress: 0, launched: false };
@@ -32389,9 +32676,15 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             : world.activePlanet === 'water' ? 'BOSSES FELLED ON WATER' : 'BOSSES FELLED ON LAVA';
         }
         if (ui.pauseBossNote) {
-          ui.pauseBossNote.textContent = local.open
-            ? `${local.name} IS WAITING`
-            : `${local.need - local.have} MORE OPENS ${local.name} · ${local.roster} STAND HERE`;
+          const eclipse = this.eclipseState;
+          ui.pauseBossNote.textContent = local.reserved
+            ? eclipse.complete ? 'THE ECLIPSE MAW IS DEFEATED · THIS COURT IS CLEAR'
+              : `ECLIPSE PURSUIT · ${(eclipse.targetPlanet || eclipse.planet).toUpperCase()} · ${this.lastSaveError ? 'CHECKPOINT NOT SAVED' : 'PHASE CHECKPOINT SAVED'}`
+            : local.defeated ? `${local.name} DEFEATED · ${this.lastSaveError ? 'CROWN NOT SAVED' : 'CROWN EARNED'}`
+              : local.status === 'fighting' ? `${local.name} · FIGHT IN PROGRESS`
+                : local.available ? `${local.name} ${local.previous ? 'REMATCH READY' : 'IS WAITING'}`
+                  : local.previous ? `CROWN EARNED · ${Math.max(0, local.need - local.have)} MORE FOR A REMATCH`
+                    : `${Math.max(0, local.need - local.have)} MORE OPENS ${local.name} · ${local.roster} STAND HERE`;
         }
       }
       if (ui.pausePurseValue) {
@@ -33852,6 +34145,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       ball.flightSpinTimer = Math.max(0, ball.flightSpinTimer - dt);
       player.grappling = false;
       const previous = ball.position.clone();
+      ball.previousPosition.copy(previous);
       this.lineActive = this.lineHeld || ball.mode === 'returning' || ball.mode === 'anchored'
         || ball.mode === 'caught' || ball.flightSpinTimer > 0 || player.spinTimer > 0;
       this.buildTetherPath(this.lineActive);
@@ -39064,10 +39358,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // A layer change may replace the whole scene, but it must not take the
       // player's look input away. Keep their authored yaw/pitch through the
       // catch instead of snapping the camera to the arena's canonical axis.
-      this.enterLayer('final', 0, 307.2, 1130, this.player.yaw, 'great-cannon', true);
+      this.enterLayer('final', 0, 307.2, 1152, this.player.yaw, 'great-cannon', true);
       world.moonheart.group.visible = true;
       this.lastHeartShock = -1;
       this.addStyle(24, 3200, 'ABOVE THE MOON', '#ffd66b');
+      this.announceEncounter('THE MOONHEART', 'GRAPPLE THE CYAN COLLARS · BREAK THE FOUR ARMOR TARGETS');
     }
 
     // THE MOON'S ROSTER, IN ONE PLACE. The cannon gate, the proximity tag
@@ -39089,20 +39384,28 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // How many of THIS world's bosses are down, and how many open its final.
     // The pause screen and the tag both speak from this.
     localFinalProgress(planet = world.activePlanet) {
-      if (planet === 'moon') {
-        return {
-          planet, have: this.moonBossesDown(), need: this.moonBossesNeeded(),
-          roster: this.moonBossRoster().length, open: this.endgameOpen,
-          name: 'THE MOONHEART',
-        };
-      }
+      const moon = planet === 'moon';
       const progress = this.worldProgress[planet];
-      if (!progress) return null;
+      if (!moon && !progress) return null;
+      const boss = moon ? world.moonheart : world.planetSurfaces.get(planet)?.boss;
+      const defeated = moon ? this.endgameComplete : !!progress.bossDefeated;
+      const previous = moon ? !!this.savedMoonheart : !!this.savedPlanetCrowns[planet]?.boss;
+      const reserved = !moon && !boss?.finishBeforeEclipse && (
+        (!!this.eclipsePaid && !this.eclipseState?.complete && world.eclipseEligible(this))
+        || !!boss?.eclipseReserved);
+      const available = moon ? this.endgameOpen : !!(progress.finalUnlocked || boss?.unlocked);
+      const fighting = !defeated && !reserved && available && (moon ? world.activeLayer === 'final' : !!boss?.engaged);
+      const status = reserved ? (this.eclipseState?.complete ? 'completed' : 'eclipse-reserved')
+        : defeated ? 'defeated' : fighting ? 'fighting' : available ? 'available'
+          : previous ? 'previously-defeated' : 'sealed';
       return {
-        planet, have: progress.regionalDefeated, need: ALTERNATE_REGIONAL_REQUIRED,
-        roster: ALTERNATE_REGIONAL_TOTAL,
-        open: progress.finalUnlocked || progress.bossDefeated,
-        name: planet === 'water' ? 'THE ABYSSAL NAUTILUS' : 'THE CALDERA TYRANT',
+        planet, have: moon ? this.moonBossesDown() : progress.regionalDefeated,
+        need: moon ? this.moonBossesNeeded() : ALTERNATE_REGIONAL_REQUIRED,
+        roster: moon ? this.moonBossRoster().length : ALTERNATE_REGIONAL_TOTAL,
+        open: available || defeated || reserved || previous,
+        available: available && !defeated && !reserved,
+        defeated, previous, reserved, status,
+        name: moon ? 'THE MOONHEART' : planet === 'water' ? 'THE ABYSSAL NAUTILUS' : 'THE CALDERA TYRANT',
       };
     }
 
@@ -39176,6 +39479,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.hitStop = Math.max(this.hitStop, .12);
       this.shake = 1;
       this.addStyle(30, 4000, 'THE GREAT CANNON WAKES', '#9defff');
+      this.announceEncounter('THE GREAT CANNON WAKES', 'FOLLOW THE LIGHT · KICK ITS BRIGHT RECEIVER');
+      this.updateObjective(true);
     }
     updateMoonheart(dt) {
       const heart = world.moonheart;
@@ -39506,6 +39811,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           if (along < 0) ball.velocity.addScaledVector(away, -1.55 * along);
           if (heart.phaseHp <= 0) {
             heart.phase = 'tide';
+            this.announceEncounter('ARMOR SHATTERED', 'KICK THE EXPOSED HEART · JUMP THE TIDE');
             heart.phaseHp = heart.tideHp;
             heart.coreHp = heart.tideHp;
             heart.shockwave.timer = .75;
@@ -39552,6 +39858,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (heart.phaseHp > 0) return;
       if (heart.phase === 'tide') {
         heart.phase = 'heart';
+        this.announceEncounter('THE MOONHEART OPENS', 'FOUR FINAL HITS · KEEP ABOVE THE SHOCKWAVE');
         heart.phaseHp = heart.heartHp;
         heart.coreHp = heart.heartHp;
         heart.shockwave.speed = 42;
@@ -39567,6 +39874,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       const heart = world.moonheart;
       if (this.endgameComplete || !heart) return false;
       this.endgameComplete = true;
+      this.announceEncounter('MOONHEART DEFEATED', 'CROWN EARNED · THE RETURN PORTAL IS OPEN', 6);
       heart.alive = false;
       heart.exposed = false;
       heart.phase = 'defeated';
@@ -39616,7 +39924,11 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       world.spawnStones(heart.position, 24, 10);
       world.dressMoonheartBall();
       this.savedMoonheart = true;
-      try { localStorage.setItem('moonkick-heart-v1', '1'); } catch (ignored) { void ignored; }
+      try { localStorage.setItem('moonkick-heart-v1', '1'); }
+      catch (error) {
+        this.lastSaveError = String(error?.message || error);
+        this.announceEncounter('MOONHEART DEFEATED', 'CROWN NOT SAVED — BROWSER STORAGE UNAVAILABLE', 6);
+      }
       this.rewardFlash = 1;
       if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', '#9defff');
       this.hitStop = Math.max(this.hitStop, .14);
@@ -40073,7 +40385,70 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // Where to go is answered by a beam of light standing in the world, not by
     // a sentence at the top of the screen. The beacon moves as the run
     // progresses and takes the colour of whatever is waiting there.
+    bossObjective() {
+      if (!this.started) return null;
+      const state = this.eclipseState;
+      const current = world.activePlanet;
+      const layer = world.activeLayer;
+      const surface = world.currentSurface();
+      const fromWorld = position => position ? toChartVec(position.clone()) : null;
+      const focusOn = (key, focus, tint = 0xffd66b, stage = 21) => ({ key, focus, tint, stage });
+      // Do not point to a different layer through a floor: finish / leave the
+      // actual Moonheart arena before directing the player to another planet.
+      if (layer === 'final') {
+        if (world.moonheart?.alive) return focusOn(`moonheart-${world.moonheart.phase}-${world.moonheart.phaseHp}`,
+          fromWorld(world.moonheart.position), 0x9defff, 12);
+        return focusOn('moonheart-return', new T.Vector3(0, 307.25, 1171), 0xffd66b, 13);
+      }
+      let destination = null, key = null, focus = null, tint = 0xc78bff;
+      if (state?.unlocked && !state.complete) {
+        destination = state.targetPlanet || state.planet;
+        key = `eclipse-${destination}-${state.phase}`;
+        if (current === destination) {
+          const base = world.eclipseMaw.bases[destination];
+          focus = new T.Vector3(base.x, base.altitude + 2, base.z);
+        }
+      } else if (this.eclipseFareOwed() || (this.eclipsePaid && !state?.complete && world.eclipseEligible(this))) {
+        destination = 'water'; key = 'eclipse-gate';
+        focus = fromWorld(world.eclipseGate?.position);
+      } else if (current === 'moon' && this.endgameOpen && !this.endgameComplete) {
+        destination = 'moon'; key = 'great-cannon';
+        focus = fromWorld(world.cannon?.crystalPosition); tint = 0xffd66b;
+      } else if (current !== 'moon') {
+        const local = this.localFinalProgress(current);
+        if (local?.available) {
+          destination = current; key = `${current}-court`;
+          const arena = surface.boss.arena;
+          focus = new T.Vector3(arena.x, arena.top + 2, arena.z);
+          tint = current === 'water' ? 0x69efff : 0xff744a;
+        }
+      }
+      if (!destination) return null;
+      if (layer === 'underground') {
+        // The existing surface transit controller owns the real exits. Prefer
+        // the nearest authored mouth rather than drawing the target overhead.
+        const playerChart = chartAt(this.player.position, {});
+        const candidates = Object.values(UNDERGROUND_MOUTHS).filter(m => m.surface).map(m => m.under).filter(Boolean);
+        candidates.sort((a, b) => Math.hypot(a.x - playerChart.x, a.z - playerChart.z) - Math.hypot(b.x - playerChart.x, b.z - playerChart.z));
+        const exit = candidates[0];
+        if (exit) return focusOn('boss-route-surface-exit', new T.Vector3(exit.x, world.undergroundInfoAt(exit.x, exit.z)?.floor ?? -80, exit.z), tint);
+        return null;
+      }
+      if (current !== destination) {
+        const vehicles = surface?.vehicles || EMPTY_SOLIDS;
+        const vehicle = vehicles.find(v => v.destination === destination) || vehicles.find(v => v.destination === 'moon');
+        return focusOn(`eclipse-ship-${vehicle?.destination || destination}`, fromWorld(vehicle?.receiver?.position), tint);
+      }
+      return focusOn(key, focus, tint);
+    }
     updateObjective(force = false) {
+      const bossRoute = this.bossObjective();
+      if (bossRoute) {
+        this.stage = bossRoute.stage;
+        this.objectiveKey = bossRoute.key;
+        world.setBeacon(bossRoute.focus, bossRoute.tint);
+        return;
+      }
       if (world.activePlanet !== 'moon') {
         const surface = world.currentSurface();
         // The opened court outranks everything else on this world -- that IS
@@ -40092,7 +40467,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const nextEnemy = this.enemies.find(enemy => enemy.alive
           && (enemy.planet || 'moon') === world.activePlanet);
         const nextBoss = finalOpen ? localFinal
-          : (surface?.bosses || EMPTY_SOLIDS).find(boss => boss.alive && boss.unlocked);
+          : (surface?.regionalBosses || EMPTY_SOLIDS).find(boss => boss.alive && boss.unlocked);
         const nextVehicle = (surface?.vehicles || EMPTY_SOLIDS)[0];
         const rawFocus = nextPickup?.chartPosition || nextBoss?.chartPosition || nextEnemy?.position
           || (nextVehicle?.receiver?.position ? toChartVec(nextVehicle.receiver.position.clone()) : null);
@@ -40418,7 +40793,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       let bestDistance = Infinity;
       // Paused, the world is behind an overlay and a label floating on top of
       // it is just litter. Same for the win screen.
-      if (this.started && !this.won && !this.paused) {
+      if (this.started && !this.paused && !this.planetTransition.active) {
         for (const target of this.collectProximityTargets()) {
           const distance = this.player.position.distanceTo(target.at);
           if (distance > target.range || distance >= bestDistance) continue;
@@ -40478,6 +40853,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       }
     }
     syncUI() {
+      const encounterNotice = document.getElementById('encounterNotice');
+      if (encounterNotice) encounterNotice.hidden = !this.started || this.paused
+        || this.planetTransition.active || this.time >= (this.encounterNoticeUntil || 0);
       this.updateProximityTag();
       // ONE COUNT FOR THE WHOLE GAME, shown in one place, with the number
       // it is currently saving toward beside it. (Alex, 2026-09-05: "Lets make
@@ -40588,8 +40966,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const moonComplete = this.savedMoonheart || this.endgameComplete;
         const crownStates = {
           moon: [
-            this.cores.has('ember'), this.cores.has('piton'), this.cores.has('kite'),
-            this.cores.has('comet'), this.cores.has('roc') || this.cores.has('colossus'),
+            ...Array.from({ length: 5 }, (_, index) => this.moonBossesDown() > index),
             moonComplete, false,
           ],
           water: [
@@ -43798,7 +44175,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       for (const region of world.regions) game.cores.add(region.core);
       return [...game.cores];
     },
-    // Ships cost 1,000 collectibles. A boarding suite needs to be able to
+    // Ships cost 500 collectibles per destination. A boarding suite needs to be able to
     // pay that fare without grinding a world for it. Adds to the world the
     // player is standing on unless one is named. Not reachable from play.
     grantCollectibles: (count = 0, planet = null) => {

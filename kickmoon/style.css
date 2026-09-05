@@ -2684,3 +2684,12 @@ body.touch-enabled #startTitle > span {
     width: 100%;
   }
 }
+
+/* 8.8 boss progression: brief, non-modal, pointer-transparent notices. */
+#encounterNotice { position:fixed; z-index:18; left:50%; top:11%; transform:translateX(-50%); max-width:min(88vw,620px); width:max-content; padding:12px 22px; border:1px solid rgba(172,226,255,.28); border-radius:10px; background:rgba(5,13,28,.82); box-shadow:0 5px 30px rgba(0,0,0,.3); text-align:center; pointer-events:none; color:#eaf8ff; font:500 12px/1.5 system-ui,sans-serif; letter-spacing:.07em; }
+#encounterNotice strong {display:block; font-size:17px; letter-spacing:.12em; color:#fff; }
+#encounterNotice span {display:block; margin-top:4px; color:#bce5ff; }
+#encounterNotice[hidden] {display:none!important;}
+@media(max-width:600px) {#encounterNotice{top:10%;padding:9px 13px;font-size:10px;}#encounterNotice strong{font-size:14px;}}
+
+@media (max-width:600px) and (orientation:portrait) {#encounterNotice{top:calc(env(safe-area-inset-top, 0px) + 148px);}}
