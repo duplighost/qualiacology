@@ -274,6 +274,27 @@ const RELAX_CONE_MIN = 65;        // m. Last-resort candidates may be ahead, but
                                   // out — at 65 m in this fog a cold, dark car is not visible,
                                   // and the pilot still drives the last 30 m so you hear it.
 
+// ROUND 13: PARKING IS NOT THE ARRIVAL BEAT. A fresh session parks the car cold at the road
+// stop nearest the start before the first spawn check, and a respawn re-parks it at the stop
+// nearest where you came back. Alex, seventh playtest: "The button for the car doesn't work
+// right away. the car seems to spawn after the start of the game" — measured, the car did not
+// exist until the player had walked 54 m out of the station yard, and L and both car buttons
+// sat dashed and dead for the first ten seconds of every session. And: "make sure the car
+// respawns at the road closest to you if you die" — it did not: anything closer than the 300 m
+// recall stayed where it was, including the wreck you died in 180 m down the road.
+// A park clears the flat by PARK_CLEAR, not YARD_CLEAR: at 54 m the car is a speck from the
+// forecourt; at the works-cut stop 42 m from the centre and 25 m from the start it is a car.
+const PARK_CLEAR = 4;             // m past a major's flat for a park
+const PARK_MIN = 12;              // m. Never on top of the player
+const RESPAWN_CAR_KEEP = 60;      // m. A car closer than this to where you come back stays put;
+                                  // the nearest legal stops are 34-57 m from every major centre
+// ROUND 13: the key glyphs. E on the driver's door while the seat is in reach; H at the wheel
+// hub for the first seconds in the seat until the horn has been used once this session.
+// Alex: "maybe looking at the horn in the car lets you see how to use it the same way."
+const HORN_TEACH_S = 6.0;
+const _promptP = { kind: 'use', x: 0, y: 0, z: 0, k: 0, label: 'E' };
+const _hubV = new THREE.Vector3();
+
 // ROUND 6, LANE H — THE FOV HAS ONE OWNER. This file used to write cam.fov itself in
 // present(), comparing against its own last write (an epsilon of 0.02) so as not to fight
 // player/camera.js, which writes cam.fov every frame. Measured with tools/carsmooth.mjs on the
@@ -298,7 +319,7 @@ const _pos = new THREE.Vector3();
 // ROUND 7, lane F: the 'world:broke' payload. Module scratch, written in place and emitted;
 // a listener must read it synchronously and never retain it (the same contract as
 // controller.js's player:climb payload).
-const _brokePayload = { x: 0, y: 0, z: 0, mass: 0, n: 0, tag: null };
+const _brokePayload = { x: 0, y: 0, z: 0, mass: 0, n: 0, tag: null, by: 'car' };   // ROUND 13: `by`
 
 function wrapAngle(a) {
   a = a % TAU;
@@ -349,6 +370,9 @@ export class Car {
     this.x = 0; this.y = 0; this.z = 0;
     this.heading = 0;
     this.speed = 0;
+    // ROUND 13: a take-down asked for by someone else (combat.js) throws its debris along a
+    // direction of their choosing instead of the car's own heading and speed.
+    this._debDir = false; this._debX = 0; this._debZ = 0; this._debSpd = 0;
     this.steer = 0;
     this.pitch = 0;
     this.roll = 0;
@@ -382,6 +406,11 @@ export class Car {
     // ---- lifecycle
     this.exists = false;
     this.mode = 'none';    // none | arriving | idle | entering | driving | exiting
+    // ROUND 13: parked on the first step of a fresh session (see step()), and a parked
+    // beacon keeps its one lamp lit past the park cool-down until somebody walks up.
+    this._freshParked = false;
+    this.beacon = false;
+    this._seatS = 0;              // ROUND 13: seconds spent in the seat this session
     this.hotwired = false;  // reset by every spawn: the first entry is always a hotwire
     this.engineOn = false;
     this.headlightsOn = false;
@@ -446,6 +475,7 @@ export class Car {
     // The winning stop point _findStop wrote. Fields, not a returned Vector2: the sweep
     // runs twice a second on the fixed step and the hot path allocates nothing.
     this._stopX = 0; this._stopZ = 0;
+    this._stopTx = 0; this._stopTz = 1;   // ROUND 13: the road tangent at a PARK stop
 
     // ---- camera reparent
     this.fromX = 0; this.fromY = 0; this.fromZ = 0;
@@ -540,8 +570,23 @@ export class Car {
     const bus = this.ctx.bus;
     if (bus && bus.on) {
       bus.on('player:died', () => this._forceRelease());
-      bus.on('player:respawn', () => {
-        this._forceRelease();
+      bus.on('player:respawn', (p) => {
+        const wasIn = this._forceRelease();
+        // ROUND 13: THE CAR COMES BACK TO THE ROAD NEXT TO YOU. Any car further than
+        // RESPAWN_CAR_KEEP from where you came back, or the one you died in, is re-parked at
+        // the nearest legal stop — measured before this: a car 180 m away stayed put through
+        // 76 'car-is-here' checks with the L arrow pointing at the walk. A car already in
+        // the yard stays. A death is not a beat, so no beacon and no pilot.
+        const pl = this._player;
+        const px = p && Number.isFinite(p.x) ? p.x : (pl ? pl.pos.x : this.x);
+        const pz = p && Number.isFinite(p.z) ? p.z : (pl ? pl.pos.z : this.z);
+        const d = this.exists ? Math.hypot(this.x - px, this.z - pz) : Infinity;
+        if ((!this.exists || wasIn || d > RESPAWN_CAR_KEEP)
+            && this._nearestStop(px, pz, PARK_CLEAR, PARK_MIN)) {
+          this._park(this._stopX, this._stopZ, this._stopTx, this._stopTz, false);
+          this.owed = false; this.owedT = 0;
+          return;
+        }
         // Redeem an owed dispatch on the FIRST step after the respawn, not up to half a
         // second later. controller.js:_respawn drops the player into the nearest claimed
         // place, so this is exactly the frame the old rule started refusing forever.
@@ -938,6 +983,72 @@ export class Car {
   }
 
   /**
+   * ROUND 13: the nearest legal road stop to a point — for PARKING, not for the arrival
+   * beat. Rings out from the point, 48 bearings a ring; the first ring that finds a road
+   * point at least `minD` away and outside every major's flat + `clear` wins, smallest
+   * distance first. Writes _stopX/_stopZ and the road's unit tangent _stopTx/_stopTz.
+   * Allocates nothing; runs once at boot and once per respawn.
+   */
+  _nearestStop(px, pz, clear, minD) {
+    const roads = this._roads;
+    if (!roads || typeof roads.nearestRoadInfo !== 'function') return false;
+    const sites = this._spawnSites;
+    let found = false, bestD = Infinity, bx = 0, bz = 0, btx = 0, btz = 1;
+    for (let r = 12; r <= 120; r += 4) {
+      for (let i = 0; i < 48; i++) {
+        const ang = (i / 48) * TAU;
+        const info = roads.nearestRoadInfo(px + Math.sin(ang) * r, pz + Math.cos(ang) * r, 12);
+        if (!info || !info.hit) continue;
+        const sx = info.x, sz = info.z;
+        const d = Math.hypot(sx - px, sz - pz);
+        if (d < minD || d >= bestD) continue;
+        let inYard = false;
+        if (sites) {
+          for (let k = 0; k < sites.length; k++) {
+            const qx = sx - sites[k].x, qz = sz - sites[k].z;
+            const rr = (sites[k].radius || 0) + clear;
+            if (qx * qx + qz * qz < rr * rr) { inYard = true; break; }
+          }
+        }
+        if (inYard) continue;
+        found = true; bestD = d; bx = sx; bz = sz; btx = info.tx; btz = info.tz;
+      }
+      if (found) break;
+    }
+    if (!found) return false;
+    this._stopX = bx; this._stopZ = bz; this._stopTx = btx; this._stopTz = btz;
+    return true;
+  }
+
+  /**
+   * ROUND 13: PARK the car here, cold, on the road, nose pointed AWAY from the nearest major
+   * along the road's own tangent (never bestRoadHeadingAt: measured 37 degrees off at the
+   * station junction, where its probes see two roads). This is what placeAt always did for
+   * tests and screenshot rigs, promoted to the game's own verb. `beacon` keeps the one lamp
+   * lit past the park cool-down until somebody walks up to the door.
+   */
+  _park(x, z, tx, tz, beacon) {
+    let fx = Number.isFinite(tx) ? tx : 0, fz = Number.isFinite(tz) ? tz : 1;
+    const fl = Math.hypot(fx, fz);
+    if (fl < 1e-6) { fx = 0; fz = 1; } else { fx /= fl; fz /= fl; }
+    const sites = this._spawnSites;
+    if (sites && sites.length) {
+      let best = -1, bd = Infinity;
+      for (let k = 0; k < sites.length; k++) {
+        const qx = x - sites[k].x, qz = z - sites[k].z, d2 = qx * qx + qz * qz;
+        if (d2 < bd) { bd = d2; best = k; }
+      }
+      if (best >= 0 && fx * (x - sites[best].x) + fz * (z - sites[best].z) < 0) { fx = -fx; fz = -fz; }
+    }
+    this._removeRoof();
+    // forward is -Z at heading 0 (see _place), so the heading that points the nose at
+    // (fx, fz) is atan2(-fx, -fz).
+    this.placeAt(x, z, Math.atan2(-fx, -fz));
+    this.beacon = !!beacon;
+    this.spawnCooldown = SPAWN_COOLDOWN;
+  }
+
+  /**
    * Put the car on the road `pilotLast` metres short of the stop point and hand it to
    * the pilot. It arrives cold: one working headlight, then the engine ticking as it
    * cools, then a door-ajar chime. Nobody explains it.
@@ -1139,6 +1250,18 @@ export class Car {
     }
 
     if (!this.exists) {
+      // ROUND 13: THE CAR EXISTS FROM THE FIRST STEP. A fresh session parks it cold at the
+      // road stop nearest the start, lamp lit as a beacon, so L and both car buttons are live
+      // from frame one and the car is in view on the first turn. Done here and not in init():
+      // roads' elevation table and the terrain are only guaranteed by the first step.
+      if (!this._freshParked) {
+        this._freshParked = true;
+        const terr = this._terrain, ps = terr && terr.playerStart;
+        if (ps && this._nearestStop(ps.x, ps.z, PARK_CLEAR, PARK_MIN)) {
+          this._park(this._stopX, this._stopZ, this._stopTx, this._stopTz, true);
+          return;
+        }
+      }
       this.spawnCheckT -= dt;
       if (this.spawnCheckT <= 0) {
         this.spawnCheckT = SPAWN_CHECK_EVERY;
@@ -1163,6 +1286,15 @@ export class Car {
         && (this.mode === 'entering' || this.mode === 'driving')) {
       this._horn(dt);
       this._flushHornSound();
+      // ROUND 13: H at the wheel hub, for the first seconds in the seat, until the horn has
+      // been used once. The hub rides the car body, so the glyph follows the wheel.
+      this._seatS += dt;
+      if (this._seatS < HORN_TEACH_S && this.hornCount === 0 && this.body && this.body.steer && this.ctx.bus) {
+        this.body.steer.getWorldPosition(_hubV);
+        _promptP.kind = 'horn'; _promptP.label = 'H';
+        _promptP.x = _hubV.x; _promptP.y = _hubV.y; _promptP.z = _hubV.z; _promptP.k = 0;
+        this.ctx.bus.emit('prompt', _promptP);
+      }
     } else {
       this.hornT = Math.max(0, this.hornT - dt);
       this.hornHeld = false;
@@ -1284,7 +1416,8 @@ export class Car {
     // PARK_DARK_S while the block ticks, and the census SpotLight goes out at the bottom
     // of the fade — so the arrival is a light coming toward you, the wait is a light going
     // out, and the woods come back. Nothing here creates or destroys a light.
-    if (this.headlightsOn && !this.ctx.shared.inCar) {
+    // ROUND 13: a parked BEACON (the fresh-session park) keeps its lamp until approached.
+    if (this.headlightsOn && !this.ctx.shared.inCar && !this.beacon) {
       this.lampFade -= dt / PARK_DARK_S;
       if (this.lampFade <= 0) { this.lampFade = 0; this._setHeadlights(false); }
       else if (this.body) this.body.setLamp(this._filament(), false);
@@ -1362,6 +1495,7 @@ export class Car {
       // walked away. A sound that retriggers on the edge of its own trigger is a stutter.
       if (!this._creaked && near < ANSWER_RANGE * 0.72) {
         this._creaked = true;
+        this.beacon = false;          // ROUND 13: found. The cool-down runs from here.
         const o = this._doorPoint(this._doorOut || (this._doorOut = { x: 0, z: 0 }));
         this._noise('car:door-swing', 14, o.x, o.z);
         this._say('door', 0.55, o.x, this.y + 1.05, o.z);
@@ -1414,6 +1548,13 @@ export class Car {
   _pollEnter(dt) {
     void dt;
     const p = this._player;
+    // ROUND 13: the key glyph on the driver's door while the seat is in reach.
+    if (p && !p.dead && this.mode === 'idle' && this._reach() <= ENTER_RANGE && this.ctx.bus) {
+      const o = this._doorPoint(this._doorOut || (this._doorOut = { x: 0, z: 0 }));
+      _promptP.kind = 'use'; _promptP.label = 'E';
+      _promptP.x = o.x; _promptP.y = this.y + 1.05; _promptP.z = o.z; _promptP.k = 0;
+      this.ctx.bus.emit('prompt', _promptP);
+    }
     const held = this._useHeld();
     if (!held) { this._useConsumed = false; this.refuseLatch = false; this.holdT = 0; return; }
     if (this._useConsumed) return;
@@ -1436,6 +1577,7 @@ export class Car {
       this.fromX = cam.position.x; this.fromY = cam.position.y; this.fromZ = cam.position.z;
     } else { this.fromX = this.x; this.fromY = this.y + SEAT.y; this.fromZ = this.z; }
     this.mode = 'entering';
+    this.beacon = false;
     this.enterT = 0;
     // WHEEL 1, 'Hotwire' — hook 'hotwireS', base CFG.car.hotwire (nodes.js:119-120).
     // Read at the moment the door shuts, never captured: a node bought between two entries
@@ -2154,6 +2296,24 @@ export class Car {
     return !!colour;
   }
 
+  /**
+   * ROUND 13: BREAKABLE BOXES. The gun and the stock take the same things apart the bumper
+   * does, so combat.js asks the car — the owner of the merged-part collapse and the debris
+   * pool — to do the taking down, with the debris thrown along the shot at `speed` m/s
+   * rather than along the car. Returns true when a merged part was found and collapsed.
+   */
+  takeDown(wx, wz, wy, mass, tag, dirX, dirZ, speed) {
+    const L = Math.hypot(dirX || 0, dirZ || 0);
+    this._debDir = L > 1e-6;
+    this._debX = this._debDir ? dirX / L : 0;
+    this._debZ = this._debDir ? dirZ / L : 0;
+    this._debSpd = speed > 0 ? Math.min(speed, 26) : 0;
+    let hit = false;
+    try { hit = this._takeDown(wx, wz, wy, mass, tag); }
+    finally { this._debDir = false; }
+    return hit;
+  }
+
   /** Ensure the debris pool exists. One geometry, one mesh, one draw, no new material. */
   _debris() {
     if (this._deb) return this._deb;
@@ -2209,9 +2369,11 @@ export class Car {
     const pieces = Math.min(10, 4 + Math.round(mass / 14));
     const rng = this.ctx.rng ? this.ctx.rng.fork('car-crush') : null;
     const rnd = () => (rng ? rng.next() : 0.5);
-    const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
-    const s = this.speed >= 0 ? 1 : -1;
-    const spd = Math.min(Math.abs(this.speed), 26);
+    // along the car, or (ROUND 13, takeDown) along whatever broke it
+    const fx = this._debDir ? this._debX : -Math.sin(this.heading);
+    const fz = this._debDir ? this._debZ : -Math.cos(this.heading);
+    const s = this._debDir ? 1 : (this.speed >= 0 ? 1 : -1);
+    const spd = this._debDir ? this._debSpd : Math.min(Math.abs(this.speed), 26);
     const col = d.geo.attributes.color.array;
     // 0.6x THE THING'S OWN ALBEDO. The pieces are thrown 1-3 m in front of the bonnet,
     // which is the core of the headlamp's cone: CFG.lights.headlight is 420 cd with decay
@@ -2458,6 +2620,7 @@ export class Car {
    */
   _forceRelease() {
     const wasIn = !!(this.ctx.shared && this.ctx.shared.inCar);
+    this.beacon = false;
     this._setCarried(false);
     this._carrySeated = false;
     this._setFovBias(0);
@@ -2475,7 +2638,7 @@ export class Car {
     // out on the loop would go on pinning ctx.shared.lit with nobody near it. No cool-down
     // beat here — a death is not a beat this file gets to add to.
     this._setHeadlights(false);
-    if (!wasIn) return;
+    if (!wasIn) return false;
     if (this.ctx.shared) this.ctx.shared.inCar = false;
     this.engineOn = false;
     this.speed = 0; this.steer = 0;
@@ -2483,6 +2646,7 @@ export class Car {
     this.spawnCooldown = SPAWN_COOLDOWN;
     if (this.exists) this._placeRoof();
     this._emit('car:exited', null);
+    return true;                  // ROUND 13: the respawn listener re-parks a car you died in
   }
 
   /* ------------------------------------------------------------- present -- */
@@ -2741,6 +2905,7 @@ export class Car {
       hotwired: this.hotwired,
       engineOn: this.engineOn,
       headlights: this.headlightsOn,
+      beacon: this.beacon,
       lampFade: this.lampFade,
       wear: this.wear,
       hotwireTotal: this.hotwireTotal,
@@ -2792,7 +2957,11 @@ export class Car {
     };
   }
 
-  /** Test/debug door: put the car here, cold and parked, with no spawn rule. */
+  /**
+   * Put the car here, cold and parked, with no spawn rule. The test/debug door since round 5;
+   * since ROUND 13 also the body of _park(), which is how a fresh session and a respawn put
+   * the car on the road (the wrapper adds the nose direction and the beacon).
+   */
   placeAt(x, z, heading) {
     const terr = this._terrain;
     this.x = x; this.z = z;

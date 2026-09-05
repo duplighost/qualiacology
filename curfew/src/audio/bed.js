@@ -23,9 +23,11 @@
 //     stop, something is coming, every single time, so the player can trust their ears.
 //  4. A CLAIMED REGION GETS EXACTLY ONE STEM BACK. One. More than one and the return is a
 //     restoration; exactly one and it is grace.
-//  5. THERE IS NO MUSIC. The car radio is the only non-diegetic-sounding thing in the county
-//     and it is diegetic — it comes out of a dashboard, band-limited to 300-3400 Hz, and it
-//     stops when you leave the car.
+//  5. THERE IS NO MUSIC IN THE COUNTY. The car radio is the only non-diegetic-sounding thing
+//     out there and it is diegetic — it comes out of a dashboard, band-limited to 300-3400 Hz,
+//     and it stops when you leave the car. ROUND 13: the pause card is outside the county. Its
+//     piece (pause.js) plays only while the game is stopped and the card is up, on its own bus
+//     above the mute, and it stops when the card goes.
 //
 // TWELVE STEMS: wind, insects, crickets, owl, frogs, farDog, traffic, worksHum, rain, canopy,
 // radio, stepTail. Everything is synthesised — there is no audio file in this project.

@@ -224,8 +224,11 @@ const PAL = {
   // brightest bark in the county is 26.2 where it was 101.4.
   barkBirch: [0.100, 0.097, 0.089],
   barkSnag: [0.145, 0.138, 0.127],
-  needle: [0.06, 0.092, 0.064],
-  needleBlue: [0.052, 0.08, 0.082],
+  // ROUND 13: cooler and darker needles (x0.72, x0.80, x1.10 on the old values). Measured in
+  // one rAF from the tower: the sky-to-canopy silhouette ratio went 1.59 -> 1.70 and the lit
+  // underside 12.7 -> 6.9 luma, into ART's 3-8 band. Alex: "the trees look not great still lol".
+  needle: [0.043, 0.074, 0.070],
+  needleBlue: [0.037, 0.064, 0.090],
   leaf: [0.088, 0.112, 0.068],
   leafDry: [0.116, 0.096, 0.056],
   // ART.md §0.5: "saturation is rationed... everything else is a value, not a
@@ -428,9 +431,12 @@ function makeRecipe(rand, ai, legacy = null) {
 
   // Branches. A snag keeps a few broken stubs and NO canopy - that is the whole
   // read of The Burn (DESIGN §2: "pale snags 7-12 m, ash floor, no canopy").
+  // ROUND 13: conifers carry 5-6 branches instead of 8-10, and each one past 0.45 of the
+  // trunk now carries a puff of foliage (blobsOnBranch below) — the bare lattice of poles
+  // crossing under the roof in pines-up-torch is gone, at a net triangle cost of about zero.
   const nB = rec.kind === 'snag' ? 6 + ((rand() * 3) | 0)
     : rec.kind === 'birch' ? 4 + ((rand() * 2) | 0)
-      : rec.kind === 'conifer' ? 8 + ((rand() * 3) | 0)
+      : rec.kind === 'conifer' ? 5 + ((rand() * 2) | 0)
         : 5 + ((rand() * 2) | 0);
   // ART.md §2.6. The conifer branch start was 0.30 and the canopy base 0.26 of
   // trunkH; with trunkH 14-24 m that put the lowest foliage mass at 3.6-6.2 m,
@@ -503,13 +509,29 @@ function makeRecipe(rand, ai, legacy = null) {
         const y = lerp(trunkH * 0.55, trunkH * 1.05, fr);   // ART.md §2.6, was 0.26 then 0.45
         const r = lerp(trunkH * 0.104, trunkH * 0.018, fr) * (0.82 + rand() * 0.36);
         const turn = rand() * TAU;
-        rec.canopy.push({
-          x: topX * (y / trunkH) + Math.cos(turn) * r * (0.08 + rand() * 0.12), y,
-          z: topZ * (y / trunkH) + Math.sin(turn) * r * (0.08 + rand() * 0.12),
-          r, squash: 0.24 + rand() * 0.13, tint: 0.86 + fr * 0.28,
-          wind: 0.42 + fr * 0.30, aspect: 0.68 + rand() * 0.66, turn,
-          profile: 'conifer',
-        });
+        // ROUND 13: BOUGHS, NOT DISCS. A tier used to be one 3.5 m plate half a metre thick;
+        // measured from a lookout deck the county read as blue-grey discs stacked on poles.
+        // Each tier below the spire is now 2-3 lobes pushed 0.35-0.6 r off the axis on the
+        // whorl bearing, each 0.55-0.7 of the old radius, taller, stretched along the radial
+        // and drooping at the rim — a bough tip, at detail 0 (20 faces) so the bill is lower
+        // than the one disc it replaces. The top tier stays one small mass: the spire.
+        const lobes = fr > 0.85 ? 1 : 2 + ((rand() * 2) | 0);
+        for (let k = 0; k < lobes; k++) {
+          const a = lobes === 1 ? turn
+            : leanDir + (i & 1) * Math.PI + (i >> 1) * 1.31 + k * (TAU / lobes) + (rand() - 0.5) * 0.5;
+          const off = lobes === 1 ? r * (0.08 + rand() * 0.12) : r * (0.35 + rand() * 0.25);
+          const lr = lobes === 1 ? r : r * (0.55 + rand() * 0.15);
+          rec.canopy.push({
+            x: topX * (y / trunkH) + Math.cos(a) * off,
+            y: y - (lobes === 1 ? 0 : rand() * 0.12 * r),
+            z: topZ * (y / trunkH) + Math.sin(a) * off,
+            r: lr, squash: lobes === 1 ? 0.24 + rand() * 0.13 : 0.45 + rand() * 0.15,
+            tint: 0.86 + fr * 0.28,
+            wind: 0.42 + fr * 0.30, aspect: lobes === 1 ? 0.68 + rand() * 0.66 : 1.3 + rand() * 0.3,
+            turn: a, profile: 'conifer', tier: i, lobe: k,
+            detail: lobes === 1 ? 1 : 0, droop: lobes === 1 ? 0 : 0.22,
+          });
+        }
       }
     } else if (rec.kind === 'birch') {
       // Same measurement, same lever: was 0.20 and four masses. A birch crown at
@@ -548,10 +570,12 @@ function makeRecipe(rand, ai, legacy = null) {
       }
     }
   }
-  // Leaf clusters hung on branch ends, so the canopy is attached to something.
-  if (rec.kind === 'broad' || rec.kind === 'birch') {
+  // Leaf clusters hung on branch ends, so the canopy is attached to something. ROUND 13:
+  // conifers too (their branches past 0.45 of the trunk), see buildTemplateGeometry.
+  if (rec.kind === 'broad' || rec.kind === 'birch' || rec.kind === 'conifer') {
+    const fMin = rec.kind === 'conifer' ? 0.45 : 0.5;
     for (const br of rec.branches) {
-      if (br.f < 0.5) continue;
+      if (br.f < fMin) continue;
       rec.blobsOnBranch = true;
     }
   }
@@ -655,10 +679,33 @@ function blobGeometry(cx, cy, cz, radius, detail, col, tint, wind, squash, seed,
       ? clamp(1 - iy * 0.24, 0.72, 1.28) : 1;
     const ex = px * lump * aspect * profile;
     const ez = pz * lump / Math.max(0.58, aspect) * profile;
-    p.setXYZ(i, ex * ct - ez * st, py * lump * squash, ex * st + ez * ct);
+    let ey = py * lump * squash;
+    // ROUND 13: a bough's rim hangs. `droop` lowers the outer rim by that fraction of the
+    // radius, so a conifer lobe reads as a bough tip and not as a plate.
+    if (shape && shape.droop) ey -= shape.droop * radius * Math.min(1, Math.hypot(ex, ez) / radius);
+    p.setXYZ(i, ex * ct - ez * st, ey, ex * st + ez * ct);
+  }
+  // ROUND 13: SMOOTH NORMALS. IcosahedronGeometry is non-indexed in r161, so
+  // computeVertexNormals() gave every canopy triangle ONE face normal — measured, 320-400 of
+  // a template's 440-530 triangles were flat-shaded facets, the "satellite dishes" and
+  // "hexagon polyhedra" in Alex's screenshots. The normal is now the deformed ellipsoid's own,
+  // analytically, per vertex: duplicated positions get identical normals, so the mass shades
+  // round. Zero triangles, zero draws, zero programs.
+  {
+    const a = radius * aspect, b = radius * squash, c = radius / Math.max(0.58, aspect);
+    const nrm = new Float32Array(p.count * 3);
+    for (let i = 0; i < p.count; i++) {
+      const X = p.getX(i), Y = p.getY(i), Z = p.getZ(i);
+      // back into the unrotated frame
+      const u = X * ct + Z * st, w = -X * st + Z * ct;
+      let nx = u / (a * a), ny = Y / (b * b), nz = w / (c * c);
+      const L = Math.hypot(nx, ny, nz) || 1;
+      nx /= L; ny /= L; nz /= L;
+      nrm[i * 3] = nx * ct - nz * st; nrm[i * 3 + 1] = ny; nrm[i * 3 + 2] = nx * st + nz * ct;
+    }
+    geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
   }
   geo.translate(cx, cy, cz);
-  geo.computeVertexNormals();
 
   const n = p.count;
   const c = new Float32Array(n * 3);
@@ -674,7 +721,7 @@ function blobGeometry(cx, cy, cz, radius, detail, col, tint, wind, squash, seed,
     // tests/shots/art-horizon-2000.png shows. 3.05:1 gives the mass a real dark
     // underside and a real moon-lit top, which is most of what makes a blob
     // read as foliage rather than as rock.
-    const g = lerp(0.42, 1.28, ly) * tint;
+    const g = lerp(0.30, 1.28, ly) * tint;   // ROUND 13: was 0.42; a deeper underside (measured 12.7 -> 8.3 lit)
     const j = 0.94 + (((i * 2654435761) >>> 0) % 1000) / 1000 * 0.12;
     c[i * 3] = col[0] * g * j; c[i * 3 + 1] = col[1] * g * j; c[i * 3 + 2] = col[2] * g * j;
     w[i] = wind;
@@ -783,7 +830,8 @@ function buildTemplateGeometry(rec, lod, seed) {
     parts.push(segmentGeometry(ax, ay, az, bx, by, bz, br.r, br.r * 0.45,
       Math.max(3, radial - 2), rec.bark, 0.18, 0.50,
       { rough: 0.045, kind: rec.kind, seed: seed + 401, part: i }));
-    if (rec.blobsOnBranch && br.f >= 0.5 && lod === 0) {
+    const puffMin = rec.kind === 'conifer' ? 0.45 : 0.5;
+    if (rec.blobsOnBranch && br.f >= puffMin && lod === 0) {
       // detail 0 (20 faces), not 1 (80). Measured: with these at detail 1 the
       // broad templates came out at 854 and 1038 triangles against ART.md
       // §2.5's "LOD0 <= 560 per template" gate, because the document's
@@ -794,18 +842,25 @@ function buildTemplateGeometry(rec, lod, seed) {
       // 0.52 -> 0.42 for the same reason as the crown masses: these hang at
       // branch height, which is exactly the band the top of the frame looks
       // through.
-      parts.push(blobGeometry(bx, by, bz, br.reach * 0.42, 0, rec.leaf,
-        0.86 + (i % 3) * 0.09, 0.70, 0.92, seed + i * 13,
-        { aspect: 0.66 + (i % 3) * 0.24, turn: br.ang, profile: 'leaf' }));
+      const conifer = rec.kind === 'conifer';
+      parts.push(blobGeometry(bx, by, bz, br.reach * (conifer ? 0.40 : 0.42), 0, rec.leaf,
+        0.86 + (i % 3) * 0.09, 0.70, conifer ? 0.55 : 0.92, seed + i * 13,
+        { aspect: conifer ? 1.35 : 0.66 + (i % 3) * 0.24, turn: br.ang,
+          profile: conifer ? 'conifer' : 'leaf', droop: conifer ? 0.18 : 0 }));
     }
   }
 
   for (let i = 0; i < rec.canopy.length; i++) {
     const cn = rec.canopy[i];
-    if (lod > 0 && rec.canopy.length > 3 && (i % 3) === 1) continue;   // thin the crown
-    parts.push(blobGeometry(cn.x, cn.y, cn.z, cn.r, detail, rec.leaf,
+    // thin the crown at LOD1: a lobed tier keeps its first lobe, an old-style crown keeps 2 in 3
+    if (lod > 0) {
+      if (cn.lobe !== undefined) { if (cn.lobe > 0) continue; }
+      else if (rec.canopy.length > 3 && (i % 3) === 1) continue;
+    }
+    const d = cn.detail !== undefined ? Math.min(detail, cn.detail) : detail;
+    parts.push(blobGeometry(cn.x, cn.y, cn.z, cn.r, d, rec.leaf,
       cn.tint, cn.wind, cn.squash, seed + i * 29,
-      { aspect: cn.aspect, turn: cn.turn, profile: cn.profile }));
+      { aspect: cn.aspect, turn: cn.turn, profile: cn.profile, droop: cn.droop || 0 }));
   }
 
   const merged = mergeGeometries(parts, false);
@@ -1570,9 +1625,10 @@ export class Flora {
         // Per-tree value jitter, cool toward the clearings so the stands read
         // darker than the gaps and the forest has depth in the value channel.
         const v = 0.80 + hashI(gx, gz, this.seed + 7) * 0.42 - cover * 0.10;
+        // ROUND 13: hue jitter as well as value, so neighbours are not the same green.
         _treeBuf[o + 6] = v * biomeTint[0];
-        _treeBuf[o + 7] = v * (0.98 + hashI(gx, gz, this.seed + 8) * 0.06) * biomeTint[1];
-        _treeBuf[o + 8] = v * (0.94 + hashI(gx, gz, this.seed + 9) * 0.08) * biomeTint[2];
+        _treeBuf[o + 7] = v * (0.92 + hashI(gx, gz, this.seed + 8) * 0.16) * biomeTint[1];
+        _treeBuf[o + 8] = v * (0.90 + hashI(gx, gz, this.seed + 9) * 0.20) * biomeTint[2];
         _treeBuf[o + 9] = hashI(gx, gz, this.seed + 11);      // submission rank
         n++;
 

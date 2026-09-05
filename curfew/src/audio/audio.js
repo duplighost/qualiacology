@@ -55,6 +55,7 @@ import { clamp, clamp01, lerp } from '../engine/math.js';
 import { GunAudio } from './guns.js';
 import { Bed } from './bed.js';
 import { Earshot } from './earshot.js';
+import { PausePiece } from './pause.js';   // ROUND 13: the card's music, above the mute
 
 export const dB = (x) => Math.pow(10, x / 20);
 const sat = clamp01;
@@ -514,9 +515,19 @@ const DREAD = {
   // call time from the step you actually just took — a generic step behind you
   // is a stranger, and a stranger is a much weaker idea than a copy of you.
   mimic:    { n: '', v: 0, gain: 0.50, bus: 'creatures', send: 0.20, occl: false, pri: 1, prop: 0, rlo: 0.97, rhi: 1.01, threat: true, mimic: true },
+  // ROUND 13: THE JUMP BEATS (director/dread.js). Every one carries energy above 110 Hz
+  // (the phone law, below) and normalises at or under the stinger's 0.98.
+  // THE DROP landing: a heavy body arriving on the litter from above, wet and close.
+  dropImpact: { n: 'dr_dropimpact', v: 2, gain: 0.95, bus: 'creatures', send: 0.20, occl: false, pri: 1, prop: 0, rlo: 0.95, rhi: 1.05, threat: true },
+  // THE PACK: three barks, saturated, with a body under each.
+  bark:       { n: 'dr_bark',       v: 3, gain: 0.95, bus: 'creatures', send: 0.22, occl: true,  pri: 1, prop: 0, rlo: 0.94, rhi: 1.06, threat: true },
+  // THE BLACKOUT: the torch's filament popping at the eye, then a breath at the ear.
+  filamentPop: { n: 'dr_filament', v: 2, gain: 0.70, bus: 'world',     send: 0.05, occl: false, pri: 1, prop: 0, rlo: 0.98, rhi: 1.02, threat: false },
+  breathEar:   { n: 'dr_breathear', v: 2, gain: 0.80, bus: 'creatures', send: 0.06, occl: false, pri: 1, prop: 0, rlo: 0.97, rhi: 1.03, threat: true },
 };
 const DREAD_ALIAS = {
   'lantern-gone': 'lanternGone', lanterngone: 'lanternGone', snap: 'branch',
+  'drop-impact': 'dropImpact', 'filament-pop': 'filamentPop', 'breath-ear': 'breathEar',
   // spellings the director lane has used for the witnessing in prose and in code
   witness: 'witnessed', caught: 'witnessed',
 };
@@ -610,6 +621,8 @@ export class Audio {
     this.guns = new GunAudio(ctx, this);
     this.bed = new Bed(ctx, this);
     this.earshot = new Earshot(ctx, this);
+    this.pause = new PausePiece(ctx, this);
+    this._paused = false;
 
     this._unsub = [];
     this._resumeHandler = null;
@@ -665,7 +678,12 @@ export class Audio {
     // The rest of the armoury, off the boot path. It is ~90 ms per gun and none
     // of them are in your hands yet; shot() force-bakes on demand if this never
     // runs, so the worst case is paying for the second gun once.
-    const rest = () => { try { this.guns.bakeRest(); } catch (e) { void e; } };
+    const rest = () => {
+      try { this.guns.bakeRest(); } catch (e) { void e; }
+      // ROUND 13: the pause piece bakes off the boot path too (about 150 ms at 12 kHz); a
+      // first Escape before the idle callback runs pays it once, on demand, in start().
+      try { this.pause.bake(); } catch (e) { void e; }
+    };
     if (typeof requestIdleCallback === 'function') requestIdleCallback(rest, { timeout: 4000 });
     else if (typeof requestAnimationFrame === 'function') requestAnimationFrame(rest);
     else rest();
@@ -698,6 +716,7 @@ export class Audio {
       this._domListeners.length = 0;
     }
     this._resumeHandler = null;
+    try { if (this.pause) this.pause.dispose(); } catch (e) { void e; }
     try { if (this.bed) this.bed.stop(); } catch (e) { void e; }
     try { if (this.actx) this.actx.close(); } catch (e) { void e; }
     this.actx = null; this.enabled = false;
@@ -722,7 +741,17 @@ export class Audio {
     this.clipMakeup = g(LIMIT_HEADROOM);
     this.clipTrim.connect(this.clipper);
     this.clipper.connect(this.clipMakeup);
-    this.clipMakeup.connect(this.master);
+    // ROUND 13: THE MUTE. Everything the county makes passes through this one gain on its way
+    // to the master; game:paused takes it to zero in about 120 ms and resume brings it back.
+    // Nothing is stopped or cut — the bed loops run on under zero and the county comes back
+    // where it was. The pause card's own piece connects to the master ABOVE this node, so the
+    // one thing the pause cannot silence is the music written for it. Alex: "The pause menu
+    // doesn't stop all the sounds. It would be nice if it did." Measured before this: the pause
+    // was exactly as loud as play.
+    this.pauseGain = g(1);
+    this.clipMakeup.connect(this.pauseGain);
+    this.pauseGain.connect(this.master);
+    this.pause.attach();
 
     // The one compressor. Glues a forest of quiet stems under a rifle.
     this.comp = c.createDynamicsCompressor();
@@ -834,9 +863,13 @@ export class Audio {
       this.conv[name] = { send, node: cv, post };
     }
 
+    // ROUND 13: the ui bus sits ABOVE the pause mute, straight into the master, so a click on
+    // the pause card (a node bought) is heard on the card. Nothing in the county uses it.
+    this.busUI = g(1);
+    this.busUI.connect(this.master);
     this.busses = {
       weapons: this.busWeapons, world: this.busWorld, creatures: this.busCreatures,
-      body: this.busBody, earshot: this.busEarshot,
+      body: this.busBody, earshot: this.busEarshot, ui: this.busUI,
     };
 
     this._buildVoicePool();
@@ -1105,6 +1138,40 @@ export class Audio {
     on('dread:beat', () => { if (this.bed) this.bed.onDreadBeat(); });
     on('car:entered', () => this.bed.setInCar(true));
     on('car:exited', () => this.bed.setInCar(false));
+    // ROUND 13: the pause. game:paused carries a BARE boolean (main.js), so it is subscribed
+    // raw — the wrapper above would turn false into {}. The mute follows the pause itself
+    // (alt-tab and a hidden tab mute too); the piece follows the CARD, which hud emits on the
+    // exact show/hide transition, because the entry pause fires for a frame before the lock
+    // lands and a background tab is not a card.
+    this._unsub.push(b.on('game:paused', (v) => this._onPaused(v === true)));
+    on('pause:card', (p) => {
+      if (!this.pause || !this.actx) return;
+      const T = this.actx.currentTime;
+      if (p.shown) this.pause.start(T);
+      else this.pause.stop(T);
+    });
+  }
+
+  /**
+   * ROUND 13: THE PAUSE IS SILENT. One GainNode above every bus, taken to zero with a short
+   * time constant and then pinned there (setTargetAtTime never reaches zero on its own), and
+   * brought back on resume. Never actx.suspend(): the resume would then need a gesture path
+   * of its own and fight _armResume; and never the master, which is the test hook.
+   */
+  _onPaused(on) {
+    const c = this.actx;
+    if (!c || !this.pauseGain) return;
+    const PZ = CFG.audio.pause;
+    const T = c.currentTime, gn = this.pauseGain.gain;
+    this._paused = !!on;
+    gn.cancelScheduledValues(T);
+    gn.setValueAtTime(gn.value, T);
+    if (on) {
+      gn.setTargetAtTime(0, T, PZ.muteTau);
+      gn.setValueAtTime(0, T + PZ.muteFloorAt);
+    } else {
+      gn.setTargetAtTime(1, T, PZ.unmuteTau);
+    }
   }
 
   /* --------------------------------------------------------- option specs -- */
@@ -1985,6 +2052,91 @@ export class Audio {
       reg('dr_footfall' + v, [normalizeTo(b, 0.95)]);
     }
 
+    // ---- ROUND 13, THE DROP'S IMPACT: a body landing from six metres on needle litter —
+    //      the footfall's weight, a wet slap band at 160-420 Hz, and a burst of litter.
+    for (let v = 0; v < 2; v++) {
+      const b = new Float32Array(N(0.42));
+      damped(b, sr, 78 + v * 9, 0.040, 0.95);
+      damped(b, sr, 156 + v * 14, 0.020, 0.34);
+      const n = new Float32Array(N(0.16));
+      noiseFill(n, rn);
+      biquad(n, sr, 'bp', 290 + v * 40, 1.1);
+      envAD(n, sr, 0.003, 0.055, 0, 1);
+      mixInto(b, n, 0.62);
+      grains(b, sr, rn, { count: 24, from: 0.002, span: 0.10, len: [0.0015, 0.006], hp: 220, lp: 3200, amp: 0.66, decay: 1.9 });
+      grains(b, sr, rn, { count: 8, from: 0.12, span: 0.16, len: [0.002, 0.008], hp: 400, lp: 2400, amp: 0.24, decay: 0.9 });
+      saturate(b, 1.6, 0.4);
+      biquad(b, sr, 'lp', 3800, 0.7);
+      biquad(b, sr, 'hp', 50, 0.7);
+      fadeOut(b, sr, 0.05);
+      reg('dr_dropimpact' + v, [normalizeTo(b, 0.95)]);
+    }
+
+    // ---- ROUND 13, THE PACK'S BARK: three bursts, 180-900 Hz saturated noise with a 60 Hz
+    //      body under each. Not a dog anybody has heard.
+    for (let v = 0; v < 3; v++) {
+      const b = new Float32Array(N(0.58));
+      for (let k = 0; k < 3; k++) {
+        const at = k * (0.17 + v * 0.012);
+        const n = new Float32Array(N(0.11));
+        noiseFill(n, rn);
+        biquad(n, sr, 'bp', 420 + v * 60 + k * 35, 0.7);
+        biquad(n, sr, 'hp', 170, 0.7);
+        envAD(n, sr, 0.004, 0.030, 0.02, 1);
+        mixInto(b, n, 0.9 - k * 0.12, Math.round(at * sr));
+        damped(b, sr, 58 + v * 6, 0.05, 0.6, 0, at);
+        damped(b, sr, 116 + v * 10, 0.03, 0.25, 0, at + 0.004);
+      }
+      saturate(b, 2.0, 0.6);
+      biquad(b, sr, 'lp', 4200, 0.7);
+      biquad(b, sr, 'hp', 70, 0.7);
+      fadeOut(b, sr, 0.04);
+      reg('dr_bark' + v, [normalizeTo(b, 0.95)]);
+    }
+
+    // ---- ROUND 13, THE FILAMENT POP: two 1.5 ms clicks 18 ms apart (a blink is two clicks,
+    //      so is a filament) and a 2.2 kHz -> 600 Hz ring dying in 90 ms.
+    for (let v = 0; v < 2; v++) {
+      const b = new Float32Array(N(0.18));
+      for (let p = 0; p < 2; p++) {
+        const n = new Float32Array(Math.round(0.010 * sr));
+        noiseFill(n, rn);
+        biquad(n, sr, 'bp', 3200 + v * 300 + p * 500, 2.8);
+        envAD(n, sr, 0.0003, 0.0030);
+        mixInto(b, n, p ? 0.6 : 0.95, Math.round((0.003 + p * 0.018) * sr));
+      }
+      sweepSine(b, sr, 2200 - v * 200, 600, 0.09, 0.045, 0.45, 0.004);
+      damped(b, sr, 740 + v * 60, 0.012, 0.22, 0, 0.004);
+      biquad(b, sr, 'hp', 380, 0.7);
+      fadeOut(b, sr, 0.02);
+      reg('dr_filament' + v, [normalizeTo(b, 0.80)]);
+    }
+
+    // ---- ROUND 13, THE BREATH AT THE EAR: the witnessed beat's trembling presence, held for
+    //      a second with no inhale and no weight — something standing where you cannot see.
+    for (let v = 0; v < 2; v++) {
+      const b = new Float32Array(N(1.10));
+      const n = new Float32Array(b.length);
+      noiseFill(n, rn);
+      biquad(n, sr, 'bp', 290 + v * 50, 0.8);
+      biquad(n, sr, 'lp', 900, 0.7);
+      for (let i = 0; i < n.length; i++) {
+        const t = i / sr;
+        n[i] *= (0.55 + 0.45 * Math.sin(t * (16.5 + v * 2) + v)) * Math.min(1, t * 4);
+      }
+      envAD(n, sr, 0.14, 0.34, 0.30, 1);
+      mixInto(b, n, 0.9);
+      const h = new Float32Array(b.length);
+      noiseFill(h, rn);
+      biquad(h, sr, 'bp', 1300 + v * 150, 1.4);
+      envAD(h, sr, 0.20, 0.30, 0.25, 1);
+      mixInto(b, h, 0.16);
+      biquad(b, sr, 'hp', 90, 0.7);
+      biquad(b, sr, 'lp', 3000, 0.7);
+      fadeOut(b, sr, 0.08);
+      reg('dr_breathear' + v, [normalizeTo(b, 0.90)]);
+    }
+
     // ---- STINGER: the loud beat. SHORT, LOW, and not a violin — a pitch drop
     //      with a crack on the front of it, driven into its own distortion,
     //      because loud IS distortion and a clean loud sound reads as a menu.
@@ -2480,6 +2632,8 @@ export class Audio {
     if (a.tension !== undefined) this.setTension(a.tension);
     if (a.bedLowpass !== undefined) this.setBedLowpass(a.bedLowpass);
     if (this.bed && a.bed) this.bed.config(a.bed);
+    // ROUND 13: config({ audio: { pause: { pieceGain: 0.3 } } }) retunes the card's music live.
+    if (this.pause && a.pause && a.pause.pieceGain !== undefined) this.pause.setGain(a.pause.pieceGain);
   }
 
   /** The test surface. tests/audio.mjs reads exactly this. */
@@ -2525,6 +2679,13 @@ export class Audio {
       updMs: +this._stats.updMs.toFixed(3),
       bed: this.bed ? this.bed.state() : null,
       earshot: this.earshot ? this.earshot.state() : null,
+      // ROUND 13: the mute and the card's piece.
+      pause: {
+        muted: this._paused,
+        gain: this.pauseGain ? +this.pauseGain.gain.value.toFixed(3) : 1,
+        piece: !!(this.pause && this.pause.playing()),
+        pieceState: this.pause ? this.pause.state() : null,
+      },
     };
   }
 }

@@ -160,6 +160,15 @@ const LEVER_LEN = 0.56;
 /* ------------------------------------------------------------------ the door -- */
 const DOOR_SWING_S = 0.55;       // s from shut to fully open and back
 const DOOR_SHUT_AT = 0.80;       // the collider exists at or above this k (0 open .. 1 shut)
+// ROUND 13: THE DOOR STARTS AJAR. Alex: "oh cool! the doors you push closed! i love it! ...
+// maybe there is some way we can get the player to push the door without realizing so they
+// know its pushable". A leaf a third of the way across the doorway (33 degrees off shut; the
+// free-edge gap is 1.2 m at the station's 2.2 m leaf, 0.7 m at Avery's) has no collider, and a
+// body walking into it at more than NUDGE_SPEED swings it open — so the first door teaches
+// itself by being pushed. Shutting is still E: a safe room is a deliberate act.
+const DOOR_AJAR_K = 0.62;
+const NUDGE_REACH = 0.82;        // m from the body's centre to the leaf (radius 0.36 + a hand)
+const NUDGE_SPEED = 0.6;         // m/s toward the leaf
 const DOOR_LOSE_R = 0.0;         // metres inside which a body keeps you anyway. Zero: the
                                  // whole point is that the door is what ends the argument.
 
@@ -276,7 +285,7 @@ export class Refuge {
 
     // counters a test can read without a screenshot
     this.stats = {
-      throws: 0, doorShuts: 0, doorOpens: 0, rests: 0, refusals: 0,
+      throws: 0, doorShuts: 0, doorOpens: 0, doorNudges: 0, rests: 0, refusals: 0,
       trailsLost: 0, hookRuns: 0, healed: 0,
     };
 
@@ -728,7 +737,7 @@ export class Refuge {
     // power is on. A shut door you did not shut teaches nothing, and the first thing this
     // whole feature has to do is teach.
     const wasShut = (bits & 2) !== 0 && this.power;
-    this.doorK = wasShut ? 1 : 0;
+    this.doorK = wasShut ? 1 : DOOR_AJAR_K;   // ROUND 13: ajar, never simply open
     this.doorTarget = this.doorK;
     this.leverK = this.power ? 1 : 0;
     this._leverPrev = this._leverCurr = this.leverK;
@@ -782,6 +791,22 @@ export class Refuge {
     this._usePrev = use;
 
     const cand = this._candidate(px, py, pz);
+
+    // ROUND 13: the key glyph (hud 'prompt'). Emitted every step there is a candidate; a step
+    // without one clears it. The door and the bed are E, the breaker is a hold; a blocked bed
+    // prompts nothing (the dead click already answers, and a glyph would promise a bed the
+    // door refuses).
+    if (cand === 'door') this._prompt('use', this.doorWX, this.doorWY + 1.15, this.doorWZ, 0);
+    else if (cand === 'breaker' && this.spec.buildBreaker !== false && !this.power && this.throwT < 0) {
+      this._prompt('hold', this.breakerWX, this.breakerWY, this.breakerWZ, this.holdKind === 'breaker' ? this.holdT / HOLD_BREAKER : 0);
+    } else if (cand === 'bed') {
+      const bg = this.anchors.bag;
+      this._prompt('hold', this._wx(bg.x, bg.z), this.padY + 0.35, this._wz(bg.x, bg.z), this.holdKind === 'bed' ? this.holdT / HOLD_REST : 0);
+    }
+    // ROUND 13: a body walking into a leaf that is not shut pushes it open.
+    if (!inCar && !this.holdKind && this.doorTarget === this.doorK && this.doorK > 0.05 && this.doorK < DOOR_SHUT_AT) {
+      this._nudgeDoor(px, pz, player);
+    }
 
     if (!use) {
       this.holdKind = ''; this.holdT = 0;
@@ -874,8 +899,51 @@ export class Refuge {
   _canRest() { return this.power && this.doorK >= DOOR_SHUT_AT; }
 
   /* ------------------------------------------------------------------ door -- */
+
+  /** ROUND 13: one preallocated payload per unit for the hud's key glyph. */
+  _prompt(kind, x, y, z, k) {
+    const P = this._promptP || (this._promptP = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E' });
+    P.kind = kind; P.x = x; P.y = y; P.z = z; P.k = k > 1 ? 1 : (k < 0 ? 0 : k);
+    if (this.ctx && this.ctx.bus) this.ctx.bus.emit('prompt', P);
+  }
+
+  /**
+   * ROUND 13: THE DOOR YOU WALK INTO SWINGS OPEN. Proximity and velocity, not physics: while
+   * the leaf swings it has no collider, so the capsule never moves it. The rule: the body's
+   * centre within NUDGE_REACH of the leaf's segment and moving toward it faster than
+   * NUDGE_SPEED, on a leaf at rest that is neither parked open nor shut. It only ever OPENS —
+   * a shut door stays shut until E, or the safe room would open by leaning on it.
+   */
+  _nudgeDoor(px, pz, player) {
+    const v = player && player.vel;
+    if (!v) return;
+    const sp = Math.hypot(v.x, v.z);
+    if (sp < NUDGE_SPEED) return;
+    const d = this.anchors.door;
+    if (!d) return;
+    const a = (d.yaw || 0) + d.open * (1 - this.doorK);
+    // the leaf's direction, local (cos a, -sin a) rotated into the world like _wx/_wz rotate
+    const lx = Math.cos(a), lz = -Math.sin(a);
+    const ex = lx * this._cy + lz * this._sy, ez = -lx * this._sy + lz * this._cy;
+    const hx = this._wx(d.hingeX, d.hingeZ), hz = this._wz(d.hingeX, d.hingeZ);
+    const rx = px - hx, rz = pz - hz;
+    let t = (rx * ex + rz * ez) / (d.width || 1);
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    const qx = hx + ex * d.width * t, qz = hz + ez * d.width * t;
+    const gx = qx - px, gz = qz - pz;
+    const dist = Math.hypot(gx, gz);
+    if (dist > NUDGE_REACH) return;
+    if ((v.x * gx + v.z * gz) / ((dist || 1e-3) * sp) < 0.5) return;   // moving at it, not past it
+    this.doorTarget = 0;
+    this.stats.doorNudges++;
+    this.stats.doorOpens++;
+    this._syncDoorCollider();
+    this._say('door', 0.40, this.doorWX, this.doorWY + 1.1, this.doorWZ);
+  }
+
   _toggleDoor(px, pz) {
-    const shutting = this.doorTarget < 0.5;
+    // ROUND 13: anything not shut (open, ajar, or swinging that way) shuts; shut opens.
+    const shutting = this.doorTarget < DOOR_SHUT_AT;
     this.doorTarget = shutting ? 1 : 0;
     if (!shutting) {
       this.stats.doorOpens++;

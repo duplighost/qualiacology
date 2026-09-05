@@ -182,6 +182,9 @@ export class Input {
   /* ------------------------------------------------------------------ DOM */
 
   _onKeyDown(e) {
+    // ROUND 13: a keyboard exists. The hud's key glyph shows only once this is true — a touch
+    // player has no E, and Alex rejected touch controls for this game.
+    this.keyboardSeen = true;
     if (!this.enabled || e.repeat) return;
     const a = KEYMAP[e.code];
     if (!a) return;
@@ -240,7 +243,15 @@ export class Input {
   }
 
   requestLock() {
-    if (this.canvas && this.canvas.requestPointerLock) this.canvas.requestPointerLock();
+    if (!this.canvas || !this.canvas.requestPointerLock) return;
+    // ROUND 13: the promise is caught. Chrome rejects a second request inside about a second
+    // ('Too many pointer lock requests in a short window of time') and any request without a
+    // fresh gesture (NotAllowedError); both used to surface as unhandled rejections, which the
+    // harness counts as page errors. Neither is an error here: the card simply stays up.
+    try {
+      const p = this.canvas.requestPointerLock();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (e) { void e; }
   }
 
   /* ------------------------------------------------------------------ reads */

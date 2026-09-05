@@ -47,10 +47,9 @@
 /* ------------------------------------------------------------------ branches -- */
 
 /**
- * `verb` is the bus/state event whose FIRST occurrence auto-grants the branch's tier-0 node,
- * free, without spending a point. DESIGN section 6: "Each branch's first node is auto-granted
- * on first use of its verb, so the tree teaches itself." progress.js owns the detection; this
- * column is the contract between the two.
+ * `verb` names the branch's first verb. It USED to auto-grant the tier-0 node on the verb's
+ * first use; ROUND 13 removed that (Alex: "is it always a choice what to put xp into? it
+ * should be."), so the column is now the card's copy and ready()'s wiring check only.
  */
 export const BRANCHES = Object.freeze([
   { id: 'legs',  name: 'Legs',  verb: 'run',    tint: 0x9fb4d8 },

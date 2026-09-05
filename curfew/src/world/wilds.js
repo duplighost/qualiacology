@@ -890,6 +890,24 @@ function buildTower(api) {
     }
     const dz = (zB - zA), zc = (zA + zB) * 0.5;
     solid.gable(px * 2 + 1.0, dz, roofY, 1.1, 0, zc, C.slate, 0);
+    // ROUND 13: THE ROOF HOLDS A BODY. Three standable strips per pitch, their tops on the
+    // slope, inset 0.35 m from the eave so the feet cannot slide off the drawn edge (Alex:
+    // "without being weird in a way where its way too easy to fall"). From the platform the
+    // eave strip is a 2.5 m mantle — the top of every lookout is now a place to stand.
+    {
+      const w = px * 2 + 1.0, half = w * 0.5, rise = 1.1, inset = 0.35;
+      const fr = [0.80, 0.50, 0.20];               // fractions of the half-span, from the ridge
+      for (const s of [-1, 1]) {
+        for (let i = 0; i < 3; i++) {
+          const u = Math.min(fr[i] * half, half - inset - 0.15);
+          const top = roofY + rise * (1 - u / half) + 0.08;
+          api.emit({
+            kind: 'obb', x: s * u, z: zc, halfX: 0.17 * half, halfZ: dz * 0.5 - 0.2, yaw: 0,
+            y0: top - 0.30, y1: top, tag: 'roof', standable: true,
+          });
+        }
+      }
+    }
     // the mast and the lantern: a housing, the glass, and a halo that reads at 150 m
     const mastY = roofY + 1.1 + 0.9;
     solid.box(0.08, 1.4, 0.08, 0, mastY - 0.5, zc, C.metal, 0);
@@ -903,8 +921,22 @@ function buildTower(api) {
     glow.pane(1.1, 1.1, 0, mastY, zc, 1.0, Math.PI * 0.5, 0);
     glow.pane(1.1, 1.1, 0, mastY, zc, 1.0, Math.PI * 0.25, 0);
     glow.pane(1.1, 1.1, 0, mastY, zc, 1.0, -Math.PI * 0.25, 0);
-    // a little light in the cabin, under the roof, so the tower has a window at night
-    glow.pane(0.5, 0.5, 0, H + 1.6, zc - 0.6, 0.35, 0, 0);
+    // A little light in the cabin, under the roof, so the tower has a window at night.
+    // ROUND 13: IT HAS A FIXTURE NOW. It used to be one 0.5 m additive pane hung in open air
+    // at eye height, 1.1 m from the cache, with nothing under it, on every tower, forever —
+    // and after ACES and bloom its 0.35 gain rendered near white. Alex read it as XP he
+    // could not collect: "a hovering thing that looked odd that could be xp. i couldn't get
+    // it. This happened twice." Now it is a small lamp box on the roof post at the far corner
+    // with two crossed panes in front of it at a quarter of the gain, so it reads as a lamp
+    // on a post from every side and never as a floating disc. Same merged meshes: no light,
+    // no collider, no program.
+    {
+      const lx = -px, lz = zA, ly = H + 1.72;
+      solid.box(0.16, 0.24, 0.16, lx + 0.15, ly, lz + 0.15, C.metal, 0);
+      solid.box(0.24, 0.05, 0.24, lx + 0.15, ly + 0.145, lz + 0.15, C.metal, 0);
+      glow.pane(0.26, 0.26, lx + 0.31, ly - 0.02, lz + 0.31, 0.09, Math.PI * 0.25, 0);
+      glow.pane(0.26, 0.26, lx + 0.31, ly - 0.02, lz + 0.31, 0.09, -Math.PI * 0.25, 0);
+    }
   }
 
   // ---- the cache, on the slab, mid-platform ------------------------------------

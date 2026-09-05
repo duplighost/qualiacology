@@ -38,6 +38,11 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, clamp } from '../engine/math.js';
+
+// ROUND 13: scratch for the Relay's guy wires (a member from A to B, like wilds.js strut()).
+const _wireUp = new THREE.Vector3(0, 1, 0);
+const _wireDir = new THREE.Vector3();
+const _wireQ = new THREE.Quaternion();
 import CFG from '../config.js';           // ROUND 6: roadApproach reads CFG.player.STEP_UP
 // The county's material break-up field, three octaves in world space. The chunk ground and
 // the road ribbon already take it (chunks.js:679, :787); the destination aprons never did,
@@ -497,6 +502,36 @@ function smallShellRoute(k, api, ox, oz, w, d, h, yaw) {
 }
 
 /**
+ * ROUND 13: THE ROOF IS A FLOOR YOU CAN WALK. Kit.gable() draws two slabs and emits nothing,
+ * so a body that reached the eave strip or a wall top stepped a hand's width onto the picture
+ * of a roof and dropped into the hut — Alex, at the Relay: "climbed up some steps to the roof.
+ * then fell through the roof lol." The collider store holds vertical prisms, so each pitch
+ * becomes a short stair of standable strips whose tops follow the slope, every riser under
+ * STEP_UP, and the body walks up one pitch, over the ridge and down the other. Same footprint
+ * and depth as the gable it sits under; nothing is drawn. Called only where a shell also has
+ * a smallShellRoute, so the roofs you can reach are the roofs that hold you.
+ */
+function gableFloor(api, x, z, w, d, h, rise, ry) {
+  const yaw = ry || 0;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const half = w * 0.5;
+  const n = Math.max(2, Math.ceil(half / 0.85));
+  const sw = half / n;
+  const hd = (d + 0.5) * 0.5;
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < n; i++) {
+      const u = (i + 0.5) * sw;                        // metres out from the ridge
+      const top = h + rise * (1 - u / half) + 0.08;    // the slab's upper face, near enough
+      const lx = s * u;
+      api.emit({
+        kind: 'obb', x: x + lx * cy, z: z - lx * sy, halfX: sw * 0.5 + 0.02, halfZ: hd, yaw,
+        y0: top - 0.30, y1: top, tag: 'roof', standable: true,
+      });
+    }
+  }
+}
+
+/**
  * A short glow column on the GLOW kit: an open tapered cylinder whose vertex colour falls to
  * nothing at the top, a shared tapered glow profile at prop scale. `gain` scales the whole
  * profile so a campfire is a fire and not a lighthouse. Reads from every bearing, which is
@@ -575,10 +610,21 @@ function lattice(k, api, lx, lz, base, top, height, rungs, col, tag) {
     k.box(0.10, 0.10, hwd * 2, lx - hwd, y, lz, col);
     k.box(0.10, 0.10, hwd * 2, lx + hwd, y, lz, col);
   }
-  api.emit({
-    kind: 'circle', x: lx, z: lz, r: base * 1.05,
-    y0: api.padY - 0.3, y1: api.padY + height, tag: tag || 'metal',
-  });
+  // ROUND 13: THE COLLIDER IS THE FOUR LEGS, NOT A TUBE OVER THE WHOLE SPREAD. One circle of
+  // base*1.05 made the Relay's mast a 10.5 m invisible wall with open ground drawn between
+  // its legs — Alex walked into it: "there was an area that looked like i could just walk
+  // across. it blocked me. i walked all the way around." Each leg is now a thin round post
+  // from the pad to the head, tagged 'mast' so the mantle refuses it (collision.js
+  // NON_CLIMB_TAGS); the rungs start at height/(rungs+1) and stay draw-only. Same emit at
+  // the Weeping Mine headframe. (The tag argument stays in the signature for its callers.)
+  void tag;
+  for (let i = 0; i < 4; i++) {
+    const sx = (i & 1) ? 1 : -1, sz = (i & 2) ? 1 : -1;
+    api.emit({
+      kind: 'circle', x: lx + sx * base, z: lz + sz * base, r: Math.max(0.42, legR * 1.8),
+      y0: api.padY - 0.3, y1: api.padY + height, tag: 'mast',
+    });
+  }
 }
 
 /** A ring of low wall around a yard, with a gap facing the road. */
@@ -967,13 +1013,20 @@ export const BUILDERS = {
       const c = api.site.claim;
       k.solid.box(0.9, 1.5, 0.4, c.dx, api.padY + 0.75, c.dz, C.metal);
       // ore bins, a conveyor, and the collar of the shaft
+      // ROUND 13: the ore bins hold a body (standable), and a 1.5 m ore step against the first
+      // bin makes them a 1.5 + 1.5 stack as well as a 3.0 m fling — "more areas to get up to".
       for (let i = 0; i < 3; i++) {
         k.solid.box(4.2, 3.0, 4.2, -2 + i * 5.0, api.padY + 1.5, 12, C.rust);
         api.emit({
           kind: 'obb', x: -2 + i * 5.0, z: 12, halfX: 2.1, halfZ: 2.1, yaw: 0,
-          y0: api.padY, y1: api.padY + 3.0, tag: 'metal',
+          y0: api.padY, y1: api.padY + 3.0, tag: 'metal', standable: true,
         });
       }
+      k.solid.box(2.4, 1.5, 1.6, -2, api.padY + 0.75, 9.1, C.dark);
+      api.emit({
+        kind: 'obb', x: -2, z: 9.1, halfX: 1.2, halfZ: 0.8, yaw: 0,
+        y0: api.padY - 0.2, y1: api.padY + 1.5, tag: 'stone', standable: true,
+      });
       k.solid.box(0.7, 0.35, 21, 8, api.padY + 6.2, 2.5, C.rust, 0, -0.22);
       k.solid.box(6.5, 0.6, 6.5, 8, api.padY + 0.3, -6, C.dark);
       // slag: a low ash ridge that says this place burned for a century. Out at 16-26 m
@@ -1019,16 +1072,28 @@ export const BUILDERS = {
         k.solid.cyl(r, r, 0.34, 12, 0, y, 0, C.metal);
         k.solid.tube(r * 0.94, r * 0.94, 1.05, 12, 0, y + 0.62, 0, C.metal);
       }
-      // three guy wires, thin enough to read as wires rather than pipes
+      // three guy wires, thin enough to read as wires rather than pipes. ROUND 13: they run
+      // from the mast at 42 m DOWN to a concrete anchor 21 m out. The two tilts used to be
+      // applied the wrong way round, so every wire rose from the foot to a point floating
+      // 21 m out at 42 m (measured: 30 endpoint vertices at the foot, 42 at y 42, r 21).
       for (let i = 0; i < 3; i++) {
         const a = (i / 3) * TAU + 0.4;
         const gx = Math.cos(a) * 21, gz = Math.sin(a) * 21;
-        const len = Math.hypot(42, 21);
+        const gy = api.heightAt(api.wx(gx, gz), api.wz(gx, gz)) - api.padY;
+        const ay = gy + 0.55;                              // the anchor's eye
+        const dx = gx, dy = ay - 42, dz = gz;
+        const len = Math.hypot(dx, dy, dz);
         const g = new THREE.CylinderGeometry(0.035, 0.035, len, 4);
-        g.rotateZ(-Math.atan2(gx, 42));
-        g.rotateX(Math.atan2(gz, 42));
-        g.translate(gx * 0.5, api.padY + 21, gz * 0.5);
+        _wireUp.set(0, 1, 0); _wireDir.set(dx / len, dy / len, dz / len);
+        g.applyQuaternion(_wireQ.setFromUnitVectors(_wireUp, _wireDir));
+        g.translate(gx * 0.5, api.padY + (42 + ay) * 0.5, gz * 0.5);
         k.solid.push(g, C.metal);
+        // and the block it is pinned to, standable, knee high
+        k.solid.box(0.9, 0.7, 0.9, gx, api.padY + gy + 0.25, gz, C.ash);
+        api.emit({
+          kind: 'obb', x: gx, z: gz, halfX: 0.45, halfZ: 0.45, yaw: 0,
+          y0: api.padY + gy - 0.3, y1: api.padY + gy + 0.6, tag: 'stone', standable: true,
+        });
       }
       // dish
       k.solid.cone(2.6, 1.5, 10, 2.6, api.padY + 34, 0, C.plaster, 0, 0, Math.PI * 0.5);
@@ -1043,8 +1108,15 @@ export const BUILDERS = {
       const k = kits();
       // the pad, widened with the mast's feet (they now stand 4.0 m out, not 2.6)
       k.solid.box(11.6, 0.4, 11.6, 0, api.padY + 0.2, 0, C.ash);
+      // ROUND 13: the slab has the collider its picture promised. With the mast's tube gone
+      // the body would otherwise stand shin-deep inside the drawn concrete.
+      api.emit({
+        kind: 'obb', x: 0, z: 0, halfX: 5.8, halfZ: 5.8, yaw: 0,
+        y0: api.padY - 0.3, y1: api.padY + 0.4, tag: 'stone', standable: true,
+      });
       shell(k.solid, api, -7.5, 6.5, 6, 5, 3.0, 0, C.plaster, 2.0);
       k.solid.gable(6.4, 5.4, api.padY + 3.0, 0.7, -7.5, 0, 6.5, C.slate, 0);
+      gableFloor(api, -7.5, 6.5, 6.4, 5.4, api.padY + 3.0, 0.7, 0);
       smallShellRoute(k.solid, api, -7.5, 6.5, 6, 5, 3.0, 0);
       const c = api.site.claim;
       k.solid.box(1.2, 1.7, 0.6, c.dx, api.padY + 0.85, c.dz, C.metal);
@@ -1542,6 +1614,7 @@ export const BUILDERS = {
       // the keeper's cottage
       shell(k.solid, api, 9, 3, 9, 6.5, 3.4, 0.3, C.plaster, 2.2);
       k.solid.gable(9.6, 7.0, api.padY + 3.4, 1.2, 9, 0, 3, C.slate, 0.3);
+      gableFloor(api, 9, 3, 9.6, 7.0, api.padY + 3.4, 1.2, 0.3);
       smallShellRoute(k.solid, api, 9, 3, 9, 6.5, 3.4, 0.3);
       k.glow.pane(1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, PANE_WINDOW, Math.PI + 0.3, 0, 6, 5);
       sash(k.solid, 1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, C.dark, Math.PI + 0.3, 0, 2, 2, 0.07, 0.09);
@@ -1602,6 +1675,7 @@ export const BUILDERS = {
       // lean-to, millstones, a cart
       shell(k.solid, api, 7.5, 4.5, 7, 5, 2.8, 0.6, C.plank, 2.0);
       k.solid.gable(7.4, 5.4, api.padY + 2.8, 0.8, 7.5, 0, 4.5, C.slate, 0.6);
+      gableFloor(api, 7.5, 4.5, 7.4, 5.4, api.padY + 2.8, 0.8, 0.6);
       smallShellRoute(k.solid, api, 7.5, 4.5, 7, 5, 2.8, 0.6);
       for (let i = 0; i < 3; i++) {
         k.solid.cyl(1.15, 1.15, 0.3, 12, -6 + i * 2.6, api.padY + 0.15, 7 + i * 0.7, C.stone);
@@ -1660,7 +1734,10 @@ export const BUILDERS = {
         k.solid.gable(4.4, 5.0, api.padY + 3.0, 0.9, lx, 0, lz, C.slate, mausYaw);
         // One sexton's service route is enough; repeating it on all three would turn the
         // graveyard into an obstacle course and erase the mausolea's different reads.
-        if (i === 1) smallShellRoute(k.solid, api, lx, lz, 4.0, 4.6, 3.0, mausYaw);
+        if (i === 1) {
+          gableFloor(api, lx, lz, 4.4, 5.0, api.padY + 3.0, 0.9, mausYaw);
+          smallShellRoute(k.solid, api, lx, lz, 4.0, 4.6, 3.0, mausYaw);
+        }
       }
       k.glow.pane(0.7, 1.0, 0, api.padY + 2.6, 11.5, PANE_LAMP, Math.PI, 0, 6, 8);
       // dead trees, because a cemetery with living trees is a park. 15-22 m out, which is

@@ -221,6 +221,17 @@ export const CFG = {
       vault: { lo: 0.60, hi: 1.20, maxThick: 1.40, time: 0.32, keep: 0.85 },
       outSpeed: 1.6,                          // m/s carried over the lip at the end
       landSpeed: 2.2,                         // the soft landing every climb ends with (no fall damage possible)
+      // ROUND 13: HOLD SPACE TO KEEP CLIMBING. Alex, seventh playtest: "climbing just by holding
+      // down the spacebar for the player to jump and grab a ledge. keep holding space and the
+      // character flings up to the next ledge ... then some kind of natural space they can get
+      // to after they climb that it lands them on". Measured: the passive mantle already chains
+      // every rise up to 2.90 m; a held Space was ONE edge, spent on the first ledge or on one
+      // jump, and a lip above 2.90 m then needed a re-press (ceiling 3.0-3.1 m from standing).
+      // So a HELD Space, on landing from a climb, re-probes at once (chainS) with the far probe,
+      // and may spend ONE fling per hold at a lip above reach but inside flingMaxRise, with the
+      // hands' band raised to handsHi while the fling is in the air. landIn puts the whole
+      // footprint on the top. Nothing here writes a jump: a hold can never bunny-hop.
+      hold: { chainS: 0.30, flingMaxRise: 3.30, handsHi: 0.80, intentS: 0.36, outSpeed: 2.6, landIn: 0.42 },
     },
     health: { max: 100, regenDelay: 6.0, regenRate: 9, regenCeiling: 40 },
     springs: { eye: [9, 1.0], landing: [8, 0.6], punch: [11, 0.55], lean: [7, 0.9] },
@@ -283,7 +294,13 @@ export const CFG = {
     // gets a quarter of the light. The whole derivation and the three lanes that proved it are
     // in the note above TORCH_DECAY. THESE TWO NUMBERS MOVE TOGETHER OR THE MID FIELD MOVES.
     torch: { hot: 100, angle: 0.80, penumbra: 0.72, spill: 300, lens: 6.0, lensR: 3.4, lag: 11, ahead: 8 },
-    headlight: { intensity: 420, angle: 0.62, distance: 60 },
+    // ROUND 13: THE LEVER IS DECAY, NOT CANDELA — the torch's own lesson, three lines up. At
+    // decay 2.0 the beam was pixel-identical to off on the road the driver looks at (mid band
+    // 20.4 vs 20.0 luma, measured) and 420 -> 1000 moved it half a luma. Decay 1.25 at 340 is
+    // the one setting where the beam is visible by eye: 10 m gets 4.5x the light, 20 m 7.6x,
+    // and 1.5 m only +10% so the crush debris does not clip. Alex: "The headlights of the car
+    // can be a little stronger if possible." Uniforms only: no light, no program.
+    headlight: { intensity: 340, angle: 0.62, penumbra: 0.35, distance: 80, decay: 1.25 },
   },
 
   // ---- car [mossway kinematics in peachful's body] ---------------------------
@@ -352,6 +369,12 @@ export const CFG = {
     airAbsorption: 55,   // exp(-d/55)
     speedOfSound: 343,
     earshot: { band: [2500, 5500], lowpass: 1600, k: 2, rearBias: 0.28 },
+    // ROUND 13: the pause. muteTau/muteFloorAt take the county to true zero in about 160 ms
+    // of audio time (measured: tau 0.02 was -51 dB at 167 ms wall); unmuteTau brings it back.
+    // The card's piece: its level, its fade in and out, and its bake (12 kHz is enough for
+    // content that tops out at 2.2 kHz; 24 s is twenty beats at 1.2 s).
+    pause: { muteTau: 0.018, muteFloorAt: 0.16, unmuteTau: 0.06,
+      pieceGain: 0.20, pieceInTau: 0.08, pieceOutS: 0.40, sr: 12000, seconds: 24, beatS: 1.2 },
   },
 
   // ---- director (M1+) -------------------------------------------------------
@@ -365,6 +388,26 @@ export const CFG = {
     targets: { dusk: [2.5, 5], deepNight: [4.5, 8], storm: [7, 11] },
     // and the hard ceiling on live pressure bodies at ANY distance (was 26 in enemies.js).
     aliveMax: 14,
+    // ROUND 13: THE JUMP BEATS. Alex, seventh playtest: "we NEED more things that terrify that
+    // shit out of me when I'm playing. especially in the woods. Nothing is really that scary. I
+    // want to jump back in real life with my heart beating a million times a minute." Measured
+    // before this: in two minutes of walking in a dense stand the only loud things were two
+    // stingers with nothing on screen. Four beats put a BODY where a stinger was: THE TURN (a
+    // hunter 2.5 m behind you after turnWalkS of walking with a stand at your back, holds
+    // turnHoldS, then attacks), THE DROP (a hound out of the crown of the tree ahead), THE PACK
+    // (three hounds out of the ferns at once), THE BLACKOUT (your torch dies for blackoutS and
+    // something may be there when it comes back). Each is loud: it shares the 26 s loud gap,
+    // waits sinceLoudMin after any loud beat, needs dense cover, distance from a road, a walking
+    // pace, and its own cooldown. bonusXp pays on top of the species when you kill the body.
+    jump: {
+      everyS: { drop: 240, turn: 300, blackout: 360, pack: 420 },
+      sinceLoudMin: 40, coverMin: 0.72, roadMin: 24, speedMax: 7.0, placeClear: 60,
+      bonusXp: 40,
+      turnWalkS: 4.0, turnBehind: 2.5, turnHoldS: 0.6, turnAmbushS: 8,
+      dropH: 6.0, dropTreeMin: 2.0, dropTreeMax: 3.5,
+      packAhead: [9, 12], packSize: 3, packMinHp: 60, packSinceHurtS: 40,
+      blackoutS: 1.8, blackoutRevealChance: 0.30, blackoutRevealAt: 1.4,
+    },
     // ARRIVAL. No more than maxBodies bodies may arrive inside any windowS seconds outside
     // the black hour (blackMaxBodies inside it). A pack assembles; it never lands. Measured
     // before this existed: five hounds in 0.6 s (tools/arrivals.mjs, docs/NEXT.md 4a).

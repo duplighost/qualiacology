@@ -175,6 +175,11 @@ export const BEAT_SOUNDS = Object.freeze([
   'collapse',      // the payoff that did not come, and the bed cutting out instead
   'tell',          // ANIMALS KNOW FIRST — 10-40 s before the Auditor's event
   'witnessed',     // being caught looking
+  // ROUND 13: the jump beats' own sounds (audio.js DREAD rows dropImpact/bark/filamentPop/breathEar)
+  'drop-impact',   // a body landing from the crown of the tree ahead
+  'bark',          // three hounds out of the ferns at once
+  'filament-pop',  // your torch dying at the eye
+  'breath-ear',    // and a breath at your ear in the dark
 ]);
 
 const SOUND_OK = Object.create(null);
@@ -198,6 +203,9 @@ const MENU = Object.freeze([
 // The hot path allocates nothing. Everything below is written into and read back out.
 const _pos = { x: 0, y: 0, z: 0 };
 const _fwd = { x: 0, y: 0, z: 0 };
+const _up = new THREE.Vector3(0, 1, 0);   // ROUND 13: the drop's landing burst normal
+const _TREE_TAGS = Object.freeze(['tree', 'trunk']);
+const _tree = { x: 0, z: 0, r: 0 };
 const _cand = { x: 0, y: 0, z: 0, ok: false };
 const _spot = { x: 0, y: 0, z: 0 };
 const _place = { x: 0, z: 0, radius: D.placeRadiusDefault };
@@ -252,7 +260,7 @@ export class Dread {
       this.timers[i] = { on: false, t: 0, tag: 0, serial: 0, x: 0, y: 0, z: 0 };
     }
     this.serial = 1;
-    this.TAG = { none: 0, payoff: 1, mimic: 2 };
+    this.TAG = { none: 0, payoff: 1, mimic: 2, breath: 3 };
 
     this.stats = {
       beats: 0, soft: 0, builds: 0, stingers: 0, collapses: 0,
@@ -262,7 +270,19 @@ export class Dread {
       answers: 0, unbakedNames: 0, hushes: 0,
       byKind: Object.create(null),
       permittedSeconds: 0, deniedSeconds: 0,
+      // ROUND 13: the jump beats — fired, and refused by kind with the reason counted
+      jumps: 0, jumpByKind: Object.create(null), refusedJump: Object.create(null),
     };
+
+    /* ---- ROUND 13: THE JUMP BEATS' STATE ---------------------------------------- */
+    this.jumpAt = Object.create(null);     // clock at which each kind last fired
+    this.lastJump = '';
+    this.backCoverT = 0;                   // seconds walked with a dense stand behind
+    this._lastYaw = 0;
+    this._forceJump = '';                  // config({ jump: kind }) — the next permitted step
+    this.dropS = { on: false, e: null, t: 0, x: 0, y: 0, z: 0, landed: false };
+    this.blackoutS = { on: false, t: 0, x: 0, z: 0, revealed: false, coin: false };
+    this._offJump = null;
 
     /* ---- the mimic: armed by a beat, fed by the player's own footfalls ---- */
     this.mimicT = 0;
@@ -280,12 +300,23 @@ export class Dread {
       if (this.tension.alive30 > 1) return;
       this.quietUntil = Math.max(this.quietUntil, this.clock + CFG.director.silenceS);
     };
+    // ROUND 13: an ambush body killed pays the jump bonus on top of its species.
+    this._onKillBonus = (p) => {
+      const e = p && p.e;
+      if (!e || !e.ambush) return;
+      const prog = this._sys('progress');
+      const J = CFG.director.jump;
+      if (prog && typeof prog.award === 'function' && J && J.bonusXp > 0) {
+        prog.award(J.bonusXp, e.pos ? e.pos.x : p.x, (e.pos ? e.pos.y : p.y) + 1.0, e.pos ? e.pos.z : p.z, 'jump');
+      }
+    };
     const bus = ctx.bus;
     this._offs = [];
     if (bus) {
       this._offs.push(bus.on('player:step', this._onStep));
       this._offs.push(bus.on('player:respawn', this._onRespawn));
       this._offs.push(bus.on('enemy:killed', this._onKill));
+      this._offs.push(bus.on('enemy:killed', this._onKillBonus));
     }
   }
 
@@ -1408,6 +1439,10 @@ export class Dread {
 
     if (this.mimicT > 0) this.mimicT -= d;
 
+    // ROUND 13: the jump beats' running parts (the drop's landing, the blackout's return),
+    // the stand-behind clock, and a forced beat from config().
+    this._stepJump(d);
+
     const H = this.hushS;
     if (H.on) { H.t += d; if (H.t >= H.dur) { H.on = false; H.t = 0; H.dur = 0; } }
 
@@ -1423,6 +1458,13 @@ export class Dread {
       s.tag = 0;
       if (tag === this.TAG.payoff) this._resolveBuild();
       else if (tag === this.TAG.mimic) this.answer('mimic', s.x, s.y, s.z, 0.30);
+      else if (tag === this.TAG.breath) {
+        // ROUND 13: the blackout's breath, at the ear, from just behind
+        this._player(_pos);
+        const cam = this._sys('camera');
+        const yaw = cam ? cam.yaw : 0;
+        this.answer('breath-ear', _pos.x + Math.sin(yaw) * 0.4, s.y, _pos.z + Math.cos(yaw) * 0.4, 0.8);
+      }
     }
 
     this._stepWatcher(d);
@@ -1449,6 +1491,11 @@ export class Dread {
     this.timer = this._nextInterval();
     this.stats.beats++;
 
+    // ROUND 13: THE JUMP takes the interval when its gates hold — dense cover, off the road,
+    // on foot at a walk, nothing hunting, long enough since the last loud beat, its own
+    // cooldown. It is loud by definition and shares the 26 s loud gap.
+    if (this._tryJump('')) return;
+
     // THE ROLL. rand < 0.76 OR sinceLoud < 13 -> soft. Restraint is the default and the
     // build is the exception, which is the inversion that makes the build mean anything.
     const sinceLoud = this.clock - this.lastLoud;
@@ -1460,9 +1507,356 @@ export class Dread {
     } else this._startBuild();
   }
 
+  /* ============================================ ROUND 13: THE JUMP BEATS ===== */
+
+  /** Per-step bookkeeping for the jump beats. */
+  _stepJump(d) {
+    const J = CFG.director.jump;
+    // the stand-behind clock: seconds walked with dense cover six metres behind, reset when
+    // he looks round (a yaw swing over 1.2 rad) or stops
+    const cam = this._sys('camera');
+    const yaw = cam ? cam.yaw : 0;
+    let dy = yaw - this._lastYaw;
+    while (dy > Math.PI) dy -= TAU;
+    while (dy < -Math.PI) dy += TAU;
+    this._lastYaw = yaw;
+    const sp = this._speed();
+    const sh = this.ctx.shared;
+    const inCar = !!(sh && sh.inCar);
+    if (Math.abs(dy) > 1.2 || inCar || sp < 1.5 || sp > J.speedMax) this.backCoverT = 0;
+    else {
+      this._player(_pos);
+      const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+      const flora = this._sys('flora');
+      const c = flora && typeof flora.coverAt === 'function' ? flora.coverAt(_pos.x - fx * 6, _pos.z - fz * 6) : 0;
+      this.backCoverT = c >= 0.75 ? this.backCoverT + d : 0;
+    }
+
+    // the drop's landing
+    const S = this.dropS;
+    if (S.on) {
+      S.t += d;
+      const e = S.e;
+      if (!e || !e.alive) { S.on = false; S.e = null; }
+      else if (!S.landed && !e.airborne) {
+        S.landed = true;
+        this.answer('drop-impact', e.pos.x, e.pos.y + 0.4, e.pos.z, 1.0);
+        const fx = this._sys('fx');
+        if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(0.22);
+        if (fx && typeof fx.impact === 'function') { _up.x = 0; _up.y = 1; _up.z = 0; try { fx.impact('rock', e.pos, _up, 1.2); } catch (err) { void err; } }
+        S.on = false; S.e = null;
+      } else if (S.t > 4) { S.on = false; S.e = null; }
+    }
+
+    // the blackout's return
+    const B = this.blackoutS;
+    if (B.on) {
+      B.t += d;
+      if (!B.revealed && B.t >= J.blackoutRevealAt) {
+        B.revealed = true;
+        this._blackoutReveal();
+      }
+      if (B.t >= J.blackoutS + 0.4) B.on = false;
+    }
+
+    // a forced beat (config({ jump })): fires on the first permitted step, gates aside
+    if (this._forceJump) {
+      const kind = this._forceJump;
+      if (this.permitOk() && !this.building) {
+        this._forceJump = '';
+        this._tryJump(kind);
+      }
+    }
+  }
+
+  /** The common gate. Returns '' when the kind may fire, else the reason it may not. */
+  _jumpRefusal(kind, forced) {
+    const J = CFG.director.jump;
+    const sh = this.ctx.shared;
+    if (sh && sh.inCar) return 'in-car';
+    if (!forced) {
+      if (this.clock - this.lastLoud < J.sinceLoudMin) return 'since-loud';
+      const at = this.jumpAt[kind];
+      if (at !== undefined && this.clock - at < J.everyS[kind]) return 'cooldown';
+      const region = this.regionKey();
+      if (region !== 'pines' && region !== 'ridge' && region !== 'marsh') return 'region';
+      this._player(_pos);
+      const flora = this._sys('flora');
+      const cover = flora && typeof flora.coverAt === 'function' ? flora.coverAt(_pos.x, _pos.z) : 0;
+      if (cover < J.coverMin) return 'cover';
+      const roads = this._sys('roads');
+      if (roads && typeof roads.roadDistance === 'function' && roads.roadDistance(_pos.x, _pos.z) < J.roadMin) return 'road';
+      if (this._speed() > J.speedMax) return 'speed';
+      if (this.tension && this.tension.hunting > 0) return 'hunting';
+      if (this._nearPlace(J.placeClear)) return 'place';
+    }
+    const en = this._sys('enemies');
+    if (!en || typeof en.spawn !== 'function') return 'no-enemies';
+    if (kind === 'turn' && this.backCoverT < J.turnWalkS && !forced) return 'walk';
+    if (kind === 'blackout') {
+      const L = this._sys('lights');
+      if (!L || typeof L.torchOn !== 'function' || !L.torchOn()) return 'torch-off';
+      if (typeof L.torchFaulted === 'function' && L.torchFaulted()) return 'faulted';
+    }
+    if (kind === 'pack') {
+      const p = this._sys('player');
+      if (p && typeof p.hp === 'number' && p.hp < J.packMinHp) return 'hp';
+      if (p && typeof p.sinceHurt === 'number' && p.sinceHurt < J.packSinceHurtS) return 'hurt';
+      const ph = sh && sh.phase;
+      if (ph !== 'night' && ph !== 'black') return 'phase';
+    }
+    return '';
+  }
+
+  /** Is an authored place within r metres (a beat never plays in somebody's yard). */
+  _nearPlace(r) {
+    const places = this._sys('places');
+    if (!places || typeof places.all !== 'function') return false;
+    this._player(_pos);
+    const all = places.all();
+    for (let i = 0; i < all.length; i++) {
+      const q = all[i];
+      if (Math.hypot(q.x - _pos.x, q.z - _pos.z) < r) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Pick and fire a jump beat. `force` names a kind (config) and skips the pacing gates but
+   * not the physical ones. Returns true when a beat fired and took the interval.
+   */
+  _tryJump(force) {
+    const J = CFG.director.jump;
+    if (!J) return false;
+    const forced = !!force;
+    let kind = force;
+    if (!kind) {
+      // the ready kinds, weighted; the drop is the commonest, the pack the rarest
+      const W = { turn: 6, drop: 6, blackout: 5, pack: 4 };
+      let total = 0;
+      for (const k in W) if (this._jumpRefusal(k, false) === '') total += W[k];
+      if (total <= 0) return false;
+      let r = this.rng.next() * total;
+      for (const k in W) {
+        if (this._jumpRefusal(k, false) !== '') continue;
+        r -= W[k];
+        if (r <= 0) { kind = k; break; }
+      }
+      if (!kind) return false;
+    } else {
+      const why = this._jumpRefusal(kind, true);
+      if (why) { this.stats.refusedJump[kind + ':' + why] = (this.stats.refusedJump[kind + ':' + why] || 0) + 1; return false; }
+    }
+    let ok = false;
+    switch (kind) {
+      case 'turn': ok = this._beatTurn(); break;
+      case 'drop': ok = this._beatDrop(); break;
+      case 'pack': ok = this._beatPack(); break;
+      case 'blackout': ok = this._beatBlackout(); break;
+      default: ok = false;
+    }
+    if (!ok) {
+      this.stats.refusedJump[kind + ':placement'] = (this.stats.refusedJump[kind + ':placement'] || 0) + 1;
+      this.stats.refusedPlacement++;
+      return false;
+    }
+    this.stats.jumps++;
+    this.stats.jumpByKind[kind] = (this.stats.jumpByKind[kind] || 0) + 1;
+    this.jumpAt[kind] = this.clock;
+    this.lastJump = kind;
+    this.lastLoud = this.clock;
+    this.quietUntil = this.clock + CFG.director.dread.postLoudQuietS;
+    this.lastBeat = BEAT.stinger;
+    this.lastBeatAt = this.clock;
+    this.backCoverT = 0;
+    this._noteKind(kind, true);
+    this.tension.addKick(D.stingerKick);
+    const bus = this.ctx.bus;
+    if (bus) bus.emit('dread:jump', { kind, x: _spot.x, z: _spot.z });
+    return true;
+  }
+
+  /**
+   * THE TURN. A hunter standing 2.5 m behind you, arrived while the stand at your back had
+   * your attention, holding its ground for turnHoldS and then attacking. Its arrival is the
+   * watcher's cloth-and-breath tell; your own footstep, one beat late, is armed so the copy
+   * is what makes you turn; and the moment you see it, 'witnessed' — being caught looking.
+   * In dusk and dawn the hunter is not abroad, so the pallbearer stands there instead.
+   */
+  _beatTurn() {
+    const J = CFG.director.jump;
+    const en = this._sys('enemies');
+    const cam = this._sys('camera');
+    const p = this._player(_pos);
+    if (!en || !p) return false;
+    const yaw = cam ? cam.yaw : (p.yaw || 0);
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const x = _pos.x - fx * J.turnBehind, z = _pos.z - fz * J.turnBehind;
+    // ground behind him, and nothing solid there: no eye-sight test, it is behind him
+    const c = this._validate(x, z, 0, 0, false);
+    if (!c.ok) return false;
+    const col = this._sys('collision');
+    if (col && typeof col.canOccupy === 'function' && !col.canOccupy(x, z, 0.48, 2.2)) return false;
+    const sh = this.ctx.shared;
+    const ph = sh && sh.phase;
+    const species = (ph === 'night' || ph === 'black') ? 'hunter' : 'pallbearer';
+    const e = en.spawn(species, x, z, { ambush: true, ambushS: J.turnAmbushS, holdS: J.turnHoldS, riseS: 0.22, awake: true });
+    if (!e) return false;
+    _spot.x = x; _spot.z = z; _spot.y = c.y;
+    this.answer('watcher', x, c.y + 1.5, z, 0.7);
+    // arm the mimic: his own footstep behind him, one beat late
+    this.mimicT = D.mimicWindow;
+    this.mimicCount = 0;
+    this._turnE = e;
+    this._turnSeen = false;
+    return true;
+  }
+
+  /**
+   * THE DROP. A hound out of the crown of the tree ahead: the crown cracks, it falls six
+   * metres and lands three metres in front of you, and it is on you before it has finished
+   * getting up. Needs a trunk 2-3.5 m off the point three metres ahead, a clean landing, and a
+   * free hound.
+   */
+  _beatDrop() {
+    const J = CFG.director.jump;
+    const en = this._sys('enemies');
+    const col = this._sys('collision');
+    if (!en) return false;
+    const ahead = this._aheadPoint(3.0, 0);
+    const ax = ahead.x, az = ahead.z;
+    // a marked tree near the landing: the nearest trunk to the point three metres ahead,
+    // between dropTreeMin and dropTreeMax from it, thick enough to hold a crown
+    let tree = null;
+    if (col && typeof col.nearestTagged === 'function') {
+      const n = col.nearestTagged(ax, az, J.dropTreeMax + 1.0, _TREE_TAGS);
+      if (n && n.radius >= 0.30) {
+        const d = Math.hypot(n.x - ax, n.z - az);
+        if (d >= J.dropTreeMin && d <= J.dropTreeMax) {
+          _tree.x = n.x; _tree.z = n.z; _tree.r = n.radius;
+          tree = _tree;
+        }
+      }
+    }
+    if (!tree) return false;
+    const c = this._validate(ax, az, 1.2, 0, false);
+    if (!c.ok) return false;
+    if (col && typeof col.canOccupy === 'function' && !col.canOccupy(ax, az, 0.42, 1.2)) return false;
+    const e = en.spawn('hound', ax, az, { ambush: true, ambushS: 6, riseS: 0.05, awake: true, feetY: c.y + J.dropH, airborne: true });
+    if (!e) return false;
+    _spot.x = ax; _spot.z = az; _spot.y = c.y;
+    // the crown cracks overhead
+    this.answer('branch', tree.x, c.y + J.dropH, tree.z, 0.9);
+    this.dropS.on = true; this.dropS.e = e; this.dropS.t = 0; this.dropS.landed = false;
+    this.dropS.x = ax; this.dropS.y = c.y; this.dropS.z = az;
+    return true;
+  }
+
+  /**
+   * THE PACK. Three hounds out of the ferns 9-12 m ahead, at once, already coming — the one
+   * exception to the director's arrival window, which is told so it closes behind them.
+   */
+  _beatPack() {
+    const J = CFG.director.jump;
+    const en = this._sys('enemies');
+    const col = this._sys('collision');
+    const flora = this._sys('flora');
+    if (!en) return false;
+    this._player(_pos);
+    const yaw = this._headingAhead();
+    let found = false, x = 0, z = 0, y = 0;
+    const tries = [0, 0.35, -0.35, 0.7, -0.7];
+    for (let i = 0; i < tries.length && !found; i++) {
+      const a = yaw + tries[i];
+      const dist = J.packAhead[0] + this.rng.next() * (J.packAhead[1] - J.packAhead[0]);
+      const px = _pos.x - Math.sin(a) * dist, pz = _pos.z - Math.cos(a) * dist;
+      const cover = flora && typeof flora.coverAt === 'function' ? flora.coverAt(px, pz) : 1;
+      if (cover < 0.6) continue;
+      const c = this._validate(px, pz, 0, 0, false);
+      if (!c.ok) continue;
+      if (col && typeof col.canOccupy === 'function' && !col.canOccupy(px, pz, 0.42, 1.1)) continue;
+      found = true; x = px; z = pz; y = c.y;
+    }
+    if (!found) return false;
+    const lead = en.spawn('hound', x, z, { ambush: true, ambushS: 6, pack: J.packSize, riseS: 0.14, awake: true });
+    if (!lead) return false;
+    const dir = this._sys('director');
+    if (dir && typeof dir.noteArrival === 'function') dir.noteArrival(J.packSize);
+    _spot.x = x; _spot.z = z; _spot.y = y;
+    this.answer('bark', x, y + 0.6, z, 1.0);
+    this.answer('brush', x, y + 0.5, z, 0.8);
+    const fx = this._sys('fx');
+    if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(0.15);
+    return true;
+  }
+
+  /**
+   * THE BLACKOUT. Your torch pops out for blackoutS seconds. A breath at your ear in the dark.
+   * When the light comes back, three times in ten something is standing 1.4 m in front of
+   * you (the Standing Kind, which only moves when you look away); otherwise there is the
+   * sound of something withdrawing behind you, and nothing to see.
+   */
+  _beatBlackout() {
+    const J = CFG.director.jump;
+    const L = this._sys('lights');
+    if (!L || typeof L.torchFault !== 'function') return false;
+    const p = this._player(_pos);
+    if (!p) return false;
+    L.torchFault(J.blackoutS);
+    const ey = this._eyeY();
+    this.answer('filament-pop', _pos.x, ey, _pos.z, 1.0);
+    const fx = this._sys('fx');
+    if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(0.10);
+    const B = this.blackoutS;
+    B.on = true; B.t = 0; B.revealed = false;
+    B.coin = this.rng.next() < J.blackoutRevealChance;
+    B.x = _pos.x; B.z = _pos.z;
+    _spot.x = _pos.x; _spot.z = _pos.z; _spot.y = _pos.y;
+    // the breath at the ear, a third of a second in
+    this._after(this.TAG.breath, 0.35, _pos.x, ey, _pos.z);
+    return true;
+  }
+
+  _blackoutReveal() {
+    const B = this.blackoutS;
+    const en = this._sys('enemies');
+    const col = this._sys('collision');
+    const cam = this._sys('camera');
+    const p = this._player(_pos);
+    if (!p) return;
+    const yaw = cam ? cam.yaw : (p.yaw || 0);
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    let placed = false;
+    if (B.coin && en && typeof en.spawn === 'function') {
+      const x = _pos.x + fx * 1.4, z = _pos.z + fz * 1.4;
+      const c = this._validate(x, z, 0, 0, true);
+      if (c.ok && !(col && typeof col.canOccupy === 'function' && !col.canOccupy(x, z, 0.34, 1.78))) {
+        const e = en.spawn('standing', x, z, { ambush: true, ambushS: 4, riseS: 0.05, awake: true });
+        if (e) {
+          placed = true;
+          const fxs = this._sys('fx');
+          if (fxs && typeof fxs.addTrauma === 'function') fxs.addTrauma(0.18);
+        }
+      }
+    }
+    if (!placed) this.answer('withdraw', _pos.x - fx * 6, _pos.y + 1.4, _pos.z - fz * 6, 0.6);
+  }
+
   /* ------------------------------------------------------- the live props -- */
 
   _stepWatcher(d) {
+    // ROUND 13: THE TURN's payoff — the moment his eye lands on the body behind him.
+    const T = this._turnE;
+    if (T && !this._turnSeen) {
+      if (!T.alive) { this._turnE = null; }
+      else if (this.watching(T.pos.x, T.pos.y + 1.5, T.pos.z, 0.5, 6)) {
+        this._turnSeen = true;
+        this.answer('witnessed', T.pos.x, T.pos.y + 1.5, T.pos.z, 0.9);
+        const fx = this._sys('fx');
+        if (fx && typeof fx.addTrauma === 'function') fx.addTrauma(0.12);
+        this._turnE = null;
+      }
+    }
     const S = this.watcherS;
     if (!S.on) return;
     S.t += d;
@@ -1711,6 +2105,9 @@ export class Dread {
       watcher: this.watcherS.on, runner: this.runnerS.on, prints: this.printS.on,
       lantern: this.lantern.on,
       hush: this.hushS.on,
+      // ROUND 13
+      jump: { last: this.lastJump, backCoverT: +this.backCoverT.toFixed(2), blackout: this.blackoutS.on,
+        drop: this.dropS.on, jumps: this.stats.jumps },
     };
   }
 
@@ -1729,6 +2126,8 @@ export class Dread {
     if (!patch) return;
     if (typeof patch.enabled === 'boolean') this.enabled = patch.enabled;
     if (typeof patch.timer === 'number') this.timer = patch.timer;
+    // ROUND 13: force a jump beat on the next permitted step (tests, and looking at one).
+    if (typeof patch.jump === 'string') this._forceJump = patch.jump;
   }
 
   reset() {
