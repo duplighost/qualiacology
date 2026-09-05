@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.6.0-lit-worlds';
+  const GAME_VERSION = '8.7.0-one-purse';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -179,11 +179,17 @@
   // is.") Three of five, so the last two regionals stay optional the same way
   // the original Moon always let part of its roster stay optional.
   const ALTERNATE_REGIONAL_REQUIRED = Math.ceil(ALTERNATE_REGIONAL_TOTAL / 2);
-  // THE SHIP FARE. (Alex, 2026-09-04: "each cost 1000 collectibles to
-  // activate one of the two ships that go to the other moons.") One price,
-  // one ship, paid out of whichever world's ledger you are standing on. The
-  // MOON destination is never sold: a fare must not be able to strand anyone.
-  const SHIP_FARE = 1000;
+  // THE SHIP FARE. (Alex, 2026-09-05: "make each ship only cost 500
+  // collectibles.") One price, one destination, paid out of the single purse
+  // every world feeds. The MOON destination is never sold: a fare must not be
+  // able to strand anyone.
+  const SHIP_FARE = 500;
+  // THE ECLIPSE FARE. (Alex, 2026-09-05: "Final boss should cost 2000... then
+  // we need something to open up to spend it, and that should be an obious
+  // thing to get to, maybe even cutscene.") The three local finals prove you
+  // can fight; this is the toll on top of them, and THE ECLIPSE GATE below is
+  // the physical place it is paid.
+  const ECLIPSE_FARE = 2000;
   const ALTERNATE_COLLECTIBLE_COUNTS = Object.freeze({
     common: 2800,
     rare: 480,
@@ -671,6 +677,8 @@
   [
     'hud', 'startOverlay', 'startButton', 'startActionHint', 'startTitle', 'startCopy',
     'crosshair', 'hitMarker', 'damageVignette', 'visorFrost', 'visorWater', 'rewardFlash', 'srState',
+    'proximityTag', 'pauseBossLabel', 'pauseBossValue', 'pauseBossNote',
+    'pausePurseValue', 'pausePurseNote', 'pauseTestNote',
     'stoneCounter', 'stoneCount', 'planetCollectibleTarget', 'planetCollectibleTargetValue',
     'planetCollectibleGateFill', 'coreCounter', 'planetBossCounter', 'suitMeter',
     'chargeUI', 'chargeFill', 'controlsHint', 'soundButton',
@@ -3726,6 +3734,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.makeAlternatePlanets();
       this.makeInterworldVehicles();
       this.makeEclipseMaw();
+      this.makeEclipseGate();
       this.particles = new ParticleField(this.scene, this.quality === 'LOW' ? 520 : 900);
       this.ringField = new RingField(this.scene, this.quality === 'LOW' ? 10 : 18);
       this.resize();
@@ -7401,6 +7410,166 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       hazardGroup.visible = false;
       this.configureEclipseMawPhase('sealed');
     }
+    // THE GATE. Built once, hidden, and shown the moment the three crowns
+    // exist. Nothing here collides: it is a place you walk into, not a wall.
+    makeEclipseGate() {
+      const base = this.eclipseMaw?.bases?.water;
+      const root = this.planetRoots?.water;
+      if (!base || !root) return null;
+      const arena = this.planetSurfaces.get('water')?.boss?.arena;
+      const group = new T.Group();
+      group.name = 'ECLIPSE GATE · THE TOLL BEFORE THE SKY';
+
+      // A VERTICAL EYE, not a hoop on the floor. Standing upright it is a
+      // door you can see through from ground level; lying flat it was a
+      // circle lost among the court's own arches. Additive, because on
+      // Water's bright palette a standard material reads as pale wire -- the
+      // court columns in the same frame prove which language carries.
+      const rings = [];
+      for (let index = 0; index < 3; index++) {
+        const ring = new T.Mesh(
+          new T.TorusGeometry(26 - index * 4.2, 1.5 - index * .28, 10, 52),
+          new T.MeshBasicMaterial({
+            color: index === 1 ? 0xff8fe0 : 0xd9a9ff,
+            transparent: true, opacity: .92,
+            depthWrite: false, blending: T.AdditiveBlending,
+          }),
+        );
+        ring.position.y = 34;
+        ring.userData.kbNoCollide = true;
+        group.add(ring);
+        rings.push(ring);
+      }
+      // THE PUPIL. Solid, unlit and nearly black, so the rings read as an eye
+      // around a hole rather than as three bright hoops.
+      const iris = new T.Mesh(
+        new T.CircleGeometry(22, 44),
+        new T.MeshBasicMaterial({
+          color: 0x120424, transparent: true, opacity: .88,
+          side: T.DoubleSide, depthWrite: false,
+        }),
+      );
+      iris.position.y = 34;
+      iris.userData.kbNoCollide = true;
+      group.add(iris);
+
+      // Ten teeth standing INTO the ring from its rim, so the door reads as a
+      // mouth. They point inward, which no other ring in this game does.
+      const teeth = [];
+      for (let index = 0; index < 10; index++) {
+        const angle = index * TAU / 10;
+        const tooth = new T.Mesh(
+          new T.ConeGeometry(1.9, 8.5 + (index % 2) * 3.2, 5),
+          new T.MeshBasicMaterial({ color: 0xf3e2ff, transparent: true, opacity: .95, depthWrite: false }),
+        );
+        tooth.position.set(Math.cos(angle) * 22.5, 34 + Math.sin(angle) * 22.5, 0);
+        tooth.rotation.z = -angle - Math.PI / 2;
+        tooth.userData.kbNoCollide = true;
+        group.add(tooth);
+        teeth.push(tooth);
+      }
+
+      // THE PILLAR. Alex asked for the moment to be legible from anywhere;
+      // this is the same answer the opened courts got.
+      const pillar = new T.Mesh(
+        new T.CylinderGeometry(5.4, 11.5, 420, 16, 1, true),
+        new T.MeshBasicMaterial({
+          color: 0xe6a8ff, transparent: true, opacity: .24,
+          side: T.DoubleSide, depthWrite: false, blending: T.AdditiveBlending,
+        }),
+      );
+      pillar.position.y = 214;
+      pillar.userData.kbNoCollide = true;
+      group.add(pillar);
+
+      // OFF THE COURT RIM. Dropped on the arena centre it stood inside the
+      // Nautilus Court's own arches and could not be picked out of them. The
+      // same sidestep the opened-court columns already make puts it against
+      // open water, where its silhouette is the only one of its kind.
+      const standYaw = Math.PI / 2 - (arena?.facingYaw ?? base.yaw ?? 0);
+      const stand = surfaceOffsetChartAt(
+        base.x, base.z, Math.cos(standYaw), Math.sin(standYaw),
+        (arena?.radius || 40) * 1.55, {},
+      );
+      this.placePlanetObject(group, stand.x, base.altitude, stand.z, base.yaw);
+      group.userData.kbNoCollide = true;
+      group.visible = false;
+      root.add(group);
+      group.updateMatrixWorld(true);
+
+      this.eclipseGate = {
+        group, rings, iris, teeth, pillar, planet: 'water',
+        x: stand.x, z: stand.z, altitude: base.altitude,
+        position: group.getWorldPosition(new T.Vector3()),
+        radius: 15.5, risen: false, rise: 0, spin: 0, refusal: 0, flash: 0,
+      };
+      return this.eclipseGate;
+    }
+    // The gate only exists once the three crowns do, and only takes the toll
+    // once. Everything here is cosmetic except the one payment branch.
+    updateEclipseGate(dt, gameState) {
+      const gate = this.eclipseGate;
+      if (!gate || !gameState) return;
+      const owed = gameState.eclipseFareOwed();
+      const wanted = owed && this.activePlanet === 'water' && this.activeLayer === 'surface';
+      gate.rise = damp(gate.rise, wanted ? 1 : 0, 2.1, dt);
+      gate.group.visible = gate.rise > .012;
+      if (!gate.group.visible) return;
+
+      // It breathes while it waits and it turns faster the closer the purse
+      // gets, so the thing itself reports the total without a word on it.
+      const purse = gameState.ledgerTotal();
+      const readiness = clamp(purse / ECLIPSE_FARE, 0, 1);
+      gate.spin += dt * (.28 + readiness * 1.15);
+      gate.refusal = Math.max(0, gate.refusal - dt);
+      gate.flash = Math.max(0, gate.flash - dt * 1.6);
+      const breathe = .5 + Math.sin(this.elapsed * 1.5) * .5;
+      const lift = smootherstep(0, 1, gate.rise);
+      gate.group.scale.setScalar(.28 + lift * .72);
+      for (let index = 0; index < gate.rings.length; index++) {
+        const ring = gate.rings[index];
+        ring.rotation.z = gate.spin * (index % 2 ? -1 : 1);
+        // Additive: brightness IS the opacity here, and it climbs with the
+        // purse so the gate itself reports the total without a word on it.
+        ring.material.opacity = clamp((.34 + readiness * .5
+          + breathe * (.08 + readiness * .22) + gate.flash * .6) * lift, 0, 1);
+      }
+      gate.iris.material.opacity = (.88 - readiness * .22 + gate.refusal * .1) * lift;
+      for (let index = 0; index < gate.teeth.length; index++) {
+        gate.teeth[index].material.opacity = clamp((.4 + readiness * .45
+          + Math.sin(this.elapsed * 2.4 + index) * .07 + gate.flash * .5) * lift, 0, 1);
+      }
+      gate.pillar.material.opacity = (.12 + readiness * .26 + gate.flash * .45) * lift;
+      gate.pillar.visible = gate.rise > .5;
+
+      if (!owed || gameState.eclipsePaid) return;
+      // THE TOLL. Walk into the ring. Nothing else on this world is a lone
+      // standing eye under a pillar of light, so this cannot be stumbled into
+      // by accident -- and the Maw arrives on the spot, which is the payoff.
+      const inside = gameState.player.position.distanceTo(gate.position) < gate.radius + 5;
+      if (!inside) { gate.entered = false; return; }
+      if (gate.entered) return;
+      gate.entered = true;
+      if (purse < ECLIPSE_FARE) {
+        // Short. One closed thunk and the iris darkens -- the same refusal
+        // language a ship you cannot afford already uses.
+        gate.refusal = .9;
+        audio.tone(116, .18, 'triangle', .05, 48);
+        this.pulseRing(gate.position, new T.Color(0x7d3bff), 18, .5, true);
+        return;
+      }
+      gameState.spendLedger('water', ECLIPSE_FARE);
+      gameState.eclipsePaid = true;
+      gate.flash = 1;
+      gameState.rewardFlash = 1;
+      gameState.shake = Math.max(gameState.shake, .62);
+      this.particles?.burst(gate.position, 0xd79bff, 190, 36, 1.9, .55);
+      this.particles?.burst(gate.position, 0xff5fc0, 130, 27, 1.4, .3);
+      this.pulseRing(gate.position, new T.Color(0xd79bff), 96, 1.15, true);
+      audio.win();
+      gameState.addStyle(46, 14000, 'THE GATE TAKES ITS TOLL', '#e6b6ff');
+      this.unlockEclipseMaw(gameState, true);
+    }
     placeEclipseMawAt(planet) {
       const maw = this.eclipseMaw;
       const base = maw?.bases?.[planet];
@@ -7569,6 +7738,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       const state = gameState?.eclipseState;
       const maw = this.eclipseMaw;
       if (!state || !maw || state.complete || state.unlocked || !this.eclipseEligible(gameState)) return false;
+      // THE TOLL COMES FIRST. (Alex, 2026-09-05: "Final boss should cost
+      // 2000.") The three crowns make the Maw possible; ECLIPSE_FARE, paid at
+      // the gate standing in the Nautilus Court, makes it happen.
+      if (gameState.eclipseFareOwed()) return false;
       state.unlocked = true;
       state.phase = 'water';
       state.planet = 'water';
@@ -30598,6 +30771,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       }
       if (live) {
         this.updateInterworldVehicles(this.currentSurface(), dt, this.elapsed, gameState);
+        this.updateEclipseGate(dt, gameState);
         this.updateEclipseMaw(dt, gameState);
       }
       // THE LANDING's beacon. Slow, patient, and the brightest thing on that
@@ -31414,6 +31588,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // paid out of does not survive either.
       this.shipPassage = { moon: true, water: false, lava: false };
       this.collectibleSpent = { moon: 0, water: 0, lava: 0 };
+      // Everything ever spent, out of the one purse. Kept beside the
+      // per-world record so the ledger can be read back either way.
+      this.spentTotal = 0;
+      this.eclipsePaid = false;
       this.lavaState = { touching: false, damageCooldown: 0, hitsTaken: 0, field: null };
       this.cannonFlight = { active: false, time: 0, progress: 0, launched: false };
       this.lastHeartShock = -1;
@@ -31440,6 +31618,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           this.savedPlanetCrowns[planet].mastery = !!saved.mastery;
         }
         this.savedEclipseMaw = !!threeCrownSave?.eclipse?.complete;
+        // A toll already paid stays paid across a reload. Beating the Maw
+        // counts as having paid it, so a completed save is never re-charged.
+        this.eclipsePaid = !!(threeCrownSave?.eclipse?.paid || threeCrownSave?.eclipse?.complete);
         // A save written before the fare existed carries no passage field,
         // and the right answer for it is "you have not bought anything yet" --
         // unless it also carries a crown, which is proof you already went.
@@ -31913,7 +32094,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           version: 1,
           water: { ...this.savedPlanetCrowns.water },
           lava: { ...this.savedPlanetCrowns.lava },
-          eclipse: { complete: !!this.savedEclipseMaw },
+          eclipse: { complete: !!this.savedEclipseMaw, paid: !!this.eclipsePaid },
           passage: { ...this.shipPassage },
         }));
       } catch (ignored) { void ignored; }
@@ -31934,26 +32115,36 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // worlds' progress records -- and every pickup in all three is worth one
     // of the same thing. These three read and spend them as though that were
     // already true, so nothing else has to know which world it is standing on.
-    ledgerTotal(planet = world.activePlanet) {
-      if (planet === 'moon') return this.drops;
-      return this.worldProgress[planet]?.collected || 0;
+    // ONE PURSE, AND IT IS THE SUM OF EVERYTHING. (Alex, 2026-09-05:
+    // "Lets make all collectibles flow into the same thing. no matter where
+    // you get them, it raises the same number.") Each world still writes its
+    // OWN lifetime count -- the mastery relic and the crown rows read those,
+    // and they must never be spendable -- and the number the player actually
+    // spends is every count added together, minus everything ever spent
+    // anywhere. Two consequences worth naming: a crescent on the Moon and a
+    // shard in the Blue Hole now raise the same total, and buying a ship out
+    // of Water no longer eats 1,000 off Water's own 100%, which it did.
+    // Nothing here has to know which world you are standing on any more, so
+    // the planet argument survives only for the spend RECORD.
+    ledgerLifetime() {
+      return (this.drops || 0)
+        + (this.worldProgress.water?.collected || 0)
+        + (this.worldProgress.lava?.collected || 0);
+    }
+    ledgerTotal() {
+      return Math.max(0, this.ledgerLifetime() - (this.spentTotal || 0));
     }
     spendLedger(planet, amount) {
       const cost = Math.max(0, Math.round(Number(amount) || 0));
       if (!cost) return 0;
-      // A ledger never goes negative. The HUD counter prints this number and
+      // The purse never goes negative. The HUD counter prints this number and
       // a minus sign there would be a word on the screen by another name.
-      if (planet === 'moon') {
-        const paid = Math.min(this.drops, cost);
-        this.drops -= paid;
-        this.collectibleSpent.moon += paid;
-        return paid;
+      const paid = Math.min(this.ledgerTotal(), cost);
+      if (!paid) return 0;
+      this.spentTotal = (this.spentTotal || 0) + paid;
+      if (planet && this.collectibleSpent[planet] !== undefined) {
+        this.collectibleSpent[planet] += paid;
       }
-      const progress = this.worldProgress[planet];
-      if (!progress) return 0;
-      const paid = Math.min(progress.collected, cost);
-      progress.collected -= paid;
-      this.collectibleSpent[planet] = (this.collectibleSpent[planet] || 0) + paid;
       return paid;
     }
     shipFareOwed(planet = world.activePlanet) {
@@ -31961,6 +32152,19 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         if (!this.shipPassage[vehicle.destination]) return true;
       }
       return false;
+    }
+    // The gate is owed only once all three local finals are down: before that
+    // there is nothing to pay for and the number would be a lie.
+    eclipseFareOwed() {
+      return !this.eclipsePaid && !this.savedEclipseMaw
+        && !this.eclipseState?.complete && world.eclipseEligible(this);
+    }
+    // What the purse is saving toward RIGHT NOW, in the order the game asks
+    // for it. Null means nothing is for sale and the counter is just a count.
+    nextPurchase() {
+      if (this.shipFareOwed(world.activePlanet)) return { kind: 'ship', cost: SHIP_FARE };
+      if (this.eclipseFareOwed()) return { kind: 'eclipse', cost: ECLIPSE_FARE };
+      return null;
     }
     resetStrataEncounter() {
       const strata = world.strata;
@@ -32086,6 +32290,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // The ledgers start again, so what was spent out of them does too.
       // this.shipPassage deliberately does NOT reset: the ships were bought.
       this.collectibleSpent = { moon: 0, water: 0, lava: 0 };
+      this.spentTotal = 0;
+      this.eclipsePaid = false;
       this.eclipseState = makeEclipseState(this.savedEclipseMaw);
       this.lavaState = { touching: false, damageCooldown: 0, hitsTaken: 0, field: null };
       this.cannonFlight = { active: false, time: 0, progress: 0, launched: false };
@@ -32168,9 +32374,42 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.syncUI();
       if (wasStarted) canvas.focus({ preventScroll: true });
     }
+    // WHAT THIS WORLD WANTS, written the moment the screen opens.
+    // (Alex, 2026-09-05: "a pause menu that says how many bosses are needed on
+    // that planet for the final boss of that planet.") It reads
+    // localFinalProgress, which is the same source the gate itself reads, so
+    // this screen cannot describe a rule the game does not enforce.
+    syncPauseProgress() {
+      const local = this.localFinalProgress(world.activePlanet);
+      if (ui.pauseBossValue && local) {
+        ui.pauseBossValue.textContent = `${local.have}/${local.need}`;
+        if (ui.pauseBossLabel) {
+          ui.pauseBossLabel.textContent = world.activePlanet === 'moon'
+            ? 'BOSSES FELLED ON THE MOON'
+            : world.activePlanet === 'water' ? 'BOSSES FELLED ON WATER' : 'BOSSES FELLED ON LAVA';
+        }
+        if (ui.pauseBossNote) {
+          ui.pauseBossNote.textContent = local.open
+            ? `${local.name} IS WAITING`
+            : `${local.need - local.have} MORE OPENS ${local.name} · ${local.roster} STAND HERE`;
+        }
+      }
+      if (ui.pausePurseValue) {
+        const purchase = this.nextPurchase();
+        ui.pausePurseValue.textContent = String(this.ledgerTotal());
+        if (ui.pausePurseNote) {
+          const thing = purchase?.kind === 'ship' ? 'THE NEXT SHIP' : 'THE ECLIPSE GATE';
+          const short = purchase ? purchase.cost - this.ledgerTotal() : 0;
+          ui.pausePurseNote.textContent = !purchase
+            ? 'NOTHING LEFT TO BUY'
+            : short > 0 ? `${short} MORE FOR ${thing}` : `ENOUGH FOR ${thing}`;
+        }
+      }
+    }
     togglePause() {
       if (!this.started) return;
       this.paused = !this.paused;
+      if (this.paused) this.syncPauseProgress();
       if (this.paused) {
         this.cancelCharge();
         this.lineHeld = false;
@@ -38831,6 +39070,42 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.addStyle(24, 3200, 'ABOVE THE MOON', '#ffd66b');
     }
 
+    // THE MOON'S ROSTER, IN ONE PLACE. The cannon gate, the proximity tag
+    // and the pause screen all used to be able to disagree about what "half
+    // the bosses" meant; now they cannot, because they all read this.
+    moonBossRoster() {
+      return [
+        ...world.regions.map(region => region.boss),
+        world.roc, world.colossus, world.strata?.boss, world.moonline?.boss,
+        world.vane, world.bellower,
+      ].filter(Boolean);
+    }
+    moonBossesNeeded() {
+      return Math.max(1, Math.ceil(this.moonBossRoster().length / 2));
+    }
+    moonBossesDown() {
+      return this.moonBossRoster().filter(boss => !boss.alive).length;
+    }
+    // How many of THIS world's bosses are down, and how many open its final.
+    // The pause screen and the tag both speak from this.
+    localFinalProgress(planet = world.activePlanet) {
+      if (planet === 'moon') {
+        return {
+          planet, have: this.moonBossesDown(), need: this.moonBossesNeeded(),
+          roster: this.moonBossRoster().length, open: this.endgameOpen,
+          name: 'THE MOONHEART',
+        };
+      }
+      const progress = this.worldProgress[planet];
+      if (!progress) return null;
+      return {
+        planet, have: progress.regionalDefeated, need: ALTERNATE_REGIONAL_REQUIRED,
+        roster: ALTERNATE_REGIONAL_TOTAL,
+        open: progress.finalUnlocked || progress.bossDefeated,
+        name: planet === 'water' ? 'THE ABYSSAL NAUTILUS' : 'THE CALDERA TYRANT',
+      };
+    }
+
     // ---- THE END OF THE MOON ---------------------------------------------
     // Half of the moon's nine bosses deploys the cannon. There is no
     // collectible threshold on it any more: collectibles buy ship passage
@@ -38845,11 +39120,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         // under-bellower. Nine. The vane and the bellower used to sit outside
         // this array and get hand-checked below, which is precisely the
         // inconsistency the old comment claimed to have fixed.
-        const moonBosses = [
-          ...world.regions.map(region => region.boss),
-          world.roc, world.colossus, world.strata?.boss, world.moonline?.boss,
-          world.vane, world.bellower,
-        ].filter(Boolean);
+        const moonBosses = this.moonBossRoster();
         const bossRoster = moonBosses.length;
         const bossesDown = moonBosses.filter(boss => !boss.alive).length;
         // HALF THE MOON WAKES THE CANNON. (Alex, 2026-09-04: "THe progression
@@ -38859,7 +39130,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         // ship passage now, they do not gate a boss. The roster is counted
         // rather than written down, so a new boss tightens the gate instead
         // of quietly loosening it.
-        const bossesNeeded = Math.max(1, Math.ceil(bossRoster / 2));
+        const bossesNeeded = this.moonBossesNeeded();
         // The cannon charges by this fraction rather than switching on, so
         // the moon shows the progress instead of only announcing the result.
         world.cannonCharge = clamp(bossesDown / bossesNeeded, 0, 1);
@@ -40079,26 +40350,153 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       }
       world.update(FIXED_DT, this);
     }
+    // ---- THE PROXIMITY TAG ----------------------------------------------
+    // (Alex, 2026-09-05: "do you know how games sometimes have little hovering
+    // things if you're close to something? could say like x/500 and make a
+    // sound if you cant take the ship. right now there just isn't any
+    // feedback.") One tag at a time -- the nearest thing that is genuinely
+    // waiting on the player -- and it leaves the moment nothing is.
+    //
+    // This is a deliberate, Alex-authorised exception to the no-words law:
+    // "i think its okay to do that to help the player know whats going on."
+    // It is anchored to a world object, never to the aiming lane, and it says
+    // nothing at all unless something nearby is withholding itself.
+    collectProximityTargets() {
+      const targets = this.proximityScratch || (this.proximityScratch = []);
+      targets.length = 0;
+      if (world.activeLayer !== 'surface' || this.planetTransition.active) return targets;
+      const surface = world.currentSurface();
+      if (!surface) return targets;
+      const purse = this.ledgerTotal();
+
+      // A SHIP whose destination is still unbought. It wants collectibles.
+      for (const vehicle of surface.vehicles || EMPTY_SOLIDS) {
+        if (this.shipPassage[vehicle.destination]) continue;
+        targets.push({
+          kind: 'ship', unit: 'collectible', id: vehicle.id, at: vehicle.receiver.position,
+          range: 112, label: vehicle.theme.name, have: purse, need: SHIP_FARE,
+        });
+      }
+
+      // A LOCAL FINAL still sealed. It wants bosses, not collectibles, and the
+      // tag says so in its own unit so the two can never be confused.
+      const seal = surface.finalSeal;
+      const local = this.localFinalProgress(surface.id);
+      if (seal && local && !local.open) {
+        const at = this.proximitySealScratch || (this.proximitySealScratch = new T.Vector3());
+        seal.group.getWorldPosition(at);
+        targets.push({
+          kind: 'boss', unit: 'boss', id: surface.id + '-seal', at, range: 165,
+          label: surface.id === 'water' ? 'NAUTILUS COURT' : 'TYRANT COURT',
+          have: local.have, need: local.need,
+        });
+      }
+
+      // THE MOON'S CANNON says exactly the same thing in the Moon's language.
+      if (surface.id === 'moon' && local && !local.open && world.cannon) {
+        targets.push({
+          kind: 'boss', unit: 'boss', id: 'moon-cannon',
+          at: world.cannon.crystalPosition, range: 165,
+          label: 'THE GREAT CANNON', have: local.have, need: local.need,
+        });
+      }
+
+      // THE ECLIPSE GATE, once all three finals are down and it has risen.
+      const gate = world.eclipseGate;
+      if (gate && gate.planet === surface.id && !this.eclipsePaid && this.eclipseFareOwed()) {
+        targets.push({
+          kind: 'gate', unit: 'collectible', id: 'eclipse-gate', at: gate.position,
+          range: 220, label: 'THE ECLIPSE GATE', have: purse, need: ECLIPSE_FARE,
+        });
+      }
+      return targets;
+    }
+    updateProximityTag() {
+      const tag = ui.proximityTag;
+      if (!tag) return;
+      let best = null;
+      let bestDistance = Infinity;
+      // Paused, the world is behind an overlay and a label floating on top of
+      // it is just litter. Same for the win screen.
+      if (this.started && !this.won && !this.paused) {
+        for (const target of this.collectProximityTargets()) {
+          const distance = this.player.position.distanceTo(target.at);
+          if (distance > target.range || distance >= bestDistance) continue;
+          best = target;
+          bestDistance = distance;
+        }
+      }
+      if (!best) {
+        if (this.proximityShownId !== null) {
+          this.proximityShownId = null;
+          tag.hidden = true;
+          tag.dataset.kind = 'none';
+        }
+        return;
+      }
+      // Anchor it to the thing itself. Off-screen or behind the camera, the
+      // tag simply is not drawn -- it is a label on an object, not a compass.
+      const projected = (this.proximityProjection || (this.proximityProjection = new T.Vector3()))
+        .copy(best.at).project(world.camera);
+      const onScreen = Number.isFinite(projected.x) && Number.isFinite(projected.y)
+        && projected.z > -1 && projected.z < 1
+        && Math.abs(projected.x) < 1.08 && Math.abs(projected.y) < 1.08;
+      if (!onScreen) {
+        tag.hidden = true;
+        return;
+      }
+      const enough = best.have >= best.need;
+      // The tag sits slightly above the thing, and is nudged out of the
+      // bottom eighth of the screen, which is the aiming lane.
+      tag.style.left = clamp((projected.x * .5 + .5) * 100, 8, 92) + '%';
+      tag.style.top = clamp((-projected.y * .5 + .5) * 100 - 5, 8, 78) + '%';
+      tag.hidden = false;
+      if (this.proximityShownId !== best.id || this.proximityShownHave !== best.have
+        || this.proximityShownEnough !== enough) {
+        tag.dataset.kind = best.kind;
+        tag.dataset.unit = best.unit;
+        tag.dataset.afford = enough ? 'true' : 'false';
+        const label = tag.querySelector('.proximity-tag__label');
+        const have = tag.querySelector('.proximity-tag__have');
+        const need = tag.querySelector('.proximity-tag__need');
+        const meter = tag.querySelector('.proximity-tag__meter b');
+        if (label) label.textContent = best.label;
+        if (have) have.textContent = String(Math.max(0, Math.round(best.have)));
+        if (need) need.textContent = String(best.need);
+        if (meter) meter.style.width = clamp(best.have / (best.need || 1), 0, 1) * 100 + '%';
+        // THE SOUND. (Alex: "make a sound if you cant take the ship.") It
+        // fires once, on arrival, and never repeats while you stand there.
+        // The affordable case gets its own small rising note, because "you
+        // can take this one now" is the more useful half of the message.
+        if (this.proximityShownId !== best.id) {
+          if (enough) audio.tone(392, .16, 'triangle', .045, 588);
+          else audio.tone(128, .13, 'triangle', .04, 54);
+        }
+        this.proximityShownId = best.id;
+        this.proximityShownHave = best.have;
+        this.proximityShownEnough = enough;
+      }
+    }
     syncUI() {
-      // ONE ledger per moon, shown in one place, with the number it is
-      // currently saving toward beside it. Every pickup on every moon is
-      // worth exactly one, whatever shape it wears.
-      // The denominator is not a constant any more, and it is written from
-      // here rather than hardcoded in the page: while a ship on this world is
-      // still cold it is the 1,000 fare, because that is what the player is
-      // actually saving for; once both are bought it goes back to the mastery
-      // total. (Alex, 2026-09-04: "each cost 1000 collectibles to activate one
-      // of the two ships that go to the other moons.")
+      this.updateProximityTag();
+      // ONE COUNT FOR THE WHOLE GAME, shown in one place, with the number
+      // it is currently saving toward beside it. (Alex, 2026-09-05: "Lets make
+      // all collectibles flow into the same thing. no matter where you get
+      // them, it raises the same number.") It no longer resets or changes when
+      // you change worlds -- a crescent on the Moon and a shard on Lava raise
+      // the same figure, and it is the figure the ships and the gate are paid
+      // out of.
+      // The denominator is written from here rather than from the page: the
+      // 500 fare while any ship on this world is still cold, then the 2,000
+      // eclipse toll once all three finals are down. When nothing at all is
+      // for sale it goes away entirely rather than filling toward a number
+      // that buys nothing, which is what the old /2000 on the Moon did.
       const hudPlanet = world.activePlanet;
-      const hudSurface = world.currentSurface();
-      const activeProgress = hudPlanet === 'moon' ? null : this.worldProgress[hudPlanet];
-      const hudTarget = this.shipFareOwed(hudPlanet)
-        ? SHIP_FARE
-        : hudSurface?.mastery?.thresholds?.total
-          || (hudPlanet === 'moon' ? MOON_COLLECTION_TARGET : ALTERNATE_COLLECTION_TARGET);
-      const collectibleHud = hudPlanet === 'moon'
-        ? { total: this.drops, target: hudTarget }
-        : { total: activeProgress?.collected || 0, target: hudTarget };
+      const hudPurchase = this.nextPurchase();
+      const collectibleHud = {
+        total: this.ledgerTotal(),
+        target: hudPurchase ? hudPurchase.cost : 0,
+      };
       const collectibleHudKey = `${hudPlanet}:${collectibleHud.total}:${collectibleHud.target}`;
       if (ui.stoneCount && this.lastCollectibleHudKey !== collectibleHudKey) {
         const previousPlanet = this.lastCollectibleHudPlanet;
@@ -40109,11 +40507,23 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         // A bare non-negative integer, always. Spending clamps at zero, so
         // this can never print a minus sign at the player.
         ui.stoneCount.textContent = String(Math.max(0, Math.round(collectibleHud.total)));
+        if (ui.planetCollectibleTarget) {
+          // Nothing for sale, nothing to read: the slash, the number and the
+          // bar all leave together, and the bare count stays.
+          ui.planetCollectibleTarget.hidden = !collectibleHud.target;
+        }
         if (ui.planetCollectibleTargetValue) {
           ui.planetCollectibleTargetValue.textContent = `/${collectibleHud.target}`;
         }
         if (ui.planetCollectibleGateFill) {
           ui.planetCollectibleGateFill.style.width = `${clamp(collectibleHud.total / (collectibleHud.target || 1), 0, 1) * 100}%`;
+        }
+        if (ui.stoneCounter) {
+          // The counter says what it is saving for, so the same 500 does not
+          // look identical to the same 500 against a different purchase.
+          ui.stoneCounter.dataset.saving = hudPurchase ? hudPurchase.kind : 'none';
+          ui.stoneCounter.dataset.afford = collectibleHud.target
+            && collectibleHud.total >= collectibleHud.target ? 'true' : 'false';
         }
         if (ui.stoneCounter) {
           ui.stoneCounter.dataset.planet = hudPlanet;
@@ -40994,15 +41404,38 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // The HUD purge is a design contract, not a preference: nothing in the
       // playing field may print words at the player. The screen-reader mirror
       // is exempt precisely because it is never rendered.
-      // One exemption by explicit amendment (Alex, 2026-08-20): the crescent
-      // counter prints a NUMBER. Words remain forbidden.
+      // Two exemptions, both by explicit amendment:
+      //   * the crescent counter prints a NUMBER (Alex, 2026-08-20);
+      //   * the PROXIMITY TAG prints a label and a count (Alex, 2026-09-05:
+      //     "i think its okay to do that to help the player know whats going
+      //     on"), because a ship and a sealed court were refusing in silence.
+      // The tag's exemption is narrow and the check below is what keeps it
+      // narrow: it is not a fixture, it is a label on a thing you walked up
+      // to, and while nothing is close it says nothing at all.
       const visibleHudText = [...(ui.hud?.children || [])]
-        .filter(node => !node.classList.contains('sr-only') && node.id !== 'stoneCounter')
+        .filter(node => !node.classList.contains('sr-only')
+          && node.id !== 'stoneCounter' && node.id !== 'proximityTag')
         .map(node => node.textContent || '')
         .join('')
         .replace(/\s+/g, '');
       const counterIsNumeric = /^\d+$/.test(ui.stoneCount?.textContent || '');
       check('hud-prints-no-words-during-play', visibleHudText === '' && counterIsNumeric, { visibleHudText, counterIsNumeric });
+
+      // THE TAG SPEAKS ONLY WHEN SPOKEN TO. Standing nowhere near a ship, a
+      // sealed court or the gate, it must be gone -- and gone as the browser
+      // draws it, not merely gone as a property. An ID selector outranks the
+      // UA's [hidden] rule, and that is exactly how this shipped broken once:
+      // .hidden said "gone" while the tag hung over the pause screen.
+      game.restart();
+      game.started = true;
+      game.paused = false;
+      game.updateProximityTag();
+      const tagNode = ui.proximityTag;
+      const tagDrawn = tagNode ? getComputedStyle(tagNode).display !== 'none' : false;
+      const tagTargets = game.collectProximityTargets().length;
+      check('proximity-tag-is-silent-with-nothing-nearby',
+        !!tagNode && !tagDrawn,
+        { tagDrawn, tagHiddenProperty: tagNode?.hidden, tagTargets });
 
       game.restart();
       input.setTouchMode(true);
@@ -42057,12 +42490,33 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // moons.") Half has to be a real half: at least one, and fewer than all
       // of them, or the word means nothing.
       check('half-a-roster-opens-each-local-final',
-        SHIP_FARE === 1000
+        SHIP_FARE === 500 && ECLIPSE_FARE === 2000
           && ALTERNATE_REGIONAL_REQUIRED === Math.ceil(ALTERNATE_REGIONAL_TOTAL / 2)
           && ALTERNATE_REGIONAL_REQUIRED >= 1
           && ALTERNATE_REGIONAL_REQUIRED < ALTERNATE_REGIONAL_TOTAL,
-        { fare: SHIP_FARE, moon: MOON_COLLECTION_TARGET, alternate: ALTERNATE_COLLECTION_TARGET,
+        { fare: SHIP_FARE, eclipseFare: ECLIPSE_FARE,
+          moon: MOON_COLLECTION_TARGET, alternate: ALTERNATE_COLLECTION_TARGET,
           regionalRequired: ALTERNATE_REGIONAL_REQUIRED, regionalTotal: ALTERNATE_REGIONAL_TOTAL });
+
+      // ONE PURSE. (Alex, 2026-09-05: "no matter where you get them, it raises
+      // the same number.") A pickup on any world raises the spendable figure,
+      // and spending never touches a world's own lifetime count -- which is
+      // what used to make Water's 3,000 mastery unreachable after a fare.
+      game.restart();
+      game.started = true;
+      const purseStart = game.ledgerTotal();
+      game.drops += 10;
+      game.worldProgress.water.collected += 10;
+      game.worldProgress.lava.collected += 10;
+      const purseAfterAll = game.ledgerTotal();
+      const waterLifetime = game.worldProgress.water.collected;
+      game.spendLedger('water', 12);
+      check('one-purse-every-world-feeds',
+        purseAfterAll === purseStart + 30
+          && game.ledgerTotal() === purseAfterAll - 12
+          && game.worldProgress.water.collected === waterLifetime,
+        { purseStart, purseAfterAll, afterSpend: game.ledgerTotal(),
+          waterLifetime, waterNow: game.worldProgress.water.collected });
 
       // The Moon has to be able to PAY that gate. A 2,000 wall on a world
       // holding 891 pickups is not a gate.
@@ -43223,6 +43677,57 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     if (!input.touchEnabled && !TEST_MODE) requestGamePointerLock();
   });
   ui.pauseResumeButton?.addEventListener('click', () => game.togglePause());
+
+  // ---- THE PAUSE TEST ROW ----------------------------------------------
+  const testNote = message => {
+    if (ui.pauseTestNote) ui.pauseTestNote.textContent = message;
+  };
+  for (const button of document.querySelectorAll('[data-test-go]')) {
+    button.addEventListener('click', () => {
+      const planet = button.dataset.testGo;
+      if (!game.started || planet === world.activePlanet) {
+        testNote(game.started ? `ALREADY ON ${planet.toUpperCase()}` : 'START THE GAME FIRST');
+        return;
+      }
+      // Straight to the world's own spawn, with the player's look kept. The
+      // same call the flight lands with, minus the ship and the fare.
+      game.enterPlanet(planet, null, null, null, game.player.yaw, 'pause-test', true);
+      game.syncPauseProgress();
+      testNote(`MOVED TO ${planet.toUpperCase()}`);
+      game.togglePause();
+    });
+  }
+  for (const button of document.querySelectorAll('[data-test-act]')) {
+    button.addEventListener('click', () => {
+      const action = button.dataset.testAct;
+      if (action === 'ships') {
+        game.shipPassage.water = true;
+        game.shipPassage.lava = true;
+        game.writeThreeCrownSave();
+        testNote('BOTH SHIPS OPEN · NO FARE');
+      } else if (action === 'grant') {
+        // The purse is (lifetime minus spent), so lowering the spent figure
+        // moves nothing until something has actually been spent -- this
+        // button did nothing at all on a fresh run. Add to the MOON's
+        // lifetime count instead: it is the one world with no mastery relic
+        // reading it, so a granted fare can never fake a 100%.
+        game.drops += SHIP_FARE;
+        testNote(`PURSE ${game.ledgerTotal()}`);
+      } else if (action === 'wipe') {
+        try {
+          localStorage.removeItem(THREE_CROWN_STORAGE_KEY);
+          localStorage.removeItem('moonkick-heart-v1');
+        } catch (ignored) { void ignored; }
+        game.shipPassage = { moon: true, water: false, lava: false };
+        game.savedPlanetCrowns = { water: { boss: false, mastery: false }, lava: { boss: false, mastery: false } };
+        game.savedEclipseMaw = false;
+        game.savedMoonheart = false;
+        game.eclipsePaid = false;
+        testNote('SAVE WIPED · RELOAD FOR A CLEAN RUN');
+      }
+      game.syncPauseProgress();
+    });
+  }
   ui.soundButton?.addEventListener('click', () => { audio.ensure(); audio.toggle(); });
   ui.fullscreenButton?.addEventListener('click', toggleFullscreen);
   ui.qualityButton?.addEventListener('click', () => world.cycleQuality());

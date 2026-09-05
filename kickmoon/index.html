@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#010204" />
-  <meta name="application-version" content="8.6.0-lit-worlds" />
+  <meta name="application-version" content="8.7.0-one-purse" />
   <meta name="description" content="KICKMOON is a first-person three-world lunar action game: one persistent boomerang ball, a water moon, and a lava moon." />
   <title>KICKMOON: Three Worlds | Qualiacology</title>
   <link rel="canonical" href="https://qualiacology.com/kickmoon/" />
@@ -51,6 +51,19 @@
            it looks like theres water on the camera. But not full time." -->
       <div id="visorWater" aria-hidden="true"></div>
       <div id="rewardFlash" aria-hidden="true"></div>
+
+      <!-- THE PROXIMITY TAG. Hovers over the one nearby thing that is
+           waiting on you -- a ship you have not paid for, a boss court still
+           sealed, the eclipse gate -- and says what it is short of. It is the
+           only place in this game with a number in it besides the counter,
+           and it exists because Alex asked for it by name: without it the
+           ships and the courts refuse in silence. It never enters the aiming
+           lane at the foot of the screen. -->
+      <div id="proximityTag" data-kind="none" hidden aria-hidden="true">
+        <span class="proximity-tag__label"></span>
+        <span class="proximity-tag__count"><b class="proximity-tag__have">0</b><i>/</i><span class="proximity-tag__need">0</span></span>
+        <span class="proximity-tag__meter" aria-hidden="true"><b></b></span>
+      </div>
 
       <div id="chargeUI" role="meter" aria-label="Kick charge" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-hidden="true">
         <svg class="charge-ring" viewBox="0 0 100 100" focusable="false" aria-hidden="true">
@@ -165,12 +178,48 @@
         <h2 id="pauseTitle">ORBIT SUSPENDED</h2>
         <p>The moon can wait. Press <kbd>ESC</kbd>, <kbd>P</kbd>, or controller <kbd>START</kbd> to drop back in.</p>
         <div class="pause-rule" aria-hidden="true"></div>
+
+        <!-- WHAT THIS WORLD IS WAITING FOR. (Alex, 2026-09-05: "a pause menu
+             that says how many bosses are needed on that planet for the final
+             boss of that planet.") Two lines, read from the live game, so the
+             pause screen can never drift from the gate it describes. -->
+        <dl id="pauseProgress">
+          <div class="pause-stat">
+            <dt id="pauseBossLabel">BOSSES FELLED HERE</dt>
+            <dd><strong id="pauseBossValue">0/0</strong><small id="pauseBossNote">&nbsp;</small></dd>
+          </div>
+          <div class="pause-stat">
+            <dt>COLLECTED</dt>
+            <dd><strong id="pausePurseValue">0</strong><small id="pausePurseNote">&nbsp;</small></dd>
+          </div>
+        </dl>
+
         <button id="pauseResumeButton" class="primary-button" type="button"><span>RETURN TO THE MOON</span><small>RESUME MISSION</small></button>
         <nav class="utility-controls" aria-label="Game settings">
           <button id="qualityButton" class="utility-button" type="button" aria-label="Change graphics quality">QUALITY HIGH</button>
           <button id="soundButton" class="utility-button" type="button" aria-label="Toggle sound">SOUND ON</button>
           <button id="fullscreenButton" class="utility-button" type="button" aria-label="Toggle fullscreen">FULLSCREEN</button>
         </nav>
+
+        <!-- THE TEST ROW. Deliberately quiet and deliberately not hidden:
+             Alex needs to reach the other two worlds without earning passage
+             first. Nothing here touches a tuning number, a boss, or a feel
+             dial -- it moves the player, grants the passage the ships sell,
+             and can wipe the browser save so a run can be started clean. -->
+        <details class="pause-test">
+          <summary>TEST</summary>
+          <div class="pause-test__row">
+            <button class="utility-button" type="button" data-test-go="moon">MOON</button>
+            <button class="utility-button" type="button" data-test-go="water">WATER</button>
+            <button class="utility-button" type="button" data-test-go="lava">LAVA</button>
+          </div>
+          <div class="pause-test__row">
+            <button class="utility-button" type="button" data-test-act="ships">OPEN SHIPS</button>
+            <button class="utility-button" type="button" data-test-act="grant">+500</button>
+            <button class="utility-button" type="button" data-test-act="wipe">WIPE SAVE</button>
+          </div>
+          <p class="pause-test__note" id="pauseTestNote">&nbsp;</p>
+        </details>
       </div>
     </section>
 

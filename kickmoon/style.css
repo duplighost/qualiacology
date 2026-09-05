@@ -1946,6 +1946,190 @@ body.touch-enabled .touch-pad > span {
 
 /* COLLECTIBLE BANK — ONE shape, one count, one 2,000 meter, on every moon.
    The centre movement lane stays bare. */
+/* An ID selector outranks the UA's [hidden] rule, so these two have to say
+   it themselves or .hidden is purely decorative. This shipped broken once:
+   the tag hung over the pause screen while its .hidden property said "gone". */
+#proximityTag[hidden] { display: none !important; }
+#planetCollectibleTarget[hidden] { display: none !important; }
+
+/* THE PROXIMITY TAG. Hovers over the one nearby thing that is waiting on the
+   player. (Alex, 2026-09-05: "little hovering things if you're close to
+   something ... could say like x/500".) Colour is never the only signal:
+   the meter fills, the border thickens and the whole tag lifts when you can
+   afford what it is asking for. */
+#proximityTag {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 6px 11px 7px;
+  border: 1px solid rgba(190, 221, 239, .16);
+  border-radius: 12px;
+  background: linear-gradient(108deg, rgba(2, 7, 14, .72), rgba(12, 8, 18, .46));
+  box-shadow: 0 2px 14px rgba(0, 0, 0, .38), inset 0 0 16px rgba(93, 171, 204, .05);
+  font-family: 'Chakra Petch', 'Segoe UI', monospace;
+  color: var(--gold-soft);
+  filter: drop-shadow(0 1px 1px rgba(0, 3, 8, .96));
+  pointer-events: none;
+  opacity: .82;
+  transition: opacity .18s ease, transform .18s cubic-bezier(.2, 1.5, .4, 1), border-color .18s ease;
+  z-index: 4;
+}
+#proximityTag .proximity-tag__label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .19em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+#proximityTag .proximity-tag__count {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  line-height: 1;
+}
+#proximityTag .proximity-tag__count i {
+  font-style: normal;
+  opacity: .38;
+  padding: 0 1px;
+}
+#proximityTag .proximity-tag__need { opacity: .58; font-size: 13px; }
+#proximityTag .proximity-tag__meter {
+  display: block;
+  width: 100%;
+  min-width: 62px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(190, 221, 239, .16);
+  overflow: hidden;
+}
+#proximityTag .proximity-tag__meter b {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: currentColor;
+  transition: width .22s ease;
+}
+/* AFFORDABLE. It lifts, brightens and squares up. The shape changes, not just
+   the hue -- meaning never lives in colour alone in this game. */
+#proximityTag[data-afford="true"] {
+  opacity: 1;
+  transform: translate(-50%, calc(-50% - 4px));
+  border-color: rgba(105, 239, 255, .46);
+  box-shadow: 0 3px 18px rgba(0, 0, 0, .42), 0 0 22px rgba(105, 239, 255, .16), inset 0 0 18px rgba(93, 171, 204, .09);
+}
+#proximityTag[data-afford="true"] .proximity-tag__label { color: var(--cyan-soft); }
+/* A boss court counts bosses, not crescents, and must never be mistaken for
+   money. Violet, and its meter is stepped rather than smooth. */
+#proximityTag[data-unit="boss"] { color: #dcc9ff; }
+#proximityTag[data-unit="boss"] .proximity-tag__meter b {
+  background: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 9px);
+}
+#proximityTag[data-kind="gate"] { color: #ffb9ec; }
+@media (max-width: 760px), (pointer: coarse) {
+  /* The phone is the important screen. Smaller, and pulled further from the
+     aiming lane. */
+  #proximityTag { padding: 5px 9px 6px; gap: 2px; }
+  #proximityTag .proximity-tag__label { font-size: 9px; letter-spacing: .15em; }
+  #proximityTag .proximity-tag__count { font-size: 15px; }
+  #proximityTag .proximity-tag__meter { min-width: 52px; }
+}
+
+/* WHAT THIS WORLD IS WAITING FOR. Two lines on the pause screen, in the same
+   glass language as the win panel's stats. */
+#pauseProgress {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 4px;
+  padding: 0;
+}
+#pauseProgress .pause-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 7px 12px;
+  border: 1px solid rgba(150, 226, 240, .14);
+  border-radius: 10px;
+  background: rgba(4, 9, 17, .46);
+}
+#pauseProgress dt {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .2em;
+  color: var(--muted);
+}
+#pauseProgress dd {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  text-align: right;
+}
+#pauseProgress strong {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--gold-soft);
+}
+#pauseProgress small {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  color: var(--muted);
+  opacity: .82;
+}
+/* THE TEST DRAWER. Quiet, shut by default, one deliberate click away -- the
+   same treatment the controls drawer gets on the start screen. */
+.pause-test {
+  width: 100%;
+  margin-top: 10px;
+  border-top: 1px solid rgba(150, 226, 240, .1);
+  padding-top: 8px;
+}
+.pause-test > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .3em;
+  color: var(--muted);
+  opacity: .45;
+  padding: 3px 0;
+  transition: opacity .16s ease;
+}
+.pause-test > summary::-webkit-details-marker { display: none; }
+.pause-test > summary:hover,
+.pause-test > summary:focus-visible { opacity: .9; }
+.pause-test__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 7px;
+}
+.pause-test__row .utility-button {
+  font-size: 10px;
+  letter-spacing: .12em;
+  padding: 6px 10px;
+}
+.pause-test__note {
+  margin: 8px 0 0;
+  min-height: 12px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  color: var(--cyan-soft);
+  opacity: .72;
+}
+
 #stoneCounter {
   position: absolute;
   left: 24px;
