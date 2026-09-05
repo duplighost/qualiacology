@@ -287,6 +287,24 @@ export function lit(ctx, x, y, z, coneDot, range) {
   return observed(ctx, x, y, z, coneDot, range);
 }
 
+/**
+ * ROUND 13: THE BEAM IS SEEN WHERE THE BODY IS NOT. Unblocked ray from a point to the ground
+ * the torch is lighting (lights.torch.target, about 8 m ahead of the player), when the torch
+ * is on. Under canopy the line to the player's head is blocked by trunks at 12-68 m, so the
+ * torch never cost anything where Alex actually uses it ("if it doesn't it should probably
+ * also make those enemies that don't always see you be able to see the light"). A body
+ * carrying a light is given away by the pool of light on the ground as much as by itself.
+ */
+export function seesBeam(ctx, x, y, z) {
+  const lights = sysOf(ctx, 'lights');
+  if (!lights || typeof lights.torchOn !== 'function' || !lights.torchOn()) return false;
+  const t = lights.torch && lights.torch.target ? lights.torch.target.position : null;
+  if (!t) return false;
+  const col = sysOf(ctx, 'collision');
+  if (!col || typeof col.segmentClear !== 'function') return true;
+  return col.segmentClear(x, y, z, t.x, t.y + 0.4, t.z);
+}
+
 /** Unblocked ray from the player's eye to a point. No cone, no range. */
 export function visible(ctx, x, y, z) {
   const p = sysOf(ctx, 'player');

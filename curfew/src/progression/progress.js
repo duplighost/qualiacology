@@ -67,17 +67,27 @@ const SAVE_KEY = 'curfew.progress';
 const _loadedPayload = Object.freeze({});
 // 2 since round 6: the `visited` bitmap and the `fires` list joined the blob. A version-1
 // blob still loads — save.js merges per key and the new fields take their defaults.
-const SAVE_VERSION = 2;
+// 3 since round 13: the bitmap is 128 x 128 and records what he has SEEN, not the one cell he
+// stood in; a version-2 blob's 1024-char bitmap is upscaled 2x2 on load (_decodeVisited).
+const SAVE_VERSION = 3;
 
 // WHERE HE HAS BEEN. Alex, fifth playtest: "a large map in the menu that shows where you've
-// been and if you've finished places". A 64 x 64 grid of travelled cells over the 4 x 4 km
-// county (62.5 m a cell), one bit each, sampled from the player's position once a second and
-// kept in the save as a 1024-character hex string (4096 bits). The pause card draws it as
-// the wash that tells the dark county from the walked one. Recorded here, drawn in ui/hud.js.
-const VISITED_N = 64;
+// been and if you've finished places"; seventh: "The map should not even show roads or anything
+// unless you've been to that area" and "lets not even have an outline for the map in the menu.
+// lets lets not let people know how far it goes and just reveal the parts they get to."
+// A 128 x 128 grid of revealed cells over the 4 x 4 km county (31.25 m a cell), one bit each.
+// ROUND 13: once a second a DISC is stamped around the player — 40 m on foot, 120 m in the car
+// (fog transmittance is 30% at 120 m; the headlight reaches 80) — so the bitmap is what he has
+// seen, and the pause card and the mini-map draw the county only inside it. Kept in the save
+// as a 4096-character hex string. Recorded here, drawn in ui/hud.js.
+const VISITED_N = 128;
 const VISITED_CELLS = VISITED_N * VISITED_N;
 const VISITED_HEX_LEN = VISITED_CELLS / 4;
+const VISITED_N_V2 = 64;            // the round 6-12 grid, for the load-time upscale
+const VISITED_HEX_LEN_V2 = VISITED_N_V2 * VISITED_N_V2 / 4;
 const VISITED_EVERY_STEPS = 60;     // once a second at the fixed step
+const REVEAL_R_FOOT = 40;           // m of county a walking player reveals around himself
+const REVEAL_R_CAR = 120;           // m from the car seat
 
 const MAX_MOTES = 24;           // a shotgun into a pack is the worst case; 24 is generous
 const MOTE_FREE_S = 0.28;       // DESIGN section 6: free flight before the homing starts
@@ -381,9 +391,11 @@ export class Progress {
     this._decodeVisited(d.visited);
 
     this._recompute();
-    // Derive the level from the loaded total DIRECTLY rather than through _checkLevel(),
-    // which would fire a level:up on the boot frame of every returning save.
-    this.level = levelFor(this.total());
+    // Derive the level DIRECTLY rather than through _checkLevel(), which would fire a
+    // level:up on the boot frame of every returning save. ROUND 13: from BANKED xp only —
+    // see _checkLevel. A returning save whose carried pile used to count may read a level
+    // lower than it did; the pile banks at the next light and nothing is lost.
+    this.level = levelFor(d.xp);
     d.level = this.level;
     this._points();
     this._publish();
@@ -544,11 +556,13 @@ export class Progress {
 
     on('level:up', (p) => { void p; });   // ours; listed so the channel is obviously live
 
-    on('weapon:reload', (p) => { if (p.phase !== 'cancel') this._verb('reload'); });
+    // ROUND 13: weapon:reload no longer grants anything (see _verb). The channel stays live
+    // for the reload receipt the audio lane already answers.
+    on('weapon:reload', (p) => { void p; });
     // weapon:granted raises the physical gun into frame. A destination claim has already
     // produced its one Progress-owned crown/chime; answering this nested event would double it.
     on('weapon:granted', () => {});
-    on('car:entered', () => { this._verb('drive'); this._doorShut(); });
+    on('car:entered', () => { this._doorShut(); });
     // ROUND 7 — THE REAL DOOR. `door:shut {x, z}` is the one event the door lane has to emit;
     // this is the whole of the wiring on progression's side, and quiet_3 "Shut the Door" is
     // already listening on the other end of it. The full contract is in
@@ -562,7 +576,7 @@ export class Progress {
     // The four bus channels this system already sees, now published to the registry so a node
     // can act on them without another lane learning that the node exists. Every one of these
     // is a `run`, never a `reduce`: a listener on the bus cannot change what was emitted.
-    on('player:hurt', (p) => { this._verb('hurt'); this.hooks.run('onHurt', this.ctx, p); });
+    on('player:hurt', (p) => { this.hooks.run('onHurt', this.ctx, p); });
     on('player:land', (p) => this.hooks.run('onLand', this.ctx, p));
     on('noise', (p) => this.hooks.run('onNoise', this.ctx, p));
 
@@ -699,16 +713,20 @@ export class Progress {
     this._chime('xp_gain', px, py, pz, 0.94 + weight * 0.18, 0.58 + weight * 0.12);
   }
 
-  /** Add to the carried pile and re-derive the level. Never emits; award() does that. */
+  /**
+   * Add to the carried pile. Never emits; award() does that. ROUND 13: and never levels —
+   * carried XP is a light on you, not a level. The level moves when it banks.
+   */
   _bank_in(amount) {
     const d = this.save.data;
     d.unbanked += amount;
     this.save.mark();
     this._publish();
-    this._checkLevel();
   }
 
   total() { const d = this.save.data; return d.xp + d.unbanked; }
+  /** ROUND 13: what the level is made of. */
+  banked() { return this.save.data.xp; }
 
   _publish() {
     const sh = this.ctx.shared;
@@ -717,8 +735,16 @@ export class Progress {
     sh.level = this.level;
   }
 
+  /**
+   * ROUND 13: THE LEVEL IS MADE OF BANKED XP ONLY. It used to be banked + carried, so a kill
+   * in the field lit nodes on the card, and a death (which drops the carried pile into the
+   * corpse) took the level back and put them out again. Alex: "a few more were lit up. maybe
+   * i fell or something but didnt die (i couldn't click on them when they were lit up) but
+   * then i looked and they weren't lit up?" A level is a thing you HAVE; nothing you have can
+   * be taken by a fall. So the arrival at a light is the moment the tree grows.
+   */
   _checkLevel() {
-    const L = levelFor(this.total());
+    const L = levelFor(this.save.data.xp);
     if (L === this.level) { this._points(); return; }
     const up = L > this.level;
     this.level = L;
@@ -751,8 +777,10 @@ export class Progress {
   }
 
   _points() {
-    // A point per level past the first. Auto-granted nodes cost nothing, which is what makes
-    // "the tree teaches itself" free rather than a tax.
+    // ROUND 13: a point per level, INCLUDING the first, so the very first pause has one thing
+    // to click — the free first pick that still requires the click. Nothing is automatic any
+    // more (Alex: "is it always a choice what to put xp into? it should be."). Nodes a legacy
+    // save was given free by the old auto-grant still cost nothing.
     let spent = 0;
     for (const id of this._owned) {
       if (this._auto.has(id)) continue;
@@ -760,7 +788,7 @@ export class Progress {
       if (n) spent += n.cost;
     }
     this.spent = spent;
-    this.points = Math.max(0, (this.level - 1) - spent);
+    this.points = Math.max(0, this.level - spent);
   }
 
   /* ------------------------------------------------------------------ motes -- */
@@ -946,7 +974,9 @@ export class Progress {
     this._chime('xp_bank', x, y, z, 1, 0.7);
     const fx = this.ctx.systems.get('fx');
     if (fx && fx.flash) fx.flash(x, y, z, CARRY_COLOUR, 11, 0.45);
-    void reason;
+    // ROUND 13: the bank reaches the bus, so the HUD can answer the bell with a picture. It
+    // used to be the one receipt with a sound and no shape ("what is that lite bell noise").
+    this.ctx.bus.emit('xp:banked', { amount: moved, level: this.level, x, y, z, reason: reason || '' });
     this._maybeDraft();
     return moved;
   }
@@ -1017,7 +1047,7 @@ export class Progress {
     this.corpseArmed = false;
     this.save.mark();
     this._publish();
-    this._checkLevel();
+    this._points();       // ROUND 13: the level cannot move here; only the carried pile did
     this._releaseCarry();
     // Release the OLD corpse's rover: the handle carries a position, and reusing it would
     // leave the light where you died last time while the embers rise where you died now.
@@ -1137,12 +1167,35 @@ export class Progress {
     if ((++this._visitedTick % VISITED_EVERY_STEPS) !== 0) return;
     const player = this.ctx.systems.get('player');
     if (!player || !player.pos) return;
-    const i = this.visitedIndex(player.pos.x, player.pos.z);
-    if (i < 0 || this.visited[i]) return;
-    this.visited[i] = 1;
-    this.visitedCount++;
-    this._visitedDirty = true;
-    this.save.mark();
+    // ROUND 13: a disc, not a cell. What he can see from here is what the map may show.
+    const inCar = !!(this.ctx.shared && this.ctx.shared.inCar);
+    const added = this.revealAround(player.pos.x, player.pos.z, inCar ? REVEAL_R_CAR : REVEAL_R_FOOT);
+    if (added > 0) this.save.mark();
+  }
+
+  /**
+   * ROUND 13: stamp a disc of radius `r` metres into the revealed grid. Returns how many
+   * cells were new. Allocates nothing; about 20 cell tests on foot, 95 in the car.
+   */
+  revealAround(x, z, r) {
+    const size = (this.ctx.cfg && this.ctx.cfg.world && this.ctx.cfg.world.SIZE) || CFG.world.SIZE;
+    const half = size * 0.5, cell = size / VISITED_N;
+    const cx = (x + half) / cell, cz = (z + half) / cell, rc = r / cell;
+    const x0 = Math.max(0, Math.floor(cx - rc)), x1 = Math.min(VISITED_N - 1, Math.ceil(cx + rc));
+    const z0 = Math.max(0, Math.floor(cz - rc)), z1 = Math.min(VISITED_N - 1, Math.ceil(cz + rc));
+    let added = 0;
+    for (let gz = z0; gz <= z1; gz++) {
+      for (let gx = x0; gx <= x1; gx++) {
+        const dx = gx + 0.5 - cx, dz = gz + 0.5 - cz;
+        if (dx * dx + dz * dz > rc * rc) continue;
+        const i = gz * VISITED_N + gx;
+        if (this.visited[i]) continue;
+        this.visited[i] = 1;
+        added++;
+      }
+    }
+    if (added > 0) { this.visitedCount += added; this._visitedDirty = true; }
+    return added;
   }
 
   /** The cell index for a world position, or -1 outside the county square. */
@@ -1205,7 +1258,25 @@ export class Progress {
     const cells = this.visited;
     cells.fill(0);
     let count = 0;
-    if (typeof hex === 'string' && hex.length > 0) {
+    if (typeof hex === 'string' && hex.length === VISITED_HEX_LEN_V2) {
+      // ROUND 13: a round 6-12 save. Each old 62.5 m cell becomes its 2 x 2 block of new
+      // cells — exact and area-preserving, so a returning player keeps every trail.
+      for (let i = 0; i < VISITED_HEX_LEN_V2; i++) {
+        const v = parseInt(hex.charAt(i), 16);
+        if (!(v >= 0)) continue;
+        for (let b = 0; b < 4; b++) {
+          if (!(v & (1 << b))) continue;
+          const old = i * 4 + b;
+          const ox = old % VISITED_N_V2, oz = (old / VISITED_N_V2) | 0;
+          for (let dz = 0; dz < 2; dz++) {
+            for (let dx = 0; dx < 2; dx++) {
+              const j = (oz * 2 + dz) * VISITED_N + (ox * 2 + dx);
+              if (!cells[j]) { cells[j] = 1; count++; }
+            }
+          }
+        }
+      }
+    } else if (typeof hex === 'string' && hex.length > 0) {
       const n = Math.min(hex.length, VISITED_HEX_LEN);
       for (let i = 0; i < n; i++) {
         const v = parseInt(hex.charAt(i), 16);
@@ -1237,30 +1308,15 @@ export class Progress {
 
   /* ---------------------------------------------------------- auto-granting -- */
 
-  /** First use of a branch's verb grants its tier-0 node, free. The tree teaches itself. */
-  _verb(name) {
-    const id = FIRST_NODE_BY_VERB[name];
-    if (!id || this._owned.has(id)) return;
-    this._owned.add(id);
-    this._auto.add(id);
-    this._stat.autoGrants++;
-    this._recompute();
-    this._points();
-    this.save.mark();
-    this.ctx.bus.emit('node:bought', { id, auto: true });
-    const player = this.ctx.systems.get('player');
-    if (player) this._chime('xp_bank', player.pos.x, player.pos.y + 1.4, player.pos.z, 1.32, 0.5);
-  }
-
-  _stepVerbs() {
-    const player = this.ctx.systems.get('player');
-    if (player) {
-      if (player.tacSprinting || player.sliding) this._verb('run');
-      if (player.crouched) this._verb('crouch');
-    }
-    const lights = this.ctx.systems.get('lights');
-    if (lights && lights.torchOn && lights.torchOn()) this._verb('torch');
-  }
+  /**
+   * ROUND 13: THERE IS NO AUTO-GRANT. Six nodes used to be given free on the first use of a
+   * verb (sprint, crouch, torch, reload, the car, taking damage): a fall unlocked "Ceiling"
+   * and the card showed nodes he never chose in the same look as the ones he could. Alex:
+   * "are some of them automatic and some of them clicked? sometimes its weird." Every node
+   * is a click now; level 1 carries the first point (see _points). _verb() and _stepVerbs()
+   * are gone; FIRST_NODE_BY_VERB stays for the card's copy and ready()'s wiring check, and
+   * d.auto stays so a legacy save's free nodes keep costing nothing.
+   */
 
   /* ----------------------------------------------------------------- the tree -- */
 
@@ -1334,6 +1390,9 @@ export class Progress {
     this._points();
     this.save.mark();     // _syncBlob() writes the lists when the debounce fires
     this.ctx.bus.emit('node:bought', { id, auto: false });
+    // ROUND 13: "it should feel good to click on one and unlock it." A rising fifth, on the
+    // ui bus above the pause mute, so the card's own click is heard on the card.
+    this._chimeUI('xp_node', 1, 0.5);
     return true;
   }
 
@@ -1417,6 +1476,21 @@ export class Progress {
     A.playAt(name, x, y, z, s);
   }
 
+  /** ROUND 13: a non-positional receipt for something done on the card. Same lazy bake. */
+  _chimeUI(name, rate, gain) {
+    const A = this.ctx.systems.get('audio');
+    if (!A || !A.reg || !A.play) return;
+    if (!this._chimeReady) {
+      if (!A.actx || !A.baked) return;
+      this._bakeChimes(A);
+      this._chimeReady = true;
+    }
+    if (!A.has || !A.has(name)) return;
+    const s = A.spec ? A.spec() : null;
+    if (s) { s.rate = rate; s.gain = gain; s.bus = 'ui'; s.priority = 1; s.x = null; s.y = null; s.z = null; }
+    A.play(name, s);
+  }
+
   _bakeChimes(A) {
     const sr = A.sr || 48000;
     const mk = (secs, hz, partials, decay, bite) => {
@@ -1461,6 +1535,26 @@ export class Progress {
       }
       A.reg('xp_gain', [b], sr);
     }
+    // ROUND 13: a node bought. A rising fifth, shorter and drier than xp_gain's fourth, so a
+    // click and a find are cousins, not twins.
+    if (!A.has('xp_node')) {
+      const secs = 0.42;
+      const n = Math.max(1, Math.floor(sr * secs));
+      const b = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const strike = (at, hz, gain) => {
+          const u = t - at;
+          if (u < 0) return 0;
+          const env = Math.exp(-u * 9.5) * (1 - Math.exp(-u * 1050));
+          return (Math.sin(TAU * hz * u) * 0.60
+            + Math.sin(TAU * hz * 2.01 * u) * 0.20
+            + Math.sin(TAU * hz * 3.0 * u) * 0.08) * env * gain;
+        };
+        b[i] = clamp(strike(0, 523.25, 0.48) + strike(0.09, 784.0, 0.52), -1, 1);
+      }
+      A.reg('xp_node', [b], sr);
+    }
   }
 
   /* ------------------------------------------------------------------- loop -- */
@@ -1474,7 +1568,6 @@ export class Progress {
     this._stepBanking(dt);
     this._stepCorpse(dt);
     this._stepRoad();
-    this._stepVerbs();
     this._stepVisited();
     this._stepMinors();
 
@@ -1521,8 +1614,8 @@ export class Progress {
   state() {
     const d = this.save.data;
     return {
-      xp: d.xp, unbanked: d.unbanked, total: this.total(),
-      level: this.level, levelFrac: +levelFrac(this.total()).toFixed(3),
+      xp: d.xp, unbanked: d.unbanked, total: this.total(), carried: d.unbanked,
+      level: this.level, levelFrac: +levelFrac(d.xp).toFixed(3),
       nextAt: xpForLevel(this.level + 1),
       points: this.points, spent: this.spent,
       autoDraft: this.autoDraft,

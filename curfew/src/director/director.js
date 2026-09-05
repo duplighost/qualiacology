@@ -582,7 +582,8 @@ export class Director {
       const d2 = dx * dx + dz * dz;
       const d = Math.sqrt(d2);
 
-      if (b.pressure) {
+      // ROUND 13: an ambush body (dread's jump beats) is dread's spend, not pressure stock.
+      if (b.pressure && !(raw && raw.scripted)) {
         this._cTotal++;
         if (d <= 70) {
           const R = ROSTER[b.species];
@@ -665,7 +666,7 @@ export class Director {
       // ROUND 6: the three gates are LAW (see COOL_MIN_R): outside 25 m, not committed, not
       // in the air, and NOT ON SCREEN through the real frame. Unseen-by-occlusion still ranks
       // above merely off-frame.
-      if (b.pressure && b.alerted && d > COOL_MIN_R
+      if (b.pressure && b.alerted && d > COOL_MIN_R && raw.scripted !== true
         && (typeof raw.stoodDownN !== 'number' || raw.stoodDownN < MAX_STAND_DOWNS)
         && raw.committed !== true && raw.airborne !== true && raw.state === 'approach'
         && !this._onScreen(b.x, b.y, b.z, raw)) {
@@ -685,6 +686,7 @@ export class Director {
     this._fnEvict = (b, raw) => {
       if (this._evictN >= EVICT_PER_TICK) return;
       if (!b.pressure) return;                       // horror is dread's, not mine (DESIGN §4)
+      if (raw && raw.scripted) return;               // ROUND 13: an ambush is placed on purpose
       let hit = false;
       for (let i = 0; i < this._clearN; i++) {
         const dx = b.x - this._clearX[i], dz = b.z - this._clearZ[i];
@@ -2010,6 +2012,16 @@ export class Director {
     this._arrivals[this._arriveHead] = this._t;
     this._arriveHead = (this._arriveHead + 1) % ARRIVE_RING;
   }
+
+  /**
+   * ROUND 13: dread's PACK beat spawns three hounds itself, past the arrival window by
+   * design; it tells the director so the window closes behind them and the next order waits.
+   */
+  noteArrival(n) {
+    const k = Math.max(0, Math.min(ARRIVE_RING, n | 0));
+    for (let i = 0; i < k; i++) this._stampArrival();
+  }
+  arrivedRecently() { return this._arrivedRecently(); }
 
   /**
    * IS ANY PART OF THIS BODY INSIDE THE FRAME? The real camera's fov and aspect, the sim's own

@@ -362,6 +362,8 @@ const _nearPayload = {
 const _foundPayload = { id: '', xp: 0 };
 const _claimPayload = { id: '', xp: 0 };
 const _claimStartPayload = { id: '' };
+// ROUND 13: the hud's key glyph — one reused payload, emitted every step a fixture is in reach.
+const _promptP = { kind: 'hold', x: 0, y: 0, z: 0, k: 0, label: 'E' };
 const _noisePayload = { x: 0, z: 0, radius: 0, source: '' };
 const _v2 = { x: 0, z: 0 };
 const _minorW = new Float64Array(MINOR_KINDS.length);
@@ -2266,6 +2268,16 @@ export class Places {
     const pressed = use && !this._usePrev;
     this._usePrev = use;
     const inCar = !!(this.ctx && this.ctx.shared && this.ctx.shared.inCar);
+
+    // ROUND 13: the key glyph — a hold ring over the fixture in reach, filling with the hold.
+    // Reach, facing and sight are the candidate's own tests, so it appears exactly when a
+    // hold would work. (Alex, on the old fixture: "it is invisible under your own torch".)
+    if (cand && !inCar && cand.fixture && this.ctx && this.ctx.bus) {
+      const fx = cand.fixture;
+      _promptP.x = fx.wx; _promptP.y = fx.wy + 1.55; _promptP.z = fx.wz;
+      _promptP.k = this._hold === cand ? Math.min(1, this._holdT / CLAIM_HOLD_S) : 0;
+      this.ctx.bus.emit('prompt', _promptP);
+    }
 
     if (!use || inCar) {
       if (this._hold) { this._hold = null; this._holdT = 0; }

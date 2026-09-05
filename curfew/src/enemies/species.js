@@ -122,6 +122,7 @@ export const SPECIES = {
     retreatBelow: 0.25,                     // hp fraction: it breaks for cover
     packMin: 1, packMax: 2, packBlack: 4,   // ARRIVAL size, see the header; director.js _packSize mirrors it
     notice: 30, memAlert: 8.0,      // it smells you at 30 m with a clear line
+    litNotice: 0.6,                 // ROUND 13: a lit player stretches notice by this much
     deathNoise: 14,
     countsAs: 0.5,                          // hounds count half against headcount
     eye: 0xffd9a0, cloth: 0x121110, skin: 0x1a1512, bone: 0x2b2721,
@@ -145,6 +146,7 @@ export const SPECIES = {
     strikeRange: 0.96,                      // r 0.96 around the committed point
     dormant: true, wakeNoise: 22, riseTime: 1.40,
     notice: 24, memAlert: 10.0,             // half-blind: it works by sound and by near
+    litNotice: 0.6,
     deathNoise: 34,                         // popping is loud: wakes 30-40 m
     countsAs: 1,
     eye: 0xbfd2e8, cloth: 0x14161a, skin: 0x1b1a18, bone: 0x3a3630,
@@ -166,6 +168,7 @@ export const SPECIES = {
     strikeRange: 2.40,
     screamRadius: 60, screamCooldown: 11.0,
     notice: 44, memAlert: 14.0,             // it is the one that finds you first
+    litNotice: 1.0,                         // ROUND 13: and it hunts by sight — a torch doubles its reach
     deathNoise: 26,
     countsAs: 1,
     eye: 0xe8f0ff, cloth: 0x0e0f11, skin: 0x191614, bone: 0x322d27,

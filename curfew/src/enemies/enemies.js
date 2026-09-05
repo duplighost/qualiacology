@@ -49,7 +49,7 @@ import {
 } from './species.js';
 import { buildBody, makeImpostor, makeBasic, whiteTex, REVEAL } from './bodies.js';
 import {
-  NAV, steer, progress, resetProgress, relocate, observed, lit, visible,
+  NAV, steer, progress, resetProgress, relocate, observed, lit, visible, seesBeam,
   groundY, followGround, SepGrid, faceYaw, bearingDot, aimAngle,
 } from './nav.js';
 
@@ -707,6 +707,7 @@ export class Enemies {
    * back noticed him again on the next tick, and the new life began with a body on him.
    */
   _calmHolds(e) {
+    if (e.scripted) return false;             // ROUND 13: an ambush is never calm
     if (e.respawnCalmT > 0) return true;
     if (!(e.calmT > 0)) return false;
     if (e.calmT > CALM_S - CALM_HARD_S) return true;
@@ -1156,6 +1157,22 @@ export class Enemies {
     e.trailT = 0; e.lostAt = 0; e._dirFarT = 0; e._dirQuietT = 0;
     e.calmT = 0;
     e.respawnCalmT = def.owner === OWNER.PRESSURE ? this._respawnGraceT : 0;
+    // ROUND 13: THE SCRIPTED EXEMPTION. A dread jump beat puts a body 2.5 m behind you on
+    // purpose; measured without this, the opening clearing stood it down at 0.23 s and the
+    // watchdogs moved it 49 m away. An ambush body arrives aware, knowing where you are, off
+    // the leash (no notice test, no front-gate patience), calm-proof, for ambushS seconds.
+    // holdS makes it stand its ground before its first commit — the beat is that it is THERE.
+    e.ambush = !!(opts && opts.ambush);
+    e.scripted = e.ambush;
+    e.scriptedT = e.scripted ? ((opts && typeof opts.ambushS === 'number') ? opts.ambushS : 6) : 0;
+    if (e.scripted) {
+      e.aware = 2; e.memT = def.memAlert;
+      e.respawnCalmT = 0; e.calmT = 0;
+      e.leashed = false;
+      if (p) { e.heardX = p.pos.x; e.heardZ = p.pos.z; }
+      e.recommitT = (opts && typeof opts.holdS === 'number') ? opts.holdS : 0;
+      e.holdT = e.recommitT;    // and it stands its ground for that long (see _approach)
+    } else e.holdT = 0;
     e.stallT = 0; e.stallAX = x; e.stallAZ = z; e.stallN = 0; e.stoodDownN = 0; e.corneredT = 0;
     e.gen++;
 
@@ -1190,7 +1207,8 @@ export class Enemies {
       // open. A non-dormant species just rises FAST — it is stepping out from behind a trunk,
       // not climbing out of a grave.
       e.state = 'rise';
-      e.riseT = def.dormant ? (def.riseTime || 0.55) : QUICK_RISE_S;
+      e.riseT = (opts && typeof opts.riseS === 'number') ? opts.riseS
+        : (def.dormant ? (def.riseTime || 0.55) : QUICK_RISE_S);
       e.riseDur = e.riseT;
       e.riseSquash = 0.34;
       e.built.group.visible = true;
@@ -1199,6 +1217,10 @@ export class Enemies {
     e.built.deathGlow(1);
     e.built.telegraph(0);
     e.built.reveal(REVEAL.FLOOR);
+
+    // ROUND 13: THE DROP starts in the air. _integrate's airborne branch owns the fall
+    // (GRAVITY, the landing on terrain, the r7 landing noise); nothing else changes.
+    if (opts && opts.airborne) { e.airborne = true; e.vel.set(0, -1.5, 0); }
 
     this._claimSlot(e);
     this._spawned++;
@@ -1285,7 +1307,11 @@ export class Enemies {
     const dx = p.pos.x - e.pos.x, dz = p.pos.z - e.pos.z;
     e.dist = Math.hypot(dx, dz);
     const eyeY = e.pos.y + def.height * 0.86 * e.scale;
-    e.los = e.dist < 120 && visible(this.ctx, e.pos.x, eyeY, e.pos.z);
+    let los = e.dist < 120 && visible(this.ctx, e.pos.x, eyeY, e.pos.z);
+    // ROUND 13: a lit player is also seen by the pool of light ahead of them. One extra line
+    // test per perception tick, only while the torch is on and the body itself is hidden.
+    if (!los && e.dist < 120 && (e.playerLit || 0) >= 0.5) los = seesBeam(this.ctx, e.pos.x, eyeY, e.pos.z);
+    e.los = los;
     // "how lit are YOU" — the torch trade. The Pale reads the same number from
     // the other side: it is only frozen while the beam is on IT.
     e.litSelf = lit(this.ctx, e.pos.x, eyeY, e.pos.z, def.beamDot || 0.82,
@@ -1342,6 +1368,11 @@ export class Enemies {
     e.windowT += dt;
     e.flashT += dt;
     if (e.windowT > STAGGER_WINDOW) e.windowDmg = 0;
+    // ROUND 13: the scripted window runs out and the body is an ordinary body again.
+    if (e.scripted) {
+      e.scriptedT -= dt;
+      if (e.scriptedT <= 0) { e.scripted = false; e.scriptedT = 0; e.leashed = true; }
+    }
     e.immuneT = Math.max(0, e.immuneT - dt);
     e.leapCd = Math.max(0, e.leapCd - dt);
     e.screamCd = Math.max(0, e.screamCd - dt);
@@ -1549,6 +1580,16 @@ export class Enemies {
 
   _approach(e, dt, p) {
     const def = e.def;
+    // ROUND 13: THE HOLD. An ambush body stands its ground for holdS, facing him, before its
+    // first move — the beat is that it is simply THERE when he turns. recommitT blocks the
+    // commit for the same span; this blocks the feet.
+    if (e.holdT > 0) {
+      e.holdT -= dt;
+      e.vel.set(0, 0, 0);
+      e.moving = false;
+      e.yaw = dampAngle(e.yaw, faceYaw(e.pos.x, e.pos.z, p.pos.x, p.pos.z), 10, dt);
+      return;
+    }
 
     // hp < 25%: break for cover. It is a hound rule but every crowd unit reads
     // better for it — a thing that never disengages is a target, not an animal.
@@ -1569,7 +1610,10 @@ export class Enemies {
     if (e.aware === 0 && e.los && !this._calmHolds(e)) {
       // off the leash (the black hour, director.js:807) it does not need to
       // notice you: it already knows.
-      const reach = e.leashed === false ? 1e9 : def.notice * (1 + (e.playerLit || 0) * 0.6);
+      // ROUND 13: the light is a price per species (species.js litNotice): the hunter, which
+      // hunts by sight, reaches 1.0x further for a fully lit player; the hound smells, 0.6x.
+      const litK = def.litNotice !== undefined ? def.litNotice : 0.6;
+      const reach = e.leashed === false ? 1e9 : def.notice * (1 + (e.playerLit || 0) * litK);
       if (e.dist <= reach) {
         e.aware = 1;
         e.memT = def.memAlert;
@@ -1674,7 +1718,8 @@ export class Enemies {
     // ---- THE STALL WATCHDOG (STALL_WIN_S / STALL_NET_M). NET drift per window, not
     // velocity: a body grinding into a trunk has a velocity and no motion. Aware only -- an
     // unaware body holding station is scenery, and scenery is allowed to stand still.
-    if (e.aware > 0) {
+    // (ROUND 13: and not an ambush holding its ground.)
+    if (e.aware > 0 && !e.scripted) {
       e.stallT += dt;
       if (e.stallT >= STALL_WIN_S) {
         const ax = e.pos.x - e.stallAX, az = e.pos.z - e.stallAZ;
@@ -1717,7 +1762,7 @@ export class Enemies {
     // and was being teleported back to his side every six seconds for as long as it
     // lived. That is a second, quieter "they always know where I am". A body that is
     // not chasing anyone is never moved.
-    if (e.aware > 0 && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
+    if (e.aware > 0 && !e.scripted && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
       if (relocate(this.ctx, e, this.placeRng, _pt)) {
         e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
         e.prevPos.copy(e.pos); e.currPos.copy(e.pos);   // never interpolate a relocation
@@ -1780,7 +1825,9 @@ export class Enemies {
       // the CALM holds here too (round 6): a called-off poacher does not re-acquire him by
       // sight for CALM_S unless he is inside CALM_NEAR_R. Measured before this line existed:
       // one poacher stood down five times in eight seconds (tests/pack.mjs c).
-      const sees = e.los && e.dist < 60 && (e.playerLit > 0.15 || e.dist < 22)
+      // ROUND 13: the moon alone (lit 0.33 in a clearing) no longer gives you away at 60 m;
+      // the torch (0.62+) does, and to 70 m. A dark, quiet player is genuinely not seen.
+      const sees = e.los && e.dist < (e.playerLit >= 0.5 ? 70 : 60) && (e.playerLit > 0.40 || e.dist < 22)
         && !this._calmHolds(e);
       if (sees) { e.aware = 1; e.memT = def.memAlert; e.calmT = 0; e.heardX = p.pos.x; e.heardZ = p.pos.z; }
     } else if (e.aware === 1) {
@@ -1820,7 +1867,7 @@ export class Enemies {
     e.vel.z = damp(e.vel.z, s.z * want + _sep.z * 2.0, 8, dt);
 
     // aware only — see the note on the same watchdog in _approach
-    if (e.aware > 0 && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
+    if (e.aware > 0 && !e.scripted && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
       if (relocate(this.ctx, e, this.placeRng, _pt)) {
         e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
         e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
@@ -2281,6 +2328,7 @@ export class Enemies {
     // THERE when you come back, so the far cull may not take one that has never noticed
     // you. Once it has been woken it is an ordinary body again and the director owns it.
     if (e.staged && e.aware <= 0) return false;
+    if (e.scripted) return false;             // ROUND 13: dread's spend, not the thermostat's stock
     this._uncommit(e);
     this._release(e);
     this._culled++;
@@ -2300,6 +2348,7 @@ export class Enemies {
   standDown(e) {
     this._lastAsk = this._t;
     if (!e || !e.alive || e.def.owner !== OWNER.PRESSURE || e.aware <= 0) return false;
+    if (e.scripted) return false;             // ROUND 13: an ambush cannot be called off
     // never mid-strike and never mid-air: a body called off in a lunge changes its mind in
     // front of him
     if (e.state === 'windup' || e.state === 'attack' || e.airborne) return false;
@@ -2664,6 +2713,7 @@ export class Enemies {
       // direction for his loudest complaint of all — the scenes stop eating the arrivals
       // budget instead of competing with it.
       if (e.staged && e.aware <= 0) continue;
+      if (e.scripted) continue;              // ROUND 13: an ambush is not pressure stock
       alive += 1;
       if (Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z) < TRICKLE_RING) near += e.def.countsAs;
     }
@@ -2890,7 +2940,7 @@ export class Enemies {
 
   telemetry() {
     let alive = 0, dormant = 0, corpses = 0, far = 0, committed = 0, draws = 0;
-    let breaking = 0, calm = 0;
+    let breaking = 0, calm = 0, scripted = 0;
     const byKind = {};
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
@@ -2903,6 +2953,7 @@ export class Enemies {
       if (e.committed) committed++;
       if (e.breakoffT > 0) breaking++;
       if (e.calmT > 0) calm++;
+      if (e.scripted) scripted++;
       byKind[e.species] = (byKind[e.species] || 0) + 1;
     }
     for (let i = 0; i < this.impostorList.length; i++) {
@@ -2910,7 +2961,7 @@ export class Enemies {
     }
     return {
       pool: this.all.length,
-      alive, dormant, corpses, impostors: far, committed, draws,
+      alive, dormant, corpses, impostors: far, committed, draws, scripted,
       pressure: this.pressureCount,
       spawned: this._spawned, killed: this._killed,
       refused: this._refused, cancelled: this._cancelled,
@@ -3059,6 +3110,10 @@ function makeRecord(id, species, def, built, rng) {
     // seenT      how long it has been continuously inside your attention.
     frontDot: 1, frontDeniedT: 0, rearStrike: false, telegraphS: 0,
     breakoffT: 0, recommitT: 0, seenT: 0,
+    // ROUND 13: an AMBUSH body (dread's jump beats). `scripted` is the exemption window:
+    // while it runs, the director's clearing, the cooling stand-down, the far cull, the calm
+    // and both watchdogs leave the body alone. `ambush` marks the life for the kill bonus.
+    scripted: false, scriptedT: 0, ambush: false, holdT: 0,
     airborne: false, leapCd: 0,
     telegraphCharge: 0,
     staggerT: 0, immuneT: 0, windowDmg: 0, windowT: 0,

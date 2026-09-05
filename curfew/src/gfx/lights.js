@@ -215,6 +215,7 @@ export class Lights {
     // so it cannot be free and it cannot be the default.
     this._torchOn = false;
     this._torchIntensity = CFG.lights.torch.hot;
+    this._faultT = 0;          // ROUND 13: seconds the filament is out (torchFault)
     this._torchLitT = 99;         // seconds since the torch came on (round 6, High Beam)
     this._headlightOn = false;
 
@@ -325,7 +326,8 @@ export class Lights {
     this.torch = torch;
 
     const H = CFG.lights.headlight;
-    const head = new THREE.SpotLight(0xfff3d8, 0, H.distance, H.angle, 0.35, 2.0);
+    const head = new THREE.SpotLight(0xfff3d8, 0, H.distance, H.angle,
+      H.penumbra !== undefined ? H.penumbra : 0.35, H.decay !== undefined ? H.decay : 2.0);
     head.castShadow = false;                      // census: headlights never cast
     head.name = 'headlight';
     head.position.set(0, -1000, 0);
@@ -443,6 +445,17 @@ export class Lights {
     if (this._torchOn && !was) this._torchLitT = 0;
   }
   torchOn() { return this._torchOn; }
+
+  /**
+   * ROUND 13: THE BLACKOUT. The filament dies for `seconds` — present() writes the torch's
+   * intensity every frame from _torchIntensity, so a fault has to live here, not in a caller's
+   * one-off write (measured: an outside write to torch.intensity is undone the next frame).
+   * ctx.shared.lit follows the real intensity, so the county knows the light is out too.
+   */
+  torchFault(seconds) {
+    this._faultT = Math.max(this._faultT, +seconds || 0);
+  }
+  torchFaulted() { return this._faultT > 0; }
 
   /**
    * Drive the moon's elevation. world/clock.js computes one every step (high through dusk
@@ -609,22 +622,33 @@ export class Lights {
       this._reseat();
     }
 
+    // ROUND 13: the torch's filament fault (dread's BLACKOUT beat) ages here, on the fixed step
+    if (this._faultT > 0) this._faultT = Math.max(0, this._faultT - dt);
+
     // Alex's natural play did not reveal any night transition and the carried light felt
     // pointless. The old fill stayed at 1.0 for dusk plus eleven minutes of deep night and
     // dimmed only when the red black-hour telegraph arrived. Drive a large, continuous arc
     // instead: visible last dusk -> dark night -> genuinely black hour -> weak false dawn.
     // This changes two existing light uniforms only; the 13-light census remains untouched.
     const clock = this.ctx.systems ? this.ctx.systems.get('clock') : null;
-    let fill = 0.72;
+    // ROUND 13: A LITTLE DARKER, NOT A VOID. Alex, seventh playtest: "The forest can even be a
+    // little darker. You have a lamp/light thing. lets make it useful." The floor under the
+    // pines is lit by this fill (6.8 x the arc), and the torch already lifts it 2.5-3.8x, so
+    // the useful move is the arc, by about a tenth: dusk 0.72/0.40 -> 0.62/0.36, night
+    // 0.40/0.28 -> 0.36/0.26, dawn's end 0.60 -> 0.52. The black hour stays at 0.22: it is
+    // already 99.8% below 8 luma under canopy, and a cut past this is the void ART.md 1.3 warns
+    // about (measured: one more step loses every trunk). Predicted night canopy floor p50
+    // 11.2 -> ~9.5, and the torch's ratio over it goes from 5.6x to about 7x.
+    let fill = 0.62;
     if (clock && typeof clock.phase === 'string') {
       const t = clamp01(clock.phaseT || 0);
       const ease = t * t * (3 - 2 * t);
-      if (clock.phase === 'dusk') fill = lerp(0.72, 0.40, ease);
+      if (clock.phase === 'dusk') fill = lerp(0.62, 0.36, ease);
       else if (clock.phase === 'night') {
         const red = typeof clock.redness === 'number' ? clamp01(clock.redness) : 0;
-        fill = lerp(0.40, 0.28, red);
+        fill = lerp(0.36, 0.26, red);
       } else if (clock.phase === 'black') fill = 0.22;
-      else if (clock.phase === 'dawn') fill = lerp(0.22, 0.60, ease);
+      else if (clock.phase === 'dawn') fill = lerp(0.22, 0.52, ease);
     }
     this.setFillScale(fill);
 
@@ -879,7 +903,7 @@ export class Lights {
       const angle = focus && aiming && typeof focus.angle === 'number' ? focus.angle : T.angle;
       if (this.torch.angle !== angle) this.torch.angle = angle;
       const hot = beam && typeof beam.seconds === 'number' && this._torchLitT < beam.seconds ? 2 : 1;
-      this.torch.intensity = this._torchIntensity * hot;
+      this.torch.intensity = this._faultT > 0 ? 0 : this._torchIntensity * hot;
       camera.getWorldDirection(_fwd);
       // The torch sits at the eye; the offset is left to the viewmodel owner to author.
       this.torch.position.copy(p);

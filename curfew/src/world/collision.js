@@ -102,6 +102,16 @@ const BREAKABLE_TAGS = new Map([
   ['leg', 44], ['stake', 18], ['bin', 26], ['pot', 14], ['kit', 14], ['bike', 18],
 ]);
 
+// ROUND 13: BREAKABLE BY THE GUN AND THE STOCK. Alex, seventh playtest: breakable boxes.
+// The tags a round or a buttstroke takes apart, and how many landings each one needs. The
+// count lives per collider (hitBreakable, below); the break retires the collider exactly the
+// way crush() does, and combat.js throws the same debris the car does and emits the same
+// 'world:broke'. Only the light wooden things are on this table: a drum, a sign, a waystone
+// still stop a round and spark like what they are.
+const SHOT_BREAK = new Map([
+  ['crate', 1], ['box', 1], ['aboard', 1], ['pallet', 2], ['cache', 1],
+]);
+
 // Never a ledge, whatever its top is doing. Round things and thin standing things: a body
 // cannot get a knee over a trunk, a post or a lamp column, and Alex's "one climb in forty is
 // a tree" (docs/NEXT.md B5) is exactly this list arriving in the mantle's probe.
@@ -163,6 +173,7 @@ export class Collision {
     this._y0 = new Float64Array(this.cap);
     this._y1 = new Float64Array(this.cap);
     this._mass = new Float64Array(this.cap);   // kg; only read when F_BREAK is set
+    this._hits = new Uint8Array(this.cap);     // ROUND 13: landings a shot-breakable has taken
     this._free = [];              // recycled slot indices
 
     // --- broadphase: cell key -> array of slot indices ---
@@ -221,6 +232,8 @@ export class Collision {
       x: 0, z: 0, radius: 0, kind: 'circle', halfX: 0, halfZ: 0, yaw: 0,
       y0: 0, y1: 0, distance: 0, id: -1,
     };
+    // ROUND 13: the shared record of the last thing hitBreakable() took apart. Reused.
+    this._broken = { x: 0, y: 0, z: 0, top: 0, radius: 0, mass: 0, tag: null, id: -1, hits: 0 };
 
     this._tel = {
       total: 0,           // live colliders  (integrator request)
@@ -237,6 +250,7 @@ export class Collision {
       broken: 0,          // how many have been crushed this session
       brokenMass: 0,      // and their total mass, kg
       crushes: 0,         // crush() calls
+      shotBroken: 0,      // ROUND 13: taken apart by a round or the stock (hitBreakable)
     };
 
     this._terrainSys = null;
@@ -323,6 +337,7 @@ export class Collision {
     this._y0 = growF64(this._y0, cap);
     this._y1 = growF64(this._y1, cap);
     this._mass = growF64(this._mass, cap);
+    this._hits = growU8(this._hits, cap);
     this.cap = cap;
   }
 
@@ -534,6 +549,7 @@ export class Collision {
     this._removeGrid(i);
     this._flags[i] = 0;
     this._mass[i] = 0;      // a recycled slot must never inherit breakability
+    this._hits[i] = 0;      // ...nor another thing's bullet holes
     this._gen[i] = (this._gen[i] + 1) & 0xffff;
     if (unlinkChunk) {
       const ci = this._chunk[i];
@@ -601,6 +617,36 @@ export class Collision {
     out.halfX = this._hx[best]; out.halfZ = this._hz[best]; out.yaw = this._yaw[best];
     out.y0 = this._y0[best]; out.y1 = this._y1[best];
     out.distance = bestD;
+    out.id = best * 65536 + this._gen[best];
+    return out;
+  }
+
+  /**
+   * ROUND 13: the nearest live collider whose tag is in `tags` (an array), within maxRadius of
+   * (x, z), measured to its rim. Returns the shared _nearest record (x, z, radius, tag,
+   * distance) or null. dread.js's DROP asks it for the trunk over the landing.
+   */
+  nearestTagged(x, z, maxRadius, tags) {
+    let best = -1, bestD = Infinity;
+    const n = this._gather(x, z, maxRadius);
+    for (let k = 0; k < n; k++) {
+      const i = this._near[k];
+      const t = this._tag[i];
+      if (!t) continue;
+      let ok = false;
+      for (let j = 0; j < tags.length; j++) if (tags[j] === t) { ok = true; break; }
+      if (!ok) continue;
+      const d = Math.hypot(x - this._x[i], z - this._z[i]) - this._r[i];
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0 || bestD > maxRadius) return null;
+    const out = this._nearest;
+    out.x = this._x[best]; out.z = this._z[best]; out.radius = this._r[best];
+    out.kind = this._kind[best] === KIND_OBB ? 'obb' : 'circle';
+    out.halfX = this._hx[best]; out.halfZ = this._hz[best]; out.yaw = this._yaw[best];
+    out.y0 = this._y0[best]; out.y1 = this._y1[best];
+    out.distance = bestD;
+    out.tag = this._tag[best];
     out.id = best * 65536 + this._gen[best];
     return out;
   }
@@ -682,6 +728,37 @@ export class Collision {
     if (!(this._flags[i] & F_ALIVE) || this._gen[i] !== gen) return -1;
     return this._mass[i];
   }
+
+  /**
+   * ROUND 13: a round or a buttstroke landed on collider `id`. Returns 0 when the thing is
+   * not shot-breakable (or the id is dead), 1 when it took the hit and stands, 2 when it came
+   * apart — then brokenResult() holds where and what, and the collider is already retired.
+   * The count is per collider and dies with it; a rebuilt crate is a whole crate.
+   */
+  hitBreakable(id) {
+    const i = Math.floor(id / 65536), gen = id % 65536;
+    if (i < 0 || i >= this.count) return 0;
+    if (!(this._flags[i] & F_ALIVE) || this._gen[i] !== gen) return 0;
+    if (!(this._flags[i] & F_BREAK)) return 0;
+    const tag = this._tag[i];
+    const need = tag ? SHOT_BREAK.get(tag) : undefined;
+    if (!need) return 0;
+    const hits = this._hits[i] < 255 ? ++this._hits[i] : 255;
+    if (hits < need) return 1;
+    const b = this._broken;
+    b.x = this._x[i]; b.z = this._z[i];
+    b.y = 0.5 * (this._y0[i] + this._y1[i]); b.top = this._y1[i];
+    b.radius = this._r[i]; b.mass = this._mass[i]; b.tag = tag; b.id = id; b.hits = hits;
+    this._retire(i, true);
+    this._tel.broken++; this._tel.brokenMass += b.mass; this._tel.shotBroken++;
+    return 2;
+  }
+
+  /** The last hitBreakable() break. Shared scratch — read it before the next call. */
+  brokenResult() { return this._broken; }
+
+  /** How many landings a tag needs to come apart; 0 when a round cannot break it. */
+  shotBreakHits(tag) { return SHOT_BREAK.get(tag) || 0; }
 
   resetTelemetry() {
     const t = this._tel;

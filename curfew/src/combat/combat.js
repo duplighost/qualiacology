@@ -68,6 +68,8 @@ const TAG_SURFACE = Object.freeze({
   drum: 'metal', tyres: 'metal', sign: 'metal', letterbox: 'metal',
   waystone: 'stone', cairn: 'stone',
   crate: 'wood', pallet: 'wood', aboard: 'wood', stall: 'wood', sapling: 'wood', leg: 'wood',
+  // ROUND 13: the shot-breakables (collision.js SHOT_BREAK) that had no row of their own
+  cache: 'wood', box: 'wood',
 });
 
 // Impact colour by surface — the spark burst reads as material before the
@@ -84,11 +86,23 @@ const PEN_DEFLECT = 0.40 * DEG;      // per surface exited, cinderbloom combat.j
 const EXIT_STEP = 0.02;              // 2 cm march when looking for the far side
 const EXIT_MAX = 0.50;               // metres of solid we will search through
 
+// ROUND 13: BREAKABLE BOXES (Alex, seventh playtest). A crate or a box that comes apart under
+// the gun sometimes had rounds in it. Seeded (ctx.rng.fork, never Math.random); a pallet and
+// a sandwich board hold nothing, and the wilds' cache pays its own way (wilds.js _brokenCache).
+const BREAK_LOOT_CHANCE = 0.35;
+const BREAK_LOOT_MIN = 3;
+const BREAK_LOOT_MAX = 6;
+const LOOT_TAGS = Object.freeze({ crate: true, box: true });
+
 /* ---- module scratch. Nothing here allocates per shot. ---- */
 const _o = new THREE.Vector3();
 const _d = new THREE.Vector3();
 const _pt = new THREE.Vector3();
 const _n = new THREE.Vector3(0, 1, 0);
+// ROUND 13: the same 'world:broke' the car emits (car.js), written in place; read it
+// synchronously, never retain it. `by` says whose it was.
+const _brokePayload = { x: 0, y: 0, z: 0, mass: 0, n: 1, tag: null, by: 'shot' };
+const _ammoPayload = { n: 0 };
 const _back = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
@@ -100,12 +114,14 @@ export class Combat {
     this.ctx = ctx;
 
     this.penRng = ctx.rng.fork('penetration');
+    this.lootRng = ctx.rng.fork('breakables');    // ROUND 13: what a broken box had in it
 
     this.shots = 0;
     this.hits = 0;
     this.misses = 0;               // rays that reached MAXT with nothing in them
     this.pens = 0;
     this.ghosts = 0;               // landings that dealt < 1 hp. MUST stay 0.
+    this.broke = 0;                // ROUND 13: props taken apart by a round or the stock
     // Reused: a shotgun lands 8 of these in one step and none may allocate. This object is
     // MUTATED IN PLACE by _land() and is never reassigned — the comment used to say
     // "reused" while _land built a fresh literal on every landing, so eight pellets meant
@@ -116,6 +132,8 @@ export class Combat {
       dmg: 0, dist: 0, pen: false, deflected: false, killed: false, lit: 0, t: 0,
     };
     this.litTimers = [];           // borrowed rover handles, released by ttl
+    // ROUND 13: the last thing that came apart. Mutated in place, like lastHit.
+    this.lastBroke = { valid: false, tag: null, x: 0, y: 0, z: 0, by: null, hits: 0, mass: 0, loot: 0, t: 0 };
 
     // Reused outbound payload. Listeners consume it synchronously and retain
     // nothing; that is what keeps a shot allocation-free in the hot path.
@@ -199,6 +217,7 @@ export class Combat {
   _trace(ox, oy, oz, dx, dy, dz, maxT) {
     const s = _stage;
     s.hit = false; s.t = maxT; s.kind = 'dirt'; s.zone = null; s.enemy = null; s.exit = false; s.boss = false;
+    s.colliderId = -1;
 
     _o.set(ox, oy, oz);
     _d.set(dx, dy, dz);
@@ -209,6 +228,7 @@ export class Combat {
       const e = enemies.raycast(_o, _d, s.t);
       if (e && e.t < s.t) {
         s.hit = true; s.t = e.t; s.kind = 'flesh'; s.zone = e.zone || 'torso'; s.enemy = e.enemy;
+        s.colliderId = -1;
         s.x = e.point.x; s.y = e.point.y; s.z = e.point.z;
         s.nx = -dx; s.ny = -dy; s.nz = -dz;
       }
@@ -239,6 +259,7 @@ export class Combat {
       const c = collision.raycast(_o, _d, s.t, collision.MASK ? collision.MASK.SHOT : 2);
       if (c && c.hit !== false && c.t < s.t) {
         s.hit = true; s.t = c.t; s.enemy = null; s.zone = null; s.boss = false;
+        s.colliderId = typeof c.id === 'number' ? c.id : -1;   // ROUND 13: so a hit can break it
         // collision publishes the tag the placer gave it (flora tags trunks 'tree').
         s.kind = TAG_SURFACE[c.tag] || 'wood';
         if (c.point) { s.x = c.point.x; s.y = c.point.y; s.z = c.point.z; }
@@ -256,6 +277,7 @@ export class Combat {
       const gt = terrain.marchRay(ox, oy, oz, dx, dy, dz, s.t);
       if (gt !== null && gt !== undefined && gt < s.t) {
         s.hit = true; s.t = gt; s.enemy = null; s.zone = null; s.boss = false; s.kind = 'dirt';
+        s.colliderId = -1;
         s.x = ox + dx * gt; s.y = oy + dy * gt; s.z = oz + dz * gt;
         if (terrain.normalAt) {
           terrain.normalAt(s.x, s.z, _tmp);
@@ -364,6 +386,9 @@ export class Combat {
 
       // A round does not continue through a creature into another.
       if (h.enemy) break;
+
+      // ROUND 13: a light wooden thing comes apart under the round, and the round is spent in it.
+      if (this._maybeBreak(h, dx, dz, 'shot')) break;
 
       // --- penetration (cinderbloom combat.js:954-982)
       // THE PENETRATION TEST is the declared site for the `penCm` hook, and its signature
@@ -527,10 +552,56 @@ export class Combat {
       const h = this._trace(p.pos.x, oy, p.pos.z, dx, dy, dz, range);
       if (h) {
         this._land(h, Math.max(1, Math.round(damage)), h.t, false, false, false, 'melee');
+        this._maybeBreak(h, dx, dz, 'melee');    // ROUND 13: the stock takes a crate apart too
         return true;
       }
     }
     return false;
+  }
+
+  /**
+   * ROUND 13: BREAKABLE BOXES. The landing was on a collider: ask collision whether that was
+   * the hit that takes it apart (SHOT_BREAK: a crate, a box or a sandwich board on the first,
+   * a pallet on the second, the wilds' cache on the first). When it is, the merged part
+   * collapses and the debris flies on with the round (the car's own take-down, pointed along
+   * the shot), the splinters double, dry close wood answers, and 'world:broke' goes out with
+   * `by` so the wilds pay a shot-open cache the way they pay a crushed one. A crate or a box
+   * sometimes had a few rounds in it. Returns true when something came apart.
+   */
+  _maybeBreak(h, dx, dz, by) {
+    if (!h || h.enemy || h.exit || !(h.colliderId >= 0)) return false;
+    const col = this._sys('collision');
+    if (!col || typeof col.hitBreakable !== 'function') return false;
+    if (col.hitBreakable(h.colliderId) !== 2) return false;
+    const b = col.brokenResult();
+    this.broke++;
+    const L = this.lastBroke;
+    L.valid = true; L.tag = b.tag; L.x = b.x; L.y = b.y; L.z = b.z; L.by = by;
+    L.hits = b.hits; L.mass = b.mass; L.loot = 0; L.t = this.ctx.time.t;
+
+    const car = this._sys('car');
+    if (car && typeof car.takeDown === 'function') {
+      car.takeDown(b.x, b.z, b.y, b.mass, b.tag, dx, dz, by === 'melee' ? 3.5 : 6.5);
+    }
+    const fx = this._sys('fx');
+    if (fx && fx.impact) {
+      _pt.set(h.x, h.y, h.z); _n.set(h.nx, h.ny, h.nz);
+      fx.impact(h.kind, _pt, _n, 1.8);
+    }
+    const audio = this._sys('audio');
+    if (audio && typeof audio.dread === 'function') {
+      audio.dread('branch', b.x, b.y + 0.3, b.z, by === 'melee' ? 0.7 : 0.55);
+    }
+    // what was in it
+    if (LOOT_TAGS[b.tag] && this.lootRng.next() < BREAK_LOOT_CHANCE) {
+      const n = BREAK_LOOT_MIN + Math.floor(this.lootRng.next() * (BREAK_LOOT_MAX - BREAK_LOOT_MIN + 1));
+      _ammoPayload.n = n; L.loot = n;
+      this.ctx.bus.emit('pickup:ammo', _ammoPayload);
+    }
+    _brokePayload.x = b.x; _brokePayload.y = b.y; _brokePayload.z = b.z;
+    _brokePayload.mass = b.mass; _brokePayload.n = 1; _brokePayload.tag = b.tag; _brokePayload.by = by;
+    this.ctx.bus.emit('world:broke', _brokePayload);
+    return true;
   }
 
   /* ---- test probe: fire a ray with no gun and no ammo ---- */
@@ -551,6 +622,7 @@ export class Combat {
       shots: this.shots, hits: this.hits, misses: this.misses,
       pens: this.pens, ghosts: this.ghosts,
       lastHit: this.lastHit,
+      broke: this.broke, lastBroke: this.lastBroke,   // ROUND 13
       // THE ONE LAW as an assertion a test can read in one line: not one
       // landing in this session dealt less than 1 hp, and every landing lit
       // what it hit for LIT_S. If `ghosts` is ever non-zero the law is broken.
@@ -565,10 +637,12 @@ export class Combat {
 const _stage = {
   hit: false, t: 0, kind: 'dirt', zone: null, enemy: null, exit: false, boss: false,
   x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0,
+  colliderId: -1,          // ROUND 13: the collider a stage-2 hit landed on, else -1
 };
 const _exitRec = {
   hit: true, t: 0, kind: 'dirt', zone: null, enemy: null, exit: true, boss: false,
   x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0,
+  colliderId: -1,
 };
 
 export default Combat;

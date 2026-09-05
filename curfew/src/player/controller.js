@@ -174,6 +174,10 @@ const MANTLE_VEL_AWAY = -1.5;  // do not yank someone who is clearly moving away
 // The feel numbers (the hands' band, the hang, the pull, the vault window) are CFG.player.climb;
 // the locals below are probe geometry and the shape of the curves.
 const CL = P.climb;
+const _landOut = { x: 0, z: 0 };   // ROUND 13: _landingOn's answer, allocation-free
+// ROUND 13: the held-Space chain and its one fling per hold (see CFG.player.climb.hold).
+const HOLD = CL.hold || { chainS: 0.30, flingMaxRise: 3.30, handsHi: 0.80, intentS: 0.36, outSpeed: 2.6, landIn: 0.42 };
+const HOLD_FLING_CARRY = 1.2;  // m/s of forward carry added at the fling so the hands reach the face at apex
 const CLIMB_NONE = 0, CLIMB_HANG = 1, CLIMB_PULL = 2, CLIMB_VAULT = 3;
 const MANTLE_LEAD2 = 0.36;     // a second probe one more radius out: a lip you run at is not always one shell away
 // A deliberate Space press gets one farther COLLIDER probe. The ordinary movement mantle,
@@ -199,7 +203,9 @@ const CLIMB_CHAIN_COOLDOWN = 0.12;
 const MANTLE_MIN_RISE = 0.62;  // STEP_UP + STEP_TOL + 0.02: anything lower the solver steps onto, and a step is not a climb
 const PULL_LIFT_END = 0.72;    // fraction of the pull by which the feet reach the top
 const PULL_OVER_START = 0.30;  // fraction of the pull at which the body starts moving over the lip
-const LAND_IN = 0.30;          // m past the probe point the feet come to rest, so the footprint is well on the top
+const LAND_IN = HOLD.landIn;   // m past the probe point the feet come to rest, so the footprint is well on the top
+                               // (ROUND 13: 0.42 = the radius and a hand — "some kind of natural space")
+const LAND_BACKOFF = [LAND_IN, 0.32, 0.22];   // ROUND 13: a narrow top gets a nearer landing, never a fall
 const CLIMB_HEAVE = 0.06;      // m the eye dips through the eye spring as the pull begins (a heave, not a hop)
 const VAULT_LAND_SPEED = 1.8;  // a vault's far-side plant: barely an event
 const VAULT_SCAN = 0.25;       // m between the probes that find the obstacle and measure its thickness
@@ -336,6 +342,10 @@ export class PlayerController {
     this.mantleCooldown = 0;
     this.spaceClimbIntent = 0;                            // Space may catch a lip during early jump
     this.climbQueued = false;                             // Space tapped during a carry: climb only on landing
+    // ROUND 13: the held-Space chain.
+    this.holdChain = false;                               // landed from a climb with Space still held: re-probe now
+    this.holdFling = false;                               // a fling is in the air: the hands' band is raised
+    this.holdSpent = false;                               // this hold has spent its one fling; release to re-arm
 
     // ---- climb (grab / pull / vault): the body is carried, the solver does not run
     this.climb = CLIMB_NONE;
@@ -945,6 +955,8 @@ export class PlayerController {
       this.spaceClimbIntent = SPACE_CLIMB_INTENT_S;
     }
     else this.jumpBuffered -= dt;
+    // ROUND 13: releasing Space re-arms the hold's one fling and ends any chain.
+    if (!this._held('jump')) { this.holdSpent = false; this.holdChain = false; }
 
     // Space is the advertised jump AND climb key. Look where the CAMERA points before spending
     // the jump, with two small lateral probes, then (only if different) the movement bearing.
@@ -1065,6 +1077,7 @@ export class PlayerController {
       this.vel.y = 0;
       this.grounded = true;
       this.sinceGround = 0;
+      this.holdFling = false;                 // ROUND 13: a fling that caught nothing has landed
       if (wasAirborne && fallSpeed > LAND_MIN_SPEED) {
         this._land(fallSpeed);
       } else if (!wasAirborne && (floorIsCollider || this.floorWasCollider)) {
@@ -1423,12 +1436,62 @@ export class PlayerController {
       caught = this.climb !== CLIMB_NONE || this.mantleCooldown > 0;
     }
 
+    // ROUND 13: THE FLING. Landed from a climb with Space still held, nothing within reach,
+    // but a lip above reach and inside HOLD.flingMaxRise straight ahead: one jump at it, with
+    // the hands' band raised for the catch at the apex. Once per hold — release to re-arm —
+    // and never on open ground: with no lip sighted nothing happens (the hold is not a jump).
+    let flung = false;
+    if (!caught && this.holdChain && this.grounded && !this.holdSpent && this.mantleCooldown <= 0) {
+      _wish.copy(_fwd);
+      if (this._flingTarget() !== null) { this._fling(); flung = true; }
+    }
+
     _wish.set(moveX, 0, moveZ);
     if (caught) {
       this.spaceClimbIntent = 0;
       this.jumpBuffered = -1;
     }
-    return caught;
+    return caught || flung;
+  }
+
+  /** ROUND 13: the fling itself — one jump at a lip the hands will reach at the apex. */
+  _fling() {
+    this.vel.y = P.JUMP;
+    this.vel.x += _fwd.x * HOLD_FLING_CARRY;
+    this.vel.z += _fwd.z * HOLD_FLING_CARRY;
+    this.grounded = false;
+    this.sinceGround = P.COYOTE + 1;
+    this.holdFling = true;
+    this.holdSpent = true;
+    this.holdChain = false;
+    this.spaceClimbIntent = HOLD.intentS;
+    this.jumpBuffered = -1;
+    this._endSlide();
+  }
+
+  /**
+   * ROUND 13: a lip the fling can reach — above the mantle's reach, inside the fling band,
+   * along the facing (`_wish` is _fwd here), at the three probe leads, with a body's worth of
+   * crouched headroom over it. The same ledgeHeight as every other climb, so trunks, posts,
+   * poles and round tops stay refused.
+   */
+  _flingTarget() {
+    const col = this._collision;
+    if (!col || !col.ledgeHeight) return null;
+    const reach = this._stat('mantleReach', P.mantle.reach);
+    const lead1 = P.RADIUS + MANTLE_LEAD, lead2 = lead1 + MANTLE_LEAD2, lead3 = lead2 + SPACE_CLIMB_EXTRA;
+    let best = null;
+    for (let k = 0; k < 3; k++) {
+      const lead = k === 0 ? lead1 : (k === 1 ? lead2 : lead3);
+      const px = this.pos.x + _wish.x * lead, pz = this.pos.z + _wish.z * lead;
+      const top = col.ledgeHeight(px, pz, this.pos.y, P.RADIUS, HOLD.flingMaxRise);
+      if (top === null) continue;
+      const rise = top - this.pos.y;
+      if (rise <= reach || rise > HOLD.flingMaxRise) continue;
+      if (col.fits && !col.fits(px, pz, top, P.RADIUS, P.CROUCH_H)) continue;
+      if (best === null || top > best) best = top;
+    }
+    return best;
   }
 
   // Mantle: DUSKFALL controller.js:289-330, re-expressed against the analytic terrain field
@@ -1485,8 +1548,10 @@ export class PlayerController {
     // frame of a running jump. Letting a sprint-speed Space press use it made the controller
     // pull onto an intermediate crate before the jump existed, stealing the airborne grab.
     const horizontalSpeed = Math.hypot(this.vel.x, this.vel.z);
+    // ROUND 13: a held-Space landing re-probe keeps the far lead whatever speed it carries
+    // (the speed gate protects a fresh running jump's airborne grab, not a chain).
     const allowSpaceReach = explicitJump && this.grounded
-      && !this.sprinting && !this.tacSprinting && horizontalSpeed <= P.WALK + 0.05;
+      && (this.holdChain || (!this.sprinting && !this.tacSprinting && horizontalSpeed <= P.WALK + 0.05));
     const lead3 = lead2 + SPACE_CLIMB_EXTRA;
     const p3x = this.pos.x + _wish.x * lead3, p3z = this.pos.z + _wish.z * lead3;
 
@@ -1510,7 +1575,9 @@ export class PlayerController {
     // under the hands and never a grab.
     if (sees && !this.grounded) {
       const lo = this.pos.y + P.EYE - CL.handsLo;
-      const hi = this.pos.y + P.EYE + CL.handsHi + (reach - M.reach);
+      // ROUND 13: the band's top is raised only while a FLING is in the air; tapped and
+      // passive grabs keep 0.50 (tests/climb.mjs pins them).
+      const hi = this.pos.y + P.EYE + (this.holdFling ? HOLD.handsHi : CL.handsHi) + (reach - M.reach);
       let top = col.ledgeHeight(p1x, p1z, this.pos.y, P.RADIUS, hi - this.pos.y);
       let px = p1x, pz = p1z;
       if (top !== null && top < lo) top = null;
@@ -1695,16 +1762,32 @@ export class PlayerController {
     this._beginClimb(CLIMB_HANG, CL.catchS + CL.hangS, this.pos.x, this.pos.y, this.pos.z,
       hx, eyeHang - P.EYE, hz, top, 'grab');
     // where the feet will end, decided now and kept
-    let lx = px + _wish.x * LAND_IN, lz = pz + _wish.z * LAND_IN;
-    if (!this._topAt(lx, lz, top)) { lx = px; lz = pz; }
-    this.climbLX = lx; this.climbLZ = lz;
+    this._landingOn(px, pz, top);
+    this.climbLX = _landOut.x; this.climbLZ = _landOut.z;
+  }
+
+  /**
+   * ROUND 13: where the feet come to rest on a top — LAND_IN past the probe point when the
+   * whole footprint fits there, a nearer point on a narrow top, the probe point itself as the
+   * last resort. Writes _landOut.
+   */
+  _landingOn(px, pz, top) {
+    const col = this._collision;
+    for (let i = 0; i < LAND_BACKOFF.length; i++) {
+      const lx = px + _wish.x * LAND_BACKOFF[i], lz = pz + _wish.z * LAND_BACKOFF[i];
+      if (!this._topAt(lx, lz, top)) continue;
+      if (col && col.fits && !col.fits(lx, lz, top, P.RADIUS, P.CROUCH_H)) continue;
+      _landOut.x = lx; _landOut.z = lz;
+      return true;
+    }
+    _landOut.x = px; _landOut.z = pz;
+    return false;
   }
 
   /** The pull: from (x0, y0, z0) to standing on `top`, over `dur` seconds. Lift first, then over. */
   _startPull(top, px, pz, x0, y0, z0, dur, kind) {
-    let lx = px + _wish.x * LAND_IN, lz = pz + _wish.z * LAND_IN;
-    if (!this._topAt(lx, lz, top)) { lx = px; lz = pz; }
-    this._beginClimb(CLIMB_PULL, dur, x0, y0, z0, lx, top, lz, top, kind);
+    this._landingOn(px, pz, top);
+    this._beginClimb(CLIMB_PULL, dur, x0, y0, z0, _landOut.x, top, _landOut.z, top, kind);
     this.eyeSpring.nudge(-this.heaveImpulse);     // the heave: a dip, then the rise through it
   }
 
@@ -1721,6 +1804,7 @@ export class PlayerController {
     this.grounded = false;
     this.sinceGround = P.COYOTE + 1;
     this.jumpBuffered = -1;
+    this.holdFling = false;                   // ROUND 13: the hands closed; the fling is over
     this._endSlide();
     if (kind !== CLIMB_VAULT) {
       // A climb interrupts the chase verb the way a slide does, and its cooldown starts.
@@ -1789,18 +1873,34 @@ export class PlayerController {
     this.climb = CLIMB_NONE;
     this.grounded = true;
     this.sinceGround = 0;
+    // ROUND 13: Space still HELD at the landing chains at once — the re-probe window opens
+    // now, the far lead stays on, and the body keeps running speed over the lip. Still no
+    // jumpBuffered write: the chain climbs, or flings at a lip it has seen, never hops.
+    const held = this._held('jump');
+    this.holdChain = held && !vault;
     const out = vault
       ? this.climbSpeed * CL.vault.keep
-      : Math.max(CL.outSpeed, this.climbSpeed * CLIMB_EXIT_KEEP);
+      : Math.max(this.holdChain ? HOLD.outSpeed : CL.outSpeed, this.climbSpeed * CLIMB_EXIT_KEEP);
     this.vel.x = this.climbDirX * out; this.vel.z = this.climbDirZ * out; this.vel.y = 0;
     this.mantleCooldown = CLIMB_CHAIN_COOLDOWN;
-    if (this.climbQueued) {
+    if (this.climbQueued || this.holdChain) {
       // Start the short window NOW, not when Space was pressed halfway through a long pull.
       // There is deliberately no jumpBuffered write here: this can chain a climb, never hop.
-      this.spaceClimbIntent = SPACE_CLIMB_INTENT_S;
+      this.spaceClimbIntent = this.holdChain ? HOLD.chainS : SPACE_CLIMB_INTENT_S;
       this.climbQueued = false;
     }
     this._land(vault ? VAULT_LAND_SPEED : CL.landSpeed);
+    // ROUND 13: "keep holding space and the character flings up to the next ledge." On the
+    // landing frame itself, with Space still held and this hold's fling unspent, look along
+    // the facing for a lip above reach and go for it at once — a narrow top gives no time to
+    // wait out the chain cooldown, and the passive mantle takes anything within reach.
+    if (this.holdChain && !this.holdSpent) {
+      const wx = _wish.x, wz = _wish.z;
+      _wish.copy(_fwd);
+      const top = this._flingTarget();
+      _wish.set(wx, 0, wz);
+      if (top !== null) this._fling();
+    }
   }
 
   /** Let go of the lip. Falls from the hang; nothing is climbed again until the feet land. */

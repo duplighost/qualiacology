@@ -135,6 +135,27 @@ const PULSE_POOL = 5;
 // same family without either being labelled.
 const GRANT_LIFE = 0.62;
 const LEVEL_LIFE = 0.95;
+const CARRY_INK = '#f0d49a';    // ROUND 13: the bank's rings, in the carried pile's colour
+
+// ROUND 13: THE KEY GLYPH. Alex, seventh playtest: "We will need some way for the player to
+// know which things they can use the 'E' key on to activate. For now, we can do what many games
+// do. somehow have a little thing that hovers to say hold E, or however most games do it."
+// One 72 px canvas that floats over the thing the key acts on — a door, a breaker, a bed, the
+// car's handle, the lever of a claim, the horn at the wheel — carrying a key-cap with the one
+// letter, and a ring that fills while a hold runs. A glyph, never a sentence: the words stay on
+// the pause card. Owners emit 'prompt' on the bus every fixed step they have one; the highest
+// rank of the step wins (hold 2, use/horn 1) and one silent step clears it.
+const PROMPT_PX = 72;
+const PROMPT_LIFT = 40;         // px the cap floats above its anchor, so it never covers it
+const PROMPT_FONT = '700 15px ui-monospace, Consolas, "Courier New", monospace';
+
+// ROUND 13: FOG OF WAR. The wash IS the mask: everything that reveals the county on the paper
+// map (ground, wash, roads, small places) is drawn on a layer cut to the revealed bitmap with
+// two feather rings, and the mini-map's roads are cut to the same bitmap plus the sight disc.
+const MAP_MASK_RING1 = 160;     // 0-255, the cells touching a revealed one
+const MAP_MASK_RING2 = 64;      // and the ring outside those: ~75 m of feather at 128 cells
+const MINI_SIGHT_FOOT = 40;     // m, the live disc around the player (= progress REVEAL_R_FOOT)
+const MINI_SIGHT_CAR = 120;
 
 // SOUND LEADS ANY READOUT BY 200 ms. The bed's hurt cue plays on the frame of the hit; the
 // vignette does not move until this has elapsed, so the ear always gets there first and the
@@ -336,6 +357,9 @@ const CSS = `
 /* The life arc. Bottom edge, full width, its own surface so the 640 px reticle canvas is
    not cleared for a thing that lives at the rim of vision. */
 #curfew-life { position: absolute; left: 0; bottom: 0; width: 100%; display: block; }
+/* ROUND 13: the key glyph. 72 px square, positioned by transform, faded by opacity. */
+#curfew-prompt { position: absolute; left: 0; top: 0; width: 72px; height: 72px; display: block;
+              opacity: 0; will-change: transform, opacity; transition: opacity .12s ease; }
 /* This live-region is a BODY SIBLING of #curfew-hud, not its child. Target its id so the
    words remain available to assistive technology while occupying exactly one clipped pixel. */
 #curfew-sr { position: fixed; left: 0; top: 0; width: 1px; height: 1px;
@@ -364,6 +388,7 @@ const CSS = `
               -webkit-tap-highlight-color: transparent; }
 #curfew-car-button:focus-visible { outline: 2px solid #e8eef8; outline-offset: 4px; }
 #curfew-car-button:disabled { cursor: default; opacity: .28; border-style: dashed; }
+#curfew-car-button[hidden] { display: none !important; }
 #curfew-car-button .car-body { position: absolute; left: 18px; top: 24px; width: 22px; height: 11px;
               box-sizing: border-box; border: 1.5px solid currentColor; border-radius: 3px; }
 #curfew-car-button .car-body::before { content: ''; position: absolute; left: 4px; top: -7px;
@@ -429,8 +454,10 @@ const CSS = `
 @media (max-width: 1180px) { #curfew-pause .top { grid-template-columns: minmax(0, 1fr); gap: 16px 0; } }
 /* SQUARE AT EVERY WIDTH. It was width:440 height:440 with max-width:100%, so a 270 px column
    drew a 440 px-tall county into a 270 px-wide box and the whole map was stretched. */
+/* ROUND 13: no paper, no edge. The county appears only where he has been; the card itself
+   is what surrounds it, and nothing marks how far the map goes. */
 #curfew-pause .map { display: block; width: min(440px, 100%); aspect-ratio: 1 / 1; height: auto;
-              margin: 0 auto; border: 1px solid #1b2431; border-radius: 2px; background: #0b0e13; }
+              margin: 0 auto; border: 0; background: transparent; }
 /* THE TREE. Six tactile branch circuits rather than a spreadsheet of dim rectangles. */
 #curfew-pause .tree { position: relative; padding: 8px 10px 6px;
               border: 1px solid rgba(75,92,117,.40); border-radius: 4px;
@@ -451,6 +478,7 @@ const CSS = `
               border-color: #e8eef8; background: rgba(201,218,241,.10);
               box-shadow: 0 0 14px rgba(177,203,235,.24), inset 0 0 12px rgba(0,0,0,.42); }
 #curfew-pause .pause-car:disabled { opacity: .28; cursor: default; border-style: dashed; }
+#curfew-pause .pause-car[hidden] { display: none !important; }
 #curfew-pause .pause-car.active { border-color: #e8eef8; }
 #curfew-pause .pause-car .car-body { position: absolute; left: 50%; top: 52%; width: 22px; height: 11px;
               transform: translate(-50%,-50%); box-sizing: border-box;
@@ -500,7 +528,7 @@ const CSS = `
               text-align: left; min-height: 54px; overflow: hidden;
               font: inherit; color: #c9d4e6; background: rgba(4,6,9,0.72);
               border: 1px solid #263246; border-left: 3px solid #263246; border-radius: 3px;
-              padding: 5px 8px 6px; cursor: default; opacity: .62;
+              padding: 5px 8px 6px 26px; cursor: default; opacity: .62;
               transition: opacity .16s ease, border-color .16s ease, background .16s ease,
                           transform .16s ease, box-shadow .16s ease; }
 #curfew-pause .nd::after { content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -523,26 +551,64 @@ const CSS = `
               width: 9px; height: 1px; background: #1b2431; }
 #curfew-pause .nd.own + .nd::before { background: #6f7f99; }
 @media (max-width: 760px) { #curfew-pause .nd + .nd::before { display: none; } }
+/* ROUND 13: THE DOT. Owned and affordable used to differ by a left-edge hue and nine luma
+   ("i actually can hardly tell the difference between it looking available to unlock by click,
+   and it being unlocked"). Now they differ by SHAPE: owned is a filled disc with a check,
+   affordable is a hollow ring that breathes, poor is a dim ring, locked is a faint dot. */
+#curfew-pause .nd .dot { position: absolute; left: 9px; top: 11px; width: 11px; height: 11px;
+              border-radius: 50%; box-sizing: border-box; border: 1.5px solid var(--accent);
+              background: transparent; opacity: .55; }
+#curfew-pause .nd .sweep { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+              transform-origin: left; transform: scaleX(0);
+              background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), transparent 70%); }
 #curfew-pause .nd.own { opacity: 1; border-color: color-mix(in srgb, var(--accent) 44%, #34425a);
               border-left-color: var(--accent);
-              background: linear-gradient(118deg, color-mix(in srgb, var(--accent) 15%, transparent),
-                          rgba(201,212,230,0.055));
+              background: linear-gradient(118deg, color-mix(in srgb, var(--accent) 18%, transparent),
+                          rgba(201,212,230,0.07));
               box-shadow: inset 0 0 20px rgba(180,202,231,.035); }
+#curfew-pause .nd.own .dot { opacity: 1; background: var(--accent); border-color: var(--accent);
+              box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent); }
+#curfew-pause .nd.own .dot::after { content: ''; position: absolute; left: 3px; top: 1px; width: 3px; height: 6px;
+              border: solid #0b0e13; border-width: 0 1.6px 1.6px 0; transform: rotate(42deg); }
+#curfew-pause .nd.own .cn { color: #ffffff; }
 #curfew-pause .nd.own .cc { display: none; }
-#curfew-pause .nd.own .ct::after { content: ' ◆'; color: #e8eef8; }
-/* AFFORDABLE NOW. The one state the eye has to find on a card of 24, so it is the brightest
-   edge on the card and it does not depend on a hover the phone cannot make. */
+/* AFFORDABLE NOW. The one state the eye has to find on a card of 24: a hollow ring that
+   breathes, the brightest edge on the card, a pointer, and it does not depend on a hover the
+   phone cannot make. */
 #curfew-pause .nd.can { opacity: 1; cursor: pointer; border-color: #8a9ab5;
               border-left-color: #e8eef8; background: rgba(201,212,230,0.055);
               box-shadow: 0 0 0 1px rgba(232,238,248,.08), inset 0 0 22px rgba(201,218,241,.035); }
+#curfew-pause .nd.can .dot { opacity: 1; border-color: #e8eef8; }
+/* ROUND 13: the ring BREATHES ON OPACITY, on its own layer. The first cut animated box-shadow
+   on the dot itself, and a box-shadow animation repaints the card every frame: measured with
+   the card up, 8.4-10.0 ms a frame against 6.1 with the animation off (the perf suite sees
+   exactly this scene, since headless Chrome never holds the pointer lock). A static halo on a
+   pseudo-element whose opacity animates is composited, not painted. */
+#curfew-pause .nd.can .dot::before { content: ''; position: absolute; inset: -4px; border-radius: 50%;
+              pointer-events: none; will-change: opacity;
+              box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent), 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
+              animation: nd-breathe 1.2s ease-in-out infinite; }
+@keyframes nd-breathe { 0%, 100% { opacity: .18; } 50% { opacity: 1; } }
 #curfew-pause .nd.can:hover, #curfew-pause .nd.can:focus-visible { border-color: #e8eef8;
-              background: rgba(201,212,230,0.11); transform: translateY(-1px);
+              background: rgba(201,212,230,0.13); transform: translateY(-1px);
               box-shadow: 0 5px 16px rgba(0,0,0,.28), 0 0 13px color-mix(in srgb, var(--accent) 28%, transparent); }
-#curfew-pause .nd.poor { opacity: .64; }
+#curfew-pause .nd.can:active { transform: translateY(0) scale(.985); }
+#curfew-pause .nd.poor { opacity: .66; }
+#curfew-pause .nd.poor .dot { opacity: .45; }
 #curfew-pause .nd.lock { opacity: .38; filter: saturate(.58); }
+#curfew-pause .nd.lock .dot { width: 5px; height: 5px; left: 12px; top: 14px; border: 0;
+              background: var(--accent); opacity: .5; }
+/* THE CARRIED PILE on the rail: the mote's own colour, "the one colour that means yours",
+   laid past the banked fill; it banks at the next light. And one plain line under it. */
+#curfew-pause .xp > i.carry { background: linear-gradient(90deg, rgba(240,212,154,.62), rgba(240,212,154,.28));
+              box-shadow: 0 0 8px rgba(240,212,154,.35); }
+#curfew-pause .carry-note { font-size: 10px; letter-spacing: .12em; opacity: .62; color: #f0d49a;
+              margin: -4px 2px 4px; line-height: 1.2; }
+#curfew-pause .carry-note:empty { display: none; }
 @media (prefers-reduced-motion: reduce) {
   #curfew-car-button.active .car-body { animation: none; }
   #curfew-car-button .car-needle, #curfew-pause .xp > i, #curfew-pause .nd { transition: none; }
+  #curfew-pause .nd .dot::before { animation: none; opacity: .6; }
 }
 /* THE CONTROLS. Four pairs to a row on a wide window, two under 1180, one on a phone. */
 #curfew-pause dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -559,6 +625,18 @@ const CSS = `
               margin: 0; white-space: nowrap; }
 #curfew-pause .foot { margin-top: 12px; font-size: 11px; letter-spacing: .22em;
               text-transform: uppercase; opacity: .32; text-align: center; }
+/* ROUND 13: on a phone the dot sits tighter so the name keeps its line (a 152 px node with
+   26 px of padding wrapped 'Heavy Rounds' and grew every row). This block sits LAST in the
+   sheet on purpose: it shares specificity with the base .nd rules above, so order decides. */
+@media (max-width: 760px) {
+  #curfew-pause .nd { padding-left: 19px; }
+  #curfew-pause .nd .dot { left: 5px; top: 12px; width: 9px; height: 9px; }
+  #curfew-pause .nd.lock .dot { left: 7px; top: 14px; width: 5px; height: 5px; }
+  #curfew-pause .nd .cn { font-size: 11.5px; }
+  /* the foot line stays ONE line on a 332 px card (measured: at .22em it wrapped, and the
+     second line was what put the last node out of reach on a 640 px window) */
+  #curfew-pause .foot { font-size: 10.5px; letter-spacing: .12em; }
+}
 `;
 
 /**
@@ -595,6 +673,10 @@ export class Hud {
     this.chrome = null; this.miniCanvas = null; this.miniG = null;
     this.ammoCanvas = null; this.ammoG = null;
     this.carBtn = null; this.pauseCarBtn = null;
+    // ROUND 13: any key leaves the card. The listener, and the last time a lock was asked for
+    // (Chrome rejects a second request inside about a second).
+    this._onKey = null;
+    this._lockReqAt = -1e9;
 
     this.R = RET_MAX; this.dpr = 1;
     this.vw = 1600; this.vh = 900;
@@ -650,7 +732,7 @@ export class Hud {
     this.nodeEls = null;       // one { node, btn } per NODES row, in NODES order
     // What the map last drew, as numbers a test can hold: rewritten in place by _drawMap().
     this.mapInfo = {
-      drawn: 0, painted: 0, roads: 0, spurs: 0, names: 0, glyphs: 0,
+      drawn: 0, painted: 0, roads: 0, spurs: 0, routes: 0, branches: 0, names: 0, glyphs: 0,
       found: 0, claimed: 0, unfound: 0,
       fires: 0, minors: 0, wilds: 0, checkpoints: 0,
       car: false, arrowX: -1, arrowY: -1, carX: -1, carY: -1,
@@ -658,6 +740,20 @@ export class Hud {
     // The travelled wash's own surface, built at the bitmap's resolution and reused. See
     // _washImage(): it is what stops the wash being a string of scalloped discs.
     this._wash = null; this._washG = null; this._washCount = -1;
+    // ROUND 13: the same bitmap as a 0/1 mask (which cells may show anything), the paper
+    // map's masked layer, and the mini-map's masked layer and mask.
+    this._washMask = null;
+    this._mapLayer = null; this._mapLayerG = null;
+    this._miniLayer = null; this._miniLayerG = null;
+    this._miniMask = null; this._miniMaskG = null;
+    this._miniSight = MINI_SIGHT_FOOT;
+    // ROUND 13: the key glyph. The slot owners write this step, the slot presented, and what
+    // the canvas last painted.
+    this._promptIn = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E', rank: 0 };
+    this._prompt = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E' };
+    this.promptCanvas = null; this.pg = null;
+    this._promptDirty = true; this._promptKq = -1; this._promptU = -1; this._promptShown = false;
+    this._promptSX = -1; this._promptSY = -1;
 
     // The live local map. Roads are immutable and cached by reference on first paint; every
     // other read stays lazy. The paint cadence is fixed-step time, never a wall timer.
@@ -706,6 +802,13 @@ export class Hud {
     const life = document.createElement('canvas');
     life.id = 'curfew-life';
     root.appendChild(life);
+    // ROUND 13: the key glyph's own small canvas, moved with a transform, painted on change.
+    const prompt = document.createElement('canvas');
+    prompt.id = 'curfew-prompt';
+    prompt.setAttribute('aria-hidden', 'true');
+    root.appendChild(prompt);
+    this.promptCanvas = prompt;
+    this.pg = prompt.getContext('2d', { alpha: true });
 
     document.body.appendChild(root);
 
@@ -728,6 +831,7 @@ export class Hud {
     carButton.id = 'curfew-car-button';
     carButton.type = 'button';
     carButton.disabled = true;
+    carButton.hidden = true;      // ROUND 13: no car, no button (see _setLocatorDisabled)
     carButton.setAttribute('aria-label', 'Locate car');
     carButton.setAttribute('aria-pressed', 'false');
     carButton.setAttribute('aria-keyshortcuts', 'L');
@@ -793,6 +897,7 @@ export class Hud {
     for (const off of this._unsub) { try { off(); } catch (e) { void e; } }
     this._unsub.length = 0;
     if (this._onResize) window.removeEventListener('resize', this._onResize);
+    if (this._onKey) { window.removeEventListener('keydown', this._onKey, true); this._onKey = null; }
     for (const el of [this.root, this.chrome, this.srEl, this.pauseEl, document.getElementById('curfew-hud-css')]) {
       if (el && el.parentNode) el.parentNode.removeChild(el);
     }
@@ -833,6 +938,13 @@ export class Hud {
       this.miniCanvas.height = Math.round(MINI_PX * this.dpr);
       this.miniG.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       this._miniDirty = true;
+    }
+    // ROUND 13: the key glyph's canvas.
+    if (this.promptCanvas && this.pg) {
+      this.promptCanvas.width = Math.round(PROMPT_PX * this.dpr);
+      this.promptCanvas.height = Math.round(PROMPT_PX * this.dpr);
+      this.pg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this._promptDirty = true;
     }
     if (this.ammoCanvas) {
       this.ammoCanvas.width = Math.round(AMMO_W * this.dpr);
@@ -907,6 +1019,21 @@ export class Hud {
     // node click).
     on('node:bought', () => { this._pulse('node', GRANT_LIFE); });
     on('level:up', () => { this._pulse('level', LEVEL_LIFE); });
+    // ROUND 13: the bank gets a picture to go with its bell — three rings in the mote's own
+    // colour, the one hue exception on the reticle, because that colour already means yours.
+    on('xp:banked', () => { this._pulse('bank', LEVEL_LIFE); });
+    // ROUND 13: the key glyph. Owners emit every step they have one; the best rank of the
+    // step wins (a hold over a press), so a lever two metres from a car door never flickers.
+    on('prompt', (p) => {
+      if (!p || !p.kind) return;
+      const rank = p.kind === 'hold' ? 2 : 1;
+      const q = this._promptIn;
+      if (q.kind && rank <= q.rank) return;
+      q.kind = p.kind; q.rank = rank;
+      q.x = +p.x || 0; q.y = +p.y || 0; q.z = +p.z || 0;
+      q.k = clamp01(+p.k || 0);
+      q.label = typeof p.label === 'string' && p.label ? p.label.slice(0, 1).toUpperCase() : (p.kind === 'horn' ? 'H' : 'E');
+    });
     // A grant raises the new weapon into the hands. Its enclosing claim already emits the
     // one canonical xp receipt, so weapon:granted must not add a second HUD pulse.
     on('weapon:granted', () => {});
@@ -1060,7 +1187,7 @@ export class Hud {
     map.width = MAP_PX; map.height = MAP_PX;
     top.appendChild(map);
     this.mapCanvas = map;
-    this.mg = map.getContext('2d', { alpha: false });
+    this.mg = map.getContext('2d', { alpha: true });   // ROUND 13: transparent where unrevealed
 
     // THE TREE. Built once: a level line, then one row per branch holding one button per
     // tier. The name, the cost and the line are written here and never again; _refreshTree()
@@ -1079,6 +1206,7 @@ export class Hud {
     const pauseCar = el('button', 'pause-car');
     pauseCar.type = 'button';
     pauseCar.disabled = true;
+    pauseCar.hidden = true;
     pauseCar.setAttribute('aria-label', 'Locate car and return to game');
     pauseCar.setAttribute('aria-pressed', 'false');
     pauseCar.setAttribute('aria-keyshortcuts', 'L');
@@ -1096,14 +1224,19 @@ export class Hud {
     xp.setAttribute('aria-label', 'Experience toward next level');
     xp.setAttribute('aria-valuemin', '0');
     this.xpFill = el('i', '');
+    this.xpCarry = el('i', 'carry');     // ROUND 13: the carried pile, past the banked fill
     this.xpEl = el('span', '', '0 / 275 XP');
-    xp.appendChild(this.xpFill); xp.appendChild(this.xpEl);
+    xp.appendChild(this.xpFill); xp.appendChild(this.xpCarry); xp.appendChild(this.xpEl);
     this.xpWrap = xp;
     tree.appendChild(lvl);
     // Keep the rail outside .lvl: existing readers intentionally treat .lvl.textContent as
     // the one exact level/points sentence. The rail is its own second line, visually and in
     // the accessibility tree.
     tree.appendChild(xp);
+    // ROUND 13: one plain line under the rail, only while something is carried. A sibling of
+    // .xp, not inside it (readers take .xp's first span as the digits).
+    this.carryNote = el('div', 'carry-note', '');
+    tree.appendChild(this.carryNote);
 
     this.nodeEls = [];
     for (let b = 0; b < BRANCHES.length; b++) {
@@ -1121,6 +1254,8 @@ export class Hud {
         btn.type = 'button';
         btn.dataset.node = n.id;
         btn.style.setProperty('--accent', hex6(br.tint));
+        // ROUND 13: the state dot, before the name so .cn's first child stays the name.
+        btn.appendChild(el('span', 'dot'));
         const name = el('span', 'cn');
         name.appendChild(el('span', '', n.name));
         const meta = el('span', 'cm');
@@ -1129,6 +1264,7 @@ export class Hud {
         name.appendChild(meta);
         btn.appendChild(name);
         btn.appendChild(el('span', 'cl', n.line));
+        btn.appendChild(el('span', 'sweep'));
         // The click buys, when it can; the press never resumes (the block above stops it).
         btn.addEventListener('click', (e) => {
           e.stopPropagation(); e.preventDefault();
@@ -1138,6 +1274,7 @@ export class Hud {
             && prog.canBuy(n.id)) bought = prog.buy(n.id) === true;
           this._refreshTree();
           if (bought) this._celebrateNode(n.id);
+          btn.blur();     // ROUND 13: the next key leaves the card; it must not re-click this
         });
         row.appendChild(btn);
         this.nodeEls.push({ node: n, btn, row });
@@ -1158,10 +1295,29 @@ export class Hud {
     }
     wrap.appendChild(dl);
 
-    wrap.appendChild(el('div', 'foot', 'click to go back out'));
+    wrap.appendChild(el('div', 'foot', 'any key, or click here, to go back out'));
 
     card.appendChild(wrap);
     card.addEventListener('mousedown', (e) => { e.preventDefault(); this._resume(); });
+    // ROUND 13: ANY KEY LEAVES THE CARD. Alex: "it makes more since to use the escape key to
+    // leave the pause menu if the escape key gets you into the pause menu ... a click is a
+    // weird key to get you out." Escape itself cannot do it: Chrome grants pointer lock only
+    // from a user gesture, the Escape key never counts as one, and it blocks any re-lock for
+    // about 1.5 s after the Escape that released it (measured). Every other key can, so every
+    // other key does. Capture phase, so it runs before input.js's own window listener;
+    // preventDefault so a Space or Enter on a focused node button does not buy AND resume, and
+    // Tab does not move focus. The key that resumes is cleared by main.js when the lock lands,
+    // so the Space that leaves the card never jumps.
+    this._onKey = (e) => {
+      if (!this.paused || !this.pauseEl || this.pauseEl.hidden) return;
+      if (e.repeat) return;
+      const k = e.key || '';
+      if (e.code === 'Escape' || k === 'Escape') return;
+      if (k === 'Shift' || k === 'Control' || k === 'Alt' || k === 'Meta' || /^F\d{1,2}$/.test(k)) return;
+      e.preventDefault();
+      this._resume();
+    };
+    window.addEventListener('keydown', this._onKey, true);
     document.body.appendChild(card);
     this.pauseEl = card;
     this.pauseBuilt = true;
@@ -1226,6 +1382,9 @@ export class Hud {
     if (this.pauseEl && this.pauseEl.hidden !== !v) {
       this.pauseEl.hidden = !v;
       if (v) { this._refreshTree(); this._drawMap(); }
+      // ROUND 13: the card's music follows the CARD, on exactly this transition (the one the
+      // gate's MutationObserver counts), so the piece and the card can never disagree.
+      this.ctx.bus.emit('pause:card', { shown: v });
     }
     if (this.chrome) this.chrome.hidden = v || !this.ctx.playing;
     this._dirty = true;
@@ -1233,8 +1392,13 @@ export class Hud {
 
   isPaused() { return this.paused; }
 
-  /** The click on the card. Ask for the lock; main.js lifts the pause when it lands. */
+  /** The click, or the key, on the card. Ask for the lock; main.js lifts the pause when it lands. */
   _resume() {
+    // ROUND 13: one request per 1.2 s. Chrome rejects two inside about a second, and a
+    // mashed key would otherwise be a page error for nothing.
+    const now = performance.now();
+    if (now - this._lockReqAt < 1200) return;
+    this._lockReqAt = now;
     if (this.ctx.input && this.ctx.input.requestLock) this.ctx.input.requestLock();
   }
 
@@ -1247,18 +1411,33 @@ export class Hud {
     const prog = this.ctx.systems.get('progress');
     if (!prog || !this.lvEl || !this.nodeEls) return;
     const car = this.ctx.systems.get('car');
-    this._setLocatorDisabled(!(car && car.exists) || !!(this.ctx.shared && this.ctx.shared.inCar));
+    const carHere = !!(car && car.exists);
+    this._setLocatorDisabled(!carHere || !!(this.ctx.shared && this.ctx.shared.inCar), !carHere);
     const owned = typeof prog.ownedSet === 'function' ? prog.ownedSet() : null;
     const level = typeof prog.level === 'number' ? prog.level : 1;
     const points = typeof prog.points === 'number' ? prog.points : 0;
     this.lvEl.textContent = 'Level ' + level;
     this.ptsEl.textContent = points <= 0 ? '' : ' · ' + (points === 1 ? 'one point' : points + ' points');
     if (this.xpFill && this.xpEl) {
-      const total = typeof prog.total === 'function' ? prog.total() : 0;
+      // ROUND 13: the rail is BANKED xp; the carried pile is its own warm segment past it.
+      const banked = typeof prog.banked === 'function' ? prog.banked()
+        : (typeof prog.total === 'function' ? prog.total() : 0);
+      const carried = prog.save && prog.save.data ? Math.max(0, prog.save.data.unbanked | 0) : 0;
       const from = xpForLevel(level), to = xpForLevel(level + 1);
-      const here = Math.max(0, total - from), span = Math.max(1, to - from);
-      const frac = levelFrac(total);
+      const here = Math.max(0, banked - from), span = Math.max(1, to - from);
+      const frac = clamp01(here / span);
       this.xpFill.style.width = (frac * 100).toFixed(1) + '%';
+      if (this.xpCarry) {
+        const cw = Math.min(1 - frac, carried / span);
+        this.xpCarry.style.left = (frac * 100).toFixed(1) + '%';
+        this.xpCarry.style.width = (Math.max(0, cw) * 100).toFixed(1) + '%';
+      }
+      if (this.carryNote) {
+        const corpse = prog.save && prog.save.data && prog.save.data.corpse;
+        let note = carried > 0 ? 'carrying ' + carried + ' · it banks at the next light' : '';
+        if (corpse && corpse.live) note += (note ? ' · ' : '') + corpse.xp + ' where you fell';
+        if (this.carryNote.textContent !== note) this.carryNote.textContent = note;
+      }
       this.xpEl.textContent = here + ' / ' + span + ' XP';
       if (this.xpWrap) {
         this.xpWrap.setAttribute('aria-valuemax', String(span));
@@ -1299,10 +1478,24 @@ export class Hud {
       // a fifth state, and reduced-motion players get the immediate state change alone.
       if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) break;
       if (q.btn.animate) q.btn.animate([
-        { transform: 'scale(.96)', boxShadow: '0 0 0 0 transparent' },
-        { transform: 'scale(1.025)', boxShadow: '0 0 0 5px color-mix(in srgb, var(--accent) 24%, transparent), 0 0 30px color-mix(in srgb, var(--accent) 46%, transparent)', offset: 0.44 },
-        { transform: 'scale(1)', boxShadow: 'inset 0 0 20px rgba(180,202,231,.035)' },
-      ], { duration: 620, easing: 'cubic-bezier(.17,.84,.32,1)' });
+        { boxShadow: '0 0 0 0 transparent' },
+        { boxShadow: '0 0 0 4px color-mix(in srgb, var(--accent) 26%, transparent), 0 0 26px color-mix(in srgb, var(--accent) 42%, transparent)', offset: 0.4 },
+        { boxShadow: 'inset 0 0 20px rgba(180,202,231,.035)' },
+      ], { duration: 520, easing: 'cubic-bezier(.17,.84,.32,1)' });
+      // ROUND 13: the ring snaps shut into the disc, and a sweep of the branch's colour runs
+      // the row. "it should feel good to click on one and unlock it."
+      const dot = q.btn.querySelector('.dot');
+      if (dot && dot.animate) dot.animate([
+        { boxShadow: 'inset 0 0 0 5.5px var(--accent), 0 0 0 0 transparent', transform: 'scale(1.7)' },
+        { boxShadow: 'inset 0 0 0 0 var(--accent), 0 0 14px var(--accent)', transform: 'scale(1)', offset: 0.6 },
+        { boxShadow: '0 0 8px color-mix(in srgb, var(--accent) 55%, transparent)', transform: 'scale(1)' },
+      ], { duration: 350, easing: 'cubic-bezier(.2,.9,.3,1)' });
+      const sweep = q.btn.querySelector('.sweep');
+      if (sweep && sweep.animate) sweep.animate([
+        { opacity: 0.9, transform: 'scaleX(0)' },
+        { opacity: 0.55, transform: 'scaleX(1)', offset: 0.7 },
+        { opacity: 0, transform: 'scaleX(1)' },
+      ], { duration: 350, easing: 'ease-out' });
       if (q.row.animate) q.row.animate([
         { filter: 'brightness(1.65)' }, { filter: 'brightness(1)' },
       ], { duration: 620, easing: 'ease-out' });
@@ -1351,19 +1544,27 @@ export class Hud {
     this._washCount = grid.count;
     const img = this._washG.createImageData(n, n);
     const d = img.data, cells = grid.cells;
+    if (!this._washMask || this._washMask.length !== n * n) this._washMask = new Uint8Array(n * n);
+    const mask = this._washMask;
     for (let y = 0; y < n; y++) {
       for (let x = 0; x < n; x++) {
         let a = 0;
         if (cells[y * n + x]) a = 255;
         else {
-          for (let dy = -1; dy <= 1 && !a; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
+          // ROUND 13: two rings, so the mask edge feathers over ~75 m without ctx.filter.
+          let near1 = false, near2 = false;
+          for (let dy = -2; dy <= 2 && !near1; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
               const yy = y + dy, xx = x + dx;
               if (xx < 0 || yy < 0 || xx >= n || yy >= n) continue;
-              if (cells[yy * n + xx]) { a = MAP_WASH_HALO; break; }
+              if (!cells[yy * n + xx]) continue;
+              if (dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1) { near1 = true; break; }
+              near2 = true;
             }
           }
+          a = near1 ? MAP_MASK_RING1 : (near2 ? MAP_MASK_RING2 : 0);
         }
+        mask[y * n + x] = a > 0 ? 1 : 0;
         const i = (y * n + x) * 4;
         d[i] = 232; d[i + 1] = 238; d[i + 2] = 248; d[i + 3] = a;   // INK; ImageData is straight, not premultiplied
       }
@@ -1522,10 +1723,16 @@ export class Hud {
    * draws nothing rather than throwing, and `mapInfo` says what was actually drawn.
    */
   _drawMap() {
-    const g = this.mg, c = this.mapCanvas;
+    const gm = this.mg, c = this.mapCanvas;
     const I = this.mapInfo;
-    if (!g || !c) return;
+    if (!gm || !c) return;
     const S = MAP_PX;
+    // ROUND 13: FOG OF WAR. Passes 0-4 (ground, wash, roads, small places, found wilds) draw
+    // into an offscreen layer that is then cut to the revealed bitmap (destination-in) and
+    // composited onto the transparent map; the found destinations, the checkpoints, the car
+    // and the arrow draw straight on the map, unmasked, so a name is never cut mid-word.
+    const lg = this._layerFor(S);
+    let g = lg || gm;
     const size = (this.ctx.cfg && this.ctx.cfg.world && this.ctx.cfg.world.SIZE) || CFG.world.SIZE;
     const half = size * 0.5;
     // North is -Z (the camera at yaw 0 looks down -Z), so -Z goes UP the page.
@@ -1540,14 +1747,18 @@ export class Hud {
     const car = sys.get('car');
     const wilds = sys.get('wilds');
 
-    I.painted = 0; I.roads = 0; I.spurs = 0; I.names = 0; I.glyphs = 0;
+    I.painted = 0; I.roads = 0; I.spurs = 0; I.routes = 0; I.branches = 0; I.names = 0; I.glyphs = 0;
     I.found = 0; I.claimed = 0; I.unfound = 0;
     I.fires = 0; I.minors = 0; I.wilds = 0; I.checkpoints = 0;
     I.car = false; I.arrowX = -1; I.arrowY = -1; I.carX = -1; I.carY = -1;
 
-    /* 0. the paper ----------------------------------------------------------- */
+    /* 0. the paper: ROUND 13, only where he has been ------------------------- */
+    gm.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    gm.globalAlpha = 1;
+    gm.clearRect(0, 0, S, S);
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     g.globalAlpha = 1;
+    if (g !== gm) g.clearRect(0, 0, S, S);
     g.fillStyle = MAP_GROUND;
     g.fillRect(0, 0, S, S);
 
@@ -1555,12 +1766,14 @@ export class Hud {
     // ONE composited image, not one arc per cell. See MAP_WASH_A. `painted` stays the count
     // of SET cells, because tests/pause.mjs holds it against progress's own visited count.
     const grid = prog && typeof prog.visitedGrid === 'function' ? prog.visitedGrid() : null;
+    let wash = null, mask = null, maskN = 0;
     if (grid && grid.cells && grid.n > 0) {
-      const wash = this._washImage(grid);
+      wash = this._washImage(grid);
+      mask = wash ? this._washMask : null; maskN = grid.n;
       if (wash) {
         const sm = g.imageSmoothingEnabled;
         g.imageSmoothingEnabled = true;
-        if ('imageSmoothingQuality' in g) g.imageSmoothingQuality = 'high';
+        if ('imageSmoothingQuality' in g) g.imageSmoothingQuality = 'low';   // bilinear: no ringing past the mask
         g.globalAlpha = MAP_WASH_A;
         g.drawImage(wash, 0, 0, S, S);
         g.globalAlpha = 1;
@@ -1577,7 +1790,19 @@ export class Hud {
     // "which way is the way round" is answered before you have read a single name.
     const routes = roads && typeof roads.routePolylines === 'function' ? roads.routePolylines() : null;
     const meta = roads && Array.isArray(roads.routes) ? roads.routes : null;
+    // ROUND 13: a route is stroked only if some point of it lies in a revealed cell (the mask
+    // then cuts it to exactly the revealed stretch). I.routes/I.branches are the source totals.
+    const revealed = (pl) => {
+      if (!mask) return true;
+      for (let i = 0; i < pl.length; i++) {
+        const cx = Math.floor((pl[i].x + half) / size * maskN), cz = Math.floor((pl[i].z + half) / size * maskN);
+        if (cx < 0 || cz < 0 || cx >= maskN || cz >= maskN) continue;
+        if (mask[cz * maskN + cx]) return true;
+      }
+      return false;
+    };
     if (Array.isArray(routes)) {
+      I.routes = routes.length; I.branches = Math.max(0, routes.length - 1);
       g.lineJoin = 'round'; g.lineCap = 'round';
       for (let pass = 0; pass < 2; pass++) {
         for (let r = 0; r < routes.length; r++) {
@@ -1586,6 +1811,7 @@ export class Hud {
           const kind = meta && meta[r] && meta[r].kind ? meta[r].kind : (r === 0 ? 'asphalt' : 'gravel');
           const loop = kind === 'asphalt';
           if (pass === 0 && !loop) continue;            // the casing is the loop's alone
+          if (!revealed(pl)) continue;
           g.strokeStyle = INK;
           g.setLineDash(pass === 1 && !loop ? [3.5, 3.0] : []);
           g.globalAlpha = pass === 0 ? MAP_CASING_A : (loop ? MAP_LOOP_A : MAP_SPUR_A);
@@ -1666,7 +1892,9 @@ export class Hud {
         const x = px(w.x), y = pz(w.z);
         const checkpoint = w.kind === 'tower' && w.climbed;
         if (checkpoint) {
-          this._checkpoint(g, x, y, 5.2, 0.92);
+          // ROUND 13: a climbed lookout is a checkpoint mark, drawn unmasked on the map itself.
+          gm.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+          this._checkpoint(gm, x, y, 5.2, 0.92);
           I.checkpoints++;
         } else {
           g.globalAlpha = w.climbed ? 0.85 : 0.55;
@@ -1690,6 +1918,27 @@ export class Hud {
     //              of its powered claim state. It also STOPS being the
     //              brightest thing on the map, so the unclaimed ones are what the eye goes
     //              to. That is the flow — the bright shapes are the ones still waiting.
+    // ROUND 13: cut the layer to the revealed bitmap and lay it on the map. Everything from
+    // here on draws unmasked, straight on the map.
+    if (g !== gm) {
+      if (wash) {
+        g.globalAlpha = 1;
+        g.globalCompositeOperation = 'destination-in';
+        const sm = g.imageSmoothingEnabled;
+        g.imageSmoothingEnabled = true;
+        // 'low' = bilinear: the softness is one cell wide. 'high' rings faintly for several
+        // cells past the mask (measured alpha 1-12 up to 25 px out), which is a reveal.
+        if ('imageSmoothingQuality' in g) g.imageSmoothingQuality = 'low';
+        g.drawImage(wash, 0, 0, S, S);
+        g.imageSmoothingEnabled = sm;
+        g.globalCompositeOperation = 'source-over';
+      } else {
+        g.clearRect(0, 0, S, S);        // no bitmap at all: nothing is revealed
+      }
+      gm.globalAlpha = 1;
+      gm.drawImage(this._mapLayer, 0, 0, S, S);
+      g = gm;
+    }
     const foundSet = places && places.found && typeof places.found.has === 'function' ? places.found
       : (prog && prog.found && typeof prog.found.has === 'function' ? prog.found : null);
     const claimedA = places && places.claimed && typeof places.claimed.has === 'function' ? places.claimed : null;
@@ -1703,12 +1952,9 @@ export class Hud {
       const found = claimed || !!(foundSet && foundSet.has(d.id));
       const tint = hex6(REGION_TINT[d.region] || DEFAULT_TINT);
       if (!found) {
-        // A hollow diamond, not a dot: at this size a filled dot is indistinguishable from a
-        // minor site he has met, and the two must never be confused.
-        g.globalAlpha = MAP_UNFOUND_A; g.strokeStyle = INK; g.lineWidth = 1;
-        g.beginPath();
-        g.moveTo(x, y - 3.1); g.lineTo(x + 3.1, y); g.lineTo(x, y + 3.1); g.lineTo(x - 3.1, y);
-        g.closePath(); g.stroke();
+        // ROUND 13: NOTHING. The hollow diamond that said "something is here" is gone; Alex:
+        // "lets not let people know how far it goes and just reveal the parts they get to."
+        // `unfound` now counts the destinations the map is keeping to itself.
         I.unfound++;
         continue;
       }
@@ -1791,19 +2037,145 @@ export class Hud {
       I.arrowX = +x.toFixed(1); I.arrowY = +y.toFixed(1);
     }
 
-    /* 8. the edge ------------------------------------------------------------- */
+    /* 8. the edge: ROUND 13, none. Nothing on the card says how far the county goes. --- */
     g.globalAlpha = 1;
-    g.strokeStyle = MAP_EDGE; g.lineWidth = 1;
-    g.strokeRect(0.5, 0.5, S - 1, S - 1);
+    void MAP_EDGE;
     I.drawn++;
+  }
+
+  /** ROUND 13: the paper map's masked layer, sized with the map. */
+  _layerFor(S) {
+    if (typeof document === 'undefined') return null;
+    const w = Math.round(S * this.dpr);
+    if (!this._mapLayer || this._mapLayer.width !== w) {
+      this._mapLayer = document.createElement('canvas');
+      this._mapLayer.width = w; this._mapLayer.height = w;
+      this._mapLayerG = this._mapLayer.getContext('2d', { alpha: true });
+    }
+    return this._mapLayerG;
   }
 
   /* ------------------------------------------------------ live instruments -- */
 
-  _setLocatorDisabled(disabled) {
-    const v = !!disabled;
-    if (this.carBtn && this.carBtn.disabled !== v) this.carBtn.disabled = v;
-    if (this.pauseCarBtn && this.pauseCarBtn.disabled !== v) this.pauseCarBtn.disabled = v;
+  /* ------------------------------------------------------------ the key glyph -- */
+
+  /** ROUND 13: the mini-map's masked layer and mask, sized with it. */
+  _miniLayerFor(S) {
+    if (typeof document === 'undefined') return null;
+    const w = Math.round(S * this.dpr);
+    if (!this._miniLayer || this._miniLayer.width !== w) {
+      this._miniLayer = document.createElement('canvas');
+      this._miniLayer.width = w; this._miniLayer.height = w;
+      this._miniLayerG = this._miniLayer.getContext('2d', { alpha: true });
+      this._miniMask = document.createElement('canvas');
+      this._miniMask.width = w; this._miniMask.height = w;
+      this._miniMaskG = this._miniMask.getContext('2d', { alpha: true });
+    }
+    return this._miniLayerG;
+  }
+
+  _promptScale() { return Math.max(0.6, Math.min(1, this.R / RET_MAX)); }
+
+  /**
+   * Project the glyph's world anchor through the real camera and move the canvas there,
+   * PROMPT_LIFT px above it. Painted only when the kind, the letter, the scale or the hold's
+   * quantised progress changes; moved every frame it is up. Nothing without a keyboard (a
+   * touch player has no E, and Alex rejected touch controls), nothing while paused.
+   */
+  _presentPrompt() {
+    const c = this.promptCanvas;
+    if (!c || !this.pg) return;
+    const p = this._prompt;
+    const inp = this.ctx.input;
+    const show = !!p.kind && !this.paused && !!this.ctx.playing && !!(inp && inp.keyboardSeen);
+    const cam = this.ctx.camera;
+    if (!show || !cam) { this._hidePrompt(); return; }
+    // the camera's own matrices, fresh: hud presents BEFORE the renderer runs this frame
+    if (typeof cam.updateMatrixWorld === 'function') cam.updateMatrixWorld();
+    if (cam.matrixWorldInverse && cam.matrixWorld) cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+    const e = cam.matrixWorldInverse.elements, m = cam.projectionMatrix.elements;
+    const x = p.x, y = p.y, z = p.z;
+    const vx = e[0] * x + e[4] * y + e[8] * z + e[12];
+    const vy = e[1] * x + e[5] * y + e[9] * z + e[13];
+    const vz = e[2] * x + e[6] * y + e[10] * z + e[14];
+    const vw = e[3] * x + e[7] * y + e[11] * z + e[15];
+    const cx = m[0] * vx + m[4] * vy + m[8] * vz + m[12] * vw;
+    const cy = m[1] * vx + m[5] * vy + m[9] * vz + m[13] * vw;
+    const cw = m[3] * vx + m[7] * vy + m[11] * vz + m[15] * vw;
+    if (cw <= 1e-6) { this._hidePrompt(); return; }
+    const nx = cx / cw, ny = cy / cw;
+    if (nx < -1.05 || nx > 1.05 || ny < -1.05 || ny > 1.05) { this._hidePrompt(); return; }
+    const sx = (nx + 1) * 0.5 * this.vw, sy = (1 - ny) * 0.5 * this.vh;
+    this._promptSX = sx; this._promptSY = sy;
+    const u = this._promptScale();
+    c.style.transform = 'translate3d(' + (sx - PROMPT_PX * 0.5).toFixed(1) + 'px,'
+      + (sy - PROMPT_PX * 0.5 - PROMPT_LIFT * u).toFixed(1) + 'px,0)';
+    const kq = p.kind === 'hold' ? Math.round(clamp01(p.k) * 24) : -1;
+    if (this._promptDirty || kq !== this._promptKq || u !== this._promptU) this._paintPrompt(u, kq);
+    if (!this._promptShown) { this._promptShown = true; c.style.opacity = '1'; }
+  }
+
+  _hidePrompt() {
+    if (!this._promptShown) return;
+    this._promptShown = false;
+    this._promptSX = -1; this._promptSY = -1;
+    if (this.promptCanvas) this.promptCanvas.style.opacity = '0';
+  }
+
+  /** The key-cap, the letter, and for a hold the ring that fills clockwise from the top. */
+  _paintPrompt(u, kq) {
+    const g = this.pg, S = PROMPT_PX, p = this._prompt;
+    this._promptDirty = false; this._promptKq = kq; this._promptU = u;
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    g.clearRect(0, 0, S, S);
+    const cx = S * 0.5, cy = S * 0.5, cap = 26 * u, r = 5 * u;
+    const rr = (x0, y0, w, h, rad) => {
+      g.beginPath();
+      g.moveTo(x0 + rad, y0); g.lineTo(x0 + w - rad, y0); g.quadraticCurveTo(x0 + w, y0, x0 + w, y0 + rad);
+      g.lineTo(x0 + w, y0 + h - rad); g.quadraticCurveTo(x0 + w, y0 + h, x0 + w - rad, y0 + h);
+      g.lineTo(x0 + rad, y0 + h); g.quadraticCurveTo(x0, y0 + h, x0, y0 + h - rad);
+      g.lineTo(x0, y0 + rad); g.quadraticCurveTo(x0, y0, x0 + rad, y0); g.closePath();
+    };
+    if (p.kind === 'hold') {
+      // the ring: a faint full circle says HOLD; the bright arc is how far the hold has run
+      const ring = 19 * u;
+      g.globalAlpha = 0.34; g.strokeStyle = INK; g.lineWidth = 1.4 * u;
+      g.beginPath(); g.arc(cx, cy, ring, 0, TAU); g.stroke();
+      const k = Math.max(0, Math.min(1, kq / 24));
+      if (k > 0) {
+        g.globalAlpha = 0.95; g.lineWidth = 2.4 * u; g.lineCap = 'round';
+        g.beginPath(); g.arc(cx, cy, ring, -Math.PI * 0.5, -Math.PI * 0.5 + TAU * k); g.stroke();
+        g.lineCap = 'butt';
+      }
+    }
+    // the cap: a dark plate with an ink edge, and the one letter
+    g.globalAlpha = 0.86; g.fillStyle = SHADE;
+    rr(cx - cap * 0.5, cy - cap * 0.5, cap, cap, r); g.fill();
+    g.globalAlpha = 0.95; g.strokeStyle = INK; g.lineWidth = 1.5;
+    rr(cx - cap * 0.5, cy - cap * 0.5, cap, cap, r); g.stroke();
+    g.globalAlpha = 1; g.fillStyle = INK;
+    g.font = PROMPT_FONT.replace('15px', Math.round(15 * u) + 'px');
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(p.label || 'E', cx, cy + 0.5 * u);
+    g.textAlign = 'left';
+  }
+
+  /**
+   * ROUND 13: a car that does not exist has NO button. The dashed 28%-opacity disabled look
+   * was the whole of "The button for the car doesn't work right away": a control on screen
+   * that does nothing. Now the buttons are hidden while there is no car and appear when
+   * there is one; disabled (dashed) is kept for the one state it means — you are in the car.
+   */
+  _setLocatorDisabled(disabled, absent) {
+    const v = !!disabled, gone = !!absent;
+    if (this.carBtn) {
+      if (this.carBtn.hidden !== gone) this.carBtn.hidden = gone;
+      if (this.carBtn.disabled !== v) this.carBtn.disabled = v;
+    }
+    if (this.pauseCarBtn) {
+      if (this.pauseCarBtn.hidden !== gone) this.pauseCarBtn.hidden = gone;
+      if (this.pauseCarBtn.disabled !== v) this.pauseCarBtn.disabled = v;
+    }
   }
 
   _setLocatorActive(active) {
@@ -1847,7 +2219,7 @@ export class Hud {
       this.carExists = exists;
       this._miniDirty = true;
     }
-    this._setLocatorDisabled(!exists || this.inCar);
+    this._setLocatorDisabled(!exists || this.inCar, !exists);
     if (!exists || !player || !player.pos || !cam || this.inCar) {
       this.locatorDistance = -1;
       this.locatorMeters = -1;
@@ -1915,29 +2287,59 @@ export class Hud {
     this._miniRoads = 0;
     const routes = this._miniRoutes;
     const meta = roads && Array.isArray(roads.routes) ? roads.routes : null;
-    if (Array.isArray(routes)) {
-      g.lineJoin = 'round'; g.lineCap = 'round';
+    // ROUND 13: the roads are drawn on a layer and cut to what he has revealed plus the sight
+    // disc around him, so the instrument never shows the woods ahead before he has seen them.
+    const ML = this._miniLayerFor(S);
+    const wash = prog && typeof prog.visitedGrid === 'function' ? this._washImage(prog.visitedGrid()) : null;
+    this._miniSight = (this.ctx.shared && this.ctx.shared.inCar) ? MINI_SIGHT_CAR : MINI_SIGHT_FOOT;
+    if (Array.isArray(routes) && ML) {
+      const rg = this._miniLayerG;
+      rg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      rg.clearRect(0, 0, S, S);
+      rg.lineJoin = 'round'; rg.lineCap = 'round';
       for (let pass = 0; pass < 2; pass++) {
         for (let r = 0; r < routes.length; r++) {
           const pl = routes[r];
           if (!pl || pl.length < 2) continue;
           const loop = !meta || !meta[r] || meta[r].kind === 'asphalt';
           if (pass === 0 && !loop) continue;
-          g.strokeStyle = pass === 0 ? 'rgba(3,5,8,0.84)' : 'rgba(205,219,238,0.58)';
-          g.lineWidth = pass === 0 ? 4.6 : (loop ? 1.7 : 1.0);
-          g.setLineDash(pass === 1 && !loop ? [3, 3] : []);
-          g.beginPath();
+          rg.strokeStyle = pass === 0 ? 'rgba(3,5,8,0.84)' : 'rgba(205,219,238,0.58)';
+          rg.lineWidth = pass === 0 ? 4.6 : (loop ? 1.7 : 1.0);
+          rg.setLineDash(pass === 1 && !loop ? [3, 3] : []);
+          rg.beginPath();
           for (let i = 0; i < pl.length; i++) {
             const dx = pl[i].x - px, dz = pl[i].z - pz;
             const x = c + (dx * rx + dz * rz) * scale;
             const y = c - (dx * fx + dz * fz) * scale;
-            if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+            if (i === 0) rg.moveTo(x, y); else rg.lineTo(x, y);
           }
-          g.stroke();
+          rg.stroke();
           if (pass === 1) this._miniRoads++;
         }
       }
-      g.setLineDash([]);
+      rg.setLineDash([]);
+      // the mask: the revealed bitmap in player-up space, plus the sight disc
+      const mg = this._miniMaskG;
+      mg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      mg.clearRect(0, 0, S, S);
+      if (wash) {
+        const size = (this.ctx.cfg && this.ctx.cfg.world && this.ctx.cfg.world.SIZE) || CFG.world.SIZE;
+        const half = size * 0.5;
+        mg.save();
+        mg.translate(c, c);
+        // world offset (dx, dz) -> screen (c + (dx*rx + dz*rz)*scale, c - (dx*fx + dz*fz)*scale)
+        mg.transform(rx * scale, -fx * scale, rz * scale, -fz * scale, 0, 0);
+        mg.imageSmoothingEnabled = true;
+        if ('imageSmoothingQuality' in mg) mg.imageSmoothingQuality = 'low';
+        mg.drawImage(wash, -half - px, -half - pz, size, size);
+        mg.restore();
+      }
+      mg.fillStyle = '#ffffff';
+      mg.beginPath(); mg.arc(c, c, this._miniSight * scale, 0, TAU); mg.fill();
+      rg.globalCompositeOperation = 'destination-in';
+      rg.drawImage(this._miniMask, 0, 0, S, S);
+      rg.globalCompositeOperation = 'source-over';
+      g.drawImage(this._miniLayer, 0, 0, S, S);
     }
 
     // Activated lookout checkpoints only. `lookouts()` returns the stable thirteen-record
@@ -1974,7 +2376,8 @@ export class Hud {
       const y = c - (dx * fx + dz * fz) * scale;
       const claimed = !!((claimedA && claimedA.has(d.id)) || (claimedB && claimedB.has(d.id)));
       const known = claimed || !!(found && found.has(d.id));
-      g.globalAlpha = claimed ? 1 : (known ? 0.84 : 0.38);
+      if (!known) continue;   // ROUND 13: an unfound destination is not on the instrument
+      g.globalAlpha = claimed ? 1 : 0.84;
       g.strokeStyle = claimed ? (REGION_HEX[d.region] || DEFAULT_HEX) : INK;
       g.fillStyle = g.strokeStyle; g.lineWidth = claimed ? 1.8 : 1.1;
       g.beginPath();
@@ -2082,6 +2485,14 @@ export class Hud {
     this._t += dt;
     const inp = this.ctx.input;
     this._sinceResume++;
+    // ROUND 13: the key glyph. hud steps after every owner (manifest order), so the best
+    // 'prompt' of this step is here now; one step with no emit clears it. No timers.
+    {
+      const q = this._promptIn, p = this._prompt;
+      if (q.kind !== p.kind || q.label !== p.label) this._promptDirty = true;
+      p.kind = q.kind; p.label = q.label; p.k = q.k; p.x = q.x; p.y = q.y; p.z = q.z;
+      q.kind = ''; q.rank = 0; q.k = 0;
+    }
     // A menu press that reaches the sim while locked. Chrome normally eats Escape and drops
     // the lock itself; if the key gets here, do the same thing and NOTHING else. The lost
     // lock is the pause and the card follows the pause. No key ever hides the card.
@@ -2184,6 +2595,7 @@ export class Hud {
     this._syncChrome();
     this._readWeapon();
     this._readCar();
+    this._presentPrompt();
     if (!this.paused && this.ctx.playing) {
       if (this._miniDirty) this._paintMini();
       if (this._ammoDirty) this._paintAmmo();
@@ -2476,12 +2888,12 @@ export class Hud {
       if (!q.live) continue;
       const life = q.life || PULSE_LIFE;
       const t = clamp01(q.t / life);
-      const rings = q.kind === 'level' ? 3 : (q.kind === 'node' || q.kind === 'reward') ? 2 : 1;
+      const rings = (q.kind === 'level' || q.kind === 'bank') ? 3 : (q.kind === 'node' || q.kind === 'reward') ? 2 : 1;
       // The grant eases OUT (fast then settling) so it reads as arriving rather than as an
       // expanding shockwave, which is what the mote's linear ring already is.
       const e = rings === 1 ? t : 1 - Math.pow(1 - t, 2.2);
       const base = rings === 1 ? 5 + 26 * t + q.streak * 1.1 : 7 + (rings === 3 ? 74 : 52) * e;
-      g.strokeStyle = INK;
+      g.strokeStyle = q.kind === 'bank' ? CARRY_INK : INK;
       for (let k = 0; k < rings; k++) {
         // Each ring lags the one before it by a fifth of the life, so they open in sequence.
         const lag = clamp01((t - k * 0.18) / Math.max(0.001, 1 - k * 0.18));
@@ -2711,14 +3123,22 @@ export class Hud {
         checkpoints: this._miniCheckpoints, car: this._miniCar,
         carX: +this._miniCarX.toFixed(1), carY: +this._miniCarY.toFixed(1),
         carAngle: +this._miniCarAngle.toFixed(3), range: MINI_RANGE,
+        masked: true, sight: this._miniSight,
+      },
+      // ROUND 13: the key glyph.
+      prompt: {
+        kind: this._prompt.kind, label: this._prompt.kind ? this._prompt.label : '',
+        k: +this._prompt.k.toFixed(3), shown: this._promptShown,
+        sx: +this._promptSX.toFixed(1), sy: +this._promptSY.toFixed(1),
       },
       locator: {
         active: this.locateT > 0,
         seconds: +this.locateT.toFixed(2),
         distance: this.locatorDistance < 0 ? -1 : +this.locatorDistance.toFixed(1),
         bearing: +this.locatorRel.toFixed(3),
-        buttonEnabled: !!(this.carBtn && !this.carBtn.disabled),
-        pauseButtonEnabled: !!(this.pauseCarBtn && !this.pauseCarBtn.disabled),
+        buttonEnabled: !!(this.carBtn && !this.carBtn.disabled && !this.carBtn.hidden),
+        buttonVisible: !!(this.carBtn && !this.carBtn.hidden),
+        pauseButtonEnabled: !!(this.pauseCarBtn && !this.pauseCarBtn.disabled && !this.pauseCarBtn.hidden),
       },
       // THE HEALTH READOUT, as numbers a gate can hold on to.
       // `lifeFrac` is the LENGTH of the arc; `lifeAlpha`/`lifeWidth` are the VALUE, and the

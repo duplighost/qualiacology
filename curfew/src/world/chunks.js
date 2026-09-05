@@ -148,7 +148,10 @@ const SHADE_FLOOR = 0.15;   // no multiplier may take a region albedo to black
 //
 // Cost: one coverAt per ground vertex, 1,681 on a tier-0 chunk, at build time only. Nothing in
 // step(). Sampled at the vertex, so it costs no texture, no draw call and no program.
-const CANOPY_AO = 0.42;     // a dense stand darkens its floor by up to 42%
+const CANOPY_AO = 0.48;     // a dense stand darkens its floor by up to 48% (ROUND 13: was 42%;
+                            // the darker-forest ask is met under the trees, not in the clearings.
+                            // 0.52 measured a night canopy floor p50 of 7.7 luma, under the 8 gate;
+                            // 0.48 keeps the floor in the 8-10 band ART.md 1.3 asks for)
 const CANOPY_WARM = 0.10;   // and goes slightly warm: needles, not sky. Blue only, downward.
 
 // The road. matRoad's colour is the CROWN's linear albedo and the profile texture scales
