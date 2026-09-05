@@ -9,7 +9,8 @@
 export class Gfx {
   constructor(canvas, { design = 1280, minH = 640 } = {}) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+    // Not desynchronized: on Windows Chrome that presents half-drawn frames.
+    this.ctx = canvas.getContext('2d', { alpha: false });
     this.design = design;
     this.minH = minH;
     this.dpr = 1;

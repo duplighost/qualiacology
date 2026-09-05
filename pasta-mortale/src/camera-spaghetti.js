@@ -132,9 +132,9 @@ export function createCameraSpaghetti(options = {}) {
   canvas.style.webkitUserSelect = "none";
   canvas.style.contain = "strict";
 
+  // Not desynchronized: on Windows Chrome that presents half-drawn frames.
   const context = canvas.getContext("2d", {
-    alpha: true,
-    desynchronized: true
+    alpha: true
   });
   if (!context) {
     if (ownsCanvas) canvas.remove();
