@@ -68,10 +68,10 @@ needs Alex — do not substitute your own.
   86.3%. `lead` is the least background-dead card (0.3%) and still among the
   least legible — its subject is ~4% of frame and the rope is a hairline at
   card size.
-- **`wick` and `vesperwake` cards are screenshots of their own title
-  screens** — painted/designed art, not in-engine, so they cannot be
-  "re-rendered without the type". Replacing them with gameplay captures is an
-  art-direction change and Alex's call, not an agent's.
+- **The `wick` card is a screenshot of its own title screen** (so was
+  VESPERWAKE's, retired 2026-09-05) — painted/designed art, not in-engine, so it
+  cannot be "re-rendered without the type". Replacing it with a gameplay capture
+  is an art-direction change and Alex's call, not an agent's.
 - All seven of those games DO render in headless Chrome with a real GPU
   (see `qa-gates.md`) and most expose debug hooks — `__LEAD`, `__VG`,
   `__WICK`, `__VW`, `__THREE__` — so in-engine recapture is technically

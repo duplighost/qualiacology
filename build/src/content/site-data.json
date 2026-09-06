@@ -52,35 +52,43 @@
   },
   "games": [
     {
+      "slug": "curfew",
+      "title": "We Were Promised Morning",
+      "descriptor": "open-world night horror",
+      "group": "horror",
+      "featured": true,
+      "image": "/assets/games/curfew-card-v20260905.webp",
+      "alt": "Through a rain-streaked windscreen at dusk, gaunt long-limbed things with lit eyes stand on a wet back road between the pines, one farmhouse window glowing beyond",
+      "summary": "One county of forest and back roads, and the sun does not come back. Walk or drive between the last lit places, shoot what comes out of the trees, and take a little of the map back every time you get somewhere.",
+      "metaDescription": "We Were Promised Morning is a first-person open-world horror game set in one dark county of forest and back roads where the sun does not come back.",
+      "controls": "WASD + mouse - Shift to sprint - F for the torch - E for the car - headphones recommended",
+      "actionLabel": "Go outside"
+    },
+    {
+      "slug": "kickmoon",
+      "title": "KICKMOON",
+      "descriptor": "First-person moon collectathon",
+      "group": "action",
+      "featured": true,
+      "image": "/assets/games/kickmoon-card-v20260905.webp",
+      "alt": "An astronaut mid-kick between three small worlds, a blue water moon, a red lava moon and a cratered white one, the ball blazing a trail of fire ahead",
+      "summary": "A boomerang is fun because it comes back. A ball is more fun. Kick it, catch it, and chase it all the way around a moon that is actually round.",
+      "metaDescription": "KICKMOON is a first-person collectathon on a real spherical moon, built around one persistent boomerang ball.",
+      "controls": "WASD + mouse · LMB kick/charge · RMB call it home · MMB grapple · Space double jump · two-thumb touch",
+      "actionLabel": "Enter the Moon"
+    },
+    {
       "slug": "lil-big-bang",
       "title": "LIL BIG BANG",
       "descriptor": "Microgame reel",
       "group": "action",
-      "featured": true,
+      "featured": false,
       "image": "/assets/games/lil-big-bang-card-clean.webp",
-      "featuredImage": {
-        "src": "/assets/games/lil-big-bang-featured-v20260830.webp",
-        "width": 1200,
-        "height": 1500
-      },
       "alt": "Dozens of game screens bursting out of a white flash in deep space, a flaming skull, a piñata, an astronaut chasing a ball, a duck, a rally truck and a neon monorail nearest the front and the rest trailing off into the stars",
       "summary": "Thirty-three microgames, a few seconds each, and it keeps speeding up. Most of them are games from this site cut down to a single move. You get four moons, and a hand comes and takes them one at a time.",
       "metaDescription": "LIL BIG BANG is a browser microgame reel: thirty-three games a few seconds each, most of them built out of the games already on this site.",
       "controls": "One thumb · tap, hold, drag · mouse or touch",
       "actionLabel": "Play LIL BIG BANG"
-    },
-    {
-      "slug": "hellspindle",
-      "title": "HELLSPINDLE",
-      "descriptor": "Chain-swing action",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/hellspindle-card-clean.webp",
-      "alt": "A hunter hanging from a chain with a spinning blade on the end, above an armoured Abbot on a black throne, in a cathedral lit red by a rose window",
-      "summary": "Twelve districts of cathedral, a chain with a wheel on the end, and the Red Abbot at the far end of it. Swing off the rings, cut through the goreweave, and spend what you kill on a longer chain and a harder wheel.",
-      "metaDescription": "HELLSPINDLE is a browser action game: swing through twelve districts of cathedral on a chain with a wheel on the end and go down to the Red Abbot.",
-      "controls": "A / D move and pump · Space jump and release · S drops a ledge · hold mouse for the wheel · two-thumb touch",
-      "actionLabel": "Descend"
     },
     {
       "slug": "i-seent-it",
@@ -133,19 +141,6 @@
       "metaDescription": "No Moon is a fast browser twin-stick roguelike about moon-headed Passengers descending through sealed rooms beneath a missing sky.",
       "controls": "WASD or arrows + mouse · twin-thumb touch",
       "actionLabel": "Play No Moon"
-    },
-    {
-      "slug": "kickmoon",
-      "title": "KICKMOON",
-      "descriptor": "First-person moon collectathon",
-      "group": "action",
-      "featured": true,
-      "image": "/assets/games/kickmoon-card-clean.webp",
-      "alt": "An astronaut mid-kick low over the cratered moon, the ringed ball blazing a light-trail past golden crescents",
-      "summary": "A boomerang is fun because it comes back. A ball is more fun. Kick it, catch it, and chase it all the way around a moon that is actually round.",
-      "metaDescription": "KICKMOON is a first-person collectathon on a real spherical moon, built around one persistent boomerang ball.",
-      "controls": "WASD + mouse · LMB kick/charge · RMB call it home · MMB grapple · Space double jump · two-thumb touch",
-      "actionLabel": "Enter the Moon"
     },
     {
       "slug": "secondhand-saint",
@@ -225,19 +220,6 @@
       "metaDescription": "THE EATEN PATH is a first-person horror walk through an infinite nighttime forest where every route seals behind you.",
       "controls": "WASD + mouse · two-thumb touch · Shift to hurry · headphones recommended",
       "actionLabel": "Enter THE EATEN PATH"
-    },
-    {
-      "slug": "curfew",
-      "title": "CURFEW",
-      "descriptor": "open-world night horror",
-      "group": "horror",
-      "featured": false,
-      "image": "/assets/games/curfew-card-clean.webp",
-      "alt": "A torch beam on the forest floor at night, pale trunks closing in on both sides of a back road",
-      "summary": "One county of forest and back roads, and the sun does not come back. Walk or drive between the last lit places, shoot what comes out of the trees, and take a little of the map back every time you get somewhere.",
-      "metaDescription": "CURFEW is a first-person open-world horror game set in one dark county of forest and back roads where the sun does not come back.",
-      "controls": "WASD + mouse - Shift to sprint - F for the torch - E for the car - headphones recommended",
-      "actionLabel": "Go outside"
     },
     {
       "slug": "rocket-shoes",
@@ -395,19 +377,6 @@
       "metaDescription": "Rally is a mouse-only tennis duel where the swing is the shot and the music only lives while the ball does.",
       "controls": "Mouse only · click to toss, swing through the ball",
       "actionLabel": "Play Rally"
-    },
-    {
-      "slug": "vesperwake",
-      "title": "VESPERWAKE: THE HOLLOW BELL",
-      "descriptor": "Gothic chain-whip action",
-      "group": "action",
-      "featured": false,
-      "image": "/assets/games/vesperwake-card-clean.webp",
-      "alt": "Sabine Vale holding an iron chain whip beneath the Meridian Bell and the drowned towers of Mourneglass",
-      "summary": "Three continuous levels. A chain whip. A city held at midnight by a bell that stole one minute of noon.",
-      "metaDescription": "VESPERWAKE: THE HOLLOW BELL is a three-level gothic action platformer about a bellwright climbing a city trapped at midnight.",
-      "controls": "A/D or arrows move · Space/Z jump · J/X whip · K/Shift quickstep · touch",
-      "actionLabel": "Begin the Wake"
     },
     {
       "slug": "spaceboarding",
