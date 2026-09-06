@@ -27,6 +27,15 @@ const routes = [
 // from the shelf — asserted 404 so a stray file or redirect cannot quietly
 // bring one back.
 const retiredRoutes = [
+  // HELLSPINDLE and VESPERWAKE, retired 2026-09-05 (Alex: "remove ... completely and retire them")
+  "/hellspindle/",
+  "/hellspindle.html",
+  "/spindle",
+  "/abbot",
+  "/vesperwake/",
+  "/vesperwake.html",
+  "/hollow-bell",
+  "/vesper",
   "/blackthorn-manor/",
   "/dusk",
   "/evensong.html",

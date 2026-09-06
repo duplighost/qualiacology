@@ -114,11 +114,6 @@
 /kick-ball-lunar-velocity/*        /kickmoon/  301!
 /kick-ball                         /kickmoon/  302
 
-# --- VESPERWAKE: THE HOLLOW BELL ---
-/vesperwake.html  /vesperwake/  301!
-/hollow-bell      /vesperwake/  302
-/vesper           /vesperwake/  302
-
 # --- FETCH ---
 /fetch.html  /fetch/  301!
 /skull       /fetch/  302
@@ -138,7 +133,7 @@
 # --- SPACEBOARDING (replaced NINEFOLD BURN, 2026-08-29) ---
 # The three vanity links NINEFOLD BURN owned are repointed at its successor
 # rather than dropped, which is the same call /vesper got when VESPERBANE came
-# off the shelf and VESPERWAKE stayed. The game's own route and its legacy
+# off the shelf and VESPERWAKE stayed (VESPERWAKE and /vesper came off on 2026-09-05). The game's own route and its legacy
 # .html are NOT repointed: they name a page that no longer exists, so they 404
 # and are asserted 404 in route-smoke's retiredRoutes.
 /ninefold           /spaceboarding/  302
@@ -168,7 +163,3 @@
 /dark       /curfew/  302
 /curfew.html /curfew/                 301!
 
-# --- HELLSPINDLE ---
-/hellspindle.html  /hellspindle/  301!
-/spindle           /hellspindle/  302
-/abbot             /hellspindle/  302
