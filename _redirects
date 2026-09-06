@@ -163,3 +163,7 @@
 /dark       /curfew/  302
 /curfew.html /curfew/                 301!
 
+# --- WINTERLINE ---
+/winterline.html  /winterline/  301!
+/winter           /winterline/  302
+/december         /winterline/  302

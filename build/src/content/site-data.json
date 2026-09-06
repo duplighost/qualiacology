@@ -91,6 +91,19 @@
       "actionLabel": "Play LIL BIG BANG"
     },
     {
+      "slug": "winterline",
+      "title": "WINTERLINE",
+      "descriptor": "First-person parkour shooter",
+      "group": "action",
+      "featured": false,
+      "image": "/assets/games/winterline-card-clean.jpg",
+      "alt": "A snowy city street at night with lit windows down both sides and a Christmas tree at the far end, seen over the barrel of a carbine",
+      "summary": "A Christmas city at night. Run it, climb it, and shoot your way across the rooftops. Take a car when the street is long. The manholes go down and two of the big buildings go all the way up. Keyboard and mouse only.",
+      "metaDescription": "WINTERLINE is a first-person parkour shooter set in a Christmas city at night: sprint, slide, climb the buildings, drive the cars, and go down through the manholes. Keyboard and mouse.",
+      "controls": "WASD + mouse · Shift sprint · Space jump, hold to climb · C slide or crouch · click fire, right click aim · 1 2 3 guns · R reload · F melee · E doors, manholes and cars",
+      "actionLabel": "Enter the city"
+    },
+    {
       "slug": "i-seent-it",
       "title": "I SEENT IT",
       "descriptor": "Lunar custody arcade",

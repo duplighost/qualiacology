@@ -299,6 +299,13 @@
 /the-last-room/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# --- WINTERLINE ---
+/winterline/
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/winterline/index.html
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
