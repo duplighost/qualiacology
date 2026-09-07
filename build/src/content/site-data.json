@@ -126,7 +126,7 @@
       "alt": "A hooded thurifer at the centre of a candlelit cathedral floor, swinging a brass censer on a long chain through a burning orange arc, with armoured figures closing in out of the dark at the edges",
       "summary": "Use the mouse to swing the weapon: circle to spin it around you, or flick it forward. The thurifer moves first and the censer arrives late, so the whole game is keeping a weight moving. Three candles on the altar are your health. Milo made this one too.",
       "metaDescription": "THURIBLE is a full 3D third-person action game about swinging a censer on a chain around a dark cathedral: circle the mouse to spin it around you, or flick it forward.",
-      "controls": "Circle the mouse around him to spin · send it far to walk, flick it to dash · right mouse or Q/E for camera · WASD nudges · Space dodges · M mutes",
+      "controls": "The mouse is a spot on the floor and he runs to it · circle it to spin, flick it to dash · right drag or Q/E turn the camera · WASD moves the spot · Space dodges · Esc pauses · M mutes",
       "actionLabel": "Swing it"
     },
     {
