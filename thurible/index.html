@@ -34,6 +34,11 @@
       <h1 id="title-word">THURIBLE</h1>
       <p class="subtitle">THE LONG NAVE</p>
       <button id="begin" type="button" aria-label="Enter the nave"><i aria-hidden="true"></i></button>
+      <div id="title-controls" class="controls">
+        <p>the mouse is a spot on the floor. he runs to it, and the censer follows late.</p>
+        <p>circle it to swing. flick it to dash. only a fast coal burns; a slow one just shoves.</p>
+        <p class="keys">space dodges · right drag or Q E turns the camera · P or Esc pauses · M mutes · on a phone, your finger is the mouse</p>
+      </div>
       <p class="dedication">for Alex · swung by Milo</p>
     </section>
 
@@ -58,7 +63,21 @@
 
     <button id="sound" type="button" hidden aria-label="Mute sound"><i></i><i></i><i></i></button>
     <button id="pause" type="button" hidden aria-label="Pause game"></button>
-    <div id="pause-card" role="status" aria-label="Paused"><i aria-hidden="true"></i></div>
+    <div id="pause-card" role="dialog" aria-label="Paused">
+      <div class="card">
+        <i aria-hidden="true"></i>
+        <dl class="controls">
+          <dt>mouse</dt><dd>a spot on the floor. he runs to it, the censer follows late</dd>
+          <dt>circle</dt><dd>spin it. faster is hotter</dd>
+          <dt>flick</dt><dd>dash. the coal whips past when he stops</dd>
+          <dt>space</dt><dd>dodge</dd>
+          <dt>right drag, Q E</dt><dd>turn the camera</dd>
+          <dt>P, Esc</dt><dd>pause</dd>
+          <dt>M</dt><dd>mute</dd>
+        </dl>
+        <p class="go">click to go on</p>
+      </div>
+    </div>
     <div id="webgl-error" role="alert">This nave needs WebGL 2 and hardware acceleration.</div>
   </main>
   <script defer src="./game.js"></script>
