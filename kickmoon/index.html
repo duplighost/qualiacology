@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#010204" />
-  <meta name="application-version" content="8.8.0-boss-repair" />
+  <meta name="application-version" content="8.9.0-reachable-bosses" />
   <meta name="description" content="KICKMOON is a first-person three-world lunar action game: one persistent boomerang ball, a water moon, and a lava moon." />
   <title>KICKMOON: Three Worlds | Qualiacology</title>
   <link rel="canonical" href="https://qualiacology.com/kickmoon/" />
@@ -22,7 +22,7 @@
   <meta name="twitter:image" content="https://qualiacology.com/assets/og/kickmoon-og-v2.jpg" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=8.9.0" />
 </head>
 <body>
   <a class="home-link" href="https://qualiacology.com/" aria-label="Return to Qualiacology"><span aria-hidden="true">←</span> <span class="home-link__name">Qualiacology</span></a>
@@ -218,6 +218,17 @@
             <button class="utility-button" type="button" data-test-act="grant">+500</button>
             <button class="utility-button" type="button" data-test-act="wipe">WIPE SAVE</button>
           </div>
+          <!-- The four finals, each from its own first frame. Nothing a test
+               does reaches the save; EXIT reloads back into the real run. -->
+          <div class="pause-test__row">
+            <button class="utility-button" type="button" data-test-boss="moon">MOONHEART</button>
+            <button class="utility-button" type="button" data-test-boss="water">NAUTILUS</button>
+            <button class="utility-button" type="button" data-test-boss="lava">TYRANT</button>
+          </div>
+          <div class="pause-test__row">
+            <button class="utility-button" type="button" data-test-boss="eclipse">ECLIPSE MAW</button>
+            <button class="utility-button" type="button" data-test-boss="exit">EXIT TEST</button>
+          </div>
           <p class="pause-test__note" id="pauseTestNote">&nbsp;</p>
         </details>
       </div>
@@ -239,6 +250,6 @@
   </main>
 
   <script src="vendor/three.min.js"></script>
-  <script src="game.js"></script>
+  <script src="game.js?v=8.9.0"></script>
 </body>
 </html>

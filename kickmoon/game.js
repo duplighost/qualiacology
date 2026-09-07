@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.8.0-boss-repair';
+  const GAME_VERSION = '8.9.0-reachable-bosses';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -2859,7 +2859,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
   // CORES_ARE_TROPHIES.
   //
   // These used to be permanent upgrades: EMBER made bounces gain speed, COMET
-  // made a full charge pierce, KITE let you glide, PITON let the ball stick.
+  // made a full charge pierce and PITON let the ball stick.
   // They are now things you FIND, not things you become. The pickups are still
   // out there, still beautiful, still worth the trip, and they still orbit the
   // ball once you have them -- they simply do not change what you can do.
@@ -2898,14 +2898,6 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       // A charged kick sticks the ball to ANY surface, and holding the line
       // reels you to it. Every cliff on the moon becomes a climbing hold.
       minCharge: .45,
-    },
-    kite: {
-      id: 'kite',
-      color: 0x8bffca,
-      // Hold the line while falling and the ball drags you forward instead of
-      // down. The sky stops being a set of islands and becomes one place.
-      glideFall: 3.4,
-      glidePull: 26,
     },
     comet: {
       id: 'comet',
@@ -3682,6 +3674,7 @@ totalEmissiveRadiance += vec3(.34, .135, .018) * kbCollectibleGleam;`);
       this.camera.rotation.order = 'YXZ';
       this.fxScratch = new T.Vector3();
       this.fxScratchB = new T.Vector3();
+      this.regionalCoreScratch = new T.Vector3();
       this.floorSurfaceDirection = new T.Vector3();
       this.scene.add(this.camera);
       try {
@@ -7274,7 +7267,11 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
 
       const claws = [];
       const moonClaws = [];
-      const coreIds = ['ember', 'piton', 'kite', 'comet', 'roc', 'colossus'];
+      // Six claws, six colours. These used to be read out of BALL_CORES by
+      // trophy id, which quietly tied the Maw's paint to the trophy roster --
+      // removing the dead KITE core took the sixth claw's colour with it and
+      // the whole world failed to build. The Maw's palette is its own now.
+      const clawTints = [0xff7a3c, 0x63f0ff, 0x8bffca, 0xffd66b, 0xffb42a, 0xc9a06a];
       const coreGeometries = [
         new T.TetrahedronGeometry(2.9, 0),
         new T.ConeGeometry(2.45, 5.8, 5),
@@ -7302,8 +7299,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const weak = new T.Mesh(
           coreGeometries[index],
           new T.MeshStandardMaterial({
-            color: BALL_CORES[coreIds[index]].color,
-            emissive: BALL_CORES[coreIds[index]].color,
+            color: clawTints[index],
+            emissive: clawTints[index],
             emissiveIntensity: 1.65, roughness: .18, metalness: .56,
           }),
         );
@@ -7316,7 +7313,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         clawGroup.add(weak);
         group.add(clawGroup);
         const node = {
-          id: `eclipse-moon-claw-${index}`, index, coreId: coreIds[index],
+          id: `eclipse-moon-claw-${index}`, index, tint: clawTints[index],
           group: clawGroup, mesh: weak, alive: true, radius: 3.6,
           position: new T.Vector3(), baseScale: weak.scale.clone(),
           basePosition: clawGroup.position.clone(), angle,
@@ -8192,9 +8189,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         node.mesh.visible = false;
         maw.hitFlash = 1;
         gameState.impact('break', node.position,
-          state.phase === 'water' ? 0x6befff : state.phase === 'lava' ? 0xffd34f : BALL_CORES[node.coreId]?.color || 0xc66bff);
+          state.phase === 'water' ? 0x6befff : state.phase === 'lava' ? 0xffd34f : node.tint || 0xc66bff);
         this.particles?.burst(node.position,
-          state.phase === 'water' ? 0x6befff : state.phase === 'lava' ? 0xff3b0c : BALL_CORES[node.coreId]?.color || 0xc66bff,
+          state.phase === 'water' ? 0x6befff : state.phase === 'lava' ? 0xff3b0c : node.tint || 0xc66bff,
           62, 22, 1.05, .28);
         gameState.addStyle(24, 1500,
           state.phase === 'water' ? 'FLOODED CRATER BLIND'
@@ -8346,9 +8343,20 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
     }
     makePlanetBossArena(profile, water, id, site, index, finalCourt = false) {
       const radius = finalCourt ? (water ? 42 : 46) : (water ? 25 : 28);
+      // THE COURT IS NOT THE BOSS. (Alex, 2026-09-07: "one of the lava bosses
+      // was clipping through a hell of a lot of objects.") Placement reserved
+      // the court's own 25 or 28 units and nothing more, but two of these
+      // creatures are far longer than their floor. Measured worst-case opaque
+      // reach from the body centre, sampled over a full animation cycle on the
+      // real build: FORGE WYRM 68.2 against a 28-unit court, with twenty world
+      // solids sitting inside the overhang, and TIDE SERPENT 51.7 against 25.
+      // Every other regional boss fits inside its own court. So the art stays
+      // the size it is and the SEARCH is told the truth instead.
+      const FOOTPRINT = { 'forge-wyrm': 70, 'tide-serpent': 54 };
+      const clearance = Math.max(radius, FOOTPRINT[id] || 0);
       const at = finalCourt
         ? { x: site.x, z: site.z, angle: water ? .2 : -.25, clearance: 0, platformClearance: 0 }
-        : this.findPlanetBossArena(profile, site, index, radius, water);
+        : this.findPlanetBossArena(profile, site, index, clearance, water);
       const ground = profile.heightAt(at.x, at.z);
       const rise = finalCourt ? (water ? 7 : 10) : (water ? 5.5 : 8);
       const top = ground + rise;
@@ -15549,15 +15557,27 @@ diffuseColor.a *= kbBody * kbStream;`);
       features.projectileMesh = projectileMesh;
       features.markerMesh = markerMesh;
     }
+    // (Alex, 2026-09-07: "the lava level especiall has cool stuff in the sky
+    // that doesn't do anything and it should.") It did do something -- it just
+    // paid ONE collectible no matter how big the job was, because `value` only
+    // ever reached the score and the style meter. Finishing the whole Sky Forge
+    // chain and cracking a single cooling plate were worth exactly the same to
+    // the purse. Now the payout is the size of the job, it lands as crescents
+    // you can see, and anything worth more than a tap says what it gave you.
     rewardLavaInteraction(profile, gameState, kind, position, label, value = 1) {
       const progress = gameState.worldProgress[profile.id];
+      const paid = Math.max(1, Math.round(value * 4));
       progress[kind] += 1;
-      progress.collected += 1;
+      progress.collected += paid;
       gameState.score += 720 * value;
       gameState.style = clamp(gameState.style + 4.5 * value, 0, 100);
       gameState.rewardFlash = Math.max(gameState.rewardFlash, .56);
       this.particles?.burst(position, profile.theme.hot, 30 + value * 9, 14, .86, .2);
       world.pulseRing(position, new T.Color(profile.theme.accent), 8 + value * 2.5, .5, true);
+      if (value > 1) {
+        world.spawnStones(gameState.player.position, paid, 5.4);
+        gameState.announceEncounter(label, `+${paid * 2} COLLECTIBLES`);
+      }
       audio.score(value > 1);
       gameState.addStyle(15 + value * 2, 900 + value * 180, label, '#ffd35a');
     }
@@ -18061,18 +18081,69 @@ diffuseColor.a *= kbBody * kbStream;`);
         }
 
         const corePosition = boss.core.getWorldPosition(profile.lavaFeatures?.scratchTarget || new T.Vector3());
-        const coreHit = ball.position.distanceTo(corePosition) <= boss.coreRadius + ball.radius;
+        const windowOpen = boss.mechanic === 'breach' || boss.mechanic === 'spit-window'
+          ? boss.vulnerable : boss.armorHp <= 0;
+        // THE TARGET HAS TO COME OUT OF THE BODY. (Alex, 2026-09-07: "often
+        // things you have to hit never come out of the bosses body ... it
+        // really makes you go inside them and you can't hit the sweet spot
+        // from the outside.") Six of these ten cores sit entirely inside the
+        // big reflecting sphere -- measured margins from +2.17 to +8.06 world
+        // units -- so a shot fired from outside met the body boundary on an
+        // earlier frame and was thrown away before its centre ever reached the
+        // target. That is not a hard fight, it is an impossible one: the ball
+        // moves ~1.4 units per frame and the narrowest gap it would have to
+        // skip is 2.17.
+        //
+        // So while the window is open the big sphere is a broad-phase hint
+        // only, and the core is tested against the ball's WHOLE step the way
+        // the repaired local finals already do (sweepBossContact, line 504).
+        // Window shut, the body still blocks and still bounces, exactly as
+        // before -- the rear of the boss is honest armour, not a doorway.
+        const sweepStart = ball.previousPosition
+          && ball.previousPosition.distanceToSquared(ball.position) < 16
+          ? ball.previousPosition : ball.position;
         const bodyHit = ball.position.distanceTo(boss.position) <= boss.radius + ball.radius;
+        // ...but only from the side the target is actually on, and that has to
+        // be judged where the ball CROSSED IN, not where it is now. Testing the
+        // current step instead let a shot bore straight through the back hull
+        // and then count as a front hit the moment it came out level with the
+        // core -- measured: rear shots went from 0/10 to 10/10, which turns
+        // honest armour into a doorway. So the side is latched on the last
+        // frame the ball was still outside the body and held for the whole
+        // passage. Come round to the exposed face, or hit a wall.
+        // Which way is this shot travelling through the boss? A ball thrown at
+        // the exposed face comes from the core's side and moves INWARD, so its
+        // velocity opposes the body-to-core direction. A ball boring in through
+        // the back moves the same way as that direction. One dot product, no
+        // state to get stale, and it reads the same on the first frame as on
+        // the last.
+        const facing = ball.velocity.dot(
+          this.regionalCoreScratch.copy(corePosition).sub(boss.position)) < 0;
+        const coreHit = !windowOpen
+          // Window shut: unchanged from the shipped build. The body blocks and
+          // the point test only decides where the refusal is drawn.
+          ? ball.position.distanceTo(corePosition) <= boss.coreRadius + ball.radius
+          // Window open and you came in the front: sweep the whole step.
+          : facing
+            ? Number.isFinite(sphereSweepTime(sweepStart, ball.position, corePosition,
+              boss.coreRadius + ball.radius))
+            // Window open but you came through the back: the core is shut for
+            // this passage. Reaching it by boring through the rear hull is not
+            // a hit, it is the thing the hull is there to stop.
+            : false;
         if (!coreHit && !bodyHit) continue;
         const coreFlightKey = `${boss.id}-core-flight`;
         if (boss.mechanic === 'moonfall-plates' && coreHit
           && ball.collisionCooldown.has(coreFlightKey)) return true;
         const id = `${boss.id}-body`;
         if (ball.collisionCooldown.has(id)) return true;
-        ball.collisionCooldown.set(id, .3);
-        const windowOpen = boss.mechanic === 'breach' || boss.mechanic === 'spit-window'
-          ? boss.vulnerable : boss.armorHp <= 0;
         if (!windowOpen || !coreHit) {
+          // A refused shot no longer holds the damage door shut. This used to
+          // set the same 0.3 s key a real hit sets, so the follow-up that
+          // finally found the core was discarded on arrival.
+          const lockId = `${boss.id}-locked`;
+          if (ball.collisionCooldown.has(lockId)) return true;
+          ball.collisionCooldown.set(lockId, .12);
           gameState.impact('locked', coreHit ? corePosition : boss.position, profile.theme.accent);
           const away = ball.position.clone().sub(boss.position);
           if (away.lengthSq() > 1e-6) {
@@ -18082,6 +18153,7 @@ diffuseColor.a *= kbBody * kbStream;`);
           }
           return true;
         }
+        ball.collisionCooldown.set(id, .3);
         boss.hp--;
         if (boss.mechanic === 'moonfall-plates') ball.collisionCooldown.set(coreFlightKey, 30);
         boss.hitFlash = 1;
@@ -27428,7 +27500,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         group.add(ring);
         const prize = new T.Mesh(
           new T.IcosahedronGeometry(3.2, 1),
-          new T.MeshStandardMaterial({ color: 0x0d2a24, emissive: BALL_CORES.kite.color, emissiveIntensity: 2.4, roughness: .2, metalness: .7 }),
+          new T.MeshStandardMaterial({ color: 0x0d2a24, emissive: 0x8bffca, emissiveIntensity: 2.4, roughness: .2, metalness: .7 }),
         );
         prize.position.set(mark.x, mark.top + 7, mark.z);
         group.add(prize);
@@ -30366,6 +30438,37 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       audio.score(true);
       return true;
     }
+    // THE SKY AND THE LANDMARKS COME BACK TOO. Everything else in restart()
+    // had a restore; the floating slabs never did. A beacon you lit stayed
+    // lit, a crystal cache you smashed stayed smashed, the crown on the top
+    // slab stayed taken, and every landmark stayed finished -- while the
+    // counters that read them were zeroed. The suit pips those hand out went
+    // with them, so pressing R after exploring left you capped at five with
+    // the upgrades already spent and nothing left up there to earn them from.
+    restoreSky() {
+      for (const slab of this.sky || EMPTY_SOLIDS) {
+        if (slab.lit) {
+          slab.lit = false;
+          slab.flameSpin = 0;
+        }
+        if (slab.cache) {
+          for (const shard of slab.cache) {
+            shard.alive = true;
+            if (shard.mesh) shard.mesh.visible = true;
+          }
+        }
+        if (slab.crown) {
+          slab.crown.taken = false;
+          if (slab.crown.prize) slab.crown.prize.visible = true;
+          if (slab.crown.glow) slab.crown.glow.visible = true;
+        }
+      }
+      for (const mark of this.landmarks || EMPTY_SOLIDS) {
+        mark.done = false;
+        mark.orbitTurns = 0;
+        if (mark.flare?.material) mark.flare.material.opacity = 0;
+      }
+    }
     restoreBreakables() {
       const spurMatrix = new T.Matrix4();
       for (const item of this.breakables) {
@@ -32319,6 +32422,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // Eclipse Maw rewrote the planet crowns from stale state and vice versa.
     // Everything that persists goes through here now, paid passage included.
     writeThreeCrownSave() {
+      // A boss test never writes. Reporting success keeps the transactional
+      // rollbacks above from firing on a save that was deliberately skipped.
+      if (this.testSession?.active) return true;
       try {
         localStorage.setItem(THREE_CROWN_STORAGE_KEY, JSON.stringify({
           version: 1,
@@ -32353,9 +32459,14 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     announceEncounterOnce(id, title, hint) {
       if (!this.encounterPrompts) this.encounterPrompts = new Set();
       if (this.encounterPrompts.has(id)) return;
-      this.encounterPrompts.add(id);
-      // Do not overwrite a just-opened court / phase announcement.
+      // Do not overwrite a just-opened court / phase announcement -- but do not
+      // burn the prompt either. Marking it used before this check meant a hint
+      // that never appeared could never appear again: walk into a boss while
+      // any other notice was still up and its one line of instruction was gone
+      // for the rest of the run. This is the only place the game says how to
+      // fight a regional boss.
       if ((this.encounterNoticeUntil || 0) > this.time + 2) return;
+      this.encounterPrompts.add(id);
       this.announceEncounter(title, hint);
     }
     purchaseEclipsePassage() {
@@ -32592,12 +32703,26 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       };
       world.gate.active = true;
       world.gate.group.visible = true;
+      // Put the seam wall's rock back, not just its collision. Restart used to
+      // re-arm the wall while leaving all 28 chunks scaled to zero, so it came
+      // back as something solid with nothing drawn there -- you walked into an
+      // invisible wall that then shattered on the first hit. The wall's health
+      // is meant to be legible by simply being smaller; that only works if a
+      // fresh run starts with all of it.
       world.fracture.active = true;
       world.fracture.group.visible = true;
+      world.fracture.hp = world.fracture.maxHp;
+      for (const piece of world.fracture.pieces || EMPTY_SOLIDS) {
+        if (!piece.gone) continue;
+        piece.gone = false;
+        piece.mesh.setMatrixAt(piece.slot, piece.matrix);
+      }
+      for (const shards of world.fracture.shards || EMPTY_SOLIDS) shards.instanceMatrix.needsUpdate = true;
       world.goal.open = false;
       world.goal.group.visible = false;
       world.anchors.forEach(anchor => { anchor.used = false; anchor.group.visible = true; });
       world.restoreBreakables();
+      world.restoreSky();
       world.restoreRockField();
       world.restoreMoondrops();
       if (world.flyingTrophies) {
@@ -32669,7 +32794,13 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     syncPauseProgress() {
       const local = this.localFinalProgress(world.activePlanet);
       if (ui.pauseBossValue && local) {
-        ui.pauseBossValue.textContent = `${local.have}/${local.need}`;
+        // The Moon counts nine and opens its final at five, so `have` runs past
+        // `need` and this used to read "7/5". Show the whole roster once the
+        // gate is open, which is also the only place the game ever says how
+        // many bosses the world actually holds.
+        ui.pauseBossValue.textContent = local.have > local.need
+          ? `${local.have}/${local.roster}`
+          : `${local.have}/${local.need}`;
         if (ui.pauseBossLabel) {
           ui.pauseBossLabel.textContent = world.activePlanet === 'moon'
             ? 'BOSSES FELLED ON THE MOON'
@@ -33175,7 +33306,14 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.stats.grinds++;
         world.pulseRing(this.grindNearest.position, new T.Color(bestRail.tint), 5.2, .26, true);
         world.particles.burst(this.grindNearest.position, bestRail.tint, 18, 8, .5, .06);
-        audio.impact(.58, 'anchor');
+        // (Alex, 2026-09-07: "the sounds when your on the rails are anoying.")
+        // A rail chain mounts once per rail, so a good line used to machine-gun
+        // this at full strength. Softer, and it will not retrigger inside a
+        // third of a second -- one clean catch per line instead of a rattle.
+        if (this.time - (this.lastGrindSound || -9) > .34) {
+          this.lastGrindSound = this.time;
+          audio.impact(.34, 'anchor');
+        }
       }
 
       if (frame.grapple && edgeFrame && frame.grapplePressed) {
@@ -34397,9 +34535,25 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       const fareDue = !this.shipPassage[vehicle.destination];
       if (fareDue) {
         if (this.ledgerTotal(world.activePlanet) < SHIP_FARE) return false;
+        // ONE FARE PER DESTINATION, OR NO FARE AT ALL. (Alex, 2026-09-07:
+        // "ships actually charge infinitely.") The debit used to happen, the
+        // flag used to be set, and the save was attempted and never checked --
+        // so on a browser that cannot write, every single boarding took another
+        // 500 and nothing was ever bought. Measured: four boardings, four
+        // charges. The Eclipse gate has always done this correctly; the ships
+        // now do the same. Either the purchase persists or it never happened.
+        const spent = this.spentTotal || 0;
+        const planetSpent = this.collectibleSpent[world.activePlanet] || 0;
         this.spendLedger(world.activePlanet, SHIP_FARE);
         this.shipPassage[vehicle.destination] = true;
-        this.writeThreeCrownSave();
+        if (!this.writeThreeCrownSave()) {
+          this.shipPassage[vehicle.destination] = false;
+          this.spentTotal = spent;
+          this.collectibleSpent[world.activePlanet] = planetSpent;
+          this.announceEncounter('PASSAGE NOT SAVED',
+            'NO COLLECTIBLES SPENT · CHECK BROWSER STORAGE');
+          return false;
+        }
       }
       const previousCount = this.planetTransition.count || 0;
       this.flightVehicle = vehicle;
@@ -35871,23 +36025,29 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             slab.crown.taken = true;
             slab.crown.prize.visible = false;
             slab.crown.glow.visible = false;
-            this.grantKite(slab.crown.prize.position.clone());
+            this.grantCrownPrize(slab.crown.prize.position.clone());
           }
         }
       }
     }
-    grantKite(at) {
-      const spec = BALL_CORES.kite;
-      if (this.cores.has(spec.id)) return;
-      this.cores.add(spec.id);
-      this.stats.cores++;
+    // THE CROWN ON THE TOP SLAB. It used to hand over the KITE core, which
+    // stopped being anything the day the glide was removed -- a dot on a
+    // counter, awarded for the hardest climb on the moon, that did nothing.
+    // (Alex, 2026-09-07: "that should not be in the game. as an unlock or as a
+    // default.") The climb still has to pay, so now it pays what the climb is
+    // actually worth: a suit pip and a real handful of collectibles, dropped
+    // where you are standing rather than filed in a trophy case.
+    grantCrownPrize(at) {
       this.rewardFlash = 1;
-      if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', `#${spec.color.toString(16).padStart(6, '0')}`);
+      if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', '#ffd66b');
       this.hitStop = Math.max(this.hitStop, .1);
       this.shake = Math.max(this.shake, .8);
-      this.addStyle(34, 6000, 'KITE CORE', '#8bffca');
-      world.particles.burst(at, spec.color, 120, 26, 1.5, .4);
-      world.pulseRing(at, new T.Color(spec.color), 30, .9);
+      this.player.maxHealth = Math.min(9, this.player.maxHealth + 1);
+      this.player.health = this.player.maxHealth;
+      world.spawnStones(at, 40, 9);
+      this.addStyle(34, 6000, 'THE CROWN · +1 SUIT · 40 CRESCENTS', '#ffd66b');
+      world.particles.burst(at, 0xffd66b, 120, 26, 1.5, .4);
+      world.pulseRing(at, new T.Color(0xffd66b), 30, .9);
       audio.win();
     }
     // ---- LANDMARKS -------------------------------------------------------
@@ -36728,10 +36888,24 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             world.pulseRing(finishedTarget.position, new T.Color(0x7befff), 13, .72, true);
             world.particles.burst(finishedTarget.position, 0x7befff, 22, 10, .72, .22);
           }
-          world.spawnStones(target.position, challenge.reward, 4.8);
+          // (Alex, 2026-09-07: "some puzzles in the underground i cant really
+          // figure out what i get when i solve them.") Three reasons you
+          // couldn't. The crescents spawned at the machine face, which on some
+          // of these is twelve metres up a wall, and nothing in the game gives
+          // a loose crescent gravity -- so half the reward hung in the air out
+          // of reach. The other half was inside the ball's pickup radius the
+          // instant it appeared and vanished in the same flash. And the name,
+          // which the code carefully formats every time, is handed to addStyle
+          // and filed in a variable that nothing in this file ever reads.
+          //
+          // So: drop them at your feet where they can be picked up, and say
+          // out loud what the job paid.
+          world.spawnStones(this.player.position, challenge.reward, 5.6);
           this.rewardFlash = Math.max(this.rewardFlash, .72);
           if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', '#7befff');
           audio.win();
+          this.announceEncounter(`${challenge.label} SOLVED`,
+            `+${challenge.reward} · ${challenge.reward} CRESCENTS RELEASED`);
           this.addStyle(28, 3400, challenge.label, '#7befff');
           return true;
         }
@@ -39923,8 +40097,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.victorySequence = victory;
       world.spawnStones(heart.position, 24, 10);
       world.dressMoonheartBall();
-      this.savedMoonheart = true;
-      try { localStorage.setItem('moonkick-heart-v1', '1'); }
+      // A test win is not a crown. Sealed the same way the three-crown save is.
+      this.savedMoonheart = !this.testSession?.active;
+      try { if (!this.testSession?.active) localStorage.setItem('moonkick-heart-v1', '1'); }
       catch (error) {
         this.lastSaveError = String(error?.message || error);
         this.announceEncounter('MOONHEART DEFEATED', 'CROWN NOT SAVED — BROWSER STORAGE UNAVAILABLE', 6);
@@ -40605,40 +40780,51 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // which matters because colour is the one channel we cannot rely on.
     impact(kind, position, tint = 0x9fe8ff) {
       const at = position.clone ? position.clone() : new T.Vector3().copy(position);
+      // HOW FAR AWAY WAS THAT. (Alex, 2026-09-07: "The soudns of enemies
+      // hitting stuff and launching those curcles are annoying and can be heard
+      // from too far away.") Every one of these played at exactly the same
+      // volume whether it happened at your feet or on the far side of the
+      // world, because audio.impact only ever took a strength and a material.
+      // The position was already here; it was just never used. Full weight
+      // inside 26 units, gone by 150, and the camera stops flinching for
+      // things happening somewhere else.
+      const range = at.distanceTo(this.player.position);
+      const near = clamp(1 - (range - 26) / 124, 0, 1);
+      const heard = near * near;
       if (kind === 'break') {
-        this.hitStop = Math.max(this.hitStop, .085);
-        this.shake = Math.max(this.shake, .46);
+        this.hitStop = Math.max(this.hitStop, .085 * near);
+        this.shake = Math.max(this.shake, .46 * near);
         world.particles.burst(at, 0xffffff, 26, 18, .7, .3);
         world.particles.burst(at, tint, 34, 14, .95, .35);
         world.pulseRing(at, new T.Color(0xffffff), 13, .34);
-        this.showHitMarker(true);
-        audio.impact(1, 'alien');
+        if (near > .02) this.showHitMarker(true);
+        if (heard > .02) audio.impact(heard, 'alien');
         return;
       }
       if (kind === 'hurt') {
-        this.hitStop = Math.max(this.hitStop, .05);
-        this.shake = Math.max(this.shake, .28);
+        this.hitStop = Math.max(this.hitStop, .05 * near);
+        this.shake = Math.max(this.shake, .28 * near);
         world.particles.burst(at, 0xffffff, 12, 14, .5, .25);
         world.particles.burst(at, tint, 18, 11, .7, .25);
         world.pulseRing(at, new T.Color(0xffffff), 6.5, .26);
-        this.showHitMarker(false);
-        audio.impact(.82, 'alien');
+        if (near > .02) this.showHitMarker(false);
+        if (heard > .02) audio.impact(.82 * heard, 'alien');
         return;
       }
       if (kind === 'graze') {
         // Armour still gives ground, so this never means "nothing happened" —
         // it means "that was the hard way round".
-        this.shake = Math.max(this.shake, .11);
+        this.shake = Math.max(this.shake, .11 * near);
         world.particles.burst(at, 0xdfe9ff, 14, 16, .34, .1);
         world.pulseRing(at, new T.Color(0xdfe9ff), 2.8, .2);
-        audio.impact(.44, 'rock');
+        if (heard > .02) audio.impact(.44 * heard, 'rock');
         return;
       }
       // 'locked'
-      this.shake = Math.max(this.shake, .13);
+      this.shake = Math.max(this.shake, .13 * near);
       world.particles.burst(at, 0x8593b5, 10, 6, .42, .06);
       world.pulseRing(at, new T.Color(0x8593b5), 3.6, .3, true);
-      audio.impact(.38, 'anchor');
+      if (heard > .02) audio.impact(.38 * heard, 'anchor');
     }
     sealCue(position, color = 0xbf83ff) {
       this.impact('locked', position, color);
@@ -40919,7 +41105,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       // each socket in its core's colour the moment that core is owned.
       if (ui.coreCounter) {
         if (!ui.coreCounter.childElementCount) {
-          for (const id of ['ember', 'piton', 'kite', 'comet', 'roc', 'colossus']) {
+          for (const id of ['ember', 'piton', 'comet', 'roc', 'colossus']) {
             const socket = document.createElement('i');
             socket.className = 'core-socket';
             socket.dataset.core = id;
@@ -41329,6 +41515,79 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (name === 'bellower') return this.teleport('bellower');
       if (name === 'underground') return this.teleport('under-veins');
       return this.teleport(name);
+    }
+    // ---- THE BOSS TEST BENCH ---------------------------------------------
+    // (Alex, 2026-09-07: "add a setting so i can test out the final boss of
+    // each moon and the final final boss like the old setting.") Four fights,
+    // each started from its real first frame with full armour, not from a
+    // half-finished pose. While a test is running the campaign save is sealed:
+    // writeThreeCrownSave and the Moonheart key both return early, so a test
+    // win can never award a crown, buy a ship, spend the purse, move a boss
+    // counter or open the Eclipse gate. EXIT reloads the page, which brings the
+    // real campaign back from the save the test was forbidden to touch -- the
+    // one restore that cannot be got wrong.
+    startBossTest(which) {
+      const id = String(which || '').toLowerCase();
+      if (!['moon', 'water', 'lava', 'eclipse'].includes(id)) return false;
+      if (!this.started) return false;
+      this.testSession = { active: true, encounter: id };
+      this.paused = false;
+      this.player.health = this.player.maxHealth;
+      this.ball.velocity.set(0, 0, 0);
+      this.ball.mode = 'ready';
+      this.ball.anchor = null;
+      this.ball.caughtBy = null;
+      this.ball.collisionCooldown.clear();
+      if (id === 'moon') {
+        world.restoreMoonheart();
+        this.endgameOpen = true;
+        this.endgameComplete = false;
+        this.enterLayer('final', 0, 307.2, 1130, 0, 'boss-test', true);
+        this.transition.active = false;
+        world.updateExpansionMotion(0, { time: this.time + 1e-9 });
+        this.updateMoonheart(0);
+      } else if (id === 'water' || id === 'lava') {
+        const profile = world.planetSurfaces.get(id);
+        if (!profile) return false;
+        profile.reset?.();
+        const progress = this.worldProgress[id];
+        if (progress) {
+          progress.finalUnlocked = true;
+          progress.bossDefeated = false;
+          progress.complete = false;
+        }
+        const boss = profile.boss;
+        if (boss) {
+          boss.alive = true;
+          boss.unlocked = true;
+          boss.engaged = false;
+          boss.eclipseReserved = false;
+          boss.finishBeforeEclipse = false;
+          boss.group.visible = true;
+        }
+        // Land on the court edge, outside the body, looking in.
+        this.enterPlanet(id, boss ? boss.baseX : null, null,
+          boss ? boss.baseZ + 42 : null, Math.PI, 'boss-test', true);
+      } else {
+        // The ultimate. Its three crowns are granted in memory only, and the
+        // toll is waived rather than paid, so no purse is touched.
+        this.endgameComplete = true;
+        this.worldProgress.water.bossDefeated = true;
+        this.worldProgress.lava.bossDefeated = true;
+        this.eclipseState = makeEclipseState(false);
+        this.eclipseCheckpoint = 'water';
+        this.eclipsePaid = true;
+        this.enterPlanet('water', null, null, null, this.player.yaw, 'boss-test', true);
+        world.unlockEclipseMaw(this, true);
+      }
+      this.syncPauseProgress();
+      this.syncWorldVisuals();
+      return true;
+    }
+    exitBossTest() {
+      if (!this.testSession?.active) return false;
+      location.reload();
+      return true;
     }
     stepWith(seconds = .1, controls = {}) {
       const ticks = Math.max(1, Math.min(3600, Math.round(Number(seconds) / FIXED_DT)));
@@ -43435,24 +43694,28 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         ventLift > 30 && game.ball.mode === 'anchored' && !!game.ball.anchor?.synthetic,
         { ventLift: +ventLift.toFixed(1), ballMode: game.ball.mode });
 
-      // THE CROWN still hands over the KITE trophy -- the climb has to pay --
-      // but holding it must not turn a fall into a glide any more. Falling is
-      // falling; the grapple is how you deal with it.
+      // THE CROWN pays the climb in suit and collectibles now. The KITE core
+      // is gone entirely: it stopped meaning anything the day the glide was
+      // removed, and a trophy that does nothing is not a reward. Falling is
+      // still falling -- the grapple is how you deal with it.
       game.restart();
       game.started = true;
       const crownSlab = world.sky.find(slab => slab.crown);
+      const healthBeforeCrown = game.player.maxHealth;
       game.player.position.copy(crownSlab.crown.prize.position);
       game.updateSky(FIXED_DT);
-      const gotKite = game.cores.has('kite');
+      const crownTaken = crownSlab.crown.taken;
+      const crownPaidSuit = game.player.maxHealth > healthBeforeCrown;
+      const kiteIsGone = !game.cores.has('kite') && !('kite' in BALL_CORES);
       KICKBALL.setPlayer(0, 400, 0);
       game.player.velocity.set(0, -30, 0);
       game.player.grounded = false;
       game.ball.mode = 'outbound';
       game.updatePlayer(FIXED_DT, { ...neutralFrame(), line: true }, false);
       const glideFall = vspeedOf(game.player.velocity, game.player.up);
-      check('the-crown-grants-the-kite-trophy-and-no-glide',
-        gotKite && game.gliding === false && glideFall < -30,
-        { gotKite, gliding: game.gliding, glideFall: +glideFall.toFixed(2) });
+      check('the-crown-pays-suit-and-crescents-and-the-kite-is-gone',
+        crownTaken && crownPaidSuit && kiteIsGone && game.gliding === false && glideFall < -30,
+        { crownTaken, crownPaidSuit, kiteIsGone, gliding: game.gliding, glideFall: +glideFall.toFixed(2) });
 
       // --- playtest fence -------------------------------------------------
       // Each of these is something a real player hit and reported. They are
@@ -44074,14 +44337,31 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       game.togglePause();
     });
   }
+  for (const button of document.querySelectorAll('[data-test-boss]')) {
+    button.addEventListener('click', () => {
+      const which = button.dataset.testBoss;
+      if (which === 'exit') {
+        if (!game.exitBossTest()) testNote('NO TEST RUNNING');
+        return;
+      }
+      if (!game.started) { testNote('START THE GAME FIRST'); return; }
+      if (!game.startBossTest(which)) { testNote(`COULD NOT START ${which.toUpperCase()}`); return; }
+      testNote(`TEST ENCOUNTER · ${button.textContent} · NOTHING IS SAVED`);
+      game.syncPauseProgress();
+      game.togglePause();
+    });
+  }
   for (const button of document.querySelectorAll('[data-test-act]')) {
     button.addEventListener('click', () => {
       const action = button.dataset.testAct;
       if (action === 'ships') {
         game.shipPassage.water = true;
         game.shipPassage.lava = true;
-        game.writeThreeCrownSave();
-        testNote('BOTH SHIPS OPEN · NO FARE');
+        // Say what actually happened. This used to claim success even when the
+        // write threw, which is the same lie the ships themselves used to tell.
+        testNote(game.writeThreeCrownSave()
+          ? 'BOTH SHIPS OPEN · NO FARE'
+          : 'SHIPS OPEN THIS SESSION ONLY · SAVE FAILED');
       } else if (action === 'grant') {
         // The purse is (lifetime minus spent), so lowering the spent figure
         // moves nothing until something has actually been spent -- this
@@ -44091,16 +44371,26 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         game.drops += SHIP_FARE;
         testNote(`PURSE ${game.ledgerTotal()}`);
       } else if (action === 'wipe') {
+        // WIPE MEANS WIPE. This used to clear the saved keys, un-buy the ships
+        // in the LIVE run, leave every live victory standing, and then tell you
+        // to reload -- while happily letting you keep playing. That mixed state
+        // is what charged for a ship that was already paid for and kept the
+        // Eclipse gate open on victories from before the wipe. It also printed
+        // SAVE WIPED whether or not the browser actually deleted anything.
+        let wiped = true;
         try {
           localStorage.removeItem(THREE_CROWN_STORAGE_KEY);
           localStorage.removeItem('moonkick-heart-v1');
-        } catch (ignored) { void ignored; }
-        game.shipPassage = { moon: true, water: false, lava: false };
-        game.savedPlanetCrowns = { water: { boss: false, mastery: false }, lava: { boss: false, mastery: false } };
-        game.savedEclipseMaw = false;
-        game.savedMoonheart = false;
-        game.eclipsePaid = false;
-        testNote('SAVE WIPED · RELOAD FOR A CLEAN RUN');
+          wiped = !localStorage.getItem(THREE_CROWN_STORAGE_KEY)
+            && !localStorage.getItem('moonkick-heart-v1');
+        } catch (ignored) { void ignored; wiped = false; }
+        if (!wiped) {
+          testNote('SAVE NOT WIPED · BROWSER REFUSED · NOTHING CHANGED');
+          return;
+        }
+        testNote('SAVE WIPED · RELOADING');
+        location.reload();
+        return;
       }
       game.syncPauseProgress();
     });

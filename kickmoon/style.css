@@ -2289,51 +2289,64 @@ body.touch-enabled .touch-pad > span {
 
 /* THREE WORLD CROWNS — three distinct rows on the right edge. Shape, order,
    luminance and colour all repeat the progression state. */
+/* (Alex, 2026-09-07: "It's not so visible that it represents 3 planets ... it
+   shows more on the bottom right. but its hardly visible.") It was three 13px
+   rows of 9px dots at 74% opacity, and the two worlds you were not standing on
+   were dimmed to 40% and desaturated by half on top of that -- so the one thing
+   in the game that says "there are three worlds and here is where you are in
+   each" was the faintest thing on the screen. Same layout, read at arm's
+   length: bigger sockets, a separating rule between the rows, and the worlds
+   you are not on stay legible instead of nearly vanishing. */
 #planetBossCounter {
   position: absolute;
-  right: 22px;
+  right: 20px;
   top: 50%;
   transform: translateY(-50%);
   display: grid;
-  grid-template-rows: repeat(3, 13px);
-  gap: 5px;
-  padding: 7px 10px;
-  border: 1px solid rgba(147, 180, 211, .13);
-  border-radius: 13px;
-  background: linear-gradient(110deg, rgba(2, 5, 12, .62), rgba(12, 8, 19, .34));
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .75), inset 0 0 18px rgba(81, 128, 173, .045);
-  opacity: .74;
+  grid-template-rows: repeat(3, 20px);
+  gap: 9px;
+  padding: 12px 14px;
+  border: 1px solid rgba(147, 180, 211, .26);
+  border-radius: 15px;
+  background: linear-gradient(110deg, rgba(2, 5, 12, .78), rgba(12, 8, 19, .5));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .8), inset 0 0 20px rgba(81, 128, 173, .07);
+  opacity: .97;
   pointer-events: none;
   transition: opacity .2s ease, border-color .2s ease;
 }
 .planet-boss-row {
   --world-tint: #ffd66b;
   display: grid;
-  grid-template-columns: 13px repeat(5, 9px) 11px 12px;
+  grid-template-columns: 19px repeat(5, 13px) 16px 17px;
   align-items: center;
-  gap: 6px;
-  height: 13px;
-  opacity: .4;
-  filter: saturate(.48);
+  gap: 7px;
+  height: 20px;
+  opacity: .72;
+  filter: saturate(.82);
   transition: opacity .2s ease, filter .2s ease, transform .2s ease;
+}
+.planet-boss-row + .planet-boss-row {
+  border-top: 1px solid rgba(147, 180, 211, .14);
+  padding-top: 8px;
+  height: 27px;
 }
 .planet-boss-row.active-planet {
   opacity: 1;
-  filter: saturate(1);
-  transform: scale(1.04);
+  filter: saturate(1.05);
+  transform: scale(1.06);
 }
 .planet-world-sigil,
 .planet-boss-socket {
   display: block;
-  width: 9px;
-  height: 9px;
+  width: 13px;
+  height: 13px;
   background: radial-gradient(circle at 38% 30%, rgba(180, 207, 229, .13), rgba(4, 8, 16, .92) 68%);
   border: 1px solid rgba(158, 188, 216, .32);
   box-shadow: inset 0 0 4px rgba(0, 0, 0, .9), 0 1px 1px rgba(0, 0, 0, .9);
 }
 .planet-world-sigil {
-  width: 12px;
-  height: 12px;
+  width: 19px;
+  height: 19px;
   border-color: var(--world-tint);
   opacity: .86;
 }
@@ -2366,13 +2379,13 @@ body.touch-enabled .touch-pad > span {
   clip-path: polygon(50% 0, 63% 35%, 100% 50%, 63% 65%, 50% 100%, 37% 65%, 0 50%, 37% 35%);
 }
 .planet-boss-socket[data-slot="final"] {
-  width: 11px;
-  height: 11px;
+  width: 16px;
+  height: 16px;
   clip-path: polygon(50% 0, 100% 38%, 81% 100%, 19% 100%, 0 38%);
 }
 .planet-boss-socket[data-slot="mastery"] {
-  width: 12px;
-  height: 12px;
+  width: 17px;
+  height: 17px;
   clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 94%, 50% 72%, 21% 94%, 32% 57%, 2% 35%, 39% 35%);
 }
 .planet-boss-socket.lit {
