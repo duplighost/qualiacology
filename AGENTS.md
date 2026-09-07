@@ -11,9 +11,11 @@ task touches.** Last verified: 2026-09-03.
 1. **`main` is production.** Netlify (project `classy-strudel-55444b`,
    publish directory `.`, no build step) deploys every push to `main` within
    about a minute, and GitHub enforces no branch protection. So: feature
-   branch → PR → merge → open the live URL. **"Ship it" from Alex IS merge
-   approval**: merge once CI is green, then verify production. Without those
-   words, stop at the open PR and wait. Never deploy manually; the git flow is
+   branch → PR → merge → open the live URL. **Publish with Alex's approval.**
+   "Ship it", "put it live", or another clear instruction to publish is enough;
+   no exact phrase is required. Once approved, merge when CI is green and verify
+   production without asking again. If publication has not been approved, leave
+   the PR ready for review. Never deploy manually; the git flow is
    the only deploy path. Rollback = redeploy a previous deploy in the Netlify UI.
 
 2. **All site copy is Alex's voice; never invent it.** Plain, dry, a little
@@ -55,7 +57,7 @@ node build/scripts/static-server.mjs --root=. --port=4173
 #   open http://localhost:4173/<game>/ and see it boot. That is the check.
 git add <game>/ && git commit -m "<GAME>: <what changed>"
 git push -u origin <branch> && gh pr create --fill
-# Wait for CI. "Ship it" → gh pr merge --squash --delete-branch, then open
+# Wait for CI and Alex's approval → gh pr merge --squash --delete-branch, then open
 # https://qualiacology.com/<game>/ and confirm it boots. Done.
 ```
 
@@ -72,7 +74,7 @@ git checkout -b <feature-branch>
 node build/scripts/preflight.mjs        # build + validate + route smoke
 #   --art if you touched ANY image; --qa only if you touched site.css/js or templates
 git add <files> && git commit && git push -u origin <branch> && gh pr create --fill
-# Inspect the Netlify deploy preview. "Ship it" → merge, then check the
+# Inspect the Netlify deploy preview. With Alex's approval → merge, then check the
 # changed routes on https://qualiacology.com.
 ```
 
