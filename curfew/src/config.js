@@ -159,7 +159,13 @@ export const CFG = {
     cell: 280,              // m; the planning grid. 120 cells inside the county, ~118 fit
     maxRadius: 1750,        // m from the centre; past this the rim fence is rising
     roadClear: 60,          // m from any centreline
-    majorClear: 120,        // m from any major
+    // ROUND 15, item 2. Was 120, which with places.js's own 70 m keep-out left every
+    // destination ringed by 50 m of forbidden ground. A wild site IS the vocabulary Alex
+    // asked for — ruins, wrecks, camps, deer stands, lookout towers — and they are already
+    // held 60 m off every road centreline and 110 m apart, so they cannot crowd an approach
+    // even at 96. Held at 96 rather than lower because a Kneeler's leash reaches about 91 m
+    // from a boss major's centre and item 24 is still open; nothing new goes inside it.
+    majorClear: 96,         // m from any major
     slopeMax: 0.25,
     waterY: 1.5,            // the reservoir bed is -4.7; below this is water
     separation: 110,        // m between any two sites (cells are 280, so this only bites at seams)
@@ -285,7 +291,32 @@ export const CFG = {
     // 8% black. Dark enough to want the torch, light enough to read as shape.
     hemi:  { sky: 0x6b82ad, ground: 0x241f18, intensity: 6.8 },
     ambient: { colour: 0x44556e, intensity: 1.55 },
-    rovers: { count: 8, distance: 18, decay: 1.8, reseat: 0.4 },   // [skyshard rovers.js]
+    // ROUND 16, THE LIGHT LANE — "LIGHT POOLS WITH REAL LIGHT AND SHADOW SIDES".
+    //
+    // Every lamp in the county that is a LIGHT rather than an emissive panel is a borrowed
+    // rover: places.js's claim-lamp (6.0 cd at 2.1 m over the post's foot), refuge's bulb,
+    // the car's headlamp and cabin pools, a mote, a corpse glow, a muzzle flash. All of them
+    // took their falloff from these two numbers, and at decay 1.8 with an 18 m cutoff a 6 cd
+    // lamp puts a 2-3 m halo on the ground and nothing else. Arithmetic, at the claim lamp:
+    //     ground under the post (2.1 m)   6 / 2.1^1.8 = 1.57   ~= the moon's own irradiance
+    //     5 m out along the apron (5.4 m) 6 / 5.4^1.8 = 0.28   5x under the moon
+    //     10 m out            (10.2 m)    6 / 10.2^1.8 = 0.09  16x under the moon
+    // A lamp that is beaten by the moon two paces from its own post is not a light pool. It
+    // is why the Filling Station forecourt reads as one flat sheet of asphalt with three
+    // orange strips floating over it in tests/shots/base-spawn.png.
+    //
+    // THE LEVER IS DECAY, NOT CANDELA — this project has now proved that twice, on the torch
+    // (gfx/lights.js TORCH_DECAY) and on the headlights (headlight.decay below), and this is
+    // the third. At the source nothing changes (d^k is 1 at 1 m for every k), so nothing that
+    // was correctly exposed close up can blow out; the whole gain lands in the mid field where
+    // there was no light at all. Same lamp, decay 1.20 with a 30 m cutoff:
+    //     2.1 m   2.55  (x1.6)      5.4 m   1.19  (x4.3)      10.2 m   0.55  (x6.3)
+    // Measured on screen at the station at deep night, the forecourt's wet patches come out
+    // of the dark and read as reflections for the first time (tests/shots/light-r1-*.png).
+    // The cutoff moves with it because three windows the falloff by (1-(d/cut)^4)^2, which at
+    // 18 m was throwing away 60% of what was left at 14 m — the reach has to exist before the
+    // falloff can deliver it.
+    rovers: { count: 8, distance: 30, decay: 1.20, reseat: 0.4 },   // [skyshard rovers.js]
     // MARROW's post-fix torch. It was 980 cd and blew every near wall to white:
     // "all I see is the flashlight on the wall". Start here and go DOWN, never up.
     //

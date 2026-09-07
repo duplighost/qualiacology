@@ -272,8 +272,20 @@ export class Lights {
     cam.updateProjectionMatrix();
     // Slope-scaled bias: trunks at a grazing moon angle acne badly without the normalBias,
     // and a plain constant bias big enough to fix them detaches the contact shadow.
+    //
+    // ROUND 16 — THE CONTACT SHADOW. normalBias is a distance in METRES: the shadow lookup is
+    // pushed 0.045 m along the surface normal, and at the boot moon elevation of 0.593 rad
+    // that displaces the shadow's edge by 0.045 / tan(0.593) = 6.6 cm along the ground. Every
+    // object in the county is therefore standing 6.6 cm above its own shadow, which is
+    // exactly the "contact shadows where things meet ground" the reviewer is asking for, and
+    // exactly the reason a crate on the forecourt looks pasted on. 0.030 halves that to
+    // 4.4 cm, which is inside one shadow texel (the 140 m box over a 1024 map is 13.7 cm a
+    // texel) — so the contact tightens as far as this map can express and no further, and the
+    // acne it is holding off cannot come back inside the texel it was already hiding in.
+    // The box itself is NOT shrunk: measured, a 50 m box brightened the mid field (fewer
+    // things left casting) instead of darkening it, which is the wrong direction for this lane.
     moon.shadow.bias = -0.0006;
-    moon.shadow.normalBias = 0.045;
+    moon.shadow.normalBias = 0.030;
     moon.shadow.autoUpdate = true;
     moon.name = 'moon';
     scene.add(moon);
@@ -574,11 +586,17 @@ export class Lights {
    * itself. It is public so a test can pin it and so a later lane has a door instead of a
    * reason to reach into a light.
    *
-   * @param k 0.20..1; anything else is clamped, a non-number is ignored
+   * ROUND 16: the floor was 0.20, which did not bite at the old black hour (0.22) but sits
+   * ABOVE the new one (0.16) — so left alone it would have silently clamped the darkest hour
+   * in the game back up, and step() would have been writing a number the light never took. A
+   * floor is there to stop a caller writing zero, not to overrule the arc; 0.12 keeps that
+   * job and leaves the arc room to move again without this trap re-arming.
+   *
+   * @param k 0.12..1; anything else is clamped, a non-number is ignored
    */
   setFillScale(k) {
     if (typeof k !== 'number' || !isFinite(k)) return;
-    const c = clamp(k, 0.20, 1);
+    const c = clamp(k, 0.12, 1);
     if (Math.abs(c - this._fillScale) < 1e-4) return;
     this._fillScale = c;
     this._writeFill();
@@ -641,16 +659,55 @@ export class Lights {
     // already 99.8% below 8 luma under canopy, and a cut past this is the void ART.md 1.3 warns
     // about (measured: one more step loses every trunk). Predicted night canopy floor p50
     // 11.2 -> ~9.5, and the torch's ratio over it goes from 5.6x to about 7x.
+    //
+    // ROUND 16, THE LIGHT LANE — THE NIGHT END OF THE ARC COMES DOWN, THE DUSK END DOES NOT.
+    //
+    // MEASURED with the clock frozen (scratch sweep), open-sky mask taken by hiding the sky
+    // root and diffing, at the Filling Station:
+    //     dusk   open sky p50 41.5   everything else p50 25.7   sky:land 1.61
+    //     night  open sky p50 15.6   everything else p50 20.7   sky:land 0.75
+    // The land walks out from under the sky the moment dusk ends and stays there for the
+    // eleven minutes that are the whole game. sky.js's night STOPS carry half of that fix
+    // (lifted 1.30x in linear); this is the other half, and the two must land together or the
+    // one that lands alone just moves the mean.
+    //
+    // WHICH TERM TO CUT WAS ALSO MEASURED, not assumed. Killing each fill in turn at deep
+    // night and reading the low band (p50 20.5 with everything on):
+    //     moon off      -> 6.4      the moon is 14 of the 20.5. It is the key and it stays.
+    //     hemi off      -> 13.0     the hemisphere is ~7.5 of it.
+    //     ambient off   -> 19.9     THE AMBIENT LIGHT IS WORTH 0.6 LUMINANCE POINTS.
+    // AmbientLight at 1.55 x 0x44556e is contributing essentially nothing to the picture it
+    // was raised to save — that is a fact about the tone curve, not about ART.md 1.3, whose
+    // sweep was run before ROUND 7 lane E rebuilt the shoulder. It is left exactly where it
+    // is (cutting a term that does nothing buys nothing, and it is the last floor under a
+    // fully-occluded interior), but nobody should spend another round tuning it: the fill
+    // that reaches the screen is the HEMISPHERE, and both move together through the scale.
+    //
+    // The cut is 22% at deep night (0.36 -> 0.28) and 27% in the black hour (0.22 -> 0.16),
+    // taken against a moon that is untouched, so the moon's SHARE of every lit surface rises
+    // and the difference between a moonlit face and a shadow side widens. That is the
+    // reviewer's "real light and shadow sides" bought with no new light. Dusk's opening value
+    // is untouched at 0.62: dusk was never inverted, and it is ART.md 1.1's calibration frame.
+    //
+    // MEASURED A/B (this cut plus sky.js's night rows and its fog, every one of them pushed
+    // back to its old value inside the same page). Frame mean is the control:
+    //   deep night, the station   mean 20.3 -> 20.4   sky 14.7 -> 19.1   land 21.5 -> 19.4
+    //   deep night, in the pines  mean 14.1 -> 14.4   sky 14.4 -> 18.6   land  9.1 ->  7.7
+    //   the black hour, pines     mean  6.7 ->  7.2   sky  5.9 ->  8.7   land  4.2 ->  3.5
+    // and the black hour, whose fill this cuts hardest, came out with ELEVEN POINTS FEWER
+    // dead-black pixels than before (72.4% -> 61.0% under luminance 8), because what it lost
+    // from the fill it got back from a sky it can now be seen against. THE VOID ART.md 1.3
+    // WARNS ABOUT IS NOT A QUANTITY OF FILL, it is a frame with nothing to read against.
     let fill = 0.62;
     if (clock && typeof clock.phase === 'string') {
       const t = clamp01(clock.phaseT || 0);
       const ease = t * t * (3 - 2 * t);
-      if (clock.phase === 'dusk') fill = lerp(0.62, 0.36, ease);
+      if (clock.phase === 'dusk') fill = lerp(0.62, 0.28, ease);
       else if (clock.phase === 'night') {
         const red = typeof clock.redness === 'number' ? clamp01(clock.redness) : 0;
-        fill = lerp(0.36, 0.26, red);
-      } else if (clock.phase === 'black') fill = 0.22;
-      else if (clock.phase === 'dawn') fill = lerp(0.22, 0.52, ease);
+        fill = lerp(0.28, 0.21, red);
+      } else if (clock.phase === 'black') fill = 0.16;
+      else if (clock.phase === 'dawn') fill = lerp(0.16, 0.44, ease);
     }
     this.setFillScale(fill);
 

@@ -178,6 +178,26 @@ const ROUTES_SRC = [
     jumps: [jump('works-crown', 5, 6, 7, 8)],
   },
   {
+    // ROUND 15, THE HOLDFAST ROAD. The middle of the county had no road within 351 m of it,
+    // which is why nothing had ever been built there. This leaves works-cut at its (30, 350)
+    // control point and runs south to the castle gate, which sits on the curtain's +Z face at
+    // about (0, 66). It is GRAVEL and 4.4 m wide — wider than a forest lane, narrower than
+    // the loop: a road that carts use, not one the county maintains.
+    //
+    // It ends AT the gate rather than through it. places.js sets a destination's yaw from
+    // atan2(road - site), so ending here is also what turns the castle to face its own road.
+    // NOT secondary. 'secondary' marks the ten narrow FOREST lanes, which are 3.30-3.90 m,
+    // rejoin the graph at both ends and carry ten direction changes each. This is a gravel
+    // approach to a destination — the same class as spur-west and spur-north, which are not
+    // secondary either. Marking it secondary put it in the wrong family and broke six
+    // assertions in tests/round9-roads.mjs that are about the forest network specifically.
+    id: 'holdfast-road', kind: 'gravel', closed: false, width: 4.40,
+    pts: [
+      [30, 350], [26, 300], [14, 252], [2, 208],
+      [-6, 168], [-8, 140], [-4, 112], [0, 88], [0, 74],
+    ],
+  },
+  {
     id: 'east-cross', kind: 'forest', secondary: true, closed: false, width: 3.60,
     pts: [
       LOOP_PTS[1], [1320, 360], [1190, 500], [1050, 390],

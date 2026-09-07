@@ -51,7 +51,7 @@
 // band ART 0.2 says the frame has nothing in, not to add another highlight.
 
 import * as THREE from 'three';
-import { C, kits, groundY } from './sites.js';
+import { C, kits, groundY, ON_APRON } from './sites.js';
 
 /* ==========================================================================
    ANCHORS — the three places refuge.js needs, in the station's LOCAL frame.
@@ -100,8 +100,13 @@ export const ANCHORS = Object.freeze({
 const D = {
   gravel: [0.112, 0.110, 0.104],
   weed: [0.052, 0.068, 0.048],
-  wet: [0.158, 0.182, 0.196],      // ~2x the marsh ground: the puddle reflects the sky
-  wetCore: [0.232, 0.262, 0.284],  // the sheen down its middle, 48-127 and nothing more
+  // ROUND 15, MEASURED. These were 0.158/0.182/0.196 and 0.232/0.262/0.284 — BRIGHTER than
+  // the apron they lie on, which is the wrong sign. Wet asphalt at night is DARKER than dry
+  // asphalt everywhere except the narrow streak where a light is mirrored in it; that streak
+  // is the additive sheen pane in wetSheen(), not the albedo. Once the puddles came out from
+  // under the apron (see ON_APRON) they read as pale slabs; now they read as water.
+  wet: [0.048, 0.056, 0.064],
+  wetCore: [0.086, 0.098, 0.112],  // the deeper middle of the same puddle
   paint: [0.132, 0.118, 0.104],    // the abandoned car's body, dulled right down
   chrome: [0.150, 0.152, 0.158],
   tyre: [0.038, 0.038, 0.040],
@@ -129,6 +134,16 @@ const D = {
   ceiling: [0.036, 0.031, 0.026],
   // The breaker's backing panel: the darkest made surface in the county, on purpose.
   panel: [0.015, 0.015, 0.018],
+  // ROUND 15. The only shadow caster in the county is a 1024 map over a +-70 m box, about
+  // 13.7 cm a texel, so a wheelie bin and a car and a pallet stack all float on an untouched
+  // apron with nothing under them. These two are the contact shadow: a soft outer mark a
+  // little smaller than the footprint, and a harder inner one where the thing actually meets
+  // the ground. 0.42x and 0.28x the apron.
+  stain: [0.055, 0.053, 0.050],
+  stainCore: [0.036, 0.035, 0.033],
+  // the kerb run on the road side: between C.ash and the gravel, so it reads as a line at
+  // night without becoming another highlight.
+  kerb: [0.126, 0.124, 0.116],
   angle: [0.086, 0.052, 0.036],
   // THE PUMP CLADDING. The pumps were the two lightest large shapes in the opening frame
   // (C.plaster, 0.265). Dark enamel with one band, so they read as machines against a lit
@@ -156,7 +171,7 @@ function apronEdge(k, api) {
   // the gravel band, 15.5 - 21 m out, thinning outward. No colliders: these are 6-11 cm.
   scatter(k, rng, 96, 0, 0, 15.5, 21.0, (x, z, r) => {
     const s = r.range(0.06, 0.16);
-    k.box(s, s * 0.5, s * r.range(0.7, 1.3), x, groundY(api, x, z) + s * 0.2, z, D.gravel, r.range(0, 3));
+    k.box(s, s * 0.5, s * r.range(0.7, 1.3), x, groundY(api, x, z) + ON_APRON + s * 0.35, z, D.gravel, r.range(0, 3));
   });
   // weed tufts. Three or four blades a tuft, leaning, so the apron has a ragged edge
   // instead of a drawn circle. Dark, so they read as texture and never as highlights.
@@ -165,7 +180,7 @@ function apronEdge(k, api) {
     const n = 3 + ((r.next() * 3) | 0);
     for (let i = 0; i < n; i++) {
       const h = r.range(0.16, 0.42);
-      k.box(0.022, h, 0.022, x + r.range(-0.13, 0.13), g + h * 0.5, z + r.range(-0.13, 0.13),
+      k.box(0.022, h, 0.022, x + r.range(-0.13, 0.13), g + ON_APRON + h * 0.5, z + r.range(-0.13, 0.13),
         D.weed, r.range(0, 3), r.range(-0.3, 0.3), r.range(-0.3, 0.3));
     }
   });
@@ -173,14 +188,14 @@ function apronEdge(k, api) {
   for (let i = 0; i < 16; i++) {
     const z = -3.2 + i * 0.46;
     const h = rng.range(0.14, 0.34);
-    k.box(0.022, h, 0.022, -5.16 + rng.range(-0.06, 0.06), api.padY + h * 0.5, z, D.weed,
+    k.box(0.022, h, 0.022, -5.16 + rng.range(-0.06, 0.06), api.padY + ON_APRON + h * 0.5, z, D.weed,
       rng.range(0, 3), 0, rng.range(-0.35, 0.35));
   }
   // a broken slab or two at the apron lip, tipped
   for (const [sx, sz, sr] of [[8.2, 11.4, 0.5], [-14.0, 12.6, -0.8], [13.6, -6.2, 0.2]]) {
     const g = groundY(api, sx, sz);
-    k.box(1.30, 0.14, 0.92, sx, g + 0.05, sz, D.gravel, sr, rng.range(0.04, 0.10), 0);
-    api.emit({ kind: 'obb', x: sx, z: sz, halfX: 0.65, halfZ: 0.46, yaw: sr, y0: g - 0.2, y1: g + 0.14, tag: 'stone', standable: true });
+    k.box(1.30, 0.14, 0.92, sx, g + ON_APRON + 0.06, sz, D.gravel, sr, rng.range(0.04, 0.10), 0);
+    api.emit({ kind: 'obb', x: sx, z: sz, halfX: 0.65, halfZ: 0.46, yaw: sr, y0: g - 0.2, y1: g + ON_APRON + 0.15, tag: 'stone', standable: true });
   }
 }
 
@@ -198,8 +213,8 @@ function apronEdge(k, api) {
 function wetPatches(k, api) {
   const rng = api.rng;
   const puddle = (x, z, w, d, ry) => {
-    k.quad(w, d, x, api.padY + 0.012, z, D.wet, ry, -Math.PI * 0.5);
-    k.quad(w * 0.42, d * 0.36, x + rng.range(-0.2, 0.2), api.padY + 0.016, z + rng.range(-0.2, 0.2),
+    k.quad(w, d, x, api.padY + ON_APRON, z, D.wet, ry, -Math.PI * 0.5);
+    k.quad(w * 0.42, d * 0.36, x + rng.range(-0.2, 0.2), api.padY + ON_APRON + 0.004, z + rng.range(-0.2, 0.2),
       D.wetCore, ry + rng.range(-0.4, 0.4), -Math.PI * 0.5);
   };
   puddle(2.9, 0.0, 4.6, 3.1, 0.22);          // the big one under the middle strip light
@@ -210,7 +225,7 @@ function wetPatches(k, api) {
   // the drip line off the canopy fascia: a row of small wet marks where the roof sheds
   for (let i = 0; i < 11; i++) {
     const x = -6.0 + i * 1.2;
-    k.quad(rng.range(0.34, 0.62), rng.range(0.24, 0.44), x, api.padY + 0.011, 4.9 + rng.range(-0.2, 0.2),
+    k.quad(rng.range(0.34, 0.62), rng.range(0.24, 0.44), x, api.padY + ON_APRON + 0.002, 4.9 + rng.range(-0.2, 0.2),
       D.wet, rng.range(0, 3), -Math.PI * 0.5);
   }
 }
@@ -309,7 +324,7 @@ function hoseReel(k, api) {
     const seg = 12;
     for (let j = 0; j < seg; j++) {
       const a = (j / seg) * Math.PI * 2;
-      k.box(0.055, 0.048, r * 0.55, x + 0.30 + Math.cos(a) * r, api.padY + 0.026 + i * 0.05, z - 0.60 + Math.sin(a) * r,
+      k.box(0.055, 0.048, r * 0.55, x + 0.30 + Math.cos(a) * r, api.padY + ON_APRON + 0.026 + i * 0.05, z - 0.60 + Math.sin(a) * r,
         C.dark, -a);
     }
   }
@@ -346,17 +361,17 @@ function palletStack(k, api) {
   const x = -16.9, z = 2.30, g = groundY(api, x, z);
   for (let i = 0; i < 7; i++) {
     const lean = i * 0.028;
-    k.box(1.22, 0.09, 1.02, x + lean * 0.6, g + 0.06 + i * 0.155, z + lean, D.timber, 0.08 + i * 0.012);
+    k.box(1.22, 0.09, 1.02, x + lean * 0.6, g + ON_APRON + 0.06 + i * 0.155, z + lean, D.timber, 0.08 + i * 0.012);
     for (const bx of [-0.46, 0, 0.46]) {
-      k.box(0.16, 0.06, 1.02, x + lean * 0.6 + bx, g + 0.02 + i * 0.155, z + lean, C.wood, 0.08 + i * 0.012);
+      k.box(0.16, 0.06, 1.02, x + lean * 0.6 + bx, g + ON_APRON + 0.02 + i * 0.155, z + lean, C.wood, 0.08 + i * 0.012);
     }
   }
   api.emit({ kind: 'obb', x: x + 0.1, z: z + 0.1, halfX: 0.63, halfZ: 0.54, yaw: 0.12, y0: g - 0.2, y1: g + 1.16, tag: 'wood', standable: true });
   // one pallet dropped flat beside it, and a couple of loose boards
-  k.box(1.22, 0.09, 1.02, x + 1.55, g + 0.05, z - 1.30, D.timber, -0.5);
+  k.box(1.22, 0.09, 1.02, x + 1.55, g + ON_APRON + 0.05, z - 1.30, D.timber, -0.5);
   api.emit({ kind: 'obb', x: x + 1.55, z: z - 1.30, halfX: 0.63, halfZ: 0.54, yaw: -0.5, y0: g - 0.2, y1: g + 0.10, tag: 'wood', standable: true });
-  k.box(1.60, 0.04, 0.16, x + 0.9, g + 0.03, z + 1.70, C.wood, 0.9);
-  k.box(1.40, 0.04, 0.14, x + 1.4, g + 0.03, z + 1.95, C.wood, 0.6);
+  k.box(1.60, 0.04, 0.16, x + 0.9, g + ON_APRON + 0.03, z + 1.70, C.wood, 0.9);
+  k.box(1.40, 0.04, 0.14, x + 1.4, g + ON_APRON + 0.03, z + 1.95, C.wood, 0.6);
 }
 
 /**
@@ -565,9 +580,9 @@ function cladPumps(k, api) {
 /** The A-board that used to say the price, face down in the forecourt. */
 function fallenBoard(k, api) {
   const x = 3.35, z = -2.65, g = groundY(api, x, z), a = 0.78;
-  k.box(0.66, 0.05, 0.98, x, g + 0.055, z, C.plank, a, 0.06, 0);
-  k.box(0.62, 0.02, 0.90, x + 0.03, g + 0.085, z + 0.02, C.dark, a, 0.06, 0);   // the wiped face
-  k.box(0.66, 0.05, 0.98, x - 0.30, g + 0.20, z + 0.34, C.plank, a - 0.2, -0.55, 0);  // the other leaf, half up
+  k.box(0.66, 0.05, 0.98, x, g + ON_APRON + 0.055, z, C.plank, a, 0.06, 0);
+  k.box(0.62, 0.02, 0.90, x + 0.03, g + ON_APRON + 0.085, z + 0.02, C.dark, a, 0.06, 0);   // the wiped face
+  k.box(0.66, 0.05, 0.98, x - 0.30, g + ON_APRON + 0.20, z + 0.34, C.plank, a - 0.2, -0.55, 0);  // the other leaf, half up
   api.emit({ kind: 'obb', x, z, halfX: 0.42, halfZ: 0.58, yaw: a, y0: g - 0.2, y1: g + 0.28, tag: 'wood', standable: true });
 }
 
@@ -911,12 +926,174 @@ function shopInterior(k, api) {
 /* ==========================================================================
    THE DRESS
    ========================================================================== */
+/* ==========================================================================
+   ROUND 15 — ITEM 20, "one genuinely polished stretch". The canopy, the ground
+   the props stand on, the kerb, and the light landing on wet asphalt.
+   ========================================================================== */
+
+/**
+ * THE CANOPY, AS A BUILT THING. sites.js gives it a 13 x 0.55 x 9 plaster slab, four bare
+ * 0.20 m posts running ground-to-slab with no foot and no head, four 0.42 x 0.12 fascia
+ * bands, and three light housings stuck to a flat plaster ceiling. Look up from the pumps
+ * and there is no structure at all — which is exactly the "silhouette, recesses, and
+ * construction" the visual review asks for, and exactly what Alex means by "boxy".
+ *
+ * Everything here is boxes and cylinders on the merged body geometry: one draw, no new
+ * material, no new program, no new collider except the two downpipes.
+ *
+ * Local frame: canopy 13 x 9 at (0, 0), slab underside padY + 4.325, top padY + 4.875,
+ * posts at (+-5.46, +-3.6). The post at (-5.46, +3.6) is BURIED inside the shop's east end
+ * wall (x -5.72..-5.28, z -3..4) — docs/ROUND-7/HANDOFF-A.md 6.2 — so it gets a foot, which
+ * is invisible and harmless, and no capital, which would poke out of a wall.
+ */
+function canopyDetail(k, api) {
+  const cw = 13, cd = 9, ch = 4.6;
+  const under = api.padY + ch - 0.275;          // padY + 4.325, the slab's underside
+  const top = api.padY + ch + 0.275;            // padY + 4.875
+
+  // (1) A RECESSED SOFFIT BORDER. Four dark bands 0.42 m in from the rim, hung 0.06 under
+  // the slab, so the ceiling has a coffer with a real reveal and the plaster in the middle
+  // is the part the strip lights pick out. That is item 16's "a light side and a shadow
+  // side" done with geometry instead of another lamp.
+  const ty = under - 0.03, tt = 0.06, tw = 0.42;
+  k.box(cw - 0.16, tt, tw, 0, ty, -cd * 0.5 + tw * 0.5 + 0.08, C.slate);
+  k.box(cw - 0.16, tt, tw, 0, ty, cd * 0.5 - tw * 0.5 - 0.08, C.slate);
+  k.box(tw, tt, cd - 0.16 - tw * 2, -cw * 0.5 + tw * 0.5 + 0.08, ty, 0, C.slate);
+  k.box(tw, tt, cd - 0.16 - tw * 2, cw * 0.5 - tw * 0.5 - 0.08, ty, 0, C.slate);
+
+  // (2) STRUCTURE OVERHEAD. Two beams on the post lines tying the four posts together, and
+  // four purlins between the light housings, which are at x -3.9, 0 and 3.9 and must stay
+  // clear. The lowest of it is 4.1 m up: nothing here is reachable and nothing is standable.
+  for (const bz of [-3.6, 3.6]) k.box(11.5, 0.26, 0.24, 0, under - 0.16, bz, D.conduit);
+  for (const bx of [-5.85, -1.95, 1.95, 5.85]) k.box(0.20, 0.20, cd - 1.2, bx, under - 0.13, 0, D.conduit);
+
+  // (3) THE POSTS GET A FOOT AND A HEAD. A bare cylinder running from asphalt to slab is the
+  // single most box-like thing under the roof.
+  for (const px of [-5.46, 5.46]) {
+    for (const pz of [-3.6, 3.6]) {
+      const g = groundY(api, px, pz) + ON_APRON;
+      k.box(0.44, 0.05, 0.44, px, g + 0.025, pz, C.ash);           // the pad
+      k.box(0.34, 0.10, 0.34, px, g + 0.10, pz, D.conduit);        // the base plate
+      k.cyl(0.23, 0.26, 0.30, 8, px, g + 0.30, pz, D.conduit);     // the collar
+      if (!(px < 0 && pz > 0)) {                                   // not the one inside the wall
+        k.box(0.32, 0.09, 0.32, px, under - 0.30, pz, D.conduit);  // the capital
+        k.box(0.26, 0.22, 0.26, px, under - 0.14, pz, D.conduit);
+      }
+    }
+  }
+
+  // (4) DRAINAGE, so the eleven drip marks on the ground have a cause. A gutter along the
+  // road-side fascia and a downpipe off each of its corners, ending in a shoe that points at
+  // the drip line at z 4.9. The pipes are the only new colliders in this function.
+  const gz = cd * 0.5 + 0.10;
+  k.box(cw + 0.16, 0.13, 0.20, 0, top + 0.05, gz, C.slate);
+  k.box(cw + 0.16, 0.04, 0.22, 0, top + 0.12, gz, D.conduit);
+  for (const dx of [-6.42, 6.42]) {
+    const g = groundY(api, dx, gz) + ON_APRON;
+    const h = top - g;
+    k.cyl(0.055, 0.055, h, 8, dx, g + h * 0.5, gz, D.conduit);
+    k.box(0.10, 0.09, 0.30, dx, g + 0.05, gz + 0.16, D.conduit, 0, 0.42, 0);   // the shoe
+    for (const by of [1.15, 2.55, 3.95]) k.box(0.15, 0.05, 0.13, dx, g + by, gz - 0.05, C.rust);
+    api.emit({ kind: 'circle', x: dx, z: gz, r: 0.11, y0: api.padY, y1: top, tag: 'metal' });
+  }
+}
+
+/**
+ * CONTACT SHADOWS. The same trick as the puddles with the opposite sign: a soft flat mark
+ * under each large prop and a smaller, darker one where it actually touches. Nothing here is
+ * a light, a collider or a material — they are quads on the body geometry at ON_APRON, which
+ * is why they had to wait for the apron fix above.
+ */
+function contactStains(k, api) {
+  const stain = (x, z, w, d, ry) => {
+    const g = groundY(api, x, z) + ON_APRON;
+    k.quad(w, d, x, g + 0.001, z, D.stain, ry, -Math.PI * 0.5);
+    k.quad(w * 0.58, d * 0.58, x, g + 0.003, z, D.stainCore, ry, -Math.PI * 0.5);
+  };
+  stain(-1.6, -8.8, 2.60, 5.10, 0.42);      // the abandoned car
+  stain(1.35, 5.35, 1.00, 1.10, 0.12);      // the standing bin
+  stain(2.60, 6.02, 1.45, 1.05, -0.62);     // the bin on its side
+  stain(-16.85, 2.36, 1.70, 1.50, 0.10);    // the pallet stack
+  stain(-15.35, 1.00, 1.40, 1.25, -0.50);   // the pallet dropped beside it
+  stain(-7.90, -4.85, 1.25, 1.05, 0.34);    // the spilled crate
+  stain(3.35, -2.65, 1.15, 1.35, 0.78);     // the fallen A-board
+  stain(-6.05, -3.90, 1.30, 1.30, 0.0);     // the hose coils
+  stain(-12.90, 4.95, 4.60, 1.30, 0.0);     // the crate stair against the back wall
+  stain(-4.15, 5.15, 1.60, 1.30, 0.0);      // the drums
+}
+
+/**
+ * THE KERB. The apron ends on a 32.68 m circle drawn by a computer. A run of separate,
+ * jittered kerb stones on the road side — the side the player walks in on — is the cheapest
+ * thing that turns a drawn circle into a made edge, with a dropped gap where the spur comes
+ * in and two stones tipped out of line.
+ *
+ * Every stone is standable and 13 cm proud, which is UNDER controller.js STICK (0.42): a
+ * collider top below that is walked over at ground level and can never become a wall. That
+ * is the mistake the sleeping bag made once already (docs/ROUND-7/HANDOFF-A.md 6b).
+ */
+function kerbLine(k, api) {
+  const rng = api.rng;
+  const R = 21.4;
+  const a0 = 2.55, a1 = 0.30, n = 26;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const a = a0 + (a1 - a0) * t;
+    if (a > 1.34 && a < 1.62) continue;          // the dropped kerb where the spur enters
+    const rr = R + rng.range(-0.20, 0.20);
+    const x = Math.cos(a) * rr, z = Math.sin(a) * rr;
+    const g = groundY(api, x, z) + ON_APRON;
+    const tip = (i === 7 || i === 18) ? rng.range(0.10, 0.20) : rng.range(-0.03, 0.03);
+    const yaw = a + Math.PI * 0.5 + rng.range(-0.05, 0.05);
+    k.box(0.90, 0.30, 0.125, x, g + 0.02, z, D.kerb, yaw, 0, tip);
+    api.emit({
+      kind: 'obb', x, z, halfX: 0.46, halfZ: 0.10, yaw,
+      y0: g - 0.30, y1: g + 0.13, tag: 'stone', standable: true,
+    });
+  }
+}
+
+/**
+ * THE LIGHT ON THE WET. "A tired station light reflected in only a few patches of asphalt."
+ *
+ * A Lambert quad with a higher albedo is a pale patch, not a reflection. Three small
+ * additive panes, one under each strip light, stretched along the sight line the way a
+ * specular streak on wet asphalt is.
+ *
+ * THE LEDGER: horizontal additive panes are capped at 2 m2 county-wide by tests/sites.mjs,
+ * because a 12 x 7.8 m horizontal glow sheet under THIS canopy is what Alex reported in
+ * playtest 4 as "a translucent square overlay across the screen". Every pane below is
+ * measurably under it — 0.81, 0.59 and 0.41 m2.
+ *
+ * THE GAIN WAS WRONG THE FIRST TIME AND THE INSTRUMENT SAID SO. At 0.30 with a quadratic
+ * falloff, tools/stretch-look.mjs forecourt-down went from 0.000% of the frame over luma 150
+ * to 4.405%, against ART 0.3 row 12's 1.5% ration — and the picture showed the round-5 bug
+ * again at one tenth the size: a bright rectangle lying on the asphalt with an edge you could
+ * point at. 0.085 with a fourth-power falloff is a streak that has no edge at all.
+ */
+const PANE_SHEEN = (u, v) => {
+  const r = Math.min(1, Math.hypot(u * 0.74, v));
+  const f = 1 - r * r;
+  return f * f * f * f * 0.085;
+};
+
+function wetSheen(glow, api) {
+  const y = api.padY + ON_APRON + 0.006;
+  glow.pane(1.30, 0.62, 2.90, y, 0.10, PANE_SHEEN, 0.22, -Math.PI * 0.5, 10, 6);
+  glow.pane(1.10, 0.54, -2.60, y, -0.90, PANE_SHEEN, -0.50, -Math.PI * 0.5, 10, 6);
+  glow.pane(0.90, 0.46, 4.35, y, 3.30, PANE_SHEEN, 0.90, -Math.PI * 0.5, 8, 6);
+}
+
 export const DRESS = {
   station(api, out) {
     void out;
     const k = kits();
     const s = k.solid;
     apronEdge(s, api);
+    kerbLine(s, api);
+    canopyDetail(s, api);
+    contactStains(s, api);
+    wetSheen(k.glow, api);
     wetPatches(s, api);
     abandonedCar(s, api);
     spilledCrate(s, api);

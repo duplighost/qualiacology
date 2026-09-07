@@ -560,6 +560,8 @@ export const XP_BY_SPECIES = Object.freeze({
   candle: 60,
   drowned: 150,
   kneeler: 600,
+  // ROUND 15: the Holdfast garrison. Between a hunter and a Kneeler, and there are six.
+  warden: 260,
   pale: 0,
   pacer: 0,
   auditor: 0,

@@ -63,7 +63,8 @@ import * as audioMod from './audio/audio.js';
 import * as hudMod from './ui/hud.js';
 import * as kneelerMod from './enemies/kneeler.js';   // ROUND 6, lane C
 import * as wildsMod from './world/wilds.js';         // ROUND 6, lane F
-import * as refugeMod from './world/refuge.js';       // ROUND 7, lane A
+import * as refugeMod from './world/refuge.js';
+import * as searchMod from './world/search.js';       // ROUND 15: going through a body
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -87,6 +88,7 @@ const SYSTEMS = [
                                // registers flats, and BEFORE chunks stream anything in
   ['wilds', wildsMod],         // ROUND 6: the off-road county — towers, caches, ruins. AFTER places
   ['refuge', refugeMod],       // ROUND 7: the breaker, the door you shut, the rest. AFTER places
+  ['search', searchMod],       // ROUND 15: hold E over a dead person. AFTER places, BEFORE enemies
   // -- the body -------------------------------------------------------------------------
   ['player', playerMod],
   ['camera', cameraMod],       // presents after player because it reads renderPos

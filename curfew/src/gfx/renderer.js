@@ -93,7 +93,8 @@ export class Gfx {
 
     const scene = new THREE.Scene();
     // Placeholder background so the very first frame is night and not renderer grey.
-    // sky.js owns the real background colour and the fog that must EQUAL it.
+    // sky.js owns the real background colour and the fog that is DERIVED from it (ROUND 16:
+    // the fog is horizon * FOG_MUL now, not the same Color object — see gfx/sky.js FOG_MUL).
     scene.background = new THREE.Color(0x07090c);
 
     const camera = new THREE.PerspectiveCamera(

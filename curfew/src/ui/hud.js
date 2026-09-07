@@ -370,12 +370,24 @@ const CSS = `
 #curfew-chrome { position: fixed; inset: 0; z-index: 13; pointer-events: none;
               contain: layout style; transition: opacity .16s ease; }
 #curfew-chrome[hidden] { display: none !important; }
+/* ROUND 15, THE LIST item 19 — "quieter minimap — its large circular outline competes with
+   the environment." THE INSTRUMENT HAD TWO OUTLINES AND HE WAS SEEING BOTH: this 1px CSS
+   border at the element edge (radius 92) and a canvas stroke at radius 85.5 painted after
+   restore() in _paintMini, i.e. two concentric bright rings 6.5 px apart with nothing between
+   them. The CSS one is deleted outright — the element still needs border-radius so the
+   background disc and the inset shadow stay round, but nothing draws a line on it any more.
+   The box-shadow's outer 5 px halo goes with it (it was a third, softer ring): what separates
+   the disc from the county now is the dark ground and the drop shadow, not an edge.
+   Opacity .94 -> .88 on top of that, because the ask is about how loudly the whole instrument
+   speaks and not only about its rim. Every pixel gate on this canvas (tests/fogmap.mjs,
+   tests/checkpoint.mjs) reads the BACKING STORE through getImageData, so CSS opacity moves
+   what Alex sees and moves no measurement — which is why it is stated here as well as done. */
 #curfew-mini { position: absolute; left: max(16px, env(safe-area-inset-left));
               top: max(16px, env(safe-area-inset-top)); width: 184px; height: 184px;
-              display: block; border: 1px solid rgba(188,205,226,.28); border-radius: 50%;
+              display: block; border: 0; border-radius: 50%;
               background: rgba(5,8,12,.68);
-              box-shadow: 0 0 0 5px rgba(3,5,8,.24), inset 0 0 32px rgba(0,0,0,.72),
-                          0 12px 34px rgba(0,0,0,.30); opacity: .94; }
+              box-shadow: inset 0 0 32px rgba(0,0,0,.72),
+                          0 12px 34px rgba(0,0,0,.34); opacity: .88; }
 #curfew-ammo { position: absolute; right: max(18px, env(safe-area-inset-right));
               bottom: max(34px, env(safe-area-inset-bottom)); width: 154px; height: 62px;
               display: block; filter: drop-shadow(0 4px 10px rgba(0,0,0,.82)); }
@@ -761,6 +773,11 @@ export class Hud {
     this._miniPaints = 0; this._miniRoads = 0; this._miniPlaces = 0;
     this._miniCheckpoints = 0; this._miniCar = false;
     this._miniCarX = -1; this._miniCarY = -1; this._miniCarAngle = 0;
+    // ROUND 15, item 19: the rim falloff's gradient, built on first paint and reused. It is
+    // dropped whenever the context it belongs to is replaced (dispose) or the backing store is
+    // resized, because a CanvasGradient outliving its canvas is the kind of thing that works
+    // everywhere until it does not.
+    this._miniEdge = null;
 
     // One explicit bearing, requested by one explicit button. No threat-direction wallpaper.
     this.locateT = 0; this.locatorRel = 0; this.locatorDistance = -1;
@@ -905,6 +922,7 @@ export class Hud {
     this.lifeCanvas = this.lg = null;
     this.mapCanvas = this.mg = null;
     this.chrome = this.miniCanvas = this.miniG = null;
+    this._miniEdge = null;
     this.ammoCanvas = this.ammoG = this.carBtn = this.pauseCarBtn = null;
   }
 
@@ -937,6 +955,7 @@ export class Hud {
       this.miniCanvas.width = Math.round(MINI_PX * this.dpr);
       this.miniCanvas.height = Math.round(MINI_PX * this.dpr);
       this.miniG.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this._miniEdge = null;
       this._miniDirty = true;
     }
     // ROUND 13: the key glyph's canvas.
@@ -1436,6 +1455,12 @@ export class Hud {
         const corpse = prog.save && prog.save.data && prog.save.data.corpse;
         let note = carried > 0 ? 'carrying ' + carried + ' · it banks at the next light' : '';
         if (corpse && corpse.live) note += (note ? ' · ' : '') + corpse.xp + ' where you fell';
+        // ROUND 15, THE PURSE. This is the ONLY place in the game a money figure is allowed
+        // to appear: the pause card. During play the coin that flies into you and the note it
+        // makes ARE the readout — no corner number, no glyph, no HUD element, because
+        // AGENTS rule 4 is that state lives in the world.
+        const cash = prog.save && prog.save.data ? (prog.save.data.cash | 0) : 0;
+        if (cash > 0) note += (note ? ' · ' : '') + cash + ' in coin';
         if (this.carryNote.textContent !== note) this.carryNote.textContent = note;
       }
       this.xpEl.textContent = here + ' / ' + span + ' XP';
@@ -2409,13 +2434,45 @@ export class Hud {
       }
     }
 
+    // ROUND 15, item 19, the half of the fix that lives in paint. The old rim was
+    //   g.restore(); stroke rgba(205,219,238,0.42) at radius rim + 0.5, lineWidth 1
+    // drawn AFTER restore(), so it was outside the clip: half its width (85.5 .. 86.0) fell on
+    // transparent canvas and sat directly on the county, and it was the brightest continuous
+    // mark on the whole instrument — 534 px of circumference at 0.42 against a disc whose road
+    // ink is 0.58 and whose ground is 0.84 of near-black.
+    //
+    // What replaces it is a FALLOFF, drawn INSIDE the clip and under the player arrow, so the
+    // disc dissolves into the night instead of being cut out of it with a line. The hard clip
+    // edge was itself part of the complaint: every road ran to radius 85 and stopped dead,
+    // which draws a circle just as well as a stroke does. One whisper of a ring is kept at
+    // rim - 1.2 (alpha .11, a quarter of the old .42) so the instrument still has an edge to
+    // sit in rather than being a smudge — inside the clip, so no part of it touches the world.
+    //
+    // NEITHER MARK CAN REACH A GATE. tests/fogmap.mjs samples a band at 280 m of a 320 m
+    // range = 0.875 of the rim and requires nothing there above luma 60; both new marks only
+    // ever DARKEN (the ring is at 0.986 of the rim and 0.11 of a mid-blue over near-black is
+    // luma ~24), and the bright-pixel count it does require is inside 40 m of the centre,
+    // which is the player arrow below and is untouched. tests/checkpoint.mjs reads ink at a
+    // lookout 32-48 m out, i.e. 0.10-0.15 of the rim, well inside where the falloff begins.
+    // The gradient is built once and cached: c and rim are module constants, and a paint that
+    // runs at 30 Hz allocates nothing (the same rule the lookouts() call above obeys).
+    if (!this._miniEdge) {
+      const eg = g.createRadialGradient(c, c, rim * 0.80, c, c, rim);
+      eg.addColorStop(0, 'rgba(4,6,10,0)');
+      eg.addColorStop(0.55, 'rgba(4,6,10,0.22)');
+      eg.addColorStop(1, 'rgba(4,6,10,0.58)');
+      this._miniEdge = eg;
+    }
+    g.fillStyle = this._miniEdge;
+    g.beginPath(); g.arc(c, c, rim, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(198,214,236,0.11)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(c, c, rim - 1.2, 0, TAU); g.stroke();
+
     // The player never moves off the centre: the county rotates under the arrow.
     g.fillStyle = INK; g.strokeStyle = SHADE; g.lineWidth = 3.4;
     g.beginPath(); g.moveTo(c, c - 8); g.lineTo(c + 5, c + 5.5); g.lineTo(c, c + 3);
     g.lineTo(c - 5, c + 5.5); g.closePath(); g.stroke(); g.fill();
     g.restore();
-    g.strokeStyle = 'rgba(205,219,238,0.42)'; g.lineWidth = 1;
-    g.beginPath(); g.arc(c, c, rim + 0.5, 0, TAU); g.stroke();
     this._miniPaints++;
     this._miniDirty = false;
   }

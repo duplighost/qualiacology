@@ -138,6 +138,14 @@ export const TERRAIN_REGIONS = Object.freeze(['pines', 'fields', 'marsh', 'ridge
  * Data only, like everything in this file. */
 export const MAJORS = Object.freeze([
   {
+    // ROUND 15, and it is Alex who found it: "i really can't tell what the texture on the
+    // ground is that looks like it could have been trying to be snow with footsteps". He was
+    // looking at the forecourt. Every apron in the county is C.ash (0.130), which is PALER
+    // than the grass around it — so a filling-station forecourt read as a white plane, and
+    // the drip line off the canopy read as footprints in it. Asphalt at night is darker than
+    // a field. This is tired wet asphalt, 0.42x the default, and the puddles and the drip
+    // marks now read as wet marks on a dark road instead of tracks in snow.
+    apronCol: [0.055, 0.056, 0.058],
     id: 'filling-station', name: 'The Filling Station',
     x: -520, z: 240, region: 'shore', terrainRegion: 'marsh', kind: 'station',
     lit: true, hub: true,
@@ -217,6 +225,41 @@ export const MAJORS = Object.freeze([
     discoverR: 24, nearR: 90, horizon: true,
     claim: { how: 'touch', dx: 12.5, dy: 0, dz: -13.9, r: 2.8 },  // the winding-house breaker
     xpFind: 25, xpClaim: 150, startClaimed: false,
+  },
+  {
+    // ROUND 15. Alex: "a gigantic castle in the middle of the map ... surrounded by actualy
+    // realistic looking people ... you have to pay someone at the door to get in ... gigantic
+    // and full of xp, but also full of powerful monsters."
+    //
+    // DEAD CENTRE, and measured before a primitive was placed: the nearest authored road
+    // control point to the origin is (30, 350) on works-cut, 351 m away, and the nearest
+    // major is the Filling Station at 573 m. The middle of this county has never had
+    // anything in it. 17.7 m of relief over 280 m and a max slope of 0.047 — open fields,
+    // which is why a castle here can be seen from a long way in every direction.
+    //
+    // NOT a boss row. STATUS item 24 (a Kneeler freezing at the Garden) is still open, and
+    // the powerful things in the Holdfast are a garrison, not a guardian at a claim.
+    id: 'holdfast', name: 'The Holdfast',
+    x: 0, z: 0, region: 'works', terrainRegion: 'fields', kind: 'holdfast',
+    lit: true, hub: false,
+    // The biggest flat in the county by a wide margin: the curtain is 132 m across and it
+    // has to stand on made ground or a 66 m wall run climbs a hill.
+    // ARITHMETIC, not taste: flora clears trees inside flat.radius * 0.86 (flora.js onPad),
+    // and the curtain's CORNERS are at hypot(66, 66) = 93.3 m from the centre. At radius 96
+    // the cleared disc was 82.6 m and the forest grew through the corner towers. 112 clears
+    // 96.3 m, which covers the corners with three metres to spare and gives the castle a
+    // glacis for the crowd to stand on.
+    flat: { radius: 112, blend: 0.70 },
+    // existing: true — the Holdfast has a GATEHOUSE, and majorApproach's standard timber
+    // arrival frame stood a 20 x 13 m gantry straight over it, which read as scaffolding
+    // round a castle (tests/shots/holdfast-v3/crowd-behind.png). The same flag the Filling
+    // Station and the Avery House use for the same reason: this place frames its own arrival.
+    approach: { x: 0, z: 74, w: 20, h: 13.0, style: 'holdfast', routeX: 0, routeZ: 56, existing: true },
+    discoverR: 70, nearR: 150, horizon: true,
+    // The claim is the keep's door, INSIDE the walls: you cannot finish this place without
+    // paying the toll or fighting through the gate, which is the whole shape Alex asked for.
+    claim: { how: 'touch', dx: 0, dy: 0, dz: -1.0, r: 3.0 },
+    xpFind: 60, xpClaim: 600, startClaimed: false,
   },
   {
     id: 'relay', name: 'The Relay',

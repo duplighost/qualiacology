@@ -100,7 +100,7 @@ const _dropped = { id: '', cx: 0, cz: 0 };
  *      minimap; Round 8 later added one, but roads, physical landmarks and the map board remain
  *      the world-space wayfinding system, and the road itself was not on screen.
  *
- * Everything here rides the vertex-colour channel that already exists plus ONE 64x128
+ * Everything here rides the vertex-colour channel that already exists plus ONE 128x256
  * profile texture on the road material, so it costs zero draws and zero shader programs
  * (measured 64 before and 64 after — CFG.render.budget.programsMax is the budget and it
  * did not move). And every term is a pure function of WORLD POSITION: a chunk is rebuilt
@@ -154,6 +154,112 @@ const CANOPY_AO = 0.48;     // a dense stand darkens its floor by up to 48% (ROU
                             // 0.48 keeps the floor in the 8-10 band ART.md 1.3 asks for)
 const CANOPY_WARM = 0.10;   // and goes slightly warm: needles, not sky. Blue only, downward.
 
+/* ------------------------------------------------------------------ *
+ * ROUND 16 — WHAT IS UNDER YOUR BOOTS.
+ *
+ * Everything above this line is PER VERTEX, and a tier-0 vertex sits every 1.6 m. Stand
+ * still and look down and the finest thing the county could draw was a 1.6 m quad of one
+ * flat colour: no grit, no gravel, no wet stone, nothing at the scale a foot occupies. It
+ * is the most obviously untextured surface in the game and no amount of vertex work can
+ * reach it, because the mesh has no vertices there to carry it.
+ *
+ * So: ONE tiling detail map on the ONE shared matGround, sampled from WORLD POSITION in
+ * the shader. Three constraints shaped every choice here.
+ *
+ *  - THE BUILDER EMITS NO `uv` ATTRIBUTE and must not start: the payload is a transfer
+ *    list shared with a Worker and adding an attribute changes that contract. The UV is
+ *    therefore derived in the vertex shader from (modelMatrix * position).xz, which is
+ *    exact — chunk meshes carry a pure translation — and costs one mat4 multiply.
+ *  - ONE PROGRAM, AND NO NEW ONES. matGround is a single shared instance across all three
+ *    LOD tiers, so there is only one program to begin with; customProgramCacheKey pins it
+ *    so it stays that way even if a future tier wanted its own material. MEASURED, live,
+ *    with the map in, over three boots: 72-75 at ready, 75 after entering the world, and
+ *    still 75 after fourteen poses and three full rebuildAll()s — the same 75 this project
+ *    has carried all round, against a CFG.render.budget.programsMax of 78, and
+ *    tests/smoke.mjs passes 12/0 reporting 75. NOTHING links during play. Two of the 75
+ *    carry the curfew-ground-1 key and
+ *    that is NOT a split by tier: their cache keys differ only in the output colour space
+ *    (`srgb` and `srgb-linear`), which is the post chain's target versus the canvas, and
+ *    both existed before this map did.
+ *  - IT MUST NOT DARKEN. ART.md 0.3 row 6 marks the ground DO NOT DARKEN, and a symmetric
+ *    multiplier is not enough to satisfy that: the tone curve is concave, so equal
+ *    excursions up and down lose mean luminance. The gains are asymmetric instead, and the
+ *    A/B measures the frame mean going UP with the map on — see GROUND_AMP_UP.
+ *
+ * TWO LAYERS AT DIFFERENT SCALES, the second with its axes swapped (a quarter turn) and
+ * reading a DIFFERENT CHANNEL of the same tile, because one tiling layer at 2.35 m is a
+ * visible grid the moment you look along the ground. The scales are in a deliberately
+ * non-integer ratio (3.96x) so the two grids beat over tens of metres instead of locking.
+ *
+ * AND IT FADES OUT WITH DISTANCE — full inside 18 m, gone by 80 m. The fade is computed in
+ * the vertex shader (one varying; three declares cameraPosition in the vertex prefix and
+ * not in the fragment one) so the fragment stage costs one multiply. It is wide on purpose:
+ * a short fade puts a visible ring on open ground, and the texture fetch is paid either way.
+ * ------------------------------------------------------------------ */
+const GROUND_TEX = 256;           // px; 2.35 m / 256 = 9.2 mm per texel at the fine layer
+const GROUND_FINE_M = 2.35;       // metres per tile, layer A
+const GROUND_COARSE_M = 9.30;     // metres per tile, layer B — 3.96x, never an integer
+// THE FIRST VERSION OF THIS WAS INVISIBLE AND THE A/B SAID SO. Measured in one boot,
+// forest floor at the player's feet, detail amplitude 0.30 vs 0 with nothing else moved:
+// near-patch sd 1.53 vs 1.64 — i.e. NOTHING, and slightly the wrong way. The arithmetic
+// says why. The tile was normalised so its widest EXCURSION was +-0.48, but the
+// distribution is peaky, so its standard deviation was only 0.123; mixing two such
+// channels dropped it to 0.088; and 1 + 0.30 * (2t - 1) then had a standard deviation of
+// 5.3% on the albedo. Five percent of a forest floor at luminance 11 is half a level.
+// So the tile is now normalised BY ITS STANDARD DEVIATION (a soft tanh limiter keeps the
+// tails inside the byte without clipping and without moving the mean) and the two layers
+// are SUMMED in signed space instead of mixed, which adds their variances instead of
+// averaging them.
+const GROUND_TARGET_SD = 0.25;    // per channel, in the texture's own 0..1 range
+const GROUND_W_FINE = 0.66, GROUND_W_COARSE = 0.54;   // signed weights; sd adds in quadrature
+// ASYMMETRIC ON PURPOSE, and this is the physics of the picture rather than a fudge: the
+// bright half of that field is wet grit catching a cold sky and it can be strong, while the
+// dark half is only the shadow between stones and must never reach the black the canopy
+// term already owns. It also carries its own exposure compensation — a mean-1 multiplier
+// LOSES mean luminance through a concave tone curve, which is why the first version came
+// back 0.2 luma darker, and the +-difference here puts about +4% back.
+const GROUND_AMP_UP = 0.55;
+const GROUND_AMP_DOWN = 0.32;
+const GROUND_FADE_NEAR = 18.0;    // full strength inside this
+const GROUND_FADE_FAR = 80.0;     // and gone by here. Wide, so the falloff cannot read as a
+                                  // ring on open ground; the sample is paid for either way.
+
+/* EXPOSED SOIL. _shadeGround was a pure multiplier chain, so every term it had could only
+ * make the region albedo lighter or darker — it could never make the ground a DIFFERENT
+ * MATERIAL. A county of forest floor with no bare earth anywhere in it is why the ground
+ * reads as one substance painted four values.
+ *
+ * Bare earth appears where water leaves and traffic or weather scrubs the litter off:
+ * ground that is CONVEX (it sheds), OPEN (no canopy dropping needles on it) and DRY. The
+ * first two are already computed per vertex here — the curvature term and the cover field —
+ * and the third is read off the groundDetail sample the value break-up already takes, which
+ * is the same field the wet/dry patches are keyed to. So this costs no new sample.
+ *
+ * TUNED AGAINST THE MEASURED DISTRIBUTION, not against the shape of the numbers. The first
+ * pass used a convexity scale of 0.45 and a dry threshold of 0.12..0.62, and over 105,903
+ * tier-0 vertices in the 63 chunks around the Filling Station that selected 0.95% of the
+ * county at a MEAN WEIGHT OF 0.0019 — which is nothing, and the in-boot A/B duly measured
+ * nothing. The reason is in the field itself: the curvature term's p95 is 0.135 and its p99
+ * is 0.226, so dividing by 0.45 and then smoothstepping put almost every vertex at zero,
+ * and groundDetail's p95 is 0.412, so an upper dry threshold of 0.62 was off the end of the
+ * distribution. Re-scaled to the field: 0.02..0.40 dry, 0.08 convex. Same 105,903 vertices,
+ * measured again: mean weight 0.032, 12.0% of the ground over 0.05, 7.6% over 0.15, 4.3%
+ * over 0.30. That is scattered patches of bare earth a few metres across, which is what it
+ * is meant to be.
+ *
+ * The albedo is warm and sits at luminance 0.161 linear — just under the fields floor
+ * (0.164), well over ridge (0.132) and pines (0.109). It has to be up there: bare earth
+ * only appears where the ground is OPEN, and open ground is the fields and the ridge, so
+ * an albedo tuned against the pines floor could only ever DARKEN the places it actually
+ * lands on. The first pass made exactly that mistake and the A/B caught it — frame mean
+ * 18.21 with the term off, 16.86 with it on. What separates it from the ground it sits in
+ * is HUE, not value: r/b is 1.81 against the fields' 1.56 and the pines' 1.20.
+ */
+const SOIL = [0.196, 0.156, 0.108];
+const SOIL_MAX = 0.62;      // never a full replacement: it is exposed earth, not a road
+const SOIL_DRY_LO = 0.02, SOIL_DRY_HI = 0.40;    // on groundDetail, whose p05..p95 is +-0.41
+const SOIL_CONVEX_HI = 0.08;                     // on the curvature term, whose p95 is 0.135
+
 // The road. matRoad's colour is the CROWN's linear albedo and the profile texture scales
 // down from it across the ribbon. ART.md 3.2.2: "a road at night is legible because it
 // reflects the sky, not because it is a different grey" — so the crown is cool, and it is
@@ -162,10 +268,32 @@ const ROAD_CROWN = [0.180, 0.190, 0.215];
 const ROAD_CROWN_HALF_M = 0.60;   // ART.md 3.2.2's 1.2 m strip, as a half-width
 const ROAD_CROWN_FALL_M = 0.55;   // and how far it takes to fall to the shoulder
 const ROAD_SHOULDER = 0.53;       // crown : shoulder = 1.89, ART.md 3.2.2's 1.9x
-const ROAD_EDGE = 0.37;           // ART.md 3.2.3, the outer strip: 30% under the shoulder
-const ROAD_EDGE_M = 0.60;
-const ROAD_TEX_W = 64, ROAD_TEX_H = 128;
-const ROAD_DETAIL_AMP = 0.18;     // the ribbon takes the county's own field, gently
+// ROUND 16: 0.37 -> 0.31 and 0.60 m -> 0.80 m. ART.md 3.2.3 wanted this strip so "the road
+// has an EDGE instead of a seam", and with the county's verge DARK it had nothing to be an
+// edge against. It does now: the pale gravel shoulder outside the ribbon measures 0.163
+// luminance against the asphalt's 0.101, so a dark lip on the tarmac is the line between
+// them. Judged in tests/shots/ground-r16b/road-feet.png, where the asphalt met the gravel
+// as a bare polygon boundary with no lip visible at all.
+const ROAD_EDGE = 0.31;
+const ROAD_EDGE_M = 0.80;
+// ROUND 16: 128 x 256, up from 64 x 128. MEASURED, with the ribbon finally rasterising
+// (tools/road-probe.mjs: 60.1% of the frame red, against 0.13% before the winding was
+// reversed): standing on the county loop the road owns 34-57% of the picture and it is a
+// PERFECTLY FLAT SHEET. The crown reads, the value reads — there is simply no surface on
+// it. The profile texture is the only per-texel channel the ribbon has (the vertex colour
+// can be nothing but a ramp across a two-vertex cross-section), and at 64 x 128 one texel
+// was 8.9 cm across a 5.7 m road, which is blurred to nothing three metres from the camera.
+// At 128 x 256 a texel is 4.5 cm by 3.1 cm — the size of the aggregate in the tarmac. The
+// texture is 128 KB and it is one upload at boot.
+const ROAD_TEX_W = 128, ROAD_TEX_H = 256;
+const ROAD_GRAIN = 0.13;          // per-texel aggregate, off the crown
+const ROAD_GRAIN_CROWN = 0.05;    // and much less on it: a wet crown is wet all the way
+// ROUND 16: 0.18 -> 0.30. This is the ribbon's only NON-REPEATING channel — the profile
+// tiles every 8 m, so anything that must not repeat over a two-kilometre straight has to
+// ride here. "A tired station light reflected in only a few patches of asphalt" is the art
+// direction's own sentence and it is a world-space patch, not a texture.
+const ROAD_DETAIL_AMP = 0.30;
+const ROAD_WET_G = 0.07, ROAD_WET_B = 0.22;   // and those patches go COOL: they are sky
 
 // AND THE REASON THE ROAD WAS INVISIBLE IN THE FIRST PLACE — measured, not reasoned.
 // roads.js emitRun banks the ribbon: y = heightAt + 0.06 + bank * half * s, with
@@ -220,6 +348,7 @@ export class Chunks {
     this.matGround = null;
     this.matRoad = null;
     this.roadTex = null;
+    this.groundTex = null;
 
     this.records = new Map();     // key -> record
     this.queue = [];              // build entries, sorted toward pos + vel*2s
@@ -272,6 +401,12 @@ export class Chunks {
       dithering: true,          // near-black gradients band badly on an 8-bit target
     });
     this.matGround.name = 'ground';
+    // ROUND 16 — the detail map. Built and installed here so every chunk mesh ever made
+    // shares the one material and the one program. If the canvas is unavailable (node, a
+    // test realm) the material is left exactly as it was: unshaded ground is a downgrade,
+    // a crash is a failure.
+    this.groundTex = this._buildGroundDetail();
+    if (this.groundTex) this._installGroundDetail(this.matGround, this.groundTex);
 
     // THE ROAD. It used to be a flat 0x14161a with no vertex colours and no map, which is
     // a linear albedo of about 0.007 — six times DARKER than the verge beside it and
@@ -286,13 +421,28 @@ export class Chunks {
     //   2. a wet CROWN down the centre at 1.9x the shoulder. A road at night is found
     //      because it reflects the sky. THIS CANNOT BE A VERTEX COLOUR: roads.js emits two
     //      vertices per cross-section (u = 0 and u = 1) so the only shape a vertex colour
-    //      can make across a ribbon is a straight ramp. It is a 64x128 profile texture.
+    //      can make across a ribbon is a straight ramp. It is a 128x256 profile texture.
     //   3. a darker strip at each edge, so the road has an EDGE instead of a seam.
     // material.color is the crown's albedo and the texture scales down from it, so the
     // profile keeps eight bits of precision instead of quantising 0.007 into two of them.
     this.matRoad = new THREE.MeshLambertMaterial({
       vertexColors: true,
       dithering: true,
+      // ROUND 15, MEASURED, AND THEN MEASURED AGAIN.
+      //
+      // This material set no `side`, so it was FrontSide — and the note at _ribbonNormals
+      // below records that computeVertexNormals() "pointed every road normal at the floor".
+      // That is a statement about the WINDING, and back-face culling reads the winding, not
+      // the normal attribute that was overridden to fix the shading. So the county's asphalt
+      // was culled from above and could only ever be seen from underneath: tools/road-probe.mjs,
+      // standing on a road looking down at it with the ribbon painted unlit and over-bright,
+      // measured 0.13% of the frame. The thing that has read as a road in every screenshot
+      // this project has ever taken is the GROUND either side of it.
+      //
+      // DoubleSide was the first fix and it was the WRONG one — three flips the normal for a
+      // back-facing fragment, so the road came back lit from underneath and rendered as a
+      // black ramp (tests/shots/holdfast-first/road-220.png). The winding is reversed at the
+      // source instead, in _ribbonIndices, and this material stays FrontSide.
       polygonOffset: true,      // the ribbon rides 6 cm over ground it is projected onto
       polygonOffsetFactor: -1.5,
       polygonOffsetUnits: -2,
@@ -708,6 +858,10 @@ export class Chunks {
     // separate runs would be measuring the whole round.
     const d = this.ctx && this.ctx.debug;
     if (d && d.flags && d.flags.flatGround) return;
+    // ROUND 16: the same discipline one step finer. flatGround turns off this whole chain,
+    // which cannot answer "what did the SOIL term do" — five other lanes are editing today
+    // and a before/after from two boots would be measuring the round, not the term.
+    const noSoil = !!(d && d.flags && d.flags.noSoil);
 
     const seg = data.seg, n = seg + 1, quad = data.quad;
     const col = data.colors, nrm = data.normals;
@@ -729,7 +883,8 @@ export class Chunks {
         const o = (iz * n + ix) * 3;
 
         // 1. VALUE BREAK-UP. Centred on 0, so the county mean does not move.
-        let m = 1 + DETAIL_AMP * groundDetail(wx, wz);
+        const detail = groundDetail(wx, wz);
+        let m = 1 + DETAIL_AMP * detail;
 
         // 1b. THE CANOPY. Dark under a stand, open in a clearing. See CANOPY_AO.
         let canopy = 0;
@@ -742,7 +897,7 @@ export class Chunks {
         //    a negative value is a hollow and a positive one is a crown. Faded to zero at
         //    the chunk border — see the note on AO_FADE_QUADS.
         const edgeIn = Math.min(ix, iz, seg - ix, seg - iz);
-        let hollow = 0;
+        let hollow = 0, crown = 0;
         if (edgeIn > 0) {
           const a = (iz * n + (ix < seg ? ix + 1 : seg)) * 3;
           const b = (iz * n + (ix > 0 ? ix - 1 : 0)) * 3;
@@ -752,8 +907,31 @@ export class Chunks {
           if (div > 1) div = 1; else if (div < -1) div = -1;
           const taper = edgeIn < fade ? edgeIn / fade : 1;
           div *= taper;
-          if (div > 0) m *= 1 + CROWN_GAIN * div;
+          if (div > 0) { crown = div; m *= 1 + CROWN_GAIN * div; }
           else { hollow = -div; m *= 1 - AO_GAIN * hollow; }
+        }
+
+        // 2b. EXPOSED SOIL — the one term in this chain that is not a multiplier.
+        //     Everything else here can only make the region albedo lighter or darker; this
+        //     makes it a DIFFERENT MATERIAL, which is the whole difference between a county
+        //     painted four values and a county made of two substances. Convex (it sheds
+        //     water), open (nothing dropping litter on it) and dry (the high tail of the
+        //     same groundDetail field the break-up above already sampled — no new noise).
+        //     It runs BEFORE the multiply, so a patch of bare earth still takes the canopy,
+        //     the curvature and the break-up like any other ground.
+        if (!noSoil && crown > 0 && detail > SOIL_DRY_LO) {
+          let s = (detail - SOIL_DRY_LO) / (SOIL_DRY_HI - SOIL_DRY_LO);
+          if (s > 1) s = 1;
+          s *= s * (3 - 2 * s);
+          let c = crown / SOIL_CONVEX_HI;
+          if (c > 1) c = 1;
+          c *= c * (3 - 2 * c);
+          const soil = SOIL_MAX * s * c * (1 - canopy);
+          if (soil > 0) {
+            col[o] += (SOIL[0] - col[o]) * soil;
+            col[o + 1] += (SOIL[1] - col[o + 1]) * soil;
+            col[o + 2] += (SOIL[2] - col[o + 2]) * soil;
+          }
         }
 
         if (m < SHADE_FLOOR) m = SHADE_FLOOR;
@@ -829,6 +1007,22 @@ export class Chunks {
    * the surface actually is: the ribbon is projected onto heightAt, so the ground's normal
    * IS the road's normal, and a road on a slope then shades like the slope it is on.
    */
+  /**
+   * ROUND 15: the winding, reversed once, here. roads.js emits its triangles clockwise seen
+   * from above, which makes every road in the county a back face to a player standing on it.
+   * Reversing the index order is one pass over a few thousand shorts at chunk-build time and
+   * it leaves the material FrontSide, the normals as authored, and the shadow pass honest —
+   * all three of which DoubleSide would have quietly broken.
+   */
+  _ribbonIndices(rib) {
+    const src = rib.indices;
+    const out = new src.constructor(src.length);
+    for (let i = 0; i + 2 < src.length; i += 3) {
+      out[i] = src[i + 2]; out[i + 1] = src[i + 1]; out[i + 2] = src[i];
+    }
+    return out;
+  }
+
   _ribbonNormals(rib) {
     const pos = rib.positions;
     const nv = pos.length / 3;
@@ -850,14 +1044,295 @@ export class Chunks {
     const col = new Float32Array(nv * 3);
     for (let i = 0; i < nv; i++) {
       const o = i * 3;
-      const m = 1 + ROAD_DETAIL_AMP * groundDetail(pos[o], pos[o + 2]);
-      col[o] = m; col[o + 1] = m; col[o + 2] = m;
+      const d = groundDetail(pos[o], pos[o + 2]);
+      const m = 1 + ROAD_DETAIL_AMP * d;
+      // ROUND 16 — THE FEW PATCHES. Only the top of the field, and only upward: a patch of
+      // standing water on asphalt is brighter AND colder than the asphalt around it, and
+      // there is no such thing as a patch that is darker than dry tarmac at night. Roads.js
+      // emits a cross-section every CFG.roads.sample (2 m), so this is a two-metre-resolved
+      // term along the ribbon and a constant across it — which is exactly right, because
+      // water lies in the length of a road, not in a stripe across it.
+      let wet = (d - 0.25) / 0.45;
+      if (wet < 0) wet = 0; else if (wet > 1) wet = 1;
+      wet *= wet * (3 - 2 * wet);
+      col[o] = m;
+      col[o + 1] = m * (1 + ROAD_WET_G * wet);
+      col[o + 2] = m * (1 + ROAD_WET_B * wet);
     }
     return col;
   }
 
   /**
-   * ART.md 3.2.2 and 3.2.3 — the road's cross-section, as a 64x128 profile texture.
+   * ROUND 16 — the ground's detail map. ONE 256 x 256 tile carrying TWO independent
+   * seamless fields, so the two layers the shader mixes are genuinely different noise
+   * rather than the same tile shown twice at different sizes (which is a visible grid, and
+   * the whole reason a single tiling layer looks cheap).
+   *
+   *   R — GRIT. Four octaves of periodic value noise plus a bright-blob pass (wet stone
+   *       catching the sky) and a dark-blob pass (leaf litter, oil, damp). Read at 2.35 m
+   *       per tile: at 256 px that is 9.4 mm per texel, which is the scale a boot occupies.
+   *   G — MOTTLE. Three low octaves only. Read at 9.30 m per tile with the axes swapped,
+   *       so it is the same texture memory doing a completely different job.
+   *
+   * Both channels are RENORMALISED to a mean of exactly 0.5 and a half-range of at most
+   * 0.48, by an affine map about the measured mean. That is what makes the shader's
+   * 1 + amp * (2t - 1) mean-neutral, which is what ART.md 0.3 row 6 requires.
+   *
+   * Deterministic: one integer hash of the lattice cell, no Math.random anywhere (project
+   * law), so the tile is identical on every machine and in every run.
+   *
+   * COST, measured on this machine in node: 108 ms to bake, once, inside init(). Boot with
+   * it in measures 9.4 s (tests/smoke.mjs), against the 15 s cold-boot law. Nothing in
+   * step() touches it and the upload is one 256 KB texture with its mip chain.
+   *
+   * NoColorSpace, per the project law for canvas textures: this is a profile, not a picture.
+   */
+  _buildGroundDetail() {
+    if (typeof document === 'undefined' || !document.createElement) return null;
+    const cv = document.createElement('canvas');
+    cv.width = GROUND_TEX; cv.height = GROUND_TEX;
+    const g2 = cv.getContext('2d');
+    if (!g2) return null;
+
+    const N = GROUND_TEX;
+    // Integer hash of a lattice cell. Same shape as chunk-worker's grain(), different
+    // constants, and it never sees a float — so the tile is bit-identical everywhere.
+    const gh = (ix, iz, salt) => {
+      let h = (ix * 374761393 + iz * 668265263 + salt * 1013904223) | 0;
+      h = (h ^ (h >>> 13)) | 0;
+      h = Math.imul(h, 1274126177);
+      return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    };
+    // Periodic value noise: P lattice cells across the tile, wrapped, so ANY integer P
+    // tiles seamlessly. Smoothstep interpolation, so the mips do not show the lattice.
+    const pn = (u, v, P, salt) => {
+      const x = u * P, z = v * P;
+      const xi = Math.floor(x), zi = Math.floor(z);
+      const fx = x - xi, fz = z - zi;
+      const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+      const i0 = ((xi % P) + P) % P, i1 = (i0 + 1) % P;
+      const j0 = ((zi % P) + P) % P, j1 = (j0 + 1) % P;
+      const a = gh(i0, j0, salt), b = gh(i1, j0, salt);
+      const c = gh(i0, j1, salt), e = gh(i1, j1, salt);
+      const lo = a + (b - a) * sx, hi = c + (e - c) * sx;
+      return lo + (hi - lo) * sz;
+    };
+
+    const R = new Float32Array(N * N), G = new Float32Array(N * N);
+    for (let y = 0; y < N; y++) {
+      const v = (y + 0.5) / N;
+      for (let x = 0; x < N; x++) {
+        const u = (x + 0.5) / N;
+        const i = y * N + x;
+
+        // GRIT. The three coarser octaves are the shape of the ground; the 61-cell octave
+        // is the grain, and at 9.4 mm per texel it is the only thing in this project that
+        // draws at the scale of a stone.
+        let r = 0.34 * pn(u, v, 7, 311)
+          + 0.27 * pn(u, v, 13, 419)
+          + 0.23 * pn(u, v, 29, 523)
+          + 0.16 * pn(u, v, 61, 631);
+        // Wet stone: connected blobs where a separate fine field runs high. Blobs, not
+        // single texels — a one-texel speck is gone by the second mip.
+        const stone = pn(u, v, 43, 733);
+        if (stone > 0.62) r += 0.34 * ((stone - 0.62) / 0.38);
+        // Litter and damp: the other tail of a separate field, going down.
+        const litter = pn(u, v, 11, 839);
+        if (litter < 0.34) r -= 0.26 * ((0.34 - litter) / 0.34);
+        R[i] = r;
+
+        // MOTTLE. Low octaves only: read at 9.3 m this is metres-wide damp and dry, and
+        // anything finer in it would just fight the grit layer.
+        G[i] = 0.50 * pn(u, v, 3, 947)
+          + 0.32 * pn(u, v, 7, 1051)
+          + 0.18 * pn(u, v, 17, 1153);
+      }
+    }
+
+    // Renormalise each channel BY ITS STANDARD DEVIATION, not by its widest excursion.
+    // Normalising by the excursion is what made the first version of this invisible: the
+    // distribution is peaky, so pinning the extremes to +-0.48 left a standard deviation of
+    // 0.123 and the shader modulated the albedo by five percent. See the note on
+    // GROUND_TARGET_SD.
+    //
+    // The tails are then folded in with tanh rather than clamped. A clamp piles mass on the
+    // two end bytes and moves the mean off 0.5, and the mean landing on 0.5 is the entire
+    // reason this multiplier is allowed near ART.md 0.3 row 6. tanh is odd but the input is
+    // not symmetric, so the mean is re-measured and removed afterwards.
+    const fit = (A) => {
+      let sum = 0;
+      for (let i = 0; i < A.length; i++) sum += A[i];
+      const mean = sum / A.length;
+      let q = 0;
+      for (let i = 0; i < A.length; i++) { const d = A[i] - mean; q += d * d; }
+      const sd = Math.sqrt(q / A.length) || 1e-6;
+      const k = GROUND_TARGET_SD / sd;
+      let s2 = 0;
+      for (let i = 0; i < A.length; i++) {
+        const x = 0.48 * Math.tanh((A[i] - mean) * k / 0.48);
+        A[i] = x; s2 += x;
+      }
+      const off = s2 / A.length;
+      let lo = 1, hi = 0, s3 = 0;
+      for (let i = 0; i < A.length; i++) {
+        let x = 0.5 + A[i] - off;
+        if (x < 0.004) x = 0.004; else if (x > 0.996) x = 0.996;
+        A[i] = x; s3 += x;
+        if (x < lo) lo = x; if (x > hi) hi = x;
+      }
+      return { mean, sd, k, out: s3 / A.length, lo, hi };
+    };
+    this._groundFit = { r: fit(R), g: fit(G) };
+
+    const img = g2.createImageData(N, N);
+    const D = img.data;
+    for (let i = 0, o = 0; i < N * N; i++, o += 4) {
+      D[o] = Math.round(R[i] * 255);
+      D[o + 1] = Math.round(G[i] * 255);
+      D[o + 2] = 128;
+      D[o + 3] = 255;
+    }
+    g2.putImageData(img, 0, 0);
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.NoColorSpace;      // project law: every canvas texture, always
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.name = 'ground-detail';
+    // The ground is seen at a grazing angle by definition — it is the floor. Without
+    // anisotropy the mip chain eats the grain at exactly two metres out, which is where
+    // this whole thing is aimed.
+    const caps = this.ctx && this.ctx.renderer && this.ctx.renderer.capabilities;
+    tex.anisotropy = (caps && typeof caps.getMaxAnisotropy === 'function')
+      ? caps.getMaxAnisotropy() : 1;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  /**
+   * ROUND 16 — install the detail map on the ONE shared ground material.
+   *
+   * NOT material.map. Setting `map` would define USE_MAP, which declares `attribute vec2 uv`
+   * and makes the stock uv_vertex write vMapUv from an attribute the builder does not emit
+   * and must not start emitting. Instead the sampler is our own uniform, the UV is derived
+   * from world position in the vertex shader, and the two stock chunks are replaced:
+   *
+   *   <uv_vertex>    -> world xz into a varying, plus the distance fade weight. `modelMatrix`
+   *                     and `cameraPosition` are both in three's own vertex prefix, and a
+   *                     chunk mesh's matrix is a pure translation, so (modelMatrix * position).xz
+   *                     is the exact world position with no extra attribute and no CPU work.
+   *   <map_fragment> -> the two-layer multiply. It sits before <color_fragment>, so it
+   *                     multiplies `diffuse` (white) and the vertex colour arrives after;
+   *                     a multiply does not care about the order.
+   *
+   * GLSL as an array of strings joined with backslash-n, exactly as flora.js's
+   * _makeGrassMaterial does it: there is no backtick anywhere in a shader in this project
+   * (a backtick inside a template literal closes the JS string and the page dies with a
+   * lineless error naming no file).
+   *
+   * customProgramCacheKey is CONSTANT. matGround is one shared instance across all three
+   * LOD tiers so there is only ever one program; the key pins that so a future tier-local
+   * material could not split it. frameStats().programs must not move, and it did not.
+   */
+  _installGroundDetail(mat, tex) {
+    const uni = {
+      uGroundMap: { value: tex },
+      // x = 1/fine metres, y = 1/coarse metres, z = amplitude UP, w = amplitude DOWN
+      uGroundParams: { value: new THREE.Vector4(
+        1 / GROUND_FINE_M, 1 / GROUND_COARSE_M, GROUND_AMP_UP, GROUND_AMP_DOWN) },
+      uGroundFade: { value: new THREE.Vector2(GROUND_FADE_NEAR, GROUND_FADE_FAR) },
+      // signed layer weights, so the two variances add instead of averaging
+      uGroundMix: { value: new THREE.Vector2(GROUND_W_FINE, GROUND_W_COARSE) },
+    };
+    mat.userData.groundUniforms = uni;
+
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uGroundMap = uni.uGroundMap;
+      shader.uniforms.uGroundParams = uni.uGroundParams;
+      shader.uniforms.uGroundFade = uni.uGroundFade;
+      shader.uniforms.uGroundMix = uni.uGroundMix;
+
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <common>',
+        [
+          '#include <common>',
+          'uniform vec2 uGroundFade;',
+          'varying vec3 vGroundD;',
+        ].join('\n')
+      );
+
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <uv_vertex>',
+        [
+          '#include <uv_vertex>',
+          '{',
+          '  vec4 gwp = modelMatrix * vec4( position, 1.0 );',
+          '  vGroundD.xy = gwp.xz;',
+          '  float gdist = length( cameraPosition.xz - gwp.xz );',
+          '  vGroundD.z = 1.0 - smoothstep( uGroundFade.x, uGroundFade.y, gdist );',
+          '}',
+        ].join('\n')
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <common>',
+        [
+          '#include <common>',
+          'uniform sampler2D uGroundMap;',
+          'uniform vec4 uGroundParams;',
+          'uniform vec2 uGroundMix;',
+          'varying vec3 vGroundD;',
+        ].join('\n')
+      );
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        [
+          '#include <map_fragment>',
+          '{',
+          // Layer A is the grit, read straight. Layer B is the mottle, read with the world
+          // axes SWAPPED (a quarter turn) and offset, so the two tilings never line up.
+          // Both are taken into SIGNED space and SUMMED: mixing them would average their
+          // variances away, which is exactly how the first version of this vanished.
+          '  float gGrit = texture2D( uGroundMap, vGroundD.xy * uGroundParams.x ).r * 2.0 - 1.0;',
+          '  float gMott = texture2D( uGroundMap, vGroundD.yx * uGroundParams.y + 0.37 ).g * 2.0 - 1.0;',
+          '  float gT = gGrit * uGroundMix.x + gMott * uGroundMix.y;',
+          '  float gNear = vGroundD.z;',
+          // Asymmetric: wet grit catching the sky can be strong, the shadow between stones
+          // must not reach the black the canopy term already owns. The difference between
+          // the two gains is also what pays back the mean a concave tone curve takes off a
+          // symmetric multiplier — see the note on GROUND_AMP_UP.
+          '  float gUp = max( gT, 0.0 ), gDn = min( gT, 0.0 );',
+          '  diffuseColor.rgb *= 1.0 + gNear * ( uGroundParams.z * gUp + uGroundParams.w * gDn );',
+          // And the bright half is WET: the only thing down there reflecting the sky, so it
+          // goes cool. Upward only, so nothing here can darken the ground.
+          '  float gWet = gUp * gNear;',
+          '  diffuseColor.g *= 1.0 + 0.06 * gWet;',
+          '  diffuseColor.b *= 1.0 + 0.20 * gWet;',
+          '}',
+        ].join('\n')
+      );
+
+      // A SELF-CHECK THAT SURVIVES THE SESSION. Both of these replacements are string
+      // matches against three's own chunk names, and a silent miss is not a crash — it is a
+      // varying that is declared, never written, reads as zero, and produces a perfectly
+      // lit county with no detail on it at all. That is this project's whole failure mode,
+      // so the answer is recorded where a probe can read it back:
+      //   __CURFEW.ctx.systems.get('chunks').matGround.userData.groundShaderPatched
+      mat.userData.groundShaderPatched = {
+        uv: shader.vertexShader.indexOf('vGroundD.xy = gwp.xz') > -1,
+        map: shader.fragmentShader.indexOf('uGroundParams.z * gUp') > -1,
+      };
+    };
+    mat.customProgramCacheKey = () => 'curfew-ground-1';
+    mat.needsUpdate = true;
+  }
+
+  /**
+   * ART.md 3.2.2 and 3.2.3 — the road's cross-section, as a 128x256 profile texture.
    * u runs across the ribbon (roads.js emits u = 0 and u = 1 at the two edges), v runs
    * along it and repeats every 8 m (roads.js emits v = arc / 8), so the longitudinal term
    * must be periodic in v or every 8 m of road would show a seam.
@@ -896,7 +1371,20 @@ export class Chunks {
           p = ROAD_SHOULDER + (ROAD_EDGE - ROAD_SHOULDER) * (t * t * (3 - 2 * t));
         }
         // The wear rides the shoulder, never the crown: a wet crown is wet all the way.
-        const q = Math.max(0, Math.min(1, p * (dm <= ROAD_CROWN_HALF_M ? 1 : wear)));
+        let q = p * (dm <= ROAD_CROWN_HALF_M ? 1 : wear);
+        // ROUND 16 — THE AGGREGATE. One deterministic hash per texel, 4.5 cm x 3.1 cm of
+        // road each, which is the size of the stone in the tarmac. It is the only thing on
+        // the ribbon at that scale and without it the road is a sheet of paper. It TILES
+        // every 8 m along and that is invisible at this frequency; the thing that must not
+        // repeat over a long straight rides the vertex colour instead (see _ribbonColors).
+        // Zero-mean by construction — (h - 0.5) — so the road's value does not move.
+        const gk = dm <= ROAD_CROWN_HALF_M ? ROAD_GRAIN_CROWN : ROAD_GRAIN;
+        let h = (x * 1597334677 + y * 3812015801 + 1013904223) | 0;
+        h = (h ^ (h >>> 15)) | 0;
+        h = Math.imul(h, 2246822519);
+        const hf = ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+        q *= 1 + gk * (hf - 0.5) * 2;
+        q = Math.max(0, Math.min(1, q));
         const o = (y * ROAD_TEX_W + x) * 4;
         const b = Math.round(q * 255);
         D[o] = b; D[o + 1] = b; D[o + 2] = b; D[o + 3] = 255;
@@ -960,7 +1448,7 @@ export class Chunks {
       rg.setAttribute('position', new THREE.BufferAttribute(data.rib.positions, 3));
       rg.setAttribute('uv', new THREE.BufferAttribute(data.rib.uvs, 2));
       rg.setAttribute('color', new THREE.BufferAttribute(this._ribbonColors(data.rib), 3));
-      rg.setIndex(new THREE.BufferAttribute(data.rib.indices, 1));
+      rg.setIndex(new THREE.BufferAttribute(this._ribbonIndices(data.rib), 1));
       // NOT computeVertexNormals() — see _ribbonNormals. That call pointed every road
       // normal at the floor and the county's only key light is above it.
       rg.setAttribute('normal', new THREE.BufferAttribute(this._ribbonNormals(data.rib), 3));
@@ -1218,6 +1706,7 @@ export class Chunks {
     if (this.matGround) { this.matGround.dispose(); this.matGround = null; }
     if (this.matRoad) { this.matRoad.dispose(); this.matRoad = null; }
     if (this.roadTex) { this.roadTex.dispose(); this.roadTex = null; }
+    if (this.groundTex) { this.groundTex.dispose(); this.groundTex = null; }
     this.group = null;
   }
 

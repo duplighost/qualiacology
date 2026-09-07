@@ -100,6 +100,7 @@ const BREAKABLE_TAGS = new Map([
   ['tyres', 48], ['sign', 30], ['aboard', 12], ['letterbox', 20], ['stall', 50],
   ['waystone', 120], ['cairn', 76], ['sapling', 26], ['stem', 26],
   ['leg', 44], ['stake', 18], ['bin', 26], ['pot', 14], ['kit', 14], ['bike', 18],
+  ['strongbox', 44],   // ROUND 15: iron-banded, and the county's one real source of money
 ]);
 
 /* ------------------------------------------------- CRUSHABLE BY SIZE, ROUND 14 --
@@ -167,6 +168,8 @@ function crushableBySize(tag, r, hx, hz, y0, y1) {
 // still stop a round and spark like what they are.
 const SHOT_BREAK = new Map([
   ['crate', 1], ['box', 1], ['aboard', 1], ['pallet', 2], ['cache', 1],
+  // ROUND 15: three landings. A strongbox should cost you rounds you would rather keep.
+  ['strongbox', 3],
 ]);
 
 // Never a ledge, whatever its top is doing. Round things and thin standing things: a body
