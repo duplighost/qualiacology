@@ -40,6 +40,7 @@
 //   emitter chain shape).
 
 import { CFG } from '../config.js';
+import { Radio } from './radio.js';
 import { clamp, clamp01, lerp } from '../engine/math.js';
 import {
   noiseFill, pinkFill, brownFill, biquad, biquadSweep, envAD, fadeOut,
@@ -125,6 +126,8 @@ export class Bed {
     this._offRoad = 0; this._region = 'pines'; this._inHush = false;
     this._started = false;
     this._radioSong = 0;
+    // ROUND 14: the dial. Real files, loaded only when he first sits down. See radio.js.
+    this.radio = new Radio(audio, ctx.rng.fork('radio:dial'));
     this._pressure = false;          // armed by a dread stinger; gates the cricket cut
     this._trafficByDistance = false; // the one stem whose cut is geometry, not dread
     this.tension = 0;
@@ -399,6 +402,9 @@ export class Bed {
   /* --------------------------------------------------------------- start -- */
 
   start() {
+    if (this.radio && this.A && this.A.actx) {
+      this.radio.build(this.A.busses ? (this.A.busses.world || this.A.busWorld) : this.A.busWorld);
+    }
     const A = this.A;
     if (!A.actx || this._started) return;
     this._started = true;
@@ -561,6 +567,7 @@ export class Bed {
   /* ------------------------------------------------------------ the step -- */
 
   step(dt) {
+    if (this.radio) this.radio.update(dt);
     const A = this.A;
     if (!A.enabled || !A.actx || !this._started) return;
     this._readWorld();
@@ -656,7 +663,9 @@ export class Bed {
       * (1 + 0.5 * clamp01(this.cutCount / 6));
     S.rain.target = S.rain.base * hush;
     S.insects.target = S.insects.base * (this._region === 'marsh' ? 1.3 : 1) * hush * inside;
-    S.radio.target = this._inCar ? 0.16 : 0;
+    // ROUND 14: the synthesised three-song loop is retired. radio.js owns the dial now and
+    // runs its own band-passed chain; this stem stays defined so the census is unchanged.
+    S.radio.target = 0;
 
     for (const k in S) {
       const s = S[k];
@@ -940,7 +949,9 @@ export class Bed {
 
   setInCar(on) {
     this._inCar = !!on;
+    if (!on && this.radio) this.radio.stop();
     if (on) {
+      if (this.radio) { this.radio.ensureLoaded(); this.radio.start(); }
       this._radioSong = (this._radioSong + 1) % 3;
       const s = this.stem.radio;
       if (s.src) { try { s.src.stop(); } catch (e) { void e; } s.src = null; }

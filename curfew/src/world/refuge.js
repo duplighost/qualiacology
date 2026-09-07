@@ -51,6 +51,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, clamp01 } from '../engine/math.js';
 import { GLOW } from './sites.js';
 import { ANCHORS } from './dress-station.js';
+import { DESTINATION_REFUGES, refugeFloorY } from './destination-refuges.js';
 
 const SITE_ID = 'filling-station';
 
@@ -91,6 +92,23 @@ const PRIMARY_SPEC = Object.freeze({
   room: Object.freeze({ x: -10.5, z: 0.5, yaw: 0, w: 10, d: 7 }),
 });
 const EXTRA_SPECS = Object.freeze([
+  ...DESTINATION_REFUGES.map(r => ({
+    id: r.id, claimPowered: true, buildBreaker: false, buildBag: true, annex:r,
+    xpPower: 0, lampIn: 7.5, lampOut: 4.5, lampDecay: 1.28,
+    room: { x:r.x, z:r.z, w:r.w, d:r.d, yaw:r.yaw },
+    anchors: compactAnchors(r, r.doorW || 2.0, r.bag || { x:-r.w/2+1.25, z:0.65, yaw:0 }),
+  })),
+  {
+    id:'blackthorn-manor', claimPowered:true, buildBreaker:false, buildBag:true,
+    xpPower:0, lampIn:6.5, lampOut:3.5, lampDecay:1.30,
+    room:{x:-25,z:-8,yaw:0,w:6,d:4},
+    anchors:{
+      breaker:{x:11,z:-12,footY:0,faceYaw:0},
+      door:{hingeX:-25.65,hingeZ:-10,width:1.3,height:2.24,yaw:0,open:-1.52,midX:-25,midZ:-10},
+      bag:{x:-26.6,z:-7.4,yaw:0},
+      lamps:{bulb:{x:-26,y:2.15,z:-7.5},door:{x:-25,y:2.3,z:-10.2}},
+    },
+  },
   Object.freeze({
     id: 'drowned-light', claimPowered: true, buildBreaker: false, buildBag: false,
     // Bright enough to be the safe island, low enough to leave wall texture and furniture
@@ -331,6 +349,11 @@ export class Refuge {
     this.yaw = rec.yaw || 0;
     this.padY = rec.padY || 0;
     this._cy = Math.cos(this.yaw); this._sy = Math.sin(this.yaw);
+    if (this.spec.annex) {
+      const terrain=this._sys('terrain');
+      this.padY=refugeFloorY({padY:this.padY,wx:(x,z)=>this._wx(x,z),wz:(x,z)=>this._wz(x,z),
+        heightAt:(x,z)=>terrain.heightAt(x,z)},this.spec.annex);
+    }
 
     this._build();
     this._restore();
@@ -575,8 +598,9 @@ export class Refuge {
     if (!b) return;
     const parts = [];
     const put = (geo, col, x, y, z) => {
+      const c = Math.cos(b.yaw || 0), s = Math.sin(b.yaw || 0);
       geo.rotateY(b.yaw || 0);
-      geo.translate(b.x + x, this.padY + y, b.z + z);
+      geo.translate(b.x + x*c + z*s, this.padY + y, b.z - x*s + z*c);
       parts.push(tint(geo, col));
     };
     put(new THREE.BoxGeometry(1.08, 0.12, 2.12), [0.125, 0.070, 0.050], 0, 0.08, 0);
@@ -891,12 +915,27 @@ export class Refuge {
     if (this.spec.buildBreaker !== false) test('breaker', this.breakerWX, this.breakerWY - 0.65, this.breakerWZ, REACH_BREAKER, true);
     const b = this.anchors.bag;
     const bx = this._wx(b.x, b.z), bz = this._wz(b.x, b.z);
-    test(this._canRest() ? 'bed' : 'bed-blocked', bx, this.padY, bz, REACH_BED, false);
+    // A bed never works from the other side of its wall or from the roof above it.
+    if (this.contains(px, py, pz))
+      test(this._canRest() ? 'bed' : 'bed-blocked', bx, this.padY, bz, REACH_BED, true);
     return best;
   }
 
   /** The bed only works when the place is safe. That IS the teaching. */
   _canRest() { return this.power && this.doorK >= DOOR_SHUT_AT; }
+
+  contains(x, y, z) {
+    const room=this.spec.room, dx=this._lx(x,z)-room.x, dz=this._lz(x,z)-room.z;
+    const c=Math.cos(room.yaw||0), s=Math.sin(room.yaw||0);
+    return Math.abs(dx*c-dz*s)<room.w/2-0.20 && Math.abs(dx*s+dz*c)<room.d/2-0.20
+      && y>=this.padY-0.3 && y<this.padY+1.25;
+  }
+
+  isProtected(x, y, z) {
+    return (this._units || [this]).some(u => u._ready && u._canRest() && u.contains(x,y,z));
+  }
+
+  isResting() { return (this._units || [this]).some(u => u.resting); }
 
   /* ------------------------------------------------------------------ door -- */
 
@@ -1098,6 +1137,7 @@ export class Refuge {
 
   /* ------------------------------------------------------------------ rest -- */
   _beginRest(p) {
+    if (!this._canRest() || !p || !this.contains(p.x,p.y,p.z)) return;
     this.resting = true;
     this.restT = 0;
     this.restPhase = 'in';

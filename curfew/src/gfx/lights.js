@@ -137,6 +137,8 @@ const HEMI_GROUND = 0x241f18;    // was CFG.lights.hemi.ground 0x1d2620
  */
 const LIT_TORCH_BASE = 0.42;   // carrying a lit torch at all
 const LIT_TORCH_AIM = 0.20;    // ...plus this much when the cone has settled onto your view
+// ROUND 14: what the torch is worth inside the cabin. See the write in the step below.
+const CABIN_TORCH = 0.16;
 const LIT_HEADLIGHT = 0.52;    // driving with the headlights on is the same trade at speed
 // ...but ONLY while the beam is on you. This term used to be a bare `if (headlightOn)`, and
 // vehicle/car.js switches the headlights on the moment the car spawns and leaves them on:
@@ -903,7 +905,17 @@ export class Lights {
       const angle = focus && aiming && typeof focus.angle === 'number' ? focus.angle : T.angle;
       if (this.torch.angle !== angle) this.torch.angle = angle;
       const hot = beam && typeof beam.seconds === 'number' && this._torchLitT < beam.seconds ? 2 : 1;
-      this.torch.intensity = this._faultT > 0 ? 0 : this._torchIntensity * hot;
+      // ROUND 14. IN THE CAR THE TORCH IS POINTED AT YOUR OWN DASHBOARD. Measured with
+      // tools/carlook.mjs: seated with the torch lit, the dash, wheel and door cards clip
+      // to white and the whole cockpit is an unreadable blowout — a 0.3 m throw into a
+      // matte panel is not the 12 m throw this intensity was tuned for. Driving already has
+      // its own light (the headlamp, LIT_HEADLIGHT above), so the torch drops to a spill
+      // that still says "it is on" without erasing the interior. It is NOT switched off:
+      // taking a player's light away without being asked is its own kind of bug, and the
+      // moment they step out it is full strength again.
+      const inCabin = !!(this.ctx.shared && this.ctx.shared.inCar);
+      const cabin = inCabin ? CABIN_TORCH : 1;
+      this.torch.intensity = this._faultT > 0 ? 0 : this._torchIntensity * hot * cabin;
       camera.getWorldDirection(_fwd);
       // The torch sits at the eye; the offset is left to the viewmodel owner to author.
       this.torch.position.copy(p);

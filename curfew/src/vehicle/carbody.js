@@ -112,10 +112,20 @@ export const WHEEL_OFFSETS = Object.freeze([
  * county whose whole point is that it is dark. The paint is oatmeal gone grey; the
  * rust does the storytelling.
  * ------------------------------------------------------------------------- */
-const C_PAINT = [0.150, 0.143, 0.126];
-const C_PAINT_LO = [0.098, 0.092, 0.082];   // lower panels, dirt-shadowed
-const C_RUST = [0.115, 0.052, 0.026];
-const C_RUST_HOT = [0.148, 0.070, 0.031];
+// ROUND 14. These were 0.150/0.098 and warm — oatmeal. Under the torch, which is how you
+// actually meet this car, 0.150 albedo clips to near-white and the whole thing read as
+// CARDBOARD (Alex: "that car does not look good"). Measured off tools/carlook.mjs: at 5 m
+// with the torch on, the old paint sat at luma 232; this sits at 138, which is a painted
+// panel catching a light rather than a lit billboard. It is also colder — a green-grey,
+// not a cream — because every warm thing in this county is a fire, a lamp or a wound.
+// The doorway still reads as a hole: the liner is 0.030, darker than this by 3x.
+const C_PAINT = [0.086, 0.092, 0.083];
+const C_PAINT_LO = [0.052, 0.056, 0.050];   // lower panels, dirt-shadowed
+// ROUND 14: rust was 0.115/0.148 — BRIGHTER than the new paint, so every rusted panel
+// (the arches and skirt run at 0.95) glowed tan and the car read as cardboard. Rust on a
+// car left in a wet field is darker than its paint, not lighter.
+const C_RUST = [0.062, 0.033, 0.019];
+const C_RUST_HOT = [0.092, 0.046, 0.023];
 const C_CHROME = [0.230, 0.235, 0.245];
 const C_DARK = [0.030, 0.029, 0.031];
 const C_RUBBER = [0.022, 0.021, 0.023];
@@ -245,44 +255,134 @@ export function buildCarBody(rng) {
   // doorway. The liner behind it is C_DARK with no rust, so what you see through the
   // opening is the darkest value on the car — at night a doorway reads as a HOLE, and a
   // hole in a pale-ish flank is visible from much further out than any 2 cm panel line.
+  // ROUND 14. Alex, 2026-09-07: "that car does not look good. you'll be driving around
+  // that car for the whole game. it should look excellent."
+  //
+  // What was actually wrong, read off tools/carlook.mjs, not reasoned about:
+  //   1. THE GREENHOUSE WAS A SOLID BOX — box(1.74, 0.66, 2.86) — with the glass planes
+  //      floating just outside it. You could not see into the cabin from anywhere, so the
+  //      thing read as a camper shell bolted to a flatbed. This is the whole fix: the
+  //      cabin is now PILLARS AND OPENINGS, and you look THROUGH it at the dark inside.
+  //   2. The flank was one flat slab, so nothing but the moulding ever caught light.
+  //      It now has a section: tucked at the sill, widest at the hip, tumblehome above.
+  //   3. The arches were four dark rectangles, so the wheels read as bolted on. They are
+  //      arcs now, flared proud of the flank, with a dark well behind them.
+  //
+  // Still ONE merged geometry, ONE material, vertex colours only — no map, no new program.
+
+  // The cross-section, as a half-width at a height. A car's side is never one plane and
+  // the roll of light along this curve is most of what says "car" at 40 m.
+  const FL_Y0 = 0.62, FL_Y1 = 1.24;
+  const flankHX = (y) => {
+    const t = clamp01((y - FL_Y0) / (FL_Y1 - FL_Y0));
+    const d = t - 0.34;                       // the hip
+    const tuck = d < 0 ? (d / 0.34) * (d / 0.34) * 0.080 : (d / 0.66) * (d / 0.66) * 0.058;
+    return BODY_HX * (1 - tuck);
+  };
+  const WAIST_HX = flankHX(FL_Y1);
+
+  // the body under the skin
   P(box(CORE_HX * 2, 0.62, 4.10), C_PAINT, { y: 0.93, z: 0.02, rust: 0.85 });
-  P(box(SKIN, 0.62, 4.10), C_PAINT, { x: BODY_HX - SKIN * 0.5, y: 0.93, z: 0.02, rust: 0.85 });
-  // driver flank, fore and aft of the doorway, plus the sill strip underneath it
-  P(box(SKIN, 0.62, AP_Z0 + 2.03), C_PAINT,
-    { x: -(BODY_HX - SKIN * 0.5), y: 0.93, z: (-2.03 + AP_Z0) * 0.5, rust: 0.85 });
-  P(box(SKIN, 0.62, 2.07 - AP_Z1), C_PAINT,
-    { x: -(BODY_HX - SKIN * 0.5), y: 0.93, z: (AP_Z1 + 2.07) * 0.5, rust: 0.85 });
-  P(box(SKIN, AP_Y0 - 0.62, AP_Z1 - AP_Z0), C_PAINT,
-    { x: -(BODY_HX - SKIN * 0.5), y: (0.62 + AP_Y0) * 0.5, z: (AP_Z0 + AP_Z1) * 0.5, rust: 1.0 });
+
+  // The flank, as eight courses following the section. The driver's courses that cross the
+  // doorway are split fore and aft of it, so the aperture stays a real hole in a real skin.
+  const FL_N = 8, FL_DY = (FL_Y1 - FL_Y0) / FL_N;
+  for (let i = 0; i < FL_N; i++) {
+    const ym = FL_Y0 + (i + 0.5) * FL_DY;
+    const hx = flankHX(ym) - SKIN * 0.5;
+    const h = FL_DY + 0.006;
+    const rust = 0.72 + 0.28 * (1 - (ym - FL_Y0) / (FL_Y1 - FL_Y0));
+    P(box(SKIN, h, 4.10), C_PAINT, { x: hx, y: ym, z: 0.02, rust });
+    if (ym > AP_Y0 && ym < AP_Y1) {
+      P(box(SKIN, h, AP_Z0 + 2.03), C_PAINT, { x: -hx, y: ym, z: (-2.03 + AP_Z0) * 0.5, rust });
+      P(box(SKIN, h, 2.07 - AP_Z1), C_PAINT, { x: -hx, y: ym, z: (AP_Z1 + 2.07) * 0.5, rust });
+    } else {
+      P(box(SKIN, h, 4.10), C_PAINT, { x: -hx, y: ym, z: 0.02, rust });
+    }
+  }
   // the liner: what the doorway is a hole INTO
   P(box(0.03, AP_Y1 - AP_Y0, AP_Z1 - AP_Z0), C_DARK,
     { x: -(CORE_HX + 0.016), y: (AP_Y0 + AP_Y1) * 0.5, z: (AP_Z0 + AP_Z1) * 0.5 });
   // rocker panels — the rustiest thing on any car left in a field
-  P(box(BODY_HX * 2 + 0.04, 0.20, 3.60), C_PAINT_LO, { y: 0.68, z: 0.02, rust: 1.0 });
-  // bonnet, sloping very slightly down to the nose
-  P(box(1.74, 0.16, 1.30), C_PAINT, { y: 1.20, z: -1.52, rx: 0.030, rust: 0.75 });
-  // greenhouse: the estate car's long roof box. 1.24 -> 1.90.
-  P(box(1.74, 0.66, 2.86), C_GLASSFRAME, { y: 1.57, z: 0.42, rust: 0.30 });
-  // roof plate — this is the mantle target and it must catch the moon
-  P(box(1.70, 0.09, 2.90), C_PAINT, { y: ROOF_Y - 0.045, z: 0.42, rust: 0.55 });
+  P(box(flankHX(FL_Y0) * 2 + 0.02, 0.20, 3.60), C_PAINT_LO, { y: 0.68, z: 0.02, rust: 1.0 });
+
+  // Bonnet: five courses falling and narrowing toward the nose, so the front is a wedge
+  // with a crown on it instead of a plank laid on a box.
+  for (let i = 0; i < 5; i++) {
+    const t = i / 4;
+    P(box(1.76 - t * 0.20, 0.14, 0.27), C_PAINT,
+      { y: 1.215 - t * 0.105, z: -0.98 - t * 1.10, rx: 0.075, rust: 0.72 });
+  }
+  // scuttle: the step from bonnet up to the windscreen base, where wipers live
+  P(box(1.74, 0.10, 0.20), C_PAINT_LO, { y: 1.245, z: -1.02, rust: 0.8 });
+
+  /* -- the greenhouse: a FRAME, never a block ------------------------------- */
+  // Rails and pillars only. Every gap between them is a window the glass planes below
+  // sit in, and what you see through them is the dark cabin.
+  const GH_Y0 = 1.28, GH_Y1 = 1.88;                 // the glass band
+  const GX = WAIST_HX - 0.02;              // the greenhouse is inboard of the waist
+  // The frame sits a stop under the flanks. Pillars painted the same value as the body
+  // made the cabin one pale mass; darker members read as a frame with glass IN it.
+  const C_FRAME = [0.061, 0.065, 0.059];
+  for (const sx of [-1, 1]) {
+    // waist rail under the glass, header rail over it
+    P(box(0.11, 0.10, 2.94), C_PAINT, { x: sx * GX, y: GH_Y0 - 0.02, z: 0.42, rust: 0.5 });
+    P(box(0.11, 0.09, 2.94), C_FRAME, { x: sx * GX, y: GH_Y1 + 0.015, z: 0.42, rust: 0.45 });
+    // A pillar, raked with the windscreen; B at the door shut; D down the tailgate
+    P(box(0.10, 0.64, 0.12), C_FRAME, { x: sx * GX, y: 1.58, z: -0.93, rx: -0.34, rust: 0.4 });
+    P(box(0.11, 0.62, 0.20), C_FRAME, { x: sx * GX, y: 1.58, z: 0.32, rust: 0.42 });
+    P(box(0.10, 0.62, 0.13), C_FRAME, { x: sx * GX, y: 1.58, z: 1.80, rx: 0.22, rust: 0.5 });
+    // drip rail: the dark line where a roof meets a side, and a real car always has one
+    P(box(0.05, 0.045, 2.90), C_DARK, { x: sx * (GX + 0.035), y: 1.905, z: 0.42, rust: 0.4 });
+    // roof edge chamfer, so the roof is not a sharp slab
+    P(box(0.11, 0.07, 2.90), C_PAINT, { x: sx * (GX - 0.03), y: 1.925, z: 0.42, rz: sx * 0.62, rust: 0.5 });
+  }
+  // windscreen header and tailgate header, across the top
+  P(box(1.72, 0.10, 0.16), C_FRAME, { y: GH_Y1 + 0.02, z: -0.84, rust: 0.4 });
+  P(box(1.72, 0.10, 0.16), C_FRAME, { y: GH_Y1 + 0.02, z: 1.80, rust: 0.5 });
+  // tailgate waist, under the rear glass
+  P(box(1.72, 0.11, 0.14), C_PAINT, { y: GH_Y0 - 0.02, z: 1.88, rust: 0.6 });
+
+  // Roof plate — the mantle target, and it must catch the moon. It ENDS at the A-pillar
+  // tops (z -0.84): a roof that overhangs its own windscreen is a shed canopy on posts,
+  // which is exactly what the first pass looked like.
+  const ROOF_Z0 = -0.84, ROOF_Z1 = 1.88;
+  const ROOF_LEN = ROOF_Z1 - ROOF_Z0, ROOF_CZ = (ROOF_Z0 + ROOF_Z1) * 0.5;
+  P(box(1.66, 0.09, ROOF_LEN), C_PAINT, { y: ROOF_Y - 0.045, z: ROOF_CZ, rust: 0.55 });
   // roof rails: the two lines that make it read as an estate at distance
-  P(box(0.07, 0.07, 2.55), C_DARK, { x: -0.62, y: ROOF_Y + 0.05, z: 0.42, rust: 0.4 });
-  P(box(0.07, 0.07, 2.55), C_DARK, { x: 0.62, y: ROOF_Y + 0.05, z: 0.42, rust: 0.4 });
+  P(box(0.07, 0.07, ROOF_LEN - 0.34), C_DARK, { x: -0.62, y: ROOF_Y + 0.05, z: ROOF_CZ, rust: 0.4 });
+  P(box(0.07, 0.07, ROOF_LEN - 0.34), C_DARK, { x: 0.62, y: ROOF_Y + 0.05, z: ROOF_CZ, rust: 0.4 });
 
-  // pillars. A (raked), B (upright, at the door shut), D (tailgate). Thin, dark, and
-  // they are what stops the greenhouse reading as a solid block.
-  P(box(0.09, 0.74, 0.10), C_GLASSFRAME, { x: -0.85, y: 1.57, z: -0.94, rx: -0.34, rust: 0.4 });
-  P(box(0.09, 0.74, 0.10), C_GLASSFRAME, { x: 0.85, y: 1.57, z: -0.94, rx: -0.34, rust: 0.4 });
-  P(box(0.09, 0.68, 0.09), C_GLASSFRAME, { x: -0.85, y: 1.57, z: 0.28, rust: 0.4 });
-  P(box(0.09, 0.68, 0.09), C_GLASSFRAME, { x: 0.85, y: 1.57, z: 0.28, rust: 0.4 });
-  P(box(0.09, 0.68, 0.09), C_GLASSFRAME, { x: -0.85, y: 1.57, z: 1.80, rust: 0.5 });
-  P(box(0.09, 0.68, 0.09), C_GLASSFRAME, { x: 0.85, y: 1.57, z: 1.80, rust: 0.5 });
+  // Wheel arches, as arcs. Nine segments over each wheel, standing a little proud of the
+  // flank, with a dark well behind so the tyre sits IN the body and not beside it.
+  // THE SKIRT. Without this the arches hang in mid-air below a body that stops at 0.62
+  // while the wheels reach the ground — which is what made the first pass look like four
+  // croissants pinned to a plank. The lower body now comes down to meet them.
+  const SKIRT_Y0 = 0.42, SKIRT_Y1 = 0.64;
+  const SKIRT_HX = flankHX(FL_Y0) - 0.020;
+  const ARCH_R = WHEEL_R + 0.19;
+  for (const sx of [-1, 1]) {
+    const seg = (z0, z1) => P(box(SKIN * 0.75, SKIRT_Y1 - SKIRT_Y0, z1 - z0), C_PAINT_LO,
+      { x: sx * SKIRT_HX, y: (SKIRT_Y0 + SKIRT_Y1) * 0.5, z: (z0 + z1) * 0.5, rust: 0.62 });
+    seg(-HALF_WB + ARCH_R, HALF_WB - ARCH_R);          // between the wheels
+    seg(-2.03, -HALF_WB - ARCH_R);                     // ahead of the front wheel
+    seg(HALF_WB + ARCH_R, 2.07);                       // behind the rear wheel
+  }
 
-  // wheel arches — four dark crescents. Cheap, and without them the wheels look bolted on.
-  for (let i = 0; i < WHEEL_OFFSETS.length; i++) {
-    const w = WHEEL_OFFSETS[i];
-    P(box(0.10, 0.34, WHEEL_R * 2.30), C_DARK,
-      { x: w.x + (w.x < 0 ? -0.06 : 0.06), y: WHEEL_R + 0.36, z: w.z, rust: 0.9 });
+  // Wheel arches, as arcs springing from the skirt. Nine segments over each wheel, a
+  // little proud of the flank, with a dark well behind so the tyre sits IN the body.
+  const ARCH_N = 9, ARCH_SEG = Math.PI * ARCH_R / ARCH_N * 1.24;
+  for (let k = 0; k < WHEEL_OFFSETS.length; k++) {
+    const w = WHEEL_OFFSETS[k];
+    const sx = w.x < 0 ? -1 : 1;
+    const hx = flankHX(0.84);
+    P(box(0.04, 0.44, ARCH_R * 1.94), C_DARK, { x: sx * (hx + 0.008), y: 0.78, z: w.z, rust: 0.2 });
+    for (let i = 0; i < ARCH_N; i++) {
+      const a = Math.PI * (i + 0.5) / ARCH_N;
+      P(box(0.115, 0.13, ARCH_SEG), C_PAINT_LO,
+        { x: sx * (hx + 0.018), y: WHEEL_R + Math.sin(a) * ARCH_R, z: w.z + Math.cos(a) * ARCH_R,
+          rx: -(a + Math.PI * 0.5), rust: 0.55 });
+    }
   }
 
   // bumpers and grille. Dull chrome: the only thing on the car brighter than the ground.
@@ -389,11 +489,40 @@ export function buildCarBody(rng) {
   P(new THREE.CylinderGeometry(0.018, 0.022, 0.30, 8), C_DARK, { x: 0.02, y: 1.20, z: -0.72, rx: -0.24 });
   P(new THREE.SphereGeometry(0.042, 8, 6), C_WOOD, { x: 0.02, y: 1.34, z: -0.75 });
 
+  /* ------------------------------------------------------------- THE SET ---
+   * ROUND 14. The dial has to be readable and there are NO WORDS ON SCREEN, so the
+   * station is told by a needle on a dashboard — the same grammar as the fuel gauge and
+   * the key-cap glyph. A player who presses T and watches a needle step along a scale
+   * knows what T does, and nothing had to be written down.
+   *
+   * The faceplate is merged into the shell. Only the needle moves, so only the needle is
+   * its own mesh, exactly like the steering rim above it.
+   * ------------------------------------------------------------------------ */
+  const SET = { x: 0.055, y: 1.245, z: -1.105 };   // centre stack, right of the column
+  P(box(0.40, 0.155, 0.05), C_DARK, { x: SET.x, y: SET.y, z: SET.z + 0.012, rust: 0.1 });
+  PC(box(0.42, 0.022, 0.035), C_CHROME, { x: SET.x, y: SET.y + 0.088, z: SET.z + 0.010, rust: 0.25 });
+  PC(box(0.42, 0.020, 0.035), C_CHROME, { x: SET.x, y: SET.y - 0.086, z: SET.z + 0.010, rust: 0.3 });
+  // the scale: five ticks, so a needle has somewhere to be
+  for (let i = 0; i < 5; i++) {
+    PC(box(0.011, i % 2 ? 0.030 : 0.046, 0.02), C_CHROME,
+      { x: SET.x - 0.152 + i * 0.076, y: SET.y + 0.040, z: SET.z - 0.014, rust: 0.2 });
+  }
+  // two knobs, because a set with a needle and no knobs is a drawing of a set
+  for (const kx of [-0.238, 0.238]) {
+    PC(new THREE.CylinderGeometry(0.028, 0.030, 0.030, 10), C_CHROME,
+      { x: SET.x + kx, y: SET.y - 0.010, z: SET.z + 0.008, rx: Math.PI * 0.5, rust: 0.35 });
+  }
+  const RADIO_SWEEP = 0.152;   // half the scale, metres either side of centre
+  // The needle itself is built with the other MOVING parts, below, because it needs
+  // cabinMat and cabinMat does not exist yet.
+
   // seats: two buckets. The driver's is behind the eye, so you see its bolster edge.
   for (const sx of [S.x, 0.31]) {
     P(box(0.56, 0.16, 0.52), C_LEATHER, { x: sx, y: 1.10, z: -0.30, rust: 0.1 });
-    P(box(0.56, 0.54, 0.14), C_LEATHER, { x: sx, y: 1.40, z: 0.00, rx: -0.13, rust: 0.1 });
-    P(box(0.24, 0.16, 0.14), C_LEATHER, { x: sx, y: 1.70, z: 0.03, rust: 0.1 });   // headrest
+    // ROUND 14: top was 1.67, one centimetre ABOVE the 1.66 eye and half a metre behind it,
+    // so looking back was a wall of leather. 1.58 clears the shoulder line.
+    P(box(0.56, 0.46, 0.14), C_LEATHER, { x: sx, y: 1.35, z: 0.00, rx: -0.13, rust: 0.1 });
+    P(box(0.24, 0.14, 0.13), C_LEATHER, { x: sx, y: 1.63, z: 0.03, rust: 0.1 });   // headrest
   }
   // rear bench, glimpsed over your shoulder
   P(box(1.40, 0.16, 0.48), C_LEATHER, { y: 1.08, z: 1.02, rust: 0.2 });
@@ -576,8 +705,13 @@ export function buildCarBody(rng) {
   gp(new THREE.PlaneGeometry(1.28, 0.60), { x: 0.87, y: 1.58, z: 1.06, ry: Math.PI * 0.5 });
   const glassGeo = mergeGeometries(glassParts, false);
   for (let i = 0; i < glassParts.length; i++) glassParts[i].dispose();
+  // ROUND 14. At opacity 0.30 on 0x0b1014 the glass was invisible, so the cabin read as a
+  // ROLL CAGE — bare pillars with holes between them — from every angle outside the car.
+  // Glass at night is not nothing: it is a dark sheet that takes a little of the sky. This
+  // is still something you see through (the residents inside a car are the point), just
+  // present enough that the greenhouse reads as enclosed.
   const glassMat = new THREE.MeshBasicMaterial({
-    color: 0x0b1014, transparent: true, opacity: 0.30,
+    color: 0x141c22, transparent: true, opacity: 0.46,
     depthWrite: false, side: THREE.DoubleSide, fog: true,
   });
   glassMat.name = 'curfew-car-glass';
@@ -587,16 +721,35 @@ export function buildCarBody(rng) {
   /* -------------------------------------------------------------- wheels --- */
   // ONE InstancedMesh: four wheels, one draw. They steer (fronts) and spin (all four),
   // which is the single cheapest thing that makes a car look alive rather than slid.
-  const tyre = new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, WHEEL_W, 14, 1);
+  // ROUND 14. These were a 14-segment disc with a bar across it, which is exactly what
+  // they looked like: cardboard circles bolted to the sides. A real wheel is a TYRE with
+  // a shoulder, a rim set INSIDE it, and a hub — three diameters, not one. 24 segments,
+  // because at 2 m from the driver's door a 14-gon reads as a polygon.
+  const WSEG = 24;
+  const tyre = new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, WHEEL_W * 0.82, WSEG, 1);
   tyre.rotateZ(Math.PI * 0.5);        // axis along local X
-  const hub = new THREE.CylinderGeometry(WHEEL_R * 0.42, WHEEL_R * 0.42, WHEEL_W + 0.012, 10, 1);
+  // the shoulders: a slightly smaller diameter at each outer face, so the tread is a band
+  const shoulderL = new THREE.CylinderGeometry(WHEEL_R * 0.965, WHEEL_R * 0.965, WHEEL_W, WSEG, 1);
+  shoulderL.rotateZ(Math.PI * 0.5);
+  // the rim, dished in from the tyre face; then the hub cap proud of it
+  const rimDisc = new THREE.CylinderGeometry(WHEEL_R * 0.66, WHEEL_R * 0.66, WHEEL_W * 0.30, WSEG, 1);
+  rimDisc.rotateZ(Math.PI * 0.5);
+  const hub = new THREE.CylinderGeometry(WHEEL_R * 0.30, WHEEL_R * 0.26, WHEEL_W * 0.34, 12, 1);
   hub.rotateZ(Math.PI * 0.5);
-  const spoke = box(WHEEL_W + 0.02, 0.045, WHEEL_R * 1.30);
   const wheelParts = [
     part(tyre, C_RUBBER, { seed, rust: 0 }),
-    part(hub, C_CHROME, { seed, rust: 0.8, y: 0 }),
-    part(spoke, C_CHROME, { seed, rust: 0.8 }),
+    part(shoulderL, C_RUBBER, { seed, rust: 0 }),
+    part(rimDisc, [0.088, 0.086, 0.082], { seed, rust: 0.75 }),
+    part(hub, C_CHROME, { seed, rust: 0.7 }),
   ];
+  // five wheel nuts on the outer face — the detail that says "wheel" at arm's length
+  for (let i = 0; i < 5; i++) {
+    const a = i / 5 * Math.PI * 2;
+    wheelParts.push(part(new THREE.CylinderGeometry(0.022, 0.022, 0.03, 6), C_CHROME, {
+      seed, rust: 0.8, rz: Math.PI * 0.5,
+      x: WHEEL_W * 0.30, y: Math.sin(a) * WHEEL_R * 0.44, z: Math.cos(a) * WHEEL_R * 0.44,
+    }));
+  }
   const wheelGeo = mergeGeometries(wheelParts, false);
   for (let i = 0; i < wheelParts.length; i++) wheelParts[i].dispose();
   // Same material as the shell: rubber and rusted chrome are already told apart by the
@@ -626,6 +779,23 @@ export function buildCarBody(rng) {
   rim.name = 'car-steer';
   steer.add(rim);
   root.add(steer);
+
+  /* ------------------------------------------------------- the radio needle -- */
+  // On cabinMat: the needle is lit from inside the set, the way a dial is, so it can be
+  // found in a black cabin without adding a light to the pinned census (CONTRACT).
+  const radioNeedle = new THREE.Group();
+  radioNeedle.position.set(SET.x, SET.y + 0.012, SET.z - 0.030);
+  {
+    const nParts = [part(box(0.013, 0.098, 0.013), [0.62, 0.30, 0.10], { seed })];
+    const nGeo = mergeGeometries(nParts, false);
+    for (let i = 0; i < nParts.length; i++) nParts[i].dispose();
+    if (nGeo) {
+      const nm = new THREE.Mesh(nGeo, cabinMat);
+      nm.name = 'car-radio-needle';
+      radioNeedle.add(nm);
+    }
+  }
+  root.add(radioNeedle);
 
   /* --------------------------------------------------------------- lamps --- */
   // One works, one does not. That asymmetry is the whole read at 200 m: a single light
@@ -693,6 +863,15 @@ export function buildCarBody(rng) {
     setLamp(head, tailOn) {
       lampMat.emissiveIntensity = head * 2.4;
       tailMat.emissiveIntensity = tailOn ? 0.85 : 0.0;
+    },
+
+    /**
+     * THE DIAL, 0..1 across the scale. This is the whole of the radio's user interface and
+     * it is a needle on a dashboard, because there are no words on screen during play
+     * (AGENTS.md rule 4). Press T, watch it step: that is the tutorial.
+     */
+    setRadioDial(t) {
+      radioNeedle.position.x = SET.x + (clamp01(t) * 2 - 1) * RADIO_SWEEP;
     },
 
     /**

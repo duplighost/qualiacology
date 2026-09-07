@@ -18,7 +18,8 @@
 // maps/procedural treatment. There are no lights, no text and no new claim/pickup logic here.
 
 import * as THREE from 'three';
-import { kits, C, groundY, shell, GLOW } from './sites.js';
+import { kits, C, groundY, shell, gableFloor, GLOW } from './sites.js';
+import { addDestinationDetails } from './destination-details.js';
 
 const TAU = Math.PI * 2;
 
@@ -221,7 +222,7 @@ function arch(k, api, x, z, span, height, depth, col, yaw = 0, crown = true) {
     k.box(pier + 0.20, 0.18, depth + 0.12, px, api.padY + height * 0.48, pz, MORTAR, yaw);
   }
   const y = localGround(api, x, z);
-  solidBox(k, api, span + pier, 0.72, depth, x, y + height - 0.36, z, col, yaw, 'wall');
+  solidBox(k, api, span + pier, 0.72, depth, x, y + height - 0.36, z, col, yaw, 'stone', true);
   if (crown) {
     for (const sx of [-1, 1]) {
       k.box(span * 0.52, 0.28, depth + 0.10,
@@ -243,6 +244,45 @@ function masonryFace(k, api, x, z, w, h, yaw = 0, rows = 7, cols = 8, palette = 
       k.box(bw * 0.90, bh * 0.78, 0.055, p, api.padY + localGround(api, x, z) + (r + 0.5) * bh,
         q, palette[(r * 5 + c * 3) % palette.length], yaw);
     }
+  }
+}
+
+/** Close a pitched roof's ends all the way to the ridge, inside the roof slab. */
+function gableEnds(k, api, x, z, wallW, wallD, roofW, eave, rise, col, yaw = 0) {
+  const f = frame(x, z, yaw), half = roofW * 0.5, thickness = 0.34;
+  for (const side of [-1, 1]) {
+    const end = side * wallD * 0.5;
+    const shape = new THREE.Shape();
+    shape.moveTo(-half, eave - 0.12);
+    shape.lineTo(half, eave - 0.12);
+    shape.lineTo(0, eave + rise - 0.10);
+    shape.closePath();
+    const g = new THREE.ExtrudeGeometry(shape,
+      { depth: thickness, bevelEnabled: false, steps: 1 });
+    // ExtrudeGeometry is non-indexed; every other shape in this batched kit is
+    // indexed. Preserve its flat normals while giving the merger a common form.
+    g.setIndex(Array.from({ length: g.attributes.position.count }, (_, i) => i));
+    g.translate(0, api.padY, end - thickness * 0.5);
+    g.rotateY(yaw); g.translate(x, 0, z); k.push(g, col);
+    // Narrow vertical strips follow the triangular face. Roof support remains
+    // the exact pitched floor above; these strips only close the attic wall.
+    const n = Math.ceil(wallW / 0.48), sw = wallW / n;
+    for (let i = 0; i < n; i++) {
+      const lx = -wallW * 0.5 + (i + 0.5) * sw;
+      const top = eave + rise * (1 - (Math.abs(lx) + sw * 0.5) / half) - 0.10;
+      api.emit({ kind: 'obb', x: f.x(lx, end), z: f.z(lx, end),
+        halfX: sw * 0.5 + 0.004, halfZ: thickness * 0.5, yaw,
+        y0: api.padY + eave - 0.12, y1: api.padY + top,
+        tag: 'wall', standable: false, climbable: false });
+    }
+    // A dark louvred vent and exposed bargeboards give the closed face scale.
+    const ventY = eave + rise * 0.36;
+    k.box(0.56, Math.min(0.8, rise * 0.4), 0.08,
+      f.x(0, end + side * 0.22), api.padY + ventY,
+      f.z(0, end + side * 0.22), COAL, yaw);
+    for (let j = 0; j < 4; j++) k.box(0.56, 0.05, 0.10,
+      f.x(0, end + side * 0.26), api.padY + ventY - 0.28 + j * 0.18,
+      f.z(0, end + side * 0.26), OLD_WOOD, yaw);
   }
 }
 
@@ -455,7 +495,7 @@ function weepingMine(api) {
   // its physical promise, far enough aside to leave the 2.8 m claim circle unobstructed.
   openCache(S, api, 8.6, -15.4, -0.18, IRON, 7);
 
-  return finish(k);
+  return finish(k, api);
 }
 
 function iColour(x) { return x < -13 ? OXIDE : (x < -9 ? C.rust : C.metal); }
@@ -481,8 +521,8 @@ function cathedral(api) {
     // cloister rhythm without turning its near view into a picket fence and flat ceiling.
     for (let i = 0; i < 7; i++) {
       if (i === 3) continue;
-      S.box(2.8, 0.15, 3.8, x + (x < -16 ? 1.0 : -1.0), api.padY + 5.72 + (i & 1) * 0.10,
-        24.5 - i * 4.35, i % 3 ? SHINGLE : VERDIGRIS, 0.08 * Math.sin(i));
+      solidBox(S, api, 2.8, 0.15, 3.8, x + (x < -16 ? 1.0 : -1.0), 5.72 + (i & 1) * 0.10,
+        24.5 - i * 4.35, i % 3 ? SHINGLE : VERDIGRIS, 0.08 * Math.sin(i), 'roof', true);
     }
   }
 
@@ -523,7 +563,7 @@ function cathedral(api) {
   // player naturally sees. It used to be one blank 17 x 15 m slab. Deep buttresses, dark
   // lancet recesses, voussoirs and a corroded parapet make it a cathedral end wall at arm's
   // length, while the route remains outside it on the west (x=-17).
-  for (const x of [-7.3, -3.7, 0, 3.7, 7.3]) {
+  for (const x of [-7.3, -3.7, 3.7, 7.3]) {
     S.box(1.05, 11.2, 1.55, x, api.padY + 5.6, 23.62,
       Math.abs(x) < 1 ? MOSS_STONE : OLD_STONE);
     S.box(1.45, 0.30, 1.85, x, api.padY + 0.16, 23.62, MORTAR);
@@ -620,7 +660,7 @@ function cathedral(api) {
   // A reliquary chest makes the brazier/claim end read as a payoff without changing it.
   openCache(S, api, 7.2, -12.4, 0.08, VERDIGRIS, 8);
 
-  return finish(k);
+  return finish(k, api);
 }
 
 function chapel(api) {
@@ -634,7 +674,12 @@ function chapel(api) {
   const HX = -13.0, HZ = 3.0, HW = 10.5, HD = 17.0, HH = 6.4;
   shell(S, api, HX, HZ, HW, HD, HH, Math.PI, OLD_STONE, 2.6);
   S.gable(HW + 0.8, HD + 0.8, api.padY + HH, 2.4, HX, 0, HZ, SHINGLE, Math.PI);
-  plankFace(S, api, HX, HZ + HD * 0.5 + 0.25, HW - 1.0, 5.7, 0, 13);
+  gableFloor(api, HX, HZ, HW + 0.8, HD + 0.8, api.padY + HH, 2.4, Math.PI);
+  gableEnds(S, api, HX, HZ, HW, HD, HW + 0.8, HH, 2.4, OLD_STONE, Math.PI);
+  // Leave the hospice's 2.6 m entry visibly OPEN. A single weatherboard skin
+  // across this face used to cover its doorway even though shell left a gap.
+  for (const side of [-1, 1]) plankFace(S, api, HX + side * 3.31,
+    HZ + HD * 0.5 + 0.25, 3.30, 5.7, 0, 5);
   masonryFace(S, api, HX + HW * 0.5 + 0.25, HZ, HD - 0.8, 5.6, Math.PI * 0.5, 8, 10);
   shingleRows(S, api, HX, HZ, HW + 0.8, HD + 0.8, HH + 0.15, 2.2, Math.PI, 8);
   for (let i = 0; i < 5; i++) {
@@ -670,8 +715,8 @@ function chapel(api) {
   for (const z of [FZ - 5.1, FZ, FZ + 5.1]) S.box(10.2, 0.34, 0.34, FX, api.padY + 5.2, z, IRON);
   for (let i = 0; i < 8; i++) {
     const z = FZ - 5.2 + i * 1.48;
-    S.box(10.5, 0.14, 1.15, FX, api.padY + 5.35 + (i & 1) * 0.07, z,
-      i % 3 ? SHINGLE : OXIDE);
+    solidBox(S, api, 10.5, 0.14, 1.15, FX, 5.35 + (i & 1) * 0.07, z,
+      i % 3 ? SHINGLE : OXIDE, 0, 'roof', true);
   }
   S.cyl(2.0, 2.0, 0.08, 14, FX, api.padY + 0.47, FZ + 0.6, COAL);
   for (let i = 0; i < 12; i++) {
@@ -714,8 +759,8 @@ function chapel(api) {
     beamBetween(S, api, [side * 1.18, 4.72, 12.50], [0, 6.28, 12.50], 0.18, OXIDE, 6);
   }
   for (let i = 0; i < 5; i++) {
-    S.box(1.25, 0.13, 2.25, -3.2 + i * 1.6, api.padY + 6.05 + (i & 1) * 0.10,
-      13.15, i % 3 ? SHINGLE : OXIDE);
+    solidBox(S, api, 1.25, 0.13, 2.25, -3.2 + i * 1.6, 6.05 + (i & 1) * 0.10,
+      13.15, i % 3 ? SHINGLE : OXIDE, 0, 'roof', true);
   }
 
   // The rear charnel gallery closes the court with an authored ruin rather than another
@@ -733,8 +778,8 @@ function chapel(api) {
     }
   }
   for (let i = 0; i < 15; i++) {
-    S.box(2.5, 0.14, 1.25, -19.0 + i * 2.7, api.padY + 5.35 + (i & 1) * 0.08,
-      -14.5, i % 4 === 0 ? VERDIGRIS : SHINGLE);
+    solidBox(S, api, 2.5, 0.14, 1.25, -19.0 + i * 2.7, 5.35 + (i & 1) * 0.08,
+      -14.5, i % 4 === 0 ? VERDIGRIS : SHINGLE, 0, 'roof', true);
   }
 
   openCache(S, api, 8.1, -4.3, 0.1, OLD_WOOD, 6);
@@ -748,7 +793,7 @@ function chapel(api) {
     crown: { x: -7.1, z: 4.0, y: api.padY + 1.05 },
   };
 
-  return finish(k);
+  return finish(k, api);
 }
 
 function gallowsfen(api) {
@@ -894,24 +939,26 @@ function gallowsfen(api) {
     tag: 'wood', standable: true });
   S.box(5.2, 0.08, 0.16, BX + 0.5, api.padY + BY + 0.75, BZ - 0.5, C.wood, -0.5);
 
-  // A drowned maintenance stair climbs the outside of the west transept. Its first tread
-  // grows directly from the existing low stage and its last reaches a new gallery laid on
-  // the three visible transept posts. The central aisle and belfry shot stay completely
-  // open; the hanging roof couples remain scenery, not surprise walkable planes.
-  const fenX = -17.0, fenZ = 5.0;
-  const fenBase = localGround(api, fenX, fenZ);
-  const fenLowerTop = fenBase + 0.92;
+  // A drowned maintenance stair climbs beside the west transept's support posts.
+  // Its treads are spread far enough apart to leave a standing body free below
+  // the next ledge; the old overlapping flight ran through two structural posts.
+  const fenX = -18.6, fenZ = 5.0;
+  const fenBase = localGround(api, -17.0, fenZ);
   const fenUpperTop = fenBase + 6.55;
-  deck(S, api, fenX, fenZ, 4.20, 2.30, fenUpperTop, TAR, 0, false);
+  deck(S, api, -17.3, fenZ, 5.40, 2.30, fenUpperTop, TAR, 0, false);
   const fenStages = [];
-  for (let i = 0; i < 7; i++) {
-    const z = 0.68 + i * 0.70;
-    const top = fenBase + 1.58 + i * 0.71;
-    routeDeck(S, api, fenX, z, 1.62, 1.16, top,
+  const fenStartZ = -4.25;
+  const fenLow = localGround(api, fenX, fenStartZ - 1.2) + 0.62;
+  for (let i = 0; i < 8; i++) {
+    const z = fenStartZ + i * 1.10;
+    // The last tread and gallery share a height and overlap by 0.25 m. Leaving
+    // one more short rise beneath the gallery's nose trapped the player under it.
+    const top = fenLow + (fenUpperTop - fenLow) * i / 7;
+    routeDeck(S, api, fenX, z, 1.70, 1.30, top,
       i % 3 === 0 ? OXIDE : OLD_WOOD, 0, i & 1 ? GRIME : TAR);
     // Water-blackened boards deliberately disagree in width and colour. The tread collider
     // stays a clean rectangle, but its merged face now reads as salvaged transept timber.
-    const fenFaceZ = z - 0.591;
+    const fenFaceZ = z - 0.661;
     for (let p = 0; p < 3; p++) {
       const px = fenX - 0.54 + p * 0.54;
       S.box(0.43 - (p === 1 ? 0.05 : 0), 0.15 + ((p + i) & 1) * 0.035,
@@ -921,9 +968,10 @@ function gallowsfen(api) {
     for (const sx of [-0.57, 0.57]) S.box(0.065, 0.235, 0.038,
       fenX + sx, api.padY + top - 0.235, fenFaceZ - 0.006, IRON);
     for (const sx of [-0.62, 0.62]) {
-      const h = Math.max(0.22, top - fenLowerTop - 0.16);
+      const base = localGround(api, fenX + sx, z);
+      const h = Math.max(0.22, top - base - 0.16);
       S.box(0.10, h, 0.10, fenX + sx,
-        api.padY + fenLowerTop + h * 0.5, z, i & 1 ? TAR : OXIDE);
+        api.padY + base + h * 0.5, z, i & 1 ? TAR : OXIDE);
     }
     if (i > 0) {
       const p = fenStages[i - 1];
@@ -934,8 +982,7 @@ function gallowsfen(api) {
   }
   api.site.parkourRoute = {
     kind: 'gallowsfen-transept-gallery', space: 'local',
-    approach: { x: fenX, z: -1.0, y: groundY(api, fenX, -1.0) },
-    mount: { x: fenX, z: 0.55, y: api.padY + fenLowerTop },
+    approach: { x: fenX, z: fenStartZ - 1.2, y: groundY(api, fenX, fenStartZ - 1.2) },
     target: { x: fenX, z: fenZ, y: api.padY + fenUpperTop },
     crown: { x: fenX, z: fenZ, y: api.padY + fenUpperTop },
     stages: fenStages.map((p) => ({ x: p.x, z: p.z, y: api.padY + p.top })),
@@ -944,7 +991,7 @@ function gallowsfen(api) {
   // Low enough not to occlude the belfry target, close enough to make its prize readable.
   openCache(S, api, -7.0, -2.2, -0.45, VERDIGRIS, 6);
 
-  return finish(k);
+  return finish(k, api);
 }
 
 function hollowMill(api) {
@@ -954,9 +1001,12 @@ function hollowMill(api) {
 
   // The granary is a second major mass: stone lower storey, weatherboard loft, deep roof.
   const GX = 14.5, GZ = -5.5, GW = 12.0, GD = 17.0;
-  shell(S, api, GX, GZ, GW, GD, 7.2, 0, OLD_STONE, 3.0);
+  shell(S, api, GX, GZ, GW, GD, 7.2, 0, OLD_STONE, 3.0, true);
   S.gable(GW + 0.9, GD + 0.9, api.padY + 7.2, 5.2, GX, 0, GZ, SHINGLE, 0);
-  masonryFace(S, api, GX, GZ + GD * 0.5 + 0.24, GW - 0.8, 3.0, 0, 6, 10);
+  gableFloor(api, GX, GZ, GW + 0.9, GD + 0.9, api.padY + 7.2, 5.2, 0);
+  gableEnds(S, api, GX, GZ, GW, GD, GW + 0.9, 7.2, 5.2, OLD_WOOD);
+  for (const side of [-1, 1]) masonryFace(S, api, GX + side * 3.84,
+    GZ + GD * 0.5 + 0.24, 3.85, 3.0, 0, 6, 4);
   // The weatherboards are the loft, not a second facade pasted over the stone storey.
   plankFace(S, api, GX, GZ + GD * 0.5 + 0.30, GW - 0.8, 3.4, 0, 13, 3.05);
   rustFace(S, api, GX - GW * 0.5 - 0.25, GZ, GD - 0.7, 6.2, -Math.PI * 0.5, 18);
@@ -976,6 +1026,8 @@ function hollowMill(api) {
       y === 9.2 ? OXIDE : IRON);
   }
   S.gable(6.8, 6.8, api.padY + EGY + EH, 4.4, EX, 0, EZ, SHINGLE, 0);
+  gableFloor(api, EX, EZ, 6.8, 6.8, api.padY + EGY + EH, 4.4, 0);
+  gableEnds(S, api, EX, EZ, 5.8, 5.8, 6.8, EGY + EH, 4.4, TAR);
   for (const x of [EX - 1.55, EX + 1.55]) {
     S.box(0.82, 3.0, 0.16, x, api.padY + EGY + 10.9, EZ + 3.04, COAL);
     S.cone(0.52, 1.0, 3, x, api.padY + EGY + 12.9, EZ + 3.08, OXIDE, Math.PI);
@@ -1093,7 +1145,7 @@ function hollowMill(api) {
 
   openCache(S, api, -2.7, 6.3, 0.22, OLD_WOOD, 7);
 
-  return finish(k);
+  return finish(k, api);
 }
 
 function gardenOfRest(api) {
@@ -1116,8 +1168,8 @@ function gardenOfRest(api) {
     for (let i = 0; i < 8; i++) {
       if (i === 3 || i === 4) continue;
       const z = 23.0 - i * 1.9;
-      S.box(3.3, 0.15, 1.45, side * 9.7, api.padY + 4.45 + (i & 1) * 0.08, z,
-        i % 3 ? SHINGLE : VERDIGRIS);
+      solidBox(S, api, 3.3, 0.15, 1.45, side * 9.7, 4.45 + (i & 1) * 0.08, z,
+        i % 3 ? SHINGLE : VERDIGRIS, 0, 'roof', true);
     }
   }
 
@@ -1126,11 +1178,15 @@ function gardenOfRest(api) {
   for (const side of [-1, 1]) {
     const x = side * 19.0, faceYaw = side > 0 ? -Math.PI * 0.5 : Math.PI * 0.5;
     for (const [z, d] of [[-8.5, 11.0], [7.5, 10.0]]) {
+      // The chapel of rest occupies the west positive-Z wing. A second masonry
+      // wall through that room made the bier chamber and its entrance unusable.
+      if (side < 0 && z > 0) continue;
       groundedBox(S, api, 0.70, 6.2, d, x, z, OLD_STONE, 0, 'wall');
       masonryFace(S, api, x - side * 0.38, z, d - 0.6, 5.8, faceYaw, 9,
         Math.max(6, Math.round(d * 0.52)), [OLD_STONE, MOSS_STONE, MORTAR, GRIME]);
     }
     for (let z = -11.5; z <= 9.5; z += 2.4) {
+      if (side < 0 && z > 0) continue;
       if (z > -3.0 && z < 2.8) continue;
       for (let y = 1.0; y <= 4.8; y += 1.3) {
         S.box(0.10, 0.72, 1.35, x - side * 0.43, api.padY + localGround(api, x, z) + y,
@@ -1140,6 +1196,7 @@ function gardenOfRest(api) {
       }
     }
     for (const z of [-13.8, 12.0]) {
+      if (side < 0 && z > 0) continue;
       const gy = localGround(api, x, z);
       S.cone(1.3, 3.0, 4, x, api.padY + gy + 7.7, z, SHINGLE);
       solidBox(S, api, 1.4, 7.0, 1.4, x, gy + 3.5, z, MOSS_STONE, 0, 'wall');
@@ -1150,17 +1207,17 @@ function gardenOfRest(api) {
   // is a visibly solid monument base with a horizontal stone crown; a fresh coping slab on
   // the actual wall receives the last step. The route stays west of the grave avenue and
   // does not make either whole columbarium range magically walkable.
-  const gardenWallX = -19.0, gardenZ = 4.8;
-  const gardenWallBase = localGround(api, gardenWallX, 7.5);
+  const gardenWallX = -19.0, gardenZ = -11.4;
+  const gardenWallBase = localGround(api, gardenWallX, -8.5);
   const gardenCapTop = gardenWallBase + 6.38;
   solidBox(S, api, 1.28, 0.18, 3.20, gardenWallX, gardenCapTop - 0.09,
     gardenZ, MORTAR, 0, 'stone', true);
   const gardenStages = [];
-  const gardenStartX = -12.60, gardenCount = 8;
+  const gardenStartX = -10.40, gardenCount = 8;
   const gardenLow = localGround(api, gardenStartX, gardenZ) + 0.58;
   for (let i = 0; i < gardenCount; i++) {
-    const t = i / (gardenCount - 1), x = gardenStartX - i * 0.76;
-    const top = gardenLow + (gardenCapTop - 0.58 - gardenLow) * t;
+    const t = i / (gardenCount - 1), x = gardenStartX - i * 1.16;
+    const top = gardenLow + (gardenCapTop - gardenLow) * t;
     const gy = localGround(api, x, gardenZ);
     const h = Math.max(0.36, top - gy);
     memorialPlinth(S, api, 1.30 - (i % 3) * 0.06, h, 1.12,
@@ -1316,7 +1373,7 @@ function gardenOfRest(api) {
   // Votive strongbox beside, not on, the real mausoleum lamp trigger.
   openCache(S, api, 3.2, 10.2, -0.12, VERDIGRIS, 8);
 
-  return finish(k);
+  return finish(k, api);
 }
 
 function iNiche(z, y) {
@@ -1324,7 +1381,8 @@ function iNiche(z, y) {
   return k === 0 ? BONE : (k === 1 ? MORTAR : (k === 2 ? VERDIGRIS : OLD_STONE));
 }
 
-function finish(k) {
+function finish(k, api) {
+  addDestinationDetails(k, api);
   return {
     solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.lamp,
   };

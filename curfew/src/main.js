@@ -56,6 +56,7 @@ import * as placesMod from './world/places.js';
 import * as enemiesMod from './enemies/enemies.js';
 import * as directorMod from './director/director.js';
 import * as dreadMod from './director/dread.js';
+import * as interiorHorrorMod from './director/interior-horror.js';
 import * as carMod from './vehicle/car.js';
 import * as progressMod from './progression/progress.js';
 import * as audioMod from './audio/audio.js';
@@ -96,6 +97,7 @@ const SYSTEMS = [
   ['enemies', enemiesMod],
   ['director', directorMod],   // AFTER enemies: it validates its roster against species
   ['dread', dreadMod],         // AFTER director: the two gate each other every step
+  ['interior-horror', interiorHorrorMod], // authored residents, after the county's permit
   ['kneeler', kneelerMod],     // ROUND 6: the guardian at three places. Outside the pool, after the pool
   // -- the loop -------------------------------------------------------------------------
   ['car', carMod],

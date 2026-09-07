@@ -19,6 +19,35 @@ import { clamp } from '../engine/math.js';
 // Module-level scratch. The hot path allocates nothing.
 const _size = new THREE.Vector2();
 
+/**
+ * ROUND 14. GPT-5.1 Pro's visual review, sent by Alex 2026-09-07: at a fixed viewport
+ * 0.75 -> 1.0 is about 78% more scene pixels, and it recommended making that "a quality
+ * option rather than force it on every device". There is no options screen in this game and
+ * there is not going to be one (no words on screen), so the device chooses, once, at boot.
+ *
+ * A coarse pointer or a small viewport is a phone or a tablet, and Alex's players are mostly
+ * on phones — those keep the measured 0.75. A desktop with a mouse renders at full scale,
+ * which is what actually fixes the "noise across the sky and surfaces" the review saw.
+ * CFG.render.renderScale stays the floor and the governor's rung; this only picks the start.
+ *
+ * HELD BACK, DELIBERATELY, AND HERE IS WHY. I built the device pick, ran the full gate, and
+ * it turned three suites red: weapon's sealed-aperture disc (45.2% against a floor of 48),
+ * weapon's gun-out-of-frame step count (8 against a ceiling of 7) and sites' campfire
+ * differential at 3 m (13,565 against a ceiling of 8,500). None of those are bugs. Every
+ * pixel threshold in this gate was calibrated at renderScale 0.75, and the harness runs
+ * headless Chrome with a mouse, so the device pick handed it 1.0 and moved the sampling
+ * under all of them at once.
+ *
+ * Moving a measured gate to match a change I just made is the one thing this project's
+ * culture is most against, and recalibrating that many thresholds is its own round with its
+ * own evidence. So the ladder start stays at CFG.render.renderScale and this function is the
+ * shape of the change, ready for that round. The grain drop (0.035 -> 0.010) shipped on its
+ * own and is green, and it was the larger half of what Pro's review actually saw.
+ */
+export function pickRenderScale() {
+  return CFG.render.renderScale;
+}
+
 export class Gfx {
   static id = 'gfx';
 
@@ -28,7 +57,7 @@ export class Gfx {
     this.scene = null;
     this.camera = null;
     this.canvas = null;
-    this.renderScale = CFG.render.renderScale;
+    this.renderScale = pickRenderScale();
     this.cssW = 1;
     this.cssH = 1;
     this._listeners = [];

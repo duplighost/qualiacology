@@ -161,6 +161,18 @@ const PILOT_ARRIVE = 1.4;         // close enough: cut the engine
 // has not merged yet still drives.
 const RAM = K.ram || { speed: 8.0, cleanSpeed: 12.0, scrubLight: 0.15, scrubHeavy: 0.35, massLight: 46, massHeavy: 210, keepFloor: 0.40 };
 const TRUNK = K.trunk || { stuckSpeed: 2.5, stuckRamp: 0.50, stuckGain: 0.45 };
+// ROUND 14, the look-behind. LAMBDA is how fast the clamp centre swings to the tail;
+// PULL is how hard the view is carried with it. Both damped, both dt-scoped, so a frame
+// spike cannot overshoot and smear the cabin.
+// 2.62 rad is 150 degrees, NOT 180. At a full half-turn the view points straight through
+// the driver own seat back, which sits 0.5 m behind the eye and fills two thirds of the
+// frame — measured, tests/shots/round14/lookback-out-the-back.png before this change. A
+// real person looks OVER THE SHOULDER, past the seat and out of the rear quarter, and 150
+// degrees is where that lands. Negative, because +yaw turns left in this basis and the
+// clear line is over the RIGHT shoulder, down the cabin.
+const LOOKBACK_ANGLE = -2.62;
+const LOOKBACK_LAMBDA = 9.0;
+const LOOKBACK_PULL = 11.0;
 const CONTACT_MEMORY = 0.12;      // s without a hit before a trunk contact counts as over
 const RAM_RADIUS = 2.4;
 const RAM_EVERY = 0.20;
@@ -1310,7 +1322,7 @@ export class Car {
     // The seat yaw clamp moves AIM, so it belongs to the step, not to present. camera is
     // manifest 12 and has already integrated this step's look by the time we run.
     this._carryLook(dt);
-    this._clampSeatLook();
+    this._clampSeatLook(dt);
 
     // The engine is a disturbance for as long as it runs, wherever it is.
     if (this.engineOn) {
@@ -2497,7 +2509,30 @@ export class Car {
    * with nothing installed is also what keeps progress.hookReport() honest: a hook point
    * with installers and zero lifetime runs is the defect that audit hunts for.
    */
+  /**
+   * THE DIAL. Alex, 2026-09-07: "if we could put a couple radio stations in the car that
+   * absolutely fit the game, it would be badass."
+   *
+   * One press, one station. The set is only wired up while you are actually in the seat —
+   * audio/bed.js rule 5 is that the radio is a thing in a dashboard, not a soundtrack, so
+   * it does not exist to a player standing in a field. radio.js owns the lockout, the
+   * static between stations and the broadcast clock; this is only the finger on the knob.
+   */
+  _radio() {
+    if (this.mode !== 'driving') return;
+    if (!this._radioTunePressed()) return;
+    const a = this._audio;
+    const bed = a && (a.bed || (a.systems && a.systems.bed));
+    if (bed && bed.radio) {
+      const i = bed.radio.tune(1);
+      this.radioStation = i;
+      if (this.body && this.body.setRadioDial) this.body.setRadioDial(bed.radio.dialT());
+      this._emit('car:radio', { station: i, id: bed.radio.station().id });
+    }
+  }
+
   _horn(dt) {
+    this._radio();
     this.hornT = Math.max(0, this.hornT - dt);
     // Read both doors EVERY fixed step. `pressed` makes every fresh tap immediate even if a
     // previous honk is still ringing; held is the accessibility/focus fallback and repeats
@@ -2874,20 +2909,57 @@ export class Car {
    * the 0.35 s reparent so that entering never yanks the view — the clamp arrives with
    * you rather than snapping you into the seat.
    */
-  _clampSeatLook() {
+  _clampSeatLook(dt) {
     const cam = this._camera;
     if (!cam) return;
     const inSeat = this.mode === 'driving' || this.mode === 'entering';
-    if (!inSeat) return;
+    if (!inSeat) { this._lookBackT = 0; return; }
+
+    // ---- LOOK BEHIND YOU -------------------------------------------------------------
+    // Alex, 2026-09-07: "you should also definitely be able to hold a button if you're
+    // driving in the car and you want to see our the back window/look behind you. but make
+    // sure the view isn't mangled and it looks good."
+    //
+    // NOT a second camera and NOT a snap. The clamp's CENTRE swings from the nose to the
+    // tail while B is held, and the view is carried round with it — so you turn your head,
+    // over the shoulder, through your own back seats and out of the tailgate glass, and it
+    // comes back the same way when you let go. Mangling is what happens when you write
+    // cam.yaw += PI on an edge: the interpolator lerps the short way through the dashboard
+    // for one frame and the whole cabin smears. Everything here is damped and dt-scoped.
+    const step = dt > 0 ? dt : 1 / 60;
+    const want = (this.mode === 'driving' && this._lookBackHeld()) ? 1 : 0;
+    this._lookBackT = damp(this._lookBackT || 0, want, LOOKBACK_LAMBDA, step);
+    if (this._lookBackT < 1e-3) this._lookBackT = 0;
+    // The swing goes over the DRIVER's shoulder (left, +yaw here) rather than taking the
+    // shortest path, which is the way a person actually looks out of the back of a car.
+    const centre = wrapAngle(this.heading + LOOKBACK_ANGLE * this._lookBackT);
+    if (this._lookBackT > 0) {
+      const toCentre = angleDelta(cam.yaw, centre);
+      cam.yaw = wrapAngle(cam.yaw + toCentre * (1 - Math.exp(-LOOKBACK_PULL * step)));
+    }
+
     // The clamp is measured from the nose, and since _carryLook the nose moves the view
     // with it, so in play this only ever bites when the player has looked over a shoulder
     // and the car turns further the same way. It is measured, not assumed: tests/car.mjs
     // holds full lock at 10 m/s with the mouse still and the clamp never engages.
     const t = this.mode === 'driving' ? 1 : clamp01(this.enterT / REPARENT);
     const width = lerp(Math.PI, SEAT.yawClamp, t);
-    const d = angleDelta(this.heading, cam.yaw);
-    if (d > width) cam.yaw = wrapAngle(this.heading + width);
-    else if (d < -width) cam.yaw = wrapAngle(this.heading - width);
+    const d = angleDelta(centre, cam.yaw);
+    if (d > width) cam.yaw = wrapAngle(centre + width);
+    else if (d < -width) cam.yaw = wrapAngle(centre - width);
+  }
+
+  _lookBackHeld() {
+    if (this._synthLookBack) return true;
+    const i = this._input;
+    return !!(i && i.held && i.held('lookback'));
+  }
+
+  /** A rising edge on the tuner. One station per press; radio.js owns the lockout. */
+  _radioTunePressed() {
+    if (this._synthTune) { this._synthTune = false; return true; }
+    const i = this._input;
+    return !!(i && i.pressed && i.pressed('radiotune'));
   }
 
   /* ---------------------------------------------------------------- debug -- */

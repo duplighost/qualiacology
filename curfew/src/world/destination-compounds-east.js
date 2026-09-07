@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { C, GLOW, kits, groundY, glowColumn, PANE_LAMP } from './sites.js';
+import { addDestinationDetails } from './destination-details.js';
 
 const PI = Math.PI;
 
@@ -149,6 +150,7 @@ function relay(api) {
   k.solid.box(1.8, 1.15, 0.55, 3.2, cy + 0.57, 5.4, C.dark);
   k.glow.pane(0.80, 0.34, 3.2, cy + 0.78, 5.70, PANE_LAMP, 0, 0, 7, 4);
   glowColumn(k.glow, 3.2, cy + 0.2, 5.72, 0.46, 2.2, 0.55);
+  addDestinationDetails(k, api);
   return { solid: k.solid.build(), glow: k.glow.build(), moving: null,
     glowColour: GLOW.white };
 }
@@ -227,6 +229,7 @@ function drowned(api) {
     C.wood, -0.28, 0, 0.10);
   k.solid.box(5.7, 0.18, 1.6, -13.0, groundY(api, -13, -1) + 1.18, -1,
     C.dark, -0.28);
+  addDestinationDetails(k, api);
   return { solid: k.solid.build(), glow: k.glow.build(), moving: null,
     glowColour: GLOW.lamp };
 }
@@ -294,6 +297,7 @@ function bell(api) {
   k.solid.box(2.65, 0.18, 1.10, 0, ry + 1.18, 8.0, C.rust, 0, 0, -0.20);
   k.glow.pane(0.42, 0.32, 0, ry + 0.72, 8.80, PANE_LAMP, 0, 0, 5, 4);
   glowColumn(k.glow, 0, ry + 0.2, 8.82, 0.36, 1.8, 0.42);
+  addDestinationDetails(k, api);
   return { solid: k.solid.build(), glow: k.glow.build(), moving: null,
     glowColour: GLOW.lamp };
 }
@@ -375,6 +379,7 @@ function jackfield(api) {
   }
   for (const [x, z, yaw] of [[5.8, -11.8, 0.1], [10.5, -12.2, -0.2], [14.2, -10.5, 0.05]])
     crate(k, api, x, z, yaw, C.wood);
+  addDestinationDetails(k, api);
   return { solid: k.solid.build(), glow: k.glow.build(), moving: null,
     glowColour: GLOW.lamp };
 }

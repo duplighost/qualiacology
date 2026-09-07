@@ -200,7 +200,7 @@ const SPACE_CLIMB_FAN_DELAY_S = 0.12;
 // the full cooldown; these two numbers apply only to a successful landing.
 const CLIMB_EXIT_KEEP = 0.82;
 const CLIMB_CHAIN_COOLDOWN = 0.12;
-const MANTLE_MIN_RISE = 0.62;  // STEP_UP + STEP_TOL + 0.02: anything lower the solver steps onto, and a step is not a climb
+const MANTLE_MIN_RISE = P.STEP_UP + 0.08 + 0.001; // solver step + tolerance + epsilon; no dead band below a climb
 const PULL_LIFT_END = 0.72;    // fraction of the pull by which the feet reach the top
 const PULL_OVER_START = 0.30;  // fraction of the pull at which the body starts moving over the lip
 const LAND_IN = HOLD.landIn;   // m past the probe point the feet come to rest, so the footprint is well on the top
@@ -358,6 +358,7 @@ export class PlayerController {
     this.climbSpeed = 0;                                    // horizontal speed on entry (the vault keeps 0.85x)
     this.climbLX = 0; this.climbLZ = 0;                     // a grab's landing, decided at the catch
     this.climbRefuse = false;                               // let go of a lip: no climb until the feet land
+    this.climbCrouch = false;                               // only tuck under a genuinely low landing ceiling
     this.floorWasCollider = false;                          // last frame's floor was a collider top (the step-up smoothing gate)
 
     // ---- the ONE stride clock. Nothing else may keep a locomotion timer.
@@ -521,6 +522,8 @@ export class PlayerController {
 
   // ---------------------------------------------------------------- verbs
   hurt(amount, fromDir) {
+    const refuge = this.ctx.systems.get('refuge');
+    if (refuge && refuge.isResting && refuge.isResting()) return;
     if (this.dead || this.ctx.debug?.god) return;
     // The respawn window. TRUE immunity, not a multiplier: partial mitigation across a 2.5 s
     // window is invisible, and the whole point of this window is that it can be seen.
@@ -812,6 +815,20 @@ export class PlayerController {
       stepSpring(this.eyeSpring, dt);
       if (this.deathT >= DEATH_S) this._respawn();
       this._commit();
+      return;
+    }
+
+    // Rest is an intentional, brief bed interaction. Keep its anchored body still and
+    // consume held edges so waking does not spend a buffered jump or resume a slide.
+    const refuge = this.ctx.systems.get('refuge');
+    if (refuge && refuge.isResting && refuge.isResting()) {
+      this._in = this._input || null;
+      this.vel.set(0, 0, 0);
+      this.forwardAxis = 0; this.strafeAxis = 0;
+      this.sliding = false; this.sprinting = false; this.tacSprinting = false;
+      this.climb = CLIMB_NONE; this.jumpBuffered = -1; this.spaceClimbIntent = 0;
+      this.holdChain = false; this.holdFling = false;
+      this._stepTail(dt, this._held('sprint'), this._held('crouch'));
       return;
     }
 
@@ -1519,6 +1536,7 @@ export class PlayerController {
    */
   _tryClimb(explicitJump = false) {
     if (this.mantleCooldown > 0 || this.climb !== CLIMB_NONE || this.carried) return;
+    if (!explicitJump && this.grounded && this._held('crouch')) return;
     // A let-go grab refuses every climb until the feet are back on something: without this,
     // crouch + forward re-mantled the very lip you just let go of, every 0.35 s, for ever.
     if (this.climbRefuse) { if (this.grounded) this.climbRefuse = false; else return; }
@@ -1645,6 +1663,12 @@ export class PlayerController {
     const rise = cTop - this.pos.y;
     if (rise < MANTLE_MIN_RISE || rise > reach) return;
     if (!this.grounded && rise >= P.EYE - CL.handsLo) return;
+    // A door lintel is in reach, but walking through its open doorway is not a request
+    // to climb it. Passive mantles require an obstacle in the body's actual travel path.
+    // Space still deliberately reaches an awning or shelf from beside its open underside.
+    if (!explicitJump && this.grounded && col && col.travelFraction
+      && col.travelFraction(this.pos.x, this.pos.z, this.pos.y,
+        cx - this.pos.x, cz - this.pos.z, P.RADIUS, this.bodyHeight) >= 1) return;
     this._startPull(cTop, cx, cz, this.pos.x, this.pos.y, this.pos.z,
       CL.pullMinS + (CL.pullMaxS - CL.pullMinS) * clamp01((rise - 1.0) / 1.9), 'mantle');
   }
@@ -1759,11 +1783,17 @@ export class PlayerController {
     // The hang pose: the eye under the lip, between a chin-up and full stretch, moved as
     // little as possible from where the hands closed. The feet follow from the eye.
     const eyeHang = clamp(this.pos.y + P.EYE, top - CL.hangEyeBelow[1], top - CL.hangEyeBelow[0]);
+    if (!this._landingOn(px, pz, top)) return false;
+    const lx = _landOut.x, lz = _landOut.z;
+    if (!this._clearPull(this.pos.x, this.pos.z, this.pos.y, lx, lz, top)) return false;
+    const catchCrouch = this.climbCrouch;
+    if (!this._clearPull(hx, hz, eyeHang - P.EYE, lx, lz, top)) return false;
+    this.climbCrouch ||= catchCrouch;
     this._beginClimb(CLIMB_HANG, CL.catchS + CL.hangS, this.pos.x, this.pos.y, this.pos.z,
       hx, eyeHang - P.EYE, hz, top, 'grab');
     // where the feet will end, decided now and kept
-    this._landingOn(px, pz, top);
-    this.climbLX = _landOut.x; this.climbLZ = _landOut.z;
+    this.climbLX = lx; this.climbLZ = lz;
+    return true;
   }
 
   /**
@@ -1781,17 +1811,32 @@ export class PlayerController {
       return true;
     }
     _landOut.x = px; _landOut.z = pz;
-    return false;
+    return this._topAt(px, pz, top)
+      && (!col || !col.fits || col.fits(px, pz, top, P.RADIUS, P.CROUCH_H));
+  }
+
+  _clearPull(x0, z0, y0, x1, z1, top) {
+    const col = this._collision;
+    this.climbCrouch = false;
+    if (!col || !col.climbPathClear) return true;
+    if (col.climbPathClear(x0, z0, y0, x1, z1, top, P.RADIUS, P.STAND_H)) return true;
+    if (!col.climbPathClear(x0, z0, y0, x1, z1, top, P.RADIUS, P.CROUCH_H)) return false;
+    this.climbCrouch = true;
+    return true;
   }
 
   /** The pull: from (x0, y0, z0) to standing on `top`, over `dur` seconds. Lift first, then over. */
-  _startPull(top, px, pz, x0, y0, z0, dur, kind) {
-    this._landingOn(px, pz, top);
-    this._beginClimb(CLIMB_PULL, dur, x0, y0, z0, _landOut.x, top, _landOut.z, top, kind);
+  _startPull(top, px, pz, x0, y0, z0, dur, kind, landingReady = false) {
+    if (!landingReady && !this._landingOn(px, pz, top)) return false;
+    const lx = landingReady ? px : _landOut.x, lz = landingReady ? pz : _landOut.z;
+    if (!this._clearPull(x0, z0, y0, lx, lz, top)) return false;
+    this._beginClimb(CLIMB_PULL, dur, x0, y0, z0, lx, top, lz, top, kind);
     this.eyeSpring.nudge(-this.heaveImpulse);     // the heave: a dip, then the rise through it
+    return true;
   }
 
   _beginClimb(kind, dur, x0, y0, z0, x1, y1, z1, top, name) {
+    if (kind === CLIMB_VAULT) this.climbCrouch = false;
     this.climb = kind;
     this.climbT = 0;
     this.climbDur = dur;
@@ -1800,6 +1845,7 @@ export class PlayerController {
     this.climbDirX = _wish.x; this.climbDirZ = _wish.z;
     this.climbTop = top;
     this.climbSpeed = Math.hypot(this.vel.x, this.vel.z);
+    if (this.climbCrouch && kind !== CLIMB_VAULT) this.crouchT = 1;
     this.vel.set(0, 0, 0);
     this.grounded = false;
     this.sinceGround = P.COYOTE + 1;
@@ -1822,7 +1868,7 @@ export class PlayerController {
     this.vel.set(0, 0, 0);
     this.grounded = false;
     this.sinceGround = P.COYOTE + 1;
-    this.crouched = false;
+    this.crouched = this.climbCrouch;
     this.slideViewT = damp(this.slideViewT, 0, SLIDE_VIEW_OUT, dt);
     const u = this.climbDur > 0 ? clamp01(this.climbT / this.climbDur) : 1;
 
@@ -1834,10 +1880,11 @@ export class PlayerController {
       this.pos.x = lerp(this.climbX0, this.climbX1, c);
       this.pos.y = lerp(this.climbY0, this.climbY1, c);
       this.pos.z = lerp(this.climbZ0, this.climbZ1, c);
-      this.crouchT = damp(this.crouchT, 0, CROUCH_OUT, dt);
+      this.crouchT = damp(this.crouchT, this.climbCrouch ? 1 : 0, CROUCH_OUT, dt);
       if (u >= 1) {
         // the hang is over: pull from the hang pose to the landing decided at the grab
-        this._startPull(this.climbTop, this.climbLX, this.climbLZ, this.pos.x, this.pos.y, this.pos.z, CL.pullS, 'pull');
+        if (!this._startPull(this.climbTop, this.climbLX, this.climbLZ,
+          this.pos.x, this.pos.y, this.pos.z, CL.pullS, 'pull', true)) this._dropClimb();
       }
       return;
     }
@@ -1847,9 +1894,14 @@ export class PlayerController {
       const lift = ease.inOutQuad(clamp01(u / PULL_LIFT_END));
       const over = ease.inOutQuad(clamp01((u - PULL_OVER_START) / (1 - PULL_OVER_START)));
       this.pos.y = lerp(this.climbY0, this.climbY1, lift);
-      this.pos.x = lerp(this.climbX0, this.climbX1, over);
-      this.pos.z = lerp(this.climbZ0, this.climbZ1, over);
-      this.crouchT = damp(this.crouchT, 0, CROUCH_OUT, dt);
+      const tx = lerp(this.climbX0, this.climbX1, over), tz = lerp(this.climbZ0, this.climbZ1, over);
+      const col = this._collision;
+      const free = col && col.travelFraction
+        ? col.travelFraction(this.pos.x, this.pos.z, this.pos.y, tx - this.pos.x, tz - this.pos.z,
+          P.RADIUS, this.climbCrouch ? P.CROUCH_H : P.STAND_H, this.pos.y < this.climbTop - 0.001) : 1;
+      this.pos.x += (tx - this.pos.x) * free;
+      this.pos.z += (tz - this.pos.z) * free;
+      this.crouchT = damp(this.crouchT, this.climbCrouch ? 1 : 0, CROUCH_OUT, dt);
       if (u >= 1) this._endClimb();
       return;
     }
@@ -1869,6 +1921,13 @@ export class PlayerController {
   /** The feet land on the top: a soft landing through the same beat every landing uses. */
   _endClimb() {
     const vault = this.climb === CLIMB_VAULT;
+    // A door can swing across the carry and a crate can break while the hands are on it.
+    // Never finish by teleporting through that obstruction or inventing a missing floor.
+    if (!vault && (Math.hypot(this.pos.x - this.climbX1, this.pos.z - this.climbZ1) > 0.04
+      || !this._topAt(this.climbX1, this.climbZ1, this.climbY1))) {
+      this._dropClimb();
+      return;
+    }
     this.pos.x = this.climbX1; this.pos.y = this.climbY1; this.pos.z = this.climbZ1;
     this.climb = CLIMB_NONE;
     this.grounded = true;

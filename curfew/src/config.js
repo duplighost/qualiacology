@@ -35,7 +35,9 @@ export const CFG = {
       // moonlit distance to an unreadable black and cost a round to find. [still/marrow]
       contrastFrom: 0.03, contrastTo: 0.42, contrast: 1.16,
       blackFloor: 0.006,
-      grain: 0.035,
+      // ROUND 14: 0.035 was visible as noise across the sky and every flat surface (GPT-5.1
+      // Pro visual review, 2026-09-07). Grain is meant to be film, not a dirty sensor.
+      grain: 0.010,
       vignette: 0.28,
     },
     // Gates, not aspirations - and these are now MEASURED rather than assumed. The first

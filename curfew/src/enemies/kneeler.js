@@ -351,10 +351,29 @@ export class Kneeler {
        halfway between it and the road, capped at 6. Sightlines dominate; relief breaks ties,
        and a tie is exactly the case the old loop was deciding by array order. */
     const RADII = [8, 7, 9, 6, 10, 11, 12];
+    /* THE BAND IS PART OF THE SCORE, and leaving it out was a real bug that took a whole
+       round to find. K.standOff is the contract — 6 to 10 m from the claim — and 11 and 12
+       are the emergency rungs for a site that offers nothing legal inside it. But the score
+       below had no distance term whatsoever, so 11 and 12 competed as equals with 8, and a
+       stand at 11 m that one extra road eye could see beat a stand at 9 m every time. The
+       search PREFERRED walking out of contract whenever the far ring had the better view.
+       MEASURED 2026-09-07: at the Garden of Rest the post sat at exactly 10.0 m against a
+       10.001 m limit before this round's destination detail went in, and 11.0 m after — the
+       new geometry did not break the search, it tipped a scale that was already balanced on
+       its edge. Adding detail to a destination must never be able to push the boss out of
+       its own contract, and items 2, 7 and 15 on Alex's list are all 'add more detail to
+       destinations'. So in-band outscores out-of-band absolutely: the bonus is larger than
+       the whole rest of the score can ever reach (6 eyes x 10 + 72 rays x 0.5 + 6 relief =
+       102), and out-of-band still wins over nothing, which is what the fallback is for. */
+    const BAND_BONUS = 1000;
     const ANGLES = [0, 0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.6, -1.6, 2.1, -2.1, 2.6, -2.6, Math.PI];
     const FAR_JUDGE = Math.min(k.farN, 6);   // boot-time cost: 7 x 14 x 6 x 4 rays per settle
     let found = false, seen = false, fx = cx + ux * 8, fz = cz + uz * 8;
     let best = -1;
+    // pass 0 demands the walk home; pass 1 drops it, so a site that offers no reachable
+    // stand still gets the best-looking one rather than none at all.
+    for (let pass = 0; pass < 2 && best < 0; pass++) {
+    const needWalk = pass === 0;
     for (let ri = 0; ri < RADII.length; ri++) {
       for (let ai = 0; ai < ANGLES.length; ai++) {
         const a = ANGLES[ai];
@@ -363,6 +382,7 @@ export class Kneeler {
         const x = cx + vx * RADII[ri], z = cz + vz * RADII[ri];
         if (!legal(x, z)) continue;
         if (!found) { fx = x; fz = z; found = true; }
+        if (needWalk && !this._walkTo(x, z, cx, cz)) continue;
         let eyes = 0, rays = 0, witness = -1, bestRays = -1;
         if (FAR_JUDGE > 0) {
           for (let j = 0; j < FAR_JUDGE; j++) {
@@ -386,14 +406,16 @@ export class Kneeler {
         const ez = witness >= 0 ? k.farPts[witness * 2 + 1] : (k.hasRoad ? k.roadZ : cz + uz * 40);
         const midY = this._ground((x + ex) * 0.5, (z + ez) * 0.5);
         const relief = Math.max(0, Math.min(6, this._ground(x, z) - midY));
-        const score = eyes * 10 + rays * 0.5 + relief;
+        const inBand = RADII[ri] >= K.standOff[0] && RADII[ri] <= K.standOff[1];
+        const score = (inBand ? BAND_BONUS : 0) + eyes * 10 + rays * 0.5 + relief;
         if (score > best) {
           best = score; fx = x; fz = z; seen = true;
           if (witness >= 0) { k.farRoadX = k.farPts[witness * 2]; k.farRoadZ = k.farPts[witness * 2 + 1]; }
         }
       }
     }
-    k.roadEyes = best > 0 ? Math.floor(best / 10) : 0;
+    }
+    k.roadEyes = best > 0 ? Math.floor((best % BAND_BONUS) / 10) : 0;
     k.placeTries++;
     k.postSettled = found;
     k.roadSight = seen;
@@ -417,6 +439,34 @@ export class Kneeler {
    * a spot inside their own walls. Measured 2026-09-03 with tests/artifacts/probe-boss.mjs:
    * two of three posts were inside a building. The 'chunk:built' listener re-asks.
    */
+  /**
+   * Can a body of this size WALK from the post to the claim point? MEASURED 2026-09-07:
+   * the moment the band term above pulled the Garden's post in from 11.0 m to 7.0 m the
+   * distance gate went green and two behaviour gates went red — it stood in a pocket behind
+   * the wall, hunted, and sat at a 3.9 m gap for 15 s without ever committing a sweep
+   * (sweepCommit is 2.90). The score knew how to be SEEN and never asked whether the body
+   * could DO ITS JOB, which is to stand up and reach a player at the claim. That is the same
+   * bug as the missing band term wearing a different coat, so it gets a hard filter and not
+   * another weighted term: a post you cannot walk out of is not a post, however good it looks.
+   * Marches at 0.6 m and asks canOccupy only — _legal's road and slope clauses would reject
+   * a path that legitimately crosses them, and it is the WALK being tested here, not the
+   * standing spot. Stops one body radius short: the claim is where the player is standing.
+   */
+  _walkTo(x, z, cx, cz) {
+    const collision = this._sys('collision');
+    if (!collision || typeof collision.canOccupy !== 'function') return true;
+    const dx = cx - x, dz = cz - z;
+    const L = Math.hypot(dx, dz);
+    if (L <= K.radius) return true;
+    const stop = Math.max(0, L - K.radius);
+    const n = Math.max(1, Math.ceil(stop / 0.6));
+    for (let i = 1; i <= n; i++) {
+      const t = (stop * i / n) / L;
+      if (!collision.canOccupy(x + dx * t, z + dz * t, K.radius, K.height)) return false;
+    }
+    return true;
+  }
+
   _legal(x, z, padY) {
     const roads = this._sys('roads');
     const terrain = this._sys('terrain');
