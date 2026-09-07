@@ -30,19 +30,28 @@ const _size = new THREE.Vector2();
  * which is what actually fixes the "noise across the sky and surfaces" the review saw.
  * CFG.render.renderScale stays the floor and the governor's rung; this only picks the start.
  *
- * HELD BACK, DELIBERATELY, AND HERE IS WHY. I built the device pick, ran the full gate, and
- * it turned three suites red: weapon's sealed-aperture disc (45.2% against a floor of 48),
- * weapon's gun-out-of-frame step count (8 against a ceiling of 7) and sites' campfire
- * differential at 3 m (13,565 against a ceiling of 8,500). None of those are bugs. Every
- * pixel threshold in this gate was calibrated at renderScale 0.75, and the harness runs
- * headless Chrome with a mouse, so the device pick handed it 1.0 and moved the sampling
- * under all of them at once.
+ * HELD BACK IN ROUND 14, AND TURNED ON IN ROUND 17. The round-14 note read: "I built the
+ * device pick, ran the full gate, and it turned three suites red: weapon's sealed-aperture
+ * disc (45.2% against a floor of 48), weapon's gun-out-of-frame step count (8 against a
+ * ceiling of 7) and sites' campfire differential at 3 m (13,565 against a ceiling of 8,500).
+ * None of those are bugs. Every pixel threshold in this gate was calibrated at renderScale
+ * 0.75... recalibrating that many thresholds is its own round with its own evidence."
  *
- * Moving a measured gate to match a change I just made is the one thing this project's
- * culture is most against, and recalibrating that many thresholds is its own round with its
- * own evidence. So the ladder start stays at CFG.render.renderScale and this function is the
- * shape of the change, ready for that round. The grain drop (0.035 -> 0.010) shipped on its
- * own and is green, and it was the larger half of what Pro's review actually saw.
+ * That was the wrong call, and Alex made it on 2026-09-07 without being shown the code. He
+ * had said the graphics "really look bad like theres always a weird filter"; when the drawing
+ * buffer turned out to be 960x540 inside a 1280x720 window on a desktop, his answer was
+ * *"its upscaled on desktop? when did that happen? that's a disaster"*.
+ *
+ * So: the desktop renders at full scale. The three thresholds are not being moved to make a
+ * gate green — the SCOPE genuinely changed, which is the one reason this repo permits it, and
+ * each one now carries the ratio it was rescaled by and this paragraph's date. A pixel count
+ * taken at 0.75 and compared at 1.0 is measuring the change, not the thing.
+ *
+ * AND THERE IS NO DEVICE PICK, because there is no second device. I wrote one — coarse
+ * pointer or small viewport keeps 0.75 — on the strength of a note saying his players are
+ * mostly on phones. Alex deleted the premise: *"no one is ever playing this game anywhere but
+ * a desktop"*, and *"why on earth is there a mobile branch? lol"* (2026-09-07). That note is
+ * about his catalogue and it is not true of this game. Full scale, for everyone, no branch.
  */
 export function pickRenderScale() {
   return CFG.render.renderScale;

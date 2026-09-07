@@ -125,17 +125,32 @@ function figure(k, api, lx, lz, yaw, rng) {
   }
   // arms: folded across the chest, or hanging. Either way they are DOWN THE SIDES of the
   // torso, not out from it — a person waiting is a closed shape.
+  //
+  // ROUND 17. Both branches used to pass `coat` — the SAME value as the coat cylinder and the
+  // torso box they sit against — which is the whole of the round-16 critique's "its arms are
+  // the same value as its coat and sit flush against it, so torso, both arms and coat merge
+  // into one flat slab". It was the one Holdfast item on that list that turned out to be
+  // exactly true. Every other part of this figure already separates itself with a shade():
+  // legs 0.72, shoulders 0.86; the arms were the only limb passing the body colour straight
+  // through, so they contributed silhouette width and no internal edge at all.
+  //
+  // 0.74 puts them between the legs and the shoulders, which is also where the light puts
+  // them: a hanging arm is on the flank, turned away from whatever is lighting the front of
+  // the coat, and a folded arm shades the chest it lies across. Two vertical edges where
+  // there were none. MEASURE THIS: the values here are ~0.030 linear and a 1.35:1 ratio in
+  // near-darkness is exactly the kind of change this project ships and never sees.
+  const sleeve = shade(coat, 0.74);
   if (rng.next() < 0.45) {
     for (const side of [-1, 1]) {
       const [ax, az] = put(side * 0.10 * h, 0.14 * h);
       s.cyl(0.048 * h, 0.052 * h, 0.30 * h, 5, ax, g + (chest - 0.16) * h, az,
-        coat, yaw + side * 0.55, 0, Math.PI * 0.5);
+        sleeve, yaw + side * 0.55, 0, Math.PI * 0.5);
     }
   } else {
     for (const side of [-1, 1]) {
       const [ax, az] = put(side * 0.205 * h, 0);
       s.cyl(0.050 * h, 0.058 * h, 0.52 * h, 5, ax, g + (waist + 0.16) * h, az,
-        coat, yaw, 0, side * 0.05);
+        sleeve, yaw, 0, side * 0.05);
     }
   }
   /* WHAT ACTUALLY MAKES A CROWD READ AS PEOPLE AT TWELVE METRES.

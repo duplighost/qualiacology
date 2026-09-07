@@ -17,7 +17,25 @@ export const CFG = {
 
   // ---- render ---------------------------------------------------------------
   render: {
-    renderScale: 0.75,      // [design §8] governor ladder 0.75 -> 0.85 -> 0.70 -> 0.60
+    // ROUND 17. Was 0.75 from the first build on 2026-09-02 — DESIGN section 8's governor
+    // ladder start, never revisited — so every frame of this game has been drawn at 56% of
+    // the pixels and upscaled, on the only kind of machine anyone plays it on. Alex, told the
+    // drawing buffer was 960x540 inside a 1280x720 window: "its upscaled on desktop? when did
+    // that happen? that's a disaster", and then: "no one is ever playing this game anywhere
+    // but a desktop". So there is no device branch. This is the value the renderer starts at.
+    //
+    // AND THE PROJECT'S OWN SPIKE SAID SO ON DAY ONE. docs/SPIKE-FINDINGS.md, 2026-09-02, from
+    // the measurements that sized this whole game: "416 m of drawn view at 23 k trees is
+    // affordable at full 1600x900 with shadows on. **Render scale 0.75 is a lever we hold in
+    // reserve, not a requirement**" — worst case 2.4 ms of a 16.7 ms budget, about 6x headroom.
+    // The lever was then set to 0.75 as the default in this file on the same day, and stayed
+    // pulled for five days and three shipped rounds. Nobody re-read the spike.
+    //
+    // The old comment here said "governor ladder 0.75 -> 0.85 -> 0.70 -> 0.60", which named a
+    // ladder that DOES NOT EXIST IN THE CODE: nothing steps it. `Gfx.setRenderScale` has
+    // exactly one caller, main.js's config-patch test door. If a real governor is wanted it
+    // has to be written; until then this is simply the render scale.
+    renderScale: 1.0,
     dpr: 1,                 // never above 1 on this GPU [glide]
     fov: 68,                // [vigil camera BASE_FOV]
     near: 0.2,
