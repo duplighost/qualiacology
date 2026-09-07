@@ -242,6 +242,29 @@ export const MAJORS = Object.freeze([
     id: 'holdfast', name: 'The Holdfast',
     x: 0, z: 0, region: 'works', terrainRegion: 'fields', kind: 'holdfast',
     lit: true, hub: false,
+    // ROUND 17. THE FORECOURT WAS STILL SNOW, AND THIS IS THE BIGGEST ONE IN THE COUNTY.
+    //
+    // Alex found this at the Filling Station and it was written up as fixed (STATUS item 38,
+    // "FIXED, and he found it"). It was fixed at ONE SITE: `apronCol` appears exactly once in
+    // this whole file, on the station row above, where the default C.ash (0.130) "read as
+    // footprints in it... tracks in snow" and went to 0.055, 0.42x the default.
+    //
+    // Every other apron in the county is still 0.130 — and this row's flat is radius 112, the
+    // largest by a wide margin, about 39,000 m^2 of it. Photographed in
+    // tests/shots/holdfast-r17-arms-after/crowd-torch.png it is a pale field filling the lower
+    // half of the frame and it is BRIGHTER THAN THE SKY, which is the one thing the night
+    // values in this game are not allowed to be.
+    //
+    // This is also the true form of the withdrawn "the county is painted white" item. That one
+    // blamed the texture tables (215-221 of 255) and was wrong, because those are multiplied
+    // by a vertex colour averaging 0.115. The pale surface is the VERTEX COLOUR, C.ash at
+    // 0.130 — over four times the crowd's coat (0.030) — and it is one constant shared by
+    // sixteen of seventeen sites. The other fifteen are not swept here: I have a photograph of
+    // this one. Photograph the rest before moving them.
+    //
+    // 0.062 is trodden earth and stone inside a curtain wall, a little warmer and a little
+    // lighter than the station's wet asphalt, and 0.48x the default.
+    apronCol: [0.062, 0.060, 0.057],
     // The biggest flat in the county by a wide margin: the curtain is 132 m across and it
     // has to stand on made ground or a 66 m wall run climbs a hill.
     // ARITHMETIC, not taste: flora clears trees inside flat.radius * 0.86 (flora.js onPad),
