@@ -102,6 +102,63 @@ const BREAKABLE_TAGS = new Map([
   ['leg', 44], ['stake', 18], ['bin', 26], ['pot', 14], ['kit', 14], ['bike', 18],
 ]);
 
+/* ------------------------------------------------- CRUSHABLE BY SIZE, ROUND 14 --
+ * ALEX, 2026-09-07: "the car should be able to run over anything it looks like it can run
+ * over and feel badass. the only place it will struggle is in the woods like it does now."
+ *
+ * MEASURED FIRST. Every `tag:` in src/ counted: wood 89, metal 65, stone 48, wall 32, and
+ * then a long tail of ones and twos. BREAKABLE_TAGS above covers the tail — fence, crate,
+ * barrel, drum, sign — which is 15 hand-tagged props in the whole county. The four big
+ * generic tags are on NOTHING in that table, so a wooden crate emitted as `tag:'wood'` (and
+ * almost all of them are) stopped the car dead. That is exactly the complaint.
+ *
+ * The rule cannot be "make wood breakable", because `wood` is also floors, roof decks,
+ * stair treads, joists and the gallery you walk on — Codex's destination pass emits
+ * hundreds of them and the car would eat the buildings. So the test is SHAPE, not name,
+ * and it is the same test a player's eye makes from the driver's seat:
+ *
+ *   is it small enough to be a THING rather than a STRUCTURE, and low enough to go under
+ *   the bonnet line?
+ *
+ * A crate, a bin, a stool, a bucket, a churn, a milk crate, a small cairn: yes. A wall
+ * (halfX metres wide), a floor, a roof course, a stair, a gate post 3 m tall: no, because
+ * they fail the footprint or the height. A trunk, a post, a pole, a lamp column: never,
+ * because they are on NON_CLIMB_TAGS below and the woods are the one place he asked to
+ * keep hard.
+ *
+ * Mass is volume x a density by material, so stone costs more speed than wood, and it is
+ * capped: nothing found this way may need more than about 12 m/s, which is inside the
+ * on-road band. breakSpeed() = 2.6 + mass * 0.055.
+ */
+const CRUSH_MAX_R = 0.85;        // m. Footprint radius: past this it is a structure.
+const CRUSH_MAX_H = 1.30;        // m. Taller than the bonnet line is not "run over".
+const CRUSH_MAX_MASS = 175;      // kg. 2.6 + 175*0.055 = 12.2 m/s, on-road and reachable.
+const CRUSH_DENSITY = new Map([
+  ['wood', 300], ['cloth', 90], ['soil', 500], ['metal', 520],
+  ['stone', 1200], ['rock', 1200], ['glass', 400], ['vehicle', 900],
+]);
+// Never crushable by shape, whatever their size: these are the fabric of a place, and a
+// car that can drive through a wall is a car that has deleted the destination pass.
+const STRUCTURE_TAGS = new Set([
+  'wall', 'roof', 'floor', 'stair', 'step', 'tread', 'beam', 'joist', 'girder',
+  'deck', 'pad', 'apron', 'kerb', 'road', 'bridge', 'ledge', 'sill', 'lintel',
+  'door', 'gatepost', 'foundation', 'pier', 'buttress', 'vault', 'arch',
+]);
+
+function crushableBySize(tag, r, hx, hz, y0, y1) {
+  if (tag && (STRUCTURE_TAGS.has(tag) || NON_CLIMB_TAGS.has(tag))) return 0;
+  const height = y1 - y0;
+  if (!(height > 0) || height > CRUSH_MAX_H) return 0;
+  // For a box use its own half-extents; for a circle the radius is the footprint.
+  const ax = hx > 0 ? hx : r, az = hz > 0 ? hz : r;
+  if (!(ax > 0) || !(az > 0)) return 0;
+  if (Math.max(ax, az) > CRUSH_MAX_R) return 0;
+  const density = (tag && CRUSH_DENSITY.get(tag)) || 380;
+  const mass = 4 * ax * az * height * density;
+  if (mass < 4) return 0;                       // a doorknob is not a thing you crush
+  return Math.min(mass, CRUSH_MAX_MASS);
+}
+
 // ROUND 13: BREAKABLE BY THE GUN AND THE STOCK. Alex, seventh playtest: breakable boxes.
 // The tags a round or a buttstroke takes apart, and how many landings each one needs. The
 // count lives per collider (hitBreakable, below); the break retires the collider exactly the
@@ -469,6 +526,7 @@ export class Collision {
     else if (typeof bk === 'number' && bk > 0) mass = bk;
     else if (bk === true) mass = BREAK_DEFAULT;
     else if (tag && BREAKABLE_TAGS.has(tag)) mass = BREAKABLE_TAGS.get(tag);
+    else mass = crushableBySize(tag, r, hx, hz, y0, y1);
     this._mass[i] = mass;
     if (mass > 0) this._tel.breakable++;
 
@@ -1018,6 +1076,46 @@ export class Collision {
     const rad = radius > 0 ? radius : CFG.player.RADIUS;
     const h = height > 0 ? height : CFG.player.STAND_H;
     return this._isClear(x, z, feetY, rad, h);
+  }
+
+  // Fraction of a horizontal body sweep that is free. This is a query, not a move:
+  // it neither steps onto things nor changes a body's velocity. Walking intent ignores
+  // ordinary steps; a carried climb uses strict=true so its feet must clear the lip.
+  travelFraction(x, z, feetY, dx, dz, radius, height, strict = false) {
+    const length = Math.hypot(dx, dz);
+    if (length < EPS) return 1;
+    const rad = radius > 0 ? radius : CFG.player.RADIUS;
+    const h = height > 0 ? height : CFG.player.STAND_H;
+    const n = this._gather(x + dx * 0.5, z + dz * 0.5, length * 0.5 + rad + EPS);
+    let fraction = 1;
+    for (let k = 0; k < n; k++) {
+      const i = this._near[k];
+      if (!this._blocks(i, feetY, feetY + h, !strict, CFG.player.STEP_UP)) continue;
+      if (this._overlap(i, x, z, rad) && dx * this._nx + dz * this._nz < -EPS) return 0;
+      if (this._sweep(i, x, z, dx, dz, rad)) {
+        fraction = Math.min(fraction, Math.max(0, this._toi - EPS / length));
+      }
+    }
+    return fraction;
+  }
+
+  // A pull raises the body beside the face, then carries it onto the top. Endpoint
+  // headroom alone used to let that lift pass straight through a ceiling. Check the
+  // full vertical column beside the face and the horizontal route above the lip.
+  climbPathClear(x0, z0, feetY, x1, z1, top, radius, height) {
+    const rad = radius > 0 ? radius : CFG.player.RADIUS;
+    const h = height > 0 ? height : CFG.player.STAND_H;
+    const n = this._gather(x0, z0, rad + EPS);
+    for (let k = 0; k < n; k++) {
+      const i = this._near[k];
+      if (!(this._mask[i] & MASK.SOLID)) continue;
+      if (this._y1[i] <= feetY + EPS || this._y0[i] >= top + h - EPS) continue;
+      if (this._overlap(i, x0, z0, Math.max(EPS, rad - EPS))) return false;
+    }
+    // Once the feet reach the landing, adjoining roof courses use the same step
+    // tolerance as walking. Refusing a 12 cm neighbouring course made every sloped
+    // gable look climbable but reject the last pull beside its edge.
+    return this.travelFraction(x0, z0, top, x1 - x0, z1 - z0, rad, h) >= 1;
   }
 
   // -------------------------------------------------------------------------

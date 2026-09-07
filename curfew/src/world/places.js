@@ -74,6 +74,8 @@ import { DRESS as DRESS_STATION } from './dress-station.js';
 import { DRESS as DRESS_INTERIORS } from './dress-interiors.js';
 import { DRESS as DRESS_COMPOUNDS } from './destination-compounds.js';
 import { DRESS as DRESS_COMPOUNDS_EAST } from './destination-compounds-east.js';
+import { DRESS as DRESS_REFUGES } from './destination-refuges.js';
+import { DRESS as DRESS_ESTATES } from './estate-details.js';
 import { STAGED_BUILDERS } from './staged.js';
 
 /**
@@ -86,7 +88,7 @@ import { STAGED_BUILDERS } from './staged.js';
  * `solid` and `glow` are merged into the body's geometry; `cast` is a staged cast (below).
  * A dress that throws is noted and skipped: the destination still builds.
  */
-const DRESS_CHAIN = [DRESS_STATION, DRESS_INTERIORS, DRESS_COMPOUNDS, DRESS_COMPOUNDS_EAST];
+const DRESS_CHAIN = [DRESS_STATION, DRESS_INTERIORS, DRESS_COMPOUNDS, DRESS_COMPOUNDS_EAST, DRESS_REFUGES, DRESS_ESTATES];
 
 /** How close you have to come before a staged cast is placed. Outside the chunk residency
  *  ring so nobody is ever seen popping into a scene in front of you. */

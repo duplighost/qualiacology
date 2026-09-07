@@ -51,7 +51,7 @@
 //    here needs the glow to be legible — the torch is the light until then.
 
 import * as THREE from 'three';
-import { kits, C, groundY, PANE_LAMP, PANE_TUBE, PANE_SIGN } from './sites.js';
+import { kits, C, groundY, gableFloor, PANE_LAMP, PANE_TUBE, PANE_SIGN } from './sites.js';
 
 const TAU = Math.PI * 2;
 
@@ -348,9 +348,11 @@ export const DRESS = {
   cathedral(api) {
     const k = kits(), S = k.solid, G = k.glow;
 
-    // ---- pews: two ranks of seven, a 4.7 m aisle down the middle -------------------------
-    for (let r = 0; r < 7; r++) {
-      const pz = 8.2 + r * 1.75;
+    // The new road-end doorway opens into the nave at +Z. The chancel lives at
+    // the tower end now; arriving should reveal a room, not the back of an altar.
+    // Six ranks leave a generous cross-aisle behind the door and ahead of the steps.
+    for (let r = 0; r < 6; r++) {
+      const pz = 11.0 + r * 1.75;
       for (const s of [-1, 1]) {
         const px = s * 4.95;
         solid(S, api, 5.2, 0.10, 0.42, px, 0.45, pz, TAR, 0, 'wood', true);
@@ -388,17 +390,17 @@ export const DRESS = {
 
     // ---- the chancel: three steps, the altar, the reredos behind it ----------------------
     for (let i = 0; i < 3; i++) {
-      solid(S, api, 12.0, 0.24, 0.9, 0, 0.12 + i * 0.24, 19.4 + i * 0.9, C.stone, 0, 'stone', true);
+      solid(S, api, 12.0, 0.24, 0.9, 0, 0.12 + i * 0.24, 9.5 - i * 0.9, C.stone, 0, 'stone', true);
     }
-    solid(S, api, 3.2, 1.0, 1.1, 0, 1.22, 21.6, C.stone, 0, 'stone');
-    S.box(3.6, 0.10, 1.3, 0, api.padY + 1.77, 21.6, C.slate);
+    solid(S, api, 3.2, 1.0, 1.1, 0, 1.22, 6.8, C.stone, 0, 'stone');
+    S.box(3.6, 0.10, 1.3, 0, api.padY + 1.77, 6.8, C.slate);
     for (const s of [-1, 1]) {
-      post(S, api, 0.09, 1.35, s * 2.3, 0.72, 20.9, IRON, 'metal');
-      S.cyl(0.10, 0.10, 0.30, 6, s * 2.3, api.padY + 2.22, 20.9, C.cloth);
-      G.pane(0.18, 0.34, s * 2.3, api.padY + 2.46, 20.9, PANE_LAMP, 0, 0, 4, 5);
+      post(S, api, 0.09, 1.35, s * 2.3, 0.72, 7.6, IRON, 'metal');
+      S.cyl(0.10, 0.10, 0.30, 6, s * 2.3, api.padY + 2.22, 7.6, C.cloth);
+      G.pane(0.18, 0.34, s * 2.3, api.padY + 2.46, 7.6, PANE_LAMP, 0, 0, 4, 5);
     }
-    S.box(6.4, 4.4, 0.20, 0, api.padY + 2.3, 22.4, SOOT);
-    S.box(1.0, 2.2, 0.10, 0, api.padY + 2.5, 22.26, C.plaster);
+    S.box(6.4, 4.4, 0.20, 0, api.padY + 2.3, 5.76, SOOT);
+    S.box(1.0, 2.2, 0.10, 0, api.padY + 2.5, 5.90, C.plaster);
 
     // ---- the side chapel, screened off in the east aisle ---------------------------------
     {
@@ -852,13 +854,11 @@ export const DRESS = {
       put(-(gap + side) * 0.5, -d * 0.5, side, t); put((gap + side) * 0.5, -d * 0.5, side, t);
       const gy0 = groundY(api, CX, CZ), L0 = gy0 - api.padY;
       S.box(gap, 0.5, t, f.x(0, -d * 0.5), gy0 + h - 0.25, f.z(0, -d * 0.5), C.stone, Y);
-      for (const s of [-1, 1]) {
-        const g = new THREE.BoxGeometry(Math.hypot(1.5, w * 0.5) + 0.2, 0.18, d + 0.5);
-        g.rotateZ(-s * Math.atan2(1.5, w * 0.5));
-        g.translate(s * w * 0.25, gy0 + h + 0.75, 0);
-        g.rotateY(Y); g.translate(CX, 0, CZ);
-        S.push(g, C.slate);
-      }
+      // The mourning room has solid gable ends, and the pictured roof supports a body.
+      // Both start at the existing eave; the entrance beneath it stays open.
+      S.gable(w, d, gy0 + h, 1.5, CX, 0, CZ, C.slate, Y,
+        { api, depth: d, col: C.stone });
+      gableFloor(api, CX, CZ, w, d, gy0 + h, 1.5, Y);
       S.box(0.7, 1.5, 0.4, f.x(0, d * 0.5 - 0.1), gy0 + h + 1.6, f.z(0, d * 0.5 - 0.1), C.stone, Y);
       // THE BIER, on trestles, with what is on it under a sheet
       solid(S, api, 2.4, 0.10, 1.0, f.x(0, 0.6), L0 + 0.86, f.z(0, 0.6), TAR, Y, 'wood', true);

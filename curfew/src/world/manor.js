@@ -148,11 +148,11 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       S.box(w, h, d, LX(x), LY(y), LZ(z), PALETTE[mat] || PALETTE.plaster, ry || 0);
     };
     /** A donor-frame AABB collider. */
-    const aabb = (x0, y0, z0, x1, y1, z1, tag, standable) => {
+    const aabb = (x0, y0, z0, x1, y1, z1, tag, standable, climbable) => {
       api.emit({
         kind: 'obb', x: LX((x0 + x1) * 0.5), z: LZ((z0 + z1) * 0.5),
         halfX: (x1 - x0) * 0.5, halfZ: (z1 - z0) * 0.5, yaw: 0,
-        y0: LY(y0), y1: LY(y1), tag: tag || 'wall', standable: !!standable,
+        y0: LY(y0), y1: LY(y1), tag: tag || 'wall', standable: !!standable, climbable,
       });
     };
     /** A donor-frame yawed box collider (door panels, furniture set at an angle). */
@@ -193,7 +193,7 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       return { key: level + '|V|' + (cx + 1) + '|' + cz, axis: 'V', ex: cx + 1, ez: cz };
     };
     const doorSpecs = {};
-    const doorPoints = [];     // {level, x, z} donor metres, for the furnisher's keep-out
+    const doorPoints = [];     // donor metres: furniture clearance and matching trim openings
     for (const [level, cx, cz, dir, opts] of DOORS) {
       const kk = edgeKey(level, cx, cz, dir);
       (doorSpecs[kk.key] = doorSpecs[kk.key] || []).push({ level, cx, cz, dir, opts, ...kk });
@@ -201,6 +201,8 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       doorPoints.push({
         level, x: kk.axis === 'H' ? along0 + CS / 2 : kk.ex * CS,
         z: kk.axis === 'H' ? kk.ez * CS : along0 + CS / 2,
+        axis: kk.axis,
+        width: opts.w || (opts.type === 'double' || opts.type === 'front' ? DBL_W : opts.type === 'arch' ? 2.6 : DOOR_W),
       });
     }
     const floorHoles = {}, ceilHoles = {};
@@ -528,13 +530,13 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       if (ix1 < r.x1) out.push({ x0: ix1, z0: iz0, x1: r.x1, z1: iz1 });
       return out;
     }
-    function floorCollider(rect, y) {
+    function floorCollider(rect, y, thickness = FLOOR_T) {
       // split long slabs so no half-extent passes MAX_RUN / 2 (the corridors are 60 m)
       const nx = Math.ceil((rect.x1 - rect.x0) / MAX_RUN), nz = Math.ceil((rect.z1 - rect.z0) / MAX_RUN);
       for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
         const x0 = rect.x0 + (rect.x1 - rect.x0) * i / nx, x1 = rect.x0 + (rect.x1 - rect.x0) * (i + 1) / nx;
         const z0 = rect.z0 + (rect.z1 - rect.z0) * j / nz, z1 = rect.z0 + (rect.z1 - rect.z0) * (j + 1) / nz;
-        aabb(x0, y - FLOOR_T, z0, x1, y, z1, 'stone', true);
+        aabb(x0, y - thickness, z0, x1, y, z1, 'stone', true, false);
       }
     }
     function buildFloors() {
@@ -577,13 +579,15 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
               floorCollider(r, L.floor);
             }
           }
-          // ceilings: geometry only; headroom is by construction
+          // Ceilings support from above and stop jumps below; stair holes stay open.
           if (!anyCeilHole) {
             box(rect.x1 - rect.x0, CEIL_T, rect.z1 - rect.z0, cm, room.cx, ceilY + CEIL_T / 2, room.cz);
+            floorCollider(rect, ceilY + CEIL_T, CEIL_T);
           } else {
             for (let cx = room.x0; cx <= room.x1; cx++) for (let cz = room.z0; cz <= room.z1; cz++) {
               if (ceilHoles[level + '|' + cx + ',' + cz]) continue;
               box(CS, CEIL_T, CS, cm, cx * CS + CS / 2, ceilY + CEIL_T / 2, cz * CS + CS / 2);
+              aabb(cx * CS, ceilY, cz * CS, (cx + 1) * CS, ceilY + CEIL_T, (cz + 1) * CS, 'ceiling', true, false);
             }
           }
         }
@@ -759,11 +763,29 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
         const dz = Math.abs(z - rz), dxE = Math.min(x - ex0, ex1 - x);
         return eave + rise * Math.max(0, 1 - Math.max(dz, hd - dxE) / hd);
       };
+      // Narrow perimeter bands follow the hip rather than filling the whole attic.
+      const bands = Math.ceil(rise / 0.20), run = hd / bands;
+      for (let i = 0; i < bands; i++) {
+        const inset = i * run, next = (i + 1) * run;
+        const top = eave + rise * (i + 0.5) / bands + 0.04;
+        const x0 = ex0 + inset, x1 = ex1 - inset, z0 = ez0 + inset, z1 = ez1 - inset;
+        for (const r of [[x0,z0,x1,ez0+next], [x0,ez1-next,x1,z1],
+          [x0,ez0+next,ex0+next,ez1-next], [ex1-next,ez0+next,x1,ez1-next]]) {
+          if (r[2]-r[0] < 0.01 || r[3]-r[1] < 0.01) continue;
+          // Split long bands for the collision spatial hash.
+          const nx=Math.ceil((r[2]-r[0])/MAX_RUN), nz=Math.ceil((r[3]-r[1])/MAX_RUN);
+          for(let a=0;a<nx;a++) for(let b=0;b<nz;b++)
+            aabb(r[0]+(r[2]-r[0])*a/nx,top-0.22,r[1]+(r[3]-r[1])*b/nz,
+              r[0]+(r[2]-r[0])*(a+1)/nx,top,r[1]+(r[3]-r[1])*(b+1)/nz,'roof',true);
+        }
+      }
       const chimneys = averyExterior ? [[18, 13], [47, 27]] : [[9, 12], [22, 28], [42, 12], [51, 30]];
       for (const [x, z] of chimneys) {
         const top = roofAt(x, z) + 3.2;
         box(1.5, top - (eave - 1.0), 1.5, 'brick', x, (top + eave - 1.0) / 2, z);
         box(1.9, 0.35, 1.9, 'stone', x, top + 0.17, z);
+        aabb(x-0.75,eave-1.0,z-0.75,x+0.75,top,z+0.75,'stone',true);
+        aabb(x-0.95,top,z-0.95,x+0.95,top+0.35,z+0.95,'stone',true);
         for (const [px, pz] of [[-0.35, -0.35], [0.35, 0.35]]) {
           S.tube(0.22, 0.22, 0.6, 8, LX(x + px), LY(top + 0.6), LZ(z + pz), PALETTE.dark);
         }
@@ -795,6 +817,7 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       if (averyExterior) {
         box(7.4, 0.34, 2.7, 'stone', doorX + 0.55, 3.05, front + 0.65);
         box(7.9, 0.22, 3.1, 'slate', doorX + 0.55, 3.34, front + 0.65);
+        aabb(doorX-3.40,2.88,front-0.90,doorX+4.50,3.45,front+2.20,'roof',true);
         for (const sx of [-1, 1]) {
           const x = doorX + 0.55 + sx * 3.15, z = front + 1.35;
           S.cyl(0.13, 0.15, 3.35 + riser, 8, LX(x), LY(1.37), LZ(z), PALETTE.dark);
@@ -838,6 +861,7 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
         }
         box(6.2, 0.4, 2.4, 'stone', doorX, 6.2, front + 0.6);
         box(6.6, 0.24, 2.8, 'slate', doorX, 6.55, front + 0.6);
+        aabb(doorX-3.3,6.0,front-0.8,doorX+3.3,6.67,front+2.0,'roof',true);
       }
       // TWO LANTERNS either side of the door, dark brass: the fixture lane lights the
       // claim, not these; they are the shape of a lit doorway waiting for power.
@@ -874,8 +898,8 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
 
     /** True if a point is within `r` of a door on this level or inside a keep-out rect. */
     function blocked(x, z, r, doorsHere, keepOut) {
-      for (const d of doorsHere) if (Math.hypot(d.x - x, d.z - z) < r) return true;
-      for (const k of keepOut) if (x > k.x0 && x < k.x1 && z > k.z0 && z < k.z1) return true;
+      for (const d of doorsHere) if (Math.hypot(d.x - x, d.z - z) < r + 0.65) return true;
+      for (const k of keepOut) if (x + r > k.x0 && x - r < k.x1 && z + r > k.z0 && z - r < k.z1) return true;
       return false;
     }
 
@@ -1074,15 +1098,47 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
       dado(room, y) {
         const D = [0.052, 0.050, 0.048], H = 1.05, T = 0.10;
         const x0 = room.wx0 + 0.06, x1 = room.wx1 - 0.06, z0 = room.wz0 + 0.06, z1 = room.wz1 - 0.06;
-        S.box(x1 - x0, H, T, LX((x0 + x1) / 2), LY(y + H / 2), LZ(z0 + T / 2), D);
-        S.box(x1 - x0, H, T, LX((x0 + x1) / 2), LY(y + H / 2), LZ(z1 - T / 2), D);
-        S.box(T, H, z1 - z0, LX(x0 + T / 2), LY(y + H / 2), LZ((z0 + z1) / 2), D);
-        S.box(T, H, z1 - z0, LX(x1 - T / 2), LY(y + H / 2), LZ((z0 + z1) / 2), D);
-        // and the string course that caps it, one shade up, so the edge is a line not a seam
-        for (const [ax2, az2, w2, d2] of [[(x0 + x1) / 2, z0 + T / 2, x1 - x0, T + 0.06],
-          [(x0 + x1) / 2, z1 - T / 2, x1 - x0, T + 0.06],
-          [x0 + T / 2, (z0 + z1) / 2, T + 0.06, z1 - z0], [x1 - T / 2, (z0 + z1) / 2, T + 0.06, z1 - z0]]) {
-          S.box(w2, 0.07, d2, LX(ax2), LY(y + H + 0.035), LZ(az2), PALETTE.stoneDark);
+        // Trim follows the same openings as the wall. An uninterrupted decorative
+        // strip used to make every usable door look barricaded at knee height.
+        for (const [axis, plane, inset, lo, hi] of [
+          ['H', room.wz0, z0 + T / 2, x0, x1], ['H', room.wz1, z1 - T / 2, x0, x1],
+          ['V', room.wx0, x0 + T / 2, z0, z1], ['V', room.wx1, x1 - T / 2, z0, z1],
+        ]) {
+          const gaps = [];
+          for (let cell = Math.floor(lo / CS); cell < Math.ceil(hi / CS); cell++) {
+            const ex = axis === 'H' ? cell : plane / CS, ez = axis === 'H' ? plane / CS : cell;
+            const a = cellRoom(room.level, axis === 'H' ? ex : ex - 1, axis === 'H' ? ez - 1 : ez);
+            const b = cellRoom(room.level, ex, ez);
+            const pair = a && b ? [a.id, b.id].sort().join('|') : null;
+            if (a === b || (pair && (openSet.has(pair) || railSet.has(pair)))) {
+              gaps.push([cell * CS, (cell + 1) * CS]);
+            }
+          }
+          for (const door of doorPoints) {
+            if (door.level !== room.level || door.axis !== axis || Math.abs((axis === 'H' ? door.z : door.x) - plane) > 0.01) continue;
+            const mid = axis === 'H' ? door.x : door.z;
+            gaps.push([mid - door.width / 2 - 0.04, mid + door.width / 2 + 0.04]);
+          }
+          let spans = [[lo, hi]];
+          for (const [g0, g1] of gaps) {
+            const next = [];
+            for (const [s0, s1] of spans) {
+              if (g1 <= s0 || g0 >= s1) next.push([s0, s1]);
+              else {
+                if (g0 > s0) next.push([s0, g0]);
+                if (g1 < s1) next.push([g1, s1]);
+              }
+            }
+            spans = next;
+          }
+          for (const [s0, s1] of spans) {
+            if (s1 - s0 < 0.02) continue;
+            const isX = axis === 'H', mid = (s0 + s1) / 2;
+            const x = isX ? mid : inset, z = isX ? inset : mid, len = s1 - s0;
+            S.box(isX ? len : T, H, isX ? T : len, LX(x), LY(y + H / 2), LZ(z), D);
+            S.box(isX ? len : T + 0.06, 0.07, isX ? T + 0.06 : len,
+              LX(x), LY(y + H + 0.035), LZ(z), PALETTE.stoneDark);
+          }
         }
       },
     };
@@ -1348,7 +1404,7 @@ export function makeManorBuilder(tools, plan = BLACKTHORN_PLAN) {
           for (let i = 0; i < 3; i++) put(V.candle, 2, 0.2 + i * 0.3, 0.12, 0.3);
         };
         case 'priest': return () => {
-          put(V.bed, 0, 0.5, 0.9, 1.0, 0.8, 1.8);
+          // The persistent Refuge owns the mattress and door in this surviving cellar room.
           V.candle(x0 + 0.4, z1 - 0.4, y);
           put(V.crate, 1, 0.5, 0.5, 0.8, 0.5);
         };

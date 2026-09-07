@@ -619,6 +619,7 @@ export class Dread {
    */
   permitOk() {
     if (!this.enabled) return false;
+    if (this.ctx.shared.interiorHorror) return false;
     if (this.building) return false;
     if (this.clock < this.quietUntil) return false;
     const dir = this._sys('director');
@@ -640,6 +641,7 @@ export class Dread {
    * dread: a build owns the picture right now, or a stinger just landed.
    */
   pressureOk() {
+    if (this.ctx.shared.interiorHorror) return false;
     if (this.building) return false;
     if (this.clock - this.lastLoud < CFG.director.dread.postLoudQuietS) return false;
     return true;

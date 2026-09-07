@@ -291,8 +291,10 @@ class Kit {
     return g;
   }
 
-  /** A pitched roof as two slabs. `pitch` is the half-angle of the gable. */
-  gable(w, d, h, rise, x, y, z, col, ry) {
+  /** Two roof slabs. Optional `ends: { api, depth, col }` closes an enclosed shell's
+   * front/back triangles at its WALL depth, under the roof overhang. The end walls start
+   * at the eave and carry their own collision; roof walking remains gableFloor's job. */
+  gable(w, d, h, rise, x, y, z, col, ry, ends) {
     const slope = Math.atan2(rise, w * 0.5);
     const len = Math.hypot(rise, w * 0.5) + 0.22;
     for (const s of [-1, 1]) {
@@ -302,6 +304,47 @@ class Kit {
       if (ry) g.rotateY(ry);
       g.translate(x, y, z);
       this.push(g, col);
+    }
+    if (ends) {
+      if (typeof ends.api?.emit !== 'function') throw new Error('gable ends require collision emit');
+      const depth = ends.depth ?? d, thick = 0.22, half = w * 0.5;
+      const cy = Math.cos(ry || 0), sy = Math.sin(ry || 0);
+      for (const side of [-1, 1]) {
+        const endZ = side * depth * 0.5, pos = [], uv = [], idx = [];
+        const triangle = [[-half, 0], [half, 0], [0, rise]];
+        // Separate face vertices keep masonry normals flat. An explicit index plus UVs
+        // matches every BoxGeometry in this kit; non-indexed triangles break its merge.
+        for (const face of [-1, 1]) {
+          const start = pos.length / 3;
+          for (const [px, py] of triangle) {
+            pos.push(px, py, endZ + face * thick * 0.5); uv.push(px / w + 0.5, py / rise);
+          }
+          idx.push(start, start + (face > 0 ? 1 : 2), start + (face > 0 ? 2 : 1));
+        }
+        for (let i = 0; i < 3; i++) {
+          const a = triangle[i], b = triangle[(i + 1) % 3], start = pos.length / 3;
+          for (const [p, face] of [[a, -1], [b, -1], [b, 1], [a, 1]]) {
+            pos.push(p[0], p[1], endZ + face * thick * 0.5); uv.push(p[0] / w + 0.5, p[1] / rise);
+          }
+          idx.push(start, start + 1, start + 2, start, start + 2, start + 3);
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        g.setIndex(idx); g.computeVertexNormals();
+        this.at(g, ends.col || col, x, h + y, z, ry);
+        // Thin vertical bands follow the triangle. Their conservative top error is less
+        // than the roof slab thickness. Nothing extends below the eave into a doorway,
+        // and these wall bands cannot compete with the standable roof strips above them.
+        const n = Math.max(2, Math.ceil(w / 0.65), Math.ceil(rise / 0.08)), sw = w / n;
+        for (let i = 0; i < n; i++) {
+          const lx = -half + (i + 0.5) * sw;
+          const top = h + y + rise * (1 - Math.max(0, Math.abs(lx) - sw * 0.5) / half);
+          ends.api.emit({ kind: 'obb', x: x + lx * cy + endZ * sy,
+            z: z - lx * sy + endZ * cy, halfX: sw * 0.5, halfZ: thick * 0.5, yaw: ry || 0,
+            y0: h + y, y1: top, tag: 'wall', standable: false, climbable: false, gableEnd: true });
+        }
+      }
     }
   }
 
@@ -378,7 +421,7 @@ function groundY(api, lx, lz) {
  * that frame. places.js rotates the whole site group and applies the same rotation to
  * every emitted collider, so local is the only frame a builder ever has to think in.
  */
-function shell(k, api, ox, oz, w, d, h, yaw, col, doorW) {
+function shell(k, api, ox, oz, w, d, h, yaw, col, doorW, backDoor = false) {
   const t = 0.44;
   const hw = w * 0.5, hd = d * 0.5;
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
@@ -407,7 +450,7 @@ function shell(k, api, ox, oz, w, d, h, yaw, col, doorW) {
       y0: base, y1: top, tag: 'wall',
     });
   };
-  put(0, hd, w, t);                       // back (+Z in the shell's frame)
+  if (!backDoor) put(0, hd, w, t);         // back (+Z in the shell's frame)
   put(-hw, 0, t, d);                      // left
   put(hw, 0, t, d);                       // right
   const gap = Math.min(doorW || 2.2, w - 1.2);
@@ -416,6 +459,16 @@ function shell(k, api, ox, oz, w, d, h, yaw, col, doorW) {
   put((gap + side) * 0.5, -hd, side, t);
   // lintel over the doorway, so the opening reads as a door and not as a missing wall
   k.box(gap, 0.5, t, ox + (-hd) * sy, api.padY + h - 0.25, oz + (-hd) * cy, col, yaw);
+  const lintel = (lz) => api.emit({ kind: 'obb',
+    x: ox + lz * sy, z: oz + lz * cy, halfX: gap * 0.5, halfZ: t * 0.5, yaw,
+    y0: top - 0.5, y1: top, tag: 'wall', standable: true, climbable: false });
+  lintel(-hd);
+  if (backDoor) {
+    put(-(gap + side) * 0.5, hd, side, t);
+    put((gap + side) * 0.5, hd, side, t);
+    k.box(gap, 0.5, t, ox + hd * sy, top - 0.25, oz + hd * cy, col, yaw);
+    lintel(hd);
+  }
 }
 
 /**
@@ -502,20 +555,21 @@ function smallShellRoute(k, api, ox, oz, w, d, h, yaw) {
 }
 
 /**
- * ROUND 13: THE ROOF IS A FLOOR YOU CAN WALK. Kit.gable() draws two slabs and emits nothing,
+ * ROUND 13: THE ROOF IS A FLOOR YOU CAN WALK. Kit.gable() draws two slabs; its optional
+ * end walls close the shell but do not provide a walking surface,
  * so a body that reached the eave strip or a wall top stepped a hand's width onto the picture
  * of a roof and dropped into the hut — Alex, at the Relay: "climbed up some steps to the roof.
  * then fell through the roof lol." The collider store holds vertical prisms, so each pitch
  * becomes a short stair of standable strips whose tops follow the slope, every riser under
  * STEP_UP, and the body walks up one pitch, over the ridge and down the other. Same footprint
- * and depth as the gable it sits under; nothing is drawn. Called only where a shell also has
- * a smallShellRoute, so the roofs you can reach are the roofs that hold you.
+ * and depth as the gable it sits under; nothing is drawn. Every rendered gable calls this,
+ * including the mine, churches, barn, and cemetery outbuildings.
  */
 function gableFloor(api, x, z, w, d, h, rise, ry) {
   const yaw = ry || 0;
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
-  const half = w * 0.5;
-  const n = Math.max(2, Math.ceil(half / 0.85));
+  const half = w * 0.5 + 0.10;
+  const n = Math.max(2, Math.ceil(half / 0.65), Math.ceil(rise / 0.22));
   const sw = half / n;
   const hd = (d + 0.5) * 0.5;
   for (const s of [-1, 1]) {
@@ -647,6 +701,11 @@ function yardWall(k, api, radius, height, gapDir, col) {
     if (Math.abs(dr) < 0.30) continue;
     const x = Math.cos(a) * radius, z = Math.sin(a) * radius;
     const seg = (TAU / N) * radius * 1.12;
+    // The keeper's yard occupies the southeast edge of the cemetery. Leave its
+    // entrance and outside climbing shelves open in both masonry and collision.
+    if (api.site.id === 'garden-of-rest' && x > 5 && x < 21 && z > 11.5) continue;
+    if (api.site.id === 'garden-of-rest' && x < -17 && z > -1 && z < 15) continue;
+    if (api.site.id === 'chapel' && x > -16 && x < -10 && z > 11) continue;
     const h = height * (0.72 + 0.28 * Math.abs(Math.sin(i * 2.7)));
     // A yard wall is a ring 19-24 m out, which is at or past the level core of every disc
     // it is used on. Each segment stands on the ground it is actually over and steps down
@@ -780,7 +839,9 @@ export const BUILDERS = {
       }
       // the shop
       shell(k.solid, api, -10.5, 0.5, 10, 7, 3.6, 0, C.plaster, 2.4);
-      k.solid.gable(10.6, 7.6, api.padY + 3.6, 1.1, -10.5, 0, 0.5, C.slate, 0);
+      k.solid.gable(10.6, 7.6, api.padY + 3.6, 1.1, -10.5, 0, 0.5, C.slate, 0,
+        { api, depth: 7, col: C.plaster });
+      gableFloor(api, -10.5, 0.5, 10.6, 7.6, api.padY + 3.6, 1.1, 0);
       // THE SHOP ROOF IS A FLOOR. Measured 2026-09-03 (docs/ROUND-5/E-places.md): standing on
       // any collider top the player controller reads airborne (controller.js:860 clamps to
       // terrain.heightAt), so there is no jump and no mantle off a crate, and the mantle
@@ -792,16 +853,6 @@ export const BUILDERS = {
       // so the only place their walls are inside a step of a 3.3 m crate is where the pitch
       // is lowest (measured: at the ridge column the stair was a dead end, probe 3).
       {
-        const gx = -10.5, gz = 0.5, halfD = 4.05, eaveTop = api.padY + 3.78;
-        // The inner strips start 1.0 m in from the crate column's footprint (x -15.41..-14.59
-        // plus the body's 0.36): a strip wall inside that reach is a 0.7 m step and a dead end.
-        const strips = [[5.3, 0], [3.5, 0.22], [2.5, 0.44], [1.5, 0.67], [0.5, 0.92]];
-        for (const [hx, rise] of strips) {
-          api.emit({
-            kind: 'obb', x: gx, z: gz, halfX: hx, halfZ: halfD, yaw: 0,
-            y0: api.padY + 3.0, y1: eaveTop + rise, tag: 'wall', standable: true,
-          });
-        }
         // the plant box on the +x pitch: the last step, level with the canopy top
         k.solid.box(2.3, 0.90, 1.6, -7.75, api.padY + 4.40, 1.2, C.metal);
         k.solid.box(0.5, 0.22, 0.5, -7.3, api.padY + 4.96, 1.2, C.dark);     // the vent hood
@@ -907,8 +958,8 @@ export const BUILDERS = {
       k.solid.box(2.86, 0.40, 0.06, -13.6, api.padY + 2.56, -3.15, C.slate);
       // the county map board on the shop's road-facing wall — the third record of a
       // filling map (DESIGN section 2). places.js adds one pin quad per found place.
-      k.solid.box(3.2, 2.1, 0.14, -8.4, api.padY + 1.9, -3.14, C.wood, Math.PI);
-      k.solid.quad(2.9, 1.8, -8.4, api.padY + 1.9, -3.23, C.paper, Math.PI);
+      k.solid.box(3.2, 2.1, 0.14, -7.4, api.padY + 1.9, -3.14, C.wood, Math.PI);
+      k.solid.quad(2.9, 1.8, -7.4, api.padY + 1.9, -3.23, C.paper, Math.PI);
       return {
         solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.lamp,
         // ROUND 6.1 (Alex, sixth playtest: "it just has a rectangle thing over part of the
@@ -938,6 +989,7 @@ export const BUILDERS = {
       const w = 11, d = 8.4, h = 6.6;
       shell(k.solid, api, 0, 0, w, d, h, 0, C.plaster, 2.2);
       k.solid.gable(w + 0.6, d + 0.6, api.padY + h, 2.4, 0, 0, 0, C.slate, 0);
+      gableFloor(api, 0, 0, w + 0.6, d + 0.6, api.padY + h, 2.4, 0);
       // porch
       k.solid.box(3.6, 0.22, 1.8, 0, api.padY + 2.9, -(d * 0.5 + 0.9), C.plank);
       for (const px of [-1.5, 1.5]) {
@@ -1006,7 +1058,9 @@ export const BUILDERS = {
       const k = kits();
       // winding house
       shell(k.solid, api, 12.5, -8, 12, 9, 5.4, 0, C.brick, 2.6);
-      k.solid.gable(12.6, 9.6, api.padY + 5.4, 1.5, 12.5, 0, -8, C.slate, 0);
+      k.solid.gable(12.6, 9.6, api.padY + 5.4, 1.5, 12.5, 0, -8, C.slate, 0,
+        { api, depth: 9, col: C.brick });
+      gableFloor(api, 12.5, -8, 12.6, 9.6, api.padY + 5.4, 1.5, 0);
       k.glow.pane(2.6, 1.2, 12.5, api.padY + 3.0, -12.6, PANE_WINDOW, Math.PI, 0, 8, 6);
       sash(k.solid, 2.6, 1.2, 12.5, api.padY + 3.0, -12.6, C.dark, Math.PI, 0, 3, 2, 0.07, 0.09);
       // the breaker cabinet — the claim
@@ -1038,6 +1092,8 @@ export const BUILDERS = {
         const a = api.rng.range(0, TAU), r = api.rng.range(16, 26);
         const cr = api.rng.range(2.4, 4.6), ch = api.rng.range(1.6, 3.4);
         const lx = Math.cos(a) * r, lz = Math.sin(a) * r;
+        // Keep the weigh office, its doorway and its service climb free for every seed.
+        if (lx + cr > -19.2 && lx - cr < -8.8 && lz + cr > -20.5 && lz - cr < -9.6) continue;
         const gy = groundY(api, lx, lz);
         k.solid.cone(cr, ch, 7, lx, gy + ch * 0.5 - 0.9, lz, C.ash);
         api.emit({
@@ -1115,8 +1171,10 @@ export const BUILDERS = {
         y0: api.padY - 0.3, y1: api.padY + 0.4, tag: 'stone', standable: true,
       });
       shell(k.solid, api, -7.5, 6.5, 6, 5, 3.0, 0, C.plaster, 2.0);
-      k.solid.gable(6.4, 5.4, api.padY + 3.0, 0.7, -7.5, 0, 6.5, C.slate, 0);
+      k.solid.gable(6.4, 5.4, api.padY + 3.0, 0.7, -7.5, 0, 6.5, C.slate, 0,
+        { api, depth: 5, col: C.plaster });
       gableFloor(api, -7.5, 6.5, 6.4, 5.4, api.padY + 3.0, 0.7, 0);
+
       smallShellRoute(k.solid, api, -7.5, 6.5, 6, 5, 3.0, 0);
       const c = api.site.claim;
       k.solid.box(1.2, 1.7, 0.6, c.dx, api.padY + 0.85, c.dz, C.metal);
@@ -1198,8 +1256,10 @@ export const BUILDERS = {
       // walls (tests/shots/r6-D2-cathedral-road.png), and its back wall stood on the far
       // verge. At 18 m it stops at z 23, on the pad, short of the bank the road sits above.
       const nw = 17, nd = 18, nh = 15;
-      shell(k.solid, api, 0, 14, nw, nd, nh, 0, C.stone, 3.0);
-      k.solid.gable(nw + 1.0, nd + 1.0, api.padY + nh, 4.2, 0, 0, 14, C.slate, 0);
+      shell(k.solid, api, 0, 14, nw, nd, nh, 0, C.stone, 3.0, true);
+      k.solid.gable(nw + 1.0, nd + 1.0, api.padY + nh, 4.2, 0, 0, 14, C.slate, 0,
+        { api, depth: nd, col: C.stone });
+      gableFloor(api, 0, 14, nw + 1.0, nd + 1.0, api.padY + nh, 4.2, 0);
       // buttresses down both flanks
       for (let i = 0; i < 3; i++) {
         const bz = 8 + i * 6.5;
@@ -1267,7 +1327,9 @@ export const BUILDERS = {
     body(api) {
       const k = kits();
       shell(k.solid, api, 0, 5, 9, 14, 6.0, 0, C.stone, 2.4);
-      k.solid.gable(9.6, 14.6, api.padY + 6.0, 2.2, 0, 0, 5, C.slate, 0);
+      k.solid.gable(9.6, 14.6, api.padY + 6.0, 2.2, 0, 0, 5, C.slate, 0,
+        { api, depth: 14, col: C.stone });
+      gableFloor(api, 0, 5, 9.6, 14.6, api.padY + 6.0, 2.2, 0);
       for (let i = 0; i < 3; i++) {
         for (const sx of [-1, 1]) {
           const cy = sx > 0 ? Math.PI * 0.5 : -Math.PI * 0.5;
@@ -1555,6 +1617,15 @@ export const BUILDERS = {
             y0: api.padY + F - 0.2, y1: api.padY + F, tag: 'metal', standable: true, climbable: false,
           });
         }
+        // The sector starts beyond the last tread's edge. Without this small landing,
+        // returning from the lamp room crossed a 60 cm gap and dropped a whole spiral
+        // lap (6.34 m), although every later X/Z waypoint still looked correct.
+        const landingA = ARRIVE_A + 0.35, landingR = 2.1;
+        const landingX = Math.cos(landingA) * landingR, landingZ = Math.sin(landingA) * landingR;
+        k.solid.box(1.2, 0.2, 1.5, landingX, api.padY + F - 0.1, landingZ, C.metal, tangYaw(landingA));
+        api.emit({ kind: 'obb', x: landingX, z: landingZ, halfX: 0.60, halfZ: 0.75,
+          yaw: tangYaw(landingA), y0: api.padY + F - 0.2, y1: api.padY + F,
+          tag: 'metal', standable: true, climbable: false });
         // the rail along the floor's far edge, over the well (the open side)
         const ra = S0 + SPAN;
         k.solid.box(2.0, 0.06, 0.06, Math.cos(ra) * 1.9, api.padY + F + 1.0, Math.sin(ra) * 1.9, C.rust, -ra);
@@ -1615,6 +1686,7 @@ export const BUILDERS = {
       shell(k.solid, api, 9, 3, 9, 6.5, 3.4, 0.3, C.plaster, 2.2);
       k.solid.gable(9.6, 7.0, api.padY + 3.4, 1.2, 9, 0, 3, C.slate, 0.3);
       gableFloor(api, 9, 3, 9.6, 7.0, api.padY + 3.4, 1.2, 0.3);
+
       smallShellRoute(k.solid, api, 9, 3, 9, 6.5, 3.4, 0.3);
       k.glow.pane(1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, PANE_WINDOW, Math.PI + 0.3, 0, 6, 5);
       sash(k.solid, 1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, C.dark, Math.PI + 0.3, 0, 2, 2, 0.07, 0.09);
@@ -1674,8 +1746,10 @@ export const BUILDERS = {
       const k = kits();
       // lean-to, millstones, a cart
       shell(k.solid, api, 7.5, 4.5, 7, 5, 2.8, 0.6, C.plank, 2.0);
-      k.solid.gable(7.4, 5.4, api.padY + 2.8, 0.8, 7.5, 0, 4.5, C.slate, 0.6);
+      k.solid.gable(7.4, 5.4, api.padY + 2.8, 0.8, 7.5, 0, 4.5, C.slate, 0.6,
+        { api, depth: 5, col: C.plank });
       gableFloor(api, 7.5, 4.5, 7.4, 5.4, api.padY + 2.8, 0.8, 0.6);
+
       smallShellRoute(k.solid, api, 7.5, 4.5, 7, 5, 2.8, 0.6);
       for (let i = 0; i < 3; i++) {
         k.solid.cyl(1.15, 1.15, 0.3, 12, -6 + i * 2.6, api.padY + 0.15, 7 + i * 0.7, C.stone);
@@ -1731,11 +1805,13 @@ export const BUILDERS = {
         const lx = MAUS[i][0], lz = MAUS[i][1];
         const mausYaw = api.rng.range(-0.2, 0.2);
         shell(k.solid, api, lx, lz, 4.0, 4.6, 3.0, mausYaw, C.stone, 1.4);
-        k.solid.gable(4.4, 5.0, api.padY + 3.0, 0.9, lx, 0, lz, C.slate, mausYaw);
+        k.solid.gable(4.4, 5.0, api.padY + 3.0, 0.9, lx, 0, lz, C.slate, mausYaw,
+          { api, depth: 4.6, col: C.stone });
+        gableFloor(api, lx, lz, 4.4, 5.0, api.padY + 3.0, 0.9, mausYaw);
         // One sexton's service route is enough; repeating it on all three would turn the
         // graveyard into an obstacle course and erase the mausolea's different reads.
         if (i === 1) {
-          gableFloor(api, lx, lz, 4.4, 5.0, api.padY + 3.0, 0.9, mausYaw);
+
           smallShellRoute(k.solid, api, lx, lz, 4.0, 4.6, 3.0, mausYaw);
         }
       }
@@ -1853,7 +1929,9 @@ export const BUILDERS = {
       shell(k.solid, api, 0, 0, w, d, h, 0, C.plank, 4.2);
       // gambrel: two pitches, which is what makes a barn read as a barn
       k.solid.gable(w + 0.8, d + 0.8, api.padY + h, 1.6, 0, 0, 0, C.rust, 0);
+      gableFloor(api, 0, 0, w + 0.8, d + 0.8, api.padY + h, 1.6, 0);
       k.solid.gable(w * 0.55, d + 0.9, api.padY + h + 1.6, 1.9, 0, 0, 0, C.rust, 0);
+      gableFloor(api, 0, 0, w * 0.55, d + 0.9, api.padY + h + 1.6, 1.9, 0);
       // the loft lantern — the claim
       const c = api.site.claim;
       k.solid.box(0.5, 0.7, 0.5, c.dx, api.padY + 1.1, c.dz, C.metal);
@@ -2522,6 +2600,7 @@ export const MINOR_BUILDERS = {
     k.solid.box(1.9, 1.5, 1.9, 0, api.padY + legH + 0.75, 0, C.plank);
     k.solid.box(1.6, 0.5, 0.06, 0, api.padY + legH + 1.05, -0.98, C.dark);   // the slot
     k.solid.gable(2.3, 2.3, api.padY + legH + 1.5, 0.4, 0, 0, 0, C.rust, 0);
+    gableFloor(api, 0, 0, 2.3, 2.3, api.padY + legH + 1.5, 0.4, 0);
     // the ladder
     for (let i = 0; i < 5; i++) k.solid.box(0.7, 0.06, 0.06, 0, api.padY + 0.4 + i * 0.5, 1.15, C.wood);
     k.solid.close(0, 0, 1.6, C.plank);
@@ -3146,7 +3225,7 @@ export { C as SITE_COLOURS };
 // dress-interiors.js, staged.js) build with exactly these helpers so a prop authored in a
 // lane's own file is indistinguishable from one authored here. Nothing below is new code.
 export {
-  C, Kit, kits, groundY, shell, glowColumn, sash, lattice, yardWall,
+  C, Kit, kits, groundY, shell, gableFloor, glowColumn, sash, lattice, yardWall,
   PANE_WINDOW, PANE_TUBE, PANE_SIGN, PANE_ROSE, PANE_LAMP, recordPane,
 };
 export default BUILDERS;

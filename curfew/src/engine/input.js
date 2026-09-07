@@ -37,7 +37,10 @@ export const ACTIONS = Object.freeze([
   // The car's verbs. Locate is owned here too: pointer lock makes an otherwise-clickable
   // corner icon unreachable with a desktop mouse, so KeyL must travel through the same
   // canonical edge path as every other play verb.
-  'use', 'horn', 'carlocate',
+  // ROUND 14. 'lookback' is HELD while driving to turn and look out of the tailgate;
+  // 'radiotune' is a rising edge that moves the dial one station on. Both are car verbs
+  // and both travel the same canonical edge path as use/horn/carlocate above.
+  'use', 'horn', 'carlocate', 'lookback', 'radiotune',
   'menu',
 ]);
 
@@ -58,6 +61,8 @@ const KEYMAP = Object.freeze({
   KeyE: 'use',
   KeyH: 'horn',
   KeyL: 'carlocate',
+  KeyB: 'lookback',
+  KeyT: 'radiotune',
   // ROUND 5 (NEXT.md item 3): the arsenal. Q cycles the owned weapons, 1 and 2 pick a slot.
   // weapons/weapon.js reads these through held() on the same edge path as reload.
   KeyQ: 'swap',
