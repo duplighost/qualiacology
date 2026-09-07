@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.9.0-reachable-bosses';
+  const GAME_VERSION = '8.10.0-the-sky-answers';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -5702,6 +5702,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         color: water ? 0xc7ffff : 0xffd573,
         emissive: water ? 0x25d5f0 : 0xff3508,
         emissiveIntensity: 2.25, roughness: .18, metalness: .38,
+        transparent: true, opacity: 1,
       });
       const toys = [];
       for (let toyIndex = 0; toyIndex < specs.length; toyIndex++) {
@@ -5803,16 +5804,20 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const final = records.at(-1);
         const ringGroup = new T.Group();
         ringGroup.name = `${name} · MOVING CELESTIAL TARGET`;
+        // Each target owns its own copy of the shared look, because a claimed
+        // core has to be able to go dark on its own. One shared material meant
+        // cracking one target dimmed all six.
+        const toyMaterial = ringMaterial.clone();
         for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
           const ring = new T.Mesh(
-            new T.TorusGeometry(3.1 + ringIndex * 1.05, .14, 6, 30), ringMaterial,
+            new T.TorusGeometry(3.1 + ringIndex * 1.05, .14, 6, 30), toyMaterial,
           );
           ring.rotation.set(ringIndex * .7, ringIndex * .5, ringIndex * .83);
           ringGroup.add(ring);
         }
         const core = new T.Mesh(
           water ? new T.IcosahedronGeometry(.72, 0) : new T.OctahedronGeometry(.78, 0),
-          ringMaterial,
+          toyMaterial,
         );
         ringGroup.add(core);
         this.placePlanetObject(ringGroup, final.x, final.top + 4.9, final.z, baseAngle);
@@ -5828,6 +5833,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           id: route.id, name, centre, records, path, spurId, ringGroup, core,
           rings: [...ringGroup.children].filter(child => child.geometry?.type === 'TorusGeometry'),
           siteIndex: records[0].siteIndex,
+          material: toyMaterial, prizes: [], position: new T.Vector3(),
+          claimed: false, burst: 0, flash: 0,
+          coreBaseScale: 1, coreAltitude: final.top + 4.9,
+          x: final.x, z: final.z, top: final.top,
         });
       }
       stepMesh.instanceMatrix.needsUpdate = true;
@@ -12567,8 +12576,12 @@ diffuseColor.a *= kbBody * kbStream;`);
     }
     rewardWaterInteraction(profile, gameState, kind, position, label, value = 1) {
       const progress = gameState.worldProgress[profile.id];
+      // Lava learned in 8.9.0 that the payout should be the size of the job.
+      // Water never did: raising the whole belfry -- a value-3 route job --
+      // paid exactly what tapping one clam paid. Same rule on both worlds now.
+      const paid = Math.max(1, Math.round(value * 4)) * (value > 1 ? 2 : 1);
       progress[kind] += 1;
-      progress.collected += 1;
+      progress.collected += value > 1 ? paid : 1;
       gameState.score += 650 * value;
       gameState.style = clamp(gameState.style + 4 * value, 0, 100);
       gameState.rewardFlash = Math.max(gameState.rewardFlash, .52);
@@ -15517,7 +15530,8 @@ diffuseColor.a *= kbBody * kbStream;`);
           id: `lava-feature-telegraphed-lava-spitter-${index}`,
           index, x: at.x, z: at.z, base, angle, group, body, mouth, crown,
           phase: index * .67, pop: 0, attackCooldown: 1.2 + index % 4 * .35,
-          attackSerial: 0, position: new T.Vector3(), mouthPosition: new T.Vector3(),
+          attackSerial: 0, stunTimer: 0, hitFlash: 0,
+          position: new T.Vector3(), mouthPosition: new T.Vector3(),
           siteIndex: placement.siteIndex, destinationId: placement.destinationId,
           anchorAuthorityId: placement.anchorAuthorityId,
           placementId: placement.id, placementRole: placement.role,
@@ -15575,7 +15589,15 @@ diffuseColor.a *= kbBody * kbStream;`);
       this.particles?.burst(position, profile.theme.hot, 30 + value * 9, 14, .86, .2);
       world.pulseRing(position, new T.Color(profile.theme.accent), 8 + value * 2.5, .5, true);
       if (value > 1) {
-        world.spawnStones(gameState.player.position, paid, 5.4);
+        // This used to hand the second half of the payout to world.spawnStones,
+        // which is the MOON's loose pool. syncStonePoolDrawRange hides that pool
+        // whenever the active planet is not Moon, and collectMoondrops jumps
+        // straight to collectPlanetPickups on Water and Lava -- so those twelve
+        // crescents were invisible, uncollectable, and left alive at Lava-chart
+        // positions that reappeared on the Moon. The forge announced +24 and
+        // paid 12. It pays 24 now, into the ledger this world actually reads.
+        progress.collected += paid;
+        gameState.score += 360 * value;
         gameState.announceEncounter(label, `+${paid * 2} COLLECTIBLES`);
       }
       audio.score(value > 1);
@@ -15593,6 +15615,32 @@ diffuseColor.a *= kbBody * kbStream;`);
       const socketArrival = ball.mode === 'ready';
       if (!movingBall && !socketArrival) return false;
       const speed = ball.velocity.length();
+
+      // Twelve of these rise out of the ground, open a mouth and shell you.
+      // They are shaped exactly like every other enemy on this planet and they
+      // were the only ones the ball went straight through: no hp, no alive, no
+      // handler. They are hazards rather than kills -- deleting twelve of them
+      // would empty the districts they punctuate -- so the ball does the thing
+      // that reads instantly instead: it slams the head back into its hole and
+      // kills the shot it was winding up. Six seconds of quiet, earned.
+      if (movingBall && speed > 7) {
+        for (const spitter of features.spitters) {
+          const id = `lava-spitter-${spitter.index}`;
+          if (ball.collisionCooldown.has(id) || spitter.pop < .18) continue;
+          if (ball.position.distanceTo(spitter.position) > 4.6 + ball.radius) continue;
+          ball.collisionCooldown.set(id, .32);
+          spitter.stunTimer = 6;
+          spitter.hitFlash = 1;
+          spitter.attackCooldown = Math.max(spitter.attackCooldown, 6.4);
+          gameState.impact('break', spitter.position, 0xff7a2c);
+          this.particles?.burst(spitter.position, 0xffb545, 26, 12, .74, .2);
+          world.pulseRing(spitter.position, new T.Color(0xff6a2c), 7, .4, true);
+          audio.impact(.7, 'rock');
+          gameState.addStyle(9, 320, 'SPITTER CAPPED', '#ffb545');
+          if (!ball.comet) ball.velocity.setLength(Math.max(17, speed * .9));
+          return true;
+        }
+      }
 
       for (const node of features.skyForgeNodes) {
         const id = `lava-sky-forge-node-${node.index}`;
@@ -15925,10 +15973,13 @@ diffuseColor.a *= kbBody * kbStream;`);
         egg.core.getWorldPosition(egg.position);
       }
       for (const spitter of features.spitters) {
-        spitter.mouth.rotation.z += dt * (1.2 + spitter.pop * 3.5);
+        const flash = spitter.hitFlash || 0;
+        // A capped head stops working its mouth: the motion itself says the
+        // ball landed, and the glow drops with it.
+        spitter.mouth.rotation.z += dt * (1.2 + spitter.pop * 3.5) * (spitter.stunTimer > 0 ? .12 : 1);
         spitter.crown.rotation.y += dt * (spitter.index % 2 ? -.3 : .3);
         spitter.body.material.emissiveIntensity = .62 + spitter.pop * 1.35
-          + Math.sin(time * 5 + spitter.phase) * .16;
+          + Math.sin(time * 5 + spitter.phase) * .16 + flash * 3.2;
       }
     }
     updateLavaWorldGameplay(profile, dt, gameState) {
@@ -16082,8 +16133,11 @@ diffuseColor.a *= kbBody * kbStream;`);
       for (const spitter of features.spitters) {
         const distance = surfaceDistanceAt(playerChart.x, playerChart.z, spitter.x, spitter.z);
         spitter.attackCooldown = Math.max(0, spitter.attackCooldown - dt);
+        spitter.stunTimer = Math.max(0, (spitter.stunTimer || 0) - dt);
+        spitter.hitFlash = Math.max(0, (spitter.hitFlash || 0) - dt * 2.6);
         const cycle = (gameState.time + spitter.phase) % 4.8;
-        const awake = distance < 105 ? 1 : distance < 155 ? .28 : 0;
+        const awake = spitter.stunTimer > 0 ? 0
+          : distance < 105 ? 1 : distance < 155 ? .28 : 0;
         const targetPop = awake * smoothstep(.08, .62, cycle)
           * (1 - smoothstep(2.5, 3.45, cycle));
         spitter.pop = damp(spitter.pop, targetPop, 5.2, dt);
@@ -16147,6 +16201,8 @@ diffuseColor.a *= kbBody * kbStream;`);
         spitter.pop = 0;
         spitter.attackCooldown = 1.2 + spitter.index % 4 * .35;
         spitter.attackSerial = 0;
+        spitter.stunTimer = 0;
+        spitter.hitFlash = 0;
         chartLift(spitter.x, spitter.base - 5.5, spitter.z, spitter.group.position);
       }
       for (const projectile of features.projectiles) {
@@ -17181,12 +17237,73 @@ diffuseColor.a *= kbBody * kbStream;`);
           id: 'lava-sky-forge-discoveries', siteIndex: 3,
           hosts: features.skyForgePlates, pickupCount: 84, breakableCount: 12,
         });
+        // Sixty catwalks climbed from 60 m to 281 m and paid nothing: the
+        // route populator knew the older sky-forge plates and had never been
+        // told about this newer stack array, so the highest standing places on
+        // the planet held no authored anything. The highest pickup on Lava sat
+        // at 218 m while the crown's top plate stands at 279 m. Same rehoming
+        // idiom as every other discovery route above -- stock moves up out of
+        // ground that measures dense, into sky that measured empty.
+        const stacks = features.forgeStacks || EMPTY_SOLIDS;
+        for (const siteIndex of [4, 5, 11]) {
+          populate({
+            id: `lava-forge-stack-${siteIndex}-climb`, siteIndex,
+            hosts: stacks.filter(plate => !plate.crown && plate.siteIndex === siteIndex),
+            pickupCount: 36, breakableCount: 4,
+          });
+        }
+        // The crown is the top of the world. Site 3 has one container left
+        // unrehomed after the sky forge took fifteen; one chest at the summit
+        // of the tallest climb reads better than four spread thin anyway.
+        populate({
+          id: 'lava-forge-crown-climb', siteIndex: 3,
+          hosts: stacks.filter(plate => plate.crown),
+          pickupCount: 30, breakableCount: 1,
+        });
       }
       for (const toy of profile.galaxyToys?.toys || EMPTY_SOLIDS) {
         populate({
           id: `${toy.id}-discoveries`, siteIndex: toy.siteIndex,
           hosts: toy.records, pickupCount: 5, breakableCount: 1,
         });
+        // (Alex, 2026-09-07: "the lava level especiall has cool stuff in the
+        // sky that doesn't do anything and it should.")  The ringed core at
+        // the head of every one of these climbs was built, named MOVING
+        // CELESTIAL TARGET, lit and spun -- and had no contact handler at all
+        // on either world.  It now holds its prize the way every breakable on
+        // the planet does: six pickups parked hidden around the core, released
+        // where the ball already is when the core cracks.  Reserved from the
+        // same single ledger, so nothing new is minted.
+        const prizes = profile.collectibles.filter(pickup =>
+          pickup.siteIndex === toy.siteIndex && pickup.kind !== 'route'
+            && !pickup.hidden && !rehomedPickups.has(pickup))
+          .slice(0, 6);
+        const head = toy.records.at(-1);
+        for (let index = 0; index < prizes.length; index++) {
+          const pickup = prizes[index];
+          const angle = index * 2.3999632297 + .41;
+          const at = surfaceOffsetChartAt(
+            head.x, head.z, Math.cos(angle), Math.sin(angle), 3.6 + (index % 2) * 1.3, {},
+          );
+          const altitude = head.top + 3.5 + (index % 3) * .95;
+          chartLift(at.x, altitude, at.z, pickup.position);
+          pickup.quaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+            .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
+          pickup.matrix.compose(pickup.position, pickup.quaternion, ONE_SCALE);
+          pickup.homePosition.copy(pickup.position);
+          pickup.homeQuaternion.copy(pickup.quaternion);
+          pickup.chartPosition.set(at.x, altitude, at.z);
+          pickup.homeChartPosition.copy(pickup.chartPosition);
+          pickup.supportAuthorityId = head.id;
+          pickup.discoveryRouteId = `${toy.id}-prize`;
+          // Reuse the container flag the breakables already use: reset re-hides
+          // anything with one, so a restart re-seals the core's prize too.
+          pickup.containerId = `${toy.id}-prize`;
+          pickup.hidden = true;
+          pickup.mesh.setMatrixAt(pickup.index, ZERO_MATRIX);
+          rehomedPickups.add(pickup);
+          toy.prizes.push(pickup);
+        }
       }
       // A named place is not a name in metadata.  Each wilderness pocket owns
       // a compact five-pickup curl and one breakable reward, moved from the
@@ -18370,7 +18487,74 @@ diffuseColor.a *= kbBody * kbStream;`);
         profile.finalSeal.iris.scale.set(1.35, .82, 1.35);
       }
     }
+    // The head of every galaxy-toy climb: three rings and a lit core, five
+    // steps up, on both worlds. It had no contact handler, so the one object
+    // in the sky that is shaped exactly like "kick me" was the one object that
+    // never answered. It answers now, and the answer is visible from the
+    // ground: an uncracked core spins inside three rings, a cracked one is a
+    // dark ember with its rings gone. Shape, brightness and motion, never hue.
+    resolveGalaxyToyBall(profile, gameState) {
+      const toys = profile.galaxyToys?.toys;
+      if (!toys?.length) return false;
+      const ball = gameState.ball;
+      if (ball.mode !== 'outbound' && ball.mode !== 'returning') return false;
+      const speed = ball.velocity.length();
+      if (speed <= 7) return false;
+      for (const toy of toys) {
+        const id = `${toy.id}-core`;
+        if (ball.collisionCooldown.has(id)) continue;
+        toy.ringGroup.updateMatrixWorld(true);
+        toy.core.getWorldPosition(toy.position);
+        // The visible rings are 3.1 to 5.2 m across. Give the whole ringed
+        // shape as the target rather than demanding the 78 cm core itself
+        // after a climb and a long shot -- the same reasoning that widened the
+        // sky forge collar.
+        if (toy.position.distanceTo(ball.position) > 4.4 + ball.radius) continue;
+        ball.collisionCooldown.set(id, .3);
+        if (!ball.comet) ball.velocity.setLength(Math.max(19, speed * .93));
+        if (toy.claimed) {
+          toy.flash = .5;
+          gameState.impact('break', toy.position, profile.theme.accent);
+          audio.impact(.38, 'crystal');
+          return true;
+        }
+        toy.claimed = true;
+        toy.burst = 0;
+        toy.flash = 1;
+        for (const ring of toy.rings) ring.userData.scatter = null;
+        // The prize is real crescents, not a number: they were parked hidden
+        // around this core and they appear exactly where the ball now is, so
+        // the return sweep collects them on its way home.
+        let released = 0;
+        for (const pickup of toy.prizes) {
+          if (!pickup.alive || !pickup.hidden) continue;
+          pickup.hidden = false;
+          pickup.mesh.setMatrixAt(pickup.index, pickup.matrix);
+          pickup.mesh.instanceMatrix.needsUpdate = true;
+          world.pulseRing(pickup.position, new T.Color(profile.theme.hot), 4.2, .3, true);
+          released++;
+        }
+        gameState.impact('break', toy.position, profile.theme.hot);
+        this.particles?.burst(toy.position, profile.theme.hot, 46, 17, .95, .26);
+        this.particles?.burst(toy.position, profile.theme.accent, 24, 11, .7, .18);
+        world.pulseRing(toy.position, new T.Color(profile.theme.accent), 13, .58, true);
+        gameState.rewardFlash = Math.max(gameState.rewardFlash, .6);
+        gameState.score += 900;
+        audio.score(true);
+        audio.impact(.78, 'crystal');
+        gameState.addStyle(19, 1400, `${toy.name} CRACKED`,
+          profile.id === 'water' ? '#9ffcff' : '#ffd35a');
+        const progress = gameState.worldProgress[profile.id];
+        if (progress) progress.route += 1;
+        // Nothing was released only if the world ran out of spare stock at
+        // build time. Pay it straight so the job is never worth zero.
+        if (!released && progress) progress.collected += 6;
+        return true;
+      }
+      return false;
+    }
     resolveAlternatePlanetBall(profile, gameState) {
+      if (this.resolveGalaxyToyBall(profile, gameState)) return true;
       if (profile.id === 'water' && this.resolveWaterWorldBall(profile, gameState)) return true;
       if (profile.id === 'lava' && this.resolveLavaWorldBall(profile, gameState)) return true;
       if (this.resolveRegionalBosses(profile, gameState)) return true;
@@ -18572,13 +18756,41 @@ diffuseColor.a *= kbBody * kbStream;`);
       }
       for (let toyIndex = 0; toyIndex < (profile.galaxyToys?.toys.length || 0); toyIndex++) {
         const toy = profile.galaxyToys.toys[toyIndex];
-        for (let ringIndex = 0; ringIndex < toy.rings.length; ringIndex++) {
-          toy.rings[ringIndex].rotation.x += dt * (.18 + ringIndex * .09);
-          toy.rings[ringIndex].rotation.z += dt * (.34 + ringIndex * .13)
-            * (ringIndex % 2 ? -1 : 1);
+        toy.flash = Math.max(0, (toy.flash || 0) - dt * 3.4);
+        if (toy.claimed) {
+          // Half a second of the rings leaving, then a dark ember that reads
+          // "done" from the approach without a word or a marker on screen.
+          toy.burst = Math.min(1, (toy.burst || 0) + dt * 2.1);
+          const eased = toy.burst * toy.burst;
+          for (let ringIndex = 0; ringIndex < toy.rings.length; ringIndex++) {
+            const ring = toy.rings[ringIndex];
+            const push = (1.6 + ringIndex * 1.15) * eased;
+            ring.position.set(
+              Math.cos(ringIndex * 2.1) * push,
+              push * .55 + eased * .8,
+              Math.sin(ringIndex * 2.1) * push,
+            );
+            ring.rotation.x += dt * (1.9 + ringIndex * .8);
+            ring.rotation.z += dt * (2.4 + ringIndex * .6) * (ringIndex % 2 ? -1 : 1);
+            ring.scale.setScalar(Math.max(.01, 1 - eased));
+            ring.visible = toy.burst < 1;
+          }
+          toy.core.rotation.y += dt * (.34 + toyIndex * .02);
+          toy.core.position.y = Math.sin(clock * .9 + toyIndex) * .07;
+          toy.core.scale.setScalar(0.44 + (1 - toy.burst) * .56);
+          toy.material.emissiveIntensity = .3 + toy.flash * 2.6
+            + Math.sin(clock * 1.3 + toyIndex) * .06;
+          toy.material.opacity = Math.max(.34, 1 - toy.burst * .55);
+        } else {
+          for (let ringIndex = 0; ringIndex < toy.rings.length; ringIndex++) {
+            toy.rings[ringIndex].rotation.x += dt * (.18 + ringIndex * .09);
+            toy.rings[ringIndex].rotation.z += dt * (.34 + ringIndex * .13)
+              * (ringIndex % 2 ? -1 : 1);
+          }
+          toy.core.rotation.y += dt * (1.1 + toyIndex * .07);
+          toy.core.position.y = Math.sin(clock * 2.1 + toyIndex) * .22;
+          toy.material.emissiveIntensity = 2.25 + toy.flash * 1.9;
         }
-        toy.core.rotation.y += dt * (1.1 + toyIndex * .07);
-        toy.core.position.y = Math.sin(clock * 2.1 + toyIndex) * .22;
       }
       for (let i = 0; i < profile.monuments.length; i++) {
         const monument = profile.monuments[i];
@@ -19011,6 +19223,19 @@ diffuseColor.a *= kbBody * kbStream;`);
     resetAlternatePlanet(profile) {
       if (profile.id === 'water') this.resetWaterWorld(profile);
       if (profile.id === 'lava') this.resetLavaWorld(profile);
+      for (const toy of profile.galaxyToys?.toys || EMPTY_SOLIDS) {
+        toy.claimed = false;
+        toy.burst = 0;
+        toy.flash = 0;
+        toy.material.emissiveIntensity = 2.25;
+        toy.material.opacity = 1;
+        toy.core.scale.setScalar(1);
+        for (const ring of toy.rings) {
+          ring.position.set(0, 0, 0);
+          ring.scale.setScalar(1);
+          ring.visible = true;
+        }
+      }
       this.resetRegionalBosses(profile);
       profile.mastered = false;
       if (profile.mastery) {
