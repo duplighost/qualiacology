@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.10.0-the-sky-answers';
+  const GAME_VERSION = '8.10.1-the-sky-answers';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -12578,7 +12578,10 @@ diffuseColor.a *= kbBody * kbStream;`);
       const progress = gameState.worldProgress[profile.id];
       // Lava learned in 8.9.0 that the payout should be the size of the job.
       // Water never did: raising the whole belfry -- a value-3 route job --
-      // paid exactly what tapping one clam paid. Same rule on both worlds now.
+      // paid exactly what tapping one clam paid. Big jobs now match Lava.
+      // NOT yet matched, on purpose: an ordinary value-1 interaction still pays
+      // 1 here and 4 on Lava. That gap predates this work, and closing it moves
+      // the Water economy, so it is Alex's call rather than a quiet edit.
       const paid = Math.max(1, Math.round(value * 4)) * (value > 1 ? 2 : 1);
       progress[kind] += 1;
       progress.collected += value > 1 ? paid : 1;
@@ -15627,7 +15630,7 @@ diffuseColor.a *= kbBody * kbStream;`);
         for (const spitter of features.spitters) {
           const id = `lava-spitter-${spitter.index}`;
           if (ball.collisionCooldown.has(id) || spitter.pop < .18) continue;
-          if (ball.position.distanceTo(spitter.position) > 4.6 + ball.radius) continue;
+          if (ball.position.distanceTo(spitter.position) > 6.2 + ball.radius) continue;
           ball.collisionCooldown.set(id, .32);
           spitter.stunTimer = 6;
           spitter.hitFlash = 1;
@@ -18501,27 +18504,31 @@ diffuseColor.a *= kbBody * kbStream;`);
       const speed = ball.velocity.length();
       if (speed <= 7) return false;
       for (const toy of toys) {
-        const id = `${toy.id}-core`;
-        if (ball.collisionCooldown.has(id)) continue;
         toy.ringGroup.updateMatrixWorld(true);
         toy.core.getWorldPosition(toy.position);
-        // The visible rings are 3.1 to 5.2 m across. Give the whole ringed
+        // The outermost visible ring is 5.2 m in radius. Give the whole ringed
         // shape as the target rather than demanding the 78 cm core itself
         // after a climb and a long shot -- the same reasoning that widened the
-        // sky forge collar.
+        // sky forge collar. Distance first: the id string is only built for a
+        // toy the ball has actually reached, not for all six every frame.
         if (toy.position.distanceTo(ball.position) > 4.4 + ball.radius) continue;
+        const id = `${toy.id}-core`;
+        if (ball.collisionCooldown.has(id)) continue;
         ball.collisionCooldown.set(id, .3);
-        if (!ball.comet) ball.velocity.setLength(Math.max(19, speed * .93));
         if (toy.claimed) {
+          // A spent core is a dead ember, not a bumper. It used to re-speed the
+          // ball to 19 before this check -- and its trigger sphere is exactly
+          // where its own prize crescents land, so coming back for a crescent
+          // you missed got your ball punted off it. It only ticks now.
           toy.flash = .5;
           gameState.impact('break', toy.position, profile.theme.accent);
-          audio.impact(.38, 'crystal');
+          audio.impact(.34, 'crystal');
           return true;
         }
+        if (!ball.comet) ball.velocity.setLength(Math.max(19, speed * .93));
         toy.claimed = true;
         toy.burst = 0;
         toy.flash = 1;
-        for (const ring of toy.rings) ring.userData.scatter = null;
         // The prize is real crescents, not a number: they were parked hidden
         // around this core and they appear exactly where the ball now is, so
         // the return sweep collects them on its way home.
@@ -18531,13 +18538,17 @@ diffuseColor.a *= kbBody * kbStream;`);
           pickup.hidden = false;
           pickup.mesh.setMatrixAt(pickup.index, pickup.matrix);
           pickup.mesh.instanceMatrix.needsUpdate = true;
-          world.pulseRing(pickup.position, new T.Color(profile.theme.hot), 4.2, .3, true);
           released++;
         }
         gameState.impact('break', toy.position, profile.theme.hot);
         this.particles?.burst(toy.position, profile.theme.hot, 46, 17, .95, .26);
         this.particles?.burst(toy.position, profile.theme.accent, 24, 11, .7, .18);
-        world.pulseRing(toy.position, new T.Color(profile.theme.accent), 13, .58, true);
+        // ONE ring, deliberately. This used to spawn one per revealed crescent
+        // plus this one -- seven in a single frame against a RingField that
+        // holds ten on LOW, which is what phones get. It recycled most of the
+        // pool and wiped every other ring cue on screen. The crescents announce
+        // themselves by appearing; the crack gets one ring, sized to be read.
+        world.pulseRing(toy.position, new T.Color(profile.theme.accent), 15, .62, true);
         gameState.rewardFlash = Math.max(gameState.rewardFlash, .6);
         gameState.score += 900;
         audio.score(true);
