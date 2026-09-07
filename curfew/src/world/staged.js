@@ -64,6 +64,7 @@ import { TAU } from '../engine/math.js';
 import {
   C, kits, groundY, glowColumn, GLOW, PANE_LAMP,
 } from './sites.js';
+import { skeleton, corpse, brass, dragMark } from './remains.js';
 
 /* ==========================================================================
    THE TABLE.
@@ -101,6 +102,23 @@ export const STAGED_KINDS = [
   // pines at 12.9, 13.9 and 15.1 m standing among the back ranks of stones. places.js reads
   // bulk as the keep-out radius now, so this row is the fix.
   { id: 'graveyard', weight: 1.9, minSince: 9, starve: 30, bulk: 18.0, offRoad: true },
+
+  /* ---------------------------------------------------------- ROUND 15 ----
+   * Alex: "there should be a lot more environmental story telling in areas with realistic
+   * bodies and skeletons and everything you can brainstorm."
+   *
+   * Three more scenes, and all three are about PEOPLE rather than about props. They are
+   * rationed by the same table as everything else, at the same starve counts as the existing
+   * tableaux (18-30, deliberately rare) so the county gains a handful of each rather than
+   * turning into an ossuary. Every body in them can be gone through: the search lane finds
+   * them through api.body(), which is what makes them a beat and not wallpaper.
+   */
+  // A hollow at the treeline with six of them in it, and nobody dug it.
+  { id: 'bone-field', weight: 2.1, minSince: 7, starve: 24, bulk: 7.0, offRoad: true },
+  // Somebody put a car door across the road and fired until they stopped.
+  { id: 'last-stand', weight: 2.3, minSince: 6, starve: 22, bulk: 4.6 },
+  // One body, and twelve metres of the ground it came along.
+  { id: 'dragged', weight: 2.4, minSince: 5, starve: 20, bulk: 3.2 },
 ];
 
 /* ==========================================================================
@@ -183,8 +201,13 @@ function fallenBody(k, api, lx, lz, yaw, sprawl) {
     (lz + tz) * 0.5, coat, ta, Math.PI * 0.5);
   api.emit({
     kind: 'circle', x: lx, z: lz, r: 0.62, y0: gy - 0.25, y1: gy + 0.34,
-    tag: 'wood', standable: true,
+    // ROUND 15: it was tagged 'wood', so no body in the county could be FOUND as a body.
+    // Still standable and still 0.34 m high, so the controller walks over it exactly as
+    // before; the tag is what search.js and the audio lane read.
+    tag: 'body', standable: true,
   });
+  // and tell the search lane there is somebody here to go through.
+  if (typeof api.body === 'function') api.body(lx, lz, gy);
   return gy;
 }
 
@@ -554,6 +577,92 @@ function rifle(k, api, lx, lz, y, yaw, lean) {
    ========================================================================== */
 
 export const STAGED_BUILDERS = {
+
+  /**
+   * BONE FIELD — a hollow at the treeline with six people in it, and no grave.
+   *
+   * The read is the SPOIL: there is none. Nobody dug this and nobody covered it, which is the
+   * whole sentence the scene says. The ring of stones round the rim is the other half — this
+   * was a place before it was this.
+   */
+  'bone-field': (api) => {
+    const k = kits();
+    const r = api.rng;
+    // the hollow itself: a dished stain, darker in the middle
+    const g0 = groundY(api, 0, 0);
+    k.solid.quad(9.4, 7.2, 0, g0 + 0.005, 0, shade(C.soil, 0.58), r.range(-0.3, 0.3), -Math.PI * 0.5);
+    k.solid.quad(5.6, 4.2, 0, g0 + 0.010, 0, shade(C.soil, 0.42), r.range(-0.3, 0.3), -Math.PI * 0.5);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + r.range(-0.4, 0.4);
+      const d = 0.9 + r.range(0, 2.1);
+      skeleton(k, api, Math.cos(a) * d * 1.25, Math.sin(a) * d, r.range(0, 6.28), r);
+    }
+    // the stones somebody set round it, a long time before
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + r.range(-0.15, 0.15);
+      const sx = Math.cos(a) * 5.4, sz = Math.sin(a) * 4.4;
+      const gs = groundY(api, sx, sz);
+      const hh = r.range(0.34, 0.66);
+      k.solid.box(r.range(0.30, 0.46), hh, r.range(0.24, 0.36), sx, gs + hh * 0.42, sz,
+        shade(C.stone, 0.66), r.range(0, 3), r.range(-0.16, 0.16), r.range(-0.16, 0.16));
+      api.emit({ kind: 'circle', x: sx, z: sz, r: 0.30, y0: gs - 0.2, y1: gs + hh, tag: 'stone', standable: true });
+    }
+    return { solid: k.solid.build(), glow: k.glow.empty() ? null : k.glow.build() };
+  },
+
+  /**
+   * LAST STAND — a car door stood up across the verge, three of them behind it, and the
+   * brass they left on the ground. They were firing OUTWARD, at the trees, which is the
+   * detail that decides which way this scene faces.
+   */
+  'last-stand': (api) => {
+    const k = kits();
+    const r = api.rng;
+    const g = groundY(api, 0, 0);
+    // the door, propped against two stakes, facing the road side (+Z)
+    k.solid.box(1.28, 1.18, 0.10, 0, g + 0.62, 1.30, shade(C.metal, 0.62), 0.10, 0, -0.16);
+    k.solid.box(0.86, 0.42, 0.03, 0, g + 1.02, 1.26, C.glass, 0.10, 0, -0.16);
+    for (const sx of [-0.70, 0.70]) {
+      k.solid.cyl(0.045, 0.055, 1.10, 4, sx, g + 0.55, 1.44, C.wood, 0, r.range(-0.2, 0.2), sx * 0.16);
+    }
+    api.emit({ kind: 'obb', x: 0, z: 1.32, halfX: 0.68, halfZ: 0.26, yaw: 0.10, y0: g - 0.2, y1: g + 1.22, tag: 'metal' });
+
+    // three of them behind it, and one of them made it further than the others
+    corpse(k, api, -0.95, 0.15, r.range(2.6, 3.4), r);
+    corpse(k, api, 0.85, -0.30, r.range(-0.6, 0.2), r);
+    corpse(k, api, 0.20, -2.60, r.range(1.2, 2.0), r);
+    // what they were firing, all over the ground behind the door
+    brass(k, api, -0.4, 0.0, r, 9);
+    brass(k, api, 0.9, -0.6, r, 6);
+    // and a rifle, dropped
+    k.solid.box(0.055, 0.075, 1.02, -1.55, g + 0.06, -0.20, shade(C.metal, 0.5), r.range(0.4, 1.0));
+    k.solid.box(0.06, 0.13, 0.34, -1.42, g + 0.09, 0.16, shade(C.wood, 0.7), r.range(0.4, 1.0));
+    return { solid: k.solid.build(), glow: k.glow.empty() ? null : k.glow.build() };
+  },
+
+  /**
+   * DRAGGED — twelve metres of disturbed ground, and the thing at the end of it.
+   *
+   * The mark runs AWAY from the road, which means whatever did this was not going to the
+   * road. That is the whole scene, and it is four primitives and a body.
+   */
+  dragged: (api) => {
+    const k = kits();
+    const r = api.rng;
+    const a = r.range(-0.5, 0.5);
+    const ex = Math.sin(a) * 12.5, ez = -Math.cos(a) * 12.5;
+    dragMark(k, api, 0, 1.4, ex, ez, r);
+    corpse(k, api, ex, ez, a + Math.PI + r.range(-0.4, 0.4), r);
+    // the boot that came off at the start of it
+    const bg = groundY(api, 0.42, 1.10);
+    k.solid.box(0.135, 0.095, 0.27, 0.42, bg + 0.05, 1.10, shade(C.dark, 0.7), r.range(0, 3), 0.2, 0);
+    // and one thing they were carrying, further along
+    const cx = ex * 0.45, cz = 1.4 + (ez - 1.4) * 0.45;
+    const cg = groundY(api, cx, cz);
+    k.solid.box(0.36, 0.26, 0.22, cx, cg + 0.13, cz, shade(C.plank, 0.6), r.range(0, 3), r.range(-0.3, 0.3), 0);
+    api.emit({ kind: 'circle', x: cx, z: cz, r: 0.26, y0: cg - 0.2, y1: cg + 0.26, tag: 'wood', standable: true });
+    return { solid: k.solid.build(), glow: k.glow.empty() ? null : k.glow.build() };
+  },
 
   /**
    * HUNTERS' FIRE — Alex's own example, verbatim: "Like that fire near the road at the

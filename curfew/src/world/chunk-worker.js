@@ -58,6 +58,30 @@ function grain(x, z) {
 const VERGE = [0.042, 0.041, 0.039];
 const VERGE_IN = 3.2;      // fully verge inside this
 const VERGE_OUT = 11.0;    // untouched ground past this
+// ROUND 15. "Pale gravel at the road edges" is the second sentence of the art direction and
+// the county had the opposite of it: VERGE is 0.042, which is 0.76x the marsh ground and
+// 0.44x the pines ground — a DARK scuff, so a road read as a stripe with a darker stripe
+// each side and no edge at all. A real back road sheds stone: the metre or two either side
+// of the asphalt is the palest ground anywhere near it. This band is laid on top of the
+// verge, immediately outside the ribbon, and is gone again by VERGE_IN — so the sequence
+// across a shoulder is asphalt, pale stone, dark scuff, forest floor.
+// ROUND 16, MEASURED. Sampled off the builder's own colour attribute in the chunk the
+// county loop crosses at (-579.8, 245.2), where the route is 4.674 m wide (half 2.337):
+//
+//   distance from centreline   0.0   2.0   2.5   3.0   3.5   4.0   6.0   10.0
+//   albedo luminance          .144  .146  .132  .100  .054  .042  .050   .070
+//
+// The pale band was real and it was almost entirely UNDER THE ASPHALT. `1 - smoothstep`
+// has no inner edge, so everything inside half + 0.20 got the full stone colour — and the
+// ribbon covers all of that. What was left outside the ribbon was 2.34 m to about 3.4 m of
+// band that was already falling: barely a metre of pale gravel, and it does not read in a
+// screenshot from a standing eye. Widening it to 2.4 m puts the fall between 2.44 m and
+// 4.74 m, which is a band you can see the whole of, and the dark scuff of the verge then
+// starts around 4.8 m where a ditch would be. The colour goes up with it: "pale gravel at
+// the road edges" is the second sentence of the art direction and this is the only surface
+// in the county allowed to be the palest thing in the frame.
+const SHOULDER = [0.168, 0.163, 0.151];
+const SHOULDER_W = 2.4;    // metres of pale stone outside the ribbon's own half-width
 // A chunk's half-diagonal is 45.3 m. roads.js's coarse chamfer field is good to a few
 // percent, so 58 m at the centre cannot miss a road that reaches VERGE_OUT of a corner.
 const ROAD_GATE = 58;
@@ -171,6 +195,13 @@ export function buildChunkData(cx, cz, tier, opts) {
         if (info.hit && info.dist < VERGE_OUT) {
           const t = 1 - smoothstep(VERGE_IN, VERGE_OUT, info.dist);
           r = lerp(r, VERGE[0], t); g = lerp(g, VERGE[1], t); b = lerp(b, VERGE[2], t);
+          // and the pale shoulder over the top of it, keyed to the ROUTE'S OWN width so a
+          // 3.35 m forest lane gets a narrow one and the county loop a wide one.
+          const half = ((info.width || 5.7) * 0.5);
+          const sh = 1 - smoothstep(half + 0.10, half + SHOULDER_W, info.dist);
+          if (sh > 0) {
+            r = lerp(r, SHOULDER[0], sh); g = lerp(g, SHOULDER[1], sh); b = lerp(b, SHOULDER[2], sh);
+          }
         }
       }
 

@@ -59,6 +59,20 @@ import { makeAveryHouseBuilder } from './avery-house.js';
    ground band on purpose: a building has to read as a made thing at 60 m under a
    moon, and the M0 lesson was that FETCH's albedos render as a void here.
    ========================================================================== */
+/* THE HOLDFAST'S OWN VALUES. See the note in BUILDERS.holdfast: a value that is right for a
+   cottage wall is wrong for four thousand square metres of it. 0.058 is 43% of C.stone. */
+const HF = {
+  wall: [0.058, 0.060, 0.062],
+  wallDark: [0.040, 0.041, 0.044],
+  roof: [0.034, 0.037, 0.043],
+  // The leaves have to read as a DOOR set in a wall, and a site wears one texture, so the
+  // only lever is value: oak at 0.062 against a 0.058 wall was no contrast at all and the
+  // gate read as more brickwork (tests/shots/holdfast-v2/crowd-close.png). Half the wall's
+  // value for the timber, and a third above it for the bands.
+  oak: [0.026, 0.021, 0.016],
+  iron: [0.079, 0.080, 0.086],
+};
+
 const C = {
   stone: [0.135, 0.139, 0.133],
   dark: [0.105, 0.108, 0.115],
@@ -305,6 +319,69 @@ class Kit {
       g.translate(x, y, z);
       this.push(g, col);
     }
+
+    /* ---- ROUND 14: THE EAVE, THE FASCIA AND THE BARGE BOARDS ---------------
+     * A gable in this county was TWO SLABS AND NOTHING ELSE: a prism cap, cut off flush at
+     * the top of the wall, with a 10 cm sliver of overhang that reads as nothing at all at
+     * night. What makes a roof look like a roof from the ground is not the tiles, which you
+     * can barely see — it is the DARK BAND under the eave. The fascia and the soffit behind
+     * it put a horizontal strip of permanent shadow along the whole length of the building
+     * just under the roofline, and that band is what separates the roof from the wall.
+     *
+     * Then the two ends. A prism cut square is the giveaway that a roof was extruded; a real
+     * gable end has a raking barge board following each slope, standing proud of the tiles,
+     * and a ridge board over the joint at the top. Nine boards, 108 triangles, on every one
+     * of the twenty-four gables in the game and every one the dress lanes raise afterwards.
+     *
+     * NO COLLIDERS AND NO CHANGE TO THE ROOF SLABS. gableFloor() walks the pitches out to
+     * w/2 + 0.10 and round10-major-climbs asserts those routes; every board here hangs BELOW
+     * or BESIDE that surface, never on it, so the roof you can walk is the roof that was
+     * measured. That is why the eave is expressed as a hanging fascia rather than by making
+     * the slabs longer, which would have added 35 cm of roof you fall through.
+     */
+    const board = [col[0] * 0.74, col[1] * 0.74, col[2] * 0.78];
+    const soffit = [col[0] * 0.44, col[1] * 0.44, col[2] * 0.46];
+    const put = (bw, bh, bd, bx, by, bz, c, rz) => {
+      const g = new THREE.BoxGeometry(bw, bh, bd);
+      if (rz) g.rotateZ(rz);
+      g.translate(bx, by, bz);
+      if (ry) g.rotateY(ry);
+      g.translate(x, y, z);
+      this.push(g, c);
+    };
+    // MEASURED, AND IT WAS WORSE THAN "NO OVERHANG". The slab is `hyp + 0.22` long about a
+    // centre at w/4, so the tiles stop at w/2 + 0.11*cos(slope) — about 0.10 m past the wall
+    // CENTRE LINE. shell()'s walls are 0.44 thick, so their outer face is at w/2 + 0.22:
+    // the wall oversailed the roof by 12 cm on every building in the county. The eave course
+    // below puts 0.57 m of rafter past the wall centre and the fascia on the end of it, so
+    // the roof finally hangs over the wall it is on.
+    const hyp = Math.max(0.01, Math.hypot(rise, w * 0.5));
+    const cs = (w * 0.5) / hyp, sn = rise / hyp;
+    const x0 = w * 0.5 + (len - hyp) * 0.5 * cs, y0 = h - (len - hyp) * 0.5 * sn;
+    const EAVE = 0.46;
+    const tipX = x0 + EAVE * cs, tipY = y0 - EAVE * sn;
+    const dz = d + 0.5;
+    for (const s of [-1, 1]) {
+      // the eave course: the rafters carrying on past the wall at the same pitch
+      put(EAVE + 0.04, 0.16, dz + 0.06, s * (x0 + EAVE * 0.5 * cs), y0 - EAVE * 0.5 * sn,
+        0, col, -s * slope);
+      // the fascia: a board on edge, on the end of the rafters
+      put(0.07, 0.20, dz + 0.14, s * (tipX + 0.035), tipY - 0.075, 0, board);
+      // the soffit: the closed underside between the fascia and the wall. It is in shadow
+      // every hour of this game, which is exactly what it is here for, and the dark band it
+      // lays along the whole length of the building is what reads as "roof" from the ground.
+      const sw2 = Math.max(0.20, tipX - w * 0.5 + 0.14);
+      put(sw2, 0.05, dz + 0.14, s * (w * 0.5 + 0.04 + sw2 * 0.5), tipY - 0.155, 0, soffit);
+      // the barge boards, one a side at each end, raking with the pitch and standing proud
+      for (const e of [-1, 1]) {
+        put(len + EAVE, 0.24, 0.07, s * (w * 0.25 + EAVE * 0.5 * cs),
+          h + rise * 0.5 - EAVE * 0.5 * sn - 0.04, e * (dz * 0.5 + 0.055), board, -s * slope);
+      }
+    }
+    // the ridge board over the joint, and a short finial at each end of it. Both are kept
+    // inside the tolerance of gableFloor's walking strips (top h + rise + 0.08).
+    put(0.34, 0.16, dz + 0.20, 0, h + rise + 0.05, 0, board);
+    for (const e of [-1, 1]) put(0.17, 0.46, 0.17, 0, h + rise + 0.20, e * (dz * 0.5 + 0.07), board);
     if (ends) {
       if (typeof ends.api?.emit !== 'function') throw new Error('gable ends require collision emit');
       const depth = ends.depth ?? d, thick = 0.22, half = w * 0.5;
@@ -469,6 +546,42 @@ function shell(k, api, ox, oz, w, d, h, yaw, col, doorW, backDoor = false) {
     k.box(gap, 0.5, t, ox + hd * sy, top - 0.25, oz + hd * cy, col, yaw);
     lintel(hd);
   }
+
+  /* ---- ROUND 14: THE PLINTH COURSE -------------------------------------
+   * Until now every wall in this county met the ground on a LINE. A wall that meets the
+   * ground on a line is a wall that was dropped there; a wall that meets it on a plinth is
+   * a wall that was built, because a plinth is the one part of a building that exists for
+   * a reason a viewer can name — it is where the wet is, so it is thicker, and it is the
+   * course the mason laid first and levelled off before anything else went up.
+   *
+   * Two steps, the way a real base course goes: a 0.55 m foot projecting 100 mm, and a
+   * 90 mm chamfer course on top of it projecting 45 mm, so the wall lands on a shadow line
+   * instead of on the mud. It runs down to the same `base` the walls do, so on a slope it
+   * grows into a foundation on the downhill side and buries itself uphill.
+   *
+   * DRAW-ONLY, DELIBERATELY, and this is the whole reason it is affordable. The wall
+   * colliders are untouched: a 100 mm projection is a quarter of the body radius (0.36) and
+   * the eye is 1.68 m up, so nothing the player can see ever intersects it, and NOT emitting
+   * means this cannot narrow a doorway, seal a route or break the four traversal suites —
+   * which is exactly the failure those suites exist to catch when a lane adds dress.
+   */
+  const pp = 0.10, pc = 0.045;
+  const pTop = gmin + 0.55, cTop = pTop + 0.09;
+  const dark = [col[0] * 0.62, col[1] * 0.62, col[2] * 0.64];
+  const course = (lx, lz, sw, sd, proj, y0, y1) => {
+    const px = ox + lx * cy + lz * sy, pz = oz - lx * sy + lz * cy;
+    k.box(sw + proj * 2, y1 - y0, sd + proj * 2, px, (y0 + y1) * 0.5, pz, dark, yaw);
+  };
+  for (const [proj, y0, y1] of [[pp, base, pTop], [pc, pTop, cTop]]) {
+    course(-hw, 0, t, d, proj, y0, y1);                       // left
+    course(hw, 0, t, d, proj, y0, y1);                        // right
+    if (!backDoor) course(0, hd, w - t * 2, t, proj, y0, y1);  // back
+    else { course(-(gap + side) * 0.5, hd, side - t, t, proj, y0, y1);
+      course((gap + side) * 0.5, hd, side - t, t, proj, y0, y1); }
+    // the front, broken either side of the doorway: a plinth stops at a threshold
+    course(-(gap + side) * 0.5, -hd, side - t, t, proj, y0, y1);
+    course((gap + side) * 0.5, -hd, side - t, t, proj, y0, y1);
+  }
 }
 
 /**
@@ -620,17 +733,48 @@ function glowColumn(k, x, y, z, r, h, gain) {
  *
  * `off` is how far proud, in the pane's local +Z before rotation; the default puts the
  * whole bar in front of a pane hung the way the builders below hang them.
+ *
+ * ============================ ROUND 14: THE REVEAL ============================
+ * NOTHING IN THIS COUNTY HAD A REVEAL. Every window and every door was a flat rectangle
+ * painted onto a flat wall: bars at 10 cm proud of the glass, and then the wall face,
+ * dead level, in every direction. That is the single largest reason the buildings read as
+ * printed rather than built — a real opening is a HOLE IN A THICKNESS, and what tells you
+ * so at night is not the glass, it is the two vertical faces at right angles to the wall
+ * on either side of it, which take the moon at a completely different angle from the wall
+ * they are cut into, and the horizontal shadow the head throws down onto the glass.
+ *
+ * We cannot subtract geometry from a merged mesh. So the reveal is built the way a mason
+ * builds one when the wall is already up: a DRESSED SURROUND laid proud of the wall face
+ * all round the opening, `REVEAL` deep, whose inner faces are the jamb, head and sill
+ * returns. The glass is then genuinely 15 cm behind the outermost stone, the glazing bars
+ * sit down inside the box with it, and the surround's own outer edge throws a second
+ * shadow line onto the wall. Two extra courses finish it: a projecting SILL that oversails
+ * the jambs and undercuts to throw the drip shadow, and a LINTEL over the head.
+ *
+ * Six boxes, 72 triangles, ZERO new colliders and ZERO new programs, in the one function
+ * every window in the game already went through — sites.js's own fifteen, and manor.js's
+ * and avery-house.js's through the factory that is handed this function by name. A pass
+ * over each caller would have been a hundred edits in six files owned by five other lanes.
+ *
+ * `rev` overrides the depth; pass 0 for a genuinely flush opening (a hatch, a vent) and the
+ * surround is skipped entirely.
  */
-function sash(k, w, h, x, y, z, col, ry, rx, cols, rows, bar, off) {
+export const REVEAL = 0.15;
+
+function sash(k, w, h, x, y, z, col, ry, rx, cols, rows, bar, off, rev) {
   const t = bar || 0.07, o = off === undefined ? 0.10 : off, d = t * 1.7;
-  const put = (bw, bh, bx, by) => {
-    const g = new THREE.BoxGeometry(bw, bh, d);
-    g.translate(bx, by, o);
+  // Anything laid in the pane's own frame, then rotated the way `put` rotates, so a reveal
+  // means the same thing on a wall facing any direction and on a horizontal rooflight.
+  const slab = (bw, bh, bd, bx, by, bz, c) => {
+    const g = new THREE.BoxGeometry(bw, bh, bd);
+    g.translate(bx, by, bz);
     if (rx) g.rotateX(rx);
     if (ry) g.rotateY(ry);
     g.translate(x, y, z);
-    k.push(g, col);
+    k.push(g, c || col);
   };
+  const put = (bw, bh, bx, by) => slab(bw, bh, d, bx, by, o);
+
   put(w + t * 2, t, 0, (h + t) * 0.5);          // head
   put(w + t * 2, t, 0, -(h + t) * 0.5);         // sill
   put(t, h, -(w + t) * 0.5, 0);                 // jambs
@@ -638,6 +782,33 @@ function sash(k, w, h, x, y, z, col, ry, rx, cols, rows, bar, off) {
   const nc = cols || 1, nr = rows || 1;
   for (let i = 1; i < nc; i++) put(t * 0.75, h, -w * 0.5 + w * i / nc, 0);
   for (let j = 1; j < nr; j++) put(w, t * 0.75, 0, -h * 0.5 + h * j / nr);
+
+  const rv0 = rev === undefined ? REVEAL : rev;
+  if (!(rv0 > 0)) return;
+  // The surround has to stand PROUD OF THE OUTERMOST GLAZING BAR or the bars poke through
+  // the stone and the opening reads as a picture frame again. The default bar is 0.07, so
+  // d = 0.119 and the bar's own face is at 0.10 + 0.06 = 0.16 — a hair past the nominal
+  // 15 cm. Take whichever is deeper.
+  const rv = Math.max(rv0, o + d * 0.5 + 0.015);
+  // The clear opening is the outside of the frame, not the glass.
+  const ix = w * 0.5 + t, iy = h * 0.5 + t;
+  // A dressed surround is between a sixth and a third of a metre wide whatever the opening;
+  // a cottage window and a hall window are cut by the same mason with the same stone.
+  const b = clamp(0.17 + Math.max(w, h) * 0.035, 0.17, 0.34);
+  const dark = [col[0] * 0.66, col[1] * 0.66, col[2] * 0.68];
+
+  // THE FOUR RETURNS. Their INNER faces are the reveal: perpendicular to the wall, `rv`
+  // deep, and the only surfaces on the building at that angle.
+  slab(ix * 2 + b * 2, b, rv, 0, iy + b * 0.5, rv * 0.5);            // head return
+  slab(ix * 2 + b * 2, b, rv, 0, -(iy + b * 0.5), rv * 0.5);         // sill return
+  slab(b, iy * 2, rv, -(ix + b * 0.5), 0, rv * 0.5);                 // jamb returns
+  slab(b, iy * 2, rv, ix + b * 0.5, 0, rv * 0.5);
+  // THE SILL, oversailing the jambs by 60 mm a side and standing 90 mm further out than the
+  // surround so its underside is a hard shadow the whole width of the opening. Darker than
+  // the surround: the underside of a sill never sees the moon.
+  slab(ix * 2 + b * 2 + 0.12, 0.10, rv + 0.09, 0, -(iy + b) - 0.05, (rv + 0.09) * 0.5, dark);
+  // THE LINTEL. Shorter oversail than the sill — a head course, not a hood mould.
+  slab(ix * 2 + b * 2 + 0.08, 0.11, rv + 0.05, 0, iy + b + 0.055, (rv + 0.05) * 0.5, dark);
 }
 
 function lattice(k, api, lx, lz, base, top, height, rungs, col, tag) {
@@ -725,6 +896,466 @@ function yardWall(k, api, radius, height, gapDir, col) {
 }
 
 /* ==========================================================================
+   THE KEEP OF THE HOLDFAST — the only building in this county with an inside.
+
+   Alex, 2026-09-07: "The giant castle should be gigantic and full of xp, but also full of
+   powerful monsters."
+
+   ROUND 16, AND IT STARTED WITH A MEASUREMENT, NOT AN IDEA. The keep shipped as ONE BOX,
+   30 x 26 x 44, with a batter — a splayed foot, 1.6 m proud and 5.0 m tall — laid round it
+   as a SECOND box. The great door is authored on the keep's own face at z = -0.9, 5.2 m
+   tall, standing from padY + 1.2 to padY + 6.4. The batter's outer face is at z = +0.6.
+   THE GREAT DOOR HAS BEEN INSIDE THE BATTER SINCE THE DAY IT WAS WRITTEN: its bottom 3.8 m
+   have never once been drawn, and tests/shots/holdfast-arch-base/bailey.png is a photograph
+   of a forty-four metre wall with nothing on it at all. That is this project's signature
+   failure — working-but-invisible — on the most important door in the game, and no test in
+   the repo could have caught it, because every one of them asks whether geometry exists.
+
+   So the keep is rebuilt as a BUILDING instead of as a mass:
+
+   - THE SHELL IS HOLLOW. Four wall slabs 2.4 m thick, not one solid block. Every outer face
+     is exactly where it was, so nothing about the 900 m horizon read changes — but a slab
+     has an INNER face, and a gap between two slabs is a 2.4 m deep reveal that costs nothing
+     to author, because it is the wall itself and not a surround laid on one. That is the
+     deepest reveal in the county by a factor of sixteen.
+   - THE BATTER IS A RING, not a lid, and it is broken at the threshold.
+   - THE DOOR IS A PORCH: 10.8 m wide, 2.8 m deep, 13 m tall, standing proud of the face,
+     with a three-order receding arch cut into it — each order 0.9 m deeper and 0.75 m
+     narrower than the one outside it, on its own engaged shafts. Four edges of stone
+     between the bailey and the dark is what "entrance framing" means at this scale.
+   - AND THERE IS SOMETHING BEHIND IT: an undercroft on a six-pier arcade, a stair, a great
+     hall two storeys up, a second stair, and a gallery over that. Every metre of it goes on
+     to the site's own merged geometry, so the castle is still two draw calls, still one
+     material, and still zero programs.
+   ========================================================================== */
+const KEEP = Object.freeze({
+  W: 30, D: 26, H: 44, CZ: -14,   // as built: the outer envelope does not move a centimetre
+  T: 2.4,                         // wall thickness, and therefore every reveal in here
+  DOOR: 4.2, HEAD: 6.1,           // the clear opening, through porch and wall alike
+  BAT: 1.6, BATH: 5.0,            // the batter: how far proud, and how tall
+  F1: 6.8,                        // the great hall's floor, above padY
+  GAL: 14.2,                      // the gallery over it
+  CEIL: 21.0,                     // and the boarded ceiling over that
+  PW: 10.8, PD: 2.8, PH: 13.0,    // the porch
+});
+const K_ZF = KEEP.CZ + KEEP.D * 0.5;        // -1     the face toward the bailey
+const K_ZB = KEEP.CZ - KEEP.D * 0.5;        // -27    the back
+const K_ZFI = K_ZF - KEEP.T;                // -3.4   and the two inner faces
+const K_ZBI = K_ZB + KEEP.T;                // -24.6
+const K_XI = KEEP.W * 0.5 - KEEP.T;         // 12.6
+
+/**
+ * A ring of voussoirs over a span, laid the way a mason lays them: each stone's LONG axis
+ * radial, so the joints point at the centre of the curve.
+ *
+ * The gatehouse's own arch uses `rz = a - PI/2` with a near-square stone, which happens to
+ * read correctly because a square has no long axis. Derived properly: rotateZ(t) sends +X to
+ * (cos t, sin t) and the radial direction at parameter a is (-cos a, sin a), so t = PI - a.
+ * `axis: 'z'` then swings the whole ring into the ZY plane with rotateY(-PI/2), which sends
+ * +X to +Z and leaves the radial relation intact — one arch function for a wall facing any
+ * of the four directions.
+ */
+function archRing(s, n, cx, cy, cz, r, rise, thick, col, axis) {
+  const tan = (Math.PI * r) / n * 1.30 + 0.06;
+  for (let i = 0; i <= n; i++) {
+    const a = Math.PI * (i / n);
+    const along = -Math.cos(a) * r, up = Math.sin(a) * rise;
+    if (axis === 'z') {
+      s.box(0.82, tan, thick, cx, cy + up, cz + along, col, -Math.PI * 0.5, 0, Math.PI - a);
+    } else {
+      s.box(0.82, tan, thick, cx + along, cy + up, cz, col, 0, 0, Math.PI - a);
+    }
+  }
+}
+
+/**
+ * THE SHELL, raised in landmark() so the tower is never streamed and never culled.
+ * Colliders are emitted wall by wall, the way shell() does it and for the same reason: a
+ * shell whose colliders are added in a second pass ships with one wall missing.
+ */
+function keepShell(k, api, y) {
+  const s = k.solid;
+  const W = HF.wall, WD = HF.wallDark, RF = HF.roof;
+  const KW = KEEP.W, KD = KEEP.D, KH = KEEP.H, T = KEEP.T, cz = KEEP.CZ;
+  const hw = KW * 0.5, dh = KEEP.DOOR * 0.5, BAT = KEEP.BAT;
+
+  /* ---- THE FOUR WALLS -------------------------------------------------- */
+  s.box(KW, KH, T, 0, y + KH * 0.5, K_ZB + T * 0.5, W);                        // back
+  const jamb = hw - dh;
+  for (const sx of [-1, 1]) {
+    s.box(jamb, KH, T, sx * (dh + jamb * 0.5), y + KH * 0.5, K_ZF - T * 0.5, W);
+  }
+  s.box(KEEP.DOOR, KH - KEEP.HEAD, T, 0, y + KEEP.HEAD + (KH - KEEP.HEAD) * 0.5,
+    K_ZF - T * 0.5, W);
+  archRing(s, 9, 0, y + KEEP.HEAD - dh, K_ZF - T * 0.5, dh, dh, T + 0.04, WD, 'x');
+
+  /* ---- THE SIDE WALLS, AND THE HALL'S THREE WINDOWS IN EACH -------------
+   * The openings are gaps BETWEEN piers of the wall itself, so each one is a 2.4 m deep
+   * embrasure with a segmental head, a weathered sill and a drip hood outside. Sill at
+   * F1 + 1.5 — chest height on the hall floor, which is where a window in a wall this thick
+   * has to be if it is going to put any sky on the floor at all.
+   * The collider stays a single full-height slab per wall: the openings start 8.3 m above
+   * the undercroft and 1.5 m above the hall, so nothing can walk out of one, and one box
+   * per wall is what stops this from costing the collision grid anything.
+   */
+  const SILL = KEEP.F1 + 1.5, HEADW = KEEP.F1 + 5.6;
+  const runZ = KD - T * 2, NP = 4, gapZ = 3.0;
+  const pierZ = (runZ - gapZ * (NP - 1)) / NP;
+  for (const sx of [-1, 1]) {
+    const wx = sx * (hw - T * 0.5);
+    s.box(T, SILL, runZ, wx, y + SILL * 0.5, cz, W);
+    s.box(T, KH - HEADW, runZ, wx, y + (HEADW + KH) * 0.5, cz, W);
+    for (let i = 0; i < NP; i++) {
+      s.box(T, HEADW - SILL, pierZ, wx, y + (SILL + HEADW) * 0.5,
+        K_ZBI + pierZ * 0.5 + i * (pierZ + gapZ), W);
+    }
+    for (let i = 0; i < NP - 1; i++) {
+      const oz = K_ZBI + pierZ + gapZ * 0.5 + i * (pierZ + gapZ);
+      archRing(s, 7, wx, y + HEADW - gapZ * 0.5, oz, gapZ * 0.5, gapZ * 0.5, T + 0.04, WD, 'z');
+      s.box(T - 0.2, 0.26, gapZ + 0.5, wx, y + SILL + 0.05, oz, WD, 0, 0, sx * 0.10);
+      s.box(0.30, 0.36, gapZ + 1.5, wx + sx * (T * 0.5 + 0.15), y + HEADW + 0.34, oz, WD);
+    }
+    api.emit({
+      kind: 'obb', x: sx * (hw + BAT - (hw + BAT - K_XI) * 0.5), z: cz,
+      halfX: (hw + BAT - K_XI) * 0.5, halfZ: KD * 0.5 + BAT, yaw: 0,
+      y0: y - 1, y1: y + KH + 14, tag: 'wall',
+    });
+  }
+  api.emit({
+    kind: 'obb', x: 0, z: K_ZBI - 2.0, halfX: hw + BAT, halfZ: 2.0, yaw: 0,
+    y0: y - 1, y1: y + KH + 14, tag: 'wall',
+  });
+  for (const sx of [-1, 1]) {
+    api.emit({
+      kind: 'obb', x: sx * (dh + (hw + BAT - dh) * 0.5), z: K_ZFI + 2.0,
+      halfX: (hw + BAT - dh) * 0.5, halfZ: 2.0, yaw: 0,
+      y0: y - 1, y1: y + KH + 14, tag: 'wall',
+    });
+  }
+  api.emit({
+    kind: 'obb', x: 0, z: K_ZF - T * 0.5, halfX: dh, halfZ: T * 0.5, yaw: 0,
+    y0: y + KEEP.HEAD, y1: y + KH + 14, tag: 'wall',
+  });
+
+  /* ---- THE BATTER, AS A RING AND NOT A LID -----------------------------
+   * Broken at the threshold, both courses, by the width of the doorway plus its own
+   * projection plus half a metre of clearance. This is the fix for the invisible door.
+   */
+  const ring = (proj, y0, y1, col) => {
+    const t = T + proj, h = y1 - y0, my = (y0 + y1) * 0.5;
+    s.box(t, h, KD + proj * 2, -hw - proj + t * 0.5, my, cz, col);
+    s.box(t, h, KD + proj * 2, hw + proj - t * 0.5, my, cz, col);
+    s.box(KW - T * 2, h, t, 0, my, K_ZB - proj + t * 0.5, col);
+    const gap = dh + proj + 0.5, run = hw - T - gap;
+    if (run > 0.3) for (const sx of [-1, 1]) {
+      s.box(run, h, t, sx * (gap + run * 0.5), my, K_ZF + proj - t * 0.5, col);
+    }
+  };
+  ring(BAT, y, y + KEEP.BATH, WD);
+  ring(0.8, y + KEEP.BATH, y + KEEP.BATH + 1.2, RF);
+
+  /* ---- THE PORCH, AND THE THREE ORDERS CUT INTO IT ---------------------- */
+  const PW = KEEP.PW, PD = KEEP.PD, PH = KEEP.PH, SPRING = 4.9;
+  // [half-width of this order's opening, its own front face, how deep the order is]
+  const ORDERS = [[dh + 1.5, K_ZF + PD, 0.9], [dh + 0.75, K_ZF + 1.9, 0.9], [dh, K_ZF + 1.0, 1.0]];
+  for (const [ohw, zf, od] of ORDERS) {
+    const zc = zf - od * 0.5, wid = PW * 0.5 - ohw;
+    for (const sx of [-1, 1]) {
+      s.box(wid, SPRING, od, sx * (ohw + wid * 0.5), y + SPRING * 0.5, zc, W);
+      // the engaged shaft in the internal corner: a vertical the moon can find on a face
+      // that is otherwise all horizontals
+      s.cyl(0.28, 0.32, SPRING - 0.5, 8, sx * (ohw - 0.04), y + 0.34 + (SPRING - 0.5) * 0.5, zc, WD);
+      s.cyl(0.42, 0.42, 0.30, 8, sx * (ohw - 0.04), y + SPRING - 0.15, zc, RF);
+      s.cyl(0.40, 0.46, 0.34, 8, sx * (ohw - 0.04), y + 0.17, zc, RF);
+    }
+    archRing(s, 9, 0, y + SPRING, zc, ohw, ohw, od, W, 'x');
+    /* THE SPANDRELS. MEASURED, FIRST PASS, AND IT WAS A HOLE. The mass over each order
+     * started at the arch's APEX, so the two triangles between the curve and the square
+     * opening were left OPEN — three pairs of black notches straight through the porch,
+     * plain in tests/shots/arch-r1/porch-4m.png. Sixteen courses a side close them, each
+     * running from the circle's own half-width at the BOTTOM of that course (so masonry can
+     * never intrude below the curve) less 0.42 — which is the voussoirs' own radial half, so
+     * every residual step hides behind the arch ring instead of showing as a stair.
+     * The head is capped at 0.90 of the rise: the last tenth of a semicircle is where a
+     * stepped fill can no longer keep up with the curve, and a hair off the crown is
+     * invisible where a hole is not.
+     */
+    const NS = 16, cap = ohw * 0.90;
+    for (let j = 0; j < NS; j++) {
+      const a0 = cap * (j / NS), a1 = cap * ((j + 1) / NS);
+      const inner = Math.max(0.25, Math.sqrt(Math.max(0, ohw * ohw - a0 * a0)) - 0.42);
+      const wid2 = PW * 0.5 - inner;
+      if (wid2 > 0.08) for (const sx of [-1, 1]) {
+        s.box(wid2, a1 - a0, od, sx * (inner + wid2 * 0.5), y + SPRING + (a0 + a1) * 0.5, zc, W);
+      }
+    }
+    const apex = y + SPRING + cap;
+    s.box(PW, y + PH - apex, od, 0, (apex + y + PH) * 0.5, zc, W);
+  }
+  // its foot, broken at the threshold the same way; then the cornice and a small parapet,
+  // so the porch has a top edge and does not simply stop
+  for (const sx of [-1, 1]) {
+    const fw = PW * 0.5 - dh - 0.55;
+    s.box(fw, 1.5, PD + 1.0, sx * (dh + 0.55 + fw * 0.5), y + 0.75, K_ZF + (PD + 1.0) * 0.5 - 0.5, WD);
+  }
+  s.box(PW + 1.0, 0.7, PD + 1.0, 0, y + PH + 0.35, K_ZF + (PD + 1.0) * 0.5 - 0.5, RF);
+  for (let i = -2; i <= 2; i++) {
+    s.box(1.5, 1.9, 1.3, i * 2.4, y + PH + 1.65, K_ZF + PD - 0.75, W);
+  }
+  for (const sx of [-1, 1]) {
+    api.emit({
+      kind: 'obb', x: sx * (dh + (PW * 0.5 - dh) * 0.5), z: K_ZF + PD * 0.5,
+      halfX: (PW * 0.5 - dh) * 0.5, halfZ: PD * 0.5 + 0.5, yaw: 0,
+      y0: y - 1, y1: y + PH + 3.6, tag: 'wall',
+    });
+  }
+}
+
+/**
+ * THE INSIDE, raised in body() so it streams with the chunk ring like every other yard.
+ *
+ * Three levels and 21 m of climb, all of it on risers of 0.40 — CFG.player.STEP_UP is 0.52
+ * and roadApproach's proven flights are 0.42, so every step in here is inside the only
+ * climb the shipped controller can make.
+ */
+function keepInside(k, api, y) {
+  const s = k.solid;
+  const W = HF.wall, WD = HF.wallDark, RF = HF.roof;
+  const F1 = KEEP.F1, GAL = KEEP.GAL;
+  const rng = api.rng;
+
+  /* ---- THE UNDERCROFT: A FLOOR, SIX PIERS AND THE ARCADE THEY CARRY ---- */
+  s.quad(K_XI * 2, K_ZFI - K_ZBI, 0, y + ON_APRON + 0.02, KEEP.CZ,
+    [0.043, 0.043, 0.042], 0, -Math.PI * 0.5);
+  const PX = 6.3, PZ = [-8.4, -14, -19.6];
+  for (const px of [-PX, PX]) for (const pz of PZ) {
+    s.cyl(1.20, 1.32, F1 - 1.5, 12, px, y + 0.8 + (F1 - 1.5) * 0.5, pz, WD);
+    s.cyl(1.70, 1.86, 0.80, 12, px, y + 0.40, pz, W);
+    s.cyl(1.86, 1.46, 0.70, 12, px, y + F1 - 1.05, pz, W);
+    api.emit({ kind: 'circle', x: px, z: pz, r: 1.45, y0: y - 0.3, y1: y + F1, tag: 'wall' });
+  }
+  // the arcade along each row, and the cross arches out to the side walls. An undercroft is
+  // a forest of these and it is the only thing that makes a low dark room read as vaulted.
+  const CROWN = y + F1 - 1.0;
+  for (const px of [-PX, PX]) {
+    for (let i = 0; i < PZ.length - 1; i++) {
+      const r = (PZ[i + 1] - PZ[i]) * 0.5;
+      archRing(s, 6, px, CROWN - r * 0.62, (PZ[i] + PZ[i + 1]) * 0.5, r, r * 0.62, 1.5, WD, 'z');
+    }
+    for (const [ez, r] of [[K_ZBI, (PZ[0] - K_ZBI) * 0.5], [K_ZFI, (K_ZFI - PZ[2]) * 0.5]]) {
+      const mid = ez === K_ZBI ? (K_ZBI + PZ[0]) * 0.5 : (K_ZFI + PZ[2]) * 0.5;
+      archRing(s, 6, px, CROWN - r * 0.62, mid, r, r * 0.62, 1.5, WD, 'z');
+    }
+  }
+  for (const pz of PZ) {
+    const r = PX;
+    archRing(s, 7, 0, CROWN - r * 0.42, pz, r, r * 0.42, 1.5, WD, 'x');
+    for (const sx of [-1, 1]) {
+      const r2 = (K_XI - PX) * 0.5;
+      archRing(s, 5, sx * (PX + r2), CROWN - r2 * 0.7, pz, r2, r2 * 0.7, 1.5, WD, 'x');
+    }
+  }
+
+  /* ---- THE WEST STAIR: UNDERCROFT TO GREAT HALL ------------------------
+   * Seventeen risers of 0.40 against the west wall, running north, 3.2 m wide. The hall
+   * floor is left open over it, which is the stairwell.
+   */
+  const SX0 = -K_XI, SX1 = -9.4, sxc = (SX0 + SX1) * 0.5, sxh = (SX1 - SX0) * 0.5;
+  const N1 = 17, RISE1 = F1 / N1, TREAD1 = 0.80;
+  const Z_BOT = -5.5;
+  for (let i = 0; i < N1; i++) {
+    const top = y + (i + 1) * RISE1;
+    const zc = Z_BOT - TREAD1 * (i + 0.5);
+    s.box(sxh * 2, (i + 1) * RISE1, TREAD1, sxc, y + (i + 1) * RISE1 * 0.5, zc, WD);
+    api.emit({
+      kind: 'obb', x: sxc, z: zc, halfX: sxh, halfZ: TREAD1 * 0.5, yaw: 0,
+      y0: y - 0.4, y1: top, tag: 'stone', standable: true,
+    });
+  }
+  const Z_TOP = Z_BOT - TREAD1 * N1;                      // -19.1
+  // a hand-height wall down the open side of the flight, so the drop reads before you take it
+  s.box(0.34, 1.05, TREAD1 * N1, SX1 - 0.17, y + F1 * 0.5 + 0.5, (Z_BOT + Z_TOP) * 0.5, W, 0, 0, -0.44);
+
+  /* ---- THE GREAT HALL FLOOR -------------------------------------------- */
+  const slab = (x0, x1, z0, z1) => {
+    const cx = (x0 + x1) * 0.5, cz = (z0 + z1) * 0.5;
+    s.box(x1 - x0, 0.6, z1 - z0, cx, y + F1 - 0.3, cz, W);
+    api.emit({
+      kind: 'obb', x: cx, z: cz, halfX: (x1 - x0) * 0.5, halfZ: (z1 - z0) * 0.5, yaw: 0,
+      y0: y + F1 - 0.6, y1: y + F1, tag: 'wall', standable: true,
+    });
+  };
+  slab(SX1, K_XI, K_ZBI, K_ZFI);
+  slab(SX0, SX1, K_ZBI, Z_TOP);
+  slab(SX0, SX1, Z_BOT, K_ZFI);
+
+  /* ---- THE HALL ITSELF -------------------------------------------------
+   * Two rows of columns carrying the gallery, a dais at the far end with the table still
+   * standing on it, and a fireplace in the wall over the door. The only lit thing in the
+   * building is what is left in that grate: it is small, it is 21 m inside a stone box, and
+   * it is the reason walking in here is different from walking into a cave.
+   */
+  const CX = 8.6;
+  for (const cx of [-CX, CX]) for (const cz of PZ) {
+    s.cyl(0.78, 0.88, GAL - F1 - 0.9, 10, cx, y + F1 + 0.45 + (GAL - F1 - 0.9) * 0.5, cz, W);
+    s.cyl(1.10, 1.20, 0.45, 10, cx, y + F1 + 0.22, cz, WD);
+    s.cyl(1.22, 0.94, 0.45, 10, cx, y + GAL - 0.68, cz, WD);
+    api.emit({ kind: 'circle', x: cx, z: cz, r: 0.95, y0: y + F1 - 0.3, y1: y + GAL, tag: 'wall' });
+  }
+  // the dais and the table left on it
+  s.box(20.0, 0.42, 4.2, 0, y + F1 + 0.21, K_ZBI + 2.1, W);
+  api.emit({
+    kind: 'obb', x: 0, z: K_ZBI + 2.1, halfX: 10.0, halfZ: 2.1, yaw: 0,
+    y0: y + F1, y1: y + F1 + 0.42, tag: 'stone', standable: true,
+  });
+  s.box(8.4, 0.20, 1.30, 0, y + F1 + 1.28, K_ZBI + 2.0, ORDINARY.timberAlt);
+  for (const tx of [-3.4, 3.4]) s.box(0.34, 0.76, 1.10, tx, y + F1 + 0.80, K_ZBI + 2.0, ORDINARY.timber);
+  s.box(1.60, 1.90, 0.34, 0, y + F1 + 1.37, K_ZBI + 1.2, ORDINARY.timber);
+
+  // the fireplace, in the front wall beside the stairwell: jambs, a lintel, a hood, and a
+  // grate with something still in it
+  const FX = 3.6;
+  for (const sx of [-1, 1]) s.box(1.0, 3.0, 0.9, FX + sx * 1.85, y + F1 + 1.5, K_ZFI - 0.45, WD);
+  s.box(4.7, 0.55, 0.9, FX, y + F1 + 3.28, K_ZFI - 0.45, W);
+  s.box(4.7, 1.9, 0.55, FX, y + F1 + 4.5, K_ZFI - 0.30, W, 0, 0.30);
+  s.box(2.7, 0.16, 0.70, FX, y + F1 + 0.30, K_ZFI - 0.40, ORDINARY.rustDark);
+  for (let i = 0; i < 5; i++) {
+    s.cyl(0.09, 0.07, 1.0, 5, FX + (i - 2) * 0.34, y + F1 + 0.44, K_ZFI - 0.40,
+      ORDINARY.timber, 0.4 + i * 0.5, 0.5, 0);
+  }
+  // MEASURED, FIRST PASS: a 2.2 x 0.9 horizontal pane plus a glowColumn cone read from the
+  // bailey as a hard-edged orange trapezoid with a disc on top, hanging in the doorway
+  // (tests/shots/arch-r1/porch-4m.png). That is Alex's round-5 note about the canopy wash
+  // ("some kind of translucent square overlay") happening again, in a doorway. The cone is
+  // gone and the ember bed is now SMALLER THAN THE GRATE OVER IT, so its edges are cut by
+  // iron instead of ending in mid-air.
+  k.glow.pane(1.3, 0.44, FX, y + F1 + 0.20, K_ZFI - 0.40, PANE_LAMP, 0, -Math.PI * 0.5, 5, 4);
+
+  /* ---- THE EAST STAIR: GREAT HALL TO GALLERY --------------------------- */
+  const EX0 = 9.8, EX1 = K_XI, exc = (EX0 + EX1) * 0.5, exh = (EX1 - EX0) * 0.5;
+  const N2 = 18, RISE2 = (GAL - F1) / N2, TREAD2 = 1.0, EZ_BOT = -4.4;
+  for (let i = 0; i < N2; i++) {
+    const top = y + F1 + (i + 1) * RISE2;
+    const zc = EZ_BOT - TREAD2 * (i + 0.5);
+    s.box(exh * 2, (i + 1) * RISE2, TREAD2, exc, y + F1 + (i + 1) * RISE2 * 0.5, zc, WD);
+    api.emit({
+      kind: 'obb', x: exc, z: zc, halfX: exh, halfZ: TREAD2 * 0.5, yaw: 0,
+      y0: y + F1 - 0.4, y1: top, tag: 'stone', standable: true,
+    });
+  }
+  s.box(0.34, 1.05, TREAD2 * N2, EX0 + 0.17, y + F1 + (GAL - F1) * 0.5 + 0.5,
+    EZ_BOT - TREAD2 * N2 * 0.5, W, 0, 0, 0.44);
+
+  /* ---- THE GALLERY: AN L OVER THE WEST AND NORTH SIDES ------------------ */
+  const GW = 2.6;
+  const deck = (x0, x1, z0, z1) => {
+    const cx = (x0 + x1) * 0.5, cz = (z0 + z1) * 0.5;
+    s.box(x1 - x0, 0.5, z1 - z0, cx, y + GAL - 0.25, cz, W);
+    api.emit({
+      kind: 'obb', x: cx, z: cz, halfX: (x1 - x0) * 0.5, halfZ: (z1 - z0) * 0.5, yaw: 0,
+      y0: y + GAL - 0.5, y1: y + GAL, tag: 'wall', standable: true,
+    });
+  };
+  deck(SX0, SX0 + GW, K_ZBI, K_ZFI);
+  deck(SX0 + GW, EX1, K_ZBI, K_ZBI + GW);
+  // the parapet, and the corbels that carry the whole thing
+  const rail = (x, z, w, d) => {
+    s.box(w, 1.02, d, x, y + GAL + 0.51, z, WD);
+    api.emit({
+      kind: 'obb', x, z, halfX: w * 0.5, halfZ: d * 0.5, yaw: 0,
+      y0: y + GAL, y1: y + GAL + 1.02, tag: 'wall',
+    });
+  };
+  rail(SX0 + GW - 0.17, KEEP.CZ, 0.34, K_ZFI - K_ZBI);
+  rail((SX0 + GW + EX1) * 0.5, K_ZBI + GW - 0.17, EX1 - SX0 - GW, 0.34);
+  for (let i = 0; i < 9; i++) {
+    const cz = K_ZBI + 1.4 + i * ((K_ZFI - K_ZBI - 2.8) / 8);
+    s.box(0.9, 0.5, 0.5, SX0 + 0.45, y + GAL - 0.85, cz, WD, 0, 0, 0.5);
+  }
+  for (let i = 0; i < 9; i++) {
+    const cx = SX0 + GW + 1.2 + i * ((EX1 - SX0 - GW - 2.4) / 8);
+    s.box(0.5, 0.5, 0.9, cx, y + GAL - 0.85, K_ZBI + 0.45, WD, 0, -0.5, 0);
+  }
+
+  /* ---- THE CEILING OVER ALL OF IT --------------------------------------
+   * Boarded, not vaulted: it is 21 m up and nothing will ever light it, so it is here to
+   * close the box and to stop the hall reading as a 44 m shaft with a floor in it.
+   */
+  s.box(K_XI * 2, 0.5, K_ZFI - K_ZBI, 0, y + KEEP.CEIL - 0.25, KEEP.CZ, RF);
+  for (let i = 0; i < 11; i++) {
+    s.box(K_XI * 2, 0.45, 0.42, 0, y + KEEP.CEIL - 0.72,
+      K_ZBI + 1.0 + i * ((K_ZFI - K_ZBI - 2.0) / 10), ORDINARY.timber);
+  }
+
+  /* ---- THE FIRE SOMEBODY LEFT IN THE UNDERCROFT ------------------------
+   * On the axis, twelve metres in, at the height of a fire. This is the thing you see
+   * through the porch from the far side of the bailey, and the reason to walk toward a
+   * black hole in a wall. It is a BASKET: the glow sits down inside a ring of staves, so
+   * its edges are cut by iron and it can never read as a lit rectangle in the air.
+   */
+  {
+    // MEASURED, FIRST PASS, AND IT WAS BOTH FAILURES AT ONCE (arch-r2/undercroft.png): in
+    // ORDINARY.iron (0.060) the basket read under a torch at four metres as a WHITE TRESTLE
+    // TABLE — the brightest object in a room whose walls are 0.058 — and the fire inside it
+    // was a single horizontal pane at 0.86 m, which from a standing eye four metres away is
+    // ten degrees off edge-on and therefore is not in the picture at all. Fire-blacked iron
+    // is ORDINARY.char (0.032), and the flame is a column, exactly as sites.js's own
+    // campfire note says and as the crowd's braziers outside the gate now do.
+    const bx = 0, bz = -10.5, bg = y + ON_APRON;
+    for (let i = 0; i < 3; i++) {
+      const a = i / 3 * Math.PI * 2 + 0.4;
+      s.cyl(0.05, 0.07, 0.72, 4, bx + Math.cos(a) * 0.32, bg + 0.36, bz + Math.sin(a) * 0.32,
+        ORDINARY.char, a, 0.16, 0);
+    }
+    for (let i = 0; i < 10; i++) {
+      const a = i / 10 * Math.PI * 2;
+      s.box(0.09, 0.46, 0.09, bx + Math.cos(a) * 0.44, bg + 0.95, bz + Math.sin(a) * 0.44,
+        ORDINARY.char, a);
+    }
+    // The top hoop is CHAR, not rust. At fifteen metres down the passage a 0.92 m warm
+    // ellipse with a flame over it read as the bar of a lollipop (arch-r4/porch-prop.png);
+    // the rim of a fire basket is the most burnt iron on the thing and has no business
+    // catching a warmer value than the flame it is holding.
+    s.cyl(0.40, 0.36, 0.09, 10, bx, bg + 1.18, bz, ORDINARY.char);
+    s.cyl(0.44, 0.34, 0.10, 10, bx, bg + 0.74, bz, ORDINARY.char);
+    for (let i = 0; i < 4; i++) {
+      const a = rng.next() * Math.PI * 2;
+      s.cyl(0.06, 0.05, 0.55, 4, bx + Math.cos(a) * 0.12, bg + 0.98, bz + Math.sin(a) * 0.12,
+        ORDINARY.char, a, 0.5, 0);
+    }
+    // MEASURED AGAIN (arch-r4/porch-prop.png): a 1.05 m column starting at the rim, over a
+    // 0.68 m ember pane, read as a lollipop — a hard orange cone with a bright disc under it
+    // on a stick, twelve metres down a stone passage. A fire in a raised basket is SHORTER
+    // THAN THE BASKET IS TALL and it sits DOWN INSIDE the staves, which then cut it up. The
+    // ground campfires outside the gate keep the taller column sites.js's own campfire uses,
+    // because a fire on the ground has nothing standing round it to cut it.
+    k.glow.pane(0.50, 0.50, bx, bg + 0.72, bz, PANE_LAMP, 0, -Math.PI * 0.5, 6, 6);
+    glowColumn(k.glow, bx, bg + 0.60, bz, 0.24, 0.52, 0.44);
+    api.emit({ kind: 'circle', x: bx, z: bz, r: 0.52, y0: y - 0.2, y1: y + 1.3, tag: 'metal' });
+  }
+
+  /* ---- WHAT IS LEFT LYING IN IT ----------------------------------------
+   * MEASURED: the first pass barrelled these in C.wood (0.140), and under a torch at three
+   * metres they were the brightest surface in the room by a distance — an undercroft lit
+   * like a bakery (tests/shots/arch-r1/undercroft.png). ORDINARY.timber is 0.072, half of
+   * it, and the same finish the service routes already use for exactly this reason.
+   */
+  for (let i = 0; i < 14; i++) {
+    const bx = rng.range(-K_XI + 1.5, K_XI - 1.5), bz = rng.range(K_ZBI + 1.5, K_ZFI - 1.5);
+    if (Math.abs(Math.abs(bx) - PX) < 2.0 && PZ.some(p => Math.abs(bz - p) < 2.0)) continue;
+    if (bx < SX1 && bz > Z_TOP && bz < Z_BOT) continue;
+    if (Math.abs(bx) < 1.6 && bz > -12.5 && bz < -8.5) continue;
+    s.cyl(0.42, 0.46, 0.86, 9, bx, y + ON_APRON + 0.45, bz,
+      i & 1 ? ORDINARY.timber : ORDINARY.timberAlt, rng.next() * 3);
+    s.cyl(0.44, 0.44, 0.08, 9, bx, y + ON_APRON + 0.88, bz, ORDINARY.rustDark);
+    api.emit({
+      kind: 'circle', x: bx, z: bz, r: 0.48, y0: y - 0.2, y1: y + 0.9,
+      tag: 'wood', standable: true,
+    });
+  }
+}
+
+/* ==========================================================================
    THE TWELVE. Each entry is { landmark, body }.
 
    landmark(api)  builds the tall silhouette ONCE at boot. It lives in a persistent group
@@ -742,6 +1373,310 @@ function yardWall(k, api, radius, height, gapDir, col) {
    ========================================================================== */
 
 export const BUILDERS = {
+
+  /* --------------------------------------------------------------- holdfast */
+  //
+  // THE HOLDFAST. Alex, 2026-09-07:
+  //
+  //   "I'd also like a gigantic castle in the middle of the map. It should be surrounded by
+  //    actualy realistic looking people. they can't look like a threat from a distance. and
+  //    you have to pay someone at the door to get in. you can try to fight your way in, but
+  //    there are a lot of them. The giant castle should be gigantic and full of xp, but also
+  //    full of powerful monsters."
+  //
+  // WHERE. Dead centre, (0, 0). MEASURED before a primitive was placed: the nearest authored
+  // road control point to the origin is (30, 350) on works-cut, 351 m away, and the nearest
+  // major is the Filling Station at 573 m. The middle of this county has never had anything
+  // in it — 17.7 m of relief over 280 m, max slope 0.047, open 'fields' ground. So the castle
+  // is not squeezed in beside anything; it is the thing the county was missing, and it is
+  // visible from a long way in every direction, which is what makes it a destination rather
+  // than another building.
+  //
+  // SCALE. The curtain is 132 m across the flats and the keep tops out at padY + 52 — the
+  // tallest built mass in the game (the cathedral spire is 77 m of spire on a small church;
+  // this is a mountain of wall). Every metre of it is boxes and cylinders on the ONE merged
+  // body geometry and the ONE shared Lambert, so the whole castle is two draw calls and zero
+  // new programs. That is the only reason a thing this size is affordable at all.
+  //
+  // THE READ. Four braziers on the gatehouse and a lamp in the keep's high window, on the
+  // shared additive glow — a lit place in the middle of a dark county, which is exactly the
+  // silhouette a crowd standing outside it needs to be read against.
+  holdfast: {
+    landmark(api) {
+      const k = kits();
+      const y = api.padY;
+      // MEASURED, FIRST PASS. Built in W (0.135) the keep read as a WEDDING CAKE at
+      // 220 m — a near-white mass, the brightest thing in the county by a distance, against
+      // an art direction whose first line is "a cold sky above nearly black trees"
+      // (tests/shots/holdfast-first/road-220.png). A value that is right for a cottage wall
+      // is wrong for four thousand square metres of it: the bigger the surface, the darker
+      // it has to be, because there is more of it catching the same moon. These are the
+      // castle's own values and nothing else in the county uses them.
+      const W = HF.wall, WD = HF.wallDark, RF = HF.roof;
+      // THE KEEP, as the horizon read. It is in the LANDMARK phase, not the body, so it is
+      // built once at boot, never streamed, and never distance-culled: from 900 m out this
+      // is a black tower with one lit window, and that is the whole point of putting it in
+      // the middle of the map.
+      const KW = KEEP.W, KD = KEEP.D, KH = KEEP.H;
+      // The shell, the batter ring, the porch and the three orders of its arch — and every
+      // wall's collider with them. See the note over keepShell(): the tower used to be one
+      // box with the great door buried inside its own splayed foot.
+      keepShell(k, api, y);
+      // a string course at each floor, so the tower has a scale you can count
+      for (let i = 1; i <= 4; i++) {
+        k.solid.box(KW + 0.5, 0.5, KD + 0.5, 0, y + 6 + i * 7.4, -14, WD);
+      }
+      // the four corner turrets, taller than the parapet
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const tx = sx * (KW * 0.5 - 1.4), tz = -14 + sz * (KD * 0.5 - 1.4);
+        k.solid.cyl(3.0, 3.4, KH + 8, 10, tx, y + (KH + 8) * 0.5, tz, W);
+        k.solid.cyl(3.6, 3.6, 1.0, 10, tx, y + KH + 8.5, tz, RF);
+        k.solid.cone(3.7, 6.0, 10, tx, y + KH + 12, tz, RF);
+      }
+      // the parapet, merlons and all: the silhouette that says castle at 900 m
+      const merlon = (mx, mz, w, d) => k.solid.box(w, 2.2, d, mx, y + KH + 1.1, mz, W);
+      for (let i = -6; i <= 6; i++) {
+        merlon(i * 2.3, -14 - KD * 0.5, 1.3, 1.1);
+        merlon(i * 2.3, -14 + KD * 0.5, 1.3, 1.1);
+      }
+      for (let i = -5; i <= 5; i++) {
+        merlon(-KW * 0.5, -14 + i * 2.3, 1.1, 1.3);
+        merlon(KW * 0.5, -14 + i * 2.3, 1.1, 1.3);
+      }
+      k.solid.box(KW + 1.0, 0.7, KD + 1.0, 0, y + KH + 0.35, -14, RF);
+
+      // THE ONE LIT WINDOW. Nothing else on this tower is lit, and it is 38 m up: it reads
+      // as somebody being in there, which is the only thing a horizon read has to say.
+      k.solid.box(2.2, 3.4, 0.5, 0, y + 38, -14 + KD * 0.5 + 0.1, C.dark);
+      k.glow.pane(1.5, 2.6, 0, y + 38, -14 + KD * 0.5 + 0.36, PANE_SIGN, 0, 0, 4, 6);
+      sash(k.solid, 1.5, 2.6, 0, y + 38, -14 + KD * 0.5 + 0.34, C.dark, 0, 0, 1, 2, 0.10, 0.12);
+
+      // No blanket collider over the footprint any more — keepShell emits one box per wall
+      // and leaves the doorway open, which is the whole point. The four corner turrets stand
+      // proud of those walls and carry their own.
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        api.emit({
+          kind: 'circle', x: sx * (KW * 0.5 - 1.4), z: -14 + sz * (KD * 0.5 - 1.4), r: 3.4,
+          y0: y - 1, y1: y + KH + 14, tag: 'wall',
+        });
+      }
+      return { solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.lamp };
+    },
+
+    body(api) {
+      const k = kits();
+      const s = k.solid;
+      const y = api.padY;
+      const rng = api.rng;
+      const W = HF.wall, WD = HF.wallDark, RF = HF.roof;
+
+      /* ---- THE CURTAIN WALL ------------------------------------------------
+       * A square 132 m across with the gate on the +Z side, which is the road side (places.js
+       * sets yaw = atan2(road - site), and local +Z faces the road). The wall is emitted as
+       * SEPARATE colliders per run, never one AABB per side — a single box over a 132 m wall
+       * is fine, but the gate gap has to be a real gap or the whole thing is a sealed cube.
+       */
+      const R = 66;              // half-width of the curtain
+      const WH = 11;             // wall height
+      const WT = 2.6;            // wall thickness
+      const GATE_HALF = 5.0;     // the opening in the +Z wall
+
+      const wallRun = (x0, z0, x1, z1, tag) => {
+        const mx = (x0 + x1) * 0.5, mz = (z0 + z1) * 0.5;
+        const dx = x1 - x0, dz = z1 - z0;
+        const len = Math.hypot(dx, dz);
+        const yaw = Math.atan2(dx, dz);
+        const g = groundY(api, mx, mz);
+        s.box(WT, WH, len, mx, g + WH * 0.5, mz, W, yaw);
+        // the plinth: a dark foot under a pale wall, so the curtain is not one slab of value
+        s.box(WT + 0.7, 1.6, len, mx, g + 0.8, mz, WD, yaw);
+        // the wall walk and its parapet, so the top reads as a place rather than an edge
+        s.box(WT + 1.4, 0.6, len, mx, g + WH + 0.3, mz, RF, yaw);
+        const n = Math.max(2, Math.floor(len / 2.4));
+        for (let i = 0; i < n; i++) {
+          const t = (i + 0.5) / n - 0.5;
+          const cx = mx + dx * t, cz = mz + dz * t;
+          s.box(WT + 1.0, 1.9, 1.2, cx, groundY(api, cx, cz) + WH + 1.55, cz, W, yaw);
+        }
+        api.emit({
+          kind: 'obb', x: mx, z: mz, halfX: WT * 0.5 + 0.7, halfZ: len * 0.5, yaw,
+          y0: g - 1, y1: g + WH + 2.6, tag: tag || 'wall',
+        });
+      };
+
+      // north (+Z, the road side) in two runs with the gate between them
+      wallRun(-R, R, -GATE_HALF, R);
+      wallRun(GATE_HALF, R, R, R);
+      wallRun(-R, -R, R, -R);                       // south
+      wallRun(-R, -R, -R, R);                       // west
+      wallRun(R, -R, R, R);                         // east
+
+      // the corner towers
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const tx = sx * R, tz = sz * R;
+        const g = groundY(api, tx, tz);
+        s.cyl(5.2, 6.0, WH + 5, 12, tx, g + (WH + 5) * 0.5, tz, W);
+        s.cyl(6.4, 6.4, 0.8, 12, tx, g + WH + 5.4, tz, RF);
+        for (let i = 0; i < 12; i++) {
+          const a = i / 12 * Math.PI * 2;
+          s.box(1.1, 1.8, 1.1, tx + Math.cos(a) * 5.6, g + WH + 6.7, tz + Math.sin(a) * 5.6, W, a);
+        }
+        api.emit({ kind: 'circle', x: tx, z: tz, r: 6.0, y0: g - 1, y1: g + WH + 8, tag: 'wall' });
+      }
+
+      /* ---- THE GATEHOUSE ---------------------------------------------------
+       * Two drum towers either side of a 10 m opening, a machicolated head over it, and the
+       * doorman standing under it. This is the thing the whole crowd is facing.
+       */
+      for (const sx of [-1, 1]) {
+        const tx = sx * (GATE_HALF + 4.6), tz = R;
+        const g = groundY(api, tx, tz);
+        s.cyl(4.6, 5.2, WH + 8, 12, tx, g + (WH + 8) * 0.5, tz, W);
+        s.cyl(5.6, 5.6, 0.9, 12, tx, g + WH + 8.5, tz, RF);
+        for (let i = 0; i < 10; i++) {
+          const a = i / 10 * Math.PI * 2;
+          s.box(1.0, 1.7, 1.0, tx + Math.cos(a) * 4.9, g + WH + 9.8, tz + Math.sin(a) * 4.9, W, a);
+        }
+        api.emit({ kind: 'circle', x: tx, z: tz, r: 5.2, y0: g - 1, y1: g + WH + 11, tag: 'wall' });
+        // a brazier on each drum: the light the crowd is standing in
+        s.cyl(0.9, 0.7, 1.0, 8, tx, g + WH + 9.6, tz - 3.4, C.rust);
+        // 1.34, not 1.5. The horizontal additive pane ledger caps every pane in the county at
+        // 2 m2 (tests/sites.mjs), and it exists because a 12 x 7.8 m horizontal glow sheet
+        // under the Filling Station canopy is what Alex reported in playtest 4 as "a
+        // translucent square overlay across the screen". 1.5 x 1.5 is 2.25 and tripped it; the
+        // gate was right and the brazier was wrong.
+        k.glow.pane(1.34, 1.34, tx, g + WH + 10.3, tz - 3.4, PANE_LAMP, 0, -Math.PI * 0.5, 6, 6);
+        glowColumn(k.glow, tx, g + WH + 10.0, tz - 3.4, 1.1, 2.6, 0.55);
+      }
+      {
+        // the head over the opening, and the arch under it
+        const g = groundY(api, 0, R);
+        s.box(GATE_HALF * 2 + 9.6, 4.2, WT + 2.4, 0, g + WH + 2.1, R, W);
+        for (let i = -5; i <= 5; i++) {
+          s.box(0.46, 0.52, 0.62, i * 1.05, g + WH - 0.22, R + WT * 0.5 + 0.30, WD);   // a corbel table under the head
+        }
+        // the arch: five voussoirs a side, so the opening is cut rather than punched
+        for (let i = 0; i <= 10; i++) {
+          const a = Math.PI * (i / 10);
+          const ax = -Math.cos(a) * GATE_HALF;
+          const ay = g + 6.4 + Math.sin(a) * 3.4;
+          s.box(1.3, 1.0, WT + 1.0, ax, ay, R, W, 0, 0, a - Math.PI * 0.5);
+        }
+        // the jambs
+        for (const sx of [-1, 1]) s.box(1.2, 6.6, WT + 1.0, sx * (GATE_HALF + 0.6), g + 3.3, R, W);
+        // THE DOOR ITSELF is a collider, not geometry you can see through: two leaves, shut.
+        // The toll opens it (search.js's gate), and the world flag remembers.
+        const shut = !(api.gateOpen && api.gateOpen());
+        if (shut) {
+          for (const sx of [-1, 1]) {
+            s.box(GATE_HALF - 0.1, 6.4, 0.34, sx * GATE_HALF * 0.5, g + 3.2, R - 0.2, HF.oak, 0);
+            for (let i = 0; i < 4; i++) {
+              s.box(GATE_HALF - 0.3, 0.22, 0.42, sx * GATE_HALF * 0.5, g + 0.9 + i * 1.5, R - 0.2, HF.iron, 0);
+            }
+          }
+          api.emit({
+            kind: 'obb', x: 0, z: R - 0.2, halfX: GATE_HALF, halfZ: 0.5, yaw: 0,
+            y0: g - 1, y1: g + 6.6, tag: 'gate',
+          });
+        }
+        // and the toll itself: hold E here, with money, and the leaves open.
+        if (typeof api.gate === 'function') api.gate(0, R + 2.6, g + 1.2);
+      }
+
+      /* ---- THE BAILEY ------------------------------------------------------ */
+      // A hard yard inside the walls, so the ground under the castle is made ground and not
+      // a field with a wall round it.
+      // Cobble, not concrete: C.ash (0.130) is the value of a filling-station forecourt and
+      // it made the inside of a castle read as a car park.
+      s.quad(R * 1.86, R * 1.86, 0, y + ON_APRON, -2, [0.052, 0.051, 0.049], 0, -Math.PI * 0.5);
+      // the well, the mounting block, the cart: the things a yard has
+      s.cyl(1.9, 2.1, 1.1, 12, -22, y + 0.55, 12, W);
+      s.cyl(1.5, 1.5, 0.2, 12, -22, y + 1.05, 12, C.dark);
+      for (const sx of [-1, 1]) s.box(0.24, 2.6, 0.24, -22 + sx * 1.9, y + 1.3, 12, C.wood);
+      s.box(4.2, 0.22, 0.24, -22, y + 2.6, 12, C.wood);
+      api.emit({ kind: 'circle', x: -22, z: 12, r: 2.1, y0: y - 0.3, y1: y + 1.1, tag: 'stone', standable: true });
+
+      /* ---- THE RANGES ALONG THE CURTAIN ------------------------------------
+       * The bailey was 122 m of cobble with a well in it and nothing else — measured in
+       * tests/shots/holdfast-arch-base/bailey.png, which is a car park with a tower at the
+       * end. What a bailey IS, is a yard with its back against buildings.
+       *
+       * Both ranges go up through shell() and gable(), so they inherit this round's plinth
+       * course, eave, fascia, soffit and barge boards at castle scale without a line of new
+       * code, and both roofs are walkable through gableFloor() — which is the only kind of
+       * climb the shipped controller can make and the only kind Alex has asked for.
+       */
+      shell(s, api, -56, -17, 34, 12, 9, -Math.PI * 0.5, W, 3.0);
+      s.gable(12.6, 34.6, y + 9, 3.4, -56, 0, -17, RF, 0, { api, depth: 34, col: W });
+      gableFloor(api, -56, -17, 12.6, 34.6, y + 9, 3.4, 0);
+      // BLIND ARCADING on the hall range's bailey face: eleven pilasters 0.38 m proud with
+      // an arch head between each pair, so 34 m of wall is a rhythm of recesses instead of
+      // one plane. DRAW ONLY — a 0.38 m projection is inside the body radius (0.36 x 2 at
+      // the shoulders) and emitting it could only ever narrow the yard, so it does not.
+      for (let i = 0; i <= 10; i++) {
+        s.box(0.80, 5.4, 0.44, -49.8, y + 2.7, -33.4 + i * 3.28, WD);
+      }
+      for (let i = 0; i < 10; i++) {
+        const pz = -33.4 + (i + 0.5) * 3.28;
+        if (Math.abs(pz + 17) < 2.6) continue;            // the doorway stays a doorway
+        archRing(s, 5, -49.8, y + 5.4, pz, 1.42, 1.30, 0.80, WD, 'z');
+      }
+      // the stable range, lower and longer, with an open lean-to down its face
+      shell(s, api, 54, -8, 26, 9, 5.4, Math.PI * 0.5, W, 3.4);
+      s.gable(9.6, 26.6, y + 5.4, 2.2, 54, 0, -8, RF, 0, { api, depth: 26, col: W });
+      gableFloor(api, 54, -8, 9.6, 26.6, y + 5.4, 2.2, 0);
+      for (let i = 0; i <= 6; i++) {
+        const pz = -19 + i * 3.7;
+        const pg = groundY(api, 47.2, pz);
+        s.cyl(0.19, 0.22, 3.30, 7, 47.2, pg + 1.65, pz, ORDINARY.timber);
+        api.emit({ kind: 'circle', x: 47.2, z: pz, r: 0.26, y0: pg - 0.3, y1: pg + 3.3, tag: 'wood' });
+      }
+      s.box(2.9, 0.22, 23.4, 48.2, y + 3.52, -8, ORDINARY.timberAlt, 0, 0, -0.12);
+      s.box(0.20, 0.30, 23.4, 47.2, y + 3.24, -8, ORDINARY.timber);
+      api.emit({
+        kind: 'obb', x: 48.2, z: -8, halfX: 1.45, halfZ: 11.7, yaw: 0,
+        y0: y + 3.30, y1: y + 3.70, tag: 'wood', standable: true,
+      });
+
+      /* ---- THE THRESHOLD, AND THE LEAVES STANDING OPEN ----------------------
+       * MEASURED, AND IT WAS A SECOND WAY THE DOOR DID NOT WORK. The forebuilding was a
+       * 9 x 5 m platform 1.20 m tall with a standable collider, and five steps drawn on top
+       * of it that carried NO collider at all. CFG.player.STEP_UP is 0.52: a body walking
+       * north out of the bailey met a 1.20 m ledge, stopped, and had no way up. The door was
+       * invisible AND unreachable, which is why nothing in the county has ever been in here.
+       *
+       * A keep's threshold is level with its undercroft floor, so this is now two shallow
+       * courses of made ground under the porch and nothing else in the way.
+       */
+      {
+        const g = groundY(api, 0, K_ZF + 3);
+        // FLAT, and deliberately: the undercroft floor, the porch and the bailey are all at
+        // padY, so a threshold with any rise in it is a step UP followed by a step DOWN into
+        // the doorway. Measured on the first pass at 0.44 m (arch-r1 frames.json, pose
+        // "threshold" stands at y 29.34 against a pad of 28.90). Two courses of paving 6 and
+        // 10 cm proud — under STICK (0.42) in both directions, so the controller never even
+        // sees them — say "made ground, and it was made for this door".
+        for (let i = 0; i < 2; i++) {
+          const w = 12.4 - i * 2.4, d = 3.6 - i * 1.2;
+          s.box(w, 0.12, d, 0, g + ON_APRON + 0.06 + i * 0.04, K_ZF + KEEP.PD + 1.6 - i * 0.6, WD);
+        }
+        // the two leaves, thrown back against the jambs of the innermost order and left
+        // there. They are what says the way in is OPEN from ninety metres out.
+        for (const sx of [-1, 1]) {
+          s.box(0.28, 5.6, 3.6, sx * 1.94, g + 3.0, K_ZF - 1.55, HF.oak, 0);
+          for (let i = 0; i < 4; i++) {
+            s.box(0.36, 0.20, 3.3, sx * 1.94, g + 1.1 + i * 1.30, K_ZF - 1.55, HF.iron, 0);
+          }
+        }
+      }
+
+      /* ---- AND WHAT IS BEHIND IT ------------------------------------------- */
+      keepInside(k, api, y);
+
+      return { solid: s.build(), glow: k.glow.empty() ? null : k.glow.build(), moving: null, glowColour: GLOW.lamp };
+    },
+  },
+
 
   /* ---------------------------------------------------------------- station */
   // The lit hub you wake in. Everything here is legible at 3 a.m. through a windscreen:
@@ -898,7 +1833,7 @@ export const BUILDERS = {
         k.solid.cyl(0.13, 0.13, 0.02, 8, tinX + 0.1, api.padY + 0.13, tinZ, C.paper, 0.4, 0, Math.PI * 0.5);
         const spill = [[-6.3, 4.9, 0.9, 0.55], [-7.4, 4.95, 1.0, 0.40], [-8.5, 4.9, 1.1, 0.32], [-9.6, 4.95, 1.0, 0.28], [-10.5, 4.55, 0.7, 0.45]];
         for (const [sx, sz, sw, sd] of spill) {
-          k.solid.quad(sw, sd, sx, api.padY + 0.012, sz, C.paper, api.rng.range(-0.2, 0.2), -Math.PI * 0.5);
+          k.solid.quad(sw, sd, sx, api.padY + ON_APRON, sz, C.paper, api.rng.range(-0.2, 0.2), -Math.PI * 0.5);
         }
         // the smear up the first crate's east face, and the glint on its lid
         k.solid.quad(0.30, 0.42, -10.47, api.padY + 0.24, 4.95, C.paper, Math.PI * 0.5, 0);
@@ -3014,6 +3949,26 @@ export function majorApproach(api) {
 // a little of its evenness rather than pretending to be forest floor.
 const APRON_DETAIL_AMP = 0.42;
 
+/**
+ * HOW HIGH THE MADE GROUND IS. The apron is drawn at heightAt + APRON_LIFT, and it is an
+ * ordinary opaque depth-writing mesh — so anything authored on the ground BELOW this is
+ * simply not in the picture, and nothing in the gate says a word about it.
+ *
+ * ROUND 15, measured: the whole ankle layer of the Filling Station was under the floor.
+ * Five puddles totalling about 30 m2 at padY + 0.012, an eleven-mark drip line off the
+ * canopy fascia at padY + 0.011, the paint spill at padY + 0.012, 96 gravel stones at
+ * groundY + 0.2x their own 6-16 cm size, and three broken slabs at groundY + 0.05 — all of
+ * them authored in ROUND 7 to answer "the first area is ugly and vacant", all of them paid
+ * for at boot, and every one of them 6-7 cm under an opaque disc. That is this catalogue's
+ * signature failure — working-but-invisible rather than broken — and it is why the
+ * complaint survived the round that was meant to answer it.
+ *
+ * ON_APRON is the Y a flat mark on the made ground must use. Both are exported so a dress
+ * module and the apron builder can never drift apart again.
+ */
+export const APRON_LIFT = 0.08;
+export const ON_APRON = APRON_LIFT + 0.012;
+
 /* ------------------------------------------------------------- the road approach --
  * ROUND 6 (lane D2's route audit, 2026-09-03). Walking the real controller from the road to
  * every claim found five pads a body cannot get onto: the road runs past the yard at
@@ -3166,7 +4121,7 @@ export function apron(api, radius, col) {
   // one flat plane across 40% of the opening frame. 56 x 12 is 673 vertices, roughly one per
   // 1.2 m, matching the chunk ground's own density, and it is still a rounding error against
   // a two-million-triangle county.
-  const N = 56, RINGS = 12, LIFT = 0.08;
+  const N = 56, RINGS = 12, LIFT = APRON_LIFT;
   const pos = [], nor = [], uv = [], idx = [];
   // PROJECTED ON THE HEIGHTFIELD, never authored above it. That is roads.js's own rule for
   // its ribbon ("the ribbon is PROJECTED onto the heightfield, never authored above it, so

@@ -90,9 +90,16 @@ const EXIT_MAX = 0.50;               // metres of solid we will search through
 // the gun sometimes had rounds in it. Seeded (ctx.rng.fork, never Math.random); a pallet and
 // a sandwich board hold nothing, and the wilds' cache pays its own way (wilds.js _brokenCache).
 const BREAK_LOOT_CHANCE = 0.35;
+const BREAK_COIN_CHANCE = 0.55;   // more often than ammo: a box with nothing in it twice running reads as broken
 const BREAK_LOOT_MIN = 3;
 const BREAK_LOOT_MAX = 6;
 const LOOT_TAGS = Object.freeze({ crate: true, box: true });
+
+// ROUND 15 (Alex): "cash should be in breakable boxes at locations too". A crate is small
+// money on purpose — it is rebuilt whole every time its site streams back in, so anything
+// worth a drive would be a farm. The real money is the STRONGBOX, which is one-shot per save
+// and remembers that it has been opened (see search.js and the sb: world flags).
+const COIN_TAGS = Object.freeze({ crate: [1, 3], box: [1, 3], strongbox: [14, 22] });
 
 /* ---- module scratch. Nothing here allocates per shot. ---- */
 const _o = new THREE.Vector3();
@@ -103,6 +110,8 @@ const _n = new THREE.Vector3(0, 1, 0);
 // synchronously, never retain it. `by` says whose it was.
 const _brokePayload = { x: 0, y: 0, z: 0, mass: 0, n: 1, tag: null, by: 'shot' };
 const _ammoPayload = { n: 0 };
+// ROUND 15: the one channel money arrives on. progress.js is the only listener.
+const _coinPayload = { n: 0, x: 0, y: 0, z: 0, reason: 'break' };
 const _back = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
@@ -115,6 +124,10 @@ export class Combat {
 
     this.penRng = ctx.rng.fork('penetration');
     this.lootRng = ctx.rng.fork('breakables');    // ROUND 13: what a broken box had in it
+    // A SEPARATE STREAM, and it is not optional: lootRng draws exactly twice per crate, and
+    // adding coin draws to it would shift every later ammo roll — which tests/break-open.mjs
+    // catches by asserting the emitted ammo equals combat.dump().lastBroke.loot.
+    this.coinRng = ctx.rng.fork('coins');
 
     this.shots = 0;
     this.hits = 0;
@@ -597,6 +610,20 @@ export class Combat {
       const n = BREAK_LOOT_MIN + Math.floor(this.lootRng.next() * (BREAK_LOOT_MAX - BREAK_LOOT_MIN + 1));
       _ammoPayload.n = n; L.loot = n;
       this.ctx.bus.emit('pickup:ammo', _ammoPayload);
+    }
+    // ROUND 15: and what money was in it. Rolled off its own stream, paid on its own channel,
+    // and it always pays for a strongbox — a box you had to work at cannot come up empty.
+    const coins = COIN_TAGS[b.tag];
+    if (coins) {
+      const sure = b.tag === 'strongbox';
+      const roll = this.coinRng.next();
+      if (sure || roll < BREAK_COIN_CHANCE) {
+        const n = coins[0] + Math.floor(this.coinRng.next() * (coins[1] - coins[0] + 1));
+        _coinPayload.n = n; _coinPayload.x = b.x; _coinPayload.y = b.y + 0.3; _coinPayload.z = b.z;
+        _coinPayload.reason = b.tag;
+        L.coins = n;
+        this.ctx.bus.emit('pickup:coin', _coinPayload);
+      }
     }
     _brokePayload.x = b.x; _brokePayload.y = b.y; _brokePayload.z = b.z;
     _brokePayload.mass = b.mass; _brokePayload.n = 1; _brokePayload.tag = b.tag; _brokePayload.by = by;

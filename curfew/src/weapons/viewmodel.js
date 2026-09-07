@@ -624,8 +624,67 @@ export class Viewmodel {
     // that says "metal". Metalness comes down with it so the key's DIFFUSE can carry the
     // body — at metalness 0.62 the diffuse term is scaled by 0.38 and the gun could only be
     // lit by specular, which is the whole fault of round one's frame.
-    const wood = new THREE.MeshStandardMaterial({ color: 0x291b12, roughness: 0.80, metalness: 0.03 });
-    const blued = new THREE.MeshStandardMaterial({ color: 0x1f2329, roughness: 0.84, metalness: 0.40 });
+    //
+    // ROUND 15, THE LIST item 18 — "distinct metal vs stock". It was never a missing material:
+    // the stock has had its own MeshStandardMaterial since the file was written. It is that the
+    // two were the SAME VALUE IN DIFFERENT HUES, and hue is the first thing a night frame
+    // throws away. Measured on the shipped build (frame A, hip, the Filling Station forecourt,
+    // grain zeroed both sides, per-material differential mask inside one rAF):
+    //
+    //                mean   p50    p95    max
+    //   wood         15.4   16.4   27.4   46.0
+    //   blued        13.6    5.6   34.5   67.8
+    //
+    // The wood was the BRIGHTER of the two through the midtone and the metal the darker, which
+    // is backwards for a night rifle: a wooden stock is a broad dull mass and blued steel is a
+    // dark body carrying thin bright edges. So the separation is authored as ROLE, not as
+    // brightness. The wood goes warmer, deeper and rougher (0.80 -> 0.90, metalness to 0) so it
+    // holds no highlight at all and reads as one soft brown block; the steel goes darker and
+    // cooler with a TIGHTER lobe (0.84 -> 0.78) and more metalness (0.40 -> 0.55), so its
+    // albedo falls while its edges come up. The specular colour of a metal IS its albedo, so
+    // darkening 0x1f2329 to 0x181d24 pays for most of the roughness drop; what is left is an
+    // edge, which is the thing worth having.
+    //
+    // ROUND 15, SECOND PASS — THE ROLE SEPARATION WAS REAL AND THE HUE SEPARATION WAS NOT.
+    // Verified on the paragraph above's own build with a per-material differential mask painted
+    // out as a picture (wood orange, steel cyan, scope green, over a dimmed frame), which is the
+    // first time anyone in this file's history looked at WHERE each material lands rather than
+    // only at what it measures. The role split holds: wood p50 14.5 / p95 30.4 (a narrow band =
+    // one dull mass), blued p50 4.1 / p95 41.1 / max 68.6 (a dark body carrying bright edges).
+    // But the wood's MEAN COLOUR came back
+    //
+    //   wood (12.9, 12.8, 18.9)      blued (8.1, 10.7, 18.4)
+    //
+    // — blue was the dominant channel on BOTH, because every light in _buildLights is blue
+    // (key 0xbecfe8, fill 0x3d4c6e, rim 0x8fa4c4, ambient 0x2a3648) and a brown albedo of
+    // 0x2c1a0c has almost no blue to lose. A stock that measures as a separate material and
+    // paints as the same cold grey as the receiver is the working-but-invisible failure with
+    // a green test on top of it.
+    //
+    // MEASURED SWEEP (one boot, live setHex on the shipped program, one rAF per row; frame A
+    // hip, the Filling Station forecourt, both grain chains zeroed; the wood's own differential
+    // mask; the sky in the same frame reads mean 36.7):
+    //
+    //   wood albedo   wood mean RGB       luma mean / p50 / p95 / max   whole gun p95 / max
+    //   0x2c1a0c      (12.9,12.8,18.9)    13.3 / 14.5 / 30.4 / 40.2      35.3 / 138.8   shipped
+    //   0x3a2110      (16.9,14.6,20.3)    15.5 / 15.9 / 31.9 / 43.2      35.3 / 138.8
+    //   0x452612      (20.4,16.1,21.2)    17.4 / 17.3 / 33.7 / 45.9      35.5 / 138.8
+    //   0x522d15      (25.4,18.7,23.0)    20.4 / 20.6 / 37.7 / 49.9      36.3 / 138.8   <- this
+    //   0x603418      (31.5,21.8,25.3)    24.1 / 23.4 / 42.6 / 54.4      37.3 / 138.8
+    //
+    // 0x522d15 is the first row where RED becomes the dominant channel, which is the whole
+    // point: it is the smallest step that makes the stock read as wood instead of as more cold
+    // receiver. The gun's own ceiling barely moves (p95 35.3 -> 36.3 against gate row 14's 60;
+    // the 138.8 max is the scope silhouette blending with the lit forecourt behind it and is
+    // the same number at every row, so it is the instrument and not the gun). The stock's MASS
+    // stays under the sky it stands against (p50 20.6 vs 36.7), which is the night-value law.
+    // 0x603418 was measured and LOOKED AT and is genuinely more legible as timber, and it is
+    // left on the table on purpose: at p95 42.6 the lit sliver on top of the forend starts to
+    // approach the sky's own mean, and this gun's whole history is of being the darkest large
+    // shape in the frame. Both candidates are in tests/shots/woodlook-b-522d15.png and
+    // woodlook-c-603418.png if a later round wants the louder one.
+    const wood = new THREE.MeshStandardMaterial({ color: 0x522d15, roughness: 0.90, metalness: 0.00 });
+    const blued = new THREE.MeshStandardMaterial({ color: 0x181d24, roughness: 0.78, metalness: 0.55 });
     const matte = new THREE.MeshStandardMaterial({ color: 0x171b20, roughness: 0.92, metalness: 0.06 });
     const brassM = new THREE.MeshStandardMaterial({ color: 0x7a5a24, roughness: 0.42, metalness: 0.80 });
     this._mats = [wood, blued, matte, brassM];
@@ -638,6 +697,45 @@ export class Viewmodel {
       parent.add(m);
       return m;
     };
+    // ROUND 15, THE LIST item 18 — "bevels that catch light".
+    //
+    // CylinderGeometry's normals are SMOOTH around the circumference, so a 10- or 12-sided tube
+    // renders as one continuous gradient and reads as a moulded plastic pipe. That is exactly
+    // what the shipped scope was: the biggest object in every frame of the game, and a
+    // featureless smear. facet() hands every triangle its own face normal, so each flat enters
+    // and leaves the key and the rim lobes at its OWN angle and a tube becomes a run of
+    // discrete values — a machined thing, and one that matches a county built out of flat
+    // faces to begin with.
+    //
+    // IT IS A GEOMETRY CHANGE, NOT A MATERIAL ONE, and that distinction is the whole reason it
+    // is affordable. `flatShading: true` is a shader DEFINE: setting it on one of the four
+    // standard materials splits their single program, and this file has three programs to
+    // spend across the entire workflow. computeVertexNormals on non-indexed data costs none.
+    //
+    // ART.md 6.1.2's warning still applies and is why the facets are SMALL: a flat face enters
+    // a specular lobe all at once. A 22.5-degree facet on a 13 mm barrel is 9 mm of screen at
+    // arm's length; the 62 mm receiver plate that clipped to 243 was forty times that area.
+    //
+    // ROUND 15, SECOND PASS — AND THIS IS THE PART THAT MATTERED. The pass that wrote the
+    // paragraph above declared facet() and NEVER CALLED IT: `grep -n facet viewmodel.js`
+    // returned four comment lines and one declaration, and not one call site. The scope
+    // therefore shipped exactly as smooth as it had always been. That is the disease this
+    // project is named for — a system that runs, reads well in its own comment, and never
+    // reaches the screen — and it is fixed here by putting the call inside tube() itself, so
+    // every cylinder on all four guns is machined and no future part can forget to ask.
+    //
+    // MEASURED before wiring it up (frame A, hip, the Filling Station forecourt, both grain
+    // chains zeroed, one rAF, boxes in frame fractions; readPixels luma):
+    //   sky above the trees  36.7      scope tube body  11.5      scope tube top edge  26.9
+    // The tube was one smooth ramp from 11 to 27 across its whole diameter — dark enough to
+    // obey the night-value law and shaped like nothing at all.
+    const facet = (geo) => {
+      const g = geo.index ? geo.toNonIndexed() : geo;
+      if (g !== geo) geo.dispose();
+      g.computeVertexNormals();
+      return g;
+    };
+
     // THE SIXTH ARGUMENT IS `openEnded` AND IT DEFAULTS TO FALSE, so every "tube" on this
     // gun was a SEALED CYLINDER with a lid on each end. Alex, playtest 3: "i can't look down
     // whatever its called. the guns sights. because when i use the iron sites or whatever, it
@@ -650,7 +748,7 @@ export class Viewmodel {
     const tube = (r, len, seg = 10, open = false) => {
       const g = new THREE.CylinderGeometry(r, r, len, seg, 1, open);
       g.rotateX(Math.PI / 2);
-      return g;
+      return facet(g);                        // every cylinder is machined, not moulded
     };
 
     // ART.md 6.1.2 — break the flat. A BoxGeometry face has ONE normal across its whole area,

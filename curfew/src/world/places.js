@@ -61,7 +61,7 @@ import {
 } from './placedata.js';
 import { BUILDERS, MINOR_BUILDERS, apron, majorApproach, GLOW } from './sites.js';
 import {
-  createPlaceSurfaceLibrary, disposePlaceSurfaceLibrary, placeSurfaceFor, projectPlaceSurfaceUVs,
+  createPlaceSurfaceLibrary, disposePlaceSurfaceLibrary, placeSurfaceFor, placeBumpFor, projectPlaceSurfaceUVs,
 } from './place-surfaces.js';
 // Round 7 and Round 9 dress modules add to the county without editing this file. Each exports
 // a plain map; this file only looks things up in them, and each module owns its own geometry.
@@ -74,6 +74,7 @@ import { DRESS as DRESS_STATION } from './dress-station.js';
 import { DRESS as DRESS_INTERIORS } from './dress-interiors.js';
 import { DRESS as DRESS_COMPOUNDS } from './destination-compounds.js';
 import { DRESS as DRESS_COMPOUNDS_EAST } from './destination-compounds-east.js';
+import { DRESS as DRESS_HOLDFAST } from './holdfast-dress.js';
 import { DRESS as DRESS_REFUGES } from './destination-refuges.js';
 import { DRESS as DRESS_ESTATES } from './estate-details.js';
 import { STAGED_BUILDERS } from './staged.js';
@@ -88,7 +89,8 @@ import { STAGED_BUILDERS } from './staged.js';
  * `solid` and `glow` are merged into the body's geometry; `cast` is a staged cast (below).
  * A dress that throws is noted and skipped: the destination still builds.
  */
-const DRESS_CHAIN = [DRESS_STATION, DRESS_INTERIORS, DRESS_COMPOUNDS, DRESS_COMPOUNDS_EAST, DRESS_REFUGES, DRESS_ESTATES];
+const DRESS_CHAIN = [DRESS_STATION, DRESS_INTERIORS, DRESS_COMPOUNDS, DRESS_COMPOUNDS_EAST,
+  DRESS_REFUGES, DRESS_ESTATES, DRESS_HOLDFAST];
 
 /** How close you have to come before a staged cast is placed. Outside the chunk residency
  *  ring so nobody is ever seen popping into a scene in front of you. */
@@ -204,6 +206,43 @@ const BELL_SWING_S = 5.0;
 const CLAIM_FLASH_S = 1.4;        // the rover a claim borrows, then releases by ttl
 const NEAR_HYSTERESIS = 12;       // metres, so place:near cannot chatter on a boundary
 const MAJOR_KEEPOUT = 70;         // no minor site inside this of a major
+
+/* ------------------------------------------------- ROUND 15: THE DEAD RING --
+ * Alex, on the destinations: "basically empty buildings without anything cool set up
+ * surrounding them".
+ *
+ * MEASURED before this round: nothing is authored past about 47 m of any major. Then
+ * MAJOR_KEEPOUT (70) forbids a minor site and CFG.wilds.majorClear (120) forbids a wild
+ * one. So every destination in the county had a 23-43 m band where the game was
+ * CONTRACTUALLY FORBIDDEN to put anything, and then trees to the horizon. You walked out of
+ * a lit yard straight into undifferentiated forest, which is exactly what he is describing.
+ *
+ * The keep-outs themselves are right and they stay: they exist so the rationed road table
+ * cannot drop a culvert in a destination's yard, and — at the three Kneeler rows — so that
+ * nothing new can crowd the boss's post out of its standOff contract (STATUS item 21).
+ * What was missing was a SECOND, DELIBERATE pass that lays a small number of AUTHORED sites
+ * in the band, from its own named PRNG stream, so the county's rationed table is untouched
+ * and byte-identical.
+ *
+ * Everything in the ring is an existing minor or staged kind: it builds on the shared body
+ * material, emits its colliders inside the build loop, publishes its bulk so the forest
+ * grows AROUND it rather than through it, and streams with the chunk ring. Zero programs,
+ * zero new code paths, zero new material families.
+ */
+const APPROACH_MIN = 52;          // m from a major's centre; inside this the yard owns the ground
+const APPROACH_BOSS_MIN = 74;     // ...and at a Kneeler row, outside its own keep-out entirely
+const APPROACH_MAX = 118;         // where wilds.majorClear takes over
+const APPROACH_PER_MAJOR = 5;
+const APPROACH_APART = 34;        // m between two of them on the same approach
+const APPROACH_MINOR_CLEAR = 26;  // m from a site the rationed table already placed
+const APPROACH_OFFSET = Object.freeze({ min: 8.5, max: 17.0 });
+// Nothing LIT: a lit kind joins places.campfires(), and tests/sites.mjs asserts every
+// campfire is at least MAJOR_KEEPOUT from a major. A fire on a destination's approach would
+// also undo the thing a campfire is for — a light you find between the lit places.
+const APPROACH_VOCAB = Object.freeze([
+  'fence', 'fence', 'waystone', 'culvert', 'pylon', 'blind', 'cairn',
+  'wreck', 'poster', 'gear', 'orchard', 'wreck-scene', 'blind-owner', 'dug-out',
+]);
 
 /* ------------------------------------------------ the claim is a THING you DO (round 6) --
  * Alex, fifth playtest (2026-09-03): "I have no idea how you finish places. That first place
@@ -903,7 +942,8 @@ export class Places {
     this.matBody = new THREE.MeshLambertMaterial({
       vertexColors: true, dithering: true,
       map: this.surfaceTextures.plaster,
-      bumpMap: this.surfaceTextures.plaster, bumpScale: 0.075,
+      // ROUND 15, item 14: a HEIGHT image, not the albedo. See place-surfaces.js.
+      bumpMap: this.surfaceTextures['plaster-bump'], bumpScale: 0.075,
       // DoubleSide because a merged kit contains single-sided quads (posters, windows,
       // signs) whose facing is authored by hand and a wrong one would be an invisible
       // prop. shadowSide keeps the depth pass single-sided so shadow acne stays away.
@@ -914,7 +954,7 @@ export class Places {
     this.matLand = new THREE.MeshLambertMaterial({
       vertexColors: true, dithering: true, fog: false,
       map: this.surfaceTextures.plaster,
-      bumpMap: this.surfaceTextures.plaster, bumpScale: 0.075,
+      bumpMap: this.surfaceTextures['plaster-bump'], bumpScale: 0.075,
       side: THREE.DoubleSide, shadowSide: THREE.FrontSide,
     });
     this.matLand.name = 'place-landmark';
@@ -986,7 +1026,7 @@ export class Places {
       projectPlaceSurfaceUVs(out.solid);
       const surfaceMat = this.matLand.clone();
       surfaceMat.map = placeSurfaceFor(this.surfaceTextures, d);
-      surfaceMat.bumpMap = surfaceMat.map;
+      surfaceMat.bumpMap = placeBumpFor(this.surfaceTextures, d);
       const m = new THREE.Mesh(out.solid, surfaceMat);
       m.name = 'land-' + d.id;
       m.castShadow = false;          // a 77 m spire is never inside the 70 m shadow radius
@@ -1165,6 +1205,10 @@ export class Places {
     if (!canCollide && phase === 'body') this._note('collision.addCollider missing: ' + d.id + ' is walk-through');
     const heightAt = (terrain && terrain.heightAt) ? (x, z) => terrain.heightAt(x, z) : () => rec.padY;
     const self = this;
+    // ROUND 15: the body index, PER BUILD and per api, never on the instance. A counter on
+    // the places instance mints a different key every time a site streams back in, and the
+    // flag that remembers a body has been gone through would never match again.
+    let bodyN = 0;
     return {
       site: d,
       padY: rec.padY,
@@ -1196,6 +1240,35 @@ export class Places {
           w.r = shape.r;
         }
         return collision.addCollider(w, chunkId || ('place:' + d.id));
+      },
+      // ROUND 15. A body that was always dead. The builder already welded it into the site's
+      // one merged geometry — this only tells the search lane it is there, so holding E over
+      // it can find it. The key must be stable across a stream-out and back, because that is
+      // what remembers the body has been gone through.
+      body(lx, lz, ly) {
+        const search = self._sys('search');
+        if (!search || typeof search.addBody !== 'function') return;
+        const n = ++bodyN;
+        search.addBody(d.id + ':' + phase + ':' + n,
+          ox + lx * cy + lz * sy,
+          Number.isFinite(ly) ? ly : rec.padY,
+          oz - lx * sy + lz * cy);
+      },
+      // ROUND 15, THE TOLL. A builder declares that a place has a door you pay at; search.js
+      // owns the verb, progress.js owns the purse, and this is the only wire between them.
+      gate(lx, lz, ly, price) {
+        const search = self._sys('search');
+        if (!search || typeof search.addGate !== 'function') return;
+        search.addGate(d.id,
+          ox + lx * cy + lz * sy,
+          Number.isFinite(ly) ? ly : rec.padY,
+          oz - lx * sy + lz * cy,
+          price);
+      },
+      /** Has the toll been paid? The builder asks, so a paid gate rebuilds open. */
+      gateOpen() {
+        const prog = self._sys('progress');
+        return !!(prog && typeof prog.flag === 'function' && prog.flag('gate:' + d.id));
       },
       _self: self,
     };
@@ -1263,6 +1336,27 @@ export class Places {
     if (collision && typeof collision.removeChunk === 'function') collision.removeChunk('place:' + key);
   }
 
+  /**
+   * ROUND 15, THE TOLL. Rebuild one major in place, right now, because a door you have just
+   * paid for has to open on the frame you paid — waiting for the chunk to stream out and back
+   * is exactly the working-but-invisible failure this project keeps hitting. The builder
+   * reads api.gateOpen(), so a rebuilt body simply comes back without its leaves and without
+   * its gate collider.
+   */
+  rebuildSite(id) {
+    const d = MAJOR_BY_ID[id];
+    if (!d) return false;
+    const chunks = this._sys('chunks');
+    const key = chunks && chunks.chunkIdAt
+      ? String(chunks.chunkIdAt(d.x, d.z))
+      : (Math.floor(d.x / CHUNK) + '|' + Math.floor(d.z / CHUNK));
+    if (!this.bodies.has(key)) return false;      // not resident: it will rebuild correctly anyway
+    const cx = Math.floor(d.x / CHUNK), cz = Math.floor(d.z / CHUNK);
+    this.disposeChunk(key);
+    this.buildChunk(cx, cz, key);
+    return true;
+  }
+
   _buildBody(d, chunkKey) {
     const rec = this.nodes.get(d.id);
     const B = BUILDERS[d.kind];
@@ -1288,7 +1382,7 @@ export class Places {
       const fl = terrain && terrain.flats ? terrain.flats() : null;
       if (fl) for (let i = 0; i < fl.length; i++) if (fl[i].id === d.flatId) { rad = fl[i].r * 0.86; break; }
     }
-    const ap = apron(api, rad, null);
+    const ap = apron(api, rad, d.apronCol || null);
     if (ap) {
       projectPlaceSurfaceUVs(ap, 7);
       const m = new THREE.Mesh(ap, this.matBody);
@@ -1302,7 +1396,7 @@ export class Places {
       projectPlaceSurfaceUVs(out.solid);
       const surfaceMat = this.matBody.clone();
       surfaceMat.map = placeSurfaceFor(this.surfaceTextures, d);
-      surfaceMat.bumpMap = surfaceMat.map;
+      surfaceMat.bumpMap = placeBumpFor(this.surfaceTextures, d);
       const m = new THREE.Mesh(out.solid, surfaceMat);
       m.name = 'body-' + d.id;
       m.castShadow = true; m.receiveShadow = true;
@@ -1434,6 +1528,7 @@ export class Places {
     const canCollide = !!(collision && typeof collision.addCollider === 'function');
     const cy = Math.cos(m.yaw), sy = Math.sin(m.yaw);
     const padY = terrain && terrain.heightAt ? terrain.heightAt(m.x, m.z) : 0;
+    let minorBodyN = 0;    // ROUND 15: per build, never on the instance — see _apiFor
     const api = {
       site: m, padY, yaw: m.yaw, age: m.age,
       rng: this._forkFor('minor:' + m.kind + ':' + m.i),
@@ -1456,6 +1551,16 @@ export class Places {
       },
       // ROUND 7: who is standing at this scene. See _recordCast. Local frame, like emit().
       cast: (entries) => this._recordCast('minor:' + m.kind + ':' + m.i, m.x, m.z, m.yaw, entries, padY),
+      // ROUND 15: see the note beside the major builder's own body().
+      body: (lx, lz, ly) => {
+        const search = this._sys('search');
+        if (!search || typeof search.addBody !== 'function') return;
+        const n = ++minorBodyN;
+        search.addBody('m' + m.i + ':' + n,
+          m.x + lx * cy + lz * sy,
+          Number.isFinite(ly) ? ly : padY,
+          m.z - lx * sy + lz * cy);
+      },
     };
     let k = null;
     try { k = B(api); } catch (e) { this._note('minor ' + m.kind + ' threw: ' + e.message); return null; }
@@ -1732,9 +1837,79 @@ export class Places {
       if (!arr) { arr = []; this.minorsByChunk.set(key, arr); }
       arr.push(rec);
     }
+    // ---- ROUND 15, ITEM 2: THE APPROACH RING -----------------------------------
+    // A second walk of the SAME traced polyline, from its own stream, keeping only road
+    // points inside a major's dead band. See the note beside APPROACH_MIN above.
+    const ringStart = this.minors.length;
+    {
+      const arng = this._forkFor('approach-ring');
+      const arnd = () => arng.next();
+      for (const d of MAJORS) {
+        const inner = d.boss ? APPROACH_BOSS_MIN : APPROACH_MIN;
+        let lastX = null, lastZ = null, placed = 0;
+        for (let i = 2; i < pts.length && placed < APPROACH_PER_MAJOR; i += 2) {
+          const ax = pts[i - 2], az = pts[i - 1], bx = pts[i], bz = pts[i + 1];
+          if (!Number.isFinite(ax) || !Number.isFinite(bx)) continue;
+          const seg = Math.hypot(bx - ax, bz - az);
+          if (!(seg > 0)) continue;
+          const dc = Math.hypot(bx - d.x, bz - d.z);
+          if (dc < inner || dc > APPROACH_MAX) continue;
+          if (lastX !== null && Math.hypot(bx - lastX, bz - lastZ) < APPROACH_APART) continue;
+          if (arnd() > 0.55) continue;         // not at every eligible point on the road
+
+          const tx = (bx - ax) / seg, tz = (bz - az) / seg;
+          const px = -tz, pz = tx;
+          const off = APPROACH_OFFSET.min + arnd() * (APPROACH_OFFSET.max - APPROACH_OFFSET.min);
+          let sd = arnd() < 0.5 ? -1 : 1;
+          let mx = bx + px * off * sd, mz = bz + pz * off * sd;
+          if (terrain && terrain.slopeAt && terrain.slopeAt(mx, mz) > 0.45) {
+            sd = -sd; mx = bx + px * off * sd; mz = bz + pz * off * sd;
+            if (terrain.slopeAt(mx, mz) > 0.55) continue;      // both sides are a bank
+          }
+
+          // the site itself, not just the road point, must respect every keep-out
+          let bad = Math.hypot(mx - d.x, mz - d.z) < inner;
+          if (!bad) for (const o of MAJORS) {
+            const oi = o.boss ? APPROACH_BOSS_MIN : APPROACH_MIN;
+            if (Math.hypot(mx - o.x, mz - o.z) < oi) { bad = true; break; }
+          }
+          if (bad) continue;
+          // never inside one of the four measured sight corridors: those exist so the
+          // landmark reads from the ordinary road, and this pass must not close one.
+          if (this.sightClear(mx, mz)) continue;
+          for (let j = 0; j < this.minors.length; j++) {
+            const q = this.minors[j];
+            if (Math.hypot(mx - q.x, mz - q.z) < APPROACH_MINOR_CLEAR) { bad = true; break; }
+          }
+          if (bad) continue;
+
+          const kind = APPROACH_VOCAB[(arnd() * APPROACH_VOCAB.length) | 0];
+          const kdef = MINOR_KINDS[this._minorIndex(kind)];
+          if (!kdef) continue;
+          const yaw = Math.atan2(bx - mx, bz - mz);           // face the road it was placed from
+          const age = hub ? clamp01(Math.hypot(mx - hub.x, mz - hub.z) / 1650) : 0.5;
+          const rec = { i: idx++, kind, x: mx, z: mz, yaw, age, roadX: null, roadZ: null, approach: d.id };
+          this.minors.push(rec);
+          if (kdef.bulk > 0) {
+            const r = kdef.bulk + MINOR_BULK_MARGIN;
+            this._bulks.push(mx, mz, r * r);
+          }
+          const key = chunks && chunks.chunkIdAt
+            ? String(chunks.chunkIdAt(mx, mz))
+            : (Math.floor(mx / CHUNK) + '|' + Math.floor(mz / CHUNK));
+          let arr = this.minorsByChunk.get(key);
+          if (!arr) { arr = []; this.minorsByChunk.set(key, arr); }
+          arr.push(rec);
+          lastX = bx; lastZ = bz;
+          placed++;
+        }
+      }
+    }
+
     this._note('minor sites: ' + this.minors.length + ' over ' +
       (roads.totalLength ? Math.round(roads.totalLength()) : '?') + ' m of road, ' +
-      this._campfires.length + ' campfires off it');
+      this._campfires.length + ' campfires off it, ' +
+      (this.minors.length - ringStart) + ' on destination approaches');
   }
 
   _minorIndex(kind) {

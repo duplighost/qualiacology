@@ -69,7 +69,9 @@ const _loadedPayload = Object.freeze({});
 // blob still loads — save.js merges per key and the new fields take their defaults.
 // 3 since round 13: the bitmap is 128 x 128 and records what he has SEEN, not the one cell he
 // stood in; a version-2 blob's 1024-char bitmap is upscaled 2x2 on load (_decodeVisited).
-const SAVE_VERSION = 3;
+// ROUND 15: 3 -> 4 for the purse. SaveBlob merges a stored blob key-by-key against a fresh
+// defaults factory, so an existing save gains the new key and loses nothing.
+const SAVE_VERSION = 4;
 
 // WHERE HE HAS BEEN. Alex, fifth playtest: "a large map in the menu that shows where you've
 // been and if you've finished places"; seventh: "The map should not even show roads or anything
@@ -103,6 +105,13 @@ const MOTE_WEAVE = 5.5;         // skyshard's orbit: it arrives on a curve, not 
 const MOTE_CATCH_M = 1.05;      // skyshard motes.js:270 collects at 1.0
 const MOTE_TRAIL_STEPS = 3;     // one particle every third fixed step: 20/s per mote
 const MOTE_COLOUR = 0xf0d49a;   // warm bone. The one colour in the game that means "yours".
+// ROUND 15. A coin is the SAME mote with a colder, brassier trail, because there is no coin
+// mesh and there must not be one: progress.js owns no geometry, and a mote is fx's pooled
+// additive Points plus a borrowed rover from the pinned 13-light census. A second colour is
+// free; a spinning coin model would be a mesh, a material and a draw.
+const COIN_COLOUR = 0xc9a45c;
+const COIN_TRAIL = Object.freeze([0.86, 0.68, 0.33]);
+const XP_TRAIL = Object.freeze([0.96, 0.83, 0.58]);
 
 // The rover pool is 8 physical lights shared with the muzzle flash, impacts and the car.
 // A pack of eight motes must never be able to starve a gunshot of its light, so only the
@@ -259,6 +268,12 @@ export class Progress {
     this.save = new SaveBlob(SAVE_KEY, SAVE_VERSION, () => ({
       v: SAVE_VERSION,
       xp: 0,            // BANKED lifetime XP
+      // THE PURSE, ROUND 15. Deliberately NOT beside unbanked: carried XP is at risk and dies
+      // with you, and money must not. Alex's rule for this game is that nothing is ever taken
+      // away, and a door you pay to get through becomes a punishment loop the moment the fee
+      // can be lost to a hound on the way there. Cash is a flat lifetime balance that moves
+      // only when you earn it or spend it.
+      cash: 0,
       unbanked: 0,      // carried since the last lit fire; at risk, and only this is
       level: 1,
       nodes: [],        // owned node ids (bought AND auto-granted)
@@ -314,6 +329,7 @@ export class Progress {
     for (let i = 0; i < MAX_MOTES; i++) {
       this.motes[i] = {
         live: false, t: 0, xp: 0, phase: 0,
+        coin: false, cr: 0.96, cg: 0.83, cb: 0.58,   // ROUND 15: xp or money, and the trail colour that says which
         x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
         px: 0, py: 0, pz: 0,          // previous, for present(alpha)
         trail: 0, light: null,
@@ -554,6 +570,21 @@ export class Progress {
       }
     });
 
+    // ROUND 15, THE PURSE. Every other lane pays money on this one channel — the search of a
+    // body, a broken strongbox, a crate the car went through — and this is the only listener.
+    // A coin arrives as the SAME homing mote XP does, so it is a thing that flies to you and
+    // makes a sound rather than a number that changes in a corner; the no-words law leaves
+    // the balance itself to the pause card and nowhere else.
+    on('pickup:coin', (p) => {
+      if (!p || p._own) return;
+      const n = Number(p.n) || 0;
+      if (n <= 0) return;
+      const x = Number.isFinite(p.x) ? p.x : this._playerAt(0);
+      const y = Number.isFinite(p.y) ? p.y : this._playerAt(1) + 0.6;
+      const z = Number.isFinite(p.z) ? p.z : this._playerAt(2);
+      this._spawnMote(x, y, z, n, true);
+    });
+
     on('level:up', (p) => { void p; });   // ours; listed so the channel is obviously live
 
     // ROUND 13: weapon:reload no longer grants anything (see _verb). The channel stays live
@@ -713,6 +744,57 @@ export class Progress {
     this._chime('xp_gain', px, py, pz, 0.94 + weight * 0.18, 0.58 + weight * 0.12);
   }
 
+  /* ------------------------------------------------------------ the purse -- */
+
+  /** What is in the purse. */
+  cash() { return this.save.data.cash | 0; }
+
+  /**
+   * Take money. The twin of award(), and deliberately simpler: no phase multiplier, because a
+   * coin is a coin whatever hour it is, and no banking, because cash is never at risk.
+   * Returns the amount actually paid.
+   */
+  payCash(n, x, y, z, reason) {
+    const amount = Math.max(0, Math.round(n || 0));
+    if (amount <= 0) return 0;
+    const d = this.save.data;
+    d.cash = (d.cash | 0) + amount;
+    this.save.mark();
+    this._publish();
+    this._cashAnswer(amount, x, y, z, reason);
+    this.ctx.bus.emit('cash:gained', {
+      amount, total: d.cash, x: x || 0, y: y || 0, z: z || 0, reason: reason || 'loot', _own: true,
+    });
+    return amount;
+  }
+
+  /**
+   * Spend it. Refuses rather than going negative — the refusal IS the answer the door gives,
+   * and the caller turns it into a dead click. Returns true only if the money moved.
+   */
+  spendCash(n, reason) {
+    const amount = Math.max(0, Math.round(n || 0));
+    const d = this.save.data;
+    if (amount <= 0 || (d.cash | 0) < amount) return false;
+    d.cash -= amount;
+    this.save.mark();
+    this._publish();
+    this.ctx.bus.emit('cash:spent', { amount, total: d.cash, reason: reason || 'toll', _own: true });
+    return true;
+  }
+
+  /** The same shape as _rewardAnswer, one tone up, so a coin sounds like a coin. */
+  _cashAnswer(amount, x, y, z, reason) {
+    void reason;
+    const px = Number.isFinite(x) ? x : this._playerAt(0);
+    const py = Number.isFinite(y) ? y : this._playerAt(1) + 0.55;
+    const pz = Number.isFinite(z) ? z : this._playerAt(2);
+    const fx = this.ctx.systems.get('fx');
+    if (fx && typeof fx.reward === 'function') fx.reward(px, py, pz, amount);
+    const weight = clamp01(Math.sqrt(Math.max(1, amount)) / 10);
+    this._chime('xp_gain', px, py, pz, 1.28 + weight * 0.22, 0.44 + weight * 0.10);
+  }
+
   /**
    * Add to the carried pile. Never emits; award() does that. ROUND 13: and never levels —
    * carried XP is a light on you, not a level. The level moves when it banks.
@@ -733,6 +815,7 @@ export class Progress {
     if (!sh) return;
     sh.xp = this.total();
     sh.level = this.level;
+    sh.cash = this.save.data.cash | 0;   // ROUND 15: read by the pause card, never by the HUD
   }
 
   /**
@@ -793,16 +876,24 @@ export class Progress {
 
   /* ------------------------------------------------------------------ motes -- */
 
-  _spawnMote(x, y, z, xp) {
+  _spawnMote(x, y, z, xp, coin) {
     let m = null;
     for (let k = 0; k < MAX_MOTES; k++) {
       const i = (this.moteCursor + k) % MAX_MOTES;
       if (!this.motes[i].live) { m = this.motes[i]; this.moteCursor = (i + 1) % MAX_MOTES; break; }
     }
     // Pool full: pay immediately rather than drop the reward. Nothing is ever taken away.
-    if (!m) { this.award(xp, x, y, z, 'kill'); return; }
+    if (!m) {
+      if (coin) this.payCash(xp, x, y, z, 'loot');
+      else this.award(xp, x, y, z, 'kill');
+      return;
+    }
 
     m.live = true; m.t = 0; m.xp = xp;
+    // ROUND 15: the same mote, carrying money instead of experience.
+    m.coin = !!coin;
+    const trail = coin ? COIN_TRAIL : XP_TRAIL;
+    m.cr = trail[0]; m.cg = trail[1]; m.cb = trail[2];
     m.phase = this.rng.next() * TAU;
     m.x = x; m.y = y; m.z = z;
     m.px = x; m.py = y; m.pz = z;
@@ -819,7 +910,7 @@ export class Progress {
     if (this.lit < MOTE_LIT_MAX) {
       const lights = this.ctx.systems.get('lights');
       if (lights && lights.borrow) {
-        m.light = lights.borrow('mote', x, y, z, MOTE_COLOUR, MOTE_LIGHT_I, 0);
+        m.light = lights.borrow('mote', x, y, z, coin ? COIN_COLOUR : MOTE_COLOUR, MOTE_LIGHT_I, 0);
         if (m.light) this.lit++;
       }
     }
@@ -876,21 +967,22 @@ export class Progress {
       // all four were wrong (INTEGRATOR DECISION 1). The integrator measures it and sets it.
       if (fx && fx.spawnParticle && (++m.trail % MOTE_TRAIL_STEPS) === 0) {
         const puls = 0.085 + 0.035 * Math.sin(m.t * 15 + m.phase);
-        fx.spawnParticle(m.x, m.y, m.z, 0, 0, 0, 0.22, puls, 0.96, 0.83, 0.58, 0, 3.4, 0.95);
+        fx.spawnParticle(m.x, m.y, m.z, 0, 0, 0, 0.22, puls, m.cr, m.cg, m.cb, 0, 3.4, 0.95);
       }
 
       if (m.t > MOTE_FREE_S + MOTE_LIFE_S) {
         // It ran out of flight without reaching you — you drove off, or it was born inside
         // geometry. Pay it anyway, silently. Nothing in CURFEW is ever taken away.
         this._stat.motesExpired++;
-        this.award(m.xp, m.x, m.y, m.z, 'kill');
+        if (m.coin) this.payCash(m.xp, m.x, m.y, m.z, 'loot');
+        else this.award(m.xp, m.x, m.y, m.z, 'kill');
         this._killMote(m);
       }
     }
   }
 
   _credit(m) {
-    const x = m.x, y = m.y, z = m.z, xp = m.xp;
+    const x = m.x, y = m.y, z = m.z, xp = m.xp, coin = m.coin;
     this._killMote(m);
     this._stat.motesCredited++;
 
@@ -898,14 +990,15 @@ export class Progress {
     this.streak = this.sinceCredit < STREAK_WINDOW_S ? this.streak + 1 : 0;
     this.sinceCredit = 0;
 
-    this.award(xp, x, y, z, 'kill');
+    if (coin) this.payCash(xp, x, y, z, 'loot');
+    else this.award(xp, x, y, z, 'kill');
 
     // THE ANSWER. Silence reads as broken, so the contact makes a sound and a light on the
-    // same frame it makes the credit.
-    const rate = 1 + Math.min(this.streak, STREAK_MAX) * STREAK_PITCH_STEP;
-    this._chime('xp_mote', x, y, z, rate, 0.55);
+    // same frame it makes the credit. A coin lands higher and shorter than experience does.
+    const rate = (coin ? 1.34 : 1) + Math.min(this.streak, STREAK_MAX) * STREAK_PITCH_STEP;
+    this._chime('xp_mote', x, y, z, rate, coin ? 0.42 : 0.55);
     const fx = this.ctx.systems.get('fx');
-    if (fx && fx.flash) fx.flash(x, y, z, MOTE_COLOUR, 5.5 + this.streak * 0.35, 0.10);
+    if (fx && fx.flash) fx.flash(x, y, z, coin ? COIN_COLOUR : MOTE_COLOUR, 5.5 + this.streak * 0.35, 0.10);
   }
 
   _killMote(m) {
@@ -1615,6 +1708,7 @@ export class Progress {
     const d = this.save.data;
     return {
       xp: d.xp, unbanked: d.unbanked, total: this.total(), carried: d.unbanked,
+      cash: d.cash | 0,
       level: this.level, levelFrac: +levelFrac(d.xp).toFixed(3),
       nextAt: xpForLevel(this.level + 1),
       points: this.points, spent: this.spent,

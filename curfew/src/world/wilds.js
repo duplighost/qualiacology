@@ -131,6 +131,40 @@ function wildSurfaceHash(x, y) {
   return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
 }
 
+/**
+ * ROUND 15, item 14. The wilderness family carried the same bug as the destinations: ONE
+ * image used as both albedo and height, so its damp banding was read by the renderer as a
+ * set of gouges cut across every ruin, tower and wreck in the county. This is the same
+ * generator with the damp term dropped — broad relief, fine grain and pitting are geometry;
+ * a wet stain is not. Zero programs: bumpMap is a boolean in three's program parameters, so
+ * a different texture object on the same UV channel keeps the same cache key.
+ */
+function makeWildSurfaceBump() {
+  const n = WILD_SURFACE_SIZE;
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const broad = Math.sin(x * TAU / n) * 0.48 + Math.cos(y * TAU / n) * 0.34
+        + Math.sin((x + y) * TAU * 3 / n) * 0.18;
+      const fine = wildSurfaceHash(x, y) - 0.5;
+      const pit = wildSurfaceHash(x >> 1, (y >> 1) + 53) > 0.955 ? -46 : 0;
+      const v = Math.max(126, Math.min(248, Math.round(216 + broad * 27 + fine * 22 + pit)));
+      const i = (y * n + x) * 4;
+      data[i] = v; data[i + 1] = v; data[i + 2] = v; data[i + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, n, n, THREE.RGBAFormat, THREE.UnsignedByteType);
+  tex.name = 'wild-surface-height';
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 4;
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 function makeWildSurfaceDetail() {
   const n = WILD_SURFACE_SIZE;
   const data = new Uint8Array(n * n * 4);
@@ -2378,6 +2412,7 @@ export class Wilds {
     this.horizonGroup = null;
     this.matBody = null;
     this.surfaceDetail = null;
+    this.surfaceBump = null;
     this.matGlow = null;
     this.matHalo = null;
     this._built = false;
@@ -2481,10 +2516,12 @@ export class Wilds {
     // vertex colour. Places warms the same Lambert/map/bump/vertex-colour shader feature set at
     // boot; the runtime census remains the authority on program stability.
     this.surfaceDetail = makeWildSurfaceDetail();
+    this.surfaceBump = makeWildSurfaceBump();
     this.matBody = new THREE.MeshLambertMaterial({
       vertexColors: true, dithering: true,
       side: THREE.DoubleSide, shadowSide: THREE.FrontSide,
-      map: this.surfaceDetail, bumpMap: this.surfaceDetail, bumpScale: 0.068,
+      // ROUND 15, item 14: a HEIGHT image, not the albedo. See makeWildSurfaceBump.
+      map: this.surfaceDetail, bumpMap: this.surfaceBump, bumpScale: 0.068,
     });
     this.matBody.name = 'wild-body';
     this.matGlow = new THREE.MeshBasicMaterial({
@@ -3284,6 +3321,7 @@ export class Wilds {
     if (this.horizonGroup && this.horizonGroup.parent) this.horizonGroup.parent.remove(this.horizonGroup);
     if (this.matBody) { this.matBody.dispose(); this.matBody = null; }
     if (this.surfaceDetail) { this.surfaceDetail.dispose(); this.surfaceDetail = null; }
+    if (this.surfaceBump) { this.surfaceBump.dispose(); this.surfaceBump = null; }
     if (this.matGlow) { this.matGlow.dispose(); this.matGlow = null; }
     if (this.matHalo) { this.matHalo.dispose(); this.matHalo = null; }
     this._built = false;

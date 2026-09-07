@@ -198,6 +198,13 @@ const STAGGER_T = 0.620, STAGGER_IMMUNITY = 2.2, STAGGER_WINDOW = 0.40;
 const STAGGER_FRACTION = 0.35;    // of max hp inside the window
 const DEATH_GLOW_S = 2.6;         // the law: dead-vs-alive must read across a field
 const CORPSE_S = 42;              // then it sinks, never pops
+// ROUND 15. Alex: "holding e on dead people should get you a few coins if you kill them".
+// 42 s is the whole budget that beat has, and in a running fight you are often not back at
+// the body inside it — which reads as a bug ("it vanished") rather than as decay. An
+// UNSEARCHED body stands for this instead; a searched one goes on the old clock, because
+// there is no longer any reason to walk back to it. Corpses hold pool slots, so this is a
+// deliberate 43% rise and not a bigger one.
+const CORPSE_UNSEARCHED_S = 60;
 const CORPSE_SINK_S = 3.2;
 const LOD_NEAR = 40;              // full rig inside this
 const LOD_HYST = 0.10;            // DESIGN's hysteresis, as a fraction of LOD_NEAR
@@ -653,6 +660,28 @@ export class Enemies {
     }
     return _aliveOut;
   }
+
+  /**
+   * ROUND 15, THE BODIES YOU CAN STILL SEARCH. A corpse is inert to everything else in this
+   * game — raycast skips it (see :782), the director does not count it, and nothing but the
+   * sink timer touches it. This is the one door into that state, so src/world/search.js does
+   * not have to know the pool's shape. Returns the nearest unsearched corpse whose centre is
+   * inside maxR of (x, z), or null.
+   */
+  nearestCorpse(x, z, maxR) {
+    let best = null, bestD = maxR * maxR;
+    for (let i = 0; i < this.all.length; i++) {
+      const e = this.all[i];
+      if (e.alive || e.state !== 'corpse' || e.looted) continue;
+      const dx = e.pos.x - x, dz = e.pos.z - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < bestD) { bestD = d2; best = e; }
+    }
+    return best;
+  }
+
+  /** Mark it gone through. The body stays: you searched it, you did not take it away. */
+  markSearched(e) { if (e) e.looted = true; }
 
   forEachAlive(fn) {
     for (let i = 0; i < this.all.length; i++) {
@@ -1138,6 +1167,7 @@ export class Enemies {
     e.staggerT = 0; e.immuneT = 0; e.windowDmg = 0; e.windowT = 0;
     e.flinchT = 99; e.flinch.set(0, 0, 0);
     e.deathT = 0; e.flashT = 99;
+    e.looted = false;           // ROUND 15: a fresh body has not been gone through
     // a reused record must never inherit the last life's wound
     e.lastZone = 'torso'; e.lastMelee = false;
     e.aware = (def.owner === OWNER.DREAD && !(opts && opts.staged && !opts.awake)) ? 2 : 0;
@@ -2276,9 +2306,10 @@ export class Enemies {
     // the 2.6 s decay. THIS is what makes dead read against alive at 40 m.
     const glow = Math.max(0, 1 - e.deathT / DEATH_GLOW_S);
     e.built.deathGlow(glow * glow);
-    if (e.deathT > CORPSE_S) {
+    const keep = e.looted ? CORPSE_S : CORPSE_UNSEARCHED_S;
+    if (e.deathT > keep) {
       e.pos.y -= dt * 0.33;                     // sink, never pop
-      if (e.deathT > CORPSE_S + CORPSE_SINK_S) this._release(e);
+      if (e.deathT > keep + CORPSE_SINK_S) this._release(e);
     }
   }
 
@@ -3088,6 +3119,10 @@ function makeRecord(id, species, def, built, rng) {
     owner: def.owner, dead: true, alerted: false, audioId: 0,
     hunt: false, huntSpeedMul: 1, leashed: true, holdFire: false,
     alive: false, state: 'dead',
+    // ROUND 15: whether the body has been gone through. Declared HERE with every other
+    // field, never grown mid-fight, and reset in _spawnOne so a reused pool slot cannot
+    // inherit a looted flag from whoever held it last.
+    looted: false,
     pos: new THREE.Vector3(), vel: new THREE.Vector3(), yaw: 0,
     prevPos: new THREE.Vector3(), currPos: new THREE.Vector3(),
     prevYaw: 0, currYaw: 0,

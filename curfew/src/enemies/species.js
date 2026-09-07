@@ -239,6 +239,44 @@ export const SPECIES = {
      question. Dread-owned.
      donor: qualiacology/marrow/src/entity.js:355-356, 388-405 (observedTime
      accumulates 1x watched and drains 2x unwatched; the hold variant) */
+  /* --------------------------------------------------------------- WARDEN --
+     ROUND 15. Alex: the Holdfast should be "gigantic and full of xp, but also full of
+     powerful monsters". This is the garrison.
+
+     IT IS PRESSURE-OWNED, SO IT PAYS XP, AND IT IS DELIBERATELY NOT IN THE DIRECTOR'S
+     ROSTER. director.js keeps its own four-row ROSTER (:378) and _pick only ever draws from
+     that, so a pressure species this table declares but that table does not name can never
+     be spawned by the pressure budget — it exists only where something places it by hand,
+     which here is the castle's own cast. That is how the county gets a boss-grade body
+     without a Warden turning up on the road outside the Filling Station.
+
+     THE SHAPE. It is a hunter that has been fed. Same FORM.GAUNT, so it costs no new
+     geometry set and no program — bodies.js welds one set per FORM and every shell material
+     shares SHELL_CACHE_KEY — but 2.55 m of it against the hunter's 2.20, at a third of the
+     speed. You cannot outfight one at close range and you CAN walk away from it, which is
+     the trade this game keeps making: a thing that is slower than you is a thing you choose
+     to fight.
+
+     THE TELEGRAPH IS THE POINT. 0.52 s of windup against the law's 0.32 floor — the longest
+     in the roster. A 46-damage strike that lands without warning is a bug report; one you
+     watch coming for half a second and step out of is a fight. */
+  warden: {
+    id: 'warden', form: FORM.GAUNT, owner: OWNER.PRESSURE, xp: 260,
+    phases: ALL_PHASES,
+    hp: 420, dmg: 46, radius: 0.62, height: 2.55, mass: 260,
+    speed: 4.20,                            // < WALK 4.35: you can always leave
+    burst: 1.400, pause: 0.700,
+    engage: [0, 16], standoff: 3.2,
+    telegraph: 0.520, attack: 0.420, strikeAt: 0.200, recover: 0.900,
+    strikeRange: 3.00,
+    notice: 30, memAlert: 18.0,
+    deathNoise: 34,                          // the whole hall hears one of these go down
+    countsAs: 2,
+    // Its glint is the coldest thing in the roster and it does not blink out at range: a
+    // Warden across a great hall is two points of light and 2.5 m of dark above them.
+    eye: 0xdfe9ff, cloth: 0x0b0c0e, skin: 0x15130f, bone: 0x2b271f,
+  },
+
   standing: {
     id: 'standing', form: FORM.ORDINARY, owner: OWNER.DREAD, xp: 0,
     phases: ALL_PHASES,
@@ -282,6 +320,9 @@ export const ROSTER = Object.keys(SPECIES);
 // a body record and its merged mesh at boot; it costs no light, no material and no program.
 export const POOL = Object.freeze({
   hound: 18, pallbearer: 12, hunter: 3, poacher: 12, pale: 8, standing: 8,
+  // ROUND 15. Six Wardens, which is the whole garrison of the one building that has them.
+  // A slot is a body record and a merged mesh at boot — no light, no material, no program.
+  warden: 6,
 });
 
 /* Species allowed to answer a pressure order, in the order a budget prefers

@@ -2,11 +2,17 @@
 //
 // A camera-following BackSide dome plus one star layer, and the fog that ends the world.
 //
-// THE FOG LAW (FETCH director.js: fog colour EQUALS the background): the far distance must
-// dissolve into the same value the sky's horizon band holds, so the world ends in a wall of
-// dark instead of in a visible geometry horizon with sky above it. Here the background
-// Color object is literally SHARED with FogExp2's colour and with the dome's horizon
-// uniform, so the three can never drift apart in a later edit.
+// THE FOG LAW (FETCH director.js): the far distance must dissolve into a value DERIVED from
+// the sky's horizon band, so the world ends in a wall of haze instead of in a visible
+// geometry horizon with sky above it. The background Color object is SHARED with the dome's
+// horizon uniform, and the fog's Color is written from it, and only from it, by _writeFog()
+// — so the three can still never drift apart in a later edit.
+//
+// It used to be literal equality (one Color object for all three) and ROUND 16 broke that
+// tie on evidence: the equality was authored when the deep-night sky measured luminance 2.1
+// and it silently inverted when ART.md 1.1 raised the sky, because from then on every fogged
+// surface in the county was being dragged UP toward a value brighter than itself. See
+// FOG_MUL below for the measurements and for why derived-not-equal keeps the law's purpose.
 //
 // The gradient is computed in the shader from THREE.Color uniforms rather than painted into
 // a canvas texture (VIGIL cosmos.js:14-55 paints one). Two reasons, both about this game
@@ -85,10 +91,13 @@ const STAR_COUNT = 1500;     // ROUND 7 lane E: was 900. One Points draw either 
 //   0x04060e -> 2.1    0x0c1220 -> 3.4    0x121a28 -> 15.9
 //   0x1a2333 -> 26.6   0x222c3f -> 38.6
 //
-// Because scene.background, FogExp2.color and the dome's uHorizon are ONE shared Color
-// (the fog law above), raising the horizon raises the fog with it: the far distance stops
-// dissolving into black and the county finally has aerial perspective. That is ART.md 1.2
-// arriving for free, and it is why 1.1 lands before anything else in section 1.
+// Because scene.background, FogExp2.color and the dome's uHorizon were ONE shared Color at
+// the time (the fog law above — ROUND 16 makes the fog DERIVED from the horizon instead of
+// equal to it), raising the horizon raised the fog with it: the far distance stopped
+// dissolving into black and the county got aerial perspective. That is ART.md 1.2 arriving
+// for free, and it is why 1.1 lands before anything else in section 1 — and it is also the
+// lift that ROUND 16 had to take back out of the fog once the sky was no longer the darker
+// of the two.
 // THE SKY IS THE LIGHT IN A NIGHT FRAME, and this table was 1.65x too dark for the job.
 //
 // Measured with tools/lightsweep.mjs, which scores a whole lighting candidate in one boot
@@ -115,11 +124,47 @@ const STAR_COUNT = 1500;     // ROUND 7 lane E: was 900. One Points draw either 
 // same as applying it and measuring: measure after, every time.
 //   sky:tree   1.92 -> 2.17    (gate >= 1.9 — a trunk must never exceed the sky)
 //   frame max  135 -> 136      (gate <= 160)
+//
+// ROUND 16, THE LIGHT LANE — THE NIGHT ROWS ONLY, AND THE REASON IS A MEASUREMENT.
+//
+// ART.md 1.1's calibration was made at frame A, which is SPAWN, which is DUSK. Measured again
+// on this tree with the clock frozen (scratch sweep, deep night, the Filling Station, sky mask
+// taken by hiding the sky root and diffing):
+//
+//     dusk   open sky p50 41.5   everything-else p50 25.7   sky:land 1.61
+//     night  open sky p50 15.6   everything-else p50 20.7   sky:land 0.75   <- INVERTED
+//
+// From the moment dusk ends, THE SKY IS THE DARKEST LARGE THING IN THE PICTURE and every
+// silhouette in the county reads backwards. The dusk row drops 2.5x into the deep-night row
+// while the fill only drops 1.7x, so the land walks out from under the sky and stays there for
+// eleven minutes — which is the whole game. The art direction is "a cold sky above nearly
+// black trees"; this table had a dark sky above pale trees.
+//
+// The two night rows are lifted 1.30x in LINEAR light, which is x1.126 in these sRGB bytes
+// (1.30^(1/2.2)). Dusk and the false dawn are untouched: they were never inverted, and moving
+// them would move ART.md 1.1's own calibration frame.
+//
+// MEASURED AFTER, as a true A/B: the shipping build against every one of this round's numbers
+// pushed back to its old value inside the same page (sky rows /1.30, fog x1.0, mist alpha
+// restored, fill x1.375, normalBias 0.045, rovers 1.8/18). Frame mean is the control — if it
+// moved, this would just be a darker screenshot, which is the one thing the reviewer ruled out:
+//
+//   deep night, the Filling Station   mean 20.3 -> 20.4   sky 14.7 -> 19.1   land 21.5 -> 19.4
+//   deep night, 6 s into the pines    mean 14.1 -> 14.4   sky 14.4 -> 18.6   land  9.1 ->  7.7
+//   the black hour, in the pines      mean  6.7 ->  7.2   sky  5.9 ->  8.7   land  4.2 ->  3.5
+//
+//   sky:land   station 0.68 -> 0.98    pines 1.58 -> 2.42    black hour 1.40 -> 2.49
+//
+// The frame mean does not move and the two halves of it separate by 30-90%. The black hour is
+// the surprise and it is worth writing down: it came out BRIGHTER (6.7 -> 7.2) with ELEVEN
+// POINTS FEWER dead-black pixels (72.4% -> 61.0% under luminance 8) despite its fill being cut
+// by a quarter, because the value it lost from the fill it got back from a sky it can actually
+// be seen against. Darkness that reads is not the same quantity as darkness.
 const STOPS = [
   // t,    horizon,   mid,       zenith,    starOpacity, fogMul
   { t: 0.00, horizon: 0x465873, mid: 0x34445f, zenith: 0x26344d, stars: 0.25, fogMul: 0.78 }, // last dusk
-  { t: 0.30, horizon: 0x29374d, mid: 0x1b283b, zenith: 0x111b2b, stars: 1.00, fogMul: 1.00 }, // deep night
-  { t: 0.70, horizon: 0x172235, mid: 0x0d1725, zenith: 0x070e19, stars: 0.45, fogMul: 1.28 }, // the black hour
+  { t: 0.30, horizon: 0x2e3e57, mid: 0x1e2d42, zenith: 0x131e30, stars: 1.00, fogMul: 1.00 }, // deep night
+  { t: 0.70, horizon: 0x1a263c, mid: 0x0f1a2a, zenith: 0x08101c, stars: 0.45, fogMul: 1.28 }, // the black hour
   { t: 1.00, horizon: 0x3a4e6c, mid: 0x293b58, zenith: 0x1c2b45, stars: 0.24, fogMul: 0.88 }, // false dawn
 ];
 
@@ -135,6 +180,46 @@ const STOPS = [
 // 4 km wide with five horizon reads to protect (ART.md 4).
 const FOG_DENSITY = 0.010;
 const DEEP_NIGHT = 0.30;
+
+/* ---- ROUND 16, THE LIGHT LANE — THE FOG IS MADE OF THE SKY, NOT EQUAL TO IT --------
+ *
+ * THE FOG LAW at the top of this file said fog colour EQUALS the background, and it was
+ * enforced by sharing ONE Color object. That law was written when the sky was near-black
+ * (pre-ART.md 1.1: deep-night zenith 0x04060e, luminance 2.1) and it was right then. ART.md
+ * 1.1 raised the sky by 1.65x-on-screen and the law quietly turned into its own opposite:
+ * every fogged surface in the county is now dragged toward a value that is BRIGHTER than the
+ * thing it is dragging. FogExp2 at 0.010 is 30% of the way to fog colour at 60 m, 63% at
+ * 100 m and 100% by 300 m, so the far half of every forest frame is painted sky-colour.
+ *
+ * That is the reviewer's "much darker forest beyond them" failing in one line of code, and it
+ * is visible without any instrument: tests/shots/base-forest.png is a milky pale-blue wall
+ * across the middle of the frame with the near ground darker than the far ground.
+ *
+ * MEASURED, deep night, the Filling Station, fog decoupled and multiplied (scratch sweep):
+ *     fog x1.00 (shipped)  mid band p50 25.3    land p50 20.7   sky:land 0.75
+ *     fog x0.50            mid band p50 18.2    land p50 20.5   sky:land 0.76
+ *     fog x0.40 + sky lift mid band p50 15.9    land p50 18.6   sky:land 1.16
+ *
+ * THE LAW IS NOT REPEALED, IT IS RE-STATED: the fog is still DERIVED from the horizon and
+ * from nothing else, recomputed inside setPhase() every time the horizon moves, so the two
+ * can still never drift apart in a later edit — and _writeFog() is the only place that
+ * writes it. What changes is that the fog is now a NIGHT-LAND value rather than a sky value:
+ * distant land dissolves into a darker haze, which is what a night landscape does, and which
+ * the dome's own painted ridges (mix(horizon, zenith, 0.30) * 0.70 for the far range, * 0.40
+ * for the near one) have always already agreed with. 0.46 sits between those two ridge
+ * values, so the fogged land reads as one more ridge rather than as a seam.
+ *
+ * scene.background stays the horizon object itself, so the sky and ready() are untouched, and
+ * so does the MIST's uCol — see the note on that uniform for the measurement that kept it
+ * there rather than following the fog down.
+ *
+ * VERIFIED AGAINST A SEAM, which is the one thing this could have broken: the far-plane clip
+ * at 900 m now meets the dome at a different value than the land in front of it. It does not
+ * read as a line — tests/shots/stretch-light-r1/road-county.png is the open-horizon frame and
+ * the distant land is a dark serrated ridge under a lighter sky, which is what a night horizon
+ * looks like. Compare tests/shots/stretch-light-r0-before/road-county.png, where the same
+ * treeline is a pale milky band brighter than the sky above it. */
+const FOG_MUL = 0.46;
 
 /* ---- ROUND 7 lane E constants ---------------------------------------------
  * MOON_ANG_R: the disc's angular RADIUS in radians. The real moon is 0.0047 rad, which at
@@ -195,9 +280,33 @@ const MIST_LAG = 1.5;
 const MIST_RING = 58;            // m: the radius the local valley floor is searched over
 const MIST_DEPTH = 3.4;          // m: how deep the fog lies over that floor
 const MIST_HEAD = 1.05;          // m: it may never be more than this above your own ground
+// ROUND 16, THE LIGHT LANE — BANKS, NOT A WALL.
+//
+// MEASURED, dusk, six seconds into the pines, grain zeroed, one rAF: hiding these two sheets
+// moved the middle band of the frame from p50 42.1 to p50 27.4, and the open sky in the same
+// frame sat at p50 40.2. THE GROUND MIST WAS THE BRIGHTEST LARGE THING IN THE PICTURE AND IT
+// OUTVALUED THE SKY. tests/shots/base-forest.png is that frame: a milky pale-blue wall from
+// about 25 m out, with the near ground DARKER than the far ground, which is aerial
+// perspective running backwards.
+//
+// Three things move and only one of them is the alpha:
+//   1. aMax comes down about a fifth. Not further — the sheet is the thing the brief calls
+//      the best single change in this lane, and an invisible mist is not an improvement.
+//   2. The moon-through term is halved and tightened (see the shader): 0.60 of the moon's
+//      own disc colour was a searchlight, and it is what put the sheet above the sky on the
+//      moon side of every frame.
+//   3. THE DENSITY BAND IS TIGHTENED, 0.34-0.74 -> 0.44-0.80, which is what turns a sheet
+//      into banks. A wide band puts SOME mist on every square metre; a tight one leaves
+//      holes, and a hollow with a hole in the fog beside it reads as weather instead of as
+//      a filter over the lens.
+//
+// MEASURED AFTER, tools/value.mjs frame A, one rAF, grain zeroed: the near sheet went from
+// mean 19.8 over 1.60% of the world columns to mean 14.8 over 0.50%, and the upper sheet from
+// 14.2 over 0.49% to 11.9 over 0.16%. It is now the second-darkest layer in the frame against
+// an open sky of p50 39.6, having been the brightest large thing in it.
 const MIST_LAYERS = [
-  { yOff: 0.00, aMax: 0.42, scale: 0.0165, drift: [0.85, 0.30], far: 150 },
-  { yOff: 1.35, aMax: 0.24, scale: 0.0088, drift: [-0.42, 0.62], far: 175 },
+  { yOff: 0.00, aMax: 0.34, scale: 0.0165, drift: [0.85, 0.30], far: 150 },
+  { yOff: 1.35, aMax: 0.18, scale: 0.0088, drift: [-0.42, 0.62], far: 175 },
 ];
 
 // Module-level scratch. The hot path allocates nothing.
@@ -217,9 +326,11 @@ export class Sky {
     this._mistYPrev = null;
     this._mistYCurr = null;
     this.phase = DEEP_NIGHT;
-    // ONE Color, shared by scene.background, scene.fog.color and the dome's horizon
-    // uniform. Sharing is the enforcement of the fog law above.
+    // ONE Color, shared by scene.background and the dome's horizon uniform.
     this.horizon = new THREE.Color(0x313c4d);
+    // ...and ONE derived Color for the fog and the mist, written only by _writeFog(), only
+    // ever as horizon * FOG_MUL. See the FOG_MUL note: derived, never authored.
+    this.fogCol = new THREE.Color(0x313c4d);
     this._t = 0;
   }
 
@@ -529,9 +640,10 @@ export class Sky {
 
     this._buildMist(scene);
 
-    /* ---- background and fog, sharing one Color ----------------------------- */
+    /* ---- background, and the fog derived from it --------------------------- */
     scene.background = this.horizon;
-    scene.fog = new THREE.FogExp2(this.horizon, FOG_DENSITY);
+    this._writeFog();
+    scene.fog = new THREE.FogExp2(this.fogCol, FOG_DENSITY);
 
     this.setPhase(DEEP_NIGHT);   // M0 is deep night and stays there
   }
@@ -563,8 +675,22 @@ export class Sky {
         uTime: { value: 0 },
         uCam: { value: new THREE.Vector3() },
         uMoonDir: { value: new THREE.Vector3(0, 1, 0) },
-        // shares the sky's ONE horizon Color, so the mist can never drift away from the
-        // fog and the background it is meant to be made of (the fog law, one level down)
+        // Shares the sky's ONE horizon Color, so the mist can never drift away from the sky
+        // it is lit by (the fog law, one level down).
+        //
+        // ROUND 16 CONSIDERED MOVING THIS TO this.fogCol — the mist IS fog, so by the law
+        // above it should take the fog's value — AND MEASURED ITS WAY OUT OF IT. fogCol is
+        // horizon * 0.46, and holding the sheet's on-screen value across that would need its
+        // opacity to go from 0.42 to about 0.73, at which point a dense bank stops being
+        // weather and becomes a dark OCCLUDER hiding the forest behind it. What the sheet
+        // actually needed was to stop being BRIGHTER THAN THE SKY, and the alpha and the
+        // density band below do that on their own: measured in frame A after this round, the
+        // near sheet is p50 14.2 against open sky p50 39.6 and apron p50 26.0 — the
+        // second-darkest layer in the whole frame, where before it was the brightest large
+        // thing in it. Physically a dense low bank does scatter more toward the eye than the
+        // thin haze behind it, so brighter-than-the-fog is not the fault; brighter than the
+        // SKY was. If a later round wants the strict law here, it must re-measure the alpha
+        // in the same move and look at the picture, not just change the uniform.
         uCol: { value: this.horizon },
         uMoonCol: { value: new THREE.Color(MOON_DISC_COL) },
         uAmt: { value: MIST_LAYERS[0].aMax },
@@ -610,7 +736,7 @@ export class Sky {
           vec2 p = vW.xz * uScale + uDrift * uTime * 0.010;
           float bank = vn2(p * 0.34 - uDrift * uTime * 0.0035);
           float grain = vn2(p * 1.9);
-          float dens = smoothstep(0.34, 0.74, bank * 0.78 + grain * 0.40);
+          float dens = smoothstep(0.44, 0.80, bank * 0.78 + grain * 0.40);
 
           float a = dens * uAmt;
           // never white out the lens: the sheet dissolves as it comes up to eye height
@@ -628,7 +754,11 @@ export class Sky {
           // AND THE MOON REACHES THROUGH IT. Looking toward the moon the bank is lit from
           // behind and goes pale; looking away it is the same value as the fog it belongs to.
           float ml = max(0.0, dot(rel / max(dist, 1e-3), normalize(uMoonDir)));
-          vec3 col = mix(uCol * 0.86, uMoonCol * 0.60, pow(ml, 3.0) * 0.75);
+          // ROUND 16: 0.60 of the moon's own disc colour is a searchlight, not a bank of
+          // fog at night — it is what put the mist above the sky on the moon side of every
+          // frame. Halved, and the exponent tightened so the pale is confined to the few
+          // degrees around the moon bearing where a real bank actually glows.
+          vec3 col = mix(uCol * 0.86, uMoonCol * 0.30, pow(ml, 4.0) * 0.60);
           gl_FragColor = vec4(col, a);
         }`,
       transparent: true,
@@ -691,7 +821,8 @@ export class Sky {
 
     const u = this.dome.material.uniforms;
     _a.set(s0.horizon); _b.set(s1.horizon);
-    this.horizon.copy(_a).lerp(_b, k);        // background + fog + dome horizon, one object
+    this.horizon.copy(_a).lerp(_b, k);        // background + dome horizon, one object
+    this._writeFog();                         // ...and the fog + the mist, derived from it
     _a.set(s0.mid); _b.set(s1.mid);
     u.uMid.value.copy(_a).lerp(_b, k);
     _a.set(s0.zenith); _b.set(s1.zenith);
@@ -701,6 +832,20 @@ export class Sky {
     if (this.scene.fog) {
       this.scene.fog.density = FOG_DENSITY * lerp(s0.fogMul, s1.fogMul, k);
     }
+  }
+
+  /**
+   * The ONE place scene.fog.color and the mist's uCol are written, and it writes nothing but
+   * horizon * FOG_MUL. Called at init and from setPhase, so the fog is a pure function of the
+   * horizon and the two can never drift apart — the fog law, re-stated rather than repealed.
+   * Allocates nothing: setRGB in the working colour space, no sRGB round trip through an int.
+   */
+  _writeFog() {
+    this.fogCol.setRGB(
+      this.horizon.r * FOG_MUL,
+      this.horizon.g * FOG_MUL,
+      this.horizon.b * FOG_MUL,
+    );
   }
 
   /** Escape hatch for the M1 speed-keyed fog (CFG.world.fog.farWalk/farDrive). */

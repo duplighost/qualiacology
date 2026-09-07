@@ -85,8 +85,45 @@ const NEAR_RING_M = 72;      // -> CFG.flora.nearRing. ART.md §2.5, was 96.
 const PLANT_CELL = 2.6;      // m; 1/2.6^2 = 0.148 trees/m^2 ceiling, which is
                              // exactly the "measured affordable to 0.150" note
                              // beside CFG.flora.treeDensity.
-const GRASS_CELL = 1.15;     // m
+// ROUND 16, THE LIST item 12 — LESS UNIFORM GROUND. Alex's reviewer: "better vegetation,
+// not simply more vegetation." Grass was a FLAT Bernoulli accept per cell: the same
+// probability in a clearing, under a closed canopy and in the middle of a fern bed, which
+// is why the floor reads as one even scatter from the spawn to the ridge.
+//
+// GRASS_CELL 1.15 -> 0.94 raises the CANDIDATE density by 1.50x (0.756 -> 1.132 cells/m2)
+// and the meadow field below then takes most of them away again. The point is the
+// DISTRIBUTION, not the count: where a meadow lands the floor is now 1.50x thicker than
+// the old flat rate, and between meadows there is real bare ground. MEASURED over 300k
+// county samples (the field survey, not a guess): the combined multiplier means 0.407, so
+// the resident card count lands at ~0.61x the old one while 15% of the county sits above
+// 0.75 of full density. 0.94 also tiles 64 m to within 8 cm; 1.15 left a 75 cm dead strip
+// at every chunk edge.
+const GRASS_CELL = 0.94;     // m
 const GRASS_ACCEPT = 0.60;
+// THE MEADOW FIELD. Sampled at WORLD x/z — NEVER at the chunk-local cell index, or the
+// pattern restarts at every 64 m seam and the county turns into wallpaper. 1/0.0165 = 60 m,
+// two octaves, and the smoothstep is deliberately steep: measured, 22% of the county comes
+// back 0 (bare), 28% comes back 1 (full meadow) and the remaining half is the edge between
+// them. That is the "real clear ground between" the review asked for.
+const GRASS_PATCH_FREQ = 0.0165;
+const GRASS_PATCH_LO = 0.34;
+const GRASS_PATCH_HI = 0.62;
+const GRASS_PATCH_FLOOR = 0.10;   // a tenth of the rate even outside a meadow: patches, not islands
+// _buildGrass was the ONLY floor layer that never asked coverAt(), so grass was as thick
+// under a closed canopy as in a clearing. Grass is a light-hungry plant and a forest floor
+// under a shut canopy is duff, not lawn: a fully covered cell keeps 1 - 0.62 = 38%.
+const GRASS_COVER_THIN = 0.62;
+// THE FERN BED, at a THIRD wavelength (109 m) so the three floor fields never agree: the
+// tree cover field is 182 m, the meadow 60 m, the beds 109 m. Ferns already leaned on
+// coverAt, which is the trees' own field — so ferns simply thickened wherever the trees
+// did, and the two layers were one layer. FERN_BED_GAIN lets a bed run over the region's
+// authored accept (the early-out bound is raised by exactly the same factor, below), so a
+// bed is a bed and not a slightly denser average.
+const FERN_BED_FREQ = 0.0092;
+const FERN_BED_LO = 0.32;
+const FERN_BED_HI = 0.66;
+const FERN_BED_FLOOR = 0.18;
+const FERN_BED_GAIN = 1.30;
 // ART.md §2.1: was 16, which is a bug and not a look. See the long note at the
 // write site in _buildGrass for why 16 made the grass reflect 140% of the light.
 // The document predicts 1.6; measured, 1.6 landed the grass layer at mean 26.2
@@ -179,7 +216,33 @@ const FORM_EDGE = 0.38;      // multiplier where the normal is perpendicular to 
 // bends; a dead snag is on its way down. The actual lean is this times pow(hash, 2.2), so
 // the ceiling is what the WORST tree in a stand does, not the average one — measured on
 // screen, a mean lean reads as a hillside and a skewed one reads as a wood.
-const LEAN_BY_KIND = [0.055, 0.062, 0.048, 0.070, 0.095, 0.105, 0.080, 0.088, 0.150];
+// ROUND 15, item 10. These were 0.048-0.150 rad and `Math.pow(hA, 2.2)` in _pack put the
+// MEDIAN tree at 0.217 of its own ceiling — under one degree off plumb for a mature conifer.
+// That is why the woods still read as a colonnade after Round 7 did the lean work. The
+// ceilings are up about 1.6x and the exponent is softer (1.8), and _pack now CLAMPS the
+// result to the headroom the 0.25 m instance sink actually gives, so a bigger ceiling can
+// never lift a trunk's base edge out of the ground — which is the failure mode that made
+// the original numbers so timid.
+const LEAN_BY_KIND = [0.088, 0.099, 0.077, 0.112, 0.152, 0.168, 0.128, 0.141, 0.150];
+
+// ROUND 15: how many metres of a destination apron's rim the understory is allowed to
+// interleave with. 6 m is about three paces — long enough to read as an edge from the
+// forecourt, short enough that the swept part of the yard is still obviously swept.
+const EDGE_FEATHER = 6.0;
+/**
+ * ROUND 15, item 10. Nine templates read as nine templates because every instance was
+ * scaled UNIFORMLY in x and z — columns 0 and 2 of the instance matrix shared one factor,
+ * and only column 1 got the height stretch. A crown squashed 14% on one axis and stretched
+ * 14% on the other stops being a sphere from every angle at once, and because the tree's
+ * own yaw is already in the matrix, no two neighbours agree about which way.
+ *
+ * Area-preserving on purpose (scX * scZ === sc * sc), so the mean footprint does not move.
+ * Both the planting loop (for the collider) and _pack (for the matrix and the impostor
+ * card) derive it from the SAME quantised position hash, so the three can never disagree.
+ */
+function xzStretch(qx, qz, seed) { return 0.86 + hashI(qx, qz, seed + 1451) * 0.28; }
+/** The wider of the two axes: what a circle collider and a billboard card have to cover. */
+function xzWide(st) { return st > 1 ? st : 1 / st; }
 
 const TEMPLATE_COUNT = 9;    // GLIDE ships 9 seeded templates; so do we.
 const SLOPE_REJECT = 0.62;   // GLIDE Forest.js:52 rejects > 0.62 for trees
@@ -253,7 +316,42 @@ const PAL = {
   // blob (tests/shots/r6F-understory-torch.png, first pass). A rock is lit by the torch
   // from arm's length far more often than a cliff is; a step under the ridge ground.
   stone: [0.108, 0.104, 0.100],
+  // ROUND 16, item 12. LEAF LITTER. The county floor had no litter at all: a trunk met an
+  // unbroken plane of ground albedo and the torch pool was one flat disc of it (see
+  // tests/shots/flora-r16-before-open-ground.png — 63.6 mean, and not one feature in it).
+  //
+  // MEASURED, AND THEN MEASURED AGAIN. The first pass authored this at [0.116, 0.094,
+  // 0.055] — the leafDry family, chosen because that is what fell off these trees — and it
+  // was WRONG by the only test that counts, the picture: tests/shots/flora-r16-litab2-on.png
+  // against -off.png shows the drifts reading as pale golden PLATES, plainly brighter than
+  // the ground they lie on and the same value as the trunks. The arithmetic explains it and
+  // the reasoning that authored it had missed two multipliers: matNear applies the FORM
+  // TERM (x1.22 on an up-facing normal), and the per-vertex jitter and the per-instance
+  // tint stack on top of it, so 0.116 arrived on screen as 0.14-0.20 against a pines ground
+  // of 0.096 — up to 2.1x in red under a warm torch.
+  //
+  // Re-derived against the terrain's real albedo (terrain.js REGIONS[0].ground =
+  // [0.096, 0.116, 0.08], Rec.709 luma 0.1092) and then SETTLED BY A DIFFERENTIAL MASK,
+  // because the arithmetic was only ever a starting point. Two compositor captures of the
+  // identical pose, litter on and off, diffed: the changed pixels ARE the litter and the
+  // same pixels in the off frame are the ground it replaced.
+  //   PAL.litter            litter luma   ground under it   RATIO
+  //   [0.116,0.094,0.055]   (first pass, plainly brighter — see the -litab2- shots)
+  //   [0.060,0.049,0.031]        46.9            55.3        0.848
+  //   [0.052,0.042,0.027]        44.1            53.7        0.821   <- shipped
+  // Note that a 0.87x cut on the albedo only moved the ratio 0.848 -> 0.821: there is an
+  // ambient and fog floor under this, so going darker stops buying contrast and only
+  // drains the colour out of it. THE NIGHT-VALUE LAW, applied to the floor: a drift of
+  // leaves is DARKER than the ground it lies on (0.82) and warm where the county is
+  // blue-grey — measured, litter reads rgb 41/45/42 against a ground of 47/56/52 — and
+  // that hue difference at a gentle value difference is what makes it read as ground
+  // rather than as an object lying on the ground.
+  litter: [0.052, 0.042, 0.027],
 };
+// A per-instance multiplier that turns the litter template into WET BARE EARTH: cooler, and
+// 0.44x the ground's luma where leaf litter is 0.62x. One geometry, two populations, no
+// extra draw call and no new material.
+const SOIL_MUL = [0.70, 0.76, 0.93];
 
 // Species archetypes. `kind` drives the silhouette; the county is 42% Pines so
 // the bank is conifer-heavy on purpose (DESIGN §2 region table).
@@ -533,40 +631,57 @@ function makeRecipe(rand, ai, legacy = null) {
           });
         }
       }
-    } else if (rec.kind === 'birch') {
-      // Same measurement, same lever: was 0.20 and four masses. A birch crown at
-      // night is a scribble of twigs with sky through it, never a ball.
-      const R = trunkH * 0.150;
-      for (let i = 0; i < 4; i++) {
-        const turn = rand() * TAU;
-        rec.canopy.push({
-          x: topX + (rand() - 0.5) * R * 1.6,
-          y: trunkH * (0.80 + rand() * 0.26),
-          z: topZ + (rand() - 0.5) * R * 1.6,
-          r: R * (0.46 + rand() * 0.46), squash: 0.68 + rand() * 0.32,
-          tint: 0.84 + rand() * 0.34, wind: 0.62 + rand() * 0.24,
-          aspect: 0.58 + rand() * 0.82, turn, profile: 'leaf',
+    } else {
+      // ROUND 15, item 10. Round 13 broke the CONIFER's tiers into offset, drooping lobes
+      // and left the broadleaf and the birch alone: they were whole detail-1 icospheres,
+      // and an icosphere with two octaves of 19% and 8% noise on it is still an icosphere.
+      // The reviewer's words are "uneven crowns, gaps through foliage, branches that break
+      // down rather than ending in rounded masses"; every one of those is a property of the
+      // BOUNDARY of the crown, and a lump on a ball does not have one.
+      //
+      // So each mass is now 2-3 detail-0 lobes pushed 0.4-0.75 of its radius off its own
+      // centre, each stretched on its own bearing with a drooping rim. TRIANGLES: this is
+      // CHEAPER, not dearer. A detail-1 icosphere is 80 faces and a detail-0 is 20, so the
+      // broadleaf's four detail-1 masses (320) become about eight detail-0 lobes (160), and
+      // LOD1 is unchanged because the existing thinning at buildTemplateGeometry keeps
+      // exactly one lobe per mass.
+      const birch = rec.kind === 'birch';
+      const R = trunkH * (birch ? 0.150 : 0.195);
+      const masses = [{
+        x: topX, y: trunkH * (birch ? 0.90 : 0.94), z: topZ,
+        r: R * (birch ? 0.86 : 1.0), tint: birch ? 0.94 : 1.0, wind: birch ? 0.62 : 0.55,
+      }];
+      for (let i = 0; i < 2; i++) {
+        masses.push({
+          x: topX + (rand() - 0.5) * R * (birch ? 1.9 : 2.4),
+          y: trunkH * ((birch ? 0.78 : 0.72) + rand() * 0.34),
+          z: topZ + (rand() - 0.5) * R * (birch ? 1.9 : 2.4),
+          r: R * (0.52 + rand() * 0.42),
+          tint: 0.80 + rand() * 0.38,
+          wind: 0.60 + rand() * 0.26,
         });
       }
-    } else {
-      // Was 0.26 with one crown blob and five satellites - the widest canopy in
-      // the bank and the single biggest contributor to the near ring's optical
-      // depth wherever a broad template is in the prefix.
-      const R = trunkH * 0.195;
-      rec.canopy.push({
-        x: topX, y: trunkH * 0.94, z: topZ, r: R, squash: 0.72,
-        tint: 1.0, wind: 0.55, aspect: 1.24, turn: rand() * TAU, profile: 'leaf',
-      });
-      for (let i = 0; i < 3; i++) {
-        const turn = rand() * TAU;
-        rec.canopy.push({
-          x: topX + (rand() - 0.5) * R * 2.4,
-          y: trunkH * (0.72 + rand() * 0.34),
-          z: topZ + (rand() - 0.5) * R * 2.4,
-          r: R * (0.44 + rand() * 0.40), squash: 0.64 + rand() * 0.30,
-          tint: 0.80 + rand() * 0.38, wind: 0.60 + rand() * 0.26,
-          aspect: 0.62 + rand() * 0.86, turn, profile: 'leaf',
-        });
+      for (let mi = 0; mi < masses.length; mi++) {
+        const M = masses[mi];
+        const lobes = mi === 0 ? 3 : 2 + ((rand() * 2) | 0);
+        const turn0 = rand() * TAU;
+        for (let kk = 0; kk < lobes; kk++) {
+          const a = turn0 + kk * (TAU / lobes) + (rand() - 0.5) * 0.72;
+          const off = M.r * (0.40 + rand() * 0.35);
+          rec.canopy.push({
+            x: M.x + Math.cos(a) * off,
+            y: M.y + (rand() - 0.5) * M.r * 0.46,
+            z: M.z + Math.sin(a) * off,
+            r: M.r * (0.54 + rand() * 0.22),
+            squash: (birch ? 0.66 : 0.60) + rand() * 0.30,
+            tint: M.tint * (0.90 + rand() * 0.22),
+            wind: M.wind,
+            aspect: 0.72 + rand() * 0.88,
+            turn: a, profile: 'leaf',
+            detail: 0, droop: 0.12 + rand() * 0.14,
+            tier: mi, lobe: kk,
+          });
+        }
       }
     }
   }
@@ -605,7 +720,12 @@ function segmentGeometry(ax, ay, az, bx, by, bz, rA, rB, radial, col, windA, win
       const furrow = Math.sin(ang * 3 + phase) * 0.58
         + Math.sin(ang * 5 - phase * 0.7 + t * 2.1) * 0.30
         + Math.sin(t * TAU * 1.5 + phase) * 0.12;
-      const k = 1 + rough * furrow + flare * (1 - t) * (1 - t);
+      // ROUND 15, item 11. The flare was quadratic over the WHOLE bottom reach — 0 to
+      // 0.32 of trunkH, which is 3.5-7.7 m of trunk — so it read as a fat tree rather than
+      // as a base. Fifth power puts the swell in the bottom half-metre, where the player
+      // stands and where a real trunk actually spreads into its roots.
+      const fall = (1 - t) * (1 - t);
+      const k = 1 + rough * furrow + flare * fall * fall * (1 - t);
       lp.setXYZ(i, x * k, y, z * k);
     }
     lp.needsUpdate = true;
@@ -721,7 +841,13 @@ function blobGeometry(cx, cy, cz, radius, detail, col, tint, wind, squash, seed,
     // tests/shots/art-horizon-2000.png shows. 3.05:1 gives the mass a real dark
     // underside and a real moon-lit top, which is most of what makes a blob
     // read as foliage rather than as rock.
-    const g = lerp(0.30, 1.28, ly) * tint;   // ROUND 13: was 0.42; a deeper underside (measured 12.7 -> 8.3 lit)
+    // ROUND 15: and it falls away toward the horizontal RIM as well as toward the bottom.
+    // A lobe that terminates at full value against the sky is a hard-edged silhouette; one
+    // that darkens into its own edge reads as depth, which is what item 10 is asking for
+    // and it costs nothing — this is a baked vertex colour.
+    const rimR = Math.max(0.01, radius * Math.max(1, aspect));
+    const rim = Math.min(1, Math.hypot(p.getX(i) - cx, p.getZ(i) - cz) / rimR);
+    const g = lerp(0.30, 1.28, ly) * (1 - rim * rim * 0.22) * tint;   // ROUND 13: was 0.42
     const j = 0.94 + (((i * 2654435761) >>> 0) % 1000) / 1000 * 0.12;
     c[i * 3] = col[0] * g * j; c[i * 3 + 1] = col[1] * g * j; c[i * 3 + 2] = col[2] * g * j;
     w[i] = wind;
@@ -772,11 +898,15 @@ function buildTemplateGeometry(rec, lod, seed) {
     const a = path[reaches[i][0]], b = path[reaches[i][1]];
     const f0 = a.y / tH, f1 = b.y / tH;
     let r0 = trunkRadiusAt(rec, f0), r1 = trunkRadiusAt(rec, f1);
-    const flare = i === 0 ? (rec.kind === 'snag' ? 0.23 : 0.18) : 0;
+    // ROUND 15: the flare is bigger AND much shorter (see the curve in segmentGeometry),
+    // so the base spreads and the shaft above it does not.
+    const flare = i === 0 ? (rec.kind === 'snag' ? 0.44 : 0.36) : 0;
     const rough = rec.kind === 'birch' ? 0.045 : rec.kind === 'snag' ? 0.11 : 0.075;
-    // Divide out the maximum baked displacement at the base: even the fattest flute stays
-    // inside the radius used by the unchanged semantic tree collider.
-    if (flare) r0 /= 1 + flare + rough;
+    // Divide out the FLUTING only, so the shaft keeps its radius. The flare itself is now
+    // allowed past the collider circle, exactly as the root spurs below are: it lives in
+    // the bottom half-metre, the collider is a circle with no vertical extent, and a base
+    // you can walk right up to is the whole point of item 11.
+    if (flare) r0 /= 1 + rough;
     parts.push(segmentGeometry(a.x, a.y, a.z, b.x, b.y, b.z,
       r0, r1, i === reaches.length - 1 ? Math.max(3, radial - 1) : radial,
       rec.bark, lerp(0, 0.10, f0), lerp(0.04, 0.18, f1), {
@@ -830,6 +960,21 @@ function buildTemplateGeometry(rec, lod, seed) {
     parts.push(segmentGeometry(ax, ay, az, bx, by, bz, br.r, br.r * 0.45,
       Math.max(3, radial - 2), rec.bark, 0.18, 0.50,
       { rough: 0.045, kind: rec.kind, seed: seed + 401, part: i }));
+    // ROUND 15, item 10: "branches that break down rather than ending in rounded masses".
+    // Every branch was one straight segment from trunk to tip. One fork off each of them at
+    // LOD0, anchored at 0.55 of the primary's reach and turning away and up, is six
+    // triangles and it is the difference between a spoke and a limb. LOD1 is untouched.
+    if (lod === 0) {
+      const fa = br.ang + ((i & 1) ? 0.74 : -0.68);
+      const fAt = 0.55, fr = br.reach * 0.46;
+      const fx = ax + Math.cos(br.ang) * br.reach * fAt;
+      const fy = ay + br.up * br.reach * fAt;
+      const fz = az + Math.sin(br.ang) * br.reach * fAt;
+      parts.push(segmentGeometry(fx, fy, fz,
+        fx + Math.cos(fa) * fr, fy + (br.up + 0.30) * fr, fz + Math.sin(fa) * fr,
+        br.r * 0.52, br.r * 0.16, 3, rec.bark, 0.30, 0.62,
+        { rough: 0.04, kind: rec.kind, seed: seed + 613, part: 20 + i }));
+    }
     const puffMin = rec.kind === 'conifer' ? 0.45 : 0.5;
     if (rec.blobsOnBranch && br.f >= puffMin && lod === 0) {
       // detail 0 (20 faces), not 1 (80). Measured: with these at detail 1 the
@@ -861,6 +1006,21 @@ function buildTemplateGeometry(rec, lod, seed) {
     parts.push(blobGeometry(cn.x, cn.y, cn.z, cn.r, d, rec.leaf,
       cn.tint, cn.wind, cn.squash, seed + i * 29,
       { aspect: cn.aspect, turn: cn.turn, profile: cn.profile, droop: cn.droop || 0 }));
+  }
+  // ROUND 15, item 11: "convincing trunk bases, roots connecting trees to ground". Three
+  // spurs leaving the base and running out and DOWN past y = 0, so the 0.25 m instance sink
+  // buries their tips whatever the terrain does underneath. Three radial segments each: six
+  // triangles a spur, eighteen a template, and only at LOD0 — this is a thing you see from
+  // two metres or not at all.
+  if (lod === 0) {
+    for (let i = 0; i < 3; i++) {
+      const a = rec.leanDir + 0.7 + i * (TAU / 3) + (rec.barkSeed % 9) * 0.09;
+      parts.push(segmentGeometry(
+        Math.cos(a) * tR * 0.20, tR * 0.42, Math.sin(a) * tR * 0.20,
+        Math.cos(a) * tR * 1.85, -0.34, Math.sin(a) * tR * 1.85,
+        tR * 0.34, tR * 0.07, 3, rec.bark, 0, 0.02,
+        { rough: 0.06, kind: rec.kind, seed: seed + 509, part: 40 + i }));
+    }
   }
 
   const merged = mergeGeometries(parts, false);
@@ -961,16 +1121,36 @@ function makeGrassTexture() {
 //   log      matNear   (bark, the form term, the near-band dissolve)          2 standable OBBs
 //   stump    matNear                                                          standable circle
 //   boulder  matNear                                                          standable circle
+//   litter   matNear   (ROUND 16: leaf drifts round trunks, bare soil)        no collider
 //
 // Nothing here is a new material: matGrass and matNear already exist and are linked at
 // boot, so the understory costs zero programs. tests/wilds.mjs asserts that.
+//
+// LITTER, added round 16 for THE LIST item 12, is one InstancedMesh per near chunk on
+// matNear — MEASURED before it was written: the dense pose ran 452 draws of a 750 gate with
+// 29 visible understory meshes over ~10 near chunks, so a fifth kind buys the whole floor
+// layer for about ten draws. It emits NO collider on purpose: it is 6 cm of dead leaves.
 // ---------------------------------------------------------------------------
-const UNDER_KINDS = ['fern', 'log', 'stump', 'boulder'];
+const UNDER_KINDS = ['fern', 'log', 'stump', 'boulder', 'litter'];
 // The grass-over-the-roof probe (see _buildGrass): a top this far over the ground is a roof.
 const ROOF_OVER = 2.4;
 const ROOF_PROBE_RISE = 40;
 const GRASS_PROBE_R = 0.30;
-const UNDER_CAP = { fern: 1200, log: 96, stump: 96, boulder: 96 };
+const UNDER_CAP = { fern: 1200, log: 96, stump: 96, boulder: 96, litter: 280 };
+// ROUND 16, item 12. The litter layer's own numbers.
+const LITTER_COLLAR_P = 0.52;     // of this chunk's trunks get a drift at the foot
+const LITTER_SOIL_CELL = 4.6;     // m; one bare-soil candidate per cell
+const LITTER_SOIL_P = 0.52;
+const LITTER_SOIL_FLOOR = 0.18;   // soil MOSTLY where the meadow gave out - but a bare scrape
+                                  // happens in a meadow too, and the first pass at 0.06 left
+                                  // the open ground with nothing on it at all (MEASURED from
+                                  // tests/shots/flora-r16-litab3-on.png: not one soil patch in
+                                  // the whole torch pool).
+const LITTER_SLOPE_MAX = 0.09;    // a drift does not cling to a bank. 0.34 in terrain's slope
+                                  // metric is a 48 degree face, and a 2 m patch tilted onto
+                                  // one reads as a leaning SLAB, not as ground. 0.09 is 24
+                                  // degrees: leaves collect on gentle ground and wash off a bank.
+const LITTER_GRAD_E = 0.9;        // m; the two forward samples the conforming tilt is built from
 const UNDER_STRIDE = 16;
 // THE UNDERSTORY IS PLANTED OFF THE chunk:built FRAME (round 6 repair, MEASURED 2026-09-03
 // on the verifier's 23 m/s drive, 185 chunk builds, loaded machine): planted inside the
@@ -1058,6 +1238,72 @@ function makeStumpGeometry() {
   const g = new THREE.CylinderGeometry(0.82, 1.18, 1, 8, 1, false);
   g.translate(0, 0.5, 0);
   return finishGeo(g, PAL.barkDark, 0.0, 0.10, PAL.cut, 0.98);
+}
+
+/**
+ * ROUND 16, item 12. A DRIFT OF LEAF LITTER: one low dome with a second lobe pushed off
+ * its centre, so a patch reads as swept leaves rather than as a painted disc.
+ *
+ * THE FAILURES THIS SHAPE EXISTS TO AVOID, all of them the "working but invisible" disease
+ * in its floor-layer form, and the last two of them SHIPPED in this round's first pass
+ * before a screenshot caught them:
+ *   1. A flat disc laid ON the terrain z-fights it and flickers.
+ *   2. A flat disc on ANY slope floats one edge and buries the other. So the instance is
+ *      tilted onto the ground's own normal at plant time (see _plantUnderstory).
+ *   3. At 8 rim segments and a rim radius varying only +-19%, a drift read as a hard-edged
+ *      OCTAGONAL PLATE (tests/shots/flora-r16-litab2-on.png). Twelve segments and a rim
+ *      that varies 0.55-1.17 of nominal make the outline ragged.
+ *   4. AND THE REAL ONE: any solid decal on a solid ground has a HARD SILHOUETTE, because
+ *      matNear has no alpha and buying one would cost a program this workflow does not
+ *      have. So the drift is not a disc at all — it is a shallow CONE THAT CROSSES THE
+ *      GROUND. Its centre stands 7.5 cm proud, its inner ring is authored 5.5-8.5 cm BELOW
+ *      y = 0 and its rim 30-46 cm below. What you see is the part above the waterline, so
+ *      the visible outline is the INTERSECTION with the terrain — set by the ground's own
+ *      micro-relief and by the instance's tilt, not by the geometry's rim — and it is a
+ *      different ragged shape on every instance in the county for free. The cone crosses
+ *      at about 8.5 degrees, which is transverse enough to keep the crossing band inside
+ *      one depth bucket instead of shimmering.
+ *
+ * Unit radius; the instance matrix carries the 1.0-2.6 m spread in x/z and a fixed rise in
+ * y (about 0.47 of the nominal radius ends up above ground). 12 + 7 = 19 rim segments x 3
+ * triangles = 57 triangles. The winding is (centre, rim[i+1], rim[i]) for the fan, which
+ * puts the normal on +Y: with C = origin, A at theta and B at theta + step,
+ * (B - C) x (A - C) = +Y.
+ */
+function makeLitterGeometry(seed) {
+  const pos = [];
+  let hk = 0;
+  const rnd = () => hashI(hk++, seed, seed + 17);
+  const lobe = (cx, cz, rad, rise, n) => {
+    const rim = [], inner = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU + rnd() * 0.34;
+      const r = rad * (0.55 + rnd() * 0.62);
+      const rx = cx + Math.cos(a) * r, rz = cz + Math.sin(a) * r;
+      rim.push([rx, -0.30 - rnd() * 0.16, rz]);
+      inner.push([cx + (rx - cx) * 0.90, -0.055 - rnd() * 0.030, cz + (rz - cz) * 0.90]);
+    }
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const ii = inner[i], ij = inner[j], ri = rim[i], rj = rim[j];
+      pos.push(cx, rise, cz, ij[0], ij[1], ij[2], ii[0], ii[1], ii[2]);
+      pos.push(ii[0], ii[1], ii[2], ij[0], ij[1], ij[2], ri[0], ri[1], ri[2]);
+      pos.push(ij[0], ij[1], ij[2], rj[0], rj[1], rj[2], ri[0], ri[1], ri[2]);
+    }
+  };
+  lobe(0, 0, 1.0, 0.075, 12);
+  lobe(0.48, -0.34, 0.42, 0.062, 7);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  // Non-indexed, so this gives FLAT per-face normals - which is what we want: every facet
+  // of the drift takes a slightly different value from the form term and the torch, and the
+  // patch mottles instead of reading as one painted ellipse.
+  g.computeVertexNormals();
+  // jitter 0.17 on the vertices, and the two lobe centres (the only vertices above 0.043)
+  // take a colour 1.16x the rest: a heap of dry leaves is palest where it is deepest, and
+  // that inner gradient is what stops the top reading as one flat tone.
+  return finishGeo(g, PAL.litter, 0.0, 0.17,
+    [PAL.litter[0] * 1.16, PAL.litter[1] * 1.16, PAL.litter[2] * 1.16], 0.058);
 }
 
 /** A boulder: the canopy blob generator with a stone colour and a flat squash, centred so
@@ -1252,8 +1498,9 @@ export class Flora {
       log: makeLogGeometry(),
       stump: makeStumpGeometry(),
       boulder: makeBoulderGeometry(this.seed + 977),
+      litter: makeLitterGeometry(this.seed + 631),
     };
-    this._underCount = { fern: 0, log: 0, stump: 0, boulder: 0 };
+    this._underCount = { fern: 0, log: 0, stump: 0, boulder: 0, litter: 0 };
 
     // --- impostor atlas ---------------------------------------------------
     const ok = this.impostors.bake(this.templates.map((t) => ({
@@ -1507,6 +1754,30 @@ export class Flora {
     return smoothstep(0.15, 0.85, f);
   }
 
+  /**
+   * ROUND 16, item 12. THE MEADOW FIELD: where grass is allowed to be grass. 0 is bare
+   * ground, 1 is a full meadow, and the smoothstep is steep enough that most of the county
+   * is one or the other rather than a permanent grey middle (MEASURED over 400k samples:
+   * 22% at 0, 28% at 1). 60 m wavelength — a third of the tree cover field's 182 m, so a
+   * meadow lands across a stand as often as it lands in a clearing, and the eye never
+   * learns that "open ground" and "grassy" are the same word.
+   *
+   * SAMPLED AT WORLD x/z. The chunk-local cell index would restart the pattern at every
+   * 64 m seam and print a grid over the whole county.
+   */
+  meadowAt(x, z) {
+    return smoothstep(GRASS_PATCH_LO, GRASS_PATCH_HI,
+      fbm2(x * GRASS_PATCH_FREQ, z * GRASS_PATCH_FREQ, this.seed + 61, 2));
+  }
+
+  /** ROUND 16. THE FERN BED, at a third wavelength (109 m) so the floor's three fields
+   *  never agree. Ferns keyed only to coverAt were keyed to the trees' own field, so the
+   *  understory was a restatement of the canopy instead of a second layer under it. */
+  fernBedAt(x, z) {
+    return smoothstep(FERN_BED_LO, FERN_BED_HI,
+      fbm2(x * FERN_BED_FREQ, z * FERN_BED_FREQ, this.seed + 62, 2));
+  }
+
   // -------------------------------------------------------------------------
   // THE PLANTING LOOP
   // -------------------------------------------------------------------------
@@ -1615,7 +1886,10 @@ export class Flora {
             // all impassable and only backwards free. It is the same class as THE EATEN PATH's
             // law that a collider spanning the walkable band is an unrecoverable soft-lock.
             // Brushing past a trunk has to be possible, or the forest is a trap.
-            r: tpl.trunkR * scale + 0.04, tag: 'tree',
+            // ROUND 15: the WIDER of the two stretched axes, or the fat side of the
+            // trunk pokes outside its own circle. See xzStretch.
+            r: tpl.trunkR * scale * xzWide(xzStretch(Math.floor(wx * 3.1), Math.floor(wz * 3.1), this.seed)) + 0.04,
+            tag: 'tree',
           }, id);
         }
 
@@ -1664,7 +1938,8 @@ export class Flora {
         if (canCollide) {
           collision.addCollider({
             kind: 'circle', x: wx, z: wz,
-            r: tpl.trunkR * scale + 0.06, tag: 'tree',   // see the note on the near-ring collider above
+            r: tpl.trunkR * scale * xzWide(xzStretch(Math.floor(wx * 3.1), Math.floor(wz * 3.1), this.seed)) + 0.06,
+            tag: 'tree',   // see the note on the near-ring collider above
           }, id);
         }
         const o = n * TREE_STRIDE;
@@ -1788,8 +2063,14 @@ export class Flora {
       const hA = hashI(qx, qz, this.seed + 613);
       const hB = hashI(qx, qz, this.seed + 991);
       const hC = hashI(qx, qz, this.seed + 227);
-      // pow 2.2 on the magnitude: most trees near plumb, a few properly askew
-      const lean = LEAN_BY_KIND[ti] * Math.pow(hA, 2.2) * (BIOME_LEAN_MUL[regionId] || 1);
+      // pow 1.8 on the magnitude: most trees near plumb, a good many properly askew.
+      // THE CLAMP: the instance rotates about its origin, which sits 0.25 m below the
+      // terrain, so the far edge of the base lifts by trunkR * scale * sin(lean). Past that
+      // the trunk floats and you can see under it. Solving it here rather than by choosing
+      // timid ceilings means a giant at 3.2x is protected by the same line as a sapling.
+      const leanCap = Math.asin(Math.min(1, 0.22 / Math.max(0.05, tpl.trunkR * sc)));
+      const lean = Math.min(leanCap,
+        LEAN_BY_KIND[ti] * Math.pow(hA, 1.8) * (BIOME_LEAN_MUL[regionId] || 1));
       // Ridge woodland agrees on a prevailing northwest blow, with enough spread that it is
       // still a forest and not a copied transform. Other biomes retain a full-circle bearing.
       // This is baked into the existing instance matrix; no frame work or new attribute.
@@ -1801,24 +2082,27 @@ export class Flora {
       const ca = Math.cos(tiltX), sa = Math.sin(tiltX);
       const cz2 = Math.cos(tiltZ), sz2 = Math.sin(tiltZ);
       const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const hMul = 0.88 + hC * 0.30;        // 0.88 - 1.18 on the vertical only
+      const hMul = 0.88 + hC * 0.30;        // 0.88 - 1.18 on the vertical
       const sy2 = sc * hMul;
+      // ROUND 15: and now the horizontal, area-preserving. See xzStretch.
+      const st = xzStretch(qx, qz, this.seed);
+      const scX = sc * st, scZ = sc / st;
 
       const m = s.mat, b = k * 16;
-      // column 0
-      m[b] = (cz2 * cy - sz2 * sa * sy) * sc;
-      m[b + 1] = (sz2 * cy + cz2 * sa * sy) * sc;
-      m[b + 2] = (-ca * sy) * sc;
+      // column 0 — the template's own X axis, stretched
+      m[b] = (cz2 * cy - sz2 * sa * sy) * scX;
+      m[b + 1] = (sz2 * cy + cz2 * sa * sy) * scX;
+      m[b + 2] = (-ca * sy) * scX;
       m[b + 3] = 0;
       // column 1 — the trunk's own axis, and the only one the height stretch touches
       m[b + 4] = (-sz2 * ca) * sy2;
       m[b + 5] = (cz2 * ca) * sy2;
       m[b + 6] = sa * sy2;
       m[b + 7] = 0;
-      // column 2
-      m[b + 8] = (cz2 * sy + sz2 * sa * cy) * sc;
-      m[b + 9] = (sz2 * sy - cz2 * sa * cy) * sc;
-      m[b + 10] = (ca * cy) * sc;
+      // column 2 — the template's own Z axis, squashed by exactly as much
+      m[b + 8] = (cz2 * sy + sz2 * sa * cy) * scZ;
+      m[b + 9] = (sz2 * sy - cz2 * sa * cy) * scZ;
+      m[b + 10] = (ca * cy) * scZ;
       m[b + 11] = 0;
       m[b + 12] = x; m[b + 13] = y; m[b + 14] = z; m[b + 15] = 1;
       s.tint[k * 3] = tr; s.tint[k * 3 + 1] = tg; s.tint[k * 3 + 2] = tb;
@@ -1826,7 +2110,9 @@ export class Flora {
       // Card anchor must be the tree's xz EXACTLY: the dissolve hash is a
       // function of position and the two shaders have to agree bit for bit.
       cards.pos[i * 3] = x; cards.pos[i * 3 + 1] = y; cards.pos[i * 3 + 2] = z;
-      cards.size[i * 2] = tpl.halfWidth * sc;
+      // The card is a billboard, so it has to cover the WIDER axis or the tree narrows on
+      // the walk across the 150 m handover — the same rule the height stretch follows above.
+      cards.size[i * 2] = tpl.halfWidth * sc * xzWide(st);
       cards.size[i * 2 + 1] = tpl.height * sy2;
       cards.yaw[i] = yaw;
       cards.tpl[i] = ti;
@@ -1928,7 +2214,21 @@ export class Flora {
           const f = flats[i];
           const dx = x - f.x, dz = z - f.z;
           const rr = f.r * 0.86;
-          if (dx * dx + dz * dz < rr * rr) return true;
+          const d2 = dx * dx + dz * dz;
+          if (d2 >= rr * rr) continue;
+          // ROUND 15, item 20's forest edge. This used to be one boolean against a circle,
+          // so every destination in the county was surrounded by a compass arc: closed
+          // forest to 32.68 m and then, on one pixel, made ground. An edge is a place where
+          // the two things interleave. Inside the hard rim the yard is still swept clean —
+          // a fern on the asphalt is wrong — but across the last FEATHER metres a candidate
+          // is kept with a probability that rises to 1 at the rim, so ferns, logs, stumps
+          // and boulders thin out of the trees into the yard instead of stopping dead.
+          // TREES are unaffected: every caller of onPad is an understory pass, and a trunk
+          // inside the apron would be a different bug.
+          const inner = rr - EDGE_FEATHER;
+          if (inner <= 0 || d2 < inner * inner) return true;
+          const t = (Math.sqrt(d2) - inner) / EDGE_FEATHER;
+          if (hashI(Math.round(x * 2), Math.round(z * 2), S + 991) > t * t) return true;
         }
       }
       return this._travelWaterClear(x, z) || (hasPad && wilds.padClear(x, z));
@@ -1967,7 +2267,7 @@ export class Flora {
       return false;
     };
 
-    const counts = { fern: 0, log: 0, stump: 0, boulder: 0 };
+    const counts = { fern: 0, log: 0, stump: 0, boulder: 0, litter: 0 };
     let minY = Infinity, maxY = -Infinity;
     const put = (kind, x, y, z, yaw, tilt, sx, sy, sz, tr, tg, tb) => {
       const k = counts[kind];
@@ -1991,7 +2291,13 @@ export class Flora {
       let con = 0;
       for (let i = 0; i < subset.length; i++) if (this.templates[subset[i]].kind === 'conifer') con++;
       const conMul = 0.45 + 0.55 * (con / Math.max(1, subset.length));
-      const bound = maxAccept(U.fernAccept) * conMul;
+      // ROUND 16, item 12. The free early-out bound has to admit the bed's gain, or a
+      // candidate a bed should have taken is thrown away before the field is ever asked.
+      // Clamped at 1 only for the first test: a probability over 1 is just "always".
+      // boundBase (no gain) is what the per-candidate refinements multiply, or the gain
+      // would be counted twice and the bound would stop bounding anything.
+      const boundBase = maxAccept(U.fernAccept) * conMul;
+      const bound = Math.min(1, boundBase * FERN_BED_GAIN);
       const cell = U.fernCell;
       const gx0 = Math.floor(ox / cell), gx1 = Math.ceil((ox + CH) / cell);
       const gz0 = Math.floor(oz / cell), gz1 = Math.ceil((oz + CH) / cell);
@@ -2003,8 +2309,14 @@ export class Flora {
           const wz = (gz + 0.10 + hashI(gx, gz, S + 102) * 0.80) * cell;
           if (wx < ox || wz < oz || wx >= ox + CH || wz >= oz + CH) continue;
           const cover = this.coverAt(wx, wz);
-          const cm = conMul * (0.20 + 0.80 * cover);
-          if (h3 > bound * (0.20 + 0.80 * cover)) continue;   // one fbm: over the cover's bound
+          // ROUND 16, item 12: ferns come in BEDS. The bed field is 109 m where the cover
+          // field is 182 m, so a bed crosses in and out of a stand instead of restating it.
+          // A fern is still a shade plant (the cover term survives) but the bed decides
+          // where a colony actually is, which is what makes the floor read as two layers.
+          const bed = this.fernBedAt(wx, wz);
+          const bm = FERN_BED_FLOOR + (FERN_BED_GAIN - FERN_BED_FLOOR) * bed;
+          const cm = conMul * (0.16 + 0.84 * cover) * bm;
+          if (h3 > boundBase * (0.16 + 0.84 * cover) * bm) continue;   // two fbm: over the fields' bound
           if (hasRoad && roads.roadDistance(wx, wz) < excludeGrass) continue;
           const wy = terrain.heightAt(wx, wz);
           if (h3 > regionP(U.fernAccept, wx, wz, wy) * cm) continue;
@@ -2145,6 +2457,97 @@ export class Flora {
               y0: wy - 0.6, y1: wy - 0.05 + 1.28 * s, tag: 'rock', standable: true,
             }, id);
           }
+        }
+      }
+    }
+
+    // --- ROUND 16, THE LIST item 12: leaf litter and exposed soil ---------------------
+    // The county floor had NOTHING on it. A trunk met an unbroken plane of ground albedo
+    // and the torch pool was one flat disc of that plane
+    // (tests/shots/flora-r16-before-open-ground.png: luma mean 63.6 and not one feature in
+    // it). Two populations, ONE geometry, ONE InstancedMesh, no collider:
+    //   - a drift of leaves at the foot of half this chunk's trunks, which is the only
+    //     thing that has ever softened the hard cylinder-into-plane join at a tree base;
+    //   - bare wet earth where the meadow field gave out, so "no grass here" reads as
+    //     ground rather than as absence.
+    {
+      const eG = LITTER_GRAD_E;
+      /**
+       * Lay one drift, CONFORMED TO THE GROUND'S OWN NORMAL. put() composes the Euler as
+       * YZX, i.e. Ry(yaw) * Rz(tilt) * Rx(0), so local +Y lands at
+       * (-sin t cos a, cos t, sin t sin a). With t = atan(g) and a = atan2(-hz, hx) that
+       * is exactly the surface normal (-hx, 1, -hz)/sqrt(1+g^2) of a heightfield whose
+       * gradient is (hx, hz). Without this a 2 m disc floats one edge 25 cm off any bank
+       * it lands on, which is the flat-decal failure this project has already paid for
+       * twice this round (the station apron, the road ribbons).
+       *
+       * The spin comes from the same gradient, so a drift's long axis follows the local
+       * fall of the ground: free variety that is also correct. On ground flat enough for
+       * the gradient to be meaningless the tilt is zero, so any yaw is as right as any
+       * other and a hash supplies it.
+       */
+      const drift = (x, z, rad, flatY, hSeed, tr, tg, tb) => {
+        const y = terrain.heightAt(x, z);
+        const hx = (terrain.heightAt(x + eG, z) - y) / eG;
+        const hz = (terrain.heightAt(x, z + eG) - y) / eG;
+        const g = Math.sqrt(hx * hx + hz * hz);
+        if (1 - 1 / Math.sqrt(g * g + 1) > LITTER_SLOPE_MAX) return;
+        const a = g > 2e-3 ? Math.atan2(-hz, hx) : hashI(Math.round(x * 4), Math.round(z * 4), hSeed) * TAU;
+        // area-preserving stretch, the same trick the trunks got this round: a drift is an
+        // ellipse, never a compass circle
+        const st = 0.78 + hashI(Math.round(x * 4), Math.round(z * 4), hSeed + 1) * 0.52;
+        // The Y scale is ABSOLUTE, not rad * flatY: coupling the rise to the spread would
+        // make a 2.3 m soil patch a 12 cm mound instead of a piece of ground.
+        put('litter', x, y + 0.015, z, a, Math.atan(g), rad * st, flatY, rad / st, tr, tg, tb);
+      };
+
+      // (1) the collar: a drift at the foot of this chunk's trunks. Every one of these
+      // inherits the TREE's exclusions - road, sight corridor, pad, water - because it is
+      // centred on a trunk that already passed all four in the planting loop. That is why
+      // there is no test here: tests/wilds.mjs asserts every understory instance's centre
+      // against the road field and the pads, and a trunk centre satisfies both by
+      // construction (plantExclude.tree is the same 7.05 m the suite reads).
+      for (let i = 0; i < nTrees; i++) {
+        if (counts.litter >= UNDER_CAP.litter) break;
+        const o = i * 3;
+        const tx = _trunkBuf[o], tz = _trunkBuf[o + 1], trad = _trunkBuf[o + 2];
+        const qx = Math.round(tx * 4), qz = Math.round(tz * 4);
+        const hc = hashI(qx, qz, S + 141);
+        if (hc > LITTER_COLLAR_P) continue;
+        // A fat trunk sheds a wider drift than a sapling. NOMINAL radius: only about 0.47
+        // of it clears the ground (the cone crosses the terrain, see makeLitterGeometry),
+        // so 1.0-1.7 nominal is a visible drift 0.5-1.9 m across. The first pass used
+        // (0.74 + trad*2.1) on a geometry that showed ALL of its radius and put a 4 m plate
+        // round a mature trunk, which is a clearing, not a collar.
+        const rad = (0.62 + trad * 1.80) * (0.80 + hashI(qx, qz, S + 142) * 0.52);
+        const v = 0.86 + hashI(qx, qz, S + 143) * 0.20;
+        drift(tx, tz, rad, 1.0, S + 144, v, v * 0.99, v * 0.97);
+      }
+
+      // (2) bare soil, keyed to the INVERSE of the meadow field and squared, so earth shows
+      // through where the grass has genuinely given out rather than everywhere at a low
+      // rate. Flatter than a leaf drift (0.62 on the rise) because it is ground, not litter.
+      const cellS = LITTER_SOIL_CELL;
+      const sx0 = Math.floor(ox / cellS), sx1 = Math.ceil((ox + CH) / cellS);
+      const sz0 = Math.floor(oz / cellS), sz1 = Math.ceil((oz + CH) / cellS);
+      for (let gz = sz0; gz < sz1; gz++) {
+        if (counts.litter >= UNDER_CAP.litter) break;
+        for (let gx = sx0; gx < sx1; gx++) {
+          const h3 = hashI(gx, gz, S + 153);
+          if (h3 > LITTER_SOIL_P) continue;
+          const wx = (gx + 0.14 + hashI(gx, gz, S + 151) * 0.72) * cellS;
+          const wz = (gz + 0.14 + hashI(gx, gz, S + 152) * 0.72) * cellS;
+          if (wx < ox || wz < oz || wx >= ox + CH || wz >= oz + CH) continue;
+          const bare = 1 - this.meadowAt(wx, wz);
+          const cm = LITTER_SOIL_FLOOR + (1 - LITTER_SOIL_FLOOR) * bare * bare;
+          if (h3 > LITTER_SOIL_P * cm) continue;
+          if (hasRoad && roads.roadDistance(wx, wz) < excludeTree) continue;
+          if (hasSight && places.sightClear(wx, wz)) continue;
+          if (onPad(wx, wz)) continue;
+          if (trunkNear(wx, wz, wx, wz, 0.9)) continue;      // the collars already own the feet
+          const rad = lerp(0.95, 2.60, hashI(gx, gz, S + 154));
+          const v = 0.88 + hashI(gx, gz, S + 155) * 0.18;
+          drift(wx, wz, rad, 0.62, S + 156, v * SOIL_MUL[0], v * SOIL_MUL[1], v * SOIL_MUL[2]);
         }
       }
     }
@@ -2513,6 +2916,11 @@ export class Flora {
     const out = [];
     for (const s of rec.under) {
       const isFern = s.kind === 'fern';
+      // ROUND 16: litter is 6 cm of dead leaves lying flat on the ground. It never casts
+      // (a caster lying on the floor spends a shadow-map draw to darken the pixel it is
+      // already covering) and it does NOT hide with the ferns at fernRadius - a drift is
+      // opaque and still reads at 40 m where an alpha-cut fern card does not.
+      const isLitter = s.kind === 'litter';
       const mesh = new THREE.InstancedMesh(this.underGeo[s.kind], isFern ? this.matGrass : this.matNear, s.count);
       mesh.name = 'flora-under-' + s.kind + '-' + rec.id;
       mesh.instanceMatrix.array.set(s.mat);
@@ -2524,8 +2932,8 @@ export class Flora {
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
       mesh.receiveShadow = true;
-      mesh.castShadow = !isFern;
-      mesh.userData.casts = !isFern;
+      mesh.castShadow = !isFern && !isLitter;
+      mesh.userData.casts = !isFern && !isLitter;
       mesh.userData.fern = isFern;
       this._setBounds(mesh, rec.underBounds);
       this.group.add(mesh);
@@ -2669,6 +3077,11 @@ export class Flora {
     const hasSupport = this.roofExclude && collision && typeof collision.supportHeight === 'function';
     const wilds = this._sys('wilds');
     const hasPad = wilds && typeof wilds.padClear === 'function';
+    // ROUND 15. _buildGrass was the only floor layer that never asked about a destination's
+    // made ground: grass grew THROUGH the Filling Station's apron everywhere more than
+    // CFG.roads.plantExclude.grass (3.05 m) from a road centreline, which is most of the
+    // forecourt. Same feather as onPad, so the two layers give out together.
+    const flats = typeof terrain.flats === 'function' ? terrain.flats() : null;
     const CH = CFG.world.CHUNK;
     const ox = rec.cx * CH, oz = rec.cz * CH;
     const cell = GRASS_CELL;
@@ -2686,12 +3099,41 @@ export class Flora {
     for (let gz = 0; gz < nx; gz++) {
       for (let gx = 0; gx < nx; gx++) {
         const ix = rec.cx * nx + gx, iz = rec.cz * nx + gz;
-        if (hashI(ix, iz, this.seed + 21) > grassAccept) continue;
+        const hg = hashI(ix, iz, this.seed + 21);
+        if (hg > grassAccept) continue;             // free: over the biome's ceiling
         const wx = ox + (gx + hashI(ix, iz, this.seed + 22)) * cell;
         const wz = oz + (gz + hashI(ix, iz, this.seed + 23)) * cell;
+        // ROUND 16, THE LIST item 12. THIS was the flat Bernoulli: one probability for the
+        // whole county, so the floor was an even scatter from the spawn to the ridge.
+        // Two fields now shape it, and the ORDER IS THE COST (the same rule the understory
+        // pass is written to): the 2-octave meadow first, because it rejects the most, and
+        // the 3-octave cover field only for what survived it. Everything expensive — the
+        // road field, the water, the pads, the apron, heightAt, supportHeight — is still
+        // below both, and now runs on ~40% as many candidates as before.
+        const mMul = GRASS_PATCH_FLOOR + (1 - GRASS_PATCH_FLOOR) * this.meadowAt(wx, wz);
+        if (hg > grassAccept * mMul) continue;
+        // Grass is a light-hungry plant: thin under a shut canopy, thick in the open. This
+        // is the layer that never asked coverAt() at all until round 16.
+        const gCover = this.coverAt(wx, wz);
+        if (hg > grassAccept * mMul * (1 - GRASS_COVER_THIN * gCover)) continue;
         if (hasRoad && roads.roadDistance(wx, wz) < exclude) continue;
         if (this._travelWaterClear(wx, wz)) continue;
         if (hasPad && wilds.padClear(wx, wz)) continue;
+        if (flats) {
+          let onApron = false;
+          for (let i = 0; i < flats.length; i++) {
+            const fl = flats[i];
+            const fdx = wx - fl.x, fdz = wz - fl.z;
+            const rr = fl.r * 0.86;
+            const d2 = fdx * fdx + fdz * fdz;
+            if (d2 >= rr * rr) continue;
+            const inner = rr - EDGE_FEATHER;
+            if (inner <= 0 || d2 < inner * inner) { onApron = true; break; }
+            const t = (Math.sqrt(d2) - inner) / EDGE_FEATHER;
+            if (hashI(Math.round(wx * 2), Math.round(wz * 2), this.seed + 991) > t * t) { onApron = true; break; }
+          }
+          if (onApron) continue;
+        }
         const wy = terrain.heightAt(wx, wz);
         if (hasSupport && collision.supportHeight(wx, wz, wy + ROOF_OVER + 0.48, GRASS_PROBE_R, ROOF_PROBE_RISE) > wy + ROOF_OVER) continue;
         const yaw = hashI(ix, iz, this.seed + 24) * TAU;
@@ -2891,6 +3333,7 @@ export class Flora {
       understory: {
         fern: this._underCount.fern, log: this._underCount.log,
         stump: this._underCount.stump, boulder: this._underCount.boulder,
+        litter: this._underCount.litter,
       },
       understoryPass: {
         pending, chunks: P.chunks, ms: +P.ms.toFixed(1), maxMs: +P.maxMs.toFixed(2),
