@@ -41565,9 +41565,15 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           boss.finishBeforeEclipse = false;
           boss.group.visible = true;
         }
-        // Land on the court edge, outside the body, looking in.
-        this.enterPlanet(id, boss ? boss.baseX : null, null,
-          boss ? boss.baseZ + 42 : null, Math.PI, 'boss-test', true);
+        // Land on the court edge, outside the body, looking in. The planet
+        // finals carry `chartPosition`/`arena`, not the regional bosses'
+        // baseX/baseZ -- reading the wrong pair handed enterPlanet undefined
+        // and dropped you at the world spawn, 675 units away from the fight.
+        // Forward here is (sin yaw, 0, -cos yaw), so yaw 0 looks down -z at a
+        // boss you are standing +z of.
+        const court = boss?.chartPosition || boss?.arena || null;
+        this.enterPlanet(id, court ? court.x : null, null,
+          court ? court.z + 46 : null, 0, 'boss-test', true);
       } else {
         // The ultimate. Its three crowns are granted in memory only, and the
         // toll is waived rather than paid, so no purse is touched.
@@ -41579,6 +41585,13 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.eclipsePaid = true;
         this.enterPlanet('water', null, null, null, this.player.yaw, 'boss-test', true);
         world.unlockEclipseMaw(this, true);
+        // Stand in the Maw's own arrival court rather than the world spawn,
+        // which is most of a kilometre away.
+        const maw = world.eclipseMaw?.group?.position;
+        if (maw) {
+          const at = toChartVec(maw.clone());
+          this.enterPlanet('water', at.x, null, at.z + 62, 0, 'boss-test', true);
+        }
       }
       this.syncPauseProgress();
       this.syncWorldVisuals();
