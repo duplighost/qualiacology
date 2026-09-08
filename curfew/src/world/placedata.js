@@ -298,6 +298,35 @@ export const MAJORS = Object.freeze([
     id: 'cathedral', name: 'The Cathedral of Unlight',
     boss: 'kneeler',                       // ROUND 6: one Kneeler at the west door
     x: 93.1, z: 1242.6, region: 'ridge', terrainRegion: 'fields', kind: 'cathedral',
+    // ROUND 17, THE APRON CENSUS. tools/apron-census.mjs stands off every major's pad in deep
+    // night and pairs each screen sample with the object the ray hits, so an apron is measured
+    // against the ground it is cut into and the sky it sits under. Two rules, both the game's
+    // own: an apron is trodden ground and must not be PALER THAN THE GRASS AROUND IT (the
+    // Filling Station row's words, from the bug Alex found), and nothing at ground level may
+    // OUT-READ THE SKY. Measured at the default C.ash 0.130, five majors broke both:
+    //
+    //     site          value   apron before -> after    sky
+    //     cathedral     0.054      37.9  ->  20.4        19.7   (two passes; 0.070 read 25.1)
+    //     hollow-mill   0.050      34.7  ->  17.6        25.4   (two passes; 0.058 read 19.8)
+    //     black-rib     0.072      34.4  ->  22.3        34.0
+    //     great-tree    0.048      33.6  ->  14.2        18.8
+    //     jackfield     0.060      29.9  ->  16.0        25.0
+    //
+    // For scale, the two already set: the station at 0.055 renders 15.0, the Holdfast at 0.062
+    // renders 19.4. Values are per material, not one sweep, and two of them needed a second
+    // pass — which is the argument for measuring each rather than picking a number and
+    // applying it everywhere.
+    //
+    // THREE MAJORS STILL READ "PALER THAN THE GROUND" AND ARE DELIBERATELY LEFT ALONE:
+    // avery-house 2.91 (12.5 vs 4.3), chapel 2.90 (11.6 vs 4.0), standing-stones 1.01
+    // (14.3 vs 14.1). The ratio is misleading there because the ground they are cut into is
+    // forest floor in deep shadow at 4.0-4.3. In ABSOLUTE terms all three are already darker
+    // than the Filling Station's own fixed apron (14.8), which is the value Alex accepted.
+    // Darkening them to match a 4.3 forest floor would delete the yard, not fix it.
+    // A cathedral precinct is laid stone, so it is legitimately the lightest of these.
+    // 0.070 measured 25.1 against a sky of 20.0 — still out-reading it. 0.054 is the second
+    // pass, and this is why the values are per site and re-measured rather than swept once.
+    apronCol: [0.054, 0.053, 0.055],
     lit: false, hub: false,
     flat: { radius: 50, blend: 0.62 },
     approach: { x: -17, z: 40, w: 14, h: 12.0, style: 'cathedral', routeX: -17, routeZ: 30 },
@@ -346,6 +375,9 @@ export const MAJORS = Object.freeze([
   {
     id: 'hollow-mill', name: 'The Hollow Mill',
     x: -996.5, z: -924.6, region: 'pines', terrainRegion: 'pines', kind: 'mill',
+    // A mill yard is damp earth and spilled grain, under trees.
+    // 0.058 measured 19.8 against a ground of 19.6 — level with it, not under it. 0.050.
+    apronCol: [0.050, 0.048, 0.045],
     lit: false, hub: false,
     flat: { radius: 34, blend: 0.62 },
     approach: { x: 0, z: 29, w: 12, h: 10.0, style: 'mill', routeX: 0, routeZ: 25 },
@@ -380,6 +412,8 @@ export const MAJORS = Object.freeze([
     id: 'jackfield', name: 'Jackfield Barn',
     reward: 'shotgun',                     // ROUND 6: in the loft, where DESIGN 7.9 always put it
     x: 1158.9, z: -790.1, region: 'fields', terrainRegion: 'fields', kind: 'barn',
+    // A barn yard is dirt, straw and old tractor ruts.
+    apronCol: [0.060, 0.058, 0.053],
     lit: false, hub: false,
     flat: { radius: 42, blend: 0.62 },
     approach: { x: 2, z: 35, w: 13, h: 10.0, style: 'barn', routeX: 2, routeZ: 30 },
@@ -408,6 +442,9 @@ export const MAJORS = Object.freeze([
     // with an actual spiral climb and a supply cage on the crown deck.
     id: 'great-tree', name: 'The Great Tree',
     x: -260, z: -850, region: 'pines', terrainRegion: 'pines', kind: 'great-tree',
+    // The darkest of them on purpose: this is a clearing floor in pines, leaf litter and
+    // needle duff, and it had been reading brighter than the sky above the canopy.
+    apronCol: [0.048, 0.047, 0.043],
     lit: false, hub: false, clearR: 50,
     flat: { radius: 52, blend: 0.62 },
     approach: { x: 0, z: 31, w: 15, h: 11.8, style: 'great-tree', routeX: 0, routeZ: 20 },
@@ -423,6 +460,8 @@ export const MAJORS = Object.freeze([
     // sleeper-monolith vocabulary as one vertical destination with a route onto its crown.
     id: 'black-rib', name: 'The Black Rib',
     x: 1392, z: -218, region: 'ridge', terrainRegion: 'ridge', kind: 'rock-arch',
+    // Bare ridge rock, so it keeps more than the earth yards do.
+    apronCol: [0.072, 0.071, 0.070],
     lit: false, hub: false, clearR: 40,
     flat: { radius: 42, blend: 0.62 },
     approach: { x: 0, z: 34, w: 15, h: 11.0, style: 'rock-arch', routeX: 6, routeZ: 13 },

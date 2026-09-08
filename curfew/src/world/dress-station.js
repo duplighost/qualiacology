@@ -946,7 +946,7 @@ function shopInterior(k, api) {
  * wall (x -5.72..-5.28, z -3..4) — docs/ROUND-7/HANDOFF-A.md 6.2 — so it gets a foot, which
  * is invisible and harmless, and no capital, which would poke out of a wall.
  */
-function canopyDetail(k, api) {
+function canopyDetail(k, api, glow) {
   const cw = 13, cd = 9, ch = 4.6;
   const under = api.padY + ch - 0.275;          // padY + 4.325, the slab's underside
   const top = api.padY + ch + 0.275;            // padY + 4.875
@@ -960,6 +960,58 @@ function canopyDetail(k, api) {
   k.box(cw - 0.16, tt, tw, 0, ty, cd * 0.5 - tw * 0.5 - 0.08, C.slate);
   k.box(tw, tt, cd - 0.16 - tw * 2, -cw * 0.5 + tw * 0.5 + 0.08, ty, 0, C.slate);
   k.box(tw, tt, cd - 0.16 - tw * 2, cw * 0.5 - tw * 0.5 - 0.08, ty, 0, C.slate);
+
+  // (1b) THE CEILING THE STRIPS ARE BOLTED TO. ROUND 17.
+  //
+  // MEASURED (tools/canopy-light.mjs), looking up from between the pumps in deep night: the
+  // strip glow reads mean luma 130.8 (max 176) and the canopy it hangs from reads mean 4.1
+  // over 7,834 samples. A thirty-to-one ratio thirty centimetres apart. It is the first thing
+  // anybody sees, because it is the roof you wake up under.
+  //
+  // IT CANNOT BE FIXED WITH A LIGHT. The census is pinned at boot (AGENTS.md's first law) and
+  // a fourteenth light would recompile every material in the game.
+  //
+  // AND IT MUST NOT BE FIXED WITH A SHEET. Round 5 hung a 12 x 7.8 m additive wash under this
+  // exact canopy; Alex reported it as a translucent rectangle floating under the roof and it
+  // was deleted, leaving the note that stands above the strips in sites.js: "A soffit is lit
+  // by its fixtures and by what the light lands on, never by a sheet of glass in the air."
+  //
+  // PAINT DOES NOT WORK HERE, AND THAT IS THE WHOLE PROBLEM. The first attempt at this was
+  // three opaque body-material panes with a baked gradient — the ceiling's version of what
+  // wetPatches() does on the ground. It changed the measured soffit from 4.1 to 4.0. A soffit
+  // faces DOWN, under a roof, away from the moon and away from the hemisphere's sky term, so
+  // Lambert has almost nothing to multiply the albedo by. Raising albedo on an unlit surface
+  // buys nothing, and the puddles only work because the ground faces up.
+  //
+  // With the light census pinned, additive geometry is the only thing that can put a value on
+  // that ceiling. So: SIX NARROW SPILL BANDS, one either side of each fixture, hugging the
+  // housing. sites.js's rule is "a pane is a fixture or a window: vertical, or small", pinned
+  // at 2 m^2 — these are 0.28 x 6.6 = 1.85 m^2 each, against the 12 x 7.8 = 93 m^2 sheet that
+  // was deleted. Not a rectangle floating under the roof; the bright edge a tube actually
+  // throws onto the boards it is bolted to, brightest against the housing and gone by 40 cm
+  // out. THIS IS THE ONE CHANGE ALEX HAS HISTORY WITH — show him the frame.
+  // ONE CURVE, SAMPLED ACROSS TWO BANDS — not two bands each with their own curve. The first
+  // cut gave each band its own falloff to zero, so the pair read as venetian blinds: a bright
+  // edge, black, then a second bright edge. The cap forces the geometry into strips 0.28 wide
+  // (0.28 x 6.6 = 1.85 m^2, under the 2 m^2 pin), but the PROFILE does not have to know that.
+  // Each vertex asks one global function for its value by its real distance from the housing
+  // edge, so the two strips are two windows onto a single continuous gradient and the seam
+  // between them is arithmetic rather than a line.
+  const SPILL_PEAK = 0.34, HOUSING_EDGE = 0.33, SPILL_REACH = 0.57;
+  const bands = [{ off: 0.47, w: 0.28 }, { off: 0.76, w: 0.28 }];
+  const spill = (sign, off, w) => (u, v) => {
+    const d = (off + (sign > 0 ? u : -u) * w * 0.5) - HOUSING_EDGE;   // metres out from the housing
+    const t = Math.max(0, 1 - d / SPILL_REACH);
+    const along = 1 - Math.pow(Math.min(1, Math.abs(v)), 8);
+    return t * t * along * SPILL_PEAK;
+  };
+  for (const lx of [-3.9, 0, 3.9]) {
+    for (const sx of [-1, 1]) {
+      for (const B of bands) {
+        glow.pane(B.w, cd - 2.4, lx + sx * B.off, under - 0.014, 0, spill(sx, B.off, B.w), 0, Math.PI * 0.5, 4, 14);
+      }
+    }
+  }
 
   // (2) STRUCTURE OVERHEAD. Two beams on the post lines tying the four posts together, and
   // four purlins between the light housings, which are at x -3.9, 0 and 3.9 and must stay
@@ -1091,7 +1143,7 @@ export const DRESS = {
     const s = k.solid;
     apronEdge(s, api);
     kerbLine(s, api);
-    canopyDetail(s, api);
+    canopyDetail(s, api, k.glow);
     contactStains(s, api);
     wetSheen(k.glow, api);
     wetPatches(s, api);
