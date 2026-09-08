@@ -36,6 +36,7 @@
 // every Mesh, every material and every add()/remove().
 
 import * as THREE from 'three';
+import { makeOuterBuilders } from './outer-destinations.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, clamp } from '../engine/math.js';
 
@@ -486,6 +487,72 @@ function kits() {
  */
 function groundY(api, lx, lz) {
   return api.heightAt(api.wx(lx, lz), api.wz(lx, lz));
+}
+
+/** A clothed human silhouette, built in its own unmapped material channel. */
+export function humanFigure(k, api, lx, lz, yaw, rng, attendant = false) {
+  const g = groundY(api, lx, lz) + ON_APRON;
+  const h = attendant ? 1.04 : rng.range(0.96, 1.08);
+  const coat = attendant ? [0.105, 0.145, 0.142] : [[0.068, 0.086, 0.10], [0.12, 0.092, 0.062], [0.076, 0.095, 0.08]][(rng.next() * 3) | 0];
+  const skin = [0.14, 0.098, 0.068], dark = [0.025, 0.026, 0.026];
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const world = (x, y, z) => new THREE.Vector3(lx + h * (x * cy + z * sy), g + h * y, lz + h * (-x * sy + z * cy));
+  const oval = (x,y,z,rx,ry,rz,col) => {
+    const geo = new THREE.SphereGeometry(1, 12, 8); geo.scale(rx*h,ry*h,rz*h); geo.rotateY(yaw);
+    const p = world(x,y,z); geo.translate(p.x,p.y,p.z); k.push(geo,col);
+  };
+  const limb = (a,b,r,col) => {
+    const p = world(...a), q = world(...b), d = q.clone().sub(p), geo = new THREE.CylinderGeometry(r*h*0.85,r*h,d.length(),9);
+    geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));
+    geo.translate((p.x+q.x)/2,(p.y+q.y)/2,(p.z+q.z)/2); k.push(geo,col);
+  };
+  for (const side of [-1,1]) {
+    const x = side * 0.105;
+    limb([x,0.13,0], [x,0.58,0.015], 0.078, dark);
+    limb([x,0.58,0.015], [x,0.96,0], 0.093, coat);
+    oval(x,0.09,0.06,0.088,0.085,0.18,dark);
+  }
+  oval(0,1.20,0,0.225,0.34,0.135,coat);
+  oval(0,0.98,0,0.195,0.18,0.13,coat);
+  limb([0,1.44,0],[0,1.57,0],0.061,skin);
+  oval(0,1.67,0.018,0.10,0.135,0.103,skin);
+  oval(0,1.68,-0.032,0.105,0.139,0.075,dark);
+  oval(0,1.66,0.116,0.028,0.038,0.037,skin);
+  for (const side of [-1,1]) {
+    const x = side * 0.255;
+    limb([side*0.205,1.41,0],[x,1.10,0.02],0.071,coat);
+    const hand = attendant ? [side*0.18,1.01,0.25] : [side*0.255,0.88,0.08];
+    limb([x,1.10,0.02],hand,0.058,coat);
+    oval(...hand,0.044,0.069,0.041,skin);
+    oval(side*0.040,1.69,0.106,0.014,0.01,0.009,dark);
+  }
+  // Lapels and a scarf make the neck and shoulders readable without a black hood.
+  for (const side of [-1,1]) limb([side*0.09,1.46,0.105],[side*0.02,1.22,0.147],0.026,[0.19,0.16,0.12]);
+  if (attendant || rng.next() < 0.4) {
+    const p=world(0,1.79,0); k.cyl(0.11*h,0.115*h,0.085*h,12,p.x,p.y,p.z,coat,yaw);
+    const b=world(0,1.76,0.07); k.box(0.24*h,0.025*h,0.19*h,b.x,b.y,b.z,coat,yaw);
+  }
+  if (attendant) {
+    const p=world(-0.12,1.34,0.136); k.box(0.048*h,0.075*h,0.015,p.x,p.y,p.z,[0.42,0.31,0.10],yaw);
+  } else if (rng.next() < 0.40) {
+    oval(0,1.18,-0.20,0.19,0.27,0.13,[0.09,0.065,0.043]);
+    for (const side of [-1,1]) limb([side*0.16,1.44,0.06],[side*0.17,1.04,0.13],0.019,dark);
+  }
+  api.emit({kind:'circle',x:lx,z:lz,r:0.29,y0:g-0.15,y1:g+1.83*h,tag:'cloth'});
+  return g;
+}
+
+function cashier(k, people, api, x, z, yaw) {
+  const g=humanFigure(people,api,x,z,yaw,api.rng,true), cy=Math.cos(yaw), sy=Math.sin(yaw);
+  const px=x+sy*0.62,pz=z+cy*0.62;
+  k.solid.box(1.7,0.12,0.66,px,g+0.93,pz,[0.10,0.067,0.038],yaw);
+  for(const side of [-1,1]) k.solid.box(0.14,0.88,0.14,px+cy*side*0.65,g+0.44,pz-sy*side*0.65,C.dark,yaw);
+  k.solid.box(0.39,0.20,0.26,px+cy*0.37,g+1.08,pz-sy*0.37,C.metal,yaw);
+  // Warm glass lantern above the counter: a distinct destination for both eye and torch.
+  k.solid.cyl(0.06,0.06,2.55,8,px-cy*0.79,g+1.275,pz+sy*0.79,C.metal);
+  k.glow.cyl(0.13,0.13,0.34,9,px-cy*0.79,g+2.44,pz+sy*0.79,[1,0.78,0.48]);
+  api.emit({kind:'obb',x:px,z:pz,halfX:0.85,halfZ:0.33,yaw,y0:g,y1:g+0.99,tag:'wood'});
+  return {x:px+sy*0.45,z:pz+cy*0.45,y:g};
 }
 
 /* ==========================================================================
@@ -1468,7 +1535,7 @@ export const BUILDERS = {
 
     body(api) {
       const k = kits();
-      const s = k.solid;
+      const s = k.solid, people = new Kit();
       const y = api.padY;
       const rng = api.rng;
       const W = HF.wall, WD = HF.wallDark, RF = HF.roof;
@@ -1558,12 +1625,36 @@ export const BUILDERS = {
         for (let i = -5; i <= 5; i++) {
           s.box(0.46, 0.52, 0.62, i * 1.05, g + WH - 0.22, R + WT * 0.5 + 0.30, WD);   // a corbel table under the head
         }
-        // the arch: five voussoirs a side, so the opening is cut rather than punched
-        for (let i = 0; i <= 10; i++) {
-          const a = Math.PI * (i / 10);
-          const ax = -Math.cos(a) * GATE_HALF;
-          const ay = g + 6.4 + Math.sin(a) * 3.4;
-          s.box(1.3, 1.0, WT + 1.0, ax, ay, R, W, 0, 0, a - Math.PI * 0.5);
+        // A continuous masonry face carries the arch up to the lintel. The old
+        // eleven rotated boxes had sky between every stone and above the crown.
+        const spring=6.4,rise=3.4,outer=GATE_HALF+.72,span=GATE_HALF+1.2,segments=24;
+        const putArchShape=(shape,col,depth,z)=>{
+          const geo=new THREE.ExtrudeGeometry(shape,{depth,steps:1,bevelEnabled:false,curveSegments:1});
+          // ExtrudeGeometry is non-indexed; the rest of the shared masonry kit is indexed.
+          geo.setIndex(Array.from({length:geo.attributes.position.count},(_,i)=>i));
+          s.at(geo,col,0,g+spring,z,0);
+        };
+        const fill=new THREE.Shape();fill.moveTo(-span,0);fill.lineTo(-GATE_HALF,0);
+        for(let i=1;i<=segments;i++){const a=i/segments*Math.PI;fill.lineTo(-Math.cos(a)*GATE_HALF,Math.sin(a)*rise);}
+        fill.lineTo(span,0);fill.lineTo(span,WH-spring+.04);fill.lineTo(-span,WH-spring+.04);fill.closePath();
+        putArchShape(fill,W,WT+1,R-(WT+1)/2);
+        // Wedge-shaped voussoirs meet at radial joints. Their narrow front relief
+        // catches light without turning the arch into a row of floating cubes.
+        for(let i=0;i<segments;i++){
+          const a=i/segments*Math.PI,b=(i+1)/segments*Math.PI,stone=new THREE.Shape();
+          stone.moveTo(-Math.cos(a)*GATE_HALF,Math.sin(a)*rise);
+          stone.lineTo(-Math.cos(b)*GATE_HALF,Math.sin(b)*rise);
+          stone.lineTo(-Math.cos(b)*outer,Math.sin(b)*(rise+.72));
+          stone.lineTo(-Math.cos(a)*outer,Math.sin(a)*(rise+.72));stone.closePath();
+          putArchShape(stone,i%3===0?WD:W,.075,R+(WT+1)/2+.015);
+        }
+        // Tall, narrow collision bands follow the opening without filling the
+        // passage. The lowest point stays above the curve throughout each band.
+        const bands=32,bw=span*2/bands;
+        for(let i=0;i<bands;i++){
+          const x=-span+(i+.5)*bw,near=Math.max(0,Math.abs(x)-bw/2);
+          const bottom=spring+(near<GATE_HALF?rise*Math.sqrt(1-(near/GATE_HALF)**2):0);
+          api.emit({kind:'obb',x,z:R,halfX:bw/2,halfZ:(WT+1)/2,yaw:0,y0:g+bottom,y1:g+WH+.04,tag:'wall'});
         }
         // the jambs
         for (const sx of [-1, 1]) s.box(1.2, 6.6, WT + 1.0, sx * (GATE_HALF + 0.6), g + 3.3, R, W);
@@ -1583,7 +1674,8 @@ export const BUILDERS = {
           });
         }
         // and the toll itself: hold E here, with money, and the leaves open.
-        if (typeof api.gate === 'function') api.gate(0, R + 2.6, g + 1.2);
+        const pay = cashier(k, people, api, 0, R + 3.5, 0);
+        if (typeof api.gate === 'function') api.gate(pay.x, pay.z, pay.y, 40);
       }
 
       /* ---- THE BAILEY ------------------------------------------------------ */
@@ -1676,7 +1768,7 @@ export const BUILDERS = {
       /* ---- AND WHAT IS BEHIND IT ------------------------------------------- */
       keepInside(k, api, y);
 
-      return { solid: s.build(), glow: k.glow.empty() ? null : k.glow.build(), moving: null, glowColour: GLOW.lamp };
+      return { people: people.build(), solid: s.build(), glow: k.glow.empty() ? null : k.glow.build(), moving: null, glowColour: GLOW.lamp };
     },
   },
 
@@ -2066,7 +2158,7 @@ export const BUILDERS = {
    *  2. LIKE THE BIG PLACE IN THE MIDDLE. The same toll machinery as the Holdfast: api.gate()
    *     registers the price, api.gateOpen() remembers, and the barrier is a real collider until
    *     it is paid. One verb, learned once, used twice.
-   *  3. GUARDED BY PEOPLE. A real dormant cast, not welded scenery.
+   *  3. GUARDED. A neutral armed cast, separate from the cashier.
    *  4. THEY START WHERE YOU WOULD NOT SHOOT THEM AND THEY LOOK DIFFERENT. This is the
    *     interesting clause and it is a READABILITY problem, not an AI one. The answer this
    *     game already has: EVERYTHING HOSTILE IN THE COUNTY IS DARK AND IN THE TREES. So the
@@ -2077,8 +2169,8 @@ export const BUILDERS = {
    *  5. THEY SELL ACCESS TO THE HIGHWAY. The barrier is across the road itself, so what the
    *     money buys is the shortcut - which is the part that makes this different from the
    *     Holdfast, where the toll buys a building.
-   *  6. YOU CAN FIGHT, AND IT IS HARD. Nine bodies against the Holdfast gate's five, and two
-   *     of them are Wardens standing back behind the barrier.
+   *  6. YOU CAN FIGHT. Two reinforced ranged guards and a Warden cover the road.
+   *     Defeating the complete garrison opens the persistent gate.
    *
    * SQUARE TO THE ROAD, NOT TO ITS OWN YAW. A major's yaw is "face the nearest road point",
    * which is meaningless for a site sitting ON the road - the nearest point is under your feet
@@ -2088,7 +2180,7 @@ export const BUILDERS = {
   checkpoint: {
     landmark(api) {
       const k = kits();
-      const s = k.solid, g = api.padY;
+      const s = k.solid, people = new Kit(), g = api.padY;
 
       // road space. tx/tz is the tangent at this exact point; nearestRoadInfo reuses one
       // scratch object, so both components are copied before anything else queries it.
@@ -2132,12 +2224,12 @@ export const BUILDERS = {
       const shut = !(api.gateOpen && api.gateOpen());
       if (shut) {
         const [bx, bz] = P(0, 0);
-        s.box(GAP * 2 + 0.7, 0.26, 0.16, bx, g + 1.05, bz, C.rust, yawOf(0, 1));
+        s.box(GAP * 2 + 0.7, 0.26, 0.16, bx, g + 1.05, bz, C.rust, yawOf(1, 0));
         for (let i = 0; i < 5; i++) {
           const [sx2, sz2] = P(0, -GAP + (i / 4) * GAP * 2);
-          s.box(0.34, 0.20, 0.18, sx2, g + 1.05, sz2, C.dark, yawOf(0, 1));
+          s.box(0.34, 0.20, 0.18, sx2, g + 1.05, sz2, C.dark, yawOf(1, 0));
         }
-        api.emit({ kind: 'obb', x: bx, z: bz, halfX: GAP + 0.4, halfZ: 0.45, yaw: 0,
+        api.emit({ kind: 'obb', x: bx, z: bz, halfX: GAP + 0.4, halfZ: 0.45, yaw: yawOf(1, 0),
           y0: g - 0.4, y1: g + 1.35, tag: 'gate' });
       }
 
@@ -2149,7 +2241,7 @@ export const BUILDERS = {
         const [wx2, wz2] = P(-3.4, GAP + 1.78);
         s.box(1.5, 0.85, 0.08, wx2, g + 1.62, wz2, [0.30, 0.26, 0.19], yawOf(1, 0));
         k.glow.pane(1.4, 0.78, wx2, g + 1.62, wz2, PANE_LAMP, yawOf(1, 0), 0, 6, 5);
-        api.emit({ kind: 'obb', x: hx, z: hz, halfX: 1.7, halfZ: 1.4, yaw: 0,
+        api.emit({ kind: 'obb', x: hx, z: hz, halfX: 1.7, halfZ: 1.4, yaw: yawOf(1, 0),
           y0: g - 0.4, y1: g + 2.9, tag: 'wall' });
       }
 
@@ -2194,34 +2286,25 @@ export const BUILDERS = {
       }
 
       // the toll: hold E on the approach side of the boom, with money, and it lifts.
-      if (typeof api.gate === 'function') { const [gx2, gz2] = P(4.6, 0); api.gate(gx2, gz2, g + 1.2); }
+      { const [cx, cz] = P(4.8, GAP + 0.2);
+        const pay = cashier(k, people, api, cx, cz, yawOf(1, 0));
+        if (typeof api.gate === 'function') api.gate(pay.x, pay.z, pay.y, 25); }
 
-      /* ---- WHO IS STANDING THERE -------------------------------------------
-       * Nine, against the Holdfast gate's five, and all of them dormant. Six are the Standing
-       * Kind - "an ordinary person who does nothing at all until it notices you", which is the
-       * exact reading Alex asked for: not a threat from a distance, a very bad idea up close.
-       * The two Wardens stand BEHIND the barrier, where you can see them over it before you
-       * decide whether to pay. That is the whole point of putting them in the light.
-       */
+      // Neutral until deliberately attacked. The low boom leaves this garrison
+      // reachable by fire from the approach, unlike the castle's solid gate leaves.
       if (typeof api.cast === 'function') {
         const C4 = (u, v, yaw2, species) => {
           const [lx, lz] = P(u, v);
-          return { species, lx, lz, yaw: yawOf(-1, 0) + yaw2, awake: false };
+          return { species, lx, lz, yaw: yawOf(1, 0) + yaw2, awake: false, guard: true, hpScale: 1.6 };
         };
         api.cast([
-          C4(2.2, GAP + 1.0, 0.2, 'standing'),
-          C4(2.4, -GAP - 1.1, -0.3, 'standing'),
-          C4(4.1, GAP + 2.6, 0.5, 'standing'),
-          C4(-2.8, GAP + 3.4, 2.6, 'standing'),
-          C4(-3.2, -GAP - 2.9, -2.4, 'standing'),
-          C4(6.4, -GAP - 3.6, 0.1, 'standing'),
-          C4(5.0, 0.6, 0.0, 'poacher'),
-          C4(-7.5, -3.2, 3.0, 'warden'),
-          C4(-8.2, 4.4, 3.0, 'warden'),
+          C4(-3.5, -GAP - 1.0, -0.2, 'poacher'),
+          C4(-3.5, GAP + 1.0, 0.2, 'poacher'),
+          C4(-9.0, 0, 0.0, 'warden'),
         ]);
       }
 
-      return { solid: s.build(), glow: k.glow.empty() ? null : k.glow.build() };
+      return { people: people.build(), solid: s.build(), glow: k.glow.empty() ? null : k.glow.build() };
     },
   },
 
@@ -3103,6 +3186,7 @@ export const BUILDERS = {
 // Blackthorn Manor (ROUND 6, Alex: "if any of my haunted mansion from previous games made it
 // in as destinations"). The whole builder lives in manor.js; it gets this file's kit,
 // palette and pane profiles and returns the same { landmark, body } shape as the rest.
+Object.assign(BUILDERS, makeOuterBuilders({ Kit, kits, C, GLOW, groundY }));
 BUILDERS.manor = makeManorBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 BUILDERS.avery = makeAveryHouseBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 
@@ -4148,7 +4232,7 @@ const APRON_DETAIL_AMP = 0.42;
  * ON_APRON is the Y a flat mark on the made ground must use. Both are exported so a dress
  * module and the apron builder can never drift apart again.
  */
-export const APRON_LIFT = 0.08;
+export const APRON_LIFT = 0.025;
 export const ON_APRON = APRON_LIFT + 0.012;
 
 /* ------------------------------------------------------------- the road approach --
@@ -4303,7 +4387,10 @@ export function apron(api, radius, col) {
   // one flat plane across 40% of the opening frame. 56 x 12 is 673 vertices, roughly one per
   // 1.2 m, matching the chunk ground's own density, and it is still a rounding error against
   // a two-million-triangle county.
-  const N = 56, RINGS = 12, LIFT = APRON_LIFT;
+  // Fixed 56 x 12 put eight-metre triangles under the Holdfast crowd. Their
+  // interpolated top could cover people planted on the analytic terrain below.
+  const N = Math.max(56, Math.ceil(TAU * radius / 2));
+  const RINGS = Math.max(12, Math.ceil(radius / 1.5)), LIFT = APRON_LIFT;
   const pos = [], nor = [], uv = [], idx = [];
   // PROJECTED ON THE HEIGHTFIELD, never authored above it. That is roads.js's own rule for
   // its ribbon ("the ribbon is PROJECTED onto the heightfield, never authored above it, so

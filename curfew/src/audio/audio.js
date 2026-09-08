@@ -524,6 +524,14 @@ const DREAD = {
   // THE BLACKOUT: the torch's filament popping at the eye, then a breath at the ear.
   filamentPop: { n: 'dr_filament', v: 2, gain: 0.70, bus: 'world',     send: 0.05, occl: false, pri: 1, prop: 0, rlo: 0.98, rhi: 1.02, threat: false },
   breathEar:   { n: 'dr_breathear', v: 2, gain: 0.80, bus: 'creatures', send: 0.06, occl: false, pri: 1, prop: 0, rlo: 0.97, rhi: 1.03, threat: true },
+  'rear-presence': { n: 'dr_rearpresence', v: 2, gain: .58, bus: 'creatures', send: .04, occl: false, pri: 1, prop: 0, rlo: .97, rhi: 1.03, threat: true },
+  'canopy-rush': { n: 'dr_canopyrush', v: 2, gain: .84, bus: 'creatures', send: .24, occl: false, pri: 1, prop: 0, rlo: .95, rhi: 1.05, threat: true },
+  'glass-strain': { n: 'dr_glassstrain', v: 2, gain: .58, bus: 'world', send: .42, occl: true, pri: 2, prop: 0, rlo: .95, rhi: 1.05, threat: false },
+  'vault-resonance': { n: 'dr_vaultresonance', v: 2, gain: .63, bus: 'world', send: .62, occl: true, pri: 2, prop: 0, rlo: .97, rhi: 1.03, threat: false },
+  'cable-strain': { n: 'dr_cablestrain', v: 2, gain: .65, bus: 'world', send: .38, occl: true, pri: 2, prop: 0, rlo: .95, rhi: 1.05, threat: false },
+  'dealer-rack': { n: 'dr_dealerrack', v: 2, gain: .64, bus: 'world', send: .10, occl: true, pri: 1, prop: 0, rlo: .98, rhi: 1.02, threat: false },
+  'dealer-reload': { n: 'dr_dealerreload', v: 2, gain: .65, bus: 'world', send: .10, occl: true, pri: 1, prop: 0, rlo: .98, rhi: 1.02, threat: false },
+  'dealer-shot': { n: 'dr_dealershot', v: 2, gain: .88, bus: 'creatures', send: .26, occl: true, pri: 1, prop: 0, rlo: .98, rhi: 1.02, threat: true },
 };
 const DREAD_ALIAS = {
   'lantern-gone': 'lanternGone', lanterngone: 'lanternGone', snap: 'branch',
@@ -2328,7 +2336,80 @@ export class Audio {
     // own last footstep used (bed.lastStepBuffer()), because a copy of you is a
     // far stronger idea than a stranger's step, and the copy has to be exact.
 
+    this._bakeExploration();
     this._verifyDread();
+  }
+
+  // Close sounds have small, dry details; distant architecture has long, uneven
+  // resonances. Everything stays below the existing peak ceiling. A separate RNG
+  // stream means adding a destination cannot change every gun and footstep bake.
+  _bakeExploration() {
+    const sr = Math.max(16000, Math.round(this.sr / 2));
+    const r = this.ctx.rng.fork('audio:exploration'), rn = () => r.next();
+    for (let v = 0; v < 2; v++) {
+      const make = s => new Float32Array(Math.round(s * sr));
+      const save = (name, b, peak = .82) => {
+        biquad(b, sr, 'hp', 55, .7); fadeOut(b, sr, .08);
+        this.reg(name + v, [normalizeTo(b, peak)], sr);
+      };
+      // Upholstery compresses; a throat takes one breath where the rear seat was empty.
+      let b = make(1.16), n = make(.96);
+      noiseFill(n, rn); biquad(n, sr, 'bp', 720 + v * 90, .8); envAD(n, sr, .15, .23);
+      mixInto(b, n, .45, Math.round(.09 * sr));
+      sweepSine(b, sr, 186 + v * 17, 91, .28, .24, .21, .12);
+      grains(b, sr, rn, { count: 13, from: .015, span: .30, len: [.002, .009], hp: 420, lp: 2200, amp: .21, decay: 1.4 });
+      save('dr_rearpresence', b, .74);
+
+      // A fast body crosses foliage; the low tearing sound has a short dry crack
+      // above it. Its force comes from the preceding silence, not unlimited gain.
+      b = make(1.15); n = make(.70);
+      noiseFill(n, rn); biquad(n, sr, 'bp', 1050 + v * 130, .65); envAD(n, sr, .018, .17);
+      mixInto(b, n, .48, Math.round(.04 * sr));
+      grains(b, sr, rn, { count: 27, from: .03, span: .62, len: [.002, .016], hp: 330, lp: 5200, amp: .45, decay: 2.4 });
+      sweepSine(b, sr, 235, 72 + v * 8, .17, .22, .40, .06);
+      damped(b, sr, 920 + v * 170, .011, .62, 0, .045);
+      save('dr_canopyrush', b, .92);
+
+      b = make(2.1);
+      for (const [f, a, t] of [[745, .35, 0], [1193, .25, .09], [1802, .13, .17], [2961, .08, .33]]) {
+        damped(b, sr, f * (1 + v * .027), .32 + rn() * .35, a, 0, t);
+      }
+      grains(b, sr, rn, { count: 11, from: .36, span: .65, len: [.001, .005], hp: 1600, lp: 6200, amp: .22, decay: 1.2 });
+      save('dr_glassstrain', b, .70);
+
+      b = make(3.5);
+      // Detuned partials beat against each other like a cracked hanging bell.
+      for (const [f, a, tau] of [[136, .43, 1.25], [275, .25, 1.0], [367, .19, .9], [578, .12, .65], [889, .10, .42]]) {
+        damped(b, sr, f + v * 4, tau, a, 0, .045);
+        damped(b, sr, f * 1.014 + v * 3, tau * .7, a * .22, 0, .053);
+      }
+      save('dr_vaultresonance', b, .78);
+
+      b = make(2.4); n = make(1.8);
+      noiseFill(n, rn); biquad(n, sr, 'bp', 450 + v * 45, 2.3); envAD(n, sr, .16, .36);
+      mixInto(b, n, .20, Math.round(.07 * sr));
+      sweepSine(b, sr, 118, 78 + v * 5, .75, .55, .42, .11);
+      for (let i = 0; i < 6; i++) damped(b, sr, 640 + i * 67 + v * 31, .017, .20, 0, .05 + i * i * .031);
+      save('dr_cablestrain', b, .76);
+
+      for (const reload of [false, true]) {
+        b = make(reload ? .95 : .48);
+        const times = reload ? [.018, .32, .66] : [.018, .17];
+        for (const t of times) {
+          grains(b, sr, rn, { count: 5, from: t, span: .034, len: [.001, .005], hp: 700, lp: 5700, amp: .38, decay: 1.6 });
+          damped(b, sr, 810 + v * 70, .024, .52, 0, t);
+          damped(b, sr, 1730 + v * 120, .008, .28, 0, t + .009);
+        }
+        save(reload ? 'dr_dealerreload' : 'dr_dealerrack', b, .78);
+      }
+      b = make(.88); n = make(.22);
+      noiseFill(n, rn); biquad(n, sr, 'hp', 500, .7); biquad(n, sr, 'lp', 6400, .7); envAD(n, sr, .001, .045);
+      mixInto(b, n, .68);
+      sweepSine(b, sr, 178 + v * 12, 61, .10, .12, .84, .003);
+      damped(b, sr, 820, .011, .40, 0, .002);
+      grains(b, sr, rn, { count: 9, from: .12, span: .39, len: [.003, .014], hp: 350, lp: 2300, amp: .13, decay: 2.5 });
+      saturate(b, 1.5, .18); save('dr_dealershot', b, .94);
+    }
   }
 
   /**

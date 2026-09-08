@@ -74,7 +74,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import CFG from '../config.js';
 import { clamp, clamp01, lerp, smoothstep, noise1D, TAU } from '../engine/math.js';
-import { ImpostorBank, IMPOSTOR_FROM } from './impostors.js';
+import { ImpostorBank, IMPOSTOR_FROM, coveragePreservingChain } from './impostors.js';
 import { planTravelWaters } from './wilds.js';
 
 // ---------------------------------------------------------------------------
@@ -739,6 +739,8 @@ function segmentGeometry(ax, ay, az, bx, by, bz, rA, rB, radial, col, windA, win
   const ni = geo.toNonIndexed();
   geo.dispose();
   geo = ni;
+  const barkUV = geo.attributes.uv;
+  for (let i = 0; i < barkUV.count; i++) barkUV.setXY(i, barkUV.getX(i) * 0.96 + 0.02, 0.82 + barkUV.getY(i) * 0.16);
 
   const n = geo.attributes.position.count;
   const c = new Float32Array(n * 3);
@@ -873,6 +875,154 @@ function trunkRadiusAt(rec, f) {
   return rec.trunkR * lerp(1, top, Math.pow(clamp01(f), 0.84));
 }
 
+// Branch-attached needle and leaf sprays. The atlas supplies the fine boundary; angled
+// cards give volume instead of one camera-facing billboard. Trunks keep opaque atlas UVs.
+function foliageSprayGeometry(cx, cy, cz, radius, col, tint, wind, squash, seed, turn = 0, conifer = false, lod = 0) {
+  const parts = [];
+  const count = lod ? 2 : 3;
+  for (let i = 0; i < count; i++) {
+    const width = radius * (conifer ? 2.42 : 2.56) * (0.89 + hashI(i, 101, seed) * 0.22);
+    const height = radius * (conifer ? 2.00 : 2.06) * Math.max(0.72, squash)
+      * (0.88 + hashI(i, 103, seed) * 0.24);
+    const g = new THREE.PlaneGeometry(width, height, 2, 2);
+    // A shallow fold through the branch gives the moon more than one plane to light.
+    const p = g.attributes.position, u = g.attributes.uv;
+    for (let j = 0; j < p.count; j++) {
+      const x = p.getX(j), y = p.getY(j);
+      p.setZ(j, Math.abs(x) * -0.24 + (y / height) * (y / height) * radius * 0.12);
+      // Generous transparent gutter: an opaque bark mip must never leak into the tip
+      // of a far foliage card and create a hard dark triangle in the sky.
+      const across = hashI(i, 107, seed) > 0.5 ? 1 - u.getX(j) : u.getX(j);
+      u.setXY(j, (conifer ? 0.03 : 0.53) + across * 0.44, 0.02 + u.getY(j) * 0.34);
+    }
+    g.rotateX((conifer ? -0.10 : -0.45) + hashI(i, 73, seed) * (conifer ? 0.42 : 0.90));
+    g.rotateZ((hashI(i, 43, seed) - 0.5) * (conifer ? 0.46 : 1.10));
+    g.rotateY(turn + i * Math.PI / count + hashI(i, 17, seed) * 0.26);
+    g.translate(cx, cy, cz);
+    g.computeVertexNormals();
+    const ni = g.toNonIndexed(); g.dispose();
+    const n = ni.attributes.position.count;
+    const colours = new Float32Array(n * 3), weights = new Float32Array(n);
+    for (let j = 0; j < n; j++) {
+      const shade = tint * (0.91 + i * 0.045);
+      colours[j * 3] = col[0] * shade; colours[j * 3 + 1] = col[1] * shade; colours[j * 3 + 2] = col[2] * shade;
+      weights[j] = wind;
+    }
+    ni.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+    ni.setAttribute('aWind', new THREE.BufferAttribute(weights, 1));
+    parts.push(ni);
+  }
+  const merged = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  return merged;
+}
+
+function coniferCrownGeometry(rec, lod, seed) {
+  const parts = [], tiers = lod ? 5 : 7;
+  const base = rec.trunkH * 0.50, span = rec.trunkH * 0.50;
+  for (let j = 0; j < tiers; j++) {
+    const f = j / (tiers - 1), y = base + span * f;
+    const r = rec.trunkH * 0.137 * Math.pow(1 - f * 0.91, 0.88)
+      * (0.91 + hashI(j, 97, seed) * 0.16);
+    const anchor = trunkPointAt(rec, y / rec.trunkH);
+    parts.push(foliageSprayGeometry(anchor.x, y + r * 0.16, anchor.z, r, rec.leaf,
+      0.91 + f * 0.18, 0.38 + f * 0.35, 1.05, seed + j * 71,
+      rec.leanDir + j * 1.37, true, lod));
+  }
+  const merged = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  return merged;
+}
+
+// One texture for the shared tree material: bark is opaque in the top 96 pixels;
+// needles/leaves occupy the bottom 176. The wide empty band prevents opaque bark
+// bleeding into minified foliage tips, even in the atlas's coarse mip levels.
+function makeFoliageAtlas() {
+  const size = 512;
+  if (typeof document === 'undefined' || !document.createElement) {
+    const data = new Uint8Array(size * size * 4); data.fill(255);
+    const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+    tex.needsUpdate = true; return tex;
+  }
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d');
+  g.clearRect(0, 0, size, size);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, size, 96);
+  // Fine longitudinal bark; RGB only, with a reserved pure-white texel for rocks/litter.
+  for (let i = 0; i < 230; i++) {
+    const x = hashI(i, 211, 3301) * size;
+    const v = 195 + Math.floor(hashI(i, 233, 3301) * 53);
+    g.strokeStyle = `rgb(${v},${v},${v})`; g.lineWidth = 0.6 + hashI(i, 251, 3301) * 2.4;
+    g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + 3, 30, x - 4, 70, x + 1, 96); g.stroke();
+  }
+  g.fillStyle = '#ffffff'; g.fillRect(376, 48, 16, 16);
+  const line = (ax, ay, bx, by, width, value) => {
+    g.strokeStyle = `rgb(${value},${value},${value})`; g.lineWidth = width;
+    g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+  };
+  // Needle bough: a curved leader, uneven paired limbs and dense angled needles.
+  // Keep every drawn needle/leaf inside the sampled rectangle. Cropping the drawing
+  // to the card boundary makes even a transparent atlas look like square foliage.
+  g.save(); g.translate(32, 336); g.scale(0.75, 0.62);
+  line(128, 246, 124, 12, 3.2, 174);
+  for (let j = 0; j < 12; j++) {
+    const t = j / 12, y = 232 - t * 206;
+    for (const side of [-1, 1]) {
+      const reach = (1 - t * 0.81) * (91 + hashI(j, side + 9, 3907) * 21);
+      const ex = 127 + side * reach, ey = y - 27 - t * 13;
+      line(127, y + 3, ex, ey, 1.8, 172);
+      for (let k = 0; k < 18; k++) {
+        const q = (k + .5) / 18, bx = 127 + (ex - 127) * q, by = y + (ey - y) * q;
+        const len = 10 + hashI(j * 41 + k, side + 19, 3907) * 11;
+        const value = 182 + Math.floor(hashI(k, j + side, 3917) * 73);
+        line(bx, by, bx + side * len * .57, by - len, 1.35, value);
+        line(bx, by + 1, bx + side * len * .82, by + len * .42, 1.15, value - 14);
+      }
+    }
+  }
+  g.restore();
+  // A deciduous twig spray. Individual pointed leaves, central veins and empty air.
+  g.save(); g.translate(288, 336); g.scale(0.75, 0.62);
+  line(120, 248, 137, 21, 2.8, 154);
+  for (let j = 0; j < 8; j++) {
+    const y = 226 - j * 25;
+    for (const side of [-1, 1]) {
+      const bx = 122 + j * 1.7;
+      const ex = bx + side * (73 - j * 4 + hashI(j, side + 13, 4201) * 15);
+      const ey = y - 24 - hashI(j, side + 17, 4201) * 17;
+      line(bx, y, ex, ey, 1.7, 163);
+      for (let k = 0; k < 3; k++) {
+        const q = .39 + k * .26, x = bx + (ex - bx) * q, yy = y + (ey - y) * q;
+        const a = -Math.PI * .5 + side * (.38 + k * .19);
+        const len = 23 + hashI(j * 7 + k, side + 21, 4201) * 14;
+        const width = len * .38, val = 182 + Math.floor(hashI(j, k + side, 4301) * 66);
+        g.save(); g.translate(x, yy); g.rotate(a);
+        g.fillStyle = `rgb(${val},${val},${val})`;
+        g.beginPath(); g.moveTo(0, 0); g.bezierCurveTo(len * .26, -width, len * .70, -width * .62, len, 0);
+        g.bezierCurveTo(len * .68, width * .82, len * .24, width, 0, 0); g.fill();
+        line(0, 0, len * .91, 0, .8, Math.max(140, val - 32)); g.restore();
+      }
+    }
+  }
+  g.restore();
+  // Transparent texels must not average their black RGB into the needles. Use the
+  // same alpha-weighted, coverage-preserving filter as the distant tree bake.
+  const rgba = g.getImageData(0, 0, size, size).data;
+  const mips = coveragePreservingChain(new Uint8Array(rgba), size, size, 0.30 * 255);
+  const tex = new THREE.DataTexture(mips[0].data, size, size, THREE.RGBAFormat);
+  tex.flipY = true;
+  tex.generateMipmaps = false;
+  tex.mipmaps = mips;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.userData.sourceCanvas = canvas;
+  tex.needsUpdate = true;
+  tex.name = 'county-bark-needle-leaf-atlas'; tex.colorSpace = THREE.NoColorSpace;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 /** Build one template's geometry from its recipe at a detail level (0 = near). */
 function buildTemplateGeometry(rec, lod, seed) {
   const parts = [];
@@ -884,7 +1034,6 @@ function buildTemplateGeometry(rec, lod, seed) {
   // triangles per mid tree is what stops a trunk reading as a flat slab, and
   // the document is explicit that this saving is not to be spent elsewhere.
   const radial = lod === 0 ? 6 : 5;
-  const detail = lod === 0 ? 1 : 0;
   const tH = rec.trunkH, tR = rec.trunkR;
 
   // Three unequal reaches, a fast base taper and six broad flutes. The bottom reach gets one
@@ -977,35 +1126,32 @@ function buildTemplateGeometry(rec, lod, seed) {
     }
     const puffMin = rec.kind === 'conifer' ? 0.45 : 0.5;
     if (rec.blobsOnBranch && br.f >= puffMin && lod === 0) {
-      // detail 0 (20 faces), not 1 (80). Measured: with these at detail 1 the
-      // broad templates came out at 854 and 1038 triangles against ART.md
-      // §2.5's "LOD0 <= 560 per template" gate, because the document's
-      // arithmetic assumed a four-blob conifer and a broad carries six canopy
-      // masses AND up to four of these. They are 0.8-1.6 m puffs on the end of a
-      // branch and the nearest one is 10 m away; the canopy masses are what
-      // carries the read, and they keep detail 1.
-      // 0.52 -> 0.42 for the same reason as the crown masses: these hang at
-      // branch height, which is exactly the band the top of the frame looks
-      // through.
+      // A three-plane spray follows the fork's bearing and leaves gaps through
+      // the limb instead of ending it in a solid low-poly ball.
       const conifer = rec.kind === 'conifer';
-      parts.push(blobGeometry(bx, by, bz, br.reach * (conifer ? 0.40 : 0.42), 0, rec.leaf,
+      parts.push(foliageSprayGeometry(bx, by, bz, br.reach * (conifer ? 0.50 : 0.48), rec.leaf,
         0.86 + (i % 3) * 0.09, 0.70, conifer ? 0.55 : 0.92, seed + i * 13,
-        { aspect: conifer ? 1.35 : 0.66 + (i % 3) * 0.24, turn: br.ang,
-          profile: conifer ? 'conifer' : 'leaf', droop: conifer ? 0.18 : 0 }));
+        br.ang, conifer, lod));
     }
   }
 
-  for (let i = 0; i < rec.canopy.length; i++) {
+  if (rec.kind === 'conifer') parts.push(coniferCrownGeometry(rec, lod, seed));
+  for (let i = 0; rec.kind !== 'conifer' && i < rec.canopy.length; i++) {
     const cn = rec.canopy[i];
     // thin the crown at LOD1: a lobed tier keeps its first lobe, an old-style crown keeps 2 in 3
     if (lod > 0) {
       if (cn.lobe !== undefined) { if (cn.lobe > 0) continue; }
       else if (rec.canopy.length > 3 && (i % 3) === 1) continue;
     }
-    const d = cn.detail !== undefined ? Math.min(detail, cn.detail) : detail;
-    parts.push(blobGeometry(cn.x, cn.y, cn.z, cn.r, d, rec.leaf,
-      cn.tint, cn.wind, cn.squash, seed + i * 29,
-      { aspect: cn.aspect, turn: cn.turn, profile: cn.profile, droop: cn.droop || 0 }));
+    // A crown belongs to a limb. The old lobes could be metres from the nearest
+    // branch; wind made those unsupported balls look like floating objects.
+    if (lod === 0) {
+      const anchor = trunkPointAt(rec, Math.min(0.96, cn.y / tH - 0.13));
+      parts.push(segmentGeometry(anchor.x, anchor.y, anchor.z, cn.x, cn.y, cn.z,
+        tR * 0.18, tR * 0.035, 3, rec.bark, 0.30, cn.wind * 0.8));
+    }
+    parts.push(foliageSprayGeometry(cn.x, cn.y, cn.z, cn.r * 1.10, rec.leaf,
+      cn.tint, cn.wind, cn.squash, seed + i * 29, cn.turn, false, lod));
   }
   // ROUND 15, item 11: "convincing trunk bases, roots connecting trees to ground". Three
   // spurs leaving the base and running out and DOWN past y = 0, so the 0.25 m instance sink
@@ -1486,6 +1632,7 @@ export class Flora {
     }
 
     // --- materials -------------------------------------------------------
+    this.foliageTex = makeFoliageAtlas();
     this.matNear = this._makeTreeMaterial(0);
     this.matMid = this._makeTreeMaterial(1);
     this.grassTex = makeGrassTexture();
@@ -1500,12 +1647,24 @@ export class Flora {
       boulder: makeBoulderGeometry(this.seed + 977),
       litter: makeLitterGeometry(this.seed + 631),
     };
+    // Logs, stone and litter also use matNear: they must never sample a leaf cutout.
+    for (const kind of UNDER_KINDS) {
+      if (kind === 'fern') continue;
+      const geo = this.underGeo[kind];
+      if (!geo) continue;
+      let uv = geo.attributes.uv;
+      if (!uv) {
+        uv = new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2);
+        geo.setAttribute('uv', uv);
+      }
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.75, 0.89);
+    }
     this._underCount = { fern: 0, log: 0, stump: 0, boulder: 0, litter: 0 };
 
     // --- impostor atlas ---------------------------------------------------
     const ok = this.impostors.bake(this.templates.map((t) => ({
       geometry: t.lod0, halfWidth: t.halfWidth, height: t.height,
-    })));
+    })), this.foliageTex);
     if (!ok) this._notes.push('impostor atlas not baked: ' + this.impostors.reason);
 
     if (this.ctx && this.ctx.scene) this.ctx.scene.add(this.group);
@@ -1517,6 +1676,10 @@ export class Flora {
   _makeTreeMaterial(tier) {
     const mat = new THREE.MeshLambertMaterial({
       vertexColors: true,
+      map: this.foliageTex,
+      alphaTest: 0.30,
+      side: THREE.DoubleSide,
+      shadowSide: THREE.FrontSide,
       fog: true,
       // Lambert, not Standard: a night forest gets nothing from a GGX lobe and
       // MeshStandard's fixed F0 makes dark bark read pale under the torch
@@ -3355,6 +3518,7 @@ export class Flora {
     this.templates.length = 0;
     if (this.matNear) this.matNear.dispose();
     if (this.matMid) this.matMid.dispose();
+    if (this.foliageTex) { this.foliageTex.dispose(); this.foliageTex = null; }
     if (this.matGrass) this.matGrass.dispose();
     if (this.grassTex) this.grassTex.dispose();
     if (this.grassGeo) this.grassGeo.dispose();

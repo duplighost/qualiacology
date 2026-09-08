@@ -41,7 +41,7 @@
 
 import * as THREE from 'three';
 import { CFG } from '../config.js';
-import { buildChunkData, TIERS } from './chunk-worker.js';
+import { buildChunkData, TIERS, MAX_CHUNK_SEG } from './chunk-worker.js';
 import { groundDetail, frostAt, heightAt, normalAt, flats, flatCount } from './terrain.js';
 
 const CHUNK = CFG.world.CHUNK;                       // 64 m
@@ -300,43 +300,14 @@ const ROAD_GRAIN_CROWN = 0.05;    // and much less on it: a wet crown is wet all
 const ROAD_DETAIL_AMP = 0.30;
 const ROAD_WET_G = 0.07, ROAD_WET_B = 0.22;   // and those patches go COOL: they are sky
 
-// AND THE REASON THE ROAD WAS INVISIBLE IN THE FIRST PLACE — measured, not reasoned.
-// roads.js emitRun banks the ribbon: y = heightAt + 0.06 + bank * half * s, with
-// CFG.roads.bank.max 0.12 and half 2.85, so the LOW edge of every curve is pushed up to
-// 0.34 m BELOW the ground it is projected onto. Sampled at -970.3, 256.4 (player standing
-// 1.7 cm from the centreline), ribbon-Y minus heightAt over every vertex within 70 m ran
-// from -0.174 to +0.294: a third of the ribbon is under the terrain. With the ribbon
-// forced emissive red the whole near road is gone and the only red pixels in the frame are
-// a strip 100 m out where the ground falls away (tests/shots/lane3-diag-red.png). That is
-// ART.md's gate row 19 — "n/a (0 px)" — and it was never a colour problem at all.
-//
-// The fix here lifts each CROSS-SECTION PAIR by whatever its lower vertex needs to clear
-// the height function, so the bank's shape survives exactly and only the section is
-// translated. The real fix is in roads.js's emitRun (bank the ribbon about its own centre
-// instead of about zero) or in CFG.roads.bank.max; neither file is this lane's, and both
-// are written up in docs/HANDOFF.md.
-// AND THE THIRD THING EATING THE ROAD, measured 2026-09-02 with the ribbon forced
-// emissive red and the aprons toggled inside one rAF: at the spawn, road pixels went
-// 8,430 with everything drawn -> 15,011 with `apron-filling-station` hidden -> 17,653 with
-// depthTest off entirely. **The place apron was covering 44% of the road on screen.** The
-// apron is a 113-vertex disc over a 38 m radius sitting at heightAt + 0.08; its triangles
-// are up to 20 m across, so between its own vertices it rides well above the height
-// function the ribbon is projected onto, and it wins the depth test. That is places.js's
-// mesh and places.js's fix (see the request in docs/HANDOFF.md) — what this lane can do is
-// clear it. 0.14 -> 0.24 recovers 8,430 -> 10,446 road pixels and takes the crown ratio
-// from 1.76 to 1.96. Not further: _liftRibbon translates a whole banked cross-section, so
-// every metre of clearance also raises the HIGH edge of a curve, and the worst ribbon
-// vertex within 60 m of the player went 0.732 m over the ground to 0.832 m. Past that the
-// road starts to float, and the honest fix is the roads.js bank request, not more lift.
-const RIBBON_CLEAR = 0.24;        // metres over heightAt at tier 0
-// The ground MESH is a piecewise-linear approximation of that function, and its worst
-// deviation above it grows with the square of the quad: 1.6 m quads are ~5 cm, 6.4 m quads
-// are ~0.8 m. Capped, because at tier 2 (640 m and out) a metre of lift is under a pixel.
-const RIBBON_CLEAR_QUAD = 0.012;
-const RIBBON_CLEAR_MAX = 1.20;
+// Roads and collision now share the terrain field. The finalizer projects the ribbon
+// onto the rendered LOD triangles with a small asphalt offset. The old 0.24--1.2 m
+// blanket lift compensated for banked ribbons and coarse aprons; it buried tyres and
+// left road edges visibly detached. Near-road ground is now refined to 0.8 m.
+const RIBBON_CLEAR = 0.045; // clears the 2.5 cm made-ground apron
 
 // Scratch for the skirt walk. Sized off the finest tier once, never per build.
-const MAX_SEG = TIERS.reduce((m, t) => Math.max(m, t.seg), 0);
+const MAX_SEG = MAX_CHUNK_SEG;
 const _ring = new Int32Array(4 * MAX_SEG);
 
 export function chunkKey(cx, cz) { return cx + '|' + cz; }
@@ -1000,19 +971,18 @@ export class Chunks {
     }
   }
 
-  /** Lift every buried cross-section until its LOWER vertex clears the height function —
-   *  see the note on RIBBON_CLEAR. roads.js emits the two edge vertices of a section
-   *  consecutively (emitRun's `for s = -1; s <= 1; s += 2`), so a pair is (2i, 2i+1) and
-   *  translating both by the same amount keeps the bank angle untouched.
-   *  In place, on the payload's own array, before it becomes a geometry. */
+  /** Project every ribbon vertex onto the actual rendered terrain before upload. */
   _liftRibbon(rib, quad) {
     const pos = rib.positions;
-    const need = Math.min(RIBBON_CLEAR_MAX, RIBBON_CLEAR + RIBBON_CLEAR_QUAD * quad * quad);
-    for (let i = 0; i + 5 < pos.length; i += 6) {
-      const dA = heightAt(pos[i], pos[i + 2]) + need - pos[i + 1];
-      const dB = heightAt(pos[i + 3], pos[i + 5]) + need - pos[i + 4];
-      const d = dA > dB ? dA : dB;
-      if (d > 0) { pos[i + 1] += d; pos[i + 4] += d; }
+    // Match the actual terrain triangles, including their LOD, instead of raising
+    // the road by a quarter metre and burying tyres in its non-colliding surface.
+    for (let i = 0; i < pos.length; i += 3) {
+      const x=pos[i],z=pos[i+2],gx=Math.floor(x/quad)*quad,gz=Math.floor(z/quad)*quad;
+      const u=(x-gx)/quad,v=(z-gz)/quad;
+      const a=heightAt(gx,gz),b=heightAt(gx+quad,gz),c=heightAt(gx,gz+quad);
+      const meshY=u+v<=1 ? a+(b-a)*u+(c-a)*v
+        : heightAt(gx+quad,gz+quad)*(u+v-1)+b*(1-v)+c*(1-u);
+      pos[i+1]=Math.max(heightAt(x,z),meshY)+RIBBON_CLEAR;
     }
   }
 

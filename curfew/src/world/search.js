@@ -5,11 +5,9 @@
 //   "we need a cash system. holding e on dead people should get you a few coins if you kill
 //    them. or if you just find bodies."
 //
-// This file owns one verb and nothing else: hold E over a dead person and take what they had.
-// It owns no mesh, no material, no light and no geometry — the coin that flies out is
-// progress.js's existing XP mote wearing a different colour, and the key-cap glyph is hud's
-// existing prompt. That is deliberate: the program budget is CFG.render.budget.programsMax
-// and this lane spends none of it.
+// Search bodies and pay guarded tolls with E. Currency and feedback belong to progress;
+// contextual price/balance belong to the shared prompt. A cashier borrows one existing
+// rover lamp while nearby, released when the player leaves.
 //
 // TWO KINDS OF DEAD PERSON, ONE VERB:
 //
@@ -27,8 +25,8 @@
 // scenery ones remember it in progress's worldFlags so a site that streams out and back does
 // not pay twice; a corpse remembers it on its own record until the pool slot is reused.
 //
-// NO WORDS. The glyph is a key-cap E with a fill ring, the same one the breaker uses. What
-// you took is answered by the coin and its chime, never by a number.
+// Payment is contextual and explicit: price, balance and any shortfall appear while
+// looking at the cashier. Alex asked for the money system to be understandable.
 
 import { CFG } from '../config.js';
 
@@ -56,9 +54,8 @@ const FOUND_EMPTY_CHANCE = 0.28;
  * but there are a lot of them."
  *
  * The same verb, one radius wider, because you are paying a man rather than kneeling over a
- * body. The refusal is the important half: with no money the hold RUNS and then fails, and
- * the answer is the dead click the county already uses when a claim is refused. No words, no
- * number, no red cross — you held the key down, the man did not move, and you work it out.
+ * body. Price, purse and shortfall are visible before the hold. A refused hold gives
+ * a dry click and requires release before retrying, without subtracting any money.
  */
 const GATE_R = 3.0;
 const GATE_HOLD_S = 1.1;
@@ -84,6 +81,8 @@ export class Search {
     this.holdT = 0;
     this.holdKey = '';
     this._usePrev = false;
+    this._releaseRequired = false;
+    this._lamp = null; this._lampKey = '';
     this._promptP = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E' };
 
     this._stat = { searched: 0, paid: 0, refused: 0, bodies: 0, tolls: 0, turnedAway: 0 };
@@ -91,7 +90,11 @@ export class Search {
 
   ready() { return true; }
 
-  dispose() { this.bodies.length = 0; this.gates.length = 0; }
+  dispose() {
+    const lights = this._sys('lights');
+    if (this._lamp && lights) lights.release(this._lamp);
+    this.bodies.length = 0; this.gates.length = 0;
+  }
 
   _sys(id) { return this.ctx.systems.get(id); }
 
@@ -136,6 +139,9 @@ export class Search {
     const inp = this.ctx.input;
     const use = !inCar && !!(inp && typeof inp.held === 'function' && inp.held('use'));
 
+    this._gateLamp(p);
+    this._checkDefeated();
+    if (!use) this._releaseRequired = false;
     const cand = inCar ? null : this._candidate(p.x, p.y, p.z);
 
     if (!cand) { this.holdT = 0; this.holdKey = ''; this._usePrev = use; return; }
@@ -146,9 +152,9 @@ export class Search {
     // The glyph, every step there is a candidate. A step without one clears it, which is what
     // hud does when nothing emits.
     this._prompt(cand.x, cand.y + gy, cand.z,
-      this.holdKey === cand.key ? this.holdT / span : 0);
+      this.holdKey === cand.key ? this.holdT / span : 0, cand);
 
-    if (!use) { this.holdT = 0; this.holdKey = ''; this._usePrev = false; return; }
+    if (!use || this._releaseRequired || cand.hostile) { this.holdT = 0; this.holdKey = ''; this._usePrev = false; return; }
 
     if (this.holdKey !== cand.key) { this.holdKey = cand.key; this.holdT = 0; }
     this.holdT += dt;
@@ -157,6 +163,7 @@ export class Search {
     if (this.holdT >= span) {
       this.holdT = 0;
       this.holdKey = '';
+      this._releaseRequired = true;
       if (cand.kind === 'gate') this._pay(cand);
       else this._take(cand);
     }
@@ -184,13 +191,15 @@ export class Search {
     // at; a body lying beside the gatehouse must never steal the toll's glyph.
     for (let i = 0; i < this.gates.length; i++) {
       const g = this.gates[i];
+      if (Math.abs(g.y - py) > 2.4) continue;
       if (this.gateOpen(g.key)) continue;           // paid: the leaves are open, there is no verb
       const d = facing(g.x, g.z, GATE_R);
       if (d < 0 || d >= bestD) continue;
       bestD = d;
-      best = { kind: 'gate', key: 'g' + g.key, flag: g.key, price: g.price, x: g.x, y: g.y, z: g.z };
+      best = { kind: 'gate', key: 'g' + g.key, flag: g.key, price: g.price, hostile: !!this._sys('progress')?.flag('gate-hostile:' + g.key), x: g.x, y: g.y, z: g.z };
     }
 
+    if (best) return best;
     const enemies = this._sys('enemies');
     if (enemies && typeof enemies.nearestCorpse === 'function') {
       const e = enemies.nearestCorpse(px, pz, SEARCH_R);
@@ -252,11 +261,8 @@ export class Search {
   /**
    * THE TOLL. Alex: "you have to pay someone at the door to get in."
    *
-   * There is no number on screen and there never will be, so the price has to be learnable
-   * the way everything else in this game is learnable — by trying it. You hold E, the hold
-   * runs its full second, and then either the doors move or they do not. A refusal is a dead
-   * click on the same channel a refused claim uses, so it reads as "not like that" rather
-   * than as a broken door.
+   * Price and available money are visible before committing the hold. A failed
+   * attempt requires release, so holding E cannot repeatedly refuse or charge.
    */
   _pay(cand) {
     const prog = this._sys('progress');
@@ -281,12 +287,48 @@ export class Search {
     this.ctx.bus.emit('gate:opened', { id: cand.flag, price: cand.price });
   }
 
-  _prompt(x, y, z, k) {
+  _prompt(x, y, z, k, cand) {
     const P = this._promptP;
     P.kind = 'hold'; P.x = x; P.y = y; P.z = z;
     P.k = k > 1 ? 1 : (k < 0 ? 0 : k);
-    P.label = 'E';
+    P.label = 'E'; P.rank = cand?.kind === 'gate' ? 3 : 2;
+    P.detail = ''; P.subdetail = ''; P.unavailable = false;
+    if (cand?.kind === 'gate') {
+      const have = this._sys('progress')?.cash() || 0;
+      const need = Math.max(0, cand.price - have);
+      P.detail = cand.hostile ? 'THE GUARDS ARE HOSTILE' : 'HOLD E · PAY ' + cand.price + ' COINS';
+      P.subdetail = cand.hostile ? 'DEFEAT THE GUARDS TO OPEN THE GATE' : 'YOU HAVE ' + have + (need ? ' · NEED ' + need + ' MORE' : ' · PERMANENT ACCESS');
+      P.unavailable = need > 0 || cand.hostile;
+    }
     this.ctx.bus.emit('prompt', P);
+  }
+
+  _gateLamp(p) {
+    let target = null, nearest = 42 * 42;
+    for (const g of this.gates) {
+      const d = (g.x - p.x) ** 2 + (g.z - p.z) ** 2;
+      if (d < nearest) { nearest = d; target = g; }
+    }
+    const lights = this._sys('lights');
+    if (!lights) return;
+    if (this._lamp && this._lampKey !== target?.key) {
+      lights.release(this._lamp); this._lamp = null; this._lampKey = '';
+    }
+    if (target && !this._lamp) {
+      this._lamp = lights.borrow('gate-cashier', target.x, target.y + 2.6, target.z + 0.35, 0xffc382, 6.5, 0);
+      if (this._lamp) { this._lamp.decay = 2.0; this._lampKey = target.key; }
+    }
+  }
+
+  _checkDefeated() {
+    const places = this._sys('places'), prog = this._sys('progress');
+    if (!places?.gateDefeated || !prog) return;
+    for (const g of this.gates) {
+      if (this.gateOpen(g.key) || !places.gateDefeated(g.key)) continue;
+      prog.flag('gate:' + g.key, 1);
+      places.rebuildSite(g.key);
+      this.ctx.bus.emit('gate:opened', { id: g.key, price: 0, fought: true });
+    }
   }
 
   /** The test surface. Nothing here allocates on a hot path. */

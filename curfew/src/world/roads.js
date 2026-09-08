@@ -578,6 +578,7 @@ let elevReady = false;
  * instead of corrugated.
  */
 export function setRoadBaseSampler(fn) { baseSampler = fn; elevReady = false; }
+export function invalidateRoadElevations() { elevReady = false; }
 
 /** Build SY once. Safe to call repeatedly; cheap after the first time. */
 export function ensureRoadElevations() {
@@ -836,24 +837,21 @@ function emitRun(rt, i0, i1, half, heightFn, lift, pos, uv, idx) {
     tx /= tl; tz /= tl;
     const nx = -tz, nz = tx;
 
-    // Bank: CARVE's frames with CFG.roads.bank (gain 50, max 0.12). This is a
-    // lane, not CARVE's half-pipe — its BANK_GAIN 620 would stand the road up.
-    const px = SX[p], pz = SZ[p], cx = SX[c], cz2 = SZ[c], qx = SX[q], qz = SZ[q];
-    const ax = cx - px, az = cz2 - pz, bx = qx - cx, bz = qz - cz2;
-    const al = Math.hypot(ax, az) || 1, bl = Math.hypot(bx, bz) || 1;
-    const crossN = (ax / al) * (bz / bl) - (az / al) * (bx / bl);
-    const bank = clamp(crossN * CFG.roads.bank.gain, -CFG.roads.bank.max, CFG.roads.bank.max);
-
-    for (let s = -1; s <= 1; s += 2) {
-      const ex = SX[c] + nx * half * s, ez = SZ[c] + nz * half * s;
-      const y = heightFn(ex, ez) + lift + bank * half * s;
-      pos.push(ex, y, ez);
-      uv.push(s < 0 ? 0 : 1, SDIST[c] / 8);
+    // The ribbon and driving collision share the SAME surface. The former mesh-only
+    // bank lifted one edge by 0.57 m on tight highway bends while leaving collision flat.
+    // Sample across the lane as well as along it; two edge vertices bridge over a crown.
+    const crossSteps = Math.max(2, Math.ceil(half * 2 / 1.4));
+    for (let j = 0; j <= crossSteps; j++) {
+      const t = j / crossSteps, side = t * 2 - 1;
+      const ex = SX[c] + nx * half * side, ez = SZ[c] + nz * half * side;
+      pos.push(ex, heightFn(ex, ez) + lift, ez);
+      uv.push(t, SDIST[c] / 8);
     }
   }
   const n = i1 - i0 + 1;
-  for (let i = 0; i < n - 1; i++) {
-    const a = base + i * 2, b = a + 1, c = a + 2, d = a + 3;
+  const crossSteps = Math.max(2, Math.ceil(half * 2 / 1.4)), stride = crossSteps + 1;
+  for (let i = 0; i < n - 1; i++) for (let j = 0; j < crossSteps; j++) {
+    const a = base + i * stride + j, b = a + 1, c = a + stride, d = c + 1;
     idx.push(a, c, b, b, c, d);
   }
 }

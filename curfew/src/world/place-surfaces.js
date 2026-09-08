@@ -90,6 +90,9 @@ const STYLE_BY_KIND = Object.freeze({
   holdfast: 'stone',
   // ROUND 18: concrete barriers, a steel gantry and a prefab booth. The station's family.
   checkpoint: 'industrial',
+  glasshouse: 'metal',
+  'bell-vault': 'mossStone',
+  'red-quarry': 'naturalRock',
 });
 
 function wrap(v, n) { return ((v % n) + n) % n; }
@@ -702,21 +705,44 @@ function plasterHeight(x, y) {
   return h;
 }
 
+// Geological strata and fractures, not masonry. The Quarry's first live frame
+// exposed the shared stone map wrapping every outcrop in neat rows of bricks.
+// This color/height pair retains the same existing mapped material program.
+function rockRelief(x, y) {
+  const warp = noise(x, y, 5, 5, 709) * 64;
+  const layers = noise(x + warp, y + x * .34, 3, 44, 719);
+  const fracture = Math.max(0, 1 - Math.abs(noise(x + warp, y, 13, 11, 727) - .48) * 42);
+  return 160 + (fbm2(x, y, 5, 4, 701) - .5) * 72 + (layers - .5) * 30 - fracture * 28;
+}
+
+function naturalRockHeight(x, y) {
+  return rockRelief(x, y) + (noise(x, y, 94, 94, 743) - .5) * 11;
+}
+
+function naturalRockPixel(x, y) {
+  const v = 210 + (rockRelief(x, y) - 160) * .84 + (hash2(x, y, 751) - .5) * 13;
+  const wet = Math.max(0, noise(x, y, 21, 4, 757) - .54) * 48;
+  return [v - wet, v - 2 - wet, v - 6 - wet * .84];
+}
+
 function heightFor(style, x, y) {
+  if (style === 'naturalRock') return naturalRockHeight(x, y);
   if (style === 'timber') return timberHeight(x, y);
   if (style === 'stone') return stoneHeight(x, y);
   if (style === 'metal') return metalHeight(x, y);
   return plasterHeight(x, y);
 }
 
-/** stone/timber/metal/plaster: which height family a colour style belongs to. */
+/** Which structural height family a colour style belongs to. */
 const BUMP_OF = Object.freeze({
+  naturalRock: 'naturalRock',
   timber: 'timber', stone: 'stone', mossStone: 'stone',
   metal: 'metal', industrial: 'metal',
   plaster: 'plaster', salt: 'plaster', avery: 'plaster',
 });
 
 function pixelFor(style, x, y) {
+  if (style === 'naturalRock') return naturalRockPixel(x, y);
   if (style === 'timber') return timberPixel(x, y);
   if (style === 'stone') return stonePixel(x, y, false);
   if (style === 'mossStone') return stonePixel(x, y, true);
@@ -760,7 +786,8 @@ function makeTexture(style, asHeight) {
 }
 
 /**
- * Twelve 512 x 512 images: eight colour, four height.
+ * Fourteen 512 x 512 images: nine colour, five height. Natural rock has its own
+ * pair because the Quarry's live frame showed masonry coursing on its geology.
  *
  * COST. Round 16's note here said 300-340 ms against 206 ms for twelve 256s — "four times the
  * texels for about 1.6x the time". That is wrong and the correction matters, because it was
@@ -774,19 +801,20 @@ function makeTexture(style, asHeight) {
  *
  * So this is on the order of half a second of a cold boot whose law is 15 s, and the boot the
  * shots below were taken through is the number that decides it, not this ratio. It is a
- * one-off cost inside places._ensureBuilt. 12.6 MB of texture memory before mipmaps.
+ * one-off cost inside places._ensureBuilt. The original twelve cost 12.6 MB before
+ * mipmaps; the two rock images add 2.1 MB, with no additional shader variant.
  *
  * The noise lattices and the crack map are working buffers, not results, so they are dropped
  * on the way out: about 600 KB that would otherwise sit in the heap for the whole session.
  */
 export function createPlaceSurfaceLibrary() {
   const lib = Object.create(null);
-  for (const style of ['timber', 'stone', 'mossStone', 'metal', 'industrial', 'plaster', 'salt', 'avery']) {
+  for (const style of ['timber', 'stone', 'mossStone', 'metal', 'industrial', 'plaster', 'salt', 'avery', 'naturalRock']) {
     lib[style] = makeTexture(style, false);
   }
   // and the four height images. Keyed '<family>-bump' so disposePlaceSurfaceLibrary's
   // Object.values sweep picks them up without knowing they exist.
-  for (const family of ['timber', 'stone', 'metal', 'plaster']) {
+  for (const family of ['timber', 'stone', 'metal', 'plaster', 'naturalRock']) {
     lib[family + '-bump'] = makeTexture(family, true);
   }
   LATTICE.clear();

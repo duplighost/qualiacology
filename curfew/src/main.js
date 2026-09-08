@@ -65,6 +65,7 @@ import * as kneelerMod from './enemies/kneeler.js';   // ROUND 6, lane C
 import * as wildsMod from './world/wilds.js';         // ROUND 6, lane F
 import * as refugeMod from './world/refuge.js';
 import * as searchMod from './world/search.js';       // ROUND 15: going through a body
+import * as dealerMod from './world/dealer.js';
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -104,6 +105,7 @@ const SYSTEMS = [
   // -- the loop -------------------------------------------------------------------------
   ['car', carMod],
   ['progress', progressMod],
+  ['dealer', dealerMod],      // saved cash/arsenal and the physical travelling shop
   ['audio', audioMod],         // late, so it can hear everything that happened this step
   ['hud', hudMod],
   // -- presentation, last ---------------------------------------------------------------

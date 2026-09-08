@@ -128,6 +128,7 @@ export class Combat {
     // adding coin draws to it would shift every later ammo roll — which tests/break-open.mjs
     // catches by asserting the emitted ammo equals combat.dump().lastBroke.loot.
     this.coinRng = ctx.rng.fork('coins');
+    this.xpRng = ctx.rng.fork('breakable-xp');
 
     this.shots = 0;
     this.hits = 0;
@@ -146,7 +147,7 @@ export class Combat {
     };
     this.litTimers = [];           // borrowed rover handles, released by ttl
     // ROUND 13: the last thing that came apart. Mutated in place, like lastHit.
-    this.lastBroke = { valid: false, tag: null, x: 0, y: 0, z: 0, by: null, hits: 0, mass: 0, loot: 0, t: 0 };
+    this.lastBroke = { valid: false, tag: null, x: 0, y: 0, z: 0, by: null, hits: 0, mass: 0, loot: 0, coins: 0, xp: 0, t: 0 };
 
     // Reused outbound payload. Listeners consume it synchronously and retain
     // nothing; that is what keeps a shot allocation-free in the hot path.
@@ -262,6 +263,14 @@ export class Combat {
     }
 
     // ---- stage 2: chunk-local colliders, capped by stage 1
+    const dealer = this._sys('dealer');
+    const shopHit = dealer?.raycast(_o, _d, s.t);
+    if (shopHit && shopHit.t < s.t) {
+      s.hit = true; s.t = shopHit.t; s.kind = 'flesh'; s.zone = shopHit.zone;
+      s.enemy = shopHit.enemy; s.boss = false; s.colliderId = -1;
+      s.x = shopHit.point.x; s.y = shopHit.point.y; s.z = shopHit.point.z;
+      s.nx = -dx; s.ny = -dy; s.nz = -dz;
+    }
     const collision = this._sys('collision');
     if (collision && collision.raycast) {
       // MASK.SHOT only — deliberately NOT 0xffffffff. The all-bits mask includes
@@ -387,7 +396,7 @@ export class Combat {
 
       if (h.enemy) {
         // the boss owns its own hp (enemies/kneeler.js); everything else is the pool's
-        const owner = this._sys(h.boss ? 'kneeler' : 'enemies');
+        const owner = this._sys(h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
         const res = owner && owner.damage
           ? owner.damage(h.enemy, dmg, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
           : { killed: false };
@@ -564,7 +573,10 @@ export class Combat {
       }
       const h = this._trace(p.pos.x, oy, p.pos.z, dx, dy, dz, range);
       if (h) {
-        this._land(h, Math.max(1, Math.round(damage)), h.t, false, false, false, 'melee');
+        const dealt = Math.max(1, Math.round(damage));
+        const owner = h.enemy && this._sys(h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+        const result = owner?.damage(h.enemy, dealt, { zone: h.zone, point: _pt.set(h.x,h.y,h.z), dist: h.t });
+        this._land(h, dealt, h.t, false, !!result?.killed, false, 'melee');
         this._maybeBreak(h, dx, dz, 'melee');    // ROUND 13: the stock takes a crate apart too
         return true;
       }
@@ -590,7 +602,7 @@ export class Combat {
     this.broke++;
     const L = this.lastBroke;
     L.valid = true; L.tag = b.tag; L.x = b.x; L.y = b.y; L.z = b.z; L.by = by;
-    L.hits = b.hits; L.mass = b.mass; L.loot = 0; L.t = this.ctx.time.t;
+    L.hits = b.hits; L.mass = b.mass; L.loot = 0; L.coins = 0; L.xp = 0; L.t = this.ctx.time.t;
 
     const car = this._sys('car');
     if (car && typeof car.takeDown === 'function') {
@@ -624,6 +636,11 @@ export class Combat {
         L.coins = n;
         this.ctx.bus.emit('pickup:coin', _coinPayload);
       }
+    }
+    if (LOOT_TAGS[b.tag] && this.xpRng.next() < .30) {
+      const xp = 12 + Math.floor(this.xpRng.next() * 11);
+      this._sys('progress')?.award(xp, b.x, b.y + .4, b.z, 'crate');
+      L.xp = xp;
     }
     _brokePayload.x = b.x; _brokePayload.y = b.y; _brokePayload.z = b.z;
     _brokePayload.mass = b.mass; _brokePayload.n = 1; _brokePayload.tag = b.tag; _brokePayload.by = by;

@@ -180,6 +180,7 @@ export const BEAT_SOUNDS = Object.freeze([
   'bark',          // three hounds out of the ferns at once
   'filament-pop',  // your torch dying at the eye
   'breath-ear',    // and a breath at your ear in the dark
+  'canopy-rush', 'glass-strain', 'vault-resonance', 'cable-strain',
 ]);
 
 const SOUND_OK = Object.create(null);
@@ -230,6 +231,7 @@ export class Dread {
     if (!scene) throw new Error('dread: ctx.scene missing (gfx must come first in the manifest)');
     this.scene = scene;
     this.rng = ctx.rng.fork('dread');
+    this.explorationRng = ctx.rng.fork('dread:exploration');
 
     this.tension = createTension(ctx);
     this.auditor = createAuditor(ctx, this._facade());
@@ -283,6 +285,8 @@ export class Dread {
     this.dropS = { on: false, e: null, t: 0, x: 0, y: 0, z: 0, landed: false };
     this.blackoutS = { on: false, t: 0, x: 0, z: 0, revealed: false, coin: false };
     this._offJump = null;
+    this.lootReturn = { on: false, t: 0, age: 0, x: 0, z: 0, hushed: false, variant: 0 };
+    this.lastLootReturn = -1e9;
 
     /* ---- the mimic: armed by a beat, fed by the player's own footfalls ---- */
     this.mimicT = 0;
@@ -317,6 +321,10 @@ export class Dread {
       this._offs.push(bus.on('player:respawn', this._onRespawn));
       this._offs.push(bus.on('enemy:killed', this._onKill));
       this._offs.push(bus.on('enemy:killed', this._onKillBonus));
+      this._offs.push(bus.on('world:broke', (p) => {
+        if (p && ['crate', 'box', 'strongbox'].includes(p.tag)) this._queueLootReturn(p);
+      }));
+      this._offs.push(bus.on('pickup:cache', (p) => this._queueLootReturn(p)));
     }
   }
 
@@ -349,15 +357,24 @@ export class Dread {
 
     /* ---- the figure. Merged at boot: one draw, not four. ------------------ */
     const parts = [];
-    const body = new THREE.CapsuleGeometry(0.24, 1.06, 3, 8);
-    body.translate(0, 0.77, 0);
+    const body = new THREE.CapsuleGeometry(0.22, .84, 4, 10);
+    body.scale(1.2, 1, .62); body.rotateZ(-.065); body.translate(0, 1.25, 0);
     parts.push(body);
-    const head = new THREE.SphereGeometry(0.135, 8, 6);
-    head.translate(0, 1.53, 0);
+    const head = new THREE.SphereGeometry(.17, 12, 9);
+    head.scale(.86, 1.46, .88); head.rotateZ(.22); head.translate(.035, 2.01, .04);
     parts.push(head);
-    const legs = new THREE.CapsuleGeometry(0.135, 0.52, 2, 6);
-    legs.translate(0, 0.30, 0);
-    parts.push(legs);
+    for (const side of [-1, 1]) {
+      const leg = new THREE.CapsuleGeometry(.082, .72, 3, 8);
+      leg.rotateZ(side * .08); leg.translate(side * .13, .49, 0); parts.push(leg);
+      const arm = new THREE.CapsuleGeometry(.072, 1.05, 3, 8);
+      arm.rotateZ(side * .13); arm.translate(side * .35, 1.03, .035); parts.push(arm);
+      // Separated, overlong fingers and hands below the knees distinguish this from a post.
+      for (let i = 0; i < 4; i++) {
+        const finger = new THREE.CapsuleGeometry(.019, .24 + i * .018, 2, 5);
+        finger.rotateZ(side * (.1 + i * .05));
+        finger.translate(side * (.36 + i * .034), .30, .065); parts.push(finger);
+      }
+    }
     const fig = mergeGeometries(parts, false);
     for (let i = 0; i < parts.length; i++) parts[i].dispose();
     this.figGeo = fig;
@@ -371,6 +388,20 @@ export class Dread {
     this.runner.visible = false;
     this.runner.frustumCulled = false;
     this.root.add(this.runner);
+
+    // A narrow exposed face catches the eye without turning the whole silhouette
+    // into an emissive mannequin. It shares the existing Basic shader family.
+    this.matFace = base.clone(); this.matFace.color.setHex(0x526359);
+    const faceParts = [];
+    for (const side of [-1, 1]) {
+      const cheek = new THREE.SphereGeometry(.07, 8, 7);
+      cheek.scale(.70, 1.2, .36); cheek.translate(side * .083, 1.99, .153); faceParts.push(cheek);
+      const jaw = new THREE.CapsuleGeometry(.023, .24, 2, 6);
+      jaw.rotateZ(side * .23); jaw.translate(side * .052, 1.78, .15); faceParts.push(jaw);
+    }
+    this.faceGeo = mergeGeometries(faceParts, false);
+    for (const g of faceParts) g.dispose();
+    this.watcher.add(new THREE.Mesh(this.faceGeo, this.matFace));
 
     /* ---- footprints. One flat quad each, scaled up as they land. ---------- */
     // [eaten-path events.js:558-565] the print's arrival IS a scale envelope, so one shared
@@ -1098,6 +1129,7 @@ export class Dread {
       if (!m || !m.def || m.dist > maxR) return null;
       _place.x = m.def.x; _place.z = m.def.z;
       _place.radius = this._padRadius(m.def);
+      _place.kind = m.def.kind;
       return _place;
     }
     // AND NOTHING AFTER THIS. A `places.nearest(x, z, r)` branch stood here as insurance
@@ -1118,7 +1150,10 @@ export class Dread {
     const r = target.radius * 0.9;
     const x = target.x + (dx / d) * r;
     const z = target.z + (dz / d) * r;
-    this.answer('door', x, this._groundAt(x, z) + 1.1, z, 0.7);
+    const cue = target.kind === 'glasshouse' ? 'glass-strain'
+      : target.kind === 'bell-vault' ? 'vault-resonance'
+        : target.kind === 'red-quarry' ? 'cable-strain' : 'door';
+    this.answer(cue, x, this._groundAt(x, z) + 1.1, z, 0.7);
     return true;
   }
 
@@ -1149,6 +1184,8 @@ export class Dread {
       const p = this._aheadPoint(d, lat);
       const v = this._validate(p.x, p.z, 0);
       if (!v.ok) { this.stats.refusedPlacement++; continue; }
+      const collision = this._sys('collision');
+      if (collision && !collision.canOccupy(v.x, v.z, .42, 2.35)) continue;
       const S = this.watcherS;
       S.on = true; S.x = v.x; S.y = v.y; S.z = v.z;
       S.t = 0; S.observed = 0; S.seen = false;
@@ -1375,6 +1412,54 @@ export class Dread {
     if (this.building) { this.building = false; this.tension.releaseScripted(); }
     // A hush whose payoff was cancelled is a bed that never comes back. Let it go with them.
     if (this.hushS) { this.hushS.on = false; this.hushS.t = 0; this.hushS.dur = 0; }
+    if (this.lootReturn) this.lootReturn.on = false;
+  }
+
+  // A cache is usually simply a reward. Occasionally the woods answer only after
+  // the player has pocketed it and walked away. Independent RNG preserves the
+  // ordinary director sequence; the pending beat expires if a real fight starts.
+  _queueLootReturn(p) {
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.z) || !this.enabled) return false;
+    if (!this.lootReturn || this.lootReturn.on || this.clock < 75 || this.clock - this.lastLootReturn < 90) return false;
+    if (this.clock - this.lastLoud < CFG.director.jump.sinceLoudMin) return false;
+    if (this.ctx.shared.inCar || !this.permitOk()) return false;
+    const places = this._sys('places');
+    const near = places && places.nearestMajor ? places.nearestMajor(p.x, p.z) : null;
+    if (near && near.def && near.dist < 70 && (near.def.hub || (places.isClaimed && places.isClaimed(near.def.id)))) return false;
+    const r = this.explorationRng;
+    if (r.next() >= .24) return false;
+    this._player(_pos);
+    Object.assign(this.lootReturn, { on: true, t: 2.4 + r.next() * 6.8, age: 0,
+      x: _pos.x, z: _pos.z, hushed: false, variant: r.next() });
+    this.lastLootReturn = this.clock;
+    return true;
+  }
+
+  _stepLootReturn(dt) {
+    const s = this.lootReturn;
+    if (!s || !s.on) return;
+    s.age += dt;
+    if (s.age > 24 || this.ctx.shared.inCar || !this.enabled || this._huntingWithin(40) > 0) { s.on = false; return; }
+    if (!this.permitOk()) return;
+    s.t -= dt;
+    if (s.t > 0) return;
+    this._player(_pos);
+    if (Math.hypot(_pos.x - s.x, _pos.z - s.z) < 2) return;
+    if (!s.hushed) {
+      s.hushed = true; s.t = .45 + this.explorationRng.next() * .55;
+      this.hush(1.5); return;
+    }
+    s.on = false;
+    // No ambush damage attached to loot. The real pressure director still owns
+    // threats; this answer is movement/absence, positioned in a validated lane.
+    const seen = s.variant < .50 ? this._beatRunner() : this._beatWatcher();
+    this._player(_pos);
+    const cam = this._sys('camera'), yaw = cam ? cam.yaw : 0;
+    const x = _pos.x + Math.sin(yaw + .55) * 5.5, z = _pos.z + Math.cos(yaw + .55) * 5.5;
+    this.answer(seen ? 'canopy-rush' : 'breath-ear', x, _pos.y + (seen ? 3.2 : 1.65), z, seen ? .80 : .48);
+    this.lastLoud = this.clock; this.lastBeatAt = this.clock; this.lastBeat = BEAT.stinger;
+    this.quietUntil = this.clock + CFG.director.dread.postLoudQuietS;
+    this.tension.addKick(.22); this._noteKind('loot-return', true);
   }
 
   _nextInterval() {
@@ -1474,6 +1559,8 @@ export class Dread {
     this._stepPrints(d);
     this._stepEyes(d);
     this._stepLantern(d);
+    this._stepLootReturn(d);
+    if (this.lootReturn && this.lootReturn.on && this.lootReturn.hushed) return;
 
     this.auditor.step(d);
 
@@ -1590,7 +1677,7 @@ export class Dread {
       if (roads && typeof roads.roadDistance === 'function' && roads.roadDistance(_pos.x, _pos.z) < J.roadMin) return 'road';
       if (this._speed() > J.speedMax) return 'speed';
       if (this.tension && this.tension.hunting > 0) return 'hunting';
-      if (this._nearPlace(J.placeClear)) return 'place';
+      if (this._hasNearbyPlace(J.placeClear)) return 'place';
     }
     const en = this._sys('enemies');
     if (!en || typeof en.spawn !== 'function') return 'no-enemies';
@@ -1611,7 +1698,7 @@ export class Dread {
   }
 
   /** Is an authored place within r metres (a beat never plays in somebody's yard). */
-  _nearPlace(r) {
+  _hasNearbyPlace(r) {
     const places = this._sys('places');
     if (!places || typeof places.all !== 'function') return false;
     this._player(_pos);
@@ -2021,6 +2108,7 @@ export class Dread {
       this._player(_pos);
       this.watcher.rotation.y = Math.atan2(_pos.x - S.x, _pos.z - S.z);
       this.matWatcher.opacity = S.vanishing ? Math.max(0, 1 - S.vt / D.watcherFade) : 1;
+      this.matFace.opacity = this.matWatcher.opacity;
       this.watcher.visible = this.matWatcher.opacity > 0.002;
     }
 
@@ -2106,6 +2194,7 @@ export class Dread {
       building: this.building,
       watcher: this.watcherS.on, runner: this.runnerS.on, prints: this.printS.on,
       lantern: this.lantern.on,
+      lootReturn: !!(this.lootReturn && this.lootReturn.on),
       hush: this.hushS.on,
       // ROUND 13
       jump: { last: this.lastJump, backCoverT: +this.backCoverT.toFixed(2), blackout: this.blackoutS.on,
@@ -2135,6 +2224,7 @@ export class Dread {
   reset() {
     this._cancelAll();
     this.clock = 0;
+    this.lastLootReturn = -1e9;
     this.timer = this._nextInterval();
     this.lastLoud = -1e9; this.quietUntil = -1e9;
     this.lastBeat = BEAT.none; this.lastBeatAt = -1e9; this.lastKind = '';
@@ -2163,6 +2253,8 @@ export class Dread {
     this._endLantern();
     if (this.root && this.root.parent) this.root.parent.remove(this.root);
     if (this.figGeo) this.figGeo.dispose();
+    if (this.faceGeo) this.faceGeo.dispose();
+    if (this.matFace) this.matFace.dispose();
     if (this.printGeo) this.printGeo.dispose();
     if (this.eyeGeo) this.eyeGeo.dispose();
     if (this.matBase) this.matBase.dispose();
