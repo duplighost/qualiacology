@@ -75,8 +75,8 @@ export const DRESS = {
     let n = 0;
 
     // the queue: two ragged files either side of the road, tightest at the door
-    for (let i = 0; i < 15; i++) {
-      const t = i / 14;
+    for (let i = 0; i < 7; i++) {
+      const t = i / 6;
       const side = (i & 1) ? 1 : -1;
       const lz = R + 5 + t * 34 + rng.range(-1.4, 1.4);
       const lx = side * (2.2 + t * 5.5) + rng.range(-1.1, 1.1);
@@ -85,7 +85,7 @@ export const DRESS = {
     }
 
     // the knots, further out, facing each other
-    for (const [cx, cz, count] of [[-17, R + 20, 4], [16, R + 27, 3], [-24, R + 38, 4], [22, R + 44, 3], [-6, R + 52, 3]]) {
+    for (const [cx, cz, count] of [[-17, R + 20, 3], [16, R + 27, 2], [22, R + 44, 3]]) {
       for (let i = 0; i < count; i++) {
         const a = (i / count) * Math.PI * 2 + rng.range(-0.3, 0.3);
         const r = 0.9 + rng.range(0, 0.5);
@@ -97,7 +97,7 @@ export const DRESS = {
     }
 
     // the stragglers, on the edge of the light, facing out into the dark
-    for (const [lx, lz] of [[-38, R + 12], [37, R + 9], [-31, R + 61], [30, R + 58], [-44, R + 33], [43, R + 30]]) {
+    for (const [lx, lz] of [[-38, R + 12], [37, R + 9], [-31, R + 61], [30, R + 58]]) {
       figure(k, api, lx + rng.range(-2, 2), lz + rng.range(-2, 2),
         Math.atan2(-lx, -(lz - R)) + Math.PI + rng.range(-0.6, 0.6), rng);
       n++;
@@ -198,11 +198,11 @@ export const DRESS = {
     // Killing the complete garrison opens the same persistent access as payment.
     if (typeof api.cast === 'function') {
       api.cast([
-        { species:'poacher', lx:-3.3, lz:R+5.0, yaw:0, guard:true, hpScale:1.5 },
-        { species:'poacher', lx:3.3, lz:R+5.0, yaw:0, guard:true, hpScale:1.5 },
-        { species:'poacher', lx:9, lz:R+6.5, yaw:-0.4, guard:true, hpScale:1.5 },
-        { species:'warden', lx:-16, lz:R+12, yaw:0, guard:true },
-        { species:'warden', lx:18, lz:R+12, yaw:0, guard:true },
+        { species:'sentry', lx:-3.3, lz:R+5.0, yaw:0, guard:true, hpScale:1.5 },
+        { species:'sentry', lx:3.3, lz:R+5.0, yaw:0, guard:true, hpScale:1.5 },
+        { species:'sentry', lx:9, lz:R+6.5, yaw:-0.4, guard:true, hpScale:1.5 },
+        { species:'marshal', lx:-16, lz:R+12, yaw:0, guard:true },
+        { species:'marshal', lx:18, lz:R+12, yaw:0, guard:true },
       ]);
     }
 

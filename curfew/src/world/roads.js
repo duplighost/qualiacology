@@ -815,11 +815,37 @@ export function buildRibbonData(x0, z0, size, heightFn, lift = 0.06) {
     }
   }
   if (idx.length === 0) return null;
-  return {
-    positions: Float32Array.from(pos),
-    uvs: Float32Array.from(uv),
-    indices: (pos.length / 3) > 65535 ? Uint32Array.from(idx) : Uint16Array.from(idx),
-  };
+  return clipRibbonToTile(pos,uv,idx,x0,z0,x1,z1,heightFn,lift);
+}
+
+// The overscan above is needed to construct a continuous spline edge, but must not be
+// drawn twice. Adjacent chunks previously submitted the same coplanar road triangles;
+// their depth values fought as the camera moved across the station forecourt.
+export function clipRibbonToTile(pos,uv,idx,x0,z0,x1,z1,heightFn=null,lift=0) {
+  const p=[],u=[],indices=[];
+  const planes=[[0,x0,1],[0,x1,-1],[2,z0,1],[2,z1,-1]];
+  for(let t=0;t<idx.length;t+=3){
+    let poly=[idx[t],idx[t+1],idx[t+2]].map(i=>[pos[i*3],pos[i*3+1],pos[i*3+2],uv[i*2],uv[i*2+1]]);
+    for(const [axis,bound,sign] of planes){
+      if(!poly.length)break;const next=[];
+      for(let j=0;j<poly.length;j++){
+        const a=poly[j],b=poly[(j+1)%poly.length],da=(a[axis]-bound)*sign,db=(b[axis]-bound)*sign;
+        if(da>=0)next.push(a);
+        if((da>=0)!==(db>=0)){
+          const f=da/(da-db),v=a.map((n,k)=>n+(b[k]-n)*f);v[axis]=bound;
+          if(heightFn)v[1]=heightFn(v[0],v[2])+lift;
+          next.push(v);
+        }
+      }poly=next;
+    }
+    if(poly.length<3)continue;
+    const base=p.length/3;
+    for(const v of poly){p.push(v[0],v[1],v[2]);u.push(v[3],v[4]);}
+    for(let j=1;j<poly.length-1;j++)indices.push(base,base+j,base+j+1);
+  }
+  if(!indices.length)return null;
+  return {positions:Float32Array.from(p),uvs:Float32Array.from(u),
+    indices:p.length/3>65535?Uint32Array.from(indices):Uint16Array.from(indices)};
 }
 
 function emitRun(rt, i0, i1, half, heightFn, lift, pos, uv, idx) {

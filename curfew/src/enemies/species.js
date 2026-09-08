@@ -301,6 +301,14 @@ export const SPECIES = {
   },
 };
 
+// Authored people never enter the roaming hunter roster.
+SPECIES.resident = { ...SPECIES.warden, id:'resident', form:FORM.HUMAN, human:true, civilian:true,
+  hp:100, dmg:10, height:1.8, radius:.32, mass:76, speed:3.6, xp:0, countsAs:0,
+  strikeRange:1.2, engage:[0,1.5], standoff:0, deathNoise:14 };
+SPECIES.cashier = { ...SPECIES.resident, id:'cashier' };
+SPECIES.sentry = { ...SPECIES.poacher, id:'sentry', human:true, hp:180, xp:90, countsAs:0 };
+SPECIES.marshal = { ...SPECIES.warden, id:'marshal', form:FORM.HUMAN, human:true, hp:560,
+  height:1.98, radius:.40, mass:120, countsAs:0 };
 export const ROSTER = Object.keys(SPECIES);
 
 /* Pool sizes. Allocated at boot; spawn() never allocates. Since round 6 the
@@ -322,13 +330,13 @@ export const POOL = Object.freeze({
   hound: 18, pallbearer: 12, hunter: 3, poacher: 12, pale: 8, standing: 8,
   // ROUND 15. Six Wardens, which is the whole garrison of the one building that has them.
   // A slot is a body record and a merged mesh at boot — no light, no material, no program.
-  warden: 6,
+  warden: 6, resident: 24, cashier: 2, sentry: 9, marshal: 3,
 });
 
 /* Species allowed to answer a pressure order, in the order a budget prefers
    them. Dread-owned rows are deliberately absent: the director must not be
    able to spend its budget on horror. */
-export const PRESSURE_ROSTER = ROSTER.filter((k) => SPECIES[k].owner === OWNER.PRESSURE);
+export const PRESSURE_ROSTER = ROSTER.filter((k) => SPECIES[k].owner === OWNER.PRESSURE && !SPECIES[k].human);
 export const DREAD_ROSTER = ROSTER.filter((k) => SPECIES[k].owner === OWNER.DREAD);
 
 /**
