@@ -42073,6 +42073,33 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         world.ballGroup.lookAt(ball.position.clone().add(ball.velocity));
       }
       world.update(FIXED_DT, this);
+      if (ball.mode === 'ready' && this.player.spinTimer <= 0 && !this.player.moonfallActive) {
+        // Keep the held presentation above a rising floor. The physical
+        // catch target and launch origin stay untouched; flight, spin and
+        // moonfall continue to draw at their existing physical positions.
+        const visualChart = this.readyVisualChart || (this.readyVisualChart = { x: 0, z: 0 });
+        chartAt(world.ballGroup.position, visualChart);
+        const visualAltitude = altAt(world.ballGroup.position);
+        const floor = world.floorHeight(visualChart.x, visualChart.z,
+          Math.min(visualAltitude, altAt(this.player.position) + .1));
+        const clearance = .9 * world.ballDisplayScale + .12;
+        if (visualAltitude < floor + clearance) {
+          setAltAt(world.ballGroup.position, floor + clearance);
+          // RMB can keep the line visible after a catch. Move only its
+          // rendered rear socket, never the physical path or wrap lengths.
+          const endIndex = ball.tetherPath.length - 1;
+          if (world.ballTether.visible && endIndex >= 1 && endIndex < 32) {
+            const socket = ball.tetherPath[endIndex];
+            const rendered = world.ballGroup.position;
+            const scale = world.ballDisplayScale;
+            world.ballTether.geometry.attributes.position.setXYZ(endIndex,
+              rendered.x + (socket.x - ball.position.x) * scale,
+              rendered.y + (socket.y - ball.position.y) * scale,
+              rendered.z + (socket.z - ball.position.z) * scale);
+            world.ballTether.geometry.attributes.position.needsUpdate = true;
+          }
+        }
+      }
     }
     // ---- THE PROXIMITY TAG ----------------------------------------------
     // (Alex, 2026-09-05: "do you know how games sometimes have little hovering
