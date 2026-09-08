@@ -48,6 +48,80 @@ for (let i = 0; i < LOOP_N; i++) {
   LOOP_PTS.push([Math.cos(a) * r, Math.sin(a) * r]);
 }
 
+/* ------------------------------------------------------------------ *
+ * ROUND 18 — THE OUTER RING.
+ *
+ * Alex, docs/ALEX-BRIEF.md section 10: "So bigger map for sure... there should be a lot more
+ * space", "It is so much fun to drive around a huge map in this game", and the reason that
+ * matters most here — "it gives you really cool new paths to design for the car to go down."
+ *
+ * The county loop has a mean radius of 1452 and reaches 1676 at its widest. The rim went to
+ * 3600, which left a two-kilometre ring of nothing all the way round (tools/county-plan.mjs:
+ * 29.4 km^2 of new land, every metre of it empty). This is the road that makes that ring
+ * drivable rather than merely large.
+ *
+ * Mean radius 2760, three non-harmonic lobes (3, 5 and 7 per revolution) so it never reads as
+ * a circle and never runs parallel to the county loop's own two. It spans 2310-3210, which
+ * keeps the whole of it inside the 3600 rim with room for verges, and leaves a 634 m gap at
+ * the closest approach to the county loop's widest point. Length comes out ~17.6 km, against
+ * the county loop's 10.6.
+ * ------------------------------------------------------------------ */
+const OUTER_N = 29;
+const OUTER_PTS = [];
+for (let i = 0; i < OUTER_N; i++) {
+  const a = (i / OUTER_N) * TAU;
+  const r = 2760 + 210 * Math.sin(a * 3 - 0.4) + 150 * Math.sin(a * 5 + 1.2) + 84 * Math.sin(a * 7 + 0.3);
+  OUTER_PTS.push([Math.cos(a) * r, Math.sin(a) * r]);
+}
+
+/**
+ * A radial road from a county-loop control point out to an outer-ring one. Straight lines are
+ * the one thing a forest road must never be, so each is bowed off its own chord by a sine that
+ * changes sign once — a long left then a long right, which is what a road pushed through trees
+ * by the cheapest available route actually does.
+ */
+function radial(li, oi, phase) {
+  const A = LOOP_PTS[li], B = OUTER_PTS[oi];
+  const dx = B[0] - A[0], dz = B[1] - A[1];
+  const L = Math.hypot(dx, dz) || 1;
+  const nx = -dz / L, nz = dx / L;
+  const pts = [A];
+  const N = 7;
+  for (let k = 1; k < N; k++) {
+    const t = k / N;
+    const off = Math.sin(t * Math.PI * 2 + phase) * 150 * Math.sin(t * Math.PI);
+    pts.push([A[0] + dx * t + nx * off, A[1] + dz * t + nz * off]);
+  }
+  pts.push(B);
+  return pts;
+}
+
+/**
+ * THE BROKEN HIGHWAY. Alex's own design, section 10 of the brief: "a kind of broken down type
+ * highway on some place of the map when we really expand it... they could sell access to the
+ * highway."
+ *
+ * So it has to be worth buying, which means it has to SAVE something. It is a chord across the
+ * eastern third: it joins the outer ring at the two points the ring would otherwise take a
+ * 6.4 km arc to connect, and does it in 3.9 km of straight fast road. Bowed east in the middle
+ * so it never comes near the county cluster, which reaches x 1500 at the Relay.
+ *
+ * Twice the width of the county loop, because a highway that handles like a forest lane is not
+ * a highway. The gates that make it cost money are a destination, not a road, and they are
+ * built on top of these endpoints.
+ */
+const HIGHWAY_PTS = (() => {
+  const A = OUTER_PTS[25], B = OUTER_PTS[4];
+  const pts = [];
+  const N = 10;
+  for (let k = 0; k <= N; k++) {
+    const t = k / N;
+    const bow = Math.sin(t * Math.PI) * 300 + Math.sin(t * Math.PI * 2) * 70;
+    pts.push([A[0] + (B[0] - A[0]) * t + bow, A[1] + (B[1] - A[1]) * t]);
+  }
+  return pts;
+})();
+
 // M0's three destinations. The DESIGN §2 destination law says every destination
 // has a road within 40 m; two of these ARE road control points, so the law holds
 // by construction rather than by audit. terrain.js imports this and turns each
@@ -218,6 +292,14 @@ const ROUTES_SRC = [
     ],
     jumps: [jump('sawmill-kick', 13, 14, 15, 16)],
   },
+
+  /* -- ROUND 18: the outer ring, its four radials, and the broken highway -------------- */
+  { id: 'outer-ring', kind: 'asphalt', closed: true, width: RC.width * 0.94, pts: OUTER_PTS },
+  { id: 'radial-east', kind: 'gravel', closed: false, width: RC.width * 0.80, pts: radial(0, 0, 0.0) },
+  { id: 'radial-north', kind: 'gravel', closed: false, width: RC.width * 0.80, pts: radial(5, 7, 1.7) },
+  { id: 'radial-west', kind: 'gravel', closed: false, width: RC.width * 0.80, pts: radial(11, 14, 3.1) },
+  { id: 'radial-south', kind: 'gravel', closed: false, width: RC.width * 0.80, pts: radial(16, 22, 4.6) },
+  { id: 'broken-highway', kind: 'asphalt', closed: false, width: RC.width * 1.55, pts: HIGHWAY_PTS },
 ];
 
 /* ------------------------------------------------------------------ *
@@ -368,7 +450,17 @@ function segEnd(s) {
  * ------------------------------------------------------------------ */
 
 const CELL = RC.hashCell;             // 8 m
-const GRID_HALF = 2400;               // county half-size + rim margin
+// ROUND 18: DERIVED, NOT TYPED. This was a hardcoded 2400 — "county half-size + rim margin",
+// correct for a 1900 m rim and silently wrong for anything else. Both grids clamp an
+// out-of-range segment into their EDGE cells rather than dropping it, so widening the rim to
+// 3600 did not fail loudly: it filed most of the new outer ring into the border of the hash,
+// which corrupts every query out there and leaves the road drivable in some places and not in
+// others. tools/county-plan.mjs drew it as a set of broken arcs, which is what sent me here.
+//
+// A road cannot exist outside the rim by construction, so the rim plus a margin is the honest
+// bound and it moves with the config from now on. At 3600 this is a 1025 x 1025 fine grid
+// (4.2 MB of Int32 offsets against the old 1.4 MB) and a 513 x 513 chamfer.
+const GRID_HALF = Math.ceil(CFG.world.RIM_RADIUS + 500);
 const GRID_N = Math.ceil((GRID_HALF * 2) / CELL);
 const PAD = CELL;                     // a segment is registered within 8 m of itself
 const EXACT_RANGE = 40;               // the fine hash is authoritative inside this

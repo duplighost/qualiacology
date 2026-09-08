@@ -443,7 +443,7 @@ const CSS = `
    52 px top pad keeps the card's resting layout clear of it. Round 6 ALSO indented the whole
    card by 180 px under 1000 px wide, which on Alex's phone left a 390 px window with a 210 px
    card: measured 2026-09-03, node buttons 45 px wide by 190 px tall and the map squashed to
-   269 x 440. "mobile is much more important than pc", so the indent is gone and the corner is
+   269 x 440. A card that cannot fit is a bug at any width, so the indent is gone and the corner is
    covered instead — a fixed patch of the overlay's own ground, so any line that scrolls up
    there is hidden rather than fighting the pill. */
 #curfew-pause { position: fixed; inset: 0; z-index: 24; display: flex; overflow-y: auto;

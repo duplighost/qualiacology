@@ -42,7 +42,7 @@
 import * as THREE from 'three';
 import { CFG } from '../config.js';
 import { buildChunkData, TIERS } from './chunk-worker.js';
-import { groundDetail, heightAt, normalAt, flats, flatCount } from './terrain.js';
+import { groundDetail, frostAt, heightAt, normalAt, flats, flatCount } from './terrain.js';
 
 const CHUNK = CFG.world.CHUNK;                       // 64 m
 
@@ -123,6 +123,11 @@ const AO_GAIN = 0.34;       // a hollow darkens by up to 34%
 const CROWN_GAIN = 0.16;    // a convexity lifts by up to 16%
 const AO_K = 4.0;           // normal divergence that saturates the term
 const WET_GAIN = 0.20;      // and the same hollow goes COOL: standing water is sky-coloured
+// ROUND 18: frost. See CFG.world.frost for what each of these is, and why the colour is cold
+// rather than white. Read once here so the per-vertex loop never touches CFG.
+const FROST = CFG.world.frost ? CFG.world.frost.colour : [0.15, 0.164, 0.188];
+const FROST_AMOUNT = CFG.world.frost ? CFG.world.frost.amount : 0;
+const FROST_HOLLOW = CFG.world.frost ? CFG.world.frost.hollowBias : 0.5;
 // Curvature needs the four grid neighbours, and a chunk's edge vertex has none outside it.
 // Clamping there would put a one-vertex ridge along every 64 m border; instead the term
 // fades to exactly 0 at the border, so two neighbouring chunks — at the same tier or at
@@ -931,6 +936,29 @@ export class Chunks {
             col[o] += (SOIL[0] - col[o]) * soil;
             col[o + 1] += (SOIL[1] - col[o + 1]) * soil;
             col[o + 2] += (SOIL[2] - col[o + 2]) * soil;
+          }
+        }
+
+        // 2c. FROST. A MATERIAL, like the soil above it and for the same reason: it has to make
+        //     the ground a different substance, not a lighter version of the same one. It runs
+        //     BEFORE the multiply, so a frosted patch still takes the canopy, the curvature and
+        //     the break-up, and cannot read as a decal laid over the county.
+        //
+        //     Three terms, and only the first is the field. WHERE (the area). OPEN TO THE SKY:
+        //     frost forms where the sky can see the ground, so none of it under a closed stand.
+        //     And HOLLOWS: cold air pools, a frost hollow is a real thing, and it is the exact
+        //     opposite of where the bare soil goes above — so the two terms never fight over the
+        //     same vertex, which is what would have made both of them look like noise.
+        if (FROST_AMOUNT > 0) {
+          const area = frostAt(wx, wz);
+          if (area > 0) {
+            const k = FROST_AMOUNT * area * (1 - canopy)
+              * (1 - FROST_HOLLOW + FROST_HOLLOW * hollow);
+            if (k > 0) {
+              col[o] += (FROST[0] - col[o]) * k;
+              col[o + 1] += (FROST[1] - col[o + 1]) * k;
+              col[o + 2] += (FROST[2] - col[o + 2]) * k;
+            }
           }
         }
 

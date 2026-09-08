@@ -57,6 +57,7 @@ import CFG from '../config.js';
 import { Rng, TAU, clamp, clamp01, lerp, noise1D, smoothstep } from '../engine/math.js';
 import {
   MAJORS, MAJOR_BY_ID, MINOR_KINDS, MINOR_SPACING, MINOR_OFFSET, REGION_TINT, DEFAULT_TINT,
+  minorSpacingScale,
   CAMPFIRE_OFFSET, CAMPFIRE_NEAR_R,
 } from './placedata.js';
 import { BUILDERS, MINOR_BUILDERS, apron, majorApproach, GLOW } from './sites.js';
@@ -1711,7 +1712,11 @@ export class Places {
       acc += seg;
       if (acc < next) continue;
       acc = 0;
-      next = MINOR_SPACING.min + rnd() * (MINOR_SPACING.max - MINOR_SPACING.min);
+      // ROUND 18: scaled by where this point IS. Inside the county the multiplier is 1 and
+      // nothing about the original rationing moves; out in the new ring it reaches 1.85, so
+      // the drive is sometimes empty. See MINOR_THINNING in placedata.js.
+      next = (MINOR_SPACING.min + rnd() * (MINOR_SPACING.max - MINOR_SPACING.min))
+        * minorSpacingScale(bx, bz);
 
       // keep-out: a major's yard is not the place for a culvert
       let blocked = false;

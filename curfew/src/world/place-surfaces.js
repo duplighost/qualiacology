@@ -88,6 +88,8 @@ const STYLE_BY_KIND = Object.freeze({
   'great-tree': 'timber',
   'rock-arch': 'stone',
   holdfast: 'stone',
+  // ROUND 18: concrete barriers, a steel gantry and a prefab booth. The station's family.
+  checkpoint: 'industrial',
 });
 
 function wrap(v, n) { return ((v % n) + n) % n; }

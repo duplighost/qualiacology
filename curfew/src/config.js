@@ -90,8 +90,23 @@ export const CFG = {
 
   // ---- world ----------------------------------------------------------------
   world: {
-    SIZE: 4000,             // 4 x 4 km county [design §2]
-    RIM_RADIUS: 1900,       // land rises past here until you turn back; never a fog wall [vigil]
+    // ROUND 18 — THE GIGANTIC MAP. Alex, 2026-09-07 (docs/ALEX-BRIEF.md section 10): "So bigger
+    // map for sure... there should be a lot more space", "It is so much fun to drive around a
+    // huge map in this game", "it gives you really cool new paths to design for the car to go
+    // down." 4 x 4 km -> 8 x 8 km, and the playable disc goes 1900 -> 3600 m, which is 11.3 km^2
+    // of county to 40.7 km^2. Three and a half times the land.
+    //
+    // THIS NUMBER ON ITS OWN IS A REGRESSION AND HE SAID SO FIRST: "Some genuinly new things
+    // should be in that extra space... we need at least some destination that are unique, and
+    // are some of the best in the game. so if a player goes out there, they don't just feel like
+    // they're seeing the same stuff." Empty forest is not more map. The routes and the
+    // destinations that fill this are the actual deliverable; the constant is the cheap part.
+    //
+    // COST. Chunks are 64 m and stream around the player, and the terrain LOD tiers below are
+    // radii around the CAMERA, not the world — so world size does not multiply frame cost. What
+    // costs is content, and content is added deliberately, one destination at a time.
+    SIZE: 8000,             // 8 x 8 km county [design §2, widened round 18]
+    RIM_RADIUS: 3600,       // land rises past here until you turn back; never a fog wall [vigil]
     CHUNK: 64,              // metres [glide, peachful both use 64]
     // Terrain LOD tiers: quad size -> radius. Skirts at every tier edge. [design §8]
     tiers: [
@@ -108,6 +123,28 @@ export const CFG = {
       broad: 35, broadFreq: 0.0022,   // metres of relief
       roll: 6, rollFreq: 0.011,
       detail: 1.2, detailFreq: 0.055,
+    },
+    // ROUND 18 — FROST. Alex, docs/ALEX-BRIEF.md section 10, approving an idea that had been
+    // waiting on him since round 15: "frost or snow would be so fucking amazing too", and then
+    // the scope, which is the important half — "frost or snow on ground in AREAS. could even be
+    // falling in some areas." Not a county-wide repaint. The old note was right to wait: turning
+    // the whole floor white would be an art-direction change nobody asked for, on 40 km^2 at
+    // once, and it would break the night-value law everywhere it landed.
+    //
+    // So it is a low-frequency field with a threshold: most of the county has none, and where it
+    // has any it has a lot. patchM is the lobe size, lo/hi the band of the field that frosts at
+    // all, amount the strongest lerp toward the frost colour anywhere.
+    //
+    // The colour is COLD AND ONLY A LITTLE LIGHTER than the ground it replaces (region albedos
+    // run 0.109-0.164). Frost at night is not white; it is the ground going blue and catching
+    // what little sky there is. Anything brighter and it out-reads the sky, which is the one
+    // thing ground is not allowed to do in this game.
+    frost: {
+      amount: 0.62,
+      patchM: 260,
+      lo: 0.34, hi: 0.62,
+      colour: [0.150, 0.164, 0.188],
+      hollowBias: 0.5,        // 0 = frost anywhere, 1 = only in hollows where cold air pools
     },
     fog: {
       density: 0.010,

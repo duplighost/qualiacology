@@ -285,6 +285,36 @@ export const MAJORS = Object.freeze([
     xpFind: 60, xpClaim: 600, startClaimed: false,
   },
   {
+    // ROUND 18 — THE EIGHTEENTH MAJOR, AND THE FIRST ONE OUT IN THE NEW LAND.
+    //
+    // Alex's own design, docs/ALEX-BRIEF.md section 10: a broken-down highway "similar to the
+    // big place in the middle", guarded, where "they could sell access to the highway. or the
+    // player could try to kill them or run them over, but the fight would be hard."
+    //
+    // WHERE. The midpoint of roads.js's 'broken-highway', which is the chord that saves 6.4 km
+    // of outer ring. A toll only means something on a road worth taking, and this is the only
+    // road in the county that is a shortcut. Measured against the destination law: the nearest
+    // other major is the Relay at (1500.5, 462.8), 757 m away, against a floor of 600.
+    //
+    // The claim is the checkpoint itself, not something past the barrier. What the money buys
+    // here is THE ROAD - that is the whole difference from the Holdfast, where the toll buys a
+    // building - so the barrier gates the shortcut and the claim just says you dealt with the
+    // place. xpClaim sits between the ordinary destinations and the Holdfast's 600: this is the
+    // second-hardest fight in the game, and the only one you can choose to pay your way out of.
+    id: 'the-toll', name: 'The Toll on the Broken Road',
+    x: 2118, z: 25, region: 'ridge', terrainRegion: 'ridge', kind: 'checkpoint',
+    lit: true, hub: false,
+    // A checkpoint is built ground: the barrier line is 18 m across the carriageway and the
+    // dead gantry stands 21 m back up the road, so the pad has to cover about 42 m of highway.
+    flat: { radius: 34, blend: 0.62 },
+    // existing: true — this place frames its own arrival with a gantry across the road. The
+    // standard timber arrival frame on top of that would be two gantries in ten metres.
+    approach: { x: 0, z: 40, w: 16, h: 11.5, style: 'checkpoint', routeX: 0, routeZ: 26, existing: true },
+    discoverR: 46, nearR: 120, horizon: true,
+    claim: { how: 'touch', dx: 0, dy: 0, dz: 0, r: 4.0 },
+    xpFind: 45, xpClaim: 320, startClaimed: false,
+  },
+  {
     id: 'relay', name: 'The Relay',
     x: 1500.5, z: 462.8, region: 'ridge', terrainRegion: 'ridge', kind: 'relay',
     lit: false, hub: false,
@@ -527,6 +557,19 @@ export const MINOR_KINDS = Object.freeze([
   { id: 'cairn', weight: 2.8, minSince: 2, starve: 10, bulk: 1.4 },
   { id: 'wreck', weight: 2.2, minSince: 4, starve: 14, bulk: 2.4 },
   { id: 'poster', weight: 2.4, minSince: 3, starve: 12, bulk: 1.0 },
+  // ROUND 18, AN OPEN BUG, LEFT AT ITS ORIGINAL WEIGHT ON PURPOSE. The county lays exactly ONE
+  // gear yard — against eight wrecks at weight 2.2 and three posters at 2.4 — and raising this
+  // to 4.4 changed the count not at all: still exactly one, measured. So the ration is choosing
+  // gear roughly 9% of the time and something downstream is refusing ~95% of those placements.
+  // The weight is NOT the lever and I have not found the one that is, so this is back at 2.0
+  // rather than shipping a number that measurably does nothing.
+  //
+  // It matters because it is Alex's, docs/ALEX-BRIEF.md section 10: "breakable stuff is so much
+  // fun to. like shooting or meleing a box to be greeted with money or xp. We havevn't done much
+  // with the money system yet." A gear yard is the county's densest cluster of breakables and
+  // there is one of them in 40 km^2, which is why he has never found one. Instrument the
+  // placement loop (places.js _chooseMinor and the ground acceptance below it) and count chosen
+  // vs placed per kind; the answer is in the refusal, not in the table.
   { id: 'gear', weight: 2.0, minSince: 4, starve: 14, bulk: 1.6 },
 ]);
 
@@ -544,6 +587,38 @@ export const MINOR_BY_ID = Object.freeze(
 
 /** DESIGN section 2: "a minor site or vignette occurs every 120-220 m of road." */
 export const MINOR_SPACING = Object.freeze({ min: 120, max: 220 });
+
+/**
+ * ROUND 18 — AND IT THINS OUT AS YOU GO.
+ *
+ * The spacing above is per METRE OF ROAD, so doubling the network doubled the county's minor
+ * sites: 311 of them, against a suite that expected 110-190. The density per kilometre never
+ * changed, which means nothing was wrong with the rationing — but nothing was right about the
+ * result either, because Alex asked for the opposite of "more of the same out there":
+ *
+ *   "Some genuinly new things should be in that extra space... we need at least some
+ *    destination that are unique, and are some of the best in the game. so if a player goes
+ *    out there, they don't just feel like they're seeing the same stuff."
+ *
+ * And: "only part of it is the fun getting to these points when driving through them." A long
+ * drive is a thing you can only have if the road is sometimes empty. So the outer network is
+ * rationed at 1.85x the spacing — a culvert every 220-410 m instead of every 120-220 — which
+ * leaves the county proper exactly as it was and makes the ring feel like the outside.
+ *
+ * Keyed on distance from the centre, not on route id, so a road authored later inherits the
+ * right density by where it is rather than by being remembered here.
+ */
+export const MINOR_THINNING = Object.freeze({ fromR: 1750, toR: 2350, factor: 1.85 });
+
+/** The spacing multiplier at a point: 1 inside the county, MINOR_THINNING.factor beyond it. */
+export function minorSpacingScale(x, z) {
+  const T = MINOR_THINNING;
+  const r = Math.sqrt(x * x + z * z);
+  if (r <= T.fromR) return 1;
+  if (r >= T.toR) return T.factor;
+  const t = (r - T.fromR) / (T.toR - T.fromR);
+  return 1 + (T.factor - 1) * t * t * (3 - 2 * t);      // smoothstep, so there is no seam
+}
 
 /** How far off the centreline a minor sits. Outside CFG.roads.plantExclude.tree (7.05)
  *  so it stands in the trees rather than in the verge the trees were kept out of. */
