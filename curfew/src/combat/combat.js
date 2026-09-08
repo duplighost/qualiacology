@@ -522,28 +522,34 @@ export class Combat {
      zone multipliers — a buttstroke is not aimed.
      ------------------------------------------------------------------ */
 
+  _landMelee(h, damage, dist) {
+    // Assisted targets and ray-swept targets (including the dealer) share one
+    // damage calculation. Apply the player's multiplier once, before owner armour;
+    // scenery keeps its existing feedback and hit-count-based break behaviour.
+    const stats = this._progStats();
+    const multiplier = h.enemy ? ((stats && stats.damageMul) || 1) : 1;
+    const dealt = Math.max(1, Math.round(damage * multiplier));
+    const owner = h.enemy && this._sys(h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+    const result = owner && owner.damage
+      ? owner.damage(h.enemy, dealt, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
+      : { killed: false };
+    this._land(h, dealt, dist, false, !!result.killed, false, 'melee');
+    return result;
+  }
+
   meleeStrike(enemy, damage) {
-    // STAT_CONTRACT.damageMul says "every round the gun lands. Melee too." The buttstroke
-    // never applied it, for the same reason the bullet did not: nothing read the stat.
-    const _ps = this._progStats();
-    const _dmul = (_ps && _ps.damageMul) || 1;
-    damage = damage * _dmul;
     const p = this._sys('player');
-    const enemies = this._sys('enemies');
     if (!enemy || !p) return { killed: false };
     _back.set(enemy.pos.x - p.pos.x, 0, enemy.pos.z - p.pos.z).normalize();
     const r = enemy.def ? enemy.def.radius : 0.4;
     const hh = enemy.def ? enemy.def.height * 0.5 : 0.9;
     _stage.kind = 'flesh'; _stage.zone = 'torso'; _stage.enemy = enemy;
+    _stage.boss = false; _stage.exit = false; _stage.colliderId = -1;
     _stage.x = enemy.pos.x - _back.x * r;
     _stage.y = enemy.pos.y + hh;
     _stage.z = enemy.pos.z - _back.z * r;
     _stage.nx = -_back.x; _stage.ny = 0; _stage.nz = -_back.z;
-    const res = enemies && enemies.damage
-      ? enemies.damage(enemy, Math.max(1, Math.round(damage)),
-        { zone: 'torso', point: _pt.set(_stage.x, _stage.y, _stage.z), dist: 2 })
-      : { killed: false };
-    this._land(_stage, Math.max(1, Math.round(damage)), 2, false, !!res.killed, false, 'melee');
+    const res = this._landMelee(_stage, damage, 2);
     const cam = this._sys('camera');
     if (cam && cam.addTrauma) cam.addTrauma(0.22);
     return res;
@@ -573,10 +579,7 @@ export class Combat {
       }
       const h = this._trace(p.pos.x, oy, p.pos.z, dx, dy, dz, range);
       if (h) {
-        const dealt = Math.max(1, Math.round(damage));
-        const owner = h.enemy && this._sys(h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
-        const result = owner?.damage(h.enemy, dealt, { zone: h.zone, point: _pt.set(h.x,h.y,h.z), dist: h.t });
-        this._land(h, dealt, h.t, false, !!result?.killed, false, 'melee');
+        this._landMelee(h, damage, h.t);
         this._maybeBreak(h, dx, dz, 'melee');    // ROUND 13: the stock takes a crate apart too
         return true;
       }
