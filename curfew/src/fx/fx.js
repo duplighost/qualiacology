@@ -27,8 +27,40 @@
 
 import * as THREE from 'three';
 import { TAU, clamp } from '../engine/math.js';
+// ROUND 18: snow falls where the frost lies, so it reads the same field the ground does.
+// terrain.js imports config and math only, so there is no cycle.
+import { frostAt } from '../world/terrain.js';
 
 const MAX_PARTICLES = 1400;
+
+/* ------------------------------------------------------------------ *
+ * ROUND 18 — FALLING SNOW, WHERE THE FROST LIES.
+ *
+ * Alex, docs/ALEX-BRIEF.md section 10: "frost or snow on ground in areas. could even be FALLING
+ * in some areas." The ground half shipped in this round as terrain.frostAt(); this is the air
+ * half, and it is keyed on the same field, so snow falls exactly where snow is lying. You drive
+ * into a frosted area and it starts; you drive out and it stops. Nothing to author and nothing
+ * to keep in sync.
+ *
+ * IT COSTS NO PROGRAM AND NO DRAW. fx already owns one pooled Points buffer for impact sparks
+ * (MAX_PARTICLES, one draw, one material), and snow is just particles in it. At the rate below,
+ * with a 5.2 s life, the steady-state population is about 150 of 1400 - a tenth of the ring -
+ * so a shotgun into a pack still has its budget. That is the whole reason this lives in fx and
+ * not in a weather system of its own: a new system would be a new material would be a new
+ * shader program, against a budget with three to spare.
+ *
+ * The flakes fall SLOWLY and drift. grav 0.55 with drag 0.86 terminal-velocities them in about
+ * a second; the drift is a shared wind plus per-flake jitter so they do not fall as a sheet.
+ */
+const SNOW_START = 0.34;      // frostAt below this and nothing falls at all
+const SNOW_RATE = 34;         // flakes/second at full frost
+const SNOW_R = 15;            // spawned in a disc this wide around the eye
+const SNOW_TOP = 7.5;         // and this far above it, so they enter frame from the top
+const SNOW_LIFE = 5.2;
+const SNOW_SIZE = 0.052;
+const SNOW_FALL = -1.35;      // m/s at birth; drag and gravity settle it
+const SNOW_WIND = 0.85;       // m/s of shared drift, so a fall has a direction
+const SNOW_COL = Object.freeze({ r: 0.60, g: 0.65, b: 0.74 });   // cold, and under the sky
 const MAX_TRACERS = 24;
 const MAX_DECALS = 64;
 
@@ -359,7 +391,46 @@ export class Fx {
 
   /* ------------------------------------------------------------------ loop -- */
 
+  /**
+   * Snow, spawned into the ordinary particle ring. Called from step().
+   *
+   * The rate IS the frost field's own strength, so this needs no authoring: it falls where the
+   * ground is frosted and nowhere else, and driving out of an area stops it. Sampled at the
+   * CAMERA once a frame — one fbm call, not one per flake — because the field's lobes are 260 m
+   * across and a 15 m spawn disc sits well inside one.
+   */
+  _snow(dt) {
+    const cam = this.ctx && this.ctx.camera;
+    if (!cam || !(dt > 0)) return;
+    const k = frostAt(cam.position.x, cam.position.z);
+    if (k <= SNOW_START) { this._snowAcc = 0; return; }
+    const strength = (k - SNOW_START) / (1 - SNOW_START);
+    this._snowAcc = (this._snowAcc || 0) + SNOW_RATE * strength * dt;
+    let count = this._snowAcc | 0;
+    if (count <= 0) return;
+    this._snowAcc -= count;
+    if (count > 6) count = 6;                 // never let a long frame dump the ring
+    const rng = this.rng;
+    this._snowPhase = (this._snowPhase || 0) + dt * 0.37;
+    const wx = Math.cos(this._snowPhase) * SNOW_WIND;
+    const wz = Math.sin(this._snowPhase * 0.8) * SNOW_WIND;
+    for (let i = 0; i < count; i++) {
+      const a = rng.next() * TAU;
+      const r = Math.sqrt(rng.next()) * SNOW_R;      // sqrt: even across the disc, not clumped
+      this.spawnParticle(
+        cam.position.x + Math.cos(a) * r,
+        cam.position.y + SNOW_TOP * (0.55 + rng.next() * 0.45),
+        cam.position.z + Math.sin(a) * r,
+        wx + (rng.next() - 0.5) * 0.5,
+        SNOW_FALL * (0.7 + rng.next() * 0.6),
+        wz + (rng.next() - 0.5) * 0.5,
+        SNOW_LIFE * (0.7 + rng.next() * 0.6), SNOW_SIZE * (0.6 + rng.next() * 0.9),
+        SNOW_COL.r, SNOW_COL.g, SNOW_COL.b, 0.55, 0.86, 0.85);
+    }
+  }
+
   step(dt) {
+    this._snow(dt);
     // Particles, tracers and decals run on the SCALED step on purpose: during hitstop the
     // debris hangs in the air, which is the whole effect.
     //
