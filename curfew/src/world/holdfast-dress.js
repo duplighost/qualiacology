@@ -11,181 +11,21 @@
 //
 //   "cash should be in breakable boxes at locations too"
 //
-// ============================================================================
-// WHY THE CROWD IS SCENERY, AND WHY THAT IS THE RIGHT ANSWER
-// ============================================================================
-// A real body in this game is an enemies.js pool record: 7-11 meshes, an AI tick, a slot in
-// a pool that is fixed at boot. The pools are `standing: 8, poacher: 12` and the county's
-// eighteen staged scenes already hold most of them for the life of the save. Forty real
-// people at this gate is not a budget question, it is arithmetic: the slots do not exist.
-//
-// So the forty are WELDED INTO THE CASTLE. Every figure below is kit primitives pushed onto
-// the site's one merged solid geometry — zero draws, zero programs, zero AI, zero pool slots,
-// and about 1,100 triangles against a 8 M budget with 6.0 M measured. They never move.
-//
-// And they should never move. This game has already taught the player that the still figure
-// is the frightening one — the Standing Kind does nothing at all until it is behind you — and
-// Alex's own words are "they can't look like a threat from a distance". A hundred metres out
-// they are a crowd standing in lamplight outside a gate. Close up they are people who have
-// been waiting a long time and are not going to be let in.
-//
-// THE ONES THAT FIGHT are a separate, small, REAL cast at the gate: the doorman and four
-// guards, spawned dormant by places' cast machinery the first time you come within 150 m.
-// Attack anybody and they wake. That is "you can try to fight your way in, but there are a
-// lot of them" told honestly — the ones who can hurt you are the ones with a job, and the
-// crowd simply stands there and watches you do it, which is worse.
-//
-// ============================================================================
-// THE NIGHT-VALUE LAW (species.js:74) APPLIES TO EVERY FIGURE HERE
-// ============================================================================
-// A body must be DARKER than the sky it stands against. Forty pale shapes outside a lit gate
-// would be the brightest thing in the county and would read as a car park. Every value below
-// is at or under C.dark, and the only bright thing anywhere near them is the brazier.
+// The waiting crowd is authored scenery with its own cloth material. Real gate
+// guards use the enemy pool with a neutral state: arriving, lighting a torch or
+// making incidental noise does not attack the player. Damage starts the fight.
+// All five stand outside the shut leaves so the fight route can be completed.
 
-import * as THREE from 'three';
-import { C, kits, groundY, ON_APRON, glowColumn } from './sites.js';
+import { C, kits, groundY, ON_APRON, glowColumn, humanFigure, Kit } from './sites.js';
 import { skeleton, corpse } from './remains.js';
 
-/* --------------------------------------------------------------------------
-   Palette. Values only — ART 0.5: the county has one hue and everything that is
-   not a rationed glow is a value, not a colour.
-   -------------------------------------------------------------------------- */
-const P = {
-  coat: [0.030, 0.029, 0.031],
-  coat2: [0.041, 0.038, 0.036],
-  coat3: [0.024, 0.025, 0.029],
-  hood: [0.019, 0.019, 0.022],
-  skin: [0.062, 0.050, 0.042],
-  boot: [0.021, 0.020, 0.020],
-  // the strongbox
-  iron: [0.052, 0.052, 0.056],
-  timber: [0.086, 0.066, 0.048],
-};
+const P = { iron: [0.052, 0.052, 0.056], timber: [0.086, 0.066, 0.048] };
 
 const shade = (col, k) => [col[0] * k, col[1] * k, col[2] * k];
 
-/* --------------------------------------------------------------------------
-   ONE PERSON, STANDING.
-
-   Fourteen primitives. It is not a rig and it never animates: the whole point is that it is
-   part of the wall it is standing in front of, as far as the renderer is concerned.
-
-   Everything that stops forty of these reading as wallpaper is per-figure: the yaw, a lean
-   in two axes, the height (0.92-1.07), which of three coat values it wears, whether it is
-   hooded or bare-headed, whether its arms are folded or hanging, and whether it is looking at
-   the gate or at the person beside it.
-   -------------------------------------------------------------------------- */
+// Share anatomy and clothing with the recognisable cashier at the gate.
 function figure(k, api, lx, lz, yaw, rng) {
-  const s = k.solid;
-  const g = groundY(api, lx, lz) + ON_APRON;
-  const h = 0.99 + rng.next() * 0.11;              // 1.74 - 1.94 m of person
-  const coat = [P.coat, P.coat2, P.coat3][(rng.next() * 3) | 0];
-  const hooded = rng.next() < 0.45;
-  const lean = (rng.next() - 0.5) * 0.07;
-  const cy = Math.cos(yaw), sy = Math.sin(yaw);
-  const put = (ox, oz) => [lx + ox * cy + oz * sy, lz - ox * sy + oz * cy];
-
-  // MEASURED, FIRST PASS, AND IT WAS WRONG. The coat was a 0.30 x 0.96 cone from the ground
-  // up with the torso stacked on top of it, and at 4 m every figure read as a traffic cone
-  // with a chess piece balanced on it (tests/shots/holdfast-first/crowd-close.png). A person
-  // is not a cone. A person at night is a NARROW VERTICAL, about seven times taller than it
-  // is wide, with a small round thing on top and a gap of leg underneath. So this is built
-  // from real proportions in metres and scaled by h, and the silhouette is checked at the
-  // two distances it has to work at: 4 m, and 90 m across a crowd.
-  const legs = 0.86, waist = 1.02, chest = 1.42, neck = 1.50, crown = 1.76;
-
-  // legs, and the boots they stand in
-  for (const side of [-1, 1]) {
-    const [bx, bz] = put(side * 0.105 * h, 0);
-    s.cyl(0.068 * h, 0.076 * h, legs * h, 5, bx, g + legs * 0.5 * h, bz, shade(coat, 0.72), yaw);
-    const [fx, fz] = put(side * 0.105 * h, 0.045 * h);
-    s.box(0.115 * h, 0.075 * h, 0.235 * h, fx, g + 0.038 * h, fz, P.boot, yaw);
-  }
-  // THE COAT. MEASURED AGAIN, ROUND 16: the rebuilt figure still read at twelve metres as a
-  // dark post rather than a person (tests/shots/arch-r1/crowd-12m.png). The cause is in the
-  // numbers: the coat was 0.80 m tall and 0.43 m across the shoulder end, and it merged with
-  // the torso and the shoulders into a single mass 1.03 m tall and 0.44 wide — a 2.3:1 block
-  // with a knob on it, which is a bollard whatever it is called in the source. It also
-  // tapered THE WRONG WAY: widest at the collar, narrowest at the hem, which is a funnel.
-  // A hanging coat is 0.98 m of nearly-straight fall that flares slightly at the hem, so the
-  // mass is now 2.7:1 and 10 per cent narrower, and the leg gap under it is unchanged.
-  s.cyl(0.170 * h, 0.196 * h, 0.98 * h, 7, lx, g + 0.91 * h, lz, coat, yaw, 0, lean);
-  // torso, and shoulders a little wider than it
-  s.box(0.34 * h, (chest - waist) * h, 0.22 * h, lx, g + (waist + chest) * 0.5 * h, lz, coat, yaw, 0, lean);
-  s.box(0.42 * h, 0.11 * h, 0.24 * h, lx, g + (chest - 0.02) * h, lz, shade(coat, 0.86), yaw, 0, lean);
-  // neck and head, ON the shoulders. The old head floated 0.14 m clear of them.
-  s.cyl(0.048 * h, 0.052 * h, 0.10 * h, 5, lx, g + neck * h, lz, P.skin, yaw, 0, lean);
-  const hy = (neck + crown) * 0.5 * h + 0.02 * h;
-  if (hooded) {
-    s.cyl(0.098 * h, 0.104 * h, 0.20 * h, 7, lx, g + hy, lz, P.hood, yaw, 0, lean);
-    s.cone(0.125 * h, 0.16 * h, 6, lx, g + (crown - 0.04) * h, lz, P.hood, yaw, 0, lean);
-  } else {
-    s.cyl(0.094 * h, 0.100 * h, 0.21 * h, 7, lx, g + hy, lz, P.skin, yaw, 0, lean);
-    s.cyl(0.100 * h, 0.096 * h, 0.07 * h, 7, lx, g + (crown - 0.05) * h, lz, P.hood, yaw, 0, lean);
-  }
-  // arms: folded across the chest, or hanging. Either way they are DOWN THE SIDES of the
-  // torso, not out from it — a person waiting is a closed shape.
-  //
-  // ROUND 17. Both branches used to pass `coat` — the SAME value as the coat cylinder and the
-  // torso box they sit against — which is the whole of the round-16 critique's "its arms are
-  // the same value as its coat and sit flush against it, so torso, both arms and coat merge
-  // into one flat slab". It was the one Holdfast item on that list that turned out to be
-  // exactly true. Every other part of this figure already separates itself with a shade():
-  // legs 0.72, shoulders 0.86; the arms were the only limb passing the body colour straight
-  // through, so they contributed silhouette width and no internal edge at all.
-  //
-  // 0.74 puts them between the legs and the shoulders, which is also where the light puts
-  // them: a hanging arm is on the flank, turned away from whatever is lighting the front of
-  // the coat, and a folded arm shades the chest it lies across. Two vertical edges where
-  // there were none. MEASURE THIS: the values here are ~0.030 linear and a 1.35:1 ratio in
-  // near-darkness is exactly the kind of change this project ships and never sees.
-  const sleeve = shade(coat, 0.74);
-  if (rng.next() < 0.45) {
-    for (const side of [-1, 1]) {
-      const [ax, az] = put(side * 0.10 * h, 0.14 * h);
-      s.cyl(0.048 * h, 0.052 * h, 0.30 * h, 5, ax, g + (chest - 0.16) * h, az,
-        sleeve, yaw + side * 0.55, 0, Math.PI * 0.5);
-    }
-  } else {
-    for (const side of [-1, 1]) {
-      const [ax, az] = put(side * 0.205 * h, 0);
-      s.cyl(0.050 * h, 0.058 * h, 0.52 * h, 5, ax, g + (waist + 0.16) * h, az,
-        sleeve, yaw, 0, side * 0.05);
-    }
-  }
-  /* WHAT ACTUALLY MAKES A CROWD READ AS PEOPLE AT TWELVE METRES.
-   *
-   * Not the anatomy. At this art direction every figure out there is one value against one
-   * ground and all you get is an outline, and forty identical outlines is a fence. What
-   * breaks it is that PEOPLE ARE CARRYING THINGS. A staff is a single 4 cm line standing
-   * 1.9 m out of the ground at a slight angle beside a vertical mass, and one line at an
-   * angle beside a vertical is the cheapest "this is a person" signal there is — it is why a
-   * pilgrim reads at a distance a fence post never will. A bundle on the back breaks the
-   * shoulder line the same way, and a hat breaks the head.
-   *
-   * A third of them carry something. None of it moves, none of it is a new material, and it
-   * is nine primitives across the whole crowd's worst case.
-   */
-  const carry = rng.next();
-  if (carry < 0.34) {
-    const side = rng.next() < 0.5 ? -1 : 1;
-    const [sx2, sz2] = put(side * 0.30 * h, 0.06 * h);
-    s.cyl(0.022 * h, 0.028 * h, 1.92 * h, 5, sx2, g + 0.94 * h, sz2,
-      shade(P.skin, 0.62), yaw + side * 0.5, 0, side * 0.075);
-  } else if (carry < 0.62) {
-    const [bx2, bz2] = put(0, -0.24 * h);
-    s.box(0.36 * h, 0.42 * h, 0.24 * h, bx2, g + (chest - 0.10) * h, bz2,
-      shade(coat, 0.72), yaw, 0, lean);
-    s.cyl(0.020 * h, 0.020 * h, 0.46 * h, 4, lx, g + (chest + 0.02) * h, lz,
-      shade(coat, 0.6), yaw, Math.PI * 0.5, 0);
-  }
-  // A collider, in the same statement that lays the geometry — the law. A person is something
-  // you walk round, not through, and at 1.75 m they are not standable.
-  api.emit({
-    kind: 'circle', x: lx, z: lz, r: 0.34,
-    y0: g - 0.3, y1: g + 1.78 * h, tag: 'cloth',
-  });
-  return g;
+  return humanFigure(k.people, api, lx, lz, yaw, rng);
 }
 
 /* --------------------------------------------------------------------------
@@ -221,7 +61,7 @@ function strongbox(k, api, lx, lz, yaw) {
 export const DRESS = {
   holdfast(api, out) {
     void out;
-    const k = kits();
+    const k = kits(); k.people = new Kit();
     const rng = api.rng;
     const R = 66;                       // the curtain's half-width; the gate is at +Z
 
@@ -354,48 +194,20 @@ export const DRESS = {
     }
     corpse(k, api, 10.2, -12.4, rng.range(0, 6.28), rng);
 
-    /* ---- WHO IS ACTUALLY AT THE DOOR ------------------------------------
-     * Five real bodies, dormant, placed by places' cast machinery the first time you come
-     * within 150 m. The doorman stands IN the gate; the four guards are inside the arch and
-     * on the flanks. They are 'standing' — the Standing Kind, an ordinary person who does
-     * nothing at all until it notices you — which is exactly the ask: not a threat from a
-     * distance, and a very bad idea up close.
-     */
-    /* ---- AND WHAT IS INSIDE ---------------------------------------------
-     * Six Wardens, which is the whole pool: 2.55 m, 420 hp, slower than a walk, and worth
-     * 260 XP each. They are dormant — a Warden standing in a dark bailey is a shape you can
-     * see through the gate before you decide to pay, which is the whole reason to put them
-     * where the crowd can be seen against them.
-     *
-     * That is 1,560 XP of garrison plus a 600 XP claim, against the county's next biggest
-     * prize of 260. Alex asked for "full of xp"; this is the number that makes it true.
-     */
+    // Three armed guards and two heavy Wardens hold the outside of the gate.
+    // Killing the complete garrison opens the same persistent access as payment.
     if (typeof api.cast === 'function') {
       api.cast([
-        // the door
-        { species: 'standing', lx: 0, lz: R + 1.6, yaw: Math.PI, awake: false },
-        { species: 'standing', lx: -3.6, lz: R - 2.0, yaw: Math.PI, awake: false },
-        { species: 'standing', lx: 3.6, lz: R - 2.0, yaw: Math.PI, awake: false },
-        { species: 'poacher', lx: -8.0, lz: R + 4.5, yaw: Math.PI + 0.5, awake: false },
-        { species: 'poacher', lx: 8.4, lz: R + 5.2, yaw: Math.PI - 0.5, awake: false },
-        // the bailey
-        { species: 'warden', lx: -18, lz: 26, yaw: 0.4, awake: false },
-        { species: 'warden', lx: 21, lz: 18, yaw: -0.7, awake: false },
-        { species: 'warden', lx: -34, lz: -12, yaw: 1.9, awake: false },
-        // the keep's own door, and the two INSIDE it. Until this round the keep was a solid
-        // block, so every Warden had to stand in the yard; the undercroft is a real room now
-        // and two of them are in it, in the dark, past the fire.
-        { species: 'warden', lx: 0, lz: 7.5, yaw: Math.PI, awake: false },
-        { species: 'warden', lx: -6.0, lz: -17.5, yaw: 0.3, awake: false },
-        { species: 'warden', lx: 7.0, lz: -21.0, yaw: -0.5, awake: false },
+        { species:'poacher', lx:-3.3, lz:R+5.0, yaw:0, guard:true, hpScale:1.5 },
+        { species:'poacher', lx:3.3, lz:R+5.0, yaw:0, guard:true, hpScale:1.5 },
+        { species:'poacher', lx:9, lz:R+6.5, yaw:-0.4, guard:true, hpScale:1.5 },
+        { species:'warden', lx:-16, lz:R+12, yaw:0, guard:true },
+        { species:'warden', lx:18, lz:R+12, yaw:0, guard:true },
       ]);
     }
 
-    return { solid: k.solid.build(), glow: k.glow.empty() ? null : k.glow.build() };
+    return { people: k.people.build(), solid: k.solid.build(), glow: k.glow.empty() ? null : k.glow.build() };
   },
 };
-
-// Keep THREE imported-and-used, the same reason dress-station.js does.
-void THREE;
 
 export default DRESS;

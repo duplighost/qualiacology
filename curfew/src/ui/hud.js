@@ -1,12 +1,9 @@
 // CURFEW — the wordless HUD. Manifest #22, id 'hud'. Owner: progression.
 //
-// ALEX'S LAW, WHICH OUTRANKS EVERY OTHER CONSIDERATION IN THIS FILE:
-// "Delete words from game UI. Show state through in-world visuals so the player feels it,
-// rather than reads it." So: no objective prose, no floating damage numbers, no compass,
-// no prompt, no name of anything during play. Alex's current playtest explicitly asks for
-// ammo and a minimap; both are compact painted instruments, with icons and numbers only.
-// tests/progression.mjs walks every text node in the document during play and fails on one
-// visible glyph. That test is not an obstacle to work around; it is this file's spec.
+// Keep ordinary play compact. Alex's current request explicitly calls for a clear
+// money system: while facing a cashier or dealer the interaction card shows price,
+// current coins and any shortfall. This is contextual, not a permanent screen panel.
+// Earlier notes that prohibited all words did not account for this request.
 //
 // AND THE ONE AMENDMENT HE MADE HIMSELF, 2026-09-02, after the first human playtest:
 // "plus, a healthbar is something we do need."
@@ -140,12 +137,13 @@ const CARRY_INK = '#f0d49a';    // ROUND 13: the bank's rings, in the carried pi
 // ROUND 13: THE KEY GLYPH. Alex, seventh playtest: "We will need some way for the player to
 // know which things they can use the 'E' key on to activate. For now, we can do what many games
 // do. somehow have a little thing that hovers to say hold E, or however most games do it."
-// One 72 px canvas that floats over the thing the key acts on — a door, a breaker, a bed, the
+// One canvas that floats over the thing the key acts on — a door, a breaker, a bed, the
 // car's handle, the lever of a claim, the horn at the wheel — carrying a key-cap with the one
-// letter, and a ring that fills while a hold runs. A glyph, never a sentence: the words stay on
-// the pause card. Owners emit 'prompt' on the bus every fixed step they have one; the highest
-// rank of the step wins (hold 2, use/horn 1) and one silent step clears it.
-const PROMPT_PX = 72;
+// letter and a ring that fills while a hold runs. Cashiers/dealers can also supply two
+// compact lines for price and purse. Owners emit prompt every fixed step; the highest
+// rank wins and one silent step clears it.
+const PROMPT_PX = 320;
+const PROMPT_H = 96;
 const PROMPT_LIFT = 40;         // px the cap floats above its anchor, so it never covers it
 const PROMPT_FONT = '700 15px ui-monospace, Consolas, "Courier New", monospace';
 
@@ -358,7 +356,7 @@ const CSS = `
    not cleared for a thing that lives at the rim of vision. */
 #curfew-life { position: absolute; left: 0; bottom: 0; width: 100%; display: block; }
 /* ROUND 13: the key glyph. 72 px square, positioned by transform, faded by opacity. */
-#curfew-prompt { position: absolute; left: 0; top: 0; width: 72px; height: 72px; display: block;
+#curfew-prompt { position: absolute; left: 0; top: 0; width: 320px; height: 96px; display: block;
               opacity: 0; will-change: transform, opacity; transition: opacity .12s ease; }
 /* This live-region is a BODY SIBLING of #curfew-hud, not its child. Target its id so the
    words remain available to assistive technology while occupying exactly one clipped pixel. */
@@ -761,8 +759,8 @@ export class Hud {
     this._miniSight = MINI_SIGHT_FOOT;
     // ROUND 13: the key glyph. The slot owners write this step, the slot presented, and what
     // the canvas last painted.
-    this._promptIn = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E', rank: 0 };
-    this._prompt = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E' };
+    this._promptIn = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E', detail: '', subdetail: '', unavailable: false, rank: 0 };
+    this._prompt = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E', detail: '', subdetail: '', unavailable: false };
     this.promptCanvas = null; this.pg = null;
     this._promptDirty = true; this._promptKq = -1; this._promptU = -1; this._promptShown = false;
     this._promptSX = -1; this._promptSY = -1;
@@ -961,7 +959,7 @@ export class Hud {
     // ROUND 13: the key glyph's canvas.
     if (this.promptCanvas && this.pg) {
       this.promptCanvas.width = Math.round(PROMPT_PX * this.dpr);
-      this.promptCanvas.height = Math.round(PROMPT_PX * this.dpr);
+      this.promptCanvas.height = Math.round(PROMPT_H * this.dpr);
       this.pg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       this._promptDirty = true;
     }
@@ -1045,10 +1043,13 @@ export class Hud {
     // step wins (a hold over a press), so a lever two metres from a car door never flickers.
     on('prompt', (p) => {
       if (!p || !p.kind) return;
-      const rank = p.kind === 'hold' ? 2 : 1;
+      const rank = Number.isFinite(p.rank) ? p.rank : p.kind === 'hold' ? 2 : 1;
       const q = this._promptIn;
       if (q.kind && rank <= q.rank) return;
       q.kind = p.kind; q.rank = rank;
+      q.detail = typeof p.detail === 'string' ? p.detail.slice(0, 44) : '';
+      q.subdetail = typeof p.subdetail === 'string' ? p.subdetail.slice(0, 50) : '';
+      q.unavailable = !!p.unavailable;
       q.x = +p.x || 0; q.y = +p.y || 0; q.z = +p.z || 0;
       q.k = clamp01(+p.k || 0);
       q.label = typeof p.label === 'string' && p.label ? p.label.slice(0, 1).toUpperCase() : (p.kind === 'horn' ? 'H' : 'E');
@@ -2134,7 +2135,7 @@ export class Hud {
     this._promptSX = sx; this._promptSY = sy;
     const u = this._promptScale();
     c.style.transform = 'translate3d(' + (sx - PROMPT_PX * 0.5).toFixed(1) + 'px,'
-      + (sy - PROMPT_PX * 0.5 - PROMPT_LIFT * u).toFixed(1) + 'px,0)';
+      + (sy - PROMPT_H * 0.5 - PROMPT_LIFT * u).toFixed(1) + 'px,0)';
     const kq = p.kind === 'hold' ? Math.round(clamp01(p.k) * 24) : -1;
     if (this._promptDirty || kq !== this._promptKq || u !== this._promptU) this._paintPrompt(u, kq);
     if (!this._promptShown) { this._promptShown = true; c.style.opacity = '1'; }
@@ -2152,8 +2153,8 @@ export class Hud {
     const g = this.pg, S = PROMPT_PX, p = this._prompt;
     this._promptDirty = false; this._promptKq = kq; this._promptU = u;
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    g.clearRect(0, 0, S, S);
-    const cx = S * 0.5, cy = S * 0.5, cap = 26 * u, r = 5 * u;
+    g.clearRect(0, 0, S, PROMPT_H);
+    const cx = S * 0.5, cy = p.detail ? 24 : PROMPT_H * 0.5, cap = 26 * u, r = 5 * u;
     const rr = (x0, y0, w, h, rad) => {
       g.beginPath();
       g.moveTo(x0 + rad, y0); g.lineTo(x0 + w - rad, y0); g.quadraticCurveTo(x0 + w, y0, x0 + w, y0 + rad);
@@ -2182,6 +2183,16 @@ export class Hud {
     g.font = PROMPT_FONT.replace('15px', Math.round(15 * u) + 'px');
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(p.label || 'E', cx, cy + 0.5 * u);
+    if (p.detail) {
+      g.globalAlpha = 0.90; g.fillStyle = SHADE;
+      rr(8, 48, S - 16, 46, 5); g.fill();
+      g.globalAlpha = 1;
+      g.fillStyle = p.unavailable ? '#edb09a' : '#f0dfba';
+      g.font = '600 13px ui-monospace, Consolas, monospace';
+      g.fillText(p.detail, cx, 62, S - 30);
+      g.fillStyle = '#ded8cc'; g.font = '12px ui-monospace, Consolas, monospace';
+      g.fillText(p.subdetail, cx, 81, S - 30);
+    }
     g.textAlign = 'left';
   }
 
@@ -2546,7 +2557,8 @@ export class Hud {
     // 'prompt' of this step is here now; one step with no emit clears it. No timers.
     {
       const q = this._promptIn, p = this._prompt;
-      if (q.kind !== p.kind || q.label !== p.label) this._promptDirty = true;
+      if (q.kind !== p.kind || q.label !== p.label || q.detail !== p.detail || q.subdetail !== p.subdetail || q.unavailable !== p.unavailable) this._promptDirty = true;
+      p.detail = q.detail; p.subdetail = q.subdetail; p.unavailable = q.unavailable;
       p.kind = q.kind; p.label = q.label; p.k = q.k; p.x = q.x; p.y = q.y; p.z = q.z;
       q.kind = ''; q.rank = 0; q.k = 0;
     }
@@ -2675,7 +2687,10 @@ export class Hud {
     const w = this.ctx.systems.get('weapons');
     const sh = this.ctx.shared;
     const car = !!(sh && sh.inCar);
-    if (car !== this.inCar) { this.inCar = car; this._dirty = true; }
+    if (car !== this.inCar) {
+      this.inCar = car; this._dirty = true;
+      if(this.ammoCanvas)this.ammoCanvas.style.visibility=car?'hidden':'';
+    }
     if (!w) {
       this.conePx = 0;
       if (this.ammo !== 0 || this.reserve !== 0 || this.weaponId) {

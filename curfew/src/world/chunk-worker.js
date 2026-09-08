@@ -44,6 +44,9 @@ export const TIERS = CFG.world.tiers.map((t) => {
   const quad = CHUNK / seg;
   return { quad, seg, radius: t.radius, skirt: quad * 1.6 + 1.2 };
 });
+// Only near road chunks need finer contact geometry. Forest terrain and the two
+// distant tiers keep their existing resolution and streaming cost.
+export const MAX_CHUNK_SEG = Math.max(TIERS[0].seg * 2, ...TIERS.map(t => t.seg));
 
 /** Cheap deterministic per-vertex grain so big colour fields never band. */
 function grain(x, z) {
@@ -110,8 +113,11 @@ const _w = new Float64Array(REGION_COUNT);
  */
 export function buildChunkData(cx, cz, tier, opts) {
   const T = TIERS[tier] || TIERS[TIERS.length - 1];
-  const seg = T.seg, quad = T.quad, n = seg + 1;
   const x0 = cx * CHUNK, z0 = cz * CHUNK;
+  // Reuse the existing ribbon/verge broad phase before allocating the grid.
+  const cxm = x0 + CHUNK * 0.5, czm = z0 + CHUNK * 0.5;
+  const roadNear = roadDistance(cxm, czm) < ROAD_GATE;
+  const seg = T.seg * (tier === 0 && roadNear ? 2 : 1), quad = CHUNK / seg, n = seg + 1;
 
   // ---- 1. height grid with a one-cell halo ------------------------------------------
   // (n+2)^2 samples. The halo ring is what makes normals seam-free: those samples ARE
@@ -133,8 +139,6 @@ export function buildChunkData(cx, cz, tier, opts) {
   // a chunk's half-diagonal is 45.3 m and buildRibbonData's own margin is under 6 m, so
   // nothing inside 58 m of the centre can be missed even allowing for the coarse
   // chamfer's few percent of error. 95% of the county answers "no road" and pays once.
-  const cxm = x0 + CHUNK * 0.5, czm = z0 + CHUNK * 0.5;
-  const roadNear = roadDistance(cxm, czm) < ROAD_GATE;
   // Tier 2 is the 640 m+ shell. FogExp2 at CFG.world.fog.density 0.0075 leaves 0.6% of a
   // surface visible at 300 m, so an 11 m verge stripe out there is well under a pixel and
   // under the fog; it is the one place the query is genuinely not worth its cost.

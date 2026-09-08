@@ -39,7 +39,7 @@
 import { CFG } from '../config.js';
 import { clamp, clamp01, lerp, smoothstep } from '../engine/math.js';
 import {
-  M0_SITES, roadFlatten, setRoadBaseSampler, ensureRoadElevations,
+  M0_SITES, roadFlatten, setRoadBaseSampler, ensureRoadElevations, invalidateRoadElevations,
 } from './roads.js';
 
 /* ------------------------------------------------------------------ *
@@ -239,6 +239,7 @@ export function addFlat(site) {
   const y = site.y !== undefined ? +site.y
     : applyFlats(macroHeight(site.x, site.z), site.x, site.z, FLATS.length);
   FLATS.push({ id, x: +site.x, z: +site.z, r, rim: r * blend, y });
+  invalidateRoadElevations();
   return y;
 }
 
@@ -269,6 +270,7 @@ export function adoptFlats(list) {
     const seen = flatIndex(f.id);
     if (seen >= 0) FLATS[seen] = rec; else FLATS.push(rec);
   }
+  invalidateRoadElevations();
   return FLATS.length;
 }
 
@@ -318,7 +320,9 @@ export function heightAt(x, z) {
   let h = applyFlats(macroHeight(x, z) + detailHeight(x, z), x, z, FLATS.length);
   const rf = roadFlatten(x, z);
   if (rf.blend > 0) h = lerp(h, rf.y, rf.blend);
-  return h;
+  // Buildings own their level cores. A smoothed road must not excavate a trench
+  // through a castle courtyard after the pad has already been applied.
+  return applyFlats(h, x, z, FLATS.length);
 }
 
 // Central-difference epsilon. 0.75 m is under the finest quad (1.6 m) so the gradient

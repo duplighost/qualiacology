@@ -8,38 +8,11 @@
 //   at 2 m, from the driver's seat, it must be a place you want to be — a dash you can
 //     see, a binnacle, a wheel rim below your hands, a door card either side.
 //
-// FLORA DISCIPLINE (world/flora.js:382, :759 — mergeGeometries, one material, no
-// per-prop material): the whole static shell is ONE merged geometry with ONE
-// MeshStandardMaterial and vertexColors, so paint / rust / chrome / leather cost one
-// draw between them. Only the things that MOVE are separate: the four wheels (one
-// InstancedMesh), the steering rim, the working lamp, the glass.
-//
-// SIX MATERIALS, THREE PROGRAMS (audit 2026-09-02; ART.md 7.1, same day). Three bakes
-// every distinct material CONFIG into its own shader program, and the budget for those is
-// ONE number that lives in CFG.render.budget.programsMax — nothing here restates it, because
-// four files used to restate it four different ways and none of them agreed with config. A
-// prop that spent seven programs was spending a budget it does not own.
-//
-// The fold that took this file from seven configs to four still stands and must not be
-// undone. What matters is not the material COUNT but the program count, and those are
-// different numbers: Three's program cache key is built from the FEATURE set (vertexColors,
-// fog, maps, lights, precision) and never from a uniform's value. roughness, metalness and
-// emissive are uniforms. So:
-//   `bodyMat`   Standard + vertexColors — shell, wheels, steering rim, dead lamp
-//   `chromeMat` Standard + vertexColors, roughness 0.62 / metalness 0.88 — ART.md 7.1's
-//               one highlight: the flank moulding, bumpers, grille bars, handles, bezels
-//   `lampMat` / `tailMat` / `cabinMat`  Standard + vertexColors, emissive amber, emissive
-//               red, and the courtesy warm of the open driver's door — added the day Alex
-//               played it and said he could not work out how to get in
-// — those five are ONE program between them. Plus `glassMat` (Basic, the only transparent
-// thing) and the shadow-depth variant. Measured: adding chromeMat left
-// renderer.info.programs.length unchanged. If a later round puts a MAP on any of them that
-// stops being true, because a map IS a define. Re-measure if you do.
-//
-// RE-MEASURED 2026-09-02 when cabinMat was added, by A/B on the real page: with the whole
-// car on screen `renderer.info.programs.length` goes 71 -> 72, and it goes 71 -> 72 with
-// the two glow meshes pointed at `bodyMat` instead. Identical. The car costs ONE program
-// and the courtesy light costs none of it.
+// Exterior paint and matte cabin trim are separate merged geometries. The wheels,
+// steering, door, glass and lamps remain independent where motion or surface response
+// requires it. All opaque materials use the same Standard vertex-colour shader family;
+// roughness, metalness and emissive differences are uniforms, not shader variants.
+// The interior split adds one draw and keeps wet bodywork highlights off the dashboard.
 //
 // vertexColors is safe here and is NOT the PALEHOLLOW grass bug (flora.js:693): every
 // part that reaches mergeGeometries has a `color` attribute written by `part()`, so
@@ -203,7 +176,23 @@ function part(geo, colour, opts) {
   return geo;
 }
 
-const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+function box(w, h, d) {
+  const radius=Math.min(.025,w*.14,h*.14,d*.14);
+  if(radius<.008)return new THREE.BoxGeometry(w,h,d);
+  const g=new THREE.BoxGeometry(w,h,d,3,3,3),p=g.attributes.position,n=g.attributes.normal;
+  const v=new THREE.Vector3(),core=new THREE.Vector3();
+  for(let i=0;i<p.count;i++){
+    v.fromBufferAttribute(p,i);
+    // Put support edges one bevel radius from the boundary, keeping broad faces flat.
+    if(Math.abs(v.x)<w*.49)v.x=Math.sign(v.x)*(w/2-radius);
+    if(Math.abs(v.y)<h*.49)v.y=Math.sign(v.y)*(h/2-radius);
+    if(Math.abs(v.z)<d*.49)v.z=Math.sign(v.z)*(d/2-radius);
+    core.set(Math.max(-w/2+radius,Math.min(w/2-radius,v.x)),
+      Math.max(-h/2+radius,Math.min(h/2-radius,v.y)),Math.max(-d/2+radius,Math.min(d/2-radius,v.z)));
+    v.sub(core).normalize();n.setXYZ(i,v.x,v.y,v.z);v.multiplyScalar(radius).add(core);p.setXYZ(i,v.x,v.y,v.z);
+  }
+  return g;
+}
 
 /**
  * Build the car. `rng` is an engine/math.js Rng fork — used only for the wear seed, so
@@ -469,25 +458,27 @@ export function buildCarBody(rng) {
   PSG(box(0.03, 0.045, AP_Z1 - AP_Z0 - 0.06), [0.055, 0.040, 0.026],
     { x: -(CORE_HX + 0.030), y: AP_Y0 + 0.045, z: (AP_Z0 + AP_Z1) * 0.5 });
 
+  const interiorParts = [];
+  const PI = (geometry, colour, opts) => interiorParts.push(part(geometry, colour, opts));
   /* --------------------------------------------------- the place you sit --- */
   const S = CFG.car.seat;             // (-0.31, 1.66, -0.50); everything below frames it
 
   // dash: the top edge sits at 1.31, 0.35 m below the eye, so it fills the bottom of
   // the view the way a dash does instead of being an invisible shelf.
-  P(box(1.66, 0.22, 0.46), C_DARK, { y: 1.20, z: -1.16, rust: 0.15 });
-  P(box(1.66, 0.05, 0.30), C_WOOD, { y: 1.31, z: -1.06, rust: 0.2 });   // capping rail
+  PI(box(1.66, 0.22, 0.46), C_DARK, { y: 1.20, z: -1.16, rust: 0.15 });
+  PI(box(1.66, 0.05, 0.30), C_WOOD, { y: 1.31, z: -1.06, rust: 0.2 });   // capping rail
   // binnacle, right in front of the driver
-  P(box(0.44, 0.16, 0.26), C_DARK, { x: S.x, y: 1.33, z: -1.20 });
+  PI(box(0.44, 0.16, 0.26), C_DARK, { x: S.x, y: 1.33, z: -1.20 });
   PC(new THREE.CylinderGeometry(0.075, 0.075, 0.012, 12), C_CHROME,
     { x: S.x - 0.10, y: 1.40, z: -1.19, rx: Math.PI * 0.5 });
   PC(new THREE.CylinderGeometry(0.060, 0.060, 0.012, 12), C_CHROME,
     { x: S.x + 0.10, y: 1.41, z: -1.19, rx: Math.PI * 0.5 });
   // column
-  P(new THREE.CylinderGeometry(0.030, 0.030, 0.30, 8), C_DARK,
+  PI(new THREE.CylinderGeometry(0.030, 0.030, 0.30, 8), C_DARK,
     { x: S.x, y: 1.30, z: -1.02, rx: 1.20 });
   // gear lever, in the middle where your right hand goes
-  P(new THREE.CylinderGeometry(0.018, 0.022, 0.30, 8), C_DARK, { x: 0.02, y: 1.20, z: -0.72, rx: -0.24 });
-  P(new THREE.SphereGeometry(0.042, 8, 6), C_WOOD, { x: 0.02, y: 1.34, z: -0.75 });
+  PI(new THREE.CylinderGeometry(0.018, 0.022, 0.30, 8), C_DARK, { x: 0.02, y: 1.20, z: -0.72, rx: -0.24 });
+  PI(new THREE.SphereGeometry(0.042, 8, 6), C_WOOD, { x: 0.02, y: 1.34, z: -0.75 });
 
   /* ------------------------------------------------------------- THE SET ---
    * ROUND 14. The dial has to be readable and there are NO WORDS ON SCREEN, so the
@@ -499,7 +490,7 @@ export function buildCarBody(rng) {
    * its own mesh, exactly like the steering rim above it.
    * ------------------------------------------------------------------------ */
   const SET = { x: 0.055, y: 1.245, z: -1.105 };   // centre stack, right of the column
-  P(box(0.40, 0.155, 0.05), C_DARK, { x: SET.x, y: SET.y, z: SET.z + 0.012, rust: 0.1 });
+  PI(box(0.40, 0.155, 0.05), C_DARK, { x: SET.x, y: SET.y, z: SET.z + 0.012, rust: 0.1 });
   PC(box(0.42, 0.022, 0.035), C_CHROME, { x: SET.x, y: SET.y + 0.088, z: SET.z + 0.010, rust: 0.25 });
   PC(box(0.42, 0.020, 0.035), C_CHROME, { x: SET.x, y: SET.y - 0.086, z: SET.z + 0.010, rust: 0.3 });
   // the scale: five ticks, so a needle has somewhere to be
@@ -518,25 +509,25 @@ export function buildCarBody(rng) {
 
   // seats: two buckets. The driver's is behind the eye, so you see its bolster edge.
   for (const sx of [S.x, 0.31]) {
-    P(box(0.56, 0.16, 0.52), C_LEATHER, { x: sx, y: 1.10, z: -0.30, rust: 0.1 });
+    PI(box(0.56, 0.16, 0.52), C_LEATHER, { x: sx, y: 1.10, z: -0.30, rust: 0.1 });
     // ROUND 14: top was 1.67, one centimetre ABOVE the 1.66 eye and half a metre behind it,
     // so looking back was a wall of leather. 1.58 clears the shoulder line.
-    P(box(0.56, 0.46, 0.14), C_LEATHER, { x: sx, y: 1.35, z: 0.00, rx: -0.13, rust: 0.1 });
-    P(box(0.24, 0.14, 0.13), C_LEATHER, { x: sx, y: 1.63, z: 0.03, rust: 0.1 });   // headrest
+    PI(box(0.56, 0.46, 0.14), C_LEATHER, { x: sx, y: 1.35, z: 0.00, rx: -0.13, rust: 0.1 });
+    PI(box(0.24, 0.14, 0.13), C_LEATHER, { x: sx, y: 1.63, z: 0.03, rust: 0.1 });   // headrest
   }
   // rear bench, glimpsed over your shoulder
-  P(box(1.40, 0.16, 0.48), C_LEATHER, { y: 1.08, z: 1.02, rust: 0.2 });
-  P(box(1.40, 0.50, 0.14), C_LEATHER, { y: 1.36, z: 1.30, rx: -0.10, rust: 0.2 });
+  PI(box(1.40, 0.16, 0.48), C_LEATHER, { y: 1.08, z: 1.02, rust: 0.2 });
+  PI(box(1.40, 0.34, 0.14), C_LEATHER, { y: 1.28, z: 1.30, rx: -0.10, rust: 0.2 });
   // load bay floor — it is an estate; the back is empty and that is the point
-  P(box(1.52, 0.06, 1.00), C_WOOD, { y: 1.06, z: 1.86, rust: 0.4 });
+  PI(box(1.52, 0.06, 1.00), C_WOOD, { y: 1.06, z: 1.86, rust: 0.4 });
 
   // door cards, inside face, either side of you
   for (const sx of [-1, 1]) {
-    P(box(0.05, 0.52, 1.90), C_DARK, { x: sx * 0.84, y: 1.20, z: -0.20, rust: 0.1 });
+    PI(box(0.05, 0.52, 1.90), C_DARK, { x: sx * 0.84, y: 1.20, z: -0.20, rust: 0.1 });
     PC(box(0.09, 0.05, 0.34), C_CHROME, { x: sx * 0.79, y: 1.28, z: -0.62 });   // pull
   }
   // floor pan, so a downward look is not a hole into the terrain
-  P(box(1.62, 0.05, 3.20), C_DARK, { y: 1.00, z: 0.20 });
+  PI(box(1.62, 0.05, 3.20), C_DARK, { y: 1.00, z: 0.20 });
 
   // PROGRAM BUDGET (audit). The dead lamp never moves and never lights, so it has no
   // business owning a material: it is a dark lens, which is exactly what a vertex colour
@@ -559,15 +550,10 @@ export function buildCarBody(rng) {
   if (!shellGeo) throw new Error('carbody: mergeGeometries returned null');
   shellGeo.computeBoundingSphere();
 
-  // THE ONE PAINTED MATERIAL. Audit: this file used to build seven material configs and
-  // Three bakes every distinct config into its own shader program, against the one budget
-  // in CFG.render.budget.programsMax. Four now: this one (shell + wheels + the steering rim,
-  // all of them carrying their colour per vertex), the glass, and the two emissives —
-  // and because the emissives also declare vertexColors they land in THIS program, so
-  // the car costs three programs, not seven materials' worth.
+  // Exterior paint; cabin trim below shares its feature set with matte uniforms.
   const bodyMat = new THREE.MeshStandardMaterial({
     vertexColors: true,               // safe: every part above carries `color`
-    roughness: 0.91,                  // dead paint, no clearcoat. A shiny car at night is a mirror ball.
+    roughness: 0.68,                  // worn paint with a broad wet highlight on rounded edges
     metalness: 0.08,                  // between the old shell 0.88/0.10 and wheel 0.95/0.05
     fog: true,
   });
@@ -577,6 +563,18 @@ export function buildCarBody(rng) {
   shell.receiveShadow = true;
   shell.name = 'car-shell';
   root.add(shell);
+
+  // Worn exterior paint can carry a wet highlight; wood, leather and rubber inside
+  // stay matte so their broad reflections do not compete with the road ahead.
+  const interiorGeo = mergeGeometries(interiorParts, false);
+  for (const geometry of interiorParts) geometry.dispose();
+  const interiorMat = bodyMat.clone();
+  interiorMat.name = 'curfew-car-interior';
+  interiorMat.roughness = .98; interiorMat.metalness = 0;
+  const interior = new THREE.Mesh(interiorGeo, interiorMat);
+  interior.name = 'car-interior'; interior.castShadow = true; interior.receiveShadow = true;
+  root.add(interior);
+
 
   /* --------------------------------------------------------------- chrome -- */
   // ART.md 7.1: "A car in a black field is found by the one hard streak the moon puts on
@@ -775,7 +773,7 @@ export function buildCarBody(rng) {
   const steerGeo = mergeGeometries(rimParts, false);
   for (let i = 0; i < rimParts.length; i++) rimParts[i].dispose();
   if (!steerGeo) throw new Error('carbody: steering merge returned null');
-  const rim = new THREE.Mesh(steerGeo, bodyMat);
+  const rim = new THREE.Mesh(steerGeo, interiorMat);
   rim.name = 'car-steer';
   steer.add(rim);
   root.add(steer);
@@ -848,7 +846,7 @@ export function buildCarBody(rng) {
     doorGroup: door,
     lampDead: null,                   // merged into the shell; the key stays for callers
     // six materials, THREE programs — cabinMat differs from bodyMat by two uniforms
-    materials: [bodyMat, chromeMat, glassMat, lampMat, tailMat, cabinMat],
+    materials: [bodyMat, chromeMat, glassMat, lampMat, tailMat, cabinMat, interiorMat],
     tris: Math.round(tris),
     roofY: ROOF_Y,
     door: DOOR,
@@ -905,7 +903,7 @@ export function buildCarBody(rng) {
       steerGeo.dispose();
       lensGeo.dispose();
       tailGeo.dispose();
-      bodyMat.dispose(); chromeMat.dispose(); glassMat.dispose();
+      bodyMat.dispose(); interiorMat.dispose(); interiorGeo.dispose(); chromeMat.dispose(); glassMat.dispose();
       lampMat.dispose(); tailMat.dispose(); cabinMat.dispose();
       if (root.parent) root.parent.remove(root);
     },

@@ -717,6 +717,9 @@ export class Places {
       // progress instead (weapon.js:509-518); this restores the real thing for everybody.
       ctx.bus.on('save:loaded', () => this._restoreFromSave());
     }
+    // Constructors run before ANY system init. Install pads before roads bake and
+    // chunks build, so the rendered terrain never predates the destination ground.
+    this._registerFlats();
   }
 
   _note(s) { if (this._notes.length < 40) this._notes.push(s); }
@@ -735,7 +738,8 @@ export class Places {
   }
 
   /* ------------------------------------------------------------------ *
-   * FLATS. Called from init(), with the rest of this lane's sibling reads.
+   * FLATS. Installed from the constructor before terrain, road and chunk init.
+   * init() repeats this idempotently for callers that construct systems in another order.
    *
    * terrain.addFlat() levels heightAt() itself, so the mesh, the collision solver, the
    * planting exclusion and hitscan all agree about where the yard is. Two of the original
@@ -758,13 +762,10 @@ export class Places {
    * MEASURED 2026-09-02: relief inside an 18 m building footprint is 0.07 m with the pads
    * and up to 7.44 m without them, which is a cathedral standing on a hillside.
    *
-   * ONE ORDERING CONSEQUENCE, MEASURED RATHER THAN ASSUMED (see docs/HANDOFF.md).
-   * roads.js bakes its smoothed spline elevations in ITS init() (manifest #6) off
-   * terrain's roadBase, which is macro + FLATS. Registering here (#10) means those
-   * elevations no longer see our thirteen discs, so where a pad's level core reaches the
-   * asphalt the road and the yard can disagree about the ground. _measureSeam() below
-   * measures that disagreement at every pad and puts the worst number in state(), so a
-   * seam is a number somebody can read instead of a cliff somebody walks into.
+   * Pads must precede both the road elevation bake and the first chunk build. Late
+   * registration formerly gave physics a different heightfield from the visible ground.
+   * The terrain registry now invalidates road elevations when its flat set changes, and
+   * workers do the same on adoption. _measureSeam reports shoulder grade, not proof of a bug.
    * ------------------------------------------------------------------ */
   _registerFlats() {
     const terrain = this._sys('terrain');
@@ -833,8 +834,7 @@ export class Places {
     this.flatSeam = worst;
     if (worst > 1.5) {
       this._note('pad/road seam ' + worst.toFixed(2) + ' m at ' + worstId
-        + ': roads.js baked its spline elevations in its own init (#6), before these pads '
-        + 'existed (#10). See docs/HANDOFF.md.');
+        + ': sampled road-to-yard shoulder change; inspect the actual approach before treating it as a discontinuity.');
     }
   }
 
@@ -951,6 +951,21 @@ export class Places {
       side: THREE.DoubleSide, shadowSide: THREE.FrontSide,
     });
     this.matBody.name = 'place-body';
+    // Match the existing mapped Lambert variant: cloth gets its own quiet weave,
+    // while people no longer inherit the castle's masonry albedo and bump map.
+    const weave = new Uint8Array(32 * 32 * 4);
+    for (let z=0;z<32;z++) for (let x=0;x<32;x++) {
+      const i=(z*32+x)*4, v=224 + ((x ^ z) & 1)*8 + ((x*17+z*13)%7);
+      weave[i]=weave[i+1]=weave[i+2]=v; weave[i+3]=255;
+    }
+    this.peopleTexture = new THREE.DataTexture(weave,32,32,THREE.RGBAFormat);
+    this.peopleTexture.wrapS=this.peopleTexture.wrapT=THREE.RepeatWrapping;
+    this.peopleTexture.generateMipmaps=true; this.peopleTexture.minFilter=THREE.LinearMipmapLinearFilter;
+    this.peopleTexture.magFilter=THREE.LinearFilter; this.peopleTexture.needsUpdate=true;
+    this.matPeople = this.matBody.clone();
+    this.matPeople.map=this.peopleTexture; this.matPeople.bumpMap=this.peopleTexture;
+    this.matPeople.bumpScale=0.007;
+    this.matPeople.name = 'place-people';
 
     this.matLand = new THREE.MeshLambertMaterial({
       vertexColors: true, dithering: true, fog: false,
@@ -1023,6 +1038,11 @@ export class Places {
       }
     } catch (e) { this._note('approach ' + d.id + ' threw: ' + e.message); }
 
+    if (out?.people) {
+      const people = new THREE.Mesh(out.people, this.matPeople);
+      people.name = 'people-' + d.id; people.castShadow = true; people.receiveShadow = true;
+      rec.node.add(people);
+    }
     if (out && out.solid) {
       projectPlaceSurfaceUVs(out.solid);
       const surfaceMat = this.matLand.clone();
@@ -1271,6 +1291,9 @@ export class Places {
         const prog = self._sys('progress');
         return !!(prog && typeof prog.flag === 'function' && prog.flag('gate:' + d.id));
       },
+      cast(entries) {
+        self._recordCast('major:' + d.id, d.x, d.z, rec.yaw, entries, rec.padY);
+      },
       _self: self,
     };
   }
@@ -1328,7 +1351,7 @@ export class Places {
         b.group.traverse((o) => {
           if (!o.isMesh) return;
           if (o.geometry) o.geometry.dispose();
-          if (o.material && o.material !== this.matBody && o.material !== this.matGlow) o.material.dispose();
+          if (o.material && o.material !== this.matBody && o.material !== this.matGlow && o.material !== this.matPeople) o.material.dispose();
         });
       }
       if (b.id && this._board && this._board.siteId === b.id) this._board = null;
@@ -1347,6 +1370,15 @@ export class Places {
   rebuildSite(id) {
     const d = MAJOR_BY_ID[id];
     if (!d) return false;
+    if (d.kind === 'checkpoint') {
+      const rec = this.nodes.get(id), collision = this._sys('collision');
+      collision?.removeChunk('place:' + id);
+      rec.node.traverse(node => { if (node.geometry) node.geometry.dispose();
+        if (node.material && node.material !== this.matLand && node.material !== this.matGlow && node.material !== this.matPeople) node.material.dispose(); });
+      rec.node.clear(); rec.built = false; rec.fixture = null; rec.prize = null; rec.moving = []; rec.ignite = null;
+      rec.rippleMin = Infinity; rec.rippleMax = 0;
+      this._buildLandmark(d);
+    }
     const chunks = this._sys('chunks');
     const key = chunks && chunks.chunkIdAt
       ? String(chunks.chunkIdAt(d.x, d.z))
@@ -1367,6 +1399,7 @@ export class Places {
     try { out = B.body(api); } catch (e) { this._note('body ' + d.id + ' threw: ' + e.message); return null; }
     if (!out) return null;
     out = this._dress(d, rec, api, out);
+    if (out.cast) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, out.cast, rec.padY);
 
     const g = new THREE.Group();
     g.name = 'place-body-' + d.id;
@@ -1392,6 +1425,11 @@ export class Places {
       g.add(m);
     }
 
+    if (out.people) {
+      const people = new THREE.Mesh(out.people, this.matPeople);
+      people.name = 'people-' + d.id; people.castShadow = true; people.receiveShadow = true;
+      g.add(people);
+    }
     let glowMesh = null;
     if (out.solid) {
       projectPlaceSurfaceUVs(out.solid);
@@ -1408,8 +1446,8 @@ export class Places {
       glowMesh.name = 'body-glow-' + d.id;
       glowMesh.material.color.set(out.glowColour || GLOW.lamp);
       glowMesh.renderOrder = 4;
-      glowMesh.material.opacity = this.claimed.has(d.id) ? 1 : 0;
-      glowMesh.visible = this.claimed.has(d.id);
+      glowMesh.material.opacity = this.claimed.has(d.id) || d.lit ? 1 : 0;
+      glowMesh.visible = this.claimed.has(d.id) || !!d.lit;
       g.add(glowMesh);
     }
     this.group.add(g);
@@ -1437,7 +1475,7 @@ export class Places {
    * the claim fixture all live there — it only adds. It may also declare a staged cast.
    */
   _dress(d, rec, api, out) {
-    let solid = out.solid, glow = out.glow;
+    let solid = out.solid, glow = out.glow, people = out.people;
     for (let i = 0; i < DRESS_CHAIN.length; i++) {
       const map = DRESS_CHAIN[i];
       if (!map) continue;
@@ -1446,11 +1484,13 @@ export class Places {
       let ex = null;
       try { ex = fn(api, out); } catch (e) { this._note('dress ' + d.id + ' threw: ' + e.message); continue; }
       if (!ex) continue;
+      if (ex.people) people = people ? mergeGeometries([people, ex.people], false) : ex.people;
       if (ex.solid) solid = solid ? mergeGeometries([solid, ex.solid], false) : ex.solid;
       if (ex.glow) glow = glow ? mergeGeometries([glow, ex.glow], false) : ex.glow;
       if (ex.glowColour && !out.glowColour) out.glowColour = ex.glowColour;
       if (ex.cast) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, ex.cast, rec.padY);
     }
+    out.people = people;
     if (solid !== out.solid) { out.solid = solid; if (solid) solid.computeBoundingSphere(); }
     if (glow !== out.glow) { out.glow = glow; if (glow) glow.computeBoundingSphere(); }
     return out;
@@ -1483,6 +1523,9 @@ export class Places {
         z: oz - lx * sy + lz * cy,
         yaw: (+e.yaw || 0) + yaw,
         awake: !!e.awake,
+        guard: !!e.guard,
+        hpScale: e.hpScale || 1,
+        entity: null, spawned: false,
       };
       // ROUND 7, lane B's request: `ly` is metres ABOVE THE SITE'S PAD, so a tableau can
       // stand on a hay loft, a mezzanine or a ringing floor 13 m up and be seen from the
@@ -1506,19 +1549,36 @@ export class Places {
       if (rec.placed) continue;
       const dx = p.x - rec.x, dz = p.z - rec.z;
       if (dx * dx + dz * dz > CAST_PLACE_R * CAST_PLACE_R) continue;
-      rec.placed = true;
-      if (this._castDone.has(rec.key)) continue;    // already met, already dealt with
-      this._castDone.add(rec.key);
-      for (let i = 0; i < rec.cast.length; i++) {
-        const c = rec.cast[i];
+      if (this._castDone.has(rec.key)) { rec.placed = true; continue; }
+      if ((rec.retryAt || 0) > this._t) continue;
+      rec.retryAt = this._t + 1;
+      const siteId = rec.key.startsWith('major:') ? rec.key.slice(6) : '';
+      const prog = this._sys('progress');
+      let complete = true;
+      for (const c of rec.cast) {
+        if (c.spawned) continue;
+        // A completed toll does not respawn a garrison when reloading the save.
+        if (c.guard && prog?.flag('gate:' + siteId)) { c.spawned = true; continue; }
         try {
-          enemies.spawn(c.species, c.x, c.z, {
-            awake: c.awake, yaw: c.yaw, staged: true, feetY: c.feetY,
+          const hostile = !!prog?.flag('gate-hostile:' + siteId);
+          const e = enemies.spawn(c.species, c.x, c.z, {
+            awake: c.guard ? true : c.awake, yaw: c.yaw, staged: true, feetY: c.feetY,
+            neutral: c.guard && !hostile, siteGuard: c.guard ? siteId : '', hpScale: c.hpScale,
           });
-        }
-        catch (e) { this._note('cast ' + rec.key + ' ' + c.species + ': ' + e.message); }
+          if (e) { c.entity = e; c.generation = e.gen; c.spawned = true; }
+          else complete = false;
+        } catch (e) { complete = false; this._note('cast ' + rec.key + ' ' + c.species + ': ' + e.message); }
       }
+      if (complete) { rec.placed = true; this._castDone.add(rec.key); }
     }
+  }
+
+  gateDefeated(id) {
+    const rec = this._casts.get('major:' + id);
+    if (!rec) return false;
+    const guards = rec.cast.filter(c => c.guard);
+    return guards.length > 0 && guards.every(c => c.spawned && c.entity
+      && (c.entity.gen !== c.generation || !c.entity.alive));
   }
 
   _buildMinor(m, chunkKey) {
@@ -2730,7 +2790,7 @@ export class Places {
     for (const list of this.bodies.values()) {
       for (const b of list) {
         if (b.kind !== 'major' || !b.glow) continue;
-        const on = this.claimed.has(b.id);
+        const on = this.claimed.has(b.id) || !!MAJOR_BY_ID[b.id]?.lit;
         b.glow.visible = on;
         b.glow.material.opacity = on ? 1 : 0;
       }
@@ -3232,6 +3292,8 @@ export class Places {
       if (this.landGroup.parent) this.landGroup.parent.remove(this.landGroup);
     }
     if (this.group && this.group.parent) this.group.parent.remove(this.group);
+    if (this.peopleTexture) this.peopleTexture.dispose();
+    if (this.matPeople) this.matPeople.dispose();
     if (this.matBody) this.matBody.dispose();
     if (this.matLand) this.matLand.dispose();
     disposePlaceSurfaceLibrary(this.surfaceTextures);

@@ -272,7 +272,7 @@ export const MAJORS = Object.freeze([
     // the cleared disc was 82.6 m and the forest grew through the corner towers. 112 clears
     // 96.3 m, which covers the corners with three metres to spare and gives the castle a
     // glacis for the crowd to stand on.
-    flat: { radius: 112, blend: 0.70 },
+    flat: { radius: 112, blend: 0.90 },
     // existing: true — the Holdfast has a GATEHOUSE, and majorApproach's standard timber
     // arrival frame stood a 20 x 13 m gantry straight over it, which read as scaffolding
     // round a castle (tests/shots/holdfast-v3/crowd-behind.png). The same flag the Filling
@@ -500,6 +500,36 @@ export const MAJORS = Object.freeze([
     // old centre position the crown slab itself hid the lamp from every ground approach.
     claim: { how: 'touch', dx: 0, dy: 10.2, dz: -3.0, r: 2.8 },
     xpFind: 35, xpClaim: 190, startClaimed: false,
+  },
+  {
+    id: 'mourning-glasshouse', name: 'The Mourning Glasshouse',
+    x: -406.6, z: 2480.4, region: 'fen', terrainRegion: 'pines', kind: 'glasshouse',
+    lit: false, hub: false, clearR: 76,
+    flat: { radius: 108, blend: 0.72 }, apronCol: [0.041, 0.050, 0.045],
+    approach: { x: 0, z: 32, w: 12, h: 18, style: 'glasshouse', existing: true },
+    discoverR: 40, nearR: 130, horizon: true,
+    claim: { how: 'touch', dx: 0, dy: 0.16, dz: -51, r: 2.6 },
+    xpFind: 70, xpClaim: 360, startClaimed: false,
+  },
+  {
+    id: 'choir-vault', name: 'The Choir Vault',
+    x: -2456.3, z: -827.6, region: 'ridge', terrainRegion: 'pines', kind: 'bell-vault',
+    lit: false, hub: false, clearR: 76,
+    flat: { radius: 108, blend: 0.72 }, apronCol: [0.051, 0.050, 0.048],
+    approach: { x: 0, z: 32, w: 14, h: 24, style: 'bell-vault', existing: true },
+    discoverR: 40, nearR: 130, horizon: true,
+    claim: { how: 'touch', dx: 16, dy: 5.2, dz: -34, r: 2.6 },
+    xpFind: 70, xpClaim: 400, startClaimed: false,
+  },
+  {
+    id: 'red-quarry', name: 'The Red Quarry',
+    x: 820.3, z: -2954.3, region: 'works', terrainRegion: 'pines', kind: 'red-quarry',
+    lit: false, hub: false, clearR: 82,
+    flat: { radius: 116, blend: 0.72 }, apronCol: [0.054, 0.043, 0.037],
+    approach: { x: 0, z: 32, w: 18, h: 28, style: 'red-quarry', existing: true },
+    discoverR: 44, nearR: 140, horizon: true,
+    claim: { how: 'touch', dx: 26, dy: 7.2, dz: -38, r: 2.6 },
+    xpFind: 75, xpClaim: 420, startClaimed: false,
   },
 ]);
 

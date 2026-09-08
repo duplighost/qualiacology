@@ -852,6 +852,7 @@ export class Enemies {
    */
   damage(e, amount, info) {
     if (!e || !e.alive) return { killed: false, hpFrac: 0, species: e ? e.species : '' };
+    if (e.neutral) this.provokeGate(e.siteGuard);
     const zone = info && info.zone ? info.zone : 'torso';
     let dmg = amount;
     if (e.staggerT > 0) dmg = Math.round(dmg * 1.25);   // a staggered body takes more
@@ -928,6 +929,20 @@ export class Enemies {
     return { killed: false, hpFrac: clamp01(e.hp / e.def.hp), species: e.species };
   }
 
+  /** Gate guards ignore proximity, torch and incidental noise. A hit chooses the fight. */
+  provokeGate(siteId) {
+    const prog = this._sys('progress'), player = this._sys('player');
+    if (siteId && prog?.flag) prog.flag('gate-hostile:' + siteId, 1);
+    for (const guard of this.all) {
+      if (!guard.alive || !guard.neutral || guard.siteGuard !== siteId) continue;
+      guard.neutral = false; guard.staged = false; guard.aware = 2; guard.alerted = true;
+      guard.calmT = 0; guard.respawnCalmT = 0; guard.memT = guard.def.memHunt || 12;
+      guard.state = 'approach'; guard.riseSquash = 1;
+      if (player) { guard.heardX = player.pos.x; guard.heardZ = player.pos.z; }
+    }
+    this.ctx.bus.emit('gate:hostile', { id: siteId });
+  }
+
   /**
    * Wake anything that could have heard it. `radius` is the alert radius the
    * source published — for a weapon that is CFG.weapons.defs[x].loud, which is
@@ -938,7 +953,7 @@ export class Enemies {
     this._noiseX = x; this._noiseZ = z; this._noiseR = radius; this._noiseT = 0;
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
-      if (e.state === 'corpse' || (!e.alive && !e.def.dormant)) continue;
+      if (e.neutral || e.state === 'corpse' || (!e.alive && !e.def.dormant)) continue;
       const d = Math.hypot(e.pos.x - x, e.pos.z - z);
       if (d > radius) continue;
       // Pulling the trigger is an explicit choice to engage this body. Other noises remain
@@ -1153,6 +1168,8 @@ export class Enemies {
     // the player as it arrives, which is what a thing stepping out of the trees does.
     const p = this._sys('player');
     e.staged = !!(opts && opts.staged);
+    e.neutral = !!opts?.neutral;
+    e.siteGuard = opts?.siteGuard || '';
     e.yaw = (opts && typeof opts.yaw === 'number') ? opts.yaw
       : (p ? faceYaw(x, z, p.pos.x, p.pos.z) : 0);
     e.prevYaw = e.currYaw = e.yaw;
@@ -1241,6 +1258,10 @@ export class Enemies {
         : (def.dormant ? (def.riseTime || 0.55) : QUICK_RISE_S);
       e.riseDur = e.riseT;
       e.riseSquash = 0.34;
+      e.built.group.visible = true;
+    }
+    if (e.neutral) {
+      e.state = 'approach'; e.riseSquash = 1; e.aware = 0; e.alerted = false;
       e.built.group.visible = true;
     }
     e.prevSquash = e.currSquash = e.riseSquash;
@@ -1384,6 +1405,13 @@ export class Enemies {
 
   _stepEnemy(e, dt, p) {
     const def = e.def;
+    if (e.neutral) {
+      e.pos.set(e.stagedX, e.stagedY, e.stagedZ); e.vel.set(0, 0, 0);
+      e.riseSquash = 1; e.state = 'approach'; e.aware = 0; e.alerted = false;
+      e.yaw = e.stagedYaw; e.gait = 0; e.airborne = false;
+      e.dist = Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z);
+      return;
+    }
 
     // Perception on a stagger, so twenty bodies never all raycast on the same
     // frame. The two dread species retest faster because their whole rule IS
@@ -1489,6 +1517,7 @@ export class Enemies {
     // and it is drawn the entire time. The instant it is aware of you it is an ordinary body
     // and every rule below applies, including the far cull it was exempt from.
     if (e.staged) {
+      this._noticeStaged(e, p);
       if (e.aware > 0) {
         e.staged = false;
       } else {
@@ -1509,6 +1538,31 @@ export class Enemies {
     }
 
     this._integrate(e, dt);
+  }
+
+  // A tableau still has senses. Returning above used to skip the pressure
+  // notice test entirely; the Pale and Standing Kind also ignore noise, so
+  // their authored scenes could remain inert even with a player beside them.
+  // Neutral toll guards exit before this path. Dread bodies wake within their
+  // existing local encounter range, then keep their ordinary look/light rules.
+  _noticeStaged(e, p) {
+    if (!e.staged || e.neutral || e.aware > 0 || !e.los || this._calmHolds(e)) return;
+    const def = e.def;
+    let reach;
+    if (def.owner === OWNER.DREAD) reach = def.leash || def.beamRange || 18;
+    else if (def.bands) {
+      if (!(e.playerLit > 0.40 || e.dist < 22)) return;
+      reach = e.playerLit >= 0.5 ? 70 : 60;
+    } else {
+      const litK = def.litNotice === undefined ? 0.6 : def.litNotice;
+      reach = e.leashed === false ? 1e9 : def.notice * (1 + (e.playerLit || 0) * litK);
+    }
+    if (!(e.dist <= reach)) return;
+    e.aware = def.owner === OWNER.DREAD ? 2 : 1;
+    e.alerted = true; e.memT = def.memAlert || 12; e.calmT = 0;
+    e.heardX = p.pos.x; e.heardZ = p.pos.z;
+    evtReset(e, 'notice'); _evt.y = e.pos.y + def.height * 0.7;
+    this.ctx.bus.emit('enemy:telegraph', _evt);
   }
 
   /* ---------------------------------------------------- the pressure brain -- */
@@ -2359,6 +2413,7 @@ export class Enemies {
     // THERE when you come back, so the far cull may not take one that has never noticed
     // you. Once it has been woken it is an ordinary body again and the director owns it.
     if (e.staged && e.aware <= 0) return false;
+    if (e.siteGuard) return false;
     if (e.scripted) return false;             // ROUND 13: dread's spend, not the thermostat's stock
     this._uncommit(e);
     this._release(e);
@@ -2379,6 +2434,7 @@ export class Enemies {
   standDown(e) {
     this._lastAsk = this._t;
     if (!e || !e.alive || e.def.owner !== OWNER.PRESSURE || e.aware <= 0) return false;
+    if (e.siteGuard) return false;
     if (e.scripted) return false;             // ROUND 13: an ambush cannot be called off
     // never mid-strike and never mid-air: a body called off in a lunge changes its mind in
     // front of him

@@ -46,6 +46,7 @@ import { roadDistance } from './roads.js';
 import { MAJORS, MAJOR_BY_ID } from './placedata.js';
 import { SITE_COLOURS as C, GLOW } from './sites.js';
 import { projectPlaceSurfaceUVs } from './place-surfaces.js';
+import { createWaterMaterial, prepareWaterGeometry } from './water-surface.js';
 
 const W = CFG.wilds;
 const CHUNK = CFG.world.CHUNK;
@@ -81,13 +82,11 @@ const TRAVEL_FORD_WIDTH = 8.4;
 const TRAVEL_POOL_OFFSETS = Object.freeze([15, 18, 21, 24]);
 const TRAVEL_WATER_BUILD_R = 250;
 const TRAVEL_WATER_DROP_R = 292;
-// Stronger separation than the old near-black pond. These are linear albedos on the shared
-// body material: deep blue centre, near-black edge, pale sky streak. Geometry and value—not
-// transparency—make them read as water rather than another patch of fog.
+// These colours preserve the authored depth classes in the geometry for offline inspection.
+// Rendered water uses water-surface.js and the live sky; the bank keeps its earth material.
 const TRAVEL_WATER_DEEP = Object.freeze([0.022, 0.135, 0.225]);
 const TRAVEL_WATER_EDGE = Object.freeze([0.010, 0.055, 0.092]);
 const TRAVEL_WATER_GLINT = Object.freeze([0.150, 0.178, 0.205]);
-const TRAVEL_WATER_GLINT_BLUE = Object.freeze([0.074, 0.105, 0.140]);
 const TRAVEL_BANK_DARK = Object.freeze([0.025, 0.018, 0.012]);
 const TRAVEL_BANK_CUT = Object.freeze([0.075, 0.052, 0.030]);
 const TRAVEL_BANK_OUTER = Object.freeze([0.050, 0.044, 0.032]);
@@ -1356,24 +1355,15 @@ function travelFordBanks(k, api) {
   k.pushColored(g);
 }
 
-/** The road-water landscape body. No light, shader or save slot of its own. */
+/** Road water owns an opaque reflective surface, a separate bank, and no save slot. */
 function buildTravelWater(api) {
   const site = api.site, solid = new Kit(), glow = new Kit(), r = api.rng;
+  const water = new Kit();
   if (site.variant === 'ford') {
-    travelFordSurface(solid, api);
+    travelFordSurface(water, api);
     travelFordBanks(solid, api);
-    // Broken, staggered silver-blue facets—not evenly spaced neon bars. Five of them sit
-    // directly in the crossing so the dark ford has readable surface area from the road.
-    for (let i = 0; i < 30; i++) {
-      const z = i < 11 ? r.range(-6.0, 6.0) : r.range(-32, 32);
-      const x = Math.sin(((z / TRAVEL_FORD_LEN) + 0.5) * 8.0 - 1.4) * 0.82;
-      const len = r.range(0.46, i < 11 ? 2.15 : 1.32);
-      const ox = r.range(-2.75, 2.75), oz = r.range(-0.46, 0.46);
-      glow.box(len, 0.014, r.range(0.032, 0.070), x + ox,
-        groundY(api, x + ox, z + oz) + 0.128, z + oz,
-        i % 4 === 0 ? TRAVEL_WATER_GLINT : TRAVEL_WATER_GLINT_BLUE,
-        r.range(-0.24, 0.24));
-    }
+    // Moving sky ripples now belong to the water shader. Static additive boxes used to
+    // float over the surface as luminous bars, unaffected by view angle or the clock.
     // Reed walls stop at the road; two broken white stakes announce the ford from either
     // direction without becoming collision or a UI arrow.
     for (let i = 0; i < 30; i++) {
@@ -1390,27 +1380,8 @@ function buildTravelWater(api) {
       glow.box(0.20, 0.12, 0.20, x, gy + 1.44, 0, TRAVEL_WATER_GLINT);
     }
   } else {
-    travelPoolSurface(solid, site.waterY);
+    travelPoolSurface(water, site.waterY);
     travelPoolBank(solid, api, site.waterY);
-    // Reflections are actual broken facets, not translucent haze and not a Tron ruler.
-    // Adjacent pieces bend into loose arcs; irregular z and alternating cold values keep
-    // the result water-like while remaining readable in the black hour.
-    for (let i = 0; i < 11; i++) {
-      const z = r.range(-5.8, 5.8);
-      const edge = Math.sqrt(Math.max(0, 1 - (z * z) / (TRAVEL_POOL_RZ * TRAVEL_POOL_RZ)));
-      const span = Math.max(0.8, TRAVEL_POOL_RX * edge * r.range(0.15, 0.34));
-      const x = r.range(-0.55, 0.55) * TRAVEL_POOL_RX * edge;
-      const pieces = 1 + (i % 3);
-      for (let j = 0; j < pieces; j++) {
-        const u = pieces === 1 ? 0 : j / (pieces - 1) - 0.5;
-        const len = span / pieces * r.range(0.46, 0.72);
-        const bend = u * u * 0.22 + r.range(-0.055, 0.055);
-        glow.box(len, 0.013, r.range(0.024, 0.046), x + u * span,
-          site.waterY + 0.020 + (j & 1) * 0.002, z + bend,
-          (i + j) % 4 === 0 ? TRAVEL_WATER_GLINT : TRAVEL_WATER_GLINT_BLUE,
-          r.range(-0.16, 0.16) + u * 0.18);
-      }
-    }
     // A broken dock reaches from the road-facing bank into every pool.
     const cy = Math.cos(site.yaw), sy = Math.sin(site.yaw);
     const dx = site.roadX - site.x, dz = site.roadZ - site.z;
@@ -1438,13 +1409,14 @@ function buildTravelWater(api) {
     solid.box(3.2, 0.28, 0.72, 1.8, site.waterY + 0.04, -0.5, C.dark, -0.35, 0, 0.08);
     solid.box(2.7, 0.10, 0.48, 1.8, site.waterY + 0.25, -0.5, TRAVEL_DOCK, -0.35, 0, 0.08);
   }
-  return { solid, glow, cache: null };
+  return { solid, glow, water, cache: null };
 }
 
 /** RUIN / WATERHOLE: a built remnant or one of the little wet places in the forest. */
 function buildRuin(api) {
   const site = api.site;
   const solid = new Kit(), glow = new Kit();
+  const water = new Kit();
   const r = api.rng;
   let cache = null;
   if (site.variant === 'chapel') {
@@ -1677,9 +1649,9 @@ function buildRuin(api) {
     if (cache) { site.cacheX = api.wx(-2.2, 1.4); site.cacheZ = api.wz(-2.2, 1.4); site.cacheY = groundY(api, -2.2, 1.4); }
   } else if (site.variant === 'pond') {
     // A small black woodland pond: genuinely level water in a deterministically selected
-    // shallow basin, with an opaque bank joining it back to the real terrain. Teal stays on
-    // the shared Lambert body material: visibly water, zero additional shader programs.
-    pondSurface(solid, 0, 0, POND_RX, POND_RZ, site.waterY);
+    // shallow basin, with an opaque bank joining it back to the real terrain. Water has
+    // its own opaque sky-reflecting material; the bank retains its rough earth surface.
+    pondSurface(water, 0, 0, POND_RX, POND_RZ, site.waterY);
     pondBankSurface(solid, api, 0, 0, POND_RX, POND_RZ, site.waterY);
     for (let i = 0; i < 18; i++) {
       const a = (i / 18) * TAU + r.range(-0.08, 0.08);
@@ -1706,7 +1678,7 @@ function buildRuin(api) {
     // One continuous creek skin sampled on a 29 x 5 grid. The old seven flat quads could
     // hover 0.8 m above a low bank or vanish into a high one; every vertex now follows the
     // terrain function shared by rendering, collision and the player.
-    streamSurface(solid, api);
+    streamSurface(water, api);
     for (let i = 0; i < 7; i++) {
       const z = -7.5 + i * 2.5;
       const x = Math.sin((z + 8.2) / 16.4 * 7.5) * 1.12;
@@ -1728,7 +1700,7 @@ function buildRuin(api) {
     if (site.cache) cache = cacheParts(api, 3.0, groundY(api, 3.0, 2.8), 2.8, 0.2);
     if (cache) { site.cacheX = api.wx(3.0, 2.8); site.cacheZ = api.wz(3.0, 2.8); site.cacheY = groundY(api, 3.0, 2.8); }
   }
-  return { solid, glow, cache };
+  return { solid, glow, water, cache };
 }
 
 /** WRECK: a dead car, a scatter of oil drums, or a fallen tree across a gully. */
@@ -2411,6 +2383,8 @@ export class Wilds {
     this.group = null;
     this.horizonGroup = null;
     this.matBody = null;
+    this.matWater = null;
+    this._waterWarm = null;
     this.surfaceDetail = null;
     this.surfaceBump = null;
     this.matGlow = null;
@@ -2524,6 +2498,10 @@ export class Wilds {
       map: this.surfaceDetail, bumpMap: this.surfaceBump, bumpScale: 0.068,
     });
     this.matBody.name = 'wild-body';
+    // Geometry-only tools construct Wilds without a renderer or the sky system. They
+    // retain a plain material; every rendered game requires the initialized real sky.
+    this.matWater = this.ctx.renderer ? createWaterMaterial(this._sys('sky'))
+      : new THREE.MeshBasicMaterial({ color: 0x071b29, side: THREE.DoubleSide });
     this.matGlow = new THREE.MeshBasicMaterial({
       vertexColors: true, fog: false, transparent: true, opacity: 1,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
@@ -2548,6 +2526,15 @@ export class Wilds {
     this.horizonGroup.name = 'wilds-horizon';
     if (scene) { scene.add(this.group); scene.add(this.horizonGroup); }
     else this._note('ctx.scene missing at wilds init: nothing will be visible');
+
+    // Water can be kilometres from boot. Keep one submerged proxy in the scene so
+    // main's compileAsync warms this exact program before the title allows play.
+    const waterWarmGeo = new THREE.PlaneGeometry(0.01, 0.01);
+    waterWarmGeo.setAttribute('waterDepth', new THREE.BufferAttribute(new Float32Array(4), 1));
+    this._waterWarm = new THREE.Mesh(waterWarmGeo, this.matWater);
+    this._waterWarm.name = 'water-material-warmup';
+    this._waterWarm.position.y = -10000;
+    this.group.add(this._waterWarm);
 
     // The horizon lanterns: the nearest W.horizonLanterns towers' lanterns, never
     // distance-culled - a glint on the glow material (fog:false), sized with distance so
@@ -2628,12 +2615,20 @@ export class Wilds {
     g.rotation.y = site.yaw;
     const solid = out.solid && !out.solid.empty() ? out.solid.build() : null;
     const glowGeo = out.glow && !out.glow.empty() ? out.glow.build() : null;
+    const waterGeo = out.water && !out.water.empty() ? out.water.build() : null;
     let glow = null;
     if (solid) {
       projectPlaceSurfaceUVs(solid, 2.8);
       const m = new THREE.Mesh(solid, this.matBody);
       m.name = 'wild-body-' + site.id;
       m.castShadow = true; m.receiveShadow = true;
+      g.add(m);
+    }
+    if (waterGeo) {
+      prepareWaterGeometry(waterGeo, site, TRAVEL_POOL_RX, TRAVEL_POOL_RZ, POND_RX, POND_RZ);
+      const m = new THREE.Mesh(waterGeo, this.matWater);
+      m.name = (site.kind === 'travel-water' ? 'travel-water-surface-' : 'wild-water-surface-') + site.id;
+      m.userData.waterSurface = true;
       g.add(m);
     }
     if (glowGeo) {
@@ -3320,6 +3315,8 @@ export class Wilds {
     if (this.group && this.group.parent) this.group.parent.remove(this.group);
     if (this.horizonGroup && this.horizonGroup.parent) this.horizonGroup.parent.remove(this.horizonGroup);
     if (this.matBody) { this.matBody.dispose(); this.matBody = null; }
+    if (this._waterWarm) { this._waterWarm.geometry.dispose(); this._waterWarm = null; }
+    if (this.matWater) { this.matWater.dispose(); this.matWater = null; }
     if (this.surfaceDetail) { this.surfaceDetail.dispose(); this.surfaceDetail = null; }
     if (this.surfaceBump) { this.surfaceBump.dispose(); this.surfaceBump = null; }
     if (this.matGlow) { this.matGlow.dispose(); this.matGlow = null; }

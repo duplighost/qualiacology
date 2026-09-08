@@ -214,7 +214,7 @@ function holdCoverage(data, cov0, cut) {
  * The chain MUST reach 1x1: a texture with a mipmap min-filter and a missing
  * tail level is mipmap-incomplete in GLES3 and samples pure black.
  */
-function coveragePreservingChain(base, w, h, cut) {
+export function coveragePreservingChain(base, w, h, cut) {
   const cov0 = coverageOf(base, cut);
   const mips = [{ data: base, width: w, height: h }];
   let cur = base, cw = w, ch = h;
@@ -253,7 +253,7 @@ export class ImpostorBank {
    * templates: [{ geometry, halfWidth, height }] - geometry in local space,
    * base at the origin, growing +Y.
    */
-  bake(templates) {
+  bake(templates, foliageMap = null) {
     const renderer = this.ctx.renderer;
     if (!renderer || !templates.length) {
       this.reason = renderer ? 'no templates' : 'no renderer at bake time';
@@ -294,7 +294,11 @@ export class ImpostorBank {
     const amb = new THREE.AmbientLight(CFG.lights.ambient.colour, CFG.lights.ambient.intensity);
     scene.add(hemi, moon, amb);
 
-    const bakeMat = new THREE.MeshLambertMaterial({ vertexColors: true, fog: false });
+    const bakeMat = new THREE.MeshLambertMaterial({
+      vertexColors: true, fog: false,
+      map: foliageMap, alphaTest: foliageMap ? 0.30 : 0,
+      side: foliageMap ? THREE.DoubleSide : THREE.FrontSide,
+    });
     const holder = new THREE.Mesh(templates[0].geometry, bakeMat);
     scene.add(holder);
 

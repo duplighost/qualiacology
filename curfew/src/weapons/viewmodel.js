@@ -44,6 +44,22 @@ import * as THREE from 'three';
 import { TAU, DEG, clamp, clamp01, lerp, ease, Spring, Spring3, sway2 } from '../engine/math.js';
 import CFG from '../config.js';
 
+// Small bevels carry a moving light edge on the stock, receiver and grip.
+function bevelBox(w,h,d) {
+  const radius=Math.min(.003,w*.16,h*.16,d*.16);
+  const g=new THREE.BoxGeometry(w,h,d,3,3,3),p=g.attributes.position,n=g.attributes.normal;
+  const v=new THREE.Vector3(),c=new THREE.Vector3();
+  for(let i=0;i<p.count;i++){
+    v.fromBufferAttribute(p,i);
+    if(Math.abs(v.x)<w*.49)v.x=Math.sign(v.x)*(w/2-radius);
+    if(Math.abs(v.y)<h*.49)v.y=Math.sign(v.y)*(h/2-radius);
+    if(Math.abs(v.z)<d*.49)v.z=Math.sign(v.z)*(d/2-radius);
+    c.set(Math.max(-w/2+radius,Math.min(w/2-radius,v.x)),Math.max(-h/2+radius,Math.min(h/2-radius,v.y)),Math.max(-d/2+radius,Math.min(d/2-radius,v.z)));
+    v.sub(c).normalize();n.setXYZ(i,v.x,v.y,v.z);v.multiplyScalar(radius).add(c);p.setXYZ(i,v.x,v.y,v.z);
+  }
+  return g;
+}
+
 /* ---------------- the authored pose anchors ---------------- */
 
 // VIGIL's hip pose was authored for the CINDER CARBINE, and lifting it onto a BOLT RIFLE is
@@ -625,116 +641,19 @@ export class Viewmodel {
     // body — at metalness 0.62 the diffuse term is scaled by 0.38 and the gun could only be
     // lit by specular, which is the whole fault of round one's frame.
     //
-    // ROUND 15, THE LIST item 18 — "distinct metal vs stock". It was never a missing material:
-    // the stock has had its own MeshStandardMaterial since the file was written. It is that the
-    // two were the SAME VALUE IN DIFFERENT HUES, and hue is the first thing a night frame
-    // throws away. Measured on the shipped build (frame A, hip, the Filling Station forecourt,
-    // grain zeroed both sides, per-material differential mask inside one rAF):
-    //
-    //                mean   p50    p95    max
-    //   wood         15.4   16.4   27.4   46.0
-    //   blued        13.6    5.6   34.5   67.8
-    //
-    // The wood was the BRIGHTER of the two through the midtone and the metal the darker, which
-    // is backwards for a night rifle: a wooden stock is a broad dull mass and blued steel is a
-    // dark body carrying thin bright edges. So the separation is authored as ROLE, not as
-    // brightness. The wood goes warmer, deeper and rougher (0.80 -> 0.90, metalness to 0) so it
-    // holds no highlight at all and reads as one soft brown block; the steel goes darker and
-    // cooler with a TIGHTER lobe (0.84 -> 0.78) and more metalness (0.40 -> 0.55), so its
-    // albedo falls while its edges come up. The specular colour of a metal IS its albedo, so
-    // darkening 0x1f2329 to 0x181d24 pays for most of the roughness drop; what is left is an
-    // edge, which is the thing worth having.
-    //
-    // ROUND 15, SECOND PASS — THE ROLE SEPARATION WAS REAL AND THE HUE SEPARATION WAS NOT.
-    // Verified on the paragraph above's own build with a per-material differential mask painted
-    // out as a picture (wood orange, steel cyan, scope green, over a dimmed frame), which is the
-    // first time anyone in this file's history looked at WHERE each material lands rather than
-    // only at what it measures. The role split holds: wood p50 14.5 / p95 30.4 (a narrow band =
-    // one dull mass), blued p50 4.1 / p95 41.1 / max 68.6 (a dark body carrying bright edges).
-    // But the wood's MEAN COLOUR came back
-    //
-    //   wood (12.9, 12.8, 18.9)      blued (8.1, 10.7, 18.4)
-    //
-    // — blue was the dominant channel on BOTH, because every light in _buildLights is blue
-    // (key 0xbecfe8, fill 0x3d4c6e, rim 0x8fa4c4, ambient 0x2a3648) and a brown albedo of
-    // 0x2c1a0c has almost no blue to lose. A stock that measures as a separate material and
-    // paints as the same cold grey as the receiver is the working-but-invisible failure with
-    // a green test on top of it.
-    //
-    // MEASURED SWEEP (one boot, live setHex on the shipped program, one rAF per row; frame A
-    // hip, the Filling Station forecourt, both grain chains zeroed; the wood's own differential
-    // mask; the sky in the same frame reads mean 36.7):
-    //
-    //   wood albedo   wood mean RGB       luma mean / p50 / p95 / max   whole gun p95 / max
-    //   0x2c1a0c      (12.9,12.8,18.9)    13.3 / 14.5 / 30.4 / 40.2      35.3 / 138.8   shipped
-    //   0x3a2110      (16.9,14.6,20.3)    15.5 / 15.9 / 31.9 / 43.2      35.3 / 138.8
-    //   0x452612      (20.4,16.1,21.2)    17.4 / 17.3 / 33.7 / 45.9      35.5 / 138.8
-    //   0x522d15      (25.4,18.7,23.0)    20.4 / 20.6 / 37.7 / 49.9      36.3 / 138.8   <- this
-    //   0x603418      (31.5,21.8,25.3)    24.1 / 23.4 / 42.6 / 54.4      37.3 / 138.8
-    //
-    // 0x522d15 is the first row where RED becomes the dominant channel, which is the whole
-    // point: it is the smallest step that makes the stock read as wood instead of as more cold
-    // receiver. The gun's own ceiling barely moves (p95 35.3 -> 36.3 against gate row 14's 60;
-    // the 138.8 max is the scope silhouette blending with the lit forecourt behind it and is
-    // the same number at every row, so it is the instrument and not the gun). The stock's MASS
-    // stays under the sky it stands against (p50 20.6 vs 36.7), which is the night-value law.
-    // 0x603418 was measured and LOOKED AT and is genuinely more legible as timber, and it is
-    // left on the table on purpose: at p95 42.6 the lit sliver on top of the forend starts to
-    // approach the sky's own mean, and this gun's whole history is of being the darkest large
-    // shape in the frame. Both candidates are in tests/shots/woodlook-b-522d15.png and
-    // woodlook-c-603418.png if a later round wants the louder one.
     const wood = new THREE.MeshStandardMaterial({ color: 0x522d15, roughness: 0.90, metalness: 0.00 });
     const blued = new THREE.MeshStandardMaterial({ color: 0x181d24, roughness: 0.78, metalness: 0.55 });
     const matte = new THREE.MeshStandardMaterial({ color: 0x171b20, roughness: 0.92, metalness: 0.06 });
     const brassM = new THREE.MeshStandardMaterial({ color: 0x7a5a24, roughness: 0.42, metalness: 0.80 });
     this._mats = [wood, blued, matte, brassM];
     for (const m of this._mats) this._grade(m);
-
     const add = (parent, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
-      const m = new THREE.Mesh(geo, mat);
-      m.position.set(x, y, z);
-      m.rotation.set(rx, ry, rz);
-      parent.add(m);
-      return m;
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x, y, z); mesh.rotation.set(rx, ry, rz); parent.add(mesh);
+      return mesh;
     };
-    // ROUND 15, THE LIST item 18 — "bevels that catch light".
-    //
-    // CylinderGeometry's normals are SMOOTH around the circumference, so a 10- or 12-sided tube
-    // renders as one continuous gradient and reads as a moulded plastic pipe. That is exactly
-    // what the shipped scope was: the biggest object in every frame of the game, and a
-    // featureless smear. facet() hands every triangle its own face normal, so each flat enters
-    // and leaves the key and the rim lobes at its OWN angle and a tube becomes a run of
-    // discrete values — a machined thing, and one that matches a county built out of flat
-    // faces to begin with.
-    //
-    // IT IS A GEOMETRY CHANGE, NOT A MATERIAL ONE, and that distinction is the whole reason it
-    // is affordable. `flatShading: true` is a shader DEFINE: setting it on one of the four
-    // standard materials splits their single program, and this file has three programs to
-    // spend across the entire workflow. computeVertexNormals on non-indexed data costs none.
-    //
-    // ART.md 6.1.2's warning still applies and is why the facets are SMALL: a flat face enters
-    // a specular lobe all at once. A 22.5-degree facet on a 13 mm barrel is 9 mm of screen at
-    // arm's length; the 62 mm receiver plate that clipped to 243 was forty times that area.
-    //
-    // ROUND 15, SECOND PASS — AND THIS IS THE PART THAT MATTERED. The pass that wrote the
-    // paragraph above declared facet() and NEVER CALLED IT: `grep -n facet viewmodel.js`
-    // returned four comment lines and one declaration, and not one call site. The scope
-    // therefore shipped exactly as smooth as it had always been. That is the disease this
-    // project is named for — a system that runs, reads well in its own comment, and never
-    // reaches the screen — and it is fixed here by putting the call inside tube() itself, so
-    // every cylinder on all four guns is machined and no future part can forget to ask.
-    //
-    // MEASURED before wiring it up (frame A, hip, the Filling Station forecourt, both grain
-    // chains zeroed, one rAF, boxes in frame fractions; readPixels luma):
-    //   sky above the trees  36.7      scope tube body  11.5      scope tube top edge  26.9
-    // The tube was one smooth ramp from 11 to 27 across its whole diameter — dark enough to
-    // obey the night-value law and shaped like nothing at all.
-    const facet = (geo) => {
-      const g = geo.index ? geo.toNonIndexed() : geo;
-      if (g !== geo) geo.dispose();
-      g.computeVertexNormals();
-      return g;
-    };
+    // Barrel and scope silhouettes use smooth radial normals. Edge rings and bevels
+    // carry the machining detail without turning the optic into a ten-sided tube.
 
     // THE SIXTH ARGUMENT IS `openEnded` AND IT DEFAULTS TO FALSE, so every "tube" on this
     // gun was a SEALED CYLINDER with a lid on each end. Alex, playtest 3: "i can't look down
@@ -746,9 +665,9 @@ export class Viewmodel {
     // lid in place. Aiming down the sights is a core verb of a first-person game and it was
     // looking at a wall.
     const tube = (r, len, seg = 10, open = false) => {
-      const g = new THREE.CylinderGeometry(r, r, len, seg, 1, open);
+      const g = new THREE.CylinderGeometry(r, r, len, Math.max(32, seg), 1, open);
       g.rotateX(Math.PI / 2);
-      return facet(g);                        // every cylinder is machined, not moulded
+      return g;                              // continuous steel highlight, smooth circular silhouette
     };
 
     // ART.md 6.1.2 — break the flat. A BoxGeometry face has ONE normal across its whole area,
@@ -819,27 +738,27 @@ export class Viewmodel {
     add(g, ridgedBox(0.050, 0.062, 0.235, 3), blued, 0, 0, -0.045);
     add(g, tube(0.0125, 0.42), blued, 0, 0.014, -0.375);
     add(g, tube(0.0165, 0.030), blued, 0, 0.014, -0.5750);          // crown
-    add(g, new THREE.BoxGeometry(0.0045, 0.018, 0.007), blued, 0, 0.0335, -0.545);  // front blade
+    add(g, bevelBox(0.0045, 0.018, 0.007), blued, 0, 0.0335, -0.545);  // front blade
     // furniture
-    add(g, new THREE.BoxGeometry(0.042, 0.044, 0.260), wood, 0, -0.008, -0.290);    // forend
-    add(g, new THREE.BoxGeometry(0.046, 0.030, 0.016), blued, 0, 0.004, -0.400);    // barrel band
-    add(g, new THREE.BoxGeometry(0.044, 0.072, 0.240), wood, 0, -0.014, 0.135);     // comb
-    add(g, new THREE.BoxGeometry(0.048, 0.092, 0.016), matte, 0, -0.028, 0.256);    // butt plate
-    add(g, new THREE.BoxGeometry(0.038, 0.062, 0.075), wood, 0, -0.048, 0.055, 0.22); // wrist
-    add(g, new THREE.BoxGeometry(0.044, 0.036, 0.085), blued, 0, -0.042, -0.055);   // floorplate
-    add(g, new THREE.BoxGeometry(0.010, 0.005, 0.056), blued, 0, -0.050, -0.012);   // trigger guard
-    add(g, new THREE.BoxGeometry(0.006, 0.020, 0.005), blued, 0, -0.044, -0.008);   // trigger
+    add(g, bevelBox(0.042, 0.044, 0.260), wood, 0, -0.008, -0.290);    // forend
+    add(g, bevelBox(0.046, 0.030, 0.016), blued, 0, 0.004, -0.400);    // barrel band
+    add(g, bevelBox(0.044, 0.072, 0.240), wood, 0, -0.014, 0.135);     // comb
+    add(g, bevelBox(0.048, 0.092, 0.016), matte, 0, -0.028, 0.256);    // butt plate
+    add(g, bevelBox(0.038, 0.062, 0.075), wood, 0, -0.048, 0.055, 0.22); // wrist
+    add(g, bevelBox(0.044, 0.036, 0.085), blued, 0, -0.042, -0.055);   // floorplate
+    add(g, bevelBox(0.010, 0.005, 0.056), blued, 0, -0.050, -0.012);   // trigger guard
+    add(g, bevelBox(0.006, 0.020, 0.005), blued, 0, -0.044, -0.008);   // trigger
 
     // the bolt: a group so the whole assembly throws back and forward
     const bolt = new THREE.Group();
     g.add(bolt);
     bolt.position.set(0, 0, 0);
     add(bolt, tube(0.0105, 0.120, 8), blued, 0.0, 0.021, -0.010);
-    add(bolt, new THREE.BoxGeometry(0.030, 0.009, 0.009), blued, 0.020, 0.018, 0.030);  // stem
+    add(bolt, bevelBox(0.030, 0.009, 0.009), blued, 0.020, 0.018, 0.030);  // stem
     add(bolt, new THREE.SphereGeometry(0.0115, 8, 6), blued, 0.036, 0.012, 0.030);      // knob
     // ejection port shadow: a near-black sliver so the port reads as a HOLE and
     // the bolt's travel is legible against it in moonlight.
-    add(g, new THREE.BoxGeometry(0.002, 0.026, 0.070), this._portMat, 0.0255, 0.020, -0.010);
+    add(g, bevelBox(0.002, 0.026, 0.070), this._portMat, 0.0255, 0.020, -0.010);
 
     // scope. The reticle is a real illuminated dot: the gun has to be aimable
     // in a county with no daylight, and a black crosshair on a black hillside
@@ -858,8 +777,8 @@ export class Viewmodel {
     add(sg, tube(0.0195, 0.200, 12, true), bore, 0, 0, -0.045);
     add(sg, tube(0.0260, 0.048, 12, true), bore, 0, 0, -0.152);   // objective bell
     add(sg, tube(0.0225, 0.036, 12, true), bore, 0, 0, 0.026);    // ocular
-    add(sg, new THREE.BoxGeometry(0.030, 0.016, 0.016), blued, 0, -0.022, -0.112);
-    add(sg, new THREE.BoxGeometry(0.030, 0.016, 0.016), blued, 0, -0.022, 0.004);
+    add(sg, bevelBox(0.030, 0.016, 0.016), blued, 0, -0.022, -0.112);
+    add(sg, bevelBox(0.030, 0.016, 0.016), blued, 0, -0.022, 0.004);
     // The ocular glass. At 0.30 over a CLOSED tube this was simply a darker lid; over an
     // open bore it is what a coated lens actually is — a faint cool tint you see the county
     // through. depthWrite off so a transparent disc cannot punch the depth of the world
@@ -932,7 +851,7 @@ export class Viewmodel {
    */
   _buildCarbine(g, K) {
     const { add, tube, ridgedBox, blued, matte, brassM } = K;
-    const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    const B = (w, h, d) => bevelBox(w, h, d);
 
     // Upper/lower receiver, side armour, rear cap, top rail. donor :96-104
     add(g, ridgedBox(0.072, 0.076, 0.300, 3), blued, 0, 0.004, -0.075);
@@ -1020,7 +939,7 @@ export class Viewmodel {
    */
   _buildShotgun(g, K) {
     const { add, tube, ridgedBox, wood, blued, matte, brassM } = K;
-    const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    const B = (w, h, d) => bevelBox(w, h, d);
     // receiver, its top rib, and the loading / ejection ports
     add(g, ridgedBox(0.048, 0.062, 0.180, 3), blued, 0, 0.002, -0.020);
     add(g, B(0.010, 0.006, 0.150), blued, 0, 0.036, -0.030);                 // the rib
@@ -1060,7 +979,7 @@ export class Viewmodel {
    */
   _buildRevolver(g, K) {
     const { add, tube, ridgedBox, wood, blued, matte, brassM } = K;
-    const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+    const B = (w, h, d) => bevelBox(w, h, d);
     // frame and top strap
     add(g, ridgedBox(0.030, 0.042, 0.100, 3), blued, 0, 0.004, -0.005);
     add(g, B(0.024, 0.008, 0.115), blued, 0, 0.032, -0.030);
@@ -1742,6 +1661,7 @@ export class Viewmodel {
    * us; see docs/HANDOFF.md.
    */
   render() {
+    if (this.ctx.shared.inCar) return;
     const r = this.ctx.renderer;
     if (!r) return;
     if (this.renderedFrame === this.ctx.time.frame) return;   // never draw twice

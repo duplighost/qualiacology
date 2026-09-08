@@ -521,6 +521,11 @@ export class Weapons {
     this._arsenalSynced = true;
     const pl = this._sys('places');
     const pr = this._sys('progress');
+    // Shop purchases and the merchant's death reward do not claim a destination.
+    // Restore their saved ownership before play, with the same quiet grant path.
+    for (const id of Object.keys(EXTRA)) {
+      if (pr?.flag?.('dealer:weapon:' + id)) this.grant(id, { quiet: true });
+    }
     // ROUND 6: every reward row, not one. A returning save that holds a place owns its gun
     // from the first step, quietly; the ammo a second claim pays is not replayed (it was
     // paid when it happened, and the save does not carry reserves).
@@ -681,6 +686,9 @@ export class Weapons {
     o.swap = held ? i.held('swap') : !!i.swap;
     o.slot1 = held ? i.held('slot1') : !!i.slot1;
     o.slot2 = held ? i.held('slot2') : !!i.slot2;
+    if (this.ctx.shared?.inCar) {
+      o.fire = o.aim = o.reload = o.melee = o.swap = o.slot1 = o.slot2 = false;
+    }
     return o;
   }
 
@@ -1086,6 +1094,11 @@ export class Weapons {
 
     const i = this._input();
     const pr = this._prev;
+    if (ctx.shared?.inCar) {
+      this.buffered = this.meleeBuffered = 0;
+      // Finish an existing swing visually without landing an invisible cabin hit.
+      if (this.melee) this.melee.struck = true;
+    }
     const firePressed = i.fire && !pr.fire;
     const aimPressed = i.aim && !pr.aim;
     const reloadPressed = i.reload && !pr.reload;
@@ -1235,7 +1248,7 @@ export class Weapons {
     // a run, and a key-keyed rule would start-and-cancel every step for as long as it was held.
     this._autoReload = this.ammo === 0 && this.reserve > 0 && !this.reloading;
     if (this._autoReload && !this.melee && !p.sprinting && this.sprintOutTimer <= 0
-        && this.cycle <= 0 && !dead && !swapping) {
+        && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar) {
       this._startReload(true);
     }
     if (this.reloading) {
@@ -1310,7 +1323,7 @@ export class Weapons {
     // stutters. The clock carries its remainder into fire()'s subT so the
     // muzzle flash and the tracer are placed where the shot actually was.
     const canFire = !this.reloading && !this.melee && this.sprintOutTimer <= 0
-      && this.cycle <= 0 && !dead && !swapping;
+      && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar;
     const wantFire = d.auto ? (i.fire || this.buffered > 0) : (this.buffered > 0);
     this.firing = false;
     if (wantFire && canFire && this.ammo > 0) {

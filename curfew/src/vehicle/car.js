@@ -62,6 +62,7 @@ import { clamp, clamp01, damp, dampAngle, lerp, ease, TAU } from '../engine/math
 import { ACTIONS } from '../engine/input.js';
 import { MASK } from '../world/collision.js';
 import { MAJORS } from '../world/placedata.js';
+import { RearPresence } from './rear-presence.js';
 import { buildCarBody, buildDebrisGeometry, DEBRIS_VERTS, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR, DOOR_HINGE, FOOTPRINT } from './carbody.js';
 
 const K = CFG.car;
@@ -164,13 +165,9 @@ const TRUNK = K.trunk || { stuckSpeed: 2.5, stuckRamp: 0.50, stuckGain: 0.45 };
 // ROUND 14, the look-behind. LAMBDA is how fast the clamp centre swings to the tail;
 // PULL is how hard the view is carried with it. Both damped, both dt-scoped, so a frame
 // spike cannot overshoot and smear the cabin.
-// 2.62 rad is 150 degrees, NOT 180. At a full half-turn the view points straight through
-// the driver own seat back, which sits 0.5 m behind the eye and fills two thirds of the
-// frame — measured, tests/shots/round14/lookback-out-the-back.png before this change. A
-// real person looks OVER THE SHOULDER, past the seat and out of the rear quarter, and 150
-// degrees is where that lands. Negative, because +yaw turns left in this basis and the
-// clear line is over the RIGHT shoulder, down the cabin.
-const LOOKBACK_ANGLE = -2.62;
+// The full half-turn is paired with a small shoulder lean in present(), clearing
+// the headrests while keeping the view inside the real cabin.
+const LOOKBACK_ANGLE = -Math.PI;
 const LOOKBACK_LAMBDA = 9.0;
 const LOOKBACK_PULL = 11.0;
 const CONTACT_MEMORY = 0.12;      // s without a hit before a trunk contact counts as over
@@ -574,6 +571,7 @@ export class Car {
     const scene = this.ctx.scene;
     if (!scene) throw new Error('car: ctx.scene missing (gfx must be manifest #1)');
     scene.add(this.body.root);
+    this.rearPresence = new RearPresence(this.ctx);
 
     // LISTEN, NEVER EMIT (integrator decision 3): player/controller.js owns player:died
     // and player:respawn and clears its own dead flag. This file only has to let go —
@@ -1242,6 +1240,7 @@ export class Car {
   /* ------------------------------------------------------------------- step */
 
   step(dt) {
+    this.rearPresence?.step(dt, this);
     // Debris outlives the car: you can crush a fence, park, get out and watch the last
     // splinters settle. So it steps before any of the early returns below.
     this._stepDebris(dt);
@@ -2724,6 +2723,15 @@ export class Car {
       _e.set(wheelRot, w.front ? steer : 0, 0, 'YXZ');
       _q.setFromEuler(_e);
       _pos.set(w.x, w.y, w.z);
+      // The sprung body leans and settles; each tyre still rests on its own contact.
+      // This short suspension travel stops the rear axle disappearing on a road crest.
+      if(this._terrain){
+        _v.set(w.x,w.y,w.z).applyEuler(root.rotation);
+        const wx=x+_v.x,wz=z+_v.z;
+        const asphalt=this._roads?.onRoad(wx,wz) ? .045 : 0;
+        const target=this._terrain.heightAt(wx,wz)+WHEEL_RADIUS+asphalt;
+        _pos.y+=clamp((target-(y+bob+_v.y))/Math.max(.5,Math.cos(pitch)*Math.cos(roll)),-.16,.20);
+      }
       _m.compose(_pos, _q, _s);
       this.body.wheels.setMatrixAt(i, _m);
     }
@@ -2830,7 +2838,9 @@ export class Car {
     // that much closer to the eye. Same Euler and order as root.rotation above, so the
     // camera is exactly where carbody.js put the seat, whatever the road is doing.
     _e.set(pitch, h, roll, 'YXZ');
-    _v.set(SEAT.x, SEAT.y, SEAT.z).applyEuler(_e);
+    const rearLean = this._lookBackT || 0;
+    // The head moves between the front headrests to see the road through the tailgate.
+    _v.set(SEAT.x + .31 * rearLean, SEAT.y - .02 * rearLean, SEAT.z + .82 * rearLean).applyEuler(_e);
     const sx = x + _v.x;
     const sy = y + bob * 0.46 + _v.y;
     const sz = z + _v.z;
@@ -2872,7 +2882,8 @@ export class Car {
    * for cam.fov (the note at the top of the file).
    */
   _driveFov(t) {
-    const want = (SEAT.fovFast - SEAT.fov) * clamp01(Math.abs(this.speed) / K.onRoad) * clamp01(t);
+    const forward = (SEAT.fovFast - SEAT.fov) * clamp01(Math.abs(this.speed) / K.onRoad);
+    const want = lerp(forward, 50 - SEAT.fov, this._lookBackT || 0) * clamp01(t);
     this._setFovBias(want);
   }
 
@@ -3063,6 +3074,7 @@ export class Car {
   }
 
   dispose() {
+    this.rearPresence?.dispose();
     this.hornSoundPending = false;
     this._setCarried(false);      // never leave the player frozen in a car that is gone
     this._carrySeated = false;

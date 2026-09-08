@@ -128,6 +128,7 @@ export class Combat {
     // adding coin draws to it would shift every later ammo roll — which tests/break-open.mjs
     // catches by asserting the emitted ammo equals combat.dump().lastBroke.loot.
     this.coinRng = ctx.rng.fork('coins');
+    this.xpRng = ctx.rng.fork('breakable-xp');
 
     this.shots = 0;
     this.hits = 0;
@@ -146,7 +147,7 @@ export class Combat {
     };
     this.litTimers = [];           // borrowed rover handles, released by ttl
     // ROUND 13: the last thing that came apart. Mutated in place, like lastHit.
-    this.lastBroke = { valid: false, tag: null, x: 0, y: 0, z: 0, by: null, hits: 0, mass: 0, loot: 0, t: 0 };
+    this.lastBroke = { valid: false, tag: null, x: 0, y: 0, z: 0, by: null, hits: 0, mass: 0, loot: 0, coins: 0, xp: 0, t: 0 };
 
     // Reused outbound payload. Listeners consume it synchronously and retain
     // nothing; that is what keeps a shot allocation-free in the hot path.
@@ -262,6 +263,14 @@ export class Combat {
     }
 
     // ---- stage 2: chunk-local colliders, capped by stage 1
+    const dealer = this._sys('dealer');
+    const shopHit = dealer?.raycast(_o, _d, s.t);
+    if (shopHit && shopHit.t < s.t) {
+      s.hit = true; s.t = shopHit.t; s.kind = 'flesh'; s.zone = shopHit.zone;
+      s.enemy = shopHit.enemy; s.boss = false; s.colliderId = -1;
+      s.x = shopHit.point.x; s.y = shopHit.point.y; s.z = shopHit.point.z;
+      s.nx = -dx; s.ny = -dy; s.nz = -dz;
+    }
     const collision = this._sys('collision');
     if (collision && collision.raycast) {
       // MASK.SHOT only — deliberately NOT 0xffffffff. The all-bits mask includes
@@ -387,7 +396,7 @@ export class Combat {
 
       if (h.enemy) {
         // the boss owns its own hp (enemies/kneeler.js); everything else is the pool's
-        const owner = this._sys(h.boss ? 'kneeler' : 'enemies');
+        const owner = this._sys(h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
         const res = owner && owner.damage
           ? owner.damage(h.enemy, dmg, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
           : { killed: false };
@@ -513,28 +522,34 @@ export class Combat {
      zone multipliers — a buttstroke is not aimed.
      ------------------------------------------------------------------ */
 
+  _landMelee(h, damage, dist) {
+    // Assisted targets and ray-swept targets (including the dealer) share one
+    // damage calculation. Apply the player's multiplier once, before owner armour;
+    // scenery keeps its existing feedback and hit-count-based break behaviour.
+    const stats = this._progStats();
+    const multiplier = h.enemy ? ((stats && stats.damageMul) || 1) : 1;
+    const dealt = Math.max(1, Math.round(damage * multiplier));
+    const owner = h.enemy && this._sys(h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+    const result = owner && owner.damage
+      ? owner.damage(h.enemy, dealt, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
+      : { killed: false };
+    this._land(h, dealt, dist, false, !!result.killed, false, 'melee');
+    return result;
+  }
+
   meleeStrike(enemy, damage) {
-    // STAT_CONTRACT.damageMul says "every round the gun lands. Melee too." The buttstroke
-    // never applied it, for the same reason the bullet did not: nothing read the stat.
-    const _ps = this._progStats();
-    const _dmul = (_ps && _ps.damageMul) || 1;
-    damage = damage * _dmul;
     const p = this._sys('player');
-    const enemies = this._sys('enemies');
     if (!enemy || !p) return { killed: false };
     _back.set(enemy.pos.x - p.pos.x, 0, enemy.pos.z - p.pos.z).normalize();
     const r = enemy.def ? enemy.def.radius : 0.4;
     const hh = enemy.def ? enemy.def.height * 0.5 : 0.9;
     _stage.kind = 'flesh'; _stage.zone = 'torso'; _stage.enemy = enemy;
+    _stage.boss = false; _stage.exit = false; _stage.colliderId = -1;
     _stage.x = enemy.pos.x - _back.x * r;
     _stage.y = enemy.pos.y + hh;
     _stage.z = enemy.pos.z - _back.z * r;
     _stage.nx = -_back.x; _stage.ny = 0; _stage.nz = -_back.z;
-    const res = enemies && enemies.damage
-      ? enemies.damage(enemy, Math.max(1, Math.round(damage)),
-        { zone: 'torso', point: _pt.set(_stage.x, _stage.y, _stage.z), dist: 2 })
-      : { killed: false };
-    this._land(_stage, Math.max(1, Math.round(damage)), 2, false, !!res.killed, false, 'melee');
+    const res = this._landMelee(_stage, damage, 2);
     const cam = this._sys('camera');
     if (cam && cam.addTrauma) cam.addTrauma(0.22);
     return res;
@@ -564,7 +579,7 @@ export class Combat {
       }
       const h = this._trace(p.pos.x, oy, p.pos.z, dx, dy, dz, range);
       if (h) {
-        this._land(h, Math.max(1, Math.round(damage)), h.t, false, false, false, 'melee');
+        this._landMelee(h, damage, h.t);
         this._maybeBreak(h, dx, dz, 'melee');    // ROUND 13: the stock takes a crate apart too
         return true;
       }
@@ -590,7 +605,7 @@ export class Combat {
     this.broke++;
     const L = this.lastBroke;
     L.valid = true; L.tag = b.tag; L.x = b.x; L.y = b.y; L.z = b.z; L.by = by;
-    L.hits = b.hits; L.mass = b.mass; L.loot = 0; L.t = this.ctx.time.t;
+    L.hits = b.hits; L.mass = b.mass; L.loot = 0; L.coins = 0; L.xp = 0; L.t = this.ctx.time.t;
 
     const car = this._sys('car');
     if (car && typeof car.takeDown === 'function') {
@@ -624,6 +639,11 @@ export class Combat {
         L.coins = n;
         this.ctx.bus.emit('pickup:coin', _coinPayload);
       }
+    }
+    if (LOOT_TAGS[b.tag] && this.xpRng.next() < .30) {
+      const xp = 12 + Math.floor(this.xpRng.next() * 11);
+      this._sys('progress')?.award(xp, b.x, b.y + .4, b.z, 'crate');
+      L.xp = xp;
     }
     _brokePayload.x = b.x; _brokePayload.y = b.y; _brokePayload.z = b.z;
     _brokePayload.mass = b.mass; _brokePayload.n = 1; _brokePayload.tag = b.tag; _brokePayload.by = by;
