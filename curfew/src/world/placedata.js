@@ -148,7 +148,7 @@ export const MAJORS = Object.freeze([
     apronCol: [0.055, 0.056, 0.058],
     id: 'filling-station', name: 'The Filling Station',
     x: -520, z: 240, region: 'shore', terrainRegion: 'marsh', kind: 'station',
-    lit: true, hub: true,
+    lit: false, hub: true,
     // roads.js already authored this disc (M0_SITES[1], r 38, blend 0.72) and the west
     // gravel spur terminates on it. Reuse, never re-declare: two discs on one spot fight.
     flat: null, flatId: 'filling-station',
@@ -160,7 +160,8 @@ export const MAJORS = Object.freeze([
     // xpFind was 0 while the hub was pre-found and could never pay for it. It is found by
     // walking into the yard now, like everywhere else, so it pays like everywhere else —
     // the smallest find in the county, because coming home is the easiest one to make.
-    xpFind: 20, xpClaim: 0, startClaimed: true,
+    // The existing shop-wall breaker powers the entire station. Refuge emits the claim.
+    xpFind: 20, xpClaim: 0, startClaimed: false,
   },
   {
     // ROUND 6 (Alex, playtest 5): "if any of my haunted mansion from previous games made it
@@ -241,7 +242,7 @@ export const MAJORS = Object.freeze([
     // the powerful things in the Holdfast are a garrison, not a guardian at a claim.
     id: 'holdfast', name: 'The Holdfast',
     x: 0, z: 0, region: 'works', terrainRegion: 'fields', kind: 'holdfast',
-    lit: true, hub: false,
+    lit: false, hub: false,
     // ROUND 17. THE FORECOURT WAS STILL SNOW, AND THIS IS THE BIGGEST ONE IN THE COUNTY.
     //
     // Alex found this at the Filling Station and it was written up as fixed (STATUS item 38,
@@ -303,7 +304,7 @@ export const MAJORS = Object.freeze([
     // second-hardest fight in the game, and the only one you can choose to pay your way out of.
     id: 'the-toll', name: 'The Toll on the Broken Road',
     x: 2118, z: 25, region: 'ridge', terrainRegion: 'ridge', kind: 'checkpoint',
-    lit: true, hub: false,
+    lit: false, hub: false,
     // A checkpoint is built ground: the barrier line is 18 m across the carriageway and the
     // dead gantry stands 21 m back up the road, so the pad has to cover about 42 m of highway.
     flat: { radius: 34, blend: 0.62 },

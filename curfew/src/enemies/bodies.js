@@ -44,6 +44,7 @@
 import * as THREE from 'three';
 import { TAU } from '../engine/math.js';
 import { SPECIES, FORM } from './species.js';
+import { buildHuman } from '../art/people.js';
 
 /* ==========================================================================
    Palette. Values, not hues — a greyscale photograph is the only place this
@@ -1494,6 +1495,7 @@ function buildStanding(def) {
  */
 export function buildBody(key, rng) {
   const def = SPECIES[key];
+  if (def.human) return buildHuman(key, Math.floor(rng.next()*4), def.height);
   const set = geoSetFor(key);
 
   // Per-instance tint: a spread of VALUE, plus a whisper of hue, so a crowd is

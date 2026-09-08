@@ -492,59 +492,14 @@ function groundY(api, lx, lz) {
 /** A clothed human silhouette, built in its own unmapped material channel. */
 export function humanFigure(k, api, lx, lz, yaw, rng, attendant = false) {
   const g = groundY(api, lx, lz) + ON_APRON;
-  const h = attendant ? 1.04 : rng.range(0.96, 1.08);
-  const coat = attendant ? [0.105, 0.145, 0.142] : [[0.068, 0.086, 0.10], [0.12, 0.092, 0.062], [0.076, 0.095, 0.08]][(rng.next() * 3) | 0];
-  const skin = [0.14, 0.098, 0.068], dark = [0.025, 0.026, 0.026];
-  const cy = Math.cos(yaw), sy = Math.sin(yaw);
-  const world = (x, y, z) => new THREE.Vector3(lx + h * (x * cy + z * sy), g + h * y, lz + h * (-x * sy + z * cy));
-  const oval = (x,y,z,rx,ry,rz,col) => {
-    const geo = new THREE.SphereGeometry(1, 12, 8); geo.scale(rx*h,ry*h,rz*h); geo.rotateY(yaw);
-    const p = world(x,y,z); geo.translate(p.x,p.y,p.z); k.push(geo,col);
-  };
-  const limb = (a,b,r,col) => {
-    const p = world(...a), q = world(...b), d = q.clone().sub(p), geo = new THREE.CylinderGeometry(r*h*0.85,r*h,d.length(),9);
-    geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()));
-    geo.translate((p.x+q.x)/2,(p.y+q.y)/2,(p.z+q.z)/2); k.push(geo,col);
-  };
-  for (const side of [-1,1]) {
-    const x = side * 0.105;
-    limb([x,0.13,0], [x,0.58,0.015], 0.078, dark);
-    limb([x,0.58,0.015], [x,0.96,0], 0.093, coat);
-    oval(x,0.09,0.06,0.088,0.085,0.18,dark);
-  }
-  oval(0,1.20,0,0.225,0.34,0.135,coat);
-  oval(0,0.98,0,0.195,0.18,0.13,coat);
-  limb([0,1.44,0],[0,1.57,0],0.061,skin);
-  oval(0,1.67,0.018,0.10,0.135,0.103,skin);
-  oval(0,1.68,-0.032,0.105,0.139,0.075,dark);
-  oval(0,1.66,0.116,0.028,0.038,0.037,skin);
-  for (const side of [-1,1]) {
-    const x = side * 0.255;
-    limb([side*0.205,1.41,0],[x,1.10,0.02],0.071,coat);
-    const hand = attendant ? [side*0.18,1.01,0.25] : [side*0.255,0.88,0.08];
-    limb([x,1.10,0.02],hand,0.058,coat);
-    oval(...hand,0.044,0.069,0.041,skin);
-    oval(side*0.040,1.69,0.106,0.014,0.01,0.009,dark);
-  }
-  // Lapels and a scarf make the neck and shoulders readable without a black hood.
-  for (const side of [-1,1]) limb([side*0.09,1.46,0.105],[side*0.02,1.22,0.147],0.026,[0.19,0.16,0.12]);
-  if (attendant || rng.next() < 0.4) {
-    const p=world(0,1.79,0); k.cyl(0.11*h,0.115*h,0.085*h,12,p.x,p.y,p.z,coat,yaw);
-    const b=world(0,1.76,0.07); k.box(0.24*h,0.025*h,0.19*h,b.x,b.y,b.z,coat,yaw);
-  }
-  if (attendant) {
-    const p=world(-0.12,1.34,0.136); k.box(0.048*h,0.075*h,0.015,p.x,p.y,p.z,[0.42,0.31,0.10],yaw);
-  } else if (rng.next() < 0.40) {
-    oval(0,1.18,-0.20,0.19,0.27,0.13,[0.09,0.065,0.043]);
-    for (const side of [-1,1]) limb([side*0.16,1.44,0.06],[side*0.17,1.04,0.13],0.019,dark);
-  }
-  api.emit({kind:'circle',x:lx,z:lz,r:0.29,y0:g-0.15,y1:g+1.83*h,tag:'cloth'});
+  api.cast?.([{species:attendant?'cashier':'resident',lx,lz,yaw:yaw+Math.PI,neutral:true,ly:g-api.padY}]);
   return g;
 }
 
+
 function cashier(k, people, api, x, z, yaw) {
   const g=humanFigure(people,api,x,z,yaw,api.rng,true), cy=Math.cos(yaw), sy=Math.sin(yaw);
-  const px=x+sy*0.62,pz=z+cy*0.62;
+  const px=x+sy*0.78,pz=z+cy*0.78;
   k.solid.box(1.7,0.12,0.66,px,g+0.93,pz,[0.10,0.067,0.038],yaw);
   for(const side of [-1,1]) k.solid.box(0.14,0.88,0.14,px+cy*side*0.65,g+0.44,pz-sy*side*0.65,C.dark,yaw);
   k.solid.box(0.39,0.20,0.26,px+cy*0.37,g+1.08,pz-sy*0.37,C.metal,yaw);
@@ -2298,9 +2253,9 @@ export const BUILDERS = {
           return { species, lx, lz, yaw: yawOf(1, 0) + yaw2, awake: false, guard: true, hpScale: 1.6 };
         };
         api.cast([
-          C4(-3.5, -GAP - 1.0, -0.2, 'poacher'),
-          C4(-3.5, GAP + 1.0, 0.2, 'poacher'),
-          C4(-9.0, 0, 0.0, 'warden'),
+          C4(-3.5, -GAP - 1.0, -0.2, 'sentry'),
+          C4(-3.5, GAP + 1.0, 0.2, 'sentry'),
+          C4(-9.0, 0, 0.0, 'marshal'),
         ]);
       }
 

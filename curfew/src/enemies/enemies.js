@@ -1154,7 +1154,8 @@ export class Enemies {
     e.alerted = def.owner === OWNER.DREAD && !(opts && opts.staged && !opts.awake);
     e.hunt = false; e.huntSpeedMul = 1;
     e.leashed = true; e.holdFire = false;
-    e.hp = def.hp * ((opts && opts.hpScale) || 1);
+    e.maxHp = def.hp * ((opts && opts.hpScale) || 1);
+    e.hp = e.maxHp;
     // ROUND 7. opts.feetY puts a body on a FLOOR — a hay loft, a mezzanine, a ringing
     // chamber 13 m up — instead of on the terrain. Only a STAGED body may use it, and only
     // while it holds its post: the moment it notices you it walks, and walking is
@@ -1169,6 +1170,7 @@ export class Enemies {
     const p = this._sys('player');
     e.staged = !!(opts && opts.staged);
     e.neutral = !!opts?.neutral;
+    e.initiallyNeutral = !!opts?.initiallyNeutral || e.neutral;
     e.siteGuard = opts?.siteGuard || '';
     e.yaw = (opts && typeof opts.yaw === 'number') ? opts.yaw
       : (p ? faceYaw(x, z, p.pos.x, p.pos.z) : 0);
@@ -1408,7 +1410,7 @@ export class Enemies {
     if (e.neutral) {
       e.pos.set(e.stagedX, e.stagedY, e.stagedZ); e.vel.set(0, 0, 0);
       e.riseSquash = 1; e.state = 'approach'; e.aware = 0; e.alerted = false;
-      e.yaw = e.stagedYaw; e.gait = 0; e.airborne = false;
+      e.yaw = e.stagedYaw; e.gait = 0; e.airborne = false; e.moving = false;
       e.dist = Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z);
       return;
     }
@@ -1531,6 +1533,14 @@ export class Enemies {
       }
     }
 
+    if (def.civilian) {
+      // Residents flee violence; they are people, not another wave of hunters.
+      const d=Math.hypot(e.pos.x-p.pos.x,e.pos.z-p.pos.z);
+      const target=steer(this.ctx,e,e.pos.x*2-p.pos.x,e.pos.z*2-p.pos.z,this._frame);
+      const speed=d<22?def.speed:0;e.vel.set(target.x*speed,0,target.z*speed);
+      e.moving=speed>0;if(e.moving)e.yaw=dampAngle(e.yaw,Math.atan2(-e.vel.x,-e.vel.z),7,dt);
+      this._integrate(e,dt);return;
+    }
     switch (def.owner === OWNER.DREAD ? def.id : 'pressure') {
       case 'pale': this._stepPale(e, dt, p); break;
       case 'standing': this._stepStanding(e, dt, p); break;
@@ -2413,7 +2423,7 @@ export class Enemies {
     // THERE when you come back, so the far cull may not take one that has never noticed
     // you. Once it has been woken it is an ordinary body again and the director owns it.
     if (e.staged && e.aware <= 0) return false;
-    if (e.siteGuard) return false;
+    if (e.siteGuard || e.initiallyNeutral) return false;
     if (e.scripted) return false;             // ROUND 13: dread's spend, not the thermostat's stock
     this._uncommit(e);
     this._release(e);
@@ -2434,7 +2444,7 @@ export class Enemies {
   standDown(e) {
     this._lastAsk = this._t;
     if (!e || !e.alive || e.def.owner !== OWNER.PRESSURE || e.aware <= 0) return false;
-    if (e.siteGuard) return false;
+    if (e.siteGuard || e.initiallyNeutral) return false;
     if (e.scripted) return false;             // ROUND 13: an ambush cannot be called off
     // never mid-strike and never mid-air: a body called off in a lunge changes its mind in
     // front of him
@@ -2479,8 +2489,19 @@ export class Enemies {
       e.built.telegraph(0);
       e.heardX = e.homeX; e.heardZ = e.homeZ;
       e.navBest = undefined;
+      if (e.initiallyNeutral) {
+        e.hp=e.maxHp||e.def.hp;e.neutral=true;e.staged=true;e.state='approach';e.stateT=0;
+        e.pos.set(e.stagedX,e.stagedY,e.stagedZ);e.prevPos.copy(e.pos);e.currPos.copy(e.pos);
+        e.homeX=e.stagedX;e.homeZ=e.stagedZ;e.yaw=e.prevYaw=e.currYaw=e.stagedYaw;
+        e.vel.set(0,0,0);e.moving=false;e.airborne=false;e.aim=0;
+        e.staggerT=0;e.immuneT=0;e.windowDmg=0;e.flinch.set(0,0,0);e.flinchT=e.flashT=99;
+        e.riseSquash=e.prevSquash=e.currSquash=1;
+        if(e.siteGuard)this._sys('progress')?.flag('gate-hostile:'+e.siteGuard,0);
+      }
       n++;
     }
+    const progress=this._sys('progress'),places=this._sys('places');
+    for(const r of places?._casts?.values?.()||[]) if(r.key.startsWith('major:')) progress?.flag('gate-hostile:'+r.key.slice(6),0);
     this._respawnCleared += n;
     return n;
   }
@@ -2993,6 +3014,7 @@ export class Enemies {
       anim.bank = clamp(dyaw * -3.2, -0.5, 0.5);
       anim.aim = e.aim || 0;
       anim.tick = e.tick || 0;
+      anim.time = this._t;
       e.built.animate(anim);
     }
 

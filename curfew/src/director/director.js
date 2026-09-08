@@ -728,7 +728,7 @@ export class Director {
     // The respawn sweep. Collects every non-dormant pressure body inside RESPAWN_RELEASE_R
     // of the point he came back to; _onRespawn decides release or stand-down per body.
     this._fnRespawn = (b, raw) => {
-      if (!b.pressure || this._respN >= RESPAWN_Q) return;
+      if (!b.pressure || raw?.initiallyNeutral || this._respN >= RESPAWN_Q) return;
       // DORMANT BODIES GO TOO. The first draft skipped them ("in the ground: not the crowd")
       // and MEASURED (tests/pack.mjs e, 2026-09-03, tests/artifacts/r6a-pack-run5.txt): two
       // pallbearers asleep inside 70 m of the Filling Station counted 2 head against a target
@@ -885,6 +885,7 @@ export class Director {
   /** Normalise one body into the shared _body view. False = not a live body. */
   _readBody(e) {
     if (!e) return false;
+    if (e.neutral || e.def?.civilian) return false;
     if (e.dead === true || e.alive === false || e.state === 'dead' || e.state === 'dying') return false;
     const p = e.pos || e.position;
     const x = p ? p.x : e.x, z = p ? p.z : e.z;

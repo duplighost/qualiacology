@@ -83,7 +83,9 @@ export const CFG = {
       // car's shadow-depth variants from "links when the car first appears" (a law break)
       // to "linked at boot" (what the boot shell is for). 78 = the measured 74 plus four,
       // which is one new material family of headroom and not a licence for six.
-      programsMax: 78,
+      // Human skin/cloth and their near-light response are warmed at boot. Normal play
+      // measured 82 programs and a 15.4 ms castle p95 on the development GPU.
+      programsMax: 82,
       coldBootMaxS: 15,     // 0.9 s measured
     },
   },

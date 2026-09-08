@@ -716,6 +716,11 @@ export class Places {
       // and every consumer that asks places wrong. weapons worked around it by asking
       // progress instead (weapon.js:509-518); this restores the real thing for everybody.
       ctx.bus.on('save:loaded', () => this._restoreFromSave());
+      ctx.bus.on('refuge:power', e => {
+        if(e?.id==='filling-station'&&e.on){
+          const d=MAJOR_BY_ID[e.id];this._claim(d,d.x,this._padOf(d),d.z);
+        }
+      });
     }
     // Constructors run before ANY system init. Install pads before roads bake and
     // chunks build, so the rendered terrain never predates the destination ground.
@@ -892,11 +897,8 @@ export class Places {
       });
     }
 
-    // The Filling Station is where you wake up: it is yours already and it is lit. It is
-    // NOT found — `startClaimed` used to add the id to both sets, which meant the one
-    // place the player is standing in at the first frame could never be discovered, never
-    // whisper its name, and put the map board's first pin in before the player had walked
-    // anywhere. Claimed is claimed; found is walked into. See placedata.js.
+    // Finding a destination and restoring its power are separate actions. The station's
+    // existing refuge breaker claims it; merely spawning outside does not turn it on.
     for (const d of MAJORS) {
       if (d.startClaimed) this.claimed.add(d.id);
     }
@@ -998,7 +1000,7 @@ export class Places {
         def: d, node, yaw: 0, padY: 0,
         solid: null, glow: null, prize: null, built: false,
         moving: null,              // [{ mesh, role, rate }]
-        glowLevel: d.startClaimed ? 1 : 0.30,
+        glowLevel: d.startClaimed ? 1 : 0,
         proxy: false,
         bellT: -1, bellClock: BELL_PERIOD_S * 0.6,
         // ROUND 6: the claim fixture — world position of its foot, its lever and its glint
@@ -1510,7 +1512,7 @@ export class Places {
    * entries: [{ species, lx, lz, yaw, awake }]
    */
   _recordCast(key, ox, oz, yaw, entries, baseY) {
-    if (!entries || !entries.length || this._casts.has(key)) return;
+    if (!entries || !entries.length) return;
     const cy = Math.cos(yaw), sy = Math.sin(yaw);
     const cast = [];
     for (let i = 0; i < entries.length; i++) {
@@ -1523,7 +1525,7 @@ export class Places {
         z: oz - lx * sy + lz * cy,
         yaw: (+e.yaw || 0) + yaw,
         awake: !!e.awake,
-        guard: !!e.guard,
+        guard: !!e.guard, neutral: !!e.neutral || !!e.guard,
         hpScale: e.hpScale || 1,
         entity: null, spawned: false,
       };
@@ -1534,7 +1536,13 @@ export class Places {
       if (typeof e.ly === 'number' && typeof baseY === 'number') c.feetY = baseY + e.ly;
       cast.push(c);
     }
-    if (cast.length) this._casts.set(key, { key, x: ox, z: oz, cast, placed: false });
+    if (cast.length) {
+      const rec=this._casts.get(key);
+      if (!rec) this._casts.set(key,{key,x:ox,z:oz,cast,placed:false});
+      else for(const c of cast) if(!rec.cast.some(old=>old.species===c.species&&old.x===c.x&&old.z===c.z)) {
+        rec.cast.push(c);rec.placed=false;this._castDone.delete(key);
+      }
+    }
   }
 
   /** Place any staged cast the player has walked up to. Once per save, never undone. */
@@ -1562,8 +1570,8 @@ export class Places {
         try {
           const hostile = !!prog?.flag('gate-hostile:' + siteId);
           const e = enemies.spawn(c.species, c.x, c.z, {
-            awake: c.guard ? true : c.awake, yaw: c.yaw, staged: true, feetY: c.feetY,
-            neutral: c.guard && !hostile, siteGuard: c.guard ? siteId : '', hpScale: c.hpScale,
+            awake: c.neutral ? true : c.awake, yaw: c.yaw, staged: true, feetY: c.feetY,
+            neutral: c.neutral && !hostile, initiallyNeutral:c.neutral, siteGuard: c.neutral ? siteId : '', hpScale: c.hpScale,
           });
           if (e) { c.entity = e; c.generation = e.gen; c.spawned = true; }
           else complete = false;
@@ -2244,17 +2252,9 @@ export class Places {
     for (let n = 0; n < this._nodeList.length; n++) {
       const rec = this._nodeList[n];
       const claimed = this.claimed.has(rec.def.id);
-      // An aviation lamp burns whether or not the mast is yours; a rose window does not.
-      // ART 4.2: "Raise the ember glow's unclaimed floor so it is visible before you own
-      // it." 0.34 x the glow tint floor (0.66) put the stack tops at 0.22 opacity at 2 km,
-      // which measured a max-minus-min of 9.4 over four seconds against a gate of 12.
-      // The Drowned Light is the county's compass and ART 4.2 wants it turning before you
-      // own it, so its lamp cannot idle at a rose window's 0.24 either.
-      const kind = rec.def.kind;
-      const idle = kind === 'relay' ? 1
-        : kind === 'works' ? 0.70
-          : kind === 'lighthouse' ? 0.55 : 0.24;
-      rec.glowLevel += ((claimed ? 1 : idle) - rec.glowLevel) * clamp01(dt * 2.2);
+      // The destination interaction restores power. The little switch locator and
+      // independent open fires remain visible; electrical lamps wait for this action.
+      rec.glowLevel += ((claimed ? 1 : 0) - rec.glowLevel) * clamp01(dt * 2.2);
       // ROUND 6: the glint grows into a lamp over the ripple, once the place is yours.
       if (rec.fixture) {
         const g = rec.fixture.grow;
@@ -2779,6 +2779,7 @@ export class Places {
   _applyState() {
     for (const rec of this.nodes.values()) {   // not the hot path: claims are rare
       const claimed = this.claimed.has(rec.def.id);
+      if(!claimed){rec.glowLevel=0;if(rec.glow){rec.glow.visible=false;rec.glow.material.opacity=0;}}
       // the mast goes white, and only then does it blink
       if (rec.def.kind === 'relay' && rec.glow) {
         rec.glow.material.color.set(claimed ? GLOW.white : GLOW.red);
@@ -2823,6 +2824,12 @@ export class Places {
     if (!prog) return;
     let added = 0;
     const cl = prog.claimed, fd = prog.found;
+    // Older saves auto-claimed the station without throwing its existing breaker.
+    // Respect an actual powered refuge, but remove that old automatic claim.
+    const stationPowered=(Number(prog.flag?.('refuge:filling-station'))&1)!==0;
+    if(stationPowered){this.claimed.add('filling-station');cl?.add?.('filling-station');}
+    else {this.claimed.delete('filling-station');cl?.delete?.('filling-station');}
+    added++;
     if (cl && typeof cl.forEach === 'function') {
       cl.forEach((id) => { if (typeof id === 'string' && !this.claimed.has(id)) { this.claimed.add(id); added++; } });
     }
@@ -2896,7 +2903,7 @@ export class Places {
     {
       const hub = MAJOR_BY_ID['filling-station'];
       const target = hub ? this.nearestUnclaimed(hub.x, hub.z) : null;
-      if (hub && target) {
+      if (hub && target && Math.hypot(target.x-hub.x,target.z-hub.z)>.1) {
         const bx = target.x - hub.x, bz = -(target.z - hub.z);
         const bl = Math.hypot(bx, bz) || 1;
         const dx = bx / bl, dz = bz / bl;                  // paper-space direction (u, v)
