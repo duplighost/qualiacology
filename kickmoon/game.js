@@ -40,7 +40,7 @@
   const SHOWCASE_FREEZE = params.has('showcase');
   const SHOWCASE_MODE = params.get('showcase') || '';
   const FORCE_TOUCH = params.has('touch');
-  const GAME_VERSION = '8.10.1-the-sky-answers';
+  const GAME_VERSION = '8.11.0-flowing-worlds';
   const FEEL_PROFILE = Object.freeze({
     name: 'zip-core',
     // Reconstructs the pre-guided-line cadence while retaining the current
@@ -172,12 +172,12 @@
   const COLLECTION_TARGET = 2000;
   const ALTERNATE_COLLECTION_TARGET = COLLECTION_TARGET;
   const MOON_COLLECTION_TARGET = COLLECTION_TARGET;
-  const ALTERNATE_REGIONAL_TOTAL = 5;
+  const ALTERNATE_REGIONAL_TOTAL = 9;
   // HALF A ROSTER OPENS THE LOCAL FINAL. (Alex, 2026-09-04: "THe progression
   // should optimally be that if deafeat maybe half of the bosses on a moon,
   // the last boss from that moon is avaialable. and it has to be clear it
-  // is.") Three of five, so the last two regionals stay optional the same way
-  // the original Moon always let part of its roster stay optional.
+  // is.") Five of nine on every moon. Each regional encounter has its own
+  // socket; the remaining four encounters stay optional after the court opens.
   const ALTERNATE_REGIONAL_REQUIRED = Math.ceil(ALTERNATE_REGIONAL_TOTAL / 2);
   // THE SHIP FARE. (Alex, 2026-09-05: "make each ship only cost 500
   // collectibles.") One price, one destination, paid out of the single purse
@@ -230,7 +230,7 @@
     { id: 'sunken-belfry', name: 'SUNKEN BELFRY', biome: 'shell-nave', spatial: 'chord-stair', rhythm: 'quiet-reveal', mechanic: 'spatial-bell-phrase' },
     { id: 'manta-gardens', name: 'MANTA GARDENS', biome: 'migrating-gardens', spatial: 'moving-islands', rhythm: 'traversal', mechanic: 'moving-manta-balance' },
     { id: 'pearl-trench', name: 'PEARL TRENCH', biome: 'pearl-canyon', spatial: 'bank-zigzag', rhythm: 'combat', mechanic: 'return-shot-clam-locks' },
-    { id: 'nautilus-court', name: 'NAUTILUS COURT', biome: 'spiral-court', spatial: 'shell-amphitheatre', rhythm: 'boss', mechanic: 'four-boss-2000-seal' },
+    { id: 'nautilus-court', name: 'NAUTILUS COURT', biome: 'spiral-court', spatial: 'shell-amphitheatre', rhythm: 'boss', mechanic: 'half-roster-seal' },
     { id: 'leviathan-wake', name: 'LEVIATHAN WAKE', biome: 'spout-skyline', spatial: 'skybreak-ascent', rhythm: 'traversal', mechanic: 'timed-moonfish-breach' },
     { id: 'drowned-orbit', name: 'DROWNED ORBIT', biome: 'twilight-moonpools', spatial: 'shutter-ring', rhythm: 'puzzle', mechanic: 'orbit-platform-navigation' },
     { id: 'polar-vent', name: 'POLAR VENT', biome: 'thermal-ice-coral', spatial: 'thermal-switchback', rhythm: 'combat', mechanic: 'thermal-switchback-ascent' },
@@ -244,7 +244,7 @@
     { id: 'ash-organ', name: 'ASH ORGAN', biome: 'pale-organ-nave', spatial: 'vent-chord-stair', rhythm: 'quiet-reveal', mechanic: 'pipe-gallery-lift' },
     { id: 'chain-foundry', name: 'CHAIN FOUNDRY', biome: 'suspended-foundry', spatial: 'chain-catenary', rhythm: 'traversal', mechanic: 'physical-chain-crossing' },
     { id: 'inferno-orrery', name: 'INFERNO ORRERY', biome: 'plum-eclipse-machine', spatial: 'planet-orbit', rhythm: 'puzzle', mechanic: 'return-hit-magma-eggs' },
-    { id: 'tyrant-court', name: 'TYRANT COURT', biome: 'angular-fortress', spatial: 'socket-court', rhythm: 'boss', mechanic: 'four-boss-2000-seal' },
+    { id: 'tyrant-court', name: 'TYRANT COURT', biome: 'angular-fortress', spatial: 'socket-court', rhythm: 'boss', mechanic: 'half-roster-seal' },
     { id: 'hellstar-rim', name: 'HELLSTAR RIM', biome: 'lava-skim-ring', spatial: 'raft-wave', rhythm: 'traversal', mechanic: 'sinking-raft-timing' },
     { id: 'cinder-eclipse', name: 'CINDER ECLIPSE', biome: 'indigo-mirror-ash', spatial: 'mirror-crypt', rhythm: 'quiet-reveal', mechanic: 'black-glass-cache-route' },
     { id: 'obsidian-zenith', name: 'OBSIDIAN ZENITH', biome: 'crystal-ash-summit', spatial: 'crown-switchback', rhythm: 'combat', mechanic: 'zenith-return-climb' },
@@ -345,8 +345,8 @@
   );
   const LAVA_PLACEMENT_MANIFEST = Object.freeze({
     lowIslands: Object.freeze([4, 6, 5, 5, 6, 4, 6, 4, 2, 6, 5, 7]),
-    caches: Object.freeze([4, 8, 6, 4, 10, 4, 6, 4, 2, 8, 18, 22]),
-    blossoms: Object.freeze([2, 3, 2, 3, 6, 4, 5, 6, 4, 10, 27, 36]),
+    caches: Object.freeze([4, 8, 8, 8, 10, 8, 8, 8, 2, 8, 12, 12]),
+    blossoms: Object.freeze([4, 7, 8, 8, 10, 9, 10, 8, 4, 12, 14, 14]),
     // Interactive props belong to the mechanic that teaches them. The raft
     // wave is entirely at Hellstar Rim, the return-hit eggs make an honest
     // Orrery, and spitters form small readable lanes instead of a global haze.
@@ -354,7 +354,7 @@
     eggs: Object.freeze([0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, 0]),
     spitters: Object.freeze([0, 0, 2, 0, 2, 0, 2, 0, 0, 2, 2, 2]),
     scenery: Object.freeze({
-      boulder: Object.freeze([4, 4, 2, 2, 10, 3, 4, 2, 0, 9, 14, 18]),
+      boulder: Object.freeze([4, 5, 5, 5, 8, 5, 6, 5, 0, 9, 10, 10]),
       chimney: Object.freeze([10, 10, 8, 9, 4, 10, 6, 5, 5, 2, 2, 1]),
       chainRelic: Object.freeze([2, 10, 2, 4, 3, 5, 20, 10, 4, 6, 3, 3]),
     }),
@@ -5504,6 +5504,17 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           water ? 15.2 : 16.8, {},
         );
         if (this.interworldScatterReserved(scenery.x, scenery.z, 4)) scenery = host;
+        // These two late-growing coral formations occupied the Chime Urchin's
+        // body after its clear court had already been chosen. Seat the gardens
+        // beyond the court instead; their trail hosts and reward curls stay put.
+        if (water && (host.id === 'water-wild-west-horizon-1-4'
+          || host.id === 'water-wild-west-outer-0-2')) {
+          const arena = profile.regionalBosses.find(boss => boss.id === 'chime-urchin')?.arena;
+          if (arena && surfaceDistanceAt(arena.x, arena.z, scenery.x, scenery.z) < 46) {
+            scenery = surfaceOffsetChartAt(arena.x, arena.z,
+              scenery.x - arena.x, scenery.z - arena.z, 46, {});
+          }
+        }
         const ground = profile.heightAt(scenery.x, scenery.z);
         const size = ((water ? .82 : .78) + ((index * 7 + host.routeIndex * 3) % 5) * .105)
           * (host.pocket ? 1.48 : 1);
@@ -8294,7 +8305,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       gameState.syncPauseProgress();
       return true;
     }
-    findPlanetBossArena(profile, site, index, radius, water) {
+    findPlanetBossArena(profile, site, index, radius, water, openApron = false) {
       // A boss cannot merely exist at a landmark coordinate: the player needs
       // a readable court with an unobstructed silhouette and a nearby route
       // onto it. Search real great-circle pockets against every physical deck,
@@ -8302,9 +8313,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       // is one ordinary KICKMOON jump away.
       let best = null;
       const distances = [58, 76, 96, 118, 142];
+      const angularSamples = openApron ? 80 : 40;
       for (const offsetDistance of distances) {
-        for (let candidateIndex = 0; candidateIndex < 40; candidateIndex++) {
-          const angle = candidateIndex / 40 * TAU + index * 1.137 + (water ? .31 : .77);
+        for (let candidateIndex = 0; candidateIndex < angularSamples; candidateIndex++) {
+          const angle = candidateIndex / angularSamples * TAU + index * 1.137 + (water ? .31 : .77);
           let candidate = surfaceOffsetChartAt(
             site.x, site.z, Math.cos(angle), Math.sin(angle), offsetDistance, {},
           );
@@ -8334,14 +8346,45 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
               surfaceDistanceAt(candidate.x, candidate.z, monument.x, monument.z)
                 - radius - surfaceCollisionRadius(monument));
           }
+          // The general solid atlas also contains real architecture:
+          // underkeep floors, roofs and walls. Ignoring it let the Ram's
+          // court replace the corridor floor after nearby caches were moved.
+          // Only intersecting height bands matter; a sky deck hundreds of
+          // metres above the creature does not consume its ground court.
+          const candidateGround = profile.heightAt(candidate.x, candidate.z);
+          for (const solid of profile.solids || EMPTY_SOLIDS) {
+            if (!Number.isFinite(solid.x) || !Number.isFinite(solid.z)
+              || solid.top < candidateGround - 2 || solid.bottom > candidateGround + 80) continue;
+            obstacleClearance = Math.min(obstacleClearance,
+              surfaceDistanceAt(candidate.x, candidate.z, solid.x, solid.z)
+                - radius - surfaceCollisionRadius(solid) - 3);
+          }
           for (const arena of profile.bossArenas || EMPTY_SOLIDS) {
             obstacleClearance = Math.min(obstacleClearance,
               surfaceDistanceAt(candidate.x, candidate.z, arena.x, arena.z)
                 - radius - surfaceCollisionRadius(arena) - 8);
           }
           const clearance = Math.min(platformClearance, obstacleClearance);
+          // Broad-winged creatures need a flat apron beyond the court edge.
+          // The cooled road is built later from the rail route; a crust disc
+          // centred on a nearby mountain can otherwise project through wings
+          // even though all existing platform records cleared this search.
+          let terrainRise = 0;
+          if (openApron) {
+            for (const reach of [28, 48, 68]) {
+              for (let sample = 0; sample < 20; sample++) {
+                const a = sample * TAU / 20;
+                const at = surfaceOffsetChartAt(candidate.x, candidate.z,
+                  Math.cos(a), Math.sin(a), reach, {});
+                terrainRise = Math.max(terrainRise,
+                  profile.heightAt(at.x, at.z) - candidateGround);
+              }
+            }
+          }
           const reachableGap = Math.abs(platformClearance - (water ? 9 : 7));
           const score = (clearance >= 3 ? 10000 : clearance * 900)
+            - (openApron && platformClearance > 20 ? 10000 : 0)
+            - Math.max(0, terrainRise - 7) * 120
             - reachableGap * 7 - offsetDistance * .08;
           if (!best || score > best.score) {
             best = { ...candidate, angle, clearance, platformClearance, score };
@@ -8365,7 +8408,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       const clearance = Math.max(radius, FOOTPRINT[id] || 0);
       const at = finalCourt
         ? { x: site.x, z: site.z, angle: water ? .2 : -.25, clearance: 0, platformClearance: 0 }
-        : this.findPlanetBossArena(profile, site, index, clearance, water);
+        : this.findPlanetBossArena(profile, site, index, clearance, water,
+          id === 'furnace-moth' || id === 'abyss-angler');
       const ground = profile.heightAt(at.x, at.z);
       const rise = finalCourt ? (water ? 7 : 10) : (water ? 5.5 : 8);
       const top = ground + rise;
@@ -8443,6 +8487,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           { id: 'pearl-kraken', name: 'PEARL KRAKEN', siteIndex: 7, mechanic: 'grapple-pearls', hp: 3 },
           { id: 'glass-crab', name: 'THE GLASS CRAB', siteIndex: 10, mechanic: 'mirror-claws', hp: 3 },
           { id: 'tide-serpent', name: 'TIDE SERPENT', siteIndex: 11, mechanic: 'current-scales', hp: 3 },
+          { id: 'lantern-jelly', name: 'LANTERN JELLY', siteIndex: 2, mechanic: 'lantern-bell', hp: 3, scale: 1.35 },
+          { id: 'abyss-angler', name: 'ABYSS ANGLER', siteIndex: 3, mechanic: 'lure-window', hp: 3, scale: 1.3 },
+          { id: 'chime-urchin', name: 'CHIME URCHIN', siteIndex: 5, mechanic: 'resonance-spines', hp: 3, scale: 1.4 },
+          { id: 'crown-seahorse', name: 'CROWN SEAHORSE', siteIndex: 9, mechanic: 'current-crown', hp: 3, scale: 1.25 },
         ]
         : [
           { id: 'chainbear', name: 'CHAINBEAR', siteIndex: 6, mechanic: 'chain-locks', hp: 4 },
@@ -8450,6 +8498,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           { id: 'ashback', name: 'ASHBACK', siteIndex: 11, mechanic: 'moonfall-plates', hp: 4 },
           { id: 'obsidian-ram', name: 'OBSIDIAN RAM', siteIndex: 1, mechanic: 'charge-horns', hp: 4 },
           { id: 'forge-wyrm', name: 'FORGE WYRM', siteIndex: 4, mechanic: 'rail-scales', hp: 4 },
+          { id: 'slag-scorpion', name: 'SLAG SCORPION', siteIndex: 2, mechanic: 'stinger-locks', hp: 4, scale: 1.45 },
+          { id: 'furnace-moth', name: 'FURNACE MOTH', siteIndex: 3, mechanic: 'furnace-wings', hp: 4, scale: 1.35 },
+          { id: 'organ-sentinel', name: 'ORGAN SENTINEL', siteIndex: 5, mechanic: 'organ-pipes', hp: 4, scale: 1.4 },
+          { id: 'glass-medusa', name: 'GLASS MEDUSA', siteIndex: 7, mechanic: 'glass-satellites', hp: 4, scale: 1.45 },
         ];
       const darkMaterial = new T.MeshStandardMaterial({
         color: water ? 0x123b50 : 0x161117,
@@ -8494,7 +8546,142 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         let body;
         let core;
 
-        if (spec.id === 'reefjaw') {
+        const addWeakNode = (geometry, position, radius = 3, scale = null, rotation = null) => {
+          const mesh = addMesh(group, geometry, brightMaterial.clone(), position, scale, rotation);
+          weakNodes.push({ index: weakNodes.length, group: mesh, mesh, alive: true,
+            position: new T.Vector3(), radius, baseScale: mesh.scale.clone() });
+          return mesh;
+        };
+        if (spec.id === 'lantern-jelly') {
+          // A hanging lantern with a scalloped glass bell and four pendant
+          // seals: nothing shares the fish, crab or bear silhouette.
+          body = addMesh(group, new T.SphereGeometry(9, 28, 16, 0, TAU, 0, Math.PI * .58),
+            paleMaterial.clone(), [0, 15, 0], [1.05, .8, 1.05]);
+          addMesh(group, new T.TorusGeometry(8.7, .65, 8, 40), darkMaterial.clone(),
+            [0, 13.6, 0], null, [Math.PI / 2, 0, 0]);
+          for (let i = 0; i < 8; i++) {
+            const a = i * TAU / 8;
+            const strand = addMesh(group, new T.TorusGeometry(5.8, .36, 6, 24, Math.PI * .88),
+              paleMaterial.clone(), [Math.cos(a) * 6, 8, Math.sin(a) * 6], [.6, 1.1, .6], [0, a, Math.PI]);
+            limbs.push(strand);
+          }
+          for (const side of [-1, 1]) {
+            addWeakNode(new T.OctahedronGeometry(2.25, 0), [side * 9.5, 8, -7.8], 2.8, [.85, 1.5, .85]);
+          }
+          core = addMesh(group, new T.SphereGeometry(2.65, 20, 14), brightMaterial.clone(), [0, 10, -12]);
+        } else if (spec.id === 'abyss-angler') {
+          body = addMesh(group, new T.DodecahedronGeometry(8.8, 1), darkMaterial.clone(),
+            [0, 9, 0], [1.15, .8, 1.28]);
+          const lure = addMesh(group, new T.TorusGeometry(7.5, .52, 7, 30, Math.PI * 1.1),
+            paleMaterial.clone(), [0, 19, -3.6], null, [0, Math.PI / 2, .14]);
+          limbs.push(lure);
+          addMesh(group, new T.SphereGeometry(1.35, 16, 10), brightMaterial.clone(), [0, 19, -11.5]);
+          for (const side of [-1, 1]) {
+            const fin = addMesh(group, new T.ConeGeometry(5.4, 10, 5), paleMaterial.clone(),
+              [side * 11, 9.2, 3.5], [1, .22, 1], [0, 0, side * 1.15]);
+            wings.push(fin);
+            addMesh(group, new T.SphereGeometry(.8, 12, 8), paleMaterial.clone(), [side * 4.4, 12.2, -8]);
+          }
+          for (let i = 0; i < 7; i++) {
+            addMesh(group, new T.ConeGeometry(.55, 3, 5), paleMaterial.clone(),
+              [-5.7 + i * 1.9, 6.2, -10.9], null, [0, 0, .12 * (i - 3)]);
+          }
+          core = addMesh(group, new T.SphereGeometry(2.7, 20, 14), brightMaterial.clone(), [0, 10, -15]);
+        } else if (spec.id === 'chime-urchin') {
+          body = addMesh(group, new T.IcosahedronGeometry(6.8, 1), darkMaterial.clone(), [0, 10, 0]);
+          for (let i = 0; i < 14; i++) {
+            const a = i * TAU / 14;
+            const spine = addMesh(group, new T.ConeGeometry(.85, 8, 6), paleMaterial.clone(),
+              [Math.cos(a) * 8.7, 10 + Math.sin(a) * 8.7, 1.2], null, [0, 0, a - Math.PI / 2]);
+            limbs.push(spine);
+          }
+          for (let i = 0; i < 3; i++) {
+            const a = -.95 + i * .95;
+            addWeakNode(new T.TorusGeometry(2.05, .62, 8, 28),
+              [Math.sin(a) * 10.5, 10 + (i === 1 ? 7 : 0), -8.5], 2.8);
+          }
+          core = addMesh(group, new T.IcosahedronGeometry(2.65, 1), brightMaterial.clone(), [0, 10, -11]);
+        } else if (spec.id === 'crown-seahorse') {
+          body = addMesh(group, new T.SphereGeometry(6.8, 22, 16), darkMaterial.clone(),
+            [0, 12, 0], [.64, 1.28, .82]);
+          addMesh(group, new T.SphereGeometry(5, 20, 14), paleMaterial.clone(), [0, 22, -2], [.85, .72, 1.35]);
+          addMesh(group, new T.CylinderGeometry(1.8, 2.5, 7, 9), darkMaterial.clone(),
+            [0, 21, -9.3], null, [Math.PI / 2, 0, 0]);
+          const tail = addMesh(group, new T.TorusGeometry(6.2, 1.3, 8, 38, Math.PI * 1.65),
+            paleMaterial.clone(), [0, 5.5, 6.2], [.7, .82, 1], [0, Math.PI / 2, .15]);
+          limbs.push(tail);
+          for (const side of [-1, 1]) {
+            const fin = addMesh(group, new T.ConeGeometry(4.5, 10, 5), paleMaterial.clone(),
+              [side * 5.4, 13, 3], [.7, .24, 1], [0, 0, side * 1.1]);
+            wings.push(fin);
+            addWeakNode(new T.OctahedronGeometry(2.2, 0), [side * 5.2, 26, -3.8], 2.8, [.8, 1.45, .8]);
+          }
+          core = addMesh(group, new T.SphereGeometry(2.5, 20, 14), brightMaterial.clone(), [0, 15, -11]);
+        } else if (spec.id === 'slag-scorpion') {
+          body = addMesh(group, new T.DodecahedronGeometry(7.3, 0), darkMaterial.clone(),
+            [0, 6.8, 0], [1.2, .58, 1.18]);
+          for (let i = 0; i < 8; i++) {
+            const side = i < 4 ? -1 : 1, lane = i % 4;
+            limbs.push(addMesh(group, new T.CylinderGeometry(.58, .9, 10.5, 6), paleMaterial.clone(),
+              [side * 9, 4.2, -5.2 + lane * 3.6], null, [.16, 0, side * .96]));
+          }
+          for (const side of [-1, 1]) {
+            addMesh(group, new T.TorusGeometry(3.9, 1.1, 8, 28, Math.PI * 1.6), paleMaterial.clone(),
+              [side * 10, 7.3, -9], null, [Math.PI / 2, 0, side * .5]);
+            addWeakNode(new T.OctahedronGeometry(2.3, 0), [side * 11.4, 8, -13.5], 2.9);
+          }
+          const tail = addMesh(group, new T.TorusGeometry(9, 1.35, 8, 34, Math.PI * 1.2),
+            darkMaterial.clone(), [0, 14, 6], [.65, 1, 1], [0, Math.PI / 2, .2]);
+          limbs.push(tail);
+          addWeakNode(new T.ConeGeometry(2.25, 4.2, 6), [0, 24, -1.5], 3.1, null, [Math.PI, 0, 0]);
+          core = addMesh(group, new T.IcosahedronGeometry(2.7, 1), brightMaterial.clone(), [0, 7.6, -13]);
+        } else if (spec.id === 'furnace-moth') {
+          body = addMesh(group, new T.SphereGeometry(6.8, 22, 14), darkMaterial.clone(), [0, 13, 0], [.56, 1.2, .75]);
+          for (const side of [-1, 1]) {
+            const wing = addMesh(group, new T.SphereGeometry(8.6, 20, 12), paleMaterial.clone(),
+              [side * 10, 14.5, 1], [1.05, .86, .13], [0, side * .22, side * -.3]);
+            wings.push(wing);
+            const lower = addMesh(group, new T.ConeGeometry(5.8, 11, 5), darkMaterial.clone(),
+              [side * 8, 5.6, 1], [1, 1, .14], [0, 0, side * .3]);
+            wings.push(lower);
+            addWeakNode(new T.TorusGeometry(2.25, .7, 8, 28), [side * 11, 15, -7], 3);
+            addMesh(group, new T.ConeGeometry(.55, 7, 6), brightMaterial.clone(),
+              [side * 2.9, 23, -.8], null, [0, 0, side * -.42]);
+          }
+          core = addMesh(group, new T.OctahedronGeometry(2.65, 1), brightMaterial.clone(), [0, 13, -10]);
+        } else if (spec.id === 'organ-sentinel') {
+          body = addMesh(group, new T.BoxGeometry(11, 13, 8), darkMaterial.clone(), [0, 9, 0], null, [0, 0, .025]);
+          for (let i = 0; i < 5; i++) {
+            const h = 12 + (2 - Math.abs(i - 2)) * 5;
+            const pipe = addMesh(group, new T.CylinderGeometry(1.6, 1.9, h, 9, 1, true),
+              paleMaterial.clone(), [(i - 2) * 3.5, 10 + h * .5, 2]);
+            limbs.push(pipe);
+          }
+          for (let i = 0; i < 3; i++) {
+            addWeakNode(new T.TorusGeometry(1.95, .6, 8, 28), [(i - 1) * 5.5, 12 + (i === 1 ? 5 : 0), -7], 2.7);
+          }
+          for (const side of [-1, 1]) {
+            addMesh(group, new T.BoxGeometry(3.5, 5, 5), paleMaterial.clone(), [side * 4, 2.5, 0]);
+            wings.push(addMesh(group, new T.BoxGeometry(2.8, 9, 3.5), darkMaterial.clone(),
+              [side * 8.5, 9, -.5], null, [0, 0, side * .18]));
+          }
+          core = addMesh(group, new T.IcosahedronGeometry(2.65, 1), brightMaterial.clone(), [0, 8, -11]);
+        } else if (spec.id === 'glass-medusa') {
+          body = addMesh(group, new T.OctahedronGeometry(7.6, 1), darkMaterial.clone(), [0, 14, 0], [1.05, 1.12, .8]);
+          for (let i = 0; i < 7; i++) {
+            const a = i * TAU / 7;
+            const snake = addMesh(group, new T.TorusGeometry(4.6, .66, 7, 28, Math.PI * 1.28),
+              paleMaterial.clone(), [Math.cos(a) * 7.2, 18 + Math.sin(a) * 5.4, 1.2],
+              [1, 1, .7], [0, a * .24, a]);
+            limbs.push(snake);
+          }
+          for (let i = 0; i < 3; i++) {
+            const a = -.9 + i * .9;
+            addWeakNode(new T.OctahedronGeometry(2.35, 0), [Math.sin(a) * 12, 10 + i * 4, -10.5], 3);
+          }
+          addMesh(group, new T.ConeGeometry(5.6, 10, 6), paleMaterial.clone(), [0, 5, 1], null, [Math.PI, 0, 0]);
+          core = addMesh(group, new T.IcosahedronGeometry(2.7, 1), brightMaterial.clone(), [0, 14, -12]);
+        } else if (spec.id === 'reefjaw') {
           body = addMesh(group, new T.SphereGeometry(7.8, 24, 16), darkMaterial.clone(),
             [0, 10, 0], [1.05, .66, 1.72]);
           const jawTop = addMesh(group, new T.BoxGeometry(8.8, 1.5, 8.6), paleMaterial.clone(),
@@ -8554,6 +8741,13 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         } else if (spec.id === 'glass-crab') {
           body = addMesh(group, new T.DodecahedronGeometry(7.2, 1), paleMaterial.clone(),
             [0, 8.6, 0], [1.38, .54, 1.04]);
+          // Keep the shell shaded blue so the white mirror-claw targets read
+          // separately in the bright water light.
+          body.material.color.setHex(0x39758d);
+          body.material.emissive.setHex(0x103247);
+          body.material.emissiveIntensity = .28;
+          body.material.roughness = .26;
+          body.material.metalness = .42;
           addMesh(group, new T.SphereGeometry(6.4, 22, 14), darkMaterial.clone(),
             [0, 8.1, 1.4], [1.42, .42, 1.02]);
           for (let legIndex = 0; legIndex < 6; legIndex++) {
@@ -8698,6 +8892,40 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           core = addMesh(group, new T.IcosahedronGeometry(2.65, 1), brightMaterial.clone(), [0, 6.6, -10.6]);
         }
 
+        // An exposed heart sits completely beyond the rendered face. The old
+        // points were inside both the visible shell and a still larger hit
+        // sphere. Moving the art AND using actual shell contact fixes both.
+        const faceDepths = { reefjaw: 17, 'bell-manta': 12, 'pearl-kraken': 15,
+          'glass-crab': 12, 'tide-serpent': 17, 'obsidian-ram': 18,
+          'forge-wyrm': 18, chainbear: 17, ashback: 19, cindermaw: 15 };
+        if (faceDepths[spec.id]) core.position.z = -faceDepths[spec.id];
+        if (spec.id === 'chainbear' || spec.id === 'pearl-kraken') {
+          for (const node of weakNodes) node.mesh.position.z = Math.min(node.mesh.position.z, -14);
+        }
+        if (spec.id === 'tide-serpent' || spec.id === 'forge-wyrm') {
+          for (const node of weakNodes) node.mesh.position.y += 5;
+        }
+        const weakMeshes = new Set(weakNodes.map(node => node.mesh));
+        const collisionMeshes = [];
+        group.traverse(mesh => {
+          if (mesh.isMesh && mesh !== core && !weakMeshes.has(mesh)) collisionMeshes.push(mesh);
+        });
+        for (const node of weakNodes) {
+          // Target rings have a repeatable open silhouette, unlike small eyes
+          // and the many decorative lights on the same creatures.
+          const halo = addMesh(group, new T.TorusGeometry(node.radius + .65, .19, 6, 30),
+            brightMaterial.clone(), [0, 0, 0]);
+          const at = node.mesh.parent === group ? node.mesh.position
+            : node.group.position.clone().add(node.mesh.position);
+          halo.position.copy(at);
+          halo.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1),
+            at.clone().sub(body.position).normalize());
+          node.halo = halo;
+          node.kickHits = 0;
+        }
+        const coreHalo = addMesh(group, new T.TorusGeometry(3.55, .28, 7, 36),
+          paleMaterial.clone(), [core.position.x, core.position.y, core.position.z - .35]);
+        coreHalo.visible = false;
         core.visible = false;
         const coreGlow = this.makeGlowSprite(water ? this.glowViolet : this.glowGold, 13, .08);
         coreGlow.position.copy(core.position);
@@ -8713,17 +8941,17 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         attackRing.position.y = .28;
         attackRing.visible = false;
         group.add(attackRing);
-        const presentationScale = water ? (spec.id === 'tide-serpent' ? 1.32 : 1.24)
+        const presentationScale = spec.scale || (water ? (spec.id === 'tide-serpent' ? 1.32 : 1.24)
           : spec.id === 'cindermaw' ? 2.05
             : spec.id === 'chainbear' ? 1.88
-              : spec.id === 'obsidian-ram' ? 1.68 : spec.id === 'forge-wyrm' ? 1.62 : 1.72;
+              : spec.id === 'obsidian-ram' ? 1.68 : spec.id === 'forge-wyrm' ? 1.62 : 1.72);
         this.placePlanetObject(group, arena.x, ground, arena.z, arena.facingYaw);
         group.scale.setScalar(presentationScale);
         profile.root.add(group);
         group.updateMatrixWorld(true);
         const boss = {
           ...spec, index, planet: profile.id, group, body, core, coreGlow,
-          weakNodes, wings, limbs, attackRing,
+          weakNodes, wings, limbs, attackRing, coreHalo, collisionMeshes,
           alive: true, unlocked: true, engaged: false, vulnerable: false,
           hp: spec.hp, maxHp: spec.hp,
           armorHp: weakNodes.length, maxArmor: weakNodes.length,
@@ -8747,6 +8975,13 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           groupBaseQuaternion: group.quaternion.clone(), groupBaseScale: group.scale.clone(),
           coreBaseScale: core.scale.clone(),
         };
+        // Broad phase encloses the real shell; narrow phase remains the mesh.
+        // It cannot hide a point behind a fictitious solid bounding sphere.
+        const bounds = new T.Box3().setFromObject(group);
+        boss.collisionRadius = bounds.getSize(new T.Vector3()).length() * .6;
+        boss.motionParts = [...new Set([...wings, ...limbs])].map(mesh => ({
+          mesh, rotation: mesh.rotation.clone(), position: mesh.position.clone(), scale: mesh.scale.clone(),
+        }));
         for (const node of weakNodes) {
           node.radius *= presentationScale;
           node.baseQuaternion = node.mesh.quaternion.clone();
@@ -8899,11 +9134,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       profile.bosses.push(boss);
       profile.boss = boss;
 
-      // Five regional marks surround the seal; any four can peel it once the
-      // world has also yielded 2,000 collectibles. The optional fifth encounter
-      // mirrors the original Moon's four-of-five boss freedom.
+      // Every regional encounter owns one mark. Half the roster opens the
+      // local final; collectibles remain the ship and Eclipse fares.
       const sealGroup = new T.Group();
-      sealGroup.name = water ? 'NAUTILUS COURT · FIVE-PEARL IRIS' : 'TYRANT COURT · FIVE-FORGE IRIS';
+      sealGroup.name = water ? 'NAUTILUS COURT · NINE-PEARL IRIS' : 'TYRANT COURT · NINE-FORGE IRIS';
       const sealMaterial = new T.MeshStandardMaterial({
         color: water ? 0x153f58 : 0x160f15,
         emissive: water ? 0x075873 : 0x681006,
@@ -8935,8 +9169,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         rib.rotation.set(water ? Math.PI / 2 : 0, -angle, water ? angle : .2 * (index - 1));
         sealGroup.add(rib);
         sealRibs.push({ index, mesh: rib, basePosition: rib.position.clone(), baseRotation: rib.rotation.clone() });
-        const orbit = new T.Mesh(new T.TorusGeometry(27 + index * 2.8, .5, 7, 56), sealBright.clone());
-        orbit.position.y = 9 + index * 2;
+        const orbit = new T.Mesh(new T.TorusGeometry(27 + index * 1.4, .4, 7, 56), sealBright.clone());
+        orbit.position.y = 9 + index;
         orbit.rotation.set(index * .55, index * .7, .25 + index * .36);
         sealGroup.add(orbit);
         sealOrbits.push(orbit);
@@ -10234,7 +10468,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           return geometry;
         };
         return mergeStaticGeometries([
-          lobe(.74, 0, 0, 11),
+          lobe(1, 0, 0, 16),
           lobe(.48, -.5, .08, 8),
           lobe(.42, .48, -.12, 9),
           lobe(.3, .08, .53, 7),
@@ -10274,9 +10508,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         const progress = step / 14;
         const top = lerp(holeRim + 5.2, holeFloor + 3.2, progress);
         const bottom = top - (centralDock ? 3.2 : 2.15);
-        // Each drop is obvious and irreversible, but consecutive lip gaps
-        // remain short enough for an ordinary running jump or controlled fall.
-        const radius = centralDock ? 8.8 : 7.15 - step * .16 + (step % 3) * .28;
+        // A broad lip lets a running player read the next shelf while falling.
+        // The central disc now covers the complete support radius, including
+        // the old invisible crescent between the scalloped lobes.
+        const radius = centralDock ? 8.8 : 11.6 - step * .22 + (step % 3) * .38;
         chartLift(at.x, bottom + (top - bottom) * .5, at.z, features.scratchPosition);
         features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
           .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
@@ -10376,6 +10611,7 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       chamberMesh.instanceMatrix.needsUpdate = true;
       blueHole.add(chamberMesh);
       features.abyssalChamberMesh = chamberMesh;
+      this.makeWaterAbyssalChoir(profile, features, holeShelves.at(-1));
 
       const deepCoralMaterials = [
         materials.coralRoseMaterial.clone(),
@@ -10395,7 +10631,9 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
         for (let index = 0; index < 24; index++) {
           const host = deepCoralHosts[(index * 5 + family * 3) % deepCoralHosts.length];
           const angle = index * 2.3999632297 + family * .77;
-          const reach = host.radius * (.28 + (index % 5) * .105);
+          // The garden frames the footing; the middle belongs to the player,
+          // the visible crescents and the exposed resonance pearl.
+          const reach = host.radius * (.76 + (index % 3) * .045);
           const at = surfaceOffsetChartAt(
             host.x, host.z, Math.cos(angle), Math.sin(angle), reach, {},
           );
@@ -10404,8 +10642,8 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
             .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
           const chamberGarden = host.family === 'abyssal-cache-chamber';
           const size = chamberGarden
-            ? 1.65 + (index % 4) * .42 + family * .18
-            : .78 + (index % 4) * .2 + family * .1;
+            ? 1.25 + (index % 4) * .28 + family * .14
+            : .66 + (index % 4) * .16 + family * .08;
           features.scratchScale.set(
             size * (chamberGarden && index % 2 ? 1.28 : 1),
             size * (chamberGarden ? 1.7 + family * .16 : 1.12 + family * .08),
@@ -10953,20 +11191,97 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
       this.makeWaterLivingScenery(profile, features, materials);
       this.updateWaterWorldVisuals(profile, 0, { time: 0 }, 0);
     }
+    makeWaterAbyssalChoir(profile, features, centralDock) {
+      const choir = {
+        nodes: [], petals: [], prizes: [], complete: false, bloom: 0,
+        centralDock, position: new T.Vector3(),
+      };
+      const bloomGroup = new T.Group();
+      bloomGroup.name = 'BLUE HOLE · SLEEPING THREE-PETAL BLOOM';
+      const bloomMaterial = new T.MeshStandardMaterial({
+        color: 0xa6ffed, emissive: 0x19bcb2, emissiveIntensity: .48,
+        roughness: .3, metalness: .06, side: T.DoubleSide,
+      });
+      for (let index = 0; index < 3; index++) {
+        const petal = new T.Group();
+        petal.rotation.y = index * TAU / 3;
+        const blade = new T.Mesh(new T.SphereGeometry(1, 14, 8), bloomMaterial.clone());
+        // Petals frame the upwelling at the dock edge, leaving the centre
+        // clear for the player's uninterrupted ascent through the water.
+        blade.position.set(0, 1.8, 6.6);
+        blade.scale.set(1.25, 2.6, .26);
+        petal.add(blade);
+        bloomGroup.add(petal);
+        choir.petals.push({ group: petal, blade });
+      }
+      this.placePlanetObject(bloomGroup, centralDock.x, centralDock.top + .15, centralDock.z);
+      profile.root.add(bloomGroup);
+      choir.group = bloomGroup;
+      bloomGroup.getWorldPosition(choir.position);
+      for (let index = 0; index < features.abyssalChambers.length; index++) {
+        const host = features.abyssalChambers[index];
+        const group = new T.Group();
+        group.name = 'BLUE HOLE · EXPOSED RESONANCE PEARL ' + (index + 1);
+        // The lit pearl stands above a fully open shell; no opaque body lies
+        // between an arriving ball and the sphere used by the strike check.
+        const shellMaterial = new T.MeshStandardMaterial({
+          color: 0x486b82, emissive: 0x062b42, emissiveIntensity: .55,
+          roughness: .48, metalness: .14,
+        });
+        const shell = new T.Mesh(new T.TorusGeometry(2.45, .28, 7, 26, Math.PI * 1.42), shellMaterial);
+        shell.rotation.x = Math.PI / 2;
+        shell.position.y = .35;
+        group.add(shell);
+        const pearlMaterial = new T.MeshStandardMaterial({
+          color: 0xdcffff, emissive: 0x54e9e4, emissiveIntensity: 2.3,
+          roughness: .14, metalness: .12,
+        });
+        const pearl = new T.Mesh(new T.IcosahedronGeometry(1.45, 2), pearlMaterial);
+        pearl.position.y = 2.65;
+        group.add(pearl);
+        const orbit = new T.Mesh(new T.TorusGeometry(2.15, .075, 5, 32),
+          new T.MeshBasicMaterial({ color: 0xafffee, transparent: true, opacity: .65 }));
+        orbit.position.y = 2.65;
+        orbit.rotation.x = Math.PI / 2;
+        group.add(orbit);
+        this.placePlanetObject(group, host.x, host.top + .2, host.z, index * TAU / 3);
+        profile.root.add(group);
+        group.updateMatrixWorld(true);
+        const position = pearl.getWorldPosition(new T.Vector3());
+        const path = new T.CatmullRomCurve3([
+          position.clone(),
+          position.clone().lerp(choir.position, .5).addScaledVector(dirAt(position, new T.Vector3()), 3.4),
+          choir.position.clone().addScaledVector(dirAt(choir.position, new T.Vector3()), 1.4),
+        ]);
+        const vein = new T.Mesh(new T.TubeGeometry(path, 20, .09, 5, false),
+          new T.MeshBasicMaterial({
+            color: 0x7affdd, transparent: true, opacity: .16, depthWrite: false,
+            blending: T.AdditiveBlending,
+          }));
+        vein.name = 'BLUE HOLE · RESONANCE ROOT ' + (index + 1);
+        vein.userData.kbLifted = true;
+        profile.root.add(vein);
+        choir.nodes.push({
+          id: 'water-abyssal-pearl-' + index, host, group, pearl, orbit, vein,
+          position, resonated: false, flash: 0, prizes: [],
+        });
+      }
+      features.abyssalChoir = choir;
+    }
     makeWaterSkyReefs(profile, features, materials) {
       const site = profile.sites[9];
       const ground = profile.heightAt(site.x, site.z);
       const layout = [
-        [-64, -38, 48, 14.5],
-        [-82, 4, 78, 13.8],
-        [-66, 65, 111, 11.4],
-        [-8, 103, 145, 16.8],
-        [72, 82, 180, 12.8],
-        [128, 18, 216, 32],
-        [96, -58, 168, 14.6],
-        [35, -94, 110, 12.2],
-        [-33, -78, 62, 14.8],
-        [14, -12, 29, 8.8],
+        [-64, -38, 48, 21],
+        [-82, 4, 78, 24],
+        [-66, 65, 111, 19],
+        [-8, 103, 145, 27],
+        [72, 82, 180, 22],
+        [128, 18, 216, 38],
+        [96, -58, 168, 25],
+        [35, -94, 110, 20],
+        [-33, -78, 62, 24],
+        [14, -12, 29, 18],
       ];
       const bodyMaterial = materials.reefMaterial.clone();
       bodyMaterial.vertexColors = true;
@@ -10984,10 +11299,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           geometry.applyMatrix4(new T.Matrix4().makeTranslation(x, 0, z));
           return geometry;
         };
-        // A broad manta/scallop footprint breaks the copied circular-island
-        // silhouette while retaining a generous honest collider at its core.
+        // The entire support disc is drawn. Broad scallop wings extend beyond
+        // that honest centre and make the landings read as living reef shelves.
         return mergeStaticGeometries([
-          lobe(.76, 0, 0, 11),
+          lobe(1, 0, 0, 16),
           lobe(.49, -.53, .08, 9),
           lobe(.49, .53, .08, 9),
           lobe(.34, 0, .55, 8),
@@ -11270,6 +11585,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           phase: 4.2 + index * .79, role: 'leviathan-breach-current',
           steerable: true, directional: true, active: true, liftTicks: 0,
           visualOpacity: .09, ringOpacityScale: .78,
+          // These broad reefs need only the last eight metres cushioned.
+          // Starting the assist at twenty-two made a short sky hop hover for
+          // several extra seconds above a landing the player had already made.
+          cushionHeight: 8,
           targetX: target.x, targetZ: target.z, targetAltitude: target.top,
           targetRadius: surfaceCollisionRadius(target) * (target.collisionScale ?? 1),
           flightTime, launchDistance,
@@ -11293,7 +11612,10 @@ roughnessFactor = mix(roughnessFactor, 0.72, vKbAbyssDepth * 0.72);`);
           ? features.skyReefs[sourceIndex + 1].record
           : {
             id: 'water-leviathan-wake-return-landing',
-            x: site.x, z: site.z, top: ground, radius: 13,
+            // The final broad reef almost reaches the district centre. Aim
+            // through its lip: a thirteen-metre settling disc stopped the
+            // current above its own source instead of carrying us to ground.
+            x: site.x, z: site.z, top: ground, radius: 2,
           };
         const sourceLayout = layout[sourceIndex];
         const targetLayout = index < 4 ? layout[sourceIndex + 1] : [0, 0];
@@ -12572,6 +12894,27 @@ diffuseColor.a *= kbBody * kbStream;`);
         bell.group.updateMatrixWorld(true);
         bell.clapper.getWorldPosition(bell.position);
       }
+      const choir = features.abyssalChoir;
+      if (choir) {
+        choir.bloom = damp(choir.bloom, choir.complete ? 1 : 0, 3.2, dt);
+        for (let index = 0; index < choir.nodes.length; index++) {
+          const node = choir.nodes[index];
+          node.flash = Math.max(0, node.flash - dt * 2.1);
+          node.pearl.rotation.y = time * (node.resonated ? .28 : 1.15) + index;
+          node.pearl.scale.setScalar(node.resonated ? .62 : 1 + Math.sin(time * 3.4 + index) * .09);
+          node.pearl.material.emissiveIntensity = node.resonated
+            ? .42 + node.flash * 3 : 2.2 + Math.sin(time * 3.4 + index) * .45;
+          node.orbit.rotation.z = time * (node.resonated ? .2 : .85) + index;
+          node.orbit.scale.setScalar(node.resonated ? 1.38 : 1);
+          node.orbit.material.opacity = node.resonated ? .22 : .6;
+          node.vein.material.opacity = node.resonated ? .55 + node.flash * .25 : .14;
+          const petal = choir.petals[index];
+          const open = node.resonated ? .48 + choir.bloom * .68 : .08;
+          petal.blade.rotation.x = open;
+          petal.blade.scale.set(1.25 + choir.bloom * .8, 2.6 + choir.bloom * 1.1, .26);
+          petal.blade.material.emissiveIntensity = node.resonated ? 1.1 + choir.bloom * 1.8 : .3;
+        }
+      }
       this.updateWaterLivingScenery(features, time);
     }
     rewardWaterInteraction(profile, gameState, kind, position, label, value = 1) {
@@ -12585,6 +12928,7 @@ diffuseColor.a *= kbBody * kbStream;`);
       const paid = Math.max(1, Math.round(value * 4)) * (value > 1 ? 2 : 1);
       progress[kind] += 1;
       progress.collected += value > 1 ? paid : 1;
+      this.showPaidRewardBurst(profile, position, value > 1 ? paid : 1);
       gameState.score += 650 * value;
       gameState.style = clamp(gameState.style + 4 * value, 0, 100);
       gameState.rewardFlash = Math.max(gameState.rewardFlash, .52);
@@ -12599,6 +12943,46 @@ diffuseColor.a *= kbBody * kbStream;`);
       if (!features || (ball.mode !== 'outbound' && ball.mode !== 'returning')) return false;
       const speed = ball.velocity.length();
       if (speed <= 7) return false;
+      const choir = features.abyssalChoir;
+      for (const node of choir?.nodes || EMPTY_SOLIDS) {
+        if (ball.collisionCooldown.has(node.id)
+          || ball.position.distanceTo(node.position) > 1.8 + ball.radius) continue;
+        ball.collisionCooldown.set(node.id, .3);
+        node.flash = 1;
+        if (node.resonated) {
+          audio.impact(.22, 'crystal');
+          return true;
+        }
+        node.resonated = true;
+        this.releaseCollectibleBurst(profile, node.prizes, node.position);
+        this.particles?.burst(node.position, 0x9fffe3, 26, 11, .8, .2);
+        world.pulseRing(node.position, new T.Color(0xa3ffdf), 10, .5, true);
+        gameState.score += 900;
+        gameState.rewardFlash = Math.max(gameState.rewardFlash, .32);
+        const complete = choir.nodes.every(candidate => candidate.resonated);
+        audio.score(complete);
+        audio.impact(.58, 'crystal');
+        if (complete) {
+          choir.complete = true;
+          // The player receives the finale where they completed the phrase,
+          // on real dry footing inside the abyss, away from the exit current.
+          // Keep the finale inside the returning ball's easy reach. Using
+          // the entire chamber radius left one outer crescent behind when the
+          // player's recall landed a little short of the pearl.
+          const rewardHost = { ...node.host, radius: Math.min(6, node.host.radius) };
+          for (let index = 0; index < choir.prizes.length; index++) {
+            this.movePlanetPickupToDiscoveryHost(choir.prizes[index], rewardHost,
+              index, 1, 'water-abyssal-choir-finale');
+          }
+          this.releaseCollectibleBurst(profile, choir.prizes, node.position);
+          gameState.worldProgress[profile.id].route += 1;
+          gameState.score += 3600;
+          gameState.rewardFlash = Math.max(gameState.rewardFlash, .7);
+          this.particles?.burst(choir.position, 0x8cffe2, 64, 18, 1.3, .34);
+          world.pulseRing(choir.position, new T.Color(0x9dffe0), 26, .9, true);
+        }
+        return true;
+      }
       for (const fish of features.moonfish) {
         const id = `water-moonfish-${fish.index}`;
         if (fish.claimed || fish.leap < 2.8 || ball.collisionCooldown.has(id)) continue;
@@ -12840,6 +13224,14 @@ diffuseColor.a *= kbBody * kbStream;`);
       if (!features) return;
       features.bellStep = 0;
       features.bellComplete = false;
+      if (features.abyssalChoir) {
+        features.abyssalChoir.complete = false;
+        features.abyssalChoir.bloom = 0;
+        for (const node of features.abyssalChoir.nodes) {
+          node.resonated = false;
+          node.flash = 0;
+        }
+      }
       features.playerDirectionalFlight = null;
       for (const geyser of features.allCurrents || features.geysers) {
         geyser.liftTicks = 0;
@@ -12868,8 +13260,8 @@ diffuseColor.a *= kbBody * kbStream;`);
     makeLavaPlacementEntries(profile, kind, budgets, family = 0) {
       const entries = [];
       const kindUnit = kind === 'low-island' ? 9.4
-        : kind === 'cache' ? 6.2
-          : kind === 'blossom' ? 4.4
+        : kind === 'cache' ? 14.8
+          : kind === 'blossom' ? 8.2
             : kind === 'raft' ? 15
               : kind === 'egg' ? 11.5
                 : kind === 'spitter' ? 14 : 6.8;
@@ -12878,8 +13270,8 @@ diffuseColor.a *= kbBody * kbStream;`);
         chimney: 4, chainRelic: 5, raft: 0, egg: 0, spitter: 1,
       })[kind] ?? family;
       const kindLane = ({
-        'low-island': -18, cache: 24, blossom: -3, boulder: 3,
-        chimney: 9, chainRelic: 15, raft: 0, egg: 0, spitter: -24,
+        'low-island': -18, cache: 24, blossom: -24, boulder: 37,
+        chimney: -39, chainRelic: 49, raft: 0, egg: 0, spitter: -24,
       })[kind] ?? family * 6;
       for (let siteIndex = 0; siteIndex < budgets.length; siteIndex++) {
         const total = budgets[siteIndex];
@@ -13018,6 +13410,54 @@ diffuseColor.a *= kbBody * kbStream;`);
               );
               sanctuaryAdjusted = true;
             }
+          }
+          // Gardens sit beside the route, with room to circle each cache.
+          // Keep the named owner and heading; resolve crowding only within
+          // that garden's lane, without consuming the seeded world stream.
+          if (kind === 'cache') {
+            const obstacles = profile.platforms.filter(record =>
+              (record.collisionScale ?? 1) > 0 && !record.sanctuary);
+            let best = null;
+            for (const advance of [0, 16, 32, 48]) {
+              for (const side of [0, 18, -18, 36, -36]) {
+                const ahead = surfaceOffsetChartAt(at.x, at.z,
+                  Math.cos(district.heading), Math.sin(district.heading), advance, {});
+                const candidate = surfaceOffsetChartAt(ahead.x, ahead.z,
+                  Math.cos(district.heading + Math.PI / 2),
+                  Math.sin(district.heading + Math.PI / 2), side, {});
+                if (this.interworldScatterReserved(candidate.x, candidate.z, 8)) continue;
+                if (siteIndex === 1) {
+                  // The roofed route is built after these gardens. Reserve its
+                  // full apron and three bays before any cache can grow into it.
+                  const keep = profile.sites[1];
+                  let blocksUnderkeep = false;
+                  for (let distance = -6; distance <= 80; distance += 4) {
+                    const axis = surfaceOffsetChartAt(keep.x, keep.z,
+                      Math.cos(-.05), Math.sin(-.05), distance, {});
+                    if (surfaceDistanceAt(candidate.x, candidate.z, axis.x, axis.z) < 21) {
+                      blocksUnderkeep = true;
+                      break;
+                    }
+                  }
+                  if (blocksUnderkeep) continue;
+                }
+                const ground = profile.heightAt(candidate.x, candidate.z);
+                let clearance = 30;
+                for (const record of obstacles) {
+                  if (record.bottom > ground + 10 || record.top < ground - .8) continue;
+                  clearance = Math.min(clearance,
+                    surfaceDistanceAt(candidate.x, candidate.z, record.x, record.z)
+                      - surfaceCollisionRadius(record) * (record.collisionScale ?? .93) - 10);
+                }
+                for (const previous of entries) {
+                  clearance = Math.min(clearance,
+                    surfaceDistanceAt(candidate.x, candidate.z, previous.x, previous.z) - 19);
+                }
+                const score = Math.min(3, clearance) - (advance + Math.abs(side)) * .014;
+                if (!best || score > best.score) best = { ...candidate, score };
+              }
+            }
+            if (best) at = best;
           }
           entries.push({
             id: `lava-${kind}-${siteIndex}-${localIndex}`,
@@ -13272,7 +13712,7 @@ diffuseColor.a *= kbBody * kbStream;`);
         const layers = [
           { y: -.31, height: .42, bottom: .94, top: .78, x: -.025, z: .035 },
           { y: .025, height: .33, bottom: .8, top: .64, x: .11, z: -.085 },
-          { y: .345, height: .34, bottom: .68, top: .5, x: -.14, z: .11 },
+          { y: .255, height: .36, bottom: .76, top: .67, x: -.09, z: .07 },
         ];
         for (let layer = 0; layer < layers.length; layer++) {
           const spec = layers[layer];
@@ -13296,6 +13736,11 @@ diffuseColor.a *= kbBody * kbStream;`);
           geometry.applyMatrix4(new T.Matrix4().compose(position, quaternion, scale));
           parts.push(geometry);
         }
+        // The original upper shelf occupied half of the live collider.
+        // This broad flat cap makes the whole standing surface visible.
+        const cap = new T.CylinderGeometry(1, .91, .12, 24);
+        cap.translate(0, .44, 0);
+        parts.push(cap);
         return mergeStaticGeometries(parts);
       };
       const connectiveFamilies = [
@@ -13340,7 +13785,7 @@ diffuseColor.a *= kbBody * kbStream;`);
           features.scratchQuaternion.copy(liftQuatAt(record.x, record.z, new T.Quaternion()))
             .multiply(new T.Quaternion().setFromAxisAngle(UP, recordIndex * .29 + family * .23))
             .multiply(columnHorizontalRing);
-          const accentRadius = record.radius * (family === 1 ? .5 : .54);
+          const accentRadius = record.radius * .89;
           features.scratchScale.setScalar(accentRadius);
           features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
           topAccents.setMatrixAt(slot, features.scratchMatrix);
@@ -13647,13 +14092,13 @@ diffuseColor.a *= kbBody * kbStream;`);
       stackRimMaterial.emissiveIntensity = .29;
       const crownPlates = 6;
       const stackBodyMesh = new T.InstancedMesh(
-        stackBody, stackBodyMaterial, stackSites.length * stackSteps + crownPlates,
+        stackBody, stackBodyMaterial, stackSites.length * (stackSteps * 2 - 1) + crownPlates * 2 - 1,
       );
       const stackRimMesh = new T.InstancedMesh(
         new T.TorusGeometry(1, .048, 4, 22, Math.PI * 1.32),
-        stackRimMaterial, stackSites.length * stackSteps + crownPlates,
+        stackRimMaterial, stackSites.length * (stackSteps * 2 - 1) + crownPlates * 2 - 1,
       );
-      stackBodyMesh.name = 'LAVA · SIXTY FORGE STACK CATWALKS';
+      stackBodyMesh.name = 'LAVA · BROAD FORGE STACK TERRACES';
       stackRimMesh.name = 'LAVA · FORGE STACK LANDING SEAMS';
       // Nothing in this chapter casts a shadow. The sky families live far
       // above the shadow camera's useful volume, so a cast would have bought
@@ -13778,6 +14223,53 @@ diffuseColor.a *= kbBody * kbStream;`);
         });
         stackIndex++;
       }
+      // Insert a broad landing halfway through every old leap. Original
+      // landmark positions and rail-clearance nudges stay put; the climb now
+      // rises by at most 5.7 m per beat, with a real reward on every landing.
+      const originalStackPlates = stackPlates.slice();
+      for (const siteIndex of [...stackSites, 3]) {
+        const route = originalStackPlates.filter(plate => plate.siteIndex === siteIndex)
+          .sort((a, b) => a.step - b.step);
+        for (let step = 0; step < route.length - 1; step++) {
+          const source = route[step].record;
+          const target = route[step + 1].record;
+          const sourceDirection = chartLift(source.x, 0, source.z, new T.Vector3())
+            .sub(PLANET_CENTRE).normalize();
+          const targetDirection = chartLift(target.x, 0, target.z, new T.Vector3())
+            .sub(PLANET_CENTRE).normalize();
+          const midpoint = sourceDirection.add(targetDirection).normalize()
+            .multiplyScalar(PLANET.radius).add(PLANET_CENTRE);
+          const chart = toChartVec(midpoint);
+          const top = (source.top + target.top) * .5;
+          // Leave the previous deck centre in open sky. An oversized middle
+          // terrace became a low ceiling over its approach despite being jumpable.
+          const radius = 10.6 + (step % 4 === 2 ? 1.4 : 0);
+          const thickness = step % 4 === 2 ? 3.1 : 2.6;
+          const bearing = Math.atan2(target.z - source.z, target.x - source.x);
+          setInstance(stackBodyMesh, stackIndex, chart.x, top - thickness * .5, chart.z,
+            bearing, radius, thickness, radius);
+          setInstance(stackRimMesh, stackIndex, chart.x, top + .1, chart.z,
+            bearing + Math.PI * .18, radius * .93, radius * .93, radius * .93, flat);
+          const record = this.registerAuthoredPlanetSolid(profile,
+            `lava-forge-terrace-${siteIndex}-${step}`, chart.x, chart.z,
+            top, top - thickness, radius, {
+              collisionScale: .93, sideScale: .97, supportDepth: thickness + .5,
+              family: 'lava-forge-terrace', siteIndex,
+              biomeId: profile.sites[siteIndex].biome,
+              skyRouteStep: step + .5, role: 'forge-flow-terrace', safe: true,
+              staticFooting: true, forgeStack: true,
+            });
+          record.renderMesh = stackBodyMesh;
+          record.renderIndex = stackIndex;
+          record.renderAuthority = 'same-instanced-catwalk';
+          stackPlates.push({ id: `lava-feature-forge-terrace-${siteIndex}-${step}`,
+            siteIndex, step: step + .5, record,
+            rise: top - profile.heightAt(profile.sites[siteIndex].x, profile.sites[siteIndex].z),
+            crown: siteIndex === 3, terrace: true });
+          stackIndex++;
+        }
+      }
+      stackPlates.sort((a, b) => a.siteIndex - b.siteIndex || a.step - b.step);
       stackBodyMesh.count = stackIndex;
       stackRimMesh.count = stackIndex;
       stackBodyMesh.instanceMatrix.needsUpdate = true;
@@ -14096,7 +14588,7 @@ diffuseColor.a *= kbBody * kbStream;`);
         thesis: 'CLIMB OUT OF EVERY DISTRICT',
         forgeStacks: stackPlates.length,
         forgeStackSites: [...stackSites, 3],
-        crownPlates,
+        crownPlates: stackPlates.filter(plate => plate.crown).length,
         highestStack: Math.max(...stackPlates.map(plate => plate.rise)),
         falls: fallSources.length,
         chainLinks: chainIndex,
@@ -15344,7 +15836,95 @@ diffuseColor.a *= kbBody * kbStream;`);
         entranceExitAuthority: 'eight-step-graded-apron-to-open-axis-safe-floor',
       };
       features.roofedUnderkeep = underkeep;
+      this.makeLavaUnderkeepVault(profile, underkeep);
       return underkeep;
+    }
+    makeLavaUnderkeepVault(profile, keep) {
+      const vault = { complete: false, opening: 0, valves: [], prizes: [] };
+      for (let index = 0; index < keep.floors.length; index++) {
+        const host = keep.floors[index];
+        const offset = surfaceOffsetChartAt(host.x, host.z, -Math.sin(keep.heading),
+          Math.cos(keep.heading), index % 2 ? -4.3 : 4.3, {});
+        const group = new T.Group();
+        group.name = 'UNDERKEEP · COOLING VALVE ' + (index + 1);
+        const material = new T.MeshStandardMaterial({ color: 0xffda80, emissive: 0xff701e,
+          emissiveIntensity: 1.7, roughness: .35, metalness: .68 });
+        const wheel = new T.Mesh(new T.TorusGeometry(1.65, .22, 8, 28), material);
+        const centre = new T.Mesh(new T.IcosahedronGeometry(.8, 1), material);
+        wheel.add(centre);
+        for (let spoke = 0; spoke < 3; spoke++) {
+          const bar = new T.Mesh(new T.BoxGeometry(2.9, .16, .18), material);
+          bar.rotation.z = spoke * Math.PI / 3;
+          wheel.add(bar);
+        }
+        // Face the walkable middle of the corridor from either side wall.
+        wheel.rotation.y = (index % 2 ? 0 : Math.PI) - keep.heading;
+        group.add(wheel);
+        this.placePlanetObject(group, offset.x, keep.floorTop + 2.8, offset.z);
+        profile.root.add(group);
+        const position = group.position.clone();
+        vault.valves.push({ id: 'underkeep-valve-' + index, group, wheel, material,
+          position, host, hit: false, turn: 0, prizes: [] });
+      }
+      const last = keep.floors.at(-1);
+      const group = new T.Group();
+      group.name = 'UNDERKEEP · THREE-VALVE TREASURE CRUCIBLE';
+      const metal = new T.MeshStandardMaterial({ color: 0x333e46, emissive: 0x141820,
+        metalness: .72, roughness: .36 });
+      const bowl = new T.Mesh(new T.TorusGeometry(2.5, .42, 8, 32), metal);
+      bowl.rotation.x = Math.PI / 2;
+      const bars = new T.Group();
+      for (let i=-1;i<=1;i++) {
+        const bar = new T.Mesh(new T.BoxGeometry(4.4, .24, .28), metal);
+        bar.position.z = i * 1.2; bars.add(bar);
+      }
+      bars.position.y = .5;
+      const heart = new T.Mesh(new T.OctahedronGeometry(1.3, 0),
+        new T.MeshStandardMaterial({color:0xffe6a1,emissive:0xffa52b,emissiveIntensity:1.4,metalness:.38,roughness:.25}));
+      heart.position.y = .8;
+      group.add(bowl,bars,heart);
+      const at=surfaceOffsetChartAt(last.x,last.z,Math.cos(keep.heading),Math.sin(keep.heading),4.2,{});
+      this.placePlanetObject(group,at.x,keep.floorTop+.2,at.z);
+      profile.root.add(group);
+      Object.assign(vault,{group,bars,heart,host:last,position:group.position.clone()});
+      keep.vault=vault;
+    }
+    resolveUnderkeepVault(profile, gameState) {
+      const vault=profile.lavaFeatures?.roofedUnderkeep?.vault, ball=gameState.ball;
+      if(!vault || vault.complete || (ball.mode!=='outbound' && ball.mode!=='returning') || ball.velocity.length()<7) return false;
+      for(const valve of vault.valves){
+        if(valve.hit || ball.position.distanceTo(valve.position)>2.1+ball.radius) continue;
+        valve.hit=true;
+        this.releaseCollectibleBurst(profile,valve.prizes,valve.position);
+        this.pulseRing(valve.position,new T.Color(0x9bfff2),5,.4);
+        gameState.impact('break',valve.position,0xffcf6b);
+        audio.impact(.6,'metal');
+        if(vault.valves.every(node=>node.hit)){
+          vault.complete=true;
+          this.releaseCollectibleBurst(profile,vault.prizes,vault.position);
+          this.spawnTrophy(vault.position,0xffce65,1.6);
+          gameState.player.health=gameState.player.maxHealth;
+          gameState.score+=4000;
+          gameState.rewardFlash=Math.max(gameState.rewardFlash,.65);
+          audio.win();
+        }
+        return true;
+      }
+      return false;
+    }
+    updateUnderkeepVault(profile,dt) {
+      const vault=profile.lavaFeatures?.roofedUnderkeep?.vault;
+      if(!vault)return;
+      vault.opening=damp(vault.opening,vault.complete?1:0,3,dt);
+      for(const valve of vault.valves){
+        const next=damp(valve.turn,valve.hit?Math.PI:0,5,dt);
+        valve.wheel.rotateZ(next-valve.turn); valve.turn=next;
+        valve.material.emissive.setHex(valve.hit?0x249aa0:0xff701e);
+        valve.material.emissiveIntensity=valve.hit?.6:1.6+Math.sin(this.elapsed*3)*.25;
+      }
+      vault.bars.position.y=.5+vault.opening*3.6;
+      vault.heart.scale.setScalar(1-vault.opening*.75);
+      vault.heart.material.emissiveIntensity=1.4-vault.opening;
     }
     makeLavaInteractiveFeatures(profile, features) {
       const { basaltMaterial, obsidianMaterial, forgeMaterial, goldMaterial, cooledMaterial } = features.materials;
@@ -15584,6 +16164,7 @@ diffuseColor.a *= kbBody * kbStream;`);
     rewardLavaInteraction(profile, gameState, kind, position, label, value = 1) {
       const progress = gameState.worldProgress[profile.id];
       const paid = Math.max(1, Math.round(value * 4));
+      this.showPaidRewardBurst(profile, position, paid * (value > 1 ? 2 : 1));
       progress[kind] += 1;
       progress.collected += paid;
       gameState.score += 720 * value;
@@ -15610,6 +16191,7 @@ diffuseColor.a *= kbBody * kbStream;`);
       const features = profile.lavaFeatures;
       const ball = gameState.ball;
       if (!features) return false;
+      if (this.resolveUnderkeepVault(profile, gameState)) return true;
       const movingBall = ball.mode === 'outbound' || ball.mode === 'returning';
       // A forge vent can deliver the ball exactly onto its promised socket and
       // the floor solver may settle it one frame before this interaction pass.
@@ -15893,6 +16475,7 @@ diffuseColor.a *= kbBody * kbStream;`);
         trim.capitalMaterial.emissiveIntensity = .29
           + Math.sin(time * .73 + trim.siteIndex * .41) * .045;
       }
+      this.updateUnderkeepVault(profile, dt);
       for (const lamp of features.roofedUnderkeep?.lamps || EMPTY_SOLIDS) {
         const pulse = Math.sin(time * 1.8 + lamp.phase) * .5 + .5;
         lamp.material.opacity = .48 + pulse * .28;
@@ -16159,6 +16742,12 @@ diffuseColor.a *= kbBody * kbStream;`);
     resetLavaWorld(profile) {
       const features = profile.lavaFeatures;
       if (!features) return;
+      const vault = features.roofedUnderkeep?.vault;
+      if(vault){
+        vault.complete=false; vault.opening=0; vault.bars.position.y=.5;
+        vault.heart.scale.setScalar(1);
+        for(const valve of vault.valves){ valve.wheel.rotateZ(-valve.turn); valve.turn=0; valve.hit=false; }
+      }
       features.projectileCursor = 0;
       features.skyForgeStep = 0;
       features.skyForgeComplete = false;
@@ -16224,7 +16813,7 @@ diffuseColor.a *= kbBody * kbStream;`);
       const sceneryHorizontalRing = new T.Quaternion().setFromEuler(new T.Euler(Math.PI / 2, 0, 0));
       const scenerySpecs = [
         { geometry: new T.DodecahedronGeometry(1, 0), material: basaltMaterial.clone(), name: 'BASALT BOULDER FIELDS' },
-        { geometry: new T.BoxGeometry(1, 1, 1), material: forgeMaterial.clone(), name: 'COPPER FURNACE CHIMNEYS' },
+        { geometry: new T.CylinderGeometry(.55, .7, 1, 8), material: forgeMaterial.clone(), name: 'COPPER FURNACE CHIMNEYS' },
         { geometry: new T.TorusGeometry(1, .16, 6, 20), material: forgeMaterial.clone(), name: 'FOUNDRY CHAIN RELICS' },
       ];
       const sceneryKinds = ['boulder', 'chimney', 'chainRelic'];
@@ -16232,6 +16821,7 @@ diffuseColor.a *= kbBody * kbStream;`);
         profile, kind, LAVA_PLACEMENT_MANIFEST.scenery[kind], family,
       ).map((entry, renderIndex) => ({ ...entry, renderFamily: family, renderIndex })));
       features.placementManifest.scenery = sceneryManifests.flat();
+      features.breakableScenery = [];
       for (let family = 0; family < scenerySpecs.length; family++) {
         const spec = scenerySpecs[family];
         spec.material.vertexColors = true;
@@ -16260,6 +16850,25 @@ diffuseColor.a *= kbBody * kbStream;`);
           mesh.setMatrixAt(index, features.scratchMatrix);
           mesh.setColorAt(index, new T.Color(placement.localIndex % 6 === 0
             ? 0xb4603f : placement.localIndex % 4 === 0 ? 0x7c3d34 : 0x56302a));
+          if (family === 0) {
+            features.breakableScenery.push({
+              id: `lava-breakable-boulder-${index}`, index, mesh,
+              alive: true, radius: Math.max(features.scratchScale.x, features.scratchScale.z),
+              position: features.scratchPosition.clone(), matrix: features.scratchMatrix.clone(),
+              siteIndex: placement.siteIndex, biomeId: profile.sites[placement.siteIndex].biome,
+              family: 'basalt-boulder', role: 'garden-breakable',
+              platformId: placement.anchorAuthorityId, containedPickups: [],
+            });
+          } else if (family === 1) {
+            const record = this.registerAuthoredPlanetSolid(profile,
+              `lava-furnace-chimney-${index}`, at.x, at.z,
+              ground + height, ground, features.scratchScale.x * .55, {
+                collisionScale: .94, sideScale: 1.06, supportDepth: height + .2,
+                family: 'solid-furnace-chimney', siteIndex: placement.siteIndex,
+              });
+            record.renderMesh = mesh;
+            record.renderIndex = index;
+          }
         }
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -16297,6 +16906,11 @@ diffuseColor.a *= kbBody * kbStream;`);
         vertexColors: true,
       });
       const cacheRocks = new T.InstancedMesh(cacheGeometry, cacheMaterial, rockCount);
+      const cacheCaps = new T.InstancedMesh(new T.CylinderGeometry(1, .86, .7, 20), cacheMaterial, cacheCount);
+      cacheCaps.name = 'OBSIDIAN CACHE GARDENS · WALKABLE BLACKGLASS CROWNS';
+      cacheCaps.frustumCulled = false;
+      cacheCaps.userData.kbLifted = true;
+      cacheCaps.receiveShadow = true;
       const cacheSeams = new T.InstancedMesh(cacheAccentGeometry, seamMaterial, rockCount);
       cacheRocks.name = 'OBSIDIAN CACHE GARDENS · 480 HARDENED-LAVA STONES';
       cacheSeams.name = 'OBSIDIAN CACHE GARDENS · RESTRAINED TOP CRACKS';
@@ -16323,6 +16937,14 @@ diffuseColor.a *= kbBody * kbStream;`);
           },
         );
         features.obsidianCaches.push(cacheRecord);
+        chartLift(centre.x, cacheRecord.top - .35, centre.z, features.scratchPosition);
+        features.scratchQuaternion.copy(liftQuatAt(centre.x, centre.z, new T.Quaternion()));
+        features.scratchScale.set(cacheRecord.radius, 1, cacheRecord.radius);
+        features.scratchMatrix.compose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
+        cacheCaps.setMatrixAt(cacheIndex, features.scratchMatrix);
+        cacheCaps.setColorAt(cacheIndex, new T.Color(cacheIndex % 3 ? 0x181820 : 0x25212b));
+        cacheRecord.renderMesh = cacheCaps;
+        cacheRecord.renderIndex = cacheIndex;
         for (let stone = 0; stone < rocksPerCache; stone++) {
           const stoneAngle = angle + stone * TAU / (rocksPerCache - 1 || 1) + .27;
           const stoneDistance = stone === 0 ? 0 : 3.2 + (stone % 2) * 1.25;
@@ -16364,10 +16986,42 @@ diffuseColor.a *= kbBody * kbStream;`);
       cacheRocks.instanceMatrix.needsUpdate = cacheSeams.instanceMatrix.needsUpdate = true;
       if (cacheRocks.instanceColor) cacheRocks.instanceColor.needsUpdate = true;
       if (cacheSeams.instanceColor) cacheSeams.instanceColor.needsUpdate = true;
-      profile.root.add(cacheRocks, cacheSeams);
+      cacheCaps.instanceMatrix.needsUpdate = true;
+      if (cacheCaps.instanceColor) cacheCaps.instanceColor.needsUpdate = true;
+      profile.root.add(cacheRocks, cacheSeams, cacheCaps);
+      features.obsidianCacheCaps = cacheCaps;
       cacheRocks.userData.placementManifest = cacheManifest;
       features.obsidianCacheMesh = cacheRocks;
       features.obsidianCacheSeams = cacheSeams;
+
+      // Small breakable stones belong on the blackglass garden tops, where
+      // the player can see and reach them. Ground scatter buried several under
+      // unrelated architecture and made a working breakable look inert.
+      const gardenSlots = profile.sites.map(() => 0);
+      for (const item of features.breakableScenery) {
+        const gardens = features.obsidianCaches.filter(cache => cache.siteIndex === item.siteIndex);
+        if (!gardens.length) continue;
+        const localIndex = gardenSlots[item.siteIndex]++;
+        const host = gardens[localIndex % gardens.length];
+        const entry = sceneryManifests[0][item.index];
+        const yaw = entry.yaw + (localIndex >= gardens.length ? Math.PI : 0);
+        const at = surfaceOffsetChartAt(host.x, host.z, Math.cos(yaw), Math.sin(yaw), 2.8, {});
+        item.matrix.decompose(features.scratchPosition, features.scratchQuaternion, features.scratchScale);
+        chartLift(at.x, host.top + features.scratchScale.y * .84, at.z, item.position);
+        features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
+          .multiply(new T.Quaternion().setFromAxisAngle(UP, yaw));
+        item.matrix.compose(item.position, features.scratchQuaternion, features.scratchScale);
+        item.mesh.setMatrixAt(item.index, item.matrix);
+        item.platformId = host.id;
+        item.chartPosition = new T.Vector3(at.x, host.top + features.scratchScale.y * .84, at.z);
+        entry.x = at.x;
+        entry.z = at.z;
+        entry.yaw = yaw;
+        entry.destinationId = host.destinationId;
+        entry.anchorAuthorityId = host.anchorAuthorityId;
+        entry.anchorRole = profile.platforms.find(record => record.id === host.anchorAuthorityId)?.role;
+      }
+      features.sceneryMeshes[0].instanceMatrix.needsUpdate = true;
 
       // Ember-glass blossoms break up the inherited platform skyline without
       // stealing the glossy-black identity of collectible-bearing caches.
@@ -16418,7 +17072,7 @@ diffuseColor.a *= kbBody * kbStream;`);
         const angle = placement.yaw;
         const at = { x: placement.x, z: placement.z };
         const ground = profile.heightAt(at.x, at.z);
-        const size = 4.2 + placement.localIndex % 6 * 1.05;
+        const size = 3.1 + placement.localIndex % 5 * .68;
         chartLift(at.x, ground + .08, at.z, features.scratchPosition);
         features.scratchQuaternion.copy(liftQuatAt(at.x, at.z, new T.Quaternion()))
           .multiply(new T.Quaternion().setFromAxisAngle(UP, angle));
@@ -17123,8 +17777,21 @@ diffuseColor.a *= kbBody * kbStream;`);
            platformId: platform.id, containedPickups: [],
         });
       }
+      if (!water) {
+        // The small basalt stones were drawn as breakable objects but never
+        // answered the ball. They now use the same hit, spill and restart
+        // lifecycle as every other container, with existing collectible stock.
+        for (const item of profile.lavaFeatures?.breakableScenery || EMPTY_SOLIDS) {
+          item.globalIndex = profile.breakables.length;
+          const context = profile.authorship.collectibleContexts.find(entry =>
+            entry.siteIndex === item.siteIndex);
+          item.contextId = context?.id;
+          profile.breakables.push(item);
+          if (!profile.breakableMeshes.includes(item.mesh)) profile.breakableMeshes.push(item.mesh);
+        }
+      }
       // A visible majority of the economy lives in paths and named gardens,
-      // while every breakable also has a real treasure inside it. These 187
+      // while every breakable also has a real treasure inside it. These
       // pickups begin physically hidden and pop into the world when struck.
       const hideable = profile.collectibles.filter(pickup => pickup.kind !== 'route');
       const hiddenIndices = new Set();
@@ -17232,8 +17899,42 @@ diffuseColor.a *= kbBody * kbStream;`);
         });
         populate({
           id: 'water-leviathan-sky-discoveries', siteIndex: 9,
-          hosts: features.skyReefs, pickupCount: 72, breakableCount: 10,
+          hosts: [features.skyLaunchPedestal, ...features.skyReefs],
+          pickupCount: 88, breakableCount: 10,
         });
+        // These pearls belong to the existing Water stock. Each chamber pays
+        // immediately, then the third resonance releases the larger finale.
+        // The central bloom is the permanent, wordless completion marker.
+        const choir = features.abyssalChoir;
+        if (choir) {
+          const reserve = (host, count, id) => {
+            const picks = profile.collectibles.filter(pickup =>
+              pickup.siteIndex === 3 && pickup.kind !== 'route' && !pickup.hidden
+                && !rehomedPickups.has(pickup)).slice(0, count);
+            for (let index = 0; index < picks.length; index++) {
+              const pickup = picks[index];
+              this.movePlanetPickupToDiscoveryHost(pickup, host, index, 1, id);
+              pickup.containerId = id;
+              pickup.hidden = true;
+              pickup.mesh.setMatrixAt(pickup.index, ZERO_MATRIX);
+              rehomedPickups.add(pickup);
+            }
+            return picks;
+          };
+          for (const node of choir.nodes) {
+            node.prizes = reserve(node.host, 6, node.id + '-prize');
+          }
+          choir.prizes = reserve(choir.nodes[2].host, 24, 'water-abyssal-choir-finale');
+          routes.push({
+            id: 'water-abyssal-choir', siteIndex: 3,
+            hosts: choir.nodes.map(node => node.host),
+            pickups: [...choir.nodes.flatMap(node => node.prizes), ...choir.prizes],
+            pickupCount: choir.nodes.reduce((total, node) => total + node.prizes.length, 0)
+              + choir.prizes.length,
+            breakables: [], breakableCount: 0,
+            economyAuthority: 'rehosted-existing-single-counter-stock',
+          });
+        }
       } else {
         const features = profile.lavaFeatures;
         populate({
@@ -17252,7 +17953,7 @@ diffuseColor.a *= kbBody * kbStream;`);
           populate({
             id: `lava-forge-stack-${siteIndex}-climb`, siteIndex,
             hosts: stacks.filter(plate => !plate.crown && plate.siteIndex === siteIndex),
-            pickupCount: 36, breakableCount: 4,
+            pickupCount: 70, breakableCount: 5,
           });
         }
         // The crown is the top of the world. Site 3 has one container left
@@ -17261,7 +17962,7 @@ diffuseColor.a *= kbBody * kbStream;`);
         populate({
           id: 'lava-forge-crown-climb', siteIndex: 3,
           hosts: stacks.filter(plate => plate.crown),
-          pickupCount: 30, breakableCount: 1,
+          pickupCount: 44, breakableCount: 1,
         });
       }
       for (const toy of profile.galaxyToys?.toys || EMPTY_SOLIDS) {
@@ -17323,6 +18024,36 @@ diffuseColor.a *= kbBody * kbStream;`);
       }
       for (const mesh of profile.collectibleMeshes) mesh.instanceMatrix.needsUpdate = true;
       for (const mesh of profile.breakableMeshes) mesh.instanceMatrix.needsUpdate = true;
+      const vault = profile.lavaFeatures?.roofedUnderkeep?.vault;
+      if(vault){
+        const stock=profile.collectibles.filter(pickup=>pickup.siteIndex===1 && pickup.kind!=='route'
+          && !pickup.hidden && !rehomedPickups.has(pickup)).slice(0,42);
+        stock.forEach((pickup,index)=>{
+          const owner=index<12?vault.valves[Math.floor(index/4)]:vault;
+          this.movePlanetPickupToDiscoveryHost(pickup,owner.host,index,1,'lava-underkeep-valve-vault');
+          pickup.containerId='underkeep-valve-vault'; pickup.hidden=true;
+          pickup.mesh.setMatrixAt(pickup.index,ZERO_MATRIX); pickup.mesh.instanceMatrix.needsUpdate=true;
+          owner.prizes.push(pickup);
+        });
+        routes.push({id:'lava-underkeep-valve-vault',siteIndex:1,hosts:vault.valves.map(v=>v.host),
+          pickups:stock,breakables:[],pickupCount:stock.length,breakableCount:0,economyAuthority:'rehosted-existing-single-counter-stock'});
+      }
+      // A boss gives a visible shower from its own reserved collectible stock.
+      // Reserve only after the authored routes, keeping every platform prize.
+      for (const boss of [...profile.regionalBosses, profile.boss]) {
+        const siteIndex=profile.sites.indexOf(boss.site);
+        const prizes=profile.collectibles.filter(pickup=>pickup.siteIndex===siteIndex
+          && pickup.kind!=='route' && !pickup.hidden && !rehomedPickups.has(pickup))
+          .slice(0,boss.localFinal?54:18);
+        for(let index=0;index<prizes.length;index++){
+          const pickup=prizes[index];
+          this.movePlanetPickupToDiscoveryHost(pickup,boss.arena,index,1,boss.id+'-victory');
+          pickup.containerId=boss.id+'-victory';pickup.hidden=true;
+          pickup.mesh.setMatrixAt(pickup.index,ZERO_MATRIX);pickup.mesh.instanceMatrix.needsUpdate=true;
+          rehomedPickups.add(pickup);
+        }
+        boss.prizes=prizes;
+      }
       profile.discoveryRoutes = routes;
     }
     makePlanetLaunchPads(profile, water) {
@@ -17972,15 +18703,19 @@ diffuseColor.a *= kbBody * kbStream;`);
       const flying = gameState.ball.mode === 'outbound' || gameState.ball.mode === 'returning';
       const ballReach = flying ? 7 + gameState.ball.velocity.length() * .035 : 2.7;
       const touched = new Set();
+      let earnedScore = false, earnedHigh = false;
       for (const pickup of profile.collectibles) {
-        if (!pickup.alive || !pickup.enabled || pickup.hidden || pickup.collecting) continue;
+        if (!pickup.alive || !pickup.enabled || pickup.hidden || pickup.collecting || (pickup.releaseAt || 0) > this.elapsed) continue;
         const ballDistanceSq = pickup.position.distanceToSquared(ball);
         const playerDistanceSq = pickup.position.distanceToSquared(player);
-        if (ballDistanceSq > ballReach * ballReach && playerDistanceSq > 8.2 ** 2) continue;
+        // A won prize finishes its visible eruption, then comes home even if
+        // the returning ball has already left the impact site.
+        const earnedBurst = (pickup.releaseAt || 0) > 0;
+        if (!earnedBurst && ballDistanceSq > ballReach * ballReach && playerDistanceSq > 8.2 ** 2) continue;
         pickup.alive = false;
         pickup.collecting = true;
         pickup.absorbAge = 0;
-        pickup.absorbDuration = pickup.kind === 'rare' ? .34 : pickup.kind === 'route' ? .28 : .22;
+        pickup.absorbDuration = pickup.kind === 'rare' ? .48 : .4;
         pickup.absorbFrom = pickup.position.clone();
         pickup.absorbTarget = ballDistanceSq <= playerDistanceSq ? 'ball' : 'player';
         profile.collectibleAbsorbing.push(pickup);
@@ -17991,8 +18726,10 @@ diffuseColor.a *= kbBody * kbStream;`);
         gameState.score += pickup.value * 90;
         gameState.style = clamp(gameState.style + pickup.value * 1.5, 0, 100);
         this.particles?.burst(pickup.position, profile.theme.accent, 10 + pickup.value * 4, 7, .55, .12);
-        audio.score(pickup.value > 1);
+        if (earnedBurst) { earnedScore = true; earnedHigh ||= pickup.value > 1; }
+        else audio.score(pickup.value > 1);
       }
+      if (earnedScore) audio.score(earnedHigh);
       for (const mesh of touched) mesh.instanceMatrix.needsUpdate = true;
     }
     unlockAlternateFinal(profile, gameState, announce = true) {
@@ -18141,8 +18878,9 @@ diffuseColor.a *= kbBody * kbStream;`);
       audio.win();
       gameState.addStyle(30, 5600, `${boss.name} FALLS`,
         profile.id === 'water' ? '#9ffcff' : '#ffd34f');
-      // The third of five is the moment the court opens, live, with the
-      // announcement and the standing column that goes with it.
+      this.releaseCollectibleBurst(profile, boss.prizes || EMPTY_SOLIDS, boss.position);
+      gameState.celebrateBossDefeat(boss.position, profile.theme.hot, 1);
+      // The fifth regional opens the court, with its standing column.
       if (progress.regionalDefeated >= ALTERNATE_REGIONAL_REQUIRED) {
         this.unlockAlternateFinal(profile, gameState);
       }
@@ -18150,143 +18888,75 @@ diffuseColor.a *= kbBody * kbStream;`);
     }
     resolveRegionalBosses(profile, gameState) {
       const ball = gameState.ball;
-      if (ball.mode !== 'outbound' && ball.mode !== 'returning') return false;
-      const speed = ball.velocity.length();
-      if (speed <= 8) return false;
+      if ((ball.mode !== 'outbound' && ball.mode !== 'returning') || ball.velocity.length() <= 8) return false;
       for (const boss of profile.regionalBosses || EMPTY_SOLIDS) {
         if (!boss.alive || !boss.unlocked) continue;
         boss.group.updateMatrixWorld(true);
         boss.body.getWorldPosition(boss.position);
-        for (const node of boss.weakNodes) {
-          if (!node.alive) continue;
-          node.mesh.getWorldPosition(node.position);
-          const id = `${boss.id}-weak-${node.index}`;
-          if (ball.collisionCooldown.has(id)
-            || ball.position.distanceTo(node.position) > node.radius + ball.radius) continue;
-          const armorFlightKey = `${boss.id}-armor-flight`;
+        const windowOpen = ['breach', 'spit-window', 'lure-window'].includes(boss.mechanic)
+          ? boss.vulnerable : boss.armorHp <= 0;
+        const targets = boss.weakNodes.filter(node => node.alive);
+        const heart = { id: boss.id + '-heart', mesh: boss.core,
+          position: new T.Vector3(), radius: boss.coreRadius, isHeart: true };
+        if (windowOpen) targets.push(heart);
+        const contact = sweepBossContact(ball, boss.collisionMeshes, targets, boss.position, boss.collisionRadius);
+        if (!contact) continue;
+        const target = contact.target;
+        const key = boss.id + (target ? target.isHeart ? '-body' : '-weak-' + target.index : '-locked');
+        if (ball.collisionCooldown.has(key)) return true;
+        ball.collisionCooldown.set(key, target ? .3 : .12);
+        const normal = target
+          ? contact.position.clone().sub(target.position).normalize() : contact.normal;
+        if (normal.lengthSq() < .01) normal.copy(ball.velocity).normalize().negate();
+        const inward = ball.velocity.dot(normal);
+        if (inward < 0 && !ball.comet) ball.velocity.addScaledVector(normal, -1.6 * inward);
+        if (!ball.comet) ball.position.copy(contact.position).addScaledVector(normal, .03);
+        if (!target) {
+          gameState.impact('locked', contact.position, profile.theme.accent);
+          return true;
+        }
+        if (!target.isHeart) {
+          const armorFlightKey = boss.id + '-armor-flight';
           if (boss.mechanic === 'moonfall-plates' && ball.collisionCooldown.has(armorFlightKey)) return true;
-          ball.collisionCooldown.set(id, .3);
-          const needsGrapple = boss.mechanic === 'grapple-pearls' || boss.mechanic === 'chain-locks';
-          const grappled = ball.mode === 'outbound'
-            && (gameState.grappleArmed > 0 || ball.grappleShot);
-          // A visible Ashback plate is an honest ball target. Earlier builds
-          // drew three bright polyhedra on its back but explicitly rejected
-          // every ball hit, while a Moonfall anywhere near the body silently
-          // removed the next plate. Moonfall remains the stylish shortcut;
-          // an aimed kick now does exactly what the visible target promises.
-          if (needsGrapple && !grappled) {
-            gameState.impact('locked', node.position, profile.theme.accent);
-            world.pulseRing(node.position, new T.Color(profile.theme.accent), 5.5, .3, true);
+          const pullLock = boss.mechanic === 'grapple-pearls' || boss.mechanic === 'chain-locks';
+          const grappled = ball.mode === 'outbound' && (gameState.grappleArmed > 0 || ball.grappleShot);
+          target.kickHits = (target.kickHits || 0) + 1;
+          // A loop is quicker to tear with grapple, but a clearly aimed kick
+          // now visibly chips it instead of looking like a dead prop.
+          if (pullLock && !grappled && target.kickHits < 2) {
+            target.mesh.scale.copy(target.baseScale).multiplyScalar(.78);
+            target.mesh.material.emissiveIntensity = 4.2;
+            this.particles?.burst(target.position, profile.theme.hot, 24, 11, .6, .2);
+            gameState.impact('hurt', target.position, profile.theme.hot);
+            audio.impact(.62, 'crystal');
             return true;
           }
-          node.alive = false;
-          node.mesh.visible = false;
+          target.alive = false;
+          target.mesh.visible = false;
+          target.halo.visible = false;
+          if (target.clapper) target.clapper.visible = false;
           if (boss.mechanic === 'moonfall-plates') ball.collisionCooldown.set(armorFlightKey, 30);
           boss.armorHp = Math.max(0, boss.armorHp - 1);
-          boss.phase = boss.armorHp > 0 ? 'armour' : 'core';
-          if (boss.armorHp === 0) {
-            boss.core.visible = true;
-            boss.coreGlow.material.opacity = .58;
-          }
-          gameState.impact('break', node.position, profile.theme.hot);
-          this.particles?.burst(node.position, profile.theme.hot, 42, 16, .9, .24);
-          gameState.addStyle(16, 920,
-            boss.mechanic === 'wing-bells' ? 'WING BELL RUNG'
-              : boss.mechanic === 'chain-locks' ? 'CHAIN LOCK TORN'
-                : boss.mechanic === 'moonfall-plates' ? 'ASHBACK PLATE SHATTERED'
-                : 'PEARL TENTACLE PULLED',
-            profile.id === 'water' ? '#9ffcff' : '#ffd34f');
-          audio.impact(.88, needsGrapple ? 'anchor' : 'crystal');
+          boss.phase = boss.armorHp ? 'armour' : 'core';
+          boss.core.visible = boss.armorHp === 0;
+          boss.coreHalo.visible = boss.armorHp === 0;
+          boss.coreGlow.material.opacity = boss.armorHp === 0 ? .58 : .08;
+          gameState.impact('break', target.position, profile.theme.hot);
+          this.particles?.burst(target.position, profile.theme.hot, 42, 16, .9, .24);
+          world.pulseRing(target.position, new T.Color(profile.theme.hot), 8, .4, true);
+          audio.impact(.88, grappled ? 'anchor' : 'crystal');
           return true;
         }
-
-        const corePosition = boss.core.getWorldPosition(profile.lavaFeatures?.scratchTarget || new T.Vector3());
-        const windowOpen = boss.mechanic === 'breach' || boss.mechanic === 'spit-window'
-          ? boss.vulnerable : boss.armorHp <= 0;
-        // THE TARGET HAS TO COME OUT OF THE BODY. (Alex, 2026-09-07: "often
-        // things you have to hit never come out of the bosses body ... it
-        // really makes you go inside them and you can't hit the sweet spot
-        // from the outside.") Six of these ten cores sit entirely inside the
-        // big reflecting sphere -- measured margins from +2.17 to +8.06 world
-        // units -- so a shot fired from outside met the body boundary on an
-        // earlier frame and was thrown away before its centre ever reached the
-        // target. That is not a hard fight, it is an impossible one: the ball
-        // moves ~1.4 units per frame and the narrowest gap it would have to
-        // skip is 2.17.
-        //
-        // So while the window is open the big sphere is a broad-phase hint
-        // only, and the core is tested against the ball's WHOLE step the way
-        // the repaired local finals already do (sweepBossContact, line 504).
-        // Window shut, the body still blocks and still bounces, exactly as
-        // before -- the rear of the boss is honest armour, not a doorway.
-        const sweepStart = ball.previousPosition
-          && ball.previousPosition.distanceToSquared(ball.position) < 16
-          ? ball.previousPosition : ball.position;
-        const bodyHit = ball.position.distanceTo(boss.position) <= boss.radius + ball.radius;
-        // ...but only from the side the target is actually on, and that has to
-        // be judged where the ball CROSSED IN, not where it is now. Testing the
-        // current step instead let a shot bore straight through the back hull
-        // and then count as a front hit the moment it came out level with the
-        // core -- measured: rear shots went from 0/10 to 10/10, which turns
-        // honest armour into a doorway. So the side is latched on the last
-        // frame the ball was still outside the body and held for the whole
-        // passage. Come round to the exposed face, or hit a wall.
-        // Which way is this shot travelling through the boss? A ball thrown at
-        // the exposed face comes from the core's side and moves INWARD, so its
-        // velocity opposes the body-to-core direction. A ball boring in through
-        // the back moves the same way as that direction. One dot product, no
-        // state to get stale, and it reads the same on the first frame as on
-        // the last.
-        const facing = ball.velocity.dot(
-          this.regionalCoreScratch.copy(corePosition).sub(boss.position)) < 0;
-        const coreHit = !windowOpen
-          // Window shut: unchanged from the shipped build. The body blocks and
-          // the point test only decides where the refusal is drawn.
-          ? ball.position.distanceTo(corePosition) <= boss.coreRadius + ball.radius
-          // Window open and you came in the front: sweep the whole step.
-          : facing
-            ? Number.isFinite(sphereSweepTime(sweepStart, ball.position, corePosition,
-              boss.coreRadius + ball.radius))
-            // Window open but you came through the back: the core is shut for
-            // this passage. Reaching it by boring through the rear hull is not
-            // a hit, it is the thing the hull is there to stop.
-            : false;
-        if (!coreHit && !bodyHit) continue;
-        const coreFlightKey = `${boss.id}-core-flight`;
-        if (boss.mechanic === 'moonfall-plates' && coreHit
-          && ball.collisionCooldown.has(coreFlightKey)) return true;
-        const id = `${boss.id}-body`;
-        if (ball.collisionCooldown.has(id)) return true;
-        if (!windowOpen || !coreHit) {
-          // A refused shot no longer holds the damage door shut. This used to
-          // set the same 0.3 s key a real hit sets, so the follow-up that
-          // finally found the core was discarded on arrival.
-          const lockId = `${boss.id}-locked`;
-          if (ball.collisionCooldown.has(lockId)) return true;
-          ball.collisionCooldown.set(lockId, .12);
-          gameState.impact('locked', coreHit ? corePosition : boss.position, profile.theme.accent);
-          const away = ball.position.clone().sub(boss.position);
-          if (away.lengthSq() > 1e-6) {
-            away.normalize();
-            const along = ball.velocity.dot(away);
-            if (along < 0 && !ball.comet) ball.velocity.addScaledVector(away, -1.65 * along);
-          }
-          return true;
-        }
-        ball.collisionCooldown.set(id, .3);
+        const coreFlightKey = boss.id + '-core-flight';
+        if (boss.mechanic === 'moonfall-plates' && ball.collisionCooldown.has(coreFlightKey)) return true;
         boss.hp--;
         if (boss.mechanic === 'moonfall-plates') ball.collisionCooldown.set(coreFlightKey, 30);
         boss.hitFlash = 1;
         boss.phase = boss.hp > 0 ? 'core' : 'defeated';
-        gameState.impact(boss.hp <= 0 ? 'break' : 'hurt', corePosition, profile.theme.hot);
-        gameState.addStyle(20, 1250, boss.hp > 0 ? `${boss.name} HEART` : `${boss.name} BROKEN`,
+        gameState.impact(boss.hp <= 0 ? 'break' : 'hurt', target.position, profile.theme.hot);
+        world.pulseRing(target.position, new T.Color(profile.theme.hot), 10, .4, true);
+        gameState.addStyle(20, 1250, boss.hp > 0 ? boss.name + ' HEART' : boss.name + ' BROKEN',
           profile.id === 'water' ? '#ff9dd5' : '#ffd35a');
-        const away = ball.position.clone().sub(corePosition);
-        if (away.lengthSq() > 1e-6) {
-          away.normalize();
-          const along = ball.velocity.dot(away);
-          if (along < 0 && !ball.comet) ball.velocity.addScaledVector(away, -1.45 * along);
-        }
         if (boss.hp <= 0) this.defeatRegionalBoss(profile, boss, gameState);
         return true;
       }
@@ -18304,6 +18974,7 @@ diffuseColor.a *= kbBody * kbStream;`);
       node.mesh.getWorldPosition(node.position);
       node.alive = false;
       node.mesh.visible = false;
+      if (node.halo) node.halo.visible = false;
       boss.armorHp = Math.max(0, boss.armorHp - 1);
       boss.phase = boss.armorHp > 0 ? 'armour' : 'core';
       if (boss.armorHp === 0) {
@@ -18329,6 +19000,19 @@ diffuseColor.a *= kbBody * kbStream;`);
         boss.motionTime += dt;
         const radial = surfaceDistanceAt(playerChart.x, playerChart.z, boss.baseX, boss.baseZ);
         boss.engaged = radial < boss.threatRadius;
+        // Ground-level encounters cannot be seen through the sphere. Keep a
+        // generous horizon margin, extending it with the player's altitude
+        // so the same bosses remain visible from a sky route. Dormant bosses
+        // retain their cycle but do no mesh animation until the approach.
+        const horizon = PLANET_RADIUS * (Math.acos(PLANET_RADIUS / (PLANET_RADIUS + Math.max(0, playerChart.y)))
+          + Math.acos(PLANET_RADIUS / (PLANET_RADIUS + Math.max(80, boss.baseAltitude + 65))));
+        boss.group.visible = radial < Math.max(360, horizon + 60);
+        if (!boss.group.visible) {
+          boss.attackTimer = Math.max(boss.attackTimer, 1.35);
+          boss.attackWave = 0;
+          boss.attackRing.visible = false;
+          continue;
+        }
         let lift = 0;
         if (boss.mechanic === 'breach') {
           const cycle = boss.motionTime % 4.5;
@@ -18341,7 +19025,7 @@ diffuseColor.a *= kbBody * kbStream;`);
           const cycle = boss.motionTime % 4.6;
           const pop = smoothstep(.1, .72, cycle) * (1 - smoothstep(2.25, 3.3, cycle));
           lift = -12 + pop * 12;
-          boss.vulnerable = cycle >= .78 && cycle <= 1.75;
+          boss.vulnerable = cycle >= .78 && cycle <= 2.3;
           const serial = Math.floor(boss.motionTime / 4.6);
           if (boss.engaged && boss.vulnerable && serial !== boss.projectileSerial
             && profile.lavaFeatures) {
@@ -18351,6 +19035,42 @@ diffuseColor.a *= kbBody * kbStream;`);
               mouthPosition: boss.projectileMouthPosition ||= new T.Vector3(),
             };
             this.launchLavaProjectile(profile, profile.lavaFeatures, adapter, gameState, playerChart);
+          }
+        } else if (boss.mechanic === 'lure-window') {
+          const cycle = boss.motionTime % 5.6;
+          lift = 1.5 + Math.sin(boss.motionTime * .9) * 1.2;
+          boss.vulnerable = cycle >= 1.25 && cycle <= 3.55;
+          boss.body.scale.copy(boss.bodyBaseScale).multiplyScalar(boss.vulnerable ? .94 : 1);
+        } else if (boss.mechanic === 'lantern-bell' || boss.mechanic === 'furnace-wings') {
+          lift = 4 + Math.sin(boss.motionTime * 1.25) * 2.5;
+          boss.vulnerable = boss.armorHp <= 0;
+          for (let i = 0; i < boss.motionParts.length; i++) {
+            const part = boss.motionParts[i];
+            part.mesh.rotation.z = part.rotation.z + Math.sin(boss.motionTime * 2.2 + i * Math.PI) * .16;
+          }
+          if (boss.mechanic === 'lantern-bell') {
+            const breathe = 1 + Math.sin(boss.motionTime * 2.2) * .05;
+            boss.body.scale.copy(boss.bodyBaseScale).multiplyScalar(breathe);
+          }
+        } else if (boss.mechanic === 'organ-pipes') {
+          boss.vulnerable = boss.armorHp <= 0;
+          for (let i = 0; i < boss.motionParts.length; i++) {
+            const part = boss.motionParts[i];
+            part.mesh.position.y = part.position.y + Math.max(0, Math.sin(boss.motionTime * 2.6 - i * .9)) * .85;
+          }
+        } else if (boss.mechanic === 'glass-satellites' || boss.mechanic === 'current-crown') {
+          lift = 2 + Math.sin(boss.motionTime) * 1.8;
+          boss.vulnerable = boss.armorHp <= 0;
+          for (let i = 0; i < boss.motionParts.length; i++) {
+            const part = boss.motionParts[i];
+            part.mesh.rotation.y = part.rotation.y + Math.sin(boss.motionTime * 1.7 + i) * .15;
+          }
+        } else if (boss.mechanic === 'stinger-locks' || boss.mechanic === 'resonance-spines') {
+          boss.vulnerable = boss.armorHp <= 0;
+          lift = .8 + Math.abs(Math.sin(boss.motionTime * 1.4)) * 1.2;
+          for (let i = 0; i < boss.motionParts.length; i++) {
+            const part = boss.motionParts[i];
+            part.mesh.rotation.z = part.rotation.z + Math.sin(boss.motionTime * 1.5 + i * .6) * .08;
           }
         } else if (boss.mechanic === 'wing-bells') {
           lift = 8 + Math.sin(boss.motionTime * .7) * 4;
@@ -18372,6 +19092,10 @@ diffuseColor.a *= kbBody * kbStream;`);
           boss.vulnerable = boss.armorHp <= 0;
         }
         chartLift(boss.baseX, boss.baseAltitude + lift, boss.baseZ, boss.group.position);
+        // The creature can breach or hover, but its ground-wave warning and
+        // crest stay on the court. Counteract the parent's radial bob in local
+        // space so the visible ring and its damage band share one altitude.
+        boss.attackRing.position.y = .28 - lift / boss.groupBaseScale.y;
         boss.group.updateMatrixWorld(true);
         boss.body.getWorldPosition(boss.position);
         boss.chartPosition.set(
@@ -18384,8 +19108,15 @@ diffuseColor.a *= kbBody * kbStream;`);
           node.mesh.rotation.y += dt * (1 + node.index * .35);
         }
         const exposed = boss.mechanic === 'breach' || boss.mechanic === 'spit-window'
-          ? boss.vulnerable : boss.armorHp <= 0;
+          || boss.mechanic === 'lure-window' ? boss.vulnerable : boss.armorHp <= 0;
         boss.core.visible = exposed;
+        boss.coreHalo.visible = exposed;
+        boss.coreHalo.rotation.z += dt * 1.1;
+        boss.coreHalo.scale.setScalar(1 + Math.sin(gameState.time * 6) * .045);
+        for (const node of boss.weakNodes) {
+          node.halo.visible = node.alive;
+          node.halo.scale.setScalar(1 + Math.sin(gameState.time * 5 + node.index) * .045);
+        }
         boss.coreGlow.material.opacity = damp(boss.coreGlow.material.opacity, exposed ? .58 : .08, 5, dt);
         boss.core.rotation.y += dt * (exposed ? 3.5 : .5);
         boss.core.material.emissiveIntensity = 2.1 + boss.hitFlash * 4
@@ -18406,9 +19137,15 @@ diffuseColor.a *= kbBody * kbStream;`);
           boss.attackRing.scale.setScalar(boss.waveRadius / (12 * boss.groupBaseScale.x));
           const playerClearance = playerChart.y
             - this.floorHeight(playerChart.x, playerChart.z, playerChart.y + 8);
+          // Grounded on a sky deck is not grounded in this shockwave.
+          // Match the actual tangent ring's radial altitude (including its
+          // curvature lift) instead of hitting every floor above the court.
+          const ringAltitude = Math.hypot(PLANET_RADIUS + boss.baseAltitude
+            + .28 * boss.groupBaseScale.y, boss.waveRadius) - PLANET_RADIUS;
           if (boss.attackHitSerial !== boss.attackSerial
             && radial >= boss.wavePrevious - 2.8 && radial <= boss.waveRadius + 2.8
-            && radial >= 8.5 && playerClearance < 5.2) {
+            && radial >= 8.5 && playerClearance < 5.2
+            && Math.abs(playerChart.y - ringAltitude) < 5.2) {
             boss.attackHitSerial = boss.attackSerial;
             gameState.damagePlayer({ position: boss.chartPosition });
             setVspeed(gameState.player.velocity, gameState.player.up,
@@ -18470,6 +19207,13 @@ diffuseColor.a *= kbBody * kbStream;`);
         boss.body.position.copy(boss.bodyBasePosition);
         boss.core.visible = false;
         boss.core.scale.copy(boss.coreBaseScale);
+        boss.coreHalo.visible = false;
+        boss.coreHalo.scale.setScalar(1);
+        for (const part of boss.motionParts) {
+          part.mesh.rotation.copy(part.rotation);
+          part.mesh.position.copy(part.position);
+          part.mesh.scale.copy(part.scale);
+        }
         boss.coreGlow.material.opacity = .08;
         boss.attackRing.visible = false;
         boss.attackRing.material.opacity = 0;
@@ -18479,6 +19223,11 @@ diffuseColor.a *= kbBody * kbStream;`);
           node.mesh.scale.copy(node.baseScale);
           node.mesh.position.copy(node.basePosition);
           node.mesh.quaternion.copy(node.baseQuaternion);
+          node.kickHits = 0;
+          node.mesh.material.emissiveIntensity = 2.1;
+          node.halo.visible = true;
+          node.halo.scale.setScalar(1);
+          if (node.clapper) node.clapper.visible = true;
         }
       }
       if (profile.finalSeal) {
@@ -18532,14 +19281,9 @@ diffuseColor.a *= kbBody * kbStream;`);
         // The prize is real crescents, not a number: they were parked hidden
         // around this core and they appear exactly where the ball now is, so
         // the return sweep collects them on its way home.
-        let released = 0;
-        for (const pickup of toy.prizes) {
-          if (!pickup.alive || !pickup.hidden) continue;
-          pickup.hidden = false;
-          pickup.mesh.setMatrixAt(pickup.index, pickup.matrix);
-          pickup.mesh.instanceMatrix.needsUpdate = true;
-          released++;
-        }
+        const prizes = toy.prizes.filter(pickup => pickup.alive && pickup.hidden);
+        const released = prizes.length;
+        this.releaseCollectibleBurst(profile, prizes, toy.position);
         gameState.impact('break', toy.position, profile.theme.hot);
         this.particles?.burst(toy.position, profile.theme.hot, 46, 17, .95, .26);
         this.particles?.burst(toy.position, profile.theme.accent, 24, 11, .7, .18);
@@ -18628,6 +19372,8 @@ diffuseColor.a *= kbBody * kbStream;`);
         if (profile.finalSeal.column) profile.finalSeal.column.visible = false;
       }
       this.revealPlanetConstellation(profile.id, true);
+      this.releaseCollectibleBurst(profile, boss.prizes || EMPTY_SOLIDS, boss.position);
+      gameState.celebrateBossDefeat(boss.position, profile.theme.hot, 1.6);
       gameState.score += 12000;
       gameState.rewardFlash = 1;
       this.particles?.burst(boss.position, profile.theme.hot, 150, 31, 1.7, .45);
@@ -18744,6 +19490,7 @@ diffuseColor.a *= kbBody * kbStream;`);
         pickup.mesh.instanceMatrix.needsUpdate = true;
         world.pulseRing(pickup.position, new T.Color(profile.theme.hot), 4.5, .34, true);
       }
+      this.releaseCollectibleBurst(profile, item.containedPickups || EMPTY_SOLIDS, item.position);
       audio.impact(clamp(force / 38, .2, .9), 'rock');
       return true;
     }
@@ -18847,6 +19594,8 @@ diffuseColor.a *= kbBody * kbStream;`);
         mesh.rotation.set(0, 0, 0);
         mesh.material.emissiveIntensity = 2.1 + Math.sin(clock * 3.2) * .38;
       }
+      this.updatePaidRewardBursts(profile, dt, gameState);
+      this.updateCollectibleBursts(profile);
       if (profile.collectibleAbsorbing?.length) {
         const matrix = new T.Matrix4();
         const position = new T.Vector3();
@@ -18859,7 +19608,8 @@ diffuseColor.a *= kbBody * kbStream;`);
           const raw = clamp(pickup.absorbAge / pickup.absorbDuration, 0, 1);
           const amount = smootherstep(0, 1, raw);
           const target = pickup.absorbTarget === 'ball' ? gameState.ball.position : gameState.player.position;
-          position.copy(pickup.absorbFrom).lerp(target, amount);
+          position.copy(pickup.absorbFrom).lerp(target, amount * amount);
+          position.addScaledVector(dirAt(pickup.absorbFrom, new T.Vector3()), Math.sin(raw * Math.PI) * 1.8);
           quaternion.copy(pickup.quaternion)
             .multiply(new T.Quaternion().setFromAxisAngle(UP, amount * TAU * 1.8));
           const size = Math.max(.001, 1 - amount * amount);
@@ -19263,6 +20013,8 @@ diffuseColor.a *= kbBody * kbStream;`);
         pickup.alive = true;
         pickup.collecting = false;
         pickup.absorbAge = 0;
+        pickup.releaseAt = 0;
+        pickup.releaseFrom = null;
         pickup.hidden = !!pickup.containerId;
         pickup.position.copy(pickup.homePosition);
         pickup.chartPosition.copy(pickup.homeChartPosition);
@@ -19273,6 +20025,9 @@ diffuseColor.a *= kbBody * kbStream;`);
         if (pickup.routeRail) pickup.routePresentationVisible = !!routeVisible;
       }
       if (profile.collectibleAbsorbing) profile.collectibleAbsorbing.length = 0;
+      if (profile.collectibleReleasing) profile.collectibleReleasing.length = 0;
+      if (profile.paidRewardParticles) profile.paidRewardParticles.length = 0;
+      if (profile.paidRewardMesh) profile.paidRewardMesh.count = 0;
       for (const mesh of profile.collectibleMeshes) mesh.instanceMatrix.needsUpdate = true;
       for (const item of profile.breakables) {
         item.alive = true;
@@ -20473,6 +21228,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           .addScaledVector(dir, 1.3);
         record.position.copy(position);
         record.alive = true;
+        record.releaseAt = this.elapsed + .38;
+        record.releaseFrom = at.clone();
         record.layer = this.activeLayer;
         quaternion.setFromUnitVectors(UP, dir);
         matrix.compose(position, quaternion, ONE_SCALE);
@@ -20483,6 +21240,115 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       this.stonePoolMesh.instanceMatrix.needsUpdate = true;
       this.syncStonePoolDrawRange(this.activeLayer);
       this.particles.burst(at, 0xffd66b, Math.min(18, 6 + amount * 2), 8, .6, .3);
+    }
+    updateRewardBursts(dt) {
+      const matrix = new T.Matrix4(), point = new T.Vector3(), up = new T.Vector3();
+      const quat = new T.Quaternion(), scale = new T.Vector3();
+      for (const drop of this.stoneSlots || EMPTY_SOLIDS) {
+        if (!drop.alive || !drop.releaseFrom || drop.layer !== this.activeLayer || this.activePlanet !== 'moon') continue;
+        const t = clamp(1 - (drop.releaseAt - this.elapsed) / .38, 0, 1);
+        dirAt(drop.releaseFrom, up);
+        point.copy(drop.releaseFrom).lerp(drop.position, smootherstep(0, 1, t))
+          .addScaledVector(up, Math.sin(t * Math.PI) * 2.4);
+        quat.setFromUnitVectors(UP, up);
+        scale.setScalar(.5 + Math.sin(t * Math.PI) * .65 + t * .5);
+        matrix.compose(point, quat, scale);
+        drop.mesh.setMatrixAt(drop.index, t >= 1 ? drop.matrix : matrix);
+        drop.mesh.instanceMatrix.needsUpdate = true;
+        if (t >= 1) drop.releaseFrom = null;
+      }
+    }
+    showPaidRewardBurst(profile, at, amount) {
+      // Existing machinery awards immediately; this pooled ceremony visualizes
+      // that exact payment without creating a second collectible or currency.
+      if (!profile.paidRewardMesh) {
+        const mesh=new T.InstancedMesh(this.moondropMesh.geometry.clone(),
+          new T.MeshStandardMaterial({color:0xffed9d,emissive:0xffb43a,
+            emissiveIntensity:2,roughness:.24,metalness:.32}),32);
+        mesh.name=profile.id+' machinery reward crescents';
+        mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.frustumCulled=false;
+        mesh.userData.kbLifted=true;profile.root.add(mesh);profile.paidRewardMesh=mesh;
+        profile.paidRewardParticles=[];
+        for(let i=0;i<32;i++)mesh.setMatrixAt(i,ZERO_MATRIX);
+      }
+      const up=dirAt(at,new T.Vector3()),east=new T.Vector3(-up.z,0,up.x);
+      if(east.lengthSq()<1e-6)east.set(1,0,0);east.normalize();
+      const north=new T.Vector3().crossVectors(up,east);
+      const count=Math.min(32,Math.max(1,Math.round(amount)));
+      const emitted=Array.from({length:count},(_,index)=>{
+        const angle=index*2.39996323,reach=2.2+(index%5)*.62;
+        return {from:at.clone(),up:up.clone(),peak:at.clone().addScaledVector(up,2.8+(index%3)*.5)
+          .addScaledVector(east,Math.cos(angle)*reach).addScaledVector(north,Math.sin(angle)*reach),t:0};
+      });
+      profile.paidRewardParticles.push(...emitted);
+      if(profile.paidRewardParticles.length>32) profile.paidRewardParticles.splice(0,profile.paidRewardParticles.length-32);
+      profile.paidRewardMesh.count=profile.paidRewardParticles.length;
+    }
+    updatePaidRewardBursts(profile,dt,gameState) {
+      if(!profile.paidRewardParticles?.length)return;
+      const matrix=new T.Matrix4(),point=new T.Vector3(),quat=new T.Quaternion(),scale=new T.Vector3();
+      let live=false;
+      profile.paidRewardParticles.forEach((p,index)=>{
+        p.t+=dt;
+        if(p.t>=.95){profile.paidRewardMesh.setMatrixAt(index,ZERO_MATRIX);return;}
+        live=true;
+        if(p.t<.38){point.copy(p.from).lerp(p.peak,smootherstep(0,.38,p.t));scale.setScalar(.65+p.t*1.6);}
+        else{const t=clamp((p.t-.38)/.57,0,1);point.copy(p.peak).lerp(gameState.ball.position,t*t);scale.setScalar(Math.max(.01,1.25*(1-t*t)));}
+        quat.setFromUnitVectors(UP,p.up).multiply(new T.Quaternion().setFromAxisAngle(UP,p.t*10));
+        matrix.compose(point,quat,scale);profile.paidRewardMesh.setMatrixAt(index,matrix);
+      });
+      profile.paidRewardMesh.instanceMatrix.needsUpdate=true;
+      if(!live){profile.paidRewardParticles.length=0;profile.paidRewardMesh.count=0;}
+    }
+    releaseEnemyPrizes(profile, enemy, origin) {
+      const centre=toChartVec(origin.clone());
+      const floor=this.floorHeight(centre.x,centre.z,centre.y+3);
+      for(let index=0;index<(enemy.prizes?.length||0);index++){
+        const pickup=enemy.prizes[index];
+        if(!pickup.alive)continue;
+        const angle=index*2.39996323;
+        const at=surfaceOffsetChartAt(centre.x,centre.z,Math.cos(angle),Math.sin(angle),1.8,{});
+        const top=Math.max(floor,this.floorHeight(at.x,at.z,floor+2));
+        // Aerial defeats should pay along the ball's return path, rather than
+        // flinging a sky creature's treasure all the way to the surface.
+        const rewardAltitude=Math.max(top+1.6,centre.y-4.5);
+        pickup.chartPosition.set(at.x,rewardAltitude,at.z);
+        chartLift(at.x,rewardAltitude,at.z,pickup.position);
+        liftQuatAt(at.x,at.z,pickup.quaternion);
+      }
+      this.releaseCollectibleBurst(profile,enemy.prizes||EMPTY_SOLIDS,origin);
+    }
+    releaseCollectibleBurst(profile, pickups, origin) {
+      profile.collectibleReleasing ||= [];
+      for (const pickup of pickups) {
+        if (!pickup.alive || pickup.collecting) continue;
+        pickup.hidden = false;
+        pickup.releaseAt = this.elapsed + .38;
+        pickup.releaseFrom = origin.clone();
+        if (!profile.collectibleReleasing.includes(pickup)) profile.collectibleReleasing.push(pickup);
+        const matrix = new T.Matrix4().compose(origin, pickup.quaternion, new T.Vector3(.5,.5,.5));
+        pickup.mesh.setMatrixAt(pickup.index, matrix);
+        pickup.mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+    updateCollectibleBursts(profile) {
+      if (!profile.collectibleReleasing?.length) return;
+      const matrix = new T.Matrix4(), point = new T.Vector3(), up = new T.Vector3(), scale = new T.Vector3();
+      for (let i = profile.collectibleReleasing.length - 1; i >= 0; i--) {
+        const pickup = profile.collectibleReleasing[i];
+        if (!pickup.alive || pickup.collecting || !pickup.releaseFrom) {
+          profile.collectibleReleasing.splice(i, 1); continue;
+        }
+        const t = clamp(1 - (pickup.releaseAt - this.elapsed) / .38, 0, 1);
+        dirAt(pickup.releaseFrom, up);
+        point.copy(pickup.releaseFrom).lerp(pickup.position, smootherstep(0, 1, t))
+          .addScaledVector(up, Math.sin(t * Math.PI) * 2.5);
+        scale.setScalar(.5 + Math.sin(t * Math.PI) * .6 + t * .5);
+        matrix.compose(point, pickup.quaternion, scale);
+        pickup.mesh.setMatrixAt(pickup.index, matrix);
+        pickup.mesh.instanceMatrix.needsUpdate = true;
+        if (t >= 1) { pickup.releaseFrom = null; profile.collectibleReleasing.splice(i, 1); }
+      }
     }
     // Lobbed snowballs: chart-space ballistics, an instanced pool of eight.
     throwSnowball(fromChart, targetChart) {
@@ -20547,19 +21413,27 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // A boss core rises from the kill, spins for a beat, then streaks to the
     // ball. The grant itself is instant (state never waits on a cosmetic);
     // this is the ceremony that makes the grant readable.
-    spawnTrophy(at, color) {
+    spawnTrophy(at, color, size = 1.8) {
       this.flyingTrophies = this.flyingTrophies || [];
       const mesh = new T.Mesh(
-        new T.OctahedronGeometry(.95, 0),
+        new T.OctahedronGeometry(size, 0),
         new T.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2.6, roughness: .3, metalness: .4 }),
       );
-      const glow = this.makeGlowSprite(this.glowGold, 5.5, .5);
+      const glow = this.makeGlowSprite(this.glowGold, size * 5.2, .44);
       glow.material = glow.material.clone();
       glow.material.color.set(color);
       mesh.add(glow);
+      for (let band = 0; band < 2; band++) {
+        const ring = new T.Mesh(new T.TorusGeometry(size * (1.45 + band * .36), size * .075, 6, 32),
+          new T.MeshStandardMaterial({ color: band ? 0xfff3d2 : color, emissive: color,
+            emissiveIntensity: 1.7, metalness: .6, roughness: .24 }));
+        ring.rotation.set(Math.PI * (.24 + band * .34), band * .7, band * .6);
+        mesh.add(ring);
+      }
       mesh.position.copy(at);
       this.scene.add(mesh);
-      this.flyingTrophies.push({ mesh, from: at.clone(), up: dirAt(at, new T.Vector3()).clone(), t: 0 });
+      this.flyingTrophies.push({ mesh, from: at.clone(), up: dirAt(at, new T.Vector3()).clone(),
+        planet: this.activePlanet, layer: this.activeLayer, t: 0 });
     }
     takeMoondrop(drop) {
       if (!drop.alive) return false;
@@ -24611,6 +25485,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             radius: 4.45, hit: false, flash: 0, active: index === 0,
           });
         });
+        challenge.reward = 12 + challenge.targets.length * 3;
         this.stationChallenges.push(challenge);
       }
     }
@@ -31617,6 +32492,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         }
       }
       this.updateSnowballs(dt, gameState);
+      this.updateRewardBursts(dt);
       if (this.absorbing?.length) {
         // Two beats, not one: the crescent pops up and SPINS where you found
         // it (so drops buried in a kill are still seen), then streaks home.
@@ -31735,6 +32611,15 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const ballAt = gameState.ball.position;
         for (let i = this.flyingTrophies.length - 1; i >= 0; i--) {
           const fly = this.flyingTrophies[i];
+          if (fly.planet !== this.activePlanet || fly.layer !== this.activeLayer) {
+            this.scene.remove(fly.mesh);
+            fly.mesh.traverse(child => {
+              if (child.isMesh) child.geometry?.dispose();
+              child.material?.dispose();
+            });
+            this.flyingTrophies.splice(i, 1);
+            continue;
+          }
           fly.t += dt;
           fly.mesh.rotateOnWorldAxis(fly.up, dt * (4 + fly.t * 5));
           if (fly.t < .95) {
@@ -31749,10 +32634,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             this.pulseRing(ballAt, new T.Color(fly.mesh.material.color.getHex()), 5, .4);
             audio.score(true);
             this.scene.remove(fly.mesh);
-            fly.mesh.geometry.dispose();
-            fly.mesh.material.dispose();
-            const flyGlow = fly.mesh.children[0];
-            if (flyGlow?.material) flyGlow.material.dispose();
+            fly.mesh.traverse(child => {
+              if (child.isMesh) child.geometry?.dispose();
+              child.material?.dispose();
+            });
             this.flyingTrophies.splice(i, 1);
           }
         }
@@ -32612,6 +33497,23 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           }
         }
         profile.enemies = this.enemies.filter(enemy => enemy.planet === planet);
+        // Defeating a creature visibly frees the same crescents as a cache.
+        // Use unassigned stock so curated routes and boss prizes stay intact.
+        const enemyStock=profile.collectibles.filter(pickup=>!pickup.hidden && !pickup.containerId
+          && !pickup.discoveryRouteId && pickup.kind!=='route');
+        for(const enemy of profile.enemies){
+          // Enemy objects are rebuilt on restart; their stable IDs rebind the
+          // same reserved stock instead of hiding a fresh batch on every run.
+          enemy.prizes=profile.collectibles.filter(pickup=>pickup.containerId===enemy.id+'-prize');
+          for(let n=enemy.prizes.length;n<Math.min(3,Math.max(2,enemy.maxHp));n++){
+            let index=enemyStock.findIndex(pickup=>pickup.siteIndex===enemy.siteIndex);
+            if(index<0)index=0;
+            const pickup=enemyStock.splice(index,1)[0];if(!pickup)break;
+            pickup.containerId=enemy.id+'-prize';pickup.hidden=true;
+            pickup.mesh.setMatrixAt(pickup.index,ZERO_MATRIX);pickup.mesh.instanceMatrix.needsUpdate=true;
+            enemy.prizes.push(pickup);
+          }
+        }
         profile.authorship.parity.enemyBodies = profile.enemies.length;
         profile.authorship.parity.enemyArchetypes = new Set(profile.enemies.map(enemy => enemy.type)).size;
         // Biomes are certified only now, after the live cast exists. Each
@@ -32964,10 +33866,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if (world.flyingTrophies) {
         for (const fly of world.flyingTrophies) {
           world.scene.remove(fly.mesh);
-          fly.mesh.geometry.dispose();
-          fly.mesh.material.dispose();
-          const glow = fly.mesh.children[0];
-          if (glow?.material) glow.material.dispose();
+          fly.mesh.traverse(child => {
+            if (child.isMesh) child.geometry?.dispose();
+            child.material?.dispose();
+          });
         }
         world.flyingTrophies.length = 0;
       }
@@ -33292,9 +34194,6 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
 
       if (world.activePlanet !== 'moon') {
         this.updatePlanetSurface(dt);
-        for (const boss of world.currentSurface()?.bosses || EMPTY_SOLIDS) {
-          if (boss.alive && boss.engaged) this.feelThreat(boss.position, boss.threatRadius || 82);
-        }
       } else if (world.activeLayer === 'surface') {
         this.updateRegions(dt);
         this.updateLandmarks(dt);
@@ -35335,21 +36234,27 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       const flying = this.ball.mode === 'outbound' || this.ball.mode === 'returning';
       const ballReach = flying ? 6.2 + this.ball.velocity.length() * .03 : 2.4;
       const ballReachSq = ballReach * ballReach;
+      let earnedScore = false, earnedPulse = false;
       for (const drop of drops) {
-        if (!drop.alive || drop.layer !== world.activeLayer) continue;
+        if (!drop.alive || drop.layer !== world.activeLayer || (drop.releaseAt || 0) > world.elapsed) continue;
         const taken = drop.position.distanceToSquared(ball) < ballReachSq
           || drop.position.distanceToSquared(player) < 7.3 ** 2;
-        if (!taken || !world.takeMoondrop(drop)) continue;
+        const earnedBurst = (drop.releaseAt || 0) > 0;
+        if ((!taken && !earnedBurst) || !world.takeMoondrop(drop)) continue;
         this.drops++;
         this.score += 60;
-        audio.score(false);
+        if (earnedBurst) earnedScore = true;
+        else audio.score(false);
         // Every sixth is worth a beat of its own: the ball visibly gains a
         // ring of light, and a run of five feels like it is building to it.
         if (this.drops % 6 === 0) {
           this.shake = Math.max(this.shake, .12);
-          world.pulseRing(ball, new T.Color(0x9defff), 6.5, .42);
+          if (earnedBurst) earnedPulse = true;
+          else world.pulseRing(ball, new T.Color(0x9defff), 6.5, .42);
         }
       }
+      if (earnedScore) audio.score(false);
+      if (earnedPulse) world.pulseRing(ball, new T.Color(0x9defff), 6.5, .42);
       // FULL MOONS: worth five, and the take is worth a real beat.
       if (world.fullmoons) {
         const moonReachSq = (flying ? ballReach + 1.6 : 3.4) ** 2;
@@ -36070,6 +36975,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       if ((enemy.planet || 'moon') === 'moon') {
         world.spawnStones(hitPosition, clamp(1 + enemy.maxHp, 2, 6), 2.6);
       } else {
+        world.releaseEnemyPrizes(world.currentSurface(), enemy, hitPosition);
         world.particles.burst(hitPosition,
           enemy.planet === 'water' ? 0x72efff : 0xff5a1f,
           14 + enemy.maxHp * 4, 10, .72, .22);
@@ -36221,6 +37127,7 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             shard.alive = false;
             shard.mesh.visible = false;
             this.stats.breaks++;
+            world.spawnStones(shard.mesh.position, 5, 3);
             this.impact('break', shard.mesh.position, 0x54d8ff);
             this.addStyle(5, 190);
             if (slab.cache.every(entry => !entry.alive)) {
@@ -37053,6 +37960,13 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     // The payoff. A core is a permanent new verb for the ball, and it starts
     // orbiting the ball immediately — the player sees the reward on the object
     // they are already looking at, and never reads a word about it.
+    celebrateBossDefeat(at, color, scale = 1) {
+      world.spawnTrophy(at, color, 2.2 * scale);
+      this.rewardFlash = Math.max(this.rewardFlash, .85);
+      if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', '#' + color.toString(16).padStart(6, '0'));
+      world.pulseRing(at, new T.Color(color), 30 * scale, .8);
+      // Victories stay immediate. Only the large visible trophy travels home.
+    }
     grantCore(region, boss) {
       const spec = BALL_CORES[region.core];
       if (!spec || this.cores.has(spec.id)) return;
@@ -37117,7 +38031,6 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
 
           challenge.complete = true;
           challenge.completionPulse = 1;
-          this.drops += challenge.reward;
           this.score += 1250 + challenge.targets.length * 180;
           this.stats.stationJobs = (this.stats.stationJobs || 0) + 1;
           for (const finishedTarget of challenge.targets) {
@@ -37136,12 +38049,14 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           //
           // So: drop them at your feet where they can be picked up, and say
           // out loud what the job paid.
-          world.spawnStones(this.player.position, challenge.reward, 5.6);
+          const prizeAt = this.player.position.clone().addScaledVector(this.player.up, 1.1);
+          world.spawnStones(prizeAt, challenge.reward, 6.8);
+          world.spawnTrophy(target.position, 0x7befff, 1.35);
           this.rewardFlash = Math.max(this.rewardFlash, .72);
           if (ui.rewardFlash) ui.rewardFlash.style.setProperty('--reward-tint', '#7befff');
           audio.win();
           this.announceEncounter(`${challenge.label} SOLVED`,
-            `+${challenge.reward} · ${challenge.reward} CRESCENTS RELEASED`);
+            `${challenge.reward} CRESCENTS RELEASED`);
           this.addStyle(28, 3400, challenge.label, '#7befff');
           return true;
         }
@@ -38155,7 +39070,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       boss.attackRing.visible = false;
       this.drops += 36;
       this.score += 9000;
-      world.spawnStones(boss.position, 22, 10);
+      world.spawnStones(boss.position, 30, 10);
+      this.celebrateBossDefeat(boss.position, 0xff6fae, 1.3);
       world.particles.burst(boss.position, 0xff6fae, 120, 28, 1.5, .42);
       world.particles.burst(boss.position, 0x62edff, 72, 21, 1.1, .28);
       world.pulseRing(boss.position, new T.Color(0xffd66b), 42, .9);
@@ -38441,7 +39357,13 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
     updateThreatMusic() {
       this.threatPlayerDir = dirAt(this.player.position, this.tempC);
       this.threatNow = 0;
-      if (world.activeLayer === 'surface') {
+      if (world.activePlanet !== 'moon') {
+        // This must happen AFTER resetting threat. The former call in the
+        // planet update was immediately erased here, muting regional fights.
+        for (const boss of world.currentSurface()?.bosses || EMPTY_SOLIDS) {
+          if (boss.alive && boss.engaged) this.feelThreat(boss.position, boss.threatRadius || 82);
+        }
+      } else if (world.activeLayer === 'surface') {
         if (world.strata?.boss?.alive && world.strata.boss.engaged) this.feelThreat(world.strata.boss.position, 82);
         if (world.colossus?.alive) this.feelThreat(world.colossus.position, 65);
         if (world.roc?.alive) this.feelThreat(world.roc.position, 70);
@@ -38478,8 +39400,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         scoreState = undergroundBoss ? 'boss' : 'underground';
         phase = undergroundBoss ? world.bellower.phase || 'boss' : 'station';
       } else if (world.activePlanet !== 'moon') {
-        const alternateBoss = world.currentSurface()?.boss;
-        const bossThreat = !!(alternateBoss?.alive && alternateBoss.engaged && this.threatNow > .08);
+        const alternateBoss = world.currentSurface()?.bosses.find(boss => boss.alive && boss.engaged);
+        const bossThreat = !!(alternateBoss && this.threatNow > .08);
         scoreState = bossThreat ? 'boss' : 'surface';
         phase = bossThreat ? `${world.activePlanet}-${alternateBoss.phase}` : world.activePlanet;
       } else {
@@ -39289,7 +40211,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             this.expansionState.vaneDefeated = true;
             this.drops += 20;
             this.score += 8000;
-            world.spawnStones(vane.position, 18, 9);
+            world.spawnStones(vane.position, 24, 9);
+            this.celebrateBossDefeat(vane.position, 0xbf83ff, 1.2);
             world.pulseRing(vane.position, new T.Color(0xffd66b), 56, 1);
             world.particles.burst(vane.position, 0xffd66b, 130, 30, 1.5, .5);
             audio.win();
@@ -39511,7 +40434,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           this.stats.kills++;
           this.drops += 25;
           this.score += 12000;
-          world.spawnStones(boss.position, 24, 10);
+          world.spawnStones(boss.position, 30, 10);
+          this.celebrateBossDefeat(boss.position, 0xffce65, 1.4);
           world.pulseRing(boss.position, new T.Color(0xffd66b), 64, 1.1);
           world.particles.burst(boss.position, 0xffd66b, 150, 34, 1.6, .52);
           audio.win();
@@ -39665,7 +40589,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         this.expansionState.bellowerDefeated = true;
         this.drops += 20;
         this.score += 8000;
-        world.spawnStones(bellower.position, 18, 9);
+        world.spawnStones(bellower.position, 30, 9);
+        this.celebrateBossDefeat(bellower.position, 0xbf83ff, 1.35);
         world.pulseRing(bellower.position, new T.Color(0xffd66b), 54, 1);
         world.particles.burst(bellower.position, 0xffd66b, 130, 30, 1.5, .5);
         audio.win();
@@ -39810,8 +40735,9 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
           : previous ? 'previously-defeated' : 'sealed';
       return {
         planet, have: moon ? this.moonBossesDown() : progress.regionalDefeated,
-        need: moon ? this.moonBossesNeeded() : ALTERNATE_REGIONAL_REQUIRED,
-        roster: moon ? this.moonBossRoster().length : ALTERNATE_REGIONAL_TOTAL,
+        need: moon ? this.moonBossesNeeded()
+          : Math.ceil(world.planetSurfaces.get(planet).regionalBosses.length / 2),
+        roster: moon ? this.moonBossRoster().length : world.planetSurfaces.get(planet).regionalBosses.length,
         open: available || defeated || reserved || previous,
         available: available && !defeated && !reserved,
         defeated, previous, reserved, status,
@@ -40331,7 +41257,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       victory.returnPortal.active = false;
       victory.returnPortal.visible = false;
       this.victorySequence = victory;
-      world.spawnStones(heart.position, 24, 10);
+      world.spawnStones(heart.position, 40, 10);
+      this.celebrateBossDefeat(heart.position, 0x9defff, 1.7);
       world.dressMoonheartBall();
       // A test win is not a crown. Sealed the same way the three-crown save is.
       this.savedMoonheart = !this.testSession?.active;
@@ -41365,7 +42292,10 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         }
       }
       if (ui.planetBossCounter) {
-        if (ui.planetBossCounter.childElementCount !== 3) {
+        const socketSignature = [this.moonBossRoster().length,
+          ...['water', 'lava'].map(planet => world.planetSurfaces.get(planet).regionalBosses.length)].join(':');
+        if (ui.planetBossCounter.dataset.roster !== socketSignature) {
+          ui.planetBossCounter.dataset.roster = socketSignature;
           ui.planetBossCounter.textContent = '';
           for (const planet of ['moon', 'water', 'lava']) {
             const row = document.createElement('div');
@@ -41374,12 +42304,20 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
             const sigil = document.createElement('i');
             sigil.className = 'planet-world-sigil';
             row.appendChild(sigil);
-            for (const slot of [
-              'regional-0', 'regional-1', 'regional-2', 'regional-3', 'regional-4', 'final', 'mastery',
-            ]) {
+            const roster = planet === 'moon' ? this.moonBossRoster()
+              : world.planetSurfaces.get(planet).regionalBosses;
+            for (const slot of [...roster.map((boss, index) => 'regional-' + index), 'final',
+              ...(planet === 'moon' ? [] : ['mastery'])]) {
               const socket = document.createElement('i');
               socket.className = 'planet-boss-socket';
               socket.dataset.slot = slot;
+              const slotIndex = Number(slot.slice('regional-'.length));
+              const boss = slot.startsWith('regional-') ? roster[slotIndex] : null;
+              socket.title = boss
+                ? boss.name || (boss === world.roc ? 'THE ROC' : boss === world.colossus ? 'THE COLOSSUS'
+                  : (boss.id || 'MOON BOSS').replaceAll('-', ' ').toUpperCase())
+                : slot === 'final' ? this.localFinalProgress(planet).name : 'WORLD MASTERY';
+              socket.setAttribute('aria-label', socket.title);
               row.appendChild(socket);
             }
             ui.planetBossCounter.appendChild(row);
@@ -41388,8 +42326,8 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
         const moonComplete = this.savedMoonheart || this.endgameComplete;
         const crownStates = {
           moon: [
-            ...Array.from({ length: 5 }, (_, index) => this.moonBossesDown() > index),
-            moonComplete, false,
+            ...this.moonBossRoster().map(boss => !boss.alive),
+            moonComplete,
           ],
           water: [
             ...this.worldProgress.water.regionalBosses,
@@ -43539,11 +44477,19 @@ roughnessFactor = mix(roughnessFactor, .97, vKbBiome.y * .85);`);
       game.ball.velocity.set(0, 0, 0);
       game.ball.mode = 'outbound';
       game.collectMoondrops();
+      const spillHeldForEruption = game.drops === dropsBefore;
+      world.elapsed += .4;
+      world.updateRewardBursts(.4);
+      game.collectMoondrops();
+      const spillPaidOnce = game.drops;
+      game.collectMoondrops();
       game.syncUI();
       check('everything-spills-crescents-and-the-counter-counts',
-        stonesAfter > stonesBefore && game.drops === dropsBefore + 1
+        stonesAfter > stonesBefore && spillHeldForEruption
+        && spillPaidOnce === dropsBefore + stonesAfter - stonesBefore && game.drops === spillPaidOnce
         && ui.stoneCount?.textContent === String(game.drops),
-        { stonesBefore, stonesAfter, drops: game.drops, counter: ui.stoneCount?.textContent });
+        { stonesBefore, stonesAfter, spillHeldForEruption, spillPaidOnce,
+          drops: game.drops, counter: ui.stoneCount?.textContent });
 
       // The rim springs have to actually fling you, or they are nine gold
       // rings decorating a walk.

@@ -2260,7 +2260,7 @@ body.touch-enabled .touch-pad > span {
   position: absolute;
   left: 26px;
   bottom: 62px;
-  display: flex;
+  display: none;
   gap: 8px;
   pointer-events: none;
 }
@@ -2317,7 +2317,7 @@ body.touch-enabled .touch-pad > span {
 .planet-boss-row {
   --world-tint: #ffd66b;
   display: grid;
-  grid-template-columns: 19px repeat(5, 13px) 16px 17px;
+  grid-template-columns: 19px repeat(9, 13px) 16px 17px;
   align-items: center;
   gap: 7px;
   height: 20px;
@@ -2378,6 +2378,10 @@ body.touch-enabled .touch-pad > span {
 .planet-boss-socket[data-slot="regional-4"] {
   clip-path: polygon(50% 0, 63% 35%, 100% 50%, 63% 65%, 50% 100%, 37% 65%, 0 50%, 37% 35%);
 }
+.planet-boss-socket[data-slot="regional-5"] { border-radius: 50% 50% 15% 15%; }
+.planet-boss-socket[data-slot="regional-6"] { clip-path: polygon(0 15%, 50% 0, 100% 15%, 80% 80%, 50% 100%, 20% 80%); }
+.planet-boss-socket[data-slot="regional-7"] { border-radius: 2px; transform: rotate(15deg); }
+.planet-boss-socket[data-slot="regional-8"] { clip-path: polygon(0 0, 30% 30%, 50% 0, 70% 30%, 100% 0, 85% 100%, 15% 100%); }
 .planet-boss-socket[data-slot="final"] {
   width: 16px;
   height: 16px;
