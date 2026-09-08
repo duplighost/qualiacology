@@ -82,11 +82,18 @@ const SAVE_VERSION = 4;
 // (fog transmittance is 30% at 120 m; the headlight reaches 80) — so the bitmap is what he has
 // seen, and the pause card and the mini-map draw the county only inside it. Kept in the save
 // as a 4096-character hex string. Recorded here, drawn in ui/hud.js.
-const VISITED_N = 128;
+// ROUND 18: 256, NOT 128, BECAUSE THE COUNTY DOUBLED. The grid is what the player has SEEN,
+// and it was sized in CELLS rather than in metres — 128 over a 4 km county is 31.25 m a cell.
+// At 8 km that same 128 became 62.5 m a cell, which is WIDER THAN THE 40 m REVEAL DISC a
+// walking player carries, so a two-hundred-metre walk stopped revealing anything: tests/
+// fogmap.mjs measured a band of 5 cells against a floor of 12. 256 restores 31.25 m a cell and
+// the fog behaves exactly as it did. The save string goes 4,096 hex characters to 16,384.
+const VISITED_N = 256;
 const VISITED_CELLS = VISITED_N * VISITED_N;
 const VISITED_HEX_LEN = VISITED_CELLS / 4;
-const VISITED_N_V2 = 64;            // the round 6-12 grid, for the load-time upscale
-const VISITED_HEX_LEN_V2 = VISITED_N_V2 * VISITED_N_V2 / 4;
+// Every grid this game has ever saved, smallest first, for the load-time upscale. A save is
+// recognised by the LENGTH of its hex string, which is why this works without a version bump.
+const VISITED_OLD_N = [64, 128];    // rounds 6-12, and rounds 13-17
 const VISITED_EVERY_STEPS = 60;     // once a second at the fixed step
 const REVEAL_R_FOOT = 40;           // m of county a walking player reveals around himself
 const REVEAL_R_CAR = 120;           // m from the car seat
@@ -1351,19 +1358,25 @@ export class Progress {
     const cells = this.visited;
     cells.fill(0);
     let count = 0;
-    if (typeof hex === 'string' && hex.length === VISITED_HEX_LEN_V2) {
-      // ROUND 13: a round 6-12 save. Each old 62.5 m cell becomes its 2 x 2 block of new
-      // cells — exact and area-preserving, so a returning player keeps every trail.
-      for (let i = 0; i < VISITED_HEX_LEN_V2; i++) {
+    // ROUND 18: generalised. Round 13 upscaled the one older grid it knew about; there are two
+    // now and there will be more, so a save is matched on its hex LENGTH and each old cell
+    // becomes its k x k block of new ones — exact and area-preserving, so a returning player
+    // keeps every trail he ever made. Ordered smallest first; VISITED_OLD_N is the whole list.
+    const oldN = typeof hex === 'string'
+      ? VISITED_OLD_N.find(N => hex.length === N * N / 4 && N < VISITED_N) : 0;
+    if (oldN) {
+      const k = VISITED_N / oldN;
+      const len = oldN * oldN / 4;
+      for (let i = 0; i < len; i++) {
         const v = parseInt(hex.charAt(i), 16);
         if (!(v >= 0)) continue;
         for (let b = 0; b < 4; b++) {
           if (!(v & (1 << b))) continue;
           const old = i * 4 + b;
-          const ox = old % VISITED_N_V2, oz = (old / VISITED_N_V2) | 0;
-          for (let dz = 0; dz < 2; dz++) {
-            for (let dx = 0; dx < 2; dx++) {
-              const j = (oz * 2 + dz) * VISITED_N + (ox * 2 + dx);
+          const ox = old % oldN, oz = (old / oldN) | 0;
+          for (let dz = 0; dz < k; dz++) {
+            for (let dx = 0; dx < k; dx++) {
+              const j = (oz * k + dz) * VISITED_N + (ox * k + dx);
               if (!cells[j]) { cells[j] = 1; count++; }
             }
           }

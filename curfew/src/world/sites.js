@@ -48,6 +48,9 @@ import CFG from '../config.js';           // ROUND 6: roadApproach reads CFG.pla
 // the road ribbon already take it (chunks.js:679, :787); the destination aprons never did,
 // and an apron is the single largest surface in the opening frame.
 import { groundDetail } from './terrain.js';
+// ROUND 18: the checkpoint straddles a road and has to be square to it. roads.js imports only
+// config and math, so there is no cycle.
+import { nearestRoadInfo } from './roads.js';
 // ROUND 6: Blackthorn Manor is compiled from its own room tables in manor.js and handed
 // this file's kit vocabulary through a factory, so there is no import cycle.
 import { makeManorBuilder } from './manor.js';
@@ -2043,6 +2046,185 @@ export const BUILDERS = {
   /* ------------------------------------------------------------------ relay */
   // A 62 m lattice mast with a red aviation lamp. Claim it and the lamp goes white and
   // starts blinking — the one state change in the county you can check from anywhere.
+  /* ------------------------------------------------------------------ checkpoint
+   *
+   * THE TOLL ON THE BROKEN ROAD. Alex's own design, docs/ALEX-BRIEF.md section 10, and the most
+   * specific he has ever given:
+   *
+   *   "i had a better idea of a kind of broken down type highway on some place of the map when
+   *    we really expand it. and it would be similar to the big place in the middle. there are
+   *    people there guarding it. nd they would have to start in a place where you wouldn't
+   *    shoot them and they look different or something so the player would know what they were
+   *    getting into. but they could sell access to the highway. or the player could try to kill
+   *    them or run them over, but the fight would be hard."
+   *
+   * Every clause is a requirement and this builds all six:
+   *
+   *  1. A broken-down HIGHWAY, in the new space. roads.js 'broken-highway' - twice the width of
+   *     the county loop, a 3.9 km chord joining two outer-ring points that are 6.4 km apart the
+   *     long way round. It exists to be worth buying.
+   *  2. LIKE THE BIG PLACE IN THE MIDDLE. The same toll machinery as the Holdfast: api.gate()
+   *     registers the price, api.gateOpen() remembers, and the barrier is a real collider until
+   *     it is paid. One verb, learned once, used twice.
+   *  3. GUARDED BY PEOPLE. A real dormant cast, not welded scenery.
+   *  4. THEY START WHERE YOU WOULD NOT SHOOT THEM AND THEY LOOK DIFFERENT. This is the
+   *     interesting clause and it is a READABILITY problem, not an AI one. The answer this
+   *     game already has: EVERYTHING HOSTILE IN THE COUNTY IS DARK AND IN THE TREES. So the
+   *     guards are the only figures in the game standing in their own light - two braziers
+   *     either side of the gap and a lit booth window, with the cast placed inside the pool.
+   *     You see lit people standing still on a road, at a barrier, before you are in range to
+   *     shoot at anything.
+   *  5. THEY SELL ACCESS TO THE HIGHWAY. The barrier is across the road itself, so what the
+   *     money buys is the shortcut - which is the part that makes this different from the
+   *     Holdfast, where the toll buys a building.
+   *  6. YOU CAN FIGHT, AND IT IS HARD. Nine bodies against the Holdfast gate's five, and two
+   *     of them are Wardens standing back behind the barrier.
+   *
+   * SQUARE TO THE ROAD, NOT TO ITS OWN YAW. A major's yaw is "face the nearest road point",
+   * which is meaningless for a site sitting ON the road - the nearest point is under your feet
+   * and the angle is noise. So this asks roads.js for the tangent at its own centre and lays
+   * everything out in road space: u along the asphalt, v across it. It cannot be crooked.
+   */
+  checkpoint: {
+    landmark(api) {
+      const k = kits();
+      const s = k.solid, g = api.padY;
+
+      // road space. tx/tz is the tangent at this exact point; nearestRoadInfo reuses one
+      // scratch object, so both components are copied before anything else queries it.
+      const info = nearestRoadInfo(api.site.x, api.site.z, 60);
+      const tx = info && info.hit ? info.tx : 0, tz = info && info.hit ? info.tz : 1;
+      const nx = -tz, nz = tx;
+      const cy = Math.cos(api.yaw), sy = Math.sin(api.yaw);
+      // a point u metres ALONG the road and v metres ACROSS it, in the kit's local frame
+      const P = (u, v) => {
+        const dx = tx * u + nx * v, dz = tz * u + nz * v;
+        return [dx * cy - dz * sy, dx * sy + dz * cy];
+      };
+      const yawOf = (u, v) => Math.atan2(tx * u + nx * v, tz * u + nz * v) - api.yaw;
+
+      const HALF = 9.2;          // the barrier reaches this far either side of the centreline
+      const GAP = 2.4;           // and the gap a car fits through
+
+      /* ---- THE BARRIER ------------------------------------------------------
+       * Jersey barriers in a line across both lanes with one gap. Concrete, chipped, and set
+       * a little crooked because nobody surveyed it - this was dragged here.
+       */
+      for (let i = 0; i < 12; i++) {
+        const v = -HALF + (i / 11) * HALF * 2;
+        if (Math.abs(v) < GAP) continue;
+        const jitter = (api.rng.next() - 0.5) * 0.22;
+        const [lx, lz] = P(jitter, v);
+        s.box(1.05, 0.92, 1.55, lx, g + 0.46, lz, C.ash, yawOf(1, 0) + (api.rng.next() - 0.5) * 0.09);
+        api.emit({ kind: 'obb', x: lx, z: lz, halfX: 0.8, halfZ: 0.8, yaw: 0,
+          y0: g - 0.3, y1: g + 0.92, tag: 'stone', standable: true });
+      }
+
+      /* ---- THE GATE ITSELF --------------------------------------------------
+       * Two uprights and a boom across the gap. The boom is a collider until the toll is
+       * paid, exactly as the Holdfast's leaves are, and the world flag remembers.
+       */
+      for (const sv of [-1, 1]) {
+        const [px, pz] = P(0, sv * (GAP + 0.35));
+        s.cyl(0.17, 0.19, 2.5, 8, px, g + 1.25, pz, ORDINARY.iron);
+        api.emit({ kind: 'circle', x: px, z: pz, r: 0.22, y0: g - 0.2, y1: g + 2.5, tag: 'metal' });
+      }
+      const shut = !(api.gateOpen && api.gateOpen());
+      if (shut) {
+        const [bx, bz] = P(0, 0);
+        s.box(GAP * 2 + 0.7, 0.26, 0.16, bx, g + 1.05, bz, C.rust, yawOf(0, 1));
+        for (let i = 0; i < 5; i++) {
+          const [sx2, sz2] = P(0, -GAP + (i / 4) * GAP * 2);
+          s.box(0.34, 0.20, 0.18, sx2, g + 1.05, sz2, C.dark, yawOf(0, 1));
+        }
+        api.emit({ kind: 'obb', x: bx, z: bz, halfX: GAP + 0.4, halfZ: 0.45, yaw: 0,
+          y0: g - 0.4, y1: g + 1.35, tag: 'gate' });
+      }
+
+      /* ---- THE BOOTH, AND THE ONLY LIT WINDOW ON THIS ROAD ------------------ */
+      {
+        const [hx, hz] = P(-3.4, GAP + 3.0);
+        s.box(3.0, 2.7, 2.4, hx, g + 1.35, hz, C.slate, yawOf(1, 0));
+        s.box(3.4, 0.16, 2.8, hx, g + 2.78, hz, C.dark, yawOf(1, 0));
+        const [wx2, wz2] = P(-3.4, GAP + 1.78);
+        s.box(1.5, 0.85, 0.08, wx2, g + 1.62, wz2, [0.30, 0.26, 0.19], yawOf(1, 0));
+        k.glow.pane(1.4, 0.78, wx2, g + 1.62, wz2, PANE_LAMP, yawOf(1, 0), 0, 6, 5);
+        api.emit({ kind: 'obb', x: hx, z: hz, halfX: 1.7, halfZ: 1.4, yaw: 0,
+          y0: g - 0.4, y1: g + 2.9, tag: 'wall' });
+      }
+
+      /* ---- THE TWO BRAZIERS THE GUARDS STAND IN -----------------------------
+       * Clause 4, and the whole reason this place is readable. A brazier is the county's own
+       * vocabulary for "somebody is here and they are not hiding".
+       */
+      for (const sv of [-1, 1]) {
+        const [fx, fz] = P(2.6, sv * (GAP + 1.9));
+        for (let i = 0; i < 7; i++) {
+          const a = (i / 7) * TAU;
+          s.box(0.22, 0.62, 0.14, fx + Math.cos(a) * 0.42, g + 0.31, fz + Math.sin(a) * 0.42,
+            ORDINARY.char, a);
+        }
+        s.cyl(0.46, 0.34, 0.16, 8, fx, g + 0.08, fz, C.dark);
+        k.glow.pane(0.62, 0.62, fx, g + 0.52, fz, PANE_LAMP, 0, -Math.PI * 0.5, 6, 6);
+        glowColumn(k.glow, fx, g + 0.42, fz, 0.30, 1.15, 0.52);
+        api.emit({ kind: 'circle', x: fx, z: fz, r: 0.5, y0: g - 0.2, y1: g + 0.7, tag: 'metal' });
+      }
+
+      /* ---- WHAT WAS HERE BEFORE THEY WERE ----------------------------------- */
+      for (const [u, v, ry] of [[-13.5, -8.6, 0.28], [-16.8, 8.2, -0.42], [11.5, -9.4, 0.15]]) {
+        const [cx, cz] = P(u, v);
+        s.box(4.3, 1.15, 1.85, cx, g + 0.58, cz, ORDINARY.rustDark, yawOf(1, 0) + ry);
+        s.box(2.1, 0.72, 1.7, cx, g + 1.42, cz, C.dark, yawOf(1, 0) + ry);
+        api.emit({ kind: 'obb', x: cx, z: cz, halfX: 2.2, halfZ: 1.0, yaw: 0,
+          y0: g - 0.3, y1: g + 1.5, tag: 'vehicle', standable: true });
+      }
+
+      /* ---- THE DEAD GANTRY, so the place reads as a highway from 300 m ------ */
+      {
+        const [ax, az] = P(-21, -HALF - 1.2), [bx2, bz2] = P(-21, HALF + 1.2);
+        s.cyl(0.26, 0.30, 6.6, 8, ax, g + 3.3, az, ORDINARY.iron);
+        s.cyl(0.26, 0.30, 6.6, 8, bx2, g + 3.3, bz2, ORDINARY.iron);
+        const [mx, mz] = P(-21, 0);
+        s.box(0.34, 0.34, (HALF + 1.2) * 2, mx, g + 6.5, mz, ORDINARY.iron, yawOf(0, 1));
+        s.box(2.6, 1.15, 0.14, mx, g + 5.7, mz, C.dark, yawOf(0, 1));
+        for (const px2 of [ax, bx2]) {
+          api.emit({ kind: 'circle', x: px2, z: px2 === ax ? az : bz2, r: 0.32,
+            y0: g - 0.3, y1: g + 6.6, tag: 'metal' });
+        }
+      }
+
+      // the toll: hold E on the approach side of the boom, with money, and it lifts.
+      if (typeof api.gate === 'function') { const [gx2, gz2] = P(4.6, 0); api.gate(gx2, gz2, g + 1.2); }
+
+      /* ---- WHO IS STANDING THERE -------------------------------------------
+       * Nine, against the Holdfast gate's five, and all of them dormant. Six are the Standing
+       * Kind - "an ordinary person who does nothing at all until it notices you", which is the
+       * exact reading Alex asked for: not a threat from a distance, a very bad idea up close.
+       * The two Wardens stand BEHIND the barrier, where you can see them over it before you
+       * decide whether to pay. That is the whole point of putting them in the light.
+       */
+      if (typeof api.cast === 'function') {
+        const C4 = (u, v, yaw2, species) => {
+          const [lx, lz] = P(u, v);
+          return { species, lx, lz, yaw: yawOf(-1, 0) + yaw2, awake: false };
+        };
+        api.cast([
+          C4(2.2, GAP + 1.0, 0.2, 'standing'),
+          C4(2.4, -GAP - 1.1, -0.3, 'standing'),
+          C4(4.1, GAP + 2.6, 0.5, 'standing'),
+          C4(-2.8, GAP + 3.4, 2.6, 'standing'),
+          C4(-3.2, -GAP - 2.9, -2.4, 'standing'),
+          C4(6.4, -GAP - 3.6, 0.1, 'standing'),
+          C4(5.0, 0.6, 0.0, 'poacher'),
+          C4(-7.5, -3.2, 3.0, 'warden'),
+          C4(-8.2, 4.4, 3.0, 'warden'),
+        ]);
+      }
+
+      return { solid: s.build(), glow: k.glow.empty() ? null : k.glow.build() };
+    },
+  },
+
   relay: {
     landmark(api) {
       const k = kits();

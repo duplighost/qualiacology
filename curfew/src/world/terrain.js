@@ -409,6 +409,22 @@ const DETAIL_FINE_M = 1.5;    // ART.md 3.1.1's first wavelength — and see the
 const DETAIL_MID_M = 6.0;     // ART.md 3.1.1's second
 const DETAIL_PATCH_M = 23.0;  // the longest wavelength that still reads as ground
 
+/**
+ * FROST, AS AN AREA. Returns 0..1: how frosted the ground at (x, z) is, before the openness and
+ * hollow terms chunks.js applies on top. One low-frequency fbm with a threshold under it, so the
+ * county is mostly bare and the places that have frost have it properly — "frost or snow on
+ * ground in areas" (Alex, 2026-09-07), not a wash over everything.
+ */
+export function frostAt(x, z) {
+  const F = CFG.world.frost;
+  if (!F || !(F.amount > 0)) return 0;
+  const a = fbm2(x / F.patchM, z / F.patchM, 2, SEED + 907);
+  let k = (a - F.lo) / Math.max(1e-6, F.hi - F.lo);
+  if (k <= 0) return 0;
+  if (k > 1) k = 1;
+  return k * k * (3 - 2 * k);
+}
+
 export function groundDetail(x, z) {
   return 0.30 * vnoise(x / DETAIL_FINE_M, z / DETAIL_FINE_M, SEED + 311)
     + 0.32 * vnoise(x / DETAIL_MID_M, z / DETAIL_MID_M, SEED + 419)
