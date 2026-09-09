@@ -49,12 +49,13 @@
 // and then drops the SpotLight — the arrival is a light coming toward you, the wait is a
 // light going out, and then the woods come back.
 //
-// THE WHEEL BRANCH OF THE SKILL TREE IS WIRED HERE. progression/nodes.js declares four
-// hook points whose `runner` is 'car' and every one of them names a call site in this
-// file: 'hotwireS' (_beginEnter), 'ramClean' (_ram, round 6), 'onHorn' (_horn) and 'wearRepair'
-// (_stepIdle's parked branch). Until this round none of them was ever called, so the whole
-// branch was four cards that bought nothing. progress is read LAZILY through `_progress`,
-// it is manifest #20 against our #19, and every call site works with it absent.
+// THE WHEEL BRANCH OF THE SKILL TREE IS WIRED HERE. progression/nodes.js declares the hook
+// points whose `runner` is 'car' and every one of them names a call site in this file:
+// 'hotwireS' (_beginEnter), 'ramClean' (_ram), 'nitro' (_nitro), 'wearAdd' (_addWear, the one
+// funnel every gram of wear goes through) and 'wearMend' (_stepWear). Before round 6 none of
+// them was ever called, so the whole branch was four cards that bought nothing. progress is
+// read LAZILY through `_progress`, it is manifest #20 against our #19, and every call site
+// works with it absent — with nothing owned the car is exactly the one that shipped.
 
 import * as THREE from 'three';
 import { CFG } from '../config.js';
@@ -428,8 +429,18 @@ export class Car {
     // continuous part, and it is what makes the park cool-down a dim and not a cut.
     this.lampFade = 0;
     // How beaten the car is, 0..1. Costs top speed and browns the lamp; the WHEEL branch's
-    // 'Keep' node is the only thing in the game that takes any of it back.
+    // 'Kept' node is the only thing in the game that takes any of it back.
     this.wear = WEAR_START;
+
+    // WHEEL 3 'Nitro'. The tank, 0..1, and what it is doing to the car this step. All four
+    // are inert — tank empty, both multipliers exactly 1 — until the node is owned, and the
+    // tank is not saved: it is full every time the perk is first seen in a session.
+    this.boost = 0;
+    this.boosting = false;
+    this._boostMul = 1;
+    this._boostAccel = 1;
+    this._boostHold = 0;
+    this._nitroSeen = false;
 
     // ---- timers, all dt-scoped. No setTimeout anywhere (CONTRACT).
     this.holdT = 0;
@@ -1250,6 +1261,10 @@ export class Car {
       this._wearSaveT+=dt;
       if(this._wearSaveT>=5){this._wearSaveT=0;this._progress.flag('car:wear',1+Math.round(this.wear*1000000));}
     }
+    // Both run in EVERY mode and both must run before _stepDriving reaches _integrate, which
+    // consumes the boost multipliers _nitro sets.
+    this._nitro(dt);
+    this._stepWear(dt);
     this.rearPresence?.step(dt, this);
     // Debris outlives the car: you can crush a fence, park, get out and watch the last
     // splinters settle. So it steps before any of the early returns below.
@@ -1438,23 +1453,6 @@ export class Car {
       this.lampFade -= dt / PARK_DARK_S;
       if (this.lampFade <= 0) { this.lampFade = 0; this._setHeadlights(false); }
       else if (this.body) this.body.setLamp(this._filament(), false);
-    }
-
-    // WHEEL 4, 'Keep' — hook 'wearRepair', base 0 per minute (nodes.js:123-124 names this
-    // exact call site as "the parked branch"). Reduced on FRAMES, not on events. With the
-    // node unowned the chain hands the 0 straight back and this costs one Map lookup; with
-    // it owned, and only somewhere lit, the car mends itself while it sits.
-    const pr = this._progress;
-    if (pr && typeof pr.perk === 'function') {
-      // The CAR's light, not the player's. ctx.shared.lit is sampled at the player, so it
-      // answered for whoever was holding the torch instead of for the thing being mended.
-      const lg = this._lights;
-      const carLit = lg && typeof lg.placeLitAt === 'function' ? lg.placeLitAt(this.x, this.z) : 0;
-      const perMin = pr.perk('wearRepair', 0, carLit);
-      if (perMin > 0 && this.wear > 0) {
-        this.wear = Math.max(0, this.wear - perMin * dt / 60);
-        if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), false);
-      }
     }
 
     this._pollEnter(dt);
@@ -1809,12 +1807,19 @@ export class Car {
     // that gives any of it back. At WEAR_START the on-road cap is 22.0 rather than 23.0.
     // About 50 km of ordinary driving from pristine to breakdown, with rough ground
     // wearing it faster. Impacts still count independently; idling does not.
-    if(this.mode==='driving')this.wear=clamp01(this.wear+Math.abs(this.speed)*dt*(onRoad?1:1.4)/50000);
+    if(this.mode==='driving')this._addWear(Math.abs(this.speed)*dt*(onRoad?1:1.4)/50000,'drive');
     const worn = this.wear>=.999 ? 0 : (1-WEAR_SPEED_LOSS*this.wear)*Math.max(.12,1-Math.max(0,this.wear-.80)*4.5);
-    const maxForward = (onRoad ? K.onRoad : K.offRoad) * worn;
+    // WHEEL 3 'Nitro'. CONSUMED, not read: _nitro() runs from _stepDriving immediately above
+    // this call and sets both, and clearing them here means the OTHER caller of _integrate —
+    // the pilot that drives the car in on its own (line ~1395) — can never inherit a boost
+    // left over from the last thing the player did at the wheel.
+    const boost = this._boostMul || 1;
+    const boostAccel = this._boostAccel || 1;
+    this._boostMul = 1; this._boostAccel = 1;
+    const maxForward = (onRoad ? K.onRoad : K.offRoad) * worn * boost;
     const maxReverse = (onRoad ? MAX_REV_ON : MAX_REV_OFF) * worn;
 
-    if (throttle) this.speed += (onRoad ? K.accelOn : K.accelOff) * dt;
+    if (throttle) this.speed += (onRoad ? K.accelOn : K.accelOff) * boostAccel * dt;
     if (brake) {
       if (this.speed > 0.55) this.speed -= K.brake * dt;
       else this.speed -= (onRoad ? CREEP_ON : CREEP_OFF) * dt;
@@ -2060,8 +2065,8 @@ export class Car {
       this._noise('car:impact', 34);
       // The car keeps the dent. Drive it into enough trees and it will not do 23 any more,
       // and the one working lamp browns out with it — which is the only reason WHEEL 4's
-      // 'Keep' has anything to repair.
-      this.wear = clamp01(this.wear + clamp01(lost / 9) * WEAR_PER_IMPACT);
+      // 'Kept' has anything to take back off.
+      this._addWear(clamp01(lost / 9) * WEAR_PER_IMPACT, 'impact');
       if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true);
       const fx2 = this._fx;
       if (fx2) {
@@ -2154,7 +2159,7 @@ export class Car {
 
     // A ram is not free: the car pays for exactly the bodies it actually hit, never for a
     // swing at air.
-    this.wear = clamp01(this.wear + WEAR_PER_RAM_HIT * hits);
+    this._addWear(WEAR_PER_RAM_HIT * hits, 'ram');
     if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true);
     this._noise('car:ram', 30);
     this._say('branch', 1.0, cx, this.y + 0.9, cz);
@@ -2224,8 +2229,8 @@ export class Car {
     this.crushCount += n; this.crushMass += res.mass;
 
     // The car takes something off it too — a bumper full of fence posts is why WHEEL 4's
-    // 'Keep' has anything to repair.
-    this.wear = clamp01(this.wear + CRUSH_WEAR * (res.mass / 100));
+    // 'Kept' has anything to take back off.
+    this._addWear(CRUSH_WEAR * (res.mass / 100), 'crush');
     if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true);
 
     // A thud, on both channels: 'noise' is what the director hears, dread('branch') is dry
@@ -2507,17 +2512,6 @@ export class Car {
   /* ---------------------------------------------------------------- horn -- */
 
   /**
-   * WHEEL 3, 'Horn' — hook 'onHorn' (nodes.js:125-126). H, from the seat.
-   *
-   * The horn belongs to the CAR: pressing it is a 46 m disturbance whatever you own, and
-   * a control that answers with nothing reads as broken. The NODE is what turns it into a
-   * TOOL — it wakes everything already alerted inside 80 m and walks it in to this spot,
-   * which is what makes "then get out and walk away" a plan rather than a joke. So the
-   * hook is fired unconditionally and the tree decides what the sound means. Firing it
-   * with nothing installed is also what keeps progress.hookReport() honest: a hook point
-   * with installers and zero lifetime runs is the defect that audit hunts for.
-   */
-  /**
    * THE DIAL. Alex, 2026-09-07: "if we could put a couple radio stations in the car that
    * absolutely fit the game, it would be badass."
    *
@@ -2548,6 +2542,127 @@ export class Car {
     this.ctx.bus.emit('prompt',{kind:'dashboard',label,detail,x:_hubV.x,y:_hubV.y,z:_hubV.z,k:0,rank:5});
   }
 
+  /* ----------------------------------------------------------------- nitro -- */
+
+  /**
+   * WHEEL 3, 'Nitro' — hook 'nitro', base null. Alex, 2026-09-09: "just a meter that lets
+   * you go fast and its fun for a bit. then it automatically regenerates."
+   *
+   * SHIFT, which is already "go faster" on foot, so nothing has to be taught. Held with the
+   * throttle down it empties the tank over `drainS` seconds and lifts the cap by `mul` and
+   * the acceleration by `accel`; let go and after `holdS` it fills again over `refillS`. The
+   * tank is NOT saved: it is full every time you get in, because a meter you have to nurse
+   * across a night is a chore and this is meant to be the fun one.
+   *
+   * With no node owned `spec` is null, the tank stays empty, shift does nothing, and the two
+   * multipliers below are exactly 1 — the car every player who has not bought it drives.
+   */
+  _nitro(dt) {
+    this._boostMul = 1;
+    this._boostAccel = 1;
+    const pr = this._progress;
+    const spec = (pr && typeof pr.perk === 'function') ? pr.perk('nitro', null) : null;
+    if (!spec) { this.boost = 0; this.boosting = false; this._nitroSeen = false; return; }
+    if (!this._nitroSeen) { this._nitroSeen = true; this.boost = 1; }
+
+    // RUN FROM step(), not from _stepDriving, so the tank fills wherever the car is and
+    // whatever you are doing. Burning it is the only part that needs the seat: come back to
+    // a car you left empty and it is full again, which is what "it automatically regenerates"
+    // has to mean if it is not going to be a chore.
+    const i = this._input;
+    const driving = this.mode === 'driving';
+    const throttle = driving && this._axis('back', 'forward') > 0;
+    const want = driving && throttle && !!(i && i.held && i.held('sprint')) && this.boost > 0;
+    if (want) {
+      this.boost = Math.max(0, this.boost - dt / Math.max(0.1, spec.drainS));
+      this._boostHold = spec.holdS;
+      this._boostMul = spec.mul;
+      this._boostAccel = spec.accel;
+      // It has to be AUDIBLE or it is a number moving behind a windscreen. One shove on the
+      // way in, and the engine's own disturbance goes out at once so the county hears it too.
+      if (!this.boosting) { this._soundNitro(); this.noiseT = 0; }
+    } else if (this._boostHold > 0) {
+      this._boostHold -= dt;
+    } else if (this.boost < 1) {
+      this.boost = Math.min(1, this.boost + dt / Math.max(0.1, spec.refillS));
+    }
+    const was = this.boosting;
+    this.boosting = want;
+    if (was !== want) this._emit('car:nitro', { on: want, tank: this.boost });
+  }
+
+  /**
+   * The shove, through the same public door the horn uses (_soundHorn below): the clean
+   * `dmg_ring0` bake pitched a long way DOWN and rolled off hard, which at 110/146 Hz is a
+   * woofy thump in the cabin and nothing like the 3.15 kHz damage ring it is made of. car.js
+   * creates NO raw AudioNodes — voice limits, scheduling, release and disposal stay audio.js's.
+   * Two layers a fifth apart so it has a body; the same guard as the horn, so a suspended or
+   * fast-forwarded tab books nothing into a clock that is not advancing.
+   */
+  _soundNitro() {
+    const a = this._audio;
+    const ac = a && (a.audioCtx || a.context || a.actx);
+    if (!a || a.enabled !== true || !a.baked || a.silent || !ac || ac.state !== 'running'
+        || typeof a.spec !== 'function' || typeof a.play !== 'function'
+        || typeof a.has !== 'function' || !a.has('dmg_ring0')) return false;
+    let voices = 0;
+    for (let n = 0; n < 2; n++) {
+      const rate = (n === 0 ? 110 : 146) / 3150;
+      const s = a.spec();
+      s.x = null;                // the driver's own car, centred in the cabin
+      s.gain = n === 0 ? 0.20 : 0.11;
+      s.rate = rate;
+      s.bus = 'world';
+      s.send = 0.05;
+      s.air = false; s.occl = false;
+      s.lpHz = 700;              // no top end at all: it is a push in the chest, not a ring
+      s.filterHz = 180; s.toneDb = 3.0;
+      s.offset = 0.020;
+      s.dur = rate * 0.44;       // playBuf divides by rate: 0.44 s at either pitch
+      s.priority = 1;
+      if (a.play('dmg_ring0', s)) voices++;
+    }
+    return voices > 0;
+  }
+
+  /* ------------------------------------------------------------------ wear -- */
+
+  /**
+   * THE ONE PLACE WEAR GOES UP. Driving, a tree, a ram and a crush all come through here, so
+   * WHEEL 4 'Kept' has exactly one line to stand on — nodes.js HOOK_POINTS names this method
+   * as the site of `wearAdd`, and "one site per point" is the rule that keeps a hook
+   * countable. Before this funnel the four writers each did their own clamp and a node would
+   * have had to be installed on four names to mean one thing.
+   *
+   * With no node owned the reduce hands `delta` straight back, so this is the game as it was
+   * plus one Map lookup per dent.
+   */
+  _addWear(delta, why) {
+    if (!(delta > 0)) return 0;
+    const pr = this._progress;
+    const add = (pr && typeof pr.perk === 'function') ? pr.perk('wearAdd', delta, why) : delta;
+    if (!(add > 0)) return 0;
+    this.wear = clamp01(this.wear + add);
+    return add;
+  }
+
+  /**
+   * And the one place it comes back down. `wearMend` is per MINUTE, base 0, and it is handed
+   * whether the engine is actually running — "it stops wearing out, and what it wore comes
+   * back off" is a thing the car does while it works, not a reward for parking it under a
+   * lamp and walking away, which is what the node it replaces asked for and almost nobody
+   * ever did.
+   */
+  _stepWear(dt) {
+    if (this.wear <= 0) return;
+    const pr = this._progress;
+    if (!pr || typeof pr.perk !== 'function') return;
+    const perMin = pr.perk('wearMend', 0, !!this.engineOn);
+    if (!(perMin > 0)) return;
+    this.wear = Math.max(0, this.wear - perMin * dt / 60);
+    if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), false);
+  }
+
   repairFull(){
     this.wear=0;this._wearLoaded=true;this._progress?.flag('car:wear',1);
     this._progress?.flag('car:fully-repaired',1);this.body?.setRepaired(true);
@@ -2569,13 +2684,14 @@ export class Car {
     if (!pressed && !beganHeld && !(held && this.hornT <= 0)) return;
     this.hornT = HORN_REPEAT;
     this.hornCount++;
+    // The horn belongs to the CAR and always did: pressing it is a 46 m disturbance whatever
+    // you own, and the enemies lane already subscribes to `noise` (enemies.js:553), so this
+    // one line IS the lure. Until 2026-09-09 a WHEEL node widened it to 80 m for three
+    // points; Alex asked for nitro in that slot instead and the horn kept its own radius.
     this._noise('car:horn', HORN_NOISE_R);
-    // Input, AI hearing and perk hooks are accepted exactly once here. If the browser's
-    // audio clock is not ready yet, only the audible answer is deferred; repeated presses
-    // while suspended coalesce into the same one-bit debt.
+    // If the browser's audio clock is not ready yet, only the audible answer is deferred;
+    // repeated presses while suspended coalesce into the same one-bit debt.
     this.hornSoundPending = !this._soundHorn();
-    const pr = this._progress;
-    if (pr && typeof pr.fire === 'function') pr.fire('onHorn', this.x, this.z);
   }
 
   /** Settle one horn sound deferred while audio was unavailable; never replay game effects. */
@@ -3017,6 +3133,7 @@ export class Car {
       beacon: this.beacon,
       lampFade: this.lampFade,
       wear: this.wear,
+      boost: this.boost, boosting: this.boosting,
       hotwireTotal: this.hotwireTotal,
       fovBias: this.fovBias,
       stuckT: this.stuckT,

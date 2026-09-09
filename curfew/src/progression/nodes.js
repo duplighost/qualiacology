@@ -110,7 +110,7 @@ export const HOOK_POINTS = Object.freeze([
   // ROUND 6 (lane G): run by gfx/lights.js present(), inside the torch block — the beam's
   // angle and heat are set by name there, and the two reads live beside them.
   { name: 'torchFocus', kind: 'reduce', runner: 'lights', base: 'null',
-    at: 'gfx/lights.js present(), the torch block', sig: '(spec|null, ctx) -> {angle,stunS,costS}|null' },
+    at: 'gfx/lights.js present(), the torch block', sig: '(spec|null, ctx) -> {angle}|null' },
   { name: 'highBeam', kind: 'reduce', runner: 'lights', base: 'null',
     at: 'gfx/lights.js present(), the torch block', sig: '(spec|null, ctx) -> {seconds}|null' },
   { name: 'eyeshineMul', kind: 'reduce', runner: 'enemies', base: '1',
@@ -126,10 +126,22 @@ export const HOOK_POINTS = Object.freeze([
     at: 'vehicle/car.js the hotwire timer', sig: '(seconds, ctx) -> seconds' },
   { name: 'ramClean', kind: 'reduce', runner: 'car', base: 'false',
     at: 'vehicle/car.js _ram()', sig: '(bool, ctx) -> bool' },
-  { name: 'wearRepair', kind: 'reduce', runner: 'car', base: '0',
-    at: 'vehicle/car.js the parked branch', sig: '(perMinute, ctx, carLit) -> perMinute' },
-  { name: 'onHorn', kind: 'run', runner: 'car', sig: '(ctx, x, z)',
-    at: 'vehicle/car.js the horn input' },
+  // 2026-09-09, Alex: "one of the car upgrades should be like nitro. just a meter that lets
+  // you go fast and its fun for a bit. then it automatically regenerates." The METER is the
+  // car's (car.js owns boost, drains it and fills it back); the node is what puts a tank in
+  // the car at all. Null means there is no tank and shift does nothing, which is the game
+  // exactly as it shipped.
+  { name: 'nitro', kind: 'reduce', runner: 'car', base: 'null',
+    at: 'vehicle/car.js _nitro()',
+    sig: '(spec|null, ctx) -> {mul,accel,drainS,refillS,holdS}|null' },
+  // 2026-09-09, Alex: "another one of the car upgrades should be that the car never breaks
+  // down." Two points, because a car that stops wearing at 70% worn is still a dog: `wearAdd`
+  // is every gram of new wear (ONE funnel, car.js _addWear) and `wearMend` takes off what is
+  // already there while the engine runs.
+  { name: 'wearAdd', kind: 'reduce', runner: 'car', base: 'the wear about to be added',
+    at: 'vehicle/car.js _addWear()', sig: '(delta, ctx, why) -> delta' },
+  { name: 'wearMend', kind: 'reduce', runner: 'car', base: '0',
+    at: 'vehicle/car.js the wear branch of step()', sig: '(perMinute, ctx, running) -> perMinute' },
   { name: 'secondWind', kind: 'reduce', runner: 'player', base: 'null',
     at: 'player/controller.js hurt(), immediately before _die()',
     sig: '(spec|null, ctx) -> {seconds}|null' },
@@ -236,15 +248,22 @@ export const STAT_CONTRACT = Object.freeze({
 });
 
 /* ------------------------------------------------------------- hook payloads -- */
-// Frozen at module scope, never built inside a hook. `holdBreath`, `noiseRadius`, `penCm` and
-// `wearRepair` are reduced on frames, not on events, and a fresh object literal per frame is
-// exactly the hot-path allocation the CONTRACT forbids.
+// Frozen at module scope, never built inside a hook. `holdBreath`, `noiseRadius`, `penCm`,
+// `nitro`, `wearAdd` and `wearMend` are reduced on frames, not on events, and a fresh object
+// literal per frame is exactly the hot-path allocation the CONTRACT forbids.
 
 const ACTIVE_RELOAD = Object.freeze({ from: 1.000, to: 1.160, mul: 1.25, jamS: 0.65 });
 const HOLD_BREATH   = Object.freeze({ swayMul: 0.25, seconds: 2.5 });
-const TORCH_FOCUS   = Object.freeze({ angle: 0.25, stunS: 0.8, costS: 3.0 });
+// `angle` and nothing else: this spec used to carry a stunS and a costS that lights.js has
+// never read and no other lane has ever asked for. A field nobody reads is a promise the
+// card does not make and the game does not keep, so they are gone.
+const TORCH_FOCUS   = Object.freeze({ angle: 0.25 });
 const HIGH_BEAM     = Object.freeze({ seconds: 1.6 });
 const SECOND_WIND   = Object.freeze({ seconds: 2.5 });
+// wheel_3. mul/accel are what the boost does to the car's own caps; drainS is a full tank
+// held flat out, refillS a full tank from empty, holdS the pause before it starts filling —
+// so a tap costs almost nothing and a long pull leaves you coasting for a while.
+const NITRO         = Object.freeze({ mul: 1.45, accel: 2.2, drainS: 4.0, refillS: 9.0, holdS: 1.1 });
 
 const STEP_LOUD_MUL   = 0.6;    // quiet_1
 const COLD_BARREL_M   = 14;     // quiet_2, metres, and only from UNAWARE
@@ -252,10 +271,7 @@ const EYESHINE_MUL    = 2.0;    // lamp_2
 const PEN_MUL         = 1.5;    // hands_4
 const HOTWIRE_S       = 0.5;    // wheel_1
 const RAM_MIN_SPEED   = 12;     // wheel_2, m/s
-const HORN_RADIUS     = 80;     // wheel_3, metres
-const WEAR_REPAIR     = 0.1;    // wheel_4, wear per minute while parked somewhere lit
-const STILL_HEART_SPD = 0.4;    // quiet_4, m/s
-const STILL_HEART_M   = 6;      // quiet_4, metres
+const WEAR_MEND       = 0.9;    // wheel_4, wear per minute taken back off while it runs
 const SHUT_DOOR_M     = 12;     // quiet_3, metres
 
 // ROUND 6 — the numbers with teeth. Two steps each, the second the whole of it.
@@ -417,18 +433,16 @@ export const NODES = Object.freeze([
         shut(ctx, pl.x, pl.z);
       });
     } },
-  { id: 'quiet_4', branch: 'quiet', tier: 3, cost: 5, name: 'Still Heart',
-    line: 'Crouched and barely moving, they stop following you.',
+  { id: 'quiet_4', branch: 'quiet', tier: 3, cost: 5, name: 'Unheard',
+    line: 'Nothing you do makes a sound they can follow.',
+    // 2026-09-09, Alex: "One of the quiet updates should make it so you can't be heard."
+    // The whole of it, at the top of the branch that has been building toward it: the step
+    // (quiet_1), the shot (quiet_2), and now everything. It is the LOUDNESS that goes, not
+    // the sound — the county still hears itself, the gun is still audible to the player, and
+    // an eye that is already on you still works. Sight is the price of the branch.
     install: (s, hooks) => {
       void s;
-      // Runs off progress's OWN step, so it needs nothing from anybody. Costs one distance
-      // test per hunting enemy per step and only while you are actually crouched and still.
-      hooks.on('onStep', 'quiet_4', (ctx) => {
-        const p = sys(ctx, 'player');
-        if (!p || !p.crouched || p.dead) return;
-        if (typeof p.speed === 'number' && p.speed > STILL_HEART_SPD) return;
-        dropDistantHunts(ctx, p.pos.x, p.pos.z, STILL_HEART_M);
-      });
+      hooks.on('noiseRadius', 'quiet_4', () => 0);
     } },
 
   /* ---- WHEEL: the car is a verb ----------------------------------------------- */
@@ -445,35 +459,26 @@ export const NODES = Object.freeze([
       void s;
       hooks.on('ramClean', 'wheel_2', () => true);
     } },
-  { id: 'wheel_3', branch: 'wheel', tier: 2, cost: 3, name: 'Horn',
-    line: 'Call everything awake to the car. Then get out and walk away.',
+  { id: 'wheel_3', branch: 'wheel', tier: 2, cost: 3, name: 'Nitro',
+    line: 'A tank of speed on SHIFT. It fills itself back up.',
+    // 2026-09-09, Alex: "just a meter that lets you go fast and its fun for a bit. then it
+    // automatically regenerates." The node is the TANK; car.js is the meter, the drain and
+    // the refill. It replaces 'Horn', which was three points to widen the horn's lure from
+    // 46 m to 80 — the horn itself was never the node and still works without it.
     install: (s, hooks) => {
       void s;
-      // The node does the whole thing. `wakeAll` is the enemies lane's public API
-      // (enemies.js:350) and the car only has to say that the horn was pressed.
-      hooks.on('onHorn', 'wheel_3', (ctx, x, z) => {
-        const en = sys(ctx, 'enemies');
-        const car = sys(ctx, 'car');
-        const hx = Number.isFinite(x) ? x : (car ? car.x : 0);
-        const hz = Number.isFinite(z) ? z : (car ? car.z : 0);
-        if (en && typeof en.wakeAll === 'function') en.wakeAll(hx, hz, HORN_RADIUS);
-        if (ctx && ctx.bus) ctx.bus.emit('noise', { x: hx, z: hz, radius: HORN_RADIUS, source: 'horn' });
-      });
+      hooks.on('nitro', 'wheel_3', () => NITRO);
     } },
-  { id: 'wheel_4', branch: 'wheel', tier: 3, cost: 5, name: 'Keep',
-    line: 'Parked somewhere lit, it mends itself.',
+  { id: 'wheel_4', branch: 'wheel', tier: 3, cost: 5, name: 'Kept',
+    line: 'It stops wearing out, and what it wore comes back off.',
+    // 2026-09-09, Alex: "another one of the car upgrades should be that the car never breaks
+    // down." So: nothing adds wear any more, and the wear already on it comes off while the
+    // engine runs. The old node ('Keep') took 0.1 a minute off ONLY while parked somewhere
+    // lit, which is a condition a player could own the node for a whole night and never meet.
     install: (s, hooks) => {
       void s;
-      hooks.on('wearRepair', 'wheel_4', (v, ctx, carLit) => {
-        void ctx;
-        // Somewhere LIT is the condition, and it is the CAR that has to be somewhere. This
-        // read ctx.shared.lit, which lights.js samples AT THE PLAYER: the card promises
-        // "parked somewhere lit" and what it delivered was "parked while you stand in light".
-        // car.js hands in lights.placeLitAt(car.x, car.z) - the claimed-place lamp term at
-        // the car - so 0.6 still means about 31 m of a claimed place's own lamps.
-        const lit = typeof carLit === 'number' ? carLit : 0;
-        return lit >= 0.6 ? v + WEAR_REPAIR : v;
-      });
+      hooks.on('wearAdd', 'wheel_4', () => 0);
+      hooks.on('wearMend', 'wheel_4', (v, ctx, running) => (running ? v + WEAR_MEND : v));
     } },
 
   /* ---- BLOOD: what you can survive -------------------------------------------- */

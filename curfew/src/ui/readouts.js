@@ -23,13 +23,23 @@ export class Readouts {
 #curfew-readouts .receipt{padding:6px 11px;background:rgba(5,9,13,.82);border-right:2px solid currentColor;color:#95d2d6;font-size:14px}
 #curfew-readouts .receipt.cash{color:#e9c785}
 #curfew-readouts .capture{position:fixed;left:50%;top:22px;transform:translateX(-50%);color:#bac8d0;background:#080d12b8;padding:6px 12px;font-size:11px}
+/* NITRO. Alex, 2026-09-09: "just a meter that lets you go fast and its fun for a bit. then it
+   automatically regenerates." It exists only in the seat, and only once WHEEL 3 is bought, so
+   nobody who has not got it ever sees a gauge. Wider and taller than the economy tracks and
+   low centre-right, where the eye is while driving. */
+#curfew-readouts .nitro{position:fixed;right:30px;bottom:34px;width:172px;padding:7px 10px 8px;background:rgba(5,9,13,.7);border-right:2px solid #c98a4e}
+#curfew-readouts .nitro .track{height:9px;margin:0;background:#241c16}
+#curfew-readouts .nitro .track i{background:linear-gradient(90deg,#8a5a2a,#e8a24e);transition:width .06s linear}
+#curfew-readouts .nitro.burn{border-color:#ffd08a}
+#curfew-readouts .nitro.burn .track i{background:linear-gradient(90deg,#e8a24e,#fff1cf)}
+#curfew-readouts .nitro.dry .track i{background:#4a3524}
 #curfew-readouts [hidden]{display:none!important}
 @media(max-height:620px){#curfew-readouts .economy{top:198px;padding:5px 10px}}
-</style><div class="economy"><div class="money"></div><div class="xp small"></div><div class="track"><i></i></div><div class="carried small"></div></div><div class="health"><div class="value"></div><div class="track"><i class="lost"></i><i class="now"></i></div></div><div class="receipts" role="status" aria-live="polite"></div><div class="capture" hidden>CLICK TO CAPTURE MOUSE</div>`;
+</style><div class="economy"><div class="money"></div><div class="xp small"></div><div class="track"><i></i></div><div class="carried small"></div></div><div class="health"><div class="value"></div><div class="track"><i class="lost"></i><i class="now"></i></div></div><div class="receipts" role="status" aria-live="polite"></div><div class="nitro" hidden><div class="track"><i></i></div></div><div class="capture" hidden>CLICK TO CAPTURE MOUSE</div>`;
     parent.appendChild(this.root);
     this.condition=document.createElement('div');this.condition.className='small';this.condition.hidden=true;
     this.root.querySelector('.economy').appendChild(this.condition);
-    for(const [key,selector] of Object.entries({money:'.money',xp:'.xp',xpFill:'.economy i',carried:'.carried',health:'.health',hp:'.value',hpFill:'.now',hpTrail:'.lost',list:'.receipts',capture:'.capture'}))this[key]=this.root.querySelector(selector);
+    for(const [key,selector] of Object.entries({money:'.money',xp:'.xp',xpFill:'.economy i',carried:'.carried',health:'.health',hp:'.value',hpFill:'.now',hpTrail:'.lost',list:'.receipts',nitro:'.nitro',nitroFill:'.nitro i',capture:'.capture'}))this[key]=this.root.querySelector(selector);
     const on=(event,fn)=>this.off.push(ctx.bus.on(event,fn));
     on('cash:gained',p=>this.receipt('+'+p.amount+' COINS','cash'));
     on('cash:spent',p=>this.receipt('−'+p.amount+' COINS','cash'));
@@ -40,6 +50,7 @@ export class Readouts {
     on('car:repaired',()=>this.receipt('CAR RESTORED · 100%','repair'));
     on('pickup:ammo',p=>{if(p.n>0)this.receipt('+'+p.n+' AMMO','ammo');});
     on('player:hurt',()=>{this.hurtUntil=this.now()+.65;this.trailAt=this.now()+.7;});
+    on('player:secondwind',()=>this.receipt('STILL STANDING','wind'));
   }
   now(){return this.ctx.time.t||0;}
   receipt(text,kind,amount=0){
@@ -67,10 +78,20 @@ export class Readouts {
       this.health.classList.toggle('hurt',time<this.hurtUntil);this.health.classList.toggle('low',frac<.3);
     }
     this.capture.hidden=!this.ctx.input.unlockedPlay;
-    const car=s.get('car');this.condition.hidden=!this.ctx.shared.inCar;
+    const car=s.get('car');const inCar=!!this.ctx.shared.inCar;this.condition.hidden=!inCar;
     if(car){const condition=Math.max(0,Math.round((1-car.wear)*100));
       this.text(this.condition,condition<=0?'ENGINE STOPPED · FIND A MECHANIC':'CAR CONDITION '+condition+'%');
-      this.condition.style.color=condition<25?'#e2a087':'#a7b7c1';}
+      this.condition.style.color=condition<25?'#e2a087':'#a7b7c1';
+      // WHEEL 3 'Nitro'. The meter exists only in the seat and only once the tank does —
+      // car._nitroSeen is set the first step the perk answers, so a player without the node
+      // never sees a gauge for a control they have not got.
+      const tank=Math.max(0,Math.min(1,car.boost||0));
+      this.nitro.hidden=!(inCar&&car._nitroSeen);
+      if(!this.nitro.hidden){
+        this.nitroFill.style.width=(tank*100).toFixed(1)+'%';
+        this.nitro.classList.toggle('burn',!!car.boosting);
+        this.nitro.classList.toggle('dry',tank<=0.001);
+      }}
   }
   dispose(){this.off.forEach(f=>f?.());this.root.remove();}
 }

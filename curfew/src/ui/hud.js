@@ -341,6 +341,14 @@ const CONTROLS = [
   ['Map and skills', 'Esc'],
 ];
 
+// A control that only exists once it is BOUGHT. Alex's rule is that controls belong on the
+// pause screen, and the corollary is that a key nobody has must not be advertised there —
+// so this row is built with the rest and stays hidden until WHEEL 3 is owned, at which point
+// the card is the one surface allowed to say what the new key does.
+const EARNED_CONTROLS = [
+  { node: 'wheel_3', what: 'Nitro (driving)', how: 'Shift' },
+];
+
 const CSS = `
 /* NO BACKTICK MAY APPEAR IN THIS BLOCK. It is a template literal, and the CONTRACT's GLSL
    law is the same law here: one backtick in a comment closed the string and the module threw
@@ -630,6 +638,12 @@ const CSS = `
    a third of the card between "MOVE" and "W A S D" and made the reader's eye do the pairing. */
 #curfew-pause .pair { display: flex; justify-content: space-between; align-items: baseline;
               gap: 0 14px; border-bottom: 1px solid rgba(27,36,49,0.55); padding: 0 0 2px; }
+/* AN EARNED ROW THAT IS NOT EARNED YET TAKES NO SPACE. The display:flex above is AUTHOR css and
+   beats the user-agent sheet's [hidden]{display:none}, so setting .hidden on the Nitro row left
+   it laid out and visible — a key the player has not bought, advertised on the card, and 16 px
+   of extra height that pushed the last node out of reach on a 780 px window. Measured: it cost
+   pause.mjs exactly two checks it had been passing. */
+#curfew-pause .pair[hidden] { display: none; }
 #curfew-pause dt { opacity: .52; letter-spacing: .12em; text-transform: uppercase;
               font-size: 11px; }
 #curfew-pause dd { text-align: right; font-size: 13px; letter-spacing: .06em; opacity: .86;
@@ -700,6 +714,9 @@ export class Hud {
     this.inCar = false;
     this.ammo = -1; this.reserve = -1; this.mag = 1; this.weaponId = '';
     this.reloadFrac = -1; this._ammoDirty = true; this._ammoLabel = '';
+    // HANDS 0 'Active': where the window sits on the reload arc, and whether the one attempt
+    // has been spent. Both -1 / false whenever no node has put a window on this reload.
+    this.winA = -1; this.winB = -1; this.winUsed = false;
     this.hp = CFG.player.health.max;
     this.hpMax = CFG.player.health.max;     // the body's own maximum; see _readHpMax()
     this.hpShown = CFG.player.health.max;   // lags hp by READOUT_LEAD_S
@@ -1040,6 +1057,11 @@ export class Hud {
     // node click).
     on('node:bought', () => { this._pulse('node', GRANT_LIFE); });
     on('level:up', () => { this._pulse('level', LEVEL_LIFE); });
+    // BLOOD 4 'Iron' just spent its once-a-cycle save. Three rings, the same as a level,
+    // because it is the biggest thing the tree ever does for you and until 2026-09-09 it
+    // did it in total silence. The invulnerability arc the life figure already draws then
+    // holds the moment for the 2.5 s it lasts.
+    on('player:secondwind', () => { this._pulse('level', LEVEL_LIFE); });
     // ROUND 13: the bank gets a picture to go with its bell — three rings in the mote's own
     // colour, the one hue exception on the reticle, because that colour already means yours.
     on('xp:banked', () => { this._pulse('bank', LEVEL_LIFE); });
@@ -1336,6 +1358,15 @@ export class Hud {
       pair.appendChild(el('dd', '', how));
       dl.appendChild(pair);
     }
+    // Built now, shown by _refreshTree() only once the node behind it is owned.
+    this.earnedEls = EARNED_CONTROLS.map((c) => {
+      const pair = el('div', 'pair');
+      pair.appendChild(el('dt', '', c.what));
+      pair.appendChild(el('dd', '', c.how));
+      pair.hidden = true;
+      dl.appendChild(pair);
+      return { node: c.node, pair };
+    });
     wrap.appendChild(dl);
 
     wrap.appendChild(el('div', 'foot', 'any key, or click here, to go back out'));
@@ -1492,6 +1523,12 @@ export class Hud {
         this.xpWrap.setAttribute('aria-valuemax', String(span));
         this.xpWrap.setAttribute('aria-valuenow', String(Math.min(span, here)));
         this.xpWrap.setAttribute('aria-valuetext', here + ' of ' + span + ' experience');
+      }
+    }
+    if (this.earnedEls) {
+      for (let i = 0; i < this.earnedEls.length; i++) {
+        const q = this.earnedEls[i];
+        q.pair.hidden = !(owned && owned.has(q.node));
       }
     }
     for (let i = 0; i < this.nodeEls.length; i++) {
@@ -2561,6 +2598,17 @@ export class Hud {
       g.fillRect(31 + i * 12, 48, 8, i < live ? 3 : 2);
     }
     if (this.reloadFrac >= 0) {
+      // THE WINDOW FIRST, UNDER the sweep: a fatter, warmer band sitting on the arc where the
+      // moment is, so the white hand runs visibly toward it. Drawn only while the node has
+      // put a window on this reload, and dimmed once the one attempt has been spent — a band
+      // still lit after you have taken your shot is a target that lies.
+      if (this.winB > this.winA) {
+        g.strokeStyle = this.winUsed ? 'rgba(240,212,154,0.22)' : 'rgba(240,212,154,0.85)';
+        g.lineWidth = 4;
+        g.beginPath();
+        g.arc(17, 29.5, 14, -Math.PI * 0.5 + TAU * this.winA, -Math.PI * 0.5 + TAU * this.winB);
+        g.stroke();
+      }
       g.strokeStyle = 'rgba(232,238,248,0.92)'; g.lineWidth = 2;
       g.beginPath(); g.arc(17, 29.5, 14, -Math.PI * 0.5, -Math.PI * 0.5 + TAU * this.reloadFrac); g.stroke();
     }
@@ -2752,10 +2800,25 @@ export class Hud {
     const weaponId = w.def && (w.def.name || w.def.id) ? String(w.def.name || w.def.id) : '';
     const reload = w.reloading && typeof w.reloading.t === 'number'
       ? clamp01(w.reloading.t / Math.max(0.001, Number(w.reloading.dur) || 1)) : -1;
+    // HANDS 0 'Active' — WHERE the window is, as a fraction of the same arc the sweep runs
+    // round. A window you cannot see is not a skill, it is a coin flip, and the node's card
+    // says "there is a moment in the reload. Take it, or jam" — which is a promise that the
+    // moment can be found. weapons authors activeFrom/activeTo in seconds on the reload it
+    // has actually started (already scaled to that gun's choreography), so this is the same
+    // divide as `reload` above and no second copy of the timing rule.
+    let winA = -1, winB = -1;
+    const r = w.reloading;
+    if (r && r.activeFrom >= 0 && r.activeTo > r.activeFrom) {
+      const dur = Math.max(0.001, Number(r.dur) || 1);
+      winA = clamp01(r.activeFrom / dur); winB = clamp01(r.activeTo / dur);
+    }
+    const used = !!(r && r.activeUsed);
     if (ammo !== this.ammo || reserve !== this.reserve || mag !== this.mag
-      || weaponId !== this.weaponId || Math.abs(reload - this.reloadFrac) > 0.01) {
+      || weaponId !== this.weaponId || Math.abs(reload - this.reloadFrac) > 0.01
+      || winA !== this.winA || winB !== this.winB || used !== this.winUsed) {
       this.ammo = ammo; this.reserve = reserve; this.mag = mag;
       this.weaponId = weaponId; this.reloadFrac = reload;
+      this.winA = winA; this.winB = winB; this.winUsed = used;
       this._ammoDirty = true;
     }
     this.conePx = this._conePx(this.cone);
@@ -3229,6 +3292,8 @@ export class Hud {
       ammo: {
         weapon: this.weaponId, magazine: this.ammo, reserve: this.reserve, cap: this.mag,
         reloading: this.reloadFrac >= 0, reloadFrac: +Math.max(0, this.reloadFrac).toFixed(3),
+        // HANDS 0's window, as it is DRAWN. -1/-1 means the arc carries no band.
+        winA: +this.winA.toFixed(3), winB: +this.winB.toFixed(3), winUsed: this.winUsed,
       },
       minimap: {
         visible: !!(this.chrome && !this.chrome.hidden), paints: this._miniPaints,
