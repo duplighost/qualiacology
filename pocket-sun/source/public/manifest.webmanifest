@@ -1,0 +1,18 @@
+{
+  "id": "/pocket-sun/",
+  "name": "POCKET SUN — One Finger / No End",
+  "short_name": "POCKET SUN",
+  "description": "An endless musical gravity toy for one finger.",
+  "start_url": "/pocket-sun/",
+  "scope": "/pocket-sun/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#090611",
+  "theme_color": "#090611",
+  "categories": ["games", "entertainment"],
+  "lang": "en",
+  "icons": [
+    { "src": "/pocket-sun/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/pocket-sun/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,14 @@
+ :root { color-scheme: dark; background: #03060d; }
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; background: #03060d; }
+body { color: #fff; font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+.pocket-sun { position: fixed; inset: 0; height: 100dvh; overflow: hidden; isolation: isolate; touch-action: none; user-select: none; }
+.world { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.optical-veil { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 40%, #00000038 100%); }
+.top-hud { position: absolute; top: max(18px, calc(env(safe-area-inset-top) + 12px)); left: 50%; transform: translateX(-50%); pointer-events: none; z-index: 3; }
+.score-lockup { padding: 4px 14px; text-align: center; }
+.score-lockup strong { font-size: clamp(26px, 5.8vw, 34px); font-weight: 450; font-variant-numeric: tabular-nums; letter-spacing: 0.045em; color: #fffbef; text-shadow: 0 2px 8px #000, 0 0 24px #000; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.pause-screen { position: absolute; inset: 0; display: grid; place-items: center; background: #03060d88; border: 0; color: #fff7e8; font-size: 42px; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+@media (orientation: landscape) and (max-height: 500px) { .top-hud { top: max(6px, env(safe-area-inset-top)); } .score-lockup strong { font-size: 24px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
