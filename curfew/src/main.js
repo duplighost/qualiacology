@@ -64,6 +64,7 @@ import * as hudMod from './ui/hud.js';
 import * as kneelerMod from './enemies/kneeler.js';   // ROUND 6, lane C
 import * as wildsMod from './world/wilds.js';         // ROUND 6, lane F
 import * as refugeMod from './world/refuge.js';
+import * as openingMod from './world/opening.js';
 import * as searchMod from './world/search.js';       // ROUND 15: going through a body
 import * as dealerMod from './world/dealer.js';
 import * as mechanicsMod from './world/mechanics.js';
@@ -110,6 +111,7 @@ const SYSTEMS = [
   ['dealer', dealerMod],      // saved cash/arsenal and the physical travelling shop
   ['mechanics', mechanicsMod],
   ['scavenging', scavengingMod],
+  ['opening', openingMod],     // the station's authored grounds, calendar and first night
   ['audio', audioMod],         // late, so it can hear everything that happened this step
   ['hud', hudMod],
   // -- presentation, last ---------------------------------------------------------------

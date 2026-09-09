@@ -727,7 +727,11 @@ function shopInterior(k, api) {
         const by = y + BH * (i + 0.5);
         const col = i % 2 ? D.lining : D.liningUp;
         if (axis === 'x') k.box(0.035, BH * 0.94, len, at + sign * 0.02, by, mid, col, 0);
-        else k.box(len, BH * 0.94, 0.035, mid, by, at + sign * 0.02, col, 0);
+        else if(at===Z0&&a0<X0+.1&&by+BH*.5>y+1.4&&by-BH*.5<y+2.7){
+          // Leave the station's new window open through the interior lining too.
+          for(const [lo,hi] of [[a0,-15],[-12.2,a1]])if(hi>lo)
+            k.box(hi-lo,BH*.94,.035,(lo+hi)/2,by,at+sign*.02,col);
+        }else k.box(len, BH * 0.94, 0.035, mid, by, at + sign * 0.02, col, 0);
       }
       // the rail at the top of the boarding, and the skirting at the bottom
       if (axis === 'x') {
