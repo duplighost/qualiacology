@@ -97,7 +97,7 @@ function clothing(style,v){
   }
   for(let i=0;i<4;i++)oval(torso,0,1.26-i*.098,-.145,.007,.007,.004,[.21,.19,.14]);
   garment(torso,[[1.435,.096,.089,-.010],[1.49,.083,.080,-.017],[1.525,.067,.071,-.02]],[.135,.12,.098]);
-  oval(neck,0,.045,-.025,.052,.087,.056,SKIN[v]);
+  oval(neck,0,.028,-.025,.058,.048,.060,SKIN[v]);
   if(armored){
     garment(torso,[[1.00,.198,.15],[1.08,.204,.166],[1.31,.226,.167],[1.37,.21,.139]],[.063,.071,.068]);
     for(const x of [-.145,0,.145]){box(torso,x,1.11,-.18,.115,.18,.065,leather);box(torso,x,1.205,-.183,.118,.025,.07,c);}
@@ -135,7 +135,7 @@ export function buildHuman(style='resident',variant=0,height=1.80){
   readableSurface(cloth);readableSurface(skin);
   const model=new THREE.Group();model.scale.setScalar(height/1.80);group.add(model);
   const mesh=(g,mat,parent=model)=>{if(!g)return null;const m=new THREE.Mesh(g,mat);m.userData.sharedHuman=true;m.castShadow=mat===cloth;m.receiveShadow=false;parent.add(m);return m;};
-  const torso=mesh(geo.torso,cloth),head=new THREE.Group();head.position.y=1.50;model.add(head);
+  const torso=mesh(geo.torso,cloth),head=new THREE.Group();head.position.y=1.43;head.scale.set(1.12,1.04,1.07);model.add(head);
   mesh(headGeometry(v),skin,head);mesh(geo.headwear,cloth,head);mesh(geo.eyes,skin,head);
   mesh(geo.neck,skin,head);
   const owned=[];
@@ -157,7 +157,7 @@ export function buildHuman(style='resident',variant=0,height=1.80){
     const hip=new THREE.Group(),knee=new THREE.Group();hip.position.set(side*.106,.855,.006);model.add(hip);mesh(geo.thigh,cloth,hip);knee.position.y=-.405;hip.add(knee);mesh(geo.shin,cloth,knee);legs.push({pivot:hip,knee});
   }
   const scale=height/1.80;
-  const zones=[{x:0,y:1.68,z:-.04,r:.13,zone:'head'}];
+  const zones=[{x:0,y:1.62,z:-.04,r:.14,zone:'head'}];
   for(const y of [.86,1.03,1.20,1.37])zones.push({x:0,y,z:0,r:.225,zone:'torso'});
   for(const side of [-1,1]){
     for(const y of [.11,.27,.44,.60,.76])zones.push({x:side*.106,y,z:0,r:.13,zone:'limb'});

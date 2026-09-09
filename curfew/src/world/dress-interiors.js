@@ -957,14 +957,10 @@ export const DRESS = {
   },
 
   /* ------------------------------------------------------------------ tower
-     THE BELL TOWER. sites.js draws fourteen outside steps up the shaft and emits NO collider
-     for any of them, so the one climb at this place is scenery you walk through. This dress
-     collides them, carries the flight sixteen steps further to a RINGING FLOOR at 13 m, and
-     hangs a bell-hop stage off it at r 7.2 — which is standing with a clean line up into the
-     belfry. docs/NEXT.md B2: the bell you have to shoot is hidden by its own shaft from
-     anywhere inside 13.5 m on the ground (measured: the sight line from eye height to the
-     bell at 24.4 clears the shaft's top corner at (3.2, 19) only past that). Underneath, in
-     the ruined nave, is the pit the bell was cast in and the bell that cracked. */
+     THE BELL TOWER. One continuous, colliding exterior flight reaches the 19 m
+     ringing floor and the belfry. This builder owns every tread; the shaft builder
+     must not add a second overlapping stair route. The ruined nave below contains
+     the casting pit and the cracked bell. */
   tower(api) {
     const k = kits(), S = k.solid, G = k.glow;
 
@@ -979,29 +975,26 @@ export const DRESS = {
     // from r 5.05 to 5.65 beside every stone tread. The walking line moves out to 5.15,
     // where a body clears the corner by 0.26 m, and the collider covers stone and timber
     // together. The lash-up is the point: somebody has been keeping this stair usable.
-    const RW = 5.15;                     // the walking radius, and the collider's centre
-    const tread = (i, drawStone) => {
-      const a = i * 0.42, y = 0.4 + i * 0.42;
-      const cx = Math.cos(a), cz = Math.sin(a);
-      if (drawStone) S.box(1.6, 0.18, 0.9, cx * 4.6, api.padY + y, cz * 4.6, C.stone, -a);
-      // the timber half-tread on its bracket
-      S.box(1.5, 0.14, 0.72, cx * 5.32, api.padY + y - 0.02, cz * 5.32, TAR, -a);
-      S.box(0.16, 0.34, 0.62, cx * 5.32, api.padY + y - 0.26, cz * 5.32, IRON, -a);
-      api.emit({
-        kind: 'obb', x: cx * RW, z: cz * RW, halfX: 0.78, halfZ: 0.78, yaw: -a,
-        y0: api.padY + y - 0.09, y1: api.padY + y + 0.09, tag: 'stone', standable: true,
-      });
-      if (i % 2 === 0) {
-        S.box(0.07, 0.95, 0.07, cx * 5.72, api.padY + y + 0.55, cz * 5.72, C.rust);
-        S.box(1.5, 0.06, 0.06, cx * 5.72, api.padY + y + 1.00, cz * 5.72, C.rust, -a);
-      }
-    };
-    for (let i = 0; i < 14; i++) tread(i, false);     // sites.js already draws the stone
-    for (let i = 14; i < 30; i++) tread(i, true);     // and this dress carries it to 13 m
+    // Close-set treads surround the shaft without intersecting its walls. The old
+    // 2.16 m spacing exceeded both the boards and the support colliders.
+    const RW=5.8,COUNT=100,DA=.16;
+    for(let i=0;i<COUNT;i++){
+      const a=i*DA,y=(i+1)*19/COUNT,cx=Math.cos(a),cz=Math.sin(a),yaw=-a;
+      S.box(1.8,.18,1.09,cx*RW,api.padY+y-.09,cz*RW,C.stone,yaw);
+      api.emit({kind:'obb',x:cx*RW,z:cz*RW,halfX:.90,halfZ:.545,yaw,
+        y0:api.padY+y-.18,y1:api.padY+y,tag:'stone',standable:true});
+      const railR=RW+.87;
+      S.box(.065,.98,.065,cx*railR,api.padY+y+.49,cz*railR,IRON);
+      S.box(.07,.065,1.16,cx*railR,api.padY+y+.98,cz*railR,C.rust,yaw);
+      api.emit({kind:'obb',x:cx*railR,z:cz*railR,halfX:.04,halfZ:.58,yaw,
+        y0:api.padY+y-.08,y1:api.padY+y+1,tag:'metal',climbable:false});
+    }
+    // Join the final tread to the belfry's solid floor.
+    const endA=(COUNT-1)*DA,ex=Math.cos(endA),ez=Math.sin(endA);
+    solid(S,api,3.3,.18,1.5,ex*4.45,18.91,ez*4.45,C.plank,-endA,'wood',true);
 
-    // ---- the ringing floor at the head of the flight ---------------------------------------------
     {
-      const a = 30 * 0.42, RY = 0.4 + 30 * 0.42;         // 13.0 m
+      const a = endA, RY = 19;
       const cx = Math.cos(a) * 5.7, cz = Math.sin(a) * 5.7;
       const yaw = -(a + Math.PI * 0.5);
       deck(S, api, cx, cz, 4.4, 2.6, RY, C.plank, yaw, false);
@@ -1017,7 +1010,7 @@ export const DRESS = {
           cz + Math.sin(a) * 1.4 + az(yaw) * i * 1.0, C.rust);
       }
       // the rope down from the belfry, the sally, the coil, the peal board chalked with a date
-      S.cyl(0.035, 0.035, 10.4, 4, cx * 0.55, api.padY + RY + 5.4, cz * 0.55, C.cloth, 0, 0.05, 0.11);
+      S.cyl(0.035, 0.035, 5.0, 4, cx * 0.55, api.padY + RY + 2.5, cz * 0.55, C.cloth, 0, 0.05, 0.11);
       S.cyl(0.075, 0.075, 0.66, 6, cx * 0.76, api.padY + RY + 1.1, cz * 0.76, C.paper);
       S.cyl(0.26, 0.26, 0.20, 10, cx - 1.0, api.padY + RY + 0.10, cz, C.cloth, 0, Math.PI * 0.5);
       S.box(1.2, 0.86, 0.07, cx + Math.cos(a) * 1.1, api.padY + RY + 1.35,

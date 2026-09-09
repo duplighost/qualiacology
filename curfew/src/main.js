@@ -66,6 +66,8 @@ import * as wildsMod from './world/wilds.js';         // ROUND 6, lane F
 import * as refugeMod from './world/refuge.js';
 import * as searchMod from './world/search.js';       // ROUND 15: going through a body
 import * as dealerMod from './world/dealer.js';
+import * as mechanicsMod from './world/mechanics.js';
+import * as scavengingMod from './world/scavenging.js';
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -106,6 +108,8 @@ const SYSTEMS = [
   ['car', carMod],
   ['progress', progressMod],
   ['dealer', dealerMod],      // saved cash/arsenal and the physical travelling shop
+  ['mechanics', mechanicsMod],
+  ['scavenging', scavengingMod],
   ['audio', audioMod],         // late, so it can hear everything that happened this step
   ['hud', hudMod],
   // -- presentation, last ---------------------------------------------------------------
@@ -397,7 +401,7 @@ function frame(now) {
   // and a resize still works, but no fixed step runs, dt is zero for anything that reads it,
   // and the accumulator is emptied so resuming cannot pay back the debt in one lurch.
   const wantPause = ctx.playing && !TEST_MODE && !API.noLock
-    && (document.hidden || !document.pointerLockElement);
+    && (document.hidden || (!document.pointerLockElement && !ctx.input.unlockedPlay));
   if (wantPause !== ctx.paused) {
     ctx.paused = wantPause;
     ctx.time.scale = 1;                       // never resume inside a hitstop

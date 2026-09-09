@@ -94,6 +94,7 @@ import { clamp, clamp01, DEG, TAU } from '../engine/math.js';
 import { BRANCHES, NODES, levelFrac, xpForLevel } from '../progression/nodes.js';
 // Pure data, read-only: the majors' positions, names and region tints for the map.
 import { MAJORS, MINOR_KINDS, REGION_TINT, DEFAULT_TINT } from '../world/placedata.js';
+import { Readouts } from './readouts.js';
 
 /* ---------------------------------------------------------------- constants -- */
 // No CFG.hud block exists; config.js belongs to the engine owner and is deep-frozen. Every
@@ -295,7 +296,7 @@ const MAP_LOOP_A = 0.60;        // the county loop: the one road that goes every
 const MAP_LOOP_W = 2.0;
 const MAP_SPUR_A = 0.34;        // a gravel spur: thinner, dashed, so the loop reads as the loop
 const MAP_SPUR_W = 1.2;
-const MAP_CASING_A = 0.10;      // a soft casing under the loop, so it survives the wash
+const MAP_CASING_A = 0.52;      // asphalt band with a dashed centre line, never a boundary
 const MAP_UNFOUND_A = 0.30;     // a faint mark. It says SOMETHING IS HERE and nothing else —
                                 // no glyph, no name: you have not been.
 const MAP_FOUND_A = 0.86;
@@ -304,7 +305,7 @@ const MAP_MINOR_A = 0.52;       // a minor site he has stood at
 const MAP_NAME_FONT = '10.5px "Palatino Linotype", Palatino, Georgia, serif';
 const MAP_NAME_DX = 7;          // px from the mark to its name
 const MAP_NAME_FLIP = 92;       // px from the right edge past which a name sits on the left
-const MAP_ARROW = 11;           // px, the player's arrow, tip to base
+const MAP_ARROW = 18;           // a distinct cyan player arrow above all map layers
 const MAP_CAR_L = 9;            // px, the car's rectangle
 const MAP_CAR_W = 5;
 
@@ -320,7 +321,7 @@ const CONTROLS = [
   ['Swap weapon', 'Q or 1 / 2'],
   ['Sprint', 'Shift'],
   ['Crouch and slide', 'Ctrl or C'],
-  ['Jump and mantle', 'Space'],
+  ['Jump / climb', 'Tap / hold Space'],
   // ALEX, first playtest: "I've made it to the car. i have no idea how to get into the car
   // lol." The door is KeyE and the horn is KeyH (engine/input.js:59-60, adopted from the
   // vehicle lane's shim) and NEITHER was on this card — the one surface in CURFEW where
@@ -330,7 +331,7 @@ const CONTROLS = [
   // playtest: "I have no idea how you finish places."
   ['Use, get in the car', 'E'],
   ['Claim a place', 'hold E'],
-  ['Horn', 'H'],
+  ['Horn / radio', 'H / T'],
   ['Locate car', 'L or car icon'],
   ['Torch', 'F'],
   // ROUND 7. Alex, fifth playtest: "I don't know if there's a map or conquered destinations
@@ -899,6 +900,8 @@ export class Hud {
     window.addEventListener('resize', this._onResize);
 
     this._wire();
+    this.readouts = new Readouts(this.ctx, chrome);
+    life.style.display = 'none'; // Health now has a labelled bar and a red damage trail.
   }
 
   ready() {
@@ -909,6 +912,7 @@ export class Hud {
   }
 
   dispose() {
+    this.readouts?.dispose();
     for (const off of this._unsub) { try { off(); } catch (e) { void e; } }
     this._unsub.length = 0;
     if (this._onResize) window.removeEventListener('resize', this._onResize);
@@ -1205,9 +1209,28 @@ export class Hud {
     const map = el('canvas', 'map');
     map.id = 'curfew-map';
     map.width = MAP_PX; map.height = MAP_PX;
-    top.appendChild(map);
+    const mapWrap=el('div','map-wrap');
+    mapWrap.appendChild(map);
+    const legend=el('div','map-legend');
+    legend.innerHTML='<span style="color:#7fe1e5">▲ You</span> &nbsp; <span style="color:#edbf76">▰ Car</span> &nbsp; <span style="color:#93c7a3">◆ Powered</span> &nbsp; ◇ Unclaimed &nbsp; <span style="color:#d2cab7">┄ Road</span>';
+    legend.style.cssText='font:11px/1.6 ui-monospace,Consolas,monospace;text-align:center;color:#c4ced4;padding:8px 0';
+    mapWrap.appendChild(legend);top.appendChild(mapWrap);
     this.mapCanvas = map;
     this.mg = map.getContext('2d', { alpha: true });   // ROUND 13: transparent where unrevealed
+    this.mapZoom=1.6;this.mapCenter=null;
+    map.style.cursor='grab';map.style.touchAction='none';
+    map.title='Scroll to zoom; drag to pan; double-click to find yourself';
+    const mapHelp=el('div','map-legend','Wheel to zoom · Drag to move · Double-click to centre');
+    mapHelp.style.cssText='font:10px/1.6 ui-monospace,Consolas,monospace;color:#8f9fa9;text-align:center';mapWrap.appendChild(mapHelp);
+    map.addEventListener('wheel',e=>{e.preventDefault();this.mapZoom=clamp(this.mapZoom*Math.exp(-e.deltaY*.0015),1,3.5);this._drawMap();},{passive:false});
+    map.addEventListener('pointerdown',e=>{if(e.button!==0)return;map.setPointerCapture(e.pointerId);this.mapDrag={x:e.clientX,y:e.clientY};map.style.cursor='grabbing';});
+    map.addEventListener('pointermove',e=>{if(!this.mapDrag||!this.mapCenter)return;
+      const scale=CFG.world.SIZE/(map.getBoundingClientRect().width*this.mapZoom);
+      this.mapCenter.x-=(e.clientX-this.mapDrag.x)*scale;this.mapCenter.z-=(e.clientY-this.mapDrag.y)*scale;
+      this.mapDrag={x:e.clientX,y:e.clientY};this._drawMap();});
+    const releaseMap=()=>{this.mapDrag=null;map.style.cursor='grab';};
+    map.addEventListener('pointerup',releaseMap);map.addEventListener('lostpointercapture',releaseMap);
+    map.addEventListener('dblclick',()=>{this.mapCenter=null;this._drawMap();});
 
     // THE TREE. Built once: a level line, then one row per branch holding one button per
     // tier. The name, the cost and the line are written here and never again; _refreshTree()
@@ -1319,20 +1342,17 @@ export class Hud {
 
     card.appendChild(wrap);
     card.addEventListener('mousedown', (e) => { e.preventDefault(); this._resume(); });
-    // ROUND 13: ANY KEY LEAVES THE CARD. Alex: "it makes more since to use the escape key to
-    // leave the pause menu if the escape key gets you into the pause menu ... a click is a
-    // weird key to get you out." Escape itself cannot do it: Chrome grants pointer lock only
-    // from a user gesture, the Escape key never counts as one, and it blocks any re-lock for
-    // about 1.5 s after the Escape that released it (measured). Every other key can, so every
-    // other key does. Capture phase, so it runs before input.js's own window listener;
-    // preventDefault so a Space or Enter on a focused node button does not buy AND resume, and
-    // Tab does not move focus. The key that resumes is cleared by main.js when the lock lands,
-    // so the Space that leaves the card never jumps.
+    // Escape resumes through the same loop pause state without depending on a pointer-lock
+    // grant. A subsequent gesture captures the mouse; this key cannot also reopen the menu.
     this._onKey = (e) => {
       if (!this.paused || !this.pauseEl || this.pauseEl.hidden) return;
       if (e.repeat) return;
       const k = e.key || '';
-      if (e.code === 'Escape' || k === 'Escape') return;
+      if (e.code === 'Escape' || k === 'Escape') {
+        e.preventDefault(); e.stopImmediatePropagation();
+        this._resume(true);
+        return;
+      }
       if (k === 'Shift' || k === 'Control' || k === 'Alt' || k === 'Meta' || /^F\d{1,2}$/.test(k)) return;
       e.preventDefault();
       this._resume();
@@ -1356,11 +1376,9 @@ export class Hud {
    * Escape/click cycle left the page with paused=false and the card VISIBLE over a running
    * game. Two states, two owners.
    *
-   * Now there is one owner. The card follows game:paused and nothing else: no key shows it,
-   * no key hides it. A menu press that reaches step() while locked exits pointer lock and
-   * does nothing more — losing the lock IS the pause. The only way out is a click: card
-   * mousedown -> _resume() -> input.requestLock() -> lock acquired -> main.js unpauses ->
-   * game:paused false -> the card hides. The card never hides itself.
+   * The card follows game:paused. Escape resumes immediately through unlockedPlay;
+   * a subsequent gesture recaptures the pointer. Clicking resumes and requests capture
+   * together. Both routes clear the input edge that could otherwise reopen the card.
    *
    * IT NEVER SHOWS AT ENTRY. Entering the game emits game:paused true on frame N (playing,
    * lock requested, not yet held) and false when the lock lands — one frame later headless,
@@ -1401,7 +1419,7 @@ export class Hud {
     // the card's transitions, and a same-value write would still make a record.
     if (this.pauseEl && this.pauseEl.hidden !== !v) {
       this.pauseEl.hidden = !v;
-      if (v) { this._refreshTree(); this._drawMap(); }
+      if (v) { this.mapCenter=null;this._refreshTree(); this._drawMap(); }
       // ROUND 13: the card's music follows the CARD, on exactly this transition (the one the
       // gate's MutationObserver counts), so the piece and the card can never disagree.
       this.ctx.bus.emit('pause:card', { shown: v });
@@ -1413,7 +1431,12 @@ export class Hud {
   isPaused() { return this.paused; }
 
   /** The click, or the key, on the card. Ask for the lock; main.js lifts the pause when it lands. */
-  _resume() {
+  _resume(escape = false) {
+    if (escape) {
+      const input = this.ctx.input;
+      if (input) { input.clear(); input.endStep(0); input.unlockedPlay = true; }
+      return;
+    }
     // ROUND 13: one request per 1.2 s. Chrome rejects two inside about a second, and a
     // mashed key would otherwise be a page error for nothing.
     const now = performance.now();
@@ -1762,8 +1785,10 @@ export class Hud {
     const size = (this.ctx.cfg && this.ctx.cfg.world && this.ctx.cfg.world.SIZE) || CFG.world.SIZE;
     const half = size * 0.5;
     // North is -Z (the camera at yaw 0 looks down -Z), so -Z goes UP the page.
-    const px = (x) => (x + half) / size * S;
-    const pz = (z) => (z + half) / size * S;
+    let overlay = false;
+    const zoom = this.mapZoom || 1;
+    const px = (x) => overlay ? S/2 + (x-this.mapCenter.x)/size*S*zoom : (x+half)/size*S;
+    const pz = (z) => overlay ? S/2 + (z-this.mapCenter.z)/size*S*zoom : (z+half)/size*S;
     const sys = this.ctx.systems;
     const prog = sys.get('progress');
     const places = sys.get('places');
@@ -1838,10 +1863,10 @@ export class Hud {
           const loop = kind === 'asphalt';
           if (pass === 0 && !loop) continue;            // the casing is the loop's alone
           if (!revealed(pl)) continue;
-          g.strokeStyle = INK;
-          g.setLineDash(pass === 1 && !loop ? [3.5, 3.0] : []);
+          g.strokeStyle = pass===0 ? '#5c6970' : (loop ? '#e1d6b9' : INK);
+          g.setLineDash(pass===1 ? (loop ? [3.5,3.0] : [1.4,3.0]) : []);
           g.globalAlpha = pass === 0 ? MAP_CASING_A : (loop ? MAP_LOOP_A : MAP_SPUR_A);
-          g.lineWidth = pass === 0 ? MAP_LOOP_W * 3.2 : (loop ? MAP_LOOP_W : MAP_SPUR_W);
+          g.lineWidth = pass === 0 ? MAP_LOOP_W * 1.7 : (loop ? .65 : MAP_SPUR_W);
           g.beginPath();
           g.moveTo(px(pl[0].x), pz(pl[0].z));
           for (let i = 1; i < pl.length; i++) g.lineTo(px(pl[i].x), pz(pl[i].z));
@@ -1962,7 +1987,12 @@ export class Hud {
         g.clearRect(0, 0, S, S);        // no bitmap at all: nothing is revealed
       }
       gm.globalAlpha = 1;
+      if(!this.mapCenter)this.mapCenter={x:player?.pos.x||0,z:player?.pos.z||0};
+      const tx=S/2-px(this.mapCenter.x)*zoom,ty=S/2-pz(this.mapCenter.z)*zoom;
+      gm.setTransform(this.dpr*zoom,0,0,this.dpr*zoom,tx*this.dpr,ty*this.dpr);
       gm.drawImage(this._mapLayer, 0, 0, S, S);
+      gm.setTransform(this.dpr,0,0,this.dpr,0,0);
+      overlay = true;
       g = gm;
     }
     const foundSet = places && places.found && typeof places.found.has === 'function' ? places.found
@@ -1971,12 +2001,14 @@ export class Hud {
     const claimedB = prog && prog.claimed && typeof prog.claimed.has === 'function' ? prog.claimed : null;
     g.font = MAP_NAME_FONT;
     g.textBaseline = 'middle';
+    const labels=player?[{x:px(player.pos.x)-25,y:pz(player.pos.z),w:50},{x:px(player.pos.x)-25,y:pz(player.pos.z)+24,w:50}]:[];
     for (let i = 0; i < MAJORS.length; i++) {
       const d = MAJORS[i];
       const x = px(d.x), y = pz(d.z);
       const claimed = !!((claimedA && claimedA.has(d.id)) || (claimedB && claimedB.has(d.id)));
       const found = claimed || !!(foundSet && foundSet.has(d.id));
-      const tint = hex6(REGION_TINT[d.region] || DEFAULT_TINT);
+      if(x<8||y<8||x>S-8||y>S-8)continue;
+      const tint = '#93c7a3';
       if (!found) {
         // ROUND 13: NOTHING. The hollow diamond that said "something is here" is gone; Alex:
         // "lets not let people know how far it goes and just reveal the parts they get to."
@@ -2011,10 +2043,19 @@ export class Hud {
       // The name, once found. To the right unless that runs off the paper.
       g.globalAlpha = claimed ? 0.86 : MAP_FOUND_A;
       g.fillStyle = claimed ? tint : INK;
-      const left = x > S - MAP_NAME_FLIP;
-      g.textAlign = left ? 'right' : 'left';
-      const nx = left ? x - MAP_GLYPH - MAP_NAME_DX : x + MAP_GLYPH + MAP_NAME_DX;
-      g.fillText(d.name, nx, y);
+      const width=g.measureText(d.name).width;
+      const left = x+MAP_GLYPH+MAP_NAME_DX+width>S-8;
+      g.textAlign = 'left';
+      const nx=Math.max(8,Math.min(S-width-8,left?x-MAP_GLYPH-MAP_NAME_DX-width:x+MAP_GLYPH+MAP_NAME_DX));
+      const bx=nx;
+      let ny=null;
+      for(let k=0;k<14;k++){
+        const yy=Math.max(12,Math.min(S-18,y+(k?Math.ceil(k/2)*16*(k%2?1:-1):0)));
+        if(!labels.some(r=>bx<r.x+r.w+5&&bx+width+5>r.x&&Math.abs(yy-r.y)<15)){ny=yy;break;}
+      }
+      if(ny===null)continue;
+      if(ny!==y){g.strokeStyle=claimed?tint:INK;g.lineWidth=.7;g.globalAlpha=.45;g.beginPath();g.moveTo(x,y);g.lineTo(left?nx+width+3:nx-3,ny);g.stroke();}
+      g.globalAlpha=.94;g.fillText(d.name,nx,ny);labels.push({x:bx,y:ny,w:width});
       I.names++;
     }
     g.globalAlpha = 1;
@@ -2030,7 +2071,7 @@ export class Hud {
       g.rotate(Math.atan2(-Math.cos(h), -Math.sin(h)));
       g.globalAlpha = 0.85; g.strokeStyle = SHADE; g.lineWidth = 3;
       g.strokeRect(-MAP_CAR_L * 0.5, -MAP_CAR_W * 0.5, MAP_CAR_L, MAP_CAR_W);
-      g.strokeStyle = INK; g.lineWidth = 1.2;
+      g.strokeStyle = '#edbf76'; g.lineWidth = 1.8;
       g.strokeRect(-MAP_CAR_L * 0.5, -MAP_CAR_W * 0.5, MAP_CAR_L, MAP_CAR_W);
       g.restore();
       I.car = true; I.carX = +x.toFixed(1); I.carY = +y.toFixed(1);
@@ -2048,8 +2089,8 @@ export class Hud {
       const rx = -fy, ry = fx;
       for (let pass = 0; pass < 2; pass++) {
         g.globalAlpha = pass === 0 ? 0.7 : 1;
-        g.strokeStyle = pass === 0 ? SHADE : INK;
-        g.fillStyle = pass === 0 ? SHADE : INK;
+        g.strokeStyle = pass === 0 ? SHADE : '#7fe1e5';
+        g.fillStyle = pass === 0 ? SHADE : '#7fe1e5';
         g.lineWidth = pass === 0 ? 4 : 1;
         g.lineJoin = 'round';
         g.beginPath();
@@ -2060,6 +2101,8 @@ export class Hud {
         g.closePath();
         if (pass === 0) g.stroke(); else g.fill();
       }
+      g.strokeStyle='#7fe1e5';g.lineWidth=1.5;g.beginPath();g.arc(x,y,14,0,TAU);g.stroke();
+      g.fillStyle='#05090e';g.fillRect(x-17,y+17,34,14);g.fillStyle='#7fe1e5';g.font='bold 11px ui-monospace,monospace';g.textAlign='center';g.fillText('YOU',x,y+24);
       I.arrowX = +x.toFixed(1); I.arrowY = +y.toFixed(1);
     }
 
@@ -2315,10 +2358,7 @@ export class Hud {
     g.beginPath(); g.arc(c, c, rim, 0, TAU); g.clip();
     g.fillStyle = 'rgba(5,8,12,0.84)'; g.fillRect(0, 0, S, S);
 
-    // Two unlabelled distance rings keep local scale readable without a legend.
-    g.strokeStyle = 'rgba(186,204,226,0.095)'; g.lineWidth = 1;
-    g.beginPath(); g.arc(c, c, rim * 0.5, 0, TAU); g.stroke();
-    g.beginPath(); g.arc(c, c, rim * 0.78, 0, TAU); g.stroke();
+    // Roads are the only interior lines; decorative rings were read as world boundaries.
 
     this._miniRoads = 0;
     const routes = this._miniRoutes;
@@ -2414,7 +2454,7 @@ export class Hud {
       const known = claimed || !!(found && found.has(d.id));
       if (!known) continue;   // ROUND 13: an unfound destination is not on the instrument
       g.globalAlpha = claimed ? 1 : 0.84;
-      g.strokeStyle = claimed ? (REGION_HEX[d.region] || DEFAULT_HEX) : INK;
+      g.strokeStyle = claimed ? '#93c7a3' : INK;
       g.fillStyle = g.strokeStyle; g.lineWidth = claimed ? 1.8 : 1.1;
       g.beginPath();
       g.moveTo(x, y - 4.2); g.lineTo(x + 4.2, y); g.lineTo(x, y + 4.2); g.lineTo(x - 4.2, y);
@@ -2438,7 +2478,7 @@ export class Hud {
         // has the opposite sign from the tempting `car.heading - cam.yaw` expression.
         const carAngle = cam.yaw - (Number.isFinite(car.heading) ? car.heading : 0);
         g.rotate(carAngle);
-        g.fillStyle = INK; g.strokeStyle = SHADE; g.lineWidth = 3;
+        g.fillStyle = '#edbf76'; g.strokeStyle = SHADE; g.lineWidth = 3;
         g.strokeRect(-3.1, -5.2, 6.2, 10.4); g.fillRect(-2.3, -4.4, 4.6, 8.8);
         g.restore(); this._miniCar = true; this._miniCarX = x; this._miniCarY = y;
         this._miniCarAngle = carAngle;
@@ -2480,9 +2520,9 @@ export class Hud {
     g.beginPath(); g.arc(c, c, rim - 1.2, 0, TAU); g.stroke();
 
     // The player never moves off the centre: the county rotates under the arrow.
-    g.fillStyle = INK; g.strokeStyle = SHADE; g.lineWidth = 3.4;
-    g.beginPath(); g.moveTo(c, c - 8); g.lineTo(c + 5, c + 5.5); g.lineTo(c, c + 3);
-    g.lineTo(c - 5, c + 5.5); g.closePath(); g.stroke(); g.fill();
+    g.fillStyle = '#7fe1e5'; g.strokeStyle = SHADE; g.lineWidth = 4;
+    g.beginPath(); g.moveTo(c,c-11);g.lineTo(c+7,c+7);g.lineTo(c,c+3);
+    g.lineTo(c-7,c+7);g.closePath();g.stroke();g.fill();
     g.restore();
     this._miniPaints++;
     this._miniDirty = false;
@@ -2568,8 +2608,9 @@ export class Hud {
     // Ignored for MENU_ARM_STEPS after a resume: a press made while paused arrives here as a
     // stale edge on the first step back and would re-pause the game (see the constant).
     if (this._sinceResume > MENU_ARM_STEPS && inp && inp.pressed && inp.pressed('menu')
-      && !this.paused && document.pointerLockElement && document.exitPointerLock) {
-      document.exitPointerLock();
+      && !this.paused) {
+      inp.unlockedPlay = false;
+      if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock();
     }
     // KeyL is not a private HUD listener. It is the canonical carlocate action, latched by
     // engine/input.js and consumed here on the same fixed-step edge as torch/menu.
@@ -2662,6 +2703,7 @@ export class Hud {
       && (this._lockHeld || performance.now() - this._pausedAtMs >= CARD_LATE_MS)) this.pause(true);
 
     this._syncChrome();
+    this.readouts?.update();
     this._readWeapon();
     this._readCar();
     this._presentPrompt();
@@ -2670,7 +2712,6 @@ export class Hud {
       if (this._ammoDirty) this._paintAmmo();
     }
     this._paintVignette();
-    this._paintLife();
     this._speak();
 
     // Repaint only when something moved. A full 640 px clear every frame for a crosshair that

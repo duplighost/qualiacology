@@ -37,6 +37,7 @@
 //   floors so a thing is always trackable on the sound stage).
 
 import { CFG } from '../config.js';
+import {bakeMarrowVoices} from './marrow-voice.js';
 import { clamp, clamp01 } from '../engine/math.js';
 import {
   noiseFill, pinkFill, biquad, biquadSweep, envAD, fadeOut, fadeIn,
@@ -165,6 +166,7 @@ export function insideFrustum(vp, x, y, z) {
  * are audible before they are visible.
  */
 export const SPECIES = {
+  marrow: { id: 'marrow', f: 96, press: 'marrow', pf: 110, rate: .88 },
   hound: { id: 'pant', f: 300, press: 'growl', pf: 150, rate: 1.10 },
   pallbearer: { id: 'drag', f: 150, press: 'breath', pf: 92, rate: 0.94 },
   hunter: { id: 'thin', f: 96, press: 'scrape', pf: 64, rate: 0.86 },
@@ -234,7 +236,7 @@ export class Earshot {
 
   /* ---------------------------------------------------------------- bake -- */
 
-  bake() {
+  async bake() {
     const A = this.A;
     const dsr = this.A.sr;                                  // device rate: the click only
     // Every creature loop is below 3 kHz and every one-shot below 4; baking them
@@ -358,9 +360,12 @@ export class Earshot {
       },
     };
 
+    const marrow=await bakeMarrowVoices(sr,rn);
+    A.buf.vid_marrow=marrow.whisper;A.buf.vpr_marrow=marrow.moan;
     const made = Object.create(null);
     for (let i = 0; i < SPECIES_KEYS.length; i++) {
       const S = SPECIES[SPECIES_KEYS[i]];
+      if(S.id==='marrow')continue;
       if (!made['id_' + S.id]) {
         made['id_' + S.id] = 1;
         const b = new Float32Array(N(3.6));

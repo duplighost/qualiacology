@@ -215,6 +215,7 @@ export class Fx {
     }
     this.decals.instanceMatrix.needsUpdate = true;
     this.dcCursor = 0;
+    this._offBroken=this.ctx.bus.on('world:broke',p=>this.clearDecalsNear(p.x,p.y,p.z,1.6));
   }
 
   /* --------------------------------------------------------------- spawners -- */
@@ -270,11 +271,22 @@ export class Fx {
     const i = this.dcCursor;
     this.dcCursor = (this.dcCursor + 1) % MAX_DECALS;
     this.dcState[i].age = 0;
+    this.dcState[i].x=point.x;this.dcState[i].y=point.y;this.dcState[i].z=point.z;
     _q.setFromUnitVectors(_zAxis, normal);
     _p.copy(point).addScaledVector(normal, 0.02);
     _m4.compose(_p, _q, _s.set(size, size, size));
     this.decals.setMatrixAt(i, _m4);
     this.decals.instanceMatrix.needsUpdate = true;
+  }
+
+  clearDecalsNear(x,y,z,radius=1.6){
+    if(!this.decals)return;
+    let changed=false;
+    for(let i=0;i<this.dcState.length;i++){
+      const d=this.dcState[i];if(d.age>22||Math.hypot(d.x-x,d.y-y,d.z-z)>radius)continue;
+      d.age=99;_m4.makeScale(0,0,0);this.decals.setMatrixAt(i,_m4);changed=true;
+    }
+    if(changed)this.decals.instanceMatrix.needsUpdate=true;
   }
 
   /**
@@ -562,6 +574,7 @@ export class Fx {
   ready() { return !!(this.points && this.tracers && this.decals); }
 
   dispose() {
+    this._offBroken?.();
     for (const m of [this.points, this.tracers, this.decals]) {
       if (!m) continue;
       m.removeFromParent();

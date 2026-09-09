@@ -1,11 +1,11 @@
 // Authored destination residents. Bodies are staged before entry; attention starts the beat.
-// No camera takeover, damage, pressure spawn, runtime light, or streamed-state reset.
+// September 8: these residents are real combatants. Damage owns health and death;
+// shots can never restart a decorative collapse or revive a defeated resident.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeShell } from '../enemies/bodies.js';
 import { clamp01 } from '../engine/math.js';
 import { CFG } from '../config.js';
-import { MASK } from '../world/collision.js';
 
 // Site-local coordinates use the SAME yaw/pad frame as places.nodes. The zone is the actual
 // room, not a radius through its walls; a head-height sight ray is a second independent gate.
@@ -50,7 +50,8 @@ const SEAM = [0.108, 0.087, 0.063];
 const VOID = [0.002, 0.003, 0.003];
 const TEETH = [0.135, 0.113, 0.088];
 const _origin = { x: 0, y: 0, z: 0 };
-const _ray = { x: 0, y: 0, z: 0 };
+const _meshRay = new THREE.Raycaster();
+const RESIDENT_DEF=Object.freeze({id:'interior-resident',owner:'pressure',hp:150,xp:90,height:2.9,radius:.43,mass:110,dmg:20});
 
 function paint(g, color) {
   const n = g.attributes.position.count, a = new Float32Array(n * 3);
@@ -139,7 +140,9 @@ function residentRig(mat, index) {
   rope.visible = false; root.add(rope);
   return { root, hips, torso, head, arms, rope, x: 0, y: 0, z: 0, px: 0, py: 0, pz: 0,
     yaw: 0, baseYaw: 0, face: 0, prevFace: 0, fold: 0, prevFold: 0, scale: 1,
-    floor: 0, ceiling: 0, active: false, phase: 0 };
+    floor: 0, ceiling: 0, active: false, phase: 0,
+    interior:true,def:RESIDENT_DEF,species:'interior-resident',pos:new THREE.Vector3(),
+    hp:150,alive:true,dead:false,deathT:0,searched:false,attackT:-1,cooldown:0,index };
 }
 
 export class InteriorHorror {
@@ -162,7 +165,6 @@ export class InteriorHorror {
       this.events.push({ def, site, spent: false, away: 0, last: -REARM, dwell: 0,
         stage: 'dormant', t: 0, seen: 0, notSeen: 0, sounded: 0, rushed: false });
     }
-    this._offShot = this.ctx.bus.on('weapon:fire', p => this._shot(p));
     this._offRespawn = this.ctx.bus.on('player:respawn', () => this._finish());
     this.ctx.shared.interiorHorror = false;
   }
@@ -222,8 +224,11 @@ export class InteriorHorror {
     this.active = e; e.stage = 'waiting'; e.t = 0; e.dwell = 0; e.seen = 0; e.notSeen = 0; e.sounded = 0; e.rushed = false;
     const d = e.def, seats = d.seats;
     for (let i = 0; i < POOL; i++) {
-      const a = this.actors[i]; a.active = i < (seats ? seats.length : 1); a.root.visible = a.active;
+      const a = this.actors[i],killed=this._sys('progress').flag('interior-killed:'+e.def.id)||0;
+      a.active = i < (seats ? seats.length : 1) && !(killed & (1<<i)); a.root.visible = a.active;
       if (!a.active) continue;
+      a.hp=RESIDENT_DEF.hp;a.alive=true;a.dead=false;a.deathT=0;a.searched=false;a.attackT=-1;a.cooldown=0;
+      a.encounter=e.def.id;a.index=i;
       const seat = seats ? seats[i] : [0, 0];
       this._world(e, d.x + seat[0], d.y, d.z + seat[1], _origin);
       a.floor = _origin.y; a.x = a.px = _origin.x; a.z = a.pz = _origin.z;
@@ -232,6 +237,7 @@ export class InteriorHorror {
       a.ceiling = a.floor + (d.ceiling || 0); a.yaw = a.baseYaw = e.site.yaw + d.yaw;
       a.face = a.prevFace = 0; a.fold = a.prevFold = seats ? 1.04 : 0.83;
       a.phase = this.rng.range(0, 6.28); a.rope.visible = d.kind === 'suspended';
+      a.pos.set(a.x,a.y,a.z);
     }
     this.present(1);
   }
@@ -266,36 +272,80 @@ export class InteriorHorror {
 
   _rush(a, p, dt) {
     const dx = p.x - a.x, dz = p.z - a.z, dist = Math.hypot(dx, dz);
-    if (dist < 2.75) return;
-    const amount = Math.min(dist - 2.75, dt * 6.5), nx = a.x + dx / dist * amount, nz = a.z + dz / dist * amount;
+    if (dist < 1.55) return;
+    const amount = Math.min(dist - 1.55, dt * 4.8);
     const col = this._sys('collision');
     // Three parallel rays cover shoulders and knees. Never sprint a silhouette through a
     // pew, a sealed door, or a wall merely because the centre ray happened to be clear.
-    for (const side of [-0.37, 0, 0.37]) {
-      const sx = dz / dist * side, sz = -dx / dist * side;
-      if (!col.segmentClear(a.x + sx, a.floor + 0.64, a.z + sz, nx + sx, a.floor + 0.64, nz + sz)
-        || !col.segmentClear(a.x + sx, a.floor + 1.85 * a.scale, a.z + sz, nx + sx, a.floor + 1.85 * a.scale, nz + sz)) {
-        this.stats.blockedRush++; return;
+    const base=Math.atan2(dx,dz),side=a.steerSide||1;
+    for(const turn of [0,side*.55,-side*.55,side*1.05,-side*1.05,side*1.5,-side*1.5]){
+      const vx=Math.sin(base+turn),vz=Math.cos(base+turn),look=Math.min(dist-.9,Math.max(amount,.68));
+      let clear=true;
+      for(const offset of [-.32,0,.32]){
+        const sx=vz*offset,sz=-vx*offset;
+        for(const h of [.64,1.85*a.scale])if(!col.segmentClear(a.x+sx,a.floor+h,a.z+sz,
+          a.x+sx+vx*look,a.floor+h,a.z+sz+vz*look)){clear=false;break;}
+        if(!clear)break;
       }
+      if(clear){a.x+=vx*amount;a.z+=vz*amount;if(turn)a.steerSide=Math.sign(turn);return;}
     }
-    a.x = nx; a.z = nz;
+    this.stats.blockedRush++;
   }
 
-  _shot(p) {
-    const e = this.active; if (!e || p.pellet > 0) return;
-    for (const a of this.actors) {
-      if (!a.active) continue;
-      const dx = a.x - p.ox, dy = a.y + 1.7 * a.scale - p.oy, dz = a.z - p.oz;
-      const along = dx * p.dx + dy * p.dy + dz * p.dz;
-      if (along < 0 || along > 30) continue;
-      const r2 = dx * dx + dy * dy + dz * dz - along * along;
-      if (r2 > 1.10) continue;
-      _origin.x = p.ox; _origin.y = p.oy; _origin.z = p.oz;
-      _ray.x = p.dx; _ray.y = p.dy; _ray.z = p.dz;
-      if (this._sys('collision').raycast(_origin, _ray, Math.max(0, along - 0.6), MASK.SHOT)) continue;
-      this.stats.shots++; e.stage = 'collapsing'; e.t = 0;
-      this.ctx.shared.interiorHorror = true; this._say('withdraw', a, 0.65); return;
+  raycast(origin, direction, maxT) {
+    if(!this.active)return null;
+    _meshRay.set(origin,direction);_meshRay.near=0;_meshRay.far=maxT;
+    let best=null;
+    for(const a of this.actors){
+      if(!a.active||!a.alive)continue;
+      a.root.updateMatrixWorld(true);
+      const hits=_meshRay.intersectObject(a.root,true);
+      const h=hits.find(h=>h.object!==a.rope);
+      if(h&&(!best||h.distance<best.t))best={t:h.distance,enemy:a,zone:h.object.parent===a.head?'head':'torso',point:h.point};
     }
+    return best;
+  }
+
+  damage(a,amount,info={}) {
+    if(!a?.active||!a.alive)return{killed:false};
+    const e=this.active;a.hp-=Math.max(1,Number.isFinite(amount)?amount:1);this.stats.shots++;
+    a.pos.set(a.x,a.y,a.z);
+    if(a.hp<=0){
+      a.hp=0;a.alive=false;a.dead=true;a.deathT=0;a.deathFold=a.fold;a.attackT=-1;a.rope.visible=false;
+      const pr=this._sys('progress'),flag='interior-killed:'+a.encounter;
+      pr.flag(flag,(pr.flag(flag)||0)|(1<<a.index));
+      this._say('withdraw',a,.60);
+      this.ctx.bus.emit('enemy:killed',{e:a,x:a.x,y:a.y+.6,z:a.z,xp:RESIDENT_DEF.xp,species:a.species,owner:'pressure',zone:info.zone,melee:!!info.melee});
+      if(!this.actors.some(b=>b.active&&b.alive)){e.stage='remains';e.t=0;e.spent=true;this.ctx.shared.interiorHorror=false;}
+      return{killed:true,hpFrac:0,species:a.species};
+    }
+    if(e.stage==='waiting'||e.stage==='listening'||e.stage==='collapsing'||e.stage==='remains')this._payoff(e);
+    a.flinchUntil=this.clock+.15;
+    return{killed:false,hpFrac:a.hp/RESIDENT_DEF.hp,species:a.species};
+  }
+
+  _combat(dt,p,player) {
+    const e=this.active;
+    for(const a of this.actors){
+      if(!a.active||!a.alive)continue;
+      a.fold=0;a.y=a.floor;a.rope.visible=false;
+      const dx=p.x-a.x,dz=p.z-a.z,dist=Math.hypot(dx,dz);
+      a.face=0;a.baseYaw=Math.atan2(dx,dz);a.cooldown=Math.max(0,a.cooldown-dt);
+      if(a.attackT>=0){
+        a.attackT+=dt;
+        if(a.attackT>=.68){
+          // Commit the swing before it lands. Sidestepping it or closing a solid door works.
+          if(Math.hypot(p.x-a.strikeX,p.z-a.strikeZ)<1.05&&dist<2.45&&Math.abs(p.y-a.floor)<1.1
+            &&this._sys('collision').segmentClear(a.x,a.floor+1.0,a.z,p.x,p.y+1,p.z))player.hurt(RESIDENT_DEF.dmg,{x:dx/(dist||1),y:0,z:dz/(dist||1)});
+          a.attackT=-1;a.cooldown=1.8;
+        }
+      }else if(this.clock>(a.flinchUntil||0)){
+        if(dist<2.05&&a.cooldown<=0&&Math.abs(p.y-a.floor)<1.1){a.attackT=0;a.strikeX=p.x;a.strikeZ=p.z;this._say('brush',a,.55);}
+        else if(dist>1.8)this._rush(a,p,dt);
+      }
+      a.pos.set(a.x,a.y,a.z);
+    }
+    if(!this.actors.some(a=>a.active&&a.alive)){e.stage='remains';e.t=0;}
   }
 
   step(dt) {
@@ -317,6 +367,8 @@ export class InteriorHorror {
       let best = null, score = Infinity;
       for (const candidate of this.events) {
         if (candidate.spent) continue;
+        const mask=(1<<(candidate.def.seats?.length||1))-1;
+        if(((this._sys('progress').flag('interior-killed:'+candidate.def.id)||0)&mask)===mask)continue;
         this._world(candidate, candidate.def.x, candidate.def.y, candidate.def.z, _origin);
         const d = Math.hypot(p.x - _origin.x, p.z - _origin.z);
         if (d > 48 || Math.abs(p.y - _origin.y) > 5) continue;
@@ -326,7 +378,10 @@ export class InteriorHorror {
       if (best) this._stage(best);
       return;
     }
-    for (const a of this.actors) { a.px = a.x; a.py = a.y; a.pz = a.z; a.prevFace = a.face; a.prevFold = a.fold; }
+    for (const a of this.actors) {
+      a.px=a.x;a.py=a.y;a.pz=a.z;a.prevFace=a.face;a.prevFold=a.fold;
+      if(a.active&&a.dead){a.deathT+=dt;a.fold=a.deathFold+(1.30-a.deathFold)*clamp01(a.deathT/.6);a.y=a.floor;a.pos.set(a.x,a.y,a.z);}
+    }
     const inside = this._inside(e, p), a0 = this.actors[0];
     let watched = false;
     for (const a of this.actors) if (a.active && this._visible(a, p)) watched = true;
@@ -341,15 +396,12 @@ export class InteriorHorror {
         if (other) { this._finish(false); this._stage(other); return; }
       }
       e.dwell = inside && watched ? e.dwell + dt : Math.max(0, e.dwell - dt * 0.7);
-      if (e.dwell > 0.75 && distance > (e.def.minDistance || 2.8) && distance < 10
+      if (e.dwell > 0.75 && distance < 12
         && !this._busy(p) && this._sys('dread').permitOk()) this._begin(e);
       return;
     }
     e.t += dt;
-    // A genuine hunt takes priority. It cannot turn the room beat into another attacker.
-    if (this._busy(p) && e.stage !== 'collapsing' && e.stage !== 'remains') {
-      e.stage = 'collapsing'; e.t = 0;
-    }
+    if(e.stage==='combat'){this._combat(dt,p,player);return;}
     if (e.stage === 'listening') {
       if (e.t > 0.72 && e.sounded === 0) { this._say('footfall', a0, 0.35); e.sounded = 1; }
       if (e.t > 1.45 && e.sounded === 1) { this._say('mimic', a0, 0.38); e.sounded = 2; }
@@ -361,7 +413,7 @@ export class InteriorHorror {
     if (e.stage === 'turning' || e.stage === 'standing') {
       let i = 0;
       for (const a of this.actors) {
-        if (!a.active) continue;
+        if (!a.active || !a.alive) continue;
         const time = e.t - i * 0.085, k = clamp01(time / 0.34);
         const target = Math.atan2(p.x - a.x, p.z - a.z);
         let delta = target - a.baseYaw;
@@ -377,7 +429,7 @@ export class InteriorHorror {
         this._rush(a0, p, dt);
         if (!e.rushed) { e.rushed = true; this._say('brush', a0, 0.68); }
       }
-      if (e.t > 4.8 && (!watched || e.t > 8.0)) { e.stage = 'collapsing'; e.t = 0; this._say('withdraw', a0, 0.42); }
+      if (e.t > 1.95) { e.stage='combat';e.t=0; }
       return;
     }
     if (e.stage === 'collapsing') {
@@ -396,24 +448,30 @@ export class InteriorHorror {
       const turn = a.prevFace + (a.face - a.prevFace) * alpha;
       const t = this.clock + alpha / 60;
       a.root.position.set(a.px + (a.x - a.px) * alpha, a.py + (a.y - a.py) * alpha, a.pz + (a.z - a.pz) * alpha);
-      a.root.scale.setScalar(a.scale); a.root.rotation.y = a.baseYaw;
+      a.root.scale.setScalar(a.scale); a.root.rotation.set(0,a.baseYaw,0);
+      // A dead body falls all the way onto its side. The old folded standing pose was
+      // indistinguishable from the living ambush pose, even after damage was repaired.
+      const fall=a.dead?clamp01(a.deathT/.65):0;
+      a.root.rotation.z=fall*1.48;
+      a.root.position.y+=fall*.27*a.scale;
       a.hips.scale.y = 1 - clamp01((fold - 0.7) / 0.6) * 0.42;
       a.torso.rotation.x = fold * 1.26;
-      a.torso.rotation.z = Math.sin(t * 1.7 + a.phase) * 0.013;
-      a.head.rotation.set(-fold * 0.68 - 0.16, turn, Math.sin(t * 2.1 + a.phase) * 0.025 + 0.13);
+      a.torso.rotation.z = a.dead?0:Math.sin(t * 1.7 + a.phase) * 0.013;
+      a.head.rotation.set(-fold * 0.68 - 0.16, turn, a.dead ? .13 : Math.sin(t * 2.1 + a.phase) * 0.025 + 0.13);
       // The shoulders follow the face after it has turned too far. This keeps a face aimed
       // at the player while retaining the impossible first half-second of neck movement.
       a.torso.rotation.y = turn * clamp01(Math.abs(turn) / Math.PI) * 0.54;
       a.head.rotation.y = turn - a.torso.rotation.y;
       for (let i = 0; i < a.arms.length; i++) {
-        a.arms[i].rotation.x = -fold * 0.42 + (e.stage === 'standing' ? -0.34 : 0);
-        a.arms[i].rotation.z = (i ? 1 : -1) * (0.09 + Math.sin(t * 2 + i) * 0.012);
+        const swing=a.attackT>=0?(a.attackT<.48 ? -1.65*a.attackT/.48 : -1.65+2.15*(a.attackT-.48)/.20):0;
+        a.arms[i].rotation.x = -fold * 0.42 + (e.stage === 'standing' ? -0.34 : 0)+swing;
+        a.arms[i].rotation.z = (i ? 1 : -1) * (a.dead?.18:0.09 + Math.sin(t * 2 + i) * 0.012);
       }
       if (a.rope.visible) {
         const attach = 2.65 - fold * 0.66;
         const length = Math.max(0.01, (a.ceiling - a.root.position.y) / a.scale - attach);
         a.rope.position.set(0, attach, -0.08); a.rope.scale.y = length;
-        a.rope.visible = e.stage === 'waiting' || e.stage === 'listening';
+        a.rope.visible = !a.dead && (e.stage === 'waiting' || e.stage === 'listening');
       }
     }
   }
@@ -422,7 +480,7 @@ export class InteriorHorror {
     return { active: this.active?.def.id || null, stage: this.active?.stage || 'dormant',
       time: this.active?.t || 0, cooldown: this.cooldown, ownsBeat: !!this.ctx.shared.interiorHorror,
       bodies: this.actors.filter(a => a.active).length, stats: { ...this.stats },
-      actors: this.actors.filter(a => a.active).map(a => ({ x: a.x, y: a.y, z: a.z, fold: a.fold, face: a.face })) };
+      actors: this.actors.filter(a => a.active).map(a => ({ x: a.x, y: a.y, z: a.z, fold: a.fold, face: a.face,hp:a.hp,alive:a.alive,attackT:a.attackT })) };
   }
 
   // Exact world-space views for a human audit. This reports setup; it never teleports or
@@ -439,7 +497,7 @@ export class InteriorHorror {
   config(patch) { if (typeof patch?.enabled === 'boolean') { this.enabled = patch.enabled; if (!this.enabled) this._finish(false); } }
   reset() { this._finish(false); this.cooldown = 0; for (const e of this.events) { e.spent = false; e.dwell = 0; e.last = -REARM; } }
   dispose() {
-    this._offShot?.(); this._offRespawn?.(); this._finish(false); this.root.removeFromParent();
+    this._offRespawn?.(); this._finish(false); this.root.removeFromParent();
     this.root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); this.mat.dispose();
   }
 }

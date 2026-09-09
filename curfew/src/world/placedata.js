@@ -322,7 +322,7 @@ export const MAJORS = Object.freeze([
     flat: { radius: 34, blend: 0.62 },
     approach: { x: 0, z: 29, w: 11, h: 9.8, style: 'relay', routeX: 0, routeZ: 20 },
     discoverR: 24, nearR: 80, horizon: true,
-    claim: { how: 'touch', dx: 3.2, dy: 0, dz: 5.4, r: 2.6 },     // the cabinet at the mast foot
+    claim: { how: 'touch', dx: 3.2, dy: 0.4, dz: 5.4, r: 2.6 },   // cabinet on the mast's raised slab
     xpFind: 25, xpClaim: 150, startClaimed: false,
   },
   {
@@ -385,7 +385,7 @@ export const MAJORS = Object.freeze([
     approach: { x: 0, z: 29, w: 11, h: 10.2, style: 'steeple', routeX: 0, routeZ: 27 },
     discoverR: 24, nearR: 70, horizon: false,
     // the hanging lamp in the drowned belfry. You have to stand in the water to see it.
-    claim: { how: 'shoot', dx: -4.4, dy: 13.4, dz: 0, r: 3.0 },
+    claim: { how: 'shoot', dx: -4.4, dy: 13.4, dz: 0, r: 3.0, control:{dx:2.0,dy:0,dz:5.4} },
     xpFind: 25, xpClaim: 140, startClaimed: false,
   },
   {
@@ -400,7 +400,7 @@ export const MAJORS = Object.freeze([
     // stairs"): the claim is the LAMP, in the lamp room at the top of the stair —
     // 81 treads up the inside of the tower to the gallery floor at 36.7 m (sites.js
     // lighthouse.landmark). dy is the lamp-room floor; lane D1's height test honours it.
-    claim: { how: 'touch', dx: 0, dy: 36.7, dz: 0, r: 2.2 },
+    claim: { how: 'touch', dx: -0.75, dy: 36.7, dz: 1.75, r: 2.2 },
     xpFind: 30, xpClaim: 170, startClaimed: false,
   },
   {
@@ -436,7 +436,7 @@ export const MAJORS = Object.freeze([
     discoverR: 24, nearR: 70, horizon: false,
     // donor: Projects/qualiacology/skyshard/src/main.js — the shootable bell. Ringing it
     // from the road is the loudest thing you can do in CURFEW and it lights the tower.
-    claim: { how: 'shoot', dx: 0, dy: 24.4, dz: 0, r: 2.6 },
+    claim: { how: 'shoot', dx: 0, dy: 24.4, dz: 0, r: 2.6, control:{dx:1.3,dy:19,dz:1.8} },
     xpFind: 25, xpClaim: 140, startClaimed: false,
   },
   {

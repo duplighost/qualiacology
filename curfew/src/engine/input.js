@@ -110,6 +110,9 @@ export class Input {
 
     this.enabled = true;
     this.pointerLocked = false;
+    // Escape can resume the simulation even though browsers do not grant pointer lock
+    // from Escape. Mouse look works until the next click or movement key captures it.
+    this.unlockedPlay = false;
     // Set of actions currently held by a synthetic driver, so a blur() from the headless
     // browser losing focus cannot silently zero a test's inputs.
     this._synthetic = new Set();
@@ -152,7 +155,7 @@ export class Input {
   }
 
   _locked() {
-    if (this.noLock) return true;
+    if (this.noLock || this.unlockedPlay) return true;
     return typeof document !== 'undefined'
       && this.canvas != null && document.pointerLockElement === this.canvas;
   }
@@ -193,6 +196,7 @@ export class Input {
     if (!this.enabled || e.repeat) return;
     const a = KEYMAP[e.code];
     if (!a) return;
+    if (this.unlockedPlay && a !== 'menu') this.requestLock();
     // Space scrolls the page and the arrows scroll it too — both would fight the game.
     if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
     this._down(a);
@@ -206,6 +210,10 @@ export class Input {
 
   _onMouseDown(e) {
     if (!this.enabled) return;
+    if (this.unlockedPlay && !this.pointerLocked && !this.noLock) {
+      this.requestLock();
+      return; // The capture click must not fire a weapon.
+    }
     if (!this._locked()) {
       // Not playing yet: the click is a request to play, not a shot.
       this.ctx.bus.emit('input:clickthrough', null);
@@ -231,6 +239,7 @@ export class Input {
   }
 
   _onBlur() {
+    this.unlockedPlay = false;
     // Alt-tabbing away must not leave the player sprinting into a tree forever. Synthetic
     // holds are exempt: a headless page can lose focus mid-measurement.
     for (const a of this._held) {
@@ -244,6 +253,7 @@ export class Input {
   _onLockChange() {
     this.pointerLocked = typeof document !== 'undefined'
       && this.canvas != null && document.pointerLockElement === this.canvas;
+    if (this.pointerLocked) this.unlockedPlay = false;
     this.ctx.bus.emit('input:lock', this.pointerLocked);
   }
 

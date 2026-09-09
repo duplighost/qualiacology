@@ -704,15 +704,16 @@ function cacheParts(api, lx, ly, lz, ryaw) {
   k.box(0.72, 0.42, 0.46, 0, 0.21, 0, C.plank, 0);
   k.box(0.06, 0.34, 0.50, -0.34, 0.20, 0, C.dark, 0);
   k.box(0.06, 0.34, 0.50, 0.34, 0.20, 0, C.dark, 0);
+  // Brass corners and a real latch mark a supply box without a hovering pickup icon.
+  for(const x of [-0.28,0.28]) k.box(0.045,0.38,0.48,x,0.22,0,[0.21,0.14,0.065],0);
+  k.box(0.09,0.13,0.04,0,0.34,0.25,[0.32,0.23,0.10],0);
   const body = k.build();
   const lid = new Kit();
   lid.box(0.76, 0.06, 0.50, 0, 0.03, 0.23, C.plank, 0);     // hinged on its back edge
   lid.box(0.20, 0.05, 0.10, 0, 0.065, 0.02, C.metal, 0);     // the hasp
   const lidGeo = lid.build();
   const glint = new Kit();
-  glint.at(new THREE.OctahedronGeometry(0.14, 0), [1.6, 1.15, 0.62], 0, 0.86, 0, 0, 0, 0);
-  glint.pane(0.8, 0.8, 0, 0.86, 0, 0.7, 0, 0);
-  glint.pane(0.8, 0.8, 0, 0.86, 0, 0.7, Math.PI * 0.5, 0);
+  glint.box(0.08,0.035,0.035,0,0.345,0.268,[0.22,0.16,0.07],0);
   const glintGeo = glint.build();
   // A taken cache still rebuilds its opened shell for continuity, but it must never
   // resurrect a solid/breakable collider after streaming out and back in.
@@ -949,11 +950,10 @@ function buildTower(api) {
     site.lanternY = mastY;
     site.lanternLZ = zc;
     site.lanternX = api.wx(0, zc); site.lanternZ = api.wz(0, zc);
-    glow.at(new THREE.OctahedronGeometry(0.19, 0), [1.7, 1.2, 0.66], 0, mastY, zc, 0, 0, 0);
-    glow.pane(1.1, 1.1, 0, mastY, zc, 1.0, 0, 0);
-    glow.pane(1.1, 1.1, 0, mastY, zc, 1.0, Math.PI * 0.5, 0);
-    glow.pane(1.1, 1.1, 0, mastY, zc, 1.0, Math.PI * 0.25, 0);
-    glow.pane(1.1, 1.1, 0, mastY, zc, 1.0, -Math.PI * 0.25, 0);
+    for(const x of [-0.135,0.135])for(const z of [-0.135,0.135])solid.box(0.035,0.44,0.035,x,mastY,zc+z,C.metal,0);
+    // A small luminous cylinder sits behind the cage. The long-distance halo has its own
+    // distance gate and never replaces the physical fitting when standing beside it.
+    glow.at(new THREE.CylinderGeometry(0.066,0.066,0.26,12),[0.72,0.44,0.16],0,mastY,zc,0,0,0);
     // A little light in the cabin, under the roof, so the tower has a window at night.
     // ROUND 13: IT HAS A FIXTURE NOW. It used to be one 0.5 m additive pane hung in open air
     // at eye height, 1.1 m from the cache, with nothing under it, on every tower, forever —
@@ -2889,7 +2889,16 @@ export class Wilds {
         if (s.rec.cache.colliderId >= 0 && collision && typeof collision.massOf === 'function'
           && collision.massOf(s.rec.cache.colliderId) < 0) { this._take(s); continue; }
         const cx = px - s.cacheX, cz = pz - s.cacheZ;
-        if (cx * cx + cz * cz < cache2 && Math.abs(py - s.cacheY) < 1.6) this._take(s);
+        if (cx * cx + cz * cz < cache2 && Math.abs(py - s.cacheY) < 1.6) {
+          const cam=this._sys('camera'),d=Math.hypot(cx,cz);
+          const facing=d<.25||((cx*Math.sin(cam.yaw)+cz*Math.cos(cam.yaw))/d)>.55;
+          if(facing){
+            const input=this.ctx.input,use=input?.held('use');
+            s.openT=use?(s.openT||0)+dt:0;
+            this.ctx.bus.emit('prompt',{kind:'hold',label:'E',detail:'OPEN SUPPLIES',x:s.cacheX,y:s.cacheY+.44,z:s.cacheZ,k:Math.min(1,s.openT/.65),rank:2});
+            if(s.openT>=.65)this._take(s);
+          }else s.openT=0;
+        }else s.openT=0;
       }
     }
 
@@ -2928,7 +2937,7 @@ export class Wilds {
     this.ctx.bus.emit('pickup:ammo', _ammoP);
     // the box lights the hands that open it: a rover, borrowed, released by its own ttl
     const lights = this._sys('lights');
-    if (lights && typeof lights.borrow === 'function') lights.borrow('cache', s.cacheX, s.cacheY + 0.7, s.cacheZ, GLOW.lamp, 34, 1.6);
+    if (lights && typeof lights.borrow === 'function') lights.borrow('cache', s.cacheX, s.cacheY + 0.7, s.cacheZ, GLOW.lamp, 5, 0.7);
   }
 
   _brokenCache(x, z) {

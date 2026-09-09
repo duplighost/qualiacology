@@ -49,7 +49,7 @@ export function skeleton(k, api, lx, lz, yaw, rng) {
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
   const put = (ox, oz) => [lx + ox * cy + oz * sy, lz - ox * sy + oz * cy];
 
-  s.quad(0.86, 1.28, lx, g + 0.006, lz, BONE.rag, yaw, -Math.PI * 0.5);
+  if(!api.scatteredBones)s.quad(0.86, 1.28, lx, g + 0.006, lz, BONE.rag, yaw, -Math.PI * 0.5);
   for (let i = 0; i < 5; i++) {
     const [rx, rz] = put(0, 0.10 + i * 0.115);
     const r = 0.13 - Math.abs(i - 2) * 0.018;

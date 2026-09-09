@@ -358,6 +358,7 @@ export class PlayerController {
     this.climbSpeed = 0;                                    // horizontal speed on entry (the vault keeps 0.85x)
     this.climbLX = 0; this.climbLZ = 0;                     // a grab's landing, decided at the catch
     this.climbRefuse = false;                               // let go of a lip: no climb until the feet land
+    this.scaling=false;this.scaleBeat=0;this.scaleFace=null;
     this.climbCrouch = false;                               // only tuck under a genuinely low landing ceiling
     this.floorWasCollider = false;                          // last frame's floor was a collider top (the step-up smoothing gate)
 
@@ -897,6 +898,7 @@ export class PlayerController {
     // queues a fresh CLIMB request at the landing, never a buffered jump: no accidental
     // bunny-hop can come out of a pull-up.
     if (this.climb !== CLIMB_NONE) {
+      this.scaling=false;
       if (edgeJump) {
         this.climbQueued = true;
         this.jumpBuffered = -1;
@@ -1011,11 +1013,17 @@ export class PlayerController {
     // The explicit Space intent remains alive through early take-off. It receives the same
     // facing-first fan in the air, which can start a real hands-band grab. Only after that
     // refuses do we offer the old narrow, movement-directed automatic mantle.
+    if(this._held('jump')&&!wantCrouch)this.spaceClimbIntent=Math.max(this.spaceClimbIntent,.12);
     if (this.spaceClimbIntent > 0) this._trySpaceClimb(hasInput);
     if (this.climb === CLIMB_NONE && hasInput) this._tryClimb(false);
     if (this.climb !== CLIMB_NONE) {
       this._stepClimb(dt, hasInput);
       this._stepTail(dt, sprintHeld, wantCrouch);
+      return;
+    }
+
+    if(this._stepScale(dt)){
+      this._stepTail(dt,sprintHeld,wantCrouch);
       return;
     }
 
@@ -1471,7 +1479,54 @@ export class PlayerController {
     return caught || flung;
   }
 
-  /** ROUND 13: the fling itself — one jump at a lip the hands will reach at the apex. */
+  /** Hold Space against a building and aim along it. No camera turn or timed button
+   * sequence is imposed; the same capsule clearance and pull-up own the entire route. */
+  _stepScale(dt) {
+    const col=this._collision;
+    if(!col?.climbFace||!this._held('jump')||this._held('crouch')||this.carried||this.climbRefuse){
+      if(this.scaling){this.scaling=false;this.scaleFace=null;this.mantleCooldown=.2;}
+      return false;
+    }
+    _rayO.x=this.pos.x;_rayO.y=this.pos.y+.85;_rayO.z=this.pos.z;
+    _rayD.x=_fwd.x;_rayD.y=0;_rayD.z=_fwd.z;
+    let hit=col.climbFace(_rayO,_rayD,1.02);
+    if(!hit&&this.scaling&&this.scaleFace){
+      _rayD.x=-this.scaleFace.nx;_rayD.z=-this.scaleFace.nz;
+      hit=col.climbFace(_rayO,_rayD,1.02);
+    }
+    if(hit){
+      this.scaleFace={x:hit.point.x,z:hit.point.z,nx:hit.normal.x,nz:hit.normal.z,top:hit.top};
+    }else if(!this.scaling||!this.scaleFace||this.scaleFace.top-this.pos.y>1.1){
+      this.scaling=false;this.scaleFace=null;return false;
+    }
+    const face=this.scaleFace,nx=face.nx,nz=face.nz,top=face.top;
+    const wx=_wish.x,wz=_wish.z;_wish.set(-nx,0,-nz);
+    if(top-this.pos.y<2.05&&top>=this.pos.y-.05){
+      const lx=face.x-nx*(P.RADIUS+.18),lz=face.z-nz*(P.RADIUS+.18);
+      if(this._startPull(top,lx,lz,this.pos.x,this.pos.y,this.pos.z,.44,'pull')){
+        this.scaling=false;this.scaleFace=null;_wish.set(wx,0,wz);this._stepClimb(dt,true);return true;
+      }
+    }
+    _wish.set(wx,0,wz);
+    const cam=this.ctx.systems.get('camera'),pitch=cam?.pitch||0;
+    const side=clamp(_fwd.x*nz-_fwd.z*nx,-.8,.8)+this.strafeAxis*.65;
+    const x=face.x+nx*(P.RADIUS+.055)+nz*side*dt*1.8;
+    const z=face.z+nz*(P.RADIUS+.055)-nx*side*dt*1.8;
+    const dy=dt*(pitch<-.55?-1.65:2.7),y=Math.min(top+.02,this.pos.y+dy);
+    if(col.climbPathClear(this.pos.x,this.pos.z,this.pos.y,x,z,y,P.RADIUS,P.STAND_H)
+      &&col.fits(x,z,y,P.RADIUS,P.STAND_H))this.pos.set(x,y,z);
+    this.scaling=true;this.vel.set(0,0,0);this.grounded=false;this.sinceGround=P.COYOTE+1;
+    this.jumpBuffered=-1;this._endSlide();this.sprinting=this.tacSprinting=false;
+    this.scaleBeat-=dt;
+    if(this.scaleBeat<=0){
+      this.scaleBeat=.48;this.eyeSpring.nudge(-.016);
+      this.ctx.bus.emit('player:climb',{kind:'scale',top,x:this.pos.x,z:this.pos.z});
+      this.ctx.systems.get('audio')?.dread?.('brush',this.pos.x,this.eyeY,this.pos.z,.14);
+    }
+    return true;
+  }
+
+  /** A jump at a lip the hands will reach at the apex. */
   _fling() {
     this.vel.y = P.JUMP;
     this.vel.x += _fwd.x * HOLD_FLING_CARRY;
@@ -2008,6 +2063,7 @@ export class PlayerController {
       tacSprinting: this.tacSprinting,
       tacCooldown: this.tacCooldown,
       climb: this.climb,
+      scaling:this.scaling,
       hpMax: this.hpMax,
       eyeY: this.eyeY,
       bobPhase: this.bobPhase,

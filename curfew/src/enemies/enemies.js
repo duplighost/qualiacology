@@ -668,11 +668,12 @@ export class Enemies {
    * not have to know the pool's shape. Returns the nearest unsearched corpse whose centre is
    * inside maxR of (x, z), or null.
    */
-  nearestCorpse(x, z, maxR) {
+  nearestCorpse(x, z, maxR, feetY=null) {
     let best = null, bestD = maxR * maxR;
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
       if (e.alive || e.state !== 'corpse' || e.looted) continue;
+      if(feetY!==null&&Math.abs(e.pos.y-feetY)>1.8)continue;
       const dx = e.pos.x - x, dz = e.pos.z - z;
       const d2 = dx * dx + dz * dz;
       if (d2 < bestD) { bestD = d2; best = e; }
@@ -931,6 +932,7 @@ export class Enemies {
 
   /** Gate guards ignore proximity, torch and incidental noise. A hit chooses the fight. */
   provokeGate(siteId) {
+    if (!siteId) return;
     const prog = this._sys('progress'), player = this._sys('player');
     if (siteId && prog?.flag) prog.flag('gate-hostile:' + siteId, 1);
     for (const guard of this.all) {
@@ -941,6 +943,31 @@ export class Enemies {
       if (player) { guard.heardX = player.pos.x; guard.heardZ = player.pos.z; }
     }
     this.ctx.bus.emit('gate:hostile', { id: siteId });
+  }
+
+  _standDownGates(dt, player) {
+    const progress=this._sys('progress'),places=this._sys('places');
+    const timers=this._gateAway||(this._gateAway={});
+    for(const id of ['holdfast','the-toll']) {
+      if(!progress?.flag('gate-hostile:'+id)){timers[id]=0;continue;}
+      const site=places?.nodes.get(id)?.def;
+      if(!site)continue;
+      let near=Math.hypot(player.pos.x-site.x,player.pos.z-site.z)<190;
+      for(const e of this.all)if(e.alive&&e.siteGuard===id&&Math.hypot(player.pos.x-e.pos.x,player.pos.z-e.pos.z)<90)near=true;
+      timers[id]=near?0:(timers[id]||0)+dt;
+      if(timers[id]<8)continue;
+      progress.flag('gate-hostile:'+id,0);timers[id]=0;
+      for(const e of this.all){
+        if(!e.alive||!e.initiallyNeutral||e.siteGuard!==id)continue;
+        this._uncommit(e);e.neutral=true;e.staged=true;e.aware=0;e.alerted=false;
+        e.hunt=false;e.huntSpeedMul=1;e.memT=0;e.state='approach';e.stateT=0;
+        e.staggerT=e.immuneT=e.windowDmg=0;e.aim=0;e.telegraphCharge=0;e.built.telegraph(0);
+        e.pos.set(e.stagedX,e.stagedY,e.stagedZ);e.prevPos.copy(e.pos);e.currPos.copy(e.pos);
+        e.homeX=e.stagedX;e.homeZ=e.stagedZ;e.yaw=e.prevYaw=e.currYaw=e.stagedYaw;
+        e.vel.set(0,0,0);e.moving=false;e.airborne=false;e.riseSquash=e.prevSquash=e.currSquash=1;
+      }
+      this.ctx.bus.emit('gate:peaceful',{id});
+    }
   }
 
   /**
@@ -1143,9 +1170,21 @@ export class Enemies {
     if (!e) { this._refused++; return null; }
 
     const col = this._sys('collision');
-    if (col && typeof col.canOccupy === 'function' && !col.canOccupy(x, z, def.radius, def.height)) {
-      this._refused++;
-      return null;
+    if (col && typeof col.canOccupy === 'function') {
+      const fits=(px,pz)=>Number.isFinite(opts?.feetY)
+        ? col.fits(px,pz,opts.feetY,def.radius,def.height) : col.canOccupy(px,pz,def.radius,def.height);
+      if(!fits(x,z)){
+        // Keep an authored person beside their post if a nearby prop occupies its centre.
+        // Do not turn a blocked, invisible guard into an impossible gate requirement.
+        let clear=false;
+        if(opts?.placementRadius>0){const ox=x,oz=z,ground=groundY(this.ctx,x,z);
+          for(let i=0;i<24;i++){const a=i*2.399,r=opts.placementRadius*Math.sqrt((i+1)/24),px=ox+Math.cos(a)*r,pz=oz+Math.sin(a)*r;
+            if(Math.abs(groundY(this.ctx,px,pz)-ground)>.45||!fits(px,pz))continue;
+            x=px;z=pz;clear=true;break;
+          }
+        }
+        if(!clear){this._refused++;return null;}
+      }
     }
 
     e.alive = true;
@@ -1301,6 +1340,7 @@ export class Enemies {
     const p = this._sys('player');
     if (!p) return;
     const black = this._phase() === PHASE.BLACK;
+    this._standDownGates(dt,p);
     this._enteredBlack = black && !this._black;
     this._black = black;
     // LANE G, round 7: the perk that lamp_2 "Eyeshine" buys. Base 1 with no node owned, so a
@@ -1829,7 +1869,7 @@ export class Enemies {
             // FLEEING -- away from him -- every 1.6 s, and never came inside 57 m. A chaser
             // scrabbling at a trunk is what relocate() was written for; the break-off is for a
             // body near him, where a teleport would be in his face.
-            if (e.dist > NAV.STUCK_MIN_DIST && relocate(this.ctx, e, this.placeRng, _pt)) {
+            if (!e.siteGuard && e.dist > NAV.STUCK_MIN_DIST && relocate(this.ctx, e, this.placeRng, _pt)) {
               e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
               e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
               e.vel.set(0, 0, 0);
@@ -1856,7 +1896,7 @@ export class Enemies {
     // and was being teleported back to his side every six seconds for as long as it
     // lived. That is a second, quieter "they always know where I am". A body that is
     // not chasing anyone is never moved.
-    if (e.aware > 0 && !e.scripted && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
+    if (e.aware > 0 && !e.scripted && !e.siteGuard && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
       if (relocate(this.ctx, e, this.placeRng, _pt)) {
         e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
         e.prevPos.copy(e.pos); e.currPos.copy(e.pos);   // never interpolate a relocation
@@ -1961,7 +2001,7 @@ export class Enemies {
     e.vel.z = damp(e.vel.z, s.z * want + _sep.z * 2.0, 8, dt);
 
     // aware only — see the note on the same watchdog in _approach
-    if (e.aware > 0 && !e.scripted && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
+    if (e.aware > 0 && !e.scripted && !e.siteGuard && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
       if (relocate(this.ctx, e, this.placeRng, _pt)) {
         e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
         e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
@@ -3015,6 +3055,7 @@ export class Enemies {
       anim.aim = e.aim || 0;
       anim.tick = e.tick || 0;
       anim.time = this._t;
+      anim.dead = !e.alive;
       e.built.animate(anim);
     }
 

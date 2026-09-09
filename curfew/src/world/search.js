@@ -186,6 +186,7 @@ export class Search {
       if (d < 0.15) return d;                       // standing on top of them counts
       return (dx / d) * fx + (dz / d) * fz >= SEARCH_FACE ? d : -1;
     };
+    const reachable=(x,y,z)=>Math.abs(y-py)<1.8&&this._sys('collision').segmentClear(px,py+1.35,pz,x,y+.35,z);
 
     // THE DOOR FIRST. It is the biggest thing in reach and the one you are certainly looking
     // at; a body lying beside the gatehouse must never steal the toll's glyph.
@@ -199,25 +200,32 @@ export class Search {
       best = { kind: 'gate', key: 'g' + g.key, flag: g.key, price: g.price, hostile: !!this._sys('progress')?.flag('gate-hostile:' + g.key), x: g.x, y: g.y, z: g.z };
     }
 
-    if (best) return best;
+    // A body under the reticle must remain searchable beside a closed or hostile gate.
+    // Keep payment as a candidate, then let a nearer reachable body take focus.
     const enemies = this._sys('enemies');
     if (enemies && typeof enemies.nearestCorpse === 'function') {
-      const e = enemies.nearestCorpse(px, pz, SEARCH_R);
+      const e = enemies.nearestCorpse(px, pz, SEARCH_R, py);
       if (e) {
         const d = facing(e.pos.x, e.pos.z);
-        if (d >= 0 && d < bestD) {
+        if (d >= 0 && d < bestD && reachable(e.pos.x,e.pos.y,e.pos.z)) {
           bestD = d;
           best = { kind: 'corpse', e, key: 'c' + e.id, x: e.pos.x, y: e.pos.y, z: e.pos.z };
         }
       }
     }
 
+    for(const a of this._sys('interior-horror')?.actors||[]){
+      if(!a.active||a.alive||a.searched||Math.abs(a.y-py)>2)continue;
+      const d=facing(a.x,a.z);
+      if(d>=0&&d<bestD&&reachable(a.x,a.y,a.z)){bestD=d;best={kind:'interior-corpse',e:a,key:'i'+a.encounter+':'+a.index,x:a.x,y:a.y,z:a.z};}
+    }
     for (let i = 0; i < this.bodies.length; i++) {
       const b = this.bodies[i];
       if (Math.abs(b.y - py) > 3.2) continue;       // a body on another floor is not in reach
       const d = facing(b.x, b.z);
       if (d < 0 || d >= bestD) continue;
       if (this._sceneryDone(b.key)) continue;
+      if(!reachable(b.x,b.y,b.z))continue;
       bestD = d;
       best = { kind: 'found', key: 'b' + b.key, flag: b.key, x: b.x, y: b.y, z: b.z };
     }
@@ -236,6 +244,8 @@ export class Search {
       // the search still happened, the sound still played, and the county is poorer for it.
       if (this.rng.next() < FOUND_EMPTY_CHANCE) n = 0;
       if (prog && typeof prog.flag === 'function') prog.flag('bs:' + cand.flag, 1);
+    } else if(cand.kind==='interior-corpse'){
+      cand.e.searched=true;
     } else {
       const enemies = this._sys('enemies');
       if (enemies && typeof enemies.markSearched === 'function') enemies.markSearched(cand.e);
@@ -250,12 +260,13 @@ export class Search {
 
     if (n > 0) {
       this._stat.paid += n;
-      this.ctx.bus.emit('pickup:coin', {
-        n, x: cand.x, y: cand.y + 0.5, z: cand.z, reason: cand.kind,
-      });
+      // The search is complete now. Credit the purse and show its receipt immediately;
+      // a travelling coin mote could postpone both after the body was already marked empty.
+      prog?.payCash(n,cand.x,cand.y+.5,cand.z,cand.kind);
     } else {
       this._stat.refused++;
     }
+    this.ctx.bus.emit('loot:searched', {coins:n, x:cand.x, y:cand.y, z:cand.z});
   }
 
   /**

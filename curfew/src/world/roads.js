@@ -815,7 +815,51 @@ export function buildRibbonData(x0, z0, size, heightFn, lift = 0.06) {
     }
   }
   if (idx.length === 0) return null;
-  return clipRibbonToTile(pos,uv,idx,x0,z0,x1,z1,heightFn,lift);
+  return unionRibbonFootprints(clipRibbonToTile(pos,uv,idx,x0,z0,x1,z1,heightFn,lift),heightFn,lift);
+}
+
+// Road junctions used to submit a complete ribbon for every branch. Tile clipping
+// removed duplicate chunks, but left several surfaces fighting at the same junction.
+// Subtract covered footprints before upload: one road surface at every point.
+export function unionRibbonFootprints(rib,heightFn=null,lift=0){
+  if(!rib)return null;
+  const pos=[],uv=[],indices=[],grid=new Map(),triangles=[],CELL=8,EPS=1e-8;
+  const area=p=>{let a=0;for(let i=0;i<p.length;i++){const v=p[i],w=p[(i+1)%p.length];a+=v[0]*w[2]-w[0]*v[2];}return Math.abs(a)*.5;};
+  const half=(poly,a,b,inside,sign)=>{
+    const out=[];if(!poly.length)return out;
+    const side=v=>((b[0]-a[0])*(v[2]-a[2])-(b[2]-a[2])*(v[0]-a[0]))*sign;
+    for(let i=0;i<poly.length;i++){
+      const v=poly[i],w=poly[(i+1)%poly.length],dv=side(v),dw=side(w),iv=inside?dv>=-EPS:dv<=EPS,iw=inside?dw>=-EPS:dw<=EPS;
+      if(iv)out.push(v);
+      if(iv!==iw){const t=dv/(dv-dw);out.push(v.map((n,k)=>n+(w[k]-n)*t));}
+    }return out;
+  };
+  const subtract=(poly,clip)=>{
+    const a=clip[0],b=clip[1],c=clip[2],sign=((b[0]-a[0])*(c[2]-a[2])-(b[2]-a[2])*(c[0]-a[0]))>=0?1:-1;
+    let intersection=poly;for(let e=0;e<3;e++)intersection=half(intersection,clip[e],clip[(e+1)%3],true,sign);
+    if(intersection.length<3||area(intersection)<EPS)return[poly];
+    const out=[];let rest=poly;
+    for(let e=0;e<3&&rest.length>=3;e++){
+      const outside=half(rest,clip[e],clip[(e+1)%3],false,sign);if(outside.length>=3&&area(outside)>EPS)out.push(outside);
+      rest=half(rest,clip[e],clip[(e+1)%3],true,sign);
+    }return out;
+  };
+  for(let t=0;t<rib.indices.length;t+=3){
+    const tri=[0,1,2].map(k=>{const i=rib.indices[t+k];return[rib.positions[i*3],rib.positions[i*3+1],rib.positions[i*3+2],rib.uvs[i*2],rib.uvs[i*2+1]];});
+    const minX=Math.min(...tri.map(v=>v[0])),maxX=Math.max(...tri.map(v=>v[0])),minZ=Math.min(...tri.map(v=>v[2])),maxZ=Math.max(...tri.map(v=>v[2]));
+    const keys=[],seen=new Set();
+    for(let x=Math.floor(minX/CELL);x<=Math.floor(maxX/CELL);x++)for(let z=Math.floor(minZ/CELL);z<=Math.floor(maxZ/CELL);z++){
+      const key=x+','+z;keys.push(key);for(const i of grid.get(key)||[])seen.add(i);
+    }
+    let pieces=[tri];
+    for(const i of seen){const old=triangles[i];if(old.maxX<=minX+EPS||old.minX>=maxX-EPS||old.maxZ<=minZ+EPS||old.minZ>=maxZ-EPS)continue;
+      pieces=pieces.flatMap(p=>subtract(p,old.tri));if(!pieces.length)break;}
+    for(const poly of pieces){const base=pos.length/3;for(const v of poly){pos.push(v[0],heightFn?heightFn(v[0],v[2])+lift:v[1],v[2]);uv.push(v[3],v[4]);}
+      for(let i=1;i<poly.length-1;i++)indices.push(base,base+i,base+i+1);}
+    const i=triangles.length;triangles.push({tri,minX,maxX,minZ,maxZ});
+    for(const key of keys){if(!grid.has(key))grid.set(key,[]);grid.get(key).push(i);}
+  }
+  return{positions:Float32Array.from(pos),uvs:Float32Array.from(uv),indices:pos.length/3>65535?Uint32Array.from(indices):Uint16Array.from(indices)};
 }
 
 // The overscan above is needed to construct a continuous spline edge, but must not be

@@ -279,7 +279,7 @@ const CLAIM_REACH = 2.4;          // m from the fixture, on the ground plane
 const CLAIM_FACE = 0.5;           // cosine of the look-to-fixture angle (60 degrees)
 const CLAIM_HOLD_S = 0.6;         // seconds of held E that throw the lever
 const CLAIM_DY_TOL = 2.0;         // m of feet height either side of the fixture's base
-const CLAIM_SIGHT_UP = 0.5;       // m up the fixture's body: never test against the ground it stands on
+const CLAIM_SIGHT_UP = 1.48;      // the visible switch, not its pedestal
 const CLAIM_SIGHT_BACK = 0.45;    // m short of the fixture, so its OWN housing is never the blocker
 const CLAIM_ANSWER_R = 6.0;       // a refused press answers (dead click) within this
 const CLAIM_GLINT_S = 2.4;        // the glint's breath, unclaimed
@@ -328,6 +328,8 @@ const CLAIM_LAMP_Y = 2.1;         // m above the fixture's foot: the head of the
 // centre, which is the side you walk up to it from — except where the claim point stands
 // in front of a building that is not the centre. Local (x, z) unit directions.
 const FIXTURE_FACE = Object.freeze({
+  'drowned-light': [1,0],        // face the landing inside the lamp room
+  'relay': [0,-1],               // the actual cabinet face, approached from its raised slab
   'garden-of-rest': [0, -1],      // the lamp in front of the far mausoleum's door: face the graves
   'avery-house': [1, 0],          // the basement fuse box is approached from the boiler room's west side
 });
@@ -1118,9 +1120,10 @@ export class Places {
   _buildFixture(d, rec, api) {
     const c = d.claim;
     if (!c || (c.how !== 'touch' && c.how !== 'shoot')) return;
-    const dy = +c.dy || 0;
-    const touch = c.how === 'touch';
-    const px = +c.dx || 0, pz = +c.dz || 0;             // the row's claim point, local
+    const at=c.control||c;
+    const dy = +at.dy || 0;
+    const touch = c.how === 'touch'||!!c.control;
+    const px = +at.dx || 0, pz = +at.dz || 0;
     // Facing (touch rows): away from the centre, or the override. The fixture itself stands
     // FIXTURE_PROUD along that facing so it is mounted on whatever slab sites.js put here.
     let fdx = 0, fdz = -1;
@@ -1135,7 +1138,7 @@ export class Places {
     const ly = rec.padY + dy;
     const cy = Math.cos(rec.yaw), sy = Math.sin(rec.yaw);
     const fx = {
-      how: c.how,
+      how: touch?'touch':c.how,
       lx, ly, lz,
       wx: d.x + lx * cy + lz * sy,
       wz: d.z - lx * sy + lz * cy,
@@ -1572,6 +1575,7 @@ export class Places {
           const e = enemies.spawn(c.species, c.x, c.z, {
             awake: c.neutral ? true : c.awake, yaw: c.yaw, staged: true, feetY: c.feetY,
             neutral: c.neutral && !hostile, initiallyNeutral:c.neutral, siteGuard: c.neutral ? siteId : '', hpScale: c.hpScale,
+            placementRadius: c.neutral ? 1.5 : 0,
           });
           if (e) { c.entity = e; c.generation = e.gen; c.spawned = true; }
           else complete = false;
@@ -2393,14 +2397,14 @@ export class Places {
 
       // --- claim: the fixture in reach (round 6; the invisible circle is gone) -------
       const c = d.claim;
-      if (c && c.how === 'touch' && dist < d.nearR + 20) {
+      if (c && (c.how === 'touch'||c.control) && dist < d.nearR + 20) {
         const rec = this.nodes.get(d.id);
         const fx = rec ? rec.fixture : null;
         if (!fx) continue;
         const fdx = fx.wx - px, fdz = fx.wz - pz;
         const fd = Math.sqrt(fdx * fdx + fdz * fdz);
         if (fd < anyFxD) { anyFxD = fd; anyFx = rec; }
-        if (this.claimed.has(d.id) || fd >= CLAIM_REACH) continue;
+        if (fd >= CLAIM_REACH) continue;
         if (Math.abs(py - fx.wy) >= CLAIM_DY_TOL) continue;
         // facing: the look direction against the bearing to the fixture, on the ground
         const dot = fd > 1e-3 ? (fdx * lookX + fdz * lookZ) / fd : 1;
@@ -2411,6 +2415,10 @@ export class Places {
         // on the far side of it. SIGHT-masked, so scrub and railings never refuse a claim you
         // can plainly see, and stopped short of the fixture so its own housing cannot block.
         if (!this._claimVisible(eyeY, px, pz, fx)) continue;
+        if(this.claimed.has(d.id)){
+          this.ctx.bus.emit('prompt',{kind:'power',label:'E',x:fx.wx+fx.fwx*.17,y:fx.wy+1.48,z:fx.wz+fx.fwz*.17,k:0,detail:'POWER ON',unavailable:true,rank:2});
+          continue;
+        }
         if (fd < candD) { candD = fd; cand = rec; }
       }
     }
@@ -2516,8 +2524,9 @@ export class Places {
     // hold would work. (Alex, on the old fixture: "it is invisible under your own torch".)
     if (cand && !inCar && cand.fixture && this.ctx && this.ctx.bus) {
       const fx = cand.fixture;
-      _promptP.x = fx.wx; _promptP.y = fx.wy + 1.55; _promptP.z = fx.wz;
+      _promptP.x = fx.wx+fx.fwx*.17; _promptP.y = fx.wy + 1.48; _promptP.z = fx.wz+fx.fwz*.17;
       _promptP.k = this._hold === cand ? Math.min(1, this._holdT / CLAIM_HOLD_S) : 0;
+      _promptP.detail='RESTORE THE LIGHT';
       this.ctx.bus.emit('prompt', _promptP);
     }
 
@@ -2810,6 +2819,7 @@ export class Places {
     let tx = fx.wx, tz = fx.wz;
     const dx = px - tx, dz = pz - tz;
     const d = Math.sqrt(dx * dx + dz * dz);
+    if(fx.how==='touch'&&d>.1&&dx*fx.fwx+dz*fx.fwz<0)return false;
     if (d > CLAIM_SIGHT_BACK) { tx += (dx / d) * CLAIM_SIGHT_BACK; tz += (dz / d) * CLAIM_SIGHT_BACK; }
     return col.segmentClear(px, eyeY, pz, tx, fx.wy + CLAIM_SIGHT_UP, tz);
   }
