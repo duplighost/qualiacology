@@ -447,6 +447,9 @@ export class Car {
     this.hotwired = false;  // reset by every spawn: the first entry is always a hotwire
     this.engineOn = false;
     this.headlightsOn = false;
+    // ROUND 20: the working headlamp's pose for gfx/airlight.js, written in present().
+    // One object, reused — the hot path allocates nothing.
+    this._beam = { on: 0, x: 0, y: 0, z: 0, dx: 0, dy: 0, dz: -1, spread: 0 };
     // 0..1 filament level for the ONE working lamp. `headlightsOn` is the census
     // SpotLight's switch and is a boolean because lights.setHeadlights is; this is the
     // continuous part, and it is what makes the park cool-down a dim and not a cut.
@@ -1172,6 +1175,18 @@ export class Car {
   }
 
   /**
+   * ROUND 20. Where the working headlamp is and which way it points, for gfx/airlight.js.
+   * Written in present() beside the setHeadlights call so the visible cone and the light
+   * on the road can never disagree; `on` is the filament, so the park cool-down and the
+   * wear loss fade the beam without a second copy of either number. Returns null while
+   * the lamp is off, which is also true whenever the car is not there at all.
+   */
+  beamPose() {
+    if (!this.headlightsOn || !(this._beam.on > 0)) return null;
+    return this._beam;
+  }
+
+  /**
    * BLOCKER 1. This file used to call _setHeadlights(TRUE) in three places — _place,
    * _beginEnter and placeAt — and _setHeadlights(false) in NONE of them. One autonomous
    * spawn therefore lit the census SpotLight for the rest of the session: ctx.shared.lit
@@ -1195,6 +1210,7 @@ export class Car {
       if (L && L.setHeadlights) L.setHeadlights(false);
       if (this.headHandle) { if (L) L.release(this.headHandle); this.headHandle = null; }
       if (this.body) this.body.setLamp(0, false);
+      this._beam.on = 0;     // ROUND 20: and the cone in the air goes with it
       return;
     }
     // One borrowed rover for the warm pool ON the lens itself — the census gives the
@@ -3139,6 +3155,13 @@ export class Car {
       const fil = this._filament();
       // aimed forward and 3 degrees down, so 60 m of road is lit and the canopy is not
       if (L && L.setHeadlights) L.setHeadlights(true, lx, ly, lz, fx, -0.055, fz, fil);
+      // ROUND 20 — and gfx/airlight.js draws the BEAM IN THE AIR from exactly this pose.
+      // One lamp, not two: this car has one working filament (see _filament) and the
+      // census SpotLight is aimed from this same lens, so a second cone would be a lie
+      // about the car and would not line up with the light on the road.
+      this._beam.on = fil;
+      this._beam.x = lx; this._beam.y = ly; this._beam.z = lz;
+      this._beam.dx = fx; this._beam.dy = -0.055; this._beam.dz = fz;
       if (this.headHandle && this.headHandle.setPosition) {
         this.headHandle.setPosition(lx + fx * 0.9, ly + 0.05, lz + fz * 0.9);
         // The rover IS ours (lights.js:344 borrow / :161 setIntensity), so this half of the

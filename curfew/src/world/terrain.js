@@ -461,8 +461,17 @@ export const REGIONS = [
   // player can name in a greyscale screenshot". Marsh went DOWN and fields went UP, so the
   // county mean is unmoved: ART.md 0.3 row 6 marks the ground "do not darken", and it is
   // the SPREAD that was missing, never the exposure.
-  { id: 0, key: 'pines', moisture: 0.55, elevation: 0.35, bias: 1.30, ground: [0.096, 0.116, 0.08], cliff: [0.116, 0.108, 0.096] },
-  { id: 1, key: 'fields', moisture: 0.22, elevation: 0.30, bias: 1.00, ground: [0.175, 0.166, 0.112], cliff: [0.150, 0.138, 0.112] },
+  // ROUND 20: pines ground de-greened at MATCHED luminance (0.1092 -> 0.1091). g:r was 1.21
+  // and g:b 1.45 — the most saturated large surface in the county — and under the torch's warm
+  // 0xffeccb the forest floor came out olive-yellow (tests/shots/vis-g/40-bark-torch.png). A
+  // night forest floor is needles and wet grey-brown, and ART.md 0.5 spends the county's
+  // saturation on lamps and eyes, not on the biggest thing in the lower frame.
+  { id: 0, key: 'pines', moisture: 0.55, elevation: 0.35, bias: 1.30, ground: [0.104, 0.112, 0.095], cliff: [0.116, 0.108, 0.096] },
+  // ROUND 20: fields cooled and taken down 5.7% in luminance (0.1640 -> 0.1547). At r:b 1.56
+  // it was the warmest large surface in the county AND the brightest, so an open field read as
+  // pale sand and sat above the horizon band — the one thing ART.md 0.3 row 8 forbids. It is
+  // still the top rung of 3.1.3's ladder (marsh 0.055, pines 0.109, ridge 0.132, fields 0.155).
+  { id: 1, key: 'fields', moisture: 0.22, elevation: 0.30, bias: 1.00, ground: [0.158, 0.156, 0.132], cliff: [0.150, 0.138, 0.112] },
   { id: 2, key: 'marsh', moisture: 0.86, elevation: 0.10, bias: 0.95, ground: [0.055, 0.068, 0.066], cliff: [0.070, 0.076, 0.074] },
   { id: 3, key: 'ridge', moisture: 0.45, elevation: 0.86, bias: 1.05, ground: [0.136, 0.132, 0.128], cliff: [0.148, 0.142, 0.136] },
 ];

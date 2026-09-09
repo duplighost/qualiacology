@@ -642,8 +642,15 @@ export class Viewmodel {
     // body — at metalness 0.62 the diffuse term is scaled by 0.38 and the gun could only be
     // lit by specular, which is the whole fault of round one's frame.
     //
+    // ROUND 20: AND THE PARAGRAPH ABOVE HAD NOT BEEN APPLIED. It publishes a measured sweep,
+    // concludes "0.84 is chosen rather than 0.90", says metalness comes down to 0.40 with it —
+    // and the line under it shipped 0.78 / 0.55, which is the row the same table scores at
+    // p95 49.7 against 36.6. A round wrote up a change and shipped a different one; the
+    // sweep is that round's own evidence, so it is applied here as it stands rather than
+    // re-derived. The gun is 13% of every frame this game has ever drawn and was the
+    // second-brightest large shape in it (ART.md 6.1).
     const wood = new THREE.MeshStandardMaterial({ color: 0x522d15, roughness: 0.90, metalness: 0.00 });
-    const blued = new THREE.MeshStandardMaterial({ color: 0x181d24, roughness: 0.78, metalness: 0.55 });
+    const blued = new THREE.MeshStandardMaterial({ color: 0x181d24, roughness: 0.84, metalness: 0.40 });
     const matte = new THREE.MeshStandardMaterial({ color: 0x171b20, roughness: 0.92, metalness: 0.06 });
     const brassM = new THREE.MeshStandardMaterial({ color: 0x7a5a24, roughness: 0.42, metalness: 0.80 });
     this._mats = [wood, blued, matte, brassM];

@@ -211,6 +211,38 @@ const FORM_RAMP = 0.62;      // dot(n, moon) -> side, scale ...
 const FORM_BIAS = 0.50;      // ... and offset
 const FORM_EDGE = 0.38;      // multiplier where the normal is perpendicular to the view
 
+/* ---- ROUND 20 — BARK -------------------------------------------------------
+ * Alex's reviewer, item 11: "bark with direction and scale, convincing trunk bases". The
+ * geometry got the bases in round 15; the SURFACE never happened, because this material's
+ * only map is the foliage atlas and a second one would be a second program.
+ *
+ * BARK_SCALE is cells per metre across the trunk. 13 puts a furrow every 7.7 cm, which is
+ * a spruce; below about 8 the pattern reads as a stain and above 20 it aliases into
+ * static two paces away. BARK_STRETCH squashes Y by that factor, so the same field is
+ * 50 cm long and 7.7 cm wide — vertical furrows, which is the direction the ask names.
+ * BARK_AMP is the peak albedo swing; 0.42 is what a torch at three metres needs to show
+ * relief without the ridges reading as a second, paler wood.
+ * BARK_FADE_M is where it starts to go: at 26 m a furrow is under a pixel and the noise
+ * would only be aliasing. Full to 26, gone by 55, and the mid ring never pays it at all.
+ */
+/* ---- ROUND 20 — THE DEAD SKIRT ---------------------------------------------
+ * The band of the trunk the dead lower branches occupy, as a fraction of trunkH. 0.09 on a
+ * 14 m tree is 1.26 m — below the 1.68 m eye, which is the point: the lowest ones have to be
+ * things you duck. 0.30 stops it just under the live branch start (0.34) so the two bands
+ * meet and do not overlap into one mass.
+ */
+const DEAD_FROM = 0.09, DEAD_TO = 0.30;
+/* Dead wood has lost its bark and gone grey. A step DARKER than the living trunk, never
+ * lighter — ART.md 0.3 row 3, a trunk must never exceed the sky, and these are inside the
+ * torch's near field where the whole county is already at its brightest. */
+const PAL_DEAD = [0.072, 0.064, 0.056];
+
+const BARK_SCALE = 36.0;
+const BARK_STRETCH = 9.0;
+const BARK_CROSS = 34.0;
+const BARK_AMP = 0.40;
+const BARK_FADE_M = 26.0;
+
 // ROUND 7, LANE E — the per-template lean ceiling, radians, indexed by template.
 // 0-3 conifer, 4-5 birch, 6-7 broad, 8 snag. A mature conifer holds itself plumb; a birch
 // bends; a dead snag is on its way down. The actual lean is this times pow(hash, 2.2), so
@@ -276,8 +308,12 @@ const GRASS_BUILDS_PER_STEP = 1;
 // bark in the county, at ~1.2x the conifers instead of 4.9x, and it is below
 // the sky instead of far above it.
 const PAL = {
-  barkDark: [0.104, 0.084, 0.068],
-  barkRed: [0.122, 0.082, 0.06],
+  // ROUND 20: cooled at matched luminance (0.0871 -> 0.0875). Bark r:b was 1.53 and the
+  // torch's own r:b is 1.26, so a trunk in the near field arrived on screen at 1.93 — pink
+  // wood in a county that is otherwise one cold blue-grey (tests/shots/vis-t/31-torch-black.png).
+  // ART.md 0.5 rations saturation; this spends none of it and only stops the multiply.
+  barkDark: [0.096, 0.086, 0.078],
+  barkRed: [0.112, 0.086, 0.072],   // ROUND 20, same reason; still the warm one of the pair
   // The document's prescribed values are 0.112/0.109/0.100 and 0.150/0.143/0.131.
   // Measured, those landed template 5 (birch) at p50 23.0 and template 4 (birch)
   // at p50 29.0 - the same albedo, two different recipes, and one of them over
@@ -496,7 +532,7 @@ function makeRecipe(rand, ai, legacy = null) {
   const rec = {
     ai, kind: A.kind, trunkH, trunkR, lean, leanDir,
     bark: A.bark, leaf: A.leaf,
-    branches: [], canopy: [],
+    branches: [], canopy: [], dead: [],   // ROUND 20: the dead lower skirt, LOD0 only
   };
 
   const topX = Math.cos(leanDir) * lean;
@@ -564,6 +600,46 @@ function makeRecipe(rand, ai, legacy = null) {
         : rec.kind === 'snag' ? 2.35 : 2.15)
       * (0.68 + rand() * 0.66) * (rec.kind === 'snag' ? 0.72 : 1);
     rec.branches.push({ f, ang, up, reach, r: Math.max(0.055, trunkR * (0.46 - t * 0.22)) });
+  }
+
+  /* ---- ROUND 20 — THE DEAD SKIRT, and it is the eye-level fix ---------------
+   *
+   * ART.md 2.6 moved the conifer's lowest foliage from 0.26 to 0.45 of the trunk and it was
+   * the right call: it put sky back in the frame. What it left behind is the band the player
+   * actually stands in. With trunkH 14-24 m the first branch is now at 4.8-8.2 m, so
+   * EVERYTHING between the ground and head height is bare shaft — photographed in
+   * tests/shots/vis-t/31-torch-black.png, which is a room of smooth cones, and it is most of
+   * what Alex means by "the trees look not great still lol".
+   *
+   * A real closed-canopy conifer does not have a clean bole. It keeps a skirt of DEAD lower
+   * branches for years after the crown has shaded them out: thin, bare, drooping, snapped
+   * short. They carry no foliage, so they cost nothing but a few segments, and they are the
+   * single most effective thing that can be put in this band — they break the colonnade,
+   * they overlap between trees so the wood reads as depth instead of as a row, and a bare
+   * spike at chest height in a torch beam is worth more fright than another lump of canopy.
+   *
+   * LOD0 only: 72 m is exactly the reach at which a 4 cm branch is worth a triangle.
+   */
+  if (rec.kind === 'conifer' || rec.kind === 'snag') {
+    const nD = rec.kind === 'snag' ? 3 + ((rand() * 3) | 0) : 5 + ((rand() * 4) | 0);
+    for (let i = 0; i < nD; i++) {
+      const t = (i + rand() * 0.7) / nD;
+      const f = clamp01(lerp(DEAD_FROM, DEAD_TO, t));
+      // Round the trunk in whorls like the live branches, but out of phase with them, so
+      // the dead skirt and the crown do not stack into one plane.
+      const ang = leanDir + 0.83 + i * 2.0 + (rand() - 0.5) * 0.7;
+      // They droop. A dead branch is held up by nothing.
+      const up = -0.30 - rand() * 0.34;
+      // Short: shaded-out wood snaps. Longer low down, where it had more years to grow.
+      const reach = (1.55 - t * 0.55) * (0.55 + rand() * 0.62);
+      rec.dead.push({
+        f, ang, up, reach,
+        r: Math.max(0.026, trunkR * (0.19 - t * 0.07)),
+        // How far along it snapped off, 0.55-1: a skirt of equal-length spikes reads as a
+        // bottle brush, and the whole point is that no two are the same length.
+        cut: 0.55 + rand() * 0.45,
+      });
+    }
   }
 
   if (rec.kind !== 'snag') {
@@ -1097,6 +1173,29 @@ function buildTemplateGeometry(rec, lod, seed) {
     }
   }
 
+  // ROUND 20 — THE DEAD SKIRT. LOD0 only: see the note where rec.dead is filled. Two
+  // segments each, so the branch DROOPS instead of leaving the trunk as a straight spoke —
+  // the tip falls another 0.55 of its own reach and that bend is most of the read.
+  if (lod === 0) {
+    for (let i = 0; i < rec.dead.length; i++) {
+      const dw = rec.dead[i];
+      const a = trunkPointAt(rec, dw.f);
+      const rr = trunkRadiusAt(rec, dw.f);
+      const ca = Math.cos(dw.ang), sa = Math.sin(dw.ang);
+      // Start just inside the bark so there is no gap where the branch meets the trunk.
+      const ax = a.x + ca * rr * 0.72, az = a.z + sa * rr * 0.72;
+      const reach = dw.reach * dw.cut;
+      const mx = ax + ca * reach * 0.55, mz = az + sa * reach * 0.55;
+      const my = a.y + dw.up * reach * 0.55;
+      const ex = ax + ca * reach, ez = az + sa * reach;
+      const ey = my + (dw.up - 0.42) * reach * 0.45;
+      parts.push(segmentGeometry(ax, a.y, az, mx, my, mz, dw.r, dw.r * 0.62, 3,
+        PAL_DEAD, 0.10, 0.34, { rough: 0.09, kind: 'snag', seed: seed + 733, part: 60 + i }));
+      parts.push(segmentGeometry(mx, my, mz, ex, ey, ez, dw.r * 0.62, dw.r * 0.16, 3,
+        PAL_DEAD, 0.34, 0.72, { rough: 0.09, kind: 'snag', seed: seed + 811, part: 70 + i }));
+    }
+  }
+
   for (let i = 0; i < rec.branches.length; i++) {
     const br = rec.branches[i];
     if (lod > 0 && (rec.kind === 'snag' ? (i & 1) : (i % 3) !== 0)) continue;
@@ -1182,19 +1281,30 @@ function buildTemplateGeometry(rec, lod, seed) {
 // forest spike on this exact machine.
 // ---------------------------------------------------------------------------
 function makeGrassTexture() {
-  const W = 64, H = 64;
+  // ROUND 20: 64 -> 128. At 64 a blade three texels wide is one texel after the first mip
+  // and a tuft two metres away rasterised into fat white splinters — photographed in
+  // tests/shots/vis-bark2/40-bark-torch.png, where the floor of the pines reads as scattered
+  // pale STARS rather than as grass.
+  const W = 128, H = 128;
   let tex;
   if (typeof document !== 'undefined' && document.createElement) {
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const g = cv.getContext('2d');
     g.clearRect(0, 0, W, H);
-    // Six tapered blades, seeded so the texture is identical on every run.
-    for (let b = 0; b < 6; b++) {
-      const x0 = 6 + hashI(b, 3, 991) * (W - 12);
-      const bend = (hashI(b, 7, 991) - 0.5) * 14;
-      const wBase = 3 + hashI(b, 11, 991) * 3.5;
-      const top = 6 + hashI(b, 13, 991) * 14;
+    // ROUND 20: ELEVEN blades, not six, and each one is DARK AT THE ROOT.
+    //
+    // A tuft of grass at night is not a uniform value: the bottom of it is inside the tuft's
+    // own shadow and the tip is the only part with any sky on it. Every blade here was one
+    // flat fill, so the card was as bright where it met the ground as at its tip, which is
+    // the single reason it read as a splinter of light instead of as a plant. The gradient
+    // is 0.30 of the flat value at the root to 1.0 at the tip; with the card's own root at
+    // the ground, that is also a free contact shadow on the floor beneath it.
+    for (let b = 0; b < 11; b++) {
+      const x0 = 8 + hashI(b, 3, 991) * (W - 16);
+      const bend = (hashI(b, 7, 991) - 0.5) * 26;
+      const wBase = 3.4 + hashI(b, 11, 991) * 3.2;
+      const top = 10 + hashI(b, 13, 991) * 30;
       // NEUTRAL, deliberately. ART.md §0.5 rations saturation to the lamp, the
       // aviation red, the stack embers, the fen wisps and the eye glints -
       // "everything else is a value, not a colour" - and this blade was green
@@ -1205,8 +1315,14 @@ function makeGrassTexture() {
       // is otherwise one blue-grey. Neutral here costs ~2.8% of luminance
       // (0.2126 + 0.7152*1.06 + 0.0722*0.78 = 1.028) and hands the hue to
       // PAL.grass, which is the one place it should live.
-      const v = 150 + hashI(b, 17, 991) * 90;
-      g.fillStyle = 'rgb(' + (v | 0) + ',' + (v | 0) + ',' + (v | 0) + ')';
+      const v = 132 + hashI(b, 17, 991) * 84;
+      // Root to tip. The canvas is drawn top-down and the blade's ROOT is at y = H.
+      const grad = g.createLinearGradient(0, H, 0, top);
+      const lo = (v * 0.30) | 0;
+      grad.addColorStop(0, 'rgb(' + lo + ',' + lo + ',' + lo + ')');
+      grad.addColorStop(0.42, 'rgb(' + ((v * 0.66) | 0) + ',' + ((v * 0.66) | 0) + ',' + ((v * 0.66) | 0) + ')');
+      grad.addColorStop(1, 'rgb(' + (v | 0) + ',' + (v | 0) + ',' + (v | 0) + ')');
+      g.fillStyle = grad;
       g.beginPath();
       g.moveTo(x0 - wBase * 0.5, H);
       g.quadraticCurveTo(x0 - wBase * 0.25 + bend * 0.5, H * 0.5, x0 + bend, top);
@@ -1720,6 +1836,9 @@ export class Flora {
           'uniform vec2 uBandFar;',
           'attribute float aWind;',
           'varying float vFWind;',
+          // ROUND 20 — BARK. See the long note beside BARK_SCALE.
+          'varying vec3 vBarkP;',
+          'varying float vBarkK;',
         ].join('\n')
       );
 
@@ -1728,6 +1847,18 @@ export class Flora {
         [
           '#include <begin_vertex>',
           'vFWind = aWind;',
+          // TEMPLATE-LOCAL position, taken BEFORE the wind sway and before the instance
+          // matrix, so the grain is nailed to the wood: an instanced pattern taken from
+          // world position swims as the tree moves and shears as it is scaled.
+          '#ifdef USE_INSTANCING',
+          '  vBarkP = position * length(instanceMatrix[1].xyz);',
+          '#else',
+          '  vBarkP = position;',
+          '#endif',
+          // Bark UVs live in the top sixth of the atlas (segmentGeometry writes
+          // 0.82 + uv.y * 0.16); every leaf card is below it. One smoothstep keeps the
+          // grain entirely off the foliage.
+          'vBarkK = smoothstep(0.775, 0.830, uv.y);',
           '{',
           // Instance world anchor. USE_INSTANCING guard is the v83 GLIDE fix -
           // v82 lacked it and the shadow/depth variant failed to link.
@@ -1771,6 +1902,37 @@ export class Flora {
           'uniform float uGlowAmt;',
           'uniform float uFormAmt;',
           'varying float vFWind;',
+          'varying vec3 vBarkP;',
+          'varying float vBarkK;',
+          // ROUND 20 — BARK, and it is the reason a trunk stops reading as a lampshade.
+          //
+          // Photographed before this existed: tests/shots/vis-t/31-torch-black.png. Under the
+          // torch every trunk in the county is a SMOOTH TAPERED CONE in flat peach. The
+          // geometry has had a root flare and six broad flutes since round 15 and they are
+          // 7% of the radius, which is a silhouette cue at 20 m and nothing at all at two.
+          // There is no bark map: the tree material's only texture is the FOLIAGE atlas.
+          //
+          // So the bark is procedural, in the fragment stage, in the material that is already
+          // here. ZERO new programs (this injection is inside the existing onBeforeCompile
+          // and customProgramCacheKey is unchanged), zero new textures, zero new draws.
+          //
+          // Two octaves of value noise on the TEMPLATE-LOCAL position, squashed 6.5:1 in Y so
+          // the cells stretch into vertical furrows the way bark actually grows, plus one
+          // high-frequency cross-grain sine. Multiplied, never added: bark is a shadow
+          // pattern in a rough surface, so it can darken the albedo and must not lift it
+          // above what the wood reflects.
+          'float bkH(vec3 p) {',
+          '  return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);',
+          '}',
+          'float bkN(vec3 p) {',
+          '  vec3 i = floor(p), f = fract(p);',
+          '  f = f * f * (3.0 - 2.0 * f);',
+          '  float a = mix(bkH(i), bkH(i + vec3(1.0, 0.0, 0.0)), f.x);',
+          '  float b = mix(bkH(i + vec3(0.0, 1.0, 0.0)), bkH(i + vec3(1.0, 1.0, 0.0)), f.x);',
+          '  float c = mix(bkH(i + vec3(0.0, 0.0, 1.0)), bkH(i + vec3(1.0, 0.0, 1.0)), f.x);',
+          '  float d = mix(bkH(i + vec3(0.0, 1.0, 1.0)), bkH(i + vec3(1.0, 1.0, 1.0)), f.x);',
+          '  return mix(mix(a, b, f.y), mix(c, d, f.y), f.z);',
+          '}',
         ].join('\n')
       );
 
@@ -1788,6 +1950,26 @@ export class Flora {
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <lights_lambert_fragment>',
         [
+          // BARK, before the form term, because it is part of the albedo and the form term
+          // is part of the light. Fades out past BARK_FADE_M so a mid-ring trunk pays one
+          // noise call it cannot show and a distant one pays none.
+          '{',
+          '  float bkFade = vBarkK * (1.0 - smoothstep(' + BARK_FADE_M.toFixed(1) + ', '
+            + (BARK_FADE_M * 2.1).toFixed(1) + ', length(vViewPosition)));',
+          '  if (bkFade > 0.004) {',
+          '    vec3 bp = vBarkP * vec3(' + BARK_SCALE.toFixed(2) + ', '
+            + (BARK_SCALE / BARK_STRETCH).toFixed(3) + ', ' + BARK_SCALE.toFixed(2) + ');',
+          '    float bk = bkN(bp) * 0.52 + bkN(bp * 3.1) * 0.48;',
+          // The cross-grain: shallow horizontal checks, the same frequency on every species
+          // because it is the wood and not the tree.
+          '    bk += sin(vBarkP.y * ' + BARK_CROSS.toFixed(1) + ') * 0.06;',
+          // Signed, so the mean albedo does not move; squared on the dark side, because a
+          // furrow is a shadow and a ridge is only wood.
+          '    float bs = clamp(bk * 2.0 - 1.0, -1.0, 1.0);',
+          '    float bmul = 1.0 + bkFade * ' + BARK_AMP.toFixed(3) + ' * (bs < 0.0 ? bs * (1.0 - bs * 0.45) : bs);',
+          '    diffuseColor.rgb *= clamp(bmul, 0.25, 1.35);',
+          '  }',
+          '}',
           '{',
           '  vec3 nrm = normalize(normal);',
           '  vec3 mdir = normalize(uMoonView);',

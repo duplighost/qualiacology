@@ -202,8 +202,8 @@ const CANOPY_WARM = 0.10;   // and goes slightly warm: needles, not sky. Blue on
  * a short fade puts a visible ring on open ground, and the texture fetch is paid either way.
  * ------------------------------------------------------------------ */
 const GROUND_TEX = 256;           // px; 2.35 m / 256 = 9.2 mm per texel at the fine layer
-const GROUND_FINE_M = 2.35;       // metres per tile, layer A
-const GROUND_COARSE_M = 9.30;     // metres per tile, layer B — 3.96x, never an integer
+const GROUND_FINE_M = 1.80;       // metres per tile, layer A. ROUND 20: was 2.35 — see GRIT below
+const GROUND_COARSE_M = 7.15;     // metres per tile, layer B — 3.97x, never an integer
 // THE FIRST VERSION OF THIS WAS INVISIBLE AND THE A/B SAID SO. Measured in one boot,
 // forest floor at the player's feet, detail amplitude 0.30 vs 0 with nothing else moved:
 // near-patch sd 1.53 vs 1.64 — i.e. NOTHING, and slightly the wrong way. The arithmetic
@@ -223,8 +223,8 @@ const GROUND_W_FINE = 0.66, GROUND_W_COARSE = 0.54;   // signed weights; sd adds
 // term already owns. It also carries its own exposure compensation — a mean-1 multiplier
 // LOSES mean luminance through a concave tone curve, which is why the first version came
 // back 0.2 luma darker, and the +-difference here puts about +4% back.
-const GROUND_AMP_UP = 0.55;
-const GROUND_AMP_DOWN = 0.32;
+const GROUND_AMP_UP = 0.68;
+const GROUND_AMP_DOWN = 0.37;
 const GROUND_FADE_NEAR = 18.0;    // full strength inside this
 const GROUND_FADE_FAR = 80.0;     // and gone by here. Wide, so the falloff cannot read as a
                                   // ring on open ground; the sample is paid for either way.
@@ -1124,12 +1124,21 @@ export class Chunks {
         const i = y * N + x;
 
         // GRIT. The three coarser octaves are the shape of the ground; the 61-cell octave
-        // is the grain, and at 9.4 mm per texel it is the only thing in this project that
+        // is the grain, and at 7.0 mm per texel it is the only thing in this project that
         // draws at the scale of a stone.
-        let r = 0.34 * pn(u, v, 7, 311)
-          + 0.27 * pn(u, v, 13, 419)
-          + 0.23 * pn(u, v, 29, 523)
-          + 0.16 * pn(u, v, 61, 631);
+        //
+        // ROUND 20 — THE WEIGHTS WERE UPSIDE DOWN. 0.34 / 0.27 / 0.23 / 0.16 puts most of
+        // the amplitude on the SEVEN-cell octave, which at the old 2.35 m tile is a 34 cm
+        // blob. Photographed under the torch (tests/shots/vis-bark2/40-bark-torch.png) the
+        // forest floor is a soft cloud of half-metre patches: the grain is present and is
+        // the quietest thing in the mix, so at two metres there is still nothing at the
+        // scale of a boot. Reweighted toward the fine end and the tile shrunk 2.35 -> 1.80,
+        // which moves the grain octave from 3.9 cm to 3.0 cm and the blob octave from 34 cm
+        // to 26 cm. The far fade at 80 m and the mips own the aliasing question.
+        let r = 0.22 * pn(u, v, 7, 311)
+          + 0.24 * pn(u, v, 13, 419)
+          + 0.28 * pn(u, v, 29, 523)
+          + 0.26 * pn(u, v, 61, 631);
         // Wet stone: connected blobs where a separate fine field runs high. Blobs, not
         // single texels — a one-texel speck is gone by the second mip.
         const stone = pn(u, v, 43, 733);

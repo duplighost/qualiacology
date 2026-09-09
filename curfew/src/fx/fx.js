@@ -300,6 +300,16 @@ export class Fx {
   flash(x, y, z, colour, intensity, life = 0.06) {
     const lights = this.ctx.systems && this.ctx.systems.get('lights');   // lazy, at use
     if (!lights) return null;
+    // ROUND 20: and it lights the AIR as well as the surfaces. gfx/airlight.js's pulse is a
+    // single frame's volume — no handle, no lifetime to manage — so a muzzle flash, an
+    // impact spark and a claim now put a ball of light in the fog for exactly as long as the
+    // rover they already borrow. Scaled off the same intensity, so nothing here needs a
+    // second number kept in step with the first.
+    const air = this.ctx.airlight;
+    if (air) {
+      air.pulse(x, y, z, 0.55 + Math.min(2.2, intensity * 0.055), colour,
+        Math.min(1, intensity * 0.020));
+    }
     return lights.borrow('flash', x, y, z, colour, intensity, life);
   }
 
