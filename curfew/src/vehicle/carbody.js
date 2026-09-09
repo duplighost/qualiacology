@@ -473,6 +473,7 @@ export function buildCarBody(rng) {
     { x: S.x - 0.10, y: 1.40, z: -1.19, rx: Math.PI * 0.5 });
   PC(new THREE.CylinderGeometry(0.060, 0.060, 0.012, 12), C_CHROME,
     { x: S.x + 0.10, y: 1.41, z: -1.19, rx: Math.PI * 0.5 });
+
   // column
   PI(new THREE.CylinderGeometry(0.030, 0.030, 0.30, 8), C_DARK,
     { x: S.x, y: 1.30, z: -1.02, rx: 1.20 });
@@ -506,6 +507,49 @@ export function buildCarBody(rng) {
   const RADIO_SWEEP = 0.152;   // half the scale, metres either side of centre
   // The needle itself is built with the other MOVING parts, below, because it needs
   // cabinMat and cabinMat does not exist yet.
+
+  /* ------------------------------------------------- THE CONDITION GAUGE ---
+   * ROUND 18. Alex, 2026-09-09: "If there isn't a meter that shows you the car slowly
+   * breaking down, there should be one. Actually, have it on the cars dashboard and not
+   * on the hud."
+   *
+   * There WAS one, and it was a line of text in the corner of the screen (ui/readouts.js
+   * printed "CAR CONDITION 84%"). That line is gone, so this is now the only place that
+   * number lives and it has to be legible or the feature is lost.
+   *
+   * IT IS ON THE RADIO'S PLANE, NOT ON THE BINNACLE. The first cut put it on the left of
+   * the two chrome discs in front of the driver, which seemed obvious — they were already
+   * there with nothing on them. But those discs sit at y 1.40 inside a binnacle whose top
+   * is at 1.41, so two thirds of each is BURIED and only a crescent shows above the
+   * casing. Photographed at wear 0.00 and 0.95, the two frames were pixel-identical:
+   * the needle swept 4.21 radians entirely inside the dashboard. This is the same
+   * dash face the radio set is on, twenty centimetres to the driver's side of it, and the
+   * radio needle is the proof that a moving pointer there can be read from the seat.
+   *
+   * The face and the ticks merge into the shell. Only the needle moves.
+   */
+  const GAUGE = { x: SET.x - 0.375, y: SET.y + 0.012, z: SET.z + 0.014 };
+  const GAUGE_R = 0.070;
+  PI(new THREE.CylinderGeometry(GAUGE_R + 0.012, GAUGE_R + 0.012, 0.030, 16), C_DARK,
+    { x: GAUGE.x, y: GAUGE.y, z: GAUGE.z - 0.008, rx: Math.PI * 0.5, rust: 0.2 });
+  PC(new THREE.TorusGeometry(GAUGE_R + 0.008, 0.008, 5, 14), C_CHROME,
+    { x: GAUGE.x, y: GAUGE.y, z: GAUGE.z + 0.006, rust: 0.3 });
+  PI(new THREE.CylinderGeometry(GAUGE_R, GAUGE_R, 0.006, 16), [0.020, 0.019, 0.017],
+    { x: GAUGE.x, y: GAUGE.y, z: GAUGE.z + 0.004, rx: Math.PI * 0.5 });
+  // Nine ticks over 240 degrees, the long ones at the ends and the middle. The empty end is
+  // on the LEFT, where every gauge in every car the player has ever seen puts it, so nothing
+  // has to be explained. The first two are red: that is the whole of "it is breaking down".
+  for (let i = 0; i < 9; i++) {
+    const a = Math.PI * 1.17 - (i / 8) * Math.PI * 1.34;
+    const long = i === 0 || i === 4 || i === 8;
+    const rr = GAUGE_R - (long ? 0.020 : 0.012) * 0.5 - 0.004;
+    PC(box(long ? 0.009 : 0.006, long ? 0.020 : 0.012, 0.006),
+      i < 2 ? [0.62, 0.13, 0.07] : C_CHROME,
+      { x: GAUGE.x + Math.cos(a) * rr, y: GAUGE.y + Math.sin(a) * rr, z: GAUGE.z + 0.010,
+        rz: a - Math.PI * 0.5 });
+  }
+  const GAUGE_A0 = Math.PI * 1.17;      // needle angle at "wrecked"
+  const GAUGE_A1 = Math.PI * -0.17;     // ...and at "as good as it gets"
 
   // seats: two buckets. The driver's is behind the eye, so you see its bolster edge.
   for (const sx of [S.x, 0.31]) {
@@ -798,6 +842,50 @@ export function buildCarBody(rng) {
   }
   root.add(radioNeedle);
 
+  /* ---------------------------------------------------- the condition needle -- */
+  // On radioMat, which is cabinMat's clone with a small emissive: the needle is lit from
+  // inside the dial, so the gauge can be read in a black cabin without adding a light to
+  // the pinned census (CONTRACT). Pivot at the dial's centre; the needle geometry runs UP
+  // from the pivot so a rotation about Z sweeps it round the face.
+  //
+  // MEASURED AND REBUILT ONCE. The first cut was 7.5 mm wide, vertex-coloured [0.70,0.24,0.10]
+  // and shared the radio's material at emissiveIntensity 0.24. tools/dash-check.mjs said
+  // every number about it was right — it was in the scene, it was visible, its rotation swept
+  // 4.21 rad monotonically across the whole range of wear — and the PHOTOGRAPHS at wear 0.0
+  // and 0.95 were identical. A gauge you cannot see is not a gauge, and this is exactly the
+  // failure this project keeps hitting: working, animating, and never reaching the screen.
+  // So: half again as wide, a pale vertex colour, and its own material at four times the
+  // emissive. It is a clone of the same base as the radio dial, so it shares that program
+  // and costs no compile.
+  const condMat = cabinMat.clone();
+  condMat.name = 'car-condition-dial';
+  condMat.emissive = new THREE.Color(0xffb066);
+  condMat.emissiveIntensity = 1.05;
+  const condNeedle = new THREE.Group();
+  condNeedle.position.set(GAUGE.x, GAUGE.y, GAUGE.z + 0.017);
+  {
+    const nParts = [
+      part(box(0.011, GAUGE_R * 0.88, 0.007), [0.95, 0.62, 0.34],
+        { seed, y: GAUGE_R * 0.44 }),
+      // the counterweight tail, so the needle is pinned at a hub rather than growing out of
+      // the middle of the face
+      part(box(0.009, GAUGE_R * 0.24, 0.006), [0.72, 0.42, 0.22],
+        { seed, y: -GAUGE_R * 0.12 }),
+      part(new THREE.CylinderGeometry(0.010, 0.010, 0.008, 8), [0.55, 0.50, 0.46],
+        { seed, rx: Math.PI * 0.5 }),
+    ];
+    const nGeo = mergeGeometries(nParts, false);
+    for (let i = 0; i < nParts.length; i++) nParts[i].dispose();
+    if (nGeo) {
+      const nm = new THREE.Mesh(nGeo, condMat);
+      nm.name = 'car-condition-needle';
+      condNeedle.add(nm);
+    }
+  }
+  // Straight up is halfway; setCondition() puts it where the wear says.
+  condNeedle.rotation.z = 0;
+  root.add(condNeedle);
+
   /* --------------------------------------------------------------- lamps --- */
   // One works, one does not. That asymmetry is the whole read at 200 m: a single light
   // coming down a road is not a car, it is a QUESTION, and that is the beat.
@@ -854,7 +942,7 @@ export function buildCarBody(rng) {
     doorGroup: door,
     lampDead,
     // Shared material programs; the dial and restored lamp vary their emissive uniforms.
-    materials: [bodyMat, chromeMat, glassMat, lampMat, repairedMat, tailMat, cabinMat, interiorMat,radioMat],
+    materials: [bodyMat, chromeMat, glassMat, lampMat, repairedMat, tailMat, cabinMat, interiorMat, radioMat, condMat],
     tris: Math.round(tris),
     roofY: ROOF_Y,
     door: DOOR,
@@ -878,6 +966,18 @@ export function buildCarBody(rng) {
      */
     setRadioDial(t) {
       radioNeedle.position.x = SET.x + (clamp01(t) * 2 - 1) * RADIO_SWEEP;
+    },
+
+    /**
+     * ROUND 18. The condition gauge on the binnacle, 0 = wrecked .. 1 = as good as this car
+     * gets. car.js hands it `1 - wear` every frame it draws the body. The needle sits UP at
+     * zero rotation, so the angle it wants is measured off vertical: a full sweep of
+     * GAUGE_A0..GAUGE_A1 rotated a quarter turn back.
+     */
+    setCondition(t) {
+      const k = clamp01(t);
+      const a = GAUGE_A0 + (GAUGE_A1 - GAUGE_A0) * k;
+      condNeedle.rotation.z = a - Math.PI * 0.5;
     },
 
     /**
@@ -914,7 +1014,8 @@ export function buildCarBody(rng) {
       tailGeo.dispose();
       bodyMat.dispose(); interiorMat.dispose(); interiorGeo.dispose(); chromeMat.dispose(); glassMat.dispose();
       lampMat.dispose(); tailMat.dispose(); cabinMat.dispose();radioDialGeo.dispose();radioMat.dispose();
-      radioNeedle.traverse(o=>o.geometry?.dispose());
+      radioNeedle.traverse(o=>o.geometry?.dispose());condMat.dispose();
+      condNeedle.traverse(o=>o.geometry?.dispose());
       if (root.parent) root.parent.remove(root);
     },
   };

@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { C, groundY, PANE_LAMP } from './sites.js';
 
+
 const P = {
   timber: [0.094, 0.064, 0.042], iron: [0.048, 0.053, 0.060],
   stone: [0.121, 0.123, 0.112], soot: [0.031, 0.035, 0.040],
@@ -416,4 +417,8 @@ const DETAIL = Object.freeze({
 export function addDestinationDetails(kits, api) {
   const build = DETAIL[api.site.id];
   if (build) build(kits, api);
+  // ROUND 18: the climb faces and hidden caches used to be added here, and this function
+  // does not run for every destination — Blackthorn Manor and the Avery House are compiled
+  // from their own room tables and never call it. They live in places.js _dress() now, which
+  // every major goes through whatever built it. See world/climbs-and-caches.js.
 }

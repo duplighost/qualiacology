@@ -326,6 +326,12 @@ const DIRECTOR_JAM_S = 25;
 /* module scratch — none of this is ever allocated inside step or present */
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
+// ROUND 18: the spider's ceiling probe. Module scratch, never allocated per step.
+const _rayUpO = { x: 0, y: 0, z: 0 };
+const _rayUp = { x: 0, y: 1, z: 0 };
+// ROUND 18: the tags the moth will cling to. An array, because that is what
+// collision.nearestTagged() wants; frozen so nothing can push a tag into it at runtime.
+const TRUNK_TAGS = Object.freeze(['tree', 'trunk']);
 const _dir = new THREE.Vector3();
 const _aim = new THREE.Vector3();
 const _m4 = new THREE.Matrix4();
@@ -398,6 +404,9 @@ export class Enemies {
     this.rng = ctx.rng.fork('enemies');
     this.placeRng = ctx.rng.fork('enemies:place');
     this.aimRng = ctx.rng.fork('enemies:aim');
+    // ROUND 18: the ragdoll tumble. Its own fork so adding it took no draws out of
+    // 'enemies', which is also the stream that places bodies (see _kill).
+    this.ragdollRng = ctx.rng.fork('enemies:ragdoll');
 
     // A violated roster law is a BOOT failure, not a quiet wrongness later.
     const bad = validate();
@@ -935,28 +944,48 @@ export class Enemies {
     if (!siteId) return;
     const prog = this._sys('progress'), player = this._sys('player');
     if (siteId && prog?.flag) prog.flag('gate-hostile:' + siteId, 1);
+    let sx = 0, sz = 0, found = false;
     for (const guard of this.all) {
       if (!guard.alive || !guard.neutral || guard.siteGuard !== siteId) continue;
       guard.neutral = false; guard.staged = false; guard.aware = 2; guard.alerted = true;
       guard.calmT = 0; guard.respawnCalmT = 0; guard.memT = guard.def.memHunt || 12;
       guard.state = 'approach'; guard.riseSquash = 1;
       if (player) { guard.heardX = player.pos.x; guard.heardZ = player.pos.z; }
+      if (!found) { sx = guard.stagedX || guard.pos.x; sz = guard.stagedZ || guard.pos.z; found = true; }
     }
+    // ROUND 18. Remember WHERE this fight is, so leaving it can end it. Alex, 2026-09-09:
+    // "don't make them aggro at you forever if you anger one and leave. Aggro should go
+    // away." The stand-down existed but it only ever ran for two hardcoded site ids, so
+    // every lookout mechanic, every minor camp and every authored cast in the county stayed
+    // hostile for the life of the save once you crossed one of them.
+    const away = this._gateAway || (this._gateAway = {});
+    const rec = away[siteId] || (away[siteId] = { t: 0, x: 0, z: 0, known: false });
+    rec.t = 0;
+    if (found) { rec.x = sx; rec.z = sz; rec.known = true; }
     this.ctx.bus.emit('gate:hostile', { id: siteId });
   }
 
   _standDownGates(dt, player) {
     const progress=this._sys('progress'),places=this._sys('places');
-    const timers=this._gateAway||(this._gateAway={});
-    for(const id of ['holdfast','the-toll']) {
-      if(!progress?.flag('gate-hostile:'+id)){timers[id]=0;continue;}
+    const away=this._gateAway||(this._gateAway={});
+    // Every site that is actually angry, not a list of two. The Holdfast and the Toll are
+    // still checked by name because a save can load already hostile with no live guard and
+    // no entry here; anything else earns its entry the moment provokeGate() runs.
+    const ids=new Set(['holdfast','the-toll']);
+    for(const k in away)ids.add(k);
+    for(const e of this.all)if(e.alive&&e.siteGuard)ids.add(e.siteGuard);
+    for(const id of ids) {
+      const rec=away[id]||(away[id]={t:0,x:0,z:0,known:false});
+      if(!progress?.flag('gate-hostile:'+id)){rec.t=0;continue;}
       const site=places?.nodes.get(id)?.def;
-      if(!site)continue;
-      let near=Math.hypot(player.pos.x-site.x,player.pos.z-site.z)<190;
+      // A site position from places when it is a major, otherwise the one provokeGate
+      // stamped. With neither, a live guard's own position still ends the fight below.
+      const sx=site?site.x:rec.x, sz=site?site.z:rec.z, hasSite=!!site||rec.known;
+      let near=hasSite&&Math.hypot(player.pos.x-sx,player.pos.z-sz)<190;
       for(const e of this.all)if(e.alive&&e.siteGuard===id&&Math.hypot(player.pos.x-e.pos.x,player.pos.z-e.pos.z)<90)near=true;
-      timers[id]=near?0:(timers[id]||0)+dt;
-      if(timers[id]<8)continue;
-      progress.flag('gate-hostile:'+id,0);timers[id]=0;
+      rec.t=near?0:rec.t+dt;
+      if(rec.t<8)continue;
+      progress.flag('gate-hostile:'+id,0);rec.t=0;
       for(const e of this.all){
         if(!e.alive||!e.initiallyNeutral||e.siteGuard!==id)continue;
         this._uncommit(e);e.neutral=true;e.staged=true;e.aware=0;e.alerted=false;
@@ -1159,6 +1188,20 @@ export class Enemies {
     return this._spawnOne(key, x, z, opts);
   }
 
+  /**
+   * ROUND 18. The nearest tree collider to a point, or null. Used only by the moth's perch,
+   * once per spawn — flora tags every trunk 'tree' (flora.js's planting loop) and collision
+   * keeps them in the same grid as everything else, so this is one gather and a compare.
+   */
+  _nearestTrunk(x, z, radius) {
+    const col = this._sys('collision');
+    if (!col || typeof col.nearestTagged !== 'function') return null;
+    // collision.nearestTagged takes an ARRAY and returns SHARED scratch, so the two fields
+    // this needs are copied out before anything else can call it again.
+    const hit = col.nearestTagged(x, z, radius, TRUNK_TAGS);
+    return hit ? { x: hit.x, z: hit.z, r: hit.radius } : null;
+  }
+
   _spawnOne(key, x, z, opts) {
     const def = SPECIES[key];
     if (!def) return null;
@@ -1262,6 +1305,44 @@ export class Enemies {
       e.holdT = e.recommitT;    // and it stands its ground for that long (see _approach)
     } else e.holdT = 0;
     e.stallT = 0; e.stallAX = x; e.stallAZ = z; e.stallN = 0; e.stoodDownN = 0; e.corneredT = 0;
+
+    /* ---- ROUND 18: THE PERCH ------------------------------------------------------
+     * ALEX: the moth "blends into trees in the forest. And then can fly."
+     *
+     * So a moth does not arrive walking out of the woods like everything else — it arrives
+     * ALREADY ON A TRUNK, two to four and a half metres up, wings folded, perfectly still,
+     * facing away. That is a STAGED body, which this system already has and which already
+     * means "hold this exact pose, drawn, until you notice him". It borrows that whole
+     * machine: the tableau rules keep it motionless, _noticeStaged wakes it, and the frame
+     * it wakes it is an ordinary flying body.
+     *
+     * It looks for a real trunk within 4 m and puts itself against it. With no trunk to
+     * cling to it simply starts in the air — the county has open ground in it and a moth
+     * refusing to spawn there would be a famine, which is the failure this whole lane is
+     * written to avoid.
+     */
+    e.perched = false;
+    e.ceilY = 0; e.ceilT = 0; e.dropped = false;
+    if (def.perch && !(opts && (opts.staged || opts.ambush || opts.awake))) {
+      const trunk = this._nearestTrunk(x, z, 4.2);
+      const up = def.perchLo + this.rng.next() * (def.perchHi - def.perchLo);
+      if (trunk) {
+        // Against the bark, on the far side from the player, at trunk radius plus its own.
+        const bx = trunk.x - x, bz = trunk.z - z;
+        const bl = Math.hypot(bx, bz) || 1;
+        const px = trunk.x + (bx / bl) * (trunk.r + def.radius * 0.55);
+        const pz = trunk.z + (bz / bl) * (trunk.r + def.radius * 0.55);
+        e.pos.set(px, groundY(this.ctx, px, pz) + up, pz);
+        e.yaw = faceYaw(px, pz, trunk.x, trunk.z);
+      } else {
+        e.pos.y = groundY(this.ctx, x, z) + up;
+      }
+      e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
+      e.prevYaw = e.currYaw = e.yaw;
+      e.stagedX = e.pos.x; e.stagedY = e.pos.y; e.stagedZ = e.pos.z; e.stagedYaw = e.yaw;
+      e.staged = true;
+      e.perched = true;
+    }
     e.gen++;
 
     // EVERY FIRST SIGHT IS PARTIAL BY CONSTRUCTION. A dormant species starts in
@@ -2329,8 +2410,72 @@ export class Enemies {
     // trees rejected straight back inside the player's chest.
     this._pushOffPlayer(e);
 
-    followGround(this.ctx, e, dt);
+    // ROUND 18: the two bodies that do not stand on the ground own their own altitude.
+    if (def.flier || def.ceiling) this._stepAir(e, dt);
+    else followGround(this.ctx, e, dt);
     e.gait += Math.hypot(e.vel.x, e.vel.z) * dt * (def.form === 'quadruped' ? 2.6 : 1.7);
+  }
+
+  /* ------------------------------------------------------- ROUND 18: ALTITUDE --
+   * Two species do not walk. Alex, 2026-09-09: the moth "can fly. Not too high. But fly",
+   * and the spider "crawls on ceiling and drops off".
+   *
+   * THE ONE THING BOTH HAVE TO GET RIGHT is that they must be able to actually HIT you.
+   * `inReachY` in _stepAttack allows |dy| <= height*0.9 + 0.55, which for a 1.15 m moth is
+   * 1.59 m — so a moth cruising at 3 m could telegraph, commit, strike and connect with
+   * nothing, for ever, and it would look like a bug and BE one. Both therefore come DOWN to
+   * strike: the moth dives on its windup, the spider lets go of the ceiling. Committing is
+   * the same thing as descending, which also happens to be the read Alex asked for.
+   */
+  _stepAir(e, dt) {
+    const def = e.def;
+    const g = groundY(this.ctx, e.pos.x, e.pos.z);
+    const committed = e.state === 'windup' || e.state === 'attack';
+    let want;
+
+    if (def.ceiling) {
+      // Where is the roof? One ray straight up, retested a few times a second rather than
+      // every frame — a spider does not need to know to the millimetre and this is inside
+      // the pool's per-step budget.
+      e.ceilT = (e.ceilT || 0) - dt;
+      if (e.ceilT <= 0) {
+        e.ceilT = 0.22;
+        const col = this._sys('collision');
+        let h = 0;
+        if (col && col.raycast) {
+          _rayUpO.x = e.pos.x; _rayUpO.y = g + 0.35; _rayUpO.z = e.pos.z;
+          const hit = col.raycast(_rayUpO, _rayUp, def.dropFrom, col.MASK ? col.MASK.SOLID : 1);
+          if (hit) h = hit.t + 0.35;
+        }
+        // No roof over it (it is outside, or the room is too tall): it walks like anything
+        // else rather than hovering in the open, which would read as a bug.
+        e.ceilY = h > def.ceilingLo ? Math.min(h - 0.55, def.ceilingHi) : 0;
+      }
+      // It DROPS to fight and climbs back up once it has lost you. `airborne` is the
+      // existing free-fall branch above; nothing new integrates gravity.
+      if (committed || e.aware === 2) {
+        if (!e.dropped && e.ceilY > 0) {
+          e.dropped = true; e.airborne = true; e.vel.y = -0.4;
+          this._emitNoise(e.pos.x, e.pos.z, 8, 'enemy');
+        }
+        want = g;
+      } else {
+        if (e.dropped && e.pos.y <= g + 0.05) e.dropped = false;   // it goes back up
+        want = e.ceilY > 0 && !e.dropped ? g + e.ceilY : g;
+      }
+      const rate = e.dropped ? 9.0 : def.climbRate;
+      e.pos.y += clamp(want - e.pos.y, -rate * dt, rate * dt);
+      return;
+    }
+
+    // THE MOTH. Not too high: hoverLo..hoverHi, bobbing, and down to strike.
+    if (committed) {
+      want = g + 0.30;
+    } else {
+      const mid = (def.hoverLo + def.hoverHi) * 0.5, half = (def.hoverHi - def.hoverLo) * 0.5;
+      want = g + mid + Math.sin(this._t * TAU * def.hoverHz + e.id * 1.7) * half;
+    }
+    e.pos.y += (want - e.pos.y) * (1 - Math.exp(-(def.hoverLambda || 3.2) * dt));
   }
 
   /* ---------------------------------------------------------------- death -- */
@@ -2353,14 +2498,47 @@ export class Enemies {
     e.staggerT = 0; e.immuneT = 0; e.calmT = 0;
     this._uncommit(e);
     this._releaseSlot(e);
-    // the corpse leaves ALONG the shot, not into it: _dir points from the
+    // THE THROW. The corpse leaves ALONG the shot, not into it: _dir points from the
     // impact point out through the body, which is the way a round pushes.
+    //
+    // ROUND 18. Alex: "both shots and melee should send the dead creature or person's body
+    // moving back a bit and ragdolling", and "melee should look powerful". The old numbers
+    // were a 6 m/s ceiling divided by mass, which put a hound at 2.9 m/s and a pallbearer
+    // at 0.8 — under a walking pace, so nothing ever visibly LEFT. Now:
+    //   - a floor under the kick, so the lightest touch of a killing blow still moves it;
+    //   - melee throws about 2.2x as hard as a round and lifts more, because a rifle stock
+    //     swung two-handed is momentum and a bullet is a hole;
+    //   - the mass divisor is softened (sqrt) so a heavy body still shifts — a 210 kg
+    //     pallbearer that does not budge reads as scenery falling over, not as a hit.
     const J = clamp(dmg * 0.70, 8, 320);
-    const kick = Math.min(J * 0.055 / (e.def.mass / 60), 6);
-    e.vel.set(_dir.x * kick, 1.2, _dir.z * kick);
+    const massK = Math.sqrt(Math.max(0.4, e.def.mass / 60));
+    const kick = melee
+      ? Math.min(3.4 + J * 0.115 / massK, 13.5)
+      : Math.min(1.9 + J * 0.070 / massK, 9.0);
+    e.vel.set(_dir.x * kick, melee ? 3.30 : 2.15, _dir.z * kick);
     e.airborne = true;
     e.moving = false;
-    e.deathSpin = (this.rng.next() - 0.5) * 6;
+    // THE TUMBLE. Spin scales with the throw, so a big hit cartwheels and a small one
+    // crumples. The roll rate keeps the sign of a random side so a body never falls the
+    // same way twice; pitch is biased FORWARD along the shot (positive = face down, going
+    // away from you) because that is what a shove in the back looks like.
+    // CAPPED, and measured. Uncapped this reached 14.9 rad/s off a melee kill on a hound —
+    // two and a half revolutions a second, which is a blender and not a body. 1.9 puts the
+    // worst case at about 7 rad/s, which is one hard cartwheel into the ground.
+    //
+    // THE TUMBLE DRAWS FROM ITS OWN FORK, and it matters. `this.rng` is the stream that also
+    // picks a poacher's band and a hunter's scream clock, and every kill used to take exactly
+    // ONE number out of it. Taking four moved every later draw along, which moved where the
+    // next body was placed — tests/enemies.mjs measured a 12 m/s ram throw at 2.02 m instead
+    // of 6 and it was not the throw that had changed, it was the corridor the Hunter was
+    // standing in. `deathSpin` keeps the original draw so the main stream is byte-for-byte
+    // what it was; the three new ones come from 'ragdoll'.
+    const spinK = Math.min(1.9, (melee ? 1.45 : 1.0) * (0.55 + kick * 0.16));
+    e.deathSpin = (this.rng.next() - 0.5) * 5 * spinK;
+    const rr = this.ragdollRng;
+    e.deathRollV = (rr.next() < 0.5 ? -1 : 1) * (1.4 + rr.next() * 2.2) * spinK;
+    e.deathPitchV = (0.6 + rr.next() * 1.4) * spinK;
+    e.deathRoll = 0; e.deathPitch = 0; e.deathYaw = 0; e.deathSettle = 0; e.deathLimp = 0;
     this._killed++;
     this._lastContact = this._t;
 
@@ -2396,17 +2574,58 @@ export class Enemies {
     // a body killed mid-rise finishes unfolding on its way down, so it is never a squashed
     // corpse two thirds under the ground (present() sinks a squashed body on purpose)
     if (e.riseSquash < 1) e.riseSquash = Math.min(1, e.riseSquash + dt * 1.6);
-    if (e.airborne || e.pos.y > groundY(this.ctx, e.pos.x, e.pos.z) + 0.05) {
+
+    /* ---- ROUND 18: THE RAGDOLL --------------------------------------------------
+       Three things happen to a thrown body and the old step only did the first:
+         1. it flies, and lands;
+         2. it BOUNCES and then SLIDES, losing speed to the ground rather than to a
+            single multiply on the frame it touched down;
+         3. it tumbles the whole time, and the tumble is what makes it read as a body
+            rather than as a plank rotating on a timer.
+       All of it is dt-scoped: no setTimeout, nothing frame-rate dependent, so a test
+       can step it. The whole thing is over in about a second and a half. */
+    const g0 = groundY(this.ctx, e.pos.x, e.pos.z);
+    const inAir = e.airborne || e.pos.y > g0 + 0.05;
+    if (inAir) {
       e.vel.y -= GRAVITY * dt;
       e.pos.x += e.vel.x * dt;
       e.pos.y += e.vel.y * dt;
       e.pos.z += e.vel.z * dt;
       const g = groundY(this.ctx, e.pos.x, e.pos.z);
       if (e.pos.y <= g) {
-        e.pos.y = g; e.airborne = false;
-        e.vel.multiplyScalar(0.3);
+        e.pos.y = g;
+        // ONE bounce, and only if it arrived with something to give: a shoulder catching
+        // the ground and turning the fall into a roll. Below the threshold it just lands.
+        if (e.vel.y < -3.2 && e.deathT < 1.1) {
+          e.vel.y = -e.vel.y * 0.26;
+          e.vel.x *= 0.62; e.vel.z *= 0.62;
+          e.deathRollV *= 1.25;             // the ground puts spin ON it, not off
+        } else {
+          e.airborne = false; e.vel.y = 0;
+          e.vel.x *= 0.55; e.vel.z *= 0.55;
+        }
       }
+    } else if (e.vel.x || e.vel.z) {
+      // THE SLIDE. It keeps going a little way after it lands, which is the whole of
+      // "moving back a bit", and friction takes it rather than a single multiply.
+      e.pos.x += e.vel.x * dt;
+      e.pos.z += e.vel.z * dt;
+      const k = Math.max(0, 1 - 7.5 * dt);
+      e.vel.x *= k; e.vel.z *= k;
+      if (Math.abs(e.vel.x) < 0.05 && Math.abs(e.vel.z) < 0.05) { e.vel.x = 0; e.vel.z = 0; }
+      e.pos.y = groundY(this.ctx, e.pos.x, e.pos.z);
     }
+
+    // The tumble, and then giving up. In the air it spins freely; on the ground the
+    // rates bleed off fast and `deathSettle` walks the body the rest of the way down to
+    // flat, so nothing is ever left frozen on its side at a strange angle.
+    e.deathYaw += e.deathSpin * dt;
+    e.deathRoll += e.deathRollV * dt;
+    e.deathPitch += e.deathPitchV * dt;
+    const bleed = Math.max(0, 1 - (inAir ? 0.55 : 6.5) * dt);
+    e.deathRollV *= bleed; e.deathPitchV *= bleed; e.deathSpin *= bleed;
+    if (!inAir) e.deathSettle = Math.min(1, e.deathSettle + dt * 2.4);
+    e.deathLimp = Math.min(1, e.deathLimp + dt * 5.0);
     // the 2.6 s decay. THIS is what makes dead read against alive at 40 m.
     const glow = Math.max(0, 1 - e.deathT / DEATH_GLOW_S);
     e.built.deathGlow(glow * glow);
@@ -3020,10 +3239,17 @@ export class Enemies {
       // THE CORPSE FIRST, then stagger and flinch: a dead body falls whatever it was doing when
       // it died. The old order let a live stagger timer keep a corpse upright (_stepCorpse).
       if (e.state === 'corpse') {
-        const fall = clamp01(e.deathT / 0.55);
-        g.rotation.z = fall * (Math.PI / 2) * (e.deathSpin > 0 ? 1 : -1) * 0.92;
-        g.rotation.y = yaw + e.deathSpin * Math.min(e.deathT, 0.5);
-        g.position.y += 0.2 * (1 - fall);
+        // ROUND 18. The old pose was `fall = deathT/0.55` driving ONE axis to 90 degrees
+        // and a yaw that stopped dead at 0.5 s — a plank on a timer, and it read as one.
+        // Now the integrated tumble is the pose, and `deathSettle` blends it toward flat
+        // so a settled body still ends up lying down, on the side the tumble left it.
+        const lay = (e.deathRoll > 0 ? 1 : -1) * (Math.PI / 2) * 0.94;
+        const s = e.deathSettle * e.deathSettle;
+        g.rotation.z = e.deathRoll * (1 - s) + lay * s;
+        g.rotation.x = e.deathPitch * (1 - s) * 0.75;
+        g.rotation.y = yaw + e.deathYaw * 0.55;
+        // the hip lifts while it is still tumbling and comes down as it settles
+        g.position.y += 0.24 * (1 - s);
       } else if (e.staggerT > 0) {
         g.position.y -= 0.26 * Math.sin(Math.PI * clamp01(1 - e.staggerT / STAGGER_T));
         g.rotation.z = Math.sin(e.staggerT * 34) * 0.08;
@@ -3056,6 +3282,9 @@ export class Enemies {
       anim.tick = e.tick || 0;
       anim.time = this._t;
       anim.dead = !e.alive;
+      // ROUND 18: how loose the rig has gone. bodies.js's gaits read it and let the limbs
+      // hang and swing off the tumble instead of holding their last live pose forever.
+      anim.limp = e.state === 'corpse' ? e.deathLimp : 0;
       e.built.animate(anim);
     }
 
@@ -3274,6 +3503,22 @@ function makeRecord(id, species, def, built, rng) {
     flinchT: 99, flinch: new THREE.Vector3(),
     flashT: 99,
     deathT: 0, deathSpin: 0,
+    // ROUND 18 (Alex, 2026-09-09: "I want more ragdolling, it's fun"). A corpse is no
+    // longer a body that lies down along one axis on a timer — it is THROWN, and it
+    // tumbles on all three until the ground takes the spin out of it. Declared here at
+    // boot with everything else, because a record that grows a field mid-fight is a
+    // shape V8 re-optimises mid-fight.
+    //   deathRoll/deathPitch        radians, integrated in _stepCorpse
+    //   deathRollV/deathPitchV      rad/s; deathSpin is the yaw rate, above
+    //   deathSettle                 0..1, how far it has given up and lain flat
+    //   deathLimp                   0..1, how loose the limbs have gone (bodies.js reads it)
+    deathRoll: 0, deathPitch: 0, deathYaw: 0, deathRollV: 0, deathPitchV: 0, deathSettle: 0, deathLimp: 0,
+    // ROUND 18, the two bodies that are not on the ground (_stepAir).
+    //   ceilY    metres of clear air over the floor under it, 0 = no roof it can hold
+    //   ceilT    the retest clock for that probe
+    //   dropped  the spider has let go and is on (or falling to) the floor
+    //   perched  the moth is clinging to a trunk and has not opened its wings yet
+    ceilY: 0, ceilT: 0, dropped: false, perched: false,
     slot: -1,
     // Where this body was last hurt, and whether it was hurt by a swing. Both
     // are declared HERE, at boot, with every other field, and both exist so
@@ -3301,7 +3546,7 @@ function makeRecord(id, species, def, built, rng) {
     navBest: undefined, navBestT: 0,
     navMoved: 0, navLastX: 0, navLastZ: 0,      // nav.js progress(): metres really covered
     _navYaw: rng.next() * TAU, _navValid: false, _navBlocked: false,
-    anim: { gait: 0, moveAmp: 0, coil: 0, swing: 0, bank: 0, aim: 0, tick: 0 },
+    anim: { gait: 0, moveAmp: 0, coil: 0, swing: 0, bank: 0, aim: 0, tick: 0, time: 0, dead: false, limp: 0 },
   };
 }
 

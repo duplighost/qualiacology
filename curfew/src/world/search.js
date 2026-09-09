@@ -43,8 +43,14 @@ const SEARCH_HOLD_S = 0.85;
 const GLYPH_Y = 0.62;
 
 /** What a body has on them. Seeded per body, never Math.random. */
-const PURSE_MIN = 2;
-const PURSE_MAX = 7;
+// ROUND 18. Alex, 2026-09-09: "The cash system is kind of broken. Things should cost much
+// more." Prices went up across the county — a revolver is 120 rather than 20, a toll is 220
+// rather than 40, and the garage's Treebreaker is 3600 — so the county's income had to move
+// with them or "much more" would just mean "unreachable". A purse is x4, which keeps the
+// SHAPE of the economy (a body is small money, a strongbox is real money, and the thing you
+// actually want costs a lot of both) while making the numbers on screen mean something.
+const PURSE_MIN = 8;
+const PURSE_MAX = 26;
 /** A body that was already dead when you found it has been out here a while, and somebody
  *  else may have been through it first. Sometimes there is nothing. */
 const FOUND_EMPTY_CHANCE = 0.28;
@@ -59,10 +65,11 @@ const FOUND_EMPTY_CHANCE = 0.28;
  */
 const GATE_R = 3.0;
 const GATE_HOLD_S = 1.1;
-/** What the doorman wants. Roughly eight bodies' worth, or two strongboxes, or a long night
- *  of crates — enough that you have to have been doing something, not so much that the
- *  castle is gated behind a grind. */
-const GATE_PRICE = 40;
+/** What the doorman wants. Roughly a dozen bodies' worth, or two strongboxes, or a long
+ *  night of crates — enough that you have to have been doing something, not so much that
+ *  the castle is gated behind a grind. ROUND 18: 40 -> 220 with the rest of the ladder. At
+ *  40 he could pay the doorman off a single searched body and the door meant nothing. */
+const GATE_PRICE = 220;
 
 export class Search {
   static id = 'search';

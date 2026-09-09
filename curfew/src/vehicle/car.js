@@ -103,6 +103,11 @@ const RIM_RATIO = 11.0;
 const SAMPLE_FWD = 2.2, SAMPLE_SIDE = 1.25;   // [mossway game.js:1855-1856]
 const TILT_LAMBDA = 5.2;          // [mossway game.js:1865-1866]
 const BOB_LAMBDA = 8.0;           // [mossway game.js:1873]
+// ROUND 18, the ride. A critically-ish damped spring the BODY sits on, above the chassis
+// y that everything physical uses. K is the stiffness (rad/s^2 per metre), C the damping,
+// and DRIVE how hard a change in ground height pulls on it. Tuned so a 0.3 m kerb at
+// 12 m/s compresses about 5 cm and is back inside 0.4 s with one small overshoot.
+const SUSP_K = 150.0, SUSP_C = 17.0, SUSP_DRIVE = 0.85;
 const GROUND_LAMBDA = 12.0;       // [peachful vehicle.js:99] damp to ground, not snap
 const HIT_COOLDOWN = 0.45;        // [mossway game.js:1809]
 
@@ -395,6 +400,8 @@ export class Car {
     // ---- fix 2: prev/curr, lerped by present(alpha). Nothing else may draw the car.
     this.prevX = 0; this.prevY = 0; this.prevZ = 0;
     this.prevHeading = 0; this.prevPitch = 0; this.prevRoll = 0; this.prevBob = 0;
+    // ROUND 18: the ride spring, interpolated between fixed steps like bob.
+    this.susp = 0; this.suspV = 0; this.prevSusp = 0; this.pedal = 0;
     this.prevWheelRot = 0; this.prevSteer = 0;
     // The door and the courtesy light are simulation state like everything else: they are
     // stepped, they keep prev/curr, and present() lerps them. A door that snapped between
@@ -558,6 +565,7 @@ export class Car {
   get _lights() { return this.ctx.systems.get('lights'); }
   get _fx() { return this.ctx.systems.get('fx'); }
   get _enemies() { return this.ctx.systems.get('enemies'); }
+  get _flora() { return this.ctx.systems.get('flora'); }
   get _input() { return this.ctx.input || this.ctx.systems.get('input'); }
   // The WHEEL branch of the skill tree. progress is manifest #20 and we are #19, so it
   // does not exist when this file is constructed and it may not exist at all in a
@@ -1132,7 +1140,7 @@ export class Car {
   _sync() {
     this.prevX = this.x; this.prevY = this.y; this.prevZ = this.z;
     this.prevHeading = this.heading;
-    this.prevPitch = this.pitch; this.prevRoll = this.roll; this.prevBob = this.bob;
+    this.prevPitch = this.pitch; this.prevRoll = this.roll; this.prevBob = this.bob; this.prevSusp = this.susp;
     this.prevWheelRot = this.wheelRot; this.prevSteer = this.steer;
     this.prevDoorA = this.doorA; this.prevCabin = this.cabin;
   }
@@ -1273,7 +1281,7 @@ export class Car {
 
     this.prevX = this.x; this.prevY = this.y; this.prevZ = this.z;
     this.prevHeading = this.heading;
-    this.prevPitch = this.pitch; this.prevRoll = this.roll; this.prevBob = this.bob;
+    this.prevPitch = this.pitch; this.prevRoll = this.roll; this.prevBob = this.bob; this.prevSusp = this.susp;
     this.prevWheelRot = this.wheelRot; this.prevSteer = this.steer;
     this.prevDoorA = this.doorA; this.prevCabin = this.cabin;
 
@@ -1819,7 +1827,22 @@ export class Car {
     const maxForward = (onRoad ? K.onRoad : K.offRoad) * worn * boost;
     const maxReverse = (onRoad ? MAX_REV_ON : MAX_REV_OFF) * worn;
 
-    if (throttle) this.speed += (onRoad ? K.accelOn : K.accelOff) * boostAccel * dt;
+    // ROUND 18. Alex, 2026-09-09: "I want the car to feel a bit smoother to drive."
+    //
+    // THE THROTTLE IS A PEDAL, NOT A SWITCH. `throttle` is a key being down, and the whole
+    // of the accel term was gated on it directly — so pressing W applied 7.0 m/s^2 on the
+    // first frame and releasing it removed all of it on the next. Every tap was a step
+    // change in acceleration, which is exactly what "not smooth" feels like from the seat.
+    // 0.22 s to full and 0.13 s off it: short enough that the car still answers the key
+    // immediately (a tap still moves it), long enough that the jerk is gone. Nothing about
+    // the CAPS moved — CFG.car.onRoad is still 23.0 and accelOn is still 7.0.
+    const want = throttle ? 1 : 0;
+    const rate = throttle ? 1 / 0.22 : 1 / 0.13;
+    this.pedal = this.pedal === undefined ? want
+      : this.pedal + clamp(want - this.pedal, -rate * dt, rate * dt);
+    if (this.pedal > 0.001) {
+      this.speed += (onRoad ? K.accelOn : K.accelOff) * boostAccel * this.pedal * dt;
+    }
     if (brake) {
       if (this.speed > 0.55) this.speed -= K.brake * dt;
       else this.speed -= (onRoad ? CREEP_ON : CREEP_OFF) * dt;
@@ -1851,7 +1874,18 @@ export class Car {
     const R = K.turn.rMin + K.turn.rCubic * v * v * v;
     const lock = Math.atan(K.wheelbase / R);
     this.lockNow = lock;
-    this.steer = damp(this.steer, steerIn * lock, STEER_LAMBDA, dt);
+    // ROUND 18, the second half of "a bit smoother to drive". The wheel used to reach its
+    // target at one fixed rate whatever the speed, and at 20 m/s a tapped A or D put the
+    // full angle on in 0.15 s, which on a straight road is a twitch rather than a lane
+    // change. The lock itself is UNTOUCHED — CFG.car.turn's radius table is Alex's round-5
+    // "really easy and responsive" tuning and re-deriving it is forbidden — only how fast
+    // the wheel gets there moves, and it moves the RIGHT way: crisper than before under
+    // 8 m/s (parking, forest spurs, three-point turns) and calmer above it.
+    //   0 m/s   9.1   1.5x the old rate
+    //   8 m/s   7.2   about where it was
+    //   23 m/s  4.4   a hand on the wheel instead of a flick
+    const steerLambda = STEER_LAMBDA * clamp(1.30 - v * 0.026, 0.62, 1.30);
+    this.steer = damp(this.steer, steerIn * lock, steerLambda, dt);
     this.heading = wrapAngle(this.heading + this.speed * Math.tan(this.steer) / K.wheelbase * dt);
     this._payKick(dt);          // round 7: whatever the last crush shoved the nose by
 
@@ -1889,6 +1923,23 @@ export class Car {
           + terr.heightAt(this.x - fx * ax, this.z - fz * ax)) * 0.5;
     }
     this.y = damp(this.y, gy, GROUND_LAMBDA, dt);
+
+    /* ---- ROUND 18: SPRINGS. The third half of "a bit smoother to drive" ------------
+     * `this.y` is the CHASSIS and everything physical reads it — the collider, the ram
+     * band, the crush band, where the door is. So the ride is added on top of it, as a
+     * visual offset the body and therefore the seat and the camera ride on, exactly the
+     * way `bob` already is. A real spring: it is pulled by how fast the ground under the
+     * car is changing, and damped, so a kerb compresses it and it comes back once rather
+     * than the whole car being welded to the heightfield.
+     *
+     * Deliberately small (the clamp is +-9 cm). This is meant to take the buzz off a rough
+     * verge, not to make the car wallow — Alex's standing note is "nothing floaty".
+     */
+    const dgy = (gy - (this._lastGy === undefined ? gy : this._lastGy)) / Math.max(dt, 1e-4);
+    this._lastGy = gy;
+    this.suspV = (this.suspV || 0) + (-(this.susp || 0) * SUSP_K - (this.suspV || 0) * SUSP_C
+      - clamp(dgy, -14, 14) * SUSP_DRIVE) * dt;
+    this.susp = clamp((this.susp || 0) + this.suspV * dt, -0.09, 0.09);
 
     this._tilt(dt, onRoad);
   }
@@ -2192,10 +2243,81 @@ export class Car {
    * Allocates nothing. `col.crush` fills a shared result and we read it before anything
    * else can call it.
    */
+  /* ------------------------------------------------ THE TREEBREAKER, ROUND 18 --
+   * ALEX, 2026-09-09: "I want to be able to upgrade the car in very expensive ways. If an
+   * upgrade is wicked expensive and it lets it crash through the trees in a forest knocking
+   * them over/temporarily destroying them, that would be the best."
+   *
+   * 3600 coins at a lookout (vehicle/garage.js), and then the woods stop being a wall.
+   * Below `minSpeed` a trunk still stops you — you cannot idle through a forest, you have
+   * to be COMMITTED — and every tree it takes costs a fifth of the speed, so a thicket is
+   * still a thicket and a lone trunk is nothing. They stand back up after regrowS, which is
+   * the "temporarily" in the ask and also the thing that stops one drive clear-felling a
+   * county that has no way to grow another tree.
+   *
+   * Both halves come down together: the trunk's COLLIDER (so the car goes through) and its
+   * INSTANCE (so you watch it go over). Restoring is the same two calls in reverse, on a
+   * timer this system owns, because it is the one that knows when it did it.
+   */
+  _treeBreakStep(dt, cx, cz, speed) {
+    const pr = this._progress;
+    const spec = pr && typeof pr.perk === 'function' ? pr.perk('treeBreak', null) : null;
+    const down = this._treesDown || (this._treesDown = []);
+    // Stand them back up first, so a tree that has served its time is already gone from
+    // the list before this drive can count it again.
+    if (down.length) {
+      const flora = this._flora;
+      for (let i = down.length - 1; i >= 0; i--) {
+        const rec = down[i];
+        rec.t -= dt;
+        if (rec.t > 0) continue;
+        if (rec.col) this._collision?.restoreTree(rec.col);
+        if (rec.vis && flora) flora.standUp(rec.vis);
+        if (rec.vis && flora && flora._felled) {
+          const j = flora._felled.indexOf(rec.vis);
+          if (j >= 0) flora._felled.splice(j, 1);
+        }
+        down.splice(i, 1);
+      }
+    }
+    if (!spec || speed < spec.minSpeed || this.mode !== 'driving') return 0;
+    const col = this._collision, flora = this._flora;
+    if (!col || typeof col.fellTrees !== 'function') return 0;
+    const taken = [];
+    const n = col.fellTrees(cx, cz, spec.radius, taken, spec.maxPerStep);
+    if (!n) return 0;
+    // The visual, and the record that puts both halves back.
+    //
+    // THE TWO LISTS ARE DIFFERENT LENGTHS and pairing them by index is wrong. A trunk can
+    // have a collider and no instance in the near ring, or an instance whose collider this
+    // step did not reach — so every entry in EITHER list gets its own row on the timer, and
+    // a row is allowed to carry only one half. Measured before this: five trunks down, three
+    // laid over, and one of the three left flat for the rest of the session.
+    const vis = flora && typeof flora.fell === 'function'
+      ? flora.fell(cx, cz, spec.radius + 0.5) : [];
+    const rows = Math.max(taken.length, vis.length);
+    for (let i = 0; i < rows; i++) {
+      down.push({ col: taken[i] || null, vis: vis[i] || null, t: spec.regrowS });
+    }
+    this.speed *= Math.max(0.30, 1 - spec.scrub * n);
+    this._addWear(0.0016 * n, 'trees');
+    this._noise('car:crush', 44, cx, cz);
+    this._say('branch', 1.0, cx, this.y + 1.2, cz);
+    const fxs = this._fx;
+    if (fxs && typeof fxs.addTrauma === 'function') fxs.addTrauma(0.22 + 0.10 * n);
+    return n;
+  }
+
   _crushStep(dt, fx, fz) {
     const col = this._collision;
     if (!col || typeof col.crush !== 'function') return 0;
     const speed = Math.abs(this.speed);
+    // The Treebreaker runs whatever the speed is, because it owns the timer that stands
+    // trunks back up and that has to keep ticking while the car is parked.
+    {
+      const s0 = this.speed > 0 ? 1 : -1;
+      this._treeBreakStep(dt, this.x + fx * s0 * CRUSH_LEAD, this.z + fz * s0 * CRUSH_LEAD, speed);
+    }
     if (speed < 2.6) return 0;
     const s = this.speed > 0 ? 1 : -1;
     // The disc sits at the nose and grows by half a step of travel, so nothing thin slips
@@ -2842,7 +2964,7 @@ export class Car {
     const h = this.prevHeading + angleDelta(this.prevHeading, this.heading) * a;
     const pitch = lerp(this.prevPitch, this.pitch, a);
     const roll = lerp(this.prevRoll, this.roll, a);
-    const bob = lerp(this.prevBob, this.bob, a);
+    const bob = lerp(this.prevBob, this.bob, a) + lerp(this.prevSusp, this.susp, a);
     const steer = lerp(this.prevSteer, this.steer, a);
     const wheelRot = lerp(this.prevWheelRot, this.wheelRot, a);
     const doorA = lerp(this.prevDoorA, this.doorA, a);
@@ -2852,6 +2974,11 @@ export class Car {
     root.position.set(x, y + bob, z);
     root.rotation.order = 'YXZ';             // fix 1
     root.rotation.set(pitch, h, roll);
+
+    // ROUND 18: the condition gauge on the binnacle. Alex asked for the breakdown meter to
+    // be "on the cars dashboard and not on the hud", so this is the only place the number
+    // is shown and the HUD line that used to print it is gone (ui/readouts.js).
+    if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wear));
     // No updateMatrixWorld here: the renderer walks the scene once per frame and nothing
     // in this file reads the car's world matrix. Forcing the subtree would be nine
     // redundant compositions every frame for a prop that is one object.

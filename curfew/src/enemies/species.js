@@ -51,6 +51,9 @@ export const FORM = Object.freeze({
   HUMAN: 'human',           // poacher — coat, rifle
   PORCELAIN: 'porcelain',   // the Pale — no face, doll joints
   ORDINARY: 'ordinary',     // the Standing Kind — an ordinary body, still
+  // ROUND 18, the two Alex asked for on 2026-09-09.
+  MOTH: 'moth',             // wings, a furred thorax, six hooked legs — it clings, then flies
+  SPIDER: 'spider',         // eight legs, a low body — it walks on the ceiling and drops
 });
 
 /* --------------------------------------------------------------------------
@@ -277,6 +280,80 @@ export const SPECIES = {
     eye: 0xdfe9ff, cloth: 0x0b0c0e, skin: 0x15130f, bone: 0x2b271f,
   },
 
+  /* ----------------------------------------------------------------- MOTH --
+     ROUND 18. ALEX, 2026-09-09: "I would like a new enemy. A freaky horror moth that kinds
+     of blends into trees in the forest. And then can fly. Not too high. But fly."
+
+     THE WHOLE BODY IS THE TRICK. While it has not noticed you it is CLINGING to a trunk,
+     wings folded flat against the bark, perfectly still, and its cloth is the bark's own
+     value — the darkest thing in the roster, under even the hound. You do not see a moth;
+     you see a patch of trunk, and then the patch opens.
+
+     `flier` is read by enemies.js _integrate: instead of following the ground it holds an
+     altitude between hoverLo and hoverHi. "Not too high" is 1.6-4.2 m — head height to
+     just over a doorway, so it is always something you could hit with the stock if you
+     were quick, and it never becomes a dot in the sky you cannot answer.
+
+     It is FAST and it is FRAGILE: 62 hp against the hound's 55, but 8.4 m/s in short darts
+     with a long pause between them, so the fight is timing and not damage. Its telegraph is
+     the longest thing on it — the wings come up and hold, which is a silhouette change you
+     can read at range in the dark, and it is 0.46 s against the law's 0.32. */
+  moth: {
+    id: 'moth', form: FORM.MOTH, owner: OWNER.PRESSURE, xp: 55,
+    phases: ALL_PHASES,
+    hp: 62, dmg: 20, radius: 0.46, height: 1.15, mass: 24,
+    speed: 8.40,
+    burst: 0.520, pause: 0.560,             // it darts, then hangs there
+    engage: [0, 14], standoff: 3.6,
+    telegraph: 0.460, attack: 0.360, strikeAt: 0.150, recover: 0.520,
+    strikeRange: 2.20,
+    // FLIGHT. hoverLo/hoverHi are metres above the ground under it; hoverHz how fast it
+    // bobs between them, which is what makes it read as a moth rather than a drone.
+    flier: true, hoverLo: 1.60, hoverHi: 4.20, hoverHz: 0.55, hoverLambda: 3.2,
+    // PERCH. Where it waits: clinging to a trunk this high up, still, until it notices you.
+    perch: true, perchLo: 2.30, perchHi: 4.60,
+    notice: 26, memAlert: 7.0,
+    litNotice: 1.6,                         // it comes to a light. That is what a moth does
+    deathNoise: 10,
+    countsAs: 1,
+    // The dullest eye in the roster and the darkest cloth — it is HIDING, and a glint you
+    // can pick out at 40 m would give the whole thing away. The wings (cloth) sit at bark
+    // value; the thorax (skin) is the one slightly warmer note when it opens.
+    eye: 0xc8a870, cloth: 0x0d0c0a, skin: 0x1c1712, bone: 0x2a2318,
+  },
+
+  /* --------------------------------------------------------------- SPIDER --
+     ROUND 18. ALEX, 2026-09-09: "Another new enemy inside a destination if it's big and
+     looks old should be a giant spider that crawls on ceiling and drops off."
+
+     So it is not spawned by the pressure budget at all — director.js's ROSTER does not name
+     it, and _pick can only draw from that table (see the Warden's note above). It is placed
+     by world/interior-horror.js, which is the lane that already knows which rooms are big
+     and which are old.
+
+     `ceiling` is its whole behaviour: it walks the underside of the roof above you, keeping
+     station, and DROPS when it is over you. The drop is the attack. On the floor it is
+     slower than you and it will climb back up if you leave it alone, which is the beat —
+     you can always walk out of the room, and then it is above you again on the way back. */
+  spider: {
+    id: 'spider', form: FORM.SPIDER, owner: OWNER.PRESSURE, xp: 120,
+    phases: ALL_PHASES,
+    hp: 180, dmg: 30, radius: 0.72, height: 1.05, mass: 95,
+    speed: 5.20,
+    burst: 0.760, pause: 0.300,
+    engage: [0, 12], standoff: 2.4,
+    telegraph: 0.420, attack: 0.380, strikeAt: 0.160, recover: 0.700,
+    strikeRange: 2.30,
+    // CEILING. dropFrom is how far above your head it will let itself go from; climbRate
+    // is how fast it gets back up there once it has lost you.
+    ceiling: true, ceilingLo: 2.60, ceilingHi: 5.20, dropFrom: 6.0, climbRate: 1.9,
+    notice: 22, memAlert: 12.0,
+    litNotice: 0.5,
+    deathNoise: 16,
+    countsAs: 2,
+    eye: 0xff9a5c, cloth: 0x0f0d0c, skin: 0x191413, bone: 0x2d2622,
+  },
+
   standing: {
     id: 'standing', form: FORM.ORDINARY, owner: OWNER.DREAD, xp: 0,
     phases: ALL_PHASES,
@@ -334,6 +411,10 @@ export const POOL = Object.freeze({
   // ROUND 15. Six Wardens, which is the whole garrison of the one building that has them.
   // A slot is a body record and a merged mesh at boot — no light, no material, no program.
   warden: 6, resident: 28, cashier: 2, sentry: 9, marshal: 3, marrow:4,
+  // ROUND 18. Six moths, because a swarm is not what was asked for — "a freaky horror moth"
+  // is one thing on one trunk. Four spiders: interior-horror places at most one per room and
+  // the county has thirteen rooms, but only the ones you are inside are ever alive at once.
+  moth: 6, spider: 4,
 });
 
 /* Species allowed to answer a pressure order, in the order a budget prefers

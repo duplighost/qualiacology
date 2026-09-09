@@ -1,4 +1,4 @@
-// CURFEW — the tree. 24 nodes, 6 branches x 4 tiers, and the XP economy's tables.
+// CURFEW — the tree. 20 nodes, 5 branches x 4 tiers, and the XP economy's tables.
 // Owner: progression. Pure data + pure functions. No THREE, no ctx, no side effects, so
 // tests/progression.mjs and anybody else can import it without booting a renderer.
 //
@@ -56,7 +56,12 @@ export const BRANCHES = Object.freeze([
   { id: 'hands', name: 'Hands', verb: 'reload', tint: 0xd8c07a },
   { id: 'lamp',  name: 'Lamp',  verb: 'torch',  tint: 0xf0dca8 },
   { id: 'quiet', name: 'Quiet', verb: 'crouch', tint: 0x8ec4c8 },
-  { id: 'wheel', name: 'Wheel', verb: 'drive',  tint: 0xc47a3a },
+  // ROUND 18: WHEEL is gone from the card. Alex, 2026-09-09: "Let's get the car upgrades out
+  // of the xp things. They should cost money from those other people who fix your car."
+  // Its four nodes moved to vehicle/garage.js, unchanged, and are bought with coins at a
+  // lookout; the hook points they install onto are still declared below, because that table
+  // is the vocabulary and an install onto an undeclared name is refused. A legacy save that
+  // owned wheel_* keeps the upgrade and gets its points back — see progress.js _migrateWheel.
   { id: 'blood', name: 'Blood', verb: 'hurt',   tint: 0xc45a5a },
 ]);
 
@@ -142,6 +147,15 @@ export const HOOK_POINTS = Object.freeze([
     at: 'vehicle/car.js _addWear()', sig: '(delta, ctx, why) -> delta' },
   { name: 'wearMend', kind: 'reduce', runner: 'car', base: '0',
     at: 'vehicle/car.js the wear branch of step()', sig: '(perMinute, ctx, running) -> perMinute' },
+  // ROUND 18, 2026-09-09, Alex: "If an upgrade is wicked expensive and it lets it crash
+  // through the trees in a forest knocking them over/temporarily destroying them, that
+  // would be the best." Installed by the GARAGE (vehicle/garage.js), not by a node — the
+  // five car upgrades are bought with money at a lookout now, not with points on the card.
+  // The hook point still lives in this table because this table is the whole vocabulary:
+  // an install onto a name that is not here is refused loudly.
+  { name: 'treeBreak', kind: 'reduce', runner: 'car', base: 'null',
+    at: 'vehicle/car.js _crushStep()',
+    sig: '(spec|null, ctx) -> {minSpeed,radius,scrub,regrowS,maxPerStep}|null' },
   { name: 'secondWind', kind: 'reduce', runner: 'player', base: 'null',
     at: 'player/controller.js hurt(), immediately before _die()',
     sig: '(spec|null, ctx) -> {seconds}|null' },
@@ -260,18 +274,14 @@ const HOLD_BREATH   = Object.freeze({ swayMul: 0.25, seconds: 2.5 });
 const TORCH_FOCUS   = Object.freeze({ angle: 0.25 });
 const HIGH_BEAM     = Object.freeze({ seconds: 1.6 });
 const SECOND_WIND   = Object.freeze({ seconds: 2.5 });
-// wheel_3. mul/accel are what the boost does to the car's own caps; drainS is a full tank
-// held flat out, refillS a full tank from empty, holdS the pause before it starts filling —
-// so a tap costs almost nothing and a long pull leaves you coasting for a while.
-const NITRO         = Object.freeze({ mul: 1.45, accel: 2.2, drainS: 4.0, refillS: 9.0, holdS: 1.1 });
 
 const STEP_LOUD_MUL   = 0.6;    // quiet_1
 const COLD_BARREL_M   = 14;     // quiet_2, metres, and only from UNAWARE
 const EYESHINE_MUL    = 2.0;    // lamp_2
 const PEN_MUL         = 1.5;    // hands_4
-const HOTWIRE_S       = 0.5;    // wheel_1
-const RAM_MIN_SPEED   = 12;     // wheel_2, m/s
-const WEAR_MEND       = 0.9;    // wheel_4, wear per minute taken back off while it runs
+// ROUND 18: HOTWIRE_S, RAM_MIN_SPEED and WEAR_MEND moved to vehicle/garage.js with the
+// four car upgrades they belonged to. NITRO went with them.
+
 const SHUT_DOOR_M     = 12;     // quiet_3, metres
 
 // ROUND 6 — the numbers with teeth. Two steps each, the second the whole of it.
@@ -445,41 +455,6 @@ export const NODES = Object.freeze([
       hooks.on('noiseRadius', 'quiet_4', () => 0);
     } },
 
-  /* ---- WHEEL: the car is a verb ----------------------------------------------- */
-  { id: 'wheel_1', branch: 'wheel', tier: 0, cost: 1, name: 'Hotwire',
-    line: 'Half a second under the column.',
-    install: (s, hooks) => { void s; hooks.on('hotwireS', 'wheel_1', () => HOTWIRE_S); } },
-  { id: 'wheel_2', branch: 'wheel', tier: 1, cost: 2, name: 'Ram',
-    line: 'At speed, a body is not an obstacle.',
-    // ROUND 6 (lane H). The base ram is the CAR'S (DESIGN section 3: 8 m/s, no node) — Alex
-    // drove into them and nothing happened, because the old base here was Infinity. This node
-    // is the CLEAN POP DESIGN gives it: at >= CFG.car.ram.cleanSpeed (12 m/s, RAM_MIN_SPEED
-    // above) a hit costs the car no speed at all. car.js _ram() reads 'ramClean', base false.
-    install: (s, hooks) => {
-      void s;
-      hooks.on('ramClean', 'wheel_2', () => true);
-    } },
-  { id: 'wheel_3', branch: 'wheel', tier: 2, cost: 3, name: 'Nitro',
-    line: 'A tank of speed on SHIFT. It fills itself back up.',
-    // 2026-09-09, Alex: "just a meter that lets you go fast and its fun for a bit. then it
-    // automatically regenerates." The node is the TANK; car.js is the meter, the drain and
-    // the refill. It replaces 'Horn', which was three points to widen the horn's lure from
-    // 46 m to 80 — the horn itself was never the node and still works without it.
-    install: (s, hooks) => {
-      void s;
-      hooks.on('nitro', 'wheel_3', () => NITRO);
-    } },
-  { id: 'wheel_4', branch: 'wheel', tier: 3, cost: 5, name: 'Kept',
-    line: 'It stops wearing out, and what it wore comes back off.',
-    // 2026-09-09, Alex: "another one of the car upgrades should be that the car never breaks
-    // down." So: nothing adds wear any more, and the wear already on it comes off while the
-    // engine runs. The old node ('Keep') took 0.1 a minute off ONLY while parked somewhere
-    // lit, which is a condition a player could own the node for a whole night and never meet.
-    install: (s, hooks) => {
-      void s;
-      hooks.on('wearAdd', 'wheel_4', () => 0);
-      hooks.on('wearMend', 'wheel_4', (v, ctx, running) => (running ? v + WEAR_MEND : v));
-    } },
 
   /* ---- BLOOD: what you can survive -------------------------------------------- */
   { id: 'blood_1', branch: 'blood', tier: 0, cost: 1, name: 'Ceiling',

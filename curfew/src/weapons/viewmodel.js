@@ -1365,10 +1365,14 @@ export class Viewmodel {
       case 'reload:end':
         this.magDropT = -1; this.magRiseT = -1;
         break;
+      // ROUND 18. What a connecting swing does to the gun in your hands. The old dose was
+      // a shade under the rifle's own recoil, so hitting something felt LIGHTER than
+      // firing at it. Now it stops the swing dead and bounces it back, which is what
+      // hitting a body with a rifle stock actually does to the rifle.
       case 'melee:connect':
-        this.kickPos.nudge(-0.030 * 16, -0.026 * 16, -0.070 * 16);
-        this.kickRot.nudge(-7 * DEG * 16, 5 * DEG * 16, 9 * DEG * 16);
-        this.jolt.nudge(10);
+        this.kickPos.nudge(-0.052 * 16, -0.044 * 16, -0.125 * 16);
+        this.kickRot.nudge(-13 * DEG * 16, 11 * DEG * 16, 18 * DEG * 16);
+        this.jolt.nudge(19);
         break;
       case 'dry':
         this.jolt.nudge(2.4);
@@ -1514,14 +1518,21 @@ export class Viewmodel {
 
     // ---- melee: a horizontal buttstroke ACROSS the frame, never a thrust. Z
     // motion is the one axis a first-person camera reads worst.
+    // ROUND 18 (Alex: "the melee looks lame"). The arc was 0.155 m of travel and 30 degrees
+    // of yaw — a nudge, not a swing, and at 2 m range most of it happened off the side of
+    // the frame where you could not see it. Nearly doubled, and given a THIRD axis: the
+    // stock now drops and comes UP through the arc (the -0.055 term on y, keyed to how far
+    // through the swing it is) so the whole thing reads as a body turning into a hit rather
+    // than a rifle sliding sideways. Nothing about the timing changed — CFG.weapons.melee
+    // still owns windup / travel / hold / active / recover, and those numbers are Alex's.
     const swing = _S[C.SWING], lift = _S[C.LIFT];
     if (swing !== 0 || lift !== 0) {
-      _v.x += swing * 0.155;
-      _v.y += lift * 0.052 - Math.abs(swing) * 0.018;
-      _v.z += lift * 0.052;
-      _e.y += -swing * 30 * DEG;
-      _e.z += swing * 26 * DEG + lift * 14 * DEG;
-      _e.x += lift * 13 * DEG;
+      _v.x += swing * 0.265;
+      _v.y += lift * 0.052 - (1 - swing * swing) * 0.055 - Math.abs(swing) * 0.010;
+      _v.z += lift * 0.052 - Math.max(0, swing) * 0.040;
+      _e.y += -swing * 52 * DEG;
+      _e.z += swing * 44 * DEG + lift * 14 * DEG;
+      _e.x += lift * 13 * DEG - swing * 11 * DEG;
     }
 
     // ---- reload body track

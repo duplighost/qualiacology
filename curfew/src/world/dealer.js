@@ -8,10 +8,14 @@ import { DEALER_CAMPS as CAMPS } from './dealer-camps.js';
 import { dampAngle, Rng } from '../engine/math.js';
 import CFG from '../config.js';
 
+// ROUND 18 (Alex: "Things should cost much more"). x6 on the ladder — a revolver was 20
+// coins, which is three searched bodies, so the arsenal arrived before the county did.
+// The ammo price below is a quarter of the gun's price scaled by how many rounds you are
+// short, so it followed on its own.
 export const STOCK = Object.freeze([
-  { id: 'shotgun', name: 'SHOTGUN', price: 28 },
-  { id: 'carbine', name: 'CARBINE', price: 46 },
-  { id: 'revolver', name: 'REVOLVER', price: 20 },
+  { id: 'shotgun', name: 'SHOTGUN', price: 190 },
+  { id: 'carbine', name: 'CARBINE', price: 340 },
+  { id: 'revolver', name: 'REVOLVER', price: 120 },
 ]);
 export const MAX_HP = 1500;
 export const SHOT_COMMIT_S = .62;
@@ -287,7 +291,7 @@ export class Dealer {
       this.dead=true;this.phase='dead';this.person.rotation.z=-Math.PI/2;this.person.position.y=.1;
       this.aim.visible=false;const pr=this._sys('progress');pr.flag('dealer:dead',true);
       this._syncBody();
-      pr.payCash(35,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');pr.award(320,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');
+      pr.payCash(150,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');pr.award(320,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');
       const gun=STOCK.find(s=>!this._sys('weapons').has(s.id));if(gun)this._grantWeapon(gun.id);
       this.ctx.bus.emit('dealer:defeated',{x:this.pos.x,z:this.pos.z});return {killed:true};
     }

@@ -53,6 +53,11 @@ import {
   levelFor, levelFrac, xpForLevel, draftPool, draftWeight,
 } from './nodes.js';
 import { SaveBlob } from './save.js';
+// ROUND 18: the car upgrades left the tree and are bought with money at a lookout. They
+// install onto the SAME hook registry the nodes do — nothing in car.js changed.
+import {
+  UPGRADES, UPGRADE_BY_ID, LEGACY_NODE_UPGRADE, LEGACY_NODE_COST,
+} from '../vehicle/garage.js';
 
 /* ---------------------------------------------------------------- constants -- */
 // None of these have a home in CFG yet. config.js is the engine owner's file and is deep
@@ -287,6 +292,12 @@ export class Progress {
       startPointCredit: 0,
       nodes: [],        // owned node ids (bought AND auto-granted)
       auto: [],         // the subset that was auto-granted, so it never costs a point
+      // ROUND 18. The five car upgrades, bought with COINS at a lookout mechanic rather
+      // than with points on the card (vehicle/garage.js). A separate list from `nodes`
+      // because they are a separate currency and a separate counter, and because a save
+      // that predates this round has its wheel_* ids in `nodes` and must keep them working.
+      carUpgrades: [],
+      carMigrated: 0,   // 1 once the wheel_* -> garage migration has run on this save
       found: [],        // place ids discovered
       claimed: [],      // place ids claimed
       roadLit: [],      // 100 m road buckets already paid for
@@ -306,6 +317,7 @@ export class Progress {
 
     this._owned = new Set();
     this._auto = new Set();
+    this._carOwned = new Set();     // ROUND 18: garage upgrade ids, bought with coins
     this.found = new Set();
     this.claimed = new Set();
     this.roadLit = new Set();
@@ -422,6 +434,10 @@ export class Progress {
 
     for (const id of d.nodes) if (NODE_BY_ID[id]) this._owned.add(id);
     for (const id of d.auto) if (NODE_BY_ID[id]) this._auto.add(id);
+    if (Array.isArray(d.carUpgrades)) {
+      for (const id of d.carUpgrades) if (UPGRADE_BY_ID[id]) this._carOwned.add(id);
+    }
+    this._migrateWheel();
     for (const id of d.found) this.found.add(id);
     for (const id of d.claimed) this.claimed.add(id);
     for (const b of d.roadLit) this.roadLit.add(b | 0);
@@ -498,6 +514,23 @@ export class Progress {
       installs += after - before.hooks;
       if (after === before.hooks && JSON.stringify(bag) === before.keys) inert.push(n.id);
     }
+    // ROUND 18: the garage takes the same gate. An upgrade you paid 3600 coins for that
+    // installs nothing is the exact failure this function exists to catch, and moving four
+    // nodes out of the tree must not move them out of the check as well.
+    for (let i = 0; i < UPGRADES.length; i++) {
+      const u = UPGRADES[i];
+      let before = 0;
+      for (let h = 0; h < HOOK_POINTS.length; h++) before += probe.count(HOOK_POINTS[h].name);
+      try { u.install(probe); } catch (e) {
+        console.error('[progress] upgrade ' + u.id + ' failed to install', e);
+        inert.push('garage:' + u.id);
+        continue;
+      }
+      let after = 0;
+      for (let h = 0; h < HOOK_POINTS.length; h++) after += probe.count(HOOK_POINTS[h].name);
+      installs += after - before;
+      if (after === before) inert.push('garage:' + u.id);
+    }
     const undeclared = probe.unknownNames();
     if (inert.length) {
       console.error('[progress] nodes that change nothing: ' + inert.join(', '));
@@ -512,7 +545,10 @@ export class Progress {
   ready() {
     // The tree must be whole. A branch that lost its tier-0 node can never be entered and
     // the player would simply never see it — the FLARE failure, one manifest down.
-    if (NODES.length !== 24) return false;
+    // ROUND 18: four tiers per branch, however many branches there are. This was a literal
+    // 24 and WHEEL leaving the card for the garage turned it into a boot failure with a
+    // message about wiring — the number was never the law, "every branch is whole" was.
+    if (NODES.length !== BRANCHES.length * 4) return false;
     for (const b of BRANCHES) if (!FIRST_NODE_BY_VERB[b.verb]) return false;
     // ...and every node must DO something. 22 of 24 buying nothing shipped once already.
     const a = this._audit || this._selfTest();
@@ -1463,7 +1499,72 @@ export class Progress {
         try { n.install(raw, this.hooks, 1); } catch (e) { console.error('[progress] node ' + n.id, e); }
       }
     }
+    // ROUND 18. The garage installs into the same registry, after the tree, from the same
+    // rebuilt-from-scratch path — so buying an upgrade, loading a save and refunding one are
+    // all the same code, which is the whole reason this function throws the bag away first.
+    for (let i = 0; i < UPGRADES.length; i++) {
+      const u = UPGRADES[i];
+      if (!this._carOwned.has(u.id)) continue;
+      try { u.install(this.hooks); } catch (e) { console.error('[progress] upgrade ' + u.id, e); }
+    }
     return this.stats;
+  }
+
+  /* --------------------------------------------------- the garage, ROUND 18 -- */
+
+  /**
+   * A save from before the car upgrades left the tree. Anyone who spent points on wheel_*
+   * KEEPS the upgrade and GETS THE POINTS BACK — Alex's rule for this game is that nothing
+   * is ever taken away, and silently deleting four bought nodes because a lane moved would
+   * be exactly that. Runs once; `carMigrated` remembers.
+   */
+  _migrateWheel() {
+    const d = this.save.data;
+    if (d.carMigrated) return;
+    // Read the BLOB, not `_owned`: the load loop filters against NODE_BY_ID and wheel_* is
+    // no longer a node, so by the time we get here those ids have already been dropped on
+    // the floor. This was the whole trap in the migration and it is worth the line.
+    let moved = 0;
+    const list = Array.isArray(d.nodes) ? d.nodes : [];
+    for (let i = 0; i < list.length; i++) {
+      const up = LEGACY_NODE_UPGRADE[list[i]];
+      if (!up) continue;
+      this._carOwned.add(up);
+      moved++;
+    }
+    // The points come back on their own: _points() recomputes `spent` from `_owned`, and
+    // these ids are not in it any more. LEGACY_NODE_COST is here for a test that wants to
+    // assert exactly how many points a particular legacy save got back.
+    void LEGACY_NODE_COST;
+    d.carMigrated = 1;
+    d.nodes = list.filter((id) => !LEGACY_NODE_UPGRADE[id]);
+    if (moved) this.save.mark();
+  }
+
+  /** Every upgrade, with what it costs and whether it is already on the car. */
+  upgrades() {
+    return UPGRADES.map((u) => ({
+      id: u.id, name: u.name, line: u.line, price: u.price, owned: this._carOwned.has(u.id),
+    }));
+  }
+
+  ownsUpgrade(id) { return this._carOwned.has(id); }
+  upgradesOwned() { return Array.from(this._carOwned); }
+
+  /**
+   * Fit one. Money leaves through the same spendCash every other price in the county uses,
+   * so a refused purchase is refused for exactly one reason and the receipt is the same.
+   */
+  buyUpgrade(id) {
+    const u = UPGRADE_BY_ID[id];
+    if (!u || this._carOwned.has(id)) return false;
+    if (!this.spendCash(u.price, 'garage:' + id)) return false;
+    this._carOwned.add(id);
+    this._recompute();
+    this.save.mark();
+    this.ctx.bus.emit('garage:bought', { id, price: u.price });
+    this._chimeUI('xp_node', 1, 0.5);
+    return true;
   }
 
   /* --------------------------------------------------- the lane-facing surface -- */
@@ -1858,6 +1959,7 @@ export class Progress {
     const d = this.save.data;
     d.nodes = Array.from(this._owned);
     d.auto = Array.from(this._auto);
+    d.carUpgrades = Array.from(this._carOwned);
     d.found = Array.from(this.found);
     d.claimed = Array.from(this.claimed);
     d.roadLit = Array.from(this.roadLit);

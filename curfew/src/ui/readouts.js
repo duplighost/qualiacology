@@ -78,11 +78,19 @@ export class Readouts {
       this.health.classList.toggle('hurt',time<this.hurtUntil);this.health.classList.toggle('low',frac<.3);
     }
     this.capture.hidden=!this.ctx.input.unlockedPlay;
-    const car=s.get('car');const inCar=!!this.ctx.shared.inCar;this.condition.hidden=!inCar;
-    if(car){const condition=Math.max(0,Math.round((1-car.wear)*100));
-      this.text(this.condition,condition<=0?'ENGINE STOPPED · FIND A MECHANIC':'CAR CONDITION '+condition+'%');
-      this.condition.style.color=condition<25?'#e2a087':'#a7b7c1';
-      // WHEEL 3 'Nitro'. The meter exists only in the seat and only once the tank does —
+    const car=s.get('car');const inCar=!!this.ctx.shared.inCar;
+    // ROUND 18. Alex, 2026-09-09: "have it on the cars dashboard and not on the hud." The
+    // line that used to read "CAR CONDITION 84%" here is now a NEEDLE on the binnacle's
+    // left dial (vehicle/carbody.js setCondition, driven from car.js present()). The one
+    // thing that still belongs on screen is the engine having actually stopped, because
+    // that is a state the gauge's needle resting on its bottom stop cannot say out loud.
+    this.condition.hidden=!(inCar&&car&&car.wear>=.999);
+    if(car){
+      if(!this.condition.hidden){
+        this.text(this.condition,'ENGINE STOPPED · FIND A MECHANIC');
+        this.condition.style.color='#e2a087';
+      }
+      // Nitro. The meter exists only in the seat and only once the tank does —
       // car._nitroSeen is set the first step the perk answers, so a player without the node
       // never sees a gauge for a control they have not got.
       const tank=Math.max(0,Math.min(1,car.boost||0));
