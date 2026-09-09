@@ -173,6 +173,56 @@ const SHOT_BREAK = new Map([
   ['strongbox', 3],
 ]);
 
+/* ------------------------------------------------ BOX-SHAPED THINGS, ROUND 18 --
+ * ALEX, 2026-09-09: "Many things look like boxes you should be able to melee. They might
+ * be concrete, I don't know. But I want to melee boxes to break them open and get stuff."
+ *
+ * The table above is a TAG list, and the county is full of box-shaped props whose tag is
+ * their MATERIAL ('wood', 'metal', 'stone') because that is what the builder cared about
+ * when it emitted them. Those all read as containers and none of them answered a swing.
+ *
+ * So this is the same trick round 14 used for "run over anything it looks like you can
+ * run over": derive it from SHAPE, not from a name. A thing qualifies when it is
+ *   - already crushable (mass > 0), which is the existing size/material classification and
+ *     therefore already excludes every structure tag, every trunk and everything huge;
+ *   - a THING and not a SURFACE: at least 30 cm tall, so a stair tread (12 cm), a deck
+ *     (20 cm) and a roof plank never qualify — shooting the water tower's stairs away
+ *     would be the worst possible reading of this ask;
+ *   - roughly box-proportioned rather than a plank or a post: no dimension more than
+ *     4.5x the smallest.
+ * The cost is by material, and a swing is worth two landings (see hitBreakable), so the
+ * stock opens a wooden crate in one and a concrete block in two. */
+const BOX_MIN_H = 0.30, BOX_MAX_H = 1.60;
+const BOX_MIN_HALF = 0.10, BOX_MAX_HALF = 0.80;
+const BOX_MAX_ASPECT = 4.5;
+const BOX_HITS = new Map([
+  ['wood', 2], ['cloth', 2], ['kit', 2], ['bin', 2], ['pot', 2], ['crate', 2], ['box', 2],
+  ['metal', 3], ['glass', 3], ['vehicle', 3], ['barrel', 3], ['drum', 3],
+  ['stone', 4], ['rock', 4], ['soil', 4], ['concrete', 4],
+]);
+const BOX_HITS_DEFAULT = 3;
+// Landscape, not containers. A census at the Filling Station found 11 stumps and 4 short
+// logs inside the shape rule, and a stump you can smash open is not what "many things look
+// like boxes" means. The log is also the one thing in this list you WALK ALONG (see
+// NON_CLIMB_TAGS above), so breaking one takes a route away.
+const NEVER_BOX = new Set([
+  'stump', 'log', 'rock', 'boulder', 'root', 'bough', 'branch', 'snag', 'bone', 'skull',
+  'grave', 'headstone', 'mound', 'hedge', 'bush', 'shrub',
+]);
+
+function boxBreakHits(tag, kind, r, hx, hz, y0, y1) {
+  if (tag && NEVER_BOX.has(tag)) return 0;
+  const h = y1 - y0;
+  if (!(h >= BOX_MIN_H) || h > BOX_MAX_H) return 0;
+  const ax = kind === KIND_OBB ? hx : r, az = kind === KIND_OBB ? hz : r;
+  if (!(ax >= BOX_MIN_HALF) || !(az >= BOX_MIN_HALF)) return 0;
+  if (ax > BOX_MAX_HALF || az > BOX_MAX_HALF) return 0;
+  const w = ax * 2, d = az * 2;
+  const big = Math.max(w, d, h), small = Math.min(w, d, h);
+  if (small <= 0 || big / small > BOX_MAX_ASPECT) return 0;
+  return (tag && BOX_HITS.get(tag)) || BOX_HITS_DEFAULT;
+}
+
 // Never a ledge, whatever its top is doing. Round things and thin standing things: a body
 // cannot get a knee over a trunk, a post or a lamp column, and Alex's "one climb in forty is
 // a tree" (docs/NEXT.md B5) is exactly this list arriving in the mantle's probe.
@@ -767,6 +817,64 @@ export class Collision {
   /** The last crush result. Shared scratch — never hold it across another crush(). */
   crushResult() { return this._crush; }
 
+  /* ------------------------------------------------ THE TREEBREAKER, ROUND 18 --
+   * ALEX, 2026-09-09: "If an upgrade is wicked expensive and it lets it crash through the
+   * trees in a forest knocking them over/temporarily destroying them, that would be the
+   * best."
+   *
+   * Trunks are deliberately outside crush(): 'tree' is on NON_CLIMB_TAGS and so
+   * crushableBySize() gives it no mass, which is what keeps "the only place it will
+   * struggle is in the woods" true for every car that has not paid 3600 coins for this.
+   * So this is its own door, and only vehicle/car.js's treeBreak block opens it.
+   *
+   * It RETIRES the trunk's collider and hands back what it took, so the caller can put it
+   * back when the tree stands up again — "temporarily destroying them". The visual half is
+   * world/flora.js fell(), which lays the instance over on the same timer.
+   */
+  fellTrees(x, z, radius, out, max = 3) {
+    let taken = 0;
+    const n = this._gather(x, z, radius + 0.6);
+    for (let k = 0; k < n && taken < max; k++) {
+      const i = this._near[k];
+      if (!(this._flags[i] & F_ALIVE)) continue;
+      const tag = this._tag[i];
+      if (tag !== 'tree' && tag !== 'trunk') continue;
+      const dx = this._x[i] - x, dz = this._z[i] - z;
+      if (Math.hypot(dx, dz) > radius + this._r[i]) continue;
+      out.push({
+        x: this._x[i], z: this._z[i], r: this._r[i],
+        y0: this._y0[i], y1: this._y1[i],
+        tag, chunk: this._chunkIdOf(i), mask: this._mask[i],
+      });
+      this._retire(i, true);
+      taken++;
+    }
+    return taken;
+  }
+
+  /* ROUND 18 wrote a SECOND nearestTagged() here, taking one tag as a string and returning
+   * a small object. There has been one since round 13 (above, `nearestTagged(x, z, maxRadius,
+   * tags)`, an ARRAY and the shared `_nearest` record), and a class body keeps the LAST
+   * definition — so the new one silently replaced it and every existing caller started
+   * matching nothing. tests/break-open.mjs went from 1 failure to 9 and named it. The moth's
+   * perch uses the real one; there is no second method. */
+
+  /** Put one back exactly as it was. A new slot and a new id: nothing holds a tree's id. */
+  restoreTree(rec) {
+    if (!rec) return -1;
+    return this.addCollider({
+      kind: 'circle', x: rec.x, z: rec.z, r: rec.r,
+      y0: rec.y0, y1: rec.y1, tag: rec.tag, climbable: false, mask: rec.mask,
+    }, rec.chunk);
+  }
+
+  /** The chunk id a slot belongs to, or null. Used only by the Treebreaker's restore. */
+  _chunkIdOf(i) {
+    const ci = this._chunk[i];
+    if (ci < 0) return null;
+    return this.chunkKeys[ci] !== undefined ? this.chunkKeys[ci] : null;
+  }
+
   /**
    * How many breakable colliders are live inside a radius, and their total mass. Authoring
    * and instrumentation only (it widens the gather ring), never the hot path.
@@ -796,24 +904,38 @@ export class Collision {
    * not shot-breakable (or the id is dead), 1 when it took the hit and stands, 2 when it came
    * apart — then brokenResult() holds where and what, and the collider is already retired.
    * The count is per collider and dies with it; a rebuilt crate is a whole crate.
+   *
+   * ROUND 18: `power` is how many landings this one blow is worth. A round is 1 and a
+   * buttstroke is 2, so the stock is the tool for opening things and the rifle is the
+   * expensive way to do it. That is the whole of "I want to melee boxes to break them
+   * open" — the melee did not need a new verb, it needed to count for more.
    */
-  hitBreakable(id) {
+  hitBreakable(id, power = 1) {
     const i = Math.floor(id / 65536), gen = id % 65536;
     if (i < 0 || i >= this.count) return 0;
     if (!(this._flags[i] & F_ALIVE) || this._gen[i] !== gen) return 0;
     if (!(this._flags[i] & F_BREAK)) return 0;
-    const tag = this._tag[i];
-    const need = tag ? SHOT_BREAK.get(tag) : undefined;
+    const need = this._breakNeed(i);
     if (!need) return 0;
-    const hits = this._hits[i] < 255 ? ++this._hits[i] : 255;
+    const step = Math.max(1, power | 0);
+    const hits = this._hits[i] < 255 - step ? (this._hits[i] += step) : 255;
     if (hits < need) return 1;
     const b = this._broken;
     b.x = this._x[i]; b.z = this._z[i];
     b.y = 0.5 * (this._y0[i] + this._y1[i]); b.top = this._y1[i];
-    b.radius = this._r[i]; b.mass = this._mass[i]; b.tag = tag; b.id = id; b.hits = hits;
+    b.radius = this._r[i]; b.mass = this._mass[i]; b.tag = this._tag[i]; b.id = id; b.hits = hits;
     this._retire(i, true);
     this._tel.broken++; this._tel.brokenMass += b.mass; this._tel.shotBroken++;
     return 2;
+  }
+
+  /** Landings this collider needs: the tag table first, then its shape. 0 = never. */
+  _breakNeed(i) {
+    const tag = this._tag[i];
+    const named = tag ? SHOT_BREAK.get(tag) : undefined;
+    if (named) return named;
+    return boxBreakHits(tag, this._kind[i], this._r[i], this._hx[i], this._hz[i],
+      this._y0[i], this._y1[i]);
   }
 
   /** The last hitBreakable() break. Shared scratch — read it before the next call. */
@@ -821,6 +943,23 @@ export class Collision {
 
   /** How many landings a tag needs to come apart; 0 when a round cannot break it. */
   shotBreakHits(tag) { return SHOT_BREAK.get(tag) || 0; }
+
+  /** Landings this LIVE collider id needs, shape rule included. 0 when nothing breaks it. */
+  breakHits(id) {
+    const i = Math.floor(id / 65536), gen = id % 65536;
+    if (i < 0 || i >= this.count) return 0;
+    if (!(this._flags[i] & F_ALIVE) || this._gen[i] !== gen) return 0;
+    if (!(this._flags[i] & F_BREAK)) return 0;
+    return this._breakNeed(i);
+  }
+
+  /** Landings this collider has ALREADY taken. -1 when the id is dead. */
+  hitsOn(id) {
+    const i = Math.floor(id / 65536), gen = id % 65536;
+    if (i < 0 || i >= this.count) return -1;
+    if (!(this._flags[i] & F_ALIVE) || this._gen[i] !== gen) return -1;
+    return this._hits[i];
+  }
 
   resetTelemetry() {
     const t = this._tel;

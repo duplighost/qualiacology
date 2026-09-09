@@ -74,6 +74,8 @@ import {
 import { DRESS as DRESS_STATION } from './dress-station.js';
 import { DRESS as DRESS_INTERIORS } from './dress-interiors.js';
 import { DRESS as DRESS_COMPOUNDS } from './destination-compounds.js';
+import { spiderCast } from './spider-nests.js';
+import { siteExtras } from './climbs-and-caches.js';
 import { DRESS as DRESS_COMPOUNDS_EAST } from './destination-compounds-east.js';
 import { DRESS as DRESS_HOLDFAST } from './holdfast-dress.js';
 import { DRESS as DRESS_REFUGES } from './destination-refuges.js';
@@ -697,6 +699,10 @@ export class Places {
     // placed again when its chunk streams back in.
     this._casts = new Map();
     this._castDone = new Set();
+    // ROUND 18. Hidden caches that must remember being opened. Rebuilt from scratch every
+    // time a site streams in, which is why the flag and not this list is the memory: this is
+    // only the lookup that turns a break at a world position back into a flag name.
+    this._stashes = [];
     this._yards = null;           // ROUND 7: [x, z, r^2] per major. See _buildYards.
     this._bulks = [];             // ROUND 7: [x, z, r^2] per MINOR, from its kind's `bulk`.
     this._built = false;
@@ -849,6 +855,23 @@ export class Places {
    * boot
    * ------------------------------------------------------------------ */
   async init() {
+    // ROUND 18. THE STASH MEMORY. combat.js emits 'world:broke' with the tag and the world
+    // position of whatever came apart; a break on a registered hidden cache sets its flag,
+    // and the next rebuild draws a smashed empty box instead of a full one. Without this the
+    // cache is a farm: 90-140 coins, re-emitted every time you drive back into the chunk.
+    this._offBroke = this.ctx.bus.on('world:broke', (p) => {
+      if (!p || p.tag !== 'strongbox') return;
+      const prog = this._sys('progress');
+      if (!prog || typeof prog.flag !== 'function') return;
+      for (let i = 0; i < this._stashes.length; i++) {
+        const s = this._stashes[i];
+        if (Math.hypot(s.x - p.x, s.z - p.z) > 1.4) continue;
+        if (Math.abs(s.y - p.y) > 1.4) continue;
+        prog.flag('site:' + s.site + ':' + s.name, 1);
+        break;
+      }
+    });
+
     // FIRST, before anything in this file samples a height: every pad below changes
     // terrain.heightAt, and rec.padY, the aprons and the minor table are all read off it.
     this._registerFlats();
@@ -1296,6 +1319,41 @@ export class Places {
         const prog = self._sys('progress');
         return !!(prog && typeof prog.flag === 'function' && prog.flag('gate:' + d.id));
       },
+      /**
+       * ROUND 18. A world flag, keyed to THIS SITE, for a builder that has to remember
+       * something across a stream-out and back. The key is namespaced by the site id so two
+       * places can use the same short name.
+       *
+       * It exists because of a real farm: a strongbox pays 90-140 coins after the round-18
+       * price rise and its collider is re-emitted every single time its chunk streams in, so
+       * without a memory a player could drive a hundred metres away and back for the rest of
+       * the night. The gate machinery three lines up already had exactly this shape; the
+       * caches did not, and the comment in STATUS.md claiming they did was wrong.
+       */
+      flag(name, value) {
+        const prog = self._sys('progress');
+        if (!prog || typeof prog.flag !== 'function') return undefined;
+        return prog.flag('site:' + d.id + ':' + name, value);
+      },
+      /**
+       * ROUND 18. A one-shot container, at a world position, that must remember being opened.
+       * The builder emits the collider itself; this only tells places.js where it is and what
+       * flag to set, so the 'world:broke' listener can close the loop. Positions are in the
+       * SITE'S OWN LOCAL FRAME here and converted the way emit() converts a collider.
+       */
+      registerStash(lx, lz, wy, name) {
+        // Deduped by site+name, because a site re-registers every one of its caches every
+        // time it streams back in and an append-only list would grow for the whole session.
+        for (let i = 0; i < self._stashes.length; i++) {
+          const s = self._stashes[i];
+          if (s.site === d.id && s.name === name) { s.y = wy; return; }
+        }
+        self._stashes.push({
+          x: ox + lx * cy + lz * sy,
+          z: oz - lx * sy + lz * cy,
+          y: wy, site: d.id, name,
+        });
+      },
       cast(entries) {
         self._recordCast('major:' + d.id, d.x, d.z, rec.yaw, entries, rec.padY);
       },
@@ -1405,6 +1463,12 @@ export class Places {
     if (!out) return null;
     out = this._dress(d, rec, api, out);
     if (out.cast) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, out.cast, rec.padY);
+    // ROUND 18. "a giant spider that crawls on ceiling and drops off", inside the big old
+    // interiors and nowhere else. It rides the ordinary staged-cast machinery — placed once
+    // per save when you come within CAST_PLACE_R, holding still on the roof until you
+    // notice it — so it costs no new streaming, no new save state and no new cleanup.
+    const nest = spiderCast(d.id);
+    if (nest) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, nest, rec.padY);
 
     const g = new THREE.Group();
     g.name = 'place-body-' + d.id;
@@ -1494,6 +1558,19 @@ export class Places {
       if (ex.glow) glow = glow ? mergeGeometries([glow, ex.glow], false) : ex.glow;
       if (ex.glowColour && !out.glowColour) out.glowColour = ex.glowColour;
       if (ex.cast) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, ex.cast, rec.padY);
+    }
+    // ROUND 18. The climb faces and the hidden caches, for EVERY major, whatever built it.
+    // This started life hung off destination-details.js's addDestinationDetails(), which
+    // every compound's finish() calls — and Blackthorn Manor and the Avery House are not
+    // compounds. They are compiled from their own room tables (manor.js, avery-house.js) and
+    // never call it, so the pass built nothing at either: measured, 0 faces and 0 caches at
+    // the manor against 3 and 2 at the cemetery. The manor is the one Alex named. This is the
+    // one hook that reaches all twenty-one.
+    let ex2 = null;
+    try { ex2 = siteExtras(api); } catch (e) { this._note('extras ' + d.id + ' threw: ' + e.message); }
+    if (ex2) {
+      if (ex2.solid) solid = solid ? mergeGeometries([solid, ex2.solid], false) : ex2.solid;
+      if (ex2.glow) glow = glow ? mergeGeometries([glow, ex2.glow], false) : ex2.glow;
     }
     out.people = people;
     if (solid !== out.solid) { out.solid = solid; if (solid) solid.computeBoundingSphere(); }
@@ -3294,6 +3371,7 @@ export class Places {
   }
 
   dispose() {
+    this._offBroke?.();
     if (this._lamp) {
       const lights = this._sys('lights');
       if (lights && typeof lights.release === 'function') lights.release(this._lamp);

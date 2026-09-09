@@ -112,7 +112,11 @@ const TREE_DAMAGE = 26;
 const TREE_PUSH_H = 8.0;
 const TREE_PUSH_UP = 3.2;
 const VARIANTS = Object.freeze({
-  tower: ['tower'], stand: ['stand'],
+  tower: ['tower'],
+  // ROUND 18: every other stand is a TREEHOUSE — a big tree with the boarded climb face up
+  // it and a house in the crown. Alex: "maybe even we should make some large trees that have
+  // it leading to tree houses in the forest." Same kind, same pad, same climb bit.
+  stand: ['stand', 'treehouse'],
   ruin: ['chapel', 'foundation', 'well', 'pond', 'stream'],
   wreck: ['car', 'drums', 'deadfall'],
   camp: ['cabin', 'tent', 'barn', 'farm'],
@@ -435,7 +439,12 @@ export function planWilds(seed, opts) {
     towers.push(s); sites.push(s);
   }
   const order = ['stand', 'ruin', 'wreck', 'camp'];
-  const vcount = { ruin: 0, wreck: 0, camp: 0 };
+  // ROUND 18: `stand` is here now because it has two variants. It was absent while it had
+  // one, and the moment it got a second every stand in the county came out with
+  // `variant: undefined` — `vcount.stand` was undefined, `undefined % 2` is NaN, and
+  // VARIANTS.stand[NaN] is undefined. Measured: 27 of 27. A kind added to VARIANTS with more
+  // than one entry MUST have a counter here.
+  const vcount = { stand: 0, ruin: 0, wreck: 0, camp: 0 };
   let cursor = 0;
   for (let q = 0; q < order.length; q++) {
     const kind = order[q];
@@ -985,7 +994,153 @@ function buildTower(api) {
  * -Z side whose last rung IS the platform's edge, rails on three sides and either side of
  * the stair head, a low front board with the hunter's slot, and a cache half the time.
  */
+/* ------------------------------------------------------- THE TREEHOUSE, ROUND 18 --
+ * ALEX, 2026-09-09, about the climbable face at the filling station: "We should put it on
+ * many destinations. It's fun. Maybe even we should make some large trees that have it
+ * leading to tree houses in the forest."
+ *
+ * So: an ELDER TRUNK — 1.5 m through and 14 m tall, three times anything the forest plants
+ * — with the boarded, runged face nailed up one side of it, and a house in its crown.
+ *
+ * IT IS A VARIANT OF THE DEER STAND, not a new site kind, and that is the whole reason it
+ * fits: `stand` already owns a pad that keeps the trees off, a climb route the map can
+ * draw, a persisted `climbed` bit, its own streaming and its own cache. A new kind would
+ * have needed all of that written again, and the plan, the quotas and the separation rules
+ * on top. This changes what gets BUILT at one in every two stands and nothing else.
+ *
+ * The face is the same construction as the one at the station — one unbroken 'wall'
+ * collider for the whole height, with visible pale rungs that are pure geometry — because
+ * that is the thing Alex says "really works" and a second, subtly different climbable
+ * surface is how a game ends up with one that works and one that nearly does.
+ */
+function buildTreehouse(api) {
+  const site = api.site;
+  const solid = new Kit(), glow = new Kit();
+  void glow;
+  const H = api.padY + 9.4;                 // the deck. High enough to look out over the canopy.
+  const TRUNK_R = 0.76, TRUNK_H = 14.2;
+  const g0 = groundY(api, 0, 0);
+  site.topY = H;
+  site.baseY = g0;
+
+  // ---- the tree ---------------------------------------------------------------
+  // Tapered, and it goes on well past the deck so the house is IN something rather than
+  // on a post. Tagged 'tree', so it is not climbable except by the face below — the
+  // county's rule that you cannot shin up a trunk stays true.
+  solid.cyl(TRUNK_R, TRUNK_R * 0.62, TRUNK_H, 9, 0, g0 + TRUNK_H * 0.5 - 0.4, 0, C.wood);
+  api.emit({ kind: 'circle', x: 0, z: 0, r: TRUNK_R * 0.92, y0: g0 - 0.5, y1: g0 + TRUNK_H,
+    tag: 'tree', climbable: false });
+  // root flare, so it grows out of the ground instead of being pushed into it
+  for (let i = 0; i < 7; i++) {
+    const a = i * 2.243;
+    solid.strut(Math.cos(a) * TRUNK_R * 1.5, g0 - 0.2, Math.sin(a) * TRUNK_R * 1.5,
+      Math.cos(a) * TRUNK_R * 0.3, g0 + 1.7, Math.sin(a) * TRUNK_R * 0.3, 0.20, 5, C.wood);
+  }
+  // four boughs over the roof, and the canopy they carry
+  for (let i = 0; i < 4; i++) {
+    const a = i * 1.571 + 0.4;
+    solid.strut(Math.cos(a) * 0.4, g0 + 10.6, Math.sin(a) * 0.4,
+      Math.cos(a) * 3.6, g0 + 13.4, Math.sin(a) * 3.6, 0.16, 5, C.wood);
+    // The canopy. There is no green in the C palette (sites.js) and there should not be one
+    // for a single prop, so this is the forest's own needle value written out: dark, cold
+    // and well under the sky, per the night-value law.
+    solid.cone(2.5, 2.2, 7, Math.cos(a) * 3.2, g0 + 14.6, Math.sin(a) * 3.2, [0.052, 0.074, 0.046]);
+  }
+
+  // ---- the climb face, on the -Z side, facing the way you arrive ---------------
+  // ONE collider for the whole height. See the header: a face built of stacked boxes drops
+  // the climber at the first seam.
+  const FZ = -(TRUNK_R + 0.12), FH = H - g0 + 0.15, FW = 1.30;
+  solid.box(FW, FH, 0.14, 0, g0 + FH * 0.5, FZ, C.plank, 0);
+  api.emit({ kind: 'obb', x: 0, z: FZ, halfX: FW * 0.5, halfZ: 0.07, yaw: 0,
+    y0: g0, y1: g0 + FH, tag: 'wall', standable: false });
+  for (const sx of [-1, 1]) {
+    solid.box(0.12, FH, 0.18, sx * (FW * 0.5 - 0.05), g0 + FH * 0.5, FZ, C.dark, 0);
+  }
+  const rungs = Math.floor((FH - 0.4) / 0.46);
+  for (let i = 0; i < rungs; i++) {
+    const y = g0 + 0.45 + i * 0.46;
+    solid.box(FW * 1.05, 0.08, 0.10, 0, y, FZ - 0.10, i % 3 === 2 ? C.dark : C.plank, 0);
+    for (const dx of [-0.55, 0.55]) {
+      solid.box(0.05, 0.44, 0.035, dx, y - 0.20, FZ - 0.09, C.dark, 0);
+    }
+  }
+  solid.box(FW * 1.14, 0.10, 0.24, 0, H + 0.04, FZ - 0.08, C.plank, 0);
+
+  // ---- the deck ---------------------------------------------------------------
+  const hw = 2.35;
+  solid.box(hw * 2, 0.16, hw * 2, 0, H - 0.08, 0, C.plank, 0);
+  api.emit({ kind: 'obb', x: 0, z: 0, halfX: hw, halfZ: hw, yaw: 0,
+    y0: H - 0.36, y1: H, tag: 'wood', standable: true });
+  for (let i = -2; i <= 2; i++) solid.box(hw * 2, 0.14, 0.12, 0, H - 0.22, i * hw * 0.45, C.wood, 0);
+  // braces from the trunk out to the deck corners, so it is held up by something
+  for (let i = 0; i < 4; i++) {
+    const sx = (i & 1) ? 1 : -1, sz = (i & 2) ? 1 : -1;
+    solid.strut(sx * 0.5, H - 3.0, sz * 0.5, sx * (hw - 0.2), H - 0.3, sz * (hw - 0.2), 0.10, 5, C.wood);
+  }
+  // rail all the way round except where the ladder arrives
+  const rail = (x, z, hx, hz) => {
+    api.emit({ kind: 'obb', x, z, halfX: hx, halfZ: hz, yaw: 0, y0: H - 0.2, y1: H + RAIL_H, tag: 'wood' });
+    solid.box(hx * 2 + 0.06, 0.05, hz * 2 + 0.06, x, H + RAIL_H, z, C.wood, 0);
+    solid.box(hx * 2 + 0.06, 0.04, hz * 2 + 0.06, x, H + RAIL_H * 0.52, z, C.wood, 0);
+  };
+  rail(0, hw, hw, 0.03);
+  rail(-hw, 0, 0.03, hw);
+  rail(hw, 0, 0.03, hw);
+  for (const sx of [-1, 1]) rail(sx * (hw + 0.75) * 0.5, -hw, (hw - 0.75) * 0.5, 0.03);
+
+  // ---- the house --------------------------------------------------------------
+  // Three walls and a pitched roof on the +Z half of the deck, open toward the ladder, so
+  // it reads as a HOUSE from below and you are never shut into a box you cannot see out of.
+  const HX = 1.55, HZ = 1.05, HH = 2.05, HCZ = hw - HZ - 0.15;
+  for (const sx of [-1, 1]) {
+    solid.box(0.12, HH, HZ * 2, sx * HX, H + HH * 0.5, HCZ, C.plank, 0);
+    api.emit({ kind: 'obb', x: sx * HX, z: HCZ, halfX: 0.06, halfZ: HZ, yaw: 0,
+      y0: H, y1: H + HH, tag: 'wall' });
+  }
+  solid.box(HX * 2 + 0.12, HH, 0.12, 0, H + HH * 0.5, HCZ + HZ, C.plank, 0);
+  api.emit({ kind: 'obb', x: 0, z: HCZ + HZ, halfX: HX + 0.06, halfZ: 0.06, yaw: 0,
+    y0: H, y1: H + HH, tag: 'wall' });
+  // a real window in the back wall, so the house has an inside that is lit from outside
+  solid.box(0.62, 0.52, 0.16, 0, H + 1.30, HCZ + HZ, C.dark, 0);
+  // the roof: two pitched slabs, and a ridge
+  for (const sx of [-1, 1]) {
+    solid.box(HX + 0.3, 0.10, HZ * 2 + 0.4, sx * (HX * 0.52), H + HH + 0.34, HCZ,
+      C.plank, 0, 0, -sx * 0.42);
+  }
+  solid.box(0.22, 0.16, HZ * 2 + 0.5, 0, H + HH + 0.66, HCZ, C.wood, 0);
+  api.emit({ kind: 'obb', x: 0, z: HCZ, halfX: HX + 0.2, halfZ: HZ + 0.25, yaw: 0,
+    y0: H + HH + 0.2, y1: H + HH + 0.74, tag: 'roof' });
+
+  // ---- what is in it ----------------------------------------------------------
+  // A chair, a lantern hook and a table, so somebody LIVED up here — and the cache on the
+  // table, which is the reason to make the climb.
+  solid.box(0.52, 0.10, 0.48, -0.85, H + 0.46, HCZ - 0.2, C.wood, 0);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    solid.box(0.07, 0.42, 0.07, -0.85 + sx * 0.20, H + 0.21, HCZ - 0.2 + sz * 0.18, C.dark, 0);
+  }
+  solid.box(0.50, 0.46, 0.07, -0.85, H + 0.74, HCZ + 0.02, C.wood, 0);
+  solid.box(1.05, 0.09, 0.62, 0.85, H + 0.78, HCZ - 0.1, C.plank, 0);
+  for (const sx of [-1, 1]) solid.box(0.08, 0.78, 0.08, 0.85 + sx * 0.42, H + 0.39, HCZ - 0.1, C.dark, 0);
+
+  const route = [
+    { x: 0, z: FZ - 1.3, y: groundY(api, 0, FZ - 1.3) },
+    { x: 0, z: FZ - 0.5, y: H },
+    { x: 0, z: 0.4, y: H },
+  ];
+  site.route = route;
+  site.platHalfX = hw; site.platHalfZ = hw;
+  // Always a cache. A tree you had to climb fourteen metres of ladder for and that has
+  // nothing in it is the empty staircase this file already has a comment about.
+  const cache = cacheParts(api, 0.85, H + 0.86, HCZ - 0.1, 0);
+  site.cacheX = api.wx(0.85, HCZ - 0.1); site.cacheZ = api.wz(0.85, HCZ - 0.1);
+  site.cacheY = H + 0.86;
+  return { solid, glow, cache };
+}
+
 function buildStand(api) {
+  // ROUND 18: half the stands in the county are treehouses now. See buildTreehouse.
+  if (api.site.variant === 'treehouse') return buildTreehouse(api);
   const site = api.site;
   const solid = new Kit(), glow = new Kit();
   void glow;

@@ -12,7 +12,7 @@ export const OPENING = Object.freeze({
   supplies:[
     {id:'woodstore',x:2.6,z:-20.7,kind:'crate'},
     {id:'tower-foot',x:19,z:-17,kind:'crate'},
-    {id:'tower-top',x:18.5,z:-14.3,y:12.08,kind:'crate',cash:12,xp:60},
+    {id:'tower-top',x:18.5,z:-14.3,y:12.08,kind:'crate',cash:60,xp:60},
     {id:'fallen-log',x:29,z:-22,kind:'crate'},
     {id:'cedar',x:31,z:-2,kind:'crate'},
     {id:'garden',x:6,z:-24,kind:'dig'},

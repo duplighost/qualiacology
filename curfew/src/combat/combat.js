@@ -28,7 +28,7 @@
 // system that resolves rays nobody can see does not exist.
 
 import * as THREE from 'three';
-import { DEG, lerp } from '../engine/math.js';
+import { DEG, lerp, clamp } from '../engine/math.js';
 import CFG from '../config.js';
 
 const MAXT = 300;                    // metres a round is allowed to travel
@@ -99,7 +99,9 @@ const LOOT_TAGS = Object.freeze({ crate: true, box: true });
 // money on purpose — it is rebuilt whole every time its site streams back in, so anything
 // worth a drive would be a farm. The real money is the STRONGBOX, which is one-shot per save
 // and remembers that it has been opened (see search.js and the sb: world flags).
-const COIN_TAGS = Object.freeze({ crate: [1, 3], box: [1, 3], strongbox: [14, 22] });
+// ROUND 18: x4, with the rest of the ladder (search.js's purse, dealer.js's stock, the
+// garage). A crate is still small money against a strongbox for exactly the reason above.
+const COIN_TAGS = Object.freeze({ crate: [4, 12], box: [4, 12], strongbox: [90, 140] });
 
 /* ---- module scratch. Nothing here allocates per shot. ---- */
 const _o = new THREE.Vector3();
@@ -536,10 +538,20 @@ export class Combat {
     const multiplier = h.enemy ? ((stats && stats.damageMul) || 1) : 1;
     const dealt = Math.max(1, Math.round(damage * multiplier));
     const owner = h.enemy && this._sys(h.enemy.interior ? 'interior-horror' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+    // ROUND 18: `melee: true` was missing from this payload, so enemies.js recorded EVERY
+    // melee kill as `lastMelee = false` and the 'enemy:killed' event said `kind: 'kill'`.
+    // The heavier melee throw and every other lane that wants to know a swing did it
+    // read that flag, so it has to be told.
     const result = owner && owner.damage
-      ? owner.damage(h.enemy, dealt, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
+      ? owner.damage(h.enemy, dealt, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist, melee: true })
       : { killed: false };
     this._land(h, dealt, dist, false, !!result.killed, false, 'melee');
+    // THE SWING HAS WEIGHT. A landed melee kicks the camera about three times as hard as
+    // a shot's own recoil, and a KILLING blow harder still — Alex: "melee should look
+    // powerful". This is the whole difference between a swing that connects and a swing
+    // that passes through.
+    const cam = this._sys('camera');
+    if (cam && cam.addTrauma) cam.addTrauma(result.killed ? 0.42 : 0.28);
     return result;
   }
 
@@ -555,10 +567,9 @@ export class Combat {
     _stage.y = enemy.pos.y + hh;
     _stage.z = enemy.pos.z - _back.z * r;
     _stage.nx = -_back.x; _stage.ny = 0; _stage.nz = -_back.z;
-    const res = this._landMelee(_stage, damage, 2);
-    const cam = this._sys('camera');
-    if (cam && cam.addTrauma) cam.addTrauma(0.22);
-    return res;
+    // _landMelee shakes the camera for every landed swing now, so the second dose that
+    // used to live here would have been counted twice on this path alone.
+    return this._landMelee(_stage, damage, 2);
   }
 
   /**
@@ -608,7 +619,8 @@ export class Combat {
     if (!h || h.enemy || h.exit || !(h.colliderId >= 0)) return false;
     const col = this._sys('collision');
     if (!col || typeof col.hitBreakable !== 'function') return false;
-    if (col.hitBreakable(h.colliderId) !== 2) return false;
+    // ROUND 18: a buttstroke counts for two landings. See collision.hitBreakable.
+    if (col.hitBreakable(h.colliderId, by === 'melee' ? 2 : 1) !== 2) return false;
     const b = col.brokenResult();
     this.broke++;
     const L = this.lastBroke;
@@ -628,9 +640,23 @@ export class Combat {
     if (audio && typeof audio.dread === 'function') {
       audio.dread('branch', b.x, b.y + 0.3, b.z, by === 'melee' ? 0.7 : 0.55);
     }
-    // what was in it
-    if (LOOT_TAGS[b.tag] && this.lootRng.next() < BREAK_LOOT_CHANCE) {
-      const n = BREAK_LOOT_MIN + Math.floor(this.lootRng.next() * (BREAK_LOOT_MAX - BREAK_LOOT_MIN + 1));
+    // ROUND 18. What was in it — and now EVERYTHING that comes apart has something in it,
+    // not only the five tags that happened to be named. Alex: "I want to melee boxes to
+    // break them open and get stuff." A box you opened and that answered with nothing is
+    // the note he filed twice already (item 6 of the September 8 list, "attractive
+    // containers hold rewards inside").
+    //
+    // The tag table still wins where it exists, so a strongbox is still the strongbox.
+    // Everything else pays off its MASS: a bin gives you a couple of rounds, a concrete
+    // block you had to swing at twice gives you rather more. It is deliberately small
+    // money — a site rebuilds its props when it streams back in, so anything worth a drive
+    // would be a farm, and the real money in this county is the strongbox and the dead.
+    const generic = !LOOT_TAGS[b.tag] && !COIN_TAGS[b.tag];
+    const heft = clamp(b.mass / 60, 0.4, 2.6);
+    if (LOOT_TAGS[b.tag] ? this.lootRng.next() < BREAK_LOOT_CHANCE
+      : (generic && this.lootRng.next() < 0.42)) {
+      const base = BREAK_LOOT_MIN + Math.floor(this.lootRng.next() * (BREAK_LOOT_MAX - BREAK_LOOT_MIN + 1));
+      const n = generic ? Math.max(2, Math.round(base * heft * 0.6)) : base;
       _ammoPayload.n = n; L.loot = n;
       this.ctx.bus.emit('pickup:ammo', _ammoPayload);
     }
@@ -647,8 +673,14 @@ export class Combat {
         L.coins = n;
         this.ctx.bus.emit('pickup:coin', _coinPayload);
       }
+    } else if (generic && this.coinRng.next() < 0.50) {
+      const n = 1 + Math.floor(this.coinRng.next() * (2 + heft * 2));
+      _coinPayload.n = n; _coinPayload.x = b.x; _coinPayload.y = b.y + 0.3; _coinPayload.z = b.z;
+      _coinPayload.reason = b.tag || 'break';
+      L.coins = n;
+      this.ctx.bus.emit('pickup:coin', _coinPayload);
     }
-    if (LOOT_TAGS[b.tag] && this.xpRng.next() < .30) {
+    if (this.xpRng.next() < (LOOT_TAGS[b.tag] ? 0.30 : 0.22)) {
       const xp = 12 + Math.floor(this.xpRng.next() * 11);
       this._sys('progress')?.award(xp, b.x, b.y + .4, b.z, 'crate');
       L.xp = xp;

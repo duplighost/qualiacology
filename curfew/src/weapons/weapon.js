@@ -1463,9 +1463,13 @@ export class Weapons {
 
   _meleeImpactJuice(cam) {
     // The kick goes DOWN. A kick that goes up is a recoil, not an impact.
-    if (cam.addPunch) cam.addPunch(-1.9, 0.9, 2.6);
+    // ROUND 18: roughly doubled, with the hitstop taken up from CFG's 0.075 to 0.125 for
+    // this one frame. Hitstop is the single cheapest weight there is — the world stops
+    // for an eighth of a second and then carries on — and 75 ms was under the threshold
+    // where a player registers it as anything but a stutter.
+    if (cam.addPunch) cam.addPunch(-3.6, 1.8, 5.0);
     const fx = this._sys('fx');
-    if (fx && fx.hitstop) fx.hitstop(MELEE.hitstop);
+    if (fx && fx.hitstop) fx.hitstop(Math.max(MELEE.hitstop, 0.125));
     this._pulse('melee:connect');
   }
 

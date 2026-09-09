@@ -799,6 +799,8 @@ function geoSetFor(key) {
     case FORM.GAUNT: set = buildHunter(def); break;
     case FORM.HUMAN: set = buildPoacher(def); break;
     case FORM.PORCELAIN: set = buildPale(def); break;
+    case FORM.MOTH: set = buildMoth(def); break;
+    case FORM.SPIDER: set = buildSpider(def); break;
     default: set = buildStanding(def); break;
   }
   set.key = key;
@@ -1484,6 +1486,262 @@ function buildStanding(def) {
   };
 }
 
+
+/* ------------------------------------------------------------------- MOTH --
+   ROUND 18. ALEX: "A freaky horror moth that kinds of blends into trees in the forest.
+   And then can fly. Not too high. But fly."
+
+   THE READ, in order, at four distances:
+     40 m  nothing. It is a dark patch on a dark trunk.
+     14 m  a shape with a texture that does not match the bark behind it.
+      6 m  the wings open and it is enormous — 2.4 m across, against a 1.15 m body.
+      2 m  a face, and the face is the wrong shape for anything that should be flying.
+
+   The wings are the whole animal. They are big triangular sheets hinged at the thorax, and
+   they are the LIMBS — bodies.js's rig gives every joint a pivot and an optional elbow, so
+   a wing is one pivot (the shoulder) and one fore section (the outer half), and the
+   'flutter' gait beats them. Four limb joints, one geometry, four draws: no more than the
+   hound's legs cost.
+
+   Every value here is under the night-value law. The wings sit at bark, and the eye is the
+   dullest in the roster on purpose. It is HIDING. */
+function buildMoth(def) {
+  const s = def.height / 1.15;
+  const w = new Weld();
+  const cloth = def.cloth, skin = def.skin, bone = def.bone;
+  const bodyY = 0.58 * s;
+
+  // A furred thorax and a long segmented abdomen trailing behind it. The abdomen is what
+  // makes it an INSECT at silhouette range instead of a bird.
+  w.add(P.sph, 0, bodyY, -0.02 * s, skin,
+    { sx: 0.34 * s, sy: 0.36 * s, sz: 0.46 * s });
+  for (let i = 0; i < 5; i++) {
+    const t = i / 4;
+    w.add(P.sph, 0, bodyY - t * 0.10 * s, (0.26 + i * 0.16) * s, i % 2 ? cloth : skin,
+      { sx: (0.28 - t * 0.13) * s, sy: (0.26 - t * 0.12) * s, sz: 0.20 * s });
+  }
+  // Collar: fur where the wings meet the body, so the hinge is not a seam.
+  //
+  // MEASURED and REPLACED. The first cut was a RING of eight cones round the thorax, and
+  // photographed at 6 m (tools/bodylook.mjs) it read as a sunburst — a radial fan of spikes
+  // with the wings lost inside it, which is a sea urchin and not a moth. A moth's silhouette
+  // is TWO PAIRS OF SHEETS and nothing else may compete with that. So: a squashed collar and
+  // a short tuft over the shoulders only, all of it behind the wing line.
+  w.add(P.sph, 0, bodyY + 0.08 * s, -0.14 * s, bone,
+    { sx: 0.36 * s, sy: 0.30 * s, sz: 0.20 * s });
+  for (const side of [-1, 1]) {
+    w.add(P.cone3, side * 0.19 * s, bodyY + 0.19 * s, -0.06 * s, bone,
+      { rx: -0.95, rz: side * 0.45, sx: 0.12 * s, sy: 0.24 * s, sz: 0.10 * s });
+  }
+
+  // THE HEAD. Not a moth's head. Two plumed antennae, a blunt face and no mouth you can
+  // find — the "freaky horror" half of the ask is that it is built like an insect and
+  // looks at you like a person.
+  const headY = bodyY + 0.10 * s;
+  w.add(P.sph, 0, headY, -0.40 * s, skin, { sx: 0.25 * s, sy: 0.25 * s, sz: 0.26 * s });
+  w.add(P.sph, 0, headY - 0.02 * s, -0.53 * s, VOID, { sx: 0.19 * s, sy: 0.17 * s, sz: 0.14 * s });
+  for (const side of [-1, 1]) {
+    // The plume: five short barbs down a curving shaft, sweeping BACK over the thorax and
+    // kept LOW. Seven long ones stood up over the head and were half of what made the
+    // folded moth read as a fan of spikes; an antenna is a detail you find at 3 m, not a
+    // second silhouette competing with the wings at 30.
+    for (let i = 0; i < 5; i++) {
+      const t = i / 4;
+      w.add(P.cone3, side * (0.09 + t * 0.20) * s, headY + (0.11 + t * 0.10) * s,
+        (-0.44 + t * 0.30) * s, bone,
+        { rx: -0.9 + t * 0.5, rz: side * (0.95 + t * 0.35),
+          sx: 0.030 * s, sy: (0.16 - t * 0.05) * s, sz: 0.018 * s });
+    }
+    // palps either side of the face, hooked inward
+    w.add(P.cone3, side * 0.13 * s, headY - 0.13 * s, -0.50 * s, bone,
+      { rx: -1.10, rz: side * -0.34, sx: 0.055 * s, sy: 0.24 * s, sz: 0.055 * s });
+  }
+
+  // Six hooked legs, TUCKED UNDER. They are welded, not jointed: the limb slots are spent on
+  // the wings, and a flying thing's legs do not swing — they hang.
+  //
+  // MEASURED, and this is what the sea-urchin actually was. The first cut splayed them at
+  // 0.85 and 1.45 rad — 49 and 83 degrees off the body — in `bone`, the palest colour on the
+  // animal. Twelve pale blades radiating from the thorax is the fan the photographs kept
+  // showing, and it survived two fixes aimed at the wings and the collar because the wings
+  // were never the problem. Now: half the splay, two thirds the length, and in `cloth`, so
+  // the legs are something you find at 3 m rather than the first thing you see at 30.
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const z = (-0.14 + i * 0.20) * s;
+      w.add(P.cap, side * 0.17 * s, bodyY - 0.23 * s, z, cloth,
+        { rz: side * 0.42, rx: -0.15 + i * 0.15, sx: 0.045 * s, sy: 0.22 * s, sz: 0.045 * s });
+      w.add(P.cone3, side * 0.25 * s, bodyY - 0.38 * s, z + 0.02 * s, cloth,
+        { rz: side * 0.72, rx: 0.30, sx: 0.032 * s, sy: 0.17 * s, sz: 0.032 * s });
+    }
+  }
+
+  const eyesW = new Weld();
+  for (const side of [-1, 1]) {
+    // Two compound domes, wide apart and low — the wrong spacing for a face, which is
+    // the thing you notice before you notice what it is.
+    eyesW.add(P.sphLo, side * 0.155 * s, headY + 0.01 * s, -0.50 * s, 0xffffff,
+      { sx: 0.070 * GLINT_SCALE * s, sy: 0.055 * GLINT_SCALE * s, sz: 0.030 * GLINT_SCALE * s });
+  }
+
+  // THE WING, built once and instanced four times (fore pair, hind pair). It runs out along
+  // +Y from its pivot, because the rig rotates a limb about x at the pivot and the `fore`
+  // section hangs off `j.fore` metres along that same axis.
+  //
+  // THE SHEET IS THE SHAPE, AND THE VEINS ARE DARKER THAN IT. The first cut had it the other
+  // way round — a near-black `cloth` sheet with three `bone` veins across it — and at 5 m
+  // the veins were the only thing bright enough to see, so four wings photographed as twelve
+  // pale blades radiating out of the thorax. Every fix aimed at the pose left that alone
+  // because the pose was never the fault. The sheet is `skin` now (still Y 0.007, still far
+  // under the sky) and the veins are `cloth`, so what you resolve first is a WING.
+  const wing = new Weld();
+  wing.add(P.cone3, 0, 0.36 * s, 0.02 * s, skin,
+    { rx: Math.PI, rz: 0.10, sx: 0.70 * s, sy: 0.80 * s, sz: 0.05 * s });
+  wing.add(P.box, 0, 0.20 * s, 0.012 * s, cloth, { sx: 0.045 * s, sy: 0.46 * s, sz: 0.030 * s });
+  // two veins THROUGH the sheet, darker than it, so it is a wing and not a paddle
+  for (let i = 0; i < 2; i++) {
+    wing.add(P.box, (0.08 + i * 0.13) * s, 0.36 * s, 0.030 * s, cloth,
+      { rz: -0.28 - i * 0.22, sx: 0.018 * s, sy: 0.52 * s, sz: 0.010 * s });
+  }
+  const wingFore = new Weld();
+  wingFore.add(P.cone3, 0, 0.30 * s, 0.01 * s, skin,
+    { rx: Math.PI, rz: -0.16, sx: 0.58 * s, sy: 0.68 * s, sz: 0.045 * s });
+  // The one pale mark on the whole animal: an eyespot near the tip, which is a real moth's
+  // trick and reads at exactly the distance the wings first open.
+  wingFore.add(P.sphLo, 0.11 * s, 0.42 * s, 0.030 * s, bone,
+    { sx: 0.14 * s, sy: 0.17 * s, sz: 0.02 * s });
+  wingFore.add(P.box, 0, 0.20 * s, 0.012 * s, cloth,
+    { sx: 0.030 * s, sy: 0.42 * s, sz: 0.020 * s });
+
+  return {
+    shell: w.geometry('moth-shell'),
+    eyes: eyesW.geometry('moth-eyes'),
+    limb: wing.geometry('moth-wing'),
+    fore: wingFore.geometry('moth-wing-outer'),
+    joints: [
+      // forewings, then hindwings. `fore` is where the outer section hinges.
+      { x: -0.26 * s, y: bodyY + 0.12 * s, z: -0.10 * s, fore: 0.62 * s },
+      { x: 0.26 * s, y: bodyY + 0.12 * s, z: -0.10 * s, fore: 0.62 * s },
+      { x: -0.24 * s, y: bodyY + 0.02 * s, z: 0.18 * s, fore: 0.52 * s },
+      { x: 0.24 * s, y: bodyY + 0.02 * s, z: 0.18 * s, fore: 0.52 * s },
+    ],
+    zones: [
+      { x: 0, y: headY, z: -0.46 * s, r: 0.24 * s, zone: 'head' },
+      { x: 0, y: bodyY, z: 0, r: 0.34 * s, zone: 'torso' },
+      { x: 0, y: bodyY - 0.04 * s, z: 0.52 * s, r: 0.26 * s, zone: 'vent' },
+    ],
+    gait: 'flutter',
+  };
+}
+
+/* ----------------------------------------------------------------- SPIDER --
+   ROUND 18. ALEX: "a giant spider that crawls on ceiling and drops off."
+
+   Eight legs on four joint slots. The rig gives one pivot and one elbow per slot, and a
+   spider's leg is exactly that shape (femur out and UP, tibia back down off the knee), so
+   each slot carries a MIRRORED PAIR welded into one geometry rather than eight slots.
+   The body is low and wide — a 1.44 m span on a 1.05 m height — so hanging over you it
+   fills a doorway.
+
+   It is built to be seen FROM UNDERNEATH, which is the only angle that matters for a thing
+   on a ceiling: the pale sternum plate, the leg sockets and the fangs are all on the belly. */
+function buildSpider(def) {
+  const s = def.height / 1.05;
+  const w = new Weld();
+  const cloth = def.cloth, skin = def.skin, bone = def.bone;
+  const bodyY = 0.46 * s;
+
+  // Abdomen behind, cephalothorax in front, joined by a visible waist.
+  w.add(P.sph, 0, bodyY + 0.04 * s, 0.34 * s, cloth,
+    { sx: 0.66 * s, sy: 0.54 * s, sz: 0.78 * s });
+  w.add(P.cyl, 0, bodyY, 0.02 * s, bone, { rx: 1.57, sx: 0.16 * s, sy: 0.22 * s, sz: 0.16 * s });
+  w.add(P.sph, 0, bodyY, -0.28 * s, skin, { sx: 0.56 * s, sy: 0.40 * s, sz: 0.56 * s });
+  // The belly plate: bone, and the thing you are looking straight at while it is overhead.
+  w.add(P.sph, 0, bodyY - 0.16 * s, -0.24 * s, bone,
+    { sx: 0.40 * s, sy: 0.12 * s, sz: 0.40 * s });
+  for (let i = 0; i < 4; i++) {
+    w.add(P.box, 0, bodyY - 0.20 * s, (0.12 + i * 0.17) * s, bone,
+      { sx: (0.30 - i * 0.05) * s, sy: 0.05 * s, sz: 0.09 * s });
+  }
+  // Spinnerets at the back of the abdomen.
+  for (const side of [-1, 1]) {
+    w.add(P.cone3, side * 0.09 * s, bodyY - 0.05 * s, 0.72 * s, bone,
+      { rx: 1.30, rz: side * 0.2, sx: 0.075 * s, sy: 0.20 * s, sz: 0.075 * s });
+  }
+  // Fangs, folded in, and the palps either side of them.
+  for (const side of [-1, 1]) {
+    w.add(P.cone, side * 0.11 * s, bodyY - 0.14 * s, -0.52 * s, bone,
+      { rx: -2.30, rz: side * 0.16, sx: 0.085 * s, sy: 0.40 * s, sz: 0.085 * s });
+    w.add(P.cap, side * 0.27 * s, bodyY - 0.06 * s, -0.44 * s, skin,
+      { rx: -1.05, rz: side * 0.30, sx: 0.085 * s, sy: 0.26 * s, sz: 0.085 * s });
+  }
+
+  const eyesW = new Weld();
+  // EIGHT EYES, in the real arrangement: a row of four across the front, two pairs above.
+  // It is the one part of this animal that is unmistakable at a glance.
+  for (let i = 0; i < 4; i++) {
+    const x = (-0.135 + i * 0.09) * s;
+    const big = i === 1 || i === 2;
+    eyesW.add(P.sphLo, x, bodyY + 0.10 * s, -0.50 * s, 0xffffff,
+      { sx: (big ? 0.042 : 0.030) * GLINT_SCALE * s,
+        sy: (big ? 0.042 : 0.030) * GLINT_SCALE * s,
+        sz: 0.020 * GLINT_SCALE * s });
+  }
+  for (const side of [-1, 1]) {
+    eyesW.add(P.sphLo, side * 0.075 * s, bodyY + 0.20 * s, -0.46 * s, 0xffffff,
+      { sx: 0.036 * GLINT_SCALE * s, sy: 0.036 * GLINT_SCALE * s, sz: 0.020 * GLINT_SCALE * s });
+    eyesW.add(P.sphLo, side * 0.175 * s, bodyY + 0.16 * s, -0.42 * s, 0xffffff,
+      { sx: 0.028 * GLINT_SCALE * s, sy: 0.028 * GLINT_SCALE * s, sz: 0.018 * GLINT_SCALE * s });
+  }
+
+  // ONE LEG PAIR per joint slot: femur running out and up from the socket, so the knee is
+  // ABOVE the body the way a spider's is, and the tibia comes back down off the elbow.
+  // MEASURED, from the first frame of it standing on the station forecourt: the first cut
+  // put the femur at 0.62 rad off vertical and the whole animal read as a sea urchin —
+  // eight spikes going up and nothing reaching the ground. A spider's femur is nearly
+  // HORIZONTAL and the knee is only just proud of the body; the length is in the tibia,
+  // which is what comes down to the floor. 1.02 rad and a longer, straighter shin.
+  const femur = new Weld();
+  for (const fs of [-1, 1]) {
+    femur.add(P.cap, fs * 0.34 * s, 0.20 * s, 0, skin,
+      { rz: fs * -1.02, sx: 0.085 * s, sy: 0.82 * s, sz: 0.085 * s });
+    // a hard knee knuckle, so the joint is a joint and not a bend in a tube
+    femur.add(P.sphLo, fs * 0.62 * s, 0.34 * s, 0, bone,
+      { sx: 0.085 * s, sy: 0.085 * s, sz: 0.085 * s });
+  }
+  const tibia = new Weld();
+  for (const side of [-1, 1]) {
+    tibia.add(P.cap, side * 0.62 * s, -0.34 * s, 0, cloth,
+      { rz: side * -0.14, sx: 0.058 * s, sy: 0.96 * s, sz: 0.058 * s });
+    // the foot hook, which is what it hangs off the ceiling by
+    tibia.add(P.cone3, side * 0.70 * s, -0.80 * s, 0, bone,
+      { rz: side * -1.9, rx: 0.25, sx: 0.042 * s, sy: 0.22 * s, sz: 0.042 * s });
+  }
+
+  return {
+    shell: w.geometry('spider-shell'),
+    eyes: eyesW.geometry('spider-eyes'),
+    limb: femur.geometry('spider-femur'),
+    fore: tibia.geometry('spider-tibia'),
+    joints: [
+      // Four sockets down the flank; each carries a mirrored pair, so eight legs. The
+      // elbow sits at the knee knuckle the femur weld puts at 0.34 up, and the fore
+      // section hangs from there — that is where the shin has to start or the leg has a
+      // visible break in it.
+      { x: 0, y: bodyY, z: -0.30 * s, fore: 0.34 * s },
+      { x: 0, y: bodyY, z: -0.10 * s, fore: 0.34 * s },
+      { x: 0, y: bodyY, z: 0.10 * s, fore: 0.34 * s },
+      { x: 0, y: bodyY, z: 0.30 * s, fore: 0.34 * s },
+    ],
+    zones: [
+      { x: 0, y: bodyY + 0.10 * s, z: -0.36 * s, r: 0.30 * s, zone: 'head' },
+      { x: 0, y: bodyY + 0.04 * s, z: 0.34 * s, r: 0.42 * s, zone: 'torso' },
+      { x: 0, y: bodyY - 0.16 * s, z: -0.24 * s, r: 0.22 * s, zone: 'vent' },
+    ],
+    gait: 'scuttle',
+  };
+}
+
 /* ==========================================================================
    Instancing a body.
    ========================================================================== */
@@ -1665,7 +1923,7 @@ export function buildBody(key, rng) {
       contactMat.opacity = 0.72 * (0.4 + 0.6 * v);
     },
 
-    animate(a) { ANIMATE[set.gait](parts, a); },
+    animate(a) { ANIMATE[set.gait](parts, a); if (a.limp > 0) limpen(parts, a); },
 
     dispose() {
       shell.dispose();
@@ -1686,6 +1944,41 @@ function CONTACT_GEO() {
    coil, bank) — no state, no allocation, and every one of them stops moving
    when moveAmp is 0, which is what makes the burst gait legible.
    ========================================================================== */
+
+/* ROUND 18, THE LIMP PASS. Alex: "I want more ragdolling."
+ *
+ * `a.limp` is 0 while alive and walks to 1 over about 200 ms once the body is a corpse.
+ * Every gait below runs first and then hands its result to this, which drags each joint
+ * toward a slack, hanging pose and adds a slow swing off `a.time` so the limbs keep
+ * moving after the body has stopped. It is the cheapest honest ragdoll there is: no
+ * solver, no constraints, no per-body allocation — the joints simply stop being held.
+ *
+ * The pose it goes to is DOWN and slightly splayed, because a dropped arm hangs behind
+ * the shoulder and a dropped leg trails. A rig frozen in its last live pose is what made
+ * a kill look like somebody switching a puppet off, which is the note. */
+function limpen(parts, a) {
+  const k = a.limp;
+  if (!(k > 0)) return;
+  const t = a.time || 0;
+  for (let i = 0; i < parts.limbs.length; i++) {
+    const L = parts.limbs[i], side = i % 2 ? 1 : -1;
+    // hang, plus a swing that is slower and wider on one side than the other so the two
+    // arms never agree — two arms that agree is a doll, and this is meant to be a body.
+    const sw = Math.sin(t * (2.1 + i * 0.37) + i * 1.9) * 0.30 * k;
+    L.pivot.rotation.x += ((0.24 + sw) - L.pivot.rotation.x) * k;
+    L.pivot.rotation.z += ((side * 0.42) - L.pivot.rotation.z) * k;
+    if (L.elbow) L.elbow.rotation.x += ((-0.85 + sw * 0.6) - L.elbow.rotation.x) * k;
+  }
+  for (let i = 0; i < parts.legs.length; i++) {
+    const L = parts.legs[i];
+    const sw = Math.sin(t * (1.7 + i * 0.29) + i * 2.4) * 0.22 * k;
+    L.pivot.rotation.x += ((-0.30 + sw) - L.pivot.rotation.x) * k;
+    if (L.knee) L.knee.rotation.x += ((0.55 - sw * 0.5) - L.knee.rotation.x) * k;
+  }
+  // the head/torso drops with everything else
+  parts.shellMesh.rotation.x += (0.20 - parts.shellMesh.rotation.x) * k;
+  parts.eyeMesh.rotation.x = parts.shellMesh.rotation.x;
+}
 
 const ANIMATE = {
   trot(parts, a) {
@@ -1750,6 +2043,70 @@ const ANIMATE = {
     }
     parts.shellMesh.rotation.z = a.bank * 0.22;
     parts.eyeMesh.rotation.z = parts.shellMesh.rotation.z;
+  },
+
+  /* ROUND 18. THE MOTH. The four limbs are its wings, and the whole read of the animal is
+     which of two states they are in:
+       CLOSED  (moveAmp 0, coil 0) — folded flat back over the abdomen, which is the shape
+               that disappears against a trunk. This is the resting pose and it is what you
+               are looking at without knowing it.
+       BEATING (moveAmp > 0)      — a fast, shallow, slightly irregular beat. The forewings
+               and hindwings run a quarter-cycle apart so the pair never snaps like a
+               shutter, and the amplitude is keyed to how fast it is actually going.
+     The windup (coil) is the wings coming UP AND HELD, over the back, which is a silhouette
+     change legible at range in the dark — that is what buys this thing its 0.46 s telegraph. */
+  flutter(parts, a) {
+    const beat = a.time * 15.5;
+    // MEASURED at 6 m with tools/bodylook.mjs, twice. The first two cuts of the FOLDED pose
+    // splayed the four wings apart (rotation.y +-0.55, rotation.z +-0.22) and the moth
+    // photographed as a radial fan of blades — a sea urchin, not a moth at rest. A resting
+    // moth is a NARROW TENT: the wings lie back flat along the abdomen, nearly on top of one
+    // another, and the whole animal is a slim wedge you could mistake for a knot in bark.
+    // That mistake is the entire point of the species, so the folded pose is the one that
+    // has to be right, not the flying one.
+    for (let i = 0; i < parts.limbs.length; i++) {
+      const L = parts.limbs[i];
+      const side = i % 2 ? 1 : -1;
+      const hind = i > 1;
+      const open = Math.max(a.moveAmp, a.coil * 0.8, a.swing);
+      const flap = Math.sin(beat + (hind ? 1.55 : 0) + i * 0.11) * (0.34 + 0.30 * a.moveAmp);
+      const shut = 1 - open;
+      // closed: 8-10 degrees off the spine. open: out to the side, beating.
+      L.pivot.rotation.z = side * (shut * (hind ? 0.10 : 0.16) + open * (hind ? 1.06 : 1.30)
+        + flap * open);
+      // closed: laid back 78 degrees so the sheets run down over the abdomen.
+      L.pivot.rotation.x = shut * 1.36 - 0.15 * open + a.coil * -1.15 + a.swing * 0.5;
+      L.pivot.rotation.y = side * shut * 0.14;
+      if (L.elbow) L.elbow.rotation.x = -0.20 - shut * 0.30 + flap * open * 0.55;
+    }
+    // The thorax pitches nose-down as it drives forward, and rears back on the windup.
+    parts.shellMesh.rotation.x = a.moveAmp * 0.24 - a.coil * 0.46 + a.swing * 0.34;
+    parts.shellMesh.rotation.z = a.bank * 0.55;
+    parts.eyeMesh.rotation.x = parts.shellMesh.rotation.x;
+    parts.eyeMesh.rotation.z = parts.shellMesh.rotation.z;
+  },
+
+  /* ROUND 18. THE SPIDER. Four joint slots, each a mirrored pair, so the phase pattern has
+     to make eight legs out of four numbers: alternating tetrapod, which is what a real
+     spider does — slots 0 and 2 swing while 1 and 3 plant. The knee stays ABOVE the body
+     throughout, because a spider whose legs hang below it is a crab. */
+  scuttle(parts, a) {
+    for (let i = 0; i < parts.limbs.length; i++) {
+      const L = parts.limbs[i];
+      const ph = a.gait * 1.6 + (i % 2 ? Math.PI : 0);
+      const step = Math.sin(ph) * 0.52 * a.moveAmp;
+      L.pivot.rotation.x = step - a.coil * 0.30;
+      // the reach: the knee lifts on the swing half and drops on the stance half
+      L.pivot.rotation.z = Math.max(0, Math.cos(ph)) * 0.34 * a.moveAmp + a.coil * 0.55;
+      if (L.elbow) L.elbow.rotation.x = -0.28 - Math.max(0, -Math.sin(ph)) * 0.62 * a.moveAmp;
+    }
+    // It crouches to strike and the fangs come round with the body.
+    parts.shellMesh.rotation.x = -a.coil * 0.34 + a.swing * 0.72;
+    parts.shellMesh.rotation.z = a.bank * 0.28;
+    parts.shellMesh.position.y = -a.coil * 0.10;
+    parts.eyeMesh.rotation.x = parts.shellMesh.rotation.x;
+    parts.eyeMesh.rotation.z = parts.shellMesh.rotation.z;
+    parts.eyeMesh.position.y = parts.shellMesh.position.y;
   },
 
   creep(parts, a) {

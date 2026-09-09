@@ -1507,6 +1507,8 @@ export class Flora {
     this.seed = (ctx && ctx.rng ? ctx.rng.fork('flora').seed : 1337) | 0;
     this.templates = [];
     this.chunks = new Map();     // chunkId -> record
+    // ROUND 18: trees the Treebreaker has knocked over and not yet stood back up.
+    this._felled = [];
     this.groups = new Map();     // "gx,gz" -> 2x2 record
     this.supers = new Map();     // "sx,sz" -> 4x4 record
     this._dirtyGroups = new Set();
@@ -2828,6 +2830,7 @@ export class Flora {
   // -------------------------------------------------------------------------
   step(dt) {
     this._ensureBuilt();
+    this._stepFelled(dt);      // ROUND 18: the Treebreaker's trunks on their way down
     const det = this._det();
     const t0 = det ? 0 : nowMs();              // the understory's budget clock (never under the flag)
 
@@ -3377,6 +3380,111 @@ export class Flora {
   // -------------------------------------------------------------------------
   // present: wind clock and the moon, interpolated. No simulation here.
   // -------------------------------------------------------------------------
+  /* ================================================ THE TREEBREAKER, ROUND 18 ==
+   * ALEX, 2026-09-09: "If an upgrade is wicked expensive and it lets it crash through the
+   * trees in a forest knocking them over/temporarily destroying them, that would be the
+   * best."
+   *
+   * A trunk is an INSTANCE in a per-chunk InstancedMesh, so knocking one over is not a
+   * matter of moving an object — it is sixteen floats in one matrix array. The instance's
+   * translation is its base (the trunk's foot, see _pack), so a fall is a rotation about
+   * that point: new3x3 = R(axis, angle) * old3x3, translation untouched, and the tree
+   * hinges out of its own hole rather than sliding sideways out of the ground.
+   *
+   * `s.mat` in the chunk record still holds the STANDING matrix — _buildNear copies it into
+   * the mesh and never reads it back — so it is the restore, for free, with no snapshot.
+   *
+   * The collider half is world/collision.js fellTrees(); car.js owns the timer that puts
+   * both halves back.
+   */
+  /**
+   * @returns the records it pushed, IN ORDER. The caller pairs these with whatever it
+   *   retired on the collision side and owns the timer that stands them back up. It must be
+   *   the records themselves and not a count: a trunk with a collider may have no instance
+   *   in the near ring (it is beyond the ring, or its chunk has not materialised), so the
+   *   two lists are different lengths and index arithmetic between them orphans one. That
+   *   was measured — five trunks felled, three instances laid over, and one of the three
+   *   never stood back up because the pairing was `felled[len - taken.length + i]`.
+   */
+  fell(x, z, radius) {
+    const out = [];
+    if (!this._built) return out;
+    const r2 = radius * radius;
+    for (const rec of this.chunks.values()) {
+      if (!rec.nearMeshes || !rec.streams) continue;
+      for (let si = 0; si < rec.nearMeshes.length; si++) {
+        const mesh = rec.nearMeshes[si], s = rec.streams[si];
+        if (!mesh || !s) continue;
+        const arr = mesh.instanceMatrix.array;
+        for (let k = 0; k < s.count; k++) {
+          const b = k * 16;
+          const dx = arr[b + 12] - x, dz = arr[b + 14] - z;
+          if (dx * dx + dz * dz > r2) continue;
+          // Already down? A tree can only be felled once until it stands back up, and the
+          // standing matrix is the one thing that must never be overwritten by a fall.
+          let dup = false;
+          for (let q = 0; q < this._felled.length; q++) {
+            const f = this._felled[q];
+            if (f.mesh === mesh && f.k === k) { dup = true; break; }
+          }
+          if (dup) continue;
+          // Fall AWAY from the car, about the horizontal axis square to that.
+          const len = Math.hypot(dx, dz) || 1;
+          const rec = {
+            mesh, stream: s, k, t: 0,
+            ax: -dz / len, az: dx / len,          // the hinge
+            x: arr[b + 12], y: arr[b + 13], z: arr[b + 14],
+          };
+          this._felled.push(rec);
+          out.push(rec);
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Stand every felled tree back up, now. Called when the upgrade's timer runs out. */
+  standUp(rec) {
+    const arr = rec.mesh.instanceMatrix.array, src = rec.stream.mat, b = rec.k * 16;
+    for (let i = 0; i < 16; i++) arr[b + i] = src[b + i];
+    rec.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /**
+   * One frame of every tree that is on its way down. 0.85 s to lie flat, then it holds
+   * there until car.js says the time is up. Cheap: a handful of records at most, and a
+   * 3x3 multiply each.
+   */
+  _stepFelled(dt) {
+    const list = this._felled;
+    if (!list.length) return;
+    for (let q = list.length - 1; q >= 0; q--) {
+      const f = list[q];
+      if (f.done) continue;
+      if (f.t >= 1) continue;                    // lying flat, nothing to redraw
+      f.t = Math.min(1, f.t + dt / 0.85);
+      // ease-out with a small overshoot at the end, which is the bounce of a trunk hitting
+      // the ground rather than a lid closing on a hinge
+      const u = 1 - (1 - f.t) * (1 - f.t) * (1 - f.t);
+      const ang = (Math.PI * 0.47) * u + Math.sin(f.t * Math.PI) * 0.05;
+      const c = Math.cos(ang), sn = Math.sin(ang), ic = 1 - c;
+      const ax = f.ax, az = f.az;
+      // Rodrigues for an axis in the XZ plane (ay = 0), written out: nine terms, no alloc.
+      const r00 = c + ax * ax * ic, r01 = -az * sn, r02 = ax * az * ic;
+      const r10 = az * sn, r11 = c, r12 = -ax * sn;
+      const r20 = ax * az * ic, r21 = ax * sn, r22 = c + az * az * ic;
+      const dst = f.mesh.instanceMatrix.array, src = f.stream.mat, b = f.k * 16;
+      for (let col = 0; col < 3; col++) {
+        const o = b + col * 4;
+        const m0 = src[o], m1 = src[o + 1], m2 = src[o + 2];
+        dst[o] = r00 * m0 + r01 * m1 + r02 * m2;
+        dst[o + 1] = r10 * m0 + r11 * m1 + r12 * m2;
+        dst[o + 2] = r20 * m0 + r21 * m1 + r22 * m2;
+      }
+      f.mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
   present(alpha) {
     if (!this._built) return;
     const t = this.ctx && this.ctx.time

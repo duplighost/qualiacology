@@ -5,6 +5,18 @@ import {skeleton} from './remains.js';
 import {OPENING} from './opening-layout.js';
 
 const WOOD=[.13,.085,.046],METAL=[.20,.135,.055],SOIL=[.065,.034,.019];
+
+/* ROUND 18. The graves you can dig, in each site's own local frame. Twelve down the two
+ * sides of the Garden of Rest's central avenue, clear of the mortuary gatehouse (0, -10.5),
+ * the mausoleum (0, ~10) and the two columbarium ranges at x = +-19, so none of them lands
+ * inside a wall. The load-time placement pass in _build() moves any that still cannot fit. */
+const GRAVE_SITES = Object.freeze([
+  { site: 'garden-of-rest', rows: [
+    [-6.2, -6.4], [-6.6, -2.6], [-6.1, 1.2], [-6.5, 5.0],
+    [6.2, -6.4], [6.6, -2.6], [6.1, 1.2], [6.5, 5.0],
+    [-11.4, -3.2], [11.4, -3.2], [-11.0, 3.6], [11.0, 3.6],
+  ] },
+]);
 const _from=new THREE.Vector3(),_dir=new THREE.Vector3(),_up=new THREE.Vector3(0,1,0);
 
 export class Scavenging {
@@ -55,6 +67,38 @@ export class Scavenging {
       const a=rng.next()*Math.PI*2,r=7+rng.next()*5;
       add('wild:'+w.id,w.x+Math.cos(a)*r,w.z+Math.sin(a)*r,i%3===0?'crate':'dig',true);
     }
+
+    /* ---- ROUND 18: THE GRAVES ------------------------------------------------------
+     * ALEX, 2026-09-09: "In that cemetery location I want to be able to use the melee dig
+     * thing to dig up graves. Some rewards. Some of those enemies we usually have popping
+     * out."
+     *
+     * The verb already exists and he named it: three melee strikes on disturbed earth. So a
+     * grave is a dig site, placed by hand along the Garden of Rest's actual grave field, and
+     * it differs from an ordinary one in exactly three numbers — twice the money, a much
+     * higher chance of something coming up, and a PALLBEARER when it does.
+     *
+     * The positions are the site's own local frame, converted here with its real yaw the
+     * same way the opening's supplies are. They run down both sides of the central avenue
+     * between the mortuary gatehouse and the mausoleum, which is where the graves are.
+     */
+    const places=this._sys('places');
+    for(const g of GRAVE_SITES){
+      const node=places.nodes.get(g.site);
+      if(!node)continue;
+      const m=MAJORS.find(q=>q.id===g.site);
+      if(!m)continue;
+      const cy2=Math.cos(node.yaw),sy2=Math.sin(node.yaw);
+      for(let i=0;i<g.rows.length;i++){
+        const q=g.rows[i];
+        add(g.site+':grave:'+i, m.x+q[0]*cy2+q[1]*sy2, m.z-q[0]*sy2+q[1]*cy2, 'dig');
+        Object.assign(this.sites.at(-1), {
+          authored:true, grave:true,
+          cash:38+Math.floor(rng.next()*30), xp:34,
+          ambushChance:0.45, ambushSpecies:'pallbearer',
+        });
+      }
+    }
     // Geometry and its existing surface program take part in normal boot warmup.
     this.warm=new THREE.Mesh(this.geos.wood,this.mat);this.warm.position.y=-10000;this.root.add(this.warm);
     this.off=this.ctx.bus.on('world:broke',p=>{if(p.tag==='supply')for(const s of this.sites)if(s.node&&Math.hypot(s.x-p.x,s.z-p.z)<1.1&&Math.abs(s.y-p.y)<1)this._take(s);});
@@ -64,8 +108,14 @@ export class Scavenging {
     const col=this._sys('collision'),terr=this._sys('terrain'),pr=this._sys('progress');
     if(!s.placed){
       const ox=s.x,oz=s.z;let found=false;
-      for(let i=0;i<(s.authored?1:20);i++){
-        const a=i*2.399,r=i===0?0:1+Math.sqrt(i)*1.2,x=ox+Math.cos(a)*r,z=oz+Math.sin(a)*r,y=s.deckY??terr.heightAt(x,z);
+      // ROUND 18: a GRAVE is authored (exact spot, tight fit radius) but gets a short search
+      // anyway, because twelve of them are hand-placed among monuments whose footprints move
+      // whenever the cemetery's dress is edited. One attempt each and a single overlapping
+      // plinth would silently cost a grave for the life of the save; eight small steps keeps
+      // it in its own row.
+      const tries = s.grave ? 8 : (s.authored ? 1 : 20);
+      for(let i=0;i<tries;i++){
+        const a=i*2.399,r=i===0?0:(s.grave?0.55:1)+Math.sqrt(i)*(s.grave?0.5:1.2),x=ox+Math.cos(a)*r,z=oz+Math.sin(a)*r,y=s.deckY??terr.heightAt(x,z);
         if(this._sys('roads').roadDistance(x,z)<3.4||y<.5||!col.fits(x,z,y+.03,s.authored?.59:.80,s.authored?1.0:1.7))continue;
         if(!s.authored&&(Math.abs(y-terr.heightAt(x+1,z))>.32||Math.abs(y-terr.heightAt(x,z+1))>.32))continue;
         s.x=x;s.y=y+.04;s.z=z;found=true;break;
@@ -100,7 +150,8 @@ export class Scavenging {
     s.stage=4;this._sys('progress').flag(s.id,4);
     this._sys('collision').removeChunk(s.id);s.node.collider=-1;
     this._sys('fx')?.clearDecalsNear(s.x,s.y+.35,s.z,1.25);
-    this._sys('progress').payCash(s.cash??(4+Math.floor(s.seed*6)),s.x,s.y+.4,s.z,'supplies');
+    // ROUND 18: a buried cache is 22-40 now, not 4-9 — the same x4 the rest of the county took.
+    this._sys('progress').payCash(s.cash??(22+Math.floor(s.seed*19)),s.x,s.y+.4,s.z,'supplies');
     this._sys('progress').award(s.xp??18,s.x,s.y+.4,s.z,'supplies');
     this.ctx.bus.emit('pickup:ammo',{n:4+Math.floor(s.seed*5)});
     this._sys('audio')?.dread('branch',s.x,s.y+.3,s.z,.40);
@@ -115,8 +166,16 @@ export class Scavenging {
     if(!best)return false;const s=best;s.stage++;this._sys('progress').flag(s.id,s.stage);
     _from.set(s.x,s.y+.1,s.z);this._sys('fx')?.impact?.('dirt',_from,_up,.65);
     this._sys('audio')?.dread('branch',s.x,s.y+.1,s.z,.38);
-    if(s.stage===3&&s.seed<.25&&!s.noAmbush){
-      const e=this._sys('enemies').spawn('marrow',s.x,s.z,{feetY:s.y,awake:true,ambush:true,riseS:.95});
+    // ROUND 18. Alex, 2026-09-09, about the cemetery: "I want to be able to use the melee
+    // dig thing to dig up graves. Some rewards. Some of those enemies we usually have
+    // popping out." A GRAVE is an ordinary dig site with two numbers changed — a much higher
+    // chance that something comes out of it, and a PALLBEARER rather than a MARROW when it
+    // does, because the pallbearer is already the species that lies in the ground and rises
+    // where it was lying (species.js) and there is no sense inventing a second one.
+    const chance=s.ambushChance===undefined?.25:s.ambushChance;
+    if(s.stage===3&&s.seed<chance&&!s.noAmbush){
+      const kind=s.ambushSpecies||'marrow';
+      const e=this._sys('enemies').spawn(kind,s.x,s.z,{feetY:s.y,awake:true,ambush:true,riseS:.95});
       if(e){s.stage=5;this._sys('progress').flag(s.id,5);this._sys('audio')?.dread('canopy-rush',s.x,s.y+.3,s.z,.55);s.node.chest.visible=false;s.ambush=true;}
     }
     this._appearance(s);if(s.ambush)s.node.chest.visible=false;
@@ -141,7 +200,7 @@ export class Scavenging {
     if(!target)return;
     const dig=target.kind==='dig'&&target.stage<3;
     this.ctx.bus.emit('prompt',{kind:dig?'dig':'hold',label:dig?'V':'E',rank:3,x:target.x,y:target.y+(dig?.3:.6),z:target.z,
-      k:dig?target.stage/3:this.hold/.7,detail:dig?'DISTURBED EARTH':'OPEN SUPPLIES',subdetail:dig?'MELEE':''});
+      k:dig?target.stage/3:this.hold/.7,detail:dig?(target.grave?'A GRAVE, RECENTLY TURNED':'DISTURBED EARTH'):'OPEN SUPPLIES',subdetail:dig?'MELEE':''});
     if(!dig&&use&&!this.release){this.hold+=dt;if(this.hold>=.7){this._take(target);this.release=true;this.hold=0;}}
     else this.hold=0;
   }
