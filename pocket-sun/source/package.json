@@ -1,7 +1,7 @@
 {
   "name": "pocket-sun",
   "private": true,
-  "version": "3.1.0",
+  "version": "3.2.0",
   "type": "module",
   "scripts": {
     "build": "node -e \"require('fs').copyFileSync('index.html.template','index.html')\" && vite build --config vite.site.config.ts",

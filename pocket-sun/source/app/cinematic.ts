@@ -131,7 +131,7 @@ export function drawDeepSpace(ctx: CanvasRenderingContext2D, materials: ReturnTy
 
 export function drawMoon(ctx: CanvasRenderingContext2D, materials: ReturnType<typeof createCinematicMaterials>, moon: Moon, time: number, impact: number) {
   const { x, y, r, progress } = moon;
-  const face = smooth(Math.max(0, Math.min(1, (progress - 0.18) / 0.72)));
+  const face = smooth(moon.face ?? (progress === 1 ? 1 : 0));
   ctx.save();
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.shadowBlur = 0;
   ctx.translate(x, y);
@@ -164,7 +164,7 @@ export function drawMoon(ctx: CanvasRenderingContext2D, materials: ReturnType<ty
     ctx.fillStyle = grin; ctx.fill(); ctx.lineWidth = r * 0.018; ctx.stroke();
   }
   // The physical rim becomes visible before the moon becomes solid.
-  ctx.globalAlpha = Math.max(0, (progress - 0.78) / 0.22) * 0.6;
+  ctx.globalAlpha = face * 0.6;
   ctx.strokeStyle = "#dcecff"; ctx.lineWidth = 1.1 + impact * 2;
   ctx.beginPath(); ctx.arc(0, 0, r + 0.5, 0, Math.PI * 2); ctx.stroke();
   ctx.restore();

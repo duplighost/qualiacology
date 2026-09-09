@@ -1,18 +1,48 @@
-export type Moon = { x: number; y: number; r: number; progress: number; solid: boolean };
+export type Moon = { x: number; y: number; r: number; progress: number; solid: boolean; face?: number };
 export type MovingBody = { x: number; y: number; vx: number; vy: number; r: number };
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
-export const MOON_SCORE = 5000;
-export const moonProgressForScore = (score: number) => clamp(score / MOON_SCORE, 0, 1);
+export const MOON_SCORE = 50000;
+export const MOON_MILESTONES = [500, 1500, 3500, 6500, 10000, 15000, 21000, 28000, 36000];
+export const MOON_EXCURSION_SECONDS = 12;
+export const MOON_ARRIVAL_SECONDS = 14;
+export const moonProgressForScore = (score: number) => score >= MOON_SCORE ? 1 : 0;
 
-export function moonLayout(width: number, height: number, progress: number, time: number): Moon {
+export type MoonJourney = { moonProgress: number; moonFace: number; moonExcursionIndex: number; moonExcursionElapsed: number };
+export function advanceMoonJourney(journey: MoonJourney, score: number, dt: number) {
+  journey.moonExcursionElapsed = Math.min(MOON_EXCURSION_SECONDS, journey.moonExcursionElapsed + dt);
+  if (score >= MOON_SCORE) {
+    if (journey.moonProgress < 1) journey.moonProgress = Math.min(1, journey.moonProgress + dt / MOON_ARRIVAL_SECONDS);
+    else journey.moonFace = Math.min(1, journey.moonFace + dt / 2.5);
+    return;
+  }
+  // Finish each trip before starting the next unlocked milestone; fast scoring cannot snap the moon home.
+  const next = journey.moonExcursionIndex + 1;
+  if (journey.moonExcursionElapsed >= MOON_EXCURSION_SECONDS && next < MOON_MILESTONES.length && score >= MOON_MILESTONES[next]) {
+    journey.moonExcursionIndex = next;
+    journey.moonExcursionElapsed = 0;
+  }
+}
+
+export function moonExcursion(index: number, elapsed: number) {
+  if (index < 0 || elapsed <= 0 || elapsed >= MOON_EXCURSION_SECONDS) return { x: 0, y: 0 };
+  const u = elapsed / MOON_EXCURSION_SECONDS;
+  const envelope = Math.sin(u * Math.PI) ** 2;
+  if (index % 3 === 0) return { x: -0.26 * envelope, y: 0.025 * Math.sin(u * Math.PI * 2) * envelope };
+  if (index % 3 === 1) return { x: -0.035 * envelope, y: 0.24 * envelope };
+  return { x: -0.24 * envelope, y: 0.19 * Math.sin(u * Math.PI * 2) * Math.sin(u * Math.PI) };
+}
+
+export function moonLayout(width: number, height: number, progress: number, time: number, excursion = { index: -1, elapsed: 0 }, awakening = progress >= 1 ? 1 : 0): Moon {
   const p = clamp(progress, 0, 1), ease = p * p * (3 - 2 * p);
-  const drift = (1 - ease) * (0.012 + p * 0.045);
+  const drift = (1 - ease) * 0.012;
+  const tour = moonExcursion(excursion.index, excursion.elapsed);
   return {
-    x: width * (0.77 - 0.27 * ease + Math.sin(time * 0.12) * drift),
-    y: height * (0.23 + 0.27 * ease + Math.cos(time * 0.09) * drift * 0.55),
+    x: width * (0.77 - 0.27 * ease + Math.sin(time * 0.12) * drift + tour.x * (1 - ease)),
+    y: height * (0.23 + 0.27 * ease + Math.cos(time * 0.09) * drift * 0.55 + tour.y * (1 - ease)),
     r: Math.min(width * 0.36, height * 0.21) * (1 - ease) + Math.min(width, height) * 0.235 * ease,
     progress: p,
-    solid: p >= 0.92,
+    face: p === 1 ? clamp(awakening, 0, 1) : 0,
+    solid: p === 1 && awakening >= 1,
   };
 }
 

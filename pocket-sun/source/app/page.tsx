@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createCinematicMaterials, drawDeepSpace, drawMoon } from "./cinematic";
-import { moonLayout, moonProgressForScore, bounceOffMoon, pushOutsideMoon } from "./moon";
+import { moonLayout, moonProgressForScore, advanceMoonJourney, MOON_EXCURSION_SECONDS, bounceOffMoon, pushOutsideMoon } from "./moon";
 
 type Palette = {
   name: string;
@@ -131,6 +131,9 @@ type GameState = {
   lastAction: number;
   wallCooldown: number;
   moonProgress: number;
+  moonFace: number;
+  moonExcursionIndex: number;
+  moonExcursionElapsed: number;
   moonHits: number;
   moonCooldown: number;
   moonImpact: number;
@@ -209,7 +212,7 @@ declare global {
   }
 }
 
-const BUILD_ID = "pocket-sun-3.1.0-moonrise";
+const BUILD_ID = "pocket-sun-3.2.0-long-moonrise";
 const TAU = Math.PI * 2;
 const PALETTES: Palette[] = [
   {
@@ -788,6 +791,9 @@ export default function Home() {
       lastAction: 0,
       wallCooldown: 0,
       moonProgress: autotest ? moonProgressForScore(safeNumber(params.get("score"), 0)) : 0,
+      moonFace: autotest ? moonProgressForScore(safeNumber(params.get("score"), 0)) : 0,
+      moonExcursionIndex: -1,
+      moonExcursionElapsed: MOON_EXCURSION_SECONDS,
       moonHits: 0,
       moonCooldown: 0,
       moonImpact: 0,
@@ -927,7 +933,7 @@ export default function Home() {
     };
     const weather = () => WEATHERS[state.weatherIndex] ?? WEATHERS[0];
 
-    const currentMoon = () => moonLayout(state.width, state.height, state.moonProgress, state.t);
+    const currentMoon = () => moonLayout(state.width, state.height, state.moonProgress, state.t, { index: state.moonExcursionIndex, elapsed: state.moonExcursionElapsed }, state.moonFace);
 
     const randomPoint = (margin = 52): Point => ({
       x: margin + random() * Math.max(1, state.width - margin * 2),
@@ -1576,7 +1582,7 @@ export default function Home() {
       const step = dt * feverScale;
       const previousMoon = currentMoon();
       state.t += dt;
-      state.moonProgress += (moonProgressForScore(state.score) - state.moonProgress) * (1 - Math.exp(-dt / 2.8));
+      advanceMoonJourney(state, state.score, dt);
       state.moonCooldown = Math.max(0, state.moonCooldown - dt);
       state.moonImpact = Math.max(0, state.moonImpact - dt * 2);
       const moon = currentMoon();
@@ -1894,7 +1900,7 @@ export default function Home() {
     const renderAtmosphere = (colors: Palette, speed: number, energy: number) => {
       const sky = atmosphereContext;
       sky.setTransform(atmosphereScale, 0, 0, atmosphereScale, 0, 0);
-      drawDeepSpace(sky, materials, state.width, state.height, state.t, state.moonProgress, colors.cool, colors.hot);
+      drawDeepSpace(sky, materials, state.width, state.height, state.t, Math.min(1, state.score / 12000), colors.cool, colors.hot);
       const light = sky.createRadialGradient(state.star.x, state.star.y, 0, state.star.x, state.star.y, Math.max(state.width, state.height) * 0.5);
       light.addColorStop(0, alphaColor(colors.sun, 0.035 + energy * 0.03 + Math.min(speed / 20000, 0.025)));
       light.addColorStop(1, alphaColor(colors.hot, 0));
@@ -2371,6 +2377,9 @@ export default function Home() {
       pulses: state.pulses,
       prisms: state.prisms,
       moonProgress: Number(state.moonProgress.toFixed(4)),
+      moonFace: Number(state.moonFace.toFixed(3)),
+      moonExcursionIndex: state.moonExcursionIndex,
+      moonExcursionElapsed: Number(state.moonExcursionElapsed.toFixed(3)),
       moonHits: state.moonHits,
       moonSolid: currentMoon().solid,
       moonX: Number(currentMoon().x.toFixed(2)),
@@ -2413,6 +2422,8 @@ export default function Home() {
       t: rounded(state.t),
       weatherFromIndex: state.weatherFromIndex,
       weatherBlend: rounded(state.weatherBlend),
+      moonFace: state.moonFace,
+      moonExcursionElapsed: state.moonExcursionElapsed,
       moonCooldown: rounded(state.moonCooldown),
       moonOrbitAngle: state.moonOrbitAngle,
       moonOrbitTravel: rounded(state.moonOrbitTravel),
@@ -2786,7 +2797,7 @@ export default function Home() {
       state.bumperHits = 0;
       state.orbits = 0;
       state.pulses = 0;
-      state.moonProgress = 0; state.moonHits = 0; state.moonCooldown = 0; state.moonImpact = 0; state.moonOrbitAngle = null; state.moonOrbitTravel = 0;
+      state.moonProgress = 0; state.moonFace = 0; state.moonExcursionIndex = -1; state.moonExcursionElapsed = MOON_EXCURSION_SECONDS; state.moonHits = 0; state.moonCooldown = 0; state.moonImpact = 0; state.moonOrbitAngle = null; state.moonOrbitTravel = 0;
       state.prisms = 0;
       state.gateRuns = 0;
       state.gateStage = 0;
