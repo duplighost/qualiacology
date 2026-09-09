@@ -354,6 +354,7 @@ export class Dread {
     this.matLantern.color.setHex(0xffc27a);
     this.matLantern.blending = THREE.AdditiveBlending;
     this.matLantern.depthWrite = false;
+    this.matLantern.name = 'dread-lantern';   // ROUND 20: gfx/airlight.js gives it a body
 
     /* ---- the figure. Merged at boot: one draw, not four. ------------------ */
     const parts = [];

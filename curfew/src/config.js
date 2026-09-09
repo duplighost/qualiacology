@@ -85,7 +85,16 @@ export const CFG = {
       // which is one new material family of headroom and not a licence for six.
       // Human skin/cloth and their near-light response are warmed at boot. Normal play
       // measured 82 programs and a 15.4 ms castle p95 on the development GPU.
-      programsMax: 90, // includes the eight warmed material variants in MARROW's Presence
+      // ROUND 20: 90 -> 94. gfx/airlight.js adds ONE ShaderMaterial and it links TWO
+      // programs, for the same reason chunks.js's ground detail map does and records: three
+      // keys the cache on the output colour space, so a material drawn both into the post
+      // chain's linear target and (post disabled) to the sRGB canvas has two variants. All
+      // three of its InstancedMeshes share the material, so the count does not grow with the
+      // number of lamps. MEASURED at boot with the system in: 92, and 92 again after moving
+      // across the county and standing in the Holdfast's lit town, which is the rule this
+      // budget exists for — nothing links during play. Boot 9.4 s against a 15 s ceiling.
+      // 94 is 92 plus two, which is the same "one family of headroom" the note above sets.
+      programsMax: 94, // includes the eight warmed material variants in MARROW's Presence
       coldBootMaxS: 15,     // 0.9 s measured
     },
   },

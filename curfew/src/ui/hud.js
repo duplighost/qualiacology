@@ -2046,7 +2046,15 @@ export class Hud {
       const x = px(d.x), y = pz(d.z);
       const claimed = !!((claimedA && claimedA.has(d.id)) || (claimedB && claimedB.has(d.id)));
       const found = claimed || !!(foundSet && foundSet.has(d.id));
-      if(x<8||y<8||x>S-8||y>S-8)continue;
+      // ROUND 20: this `continue` used to run BEFORE the state was counted, so a destination
+      // that falls past the edge of the paper was in no state at all — not found, not claimed,
+      // not even unfound. Round 18 put three destinations outside the old rim and two of them
+      // land off this square, which is why the map accounted for 19 of 21. Nothing about what
+      // is DRAWN changes; the ledger is just complete now.
+      if (x < 8 || y < 8 || x > S - 8 || y > S - 8) {
+        if (!found) I.unfound++; else if (claimed) I.claimed++; else I.found++;
+        continue;
+      }
       const tint = '#93c7a3';
       if (!found) {
         // ROUND 13: NOTHING. The hollow diamond that said "something is here" is gone; Alex:

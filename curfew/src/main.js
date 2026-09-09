@@ -51,6 +51,7 @@ import * as viewmodelMod from './weapons/viewmodel.js';
 import * as combatMod from './combat/combat.js';
 import * as fxMod from './fx/fx.js';
 import * as postMod from './gfx/post.js';
+import * as airlightMod from './gfx/airlight.js';   // ROUND 20
 import * as clockMod from './world/clock.js';
 import * as placesMod from './world/places.js';
 import * as enemiesMod from './enemies/enemies.js';
@@ -116,6 +117,8 @@ const SYSTEMS = [
   ['hud', hudMod],
   // -- presentation, last ---------------------------------------------------------------
   ['fx', fxMod],
+  ['airlight', airlightMod],   // ROUND 20: the body of every light in the county. AFTER car and
+                               // fx (it reads the beam pose and the torch, both written above)
   ['post', postMod],           // post MUST stay last; it composites everything above
 ];
 
