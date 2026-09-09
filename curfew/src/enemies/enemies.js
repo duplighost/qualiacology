@@ -1242,7 +1242,32 @@ export class Enemies {
     // chamber 13 m up — instead of on the terrain. Only a STAGED body may use it, and only
     // while it holds its post: the moment it notices you it walks, and walking is
     // followGround's, which is the terrain and nothing else.
-    const feetY = (opts && typeof opts.feetY === 'number') ? opts.feetY : groundY(this.ctx, x, z);
+    let feetY = (opts && typeof opts.feetY === 'number') ? opts.feetY : groundY(this.ctx, x, z);
+    // ROUND 19. ALEX: "Spiders falling from the sky when not inside or somewhere."
+    //
+    // A ceiling species is placed at an authored `ly` above the site's pad — a ROOM's
+    // ceiling — and nothing checked that a ceiling was there. The Holdfast's nest was
+    // authored at (0, 6), which is seven metres out into the open bailey, so its spider was
+    // hung 6.6 m up in the open air and then descended out of an empty sky the first time
+    // the player came near. (The nest has been moved into the keep; this is the guard, so
+    // the next authored coordinate that misses a room fails visibly instead of magically.)
+    //
+    // One ray up from the ground under the spawn. No roof within its own dropFrom and the
+    // body simply starts on the floor, which is what _stepAir does with it from then on
+    // anyway — the only thing that changes is that it never appears in mid-air.
+    if (def.ceiling && opts && typeof opts.feetY === 'number') {
+      const gy = groundY(this.ctx, x, z);
+      if (feetY > gy + 0.5) {
+        const col = this._sys('collision');
+        let roofed = false;
+        if (col && col.raycast) {
+          _rayUpO.x = x; _rayUpO.y = gy + 0.35; _rayUpO.z = z;
+          roofed = !!col.raycast(_rayUpO, _rayUp, (def.dropFrom || 9) + 1,
+            col.MASK ? col.MASK.SOLID : 1);
+        }
+        if (!roofed) feetY = gy;
+      }
+    }
     e.pos.set(x, feetY, z);
     e.vel.set(0, 0, 0);
     e.prevPos.copy(e.pos); e.currPos.copy(e.pos);
@@ -2256,7 +2281,16 @@ export class Enemies {
       e.moving = false;
       e.speedWant = 0;
     } else {
-      const s = steer(this.ctx, e, p.pos.x, p.pos.z, this._frame);
+      // ROUND 19: it belongs to a PLACE. At 0.42 m/s an unleashed Pale could never actually
+      // get anywhere, so nothing ever needed to say where it stops; at 3.6 it would follow
+      // you across an 8 km county for the rest of the night, which turns the one encounter
+      // you are supposed to remember into a thing that is always behind you. Past `stalk`
+      // from where the scene put it, it goes home instead — still only while unobserved, so
+      // the rule the player has learned never breaks.
+      const home = def.stalk > 0
+        && Math.hypot(e.pos.x - e.homeX, e.pos.z - e.homeZ) > def.stalk;
+      const tx = home ? e.homeX : p.pos.x, tz = home ? e.homeZ : p.pos.z;
+      const s = steer(this.ctx, e, tx, tz, this._frame);
       e.speedWant = def.speed;
       e.vel.x = s.x * def.speed;
       e.vel.z = s.z * def.speed;

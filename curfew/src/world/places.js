@@ -206,6 +206,14 @@ const WHEEL_RATE = 0.90;          // rad/s, the headframe once the winding house
 const BELL_PERIOD_S = 180;        // "the bell rings on the hour" until a clock exists
 const BELL_SWING_S = 5.0;
 
+/* ROUND 19: THE GATE SWING. Alex: "There needs to be an animation when it opens."
+ * 2.4 s from shut to back against the jambs, eased at both ends, because a pair of oak
+ * leaves with iron bands on them is heavy. GATE_CLEAR_K is when the body is rebuilt without
+ * its gate collider: 0.45 of the eased swing is about 55 degrees of opening, which is a gap
+ * a body fits through, so the physics changes when the picture says it should. */
+const GATE_SWING_S = 2.4;
+const GATE_CLEAR_K = 0.45;
+
 const CLAIM_FLASH_S = 1.4;        // the rover a claim borrows, then releases by ttl
 const NEAR_HYSTERESIS = 12;       // metres, so place:near cannot chatter on a boundary
 const MAJOR_KEEPOUT = 70;         // no minor site inside this of a major
@@ -572,6 +580,121 @@ function fixtureGlint(y, sc = 1) {
   return out;
 }
 
+/* ------------------------------------------------------- THE FAR MARK, ROUND 19 --
+ * ALEX, 2026-09-09: "Those destination markers you can see from far away look odd and
+ * unhelpful. At least give them shapes."
+ *
+ * WHAT HE IS SEEING. Every major carries a claim GLINT — a 0.11 m additive bead under a
+ * 0.30 x 0.90 halo, on a node that is never distance-culled. Beyond PROXY_R (460 m) the whole
+ * landmark node is pulled in to a fixed 460 m and scaled, so at any range past that the glint
+ * holds a CONSTANT screen size: measured from the middle of the county, TWENTY of them, all
+ * at 460 m, at heights of 13 to 54 m (tools/_glowcensus.mjs). A bead and a soft halo at that
+ * size is a hovering pale square, twenty of them at once, and it says nothing about what is
+ * out there. "Odd and unhelpful" is exact.
+ *
+ * So the far read gets a SHAPE, drawn out of the same additive material, one per kind:
+ *
+ *     a cross for a church           a mast for the relay
+ *     a belfry for a tower           a battlement for the Holdfast
+ *     a beam for the lighthouse      an X for the mill's sails
+ *     a headframe for the workings   a gable for a house, a barn or a shed
+ *     an arch for the stones         a boom with a gap for the toll
+ *
+ * It is EIGHT METRES across, so it subtends about 30 px at 300 m and stays that size past
+ * the proxy handover. It fades IN with distance and the bead fades OUT, so nothing ever
+ * doubles up: close to, the glint is a lamp on a switch, and from the road it is a sign.
+ */
+// MEASURED (tools/_mark-probe.mjs): at 4 m of half-width the twenty glyphs came out 6-16 px
+// across from the middle of the county — a cross at 7 px is a dot, which is the thing being
+// replaced. 10 m gives about 46 px at MARK_FAR, 34 px at the proxy handover and 16 px at two
+// kilometres, and apparent size still falls with distance because the proxy transform is
+// monotonic in it (see the horizon-gain note at the top of this file).
+const MARK_R = 10.0;              // half-width in metres; the glyph is 20 m across
+const MARK_UP = 12.0;             // how far above the fixture it floats
+const MARK_NEAR = 150;            // m: nothing at all inside this
+const MARK_FAR = 330;             // m: full strength past this
+const MARK_BAR = 1.20;            // stroke thickness
+
+/** One additive bar of the glyph, centred at (x, y) in the glyph's own plane. */
+function markBar(parts, w, h, x, y) {
+  const g = new THREE.BoxGeometry(w, h, MARK_BAR);
+  g.translate(x, y, 0);
+  parts.push(fxColour(g, 1, 1, 1));
+}
+
+/** The glyph for a site kind, as merged additive geometry in a plane facing +Z. */
+function fixtureGlyph(kind) {
+  const p = [];
+  const R = MARK_R, B = MARK_BAR;
+  switch (kind) {
+    case 'cathedral': case 'chapel':                 // a cross
+      markBar(p, B, R * 2.0, 0, 0);
+      markBar(p, R * 1.25, B, 0, R * 0.45);
+      break;
+    case 'tower': case 'steeple': case 'bell-vault': // a belfry: a shaft under a wide head
+      markBar(p, B, R * 1.7, 0, -R * 0.15);
+      markBar(p, R * 1.35, B, 0, R * 0.70);
+      markBar(p, R * 0.75, B, 0, R * 0.95);
+      break;
+    case 'holdfast':                                 // a battlement: three merlons on a wall
+      markBar(p, R * 1.8, B, 0, -R * 0.35);
+      for (const x of [-R * 0.7, 0, R * 0.7]) markBar(p, B, R * 0.7, x, R * 0.05);
+      break;
+    case 'lighthouse':                               // the beam: a long horizontal on a stub
+      markBar(p, R * 2.0, B, 0, R * 0.35);
+      markBar(p, B, R * 0.9, 0, -R * 0.25);
+      break;
+    case 'mill':                                     // the sails
+      for (const s of [-1, 1]) {
+        const g = new THREE.BoxGeometry(R * 1.9, B, B);
+        g.rotateZ(s * Math.PI * 0.25);
+        p.push(fxColour(g, 1, 1, 1));
+      }
+      break;
+    case 'works': case 'red-quarry':                 // a headframe: a triangle over a base
+      for (const s of [-1, 1]) {
+        const g = new THREE.BoxGeometry(R * 1.5, B, B);
+        g.rotateZ(s * 1.05);
+        g.translate(s * R * 0.36, 0, 0);
+        p.push(fxColour(g, 1, 1, 1));
+      }
+      markBar(p, R * 1.5, B, 0, -R * 0.62);
+      break;
+    case 'relay':                                    // a mast, two crossbars
+      markBar(p, B, R * 2.0, 0, 0);
+      markBar(p, R * 1.1, B, 0, R * 0.30);
+      markBar(p, R * 0.7, B, 0, R * 0.72);
+      break;
+    case 'checkpoint':                               // a boom with the gap in it
+      markBar(p, R * 0.75, B, -R * 0.62, 0);
+      markBar(p, R * 0.75, B, R * 0.62, 0);
+      markBar(p, B, R * 0.9, -R * 1.0, -R * 0.35);
+      break;
+    case 'cemetery':                                 // a headstone
+      markBar(p, R * 1.2, B, 0, R * 0.55);
+      markBar(p, B, R * 1.5, -R * 0.55, -R * 0.15);
+      markBar(p, B, R * 1.5, R * 0.55, -R * 0.15);
+      markBar(p, R * 1.2, B, 0, -R * 0.85);
+      break;
+    case 'stones': case 'rock-arch': case 'great-tree':   // an arch: two uprights and a lintel
+      markBar(p, B, R * 1.4, -R * 0.6, -R * 0.2);
+      markBar(p, B, R * 1.4, R * 0.6, -R * 0.2);
+      markBar(p, R * 1.6, B, 0, R * 0.55);
+      break;
+    default:                                         // a gable: a roof over a doorway
+      for (const s of [-1, 1]) {
+        const g = new THREE.BoxGeometry(R * 1.35, B, B);
+        g.rotateZ(-s * 0.62);
+        g.translate(s * R * 0.5, R * 0.30, 0);
+        p.push(fxColour(g, 1, 1, 1));
+      }
+      markBar(p, R * 1.9, B, 0, -R * 0.42);
+      markBar(p, B, R * 0.75, 0, -R * 0.80);
+      break;
+  }
+  return fxMerge(p);
+}
+
 /**
  * A destination weapon is physically waiting beside the completion fixture BEFORE it is
  * granted: an open black transit case, with the gun reduced to the silhouette that matters
@@ -675,6 +798,7 @@ export class Places {
     this._bellClockSeen = false;
     this._t = 0;
     this._nodeList = [];          // flat: iterating a Map allocates an iterator per frame
+    this._gateAny = false;        // ROUND 19: does any landmark carry a swinging gate leaf?
     this._flickers = [];          // body glows that breathe (the dying headlight)
     this._embers = [];            // resident campfire glows, breathed in present()
     this._campfires = [];         // every authored campfire {i, x, z, ...}, for proximity
@@ -1024,6 +1148,7 @@ export class Places {
       this.nodes.set(d.id, {
         def: d, node, yaw: 0, padY: 0,
         solid: null, glow: null, prize: null, built: false,
+        mark: null,                // ROUND 19: the shaped far read (fixtureGlyph)
         moving: null,              // [{ mesh, role, rate }]
         glowLevel: d.startClaimed ? 1 : 0,
         proxy: false,
@@ -1116,7 +1241,13 @@ export class Places {
             : mv.role === 'wheel' ? WHEEL_RATE : (mv.rate || 0);
         // prev/curr, because these four ARE the moving things in the county: the mesh's
         // rotation is written only in present(alpha), never in step().
-        rec.moving.push({ mesh, role: mv.role, rate, glow: isGlow, prev: 0, curr: 0 });
+        // ROUND 19: a gate leaf carries the angle it swings TO, and starts wherever the
+        // save already has it — a gate that was paid for last session is open on boot and
+        // must not swing again the first time you look at it.
+        const open = typeof mv.open === 'number' ? mv.open : 0;
+        const shut0 = open && this.gateIsOpen(d.id) ? open : 0;
+        rec.moving.push({ mesh, role: mv.role, rate, glow: isGlow, open, prev: shut0, curr: shut0 });
+        if (open) { mesh.rotation.y = shut0; this._gateAny = true; }
       }
     }
 
@@ -1228,6 +1359,24 @@ export class Places {
     const gmv = { mesh: glint, role: 'glint', rate: 0, glow: true, prev: 0, curr: 0 };
     rec.moving.push(gmv);
     fx.glint = gmv;
+
+    // ROUND 19: THE FAR MARK. See fixtureGlyph. Its own mesh on the same shared additive
+    // material (a clone shares the program), billboarded to the camera in present() so a
+    // sign is a sign from whichever road you come in on, and faded in only past MARK_NEAR.
+    const markGeo = fixtureGlyph(d.kind);
+    if (markGeo) {
+      const mm = this.matGlow.clone();
+      mm.color.set(GLOW.cold);
+      mm.opacity = 0;
+      const mark = new THREE.Mesh(markGeo, mm);
+      mark.name = 'land-mark-' + d.id;
+      mark.position.set(lx, ly + gy + MARK_UP, lz);
+      mark.frustumCulled = false;
+      mark.renderOrder = 4;
+      mark.visible = false;
+      rec.node.add(mark);
+      rec.mark = mark;
+    }
     // The halo fade record: the bead's vertices are first (fixtureGlint merges bead, halo).
     const col = geo.attributes.color;
     if (col) {
@@ -1278,6 +1427,11 @@ export class Places {
           // and climbable by the mantle. Dropping these silently is how a whole feature ships
           // inert; wilds.js passes them and sites.js could not.
           breakable: shape.breakable, climbable: shape.climbable,
+          // ROUND 19: `authored` is documented in collision.js's shape contract and was
+          // dropped here, so a builder could not opt a legitimately long wall out of the
+          // oversize reject even in principle. A field that is documented and silently
+          // discarded is the next silent reject.
+          authored: shape.authored,
           x: ox + lx * cy + lz * sy,
           z: oz - lx * sy + lz * cy,
           y0: shape.y0, y1: shape.y1,
@@ -1430,6 +1584,56 @@ export class Places {
    * reads api.gateOpen(), so a rebuilt body simply comes back without its leaves and without
    * its gate collider.
    */
+  /** Has this site's toll been paid? Read by _buildLandmark so a gate opened last session
+   *  is already standing open on boot instead of swinging the first time you look at it. */
+  gateIsOpen(id) {
+    const prog = this._sys('progress');
+    return !!(prog && typeof prog.flag === 'function' && prog.flag('gate:' + id));
+  }
+
+  /**
+   * ROUND 19. ALEX: "There needs to be an animation when it opens."
+   *
+   * The toll was paid. Start the swing, and rebuild the body — which is what drops the gate
+   * COLLIDER — only once the leaves have actually moved out of the way. Called by
+   * search.js's _pay in place of the bare rebuildSite it used to call: a door that vanished
+   * on the frame you paid was the whole complaint.
+   *
+   * A site with no gate leaves (every place but the Holdfast today) has nothing to swing, so
+   * it rebuilds at once and behaves exactly as it did.
+   */
+  openGate(id) {
+    const rec = this.nodes.get(id);
+    const leaves = rec && rec.moving ? rec.moving.some((mv) => mv.role === 'gateLeaf') : false;
+    if (!leaves) { this.rebuildSite(id); return false; }
+    if (rec.gateSwing) return true;                 // already running; never restart it
+    rec.gateSwing = true;
+    rec.gateK = rec.gateK || 0;
+    rec.gateCleared = false;
+    const audio = this._sys('audio');
+    if (audio && typeof audio.dread === 'function') {
+      // The bar coming off, then the leaves. `door` is the county's own heavy-timber cue.
+      audio.dread('door', rec.def.x, rec.padY + 1.6, rec.def.z, 0.95);
+    }
+    this.ctx.bus.emit('gate:swinging', { id });
+    return true;
+  }
+
+  /** Advance any gate that is swinging. Called once per fixed step from step(). */
+  _stepGates(dt) {
+    if (!this._gateAny) return;
+    for (const rec of this._nodeList) {
+      if (!rec.gateSwing) continue;
+      rec.gateK = Math.min(1, (rec.gateK || 0) + dt / GATE_SWING_S);
+      // The collider goes when the opening is actually clear, not when the money moved.
+      if (!rec.gateCleared && rec.gateK >= GATE_CLEAR_K) {
+        rec.gateCleared = true;
+        this.rebuildSite(rec.def.id);
+      }
+      if (rec.gateK >= 1) rec.gateSwing = false;
+    }
+  }
+
   rebuildSite(id) {
     const d = MAJOR_BY_ID[id];
     if (!d) return false;
@@ -1439,6 +1643,7 @@ export class Places {
       rec.node.traverse(node => { if (node.geometry) node.geometry.dispose();
         if (node.material && node.material !== this.matLand && node.material !== this.matGlow && node.material !== this.matPeople) node.material.dispose(); });
       rec.node.clear(); rec.built = false; rec.fixture = null; rec.prize = null; rec.moving = []; rec.ignite = null;
+      rec.mark = null;
       rec.rippleMin = Infinity; rec.rippleMax = 0;
       this._buildLandmark(d);
     }
@@ -1519,6 +1724,18 @@ export class Places {
       glowMesh.visible = this.claimed.has(d.id) || !!d.lit;
       g.add(glowMesh);
     }
+    // ROUND 19: the fires and lamps that belong to whoever lives here. Never switched by the
+    // claim — see the note in _dress. Same material program as the one above (a clone shares
+    // it), so this is one extra draw call at the sites that use it and no extra compile.
+    if (out.glowLive) {
+      const liveMesh = new THREE.Mesh(out.glowLive, this.matGlow.clone());
+      liveMesh.name = 'body-glow-live-' + d.id;
+      liveMesh.material.color.set(out.glowLiveColour || GLOW.ember);
+      liveMesh.renderOrder = 4;
+      liveMesh.material.opacity = 1;
+      liveMesh.visible = true;
+      g.add(liveMesh);
+    }
     this.group.add(g);
 
     const body = { id: d.id, group: g, glow: glowMesh, kind: 'major', ignite: null };
@@ -1545,6 +1762,12 @@ export class Places {
    */
   _dress(d, rec, api, out) {
     let solid = out.solid, glow = out.glow, people = out.people;
+    // ROUND 19: the SECOND glow channel. `glow` is "your lamps", switched on by the claim
+    // (see _applyState's windows loop); `glowLive` is somebody else's fire and burns from
+    // the moment the chunk streams in. A market lantern, a cooking fire and a lit window in
+    // a house with a person standing in its doorway are not things the player switched on,
+    // and gating them on the claim is what left the Holdfast's town cold.
+    let live = out.glowLive || null;
     for (let i = 0; i < DRESS_CHAIN.length; i++) {
       const map = DRESS_CHAIN[i];
       if (!map) continue;
@@ -1556,6 +1779,7 @@ export class Places {
       if (ex.people) people = people ? mergeGeometries([people, ex.people], false) : ex.people;
       if (ex.solid) solid = solid ? mergeGeometries([solid, ex.solid], false) : ex.solid;
       if (ex.glow) glow = glow ? mergeGeometries([glow, ex.glow], false) : ex.glow;
+      if (ex.glowLive) live = live ? mergeGeometries([live, ex.glowLive], false) : ex.glowLive;
       if (ex.glowColour && !out.glowColour) out.glowColour = ex.glowColour;
       if (ex.cast) this._recordCast('major:' + d.id, d.x, d.z, rec.yaw, ex.cast, rec.padY);
     }
@@ -1575,6 +1799,7 @@ export class Places {
     out.people = people;
     if (solid !== out.solid) { out.solid = solid; if (solid) solid.computeBoundingSphere(); }
     if (glow !== out.glow) { out.glow = glow; if (glow) glow.computeBoundingSphere(); }
+    if (live !== out.glowLive) { out.glowLive = live; if (live) live.computeBoundingSphere(); }
     return out;
   }
 
@@ -1690,7 +1915,12 @@ export class Places {
         const lx = +shape.x || 0, lz = +shape.z || 0;
         const w = {
           kind: shape.kind, tag: shape.tag, standable: shape.standable,
-          breakable: shape.breakable, climbable: shape.climbable,   // ROUND 7, lane F 1a
+          breakable: shape.breakable, climbable: shape.climbable,
+          // ROUND 19: `authored` is documented in collision.js's shape contract and was
+          // dropped here, so a builder could not opt a legitimately long wall out of the
+          // oversize reject even in principle. A field that is documented and silently
+          // discarded is the next silent reject.
+          authored: shape.authored,   // ROUND 7, lane F 1a
           x: m.x + lx * cy + lz * sy,
           z: m.z - lx * sy + lz * cy,
           y0: shape.y0, y1: shape.y1,
@@ -2328,6 +2558,7 @@ export class Places {
     // The props below keep turning through boot on purpose: they want to be warm.
     if (this.ctx && this.ctx.ready) this._proximity(dt);
     if (this.ctx && this.ctx.ready) this._castStep();
+    this._stepGates(dt);   // ROUND 19: the Holdfast's leaves, if they are moving
 
     // --- the things that turn --------------------------------------------
     for (let n = 0; n < this._nodeList.length; n++) {
@@ -2352,6 +2583,16 @@ export class Places {
           // Claiming it does not start the beam; it brings the beam up to full.
           else if (mv.role === 'beam') advanceAngle(mv, mv.rate * dt);
           else if (mv.role === 'brazier' || mv.role === 'glint') { /* no rotation: a lamp */ }
+          // ROUND 19. ALEX: "There needs to be an animation when it opens." rec.gateK runs
+          // 0..1 over GATE_SWING_S from openGate(); the leaf's own `open` is the angle it
+          // ends at, so the two halves swing apart from the same scalar. Eased at both ends
+          // — a gate this heavy does not start or stop instantly.
+          else if (mv.role === 'gateLeaf') {
+            const k = rec.gateK === undefined ? 0 : rec.gateK;
+            const e = k * k * (3 - 2 * k);
+            mv.prev = mv.curr;
+            mv.curr = mv.open * e;
+          }
           else if (mv.role === 'lever') {
             // The throw tracks the hand while the hold runs, holds at 1 once the place is
             // claimed, and falls back at LEVER_SNAP when the hand lets go. prev/curr, so a
@@ -3133,6 +3374,17 @@ export class Places {
       const tintGlow = lerp(1, TINT_GLOW_FLOOR, t);
       const gk = tintGlow * rec.glowLevel;
       const claimedHere = this.claimed.has(d.id);
+      // ROUND 19: the far mark. Nothing inside MARK_NEAR, full past MARK_FAR, and it turns
+      // to face the camera about Y so the glyph is read flat from every approach. It sits on
+      // the landmark node, so the proxy transform holds its screen size past PROXY_R for
+      // free — which is the whole reason the old bead read as a fixed pale square.
+      if (rec.mark) {
+        const mo = smoothstep(MARK_NEAR, MARK_FAR, dist) * (claimedHere ? 0.80 : 0.62);
+        rec.mark.visible = mo > 0.004;
+        rec.mark.material.opacity = mo;
+        rec.mark.material.depthTest = true;
+        if (rec.mark.visible) rec.mark.rotation.y = Math.atan2(cx - d.x, cz - d.z) - rec.yaw;
+      }
       if (rec.prize) rec.prize.visible = !claimedHere;
       if (rec.glow) {
         let o = gk;
@@ -3189,7 +3441,7 @@ export class Places {
         // face-on), the beam sweeps about Y, the bell swings about Z and the lever throws
         // about its hinge, X. A brazier and a glint do not turn at all.
         const ang = mv.prev + (mv.curr - mv.prev) * a;
-        if (mv.role === 'beam') mv.mesh.rotation.y = ang;
+        if (mv.role === 'beam' || mv.role === 'gateLeaf') mv.mesh.rotation.y = ang;
         else if (mv.role === 'lever') mv.mesh.rotation.x = ang;
         else if (mv.role !== 'brazier' && mv.role !== 'glint') mv.mesh.rotation.z = ang;
       }

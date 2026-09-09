@@ -217,7 +217,29 @@ export const SPECIES = {
     phases: ALL_PHASES,
     hp: 44, dmg: 34, radius: 0.24, height: 1.70, mass: 38,
     childHeight: 0.90, childChance: 0.5,
-    speed: 0.42,
+    // ROUND 19. ALEX: "I saw one of the weird leaning alien enemies. Again it did not chase
+    // me or attack."
+    //
+    // 0.42 m/s is STILL's number and STILL is a game about corridors on one floor of one
+    // house, where 0.42 m/s across six metres of hallway is terrifying. This county is 8 km
+    // across and the player walks at 4.35 and sprints at 6.60, so a Pale in the open was
+    // moving at a tenth of walking pace: you could look away for five whole seconds and it
+    // had gained two metres. It is not that it did not chase him — it is that at that speed
+    // nothing it does is legible as chasing.
+    //
+    // 3.6 m/s is the rule doing what the rule is FOR: look away and it has closed real
+    // ground, look at it and it is stopped dead. It is still slower than a walk, so you can
+    // always leave; what you cannot do any more is ignore it. The freeze is untouched — that
+    // is the whole species and it is the half that already worked.
+    speed: 3.60,
+    // ...and it wakes at the range it can be SEEN at, not at the range of its own torch
+    // rule. _noticeStaged used to fall back to beamRange (16 m) for a dread body with no
+    // leash, so a staged Pale beside the road held its pose until you were almost touching
+    // it and then crept. 48 m is about where its porcelain resolves against the trees.
+    leash: 48,
+    // How far from where the scene put it it will follow you before it turns for home. It
+    // exists only because the speed above makes "follow" mean something; see _stepPale.
+    stalk: 150,
     burst: 1e9, pause: 0,
     engage: [0, 0.85], standoff: 0,
     telegraph: 0.340, attack: 0.240, strikeAt: 0.120, recover: 1.400,
@@ -410,7 +432,14 @@ export const POOL = Object.freeze({
   hound: 18, pallbearer: 12, hunter: 3, poacher: 12, pale: 8, standing: 8,
   // ROUND 15. Six Wardens, which is the whole garrison of the one building that has them.
   // A slot is a body record and a merged mesh at boot — no light, no material, no program.
-  warden: 6, resident: 28, cashier: 2, sentry: 9, marshal: 3, marrow:4,
+  // ROUND 19: 28 -> 52. The Holdfast's crowd OUTSIDE the gate already stands nineteen
+  // residents (holdfast-dress.js: a queue of 7, three knots of 8, four stragglers), and the
+  // town inside the walls that round 19 built adds fifteen more — one at each of eight
+  // stalls, four in doorways, three at the yard fire. At 28 the town would have silently
+  // placed nobody, which is exactly the failure round 7 measured at the second FETCH
+  // graveyard. A slot is a body record and a merged mesh at boot: no light, no material and
+  // no program.
+  warden: 6, resident: 52, cashier: 2, sentry: 9, marshal: 3, marrow:4,
   // ROUND 18. Six moths, because a swarm is not what was asked for — "a freaky horror moth"
   // is one thing on one trunk. Four spiders: interior-horror places at most one per room and
   // the county has thirteen rooms, but only the ones you are inside are ever alive at once.

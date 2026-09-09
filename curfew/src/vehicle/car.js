@@ -101,13 +101,25 @@ const ENTER_LOOK_LAMBDA = 9.0;
 // is the ~200 degrees of rim MOSSWAY's 5.6 * 0.66 drew, and at 23 m/s the rim moves ~40.
 const RIM_RATIO = 11.0;
 const SAMPLE_FWD = 2.2, SAMPLE_SIDE = 1.25;   // [mossway game.js:1855-1856]
+// ROUND 19. ALEX: "Car gets too bumpy, especially off road."
+// OFF ROAD the tilt is sampled on a WIDER base. The county's heightfield has real detail at
+// a 2-3 m scale, so a 2.2 m front-to-back base was picking up single ripples as pitch; 3.6 m
+// front to back and 2.0 m across is a physical low-pass and it is also honest — a car with a
+// 2.55 m wheelbase and long overhangs really does bridge more ground than its axles.
+const SAMPLE_FWD_OFF = 3.6, SAMPLE_SIDE_OFF = 2.0;
 const TILT_LAMBDA = 5.2;          // [mossway game.js:1865-1866]
+const TILT_LAMBDA_OFF = 3.4;      // ROUND 19: slower off road, so a rut is a lean and not a jolt
 const BOB_LAMBDA = 8.0;           // [mossway game.js:1873]
 // ROUND 18, the ride. A critically-ish damped spring the BODY sits on, above the chassis
 // y that everything physical uses. K is the stiffness (rad/s^2 per metre), C the damping,
 // and DRIVE how hard a change in ground height pulls on it. Tuned so a 0.3 m kerb at
 // 12 m/s compresses about 5 cm and is back inside 0.4 s with one small overshoot.
-const SUSP_K = 150.0, SUSP_C = 17.0, SUSP_DRIVE = 0.85;
+// ROUND 19: damping up from 17 and the drive down from 0.85. At K 150 the critical damping
+// is 2*sqrt(150) = 24.5, so 17 was UNDER-damped and every ripple rang; 26 is just past
+// critical and a kerb now compresses and returns without a second bounce. The drive halves
+// because with the bob cut back this spring is what you feel, and it was tuned against a
+// ride that already had a third of a metre of sine in it.
+const SUSP_K = 150.0, SUSP_C = 26.0, SUSP_DRIVE = 0.45;
 const GROUND_LAMBDA = 12.0;       // [peachful vehicle.js:99] damp to ground, not snap
 const HIT_COOLDOWN = 0.45;        // [mossway game.js:1809]
 
@@ -307,6 +319,9 @@ const RESPAWN_CAR_KEEP = 60;      // m. A car closer than this to where you come
 // hub for the first seconds in the seat until the horn has been used once this session.
 // Alex: "maybe looking at the horn in the car lets you see how to use it the same way."
 const HORN_TEACH_S = 6.0;
+// How far the camera must be nosed DOWN before a dashboard glyph will answer. See
+// _dashboardPrompt: the cone alone is satisfied by a level camera on a straight road.
+const DASH_LOOK_DOWN = 0.22;
 const _promptP = { kind: 'use', x: 0, y: 0, z: 0, k: 0, label: 'E' };
 const _hubV = new THREE.Vector3();
 
@@ -428,6 +443,7 @@ export class Car {
     this._freshParked = false;
     this.beacon = false;
     this._seatS = 0;              // ROUND 13: seconds spent in the seat this session
+    this.radioTunes = 0;          // ROUND 19: T presses this session; the T glyph stops after one
     this.hotwired = false;  // reset by every spawn: the first entry is always a hotwire
     this.engineOn = false;
     this.headlightsOn = false;
@@ -1333,8 +1349,25 @@ export class Car {
       // ROUND 13: H at the wheel hub, for the first seconds in the seat, until the horn has
       // been used once. The hub rides the car body, so the glyph follows the wheel.
       this._seatS += dt;
-      this._dashboardPrompt(this.body?.steer,'H','HONK');
-      this._dashboardPrompt(this.body?.radio,'T','TUNE RADIO');
+      // ROUND 19. ALEX: "it highlights that h for horn and t for radio too much. I don't
+      // always want to see that popup when I'm looking forward."
+      //
+      // He is right and the code never did what the comment above it says. HORN_TEACH_S has
+      // existed since round 13 and NOTHING READ IT: both lines ran on every driving step for
+      // the whole life of the session, gated only by a 15-degree cone at the hub — and the
+      // wheel hub sits 0.6 m ahead of and 0.30 m below the eye, which is inside 15 degrees of
+      // straight ahead the moment you level the camera on a road. So looking forward WAS
+      // looking at the horn.
+      //
+      // Two gates now, and they are the ones the note always claimed: the first
+      // HORN_TEACH_S seconds of a seat, and only until the thing has been used once this
+      // session. Plus a real look-down test — the node must be at least LOOK_DOWN below the
+      // eye line — so the glyph answers a deliberate glance at the dash and never a glance
+      // at the road.
+      if (this._seatS < HORN_TEACH_S) {
+        if (this.hornCount === 0) this._dashboardPrompt(this.body?.steer, 'H', 'HONK');
+        if (this.radioTunes === 0) this._dashboardPrompt(this.body?.radio, 'T', 'TUNE RADIO');
+      }
     } else {
       this.hornT = Math.max(0, this.hornT - dt);
       this.hornHeld = false;
@@ -1948,14 +1981,17 @@ export class Car {
   _tilt(dt, onRoad) {
     const terr = this._terrain;
     if (!terr) return;
+    const sf = onRoad ? SAMPLE_FWD : SAMPLE_FWD_OFF;
+    const ss = onRoad ? SAMPLE_SIDE : SAMPLE_SIDE_OFF;
+    const lam = onRoad ? TILT_LAMBDA : TILT_LAMBDA_OFF;
     const fx = -Math.sin(this.heading), fz = -Math.cos(this.heading);
     const rx = Math.cos(this.heading), rz = -Math.sin(this.heading);
-    const hf = terr.heightAt(this.x + fx * SAMPLE_FWD, this.z + fz * SAMPLE_FWD);
-    const hb = terr.heightAt(this.x - fx * SAMPLE_FWD, this.z - fz * SAMPLE_FWD);
-    const hr = terr.heightAt(this.x + rx * SAMPLE_SIDE, this.z + rz * SAMPLE_SIDE);
-    const hl = terr.heightAt(this.x - rx * SAMPLE_SIDE, this.z - rz * SAMPLE_SIDE);
+    const hf = terr.heightAt(this.x + fx * sf, this.z + fz * sf);
+    const hb = terr.heightAt(this.x - fx * sf, this.z - fz * sf);
+    const hr = terr.heightAt(this.x + rx * ss, this.z + rz * ss);
+    const hl = terr.heightAt(this.x - rx * ss, this.z - rz * ss);
     // nose-up on a climb: forward is -Z, so a rising front is a POSITIVE x rotation.
-    const wantPitch = Math.atan2(hf - hb, SAMPLE_FWD * 2) * 0.78;
+    const wantPitch = Math.atan2(hf - hb, sf * 2) * 0.78;
     // roll is about the car's local Z (which points BACKWARD), so a positive roll raises
     // the car's local +X — its RIGHT. Higher ground on the right therefore wants a
     // POSITIVE roll, and a left turn wants a NEGATIVE one, because a body leans OUT of a
@@ -1965,12 +2001,18 @@ export class Car {
     // degrees at 23 m/s now (CFG.car.turn), and 0.023 is what MOSSWAY's 0.66 * 0.035
     // reached at full lock, so the body leans exactly as far as it did.
     const steerN = this.lockNow > 0 ? clamp(this.steer / this.lockNow, -1, 1) : 0;
-    const wantRoll = Math.atan2(hr - hl, SAMPLE_SIDE * 2) * 0.72
+    const wantRoll = Math.atan2(hr - hl, ss * 2) * 0.72
       - steerN * Math.min(Math.abs(this.speed) / K.onRoad, 1) * ROLL_LEAN;
-    this.pitch = damp(this.pitch, clamp(wantPitch, -K.pitchClamp, K.pitchClamp), TILT_LAMBDA, dt);
-    this.roll = damp(this.roll, clamp(wantRoll, -K.rollClamp, K.rollClamp), TILT_LAMBDA, dt);
+    this.pitch = damp(this.pitch, clamp(wantPitch, -K.pitchClamp, K.pitchClamp), lam, dt);
+    this.roll = damp(this.roll, clamp(wantRoll, -K.rollClamp, K.rollClamp), lam, dt);
 
-    const rough = onRoad ? 0.010 : 0.032;   // [mossway game.js:1871]
+    // THE BOB, and it was the loudest half of "too bumpy". MOSSWAY's 0.010 / 0.032 are
+    // multiplied by the speed, so off road at 12 m/s this was a 0.38 m sine wave under the
+    // seat — a third of a metre, at 3.4 Hz, for ever, on top of the pitch, the roll and the
+    // suspension spring. It is not a bump; it is a boat. A third of MOSSWAY's number leaves
+    // a rough verge audible in the view (0.13 m off road at full speed) without it being the
+    // thing you notice about driving.
+    const rough = onRoad ? 0.0034 : 0.0105;
     const targetBob = Math.sin(this.travel * (onRoad ? 1.35 : 1.8)) * rough
       * Math.min(Math.abs(this.speed), 14);
     this.bob = damp(this.bob, targetBob, BOB_LAMBDA, dt);
@@ -2650,6 +2692,7 @@ export class Car {
     if (bed && bed.radio) {
       const i = bed.radio.tune(1);
       this.radioStation = i;
+      this.radioTunes++;
       if (this.body && this.body.setRadioDial) this.body.setRadioDial(bed.radio.dialT());
       this._emit('car:radio', { station: i, id: bed.radio.station().id });
     }
@@ -2660,6 +2703,11 @@ export class Car {
     node.getWorldPosition(_hubV);
     const cam=this.ctx.camera,dx=_hubV.x-cam.position.x,dy=_hubV.y-cam.position.y,dz=_hubV.z-cam.position.z;
     const d=Math.hypot(dx,dy,dz)||1;cam.getWorldDirection(_dir);
+    // The camera must actually be pointed DOWN at the thing, not merely near it in angle.
+    // A dot alone is not enough: the hub is barely below the eye, so at a level camera the
+    // cone caught it. -0.22 of the unit vector is about 13 degrees of nose-down, which is
+    // "he looked at the dashboard" and is nothing you do while watching the road.
+    if(_dir.y>-DASH_LOOK_DOWN)return;
     if((dx*_dir.x+dy*_dir.y+dz*_dir.z)/d<.965)return;
     this.ctx.bus.emit('prompt',{kind:'dashboard',label,detail,x:_hubV.x,y:_hubV.y,z:_hubV.z,k:0,rank:5});
   }
@@ -2824,14 +2872,21 @@ export class Car {
   }
 
   /**
-   * A short two-tone horn through audio.js's PUBLIC pooled one-shot door. `noise` is an AI
-   * event, not an audible channel, and audio.js does not subscribe to it; that made a
-   * mechanically successful H press sound exactly like a failed one.
+   * The horn, through audio.js's PUBLIC pooled one-shot door. `noise` is an AI event, not
+   * an audible channel, and audio.js does not subscribe to it; that made a mechanically
+   * successful H press sound exactly like a failed one.
    *
-   * We pitch the existing clean `dmg_ring0` bake down from 3150 Hz to 370 / 466 Hz. At that
-   * pitch, on the world bus, it no longer resembles the dry 3.15 kHz damage cue; the close
-   * interval is the unmistakable old-car horn. More importantly, car.js creates NO raw
-   * AudioNodes: voice limits, scheduling, release, mix law and disposal remain audio.js's.
+   * ROUND 19. ALEX: "Fix horn sound. that does not sound heavy like a horn right now."
+   * It was two copies of the clean `dmg_ring0` bake — a single damped SINE at 3150 Hz —
+   * pitched down to 370/466. A sine has no harmonics, so it was two soft pips that died in
+   * a third of a second. audio.js `_bakeHorn` now bakes the real thing: two saturated reed
+   * stacks a major third apart at 245/309 Hz, a 1.5 kHz formant, a low shelf for weight and
+   * a flat 0.42 s middle. One buffer, played once — the two tones are IN it.
+   *
+   * The old pitched-ring path is kept as the fallback for a save loaded against an older
+   * bake set, so a missing `car_horn` is a duller horn and never a silent one. car.js
+   * creates NO raw AudioNodes either way: voice limits, scheduling, release, mix law and
+   * disposal remain audio.js's.
    */
   _soundHorn() {
     const a = this._audio;
@@ -2841,24 +2896,37 @@ export class Car {
     // noise still fires but no sound is booked into a clock that is not advancing.
     if (!a || a.enabled !== true || !a.baked || a.silent || !ac || ac.state !== 'running'
         || typeof a.spec !== 'function' || typeof a.play !== 'function'
-        || typeof a.has !== 'function' || !a.has('dmg_ring0')) return false;
+        || typeof a.has !== 'function') return false;
 
     let voices = 0;
-    for (let n = 0; n < 2; n++) {
-      const rate = (n === 0 ? 370 : 466) / 3150;
+    if (a.has('car_horn')) {
       const s = a.spec();
       s.x = null;                // the driver hears their own horn centred in the cabin
-      s.gain = n === 0 ? 0.15 : 0.12;
-      s.rate = rate;
+      s.gain = 0.34;
       s.bus = 'world';
-      s.send = 0.08;
+      s.send = 0.10;
       s.air = false; s.occl = false;
-      s.lpHz = 1800;
-      s.filterHz = 620; s.toneDb = 2.0;
-      s.offset = 0.030;
-      s.dur = rate * 0.31;       // playBuf divides by rate: exactly 0.31 s at either pitch
+      s.lpHz = 0;                // it is allowed its own top end: that is where a horn cuts
+      s.filterHz = 1500; s.toneDb = 1.5;
       s.priority = 1;
-      if (a.play('dmg_ring0', s)) voices++;
+      if (a.play('car_horn', s)) voices++;
+    } else if (a.has('dmg_ring0')) {
+      for (let n = 0; n < 2; n++) {
+        const rate = (n === 0 ? 370 : 466) / 3150;
+        const s = a.spec();
+        s.x = null;
+        s.gain = n === 0 ? 0.15 : 0.12;
+        s.rate = rate;
+        s.bus = 'world';
+        s.send = 0.08;
+        s.air = false; s.occl = false;
+        s.lpHz = 1800;
+        s.filterHz = 620; s.toneDb = 2.0;
+        s.offset = 0.030;
+        s.dur = rate * 0.31;
+        s.priority = 1;
+        if (a.play('dmg_ring0', s)) voices++;
+      }
     }
     if (voices > 0) this.hornSoundCount++;
     return voices > 0;
@@ -2978,7 +3046,14 @@ export class Car {
     // ROUND 18: the condition gauge on the binnacle. Alex asked for the breakdown meter to
     // be "on the cars dashboard and not on the hud", so this is the only place the number
     // is shown and the HUD line that used to print it is gone (ui/readouts.js).
-    if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wear));
+    if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wear), (this.ctx.time && this.ctx.time.t) || 0);
+    // ROUND 19: the glass. From the seat it is glass; from outside it is a haze. Driven
+    // here, not on the door event, so a reload, a respawn or a teleport into the seat can
+    // never leave the wash on. See carbody.js setCabinView.
+    if (this.body.setCabinView) {
+      this.body.setCabinView(this.mode === 'driving' || this.mode === 'entering'
+        || this.mode === 'exiting');
+    }
     // No updateMatrixWorld here: the renderer walks the scene once per frame and nothing
     // in this file reads the car's world matrix. Forcing the subtree would be nine
     // redundant compositions every frame for a prop that is one object.

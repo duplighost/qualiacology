@@ -195,6 +195,25 @@ const SPACE_CLIMB_FAN = 0.20;  // lateral component before normalising: atan(0.2
 // joins while the same Space intent is still alive. Standing/walking and queued chains do not
 // need the delay because they are not sweeping several metres of frontage during take-off.
 const SPACE_CLIMB_FAN_DELAY_S = 0.12;
+/* ------------------------------------------------------- THE SCALE, ROUND 19 --
+ * Alex asked for a lot more walls to answer the held-Space climb, and for the two ways it
+ * currently goes wrong to stop: a face you cannot reach past the clutter in front of it, and
+ * a body left hanging on a face it can never get up. See _stepScale.
+ *   PROBE_Y   three heights, so a low wall behind a bench and a parapet you are level with
+ *             both answer, not just the one at chest height.
+ *   REACH     handed to collision.climbFace, which pierces up to three surfaces in front of
+ *             the wall on its own.
+ *   LOSE_R    how far the body may drift from the face before the hands are off it.
+ *   STALL     seconds of a climb that is going nowhere before it lets go.
+ */
+const SCALE_PROBE_Y = [0.85, 1.45, 0.35];
+const SCALE_REACH = 1.42;
+const SCALE_LOSE_R = 1.65;
+const SCALE_STALL_S = 0.55;
+const SCALE_STALL_EPS = 0.05;   // m/s: under this the climb is not moving
+// How far ABOVE the face's own top a scale may look for a landing when the top itself will
+// not take a body — a roof deck over an eave, a wall walk over a parapet. See _stepScale.
+const SCALE_ROOF_REACH = 2.60;
 // A completed pull should flow into the next piece of geometry instead of leaving the player
 // almost stopped behind the full general-purpose refusal cooldown. Dropping a hold still uses
 // the full cooldown; these two numbers apply only to a successful landing.
@@ -360,6 +379,7 @@ export class PlayerController {
     this.climbRefuse = false;                               // let go of a lip: no climb until the feet land
     this.scaling=false;this.scaleBeat=0;this.scaleFace=null;
     this.climbCrouch = false;                               // only tuck under a genuinely low landing ceiling
+    this.scaleStall = 0;                                    // ROUND 19: seconds a held-Space climb has got nowhere
     this.floorWasCollider = false;                          // last frame's floor was a collider top (the step-up smoothing gate)
 
     // ---- the ONE stride clock. Nothing else may keep a locomotion timer.
@@ -1502,24 +1522,59 @@ export class PlayerController {
       if(this.scaling){this.scaling=false;this.scaleFace=null;this.mantleCooldown=.2;}
       return false;
     }
-    _rayO.x=this.pos.x;_rayO.y=this.pos.y+.85;_rayO.z=this.pos.z;
+    // ROUND 19: THREE PROBE HEIGHTS, not one. A single ray at chest height finds nothing
+    // when the bottom of the wall is behind a bench or the top of it is a parapet you are
+    // already level with; the shoulder and the knee catch both. collision.climbFace pierces
+    // whatever is in FRONT of the face, this covers what is above and below the ray.
     _rayD.x=_fwd.x;_rayD.y=0;_rayD.z=_fwd.z;
-    let hit=col.climbFace(_rayO,_rayD,1.02);
+    let hit=null;
+    for(let k=0;k<SCALE_PROBE_Y.length&&!hit;k++){
+      _rayO.x=this.pos.x;_rayO.y=this.pos.y+SCALE_PROBE_Y[k];_rayO.z=this.pos.z;
+      hit=col.climbFace(_rayO,_rayD,SCALE_REACH);
+    }
     if(!hit&&this.scaling&&this.scaleFace){
       _rayD.x=-this.scaleFace.nx;_rayD.z=-this.scaleFace.nz;
-      hit=col.climbFace(_rayO,_rayD,1.02);
+      for(let k=0;k<SCALE_PROBE_Y.length&&!hit;k++){
+        _rayO.x=this.pos.x;_rayO.y=this.pos.y+SCALE_PROBE_Y[k];_rayO.z=this.pos.z;
+        hit=col.climbFace(_rayO,_rayD,SCALE_REACH);
+      }
     }
     if(hit){
       this.scaleFace={x:hit.point.x,z:hit.point.z,nx:hit.normal.x,nz:hit.normal.z,top:hit.top};
-    }else if(!this.scaling||!this.scaleFace||this.scaleFace.top-this.pos.y>1.1){
-      this.scaling=false;this.scaleFace=null;return false;
+      this.scaleStall=0;
+    }else if(!this.scaling||!this.scaleFace||this.scaleFace.top-this.pos.y>1.1
+      ||Math.hypot(this.scaleFace.x-this.pos.x,this.scaleFace.z-this.pos.z)>SCALE_LOSE_R){
+      // ...and the face has to still be THERE. Without the distance test the controller
+      // kept a face it had lost as long as its top was within 1.1 m, so a body that had
+      // slid or been pushed off carried on "scaling" in mid air with nothing in front of
+      // it. That is Alex's "Climbing on nothing".
+      this.scaling=false;this.scaleFace=null;this.scaleStall=0;return false;
     }
     const face=this.scaleFace,nx=face.nx,nz=face.nz,top=face.top;
     const wx=_wish.x,wz=_wish.z;_wish.set(-nx,0,-nz);
     if(top-this.pos.y<2.05&&top>=this.pos.y-.05){
       const lx=face.x-nx*(P.RADIUS+.18),lz=face.z-nz*(P.RADIUS+.18);
-      if(this._startPull(top,lx,lz,this.pos.x,this.pos.y,this.pos.z,.44,'pull')){
-        this.scaling=false;this.scaleFace=null;_wish.set(wx,0,wz);this._stepClimb(dt,true);return true;
+      let done=this._startPull(top,lx,lz,this.pos.x,this.pos.y,this.pos.z,.44,'pull');
+      // ROUND 19: THE WALL TOP IS NOT ALWAYS THE LANDING.
+      //
+      // On a building, the top of the wall COLLIDER is inside the roof — climb the outside
+      // of the shop and the pull's landing point is in the roof void, so _startPull refuses
+      // and the climb dies one metre from the eave every time. That is most of "some
+      // climbing walls with the right thing on them you cannot even climb". The thing you
+      // are actually trying to get onto is the roof deck above the lip, and collision
+      // already knows where that is: ledgeHeight is the same probe the mantle and the fling
+      // use, and it applies the same refusals (no trunks, no unflagged round tops, real
+      // crouched headroom over the landing). So if the wall's own top will not take a body,
+      // ask what WILL, within a body's reach above it, and pull onto that instead.
+      if(!done&&col.ledgeHeight){
+        const over=col.ledgeHeight(lx,lz,this.pos.y,P.RADIUS,SCALE_ROOF_REACH,true);
+        if(over!==null&&over>top+0.02){
+          done=this._startPull(over,lx,lz,this.pos.x,this.pos.y,this.pos.z,.50,'pull');
+        }
+      }
+      if(done){
+        this.scaling=false;this.scaleFace=null;this.scaleStall=0;
+        _wish.set(wx,0,wz);this._stepClimb(dt,true);return true;
       }
     }
     _wish.set(wx,0,wz);
@@ -1528,15 +1583,53 @@ export class PlayerController {
     const x=face.x+nx*(P.RADIUS+.055)+nz*side*dt*1.8;
     const z=face.z+nz*(P.RADIUS+.055)-nx*side*dt*1.8;
     const dy=dt*(pitch<-.55?-1.65:2.7),y=Math.min(top+.02,this.pos.y+dy);
+    // ROUND 19: AND IF IT CANNOT MOVE, IT LETS GO.
+    //
+    // ALEX: "Some climbing walls with the right thing on them to climb you cannot even
+    // climb, because they're probably blocked by things on the other side or things there
+    // that interfearint or invisible. No idea. We should not be so messy."
+    //
+    // He is describing exactly this branch. When climbPathClear or fits refused — a bracing
+    // beam across the face, a roof course over the lip, a collider on the far side of a thin
+    // wall — the body simply did not move, and every line BELOW still ran: scaling true,
+    // velocity zero, grounded false. So you hung there, silently, holding Space against a
+    // wall you were never going to get up, with no way to tell that from a slow climb.
+    //
+    // Now a blocked climb is timed. SCALE_STALL_S of getting nowhere and the hands come off:
+    // scaling drops, the cooldown arms, and gravity takes you down — which reads as "that one
+    // is not climbable" in the only language a game without words has. A climb that IS
+    // moving resets the timer every step, so nothing that works is ever interrupted.
+    // MEASURED IN RISE, not in total displacement. The lateral term in `x`/`z` above drifts
+    // the body a few millimetres along the face every step whatever happens vertically, so a
+    // "did it move at all" test was satisfied by a body that was going nowhere and the stall
+    // timer never reached 0.02 s. What a stalled climb means is that it is not going UP.
+    let moved=false;
     if(col.climbPathClear(this.pos.x,this.pos.z,this.pos.y,x,z,y,P.RADIUS,P.STAND_H)
-      &&col.fits(x,z,y,P.RADIUS,P.STAND_H))this.pos.set(x,y,z);
+      &&col.fits(x,z,y,P.RADIUS,P.STAND_H)){
+      const rise=y-this.pos.y;
+      this.pos.set(x,y,z);
+      moved=Math.abs(rise)>SCALE_STALL_EPS*dt;
+    }
+    if(moved)this.scaleStall=0;
+    else{
+      this.scaleStall=(this.scaleStall||0)+dt;
+      if(this.scaleStall>=SCALE_STALL_S){
+        this.scaling=false;this.scaleFace=null;this.scaleStall=0;
+        this.mantleCooldown=.35;this.climbRefuse=true;
+        return false;
+      }
+    }
     this.scaling=true;this.vel.set(0,0,0);this.grounded=false;this.sinceGround=P.COYOTE+1;
     this.jumpBuffered=-1;this._endSlide();this.sprinting=this.tacSprinting=false;
     this.scaleBeat-=dt;
     if(this.scaleBeat<=0){
       this.scaleBeat=.48;this.eyeSpring.nudge(-.016);
       this.ctx.bus.emit('player:climb',{kind:'scale',top,x:this.pos.x,z:this.pos.z});
-      this.ctx.systems.get('audio')?.dread?.('brush',this.pos.x,this.eyeY,this.pos.z,.14);
+      // ROUND 19. ALEX: "The sound it makes is gross though. It sounds like a spider. It
+      // should sound like someone climbing." It was `brush` — the creature-in-the-undergrowth
+      // cue, a scatter of noise grains on the creatures bus with the threat flag set. See the
+      // `climb` row and _bakeDread in audio/audio.js: a hand, a boot and cloth on stone.
+      this.ctx.systems.get('audio')?.dread?.('climb',this.pos.x,this.eyeY-0.55,this.pos.z,.55);
     }
     return true;
   }

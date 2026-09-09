@@ -19,9 +19,19 @@ const GRAVE_SITES = Object.freeze([
 ]);
 const _from=new THREE.Vector3(),_dir=new THREE.Vector3(),_up=new THREE.Vector3(0,1,0);
 
+/* ROUND 19: hands on a box. See _stepHandOpen. The reach is the melee's, so anything you
+ * could swing at you can also put your hands on; the facing is looser than a body's (0.45)
+ * because a crate is a big target you stand over. */
+const BOX_REACH=2.4;
+const BOX_FACE=0.55;
+const BOX_HOLD_BASE=0.38;
+const BOX_HOLD_PER=0.22;   // per landing the stock would have needed: 0.6 s wood .. 1.3 s stone
+const BOX_LOS_SLACK=0.55;  // how much of its own body the eye-ray may end inside
+const _rayO={x:0,y:0,z:0},_rayD={x:0,y:0,z:0};
+
 export class Scavenging {
   static id='scavenging';
-  constructor(ctx){this.ctx=ctx;this.sites=[];this.root=new THREE.Group();this.root.name='buried-supplies';this.time=0;this.hold=0;this.target=null;this.release=false;}
+  constructor(ctx){this.ctx=ctx;this.sites=[];this.root=new THREE.Group();this.root.name='buried-supplies';this.time=0;this.hold=0;this.target=null;this.release=false;this.boxTarget=null;this.boxHold=0;}
   _sys(id){return this.ctx.systems.get(id);}
   init(){
     this.ctx.scene.add(this.root);this.mat=this._sys('wilds').matBody;
@@ -197,12 +207,80 @@ export class Scavenging {
       target=s;near=d;
     }
     if(target!==this.target){this.target=target;this.hold=0;}
-    if(!target)return;
+    if(!target){this._stepHandOpen(dt,p,col,_dir,use);return;}
     const dig=target.kind==='dig'&&target.stage<3;
     this.ctx.bus.emit('prompt',{kind:dig?'dig':'hold',label:dig?'V':'E',rank:3,x:target.x,y:target.y+(dig?.3:.6),z:target.z,
       k:dig?target.stage/3:this.hold/.7,detail:dig?(target.grave?'A GRAVE, RECENTLY TURNED':'DISTURBED EARTH'):'OPEN SUPPLIES',subdetail:dig?'MELEE':''});
     if(!dig&&use&&!this.release){this.hold+=dt;if(this.hold>=.7){this._take(target);this.release=true;this.hold=0;}}
     else this.hold=0;
+    this.boxTarget=null;this.boxHold=0;
+  }
+
+  /* ------------------------------------------------------ HANDS ON A BOX --
+   * ROUND 19. ALEX: "I guess all the boxes should both be able to hold e to open or smash
+   * them to open when you melee."
+   *
+   * The smash half has existed since round 13 and the shape rule since round 18. This is the
+   * other half, and it lives here because this file already owns the held-E-to-open verb,
+   * its ring prompt and its release latch — a second implementation of a hold somewhere else
+   * is how two verbs end up disagreeing about what a hold is.
+   *
+   * The target is whatever collision says is the nearest breakable in front of you
+   * (collision.nearestBreakable, which is the exact set the stock opens). The HOLD is the
+   * cost, and it is the material's: a wooden crate the stock takes in one swing is 0.6 s in
+   * the hands, a concrete block that needs four is 1.4. So the stock is still the fast way
+   * and the hands are the quiet, deliberate one — and combat.openBreakable pays out through
+   * the same path either way, so nothing about the reward can drift between them.
+   */
+  _stepHandOpen(dt,p,col,dir,use){
+    // Never from the driver's seat: E is the door there, and a crate beside a parked car
+    // must not answer the press that gets you into it.
+    if(this.ctx.shared&&this.ctx.shared.inCar){this.boxTarget=null;this.boxHold=0;return;}
+    if(!col||typeof col.nearestBreakable!=='function'){this.boxTarget=null;return;}
+    const b=col.nearestBreakable(p.pos.x,p.pos.z,BOX_REACH,p.pos.y,2.1);
+    let ok=!!b;
+    if(ok){
+      const dx=b.x-p.pos.x,dz=b.z-p.pos.z,d=Math.hypot(dx,dz)||1;
+      // Facing, and a clear line: a box behind a wall is not a box you have your hands on.
+      //
+      // THE LINE STOPS SHORT OF THE BOX. Aiming segmentClear at the box's CENTRE meant the
+      // ray had to pass through the box's own near face to get there, so every box in the
+      // county reported itself occluded and the verb never fired once. It is tested to a
+      // point just outside its footprint instead, which is the thing the test was for: a
+      // wall between you and it, not the box itself.
+      if((dx*dir.x+dz*dir.z)/d<BOX_FACE)ok=false;
+      else{
+        // IS THE BOX THE FIRST THING THE EYE REACHES? A segmentClear to the box's CENTRE
+        // cannot answer that — the ray has to pass through the box's own near face to get
+        // there, so every box in the county reported itself occluded and the verb never
+        // fired once (measured with tools/_box-probe.mjs). And a segment stopped short of
+        // the footprint fails too on a stack: at the station's crate stair the short line
+        // clips the neighbouring column. So: cast at it, and accept if nothing solid is in
+        // the way before its own surface. A wall between you and it still refuses.
+        const my=(b.y0+b.y1)*.5,ey=p.eyeY,dyy=my-ey;
+        const len=Math.hypot(dx,dyy,dz)||1;
+        _rayD.x=dx/len;_rayD.y=dyy/len;_rayD.z=dz/len;
+        _rayO.x=p.pos.x;_rayO.y=ey;_rayO.z=p.pos.z;
+        const hit=col.raycast(_rayO,_rayD,len,col.MASK?col.MASK.SOLID:1);
+        if(hit&&hit.t<len-((b.radius||0.4)+BOX_LOS_SLACK))ok=false;
+      }
+    }
+    if(!ok){this.boxTarget=null;this.boxHold=0;return;}
+    const need=Math.max(1,b.need||1),span=BOX_HOLD_BASE+BOX_HOLD_PER*need;
+    const y=(b.y0+b.y1)*.5,mid={id:b.id,x:b.x,y,z:b.z,span};
+    if(!this.boxTarget||this.boxTarget.id!==b.id){this.boxTarget=mid;this.boxHold=0;}
+    else this.boxTarget=mid;
+    this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:2,x:b.x,y:b.y1+.18,z:b.z,
+      k:this.boxHold/span,detail:'OPEN',subdetail:''});
+    if(use&&!this.release){
+      this.boxHold+=dt;
+      if(this.boxHold>=span){
+        const combat=this._sys('combat');
+        const dx=b.x-p.pos.x,dz=b.z-p.pos.z;
+        if(combat&&typeof combat.openBreakable==='function')combat.openBreakable(b.id,b.x,y,b.z,dx,dz);
+        this.release=true;this.boxHold=0;this.boxTarget=null;
+      }
+    }else this.boxHold=0;
   }
   state(){return{sites:this.sites.length,digs:this.sites.filter(s=>s.kind==='dig').length,resident:this.sites.filter(s=>s.node).map(s=>({id:s.id,kind:s.kind,x:s.x,y:s.y,z:s.z,stage:s.stage,seed:s.seed}))};}
   dispose(){this.off?.();this.root.removeFromParent();for(const s of this.sites){this._sys('collision').removeChunk(s.id);s.node?.boneGeo?.dispose();}Object.values(this.geos).forEach(g=>g.dispose());}

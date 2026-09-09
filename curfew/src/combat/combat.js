@@ -112,6 +112,9 @@ const _n = new THREE.Vector3(0, 1, 0);
 // synchronously, never retain it. `by` says whose it was.
 const _brokePayload = { x: 0, y: 0, z: 0, mass: 0, n: 1, tag: null, by: 'shot' };
 const _ammoPayload = { n: 0 };
+// ROUND 19: the synthetic hit record openBreakable() hands to _maybeBreak. Module scope so
+// the hands allocate nothing, exactly like every other hot record in this file.
+const _hand = { colliderId: -1, enemy: null, exit: false, x: 0, y: 0, z: 0, nx: 0, ny: 0, nz: 0, kind: 'wood' };
 // ROUND 15: the one channel money arrives on. progress.js is the only listener.
 const _coinPayload = { n: 0, x: 0, y: 0, z: 0, reason: 'break' };
 const _back = new THREE.Vector3();
@@ -607,6 +610,28 @@ export class Combat {
   }
 
   /**
+   * ROUND 19. ALEX: "all the boxes should both be able to hold e to open or smash them to
+   * open when you melee."
+   *
+   * THE HANDS. A held E on a breakable opens it in one go, and it pays, sounds, throws its
+   * debris and takes its geometry down through EXACTLY the path a buttstroke does — because
+   * it is the same path. Two things a swing is not: the power is 255, so one hold opens a
+   * concrete block the stock needs four landings for (world/scavenging.js charges for that
+   * in the LENGTH of the hold instead), and `by` is 'hand', which the loot roll below treats
+   * as melee and which keeps a quiet verb out of the melee kill census.
+   *
+   * Returns true if something came apart.
+   */
+  openBreakable(id, x, y, z, dx, dz) {
+    _hand.colliderId = id; _hand.enemy = null; _hand.exit = false;
+    _hand.x = x; _hand.y = y; _hand.z = z;
+    const L = Math.hypot(dx, dz) || 1;
+    _hand.nx = -dx / L; _hand.ny = 0; _hand.nz = -dz / L;
+    _hand.kind = 'wood';
+    return this._maybeBreak(_hand, dx, dz, 'hand', 255);
+  }
+
+  /**
    * ROUND 13: BREAKABLE BOXES. The landing was on a collider: ask collision whether that was
    * the hit that takes it apart (SHOT_BREAK: a crate, a box or a sandwich board on the first,
    * a pallet on the second, the wilds' cache on the first). When it is, the merged part
@@ -615,12 +640,14 @@ export class Combat {
    * `by` so the wilds pay a shot-open cache the way they pay a crushed one. A crate or a box
    * sometimes had a few rounds in it. Returns true when something came apart.
    */
-  _maybeBreak(h, dx, dz, by) {
+  _maybeBreak(h, dx, dz, by, power) {
     if (!h || h.enemy || h.exit || !(h.colliderId >= 0)) return false;
     const col = this._sys('collision');
     if (!col || typeof col.hitBreakable !== 'function') return false;
     // ROUND 18: a buttstroke counts for two landings. See collision.hitBreakable.
-    if (col.hitBreakable(h.colliderId, by === 'melee' ? 2 : 1) !== 2) return false;
+    // ROUND 19: a held-E opening passes its own power (255) — one hold, one box.
+    const pw = power !== undefined ? power : (by === 'melee' ? 2 : 1);
+    if (col.hitBreakable(h.colliderId, pw) !== 2) return false;
     const b = col.brokenResult();
     this.broke++;
     const L = this.lastBroke;
@@ -629,7 +656,7 @@ export class Combat {
 
     const car = this._sys('car');
     if (car && typeof car.takeDown === 'function') {
-      car.takeDown(b.x, b.z, b.y, b.mass, b.tag, dx, dz, by === 'melee' ? 3.5 : 6.5);
+      car.takeDown(b.x, b.z, b.y, b.mass, b.tag, dx, dz, by === 'shot' ? 6.5 : 3.5);
     }
     const fx = this._sys('fx');
     if (fx && fx.impact) {
@@ -638,7 +665,7 @@ export class Combat {
     }
     const audio = this._sys('audio');
     if (audio && typeof audio.dread === 'function') {
-      audio.dread('branch', b.x, b.y + 0.3, b.z, by === 'melee' ? 0.7 : 0.55);
+      audio.dread('branch', b.x, b.y + 0.3, b.z, by === 'hand' ? 0.42 : (by === 'melee' ? 0.7 : 0.55));
     }
     // ROUND 18. What was in it — and now EVERYTHING that comes apart has something in it,
     // not only the five tags that happened to be named. Alex: "I want to melee boxes to

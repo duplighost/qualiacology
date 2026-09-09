@@ -551,6 +551,29 @@ export function buildCarBody(rng) {
   const GAUGE_A0 = Math.PI * 1.17;      // needle angle at "wrecked"
   const GAUGE_A1 = Math.PI * -0.17;     // ...and at "as good as it gets"
 
+  /* --------------------------------------------------- THE BREAKDOWN LAMP ---
+   * ROUND 19. ALEX: "Where in the UI does it have the thing that tells you how worn/close
+   * the car is to breaking down?"
+   *
+   * The gauge above is there and it works — but MEASURED from the seat it sits 49 degrees
+   * BELOW the eye line, and the camera's vertical half-FOV is 34, so at a level camera it
+   * is not on the screen at all. You have to already know it exists to look for it. That is
+   * why he could not find it, and a meter you have to be told about is a meter that is not
+   * doing its job.
+   *
+   * So the dial keeps the NUMBER and this keeps the WARNING, the way a real car splits
+   * them. It sits on the cowl at the base of the windscreen, 27 degrees below the eye line
+   * — inside the frame at a level camera, in the bottom third where a tell-tale belongs.
+   * It is DARK until the car is genuinely getting bad, so it is never clutter: amber from
+   * WARN_AMBER of wear, red and pulsing from WARN_RED. No words, and nothing on the HUD.
+   */
+  const lampGlassGeo = new THREE.CylinderGeometry(0.021, 0.021, 0.010, 12);
+  const warnGeo = part(lampGlassGeo, [1.0, 0.62, 0.20],
+    { seed, x: S.x + 0.30, y: 1.318, z: -1.115, rx: Math.PI * 0.5 });
+  // the bezel it is set into, so it reads as a fitting and not a sticker
+  PI(new THREE.CylinderGeometry(0.030, 0.030, 0.014, 12), C_DARK,
+    { x: S.x + 0.30, y: 1.316, z: -1.112, rx: Math.PI * 0.5, rust: 0.2 });
+
   // seats: two buckets. The driver's is behind the eye, so you see its bolster edge.
   for (const sx of [S.x, 0.31]) {
     PI(box(0.56, 0.16, 0.52), C_LEATHER, { x: sx, y: 1.10, z: -0.30, rust: 0.1 });
@@ -752,8 +775,24 @@ export function buildCarBody(rng) {
   // Glass at night is not nothing: it is a dark sheet that takes a little of the sky. This
   // is still something you see through (the residents inside a car are the point), just
   // present enough that the greenhouse reads as enclosed.
+  //
+  // ROUND 19, AND IT IS "THE WEIRD FILTER". ALEX: "interior still doesn't look right when
+  // driving", and before that, "there's always a weird filter".
+  //
+  // MEASURED from the driver's eye (tools/_seat-what.mjs, ten rays through the frame): NINE
+  // of ten screen points hit `car-glass` FIRST, at 0.52-0.85 m. Round 14 raised this from
+  // 0.30 to 0.46 so the greenhouse would read as enclosed from OUTSIDE, and nobody looked
+  // from inside — where it is a 46% sheet of 0x141c22 across the entire windscreen, and
+  // where the windscreen, the far side window and the tailgate STACK, so most of the frame
+  // was two or three of them deep. That is a pale blue-grey wash over the whole world, and
+  // it is the thing he keeps calling a filter.
+  //
+  // A windscreen you are sitting behind is not a haze; it is glass, and glass you are
+  // looking through is nearly nothing. So the opacity is a function of where the camera is:
+  // CABIN_GLASS from the seat, GLASS_OUT from anywhere else. car.js flips it on the door.
+  const GLASS_OUT = 0.46, CABIN_GLASS = 0.055;
   const glassMat = new THREE.MeshBasicMaterial({
-    color: 0x141c22, transparent: true, opacity: 0.46,
+    color: 0x141c22, transparent: true, opacity: GLASS_OUT,
     depthWrite: false, side: THREE.DoubleSide, fog: true,
   });
   glassMat.name = 'curfew-car-glass';
@@ -861,6 +900,15 @@ export function buildCarBody(rng) {
   condMat.name = 'car-condition-dial';
   condMat.emissive = new THREE.Color(0xffb066);
   condMat.emissiveIntensity = 1.05;
+  // ROUND 19: the breakdown tell-tale on the cowl. A clone of the same base, so it shares
+  // cabinMat's program and compiles nothing; only its emissive colour and intensity move.
+  const warnMat = cabinMat.clone();
+  warnMat.name = 'car-breakdown-lamp';
+  warnMat.emissive = new THREE.Color(0xff7a2a);
+  warnMat.emissiveIntensity = 0.0;
+  const warnLamp = warnGeo ? new THREE.Mesh(warnGeo, warnMat) : null;
+  if (warnLamp) { warnLamp.name = 'car-breakdown-lamp'; root.add(warnLamp); }
+  const WARN_AMBER = 0.55, WARN_RED = 0.80;   // of WEAR, not of condition
   const condNeedle = new THREE.Group();
   condNeedle.position.set(GAUGE.x, GAUGE.y, GAUGE.z + 0.017);
   {
@@ -942,7 +990,7 @@ export function buildCarBody(rng) {
     doorGroup: door,
     lampDead,
     // Shared material programs; the dial and restored lamp vary their emissive uniforms.
-    materials: [bodyMat, chromeMat, glassMat, lampMat, repairedMat, tailMat, cabinMat, interiorMat, radioMat, condMat],
+    materials: [bodyMat, chromeMat, glassMat, lampMat, repairedMat, tailMat, cabinMat, interiorMat, radioMat, condMat, warnMat],
     tris: Math.round(tris),
     roofY: ROOF_Y,
     door: DOOR,
@@ -962,6 +1010,16 @@ export function buildCarBody(rng) {
     setRepaired(on){fullyRepaired=!!on;repairedMat.emissiveIntensity=fullyRepaired?lampMat.emissiveIntensity:0;},
 
     /**
+     * ROUND 19. Where the camera is. See the note over glassMat: the same sheet that makes
+     * the greenhouse read from outside is a wash over the whole world from the seat. One
+     * boolean, flipped by car.js on the door, so the glass is a haze out there and glass in
+     * here. It is one material property, so it costs nothing and recompiles nothing.
+     */
+    setCabinView(inside) {
+      glassMat.opacity = inside ? CABIN_GLASS : GLASS_OUT;
+    },
+
+    /**
      * The physical dial moves with T; looking at the set also shows its focused prompt.
      */
     setRadioDial(t) {
@@ -974,10 +1032,24 @@ export function buildCarBody(rng) {
      * zero rotation, so the angle it wants is measured off vertical: a full sweep of
      * GAUGE_A0..GAUGE_A1 rotated a quarter turn back.
      */
-    setCondition(t) {
+    setCondition(t, tSec) {
       const k = clamp01(t);
       const a = GAUGE_A0 + (GAUGE_A1 - GAUGE_A0) * k;
       condNeedle.rotation.z = a - Math.PI * 0.5;
+      // ROUND 19, the cowl tell-tale. `wear` is 1 - k. Dark until WARN_AMBER, then amber,
+      // then red and pulsing past WARN_RED — a light coming on in your lower vision, which
+      // is the whole point of it and is what the dial 49 degrees further down cannot do.
+      if (!warnLamp) return;
+      const wear = 1 - k;
+      if (wear < WARN_AMBER) { warnMat.emissiveIntensity = 0; warnLamp.visible = false; return; }
+      warnLamp.visible = true;
+      const red = wear >= WARN_RED;
+      const ramp = clamp01((wear - WARN_AMBER) / Math.max(0.001, WARN_RED - WARN_AMBER));
+      warnMat.emissive.setRGB(1.0, red ? 0.16 : 0.62 - 0.34 * ramp, red ? 0.08 : 0.20);
+      // The pulse is on the game clock car.js hands in, so it is dt-scoped like everything
+      // else and a paused frame does not advance it. 1.35 Hz: urgent, not a strobe.
+      const pulse = red ? 0.55 + 0.45 * Math.sin((tSec || 0) * 8.5) : 1;
+      warnMat.emissiveIntensity = (red ? 1.5 : 0.55 + 0.45 * ramp) * pulse;
     },
 
     /**
@@ -1016,6 +1088,7 @@ export function buildCarBody(rng) {
       lampMat.dispose(); tailMat.dispose(); cabinMat.dispose();radioDialGeo.dispose();radioMat.dispose();
       radioNeedle.traverse(o=>o.geometry?.dispose());condMat.dispose();
       condNeedle.traverse(o=>o.geometry?.dispose());
+      warnLamp?.geometry?.dispose(); warnMat.dispose();
       if (root.parent) root.parent.remove(root);
     },
   };
