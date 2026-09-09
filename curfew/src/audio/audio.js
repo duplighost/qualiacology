@@ -483,6 +483,14 @@ const DREAD = {
   // cloth and breath: a presence tell, never a footstep
   watcher:  { n: 'dr_watcher',  v: 2, gain: 0.55, bus: 'creatures', send: 0.16, occl: true,  pri: 1, prop: 0,  rlo: 0.96, rhi: 1.05, threat: true },
   brush:    { n: 'dr_brush',    v: 3, gain: 0.90, bus: 'creatures', send: 0.24, occl: true,  pri: 1, prop: 0,  rlo: 0.93, rhi: 1.09, threat: true },
+  // ROUND 19. ALEX, on the climb: "The sound it makes is gross though. It sounds like a
+  // spider. It should sound like someone climbing." It WAS a spider: the climb beat played
+  // `brush`, which is 44 noise grains scattered over half a second on the CREATURES bus with
+  // threat:true — the county's "something is moving in the undergrowth beside you" cue. Every
+  // property of that row is wrong for your own hands. This one is on the WORLD bus with the
+  // rest of the player's foley, it is not a threat and so it does not arm the cricket pacing
+  // law, and it is dry and close because it is happening at the end of your own arms.
+  climb:    { n: 'dr_climb',    v: 4, gain: 0.62, bus: 'world',     send: 0.10, occl: false, pri: 3, prop: 0,  rlo: 0.94, rhi: 1.07, threat: false, cls: CUE_WORLD },
   // fires every 0.16 s while the runner runs, so it is short, cheap, takes no
   // reserved ray and is never occlusion-tested
   runstep:  { n: 'dr_runstep',  v: 4, gain: 0.42, bus: 'creatures', send: 0.12, occl: false, pri: 3, prop: 0,  rlo: 0.92, rhi: 1.12, threat: false },
@@ -1955,6 +1963,102 @@ export class Audio {
       fadeOut(b, sr, Math.min(0.12, tau * 0.5));
       this.reg('dmg_ring' + v, [normalizeTo(b, 0.72)]);
     }
+    this._bakeHorn(sr, rn, N);
+  }
+
+  /* ------------------------------------------------------------- THE HORN -- */
+
+  /**
+   * ALEX, 2026-09-09: "Fix horn sound. that does not sound heavy like a horn right now."
+   *
+   * It did not, and the reason is in the old comment in car.js: the horn was the clean
+   * `dmg_ring0` bake — ONE damped sine at 3150 Hz — pitched down to 370/466. A damped sine
+   * has no harmonics at all, so what came out was two soft flutey pips that decayed in a
+   * third of a second. A car horn is the opposite of a sine: it is a steel diaphragm being
+   * driven by a buzzing contact, so it is nearly all harmonics, it SUSTAINS at a flat level
+   * for as long as the button is down, and the weight is in the first four partials.
+   *
+   * So this is built the way the thing is built:
+   *   - two reeds a major third apart, low (245 / 309 Hz), because "heavy" is pitch;
+   *   - sixteen partials each on a 1/n^0.8 slope, with the odd ones lifted — a clamped
+   *     diaphragm is closer to a square than to a sine;
+   *   - a few cents of drift per reed and a slow beat between them, so it is a physical
+   *     object and not an oscillator;
+   *   - hard saturation, which is what the contact breaker actually does to the drive;
+   *   - a 1.6 kHz formant peak so it CARRIES over an engine, and a shelf under 90 Hz so
+   *     the weight is felt without turning it into a foghorn;
+   *   - 18 ms to come up (a diaphragm has mass), 0.42 s flat, 90 ms to fall away.
+   *
+   * Baked at the device rate on purpose: saturation puts real content well above the
+   * half-rate Nyquist and this is 0.55 s of one buffer, about 100 kB.
+   */
+  _bakeHorn(sr, rn, N) {
+    const DUR = 0.58;
+    const b = new Float32Array(N(DUR));
+    const REEDS = [
+      { f: 245.0, amp: 1.00, drift: 0.9 },
+      { f: 309.0, amp: 0.86, drift: -1.3 },
+    ];
+    for (let ri = 0; ri < REEDS.length; ri++) {
+      const R = REEDS[ri];
+      // a couple of cents of static detune per reed, drawn once from the audio stream so
+      // the horn is the same horn every session
+      const cents = (rn() - 0.5) * 6;
+      const f0 = R.f * Math.pow(2, cents / 1200);
+      for (let n = 1; n <= 16; n++) {
+        const odd = (n & 1) === 1;
+        // 1/n^0.8, odd partials lifted 1.35x: the shape of a clamped plate, not a string
+        let a = R.amp * Math.pow(n, -0.80) * (odd ? 1.35 : 0.70);
+        if (n === 1) a *= 0.85;              // the fundamental is felt, not heard; the 2nd carries
+        const f = f0 * n;
+        if (f > sr * 0.45) break;
+        // a slow wobble in the drive, deeper on the low partials, so the tone breathes
+        const wob = R.drift * (1 + n * 0.06);
+        const w0 = 2 * Math.PI * f / sr;
+        const wv = 2 * Math.PI * 5.7 / sr;   // 5.7 Hz, under speech rate: it reads as strain
+        let ph = rn() * Math.PI * 2, vph = ri * 1.9;
+        for (let i = 0; i < b.length; i++) {
+          b[i] += Math.sin(ph) * a;
+          ph += w0 * (1 + Math.sin(vph) * wob * 0.0008);
+          vph += wv;
+        }
+      }
+    }
+    // THE CONTACT BREAKER. A horn is driven by a make-and-break, and that is where the
+    // buzz comes from. Saturating the sum is the same operation and it is what turns a
+    // stack of sines into something with teeth.
+    gainBuf(b, 0.16);
+    saturate(b, 3.4, 1.0);
+    // The trumpet. 1.5 kHz is where a car horn's energy actually sits and it is what makes
+    // one audible from the other side of a road. The dip at 3.4 k takes off the saturation
+    // fizz without touching the formant; the shelf at 300 is the WEIGHT, which is the whole
+    // of what he asked for and lives at 150-400 Hz, not in a sub.
+    biquad(b, sr, 'peak', 1500, 1.2, 6.0);
+    biquad(b, sr, 'peak', 3400, 1.6, -6.0);
+    biquad(b, sr, 'lowshelf', 300, 0.7, 4.5);
+    biquad(b, sr, 'lp', 5600, 0.7);
+    biquad(b, sr, 'hp', 105, 0.7, 0, 2);
+    // The relay closing, 14 ms before the diaphragm has anything to say.
+    {
+      const c = new Float32Array(N(0.02));
+      noiseFill(c, rn);
+      biquad(c, sr, 'bp', 2600, 1.2);
+      envAD(c, sr, 0.0003, 0.004);
+      mixInto(b, c, 0.14);
+    }
+    // 18 ms up, flat, 90 ms down. The flat middle is the whole difference between a horn
+    // and a pip: a horn holds until you take your hand off it.
+    {
+      const aN = Math.round(0.018 * sr), rN = Math.round(0.090 * sr);
+      const end = b.length;
+      for (let i = 0; i < end; i++) {
+        let e = 1;
+        if (i < aN) e = Math.pow(i / aN, 0.7);
+        else if (i > end - rN) e = (end - i) / rN;
+        b[i] *= e;
+      }
+    }
+    this.reg('car_horn', [normalizeTo(b, 0.94)]);
   }
 
   /* ---------------------------------------------------------- dread bakes -- */
@@ -2033,6 +2137,63 @@ export class Audio {
       biquad(b, sr, 'hp', 240, 0.7);
       fadeOut(b, sr, 0.14);
       reg('dr_brush' + v, [normalizeTo(b, 0.95)]);
+    }
+
+    // ---- CLIMB: A PERSON GOING UP A WALL. ROUND 19, and it replaces `brush` on the
+    //      player's own climb beat (player/controller.js _stepScale).
+    //
+    //      What a climb actually sounds like, in the order it happens: a HAND finding the
+    //      hold — a muted slap with a palm's thump under it, not a click; the BOOT scuffing
+    //      up the face for purchase, which is the only part that is a scrape and it is short
+    //      and downward; and CLOTH dragging over stone. Two of the four carry a small effort
+    //      breath, so a long climb has a rhythm and is not the same 0.48 s over and over.
+    //
+    //      Deliberately DRY (send 0.10) and band-limited under 5 kHz: this is a sound made
+    //      at arm's length by your own body, and the top octave is where `brush` got its
+    //      scuttle. Nothing here is a grain scatter.
+    for (let v = 0; v < 4; v++) {
+      const b = new Float32Array(N(0.40));
+      // (a) the hand landing on the hold. A palm is a low, damped slap.
+      {
+        const n = new Float32Array(N(0.09));
+        noiseFill(n, rn);
+        biquad(n, sr, 'bp', 1150 + v * 130, 0.9);
+        envAD(n, sr, 0.0006, 0.017);
+        mixInto(b, n, 0.62);
+      }
+      damped(b, sr, 168 + v * 11, 0.030, 0.34);      // the palm's own thump
+      damped(b, sr, 92, 0.045, 0.16);                // and the wall answering it
+      // (b) the boot, 40-70 ms later: a short scrape that dies, not a hiss that hangs.
+      {
+        const at = 0.045 + (v & 1) * 0.022;
+        const n = new Float32Array(N(0.16));
+        noiseFill(n, rn);
+        biquadSweep(n, sr, 'bp', 2600, 900, 1.1, 0.11, 1.5);
+        envAD(n, sr, 0.008, 0.048, 0.012);
+        mixInto(b, n, 0.40, Math.round(at * sr));
+      }
+      // (c) cloth over stone, under everything, the length of the beat
+      {
+        const n = new Float32Array(N(0.26));
+        noiseFill(n, rn);
+        biquad(n, sr, 'bp', 520, 0.6);
+        biquad(n, sr, 'lp', 1400, 0.7);
+        envAD(n, sr, 0.030, 0.075, 0.030);
+        mixInto(b, n, 0.30, Math.round(0.030 * sr));
+      }
+      // (d) the effort, on two of the four. A breath OUT through the nose, not a grunt:
+      //     a grunt is a character and this game's player does not have a voice.
+      if (v === 1 || v === 3) {
+        const n = new Float32Array(N(0.22));
+        noiseFill(n, rn);
+        biquadSweep(n, sr, 'bp', 470, 250, 1.7, 0.15, 1.3);
+        envAD(n, sr, 0.022, 0.070, 0.020);
+        mixInto(b, n, 0.26, Math.round(0.075 * sr));
+      }
+      biquad(b, sr, 'hp', 110, 0.7);
+      biquad(b, sr, 'lp', 5000, 0.7);
+      fadeOut(b, sr, 0.05);
+      reg('dr_climb' + v, [normalizeTo(b, 0.86)]);
     }
 
     // ---- RUNSTEP: fires every 0.16 s while something runs at you, so it is

@@ -236,6 +236,18 @@ const NON_CLIMB_TAGS = new Set([
 // county is the pylon pad at 2.3 m, and every one of those is flagged standable anyway.
 const MIN_ROUND_LEDGE = 0.95;
 
+/* ------------------------------------------------------- THE CLIMB, ROUND 19 --
+ * See climbFace(). Alex asked for ordinary walls to be climbable and for the ones that are
+ * covered by clutter to stop refusing. These are the four numbers that decide it.
+ */
+const CLIMB_REACH = 1.42;      // m from the ray origin. Was 1.02: one crate deeper.
+const CLIMB_PIERCE = 3;        // surfaces the probe may walk past before giving up
+const CLIMB_STEP = 0.06;       // m past a refused surface before the next cast
+const CLIMB_MIN_H = 0.95;      // a parapet counts; a kerb does not
+const CLIMB_MIN_HALF = 0.45;   // half-extent of a box face. Was 0.65.
+const CLIMB_MIN_ROUND = 1.20;  // a tower, not a trunk (the county's trunks top out at 0.88)
+const _climbO = { x: 0, y: 0, z: 0 };
+
 // Anything with one of these tags is scenery, not physics. Grass is here because a grass
 // card must NEVER produce a collider, and road/ribbon because a terrain-following ribbon
 // baked into one box is VANTA's giant invisible wall.
@@ -342,6 +354,13 @@ export class Collision {
     this._nearest = {
       x: 0, z: 0, radius: 0, kind: 'circle', halfX: 0, halfZ: 0, yaw: 0,
       y0: 0, y1: 0, distance: 0, id: -1,
+    };
+    // ROUND 19: nearestBreakable's own record. See the note in that method — it runs every
+    // fixed step and must never be able to rewrite a nearestTagged() result a caller is
+    // still holding across steps.
+    this._nearestBreak = {
+      x: 0, z: 0, radius: 0, kind: 'circle', halfX: 0, halfZ: 0, yaw: 0,
+      y0: 0, y1: 0, distance: 0, id: -1, tag: null, need: 0,
     };
     // ROUND 13: the shared record of the last thing hitBreakable() took apart. Reused.
     this._broken = { x: 0, y: 0, z: 0, top: 0, radius: 0, mass: 0, tag: null, id: -1, hits: 0 };
@@ -760,6 +779,49 @@ export class Collision {
     out.distance = bestD;
     out.tag = this._tag[best];
     out.id = best * 65536 + this._gen[best];
+    return out;
+  }
+
+  /**
+   * ROUND 19. ALEX: "all the boxes should both be able to hold e to open or smash them to
+   * open when you melee."
+   *
+   * The nearest live BREAKABLE inside `maxRadius`, whose band overlaps the player's own
+   * (feetY .. feetY + reachH), returned in the same shared record nearestTagged uses. It
+   * asks _breakNeed, so it is exactly the set of things the stock already opens — the tag
+   * table plus the round-18 shape rule — and a wall, a trunk, a stair or a roof is refused
+   * here for the same reasons it is refused there.
+   *
+   * `distance` is to the FOOTPRINT, not the centre, so a wide crate answers from its face.
+   */
+  nearestBreakable(x, z, maxRadius, feetY, reachH) {
+    let best = -1, bestD = Infinity;
+    const lo = Number.isFinite(feetY) ? feetY - 0.6 : -Infinity;
+    const hi = Number.isFinite(feetY) ? feetY + (reachH || 2.0) : Infinity;
+    const n = this._gather(x, z, maxRadius);
+    for (let k = 0; k < n; k++) {
+      const i = this._near[k];
+      if (!(this._flags[i] & F_BREAK)) continue;
+      if (this._y1[i] < lo || this._y0[i] > hi) continue;
+      if (!this._breakNeed(i)) continue;
+      const d = Math.hypot(x - this._x[i], z - this._z[i]) - this._r[i];
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0 || bestD > maxRadius) return null;
+    // ITS OWN RECORD, not nearestTagged's. This runs EVERY FIXED STEP (world/scavenging.js
+    // asks it what is under the player's hands), and nearestTagged's `_nearest` is a shared
+    // scratch that callers routinely hold across a step — tests/cash.mjs picks a crate, shoots
+    // it over six steps and then reads the tag back. Sharing the record turned that crate into
+    // whatever this call had last found. A second object, allocated once at construction.
+    const out = this._nearestBreak;
+    out.x = this._x[best]; out.z = this._z[best]; out.radius = this._r[best];
+    out.kind = this._kind[best] === KIND_OBB ? 'obb' : 'circle';
+    out.halfX = this._hx[best]; out.halfZ = this._hz[best]; out.yaw = this._yaw[best];
+    out.y0 = this._y0[best]; out.y1 = this._y1[best];
+    out.distance = bestD;
+    out.tag = this._tag[best];
+    out.id = best * 65536 + this._gen[best];
+    out.need = this._breakNeed(best);
     return out;
   }
 
@@ -1848,14 +1910,78 @@ export class Collision {
 
   // Line of sight between two world points at a given height. Used by AI and by the
   // torch trade. Cheap: one raycast with the SIGHT mask, no ground march.
-  /** A broad structural face the hands can hold. Reuses the ray result. */
-  climbFace(origin, direction, reach=1.05) {
-    const hit=this.raycast(origin,direction,reach,MASK.SOLID);
-    if(!hit||hit.ground||Math.abs(hit.normal.y)>.25)return null;
-    const i=Math.floor(hit.id/65536);
-    if(this._kind[i]!==KIND_OBB || (this._flags[i]&(F_NOCLIMB|F_BREAK))
-      || this._y1[i]-this._y0[i]<1.1 || Math.max(this._hx[i],this._hz[i])<.65)return null;
-    hit.top=this._y1[i];return hit;
+  /**
+   * A broad structural face the hands can hold.
+   *
+   * ROUND 19. ALEX, on the climb: "I actually like how you climb. I wish a lot of walls could
+   * be like that even if they don't look like that... I bet we should put that on like so many
+   * walls... We don't even need to make walls look like specific climbing walls." And then the
+   * two failures: "the walls at destinations have climbing walls covered by things anyway so
+   * it's hard to climb. Or rather impossible right now cause you can't reach them", and "Some
+   * climbing walls with the right thing on them to climb you cannot even climb, because
+   * they're probably blocked by things on the other side or things there that interfearint or
+   * invisible."
+   *
+   * THREE THINGS WERE WRONG AND ALL THREE ARE HERE.
+   *
+   *  1. ONLY BOXES COUNTED. `this._kind[i] !== KIND_OBB` refused every round collider in the
+   *     county — which is every tower. The Holdfast's four corner towers, both gatehouse
+   *     drums and all four keep turrets are circles, so the one building in the game that
+   *     most looks like something you climb was the one you provably could not. A circle is
+   *     climbable now when it is big enough to be a building rather than a post, and the
+   *     NON_CLIMB tags (trunk, pole, lamp, chimney, mast...) still refuse it by name.
+   *
+   *  2. THE FIRST HIT DECIDED. One raycast, and if it landed on a barrel, a cart, a buttress
+   *     or a bench in front of the wall, the answer was "no wall here" — which is exactly the
+   *     "covered by things" he describes. The ray now WALKS PAST what it cannot climb, up to
+   *     CLIMB_PIERCE surfaces, and takes the first face that qualifies.
+   *
+   *  3. THE REACH WAS 1.02 m FROM THE EYE RAY. With clutter against a wall you cannot stand
+   *     that close to it. It is CLIMB_REACH now, which is one crate deeper.
+   *
+   * The height and footprint gates are also looser: 0.95 m tall (a parapet, a low wall) and
+   * 0.45 m of half-extent, so ordinary building walls answer without anything being authored.
+   * F_BREAK is still refused — a crate that comes apart when you lean on it is not a hold —
+   * and so is anything horizontal (|normal.y| > 0.25), which is what keeps this off floors.
+   */
+  climbFace(origin, direction, reach) {
+    const far = reach > 0 ? reach : CLIMB_REACH;
+    // raycast normalises its own direction and reports `t` in real metres, so the pierce
+    // step has to walk a UNIT vector or a pitched camera's short forward would advance the
+    // origin by less than it thinks and re-hit the surface it just skipped.
+    const dl = Math.hypot(direction.x, direction.y, direction.z);
+    if (!(dl > 1e-9)) return null;
+    const ux = direction.x / dl, uy = direction.y / dl, uz = direction.z / dl;
+    let t0 = 0;
+    for (let pass = 0; pass < CLIMB_PIERCE; pass++) {
+      _climbO.x = origin.x + ux * t0;
+      _climbO.y = origin.y + uy * t0;
+      _climbO.z = origin.z + uz * t0;
+      const hit = this.raycast(_climbO, direction, far - t0, MASK.SOLID);
+      if (!hit) return null;
+      const at = t0 + hit.t;
+      if (!hit.ground && Math.abs(hit.normal.y) <= 0.25) {
+        const i = Math.floor(hit.id / 65536);
+        if (this._climbable(i)) { hit.t = at; hit.top = this._y1[i]; return hit; }
+      }
+      // Not a hold: step just past this surface and ask again. This is the "covered by
+      // things" fix, and it is bounded — three surfaces, never a march.
+      t0 = at + CLIMB_STEP;
+      if (t0 >= far) return null;
+    }
+    return null;
+  }
+
+  /** Is collider `i` a face the hands may hold? See climbFace. */
+  _climbable(i) {
+    if (this._flags[i] & (F_NOCLIMB | F_BREAK)) return false;
+    if (this._y1[i] - this._y0[i] < CLIMB_MIN_H) return false;
+    if (this._kind[i] === KIND_OBB) {
+      return Math.max(this._hx[i], this._hz[i]) >= CLIMB_MIN_HALF;
+    }
+    // A circle: a tower, a silo, a tank, a stack of hay. Wide enough that it is a structure
+    // and not a post — the county's trunks run 0.26-0.88 m and its lamp columns far less.
+    return this._r[i] >= CLIMB_MIN_ROUND;
   }
 
   segmentClear(x0, y0, z0, x1, y1, z1) {

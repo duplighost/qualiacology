@@ -61,6 +61,9 @@ const SNOW_SIZE = 0.052;
 const SNOW_FALL = -1.35;      // m/s at birth; drag and gravity settle it
 const SNOW_WIND = 0.85;       // m/s of shared drift, so a fall has a direction
 const SNOW_COL = Object.freeze({ r: 0.60, g: 0.65, b: 0.74 });   // cold, and under the sky
+// ROUND 19: the is-there-sky-over-me ray. Module scope; _snow allocates nothing.
+const _snowO = { x: 0, y: 0, z: 0 };
+const _snowUp = Object.freeze({ x: 0, y: 1, z: 0 });
 const MAX_TRACERS = 24;
 const MAX_DECALS = 64;
 
@@ -414,6 +417,27 @@ export class Fx {
   _snow(dt) {
     const cam = this.ctx && this.ctx.camera;
     if (!cam || !(dt > 0)) return;
+    // ROUND 19. ALEX: "Snowing inside castle."
+    //
+    // It was, everywhere. Flakes are spawned in a 15 m disc SNOW_TOP above the eye and fall,
+    // and nothing ever asked whether there was a roof between the two — so it snowed in the
+    // keep, in the manor, in the mine and under the filling station canopy. One ray straight
+    // up from the camera, retested a few times a second rather than every frame (the answer
+    // does not change inside one stride), and a roof stops the weather. The DRIFT is kept:
+    // the accumulator is not zeroed here, so walking out from under a roof resumes rather
+    // than paying back a debt of flakes in one frame.
+    this._skyT = (this._skyT || 0) - dt;
+    if (this._skyT <= 0) {
+      this._skyT = 0.25;
+      const col = this.ctx.systems && this.ctx.systems.get('collision');
+      let open = true;
+      if (col && col.raycast) {
+        _snowO.x = cam.position.x; _snowO.y = cam.position.y + 0.2; _snowO.z = cam.position.z;
+        open = !col.raycast(_snowO, _snowUp, SNOW_TOP + 2.0, col.MASK ? col.MASK.SOLID : 1);
+      }
+      this._underRoof = !open;
+    }
+    if (this._underRoof) return;
     const k = frostAt(cam.position.x, cam.position.z);
     if (k <= SNOW_START) { this._snowAcc = 0; return; }
     const strength = (k - SNOW_START) / (1 - SNOW_START);

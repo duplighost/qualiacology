@@ -427,9 +427,28 @@ export class Progress {
         // Old saves earned a point at level one. Keep that earned point as a migration credit.
         d.startPointCredit=1;
       } else {
-        d.xp=xpForLevel(2);d.level=2;d.startPointCredit=0;
+        // ROUND 19, and see the v2 block below: a fresh save starts at LEVEL ONE with the
+        // free first pick carried as a credit, not at level two with the xp for it.
+        d.xp=0;d.level=1;d.startPointCredit=1;
       }
-      d.curveVersion=1;this.save.mark();
+      d.curveVersion=2;this.save.mark();
+    }
+    // ROUND 19. ALEX: "Start at level one instead of level 2." / "Let's start the player on
+    // level one." A fresh save was handed xpForLevel(2) so that _points() — which pays
+    // `level - 1 + credit` — could give the first pause one thing to click. The point was
+    // right and the LEVEL was a lie: the card and the HUD both read "LV 2" before he had
+    // earned anything. Level one, and the free first pick becomes the credit instead, so
+    // the number of points is identical and only the label changed.
+    //
+    // Applied to a save only where it is provably still the untouched opening blob: exactly
+    // at the level-2 floor, no credit, nothing spent, nothing found. A returning save that
+    // has actually earned its way to level two is left alone.
+    if (d.curveVersion === 1) {
+      const untouched = d.xp === xpForLevel(2) && !(d.startPointCredit > 0)
+        && (!d.nodes || d.nodes.length === 0) && (!d.found || d.found.length === 0)
+        && (!d.claimed || d.claimed.length === 0) && !(d.unbanked > 0);
+      if (untouched) { d.xp = 0; d.level = 1; d.startPointCredit = 1; }
+      d.curveVersion = 2; this.save.mark();
     }
 
     for (const id of d.nodes) if (NODE_BY_ID[id]) this._owned.add(id);

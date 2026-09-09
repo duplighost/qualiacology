@@ -32,7 +32,17 @@ export const SPIDER_NESTS = Object.freeze({
   'hollow-mill': [{ lx: 11.0, lz: -5.0, ly: 4.2, yaw: Math.PI }],
   jackfield: [{ lx: -2.3, lz: 1.2, ly: 4.8, yaw: 0 }],
   'bell-tower': [{ lx: 0, lz: 0, ly: 8.4, yaw: 0 }],
-  holdfast: [{ lx: 0, lz: 6, ly: 6.6, yaw: Math.PI }],
+  // ROUND 19. ALEX: "Spiders falling from the sky when not inside or somewhere."
+  //
+  // THIS ROW WAS THE ONE. (0, 6) is not a room — it is seven metres out into the open bailey,
+  // on the cobbles between the keep's porch and the well, with 44 m of night above it. The
+  // note at the top of this file says every coordinate here was "lifted from
+  // director/interior-horror.js's INTERIOR_ENCOUNTERS, which were verified by actually
+  // walking to them"; the Holdfast has no row in that table, so this one was a guess and it
+  // was wrong. (0, -14) is the middle of the keep's UNDERCROFT — the six-pier hall behind the
+  // great door, floor at padY, boarded over at KEEP.F1 = 6.8 — which is the biggest, oldest,
+  // most enclosed room in the county and exactly the room he asked for.
+  holdfast: [{ lx: 0, lz: -14, ly: 6.1, yaw: 0 }],
 });
 
 /** The cast entries for one site, in the shape places.js _recordCast wants. */

@@ -297,11 +297,17 @@ export class Search {
     this._stat.tolls++;
     if (prog && typeof prog.flag === 'function') prog.flag('gate:' + cand.flag, 1);
     if (audio && typeof audio.dread === 'function') audio.dread('lantern', cand.x, cand.y, cand.z, 0.85);
-    // The place rebuilds without its gate collider and without its leaves the next time its
-    // chunk streams — and a paid gate is paid for the life of the save. Asking places to
-    // rebuild NOW is what makes it feel like the door opened rather than like it forgot to.
+    // The place rebuilds without its gate collider the next time its chunk streams — and a
+    // paid gate is paid for the life of the save. Asking places to open it NOW is what makes
+    // it feel like the door opened rather than like it forgot to.
+    //
+    // ROUND 19. ALEX: "There needs to be an animation when it opens." places.openGate swings
+    // the leaves over GATE_SWING_S and rebuilds the body — which is what drops the collider —
+    // when the opening is actually clear. A site with no leaves rebuilds at once, exactly as
+    // it did before, so nothing else in the county changed.
     const places = this._sys('places');
-    if (places && typeof places.rebuildSite === 'function') places.rebuildSite(cand.flag);
+    if (places && typeof places.openGate === 'function') places.openGate(cand.flag);
+    else if (places && typeof places.rebuildSite === 'function') places.rebuildSite(cand.flag);
     this.ctx.bus.emit('gate:opened', { id: cand.flag, price: cand.price });
   }
 
@@ -344,7 +350,9 @@ export class Search {
     for (const g of this.gates) {
       if (this.gateOpen(g.key) || !places.gateDefeated(g.key)) continue;
       prog.flag('gate:' + g.key, 1);
-      places.rebuildSite(g.key);
+      // ROUND 19: fighting the garrison opens the same leaves the same way paying does.
+      if (typeof places.openGate === 'function') places.openGate(g.key);
+      else places.rebuildSite(g.key);
       this.ctx.bus.emit('gate:opened', { id: g.key, price: 0, fought: true });
     }
   }

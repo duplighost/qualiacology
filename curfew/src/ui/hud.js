@@ -1369,10 +1369,16 @@ export class Hud {
     });
     wrap.appendChild(dl);
 
-    wrap.appendChild(el('div', 'foot', 'any key, or click here, to go back out'));
+    wrap.appendChild(el('div', 'foot', 'escape to go back out'));
 
     card.appendChild(wrap);
-    card.addEventListener('mousedown', (e) => { e.preventDefault(); this._resume(); });
+    // ROUND 19. ALEX: "dont use click to leave pause menu, just keep it only the escape
+    // button." The card used to resume on ANY mousedown anywhere on it and on ANY key, which
+    // meant every miss while spending a point — the gaps between node buttons, the map, a
+    // stray W — dropped him back into the game. The node buttons and the car locator have
+    // their own click handlers and stop propagation to nothing, because nothing above them
+    // listens any more. ONE key leaves this card.
+    //
     // Escape resumes through the same loop pause state without depending on a pointer-lock
     // grant. A subsequent gesture captures the mouse; this key cannot also reopen the menu.
     this._onKey = (e) => {
@@ -1382,11 +1388,7 @@ export class Hud {
       if (e.code === 'Escape' || k === 'Escape') {
         e.preventDefault(); e.stopImmediatePropagation();
         this._resume(true);
-        return;
       }
-      if (k === 'Shift' || k === 'Control' || k === 'Alt' || k === 'Meta' || /^F\d{1,2}$/.test(k)) return;
-      e.preventDefault();
-      this._resume();
     };
     window.addEventListener('keydown', this._onKey, true);
     document.body.appendChild(card);

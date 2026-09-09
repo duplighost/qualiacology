@@ -76,6 +76,16 @@ const HF = {
   oak: [0.026, 0.021, 0.016],
   iron: [0.079, 0.080, 0.086],
 };
+// ROUND 19: metres of curtain wall per emitted collider. collision.js refuses a half-extent
+// over MAX_HALF_EXTENT (24), which is why the whole wall used to have no physics; 16 m
+// segments leave a half-extent of 8 and index cleanly into the 8 m broadphase grid.
+const WALL_SEG = 16;
+// The Holdfast's own geometry constants, shared by its landmark and its body: the curtain's
+// half-width, the clear half-opening at the gate, and how far the leaves swing.
+const HF_R = 66;
+const HF_GATE_HALF = 5.0;
+const HF_GATE_OPEN = 1.40;   // rad, ~80 degrees: back against the jambs, not flat to the wall
+const HF_GATE_PRICE = 600;   // the most expensive door in the county. See the toll below.
 
 const C = {
   stone: [0.135, 0.139, 0.133],
@@ -470,7 +480,11 @@ class Kit {
 function kits() {
   const glow = new Kit();
   glow.additive = true;     // the ledger records this kit's sheets whatever method laid them
-  return { solid: new Kit(), glow };
+  // ROUND 19: `moving` is the list of separately-transformed parts a landmark hands back.
+  // places.js turns each entry into its own mesh on the landmark node and writes its
+  // rotation in present(alpha). It was always in the builder contract; only the four
+  // rotating horizon reads had ever used it and they each built their array by hand.
+  return { solid: new Kit(), glow, moving: [] };
 }
 
 /**
@@ -1485,7 +1499,51 @@ export const BUILDERS = {
           y0: y - 1, y1: y + KH + 14, tag: 'wall',
         });
       }
-      return { solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.lamp };
+      /* ---- THE GATE LEAVES, AND THEY MOVE ---------------------------------------
+       * ALEX, 2026-09-09: "There needs to be an animation when it opens."
+       *
+       * They used to be two boxes welded into the BODY's merged geometry, drawn only while
+       * the toll was unpaid: you held E, the site rebuilt, and the doors were simply gone
+       * between one frame and the next. A castle gate that teleports open is the opposite of
+       * the beat this whole place is built around.
+       *
+       * They live on the LANDMARK now, as two `moving` entries hinged at their own jambs.
+       * The landmark node is built once at boot and never streams, which is what lets a
+       * swing survive the site rebuilding underneath it, and places.js already owns prev/curr
+       * and writes every rotation in present(alpha) — so the swing is interpolated at
+       * whatever refresh rate the monitor runs at, exactly like the mill sails and the
+       * lighthouse beam. places.js openGate() drives them.
+       */
+      {
+        const gy = groundY(api, 0, HF_R);
+        for (const sx of [-1, 1]) {
+          const leaf = new Kit();
+          // Built with the HINGE at the local origin and the leaf reaching inward, so the
+          // mesh's own rotation.y IS the swing and nothing has to offset a pivot.
+          const reach = HF_GATE_HALF - 0.1;
+          leaf.box(reach, 6.4, 0.34, -sx * reach * 0.5, 0, 0, HF.oak, 0);
+          for (let i = 0; i < 4; i++) {
+            leaf.box(reach - 0.2, 0.22, 0.42, -sx * reach * 0.5, -2.3 + i * 1.5, 0, HF.iron, 0);
+          }
+          // the ring handle, so a shut gate has something a hand would pull
+          leaf.cyl(0.20, 0.20, 0.06, 8, -sx * (reach - 0.55), 0.35, 0.22, HF.iron, 0, 0, Math.PI * 0.5);
+          const geo = leaf.build();
+          if (geo) {
+            k.moving.push({
+              geo, role: 'gateLeaf', rate: 0,
+              x: sx * (HF_GATE_HALF - 0.05), y: gy + 3.2, z: HF_R - 0.2,
+              // Which way it swings: INWARD, into the bailey (local -Z). rotateY(t) sends
+              // (+x, 0, 0) to (x cos t, 0, -x sin t), so a leaf reaching +x wants a POSITIVE
+              // angle. The left leaf (sx -1) reaches +x, so its angle is -sx * OPEN.
+              open: -sx * HF_GATE_OPEN,
+            });
+          }
+        }
+      }
+      return {
+        solid: k.solid.build(), glow: k.glow.build(),
+        moving: k.moving.length ? k.moving : null, glowColour: GLOW.lamp,
+      };
     },
 
     body(api) {
@@ -1501,10 +1559,10 @@ export const BUILDERS = {
        * SEPARATE colliders per run, never one AABB per side — a single box over a 132 m wall
        * is fine, but the gate gap has to be a real gap or the whole thing is a sealed cube.
        */
-      const R = 66;              // half-width of the curtain
+      const R = HF_R;            // half-width of the curtain (see HF_R: the landmark shares it)
       const WH = 11;             // wall height
       const WT = 2.6;            // wall thickness
-      const GATE_HALF = 5.0;     // the opening in the +Z wall
+      const GATE_HALF = HF_GATE_HALF;   // the opening in the +Z wall
 
       const wallRun = (x0, z0, x1, z1, tag) => {
         const mx = (x0 + x1) * 0.5, mz = (z0 + z1) * 0.5;
@@ -1523,10 +1581,35 @@ export const BUILDERS = {
           const cx = mx + dx * t, cz = mz + dz * t;
           s.box(WT + 1.0, 1.9, 1.2, cx, groundY(api, cx, cz) + WH + 1.55, cz, W, yaw);
         }
-        api.emit({
-          kind: 'obb', x: mx, z: mz, halfX: WT * 0.5 + 0.7, halfZ: len * 0.5, yaw,
-          y0: g - 1, y1: g + WH + 2.6, tag: tag || 'wall',
-        });
+        /* ---- ROUND 19: THE CURTAIN WALL HAD NO COLLISION AT ALL --------------------
+         * ALEX: "Castle destination in center has you walking through stuff."
+         *
+         * MEASURED (tools/_oversize.mjs, which wraps collision.addCollider and counts what
+         * it refuses): FIVE colliders in the whole county were being rejected, and all five
+         * were these — the two north runs at halfZ 30.5 and the south, west and east runs at
+         * halfZ 66. collision.js MAX_HALF_EXTENT is 24, because a half-extent past that "is
+         * the shape a terrain-following ribbon makes when someone bakes its bounding box",
+         * and addCollider refuses it and returns -1. The emit's return value is not read
+         * here, and never was, so the castle has been walk-through since round 15: a 132 m
+         * curtain wall, four sides, no physics on any of it.
+         *
+         * The fix is NOT `authored: true` (which would skip the reject). A 132 m box has a
+         * 66 m bounding radius, so the broadphase would hand it back for every query within
+         * 66 m of the castle and every distance test in the game would be answering about a
+         * wall the length of the site. It is emitted in SEGMENTS instead — one per WALL_SEG
+         * metres of run — which is what the geometry above already is anyway, and each one
+         * indexes into the 8 m broadphase grid the way a real wall should.
+         */
+        const segs = Math.max(1, Math.ceil(len / WALL_SEG));
+        const half = len / (segs * 2);
+        for (let s2 = 0; s2 < segs; s2++) {
+          const t = (s2 + 0.5) / segs - 0.5;
+          const sx = mx + dx * t, sz = mz + dz * t;
+          api.emit({
+            kind: 'obb', x: sx, z: sz, halfX: WT * 0.5 + 0.7, halfZ: half, yaw,
+            y0: groundY(api, sx, sz) - 1, y1: groundY(api, sx, sz) + WH + 2.6, tag: tag || 'wall',
+          });
+        }
       };
 
       // north (+Z, the road side) in two runs with the gate between them
@@ -1613,24 +1696,26 @@ export const BUILDERS = {
         }
         // the jambs
         for (const sx of [-1, 1]) s.box(1.2, 6.6, WT + 1.0, sx * (GATE_HALF + 0.6), g + 3.3, R, W);
-        // THE DOOR ITSELF is a collider, not geometry you can see through: two leaves, shut.
-        // The toll opens it (search.js's gate), and the world flag remembers.
+        // THE DOOR ITSELF. ROUND 19: only the COLLIDER lives here now — the two leaves you
+        // can see are `moving` parts on the landmark (see the gate-leaves block in
+        // landmark() above), because a door welded into a streamed merged geometry cannot
+        // swing. The toll opens it (search.js's gate) and the world flag remembers.
         const shut = !(api.gateOpen && api.gateOpen());
         if (shut) {
-          for (const sx of [-1, 1]) {
-            s.box(GATE_HALF - 0.1, 6.4, 0.34, sx * GATE_HALF * 0.5, g + 3.2, R - 0.2, HF.oak, 0);
-            for (let i = 0; i < 4; i++) {
-              s.box(GATE_HALF - 0.3, 0.22, 0.42, sx * GATE_HALF * 0.5, g + 0.9 + i * 1.5, R - 0.2, HF.iron, 0);
-            }
-          }
           api.emit({
             kind: 'obb', x: 0, z: R - 0.2, halfX: GATE_HALF, halfZ: 0.5, yaw: 0,
             y0: g - 1, y1: g + 6.6, tag: 'gate',
           });
         }
         // and the toll itself: hold E here, with money, and the leaves open.
+        //
+        // ROUND 19. ALEX: "It is way too cheap to open gate to castle." It was FORTY coins —
+        // two purses off two bodies — for the biggest destination in the county, against 220
+        // for the highway toll, 340 for the carbine and 3600 for the Treebreaker. The gate to
+        // the Holdfast is now the most expensive door in the game, which is what it should
+        // be: several strongboxes, or a long night of bodies, or you fight your way in.
         const pay = cashier(k, people, api, 0, R + 3.5, 0);
-        if (typeof api.gate === 'function') api.gate(pay.x, pay.z, pay.y, 40);
+        if (typeof api.gate === 'function') api.gate(pay.x, pay.z, pay.y, HF_GATE_PRICE);
       }
 
       /* ---- THE BAILEY ------------------------------------------------------ */
@@ -2258,9 +2343,16 @@ export const BUILDERS = {
       }
 
       // the toll: hold E on the approach side of the boom, with money, and it lifts.
+      //
+      // ROUND 19. TWENTY-FIVE COINS. docs/STATUS.md's round-18 entry says "toll 220" and the
+      // search lane's own GATE_PRICE default is 220; this call site passed 25 and nobody read
+      // it back. So the shortcut that saves 6.4 km of outer ring — the single most valuable
+      // thing money buys in this county — cost one purse off one body, which is the same
+      // complaint Alex made about the castle door ("It is way too cheap"). 220 is the number
+      // the design and the docs both already say.
       { const [cx, cz] = P(4.8, GAP + 0.2);
         const pay = cashier(k, people, api, cx, cz, yawOf(1, 0));
-        if (typeof api.gate === 'function') api.gate(pay.x, pay.z, pay.y, 25); }
+        if (typeof api.gate === 'function') api.gate(pay.x, pay.z, pay.y, 220); }
 
       // Neutral until deliberately attacked. The low boom leaves this garrison
       // reachable by fire from the approach, unlike the castle's solid gate leaves.
