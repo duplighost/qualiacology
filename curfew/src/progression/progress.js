@@ -1473,7 +1473,7 @@ export class Progress {
    * take the frame down with it — a bought perk must never be able to stop the game.
    *
    *   const r = progress.perk('noiseRadius', radius, 'step');   // reduce: value in, value out
-   *   progress.fire('onHorn', x, z);                            // run: fire and forget
+   *   progress.fire('onDoorShut', x, z);                        // run: fire and forget
    *
    * `HOOK_POINTS` in nodes.js names the one legal call site for each. Anything not in that
    * table is refused loudly at install time.

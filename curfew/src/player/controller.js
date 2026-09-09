@@ -542,6 +542,13 @@ export class PlayerController {
       if (wind && wind.seconds > 0) {
         this.hp = 1;
         this.invuln = Math.max(this.invuln, wind.seconds);
+        this.invulnMax = Math.max(this.invulnMax, wind.seconds);
+        // AND IT HAS TO SAY SO. Five points at the top of BLOOD bought a thing that reached
+        // in, stopped the death, and told the player absolutely nothing — the deepest
+        // vignette in the game and then you are simply still walking. The bus event is what
+        // the HUD's biggest ring and the receipt line hang off; without it the most expensive
+        // card in the tree is the quietest thing in the county.
+        this.ctx.bus.emit('player:secondwind', { seconds: wind.seconds, pos: this.pos });
         return;
       }
       this._die();
@@ -1209,18 +1216,26 @@ export class PlayerController {
       lerp(NOISE_LAND_MIN, NOISE_LAND_MAX, clamp01(fallSpeed / FALL_FREE)), 'land');
     // ~5.8 m is free; stepping off something tall stings without reading as a death
     // sentence for one slip. [vigil]
-    if (fallSpeed > FALL_FREE) {
-      // LEGS / drop-roll: with the node owned, a fall that would have hurt costs
-      // nothing IF you were holding crouch when you touched down — and the speed you
-      // arrived with carries on into a slide instead of being eaten by the floor.
-      // It is a decision made in the air, not a passive damage reduction, which is
-      // why it is gated on the held input and not merely on owning the node.
-      if (this.crouchHeld && this._stat('dropRoll', 0) > 0) {
-        this.slideCooldown = 0;       // a roll is never refused by the slide cooldown
-        this._startSlide();           // no-op below entrySpeed: a straight drop lands soft
-      } else {
-        this.hurt((fallSpeed - FALL_FREE) * FALL_HP_PER, null);
-      }
+    // LEGS / drop-roll: with the node owned, a landing costs nothing IF you were holding
+    // crouch when you touched down — and the speed you arrived with carries on into a slide
+    // instead of being eaten by the floor. It is a decision made in the air, not a passive
+    // damage reduction, which is why it is gated on the held input and not merely on
+    // owning the node.
+    //
+    // 2026-09-09: the threshold is `dropRollFromM` (9 m/s, about a 4 m drop), which is the
+    // number nodes.js has declared and STAT_CONTRACT has named a call site for since round 6
+    // and which NOTHING has ever read. The roll was gated on FALL_FREE instead — 16 m/s,
+    // about a 13 m drop — so the whole of LEGS tier 0 fired only off a fall most players
+    // never take, and the card's "a long fall ends in a slide" was true perhaps once a night.
+    // A fall between the two thresholds never hurt anybody, so this converts landings that
+    // were free-but-dead into the slide the card sells, and takes nothing away.
+    const rolling = this.crouchHeld && this._stat('dropRoll', 0) > 0
+      && fallSpeed > this._stat('dropRollFromM', 9.0);
+    if (rolling) {
+      this.slideCooldown = 0;         // a roll is never refused by the slide cooldown
+      this._startSlide();             // no-op below entrySpeed: a straight drop lands soft
+    } else if (fallSpeed > FALL_FREE) {
+      this.hurt((fallSpeed - FALL_FREE) * FALL_HP_PER, null);
     }
   }
 
