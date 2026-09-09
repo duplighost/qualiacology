@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createCinematicMaterials, drawDeepSpace } from "./cinematic";
+import { createCinematicMaterials, drawDeepSpace, drawMoon } from "./cinematic";
+import { moonLayout, moonProgressForScore, bounceOffMoon, pushOutsideMoon } from "./moon";
 
 type Palette = {
   name: string;
@@ -129,6 +130,12 @@ type GameState = {
   shake: number;
   lastAction: number;
   wallCooldown: number;
+  moonProgress: number;
+  moonHits: number;
+  moonCooldown: number;
+  moonImpact: number;
+  moonOrbitAngle: number | null;
+  moonOrbitTravel: number;
   dare: Dare;
   nextId: number;
   star: Star;
@@ -202,7 +209,7 @@ declare global {
   }
 }
 
-const BUILD_ID = "pocket-sun-3.0.0-cinematic";
+const BUILD_ID = "pocket-sun-3.1.0-moonrise";
 const TAU = Math.PI * 2;
 const PALETTES: Palette[] = [
   {
@@ -750,7 +757,7 @@ export default function Home() {
       dpr: 1,
       t: 0,
       seed,
-      score: 0,
+      score: autotest ? Math.max(0, safeNumber(params.get("score"), 0)) : 0,
       best,
       flow: 1,
       combo: 0,
@@ -780,6 +787,12 @@ export default function Home() {
       shake: 0,
       lastAction: 0,
       wallCooldown: 0,
+      moonProgress: autotest ? moonProgressForScore(safeNumber(params.get("score"), 0)) : 0,
+      moonHits: 0,
+      moonCooldown: 0,
+      moonImpact: 0,
+      moonOrbitAngle: null,
+      moonOrbitTravel: 0,
       dare: makeDare(random),
       nextId: 1,
       star: {
@@ -914,6 +927,8 @@ export default function Home() {
     };
     const weather = () => WEATHERS[state.weatherIndex] ?? WEATHERS[0];
 
+    const currentMoon = () => moonLayout(state.width, state.height, state.moonProgress, state.t);
+
     const randomPoint = (margin = 52): Point => ({
       x: margin + random() * Math.max(1, state.width - margin * 2),
       y: margin + random() * Math.max(1, state.height - margin * 2),
@@ -923,7 +938,8 @@ export default function Home() {
       let point = randomPoint(margin);
       for (let attempt = 0; attempt < 18; attempt += 1) {
         const farFromStar = distance(point, state.star) > clearance;
-        if (farFromStar) return point;
+        const moon = currentMoon();
+        if (farFromStar && (!moon.solid || distance(point, moon) > moon.r + margin)) return point;
         point = randomPoint(margin);
       }
       return point;
@@ -1005,6 +1021,8 @@ export default function Home() {
 
     const gateRouteIsSafe = (start: Point, end: Point) => {
       if (distance(start, end) > gateMaxLeg()) return false;
+      const moon = currentMoon();
+      if (moon.solid && sweptCirclesOverlap(start, end, moon, moon, moon.r + state.star.r + 12)) return false;
       return hudRectangles(state.star.r + 10).every((rect) => !segmentIntersectsRect(start, end, rect));
     };
 
@@ -1023,6 +1041,8 @@ export default function Home() {
         return false;
       }
       const visualRadius = bounds.radius * 1.55;
+      const moon = currentMoon();
+      if (moon.solid && distance(point, moon) < moon.r + visualRadius + 10) return false;
       if (hudRectangles(visualRadius + 8).some((rect) => pointInsideRect(point, rect))) return false;
       const triggerRadius = state.star.r + bounds.radius * 0.62;
       if (
@@ -1554,7 +1574,15 @@ export default function Home() {
       const activeWeather = weather();
       const feverScale = state.fever > 0 ? 0.86 : 1;
       const step = dt * feverScale;
+      const previousMoon = currentMoon();
       state.t += dt;
+      state.moonProgress += (moonProgressForScore(state.score) - state.moonProgress) * (1 - Math.exp(-dt / 2.8));
+      state.moonCooldown = Math.max(0, state.moonCooldown - dt);
+      state.moonImpact = Math.max(0, state.moonImpact - dt * 2);
+      const moon = currentMoon();
+      if (moon.solid && state.gates.length > 0 && !gateRunIsValid(false)) {
+        state.gates.length = 0; state.gateStage = 0; state.nextGateAt = state.t + 4;
+      }
       state.weatherClock += dt;
       state.paletteBlend = Math.min(1, state.paletteBlend + dt / 4.8);
       state.weatherBlend = Math.min(1, state.weatherBlend + dt / 4.2);
@@ -1611,6 +1639,13 @@ export default function Home() {
         state.star.vy += Math.cos(state.t * 7.3) * 28 * step;
       }
 
+      if (moon.solid) {
+        const dx = moon.x - state.star.x, dy = moon.y - state.star.y;
+        const distanceToMoon = Math.max(1, Math.hypot(dx, dy));
+        const pull = clamp(1 - (distanceToMoon - moon.r) / (moon.r * 2.8), 0, 1) * (pointer.down ? 70 : 210);
+        state.star.vx += dx / distanceToMoon * pull * step;
+        state.star.vy += dy / distanceToMoon * pull * step;
+      }
       const drag = Math.pow(activeWeather.drag, step * 60);
       state.star.vx *= drag;
       state.star.vy *= drag;
@@ -1653,6 +1688,29 @@ export default function Home() {
         wallHit(state.star.x, state.star.y);
       }
 
+      if (bounceOffMoon(state.star, starStart, moon, previousMoon, step, true) && state.moonCooldown <= 0) {
+        state.moonCooldown = 0.28;
+        state.moonImpact = 1;
+        state.moonHits += 1;
+        state.combo += 1;
+        scorePoints(120, state.star, 1.1, palette().sun);
+        particleBurst(state.star.x, state.star.y, palette().sun, 15, 180, 2.2);
+        addRing(state.star.x, state.star.y, palette().cool, 8, 0.55, 2);
+        sound.bumper(0.6); vibrate(state, 12);
+      }
+      if (moon.solid && distance(state.star, moon) < moon.r * 3.6) {
+        const angle = Math.atan2(state.star.y - moon.y, state.star.x - moon.x);
+        if (state.moonOrbitAngle !== null) {
+          const turn = normalizeAngle(angle - state.moonOrbitAngle);
+          if (Math.abs(turn) < 0.5) state.moonOrbitTravel += turn;
+          if (Math.abs(state.moonOrbitTravel) >= TAU * 0.95) {
+            state.moonOrbitTravel = 0; state.moonImpact = 1;
+            awardOrbit();
+          }
+        }
+        state.moonOrbitAngle = angle;
+      } else { state.moonOrbitAngle = null; state.moonOrbitTravel = 0; }
+
       state.star.trail.unshift({ x: state.star.x, y: state.star.y, life: 1 });
       const maxTrail = state.fever > 0 ? 68 : 42;
       if (state.star.trail.length > maxTrail) state.star.trail.length = maxTrail;
@@ -1669,6 +1727,7 @@ export default function Home() {
         const wobbleY = Math.cos(mote.phase * 0.83 + mote.id) * 0.32 * step * 60;
         mote.x += wobbleX + mote.vx * step;
         mote.y += wobbleY + mote.vy * step;
+        bounceOffMoon(mote, moteStart, moon, previousMoon, step);
         if (mote.x < 34 || mote.x > state.width - 34) mote.vx *= -1;
         if (mote.y < 34 || mote.y > state.height - 34) mote.vy *= -1;
         mote.x = clamp(mote.x, 34, state.width - 34);
@@ -1701,6 +1760,7 @@ export default function Home() {
           bumper.x = bumper.homeX;
           bumper.y = bumper.homeY;
         }
+        pushOutsideMoon(bumper, moon, 6);
         const bumperMargin = bumper.r + 8;
         bumper.x = clamp(bumper.x, bumperMargin, state.width - bumperMargin);
         bumper.y = clamp(bumper.y, bumperMargin, state.height - bumperMargin);
@@ -1742,8 +1802,12 @@ export default function Home() {
           state.particles.splice(index, 1);
           continue;
         }
+        const particleStart = { x: particle.x, y: particle.y };
         particle.x += particle.vx * step;
         particle.y += particle.vy * step;
+        const fragment = { x: particle.x, y: particle.y, vx: particle.vx, vy: particle.vy, r: particle.size };
+        bounceOffMoon(fragment, particleStart, moon, previousMoon, step);
+        Object.assign(particle, { x: fragment.x, y: fragment.y, vx: fragment.vx, vy: fragment.vy });
         const particleDrag = Math.pow(particle.drag, step * 60);
         particle.vx *= particleDrag;
         particle.vy *= particleDrag;
@@ -1789,6 +1853,8 @@ export default function Home() {
       const radius = star.r * (state.fever > 0 ? 1.52 : 1.28);
       const heat = clamp(Math.hypot(star.vx, star.vy) / 850, 0, 1);
       context.save();
+      context.globalAlpha = 1;
+      context.shadowBlur = 0;
       context.translate(star.x, star.y);
       context.globalCompositeOperation = "lighter";
       const glow = context.createRadialGradient(0, 0, radius * 0.6, 0, 0, radius * 7);
@@ -1828,9 +1894,7 @@ export default function Home() {
     const renderAtmosphere = (colors: Palette, speed: number, energy: number) => {
       const sky = atmosphereContext;
       sky.setTransform(atmosphereScale, 0, 0, atmosphereScale, 0, 0);
-      const blend = state.weatherBlend * state.weatherBlend * (3 - 2 * state.weatherBlend);
-      const stage = state.weatherFromIndex + (state.weatherIndex - state.weatherFromIndex) * blend;
-      drawDeepSpace(sky, materials, state.width, state.height, state.t, stage, colors.cool, colors.hot);
+      drawDeepSpace(sky, materials, state.width, state.height, state.t, state.moonProgress, colors.cool, colors.hot);
       const light = sky.createRadialGradient(state.star.x, state.star.y, 0, state.star.x, state.star.y, Math.max(state.width, state.height) * 0.5);
       light.addColorStop(0, alphaColor(colors.sun, 0.035 + energy * 0.03 + Math.min(speed / 20000, 0.025)));
       light.addColorStop(1, alphaColor(colors.hot, 0));
@@ -1879,6 +1943,7 @@ export default function Home() {
       const shakeY = state.shake > 0 ? Math.cos(state.t * 67 + state.seed * 0.0017) * state.shake * 0.5 : 0;
       context.save();
       context.translate(shakeX, shakeY);
+      drawMoon(context, materials, currentMoon(), state.t, state.moonImpact);
 
       if (state.gates.length > 0) {
         context.save();
@@ -2233,6 +2298,8 @@ export default function Home() {
       }
       context.shadowBlur = 0;
 
+      // Effects own their fade. The player body is always opaque.
+      context.globalAlpha = 1;
       drawSun(colors);
 
       for (const floater of state.floaters) {
@@ -2303,6 +2370,13 @@ export default function Home() {
       orbits: state.orbits,
       pulses: state.pulses,
       prisms: state.prisms,
+      moonProgress: Number(state.moonProgress.toFixed(4)),
+      moonHits: state.moonHits,
+      moonSolid: currentMoon().solid,
+      moonX: Number(currentMoon().x.toFixed(2)),
+      moonY: Number(currentMoon().y.toFixed(2)),
+      moonRadius: Number(currentMoon().r.toFixed(2)),
+      moonSunSeparation: Number(distance(state.star, currentMoon()).toFixed(2)),
       gateRuns: state.gateRuns,
       gates: state.gates.length,
       gateStage: state.gateStage,
@@ -2339,6 +2413,9 @@ export default function Home() {
       t: rounded(state.t),
       weatherFromIndex: state.weatherFromIndex,
       weatherBlend: rounded(state.weatherBlend),
+      moonCooldown: rounded(state.moonCooldown),
+      moonOrbitAngle: state.moonOrbitAngle,
+      moonOrbitTravel: rounded(state.moonOrbitTravel),
       weatherClock: rounded(state.weatherClock),
       weatherDuration: rounded(state.weatherDuration),
       nextGateAt: rounded(state.nextGateAt),
@@ -2709,6 +2786,7 @@ export default function Home() {
       state.bumperHits = 0;
       state.orbits = 0;
       state.pulses = 0;
+      state.moonProgress = 0; state.moonHits = 0; state.moonCooldown = 0; state.moonImpact = 0; state.moonOrbitAngle = null; state.moonOrbitTravel = 0;
       state.prisms = 0;
       state.gateRuns = 0;
       state.gateStage = 0;
@@ -2891,7 +2969,7 @@ export default function Home() {
     if (autotest) {
       draw();
       window.setTimeout(() => {
-        if (!destroyed) runSmoke();
+        if (!destroyed && !params.has("score")) runSmoke();
       }, 80);
     } else {
       animationFrame = window.requestAnimationFrame(loop);

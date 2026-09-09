@@ -1,11 +1,12 @@
 {
   "name": "pocket-sun",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.1.0",
   "type": "module",
   "scripts": {
     "build": "node -e \"require('fs').copyFileSync('index.html.template','index.html')\" && vite build --config vite.site.config.ts",
-    "typecheck": "tsc -p tsconfig.site.json"
+    "typecheck": "tsc -p tsconfig.site.json",
+    "test": "node --experimental-strip-types --test tests/moon.test.mjs"
   },
   "dependencies": {
     "react": "19.2.6",
