@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {Kit} from './sites.js';
 import {MAJORS} from './placedata.js';
 import {skeleton} from './remains.js';
+import {OPENING} from './opening-layout.js';
 
 const WOOD=[.13,.085,.046],METAL=[.20,.135,.055],SOIL=[.065,.034,.019];
 const _from=new THREE.Vector3(),_dir=new THREE.Vector3(),_up=new THREE.Vector3(0,1,0);
@@ -39,11 +40,16 @@ export class Scavenging {
     this.geos={wood:wood.build(),lid:lid.build(),inside:inside.build(),earth:earth.build()};
     const rng=this.ctx.rng.fork('buried-supplies');
     const add=(id,x,z,kind,bones=false)=>this.sites.push({id:'supply:'+id,x,z,kind,bones,seed:rng.next(),stage:0,node:null});
-    for(const m of MAJORS)for(let i=0;i<3;i++){
+    for(const m of MAJORS.filter(m=>m.id!==OPENING.id))for(let i=0;i<3;i++){
       const a=(i/3)*Math.PI*2+.48,r=(m.flat?.radius||30)*(i===2?1.22:(.52+i*.10));
       add(m.id+':'+i,m.x+Math.cos(a)*r,m.z+Math.sin(a)*r,i===2?'dig':'crate',i===2);
     }
     const wild=this._sys('wilds');wild.lookouts();
+    const station=this._sys('places').nodes.get(OPENING.id),cy=Math.cos(station.yaw),sy=Math.sin(station.yaw);
+    for(const q of OPENING.supplies){
+      add('opening:'+q.id,OPENING.x+q.x*cy+q.z*sy,OPENING.z-q.x*sy+q.z*cy,q.kind);
+      Object.assign(this.sites.at(-1),{authored:true,noAmbush:true,deckY:q.y===undefined?null:station.padY+q.y,cash:q.cash,xp:q.xp});
+    }
     for(let i=0;i<wild.sites.length;i++){
       const w=wild.sites[i];if(w.kind==='travel-water')continue;
       const a=rng.next()*Math.PI*2,r=7+rng.next()*5;
@@ -51,17 +57,17 @@ export class Scavenging {
     }
     // Geometry and its existing surface program take part in normal boot warmup.
     this.warm=new THREE.Mesh(this.geos.wood,this.mat);this.warm.position.y=-10000;this.root.add(this.warm);
-    this.off=this.ctx.bus.on('world:broke',p=>{if(p.tag==='supply')for(const s of this.sites)if(s.node&&Math.hypot(s.x-p.x,s.z-p.z)<1.1)this._take(s);});
+    this.off=this.ctx.bus.on('world:broke',p=>{if(p.tag==='supply')for(const s of this.sites)if(s.node&&Math.hypot(s.x-p.x,s.z-p.z)<1.1&&Math.abs(s.y-p.y)<1)this._take(s);});
   }
   ready(){return !!this.geos&&this.sites.length>0;}
   _build(s){
     const col=this._sys('collision'),terr=this._sys('terrain'),pr=this._sys('progress');
     if(!s.placed){
       const ox=s.x,oz=s.z;let found=false;
-      for(let i=0;i<20;i++){
-        const a=i*2.399,r=i===0?0:1+Math.sqrt(i)*1.2,x=ox+Math.cos(a)*r,z=oz+Math.sin(a)*r,y=terr.heightAt(x,z);
-        if(this._sys('roads').roadDistance(x,z)<3.4||y<.5||!col.fits(x,z,y+.03,.80,1.7))continue;
-        if(Math.abs(y-terr.heightAt(x+1,z))>.32||Math.abs(y-terr.heightAt(x,z+1))>.32)continue;
+      for(let i=0;i<(s.authored?1:20);i++){
+        const a=i*2.399,r=i===0?0:1+Math.sqrt(i)*1.2,x=ox+Math.cos(a)*r,z=oz+Math.sin(a)*r,y=s.deckY??terr.heightAt(x,z);
+        if(this._sys('roads').roadDistance(x,z)<3.4||y<.5||!col.fits(x,z,y+.03,s.authored?.59:.80,s.authored?1.0:1.7))continue;
+        if(!s.authored&&(Math.abs(y-terr.heightAt(x+1,z))>.32||Math.abs(y-terr.heightAt(x,z+1))>.32))continue;
         s.x=x;s.y=y+.04;s.z=z;found=true;break;
       }
       if(!found){s.retry=this.time+15;return;}
@@ -94,8 +100,8 @@ export class Scavenging {
     s.stage=4;this._sys('progress').flag(s.id,4);
     this._sys('collision').removeChunk(s.id);s.node.collider=-1;
     this._sys('fx')?.clearDecalsNear(s.x,s.y+.35,s.z,1.25);
-    this._sys('progress').payCash(4+Math.floor(s.seed*6),s.x,s.y+.4,s.z,'supplies');
-    this._sys('progress').award(18,s.x,s.y+.4,s.z,'supplies');
+    this._sys('progress').payCash(s.cash??(4+Math.floor(s.seed*6)),s.x,s.y+.4,s.z,'supplies');
+    this._sys('progress').award(s.xp??18,s.x,s.y+.4,s.z,'supplies');
     this.ctx.bus.emit('pickup:ammo',{n:4+Math.floor(s.seed*5)});
     this._sys('audio')?.dread('branch',s.x,s.y+.3,s.z,.40);
     this._appearance(s);
@@ -109,7 +115,7 @@ export class Scavenging {
     if(!best)return false;const s=best;s.stage++;this._sys('progress').flag(s.id,s.stage);
     _from.set(s.x,s.y+.1,s.z);this._sys('fx')?.impact?.('dirt',_from,_up,.65);
     this._sys('audio')?.dread('branch',s.x,s.y+.1,s.z,.38);
-    if(s.stage===3&&s.seed<.25){
+    if(s.stage===3&&s.seed<.25&&!s.noAmbush){
       const e=this._sys('enemies').spawn('marrow',s.x,s.z,{feetY:s.y,awake:true,ambush:true,riseS:.95});
       if(e){s.stage=5;this._sys('progress').flag(s.id,5);this._sys('audio')?.dread('canopy-rush',s.x,s.y+.3,s.z,.55);s.node.chest.visible=false;s.ambush=true;}
     }

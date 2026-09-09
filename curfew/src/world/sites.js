@@ -1823,7 +1823,23 @@ export const BUILDERS = {
         }
       }
       // the shop
-      shell(k.solid, api, -10.5, 0.5, 10, 7, 3.6, 0, C.plaster, 2.4);
+      // The opening room has a real window reveal. Wall pieces and collision share
+      // these bounds, so the darkening grounds are visible from beside the bed.
+      {
+        const wall=(x0,x1,z0,z1,lo,hi)=>{
+          k.solid.box(x1-x0,hi-lo,z1-z0,(x0+x1)/2,api.padY+(lo+hi)/2,(z0+z1)/2,C.plaster);
+          api.emit({kind:'obb',x:(x0+x1)/2,z:(z0+z1)/2,halfX:(x1-x0)/2,halfZ:(z1-z0)/2,yaw:0,
+            y0:api.padY+lo,y1:api.padY+hi,tag:'wall',standable:true});
+        };
+        wall(-15.5,-5.5,3.78,4.22,-.5,3.6);
+        wall(-15.72,-15.28,-3,4,-.5,3.6);wall(-5.72,-5.28,-3,4,-.5,3.6);
+        wall(-15.5,-15,-3.22,-2.78,-.5,3.6);wall(-12.2,-11.7,-3.22,-2.78,-.5,3.6);
+        wall(-15,-12.2,-3.22,-2.78,-.5,1.4);wall(-15,-12.2,-3.22,-2.78,2.7,3.6);
+        wall(-9.3,-5.5,-3.22,-2.78,-.5,3.6);wall(-11.7,-9.3,-3.22,-2.78,2.62,3.6);
+        api.emit({kind:'obb',x:-13.6,z:-3,halfX:1.4,halfZ:.035,yaw:0,y0:api.padY+1.4,y1:api.padY+2.7,
+          tag:'glass',climbable:false,standable:false});
+        k.solid.box(3.04,.12,.62,-13.6,api.padY+1.4,-3,C.stone);
+      }
       k.solid.gable(10.6, 7.6, api.padY + 3.6, 1.1, -10.5, 0, 0.5, C.slate, 0,
         { api, depth: 7, col: C.plaster });
       gableFloor(api, -10.5, 0.5, 10.6, 7.6, api.padY + 3.6, 1.1, 0);
@@ -1938,9 +1954,8 @@ export const BUILDERS = {
       api.emit({ kind: 'obb', x: -17.0, z: -1.6, halfX: 0.5, halfZ: 0.5, yaw: 0, y0: api.padY - 0.2, y1: api.padY + 2.45, tag: 'metal', standable: true });
       // the shop window: four panes behind a frame, a blind pulled half down over the top
       // of them, and a gradient that is brightest at the fitting and dies at the sill
-      k.glow.pane(3.0, 1.4, -13.6, api.padY + 2.1, -3.06, PANE_WINDOW, Math.PI, 0, 8, 8);
-      sash(k.solid, 3.0, 1.4, -13.6, api.padY + 2.1, -3.06, C.dark, Math.PI, 0, 2, 2, 0.08, 0.10);
-      k.solid.box(2.86, 0.40, 0.06, -13.6, api.padY + 2.56, -3.15, C.slate);
+      sash(k.solid, 2.8, 1.3, -13.6, api.padY + 2.05, -3.06, C.dark, Math.PI, 0, 2, 1, 0.065, 0.10);
+      k.solid.box(2.86, 0.18, 0.06, -13.6, api.padY + 2.65, -3.15, C.slate);
       // the county map board on the shop's road-facing wall — the third record of a
       // filling map (DESIGN section 2). places.js adds one pin quad per found place.
       k.solid.box(3.2, 2.1, 0.14, -7.4, api.padY + 1.9, -3.14, C.wood, Math.PI);

@@ -47,6 +47,7 @@
 // tell how to do is now the biggest dark shape in the first frame you ever see.
 
 import * as THREE from 'three';
+import { CFG } from '../config.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, clamp01 } from '../engine/math.js';
 import { GLOW, Kit } from './sites.js';
@@ -1222,7 +1223,17 @@ export class Refuge {
     // once-a-night latch re-arms. Writing cycleT directly skipped every one of those.
     const clock = this._sys('clock');
     if (clock && typeof clock.advance === 'function') {
-      try { clock.advance(REST_CLOCK_S); } catch (e) { this._note('clock: ' + e.message); }
+      try {
+        clock.advance(REST_CLOCK_S);
+        // The first station sleep cannot accidentally deliver a fresh blue dusk.
+        // Time still crosses phase boundaries through the normal clock API.
+        const pr=this._sys('progress');
+        if(this.siteId===SITE_ID&&!pr.flag('opening:slept')){
+          if(clock.phase==='dusk')clock.advance(CFG.clock.duskS-clock.cycleT+12);
+          else if(clock.phase==='dawn')clock.advance(clock.cycleLength-clock.cycleT+CFG.clock.duskS+12);
+          pr.flag('opening:slept',1);
+        }
+      } catch (e) { this._note('clock: ' + e.message); }
     }
     // 3. nothing reached you, and nothing is waiting when you get up
     const enemies = this._sys('enemies');
