@@ -381,21 +381,22 @@ const ROSTER = {
   pallbearer: { cost: 2.0, head: 1.0, band: [26, 44], coverPref: 0.95, spacing: 4.0 },
   poacher: { cost: 2.0, head: 1.0, band: [34, 56], coverPref: 0.55, spacing: 6.0 },
   hunter: { cost: 4.0, head: 1.0, band: [30, 52], coverPref: 0.75, spacing: 8.0 },
+  marrow: { cost: 4.0, head: 1.0, band: [28, 46], coverPref: 0.90, spacing: 8.0 },
 };
 // Written out, not Object.keys(ROSTER): the RECIPES rows below are positional, and a
 // species added to ROSTER without a column here would silently shift every weight by one.
 // ready() asserts the two still agree.
-const SPECIES = ['hound', 'pallbearer', 'poacher', 'hunter'];
+const SPECIES = ['hound', 'pallbearer', 'poacher', 'hunter', 'marrow'];
 
 // Region recipes. terrain.js ships FOUR regions (pines / fields / marsh / ridge), not
 // DESIGN §2's seven, so the seven recipes collapse onto four; see HANDOFF.
 // Rows are weights per species, indexed by terrain region id. A zero is a real "never here".
 //                      hound  pallb  poach  hunter
 const RECIPES = [
-  /* 0 pines  'pack'    */[3.0, 1.4, 0.5, 1.0],
-  /* 1 fields 'ambush'  */[1.2, 1.6, 2.4, 0.6],
-  /* 2 marsh  'quiet'   */[1.0, 2.4, 0.4, 0.5],
-  /* 3 ridge  'gunline' */[0.8, 0.5, 2.8, 1.2],
+  /* 0 pines  'pack'    */[3.0, 1.4, 0.5, 0.7, 0.3],
+  /* 1 fields 'ambush'  */[1.2, 1.6, 2.4, 0.45, 0.15],
+  /* 2 marsh  'quiet'   */[1.0, 2.4, 0.4, 0.35, 0.15],
+  /* 3 ridge  'gunline' */[0.8, 0.5, 2.8, 0.95, 0.25],
 ];
 
 // The recipe lookup must be TOTAL. terrain ships ids 0-3, but placedata.js authors regions
@@ -411,8 +412,8 @@ function recipeFor(region) {
 
 // The black hour does not multiply the roster, it REPLACES it: hounds pack, the Hunter is
 // off the leash, and the men go quiet and go home. DESIGN §2, "the roster CHANGES".
-const BLACK_MUL = { hound: 2.4, pallbearer: 1.6, poacher: 0.0, hunter: 2.2 };
-const DUSK_MUL = { hound: 0.8, pallbearer: 0.7, poacher: 1.8, hunter: 0.0 };
+const BLACK_MUL = { hound: 2.4, pallbearer: 1.6, poacher: 0.0, hunter: 2.2, marrow:2.2 };
+const DUSK_MUL = { hound: 0.8, pallbearer: 0.7, poacher: 1.8, hunter: 0.0, marrow:0.0 };
 
 /* ------------------------------------------------------------- module scratch -- */
 

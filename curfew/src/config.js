@@ -85,7 +85,7 @@ export const CFG = {
       // which is one new material family of headroom and not a licence for six.
       // Human skin/cloth and their near-light response are warmed at boot. Normal play
       // measured 82 programs and a 15.4 ms castle p95 on the development GPU.
-      programsMax: 82,
+      programsMax: 90, // includes the eight warmed material variants in MARROW's Presence
       coldBootMaxS: 15,     // 0.9 s measured
     },
   },

@@ -1,7 +1,7 @@
 // CURFEW — audio engine. Owner: audio. Manifest #21, id 'audio'.
 //
-// EVERYTHING IS SYNTHESISED. There is not one audio file in this project and there will not
-// be one. Every buffer below is baked from noise, biquads and damped sinusoids at boot.
+// Effects and creature voices are synthesized at boot. Lookout greetings are recorded
+// synthetic speech in assets/voices, decoded by the mechanics system and spatialized here.
 //
 // The shape, in one picture:
 //
@@ -669,7 +669,7 @@ export class Audio {
     await this._slice('audio: reverb', () => this._bakeReverb());
     await this._slice('audio: foley', () => this._bakeFoley());
     await this._slice('audio: weapons', () => this.guns.bake());
-    await this._slice('audio: world', () => { this.bed.bake(); this.earshot.bake(); });
+    await this._slice('audio: world', async () => { this.bed.bake(); await this.earshot.bake(); });
     // The dread beats and the naming whisper. They are on the BOOT path, not on
     // requestIdleCallback with the spare guns: the dread director can ask for a
     // beat inside the first ten seconds and the first place you walk past has to
@@ -704,7 +704,7 @@ export class Audio {
    */
   async _slice(label, fn) {
     try { this.ctx.bus.emit('boot:stage', label); } catch (e) { void e; }
-    fn();
+    await fn();
     await new Promise((r) => {
       if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => r());
       else r();

@@ -261,10 +261,10 @@ const SHUT_DOOR_M     = 12;     // quiet_3, metres
 // ROUND 6 — the numbers with teeth. Two steps each, the second the whole of it.
 const HP_THICK_SKIN   = 120;    // blood_2
 const HP_IRON         = 150;    // blood_4
-const SPEED_STRIDE    = 1.06;   // legs_2
-const SPEED_WIND      = 1.12;   // legs_4
-const DMG_HEAVY       = 1.12;   // hands_2
-const DMG_THROUGH     = 1.25;   // hands_4
+const SPEED_STRIDE    = 1.10;   // legs_2
+const SPEED_WIND      = 1.20;   // legs_4
+const DMG_HEAVY       = 1.25;   // hands_2
+const DMG_THROUGH     = 1.50;   // hands_4
 const TAC_SPRINT_CUT  = 6.5;    // legs_3, seconds
 const MANTLE_WIND     = 3.60;   // legs_4, metres
 
@@ -320,13 +320,13 @@ export const NODES = Object.freeze([
     line: 'A long fall ends in a slide instead of a stop.',
     install: (s) => { s.dropRoll = 1; } },
   { id: 'legs_2', branch: 'legs', tier: 1, cost: 2, name: 'Long Stride',
-    line: 'Six per cent faster on your feet, everywhere.',
+    line: 'Ten per cent faster on your feet, everywhere.',
     install: (s) => { s.speedMul = SPEED_STRIDE; } },
   { id: 'legs_3', branch: 'legs', tier: 2, cost: 3, name: 'Cut',
     line: 'The hard sprint holds longer, and a slide keeps its speed.',
     install: (s) => { s.tacSprintTime = TAC_SPRINT_CUT; s.slideCancelKeep = 1.0; } },
   { id: 'legs_4', branch: 'legs', tier: 3, cost: 5, name: 'Wind',
-    line: 'Twelve per cent faster, and a second storey is a handhold.',
+    line: 'Twenty per cent faster, with a longer climbing reach.',
     // The WHOLE multiplier, not a second step on top of Long Stride: installs run in tier
     // order and this row is what the stat reads once both are owned.
     install: (s) => { s.speedMul = SPEED_WIND; s.mantleReach = MANTLE_WIND; } },
@@ -341,7 +341,7 @@ export const NODES = Object.freeze([
       hooks.on('reloadWindow', 'hands_1', () => ACTIVE_RELOAD);
     } },
   { id: 'hands_2', branch: 'hands', tier: 1, cost: 2, name: 'Heavy Rounds',
-    line: 'Every round you land hits twelve per cent harder.',
+    line: 'Every round you land hits a quarter harder.',
     install: (s) => { s.damageMul = DMG_HEAVY; } },
   { id: 'hands_3', branch: 'hands', tier: 2, cost: 3, name: 'Hold',
     line: 'The sight stops drifting, and a reload you ran out of resumes.',
@@ -351,7 +351,7 @@ export const NODES = Object.freeze([
       hooks.on('reloadResume', 'hands_3', () => true);
     } },
   { id: 'hands_4', branch: 'hands', tier: 3, cost: 5, name: 'Through',
-    line: 'A quarter harder, and the round leaves the far side.',
+    line: 'Half again as hard, and rounds pass through cover.',
     install: (s, hooks) => {
       s.damageMul = DMG_THROUGH;
       hooks.on('penCm', 'hands_4', (cm) => (typeof cm === 'number' ? cm * PEN_MUL : cm));
@@ -589,15 +589,15 @@ export const STREAK_MAX = 8;
 
 /* ---------------------------------------------------------------- levelling -- */
 
-// DESIGN section 6: `100 * L^1.45` is the TOTAL lifetime XP needed to BE level L.
-// L2 275, L5 1030, L10 2820, L20 7700 — those four are the design's own worked examples and
-// this curve reproduces them to the rounding they were written at.
-export const LEVEL_BASE = 100;
-export const LEVEL_POW = 1.45;
+// September 8: retain the level-two opening, then make later choices last. The old
+// total-XP curve allowed several whole levels from one destination. Save migration
+// preserves earned levels, purchases and fractional progress before this curve applies.
+export const LEVEL_BASE = 650;
+export const LEVEL_POW = 1.35;
 
 export function xpForLevel(level) {
   const L = Math.max(1, Math.floor(level));
-  return L <= 1 ? 0 : Math.round(LEVEL_BASE * Math.pow(L, LEVEL_POW));
+  return L <= 1 ? 0 : 273 + Math.round(LEVEL_BASE * Math.pow(L - 2, LEVEL_POW));
 }
 
 export function levelFor(totalXp) {
@@ -606,7 +606,7 @@ export function levelFor(totalXp) {
   // Closed form, then one correction step each way, because Math.pow rounding at the exact
   // threshold is the difference between "you levelled" and "you did not" and the player will
   // be looking at the light on their hands when it happens.
-  let L = Math.floor(Math.pow(xp / LEVEL_BASE, 1 / LEVEL_POW));
+  let L = 2 + Math.floor(Math.pow(Math.max(0,xp - 273) / LEVEL_BASE, 1 / LEVEL_POW));
   while (L > 1 && xpForLevel(L) > xp) L--;
   while (xpForLevel(L + 1) <= xp) L++;
   return Math.max(1, L);

@@ -1240,6 +1240,16 @@ export class Car {
   /* ------------------------------------------------------------------- step */
 
   step(dt) {
+    if(!this._wearLoaded&&this._progress?.save?.data){
+      const saved=Number(this._progress.flag('car:wear'));
+      this.body?.setRepaired(!!this._progress.flag('car:fully-repaired'));
+      if(saved>0)this.wear=clamp01((saved-1)/1000000);
+      this._wearLoaded=true;this._wearSaveT=0;
+    }
+    if(this._wearLoaded&&this.ctx.playing&&!this.ctx.paused){
+      this._wearSaveT+=dt;
+      if(this._wearSaveT>=5){this._wearSaveT=0;this._progress.flag('car:wear',1+Math.round(this.wear*1000000));}
+    }
     this.rearPresence?.step(dt, this);
     // Debris outlives the car: you can crush a fence, park, get out and watch the last
     // splinters settle. So it steps before any of the early returns below.
@@ -1300,12 +1310,8 @@ export class Car {
       // ROUND 13: H at the wheel hub, for the first seconds in the seat, until the horn has
       // been used once. The hub rides the car body, so the glyph follows the wheel.
       this._seatS += dt;
-      if (this._seatS < HORN_TEACH_S && this.hornCount === 0 && this.body && this.body.steer && this.ctx.bus) {
-        this.body.steer.getWorldPosition(_hubV);
-        _promptP.kind = 'horn'; _promptP.label = 'H';
-        _promptP.x = _hubV.x; _promptP.y = _hubV.y; _promptP.z = _hubV.z; _promptP.k = 0;
-        this.ctx.bus.emit('prompt', _promptP);
-      }
+      this._dashboardPrompt(this.body?.steer,'H','HONK');
+      this._dashboardPrompt(this.body?.radio,'T','TUNE RADIO');
     } else {
       this.hornT = Math.max(0, this.hornT - dt);
       this.hornHeld = false;
@@ -1801,7 +1807,10 @@ export class Car {
     // Wear costs top speed and nothing else: a beaten car is a slower car, which is a read
     // you get through the windscreen instead of off a gauge. WHEEL 4 is the only thing
     // that gives any of it back. At WEAR_START the on-road cap is 22.0 rather than 23.0.
-    const worn = 1 - WEAR_SPEED_LOSS * clamp01(this.wear);
+    // About 50 km of ordinary driving from pristine to breakdown, with rough ground
+    // wearing it faster. Impacts still count independently; idling does not.
+    if(this.mode==='driving')this.wear=clamp01(this.wear+Math.abs(this.speed)*dt*(onRoad?1:1.4)/50000);
+    const worn = this.wear>=.999 ? 0 : (1-WEAR_SPEED_LOSS*this.wear)*Math.max(.12,1-Math.max(0,this.wear-.80)*4.5);
     const maxForward = (onRoad ? K.onRoad : K.offRoad) * worn;
     const maxReverse = (onRoad ? MAX_REV_ON : MAX_REV_OFF) * worn;
 
@@ -2528,6 +2537,23 @@ export class Car {
       if (this.body && this.body.setRadioDial) this.body.setRadioDial(bed.radio.dialT());
       this._emit('car:radio', { station: i, id: bed.radio.station().id });
     }
+  }
+
+  _dashboardPrompt(node,label,detail){
+    if(!node||!this.ctx.camera)return;
+    node.getWorldPosition(_hubV);
+    const cam=this.ctx.camera,dx=_hubV.x-cam.position.x,dy=_hubV.y-cam.position.y,dz=_hubV.z-cam.position.z;
+    const d=Math.hypot(dx,dy,dz)||1;cam.getWorldDirection(_dir);
+    if((dx*_dir.x+dy*_dir.y+dz*_dir.z)/d<.965)return;
+    this.ctx.bus.emit('prompt',{kind:'dashboard',label,detail,x:_hubV.x,y:_hubV.y,z:_hubV.z,k:0,rank:5});
+  }
+
+  repairFull(){
+    this.wear=0;this._wearLoaded=true;this._progress?.flag('car:wear',1);
+    this._progress?.flag('car:fully-repaired',1);this.body?.setRepaired(true);
+    this.hitCooldown=0;this.stuckT=0;
+    if(this.body)this.body.setLamp(this.headlightsOn?this._filament():0,this.engineOn);
+    this._emit('car:repaired',{condition:100});
   }
 
   _horn(dt) {

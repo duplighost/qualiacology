@@ -49,7 +49,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, clamp01 } from '../engine/math.js';
-import { GLOW } from './sites.js';
+import { GLOW, Kit } from './sites.js';
 import { ANCHORS } from './dress-station.js';
 import { DESTINATION_REFUGES, refugeFloorY } from './destination-refuges.js';
 
@@ -177,7 +177,7 @@ const LEVER_LEN = 0.56;
 
 /* ------------------------------------------------------------------ the door -- */
 const DOOR_SWING_S = 0.55;       // s from shut to fully open and back
-const DOOR_SHUT_AT = 0.80;       // the collider exists at or above this k (0 open .. 1 shut)
+const DOOR_SHUT_AT = 0.80;       // closed enough to shelter the room (0 open .. 1 shut)
 // ROUND 13: THE DOOR STARTS AJAR. Alex: "oh cool! the doors you push closed! i love it! ...
 // maybe there is some way we can get the player to push the door without realizing so they
 // know its pushable". A leaf a third of the way across the doorway (33 degrees off shut; the
@@ -287,7 +287,7 @@ export class Refuge {
                                  // init(): it starts OPEN, because a shut door you did not
                                  // shut teaches nothing.
     this.doorTarget = 0;
-    this.doorColliderOn = '';        // '' | 'shut' | 'open' — where the leaf's collider is
+    this.doorColliderOn = '';        // '' | 'shut' | 'ajar' | 'open'
     this.leverK = 0;             // 0 up .. 1 thrown
     this.throwT = -1;            // >= 0 while the 0.4 s swing runs
 
@@ -356,6 +356,10 @@ export class Refuge {
     }
 
     this._build();
+    if(this.spec.buildBreaker===false&&rec.fixture){
+      const f=rec.fixture;this.breakerWX=f.wx;this.breakerWY=f.wy+1.48;this.breakerWZ=f.wz;
+      this.breakerNX=f.fwx;this.breakerNZ=f.fwz;
+    }
     this._restore();
     this._ready = true;
     if (!this._owner) {
@@ -406,6 +410,13 @@ export class Refuge {
     this.group.rotation.y = this.yaw;
     if (scene) scene.add(this.group);
     else this._note('ctx.scene missing at refuge init: nothing will be visible');
+    // A raised timber floor separates the room from road and apron surfaces beneath it.
+    const room=this.spec.room,floor=new Kit(),w=room.w-.28,d=room.d-.28,n=Math.ceil(w/.32);
+    for(let i=0;i<n;i++)floor.box(w/n-.006,.095,d,-w/2+(i+.5)*w/n,this.padY+.068,0,[.075,.060,.043]);
+    const deck=new THREE.Mesh(floor.build(),this.matBody);deck.name='refuge-floor-'+this.siteId;
+    deck.position.set(room.x,0,room.z);deck.rotation.y=room.yaw||0;this.group.add(deck);
+    this._sys('collision')?.addCollider({kind:'obb',x:this._wx(room.x,room.z),z:this._wz(room.x,room.z),
+      halfX:w/2,halfZ:d/2,yaw:this.yaw+(room.yaw||0),y0:this.padY+.02,y1:this.padY+.116,tag:'wood',standable:true,breakable:false},'refuge-floor:'+this.siteId);
 
     if (this.spec.buildBreaker !== false) this._buildBreaker();
     this._buildDoor();
@@ -820,12 +831,19 @@ export class Refuge {
     // without one clears it. The door and the bed are E, the breaker is a hold; a blocked bed
     // prompts nothing (the dead click already answers, and a glyph would promise a bed the
     // door refuses).
-    if (cand === 'door') this._prompt('use', this.doorWX, this.doorWY + 1.15, this.doorWZ, 0);
+    if (cand === 'door') {
+      const handle = this._doorHandle();
+      this._prompt('use', handle.x, handle.y, handle.z, 0, this.doorTarget < DOOR_SHUT_AT ? 'CLOSE DOOR' : 'OPEN DOOR');
+    }
     else if (cand === 'breaker' && this.spec.buildBreaker !== false && !this.power && this.throwT < 0) {
-      this._prompt('hold', this.breakerWX, this.breakerWY, this.breakerWZ, this.holdKind === 'breaker' ? this.holdT / HOLD_BREAKER : 0);
-    } else if (cand === 'bed') {
+      this._prompt('hold', this.breakerWX, this.breakerWY, this.breakerWZ, this.holdKind === 'breaker' ? this.holdT / HOLD_BREAKER : 0, 'RESTORE POWER');
+    } else if (cand === 'breaker' && this.power) {
+      this._prompt('use', this.breakerWX, this.breakerWY, this.breakerWZ, 0, 'POWER ON', true);
+    } else if (cand === 'bed' || cand === 'bed-blocked') {
       const bg = this.anchors.bag;
-      this._prompt('hold', this._wx(bg.x, bg.z), this.padY + 0.35, this._wz(bg.x, bg.z), this.holdKind === 'bed' ? this.holdT / HOLD_REST : 0);
+      const blocked = cand === 'bed-blocked';
+      const detail = !blocked ? 'SLEEP' : !this.power ? 'RESTORE THE LIGHT TO REST' : 'CLOSE THE DOOR TO REST';
+      this._prompt('hold', this._wx(bg.x, bg.z), this.padY + 0.35, this._wz(bg.x, bg.z), this.holdKind === 'bed' ? this.holdT / HOLD_REST : 0, detail, blocked);
     }
     // ROUND 13: a body walking into a leaf that is not shut pushes it open.
     if (!inCar && !this.holdKind && this.doorTarget === this.doorK && this.doorK > 0.05 && this.doorK < DOOR_SHUT_AT) {
@@ -911,7 +929,8 @@ export class Refuge {
       }
       if (d < bestD) { bestD = d; best = kind; }
     };
-    test('door', this.doorWX, this.doorWY, this.doorWZ, REACH_DOOR, true);
+    const handle = this._doorHandle();
+    test('door', handle.x, this.doorWY, handle.z, REACH_DOOR, true);
     if (this.spec.buildBreaker !== false) test('breaker', this.breakerWX, this.breakerWY - 0.65, this.breakerWZ, REACH_BREAKER, true);
     const b = this.anchors.bag;
     const bx = this._wx(b.x, b.z), bz = this._wz(b.x, b.z);
@@ -940,10 +959,20 @@ export class Refuge {
   /* ------------------------------------------------------------------ door -- */
 
   /** ROUND 13: one preallocated payload per unit for the hud's key glyph. */
-  _prompt(kind, x, y, z, k) {
+  _prompt(kind, x, y, z, k, detail = '', unavailable = false) {
     const P = this._promptP || (this._promptP = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E' });
     P.kind = kind; P.x = x; P.y = y; P.z = z; P.k = k > 1 ? 1 : (k < 0 ? 0 : k);
+    P.detail = detail; P.subdetail = ''; P.unavailable = unavailable; P.rank = 3;
     if (this.ctx && this.ctx.bus) this.ctx.bus.emit('prompt', P);
+  }
+
+  _doorHandle() {
+    const d = this.anchors.door, a = (d.yaw || 0) + d.open * (1 - this.doorK);
+    const h = this._handlePoint || (this._handlePoint = {x: 0, y: 0, z: 0});
+    const x = d.hingeX + Math.cos(a) * d.width * 0.82;
+    const z = d.hingeZ - Math.sin(a) * d.width * 0.82;
+    h.x = this._wx(x,z); h.y = this.doorWY + 1.12; h.z = this._wz(x,z);
+    return h;
   }
 
   /**
@@ -1028,27 +1057,21 @@ export class Refuge {
   }
 
   /**
-   * The leaf's collider, in the two places a leaf ever RESTS: across the doorway when it is
-   * shut, and standing back inside the room when it is open. While it swings there is none —
-   * a collider that moves under a capsule pushes the body, and a door that shoves you across
-   * a room is worse than a door you can walk through for half a second.
-   *
-   * The open position is not "no collider". An open leaf is 2.3 m of timber standing in the
-   * room and you must not be able to walk through it; the first cut of this file could, and
-   * it looked exactly like the walk-through trees CINDERBLOOM shipped.
+   * Keep the physical leaf at its visible angle, including the initial ajar position.
+   * Small angle changes are coalesced; walking into an ajar leaf still nudges it open.
    */
   _syncDoorCollider() {
     const col = this._sys('collision');
     if (!col || typeof col.addCollider !== 'function') return;
-    const want = this.doorK >= DOOR_SHUT_AT ? 'shut' : (this.doorK <= 0.05 ? 'open' : '');
-    if (want === this.doorColliderOn) return;
+    const want = this.doorK >= DOOR_SHUT_AT ? 'shut' : (this.doorK <= 0.05 ? 'open' : 'ajar');
+    if (want === this.doorColliderOn && Math.abs(this.doorK-(this._doorColliderK??-10))<.006) return;
     this.doorColliderOn = want;
+    this._doorColliderK=this.doorK;
     const chunkId = 'refuge:door:' + this.siteId;
     if (typeof col.removeChunk === 'function') col.removeChunk(chunkId);
-    if (!want) return;
     const d = this.anchors.door;
     // the leaf's midpoint and heading at this rest angle, in the site's local frame
-    const th = want === 'shut' ? 0 : d.open;
+    const th = d.open*(1-this.doorK);
     const h = d.width * 0.5;
     const base = d.yaw || 0;
     const lx = d.hingeX + h * Math.cos(base + th), lz = d.hingeZ - h * Math.sin(base + th);
@@ -1359,6 +1382,7 @@ export class Refuge {
   ready() { return true; }
 
   dispose() {
+    this._sys('collision')?.removeChunk('refuge-floor:'+this.siteId);
     if (!this._owner && this._units) {
       for (let i = 1; i < this._units.length; i++) this._units[i].dispose();
       this._units.length = 1;

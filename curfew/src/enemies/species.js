@@ -309,6 +309,9 @@ SPECIES.cashier = { ...SPECIES.resident, id:'cashier' };
 SPECIES.sentry = { ...SPECIES.poacher, id:'sentry', human:true, hp:180, xp:90, countsAs:0 };
 SPECIES.marshal = { ...SPECIES.warden, id:'marshal', form:FORM.HUMAN, human:true, hp:560,
   height:1.98, radius:.40, mass:120, countsAs:0 };
+SPECIES.marrow={...SPECIES.hunter,id:'marrow',xp:90,hp:165,dmg:24,radius:.40,height:2.28,mass:68,
+  speed:7.0,burst:.72,pause:.42,standoff:1.8,telegraph:.62,attack:.46,strikeAt:.28,recover:.85,
+  dormant:true,riseTime:.95,countsAs:1,eye:0xd8e0cf};
 export const ROSTER = Object.keys(SPECIES);
 
 /* Pool sizes. Allocated at boot; spawn() never allocates. Since round 6 the
@@ -330,7 +333,7 @@ export const POOL = Object.freeze({
   hound: 18, pallbearer: 12, hunter: 3, poacher: 12, pale: 8, standing: 8,
   // ROUND 15. Six Wardens, which is the whole garrison of the one building that has them.
   // A slot is a body record and a merged mesh at boot — no light, no material, no program.
-  warden: 6, resident: 24, cashier: 2, sentry: 9, marshal: 3,
+  warden: 6, resident: 28, cashier: 2, sentry: 9, marshal: 3, marrow:4,
 });
 
 /* Species allowed to answer a pressure order, in the order a budget prefers

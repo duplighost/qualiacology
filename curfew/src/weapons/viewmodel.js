@@ -41,6 +41,7 @@
 //      breath are added on top at the true presentation time.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, DEG, clamp, clamp01, lerp, ease, Spring, Spring3, sway2 } from '../engine/math.js';
 import CFG from '../config.js';
 
@@ -647,6 +648,26 @@ export class Viewmodel {
     const brassM = new THREE.MeshStandardMaterial({ color: 0x7a5a24, roughness: 0.42, metalness: 0.80 });
     this._mats = [wood, blued, matte, brassM];
     for (const m of this._mats) this._grade(m);
+    // A visible alternating grip communicates the held-Space movement without a tutorial.
+    this.climbHands=[];
+    const glove=matte.clone();glove.color.setHex(0x4c4940);this._grade(glove);this._mats.push(glove);
+    for(const side of [-1,1]){
+      const parts=[];
+      const block=(w,h,d,x,y,z,rx=0,rz=0)=>{
+        const g=bevelBox(w,h,d);g.rotateX(rx);g.rotateZ(rz);g.translate(x,y,z);parts.push(g);
+      };
+      block(.082,.16,.075,0,-.16,.05,-.12);
+      block(.088,.11,.043,0,-.032,0);
+      for(let f=0;f<4;f++){
+        const x=(f-1.5)*.023,dy=(f===0||f===3)?-.009:0;
+        block(.018,.055,.022,x,.043+dy,-.005,-.10);
+        block(.018,.025,.038,x,.074+dy,-.018,.65);
+      }
+      block(.027,.066,.03,-side*.052,-.009,-.014,.1,-side*.55);
+      const g=mergeGeometries(parts);parts.forEach(g=>g.dispose());
+      const hand=new THREE.Mesh(g,glove);hand.scale.setScalar(.80);hand.visible=false;hand.userData.side=side;
+      this.root.add(hand);this.climbHands.push(hand);
+    }
     const add = (parent, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, y, z); mesh.rotation.set(rx, ry, rz); parent.add(mesh);
@@ -1544,6 +1565,15 @@ export class Viewmodel {
     // root locked to the camera orientation: rotate-then-place
     this.root.position.set(0, 0, 0);
     this.root.quaternion.identity();
+    const gripping=p.scaling||p.climb!==0;
+    if(gripping){_v.y-=.48;_e.x+=.7;}
+    for(const hand of this.climbHands){
+      hand.visible=gripping;
+      if(gripping){const side=hand.userData.side,beat=t*6.5+(side<0?Math.PI:0);
+        hand.position.set(side*(.26+.013*Math.cos(beat)),-.16+.08*Math.sin(beat),-.62+.025*Math.cos(beat));
+        hand.rotation.set(-.12+.12*Math.cos(beat),-side*.12,-side*.18);
+      }
+    }
     this.gun.position.copy(_v);
     this.gun.rotation.copy(_e);
 

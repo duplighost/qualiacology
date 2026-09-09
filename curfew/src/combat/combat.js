@@ -271,6 +271,12 @@ export class Combat {
       s.x = shopHit.point.x; s.y = shopHit.point.y; s.z = shopHit.point.z;
       s.nx = -dx; s.ny = -dy; s.nz = -dz;
     }
+    const residentHit = this._sys('interior-horror')?.raycast(_o,_d,s.t);
+    if(residentHit&&residentHit.t<s.t){
+      s.hit=true;s.t=residentHit.t;s.kind='flesh';s.zone=residentHit.zone;s.enemy=residentHit.enemy;
+      s.boss=false;s.colliderId=-1;s.x=residentHit.point.x;s.y=residentHit.point.y;s.z=residentHit.point.z;
+      s.nx=-dx;s.ny=-dy;s.nz=-dz;
+    }
     const collision = this._sys('collision');
     if (collision && collision.raycast) {
       // MASK.SHOT only — deliberately NOT 0xffffffff. The all-bits mask includes
@@ -396,7 +402,7 @@ export class Combat {
 
       if (h.enemy) {
         // the boss owns its own hp (enemies/kneeler.js); everything else is the pool's
-        const owner = this._sys(h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+        const owner = this._sys(h.enemy.interior ? 'interior-horror' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
         const res = owner && owner.damage
           ? owner.damage(h.enemy, dmg, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
           : { killed: false };
@@ -529,7 +535,7 @@ export class Combat {
     const stats = this._progStats();
     const multiplier = h.enemy ? ((stats && stats.damageMul) || 1) : 1;
     const dealt = Math.max(1, Math.round(damage * multiplier));
-    const owner = h.enemy && this._sys(h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+    const owner = h.enemy && this._sys(h.enemy.interior ? 'interior-horror' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
     const result = owner && owner.damage
       ? owner.damage(h.enemy, dealt, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
       : { killed: false };
@@ -578,6 +584,8 @@ export class Combat {
         dx *= inv; dy *= inv; dz *= inv;
       }
       const h = this._trace(p.pos.x, oy, p.pos.z, dx, dy, dz, range);
+      _pt.set(p.pos.x,oy,p.pos.z);_n.set(dx,dy,dz);
+      if(this._sys('scavenging')?.strike(_pt,_n,h?Math.min(range,h.t+.20):range))return true;
       if (h) {
         this._landMelee(h, damage, h.t);
         this._maybeBreak(h, dx, dz, 'melee');    // ROUND 13: the stock takes a crate apart too

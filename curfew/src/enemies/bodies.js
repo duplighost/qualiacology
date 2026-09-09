@@ -45,6 +45,7 @@ import * as THREE from 'three';
 import { TAU } from '../engine/math.js';
 import { SPECIES, FORM } from './species.js';
 import { buildHuman } from '../art/people.js';
+import { buildMarrow } from './marrow-body.js';
 
 /* ==========================================================================
    Palette. Values, not hues — a greyscale photograph is the only place this
@@ -1494,6 +1495,7 @@ function buildStanding(def) {
  *          owns everything inside it.
  */
 export function buildBody(key, rng) {
+  if(key==='marrow')return buildMarrow(rng);
   const def = SPECIES[key];
   if (def.human) return buildHuman(key, Math.floor(rng.next()*4), def.height);
   const set = geoSetFor(key);

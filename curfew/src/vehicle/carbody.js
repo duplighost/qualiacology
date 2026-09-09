@@ -489,19 +489,19 @@ export function buildCarBody(rng) {
    * The faceplate is merged into the shell. Only the needle moves, so only the needle is
    * its own mesh, exactly like the steering rim above it.
    * ------------------------------------------------------------------------ */
-  const SET = { x: 0.055, y: 1.245, z: -1.105 };   // centre stack, right of the column
+  const SET = { x: 0.055, y: 1.245, z: -.855 };   // mounted on the driver-facing surface
   PI(box(0.40, 0.155, 0.05), C_DARK, { x: SET.x, y: SET.y, z: SET.z + 0.012, rust: 0.1 });
   PC(box(0.42, 0.022, 0.035), C_CHROME, { x: SET.x, y: SET.y + 0.088, z: SET.z + 0.010, rust: 0.25 });
   PC(box(0.42, 0.020, 0.035), C_CHROME, { x: SET.x, y: SET.y - 0.086, z: SET.z + 0.010, rust: 0.3 });
   // the scale: five ticks, so a needle has somewhere to be
   for (let i = 0; i < 5; i++) {
     PC(box(0.011, i % 2 ? 0.030 : 0.046, 0.02), C_CHROME,
-      { x: SET.x - 0.152 + i * 0.076, y: SET.y + 0.040, z: SET.z - 0.014, rust: 0.2 });
+      { x: SET.x - 0.152 + i * 0.076, y: SET.y + 0.040, z: SET.z + 0.052, rust: 0.2 });
   }
   // two knobs, because a set with a needle and no knobs is a drawing of a set
   for (const kx of [-0.238, 0.238]) {
     PC(new THREE.CylinderGeometry(0.028, 0.030, 0.030, 10), C_CHROME,
-      { x: SET.x + kx, y: SET.y - 0.010, z: SET.z + 0.008, rx: Math.PI * 0.5, rust: 0.35 });
+      { x: SET.x + kx, y: SET.y - 0.010, z: SET.z + 0.060, rx: Math.PI * 0.5, rust: 0.35 });
   }
   const RADIO_SWEEP = 0.152;   // half the scale, metres either side of centre
   // The needle itself is built with the other MOVING parts, below, because it needs
@@ -782,13 +782,16 @@ export function buildCarBody(rng) {
   // On cabinMat: the needle is lit from inside the set, the way a dial is, so it can be
   // found in a black cabin without adding a light to the pinned census (CONTRACT).
   const radioNeedle = new THREE.Group();
-  radioNeedle.position.set(SET.x, SET.y + 0.012, SET.z - 0.030);
+  radioNeedle.position.set(SET.x, SET.y + 0.012, SET.z + 0.067);
+  const radioMat=cabinMat.clone();radioMat.name='car-radio-dial';radioMat.emissiveIntensity=.24;
+  const radioDialGeo=part(box(.34,.095,.008),[.028,.065,.047],{seed,x:SET.x,y:SET.y+.012,z:SET.z+.045});
+  const radioDial=new THREE.Mesh(radioDialGeo,radioMat);radioDial.name='car-radio-dial';root.add(radioDial);
   {
     const nParts = [part(box(0.013, 0.098, 0.013), [0.62, 0.30, 0.10], { seed })];
     const nGeo = mergeGeometries(nParts, false);
     for (let i = 0; i < nParts.length; i++) nParts[i].dispose();
     if (nGeo) {
-      const nm = new THREE.Mesh(nGeo, cabinMat);
+      const nm = new THREE.Mesh(nGeo, radioMat);
       nm.name = 'car-radio-needle';
       radioNeedle.add(nm);
     }
@@ -813,6 +816,11 @@ export function buildCarBody(rng) {
   const lampGood = new THREE.Mesh(lensGeo, lampMat);
   lampGood.name = 'car-lamp-good';
   root.add(lampGood);
+  const repairedGeo=lensGeo.clone();
+  repairedGeo.translate(LAMP_DEAD.x-LAMP_GOOD.x,LAMP_DEAD.y-LAMP_GOOD.y,LAMP_DEAD.z-LAMP_GOOD.z-.012);
+  const repairedMat=lampMat.clone();repairedMat.name='car-repaired-headlamp';
+  const lampDead=new THREE.Mesh(repairedGeo,repairedMat);lampDead.name='car-repaired-headlamp';root.add(lampDead);
+  let fullyRepaired=false;
 
   // Tail lamps: the thing you see in the mirror of your own car and the thing a hound
   // stands beside. Dim red, always on when the electrics are. Both in one geometry —
@@ -842,11 +850,11 @@ export function buildCarBody(rng) {
   });
 
   return {
-    root, wheels, steer, lampGood,
+    root, wheels, steer, lampGood, radio:radioNeedle,
     doorGroup: door,
-    lampDead: null,                   // merged into the shell; the key stays for callers
-    // six materials, THREE programs — cabinMat differs from bodyMat by two uniforms
-    materials: [bodyMat, chromeMat, glassMat, lampMat, tailMat, cabinMat, interiorMat],
+    lampDead,
+    // Shared material programs; the dial and restored lamp vary their emissive uniforms.
+    materials: [bodyMat, chromeMat, glassMat, lampMat, repairedMat, tailMat, cabinMat, interiorMat,radioMat],
     tris: Math.round(tris),
     roofY: ROOF_Y,
     door: DOOR,
@@ -860,13 +868,13 @@ export function buildCarBody(rng) {
      */
     setLamp(head, tailOn) {
       lampMat.emissiveIntensity = head * 2.4;
+      repairedMat.emissiveIntensity=fullyRepaired?head*2.4:0;
       tailMat.emissiveIntensity = tailOn ? 0.85 : 0.0;
     },
+    setRepaired(on){fullyRepaired=!!on;repairedMat.emissiveIntensity=fullyRepaired?lampMat.emissiveIntensity:0;},
 
     /**
-     * THE DIAL, 0..1 across the scale. This is the whole of the radio's user interface and
-     * it is a needle on a dashboard, because there are no words on screen during play
-     * (AGENTS.md rule 4). Press T, watch it step: that is the tutorial.
+     * The physical dial moves with T; looking at the set also shows its focused prompt.
      */
     setRadioDial(t) {
       radioNeedle.position.x = SET.x + (clamp01(t) * 2 - 1) * RADIO_SWEEP;
@@ -902,9 +910,11 @@ export function buildCarBody(rng) {
       wheelGeo.dispose();
       steerGeo.dispose();
       lensGeo.dispose();
+      repairedGeo.dispose();repairedMat.dispose();
       tailGeo.dispose();
       bodyMat.dispose(); interiorMat.dispose(); interiorGeo.dispose(); chromeMat.dispose(); glassMat.dispose();
-      lampMat.dispose(); tailMat.dispose(); cabinMat.dispose();
+      lampMat.dispose(); tailMat.dispose(); cabinMat.dispose();radioDialGeo.dispose();radioMat.dispose();
+      radioNeedle.traverse(o=>o.geometry?.dispose());
       if (root.parent) root.parent.remove(root);
     },
   };

@@ -167,6 +167,7 @@ function crushableBySize(tag, r, hx, hz, y0, y1) {
 // 'world:broke'. Only the light wooden things are on this table: a drum, a sign, a waystone
 // still stop a round and spark like what they are.
 const SHOT_BREAK = new Map([
+  ['supply',2],
   ['crate', 1], ['box', 1], ['aboard', 1], ['pallet', 2], ['cache', 1],
   // ROUND 15: three landings. A strongbox should cost you rounds you would rather keep.
   ['strongbox', 3],
@@ -1708,6 +1709,16 @@ export class Collision {
 
   // Line of sight between two world points at a given height. Used by AI and by the
   // torch trade. Cheap: one raycast with the SIGHT mask, no ground march.
+  /** A broad structural face the hands can hold. Reuses the ray result. */
+  climbFace(origin, direction, reach=1.05) {
+    const hit=this.raycast(origin,direction,reach,MASK.SOLID);
+    if(!hit||hit.ground||Math.abs(hit.normal.y)>.25)return null;
+    const i=Math.floor(hit.id/65536);
+    if(this._kind[i]!==KIND_OBB || (this._flags[i]&(F_NOCLIMB|F_BREAK))
+      || this._y1[i]-this._y0[i]<1.1 || Math.max(this._hx[i],this._hz[i])<.65)return null;
+    hit.top=this._y1[i];return hit;
+  }
+
   segmentClear(x0, y0, z0, x1, y1, z1) {
     const dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
     const d = Math.sqrt(dx * dx + dy * dy + dz * dz);

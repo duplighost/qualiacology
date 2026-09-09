@@ -283,6 +283,8 @@ export class Progress {
       cash: 0,
       unbanked: 0,      // carried since the last lit fire; at risk, and only this is
       level: 1,
+      curveVersion: 0,
+      startPointCredit: 0,
       nodes: [],        // owned node ids (bought AND auto-granted)
       auto: [],         // the subset that was auto-granted, so it never costs a point
       found: [],        // place ids discovered
@@ -401,6 +403,22 @@ export class Progress {
     this._selfTest();
     this.save.load().bind();
     const d = this.save.data;
+    // Make the first choice intentional. Preserve every old purchase and earned level
+    // while moving a returning save to the slower curve, once, at its existing progress.
+    if (!d.curveVersion) {
+      if (this.save.loadedFrom === 'store') {
+        const oldThreshold=L=>L<=1?0:Math.round(100*Math.pow(L,1.45));
+        let L=Math.max(1,Math.floor(Math.pow(Math.max(0,d.xp)/100,1/1.45)));
+        while(oldThreshold(L+1)<=d.xp)L++;
+        const fraction=(d.xp-oldThreshold(L))/Math.max(1,oldThreshold(L+1)-oldThreshold(L));
+        d.xp=xpForLevel(L)+Math.round(fraction*(xpForLevel(L+1)-xpForLevel(L)));
+        // Old saves earned a point at level one. Keep that earned point as a migration credit.
+        d.startPointCredit=1;
+      } else {
+        d.xp=xpForLevel(2);d.level=2;d.startPointCredit=0;
+      }
+      d.curveVersion=1;this.save.mark();
+    }
 
     for (const id of d.nodes) if (NODE_BY_ID[id]) this._owned.add(id);
     for (const id of d.auto) if (NODE_BY_ID[id]) this._auto.add(id);
@@ -878,7 +896,7 @@ export class Progress {
       if (n) spent += n.cost;
     }
     this.spent = spent;
-    this.points = Math.max(0, this.level - spent);
+    this.points = Math.max(0, this.level - 1 + (this.save.data.startPointCredit || 0) - spent);
   }
 
   /* ------------------------------------------------------------------ motes -- */

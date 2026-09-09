@@ -2152,6 +2152,8 @@ export const BUILDERS = {
 
       const HALF = 9.2;          // the barrier reaches this far either side of the centreline
       const GAP = 2.4;           // and the gap a car fits through
+      // The control stands beside the boom, clear of its collision volume.
+      [api.site.claim.dx,api.site.claim.dz]=P(-1.6,-GAP-1.2);
 
       /* ---- THE BARRIER ------------------------------------------------------
        * Jersey barriers in a line across both lanes with one gap. Concrete, chipped, and set
@@ -2254,7 +2256,7 @@ export const BUILDERS = {
         };
         api.cast([
           C4(-3.5, -GAP - 1.0, -0.2, 'sentry'),
-          C4(-3.5, GAP + 1.0, 0.2, 'sentry'),
+          C4(-5.6, GAP + 1.0, 0.2, 'sentry'),
           C4(-9.0, 0, 0.0, 'marshal'),
         ]);
       }
@@ -2692,12 +2694,15 @@ export const BUILDERS = {
         // overlapped by more than a player's radius at 0.55. A narrower 0.42 keeps the
         // ascending body continuously supported; the lamp-room ceiling's explicit
         // non-climbable flag below is what prevents the false mantle on descent.
-        const rc = (POST_R + rOut) * 0.5;
-        api.emit({
-          kind: 'obb', x: Math.cos(a) * rc, z: Math.sin(a) * rc,
-          halfX: (rOut - POST_R) * 0.5, halfZ: 0.42, yaw: -a,
-          y0: top - 0.22, y1: top, tag: 'metal', standable: true,
-        });
+        // Three radial bands follow the widening tread. The old fixed 0.84 m
+        // collision strip left large unsupported gaps beside the outer wall.
+        const band=(rOut-POST_R)/3;
+        for(let j=0;j<3;j++){
+          const rc=POST_R+(j+.5)*band;
+          api.emit({kind:'obb',x:Math.cos(a)*rc,z:Math.sin(a)*rc,
+            halfX:band*.5+.025,halfZ:(rc+band*.5)*Math.tan(STEP_A*.5)+.025,yaw:-a,
+            y0:top-.22,y1:top,tag:'metal',standable:true});
+        }
         // a handrail on the post side, 0.9 m over each tread
         const hr = POST_R + 0.22;
         k.solid.box(0.06, 0.06, 0.62, Math.cos(a) * hr, top + 0.9, Math.sin(a) * hr, C.rust, tangYaw(a));
@@ -2843,8 +2848,9 @@ export const BUILDERS = {
       gableFloor(api, 9, 3, 9.6, 7.0, api.padY + 3.4, 1.2, 0.3);
 
       smallShellRoute(k.solid, api, 9, 3, 9, 6.5, 3.4, 0.3);
-      k.glow.pane(1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, PANE_WINDOW, Math.PI + 0.3, 0, 6, 5);
-      sash(k.solid, 1.4, 1.0, 9 - 1.0, api.padY + 2.0, 3 - 3.4, C.dark, Math.PI + 0.3, 0, 2, 2, 0.07, 0.09);
+      const windowX=9-2.7*Math.cos(.3)-3.32*Math.sin(.3),windowZ=3+2.7*Math.sin(.3)-3.32*Math.cos(.3);
+      k.glow.pane(1.4, 1.0, windowX, api.padY + 2.0, windowZ, PANE_WINDOW, Math.PI + 0.3, 0, 6, 5);
+      sash(k.solid, 1.4, 1.0, windowX, api.padY + 2.0, windowZ, C.dark, Math.PI + 0.3, 0, 2, 2, 0.07, 0.09);
       // ROUND 6: the claim is the lamp at the top of the stair (landmark). The door at the
       // foot is the tower's own doorway now, facing the road; nothing is claimed down here.
       // breakwater
@@ -3042,14 +3048,8 @@ export const BUILDERS = {
     },
     body(api) {
       const k = kits();
-      // the outside stair, which is how you get up if you ever get an interior
-      for (let i = 0; i < 14; i++) {
-        const a = i * 0.42;
-        const r = 4.6;
-        k.solid.box(1.6, 0.18, 0.9, Math.cos(a) * r, api.padY + 0.4 + i * 0.42, Math.sin(a) * r,
-          C.stone, -a);
-      }
-      // a ruined nave stub, so the tower is clearly what is LEFT of something
+      // A complete stair to the belfry, with matching support for every visible tread.
+      // The continuous staircase is authored once, in dress-interiors.tower.
       for (let i = 0; i < 5; i++) {
         const lz = 6 + i * 3.0;
         const hh = api.rng.range(0.8, 2.6);
