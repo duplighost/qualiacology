@@ -33,6 +33,8 @@
 //   garden-of-rest   h 117.5  slope 0.01  road 28.0   ridge
 //   bell-tower       h  86.6  slope 0.02  road 25.3   pines   (moisture 0.81)
 //   jackfield        h  75.6  slope 0.01  road 29.7   fields
+//   morning          h  10.6  slope 0.003 road 33.8   fields  (ROUND 22: east of the outer
+//                                                            ring; 1043 m from the Toll)
 //
 // The nine loop destinations are the odd control points of the county loop, pushed 24-30 m
 // radially off the centreline so the road runs PAST the yard instead of THROUGH the
@@ -544,6 +546,20 @@ export const MAJORS = Object.freeze([
     discoverR: 44, nearR: 140, horizon: true,
     claim: { how: 'touch', dx: 26, dy: 7.2, dz: -38, r: 2.6 },
     xpFind: 75, xpClaim: 420, startClaimed: false,
+  },
+  // ROUND 22 — MORNING. Alex: "Green highway sign: MORNING — 40. It's a town. It's the far end
+  // of the map. Whether there's anything there is your ending." The last building on the map,
+  // east of the outer ring, seats facing true east. The claim post is the button in the
+  // console (planetarium.js puts the console at local (0, +3) so its plate faces the seats).
+  {
+    id: 'morning', name: 'Morning',
+    x: 2980, z: 580, region: 'shore', terrainRegion: 'fields', kind: 'planetarium',
+    lit: false, hub: false, clearR: 46,
+    flat: { radius: 56, blend: 0.62 }, apronCol: [0.052, 0.053, 0.056],
+    approach: { x: 0, z: 36, w: 14, h: 9, style: 'planetarium', routeX: 0, routeZ: 24, existing: true },
+    discoverR: 30, nearR: 120, horizon: true,
+    claim: { how: 'touch', dx: 0, dy: 0.14, dz: 3.0, r: 2.6 },
+    xpFind: 80, xpClaim: 500, startClaimed: false,
   },
 ]);
 

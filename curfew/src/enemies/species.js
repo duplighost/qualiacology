@@ -344,6 +344,47 @@ export const SPECIES = {
     eye: 0xc8a870, cloth: 0x0d0c0a, skin: 0x1c1712, bone: 0x2a2318,
   },
 
+  /* --------------------------------------------------------------- RUNNER --
+     ROUND 22. ALEX, 2026-09-10: "New enemy: we need a really fast enemy."
+
+     A low, LONG quadruped — the hound's builder stretched along its spine (bodies.js reads
+     `stretch`) at 0.80 m, so it reads as a different animal at 40 m by silhouette alone.
+     Night only, like the hunter: the first dusk teaches the hound before the thing you
+     cannot outrun arrives.
+
+     THE WHOLE ANIMAL IS THE DASH. Its cruise, 8.60, sits under tac-sprint 9.20 and under
+     the car, so the chase is still a chase you can win by spending the verb. The dash is
+     not: 13.5 m/s for 1.05 s, and validate() asserts it beats tac-sprint, because "really
+     fast" that a tac-sprint outruns is not what was asked for. The telegraph is the crouch
+     — 0.380 s, legible against the 0.320 law — and the attack is a line PAST you: it aims
+     0.9 m off your shoulder, bites as it passes, keeps going, and circles back from its
+     7.5 m ring. A body that stops on your chest is a hound; this one does not stop.
+     A dash into a trunk ends in recover, never a freeze (enemies.js _attack).
+     engage[0] is 4 m: inside that it is too close to launch and rings back out first,
+     which is the "overshoot and circle" Alex will actually see. */
+  runner: {
+    id: 'runner', form: FORM.QUADRUPED, owner: OWNER.PRESSURE, xp: 70,
+    phases: NIGHT_ONLY,
+    hp: 40, dmg: 24, radius: 0.40, height: 0.80, mass: 34,
+    stretch: 1.35, gait: 'dash',            // bodies.js: z-scale the hound rig; its own gait
+    speed: 8.60,                            // < tacSprint 9.20, checked below; HUNT caps at 8.80 anyway
+    burst: 0.900, pause: 0.220,
+    engage: [4, 16], standoff: 7.5,
+    telegraph: 0.380, attack: 1.05, strikeAt: 0.0, recover: 0.950,
+    strikeRange: 1.60,
+    // THE DASH. dashSpeed > tacSprint, checked below. dashTime is how long the line is held;
+    // dashRange how far out it may launch from; dashLead seconds of your velocity it leads
+    // by; dashOffset metres off your shoulder the line is aimed, so it passes rather than
+    // stops (enemies.js _pushOffPlayer stops anything aimed at your centre).
+    dash: true, dashSpeed: 13.5, dashTime: 1.05, dashRange: 16, dashLead: 0.30, dashOffset: 0.9,
+    notice: 40, memAlert: 9.0,
+    litNotice: 1.0,                         // it hunts by sight, like the hunter
+    deathNoise: 12,
+    countsAs: 1,
+    // Night-value law: cloth at bark value, the eye warm and bright (ratio ~30x bone).
+    eye: 0xffe6b0, cloth: 0x0f0e0c, skin: 0x171410, bone: 0x2a2620,
+  },
+
   /* --------------------------------------------------------------- SPIDER --
      ROUND 18. ALEX, 2026-09-09: "Another new enemy inside a destination if it's big and
      looks old should be a giant spider that crawls on ceiling and drops off."
@@ -406,6 +447,21 @@ SPECIES.resident = { ...SPECIES.warden, id:'resident', form:FORM.HUMAN, human:tr
   strikeRange:1.2, engage:[0,1.5], standoff:0, deathNoise:14 };
 SPECIES.cashier = { ...SPECIES.resident, id:'cashier' };
 SPECIES.sentry = { ...SPECIES.poacher, id:'sentry', human:true, hp:180, xp:90, countsAs:0 };
+// ROUND 22. ALEX, 2026-09-10: "The dog-caller. The voice in the woods calling a name all game
+// is a person. Biggest light in the county, hunts you with the pack. Kill him and the hounds
+// stop answering." A poacher's brain (bands, real bolts) in a human rig with a rifle
+// (art/people.js gives 'dogcaller' the gun), placed ONCE per session by enemies/dogcaller.js
+// — the director never rolls him (PRESSURE_ROSTER excludes human rows) and `unique` makes
+// cull/standDown/the respawn sweep refuse him. All four phases: the voice does not go home
+// at black. countsAs 0: he is a boss, not headcount. The call fields are dogcaller.js's:
+// callEvery idle / callHuntEvery while he has you; callRadius is how far a hound answers;
+// packRadius how far the pack shares his eyes; lantern.near is where his rover is borrowed.
+SPECIES.dogcaller = { ...SPECIES.poacher, id:'dogcaller', human:true, unique:true,
+  phases: ALL_PHASES, hp: 240, xp: 180, countsAs: 0,
+  bands: [18, 26, 34], bandWeights: [0.34, 0.40, 0.26], accuracy: 0.50,
+  memAlert: 12, memHunt: 20, deathNoise: 30,
+  callEvery: [22, 38], callHuntEvery: [9, 14], callRadius: 220, packRadius: 45,
+  lantern: { colour: 0xffb469, intensity: 44, near: 140 } };
 SPECIES.marshal = { ...SPECIES.warden, id:'marshal', form:FORM.HUMAN, human:true, hp:560,
   height:1.98, radius:.40, mass:120, countsAs:0 };
 SPECIES.marrow={...SPECIES.hunter,id:'marrow',xp:90,hp:165,dmg:24,radius:.40,height:2.28,mass:68,
@@ -444,6 +500,9 @@ export const POOL = Object.freeze({
   // is one thing on one trunk. Four spiders: interior-horror places at most one per room and
   // the county has thirteen rooms, but only the ones you are inside are ever alive at once.
   moth: 6, spider: 4,
+  // ROUND 22. Three runners so a corpse holding its slot cannot starve the director's one
+  // live runner (ROSTER maxAlive 1); one dog-caller, because there is one voice in the woods.
+  runner: 3, dogcaller: 1,
 });
 
 /* Species allowed to answer a pressure order, in the order a budget prefers
@@ -484,6 +543,15 @@ export function validate() {
   if (!(SPECIES.hunter.speed > CFG.player.SPRINT
      && SPECIES.hunter.speed < CFG.player.tacSprint.speed)) {
     bad.push('hunter must sit between SPRINT and tac-sprint: the chase IS that gap');
+  }
+  // ROUND 22. The runner: its cruise can still be outrun by a tac-sprint and by the car, and
+  // ONLY the dash beats you. Alex asked for "a really fast enemy"; a dash a tac-sprint outruns
+  // would not be one, and a cruise nothing outruns would be a wall, not an animal.
+  if (!(SPECIES.runner.dashSpeed > CFG.player.tacSprint.speed)) {
+    bad.push('runner dash must beat tac-sprint: the dash is the whole animal');
+  }
+  if (!(SPECIES.runner.speed < CFG.player.tacSprint.speed)) {
+    bad.push('runner cruise must stay under tac-sprint so the verb still answers it');
   }
   return bad;
 }

@@ -37,6 +37,7 @@
 
 import * as THREE from 'three';
 import { makeOuterBuilders } from './outer-destinations.js';
+import { makePlanetariumBuilders } from './planetarium.js';   // ROUND 22: the town of Morning
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, clamp } from '../engine/math.js';
 
@@ -3249,6 +3250,8 @@ export const BUILDERS = {
 // in as destinations"). The whole builder lives in manor.js; it gets this file's kit,
 // palette and pane profiles and returns the same { landmark, body } shape as the rest.
 Object.assign(BUILDERS, makeOuterBuilders({ Kit, kits, C, GLOW, groundY }));
+// ROUND 22: the planetarium at Morning, authored in planetarium.js the same way.
+Object.assign(BUILDERS, makePlanetariumBuilders({ Kit, kits, C, GLOW, groundY }));
 BUILDERS.manor = makeManorBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 BUILDERS.avery = makeAveryHouseBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 
@@ -4000,9 +4003,11 @@ export const MINOR_BUILDERS = {
    * the face has all but gone. `api.age` is 0..1, handed in by places.js.
    *
    * REDUCED: EATEN PATH's version paints a real face into a canvas texture
-   * (props.js:684 `missingTex`). A texture map is a new shader program against
-   * CFG.render.budget.programsMax, so the ageing is carried in the vertex colours instead —
-   * the paper greys, the printed block shrinks and the corners curl. See docs/HANDOFF.md.
+   * (props.js:684 `missingTex`). The ageing is carried in the vertex colours instead —
+   * the paper greys, the printed block shrinks and the corners curl. (ROUND 22: the
+   * "a texture map is a new shader program" reason this used to give was stale — a
+   * places.matBody.clone() with a canvas map shares the opening's paper program, which
+   * is how signage.js hangs its painted government notice over this very board.)
    */
   poster(api) {
     const k = kits();
@@ -4014,14 +4019,19 @@ export const MINOR_BUILDERS = {
     k.solid.cyl(0.05, 0.06, 1.9, 5, -0.42, api.padY + 0.95, 0, C.wood);
     k.solid.cyl(0.05, 0.06, 1.9, 5, 0.42, api.padY + 0.95, 0, C.wood);
     k.solid.box(1.15, 0.85, 0.05, 0, api.padY + 1.45, 0, C.wood);
-    k.solid.quad(0.98, 0.70, 0, api.padY + 1.45, -0.04, paper, Math.PI, api.rng.range(-0.05, 0.05));
+    // ROUND 22 (lane D): the paper was on the -Z side at yaw PI, facing AWAY from the road
+    // (places.js yaws a minor so local +Z faces the road). Now on +Z, and signage.js hangs
+    // its painted government poster 0.06 in front of it, so the stapled notice reads from
+    // the road. The kit's paper stays: it is what shows when the site streams and the
+    // overlay does not.
+    k.solid.quad(0.98, 0.70, 0, api.padY + 1.45, 0.035, paper, 0, api.rng.range(-0.05, 0.05));
     // the face block, shrinking as the poster ages
     const fs = 0.44 * (1 - 0.55 * age);
-    k.solid.quad(fs, fs * 1.15, 0, api.padY + 1.56, -0.05, C.dark, Math.PI);
+    k.solid.quad(fs, fs * 1.15, 0, api.padY + 1.56, 0.04, C.dark, 0);
     // curled corners: two small quads leaning off the board
     if (age > 0.3) {
       for (const sx of [-1, 1]) {
-        k.solid.quad(0.22, 0.22, sx * 0.40, api.padY + 1.16, -0.07, paper, Math.PI, sx * 0.9 * age);
+        k.solid.quad(0.22, 0.22, sx * 0.40, api.padY + 1.16, 0.08, paper, 0, -sx * 0.9 * age);
       }
     }
     k.solid.close(0, 0, 0.8, paper);

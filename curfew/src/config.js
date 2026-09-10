@@ -200,7 +200,9 @@ export const CFG = {
       fadeS: 26,                  // seconds to ease all the way in or out. Fronts do not snap.
       // The odds a spell is each kind once one starts. Snow is a little rarer than rain and
       // worth more when it lands, and the drizzle/downpour split gives rain two faces.
-      odds: { drizzle: 0.34, rain: 0.26, snow: 0.30, mist: 0.10 },
+      // ROUND 22 lane F: 'storm' is rain that carries lightning. A rare spell, about one
+      // front in ten, and the others give up a little each so the table still sums to 1.
+      odds: { drizzle: 0.30, rain: 0.24, snow: 0.28, mist: 0.08, storm: 0.10 },
 
       // Wind. ONE wandering vector, shared by the falling particles, so a squall leans the
       // whole sky the same way instead of every flake choosing for itself.
@@ -226,8 +228,28 @@ export const CFG = {
 
       // The air. Multipliers on the authored fog and cloud, so the clock still owns the shape
       // of the night and weather only leans on it.
-      fogMul: { clear: 1.0, drizzle: 1.35, rain: 1.85, snow: 1.55, mist: 2.6 },
-      cloudMul: { clear: 1.0, drizzle: 1.5, rain: 1.9, snow: 1.7, mist: 1.25 },
+      fogMul: { clear: 1.0, drizzle: 1.35, rain: 1.85, snow: 1.55, mist: 2.6, storm: 2.1 },
+      cloudMul: { clear: 1.0, drizzle: 1.5, rain: 1.9, snow: 1.7, mist: 1.25, storm: 2.0 },
+    },
+
+    // ROUND 22 lane F — LIGHTNING. Alex, 2026-09-10: "The only daylight left is a lightning
+    // storm — one frame of the whole forest, every silhouette, then black. The player will
+    // pray for storms and dread them." A bolt is a global flash on lights that already
+    // exist (the moon, the two fills, the sky dome's uFlash, the fog colour): no light is
+    // added and no program links. It only fires inside the 'storm' kind above.
+    lightning: {
+      minStrength: 0.5,       // a storm has to be this far in before it can strike
+      firstS: 8,              // and never in its first seconds: the rain arrives first
+      gapS: [25, 90],         // seconds between bolts. Rare enough to be prayed for
+      // SECONDS OF FIXED STEP, not display frames: 2 bright steps and 3 fading ones at
+      // 60 Hz. A 144 Hz display shows about 5 + 7. "One frame" is the feel, not a count.
+      peakS: 0.033,
+      tailS: 0.05,
+      distM: [300, 3000],     // log-uniform, so a near strike is the rare one
+      moonMul: 8,             // the moon's intensity at the peak, x8: the forest lit at once
+      fillMul: 6,             // hemisphere and ambient x6: the ground under the canopy too
+      fogGain: 2.2,           // the haze the county dissolves into brightens with the sky,
+                              // which is what makes the far silhouettes appear
     },
   },
 
@@ -283,6 +305,29 @@ export const CFG = {
     },
   },
 
+  // ---- fx (ROUND 22 lane F): eyeshine and meteors ------------------------------
+  // Alex, 2026-09-10: "Eyeshine in the treeline. Pairs of reflected points when your beams
+  // sweep. Deeper in, more pairs. Some at the wrong height." And of the sky: "Stars in
+  // obscene numbers. Meteors." Both are points in buffers that already draw: the eyes share
+  // fx's particle material, the meteors are eight spare vertices in the star field.
+  fx: {
+    eyeshine: {
+      pairs: 24,              // the pool. Two additive points each, one draw for all of them
+      range: [20, 60],        // m from the beam's origin: far enough to be a glint, not a body
+      h: [0.6, 1.1],          // m above the ground: a dog, a deer, something on all fours
+      hWrong: [2.5, 3.5],     // ...and the ones that are not. Nothing in the county stands there
+      wrongBase: 0.10,        // the share at the wrong height near the centre...
+      wrongDepth: 0.35,       // ...plus this much more by the rim. Deeper in, more of them
+      near: 12,               // m: walk this close and the pair is gone. Never seen up close
+      lookS: 1.5,             // seconds of being stared at straight before it looks away
+      depthFrom: 500,         // m from the centre where the count starts climbing
+    },
+    meteor: {
+      gapS: [40, 120],        // seconds between streaks: you have to be looking up
+      lifeS: 0.4,             // a real one is over before you can point at it
+    },
+  },
+
   // ---- wilds (ROUND 6, lane F): the off-road county ---------------------------
   // Alex: "There should be those things from dying light 2 in the vehicle expansion where
   // there are the wooden places you can climb up in the wilderness... cool items on the
@@ -327,6 +372,29 @@ export const CFG = {
     // with distance. MEASURED: the depth-tested lantern is 0 px from 150 m with the forest
     // in (wilds.js _ensureBuilt); 'scaleAt' 80 puts ~2 m of pane at 150 m.
     halo: { from: 45, full: 90, scaleAt: 80 },
+  },
+
+  // ---- signage (ROUND 22, lane D): the promises, painted where they were made ----------
+  // Alex, 2026-09-10: "Nobody in this county promised morning. Everybody did." Words in the
+  // world, never on the HUD: church board, funeral verse, barn verse with LIAR, government
+  // posters whose date decays with depth, MORNING — 40, the marker, mile markers, the gas
+  // price, curfew notices, FALL BACK. Every face is painted into ONE atlas on the opening's
+  // paper material (places.matBody.clone() + map), so the whole lane costs zero programs.
+  signage: {
+    posterEveryM: 260,      // m of road between stapled government posters (~40 in the county)
+    mileEveryM: 800,        // m between mile markers on the loop (10.6 km -> 13)
+    radialMileEveryM: 300,  // m between mile markers on the road to Morning (~4)
+    vergeExtra: 2.1,        // m past the half-width a post stands off the centreline (opening.js's own signs)
+    keepoutMajor: 70,       // m from a major's centre where no stake goes (places.js MAJOR_KEEPOUT)
+    keepoutMinor: 14,       // m from a rationed minor, so a stake never grows out of a campfire
+    keepoutSign: 30,        // m between two free-standing signs of this lane's own
+    atlas: { w: 2048, h: 1024, gutter: 8 },   // one 8.4 MB canvas; gutter stops mip bleed
+    priceStages: 6,         // 4.29 9/10, 5.89, 9.99, NO GAS, NO, a drawn sun — one per 14-minute cycle
+    // the poster's date by distance from the county centre; the same radii MINOR_THINNING uses,
+    // so the bureaucracy loses its nerve exactly where the county thins out
+    decayBands: [950, 1400, 1750, 2350],   // 6:14 AM | TUESDAY | THIS WEEK | SOON | (plywood MORNING beyond)
+    plywoodBoards: 6,       // hand-placed MORNING boards on the outer ring, one per ~60 degrees
+    albedoMax: 0.32,        // C.paper; the brightest paint allowed (tests/sites.mjs frame A over-200 gate)
   },
 
   // ---- player [vigil controller.js — Alex played this and said "feels good"] ----
@@ -376,6 +444,39 @@ export const CFG = {
     },
     health: { max: 100, regenDelay: 6.0, regenRate: 9, regenCeiling: 40 },
     springs: { eye: [9, 1.0], landing: [8, 0.6], punch: [11, 0.55], lean: [7, 0.9] },
+  },
+
+  // ---- ROUND 22: the planetarium at Morning, the ending [world/planetarium.js] ----------
+  // Alex, 2026-09-10: "Press the button and the dome does a sunrise. Twelve minutes long.
+  // It's the only morning in the game, and a horde knows the schedule."
+  planetarium: {
+    sunriseS: 720,          // Alex's twelve minutes, black to pale blue, then off in one step
+    humS: 4,                // the projector warming in the dark before any light: the hum is lane G's
+    buttonHoldS: 0.6,       // the restart hold, the same length as places' claim hold on the same post
+    seatHoldS: 0.45,        // the seat, the same hold as the refuge's bed
+    seatReach: 1.9,         // m to a seat point, the bed's reach (you stand beside a bench to sit)
+    seatDrop: 0.52,         // m the eye comes down: 1.68 standing -> 1.16, a seated adult
+    seatEaseS: 0.28,        // s to sit; standing is instant ("Getting up must be instant and clean.")
+    roverPeak: 8.0,         // cd of the ONE borrowed rover the room warms with; the refuge bulb is 7.5
+    roverY: 5.5,            // m above the pad, under the dome's crown, so the light falls on the seats
+    roverDecay: 1.25,       // the refuge's lampDecay: a room, not a spotlight
+    domeR: 7.6,             // the projection hemisphere, inside the 8.4 m roof on the 8 m drum
+    sunR: 0.06,             // rad, the disc's angular radius: 0.9 m on the dome, readable from a seat
+    sunElev: [-0.06, 0.32], // rad, where the sun starts (under the rim) and ends (18 deg up)
+    sunFrom: 0.42,          // fraction of the run before the disc starts to climb: the sky first
+    // The colour stops, sRGB hex, piecewise linear in linear light: black, indigo, rose,
+    // gold, a pale blue day. 'sun' is the disc's peak radiance before ACES (the moon's is
+    // 2.6); 'glow' is its glare. Authored so the ceiling never clips: over-200 share <= 2%
+    // is measured in tools/round22/check-I.mjs.
+    stops: [
+      { t: 0.00, horizon: 0x000000, mid: 0x000000, zenith: 0x000000, sun: 0.0, glow: 0.0 },
+      { t: 0.10, horizon: 0x101427, mid: 0x080a18, zenith: 0x03040c, sun: 0.0, glow: 0.05 },
+      { t: 0.32, horizon: 0x3b2f5e, mid: 0x1e1f4a, zenith: 0x0b1030, sun: 0.0, glow: 0.18 },
+      { t: 0.50, horizon: 0xc46a6e, mid: 0x5a3a72, zenith: 0x1d2350, sun: 0.0, glow: 0.35 },
+      { t: 0.62, horizon: 0xf0a24a, mid: 0x9a6a6a, zenith: 0x3a4a80, sun: 1.6, glow: 0.55 },
+      { t: 0.78, horizon: 0xf7c66a, mid: 0xb9a6a0, zenith: 0x6a8ec0, sun: 2.6, glow: 0.45 },
+      { t: 1.00, horizon: 0xd9e6f2, mid: 0xa8c8ec, zenith: 0x6f9fdc, sun: 3.0, glow: 0.30 },
+    ],
   },
 
   camera: {
@@ -525,6 +626,18 @@ export const CFG = {
     // full rate is a 5 rad/s spin and the view rides the nose. Measured (tests/car.mjs): from
     // a dead stop against a 0.3 m trunk, full throttle is free of it inside 1.5 s.
     trunk: { stuckSpeed: 2.5, stuckRamp: 0.50, stuckGain: 0.45 },
+    // ROUND 22 — Alex: "Car should degrade faster." One lap of the county (~10.6 km) takes a
+    // part-worn car to the crawl: driveMetres is the road distance from wear 0 to 1 (was
+    // 50000, which outlived every session); offRoadMul is how much faster gravel wears it;
+    // impact / ram / crush / tree are the per-contact costs (0.055 / 0.020 / 0.010 / 0.0016
+    // before), raised less than the drive rate because a dent already registered on the needle.
+    wear: { driveMetres: 16000, offRoadMul: 1.4, impact: 0.070, ram: 0.025, crush: 0.014, tree: 0.0022 },
+    // ROUND 22 — Alex: "Moths. Idle with your headlights on and they cake the lens, dimming
+    // your beams until you drive." Noticeable by 30 s, the floor by 80 s, gone 10 s into a
+    // drive. idleSpeed is the m/s under which you are idling; graceS the free stop before the
+    // first moth; riseS clean-to-caked; clearSpeed the m/s above which the wind takes them;
+    // clearS caked-to-clean at a drive; floor the filament a caked lens still passes.
+    moths: { idleSpeed: 1.0, graceS: 5, riseS: 80, clearSpeed: 4.0, clearS: 10, floor: 0.35 },
   },
 
   // ---- audio ----------------------------------------------------------------
@@ -541,6 +654,29 @@ export const CFG = {
     // content that tops out at 2.2 kHz; 24 s is twenty beats at 1.2 s).
     pause: { muteTau: 0.018, muteFloorAt: 0.16, unmuteTau: 0.06,
       pieceGain: 0.20, pieceInTau: 0.08, pieceOutS: 0.40, sr: 12000, seconds: 24, beatS: 1.2 },
+    // ROUND 22 lane G: the county's own sounds (src/audio/county.js reads these with literal
+    // fallbacks). Alex, 2026-09-10 ("Sound"): church bells on the hour, the ice cream truck far
+    // off that sometimes moves, alarm clocks behind every door and coffee makers at the false
+    // dawn, the rooster, the dawn chorus that stops embarrassed, wind chimes before the hounds.
+    county: {
+      bellEveryS: 210,          // the county has no hours; one lone toll every 3.5 min stands in for them
+      bellRangeM: 1800,         // sound carries a mile; a bell two miles off is not this player's bell
+      chimeCooldownS: 25,       // one ring per approach, or a pack order becomes a wind-chime concert
+      thunderDuckDb: 4,         // near thunder steps the bed back a little; never the threat duck (reserved)
+      thunderDuckM: 250,        // ...and only when the bolt is inside a quarter mile
+      truckChance: 0.30,        // "sometimes": three nights in ten, rolled at the start of 'night'
+      truckSpeedMps: 0.5,       // it moves, barely; a jingle that swings across the sky is a chase, not a truck
+      truckHearM: [200, 700],   // heard from a little far to very far; never close enough to find
+      dawnHouses: 4,            // alarm clocks at the four nearest doors: a neighbourhood, not a fire drill
+      dawnRangeM: 400,          // doors farther than this are not "behind every door"
+      chorusS: 60,              // "stop after a minute like they're embarrassed"
+      chorusPerS: 2.6,          // chirps a second at full song; dense enough that the stop is heard
+      roosterRangeM: 1200,      // "sound carries a mile"
+      rooster: true,            // the cue most exposed to taste; Alex can cut it here in one word
+      dogcallerLpHz: 1800,      // the voice is a quarter mile off: no consonants left
+      dogcallerTailS: 1.2,      // a valley's worth of tail baked in once at decode
+      dogcallerCooldownS: 4,    // lane C may call faster than a man can shout
+    },
   },
 
   // ---- director (M1+) -------------------------------------------------------
@@ -600,6 +736,47 @@ export const CFG = {
     huntBeyond: 80, huntSpeedMul: 1.72,
     permitRadius: 40,       // scaled by clamp(speed/6.6, 1, 2.4)
     dread: { loudGapS: 26, softRoll: 0.76, postLoudQuietS: 3.2 },
+    // ROUND 22, lane C. Alex, 2026-09-10: "we need a really fast enemy." The runner's body
+    // numbers live in enemies/species.js by that file's convention; this is the director's
+    // brake on it: one alive at a time, because two things you cannot outrun is a wall.
+    runner: { maxAlive: 1 },
+    // The dog-caller (species.js has his body and his call cadence). He is placed once per
+    // session this far out in the pines, off any road, and drifts toward you over the night
+    // — a step every driftEveryS, never inside driftFloor — so the voice gets nearer.
+    dogCaller: { placeMin: 650, placeMax: 900, roadClear: 40, driftEveryS: 30, driftStep: 40, driftFloor: 200 },
+    // The lit dusk-to-dawn pools (lane E's ctx.shared.litPoles). A pressure body's centre
+    // holds `margin` metres outside the rim so its paws are never in the light, and a body
+    // pacing the rim because you are inside runs at holdPace x its cruise — a dog at a fence.
+    litPool: { margin: 0.60, holdPace: 0.90 },
+  },
+
+  // ---- dusk-to-dawn: the pole lights (ROUND 22, world/dusk-to-dawn.js) --------
+  // Alex, 2026-09-10: "barn and yard lights on photocells ... They've been on since it
+  // happened, and they're the one thing the hounds won't cross. They're burning out one at
+  // a time." Money buys bulbs; you relight the county pole by pole.
+  duskToDawn: {
+    spacingM: 150,          // one pole per 150 m over ~11 km of road is ~75 poles: a road, not a runway
+    spacingJitterM: 35,     // so the gaps are a county's, not a surveyor's
+    vergeM: 6.3,            // off the centreline: past the 5.7 m asphalt, inside the 7.05 m tree exclusion
+    headY: 4.6,             // the head's height. Under airlight's 9 m ceiling so the bead gets a ground pool
+    poolR: 9.0,             // the pool on the road, in metres — THE fence the hounds refuse (lane C)
+    poolGain: 3.0,          // x on airlight's inverse-square drop: a 4.6 m head reads like a 2 m yard lamp's pool
+    keepoutMajorM: 30,      // clear of every major's pad and apron
+    keepoutMinorM: 30,      // and every minor's ground
+    keepoutCampM: 20,       // and the dealer's camps
+    minApartM: 60,          // two roads meeting do not stack two poles on the junction
+    bootOutFrac: 0.12,      // one in eight was already dead before you arrived: the county has been losing them
+    burnoutEveryS: 200,     // one pole per ~200 s is about four lights per 840 s cycle: you can watch it happen
+    burnoutJitterS: 40,     // never on a beat
+    burnoutMinDistM: 120,   // never the pole you stand under: you SEE the county going dark down the road
+    flickerS: 20,           // a bad ballast for twenty seconds, then nothing
+    rippleS: 1.2,           // the bead comes up over this long on a relight (places.js claim ripple)
+    holdS: 1.6,             // hold E this long with a bulb. Longer than a door (1.1): you are up a pole
+    reachM: 2.6,            // from the post
+    roverR: 30,             // one borrowed rover at the nearest lit pole inside this
+    roverI: 6.0, roverDecay: 0.85,   // the same yard-lamp numbers as places.js CLAIM_LAMP_*
+    bulbPrice: 40,          // what the dealer charges (dealer.js STOCK mirrors it); a searched body is ~10
+    minPoles: 40,           // the check tool's floor on the count; below this the spine is not a spine
   },
 
   // ---- clock: night only. Never a day. [design decision 3] -------------------

@@ -79,6 +79,7 @@
 import { CFG } from '../config.js';
 import { clamp, clamp01, lerp } from '../engine/math.js';
 import { MASK } from '../world/collision.js';
+import { inLitPool } from '../enemies/nav.js';   // ROUND 22: placement refuses a lit pool
 
 const D = CFG.director;
 const SP = D.spawn;
@@ -268,6 +269,7 @@ const PITY_S = 90;             // [design §4 "90 s of night with no contact"]
 const CENSUS_HZ = 4;           // headcount / HUNT / cone-entry sweep, times a second
 
 const STORM_RISE = 6, STORM_HOLD = 52, STORM_FALL = 12;   // seconds; see HANDOFF request 3
+const SUNRISE_WAKE_R = 320;    // ROUND 22: m round the dome that converge when the projection starts
 const DREAD_GAIN = 0.055;      // region dread per second at tension 1.0
 const DREAD_DECAY = 0.018;     // per second, everywhere, always
 
@@ -387,11 +389,17 @@ const ROSTER = {
   // this thing is only ever placed where there is something to be mistaken for. It arrives
   // in the woods and nowhere else; see the RECIPES row.
   moth: { cost: 2.0, head: 1.0, band: [22, 40], coverPref: 0.98, spacing: 9.0 },
+  // ROUND 22. Alex, 2026-09-10: "we need a really fast enemy." The runner needs a runway, so
+  // it comes from further out, and `maxAlive` (honoured by _pick and _drain; absent means
+  // unlimited) keeps it to ONE at a time: a dash you cannot outrun is a beat, two is a wall.
+  // CFG.director.runner.maxAlive is the number; it is read here so the roster row is whole.
+  runner: { cost: 3.0, head: 1.0, band: [30, 56], coverPref: 0.85, spacing: 9.0,
+    maxAlive: (D.runner && D.runner.maxAlive) || 1 },
 };
 // Written out, not Object.keys(ROSTER): the RECIPES rows below are positional, and a
 // species added to ROSTER without a column here would silently shift every weight by one.
 // ready() asserts the two still agree.
-const SPECIES = ['hound', 'pallbearer', 'poacher', 'hunter', 'marrow', 'moth'];
+const SPECIES = ['hound', 'pallbearer', 'poacher', 'hunter', 'marrow', 'moth', 'runner'];
 
 // Region recipes. terrain.js ships FOUR regions (pines / fields / marsh / ridge), not
 // DESIGN §2's seven, so the seven recipes collapse onto four; see HANDOFF.
@@ -400,12 +408,14 @@ const SPECIES = ['hound', 'pallbearer', 'poacher', 'hunter', 'marrow', 'moth'];
 // common in the pines, rare on the ridge where the trees are thin, and absent from the open
 // fields, because a thing whose whole trick is blending into a trunk has nothing to do in a
 // meadow. Alex asked for it "in the forest" and this column is that sentence.
-//                      hound  pallb  poach  hunter  marrow  moth
+// ROUND 22 adds a seventh: the runner. Open ground is where a runner runs — the fields
+// first, the ridge, a little in the pines, and almost never in the marsh.
+//                      hound  pallb  poach  hunter  marrow  moth  runner
 const RECIPES = [
-  /* 0 pines  'pack'    */[3.0, 1.4, 0.5, 0.7, 0.3, 1.6],
-  /* 1 fields 'ambush'  */[1.2, 1.6, 2.4, 0.45, 0.15, 0.0],
-  /* 2 marsh  'quiet'   */[1.0, 2.4, 0.4, 0.35, 0.15, 0.9],
-  /* 3 ridge  'gunline' */[0.8, 0.5, 2.8, 0.95, 0.25, 0.35],
+  /* 0 pines  'pack'    */[3.0, 1.4, 0.5, 0.7, 0.3, 1.6, 0.45],
+  /* 1 fields 'ambush'  */[1.2, 1.6, 2.4, 0.45, 0.15, 0.0, 1.3],
+  /* 2 marsh  'quiet'   */[1.0, 2.4, 0.4, 0.35, 0.15, 0.9, 0.25],
+  /* 3 ridge  'gunline' */[0.8, 0.5, 2.8, 0.95, 0.25, 0.35, 0.9],
 ];
 
 // The recipe lookup must be TOTAL. terrain ships ids 0-3, but placedata.js authors regions
@@ -421,8 +431,13 @@ function recipeFor(region) {
 
 // The black hour does not multiply the roster, it REPLACES it: hounds pack, the Hunter is
 // off the leash, and the men go quiet and go home. DESIGN §2, "the roster CHANGES".
-const BLACK_MUL = { hound: 2.4, pallbearer: 1.6, poacher: 0.0, hunter: 2.2, marrow:2.2, moth: 1.8 };
-const DUSK_MUL = { hound: 0.8, pallbearer: 0.7, poacher: 1.8, hunter: 0.0, marrow:0.0, moth: 0.5 };
+// ROUND 22: EVERY species in SPECIES needs a key in BOTH tables. A missing key multiplies by
+// undefined, the total goes NaN, and _pick returns the LAST species on every roll.
+const BLACK_MUL = { hound: 2.4, pallbearer: 1.6, poacher: 0.0, hunter: 2.2, marrow:2.2, moth: 1.8, runner: 1.5 };
+const DUSK_MUL = { hound: 0.8, pallbearer: 0.7, poacher: 1.8, hunter: 0.0, marrow:0.0, moth: 0.5, runner: 0.0 };
+// ROUND 22: lane G rings wind chimes on the bearing an order will arrive from, before the
+// body exists. One reused payload; read the numbers, never keep the object.
+const _order = { species: '', bearing: 0, at: 0 };
 
 /* ------------------------------------------------------------- module scratch -- */
 
@@ -483,6 +498,14 @@ export class Director {
     this._stormCd = 0;
     this.regionDread = new Float64Array(RECIPES.length);
     this.stormsFired = 0;
+    // ROUND 22: the planetarium's hold (seconds, 0 = the ordinary STORM_HOLD) and where it is
+    this._stormHoldS = 0;
+    this._sunriseOn = false;
+    this._sunriseX = 0; this._sunriseZ = 0;
+    // ROUND 22: per-species alive counts from the census, for ROSTER maxAlive. One object,
+    // its keys fixed at boot, zeroed each census — never grown mid-fight.
+    this._aliveBy = {};
+    for (let i = 0; i < SPECIES.length; i++) this._aliveBy[SPECIES[i]] = 0;
 
     /* ---- noise ---- */
     this.noise = 0;
@@ -595,6 +618,8 @@ export class Director {
       // ROUND 13: an ambush body (dread's jump beats) is dread's spend, not pressure stock.
       if (b.pressure && !(raw && raw.scripted)) {
         this._cTotal++;
+        // ROUND 22: per-species alive count, for ROSTER maxAlive (the one-runner brake)
+        if (this._aliveBy[b.species] !== undefined) this._aliveBy[b.species]++;
         if (d <= 70) {
           const R = ROSTER[b.species];
           this._cHead += R ? R.head : 1;
@@ -649,7 +674,12 @@ export class Director {
       // THE FAR CULL. Dwell, not a snapshot: CULL_S of being unaware, far and unseen.
       // The dwell lives on the record (_dirFarT, declared in enemies.js makeRecord) so
       // nothing is allocated and a recycled body starts from zero (enemies._spawnOne).
-      if (b.pressure && !b.alerted && !inCone && d > CULL_R && !this._onScreen(b.x, b.y, b.z, raw)) {
+      // ROUND 22: a `unique` body (the dog-caller) is never a release candidate. MEASURED
+      // (tests/pack.mjs d): with enemies.cull() refusing him, the quiet release below picked
+      // him — the farthest unaware body in the county, every tick — offered its one slot to
+      // him, was refused, and never released a single surplus hound for the whole run.
+      const unique = raw.unique === true;
+      if (b.pressure && !unique && !b.alerted && !inCone && d > CULL_R && !this._onScreen(b.x, b.y, b.z, raw)) {
         raw._dirFarT = (raw._dirFarT || 0) + 1 / CENSUS_HZ;
         if (raw._dirFarT >= CULL_S && this._cullN < CULL_PER_TICK) this._cullQ[this._cullN++] = raw;
       } else raw._dirFarT = 0;
@@ -659,7 +689,7 @@ export class Director {
       // `dot` is the same number `inCone` is built from, read against 0 rather than COS_CONE:
       // strictly behind the shoulder line, not merely outside the spawn cone.
       const dot = d > 0.01 ? (dx * this._fx + dz * this._fz) / d : 1;
-      if (b.pressure && !b.alerted && d > QUIET_R && dot < QUIET_DOT
+      if (b.pressure && !unique && !b.alerted && d > QUIET_R && dot < QUIET_DOT
         && raw.obsSelf !== true && raw.state !== 'dormant'
         && !this._onScreen(b.x, b.y, b.z, raw)) {
         raw._dirQuietT = (raw._dirQuietT || 0) + 1 / CENSUS_HZ;
@@ -676,7 +706,7 @@ export class Director {
       // ROUND 6: the three gates are LAW (see COOL_MIN_R): outside 25 m, not committed, not
       // in the air, and NOT ON SCREEN through the real frame. Unseen-by-occlusion still ranks
       // above merely off-frame.
-      if (b.pressure && b.alerted && d > COOL_MIN_R && raw.scripted !== true
+      if (b.pressure && b.alerted && d > COOL_MIN_R && raw.scripted !== true && !unique
         && (typeof raw.stoodDownN !== 'number' || raw.stoodDownN < MAX_STAND_DOWNS)
         && raw.committed !== true && raw.airborne !== true && raw.state === 'approach'
         && !this._onScreen(b.x, b.y, b.z, raw)) {
@@ -697,6 +727,7 @@ export class Director {
       if (this._evictN >= EVICT_PER_TICK) return;
       if (!b.pressure) return;                       // horror is dread's, not mine (DESIGN §4)
       if (raw && raw.scripted) return;               // ROUND 13: an ambush is placed on purpose
+      if (raw && raw.unique) return;                 // ROUND 22: and the dog-caller is never moved by a clearing
       let hit = false;
       for (let i = 0; i < this._clearN; i++) {
         const dx = b.x - this._clearX[i], dz = b.z - this._clearZ[i];
@@ -738,7 +769,7 @@ export class Director {
     // The respawn sweep. Collects every non-dormant pressure body inside RESPAWN_RELEASE_R
     // of the point he came back to; _onRespawn decides release or stand-down per body.
     this._fnRespawn = (b, raw) => {
-      if (!b.pressure || raw?.initiallyNeutral || this._respN >= RESPAWN_Q) return;
+      if (!b.pressure || raw?.initiallyNeutral || raw?.unique || this._respN >= RESPAWN_Q) return;   // ROUND 22: never the dog-caller
       // DORMANT BODIES GO TOO. The first draft skipped them ("in the ground: not the crowd")
       // and MEASURED (tests/pack.mjs e, 2026-09-03, tests/artifacts/r6a-pack-run5.txt): two
       // pallbearers asleep inside 70 m of the Filling Station counted 2 head against a target
@@ -783,6 +814,11 @@ export class Director {
     // player/controller.js:440 emits this with {x, y, z}, and the payload is SHARED SCRATCH
     // (controller.js:159) — read the numbers here, never keep the object.
     bus.on('player:respawn', (e) => this._onRespawn(e));
+    // ROUND 22: THE PLANETARIUM. Alex: "Press the button and the dome does a sunrise. Twelve
+    // minutes long. It's the only morning in the game, and a horde knows the schedule."
+    // Lane I emits these; the storm is held for the projection's length on the dome.
+    bus.on('planetarium:sunrise', (e) => this._onSunrise(e));
+    bus.on('planetarium:ended', () => this._onSunriseEnd());
   }
 
   async init() {
@@ -1117,6 +1153,7 @@ export class Director {
   _census() {
     this._cHead = 0; this._cNear = 0; this._cTotal = 0; this._cHunting = 0;
     this._cHuntNear = false; this._cContact = false;
+    for (let i = 0; i < SPECIES.length; i++) this._aliveBy[SPECIES[i]] = 0;   // ROUND 22
     const permitR = D.permitRadius * clamp(this._speed / CFG.player.SPRINT, 1, 2.4);
     this._cPermitR2 = permitR * permitR;
 
@@ -1653,7 +1690,11 @@ export class Director {
         break;
       case 'hold':
         this.storm = 1;
-        if (this._stormT >= STORM_HOLD) { this._stormPhase = 'fall'; this._stormT = 0; }
+        // ROUND 22: a planetarium sunrise holds the storm for the projection's own length
+        if (this._stormT >= (this._stormHoldS > 0 ? this._stormHoldS : STORM_HOLD)) {
+          this._stormPhase = 'fall'; this._stormT = 0;
+          this._stormHoldS = 0; this._sunriseOn = false;
+        }
         break;
       case 'fall':
         this.storm = 1 - clamp01(this._stormT / STORM_FALL);
@@ -1787,6 +1828,22 @@ export class Director {
     return fwd + (rng.next() < 0.5 ? -1 : 1) * lerp(0.60, 2.70, rng.next());
   }
 
+  /**
+   * ROUND 22: how many of a species are alive OR already ordered. The census count is a
+   * quarter of a second stale and an order in the queue is a body on its way, so both are
+   * held against ROSTER maxAlive; otherwise one composition could roll two runners.
+   */
+  _speciesLoad(sp) {
+    let n = this._aliveBy[sp] || 0;
+    for (let i = 0; i < ORDER_POOL; i++) if (this._orders[i].live && this._orders[i].species === sp) n++;
+    return n;
+  }
+
+  _atMaxAlive(sp) {
+    const R = ROSTER[sp];
+    return !!(R && R.maxAlive > 0 && this._speciesLoad(sp) >= R.maxAlive);
+  }
+
   /** Weighted species pick for the current region, phase and roster flip. */
   _pick(preferCover) {
     const row = recipeFor(this._region);
@@ -1797,6 +1854,7 @@ export class Director {
       let w = row[i];
       if (mul) w *= mul[SPECIES[i]];
       if (preferCover) w *= ROSTER[SPECIES[i]].coverPref;   // pity spawns come from cover
+      if (w > 0 && this._atMaxAlive(SPECIES[i])) w = 0;      // ROUND 22: maxAlive
       this._w[i] = w;
       total += w;
     }
@@ -1816,6 +1874,9 @@ export class Director {
       o.live = true; o.species = species; o.bearing = bearing;
       o.at = this._t + at; o.hold = hold; o.tries = 0; o.pack = 0;
       this._orderCount++;
+      // ROUND 22: lane G's wind chimes ring on the bearing before the body exists
+      _order.species = species; _order.bearing = bearing; _order.at = at;
+      this.ctx.bus.emit('director:order', _order);
       return o;
     }
     // A full pool is a real fault, not a reason to drop an order: say so, loudly, once.
@@ -1846,6 +1907,16 @@ export class Director {
         if (this._t < o.at && this.aliveNear > 2) continue;
       } else if (this._t < o.at) continue;
 
+      // ROUND 22: a species at its maxAlive (the runner's one) re-rolls rather than waits —
+      // the order's own count is excluded so it does not refuse itself.
+      {
+        const RM = ROSTER[o.species];
+        if (RM && RM.maxAlive > 0 && this._speciesLoad(o.species) - 1 >= RM.maxAlive) {
+          o.species = this._pick(false);
+          this.respecied++;
+          continue;
+        }
+      }
       const R = ROSTER[o.species] || ROSTER.hound;
       // THE ARRIVAL WINDOW (ROUND 6). This order's bodies plus everything that arrived inside
       // the last ARRIVE_WINDOW_S must fit under the window's cap, or the order waits: a pair
@@ -2009,8 +2080,36 @@ export class Director {
   /** The hard ceiling on live pressure bodies right now (see ALIVE_MAX). */
   _aliveCap() { return Math.min(this.cap * ALIVE_CAP_MUL, ALIVE_MAX); }
 
-  /** The arrival window's cap for the current phase. */
-  _arriveMax() { return this._phase() === 'black' ? ARRIVE_MAX_BLACK : ARRIVE_MAX; }
+  /** The arrival window's cap for the current phase (ROUND 22: and black-tier while a
+      planetarium sunrise runs, so the horde that knows the schedule can actually land). */
+  _arriveMax() { return (this._phase() === 'black' || this._sunriseOn) ? ARRIVE_MAX_BLACK : ARRIVE_MAX; }
+
+  /* ------------------------------------------------- ROUND 22: the planetarium -- */
+
+  /**
+   * The dome's twelve-minute sunrise. The storm goes straight to hold for `seconds` on the
+   * dome, and everything inside SUNRISE_WAKE_R converges on it the way it converges on a
+   * gunshot: the horde knows the schedule. Payload {x, z, seconds} is lane I's shared
+   * scratch — read the numbers, keep nothing.
+   */
+  _onSunrise(e) {
+    if (!e || !Number.isFinite(e.x) || !Number.isFinite(e.z)) return;
+    const s = Number.isFinite(e.seconds) && e.seconds > 0 ? e.seconds : STORM_HOLD;
+    this._sunriseX = e.x; this._sunriseZ = e.z;
+    this._sunriseOn = true;
+    this._stormHoldS = s;
+    this._stormPhase = 'hold'; this.storm = 1; this._stormT = 0;
+    this.stormsFired++;
+    this._sinceContact = 0;
+    this._wake(e.x, e.z, SUNRISE_WAKE_R, 'planetarium');
+  }
+
+  _onSunriseEnd() {
+    if (!this._sunriseOn) return;
+    this._sunriseOn = false;
+    this._stormHoldS = 0;
+    if (this._stormPhase === 'hold' || this._stormPhase === 'rise') { this._stormPhase = 'fall'; this._stormT = 0; }
+  }
 
   /** Bodies that arrived inside the last ARRIVE_WINDOW_S. */
   _arrivedRecently() {
@@ -2161,6 +2260,9 @@ export class Director {
 
       // never on top of a live body
       if (this._tooClose(x, z, R.spacing)) continue;
+      // ROUND 22: never inside a lit dusk-to-dawn pool — the fence the hounds will not cross
+      // is not ground a hound may be placed on
+      if (inLitPool(this.ctx, x, z)) continue;
       // and it must physically fit
       if (collision && typeof collision.canOccupy === 'function'
         && !collision.canOccupy(x, z, 0.42, 1.70)) continue;
@@ -2322,6 +2424,10 @@ export class Director {
       storm: +this.storm.toFixed(3),
       stormPhase: this._stormPhase,
       stormsFired: this.stormsFired,
+      // ROUND 22: the planetarium's hold, and the one-runner brake
+      sunrise: !!this._sunriseOn,
+      stormHoldS: +(this._stormHoldS || 0).toFixed(1),
+      runnerLoad: this._speciesLoad('runner'),
       stormCd: +Math.max(0, this._stormCd).toFixed(1),
       regionDread: Array.from(this.regionDread, (v) => +v.toFixed(3)),
       region: this._region,

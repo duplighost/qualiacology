@@ -77,6 +77,7 @@ const STYLE_BY_KIND = Object.freeze({
   works: 'stone',
   relay: 'metal',
   cathedral: 'stone',
+  planetarium: 'stone',   // ROUND 22: concrete and render, the science centre at Morning
   chapel: 'timber',
   steeple: 'timber',
   lighthouse: 'salt',

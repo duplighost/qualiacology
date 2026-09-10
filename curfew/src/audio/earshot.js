@@ -168,6 +168,11 @@ export function insideFrustum(vp, x, y, z) {
 export const SPECIES = {
   marrow: { id: 'marrow', f: 96, press: 'marrow', pf: 110, rate: .88 },
   hound: { id: 'pant', f: 300, press: 'growl', pf: 150, rate: 1.10 },
+  // ROUND 22 lane C's two new bodies, given rows here so neither falls back to the hound
+  // stems (a runner that pants like a dog would be read as a dog). The runner is a taller
+  // pant at a faster rate; the dog-caller is a person with a pack's gear on him.
+  runner: { id: 'pant', f: 360, press: 'growl', pf: 190, rate: 1.30 },
+  dogcaller: { id: 'gear', f: 230, press: 'breath', pf: 115, rate: 1.0 },
   pallbearer: { id: 'drag', f: 150, press: 'breath', pf: 92, rate: 0.94 },
   hunter: { id: 'thin', f: 96, press: 'scrape', pf: 64, rate: 0.86 },
   drowned: { id: 'wet', f: 210, press: 'gurgle', pf: 110, rate: 0.90 },

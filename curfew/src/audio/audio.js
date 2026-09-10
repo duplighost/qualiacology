@@ -56,6 +56,7 @@ import { GunAudio } from './guns.js';
 import { Bed } from './bed.js';
 import { Earshot } from './earshot.js';
 import { PausePiece } from './pause.js';   // ROUND 13: the card's music, above the mute
+import { County } from './county.js';      // ROUND 22: bells, the false dawn, thunder, the dog-caller
 
 export const dB = (x) => Math.pow(10, x / 20);
 const sat = clamp01;
@@ -638,6 +639,9 @@ export class Audio {
     this.bed = new Bed(ctx, this);
     this.earshot = new Earshot(ctx, this);
     this.pause = new PausePiece(ctx, this);
+    // ROUND 22 lane G: the county's own sounds. Constructed here like the bed and the
+    // earshot ticker (no manifest row), Node-safe, baked in init, stepped after earshot.
+    this.county = new County(ctx, this);
     this._paused = false;
 
     this._unsub = [];
@@ -686,6 +690,10 @@ export class Audio {
     // ROUND 6, lane C: the Kneeler's five sounds. On the boot path for the same reason the
     // dread beats are: the first place you walk past may be guarded, and silence reads as broken.
     await this._slice('audio: kneeler', () => this._bakeKneeler());
+    // ROUND 22 lane G: bells, wind chimes and thunder. On the boot path because a phase change
+    // rings inside the first minute and lane F's first bolt can land any time; the false dawn,
+    // the truck and the dome bake in `rest` below (county.bakeRest, with on-demand fallback).
+    await this._slice('audio: county', () => this.county.bake());
 
     this.baked = true;
     this.bed.start();
@@ -699,6 +707,9 @@ export class Audio {
       // ROUND 13: the pause piece bakes off the boot path too (about 150 ms at 12 kHz); a
       // first Escape before the idle callback runs pays it once, on demand, in start().
       try { this.pause.bake(); } catch (e) { void e; }
+      // ROUND 22: the county's dawn cues, the truck's jingle, the dome's hum, the radio's tones,
+      // in three idle callbacks of its own so none of them is a hitch.
+      try { this.county.bakeRestIdle(); } catch (e) { void e; }
     };
     if (typeof requestIdleCallback === 'function') requestIdleCallback(rest, { timeout: 4000 });
     else if (typeof requestAnimationFrame === 'function') requestAnimationFrame(rest);
@@ -733,6 +744,7 @@ export class Audio {
     }
     this._resumeHandler = null;
     try { if (this.pause) this.pause.dispose(); } catch (e) { void e; }
+    try { if (this.county) this.county.dispose(); } catch (e) { void e; }
     try { if (this.bed) this.bed.stop(); } catch (e) { void e; }
     try { if (this.actx) this.actx.close(); } catch (e) { void e; }
     this.actx = null; this.enabled = false;
@@ -1142,7 +1154,20 @@ export class Audio {
     on('enemy:killed', (p) => this.earshot.detach(p.e || p, true));
     on('enemy:hurt', (p) => this.earshot.hurt(p.e || p, p));
     on('enemy:telegraph', (p) => this.earshot.telegraph(p.e || p, p.kind));
-    on('phase:changed', (p) => this.bed.onPhase(p.phase, p.prev));
+    on('phase:changed', (p) => { this.bed.onPhase(p.phase, p.prev); this.county.onPhase(p.phase, p.prev); });
+    // ROUND 22 lane G: the county's sounds, on the sibling lanes' events. Every one is optional
+    // and payload-defensive: the lanes are being written at the same time as this one.
+    on('weather:lightning', (p) => this.county.onLightning(p));      // lane F: thunder after dist/340 s
+    on('dogcaller:call', (p) => this.county.onCall(p));              // lane C: the voice in the woods
+    on('dogcaller:dead', () => this.county.onCallerDead());          // lane C: and never again
+    on('director:order', (p) => this.county.onOrder(p));             // lane C: chimes before the hounds
+    on('enemy:spawned', (p) => this.county.onSpawned(p.e || p));     // ...or, without that, at the spawn
+    on('planetarium:button', (p) => this.county.onButton(p));        // lane I: a relay, no words
+    on('planetarium:sunrise', (p) => this.county.onSunrise(p));      // lane I: the projector hum
+    on('planetarium:ended', () => this.county.onEnded());
+    on('dusk-to-dawn:flicker', (p) => this.county.onFlicker(p));     // lane E: a ballast on its way out
+    on('setpiece:trailcam', (p) => this.county.onTrailcam(p));       // lane H: the click and the flash
+    on('setpiece:crossing', (p) => this.county.onCrossing(p));       // lane H: the bell while the gates are down
     on('place:claimed', (p) => this.bed.onClaim(p.id));
     on('place:discovered', (p) => this.bed.onDiscover(p.id));
     on('dread:stinger', (p) => this.bed.stinger(p.kind));
@@ -1742,6 +1767,7 @@ export class Audio {
       this._updateReflex(dt);
       this.bed.step(dt);
       this.earshot.step(dt);
+      this.county.step(dt);
     }
     this._stats.updMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
   }
@@ -2921,6 +2947,8 @@ export class Audio {
       updMs: +this._stats.updMs.toFixed(3),
       bed: this.bed ? this.bed.state() : null,
       earshot: this.earshot ? this.earshot.state() : null,
+      // ROUND 22: the county's sounds (tools/round22/check-G.mjs reads this).
+      county: this.county ? this.county.state() : null,
       // ROUND 13: the mute and the card's piece.
       pause: {
         muted: this._paused,

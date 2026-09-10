@@ -5,6 +5,7 @@ import { buildHuman } from '../art/people.js';
 import { readableSurface } from '../art/surface-light.js';
 import { buildWorkshop } from './dealer-workshop.js';
 import { DEALER_CAMPS as CAMPS } from './dealer-camps.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { dampAngle, Rng } from '../engine/math.js';
 import CFG from '../config.js';
 
@@ -12,11 +13,20 @@ import CFG from '../config.js';
 // coins, which is three searched bodies, so the arsenal arrived before the county did.
 // The ammo price below is a quarter of the gun's price scaled by how many rounds you are
 // short, so it followed on its own.
+// ROUND 22 (Alex: "money buys bulbs and lanterns from the merchant, and the player relights
+// the county pole by pole ... you can't punch a bulb into existence"). The bulb is an ITEM,
+// not a gun: no ammo, no ownership, a fixed price, a count that goes into your pocket
+// (world/dusk-to-dawn.js carries it; progress flag 'd2d:bulbs' remembers it).
 export const STOCK = Object.freeze([
   { id: 'shotgun', name: 'SHOTGUN', price: 190 },
   { id: 'carbine', name: 'CARBINE', price: 340 },
   { id: 'revolver', name: 'REVOLVER', price: 120 },
+  { id: 'bulb', name: 'BULB', price: CFG.duskToDawn?.bulbPrice ?? 40, item: true },
 ]);
+// Where the bulb carton sits, in the camp's local frame: on top of the right-hand crate
+// (dealer-workshop.js crate(3.13,.65,1.15,1.20,1.32) — its top is at y 1.38), so the row
+// has a thing to look at and its prompt hangs over it rather than over the gun rail.
+const BULB_AT = Object.freeze({ x: 3.13, y: 1.38, z: .72 });
 export const MAX_HP = 1500;
 export const SHOT_COMMIT_S = .62;
 const TRAVEL_INTERVAL = 660;
@@ -60,6 +70,35 @@ export class Dealer {
     this.aim=new THREE.Mesh(new THREE.SphereGeometry(.038,12,8),this.lampMat);
     this.aim.name='dealer-weapon-tell';this.aim.position.set(0,.025,-.70);this.aim.visible=false;
     this.rifle.add(this.aim);
+    this.root.add(this._buildCarton());
+  }
+  // ROUND 22: a carton of bulbs on the right crate, on the camp's own vertex-coloured
+  // Standard material — no new material, no new program. A cardboard box, its lid folded
+  // back, four pale bulbs standing in it.
+  _buildCarton(){
+    const parts=[];
+    const put=(geo,col,x,y,z)=>{
+      const n=geo.attributes.position.count,c=new Float32Array(n*3);
+      for(let i=0;i<n;i++){c[i*3]=col[0];c[i*3+1]=col[1];c[i*3+2]=col[2];}
+      geo.setAttribute('color',new THREE.BufferAttribute(c,3));geo.translate(x,y,z);parts.push(geo);
+    };
+    const card=[.20,.152,.098],pale=[.62,.60,.54];
+    const {x,y,z}=BULB_AT;
+    put(new THREE.BoxGeometry(.34,.20,.26),card,x,y+.10,z);
+    put(new THREE.BoxGeometry(.34,.012,.13),card,x,y+.21,z-.13+.065);
+    for(const [dx,dz] of [[-.08,-.05],[.08,-.05],[-.08,.06],[.08,.06]]){
+      put(new THREE.SphereGeometry(.04,8,6),pale,x+dx,y+.24,z+dz);
+      put(new THREE.CylinderGeometry(.018,.018,.05,6),[.28,.27,.25],x+dx,y+.20,z+dz);
+    }
+    const geo=mergeGeometries(parts,false);parts.forEach(g=>g.dispose());
+    const m=new THREE.Mesh(geo,this.mat);m.name='dealer-bulb-carton';m.castShadow=true;m.receiveShadow=true;
+    return m;
+  }
+  /** How many bulbs he carries: the pole system's count, or the flag when a test has no such system. */
+  _bulbsHeld(){
+    const d2d=this._sys('dusk-to-dawn');
+    if(d2d&&typeof d2d.bulbs==='function')return d2d.bulbs();
+    return Math.max(0,Number(this._sys('progress')?.flag('d2d:bulbs'))||0);
   }
   resetEncounter(){
     this.hp=MAX_HP;this.hostile=false;this.phase='peaceful';this.phaseT=0;this.shot=0;this.cycle=0;
@@ -189,13 +228,35 @@ export class Dealer {
     const cam=this._sys('camera'), pr=this._sys('progress'), weapons=this._sys('weapons');
     let chosen=-1,best=2.5;
     for(let i=0;i<STOCK.length;i++){
-      const p=this._world((i-1)*1.35,1.18,.95);
+      const p=STOCK[i].item?this._world(BULB_AT.x,BULB_AT.y+.08,.95):this._world((i-1)*1.35,1.18,.95);
       const dx=p.x-player.pos.x,dz=p.z-player.pos.z,d=Math.hypot(dx,dz);
       if(d<best && (-Math.sin(cam.yaw)*dx-Math.cos(cam.yaw)*dz)/Math.max(d,.001)>.66){chosen=i;best=d;}
     }
     if(chosen<0){this.hold=0;this.lastTarget=-1;return;}
     if(chosen!==this.lastTarget){this.hold=0;this.lastTarget=chosen;}
-    const s=STOCK[chosen],owned=weapons.has(s.id),cash=pr.cash();
+    const s=STOCK[chosen],cash=pr.cash();
+    if(s.item){
+      // ROUND 22: the bulb row. Fixed price, no ownership, never full — you can always carry
+      // one more. The count is read from the pole system so the line is honest about it.
+      const bulbs=this._bulbsHeld(),price=s.price;
+      const p=this._world(BULB_AT.x,BULB_AT.y+.42,BULB_AT.z);
+      Object.assign(this.prompt,{x:p.x,y:p.y,z:p.z,k:this.hold/.85,
+        detail:`${s.name} · ${price} COINS`,
+        subdetail:cash<price?`YOU HAVE ${cash} · NEED ${price-cash}`:`YOU HAVE ${cash} · ${bulbs} ${bulbs===1?'BULB':'BULBS'} · HOLD E TO BUY`,
+        unavailable:cash<price});
+      this.ctx.bus.emit('prompt',this.prompt);
+      if(!held||this.locked){this.hold=0;return;}
+      this.hold+=dt;
+      if(this.hold<.85)return;
+      this.hold=0;this.locked=true;
+      if(!pr.spendCash(price,'dealer:'+s.id)){this._voice('dealer-rack',.3);return;}
+      const d2d=this._sys('dusk-to-dawn');
+      const count=d2d&&typeof d2d.addBulb==='function'?d2d.addBulb(1):pr.flag('d2d:bulbs',bulbs+1);
+      this.ctx.bus.emit('dealer:bought',{id:s.id,price,ammo:false,rounds:0,count});
+      this._voice('xp_gain',.55);
+      return;
+    }
+    const owned=weapons.has(s.id);
     const bundle=CFG.weapons.defs[s.id].reserve;
     const rounds=owned?Math.max(0,Math.min(bundle,bundle*2-weapons.reserveOf(s.id))):0;
     const full=owned&&rounds===0;
@@ -292,12 +353,13 @@ export class Dealer {
       this.aim.visible=false;const pr=this._sys('progress');pr.flag('dealer:dead',true);
       this._syncBody();
       pr.payCash(150,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');pr.award(320,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');
-      const gun=STOCK.find(s=>!this._sys('weapons').has(s.id));if(gun)this._grantWeapon(gun.id);
+      // The death reward is a GUN he had on the rail; the bulb row is an item, not a weapon.
+      const gun=STOCK.find(s=>!s.item&&!this._sys('weapons').has(s.id));if(gun)this._grantWeapon(gun.id);
       this.ctx.bus.emit('dealer:defeated',{x:this.pos.x,z:this.pos.z});return {killed:true};
     }
     return {killed:false};
   }
-  state(){return {camp:this.campIndex,near:CAMPS[this.campIndex]?.near,spawnPoints:CAMPS.length,maxHp:MAX_HP,x:this.pos.x,y:this.pos.y,z:this.pos.z,hp:this.hp,hostile:this.hostile,dead:this.dead,phase:this.phase,stock:STOCK};}
+  state(){return {camp:this.campIndex,near:CAMPS[this.campIndex]?.near,spawnPoints:CAMPS.length,maxHp:MAX_HP,x:this.pos.x,y:this.pos.y,z:this.pos.z,hp:this.hp,hostile:this.hostile,dead:this.dead,phase:this.phase,stock:STOCK,bulbs:this._bulbsHeld()};}
   dispose(){
     this._off?.();if(this.light)this._sys('lights')?.release(this.light);
     this._sys('collision')?.removeChunk('travelling-arms-dealer');

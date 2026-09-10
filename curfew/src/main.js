@@ -64,10 +64,14 @@ import * as progressMod from './progression/progress.js';
 import * as audioMod from './audio/audio.js';
 import * as hudMod from './ui/hud.js';
 import * as kneelerMod from './enemies/kneeler.js';   // ROUND 6, lane C
+import * as dogcallerMod from './enemies/dogcaller.js';   // ROUND 22, lane C
 import * as wildsMod from './world/wilds.js';         // ROUND 6, lane F
 import * as refugeMod from './world/refuge.js';
+import * as planetariumMod from './world/planetarium.js';   // ROUND 22: the town of Morning
 import * as openingMod from './world/opening.js';
+import * as signageMod from './world/signage.js';     // ROUND 22, lane D: the promises
 import * as searchMod from './world/search.js';       // ROUND 15: going through a body
+import * as duskToDawnMod from './world/dusk-to-dawn.js';   // ROUND 22: the county's pole lights
 import * as dealerMod from './world/dealer.js';
 import * as mechanicsMod from './world/mechanics.js';
 import * as scavengingMod from './world/scavenging.js';
@@ -98,7 +102,9 @@ const SYSTEMS = [
                                // registers flats, and BEFORE chunks stream anything in
   ['wilds', wildsMod],         // ROUND 6: the off-road county — towers, caches, ruins. AFTER places
   ['refuge', refugeMod],       // ROUND 7: the breaker, the door you shut, the rest. AFTER places
+  ['planetarium', planetariumMod],   // ROUND 22: the town of Morning — the dome, the button, the seat. AFTER places and lights, BEFORE player
   ['search', searchMod],       // ROUND 15: hold E over a dead person. AFTER places, BEFORE enemies
+  ['dusk-to-dawn', duskToDawnMod], // ROUND 22: photocell pole lights along the roads, on since it happened. AFTER places (reads minorList and shares its materials) and roads/terrain/collision; BEFORE enemies (they read ctx.shared.litPoles) and dealer (it sells the bulbs)
   // -- the body -------------------------------------------------------------------------
   ['player', playerMod],
   ['camera', cameraMod],       // presents after player because it reads renderPos
@@ -111,6 +117,7 @@ const SYSTEMS = [
   ['dread', dreadMod],         // AFTER director: the two gate each other every step
   ['interior-horror', interiorHorrorMod], // authored residents, after the county's permit
   ['kneeler', kneelerMod],     // ROUND 6: the guardian at three places. Outside the pool, after the pool
+  ['dogcaller', dogcallerMod], // ROUND 22: the voice in the woods is a man. AFTER enemies (it reads the pool)
   // -- the loop -------------------------------------------------------------------------
   ['car', carMod],
   ['progress', progressMod],
@@ -118,6 +125,7 @@ const SYSTEMS = [
   ['mechanics', mechanicsMod],
   ['scavenging', scavengingMod],
   ['opening', openingMod],     // the station's authored grounds, calendar and first night
+  ['signage', signageMod],     // ROUND 22: the promises — words in the world, painted on the opening's paper program
   ['audio', audioMod],         // late, so it can hear everything that happened this step
   ['hud', hudMod],
   // -- presentation, last ---------------------------------------------------------------
@@ -228,6 +236,7 @@ const ctx = {
   shared: {
     phase: 'night', phaseT: 0, tension: 0, danger: 1, noise: 0, lit: 0,
     level: 1, xp: 0, inCar: false,
+    litPoles: [],   // ROUND 22: owned by dusk-to-dawn, [{x,z,r,on}] refreshed every step (the one non-scalar; lane C reads it)
   },
   debug: { flags: {} },
   // Owned here, per the weapons HANDOFF offer: viewmodel pushes its render() in at

@@ -707,7 +707,9 @@ export class Bed {
   setWeather(kind, strength, snowCover) {
     const s = strength > 0 ? (strength > 1 ? 1 : strength) : 0;
     this._wxStrength = s;
-    this._wxRain = kind === 'rain' ? s : kind === 'drizzle' ? s * 0.45 : 0;
+    // ROUND 22: lane F's lightning front is kind 'storm'; it rains like rain here and the
+    // thunder itself is county.js's, off the weather:lightning event.
+    this._wxRain = (kind === 'rain' || kind === 'storm') ? s : kind === 'drizzle' ? s * 0.45 : 0;
     this._wxSnowCover = snowCover > 0 ? (snowCover > 1 ? 1 : snowCover) : 0;
   }
 

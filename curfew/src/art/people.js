@@ -85,7 +85,7 @@ function headGeometry(v){
 function clothing(style,v){
   const key=style+v;if(cache.has(key))return cache.get(key);
   const torso=[],upper=[],fore=[],thigh=[],shin=[],headwear=[],eyes=[],neck=[];
-  const c=style==='dealer'?[.053,.069,.063]:style==='sentry'||style==='marshal'?[.048,.059,.054]:COATS[v];
+  const c=style==='dealer'?[.053,.069,.063]:style==='sentry'||style==='marshal'||style==='dogcaller'?[.048,.059,.054]:COATS[v];
   const armored=style==='marshal'||style==='dealer';
   garment(torso,[[.68,.22,.14],[.74,.225,.147],[.84,.211,.145],[.94,.192,.132],[1.06,.186,.126],[1.22,.211,.141],[1.36,.233,.132],[1.42,.214,.116],[1.465,.166,.095],[1.49,.077,.078]],c,v);
   // Open lapels, layered collar, working pockets and buttons have actual thickness.
@@ -140,7 +140,7 @@ export function buildHuman(style='resident',variant=0,height=1.80){
   mesh(geo.neck,skin,head);
   const owned=[];
   let gun=null;
-  if(style==='sentry'||style==='dealer'){
+  if(style==='sentry'||style==='dealer'||style==='dogcaller'){   // ROUND 22, lane C: the dog-caller carries the rifle his poacher brain fires
     gun=new THREE.Group();gun.position.set(.20,1.16,-.16);model.add(gun);
     const p=[];box(p,0,0,0,.065,.11,.26,[.07,.075,.071]);
     box(p,0,-.025,.19,.083,.13,.24,leather);box(p,0,-.115,-.01,.057,.17,.085,leather,.12);

@@ -948,6 +948,10 @@ export function buildCarBody(rng) {
   const lampMat = new THREE.MeshStandardMaterial({
     vertexColors: true, emissive: 0xffd9a4, emissiveIntensity: 0.0, roughness: 0.28, fog: true,
   });
+  // ROUND 22: the two ends of the moth coat (setLamp's `cake`), built once. The clean end
+  // is the emissive above; the caked end is a dull brown, and the albedo goes dun with it.
+  const LENS_CLEAN = new THREE.Color(0xffd9a4), LENS_CAKED = new THREE.Color(0x7a4e22);
+  const LENS_ALBEDO_CLEAN = new THREE.Color(0xffffff), LENS_ALBEDO_CAKED = new THREE.Color(0x998061);
   lampMat.name = 'curfew-car-lamp';
   const lampGood = new THREE.Mesh(lensGeo, lampMat);
   lampGood.name = 'car-lamp-good';
@@ -1001,10 +1005,23 @@ export function buildCarBody(rng) {
     /**
      * Electrics. `head` 0..1 is the working headlamp's filament, `tailOn` the rears.
      * Emissive intensity only — NEVER a light. The census is pinned (CONTRACT).
+     *
+     * ROUND 22 — `cake` 0..1 is the moths on the lens (car.js _stepMoths). `head` already
+     * carries the dim; this is the COLOUR of it: a lens wearing a fur coat is browner, not
+     * just darker, so the emissive slides from the warm 0xffd9a4 toward a dull 0x7a4e22
+     * and the albedo goes dun. Both are uniforms on the one existing program (the same
+     * argument as tailMat above), so this links nothing.
      */
-    setLamp(head, tailOn) {
+    setLamp(head, tailOn, cake = 0) {
+      const k = clamp01(cake);
       lampMat.emissiveIntensity = head * 2.4;
+      // copy + lerp mutate in place: no allocation, and the ends are the sRGB hexes above
+      // (setRGB would have written LINEAR values and read back as a paler ffedd1).
+      lampMat.emissive.copy(LENS_CLEAN).lerp(LENS_CAKED, k);
+      lampMat.color.copy(LENS_ALBEDO_CLEAN).lerp(LENS_ALBEDO_CAKED, k);
       repairedMat.emissiveIntensity=fullyRepaired?head*2.4:0;
+      repairedMat.emissive.copy(lampMat.emissive);
+      repairedMat.color.copy(lampMat.color);
       tailMat.emissiveIntensity = tailOn ? 0.85 : 0.0;
     },
     setRepaired(on){fullyRepaired=!!on;repairedMat.emissiveIntensity=fullyRepaired?lampMat.emissiveIntensity:0;},

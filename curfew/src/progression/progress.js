@@ -301,7 +301,9 @@ export class Progress {
       found: [],        // place ids discovered
       claimed: [],      // place ids claimed
       roadLit: [],      // 100 m road buckets already paid for
-      worldFlags: {},   // free-form; other lanes may write through flag()
+      worldFlags: {},   // free-form; other lanes may write through flag(). ROUND 22, dusk-to-dawn:
+                        // 'd2d:out' [pole indices dead], 'd2d:relit' [indices brought back],
+                        // 'd2d:bulbs' (int carried), 'd2d:nextS' (seconds LEFT on the burnout clock)
       corpse: { live: 0, x: 0, y: 0, z: 0, xp: 0 },
       cyclesOut: 0,     // full cycles survived since the last bank
       cycleCount: 0,

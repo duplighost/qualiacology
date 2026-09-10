@@ -394,7 +394,18 @@ function evtReset(e, kind) {
 // asks with this instead of allocating a record per attempt inside step().
 const _spawnScratch = { id: -1, def: null };
 const _aliveOut = [];
-const INCAR_BLOCKED = Object.freeze({ hound: true, pale: true });
+const INCAR_BLOCKED = Object.freeze({ hound: true, pale: true, runner: true });   // ROUND 22: a quadruped cannot open a door
+
+/* ROUND 22 — THE LIT POOLS. Alex, 2026-09-10: dusk-to-dawn lights "are the one thing the
+   hounds won't cross." Lane E publishes ctx.shared.litPoles = [{x, z, r, on}] every step;
+   this lane makes every PRESSURE-owned body treat a lit pool as a fence: it steers round
+   one, holds at the rim when what it wants is inside, and is clamped out of it in every
+   state (_pushOffPool). Dread bodies ignore pools by law. The array does not exist until
+   lane E lands, so every read falls back to this frozen empty one. */
+const EMPTY_POLES = Object.freeze([]);
+const POOL_MARGIN = (CFG.director.litPool && CFG.director.litPool.margin) || 0.60;      // m outside the rim a body's centre holds
+const POOL_HOLD_PACE = (CFG.director.litPool && CFG.director.litPool.holdPace) || 0.90; // x cruise while pacing a rim
+const POOL_SCAN_PAD = 12;      // m past its rim a pool is worth caching for a body
 
 export class Enemies {
   static id = 'enemies';
@@ -468,6 +479,11 @@ export class Enemies {
     this.footLift = new Map();
     this.sep = new SepGrid(96);
     this._unsub = [];
+    // ROUND 22: the lit pools, read once per step (lane E's live array, or the frozen
+    // empty one), and whether the PLAYER is standing inside one this step.
+    this._poles = EMPTY_POLES;
+    this._playerPool = false;
+    this._rallied = 0;
   }
 
   /* =====================================================================
@@ -1133,6 +1149,63 @@ export class Enemies {
     return n;
   }
 
+  /**
+   * ROUND 22: THE CALL. Bodies of `species` inside `radius` of (cx, cz) answer (tx, tz).
+   * Two verbs, because the dog-caller needs both:
+   *
+   *   wake = false  THE CALL. An IDLE hound (aware 0) is re-homed to the point and trots
+   *                 there on its own unaware search walk (the 0.42x cruise in _approach),
+   *                 and holds station when it arrives — it is his pack now. A hound that
+   *                 already knows about YOU is left exactly as it is: the voice does not
+   *                 pull a chase off you, and it does not re-wake a body the thermostat
+   *                 stood down. And a hound answers the NEARER of the two, the voice or
+   *                 you: one standing nearer the player than the point stays where it is,
+   *                 which keeps the surplus round him the thermostat's to release.
+   *                 MEASURED before these rules (tests/pack.mjs b and d): a hunting pack at
+   *                 90-100 m walked off to answer him and never arrived, and the standing
+   *                 surplus at 44-76 m trotted off toward a caller 200 m out every call, so
+   *                 the quiet release never found one standing.
+   *   wake = true   THE PACK SHARES HIS EYES. Every hound in the radius knows about the
+   *                 point for at least memS seconds, woken if it was not — this is what
+   *                 "hunts you with the pack" is, and it is only ever asked inside
+   *                 packRadius of him, while he is hunting.
+   *
+   * A body inside its respawn grace does not answer — a new life begins the way the first
+   * one did — and a called-off body's calm holds; his rifle ends both, like everything else.
+   * Returns how many answered. Nothing here allocates.
+   */
+  rally(cx, cz, radius, species, tx, tz, memS, wake) {
+    if (!(radius > 0)) return 0;
+    const p = this._sys('player');
+    let n = 0;
+    for (let i = 0; i < this.all.length; i++) {
+      const e = this.all[i];
+      if (!e.alive || e.species !== species || e.neutral || e.state === 'corpse' || e.state === 'dormant') continue;
+      if (e.staged && e.aware <= 0) continue;
+      if (e.respawnCalmT > 0 || this._calmHolds(e)) continue;
+      const dx = e.pos.x - cx, dz = e.pos.z - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > radius * radius) continue;
+      if (wake) {
+        e.heardX = tx; e.heardZ = tz;
+        if (e.aware < 1) e.aware = 1;
+        e.memT = Math.max(e.memT, memS || e.def.memAlert || 6);
+      } else {
+        if (e.aware > 0) continue;               // it is busy with you
+        if (p && p.pos) {                        // the nearer of the two: the voice, or you
+          const px = e.pos.x - p.pos.x, pz = e.pos.z - p.pos.z;
+          if (px * px + pz * pz < d2) continue;
+        }
+        e.heardX = tx; e.heardZ = tz;
+        e.homeX = tx; e.homeZ = tz;              // and when it gets there, it stays
+      }
+      e.navBest = undefined;
+      n++;
+    }
+    this._rallied += n;
+    return n;
+  }
+
   /** Broadcast a noise of our own. Anything can listen; the director will. */
   _emitNoise(x, z, radius, source) {
     _noise.x = x; _noise.z = z; _noise.radius = radius; _noise.source = source;
@@ -1330,6 +1403,10 @@ export class Enemies {
       e.holdT = e.recommitT;    // and it stands its ground for that long (see _approach)
     } else e.holdT = 0;
     e.stallT = 0; e.stallAX = x; e.stallAZ = z; e.stallN = 0; e.stoodDownN = 0; e.corneredT = 0;
+    // ROUND 22: the one-per-session body (the dog-caller) and the per-life pool/dash fields.
+    e.unique = !!(opts && opts.unique);
+    e.poleX = 0; e.poleZ = 0; e.poleR = 0; e.poleHold = false;
+    e.dashDirX = 0; e.dashDirZ = 1;
 
     /* ---- ROUND 18: THE PERCH ------------------------------------------------------
      * ALEX: the moth "blends into trees in the forest. And then can fly."
@@ -1447,6 +1524,20 @@ export class Enemies {
     if (!p) return;
     const black = this._phase() === PHASE.BLACK;
     this._standDownGates(dt,p);
+    // ROUND 22: the lit pools. One array read, one scan for the player, per step.
+    {
+      const sh = this.ctx.shared;
+      const poles = sh && Array.isArray(sh.litPoles) ? sh.litPoles : EMPTY_POLES;
+      this._poles = poles;
+      let inPool = false;
+      for (let i = 0; i < poles.length && !inPool; i++) {
+        const q = poles[i];
+        if (!q || !q.on) continue;
+        const dx = p.pos.x - q.x, dz = p.pos.z - q.z;
+        inPool = dx * dx + dz * dz < q.r * q.r;
+      }
+      this._playerPool = inPool;
+    }
     this._enteredBlack = black && !this._black;
     this._black = black;
     // LANE G, round 7: the perk that lamp_2 "Eyeshine" buys. Base 1 with no node owned, so a
@@ -1525,6 +1616,20 @@ export class Enemies {
     const shared = this.ctx.shared;
     e.playerLit = shared && typeof shared.lit === 'number' ? shared.lit
       : (this._torchOn() ? 1 : 0);
+    // ROUND 22: the nearest LIT pool this body could reach, cached on the same stagger so
+    // the cost is poles x bodies / 6 frames and never per frame. poleR 0 means none near.
+    if (def.owner === OWNER.PRESSURE) {
+      const poles = this._poles;
+      let best = -1, bestGap = POOL_SCAN_PAD;
+      for (let i = 0; i < poles.length; i++) {
+        const q = poles[i];
+        if (!q || !q.on || !(q.r > 0)) continue;
+        const gap = Math.hypot(q.x - e.pos.x, q.z - e.pos.z) - q.r;
+        if (gap < bestGap) { bestGap = gap; best = i; }
+      }
+      if (best >= 0) { const q = poles[best]; e.poleX = q.x; e.poleZ = q.z; e.poleR = q.r; }
+      else { e.poleR = 0; e.poleHold = false; }
+    }
   }
 
   _torchOn() {
@@ -1745,8 +1850,14 @@ export class Enemies {
         if (e.stateT >= e.telegraphS) {
           const d = Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z);
           const reach = def.id === 'poacher' ? def.strikeRange
+            : e.attackKind === 'dash' ? def.dashRange + 3.0
             : (def.lungeRange || def.strikeRange) * 1.6 + 3.0;
-          if (d > reach) {
+          // ROUND 22: a pressure body never lands a blow inside a lit pool. If the player
+          // stepped under a pole during the windup, or the line of a dash would cross one,
+          // the attack is cancelled the same way a late one is.
+          const pooled = def.owner === OWNER.PRESSURE
+            && (this._playerPool || (e.attackKind === 'dash' && this._dashCrossesPool(e, p)));
+          if (d > reach || pooled) {
             // THE TELEGRAPH LAW's other half: an attack that would land late is
             // CANCELLED. It is never turned into a chase-strike, because a
             // chase-strike is an attack the player was never shown.
@@ -1756,6 +1867,7 @@ export class Enemies {
             e.state = 'attack'; e.stateT = 0; e.struck = false;
             e.strikeX = p.pos.x; e.strikeZ = p.pos.z;   // committed to a FIXED point
             if (e.attackKind === 'leap') this._launchLeap(e, p);
+            if (e.attackKind === 'dash') this._launchDash(e, p);
             // 'commit', never the attack kind again: a second event with the
             // same kind made a telegraph-to-strike gate read 0.150 s in the node
             // harness when the real windup was the full 0.320. The channel has
@@ -1938,6 +2050,48 @@ export class Enemies {
       want = def.speed * 0.42;
     }
 
+    // ---- ROUND 22: THE LIT POOL IS A FENCE. Alex: the dusk-to-dawn lights are "the one
+    // thing the hounds won't cross." With a lit pool cached on the perception tick:
+    //   the target is INSIDE it  -> hold at the rim and pace it (poleHold), the way a dog
+    //                               stops at a fence with you on the other side;
+    //   the way there CROSSES it -> steer to the rim point on the near side and go round.
+    // _pushOffPool in _integrate is the hard guarantee; this is what makes it read as
+    // a choice rather than a wall. Dread bodies never get here (they have their own steps).
+    e.poleHold = false;
+    if (e.poleR > 0) {
+      const R = e.poleR + POOL_MARGIN;
+      const cx = e.poleX, cz = e.poleZ;
+      const txc = tx - cx, tzc = tz - cz;
+      if (txc * txc + tzc * tzc < R * R) {
+        e.poleHold = true;
+        const bx = e.pos.x - cx, bz = e.pos.z - cz;
+        const a0 = Math.atan2(bz, bx);
+        // a slow pace along the rim, phased by id so a pack spreads round it
+        const a = a0 + Math.sin(this._ringPhase * 2.0 + e.id * 1.7) * 0.9;
+        tx = cx + Math.cos(a) * (R + 0.8);
+        tz = cz + Math.sin(a) * (R + 0.8);
+        want = Math.min(want, def.speed * POOL_HOLD_PACE);
+      } else {
+        const sx = tx - e.pos.x, sz = tz - e.pos.z;
+        const sl2 = sx * sx + sz * sz;
+        if (sl2 > 1e-6) {
+          const t = clamp01(((cx - e.pos.x) * sx + (cz - e.pos.z) * sz) / sl2);
+          let qx = e.pos.x + sx * t - cx, qz = e.pos.z + sz * t - cz;
+          if (qx * qx + qz * qz < R * R) {
+            let ql = Math.hypot(qx, qz);
+            if (ql < 0.05) {
+              // straight through the centre: go round on the side it is already leaning
+              const hx = -Math.sin(e.yaw), hz = -Math.cos(e.yaw);
+              const side = (hx * -sz + hz * sx) >= 0 ? 1 : -1;
+              qx = -sz * side; qz = sx * side; ql = Math.hypot(qx, qz) || 1;
+            }
+            tx = cx + (qx / ql) * (R + 1.5);
+            tz = cz + (qz / ql) * (R + 1.5);
+          }
+        }
+      }
+    }
+
     // ---- burst gait: 600 ms of travel, 350 ms of stillness. A body may only
     // commit to an attack DURING a pause.
     if (def.burst < 100) {
@@ -1958,8 +2112,17 @@ export class Enemies {
     // ---- THE STALL WATCHDOG (STALL_WIN_S / STALL_NET_M). NET drift per window, not
     // velocity: a body grinding into a trunk has a velocity and no motion. Aware only -- an
     // unaware body holding station is scenery, and scenery is allowed to stand still.
-    // (ROUND 13: and not an ambush holding its ground.)
-    if (e.aware > 0 && !e.scripted) {
+    // (ROUND 13: and not an ambush holding its ground. ROUND 22: and not a body pacing a
+    // lit pool's rim — it is not stalled, it is refusing, and relocate() could land it inside.)
+    //
+    // ROUND 22, MEASURED AND LEFT ALONE: a hunting body standing on a stale heard point is
+    // "stalled" by this measure and gets relocated to 22-46 m from him. tests/pack.mjs b
+    // depends on exactly that — the car drives itself to a teleported player and its engine
+    // (a 60 m noise) re-points every hunting hound at the CAR, 57 m short of him; the
+    // relocation is what delivers that hunt. An "arrived" exemption here made the pack stand
+    // by the car for ever. The dog-caller's pack answers him UNAWARE (rally, wake=false), and
+    // no watchdog runs on an unaware body, so it never needed the exemption.
+    if (e.aware > 0 && !e.scripted && !e.poleHold) {
       e.stallT += dt;
       if (e.stallT >= STALL_WIN_S) {
         const ax = e.pos.x - e.stallAX, az = e.pos.z - e.stallAZ;
@@ -2002,7 +2165,7 @@ export class Enemies {
     // and was being teleported back to his side every six seconds for as long as it
     // lived. That is a second, quieter "they always know where I am". A body that is
     // not chasing anyone is never moved.
-    if (e.aware > 0 && !e.scripted && !e.siteGuard && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
+    if (e.aware > 0 && !e.scripted && !e.siteGuard && !e.poleHold && progress(e, dt, tx, tz) && e.dist > NAV.STUCK_MIN_DIST) {
       if (relocate(this.ctx, e, this.placeRng, _pt)) {
         e.pos.set(_pt.x, groundY(this.ctx, _pt.x, _pt.z), _pt.z);
         e.prevPos.copy(e.pos); e.currPos.copy(e.pos);   // never interpolate a relocation
@@ -2011,7 +2174,7 @@ export class Enemies {
         this._relocated++;
       }
       resetProgress(e, tx, tz);
-    } else if (e.aware === 0) resetProgress(e, tx, tz);
+    } else if (e.aware === 0 || e.poleHold) resetProgress(e, tx, tz);
 
     // ---- the hunter's scream: it does not sneak, it recruits
     if (def.screamRadius && e.aware > 0 && e.screamCd <= 0 && e.dist < 46) {
@@ -2025,7 +2188,8 @@ export class Enemies {
     // ---- the attack decision
     const inBand = e.dist >= def.engage[0] && e.dist <= def.engage[1];
     const paused = def.burst > 100 || !e.moving;      // move OR attack
-    const wants = inBand && e.aware > 0 && e.los;
+    // ROUND 22: and never at a player standing in a lit pool (the fence, see above).
+    const wants = inBand && e.aware > 0 && e.los && !this._playerPool;
     // THE FRONT-COMMIT LAW. It is asked BEFORE the token so that being behind
     // the player costs a body patience rather than a token, and asked with
     // `wants` so patience only accrues while it is genuinely trying.
@@ -2039,6 +2203,9 @@ export class Enemies {
         this._squadLeapAt = this._t;
       } else if (def.lungeRange && e.dist <= def.lungeRange) {
         e.attackKind = 'lunge';
+      } else if (def.dash && e.dist >= def.engage[0] && e.dist <= def.dashRange) {
+        // ROUND 22: the runner. Its only attack is the line past you.
+        e.attackKind = 'dash';
       } else if (e.dist <= def.strikeRange + (e.corneredT > 0 ? 2.6 : 1.1)) {
         // a CORNERED body (see CORNERED_S) commits from where it stands: MEASURED a pallbearer
         // at 2.4 m, 0.34 m outside this reach, taking the token and dropping it every frame
@@ -2145,6 +2312,44 @@ export class Enemies {
     e.airborne = true;
   }
 
+  /**
+   * ROUND 22: THE RUNNER'S DASH. Fix a line from the body to a point dashOffset metres off
+   * the player's shoulder — led by dashLead seconds of their velocity — on the side the body
+   * is already leaning. It is a GRAZE line on purpose: _pushOffPlayer stops anything aimed at
+   * the player's centre dead on their chest, and this animal is meant to pass.
+   */
+  _launchDash(e, p) {
+    const def = e.def;
+    const lead = def.dashLead || 0;
+    const px = p.pos.x + (p.vel ? p.vel.x * lead : 0);
+    const pz = p.pos.z + (p.vel ? p.vel.z * lead : 0);
+    let dx = px - e.pos.x, dz = pz - e.pos.z;
+    const d = Math.hypot(dx, dz) || 1;
+    dx /= d; dz /= d;
+    // perpendicular, on the side the body's own heading leans toward (never dead centre)
+    const hx = -Math.sin(e.yaw), hz = -Math.cos(e.yaw);
+    const lean = hx * -dz + hz * dx;
+    const side = lean >= 0 ? 1 : -1;
+    const ox = -dz * side * (def.dashOffset || 0.9), oz = dx * side * (def.dashOffset || 0.9);
+    let tx = px + ox - e.pos.x, tz = pz + oz - e.pos.z;
+    const tl = Math.hypot(tx, tz) || 1;
+    e.dashDirX = tx / tl; e.dashDirZ = tz / tl;
+    e.yaw = Math.atan2(-e.dashDirX, -e.dashDirZ);
+    e.moving = true;
+  }
+
+  /** Would the dash line from this body to the player cross its cached lit pool? */
+  _dashCrossesPool(e, p) {
+    if (!(e.poleR > 0)) return false;
+    const R = e.poleR + POOL_MARGIN;
+    const sx = p.pos.x - e.pos.x, sz = p.pos.z - e.pos.z;
+    const sl2 = sx * sx + sz * sz;
+    if (sl2 < 1e-6) return false;
+    const t = clamp01(((e.poleX - e.pos.x) * sx + (e.poleZ - e.pos.z) * sz) / sl2);
+    const qx = e.pos.x + sx * t - e.poleX, qz = e.pos.z + sz * t - e.poleZ;
+    return qx * qx + qz * qz < R * R;
+  }
+
   _attack(e, dt, p) {
     const def = e.def;
     // XZ FOR THE APPROACH, BUT NOT FOR THE BLOW. Every range test in this file was a plan
@@ -2156,6 +2361,26 @@ export class Enemies {
     const d = Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z);
     const dyAbs = Math.abs((p.pos.y + CFG.player.EYE * 0.45) - (e.pos.y + def.height * 0.5));
     const inReachY = dyAbs <= def.height * 0.9 + 0.55;
+
+    if (e.attackKind === 'dash') {
+      // ROUND 22. The line is held at dashSpeed with no damping: it bites once as it passes
+      // and KEEPS GOING (the overshoot Alex will see), then recovers and circles back off its
+      // ring. Two ways it ends early: the trunk slide in _integrate zeroed its velocity —
+      // it hit a tree, and a runner standing frozen in 'attack' is exactly the "they freeze"
+      // note — or the lit-pool clamp took the whole of its heading.
+      const spd = Math.hypot(e.vel.x, e.vel.z);
+      if (e.stateT > 0.05 && spd < 1.0) { e.state = 'recover'; e.stateT = 0; return; }
+      e.vel.x = e.dashDirX * def.dashSpeed; e.vel.z = e.dashDirZ * def.dashSpeed;
+      e.moving = true;
+      if (!e.struck && inReachY && d < def.strikeRange + CFG.player.RADIUS) {
+        e.struck = true;
+        _dir.set(p.pos.x - e.pos.x, 0, p.pos.z - e.pos.z);
+        if (_dir.lengthSq() > 1e-6) _dir.normalize(); else _dir.set(e.dashDirX, 0, e.dashDirZ);
+        this._hurtPlayer(e, p, _dir);
+      }
+      if (e.stateT >= def.dashTime) { e.state = 'recover'; e.stateT = 0; }
+      return;
+    }
 
     if (e.attackKind === 'lunge') {
       _dir.set(p.pos.x - e.pos.x, 0, p.pos.z - e.pos.z);
@@ -2389,6 +2614,26 @@ export class Enemies {
     if (into < 0) { e.vel.x -= nx * into; e.vel.z -= nz * into; }
   }
 
+  /**
+   * ROUND 22: THE FENCE. The hard guarantee, in every state (flee, hunt, attack, a leap's
+   * landing): a PRESSURE body's centre is never inside its cached lit pool plus the margin.
+   * Same shape as _pushOffPlayer — project to the rim, remove only the INWARD velocity so a
+   * body sliding past keeps its tangential speed and a body pressing in stops dead.
+   */
+  _pushOffPool(e) {
+    if (!(e.poleR > 0) || e.def.owner !== OWNER.PRESSURE) return;
+    const R = e.poleR + POOL_MARGIN;
+    let dx = e.pos.x - e.poleX, dz = e.pos.z - e.poleZ;
+    let d = Math.sqrt(dx * dx + dz * dz);
+    if (d >= R) return;
+    if (d < 1e-4) { dx = -Math.sin(e.yaw); dz = -Math.cos(e.yaw); d = 1; }
+    const nx = dx / d, nz = dz / d;
+    e.pos.x = e.poleX + nx * R;
+    e.pos.z = e.poleZ + nz * R;
+    const into = e.vel.x * nx + e.vel.z * nz;
+    if (into < 0) { e.vel.x -= nx * into; e.vel.z -= nz * into; }
+  }
+
   _integrate(e, dt) {
     const def = e.def;
     if (e.airborne) {
@@ -2397,6 +2642,7 @@ export class Enemies {
       e.pos.x += e.vel.x * dt;
       e.pos.y += e.vel.y * dt;
       e.pos.z += e.vel.z * dt;
+      this._pushOffPool(e);                            // ROUND 22: a leap lands AT the fence
       // A LEAP OBEYS WALLS. This branch used to integrate raw — the grounded path below has
       // had an occupancy test since it was written, and the airborne one had nothing — so a
       // hound that committed to a leap flew through the filling station and bit the player
@@ -2422,6 +2668,7 @@ export class Enemies {
 
     e.pos.x += e.vel.x * dt;
     e.pos.z += e.vel.z * dt;
+    this._pushOffPool(e);                              // ROUND 22: the fence, before the trunk slide
 
     // Slide out of anything we are inside. collision owns the mover for the
     // player; for a body this is the cheap version — one occupancy test and a
@@ -2718,6 +2965,7 @@ export class Enemies {
     if (e.staged && e.aware <= 0) return false;
     if (e.siteGuard || e.initiallyNeutral) return false;
     if (e.scripted) return false;             // ROUND 13: dread's spend, not the thermostat's stock
+    if (e.unique) return false;               // ROUND 22: the dog-caller is placed once and stays
     this._uncommit(e);
     this._release(e);
     this._culled++;
@@ -2739,6 +2987,7 @@ export class Enemies {
     if (!e || !e.alive || e.def.owner !== OWNER.PRESSURE || e.aware <= 0) return false;
     if (e.siteGuard || e.initiallyNeutral) return false;
     if (e.scripted) return false;             // ROUND 13: an ambush cannot be called off
+    if (e.unique) return false;               // ROUND 22: nor can the dog-caller
     // never mid-strike and never mid-air: a body called off in a lunge changes its mind in
     // front of him
     if (e.state === 'windup' || e.state === 'attack' || e.airborne) return false;
@@ -3309,8 +3558,11 @@ export class Enemies {
       anim.gait = gait;
       anim.moveAmp = e.moving ? clamp01(Math.hypot(e.vel.x, e.vel.z) / Math.max(0.4, e.def.speed)) : 0;
       anim.coil = e.state === 'windup' ? (e.telegraphCharge || 0) : 0;
+      // ROUND 22: the runner's dash stretches the shell for as long as the line is held
       anim.swing = e.state === 'attack' && e.attackKind === 'strike'
-        ? clamp01(e.stateT / Math.max(0.001, e.def.attack)) : 0;
+        ? clamp01(e.stateT / Math.max(0.001, e.def.attack))
+        : e.state === 'attack' && e.attackKind === 'dash'
+          ? 1 - clamp01(e.stateT / Math.max(0.001, e.def.dashTime || 1)) * 0.5 : 0;
       anim.bank = clamp(dyaw * -3.2, -0.5, 0.5);
       anim.aim = e.aim || 0;
       anim.tick = e.tick || 0;
@@ -3553,6 +3805,12 @@ function makeRecord(id, species, def, built, rng) {
     //   dropped  the spider has let go and is on (or falling to) the floor
     //   perched  the moth is clinging to a trunk and has not opened its wings yet
     ceilY: 0, ceilT: 0, dropped: false, perched: false,
+    // ROUND 22.
+    //   unique          placed once per session and refused by cull/standDown/the respawn sweep
+    //   poleX/Z/R       the nearest LIT dusk-to-dawn pool, cached on the perception tick (R 0 = none)
+    //   poleHold        it is pacing that pool's rim because what it wants is inside
+    //   dashDirX/Z      the runner's committed dash line
+    unique: false, poleX: 0, poleZ: 0, poleR: 0, poleHold: false, dashDirX: 0, dashDirZ: 1,
     slot: -1,
     // Where this body was last hurt, and whether it was hurt by a swing. Both
     // are declared HERE, at boot, with every other field, and both exist so
