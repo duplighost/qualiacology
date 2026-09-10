@@ -397,7 +397,7 @@ export class Planetarium {
       const u = mat.uniforms;
       const set = (n, v) => { if (u[n]) u[n].value = v; };
       set('uCloud', 0); set('uRidge', 0); set('uBand', 0);
-      set('uMoonGlow', 0); set('uMoonPeak', 0); set('uMoonPhase', 2.0); set('uMoonR', SUN_R);
+      set('uMoonGlow', 0); set('uMoonPeak', 0); set('uEastGlow', 0); set('uMoonPhase', 2.0); set('uMoonR', SUN_R);   // uEastGlow 0: the county's east line is not painted on the dome at rest
       if (u.uMoonDir) u.uMoonDir.value.set(0, 0.2, -1).normalize();
       if (u.uHorizon) u.uHorizon.value.setRGB(0, 0, 0);
       if (u.uMid) u.uMid.value.setRGB(0, 0, 0);

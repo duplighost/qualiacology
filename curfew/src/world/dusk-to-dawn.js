@@ -350,7 +350,7 @@ export class DuskToDawn {
       for (const i of out) { const p = this.poles[i | 0]; if (p && p.lit) { p.lit = false; this._writePole(p.i, 0); } }
     }
     if (Array.isArray(relit)) {
-      for (const i of relit) { const p = this.poles[i | 0]; if (p && !p.lit) { p.lit = true; this._writePole(p.i, 1); } }
+      for (const i of relit) { const p = this.poles[i | 0]; if (!p) continue; p.relit = true; if (!p.lit) { p.lit = true; this._writePole(p.i, 1); } }   // relit stays set, or the next _persistLists() drops a bought light
     }
     this._restored = true;
     this._publish();

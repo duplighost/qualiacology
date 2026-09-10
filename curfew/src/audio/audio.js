@@ -1162,7 +1162,7 @@ export class Audio {
     on('dogcaller:dead', () => this.county.onCallerDead());          // lane C: and never again
     on('director:order', (p) => this.county.onOrder(p));             // lane C: chimes before the hounds
     on('enemy:spawned', (p) => this.county.onSpawned(p.e || p));     // ...or, without that, at the spawn
-    on('planetarium:button', (p) => this.county.onButton(p));        // lane I: a relay, no words
+    on('planetarium:button', (p) => { this.county.onButton(p); this.county.onSunrise(p); });   // lane I: a relay, and the projector hum from the button (its 4 s in the black hum too)
     on('planetarium:sunrise', (p) => this.county.onSunrise(p));      // lane I: the projector hum
     on('planetarium:ended', () => this.county.onEnded());
     on('dusk-to-dawn:flicker', (p) => this.county.onFlicker(p));     // lane E: a ballast on its way out

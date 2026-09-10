@@ -306,6 +306,7 @@ export class Fx {
     }
     this._eyeSpawnT = 0;
     this._eyePosDirty = false;
+    this._eyeWasLive = false;   // so the alpha upload happens only while a pair is (or just was) on screen
     this._eyeLive = 0;
 
     /* ---------------- tracers: instanced stretched boxes ---------------------- */
@@ -923,14 +924,16 @@ export class Fx {
     // Alphas every frame from the step's `lit`; positions only when a pair was placed or
     // dropped. A dropped pair is parked under the world once, then left alone.
     const eyeAttr = this.eyeAttr, eyePos = this.eyePos;
+    let anyLive = false;
     for (let i = 0; i < EYE_PAIRS; i++) {
       const e = this.eyeState[i], j = i * 6;
       let al = 0;
-      if (e.live) al = e.blinkOff > 0 ? 0 : EYE_ALPHA * e.lit;
+      if (e.live) { anyLive = true; al = e.blinkOff > 0 ? 0 : EYE_ALPHA * e.lit; }
       else if (eyePos[j + 1] !== -9999) { eyePos[j + 1] = -9999; eyePos[j + 4] = -9999; this._eyePosDirty = true; }
       eyeAttr[j + 1] = al; eyeAttr[j + 4] = al;
     }
-    this.eyeGeo.attributes.aP.needsUpdate = true;
+    if (anyLive || this._eyeWasLive) this.eyeGeo.attributes.aP.needsUpdate = true;   // not a 576-byte upload every frame of an empty night
+    this._eyeWasLive = anyLive;
     if (this._eyePosDirty) { this.eyeGeo.attributes.position.needsUpdate = true; this._eyePosDirty = false; }
 
     /* ---- tracers --------------------------------------------------------- */

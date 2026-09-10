@@ -2601,13 +2601,14 @@ export class Hud {
     {
       const R = MINI_COMPASS_R, cy = c + MINI_COMPASS_DY;
       g.font = MINI_COMPASS_FONT; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.lineJoin = 'round'; g.strokeStyle = SHADE; g.lineWidth = 2.5; g.fillStyle = INK;
+      const lj = g.lineJoin; g.lineJoin = 'round'; g.strokeStyle = SHADE; g.lineWidth = 2.5; g.fillStyle = INK;
       g.globalAlpha = MINI_COMPASS_A_N;
       g.strokeText('N', c - rz * R, cy + fz * R); g.fillText('N', c - rz * R, cy + fz * R);
       g.globalAlpha = MINI_COMPASS_A;
       g.strokeText('S', c + rz * R, cy - fz * R); g.fillText('S', c + rz * R, cy - fz * R);
       g.strokeText('E', c + rx * R, cy - fx * R); g.fillText('E', c + rx * R, cy - fx * R);
       g.strokeText('W', c - rx * R, cy + fx * R); g.fillText('W', c - rx * R, cy + fx * R);
+      g.lineJoin = lj;   // the arrow below keeps its own joins
       g.globalAlpha = 1;
       // Screen angle of N clockwise from up equals cam.yaw (positive yaw turns forward
       // toward screen-left, so north swings to the right). Kept for state().

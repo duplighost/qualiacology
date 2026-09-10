@@ -683,7 +683,7 @@ export class Signage {
         const p = this._along(loop, j, d);
         const side = (-p.tz) > 0 ? 1 : -1;                     // perp = (-tz, tx) * side: choose x increasing
         const v = this._verge(p.x, p.z, p.tx, p.tz, side, W, 2.4);
-        const s = d > 0 ? 1 : -1, nx = p.tx * s, nz = p.tz * s;   // face away from the junction: at oncoming traffic
+        const nx = p.tx, nz = p.tz;   // _along's tangent already points AWAY from the junction on both sides (it walks back for d < 0), so the face is that direction: at the traffic approaching the junction
         const drvX = -nx, drvZ = -nz;                            // the driver reading it travels toward the junction
         const arrow = (-drvZ) > 0 ? 'right' : 'left';            // east on the driver's right when -dz > 0
         this._highway(v.x, v.z, Math.atan2(nx, nz), ['MORNING', '40'], arrow);

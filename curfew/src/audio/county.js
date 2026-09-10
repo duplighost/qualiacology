@@ -1061,6 +1061,7 @@ export class County {
     if (!this._rest.far) { try { this.bakeRest('far'); } catch (e) { void e; } }
     const buf = A.buf.county_hum;
     if (!buf) return;
+    if (this._hum.src) return;   // already humming since the button; the sunrise event does not restart it
     this._humStop(0.05);
     const c = A.actx, T = c.currentTime;
     const x = p && typeof p.x === 'number' && isFinite(p.x) ? p.x : this._px;
