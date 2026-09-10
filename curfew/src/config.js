@@ -388,7 +388,7 @@ export const CFG = {
     keepoutMajor: 70,       // m from a major's centre where no stake goes (places.js MAJOR_KEEPOUT)
     keepoutMinor: 14,       // m from a rationed minor, so a stake never grows out of a campfire
     keepoutSign: 30,        // m between two free-standing signs of this lane's own
-    atlas: { w: 2048, h: 1024, gutter: 8 },   // one 8.4 MB canvas; gutter stops mip bleed
+    atlas: { w: 2048, h: 2048, gutter: 8 },   // one 16.8 MB canvas (was 1024 tall: it filled to ~70% and overflowed on one smoke boot when the fonts measured wide); gutter stops mip bleed
     priceStages: 6,         // 4.29 9/10, 5.89, 9.99, NO GAS, NO, a drawn sun — one per 14-minute cycle
     // the poster's date by distance from the county centre; the same radii MINOR_THINNING uses,
     // so the bureaucracy loses its nerve exactly where the county thins out
