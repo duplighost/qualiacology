@@ -68,6 +68,9 @@ const TAIL_SHORT = 0.34;          // the world got smaller
 const MAX_SILENCE_S = 45;         // the law
 const SILENCE_ANSWER_S = 40;      // answer before the law is broken, not after
 const HUSH_R = 20;                // the Hush sphere's outer radius [DESIGN 5]
+// ROUND 21: the rain stem's level at a full downpour. Set against the wind's 0.11 base and
+// deliberately near it: rain you can hear over everything else is rain you stop hearing.
+const WX_RAIN = 0.15;
 
 // The order a claimed region gives one back. Most-missed first — the crickets
 // are the sound of the county being alive and they are the first thing anyone
@@ -651,7 +654,9 @@ export class Bed {
       const open = this._region === 'ridge' || this._region === 'fields';
       this._windTarget = S.wind.base * (0.55 + this.rng.next() * (open ? 1.5 : 0.9));
     }
-    S.wind.target = this._windTarget * hush * inside;
+    // ROUND 21: and it leans into a front. The wind is what makes weather feel like it has a
+    // SIZE, so it carries most of the loudness and the rain sits under it.
+    S.wind.target = this._windTarget * hush * inside * (1 + 1.15 * (this._wxStrength || 0));
 
     S.canopy.target = S.canopy.base * (this._region === 'pines' ? 1.25 : this._region === 'ridge' ? 0.25 : 0.8) * hush * inside;
     S.traffic.target = S.traffic.base * clamp01(1 - this._offRoad / TRAFFIC_DIES_M) * hush;
@@ -661,8 +666,22 @@ export class Bed {
     const humRise = this._phase === 'dawn' ? 1 + this._phaseT * 1.6 : 1;
     S.worksHum.target = S.worksHum.base * (this._region === 'works' ? 2.2 : 1) * humRise
       * (1 + 0.5 * clamp01(this.cutCount / 6));
-    S.rain.target = S.rain.base * hush;
-    S.insects.target = S.insects.base * (this._region === 'marsh' ? 1.3 : 1) * hush * inside;
+    // ROUND 21 — THE RAIN STEM FINALLY HAS A REASON TO EXIST.
+    //
+    // stem_rain has been baked since round 13 — a real band-passed 4.5 s loop with grains in
+    // it — and its authored gain has been 0.0 the whole time, because nothing in the county
+    // could rain. world/weather.js can now, and it hands the level here. base stays 0.0 so
+    // the stem census is unchanged; the level is weather's, not the table's.
+    //
+    // WX_RAIN is deliberately modest. Alex: "nothing loud or anoying." Rain that sits on top
+    // of the mix would bury the thing this game is actually listening for, so it comes in
+    // under the wind and lets the wind carry the weather's size.
+    S.rain.target = WX_RAIN * this._wxRain * hush * inside;
+    // Lying snow MUFFLES. A white county is a quiet one — snow absorbs what the ground used
+    // to reflect — and it is the one place this system makes the night emptier rather than
+    // busier, which is worth more here than another layer would be.
+    const muffle = 1 - 0.45 * (this._wxSnowCover || 0);
+    S.insects.target = S.insects.base * (this._region === 'marsh' ? 1.3 : 1) * hush * inside * muffle;
     // ROUND 14: the synthesised three-song loop is retired. radio.js owns the dial now and
     // runs its own band-passed chain; this stem stays defined so the census is unchanged.
     S.radio.target = 0;
@@ -678,6 +697,18 @@ export class Bed {
         s.node.gain.setTargetAtTime(s.level, T, 0.25);
       }
     }
+  }
+
+  /**
+   * ROUND 21 — world/weather.js's one door into the bed. Levels only: this sets no gain and
+   * starts no source, it hands _mixLoops three numbers and lets the existing slow follow do
+   * the fade, so a front arrives in the mix over about a second rather than as a click.
+   */
+  setWeather(kind, strength, snowCover) {
+    const s = strength > 0 ? (strength > 1 ? 1 : strength) : 0;
+    this._wxStrength = s;
+    this._wxRain = kind === 'rain' ? s : kind === 'drizzle' ? s * 0.45 : 0;
+    this._wxSnowCover = snowCover > 0 ? (snowCover > 1 ? 1 : snowCover) : 0;
   }
 
   /** The discrete stems: crickets, owl, frogs, the far dog. */

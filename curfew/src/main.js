@@ -53,6 +53,7 @@ import * as fxMod from './fx/fx.js';
 import * as postMod from './gfx/post.js';
 import * as airlightMod from './gfx/airlight.js';   // ROUND 20
 import * as clockMod from './world/clock.js';
+import * as weatherMod from './world/weather.js';
 import * as placesMod from './world/places.js';
 import * as enemiesMod from './enemies/enemies.js';
 import * as directorMod from './director/director.js';
@@ -83,6 +84,10 @@ const SYSTEMS = [
   ['lights', lightsMod],       // owns the pinned 13-light census AND ctx.shared.lit
   ['sky', skyMod],
   ['clock', clockMod],         // publishes ctx.shared.phase; drives sky and the moon
+  ['weather', weatherMod],     // ROUND 21: publishes ctx.shared.weather and hands it to the
+                               // four lanes that can draw it. AFTER clock (it leans on the
+                               // authored fog and cloud rather than replacing them) and
+                               // BEFORE chunks, fx, sky and audio read it in the same step.
   // -- the ground -----------------------------------------------------------------------
   ['terrain', terrainMod],
   ['roads', roadsMod],
