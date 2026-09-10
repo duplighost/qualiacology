@@ -1,119 +1,73 @@
-# AGENTS.md — how to work on qualiacology.com
+# qualiacology.com
 
-Read this first. It is the entry point for every AI agent (Codex, Claude,
-anything else) and is kept current: trust it over your own notes or memory.
-It is deliberately short: the rules that always apply, two ship flows, and a
-table routing to a task guide in `build/docs/`. **Read only the guides your
-task touches.** Last verified: 2026-09-03.
+The repo root is the served site. Netlify deploys every push to `main` within about a
+minute. There is no other deploy path and no branch protection. Rollback is redeploying
+an earlier deploy in the Netlify UI.
 
-## The three rules
+## Three rules
 
-1. **`main` is production.** Netlify (project `classy-strudel-55444b`,
-   publish directory `.`, no build step) deploys every push to `main` within
-   about a minute, and GitHub enforces no branch protection. So: feature
-   branch → PR → merge → open the live URL. **"Ship it" from Alex IS merge
-   approval**: merge once CI is green, then verify production. Without those
-   words, stop at the open PR and wait. Never deploy manually; the git flow is
-   the only deploy path. Rollback = redeploy a previous deploy in the Netlify UI.
+1. **`main` is production.** Branch, PR, merge, open the live URL. Alex's "ship it" is
+   merge approval: once he has said it, merge as soon as CI is green and run nothing else
+   first. Without it, stop at the open PR.
+2. **All copy is Alex's voice.** Reuse his lines; never invent taglines. Games other
+   people made keep their own words.
+3. **The hub pages are generated.** `index.html`, `games/`, `music/`,
+   `psychopharmacology/` and `sitemap.xml` come from `build/`; never edit them directly.
+   Everything else at root (game folders, `music/<slug>/`, `_redirects`, `_headers`,
+   `404.html`) is static and hand-edited.
 
-2. **All site copy is Alex's voice; never invent it.** Plain, dry, a little
-   charged, occasionally profane. No taglines, no hype words. Reuse his
-   existing lines; when unsure, ask. Games contributed by others keep their
-   own words: shell them, fix accessibility, never edit their text.
-
-3. **The four hub pages are generated; never edit them directly.**
-   `index.html`, `games/`, `music/`, `psychopharmacology/` are build output.
-   Sources: `build/src/content/site-data.json` (all copy plus the catalog;
-   hand-formatted, so make targeted text edits only and NEVER load-and-redump
-   with a JSON library), the templates in `build/scripts/build-site.mjs`, and
-   `build/src/site.css|js`. Everything else at root (per-game folders,
-   `music/<slug>/`, `_redirects`, `_headers`, `404.html`) is static and
-   hand-edited. Repo root IS the served site; never leave scratch files here.
-
-## Before you edit anything
+## Shipping a game change (the common case)
 
 ```sh
-git status && git pull
-```
-
-A dirty tree with changes you didn't make means another session is
-mid-flight in this checkout: stop and say so. Other sessions may be working
-in separate worktrees of this repo at the same time; that is fine.
-
-## Flow A: you changed files inside one game folder (the common case)
-
-Updating a game that is already on the site. No hub build, no preflight, no
-QA run. CI validates the PR for you.
-
-```sh
-git checkout -b <game>-<what-changed>
-# Put the new files in <game>/. If the game also lives under
-# C:\Users\Alex\Projects\<game>, check which copy is newer BEFORE copying
-# (gotchas.md, "Site copy vs Projects source"). Some games generate the
-# site copy with a script (arc, thrown, thurible, curfew: see their docs).
+git status && git pull        # changes you did not make = another session mid-flight: stop
+git checkout -b <game>-<what>
+# Put the new files in <game>/ (see the table below). The site's own index.html carries
+# the site shell (title, meta, home pill): keep it, or re-shell the new one.
 node build/scripts/static-server.mjs --root=. --port=4173
-#   open http://localhost:4173/<game>/ and see it boot. That is the check.
+#   open http://localhost:4173/<game>/ and see it boot. That is the whole check.
 git add <game>/ && git commit -m "<GAME>: <what changed>"
 git push -u origin <branch> && gh pr create --fill
-# Wait for CI. "Ship it" → gh pr merge --squash --delete-branch, then open
-# https://qualiacology.com/<game>/ and confirm it boots. Done.
+# CI runs. On "ship it": gh pr merge --squash --delete-branch, then open
+# https://qualiacology.com/<game>/?cb=<anything> and confirm it boots.
 ```
 
-If the game has its own `build/qa/<game>-boot-check.mjs` AND you changed how
-it boots, run that one check against localhost. Nothing else.
+No preflight, no QA sweep, no new tests. `build/qa/` holds boot checks for a few games;
+run one only if you changed how that game boots.
 
-## Flow B: you changed the hub
+## Changing the hub
 
-Catalog entries, hub copy, templates, `site.css` or `site.js`, images, or
-adding/removing a game or album.
+Catalog entries, hub copy, templates, `site.css`, `site.js`, images, adding or removing
+a game or album:
 
 ```sh
-git checkout -b <feature-branch>
-node build/scripts/preflight.mjs        # build + validate + route smoke
-#   --art if you touched ANY image; --qa only if you touched site.css/js or templates
-git add <files> && git commit && git push -u origin <branch> && gh pr create --fill
-# Inspect the Netlify deploy preview. "Ship it" → merge, then check the
-# changed routes on https://qualiacology.com.
+node build/scripts/preflight.mjs   # build + validate + route smoke; add --art if you touched an image
 ```
 
-Windows notes (Alex's machine, PowerShell 5.1): no `&&` chaining there; write
-commit messages to a file and `git commit -F <file>`, saved ASCII. Git Bash
-avoids all of this. Python is `py -3`.
+then branch, PR, "ship it", merge, and check the changed routes live. Guides, read only
+the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
+`add-game.md`, `remove-game.md`, `add-album.md`, `images.md` (any image),
+`design-system.md` (site.css, site.js, templates), `gotchas.md`.
 
-## Where to go for your task
+## Where each game's files come from
 
-| Task | Read |
-|---|---|
-| Update an existing game's files | Flow A above. Nothing else. |
-| Edit hub copy / catalog data, edit a static page, verify a deploy | `build/docs/quick-changes.md` |
-| Add a game | `build/docs/add-game.md` |
-| Remove a game | `build/docs/remove-game.md` |
-| Add an album | `build/docs/add-album.md` |
-| Touch `site.css`, `site.js`, or page templates | `build/docs/design-system.md` (**required**) |
-| Touch any image | `build/docs/images.md` (**required**) |
-| Write or run tests, boot checks, or measure anything in a browser | `build/docs/qa-gates.md` |
-| Something failed in a weird way / what's known-unfinished | `build/docs/gotchas.md` |
+| site folder | source | how the site copy is made |
+|---|---|---|
+| arc, thrown | `Projects\arc`, `Projects\thrown` | `node build-site-copy.mjs` there; never hand-edit the site copy |
+| curfew | `Projects\curfew` | `node build-site-copy.mjs` there; never hand-edit |
+| winterline | `Projects\winterline` | `node tools/build-site-copy.mjs` there; never hand-edit |
+| thurible | `Projects\thurible-3d` (not `thurible`, the 2D original) | build with `--production`, copy index.html, game.js, style.css, THIRD_PARTY_NOTICES.txt |
+| kickmoon | `Projects\kick-ball-moonkick` (not `kick-ball`) | copy the `game/` runtime; keep the site's index.html shell |
+| pocket-sun | `Projects\pocket-sun` | `npm run build:site` then `npm run copy:site` there |
+| spaceboarding | `Projects\spaceboarding` | copy `assets src styles.css vendor`; keep the site's index.html shell |
+| fetch | `Projects\fetch` (GitHub duplighost/fetch) | copy the changed `src/` files; keep the site's index.html shell |
+| vigil | this repo | the site copy is newer than `Projects\vigil`; never copy that folder over it |
+| lead, rally, rocket-shoes, eaten-path, wick, galaxy-sandbox, the-last-room, secondhand-saint | a `Projects` folder of the same name | plain copies; compare dates both ways before copying |
+| everything else | this repo | the site copy is the only source |
 
-`HANDOFF.md` at root is a long, git-ignored local session diary. Do not read
-it whole; grep it if you need history on one specific change.
-`.github/workflows/validate-site.yml` is read-only CI on PRs and main: it
-rebuilds the hubs, validates, runs route smoke, and rejects stale generated
-pages. It never commits or pushes.
+## Access and machine notes
 
-## Access
-
-- GitHub: `duplighost/qualiacology` (public), branch `main`. The `gh` CLI on
-  Alex's machine is authed as `duplighost`. Commit identity `duplighost` /
-  `alexdguitar@gmail.com`.
-- Netlify: team "Alexander Guitar", project `classy-strudel-55444b`, site_id
-  `85511573-c8bc-48fb-b23e-c9a5d2eff8f6`, domain qualiacology.com. Deploy
-  state via the Netlify MCP (`get-project`, currentDeploy → `ready`) if
-  available, or just open the URL.
-
-## Keep these docs true
-
-If you change the workflow (new asset contract, new script, moved files),
-update this router and the affected guide **in the same commit**. Future
-agents trust these files; stale instructions are worse than none. Never print
-counts in prose that can rot: the build and route-smoke print the real totals.
-
+- GitHub `duplighost/qualiacology`; `gh` on this machine is logged in as duplighost.
+  Netlify team "Alexander Guitar", project `classy-strudel-55444b`.
+- CI (`.github/workflows/validate-site.yml`) rebuilds the hubs, validates, smoke-tests
+  every route and rejects stale generated pages. It never deploys.
+- PowerShell 5.1 has no `&&`; Git Bash does. Python is `py -3`.
