@@ -1540,8 +1540,18 @@ export class PlayerController {
       }
     }
     if(hit){
+      // ROUND 21: ONLY A FRESH GRAB CLEARS THE STALL TIMER.
+      //
+      // This reset used to run on every hit, a few lines above the branch that increments
+      // the same timer — and the face is still THERE while you are pressed against it, so
+      // the timer was zeroed and re-added every step and sat at one frame's dt forever. The
+      // 0.55 s refusal below could never fire, so round 19's whole "and if it cannot move,
+      // it lets go" never happened: hold W and Space under an overhang and you hang there
+      // silently, exactly the thing it was written to stop. Progress still clears it, at the
+      // `moved` test below, so nothing that is actually climbing is ever interrupted.
+      const fresh=!this.scaleFace;
       this.scaleFace={x:hit.point.x,z:hit.point.z,nx:hit.normal.x,nz:hit.normal.z,top:hit.top};
-      this.scaleStall=0;
+      if(fresh)this.scaleStall=0;
     }else if(!this.scaling||!this.scaleFace||this.scaleFace.top-this.pos.y>1.1
       ||Math.hypot(this.scaleFace.x-this.pos.x,this.scaleFace.z-this.pos.z)>SCALE_LOSE_R){
       // ...and the face has to still be THERE. Without the distance test the controller

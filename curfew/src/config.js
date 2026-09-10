@@ -94,7 +94,18 @@ export const CFG = {
       // across the county and standing in the Holdfast's lit town, which is the rule this
       // budget exists for — nothing links during play. Boot 9.4 s against a 15 s ceiling.
       // 94 is 92 plus two, which is the same "one family of headroom" the note above sets.
-      programsMax: 94, // includes the eight warmed material variants in MARROW's Presence
+      // ROUND 21: 94 -> 96, and the same arithmetic as the line above. Weather itself adds no
+      // program — falling rain and snow are particles in the pool fx already draws, and the
+      // ground's response is two floats on an injection matGround already had. The two come
+      // from world/places.js: putting lying snow on the destinations means matBody/matPeople
+      // and matLand each compile a shader of their own, and a material with a hand-written
+      // shader MUST carry a customProgramCacheKey or three will serve it another Lambert's
+      // program. Those keys are what pull the two out of the shared pool; they are the cost of
+      // the county's yards and roofs going white with the field around them, and they are not
+      // optional for correctness. MEASURED at boot with weather in: 94, and 94 again after
+      // crossing the county under every kind of front — nothing links during play, which is
+      // the rule this budget exists for. Boot 9.1 s against a 15 s ceiling.
+      programsMax: 96, // includes the eight warmed material variants in MARROW's Presence
       coldBootMaxS: 15,     // 0.9 s measured
     },
   },
@@ -161,6 +172,62 @@ export const CFG = {
       density: 0.010,
       // Speed-keyed far fog so the world opens when you drive [filament]
       farWalk: 300, farDrive: 520, speedLo: 16, speedHi: 34,
+    },
+
+    // ROUND 21 — WEATHER. Alex: "add a whether system too where sometimes it's raining or
+    // snowing and stuff like that. I know it already does snow a bit. but make the weather
+    // system beautiful."
+    //
+    // The round-18 note above is now half superseded, and it should be read as history. It
+    // argued against "turning the whole floor white" because nobody had asked for it. Alex
+    // has now asked for it — "make it snow" — so the county IS allowed to go white, and the
+    // night-value law bends here on his say-so: snow at night that is not brighter than the
+    // ground is not snow, it is grey. What survives from round 18 is the SHAPE of the idea:
+    // frost is still a PLACE (the static field below), and weather is now a TIME laid over
+    // it. Where they meet, the deeper one wins.
+    //
+    // Nothing here adds a shader program. The county has 94 and uses 92. Falling rain and
+    // snow are particles in the pool fx already owns; the ground's response is two floats on
+    // the ground material's existing injection; the sky's is the uCloud knob sky.js already
+    // exposed with the comment "the clock may drive it later". This is that driver.
+    weather: {
+      // A front arrives, holds, and passes. These are the seconds each state lasts, picked
+      // against the 840 s night: you get three or four changes of weather in a full cycle,
+      // so it is an event you notice rather than wallpaper, and clear spells are the
+      // longest because clear is the county's normal face.
+      clearS: [150, 330],
+      wetS: [120, 260],           // one spell of rain or snow
+      fadeS: 26,                  // seconds to ease all the way in or out. Fronts do not snap.
+      // The odds a spell is each kind once one starts. Snow is a little rarer than rain and
+      // worth more when it lands, and the drizzle/downpour split gives rain two faces.
+      odds: { drizzle: 0.34, rain: 0.26, snow: 0.30, mist: 0.10 },
+
+      // Wind. ONE wandering vector, shared by the falling particles, so a squall leans the
+      // whole sky the same way instead of every flake choosing for itself.
+      windMax: 4.2,               // m/s at full gale
+      windTurnS: 9,               // seconds for a gust to change its mind
+      windGustS: 3.4,
+
+      // How fast the ground answers. Snow LAYS slowly and melts slower — you should be able
+      // to watch the county turn over a minute and find it still white when you come back.
+      snowLayS: 75,               // seconds of falling snow to full cover
+      snowMeltS: 260,             // and to lose it again after the sky clears
+      wetS_rise: 22,              // rain soaks in fast...
+      wetS_dry: 150,              // ...and dries slow. The road stays shining after it stops.
+
+      // What the ground does at full cover. snowCol is LINEAR albedo, like REGIONS.
+      // 0.34 against region ground of 0.109-0.164, so lying snow is about 2.4x the floor it
+      // covers: unmistakably snow, and still under a lamp's pool rather than over it.
+      snowCol: [0.330, 0.345, 0.385],
+      wetDark: 0.72,              // rain multiplies the ground by this...
+      wetSky: 0.16,               // ...and pushes it toward the sky's blue, because wet ground
+                                  // at night is a mirror. This is the road's wet-crown trick
+                                  // applied to the whole county.
+
+      // The air. Multipliers on the authored fog and cloud, so the clock still owns the shape
+      // of the night and weather only leans on it.
+      fogMul: { clear: 1.0, drizzle: 1.35, rain: 1.85, snow: 1.55, mist: 2.6 },
+      cloudMul: { clear: 1.0, drizzle: 1.5, rain: 1.9, snow: 1.7, mist: 1.25 },
     },
   },
 

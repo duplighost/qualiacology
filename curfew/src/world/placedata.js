@@ -368,6 +368,13 @@ export const MAJORS = Object.freeze([
   {
     id: 'chapel', name: 'The Chapel',
     x: -816.4, z: 1414.0, region: 'ridge', terrainRegion: 'ridge', kind: 'chapel',
+    // ROUND 21. The worst remaining one, and it is Alex's snow again: at the default C.ash
+    // the yard measured 24.1 against a ground of 13.1 — 1.84x PALER than the ridge it is cut
+    // into, a cold white field under a near-black chapel. Photographed before moving, as the
+    // Holdfast row above asks.
+    // A chapel yard on a ridge is trodden grass and packed earth, and it belongs under the
+    // meadow, not over it.
+    apronCol: [0.052, 0.051, 0.049],
     lit: false, hub: false,
     flat: { radius: 42, blend: 0.62 },
     approach: { x: 0, z: 32, w: 11, h: 9.4, style: 'chapel', routeX: 0, routeZ: 24 },
@@ -392,6 +399,12 @@ export const MAJORS = Object.freeze([
     id: 'drowned-light', name: 'The Drowned Light',
     reward: 'revolver',                    // ROUND 6: at the top of the stair, in the lamp room
     x: -1380.3, z: -208.1, region: 'shore', terrainRegion: 'pines', kind: 'lighthouse',
+    // ROUND 21. THE BRIGHTEST GROUND IN THE COUNTY, at 35.2 — over its own shore (33.3) and
+    // well over its sky (25.4). The cracks in the default apron read as tracks across it,
+    // which is the Filling Station's exact complaint at the one site with a sea in the frame.
+    // Wet shingle and salt-stained stone beside dark water: darker than the station's asphalt,
+    // and the lamp above is what the eye is supposed to find here.
+    apronCol: [0.050, 0.051, 0.053],
     lit: false, hub: false,
     flat: { radius: 32, blend: 0.62 },
     approach: { x: 0, z: 28, w: 12, h: 11.2, style: 'lighthouse', routeX: 0, routeZ: 24 },

@@ -61,6 +61,36 @@ const SNOW_SIZE = 0.052;
 const SNOW_FALL = -1.35;      // m/s at birth; drag and gravity settle it
 const SNOW_WIND = 0.85;       // m/s of shared drift, so a fall has a direction
 const SNOW_COL = Object.freeze({ r: 0.60, g: 0.65, b: 0.74 });   // cold, and under the sky
+
+/* ROUND 21 — RAIN, in the same pool, on the same program.
+ *
+ * Rain is not snow with different numbers, and the reason is in the last two constants. A
+ * round additive dot falling at 10 m/s is a SPARK; the eye reads falling water as a line, and
+ * a line is what RAIN_ANISO makes by squeezing the point sprite's x in the fragment shader.
+ * The rest follows from that: it is dim (additive over a black county goes bright fast), it
+ * is short-lived, and its drag is nearly nothing so it never floats.
+ *
+ * The budget: 240/s at a 1.15 s life is about 275 of the 1400-slot ring at a full downpour,
+ * on top of snow's 150. A shotgun into a pack still has two thirds of the ring.
+ */
+const RAIN_RATE = 420;        // drops/second at full rain
+const RAIN_R = 12;            // spawned in a disc this wide around the eye — tighter than
+                              // snow, because a drop crosses it in a fraction of the time
+const RAIN_TOP = 9.0;
+const RAIN_LIFE = 1.15;
+// MEASURED, not guessed. The first pass was 0.085 m at alpha 0.34 and aniso 7, and the frame
+// (tests/shots/weather-r21b) had 305 live drops in it that you had to hunt for: at 5 m that
+// sprite is 12 px tall and the 7x squeeze left the visible streak 1.7 px wide, which is the
+// sub-pixel additive line CINDERBLOOM's tracers already taught this project vanishes. Bigger,
+// brighter, and a little less squeezed.
+// The second pass came back as fat capsules — readable, but reading as falling SEEDS, because
+// a 5x squeeze on a 12 px sprite is a lozenge and not a line. The sprite has to be LONG and the
+// squeeze STRONG: at 8 m these are about 19 px tall and under 2 px wide, which is a rain streak.
+const RAIN_SIZE = 0.22;
+const RAIN_FALL = -9.5;       // m/s at birth, and it barely slows
+const RAIN_ALPHA = 0.50;
+const RAIN_ANISO = 8.0;       // the streak: 8x taller than it is wide
+const RAIN_COL = Object.freeze({ r: 0.56, g: 0.64, b: 0.78 });
 // ROUND 19: the is-there-sky-over-me ray. Module scope; _snow allocates nothing.
 const _snowO = { x: 0, y: 0, z: 0 };
 const _snowUp = Object.freeze({ x: 0, y: 1, z: 0 });
@@ -117,9 +147,14 @@ export class Fx {
     this.pCur = new Float32Array(MAX_PARTICLES * 3);
     this.pPrv = new Float32Array(MAX_PARTICLES * 3);
     this.pCol = new Float32Array(MAX_PARTICLES * 3);
-    this.pAttr = new Float32Array(MAX_PARTICLES * 2);   // size, alpha
-    this.pAttrC = new Float32Array(MAX_PARTICLES * 2);
-    this.pAttrP = new Float32Array(MAX_PARTICLES * 2);
+    // ROUND 21: size, alpha, ANISO. The third float stretches the sprite vertically in the
+    // fragment shader, and it is the whole difference between rain and glitter: a round
+    // additive dot falling fast reads as a spark, and rain at night is a LINE. It costs one
+    // float per particle and no new program — the alternative was a second material, against
+    // a 94-program budget with two spare. 1 is round; snow and every spark stay at 1.
+    this.pAttr = new Float32Array(MAX_PARTICLES * 3);
+    this.pAttrC = new Float32Array(MAX_PARTICLES * 3);
+    this.pAttrP = new Float32Array(MAX_PARTICLES * 3);
     this.pVel = new Float32Array(MAX_PARTICLES * 3);
     this.pLife = new Float32Array(MAX_PARTICLES * 2);   // age, life
     this.pDrag = new Float32Array(MAX_PARTICLES);
@@ -133,7 +168,7 @@ export class Fx {
     const pGeo = new THREE.BufferGeometry();
     pGeo.setAttribute('position', new THREE.BufferAttribute(this.pPos, 3));
     pGeo.setAttribute('color', new THREE.BufferAttribute(this.pCol, 3));
-    pGeo.setAttribute('aP', new THREE.BufferAttribute(this.pAttr, 2));
+    pGeo.setAttribute('aP', new THREE.BufferAttribute(this.pAttr, 3));
     // never culled: the bounding sphere of a ring buffer is meaningless and recomputing
     // it every frame is the cost we are avoiding by pooling in the first place
     pGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
@@ -142,12 +177,14 @@ export class Fx {
     const pMat = new THREE.ShaderMaterial({
       uniforms: {},
       vertexShader: /* glsl */`
-        attribute vec2 aP;
+        attribute vec3 aP;
         varying vec3 vColor;
         varying float vAlpha;
+        varying float vAniso;
         void main() {
           vColor = color;
           vAlpha = aP.y;
+          vAniso = aP.z;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           // aP.x is an approximate world diameter in metres
           gl_PointSize = clamp(aP.x * 700.0 / max(1.0, -mv.z), 1.5, 90.0);
@@ -156,8 +193,13 @@ export class Fx {
       fragmentShader: /* glsl */`
         varying vec3 vColor;
         varying float vAlpha;
+        varying float vAniso;
         void main() {
           vec2 p = gl_PointCoord - 0.5;
+          // ROUND 21: squeeze the sprite's X by aniso and the same falloff draws a vertical
+          // streak instead of a dot, inside the same square point. aniso 1 is the old
+          // behaviour exactly, so sparks, blood and snow are untouched.
+          p.x *= max(1.0, vAniso);
           float r = length(p) * 2.0;
           float a = (1.0 - smoothstep(0.35, 1.0, r)) * vAlpha;
           if (a < 0.004) discard;
@@ -223,7 +265,7 @@ export class Fx {
 
   /* --------------------------------------------------------------- spawners -- */
 
-  spawnParticle(x, y, z, vx, vy, vz, life, size, r, g, b, grav = 12, drag = 0.9, alpha0 = 1) {
+  spawnParticle(x, y, z, vx, vy, vz, life, size, r, g, b, grav = 12, drag = 0.9, alpha0 = 1, aniso = 1) {
     const i = this.pCursor;
     const i3 = i * 3, i2 = i * 2;
     this.pCursor = (this.pCursor + 1) % MAX_PARTICLES;
@@ -237,9 +279,11 @@ export class Fx {
     this.pCol[i3] = r; this.pCol[i3 + 1] = g; this.pCol[i3 + 2] = b;
     this.pGrav[i] = grav; this.pDrag[i] = drag;
     this.pSize0[i] = size; this.pAlpha0[i] = alpha0;
-    this.pAttrC[i2] = size; this.pAttrC[i2 + 1] = alpha0;
-    this.pAttrP[i2] = size; this.pAttrP[i2 + 1] = alpha0;
-    this.pAttr[i2] = size; this.pAttr[i2 + 1] = alpha0;
+    // The attribute buffers stride by THREE now, so they share i3 with position. aniso is
+    // written once, at birth, and no integrator touches it: it is a shape, not a state.
+    this.pAttrC[i3] = size; this.pAttrC[i3 + 1] = alpha0; this.pAttrC[i3 + 2] = aniso;
+    this.pAttrP[i3] = size; this.pAttrP[i3 + 1] = alpha0; this.pAttrP[i3 + 2] = aniso;
+    this.pAttr[i3] = size; this.pAttr[i3 + 1] = alpha0; this.pAttr[i3 + 2] = aniso;
     this.pColDirty = true;   // colour is written on spawn only, never integrated
   }
 
@@ -424,7 +468,7 @@ export class Fx {
    * CAMERA once a frame — one fbm call, not one per flake — because the field's lobes are 260 m
    * across and a 15 m spawn disc sits well inside one.
    */
-  _snow(dt) {
+  _precip(dt) {
     const cam = this.ctx && this.ctx.camera;
     if (!cam || !(dt > 0)) return;
     // ROUND 19. ALEX: "Snowing inside castle."
@@ -448,35 +492,85 @@ export class Fx {
       this._underRoof = !open;
     }
     if (this._underRoof) return;
-    const k = frostAt(cam.position.x, cam.position.z);
-    if (k <= SNOW_START) { this._snowAcc = 0; return; }
-    const strength = (k - SNOW_START) / (1 - SNOW_START);
-    this._snowAcc = (this._snowAcc || 0) + SNOW_RATE * strength * dt;
-    let count = this._snowAcc | 0;
-    if (count <= 0) return;
-    this._snowAcc -= count;
-    if (count > 6) count = 6;                 // never let a long frame dump the ring
+
+    // ROUND 21: TWO SOURCES OF SNOW, AND RAIN.
+    //
+    // The frost field is still a PLACE: stand in a cold hollow on a clear night and it is
+    // snowing there, exactly as round 18 built it. Weather is a TIME laid over the whole
+    // county, and where they overlap the deeper of the two wins rather than the two adding
+    // into a whiteout. A warm front over a frost patch really can give you rain and lying
+    // snow at once, and it looks like sleet, so that combination is allowed through.
+    const place = Math.max(0, (frostAt(cam.position.x, cam.position.z) - SNOW_START) / (1 - SNOW_START));
+    const snowK = Math.max(place, this._wxSnow || 0);
+    const rainK = this._wxRain || 0;
+    if (snowK <= 0 && rainK <= 0) { this._snowAcc = 0; this._rainAcc = 0; return; }
+
     const rng = this.rng;
+    // The gentle wander is still here and is what a still night has; weather's gusts are
+    // ADDED to it, so a squall leans the whole sky one way without ever making it uniform.
     this._snowPhase = (this._snowPhase || 0) + dt * 0.37;
-    const wx = Math.cos(this._snowPhase) * SNOW_WIND;
-    const wz = Math.sin(this._snowPhase * 0.8) * SNOW_WIND;
-    for (let i = 0; i < count; i++) {
-      const a = rng.next() * TAU;
-      const r = Math.sqrt(rng.next()) * SNOW_R;      // sqrt: even across the disc, not clumped
-      this.spawnParticle(
-        cam.position.x + Math.cos(a) * r,
-        cam.position.y + SNOW_TOP * (0.55 + rng.next() * 0.45),
-        cam.position.z + Math.sin(a) * r,
-        wx + (rng.next() - 0.5) * 0.5,
-        SNOW_FALL * (0.7 + rng.next() * 0.6),
-        wz + (rng.next() - 0.5) * 0.5,
-        SNOW_LIFE * (0.7 + rng.next() * 0.6), SNOW_SIZE * (0.6 + rng.next() * 0.9),
-        SNOW_COL.r, SNOW_COL.g, SNOW_COL.b, 0.55, 0.86, 0.85);
+    const wx = Math.cos(this._snowPhase) * SNOW_WIND + (this._wxWindX || 0);
+    const wz = Math.sin(this._snowPhase * 0.8) * SNOW_WIND + (this._wxWindZ || 0);
+
+    if (snowK > 0) {
+      this._snowAcc = (this._snowAcc || 0) + SNOW_RATE * snowK * dt;
+      let count = this._snowAcc | 0;
+      this._snowAcc -= count;
+      if (count > 8) count = 8;               // never let a long frame dump the ring
+      for (let i = 0; i < count; i++) {
+        const a = rng.next() * TAU;
+        const r = Math.sqrt(rng.next()) * SNOW_R;   // sqrt: even across the disc, not clumped
+        this.spawnParticle(
+          cam.position.x + Math.cos(a) * r,
+          cam.position.y + SNOW_TOP * (0.55 + rng.next() * 0.45),
+          cam.position.z + Math.sin(a) * r,
+          wx + (rng.next() - 0.5) * 0.5,
+          SNOW_FALL * (0.7 + rng.next() * 0.6),
+          wz + (rng.next() - 0.5) * 0.5,
+          SNOW_LIFE * (0.7 + rng.next() * 0.6), SNOW_SIZE * (0.6 + rng.next() * 0.9),
+          SNOW_COL.r, SNOW_COL.g, SNOW_COL.b, 0.55, 0.86, 0.85);
+      }
+    }
+
+    if (rainK > 0) {
+      // Rain is the same pool and the same program, and everything that makes it read as
+      // rain instead of as falling sparks is in these numbers: it is FAST, it is SHORT-lived,
+      // it is dim, and it is STRETCHED. RAIN_ANISO is the streak.
+      this._rainAcc = (this._rainAcc || 0) + RAIN_RATE * rainK * dt;
+      let count = this._rainAcc | 0;
+      this._rainAcc -= count;
+      if (count > 22) count = 22;
+      for (let i = 0; i < count; i++) {
+        const a = rng.next() * TAU;
+        const r = Math.sqrt(rng.next()) * RAIN_R;
+        this.spawnParticle(
+          cam.position.x + Math.cos(a) * r,
+          cam.position.y + RAIN_TOP * (0.5 + rng.next() * 0.5),
+          cam.position.z + Math.sin(a) * r,
+          wx * 0.5 + (rng.next() - 0.5) * 0.4,
+          RAIN_FALL * (0.85 + rng.next() * 0.3),
+          wz * 0.5 + (rng.next() - 0.5) * 0.4,
+          RAIN_LIFE * (0.8 + rng.next() * 0.4), RAIN_SIZE * (0.7 + rng.next() * 0.6),
+          RAIN_COL.r, RAIN_COL.g, RAIN_COL.b, 2.0, 0.06,
+          RAIN_ALPHA * (0.6 + rng.next() * 0.7), RAIN_ANISO * (0.75 + rng.next() * 0.5));
+      }
     }
   }
 
+  /**
+   * ROUND 21 — world/weather.js's one door into fx. Stores four numbers; spawns nothing here,
+   * because spawning belongs on the fixed step and this may be called from anywhere.
+   */
+  setWeather(kind, strength, windX, windZ) {
+    const s = strength > 0 ? (strength > 1 ? 1 : strength) : 0;
+    this._wxSnow = kind === 'snow' ? s : 0;
+    this._wxRain = kind === 'rain' ? s : kind === 'drizzle' ? s * 0.45 : 0;
+    this._wxWindX = windX || 0;
+    this._wxWindZ = windZ || 0;
+  }
+
   step(dt) {
-    this._snow(dt);
+    this._precip(dt);
     // Particles, tracers and decals run on the SCALED step on purpose: during hitstop the
     // debris hangs in the air, which is the whole effect.
     //
@@ -488,14 +582,16 @@ export class Fx {
       const i3 = i * 3, i2 = i * 2;
       if (pLife[i2] >= pLife[i2 + 1]) continue;
       pPrv[i3] = pCur[i3]; pPrv[i3 + 1] = pCur[i3 + 1]; pPrv[i3 + 2] = pCur[i3 + 2];
-      pAP[i2] = pAC[i2]; pAP[i2 + 1] = pAC[i2 + 1];
+      // Attributes stride by three now and share i3; index 2 is aniso, which is set at birth
+      // and never integrated, so nothing in this loop reads or writes it.
+      pAP[i3] = pAC[i3]; pAP[i3 + 1] = pAC[i3 + 1];
       pLife[i2] += dt;
       const t = pLife[i2] / pLife[i2 + 1];
       if (t >= 1) {
         // Dead: park BOTH ends under the world with zero alpha, so present has nothing to
         // interpolate between and cannot draw a streak down to the parking spot.
         pCur[i3 + 1] = -9999; pPrv[i3 + 1] = -9999;
-        pAC[i2 + 1] = 0; pAP[i2 + 1] = 0;
+        pAC[i3 + 1] = 0; pAP[i3 + 1] = 0;
         continue;
       }
       const dr = Math.exp(-this.pDrag[i] * dt);
@@ -505,8 +601,8 @@ export class Fx {
       pCur[i3] += pVel[i3] * dt;
       pCur[i3 + 1] += pVel[i3 + 1] * dt;
       pCur[i3 + 2] += pVel[i3 + 2] * dt;
-      pAC[i2 + 1] = this.pAlpha0[i] * (1 - t * t);
-      pAC[i2] = this.pSize0[i] * (1 + t * 0.6);
+      pAC[i3 + 1] = this.pAlpha0[i] * (1 - t * t);
+      pAC[i3] = this.pSize0[i] * (1 + t * 0.6);
     }
 
     // tracers: the head advances at 340 m/s. The matrix is composed in present().
@@ -555,14 +651,14 @@ export class Fx {
       const i3 = i * 3, i2 = i * 2;
       if (pLife[i2] >= pLife[i2 + 1]) {
         // Idempotent, and only writes on the frame a particle actually retired.
-        if (pAttr[i2 + 1] !== 0) { pAttr[i2 + 1] = 0; pPos[i3 + 1] = -9999; }
+        if (pAttr[i3 + 1] !== 0) { pAttr[i3 + 1] = 0; pPos[i3 + 1] = -9999; }
         continue;
       }
       pPos[i3] = pPrv[i3] + (pCur[i3] - pPrv[i3]) * a;
       pPos[i3 + 1] = pPrv[i3 + 1] + (pCur[i3 + 1] - pPrv[i3 + 1]) * a;
       pPos[i3 + 2] = pPrv[i3 + 2] + (pCur[i3 + 2] - pPrv[i3 + 2]) * a;
-      pAttr[i2] = pAP[i2] + (pAC[i2] - pAP[i2]) * a;
-      pAttr[i2 + 1] = pAP[i2 + 1] + (pAC[i2 + 1] - pAP[i2 + 1]) * a;
+      pAttr[i3] = pAP[i3] + (pAC[i3] - pAP[i3]) * a;
+      pAttr[i3 + 1] = pAP[i3 + 1] + (pAC[i3 + 1] - pAP[i3 + 1]) * a;
     }
     this.pGeo.attributes.position.needsUpdate = true;
     this.pGeo.attributes.aP.needsUpdate = true;

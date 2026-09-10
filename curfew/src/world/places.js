@@ -82,6 +82,68 @@ import { DRESS as DRESS_REFUGES } from './destination-refuges.js';
 import { DRESS as DRESS_ESTATES } from './estate-details.js';
 import { STAGED_BUILDERS } from './staged.js';
 
+// ROUND 21: weather's snow colour, shared with chunks.js's ground so a yard and the field it
+// sits in are the same white. Read once, here, and never inside a build loop.
+const WX_SNOW = (CFG.world.weather && CFG.world.weather.snowCol) || [0.33, 0.345, 0.385];
+
+/**
+ * ROUND 21 — lying snow on a places material. The same two injections chunks.js makes on the
+ * ground, minus the wet half, and for the same reasons in the same order:
+ *
+ *   VERTEX    a world-space up varying, because snow lies on the level and not on the sheer,
+ *             and that one term is what makes a roof take snow while its wall does not.
+ *   FRAGMENT  after <color_fragment>, never at <map_fragment>. three applies the vertex
+ *             colour at the former, so at the latter diffuseColor is still the bare material
+ *             colour and a snow mix there would come out as albedo x snow.
+ *
+ * The self-check is written where a probe can read it: a silently-missed string match is not
+ * a crash, it is a county where the ground goes white and the buildings do not.
+ */
+function _installPlaceSnow(mat, uni, cacheKey) {
+  mat.userData.wxUniforms = uni;
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uWeather = uni.uWeather;
+    shader.uniforms.uSnowCol = uni.uSnowCol;
+
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      '#include <common>\nvarying float vWxUp;'
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <uv_vertex>',
+      '#include <uv_vertex>\nvWxUp = normalize( mat3( modelMatrix ) * normal ).y;'
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      ['#include <common>',
+        'uniform vec2 uWeather;',
+        'uniform vec3 uSnowCol;',
+        'varying float vWxUp;'].join('\n')
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      ['#include <color_fragment>',
+        '{',
+        '  float wSnow = uWeather.x;',
+        '  if ( wSnow > 0.001 ) {',
+        // A shade less eager than the ground's: a yard is walked on and a roof sheds, so the
+        // made surfaces of a place hold a little less snow than the field around them. That
+        // difference is what keeps a destination legible in a white county instead of
+        // dissolving into it.
+        '    float wUp = smoothstep( 0.58, 0.94, vWxUp );',
+        '    diffuseColor.rgb = mix( diffuseColor.rgb, uSnowCol, clamp( wSnow * wUp * 0.82, 0.0, 1.0 ) );',
+        '  }',
+        '}'].join('\n')
+    );
+    mat.userData.wxShaderPatched = {
+      up: shader.vertexShader.indexOf('vWxUp = normalize') > -1,
+      snow: shader.fragmentShader.indexOf('mix( diffuseColor.rgb, uSnowCol') > -1,
+    };
+  };
+  mat.customProgramCacheKey = () => cacheKey;
+  mat.needsUpdate = true;
+}
+
 /**
  * Every dress module, in application order. A dress entry is keyed by a major's `kind` OR
  * its `id` (id wins) and is called AFTER the base builder with the same api and the
@@ -1125,6 +1187,40 @@ export class Places {
       side: THREE.DoubleSide, shadowSide: THREE.FrontSide,
     });
     this.matLand.name = 'place-landmark';
+
+    // ROUND 21 — SNOW LIES ON THE PLACES TOO.
+    //
+    // The county's floor is chunks.js's matGround and weather paints it there. Everything a
+    // destination is made of — its yard, its walls, its ROOFS — is these two materials, and
+    // without this a snowed county has a dark disc and a bare roof at all 21 majors. The
+    // yard is the worse of the two: sites.js's apron() is a 40-110 m disc of made ground and
+    // it would read as a hole rather than as a yard.
+    //
+    // Snow only. Buildings do not take the wet darkening: a wet wall is a different effect
+    // from a wet field and guessing at it would be worse than leaving it.
+    //
+    // THE CACHE KEYS ARE NOT OPTIONAL, AND THEY ARE ALSO THE BUDGET.
+    //
+    // matPeople is a clone of matBody taken above, and three's default cache key does not
+    // know that one of them now compiles a different shader — two materials with the same key
+    // and different source get served each other's program. The first cut gave all three
+    // their own key and the county went from 92 programs to 94, which is exactly
+    // CFG.render.budget.programsMax and no headroom at all.
+    //
+    // So matPeople gets the SAME injection and the SAME key as matBody. That is honest rather
+    // than a dodge: they are the same Lambert with the same defines and differ only in which
+    // texture is bound, which is a uniform. And the effect is right — snow settles on the
+    // shoulders of anyone standing out in it.
+    //
+    // matLand keeps its own key because it genuinely is a different program: fog:false is a
+    // define, so it could never have shared one.
+    this.wxUniforms = {
+      uWeather: { value: new THREE.Vector2(0, 0) },
+      uSnowCol: { value: new THREE.Color().setRGB(WX_SNOW[0], WX_SNOW[1], WX_SNOW[2], THREE.LinearSRGBColorSpace) },
+    };
+    _installPlaceSnow(this.matBody, this.wxUniforms, 'curfew-place-body-1');
+    _installPlaceSnow(this.matPeople, this.wxUniforms, 'curfew-place-body-1');
+    _installPlaceSnow(this.matLand, this.wxUniforms, 'curfew-place-land-1');
 
     this.matGlow = new THREE.MeshBasicMaterial({
       vertexColors: true, fog: false, transparent: true, opacity: 1,
@@ -3496,6 +3592,19 @@ export class Places {
   }
 
   /** Every major, with its live state. Used by progression and by tests. */
+  /**
+   * ROUND 21 — world/weather.js's one door here. Two floats into a uniform shared by the body
+   * and landmark materials, so every destination in the county answers a front at once. The
+   * wet channel is carried but unused: buildings take snow only, see _installPlaceSnow.
+   */
+  setWeather(snow, wet) {
+    if (!this.wxUniforms) return;
+    this.wxUniforms.uWeather.value.set(
+      snow > 0 ? (snow > 1 ? 1 : snow) : 0,
+      wet > 0 ? (wet > 1 ? 1 : wet) : 0,
+    );
+  }
+
   list() {
     const out = [];
     for (const d of MAJORS) {

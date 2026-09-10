@@ -58,8 +58,17 @@ export class Mechanics {
    */
   _deadNow(id,dist){
     const pr=this._sys('progress');
-    const at=Number(pr.flag(id+':dead'))||0;
+    let at=Number(pr.flag(id+':dead'))||0;
     if(!at)return false;
+    // ROUND 21: THE STAMP AND THE CLOCK HAVE TO SHARE A ZERO.
+    //
+    // this.clock counts THIS session and starts at 0, but the stamp is saved and outlives
+    // the page. Kill a keeper half an hour in, reload, and the sum below was 0 - 1800: the
+    // countdown could not start until the new session had run out the whole old one, so
+    // that tower stayed empty for another half hour — the permanent-dead keeper Alex asked
+    // to end, wearing a timer. A stamp ahead of the clock is from a session that no longer
+    // exists, so re-stamp it to now and let the 150 s run from the reload.
+    if(at>this.clock){at=Math.max(1,Math.round(this.clock));pr.flag(id+':dead',at);}
     if(this.clock-at>=RESPAWN_S&&dist>RESPAWN_AWAY){pr.flag(id+':dead',0);return false;}
     return true;
   }

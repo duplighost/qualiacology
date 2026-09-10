@@ -833,13 +833,21 @@ export class Refuge {
     // prompts nothing (the dead click already answers, and a glyph would promise a bed the
     // door refuses).
     if (cand === 'door') {
-      const handle = this._doorHandle();
-      this._prompt('use', handle.x, handle.y, handle.z, 0, this.doorTarget < DOOR_SHUT_AT ? 'CLOSE DOOR' : 'OPEN DOOR');
+      // The glyph sits on the handle while there IS a handle in front of you — a shut leaf
+      // fills the doorway and grabbing it is the whole gesture. Once the leaf has swung away
+      // the handle is off to the side, often behind you, so the glyph moves to the opening
+      // you are actually looking through; a key floating out of frame teaches nothing.
+      const shut = this.doorK >= DOOR_SHUT_AT;
+      const h = shut ? this._doorHandle() : null;
+      const gx = shut ? h.x : this.doorWX, gy = shut ? h.y : this.doorWY + 1.12, gz = shut ? h.z : this.doorWZ;
+      this._prompt('use', gx, gy, gz, 0, this.doorTarget < DOOR_SHUT_AT ? 'CLOSE DOOR' : 'OPEN DOOR');
     }
     else if (cand === 'breaker' && this.spec.buildBreaker !== false && !this.power && this.throwT < 0) {
       this._prompt('hold', this.breakerWX, this.breakerWY, this.breakerWZ, this.holdKind === 'breaker' ? this.holdT / HOLD_BREAKER : 0, 'RESTORE POWER');
-    } else if (cand === 'breaker' && this.power) {
-      this._prompt('use', this.breakerWX, this.breakerWY, this.breakerWZ, 0, 'POWER ON', true);
+    // A breaker that is already thrown prompts NOTHING. It arrived in the same change that
+    // moved the door prompt onto the swinging handle, uncommented, and it is the rule stated
+    // three lines above worded the other way round: a glyph on a switch that will not do
+    // anything promises an interaction there isn't. The lamps coming up already said it.
     } else if (cand === 'bed' || cand === 'bed-blocked') {
       const bg = this.anchors.bag;
       const blocked = cand === 'bed-blocked';
@@ -930,8 +938,17 @@ export class Refuge {
       }
       if (d < bestD) { bestD = d; best = kind; }
     };
-    const handle = this._doorHandle();
-    test('door', handle.x, this.doorWY, handle.z, REACH_DOOR, true);
+    // ROUND 21: RANGED TO THE DOORWAY, NOT TO THE HANDLE.
+    //
+    // This used to measure to _doorHandle(), which SWINGS with the leaf: once the door was
+    // fully open the handle sat a leaf's width off to the side and about 90 degrees out of
+    // the look direction, so it failed both REACH_DOOR and FACE_MIN and there was no prompt
+    // to shut the door again. On the compact anchors, whose leaves are 2.0-2.2 m wide, that
+    // left no usable spot outside the doorway at all — you could open a safe room and then
+    // not close it from the side you were standing on. The constant has always said "to the
+    // middle of the doorway, from EITHER side", and the doorway middle is already here: it
+    // is where the door's own sounds play from.
+    test('door', this.doorWX, this.doorWY, this.doorWZ, REACH_DOOR, true);
     if (this.spec.buildBreaker !== false) test('breaker', this.breakerWX, this.breakerWY - 0.65, this.breakerWZ, REACH_BREAKER, true);
     const b = this.anchors.bag;
     const bx = this._wx(b.x, b.z), bz = this._wz(b.x, b.z);

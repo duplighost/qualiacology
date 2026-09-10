@@ -128,6 +128,12 @@ const WET_GAIN = 0.20;      // and the same hollow goes COOL: standing water is 
 const FROST = CFG.world.frost ? CFG.world.frost.colour : [0.15, 0.164, 0.188];
 const FROST_AMOUNT = CFG.world.frost ? CFG.world.frost.amount : 0;
 const FROST_HOLLOW = CFG.world.frost ? CFG.world.frost.hollowBias : 0.5;
+// ROUND 21: weather's colours, read once, for the ground material's uniforms. Frost above is
+// a PLACE baked into vertex colours; these are a TIME the shader lerps to live.
+const WX = CFG.world.weather || {};
+const WX_SNOW = WX.snowCol || [0.33, 0.345, 0.385];
+const WX_WET_DARK = WX.wetDark !== undefined ? WX.wetDark : 0.72;
+const WX_WET_SKY = WX.wetSky !== undefined ? WX.wetSky : 0.16;
 // Curvature needs the four grid neighbours, and a chunk's edge vertex has none outside it.
 // Clamping there would put a one-vertex ridge along every 64 m border; instead the term
 // fades to exactly 0 at the border, so two neighbouring chunks — at the same tier or at
@@ -1253,6 +1259,16 @@ export class Chunks {
       uGroundFade: { value: new THREE.Vector2(GROUND_FADE_NEAR, GROUND_FADE_FAR) },
       // signed layer weights, so the two variances add instead of averaging
       uGroundMix: { value: new THREE.Vector2(GROUND_W_FINE, GROUND_W_COARSE) },
+      // ROUND 21 — WEATHER, ON THE GROUND. x = lying snow 0..1, y = wet 0..1. Two floats on
+      // the material the whole county already shares, so a front repaints 64 km^2 in the
+      // frame it arrives, with no chunk rebuilt and no second program. world/weather.js is
+      // the only writer, through setWeather() below.
+      uWeather: { value: new THREE.Vector2(0, 0) },
+      // LINEAR, explicitly, for the same reason matRoad.color is below: every albedo in this
+      // lane is linear and a default-space constructor is one three release away from
+      // decoding it as sRGB and landing the snow somewhere else entirely.
+      uSnowCol: { value: new THREE.Color().setRGB(WX_SNOW[0], WX_SNOW[1], WX_SNOW[2], THREE.LinearSRGBColorSpace) },
+      uWetPar: { value: new THREE.Vector2(WX_WET_DARK, WX_WET_SKY) },
     };
     mat.userData.groundUniforms = uni;
 
@@ -1261,6 +1277,9 @@ export class Chunks {
       shader.uniforms.uGroundParams = uni.uGroundParams;
       shader.uniforms.uGroundFade = uni.uGroundFade;
       shader.uniforms.uGroundMix = uni.uGroundMix;
+      shader.uniforms.uWeather = uni.uWeather;
+      shader.uniforms.uSnowCol = uni.uSnowCol;
+      shader.uniforms.uWetPar = uni.uWetPar;
 
       shader.vertexShader = shader.vertexShader.replace(
         '#include <common>',
@@ -1268,6 +1287,10 @@ export class Chunks {
           '#include <common>',
           'uniform vec2 uGroundFade;',
           'varying vec3 vGroundD;',
+          // ROUND 21: how level this fragment's ground is, in WORLD space. Snow lies on the
+          // flat and slides off the steep, and that one term is most of what makes lying snow
+          // read as depth rather than as paint.
+          'varying float vGroundUp;',
         ].join('\n')
       );
 
@@ -1280,6 +1303,7 @@ export class Chunks {
           '  vGroundD.xy = gwp.xz;',
           '  float gdist = length( cameraPosition.xz - gwp.xz );',
           '  vGroundD.z = 1.0 - smoothstep( uGroundFade.x, uGroundFade.y, gdist );',
+          '  vGroundUp = normalize( mat3( modelMatrix ) * normal ).y;',
           '}',
         ].join('\n')
       );
@@ -1292,6 +1316,10 @@ export class Chunks {
           'uniform vec4 uGroundParams;',
           'uniform vec2 uGroundMix;',
           'varying vec3 vGroundD;',
+          'uniform vec2 uWeather;',
+          'uniform vec3 uSnowCol;',
+          'uniform vec2 uWetPar;',
+          'varying float vGroundUp;',
         ].join('\n')
       );
 
@@ -1299,6 +1327,12 @@ export class Chunks {
         '#include <map_fragment>',
         [
           '#include <map_fragment>',
+          // ROUND 21: hoisted out of the block below so the weather block after
+          // <color_fragment> can reuse the same grit instead of paying for a second fetch of
+          // the same texture. Weather has to run there and not here: <color_fragment> is
+          // where three applies the vertex colour, so at THIS point diffuseColor is still
+          // plain white and a snow mix against it would come out as ground x snow.
+          'float gTerr = 0.0, gNearF = 0.0, gUpF = 0.0;',
           '{',
           // Layer A is the grit, read straight. Layer B is the mottle, read with the world
           // axes SWAPPED (a quarter turn) and offset, so the two tilings never line up.
@@ -1319,6 +1353,46 @@ export class Chunks {
           '  float gWet = gUp * gNear;',
           '  diffuseColor.g *= 1.0 + 0.06 * gWet;',
           '  diffuseColor.b *= 1.0 + 0.20 * gWet;',
+          '  gTerr = gT; gNearF = gNear; gUpF = gUp;',
+          '}',
+        ].join('\n')
+      );
+
+      // ROUND 21 — WHAT THE WEATHER LEAVES ON THE GROUND.
+      //
+      // After <color_fragment>, so the county's own albedo is in diffuseColor and snow can
+      // REPLACE it rather than tint it. Two effects, and they are opposites on purpose:
+      // snow puts a brighter substance on top of the ground, rain makes the ground itself
+      // darker and wetter. Both are keyed on the grit that is already there, so neither one
+      // arrives as a flat wash over 64 km^2.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        [
+          '#include <color_fragment>',
+          '{',
+          // SNOW. Level ground only — smoothstep on the world normal, so a bank keeps its
+          // dark face and the flat between two banks goes white, which is the shape that
+          // reads as depth. The grit decides where it sticks FIRST: at a thin cover the low
+          // spots fill and the high ones stay bare, so an arriving fall is patchy and a
+          // settled one is complete.
+          '  float wSnow = uWeather.x;',
+          '  if ( wSnow > 0.001 ) {',
+          '    float wUp = smoothstep( 0.50, 0.88, vGroundUp );',
+          '    float wFill = smoothstep( -0.75, 0.75, wSnow * 2.0 - 1.0 - gTerr * 0.6 );',
+          '    float wK = clamp( wSnow * wUp * ( 0.30 + 0.70 * wFill ), 0.0, 1.0 );',
+          '    diffuseColor.rgb = mix( diffuseColor.rgb, uSnowCol, wK );',
+          '  }',
+          // RAIN. Darker, and leaning toward the sky it is reflecting — the same reason the
+          // road has a wet crown down its middle. The sheen rides gUpF, the raised half of
+          // the grit, so a wet county glitters where the stones catch the light instead of
+          // going uniformly navy.
+          '  float wWet = uWeather.y;',
+          '  if ( wWet > 0.001 ) {',
+          '    diffuseColor.rgb *= mix( 1.0, uWetPar.x, wWet );',
+          '    float wSheen = uWetPar.y * wWet * ( 0.35 + gUpF * gNearF );',
+          '    diffuseColor.g += diffuseColor.g * wSheen * 0.45;',
+          '    diffuseColor.b += diffuseColor.b * wSheen;',
+          '  }',
           '}',
         ].join('\n')
       );
@@ -1332,10 +1406,31 @@ export class Chunks {
       mat.userData.groundShaderPatched = {
         uv: shader.vertexShader.indexOf('vGroundD.xy = gwp.xz') > -1,
         map: shader.fragmentShader.indexOf('uGroundParams.z * gUp') > -1,
+        // ROUND 21: and the same guarantee for weather. A missed match here is a county that
+        // never goes white however hard it snows, with nothing on screen to say why.
+        up: shader.vertexShader.indexOf('vGroundUp = normalize') > -1,
+        weather: shader.fragmentShader.indexOf('mix( diffuseColor.rgb, uSnowCol, wK )') > -1,
       };
     };
-    mat.customProgramCacheKey = () => 'curfew-ground-1';
+    // ROUND 21: bumped to -2. The cache key is what stops three compiling a second program
+    // per material variant, and it has to change when the SOURCE changes or a warm cache
+    // from an earlier build could hand this material the pre-weather program.
+    mat.customProgramCacheKey = () => 'curfew-ground-2';
     mat.needsUpdate = true;
+  }
+
+  /**
+   * ROUND 21 — the one door weather uses to repaint the county. world/weather.js is the only
+   * caller. Cheap enough to call every step: it writes two floats into a uniform that every
+   * ground chunk already shares, and touches no geometry.
+   */
+  setWeather(snow, wet) {
+    const uni = this.matGround && this.matGround.userData.groundUniforms;
+    if (!uni || !uni.uWeather) return;
+    uni.uWeather.value.set(
+      snow > 0 ? (snow > 1 ? 1 : snow) : 0,
+      wet > 0 ? (wet > 1 ? 1 : wet) : 0,
+    );
   }
 
   /**

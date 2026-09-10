@@ -331,6 +331,11 @@ export class Sky {
     // ...and ONE derived Color for the fog and the mist, written only by _writeFog(), only
     // ever as horizon * FOG_MUL. See the FOG_MUL note: derived, never authored.
     this.fogCol = new THREE.Color(0x313c4d);
+    // ROUND 21: the two halves of the fog density. _phaseFog is what the clock authored for
+    // this moment of the night; _wxFog is weather's multiplier on it. scene.fog.density is
+    // always their product and is written in exactly two places, both of which set both.
+    this._phaseFog = 0;
+    this._wxFog = 1;
     this._t = 0;
   }
 
@@ -829,9 +834,25 @@ export class Sky {
     u.uZenith.value.copy(_a).lerp(_b, k);
 
     this.stars.material.uniforms.uOpacity.value = lerp(s0.stars, s1.stars, k);
+    // Stars go out under a front. Not to zero — a break in the cloud is worth more than a
+    // uniform lid — but a downpour is not a night for looking up.
+    if (this._wxFog > 1) this.stars.material.uniforms.uOpacity.value /= this._wxFog;
     if (this.scene.fog) {
-      this.scene.fog.density = FOG_DENSITY * lerp(s0.fogMul, s1.fogMul, k);
+      this._phaseFog = FOG_DENSITY * lerp(s0.fogMul, s1.fogMul, k);
+      this.scene.fog.density = this._phaseFog * this._wxFog;
     }
+  }
+
+  /**
+   * ROUND 21 — weather's multiplier on the authored fog. A MULTIPLIER and not a write,
+   * because setPhase recomputes the density from the clock's stops every time the night
+   * moves: a system that wrote scene.fog.density directly would be silently reverted a
+   * fraction of a second later, on a schedule, which is this project's whole failure mode.
+   * The clock still owns the shape of the night; a front only leans on it.
+   */
+  setWeatherFog(mul) {
+    this._wxFog = Math.max(0, mul || 1);
+    if (this.scene.fog && this._phaseFog) this.scene.fog.density = this._phaseFog * this._wxFog;
   }
 
   /**

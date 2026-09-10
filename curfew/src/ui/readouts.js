@@ -48,7 +48,11 @@ export class Readouts {
     on('level:up',p=>this.receipt('LEVEL '+p.level+' · SKILL POINT','level'));
     on('loot:searched',p=>{if(!p.coins)this.receipt('EMPTY POCKETS','empty');});
     on('car:repaired',()=>this.receipt('CAR RESTORED · 100%','repair'));
-    on('pickup:ammo',p=>{if(p.n>0)this.receipt('+'+p.n+' AMMO','ammo');});
+    // p?.n, not p.n: weapons/weapon.js listens on this same channel and deliberately takes a
+    // missing payload as nothing (`p ? ... : 0`). This one threw on it instead, inside the
+    // fixed step — which is why tests/weapon.mjs aborted at (j) and the 60-odd checks after
+    // it, the auto-reload sight and the swap curve, never ran at all.
+    on('pickup:ammo',p=>{if(p?.n>0)this.receipt('+'+p.n+' AMMO','ammo');});
     on('player:hurt',()=>{this.hurtUntil=this.now()+.65;this.trailAt=this.now()+.7;});
     on('player:secondwind',()=>this.receipt('STILL STANDING','wind'));
   }
