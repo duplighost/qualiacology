@@ -26,7 +26,8 @@
 // created once, at init.
 
 import * as THREE from 'three';
-import { TAU, clamp } from '../engine/math.js';
+import { CFG } from '../config.js';
+import { TAU, clamp, clamp01 } from '../engine/math.js';
 // ROUND 18: snow falls where the frost lies, so it reads the same field the ground does.
 // terrain.js imports config and math only, so there is no cycle.
 import { frostAt } from '../world/terrain.js';
@@ -100,6 +101,66 @@ const MAX_DECALS = 64;
 // Trauma decays to zero in ~1/TRAUMA_DECAY seconds; shake is trauma squared so a small
 // hit is a tap and a big one is a wallop [cinderbloom COMBAT_FEEL].
 const TRAUMA_DECAY = 1.6;
+
+/* ------------------------------------------------------------------ *
+ * ROUND 22 lane F — EYESHINE IN THE TREELINE.
+ *
+ * Alex, 2026-09-10: "Eyeshine in the treeline. Pairs of reflected points when your beams
+ * sweep. Deeper in, more pairs. Some at the wrong height."
+ *
+ * A pair is two additive points on the rim of a resident trunk, facing the beam that found
+ * it, at the height of something on all fours — or, some of the time, at a height nothing
+ * in the county should have. They exist only where a beam (the torch or the car's lamp) is
+ * pointing, fade up as the beam settles on them and out when it sweeps off, and they are
+ * NEVER seen up close: walk within EYE_NEAR and the pair is gone, stare at one straight for
+ * EYE_LOOK_S and it looks away. Nothing is ever there. The count climbs with depth from
+ * the county's centre, so the woods at the rim are full of them.
+ *
+ * IT COSTS NO PROGRAM AND ONE DRAW: a second THREE.Points on the SAME ShaderMaterial
+ * instance as the particle ring (pMat below) — same program, its own small buffer, so a
+ * pair can live 20 s without the ring's cursor wrapping over it. The bodies' night-value
+ * law holds by construction: there is no body, only the glint.
+ *
+ * The hot path allocates nothing: a fixed array of EYE_PAIRS states built at init, two
+ * module-level beam records, present() writes 48 alphas into a Float32Array.
+ */
+const EYE = (CFG.fx && CFG.fx.eyeshine) || {};
+const EYE_PAIRS = EYE.pairs || 24;
+const EYE_RANGE = EYE.range || [20, 60];
+const EYE_H = EYE.h || [0.6, 1.1];
+const EYE_H_WRONG = EYE.hWrong || [2.5, 3.5];
+const EYE_WRONG_BASE = typeof EYE.wrongBase === 'number' ? EYE.wrongBase : 0.10;
+const EYE_WRONG_DEPTH = typeof EYE.wrongDepth === 'number' ? EYE.wrongDepth : 0.35;
+const EYE_NEAR = EYE.near || 12;
+const EYE_LOOK_S = EYE.lookS || 1.5;
+const EYE_DEPTH_FROM = EYE.depthFrom || 500;
+// world/placedata.js MINOR_THINNING.fromR: where the county's minors start to thin, which is
+// the rim the count climbs toward. Inlined rather than imported: placedata pulls staged.js
+// and everything it dresses with, and this file must stay a leaf.
+const EYE_DEPTH_TO = 1750;
+const EYE_MIN_PAIRS = 6;          // the cap at the centre; EYE_PAIRS at the rim
+const EYE_SPAWN_S = 0.25;         // one placement attempt per this many seconds
+const EYE_TRIES = 4;              // trunk probes per attempt (nearestTagged is cheap)
+// MEASURED from the driver's seat (tests/shots/round22-F-eyes.png): at 0.11 m apart the two
+// points merged into one glint by 40 m. 0.28 m is about 8 px apart at 25 m and still one
+// point past 60 m, which is how a pair reads at a distance anyway.
+const EYE_SEP = 0.28;             // m between the two eyes
+const EYE_SIZE = 0.16;            // m, the sprite's world diameter: 4 px at 25 m, 2 at 60
+const EYE_ALPHA = 0.60;           // colour * alpha stays under post.js's 1.05 bloom threshold
+const EYE_COL = [1.4, 1.6, 1.25]; // a green-white, the way a dog's eyes throw a lamp back
+const EYE_LOOK_COS = Math.cos(0.09);
+const EYE_AGE_MAX = 20;           // s; then it was never there
+const EYE_LIT_FADE = 0.6;         // s to fade up in a beam, and out of one
+const EYE_UNLIT_S = 3;            // s out of every beam before the pair is dropped
+const EYE_TRUNK_R = 4;            // m: how far off the probe point a trunk may stand
+const EYE_SPACING = 6;            // m: no two pairs closer than this
+const EYE_BEAM_REACH = 70;        // m: past this no beam lights a pair
+const TRUNK_TAGS = Object.freeze(['tree', 'trunk']);
+// The two beams, read on the step. Reused records; `cos` is the cone's half-angle cosine.
+const _beamTorch = { on: false, x: 0, y: 0, z: 0, dx: 0, dy: 0, dz: -1, cos: 0.7 };
+const _beamCar = { on: false, x: 0, y: 0, z: 0, dx: 0, dy: 0, dz: -1, cos: 0.8 };
+const _beams = [_beamTorch, _beamCar];
+const _fwd = new THREE.Vector3();
 
 // Module-level scratch.
 const _m4 = new THREE.Matrix4();
@@ -213,6 +274,41 @@ export class Fx {
     this.points.name = 'fx.particles';
     scene.add(this.points);
 
+    /* ---------------- eyeshine (ROUND 22): a second Points on the SAME pMat -------- */
+    // The same material INSTANCE, never a clone: a clone is a new program and the county
+    // is at its budget. +1 draw, 48 vertices, parked under the world until a beam finds
+    // a trunk. Depth-tested like the ring, so a nearer trunk hides a pair behind it.
+    const eyeN = EYE_PAIRS * 2;
+    this.eyePos = new Float32Array(eyeN * 3);
+    this.eyeCol = new Float32Array(eyeN * 3);
+    this.eyeAttr = new Float32Array(eyeN * 3);
+    this.eyePos.fill(-9999);
+    for (let i = 0; i < eyeN; i++) {
+      this.eyeCol[i * 3] = EYE_COL[0]; this.eyeCol[i * 3 + 1] = EYE_COL[1]; this.eyeCol[i * 3 + 2] = EYE_COL[2];
+      this.eyeAttr[i * 3] = EYE_SIZE; this.eyeAttr[i * 3 + 1] = 0; this.eyeAttr[i * 3 + 2] = 1;
+    }
+    const eyeGeo = new THREE.BufferGeometry();
+    eyeGeo.setAttribute('position', new THREE.BufferAttribute(this.eyePos, 3));
+    eyeGeo.setAttribute('color', new THREE.BufferAttribute(this.eyeCol, 3));
+    eyeGeo.setAttribute('aP', new THREE.BufferAttribute(this.eyeAttr, 3));
+    eyeGeo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
+    this.eyeGeo = eyeGeo;
+    this.eyes = new THREE.Points(eyeGeo, pMat);
+    this.eyes.frustumCulled = false;
+    this.eyes.name = 'fx.eyeshine';
+    scene.add(this.eyes);
+    this.eyeState = [];
+    for (let i = 0; i < EYE_PAIRS; i++) {
+      this.eyeState.push({
+        live: false, x: 0, y: 0, z: 0, age: 0, lit: 0, unlitT: 0, lookT: 0,
+        wrong: false, blinkT: 0, blinkOff: 0, died: 0,
+      });
+    }
+    this._eyeSpawnT = 0;
+    this._eyePosDirty = false;
+    this._eyeWasLive = false;   // so the alpha upload happens only while a pair is (or just was) on screen
+    this._eyeLive = 0;
+
     /* ---------------- tracers: instanced stretched boxes ---------------------- */
     // Camera-facing ribbons approximated as thin instanced boxes oriented along flight.
     // The screen-space minimum width matters: a sub-pixel additive line vanishes entirely
@@ -260,7 +356,8 @@ export class Fx {
     }
     this.decals.instanceMatrix.needsUpdate = true;
     this.dcCursor = 0;
-    this._offBroken=this.ctx.bus.on('world:broke',p=>this.clearDecalsNear(p.x,p.y,p.z,1.6));
+    // A node suite (tests/round9-water-reward.mjs) constructs Fx with no bus; guard, do not throw.
+    this._offBroken=this.ctx.bus?this.ctx.bus.on('world:broke',p=>this.clearDecalsNear(p.x,p.y,p.z,1.6)):null;
   }
 
   /* --------------------------------------------------------------- spawners -- */
@@ -564,13 +661,172 @@ export class Fx {
   setWeather(kind, strength, windX, windZ) {
     const s = strength > 0 ? (strength > 1 ? 1 : strength) : 0;
     this._wxSnow = kind === 'snow' ? s : 0;
-    this._wxRain = kind === 'rain' ? s : kind === 'drizzle' ? s * 0.45 : 0;
+    // ROUND 22: a storm rains like rain (1.0x, so the ring's ceiling is unchanged); the
+    // lightning is weather's and the sky's, not a particle.
+    this._wxRain = kind === 'rain' || kind === 'storm' ? s : kind === 'drizzle' ? s * 0.45 : 0;
     this._wxWindX = windX || 0;
     this._wxWindZ = windZ || 0;
   }
 
+  /* ------------------------------------------------------------- eyeshine -- */
+
+  /** The two beams that can find a pair, read lazily from lights and the car. */
+  _beamPoses() {
+    const sys = this.ctx.systems;
+    const t = _beamTorch;
+    t.on = false;
+    const lights = sys ? sys.get('lights') : null;
+    if (lights && lights.torch && lights.torch.intensity > 0) {
+      const p = lights.torch.position, tt = lights.torch.target.position;
+      const dx = tt.x - p.x, dy = tt.y - p.y, dz = tt.z - p.z;
+      const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (len > 1e-4) {
+        t.on = true; t.x = p.x; t.y = p.y; t.z = p.z;
+        t.dx = dx / len; t.dy = dy / len; t.dz = dz / len;
+        t.cos = Math.cos(lights.torch.angle || CFG.lights.torch.angle);
+      }
+    }
+    const c = _beamCar;
+    c.on = false;
+    const car = sys ? sys.get('car') : null;
+    const b = car && typeof car.beamPose === 'function' ? car.beamPose() : null;
+    if (b && b.on > 0) {
+      c.on = true; c.x = b.x; c.y = b.y; c.z = b.z; c.dx = b.dx; c.dy = b.dy; c.dz = b.dz;
+      c.cos = Math.cos(CFG.lights.headlight.angle);
+    }
+  }
+
+  /**
+   * Age, light and drop the pairs; then, on its own clock, try to place one where a beam
+   * meets a trunk. All on the fixed step. present() only writes the alphas.
+   */
+  _eyeshine(dt) {
+    const cam = this.ctx.camera;
+    const sys = this.ctx.systems;
+    if (!cam || !sys || !(dt > 0)) return;
+    this._beamPoses();
+    cam.getWorldDirection(_fwd);
+    const cx = cam.position.x, cy = cam.position.y, cz = cam.position.z;
+    const rng = this.rng;
+    const litK = 1 - Math.exp(-dt / EYE_LIT_FADE);
+
+    let live = 0;
+    for (let i = 0; i < EYE_PAIRS; i++) {
+      const e = this.eyeState[i];
+      if (!e.live) continue;
+      e.age += dt;
+      const dx = e.x - cx, dy = e.y - cy, dz = e.z - cz;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      // Is a beam on it? Inside either cone and within reach: yes. The glint has no
+      // penumbra of its own; the fade below is the eye's memory of it.
+      let target = 0;
+      for (let b = 0; b < _beams.length; b++) {
+        const bm = _beams[b];
+        if (!bm.on) continue;
+        const bx = e.x - bm.x, by = e.y - bm.y, bz = e.z - bm.z;
+        const bd = Math.sqrt(bx * bx + by * by + bz * bz);
+        if (bd < 1e-3 || bd > EYE_BEAM_REACH) continue;
+        if ((bx * bm.dx + by * bm.dy + bz * bm.dz) / bd > bm.cos) { target = 1; break; }
+      }
+      e.lit += (target - e.lit) * litK;
+      e.unlitT = target > 0 ? 0 : e.unlitT + dt;
+      // Stared at straight: it looks away. Glancing across it costs nothing.
+      const look = d > 1e-3 && (dx * _fwd.x + dy * _fwd.y + dz * _fwd.z) / d > EYE_LOOK_COS;
+      e.lookT = look ? e.lookT + dt : Math.max(0, e.lookT - dt * 2);
+      // A blink now and then: both points out for a tenth of a second. It is the one thing
+      // that says these are eyes and not two bits of reflector.
+      e.blinkT -= dt;
+      if (e.blinkT <= 0) { e.blinkOff = 0.12; e.blinkT = 2.5 + rng.next() * 4; }
+      if (e.blinkOff > 0) e.blinkOff -= dt;
+      // Why a pair goes is kept as a small number, so a tool can say which rule fired:
+      // 1 approached, 2 aged out, 3 stared at, 4 left in the dark.
+      const why = d < EYE_NEAR ? 1 : e.age > EYE_AGE_MAX ? 2 : e.lookT > EYE_LOOK_S ? 3 : e.unlitT > EYE_UNLIT_S ? 4 : 0;
+      if (why) {
+        e.live = false;
+        e.died = why;
+        this._eyePosDirty = true;
+        continue;
+      }
+      live++;
+    }
+    this._eyeLive = live;
+
+    this._eyeSpawnT -= dt;
+    if (this._eyeSpawnT > 0) return;
+    this._eyeSpawnT = EYE_SPAWN_S;
+    if ((!_beamTorch.on && !_beamCar.on) || this._underRoof) return;
+    // Deeper in, more pairs: the cap climbs from the centre to the rim.
+    const depthK = clamp01((Math.sqrt(cx * cx + cz * cz) - EYE_DEPTH_FROM) / (EYE_DEPTH_TO - EYE_DEPTH_FROM));
+    const cap = Math.round(EYE_MIN_PAIRS + (EYE_PAIRS - EYE_MIN_PAIRS) * depthK);
+    if (live >= cap) return;
+    const col = sys.get('collision'), terrain = sys.get('terrain');
+    if (!col || typeof col.nearestTagged !== 'function' || !terrain || typeof terrain.heightAt !== 'function') return;
+
+    for (let t = 0; t < EYE_TRIES; t++) {
+      const bm = _beamCar.on && (!_beamTorch.on || rng.next() < 0.5) ? _beamCar : _beamTorch;
+      const dist = EYE_RANGE[0] + rng.next() * (EYE_RANGE[1] - EYE_RANGE[0]);
+      // Somewhere inside the cone, in the ground plane: rotate the beam's heading by up to
+      // 80% of its half-angle and walk out `dist`.
+      const a = (rng.next() - 0.5) * 2 * Math.acos(clamp(bm.cos, -1, 1)) * 0.8;
+      const bl = Math.sqrt(bm.dx * bm.dx + bm.dz * bm.dz) || 1;
+      const ux = bm.dx / bl, uz = bm.dz / bl;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      const px = bm.x + (ux * ca - uz * sa) * dist, pz = bm.z + (ux * sa + uz * ca) * dist;
+      const hit = col.nearestTagged(px, pz, EYE_TRUNK_R, TRUNK_TAGS);
+      if (!hit) continue;
+      const tx = hit.x, tz = hit.z, tr = hit.radius;   // SHARED scratch: copied out at once
+      if (Math.hypot(tx - cx, tz - cz) < EYE_NEAR + 4) continue;
+      let crowded = false;
+      for (let i = 0; i < EYE_PAIRS; i++) {
+        const e = this.eyeState[i];
+        if (e.live && Math.hypot(e.x - tx, e.z - tz) < EYE_SPACING) { crowded = true; break; }
+      }
+      if (crowded) continue;
+      // On the rim of the trunk, facing whatever lit it, a hand's width off the bark.
+      let fx = bm.x - tx, fz = bm.z - tz;
+      const fl = Math.hypot(fx, fz) || 1;
+      fx /= fl; fz /= fl;
+      const ex = tx + fx * (tr + 0.15), ez = tz + fz * (tr + 0.15);
+      const g = terrain.heightAt(ex, ez);
+      if (!isFinite(g)) continue;
+      const wrong = rng.next() < EYE_WRONG_BASE + EYE_WRONG_DEPTH * depthK;
+      const hr = wrong ? EYE_H_WRONG : EYE_H;
+      const ey = g + hr[0] + rng.next() * (hr[1] - hr[0]);
+      let slot = -1;
+      for (let i = 0; i < EYE_PAIRS; i++) if (!this.eyeState[i].live) { slot = i; break; }
+      if (slot < 0) return;
+      const e = this.eyeState[slot];
+      e.live = true; e.x = ex; e.y = ey; e.z = ez;
+      e.age = 0; e.lit = 0; e.unlitT = 0; e.lookT = 0; e.wrong = wrong;
+      e.blinkT = 1 + rng.next() * 4; e.blinkOff = 0;
+      // The two eyes sit across the facing, EYE_SEP apart.
+      const sx = -fz * EYE_SEP * 0.5, sz = fx * EYE_SEP * 0.5;
+      const j = slot * 6;
+      this.eyePos[j] = ex - sx; this.eyePos[j + 1] = ey; this.eyePos[j + 2] = ez - sz;
+      this.eyePos[j + 3] = ex + sx; this.eyePos[j + 4] = ey; this.eyePos[j + 5] = ez + sz;
+      this._eyePosDirty = true;
+      this._eyeLive++;
+      return;                                  // one pair per attempt
+    }
+  }
+
+  /** Live pairs right now. Tools and tests. */
+  eyeshineCount() { return this._eyeLive; }
+
+  /** Every live pair, copied out, with its slot index. Tools only: it allocates. */
+  eyeshine() {
+    const out = [];
+    for (let i = 0; i < EYE_PAIRS; i++) {
+      const e = this.eyeState[i];
+      if (!e.live) continue;
+      out.push({ i, x: +e.x.toFixed(2), y: +e.y.toFixed(2), z: +e.z.toFixed(2), lit: +e.lit.toFixed(3), wrong: e.wrong, age: +e.age.toFixed(2), lookT: +e.lookT.toFixed(2) });
+    }
+    return out;
+  }
+
   step(dt) {
     this._precip(dt);
+    this._eyeshine(dt);
     // Particles, tracers and decals run on the SCALED step on purpose: during hitstop the
     // debris hangs in the air, which is the whole effect.
     //
@@ -664,6 +920,22 @@ export class Fx {
     this.pGeo.attributes.aP.needsUpdate = true;
     if (this.pColDirty) { this.pGeo.attributes.color.needsUpdate = true; this.pColDirty = false; }
 
+    /* ---- eyeshine (ROUND 22) --------------------------------------------- */
+    // Alphas every frame from the step's `lit`; positions only when a pair was placed or
+    // dropped. A dropped pair is parked under the world once, then left alone.
+    const eyeAttr = this.eyeAttr, eyePos = this.eyePos;
+    let anyLive = false;
+    for (let i = 0; i < EYE_PAIRS; i++) {
+      const e = this.eyeState[i], j = i * 6;
+      let al = 0;
+      if (e.live) { anyLive = true; al = e.blinkOff > 0 ? 0 : EYE_ALPHA * e.lit; }
+      else if (eyePos[j + 1] !== -9999) { eyePos[j + 1] = -9999; eyePos[j + 4] = -9999; this._eyePosDirty = true; }
+      eyeAttr[j + 1] = al; eyeAttr[j + 4] = al;
+    }
+    if (anyLive || this._eyeWasLive) this.eyeGeo.attributes.aP.needsUpdate = true;   // not a 576-byte upload every frame of an empty night
+    this._eyeWasLive = anyLive;
+    if (this._eyePosDirty) { this.eyeGeo.attributes.position.needsUpdate = true; this._eyePosDirty = false; }
+
     /* ---- tracers --------------------------------------------------------- */
     // 340 m/s is 5.7 m per fixed step: without this lerp a 144 Hz display sees the same
     // tracer three times in the same place and the shot reads as a stutter, not a shot.
@@ -701,10 +973,13 @@ export class Fx {
     if (this.ctx.time) this.ctx.time.scale = this._freeze > 0 ? 0 : 1;
   }
 
-  ready() { return !!(this.points && this.tracers && this.decals); }
+  ready() { return !!(this.points && this.tracers && this.decals && this.eyes); }
 
   dispose() {
     this._offBroken?.();
+    // The eyes share the ring's material: remove and drop the geometry, dispose the
+    // material once, with the ring.
+    if (this.eyes) { this.eyes.removeFromParent(); this.eyes.geometry.dispose(); this.eyes = null; }
     for (const m of [this.points, this.tracers, this.decals]) {
       if (!m) continue;
       m.removeFromParent();

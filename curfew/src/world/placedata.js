@@ -33,6 +33,8 @@
 //   garden-of-rest   h 117.5  slope 0.01  road 28.0   ridge
 //   bell-tower       h  86.6  slope 0.02  road 25.3   pines   (moisture 0.81)
 //   jackfield        h  75.6  slope 0.01  road 29.7   fields
+//   morning          h  10.6  slope 0.003 road 33.8   fields  (ROUND 22: east of the outer
+//                                                            ring; 1043 m from the Toll)
 //
 // The nine loop destinations are the odd control points of the county loop, pushed 24-30 m
 // radially off the centreline so the road runs PAST the yard instead of THROUGH the
@@ -62,6 +64,7 @@
  * would mean a destination's own colour changes as you walk around it. Authored wins.
  * ------------------------------------------------------------------ */
 import { STAGED_KINDS } from './staged.js';
+import { SETPIECE_KINDS } from './setpieces.js';   // ROUND 22, lane H: the rationed set pieces
 
 export const REGION_TINT = Object.freeze({
   pines: 0x63d08a,    // cold green
@@ -545,6 +548,20 @@ export const MAJORS = Object.freeze([
     claim: { how: 'touch', dx: 26, dy: 7.2, dz: -38, r: 2.6 },
     xpFind: 75, xpClaim: 420, startClaimed: false,
   },
+  // ROUND 22 — MORNING. Alex: "Green highway sign: MORNING — 40. It's a town. It's the far end
+  // of the map. Whether there's anything there is your ending." The last building on the map,
+  // east of the outer ring, seats facing true east. The claim post is the button in the
+  // console (planetarium.js puts the console at local (0, +3) so its plate faces the seats).
+  {
+    id: 'morning', name: 'Morning',
+    x: 2980, z: 580, region: 'shore', terrainRegion: 'fields', kind: 'planetarium',
+    lit: false, hub: false, clearR: 46,
+    flat: { radius: 56, blend: 0.62 }, apronCol: [0.052, 0.053, 0.056],
+    approach: { x: 0, z: 36, w: 14, h: 9, style: 'planetarium', routeX: 0, routeZ: 24, existing: true },
+    discoverR: 30, nearR: 120, horizon: true,
+    claim: { how: 'touch', dx: 0, dy: 0.14, dz: 3.0, r: 2.6 },
+    xpFind: 80, xpClaim: 500, startClaimed: false,
+  },
 ]);
 
 /** id -> row. Built once; MAJORS is frozen so this can never drift from it. */
@@ -577,6 +594,17 @@ export const MINOR_KINDS = Object.freeze([
   // lane owns a scene end to end; they are spliced in here so _chooseMinor rations them
   // exactly like every other kind. Same shape, no special case anywhere downstream.
   ...STAGED_KINDS,
+  // ROUND 22, lane H: the rationed set pieces (crosses, trail cam, tally tree, school bus, the
+  // car in the trees). MEASURED FIRST AFTER 'gear', where the brief put them: zero of the five
+  // placed in 259 sites. _chooseMinor serves the starvation guards in TABLE ORDER and the
+  // reciprocals of every starve count above and below this line sum to about 1.5, so at nearly
+  // every road point some earlier row is already starving and a row at the end of the table is
+  // never reached — which is also why 'gear' (the last row) lays exactly one yard, the open bug
+  // noted on its row. So they stand here, behind the staged scenes and ahead of the campfire,
+  // at starve counts of 18-34 (about 0.2 of the demand). Measured after the move:
+  // tools/round22/check-H.mjs prints the ration; the campfire stays >= 4 and the staged share
+  // inside tests/staged.mjs's 18-50%.
+  ...SETPIECE_KINDS,
   // ROUND 5 (Alex, playtest 4): "it shouldn't be that vacant. There should be areas with at
   // least cool scenery... maybe little campfire spots." The campfire is the first minor that
   // lives OFF the road (`offRoad`: 18-40 m out, see CAMPFIRE_OFFSET) and is visible from it:
@@ -615,6 +643,72 @@ export const MINOR_KINDS = Object.freeze([
   // placement loop (places.js _chooseMinor and the ground acceptance below it) and count chosen
   // vs placed per kind; the answer is in the refusal, not in the table.
   { id: 'gear', weight: 2.0, minSince: 4, starve: 14, bulk: 1.6 },
+]);
+
+/* ------------------------------------------------------------------ *
+ * ROUND 22, lane H — THE FIXED SET PIECES.
+ *
+ * Alex, 2026-09-10: "The Waiting. A ridge with forty lawn chairs facing east", "Bleachers
+ * hauled into a field, facing east", "A whole field [of sunflowers] slowly turns to face your
+ * headlights as you drive past", "Eastbound lanes: a traffic jam frozen forever. Westbound:
+ * empty", "A watch tree", "A railroad crossing dinging and the gates dropping for no train",
+ * "A cul-de-sac where everyone hung every Christmas light they owned".
+ *
+ * A rationed minor never knows where the road is, so anything that must sit ON a road or on
+ * particular ground is a row here, appended by places._buildMinorTable AFTER both walks (the
+ * indices of every other minor stay put). `yaw` is the site's local +Z heading in world
+ * terms (places' convention: a local point (lx, lz) lands at x + lx cos yaw + lz sin yaw,
+ * z - lx sin yaw + lz cos yaw); `bulk` is the flora keep-out radius like any other row.
+ *
+ * MEASURED in the live game against terrain.regionAt / heightAt / slopeAt, roads.nearestRoadInfo
+ * and every major, minor and wilds site (tools/round22/check-H.mjs and its pre-pass, 2026-09-10):
+ *   the-waiting     ridge   h 125.4 slope 0.000 at the first spot (1500, 90), ground falling
+ *                   3.7 m over 50 m toward +X, 45.4 m off the county loop (its nearest point
+ *                   1455.0, 95.8), 326 m from the nearest major (Black Rib), 99 m from the
+ *                   nearest minor. yaw PI/2: local +Z IS east. MOVED 17 m toward the road
+ *                   (28 m off it) after two pictures from the road with the lamp on: the
+ *                   first showed trunks and no chairs (the 'clearing' row beside it is the
+ *                   fix for that), the second open ground and no chairs either — at 45 m the
+ *                   headlight (340 cd, decay 1.25) is a fifth of what it is at 28. The
+ *                   check tool prints the region, slope and road distance at the new spot.
+ *   bleachers       fields  h 78.2  slope 0.000  29.9 m off the county loop, 174 m from a
+ *                   major (Cathedral), 109 m from a minor. yaw faces the road; the tiers face east.
+ *   sunflower-field fields  h 31.6  slope 0.000  all five samples over the 40 x 26 m footprint
+ *                   on 'fields' with slope < 0.08 and 2.5 m of relief; 33.1 m off east-cross,
+ *                   156 m from a major (Standing Stones), 63 m from a minor. yaw faces the road.
+ *   watch-tree      pines   h 33.8  19.5 m off radial-south, 822 m from a major, 91 m from a
+ *                   minor, age 1.53 ("deep").
+ *   crossing        ON the outer ring at its snapped point, width 5.36 m, tangent (0.2182,
+ *                   0.9759) heading toward Morning, straight for +-40 m, no other route within
+ *                   45 m, 340 m from a major (Morning), 98 m from a minor, ground within 1.3 m
+ *                   either side over the rails' 12 m. yaw = atan2(tx, tz).
+ *   xmas-culdesac   fields  h 10.3  slope 0.004, 1.9 m of relief over a 36 m disc; 45.2 m off
+ *                   holdfast-road, 301 m from the Holdfast, 111 m from a minor.
+ *   jam-segment x7  the broken highway (8.84 m wide: radial-east is 4.56 m, and a 1.86 m car
+ *                   in one lane of that leaves 2.7 m, under the 3.6 m clear width the lane was
+ *                   told to guarantee, so the jam is on the highway), the north half, seven
+ *                   centreline points 55 m apart, the last 223 m north of the Toll's pad;
+ *                   slope <= 0.009 at all seven, >= 223 m from a major. yaw = atan2(tx, tz),
+ *                   local +Z heading TOWARD the Toll and the road to Morning; the cars sit in
+ *                   that driver's right-hand lane (local -X) and the other lane is empty.
+ * ------------------------------------------------------------------ */
+export const FIXED_MINORS = Object.freeze([
+  { kind: 'the-waiting', x: 1483, z: 92, yaw: Math.PI * 0.5, bulk: 12.0 },
+  // the open ground between the loop (its nearest point 1455.0, 95.8) and the chairs: a bulk
+  // and nothing else, so the beam from the road reaches them (see setpieces.js 'clearing')
+  { kind: 'clearing', x: 1466, z: 94, yaw: 0, bulk: 14.0 },
+  { kind: 'bleachers', x: 750, z: 1200, yaw: -3.140, bulk: 7.0 },
+  { kind: 'sunflower-field', x: 540, z: 510, yaw: 2.155, bulk: 24.0 },
+  { kind: 'watch-tree', x: 240, z: -2160, yaw: 1.248, bulk: 4.0 },
+  { kind: 'crossing', x: 2919.41, z: 245.30, yaw: 0.2200, bulk: 6.0 },
+  { kind: 'xmas-culdesac', x: -20, z: 300, yaw: 1.782, bulk: 22.0 },
+  { kind: 'jam-segment', x: 2135.09, z: -528.58, yaw: 0.0265, bulk: 4.0 },
+  { kind: 'jam-segment', x: 2136.23, z: -472.69, yaw: 0.0137, bulk: 4.0 },
+  { kind: 'jam-segment', x: 2136.66, z: -416.81, yaw: 0.0020, bulk: 4.0 },
+  { kind: 'jam-segment', x: 2136.40, z: -364.90, yaw: -0.0131, bulk: 4.0 },
+  { kind: 'jam-segment', x: 2135.23, z: -309.01, yaw: -0.0284, bulk: 4.0 },
+  { kind: 'jam-segment', x: 2133.24, z: -253.10, yaw: -0.0428, bulk: 4.0 },
+  { kind: 'jam-segment', x: 2130.51, z: -197.21, yaw: -0.0550, bulk: 4.0 },
 ]);
 
 /** How far off the centreline an `offRoad` minor sits: in the trees, but in sight of the

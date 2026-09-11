@@ -607,7 +607,10 @@ export const STAGED_BUILDERS = {
         shade(C.stone, 0.66), r.range(0, 3), r.range(-0.16, 0.16), r.range(-0.16, 0.16));
       api.emit({ kind: 'circle', x: sx, z: sz, r: 0.30, y0: gs - 0.2, y1: gs + hh, tag: 'stone', standable: true });
     }
-    return { solid: k.solid.build(), glow: k.glow.empty() ? null : k.glow.build() };
+    // ROUND 22, lane H: this returned BUILT GEOMETRIES, and places.js:2049 wants the KIT
+    // (`k.solid.build ? k.solid.build() : null`). The colliders and the bodies landed and the
+    // scene itself was never drawn; the same bug sat in 'last-stand' and 'dragged' below.
+    return k;
   },
 
   /**
@@ -637,7 +640,7 @@ export const STAGED_BUILDERS = {
     // and a rifle, dropped
     k.solid.box(0.055, 0.075, 1.02, -1.55, g + 0.06, -0.20, shade(C.metal, 0.5), r.range(0.4, 1.0));
     k.solid.box(0.06, 0.13, 0.34, -1.42, g + 0.09, 0.16, shade(C.wood, 0.7), r.range(0.4, 1.0));
-    return { solid: k.solid.build(), glow: k.glow.empty() ? null : k.glow.build() };
+    return k;    // ROUND 22: the kit, not its geometry — see 'bone-field'
   },
 
   /**
@@ -661,7 +664,7 @@ export const STAGED_BUILDERS = {
     const cg = groundY(api, cx, cz);
     k.solid.box(0.36, 0.26, 0.22, cx, cg + 0.13, cz, shade(C.plank, 0.6), r.range(0, 3), r.range(-0.3, 0.3), 0);
     api.emit({ kind: 'circle', x: cx, z: cz, r: 0.26, y0: cg - 0.2, y1: cg + 0.26, tag: 'wood', standable: true });
-    return { solid: k.solid.build(), glow: k.glow.empty() ? null : k.glow.build() };
+    return k;    // ROUND 22: the kit, not its geometry — see 'bone-field'
   },
 
   /**
@@ -1286,5 +1289,10 @@ export const STAGED_BUILDERS = {
     return k;
   },
 };
+
+// ROUND 22, lane H: the set pieces (setpieces.js) are built from these same props — a car
+// shell in the jam, seated shoulders in it, a headstone in the Garden of Rest — so they are
+// shared rather than copied. Nothing here changed shape; they were only module-private.
+export { shade, rod, fallenBody, seatedShoulders, carShell, headstone, mourner, lantern, stump, rifle };
 
 export default STAGED_BUILDERS;

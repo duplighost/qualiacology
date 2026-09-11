@@ -246,6 +246,42 @@ const MOON_PEAK = 2.60;
 const MOON_PHASE = 0.42;
 const MOON_DISC_COL = 0xe6eefb;
 
+/* ROUND 22 lane F — THE EAST LINE, THE FLASH, THE METEORS.
+ *
+ * Alex, 2026-09-10: "A faint gray line on one horizon that never gets brighter. East is just
+ * a direction now. Unless it isn't." The dome's root copies the camera's POSITION only, so
+ * +X is a fixed compass bearing on it, and +X is east (the mini-map draws north as -Z). The
+ * glow is authored a few luma over the deep-night horizon, in a band pow(cos, 10) wide and
+ * 0..0.11 of elevation tall, painted BEFORE the ridge silhouettes so it shows between them.
+ * It is a constant: it does not read the clock, so it cannot brighten toward a dawn.
+ * MEASURED (tools/round22/check-F.mjs) over dome pixels in the horizon band, looking east
+ * from 120 m up so nothing stands in front of it: gain 0.55 was +7.6 luma on a sky of 30,
+ * gain 1.0 +13.6; 0.30 is +4 at deep night and +5.5 at the black hour, where the same
+ * addition stands out more because everything round it went darker. In absolute terms the
+ * east sky is never brighter than it is at deep night. From the ground the dome is 1-14%
+ * of that band (trees), so it is a thing you see from open ground, a road's end, a
+ * hilltop: "unless it isn't" is left alone.
+ */
+const EAST_GLOW = 0.30;           // gain on EAST_COL; 0 clears it
+const EAST_COL = 0x2e3846;        // sRGB, authored just over deep night's horizon 0x2e3e57
+/* "Lightning. The only daylight left is a lightning storm — one frame of the whole forest,
+ * every silhouette, then black." world/weather.js runs the envelope and hands us k 0..1
+ * through setFlash(): the dome mixes toward a blue-white kept UNDER post.js's bloom
+ * threshold (1.05) so the whole sky cannot bloom to a haze, the fog colour gains
+ * FOG_FLASH_GAIN so the far county the haze had swallowed comes back as silhouette, and the
+ * stars go out. The moon and the fills are lights.js's half of the same envelope. */
+const FOG_FLASH_GAIN = (CFG.world.lightning && CFG.world.lightning.fogGain) || 2.2;
+/* "Stars in obscene numbers. Meteors." Eight vertices past STAR_COUNT in the same buffer,
+ * parked under the horizon between streaks and written through addUpdateRange so the 1500
+ * stars are never re-uploaded. They ride uOpacity like the stars, so a front dims them. */
+const METEOR_PTS = 8;
+const METEOR_GAP_S = (CFG.fx && CFG.fx.meteor && CFG.fx.meteor.gapS) || [40, 120];
+const METEOR_LIFE = (CFG.fx && CFG.fx.meteor && CFG.fx.meteor.lifeS) || 0.4;
+const METEOR_ARC = [0.10, 0.16];  // radians of sky one streak crosses
+const METEOR_ELEV = [0.25, 0.80]; // radians: never at the horizon, never overhead
+const METEOR_TRAIL = 0.045;       // of the arc, between trailing points
+const METEOR_PARK_Y = -60;        // below the horizon, never seen
+
 // The galactic band. A tilted great circle: the axis is its POLE, so the band is every
 // direction perpendicular to this. Chosen to cross the sky diagonally from the default
 // spawn heading rather than to sit level, because a level band reads as a rendering seam.
@@ -337,6 +373,20 @@ export class Sky {
     this._phaseFog = 0;
     this._wxFog = 1;
     this._t = 0;
+
+    // ROUND 22 lane F. The flash envelope (from weather), the star opacity the clock
+    // authored (kept so the flash can multiply it without re-reading the STOPS), and the
+    // one meteor: all numbers, built once, so a streak allocates nothing.
+    this._flash = 0;
+    this._starOpacity = 1;
+    this._meteorRng = null;
+    this._meteorT = 0;
+    this._mt = {
+      live: false, agePrev: 0, ageCurr: 0,
+      ox: 0, oy: 1, oz: 0, tx: 1, ty: 0, tz: 0, arc: 0.12,
+    };
+    this._meteorPark = false;   // one write of the parking position after a streak dies
+    this.starGeo = null;
   }
 
   async init() {
@@ -367,6 +417,10 @@ export class Sky {
         uRidge: { value: 1.0 },
         uBand: { value: 0.055 },
         uBandAxis: { value: BAND_AXIS.clone() },
+        // ROUND 22 lane F
+        uFlash: { value: 0 },
+        uEastGlow: { value: EAST_GLOW },
+        uEastCol: { value: new THREE.Color(EAST_COL) },
       },
       vertexShader: /* glsl */`
         varying vec3 vDir;
@@ -379,9 +433,9 @@ export class Sky {
       // file), and no identifier called flat, half or sat.
       fragmentShader: /* glsl */`
         varying vec3 vDir;
-        uniform vec3 uHorizon, uMid, uZenith, uMoonDir, uMoonCol, uBandAxis;
+        uniform vec3 uHorizon, uMid, uZenith, uMoonDir, uMoonCol, uBandAxis, uEastCol;
         uniform float uMoonGlow, uTime, uMoonR, uMoonPeak, uMoonPhase;
-        uniform float uCloud, uRidge, uBand;
+        uniform float uCloud, uRidge, uBand, uFlash, uEastGlow;
 
         float h21(vec2 p) {
           p = fract(p * vec2(127.31, 311.77));
@@ -489,6 +543,21 @@ export class Sky {
             // the deck goes on LAST so it can hide the moon, the band and the halo
             col = mix(col, cloudCol, cov);
 
+            /* ---- THE EAST LINE (ROUND 22) --------------------------------------
+             * +X is east. A narrow lobe on the bearing, a thin band of sky JUST OVER
+             * the ridge crests (0.02-0.10 of elevation; the band peaks at 0.07 and is
+             * gone by 0.24), under the deck like everything else, and BEFORE the ridges
+             * so they stay silhouettes in front of it. MEASURED: a band authored at
+             * 0..0.11 sat entirely under the painted ridges and moved no pixel. */
+            float eastK = pow(max(0.0, circ.x), 10.0) * smoothstep(-0.02, 0.07, e)
+                        * (1.0 - smoothstep(0.07, 0.24, e));
+            col += uEastCol * uEastGlow * eastK * (1.0 - cov * 0.6);
+
+            /* ---- THE FLASH (ROUND 22) --------------------------------------------
+             * The whole dome toward blue-white, most at the horizon where the forest
+             * stands against it. Before the ridges, so the ridges are what you see. */
+            col = mix(col, vec3(0.86, 0.90, 1.0), uFlash * 0.85 * smoothstep(-0.10, 0.06, e));
+
             /* ---- THE RIDGE LINES ------------------------------------------------
              * Sampled on the unit circle, so the profile is seamless where azimuth wraps.
              * The far range is painted first and the near one crosses it. */
@@ -542,9 +611,11 @@ export class Sky {
     // One layer, not VIGIL's three: three counter-rotating layers is a planetarium, and
     // this is a county sky seen through haze. One program instead of three.
     const rng = this.ctx.rng.fork('sky.stars');
-    const pos = new Float32Array(STAR_COUNT * 3);
-    const col = new Float32Array(STAR_COUNT * 3);
-    const attr = new Float32Array(STAR_COUNT * 2);   // size, twinkle phase
+    // ROUND 22: METEOR_PTS spare vertices after the stars, parked below the horizon.
+    const N = STAR_COUNT + METEOR_PTS;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    const attr = new Float32Array(N * 2);   // size, twinkle phase
     const warm = new THREE.Color(0xffe7c4), cold = new THREE.Color(0xcfe0ff);
     // ROUND 7 lane E — THE ONE DISTRIBUTION A REAL SKY NEVER HAS IS THE UNIFORM ONE.
     // BAND_FRAC of the stars are drawn into the galactic band instead: an orthonormal basis
@@ -591,10 +662,25 @@ export class Sky {
       attr[i * 2] = 0.72 + Math.pow(rng.next(), 5) * 2.2;
       attr[i * 2 + 1] = rng.next() * TAU;
     }
+    for (let i = STAR_COUNT; i < N; i++) {
+      pos[i * 3] = 0; pos[i * 3 + 1] = METEOR_PARK_Y; pos[i * 3 + 2] = 0;
+      col[i * 3] = 0; col[i * 3 + 1] = 0; col[i * 3 + 2] = 0;
+      attr[i * 2] = 3.4;               // the shader's largest point; a streak is not a star
+      attr[i * 2 + 1] = 0;
+    }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const posAttr = new THREE.BufferAttribute(pos, 3);
+    const colAttr = new THREE.BufferAttribute(col, 3);
+    // Dynamic: the meteor's 8 vertices move every frame of a streak. addUpdateRange keeps
+    // the upload to those 8; the stars themselves are never sent again.
+    posAttr.setUsage(THREE.DynamicDrawUsage);
+    colAttr.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('position', posAttr);
+    geo.setAttribute('color', colAttr);
     geo.setAttribute('aStar', new THREE.BufferAttribute(attr, 2));
+    this.starGeo = geo;
+    this._meteorRng = this.ctx.rng.fork('sky.meteor');
+    this._meteorT = this._meteorSpan(METEOR_GAP_S);
     const starMat = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 }, uOpacity: { value: 1 } },
       vertexShader: /* glsl */`
@@ -813,6 +899,120 @@ export class Sky {
   setRidge(k) { if (this.dome) this.dome.material.uniforms.uRidge.value = Math.max(0, k); }
 
   /**
+   * ROUND 22 lane F — the bolt. world/weather.js calls this every step with its envelope;
+   * an unchanged value returns at once, so it costs nothing between bolts. At k the dome
+   * mixes toward the flash colour, the fog colour gains, and the stars go out.
+   */
+  setFlash(k) {
+    k = clamp01(typeof k === 'number' && isFinite(k) ? k : 0);
+    if (k === this._flash) return;
+    this._flash = k;
+    if (this.dome) this.dome.material.uniforms.uFlash.value = k;
+    this._writeFog();
+    this._writeStars();
+  }
+
+  /** The flash on the dome this step, 0..1. Tests and tools. */
+  flash() { return this._flash; }
+
+  /** The east line's gain; 0 clears it. A tool's knob, not the clock's: it must never rise. */
+  setEastGlow(k) { if (this.dome) this.dome.material.uniforms.uEastGlow.value = Math.max(0, +k || 0); }
+
+  /** Fire one meteor now. Tools and tests; the schedule calls _fireMeteor itself. */
+  meteor() { this._fireMeteor(); }
+
+  /** The ONE writer of the star layer's opacity: what the clock authored, times the flash. */
+  _writeStars() {
+    if (!this.stars) return;
+    let o = this._starOpacity * (1 - this._flash);
+    // Stars go out under a front. Not to zero — a break in the cloud is worth more than a
+    // uniform lid — but a downpour is not a night for looking up.
+    if (this._wxFog > 1) o /= this._wxFog;
+    this.stars.material.uniforms.uOpacity.value = o;
+  }
+
+  _meteorSpan(range) {
+    const r = this._meteorRng ? this._meteorRng.next() : 0.5;
+    return range[0] + r * (range[1] - range[0]);
+  }
+
+  /** Pick a streak: an origin at a moderate elevation, a tangent direction, an arc. */
+  _fireMeteor() {
+    const m = this._mt, rng = this._meteorRng;
+    if (!rng || m.live) return;
+    const elev = METEOR_ELEV[0] + rng.next() * (METEOR_ELEV[1] - METEOR_ELEV[0]);
+    const az = rng.next() * TAU;
+    const ox = Math.cos(elev) * Math.cos(az), oy = Math.sin(elev), oz = Math.cos(elev) * Math.sin(az);
+    // A tangent: cross the origin with a random vector, normalised. Degenerate only if the
+    // random vector is parallel to the origin, which a second roll fixes.
+    let rx = rng.next() - 0.5, ry = rng.next() - 0.5, rz = rng.next() - 0.5;
+    let tx = oy * rz - oz * ry, ty = oz * rx - ox * rz, tz = ox * ry - oy * rx;
+    let len = Math.hypot(tx, ty, tz);
+    if (len < 1e-4) { rx = 0.3; ry = 0.9; rz = -0.2; tx = oy * rz - oz * ry; ty = oz * rx - ox * rz; tz = ox * ry - oy * rx; len = Math.hypot(tx, ty, tz); }
+    m.ox = ox; m.oy = oy; m.oz = oz;
+    m.tx = tx / len; m.ty = ty / len; m.tz = tz / len;
+    m.arc = METEOR_ARC[0] + rng.next() * (METEOR_ARC[1] - METEOR_ARC[0]);
+    m.agePrev = 0; m.ageCurr = 0;
+    m.live = true;
+  }
+
+  /** The meteor's clock, on the fixed step. present() lerps agePrev -> ageCurr. */
+  _stepMeteor(dt) {
+    const m = this._mt;
+    if (!m.live) {
+      this._meteorT -= dt;
+      if (this._meteorT <= 0) { this._meteorT = this._meteorSpan(METEOR_GAP_S); this._fireMeteor(); }
+      return;
+    }
+    m.agePrev = m.ageCurr;
+    m.ageCurr += dt;
+    if (m.ageCurr >= METEOR_LIFE) { m.live = false; this._meteorPark = true; }
+  }
+
+  /** Write the streak's 8 points into the star buffer past STAR_COUNT. Allocates nothing. */
+  _presentMeteor(alpha) {
+    const geo = this.starGeo;
+    if (!geo) return;
+    const m = this._mt;
+    const posA = geo.attributes.position, colA = geo.attributes.color;
+    const pos = posA.array, col = colA.array;
+    const base = STAR_COUNT;
+    if (!m.live) {
+      if (!this._meteorPark) return;
+      this._meteorPark = false;
+      for (let i = 0; i < METEOR_PTS; i++) {
+        const j = (base + i) * 3;
+        pos[j] = 0; pos[j + 1] = METEOR_PARK_Y; pos[j + 2] = 0;
+        col[j] = 0; col[j + 1] = 0; col[j + 2] = 0;
+      }
+    } else {
+      const age = lerp(m.agePrev, m.ageCurr, clamp01(alpha)) / METEOR_LIFE;
+      const r = SKY_RADIUS * 0.94;
+      for (let i = 0; i < METEOR_PTS; i++) {
+        const j = (base + i) * 3;
+        const s = age - i * METEOR_TRAIL;
+        if (s < 0) { pos[j] = 0; pos[j + 1] = METEOR_PARK_Y; pos[j + 2] = 0; col[j] = col[j + 1] = col[j + 2] = 0; continue; }
+        const k = m.arc * s;
+        let dx = m.ox + m.tx * k, dy = m.oy + m.ty * k, dz = m.oz + m.tz * k;
+        const inv = 1 / Math.max(1e-6, Math.hypot(dx, dy, dz));
+        dx *= inv; dy *= inv; dz *= inv;
+        pos[j] = dx * r; pos[j + 1] = dy * r + 8; pos[j + 2] = dz * r;
+        // The head is brightest and the whole streak fades as it dies. 0.9 is the star
+        // shader's own cap; the tail steps down behind it.
+        const b = 0.9 * (1 - i / METEOR_PTS) * (1 - age);
+        col[j] = b; col[j + 1] = b; col[j + 2] = b * 0.92;
+      }
+    }
+    posA.addUpdateRange(base * 3, METEOR_PTS * 3);
+    posA.needsUpdate = true;
+    colA.addUpdateRange(base * 3, METEOR_PTS * 3);
+    colA.needsUpdate = true;
+  }
+
+  /** Whether a streak is crossing the sky right now, and how far along. Tools and tests. */
+  meteorState() { return { live: this._mt.live, age: +this._mt.ageCurr.toFixed(3), nextS: +this._meteorT.toFixed(1) }; }
+
+  /**
    * M1's clock drives this. t is 0..1 across the night: 0 dusk, 0.30 deep night,
    * 0.70 the black hour, 1 false dawn. M0 never calls it after init.
    */
@@ -833,10 +1033,8 @@ export class Sky {
     _a.set(s0.zenith); _b.set(s1.zenith);
     u.uZenith.value.copy(_a).lerp(_b, k);
 
-    this.stars.material.uniforms.uOpacity.value = lerp(s0.stars, s1.stars, k);
-    // Stars go out under a front. Not to zero — a break in the cloud is worth more than a
-    // uniform lid — but a downpour is not a night for looking up.
-    if (this._wxFog > 1) this.stars.material.uniforms.uOpacity.value /= this._wxFog;
+    this._starOpacity = lerp(s0.stars, s1.stars, k);
+    this._writeStars();                       // ...times the front and the flash
     if (this.scene.fog) {
       this._phaseFog = FOG_DENSITY * lerp(s0.fogMul, s1.fogMul, k);
       this.scene.fog.density = this._phaseFog * this._wxFog;
@@ -853,6 +1051,7 @@ export class Sky {
   setWeatherFog(mul) {
     this._wxFog = Math.max(0, mul || 1);
     if (this.scene.fog && this._phaseFog) this.scene.fog.density = this._phaseFog * this._wxFog;
+    this._writeStars();
   }
 
   /**
@@ -862,10 +1061,13 @@ export class Sky {
    * Allocates nothing: setRGB in the working colour space, no sRGB round trip through an int.
    */
   _writeFog() {
+    // ROUND 22: a bolt brightens the haze with the sky. This is the reveal — the far county
+    // FogExp2 had dissolved comes back as silhouette for the frames the colour is up.
+    const m = FOG_MUL * (1 + this._flash * FOG_FLASH_GAIN);
     this.fogCol.setRGB(
-      this.horizon.r * FOG_MUL,
-      this.horizon.g * FOG_MUL,
-      this.horizon.b * FOG_MUL,
+      this.horizon.r * m,
+      this.horizon.g * m,
+      this.horizon.b * m,
     );
   }
 
@@ -874,6 +1076,7 @@ export class Sky {
 
   step(dt) {
     this._t += dt;
+    this._stepMeteor(dt);
 
     // THE MIST'S HEIGHT IS SIMULATED HERE, NOT IN present(). It is a visible transform and
     // the CONTRACT's loop law has no exceptions; present() only lerps prev -> curr.
@@ -918,6 +1121,7 @@ export class Sky {
     if (lights && lights.moon) {
       du.uMoonDir.value.copy(lights.moon.position).sub(lights.moon.target.position).normalize();
     }
+    this._presentMeteor(alpha);
 
     if (!this.mist || this._mistYCurr === null) return;
     const y = lerp(this._mistYPrev, this._mistYCurr, clamp01(alpha));

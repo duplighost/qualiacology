@@ -372,11 +372,28 @@ export function relocate(ctx, e, rng, out) {
       if (roads.roadDistance(x, z) < NAV.RELOC_OFF_ROAD) continue;
     }
     if (slope(ctx, x, z) > 0.55) continue;
+    // ROUND 22: never inside a lit dusk-to-dawn pool (lane E's ctx.shared.litPoles). A
+    // relocation that lands a hound in the light is the fence being walked through.
+    if (inLitPool(ctx, x, z)) continue;
     if (col && typeof col.canOccupy === 'function'
       && !col.canOccupy(x, z, e.def.radius, e.def.height)) continue;
 
     out.x = x; out.z = z;
     return true;
+  }
+  return false;
+}
+
+/** ROUND 22: is (x, z) inside any LIT pool lane E publishes? Tolerates the array's absence. */
+export function inLitPool(ctx, x, z) {
+  const sh = ctx && ctx.shared;
+  const poles = sh && sh.litPoles;
+  if (!Array.isArray(poles)) return false;
+  for (let i = 0; i < poles.length; i++) {
+    const q = poles[i];
+    if (!q || !q.on || !(q.r > 0)) continue;
+    const dx = x - q.x, dz = z - q.z;
+    if (dx * dx + dz * dz < q.r * q.r) return true;
   }
   return false;
 }

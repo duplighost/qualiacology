@@ -404,6 +404,7 @@ export class PlayerController {
     this.dead = false;
     this.deathT = 0;                  // seconds into the death beat
     this.deathDrop = 0;               // m the eye has sunk; added into eyeY, nothing else
+    this.seatDrop = 0;                // ROUND 22: the planetarium seat lowers the eye through the same channel as the death sink
     // Where the killing blow landed, so the respawn can put the body somewhere else and the
     // director can be told which ground to sweep.
     this.deathX = 0; this.deathZ = 0;
@@ -530,7 +531,7 @@ export class PlayerController {
     // sink, collapse and dip, and it may never end up in the soil, whatever combination
     // arrives. Cheap, unconditional, and it makes the whole class impossible rather than the
     // one case that was reported.
-    const eye = this.pos.y + drop + this.landSpring.value - this.deathDrop;
+    const eye = this.pos.y + drop + this.landSpring.value - this.deathDrop - this.seatDrop;
     return Math.max(eye, this.pos.y + EYE_FLOOR);
   }
 

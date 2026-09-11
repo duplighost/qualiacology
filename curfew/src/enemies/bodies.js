@@ -914,25 +914,35 @@ function buildHound(def) {
         sy: (0.18 - Math.abs(i) * 0.025) * s, sz: 0.027 * s });
   }
 
+  // ROUND 22: THE RUNNER is this same animal STRETCHED along its spine (species.js
+  // `stretch`, 1.35 for the runner, absent = 1 for the hound). The welded shell and the eyes
+  // are scaled in z before they are ever uploaded, and the hip pivots and hit zones move with
+  // them, so a low long body comes out of the one builder with no new geometry code and —
+  // the law that matters — no new material and no new program. Legs are not stretched: a
+  // long body on the same legs is exactly the silhouette that reads as "not a hound".
+  const st = def.stretch > 0 ? def.stretch : 1;
+  const shell = w.geometry('hound-shell');
+  const eyes = eyesW.geometry('hound-eyes');
+  if (st !== 1) { shell.scale(1, 1, st); eyes.scale(1, 1, st); }
   return {
-    shell: w.geometry('hound-shell'),
-    eyes: eyesW.geometry('hound-eyes'),
+    shell,
+    eyes,
     limb: leg.geometry('hound-leg'),
     fore: null,
     joints: [
       // four hips, front pair then rear pair. y is the pivot height.
-      { x: -0.20 * s, y: 0.62 * s, z: -0.34 * s },
-      { x: 0.20 * s, y: 0.62 * s, z: -0.34 * s },
-      { x: -0.21 * s, y: 0.60 * s, z: 0.34 * s },
-      { x: 0.21 * s, y: 0.60 * s, z: 0.34 * s },
+      { x: -0.20 * s, y: 0.62 * s, z: -0.34 * s * st },
+      { x: 0.20 * s, y: 0.62 * s, z: -0.34 * s * st },
+      { x: -0.21 * s, y: 0.60 * s, z: 0.34 * s * st },
+      { x: 0.21 * s, y: 0.60 * s, z: 0.34 * s * st },
     ],
     zones: [
-      { x: 0, y: headY, z: -0.74 * s, r: 0.26 * s, zone: 'head' },
-      { x: 0, y: backY + 0.24 * s, z: 0.02 * s, r: 0.19 * s, zone: 'vent' },
-      { x: 0, y: backY, z: -0.10 * s, r: 0.42 * s, zone: 'torso' },
-      { x: 0, y: backY - 0.02 * s, z: 0.32 * s, r: 0.31 * s, zone: 'limb' },
+      { x: 0, y: headY, z: -0.74 * s * st, r: 0.26 * s, zone: 'head' },
+      { x: 0, y: backY + 0.24 * s, z: 0.02 * s * st, r: 0.19 * s, zone: 'vent' },
+      { x: 0, y: backY, z: -0.10 * s * st, r: 0.42 * s, zone: 'torso' },
+      { x: 0, y: backY - 0.02 * s, z: 0.32 * s * st, r: 0.31 * s, zone: 'limb' },
     ],
-    gait: 'trot',
+    gait: def.gait || 'trot',
   };
 }
 
@@ -1991,6 +2001,26 @@ const ANIMATE = {
     parts.shellMesh.rotation.x = a.coil * -0.34 + Math.sin(a.gait * 2) * 0.035 * a.moveAmp;
     parts.eyeMesh.position.z = parts.shellMesh.position.z;
     parts.eyeMesh.rotation.x = parts.shellMesh.rotation.x;
+  },
+
+  /* ROUND 22. THE RUNNER. The trot's legs at a faster cycle, and two things the hound does
+     not do: the telegraph is a CROUCH — the body drops and the nose goes down, which is the
+     silhouette change that buys its 0.38 s — and the dash STRETCHES the shell along its own
+     spine (swing, fed by enemies.js present() for attackKind 'dash'), so at 13.5 m/s it reads
+     as something pouring past you rather than a hound played fast. */
+  dash(parts, a) {
+    for (let i = 0; i < parts.limbs.length; i++) {
+      const ph = a.gait * 1.35 + (i % 2 ? Math.PI : 0) + (i < 2 ? 0 : Math.PI * 0.5);
+      parts.limbs[i].pivot.rotation.x = Math.sin(ph) * 0.70 * a.moveAmp;
+    }
+    const sh = parts.shellMesh;
+    sh.position.y = -a.coil * 0.16;
+    sh.position.z = a.coil * 0.10;
+    sh.rotation.x = -a.coil * 0.50 + Math.sin(a.gait * 2) * 0.03 * a.moveAmp + a.swing * 0.12;
+    sh.scale.z = 1 + a.swing * 0.15;
+    const ey = parts.eyeMesh;
+    ey.position.y = sh.position.y; ey.position.z = sh.position.z;
+    ey.rotation.x = sh.rotation.x; ey.scale.z = sh.scale.z;
   },
 
   drag(parts, a) {

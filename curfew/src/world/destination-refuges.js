@@ -10,6 +10,11 @@ export const DESTINATION_REFUGES = Object.freeze([
   { id: 'jackfield', x: -23, z: -2, w: 6, d: 6, yaw: 0, type: 'bunk', roof: 3.2 },
   { id: 'chapel', x: -13, z: 3, w: 10.5, d: 17, yaw: Math.PI, existing: true,
     doorW: 2.6, bag: { x: 3.2, z: 5, yaw: 0 } },
+  // ROUND 22: the planetarium at Morning. The whole building is the room: shut the door
+  // and the hall is a refuge while the projection runs. existing:true (planetarium.js builds
+  // the walls); yaw PI puts the leaf on the site's +Z face at (0, 24); the bag is in the foyer.
+  { id: 'morning', x: 0, z: 11, w: 17, d: 26, yaw: Math.PI, existing: true,
+    doorW: 2.4, bag: { x: 4.6, z: -10.6, yaw: 0 } },
 ]);
 
 const timber = [0.12,0.082,0.047], trim=[0.20,0.18,0.14], metal=[0.045,0.05,0.047];

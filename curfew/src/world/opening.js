@@ -228,19 +228,32 @@ export class Opening {
     const m=this._mesh(geo,mat,name);m.position.set(x,y,z);m.rotation.y=yaw;return m;
   }
   _papers(){
+    // ROUND 22 (lane D). Alex: "it happened the night the clocks fell back. Kitchen calendar,
+    // first Sunday of November circled, FALL BACK. Everyone got an extra hour of dark and it
+    // never gave the hour back." November 2026: the 1st is that Sunday. Every night since is
+    // crossed off. 'Still here.' stays.
     this.calendar=this._paper('thirty-days-calendar',-11.2,this.padY+1.73,3.69,1.32,1.98,(c,w,h)=>{
       c.fillStyle='#51483a';c.fillRect(0,0,w,h);c.fillStyle='#17120c';c.fillRect(0,0,w,22);
       for(let i=0;i<3200;i++){const x=(i*347)%w,y=(i*593)%h;c.fillStyle=i%2?'#4d4538':'#554c3e';c.fillRect(x,y,1+i%3,2);}
-      c.textAlign='center';c.fillStyle='#030201';c.font='bold 99px Georgia';c.fillText('30 days',w/2,150);
-      c.font='bold italic 63px Georgia';c.fillText('without morning',w/2,222);
-      c.strokeStyle='#0d0a06';c.lineWidth=2;c.strokeRect(43,280,w-86,635);
-      for(let row=0;row<6;row++)for(let col=0;col<5;col++){
-        const x=43+col*(w-86)/5,y=280+row*635/6,n=row*5+col+1;
-        c.strokeStyle='#1a150f';c.lineWidth=2;c.strokeRect(x,y,(w-86)/5,635/6);
-        c.fillStyle='#030201';c.font='42px Georgia';c.fillText(String(n),x+68,y+65);
-        c.strokeStyle='#250504';c.lineWidth=n===30?9:6;c.beginPath();c.moveTo(x+24,y+24+n%7);c.lineTo(x+111,y+86);c.moveTo(x+106,y+19);c.lineTo(x+26,y+91-n%9);c.stroke();
+      // the picture half: a hill under a sky, the kind of thing a feed store gives away
+      c.fillStyle='#3a3628';c.fillRect(0,22,w,168);c.fillStyle='#2b2a24';c.beginPath();c.arc(w/2,200,220,Math.PI,0);c.fill();
+      c.fillStyle='#4d4538';c.beginPath();c.arc(w*.72,86,26,0,Math.PI*2);c.fill();   // the sun, in the picture, where it still is
+      c.textAlign='center';c.fillStyle='#030201';c.font='bold 84px Georgia';c.fillText('NOVEMBER',w/2,262);
+      const gx=43,gy=290,gw=w-86,gh=600,cw=gw/7,ch=gh/5;
+      c.strokeStyle='#0d0a06';c.lineWidth=2;c.strokeRect(gx,gy,gw,gh);
+      for(let row=0;row<5;row++)for(let col=0;col<7;col++){
+        const x=gx+col*cw,y=gy+row*ch,n=row*7+col+1;
+        c.strokeStyle='#1a150f';c.lineWidth=2;c.strokeRect(x,y,cw,ch);
+        if(n>30)continue;
+        c.fillStyle='#030201';c.font='34px Georgia';c.textAlign='left';c.fillText(String(n),x+8,y+34);
+        if(n===1){
+          c.strokeStyle='#3a0a06';c.lineWidth=5;c.beginPath();c.ellipse(x+cw/2,y+ch/2,cw*.47,ch*.45,.12,0,Math.PI*2);c.stroke();
+          c.fillStyle='#3a0a06';c.font='bold 26px Georgia';c.textAlign='center';c.fillText('FALL',x+cw/2,y+ch*.58);c.fillText('BACK',x+cw/2,y+ch*.84);
+          continue;
+        }
+        c.strokeStyle='#250504';c.lineWidth=n<20?6:4;c.beginPath();c.moveTo(x+14,y+16+n%7);c.lineTo(x+cw-12,y+ch-12);c.moveTo(x+cw-14,y+14);c.lineTo(x+12,y+ch-14-n%9);c.stroke();
       }
-      c.fillStyle='#060302';c.font='italic 38px Georgia';c.fillText('Still here.',w/2,h-108);
+      c.textAlign='center';c.fillStyle='#060302';c.font='italic 38px Georgia';c.fillText('Still here.',w/2,h-108);
       c.strokeStyle='#0c0603';c.lineWidth=6;c.beginPath();c.moveTo(190,h-65);c.lineTo(582,h-61);c.stroke();
     });
     this._paper('shelter-bed-sign',-5.245,this.padY+2.45,-.8,1.04,.48,(c,w,h)=>{

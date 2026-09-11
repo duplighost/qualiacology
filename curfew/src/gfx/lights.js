@@ -117,6 +117,19 @@ const HEMI_INTENSITY = CFG.lights.hemi.intensity;
 const AMBIENT_INTENSITY = CFG.lights.ambient.intensity;
 const HEMI_GROUND = 0x241f18;    // was CFG.lights.hemi.ground 0x1d2620
 
+// ROUND 22 lane F — LIGHTNING. world/weather.js hands us a 0..1 envelope through setFlash();
+// at 1 the moon is x moonMul and both fills x fillMul for the two-step peak. INTENSITY ONLY
+// on lights that exist: no light, no colour, no program. CFG.world.lightning owns the numbers.
+const MOON_FLASH_MUL = (CFG.world.lightning && CFG.world.lightning.moonMul) || 8;
+const FILL_FLASH_MUL = (CFG.world.lightning && CFG.world.lightning.fillMul) || 6;
+
+// ROUND 22 lane E's pole lights, read here for ctx.shared.lit. world/dusk-to-dawn.js owns
+// ctx.shared.litPoles ({x, z, r, on} per pole); this file only reads it. Standing in a lit
+// pool is standing in light: 0.80 inside the pool's radius, feathered to nothing at 1.7 r.
+const LIT_POLE_MAX = 0.80;
+const LIT_POLE_FEATHER = 1.7;
+const _noPoles = Object.freeze([]);
+
 /* The fill follows the complete dusk/night/black/false-dawn arc. It is derived here from
  * clock state rather than pushed from clock._apply(), so lights remains the only owner of
  * hemisphere/ambient intensity. The census is untouched: two existing uniforms move. */
@@ -220,6 +233,18 @@ export class Lights {
     this._faultT = 0;          // ROUND 13: seconds the filament is out (torchFault)
     this._torchLitT = 99;         // seconds since the torch came on (round 6, High Beam)
     this._headlightOn = false;
+    this._headLevel = 1;          // ROUND 22: the car's filament, 0..1, scales the SpotLight
+
+    // ---- lightning (ROUND 22 lane F). Envelope from weather; applied in present(). ------
+    // _moonBaseI is the moon's intensity BEFORE the flash and is the only input to the maths;
+    // the light's current value is never adopted except to notice an external write (the
+    // same rule setMoonTint keeps for colour, below). clock.js declares its base through
+    // setMoonIntensity(); a build where it still writes the light directly is caught by the
+    // _moonWroteI comparison and adopted as the new base, so a bolt survives either way.
+    this._flash = 0;
+    this._flashPrev = 0;
+    this._moonBaseI = CFG.lights.moon.intensity;
+    this._moonWroteI = NaN;
 
     // ---- the moon's arc. Driven by world/clock.js through setMoonArc(). --------
     this._moonElev = MOON_ELEV;
@@ -605,16 +630,49 @@ export class Lights {
   /** The fill's current night dim, 0.20..1. Tests and the debug HUD. */
   fillScale() { return this._fillScale; }
 
-  /** The ONE place hemi.intensity and ambient.intensity are written. */
-  _writeFill() {
-    if (this.hemi) this.hemi.intensity = HEMI_INTENSITY * this._fillScale;
-    if (this.ambient) this.ambient.intensity = AMBIENT_INTENSITY * this._fillScale;
+  /**
+   * ROUND 22 lane F — a bolt. world/weather.js calls this every step with its envelope
+   * (0 almost always). Stored here, written in present(): the moon x MOON_FLASH_MUL and the
+   * two fills x FILL_FLASH_MUL at k = 1. Intensity only, on lights that exist.
+   * @param k 0..1; anything else is treated as 0
+   */
+  setFlash(k) { this._flash = clamp01(typeof k === 'number' && isFinite(k) ? k : 0); }
+
+  /** The flash envelope being applied this frame, 0..1. Tests and tools. */
+  flash() { return this._flash; }
+
+  /**
+   * Declare the moon's UNFLASHED intensity. For world/clock.js, which owns the pale->black
+   * arc of the moon's brightness: this is how it says "this is the moon before any bolt".
+   * Written to the light at once when no flash is running, so the clock's arc lands on the
+   * frame it moved; during a bolt present() re-expresses the flash on top of the new base,
+   * so the clock (manifest #4, after us) can never undo a bolt by writing after we did.
+   */
+  setMoonIntensity(v) {
+    if (typeof v !== 'number' || !isFinite(v) || !this.moon) return;
+    this._moonBaseI = v;
+    if (this._flash <= 0) { this.moon.intensity = v; this._moonWroteI = v; }
   }
 
-  /** Car headlights (M1). Intensity only — the light itself never comes or goes. */
-  setHeadlights(on, x = 0, y = 0, z = 0, dx = 0, dy = 0, dz = -1) {
+  /** The ONE place hemi.intensity and ambient.intensity are written. */
+  _writeFill() {
+    const f = 1 + this._flash * (FILL_FLASH_MUL - 1);
+    if (this.hemi) this.hemi.intensity = HEMI_INTENSITY * this._fillScale * f;
+    if (this.ambient) this.ambient.intensity = AMBIENT_INTENSITY * this._fillScale * f;
+  }
+
+  /**
+   * Car headlights (M1). Intensity only — the light itself never comes or goes.
+   * ROUND 22 (for lane B): `level` is the filament, 0..1. vehicle/car.js has passed it as
+   * the eighth argument since the park cool-down was built and this signature ignored it,
+   * so the lamp dimmed on the car while the light on the road stayed full (ART.md 7.3).
+   * It scales the SpotLight and the ctx.shared.lit term alike: the moths caking the lens
+   * dim the county the same way they dim the beam.
+   */
+  setHeadlights(on, x = 0, y = 0, z = 0, dx = 0, dy = 0, dz = -1, level = 1) {
     this._headlightOn = !!on;
-    this.headlight.intensity = this._headlightOn ? CFG.lights.headlight.intensity : 0;
+    this._headLevel = typeof level === 'number' && isFinite(level) ? clamp01(level) : 1;
+    this.headlight.intensity = this._headlightOn ? CFG.lights.headlight.intensity * this._headLevel : 0;
     if (this._headlightOn) {
       this.headlight.position.set(x, y, z);
       this.headlight.target.position.set(x + dx * 20, y + dy * 20, z + dz * 20);
@@ -780,7 +838,7 @@ export class Lights {
         f = d <= LIT_HEADLIGHT_FULL ? 1
           : clamp01(1 - (d - LIT_HEADLIGHT_FULL) / Math.max(1e-3, fade - LIT_HEADLIGHT_FULL));
       }
-      const t = LIT_HEADLIGHT * f;
+      const t = LIT_HEADLIGHT * f * this._headLevel;
       if (t > 0) lit = lit + t - lit * t;
     }
 
@@ -807,8 +865,10 @@ export class Lights {
     const cover = flora && typeof flora.coverAt === 'function'
       ? clamp01(flora.coverAt(px, pz)) : 0;
     const open = 1 - cover;
-    const moonI = this.moon
-      ? clamp01(this.moon.intensity / (CFG.lights.moon.intensity || 1)) : 0;
+    // The BASE, not the light: a bolt multiplies the moon for two steps and a poacher's aim
+    // (enemies.js reads lit) must not get a free frame of daylight out of it.
+    const baseI = Number.isFinite(this._moonBaseI) ? this._moonBaseI : this.moon.intensity;
+    const moonI = this.moon ? clamp01(baseI / (CFG.lights.moon.intensity || 1)) : 0;
     // sin(elev) against the boot elevation: the black hour's low moon rakes sideways and
     // puts almost nothing on the top of your head, which is exactly what clock intends.
     const elevF = clamp01(Math.sin(this._moonElev) / Math.sin(MOON_ELEV));
@@ -825,6 +885,22 @@ export class Lights {
       const t = LIT_PLACE_MAX * clamp01(f);
       lit = lit + t - lit * t;
     }
+
+    /* ---- a dusk-to-dawn pole's pool (ROUND 22 lane E) ----------------------- */
+    // dusk-to-dawn owns ctx.shared.litPoles and refreshes it every step; an entry that is
+    // not `on` has burned out and lights nothing. Only the nearest lit pool counts: two
+    // poles never stand close enough for the sum to matter, and a max cannot compound.
+    const poles = shared.litPoles || _noPoles;
+    let poleT = 0;
+    for (let i = 0; i < poles.length; i++) {
+      const e = poles[i];
+      if (!e || !e.on || !(e.r > 0)) continue;
+      const d = Math.hypot(e.x - px, e.z - pz);
+      const t = d <= e.r ? LIT_POLE_MAX
+        : LIT_POLE_MAX * clamp01(1 - (d - e.r) / (e.r * (LIT_POLE_FEATHER - 1)));
+      if (t > poleT) poleT = t;
+    }
+    if (poleT > 0) lit = lit + poleT - lit * poleT;
 
     this.lit = clamp01(lit);
     shared.lit = this.lit;
@@ -922,6 +998,17 @@ export class Lights {
     // A borrow or release since the last seating: seat it before we write, so a muzzle
     // flash fired this frame is lit this frame.
     if (this._dirty) { this._dirty = false; this._reseat(); }
+
+    /* ---- lightning (ROUND 22 lane F) --------------------------------------- */
+    // Somebody wrote the moon since we did? Then THAT is the base now (clock.js on a build
+    // without setMoonIntensity, or a tool). Then base x the envelope, and the fills through
+    // their one writer — on the flash frames and on the first frame after, so they restore.
+    const moon = this.moon;
+    if (moon.intensity !== this._moonWroteI) this._moonBaseI = moon.intensity;
+    moon.intensity = this._moonBaseI * (1 + this._flash * (MOON_FLASH_MUL - 1));
+    this._moonWroteI = moon.intensity;
+    if (this._flash > 0 || this._flashPrev > 0) this._writeFill();
+    this._flashPrev = this._flash;
 
     /* ---- the moon's ortho box follows the player --------------------------- */
     const D = CFG.render.shadow.distance;

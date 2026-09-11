@@ -37,6 +37,7 @@
 
 import * as THREE from 'three';
 import { makeOuterBuilders } from './outer-destinations.js';
+import { makePlanetariumBuilders } from './planetarium.js';   // ROUND 22: the town of Morning
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, clamp } from '../engine/math.js';
 
@@ -56,6 +57,10 @@ import { nearestRoadInfo } from './roads.js';
 // this file's kit vocabulary through a factory, so there is no import cycle.
 import { makeManorBuilder } from './manor.js';
 import { makeAveryHouseBuilder } from './avery-house.js';
+// ROUND 22, lane H: the Garden of Rest's stones are FETCH's four silhouettes from staged.js.
+// staged.js imports this file's kit at its top level and this file only calls headstone()
+// from inside a builder, long after both modules have evaluated, so the cycle is inert.
+import { headstone } from './staged.js';
 
 /* ==========================================================================
    Palette. LINEAR-space albedos, in the same band terrain.js settled on after
@@ -3053,22 +3058,67 @@ export const BUILDERS = {
     body(api) {
       const k = kits();
       yardWall(k.solid, api, 24, 1.4, -Math.PI * 0.5, C.stone);
-      // graves on a lattice, jittered, leaning
+      /* ---- ROUND 22, lane H. Alex, 2026-09-10: "A cemetery. Christian graves face east —
+       * real tradition, so you rise to meet the light. The old graves face east. The fresh
+       * ones, hand-dug, face the forest."
+       *
+       * The lattice is the one that was here; the stones are now FETCH's four silhouettes
+       * (staged.js headstone) with their MOUND laid toward WORLD EAST, which in this site's
+       * frame is the unit vector (cos api.yaw, sin api.yaw): a mound at heading `yaw` lies at
+       * (sin yaw, cos yaw) from its stone, so east is atan2(cos api.yaw, sin api.yaw). Every
+       * old grave in the yard points the same way, which is the tradition, and it is the
+       * reason the fresh ones read at all. A stone within a mausoleum's footprint is skipped
+       * so no collider lands inside a wall. */
+      const MAUS = [[-10, -6], [0, 14], [10, 2]];
+      const eastYaw = Math.atan2(Math.cos(api.yaw), Math.sin(api.yaw));
+      const KINDS = ['gothic', 'gothic', 'shouldered', 'broken', 'cross', 'gothic', 'obelisk', 'shouldered', 'broken'];
+      let gi = 0;
       for (let gz = 0; gz < 7; gz++) {
         for (let gx = 0; gx < 6; gx++) {
           const lx = -13 + gx * 5.2 + api.rng.range(-0.8, 0.8);
           const lz = -13 + gz * 4.4 + api.rng.range(-0.7, 0.7);
           if (Math.hypot(lx, lz) > 20) continue;
-          const h = api.rng.range(0.65, 1.35);
-          k.solid.box(0.66, h, 0.17, lx, api.padY + h * 0.5, lz, C.stone,
-            api.rng.range(-0.35, 0.35), 0, api.rng.range(-0.14, 0.14));
-          if (api.rng.next() < 0.30) k.solid.box(1.9, 0.16, 0.9, lx, api.padY + 0.08, lz + 0.9, C.stone);
+          let inMaus = false;
+          for (const m of MAUS) if (Math.abs(lx - m[0]) < 3.4 && Math.abs(lz - m[1]) < 3.7) inMaus = true;
+          if (inMaus) continue;
+          headstone(k, api, lx, lz, { kind: KINDS[gi++ % KINDS.length], yaw: eastYaw });
+        }
+      }
+      // THE FRESH ONES. Hand-dug along the yard's back edge, the far side from the road (-Z,
+      // the forest), and their feet point INTO the trees: a raised mound of turned earth, the
+      // spoil still heaped beside it, a plank cross on some and nothing on the rest. No
+      // stone, no lettering. Low and standable, so the yard still walks.
+      {
+        const nFresh = 6 + Math.floor(api.rng.next() * 4);     // 6-9
+        const fy = Math.PI;                                     // the foot lies toward -Z
+        for (let i = 0; i < nFresh; i++) {
+          const lx = -14 + (i + 0.5) * (28 / nFresh) + api.rng.range(-0.6, 0.6);
+          const lz = -18.2 + api.rng.range(-0.7, 0.7);
+          const gy = groundY(api, lx, lz);
+          const mx = lx + Math.sin(fy) * 1.0, mz = lz + Math.cos(fy) * 1.0;
+          const mg = groundY(api, mx, mz);
+          const mound = new THREE.SphereGeometry(1, 9, 5, 0, TAU, 0, Math.PI * 0.5);
+          mound.scale(0.46, 0.42, 1.0);
+          k.solid.at(mound, [0.056, 0.046, 0.034], mx, mg - 0.02, mz, fy);
+          // the spoil, heaped on the side nobody stood on
+          const sx = lx + 1.05, sz = lz - 0.6;
+          k.solid.cone(0.55, 0.42, 7, sx, groundY(api, sx, sz) + 0.18, sz, [0.062, 0.052, 0.038], api.rng.range(0, TAU));
+          // the dark of open ground round both
+          k.solid.quad(1.9, 2.9, mx, mg + 0.012, mz, [0.044, 0.038, 0.030], fy, -Math.PI * 0.5);
+          if (api.rng.next() < 0.55) {
+            // a plank cross at the HEAD, which is the road end, leaning
+            const lean = api.rng.range(-0.18, 0.18);
+            k.solid.box(0.07, 1.05, 0.05, lx, gy + 0.50, lz + 0.20, [0.112, 0.092, 0.066], fy, 0, lean);
+            k.solid.box(0.52, 0.07, 0.05, lx, gy + 0.82, lz + 0.20, [0.112, 0.092, 0.066], fy, 0, lean);
+            api.emit({ kind: 'circle', x: lx, z: lz + 0.2, r: 0.14, y0: gy - 0.3, y1: gy + 1.05, tag: 'wood' });
+          }
+          api.emit({ kind: 'circle', x: mx, z: mz, r: 0.55, y0: mg - 0.3, y1: mg + 0.40, tag: 'stone', standable: true });
         }
       }
       // three mausolea; the far one carries the lamp that is the claim
       // Three mausolea at FIXED local positions; the far one carries the lamp, and the
-      // claim stands in front of its door instead of inside the building.
-      const MAUS = [[-10, -6], [0, 14], [10, 2]];
+      // claim stands in front of its door instead of inside the building. (MAUS is declared
+      // above the stones now, which skip its footprints.)
       for (let i = 0; i < 3; i++) {
         const lx = MAUS[i][0], lz = MAUS[i][1];
         const mausYaw = api.rng.range(-0.2, 0.2);
@@ -3249,6 +3299,8 @@ export const BUILDERS = {
 // in as destinations"). The whole builder lives in manor.js; it gets this file's kit,
 // palette and pane profiles and returns the same { landmark, body } shape as the rest.
 Object.assign(BUILDERS, makeOuterBuilders({ Kit, kits, C, GLOW, groundY }));
+// ROUND 22: the planetarium at Morning, authored in planetarium.js the same way.
+Object.assign(BUILDERS, makePlanetariumBuilders({ Kit, kits, C, GLOW, groundY }));
 BUILDERS.manor = makeManorBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 BUILDERS.avery = makeAveryHouseBuilder({ Kit, kits, sash, C, PANE_WINDOW, PANE_LAMP, GLOW, groundY });
 
@@ -4000,9 +4052,11 @@ export const MINOR_BUILDERS = {
    * the face has all but gone. `api.age` is 0..1, handed in by places.js.
    *
    * REDUCED: EATEN PATH's version paints a real face into a canvas texture
-   * (props.js:684 `missingTex`). A texture map is a new shader program against
-   * CFG.render.budget.programsMax, so the ageing is carried in the vertex colours instead —
-   * the paper greys, the printed block shrinks and the corners curl. See docs/HANDOFF.md.
+   * (props.js:684 `missingTex`). The ageing is carried in the vertex colours instead —
+   * the paper greys, the printed block shrinks and the corners curl. (ROUND 22: the
+   * "a texture map is a new shader program" reason this used to give was stale — a
+   * places.matBody.clone() with a canvas map shares the opening's paper program, which
+   * is how signage.js hangs its painted government notice over this very board.)
    */
   poster(api) {
     const k = kits();
@@ -4014,14 +4068,19 @@ export const MINOR_BUILDERS = {
     k.solid.cyl(0.05, 0.06, 1.9, 5, -0.42, api.padY + 0.95, 0, C.wood);
     k.solid.cyl(0.05, 0.06, 1.9, 5, 0.42, api.padY + 0.95, 0, C.wood);
     k.solid.box(1.15, 0.85, 0.05, 0, api.padY + 1.45, 0, C.wood);
-    k.solid.quad(0.98, 0.70, 0, api.padY + 1.45, -0.04, paper, Math.PI, api.rng.range(-0.05, 0.05));
+    // ROUND 22 (lane D): the paper was on the -Z side at yaw PI, facing AWAY from the road
+    // (places.js yaws a minor so local +Z faces the road). Now on +Z, and signage.js hangs
+    // its painted government poster 0.06 in front of it, so the stapled notice reads from
+    // the road. The kit's paper stays: it is what shows when the site streams and the
+    // overlay does not.
+    k.solid.quad(0.98, 0.70, 0, api.padY + 1.45, 0.035, paper, 0, api.rng.range(-0.05, 0.05));
     // the face block, shrinking as the poster ages
     const fs = 0.44 * (1 - 0.55 * age);
-    k.solid.quad(fs, fs * 1.15, 0, api.padY + 1.56, -0.05, C.dark, Math.PI);
+    k.solid.quad(fs, fs * 1.15, 0, api.padY + 1.56, 0.04, C.dark, 0);
     // curled corners: two small quads leaning off the board
     if (age > 0.3) {
       for (const sx of [-1, 1]) {
-        k.solid.quad(0.22, 0.22, sx * 0.40, api.padY + 1.16, -0.07, paper, Math.PI, sx * 0.9 * age);
+        k.solid.quad(0.22, 0.22, sx * 0.40, api.padY + 1.16, 0.08, paper, 0, -sx * 0.9 * age);
       }
     }
     k.solid.close(0, 0, 0.8, paper);

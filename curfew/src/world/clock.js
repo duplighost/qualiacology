@@ -376,7 +376,11 @@ export class Clock {
     _rgb.b = lerp(_pale.b, _red.b, redness);
     // setRGB, not set(hex): no allocation, no sRGB round-trip through an int.
     moon.color.setRGB(_rgb.r, _rgb.g, _rgb.b);
-    moon.intensity = CFG.lights.moon.intensity * lerp(1, MOON_BLACK_MUL, redness);
+    // ROUND 22: through lights when it has the door, so a lightning bolt lights.present()
+    // wrote this frame (manifest #2, before us) is never undone by this write landing after.
+    const mi = CFG.lights.moon.intensity * lerp(1, MOON_BLACK_MUL, redness);
+    if (typeof lights.setMoonIntensity === 'function') lights.setMoonIntensity(mi);
+    else moon.intensity = mi;
   }
 
   /* ---------------------------------------------------------------- the surface -- */

@@ -66,7 +66,9 @@
 //     and WHERE HE HAS BEEN as a soft wash over a 64 x 64 travelled-cell bitmap that
 //     progression/progress.js records once a second and keeps in the save. The unexplored
 //     county stays dark. Words on the map: place names, once found; no legend, no compass, no
-//     coordinates.
+//     coordinates. The LIVE mini-map is the exception since round 22: it carries N, S, E, W
+//     at its rim (Alex, 2026-09-10: "Need N,S,E and W on mini map."). The pause map still
+//     has none; it is drawn north-up and does not need one.
 //
 // The gun's magazine window and last-three-tracer language remain useful world feedback. The
 // counter now completes it instead of asking the model alone to carry exact inventory state.
@@ -110,6 +112,22 @@ const MINI_RANGE = 320;          // metres from centre to rim
 // Measured by tools/round8-hud-audit.mjs at ~0.074 ms per paint. Thirty paints a second
 // therefore cost roughly 2.2 ms of one CPU-second while keeping player-up rotation smooth.
 const MINI_PERIOD = 1 / 30;
+// ROUND 22, Alex (2026-09-10): "Need N,S,E and W on mini map." Four upright letters that
+// orbit the rim as the county rotates under the arrow (N is world -Z). The letters sit
+// between two walls: tests/fogmap.mjs counts bright pixels in a window 280 m ahead that
+// reaches r = 78.3 px from the centre at its corners, and the clip ends at rim = 85. A 7.5 px
+// font centred at rim - 3.5 puts its ink at roughly r 79..84, clear of both at every yaw
+// (measured by tools/round22/check-A.mjs; only one letter can be near the top at a time).
+const MINI_COMPASS_R = (MINI_PX * 0.5 - 7) - 3.5;
+const MINI_COMPASS_FONT = '600 7.5px ui-monospace, Consolas, monospace';
+// textBaseline 'middle' centres the em box, not the capitals: measured in Chrome on this
+// font, the visible glyph sits 1.5 px above its anchor (N at yaw 0 spanned r 81..85, S
+// 78..82). Without this the top letter grazes the clip and the bottom one leans toward the
+// fogmap window; with 1 px down, the letter in the top column spans r 79.2..84.9 at every
+// heading (64 sampled), inside both walls.
+const MINI_COMPASS_DY = 1;
+const MINI_COMPASS_A = 0.58;      // S, E, W: the road ink's alpha, so they read as part of the map
+const MINI_COMPASS_A_N = 0.80;    // N a little brighter: the compass convention, no second colour
 const AMMO_W = 154;
 const AMMO_H = 62;
 const LOCATE_LIFE = 5.5;         // one press, one temporary bearing
@@ -789,6 +807,7 @@ export class Hud {
     this._miniPaints = 0; this._miniRoads = 0; this._miniPlaces = 0;
     this._miniCheckpoints = 0; this._miniCar = false;
     this._miniCarX = -1; this._miniCarY = -1; this._miniCarAngle = 0;
+    this._miniNorthAngle = 0;      // ROUND 22: screen angle of N, clockwise from up, as painted
     // ROUND 15, item 19: the rim falloff's gradient, built on first paint and reused. It is
     // dropped whenever the context it belongs to is replaced (dispose) or the backing store is
     // resized, because a CanvasGradient outliving its canvas is the kind of thing that works
@@ -1841,6 +1860,10 @@ export class Hud {
     I.found = 0; I.claimed = 0; I.unfound = 0;
     I.fires = 0; I.minors = 0; I.wilds = 0; I.checkpoints = 0;
     I.car = false; I.arrowX = -1; I.arrowY = -1; I.carX = -1; I.carY = -1;
+    // The paper's projection and its name boxes, as drawn, so a test can put its exemptions
+    // where the marks actually are (the map is a zoomed view centred on him, not the county
+    // square; tests/fogmap.mjs was red for a day because it assumed the square).
+    I.zoom = 1; I.cx = 0; I.cz = 0; I.labels = null;
 
     /* 0. the paper: ROUND 13, only where he has been ------------------------- */
     gm.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -2032,6 +2055,7 @@ export class Hud {
       gm.drawImage(this._mapLayer, 0, 0, S, S);
       gm.setTransform(this.dpr,0,0,this.dpr,0,0);
       overlay = true;
+      I.zoom = zoom; I.cx = this.mapCenter.x; I.cz = this.mapCenter.z;
       g = gm;
     }
     const foundSet = places && places.found && typeof places.found.has === 'function' ? places.found
@@ -2102,9 +2126,10 @@ export class Hud {
       }
       if(ny===null)continue;
       if(ny!==y){g.strokeStyle=claimed?tint:INK;g.lineWidth=.7;g.globalAlpha=.45;g.beginPath();g.moveTo(x,y);g.lineTo(left?nx+width+3:nx-3,ny);g.stroke();}
-      g.globalAlpha=.94;g.fillText(d.name,nx,ny);labels.push({x:bx,y:ny,w:width});
+      g.globalAlpha=.94;g.fillText(d.name,nx,ny);labels.push({x:bx,y:ny,w:width,mx:x,my:y});
       I.names++;
     }
+    I.labels = labels;
     g.globalAlpha = 1;
 
     /* 6. the car ------------------------------------------------------------- */
@@ -2565,6 +2590,30 @@ export class Hud {
     g.beginPath(); g.arc(c, c, rim, 0, TAU); g.fill();
     g.strokeStyle = 'rgba(198,214,236,0.11)'; g.lineWidth = 1;
     g.beginPath(); g.arc(c, c, rim - 1.2, 0, TAU); g.stroke();
+
+    // ROUND 22: N, S, E, W at the rim. World-fixed (north is world -Z, the pause map's up)
+    // and upright, so they orbit the rim as the county turns under the arrow, the way a real
+    // compass card reads. Drawn AFTER the falloff so the gradient does not dim them, and
+    // BEFORE g.restore() so they stay under the clip and never touch the county (round 15's
+    // complaint about ink outside the disc). The anchors reuse fx/fz/rx/rz: the unit vector
+    // to world north is (0, -1), so N lands at (c - rz*R, c + fz*R) and the rest follow at
+    // right angles. A SHADE halo under INK is what the arrow and the car already wear.
+    {
+      const R = MINI_COMPASS_R, cy = c + MINI_COMPASS_DY;
+      g.font = MINI_COMPASS_FONT; g.textAlign = 'center'; g.textBaseline = 'middle';
+      const lj = g.lineJoin; g.lineJoin = 'round'; g.strokeStyle = SHADE; g.lineWidth = 2.5; g.fillStyle = INK;
+      g.globalAlpha = MINI_COMPASS_A_N;
+      g.strokeText('N', c - rz * R, cy + fz * R); g.fillText('N', c - rz * R, cy + fz * R);
+      g.globalAlpha = MINI_COMPASS_A;
+      g.strokeText('S', c + rz * R, cy - fz * R); g.fillText('S', c + rz * R, cy - fz * R);
+      g.strokeText('E', c + rx * R, cy - fx * R); g.fillText('E', c + rx * R, cy - fx * R);
+      g.strokeText('W', c - rx * R, cy + fx * R); g.fillText('W', c - rx * R, cy + fx * R);
+      g.lineJoin = lj;   // the arrow below keeps its own joins
+      g.globalAlpha = 1;
+      // Screen angle of N clockwise from up equals cam.yaw (positive yaw turns forward
+      // toward screen-left, so north swings to the right). Kept for state().
+      this._miniNorthAngle = ((cam.yaw % TAU) + TAU) % TAU;
+    }
 
     // The player never moves off the centre: the county rotates under the arrow.
     g.fillStyle = '#7fe1e5'; g.strokeStyle = SHADE; g.lineWidth = 4;
@@ -3312,6 +3361,8 @@ export class Hud {
         carX: +this._miniCarX.toFixed(1), carY: +this._miniCarY.toFixed(1),
         carAngle: +this._miniCarAngle.toFixed(3), range: MINI_RANGE,
         masked: true, sight: this._miniSight,
+        // ROUND 22: the rim compass, as painted.
+        compass: true, compassR: MINI_COMPASS_R, northAngle: +this._miniNorthAngle.toFixed(3),
       },
       // ROUND 13: the key glyph.
       prompt: {

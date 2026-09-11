@@ -329,7 +329,7 @@ export class AirLight {
     for (let i = 0; i < MAX_PULSE; i++) {
       this._pulses.push({
         x: 0, y: 0, z: 0, r: 1, cr: 1, cg: 1, cb: 1,
-        on: 0, pool: 0, halo: 1, poolY: null, fade: 1, _d2: 0,
+        on: 0, pool: 0, halo: 1, poolY: null, fade: 1, _d2: 0, poolR: 0, poolGain: 1,
       });
     }
   }
@@ -564,7 +564,8 @@ export class AirLight {
 
       let s = this._src.get(key);
       if (!s) {
-        s = { x: 0, y: 0, z: 0, r: 1, cr: 1, cg: 1, cb: 1, on: 0, pool: 1, halo: 1, poolY: null, fade: 0 };
+        s = { x: 0, y: 0, z: 0, r: 1, cr: 1, cg: 1, cb: 1, on: 0, pool: 1, halo: 1, poolY: null, fade: 0,
+          poolR: 0, poolGain: 1 };
         this._src.set(key, s);
       }
       s.x = this._v.x; s.y = this._v.y; s.z = this._v.z;
@@ -575,6 +576,13 @@ export class AirLight {
       // A lamp more than this far over its own ground is in a tower or a lamp room, and its
       // pool would be a disc of light on a field nobody can stand in.
       s.poolY = gy === null || this._v.y - gy > 9 ? null : gy;
+      // ROUND 22: a mesh may say what its pool is. The dusk-to-dawn poles hang a bead 4.6 m
+      // up, and by the drop below that is an 8 m disc at a seventh of the gain — invisible on
+      // a road, and that pool is the fence the hounds refuse (world/dusk-to-dawn.js), so it
+      // has to be READ. poolR is metres on the ground; poolGain multiplies the drop's result.
+      const ov = mesh.userData.air;
+      s.poolR = ov && ov.poolR > 0 ? ov.poolR : 0;
+      s.poolGain = ov && ov.poolGain > 0 ? ov.poolGain : 1;
     }
   }
 
@@ -633,12 +641,12 @@ export class AirLight {
         const h = Math.max(0.35, s.y - s.poolY);
         // A pool is as wide as the lamp is high, plus its own body. A bulb 4 m up throws a
         // wider, fainter disc than the same bulb on a table: both terms are in here.
-        const rr = (h * 1.75 + s.r * 0.9);
+        const rr = s.poolR > 0 ? s.poolR : (h * 1.75 + s.r * 0.9);
         this._m.makeScale(rr, 1, rr);
         this._m.setPosition(s.x, s.poolY + 0.055, s.z);
         this.pools.setMatrixAt(np, this._m);
         // Inverse-square on the drop, so a high lamp does not paint a bright floor.
-        const g = k * s.pool * far * POOL_GAIN / (1 + 0.34 * h * h);
+        const g = k * s.pool * far * s.poolGain * POOL_GAIN / (1 + 0.34 * h * h);
         this.pools.instanceColor.setXYZ(np, s.cr * g, s.cg * g, s.cb * g);
         np++;
       }

@@ -25,7 +25,29 @@
 // NOTHING LOADS UNTIL YOU FIRST SIT IN THE CAR. 22 MB of audio must never touch the boot
 // path: cold boot is gated at 15 s (AGENTS.md) and this county boots in 5.4.
 
+import { biquad, pinkFill, saturate, mixInto, normalizeTo, toAudioBuffer } from './audio.js';
+
 const BASE = 'assets/radio/';
+
+/**
+ * ROUND 22: a transmission, not a bake. 300-3400 Hz (a voice channel), a little saturation
+ * (a transmitter driven hard) and a hiss, applied ONCE to anything synthesized for the dial or
+ * fetched from assets/voices, before the dashboard's own band-pass colours it. In place on a
+ * Float32Array; returns it. Exported for county.js's EAS tones, carrier and bumper.
+ */
+export function radioize(b, sr, rnd, hiss) {
+  biquad(b, sr, 'hp', 300, 0.7, 0, 2);
+  biquad(b, sr, 'lp', 3400, 0.7, 0, 2);
+  saturate(b, 1.6, 1.0);
+  normalizeTo(b, 0.85);
+  if (hiss > 0) {
+    const h = new Float32Array(b.length);
+    pinkFill(h, rnd);
+    biquad(h, sr, 'lp', 3400, 0.7);
+    mixInto(b, h, hiss);
+  }
+  return b;
+}
 
 // TWO STATIONS AND A DEAD BAND.
 //
@@ -67,14 +89,43 @@ export const STATIONS = Object.freeze([
       { file: 'song-4.mp3', kind: 'music' },
     ],
   },
+  // ROUND 22 lane G. Alex, 2026-09-10: "The NOAA weather-radio voice: Sunny. High of 78.
+  // Emergency Alert tones, then a dated message." and "An automated morning show: Gooood
+  // morning, it's 6 AM, it's gonna be a beautiful day — and the traffic report." Both are
+  // automated voices, so the files are Windows SAPI (tools/bake-voices.ps1, David and Zira)
+  // and that is honest: a weather radio IS a robot. A part is either a `url` (a file, fetched
+  // and radioized at decode) or a `buf` (a name county.js baked: the EAS two-tone, the open
+  // carrier with its time tick, the show's bumper). Alex may replace any wav by name.
+  {
+    id: 'noaa', dial: '162.4', name: 'WX', kind: 'voice',
+    parts: [
+      { url: 'assets/voices/noaa-1.wav', kind: 'voice', radio: true },
+      { buf: 'radio_eas', kind: 'voice' },
+      { url: 'assets/voices/noaa-2.wav', kind: 'voice', radio: true },
+      { buf: 'radio_carrier', kind: 'music' },
+    ],
+  },
+  {
+    id: 'morning', dial: '97.1', name: 'MORNING', kind: 'voice',
+    parts: [
+      { url: 'assets/voices/morning-show-1.wav', kind: 'voice', radio: true },
+      { buf: 'radio_bumper', kind: 'music' },
+      { url: 'assets/voices/morning-show-2.wav', kind: 'voice', radio: true },
+      { buf: 'radio_bumper', kind: 'music' },
+    ],
+  },
   { id: 'dead', dial: '—', name: null, kind: 'dead', parts: [] },
 ]);
 
-/** Every distinct file the dial can play, in load order. */
+/** A part's key in the decoded-buffer table: its file name, or its url. */
+const keyOf = (p) => p.url || p.file;
+
+/** Every distinct file the dial can play, in load order (baked `buf` parts are not files). */
 const FILES = (() => {
   const seen = [], out = [];
   for (const s of STATIONS) for (const p of s.parts) {
-    if (!seen.includes(p.file)) { seen.push(p.file); out.push(p); }
+    const k = keyOf(p);
+    if (k && !seen.includes(k)) { seen.push(k); out.push(p); }
   }
   return out;
 })();
@@ -169,21 +220,34 @@ export class Radio {
     this.loading = true;
     const actx = this.A && this.A.actx;
     if (!actx) { this.loading = false; return; }
+    // ROUND 22: the dial's synthesized parts, if their idle bake has not run yet (he sat down
+    // inside the first seconds). One-time, and only the radio's own part.
+    try { if (this.A.county && this.A.county.bakeRest) this.A.county.bakeRest('radio'); } catch (e) { void e; }
     await Promise.all(FILES.map(async (p) => {
+      const k = keyOf(p);
       try {
-        const res = await fetch(BASE + p.file);
+        const res = await fetch(p.url || (BASE + p.file));
         if (!res.ok) throw new Error('http ' + res.status);
         const bytes = await res.arrayBuffer();
-        this._buf[p.file] = await actx.decodeAudioData(bytes);
+        let dec = await actx.decodeAudioData(bytes);
+        // ROUND 22: a voice baked for the dial (SAPI, full band, dry) is narrowed to a
+        // transmission once here, so the dashboard receives radio and not a recording.
+        if (p.radio && dec && dec.numberOfChannels > 0) {
+          const src = dec.getChannelData(0);
+          const f = new Float32Array(src.length);
+          f.set(src);
+          dec = toAudioBuffer(actx, [radioize(f, dec.sampleRate, () => this.rng.next(), 0.035)], dec.sampleRate);
+        }
+        this._buf[k] = dec;
       } catch (e) {
         // A file that will not load is an item that is not in the schedule tonight. It must
         // never take the car's audio, or the game, down with it.
-        void e; this._buf[p.file] = null;
+        void e; this._buf[k] = null;
       }
     }));
     this.loaded = true;
     this.loading = false;
-    this.failed = FILES.every(p => !this._buf[p.file]);
+    this.failed = FILES.every(p => !this._buf[keyOf(p)]);
     if (this.on) this._play(false);
   }
 
@@ -192,8 +256,10 @@ export class Radio {
     const st = STATIONS[i];
     const out = [];
     for (const p of st.parts) {
-      const b = this._buf[p.file];
-      if (b) out.push({ buf: b, kind: p.kind, file: p.file, dur: b.duration });
+      // a fetched file, or a buffer county.js baked under that name (missing until its idle
+      // bake has run, in which case tonight's schedule simply skips it)
+      const b = p.buf ? (this.A.buf ? this.A.buf[p.buf] : null) : this._buf[keyOf(p)];
+      if (b) out.push({ buf: b, kind: p.kind, file: p.buf || keyOf(p), dur: b.duration });
     }
     return out;
   }

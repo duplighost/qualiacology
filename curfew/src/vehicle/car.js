@@ -222,7 +222,9 @@ const CRUSH_YAW_MAX = CRUSH.yaw || 0.16;     // rad of nose kick for a dead-off-
 // The total angle is identical; only its arrival is spread.
 const CRUSH_KICK_LAMBDA = 13.0;
 const CRUSH_TRAUMA = CRUSH.trauma || 0.46;   // camera knock at the heavy end, short
-const CRUSH_WEAR = 0.010;                    // per kg/100: the county wears the car down too
+// ROUND 22: 0.010 -> 0.014 with the rest of the wear block (CFG.car.wear.crush; read off K
+// here because this line sits above the W block below and a const cannot be read early).
+const CRUSH_WEAR = (K.wear && K.wear.crush) || 0.014;   // per kg/100: the county wears the car down too
 const DEBRIS_POOL = 24;                      // pieces in flight at once; one mesh, one draw
 const DEBRIS_LIFE = 2.2;                     // s before a piece is taken down
 const DEBRIS_GRAV = 19.0;
@@ -261,11 +263,45 @@ const HORN_REPEAT = 0.55;
 
 // Wear. 0 is a car somebody looked after; 1 is one that will not do much more than crawl.
 // It starts part-worn because it was already abandoned when it found you.
+//
+// ROUND 22 — Alex, 2026-09-10: "Car should degrade faster." The numbers live in
+// CFG.car.wear with these literals as fallbacks. Driving is the main funnel: one metre on
+// the road costs 1/WEAR_DRIVE_M, so from WEAR_START to the 0.80 knee (where _integrate's
+// speed multiplier collapses) is 10.4 km — about one lap of the county loop — and to the
+// engine stopping is 13.6 km; gravel wears at 1.4x, so the knee arrives in 7.4 km there.
+// Before this round the divisor was 50000 and the car outlived every session. Contacts
+// rise less (they already registered on the needle) so the car is worn out by DRIVING it,
+// not by a thicket.
+const W = K.wear || {};
 const WEAR_START = 0.15;
-const WEAR_PER_IMPACT = 0.055;    // scaled by how much speed the contact actually cost
-const WEAR_PER_RAM_HIT = 0.020;   // a body at speed dents a wing
+const WEAR_DRIVE_M = W.driveMetres || 16000;     // metres of road from 0 to 1
+const WEAR_OFFROAD_MUL = W.offRoadMul || 1.4;    // gravel and grass wear it faster
+const WEAR_PER_IMPACT = W.impact || 0.070;       // scaled by how much speed the contact actually cost
+const WEAR_PER_RAM_HIT = W.ram || 0.025;         // a body at speed dents a wing
+const WEAR_PER_TREE = W.tree || 0.0022;          // Treebreaker: per trunk felled
 const WEAR_SPEED_LOSS = 0.28;     // fraction of top speed a fully worn car has lost
 const WEAR_LAMP_LOSS = 0.45;      // and the one working lamp browns out with it
+
+// ROUND 22 — Alex, 2026-09-10: "Moths. Idle with your headlights on and they cake the lens,
+// dimming your beams until you drive. Free pressure to keep moving, no clock required."
+// `moths` is 0..1, the fur coat on the one working lens. It rises only in the SEAT — mode
+// 'driving', engine and lamp on, under idleSpeed — after a grace that makes a junction stop
+// free; it clears above clearSpeed (the slipstream takes them); it HOLDS in between and
+// while parked, so a car you left running-and-lit does not clean itself. The parked beacon
+// never cakes: the engine is off the moment you get out, and the car has to stay findable.
+// Numbers from CFG.car.moths with these fallbacks: noticeable by 30 s (filament 0.80 of
+// itself), the floor by 80 s (0.35), gone 10 s into a drive.
+const M = K.moths || {};
+const MOTH_IDLE_SPEED = M.idleSpeed || 1.0;      // m/s: under this you are idling
+const MOTH_GRACE_S = M.graceS || 5;              // s of idle before the first moth lands
+const MOTH_RISE_S = M.riseS || 80;               // s from clean to fully caked
+const MOTH_CLEAR_SPEED = M.clearSpeed || 4.0;    // m/s: above this the wind clears them
+const MOTH_CLEAR_S = M.clearS || 10;             // s from fully caked to clean at a drive
+const MOTH_FLOOR = M.floor || 0.35;              // the filament a caked lens still passes
+const MOTH_PUSH_EPS = 0.004;                     // lens emissive is event-driven: push on this much movement
+const MOTH_SWARM_MIN = 0.15;                     // the visible swarm begins here
+const MOTH_SWARM_RATE = 10;                      // particles/s at full cake, on top of a base 2
+const MOTH_ON_LEVEL = 0.25, MOTH_OFF_LEVEL = 0.05;   // bus 'car:moths' edges, for lane G
 
 const SPAWN_CHECK_EVERY = 0.50;   // the spawn rule is evaluated twice a second, not per frame
 const SPAWN_COOLDOWN = 8.0;       // after a spawn or an exit, before another can be considered
@@ -457,6 +493,14 @@ export class Car {
     // How beaten the car is, 0..1. Costs top speed and browns the lamp; the WHEEL branch's
     // 'Kept' node is the only thing in the game that takes any of it back.
     this.wear = WEAR_START;
+    // ROUND 22: the moths on the lens, 0..1 (see the MOTH_ block). `_mothPushed` is the
+    // level the lens emissive was last told, because body.setLamp is event-driven and not
+    // per-frame; `_mothSpawnT` accumulates fractional particles so the swarm allocates nothing.
+    this.moths = 0;
+    this._mothPushed = -1;
+    this._mothSpawnT = 0;
+    this._mothIdleT = 0;          // seconds spent idling in the seat; the grace runs off it
+    this._mothsCalled = false;    // the 'car:moths' bus edge, so lane G hears one on and one off
 
     // WHEEL 3 'Nitro'. The tank, 0..1, and what it is doing to the car this step. All four
     // are inert — tank empty, both multipliers exactly 1 — until the node is owned, and the
@@ -1143,6 +1187,7 @@ export class Car {
     this.mode = 'arriving';
     this.hotwired = false;      // every spawn is a fresh hotwire
     this.engineOn = true;
+    this.moths = 0; this._mothPushed = -1;   // ROUND 22: a new car arrives with a clean lens
     this.hornSoundPending = false;
     this.hitCooldown = 0;
     this.stuckT = 0;
@@ -1167,11 +1212,15 @@ export class Car {
   /* ----------------------------------------------------------------- lights */
 
   /**
-   * The one working lamp's filament, 0..1. The park cool-down dims it and wear browns it,
-   * and both have to be in one number or the two would fight over body.setLamp.
+   * The one working lamp's filament, 0..1. The park cool-down dims it, wear browns it and
+   * (ROUND 22) the moths cake it, and all three have to be in one number or they would fight
+   * over body.setLamp — and every reader (the lens emissive, the nose rover, the airlight
+   * cone, and the census SpotLight the day lights.js takes a level) dims together off it.
+   * A fully caked lens still passes MOTH_FLOOR of what it had: dim, never dark.
    */
   _filament() {
-    return clamp01(this.lampFade) * (1 - WEAR_LAMP_LOSS * clamp01(this.wear));
+    return clamp01(this.lampFade) * (1 - WEAR_LAMP_LOSS * clamp01(this.wear))
+      * (1 - (1 - MOTH_FLOOR) * clamp01(this.moths));
   }
 
   /**
@@ -1201,7 +1250,7 @@ export class Car {
     on = !!on;
     this.lampFade = on ? 1 : 0;
     if (on === this.headlightsOn) {
-      if (on && this.body) this.body.setLamp(this._filament(), true);
+      if (on && this.body) this.body.setLamp(this._filament(), true, this.moths);
       return;
     }
     this.headlightsOn = on;
@@ -1209,7 +1258,7 @@ export class Car {
     if (!on) {
       if (L && L.setHeadlights) L.setHeadlights(false);
       if (this.headHandle) { if (L) L.release(this.headHandle); this.headHandle = null; }
-      if (this.body) this.body.setLamp(0, false);
+      if (this.body) this.body.setLamp(0, false, this.moths);
       this._beam.on = 0;     // ROUND 20: and the cone in the air goes with it
       return;
     }
@@ -1219,7 +1268,7 @@ export class Car {
     if (L && L.borrow && !this.headHandle) {
       this.headHandle = L.borrow('headlamp', this.x, this.y + 1.0, this.z, 0xffdca6, HEAD_POOL, 0);
     }
-    if (this.body) this.body.setLamp(this._filament(), true);
+    if (this.body) this.body.setLamp(this._filament(), true, this.moths);
   }
 
   /* ------------------------------------------------------------------ roof  */
@@ -1305,6 +1354,7 @@ export class Car {
     // consumes the boost multipliers _nitro sets.
     this._nitro(dt);
     this._stepWear(dt);
+    this._stepMoths(dt);   // ROUND 22: every mode too — a held level must survive a park
     this.rearPresence?.step(dt, this);
     // Debris outlives the car: you can crush a fence, park, get out and watch the last
     // splinters settle. So it steps before any of the early returns below.
@@ -1509,7 +1559,7 @@ export class Car {
     if (this.headlightsOn && !this.ctx.shared.inCar && !this.beacon) {
       this.lampFade -= dt / PARK_DARK_S;
       if (this.lampFade <= 0) { this.lampFade = 0; this._setHeadlights(false); }
-      else if (this.body) this.body.setLamp(this._filament(), false);
+      else if (this.body) this.body.setLamp(this._filament(), false, this.moths);
     }
 
     this._pollEnter(dt);
@@ -1862,9 +1912,11 @@ export class Car {
     // Wear costs top speed and nothing else: a beaten car is a slower car, which is a read
     // you get through the windscreen instead of off a gauge. WHEEL 4 is the only thing
     // that gives any of it back. At WEAR_START the on-road cap is 22.0 rather than 23.0.
-    // About 50 km of ordinary driving from pristine to breakdown, with rough ground
-    // wearing it faster. Impacts still count independently; idling does not.
-    if(this.mode==='driving')this._addWear(Math.abs(this.speed)*dt*(onRoad?1:1.4)/50000,'drive');
+    // ROUND 22 — Alex: "Car should degrade faster." About one lap of the county (10.4 km
+    // of road, WEAR_DRIVE_M) from part-worn to the crawl at the 0.80 knee, and 13.6 km to
+    // the engine stopping; rough ground wears it WEAR_OFFROAD_MUL faster. Impacts still
+    // count independently; idling does not — idling is the moths' job.
+    if(this.mode==='driving')this._addWear(Math.abs(this.speed)*dt*(onRoad?1:WEAR_OFFROAD_MUL)/WEAR_DRIVE_M,'drive');
     const worn = this.wear>=.999 ? 0 : (1-WEAR_SPEED_LOSS*this.wear)*Math.max(.12,1-Math.max(0,this.wear-.80)*4.5);
     // WHEEL 3 'Nitro'. CONSUMED, not read: _nitro() runs from _stepDriving immediately above
     // this call and sets both, and clearing them here means the OTHER caller of _integrate —
@@ -2176,7 +2228,7 @@ export class Car {
       // and the one working lamp browns out with it — which is the only reason WHEEL 4's
       // 'Kept' has anything to take back off.
       this._addWear(clamp01(lost / 9) * WEAR_PER_IMPACT, 'impact');
-      if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true);
+      if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true, this.moths);
       const fx2 = this._fx;
       if (fx2) {
         // BLOCKER. fx.trauma is a NUMBER (fx/fx.js:52); the setter is addTrauma
@@ -2269,7 +2321,7 @@ export class Car {
     // A ram is not free: the car pays for exactly the bodies it actually hit, never for a
     // swing at air.
     this._addWear(WEAR_PER_RAM_HIT * hits, 'ram');
-    if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true);
+    if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true, this.moths);
     this._noise('car:ram', 30);
     this._say('branch', 1.0, cx, this.y + 0.9, cz);
     const fxs = this._fx;
@@ -2358,7 +2410,7 @@ export class Car {
       down.push({ col: taken[i] || null, vis: vis[i] || null, t: spec.regrowS });
     }
     this.speed *= Math.max(0.30, 1 - spec.scrub * n);
-    this._addWear(0.0016 * n, 'trees');
+    this._addWear(WEAR_PER_TREE * n, 'trees');
     this._noise('car:crush', 44, cx, cz);
     this._say('branch', 1.0, cx, this.y + 1.2, cz);
     const fxs = this._fx;
@@ -2411,7 +2463,7 @@ export class Car {
     // The car takes something off it too — a bumper full of fence posts is why WHEEL 4's
     // 'Kept' has anything to take back off.
     this._addWear(CRUSH_WEAR * (res.mass / 100), 'crush');
-    if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true);
+    if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), true, this.moths);
 
     // A thud, on both channels: 'noise' is what the director hears, dread('branch') is dry
     // close wood and is the honest stand-in until the audio lane keys a real crash to
@@ -2846,14 +2898,86 @@ export class Car {
     const perMin = pr.perk('wearMend', 0, !!this.engineOn);
     if (!(perMin > 0)) return;
     this.wear = Math.max(0, this.wear - perMin * dt / 60);
-    if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), false);
+    // ROUND 22: this passed `false` for the tails, so with REBUILT owned the rear lamps
+    // were switched off every step while driving. The tails follow the electrics.
+    if (this.headlightsOn && this.body) this.body.setLamp(this._filament(), this.engineOn, this.moths);
+  }
+
+  /**
+   * ROUND 22 — Alex: "Moths. Idle with your headlights on and they cake the lens, dimming
+   * your beams until you drive. Free pressure to keep moving, no clock required."
+   *
+   * Runs in every mode. The level RISES only in the seat — mode 'driving', engine and lamp
+   * on, under MOTH_IDLE_SPEED — after MOTH_GRACE_S of it, so a junction stop is free and a
+   * wait is not. It FALLS above MOTH_CLEAR_SPEED: the slipstream takes them. Anywhere else
+   * (rolling between the two, parked, lamp off) it HOLDS: a lens you left caked is caked
+   * when you come back, and the parked beacon (engine off) never gains any. The dim itself
+   * is one term in _filament(); this method only moves the level, pushes the lens emissive
+   * when it has moved enough to see (setLamp is event-driven), and spawns the swarm.
+   *
+   * Allocates nothing: the particles go into fx's pooled ring, and the fractional count
+   * carries over in _mothSpawnT.
+   */
+  _stepMoths(dt) {
+    const v = Math.abs(this.speed);
+    const seated = this.mode === 'driving' && this.engineOn && this.headlightsOn;
+    let m = this.moths;
+    if (seated && v < MOTH_IDLE_SPEED) {
+      this._mothIdleT += dt;
+      if (this._mothIdleT > MOTH_GRACE_S) m = Math.min(1, m + dt / MOTH_RISE_S);
+    } else {
+      this._mothIdleT = 0;
+      if (v > MOTH_CLEAR_SPEED && m > 0) m = Math.max(0, m - dt / MOTH_CLEAR_S);
+    }
+    this.moths = m;
+
+    // The lens: pushed on movement, not per frame, and only while the lamp is lit (the
+    // off-lamp sites already write 0 and a cake on a dark lens has nothing to brown).
+    if (this.headlightsOn && this.body && Math.abs(m - this._mothPushed) >= MOTH_PUSH_EPS) {
+      this._mothPushed = m;
+      this.body.setLamp(this._filament(), this.engineOn, m);
+    }
+
+    // One edge each way on the bus, for lane G (no sound from here).
+    if (!this._mothsCalled && m >= MOTH_ON_LEVEL) { this._mothsCalled = true; this._emit('car:moths', { level: m }); }
+    else if (this._mothsCalled && m <= MOTH_OFF_LEVEL) { this._mothsCalled = false; this._emit('car:moths', { level: m }); }
+
+    // The swarm you can see: fx's one pooled Points ring, so no draw and no program.
+    // Only in the seat with the lamp lit and only once there is a coat worth seeing; while
+    // clearing, a thinning tail blown back past the windscreen; nothing above clearSpeed
+    // once the coat is nearly gone.
+    if (!seated || m <= (v > MOTH_CLEAR_SPEED ? MOTH_OFF_LEVEL : MOTH_SWARM_MIN)) { this._mothSpawnT = 0; return; }
+    const fx = this._fx;
+    if (!fx || typeof fx.spawnParticle !== 'function' || !fx.rng) return;
+    const clearing = v > MOTH_CLEAR_SPEED;
+    this._mothSpawnT += dt * (clearing ? 6 * m : 2 + MOTH_SWARM_RATE * m);
+    if (this._mothSpawnT < 1) return;
+    const h = this.heading;
+    const fwx = -Math.sin(h), fwz = -Math.cos(h);
+    const rx = Math.cos(h), rz = -Math.sin(h);
+    // the working lens, the same offsets present() aims the beam from (without the bob)
+    const lx = this.x + rx * -0.66 + fwx * 2.16;
+    const ly = this.y + 1.02;
+    const lz = this.z + rz * -0.66 + fwz * 2.16;
+    const rng = fx.rng;
+    while (this._mothSpawnT >= 1) {
+      this._mothSpawnT -= 1;
+      const a = rng.next() * TAU, s = 0.3 + rng.next() * 0.7;
+      let vx = Math.cos(a) * s, vy = (rng.next() - 0.4) * s, vz = Math.sin(a) * s;
+      if (clearing) { vx -= fwx * v * 0.5; vz -= fwz * v * 0.5; }
+      fx.spawnParticle(
+        lx + (rng.next() - 0.5) * 0.24, ly + (rng.next() - 0.5) * 0.16, lz + (rng.next() - 0.5) * 0.24,
+        vx, vy, vz, 0.45 + rng.next() * 0.35, 0.03 + rng.next() * 0.015,
+        0.62, 0.58, 0.48, 0, 4, 0.5, 1);
+    }
   }
 
   repairFull(){
     this.wear=0;this._wearLoaded=true;this._progress?.flag('car:wear',1);
     this._progress?.flag('car:fully-repaired',1);this.body?.setRepaired(true);
     this.hitCooldown=0;this.stuckT=0;
-    if(this.body)this.body.setLamp(this.headlightsOn?this._filament():0,this.engineOn);
+    this.moths=0;this._mothPushed=-1;   // ROUND 22: the mechanic cleans the lens too
+    if(this.body)this.body.setLamp(this.headlightsOn?this._filament():0,this.engineOn,0);
     this._emit('car:repaired',{condition:100});
   }
 
@@ -3358,6 +3482,7 @@ export class Car {
       beacon: this.beacon,
       lampFade: this.lampFade,
       wear: this.wear,
+      moths: this.moths, filament: this._filament(),   // ROUND 22
       boost: this.boost, boosting: this.boosting,
       hotwireTotal: this.hotwireTotal,
       fovBias: this.fovBias,
