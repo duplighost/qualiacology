@@ -23,6 +23,14 @@ const _from=new THREE.Vector3(),_dir=new THREE.Vector3(),_up=new THREE.Vector3(0
  * could swing at you can also put your hands on; the facing is looser than a body's (0.45)
  * because a crate is a big target you stand over. */
 const BOX_REACH=2.4;
+// ROUND 22. Alex, 2026-09-11: "you can open everything on the map. any piece of wood or metal or
+// whatever." Round 14 made every SMALL wood/metal/stone shape crushable so the car could run
+// it over, and round 19 put the E-hold on every breakable; this round lined every road with
+// small wood and metal (sign stakes, pole posts, chairs, crosses), so OPEN stood on all of it.
+// The hold keeps to the hand-tagged breakables (crate, drum, fence, strongbox...) and the
+// containers; a thing that is breakable only because it is small gets no prompt. The car and
+// the stock still break it.
+const NO_HOLD_TAG=new Set(['wood','metal','stone','wall','plank','vehicle','glass','concrete','earth','rust','dark']);
 const BOX_FACE=0.55;
 const BOX_HOLD_BASE=0.38;
 const BOX_HOLD_PER=0.22;   // per landing the stock would have needed: 0.6 s wood .. 1.3 s stone
@@ -238,7 +246,7 @@ export class Scavenging {
     if(this.ctx.shared&&this.ctx.shared.inCar){this.boxTarget=null;this.boxHold=0;return;}
     if(!col||typeof col.nearestBreakable!=='function'){this.boxTarget=null;return;}
     const b=col.nearestBreakable(p.pos.x,p.pos.z,BOX_REACH,p.pos.y,2.1);
-    let ok=!!b;
+    let ok=!!b&&!NO_HOLD_TAG.has(b.tag);
     if(ok){
       const dx=b.x-p.pos.x,dz=b.z-p.pos.z,d=Math.hypot(dx,dz)||1;
       // Facing, and a clear line: a box behind a wall is not a box you have your hands on.

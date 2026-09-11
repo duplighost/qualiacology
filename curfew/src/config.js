@@ -341,7 +341,7 @@ export const CFG = {
   // fx's particle material, the meteors are eight spare vertices in the star field.
   fx: {
     eyeshine: {
-      pairs: 24,              // the pool. Two additive points each, one draw for all of them
+      pairs: 10,              // the pool (was 24: Alex, 2026-09-11, "it seems like a lot"). Two additive points each, one draw
       range: [20, 60],        // m from the beam's origin: far enough to be a glint, not a body
       h: [0.6, 1.1],          // m above the ground: a dog, a deer, something on all fours
       hWrong: [2.5, 3.5],     // ...and the ones that are not. Nothing in the county stands there
@@ -349,7 +349,7 @@ export const CFG = {
       wrongDepth: 0.35,       // ...plus this much more by the rim. Deeper in, more of them
       near: 12,               // m: walk this close and the pair is gone. Never seen up close
       lookS: 1.5,             // seconds of being stared at straight before it looks away
-      depthFrom: 500,         // m from the centre where the count starts climbing
+      depthFrom: 900,         // m from the centre where the count starts climbing (was 500)
     },
     meteor: {
       gapS: [40, 120],        // seconds between streaks: you have to be looking up
