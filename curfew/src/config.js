@@ -265,6 +265,30 @@ export const CFG = {
     headingProbes: 24, headingNear: 9, headingFar: 18,   // [mossway bestRoadHeadingAt]
   },
 
+  // ---- set pieces (ROUND 22, lane H) --------------------------------------------
+  // Alex, 2026-09-10: "The Waiting. A ridge with forty lawn chairs facing east, people in
+  // them. They don't move. When your headlights sweep across, every head turns to follow."
+  // "Sunflowers. They track light. A whole field slowly turns to face your headlights as you
+  // drive past. Stop the car and they all settle on you." "Trail cams strapped to trees. They
+  // flash when you walk past (free jumpscare)." "Wind turbines above the treeline, red lights
+  // blinking in unison across the whole horizon, the way they actually do."
+  setpieces: {
+    trailcam: {
+      reachM: 5.5,          // m: a trail cam is set for a game trail, and it sees about this far
+      faceDot: 0.30,        // in front of the lens only (cos ~72 deg); nothing fires from behind the tree
+      cd: 260,              // candela: under the headlight's 340 so it reads as a flash, not a lamp
+      ttlS: 0.08,           // s: a camera flash is over before you can look at it
+      coolS: 25,            // s: so walking round the tree cannot farm a strobe
+    },
+    heads: { trackR: 120, turnRate: 1.6 },     // m the beam is followed from; rad/s a head turns (a person, not a servo)
+    sunflowers: { n: 600, trackR: 80, turnRate: 0.9 }, // stalks; m; rad/s — slower than a head, they "slowly turn"
+    turbines: { count: 9, blinkS: 2.0, duty: 0.25, farM: 2100 }, // masts; s per blink; lit fraction; m from the centre they stand
+    hazards: { periodS: 1.2 },   // s: a school bus hazard cycle, 50% duty
+    crossing: { periodS: 1.0 },  // s: the crossing's pair alternates twice a second
+    xmas: { dayS: 120, nightS: 20 }, // s: "a fake day, in the wrong month, on a timer" — and it has a night
+    dying: { fadeS: 90, floor: 0.15 }, // s the battery takes to go from first sight; what is left at the end
+  },
+
   // ---- flora ----------------------------------------------------------------
   flora: {
     treeDensity: 0.070,     // trees/m^2 inside full cover; measured affordable to 0.150

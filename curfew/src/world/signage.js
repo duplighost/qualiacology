@@ -907,6 +907,17 @@ export class Signage {
     const list = Array.from(cells.values()).sort((a, b) => b.h - a.h || b.w - a.w);
     for (const cell of list) {
       cell.rect = shelf.reserve(cell.w, cell.h);
+      if (!cell.rect) {
+        // ROUND 22, lane H. MEASURED: a cell's pixel size is taken from the FIRST sign that
+        // registers its key (above), so which stake or overlay lands first decides the packing,
+        // and the stakes move whenever the minor table moves (KEEPOUT_MINOR). Lane H's rows moved
+        // them and the last, shortest cell (graffiti YOU SAID TOMORROW, 435 x 77) fell out of a
+        // 77% atlas — a promise gone from the Black Rib for want of a shelf end. A cell that does
+        // not fit is painted at half resolution rather than not at all; the count is in state().
+        const w2 = Math.max(32, Math.round(cell.w * 0.5 / 4) * 4), h2 = Math.max(24, Math.round(cell.h * 0.5 / 4) * 4);
+        cell.rect = shelf.reserve(w2, h2);
+        if (cell.rect) { cell.w = w2; cell.h = h2; this.counts.halved = (this.counts.halved || 0) + 1; }
+      }
       if (!cell.rect) { this._note('atlas full: ' + cell.key.split('|')[0] + ' ' + cell.key.split('|')[1].split('\n')[0]); continue; }
       const R = cell.rect;
       c.save(); c.translate(R.x, R.y); c.beginPath(); c.rect(0, 0, R.w, R.h); c.clip();

@@ -66,6 +66,7 @@ import * as hudMod from './ui/hud.js';
 import * as kneelerMod from './enemies/kneeler.js';   // ROUND 6, lane C
 import * as dogcallerMod from './enemies/dogcaller.js';   // ROUND 22, lane C
 import * as wildsMod from './world/wilds.js';         // ROUND 6, lane F
+import * as setpiecesMod from './world/setpieces.js'; // ROUND 22, lane H: the set pieces
 import * as refugeMod from './world/refuge.js';
 import * as planetariumMod from './world/planetarium.js';   // ROUND 22: the town of Morning
 import * as openingMod from './world/opening.js';
@@ -101,6 +102,7 @@ const SYSTEMS = [
   ['places', placesMod],       // AFTER roads and terrain: its constructor reads sites() and
                                // registers flats, and BEFORE chunks stream anything in
   ['wilds', wildsMod],         // ROUND 6: the off-road county — towers, caches, ruins. AFTER places
+  ['setpieces', setpiecesMod], // ROUND 22: set pieces — trackers, blinkers, trail cams, the turbine horizon. AFTER places (it reads places' materials and group) and BEFORE car/player is fine: it reads car.beamPose() one frame late by design.
   ['refuge', refugeMod],       // ROUND 7: the breaker, the door you shut, the rest. AFTER places
   ['planetarium', planetariumMod],   // ROUND 22: the town of Morning — the dome, the button, the seat. AFTER places and lights, BEFORE player
   ['search', searchMod],       // ROUND 15: hold E over a dead person. AFTER places, BEFORE enemies

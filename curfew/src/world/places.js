@@ -59,6 +59,7 @@ import {
   MAJORS, MAJOR_BY_ID, MINOR_KINDS, MINOR_SPACING, MINOR_OFFSET, REGION_TINT, DEFAULT_TINT,
   minorSpacingScale,
   CAMPFIRE_OFFSET, CAMPFIRE_NEAR_R,
+  FIXED_MINORS,   // ROUND 22, lane H: the authored set pieces, appended after both walks
 } from './placedata.js';
 import { BUILDERS, MINOR_BUILDERS, apron, majorApproach, GLOW } from './sites.js';
 import {
@@ -2384,6 +2385,30 @@ export class Places {
           placed++;
         }
       }
+    }
+
+    // ---- ROUND 22, lane H: THE FIXED ROWS --------------------------------------
+    // The set pieces that have to be somewhere exact — on the road (the jam, the crossing),
+    // on a ridge that falls away east (The Waiting), in a field the headlights can sweep —
+    // are authored in placedata.FIXED_MINORS with measured coordinates, and appended HERE,
+    // after both walks, so every existing index `i` (progress.minorsSeen, the county map)
+    // stays where it was. Their bulk goes into _bulks like any other minor's, and because
+    // sightClear builds this table lazily before flora plants, the trees keep out of them.
+    for (const f of FIXED_MINORS) {
+      const rec = { i: idx++, kind: f.kind, x: f.x, z: f.z, yaw: f.yaw,
+        age: hub ? clamp01(Math.hypot(f.x - hub.x, f.z - hub.z) / 1650) : 0.5,
+        roadX: null, roadZ: null, fixed: true };
+      this.minors.push(rec);
+      if (f.bulk > 0) {
+        const r = f.bulk + MINOR_BULK_MARGIN;
+        this._bulks.push(f.x, f.z, r * r);
+      }
+      const key = chunks && chunks.chunkIdAt
+        ? String(chunks.chunkIdAt(f.x, f.z))
+        : (Math.floor(f.x / CHUNK) + '|' + Math.floor(f.z / CHUNK));
+      let arr = this.minorsByChunk.get(key);
+      if (!arr) { arr = []; this.minorsByChunk.set(key, arr); }
+      arr.push(rec);
     }
 
     this._note('minor sites: ' + this.minors.length + ' over ' +
