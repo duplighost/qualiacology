@@ -138,8 +138,8 @@ const EYE_DEPTH_FROM = EYE.depthFrom || 500;
 // the rim the count climbs toward. Inlined rather than imported: placedata pulls staged.js
 // and everything it dresses with, and this file must stay a leaf.
 const EYE_DEPTH_TO = 1750;
-const EYE_MIN_PAIRS = 6;          // the cap at the centre; EYE_PAIRS at the rim
-const EYE_SPAWN_S = 0.25;         // one placement attempt per this many seconds
+const EYE_MIN_PAIRS = 2;          // the cap at the centre (was 6); EYE_PAIRS at the rim. Alex: "it seems like a lot"
+const EYE_SPAWN_S = 0.8;          // one placement attempt per this many seconds (was 0.25)
 const EYE_TRIES = 4;              // trunk probes per attempt (nearestTagged is cheap)
 // MEASURED from the driver's seat (tests/shots/round22-F-eyes.png): at 0.11 m apart the two
 // points merged into one glint by 40 m. 0.28 m is about 8 px apart at 25 m and still one
