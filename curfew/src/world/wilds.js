@@ -1000,7 +1000,8 @@ function buildTower(api) {
  * leading to tree houses in the forest."
  *
  * So: an ELDER TRUNK — 1.5 m through and 14 m tall, three times anything the forest plants
- * — with the boarded, runged face nailed up one side of it, and a house in its crown.
+ * — with a boarded, runged face standing at the deck's edge, braced back to the trunk, and
+ * a house in its crown.
  *
  * IT IS A VARIANT OF THE DEER STAND, not a new site kind, and that is the whole reason it
  * fits: `stand` already owns a pad that keeps the trees off, a climb route the map can
@@ -1021,7 +1022,6 @@ function buildTreehouse(api) {
   const TRUNK_R = 0.76, TRUNK_H = 14.2;
   const g0 = groundY(api, 0, 0);
   site.topY = H;
-  site.baseY = g0;
 
   // ---- the tree ---------------------------------------------------------------
   // Tapered, and it goes on well past the deck so the house is IN something rather than
@@ -1050,25 +1050,45 @@ function buildTreehouse(api) {
   // ---- the climb face, on the -Z side, facing the way you arrive ---------------
   // ONE collider for the whole height. See the header: a face built of stacked boxes drops
   // the climber at the first seam.
-  const FZ = -(TRUNK_R + 0.12), FH = H - g0 + 0.15, FW = 1.30;
-  solid.box(FW, FH, 0.14, 0, g0 + FH * 0.5, FZ, C.plank, 0);
+  //
+  // IT STANDS AT THE DECK'S EDGE, NOT AGAINST THE TRUNK. MEASURED 2026-09-10 (tests/wilds.mjs,
+  // every treehouse in the county): nailed to the trunk at z = -0.88 the face came up 1.5 m
+  // INSIDE the deck's footprint, so a climber's head met the deck's underside at 7.2 m of
+  // the 9.4 (the deck's y0 less a standing body), the scale stalled and let go, the fall
+  // cost about 38 HP a try, and the pull's landing beside the trunk never fit a body. Not
+  // one treehouse could be climbed. At the edge the body climbs in clear air, the top of
+  // the face IS the deck's edge (y1 = H exactly: the pull's _topAt allows 2 cm), the rail
+  // gap over it is where the pull lands, and the braces below tie it back to the tree.
+  const hw = 2.35;                          // the deck's half-width; the face stands at -hw
+  const FZ = -(hw + 0.09), FW = 1.30;
+  // its foot: the lowest ground under and just before it, sunk a little, so it grows out of
+  // the earth however the pad's detail octave falls there
+  const g1 = Math.min(g0, groundY(api, 0, FZ), groundY(api, 0, FZ - 0.6), groundY(api, 0, FZ - 1.2)) - 0.25;
+  const FH = H - g1;
+  site.baseY = g1 + 0.25;
+  solid.box(FW, FH, 0.14, 0, g1 + FH * 0.5, FZ, C.plank, 0);
   api.emit({ kind: 'obb', x: 0, z: FZ, halfX: FW * 0.5, halfZ: 0.07, yaw: 0,
-    y0: g0, y1: g0 + FH, tag: 'wall', standable: false });
+    y0: g1, y1: H, tag: 'wall', standable: false });
   for (const sx of [-1, 1]) {
-    solid.box(0.12, FH, 0.18, sx * (FW * 0.5 - 0.05), g0 + FH * 0.5, FZ, C.dark, 0);
+    solid.box(0.12, FH, 0.18, sx * (FW * 0.5 - 0.05), g1 + FH * 0.5, FZ, C.dark, 0);
   }
   const rungs = Math.floor((FH - 0.4) / 0.46);
   for (let i = 0; i < rungs; i++) {
-    const y = g0 + 0.45 + i * 0.46;
+    const y = g1 + 0.45 + i * 0.46;
     solid.box(FW * 1.05, 0.08, 0.10, 0, y, FZ - 0.10, i % 3 === 2 ? C.dark : C.plank, 0);
     for (const dx of [-0.55, 0.55]) {
       solid.box(0.05, 0.44, 0.035, dx, y - 0.20, FZ - 0.09, C.dark, 0);
     }
   }
   solid.box(FW * 1.14, 0.10, 0.24, 0, H + 0.04, FZ - 0.08, C.plank, 0);
+  // three pairs of braces from the back of the face to the trunk: what holds it up
+  for (const y of [g1 + 2.4, g1 + 5.4, H - 1.4]) {
+    for (const sx of [-1, 1]) {
+      solid.strut(sx * 0.5, y, FZ + 0.1, sx * 0.2, y + 0.5, -0.45, 0.07, 5, C.dark);
+    }
+  }
 
   // ---- the deck ---------------------------------------------------------------
-  const hw = 2.35;
   solid.box(hw * 2, 0.16, hw * 2, 0, H - 0.08, 0, C.plank, 0);
   api.emit({ kind: 'obb', x: 0, z: 0, halfX: hw, halfZ: hw, yaw: 0,
     y0: H - 0.36, y1: H, tag: 'wood', standable: true });
@@ -1123,10 +1143,12 @@ function buildTreehouse(api) {
   solid.box(1.05, 0.09, 0.62, 0.85, H + 0.78, HCZ - 0.1, C.plank, 0);
   for (const sx of [-1, 1]) solid.box(0.08, 0.78, 0.08, 0.85 + sx * 0.42, H + 0.39, HCZ - 0.1, C.dark, 0);
 
+  // the audit's waypoints (tests/wilds.mjs): the foot, the face, then a spot on the deck
+  // clear of the trunk's own collider — (0, 0.4) was inside it, where no body can stand
   const route = [
     { x: 0, z: FZ - 1.3, y: groundY(api, 0, FZ - 1.3) },
     { x: 0, z: FZ - 0.5, y: H },
-    { x: 0, z: 0.4, y: H },
+    { x: 0, z: -1.6, y: H },
   ];
   site.route = route;
   site.platHalfX = hw; site.platHalfZ = hw;
@@ -3036,7 +3058,7 @@ export class Wilds {
         }
       }
 
-      // the cache: taken by walking into it
+      // the cache: opened by holding E at it, facing it, for 0.65 s (or broken open: above)
       if (s.cache && !s.taken && s.rec.cache) {
         // `world:broke.tag` names the heaviest thing in a multi-prop impact. If a drum and
         // this box go together it may therefore say "drum"; the retired collider is the

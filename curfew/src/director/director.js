@@ -437,7 +437,7 @@ const BLACK_MUL = { hound: 2.4, pallbearer: 1.6, poacher: 0.0, hunter: 2.2, marr
 const DUSK_MUL = { hound: 0.8, pallbearer: 0.7, poacher: 1.8, hunter: 0.0, marrow:0.0, moth: 0.5, runner: 0.0 };
 // ROUND 22: lane G rings wind chimes on the bearing an order will arrive from, before the
 // body exists. One reused payload; read the numbers, never keep the object.
-const _order = { species: '', bearing: 0, at: 0 };
+const _order = { species: '', bearing: 0, at: 0, lead: 0 };   // lead: seconds until it lands (ROUND 22: the chimes ring only for a near one)
 
 /* ------------------------------------------------------------- module scratch -- */
 
@@ -1874,9 +1874,6 @@ export class Director {
       o.live = true; o.species = species; o.bearing = bearing;
       o.at = this._t + at; o.hold = hold; o.tries = 0; o.pack = 0;
       this._orderCount++;
-      // ROUND 22: lane G's wind chimes ring on the bearing before the body exists
-      _order.species = species; _order.bearing = bearing; _order.at = at;
-      this.ctx.bus.emit('director:order', _order);
       return o;
     }
     // A full pool is a real fault, not a reason to drop an order: say so, loudly, once.
@@ -1942,6 +1939,13 @@ export class Director {
         this._failOrder(o, 0.35);
         return;
       }
+      // ROUND 22: lane G's wind chimes ring on the bearing as the body is PLACED. "They ring before
+      // the hounds come" is the seconds it takes them to close from the placement band, not the
+      // minutes an order can sit held: emitted from _enqueue, the chime rang at t 2 s on every boot
+      // for a first order the opening grace holds 75 s (MEASURED in tests/pause-audio.mjs, which
+      // read the county 7-11 dB louder before its pause than after — that chime decaying).
+      _order.species = o.species; _order.bearing = o.bearing; _order.at = o.at; _order.lead = 0;
+      this.ctx.bus.emit('director:order', _order);
       const handle = this._spawnBody(o.species, _placed.x, _placed.y, _placed.z, o.pack);
       if (!handle) {
         // The pool is jammed, or this species cannot be fielded at all.

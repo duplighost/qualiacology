@@ -55,6 +55,7 @@ const K = (CFG.audio && CFG.audio.county) || {};
 const BELL_EVERY_S = K.bellEveryS !== undefined ? K.bellEveryS : 210;
 const BELL_RANGE_M = K.bellRangeM !== undefined ? K.bellRangeM : 1800;
 const CHIME_COOLDOWN_S = K.chimeCooldownS !== undefined ? K.chimeCooldownS : 25;
+const CHIME_MAX_LEAD_S = K.chimeMaxLeadS !== undefined ? K.chimeMaxLeadS : 15;   // an order landing later than this rings nothing (the opening holds the first one 75 s)
 const THUNDER_DUCK_DB = K.thunderDuckDb !== undefined ? K.thunderDuckDb : 4;
 const THUNDER_DUCK_M = K.thunderDuckM !== undefined ? K.thunderDuckM : 250;
 const TRUCK_CHANCE = K.truckChance !== undefined ? K.truckChance : 0.30;
@@ -168,6 +169,7 @@ export class County {
 
     // chimes
     this._chimeCool = 0;
+    this._phaseAnnounced = false;   // the clock announces its boot phase first; that first event rings no bell
     this._orderSeen = false;
 
     // the truck
@@ -860,6 +862,13 @@ export class County {
   onOrder(p) {
     this._orderSeen = true;
     if (!p || p.species !== 'hound') return;
+    // Alex: "they ring before the hounds come." Before, not a minute before: the director
+    // enqueues its first hound order in the first second of play and the opening grace holds
+    // it for 75 s (MEASURED: county_chime0 at t 2.1 s on every boot, and tests/pause-audio.mjs
+    // read the county 7-9 dB louder before its pause than after because that chime was
+    // decaying through its first measurement). A far order rings nothing; the director
+    // re-orders within seconds of a real arrival and that one rings.
+    if (typeof p.lead === 'number' && p.lead > CHIME_MAX_LEAD_S) return;
     const b = typeof p.bearing === 'number' && isFinite(p.bearing) ? p.bearing : this.rng.next() * Math.PI * 2;
     const d = 30 + this.rng.next() * 20;
     this._chime(this._px + Math.sin(b) * d, this._pz + Math.cos(b) * d);
@@ -1163,7 +1172,13 @@ export class County {
   onPhase(phase, prev) {
     void prev;
     this._readPlayer();
-    const n = TOLLS[phase] || 0;
+    // The clock announces the phase it BOOTS in on its first step (clock.js: the first
+    // phase:changed is emitted on the first step). That is not the sky changing, so no bell:
+    // tests/pause-audio.mjs measured the county 7 dB louder in its first seconds than after
+    // its pause, and it was this toll decaying.
+    const firstAnnouncement = !this._phaseAnnounced;
+    this._phaseAnnounced = true;
+    const n = firstAnnouncement ? 0 : (TOLLS[phase] || 0);
     if (n > 0) {
       const near = this._nearestBells(2, this._scratchBells || (this._scratchBells = []));
       for (let k = 0; k < near.length; k++) {
