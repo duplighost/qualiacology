@@ -189,6 +189,7 @@ class RoverHandle {
     // Reset on every borrow. Most rovers use the shared falloff; a persistent authored
     // light may soften only this uniform without adding a light or a shader program.
     this.decay = CFG.lights.rovers.decay;
+    this.distance = CFG.lights.rovers.distance;
     this.ttl = 0;        // <= 0 or non-finite means persistent until released
     this.age = 0;
     this.d2 = 0;
@@ -417,6 +418,7 @@ export class Lights {
     h.r = _col.r; h.g = _col.g; h.b = _col.b;
     h.peak = intensity;
     h.decay = CFG.lights.rovers.decay;
+    h.distance = CFG.lights.rovers.distance;
     h.ttl = ttl;
     h.age = 0;
     h.d2 = 0;
@@ -1084,10 +1086,11 @@ export class Lights {
       light.position.set(h.x, h.y, h.z);
       light.color.setRGB(h.r, h.g, h.b);
       light.decay = h.decay;
+      light.distance = h.distance;
       // Distance fade [skyshard rovers.js:56]: a rover that is about to lose its seat is
       // already dim, so the handoff never pops.
       const dx = h.x - p.x, dy = h.y - p.y, dz = h.z - p.z;
-      const fall = clamp01(1.15 - Math.sqrt(dx * dx + dy * dy + dz * dz) / 46);
+      const fall = clamp01(1.15 - Math.sqrt(dx * dx + dy * dy + dz * dz) / Math.max(46,h.distance));
       let v = h.peak * fall;
       // A ttl'd borrow (muzzle flash, impact spark) decays on the VIGIL flash curve
       // [vigil fx.js:296-301]; a persistent borrow holds whatever intensity it was given.

@@ -1955,18 +1955,28 @@ export class Places {
     const player = this._sys('player');
     const p = player && player.pos ? player.pos : null;
     if (!p) return;
+    const prog = this._sys('progress');
     for (const rec of this._casts.values()) {
+      const siteId = rec.key.startsWith('major:') ? rec.key.slice(6) : '';
+      // An alerted attacker may be culled after the player leaves. Recycling its
+      // enemy-pool record neither defeats it nor permanently empties this site.
+      // Requeue only unfinished hostile cast seats; recorded kills stay gone.
+      for (let castIndex=0;castIndex<rec.cast.length;castIndex++) {
+        const c=rec.cast[castIndex];
+        if(!c.spawned||c.neutral||prog?.flag('cast-killed:'+rec.key+':'+castIndex)||prog?.flag('secured:'+siteId))continue;
+        if(c.entity?.alive&&c.entity.gen===c.generation)continue;
+        c.entity=null;c.generation=0;c.spawned=false;rec.placed=false;this._castDone.delete(rec.key);
+      }
       if (rec.placed) continue;
       const dx = p.x - rec.x, dz = p.z - rec.z;
       if (dx * dx + dz * dz > CAST_PLACE_R * CAST_PLACE_R) continue;
       if (this._castDone.has(rec.key)) { rec.placed = true; continue; }
       if ((rec.retryAt || 0) > this._t) continue;
       rec.retryAt = this._t + 1;
-      const siteId = rec.key.startsWith('major:') ? rec.key.slice(6) : '';
-      const prog = this._sys('progress');
       let complete = true;
-      for (const c of rec.cast) {
+      for (const [castIndex, c] of rec.cast.entries()) {
         if (c.spawned) continue;
+        if (!c.neutral && (prog?.flag('cast-killed:' + rec.key + ':' + castIndex) || prog?.flag('secured:' + siteId))) { c.spawned = true; continue; }
         // A completed toll does not respawn a garrison when reloading the save.
         if (c.guard && prog?.flag('gate:' + siteId)) { c.spawned = true; continue; }
         try {
@@ -2858,6 +2868,12 @@ export class Places {
           this.ctx.bus.emit('prompt',{kind:'power',label:'E',x:fx.wx+fx.fwx*.17,y:fx.wy+1.48,z:fx.wz+fx.fwz*.17,k:0,detail:'POWER ON',unavailable:true,rank:2});
           continue;
         }
+        const progress = this._sys('territory')?.status(d.id);
+        if (progress && !progress.clear) {
+          this.ctx.bus.emit('prompt', { kind:'power', label:'E', x:fx.wx, y:fx.wy+1.48, z:fx.wz, k:0,
+            detail:'CLEAR THE PLACE', subdetail:progress.remaining+' REMAIN', unavailable:true, rank:2 });
+          continue;
+        }
         if (fd < candD) { candD = fd; cand = rec; }
       }
     }
@@ -3104,6 +3120,7 @@ export class Places {
       const wy = rec.padY + c.dy;
       const dx = p.x - wx, dy = p.y - wy, dz = p.z - wz;
       if (dx * dx + dy * dy + dz * dz > c.r * c.r) continue;
+      if (this._sys('territory')?.canPower(d.id) === false) continue;
       this._claim(d, wx, wy, wz);
       if (rec.moving) for (const mv of rec.moving) if (mv.role === 'bell') this._ring(rec);
       return;
@@ -3118,6 +3135,7 @@ export class Places {
    */
   _claim(d, wx, wy, wz) {
     if (this.claimed.has(d.id)) return;
+    if (this._sys('territory')?.canPower(d.id) === false) return;
     this.claimed.add(d.id);
     // A claim you somehow made without a find still pays the find and still pins the map:
     // this used to emit place:discovered by hand and drop both the whisper and the XP.

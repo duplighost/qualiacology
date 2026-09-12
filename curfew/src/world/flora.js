@@ -76,6 +76,8 @@ import CFG from '../config.js';
 import { clamp, clamp01, lerp, smoothstep, noise1D, TAU } from '../engine/math.js';
 import { ImpostorBank, IMPOSTOR_FROM, coveragePreservingChain } from './impostors.js';
 import { planTravelWaters } from './wilds.js';
+import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
+import { loadScannedSurface } from './scanned-materials.js';
 
 // ---------------------------------------------------------------------------
 // Local constants that want to be in config.js. Requested in docs/HANDOFF.md;
@@ -429,7 +431,7 @@ const BIOME_LEAN_MUL = Object.freeze([1.0, 1.0, 1.18, 1.68]);
 // The floor has to change with the canopy or four forests still read as one carpet of pale
 // spikes. These alter the same crossed-card grass instances—no extra mesh or material.
 const BIOME_GRASS_ACCEPT = Object.freeze([0.32, 0.56, 0.38, 0.18]);
-const BIOME_GRASS_WIDTH = Object.freeze([[0.16, 0.29], [0.24, 0.46], [0.15, 0.27], [0.12, 0.23]]);
+const BIOME_GRASS_WIDTH = Object.freeze([[0.27, 0.48], [0.38, 0.66], [0.24, 0.44], [0.21, 0.36]]);
 const BIOME_GRASS_HEIGHT = Object.freeze([[0.22, 0.55], [0.30, 0.74], [0.52, 1.06], [0.16, 0.40]]);
 const BIOME_GRASS_TINT = Object.freeze([
   Object.freeze([0.70, 0.84, 0.90]),   // pine floor: sparse, low, cold
@@ -955,32 +957,37 @@ function trunkRadiusAt(rec, f) {
 // cards give volume instead of one camera-facing billboard. Trunks keep opaque atlas UVs.
 function foliageSprayGeometry(cx, cy, cz, radius, col, tint, wind, squash, seed, turn = 0, conifer = false, lod = 0) {
   const parts = [];
-  const count = lod ? 2 : 3;
+  const count = conifer ? (lod ? 2 : 3) : (lod ? 3 : 6);
+  const scale = conifer ? 1 : (lod ? 0.78 : 0.64);
   for (let i = 0; i < count; i++) {
-    const width = radius * (conifer ? 2.42 : 2.56) * (0.89 + hashI(i, 101, seed) * 0.22);
-    const height = radius * (conifer ? 2.00 : 2.06) * Math.max(0.72, squash)
+    const width = radius * (conifer ? 2.42 : 2.56) * scale * (0.89 + hashI(i, 101, seed) * 0.22);
+    const height = radius * (conifer ? 2.00 : 2.06) * scale * Math.max(0.72, squash)
       * (0.88 + hashI(i, 103, seed) * 0.24);
     const g = new THREE.PlaneGeometry(width, height, 2, 2);
     // A shallow fold through the branch gives the moon more than one plane to light.
     const p = g.attributes.position, u = g.attributes.uv;
     for (let j = 0; j < p.count; j++) {
       const x = p.getX(j), y = p.getY(j);
-      p.setZ(j, Math.abs(x) * -0.24 + (y / height) * (y / height) * radius * 0.12);
+      p.setZ(j, Math.abs(x) * -0.48 + (y / height) * (y / height) * radius * 0.28);
       // Generous transparent gutter: an opaque bark mip must never leak into the tip
       // of a far foliage card and create a hard dark triangle in the sky.
       const across = hashI(i, 107, seed) > 0.5 ? 1 - u.getX(j) : u.getX(j);
       u.setXY(j, (conifer ? 0.03 : 0.53) + across * 0.44, 0.02 + u.getY(j) * 0.34);
     }
-    g.rotateX((conifer ? -0.10 : -0.45) + hashI(i, 73, seed) * (conifer ? 0.42 : 0.90));
+    g.rotateX((conifer ? -0.10 : -1.15) + hashI(i, 73, seed) * (conifer ? 0.42 : 2.30));
     g.rotateZ((hashI(i, 43, seed) - 0.5) * (conifer ? 0.46 : 1.10));
     g.rotateY(turn + i * Math.PI / count + hashI(i, 17, seed) * 0.26);
-    g.translate(cx, cy, cz);
+    const angle = turn + i * 2.3999632;
+    const spread = conifer ? 0 : radius * (lod ? 0.26 : 0.50);
+    g.translate(cx + Math.cos(angle) * spread,
+      cy + (conifer ? 0 : (hashI(i, 83, seed) - 0.5) * radius * 0.76),
+      cz + Math.sin(angle) * spread);
     g.computeVertexNormals();
     const ni = g.toNonIndexed(); g.dispose();
     const n = ni.attributes.position.count;
     const colours = new Float32Array(n * 3), weights = new Float32Array(n);
     for (let j = 0; j < n; j++) {
-      const shade = tint * (0.91 + i * 0.045);
+      const shade = tint * (0.77 + hashI(i, 89, seed) * 0.34);
       colours[j * 3] = col[0] * shade; colours[j * 3 + 1] = col[1] * shade; colours[j * 3 + 2] = col[2] * shade;
       weights[j] = wind;
     }
@@ -994,17 +1001,87 @@ function foliageSprayGeometry(cx, cy, cz, radius, col, tint, wind, squash, seed,
 }
 
 function coniferCrownGeometry(rec, lod, seed) {
-  const parts = [], tiers = lod ? 5 : 7;
-  const base = rec.trunkH * 0.50, span = rec.trunkH * 0.50;
+  const parts = [], tiers = lod ? 6 : 8;
+  const base = rec.trunkH * 0.30, span = rec.trunkH * 0.69;
+  const spacing = span / (tiers - 1);
   for (let j = 0; j < tiers; j++) {
     const f = j / (tiers - 1), y = base + span * f;
-    const r = rec.trunkH * 0.137 * Math.pow(1 - f * 0.91, 0.88)
-      * (0.91 + hashI(j, 97, seed) * 0.16);
+    const r = rec.trunkH * 0.220 * Math.pow(1 - f * 0.96, 0.72)
+      * (0.86 + hashI(j, 97, seed) * 0.25);
     const anchor = trunkPointAt(rec, y / rec.trunkH);
-    parts.push(foliageSprayGeometry(anchor.x, y + r * 0.16, anchor.z, r, rec.leaf,
-      0.91 + f * 0.18, 0.38 + f * 0.35, 1.05, seed + j * 71,
-      rec.leanDir + j * 1.37, true, lod));
+    // Each whorl grows OUT from the trunk. The old crown repeated upright little
+    // trees on crossed sheets; real boughs hang in overlapping radial layers.
+    const fans = lod ? 3 : 5;
+    for (let k = 0; k < fans; k++) {
+      const angle = rec.leanDir + j * 2.3999632 + k * TAU / fans
+        + (hashI(j, k + 31, seed) - 0.5) * 0.34;
+      const reach = r * (0.86 + hashI(j, k + 41, seed) * 0.27);
+      const branchY = y + (hashI(j, k + 59, seed) - 0.5) * spacing * 0.48;
+      const g = new THREE.PlaneGeometry(reach * 1.50, reach, lod ? 1 : 2, 2);
+      const p = g.attributes.position, uv = g.attributes.uv;
+      const colors = new Float32Array(p.count * 3), weights = new Float32Array(p.count);
+      const ca = Math.cos(angle), sa = Math.sin(angle);
+      for (let v = 0; v < p.count; v++) {
+        const across = p.getX(v), along = uv.getY(v);
+        const run = reach * along;
+        const arch = Math.sin(along * Math.PI) * reach * 0.22;
+        const droop = along * along * reach * (0.22 + hashI(j, k + 51, seed) * 0.16);
+        p.setXYZ(v, anchor.x + ca * run - sa * across,
+          branchY + arch - droop - Math.abs(across) * 0.17,
+          anchor.z + sa * run + ca * across);
+        uv.setXY(v, 0.03 + uv.getX(v) * 0.44, 0.02 + along * 0.34);
+        const shade = (0.75 + f * 0.19 + along * 0.17)
+          * (0.88 + hashI(j, k + 67, seed) * 0.20);
+        for (let c = 0; c < 3; c++) colors[v * 3 + c] = rec.leaf[c] * shade;
+        weights[v] = 0.27 + f * 0.28 + along * 0.25;
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      g.setAttribute('aWind', new THREE.BufferAttribute(weights, 1));
+      g.computeVertexNormals();
+      const ni = g.toNonIndexed(); g.dispose(); parts.push(ni);
+      // A bough also has hanging secondary shoots. The upper fan alone becomes
+      // edge-on at eye level, which made even the radial version look skeletal.
+      // These folded skirts occupy the outer half of each limb, not the trunk.
+      // Upper whorls are closer in width, not shorter in needles. A minimum hanging
+      // length bridges the vertical gaps which made the crown look like stacked cones.
+      const hang = Math.max(reach * 0.90, spacing * 1.65)
+        * (0.86 + hashI(j, k + 61, seed) * 0.27);
+      const skirt = new THREE.PlaneGeometry(reach * 1.52, hang, lod ? 1 : 2, 2);
+      const sp = skirt.attributes.position, su = skirt.attributes.uv;
+      const sc = new Float32Array(sp.count * 3), sw = new Float32Array(sp.count);
+      for (let v = 0; v < sp.count; v++) {
+        const along = su.getY(v), across = sp.getX(v);
+        const run = reach * (0.64 - along * 0.27) - Math.abs(across) * 0.24;
+        sp.setXYZ(v, anchor.x + ca * run - sa * across,
+          branchY - hang * 0.74 + along * hang,
+          anchor.z + sa * run + ca * across);
+        su.setXY(v, 0.03 + su.getX(v) * 0.44, 0.02 + along * 0.34);
+        const shade = 0.81 + along * 0.15 + f * 0.11;
+        for (let c = 0; c < 3; c++) sc[v * 3 + c] = rec.leaf[c] * shade;
+        sw[v] = 0.45 + f * 0.21 + (1 - along) * 0.18;
+      }
+      skirt.setAttribute('color', new THREE.BufferAttribute(sc, 3));
+      skirt.setAttribute('aWind', new THREE.BufferAttribute(sw, 1));
+      skirt.computeVertexNormals();
+      const sn = skirt.toNonIndexed(); skirt.dispose(); parts.push(sn);
+      if (!lod && k % 2 === 0 && j < tiers - 2) {
+        parts.push(segmentGeometry(anchor.x, y, anchor.z,
+          anchor.x + ca * reach * 0.87, y - reach * 0.11, anchor.z + sa * reach * 0.87,
+          rec.trunkR * (0.14 - f * 0.08), 0.018, 3, rec.bark, 0.15, 0.52));
+      }
+    }
+    // The inner shoots conceal the bole between successive radial whorls. These
+    // narrow folded sprays carry the same needle material and remain in one mesh.
+    if (j < tiers - 1 && (!lod || j % 2 === 0)) {
+      const core = Math.max(r * 0.39, spacing * 0.56);
+      parts.push(foliageSprayGeometry(anchor.x, y - spacing * 0.26, anchor.z,
+        core, rec.leaf, 0.90 + f * 0.15, 0.42 + f * 0.3, 1.4,
+        seed + 4100 + j * 19, rec.leanDir + j * 2.3999632, true, 1));
+    }
   }
+  const leader = trunkPointAt(rec, 0.958);
+  parts.push(foliageSprayGeometry(leader.x, leader.y, leader.z, rec.trunkH * 0.047,
+    rec.leaf, 1.06, 0.79, 1.25, seed + 4999, rec.leanDir, true, lod));
   const merged = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
   return merged;
@@ -1014,7 +1091,7 @@ function coniferCrownGeometry(rec, lod, seed) {
 // needles/leaves occupy the bottom 176. The wide empty band prevents opaque bark
 // bleeding into minified foliage tips, even in the atlas's coarse mip levels.
 function makeFoliageAtlas() {
-  const size = 512;
+  const size = 1024;
   if (typeof document === 'undefined' || !document.createElement) {
     const data = new Uint8Array(size * size * 4); data.fill(255);
     const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
@@ -1023,10 +1100,11 @@ function makeFoliageAtlas() {
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = size;
   const g = canvas.getContext('2d');
   g.clearRect(0, 0, size, size);
-  g.fillStyle = '#ffffff'; g.fillRect(0, 0, size, 96);
+  g.scale(2, 2);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 512, 96);
   // Fine longitudinal bark; RGB only, with a reserved pure-white texel for rocks/litter.
   for (let i = 0; i < 230; i++) {
-    const x = hashI(i, 211, 3301) * size;
+    const x = hashI(i, 211, 3301) * 512;
     const v = 195 + Math.floor(hashI(i, 233, 3301) * 53);
     g.strokeStyle = `rgb(${v},${v},${v})`; g.lineWidth = 0.6 + hashI(i, 251, 3301) * 2.4;
     g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + 3, 30, x - 4, 70, x + 1, 96); g.stroke();
@@ -1046,13 +1124,13 @@ function makeFoliageAtlas() {
     for (const side of [-1, 1]) {
       const reach = (1 - t * 0.81) * (91 + hashI(j, side + 9, 3907) * 21);
       const ex = 127 + side * reach, ey = y - 27 - t * 13;
-      line(127, y + 3, ex, ey, 1.8, 172);
+      line(127, y + 3, ex, ey, 4.2, 153);
       for (let k = 0; k < 18; k++) {
         const q = (k + .5) / 18, bx = 127 + (ex - 127) * q, by = y + (ey - y) * q;
         const len = 10 + hashI(j * 41 + k, side + 19, 3907) * 11;
         const value = 182 + Math.floor(hashI(k, j + side, 3917) * 73);
-        line(bx, by, bx + side * len * .57, by - len, 1.35, value);
-        line(bx, by + 1, bx + side * len * .82, by + len * .42, 1.15, value - 14);
+        line(bx, by, bx + side * len * .57, by - len, 2.15, value);
+        line(bx, by + 1, bx + side * len * .82, by + len * .42, 1.90, value - 14);
       }
     }
   }
@@ -1109,7 +1187,7 @@ function buildTemplateGeometry(rec, lod, seed) {
   // Radial goes DOWN at LOD0 (7 -> 6) and UP at LOD1 (4 -> 5) on purpose: 8
   // triangles per mid tree is what stops a trunk reading as a flat slab, and
   // the document is explicit that this saving is not to be spent elsewhere.
-  const radial = lod === 0 ? 6 : 5;
+  const radial = lod === 0 ? 10 : 5;
   const tH = rec.trunkH, tR = rec.trunkR;
 
   // Three unequal reaches, a fast base taper and six broad flutes. The bottom reach gets one
@@ -1289,9 +1367,10 @@ function makeGrassTexture() {
   let tex;
   if (typeof document !== 'undefined' && document.createElement) {
     const cv = document.createElement('canvas');
-    cv.width = W; cv.height = H;
+    cv.width = W * 2; cv.height = H * 4;
     const g = cv.getContext('2d');
-    g.clearRect(0, 0, W, H);
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.scale(2, 2);
     // ROUND 20: ELEVEN blades, not six, and each one is DARK AT THE ROOT.
     //
     // A tuft of grass at night is not a uniform value: the bottom of it is inside the tuft's
@@ -1302,7 +1381,7 @@ function makeGrassTexture() {
     // the ground, that is also a free contact shadow on the floor beneath it.
     for (let b = 0; b < 11; b++) {
       const x0 = 8 + hashI(b, 3, 991) * (W - 16);
-      const bend = (hashI(b, 7, 991) - 0.5) * 26;
+      const bend = (hashI(b, 7, 991) - 0.5) * 49;
       const wBase = 3.4 + hashI(b, 11, 991) * 3.2;
       const top = 10 + hashI(b, 13, 991) * 30;
       // NEUTRAL, deliberately. ART.md §0.5 rations saturation to the lamp, the
@@ -1330,7 +1409,35 @@ function makeGrassTexture() {
       g.closePath();
       g.fill();
     }
-    tex = new THREE.CanvasTexture(cv);
+    // The bottom half is a real pinnate fern frond. Ferns previously reused
+    // the lawn texture, so nine broad sheets became a bundle of grass knives.
+    g.save(); g.translate(0, H);
+    g.strokeStyle = '#6d7167'; g.lineWidth = 1.35;
+    g.beginPath(); g.moveTo(64, 128); g.quadraticCurveTo(60, 64, 67, 9); g.stroke();
+    for (let row = 0; row < 13; row++) {
+      const y = 113 - row * 7.8, t = row / 13;
+      for (const side of [-1, 1]) {
+        const length = (1 - t * 0.84) * (40 + hashI(row, side + 11, 5323) * 10);
+        const start = 64 + Math.sin(t * 2.8) * 3;
+        const end = start + side * length;
+        const ey = y - 9 - t * 6, breadth = 4.0 + (1 - t) * 4.8;
+        const shade = Math.floor(116 + t * 58 + hashI(row, side + 17, 5333) * 24);
+        g.fillStyle = `rgb(${shade},${shade},${shade})`;
+        g.beginPath(); g.moveTo(start, y);
+        g.bezierCurveTo(start + side * length * 0.33, y - breadth,
+          end - side * 7, ey - breadth * 0.42, end, ey);
+        g.bezierCurveTo(end - side * 8, ey + breadth * 0.55,
+          start + side * length * 0.37, y + breadth * 0.48, start, y);
+        g.fill();
+        g.strokeStyle = '#646d5f'; g.lineWidth = 0.45;
+        g.beginPath(); g.moveTo(start, y); g.lineTo(end, ey); g.stroke();
+      }
+    }
+    g.restore();
+    const rgba = g.getImageData(0, 0, cv.width, cv.height).data;
+    const mips = coveragePreservingChain(new Uint8Array(rgba), cv.width, cv.height, CFG.flora.alphaTest * 255);
+    tex = new THREE.DataTexture(mips[0].data, cv.width, cv.height, THREE.RGBAFormat);
+    tex.flipY = true; tex.mipmaps = mips; tex.generateMipmaps = false;
   } else {
     // Headless (a node import of this module). Same shape, no canvas.
     const data = new Uint8Array(W * H * 4);
@@ -1349,7 +1456,7 @@ function makeGrassTexture() {
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
-  tex.generateMipmaps = true;
+  tex.generateMipmaps = !tex.mipmaps.length;
   tex.anisotropy = 4;
   // THE LAW: canvas-generated textures get NoColorSpace or sRGB decode crushes
   // dark albedo.
@@ -1457,11 +1564,16 @@ function finishGeo(geo, col, wind, jitter, topCol, topFrom) {
 function makeFernGeometry() {
   const parts = [];
   for (let i = 0; i < 9; i++) {
-    // a broad frond: the blade map stretched over 0.7 units reads as fronds, not grass
-    const g = new THREE.PlaneGeometry(0.70, 1.0, 1, 2);
-    g.translate(0, 0.5, 0);
-    g.rotateX(-0.66 - (i % 3) * 0.12);            // lean the frond over, tip outward
+    const g = new THREE.PlaneGeometry(0.70, 1.0, 2, 4);
+    const p = g.attributes.position, uv = g.attributes.uv;
+    for (let j = 0; j < p.count; j++) {
+      const t = uv.getY(j), x = p.getX(j);
+      p.setXYZ(j, x, Math.sin(t * 1.93) * (0.64 + (i % 3) * 0.12),
+        t * 0.82 - Math.abs(x) * 0.23);
+      uv.setY(j, uv.getY(j) * 0.49 + 0.005);
+    }
     g.rotateY(i * 2.3999632 + 0.4);                // golden angle: never two fronds aligned
+    g.computeVertexNormals();
     parts.push(g);
   }
   const merged = mergeGeometries(parts, false);
@@ -1700,6 +1812,15 @@ export class Flora {
   // -------------------------------------------------------------------------
   async init() {
     this._ensureBuilt();
+    try {
+      this.barkSurface = await loadScannedSurface('bark_brown_02', this.ctx.renderer);
+      if (this.barkSurface) {
+        this.barkScan.uBarkScan.value = this.barkSurface.albedo;
+        this.barkScan.uBarkHeight.value = this.barkSurface.height;
+        this.barkScan.uBarkMean.value.copy(this.barkSurface.mean);
+        this.barkScan.uBarkReady.value = 1;
+      }
+    } catch (error) { this._notes.push(error.message); }
     // Catch chunks that already exist (init order, or a reload).
     const chunks = this._sys('chunks');
     if (chunks && typeof chunks.forEachResident === 'function') {
@@ -1738,6 +1859,10 @@ export class Flora {
       const rec = makeRecipe(shapeRand, ai, legacy);
       const g0 = buildTemplateGeometry(rec, 0, this.seed + i * 131);
       const g1 = buildTemplateGeometry(rec, 1, this.seed + i * 131);
+      for (const geometry of [g0, g1]) {
+        const bark = new Float32Array(geometry.attributes.position.count); bark.fill(1);
+        geometry.setAttribute('aBark', new THREE.BufferAttribute(bark, 1));
+      }
       const bb = g0.boundingBox;
       const halfWidth = Math.max(Math.abs(bb.min.x), Math.abs(bb.max.x), Math.abs(bb.min.z), Math.abs(bb.max.z));
       this.templates.push({
@@ -1751,6 +1876,10 @@ export class Flora {
 
     // --- materials -------------------------------------------------------
     this.foliageTex = makeFoliageAtlas();
+    this.barkScan = {
+      uBarkScan: { value: this.foliageTex }, uBarkHeight: { value: this.foliageTex },
+      uBarkMean: { value: new THREE.Vector3(1, 1, 1) }, uBarkReady: { value: 0 },
+    };
     this.matNear = this._makeTreeMaterial(0);
     this.matMid = this._makeTreeMaterial(1);
     this.grassTex = makeGrassTexture();
@@ -1770,6 +1899,9 @@ export class Flora {
       if (kind === 'fern') continue;
       const geo = this.underGeo[kind];
       if (!geo) continue;
+      const bark = new Float32Array(geo.attributes.position.count);
+      if (kind === 'log' || kind === 'stump') bark.fill(1);
+      geo.setAttribute('aBark', new THREE.BufferAttribute(bark, 1));
       let uv = geo.attributes.uv;
       if (!uv) {
         uv = new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2);
@@ -1813,6 +1945,7 @@ export class Flora {
     mat.userData.floraUniforms = uni;
 
     mat.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, this.barkScan);
       shader.uniforms.uTime = this.wind.uTime;
       shader.uniforms.uWind = this.wind.uWind;
       shader.uniforms.uGust = this.wind.uGust;
@@ -1835,6 +1968,7 @@ export class Flora {
           'uniform vec2 uBandNear;',
           'uniform vec2 uBandFar;',
           'attribute float aWind;',
+          'attribute float aBark;',
           'varying float vFWind;',
           // ROUND 20 — BARK. See the long note beside BARK_SCALE.
           'varying vec3 vBarkP;',
@@ -1858,7 +1992,7 @@ export class Flora {
           // Bark UVs live in the top sixth of the atlas (segmentGeometry writes
           // 0.82 + uv.y * 0.16); every leaf card is below it. One smoothstep keeps the
           // grain entirely off the foliage.
-          'vBarkK = smoothstep(0.775, 0.830, uv.y);',
+          'vBarkK = smoothstep(0.775, 0.830, uv.y) * aBark;',
           '{',
           // Instance world anchor. USE_INSTANCING guard is the v83 GLIDE fix -
           // v82 lacked it and the shadow/depth variant failed to link.
@@ -1901,9 +2035,14 @@ export class Flora {
           'uniform vec3 uGlowColor;',
           'uniform float uGlowAmt;',
           'uniform float uFormAmt;',
+          'uniform sampler2D uBarkScan;',
+          'uniform sampler2D uBarkHeight;',
+          'uniform vec3 uBarkMean;',
+          'uniform float uBarkReady;',
           'varying float vFWind;',
           'varying vec3 vBarkP;',
           'varying float vBarkK;',
+          SURFACE_RELIEF_GLSL,
           // ROUND 20 — BARK, and it is the reason a trunk stops reading as a lampshade.
           //
           // Photographed before this existed: tests/shots/vis-t/31-torch-black.png. Under the
@@ -1953,23 +2092,39 @@ export class Flora {
           // BARK, before the form term, because it is part of the albedo and the form term
           // is part of the light. Fades out past BARK_FADE_M so a mid-ring trunk pays one
           // noise call it cannot show and a distant one pays none.
+          'float countyBarkHeight = 0.0;',
           '{',
           '  float bkFade = vBarkK * (1.0 - smoothstep(' + BARK_FADE_M.toFixed(1) + ', '
             + (BARK_FADE_M * 2.1).toFixed(1) + ', length(vViewPosition)));',
           '  if (bkFade > 0.004) {',
-          '    vec3 bp = vBarkP * vec3(' + BARK_SCALE.toFixed(2) + ', '
+          '    float bk = 0.5;',
+          '    if (uBarkReady < 0.5) {',
+          '      vec3 bp = vBarkP * vec3(' + BARK_SCALE.toFixed(2) + ', '
             + (BARK_SCALE / BARK_STRETCH).toFixed(3) + ', ' + BARK_SCALE.toFixed(2) + ');',
-          '    float bk = bkN(bp) * 0.52 + bkN(bp * 3.1) * 0.48;',
+          '      bk = bkN(bp) * 0.52 + bkN(bp * 3.1) * 0.48;',
           // The cross-grain: shallow horizontal checks, the same frequency on every species
           // because it is the wood and not the tree.
-          '    bk += sin(vBarkP.y * ' + BARK_CROSS.toFixed(1) + ') * 0.06;',
+          '      bk += sin(vBarkP.y * ' + BARK_CROSS.toFixed(1) + ') * 0.06;',
+          '    }',
           // Signed, so the mean albedo does not move; squared on the dark side, because a
           // furrow is a shadow and a ridge is only wood.
           '    float bs = clamp(bk * 2.0 - 1.0, -1.0, 1.0);',
           '    float bmul = 1.0 + bkFade * ' + BARK_AMP.toFixed(3) + ' * (bs < 0.0 ? bs * (1.0 - bs * 0.45) : bs);',
           '    diffuseColor.rgb *= clamp(bmul, 0.25, 1.35);',
+          '    countyBarkHeight = bk * 0.024 * bkFade;',
+          '    vec2 barkUV = vec2(atan(vBarkP.z, vBarkP.x) / 3.14159265, vBarkP.y * 0.67);',
+          '    vec3 barkScan = texture2D(uBarkScan, barkUV).rgb / uBarkMean;',
+          '    float scanHeight = texture2D(uBarkHeight, barkUV).r;',
+          '    diffuseColor.rgb *= mix(vec3(1.0), clamp(barkScan, vec3(0.20), vec3(2.30)), uBarkReady * bkFade * 0.88);',
+          '    countyBarkHeight = mix(countyBarkHeight, scanHeight * 0.046 * bkFade, uBarkReady);',
+          // Damp moss occupies the protected, low fissures; it has a different
+          // material colour instead of making every trunk the same brown tube.
+          '    float moss = (1.0 - smoothstep(0.15, 1.9, vBarkP.y))',
+          '      * smoothstep(0.44, 0.74, bk) * bkFade * (1.0 - uBarkReady);',
+          '    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.64, 0.91, 0.47), moss * 0.52);',
           '  }',
           '}',
+          'normal = countyReliefNormal(-vViewPosition, normal, countyBarkHeight);',
           '{',
           '  vec3 nrm = normalize(normal);',
           '  vec3 mdir = normalize(uMoonView);',
@@ -2007,7 +2162,7 @@ export class Flora {
     // SAME key on purpose: the injected code is identical and only the uniform
     // values differ, so they SHOULD share one program - that is 1 program for
     // the near and mid rings instead of 2.
-    mat.customProgramCacheKey = () => 'curfew-tree';
+    mat.customProgramCacheKey = () => 'curfew-tree-relief-2';
     return mat;
   }
 
@@ -2076,10 +2231,17 @@ export class Flora {
 
   /** One crossed-quad blade card, y in [0,1]. 8 triangles. */
   _makeGrassGeometry() {
-    const a = new THREE.PlaneGeometry(1, 1, 1, 2);
+    const a = new THREE.PlaneGeometry(1, 1, 2, 3);
     a.translate(0, 0.5, 0);
+    const p = a.attributes.position, uv = a.attributes.uv;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i);
+      p.setXYZ(i, x * (0.58 + y * 0.42), y, y * y * 0.28 - Math.abs(x) * 0.19);
+      uv.setY(i, 0.505 + uv.getY(i) * 0.49);
+    }
+    a.computeVertexNormals();
     const b = a.clone();
-    b.rotateY(Math.PI / 2);
+    b.rotateY(1.97);
     const g = mergeGeometries([a, b], false);
     a.dispose(); b.dispose();
     g.computeBoundingSphere();
@@ -2210,6 +2372,7 @@ export class Flora {
         if (this._travelWaterClear(wx, wz)) continue;
         if (hasSight && places.sightClear(wx, wz)) continue;
         if (hasPad && wilds.padClear(wx, wz)) continue;
+        if (this._sys('sanctuaries')?.clearsTrees(wx, wz)) continue;
         if (hasSlope && terrain.slopeAt(wx, wz) > SLOPE_REJECT) continue;
 
         const wy = terrain.heightAt(wx, wz);
@@ -2275,7 +2438,8 @@ export class Flora {
       // A 2.2-3.2x elder is the worst possible thing to leave standing in a
       // sight corridor, so it takes the same test.
       const okSight = !hasSight || !places.sightClear(wx, wz);
-      const okPad = !hasPad || !wilds.padClear(wx, wz);
+      const okPad = (!hasPad || !wilds.padClear(wx, wz))
+        && !this._sys('sanctuaries')?.clearsTrees(wx, wz);
       const okWater = !this._travelWaterClear(wx, wz);
       if (okRoad && okSlope && okSight && okPad && okWater) {
         const wy = terrain.heightAt(wx, wz);
@@ -3809,6 +3973,7 @@ export class Flora {
     if (this.matNear) this.matNear.dispose();
     if (this.matMid) this.matMid.dispose();
     if (this.foliageTex) { this.foliageTex.dispose(); this.foliageTex = null; }
+    if (this.barkSurface) { this.barkSurface.dispose(); this.barkSurface = null; }
     if (this.matGrass) this.matGrass.dispose();
     if (this.grassTex) this.grassTex.dispose();
     if (this.grassGeo) this.grassGeo.dispose();

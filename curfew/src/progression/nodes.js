@@ -1,67 +1,15 @@
-// CURFEW — the tree. 20 nodes, 5 branches x 4 tiers, and the XP economy's tables.
-// Owner: progression. Pure data + pure functions. No THREE, no ctx, no side effects, so
-// tests/progression.mjs and anybody else can import it without booting a renderer.
-//
-// THE FIRST LAW OF THIS FILE, AMENDED IN ROUND 6: EVERY TIER HAS SOMETHING HE CAN FEEL.
-// The first shape of this law was "every node changes a verb, not a number", and it bought
-// 24 subtle verbs (drop-roll, an active-reload window, a soft step) and not one thing that
-// made the body bigger. Alex, fifth playtest: "Things that work to make your health bigger.
-// Things that work to make you faster or stronger or whatever makes sense that isn't in the
-// current xp system. Actually, most of the cool stuff should just be in the xp system." So
-// three plain numbers now live in the bag — hpMax, speedMul, damageMul — and the three
-// branches he named by feel (BLOOD, LEGS, HANDS) each buy them at two of their four tiers.
-// The verbs that survived are the ones a player can describe to somebody else.
-//
-// THE SECOND LAW, ADDED AFTER THE SECOND AUDIT: THE HOOK REGISTRY IS THE CONTRACT.
-// The first shape of this file wrote forty-odd keys into a `stats` bag and trusted five other
-// lanes to remember to read them. A grep of all of src/ then found ZERO readers of ANY key:
-// 22 of the 24 nodes did nothing at all, and the two that worked (blood_3, blood_4) worked
-// because they registered a HOOK. A key nobody reads fails silently forever; a hook nobody
-// runs is countable, and `progress.hookReport()` counts it.
-//
-// So every node INSTALLS ITS OWN EFFECT into the registry. The node carries the code. No
-// sibling switches on a node id, and no sibling has to remember a key name — it calls ONE
-// named hook point at ONE named line, and every node that cares is already listening.
-// `HOOK_POINTS` below names every point, who RUNS it, and the exact call site.
-//
-// NINE VALUES SURVIVE AS STATS, and only because another lane samples them inside its own
-// physics every step, where a function call per frame would be the wrong shape: dropRoll,
-// tacSprintTime, slideCancelKeep, mantleReach, regenCeiling, and — since round 6 — hpMax,
-// speedMul, damageMul. Each has a row in `STAT_CONTRACT` naming the exact file, the exact CFG
-// number it replaces, and the fallback. `baseStats()` holds those and nothing else, so "a key
-// with no consumer" is an assertion a gate can make rather than a thing an audit discovers.
-//
-// donor: palehollow/src/progress.js:10-40 — the {id, branch, tier, cost, apply(s)} row shape
-//   and :66-74 recompute(), where stats are rebuilt FROM SCRATCH on every purchase rather
-//   than mutated in place. That is what makes a refund, a load and a respec all the same
-//   code path, and it is why nothing here does `s.x += 1` against a live object.
-// donor: qualiacology/rocket-shoes/src/systems/items.js:7-31 — the hook registry.
-//   "Item effect hook table. Systems call hooks; no system switches on item ids." A node is
-//   an INSTALLER: it registers behaviour. Nothing anywhere in CURFEW is allowed to branch on
-//   a node id, so the tree can grow without touching another lane.
-// donor: qualiacology/rocket-shoes/src/systems/draft.js:22-34 — weighted 3-card dealing,
-//   ported to progress.js (this file only supplies the pool and the weights). Since round 6
-//   nothing on the pause card deals: the whole tree is on the card and a click buys a node.
-//   draft() and the pool survive for autoDraft tests only.
+// Twenty abilities across five branches. Stable IDs and costs preserve purchased saves.
+// Installers register behavior through HOOK_POINTS and rebuild the sampled stats below.
+// Signature effects use system APIs in perk-effects.js; importing the tree needs no renderer.
 
-/* ------------------------------------------------------------------ branches -- */
+import {refillSprint, returnHeadshotRound, bloodPrice, panicGuard, tickPanic, flashlamp} from './perk-effects.js';
 
-/**
- * `verb` names the branch's first verb. It USED to auto-grant the tier-0 node on the verb's
- * first use; ROUND 13 removed that (Alex: "is it always a choice what to put xp into? it
- * should be."), so the column is now the card's copy and ready()'s wiring check only.
- */
 export const BRANCHES = Object.freeze([
   { id: 'legs',  name: 'Legs',  verb: 'run',    tint: 0x9fb4d8 },
   { id: 'hands', name: 'Hands', verb: 'reload', tint: 0xd8c07a },
   { id: 'lamp',  name: 'Lamp',  verb: 'torch',  tint: 0xf0dca8 },
   { id: 'quiet', name: 'Quiet', verb: 'crouch', tint: 0x8ec4c8 },
-  // ROUND 18: WHEEL is gone from the card. Alex, 2026-09-09: "Let's get the car upgrades out
-  // of the xp things. They should cost money from those other people who fix your car."
-  // Its four nodes moved to vehicle/garage.js, unchanged, and are bought with coins at a
-  // lookout; the hook points they install onto are still declared below, because that table
-  // is the vocabulary and an install onto an undeclared name is refused. A legacy save that
-  // owned wheel_* keeps the upgrade and gets its points back — see progress.js _migrateWheel.
+  // Vehicle upgrades use the same hook registry but are bought with cash at mechanics.
   { id: 'blood', name: 'Blood', verb: 'hurt',   tint: 0xc45a5a },
 ]);
 
@@ -69,22 +17,12 @@ export const BRANCH_IDS = Object.freeze(BRANCHES.map((b) => b.id));
 
 /* -------------------------------------------------------------- hook points -- */
 
-/**
- * THE WHOLE VOCABULARY. A node may not install onto a name that is not in this table, and
- * progress.js console.errors on one that is not — a typo used to be a node that silently did
- * nothing, which is the failure this round exists to end.
- *
- *   kind    'run'    fire and forget.   progress.fire(name, a, b)      -> fn(ctx, a, b)
- *           'reduce' a value in and out. progress.perk(name, value, a) -> fn(value, ctx, a)
- *   runner  which lane calls it. 'progress' means this system already does, today.
- *   at      the EXACT file and function of the single call site. One site per point.
- *   base    what the runner passes as the starting value of a 'reduce'.
- *
- * Every 'reduce' is written so that with NO nodes owned it returns `base` untouched: the whole
- * tree is a no-op on a fresh save and no lane special-cases an empty tree.
+/** Hook names, consumers and call signatures. Unknown installations are reported.
+ * Run hooks receive (ctx, ...args); reduce hooks receive (value, ctx, ...args).
+ * Without an owned ability, reduce hooks leave their input unchanged.
  */
 export const HOOK_POINTS = Object.freeze([
-  /* ---- run by progress.js itself, today, with no cooperation from anybody ------ */
+  // Event hooks dispatched by Progress.
   { name: 'onStep', kind: 'run', runner: 'progress', sig: '(ctx, dt)',
     at: 'progression/progress.js step()' },
   { name: 'onKill', kind: 'run', runner: 'progress', sig: '(ctx, payload)',
@@ -100,7 +38,7 @@ export const HOOK_POINTS = Object.freeze([
   { name: 'onPlaceNear', kind: 'run', runner: 'progress', sig: '(ctx, payload)',
     at: 'progression/progress.js _wire() from place:near' },
 
-  /* ---- run by another lane. ONE line each, named. Requests are in docs/HANDOFF.md ---- */
+  // Hooks sampled by the systems that own the action.
   { name: 'reloadWindow', kind: 'reduce', runner: 'weapons', base: 'null',
     at: 'weapons/weapon.js _startReload()',
     sig: '(spec|null, ctx, weapon) -> {from,to,mul,jamS}|null' },
@@ -159,12 +97,9 @@ export const HOOK_POINTS = Object.freeze([
   { name: 'secondWind', kind: 'reduce', runner: 'player', base: 'null',
     at: 'player/controller.js hurt(), immediately before _die()',
     sig: '(spec|null, ctx) -> {seconds}|null' },
-  // Declared for places; RUN BY PROGRESS since round 5. There are no doors to close yet, so
-  // the car door (car:entered) and a claimed place's door (place:claimed) are the two, and
-  // progress runs it from the bus like onHurt/onLand/onNoise. When places grows a real door
-  // it takes this line back and progress drops its two.
+  // Latched doors, entering the car and securing a place share the trail-loss hook.
   { name: 'onDoorShut', kind: 'run', runner: 'progress', sig: '(ctx, x, z)',
-    at: 'progression/progress.js _doorShut() from car:entered and place:claimed' },
+    at: 'progression/progress.js _doorShut() from door:shut, car:entered and place:claimed' },
 ]);
 
 export const HOOK_NAMES = Object.freeze(HOOK_POINTS.map((h) => h.name));
@@ -174,19 +109,8 @@ export const HOOK_BY_NAME = Object.freeze(
 
 /* --------------------------------------------------------------- base stats -- */
 
-/**
- * THE STAT CONTRACT — nine keys now, not forty, because a value only earns a key if another
- * lane samples it INSIDE ITS OWN PHYSICS EVERY STEP. Everything else is a hook and carries
- * its own code.
- *
- * Read them as `ctx.systems.get('progress').stats.<key>` LAZILY, inside step, never captured.
- * Every read is counted; `progress.statReport()` names any key nothing has ever read, and a
- * gate asserts that list is empty.
- *
- * The defaults are the game exactly as it ships today, so `baseStats()` with no nodes owned
- * is a no-op on every system. THE FALLBACK LAW: every reader falls back to its CFG number
- * when progress is absent, and progress boots whether or not anybody reads a key — a stat
- * with no reader yet is a dead number, never a dead game.
+/** Sampled movement, combat and health defaults. Progress rebuilds these on load or
+ * purchase; consumers read the current values and fall back to their own CFG defaults.
  */
 export function baseStats() {
   return {
@@ -196,21 +120,15 @@ export function baseStats() {
     slideCancelKeep: 0.85,  // fraction of speed kept when a slide is cancelled EARLY
     mantleReach: 2.90,      // metres of ledge the mantle probe accepts
     regenCeiling: 40,       // hp the passive regen climbs to
-    // ROUND 6 — the three he asked for by name. "make your health bigger", "faster",
-    // "stronger". Plain multipliers, base = CFG's own numbers, read by E (body) and C (gun).
-    hpMax: 100,             // CFG.player.health.max; Thick Skin 120, Iron 150
-    speedMul: 1.0,          // every ground speed of the body; Long Stride 1.06, Wind 1.12
-    damageMul: 1.0,         // every round the gun lands; Heavy Rounds 1.12, Through 1.25
+    hpMax: 100,             // CFG.player.health.max
+    speedMul: 1.0,          // every ground speed of the body
+    damageMul: 1.0,         // every round the gun lands
   };
 }
 
 export const STAT_KEYS = Object.freeze(Object.keys(baseStats()));
 
-/**
- * One row per key: WHO reads it, WHAT frozen CFG number it replaces, and what the lane falls
- * back to when progress is not in the manifest. This table is the HANDOFF request, kept in
- * code so it cannot drift away from the file it describes.
- */
+/** Consumer locations and CFG fallbacks for the sampled values. */
 export const STAT_CONTRACT = Object.freeze({
   dropRoll: Object.freeze({
     file: 'src/player/controller.js', site: 'the landing branch, controller.js:679-682',
@@ -307,8 +225,11 @@ function sys(ctx, id) {
 function nothingIsAware(ctx) {
   const en = sys(ctx, 'enemies');
   if (!en || typeof en.forEachAlive !== 'function') return false;
+  // Dread figures can be permanently aware. Only the pressure population tracks
+  // shots, and its maintained count is the public, allocation-free answer.
+  if (Number.isFinite(en.awareCount)) return en.awareCount === 0;
   let seen = false;
-  en.forEachAlive((e) => { if (e && e.aware > 0) seen = true; });
+  en.forEachAlive((e) => { if (e && !e.neutral && e.def?.owner !== 'dread' && e.aware > 0) seen = true; });
   return !seen;
 }
 
@@ -319,6 +240,7 @@ function nothingIsAware(ctx) {
  */
 function dropDistantHunts(ctx, x, z, beyond) {
   const en = sys(ctx, 'enemies');
+  if (typeof en?.loseTrail === 'function') return en.loseTrail(x, z, beyond);
   if (!en || typeof en.forEachAlive !== 'function' || typeof en.setHunt !== 'function') return 0;
   const b2 = beyond * beyond;
   let n = 0;
@@ -343,19 +265,20 @@ function dropDistantHunts(ctx, x, z, beyond) {
 export const NODES = Object.freeze([
   /* ---- LEGS: the county gets smaller ------------------------------------------ */
   { id: 'legs_1', branch: 'legs', tier: 0, cost: 1, name: 'Drop-roll',
-    line: 'A long fall ends in a slide instead of a stop.',
+    line: 'Hold crouch as you land. Roll through a long fall.',
     install: (s) => { s.dropRoll = 1; } },
-  { id: 'legs_2', branch: 'legs', tier: 1, cost: 2, name: 'Long Stride',
-    line: 'Ten per cent faster on your feet, everywhere.',
-    install: (s) => { s.speedMul = SPEED_STRIDE; } },
+  { id: 'legs_2', branch: 'legs', tier: 1, cost: 2, name: 'Second Wind',
+    line: 'Every kill refills your hard sprint. Run faster, too.',
+    install: (s, hooks) => { s.speedMul = SPEED_STRIDE; hooks.on('onKill','legs_2',ctx=>refillSprint(ctx)); } },
   { id: 'legs_3', branch: 'legs', tier: 2, cost: 3, name: 'Cut',
     line: 'The hard sprint holds longer, and a slide keeps its speed.',
     install: (s) => { s.tacSprintTime = TAC_SPRINT_CUT; s.slideCancelKeep = 1.0; } },
   { id: 'legs_4', branch: 'legs', tier: 3, cost: 5, name: 'Wind',
-    line: 'Twenty per cent faster, with a longer climbing reach.',
+    line: 'Vault higher. Hard landings refill your sprint.',
     // The WHOLE multiplier, not a second step on top of Long Stride: installs run in tier
     // order and this row is what the stat reads once both are owned.
-    install: (s) => { s.speedMul = SPEED_WIND; s.mantleReach = MANTLE_WIND; } },
+    install: (s, hooks) => { s.speedMul = SPEED_WIND; s.mantleReach = MANTLE_WIND;
+      hooks.on('onLand','legs_4',(ctx,p)=>{if(p?.speed>=7)refillSprint(ctx,'legs_4');}); } },
 
   /* ---- HANDS: the gun answers harder ------------------------------------------ */
   { id: 'hands_1', branch: 'hands', tier: 0, cost: 1, name: 'Active',
@@ -366,9 +289,9 @@ export const NODES = Object.freeze([
       // null; there is no flag to read and no second key that could disagree with it.
       hooks.on('reloadWindow', 'hands_1', () => ACTIVE_RELOAD);
     } },
-  { id: 'hands_2', branch: 'hands', tier: 1, cost: 2, name: 'Heavy Rounds',
-    line: 'Every round you land hits a quarter harder.',
-    install: (s) => { s.damageMul = DMG_HEAVY; } },
+  { id: 'hands_2', branch: 'hands', tier: 1, cost: 2, name: 'Last Round',
+    line: 'A headshot kill returns a round to your gun. Hit harder.',
+    install: (s, hooks) => { s.damageMul = DMG_HEAVY; hooks.on('onKill','hands_2',returnHeadshotRound); } },
   { id: 'hands_3', branch: 'hands', tier: 2, cost: 3, name: 'Hold',
     line: 'The sight stops drifting, and a reload you ran out of resumes.',
     install: (s, hooks) => {
@@ -377,7 +300,7 @@ export const NODES = Object.freeze([
       hooks.on('reloadResume', 'hands_3', () => true);
     } },
   { id: 'hands_4', branch: 'hands', tier: 3, cost: 5, name: 'Through',
-    line: 'Half again as hard, and rounds pass through cover.',
+    line: 'Shoot through cover and the body behind it.',
     install: (s, hooks) => {
       s.damageMul = DMG_THROUGH;
       hooks.on('penCm', 'hands_4', (cm) => (typeof cm === 'number' ? cm * PEN_MUL : cm));
@@ -393,27 +316,27 @@ export const NODES = Object.freeze([
     // VALUE only, never hue: the glint gets further away, it does not change colour.
     install: (s, hooks) => { void s; hooks.on('eyeshineMul', 'lamp_2', (m) => m * EYESHINE_MUL); } },
   { id: 'lamp_3', branch: 'lamp', tier: 2, cost: 3, name: 'Resolve',
-    line: 'What the beam finds stops being a suggestion.',
+    line: 'Hold a watcher in your beam. Make it withdraw.',
     install: (s, hooks) => { void s; hooks.on('resolveWatchers', 'lamp_3', () => true); } },
-  { id: 'lamp_4', branch: 'lamp', tier: 3, cost: 5, name: 'High Beam',
-    line: 'For a moment after it comes on, the torch burns twice as hot.',
-    install: (s, hooks) => { void s; hooks.on('highBeam', 'lamp_4', () => HIGH_BEAM); } },
+  { id: 'lamp_4', branch: 'lamp', tier: 3, cost: 5, name: 'Flashburn',
+    line: 'Switch on the torch to repel attackers. Recharges in 12s.',
+    install: (s, hooks) => { void s; hooks.on('highBeam', 'lamp_4', () => HIGH_BEAM);
+      hooks.on('onStep','lamp_4',flashlamp); } },
 
   /* ---- QUIET: the loudness economy -------------------------------------------- */
   { id: 'quiet_1', branch: 'quiet', tier: 0, cost: 1, name: 'Soft Step',
-    line: 'Your feet carry a good deal less.',
+    line: 'Crouched footsteps are silent. Running carries less.',
     // INTEGRATOR DECISION 2: the footstep noise is emitted by player/controller.js, not by
     // the audio lane, so this node keeps working with the AudioContext dead — which is every
     // headless run. The reduce is keyed on the SOURCE STRING and touches nothing else.
     install: (s, hooks) => {
       void s;
       hooks.on('noiseRadius', 'quiet_1', (r, ctx, source) => {
-        void ctx;
-        return source === 'step' ? r * STEP_LOUD_MUL : r;
+        return source === 'step' ? (sys(ctx,'player')?.crouched ? 0 : r * STEP_LOUD_MUL) : r;
       });
     } },
   { id: 'quiet_2', branch: 'quiet', tier: 1, cost: 2, name: 'Cold Barrel',
-    line: 'The first shot at something that has not seen you is small.',
+    line: 'An opening shot only alerts enemies close to you.',
     install: (s, hooks) => {
       void s;
       hooks.on('noiseRadius', 'quiet_2', (r, ctx, source) => {
@@ -425,12 +348,10 @@ export const NODES = Object.freeze([
       });
     } },
   { id: 'quiet_3', branch: 'quiet', tier: 2, cost: 3, name: 'Shut the Door',
-    line: 'A door closed behind you ends the argument.',
+    line: 'Close a door. Unseen pursuers lose your trail.',
     install: (s, hooks) => {
       void s;
-      // Two triggers, one effect. `onDoorShut` runs on the car door and on claiming a place
-      // (progress.js _doorShut); crossing into a lit place is the same beat and progress
-      // already hears it. Before round 5 nothing ran onDoorShut at all.
+      // Reaching a lit place also breaks a pursuit that no longer has line of sight.
       const shut = (ctx, x, z) => {
         const p = sys(ctx, 'player');
         const px = Number.isFinite(x) ? x : (p && p.pos ? p.pos.x : 0);
@@ -457,25 +378,20 @@ export const NODES = Object.freeze([
 
 
   /* ---- BLOOD: what you can survive -------------------------------------------- */
-  { id: 'blood_1', branch: 'blood', tier: 0, cost: 1, name: 'Ceiling',
-    line: 'You come back further on your own.',
+  { id: 'blood_1', branch: 'blood', tier: 0, cost: 1, name: 'Mend',
+    line: 'Wounds mend back to 70 health without a medkit.',
     install: (s) => { s.regenCeiling = 70; } },
-  { id: 'blood_2', branch: 'blood', tier: 1, cost: 2, name: 'Thick Skin',
-    line: 'A fifth more health. Twenty points of it.',
-    install: (s) => { s.hpMax = HP_THICK_SKIN; } },
-  { id: 'blood_3', branch: 'blood', tier: 2, cost: 3, name: 'Quick Clot',
-    line: 'Killing it starts the mending.',
+  { id: 'blood_2', branch: 'blood', tier: 1, cost: 2, name: 'Fight Back',
+    line: 'When hurt near death, shove attackers back. +20 max health.',
+    install: (s, hooks) => { s.hpMax = HP_THICK_SKIN;
+      hooks.on('onHurt','blood_2',panicGuard);hooks.on('onStep','blood_2',tickPanic); } },
+  { id: 'blood_3', branch: 'blood', tier: 2, cost: 3, name: 'Blood Price',
+    line: 'Every kill restores 12 health and starts mending.',
     // The node that proved the registry: it was the only one of the 24 that ever did
     // anything, because progress actually runs onKill.
     install: (s, hooks) => {
       void s;
-      hooks.on('onKill', 'blood_3', (ctx) => {
-        const p = sys(ctx, 'player');
-        if (p && typeof p.sinceHurt === 'number') {
-          const delay = ctx.cfg.player.health.regenDelay;
-          if (p.sinceHurt < delay) p.sinceHurt = delay;
-        }
-      });
+      hooks.on('onKill', 'blood_3', bloodPrice);
     } },
   { id: 'blood_4', branch: 'blood', tier: 3, cost: 5, name: 'Iron',
     line: 'Fifty more health, and once a cycle the end of you is a run.',

@@ -493,6 +493,8 @@ export class Car {
     // How beaten the car is, 0..1. Costs top speed and browns the lamp; the WHEEL branch's
     // 'Kept' node is the only thing in the game that takes any of it back.
     this.wear = WEAR_START;
+    this._engineFailed = false;
+    this._failureAnnounced = false;
     // ROUND 22: the moths on the lens, 0..1 (see the MOTH_ block). `_mothPushed` is the
     // level the lens emissive was last told, because body.setLamp is event-driven and not
     // per-frame; `_mothSpawnT` accumulates fractional particles so the swarm allocates nothing.
@@ -661,6 +663,10 @@ export class Car {
     // out of, and the respawn puts the player straight back into the car.
     const bus = this.ctx.bus;
     if (bus && bus.on) {
+      this._offGarage = bus.on('garage:bought', ({id}) => {
+        this.body?.setUpgrades(this._progress.upgradesOwned());
+        if (id === 'kept') this.repairFull();
+      });
       bus.on('player:died', () => this._forceRelease());
       bus.on('player:respawn', (p) => {
         const wasIn = this._forceRelease();
@@ -1343,6 +1349,7 @@ export class Car {
     if(!this._wearLoaded&&this._progress?.save?.data){
       const saved=Number(this._progress.flag('car:wear'));
       this.body?.setRepaired(!!this._progress.flag('car:fully-repaired'));
+      this.body?.setUpgrades(this._progress.upgradesOwned());
       if(saved>0)this.wear=clamp01((saved-1)/1000000);
       this._wearLoaded=true;this._wearSaveT=0;
     }
@@ -1352,8 +1359,9 @@ export class Car {
     }
     // Both run in EVERY mode and both must run before _stepDriving reaches _integrate, which
     // consumes the boost multipliers _nitro sets.
-    this._nitro(dt);
     this._stepWear(dt);
+    this._syncEngineFailure();
+    this._nitro(dt);
     this._stepMoths(dt);   // ROUND 22: every mode too — a held level must survive a park
     this.rearPresence?.step(dt, this);
     // Debris outlives the car: you can crush a fence, park, get out and watch the last
@@ -1404,6 +1412,8 @@ export class Car {
       case 'exiting': this._stepExiting(dt); break;
       default: break;
     }
+    // Driving and impacts can cross the wear threshold during the mode step.
+    this._syncEngineFailure();
 
     // The seat owns the horn from the instant the door shuts, including the hotwire beat.
     // Previously input was not polled until `driving`, so any H tap during the 1.95 s entry
@@ -1674,6 +1684,8 @@ export class Car {
     if (p && !p.dead && this.mode === 'idle' && this._reach() <= ENTER_RANGE && this.ctx.bus) {
       const o = this._doorPoint(this._doorOut || (this._doorOut = { x: 0, z: 0 }));
       _promptP.kind = 'use'; _promptP.label = 'E';
+      _promptP.detail = this.wear >= .999 ? 'GET IN · ENGINE DEAD' : 'GET IN';
+      _promptP.subdetail = this.wear >= .999 ? 'FIND A MECHANIC TO REPAIR' : '';
       _promptP.x = o.x; _promptP.y = this.y + 1.05; _promptP.z = o.z; _promptP.k = 0;
       this.ctx.bus.emit('prompt', _promptP);
     }
@@ -1761,11 +1773,11 @@ export class Car {
       if (this.hotwireT > 0) return;
       this.hotwired = true;
     }
-    this.engineOn = true;
+    this.engineOn = this.wear < .999;
     this.noiseT = 0;
     this.mode = 'driving';
     this._emit('car:entered', null);
-    this._noise('car:start', ENGINE_NOISE_R);
+    if (this.engineOn) this._noise('car:start', ENGINE_NOISE_R);
   }
 
   /* ------------------------------------------------------------- driving -- */
@@ -2808,7 +2820,7 @@ export class Car {
     // a car you left empty and it is full again, which is what "it automatically regenerates"
     // has to mean if it is not going to be a chore.
     const i = this._input;
-    const driving = this.mode === 'driving';
+    const driving = this.mode === 'driving' && this.engineOn && this.wear < .999;
     const throttle = driving && this._axis('back', 'forward') > 0;
     const want = driving && throttle && !!(i && i.held && i.held('sprint')) && this.boost > 0;
     if (want) {
@@ -2864,6 +2876,43 @@ export class Car {
   }
 
   /* ------------------------------------------------------------------ wear -- */
+
+  /** Failure is a state edge, so a held accelerator cannot repeat its sound or receipt. */
+  _syncEngineFailure() {
+    if (this.wear < .999) {
+      if (this._engineFailed && (this.mode === 'driving' || this.mode === 'arriving')) this.engineOn = true;
+      this._engineFailed = false; this._failureAnnounced = false;
+      return false;
+    }
+    this._engineFailed = true;
+    this.engineOn = false; this.pedal = 0; this._throttle = 0;
+    this._boostMul = 1; this._boostAccel = 1;
+    if (this.boosting) { this.boosting = false; this._emit('car:nitro', { on: false, tank: this.boost }); }
+    if (!this._failureAnnounced && this.exists && (this.mode === 'driving' || this.mode === 'arriving')) {
+      this._failureAnnounced = true;
+      this._soundFailure();
+      this._noise('car:failed', 24);
+      this._emit('car:failed', { x: this.x, y: this.y, z: this.z });
+    }
+    // A failed autonomous arrival must still become an enterable, repairable parked car.
+    if (this.mode === 'arriving' && Math.abs(this.speed) < .1) {
+      this.mode = 'idle'; this.speed = 0; this._placeRoof();
+    }
+    return true;
+  }
+
+  _soundFailure() {
+    const a = this._audio,ac = a && (a.audioCtx || a.context || a.actx);
+    if (!a?.enabled || !a.baked || a.silent || ac?.state !== 'running' || !a.spec || !a.play || !a.has) return;
+    // Two short, falling mechanical coughs, through audio's voice pool and world bus.
+    for (let n = 0; n < 2; n++) {
+      const name = 'dr_branch' + n; if (!a.has(name)) continue;
+      const s = a.spec();s.x=this.x;s.y=this.y+.8;s.z=this.z;
+      s.gain=n ? .17 : .25;s.rate=n ? .42 : .62;s.delay=n*.16;s.dur=s.rate*.19;
+      s.bus='world';s.send=.035;s.air=false;s.occl=false;s.lpHz=480;s.priority=1;
+      a.play(name,s);
+    }
+  }
 
   /**
    * THE ONE PLACE WEAR GOES UP. Driving, a tree, a ram and a crush all come through here, so
@@ -2974,6 +3023,7 @@ export class Car {
 
   repairFull(){
     this.wear=0;this._wearLoaded=true;this._progress?.flag('car:wear',1);
+    this._syncEngineFailure();
     this._progress?.flag('car:fully-repaired',1);this.body?.setRepaired(true);
     this.hitCooldown=0;this.stuckT=0;
     this.moths=0;this._mothPushed=-1;   // ROUND 22: the mechanic cleans the lens too
@@ -3187,6 +3237,7 @@ export class Car {
     // be "on the cars dashboard and not on the hud", so this is the only place the number
     // is shown and the HUD line that used to print it is gone (ui/readouts.js).
     if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wear), (this.ctx.time && this.ctx.time.t) || 0);
+    this.body.setMotion?.(this.speed, this.boost, this.boosting, this.ctx.time?.t || 0);
     // ROUND 19: the glass. From the seat it is glass; from outside it is a haze. Driven
     // here, not on the door event, so a reload, a respawn or a teleport into the seat can
     // never leave the wash on. See carbody.js setCabinView.
@@ -3594,6 +3645,7 @@ export class Car {
       this._deb.geo.dispose();      // the material is borrowed; it is not ours to dispose
       this._deb = null;
     }
+    this._offGarage?.();
     if (this.body) { this.body.dispose(); this.body = null; }
     if (this.ctx.shared) this.ctx.shared.inCar = false;
   }

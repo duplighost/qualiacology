@@ -6,6 +6,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeShell } from '../enemies/bodies.js';
 import { clamp01 } from '../engine/math.js';
 import { CFG } from '../config.js';
+import { loft, tendon } from '../art/character-sculpt.js';
+import { fracturedMask } from '../art/character-faces.js';
 
 // Site-local coordinates use the SAME yaw/pad frame as places.nodes. The zone is the actual
 // room, not a radius through its walls; a head-height sight ray is a second independent gate.
@@ -82,58 +84,66 @@ function sculpt(mat, fn) {
 function residentRig(mat, index) {
   const root = new THREE.Group(); root.name = 'interior-resident-' + index; root.visible = false;
   const hips = new THREE.Group(); root.add(hips);
-  const lower = sculpt(mat, (ell, rod) => {
-    ell(0, 0.95, 0, 0.29, 0.44, 0.22, CLOTH);
+  const lower = sculpt(mat, (ell, _rod, shape) => {
+    shape(loft([[.58,.10,.10],[.70,.25,.18],[.91,.28,.21],[1.17,.23,.17],[1.34,.15,.11]],
+      {segments:32,subdivisions:4,folds:.10,seed:index}),0,0,0,CLOTH);
     for (const s of [-1, 1]) {
-      rod(s * 0.18, 0.50, -0.06, 0.125, 0.074, 0.91, CLOTH, -0.09, -s * 0.07);
+      shape(loft([[.07,.065,.075,0,.025],[.20,.077,.080],[.43,.089,.085],[.61,.105,.094],
+        [.85,.117,.105],[.98,.09,.09]],{segments:24,subdivisions:4,folds:.065,seed:index+s}),s*.18,0,-.06,CLOTH);
       ell(s * 0.20, 0.09, 0.10, 0.115, 0.075, 0.24, VOID);
-      rod(s * 0.29, 0.92, 0.13, 0.035, 0.09, 0.85, SEAM, 0.16, s * 0.14);
+      shape(tendon([[s*.22,.51,.12],[s*.26,.78,.14],[s*.30,1.08,.10],[s*.25,1.32,.065]],.031,.015,24,8),0,0,0,SEAM);
     }
   });
   hips.add(lower);
   const torso = new THREE.Group(); torso.position.y = 1.18; hips.add(torso);
-  torso.add(sculpt(mat, (ell, rod) => {
-    ell(0, 0.52, 0, 0.30, 0.72, 0.18, CLOTH, 0.10);
-    ell(0, 0.94, -0.03, 0.48, 0.15, 0.16, CLOTH, 0.13);
-    rod(0, 0.58, 0.157, 0.034, 0.022, 1.03, SEAM);
+  torso.add(sculpt(mat, (ell, _rod, shape) => {
+    shape(loft([[-.12,.13,.10],[.08,.25,.16],[.28,.22,.14],[.51,.255,.165],
+      [.76,.31,.171,-.015,-.01],[.92,.42,.149,-.018,-.028],[1.02,.31,.13],[1.11,.095,.087]],
+      {segments:40,subdivisions:4,folds:.075,seed:index+.3}),0,0,0,CLOTH);
+    shape(tendon([[0,.07,.153],[.017,.39,.171],[-.011,.73,.184],[0,1.09,.10]],.023,.012,30,9),0,0,0,SEAM);
     for (let i = 0; i < 6; i++) {
       ell(-0.018, 0.97 - i * 0.15, 0.177, 0.025, 0.024, 0.018, SKIN);
-      rod((i % 2 ? -1 : 1) * 0.17, 0.84 - i * 0.115, 0.133, 0.018, 0.018, 0.26, SEAM, 0, 1.31);
+      for(const s of [-1,1]){
+        const y=.88-i*.12,r=.285-i*.015;
+        shape(tendon([[s*.055,y+.045,-.05],[s*r,y,.04],[s*r*.69,y-.035,.155],[s*.03,y-.064,.18]],.018,.008,22,8),0,0,0,SEAM);
+      }
     }
-    rod(0.025, 1.18, 0.025, 0.085, 0.13, 0.36, SKIN, -0.14);
+    shape(loft([[1.04,.103,.092],[1.16,.089,.080,.012,.014],[1.31,.073,.069,.022,.034],[1.40,.061,.057,.018,.03]],
+      {segments:24,subdivisions:3,folds:.025}),0,0,0,SKIN);
   }));
   const head = new THREE.Group(); head.position.set(0.018, 1.40, 0.028); torso.add(head);
-  head.add(sculpt(mat, (ell, rod) => {
-    ell(0, 0.045, -0.092, 0.237, 0.343, 0.207, CLOTH, -0.06);
-    ell(0, 0.02, 0, 0.182, 0.29, 0.19, SKIN, -0.06);
-    ell(-0.027, -0.222, 0.094, 0.109, 0.262, 0.116, SKIN, -0.12, -0.19);
-    ell(0.109, -0.033, 0.12, 0.064, 0.106, 0.080, SEAM, 0.04, 0.13);
-    ell(-0.116, -0.031, 0.153, 0.046, 0.082, 0.037, [0.016, 0.018, 0.016], 0, -0.14);
-    // Recesses are geometry with depth, so they read in the torch rather than glowing.
-    for (const s of [-1, 1]) {
-      ell(s * 0.079, 0.082 + s * 0.016, 0.172, 0.052, 0.039 + s * 0.008, 0.042, VOID, 0, -s * 0.26);
-      ell(s * 0.080, 0.123, 0.165, 0.073, 0.027, 0.044, SEAM, 0, -s * 0.18);
-      rod(s * 0.143, -0.11, 0.136, 0.027, 0.012, 0.22, SEAM, 0, s * 0.14);
+  head.add(sculpt(mat, (_ell, _rod, shape) => {
+    // The resident looks along +Z, opposite the roaming bodies. Rotate the
+    // anatomical sculpture once without changing this encounter's head pivot.
+    const face=fracturedMask({variant:index%2,scale:[2.12,2.95,1.88],origin:[0,.015,-.008],fracture:.019,mouth:.038});
+    face.geometry.rotateY(Math.PI);face.innerGeometry.rotateY(Math.PI);
+    shape(face.innerGeometry,0,0,0,VOID);shape(face.geometry,0,0,0,SKIN);
+    shape(loft([[-.29,.086,.068,0,-.105],[-.16,.193,.105,0,-.11],[.06,.226,.143,0,-.102],
+      [.27,.184,.135,0,-.079],[.38,.016,.017,0,-.065]],{segments:32,subdivisions:4,folds:.065,seed:index}),0,0,0,CLOTH);
+    for(const s of [-1,1]){
+      shape(tendon([[s*.122,.12,.13],[s*.144,-.055,.16],[s*.082,-.245,.185],[s*.017,-.367,.19]],
+        .018,.007,26,9),0,0,0,SEAM);
+      const rag=loft([[-.41,.003,.003],[-.29,.018,.006,.01,0],[-.02,.024,.009],
+        [.23,.022,.008,-.014,-.01],[.31,.009,.005]],{segments:12,subdivisions:3,folds:.18,seed:index+s});
+      shape(rag,s*.18,-.035,.08,CLOTH,0,s*.13);
     }
-    ell(0.029, -0.188, 0.216, 0.057, 0.181, 0.026, VOID, -0.10, -0.18);
-    // Strips of the old head covering divide the face, and hide its familiar symmetry.
-    rod(-0.148, -0.062, 0.123, 0.030, 0.012, 0.60, SEAM, 0.05, -0.045);
-    rod(0.129, -0.141, 0.128, 0.019, 0.046, 0.72, CLOTH, -0.035, 0.12);
-    for (const [x, y, h, tilt] of [[-0.042,-0.034,0.049,-0.20],[-0.009,-0.043,0.078,0.13],
-      [0.037,-0.019,0.034,0.23],[-0.048,-0.327,0.067,-0.27],[0.014,-0.348,0.047,0.09]])
-      rod(x, y, 0.24, 0.011, 0.013, h, TEETH, 0, tilt);
-    ell(0.013, 0.015, 0.195, 0.032, 0.071, 0.050, SKIN);
+    // Fine irregular teeth stay inside the mouth opening, without emissive eyes.
+    for(let i=0;i<5;i++)shape(tendon([[(i-2)*.018,-.106,.228],[(i-2)*.019,-.142-(i%2)*.021,.237]],.006,.002,6,6),0,0,0,TEETH);
   }));
   const arms = [];
   for (const s of [-1, 1]) {
     const arm = new THREE.Group(); arm.position.set(s * 0.40, 0.95, 0); torso.add(arm); arms.push(arm);
-    arm.add(sculpt(mat, (ell, rod) => {
-      rod(s * 0.11, -0.34, 0, 0.13, 0.074, 0.78, CLOTH, 0.08, s * 0.25);
-      ell(s * 0.21, -0.75, 0.036, 0.09, 0.105, 0.10, SKIN);
-      rod(s * 0.19, -1.06, 0.096, 0.072, 0.034, 0.60, SKIN, -0.16, -s * 0.07);
-      ell(s * 0.17, -1.35, 0.143, 0.074, 0.115, 0.04, SKIN);
-      for (let i = 0; i < 4; i++) rod(s * (0.12 + i * 0.033), -1.50 - i * 0.017, 0.17,
-        0.019, 0.007, 0.27 + i * 0.014, SKIN, -0.19, s * (i - 1.5) * 0.055);
+    arm.add(sculpt(mat, (_ell, _rod, shape) => {
+      shape(loft([[.025,.047,.049],[0,.118,.115],[-.17,.117,.099,s*.052,.006],[-.43,.096,.08,s*.14,.014],
+        [-.68,.065,.067,s*.20,.033],[-.78,.061,.066,s*.21,.038]],{segments:24,subdivisions:4,folds:.075,seed:index}),0,0,0,CLOTH);
+      shape(loft([[-.72,.060,.062,s*.21,.038],[-.89,.071,.063,s*.20,.06],[-1.11,.040,.038,s*.19,.105],
+        [-1.27,.033,.03,s*.18,.127],[-1.36,.068,.035,s*.17,.14],[-1.435,.055,.029,s*.17,.151]],
+        {segments:24,subdivisions:4,folds:.035}),0,0,0,SKIN);
+      for(let i=0;i<4;i++){
+        const x=s*(.12+i*.033),len=.23+i*.014;
+        shape(tendon([[x,-1.405,.158],[x+s*.009,-1.49,.174],[x+s*.015,-1.46-len,.199],[x,-1.49-len,.17]],
+          .017,.0045,24,8),0,0,0,SKIN);
+      }
     }));
   }
   const rope = sculpt(mat, (_ell, rod) => rod(0, 0.5, 0, 0.018, 0.020, 1, SEAM));
@@ -260,10 +270,19 @@ export class InteriorHorror {
     this.ctx.bus.emit('interior:beat', { id: e.def.id, site: e.def.site, kind: e.def.kind, phase: 'payoff' });
   }
 
+  _isCleared(e) {
+    const mask=(1<<(e.def.seats?.length||1))-1;
+    return ((this._sys('progress')?.flag('interior-killed:'+e.def.id)||0)&mask)===mask;
+  }
+
   _finish(spent = true) {
     const e = this.active;
     if (e) {
-      if (spent && e.stage !== 'waiting') { e.spent = true; e.last = this.clock; this.cooldown = GLOBAL_GAP; }
+      // These bodies are now part of the site's clear condition. Leaving a fight
+      // cannot consume a vignette and hide required survivors for five minutes.
+      // Actual kills persist seat by seat; only a completed mask spends the scene.
+      const cleared=this._isCleared(e);e.spent=cleared;
+      if (spent && e.stage !== 'waiting') { e.last = this.clock; this.cooldown = cleared ? GLOBAL_GAP : Math.max(this.cooldown,6); }
       e.stage = 'dormant'; e.away = 0;
     }
     for (const a of this.actors) { a.root.visible = false; a.active = false; }
@@ -367,6 +386,7 @@ export class InteriorHorror {
       let best = null, score = Infinity;
       for (const candidate of this.events) {
         if (candidate.spent) continue;
+        if (this._sys('progress').flag('secured:' + candidate.def.site)) continue;
         const mask=(1<<(candidate.def.seats?.length||1))-1;
         if(((this._sys('progress').flag('interior-killed:'+candidate.def.id)||0)&mask)===mask)continue;
         this._world(candidate, candidate.def.x, candidate.def.y, candidate.def.z, _origin);
@@ -392,7 +412,8 @@ export class InteriorHorror {
       // Move the pool to another room only out of sight. The body does not change into a
       // different apparition while the player watches it from a stair or a doorway.
       if (!inside && e.notSeen > 4) {
-        const other = this.events.find(c => c !== e && !c.spent && this._inside(c, p));
+        const other = this.events.find(c => c !== e && !c.spent
+          && !this._sys('progress').flag('secured:'+c.def.site) && !this._isCleared(c) && this._inside(c, p));
         if (other) { this._finish(false); this._stage(other); return; }
       }
       e.dwell = inside && watched ? e.dwell + dt : Math.max(0, e.dwell - dt * 0.7);

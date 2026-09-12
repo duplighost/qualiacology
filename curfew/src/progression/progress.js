@@ -1583,7 +1583,7 @@ export class Progress {
     this._carOwned.add(id);
     this._recompute();
     this.save.mark();
-    this.ctx.bus.emit('garage:bought', { id, price: u.price });
+    this.ctx.bus.emit('garage:bought', { id, name:u.name, line:u.line, price: u.price });
     this._chimeUI('xp_node', 1, 0.5);
     return true;
   }
@@ -1631,11 +1631,16 @@ export class Progress {
 
   buy(id) {
     if (!this.canBuy(id)) return false;
+    const previousMax=this._statsRaw.hpMax;
     this._owned.add(id);
     this._recompute();
+    // A larger health pool arrives filled, so the purchase is felt immediately.
+    const extra=this._statsRaw.hpMax-previousMax;
+    if(extra>0)this.ctx.systems.get('player')?.heal?.(extra);
     this._points();
     this.save.mark();     // _syncBlob() writes the lists when the debounce fires
-    this.ctx.bus.emit('node:bought', { id, auto: false });
+    const node=NODE_BY_ID[id];
+    this.ctx.bus.emit('node:bought', { id, name:node.name, line:node.line, auto: false });
     // ROUND 13: "it should feel good to click on one and unlock it." A rising fifth, on the
     // ui bus above the pause mute, so the card's own click is heard on the card.
     this._chimeUI('xp_node', 1, 0.5);

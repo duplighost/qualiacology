@@ -1,0 +1,37 @@
+{
+  "license": "CC0-1.0",
+  "licenseUrl": "https://polyhaven.com/license",
+  "retrieved": "2026-09-12",
+  "materials": [
+    {
+      "id": "forest_ground_04",
+      "title": "Forest Ground 04",
+      "authors": ["Rob Tuytel", "Rico Cilliers"],
+      "source": "https://polyhaven.com/a/forest_ground_04",
+      "files": ["forest_ground_04-albedo.jpg", "forest_ground_04-height.jpg"],
+      "resolution": [2048, 2048]
+    },
+    {
+      "id": "bark_brown_02",
+      "title": "Bark Brown 02",
+      "authors": ["Rob Tuytel"],
+      "source": "https://polyhaven.com/a/bark_brown_02",
+      "files": ["bark_brown_02-albedo.jpg", "bark_brown_02-height.jpg"],
+      "resolution": [2048, 2048]
+    }
+  ],
+  "generatedAssets": [
+    {
+      "file": "place-surfaces-v1.bin.gz",
+      "provenance": "Original procedural texture data from this game's source; the external CC0 material license above applies to the photographic scans only.",
+      "source": "src/world/place-surfaces.js",
+      "regenerate": "node tools/bake-place-surfaces.mjs",
+      "resolution": [512, 512],
+      "colorMaps": 9,
+      "heightMaps": 5,
+      "encoding": "Gzip; nine RGB images followed by five single-channel height images, in source library order. Runtime restores opaque alpha and identical height RGB channels.",
+      "compressedBytes": 4052005,
+      "sha256": "60dac774c93f0d80eab86a9da6091f283ddf6d9898de176133f36ad7fd968334"
+    }
+  ]
+}

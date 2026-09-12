@@ -43,6 +43,9 @@ import * as THREE from 'three';
 import { CFG } from '../config.js';
 import { buildChunkData, TIERS, MAX_CHUNK_SEG } from './chunk-worker.js';
 import { groundDetail, frostAt, heightAt, normalAt, flats, flatCount } from './terrain.js';
+import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
+import { loadScannedSurface } from './scanned-materials.js';
+import { preloadPlaceSurfaceLibrary } from './place-surfaces.js';
 
 const CHUNK = CFG.world.CHUNK;                       // 64 m
 
@@ -207,7 +210,7 @@ const CANOPY_WARM = 0.10;   // and goes slightly warm: needles, not sky. Blue on
  * not in the fragment one) so the fragment stage costs one multiply. It is wide on purpose:
  * a short fade puts a visible ring on open ground, and the texture fetch is paid either way.
  * ------------------------------------------------------------------ */
-const GROUND_TEX = 256;           // px; 2.35 m / 256 = 9.2 mm per texel at the fine layer
+const GROUND_TEX = 512;           // 3.5 mm per texel at the close ground layer
 const GROUND_FINE_M = 1.80;       // metres per tile, layer A. ROUND 20: was 2.35 — see GRIT below
 const GROUND_COARSE_M = 7.15;     // metres per tile, layer B — 3.97x, never an integer
 // THE FIRST VERSION OF THIS WAS INVISIBLE AND THE A/B SAID SO. Measured in one boot,
@@ -362,6 +365,7 @@ export class Chunks {
    * ---------------------------------------------------------------- */
 
   async init() {
+    const placeSurfaces = preloadPlaceSurfaceLibrary().catch(error => { this._notes.push(error.message); });
     const scene = this.ctx.scene;
     if (!scene) throw new Error('chunks: ctx.scene missing (gfx must be manifest #1)');
 
@@ -389,6 +393,17 @@ export class Chunks {
     // a crash is a failure.
     this.groundTex = this._buildGroundDetail();
     if (this.groundTex) this._installGroundDetail(this.matGround, this.groundTex);
+    try {
+      this.groundSurface = await loadScannedSurface('forest_ground_04', this.ctx.renderer);
+      const scans = this.matGround.userData.groundUniforms;
+      if (this.groundSurface && scans) {
+        scans.uGroundScan.value = this.groundSurface.albedo;
+        scans.uGroundHeight.value = this.groundSurface.height;
+        scans.uGroundMean.value.copy(this.groundSurface.mean);
+        scans.uGroundReady.value = 1;
+      }
+    } catch (error) { this._notes.push(error.message); }
+    await placeSurfaces;
 
     // THE ROAD. It used to be a flat 0x14161a with no vertex colours and no map, which is
     // a linear albedo of about 0.007 — six times DARKER than the verge beside it and
@@ -1123,6 +1138,7 @@ export class Chunks {
     };
 
     const R = new Float32Array(N * N), G = new Float32Array(N * N);
+    const H = new Float32Array(N * N);
     for (let y = 0; y < N; y++) {
       const v = (y + 0.5) / N;
       for (let x = 0; x < N; x++) {
@@ -1152,6 +1168,25 @@ export class Chunks {
         // Litter and damp: the other tail of a separate field, going down.
         const litter = pn(u, v, 11, 839);
         if (litter < 0.34) r -= 0.26 * ((0.34 - litter) / 0.34);
+        // Rounded grit in actual centimetres, with soil between the grains. The
+        // old texture was only cloud noise, so increasing contrast made static.
+        // Periodic cell centres give each pebble a face, edge and recessed seam.
+        const cells = 34, gx = u * cells, gy = v * cells;
+        const ix = Math.floor(gx), iy = Math.floor(gy);
+        let pebble = 0;
+        for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+          const hx = ((ix + ox) % cells + cells) % cells;
+          const hy = ((iy + oy) % cells + cells) % cells;
+          const px = ix + ox + 0.18 + gh(hx, hy, 1223) * 0.64;
+          const py = iy + oy + 0.18 + gh(hx, hy, 1301) * 0.64;
+          const stretch = 0.65 + gh(hx, hy, 1451) * 0.70;
+          const radius = 0.22 + gh(hx, hy, 1597) * 0.24;
+          const dx = (gx - px) * stretch, dy = (gy - py) / stretch;
+          const d = Math.sqrt(dx * dx + dy * dy) / radius;
+          if (d < 1) pebble = Math.max(pebble, Math.sqrt(Math.max(0, 1 - d * d)));
+        }
+        r += (pebble - 0.24) * 0.32;
+        H[i] = 0.17 + pebble * 0.66 + pn(u, v, 71, 1613) * 0.15;
         R[i] = r;
 
         // MOTTLE. Low octaves only: read at 9.3 m this is metres-wide damp and dry, and
@@ -1202,7 +1237,7 @@ export class Chunks {
     for (let i = 0, o = 0; i < N * N; i++, o += 4) {
       D[o] = Math.round(R[i] * 255);
       D[o + 1] = Math.round(G[i] * 255);
-      D[o + 2] = 128;
+      D[o + 2] = Math.round(Math.min(1, H[i]) * 255);
       D[o + 3] = 255;
     }
     g2.putImageData(img, 0, 0);
@@ -1253,6 +1288,8 @@ export class Chunks {
   _installGroundDetail(mat, tex) {
     const uni = {
       uGroundMap: { value: tex },
+      uGroundScan: { value: tex }, uGroundHeight: { value: tex },
+      uGroundMean: { value: new THREE.Vector3(1, 1, 1) }, uGroundReady: { value: 0 },
       // x = 1/fine metres, y = 1/coarse metres, z = amplitude UP, w = amplitude DOWN
       uGroundParams: { value: new THREE.Vector4(
         1 / GROUND_FINE_M, 1 / GROUND_COARSE_M, GROUND_AMP_UP, GROUND_AMP_DOWN) },
@@ -1274,6 +1311,10 @@ export class Chunks {
 
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uGroundMap = uni.uGroundMap;
+      shader.uniforms.uGroundScan = uni.uGroundScan;
+      shader.uniforms.uGroundHeight = uni.uGroundHeight;
+      shader.uniforms.uGroundMean = uni.uGroundMean;
+      shader.uniforms.uGroundReady = uni.uGroundReady;
       shader.uniforms.uGroundParams = uni.uGroundParams;
       shader.uniforms.uGroundFade = uni.uGroundFade;
       shader.uniforms.uGroundMix = uni.uGroundMix;
@@ -1313,6 +1354,10 @@ export class Chunks {
         [
           '#include <common>',
           'uniform sampler2D uGroundMap;',
+          'uniform sampler2D uGroundScan;',
+          'uniform sampler2D uGroundHeight;',
+          'uniform vec3 uGroundMean;',
+          'uniform float uGroundReady;',
           'uniform vec4 uGroundParams;',
           'uniform vec2 uGroundMix;',
           'varying vec3 vGroundD;',
@@ -1320,6 +1365,7 @@ export class Chunks {
           'uniform vec3 uSnowCol;',
           'uniform vec2 uWetPar;',
           'varying float vGroundUp;',
+          SURFACE_RELIEF_GLSL,
         ].join('\n')
       );
 
@@ -1332,15 +1378,16 @@ export class Chunks {
           // the same texture. Weather has to run there and not here: <color_fragment> is
           // where three applies the vertex colour, so at THIS point diffuseColor is still
           // plain white and a snow mix against it would come out as ground x snow.
-          'float gTerr = 0.0, gNearF = 0.0, gUpF = 0.0;',
+          'float gTerr = 0.0, gNearF = 0.0, gUpF = 0.0, gRelief = 0.0;',
           '{',
           // Layer A is the grit, read straight. Layer B is the mottle, read with the world
           // axes SWAPPED (a quarter turn) and offset, so the two tilings never line up.
           // Both are taken into SIGNED space and SUMMED: mixing them would average their
           // variances away, which is exactly how the first version of this vanished.
-          '  float gGrit = texture2D( uGroundMap, vGroundD.xy * uGroundParams.x ).r * 2.0 - 1.0;',
+          '  vec3 gSample = texture2D( uGroundMap, vGroundD.xy * uGroundParams.x ).rgb;',
+          '  float gGrit = gSample.r * 2.0 - 1.0;',
           '  float gMott = texture2D( uGroundMap, vGroundD.yx * uGroundParams.y + 0.37 ).g * 2.0 - 1.0;',
-          '  float gT = gGrit * uGroundMix.x + gMott * uGroundMix.y;',
+          '  float gT = (gGrit * uGroundMix.x + gMott * uGroundMix.y) * mix(1.0, 0.22, uGroundReady);',
           '  float gNear = vGroundD.z;',
           // Asymmetric: wet grit catching the sky can be strong, the shadow between stones
           // must not reach the black the canopy term already owns. The difference between
@@ -1354,6 +1401,15 @@ export class Chunks {
           '  diffuseColor.g *= 1.0 + 0.06 * gWet;',
           '  diffuseColor.b *= 1.0 + 0.20 * gWet;',
           '  gTerr = gT; gNearF = gNear; gUpF = gUp;',
+          '  gRelief = gSample.b * gNear * 0.027;',
+          // A four-metre photographed patch: pine needles, twigs, grit and soil.
+          // The very broad procedural layer keeps the same tile from standing out.
+          '  vec2 scanUV = vGroundD.xy * 0.25;',
+          '  vec3 soilScan = texture2D(uGroundScan, scanUV).rgb / uGroundMean;',
+          '  float soilHeight = texture2D(uGroundHeight, scanUV).r;',
+          '  float scanFade = uGroundReady * (0.44 + gNear * 0.56);',
+          '  diffuseColor.rgb *= mix(vec3(1.0), clamp(soilScan, vec3(0.22), vec3(2.35)), scanFade);',
+          '  gRelief = mix(gRelief, soilHeight * 0.070 * gNear, uGroundReady);',
           '}',
         ].join('\n')
       );
@@ -1397,6 +1453,13 @@ export class Chunks {
         ].join('\n')
       );
 
+      // The same grains now bend actual light. Snow fills the small gaps while
+      // leaving terrain-scale normals intact, so its accumulation looks smooth.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <normal_fragment_maps>',
+        '#include <normal_fragment_maps>\nnormal = countyReliefNormal(-vViewPosition, normal, gRelief * (1.0 - uWeather.x * 0.84));'
+      );
+
       // A SELF-CHECK THAT SURVIVES THE SESSION. Both of these replacements are string
       // matches against three's own chunk names, and a silent miss is not a crash — it is a
       // varying that is declared, never written, reads as zero, and produces a perfectly
@@ -1410,12 +1473,13 @@ export class Chunks {
         // never goes white however hard it snows, with nothing on screen to say why.
         up: shader.vertexShader.indexOf('vGroundUp = normalize') > -1,
         weather: shader.fragmentShader.indexOf('mix( diffuseColor.rgb, uSnowCol, wK )') > -1,
+        relief: shader.fragmentShader.indexOf('normal = countyReliefNormal') > -1,
       };
     };
     // ROUND 21: bumped to -2. The cache key is what stops three compiling a second program
     // per material variant, and it has to change when the SOURCE changes or a warm cache
     // from an earlier build could hand this material the pre-weather program.
-    mat.customProgramCacheKey = () => 'curfew-ground-2';
+    mat.customProgramCacheKey = () => 'curfew-ground-relief-3';
     mat.needsUpdate = true;
   }
 
@@ -1809,6 +1873,7 @@ export class Chunks {
     if (this.matRoad) { this.matRoad.dispose(); this.matRoad = null; }
     if (this.roadTex) { this.roadTex.dispose(); this.roadTex = null; }
     if (this.groundTex) { this.groundTex.dispose(); this.groundTex = null; }
+    if (this.groundSurface) { this.groundSurface.dispose(); this.groundSurface = null; }
     this.group = null;
   }
 

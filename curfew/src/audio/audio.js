@@ -56,6 +56,8 @@ import { GunAudio } from './guns.js';
 import { Bed } from './bed.js';
 import { Earshot } from './earshot.js';
 import { PausePiece } from './pause.js';   // ROUND 13: the card's music, above the mute
+import { RefugeMusic } from './refuge-music.js';
+import { VehicleEngine } from './vehicle-engine.js';
 import { County } from './county.js';      // ROUND 22: bells, the false dawn, thunder, the dog-caller
 
 export const dB = (x) => Math.pow(10, x / 20);
@@ -639,6 +641,8 @@ export class Audio {
     this.bed = new Bed(ctx, this);
     this.earshot = new Earshot(ctx, this);
     this.pause = new PausePiece(ctx, this);
+    this.refugeMusic = new RefugeMusic(ctx,this);
+    this.vehicleEngine = new VehicleEngine(ctx,this);
     // ROUND 22 lane G: the county's own sounds. Constructed here like the bed and the
     // earshot ticker (no manifest row), Node-safe, baked in init, stepped after earshot.
     this.county = new County(ctx, this);
@@ -744,6 +748,8 @@ export class Audio {
     }
     this._resumeHandler = null;
     try { if (this.pause) this.pause.dispose(); } catch (e) { void e; }
+    this.refugeMusic?.dispose();
+    this.vehicleEngine?.dispose();
     try { if (this.county) this.county.dispose(); } catch (e) { void e; }
     try { if (this.bed) this.bed.stop(); } catch (e) { void e; }
     try { if (this.actx) this.actx.close(); } catch (e) { void e; }
@@ -1115,8 +1121,14 @@ export class Audio {
     if (Math.abs(this._bedLPHz - this._bedLPTarget) < 1) this._bedLPHz = this._bedLPTarget;
     if (this.silent) return;
     const T = this.actx.currentTime;
-    this.bedLP.frequency.setTargetAtTime(this._bedLPHz, T, 0.20);
-    this.busWorld.gain.setTargetAtTime(WORLD_BUS_GAIN * (1 - WORLD_DUCK_AT_T * this.tension), T, 0.35);
+    const p=this.ctx.systems.get('player')?.pos;
+    const safe=!!(p&&this.ctx.systems.get('refuge')?.isProtected(p.x,p.y,p.z));
+    const grove=!!this.ctx.shared.sanctuary;
+    this.bedLP.frequency.setTargetAtTime(safe?680:this._bedLPHz, T, 0.20);
+    this.busWorld.gain.setTargetAtTime(WORLD_BUS_GAIN * (safe?.13:grove?.5:1) * (1 - WORLD_DUCK_AT_T * this.tension), T, 0.35);
+    this.busCreatures.gain.setTargetAtTime(safe?.08:1,T,.25);
+    this.busEarshot.gain.setTargetAtTime(safe?.06:grove?.35:1,T,.25);
+    this.reverbReturn.gain.setTargetAtTime(safe?.18:1,T,.3);
   }
 
   /* ----------------------------------------------------------------- bus -- */
@@ -1768,6 +1780,8 @@ export class Audio {
       this.bed.step(dt);
       this.earshot.step(dt);
       this.county.step(dt);
+      this.refugeMusic.step();
+      this.vehicleEngine.step();
     }
     this._stats.updMs = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
   }

@@ -76,6 +76,8 @@ import * as duskToDawnMod from './world/dusk-to-dawn.js';   // ROUND 22: the cou
 import * as dealerMod from './world/dealer.js';
 import * as mechanicsMod from './world/mechanics.js';
 import * as scavengingMod from './world/scavenging.js';
+import * as sanctuariesMod from './world/sanctuaries.js';
+import * as territoryMod from './world/territory.js';
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -107,6 +109,7 @@ const SYSTEMS = [
   ['planetarium', planetariumMod],   // ROUND 22: the town of Morning — the dome, the button, the seat. AFTER places and lights, BEFORE player
   ['search', searchMod],       // ROUND 15: hold E over a dead person. AFTER places, BEFORE enemies
   ['dusk-to-dawn', duskToDawnMod], // ROUND 22: photocell pole lights along the roads, on since it happened. AFTER places (reads minorList and shares its materials) and roads/terrain/collision; BEFORE enemies (they read ctx.shared.litPoles) and dealer (it sells the bulbs)
+  ['sanctuaries', sanctuariesMod], // plans clearings before streaming; publishes safe light ground
   // -- the body -------------------------------------------------------------------------
   ['player', playerMod],
   ['camera', cameraMod],       // presents after player because it reads renderPos
@@ -123,6 +126,7 @@ const SYSTEMS = [
   // -- the loop -------------------------------------------------------------------------
   ['car', carMod],
   ['progress', progressMod],
+  ['territory', territoryMod], // counts authored kills after save load and owns secured ground
   ['dealer', dealerMod],      // saved cash/arsenal and the physical travelling shop
   ['mechanics', mechanicsMod],
   ['scavenging', scavengingMod],
@@ -616,6 +620,10 @@ async function boot() {
     // building each. About a second of cold start, on every load, invisible because the guard
     // failed in the safe direction. A probe for a method that does not exist is not a guard.
     if (i > 20 && chunksSys && typeof chunksSys.queuedCount === 'function' && chunksSys.queuedCount() === 0) break;
+    // Let terrain-worker replies reach the streamer between boot batches. Running
+    // ninety synchronous simulation steps starves its message handler and makes
+    // healthy background builds appear stalled, duplicating them on this thread.
+    if (i % 4 === 3) await new Promise(requestAnimationFrame);
   }
   ctx.time.alpha = 0;
 

@@ -587,6 +587,14 @@ export class Weapons {
     return got;
   }
 
+  // Perks recover a real cartridge into the current magazine; excess is never minted.
+  recoverRound(n = 1) {
+    const got = Math.max(0, Math.min(Math.floor(n), this.def.mag - this.ammo));
+    this.ammo += got;
+    if (got) { this.chambered = true; this.dryLatch = false; }
+    return got;
+  }
+
   dump() {
     return {
       weapon: this.def.id, ammo: this.ammo, reserve: this.reserve,

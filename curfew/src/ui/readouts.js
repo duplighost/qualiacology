@@ -39,6 +39,7 @@ export class Readouts {
     parent.appendChild(this.root);
     this.condition=document.createElement('div');this.condition.className='small';this.condition.hidden=true;
     this.root.querySelector('.economy').appendChild(this.condition);
+    this.objective=document.createElement('div');this.objective.className='small';this.objective.style.cssText='margin-top:12px;line-height:1.65;color:#e9d6ac';this.root.querySelector('.economy').appendChild(this.objective);
     for(const [key,selector] of Object.entries({money:'.money',xp:'.xp',xpFill:'.economy i',carried:'.carried',health:'.health',hp:'.value',hpFill:'.now',hpTrail:'.lost',list:'.receipts',nitro:'.nitro',nitroFill:'.nitro i',capture:'.capture'}))this[key]=this.root.querySelector(selector);
     const on=(event,fn)=>this.off.push(ctx.bus.on(event,fn));
     on('cash:gained',p=>this.receipt('+'+p.amount+' COINS','cash'));
@@ -48,6 +49,13 @@ export class Readouts {
     on('level:up',p=>this.receipt('LEVEL '+p.level+' · SKILL POINT','level'));
     on('loot:searched',p=>{if(!p.coins)this.receipt('EMPTY POCKETS','empty');});
     on('car:repaired',()=>this.receipt('CAR RESTORED · 100%','repair'));
+    on('car:failed',()=>{if(this.ctx.shared.inCar)this.receipt('ENGINE DEAD','empty');});
+    on('node:bought',p=>{if(!p.auto)this.receipt(p.name||'ABILITY LEARNED','ability');});
+    on('garage:bought',p=>this.receipt((p.name||'UPGRADE')+' · FITTED','repair'));
+    on('perk:triggered',p=>this.receipt(p.name+(p.detail?' · '+p.detail:''),'ability'));
+    on('sanctuary:lit',()=>this.receipt('THE WOODS ARE LIT','light'));
+    on('territory:secured',p=>this.receipt(p.name+' · SECURED','light'));
+    on('refuge:puzzle',()=>this.receipt('NINE LIGHTS','light'));
     // p?.n, not p.n: weapons/weapon.js listens on this same channel and deliberately takes a
     // missing payload as nothing (`p ? ... : 0`). This one threw on it instead, inside the
     // fixed step — which is why tests/weapon.mjs aborted at (j) and the 60-odd checks after
@@ -68,6 +76,17 @@ export class Readouts {
   update(){
     const time=this.now(),dt=Math.max(0,Math.min(.1,time-(this.lastTime??time))),s=this.ctx.systems,p=s.get('player'),pr=s.get('progress');
     this.lastTime=time;
+    const place=s.get('places'),territory=s.get('territory'),refuge=s.get('refuge');
+    const row=place?.near?territory?.status(place.near):null;
+    const sheltered=p&&refuge?.isProtected(p.pos.x,p.pos.y,p.pos.z);
+    let goal='';
+    if(sheltered)goal='DOOR SHUT · YOU CAN REST';
+    else if(this.ctx.shared.sanctuary)goal='THE WOODS ARE LIT';
+    else if(row){
+      const hasRoom=refuge?._units?.some(u=>u.siteId===row.id);
+      goal=row.name+'\n'+(row.secured?(hasRoom?'SECURED · CLOSE THE REFUGE DOOR':'SECURED'):row.remaining>0?row.remaining+' REMAIN · CLEAR THE PLACE':'CLEAR · RESTORE POWER');
+    }
+    this.objective.style.whiteSpace='pre-line';this.text(this.objective,goal);this.objective.hidden=!goal;
     for(let i=this.receipts.length-1;i>=0;i--)if(time>this.receipts[i].until){this.receipts[i].el.remove();this.receipts.splice(i,1);}
     if(pr){const d=pr.save.data,L=pr.level,from=xpForLevel(L),span=Math.max(1,xpForLevel(L+1)-from),here=Math.max(0,d.xp-from);
       this.text(this.money,(pr.cash()||0)+' COINS');this.text(this.xp,'LV '+L+' · '+Math.floor(here)+' / '+span+' XP');
@@ -91,14 +110,14 @@ export class Readouts {
     this.condition.hidden=!(inCar&&car&&car.wear>=.999);
     if(car){
       if(!this.condition.hidden){
-        this.text(this.condition,'ENGINE STOPPED · FIND A MECHANIC');
+        this.text(this.condition,Math.abs(car.speed)>1.6?'ENGINE DEAD · SPACE TO STOP':'ENGINE DEAD · E GET OUT · FIND A MECHANIC');
         this.condition.style.color='#e2a087';
       }
       // Nitro. The meter exists only in the seat and only once the tank does —
       // car._nitroSeen is set the first step the perk answers, so a player without the node
       // never sees a gauge for a control they have not got.
       const tank=Math.max(0,Math.min(1,car.boost||0));
-      this.nitro.hidden=!(inCar&&car._nitroSeen);
+      this.nitro.hidden=!(inCar&&car._nitroSeen&&car.wear<.999);
       if(!this.nitro.hidden){
         this.nitroFill.style.width=(tank*100).toFixed(1)+'%';
         this.nitro.classList.toggle('burn',!!car.boosting);
