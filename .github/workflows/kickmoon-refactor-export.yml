@@ -1,0 +1,34 @@
+name: Kickmoon isolated refactor export
+on:
+  push:
+    branches: [kickmoon-refactor-export-20260912]
+    paths: [.github/workflows/kickmoon-refactor-export.yml]
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: b822ee53c57e9740522eb60b38803672910c5d60
+          persist-credentials: false
+      - name: Package unchanged pinned Kickmoon runtime
+        run: |
+          mkdir -p /tmp/kickmoon-export/runtime /tmp/kickmoon-export/context
+          cp -a kickmoon/. /tmp/kickmoon-export/runtime/
+          git rev-parse HEAD > /tmp/kickmoon-export/context/repository-commit.txt
+          git log -3 --format='%H %cI %s' -- kickmoon > /tmp/kickmoon-export/context/kickmoon-history.txt
+          git status --porcelain > /tmp/kickmoon-export/context/git-status.txt
+          git ls-tree -r HEAD kickmoon > /tmp/kickmoon-export/context/git-tree.txt
+          for f in AGENTS.md package.json netlify.toml .github/workflows/validate-site.yml; do
+            if test -f "$f"; then cp "$f" "/tmp/kickmoon-export/context/$(basename "$f")"; fi
+          done
+          cd /tmp/kickmoon-export
+          find runtime -type f -print0 | sort -z | xargs -0 sha256sum > context/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kickmoon-pinned-runtime-b822ee53
+          path: /tmp/kickmoon-export/
+          retention-days: 7
+          if-no-files-found: error
