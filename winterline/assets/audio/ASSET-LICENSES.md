@@ -1,3 +1,11 @@
+# Human opening yell
+
+`rampage-yell.wav` is the human performance `2yell6.wav` from **Male Grunt/Yelling sounds**, uploaded by **HaelDB**. Selected under the source's **CC0 1.0** option. Converted from stereo to mono, peak normalized to 0.79, with 18 ms edge fades; original pitch and timing are preserved.
+
+- Source and license: https://opengameart.org/content/male-gruntyelling-sounds
+- Original archive: https://opengameart.org/sites/default/files/yelling%20sounds.zip
+- License: https://creativecommons.org/publicdomain/zero/1.0/
+
 # Firearm recordings
 
 The runtime WAV files are excerpts prepared directly from **The Free Firearm Sound Library**, created and recorded by **Ben Jaszczak, Brian Nelson, Kevin Heras, and Matthew Nanney**.
