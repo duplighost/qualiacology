@@ -81,6 +81,7 @@ import * as territoryMod from './world/territory.js';
 import * as holdfastLifeMod from './world/holdfast-life.js';
 import * as bossSitesMod from './world/boss-sites.js';
 import * as bossEncountersMod from './enemies/boss-encounters.js';
+import * as worldStoriesMod from './world/world-stories.js';
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -136,6 +137,7 @@ const SYSTEMS = [
   ['mechanics', mechanicsMod],
   ['scavenging', scavengingMod],
   ['holdfast-life', holdfastLifeMod],
+  ['world-stories', worldStoriesMod],
   ['opening', openingMod],     // the station's authored grounds, calendar and first night
   ['signage', signageMod],     // ROUND 22: the promises — words in the world, painted on the opening's paper program
   ['audio', audioMod],         // late, so it can hear everything that happened this step

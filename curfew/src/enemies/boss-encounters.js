@@ -12,7 +12,7 @@ export function hazardContains(h,x,z,jump=0,time=0){
  if(h.kind==='fan'){const dx=x-h.x,dz=z-h.z,d=Math.hypot(dx,dz);return d<h.r&&((dx*h.dx+dz*h.dz)/(d||1)>h.dot||d<3);}
  return Math.hypot(x-h.x,z-h.z)<h.r;
 }
-function makeVoice(audio,index){const name='encounter-voice-'+index;if(audio?.has?.(name)||!audio?.actx)return name;const sr=22050,seconds=4.2,n=Math.floor(sr*seconds),a=new Float32Array(n);let seed=31917+index*619,brown=0,phase=0;const notes=[39,31,74,57,26,108,44,138,34,49];
+function makeVoice(audio,index){const name='encounter-voice-'+index;if(audio?.has?.(name)||!audio?.actx)return name;const sr=22050,seconds=4.2,n=Math.floor(sr*seconds),a=new Float32Array(n);let seed=31917+index*619,brown=0,phase=0;const notes=[39,31,74,57,26,108,44,138,34,49,36];
  for(let i=0;i<n;i++){const t=i/sr;seed=(Math.imul(seed,1664525)+1013904223)|0;const noise=(seed>>>0)/2147483648-1;brown=(brown+noise*.045)/1.045;const bend=1+.14*Math.sin(t*1.7+index),f=notes[index]*bend;phase+=TAU*f/sr;const env=Math.sin(Math.PI*t/seconds)**1.6,pulse=.6+.4*Math.sin(t*(2+index*.4))**2;const throat=Math.sin(phase+Math.sin(phase*.501)*1.7)*.35+Math.sin(phase*1.51)*.14+Math.sin(phase*3.07)*.09;const scrape=noise*.045*(.5+.5*Math.sin(t*(13+index*3)));a[i]=(throat*pulse+brown*.5+scrape)*env*.44;}
  audio.reg(name,[a],sr);return name;
 }
@@ -25,7 +25,7 @@ export class BossEncounters {
  _sys(id){return this.ctx.systems.get(id);}
  async init(){const sites=this._sys('boss-sites');if(!sites)return;
   this.group=new THREE.Group();this.group.name='county-encounters';this.ctx.scene.add(this.group);
-  for(let i=0;i<BOSSES.length;i++){const def=BOSSES[i],site=sites.sites.find(s=>s.id===def.id),rig=buildBossRig(def);const k={id:def.id,index:i,def:{...def,radius:3,height:rig.anatomy.height},site,rig,encounter:true,species:'encounter',pos:new THREE.Vector3(def.x,site.y,def.z),home:new THREE.Vector3(def.x,site.y,def.z),hp:def.hp,alive:true,dead:false,state:'dormant',stateT:0,age:0,cycle:0,phase:1,weakOpen:false,stagger:0,away:0,dreadT:0,hitFlash:0,hazards:[],attack:'',yaw:0,windup:1.8,duration:1.6,hitCooldown:0,chargeStart:null,chargeEnd:null,scar:0,rover:null};
+  for(let i=0;i<BOSSES.length;i++){const def=BOSSES[i],site=sites.sites.find(s=>s.id===def.id),rig=buildBossRig(def);const k={id:def.id,index:i,def:{...def,radius:3,height:rig.anatomy.height},site,rig,encounter:true,species:'encounter',pos:new THREE.Vector3(def.x,site.y,def.z),home:new THREE.Vector3(def.x,site.y,def.z),hp:def.hp,alive:true,dead:false,state:'dormant',stateT:0,age:0,cycle:0,phase:1,weakOpen:false,stagger:0,away:0,dreadT:0,hitFlash:0,hazards:[],attack:'',yaw:0,windup:1.8,duration:1.6,hitCooldown:0,chargeStart:null,chargeEnd:null,scar:0,rover:null,gait:0,moveSpeed:0,recoil:0,turn:0,stalkT:0,climbedCycle:-1,ambushed:false};
    rig.root.position.copy(k.pos);rig.root.visible=false;this.group.add(rig.root);this.all.push(k);for(const anchor of site.anchors){anchor.enemy={id:def.id+':anchor:'+anchor.index,encounter:true,anchor:true,boss:k,record:anchor,pos:new THREE.Vector3(anchor.x,anchor.y,anchor.z),def:{radius:.85,height:2},alive:true};}
    this._seat(k);
   }
@@ -39,23 +39,66 @@ export class BossEncounters {
   this._makeHUD();if(typeof window!=='undefined'){const api=window.__CURFEW||(window.__CURFEW={});api.bosses={state:()=>this.state(),list:()=>this.all.map(k=>({id:k.id,name:k.def.name,x:k.pos.x,y:k.pos.y,z:k.pos.z,hp:k.hp,state:k.state,weakOpen:k.weakOpen})),zoneWorld:id=>{const k=this.all.find(k=>k.id===id);if(!k)return null;k.rig.root.updateMatrixWorld(true);return k.rig.weak.getWorldPosition(new THREE.Vector3()).toArray();}};}
  }
  _makeHUD(){if(typeof document==='undefined')return;const el=document.createElement('section');el.id='encounter-hud';el.setAttribute('aria-label','Boss encounter');el.style.cssText='position:fixed;top:7%;left:50%;transform:translateX(-50%);width:min(470px,55vw);pointer-events:none;text-align:center;color:#e8d9cf;z-index:32;opacity:0;transition:opacity .6s;font-family:Georgia,serif;text-shadow:0 2px 9px #000';el.innerHTML='<div class="encounter-name" style="font-size:21px;letter-spacing:.1em;margin-bottom:9px"></div><div style="height:4px;background:#19171dcc;box-shadow:0 0 0 1px #85766b55"><div class="encounter-health" style="height:100%;width:100%;background:linear-gradient(90deg,#796579,#cbb6a5);transition:width .18s"></div></div><div class="encounter-state" style="font:10px monospace;letter-spacing:.22em;margin-top:9px;color:#c6afb0"></div>';document.body.append(el);this.hud=el;this.nameEl=el.querySelector('.encounter-name');this.hpEl=el.querySelector('.encounter-health');this.stateEl=el.querySelector('.encounter-state');}
- ready(){return this.all.length===10;}
+ ready(){return this.all.length===BOSSES.length;}
  _restore(){const pr=this._sys('progress');if(!pr)return;for(const k of this.all){const cleared=pr.bossCleared?.(k.id)||pr.flag('boss:'+k.id);if(cleared){k.hp=0;k.alive=false;k.dead=true;k.state='dead';k.stateT=10;k.scar=1;for(const a of k.site.anchors){a.spent=true;a.enemy.alive=false;}if(k.rover?.inUse)this._sys('lights')?.release?.(k.rover);k.rover=null;this._clearHazards(k);this._unseat(k);}else this._reset(k);}this.loaded=true;}
  _seat(k){const c=this._sys('collision');if(!c)return;this._unseat(k);k.collider=c.addCollider({kind:'circle',x:k.pos.x,z:k.pos.z,r:k.def.shape==='tree'?3:2.25,y0:k.pos.y,y1:k.pos.y+Math.min(8,k.rig.anatomy.height),mask:1,tag:'boss',climbable:false},'boss-body:'+k.id);}
  _unseat(k){if(k.collider!==undefined){this._sys('collision')?.removeChunk('boss-body:'+k.id);k.collider=undefined;}}
  _voice(k,kind='dread',gain=.6){const a=this._sys('audio');if(!a?.spec)return;const name=kind==='dread'?makeVoice(a,k.index):kind==='death'?'kn_death':kind==='open'?'kn_vent':kind==='strike'?'kn_stand':'kn_sweep';if(!a.has(name))return;const s=a.spec();s.bus='creatures';s.cls='threat';s.gain=gain;s.ref=kind==='dread'?55:24;s.maxDist=180;s.priority=1;s.rate=kind==='dread'?1:.74+k.index*.033;s.send=.5;s.propagate=false;a.playAt(name,k.pos.x,k.pos.y+4,k.pos.z,s);}
- _wake(k){if(!k.alive||k.state!=='dormant')return;k.state='rising';k.stateT=0;k.weakOpen=false;this._voice(k,'dread',.85);this.ctx.bus.emit('boss:woke',{id:k.id,x:k.pos.x,z:k.pos.z,by:'arrival'});}
+ _wake(k){if(!k.alive||k.state!=='dormant')return;k.state='rising';k.stateT=0;k.weakOpen=false;if(k.def.ambush)this._ambush(k);this._voice(k,'dread',.85);this.ctx.bus.emit('boss:woke',{id:k.id,x:k.pos.x,z:k.pos.z,by:'arrival'});}
+ _ambush(k){
+  const p=this._sys('player'),car=this._sys('car');if(!p||k.ambushed)return;k.ambushed=true;
+  if(this.ctx.shared.inCar&&car?.throwFromEncounter){
+   // It erupts under the nose, rather than launching the car remotely from the
+   // middle of a field. The arena identity and return/reset point remain fixed.
+   k.pos.set(car.x-Math.sin(car.heading)*8,k.site.y,car.z-Math.cos(car.heading)*8);
+   const offset=k.pos.clone().sub(k.home);if(offset.length()>40)k.pos.copy(k.home).add(offset.setLength(40));
+   k.yaw=Math.atan2(car.x-k.pos.x,car.z-k.pos.z);k.rig.root.rotation.y=k.yaw;k.rig.root.position.copy(k.pos);k.attack='seize';this._seat(k);
+   const direction=new THREE.Vector3(car.x-k.home.x,0,car.z-k.home.z);if(direction.length()<3)direction.set(-1,0,.4);direction.normalize();
+   car.throwFromEncounter({x:k.home.x,z:k.home.z,dx:direction.x,dz:direction.z,distance:70});
+  }
+  p.invuln=Math.max(p.invuln||0,3.4);this._sys('fx')?.addTrauma?.(.44);
+  this.ctx.bus.emit('boss:eruption',{id:k.id,x:k.pos.x,y:k.pos.y,z:k.pos.z});
+ }
+ _move(k,dx,dz,dt,speed){
+  const len=Math.hypot(dx,dz);if(len<.01){k.moveSpeed=0;return false;}dx/=len;dz/=len;
+  const distance=Math.min(len,speed*dt),col=this._sys('collision'),radius=k.def.shape==='crypt'?2.2:2.8;
+  let mx=dx,mz=dz,blocked=false;
+  for(let trial=0;trial<3;trial++){
+   const c=col?.raycast({x:k.pos.x,y:k.site.y+1.5,z:k.pos.z},{x:mx,y:0,z:mz},distance+radius,2);
+   if(!c?.hit){blocked=false;break;}blocked=true;
+   const sign=(trial===0?1:-1)*(k.index%2?1:-1);mx=-dz*sign;mz=dx*sign;
+  }
+  if(blocked){k.moveSpeed=0;return false;}
+  const x=k.pos.x+mx*distance,z=k.pos.z+mz*distance,homeD=Math.hypot(x-k.home.x,z-k.home.z),limit=k.def.shape==='sea'?13:k.def.ambush?43:28;
+  if(homeD>limit){k.moveSpeed=0;return false;}
+  k.pos.x=x;k.pos.z=z;k.pos.y=k.site.y;k.rig.root.position.copy(k.pos);k.moveSpeed=distance/Math.max(dt,.001);k.gait+=distance;
+  if(this._colliderTimer<=0)this._seat(k);return true;
+ }
+ _stalk(k,p,dt){
+  const shape=k.def.shape,dx=p.pos.x-k.pos.x,dz=p.pos.z-k.pos.z,d=Math.hypot(dx,dz)||1;
+  const pace={crypt:4.3,burrow:4.5,lantern:5.6,antler:4.7,bell:3.2,furnace:2.3,mire:2.8,moth:5.0,choir:1.65,sea:1.6,tree:0}[shape]||0;
+  if(shape==='crypt'&&k.cycle>1&&k.cycle%3===0&&k.climbedCycle!==k.cycle){
+   const side=p.pos.x>k.home.x?1:-1,tx=k.home.x+side*26,tz=k.home.z-4;
+   if(Math.hypot(tx-k.pos.x,tz-k.pos.z)<1.4){k.state='climbing';k.stateT=0;k.climbedCycle=k.cycle;k.yaw=side*Math.PI/2;k.rig.root.rotation.y=k.yaw;k.moveSpeed=0;return;}
+   if(k.stateT<7){this._move(k,tx-k.pos.x,tz-k.pos.z,dt,pace*1.2);return;}
+  }
+  const desired=shape==='crypt'?10:shape==='burrow'?11:shape==='moth'?19:shape==='sea'?18:14;
+  const close=d>desired+2?1:d<desired-4?-.8:.15,orbit=(k.cycle%2?1:-1)*(shape==='moth'?1:.65);
+  this._move(k,dx/d*close-dz/d*orbit,dz/d*close+dx/d*orbit,dt,pace*(k.phase===2?1.18:1));
+  if((k.stateT>1.2&&d<desired+4)||k.stateT>3.8||pace===0)this._beginAttack(k,p);
+ }
  _clearHazards(k){for(const h of k.hazards){h.mesh.removeFromParent();h.mesh.geometry.dispose();h.material.dispose();for(const m of h.spikes||[]){m.removeFromParent();m.geometry.dispose();m.material.dispose();}}k.hazards.length=0;}
- _reset(k){this._clearHazards(k);k.pos.copy(k.home);k.rig.root.position.copy(k.home);k.rig.body.rotation.set(0,0,0);k.hp=k.def.hp;k.alive=true;k.dead=false;k.state='dormant';k.stateT=0;k.cycle=0;k.phase=1;k.weakOpen=false;k.stagger=0;k.away=0;k.scar=0;for(const a of k.site.anchors){a.spent=false;a.hp=36;a.enemy.alive=true;}this._seat(k);}
+ _reset(k){this._clearHazards(k);k.pos.copy(k.home);k.rig.root.position.copy(k.home);k.rig.body.rotation.set(0,0,0);k.hp=k.def.hp;k.alive=true;k.dead=false;k.state='dormant';k.stateT=0;k.cycle=0;k.phase=1;k.weakOpen=false;k.stagger=0;k.away=0;k.scar=0;k.moveSpeed=0;k.gait=0;k.recoil=0;k.climbedCycle=-1;for(const a of k.site.anchors){a.spent=false;a.hp=36;a.enemy.alive=true;}this._seat(k);}
  _hazard(k,data){const material=new THREE.MeshBasicMaterial({color:k.def.skin.colors.accent,transparent:true,opacity:.12,side:THREE.DoubleSide,depthWrite:false,toneMapped:false});const h={y:k.site.y,r:4,width:2.4,speed:17,inward:false,damage:25,hit:false,...data,material};h.mesh=hazardMesh(h,material);this.group.add(h.mesh);h.spikes=[];
   // Gross physical aftermath belongs to the floor marks: tentacles, hands, roots and vent plumes.
   if(h.kind==='disc'){for(let i=0;i<4;i++){const m=new THREE.Mesh(new THREE.ConeGeometry(.3,.9,7),new THREE.MeshStandardMaterial({color:k.def.shape==='furnace'?0x663220:0x665649,roughness:.7}));const a=i*TAU/4;m.position.set(h.x+Math.cos(a)*h.r*.5,h.y-.8,h.z+Math.sin(a)*h.r*.5);m.visible=false;this.group.add(m);h.spikes.push(m);}}
   k.hazards.push(h);return h;
  }
- _beginAttack(k,p){this._clearHazards(k);k.attack=k.def.attacks[k.cycle++%k.def.attacks.length];k.state='warning';k.stateT=0;k.weakOpen=false;k.hitCooldown=0;const dx=p.pos.x-k.pos.x,dz=p.pos.z-k.pos.z,d=Math.hypot(dx,dz)||1,ux=dx/d,uz=dz/d;k.yaw=Math.atan2(ux,uz);k.rig.root.rotation.y=k.yaw;k.windup=k.phase===2?1.55:1.85;k.duration=1.65;k.chargeStart=null;
+ _beginAttack(k,p){this._clearHazards(k);k.attack=k.def.attacks[k.cycle++%k.def.attacks.length];if((k.def.shape==='crypt'||k.def.shape==='burrow')&&Math.hypot(p.pos.x-k.pos.x,p.pos.z-k.pos.z)<15&&k.cycle%2)k.attack='reach';k.moveSpeed=0;k.state='warning';k.stateT=0;k.weakOpen=false;k.hitCooldown=0;const dx=p.pos.x-k.pos.x,dz=p.pos.z-k.pos.z,d=Math.hypot(dx,dz)||1,ux=dx/d,uz=dz/d;k.yaw=Math.atan2(ux,uz);k.rig.root.rotation.y=k.yaw;k.windup=k.phase===2?1.55:1.85;k.duration=1.65;k.chargeStart=null;
   const disc=(x,z,r=4,damage=24)=>this._hazard(k,{kind:'disc',x,z,r,damage});
   const line=(angle,length=42,width=2.8)=>this._hazard(k,{kind:'line',x:k.pos.x,z:k.pos.z,bx:k.pos.x+Math.sin(angle)*length,bz:k.pos.z+Math.cos(angle)*length,width,damage:27});
   switch(k.attack){
+   case 'reach':line(k.yaw,16,2.1);k.windup=k.phase===2?1.5:1.8;k.duration=.8;break;
    case 'charge':{const length=Math.min(26,Math.max(15,d+4));line(k.yaw,length,3.1);k.windup=2.0;k.duration=1.5;k.chargeStart=k.pos.clone();k.chargeEnd=k.pos.clone().add(new THREE.Vector3(ux*length,0,uz*length));const delta=k.chargeEnd.clone().sub(k.home);if(delta.length()>27)k.chargeEnd.copy(k.home).add(delta.setLength(27));break;}
    case 'ring':this._hazard(k,{kind:'ring',x:k.pos.x,z:k.pos.z,r:40,width:1.5,speed:17,damage:23});k.duration=2.6;break;
    case 'undertow':this._hazard(k,{kind:'ring',x:k.pos.x,z:k.pos.z,r:40,width:2,speed:16,inward:true,damage:22});k.duration=2.6;break;
@@ -94,7 +137,7 @@ export class BossEncounters {
   for(const a of k.site.anchors){a.spent=true;a.enemy.alive=false;}this.ctx.bus.emit('boss:world-cleared',{id:k.id,x:k.home.x,z:k.home.z});
  }
  damage(enemy,amount,info={}){if(enemy?.anchor){const k=enemy.boss,a=enemy.record;if(a.spent||!k.alive)return {killed:false,hpFrac:0};a.hp-=Math.max(1,amount);this._wake(k);if(a.hp<=0){a.spent=true;enemy.alive=false;k.stagger=6;k.weakOpen=true;k.state='recover';k.stateT=-2;this._clearHazards(k);k.hp-=190;this._voice(k,'strike',.6);this._sys('fx')?.impact?.('flesh',enemy.pos,N,1.4);if(k.hp<=0)this._die(k);return {killed:false,hpFrac:Math.max(0,k.hp/k.def.hp),species:'encounter'};}return {killed:false,hpFrac:a.hp/36,species:'encounter'};}
-  const k=enemy;if(!k?.alive)return {killed:false,hpFrac:0,species:'encounter'};this._wake(k);const vulnerable=info.zone==='heart'&&k.weakOpen;const dealt=Math.max(1,amount*(vulnerable?2.65:.64));k.hp-=dealt;k.hitFlash=.22;if(k.hp<=0){this._die(k);return {killed:true,hpFrac:0,species:'encounter'};}return {killed:false,hpFrac:k.hp/k.def.hp,species:'encounter'};
+  const k=enemy;if(!k?.alive)return {killed:false,hpFrac:0,species:'encounter'};this._wake(k);const vulnerable=info.zone==='heart'&&k.weakOpen;const dealt=Math.max(1,amount*(vulnerable?2.65:.64));k.hp-=dealt;k.hitFlash=.22;k.recoil=Math.min(1,k.recoil+(vulnerable?.7:.24));if(k.hp<=0){this._die(k);return {killed:true,hpFrac:0,species:'encounter'};}return {killed:false,hpFrac:k.hp/k.def.hp,species:'encounter'};
  }
  raycast(origin,direction,maxT){let best=maxT,owner=null,zone='torso';ray.set(origin,direction);ray.far=maxT;ray.near=0;
   for(const k of this.all){if(!k.alive||!k.rig.root.visible)continue;const ax=k.pos.x-origin.x,az=k.pos.z-origin.z,ay=k.pos.y+5-origin.y,along=ax*direction.x+ay*direction.y+az*direction.z;if(along<-25||along>best+25||ax*ax+ay*ay+az*az-along*along>625)continue;
@@ -105,18 +148,26 @@ export class BossEncounters {
   if(!owner)return null;hit.t=best;hit.enemy=owner;hit.zone=zone;hit.point.copy(direction).multiplyScalar(best).add(origin);return hit;
  }
  step(dt){if(!this.ctx.ready)return;if(!this.loaded)this._restore();const p=this._sys('player');if(!p?.pos)return;this.time+=dt;this.active=null;this._colliderTimer-=dt;
-  for(const k of this.all){k.age+=dt;k.stateT+=dt;k.hitCooldown=Math.max(0,k.hitCooldown-dt);k.hitFlash=Math.max(0,k.hitFlash-dt);k.stagger=Math.max(0,k.stagger-dt);const d=Math.hypot(p.pos.x-k.home.x,p.pos.z-k.home.z);k.rig.root.visible=d<460;
+  for(const k of this.all){k.age+=dt;k.stateT+=dt;k.hitCooldown=Math.max(0,k.hitCooldown-dt);k.hitFlash=Math.max(0,k.hitFlash-dt);k.recoil=Math.max(0,k.recoil-dt*2.5);k.moveSpeed=0;k.stagger=Math.max(0,k.stagger-dt);const d=Math.hypot(p.pos.x-k.home.x,p.pos.z-k.home.z);k.rig.root.visible=d<460;
    if(!k.alive){if(k.state==='dying'&&k.stateT>4)k.state='dead';if(d<80&&k.stateT<6)this.active=k;k.rig.pose(k.age,false,0,Math.min(8,k.stateT));continue;}
    if(d>100||p.dead){k.away+=dt;if(k.away>12&&k.state!=='dormant')this._reset(k);}else k.away=0;
    if(d<160&&d>(k.id==='underkeep'?24:42)){k.dreadT-=dt;if(k.dreadT<=0){this._voice(k,'dread',.36+(1-d/170)*.28);k.dreadT=12+k.index*.9;}}
-   if(k.state==='dormant'&&d<(k.id==='underkeep'?22:36)&&!p.dead)this._wake(k);
+   if(k.state==='dormant'&&d<(k.id==='underkeep'?25:36)&&!p.dead)this._wake(k);
    if(k.state!=='dormant'&&d<92)this.active=k;
    if(k.state==='rising'&&k.stateT>3.2){k.state='recover';k.stateT=0;k.weakOpen=true;}
    if(k.hp<k.def.hp*.48&&k.phase===1){k.phase=2;this._voice(k,'dread',.72);}
-   if(k.state==='recover'){k.weakOpen=true;if(k.stateT>3.6&&k.stagger<=0&&!p.dead&&d<70)this._beginAttack(k,p);}
+   if(k.state==='recover'){
+    k.weakOpen=true;const settle=k.def.shape==='crypt'?2.15:2.6;
+    if(k.stateT>settle&&k.stagger<=0&&!p.dead&&d<85){k.state='stalking';k.stateT=0;k.weakOpen=false;}
+   }
+   if(k.state==='stalking'&&!p.dead){k.weakOpen=false;this._stalk(k,p,dt);}
+   if(k.state==='climbing'){
+    k.weakOpen=true;k.pos.y=k.site.y+Math.sin(Math.min(1,k.stateT/3.4)*Math.PI)*3.6;k.rig.root.position.copy(k.pos);
+    if(k.stateT>3.4){k.pos.y=k.site.y;k.rig.root.position.copy(k.pos);this._seat(k);this._beginAttack(k,p);}
+   }
    if(k.state==='warning'||k.state==='striking')this._advanceAttack(k,p,dt);
-   const face=(k.state==='dormant'||k.state==='recover'||k.state==='rising');if(face&&d<120){const desired=Math.atan2(p.pos.x-k.pos.x,p.pos.z-k.pos.z),delta=Math.atan2(Math.sin(desired-k.yaw),Math.cos(desired-k.yaw));k.yaw+=delta*Math.min(1,dt*.75);k.rig.root.rotation.y=k.yaw;}
-   k.rig.pose(k.age,k.weakOpen,k.state==='warning'?clamp(k.stateT/k.windup,0,1):0,0);if(k.hitFlash>0)k.rig.membrane.emissiveIntensity=.65;
+   const face=(k.state==='dormant'||k.state==='recover'||k.state==='rising'||k.state==='stalking');if(face&&d<120){const desired=Math.atan2(p.pos.x-k.pos.x,p.pos.z-k.pos.z),delta=Math.atan2(Math.sin(desired-k.yaw),Math.cos(desired-k.yaw));k.turn=delta;k.yaw+=delta*Math.min(1,dt*(k.state==='stalking'?3.3:1.9));k.rig.root.rotation.y=k.yaw;}
+   k.rig.pose(k.age,k.weakOpen,k.state==='warning'?clamp(k.stateT/k.windup,0,1):0,0,{state:k.state,stateT:k.stateT,attack:k.attack,strike:k.stateT/k.duration,speed:k.moveSpeed,gait:k.gait,recoil:k.recoil,turn:k.turn});if(k.hitFlash>0)k.rig.membrane.emissiveIntensity=.65;
    // One borrowed light paints the real creature and nearby ground. No extra renderer light slots.
    if(d<72&&k.state!=='dormant'){const lights=this._sys('lights');if(!k.rover?.inUse)k.rover=lights?.borrow?.('boss',k.pos.x,k.pos.y+5,k.pos.z+6,k.def.skin.colors.accent,13,0);if(k.rover){k.rover.x=k.pos.x;k.rover.y=k.pos.y+5;k.rover.z=k.pos.z+6;k.rover.peak=k.weakOpen?17:8;k.rover.distance=38;k.rover.decay=1.1;}}else if(k.rover?.inUse){this._sys('lights')?.release?.(k.rover);k.rover=null;}
   }

@@ -245,7 +245,7 @@ export const MAJORS = Object.freeze([
     // the powerful things in the Holdfast are a garrison, not a guardian at a claim.
     id: 'holdfast', name: 'The Holdfast',
     x: 0, z: 0, region: 'works', terrainRegion: 'fields', kind: 'holdfast',
-    lit: false, hub: false,
+    lit: true, hub: true,
     // ROUND 17. THE FORECOURT WAS STILL SNOW, AND THIS IS THE BIGGEST ONE IN THE COUNTY.
     //
     // Alex found this at the Filling Station and it was written up as fixed (STATUS item 38,
@@ -283,10 +283,10 @@ export const MAJORS = Object.freeze([
     // Station and the Avery House use for the same reason: this place frames its own arrival.
     approach: { x: 0, z: 74, w: 20, h: 13.0, style: 'holdfast', routeX: 0, routeZ: 56, existing: true },
     discoverR: 70, nearR: 150, horizon: true,
-    // The claim is the keep's door, INSIDE the walls: you cannot finish this place without
-    // paying the toll or fighting through the gate, which is the whole shape Alex asked for.
-    claim: { how: 'touch', dx: 0, dy: 0, dz: -1.0, r: 3.0 },
-    xpFind: 60, xpClaim: 600, startClaimed: false,
+    // The residents already keep their lights on. Entry is still controlled by
+    // the gate; there is no abandoned clearance switch blocking their hallway.
+    claim: { how: 'none' },
+    xpFind: 60, xpClaim: 0, startClaimed: true,
   },
   {
     // ROUND 18 — THE EIGHTEENTH MAJOR, AND THE FIRST ONE OUT IN THE NEW LAND.

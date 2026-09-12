@@ -37,6 +37,8 @@
 // nothing, and touches no state that could break determinism.
 
 import { CFG } from '../config.js';
+import {passageHeightAt} from './boss-passage.js';
+import {storyHeightAt} from './world-scars.js';
 import { clamp, clamp01, lerp, smoothstep } from '../engine/math.js';
 import {
   M0_SITES, roadFlatten, setRoadBaseSampler, ensureRoadElevations, invalidateRoadElevations,
@@ -322,7 +324,7 @@ export function heightAt(x, z) {
   if (rf.blend > 0) h = lerp(h, rf.y, rf.blend);
   // Buildings own their level cores. A smoothed road must not excavate a trench
   // through a castle courtyard after the pad has already been applied.
-  return applyFlats(h, x, z, FLATS.length);
+  return storyHeightAt(x,z,passageHeightAt(x,z,applyFlats(h, x, z, FLATS.length)));
 }
 
 // Central-difference epsilon. 0.75 m is under the finest quad (1.6 m) so the gradient

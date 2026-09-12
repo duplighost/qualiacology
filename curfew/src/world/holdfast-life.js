@@ -26,6 +26,18 @@ const STORIES = {
   shrinekeeper: ['Leda · keeper of the lamps', ['The statues face the streets. We decided it was kinder than making them look at the sky.', 'The northern conservatory looks like it is wearing snow. A trader told me the snow breathed.'], 'moth'],
 };
 const NAMES=['Perrin','Moss','Una','Dara','Silas','Wren','Kit'];
+const UPPER_STORIES={
+ 'roof-seamstress':['Linn · the washing lines',['The wind dries everything stiff. Bring the sheets in before they break.','The little houses south of here used to have their lights on all night. They were waiting for a family who never arrived.']],
+ 'roof-baker':['Aven · oven watch',['You can tell who is awake by which chimney is warm.','Tomas says the ovens have never gone out. They have. I stayed up with him until we got them going again.']],
+ 'roof-gardener':['Fern · roof garden',['Nothing grows down in the alleys. Up here we can still pretend it knows which way the sun is.','The seeds came from under the white roof in Morning. That is what the packet said.'],'morning'],
+ 'roof-teacher':['Ansel · the lookout',['Come up here when you lose your way. Roads make more sense when you can see where they stop.','There is a forest road that simply ends. A house used to be there. Its washing line is still tied to two trees.']],
+ 'roof-watch':['Mae · roof watch',['Stay on the stone when you cross the bridges. The ice on the parapets is not a path.','Something underneath the western field pushes the soil up in long lines. Keep to the road.'],'fieldmaw'],
+ 'keep-cook':['Cora · the common kitchen',['The upper floors eat later. Getting everything up those stairs takes a while.','When somebody comes back, we move a chair to make room. We have never run out of chairs.']],
+ 'keep-nurse':['Edith · the upper infirmary',['There is clean water by the bed. Let it thaw before you drink.','The men from the sealed stair had old cuts on their palms. They had held the same handrail all the way down.'],'underkeep'],
+ 'keep-reader':['Orla · the map room',['A route crossed out is useful. Somebody lived long enough to come back and cross it out.','Morning is circled on every edition. Nobody ever wrote what they found there.'],'morning'],
+ 'keep-weaver':['Nessa · the looms',['The first moon banner was a blanket. We make the edges stronger now.','The old notices said the roads were open. We turned them over. Good paper is hard to find.']],
+ 'keep-watcher':['Ives · the high watch',['You made it. On a clear night you can see three watch fires from here.','We do not ring the bell for what we see outside. Only for the people who come back.']],
+};
 const _from=new THREE.Vector3(),_to=new THREE.Vector3(),_ray=new THREE.Vector3();
 
 export class HoldfastLife {
@@ -43,7 +55,9 @@ export class HoldfastLife {
   async init(){
     this._sys('progress')?.flag('gate-hostile:holdfast',0);
     for(const r of TOWN.residents)this.people.push({...r,story:STORIES[r.id],e:null,gen:0,line:0});
-    TOWN.routes.forEach((route,i)=>this.people.push({id:'walker-'+i,x:route[0][0],z:route[0][1],yaw:0,route,waypoint:1,direction:1,pause:i*.4,story:[NAMES[i],['People still knock here. I like that.','Every lamp has someone who cleans the glass. That is how this place stays here.']],e:null,gen:0,line:0}));
+    for(const r of TOWN.elevatedResidents||[])this.people.push({...r,story:UPPER_STORIES[r.id]||['The upper watch',['We can see the road from here. Someone has to.']],e:null,gen:0,line:0});
+    for(const r of TOWN.guards||[])this.people.push({...r,guard:true,story:['The Holdfast watch',['Keep your weapon down in the streets. If something follows you here, bring it to us.']],e:null,gen:0,line:0});
+    TOWN.routes.forEach((route,i)=>this.people.push({id:'walker-'+i,x:route[0][0],z:route[0][1],y:route[0][2]||0,yaw:0,route,waypoint:1,direction:1,pause:i*.4,story:[NAMES[i%NAMES.length],['People still knock here. I like that.','Every lamp has someone who cleans the glass. That is how this place stays here.']],e:null,gen:0,line:0}));
     for(const s of TOWN.shops)this.people.push({...s,shop:s.kind,story:[s.kind==='weapons'?(s.outside?'Fen · road armourer':'Merrit · armourer'):(s.outside?'Bo · gate mechanic':'Ari · engine keeper'),[s.kind==='weapons'?'Clean barrels. Dry rounds. Keep both that way.':'Bring the car back in one piece. Or as close as you can manage.']],e:null,gen:0,line:0});
     this._buildUI();this._signs();
     this.off.push(this.ctx.bus.on('player:respawn',()=>this.reset()));
@@ -68,26 +82,42 @@ export class HoldfastLife {
       const lines=s.text.split('\n');a.textAlign='center';a.textBaseline='middle';a.fillStyle='#dfdccd';
       lines.forEach((line,i)=>{a.font=(i===0?'28px':'24px')+' Georgia';a.fillText(line,384,128+(i-(lines.length-1)/2)*49);});
       const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const mat=new THREE.MeshLambertMaterial({map:tex,emissive:0xbbb8aa,emissiveMap:tex,emissiveIntensity:.16,side:THREE.DoubleSide});
-      const mesh=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.87),mat),p=this.world(s.x,s.z,2.3);mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=(this._frame()?.yaw||0)+s.yaw;mesh.name='painted-town-sign';group.add(mesh);this.signs.push(mesh);
+      const mesh=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.87),mat),p=this.world(s.x,s.z,s.y||2.3);mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=(this._frame()?.yaw||0)+s.yaw;mesh.name='painted-town-sign';group.add(mesh);this.signs.push(mesh);
     }
   }
   reset(){
-    const en=this._sys('enemies');this.epoch++;this.away=0;this.chat=null;this._sys('progress')?.flag('gate-hostile:holdfast',0);
-    for(const r of this.people){if(r.e?.gen===r.gen)en?._release(r.e);r.e=null;r.gen=0;r.dead=false;}
-    const cast=this._sys('places')?._casts.get('major:holdfast');
-    if(cast)for(const c of cast.cast){if(!c.neutral)continue;if(c.entity&&c.entity.gen===c.generation)en?._release(c.entity);c.entity=null;c.generation=0;c.spawned=false;cast.placed=false;this._sys('places')._castDone.delete(cast.key);}
+    const en=this._sys('enemies'),places=this._sys('places');
+    this.epoch++;this.away=0;this.chat=null;this.target='';this.hold=0;this.offer=0;this.useLock=false;this.tuneLock=false;
+    this.shotAt.clear();this._sys('progress')?.flag('gate-hostile:holdfast',0);
+    // A pooled record may already belong to another person. Release only this life,
+    // and return its attack token before releasing its body slot.
+    const release=(e,gen)=>{if(e&&e.gen===gen){en?._uncommit(e);en?._release(e);}};
+    for(const r of this.people){
+      release(r.e,r.gen);r.e=null;r.gen=0;r.dead=false;
+      if(r.route){r.waypoint=1;r.direction=1;r.pause=0;}
+    }
+    const cast=places?._casts.get('major:holdfast');
+    if(cast)for(const c of cast.cast){
+      if(!c.neutral)continue;release(c.entity,c.generation);c.entity=null;c.generation=0;c.spawned=false;
+      cast.placed=false;cast.retryAt=0;places._castDone.delete(cast.key);
+    }
+    if(en?._gateAway?.holdfast)en._gateAway.holdfast.t=0;
     for(const h of this.lamps.values())this._sys('lights')?.release(h);this.lamps.clear();
   }
   _spawn(r){
-    const p=this.world(r.x,r.z,.035),yaw=(this._frame()?.yaw||0)+r.yaw+Math.PI;
-    r.e=this._sys('enemies').spawn('resident',p.x,p.z,{staged:true,neutral:true,initiallyNeutral:true,siteGuard:'holdfast',townCivilian:true,feetY:p.y,yaw,placementRadius:1.2});
-    if(r.e){r.gen=r.e.gen;r.e.looted=true;r.e.townName=r.story[0];r.e.townHome={x:p.x,z:p.z};}
+    const p=this.world(r.x,r.z,(r.y||0)+.035),yaw=(this._frame()?.yaw||0)+(r.yaw||0)+Math.PI,en=this._sys('enemies');
+    r.e=en.spawn(r.guard?'marshal':'resident',p.x,p.z,{staged:true,neutral:true,initiallyNeutral:true,siteGuard:'holdfast',townGuard:!!r.guard,townCivilian:!r.guard,feetY:p.y,yaw,placementRadius:1.2});
+    if(r.e){
+      r.gen=r.e.gen;r.e.looted=true;r.e.townName=r.story[0];r.e.townHome={x:p.x,z:p.z};
+      // A guard whose pool slot became available after the crime joins the same fight.
+      if(r.guard&&this._sys('progress')?.flag('gate-hostile:holdfast'))en.provokeGate('holdfast');
+    }
   }
   _walk(r,dt){
-    const e=r.e;if(!r.route||!e?.alive)return;
+    const e=r.e;if(!r.route||!e?.alive||!e.neutral)return;
     if(this.chat?.id===r.id || this.target===r.id){e.townWalk=0;return;}
     if(r.pause>0){r.pause-=dt;e.townWalk=0;return;}
-    const q=r.route[r.waypoint],goal=this.world(q[0],q[1]),dx=goal.x-e.stagedX,dz=goal.z-e.stagedZ,d=Math.hypot(dx,dz);
+    const q=r.route[r.waypoint],goal=this.world(q[0],q[1],(q[2]||0)+.035),dx=goal.x-e.stagedX,dz=goal.z-e.stagedZ,d=Math.hypot(dx,dz);
     if(d<.22){r.waypoint+=r.direction;if(r.waypoint>=r.route.length||r.waypoint<0){r.direction*=-1;r.waypoint+=r.direction*2;r.pause=3+r.line%3;}return;}
     const speed=this._sys('progress').flag('gate-hostile:holdfast')?1.65:.74;
     _from.set(e.stagedX,e.stagedY+.8,e.stagedZ);_ray.set(dx/d,0,dz/d);
@@ -95,6 +125,7 @@ export class HoldfastLife {
     if(blocked&&blocked.hit!==false){r.direction*=-1;r.waypoint=Math.max(0,Math.min(r.route.length-1,r.waypoint+r.direction));r.pause=1;e.townWalk=0;return;}
     const p=this._sys('player');if(Math.hypot(p.pos.x-e.pos.x,p.pos.z-e.pos.z)<1.4){e.townWalk=0;return;}
     e.stagedYaw=faceYaw(e.stagedX,e.stagedZ,goal.x,goal.z);e.stagedX+=dx/d*Math.min(d,speed*dt);e.stagedZ+=dz/d*Math.min(d,speed*dt);e.townWalk=speed;
+    e.stagedY+=(goal.y-e.stagedY)*Math.min(1,speed*dt/Math.max(d,.01));
   }
   _sight(a,b,height=1.2){
     _from.set(a.x,a.y+height,a.z);_to.set(b.x,b.y+1.15,b.z);_ray.subVectors(_to,_from);const d=_ray.length();_ray.multiplyScalar(1/Math.max(.001,d));
@@ -103,7 +134,7 @@ export class HoldfastLife {
   _light(){
     if(this.time<this.lightAt)return;this.lightAt=this.time+.5;
     const p=this._sys('player').pos,lights=this._sys('lights');
-    const nearby=[...TOWN.buildings.map(b=>({...b,y:2.9})),...TOWN.lamps].map(b=>({b,p:this.world(b.x,b.z,b.y)})).map(q=>({...q,d:Math.hypot(p.x-q.p.x,p.z-q.p.z)})).filter(q=>q.d<28).sort((a,b)=>a.d-b.d).slice(0,2);
+    const nearby=[...TOWN.buildings.map(b=>({...b,y:(b.y||0)+2.9})),...TOWN.lamps].map(b=>({b,p:this.world(b.x,b.z,b.y)})).map(q=>({...q,d:Math.hypot(p.x-q.p.x,p.y-q.p.y,p.z-q.p.z)})).filter(q=>q.d<28).sort((a,b)=>a.d-b.d).slice(0,2);
     const want=new Set(nearby.map(q=>q.b.id));for(const[id,h]of this.lamps)if(!want.has(id)){lights.release(h);this.lamps.delete(id);}
     for(const q of nearby){const old=this.lamps.get(q.b.id);if(old?.inUse)continue;const h=lights.borrow('holdfast:'+q.b.id,q.p.x,q.p.y,q.p.z,0xffbd79,18,0);if(h){h.distance=19;this.lamps.set(q.b.id,h);}}
   }
@@ -131,6 +162,15 @@ export class HoldfastLife {
     const id=r.story[2];if(!id)return;const pr=this._sys('progress');
     if(id==='morning'){const d=this._sys('places').nodes.get('morning')?.def;if(d)pr.learnRumour({id,name:d.name,x:d.x,z:d.z,kind:'place'});return;}
     const b=BOSSES.find(b=>b.id===id);if(b)pr.learnRumour({id:b.id,name:b.location,...bossMapPoint(b),kind:'boss'});
+  }
+  _insideGate(use){
+    const a=TOWN.insideGate||{x:5.8,z:62,y:1.3},p=this._sys('player'),places=this._sys('places');
+    if(p.dead||this.ctx.shared.inCar||places.gateIsOpen('holdfast'))return false;
+    const local=this.local(p.pos.x,p.pos.z),at=this.world(a.x,a.z,a.y||1.3);
+    if(local.z>=64||Math.hypot(p.pos.x-at.x,p.pos.z-at.z)>2.8||Math.abs(p.pos.y+1.2-at.y)>2)return false;
+    this.ctx.bus.emit('prompt',{kind:'use',label:'E',rank:12,x:at.x,y:at.y,z:at.z,k:0,detail:'OPEN THE GATE',subdetail:'INNER CRANK',unavailable:false});
+    if(use&&!this.useLock){this.useLock=true;this._sys('progress').flag('gate:holdfast',true);places.openGate('holdfast');this.ctx.bus.emit('holdfast:gate-opened-inside',{});}
+    return true;
   }
   _talk(r){
     const lines=r.story[1],i=r.line++%lines.length;this.chat={id:r.id,name:r.story[0],text:lines[i],until:this.time+14};
@@ -172,7 +212,7 @@ export class HoldfastLife {
   step(dt){
     if(!this.ctx.playing||this.ctx.paused)return;this.time+=dt;const p=this._sys('player'),en=this._sys('enemies');
     const far=!this.contains(p.pos.x,p.pos.z,140);this.away=far?this.away+dt:0;
-    if(this.away>4){if(this.people.some(r=>r.e))this.reset();this.chat=null;this.target='';return;}
+    if(this.away>4){if(this.people.some(r=>r.e||r.dead)||this._sys('progress').flag('gate-hostile:holdfast'))this.reset();this.chat=null;this.target='';return;}
     const near=this.contains(p.pos.x,p.pos.z,70),hostile=this._sys('progress').flag('gate-hostile:holdfast');
     for(const r of this.people){
       if(r.e&&r.e.gen!==r.gen){r.e=null;r.dead=true;}
@@ -182,6 +222,7 @@ export class HoldfastLife {
     }
     this._protect(dt);this._light();
     const use=this.ctx.input.held('use'),tune=this.ctx.input.held('radiotune');if(!use)this.useLock=false;if(!tune)this.tuneLock=false;
+    if(this._insideGate(use)){this.target='';this.chat=null;this.shopEl.style.display='none';return;}
     let target=null,best=3.3;const cam=this._sys('camera');
     if(!p.dead&&!this.ctx.shared.inCar&&!hostile)for(const r of this.people){const e=r.e;if(!e?.alive||e.gen!==r.gen)continue;const dx=e.pos.x-p.pos.x,dz=e.pos.z-p.pos.z,d=Math.hypot(dx,dz);if(d<best&&Math.abs(e.pos.y-p.pos.y)<1.7&&(-Math.sin(cam.yaw)*dx-Math.cos(cam.yaw)*dz)/Math.max(d,.001)>.64&&this._sight(p.pos,e.pos)){target=r;best=d;}}
     if(this.target!==target?.id){this.hold=0;this.offer=0;this.cardKey='';}this.target=target?.id||'';this.shopEl.style.display='none';

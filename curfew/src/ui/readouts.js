@@ -41,6 +41,7 @@ export class Readouts {
     this.condition=document.createElement('div');this.condition.className='small';this.condition.hidden=true;
     this.root.querySelector('.economy').appendChild(this.condition);
     this.objective=document.createElement('div');this.objective.className='small';this.objective.style.cssText='margin-top:12px;line-height:1.65;color:#e9d6ac';this.root.querySelector('.economy').appendChild(this.objective);
+    this.waypoint=document.createElement('div');this.waypoint.className='small';this.waypoint.style.cssText='margin:0 0 8px;color:#f1c187;line-height:1.5';this.waypoint.hidden=true;this.root.querySelector('.economy').prepend(this.waypoint);
     for(const [key,selector] of Object.entries({money:'.money',xp:'.xp',xpFill:'.economy i',carried:'.carried',health:'.health',hp:'.value',hpFill:'.now',hpTrail:'.lost',list:'.receipts',nitro:'.nitro',nitroFill:'.nitro i',capture:'.capture'}))this[key]=this.root.querySelector(selector);
     const on=(event,fn)=>this.off.push(ctx.bus.on(event,fn));
     on('cash:gained',p=>this.receipt('+'+p.amount+' COINS','cash'));
@@ -58,6 +59,7 @@ export class Readouts {
     on('territory:secured',p=>this.receipt(p.name+' · SECURED','light'));
     on('refuge:puzzle',()=>this.receipt('NINE LIGHTS','light'));
     on('map:rumour',p=>{this.receipt('MAP UPDATED · '+p.name+' · M','rumour');this.receipts.at(-1).until=this.now()+6.5;});
+    on('map:waypoint',p=>this.receipt(p.cleared?'WAYPOINT CLEARED':'WAYPOINT SET · '+p.name,'rumour'));
     on('boss:cleared',p=>{const f=FINISH_BY_ID[p.skin];this.receipt((f?.name||p.skin||'TROPHY')+' · WEAPON FINISH UNLOCKED','ability');this.receipts.at(-1).until=this.now()+8;});
     // p?.n, not p.n: weapons/weapon.js listens on this same channel and deliberately takes a
     // missing payload as nothing (`p ? ... : 0`). This one threw on it instead, inside the
@@ -82,6 +84,9 @@ export class Readouts {
     const place=s.get('places'),territory=s.get('territory'),refuge=s.get('refuge');
     const row=place?.near?territory?.status(place.near):null;
     const sheltered=p&&refuge?.isProtected(p.pos.x,p.pos.y,p.pos.z);
+    const waypoint=pr?.waypoint?.(),origin=this.ctx.shared.locationOverride||p?.pos;
+    this.waypoint.hidden=!(waypoint&&origin);
+    if(waypoint&&origin){const d=Math.hypot(waypoint.x-origin.x,waypoint.z-origin.z),distance=d>=1000?(d/1000).toFixed(1)+' km':Math.round(d)+' m';this.text(this.waypoint,'◆ '+waypoint.name+' · '+(this.ctx.shared.locationOverride?'SURFACE':d<14?'HERE':distance));}
     let goal='';
     if(sheltered)goal='DOOR SHUT · YOU CAN REST';
     else if(this.ctx.shared.sanctuary)goal='THE WOODS ARE LIT';

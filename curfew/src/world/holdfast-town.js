@@ -2,8 +2,9 @@
 // actual door gaps; upper lanes have stairs, floors and open arches beneath them.
 import { Kit, kits, groundY, ON_APRON, GLOW } from './sites.js';
 import { HOLDFAST_TOWN } from './holdfast-town-layout.js';
+import { dressHoldfastKeep } from './holdfast-keep.js';
 import { building } from './holdfast-town-houses.js';
-import { P, solid, cylinder, crescent, banner, icicles, lantern, brazier, statue, arch, path, lowWall, chair, chest } from './holdfast-town-art.js';
+import { P, solid, cylinder, crescent, banner, icicles, lantern, brazier, statue, arch, path, bakePaths, snowCap, lowWall, chair, chest } from './holdfast-town-art.js';
 
 function upperStreet(k, api, rng) {
   const floorY = api.padY + ON_APRON + 6.30;
@@ -22,22 +23,59 @@ function upperStreet(k, api, rng) {
   }
   for (const z of [40.1, 43.9]) {
     for (let x = -36; x <= 36; x += 4) {
+      if(Math.abs(x)===36)continue;
       solid(k, api, 3.97, 0.85, 0.27, x, floorY + 0.42, z, P.stone);
-      k.solid.box(4.03, 0.13, 0.40, x, floorY + 0.92, z, P.snow);
+      snowCap(k,x,floorY+.98,z,4.08,.54,0,.14,x+z);
       for (const dx of [-1.84, 1.84]) k.solid.box(0.26, 1.14, 0.42, x + dx, floorY + 0.53, z, P.edge);
     }
+  }
+  // Four narrow streets make the upper town a connected neighbourhood. The
+  // stair flights remain open above; inner and outer lanes pass on either side.
+  for (const side of [-1, 1]) {
+    for (const lane of [36,44]) {
+      for (const [lo,hi] of [[12,35],[35,58]]) solid(k,api,3.0,.28,hi-lo,side*lane,floorY-.14,(lo+hi)/2,P.stone,0,'floor');
+      for (const z of [14,22,38,56]) {
+        const x=side*(lane+(lane===36?-1.12:1.12));
+        solid(k,api,.48,6.0,.48,x,api.padY+ON_APRON+3,z,P.darkStone);
+        k.solid.box(.90,.22,.9,x,floorY-.32,z,P.edge);
+      }
+      for(let z=12.6;z<57.5;z+=1.15)for(const edge of[-1,1]) {
+        const bridge=lane===36?[28,31,42,50,51]:[16,34,35,42,52];
+        if(bridge.some(v=>Math.abs(v-z)<2.4))continue;
+        solid(k,api,.13,.9,1.12,side*lane+edge*1.48,floorY+.45,z,P.iron,0,'metal');
+      }
+    }
+    for(const z of side<0?[31,51]:[28,50]){
+      solid(k,api,5.7,.28,2.7,side*33.65,floorY-.14,z,P.stone,0,'floor');
+      for(const e of[-1,1])solid(k,api,3.6,.85,.15,side*32.60,floorY+.425,z+e*1.34,P.iron,0,'metal');
+    }
+    for(const z of side<0?[16,34,52]:[17,35,52]){
+      solid(k,api,6.15,.28,2.7,side*46.35,floorY-.14,z,P.stone,0,'floor');
+      for(const e of[-1,1])solid(k,api,3.8,.85,.15,side*47.5,floorY+.425,z+e*1.34,P.iron,0,'metal');
+    }
+    solid(k,api,10.7,.28,3.6,side*40,floorY-.14,42,P.stone,0,'floor');
+    for(const z of[17,53]){lantern(k,side*44,floorY+2.1,z,0,true);banner(k,side*44,floorY-.2,z,1.05,2.1,side*Math.PI/2);}
+    // The candlehouse and infirmary terraces remain open gardens and laundry yards.
+    const tx=side*53,tz=side<0?16:17;
+    for(let i=0;i<5;i++){
+      k.cloth.cyl(.28,.21,.48,9,tx-2+i,floorY+.24,tz+3.0,P.cutWood);
+      k.cloth.cone(.20,.56,6,tx-2+i,floorY+.74,tz+3,[.04,.078,.05]);
+    }
+    for(const x of[tx-3,tx+3])solid(k,api,.12,2.55,.12,x,floorY+1.275,tz-2.4,P.wood,0,'wood');
+    k.cloth.box(6,.028,.028,tx,floorY+2.48,tz-2.4,P.iron);
+    for(let i=0;i<4;i++)k.cloth.box(.94,1.1,.035,tx-2.2+i*1.45,floorY+1.94,tz-2.4,i%2?P.paper:P.purple,0,0,.04*(i-2));
   }
   for (const x of [-22, 0, 22]) {
     banner(k, x, floorY - 0.75, 44.13, 1.35, 2.15, 0, x === 0);
     k.solid.cyl(0.055, 0.072, 0.64, 7, x, floorY + 1.10, 43.9, P.iron);
     lantern(k, x, floorY + 1.58, 43.9, 0, true);
   }
-  icicles(k, 0, floorY - 0.30, 43.86, 13, 0, rng);
-  chest(k, api, 36.5, floorY + 0.02, 42.0);
+  for(const cx of[-32,-16,0,16,32]){icicles(k,cx,floorY-.30,43.86,13,0,rng);snowCap(k,cx,floorY+.025,42.95,15,.85,0,.12,cx);}
+  chest(k, api, 40, floorY + 0.02, 44.2);
 }
 
 function market(k, api, rng) {
-  for (const side of [-1, 1]) for (const [index, z] of [25, 34, 52].entries()) {
+  for (const side of [-1, 1]) for (const [index, z] of [52].entries()) {
     const x = side * 17, y = groundY(api, x, z) + ON_APRON, yaw = side * Math.PI / 2;
     const cy = Math.cos(yaw), sy = Math.sin(yaw), point = (px, pz) => [x + px * cy + pz * sy, z - px * sy + pz * cy];
     for (const px of [-1.65, 1.65]) for (const pz of [-0.95, 0.95]) {
@@ -92,9 +130,12 @@ function outskirts(k, api) {
     path(k, api, [[side * 43, 159], [side * 21, 147], [side * 18, 117], [side * 18, 85], [side * 10, 75]], 4.3);
     path(k, api, [[side * 18, 99], [side * 27, 99]], 3.4);
     path(k, api, [[side * 19, 130], [side * 30, 130]], 3.4);
+    path(k,api,[[side*42,86],[side*42,148]],3.8);
+    for(const z of[96,119,141])path(k,api,[[side*42,z],[side*48,z]],3.5);
+    path(k,api,[[side*18,119],[side*42,119]],3.5);
     // Short protective walls, with frequent, visibly paved gaps for people and cars.
     for (const z of [86, 108, 134]) lowWall(k, api, side * 11, z, 11, Math.PI / 2);
-    for (const [x, z, len] of [[31, 150, 19], [49, 133, 14], [49, 108, 15], [41, 83, 19]]) lowWall(k, api, side * x, z, len, x === 49 ? Math.PI / 2 : 0);
+    for (const [x, z, len] of [[31, 150, 19], [61, 133, 14], [61, 108, 15], [41, 83, 19]]) lowWall(k, api, side * x, z, len, x === 61 ? Math.PI / 2 : 0);
     for (const z of [80, 117, 146]) {
       const x = side * 13, g = groundY(api, x, z);
       cylinder(k, api, 0.48, 1.5, x, g + 0.75, z, P.darkStone);
@@ -117,32 +158,11 @@ function outskirts(k, api) {
   banner(k, 6.4, groundY(api, 6.4, 158) + 3.7, 158.7, 1.25, 2.4, 0);
 }
 
-function sealedStair(k, api) {
-  const { x, z } = HOLDFAST_TOWN.hatch, y = groundY(api, x, z) + ON_APRON;
-  solid(k, api, 3.6, 0.22, 3.5, x, y + 0.11, z, P.darkStone, 0, 'stone');
-  k.solid.box(2.65, 0.11, 2.5, x, y + 0.28, z, P.iron);
-  for (let i = 0; i < 7; i++) k.solid.box(2.45, 0.026, 0.04, x, y + 0.345, z - 1.05 + i * 0.35, P.edge);
-  for (const side of [-1, 1]) k.solid.box(0.09, 0.045, 2.62, x + side * 0.87, y + 0.38, z, P.darkStone);
-  k.solid.tube(0.18, 0.18, 0.045, 12, x, y + 0.42, z + 0.72, P.edge, 0, Math.PI / 2);
-  for (const side of [-1, 1]) {
-    const px = x + side * 2.2;
-    solid(k, api, 0.68, 2.75, 0.68, px, y + 1.375, z - 0.4, P.stone);
-    k.solid.box(0.94, 0.17, 0.94, px, y + 2.82, z - 0.4, P.snow);
-  }
-  k.solid.box(5.4, 0.39, 0.75, x, y + 2.79, z - 0.4, P.darkStone);
-  crescent(k.solid, x, y + 2.79, z + 0.02, 0.42, 0, P.edge);
-  // A covered lantern, abandoned boots and a cut rope show the stair's history.
-  k.cloth.box(0.33, 0.50, 0.32, x - 2.1, y + 1.6, z, P.purple);
-  k.solid.box(1.40, 0.76, 0.08, x - 1.8, y + 1.06, z + 1.75, P.wood, 0.22);
-  for (const off of [-0.35, 0.35]) k.solid.box(0.09, 1.20, 0.09, x - 1.8 + off, y + 0.60, z + 1.75, P.wood);
-  for (let i = 0; i < 4; i++) for (const side of [-1, 1]) k.solid.box(0.16, 0.24, 0.35, x + 2.15 + side * 0.11, y + 0.12, z - 1.1 + i * 0.52, P.wood, i * 0.12);
-  for (let i = 0; i < 3; i++) k.solid.tube(0.43 + i * 0.07, 0.43 + i * 0.07, 0.045, 20, x - 2.6, y + 0.07, z - 1.0, P.cutWood);
-}
-
 export function buildHoldfastTown(api) {
   const k = kits(); k.cloth = new Kit(); k.live = new Kit(); k.live.additive = true;
   const rng = api.rng;
   for (const b of HOLDFAST_TOWN.buildings) building(k, api, b, rng);
+  for(const b of HOLDFAST_TOWN.buildings.filter(b=>!b.y))path(k,api,[[b.door.x,b.door.z],[b.door.x-Math.sin(b.yaw)*3,b.door.z-Math.cos(b.yaw)*3]],3.0);
   path(k, api, [[0, 63], [0, 46], [0, 20], [0, 3]], 11);
   for (const side of [-1, 1]) {
     path(k, api, [[side * 9, 59], [side * 40, 59], [side * 40, 7], [side * 20, 6]], 4.8);
@@ -155,9 +175,9 @@ export function buildHoldfastTown(api) {
     statue(k, api, side * 8, 19, side > 0 ? -0.18 : 0.18, 0.87);
   }
   path(k, api, [[-41, -36], [-22, -36], [0, -37], [22, -36], [40, -36]], 4.4);
-  upperStreet(k, api, rng); market(k, api, rng); outskirts(k, api); sealedStair(k, api);
+  upperStreet(k, api, rng); market(k, api, rng); outskirts(k, api); dressHoldfastKeep(k, api);
   for (const x of [-37, 37]) banner(k, x, api.padY + 8.7, 64.56, 3.3, 6.6, Math.PI, true);
-  banner(k, 0, api.padY + 23, 0.08, 4.1, 11.5, 0, true);
+
   for (const side of [-1, 1]) {
     banner(k, side * 64.6, api.padY + 8, -39, 3, 5.6, side > 0 ? -Math.PI / 2 : Math.PI / 2, true);
     statue(k, api, side * 22, -34, Math.PI, 1.13);
@@ -183,6 +203,15 @@ export function buildHoldfastTown(api) {
     { species: 'marshal', lx: -16, lz: 78, yaw: 0, guard: true },
     { species: 'marshal', lx: 18, lz: 78, yaw: 0, guard: true },
   ]);
+  // An inside crank is a physical handle on the return face of the gatehouse.
+  {const{x,z}=HOLDFAST_TOWN.insideGate,y=api.padY+1.3;
+    k.solid.box(.80,1.12,.20,x,y,z,P.darkStone);
+    k.solid.tube(.33,.33,.065,18,x,y,z-.16,P.iron,0,Math.PI/2);
+    k.solid.box(.08,.59,.08,x,y,z-.20,P.cutWood);
+    k.solid.cyl(.055,.055,.26,8,x,y+.27,z-.32,P.cutWood,0,Math.PI/2);
+    lantern(k,x+.7,y+.95,z-.15,Math.PI,true);
+  }
+  bakePaths(k,api);
   return { solid: k.solid.build(), people: k.cloth.build(), glow: null,
     glowLive: k.live.build(), glowLiveColour: GLOW.ember };
 }

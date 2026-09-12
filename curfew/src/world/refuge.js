@@ -54,6 +54,7 @@ import { GLOW, Kit } from './sites.js';
 import { ANCHORS } from './dress-station.js';
 import { DESTINATION_REFUGES, refugeFloorY } from './destination-refuges.js';
 import { RefugeComfort } from './refuge-comfort.js';
+import { RefugeRenewal } from './refuge-renewal.js';
 
 const SITE_ID = 'filling-station';
 
@@ -425,6 +426,7 @@ export class Refuge {
     if (this.spec.buildBag) this._buildBag();
     this._buildLamps();
     this.comfort = new RefugeComfort(this); this.comfort.build();
+    this.renewal = new RefugeRenewal(this); this.renewal.build();
   }
 
   /**
@@ -834,8 +836,9 @@ export class Refuge {
     const pressed = use && !this._usePrev;
     this._usePrev = use;
 
-    this.comfort?.step();
-    const cand = this.comfort?.focus >= 0 ? '' : this._candidate(px, py, pz);
+    const tending=this.renewal?.step(dt);
+    if(tending){if(this.comfort){this.comfort.usePrev=use;this.comfort.focus=-1;}}else this.comfort?.step();
+    const cand = tending||this.comfort?.focus >= 0 ? '' : this._candidate(px, py, pz);
 
     // ROUND 13: the key glyph (hud 'prompt'). Emitted every step there is a candidate; a step
     // without one clears it. The door and the bed are E, the breaker is a hold; a blocked bed
@@ -1336,6 +1339,7 @@ export class Refuge {
       door: +this.doorK.toFixed(3), doorTarget: this.doorTarget, collider: this.doorColliderOn,
       resting: this.resting, restPhase: this.restPhase, fade: +this.fade.toFixed(3),
       canRest: this._canRest(),
+      renewal: this.renewal?.state() || null,
       hold: this.holdKind, holdT: +this.holdT.toFixed(3),
       lamp: this._lampWhere || null,
       overlay: (this._overlay || (this._owner && this._owner._overlay))
@@ -1416,6 +1420,7 @@ export class Refuge {
   ready() { return true; }
 
   dispose() {
+    this.renewal?.dispose();
     this.comfort?.dispose();
     this._sys('collision')?.removeChunk('refuge-floor:'+this.siteId);
     if (!this._owner && this._units) {

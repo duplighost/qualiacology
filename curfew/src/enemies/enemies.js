@@ -787,10 +787,14 @@ export class Enemies {
    */
   ramHit(x, z, radius, speed, dirX, dirZ) {
     const r = (radius || 2.4) + 0.4;
+    const car=this._sys('car'),ground=Number.isFinite(car?.y)?car.y:groundY(this.ctx,x,z);
+    const roof=car?.roofHeightAt?.(car.x,car.z),bottom=ground+.30,top=Number.isFinite(roof)?roof:ground+2.2;
     let hits = 0;
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
       if (!e.alive) continue;
+      // A car below a bridge does not hit people standing on the bridge above it.
+      if(e.pos.y>top||e.pos.y+e.def.height*(e.scale||1)<bottom)continue;
       const dx = e.pos.x - x, dz = e.pos.z - z;
       if (dx * dx + dz * dz > (r + e.def.radius) * (r + e.def.radius)) continue;
       hits++;
@@ -1628,7 +1632,7 @@ export class Enemies {
       : (this._torchOn() ? 1 : 0);
     // ROUND 22: the nearest LIT pool this body could reach, cached on the same stagger so
     // the cost is poles x bodies / 6 frames and never per frame. poleR 0 means none near.
-    if (def.owner === OWNER.PRESSURE) {
+    if (def.owner === OWNER.PRESSURE && !e.initiallyNeutral) {
       const poles = this._poles;
       let best = -1, bestGap = POOL_SCAN_PAD;
       for (let i = 0; i < poles.length; i++) {
@@ -1639,7 +1643,7 @@ export class Enemies {
       }
       if (best >= 0) { const q = poles[best]; e.poleX = q.x; e.poleZ = q.z; e.poleR = q.r; }
       else { e.poleR = 0; e.poleHold = false; }
-    }
+    } else if(e.initiallyNeutral){e.poleR=0;e.poleHold=false;}
   }
 
   // A close defensive burst cancels a commitment and uses ordinary collision integration.
@@ -1905,7 +1909,7 @@ export class Enemies {
           // ROUND 22: a pressure body never lands a blow inside a lit pool. If the player
           // stepped under a pole during the windup, or the line of a dash would cross one,
           // the attack is cancelled the same way a late one is.
-          const pooled = def.owner === OWNER.PRESSURE
+          const pooled = def.owner === OWNER.PRESSURE && !e.initiallyNeutral
             && (this._playerPool || (e.attackKind === 'dash' && this._dashCrossesPool(e, p)));
           if (d > reach || pooled) {
             // THE TELEGRAPH LAW's other half: an attack that would land late is
@@ -2108,7 +2112,7 @@ export class Enemies {
     // _pushOffPool in _integrate is the hard guarantee; this is what makes it read as
     // a choice rather than a wall. Dread bodies never get here (they have their own steps).
     e.poleHold = false;
-    if (e.poleR > 0) {
+    if (e.poleR > 0 && !e.initiallyNeutral) {
       const R = e.poleR + POOL_MARGIN;
       const cx = e.poleX, cz = e.poleZ;
       const txc = tx - cx, tzc = tz - cz;
@@ -2239,7 +2243,7 @@ export class Enemies {
     const inBand = e.dist >= def.engage[0] && e.dist <= def.engage[1];
     const paused = def.burst > 100 || !e.moving;      // move OR attack
     // ROUND 22: and never at a player standing in a lit pool (the fence, see above).
-    const wants = inBand && e.aware > 0 && e.los && !this._playerPool;
+    const wants = inBand && e.aware > 0 && e.los && (e.initiallyNeutral || !this._playerPool);
     // THE FRONT-COMMIT LAW. It is asked BEFORE the token so that being behind
     // the player costs a body patience rather than a token, and asked with
     // `wants` so patience only accrues while it is genuinely trying.
@@ -2390,7 +2394,7 @@ export class Enemies {
 
   /** Would the dash line from this body to the player cross its cached lit pool? */
   _dashCrossesPool(e, p) {
-    if (!(e.poleR > 0)) return false;
+    if (e.initiallyNeutral || !(e.poleR > 0)) return false;
     const R = e.poleR + POOL_MARGIN;
     const sx = p.pos.x - e.pos.x, sz = p.pos.z - e.pos.z;
     const sl2 = sx * sx + sz * sz;
@@ -2648,6 +2652,7 @@ export class Enemies {
   _pushOffPlayer(e) {
     const p = this._sys('player');
     if (!p || !p.pos) return;
+    if(e.initiallyNeutral&&e.siteGuard==='holdfast'&&(e.pos.y>p.pos.y+CFG.player.STAND_H||e.pos.y+e.def.height<p.pos.y))return;
     const minD = e.def.radius + CFG.player.RADIUS + CONTACT_PAD;
     let dx = e.pos.x - p.pos.x, dz = e.pos.z - p.pos.z;
     let d = Math.sqrt(dx * dx + dz * dz);
@@ -2671,7 +2676,7 @@ export class Enemies {
    * body sliding past keeps its tangential speed and a body pressing in stops dead.
    */
   _pushOffPool(e) {
-    if (!(e.poleR > 0) || e.def.owner !== OWNER.PRESSURE) return;
+    if (e.initiallyNeutral || !(e.poleR > 0) || e.def.owner !== OWNER.PRESSURE) return;
     const R = e.poleR + POOL_MARGIN;
     let dx = e.pos.x - e.poleX, dz = e.pos.z - e.poleZ;
     let d = Math.sqrt(dx * dx + dz * dz);
@@ -2687,6 +2692,16 @@ export class Enemies {
 
   _integrate(e, dt) {
     const def = e.def;
+    // The watch lives on real floors. Becoming hostile must not replace its roof
+    // height with terrain height or let it pass through a stairwell wall.
+    const townCol=e.initiallyNeutral&&e.siteGuard==='holdfast'?this._sys('collision'):null;
+    if(townCol?.resolveCapsule){
+      e.vel.y=e.airborne?e.vel.y-GRAVITY*dt:Math.min(e.vel.y,-.2);
+      const result=townCol.resolveCapsule(e.pos,e.vel,def.radius,Math.min(def.height,1.9),dt);
+      e.airborne=!result.grounded;if(result.grounded&&e.vel.y<0)e.vel.y=0;
+      this._pushOffPlayer(e);
+      e.gait+=Math.hypot(e.vel.x,e.vel.z)*dt*1.7;return;
+    }
     if (e.airborne) {
       e.vel.y -= GRAVITY * dt;
       const ax = e.pos.x, az = e.pos.z;

@@ -1,18 +1,29 @@
 // Holdfast's shared, local-space plan. Geometry, people and shop prompts use these
 // same doors and lanes; +Z is the gate/road side of the castle.
 const H = Math.PI * 0.5;
-const house = (id, name, x, z, w, d, h, yaw, use, outside = false) => {
-  const door = { x: x - Math.sin(yaw) * (d / 2 + 1.4), z: z - Math.cos(yaw) * (d / 2 + 1.4) };
-  return Object.freeze({ id, name, x, z, w, d, h, yaw, use, outside, door: Object.freeze(door) });
+const house = (id, name, x, z, w, d, h, yaw, use, outside = false, y = 0, terrace = false) => {
+  const door = { x: x - Math.sin(yaw) * (d / 2 + 1.4), z: z - Math.cos(yaw) * (d / 2 + 1.4), y };
+  return Object.freeze({ id, name, x, z, w, d, h, yaw, use, outside, y, terrace, door: Object.freeze(door) });
 };
 
 export const HOLDFAST_TOWN = Object.freeze({
   bounds: { minX: -64, maxX: 64, minZ: -63, maxZ: 166 },
   gate: { x: 0, z: 66 },
+  insideGate: { x: 5.8, z: 62, y: 1.3 },
+  guards: [
+    { id:'market-watch-west', x:-21, z:40, y:.1, yaw:H },
+    { id:'market-watch-east', x:21, z:40, y:.1, yaw:-H },
+    { id:'north-watch', x:20, z:-36, y:.1, yaw:Math.PI },
+    { id:'upper-watch-west', x:-36, z:46, y:6.42, yaw:H },
+    { id:'upper-watch-east', x:44, z:46, y:6.42, yaw:-H },
+  ],
   lamps: [
+    ...[0,6.3,12.6,18.9,25.2,31.5].map((y,i)=>({id:'keep-lantern-'+i,x:3.9,z:-5,y:y+2.9})),
+    {id:'keep-roof-lantern',x:-5,z:-6,y:39.4},
+    ...[-1,1].flatMap(side=>[17,53].map(z=>({id:'upper-lantern-'+side+'-'+z,x:side*44,z,y:8.52}))),
     { id: 'street-west', x: -7.8, z: 55, y: 2.05 },
     { id: 'street-east', x: 7.8, z: 55, y: 2.05 },
-    ...[-1, 1].flatMap(side => [25, 34, 52].map(z => ({ id: 'market-' + side + '-' + z, x: side * 17, z, y: 2.25 }))),
+    ...[-1, 1].flatMap(side => [52].map(z => ({ id: 'market-' + side + '-' + z, x: side * 17, z, y: 2.25 }))),
     { id: 'shrine-west', x: -9.5, z: 12, y: 2.05 },
     { id: 'shrine-east', x: 9.5, z: 12, y: 2.05 },
     { id: 'road-west', x: -22, z: 116, y: 2.05 },
@@ -22,22 +33,42 @@ export const HOLDFAST_TOWN = Object.freeze({
   ],
   hatch: { x: 45, z: -43, approachX: 43.4, approachZ: -39, name: 'The sealed stair' },
   buildings: [
-    house('candlehouse', 'The candle house', -53, 16, 11, 9, 6.2, -H, 'candles'),
-    house('mender', 'The mender', -53, 34, 11, 9, 7.0, -H, 'cloth'),
-    house('bakehouse', 'The bread oven', -53, 52, 11, 9, 6.3, -H, 'bakery'),
-    house('infirmary', 'The quiet house', 53, 17, 11, 9, 6.8, H, 'infirmary'),
-    house('school', 'The old school', 53, 35, 11, 9, 7.4, H, 'school'),
-    house('watch-home', 'The watch house', 53, 52, 11, 9, 6.4, H, 'home'),
-    house('armourer', 'Moonrise arms', -28, 31, 12, 10, 7.4, -H, 'weapons'),
-    house('inn', 'The last room', -28, 51, 12, 10, 8.8, -H, 'inn'),
-    house('engine-house', 'The warm engine', 28, 28, 12, 10, 7.5, H, 'car'),
-    house('soup-kitchen', 'The long table', 28, 50, 12, 10, 6.6, H, 'kitchen'),
+    house('candlehouse', 'The candle house', -53, 16, 11, 9, 6.3, -H, 'candles', false, 0, true),
+    house('mender', 'The mender', -53, 34, 11, 9, 6.3, -H, 'cloth', false, 0, true),
+    house('bakehouse', 'The bread oven', -53, 52, 11, 9, 6.3, -H, 'bakery', false, 0, true),
+    house('infirmary', 'The quiet house', 53, 17, 11, 9, 6.3, H, 'infirmary', false, 0, true),
+    house('school', 'The old school', 53, 35, 11, 9, 6.3, H, 'school', false, 0, true),
+    house('watch-home', 'The watch house', 53, 52, 11, 9, 6.3, H, 'home', false, 0, true),
+    house('armourer', 'Moonrise arms', -28, 31, 12, 10, 6.3, -H, 'weapons', false, 0, true),
+    house('inn', 'The last room', -28, 51, 12, 10, 6.3, -H, 'inn', false, 0, true),
+    house('engine-house', 'The warm engine', 28, 28, 12, 10, 6.3, H, 'car', false, 0, true),
+    house('soup-kitchen', 'The long table', 28, 50, 12, 10, 6.3, H, 'kitchen', false, 0, true),
     house('archive', 'The days we counted', -33, -16, 14, 10, 9.2, -H, 'archive'),
     house('glasshouse', 'The moon garden', 33, -13, 14, 10, 8.2, H, 'garden'),
     house('weaver-home', 'The blue shutters', -36, -47, 14, 11, 7.2, Math.PI, 'home'),
     house('bell-keeper', 'The bell keeper', 31, -48, 13, 11, 7.8, Math.PI, 'bells'),
     house('north-home', 'The northern room', -13, -52, 14, 10, 8.6, Math.PI, 'home'),
     house('memorial-house', 'The empty chairs', 9, -52, 14, 10, 7.1, Math.PI, 'memorial'),
+    house('tallow-lane', 'The second candle', -12, 29, 13, 9, 8.3, -H, 'candles'),
+    house('dye-lane', 'Blue hands', 12, 29, 13, 9, 7.7, H, 'cloth'),
+    house('west-cooper', 'The barrel maker', -32, 7, 10, 9, 5.9, -H, 'home'),
+    house('east-herbs', 'The herb room', 32, 7, 10, 9, 6.5, H, 'garden'),
+    house('north-washer', 'The wash house', -53, -49, 12, 8, 7.2, -H, 'cloth'),
+    house('north-lantern', 'The last lantern', 55, -55, 8, 7, 5.8, H, 'candles'),
+    house('upper-arms', 'Above the armourer', -28, 31, 8.2, 7.4, 4.8, H, 'home', false, 6.3),
+    house('upper-inn', 'The blue room', -28, 51, 8.2, 7.4, 5.6, H, 'inn', false, 6.3),
+    house('upper-engine', 'The mechanic sleeps', 28, 28, 8.2, 7.4, 4.8, -H, 'home', false, 6.3),
+    house('upper-kitchen', 'The seed room', 28, 50, 8.2, 7.4, 5.4, -H, 'garden', false, 6.3),
+    house('upper-mender', 'The purple attic', -53, 34, 8.4, 7.4, 4.8, -H, 'cloth', false, 6.3),
+    house('upper-bakehouse', 'The flour room', -53, 52, 8.4, 7.4, 5.5, -H, 'home', false, 6.3),
+    house('upper-school', 'The star lesson', 53, 35, 8.4, 7.4, 5.0, H, 'school', false, 6.3),
+    house('upper-watch', 'The watch family', 53, 52, 8.4, 7.4, 5.6, H, 'home', false, 6.3),
+    house('road-cobbler', 'The cobbler', -52, 96, 10, 8, 7.4, -H, 'cloth', true),
+    house('road-smoke', 'The smoke house', 52, 96, 10, 8, 6.8, H, 'kitchen', true),
+    house('road-shelter', 'The borrowed bed', -52, 119, 12, 8, 8.0, -H, 'inn', true),
+    house('road-glass', 'The bottle house', 52, 119, 12, 8, 7.1, H, 'candles', true),
+    house('road-child', 'The red mitten', -52, 141, 10, 8, 6.1, -H, 'home', true),
+    house('road-tins', 'The tinsmith', 52, 141, 10, 8, 7.5, H, 'car', true),
     house('outer-arms', 'The road armourer', -31, 99, 12, 10, 6.0, -H, 'weapons', true),
     house('outer-motor', 'The gate garage', 31, 99, 12, 12, 6.8, H, 'car', true),
     house('outer-home', 'The first warm window', -34, 130, 11, 9, 5.7, -H, 'home', true),
@@ -52,10 +83,10 @@ export const HOLDFAST_TOWN = Object.freeze({
   // Each waypoint is a clear patch of the actual floor, not a straight-line shortcut
   // through a house. Walkers traverse adjacent points in this order and then reverse.
   routes: [
-    [[-36.7, 54], [-36.7, 42], [-36.7, 23], [-39, 8], [-31, 8], [-29, 16]],
-    [[36.7, 54], [36.7, 41], [36.7, 20], [39, 8], [27, 8], [21, 15]],
-    [[-12, 61], [-12, 52], [-12, 38], [-12, 20], [-17, 11]],
-    [[12, 61], [12, 50], [12, 37], [12, 20], [18, 11]],
+    [[-36.7, 54], [-36.7, 42], [-36.7, 23], [-38.2, 15]],
+    [[36.7, 54], [36.7, 41], [36.7, 20], [38.2, 15]],
+    [[-12, 61], [-12, 52], [-12, 39], [-5.8, 38], [-5.8, 20], [-4, 12]],
+    [[12, 61], [12, 50], [12, 39], [5.8, 38], [5.8, 20], [4, 12]],
     [[-40, -37], [-26, -38], [-8, -37], [12, -37], [31, -37], [40, -37]],
     [[-20, 147], [-19, 131], [-18, 114], [-18, 97], [-18, 83]],
     [[20, 147], [19, 131], [18, 114], [18, 97], [18, 83]],
@@ -78,7 +109,20 @@ export const HOLDFAST_TOWN = Object.freeze({
     { id: 'wellkeeper', x: -18, z: 11, yaw: -H },
     { id: 'shrinekeeper', x: 9, z: 11, yaw: -H },
   ],
+  elevatedResidents: [
+    { id:'roof-seamstress', x:-53, z:34, y:6.42, yaw:H, home:'upper-mender' },
+    { id:'roof-baker', x:-28, z:51, y:6.42, yaw:-H, home:'upper-inn' },
+    { id:'roof-gardener', x:28, z:50, y:6.42, yaw:H, home:'upper-kitchen' },
+    { id:'roof-teacher', x:53, z:35, y:6.42, yaw:-H, home:'upper-school' },
+    { id:'roof-watch', x:-44, z:16, y:6.42, yaw:0 },
+    { id:'keep-cook', x:-8.7, z:-8.9, y:0.20, yaw:H },
+    { id:'keep-nurse', x:-8.7, z:-8.9, y:6.50, yaw:H },
+    { id:'keep-reader', x:-8.7, z:-8.9, y:12.80, yaw:H },
+    { id:'keep-weaver', x:-8.7, z:-8.9, y:19.10, yaw:H },
+    { id:'keep-watcher', x:-2.6, z:-9.5, y:38.0, yaw:0 },
+  ],
   signs: [
+    {x:5.8,z:61.83,y:2.55,yaw:Math.PI,text:'OPEN GATE'},
     { x: -12.6, z: 148, yaw: 0, text: 'HOLDFAST\nEngines in the road.\nPeople in the light.' },
     { x: -20.7, z: 31, yaw: H, text: 'MOONRISE ARMS' },
     { x: 20.7, z: 28, yaw: -H, text: 'THE WARM ENGINE' },

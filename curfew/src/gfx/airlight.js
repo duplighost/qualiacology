@@ -135,7 +135,7 @@ const SKIP_SUBTREES = new Set(['chunks', 'flora', 'airlight', 'sky', 'impostor-b
 const SCAN_S = 0.45;
 /* A halo is bigger than the bulb that makes it. 3.4x, floored so a 4 cm bead still has a
  * glow and ceilinged so a 12 m cathedral window does not fill the sky. */
-const HALO_MUL = 1.75, HALO_MIN = 0.42, HALO_MAX = 3.0;
+const HALO_MUL = 0.85, HALO_MIN = 0.16, HALO_MAX = 0.75;
 /* AND THE FIRST VERSION OF THESE WAS FAR TOO LOUD. 3.4x radius at a gain of 0.62 put a
  * two-metre orange balloon over every stall in the Holdfast's market
  * (tests/shots/vis-hold2/61-holdfast-gate.png) — the lamps stopped being lamps and became
@@ -143,10 +143,10 @@ const HALO_MUL = 1.75, HALO_MIN = 0.42, HALO_MAX = 3.0;
  * "nothing loud or anoying". A halo is what you see AROUND a lamp on a damp night, so it is
  * a little bigger than the bulb and a lot fainter, and the mist term is what makes it
  * grow — a halo IS the air, so with no air there is barely one. */
-const HALO_GAIN = 0.115, HALO_GAIN_MIST = 0.26;
+const HALO_GAIN = 0.035, HALO_GAIN_MIST = 0.055;
 /* The pool reads at roughly this against a cobbled apron and a forest floor; unlike the
  * halo it is landing on a real surface, so it can afford to be the stronger of the two. */
-const POOL_GAIN = 1.30;
+const POOL_GAIN = 0.12;
 /* Past this a glow mesh is a beacon or a sign, not a lamp, and it lights nothing. */
 const SRC_MAX_R = 14.0;
 /* How far apart two glow vertices have to be before they are two different lamps. 1.4 m is
@@ -641,7 +641,9 @@ export class AirLight {
         const h = Math.max(0.35, s.y - s.poolY);
         // A pool is as wide as the lamp is high, plus its own body. A bulb 4 m up throws a
         // wider, fainter disc than the same bulb on a table: both terms are in here.
-        const rr = s.poolR > 0 ? s.poolR : (h * 1.75 + s.r * 0.9);
+        // Light on the actual wall/floor comes from the nearby point lights.
+        // This is only a faint contact haze, never a room-sized orange paint disc.
+        const rr = Math.min(2.8,s.poolR > 0 ? s.poolR : h * .75 + s.r * .4);
         this._m.makeScale(rr, 1, rr);
         this._m.setPosition(s.x, s.poolY + 0.055, s.z);
         this.pools.setMatrixAt(np, this._m);

@@ -85,6 +85,8 @@ export const STATIONS = Object.freeze([
     id: 'wrong-turn', dial: '106.7', name: 'WRONG TURN', kind: 'music',
     parts: [
       { file: 'voice-2.wav', kind: 'voice' },
+      { file: 'wrong-turn-raid.mp3', kind: 'voice' },
+      { buf: 'radio_carrier', kind: 'music' },
       { file: 'song-3.mp3', kind: 'music' },
       { file: 'song-4.mp3', kind: 'music' },
     ],

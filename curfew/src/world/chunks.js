@@ -43,6 +43,7 @@ import * as THREE from 'three';
 import { CFG } from '../config.js';
 import { buildChunkData, TIERS, MAX_CHUNK_SEG } from './chunk-worker.js';
 import { groundDetail, frostAt, heightAt, normalAt, flats, flatCount } from './terrain.js';
+import { sinkholeDepthAt } from './world-scars.js';
 import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
 import { loadScannedSurface } from './scanned-materials.js';
 import { preloadPlaceSurfaceLibrary } from './place-surfaces.js';
@@ -274,21 +275,20 @@ const SOIL_MAX = 0.62;      // never a full replacement: it is exposed earth, no
 const SOIL_DRY_LO = 0.02, SOIL_DRY_HI = 0.40;    // on groundDetail, whose p05..p95 is +-0.41
 const SOIL_CONVEX_HI = 0.08;                     // on the curvature term, whose p95 is 0.135
 
-// The road. matRoad's colour is the CROWN's linear albedo and the profile texture scales
-// down from it across the ribbon. ART.md 3.2.2: "a road at night is legible because it
-// reflects the sky, not because it is a different grey" — so the crown is cool, and it is
-// the one place in the county where the ground is allowed above the region albedo.
-const ROAD_CROWN = [0.180, 0.190, 0.215];
+// Asphalt has a modest worn centre. A pale blue 1.9x stripe baked into diffuse
+// albedo looked like a moving light pool, even with every local light disabled.
+// The surface stays neutral; actual moon and lamp colours provide the lighting.
+const ROAD_CROWN = [0.105, 0.108, 0.112];
 const ROAD_CROWN_HALF_M = 0.60;   // ART.md 3.2.2's 1.2 m strip, as a half-width
 const ROAD_CROWN_FALL_M = 0.55;   // and how far it takes to fall to the shoulder
-const ROAD_SHOULDER = 0.53;       // crown : shoulder = 1.89, ART.md 3.2.2's 1.9x
+const ROAD_SHOULDER = 0.86;
 // ROUND 16: 0.37 -> 0.31 and 0.60 m -> 0.80 m. ART.md 3.2.3 wanted this strip so "the road
 // has an EDGE instead of a seam", and with the county's verge DARK it had nothing to be an
 // edge against. It does now: the pale gravel shoulder outside the ribbon measures 0.163
 // luminance against the asphalt's 0.101, so a dark lip on the tarmac is the line between
 // them. Judged in tests/shots/ground-r16b/road-feet.png, where the asphalt met the gravel
 // as a bare polygon boundary with no lip visible at all.
-const ROAD_EDGE = 0.31;
+const ROAD_EDGE = 0.52;
 const ROAD_EDGE_M = 0.80;
 // ROUND 16: 128 x 256, up from 64 x 128. MEASURED, with the ribbon finally rasterising
 // (tools/road-probe.mjs: 60.1% of the frame red, against 0.13% before the winding was
@@ -301,13 +301,13 @@ const ROAD_EDGE_M = 0.80;
 // texture is 128 KB and it is one upload at boot.
 const ROAD_TEX_W = 128, ROAD_TEX_H = 256;
 const ROAD_GRAIN = 0.13;          // per-texel aggregate, off the crown
-const ROAD_GRAIN_CROWN = 0.05;    // and much less on it: a wet crown is wet all the way
+const ROAD_GRAIN_CROWN = 0.16;
 // ROUND 16: 0.18 -> 0.30. This is the ribbon's only NON-REPEATING channel — the profile
 // tiles every 8 m, so anything that must not repeat over a two-kilometre straight has to
 // ride here. "A tired station light reflected in only a few patches of asphalt" is the art
 // direction's own sentence and it is a world-space patch, not a texture.
 const ROAD_DETAIL_AMP = 0.30;
-const ROAD_WET_G = 0.07, ROAD_WET_B = 0.22;   // and those patches go COOL: they are sky
+const ROAD_WET_G = 0.015, ROAD_WET_B = 0.025;
 
 // Roads and collision now share the terrain field. The finalizer projects the ribbon
 // onto the rendered LOD triangles with a small asphalt offset. The old 0.24--1.2 m
@@ -931,6 +931,17 @@ export class Chunks {
           }
         }
 
+        // The collapse exposes cooler mineral soil. Tint these same terrain
+        // vertices at every LOD; a separate surface can cross the chunk triangles.
+        const collapseDepth = sinkholeDepthAt(wx, wz);
+        if (collapseDepth > 0) {
+          let scar = Math.min(1, collapseDepth / 2);
+          scar *= scar * (3 - 2 * scar);
+          col[o] += (0.118 - col[o]) * scar;
+          col[o + 1] += (0.101 - col[o + 1]) * scar;
+          col[o + 2] += (0.081 - col[o + 2]) * scar;
+        }
+
         // 2c. FROST. A MATERIAL, like the soil above it and for the same reason: it has to make
         //     the ground a different substance, not a lighter version of the same one. It runs
         //     BEFORE the multiply, so a frosted patch still takes the canopy, the curvature and
@@ -995,6 +1006,7 @@ export class Chunks {
   /** Project every ribbon vertex onto the actual rendered terrain before upload. */
   _liftRibbon(rib, quad) {
     const pos = rib.positions;
+    const station=flats().find(f=>f.id==='filling-station');
     // Match the actual terrain triangles, including their LOD, instead of raising
     // the road by a quarter metre and burying tyres in its non-colliding surface.
     for (let i = 0; i < pos.length; i += 3) {
@@ -1003,7 +1015,13 @@ export class Chunks {
       const a=heightAt(gx,gz),b=heightAt(gx+quad,gz),c=heightAt(gx,gz+quad);
       const meshY=u+v<=1 ? a+(b-a)*u+(c-a)*v
         : heightAt(gx+quad,gz+quad)*(u+v-1)+b*(1-v)+c*(1-u);
-      pos[i+1]=Math.max(heightAt(x,z),meshY)+RIBBON_CLEAR;
+      // The filling station has its own continuous authored forecourt. The road
+      // used to sit two centimetres above it and paint a bright stripe through
+      // its cracks, debris and parking bays. Let that paving own its interior.
+      const d=station?Math.hypot(x-station.x,z-station.z):Infinity;
+      const t=station?Math.max(0,Math.min(1,(d-station.r*.80)/(station.r*.07))):1;
+      const lift=-.018+(RIBBON_CLEAR+.018)*t*t*(3-2*t);
+      pos[i+1]=Math.max(heightAt(x,z),meshY)+lift;
     }
   }
 
@@ -1536,8 +1554,7 @@ export class Chunks {
           const t = Math.min(1, (dm - edgeAt) / Math.max(0.05, halfM - edgeAt));
           p = ROAD_SHOULDER + (ROAD_EDGE - ROAD_SHOULDER) * (t * t * (3 - 2 * t));
         }
-        // The wear rides the shoulder, never the crown: a wet crown is wet all the way.
-        let q = p * (dm <= ROAD_CROWN_HALF_M ? 1 : wear);
+        let q = p * wear;
         // ROUND 16 — THE AGGREGATE. One deterministic hash per texel, 4.5 cm x 3.1 cm of
         // road each, which is the size of the stone in the tarmac. It is the only thing on
         // the ribbon at that scale and without it the road is a sheet of paper. It TILES

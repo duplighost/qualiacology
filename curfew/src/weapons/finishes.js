@@ -31,7 +31,8 @@ float finishPattern(vec3 p, float id){
   else if(id<7.5){a=pow(abs(sin(p.x*.4+sin(p.z*.8)+sin(p.y*.9))),48.0);}
   else if(id<8.5){a=pow(abs(sin(p.z*1.7+abs(p.y)*.8)),36.0)*(.55+.45*sin(p.y*.7));}
   else if(id<9.5){a=smoothstep(.985,.999,abs(sin(p.z*1.2+abs(sin(p.y*.45))*4.0)));}
-  else {a=pow(abs(sin(p.z*1.8)),42.0)*smoothstep(.15,.75,abs(sin(p.y*.4)));}
+  else if(id<10.5){a=pow(abs(sin(p.z*1.8)),42.0)*smoothstep(.15,.75,abs(sin(p.y*.4)));}
+  else {a=pow(abs(sin(p.y*1.7+sin(p.z*.65)*2.0)),28.0)*smoothstep(.15,.65,abs(sin(p.z*.23)));}
   return clamp(a,0.0,1.0);
 }
 `;
@@ -72,7 +73,7 @@ export function setMaterialFinish(material,id){
   u.uFinishIndex.value=f.index;
   u.uFinishBase.value.setHex(f.colors.base);u.uFinishAccent.value.setHex(f.colors.accent);
   // Pearl, wet sap, tarnished brass, bone, fired ceramic, opal and frost have distinct light responses.
-  const response=[[0,0],[.34,.48],[.7,.1],[.4,.72],[.6,.2],[.58,.44],[.35,.62],[.28,.5],[.54,.35],[.72,.3],[.46,.56]][f.index];
+  const response=[[0,0],[.34,.48],[.7,.1],[.4,.72],[.6,.2],[.58,.44],[.35,.62],[.28,.5],[.54,.35],[.72,.3],[.46,.56],[.72,.18]][f.index]||[.65,.25];
   material.roughness=f.index?o.roughness*.65+response[0]*.35:o.roughness;
   material.metalness=f.index?o.metalness*.80+response[1]*.20:o.metalness;
 }

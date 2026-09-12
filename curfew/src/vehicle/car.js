@@ -1213,6 +1213,7 @@ export class Car {
     this.prevPitch = this.pitch; this.prevRoll = this.roll; this.prevBob = this.bob; this.prevSusp = this.susp;
     this.prevWheelRot = this.wheelRot; this.prevSteer = this.steer;
     this.prevDoorA = this.doorA; this.prevCabin = this.cabin;
+
   }
 
   /* ----------------------------------------------------------------- lights */
@@ -1405,6 +1406,7 @@ export class Car {
     }
 
     switch (this.mode) {
+      case 'thrown': this._stepEncounterThrow(dt); break;
       case 'arriving': this._stepArriving(dt); break;
       case 'idle': this._stepIdle(dt); break;
       case 'entering': this._stepEntering(dt); break;
@@ -2308,6 +2310,7 @@ export class Car {
       for (let i = 0; i < list.length; i++) {
         const e = list[i];
         if (!e || !e.alive || !e.pos || !e.def) continue;
+        if(e.pos.y>this.y+ROOF_Y||e.pos.y+(e.def.height||1.8)*(e.scale||1)<this.y+.30)continue;
         const dx = e.pos.x - cx, dz = e.pos.z - cz;
         const rr = r + (e.def.radius || 0);
         if (dx * dx + dz * dz > rr * rr) continue;
@@ -3589,6 +3592,50 @@ export class Car {
    * since ROUND 13 also the body of _park(), which is how a fresh session and a respawn put
    * the car on the road (the wrapper adds the nose direction and the beacon).
    */
+  throwFromEncounter(spec) {
+    if(!this.exists||this.mode==='thrown'||!this.ctx.shared.inCar)return false;
+    const p=this._player,terrain=this._terrain,col=this._collision;
+    if(!p||p.dead||!terrain)return false;
+    // Measure from the car, not the boss: the player can enter the ambush from
+    // either edge of the field. Validate a 60–70 m throw before taking the seat
+    // away, with clear-ground fallbacks that never shorten it below 48 m.
+    const start={x:this.x,y:this.y,z:this.z,heading:this.heading};
+    const dir=Math.atan2(Number.isFinite(spec.dx)?spec.dx:-1,Number.isFinite(spec.dz)?spec.dz:.4),distance=Math.max(60,Math.min(70,spec.distance||70));
+    const ranges=[distance,60,54,48];
+    let landing=null;
+    for(let ring=0;ring<ranges.length&&!landing;ring++)for(let j=0;j<12;j++){
+      const a=dir+(j%2?1:-1)*Math.ceil(j/2)*.23,r=ranges[ring];
+      const x=start.x+Math.sin(a)*r,z=start.z+Math.cos(a)*r,y=terrain.heightAt(x,z);
+      if(!Number.isFinite(y)||y<3||Math.abs(x)>3800||Math.abs(z)>3800)continue;
+      if(terrain.slopeAt?.(x,z)>.16||col?.canOccupy&&!col.canOccupy(x,z,3.1,2.8))continue;
+      landing={x,z,y};break;
+    }
+    if(!landing)return false;
+    this._forceRelease();this._removeRoof();this.mode='thrown';this.beacon=true;
+    this._encounterThrow={start,landing,t:0,duration:2.35};this.spawnCooldown=90;
+    // Place beside the vacated door, then give a short physical shove. Look and
+    // locomotion remain owned by the player controller throughout the impact.
+    let ex=start.x+Math.cos(start.heading)*4,ez=start.z-Math.sin(start.heading)*4;
+    for(let i=0;i<12;i++){const a=dir+i*Math.PI/6,x=start.x+Math.sin(a)*6,z=start.z+Math.cos(a)*6;if(!col?.canOccupy||col.canOccupy(x,z,.4,1.9)){ex=x;ez=z;break;}}
+    p.teleport(ex,ez);p.pos.y+=.3;p.grounded=false;p.vel.set((ex-start.x)*.8,4.2,(ez-start.z)*.8);p.invuln=Math.max(p.invuln||0,3.5);p._sync?.();
+    this._emit('car:thrown',{x:start.x,z:start.z,landingX:landing.x,landingZ:landing.z});return true;
+  }
+
+  _stepEncounterThrow(dt){
+    const e=this._encounterThrow;if(!e){this.mode='idle';return;}e.t+=dt;
+    const u=Math.min(1,e.t/e.duration),arc=4*u*(1-u);
+    this.x=lerp(e.start.x,e.landing.x,u);this.z=lerp(e.start.z,e.landing.z,u);
+    this.y=lerp(e.start.y,e.landing.y,u)+arc*15;
+    this.heading=e.start.heading+u*2.3;this.pitch=Math.sin(u*Math.PI)*.85;this.roll=Math.sin(u*Math.PI*2)*1.2;this.bob=0;this.susp=0;
+    this.doorA=Math.max(this.doorA,.65);this.cabin=.22;
+    if(u<1)return;
+    this.mode='idle';this._encounterThrow=null;this.pitch=0;this.roll=0;this.speed=0;this.steer=0;this.engineOn=false;this.hotwired=true;this.beacon=true;
+    this._placeRoof();this._setHeadlights(true);this.spawnCooldown=90;
+    this._emit('car:impact',{x:this.x,y:this.y,z:this.z,speed:18});
+    this.ctx.bus.emit('noise',{kind:'car:crash',x:this.x,y:this.y,z:this.z,loudness:65,radius:65});
+    this.ctx.systems.get('fx')?.addTrauma?.(.14);
+  }
+
   placeAt(x, z, heading) {
     const terr = this._terrain;
     this.x = x; this.z = z;

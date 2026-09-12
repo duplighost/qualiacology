@@ -2156,7 +2156,7 @@ export class Places {
     const roads = this._sys('roads');
     if (!roads || typeof roads.nearestRoadInfo !== 'function') return (this._roadPts = []);
     const routes = roads.routes || [];
-    const nRoutes = routes.length || 1;
+    const nRoutes = routes.filter(r=>!r.noMinors).length || 1;
     const STEP = 8;
 
     // --- seed one point per route with a coarse scan -----------------------
@@ -2167,6 +2167,9 @@ export class Places {
         if (roads.roadDistance(x, z) > 30) continue;
         const info = roads.nearestRoadInfo(x, z, 30);
         if (!info || !info.hit) continue;
+        // This short authored drive already owns its scene. Keep the saved minor
+        // indices stable instead of inserting another random site into the table.
+        if(routes[info.route]?.noMinors)continue;
         if (!seeds.has(info.route)) seeds.set(info.route, [info.x, info.z]);
         if (seeds.size >= nRoutes) break;
       }
