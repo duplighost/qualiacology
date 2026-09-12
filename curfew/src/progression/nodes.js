@@ -282,7 +282,7 @@ export const NODES = Object.freeze([
 
   /* ---- HANDS: the gun answers harder ------------------------------------------ */
   { id: 'hands_1', branch: 'hands', tier: 0, cost: 1, name: 'Active',
-    line: 'There is a moment in the reload. Take it, or jam.',
+    line: 'Press R at the reload click to finish early. Mistime it and the gun jams.',
     install: (s, hooks) => {
       void s;
       // The WINDOW is the node. weapons asks once, at _startReload, and gets the spec or
@@ -293,7 +293,7 @@ export const NODES = Object.freeze([
     line: 'A headshot kill returns a round to your gun. Hit harder.',
     install: (s, hooks) => { s.damageMul = DMG_HEAVY; hooks.on('onKill','hands_2',returnHeadshotRound); } },
   { id: 'hands_3', branch: 'hands', tier: 2, cost: 3, name: 'Hold',
-    line: 'The sight stops drifting, and a reload you ran out of resumes.',
+    line: 'Steady your aim. Interrupted reloads resume where you left them.',
     install: (s, hooks) => {
       void s;
       hooks.on('holdBreath', 'hands_3', () => HOLD_BREATH);
@@ -394,7 +394,7 @@ export const NODES = Object.freeze([
       hooks.on('onKill', 'blood_3', bloodPrice);
     } },
   { id: 'blood_4', branch: 'blood', tier: 3, cost: 5, name: 'Iron',
-    line: 'Fifty more health, and once a cycle the end of you is a run.',
+    line: '150 max health. Survive a fatal hit once each cycle and escape.',
     install: (s, hooks) => {
       // The WHOLE number, like Wind: 150 is what the body reads once Thick Skin and Iron
       // are both owned, not 120 + 30 applied in some order.

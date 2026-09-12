@@ -41,7 +41,7 @@ export const ACTIONS = Object.freeze([
   // 'radiotune' is a rising edge that moves the dial one station on. Both are car verbs
   // and both travel the same canonical edge path as use/horn/carlocate above.
   'use', 'horn', 'carlocate', 'lookback', 'radiotune',
-  'menu',
+  'menu', 'perks', 'map',
 ]);
 
 // e.code, never e.key: e.key is layout- and modifier-dependent and 'W' with shift held
@@ -68,6 +68,7 @@ const KEYMAP = Object.freeze({
   KeyQ: 'swap',
   Digit1: 'slot1', Digit2: 'slot2',
   Escape: 'menu',
+  Tab: 'perks', KeyM: 'map',
 });
 
 // Mouse buttons, written out because ARC shipped with these two swapped. MouseEvent.button:
@@ -196,9 +197,9 @@ export class Input {
     if (!this.enabled || e.repeat) return;
     const a = KEYMAP[e.code];
     if (!a) return;
-    if (this.unlockedPlay && a !== 'menu') this.requestLock();
+    if (this.unlockedPlay && !['menu','perks','map'].includes(a)) this.requestLock();
     // Space scrolls the page and the arrows scroll it too — both would fight the game.
-    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+    if (e.code === 'Space' || e.code.startsWith('Arrow') || (e.code === 'Tab' && !this.ctx.systems?.get('hud')?.isPaused?.())) e.preventDefault();
     this._down(a);
   }
 

@@ -41,6 +41,7 @@
 //      breath are added on top at the true presentation time.
 
 import * as THREE from 'three';
+import {finishMaterial, setMaterialFinish} from './finishes.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, DEG, clamp, clamp01, lerp, ease, Spring, Spring3, sway2 } from '../engine/math.js';
 import CFG from '../config.js';
@@ -492,6 +493,8 @@ export class Viewmodel {
    * request) the world's own grade pass covers the gun and this would double-apply.
    */
   _grade(mat) {
+    delete mat.userData.finishUniforms;
+    delete mat.userData.finishOriginal;
     if (!this._gradeU) {
       const G = CFG.render.grade;
       this._gradeU = {
@@ -521,6 +524,7 @@ export class Viewmodel {
     };
     // CONSTANT, and identical across all four materials: they share one program.
     mat.customProgramCacheKey = () => 'curfew-vm-grade-1';
+    finishMaterial(mat, 0);
     mat.needsUpdate = true;
   }
 
@@ -655,6 +659,8 @@ export class Viewmodel {
     const brassM = new THREE.MeshStandardMaterial({ color: 0x7a5a24, roughness: 0.42, metalness: 0.80 });
     this._mats = [wood, blued, matte, brassM];
     for (const m of this._mats) this._grade(m);
+    this._finishMats = [...this._mats];
+    for (let i=0;i<this._finishMats.length;i++) this._finishMats[i].userData.finishUniforms.uFinishStrength.value = i===2?.72:i===3?.48:1;
     // A visible alternating grip communicates the held-Space movement without a tutorial.
     this.climbHands=[];
     const glove=matte.clone();glove.color.setHex(0x4c4940);this._grade(glove);this._mats.push(glove);
@@ -1130,6 +1136,13 @@ export class Viewmodel {
   }
 
   async init() {
+    const apply = () => {
+      const id=this.ctx.systems.get('progress')?.activeFinish?.()||'original';
+      for(const m of this._finishMats) setMaterialFinish(m,id);
+      this.finishId=id;
+    };
+    this._finishOff=[this.ctx.bus.on('save:loaded',apply),this.ctx.bus.on('finish:equipped',apply)];
+    apply();
     // Parent the brass here, not in the constructor: main.js constructs every system before
     // it calls any init(), so ctx.scene does not exist yet at construction time. ready()
     // asserts brass.parent so a future regression fails the boot sweep instead of silently
@@ -1159,6 +1172,7 @@ export class Viewmodel {
   ready() { return !!this.scene && !!this.camera && !!this.gun && !!this.brass.parent; }
 
   dispose() {
+    for(const off of this._finishOff||[]) off();
     if (this.ctx.scene) this.ctx.scene.remove(this.brass);
     this.brass.geometry.dispose();
     this.brass.material.dispose();

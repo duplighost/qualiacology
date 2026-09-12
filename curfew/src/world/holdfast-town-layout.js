@@ -1,0 +1,91 @@
+// Holdfast's shared, local-space plan. Geometry, people and shop prompts use these
+// same doors and lanes; +Z is the gate/road side of the castle.
+const H = Math.PI * 0.5;
+const house = (id, name, x, z, w, d, h, yaw, use, outside = false) => {
+  const door = { x: x - Math.sin(yaw) * (d / 2 + 1.4), z: z - Math.cos(yaw) * (d / 2 + 1.4) };
+  return Object.freeze({ id, name, x, z, w, d, h, yaw, use, outside, door: Object.freeze(door) });
+};
+
+export const HOLDFAST_TOWN = Object.freeze({
+  bounds: { minX: -64, maxX: 64, minZ: -63, maxZ: 166 },
+  gate: { x: 0, z: 66 },
+  lamps: [
+    { id: 'street-west', x: -7.8, z: 55, y: 2.05 },
+    { id: 'street-east', x: 7.8, z: 55, y: 2.05 },
+    ...[-1, 1].flatMap(side => [25, 34, 52].map(z => ({ id: 'market-' + side + '-' + z, x: side * 17, z, y: 2.25 }))),
+    { id: 'shrine-west', x: -9.5, z: 12, y: 2.05 },
+    { id: 'shrine-east', x: 9.5, z: 12, y: 2.05 },
+    { id: 'road-west', x: -22, z: 116, y: 2.05 },
+    { id: 'road-east', x: 22, z: 116, y: 2.05 },
+    { id: 'entry-west', x: -13, z: 146, y: 2.12 },
+    { id: 'entry-east', x: 13, z: 146, y: 2.12 },
+  ],
+  hatch: { x: 45, z: -43, approachX: 43.4, approachZ: -39, name: 'The sealed stair' },
+  buildings: [
+    house('candlehouse', 'The candle house', -53, 16, 11, 9, 6.2, -H, 'candles'),
+    house('mender', 'The mender', -53, 34, 11, 9, 7.0, -H, 'cloth'),
+    house('bakehouse', 'The bread oven', -53, 52, 11, 9, 6.3, -H, 'bakery'),
+    house('infirmary', 'The quiet house', 53, 17, 11, 9, 6.8, H, 'infirmary'),
+    house('school', 'The old school', 53, 35, 11, 9, 7.4, H, 'school'),
+    house('watch-home', 'The watch house', 53, 52, 11, 9, 6.4, H, 'home'),
+    house('armourer', 'Moonrise arms', -28, 31, 12, 10, 7.4, -H, 'weapons'),
+    house('inn', 'The last room', -28, 51, 12, 10, 8.8, -H, 'inn'),
+    house('engine-house', 'The warm engine', 28, 28, 12, 10, 7.5, H, 'car'),
+    house('soup-kitchen', 'The long table', 28, 50, 12, 10, 6.6, H, 'kitchen'),
+    house('archive', 'The days we counted', -33, -16, 14, 10, 9.2, -H, 'archive'),
+    house('glasshouse', 'The moon garden', 33, -13, 14, 10, 8.2, H, 'garden'),
+    house('weaver-home', 'The blue shutters', -36, -47, 14, 11, 7.2, Math.PI, 'home'),
+    house('bell-keeper', 'The bell keeper', 31, -48, 13, 11, 7.8, Math.PI, 'bells'),
+    house('north-home', 'The northern room', -13, -52, 14, 10, 8.6, Math.PI, 'home'),
+    house('memorial-house', 'The empty chairs', 9, -52, 14, 10, 7.1, Math.PI, 'memorial'),
+    house('outer-arms', 'The road armourer', -31, 99, 12, 10, 6.0, -H, 'weapons', true),
+    house('outer-motor', 'The gate garage', 31, 99, 12, 12, 6.8, H, 'car', true),
+    house('outer-home', 'The first warm window', -34, 130, 11, 9, 5.7, -H, 'home', true),
+    house('outer-kitchen', 'The travellers table', 34, 130, 12, 10, 6.2, H, 'kitchen', true),
+  ],
+  shops: [
+    { id: 'holdfast-arms', kind: 'weapons', building: 'armourer', x: -24.4, z: 31, yaw: H, outside: false },
+    { id: 'holdfast-engine', kind: 'car', building: 'engine-house', x: 24.4, z: 28, yaw: -H, outside: false },
+    { id: 'holdfast-road-arms', kind: 'weapons', building: 'outer-arms', x: -27.4, z: 99, yaw: H, outside: true },
+    { id: 'holdfast-gate-garage', kind: 'car', building: 'outer-motor', x: 26.4, z: 99, yaw: -H, outside: true },
+  ],
+  // Each waypoint is a clear patch of the actual floor, not a straight-line shortcut
+  // through a house. Walkers traverse adjacent points in this order and then reverse.
+  routes: [
+    [[-36.7, 54], [-36.7, 42], [-36.7, 23], [-39, 8], [-31, 8], [-29, 16]],
+    [[36.7, 54], [36.7, 41], [36.7, 20], [39, 8], [27, 8], [21, 15]],
+    [[-12, 61], [-12, 52], [-12, 38], [-12, 20], [-17, 11]],
+    [[12, 61], [12, 50], [12, 37], [12, 20], [18, 11]],
+    [[-40, -37], [-26, -38], [-8, -37], [12, -37], [31, -37], [40, -37]],
+    [[-20, 147], [-19, 131], [-18, 114], [-18, 97], [-18, 83]],
+    [[20, 147], [19, 131], [18, 114], [18, 97], [18, 83]],
+  ],
+  residents: [
+    { id: 'candlekeeper', x: -45, z: 16, yaw: H, home: 'candlehouse' },
+    { id: 'mender', x: -53, z: 34, yaw: H, home: 'mender' },
+    { id: 'baker', x: -45, z: 53, yaw: H, home: 'bakehouse' },
+    { id: 'nurse', x: 53, z: 17, yaw: -H, home: 'infirmary' },
+    { id: 'teacher', x: 45, z: 35, yaw: -H, home: 'school' },
+    { id: 'watch-wife', x: 45, z: 53, yaw: -H, home: 'watch-home' },
+    { id: 'innkeeper', x: -28, z: 51, yaw: H, home: 'inn' },
+    { id: 'cook', x: 28, z: 50, yaw: -H, home: 'soup-kitchen' },
+    { id: 'archivist', x: -33, z: -16, yaw: H, home: 'archive' },
+    { id: 'gardener', x: 33, z: -13, yaw: -H, home: 'glasshouse' },
+    { id: 'bellkeeper', x: 30, z: -39, yaw: 0, home: 'bell-keeper' },
+    { id: 'widower', x: 9, z: -43, yaw: 0, home: 'memorial-house' },
+    { id: 'traveller', x: -24, z: 130, yaw: H, home: 'outer-home' },
+    { id: 'roadcook', x: 24, z: 130, yaw: -H, home: 'outer-kitchen' },
+    { id: 'wellkeeper', x: -18, z: 11, yaw: -H },
+    { id: 'shrinekeeper', x: 9, z: 11, yaw: -H },
+  ],
+  signs: [
+    { x: -12.6, z: 148, yaw: 0, text: 'HOLDFAST\nEngines in the road.\nPeople in the light.' },
+    { x: -20.7, z: 31, yaw: H, text: 'MOONRISE ARMS' },
+    { x: 20.7, z: 28, yaw: -H, text: 'THE WARM ENGINE' },
+    { x: -23.7, z: 99, yaw: H, text: 'ARMS / AMMUNITION' },
+    { x: 22.7, z: 99, yaw: -H, text: 'PARTS / REPAIRS' },
+    { x: 43.2, z: -40.8, yaw: 0, text: 'SEALED BY THE WATCH\nDo not answer from below.' },
+  ],
+});
+
+export default HOLDFAST_TOWN;

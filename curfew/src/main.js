@@ -78,6 +78,9 @@ import * as mechanicsMod from './world/mechanics.js';
 import * as scavengingMod from './world/scavenging.js';
 import * as sanctuariesMod from './world/sanctuaries.js';
 import * as territoryMod from './world/territory.js';
+import * as holdfastLifeMod from './world/holdfast-life.js';
+import * as bossSitesMod from './world/boss-sites.js';
+import * as bossEncountersMod from './enemies/boss-encounters.js';
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -110,6 +113,7 @@ const SYSTEMS = [
   ['search', searchMod],       // ROUND 15: hold E over a dead person. AFTER places, BEFORE enemies
   ['dusk-to-dawn', duskToDawnMod], // ROUND 22: photocell pole lights along the roads, on since it happened. AFTER places (reads minorList and shares its materials) and roads/terrain/collision; BEFORE enemies (they read ctx.shared.litPoles) and dealer (it sells the bulbs)
   ['sanctuaries', sanctuariesMod], // plans clearings before streaming; publishes safe light ground
+  ['boss-sites', bossSitesMod],
   // -- the body -------------------------------------------------------------------------
   ['player', playerMod],
   ['camera', cameraMod],       // presents after player because it reads renderPos
@@ -122,6 +126,7 @@ const SYSTEMS = [
   ['dread', dreadMod],         // AFTER director: the two gate each other every step
   ['interior-horror', interiorHorrorMod], // authored residents, after the county's permit
   ['kneeler', kneelerMod],     // ROUND 6: the guardian at three places. Outside the pool, after the pool
+  ['boss-encounters', bossEncountersMod],
   ['dogcaller', dogcallerMod], // ROUND 22: the voice in the woods is a man. AFTER enemies (it reads the pool)
   // -- the loop -------------------------------------------------------------------------
   ['car', carMod],
@@ -130,6 +135,7 @@ const SYSTEMS = [
   ['dealer', dealerMod],      // saved cash/arsenal and the physical travelling shop
   ['mechanics', mechanicsMod],
   ['scavenging', scavengingMod],
+  ['holdfast-life', holdfastLifeMod],
   ['opening', openingMod],     // the station's authored grounds, calendar and first night
   ['signage', signageMod],     // ROUND 22: the promises — words in the world, painted on the opening's paper program
   ['audio', audioMod],         // late, so it can hear everything that happened this step

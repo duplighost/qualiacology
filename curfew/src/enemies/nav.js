@@ -386,6 +386,8 @@ export function relocate(ctx, e, rng, out) {
 
 /** ROUND 22: is (x, z) inside any LIT pool lane E publishes? Tolerates the array's absence. */
 export function inLitPool(ctx, x, z) {
+  if(ctx?.systems?.get('holdfast-life')?.contains(x,z)) return true;
+  for(const q of ctx?.shared?.bossZones||[]) if(q.on && Math.hypot(x-q.x,z-q.z)<q.r)return true;
   const sh = ctx && ctx.shared;
   const poles = sh && (sh.safeLightZones || sh.litPoles);
   if (!Array.isArray(poles)) return false;
