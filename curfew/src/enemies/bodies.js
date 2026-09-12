@@ -1,51 +1,14 @@
-// CURFEW — how the things in the trees LOOK.
-//
-// There is no character art on this machine and no skinning pipeline, so this
-// file is the whole answer to "will Alex believe it". Five rules govern every
-// line below, and each of them is a mistake somebody already made:
-//
-//  1. RIGID-PART RIGS WITH REAL JOINTS. Block torso, shoulder caps, capsule
-//     limbs, elbow and knee PIVOTS. Cylinder people were rejected outright.
-//     donor: uninvited/src/npc.js:12-157 (figure(): stacked blocks, shoulder
-//     caps, shoulder -> upper -> ELBOW -> forearm + hand, hip -> thigh ->
-//     KNEE -> shin + foot)
-//
-//  2. THE SCARY-SILHOUETTE RECIPE. A lightless sculpted head CAVITY in a
-//     near-black material, mirrored hood folds, a pointed brow, and a SHALLOW
-//     mask so the sockets read as dark holes rather than burying themselves.
-//     donor: secondhand-saint/src/characters.js:4446-4530 ('lightless hood
-//     cavity', the two mirrored 'deep reliquary hood fold's, 'armoured pointed
-//     hood brow', and the comment at :4501 explaining why the mask is shallow)
-//
-//  3. LAMBERT, NEVER MeshStandard, for cloth and flesh. Standard's fixed F0
-//     specular makes dark cloth read PALE under a lamp; Lambert has no specular
-//     term at all. Albedos live below the torch.
-//     donor: fetch/src/outside.js:4450-4480 ('what was pale was never the
-//     albedo ... the answer was to stop being glossy') plus the FOUR-VALUE law
-//     at :4461-4467 — bodies differ by VALUE, not by hue.
-//
-//  4. ONE PROGRAM PER MATERIAL CLASS. Every shell material is built by the same
-//     factory with the same onBeforeCompile and a constant customProgramCacheKey,
-//     so forty-six bodies cost ONE program. CINDERBLOOM's 55-second compile was
-//     per-enemy materials that differed textually.
-//     donor: donors/dagger/src/enemies.js:13-36 ('All clones share one compiled
-//     program (identical onBeforeCompile), so cloning per-enemy is cheap.')
-//
-//  5. THE REVEAL BUDGET. No body is fully lit closer than 6 m unless it is
-//     committed to a strike. That is not a lighting note, it is a uniform:
-//     uReveal multiplies the albedo, enemies.js drives it, and a body that
-//     looks bad in full light therefore never stands in full light.
-//
-// Two programs total: a Lambert shell (vertexColors + the reveal/rim hooks) and
-// ONE MeshBasic config shared by the eye glints, the contact shadow and the far
-// impostor card. Everything is textually identical so the three share a program.
-// castShadow is FALSE on every body on purpose — see the note by CONTACT_TEX.
-
+// Shared character geometry and articulated rigs. Enemy controllers own combat,
+// hit zones and timing; this module owns anatomy, surfaces and their presentation.
+// PBR tissue keeps its detail under nearby lights through readableSurface.
 import * as THREE from 'three';
 import { TAU } from '../engine/math.js';
 import { SPECIES, FORM } from './species.js';
 import { buildHuman } from '../art/people.js';
 import { buildMarrow } from './marrow-body.js';
+import { loft, tendon, boneHorn, wornPlate, wingMembrane, characterMaps } from '../art/character-sculpt.js';
+import { readableSurface } from '../art/surface-light.js';
+import { fracturedMask } from '../art/character-faces.js';
 
 /* ==========================================================================
    Palette. Values, not hues — a greyscale photograph is the only place this
@@ -129,7 +92,7 @@ const TINT_CEIL = 1.14;
    ========================================================================== */
 
 // A constant cache key so every shell material in the game links exactly once.
-const SHELL_CACHE_KEY = 'curfew-body-shell-v1';
+const SHELL_CACHE_KEY = 'curfew-body-shell-v2-pbr';
 
 // GLSL. No backtick appears anywhere inside these template literals, not even
 // in a comment (the project law). No identifier named flat, half or sat.
@@ -151,6 +114,7 @@ rimF = rimF * rimF * rimF;
 totalEmissiveRadiance += uRim * rimF * uRimGain;`;
 
 function shellCompile(shader) {
+  this.userData.surfaceCompile.call(this, shader);
   const ud = this.userData;
   shader.uniforms.uRim = { value: ud.rim };
   shader.uniforms.uRimGain = { value: ud.rimGain };
@@ -171,12 +135,13 @@ function shellCacheKey() { return SHELL_CACHE_KEY; }
  * separate a silhouette from the trees, not to make a neon toy.
  */
 export function makeShell(tintR, tintG, tintB) {
-  const m = new THREE.MeshLambertMaterial({
+  const m = new THREE.MeshStandardMaterial({
     color: new THREE.Color(tintR, tintG, tintB),
     vertexColors: true,          // EVERY geometry fed to this MUST carry `color`
-    map: bodySurfaceTex(false),
-    bumpMap: bodySurfaceTex(true),
-    bumpScale: 0.085,
+    ...characterMaps('hide'),
+    bumpScale: 0.013,
+    roughness: 1,
+    metalness: 0,
     emissive: 0x000000,
     fog: true,
   });
@@ -192,52 +157,11 @@ export function makeShell(tintR, tintG, tintB) {
   m.userData.rim = new THREE.Color(0.49, 0.755, 0.715);
   m.userData.rimGain = RIM_GAIN;
   m.userData.reveal = 1;
+  readableSurface(m);
+  m.userData.surfaceCompile=m.onBeforeCompile;
   m.onBeforeCompile = shellCompile;
   m.customProgramCacheKey = shellCacheKey;
   return m;
-}
-
-/* One shared skin of old cloth, hide, porcelain and bone. The species colours
-   still come from vertex colour; this only supplies material breakup. Every
-   shell receives both maps, so this remains one Lambert program instead of a
-   per-species shader zoo. The broad stains survive at eight metres, while the
-   thin scratches only appear when the torch is close. */
-const BODY_SURFACE = [null, null];
-function bodySurfaceTex(asBump) {
-  const slot = asBump ? 1 : 0;
-  if (BODY_SURFACE[slot]) return BODY_SURFACE[slot];
-  const N = 128;
-  const data = new Uint8Array(N * N * 4);
-  const hash = (x, y) => {
-    let n = (x * 374761393 + y * 668265263) | 0;
-    n = (n ^ (n >>> 13)) * 1274126177;
-    return (n ^ (n >>> 16)) >>> 0;
-  };
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      const coarse = hash(x >> 3, y >> 3) & 31;
-      const fine = hash(x, y) & 15;
-      const bruise = ((x * 3 + y * 5 + (hash(x >> 4, y >> 4) & 31)) % 41) < 7;
-      const cut = ((x + y * 7 + (hash(x >> 2, y >> 2) & 63)) % 79) < 2;
-      let v;
-      if (asBump) v = 92 + coarse * 3 + fine * 2 + (cut ? -54 : 0);
-      else v = 178 + coarse * 2 + fine + (bruise ? -34 : 0) + (cut ? -76 : 0);
-      v = Math.max(28, Math.min(255, v));
-      const p = (y * N + x) * 4;
-      data[p] = data[p + 1] = data[p + 2] = v;
-      data[p + 3] = 255;
-    }
-  }
-  const t = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
-  t.name = asBump ? 'body-decay-bump' : 'body-decay-colour';
-  t.colorSpace = THREE.NoColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.minFilter = THREE.LinearMipmapLinearFilter;
-  t.magFilter = THREE.LinearFilter;
-  t.generateMipmaps = true;
-  t.needsUpdate = true;
-  BODY_SURFACE[slot] = t;
-  return t;
 }
 
 /** Write the reveal uniform, before or after the program has linked. */
@@ -283,12 +207,8 @@ export function makeBasic(map, colour) {
 let WHITE_TEX = null;
 export function whiteTex() {
   if (WHITE_TEX) return WHITE_TEX;
-  const c = document.createElement('canvas');
-  c.width = 4; c.height = 4;
-  const g = c.getContext('2d');
-  g.fillStyle = '#ffffff';
-  g.fillRect(0, 0, 4, 4);
-  const t = new THREE.CanvasTexture(c);
+  const t = new THREE.DataTexture(new Uint8Array([255,255,255,255]),1,1);
+  t.needsUpdate=true;
   t.colorSpace = THREE.NoColorSpace;
   t.generateMipmaps = false;
   t.minFilter = THREE.LinearFilter;
@@ -305,18 +225,14 @@ let CONTACT_TEX = null;
 export function contactTex() {
   if (CONTACT_TEX) return CONTACT_TEX;
   const N = 64;
-  const c = document.createElement('canvas');
-  c.width = N; c.height = N;
-  const g = c.getContext('2d');
-  const grad = g.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
-  // Opaque-ish core falling to nothing: the one part of a body the light
-  // genuinely cannot reach. donor: fetch/src/outside.js:4481-4487 (contactMat)
-  grad.addColorStop(0.0, 'rgba(255,255,255,0.80)');
-  grad.addColorStop(0.55, 'rgba(255,255,255,0.34)');
-  grad.addColorStop(1.0, 'rgba(255,255,255,0.0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, N, N);
-  const t = new THREE.CanvasTexture(c);
+  const pixels=new Uint8Array(N*N*4);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){
+    const d=Math.hypot((x+.5-N/2)/(N/2),(y+.5-N/2)/(N/2));
+    const alpha=d<.55?.80-(d/.55)*.46:.34*(1-Math.min(1,(d-.55)/.45));
+    const k=(y*N+x)*4;pixels[k]=pixels[k+1]=pixels[k+2]=255;pixels[k+3]=Math.round(alpha*255);
+  }
+  const t = new THREE.DataTexture(pixels,N,N);
+  t.generateMipmaps=true;t.needsUpdate=true;
   t.colorSpace = THREE.NoColorSpace;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   CONTACT_TEX = t;
@@ -401,7 +317,7 @@ function impostorTexture(key) {
   const g = c.getContext('2d');
   g.clearRect(0, 0, W, H);
   // The card is drawn UNLIT (MeshBasic, toneMapped false), while the rig two
-  // metres nearer is a tone-mapped Lambert standing in moonlight. Every byte
+  // metres nearer is a tone-mapped PBR surface standing in moonlight. Every byte
   // written into this canvas is read back as LINEAR (NoColorSpace, below), so
   // linearByte() is the only correct way to put an authored sRGB hex on it —
   // see its comment for the 8.6x error this replaces. The glints are painted at
@@ -588,17 +504,16 @@ class Weld {
 }
 const EMPTY = {};
 
-/* Shared primitives, built once. Low segment counts: a body is ~500 triangles
-   and there may be 24 of them. */
+// Cached sculpted forms. Curvature is in the mesh, while fine relief is material detail.
 const P = {
-  box: new THREE.BoxGeometry(1, 1, 1),
-  sph: new THREE.SphereGeometry(0.5, 10, 8),
-  sphLo: new THREE.SphereGeometry(0.5, 8, 6),
-  cap: new THREE.CapsuleGeometry(0.5, 1, 3, 7),
-  cone: new THREE.ConeGeometry(0.5, 1, 7),
-  cone3: new THREE.ConeGeometry(0.5, 1, 3),
-  cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 7),
-  torus: new THREE.TorusGeometry(0.5, 0.10, 5, 10),
+  box: wornPlate(),
+  sph: new THREE.SphereGeometry(0.5, 24, 16),
+  sphLo: new THREE.SphereGeometry(0.5, 16, 10),
+  cap: loft([[-1,.005,.005],[-.83,.29,.28],[-.52,.43,.40],[-.08,.47,.43],[.36,.43,.41],[.72,.30,.28],[1,.005,.005]],{segments:20,subdivisions:2,folds:.035}),
+  cone: boneHorn(),
+  cone3: boneHorn(),
+  cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 16),
+  torus: new THREE.TorusGeometry(0.5, 0.10, 10, 28),
 };
 
 /* ==========================================================================
@@ -821,15 +736,18 @@ function buildHound(def) {
   // A flayed cage, not a coffee table. Five complete ribs stand proud of a
   // pinched hide core; from the front they make a broad bony vault and from
   // either flank they disclose the empty depth between each ring.
-  w.add(P.sph, 0, backY, -0.04 * s, skin,
-    { rx: -0.10, sx: 0.32 * s, sy: 0.31 * s, sz: 0.68 * s });
-  w.add(P.sph, 0.04 * s, backY - 0.08 * s, 0.36 * s, cloth,
-    { rx: 0.16, rz: -0.10, sx: 0.30 * s, sy: 0.27 * s, sz: 0.42 * s });
-  for (let i = 0; i < 5; i++) {
-    const z = (-0.30 + i * 0.145) * s;
-    w.add(P.torus, (i % 2 ? 0.018 : -0.014) * s, backY + (i % 2 ? 0.01 : -0.018) * s, z, bone,
-      { rz: (i - 2) * 0.055, sx: (0.94 - i * 0.055) * s,
-        sy: (0.50 - i * 0.035) * s, sz: 0.40 * s });
+  const trunk=loft([[-.47,.025,.04],[-.36,.18,.205],[-.21,.252,.236],[-.02,.242,.215],
+    [.18,.169,.158,.01,.01],[.36,.157,.142,.024,-.04],[.55,.075,.074,.027,-.018],[.59,.003,.003]],
+  {segments:32,subdivisions:4,folds:.045,seed:2});
+  trunk.rotateX(Math.PI/2);w.add(trunk,0,backY,0,skin,{sx:s,sy:s,sz:s});trunk.dispose();
+  // Ribs wrap from spine around the actual chest. Separate roots and tapering
+  // sternum tips read as anatomy instead of five complete metal hoops.
+  for (let i=0;i<6;i++)for(const side of [-1,1]) {
+    const z=-.33+i*.102,rx=.267-i*.012;
+    const rib=tendon([[0,backY/s+.207,z],[side*rx*.70,backY/s+.168,z-.018],
+      [side*rx,backY/s-.015,z-.032],[side*rx*.63,backY/s-.179,z+.011],[side*.035,backY/s-.17,z+.056]],
+    .027-i*.0015,.009,24,9);
+    w.add(rib,0,0,0,bone,{sx:s,sy:s,sz:s});rib.dispose();
   }
   // Knife scapulae and an uneven vertebral saw remain legible after every
   // surface detail has collapsed into a single dark pixel.
@@ -897,21 +815,20 @@ function buildHound(def) {
         sx: 0.040 * GLINT_SCALE * s, sy: 0.005 * GLINT_SCALE * s, sz: 0.014 * GLINT_SCALE * s });
   }
 
-  // Reverse-jointed leg and three long toes, all one shared geometry and one
-  // draw per limb. The bent profile replaces four identical dangling sticks.
-  const leg = new Weld();
-  leg.add(P.cap, 0, -0.19 * s, 0.035 * s, skin,
-    { rx: -0.14, sx: 0.15 * s, sy: 0.30 * s, sz: 0.14 * s });
-  leg.add(P.sphLo, 0, -0.37 * s, 0.105 * s, bone,
-    { sx: 0.16 * s, sy: 0.13 * s, sz: 0.18 * s });
-  leg.add(P.cap, 0, -0.50 * s, -0.025 * s, skin,
-    { rx: 0.54, sx: 0.105 * s, sy: 0.23 * s, sz: 0.10 * s });
-  leg.add(P.box, 0, -0.625 * s, -0.135 * s, bone,
-    { sx: 0.18 * s, sy: 0.065 * s, sz: 0.30 * s });
-  for (let i = -1; i <= 1; i++) {
-    leg.add(P.cone3, i * 0.055 * s, -0.64 * s, -0.29 * s, bone,
-      { rx: -1.36, rz: i * 0.16, sx: 0.027 * s,
-        sy: (0.18 - Math.abs(i) * 0.025) * s, sz: 0.027 * s });
+  // Two real joints support each quarter of the body. The femur loads the
+  // knee; the narrow lower leg folds behind it during the airborne half-step.
+  const leg=new Weld(),lower=new Weld();
+  const upperLeg=loft([[.02,.041,.042],[0,.064,.07],[-.11,.077,.079,0,.035],
+    [-.23,.052,.059,0,.09],[-.34,.037,.041,0,.10]],{segments:20,subdivisions:3,folds:.035});
+  leg.add(upperLeg,0,0,0,skin,{sx:s,sy:s,sz:s});upperLeg.dispose();
+  const lowerLeg=loft([[.022,.034,.04],[0,.047,.048],[-.075,.031,.033,0,-.03],
+    [-.19,.022,.026,0,-.11],[-.28,.024,.030,0,-.20]],{segments:18,subdivisions:3,folds:.025});
+  lower.add(lowerLeg,0,0,0,skin,{sx:s,sy:s,sz:s});lowerLeg.dispose();
+  lower.add(P.sphLo,0,0,0,bone,{sx:.10*s,sy:.085*s,sz:.11*s});
+  lower.add(P.sphLo,0,-.29*s,-.21*s,bone,{sx:.15*s,sy:.065*s,sz:.22*s});
+  for(let i=-1;i<=1;i++){
+    const toe=tendon([[i*.044,-.286,-.23],[i*.055,-.30,-.33],[i*.054,-.304,-.41+Math.abs(i)*.028]],.016,.0025,15,7);
+    lower.add(toe,0,0,0,bone,{sx:s,sy:s,sz:s});toe.dispose();
   }
 
   // ROUND 22: THE RUNNER is this same animal STRETCHED along its spine (species.js
@@ -928,13 +845,13 @@ function buildHound(def) {
     shell,
     eyes,
     limb: leg.geometry('hound-leg'),
-    fore: null,
+    fore: lower.geometry('hound-lower-leg'),
     joints: [
       // four hips, front pair then rear pair. y is the pivot height.
-      { x: -0.20 * s, y: 0.62 * s, z: -0.34 * s * st },
-      { x: 0.20 * s, y: 0.62 * s, z: -0.34 * s * st },
-      { x: -0.21 * s, y: 0.60 * s, z: 0.34 * s * st },
-      { x: 0.21 * s, y: 0.60 * s, z: 0.34 * s * st },
+      { x: -0.20 * s, y: 0.62 * s, z: -0.34 * s * st, fore: -.34*s, foreZ: .10*s },
+      { x: 0.20 * s, y: 0.62 * s, z: -0.34 * s * st, fore: -.34*s, foreZ: .10*s },
+      { x: -0.21 * s, y: 0.60 * s, z: 0.34 * s * st, fore: -.34*s, foreZ: .10*s },
+      { x: 0.21 * s, y: 0.60 * s, z: 0.34 * s * st, fore: -.34*s, foreZ: .10*s },
     ],
     zones: [
       { x: 0, y: headY, z: -0.74 * s * st, r: 0.26 * s, zone: 'head' },
@@ -973,8 +890,11 @@ function buildPallbearer(def) {
   // Layered hanging cloth with real gaps between the tongues. These pieces are
   // deliberately different lengths; a single cone always turns back into a
   // pawn as soon as it is seen head-on.
-  w.add(P.cap, -0.03 * s, 1.02 * s, 0, cloth,
-    { rz: 0.055, sx: 0.48 * s, sy: 1.12 * s, sz: 0.34 * s });
+  const shroud=loft([[.10,.37,.235,.025,.025],[.24,.34,.229],[.48,.288,.203],
+    [.78,.239,.161,-.018,.01],[1.06,.21,.148,-.027,.01],[1.30,.28,.155,-.03,0],
+    [1.49,.286,.13,-.03,0],[1.60,.133,.089,-.02,0],[1.62,.07,.06]],
+  {segments:40,subdivisions:4,folds:.15,seed:4});
+  w.add(shroud,0,0,0,cloth,{sx:s,sy:s,sz:s});shroud.dispose();
   const panels = [
     [-0.34, 0.57, 0.12, 0.31, 0.98, 0.10],
     [-0.13, 0.48, -0.04, 0.28, 1.12, -0.04],
@@ -983,8 +903,9 @@ function buildPallbearer(def) {
   ];
   for (let i = 0; i < panels.length; i++) {
     const p = panels[i];
-    w.add(P.cone3, p[0] * s, p[1] * s, p[2] * s, i % 2 ? SEAM : cloth,
-      { rx: Math.PI, rz: p[5], sx: p[3] * s, sy: p[4] * s, sz: 0.26 * s });
+    const hem=loft([[-.45,.004,.006],[-.34,.09,.035],[-.1,.11,.034],[.23,.12,.030],[.48,.035,.01]],
+    {segments:16,subdivisions:3,folds:.12,seed:i*1.7});
+    w.add(hem,p[0]*s,p[1]*s,p[2]*s-.155*s,i%2?SEAM:cloth,{rz:p[5],sx:s,sy:p[4]*s,sz:s});hem.dispose();
   }
   // Exposed cage bars show through the parted shroud.
   for (const side of [-1, 1]) {
@@ -1067,18 +988,20 @@ function buildHunter(def) {
 
   // A waist like a cable beneath an exposed thoracic cage. The repeated full
   // hoops are large enough to read as anatomy instead of decorative pixels.
-  w.add(P.cap, 0.035 * s, hipY + 0.22 * s, 0.04 * s, skin,
-    { rz: -0.08, sx: 0.20 * s, sy: 0.56 * s, sz: 0.16 * s });
-  w.add(P.sphLo, -0.035 * s, hipY - 0.02 * s, 0, cloth,
-    { rz: 0.10, sx: 0.31 * s, sy: 0.23 * s, sz: 0.22 * s });
-  for (let i = 0; i < 5; i++) {
-    const y = (1.24 + i * 0.115) * s;
-    w.add(P.torus, (i % 2 ? 0.025 : -0.018) * s, y, -0.005 * s, bone,
-      { rz: (i - 2) * 0.035, sx: (0.72 - i * 0.045) * s,
-        sy: (0.42 - i * 0.025) * s, sz: 0.34 * s });
+  const torso=loft([[.91,.052,.045,-.01,0],[1.00,.154,.111,-.027,.01],
+    [1.12,.109,.077,.013,.029],[1.26,.166,.093,.024,.018],[1.42,.22,.128,.012,.005],
+    [1.58,.253,.139,-.013,.01],[1.72,.241,.112,-.025,.029],[1.79,.126,.092,-.018,.04],
+    [1.82,.034,.03,-.017,.028]],{segments:36,subdivisions:4,folds:.042});
+  w.add(torso,0,0,0,skin,{sx:s,sy:s,sz:s});torso.dispose();
+  for(let i=0;i<6;i++)for(const side of [-1,1]){
+    const y=1.21+i*.083,rx=.167+i*.014;
+    const rib=tendon([[side*.034,y+.062,.116],[side*rx*.85,y+.04,.082],
+      [side*rx,y,-.034],[side*rx*.64,y-.030,-.117],[side*.025,y-.052,-.122]],
+    .022,.008,24,9);
+    w.add(rib,0,0,0,bone,{sx:s,sy:s,sz:s});rib.dispose();
   }
-  w.add(P.box, 0, 1.49 * s, 0.09 * s, skin,
-    { sx: 0.13 * s, sy: 0.72 * s, sz: 0.14 * s });
+  const spine=tendon([[0,1.02,.095],[.045,1.22,.127],[.021,1.48,.153],[-.026,1.76,.13]],.045,.026,28,10);
+  w.add(spine,0,0,0,bone,{sx:s,sy:s,sz:s});spine.dispose();
 
   // Four scapular blades turn the top half into a closing insect trap. The
   // inner pair rises above the head; the outer pair hooks down toward the arms.
@@ -1089,61 +1012,52 @@ function buildHunter(def) {
       { rz: side * 0.78, rx: 0.12, sx: 0.12 * s, sy: 0.70 * s, sz: 0.10 * s });
     w.add(P.cone3, side * 0.50 * s, shoulderY - 0.06 * s, -0.01 * s, bone,
       { rz: side * -0.72, rx: -0.18, sx: 0.075 * s, sy: 0.45 * s, sz: 0.075 * s });
-    w.add(P.sphLo, side * 0.31 * s, shoulderY - 0.08 * s, 0, skin,
-      { sx: 0.22 * s, sy: 0.18 * s, sz: 0.18 * s });
   }
 
-  // The head is a suspended black seed below the blade tips, with an incomplete
-  // nasal carapace. Bright eyes now live inside a shape, not on a round ball.
-  w.add(P.cap, 0, shoulderY - 0.01 * s, -0.13 * s, skin,
-    { rx: 1.12, sx: 0.12 * s, sy: 0.22 * s, sz: 0.12 * s });
-  w.add(P.sph, 0, headY - 0.04 * s, -0.22 * s, VOID,
-    { sx: 0.28 * s, sy: 0.32 * s, sz: 0.25 * s });
-  w.add(P.cone3, -0.07 * s, headY + 0.10 * s, -0.39 * s, bone,
-    { rx: 1.15, rz: 2.96, sx: 0.23 * s, sy: 0.18 * s, sz: 0.13 * s });
-  w.add(P.box, 0.07 * s, headY - 0.09 * s, -0.42 * s, bone,
-    { rz: -0.16, ry: 0.10, sx: 0.10 * s, sy: 0.25 * s, sz: 0.055 * s });
-  w.add(P.cone3, -0.05 * s, headY - 0.31 * s, -0.33 * s, bone,
-    { rx: Math.PI, rz: -0.20, sx: 0.11 * s, sy: 0.35 * s, sz: 0.10 * s });
-  for (const side of [-1, 1]) {
-    w.add(P.sphLo, side * 0.080 * s, headY + 0.015 * s, -0.455 * s, VOID,
-      { sx: 0.10 * s, sy: 0.055 * s, sz: 0.035 * s });
+  // A human cranial structure stretched under the shoulder blades. The face
+  // still has a nose and cheek bones, but its jaw has split away and the eye
+  // apertures see into an unlit interior.
+  const neck=tendon([[0,shoulderY/s+.015,.016],[.015,shoulderY/s-.01,-.14],[0,headY/s-.04,-.255]],.070,.046,24,12);
+  w.add(neck,0,0,0,skin,{sx:s,sy:s,sz:s});neck.dispose();
+  const mask=fracturedMask({variant:0,origin:[0,headY/s,-.235],scale:[1.66,2.36,1.55],fracture:.021,mouth:.031});
+  w.add(mask.innerGeometry,0,0,0,VOID,{sx:s,sy:s,sz:s});mask.innerGeometry.dispose();
+  w.add(mask.geometry,0,0,0,bone,{sx:s,sy:s,sz:s});mask.geometry.dispose();
+  const hunterEyes=new Weld();
+  for(const [x,y,z] of mask.eyes){
+    hunterEyes.add(P.sphLo,x*s,y*s,(z-.01)*s,0xffffff,{sx:.033*s,sy:.006*s,sz:.011*s});
   }
-  const sockZ = -0.47;
 
-  // Long limbs, but no smooth sticks: each upper arm is wrapped by a shoulder
-  // blade and each forearm ends in a wrist spur plus four hooked fingers.
-  const upper = new Weld();
-  upper.add(P.cap, 0, -0.25 * s, 0, skin,
-    { rz: -0.10, sx: 0.17 * s, sy: 0.38 * s, sz: 0.14 * s });
-  upper.add(P.cone3, 0.08 * s, -0.24 * s, 0.02 * s, bone,
-    { rz: -0.42, sx: 0.055 * s, sy: 0.48 * s, sz: 0.055 * s });
-  const fore = new Weld();
-  fore.add(P.cap, 0, -0.27 * s, 0, skin,
-    { rz: 0.06, sx: 0.125 * s, sy: 0.42 * s, sz: 0.105 * s });
-  fore.add(P.cone3, -0.10 * s, -0.40 * s, 0.04 * s, bone,
-    { rz: 0.26, rx: -0.50, sx: 0.060 * s, sy: 0.48 * s, sz: 0.060 * s });
-  fore.add(P.box, 0, -0.55 * s, -0.05 * s, bone,
-    { sx: 0.17 * s, sy: 0.08 * s, sz: 0.22 * s });
-  for (let i = -2; i <= 1; i++) {
-    fore.add(P.cone3, i * 0.060 * s + 0.025 * s, -0.59 * s, -0.23 * s, bone,
-      { rx: -1.22 - (i & 1) * 0.13, rz: i * 0.10,
-        sx: 0.030 * s, sy: (0.30 + ((i + 2) % 2) * 0.07) * s, sz: 0.030 * s });
+  // Muscle narrows into visible tendons at the elbow and wrist. Hands are
+  // narrow palms with four crooked fingers, continuous with the forearm.
+  const upper=new Weld(),fore=new Weld(),thigh=new Weld(),shin=new Weld();
+  const armShape=loft([[.025,.038,.035],[0,.089,.081],[-.12,.086,.066,.01,0],
+    [-.28,.067,.052,.007,.006],[-.44,.041,.040],[-.52,.037,.038]],
+    {segments:24,subdivisions:3,folds:.045});
+  upper.add(armShape,0,0,0,skin,{sx:s,sy:s,sz:s});armShape.dispose();
+  const foreShape=loft([[.02,.037,.039],[-.075,.053,.046],[-.21,.040,.034],[-.38,.026,.023,0,-.012],
+    [-.51,.023,.022,0,-.02],[-.57,.049,.029,0,-.03],[-.64,.042,.025,0,-.044]],
+    {segments:24,subdivisions:3,folds:.035});
+  fore.add(foreShape,0,0,0,skin,{sx:s,sy:s,sz:s});foreShape.dispose();
+  for(let i=0;i<4;i++){
+    const x=(i-1.5)*.025,len=.21-Math.abs(i-1.5)*.03;
+    const digit=tendon([[x,-.618,-.043],[x*1.25,-.67,-.058],[x*1.3,-.68-len*.6,-.106],
+      [x*1.10,-.68-len,-.09]],.015,.0035,22,8);
+    fore.add(digit,0,0,0,bone,{sx:s,sy:s,sz:s});digit.dispose();
   }
-  const thigh = new Weld();
-  thigh.add(P.cap, 0, -0.25 * s, 0.025 * s, skin,
-    { rx: -0.10, sx: 0.18 * s, sy: 0.40 * s, sz: 0.15 * s });
-  thigh.add(P.cone3, 0.08 * s, -0.46 * s, 0.10 * s, bone,
-    { rx: -0.45, rz: -0.55, sx: 0.070 * s, sy: 0.38 * s, sz: 0.070 * s });
-  const shin = new Weld();
-  shin.add(P.cap, 0, -0.25 * s, -0.04 * s, skin,
-    { rx: 0.22, sx: 0.13 * s, sy: 0.39 * s, sz: 0.11 * s });
-  shin.add(P.box, 0, -0.51 * s, -0.12 * s, SEAM,
-    { sx: 0.16 * s, sy: 0.07 * s, sz: 0.34 * s });
+  const thighShape=loft([[.015,.051,.047],[-.08,.090,.076],[-.24,.071,.055,0,.009],
+    [-.41,.046,.043,0,.025],[-.51,.039,.041,0,.028]],{segments:24,subdivisions:3,folds:.035});
+  thigh.add(thighShape,0,0,0,skin,{sx:s,sy:s,sz:s});thighShape.dispose();
+  const shinShape=loft([[.02,.037,.04,0,.028],[-.10,.059,.050,0,.018],[-.28,.036,.033,0,-.018],
+    [-.43,.026,.032,0,-.061],[-.51,.04,.07,0,-.096]],{segments:22,subdivisions:3,folds:.035});
+  shin.add(shinShape,0,0,0,skin,{sx:s,sy:s,sz:s});shinShape.dispose();
+  for(let i=-1;i<=1;i++){
+    const toe=tendon([[i*.023,-.50,-.105],[i*.036,-.52,-.182],[i*.04,-.53,-.253+Math.abs(i)*.02]],.018,.004,18,8);
+    shin.add(toe,0,0,0,bone,{sx:s,sy:s,sz:s});toe.dispose();
+  }
 
   return {
     shell: w.geometry('hunter-shell'),
-    eyes: eyeGeometry(headY, s, sockZ, 0.080),
+    eyes: hunterEyes.geometry('hunter-eyes'),
     limb: upper.geometry('hunter-upper'), fore: fore.geometry('hunter-fore'),
     thigh: thigh.geometry('hunter-thigh'), shin: shin.geometry('hunter-shin'),
     joints: [
@@ -1290,15 +1204,13 @@ function buildPale(def) {
   // plates tied over it. Large gaps between the plates prevent the torch from
   // turning the whole body into one beige plastic toy.
   const shroud = 0x343330;
-  w.add(P.cap, 0.015, 1.05, 0.02, shroud,
-    { rz: -0.045, sx: 0.29, sy: 0.46, sz: 0.23 });
-  w.add(P.cone3, -0.11, 0.91, 0.015, shroud,
-    { rx: Math.PI, rz: 0.08, sx: 0.30, sy: 0.50, sz: 0.28 });
-  w.add(P.cone3, 0.14, 0.95, -0.02, cloth,
-    { rx: Math.PI, rz: -0.12, sx: 0.28, sy: 0.43, sz: 0.26 });
+  const garment=loft([[.70,.107,.08,.015,.018],[.82,.166,.104],[.94,.138,.086],
+    [1.08,.133,.104],[1.25,.184,.108,-.013,0],[1.34,.190,.087,-.02,0],
+    [1.42,.085,.067,-.008,0],[1.44,.04,.04]],{segments:32,subdivisions:3,folds:.11,seed:5});
+  w.add(garment,0,0,0,shroud);garment.dispose();
   // collar and separated rib plates
-  w.add(P.torus, 0, 1.29, -0.01, bone,
-    { rx: 1.57, sx: 0.49, sy: 0.43, sz: 0.52 });
+  const collar=tendon([[-.17,1.32,-.037],[-.075,1.35,-.099],[0,1.30,-.117],[.071,1.34,-.101],[.17,1.31,-.037]],.022,.014,26,9);
+  w.add(collar,0,0,0,bone);collar.dispose();
   for (let i = 0; i < 4; i++) {
     for (const side of [-1, 1]) {
       w.add(P.cone3, side * (0.11 + i * 0.014), 1.09 + i * 0.095, -0.20, bone,
@@ -1321,61 +1233,44 @@ function buildPale(def) {
       { rz: 1.57, sx: 0.13, sy: 0.038, sz: 0.13 });
   }
 
-  // Oversized head assembled from two misregistered porcelain shells around a
-  // genuine black cleft. The fracture goes from crown to jaw and one half has
-  // slipped lower; it cannot read as a mannequin face from any useful range.
-  w.add(P.sph, 0, headY + 0.015, -0.015, VOID,
-    { sx: 0.36, sy: 0.42, sz: 0.31 });
-  w.add(P.sph, -0.185, headY + 0.085, -0.075, bone,
-    { rz: 0.24, ry: -0.14, sx: 0.31, sy: 0.43, sz: 0.25 });
-  w.add(P.sph, 0.175, headY - 0.115, -0.065, cloth,
-    { rz: -0.34, ry: 0.18, sx: 0.18, sy: 0.25, sz: 0.21 });
-  w.add(P.box, -0.005, headY - 0.015, -0.318, VOID,
-    { rz: -0.10, sx: 0.105, sy: 0.66, sz: 0.026 });
-  // broken halo/crown — five unequal porcelain nails, never a neat tiara
-  const crown = [
-    [-0.31, 1.83, -0.06, -0.80, 0.34], [-0.18, 1.91, -0.03, -0.35, 0.44],
-    [-0.035, 1.95, 0.00, -0.02, 0.50], [0.16, 1.77, -0.02, 0.52, 0.26],
-    [0.29, 1.70, -0.05, 0.92, 0.20],
-  ];
-  for (let i = 0; i < crown.length; i++) {
-    const c = crown[i];
-    w.add(P.cone3, c[0], c[1], c[2], i % 2 ? cloth : bone,
-      { rz: c[3], sx: 0.042, sy: c[4], sz: 0.042 });
+  // A broken anatomical face. One cheek has slipped down its fracture, and
+  // the eye and mouth apertures look into a real recessed cavity.
+  const mask=fracturedMask({variant:2,origin:[-.005,headY,-.04],scale:[1.70,1.90,1.55],fracture:.027,mouth:.026});
+  w.add(mask.innerGeometry,0,0,0,VOID);mask.innerGeometry.dispose();
+  w.add(mask.geometry,0,0,0,bone);mask.geometry.dispose();
+  const eyes=new Weld();
+  for(const [x,y,z] of mask.eyes){
+    eyes.add(P.sphLo,x,y,z-.009,0xffffff,{sx:.027,sy:.0055,sz:.009});
   }
-  // broad empty sockets and a displaced lower face shard
-  w.add(P.sphLo, -0.160, headY + 0.100, -0.325, VOID,
-    { rz: -0.12, sx: 0.115, sy: 0.060, sz: 0.035 });
-  w.add(P.sphLo, 0.170, headY - 0.070, -0.315, VOID,
-    { rz: 0.22, sx: 0.105, sy: 0.050, sz: 0.035 });
-  w.add(P.box, 0.07, headY - 0.21, -0.31, bone,
-    { rz: -0.16, ry: 0.08, sx: 0.16, sy: 0.10, sz: 0.055 });
-
-  const eyes = new Weld();
-  eyes.add(P.sphLo, -0.164, headY + 0.100, -0.352, 0xffffff,
-    { rz: -0.12, sx: 0.060, sy: 0.009, sz: 0.018 });
-  eyes.add(P.sphLo, 0.173, headY - 0.070, -0.342, 0xffffff,
-    { rz: 0.22, sx: 0.043, sy: 0.007, sz: 0.016 });
+  // Slender roots have grown through the back of the effigy, leaving its face
+  // recognizable until the light catches the holes in it.
+  for(let i=0;i<5;i++){
+    const x=(i-2)*.061;
+    const root=tendon([[x*.7,1.67,.016],[x,1.81,.028],[x*1.45,1.91+(i%2)*.08,.002],
+      [x*1.65,1.96+(i%2)*.08,-.054]],.014,.002,22,8);
+    w.add(root,0,0,0,i%2?cloth:bone);root.dispose();
+  }
 
   const arm = new Weld();
-  arm.add(P.box, 0, -0.18, 0, bone,
-    { rz: 0.055, sx: 0.105, sy: 0.31, sz: 0.10 });
+  const upper=loft([[.01,.026,.025],[-.05,.046,.043],[-.18,.041,.034],[-.32,.027,.03],[-.35,.012,.014]],{segments:20,subdivisions:3,folds:.045});
+  arm.add(upper,0,0,0,bone);upper.dispose();
   arm.add(P.sphLo, 0.02, -0.36, 0, VOID,
-    { sx: 0.13, sy: 0.12, sz: 0.12 });
-  arm.add(P.box, 0.02, -0.51, -0.015, cloth,
-    { rz: -0.04, sx: 0.085, sy: 0.27, sz: 0.08 });
-  for (let i = -1; i <= 1; i++) {
-    arm.add(P.cone3, i * 0.040, -0.68, -0.075, bone,
-      { rx: -1.22, rz: i * 0.14, sx: 0.024,
-        sy: 0.20 - Math.abs(i) * 0.025, sz: 0.024 });
+    { sx: 0.070, sy: 0.075, sz: 0.065 });
+  const forearm=loft([[-.38,.016,.018,.02,0],[-.44,.035,.038,.02,-.006],[-.57,.027,.025,.018,-.015],[-.66,.021,.018,.016,-.03]],{segments:20,subdivisions:3,folds:.06});
+  arm.add(forearm,0,0,0,cloth);forearm.dispose();
+  arm.add(P.sphLo,.016,-.665,-.035,bone,{sx:.066,sy:.075,sz:.04});
+  for(let i=-1;i<=1;i++){
+    const digit=tendon([[.016+i*.021,-.68,-.034],[.016+i*.027,-.737,-.050],
+      [.016+i*.029,-.792+Math.abs(i)*.015,-.074]],.010,.003,17,7);
+    arm.add(digit,0,0,0,bone);digit.dispose();
   }
   const leg = new Weld();
-  leg.add(P.box, 0, -0.23, 0, bone,
-    { rz: -0.035, sx: 0.115, sy: 0.39, sz: 0.11 });
+  const thigh=loft([[.006,.034,.03],[-.08,.052,.049],[-.22,.044,.04],[-.39,.029,.03],[-.44,.017,.02]],{segments:20,subdivisions:3,folds:.05});
+  leg.add(thigh,0,0,0,bone);thigh.dispose();
   leg.add(P.sphLo, 0.025, -0.46, 0.015, VOID,
-    { sx: 0.13, sy: 0.11, sz: 0.12 });
-  leg.add(P.box, 0.02, -0.60, -0.025, cloth,
-    { rz: 0.045, sx: 0.090, sy: 0.25, sz: 0.085 });
+    { sx: 0.075, sy: 0.065, sz: 0.065 });
+  const shin=loft([[-.49,.025,.025,.02,0],[-.55,.04,.038,.02,-.006],[-.66,.027,.026,.02,-.025],[-.74,.025,.027,.02,-.025]],{segments:20,subdivisions:3,folds:.05});
+  leg.add(shin,0,0,0,cloth);shin.dispose();
   leg.add(P.box, 0.02, -0.74, -0.085, bone,
     { sx: 0.14, sy: 0.075, sz: 0.28 });
 
@@ -1605,21 +1500,21 @@ function buildMoth(def) {
   // because the pose was never the fault. The sheet is `skin` now (still Y 0.007, still far
   // under the sky) and the veins are `cloth`, so what you resolve first is a WING.
   const wing = new Weld();
-  wing.add(P.cone3, 0, 0.36 * s, 0.02 * s, skin,
-    { rx: Math.PI, rz: 0.10, sx: 0.70 * s, sy: 0.80 * s, sz: 0.05 * s });
-  wing.add(P.box, 0, 0.20 * s, 0.012 * s, cloth, { sx: 0.045 * s, sy: 0.46 * s, sz: 0.030 * s });
+  const membrane=wingMembrane();
+  wing.add(membrane,0,0,0,skin,{sx:s,sy:s,sz:s});
   // two veins THROUGH the sheet, darker than it, so it is a wing and not a paddle
-  for (let i = 0; i < 2; i++) {
-    wing.add(P.box, (0.08 + i * 0.13) * s, 0.36 * s, 0.030 * s, cloth,
-      { rz: -0.28 - i * 0.22, sx: 0.018 * s, sy: 0.52 * s, sz: 0.010 * s });
+  for(let i=0;i<5;i++){
+    const x=-.26+i*.112;
+    const vein=tendon([[0,.03,.012],[x*.48,.30,.035],[x,.60+(.20-Math.abs(x)*.5),.026]],.006,.0025,20,6);
+    wing.add(vein,0,0,0,cloth,{sx:s,sy:s,sz:s});vein.dispose();
   }
   const wingFore = new Weld();
-  wingFore.add(P.cone3, 0, 0.30 * s, 0.01 * s, skin,
-    { rx: Math.PI, rz: -0.16, sx: 0.58 * s, sy: 0.68 * s, sz: 0.045 * s });
+  wingFore.add(membrane,0,0,0,skin,{sx:s*.85,sy:s*.83,sz:s});membrane.dispose();
   // The one pale mark on the whole animal: an eyespot near the tip, which is a real moth's
   // trick and reads at exactly the distance the wings first open.
   wingFore.add(P.sphLo, 0.11 * s, 0.42 * s, 0.030 * s, bone,
     { sx: 0.14 * s, sy: 0.17 * s, sz: 0.02 * s });
+  wingFore.add(P.sphLo,.11*s,.42*s,.043*s,cloth,{sx:.083*s,sy:.105*s,sz:.011*s});
   wingFore.add(P.box, 0, 0.20 * s, 0.012 * s, cloth,
     { sx: 0.030 * s, sy: 0.42 * s, sz: 0.020 * s });
 
@@ -1862,6 +1757,7 @@ export function buildBody(key, rng) {
     if (set.fore && j.fore !== undefined) {
       elbow = new THREE.Group();
       elbow.position.y = j.fore;
+      elbow.position.z = j.foreZ || 0;
       elbow.rotation.x = -0.22;               // a natural resting bend (UNINVITED)
       pivot.add(elbow);
       const fore = new THREE.Mesh(set.fore, shell);
@@ -1994,13 +1890,17 @@ const ANIMATE = {
   trot(parts, a) {
     for (let i = 0; i < parts.limbs.length; i++) {
       const ph = a.gait + (i % 2 ? Math.PI : 0) + (i < 2 ? 0 : Math.PI * 0.5);
-      parts.limbs[i].pivot.rotation.x = Math.sin(ph) * 0.62 * a.moveAmp;
+      const limb=parts.limbs[i],step=Math.sin(ph);
+      limb.pivot.rotation.x = step*.50*a.moveAmp+a.coil*.16;
+      if(limb.elbow)limb.elbow.rotation.x=-Math.max(0,-Math.sin(ph-.30))*.95*a.moveAmp-a.coil*.22;
     }
     // the coil: it draws BACK before it lunges, which is the silhouette change
     parts.shellMesh.position.z = a.coil * 0.24;
     parts.shellMesh.rotation.x = a.coil * -0.34 + Math.sin(a.gait * 2) * 0.035 * a.moveAmp;
+    parts.shellMesh.scale.y=1+Math.sin((a.time||0)*2.2)*.007*(1-a.moveAmp);
     parts.eyeMesh.position.z = parts.shellMesh.position.z;
     parts.eyeMesh.rotation.x = parts.shellMesh.rotation.x;
+    parts.eyeMesh.scale.y=parts.shellMesh.scale.y;
   },
 
   /* ROUND 22. THE RUNNER. The trot's legs at a faster cycle, and two things the hound does
@@ -2011,7 +1911,9 @@ const ANIMATE = {
   dash(parts, a) {
     for (let i = 0; i < parts.limbs.length; i++) {
       const ph = a.gait * 1.35 + (i % 2 ? Math.PI : 0) + (i < 2 ? 0 : Math.PI * 0.5);
-      parts.limbs[i].pivot.rotation.x = Math.sin(ph) * 0.70 * a.moveAmp;
+      const limb=parts.limbs[i];
+      limb.pivot.rotation.x = Math.sin(ph)*.76*a.moveAmp+a.coil*.28;
+      if(limb.elbow)limb.elbow.rotation.x=-Math.max(0,-Math.sin(ph-.22))*1.18*a.moveAmp-a.coil*.42;
     }
     const sh = parts.shellMesh;
     sh.position.y = -a.coil * 0.16;
@@ -2044,7 +1946,8 @@ const ANIMATE = {
       const L = parts.limbs[i];
       const ph = a.gait + (i ? Math.PI : 0);
       L.pivot.rotation.x = Math.sin(ph) * 0.75 * a.moveAmp - a.coil * 1.9 + a.swing * 2.2;
-      L.pivot.rotation.z = (i ? 1 : -1) * (0.12 + a.coil * 0.30);
+      const tension=Math.sin((a.time||0)*(i?7.1:5.3)+i)*.012*(1-a.moveAmp);
+      L.pivot.rotation.z = (i ? 1 : -1) * (0.12 + a.coil * (i?.26:.34))+tension;
       if (L.elbow) L.elbow.rotation.x = -0.30 - Math.abs(Math.sin(ph)) * 0.30 * a.moveAmp - a.coil * 0.5;
     }
     for (let i = 0; i < parts.legs.length; i++) {

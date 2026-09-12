@@ -2058,6 +2058,13 @@ export class Hud {
       I.zoom = zoom; I.cx = this.mapCenter.x; I.cz = this.mapCenter.z;
       g = gm;
     }
+    for (const q of this.ctx.shared.sanctuaryZones || []) {
+      if (!q.found && !q.on) continue;
+      const x=px(q.x), y=pz(q.z), r=q.r/size*S*(overlay?zoom:1);
+      g.strokeStyle=q.on?'#d8bd78':'#aaa38a';g.lineWidth=1.3;
+      if(q.on){g.fillStyle='rgba(220,179,85,.15)';g.beginPath();g.arc(x,y,r,0,TAU);g.fill();g.stroke();}
+      this._spark(g,x,y,4,q.on?1:.55);
+    }
     const foundSet = places && places.found && typeof places.found.has === 'function' ? places.found
       : (prog && prog.found && typeof prog.found.has === 'function' ? prog.found : null);
     const claimedA = places && places.claimed && typeof places.claimed.has === 'function' ? places.claimed : null;
@@ -2535,6 +2542,16 @@ export class Hud {
       this._miniPlaces++;
     }
     g.globalAlpha = 1;
+
+    for (const q of this.ctx.shared.sanctuaryZones || []) {
+      if (!q.found && !q.on) continue;
+      const dx=q.x-px,dz=q.z-pz;
+      if(Math.hypot(dx,dz)>MINI_RANGE+q.r)continue;
+      const x=c+(dx*rx+dz*rz)*scale,y=c-(dx*fx+dz*fz)*scale;
+      g.strokeStyle=q.on?'rgba(241,202,123,.70)':'rgba(197,190,160,.6)';g.lineWidth=1.2;
+      if(q.on){g.fillStyle='rgba(226,181,79,.14)';g.beginPath();g.arc(x,y,q.r*scale,0,TAU);g.fill();g.stroke();}
+      this._spark(g,x,y,3.2,q.on?1:.6);
+    }
 
     // The car only lives on the mini-map while it is inside local range. Beyond that, the
     // explicit button is the one directional surface and no always-on arrow competes with it.

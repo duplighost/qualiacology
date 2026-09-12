@@ -1,46 +1,8 @@
-// CURFEW — the Kneeler's body. ROUND 6, lane C. Owner: the boss lane.
-//
-// Alex, fifth playtest: "I hope there are bosses somewhere." and "Certain enemies should
-// definitely look really scary and good graphics and good style."
-//
-// A 4.40 m load-bearing shape, weight collapsed to one side, that has to read as a BOULDER
-// OR A ROOT BALL from 40 m and as a body from 15. DESIGN section 4's row: 4.40 m, folded,
-// weight on one side. Built the way bodies.js builds the six species, and deliberately
-// with the SAME materials, so it costs no new shader program:
-//
-//   - rigid parts on real joints (shoulder -> ELBOW -> forearm + claw; hip -> KNEE -> shin +
-//     foot). Cylinder people were rejected outright (bodies.js rule 1).
-//   - ONE merged shell for the whole torso-and-head (a Weld with a baked colour attribute),
-//     so the trunk is one draw and the shared Lambert shell program carries bone, hide and
-//     the lightless cavity at once. The limbs are eight more draws on the same material.
-//   - Lambert, never MeshStandard. Albedos below the torch (bodies.js rule 3).
-//   - eyes proud of the sockets as MeshBasic glints, and TWO DORSAL VENTS on the back that
-//     glow when open through the same emissive trick the eyes use — a second MeshBasic mesh
-//     on the identical config (makeBasic), hidden while the vents are shut. No light.
-//
-// THE MATERIALS COME OFF bodies.js's OWN FACTORIES. As of ROUND 7 bodies.js exports
-// makeShell() and contactTex() (docs/ROUND-6/HANDOFF-C.md item 1, docs/NEXT.md section E), so
-// the shell Lambert, the glint Basic and the contact disc are built by the one factory that
-// exists and cannot drift out of program-sharing with the six species. The old path — build a
-// whole hound at boot, keep three of its materials and throw the body away — is still below
-// as a guarded fallback and is no longer taken.
-//
-// ROUND 7 REBUILT THE BODY. The round-6 build read as a CARTOON OWL at 3.4 m under the torch
-// (tests/shots/bodylook/before-kneeler-cathedral-near.png): two big round glowing eyes on a
-// smooth ball head, sausage arms, capsule legs. See the note at the top of kneelerSet() for
-// the five rules that replaced it and the measurement behind each one.
-//
-// donor: Projects/qualiacology/fetch/src/enemies.js:18-22 (KIND.kneeler — h 4.4, r 0.9,
-//   chase 6.2, the hit-zone ladder) and :682-763 (buildKneeler — "a load-bearing animal
-//   silhouette rather than a scaled walker. Its weight has collapsed to one side, the
-//   shoulder yoke is broader than its pelvis, and two crooked forelimb joints plant ahead
-//   of a face hung underneath it"; the hump at (-0.09, 1.48, -0.25), the three bone spine
-//   spurs, the jaw and the mouth void). The proportions below are those, scaled to 4.40 m
-//   and re-jointed so the thing can KNEEL, STAND, SWEEP and FOLD.
-// donor: src/enemies/bodies.js:466-520 (Weld), :567-640 (sculptHead: cavity first, brow
-//   above, a SHALLOW mask, sockets sunk so the glints have holes to sit in).
-
+// The Kneeler: one asymmetrical torso and head mesh, eight articulated limbs,
+// and two dorsal vents. The rig and gameplay zones share the pelvis/torso pose.
+// It borrows PBR tissue, glints and contact shadows from the common body factory.
 import * as THREE from 'three';
+import { loft, tendon, boneHorn, wornPlate } from '../art/character-sculpt.js';
 import * as bodiesMod from './bodies.js';
 
 /* ==========================================================================
@@ -124,14 +86,15 @@ class Weld {
 }
 
 const P = {
-  box: new THREE.BoxGeometry(1, 1, 1),
-  sph: new THREE.SphereGeometry(0.5, 10, 8),
-  sphLo: new THREE.SphereGeometry(0.5, 8, 6),
-  cap: new THREE.CapsuleGeometry(0.5, 1, 3, 7),
-  cone3: new THREE.ConeGeometry(0.5, 1, 3),
-  cone5: new THREE.ConeGeometry(0.5, 1, 5),
-  cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 6),
-  torus: new THREE.TorusGeometry(0.5, 0.10, 5, 10),
+  box: wornPlate(),
+  sph: new THREE.SphereGeometry(0.5, 28, 18),
+  sphLo: new THREE.SphereGeometry(0.5, 18, 12),
+  cap: loft([[-1,.006,.006],[-.83,.25,.28],[-.54,.38,.40],[-.16,.47,.43],
+    [.34,.43,.44],[.68,.29,.30],[1,.006,.006]],{segments:24,subdivisions:3,folds:.05}),
+  cone3: boneHorn(),
+  cone5: boneHorn(),
+  cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 18),
+  torus: new THREE.TorusGeometry(0.5, 0.10, 10, 30),
 };
 
 /* ==========================================================================
@@ -212,20 +175,12 @@ export function kneelerSet() {
      ---------------------------------------------------------------------------------------- */
 
   // --- the pelvis and haunches: low, wide, and heavier on one side
-  w.add(P.sph, 0.06, 0.06, 0.10, CLOTH, { sx: 1.44, sy: 0.66, sz: 1.06, rz: 0.10 });
-  w.add(P.sph, -0.32, 0.30, 0.46, CLOTH, { sx: 1.12, sy: 0.74, sz: 0.88, rz: 0.22 });
-  w.add(P.sph, 0.44, 0.22, 0.30, CLOTH, { sx: 0.86, sy: 0.58, sz: 0.76, rz: -0.16 });
-
-  // --- the barrel. NARROW IN Z: 0.78 deep against 1.14 wide, so the thing is a blade from
-  //     the side and a wall from the front. A starved chest, not a ball.
-  w.add(P.cap, -0.02, 0.88, -0.10, CLOTH, { sx: 1.14, sy: 0.86, sz: 0.78, rz: 0.06 });
-  w.add(P.sph, 0.08, 1.24, -0.28, CLOTH, { sx: 1.06, sy: 0.62, sz: 0.66, rz: -0.10 });
-
-  // --- the yoke, TIPPED: the left shoulder rides high and the right has dropped
-  w.add(P.sph, -0.12, 1.66, -0.06, CLOTH, { sx: 1.72, sy: 0.68, sz: 0.78, rz: -0.17 });
-  // --- the HUMP: the weight collapsed to -X and back. The top of the folded shape.
-  w.add(P.sph, -0.42, 2.04, 0.42, CLOTH, { sx: 1.38, sy: 1.04, sz: 1.26, rz: 0.16 });
-  w.add(P.sph, 0.34, 1.80, 0.30, CLOTH, { sx: 0.90, sy: 0.64, sz: 0.86, rz: -0.20 });
+  const trunk=loft([[-.23,.09,.09,.05,.10],[0,.65,.46,.05,.11],[.30,.66,.49,-.04,.20],
+    [.66,.46,.37,-.01,.01],[.98,.50,.33,.015,-.15],[1.24,.59,.36,-.035,-.17],
+    [1.54,.84,.39,-.10,-.04],[1.83,.74,.47,-.19,.15],[2.12,.61,.52,-.33,.32],
+    [2.38,.39,.34,-.39,.36],[2.55,.006,.006,-.4,.34]],
+  {segments:48,subdivisions:4,folds:.055,seed:7});
+  w.add(trunk,0,0,0,CLOTH);trunk.dispose();
   // shoulder caps at two different heights (the pivots are mirrored to match, see the rig)
   w.add(P.sph, -1.04, 1.84, -0.02, CLOTH, { sx: 0.68, sy: 0.58, sz: 0.70 });
   w.add(P.sph, 0.98, 1.54, -0.06, CLOTH, { sx: 0.58, sy: 0.50, sz: 0.60 });
@@ -246,10 +201,12 @@ export function kneelerSet() {
 
   // Four open thoracic hoops replace a single smooth chest wall. Their front
   // halves catch the torch while the black gaps remain black, even point blank.
-  for (let i = 0; i < 4; i++) {
-    w.add(P.torus, (i % 2 ? 0.05 : -0.04), 0.92 + i * 0.23, -0.40 - i * 0.025, BONE,
-      { rz: (i - 1.5) * 0.035, sx: 1.42 - i * 0.09,
-        sy: 0.76 - i * 0.055, sz: 0.48 });
+  for(let i=0;i<5;i++)for(const side of [-1,1]){
+    const y=.78+i*.175+(side<0?.04:0),radius=.57+i*.025;
+    const rib=tendon([[side*.09,y+.11,.26],[side*radius*.85,y+.08,.09],
+      [side*radius,y,-.20],[side*radius*.67,y-.04,-.48],[side*.05,y-.10,-.50]],
+    .068-i*.004,.025,28,10);
+    w.add(rib,0,0,0,BONE);rib.dispose();
   }
 
   // --- RIBS. Curved bone spurs standing off the flank, offset one rib between the sides so
@@ -304,9 +261,8 @@ export function kneelerSet() {
   // --- THE NECK. Three segments going forward and DOWN from under the yoke. The head is not
   //     on top of this animal; it is slung under the front of it, and that one fact is most of
   //     what stops the shape reading as a person in a costume.
-  w.add(P.cap, 0.06, 1.52, -0.56, SKIN, { rx: 1.02, sx: 0.50, sy: 0.44, sz: 0.50 });
-  w.add(P.cap, 0.09, 1.36, -0.98, SKIN, { rx: 1.24, sx: 0.44, sy: 0.40, sz: 0.44 });
-  w.add(P.cap, 0.10, 1.26, -1.28, SKIN, { rx: 1.36, sx: 0.38, sy: 0.30, sz: 0.38 });
+  const neck=tendon([[.06,1.57,-.38],[.075,1.43,-.65],[.09,1.30,-1.00],[.10,1.25,-1.34]],.27,.16,30,20);
+  w.add(neck,0,0,0,SKIN);neck.dispose();
 
   // --- THE SKULL. Long, narrow, and bowed toward the ground: 1.05 m of it along -Z against
   //     0.44 m across. Cavity first, then the cranial plate, then the jaw with the mouth void
@@ -445,7 +401,7 @@ function borrowMaterials(rng) {
     contact.material.opacity = 0.72;
     contact.rotation.x = -Math.PI / 2;
     // THE PAINTED CAST SHADOW. NEXT.md B4: "fully lit, no shadow". A real one needs
-    // castShadow, and castShadow on a vertexColors Lambert links a DEPTH program the day the
+    // castShadow, and castShadow on a vertexColors material links a DEPTH program the day the
     // boss first enters the moon's cascade — mid-play, which is the one thing the program
     // budget forbids (AGENTS.md). So the shadow is PAINTED: the same soft disc, stretched
     // along the ground away from the moon and laid under the body. One draw, no program, and

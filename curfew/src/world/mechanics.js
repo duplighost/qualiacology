@@ -15,6 +15,7 @@
 // enough of the night has passed and the player is nowhere near the tower.
 
 import { UPGRADES } from '../vehicle/garage.js';
+import { WorkshopCard } from '../vehicle/workshop-card.js';
 
 // How long a killed keeper stays dead, and how far away you have to be for the tower to
 // quietly get its person back. 150 s is about two minutes of driving; RESPAWN_AWAY is
@@ -30,6 +31,7 @@ export class Mechanics {
     this.offer=0;this.tuneRelease=false;this.offers=[];}
   _sys(id){return this.ctx.systems.get(id);}
   async init(){
+    this.card=new WorkshopCard();
     const files=['mechanic-hello-1.wav','mechanic-hello-2.wav','mechanic-fixed.wav'];
     this.bytes=await Promise.all(files.map(async f=>{const r=await fetch(new URL('../../assets/voices/'+f,import.meta.url));if(!r.ok)throw new Error('Missing mechanic speech: '+f);return r.arrayBuffer();}));
     this.off=this.ctx.bus.on('enemy:killed',p=>{
@@ -76,12 +78,12 @@ export class Mechanics {
   /** The list this keeper is offering, rebuilt each frame it is in focus. Repair first. */
   _buildOffers(car,pr){
     const out=this.offers;out.length=0;
-    if(car.wear>.005){
+    if(car.wear>.005||!pr.flag('car:fully-repaired')){
       // ROUND 18. Alex: "The cash system is kind of broken. Things should cost much more."
       // A full rebuild used to top out at 32 coins, which is four searched bodies — the car
       // could be wrecked and repairing it was not a decision. x8, with a floor that means
       // a scratch is still worth paying to have out.
-      out.push({kind:'repair',name:'FULL CAR REPAIR',line:'ENGINE · BRAKES · ELECTRICS',
+      out.push({kind:'repair',name:'FULL CAR REPAIR',line:'Engine, brakes and both headlamps restored.',
         price:Math.max(40,Math.ceil(car.wear*260))});
     }
     for(let i=0;i<UPGRADES.length;i++){
@@ -93,7 +95,7 @@ export class Mechanics {
   }
 
   step(dt){
-    if(!this.ctx.playing||this.ctx.paused)return;this.clock+=dt;
+    if(!this.ctx.playing||this.ctx.paused){this.card?.hide();return;}this.clock+=dt;
     const p=this._sys('player'),en=this._sys('enemies'),pr=this._sys('progress'),car=this._sys('car'),wild=this._sys('wilds');
     const use=this.ctx.input.held('use');if(!use)this.release=false;
     const tune=this.ctx.input.held('radiotune');if(!tune)this.tuneRelease=false;
@@ -124,12 +126,13 @@ export class Mechanics {
         if(dot>.60&&this._sys('collision').segmentClear(p.pos.x,p.eyeY,p.pos.z,pos.x,pos.y+1.5,pos.z)){nearest=d;target=k;}
       }
     }
-    if(!target){this.hold=0;this.target='';return;}
+    if(!target||p.dead||this.ctx.shared.inCar){this.card?.hide();this.hold=0;this.target='';return;}
     if(this.target!==target.id){this.target=target.id;this.hold=0;this.offer=0;}
 
     const list=this._buildOffers(car,pr);
     const e=target.e;
     if(!list.length){
+      this.card?.show([],0,pr.cash(),UPGRADES.filter(u=>pr.ownsUpgrade(u.id)).map(u=>u.name));
       // Nothing left to sell and nothing to fix. Say so rather than showing a dead prompt.
       this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:6,x:e.pos.x,y:e.pos.y+1.38,z:e.pos.z,k:0,
         detail:'YOUR CAR IS IN GOOD SHAPE',subdetail:'NOTHING LEFT TO FIT',unavailable:true});
@@ -141,10 +144,11 @@ export class Mechanics {
     }
     if(this.offer>=list.length)this.offer=0;
     const o=list[this.offer],cash=pr.cash(),can=cash>=o.price;
+    this.card?.show(list,this.offer,cash,UPGRADES.filter(u=>pr.ownsUpgrade(u.id)).map(u=>u.name));
     const more=list.length>1?' · T · NEXT':'';
     this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:6,x:e.pos.x,y:e.pos.y+1.38,z:e.pos.z,k:this.hold/1.1,
       detail:o.name+' · '+o.price+' COINS',
-      subdetail:(can?o.line:'YOU HAVE '+cash+' · NEED '+(o.price-cash))+more,
+      subdetail:(can?'HOLD E TO FIT':'YOU HAVE '+cash+' · NEED '+(o.price-cash))+more,
       unavailable:!can});
     if(!use||this.release||!can){this.hold=0;return;}
     this.hold+=dt;
@@ -159,5 +163,6 @@ export class Mechanics {
   }
   state(){return{keepers:[...this.keepers.values()].map(k=>({id:k.id,alive:!!k.e?.alive,position:k.e?.pos.toArray()})),
     offer:this.offer,offers:this.offers.map(o=>({name:o.name,price:o.price}))};}
-  dispose(){this.off?.();}
+  present(){if(!this.ctx.playing||this.ctx.paused||this.ctx.shared.inCar)this.card?.hide();}
+  dispose(){this.off?.();this.card?.dispose();}
 }

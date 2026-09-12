@@ -6,7 +6,7 @@ Source: https://github.com/makehumancommunity/makehuman/tree/a8bc2d54ff0ac92e78f
 
 License: https://github.com/makehumancommunity/makehuman/blob/a8bc2d54ff0ac92e78ff71431b1023eda42bf482/LICENSE.md (section C)
 
-Modifications: extracted head/neck, applied adult shape targets, normalized proportions, generated game geometry. Clothing, eyes, coloring and animation are authored for WWPM.
+Modifications: extracted head/neck, applied adult shape targets, normalized proportions, generated game geometry. The Hunter, Pale and interior resident effigies reshape this anatomy into fractured masks with recessed eye and mouth apertures. Clothing, eyes, coloring and animation are authored for WWPM.
 
 - african-male-old.target SHA256 59ec94956b3525dbb30238d1239b2bce52adc3bfae091f12cd85d2570aa1933c
 - asian-female-young.target SHA256 095fe79694fa19e1fe98d93009ec116199bd524e081c640351a10eccf2cca1eb

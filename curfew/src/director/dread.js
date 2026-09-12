@@ -52,6 +52,7 @@ import CFG from '../config.js';
 import { clamp, clamp01, TAU } from '../engine/math.js';
 import { createTension, scanEnemies, huntingFromLastScan } from './tension.js';
 import { createAuditor } from './auditor.js';
+import { peacefulAt } from '../world/safety.js';
 
 // ---------------------------------------------------------------------------
 // THE ONE LOCAL TABLE. CFG.director.dread already carries loudGapS / softRoll /
@@ -651,6 +652,8 @@ export class Dread {
    */
   permitOk() {
     if (!this.enabled) return false;
+    const p = this._sys('player')?.pos;
+    if (p && (peacefulAt(this.ctx,p.x,p.z) || this._sys('refuge')?.isProtected(p.x,p.y,p.z))) return false;
     if (this.ctx.shared.interiorHorror) return false;
     if (this.building) return false;
     if (this.clock < this.quietUntil) return false;

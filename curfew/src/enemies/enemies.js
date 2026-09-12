@@ -1527,7 +1527,7 @@ export class Enemies {
     // ROUND 22: the lit pools. One array read, one scan for the player, per step.
     {
       const sh = this.ctx.shared;
-      const poles = sh && Array.isArray(sh.litPoles) ? sh.litPoles : EMPTY_POLES;
+      const poles = sh && (sh.safeLightZones || sh.litPoles) || EMPTY_POLES;
       this._poles = poles;
       let inPool = false;
       for (let i = 0; i < poles.length && !inPool; i++) {
@@ -1630,6 +1630,25 @@ export class Enemies {
       if (best >= 0) { const q = poles[best]; e.poleX = q.x; e.poleZ = q.z; e.poleR = q.r; }
       else { e.poleR = 0; e.poleHold = false; }
     }
+  }
+
+  // A close defensive burst cancels a commitment and uses ordinary collision integration.
+  repel(x, z, radius = 8, seconds = 1.4, force = 5) {
+    let count = 0;
+    const p = this._sys('player'), col = this._sys('collision');
+    for (const e of this.all) {
+      if (!e.alive || e.neutral || e.initiallyNeutral || e.def.owner !== OWNER.PRESSURE) continue;
+      const dx = e.pos.x - x, dz = e.pos.z - z, dist = Math.hypot(dx,dz);
+      if (dist > radius || Math.abs(e.pos.y-(p?.pos.y??e.pos.y)) > 3) continue;
+      if (col && !col.segmentClear(x,(p?.pos.y||0)+1.1,z,e.pos.x,e.pos.y+.65,e.pos.z)) continue;
+      this._uncommit(e); e.state = 'recover'; e.stateT = 0; e.staged = false;
+      e.staggerT = Math.max(e.staggerT,seconds); e.aware = 1;
+      const d = dist || 1;
+      e.vel.x = (dist ? dx/d : Math.sin(e.yaw)) * force;
+      e.vel.z = (dist ? dz/d : Math.cos(e.yaw)) * force;
+      count++;
+    }
+    return count;
   }
 
   _torchOn() {
@@ -1758,6 +1777,25 @@ export class Enemies {
       }
       this._integrate(e, dt);
       return;
+    }
+
+    // A newly lit woodland drives creatures out on their feet. Run this after senses,
+    // timers and hit reactions: an early return above them froze immunity and the pool
+    // cache. The ordinary whiskers route around trunks instead of pushing radially into
+    // the same tree forever. Small lamp pools keep their existing hard rim.
+    if (!e.initiallyNeutral && def.owner === OWNER.PRESSURE && e.poleR > 32) {
+      const dx=e.pos.x-e.poleX,dz=e.pos.z-e.poleZ,d=Math.hypot(dx,dz);
+      if(d<e.poleR+.5){
+        if(e.state!=='flee'){e._navValid=false;e.stateT=0;}
+        this._uncommit(e);e.state='flee';e.staged=false;e.aware=0;e.alerted=false;
+        e.hunt=false;e.memT=0;e.calmT=2;e.stateT+=dt;
+        const nx=d?dx/d:-Math.sin(e.yaw),nz=d?dz/d:-Math.cos(e.yaw);
+        const speed=Math.min(6,def.speed||4);e.speedWant=speed;
+        const heading=steer(this.ctx,e,e.poleX+nx*(e.poleR+3),e.poleZ+nz*(e.poleR+3),this._frame);
+        e.vel.x=heading.x*speed;e.vel.z=heading.z*speed;e.moving=true;
+        e.yaw=faceYaw(e.pos.x,e.pos.z,e.pos.x+e.vel.x,e.pos.z+e.vel.z);
+        this._integrate(e,dt);return;
+      }
     }
 
     // ROUND 7 — A STAGED BODY IS A TABLEAU UNTIL YOU DISTURB IT.
@@ -2626,6 +2664,7 @@ export class Enemies {
     let dx = e.pos.x - e.poleX, dz = e.pos.z - e.poleZ;
     let d = Math.sqrt(dx * dx + dz * dz);
     if (d >= R) return;
+    if (e.poleR > 32 && d < R - 1) return; // existing animals retreat through normal integration
     if (d < 1e-4) { dx = -Math.sin(e.yaw); dz = -Math.cos(e.yaw); d = 1; }
     const nx = dx / d, nz = dz / d;
     e.pos.x = e.poleX + nx * R;

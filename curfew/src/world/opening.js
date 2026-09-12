@@ -211,6 +211,7 @@ export class Opening {
       }
     }
     const fernGeo=fern.build(),uv=fernGeo.attributes.uv;
+    fernGeo.setAttribute('aBark',new THREE.Float32BufferAttribute(new Float32Array(fernGeo.attributes.position.count),1));
     for(let i=0;i<uv.count;i++)uv.setXY(i,.75,.89);
     this.geometries.push(fernGeo);
     for(const [geo,mat] of [[fernGeo,f.matNear]]){

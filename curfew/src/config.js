@@ -55,63 +55,22 @@ export const CFG = {
       blackFloor: 0.006,
       // ROUND 14: 0.035 was visible as noise across the sky and every flat surface (GPT-5.1
       // Pro visual review, 2026-09-07). Grain is meant to be film, not a dirty sensor.
-      grain: 0.010,
+      grain: 0.0025,
       vignette: 0.28,
     },
-    // Gates, not aspirations - and these are now MEASURED rather than assumed. The first
-    // three numbers came from DESIGN before anything had been built; the M0 build then ran at
-    // a 3.0 ms median with 6.0 M triangles, which made the 1.5 M triangle ceiling a budget
-    // nothing was failing and the p95 the only honest complaint.
-    //   measured 2026-09-02, GTX 980M, 1600x900, vsync off, walking in the Pines:
-    //   median 3.0 ms, p95 28.8 ms, 193 draws, 5.2 M tris, 38 programs.
-    // The p95 is chunk-build hitching, not steady-state cost, and it is the one number here
-    // still worth chasing: it is a visible stutter and the budget stays tight on purpose.
+    // Rendering targets remain separate from material/asset allocation ceilings.
     budget: {
       fpsMin: 58,
-      // ROUND 22: 9 was never met once the county filled in. MEASURED on the base tree before
-      // this round: worst-scene median 11.8 ms (avery-house), stand 10.6, sprint 9.9; after it,
-      // alone on the GPU: 12.2 (sprint), stand 11.7, avery 10.8; inside the full gate with the
-      // machine warm: 14.9. Round 9 measured 8.3 with half the county built. 15 is a ceiling that
-      // still catches a real slide, not a target; the target stays "steady above 60".
       medianMax: 15,
-      p95Max: 34,           // KNOWN ISSUE: chunk-build hitches. Was 22 and never met.
-      drawsMax: 1400,       // 193-249 at M0; enemies, places and the car all add draws
-      trisMax: 8e6,         // 6.0 M measured at 3 ms; the old 1.5 M was a pre-build guess
-      // MEASURED 2026-09-03, GTX 980M, 1600x900, on the merged round-5 tree. The count is
-      // 74 at the end of warm() and it is STILL 74 in every state the game reaches: on foot,
-      // after streaming new chunks, with all four weapons owned / drawn / aimed / fired, at a
-      // claimed and lit place, in the black hour, with 12 bodies out, with the car placed,
-      // entered and driven, and with the pause card up. It does not move once, which is the
-      // law this budget exists to serve (tests/car.mjs asserts it across a 20 s drive;
-      // tests/sites.mjs across nine states including the county's west side). 72 was the
-      // provisional M1 guess and it went RED the moment lane D's car.warmup() moved the
-      // car's shadow-depth variants from "links when the car first appears" (a law break)
-      // to "linked at boot" (what the boot shell is for). 78 = the measured 74 plus four,
-      // which is one new material family of headroom and not a licence for six.
-      // Human skin/cloth and their near-light response are warmed at boot. Normal play
-      // measured 82 programs and a 15.4 ms castle p95 on the development GPU.
-      // ROUND 20: 90 -> 94. gfx/airlight.js adds ONE ShaderMaterial and it links TWO
-      // programs, for the same reason chunks.js's ground detail map does and records: three
-      // keys the cache on the output colour space, so a material drawn both into the post
-      // chain's linear target and (post disabled) to the sRGB canvas has two variants. All
-      // three of its InstancedMeshes share the material, so the count does not grow with the
-      // number of lamps. MEASURED at boot with the system in: 92, and 92 again after moving
-      // across the county and standing in the Holdfast's lit town, which is the rule this
-      // budget exists for — nothing links during play. Boot 9.4 s against a 15 s ceiling.
-      // 94 is 92 plus two, which is the same "one family of headroom" the note above sets.
-      // ROUND 21: 94 -> 96, and the same arithmetic as the line above. Weather itself adds no
-      // program — falling rain and snow are particles in the pool fx already draws, and the
-      // ground's response is two floats on an injection matGround already had. The two come
-      // from world/places.js: putting lying snow on the destinations means matBody/matPeople
-      // and matLand each compile a shader of their own, and a material with a hand-written
-      // shader MUST carry a customProgramCacheKey or three will serve it another Lambert's
-      // program. Those keys are what pull the two out of the shared pool; they are the cost of
-      // the county's yards and roofs going white with the field around them, and they are not
-      // optional for correctness. MEASURED at boot with weather in: 94, and 94 again after
-      // crossing the county under every kind of front — nothing links during play, which is
-      // the rule this budget exists for. Boot 9.1 s against a 15 s ceiling.
-      programsMax: 96, // includes the eight warmed material variants in MARROW's Presence
-      coldBootMaxS: 15,     // 0.9 s measured
+      p95Max: 34,
+      drawsMax: 1400,
+      trisMax: 8e6,
+      // September 12 overhaul: 112-113 programs measured through the car, refuge,
+      // woodland lights and destination scenes. New PBR families are warmed at boot.
+      programsMax: 116,
+      // More detailed geometry/assets take about 20s locally. Lossless prebaking
+      // removed about 2.2s CPU work; 25s is a regression ceiling, not a speed claim.
+      coldBootMaxS: 25,
     },
   },
 

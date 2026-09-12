@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {clamp,TAU} from '../engine/math.js';
 import {readableSurface} from '../art/surface-light.js';
+import {loft,tendon,characterMaps} from '../art/character-sculpt.js';
 
 function malform(geo, amp, seed = 1) {
   const p = geo.attributes.position;
@@ -25,9 +26,10 @@ function buildPresence(rng) {
   g.name = 'the presence';
   const flesh = new THREE.MeshPhysicalMaterial({
     color: 0x090606, roughness: 0.58, metalness: 0.0,
+    ...characterMaps('hide'),bumpScale:.009,
     clearcoat: 0.42, clearcoatRoughness: 0.74, emissive: 0x070202, emissiveIntensity: 0.08,
   });
-  const bone = new THREE.MeshStandardMaterial({ color: 0x18130f, roughness: 0.82 });
+  const bone = new THREE.MeshStandardMaterial({ color: 0x18130f, roughness: 0.94,...characterMaps('hide'),bumpScale:.004 });
   const cavity = new THREE.MeshBasicMaterial({ color: 0x040203 });
   P.mawMat = new THREE.MeshPhysicalMaterial({
     color: 0x2a0608, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.62,
@@ -46,16 +48,15 @@ function buildPresence(rng) {
     color: 0x000000, emissive: 0xd8e0cf, emissiveIntensity: 1.7, roughness: 1,
   });
 
-  const pelvis = new THREE.Mesh(malform(new THREE.CapsuleGeometry(0.13, 0.16, 4, 8), 0.16, 5), flesh);
-  pelvis.position.y = 0.98; g.add(pelvis);
-  const torso = new THREE.Mesh(malform(new THREE.CapsuleGeometry(0.17, 0.85, 5, 12), 0.2, 3), flesh);
-  torso.position.set(0.02, 1.35, 0); torso.scale.set(1, 1, 0.6); torso.rotation.x = 0.14; g.add(torso);
+  const torso=new THREE.Mesh(loft([[.86,.03,.03],[.97,.127,.095,-.01,0],[1.10,.088,.06,.02,-.02],
+    [1.25,.109,.075,.03,-.018],[1.47,.162,.104,.014,0],[1.68,.193,.113,-.012,0],
+    [1.76,.146,.09,-.02,-.017],[1.82,.041,.044,.01,0]],{segments:32,subdivisions:4,folds:.085,seed:3}),flesh);
+  g.add(torso);
   P.torso = torso;
   P.veins = [];
   for (let i = 0; i < 6; i++) {
-    const vein = new THREE.Mesh(new THREE.CapsuleGeometry(0.006 + (i % 2) * 0.003, 0.26 + i * 0.025, 2, 5), P.veinMat);
-    vein.position.set((i - 2.5) * 0.04, 1.35 + Math.sin(i * 1.7) * 0.18, 0.112);
-    vein.rotation.set(0.32 + i * 0.04, 0.12 * Math.sin(i), (i - 2.5) * 0.22);
+    const x=(i-2.5)*.035;
+    const vein=new THREE.Mesh(tendon([[x*.7,1.08,.069],[x,1.29,.09],[x+Math.sin(i)*.023,1.50,.109],[x*.8,1.68,.11]],.005+(i%2)*.002,.002,25,6),P.veinMat);
     g.add(vein); P.veins.push(vein);
   }
   for (let i = 0; i < 4; i++) {
@@ -69,7 +70,8 @@ function buildPresence(rng) {
   P.spines = [];
   for (let i = 0; i < 7; i++) {
     const sx = (i - 3) * 0.055;
-    const spine = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.48 + Math.abs(i - 3) * 0.08, 3, 6), bone);
+    const len=.48+Math.abs(i-3)*.08;
+    const spine=new THREE.Mesh(tendon([[0,-len*.5,0],[.016,len*.10,-.035],[.045,len*.43,-.082],[.075,len*.52,-.13]],.017,.003,22,8),bone);
     spine.position.set(sx, 1.73 - Math.abs(i - 3) * 0.035, -0.09);
     spine.rotation.set(0.68 + Math.abs(i - 3) * 0.08, sx * 4.5, sx * 3.0);
     g.add(spine); P.spines.push(spine);
@@ -138,14 +140,19 @@ function buildPresence(rng) {
   // silhouette stays wrong even under the skull's light
   P.veils = [];
   for (let i = 0; i < 7; i++) {
-    const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.04 + (i % 3) * 0.018, 0.85 + rng.next() * 0.6), shadowSkin);
+    const len=.85+rng.next()*.6,width=(.04+(i%3)*.018)*.5;
+    const strip=new THREE.Mesh(loft([[-len/2,.001,.002,-.02,0],[-len*.36,width*.60,.004,.018,.007],
+      [0,width,.005,0,0],[len*.30,width*.74,.004,.013,-.004],[len/2,width*.40,.003,0,0]],
+    {segments:10,subdivisions:3,folds:.12,seed:i}),shadowSkin);
     strip.position.set((i - 3) * 0.035, 1.62 - rng.next() * 0.25, -0.10 - rng.next() * 0.06);
     strip.rotation.set(0.2 + rng.next() * 0.3, (rng.next() - 0.5) * 0.4, (rng.next() - 0.5) * 0.5);
     g.add(strip); P.veils.push(strip);
   }
   P.rags = [];
   for (let i = 0; i < 9; i++) {
-    const rag = new THREE.Mesh(new THREE.PlaneGeometry(0.055 + (i % 3) * 0.025, 1.0 + rng.next() * 0.7), blackVeil);
+    const len=1+rng.next()*.7,width=(.055+(i%3)*.025)*.5;
+    const rag=new THREE.Mesh(loft([[-len/2,.001,.002],[-len*.35,width*.7,.004,.022,0],[0,width,.005],
+      [len*.32,width*.85,.005,-.01,.006],[len/2,width*.6,.004]],{segments:10,subdivisions:3,folds:.15,seed:i}),blackVeil);
     rag.position.set((i - 4) * 0.045, 1.16 + rng.next() * 0.26, 0.03 + (i % 2) * 0.035);
     rag.rotation.set((rng.next() - 0.5) * 0.22, (rng.next() - 0.5) * 0.8, (i - 4) * 0.08);
     rag.renderOrder = 2;

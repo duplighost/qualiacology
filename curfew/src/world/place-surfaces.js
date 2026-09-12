@@ -68,6 +68,26 @@
 import * as THREE from 'three';
 
 const SIZE = 512;
+const COLOR_STYLES = ['timber', 'stone', 'mossStone', 'metal', 'industrial', 'plaster', 'salt', 'avery', 'naturalRock'];
+const HEIGHT_STYLES = ['timber', 'stone', 'metal', 'plaster', 'naturalRock'];
+let prebaked = null, preload = null;
+
+// These maps are deterministic and need not run millions of noise samples on every
+// visit. tools/bake-place-surfaces.mjs stores their exact RGB/height bytes losslessly.
+// Load beside the terrain scans, before the synchronous place builders need textures.
+export async function preloadPlaceSurfaceLibrary() {
+  if (typeof document === 'undefined' || typeof DecompressionStream === 'undefined') return false;
+  if (!preload) preload = (async () => {
+    const url = new URL('../../assets/materials/place-surfaces-v1.bin.gz', import.meta.url);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('place surfaces: asset HTTP ' + response.status);
+    const bytes = new Uint8Array(await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+    if (bytes.length !== SIZE * SIZE * 32) throw new Error('place surfaces: invalid baked data length');
+    prebaked = bytes;
+    return true;
+  })();
+  return preload;
+}
 const TAU = Math.PI * 2;
 
 const STYLE_BY_KIND = Object.freeze({
@@ -766,12 +786,42 @@ function writePixel(data, x, y, rgb) {
 
 function makeTexture(style, asHeight) {
   const data = new Uint8Array(SIZE * SIZE * 4);
+  const family = BUMP_OF[style] || style;
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      if (asHeight) { const h = heightFor(style, x, y); writePixel(data, x, y, [h, h, h]); }
-      else writePixel(data, x, y, pixelFor(style, x, y));
+      // A shared physical microstructure affects BOTH colour and relief. Pores
+      // are recessed in mineral faces; cut timber has long checked fibres;
+      // rolled metal has fine parallel abrasion instead of the same noise.
+      let relief = 0;
+      if (family === 'stone' || family === 'plaster' || family === 'naturalRock') {
+        const cx = Math.floor(x / 4), cy = Math.floor(y / 4);
+        const h = hash2(cx, cy, 7117);
+        const px = cx * 4 + 0.9 + hash2(cx, cy, 7121) * 2.2;
+        const py = cy * 4 + 0.9 + hash2(cx, cy, 7127) * 2.2;
+        const r = 0.46 + h * 0.92;
+        const d = Math.hypot(x - px, y - py);
+        if (d < r && h > 0.48) relief = -(1 - d / r) * (family === 'plaster' ? 29 : 43);
+        relief += (noise(x, y, 180, 180, 7141) - 0.5) * 11;
+      } else if (family === 'timber') {
+        const strand = noise(x, y, 9, 240, 7151);
+        relief = -Math.max(0, strand - 0.58) * 45;
+      } else if (family === 'metal') {
+        relief = (noise(x, y, 11, 220, 7177) - 0.5) * 4;
+      }
+      if (asHeight) {
+        const h = heightFor(style, x, y) + relief;
+        writePixel(data, x, y, [h, h, h]);
+      } else {
+        const col = pixelFor(style, x, y);
+        for (let c = 0; c < 3; c++) col[c] += relief * 0.72;
+        writePixel(data, x, y, col);
+      }
     }
   }
+  return textureFromData(style, asHeight, data);
+}
+
+function textureFromData(style, asHeight, data) {
   const tex = new THREE.DataTexture(data, SIZE, SIZE, THREE.RGBAFormat, THREE.UnsignedByteType);
   tex.name = (asHeight ? 'place-bump-' : 'place-surface-') + style;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -810,14 +860,21 @@ function makeTexture(style, asHeight) {
  */
 export function createPlaceSurfaceLibrary() {
   const lib = Object.create(null);
-  for (const style of ['timber', 'stone', 'mossStone', 'metal', 'industrial', 'plaster', 'salt', 'avery', 'naturalRock']) {
-    lib[style] = makeTexture(style, false);
+  let offset = 0;
+  for (const asHeight of [false, true]) for (const style of asHeight ? HEIGHT_STYLES : COLOR_STYLES) {
+    const key = style + (asHeight ? '-bump' : '');
+    if (!prebaked) { lib[key] = makeTexture(style, asHeight); continue; }
+    const data = new Uint8Array(SIZE * SIZE * 4);
+    for (let p = 0; p < data.length; p += 4) {
+      data[p] = prebaked[offset++];
+      data[p + 1] = asHeight ? data[p] : prebaked[offset++];
+      data[p + 2] = asHeight ? data[p] : prebaked[offset++];
+      data[p + 3] = 255;
+    }
+    lib[key] = textureFromData(style, asHeight, data);
   }
-  // and the four height images. Keyed '<family>-bump' so disposePlaceSurfaceLibrary's
-  // Object.values sweep picks them up without knowing they exist.
-  for (const family of ['timber', 'stone', 'metal', 'plaster', 'naturalRock']) {
-    lib[family + '-bump'] = makeTexture(family, true);
-  }
+  // The renderer owns the expanded texels now; release the packed working copy.
+  prebaked = null;
   LATTICE.clear();
   CRACK = null;
   return lib;

@@ -53,6 +53,7 @@ import { clamp, clamp01 } from '../engine/math.js';
 import { GLOW, Kit } from './sites.js';
 import { ANCHORS } from './dress-station.js';
 import { DESTINATION_REFUGES, refugeFloorY } from './destination-refuges.js';
+import { RefugeComfort } from './refuge-comfort.js';
 
 const SITE_ID = 'filling-station';
 
@@ -423,6 +424,7 @@ export class Refuge {
     this._buildDoor();
     if (this.spec.buildBag) this._buildBag();
     this._buildLamps();
+    this.comfort = new RefugeComfort(this); this.comfort.build();
   }
 
   /**
@@ -615,9 +617,15 @@ export class Refuge {
       geo.translate(b.x + x*c + z*s, this.padY + y, b.z - x*s + z*c);
       parts.push(tint(geo, col));
     };
-    put(new THREE.BoxGeometry(1.08, 0.12, 2.12), [0.125, 0.070, 0.050], 0, 0.08, 0);
-    put(new THREE.BoxGeometry(0.82, 0.18, 0.42), [0.112, 0.100, 0.080], 0, 0.19, -0.72);
-    put(new THREE.BoxGeometry(1.00, 0.08, 0.50), [0.088, 0.052, 0.040], 0, 0.17, 0.68);
+    put(new THREE.BoxGeometry(1.10, 0.13, 2.14), [0.18, 0.11, 0.064], 0, 0.17, 0);
+    const pillow=new THREE.SphereGeometry(1,24,14);pillow.scale(.43,.13,.24);
+    put(pillow,[.35,.30,.22],0,.31,-.77);
+    // Padded stitched baffles, with a turned-down hem and a warm flannel weave.
+    for(let row=0;row<7;row++)for(let col=0;col<3;col++){
+      const cell=new THREE.SphereGeometry(1,14,8);cell.scale(.18,.065,.135);
+      put(cell,[(row+col)%2?.21:.17,.096,.056],(col-1)*.345,.27,-.40+row*.22);
+    }
+    put(new THREE.BoxGeometry(1.04,.07,.20),[.30,.21,.12],0,.30,-.53);
     const geo = merge(parts);
     if (!geo) return;
     const m = new THREE.Mesh(geo, this.matBody);
@@ -826,7 +834,8 @@ export class Refuge {
     const pressed = use && !this._usePrev;
     this._usePrev = use;
 
-    const cand = this._candidate(px, py, pz);
+    this.comfort?.step();
+    const cand = this.comfort?.focus >= 0 ? '' : this._candidate(px, py, pz);
 
     // ROUND 13: the key glyph (hud 'prompt'). Emitted every step there is a candidate; a step
     // without one clears it. The door and the bed are E, the breaker is a hold; a blocked bed
@@ -1064,11 +1073,8 @@ export class Refuge {
       try { this.stats.trailsLost += enemies.loseTrail(px, pz, DOOR_LOSE_R) || 0; }
       catch (e) { this._note('loseTrail: ' + e.message); }
     }
-    const prog = this._sys('progress');
-    if (prog && typeof prog._doorShut === 'function') {
-      try { prog._doorShut(); this.stats.hookRuns++; }
-      catch (e) { this._note('onDoorShut: ' + e.message); }
-    }
+    // Progress listens to door:shut; a direct call here used to fire the perk twice.
+    this.stats.hookRuns++;
     _doorPayload.id = this.siteId; _doorPayload.shut = true; _doorPayload.x = px; _doorPayload.z = pz;
     this.ctx.bus.emit('door:shut', _doorPayload);
     this._save();
@@ -1410,6 +1416,7 @@ export class Refuge {
   ready() { return true; }
 
   dispose() {
+    this.comfort?.dispose();
     this._sys('collision')?.removeChunk('refuge-floor:'+this.siteId);
     if (!this._owner && this._units) {
       for (let i = 1; i < this._units.length; i++) this._units[i].dispose();

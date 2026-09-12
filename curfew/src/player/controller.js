@@ -546,6 +546,7 @@ export class PlayerController {
   hurt(amount, fromDir) {
     const refuge = this.ctx.systems.get('refuge');
     if (refuge && refuge.isResting && refuge.isResting()) return;
+    if (refuge?.isProtected(this.pos.x,this.pos.y,this.pos.z)) return;
     if (this.dead || this.ctx.debug?.god) return;
     // The respawn window. TRUE immunity, not a multiplier: partial mitigation across a 2.5 s
     // window is invisible, and the whole point of this window is that it can be seen.
