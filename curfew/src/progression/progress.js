@@ -286,6 +286,10 @@ export class Progress {
       // can be lost to a hound on the way there. Cash is a flat lifetime balance that moves
       // only when you earn it or spend it.
       cash: 0,
+      bossesCleared: [],
+      finishes: [],
+      equippedFinish: 'original',
+      rumours: [],
       unbanked: 0,      // carried since the last lit fire; at risk, and only this is
       level: 1,
       curveVersion: 0,
@@ -417,6 +421,10 @@ export class Progress {
     this._selfTest();
     this.save.load().bind();
     const d = this.save.data;
+    d.bossesCleared = d.bossesCleared.filter(id => typeof id === 'string');
+    d.finishes = d.finishes.filter(id => typeof id === 'string');
+    d.rumours = d.rumours.filter(r => r && typeof r.id === 'string' && Number.isFinite(r.x) && Number.isFinite(r.z));
+    if (d.equippedFinish !== 'original' && !d.finishes.includes(d.equippedFinish)) d.equippedFinish = 'original';
     // Make the first choice intentional. Preserve every old purchase and earned level
     // while moving a returning save to the slower curve, once, at its existing progress.
     if (!d.curveVersion) {
@@ -722,6 +730,7 @@ export class Progress {
   }
 
   _onKill(p) {
+    if (p?.e?.damageSource === 'guard' || p?.e?.initiallyNeutral) return;
     this._stat.kills++;
 
     // The enemies lane publishes its own `xp` on the event. The species table wins where it
@@ -830,6 +839,59 @@ export class Progress {
 
   /** What is in the purse. */
   cash() { return this.save.data.cash | 0; }
+
+  /** Boss rewards are permanent, including the XP: a victory never becomes a corpse run. */
+  bossCleared(id) { return this.save.data.bossesCleared.includes(id) || !!this.flag('boss:' + id); }
+
+  completeBoss({ id, name, finishId, xp = 0, cash = 0 } = {}) {
+    if (typeof id !== 'string' || !id || this.bossCleared(id)) return false;
+    const d = this.save.data;
+    d.bossesCleared.push(id); d.worldFlags['boss:' + id] = true;
+    if (typeof finishId === 'string' && finishId && !d.finishes.includes(finishId)) d.finishes.push(finishId);
+    const amount = Math.max(0, Math.round(Number(xp) || 0));
+    d.xp += amount;
+    this.save.mark(); this._checkLevel(); this._publish();
+    const x = this._playerAt(0), y = this._playerAt(1) + 1, z = this._playerAt(2);
+    if (amount) this.ctx.bus.emit('xp:gained', {amount, x, y, z, reason:'boss', _own:true});
+    this.payCash(cash, x, y, z, 'boss');
+    this._rewardAnswer(amount, x, y, z, 'boss');
+    this.ctx.bus.emit('boss:cleared', {id, name: name || id, xp:amount, cash, skin:finishId});
+    this.save.flush();
+    return true;
+  }
+
+  unlockedFinishes() { return ['original', ...this.save.data.finishes]; }
+  activeFinish() { return this.save.data.equippedFinish || 'original'; }
+  equipFinish(id) {
+    if (id !== 'original' && !this.save.data.finishes.includes(id)) return false;
+    this.save.data.equippedFinish = id; this.save.mark(); this.save.flush();
+    this.ctx.bus.emit('finish:equipped', {id});
+    return true;
+  }
+
+  /** Rumours reveal a named point, never the roads or unexplored land around it. */
+  learnRumour({ id, name, x, z, kind = 'place', visited = false } = {}) {
+    if (typeof id !== 'string' || !id || !Number.isFinite(x) || !Number.isFinite(z)) return false;
+    if (visited) return this.discoverBoss(id);
+    if (this.save.data.rumours.some(r => r.id === id) || this.found.has(id) || this.claimed.has(id) || this.bossCleared(id)) return false;
+    const rumour = {id, name: String(name || id), x, z, kind: String(kind)};
+    this.save.data.rumours.push(rumour); this.save.mark();
+    this.ctx.bus.emit('map:rumour', rumour);
+    return true;
+  }
+  rumours() { return this.save.data.rumours; }
+  mapStatus(id) {
+    if (this.bossCleared(id) || this.claimed.has(id)) return 'cleared';
+    if (this.found.has(id) || this.flag('boss-found:' + id)) return 'discovered';
+    return this.save.data.rumours.some(r => r.id === id) ? 'rumoured' : 'unknown';
+  }
+
+  discoverBoss(id) {
+    if (!id || this.found.has(id)) return false;
+    this.found.add(id); this.save.mark();
+    this.ctx.bus.emit('map:discovered', {id});
+    return true;
+  }
 
   /**
    * Take money. The twin of award(), and deliberately simpler: no phase multiplier, because a

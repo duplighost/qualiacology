@@ -201,6 +201,7 @@ export class InteriorHorror {
   }
 
   _protected(p) {
+    if(this._sys('holdfast-life')?.contains(p.x,p.z) || this.ctx.shared.bossEncounter) return true;
     const refuge = this._sys('refuge');
     return refuge.isResting() || refuge.isProtected(p.x, p.y, p.z);
   }

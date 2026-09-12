@@ -42,7 +42,6 @@ export const SPIDER_NESTS = Object.freeze({
   // was wrong. (0, -14) is the middle of the keep's UNDERCROFT — the six-pier hall behind the
   // great door, floor at padY, boarded over at KEEP.F1 = 6.8 — which is the biggest, oldest,
   // most enclosed room in the county and exactly the room he asked for.
-  holdfast: [{ lx: 0, lz: -14, ly: 6.1, yaw: 0 }],
 });
 
 /** The cast entries for one site, in the shape places.js _recordCast wants. */

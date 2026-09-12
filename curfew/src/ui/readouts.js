@@ -1,4 +1,5 @@
 import {xpForLevel} from '../progression/nodes.js';
+import {FINISH_BY_ID} from '../weapons/finishes.js';
 
 // Explicit, quiet information for the things the player earns and loses. These read the
 // authoritative systems; receipt events never change a balance or award a second reward.
@@ -56,6 +57,8 @@ export class Readouts {
     on('sanctuary:lit',()=>this.receipt('THE WOODS ARE LIT','light'));
     on('territory:secured',p=>this.receipt(p.name+' · SECURED','light'));
     on('refuge:puzzle',()=>this.receipt('NINE LIGHTS','light'));
+    on('map:rumour',p=>{this.receipt('MAP UPDATED · '+p.name+' · M','rumour');this.receipts.at(-1).until=this.now()+6.5;});
+    on('boss:cleared',p=>{const f=FINISH_BY_ID[p.skin];this.receipt((f?.name||p.skin||'TROPHY')+' · WEAPON FINISH UNLOCKED','ability');this.receipts.at(-1).until=this.now()+8;});
     // p?.n, not p.n: weapons/weapon.js listens on this same channel and deliberately takes a
     // missing payload as nothing (`p ? ... : 0`). This one threw on it instead, inside the
     // fixed step — which is why tests/weapon.mjs aborted at (j) and the 60-odd checks after
@@ -82,6 +85,7 @@ export class Readouts {
     let goal='';
     if(sheltered)goal='DOOR SHUT · YOU CAN REST';
     else if(this.ctx.shared.sanctuary)goal='THE WOODS ARE LIT';
+    else if(row?.id==='holdfast')goal=row.name+'\nINHABITED · TRADERS & SHELTER';
     else if(row){
       const hasRoom=refuge?._units?.some(u=>u.siteId===row.id);
       goal=row.name+'\n'+(row.secured?(hasRoom?'SECURED · CLOSE THE REFUGE DOOR':'SECURED'):row.remaining>0?row.remaining+' REMAIN · CLEAR THE PLACE':'CLEAR · RESTORE POWER');

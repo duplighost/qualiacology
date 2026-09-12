@@ -97,6 +97,8 @@ import { BRANCHES, NODES, levelFrac, xpForLevel } from '../progression/nodes.js'
 // Pure data, read-only: the majors' positions, names and region tints for the map.
 import { MAJORS, MINOR_KINDS, REGION_TINT, DEFAULT_TINT } from '../world/placedata.js';
 import { Readouts } from './readouts.js';
+import {PauseMenu} from './pause-menu.js';
+import {BOSSES,bossMapPoint} from '../world/boss-catalog.js';
 
 /* ---------------------------------------------------------------- constants -- */
 // No CFG.hud block exists; config.js belongs to the engine owner and is deep-frozen. Every
@@ -338,6 +340,7 @@ const CONTROLS = [
   // digits. Same round, same card.
   ['Swap weapon', 'Q or 1 / 2'],
   ['Sprint', 'Shift'],
+  ['Hard sprint', 'Double-tap Shift'],
   ['Crouch and slide', 'Ctrl or C'],
   ['Jump / climb', 'Tap / hold Space'],
   // ALEX, first playtest: "I've made it to the car. i have no idea how to get into the car
@@ -356,7 +359,10 @@ const CONTROLS = [
   // or something." There is, and it is behind this key, and the card that says so is the one
   // he only sees AFTER pressing it. Naming the key for what is behind it is the only place
   // this can be taught without a word on the screen during play.
-  ['Map and skills', 'Esc'],
+  ['Pause / return', 'Esc'],
+  ['Perks / map', 'Tab / M'],
+  ['Look behind (driving)', 'B'],
+  ['Handbrake (driving)', 'Space'],
 ];
 
 // A control that only exists once it is BOUGHT. Alex's rule is that controls belong on the
@@ -949,6 +955,7 @@ export class Hud {
 
   dispose() {
     this.readouts?.dispose();
+    this.menu?.dispose();
     for (const off of this._unsub) { try { off(); } catch (e) { void e; } }
     this._unsub.length = 0;
     if (this._onResize) window.removeEventListener('resize', this._onResize);
@@ -1015,6 +1022,7 @@ export class Hud {
       this.mapCanvas.height = Math.round(MAP_PX * this.dpr);
       this.mg.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       if (this.paused && this.pauseEl && !this.pauseEl.hidden) this._drawMap();
+      if (this.paused && this.menu?.page==='weapons') this.menu.renderWeapon();
     }
   }
 
@@ -1050,6 +1058,7 @@ export class Hud {
     const on = (k, fn) => this._unsub.push(b.on(k, (p) => {
       try { fn(p || {}); } catch (e) { console.error('[hud] ' + k, e); }
     }));
+    for(const event of ['map:rumour','map:discovered','boss:cleared','save:loaded']) on(event,()=>{this._knownMapPins=null;this._miniDirty=true;if(this.paused)this.menu?.refresh();});
 
     on('weapon:hit', (p) => {
       // Only a HIT ON A THING. Without this every round into a tree pops a marker and the
@@ -1253,7 +1262,7 @@ export class Hud {
     const mapWrap=el('div','map-wrap');
     mapWrap.appendChild(map);
     const legend=el('div','map-legend');
-    legend.innerHTML='<span style="color:#7fe1e5">▲ You</span> &nbsp; <span style="color:#edbf76">▰ Car</span> &nbsp; <span style="color:#93c7a3">◆ Powered</span> &nbsp; ◇ Unclaimed &nbsp; <span style="color:#d2cab7">┄ Road</span>';
+    legend.innerHTML='<span style="color:#7fe1e5">▲ You</span> &nbsp; <span style="color:#edbf76">▰ Car</span> &nbsp; <span style="color:#93c7a3">◆ Powered / ✓ Cleared</span> &nbsp; ◇ Found &nbsp; <span style="color:#ddbd87">? Heard about</span>';
     legend.style.cssText='font:11px/1.6 ui-monospace,Consolas,monospace;text-align:center;color:#c4ced4;padding:8px 0';
     mapWrap.appendChild(legend);top.appendChild(mapWrap);
     this.mapCanvas = map;
@@ -1352,13 +1361,7 @@ export class Hud {
         // The click buys, when it can; the press never resumes (the block above stops it).
         btn.addEventListener('click', (e) => {
           e.stopPropagation(); e.preventDefault();
-          const prog = this.ctx.systems.get('progress');
-          let bought = false;
-          if (prog && typeof prog.buy === 'function' && typeof prog.canBuy === 'function'
-            && prog.canBuy(n.id)) bought = prog.buy(n.id) === true;
-          this._refreshTree();
-          if (bought) this._celebrateNode(n.id);
-          btn.blur();     // ROUND 13: the next key leaves the card; it must not re-click this
+          this.menu?.selectPerk(n.id);
         });
         row.appendChild(btn);
         this.nodeEls.push({ node: n, btn, row });
@@ -1407,12 +1410,16 @@ export class Hud {
       if (e.code === 'Escape' || k === 'Escape') {
         e.preventDefault(); e.stopImmediatePropagation();
         this._resume(true);
+      } else if (e.code === 'KeyM') {
+        e.preventDefault(); e.stopImmediatePropagation();
+        if(this.menu?.page==='map')this._resume(true);else this.menu?.show('map');
       }
     };
     window.addEventListener('keydown', this._onKey, true);
     document.body.appendChild(card);
     this.pauseEl = card;
     this.pauseBuilt = true;
+    this.menu = new PauseMenu(this, {card,wrap,mapWrap,tree,controls:dl});
   }
 
   /**
@@ -1471,7 +1478,7 @@ export class Hud {
     // the card's transitions, and a same-value write would still make a record.
     if (this.pauseEl && this.pauseEl.hidden !== !v) {
       this.pauseEl.hidden = !v;
-      if (v) { this.mapCenter=null;this._refreshTree(); this._drawMap(); }
+      if (v) { this.mapCenter=null;this._refreshTree(); this._drawMap(); this.menu?.show(this._pendingMenu||'home');this._pendingMenu=null; }
       // ROUND 13: the card's music follows the CARD, on exactly this transition (the one the
       // gate's MutationObserver counts), so the piece and the card can never disagree.
       this.ctx.bus.emit('pause:card', { shown: v });
@@ -1492,7 +1499,11 @@ export class Hud {
     // ROUND 13: one request per 1.2 s. Chrome rejects two inside about a second, and a
     // mashed key would otherwise be a page error for nothing.
     const now = performance.now();
-    if (now - this._lockReqAt < 1200) return;
+    if (now - this._lockReqAt < 1200) {
+      const input=this.ctx.input;
+      if(input){input.clear();input.endStep(0);input.unlockedPlay=true;}
+      return;
+    }
     this._lockReqAt = now;
     if (this.ctx.input && this.ctx.input.requestLock) this.ctx.input.requestLock();
   }
@@ -1549,7 +1560,7 @@ export class Hud {
     if (this.earnedEls) {
       for (let i = 0; i < this.earnedEls.length; i++) {
         const q = this.earnedEls[i];
-        q.pair.hidden = !(owned && owned.has(q.node));
+        q.pair.hidden = !((owned && owned.has(q.node)) || (q.node==='wheel_3' && prog.ownsUpgrade?.('nitro')));
       }
     }
     for (let i = 0; i < this.nodeEls.length; i++) {
@@ -1851,7 +1862,8 @@ export class Hud {
     const prog = sys.get('progress');
     const places = sys.get('places');
     const roads = sys.get('roads');
-    const player = sys.get('player');
+    const actualPlayer = sys.get('player');
+    const player = this.ctx.shared.locationOverride && actualPlayer ? {pos:{...actualPlayer.pos,...this.ctx.shared.locationOverride},yaw:actualPlayer.yaw} : actualPlayer;
     const cam = sys.get('camera');
     const car = sys.get('car');
     const wilds = sys.get('wilds');
@@ -2136,6 +2148,20 @@ export class Hud {
       g.globalAlpha=.94;g.fillText(d.name,nx,ny);labels.push({x:bx,y:ny,w:width,mx:x,my:y});
       I.names++;
     }
+    // A rumour is an isolated pin beyond the explored ground, with no terrain revealed.
+    I.rumours=0;I.bosses=0;
+    for(const pin of this._mapPins()){
+      const state=prog?.mapStatus(pin.id)||'unknown';if(state==='unknown')continue;
+      if(pin.kind!=='boss'&&state!=='rumoured')continue;
+      const x=px(pin.x),y=pz(pin.z);if(x<10||y<10||x>S-10||y>S-10)continue;
+      this._rumourGlyph(g,x,y,state,7);
+      const label=pin.name+(state==='rumoured'?' · ?':state==='cleared'?' · cleared':'');
+      g.font=MAP_NAME_FONT;g.textAlign='left';g.textBaseline='middle';const width=g.measureText(label).width;
+      const nx=Math.max(8,Math.min(S-width-8,x+12));let ny=y;
+      for(let k=0;k<16;k++){const yy=Math.max(12,Math.min(S-12,y+(k?Math.ceil(k/2)*16*(k%2?1:-1):0)));if(!labels.some(r=>nx<r.x+r.w+5&&nx+width+5>r.x&&Math.abs(yy-r.y)<15)){ny=yy;break;}}
+      g.globalAlpha=.95;g.fillStyle=state==='cleared'?'#93c7a3':state==='rumoured'?'#ddbd87':'#ddaaa4';g.strokeStyle='#080e16';g.lineWidth=3;g.strokeText(label,nx,ny);g.fillText(label,nx,ny);labels.push({x:nx,y:ny,w:width});
+      if(state==='rumoured')I.rumours++;if(pin.kind==='boss')I.bosses++;
+    }
     I.labels = labels;
     g.globalAlpha = 1;
 
@@ -2192,6 +2218,20 @@ export class Hud {
   }
 
   /** ROUND 13: the paper map's masked layer, sized with the map. */
+  _mapPins(){
+    if(this._knownMapPins)return this._knownMapPins;
+    const p=this.ctx.systems.get('progress'),rows=new Map((p?.rumours?.()||[]).map(r=>[r.id,r]));
+    for(const b of BOSSES){if(p?.mapStatus(b.id)!=='unknown')rows.set(b.id,{id:b.id,name:b.location,...bossMapPoint(b),kind:'boss'});}
+    this._knownMapPins=[...rows.values()];return this._knownMapPins;
+  }
+  _rumourGlyph(g,x,y,state,r){
+    g.save();g.globalAlpha=1;g.fillStyle='#080e16';g.strokeStyle=state==='cleared'?'#93c7a3':state==='rumoured'?'#ddbd87':'#ddaaa4';g.lineWidth=1.2;
+    if(state==='rumoured')g.setLineDash([2,2]);g.beginPath();g.arc(x,y,r,0,TAU);g.fill();g.stroke();g.setLineDash([]);
+    if(state==='cleared'){g.beginPath();g.moveTo(x-r*.5,y);g.lineTo(x-r*.1,y+r*.35);g.lineTo(x+r*.52,y-r*.4);g.stroke();}
+    else{g.fillStyle=g.strokeStyle;g.font=`600 ${r+3}px ui-monospace,Consolas,monospace`;g.textAlign='center';g.textBaseline='middle';g.fillText(state==='rumoured'?'?':'×',x,y+.5);}
+    g.restore();
+  }
+
   _layerFor(S) {
     if (typeof document === 'undefined') return null;
     const w = Math.round(S * this.dpr);
@@ -2519,6 +2559,11 @@ export class Hud {
     }
 
     // Nearby destinations, no names. Hollow = waiting, solid = claimed.
+    for(const pin of this._mapPins()){
+      const dx=pin.x-px,dz=pin.z-pz;if(dx*dx+dz*dz>MINI_RANGE*MINI_RANGE)continue;
+      const state=prog?.mapStatus(pin.id)||'unknown';if(state==='unknown'||(pin.kind!=='boss'&&state!=='rumoured'))continue;
+      this._rumourGlyph(g,c+(dx*rx+dz*rz)*scale,c-(dx*fx+dz*fz)*scale,state,5);
+    }
     const found = places && places.found && typeof places.found.has === 'function' ? places.found
       : (prog && prog.found && typeof prog.found.has === 'function' ? prog.found : null);
     const claimedA = places && places.claimed && typeof places.claimed.has === 'function' ? places.claimed : null;
@@ -2731,8 +2776,9 @@ export class Hud {
     // lock is the pause and the card follows the pause. No key ever hides the card.
     // Ignored for MENU_ARM_STEPS after a resume: a press made while paused arrives here as a
     // stale edge on the first step back and would re-pause the game (see the constant).
-    if (this._sinceResume > MENU_ARM_STEPS && inp && inp.pressed && inp.pressed('menu')
+    if (this._sinceResume > MENU_ARM_STEPS && inp && inp.pressed && (inp.pressed('menu') || inp.pressed('perks') || inp.pressed('map'))
       && !this.paused) {
+      this._pendingMenu=inp.pressed('perks')?'perks':inp.pressed('map')?'map':'home';
       inp.unlockedPlay = false;
       if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock();
     }
@@ -3362,6 +3408,7 @@ export class Hud {
       hp: this.hp, hpMax: this.hpMax, hpShown: +this.hpShown.toFixed(1),
       vignette: +this.vigA.toFixed(3), tremor: +this.tremor.toFixed(3),
       marks, arcs, pulses, grants, paused: this.paused,
+      menuPage:this.menu?.page||'home',
       card: !!(this.pauseEl && !this.pauseEl.hidden), lockHeld: this._lockHeld,
       tree: { own, can, poor, lock, points: this.ptsEl ? this.ptsEl.textContent : '' },
       map: Object.assign({}, this.mapInfo),

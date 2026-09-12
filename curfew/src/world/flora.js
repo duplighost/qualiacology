@@ -2373,6 +2373,7 @@ export class Flora {
         if (hasSight && places.sightClear(wx, wz)) continue;
         if (hasPad && wilds.padClear(wx, wz)) continue;
         if (this._sys('sanctuaries')?.clearsTrees(wx, wz)) continue;
+        if (this._sys('boss-sites')?.clearsTrees(wx, wz)) continue;
         if (hasSlope && terrain.slopeAt(wx, wz) > SLOPE_REJECT) continue;
 
         const wy = terrain.heightAt(wx, wz);
@@ -2439,7 +2440,8 @@ export class Flora {
       // sight corridor, so it takes the same test.
       const okSight = !hasSight || !places.sightClear(wx, wz);
       const okPad = (!hasPad || !wilds.padClear(wx, wz))
-        && !this._sys('sanctuaries')?.clearsTrees(wx, wz);
+        && !this._sys('sanctuaries')?.clearsTrees(wx, wz)
+        && !this._sys('boss-sites')?.clearsTrees(wx, wz);
       const okWater = !this._travelWaterClear(wx, wz);
       if (okRoad && okSlope && okSight && okPad && okWater) {
         const wy = terrain.heightAt(wx, wz);
@@ -2715,6 +2717,7 @@ export class Flora {
     const flats = typeof terrain.flats === 'function' ? terrain.flats() : null;
 
     const onPad = (x, z) => {
+      if(this._sys('boss-sites')?.clearsTrees(x,z))return true;
       for (let i = 0; i < _minorsNear.length; i++) {
         const m = _minorsNear[i];
         const dx = x - m.x, dz = z - m.z;

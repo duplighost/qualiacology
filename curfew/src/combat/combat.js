@@ -267,6 +267,15 @@ export class Combat {
       }
     }
 
+    // Authored world bosses and their breakable arena hearts. The following collider
+    // and terrain stages still win whenever actual scenery stands before the target.
+    const encounterHit = this._sys('boss-encounters')?.raycast(_o, _d, s.t);
+    if (encounterHit && encounterHit.t < s.t) {
+      s.hit = true; s.t = encounterHit.t; s.kind = 'flesh'; s.zone = encounterHit.zone;
+      s.enemy = encounterHit.enemy; s.boss = true; s.colliderId = -1;
+      s.x = encounterHit.point.x; s.y = encounterHit.point.y; s.z = encounterHit.point.z;
+      s.nx = -dx; s.ny = -dy; s.nz = -dz;
+    }
     // ---- stage 2: chunk-local colliders, capped by stage 1
     const dealer = this._sys('dealer');
     const shopHit = dealer?.raycast(_o, _d, s.t);
@@ -407,7 +416,7 @@ export class Combat {
 
       if (h.enemy) {
         // the boss owns its own hp (enemies/kneeler.js); everything else is the pool's
-        const owner = this._sys(h.enemy.interior ? 'interior-horror' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+        const owner = this._sys(h.enemy.encounter ? 'boss-encounters' : h.enemy.interior ? 'interior-horror' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
         const res = owner && owner.damage
           ? owner.damage(h.enemy, dmg, { zone: h.zone, point: _pt.set(h.x, h.y, h.z), dist })
           : { killed: false };
@@ -540,7 +549,7 @@ export class Combat {
     const stats = this._progStats();
     const multiplier = h.enemy ? ((stats && stats.damageMul) || 1) : 1;
     const dealt = Math.max(1, Math.round(damage * multiplier));
-    const owner = h.enemy && this._sys(h.enemy.interior ? 'interior-horror' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
+    const owner = h.enemy && this._sys(h.enemy.encounter ? 'boss-encounters' : h.enemy.interior ? 'interior-horror' : h.enemy.dealer ? 'dealer' : h.boss ? 'kneeler' : 'enemies');
     // ROUND 18: `melee: true` was missing from this payload, so enemies.js recorded EVERY
     // melee kill as `lastMelee = false` and the 'enemy:killed' event said `kind: 'kill'`.
     // The heavier melee throw and every other lane that wants to know a swing did it

@@ -983,6 +983,16 @@ export class Places {
       });
       added++;
     }
+    // The inhabited foretown follows the existing approach road. Register made ground
+    // before roads/terrain workers bake so the houses and the collision floor agree.
+    const holdfast = MAJOR_BY_ID.holdfast;
+    if (holdfast) {
+      const p = this._roadPointFor(holdfast);
+      const yaw = p ? Math.atan2(p.x-holdfast.x,p.z-holdfast.z) : 0;
+      const cy=Math.cos(yaw),sy=Math.sin(yaw),y=terrain.heightAt(holdfast.x,holdfast.z);
+      for(const x of [-23,23]) terrain.addFlat({id:'holdfast-foretown:'+x,
+        x:holdfast.x+x*cy+123*sy,z:holdfast.z-x*sy+123*cy,radius:76,blend:.91,y});
+    }
     if (!added) { this.flatsRegistered = true; return; }
 
     // Verify by ID, never by counting: flatCount() is terrain's number and the array it
@@ -1920,6 +1930,9 @@ export class Places {
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       if (!e || !e.species) continue;
+      // Holdfast is inhabited. Its crypt has a separate encounter owner; the old
+      // keep/yard hostile table must never repopulate above-ground rooms.
+      if (key === 'major:holdfast' && !e.neutral && !e.guard) continue;
       const lx = +e.lx || 0, lz = +e.lz || 0;
       const c = {
         species: e.species,
@@ -1958,6 +1971,13 @@ export class Places {
     const prog = this._sys('progress');
     for (const rec of this._casts.values()) {
       const siteId = rec.key.startsWith('major:') ? rec.key.slice(6) : '';
+      // Neutral people are a renewable population, never saved permanent casualties.
+      if(Math.hypot(p.x-rec.x,p.z-rec.z)>245) for(const c of rec.cast) {
+        if(!c.neutral)continue;
+        if(c.entity&&c.entity.gen===c.generation) enemies._release(c.entity);
+        c.entity=null;c.generation=0;c.spawned=false;rec.placed=false;
+        this._castDone.delete(rec.key);
+      }
       // An alerted attacker may be culled after the player leaves. Recycling its
       // enemy-pool record neither defeats it nor permanently empties this site.
       // Requeue only unfinished hostile cast seats; recorded kills stay gone.
@@ -1977,14 +1997,15 @@ export class Places {
       for (const [castIndex, c] of rec.cast.entries()) {
         if (c.spawned) continue;
         if (!c.neutral && (prog?.flag('cast-killed:' + rec.key + ':' + castIndex) || prog?.flag('secured:' + siteId))) { c.spawned = true; continue; }
-        // A completed toll does not respawn a garrison when reloading the save.
-        if (c.guard && prog?.flag('gate:' + siteId)) { c.spawned = true; continue; }
+        // Paying opens the gate; the people who protect the town still live here.
+        if (c.guard && siteId !== 'holdfast' && prog?.flag('gate:' + siteId)) { c.spawned = true; continue; }
         try {
           const hostile = !!prog?.flag('gate-hostile:' + siteId);
           const e = enemies.spawn(c.species, c.x, c.z, {
             awake: c.neutral ? true : c.awake, yaw: c.yaw, staged: true, feetY: c.feetY,
             neutral: c.neutral && !hostile, initiallyNeutral:c.neutral, siteGuard: c.neutral ? siteId : '', hpScale: c.hpScale,
-            placementRadius: c.neutral ? 1.5 : 0,
+            placementRadius: c.neutral ? 1.5 : 0, townGuard: siteId === 'holdfast' && c.guard,
+            townCivilian: siteId === 'holdfast' && c.species === 'cashier',
           });
           if (e) { c.entity = e; c.generation = e.gen; c.spawned = true; }
           else complete = false;

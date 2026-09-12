@@ -557,6 +557,9 @@ export class Enemies {
     // importing this file, it asks for the channel in docs/HANDOFF.md and the
     // integrator puts it in CONTRACT.md first. The request is filed there.
     const bus = ctx.bus;
+    this._unsub.push(bus.on('boss:woke', p=>{
+      for(const e of this.all) if(e.alive&&!e.initiallyNeutral&&!e.neutral&&Math.hypot(e.pos.x-p.x,e.pos.z-p.z)<78)this._release(e);
+    }));
 
     this._unsub.push(bus.on('weapon:fire', (p) => {
       if (!p) return;
@@ -697,7 +700,7 @@ export class Enemies {
     let best = null, bestD = maxR * maxR;
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
-      if (e.alive || e.state !== 'corpse' || e.looted) continue;
+      if (e.alive || e.state !== 'corpse' || e.looted || e.initiallyNeutral) continue;
       if(feetY!==null&&Math.abs(e.pos.y-feetY)>1.8)continue;
       const dx = e.pos.x - x, dz = e.pos.z - z;
       const d2 = dx * dx + dz * dz;
@@ -877,6 +880,7 @@ export class Enemies {
    * is a convenience wrapper around it.
    */
   damage(e, amount, info) {
+    if(e) e.damageSource=info?.source || 'player';
     if (!e || !e.alive) return { killed: false, hpFrac: 0, species: e ? e.species : '' };
     if (e.neutral) this.provokeGate(e.siteGuard);
     const zone = info && info.zone ? info.zone : 'torso';
@@ -963,6 +967,7 @@ export class Enemies {
     let sx = 0, sz = 0, found = false;
     for (const guard of this.all) {
       if (!guard.alive || !guard.neutral || guard.siteGuard !== siteId) continue;
+      if(guard.townCivilian) { guard.townFear=12; continue; }
       guard.neutral = false; guard.staged = false; guard.aware = 2; guard.alerted = true;
       guard.calmT = 0; guard.respawnCalmT = 0; guard.memT = guard.def.memHunt || 12;
       guard.state = 'approach'; guard.riseSquash = 1;
@@ -1237,6 +1242,8 @@ export class Enemies {
     let x, z, opts;
     if (typeof c === 'number') { x = a; z = c; opts = d; }        // (key, x, y, z, opts)
     else { x = a; z = b; opts = c; }                              // (key, x, z, opts)
+    if(!opts?.neutral && !opts?.initiallyNeutral && this._sys('holdfast-life')?.contains(x,z)) return null;
+    if(!opts?.neutral && !opts?.initiallyNeutral && (this.ctx.shared.bossZones||[]).some(q=>q.on&&Math.hypot(x-q.x,z-q.z)<q.r)) return null;
     this._lastAsk = this._t;
     const def = SPECIES[key];
     // An unknown id still returns null — refusing is right, and a caller that
@@ -1352,6 +1359,9 @@ export class Enemies {
     e.neutral = !!opts?.neutral;
     e.initiallyNeutral = !!opts?.initiallyNeutral || e.neutral;
     e.siteGuard = opts?.siteGuard || '';
+    e.townGuard = !!opts?.townGuard;
+    e.townCivilian = !!opts?.townCivilian;
+    e.townWalk = 0; e.townFear = 0; e.damageSource = '';
     e.yaw = (opts && typeof opts.yaw === 'number') ? opts.yaw
       : (p ? faceYaw(x, z, p.pos.x, p.pos.z) : 0);
     e.prevYaw = e.currYaw = e.yaw;
@@ -1680,7 +1690,9 @@ export class Enemies {
     if (e.neutral) {
       e.pos.set(e.stagedX, e.stagedY, e.stagedZ); e.vel.set(0, 0, 0);
       e.riseSquash = 1; e.state = 'approach'; e.aware = 0; e.alerted = false;
-      e.yaw = e.stagedYaw; e.gait = 0; e.airborne = false; e.moving = false;
+      e.aim=e.townAim||0;
+      e.yaw = e.stagedYaw; e.gait += (e.townWalk || 0) * dt * 2.6;
+      e.airborne = false; e.moving = (e.townWalk || 0) > .05;
       e.dist = Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z);
       return;
     }

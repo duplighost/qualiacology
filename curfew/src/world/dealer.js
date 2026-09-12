@@ -58,7 +58,7 @@ export class Dealer {
     this.mats = [this.mat, this.lampMat];
     this._build();
     this._off = ctx.bus.on('player:respawn', () => {
-      if (!this.dead) this.resetEncounter();
+      this.revive();
     });
   }
   _sys(id) { return this.ctx.systems.get(id); }
@@ -109,6 +109,10 @@ export class Dealer {
     this.root.updateMatrixWorld(true);this.pos.set(0,.18,-.50).applyMatrix4(this.root.matrixWorld);this.prev.copy(this.pos);
     this._syncBody();this.human.animate({aim:0,time:this.timer});
   }
+  revive(){
+    this.dead=false;this.person.visible=true;this.person.rotation.z=0;
+    this._sys('progress')?.flag('dealer:dead',false);this.resetEncounter();
+  }
   _chooseCamp(first=false){
     const old=CAMPS[this.campIndex]?.near;
     const player=this._sys('player')?.pos;
@@ -131,7 +135,8 @@ export class Dealer {
     const saved=Number(pr?.flag('dealer:camp'));
     this.campIndex=pr?.flag('dealer:route-v2')&&Number.isInteger(saved)&&saved>=0&&saved<CAMPS.length?saved:this._chooseCamp(true);
     pr?.flag('dealer:route-v2',1);
-    this.dead=!!pr?.flag('dealer:dead'); this.hp=this.dead?0:MAX_HP;
+    if(pr?.flag('dealer:dead'))pr.flag('dealer:rewarded',true);
+    this.dead=false;pr?.flag('dealer:dead',false); this.hp=MAX_HP;
     this._place(this.campIndex);
   }
   ready(){return true;}
@@ -204,6 +209,7 @@ export class Dealer {
     this.timer+=dt; this.hurtT=Math.max(0,this.hurtT-dt);
     this.greetingT=Math.max(0,(this.greetingT||0)-dt);
     if(d>120&&this.light){this._sys('lights')?.release(this.light);this.light=null;}
+    if((this.dead||this.hostile)&&d>220){this.revive();return;}
     if(this.dead)return;
     if(!this.hostile && this.timer>TRAVEL_INTERVAL && d>220){this._place(this._chooseCamp());return;}
     if(d>180){this.hold=0;if(this.light){this._sys('lights')?.release(this.light);this.light=null;}return;}
@@ -352,9 +358,10 @@ export class Dealer {
       this.dead=true;this.phase='dead';this.person.rotation.z=-Math.PI/2;this.person.position.y=.1;
       this.aim.visible=false;const pr=this._sys('progress');pr.flag('dealer:dead',true);
       this._syncBody();
-      pr.payCash(150,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');pr.award(320,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');
+      const rewarded=!!pr.flag('dealer:rewarded');
+      if(!rewarded){pr.payCash(150,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');pr.award(320,this.pos.x,this.pos.y+.6,this.pos.z,'dealer');pr.flag('dealer:rewarded',true);}
       // The death reward is a GUN he had on the rail; the bulb row is an item, not a weapon.
-      const gun=STOCK.find(s=>!s.item&&!this._sys('weapons').has(s.id));if(gun)this._grantWeapon(gun.id);
+      const gun=STOCK.find(s=>!s.item&&!this._sys('weapons').has(s.id));if(gun&&!rewarded)this._grantWeapon(gun.id);
       this.ctx.bus.emit('dealer:defeated',{x:this.pos.x,z:this.pos.z});return {killed:true};
     }
     return {killed:false};
