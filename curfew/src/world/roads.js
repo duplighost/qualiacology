@@ -26,6 +26,7 @@
 
 import { CFG } from '../config.js';
 import { clamp, clamp01, lerp, smoothstep, TAU } from '../engine/math.js';
+import { LOST_DRIVE } from './world-scars.js';
 
 const RC = CFG.roads;
 
@@ -300,6 +301,7 @@ const ROUTES_SRC = [
   { id: 'radial-west', kind: 'gravel', closed: false, width: RC.width * 0.80, pts: radial(11, 14, 3.1) },
   { id: 'radial-south', kind: 'gravel', closed: false, width: RC.width * 0.80, pts: radial(16, 22, 4.6) },
   { id: 'broken-highway', kind: 'asphalt', closed: false, width: RC.width * 1.55, pts: HIGHWAY_PTS },
+  { id: 'lost-house-drive', kind: 'forest', secondary: true, closed: false, noMinors:true, width: 3.35, pts: LOST_DRIVE },
 ];
 
 /* ------------------------------------------------------------------ *
@@ -369,6 +371,7 @@ const JUNCTION_SAMPLES = [];
     ROUTES.push({
       id: src.id, kind: src.kind, width: src.width, closed: src.closed,
       secondary: !!src.secondary, controlCount: src.pts.length,
+      noMinors: !!src.noMinors,
       jumps: Object.freeze(jumps),
       start, n: (flat.length / 3), length: 0,
     });

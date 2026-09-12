@@ -1660,7 +1660,7 @@ function buildSpider(def) {
 export function buildBody(key, rng) {
   if(key==='marrow')return buildMarrow(rng);
   const def = SPECIES[key];
-  if (def.human) return buildHuman(key, Math.floor(rng.next()*4), def.height);
+  if (def.human) return buildHuman(key, Math.floor(rng.next()*12), def.height);
   const set = geoSetFor(key);
 
   // Per-instance tint: a spread of VALUE, plus a whisper of hue, so a crowd is

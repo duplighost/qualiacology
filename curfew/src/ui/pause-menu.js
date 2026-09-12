@@ -86,9 +86,12 @@ export class PauseMenu {
   }
   purchase(){const p=this.ctx.systems.get('progress');if(!p?.buy?.(this.selectedNode))return;this.hud._refreshTree();this.hud._celebrateNode(this.selectedNode);this.selectPerk(this.selectedNode);this.requirement.textContent='Learned.';}
   refreshJournal(){
-    const p=this.ctx.systems.get('progress');this.journal.replaceChildren(el('h2','','Places heard about'));
+    const p=this.ctx.systems.get('progress'),waypoint=p?.waypoint?.();this.journal.replaceChildren(el('h2','','Your waypoint'));
+    this.journal.append(el('p','',waypoint?'◆ '+waypoint.name:'Click anywhere on the map to place a waypoint. Click again to move it.'));
+    if(waypoint){const clear=button('Clear waypoint',()=>p.setWaypoint(null),'primary-action');clear.style.marginBottom='12px';this.journal.append(clear);}
+    const center=button('Centre on me',()=>{this.hud.mapCenter=null;this.hud._drawMap();},'map-pin');this.journal.append(center,el('h2','','Places heard about'));
     const rows=p?.rumours?.()||[];if(!rows.length)this.journal.append(el('p','','Talk to people in the Holdfast. What they tell you will be marked here.'));
-    for(const r of rows){const state=p.mapStatus(r.id),b=button('',()=>{this.hud.mapCenter={x:r.x,z:r.z};this.hud.mapZoom=2.6;this.hud._drawMap();},'map-pin');b.dataset.state=state;b.append(el('strong','',r.name),el('small','',{rumoured:'?  Heard about · Unvisited',discovered:'◇  Discovered',cleared:'✓  Cleared'}[state]||'Unvisited'));this.journal.append(b);}
+    for(const r of rows){const state=p.mapStatus(r.id),b=button('',()=>{this.hud.mapCenter={x:r.x,z:r.z};this.hud.mapZoom=2.6;p.setWaypoint(r);this.hud._drawMap();},'map-pin');b.dataset.state=state;b.title='Set waypoint: '+r.name;b.append(el('strong','',r.name),el('small','',({rumoured:'?  Heard about · Unvisited',discovered:'◇  Discovered',cleared:'✓  Cleared'}[state]||'Unvisited')+' · Mark'));this.journal.append(b);}
   }
   refreshFinishes(){const p=this.ctx.systems.get('progress'),unlocked=p?.unlockedFinishes?.()||['original'],active=p?.activeFinish?.()||'original',f=FINISH_BY_ID[this.selectedFinish]||FINISHES[0];for(const [id,b]of Object.entries(this.finishButtons)){b.dataset.selected=String(id===f.id);b.dataset.locked=String(!unlocked.includes(id));b.dataset.equipped=String(active===id);b.setAttribute('aria-pressed',String(id===f.id));b.setAttribute('aria-label',`${FINISH_BY_ID[id].name}, ${unlocked.includes(id)?active===id?'equipped':'unlocked':'locked'}`);}this.finishName.textContent=f.name;this.finishLore.textContent=f.id==='original'?'The finish you started with.':unlocked.includes(f.id)?`Taken from ${f.boss}. Available on every weapon you own, now and later.`:`Defeat ${f.boss} at ${f.location}. This finish unlocks for every weapon.`;this.equip.disabled=!unlocked.includes(f.id)||active===f.id;this.equip.textContent=active===f.id?'Equipped':unlocked.includes(f.id)?'Equip finish':'Not yet earned';}
   renderWeapon(){

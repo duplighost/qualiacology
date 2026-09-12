@@ -852,12 +852,31 @@ export const SETPIECE_BUILDERS = {
     const W = 7.4, D = 6.4, H = 3.2, RISE = 1.6;
     for (let i = 0; i < HOUSES.length; i++) {
       const [ox, oz] = HOUSES[i];
-      const yaw = Math.atan2(ox, oz) + r.range(-0.08, 0.08);     // the door faces the circle
+      const yaw = Math.atan2(ox, oz);     // the door faces the circle; shared with the story props
       shell(s, api, ox, oz, W, D, H, yaw, hcol[i], 1.4);
       s.gable(W, D, y + H, RISE, ox, 0, oz, C.slate, yaw, { api, depth: D, col: hcol[i] });
       gableFloor(api, ox, oz, W, D, y + H, RISE, yaw);
       const cy = Math.cos(yaw), sy = Math.sin(yaw);
       const put = (lx, lz) => ({ x: ox + lx * cy + lz * sy, z: oz - lx * sy + lz * cy });
+      const furniture=(lx,yy,lz,w,h,d,col,solid=true)=>{const p=put(lx,lz);s.box(w,h,d,p.x,y+yy,p.z,col,yaw);if(solid)api.emit({kind:'obb',x:p.x,z:p.z,halfX:w/2,halfZ:d/2,yaw,y0:y+yy-h/2,y1:y+yy+h/2,tag:'wood',standable:true});};
+      furniture(0,.015,0,W-.35,.08,D-.35,shade(C.plank,.72));
+      // Three different households: supper left warm, a child's room, a repair bench.
+      furniture(-2.0,.24,1.45,1.35,.36,2.25,shade(C.wood,.68));
+      furniture(-2.0,.48,1.45,1.29,.16,2.16,i===1?[.18,.075,.065]:[.12,.145,.139],false);
+      furniture(-2.0,.59,2.1,1.00,.16,.44,C.cloth,false);
+      furniture(1.75,.82,.55,1.72,.12,1.35,shade(C.plank,.82));
+      for(const xx of [1.06,2.44])for(const zz of [0,1.1])furniture(xx,.39,zz,.09,.78,.09,shade(C.wood,.64));
+      furniture(1.65,.46,-.88,.62,.10,.63,shade(C.wood,.68));
+      furniture(1.65,.81,-1.15,.62,.62,.07,shade(C.wood,.72));
+      for(const xx of [1.40,1.90])for(const zz of [-1.1,-.63])furniture(xx,.23,zz,.07,.46,.07,shade(C.wood,.58));
+      const bowl=put(1.75,.55);s.tube(.17,.13,.10,14,bowl.x,y+.94,bowl.z,i===2?C.metal:C.cloth);
+      if(i===0){for(const lx of [1.25,2.25]){const p=put(lx,.7);s.cyl(.12,.12,.025,12,p.x,y+.90,p.z,C.paper);}furniture(1.75,.905,.15,.32,.025,.48,C.paper,false);}
+      if(i===1){furniture(.05,.42,2.38,1.15,.72,.70,[.13,.072,.042]);for(let j=0;j<5;j++)furniture(.1+j*.13,.84,2.38,.09,.10+j*.03,.12,[.13,.11,.18],false);}
+      if(i===2){for(let j=0;j<4;j++)furniture(1.2+j*.30,.94,.2,.10,.12,.20,C.metal,false);const p=put(2.2,.8);s.tube(.24,.24,.08,20,p.x,y+.95,p.z,[.030,.034,.032]);}
+      // Faded rugs and a shelf of mismatched tins keep the open rooms lived in.
+      furniture(0,.068,-.4,2.1,.015,2.4,[.11,.072,.055],false);
+      furniture(.2,1.63,2.88,2.20,.09,.24,shade(C.plank,.70),false);
+      for(let j=0;j<6;j++){const p=put(-.68+j*.32,2.87);s.cyl(.08,.08,.14+(j%3)*.055,9,p.x,y+1.77,p.z,[.10+j*.012,.105,.091]);}
       // the eaves (the long sides, x = +-W/2) and the ridge
       for (const sx of [-1, 1]) {
         for (let lz = -D * 0.5 - 0.2; lz <= D * 0.5 + 0.2; lz += 0.35) {
@@ -877,6 +896,10 @@ export const SETPIECE_BUILDERS = {
         }
       }
     }
+    // The strings terminate at a numbered service junction and a real generator.
+    rod(s,-11.5,y+H-.1,-4.5,-7.8,y+2.45,4.2,.026,6,[.025,.028,.025]);
+    rod(s,-7.8,y+2.45,4.2,-6.2,y+1.35,11,.026,6,[.025,.028,.025]);
+    rod(s,-6.2,y+1.35,11,-6.2,y+.65,11,.036,6,[.12,.075,.029]);
     // the cords, house to house, sagging
     for (let i = 0; i < HOUSES.length; i++) {
       const a = HOUSES[i], b = HOUSES[(i + 1) % HOUSES.length];
@@ -1226,6 +1249,7 @@ export class Setpieces {
           col.needsUpdate = true;
         }
       } else if (b.kind === 'twinkle') {
+        if(this.ctx.systems.get('progress')?.flag('story:xmas-power')){b.glow.visible=true;m.opacity=.94;continue;}
         const cyc = (t + b.seed) % (XMAS_DAY + XMAS_NIGHT);
         if (cyc > XMAS_DAY) { m.opacity = 0.0; b.glow.visible = false; }
         else {

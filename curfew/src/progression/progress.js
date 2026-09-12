@@ -290,6 +290,7 @@ export class Progress {
       finishes: [],
       equippedFinish: 'original',
       rumours: [],
+      waypoint: {},
       unbanked: 0,      // carried since the last lit fire; at risk, and only this is
       level: 1,
       curveVersion: 0,
@@ -880,6 +881,14 @@ export class Progress {
     return true;
   }
   rumours() { return this.save.data.rumours; }
+  waypoint() { const p=this.save.data.waypoint;return p&&Number.isFinite(p.x)&&Number.isFinite(p.z)?p:null; }
+  setWaypoint(point) {
+    if(!point){this.save.data.waypoint={};this.save.mark();this.save.flush();this.ctx.bus.emit('map:waypoint',{cleared:true});return true;}
+    if(!Number.isFinite(point.x)||!Number.isFinite(point.z))return false;
+    const half=CFG.world.SIZE*.5;
+    this.save.data.waypoint={x:Math.max(-half,Math.min(half,point.x)),z:Math.max(-half,Math.min(half,point.z)),name:String(point.name||'Waypoint').slice(0,80)};
+    this.save.mark();this.save.flush();this.ctx.bus.emit('map:waypoint',this.save.data.waypoint);return true;
+  }
   mapStatus(id) {
     if (this.bossCleared(id) || this.claimed.has(id)) return 'cleared';
     if (this.found.has(id) || this.flag('boss-found:' + id)) return 'discovered';

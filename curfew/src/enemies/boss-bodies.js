@@ -46,6 +46,44 @@ class Sculpt {
  teeth(x,y,z,r,count=18,mat='bone'){for(let i=0;i<count;i++){const a=i*TAU/count,xx=x+Math.cos(a)*r,yy=y+Math.sin(a)*r;this.rod([[xx,yy,z],[xx-Math.cos(a)*.22,yy-Math.sin(a)*.22,z+.35],[xx-Math.cos(a)*.54,yy-Math.sin(a)*.54,z+.42]],.15,mat,.01);}}
  flush(){for(const [id,list]of this.parts){const g=mergeGeometries(list,false);list.forEach(g=>g.dispose());const mesh=new THREE.Mesh(g,materials()[id]);mesh.receiveShadow=true;mesh.castShadow=false;this.root.add(mesh);}this.parts.clear();}
 }
+
+// Separate shoulder, forearm and hand pieces let the silhouette actually bear weight.
+// Two bone placement below keeps fingertips on the ground during the planted half-step.
+function crawlerArm(s,limbs,anchor,foot,side,index,size=1){
+ const joint=new THREE.Group(),upper=new THREE.Group(),lower=new THREE.Group(),hand=new THREE.Group();
+ const a=new Sculpt(upper),b=new Sculpt(lower),c=new Sculpt(hand);
+ a.rod([[0,0,0],[.07,.35,.08],[0,1,0]],.38*size,'flesh',.65);
+ a.oval(0,.35,0,.48*size,.31,.42*size,'flesh');
+ for(const off of[-.16,.16])a.rod([[off,0,.27*size],[off*.8,.6,.25*size],[off,1,.12*size]],.065*size,'bone',.8);
+ b.rod([[0,0,0],[-.07,.6,.03],[0,1,0]],.25*size,'flesh',.65);
+ b.rod([[.18*size,.08,.12*size],[.19*size,.58,.1*size],[.12*size,.95,.09*size]],.09*size,'bone',.55);
+ b.oval(0,.05,0,.36*size,.16,.33*size,'bone');
+ c.oval(0,.19,.25,.66*size,.24*size,.9*size,'flesh');
+ for(let j=0;j<5;j++){const x=(j-2)*.28*size,len=(j===0?.78:1.1-Math.abs(j-2)*.13)*size;
+  c.rod([[x,.25,.65*size],[x*1.35,.2,1.15*size],[x*1.42,.1,1.35*size+len]],.14*size,'flesh',.4);
+  c.oval(x*1.35,.19,1.2*size,.18*size,.16*size,.19*size,'bone');
+  c.rod([[x*1.42,.1,1.35*size+len],[x*1.45,.17,1.64*size+len],[x*1.42,.04,1.91*size+len]],.12*size,'bone',.015);
+ }
+ a.flush();b.flush();c.flush();joint.add(upper,lower,hand);s.root.add(joint);joint.userData.ik={anchor:new THREE.Vector3(...anchor),foot:new THREE.Vector3(...foot),side,index,upper,lower,hand};limbs.push(joint);
+}
+const IK_A=new THREE.Vector3(),IK_B=new THREE.Vector3(),IK_C=new THREE.Vector3(),IK_D=new THREE.Vector3(),IK_Q=new THREE.Quaternion();
+function placeSegment(mesh,a,b){mesh.position.copy(a);IK_D.copy(b).sub(a);mesh.scale.y=IK_D.length();mesh.quaternion.setFromUnitVectors(UP,IK_D.normalize());}
+function poseCrawler(ik,t,motion,telegraph,dead){
+ const gait=motion.gait||0,speed=Math.min(1,(motion.speed||0)/4),phase=gait*1.8+ik.index*Math.PI*.92;
+ const cycle=Math.sin(phase),lift=Math.max(0,Math.cos(phase))*speed;
+ IK_A.copy(ik.anchor);IK_C.copy(ik.foot);IK_C.z+=cycle*1.9*speed;IK_C.y+=lift*1.3;
+ const front=ik.index<2,reach=motion.attack==='reach'||motion.attack==='hands';
+ const strike=motion.state==='striking'?Math.sin(Math.min(1,motion.strike||0)*Math.PI):0;
+ if(front&&reach){IK_C.y+=telegraph*3.4;IK_C.z+=telegraph*2.5+strike*6;IK_C.x*=1-telegraph*.3;}
+ if(front&&motion.attack==='seize'&&motion.state==='rising'){const u=Math.min(1,(motion.stateT||0)/1.1);IK_C.y+=Math.sin(u*Math.PI)*8;IK_C.z+=Math.sin(u*Math.PI)*5;IK_C.x*=.55;}
+ if(motion.attack==='slam'){IK_C.y+=telegraph*(front?4:1.2);IK_C.z+=telegraph*(front?1.3:0);}
+ if(motion.state==='climbing'){IK_C.x=ik.side*(front?.9:ik.index<4?1.1:1.5);IK_C.z=front?4.8:ik.index<4?4.7:3.8;IK_C.y=front?6.8:ik.index<4?3.8:.3;}
+ if(dead){IK_C.x*=1.2;IK_C.z+=.8;IK_C.y=.12;}
+ if(motion.body){IK_C.sub(motion.body.position).applyQuaternion(IK_Q.copy(motion.body.quaternion).invert());IK_C.y/=motion.body.scale.y;}
+ IK_B.copy(IK_A).lerp(IK_C,.5);IK_B.x+=ik.side*(1.1+telegraph*.5);IK_B.y+=1.0;IK_B.z-=1.1;
+ placeSegment(ik.upper,IK_A,IK_B);placeSegment(ik.lower,IK_B,IK_C);ik.hand.position.copy(IK_C);ik.hand.rotation.set(-lift*.35,ik.side*.18+cycle*.1*speed,ik.side*lift*.14);
+}
+
 const SHAPES={
  sea(s,limbs){
   s.oval(0,3,0,4.8,3.3,4,'hide');s.oval(0,4.2,2.9,3.1,2.7,1.7,'flesh');s.torus(0,4,4.3,1.7,.42,'flesh',1.25,.85);s.teeth(0,4,4.6,1.65,27);s.oval(0,4,4.3,1.7,1.25,.13,'wound');
@@ -60,9 +98,9 @@ const SHAPES={
   return {weak:[0,5.3,3.35],r:.93,body:[0,6,0,3],height:18};
  },
  bell(s,limbs){
-  s.oval(0,6,0,3.2,3.6,2.9,'iron');s.torus(0,4,2.9,2.3,.36,'bone');s.oval(0,4,2.8,2.2,2,.3,'wound');
+  const bell=new THREE.LatheGeometry([[2.9,3.3],[3.4,3.5],[3.3,3.9],[2.7,4.1],[2.25,6.3],[1.2,8.1],[.8,8.3]].map(p=>new THREE.Vector2(...p)),40);s.add(bell,'iron');s.torus(0,4,2.9,2.3,.36,'bone');s.oval(0,4,2.8,2.2,2,.3,'wound');
   for(let i=0;i<5;i++){s.torus(0,4.5+i*.6,0,2.8-i*.25,.11,'bone');}
-  for(const side of[-1,1]){s.rod([[side*1.8,5,0],[side*4,3,1],[side*4.5,.4,3]],.95,'flesh');for(let i=0;i<4;i++)s.rod([[side*4.5,.5,3],[side*(3.6+i*.5),.15,4],[side*(3.4+i*.6),.1,5.4]],.28,'bone');s.rod([[side*1,8,0],[side*2,10,0],[side*.8,10.8,.5]],.2,'iron');}
+  for(let i=0;i<4;i++){const side=i%2?-1:1,pair=Math.floor(i/2);crawlerArm(s,limbs,[side*2.2,5,0],[side*4.8,.12,3-pair*6],side,i,1.1);}for(const side of[-1,1])s.rod([[side*1,8,0],[side*2,10,0],[side*.8,10.8,.5]],.2,'iron');
   s.oval(0,8.9,1,1,1.1,.7,'bone');s.teeth(0,4,3,2.05,24);
   return {weak:[0,4,3.3],r:1.5,body:[0,6,0,3.4],height:11};
  },
@@ -75,19 +113,19 @@ const SHAPES={
  furnace(s,limbs){
   s.box(0,4,0,4.5,6.5,3.9,'iron');s.oval(0,7.7,0,2.5,2,2,'flesh');s.torus(0,4,2.2,1.45,.3,'bone');s.oval(0,4,2.3,1.4,1.4,.25,'wound');
   for(let i=-2;i<=2;i++){s.box(i*.7,4,2.65,.13,3.2,.15,'iron');s.rod([[i*.7,7,0],[i,10,0],[i*1.4,11.4,-1]],.23,'iron');}
-  for(const side of[-1,1]){s.rod([[side*2,5,0],[side*4,3,1],[side*5,.6,3]],1,'flesh');s.oval(side*5,.6,3,1.4,.7,1.4,'bone');s.rod([[side*1,1,0],[side*2,.3,-2]],.9,'iron');}
+  for(let i=0;i<4;i++){const side=i%2?-1:1; crawlerArm(s,limbs,[side*2,5-Math.floor(i/2)*2,0],[side*4.8,.15,3-Math.floor(i/2)*5],side,i,1.05);}for(let i=0;i<8;i++){s.box(0,1+i*.7,-2.1,4.8,.16,.3,'iron');s.oval((i%2?1:-1)*1.5,6.5+i*.2,.5,.42,.7,.5,'flesh');}
   return {weak:[0,4,2.75],r:1.2,body:[0,4.2,0,3.1],height:12};
  },
  lantern(s,limbs){
   s.oval(0,3.8,0,1.4,3.4,1.5,'hide');s.oval(0,6.8,.7,1.4,1.6,1.5,'flesh');s.torus(0,6.8,2.1,.8,.2,'bone');s.teeth(0,6.8,2.1,.72,16);
-  for(const side of[-1,1]){s.rod([[side*.8,3,0],[side*3,2,0],[side*4.5,.1,2]],.28,'bone');s.rod([[side*.8,5,0],[side*3.5,4,-1],[side*5,0,-2]],.25,'flesh');s.rod([[side*.7,1,0],[side*2,.1,-3]],.25,'bone');}
+  for(let i=0;i<6;i++){const side=i%2?-1:1,pair=Math.floor(i/2);crawlerArm(s,limbs,[side*.9,4-pair*.7,0],[side*(4.7-pair*.5),.1,3-pair*3],side,i,.58);}for(let i=0;i<15;i++)s.oval(0,1+i*.4,-1.1,.22,.16,.25,'bone');
   s.rod([[0,7,-.3],[0,10,0],[0,10.5,2.5],[0,8,4]],.14,'bone');s.oval(0,8,4,.6,.8,.6,'flesh');
   return {weak:[0,6.8,2.3],r:.85,body:[0,4,0,2.2],height:11};
  },
  mire(s,limbs){
   s.oval(0,2.2,0,3.5,2.3,3,'flesh');s.rod([[0,2,0],[0,4,0],[-.4,6,0]],1.5,'flesh',.6);s.oval(-.4,6.5,.2,1,1.7,1.1,'bone');s.oval(-.4,6.2,1.15,.7,1.1,.2,'wound');
   for(let i=0;i<12;i++){const a=i*TAU/12;const g=new THREE.Group(),k=new Sculpt(g);k.rod([[Math.cos(a),6,Math.sin(a)],[Math.cos(a)*2.8,3,Math.sin(a)*2.8],[Math.cos(a)*5,.05,Math.sin(a)*5]],.2,'hide',.08);k.flush();limbs.push(g);s.root.add(g);}
-  for(const side of[-1,1])s.rod([[side,4,0],[side*3,3,1],[side*3.8,.5,3.4]],.45,'flesh');
+  for(let i=0;i<4;i++){const side=i%2?-1:1,pair=Math.floor(i/2);crawlerArm(s,limbs,[side,4-pair*1.8,0],[side*3.7,.13,3.4-pair*6],side,i,.72);}
   for(let i=0;i<14;i++){const a=i*2.4;s.oval(Math.cos(a)*3,1.7+Math.sin(i)*.4,Math.sin(a)*2.5,.7,.65,.65,'wound');}
   return {weak:[-.4,6.2,1.45],r:.8,body:[0,2.7,0,3.4],height:8};
  },
@@ -98,26 +136,62 @@ const SHAPES={
  },
  antler(s,limbs){
   s.oval(0,3.5,-1,2,2,4.4,'iron');s.rod([[0,4,1],[0,6,2],[0,7.5,3]],1,'flesh',.7);s.oval(0,7.3,3.5,1.4,1.4,1.3,'bone');s.oval(0,6.8,4.6,.85,.95,.2,'wound');
-  for(const side of[-1,1]){s.rod([[side*.9,8,3],[side*2.5,10,2],[side*5,11,0]],.3,'bone',.05);for(let i=0;i<4;i++)s.rod([[side*(2+i*.7),9+i*.6,2-i*.5],[side*(1.8+i*.8),12+i*.4,1-i*.6]],.2,'bone');for(let j=0;j<3;j++)s.rod([[side*1.4,3,-3+j*2],[side*2.5,1.7,-2+j*2],[side*3,0,-1+j*2]],.5,'bone');s.box(side*1.8,3,-1,.3,1.2,5,'iron');}
+  for(const side of[-1,1]){s.rod([[side*.9,8,3],[side*2.5,10,2],[side*5,11,0]],.3,'bone',.05);for(let i=0;i<4;i++)s.rod([[side*(2+i*.7),9+i*.6,2-i*.5],[side*(1.8+i*.8),12+i*.4,1-i*.6]],.2,'bone');for(let j=0;j<3;j++)crawlerArm(s,limbs,[side*1.4,3,-3+j*2],[side*3.3,.12,-2+j*2],side,j*2+(side<0?1:0),.76);s.box(side*1.8,3,-1,.3,1.2,5,'iron');}
   return {weak:[0,6.8,4.85],r:.95,body:[0,3.8,-.5,3.8],height:14};
  },
  crypt(s,limbs){
-  s.oval(0,2.5,-1,2.7,2.6,2.2,'hide');s.oval(0,5,0,2.1,2.9,1.6,'flesh');s.oval(0,7.9,.7,1.5,1.8,1.25,'bone');
-  for(const side of[-1,1]){s.oval(side*.55,8.2,1.88,.42,.52,.22,'hide');s.rod([[side*.14,8.65,1.95],[side*.64,8.8,1.78],[side*1.11,8.51,1.61]],.14,'bone');s.oval(side*1,7.55,1.7,.35,.53,.31,'bone');for(let i=0;i<8;i++)s.rod([[side*.13,5.7-i*.34,1.84],[side*1.3,5.9-i*.36,1.7],[side*2.1,5.55-i*.36,1.05]],.12,'bone');}
-  s.oval(0,7.9,2.01,.16,.4,.12,'hide');s.oval(0,7.12,1.98,.6,.62,.15,'wound');s.teeth(0,7.1,2.13,.53,11);s.oval(0,5.25,1.76,.8,1.2,.2,'wound');
-
-  for(let i=0;i<9;i++){const a=i*TAU/9;s.rod([[Math.cos(a)*1.5,8.4,Math.sin(a)*1.5],[Math.cos(a)*2,10.3,Math.sin(a)*2]],.18,'iron');}
-  for(let i=0;i<6;i++){const side=i%2?-1:1,y=3+Math.floor(i/2)*1.2;const g=new THREE.Group(),k=new Sculpt(g);k.rod([[side*2,y,0],[side*(4+i*.25),y-1,1],[side*(5+i*.25),.5,3]],.48,'flesh');for(let j=0;j<4;j++)k.rod([[side*(5+i*.25),.5,3],[side*(5+i*.25)+(j-1.5)*.27,.1,4.5]],.14,'bone');k.flush();limbs.push(g);s.root.add(g);}
-  for(let i=0;i<12;i++)s.torus(0,2.5+i*.35,1.3,1.2+i*.07,.07,'bone',1,.6);
-  return {weak:[0,5.25,2.0],r:.76,body:[0,4,0,3.2],height:11,eyes:[[-.55,8.2,2.08],[.55,8.2,2.08]]};
+  // A desiccated human frame pulled into a predatory, six-armed shape. The hollow
+  // chest and leaning skull read as anatomy before the light in the cavity appears.
+  // Broken pelvic wings and long exposed muscles leave daylight between the limbs.
+  // A smooth inflated abdomen made the old silhouette look like a toy spider.
+  for(const side of[-1,1]){s.oval(side*.95,2.15,-1.6,.72,1.27,1.9,'flesh',side*.36);s.rod([[side*.3,2.8,-.4],[side*1.65,2.5,-1.2],[side*1.3,1.25,-2.2]],.26,'bone',.7);s.rod([[side*.6,5.8,-.3],[side*1.15,4.1,.2],[side*.45,2.1,-.6]],.35,'flesh',.65);}
+  s.rod([[0,1,-3],[0,2.7,-1.8],[0,4.8,-.1],[0,6.4,.6]],.45,'bone',.65);
+  s.oval(0,4.1,-.1,1.18,2.1,.8,'wound');s.oval(0,4.8,1.15,.94,1.4,.2,'hide');
+  for(const side of[-1,1]){s.rod([[side*.1,6,.7],[side*1.5,6.1,.3],[side*2.3,5.55,-.2]],.22,'bone');
+   for(let i=0;i<8;i++){const y=5.5-i*.34,w=1.85-Math.abs(i-3)*.1;s.rod([[side*.25,y+ .12,-.8],[side*w,y,.1],[side*w*.8,y-.28,1.4],[side*.55,y-.43,1.83]],.16,'bone',.72);if(i%3===0)s.rod([[side*w,y,.25],[side*(w+.2),y-.65,.8],[side*(w-.3),y-1.18,1.03]],.19,'flesh',.025);}
+   s.oval(side*1.7,5.5,-.1,.65,.7,.7,'flesh');
+   for(let i=0;i<4;i++)s.rod([[side*(1.4+i*.12),4.5-i*.4,.8],[side*(1.2+i*.25),3.5-i*.42,1.4],[side*(.9+i*.3),2.5-i*.36,1.2]],.095,'wound',.02);
+   s.rod([[side*.5,3.1,.6],[side*1.45,2.8,.3],[side*1.9,2,-.5]],.21,'bone');
+  }
+  for(let i=0;i<11;i++)s.oval(0,1.3+i*.43,-1.1+i*.12,.27,.18,.34,'bone');
+  const head=new THREE.Group();head.position.set(0,6.1,.4);const h=new Sculpt(head);
+  h.rod([[0,-.4,-.2],[-.16,.3,.4],[0,.9,.7]],.39,'flesh',.65);
+  h.oval(.09,1.68,.6,.77,1.44,.95,'flesh',-.15);h.oval(-.32,1.94,1.05,.5,1.03,.54,'bone',.23);
+  h.rod([[-.74,2.12,1.08],[-.26,2.66,1.17],[.25,2.77,.99],[.7,2.4,.67]],.17,'bone',.5);
+  for(const side of[-1,1]){h.oval(side*.34,1.66,1.49,.23,.16,.19,'hide',side*.25);h.rod([[side*.08,1.99,1.51],[side*.38,2.06,1.5],[side*.69,1.77,1.22]],.16,side<0?'bone':'flesh');h.rod([[side*.61,1.62,1.28],[side*.71,1.02,1.5],[side*.47,.72,1.68]],.19,'bone',.5);}
+  h.rod([[0,1.88,1.55],[.05,1.12,1.79],[-.12,.93,1.89]],.13,'bone',.28);
+  // The lower face has torn away. The jaw hangs below the cheek on exposed ligaments,
+  // opens independently with each reach, and never forms a horizontal smiling tooth row.
+  h.oval(.04,.65,1.57,.45,.92,.19,'wound');h.oval(.06,.8,1.77,.34,.73,.08,'hide');
+  for(let j=0;j<7;j++){const x=(j-3)*.11;h.rod([[x,.98-Math.abs(j-3)*.055,1.84],[x*1.03,.51-(j%3)*.10,1.95]],.065,'bone',.02);}
+  const jaw=new THREE.Group();jaw.position.set(0,.9,1.34);const j=new Sculpt(jaw);
+  for(const side of[-1,1]){j.rod([[side*.57,.18,0],[side*.73,-.85,.5],[side*.35,-1.67,.74],[side*.10,-1.78,.88]],.19,'bone',.48);j.rod([[side*.64,.37,-.03],[side*.79,-.38,.25],[side*.55,-1.3,.6]],.09,'flesh',.12);for(let q=0;q<4;q++)j.rod([[side*(.1+q*.11),-1.68+q*.07,.88],[side*(.1+q*.10),-1.3+q*.10,1.01]],.065,'bone',.02);}
+  j.rod([[0,-.27,.34],[.12,-.86,.65],[-.1,-1.5,.9],[.22,-2.2,.93]],.19,'wound',.07);j.flush();head.add(jaw);
+  h.rod([[-.72,2.05,.1],[-1.02,2.65,-.02],[-.64,3.18,-.08],[.1,3.43,-.17],[.62,3.02,-.3]],.13,'iron',.75);
+  for(let i=0;i<5;i++){const x=-.5+i*.24;h.rod([[x,2.4,.82],[x+.13,1.93,1.27],[x+.25,1.32,1.34]],.065,'flesh',.04);}
+  h.flush();s.root.add(head);
+  for(let i=0;i<6;i++){const side=i%2?-1:1,pair=Math.floor(i/2);crawlerArm(s,limbs,[side*(1.55-pair*.12),5.3-pair*1.28,-pair*.65],[side*(5.1+pair*.7),.13,3.6-pair*3.6],side,i,1);}
+  return {weak:[0,4.7,1.94],r:.74,body:[0,3.6,0,2.7],height:10,head,jaw,eyes:[[-.34,7.76,1.91],[.34,7.76,1.91]],mobile:true};
+ },
+ burrow(s,limbs){
+  // A mole-like corpse adapted into a shovel: bony digging hands, segmented
+  // earth-encrusted mantle, split vertical throat, and a blind human jaw beneath.
+  s.oval(0,3.1,-1.6,3.2,2.3,4.1,'hide');s.rod([[0,1.5,-5],[0,3,-3],[0,4.8,0],[0,5.4,1.8]],1.1,'flesh',.8);
+  for(let i=0;i<8;i++){const z=-4.2+i*.85,y=3.5+Math.sin(i/8*Math.PI)*1.3;s.oval(0,y,z,2.8-i*.11,.7,.9,'wood');for(const side of[-1,1])s.rod([[side*2.1,y,z],[side*3,y+.9,z-.4],[side*3.45,y+.6,z-.8]],.22,'bone',.03);}
+  s.oval(0,5.3,2.1,1.9,1.8,1.4,'bone');s.oval(0,4.8,3.25,1.1,1.7,.26,'wound');
+  for(const side of[-1,1]){s.rod([[side*.27,6.8,3.35],[side*1.3,5.8,3.55],[side*1.0,3.8,3.5],[side*.3,3.4,3.4]],.32,'flesh',.55);for(let j=0;j<10;j++){const y=3.8+j*.27;s.rod([[side*(.9+Math.sin(j/9*Math.PI)*.3),y,3.65],[side*.48,y-.1,3.9],[side*.3,y-.15,3.75]],.14,'bone',.015);}}
+  for(let i=0;i<6;i++){const side=i%2?-1:1,pair=Math.floor(i/2);crawlerArm(s,limbs,[side*2,3.8-pair*.7,1-pair*1.6],[side*(5.4-pair*.4),.12,4-pair*4],side,i,pair===0?1.45:.85);}
+  for(let i=0;i<9;i++)s.rod([[Math.sin(i*2.4)*2.5,2,-3+i*.5],[Math.sin(i*2.4)*3.5,.7,-4+i*.5]],.19,'flesh',.02);
+  return {weak:[0,4.95,3.85],r:.88,body:[0,3,-1,3.8],height:8,mobile:true};
  }
+
 };
 export function buildBossRig(def){
  const root=new THREE.Group();root.name='boss-'+def.id;const body=new THREE.Group();root.add(body);const s=new Sculpt(body),limbs=[];const anatomy=SHAPES[def.shape](s,limbs);s.flush();
  const tissue=tissueSurface('flesh');const membrane=new THREE.MeshStandardMaterial({color:0x582b35,emissive:0x7a3037,emissiveIntensity:.15,roughness:.35,metalness:.04,map:tissue.map,bumpMap:tissue.bump,bumpScale:.045});membrane.name='boss-open-heart';
  const weak=new THREE.Mesh(new THREE.SphereGeometry(anatomy.r,20,14),membrane);weak.position.set(...anatomy.weak);weak.scale.z=.42;body.add(weak);
  const eyeMat=new THREE.MeshBasicMaterial({color:def.skin.colors.accent,toneMapped:false});const eyes=[];
- for(const side of[-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.105,10,8),eyeMat);if(anatomy.eyes)e.position.set(...anatomy.eyes[side===-1?0:1]);else e.position.set(anatomy.weak[0]+side*(anatomy.r+ .38),anatomy.weak[1]+.8,anatomy.weak[2]-.2);body.add(e);eyes.push(e);}
+ for(const side of[-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.105,10,8),eyeMat);if(anatomy.eyes)e.position.set(...anatomy.eyes[side===-1?0:1]);else e.position.set(anatomy.weak[0]+side*(anatomy.r+ .38),anatomy.weak[1]+.8,anatomy.weak[2]-.2);if(anatomy.head){e.position.sub(anatomy.head.position);anatomy.head.add(e);}else body.add(e);eyes.push(e);}
  // A soft contact shadow seats the creature in the floor without another shadow pass.
  const shadowData=new Uint8Array(64*64*4);for(let y=0;y<64;y++)for(let x=0;x<64;x++){const d=Math.hypot((x-31.5)/32,(y-31.5)/32);shadowData[(y*64+x)*4+3]=Math.round(Math.max(0,1-d*d)**2*175);}
  const shadowMap=new THREE.DataTexture(shadowData,64,64,THREE.RGBAFormat);shadowMap.needsUpdate=true;shadowMap.magFilter=THREE.LinearFilter;
@@ -125,7 +199,29 @@ export function buildBossRig(def){
  const veins=new THREE.MeshStandardMaterial({color:0x311018,roughness:.37});for(let i=0;i<5;i++){const r=anatomy.r,x=(i-2)*r*.28,points=[new THREE.Vector3(x,-r*.74,r*.65),new THREE.Vector3(x+Math.sin(i)*r*.16,0,r*1.03),new THREE.Vector3(x-r*.15,r*.71,r*.69)],g=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),16,r*.036,6,false),m=new THREE.Mesh(g,veins);m.userData.weakTissue=true;weak.add(m);}
  const zone=()=>weak.getWorldPosition(new THREE.Vector3());
  return {root,body,limbs,weak,membrane,eyes,anatomy,zone,
-  pose(t,open,telegraph,dead){body.position.y=dead?-Math.min(.4,dead*.1):Math.sin(t*1.2)*.055;body.scale.y=dead?1-Math.min(.63,dead*.21):1;body.rotation.z=dead?Math.min(.4,dead*.13):Math.sin(t*.5)*.013;eyeMat.color.setHex(dead?0x111218:def.skin.colors.accent);for(let i=0;i<limbs.length;i++){const l=limbs[i];l.rotation.y=Math.sin(t*.65+i)*.045;l.rotation.z=Math.sin(t*1.05+i*.9)*(.018+telegraph*.045);if(def.shape==='moth')l.rotation.y=(i?1:-1)*(.16+Math.sin(t*.7)*.15+telegraph*.13);}membrane.color.setHex(open?0x944153:0x3d2830);membrane.emissive.setHex(open?0xbd5249:0x461423);membrane.emissiveIntensity=dead?0:open?.38:.05;weak.scale.set(1+Math.sin(t*4)*.035,1+Math.sin(t*4)*.035,.42);},
+  pose(t,open,telegraph,dead,motion={}){
+   const mobile=!!anatomy.mobile||['lantern','antler','bell','furnace','mire'].includes(def.shape),speed=Math.min(1,(motion.speed||0)/4),gait=motion.gait||0;
+   const recoil=motion.recoil||0,rise=motion.state==='rising'?Math.min(1,(motion.stateT||0)/(def.ambush?.7:2.1)):1;
+   body.position.y=dead?-Math.min(.7,dead*.18):Math.sin(mobile?gait*3.6:t*1.2)*(mobile?.13*speed:.055);
+   body.scale.y=dead?1-Math.min(.65,dead*.22):1;
+   body.rotation.x=dead?.2:mobile?-.13-telegraph*.08+recoil*.15:recoil*.05;
+   body.rotation.z=dead?Math.min(.45,dead*.15):Math.sin(mobile?gait*1.8:t*.5)*(mobile?.055*speed:.013);
+   if(def.ambush&&!dead){body.position.y-=motion.state==='dormant'?10:(1-rise)*10;body.rotation.x+=(1-rise)*.45;}
+   if(def.shape==='moth'&&!dead){body.position.y+=1.2+Math.sin(t*1.7)*.65;body.rotation.x+=speed*.16;}
+   if(motion.state==='climbing'&&!dead){body.position.y+=motion.climb||0;body.rotation.x=-.55;}
+   if(anatomy.head){anatomy.head.rotation.y=Math.sin(t*.7)*.07+(motion.turn||0)*.22;anatomy.head.rotation.x=-telegraph*.2+recoil*.33;anatomy.head.rotation.z=Math.sin(t*.83)*.08;}
+   if(anatomy.jaw){anatomy.jaw.rotation.x=.15+telegraph*.55+Math.sin(t*2.3)*.09;anatomy.jaw.rotation.z=Math.sin(t*1.7)*.07+recoil*.15;}
+   eyeMat.color.setHex(dead?0x111218:def.skin.colors.accent);
+   motion.body=body;
+   for(let i=0;i<limbs.length;i++){const l=limbs[i];if(l.userData.ik){poseCrawler(l.userData.ik,t,motion,telegraph,dead);continue;}
+    l.rotation.y=Math.sin(t*.65+i)*.07;l.rotation.z=Math.sin(t*1.05+i*.9)*(.045+telegraph*.14);
+    if(def.shape==='moth'){l.rotation.y=(i?1:-1)*(.25+Math.sin(t*(speed?5.2:2.5))*(.3+speed*.16)+telegraph*.6);l.rotation.z=(i?1:-1)*(.06+Math.sin(t*2.5)*.1);}
+    if(def.shape==='sea'){l.rotation.x=Math.sin(t*1.5+i)*.10+telegraph*.08;l.rotation.z=Math.sin(t*1.2+i*.9)*.14;}
+    if(def.shape==='tree')l.rotation.z=Math.sin(t*.8+i*.7)*(.03+telegraph*.16)+recoil*.07;
+    if(def.shape==='choir')l.rotation.x=Math.sin(t*1.9+i)*.1-telegraph*.22;
+   }
+   membrane.color.setHex(open?0x944153:0x3d2830);membrane.emissive.setHex(open?0xbd5249:0x461423);membrane.emissiveIntensity=dead?0:open?.38:.05;weak.scale.set(1+Math.sin(t*4)*.035,1+Math.sin(t*4)*.035,.42);
+  },
   dispose(){root.traverse(o=>o.geometry?.dispose());veins.dispose();shadowMap.dispose();shadowMat.dispose();membrane.map?.dispose();membrane.bumpMap?.dispose();membrane.dispose();eyeMat.dispose();root.removeFromParent();}
  };
 }

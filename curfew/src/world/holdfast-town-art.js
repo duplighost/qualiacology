@@ -62,13 +62,46 @@ export function banner(k, x, y, z, w, h, yaw, phases = false) {
   }
 }
 
-export function icicles(k, x, y, z, length, yaw, rng) {
-  const cy = Math.cos(yaw), sy = Math.sin(yaw), n = Math.ceil(length * 2.2);
-  for (let i = 0; i < n; i++) {
-    const off = (i + 0.5) / n * length - length / 2, h = rng.range(0.16, 0.72);
-    k.solid.cone(rng.range(0.035, 0.085), h, 5, x + cy * off, y - h / 2, z - sy * off, P.ice, 0, Math.PI);
+export function snowCap(k, x, y, z, w, d, yaw=0, depth=.16, seed=1, profile=null) {
+  const nx=Math.max(3,Math.ceil(w/.36)),nz=Math.max(3,Math.ceil(d/.28)),geo=new THREE.PlaneGeometry(w,d,nx,nz);
+  geo.rotateX(-Math.PI/2);const p=geo.attributes.position,cs=[];
+  for(let i=0;i<p.count;i++){
+    const px=p.getX(i),pz=p.getZ(i),u=px/(w/2),v=pz/(d/2);
+    const edge=Math.max(Math.abs(u),Math.abs(v));
+    const grain=.5+.5*Math.sin(px*5.2+pz*3.7+seed)*Math.sin(px*1.91-pz*5.3+seed*2);
+    const mound=Math.pow(Math.max(0,1-edge*edge),.7)*depth*(.72+grain*.28);
+    p.setZ(i,pz*(1+.07*Math.sin(px*3.1+seed)));
+    p.setY(i,(profile?profile(px,p.getZ(i)):0)+.045+mound);
+    const shade=.78+grain*.15+(1-edge)*.07;cs.push(.30*shade,.335*shade,.37*shade);
   }
-  k.solid.box(length, 0.13, 0.23, x, y + 0.04, z, P.snow, yaw);
+  geo.computeVertexNormals();k.cloth.at(geo,P.snow,x,y,z,yaw);
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(cs,3));
+}
+
+export function stucco(k, w,h,d,x,y,z,col,yaw=0,seed=1) {
+  const geo=new THREE.BoxGeometry(w,h,d,Math.max(1,Math.ceil(w/.25)),Math.max(1,Math.ceil(h/.25)),Math.max(1,Math.ceil(d/.25)));
+  const p=geo.attributes.position,normal=geo.attributes.normal,cs=[];
+  for(let i=0;i<p.count;i++){
+    const px=p.getX(i),py=p.getY(i),pz=p.getZ(i),v=(py+h/2)/h;
+    const q=.5+.5*Math.sin(px*3.7+pz*4.1+seed)*Math.sin(py*7.3+px*1.7+seed*2.1);
+    const fine=.5+.5*Math.sin(px*24.3+py*17.1+pz*19.1+seed);
+    const streak=(.5+.5*Math.sin(px*7.8+pz*8.9+seed))*Math.max(0,1-v*1.5);
+    const wear=.69+q*.23+fine*.08-streak*.14;
+    cs.push(col[0]*wear,col[1]*wear*(1-streak*.06),col[2]*wear*(1-streak*.14));
+    // A few millimetres of broken render catch grazing light, not silhouette noise.
+    const relief=(fine-.5)*.011;p.setXYZ(i,px+normal.getX(i)*relief,py+normal.getY(i)*relief,pz+normal.getZ(i)*relief);
+  }
+  geo.computeVertexNormals();k.cloth.at(geo,col,x,y,z,yaw);geo.setAttribute('color',new THREE.Float32BufferAttribute(cs,3));
+}
+
+export function icicles(k, x, y, z, length, yaw, rng) {
+  const cy=Math.cos(yaw),sy=Math.sin(yaw),n=Math.ceil(length*2.2);
+  for(let i=0;i<n;i++){
+    const off=(i+.5)/n*length-length/2,h=rng.range(.13,.79),radius=rng.range(.025,.074);
+    k.cloth.cone(radius,h,6,x+cy*off,y-h/2,z-sy*off,[.19,.26,.30],0,Math.PI);
+    if(i%4===0)k.cloth.cone(radius*.45,h*.65,5,x+cy*(off+.085),y-h*.325,z-sy*(off+.085),[.25,.30,.34],0,Math.PI);
+  }
+  snowCap(k,x,y+.015,z,length,.38,yaw,.13,length);
 }
 
 export function lantern(k, x, y, z, yaw = 0, large = false) {
@@ -160,19 +193,48 @@ export function arch(k, api, x, z, width, spring, rise, depth, y, yaw = 0) {
 }
 
 export function path(k, api, points, width) {
-  for (let j = 1; j < points.length; j++) {
-    const a = points[j - 1], b = points[j], dx = b[0] - a[0], dz = b[1] - a[1], length = Math.hypot(dx, dz);
-    const n = Math.ceil(length / 2.5), yaw = Math.atan2(dx, dz);
-    for (let i = 0; i < n; i++) {
-      const t = (i + 0.5) / n, x = a[0] + dx * t, z = a[1] + dz * t;
-      const geo = new THREE.PlaneGeometry(width, length / n + 0.05, 2, 2), p = geo.attributes.position;
-      geo.rotateX(-Math.PI / 2); geo.rotateY(yaw); geo.translate(x, 0, z);
-      for (let v = 0; v < p.count; v++) p.setY(v, groundY(api, p.getX(v), p.getZ(v)) + ON_APRON + 0.018);
-      geo.computeVertexNormals(); k.solid.push(geo, i % 3 ? [0.075, 0.082, 0.090] : [0.087, 0.090, 0.097]);
-      for (const side of [-1, 1]) {
-        const px = x + Math.cos(yaw) * width / 2 * side, pz = z - Math.sin(yaw) * width / 2 * side;
-        k.solid.box(0.26, 0.13, length / n - 0.07, px, groundY(api, px, pz) + ON_APRON + 0.06, pz, P.edge, yaw);
-      }
+  (k.pathRuns ||= []).push(...points.slice(1).map((b,i)=>({a:points[i],b,width})));
+}
+
+export function bakePaths(k, api) {
+  const runs=k.pathRuns||[],distance=(x,z,r)=>{
+    const dx=r.b[0]-r.a[0],dz=r.b[1]-r.a[1],len=dx*dx+dz*dz;
+    const t=Math.max(0,Math.min(1,((x-r.a[0])*dx+(z-r.a[1])*dz)/len));
+    return Math.hypot(x-r.a[0]-t*dx,z-r.a[1]-t*dz)-r.width/2;
+  };
+  const positions=[],indices=[],uvs=[],colors=[];
+  // A union of the path footprints has one surface at each point, including every
+  // junction. It removes the coplanar crossing sheets visible in the previous town.
+  const step=.8;
+  for(let z=-62.4;z<169.6;z+=step)for(let x=-62.4;x<63.2;x+=step){
+    if(x+step>41.5&&x<48.5&&z+step>-47.5&&z<-36)continue;
+    if(!runs.some(r=>distance(x+step/2,z+step/2,r)<=0))continue;
+    const n=positions.length/3,shade=.94+((Math.round(x*5)*13+Math.round(z*5)*7)%9+9)%9*.018;
+    for(const[px,pz]of[[x,z],[x,z+step],[x+step,z+step],[x+step,z]]){
+      positions.push(px,groundY(api,px,pz)+ON_APRON+.032,pz);uvs.push(px*.8,pz*.8);colors.push(.079*shade,.083*shade,.089*shade);
+    }
+    indices.push(n,n+1,n+2,n,n+2,n+3);
+  }
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geo.setIndex(indices);geo.computeVertexNormals();
+  k.solid.push(geo,P.stone);geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  for(const r of runs){
+    const dx=r.b[0]-r.a[0],dz=r.b[1]-r.a[1],length=Math.hypot(dx,dz),yaw=Math.atan2(dx,dz),n=Math.ceil(length/7);
+    for(let i=0;i<n;i++)for(const side of[-1,1]){
+      const t=(i+.5)/n,x=r.a[0]+dx*t+Math.cos(yaw)*(r.width/2+.43)*side,z=r.a[1]+dz*t-Math.sin(yaw)*(r.width/2+.43)*side;
+      if(runs.some(other=>other!==r&&distance(x,z,other)<.55))continue;
+      if(x>40&&x<50&&z>-49&&z<-34)continue;
+      snowCap(k,x,groundY(api,x,z)+ON_APRON+.08,z,1.1,length/n+.3,yaw,.12,i+side*7);
+    }
+  }
+  // Kerbs stop before another path joins them; they never run through junctions.
+  for(const r of runs){
+    const dx=r.b[0]-r.a[0],dz=r.b[1]-r.a[1],length=Math.hypot(dx,dz),yaw=Math.atan2(dx,dz),n=Math.ceil(length/2.2);
+    for(let i=0;i<n;i++)for(const side of[-1,1]){
+      const t=(i+.5)/n,x=r.a[0]+dx*t+Math.cos(yaw)*r.width/2*side,z=r.a[1]+dz*t-Math.sin(yaw)*r.width/2*side;
+      if(runs.some(other=>other!==r&&distance(x,z,other)<.65))continue;
+      if(x>40.9&&x<49.1&&z>-48.1&&z<-35.4)continue;
+      k.solid.box(.23,.10,length/n-.08,x,groundY(api,x,z)+ON_APRON+.084,z,P.edge,yaw);
     }
   }
 }

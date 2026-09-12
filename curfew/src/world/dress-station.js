@@ -51,7 +51,7 @@
 // band ART 0.2 says the frame has nothing in, not to add another highlight.
 
 import * as THREE from 'three';
-import { C, kits, groundY, ON_APRON } from './sites.js';
+import { C, kits, groundY, gableFloor, ON_APRON } from './sites.js';
 
 /* ==========================================================================
    ANCHORS — the three places refuge.js needs, in the station's LOCAL frame.
@@ -422,10 +422,11 @@ function serviceBay(k, api) {
 
   // Deep pitched roof, patched in alternating strips, plus two crooked turbine vents.
   k.gable(w + 0.75, d + 0.80, y + h, 1.75, x, 0, z, C.slate, 0);
+  gableFloor(api, x, z, w + 0.75, d + 0.80, y + h, 1.75, 0);
   for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) {
     const px = x + sx * (1.0 + i * 0.82);
-    k.box(0.74, 0.055, d - 0.8, px, y + h + 0.63 + (4 - i) * 0.20,
-      z + (i % 2 ? 0.10 : -0.10), i % 2 ? D.conduit : C.rust, 0, 0, -sx * 0.32);
+    k.box(0.74, 0.055, d - 0.8, px, y + h + 1.75 * (1 - Math.abs(px - x) / ((w + 0.75) / 2)) + 0.14,
+      z + (i % 2 ? 0.10 : -0.10), i % 2 ? D.conduit : C.rust, 0, 0, -sx * Math.atan2(1.75, (w + 0.75) / 2));
   }
   for (const vx of [x - 2.6, x + 2.15]) {
     k.cyl(0.18, 0.18, 1.25, 10, vx, y + h + 1.70, z + 1.2, D.conduit);

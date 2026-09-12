@@ -1059,6 +1059,7 @@ export class Hud {
       try { fn(p || {}); } catch (e) { console.error('[hud] ' + k, e); }
     }));
     for(const event of ['map:rumour','map:discovered','boss:cleared','save:loaded']) on(event,()=>{this._knownMapPins=null;this._miniDirty=true;if(this.paused)this.menu?.refresh();});
+    on('map:waypoint',()=>{this._miniDirty=true;if(this.paused){this._drawMap();this.menu?.refreshJournal();}});
 
     on('weapon:hit', (p) => {
       // Only a HIT ON A THING. Without this every round into a tree pops a marker and the
@@ -1269,18 +1270,19 @@ export class Hud {
     this.mg = map.getContext('2d', { alpha: true });   // ROUND 13: transparent where unrevealed
     this.mapZoom=1.6;this.mapCenter=null;
     map.style.cursor='grab';map.style.touchAction='none';
-    map.title='Scroll to zoom; drag to pan; double-click to find yourself';
-    const mapHelp=el('div','map-legend','Wheel to zoom · Drag to move · Double-click to centre');
+    map.title='Click to place or change your waypoint; drag to pan; scroll to zoom';
+    const mapHelp=el('div','map-legend','Click to mark a waypoint · Drag to move · Wheel to zoom');
     mapHelp.style.cssText='font:10px/1.6 ui-monospace,Consolas,monospace;color:#8f9fa9;text-align:center';mapWrap.appendChild(mapHelp);
     map.addEventListener('wheel',e=>{e.preventDefault();this.mapZoom=clamp(this.mapZoom*Math.exp(-e.deltaY*.0015),1,3.5);this._drawMap();},{passive:false});
-    map.addEventListener('pointerdown',e=>{if(e.button!==0)return;map.setPointerCapture(e.pointerId);this.mapDrag={x:e.clientX,y:e.clientY};map.style.cursor='grabbing';});
+    map.addEventListener('pointerdown',e=>{if(e.button!==0)return;map.setPointerCapture(e.pointerId);this.mapDrag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false};map.style.cursor='grabbing';});
     map.addEventListener('pointermove',e=>{if(!this.mapDrag||!this.mapCenter)return;
-      const scale=CFG.world.SIZE/(map.getBoundingClientRect().width*this.mapZoom);
+      if(!this.mapDrag.moved&&Math.hypot(e.clientX-this.mapDrag.startX,e.clientY-this.mapDrag.startY)<5)return;
+      this.mapDrag.moved=true;const scale=CFG.world.SIZE/(map.getBoundingClientRect().width*this.mapZoom);
       this.mapCenter.x-=(e.clientX-this.mapDrag.x)*scale;this.mapCenter.z-=(e.clientY-this.mapDrag.y)*scale;
-      this.mapDrag={x:e.clientX,y:e.clientY};this._drawMap();});
+      this.mapDrag.x=e.clientX;this.mapDrag.y=e.clientY;this._drawMap();});
     const releaseMap=()=>{this.mapDrag=null;map.style.cursor='grab';};
-    map.addEventListener('pointerup',releaseMap);map.addEventListener('lostpointercapture',releaseMap);
-    map.addEventListener('dblclick',()=>{this.mapCenter=null;this._drawMap();});
+    map.addEventListener('pointerup',e=>{if(this.mapDrag&&!this.mapDrag.moved)this._placeWaypoint(e.clientX,e.clientY);releaseMap();});map.addEventListener('lostpointercapture',releaseMap);
+    map.addEventListener('contextmenu',e=>{e.preventDefault();this.ctx.systems.get('progress')?.setWaypoint(null);});
 
     // THE TREE. Built once: a level line, then one row per branch holding one button per
     // tier. The name, the cost and the line are written here and never again; _refreshTree()
@@ -2152,7 +2154,7 @@ export class Hud {
     I.rumours=0;I.bosses=0;
     for(const pin of this._mapPins()){
       const state=prog?.mapStatus(pin.id)||'unknown';if(state==='unknown')continue;
-      if(pin.kind!=='boss'&&state!=='rumoured')continue;
+      if(pin.kind!=='boss'&&pin.kind!=='story'&&state!=='rumoured')continue;
       const x=px(pin.x),y=pz(pin.z);if(x<10||y<10||x>S-10||y>S-10)continue;
       this._rumourGlyph(g,x,y,state,7);
       const label=pin.name+(state==='rumoured'?' · ?':state==='cleared'?' · cleared':'');
@@ -2164,6 +2166,8 @@ export class Hud {
     }
     I.labels = labels;
     g.globalAlpha = 1;
+    const waypoint=prog?.waypoint?.();
+    if(waypoint){const x=px(waypoint.x),y=pz(waypoint.z);if(x>=10&&y>=10&&x<=S-10&&y<=S-10)this._waypointGlyph(g,x,y,8);I.waypoint={x:waypoint.x,z:waypoint.z,name:waypoint.name};}else I.waypoint=null;
 
     /* 6. the car ------------------------------------------------------------- */
     if (car && car.exists && Number.isFinite(car.x) && Number.isFinite(car.z)) {
@@ -2218,6 +2222,16 @@ export class Hud {
   }
 
   /** ROUND 13: the paper map's masked layer, sized with the map. */
+  _placeWaypoint(clientX,clientY){
+    const rect=this.mapCanvas.getBoundingClientRect(),center=this.mapCenter;if(!center||!rect.width)return;
+    const span=CFG.world.SIZE/this.mapZoom,x=center.x+((clientX-rect.left)/rect.width-.5)*span,z=center.z+((clientY-rect.top)/rect.height-.5)*span;
+    const p=this.ctx.systems.get('progress'),near=[...this._mapPins(),...MAJORS.filter(d=>p?.mapStatus(d.id)!=='unknown')].map(q=>({q,d:Math.hypot(q.x-x,q.z-z)})).sort((a,b)=>a.d-b.d)[0];
+    const point=near&&near.d<span/rect.width*14?{x:near.q.x,z:near.q.z,name:near.q.name}:{x,z,name:'Waypoint'};
+    p?.setWaypoint(point);
+  }
+  _waypointGlyph(g,x,y,r){
+    g.save();g.strokeStyle='#10131b';g.fillStyle='#f1c187';g.lineWidth=3;g.beginPath();g.moveTo(x,y-r);g.lineTo(x+r*.74,y);g.lineTo(x,y+r);g.lineTo(x-r*.74,y);g.closePath();g.stroke();g.fill();g.fillStyle='#312219';g.beginPath();g.arc(x,y,Math.max(1.5,r*.24),0,TAU);g.fill();g.restore();
+  }
   _mapPins(){
     if(this._knownMapPins)return this._knownMapPins;
     const p=this.ctx.systems.get('progress'),rows=new Map((p?.rumours?.()||[]).map(r=>[r.id,r]));
@@ -2561,7 +2575,7 @@ export class Hud {
     // Nearby destinations, no names. Hollow = waiting, solid = claimed.
     for(const pin of this._mapPins()){
       const dx=pin.x-px,dz=pin.z-pz;if(dx*dx+dz*dz>MINI_RANGE*MINI_RANGE)continue;
-      const state=prog?.mapStatus(pin.id)||'unknown';if(state==='unknown'||(pin.kind!=='boss'&&state!=='rumoured'))continue;
+      const state=prog?.mapStatus(pin.id)||'unknown';if(state==='unknown'||(pin.kind!=='boss'&&pin.kind!=='story'&&state!=='rumoured'))continue;
       this._rumourGlyph(g,c+(dx*rx+dz*rz)*scale,c-(dx*fx+dz*fz)*scale,state,5);
     }
     const found = places && places.found && typeof places.found.has === 'function' ? places.found
@@ -2678,6 +2692,13 @@ export class Hud {
     }
 
     // The player never moves off the centre: the county rotates under the arrow.
+    const waypoint=prog?.waypoint?.();
+    if(waypoint&&!this.ctx.shared.locationOverride){
+      const dx=waypoint.x-px,dz=waypoint.z-pz,d=Math.hypot(dx,dz),sx=dx*rx+dz*rz,sy=-(dx*fx+dz*fz),rr=Math.min(d*scale,rim-17),denom=d||1;
+      const wx=c+sx/denom*rr,wy=c+sy/denom*rr;
+      if(d>MINI_RANGE*.8){g.save();g.translate(wx,wy);g.rotate(Math.atan2(sy,sx)+Math.PI/2);g.fillStyle='#f1c187';g.strokeStyle=SHADE;g.lineWidth=3;g.beginPath();g.moveTo(0,-7);g.lineTo(5,4);g.lineTo(0,1);g.lineTo(-5,4);g.closePath();g.stroke();g.fill();g.restore();}
+      else this._waypointGlyph(g,wx,wy,6);
+    }
     g.fillStyle = '#7fe1e5'; g.strokeStyle = SHADE; g.lineWidth = 4;
     g.beginPath(); g.moveTo(c,c-11);g.lineTo(c+7,c+7);g.lineTo(c,c+3);
     g.lineTo(c-7,c+7);g.closePath();g.stroke();g.fill();

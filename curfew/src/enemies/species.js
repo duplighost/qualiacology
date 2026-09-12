@@ -495,7 +495,7 @@ export const POOL = Object.freeze({
   // placed nobody, which is exactly the failure round 7 measured at the second FETCH
   // graveyard. A slot is a body record and a merged mesh at boot: no light, no material and
   // no program.
-  warden: 6, resident: 52, cashier: 2, sentry: 9, marshal: 3, marrow:4,
+  warden: 6, resident: 52, cashier: 2, sentry: 9, marshal: 8, marrow:4,
   // ROUND 18. Six moths, because a swarm is not what was asked for — "a freaky horror moth"
   // is one thing on one trunk. Four spiders: interior-horror places at most one per room and
   // the county has thirteen rooms, but only the ones you are inside are ever alive at once.
