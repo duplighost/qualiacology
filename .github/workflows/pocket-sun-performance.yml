@@ -1,0 +1,142 @@
+name: Pocket Sun Android Performance
+on:
+  push:
+    branches: ['android/pocket-sun-performance-20260913']
+    paths: ['android-pocket-sun/**', '.github/workflows/pocket-sun-performance.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: pocket-sun-performance-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: android-pocket-sun
+      - uses: actions/download-artifact@v4
+        with:
+          name: pocket-sun-android
+          run-id: 34739958368
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: android-pocket-sun/previous
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: '12266719'
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
+      - name: Restore exact installed source and apply verified rendering patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile, json, hashlib, shutil, os
+          here=Path('android-pocket-sun'); out=here/'out'; out.mkdir(exist_ok=True)
+          archive=next((here/'previous').rglob('POCKET-SUN-Android-Source.zip'))
+          with zipfile.ZipFile(archive) as z: z.extractall(out)
+          project=out/'PocketSunAndroid'
+          shutil.copytree(project/'app/src/main/assets/pocket-sun',out/'baseline')
+          shutil.rmtree(project/'qa',ignore_errors=True)
+          (out/'qa').mkdir(exist_ok=True)
+          edits=json.loads((here/'performance-edits.json').read_text())
+          for relative,item in edits.items():
+              p=project/relative; text=p.read_text() if p.exists() else ''
+              assert hashlib.sha256(text.encode()).hexdigest()==item['original_sha256'], relative+' baseline mismatch'
+              for start,end,replacement in reversed(item['edits']): text=text[:start]+replacement+text[end:]
+              assert hashlib.sha256(text.encode()).hexdigest()==item['patched_sha256'], relative+' patched hash mismatch'
+              p.parent.mkdir(parents=True,exist_ok=True);p.write_text(text)
+          info=json.loads((project/'BUILD-INFO.json').read_text())
+          info.update(android_version='3.2.0-android.2',source_commit=os.environ['GITHUB_SHA'],optimization='render-only caches, blur removal, frame-aware adaptation, 60 Hz drawing cap',baseline_actions_run=34739958368)
+          (project/'BUILD-INFO.json').write_text(json.dumps(info,indent=2)+'\n')
+          (out/'qa/source-verification.json').write_text(json.dumps(edits,indent=2))
+          (project/'PERFORMANCE.md').write_text('''# Android performance update: 3.2.0-android.2
+          Portrait, controls, physics, scoring, object counts and save keys are unchanged.
+          Cached radial halos and one-time text sprites replace repeated gradients and text blurs.
+          Moving path glows use additive strokes rather than per-frame shadowBlur.
+          One Path2D is reused for each trail. Background redraws are reduced to 8-12 Hz.
+          Foreground draws are capped at 60 Hz; input events and simulation still run at each vsync.
+          Adaptive quality observes delivered frames as well as draw time, starts balanced,
+          and restores high resolution after ten healthy sampling windows. Main render bounds remain unchanged.
+          This APK uses the SAME non-production signing key and application ID as android.1.
+          Installing as an update should retain local saves; do not uninstall the previous app first.
+          The desktop browser tests are not a physical-phone performance guarantee.
+          To rebuild the web assets: cd web-source; npm ci; npm run typecheck; npm test; npm run build.
+          Copy web-source/dist/site contents into app/src/main/assets/pocket-sun before Gradle assembly.
+          Then run ./gradlew assembleDebug. No website deployment is performed by this workflow.
+          ''')
+          PY
+      - name: Typecheck, physics tests, and production web build
+        run: |
+          P="$GITHUB_WORKSPACE/android-pocket-sun/out/PocketSunAndroid"
+          cd "$P/web-source"
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test | tee "$GITHUB_WORKSPACE/android-pocket-sun/out/qa/unit-tests.txt"
+          npm run build
+          rm -rf "$P/app/src/main/assets/pocket-sun"
+          cp -a dist/site "$P/app/src/main/assets/pocket-sun"
+      - name: Browser regressions against the previous Android assets
+        run: |
+          npm install --prefix android-pocket-sun --no-save --package-lock=false --no-audit --no-fund playwright@1.51.1
+          node android-pocket-sun/browser-test.cjs
+      - name: Compile APK and verify compatible update certificate
+        run: |
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          P="$GITHUB_WORKSPACE/android-pocket-sun/out/PocketSunAndroid"
+          chmod +x "$P/gradlew"
+          "$P/gradlew" -p "$P" assembleDebug lintDebug --no-daemon
+          cp "$P/app/build/outputs/apk/debug/app-debug.apk" android-pocket-sun/out/POCKET-SUN-3.2.0-android.2.apk
+          SIGN="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$SIGN" verify --verbose --print-certs android-pocket-sun/out/POCKET-SUN-3.2.0-android.2.apk | tee android-pocket-sun/out/qa/apk-signature.txt
+          OLD=$(find android-pocket-sun/previous -name 'POCKET-SUN-3.2.0-android.1.apk' -print -quit)
+          "$SIGN" verify --print-certs "$OLD" > android-pocket-sun/out/qa/previous-certificate.txt
+          diff <(grep 'certificate SHA-256 digest' android-pocket-sun/out/qa/previous-certificate.txt) <(grep 'certificate SHA-256 digest' android-pocket-sun/out/qa/apk-signature.txt)
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android-pocket-sun/out/POCKET-SUN-3.2.0-android.2.apk | tee android-pocket-sun/out/qa/apk-badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions android-pocket-sun/out/POCKET-SUN-3.2.0-android.2.apk | tee android-pocket-sun/out/qa/apk-permissions.txt
+          if grep -q 'android.permission.INTERNET' android-pocket-sun/out/qa/apk-permissions.txt; then exit 1; fi
+          mkdir -p android-pocket-sun/out/tooling
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" android-pocket-sun/out/tooling/
+      - name: Package source and test evidence
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil,zipfile,hashlib,json
+          out=Path('android-pocket-sun/out');p=out/'PocketSunAndroid'
+          shutil.copytree(out/'qa',p/'qa',dirs_exist_ok=True)
+          shutil.copy2('android-pocket-sun/performance-edits.json',p/'qa/performance-edits.json')
+          # Legacy source generator recreates android.1; retain as historical evidence only.
+          if (p/'build_android.py').exists(): shutil.move(p/'build_android.py',p/'qa/baseline-generator.py')
+          with zipfile.ZipFile(out/'POCKET-SUN-Android-Optimized-Source.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for f in sorted(p.rglob('*')):
+                  rel=f.relative_to(p)
+                  if f.is_file() and not any(x in rel.parts for x in ('.gradle','build','node_modules','dist')) and f.name!='local.properties':z.write(f,Path('PocketSunAndroid')/rel)
+          artifacts=[out/'POCKET-SUN-3.2.0-android.2.apk',out/'POCKET-SUN-Android-Optimized-Source.zip']
+          (out/'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.name+'\n' for f in artifacts))
+          (out/'qa/native-limitations.txt').write_text('The native wrapper is unchanged. No physical-phone benchmark or native emulator validation was performed in this build. Compilation, signature verification, and browser regression results are separate checks.\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pocket-sun-performance-android2
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            android-pocket-sun/out/POCKET-SUN-3.2.0-android.2.apk
+            android-pocket-sun/out/POCKET-SUN-Android-Optimized-Source.zip
+            android-pocket-sun/out/SHA256SUMS.txt
+            android-pocket-sun/out/qa/
+            android-pocket-sun/out/tooling/
+            android-pocket-sun/out/PocketSunAndroid/app/build/reports/
