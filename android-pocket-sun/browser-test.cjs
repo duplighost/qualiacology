@@ -101,10 +101,16 @@ async function context(browser, viewport, native) {
     await page.touchscreen.tap(150,500);
     await page.waitForTimeout(400);
     await page.screenshot({path:path.join(OUT,'qa','portrait-browser.png')});
-    await page.evaluate(() => localStorage.setItem('pocket-sun-best','24680'));
+    // Stop the old run before injecting a fixture; it otherwise overwrites it on its next save.
+    await page.evaluate(() => { window.__pocketSetActive(false); localStorage.setItem('pocket-sun-best','24680'); });
+    report.storageBeforeReload = await page.evaluate(() => localStorage.getItem('pocket-sun-best'));
     await page.reload();
     await page.waitForFunction(() => document.body.dataset.gameReady === 'true');
-    check('Best-score storage persists after reload', await page.evaluate(() => localStorage.getItem('pocket-sun-best') === '24680'));
+    report.storageAfterReload = await page.evaluate(() => localStorage.getItem('pocket-sun-best'));
+    check('Best-score storage persists after reload', report.storageBeforeReload === '24680' && report.storageAfterReload === '24680');
+    await page.reload();
+    await page.waitForFunction(() => document.body.dataset.gameReady === 'true');
+    check('Saved best remains intact on another launch', await page.evaluate(() => localStorage.getItem('pocket-sun-best') === '24680'));
     const canvas = await page.locator('canvas.world').boundingBox();
     check('Portrait playfield fits the viewport', canvas.width <= 413 && canvas.height <= 916 && canvas.height > canvas.width);
     check('No external resource dependencies', external.length === 0);
