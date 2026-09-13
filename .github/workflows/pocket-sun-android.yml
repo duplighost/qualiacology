@@ -1,0 +1,119 @@
+name: Pocket Sun Android
+on:
+  push:
+    branches: ['android/pocket-sun-portrait-20260913']
+    paths: ['android-pocket-sun/**', '.github/workflows/pocket-sun-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pocket-sun-android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            pocket-sun
+            android-pocket-sun
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: pocket-sun/source/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare current game and native project
+        run: |
+          python -m py_compile android-pocket-sun/build_android.py android-pocket-sun/emulator-test.py
+          python android-pocket-sun/build_android.py
+      - name: Browser regression tests
+        id: webqa
+        continue-on-error: true
+        run: |
+          npm install --prefix android-pocket-sun --no-save --package-lock=false --no-audit --no-fund playwright@1.51.1
+          node android-pocket-sun/browser-test.cjs
+      - name: Compile and verify installable APK
+        id: apk
+        run: |
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          P="$GITHUB_WORKSPACE/android-pocket-sun/out/PocketSunAndroid"
+          gradle -p "$P" wrapper --gradle-version 8.11.1 --no-daemon
+          "$P/gradlew" -p "$P" assembleDebug lintDebug --no-daemon
+          cp "$P/app/build/outputs/apk/debug/app-debug.apk" android-pocket-sun/out/POCKET-SUN-3.2.0-android.1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs android-pocket-sun/out/POCKET-SUN-3.2.0-android.1.apk | tee android-pocket-sun/out/qa/apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android-pocket-sun/out/POCKET-SUN-3.2.0-android.1.apk | tee android-pocket-sun/out/qa/apk-badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions android-pocket-sun/out/POCKET-SUN-3.2.0-android.1.apk | tee android-pocket-sun/out/qa/apk-permissions.txt
+          if grep -q 'android.permission.INTERNET' android-pocket-sun/out/qa/apk-permissions.txt; then echo 'Unexpected INTERNET permission'; exit 1; fi
+      - name: Enable emulator virtualization
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          python -m pip install websocket-client==1.8.0
+      - name: Android installation and lifecycle tests
+        id: androidqa
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: python android-pocket-sun/emulator-test.py
+      - name: Package editable source and test results
+        if: always() && steps.apk.outcome == 'success'
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, json, shutil, zipfile
+          out=Path('android-pocket-sun/out')
+          project=out/'PocketSunAndroid'
+          (project/'qa').mkdir(exist_ok=True)
+          if (out/'qa').exists(): shutil.copytree(out/'qa',project/'qa',dirs_exist_ok=True)
+          for name in ['build_android.py','browser-test.cjs','emulator-test.py']:
+              shutil.copy2(Path('android-pocket-sun')/name,project/name)
+          with zipfile.ZipFile(out/'POCKET-SUN-Android-Source.zip','w',zipfile.ZIP_DEFLATED) as z:
+              for p in sorted(project.rglob('*')):
+                  rel=p.relative_to(project)
+                  if p.is_file() and not any(x in rel.parts for x in ('.gradle','build','node_modules','dist')) and p.name!='local.properties':
+                      z.write(p,Path('PocketSunAndroid')/rel)
+          hashes=[]
+          for p in [out/'POCKET-SUN-3.2.0-android.1.apk',out/'POCKET-SUN-Android-Source.zip']:
+              hashes.append(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name)
+          (out/'SHA256SUMS.txt').write_text('\n'.join(hashes)+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pocket-sun-android
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            android-pocket-sun/out/POCKET-SUN-3.2.0-android.1.apk
+            android-pocket-sun/out/POCKET-SUN-Android-Source.zip
+            android-pocket-sun/out/SHA256SUMS.txt
+            android-pocket-sun/out/qa/
+      - name: Enforce test results
+        if: always()
+        env:
+          WEB_RESULT: ${{ steps.webqa.outcome }}
+          ANDROID_RESULT: ${{ steps.androidqa.outcome }}
+          APK_RESULT: ${{ steps.apk.outcome }}
+        run: |
+          test "$APK_RESULT" = success
+          test "$WEB_RESULT" = success
+          test "$ANDROID_RESULT" = success
