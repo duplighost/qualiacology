@@ -26,6 +26,7 @@
 // path: cold boot is gated at 15 s (AGENTS.md) and this county boots in 5.4.
 
 import { biquad, pinkFill, saturate, mixInto, normalizeTo, toAudioBuffer } from './audio.js';
+import { DAWN_START_S } from '../world/late-bell-state.js';
 
 const BASE = 'assets/radio/';
 
@@ -121,6 +122,18 @@ export const STATIONS = Object.freeze([
 
 /** A part's key in the decoded-buffer table: its file name, or its url. */
 const keyOf = (p) => p.url || p.file;
+const CAL_REPLY={url:'assets/voices/cal-lights-reply.wav',kind:'voice',radio:true};
+const CAL_REPLY_TEXT="Mom, if you're getting this — the lights look great from up here. We're coming.";
+export const CAL_FINAL_START_S=DAWN_START_S-5, CAL_FINAL_CUT_S=DAWN_START_S-1;
+// This passage in the existing recording begins at 5.25 seconds; its 9.25-second
+// cutoff is voiced signal. The carrier disappears one second before first light.
+export const CAL_FINAL_OFFSET_S=5.25;
+export function calFinalPhase(shared,elapsed) {
+  if(shared?.morningReturned||shared?.trueDawn>0)return 'off-air';
+  if(!shared?.lateBellFinal)return '';
+  if(elapsed>=CAL_FINAL_CUT_S)return 'off-air';
+  return elapsed>=CAL_FINAL_START_S?'voice':'';
+}
 
 /** Every distinct file the dial can play, in load order (baked `buf` parts are not files). */
 const FILES = (() => {
@@ -129,7 +142,7 @@ const FILES = (() => {
     const k = keyOf(p);
     if (k && !seen.includes(k)) { seen.push(k); out.push(p); }
   }
-  return out;
+  out.push(CAL_REPLY);return out;
 })();
 
 const TUNE_STATIC_S = 0.42;    // how long the hiss covers the change
@@ -319,6 +332,8 @@ export class Radio {
     const actx = this.A && this.A.actx;
     if (!actx || !this._built) return;
     const T = actx.currentTime;
+    const ctx=this.A.ctx;
+    if(this._lastCalBroadcast(T))return;
     // the static skirt closing after a tune
     if (this._staticUntil > 0 && T >= this._staticUntil) {
       this._staticUntil = 0;
@@ -329,6 +344,12 @@ export class Radio {
     if (this.on && this._src && this._partEndsAt > 0 && T >= this._partEndsAt) {
       const sched = this._schedList;
       if (sched && sched.length) {
+        const pr=ctx?.systems.get('progress'),reply=this._buf[CAL_REPLY.url];
+        if(this.station().id==='wrong-turn'&&this._actualPart==='voice-2.wav'&&reply&&pr?.flag('story:xmas-power')&&pr.flag('story:road-card')&&!pr.flag('story:cal-lights-answer')){
+          this._stopSource();pr.flag('story:cal-lights-answer',true);pr.save.flush();
+          this._playPart({part:{buf:reply,kind:'voice',file:CAL_REPLY.url,dur:reply.duration},k:this._schedIndex,offset:0,sched},T,false);
+          ctx.systems.get('world-stories')?._say(CAL_REPLY_TEXT);ctx.bus.emit('radio:cal-answer',{station:'wrong-turn',text:CAL_REPLY_TEXT});return;
+        }
         const k = (this._schedIndex + 1) % sched.length;
         this._stopSource();
         this._playPart({ part: sched[k], k, offset: 0, sched }, T, false);
@@ -342,11 +363,48 @@ export class Radio {
     if (this._src) { try { this._src.stop(); } catch (e) { void e; } this._src = null; }
   }
 
+  _silenceStatic(T) {
+    if(this._staticSrc){try{this._staticSrc.stop();}catch(e){void e;}this._staticSrc=null;}
+    this._staticUntil=0;
+    this._staticGain.gain.cancelScheduledValues(T);this._staticGain.gain.setValueAtTime(0,T);
+  }
+
+  _lastCalBroadcast(T) {
+    const ctx=this.A.ctx,clock=ctx?.systems?.get('clock');
+    const elapsed=Number(clock?.cycleT??ctx?.systems?.get('progress')?.flag('morning:late-bell')?.elapsed)||0;
+    const phase=this.station().id==='wrong-turn'?calFinalPhase(ctx?.shared,elapsed):'';
+    if(!phase){this._calOffAir=false;this._calFinalSource=null;return false;}
+    if(phase==='off-air'){
+      const first=!this._calOffAir;this._calOffAir=true;
+      if(this._src||first){this._stopSource();this._partEndsAt=0;this._schedList=null;this._actualPart=null;
+        this.gain.gain.cancelScheduledValues(T);this.gain.gain.setTargetAtTime(0,T,.015);}
+      if(this._staticSrc||this._staticUntil||first)this._silenceStatic(T);
+      if(first&&this.on)ctx?.bus?.emit('radio:off-air',{station:'wrong-turn'});
+      return true;
+    }
+    this._calOffAir=false;
+    if(!this.on)return true;
+    const buf=this._buf['voice-2.wav'];if(!buf)return true;
+    const offset=CAL_FINAL_OFFSET_S+elapsed-CAL_FINAL_START_S;
+    // Audio time continues while the game is paused. Rejoin the sentence at its
+    // simulation-clock position on resume, reload, or tuning back to this frequency.
+    const actualOffset=(this._calFinalOffset||0)+T-(this._calFinalAt||0);
+    if(this._src!==this._calFinalSource||!this._src||Math.abs(actualOffset-offset)>.18){
+      this._stopSource();this._silenceStatic(T);
+      const part={buf,kind:'voice',file:'voice-2.wav',dur:buf.duration};
+      this._playPart({part,k:0,offset,sched:[part]},T,false);
+      this._calFinalSource=this._src;this._calFinalOffset=offset;this._calFinalAt=T;
+      this._partEndsAt=T+CAL_FINAL_CUT_S-elapsed;
+    }
+    return true;
+  }
+
   _play(withStatic) {
     const actx = this.A && this.A.actx;
     if (!actx || !this._built) return;
     const T = actx.currentTime;
     this._stopSource();
+    if(this._lastCalBroadcast(T))return;
 
     if (withStatic && this._staticBuf) {
       if (this._staticSrc) { try { this._staticSrc.stop(); } catch (e) { void e; } }
@@ -391,6 +449,8 @@ export class Radio {
   _playPart(at, T, withStatic) {
     const actx = this.A.actx;
     const { part, k, offset, sched } = at;
+    this._actualPart=part.file;
+    this.A.ctx?.bus.emit('radio:segment',{station:this.station().id,file:part.file,kind:part.kind,offset});
     const src = actx.createBufferSource();
     src.buffer = part.buf;
     src.loop = false;
@@ -414,7 +474,7 @@ export class Radio {
   nowPlaying() {
     const st = STATIONS[this.index];
     const p = this._schedList && this._schedList[this._schedIndex];
-    return { station: st.id, dial: st.dial, name: st.name, part: p ? p.file : null, kind: p ? p.kind : st.kind };
+    return { station: st.id, dial: st.dial, name: st.name, part: this._actualPart||(p ? p.file : null), kind: p ? p.kind : st.kind,offAir:!!this._calOffAir };
   }
 
   dispose() {

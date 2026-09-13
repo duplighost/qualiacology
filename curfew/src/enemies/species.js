@@ -215,7 +215,7 @@ export const SPECIES = {
   pale: {
     id: 'pale', form: FORM.PORCELAIN, owner: OWNER.DREAD, xp: 0,
     phases: ALL_PHASES,
-    hp: 44, dmg: 34, radius: 0.24, height: 1.70, mass: 38,
+    hp: 44, dmg: 0, officer: true, radius: 0.24, height: 1.70, mass: 38,
     childHeight: 0.90, childChance: 0.5,
     // ROUND 19. ALEX: "I saw one of the weird leaning alien enemies. Again it did not chase
     // me or attack."
@@ -399,9 +399,9 @@ export const SPECIES = {
      slower than you and it will climb back up if you leave it alone, which is the beat —
      you can always walk out of the room, and then it is above you again on the way back. */
   spider: {
-    id: 'spider', form: FORM.SPIDER, owner: OWNER.PRESSURE, xp: 120,
+    id: 'spider', form: FORM.SPIDER, owner: OWNER.DREAD, xp: 0, officer: true,
     phases: ALL_PHASES,
-    hp: 180, dmg: 30, radius: 0.72, height: 1.05, mass: 95,
+    hp: 180, dmg: 0, radius: 0.72, height: 1.05, mass: 95,
     speed: 5.20,
     burst: 0.760, pause: 0.300,
     engage: [0, 12], standoff: 2.4,
@@ -418,7 +418,7 @@ export const SPECIES = {
   },
 
   standing: {
-    id: 'standing', form: FORM.ORDINARY, owner: OWNER.DREAD, xp: 0,
+    id: 'standing', form: FORM.ORDINARY, owner: OWNER.DREAD, xp: 120,
     phases: ALL_PHASES,
     hp: 60, dmg: 28, radius: 0.34, height: 1.78, mass: 76,
     speed: 2.60,
@@ -467,6 +467,13 @@ SPECIES.marshal = { ...SPECIES.warden, id:'marshal', form:FORM.HUMAN, human:true
 SPECIES.marrow={...SPECIES.hunter,id:'marrow',xp:90,hp:165,dmg:24,radius:.40,height:2.28,mass:68,
   speed:7.0,burst:.72,pause:.42,standoff:1.8,telegraph:.62,attack:.46,strikeAt:.28,recover:.85,
   dormant:true,riseTime:.95,countsAs:1,eye:0xd8e0cf};
+// The ordinary dead from Vera's ledger. Finite authored placements own their arrival.
+SPECIES.candle = { ...SPECIES.pallbearer, id:'candle', form:FORM.ORDINARY, xp:60,
+  hp:85, dmg:18, height:1.8, radius:.32, speed:2.3, deathNoise:9,
+  eye:0x93caff, cloth:0x101722, skin:0x29323a, bone:0x555c66 };
+SPECIES.drowned = { ...SPECIES.pallbearer, id:'drowned', xp:150, hp:260, dmg:32,
+  height:2.08, radius:.48, mass:210, speed:2.5, deathNoise:12,
+  eye:0x9eaaa1, cloth:0x0c1616, skin:0x22322d, bone:0x777367 };
 export const ROSTER = Object.keys(SPECIES);
 
 /* Pool sizes. Allocated at boot; spawn() never allocates. Since round 6 the
@@ -503,6 +510,7 @@ export const POOL = Object.freeze({
   // ROUND 22. Three runners so a corpse holding its slot cannot starve the director's one
   // live runner (ROSTER maxAlive 1); one dog-caller, because there is one voice in the woods.
   runner: 3, dogcaller: 1,
+  candle: 4, drowned: 4,
 });
 
 /* Species allowed to answer a pressure order, in the order a budget prefers
@@ -529,7 +537,7 @@ export function validate() {
     if (!(d.strikeAt <= d.attack + 1e-9)) bad.push(key + ': strikeAt is past the end of attack');
     if (!(d.hp > 0) || !(d.radius > 0) || !(d.height > 0)) bad.push(key + ': degenerate body');
     if (!Array.isArray(d.engage) || d.engage.length !== 2) bad.push(key + ': engage is not a band');
-    if (d.owner === OWNER.DREAD && d.xp !== 0) bad.push(key + ': dread-owned bodies pay no XP');
+    if (d.officer && (d.xp !== 0 || d.dmg !== 0)) bad.push(key + ': officers cannot damage or pay XP');
     if (POOL[key] === undefined) bad.push(key + ': no pool size');
     if (d.owner === OWNER.PRESSURE && !(d.notice > 0) && !d.bands) {
       bad.push(key + ': a pressure body with no notice range can never see you');

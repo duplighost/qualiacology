@@ -290,7 +290,7 @@ const SUN_FROM = P.sunFrom ?? 0.42;
 const REACH = 2.4;                  // places' CLAIM_REACH: the button is the same post
 const FACE = 0.5;                   // places' CLAIM_FACE
 const SEAT_FACE = 0.35;             // refuge's FACE_MIN: you are indoors and cannot back off
-const STOPS = P.stops || [
+export const MORNING_STOPS = P.stops || [
   { t: 0.00, horizon: 0x000000, mid: 0x000000, zenith: 0x000000, sun: 0.0, glow: 0.0 },
   { t: 0.10, horizon: 0x101427, mid: 0x080a18, zenith: 0x03040c, sun: 0.0, glow: 0.05 },
   { t: 0.32, horizon: 0x3b2f5e, mid: 0x1e1f4a, zenith: 0x0b1030, sun: 0.0, glow: 0.18 },
@@ -356,7 +356,7 @@ export class Planetarium {
     else this._note('no claim fixture on ' + SITE_ID + ': the button has nothing to stand on');
 
     // the stops, as linear colours, once
-    this._stops = STOPS.map(s => ({ t: s.t, h: new THREE.Color(s.horizon), m: new THREE.Color(s.mid),
+    this._stops = MORNING_STOPS.map(s => ({ t: s.t, h: new THREE.Color(s.horizon), m: new THREE.Color(s.mid),
       z: new THREE.Color(s.zenith), sun: s.sun, glow: s.glow }));
 
     this._buildDome(places);
@@ -398,6 +398,7 @@ export class Planetarium {
       const set = (n, v) => { if (u[n]) u[n].value = v; };
       set('uCloud', 0); set('uRidge', 0); set('uBand', 0);
       set('uMoonGlow', 0); set('uMoonPeak', 0); set('uEastGlow', 0); set('uMoonPhase', 2.0); set('uMoonR', SUN_R);   // uEastGlow 0: the county's east line is not painted on the dome at rest
+      set('uTrueDawn', 0); // the projector never inherits the outdoor sun
       if (u.uMoonDir) u.uMoonDir.value.set(0, 0.2, -1).normalize();
       if (u.uHorizon) u.uHorizon.value.setRGB(0, 0, 0);
       if (u.uMid) u.uMid.value.setRGB(0, 0, 0);
@@ -556,7 +557,12 @@ export class Planetarium {
     let kind = '', key = '', need = 0, kx = 0, ky = 0, kz = 0, idx = -1;
 
     const fx = this.fx;
-    if (fx && this.phase === 'off') {
+    const bookX=this._wx(LECTERN.x,LECTERN.z),bookZ=this._wz(LECTERN.x,LECTERN.z);
+    const bookD=Math.hypot(bookX-px,bookZ-pz);
+    if(bookD<2.1&&Math.abs(py-(this.padY+FLOOR))<1.4&&((bookX-px)*lookX+(bookZ-pz)*lookZ)/Math.max(.01,bookD)>.45){
+      kind='book';key='book';need=.3;kx=bookX;ky=this.padY+1.1;kz=bookZ;
+    }
+    if (!kind && fx && this.phase === 'off' && !this.ctx.shared.lateBellFinal) {
       const places = this._sys('places');
       if (places && typeof places.isClaimed === 'function' && places.isClaimed(SITE_ID)) {
         const dx = fx.x - px, dz = fx.z - pz, d = Math.sqrt(dx * dx + dz * dz);
@@ -600,7 +606,10 @@ export class Planetarium {
     if (this.hold < need) return;
     this.hold = 0; this._release = true;
     if (kind === 'button') this._start();
-    else this._sit(player, idx);
+    else if(kind==='book'){
+      this._sys('progress')?.flag('story:site:morning',true);
+      this.ctx.bus.emit('story:read',{id:'site:morning',title:'Emmett Sayer’s logbook',text:'Nov 1. A pencil landscape: hills, a sun, rays.\n\nthis is all it ever was'});
+    }else this._sit(player, idx);
   }
 
   /** A clear line from the eye to the lever, stopped short of the post itself. */
@@ -635,7 +644,7 @@ export class Planetarium {
   /* ------------------------------------------------------------ projection -- */
   /** Pressed: the claim (once) or the hold on the same post between runs. Cannot be stopped. */
   _start() {
-    if (!this._ready || this.phase !== 'off') return;
+    if (!this._ready || this.phase !== 'off' || this.ctx.shared.lateBellFinal) return;
     this.phase = 'hum'; this.t = 0;
     const cx = this.fx ? this.fx.x : this._wx(0, CONSOLE_R), cz = this.fx ? this.fx.z : this._wz(0, CONSOLE_R);
     _evt.x = cx; _evt.z = cz; _evt.seconds = SUNRISE_S;
@@ -768,6 +777,27 @@ export class Planetarium {
   _say(kind, gain, x, y, z) {
     const audio = this._sys('audio');
     if (audio && typeof audio.dread === 'function') audio.dread(kind, x, y, z, gain);
+  }
+
+  // The console stays off. Real light falls through the foyer onto the benches;
+  // the dark hemisphere and Emmett's logbook remain exactly where they were.
+  setTrueMorning(k) {
+    if (this.phase !== 'off') this._end();
+    if (k <= 0) return;
+    const p=this._sys('player');
+    if(!p?.pos||Math.hypot(p.pos.x-this._wx(0,0),p.pos.z-this._wz(0,0))>90){
+      if(this.rover)this._sys('lights')?.release(this.rover);this.rover=null;this.roverPeak=0;return;
+    }
+    this._borrow();
+    if (this.rover) {
+      this.rover.x = this._wx(0, FOYER_Z1 - 1);
+      this.rover.y = this.padY + 2.8;
+      this.rover.z = this._wz(0, FOYER_Z1 - 1);
+      _ca.copy(_gold).lerp(_white, k * .45);
+      this.rover.r = _ca.r; this.rover.g = _ca.g; this.rover.b = _ca.b;
+      this.rover.peak = 34 * k; this.rover.distance = 40; this.rover.decay = 1.1;
+      this.roverPeak = this.rover.peak;
+    }
   }
 
   /* ------------------------------------------------------------- readouts -- */

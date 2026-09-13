@@ -1064,6 +1064,7 @@ export class Director {
 
   step(dt) {
     this._t += dt;
+    if(this.ctx.shared.lateBellFinal){this._sys('enemies')?.heartbeat?.();return;}
     const player = this._sys('player');
     if (!player || !player.pos) return;
 

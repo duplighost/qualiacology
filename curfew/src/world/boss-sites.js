@@ -53,7 +53,10 @@ export class BossSites {
    for(const side of[-1,1]){box(side*31,-4,6,48,4);for(let i=0;i<9;i++){k.box(6.4,.13,.24,side*31,1.7+i*.22,-4,[.24,.25,.23]);}for(let i=0;i<5;i++)rod(k,[side*(12+i*2),.4,-18+i*6],[side*(9+i*2),8,-18+i*6],.28,BONE);}
    for(let i=0;i<14;i++)k.box(1.6,.19,19,(i-6.5)*1.8,.27,26,TIMBER);box(0,-34,31,3,5,IRON);sign(root,'BRINE LOCK|NO VESSEL RETURNED INTACT',0,3.5,37);
   }else if(s.shape==='tree'){
-   for(let i=0;i<16;i++){const a=i*2.4,r=29+(i%3)*3,x=Math.cos(a)*r,z=Math.sin(a)*r;k.cyl(.35,.7,4+i%4,8,x,2,z,TIMBER);rod(k,[x,3,z],[x+3,6,z+2],.18,TIMBER);rod(k,[x,4,z],[x-2,6,z-1],.17,TIMBER);k.box(1.2,.65,.85,x+1,.35,z,[.22,.12,.08]);}sign(root,'WIDOW\'S ORCHARD|DO NOT PICK WHAT LOOKS BACK',0,2.8,39);
+   s.orchard=[];for(let i=0;i<16;i++){const a=i*2.4,r=29+(i%3)*3,x=Math.cos(a)*r,z=Math.sin(a)*r;
+    const pair=new THREE.Group();pair.position.set(x,0,z);pair.rotation.y=a;root.add(pair);
+    for(const side of[-1,1]){const arm=new THREE.Group();arm.position.x=side*.34;pair.add(arm);const tk=new Kit();tk.cyl(.28,.42,4+i%4,8,0,2,0,TIMBER);rod(tk,[0,3,0],[-side*1.3,6,.8],.18,TIMBER);rod(tk,[0,4,0],[side*1.8,5.2,-.4],.12,TIMBER);const mesh=new THREE.Mesh(tk.build(),this.materials.timber);arm.add(mesh);arm.rotation.z=-side*.13;s.orchard.push({arm,side});}
+    k.box(1.2,.65,.85,x+1,.35,z,[.22,.12,.08]);}sign(root,'WIDOW\'S ORCHARD|DO NOT PICK WHAT LOOKS BACK',0,2.8,39);
   }else if(s.shape==='bell'){
    for(const side of[-1,1]){box(side*27,-12,5,5,14);box(side*27,15,5,5,11);}for(let i=0;i<4;i++){k.tube(2.3,3.3,3,24,-23+i*15,2,-29,IRON);k.cyl(2.6,3.4,.3,24,-23+i*15,.45,-29,BONE);}k.box(58,1.3,3,0,13,-12,IRON);sign(root,'BELLFOUNDER\'S CUT|HEARING PROTECTION REQUIRED',0,3,39);
   }else if(s.shape==='choir'){
@@ -63,7 +66,7 @@ export class BossSites {
   }else if(s.shape==='lantern'){
    for(const side of[-1,1])for(let i=0;i<3;i++)box(side*25,-28+i*25,5,6,17);k.box(58,2,8,0,17,-28,STONE);k.box(58,2,8,0,17,22,STONE);for(let i=0;i<9;i++){k.cyl(.09,.12,6,8,(i-4)*6,3,29,IRON);glow.cyl(.14,.14,.25,8,(i-4)*6,5.8,29,[.3,.35,.5]);}sign(root,'LAST LIGHT VIADUCT|COUNT THE LAMPS ON YOUR WAY BACK',0,3,39);
   }else if(s.shape==='mire'){
-   for(let i=0;i<14;i++){const a=i*TAU/14,x=Math.cos(a)*29,z=Math.sin(a)*29;if(z>20)continue;box(x,z,2.2,2.2,7);rod(k,[x,7,z],[x*.75,11,z*.75],.22,STONE);}for(let i=0;i<12;i++){const a=i*2.4,x=Math.cos(a)*23,z=Math.sin(a)*23;k.box(4,.1,2,x,.14,z,[.06,.085,.072],a);}sign(root,'WADING CHAPEL|WE LEFT THE DRESSES HERE',0,3,39);
+   for(let i=0;i<14;i++){const a=i*TAU/14,x=Math.cos(a)*29,z=Math.sin(a)*29;if(z>20)continue;box(x,z,2.2,2.2,7);rod(k,[x,7,z],[x*.75,11,z*.75],.22,STONE);}for(let i=0;i<12;i++){const a=i*2.4,x=Math.cos(a)*23,z=Math.sin(a)*23;k.box(4,.1,2,x,.14,z,[.06,.085,.072],a);}sign(root,'WEDDING DRESS|NEVER WORN|ASK INSIDE',0,3,39);
   }else if(s.shape==='moth'){
    for(let i=0;i<9;i++){const a=i*Math.PI/8;for(const side of[-1,1])rod(k,[side*32,0,-30+i*7],[side*29,15,-30+i*7],.16,IRON);rod(k,[-29,15,-30+i*7],[0,21,-30+i*7],.14,IRON);rod(k,[0,21,-30+i*7],[29,15,-30+i*7],.14,IRON);}for(let i=0;i<18;i++){const a=i*2.4;rod(k,[Math.cos(a)*24,1,Math.sin(a)*25],[0,18,0],.035,[.35,.36,.34]);}sign(root,'LUNAR CONSERVATORY|DO NOT OPEN AFTER SUNDOWN',0,3,39);
   }else if(s.shape==='antler'){
@@ -73,10 +76,16 @@ export class BossSites {
    box(-43,0,4,90,15);box(43,0,4,90,15);box(0,-43,90,4,15);box(0,43,90,4,15);k.box(90,3,90,0,16,0,STONE);
    for(const side of[-1,1])for(let i=0;i<5;i++){const z=-30+i*13;box(side*31,z,3.5,3.5,14);if(side===-1){const arch=new THREE.TorusGeometry(31,.68,10,52,Math.PI);arch.scale(1,.24,1);arch.translate(0,7,z);k.push(arch,STONE);}glow.cyl(.14,.24,1,8,side*30,3,z,[.3,.38,.65]);}
    // A vestibule breaks the first view; bones face the return stair, food bowls face inward.
-   box(-22,25,20,2.4,6);box(22,25,20,2.4,6);for(let i=0;i<13;i++)bones(k,-20+i*3.2,18+(i%3)*2.4,0,i*.4);for(let i=0;i<6;i++)k.cyl(.34,.23,.18,16,-4+i*1.3,.16,32,IRON);
+   box(-22,25,20,2.4,6);box(22,25,20,2.4,6);
+   // Thirteen neighbours in two rows. Faces and bowls point toward the returning stair.
+   for(let i=0;i<13;i++){const side=i<7?-1:1,x=side*27,z=-27+(i%7)*7.4;
+    k.box(.55,.68,.38,x,.57,z,[.09,.08,.072]);k.at(new THREE.SphereGeometry(.23,12,9),BONE,x,1.18,z+.06);
+    for(const a of[-1,1]){k.at(new THREE.SphereGeometry(.048,7,5),[.025,.022,.021],x+a*.087,1.21,z+.262);rod(k,[x+a*.18,.27,z],[x+a*.22,.14,z+1],.072,BONE);rod(k,[x+a*.32,.8,z],[x+a*.38,.35,z+.43],.052,BONE);}
+    k.cyl(.3,.19,.16,14,x,.14,z+1.6,IRON);
+   }
    for(let i=0;i<15;i++){const z=35+i*.42,h=(i+1)*.2;box(0,z,3.6,.44,h,STONE);}
    box(-2.25,38,1,7,5);box(2.25,38,1,7,5);k.box(5.5,1.5,7,0,5.5,38,STONE);
-   sign(root,'WE DID NOT BURY A MAN|DO NOT GO FURTHER',-9,1.7,25);sign(root,'HOLDFAST|RETURN TO THE LIGHT',3.3,2.0,35,Math.PI);
+   sign(root,'HOLLIS CRANE · 1911|UNTIL THE MORNING',-9,1.7,25);sign(root,'HOLDFAST|RETURN TO THE LIGHT',3.3,2.0,35,Math.PI);
   }
   // Three coherent arena levers. Their amber hearts visibly rupture and stay spent for this attempt.
   for(let i=0;i<3;i++){const a=(i+1)*TAU/3+.4,x=Math.cos(a)*23,z=Math.sin(a)*23;const g=new THREE.Group();g.position.set(x,0,z);const mat=new THREE.MeshStandardMaterial({color:s.skin.colors.accent,emissive:s.skin.colors.accent,emissiveIntensity:.45,roughness:.48,metalness:.15});const heart=new THREE.Mesh(new THREE.SphereGeometry(.72,16,12),mat);heart.scale.set(.8,1.25,.8);heart.position.y=1.55;g.add(heart);root.add(g);k.cyl(.65,.85,.48,12,x,.28,z,IRON);for(const side of[-1,1])rod(k,[x+side*.7,.2,z],[x+side*.55,2.5,z],.09,IRON);s.anchors.push({index:i,x:s.x+x,y:s.y+1.55,z:s.z+z,hp:36,spent:false,mesh:g,heart,mat,r:.85});}
@@ -87,7 +96,13 @@ export class BossSites {
    sign(root,s.location.toUpperCase()+'|KEEP CLEAR',dx,Math.max(2,heightAt(s.road.x,s.road.z)-s.y+2),dz,angle);
   }
   const batches=new Map();for(const part of k.parts){const c=part.attributes.color.array;const same=a=>Math.abs(c[0]-a[0])+Math.abs(c[1]-a[1])+Math.abs(c[2]-a[2])<.005;const family=same(TIMBER)?'timber':same(IRON)?'metal':same(BONE)?'bone':'stone';if(!batches.has(family))batches.set(family,[]);batches.get(family).push(part);}
-  for(const [family,parts]of batches){const geo=mergeGeometries(parts,false);parts.forEach(g=>g.dispose());projectPlaceSurfaceUVs(geo,family==='timber'?2.8:4);const mesh=new THREE.Mesh(geo,this.materials[family]);mesh.receiveShadow=true;root.add(mesh);}k.parts.length=0;if(glow.parts.length){const mat=new THREE.MeshBasicMaterial({vertexColors:true,toneMapped:false});root.add(new THREE.Mesh(glow.build(),mat));}
+  for(const [family,parts]of batches){const geo=mergeGeometries(parts,false);parts.forEach(g=>g.dispose());projectPlaceSurfaceUVs(geo,family==='timber'?2.8:4);const mesh=new THREE.Mesh(geo,this.materials[family]);mesh.receiveShadow=true;root.add(mesh);}k.parts.length=0;if(glow.parts.length){const mat=new THREE.MeshBasicMaterial({vertexColors:true,toneMapped:false});s.glow=new THREE.Mesh(glow.build(),mat);root.add(s.glow);}
+  if(s.id==='underkeep'){
+   // The brief release of morning belongs to this room alone.
+   const local=new Map();root.traverse(o=>{if(!o.material||!Object.values(this.materials).includes(o.material))return;
+    if(!local.has(o.material)){const mat=o.material.clone();mat.name=o.material.name+'-crypt';local.set(o.material,mat);this.ownedMaterials.add(mat);}o.material=local.get(o.material);
+   });s.cryptMaterials=[...local.values()];
+  }
   s.art=root;root.visible=false;
  }
  _buildPassage(){
@@ -102,6 +117,9 @@ export class BossSites {
   for(let i=0;i<4;i++){k.cyl(.27,.2,.16,14,-1.2+i*.7,.12,7.3,IRON);rod(k,[-1.7,2.4,5-i*2],[-1.7,.2-i*.4,3-i*2],.035,TIMBER);}
   const geo=k.build();projectPlaceSurfaceUVs(geo,3.1);const mesh=new THREE.Mesh(geo,this.materials.stone);mesh.receiveShadow=true;root.add(mesh);
   sign(root,'KEEP THE STAIR CLEAR|NO ONE RETURNS ALONE',0,2,6.4);
+  sign(root,'AMOS',-1.9,1.4,5.1,Math.PI/2);
+  const bowl=new Kit();bowl.cyl(.31,.24,.17,18,1.35,.13,6.1,IRON);bowl.cyl(.27,.27,.022,18,1.35,.226,6.1,[.26,.16,.064]);
+  this.nellsBowl=new THREE.Mesh(bowl.build(),this.materials.stone);this.nellsBowl.name='nells-full-bowl';root.add(this.nellsBowl);
   const mat=new THREE.MeshBasicMaterial({color:0x08090c,side:THREE.DoubleSide});const dark=new THREE.Mesh(new THREE.PlaneGeometry(3.9,3),mat);dark.position.set(0,-1.75,-3.3);root.add(dark);
  }
  _hatch(){const r=this._sys('places')?.nodes.get('holdfast');if(!r)return null;const c=Math.cos(r.yaw),s=Math.sin(r.yaw);return {x:CRYPT.hatchX*c+CRYPT.hatchZ*s,z:-CRYPT.hatchX*s+CRYPT.hatchZ*c,y:r.padY,yaw:r.yaw};}
@@ -112,6 +130,11 @@ export class BossSites {
   if(camera){camera.yaw=p.yaw;camera.pitch=pitch;}this.passageCooldown=1.4;this.ctx.bus.emit('boss:passage',{inside:enter});this.release=true;return true;
  }
  step(dt){if(!this.ctx.ready)return;this.time+=dt;const p=this._sys('player'),pr=this._sys('progress');if(!p?.pos||!pr)return;if(!this.loaded){for(const s of this.sites)s.supplyUsed=!!pr.flag('boss-supply:'+s.id);this.loaded=true;}
+  for(const s of this.sites){
+   if(s.id==='underkeep'&&s.glow)s.glow.visible=!pr.bossCleared('underkeep');
+   if(s.orchard){s.uncurl=pr.bossCleared(s.id)?Math.min(1,(s.uncurl||0)+dt/4):0;for(const q of s.orchard)q.arm.rotation.z=q.side*(-.13+.26*s.uncurl);}
+  }
+  if(this.nellsBowl)this.nellsBowl.visible=pr.bossCleared('underkeep')||this.ctx.shared.lateBellFinal||this.ctx.shared.phase!=='dusk';
   const use=this.ctx.input.held('use');if(!use)this.release=false;
   const atCrypt=Math.hypot(p.pos.x-CRYPT.x,p.pos.z-CRYPT.z)<65;if(atCrypt!==this.inside){this.inside=atCrypt;const hatch=this._hatch();this.ctx.shared.locationOverride=atCrypt?{x:hatch?.x||0,z:hatch?.z||0,name:'Beneath the Holdfast'}:null;}
   for(const s of this.sites){const d=Math.hypot(p.pos.x-s.x,p.pos.z-s.z);s.art.visible=d<500;if(s.eruption){const encounter=this._sys('boss-encounters')?.all.find(k=>k.id===s.id),awake=encounter&&encounter.state!=='dormant';s.eruption.visible=!!awake;for(const m of s.eruption.children){const u=Math.min(1,(encounter?.stateT||0)/1.5),fly=awake&&encounter.state==='rising'?Math.sin(u*Math.PI):0;m.position.y=.12+fly*(2+(m.id%4));m.position.x=m.userData.start.x*(1+fly);m.position.z=m.userData.start.z*(1+fly);m.rotation.x=fly*2;}}for(const a of s.anchors){a.mesh.visible=!a.spent;a.mat.emissiveIntensity=.32+Math.sin(this.time*2+a.index)*.10;}

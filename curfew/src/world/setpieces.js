@@ -245,7 +245,8 @@ class Tracker {
       const o = p * V * 3;
       for (let i = 0; i < V; i++) {
         const j = i * 3;
-        const x = tp[j], y = tp[j + 1], z = tp[j + 2];
+        const source=p===this.dotIndex&&this.standingPositions?this.standingPositions:tp;
+        const x = source[j], y = source[j + 1], z = source[j + 2];
         pos[o + j] = px + x * c + z * s;
         pos[o + j + 1] = py + y;
         pos[o + j + 2] = pz - x * s + z * c;
@@ -343,7 +344,7 @@ export const SETPIECE_BUILDERS = {
     const pivots = [];
     const RANKS = 4, PER = 10, PITCH = 0.95, RANK = 1.4;
     const emptyRank = 0, emptyCol = 4;
-    const tipped = { rank: 2, col: 8 };
+    const bodyPivots = [];
     for (let rk = 0; rk < RANKS; rk++) {
       const lz = (rk - (RANKS - 1) * 0.5) * RANK;
       let gmin = Infinity, gmax = -Infinity;
@@ -352,12 +353,6 @@ export const SETPIECE_BUILDERS = {
         const gy = groundY(api, lx, lz);
         gmin = Math.min(gmin, gy); gmax = Math.max(gmax, gy);
         const ry = r.range(-0.08, 0.08);
-        if (rk === tipped.rank && cI === tipped.col) {
-          // one on its side, the way a folding chair goes over
-          s.box(0.50, 0.05, 0.50, lx, gy + 0.26, lz, web, ry, 0, Math.PI * 0.5);
-          s.box(0.50, 0.55, 0.04, lx - 0.30, gy + 0.26, lz - 0.24, web, ry, 0, Math.PI * 0.5);
-          continue;
-        }
         // the chair: seat, back, four legs
         s.box(0.50, 0.05, 0.50, lx, gy + 0.42, lz, web, ry);
         s.box(0.50, 0.55, 0.04, lx, gy + 0.70, lz - 0.24, web, ry, -0.12);
@@ -366,23 +361,28 @@ export const SETPIECE_BUILDERS = {
         }
         for (const sx of [-0.26, 0.26]) s.box(0.04, 0.03, 0.46, lx + sx, gy + 0.66, lz + 0.02, frame, ry);
         if (rk === emptyRank && cI === emptyCol) continue;
-        // the one in it: thighs, shins, torso, arms on the rests; no head here — that is the
-        // tracker's, on a pivot at the neck
-        s.box(0.40, 0.14, 0.46, lx, gy + 0.52, lz + 0.06, coat, ry);
-        for (const sx of [-0.12, 0.12]) s.box(0.12, 0.44, 0.12, lx + sx, gy + 0.22, lz + 0.36, shade(C.dark, 0.7), ry);
-        s.box(0.44, 0.60, 0.24, lx, gy + 0.90, lz - 0.10, coat, ry, -0.10);
-        for (const sx of [-0.27, 0.27]) s.box(0.10, 0.10, 0.40, lx + sx, gy + 0.74, lz + 0.02, coat, ry);
+        bodyPivots.push({x:api.wx(lx,lz),y:gy,z:api.wz(lx,lz),yaw0:Math.PI*.5});
         pivots.push({ x: api.wx(lx, lz - 0.14), y: gy + 1.20, z: api.wz(lx, lz - 0.14), yaw0: Math.PI * 0.5 + r.range(-0.05, 0.05) });
       }
       api.emit({ kind: 'obb', x: 0, z: lz, halfX: PER * PITCH * 0.5, halfZ: 0.45, yaw: 0,
         y0: gmin - 0.3, y1: gmax + 1.0, tag: 'wood', climbable: false });
     }
-    // THE ONE STANDING, behind the empty chair, facing east like the rest
-    {
-      const lx = (emptyCol - (PER - 1) * 0.5) * PITCH;
-      const lz = (emptyRank - (RANKS - 1) * 0.5) * RANK - 1.35;
-      api.cast([{ species: 'standing', lx, lz, yaw: 0, awake: false }]);
-    }
+    // Dot stayed behind her own empty chair. She is a nonhostile witness, never a
+    // pooled Standing enemy whose proximity AI can turn this scene into an ambush.
+    const dotX=(emptyCol-(PER-1)*.5)*PITCH,dotZ=(emptyRank-(RANKS-1)*.5)*RANK-1.35,dotY=groundY(api,dotX,dotZ);
+    bodyPivots.push({x:api.wx(dotX,dotZ),y:dotY,z:api.wz(dotX,dotZ),yaw0:Math.PI*.5});
+    pivots.push({x:api.wx(dotX,dotZ),y:dotY+1.57,z:api.wz(dotX,dotZ),yaw0:Math.PI*.5});
+    const bodyTemplate=(standing)=>template(t=>{
+      t.box(.40,.14,.46,0,standing?.81:.52,standing?0:.06,coat);
+      for(const side of[-1,1])t.box(.12,standing?.76:.44,.12,side*.12,standing?.4:.22,standing?0:.36,shade(C.dark,.7));
+      t.box(.44,.60,.24,0,standing?1.24:.90,standing?0:-.10,coat,0,standing?0:-.10);
+      for(const side of[-1,1])t.box(.10,standing?.48:.10,standing?.12:.40,side*.27,standing?1.17:.74,standing?0:.02,coat);
+    });
+    const seatedBody=bodyTemplate(false),standingBody=bodyTemplate(true),bodyTracker=new Tracker(seatedBody,bodyPivots,{trackR:0,turnRate:1});
+    bodyTracker.standingPositions=new Float32Array(standingBody.attributes.position.array);
+    bodyTracker.seatedPositions=new Float32Array(bodyTracker.tpos);standingBody.dispose();
+    // Dot's geometry is replaced at presentation; the other thirty-nine stay seated.
+    bodyTracker.dotIndex=bodyPivots.length-1;
     // the heads. A 7-sided head is a cylinder about its own axis and a turning cylinder is
     // invisible: the cap brim and the nose are what make the turn read from the road.
     const head = template((t) => {
@@ -392,7 +392,7 @@ export const SETPIECE_BUILDERS = {
       t.box(0.05, 0.05, 0.06, 0, 0.12, 0.13, shade(C.dark, 1.15));
     });
     const tracker = new Tracker(head, pivots, { trackR: HEADS_R, turnRate: HEADS_RATE });
-    register(api, { tracker, label: 'heads' });
+    register(api, { tracker, bodyTracker, label: 'heads', baseHeads:new Float32Array(tracker.piv), baseBodies:new Float32Array(bodyTracker.piv), seated:39, chairs:40 });
     return k;
   },
 
@@ -528,13 +528,18 @@ export const SETPIECE_BUILDERS = {
       const lz = (i - (N - 1) * 0.5) * PITCH + r.range(-0.25, 0.25);
       const lx = LANE + r.range(-0.22, 0.22);
       // car-local +X (the bonnet) maps to site (cos yaw, -sin yaw): -PI/2 sends it along +Z
-      const yaw = -Math.PI * 0.5 + r.range(-0.05, 0.05);
+      const sunCar=Math.abs(api.site.x-2136.40)<1&&Math.abs(api.site.z+364.90)<1&&i===3;
+      const yaw = sunCar?-api.yaw:-Math.PI * 0.5 + r.range(-0.05, 0.05);
       const rust = (i % 2) === 1;
       const open = (i % 4) === 2 ? r.range(0.7, 1.1) : 0;
       const car = carShell(k, api, lx, lz, yaw, { rust, open });
       if ((i % 3) === 1) {
         const p = car.put(-0.25, -0.35);
         seatedShoulders(k, p.x, car.gy + 0.92, p.z, yaw);
+      }
+      if (sunCar) {
+        const rear=car.put(-1.315,0);k.solid.box(.025,.48,1.42,rear.x,car.gy+1.32,rear.z,C.glass,yaw);
+        const paper=car.put(-1.333,0);register(api,{label:'sun-drawing',drawing:{x:api.wx(paper.x,paper.z),y:car.gy+1.32,z:api.wz(paper.x,paper.z),yaw:-Math.PI/2}});
       }
       if (i === bootCar) {
         // the boot lid, up
@@ -691,7 +696,7 @@ export const SETPIECE_BUILDERS = {
     s.cyl(0.36, 0.52, 8.0, 8, 0, gy + 3.7, 0, shade(C.wood, 0.9));
     api.emit({ kind: 'circle', x: 0, z: 0, r: 0.52, y0: gy - 0.3, y1: gy + 8.0, tag: 'tree' });
     const face = shade(C.metal, 1.3), strap = shade(C.dark, 0.8);
-    let hung = 0;
+    let hung = 0;const watches=[];
     for (let b = 0; b < 7; b++) {
       const a = (b / 7) * TAU + r.range(-0.3, 0.3);
       const y0 = gy + 2.0 + b * 0.5 + r.range(-0.2, 0.2);
@@ -700,16 +705,17 @@ export const SETPIECE_BUILDERS = {
       const ex = Math.sin(a) * len, ez = Math.cos(a) * len;
       rod(s, Math.sin(a) * 0.3, y0, Math.cos(a) * 0.3, ex, y0 + rise, ez, 0.06, 5, shade(C.wood, 0.8));
       // the watches, along the branch, hanging under it
-      for (let t = 0.18; t < 0.98 && hung < 300; t += r.range(0.045, 0.11)) {
+      for (let t = 0.18; t < 0.98 && hung < 300; t += r.range(0.016, 0.023)) {
         const x = ex * t + r.range(-0.05, 0.05), z = ez * t + r.range(-0.05, 0.05);
         const y = y0 + rise * t - r.range(0.10, 0.32);
         const ry = r.range(0, TAU);
         s.quad(0.012, 0.16, x, y + 0.09, z, strap, ry);
-        s.box(0.036, 0.008, 0.036, x, y, z, face, ry, r.range(-0.4, 0.4), r.range(-0.3, 0.3));
+        s.quad(.085,.085,x,y,z,face,ry);
+        watches.push({x:api.wx(x,z),y,z:api.wz(x,z),yaw:ry+api.yaw,minute:Math.floor(r.next()*60)});
         hung++;
       }
     }
-    register(api, { label: 'watch-tree' });
+    register(api, { label: 'watch-tree',watchCount:hung,watches });
     return k;
   },
 
@@ -1002,8 +1008,7 @@ export class Setpieces {
     if (!list) { list = []; this._byKey.set(rec.key, list); }
     list.push(rec);
     this._records.push(rec);
-    if (rec.tracker) {
-      const t = rec.tracker;
+    for (const t of [rec.tracker,rec.bodyTracker].filter(Boolean)) {
       if (places && places.matBody && !t.mesh) {
         t.mesh = new THREE.Mesh(t.geo, places.matBody);
         t.mesh.name = 'setpiece-tracker-' + rec.kind;
@@ -1014,6 +1019,8 @@ export class Setpieces {
       this._trackers.push(t);
     }
     if (rec.trigger) { rec.trigger.rec = rec; this._triggers.push(rec.trigger); }
+    if(rec.drawing)this._sunDrawing(rec);
+    if(rec.watches)this._watchHands(rec);
     if (rec.blinker) {
       const b = rec.blinker;
       b.rec = rec; b.t0 = this._t; b.glow = null;
@@ -1041,7 +1048,7 @@ export class Setpieces {
     if (rec.kind === 'bleachers' && this._bannerMesh) this._bannerMesh.visible = true;
     this.stats.adopted++;
     this._emit('setpiece:built', rec);
-    if (rec.crossing) { this.stats.crossings++; this._emitCrossing(rec, true); }
+    if (rec.crossing) { this.stats.crossings++; rec.crossingOn=!this._sys('progress')?.bossCleared('antler');this._emitCrossing(rec,rec.crossingOn); }
   }
 
   _drop(key) {
@@ -1049,8 +1056,8 @@ export class Setpieces {
     if (!list) return;
     this._byKey.delete(key);
     for (const rec of list) {
-      if (rec.tracker) {
-        const t = rec.tracker;
+      if(rec.loreMesh){rec.loreMesh.removeFromParent();rec.loreMesh.geometry.dispose();if(rec.drawing){rec.loreMesh.material.map?.dispose();rec.loreMesh.material.dispose();}}
+      for (const t of [rec.tracker,rec.bodyTracker].filter(Boolean)) {
         const i = this._trackers.indexOf(t);
         if (i >= 0) { this._trackers[i] = this._trackers[this._trackers.length - 1]; this._trackers.pop(); }
         if (t.mesh) { this.group.remove(t.mesh); t.mesh = null; }
@@ -1088,6 +1095,38 @@ export class Setpieces {
     const p = this._ev;
     p.kind = rec.kind; p.x = rec.x; p.y = rec.y; p.z = rec.z; p.on = on;
     this.ctx.bus.emit('setpiece:crossing', p);
+  }
+  _sunDrawing(rec){
+    if(typeof document==='undefined')return;const c=document.createElement('canvas');c.width=384;c.height=256;const a=c.getContext('2d');a.fillStyle='#4a4535';a.fillRect(0,0,384,256);a.strokeStyle='#523511';a.lineWidth=8;a.beginPath();a.arc(190,121,51,0,TAU);a.stroke();
+    for(let i=0;i<12;i++){const t=i*TAU/12;a.beginPath();a.moveTo(190+Math.cos(t)*68,121+Math.sin(t)*68);a.lineTo(190+Math.cos(t)*96,121+Math.sin(t)*96);a.stroke();}a.strokeStyle='#405548';a.lineWidth=5;a.beginPath();a.moveTo(0,235);a.lineTo(87,213);a.lineTo(163,230);a.lineTo(290,215);a.lineTo(384,232);a.stroke();
+    a.fillStyle='#d3cbb07f';for(const x of[6,337])a.fillRect(x,8,38,38);
+    const map=new THREE.CanvasTexture(c);map.colorSpace=THREE.NoColorSpace;const material=this._sys('places').matBody.clone();material.map=map;material.bumpScale=0;
+    const geo=new THREE.PlaneGeometry(.52,.35);geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count*3).fill(1),3));const m=rec.loreMesh=new THREE.Mesh(geo,material),p=rec.drawing;m.position.set(p.x,p.y,p.z);m.rotation.y=p.yaw;m.name='jam-four-childs-sun-facing-west';this.group.add(m);
+  }
+  _watchHands(rec){
+    const final=!!this.ctx.shared.lateBellFinal,tick=final?-1:Math.floor(this._t/14);if(rec.watchTick===tick)return;rec.watchTick=tick;const k=new Kit();
+    for(const w of rec.watches){const minute=final?0:(w.minute+tick)%60;for(const [angle,len]of [[(final?2:1+minute/60)*TAU/12,.024],[minute*TAU/60,.035]]){const dx=Math.sin(angle)*len,dy=Math.cos(angle)*len;rod(k,w.x+Math.sin(w.yaw)*.006,w.y,w.z+Math.cos(w.yaw)*.006,w.x+dx*Math.cos(w.yaw)+Math.sin(w.yaw)*.006,w.y+dy,w.z-dx*Math.sin(w.yaw)+Math.cos(w.yaw)*.006,.003,4,shade(C.dark,.8));}}
+    const geo=k.build();if(rec.loreMesh){rec.loreMesh.geometry.dispose();rec.loreMesh.geometry=geo;}else{rec.loreMesh=new THREE.Mesh(geo,this._sys('places').matBody);rec.loreMesh.name='watch-tree-running-hands';this.group.add(rec.loreMesh);}rec.watchHour=final?2:1;
+  }
+  _loreStep(dt){
+    const pr=this._sys('progress'),p=this._sys('player')?.pos,final=!!this.ctx.shared.lateBellFinal;
+    for(const r of this._records){
+      if(r.watches)this._watchHands(r);
+      if(r.crossing){const last=final&&!r.finalChimeDone;if(last){r.finalChimeDone=true;r.finalChimeUntil=this._t+2;}const on=this._t<(r.finalChimeUntil||0)||(!final&&!pr?.bossCleared('antler'));if(on!==r.crossingOn){r.crossingOn=on;this._emitCrossing(r,on);}}
+      if(!r.bodyTracker)continue;
+      const body=r.bodyTracker,head=r.tracker,near=p&&Math.hypot(p.x-r.x,p.z-r.z)<130;
+      if(final&&near&&r.leaving===undefined){r.leaving=0;pr?.flag('story:waiting-returning',true);}
+      if(r.leaving===undefined)continue;r.leaving+=dt;
+      head.trackR=0;
+      const rise=Math.min(1,r.leaving/3),walk=Math.max(0,r.leaving-3)*.64;
+      for(let j=0;j<body.tpos.length;j++)body.tpos[j]=lerp(body.seatedPositions[j],body.standingPositions[j],rise);
+      for(let i=0;i<body.N;i++){
+        const x=r.baseBodies[i*3]+walk,z=r.baseBodies[i*3+2],y=this._sys('terrain')?.heightAt(x,z)??r.baseBodies[i*3+1];
+        body.piv[i*3]=x;body.piv[i*3+1]=y;body.piv[i*3+2]=z;head.piv[i*3]=x;head.piv[i*3+1]=y+lerp(i===body.dotIndex?1.57:1.2,1.57,rise);head.piv[i*3+2]=z;
+        head.curr[i]=head.prev[i]=Math.PI*.5;body.curr[i]=body.prev[i]=Math.PI*.5;
+      }
+      body.dirty=head.dirty=2;body.mesh.frustumCulled=head.mesh.frustumCulled=false;body.mesh.visible=head.mesh.visible=walk<90;
+    }
   }
 
   /* ---------------------------------------------------------------- banner -- */
@@ -1196,7 +1235,9 @@ export class Setpieces {
 
   /* ------------------------------------------------------------------ step -- */
   step(dt) {
+    if(!this.ctx.playing||this.ctx.paused)return;
     this._t += dt;
+    this._loreStep(dt);
     if (PENDING.length) this._drain();
     const car = this._sys('car');
     const beam = car && typeof car.beamPose === 'function' ? car.beamPose() : null;
@@ -1237,6 +1278,7 @@ export class Setpieces {
       if (b.kind === 'hazard') {
         m.opacity = (t % HAZ_S) < HAZ_S * 0.5 ? 1 : 0.08;
       } else if (b.kind === 'alternate') {
+        if(b.rec.crossingOn===false){m.opacity=0;continue;}m.opacity=1;
         const ph = (t % XING_S) < XING_S * 0.5 ? 0 : 1;
         if (ph !== b.phase) {
           b.phase = ph;

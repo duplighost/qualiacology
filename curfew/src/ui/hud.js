@@ -99,6 +99,7 @@ import { MAJORS, MINOR_KINDS, REGION_TINT, DEFAULT_TINT } from '../world/placeda
 import { Readouts } from './readouts.js';
 import {PauseMenu} from './pause-menu.js';
 import {BOSSES,bossMapPoint} from '../world/boss-catalog.js';
+import {knownRoadLamps} from '../lore/map-lamps.js';
 
 /* ---------------------------------------------------------------- constants -- */
 // No CFG.hud block exists; config.js belongs to the engine owner and is deep-frozen. Every
@@ -787,6 +788,7 @@ export class Hud {
       drawn: 0, painted: 0, roads: 0, spurs: 0, routes: 0, branches: 0, names: 0, glyphs: 0,
       found: 0, claimed: 0, unfound: 0,
       fires: 0, minors: 0, wilds: 0, checkpoints: 0,
+      lamps: 0, lampsLit: 0, lampsDark: 0, lampsDaylight: 0,
       car: false, arrowX: -1, arrowY: -1, carX: -1, carY: -1,
     };
     // The travelled wash's own surface, built at the bitmap's resolution and reused. See
@@ -1060,6 +1062,7 @@ export class Hud {
     }));
     for(const event of ['map:rumour','map:discovered','boss:cleared','save:loaded']) on(event,()=>{this._knownMapPins=null;this._miniDirty=true;if(this.paused)this.menu?.refresh();});
     on('map:waypoint',()=>{this._miniDirty=true;if(this.paused){this._drawMap();this.menu?.refreshJournal();}});
+    for(const event of ['dusk-to-dawn:relit','dusk-to-dawn:out','dusk-to-dawn:flicker','dusk-to-dawn:photocell','save:loaded'])on(event,()=>{this._mapLampsDirty=true;});
 
     on('weapon:hit', (p) => {
       // Only a HIT ON A THING. Without this every round into a tree pops a marker and the
@@ -1412,7 +1415,7 @@ export class Hud {
       if (e.code === 'Escape' || k === 'Escape') {
         e.preventDefault(); e.stopImmediatePropagation();
         this._resume(true);
-      } else if (e.code === 'KeyM') {
+      } else if (e.code === 'KeyM' && !e.target?.matches?.('input,textarea,[contenteditable=true]')) {
         e.preventDefault(); e.stopImmediatePropagation();
         if(this.menu?.page==='map')this._resume(true);else this.menu?.show('map');
       }
@@ -1846,6 +1849,7 @@ export class Hud {
     const gm = this.mg, c = this.mapCanvas;
     const I = this.mapInfo;
     if (!gm || !c) return;
+    this._mapLampsDirty=false;
     const S = MAP_PX;
     // ROUND 13: FOG OF WAR. Passes 0-4 (ground, wash, roads, small places, found wilds) draw
     // into an offscreen layer that is then cut to the revealed bitmap (destination-in) and
@@ -1873,6 +1877,7 @@ export class Hud {
     I.painted = 0; I.roads = 0; I.spurs = 0; I.routes = 0; I.branches = 0; I.names = 0; I.glyphs = 0;
     I.found = 0; I.claimed = 0; I.unfound = 0;
     I.fires = 0; I.minors = 0; I.wilds = 0; I.checkpoints = 0;
+    I.lamps = 0; I.lampsLit = 0; I.lampsDark = 0; I.lampsDaylight = 0;
     I.car = false; I.arrowX = -1; I.arrowY = -1; I.carX = -1; I.carY = -1;
     // The paper's projection and its name boxes, as drawn, so a test can put its exemptions
     // where the marks actually are (the map is a zoomed view centred on him, not the county
@@ -1953,6 +1958,24 @@ export class Hud {
       g.setLineDash([]);
       g.globalAlpha = 1;
     }
+
+    // Road photocells, under the same fog mask as their roads. A working light is
+    // a small warm core; an extinguished one leaves an empty ring. At true dawn the
+    // real east-to-west photocell state empties these cores without erasing the road.
+    for(const lamp of knownRoadLamps(sys.get('dusk-to-dawn')?.poles,grid,size)){
+      const x=px(lamp.x),y=pz(lamp.z);
+      g.lineWidth=.55;
+      if(lamp.lit){
+        g.globalAlpha=lamp.flicker?.32:.19;g.fillStyle='#edb85f';g.beginPath();g.arc(x,y,2.3,0,TAU);g.fill();
+        g.globalAlpha=lamp.flicker?.62:.94;g.fillStyle=lamp.flicker?'#ba844d':'#f7d397';g.beginPath();g.arc(x,y,1.05,0,TAU);g.fill();
+        I.lampsLit++;
+      }else{
+        g.globalAlpha=lamp.daylightOff?.35:.52;g.strokeStyle=lamp.daylightOff?'#8a9392':'#a98b64';g.beginPath();g.arc(x,y,.86,0,TAU);g.stroke();I.lampsDark++;
+        if(lamp.daylightOff)I.lampsDaylight++;
+      }
+      I.lamps++;
+    }
+    g.globalAlpha=1;
 
     /* 3. the small places along the roads he has actually stood at ------------ */
     // A campfire he has warmed himself at (progress.firesFound, ids), and — round 7 — every
@@ -2892,6 +2915,7 @@ export class Hud {
     // or after CARD_LATE_MS if it never was (see _onPaused). No counter, no allocation.
     if (this.paused && this.pauseEl && this.pauseEl.hidden
       && (this._lockHeld || performance.now() - this._pausedAtMs >= CARD_LATE_MS)) this.pause(true);
+    if(this.paused&&this.menu?.page==='map'&&this._mapLampsDirty)this._drawMap();
 
     this._syncChrome();
     this.readouts?.update();

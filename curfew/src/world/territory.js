@@ -1,9 +1,16 @@
 // Destination completion joins authored combat, power, rewards and persistent safe ground.
 // Geometry, enemy brains and the save owner stay in their own systems.
 import { MAJORS, MAJOR_BY_ID } from './placedata.js';
+import { SPECIES } from '../enemies/species.js';
 
 export function countBits(n) { let count = 0; for (n >>>= 0; n; n &= n - 1) count++; return count; }
 export const castKey = (record, index) => 'cast-killed:' + record.key + ':' + index;
+// The hour's officials cannot die. A circuit must never require their deaths, including
+// while a saved cast is streamed out and no live entity exists to answer the question.
+export const countsForClear = (row, returned=false) => !row?.neutral && !row?.def?.officer
+  && !SPECIES[row?.species || row?.def?.species]?.officer
+  && !(row?.species == null && row?.entity?.def?.officer)
+  && !(returned && SPECIES[row?.species] && !SPECIES[row.species].human && !['poacher','hunter'].includes(row.species));
 
 export class Territory {
   static id = 'territory';
@@ -28,29 +35,30 @@ export class Territory {
     const places = this._sys('places'), pr = this._sys('progress');
     for (const rec of places._casts.values()) for (let i = 0; i < rec.cast.length; i++) {
       const c = rec.cast[i];
-      if (c.entity === e && c.generation === e.gen && !c.neutral) pr.flag(castKey(rec, i), true);
+      if (c.entity === e && c.generation === e.gen && countsForClear(c)) pr.flag(castKey(rec, i), true);
     }
     this.elapsed = 1;
   }
   status(id) {
     const row = this.rows.get(id); if (!row) return null;
     const pr = this._sys('progress'), places = this._sys('places');
+    const returned=!!pr.flag('morning:late-bell')?.rang;
     row.powered = places.isClaimed(id);
     row.secured = !!pr.flag('secured:' + id);
     let remaining = 0, total = 0;
     const cast = places._casts.get('major:' + id);
     if (cast) for (let i = 0; i < cast.cast.length; i++) {
-      const c = cast.cast[i]; if (c.neutral) continue;
+      const c = cast.cast[i]; if (!countsForClear(c,returned)) continue;
       total++;
       // Pool recycling and leaving a chunk are never proof of a kill.
       if (!pr.flag(castKey(cast, i))) remaining++;
     }
     for (const e of this._sys('interior-horror')?.events || []) {
-      if (e.def.site !== id) continue;
+      if (e.def.site !== id || !countsForClear(e) || pr.flag('interior-returned:'+e.def.id)) continue;
       const n = e.def.seats?.length || 1, mask = (1 << n) - 1;
       total += n; remaining += n - countBits((pr.flag('interior-killed:' + e.def.id) || 0) & mask);
     }
-    if (MAJOR_BY_ID[id]?.boss) { total++; if (!pr.flag('boss-killed:' + id)) remaining++; }
+    if (MAJOR_BY_ID[id]?.boss && !returned) { total++; if (!pr.flag('boss-killed:' + id)) remaining++; }
     row.total = total; row.remaining = row.secured ? 0 : remaining;
     row.clear = row.remaining === 0; row.on = row.secured;
     row.reward = 120 + Math.min(180, total * 20);

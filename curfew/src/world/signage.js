@@ -3,8 +3,8 @@
 // ALEX, 2026-09-10: "Nobody in this county promised morning. *Everybody* did. That's the
 // story, and it's already written into the world if you put each promise where it was made."
 // God (GEN 8:22 on a church board that went up before it happened; JOY COMES IN THE MORNING
-// on the cemetery gate; the same verse on a barn with LIAR scratched under it), the
-// government (REMAIN INDOORS. DAYLIGHT RESUMES 6:14 AM, then TUESDAY, THIS WEEK, SOON, then a
+// on the funeral home; the same verse on a barn with LIAR scratched under it), the
+// government (REMAIN INDOORS. DAYLIGHT RESUMES 6:31 AM, then TUESDAY, THIS WEEK, SOON, then a
 // hand-painted MORNING on plywood — "bureaucracy losing its nerve one flyer at a time"), and
 // the road (MORNING — 40: "It's a town. It's the far end of the map."). Plus the county's own
 // voice from the alternate titles (YOU SAID TOMORROW, WHO TURNED IT OFF, DO YOU REMEMBER
@@ -89,7 +89,7 @@ const PPM = {
 const MILE_WORDS = ['TOMORROW', 'SOON', 'EAST', 'STILL HERE', 'MORNING', 'WAIT', 'DUSK'];
 
 /** The poster's date by band. Alex: "The date decays as you go deeper." */
-const POSTER_STAGE = ['6:14 AM', 'TUESDAY', 'THIS WEEK', 'SOON'];
+const POSTER_STAGE = ['6:31 AM', 'TUESDAY', 'THIS WEEK', 'SOON'];
 
 /** The price ladder. Alex: "climbs daily, then NO GAS, then NO, then a drawing of a sun." */
 const PRICE_STAGE = ['4.29', '5.89', '9.99', 'NO GAS', 'NO', 'SUN'];
@@ -165,10 +165,11 @@ const PAINT = {
     grain(c, w, h, rnd, 5000, PAPER_LO, PAPER_HI);
     c.strokeStyle = INK; c.lineWidth = w * 0.012; c.strokeRect(w * 0.03, h * 0.05, w * 0.94, h * 0.9);
     c.fillStyle = INK; c.textAlign = 'center'; c.textBaseline = 'middle';
-    fit(c, r.lines[0], w * 0.8, h * 0.13, 'Georgia, serif', 'normal'); c.fillText(r.lines[0], w * 0.5, h * 0.20);
-    fit(c, r.lines[1], w * 0.86, h * 0.27, 'Georgia, serif', 'bold'); c.fillText(r.lines[1], w * 0.5, h * 0.47);
-    fit(c, r.lines[2], w * 0.86, h * 0.27, 'Georgia, serif', 'bold'); c.fillText(r.lines[2], w * 0.5, h * 0.76);
+    fit(c, r.lines[0], w * 0.86, h * 0.22, 'Georgia, serif', 'bold'); c.fillText(r.lines[0], w * 0.5, h * 0.20);
+    fit(c, r.lines[1], w * 0.86, h * 0.22, 'Georgia, serif', 'bold'); c.fillText(r.lines[1], w * 0.5, h * 0.43);
+    fit(c, r.lines[2], w * 0.8, h * 0.11, 'Georgia, serif', 'normal'); c.fillText(r.lines[2], w * 0.5, h * 0.62);
     streaks(c, w, h, rnd, 28, PAPER_LO, 0.55);
+    spray(c, r.lines[3], w * 0.65, h * 0.82, h * 0.20, '#3d160d', rnd, w * 0.45);
     // a corner of the paper gone, board behind it
     c.fillStyle = BOARD; c.beginPath(); c.moveTo(w, h * 0.72); c.lineTo(w, h); c.lineTo(w * 0.86, h); c.closePath(); c.fill();
   },
@@ -389,7 +390,7 @@ const PAINT = {
     }
   },
   almanac(c, w, h, r, rnd) {
-    // Alex: "The Farmers' Almanac open to the sunrise table. 6:14." Every row.
+    // Alex: "The Farmers' Almanac open to the sunrise table. 6:31." Every row.
     c.fillStyle = PAPER_HI; c.fillRect(0, 0, w, h);
     grain(c, w, h, rnd, 2000, PAPER, PAPER_LO);
     c.fillStyle = PAPER_LO; c.fillRect(w * 0.495, 0, w * 0.01, h);   // the gutter of the open book
@@ -402,7 +403,7 @@ const PAINT = {
       for (let i = 0; i < 12; i++) {
         const y = h * (0.19 + i * 0.066), day = i + 1 + side * 12;
         c.textAlign = 'left'; c.fillText('Nov ' + day, x0, y);
-        c.textAlign = 'right'; c.fillText('6:14', x0 + cw, y);
+        c.textAlign = 'right'; c.fillText('6:31', x0 + cw, y);
       }
     }
     // a thumb-worn hollow where the reader kept coming back
@@ -779,7 +780,7 @@ export class Signage {
         const bw = 4.8, bh = 2.4, ax = nz, az = -nx;                                        // the board's own axis
         const need = W * 0.5 + VERGE_EXTRA + bw * 0.5 * Math.abs(ax * -tz + az * tx) + 0.3;
         const x = px - tz * side * need, z = pz + tx * side * need, gy = this._ground(x, z), top = 5.2, y = gy + top - bh * 0.5, yaw = Math.atan2(nx, nz);
-        const r = this._sign({ style: 'billboard', lines: ['GEN 8:22', 'DAY AND NIGHT', 'SHALL NOT CEASE'], x: x + nx * 0.05, y, z: z + nz * 0.05, w: bw, h: bh, yaw, backing: false });
+        const r = this._sign({ style: 'billboard', lines: ['DAY AND NIGHT', 'SHALL NOT CEASE', '— GEN 8:22', 'LIAR'], x: x + nx * 0.05, y, z: z + nz * 0.05, w: bw, h: bh, yaw, backing: false });
         r.mount = (k, col) => {
           // posts BEHIND the board (MEASURED: centred on it they stood proud of the face and cut the D and the T)
           for (const sgn of [-1, 1]) k.box(0.22, top, 0.22, x + ax * (bw * 0.5 - 0.5) * sgn - nx * 0.16, gy + top * 0.5, z + az * (bw * 0.5 - 0.5) * sgn - nz * 0.16, K_WOOD, yaw);
@@ -790,10 +791,25 @@ export class Signage {
         this._posts.push({ x, z, kind: 'billboard', yaw }); this.fixed.push({ id: 'cathedral:billboard', x: +x.toFixed(1), z: +z.toFixed(1), yaw: yaw }); this.counts.fixed++;
       } else this._note('no road by the cathedral verge');
     }
-    // "Put JOY COMES IN THE MORNING on the funeral home." There is none; the cemetery gate is
-    // the county's undertaker. Carved into the arch lintel, facing the yard.
+    // The existing chapel of rest is the funeral home's mourning room: its bier,
+    // trestles and candles are in dress-interiors.cemetery. Mount over its real doorway.
     const cem = this._frame('garden-of-rest');
-    if (cem) this._onMajor(cem, 'stone', ['JOY COMES IN THE MORNING'], 0, 6.6, -19.37, 7.4, 1.0, 0, { backD: 0.02, backCol: C.stone });
+    if (cem) {
+      const cy=Math.cos(.34),sy=Math.sin(.34),lx=-17.2-4.64*sy,lz=6.5-4.64*cy;
+      const floor=G(cem,-17.2,6.5),yaw=cem.yaw+.34+Math.PI,w=5.2,h=1.05;
+      const r=this._onMajor(cem,'marquee',['GARDEN FUNERAL HOME','JOY COMES IN','THE MORNING'],lx,floor-cem.padY+3.28,lz,w,h,.34+Math.PI,{backD:.18,backCol:K_DARK});
+      this.fixed[this.fixed.length-1].id='garden-of-rest:funeral-marquee';
+      r.mount=(k)=>{
+        const nx=Math.sin(yaw),nz=Math.cos(yaw),ax=Math.cos(yaw),az=-Math.sin(yaw);
+        for(const side of [-1,1]){
+          k.box(.09,h+.16,.24,r.x+ax*(w*.5+.025)*side,r.y,r.z+az*(w*.5+.025)*side,K_METAL,yaw);
+          // Short brackets run back into the front masonry, clear above the open door.
+          k.box(.12,.12,.38,r.x+ax*2.15*side-nx*.14,r.y-.32,r.z+az*2.15*side-nz*.14,K_METAL,yaw);
+        }
+        k.box(w+.18,.09,.38,r.x-nx*.07,r.y+h*.5+.045,r.z-nz*.07,K_METAL,yaw);
+        k.box(w+.18,.09,.28,r.x-nx*.035,r.y-h*.5-.045,r.z-nz*.035,K_METAL,yaw);
+      };
+    }
     // "Somewhere deep, the same verse painted on a barn with LIAR scratched under it."
     const barn = this._frame('jackfield');
     if (barn) this._onMajor(barn, 'barn', ['DAY AND NIGHT SHALL NOT CEASE', 'GEN 8:22', 'LIAR'], 0, 3.5, 6.25, 13, 2.2, 0, { backD: 0.02, backCol: K_PLANK });

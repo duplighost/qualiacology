@@ -126,9 +126,19 @@ export class DuskToDawn {
     this.nearest = -1;
     this._stepN = 0;
     this._notes = [];
+    this.honestNight = false;
+    this.photocellSweep = 0;
+    this.wardenRegions = Object.create(null);
     if (ctx.bus && ctx.bus.on) {
       // progress inits after us and loads the save then: the pattern places.js:912 uses.
       this._offLoaded = ctx.bus.on('save:loaded', () => { this._restored = false; this._restore(); });
+      this._offWarden = ctx.bus.on('enemy:killed', p => this._wardenKilled(p));
+      this._offCycle = ctx.bus.on('phase:changed', p => {
+        if (p?.phase === 'dusk' && p.prev) {
+          this.wardenRegions = Object.create(null);
+          this._progress()?.flag('d2d:warden-regions', {});
+        }
+      });
     }
   }
 
@@ -344,6 +354,12 @@ export class DuskToDawn {
     if (!pr) return;
     this._bulbs = Math.max(0, Number(pr.flag('d2d:bulbs')) || 0);
     const out = pr.flag('d2d:out'), relit = pr.flag('d2d:relit');
+    const regions = pr.flag('d2d:warden-regions');
+    if (regions && typeof regions === 'object') {
+      this.wardenRegions = Object.create(null);
+      for (const [key, row] of Object.entries(regions)) if (row && Number.isFinite(row.wait) && Number.isFinite(row.kills))
+        this.wardenRegions[key] = { kills: Math.max(0, Math.min(3, row.kills)), wait: Math.max(0, row.wait) };
+    }
     const nextS = Number(pr.flag('d2d:nextS'));
     if (Number.isFinite(nextS) && nextS > 0) this.nextS = Math.min(nextS, BURNOUT_EVERY_S + BURNOUT_JITTER_S);
     if (Array.isArray(out)) {
@@ -378,7 +394,7 @@ export class DuskToDawn {
     for (let i = 0; i < poles.length && i < lp.length; i++) {
       // A flickering pole still counts as lit until the bulb actually dies: the hounds
       // see the light go, not the warning.
-      lp[i].on = poles[i].lit;
+      lp[i].on = poles[i].lit && !poles[i].daylightOff;
     }
     if (this.ctx.shared && this.ctx.shared.litPoles !== lp) this.ctx.shared.litPoles = lp;
   }
@@ -388,6 +404,9 @@ export class DuskToDawn {
     if (!this._restored) this._restore();
     this._stepN++;
     const playing = !!this.ctx.playing && !this.ctx.paused;
+    for (const key in this.wardenRegions) {
+      this.wardenRegions[key].wait = Math.max(0, this.wardenRegions[key].wait - dt);
+    }
 
     /* ---- the ones that are dying, and the ones coming back ------------ */
     for (let i = 0; i < this.poles.length; i++) {
@@ -418,7 +437,7 @@ export class DuskToDawn {
     }
 
     /* ---- the clock: one at a time, out of sight ----------------------- */
-    if (playing && this.poles.length) {
+    if (playing && this.poles.length && !this.honestNight && this.photocellSweep <= 0) {
       this.nextS -= dt;
       if (this.nextS <= 0) {
         this._burnoutPick();
@@ -429,7 +448,10 @@ export class DuskToDawn {
       if (this._persistT <= 0) {
         this._persistT = PERSIST_EVERY_S;
         const pr = this._progress();
-        if (pr) pr.flag('d2d:nextS', Math.max(1, Math.round(this.nextS)));
+        if (pr) {
+          pr.flag('d2d:nextS', Math.max(1, Math.round(this.nextS)));
+          pr.flag('d2d:warden-regions', JSON.parse(JSON.stringify(this.wardenRegions)));
+        }
       }
     }
 
@@ -448,7 +470,7 @@ export class DuskToDawn {
     let best = -1, bd = Infinity;
     for (let i = 0; i < this.poles.length; i++) {
       const p = this.poles[i];
-      if (litOnly && !p.lit) continue;
+      if (litOnly && (!p.lit || p.daylightOff)) continue;
       const dx = p.hx - x, dz = p.hz - z;
       const d2 = dx * dx + dz * dz;
       if (d2 < bd) { bd = d2; best = i; }
@@ -462,6 +484,7 @@ export class DuskToDawn {
    * the county going dark somewhere down the road, not the light you are standing under.
    */
   _burnoutPick() {
+    if (this.honestNight || this.photocellSweep > 0) return -1;
     const player = this._sys('player');
     const pos = player && player.pos ? player.pos : null;
     const nearLit = pos ? this._nearest(pos.x, pos.z, true) : -1;
@@ -469,7 +492,7 @@ export class DuskToDawn {
     const min2 = BURNOUT_MIN_DIST_M * BURNOUT_MIN_DIST_M;
     for (let i = 0; i < this.poles.length; i++) {
       const p = this.poles[i];
-      if (!p.lit || p.flickerT > 0 || p.immune || i === nearLit) continue;
+      if (!p.lit || p.flickerT > 0 || p.immune || i === nearLit || this._regionResting(p)) continue;
       if (pos) { const dx = p.hx - pos.x, dz = p.hz - pos.z; if (dx * dx + dz * dz < min2) continue; }
       n++;
     }
@@ -481,7 +504,7 @@ export class DuskToDawn {
     let pick = this.rng ? Math.floor(this.rng.next() * n) : 0;
     for (let i = 0; i < this.poles.length; i++) {
       const p = this.poles[i];
-      if (!p.lit || p.flickerT > 0 || p.immune || i === nearLit) continue;
+      if (!p.lit || p.flickerT > 0 || p.immune || i === nearLit || this._regionResting(p)) continue;
       if (pos) { const dx = p.hx - pos.x, dz = p.hz - pos.z; if (dx * dx + dz * dz < min2) continue; }
       if (pick-- === 0) { this._startFlicker(i); return i; }
     }
@@ -490,13 +513,119 @@ export class DuskToDawn {
 
   _startFlicker(i) {
     const p = this.poles[i];
-    if (!p || !p.lit || p.flickerT > 0) return;
+    if (!p || !p.lit || p.flickerT > 0 || this.honestNight || this.photocellSweep > 0) return false;
     p.flickerT = FLICKER_S;
     p.rippleT = -1;
+    this._seatWarden(p);
     // A relit pole's immunity is spent the cycle after it was granted.
     for (let j = 0; j < this.poles.length; j++) if (j !== i) this.poles[j].immune = false;
     _evt.i = i; _evt.x = p.hx; _evt.z = p.hz;
     this.ctx.bus.emit('dusk-to-dawn:flicker', _evt);
+    const regional = this.wardenRegions[this._region(p.x, p.z)];
+    if (regional) regional.wait = BURNOUT_EVERY_S * (1 + Math.min(3, regional.kills) * .75);
+    return true;
+  }
+
+  _region(x, z) { return this._sys('terrain')?.regionAt?.(x, z)?.key || 'county'; }
+  _regionResting(p) { return (this.wardenRegions[this._region(p.x, p.z)]?.wait || 0) > 0; }
+
+  _seatWarden(pole) {
+    const en = this._sys('enemies'), pos = this._sys('player')?.pos;
+    if (!en?.spawn || !pos) return null;
+    let nearby = null, total = 0, regional = false;
+    const key = this._region(pole.x, pole.z);
+    en.forEachAlive?.(e => {
+      if (e.def?.id !== 'warden') return;
+      total++;
+      if (this._region(e.pos.x, e.pos.z) === key) regional = true;
+      if (Math.hypot(e.pos.x - pole.x, e.pos.z - pole.z) <= 120) nearby = e;
+    });
+    if (nearby) {
+      if (!nearby.aware || nearby.wardenWorkT > 0) { nearby.wardenLamp = pole.i; nearby.wardenWorkT = FLICKER_S; }
+      return nearby;
+    }
+    // The remote county can lose a light without keeping unseen enemies in memory.
+    // A visible failure gets one utility man, never a fresh crowd or a body in your pool.
+    const dist = Math.hypot(pole.x - pos.x, pole.z - pos.z);
+    if (dist > 280 || dist < 32 || total >= 2 || regional) return null;
+    const terrain = this._sys('terrain'), col = this._sys('collision');
+    const away = Math.atan2(pole.x - pos.x, pole.z - pos.z);
+    for (const offset of [0, .65, -.65, 1.2, -1.2]) {
+      const a = away + offset, x = pole.x + Math.sin(a) * 14, z = pole.z + Math.cos(a) * 14;
+      if (Math.hypot(x - pos.x, z - pos.z) < 40) continue;
+      if (terrain?.slopeAt?.(x, z) > .45 || col?.canOccupy && !col.canOccupy(x, z, .68, 2.65)) continue;
+      if (this._sys('holdfast-life')?.contains?.(x, z)) continue;
+      const zones = [this.ctx.shared?.litPoles, this.ctx.shared?.safeLightZones, this.ctx.shared?.territoryZones, this.ctx.shared?.bossZones];
+      if (zones.some(rows => rows?.some(q => q.on && Math.hypot(x-q.x,z-q.z)<q.r+2))) continue;
+      const e = en.spawn('warden', x, z, { awake: false, staged: true, yaw: Math.atan2(pole.x-x,pole.z-z) });
+      if (e) { e.wardenLamp=pole.i; e.wardenWorkT=FLICKER_S; e.wardenRegion=key; }
+      return e || null;
+    }
+    return null;
+  }
+
+  _wardenKilled(event) {
+    if ((event?.e?.def?.id || event?.kind || event?.species) !== 'warden') return false;
+    const pos = event.e?.pos || event;
+    if (!Number.isFinite(pos.x) || !Number.isFinite(pos.z)) return false;
+    const key = this._region(pos.x, pos.z);
+    const row = this.wardenRegions[key] || (this.wardenRegions[key] = { kills: 0, wait: 0 });
+    row.kills = Math.min(3, row.kills + 1);
+    row.wait = Math.max(row.wait, BURNOUT_EVERY_S * (1 + row.kills * .75));
+    // A utility man's death releases the pole already under his hand, too.
+    for (const p of this.poles) if (p.flickerT > 0 && this._region(p.x, p.z) === key) {
+      p.flickerT = 0; p.k = 1; this._writePole(p.i, 1);
+    }
+    this._progress()?.flag('d2d:warden-regions', JSON.parse(JSON.stringify(this.wardenRegions)));
+    return true;
+  }
+
+  /** The Pacer may condemn a visible road light, never the pool protecting the player. */
+  warnVisiblePole(visible) {
+    if (this.honestNight || this.photocellSweep > 0) return -1;
+    const pos = this._sys('player')?.pos;
+    if (!pos || typeof visible !== 'function') return -1;
+    const near = this._nearest(pos.x, pos.z, true);
+    let best = -1, distance = Infinity;
+    for (const p of this.poles) {
+      const d = Math.hypot(p.hx - pos.x, p.hz - pos.z);
+      if (!p.lit || p.immune || p.flickerT > 0 || p.i === near || this._regionResting(p)
+        || d < 26 || d > 180 || !visible(p.hx, p.headY, p.hz)) continue;
+      if (d < distance) { best = p.i; distance = d; }
+    }
+    if (best >= 0 && this._startFlicker(best)) return best;
+    return -1;
+  }
+
+  /** Final honest night preserves every working bulb and cancels the hour's sabotage. */
+  setHonestNight(on = true) {
+    if (this.honestNight === !!on) return;
+    this.honestNight = !!on;
+    if (on) for (const p of this.poles) if (p.flickerT > 0) {
+      p.flickerT = 0; p.k = 1; this._writePole(p.i, p.daylightOff ? 0 : 1);
+    }
+  }
+
+  /** Photocells see morning from east to west; this never destroys or consumes a bulb. */
+  setPhotocellSweep(k) {
+    const next = clamp01(k);
+    if (next === this.photocellSweep) return;
+    this.photocellSweep = next;
+    let east = -Infinity, west = Infinity;
+    for (const p of this.poles) { east = Math.max(east, p.hx); west = Math.min(west, p.hx); }
+    const edge = east - (east - west) * next;
+    const pos = this._sys('player')?.pos;
+    for (const p of this.poles) {
+      const off = next > 0 && (next >= 1 || p.hx >= edge);
+      if (!!p.daylightOff === off) continue;
+      p.daylightOff = off;
+      this._writePole(p.i, p.lit && !off ? 1 : 0);
+      if (off && p.lit) {
+        if (pos && Math.hypot(pos.x - p.hx, pos.z - p.hz) < 65) this._sys('audio')?.dread?.('door', p.hx, p.headY, p.hz, .18);
+        this.ctx.bus?.emit('dusk-to-dawn:photocell', { i: p.i, x: p.hx, z: p.hz });
+      }
+    }
+    this._publish();
   }
 
   /**
@@ -558,7 +687,7 @@ export class DuskToDawn {
     this.nearest = target;
     if (target < 0) { this.hold = 0; this._holdI = -1; return; }
     const p = this.poles[target];
-    if (p.lit) { this.hold = 0; this._holdI = -1; return; }
+    if (p.lit || p.daylightOff) { this.hold = 0; this._holdI = -1; return; }
     if (this._holdI !== target) { this.hold = 0; this._holdI = target; }
     const bulbs = this._bulbs;
     _prompt.x = p.x; _prompt.y = p.gy + 1.5; _prompt.z = p.z;
@@ -596,6 +725,7 @@ export class DuskToDawn {
     this._publish();
     _evt.i = i; _evt.x = p.hx; _evt.z = p.hz;
     this.ctx.bus.emit('dusk-to-dawn:relit', _evt);
+    this.ctx.bus.emit('lamp:replaced', { i, x: p.hx, z: p.hz });
     return true;
   }
 
@@ -637,7 +767,7 @@ export class DuskToDawn {
   /** Copies, for tools, tests and a map: [{i, x, z, gy, lit, flicker, r}]. Off the hot path. */
   list() {
     return this.poles.map(p => ({ i: p.i, x: p.hx, z: p.hz, postX: p.x, postZ: p.z, gy: p.gy,
-      lit: p.lit, flicker: p.flickerT > 0, r: POOL_R }));
+      lit: p.lit && !p.daylightOff, bulbWorking: p.lit, daylightOff: !!p.daylightOff, flicker: p.flickerT > 0, r: POOL_R }));
   }
 
   state() {
@@ -645,7 +775,8 @@ export class DuskToDawn {
     for (const p of this.poles) { if (p.lit) lit++; else out++; if (p.flickerT > 0) flicker++; }
     return { poles: this.poles.length, lit, out, flicker, bulbs: this._bulbs, nextS: this.nextS,
       nearest: this.nearest, hold: this.hold, rover: this._roverI, restored: this._restored,
-      notes: this._notes.slice() };
+      honestNight: this.honestNight, photocellSweep: this.photocellSweep,
+      wardenRegions: JSON.parse(JSON.stringify(this.wardenRegions)), notes: this._notes.slice() };
   }
 
   ready() {
@@ -659,6 +790,7 @@ export class DuskToDawn {
 
   dispose() {
     if (this._offLoaded) this._offLoaded();
+    this._offWarden?.(); this._offCycle?.();
     const lights = this._sys('lights');
     if (this._rover && lights && typeof lights.release === 'function') lights.release(this._rover);
     this._rover = null; this._roverI = -1;

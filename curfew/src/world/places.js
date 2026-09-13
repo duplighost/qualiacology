@@ -82,6 +82,7 @@ import { DRESS as DRESS_HOLDFAST } from './holdfast-dress.js';
 import { DRESS as DRESS_REFUGES } from './destination-refuges.js';
 import { DRESS as DRESS_ESTATES } from './estate-details.js';
 import { STAGED_BUILDERS } from './staged.js';
+import { SPECIES } from '../enemies/species.js';
 
 // ROUND 21: weather's snow colour, shared with chunks.js's ground so a yard and the field it
 // sits in are the same white. Read once, here, and never inside a build loop.
@@ -1963,6 +1964,7 @@ export class Places {
   /** Place any staged cast the player has walked up to. Once per save, never undone. */
   _castStep() {
     if (!this._casts.size) return;
+    const returning = !!(this.ctx.shared.lateBellFinal || this.ctx.shared.morningReturned);
     const enemies = this._sys('enemies');
     if (!enemies || typeof enemies.spawn !== 'function') return;
     const player = this._sys('player');
@@ -1983,6 +1985,7 @@ export class Places {
       // Requeue only unfinished hostile cast seats; recorded kills stay gone.
       for (let castIndex=0;castIndex<rec.cast.length;castIndex++) {
         const c=rec.cast[castIndex];
+        if (returning && !c.neutral && !SPECIES[c.species]?.human && !['poacher','hunter'].includes(c.species)) continue;
         if(!c.spawned||c.neutral||prog?.flag('cast-killed:'+rec.key+':'+castIndex)||prog?.flag('secured:'+siteId))continue;
         if(c.entity?.alive&&c.entity.gen===c.generation)continue;
         c.entity=null;c.generation=0;c.spawned=false;rec.placed=false;this._castDone.delete(rec.key);
@@ -1996,6 +1999,9 @@ export class Places {
       let complete = true;
       for (const [castIndex, c] of rec.cast.entries()) {
         if (c.spawned) continue;
+        // Existing dead leave through their own controller; an unvisited or recycled
+        // seat cannot introduce more after the last bell. Living people still arrive.
+        if (returning && !c.neutral && !SPECIES[c.species]?.human && !['poacher','hunter'].includes(c.species)) { c.spawned = true; continue; }
         if (!c.neutral && (prog?.flag('cast-killed:' + rec.key + ':' + castIndex) || prog?.flag('secured:' + siteId))) { c.spawned = true; continue; }
         // Paying opens the gate; the people who protect the town still live here.
         if (c.guard && siteId !== 'holdfast' && prog?.flag('gate:' + siteId)) { c.spawned = true; continue; }
@@ -3135,7 +3141,7 @@ export class Places {
     for (let i = 0; i < MAJORS.length; i++) {
       const d = MAJORS[i];
       const c = d.claim;
-      if (!c || c.how !== 'shoot' || this.claimed.has(d.id)) continue;
+      if (!c || c.how !== 'shoot' || (this.claimed.has(d.id) && d.id !== 'bell-tower')) continue;
       const rec = this.nodes.get(d.id);
       if (!rec) continue;
       const cy = Math.cos(rec.yaw), sy = Math.sin(rec.yaw);
@@ -3144,9 +3150,11 @@ export class Places {
       const wy = rec.padY + c.dy;
       const dx = p.x - wx, dy = p.y - wy, dz = p.z - wz;
       if (dx * dx + dy * dy + dz * dz > c.r * c.r) continue;
-      if (this._sys('territory')?.canPower(d.id) === false) continue;
-      this._claim(d, wx, wy, wz);
+      const canPower=this._sys('territory')?.canPower(d.id)!==false;
+      if(!canPower&&d.id!=='bell-tower')continue;
+      if(canPower)this._claim(d, wx, wy, wz);
       if (rec.moving) for (const mv of rec.moving) if (mv.role === 'bell') this._ring(rec);
+      if (d.id === 'bell-tower') this.ctx.bus.emit('place:bell-shot', { id: d.id, x: wx, y: wy, z: wz });
       return;
     }
   }

@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import {Kit} from './sites.js';
 import {bedsidePlacement} from './refuge-comfort.js';
+import {SITE_HANDS,paintHandwriting} from './lore-handwriting.js';
 
 const ARMED=1,AWAY=2,RENEWED=4,TAKEN=8;
 export class RefugeRenewal {
@@ -36,7 +37,7 @@ export class RefugeRenewal {
   flowers.add(new THREE.Mesh(f.build(),u.matBody));
   this._note();this.group.visible=false;
  }
- _note(){if(typeof document==='undefined')return;const c=document.createElement('canvas');c.width=512;c.height=192;const g=c.getContext('2d');g.fillStyle='#aaa28b';g.fillRect(0,0,512,192);g.fillStyle='#302f29';g.font='29px Georgia';g.textAlign='center';g.fillText('Kept the light on.',256,69);g.fillText('Left what we could.',256,120);const map=new THREE.CanvasTexture(c);map.colorSpace=THREE.SRGBColorSpace;this.noteMaterial=new THREE.MeshStandardMaterial({map,roughness:1,color:0x898478});const note=new THREE.Mesh(new THREE.PlaneGeometry(.9,.34),this.noteMaterial);note.position.set(0,1.7,-.22);note.rotation.y=Math.PI;this.shelf.add(note);}
+ _note(){if(typeof document==='undefined')return;const c=document.createElement('canvas');c.width=512;c.height=192;const g=c.getContext('2d');g.fillStyle='#4a4535';g.fillRect(0,0,512,192);g.fillStyle='#060402';paintHandwriting(g,'the light was kept on',26,69,460,29,this.u.siteId);paintHandwriting(g,'left what we could',26,120,460,29,this.u.siteId);const map=new THREE.CanvasTexture(c);map.colorSpace=THREE.NoColorSpace;this.noteMaterial=this.u._sys('places').matBody.clone();this.noteMaterial.map=map;this.noteMaterial.bumpScale=0;const geo=new THREE.PlaneGeometry(.9,.34);geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count*3).fill(1),3));const note=new THREE.Mesh(geo,this.noteMaterial);note.position.set(0,1.7,-.22);note.rotation.y=Math.PI;this.shelf.add(note);}
  _save(pr){pr.flag(this.key,this.bits);pr.flag(this.key+':away',Math.min(60,Math.floor(this.away)));}
  step(dt){this.focus=false;const ctx=this.ctx,u=this.u,pr=u._sys('progress'),p=u._sys('player');const use=!!ctx.input?.held('use'),pressed=use&&!this.usePrev;this.usePrev=use;
   if(!ctx.ready||!pr||!p?.pos)return false;
@@ -47,17 +48,17 @@ export class RefugeRenewal {
   if(!this.eligible)return false;
   const room=u.spec.room,x=u._wx(room.x,room.z),z=u._wz(room.x,room.z),distance=Math.hypot(p.pos.x-x,p.pos.z-z),inside=u.contains(p.pos.x,p.pos.y,p.pos.z);
   if(!(this.bits&ARMED)&&inside){this.bits|=ARMED;this._save(pr);}
-  if((this.bits&ARMED)&&!(this.bits&RENEWED)){
+  if((this.bits&ARMED)&&!(this.bits&RENEWED)&&!ctx.shared.morningReturned&&!(ctx.shared.trueDawn>0)){
    if(distance>130){this.away+=dt;this.persistT+=dt;if(this.away>=60)this.bits|=AWAY;if(this.persistT>10){this.persistT=0;this._save(pr);}}
    else if(distance<100&&!(this.bits&AWAY)&&this.away>0){this.away=0;this._save(pr);}
    if((this.bits&AWAY)&&distance<24){this.bits|=RENEWED;this._save(pr);this.group.visible=true;ctx.bus.emit('refuge:tended',{id:u.siteId});}
   }
-  if(!(this.bits&RENEWED)||(this.bits&TAKEN)||!inside||ctx.shared.inCar)return false;
+  if(!(this.bits&RENEWED)||!inside||ctx.shared.inCar)return false;
   const at=this.shelf.position,wx=u._wx(at.x,at.z),wz=u._wz(at.x,at.z),wy=u.padY+1.3,dx=wx-p.pos.x,dz=wz-p.pos.z,d=Math.hypot(dx,dz),cam=u._sys('camera');
   if(d>2.0||!cam||(-Math.sin(cam.yaw)*dx-Math.cos(cam.yaw)*dz)/(d||1)<.78)return false;
   if(u._sys('collision')?.segmentClear&&!u._sys('collision').segmentClear(p.pos.x,p.eyeY??p.pos.y+1.65,p.pos.z,wx,wy,wz))return false;
-  this.focus=true;ctx.bus.emit('prompt',{kind:'use',label:'E',rank:7,x:wx,y:wy,z:wz,detail:'TAKE THE SUPPLIES',subdetail:'LEFT FOR YOU'});
-  if(pressed){this.bits|=TAKEN;this.supplies.visible=false;this._save(pr);p.heal?.(35);const weapons=u._sys('weapons');for(const id of['revolver','bolt','shotgun','carbine'])weapons?.addReserveTo?.(id,id==='carbine'?24:8);u._say?.('lantern',.2,wx,wy,wz);ctx.bus.emit('pickup',{kind:'ammo',amount:8});}
+  this.focus=true;ctx.bus.emit('prompt',{kind:'use',label:'E',rank:7,x:wx,y:wy,z:wz,detail:this.bits&TAKEN?'READ THE NOTE':'TAKE THE SUPPLIES',subdetail:'LEFT FOR YOU'});
+  if(pressed){const text='the light was kept on\nleft what we could';ctx.bus.emit('story:read',{id:'refuge-note:'+u.siteId,title:'An unsigned note',text,siteId:u.siteId,hand:SITE_HANDS[u.siteId]});u._sys('world-stories')?._say(text);if(!(this.bits&TAKEN)){this.bits|=TAKEN;this.supplies.visible=false;this._save(pr);p.heal?.(35);const weapons=u._sys('weapons');for(const id of['revolver','bolt','shotgun','carbine'])weapons?.addReserveTo?.(id,id==='carbine'?24:8);u._say?.('lantern',.2,wx,wy,wz);ctx.bus.emit('pickup',{kind:'ammo',amount:8});}}
   return true;
  }
  state(){const p=this.shelf?.position;return {armed:!!(this.bits&ARMED),away:Math.floor(this.away),tended:!!(this.bits&RENEWED),suppliesTaken:!!(this.bits&TAKEN),at:p?[this.u._wx(p.x,p.z),this.u.padY+1.3,this.u._wz(p.x,p.z)]:null};}

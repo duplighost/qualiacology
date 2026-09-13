@@ -73,6 +73,7 @@
 import * as THREE from 'three';
 import { CFG } from '../config.js';
 import { TAU, clamp01, lerp, damp } from '../engine/math.js';
+import { MORNING_STOPS } from '../world/planetarium.js';
 
 const SKY_RADIUS = 620;      // inside CFG.render.far (900), outside any fog-visible range
 const STAR_COUNT = 1500;     // ROUND 7 lane E: was 900. One Points draw either way.
@@ -421,6 +422,9 @@ export class Sky {
         uFlash: { value: 0 },
         uEastGlow: { value: EAST_GLOW },
         uEastCol: { value: new THREE.Color(EAST_COL) },
+        uTrueDawn: { value: 0 },
+        uSunDir: { value: new THREE.Vector3(1, .04, 0).normalize() },
+        uSunCol: { value: new THREE.Color(0xffb347) },
       },
       vertexShader: /* glsl */`
         varying vec3 vDir;
@@ -436,6 +440,8 @@ export class Sky {
         uniform vec3 uHorizon, uMid, uZenith, uMoonDir, uMoonCol, uBandAxis, uEastCol;
         uniform float uMoonGlow, uTime, uMoonR, uMoonPeak, uMoonPhase;
         uniform float uCloud, uRidge, uBand, uFlash, uEastGlow;
+        uniform float uTrueDawn;
+        uniform vec3 uSunDir, uSunCol;
 
         float h21(vec2 p) {
           p = fract(p * vec2(127.31, 311.77));
@@ -552,6 +558,11 @@ export class Sky {
             float eastK = pow(max(0.0, circ.x), 10.0) * smoothstep(-0.02, 0.07, e)
                         * (1.0 - smoothstep(0.07, 0.24, e));
             col += uEastCol * uEastGlow * eastK * (1.0 - cov * 0.6);
+
+            // The morning comes from true east, above the earth, once.
+            float sunFacing = max(0.0, dot(d, normalize(uSunDir)));
+            float sunDisc = smoothstep(cos(0.036), cos(0.032), sunFacing);
+            col += uSunCol * uTrueDawn * (sunDisc * 2.6 + pow(sunFacing, 60.0) * .30);
 
             /* ---- THE FLASH (ROUND 22) --------------------------------------------
              * The whole dome toward blue-white, most at the horizon where the forest
@@ -1039,6 +1050,28 @@ export class Sky {
       this._phaseFog = FOG_DENSITY * lerp(s0.fogMul, s1.fogMul, k);
       this.scene.fog.density = this._phaseFog * this._wxFog;
     }
+  }
+
+  setTrueDawn(amount) {
+    const k = clamp01(amount), u = this.dome.material.uniforms;
+    u.uTrueDawn.value = k;
+    if (!k) { u.uMoonPeak.value=MOON_PEAK;u.uMoonGlow.value=.18;for(const m of this.mist||[])m.mesh.visible=true;return; }
+    // The very same indigo, rose and gold stops as Emmett's projection.
+    const t = .22 + .56 * k;
+    let i = 0;
+    while (i < MORNING_STOPS.length - 2 && MORNING_STOPS[i + 1].t < t) i++;
+    const a = MORNING_STOPS[i], b = MORNING_STOPS[i + 1], f = clamp01((t - a.t) / (b.t - a.t));
+    _a.set(a.horizon); _b.set(b.horizon); this.horizon.copy(_a).lerp(_b, f);
+    _a.set(a.mid); _b.set(b.mid); u.uMid.value.copy(_a).lerp(_b, f);
+    _a.set(a.zenith); _b.set(b.zenith); u.uZenith.value.copy(_a).lerp(_b, f);
+    u.uSunDir.value.set(Math.cos(.04 + k * .13), Math.sin(.04 + k * .13), 0);
+    u.uSunCol.value.set(0xffb347).lerp(_a.set(0xfff4e0), k * .45);
+    u.uMoonPeak.value = MOON_PEAK * (1 - k);
+    u.uMoonGlow.value = .18 * (1 - k);
+    this._starOpacity = .24 * (1 - k); this._writeStars();
+    this._writeFog();
+    if (this.scene.fog) this.scene.fog.density = FOG_DENSITY * (.88 - .5 * k);
+    for (const m of this.mist || []) m.mesh.visible = false;
   }
 
   /**

@@ -39,6 +39,25 @@ const UPPER_STORIES={
  'keep-watcher':['Ives · the high watch',['You made it. On a clear night you can see three watch fires from here.','We do not ring the bell for what we see outside. Only for the people who come back.']],
 };
 const _from=new THREE.Vector3(),_to=new THREE.Vector3(),_ray=new THREE.Vector3();
+// These are the residents' accounts. The underlying account stays out of their mouths.
+const LORE_LINES={
+ archivist:'Aven wrote when I could not. Then Orla. Then me again. Three hands in the first year. After that, moons.',
+ cook:'I put one bowl aside. Whatever we ate. Hot, still. It goes at the foot of the east stair.',
+ widower:'Amos. My brother. The last name under the warning. Purple cloth for the stair. Pale for the road.',
+ baker:'Someone always takes the next shift. The stone stays warm. Both things help.',
+ teacher:'Nineteen children. Eleven born since. I took them to Morning once, on foot. I would not take them again.',
+ nurse:'The threads do not pull free. I leave them now. I can still keep someone warm.',
+ 'watch-wife':'Four chairs at our table. Three used. Leave the car in the road. Nothing good comes up through a road.',
+ shrinekeeper:'I trim them every night. They do not need it. If that ever changes, somebody should remember how.',
+ wellkeeper:'That thing with the ledger has my father’s hands. Lower the bucket quietly.',
+ gardener:'Moonlight will grow something. We watch very carefully what it grows.',
+ roadcook:'Marguerite asked me to shut the number four door. Somebody had to. There is soup.',
+ traveller:'It followed me from the viaduct. I did not turn around. Not once.',
+ 'keep-nurse':'The same cut across the palm. The same handrail. An old cut, even on the ones who only just went down.',
+ 'keep-reader':'Morning is circled on every edition. Different hands. I trust the roads somebody crossed out.',
+ 'roof-gardener':'The seeds came up in the foyer cracks at Morning. Warm ground. We count them every moon.',
+ 'keep-weaver':'We turned the evacuation notices over. The first banner was a blanket. We use stronger edges now.',
+};
 
 export class HoldfastLife {
   static id='holdfast-life';
@@ -60,6 +79,9 @@ export class HoldfastLife {
     TOWN.routes.forEach((route,i)=>this.people.push({id:'walker-'+i,x:route[0][0],z:route[0][1],y:route[0][2]||0,yaw:0,route,waypoint:1,direction:1,pause:i*.4,story:[NAMES[i%NAMES.length],['People still knock here. I like that.','Every lamp has someone who cleans the glass. That is how this place stays here.']],e:null,gen:0,line:0}));
     for(const s of TOWN.shops)this.people.push({...s,shop:s.kind,story:[s.kind==='weapons'?(s.outside?'Fen · road armourer':'Merrit · armourer'):(s.outside?'Bo · gate mechanic':'Ari · engine keeper'),[s.kind==='weapons'?'Clean barrels. Dry rounds. Keep both that way.':'Bring the car back in one piece. Or as close as you can manage.']],e:null,gen:0,line:0});
     this._buildUI();this._signs();
+    for(const r of this.people)if(LORE_LINES[r.id])r.story=[r.story[0],[r.story[1][0],LORE_LINES[r.id],...r.story[1].slice(1)],r.story[2]];
+    const linn=this.people.find(r=>r.id==='roof-seamstress');if(linn)linn.story[1][0]='The washing hangs still. It has not moved in six years. Bring the sheets in before they freeze.';
+    const aven=this.people.find(r=>r.id==='roof-baker');if(aven)aven.story[1][1]='The stone underneath the ovens stays warm. Tomas talks about the shifts. I let him.';
     this.off.push(this.ctx.bus.on('player:respawn',()=>this.reset()));
     this.off.push(this.ctx.bus.on('save:loaded',()=>this.reset()));
     this.off.push(this.ctx.bus.on('gate:hostile',e=>{if(e.id==='holdfast'){this.chat=null;this._sys('audio')?.dread?.('dealer-rack',this.world(0,66).x,this.world(0,66).y+1.5,this.world(0,66).z,.3);}}));
@@ -78,11 +100,11 @@ export class HoldfastLife {
     const group=this.signGroup=new THREE.Group();group.name='holdfast-painted-signs';this.ctx.scene.add(group);
     for(const s of TOWN.signs){
       const c=document.createElement('canvas');c.width=768;c.height=256;const a=c.getContext('2d');
-      a.fillStyle='#1a2028';a.fillRect(0,0,768,256);a.strokeStyle='#9a9aae';a.lineWidth=3;a.strokeRect(12,12,744,232);
-      const lines=s.text.split('\n');a.textAlign='center';a.textBaseline='middle';a.fillStyle='#dfdccd';
+      a.fillStyle='#030406';a.fillRect(0,0,768,256);a.strokeStyle='#343442';a.lineWidth=3;a.strokeRect(12,12,744,232);
+      const lines=s.text.split('\n');a.textAlign='center';a.textBaseline='middle';a.fillStyle='#524f43';
       lines.forEach((line,i)=>{a.font=(i===0?'28px':'24px')+' Georgia';a.fillText(line,384,128+(i-(lines.length-1)/2)*49);});
-      const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;const mat=new THREE.MeshLambertMaterial({map:tex,emissive:0xbbb8aa,emissiveMap:tex,emissiveIntensity:.16,side:THREE.DoubleSide});
-      const mesh=new THREE.Mesh(new THREE.PlaneGeometry(2.6,.87),mat),p=this.world(s.x,s.z,s.y||2.3);mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=(this._frame()?.yaw||0)+s.yaw;mesh.name='painted-town-sign';group.add(mesh);this.signs.push(mesh);
+      const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.NoColorSpace;const mat=this._sys('places').matBody.clone();mat.map=tex;mat.bumpScale=0;
+      const geo=new THREE.PlaneGeometry(2.6,.87);geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count*3).fill(1),3));const mesh=new THREE.Mesh(geo,mat),p=this.world(s.x,s.z,s.y||2.3);mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=(this._frame()?.yaw||0)+s.yaw;mesh.name='painted-town-sign';group.add(mesh);this.signs.push(mesh);
     }
   }
   reset(){
@@ -134,9 +156,10 @@ export class HoldfastLife {
   _light(){
     if(this.time<this.lightAt)return;this.lightAt=this.time+.5;
     const p=this._sys('player').pos,lights=this._sys('lights');
+    if(this.ctx.shared.holdfastBlackout){for(const h of this.lamps.values())lights.release(h);this.lamps.clear();return;}
     const nearby=[...TOWN.buildings.map(b=>({...b,y:(b.y||0)+2.9})),...TOWN.lamps].map(b=>({b,p:this.world(b.x,b.z,b.y)})).map(q=>({...q,d:Math.hypot(p.x-q.p.x,p.y-q.p.y,p.z-q.p.z)})).filter(q=>q.d<28).sort((a,b)=>a.d-b.d).slice(0,2);
     const want=new Set(nearby.map(q=>q.b.id));for(const[id,h]of this.lamps)if(!want.has(id)){lights.release(h);this.lamps.delete(id);}
-    for(const q of nearby){const old=this.lamps.get(q.b.id);if(old?.inUse)continue;const h=lights.borrow('holdfast:'+q.b.id,q.p.x,q.p.y,q.p.z,0xffbd79,18,0);if(h){h.distance=19;this.lamps.set(q.b.id,h);}}
+    for(const q of nearby){const relight=this.ctx.shared.holdfastRelight??1,index=[...TOWN.buildings,...TOWN.lamps].findIndex(b=>b.id===q.b.id);if(relight<1&&index/Math.max(1,TOWN.buildings.length+TOWN.lamps.length)>relight)continue;const old=this.lamps.get(q.b.id);if(old?.inUse)continue;const h=lights.borrow('holdfast:'+q.b.id,q.p.x,q.p.y,q.p.z,0xffbd79,18,0);if(h){h.distance=19;this.lamps.set(q.b.id,h);}}
   }
   _protect(dt){
     const en=this._sys('enemies'),p=this._sys('player');if(!this.contains(p.pos.x,p.pos.z,100))return;
@@ -173,9 +196,17 @@ export class HoldfastLife {
     return true;
   }
   _talk(r){
-    const lines=r.story[1],i=r.line++%lines.length;this.chat={id:r.id,name:r.story[0],text:lines[i],until:this.time+14};
+    const pr=this._sys('progress'),complete=BOSSES.every(b=>pr.unlockedFinishes().includes(b.skin.id));
+    const privateHint=r.id==='bellkeeper'&&complete;
+    let lines=r.story[1];
+    if(r.id==='keep-watcher'){const n=this._sys('lore-lookout')?.getPoweredCount()??Array.from(this._sys('places').nodes.values()).filter(n=>this._sys('places').isClaimed(n.def.id)||n.def.lit).length;const old=Number(pr.flag('story:ives-count'))||3;lines=[`${n} fires. ${n>old?'There were fewer when you last came. I counted them twice.':'I count them every night.'}`,r.story[1][1]];pr.flag('story:ives-count',n);}
+    if(privateHint)lines=['You have brought the Eleven home. I can feel the stone wanting it back.','The day bell. The priory tower in the north pines. Ring it in the Black Hour with your car in the yard, where the bell can see it. Then drive east. All the way to Morning.'];
+    if(r.id==='cook'&&pr.bossCleared('underkeep'))lines=['The bowl was still full.','I put it out again. Hot, still. Whatever we ate.'];
+    if(r.id==='shrinekeeper'&&pr.bossCleared('underkeep'))lines=['I remembered how.','A wick. Oil. A clean glass. We can do that much ourselves.'];
+    const i=r.line++%lines.length;this.chat={id:r.id,name:r.story[0],text:lines[i],until:this.time+Math.max(14,lines[i].length/15)};
     // Each rumour is spoken before being marked, including on repeat conversations.
     if(i===lines.length-1)this._rumour(r);
+    this.ctx.bus.emit('holdfast:conversation',{id:r.id,name:r.story[0],text:lines[i],final:i===lines.length-1,rumour:r.story[2],privateHint});
     const e=r.e,p=this._sys('player');e.stagedYaw=faceYaw(e.pos.x,e.pos.z,p.pos.x,p.pos.z);
   }
   _offers(r){
@@ -203,8 +234,10 @@ export class HoldfastLife {
     }
   }
   _shopCard(r,list,chosen){
+    if(this.lastShopMet!==r.id){this.lastShopMet=r.id;this.ctx.bus.emit('holdfast:conversation',{id:r.id,name:r.story[0],text:r.story[1][0],final:true});}
     const key=r.id+':'+chosen+':'+this._sys('progress').cash()+':'+list.map(o=>o.id+o.rounds+o.price).join(',');
     if(key!==this.cardKey){this.cardKey=key;this.shopEl.replaceChildren();const title=document.createElement('h3');title.style.cssText='font:22px Georgia;margin:0 0 6px';title.textContent=r.shop==='car'?'Parts & repairs':'Arms & ammunition';const sub=document.createElement('div');sub.style.cssText='color:#a7a8bc;font-size:11px;letter-spacing:.1em;margin-bottom:18px';sub.textContent=r.story[0]+' · '+this._sys('progress').cash()+' COINS';this.shopEl.append(title,sub);
+      const greeting=document.createElement('div');greeting.textContent=r.story[1][0];greeting.style.cssText='font:14px/1.5 Georgia;color:#cec8be;margin:8px 0 14px';this.shopEl.append(greeting);
       list.forEach((o,i)=>{const row=document.createElement('div');row.style.cssText='padding:9px 11px;margin:3px 0;border-left:2px solid '+(i===chosen?'#cec7e9':'transparent')+';background:'+(i===chosen?'#77738b33':'transparent')+';color:'+(i===chosen?'#f0edf5':'#949ba7');row.textContent=o.name+' · '+(o.full?'full':o.price);this.shopEl.append(row);if(i===chosen){const line=document.createElement('div');line.style.cssText='font-size:12px;color:#bbb8c9;padding:0 11px 10px';line.textContent=o.line;this.shopEl.append(line);}});
       const foot=document.createElement('div');foot.style.cssText='border-top:1px solid #85809144;margin-top:16px;padding-top:13px;color:#bab5cc;font-size:11px';foot.textContent=list.length?'T  Browse     Hold E  Buy':'Everything is fitted. Bring it back when it needs work.';this.shopEl.append(foot);
     }this.shopEl.style.display='block';
@@ -220,7 +253,8 @@ export class HoldfastLife {
       if(!r.e&&!r.dead&&near)this._spawn(r);
       if(r.e?.alive)this._walk(r,dt);
     }
-    this._protect(dt);this._light();
+    this._protect(dt);this._light();this._addresses();
+    if(this.ctx.shared.holdfastBlackout&&this.time>(this.nextBlackoutBell||0)){this.nextBlackoutBell=this.time+3.4;const at=this.world(31,-48,9);this._sys('audio')?.whisper('bell','Hale',at.x,at.y,at.z);this.ctx.bus.emit('holdfast:bell',{...at,reason:'kept'});}
     const use=this.ctx.input.held('use'),tune=this.ctx.input.held('radiotune');if(!use)this.useLock=false;if(!tune)this.tuneLock=false;
     if(this._insideGate(use)){this.target='';this.chat=null;this.shopEl.style.display='none';return;}
     let target=null,best=3.3;const cam=this._sys('camera');
@@ -233,8 +267,16 @@ export class HoldfastLife {
   present(){
     const active=this.ctx.playing&&!this.ctx.paused&&!this._sys('player')?.dead;
     this.signGroup.visible=this.contains(this._sys('player').pos.x,this._sys('player').pos.z,180);
+    const level=this.ctx.shared.holdfastBlackout?0:(this.ctx.shared.holdfastRelight??1),places=this._sys('places'),n=places?.nodes.get('holdfast');
+    if(n?.glow){n.glow.visible=level>0;n.glow.material.opacity*=level;}
+    for(const group of places?.bodies.values()||[])for(const b of group)if(b.id==='holdfast')b.group.traverse(o=>{if(o.isMesh&&o.name.includes('glow')){o.visible=level>0;o.material.opacity=level;}});
     if(!active||!this.target)this.shopEl.style.display='none';
     if(active&&this.chat){this.ui.style.display='block';this.personEl.textContent=this.chat.name;this.textEl.textContent=this.chat.text;this.footer.textContent=this.target===this.chat.id?'E  Listen':'The Holdfast';}else this.ui.style.display='none';
+  }
+  _addresses(){
+    const p=this._sys('player'),q=this.local(p.pos.x,p.pos.z),y=p.pos.y-(this._frame()?.padY||0);let address=null;
+    if(!p.dead&&!this.ctx.shared.inCar)for(const b of TOWN.buildings){const dx=q.x-b.x,dz=q.z-b.z,c=Math.cos(b.yaw),s=Math.sin(b.yaw),x=dx*c-dz*s,z=dx*s+dz*c;if(Math.abs(x)<b.w/2-.22&&Math.abs(z)<b.d/2-.22&&y>=(b.y||0)-.4&&y<(b.y||0)+2.8){address=b;break;}}
+    if(address?.id!==this.address){this.address=address?.id||'';if(address)this.ctx.bus.emit('holdfast:address',{id:address.id,name:address.name});}
   }
   state(){return{residents:this.people.map(r=>({id:r.id,alive:!!r.e?.alive,dead:!!r.dead,pos:r.e?.pos.toArray(),shop:r.shop||null,walking:!!r.route})),hostile:!!this._sys('progress').flag('gate-hostile:holdfast'),chat:this.chat,target:this.target,epoch:this.epoch};}
   dispose(){this.off.forEach(f=>f?.());for(const h of this.lamps.values())this._sys('lights')?.release(h);this.ui?.remove();this.shopEl?.remove();for(const s of this.signs){s.geometry.dispose();s.material.map.dispose();s.material.dispose();}this.signGroup?.removeFromParent();}

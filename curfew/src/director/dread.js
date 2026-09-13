@@ -51,7 +51,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import CFG from '../config.js';
 import { clamp, clamp01, TAU } from '../engine/math.js';
 import { createTension, scanEnemies, huntingFromLastScan } from './tension.js';
-import { createAuditor } from './auditor.js';
+import { createAuditor, CarriedLightAuditor } from './auditor.js';
+import { RoadPacer } from './hour-officers.js';
 import { peacefulAt } from '../world/safety.js';
 
 // ---------------------------------------------------------------------------
@@ -244,6 +245,8 @@ export class Dread {
     scene.add(this.root);
 
     this._buildKit();
+    this.ledgerKeeper = new CarriedLightAuditor(ctx, this);
+    this.pacer = new RoadPacer(ctx, this);
 
     /* ---- scheduler state ------------------------------------------------- */
     this.timer = this._nextInterval();
@@ -651,7 +654,7 @@ export class Dread {
    * director has said no, or something is hunting you inside the permit radius.
    */
   permitOk() {
-    if (!this.enabled) return false;
+    if (!this.enabled || this._returning()) return false;
     const p = this._sys('player')?.pos;
     if (p && (peacefulAt(this.ctx,p.x,p.z) || this._sys('refuge')?.isProtected(p.x,p.y,p.z))) return false;
     if (this.ctx.shared.interiorHorror) return false;
@@ -676,6 +679,7 @@ export class Dread {
    * dread: a build owns the picture right now, or a stinger just landed.
    */
   pressureOk() {
+    if (this._returning()) return false;
     if (this.ctx.shared.interiorHorror) return false;
     if (this.building) return false;
     if (this.clock - this.lastLoud < CFG.director.dread.postLoudQuietS) return false;
@@ -1072,7 +1076,7 @@ export class Dread {
    * noise masks it; the same rule holds here and it is why walking is worse than sprinting.
    */
   _mimicStep() {
-    if (this.mimicT <= 0) return;
+    if (this.mimicT <= 0 || this._returning()) return;
     const p = this._sys('player');
     if (p && (p.sprinting || p.tacSprinting)) return;
     this.mimicCount++;
@@ -1519,10 +1523,38 @@ export class Dread {
     if (!this.lantern.on) this.lantern.mesh.visible = false;
   }
 
+  _returning() { return !!(this.ctx.shared?.lateBellFinal || this.ctx.shared?.morningReturned); }
+
+  _finishHour() {
+    if (this._hourFinished) return;
+    this._hourFinished = true;
+    this._cancelAll();
+    this.mimicT = 0; this.backCoverT = 0; this._forceJump = '';
+    this.dropS.on = false; this.dropS.e = null; this.blackoutS.on = false;
+    this.watcherS.on = false; this.runnerS.on = false; this.printS.on = false;
+    for (const e of this.eyes) { e.on = false; e.owner = null; }
+    this._endLantern();
+    this._hideAll();
+    // Cancel armed county incidents without awarding a witness or erasing their history.
+    for (const s of this.auditor.actives) {
+      this.decommission(s.handle);
+      s.on = false; s.live = false; s.handle = null; s.prop = null;
+    }
+    this.tension.reset();
+  }
+
   step(dt) {
     const d = dt > 0 ? dt : 0;
     if (this._warm) { this._warm = false; this._hideAll(); }
     this.clock += d;
+
+    if (this._returning()) {
+      this._finishHour();
+      // The physical keeper still closes his book before he leaves.
+      this.pacer?.step(d); this.ledgerKeeper?.step(d);
+      this.stats.deniedSeconds += d;
+      return;
+    }
 
     this.tension.update(d);
     // A hunting body owns the picture above the bus: priority is scripted > chase > bus.
@@ -1563,6 +1595,8 @@ export class Dread {
     this._stepPrints(d);
     this._stepEyes(d);
     this._stepLantern(d);
+    this.pacer?.step(d);
+    this.ledgerKeeper?.step(d);
     this._stepLootReturn(d);
     if (this.lootReturn && this.lootReturn.on && this.lootReturn.hushed) return;
 
@@ -1938,6 +1972,9 @@ export class Dread {
   /* ------------------------------------------------------- the live props -- */
 
   _stepWatcher(d) {
+    if (this.ctx.shared?.lateBellFinal || this.ctx.shared?.morningReturned) {
+      this.watcherS.on = false; this.watcher.visible = false; return;
+    }
     // ROUND 13: THE TURN's payoff — the moment his eye lands on the body behind him.
     const T = this._turnE;
     if (T && !this._turnSeen) {
@@ -1958,7 +1995,10 @@ export class Dread {
 
     // ATTENTION, NOT A TIMER. [marrow entity.js:356] +1x watched, -2x not.
     const watched = this.watching(S.x, S.y + 1.5, S.z, 0.86, 90);
-    if (watched) { S.observed += d; if (S.observed > 0.05) S.seen = true; }
+    if (watched) {
+      S.observed += d;
+      if (S.observed > 0.05 && !S.seen) { S.seen = true; this.ctx.bus?.emit('lore:sighting', { species: 'pale' }); }
+    }
     else S.observed = Math.max(0, S.observed - d * 2);
 
     if (!S.vanishing) {
@@ -2212,6 +2252,7 @@ export class Dread {
       state: this.state(),
       tension: this.tension.snapshot(),
       auditor: this.auditor.snapshot(),
+      ledgerKeeper: this.ledgerKeeper?.state(), pacer: this.pacer?.state(),
       stats: Object.assign({}, this.stats, { byKind: Object.assign({}, this.stats.byKind) }),
     };
   }
@@ -2227,6 +2268,7 @@ export class Dread {
 
   reset() {
     this._cancelAll();
+    this._hourFinished = false;
     this.clock = 0;
     this.lastLootReturn = -1e9;
     this.timer = this._nextInterval();
@@ -2254,6 +2296,7 @@ export class Dread {
     if (this._offs) { for (let i = 0; i < this._offs.length; i++) { const f = this._offs[i]; if (typeof f === 'function') f(); } }
     this._offs = null;
     if (this.auditor) this.auditor.dispose();
+    this.ledgerKeeper?.dispose(); this.pacer?.dispose();
     this._endLantern();
     if (this.root && this.root.parent) this.root.parent.remove(this.root);
     if (this.figGeo) this.figGeo.dispose();

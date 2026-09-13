@@ -841,7 +841,7 @@ export class Enemies {
     const dx = dir.x, dy = dir.y, dz = dir.z;
     for (let i = 0; i < this.all.length; i++) {
       const e = this.all[i];
-      if (!e.alive) continue;
+      if (!e.alive || e.def.officer || e.goingHome) continue;
       // cheap reject: the whole body's bounding sphere first
       const bx = e.pos.x - ox, by = (e.pos.y + e.def.height * 0.5) - oy, bz = e.pos.z - oz;
       const bt = bx * dx + by * dy + bz * dz;
@@ -884,6 +884,7 @@ export class Enemies {
    * is a convenience wrapper around it.
    */
   damage(e, amount, info) {
+    if (e?.def?.officer || e?.goingHome) return { killed:false, hpFrac:1, species:e.species };
     if(e) e.damageSource=info?.source || 'player';
     if (!e || !e.alive) return { killed: false, hpFrac: 0, species: e ? e.species : '' };
     if (e.neutral) this.provokeGate(e.siteGuard);
@@ -1257,6 +1258,8 @@ export class Enemies {
     // class of bug this audit was called for. Once, not per frame, because a
     // per-frame warn from inside step() is its own denial of service.
     if (!def) { this._warnUnknown(key); return null; }
+    if (this.ctx.shared.lateBellFinal && !def.human && !['poacher','hunter'].includes(key)
+      && !opts?.neutral && !opts?.initiallyNeutral && !opts?.staged) return null;
 
     const pack = opts && opts.pack > 1 ? Math.min(8, opts.pack | 0) : 1;
     if (pack > 1) {
@@ -1316,6 +1319,7 @@ export class Enemies {
 
     e.alive = true;
     e.dead = false;
+    e.goingHome=false;e.homecomingT=0;e.departSink=0;e.officerSeen=false;e.officerGaze=0;e.officerCeiling=0;e.wardenWorkT=0;
     // ROUND 7: unless it is a TABLEAU. See the note above STAGED bodies in _stepEnemy.
     e.alerted = def.owner === OWNER.DREAD && !(opts && opts.staged && !opts.awake);
     e.hunt = false; e.huntSpeedMul = 1;
@@ -1691,6 +1695,16 @@ export class Enemies {
 
   _stepEnemy(e, dt, p) {
     const def = e.def;
+    if (this.ctx.shared.lateBellFinal && !e.initiallyNeutral && !e.neutral
+      && !def.human && !['poacher','hunter'].includes(e.species)) {
+      this._stepHomecoming(e, dt, p); return;
+    }
+    if (def.officer) { this._stepOfficer(e, dt, p); return; }
+    if(e.species==='warden'&&e.wardenWorkT>0){
+      const d=Math.hypot(e.pos.x-p.pos.x,e.pos.z-p.pos.z);
+      if(e.hp<e.maxHp||d<10)e.wardenWorkT=0;
+      else{e.wardenWorkT=Math.max(0,e.wardenWorkT-dt);e.state='approach';e.vel.set(0,0,0);e.moving=false;e.aim=.9;e.riseSquash=1;return;}
+    }
     if (e.neutral) {
       e.pos.set(e.stagedX, e.stagedY, e.stagedZ); e.vel.set(0, 0, 0);
       e.riseSquash = 1; e.state = 'approach'; e.aware = 0; e.alerted = false;
@@ -1853,6 +1867,52 @@ export class Enemies {
     }
 
     this._integrate(e, dt);
+  }
+
+  _stepOfficer(e, dt, p) {
+    this._uncommit(e); e.vel.set(0,0,0); e.aware=0; e.hunt=false;
+    e.dist=Math.hypot(e.pos.x-p.pos.x,e.pos.z-p.pos.z);
+    if (e.state === 'dormant') { if(e.dist>45)return; e.state='approach';e.riseSquash=1; }
+    const eye=e.pos.y+e.def.height*.85;
+    const seen=e.dist<60&&observed(this.ctx,e.pos.x,eye,e.pos.z,.92,60);
+    if(seen&&!e.officerSeen){e.officerSeen=true;this.ctx.bus.emit('lore:sighting',{species:'pale'});}
+    e.officerGaze=seen?(e.officerGaze||0)+dt:0;
+    if(e.species==='spider') {
+      const g=groundY(this.ctx,e.pos.x,e.pos.z),col=this._sys('collision');
+      if(!e.officerCeiling){const hit=col?.raycast(new THREE.Vector3(e.pos.x,g+.4,e.pos.z),_UP,7,col.MASK?.SOLID||1);e.officerCeiling=hit?g+.4+hit.t-.7:g+2.8;}
+      e.pos.y=e.officerCeiling;
+    }
+    if(e.dist<(e.species==='spider'?2.5:12)||e.officerGaze>=1.5)this._release(e);
+  }
+
+  _stepHomecoming(e, dt, p) {
+    if(!e.goingHome){
+      e.goingHome=true;e.homecomingT=0;this._uncommit(e);e.hunt=false;e.aware=0;
+      e.staged=false;e.scripted=false;e.state='approach';e.riseSquash=1;
+      e.departX=e.pos.x+24;e.departZ=e.pos.z;
+      if(e.species==='hound'||e.species==='runner'){
+        const hole=this._sys('lore-dead')?.homeFor(e);
+        if(hole){e.departX=hole.x;e.departZ=hole.z;}
+      }
+    }
+    e.homecomingT+=dt;e.dist=Math.hypot(e.pos.x-p.pos.x,e.pos.z-p.pos.z);
+    if(e.species==='standing'){
+      e.vel.set(0,0,0);e.moving=false;
+      if(e.homecomingT>8&&e.dist>12)this._release(e);
+      return;
+    }
+    if(e.def.officer){this._release(e);return;}
+    const remaining=Math.hypot(e.departX-e.pos.x,e.departZ-e.pos.z);
+    if(remaining>1.2&&e.homecomingT<38){
+      const heading=steer(this.ctx,e,e.departX,e.departZ,this._frame);
+      const speed=Math.min(3.2,e.def.speed);
+      e.vel.set(heading.x*speed,0,heading.z*speed);e.moving=true;
+      e.yaw=dampAngle(e.yaw,Math.atan2(-e.vel.x,-e.vel.z),5,dt);this._integrate(e,dt);
+    }else{
+      e.vel.set(0,0,0);e.moving=false;e.pos.y-=dt*.7;
+      e.departSink=(e.departSink||0)+dt;
+      if(e.departSink>4)this._release(e);
+    }
   }
 
   // A tableau still has senses. Returning above used to skip the pressure
@@ -3547,6 +3607,7 @@ export class Enemies {
         if (rec && rec.n < rec.mesh.instanceMatrix.count) {
           let h = e.def.height * e.scale * squash;
           let w = h * rec.mesh.userData.aspect;
+          if(e.goingHome&&e.species==='standing'){h*=1-.83*clamp01(e.homecomingT/3);w*=1+clamp01(e.homecomingT/3);}
           // camera-facing card, upright: yaw only, so it never lies down -- and a CORPSE card
           // FLATTENS with the rig's own 0.55 s fall (to 30% of its height, half again as
           // wide), because a body killed past the 40 m line was a standing silhouette for
@@ -3600,10 +3661,15 @@ export class Enemies {
         // the hip lifts while it is still tumbling and comes down as it settles
         g.position.y += 0.24 * (1 - s);
       } else if (e.staggerT > 0) {
+        g.rotation.x = 0;
         g.position.y -= 0.26 * Math.sin(Math.PI * clamp01(1 - e.staggerT / STAGGER_T));
         g.rotation.z = Math.sin(e.staggerT * 34) * 0.08;
       } else {
-        g.rotation.z = 0;
+        g.rotation.z = 0; g.rotation.x = 0;
+      }
+      if(e.goingHome&&e.species==='standing'){
+        g.rotation.x=-Math.PI*.5*clamp01(e.homecomingT/3);
+        g.position.y+=.14*clamp01(e.homecomingT/3);
       }
       if (e.flinchT < 0.35) {
         const f = e.flinchT < 0.09 ? e.flinchT / 0.09 : 1 - (e.flinchT - 0.09) / 0.26;

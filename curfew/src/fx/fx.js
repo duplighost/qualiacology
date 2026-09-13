@@ -598,7 +598,9 @@ export class Fx {
     // into a whiteout. A warm front over a frost patch really can give you rain and lying
     // snow at once, and it looks like sleet, so that combination is allowed through.
     const place = Math.max(0, (frostAt(cam.position.x, cam.position.z) - SNOW_START) / (1 - SNOW_START));
-    const snowK = Math.max(place, this._wxSnow || 0);
+    const weather = this.ctx.systems?.get('weather');
+    const localSnow = weather?.snowfallAt ? weather.snowfallAt(cam.position.x, cam.position.z) : 1;
+    const snowK = Math.max(place, this._wxSnow || 0) * localSnow;
     const rainK = this._wxRain || 0;
     if (snowK <= 0 && rainK <= 0) { this._snowAcc = 0; this._rainAcc = 0; return; }
 

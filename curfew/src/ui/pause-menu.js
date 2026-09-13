@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {BRANCHES,NODES} from '../progression/nodes.js';
 import {FINISHES,FINISH_BY_ID,finishMaterial,setMaterialFinish} from '../weapons/finishes.js';
+import {LedgerView} from '../lore/ledger-view.js';
 
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
 const button=(text,fn,cls='')=>{const b=el('button',cls,text);b.type='button';b.addEventListener('click',fn);return b;};
@@ -50,15 +51,16 @@ export class PauseMenu {
     wrap.replaceChildren();
     const header=el('header','menu-head'),identity=el('div');identity.append(el('div','menu-brand','We Were Promised Morning'));this.title=el('h1','','Paused');identity.append(this.title);header.append(identity);
     this.nav=el('nav','menu-nav');this.nav.setAttribute('aria-label','Pause pages');this.navButtons={};
-    for(const [id,title] of [['home','Overview'],['perks','Perks'],['map','Map'],['weapons','Weapons'],['controls','Controls']]){const b=button(title,()=>this.show(id));b.dataset.page=id;this.nav.append(b);this.navButtons[id]=b;}
+    for(const [id,title] of [['home','Overview'],['perks','Perks'],['map','Map'],['weapons','Weapons'],['ledger','What we were told'],['controls','Controls']]){const b=button(title,()=>this.show(id));b.dataset.page=id;this.nav.append(b);this.navButtons[id]=b;}
     header.append(this.nav);wrap.append(header);this.pages={};
     const page=(id,cls)=>{const p=el('section','menu-page '+cls);p.dataset.page=id;p.hidden=true;this.pages[id]=p;wrap.append(p);return p;};
     const home=page('home','pause-home'),intro=el('div');intro.append(el('div','home-moon'));intro.append(el('div','home-name','We Were Promised Morning'));this.homeStatus=el('div','home-status');intro.append(this.homeStatus);home.append(intro);
     const links=el('div','home-choices');
-    for(const [id,title,hint,key] of [['resume','Return','Back to the world','Esc'],['perks','Perks','Choose what keeps you alive','Tab'],['map','Map','Places found. Things heard.','M'],['weapons','Weapons','The marks you brought back','']]){const b=button('',()=>id==='resume'?hud._resume():this.show(id),'home-choice'),text=el('span');text.append(el('strong','',title),el('small','',hint));b.append(text,el(key?'kbd':'span','',key||'→'));links.append(b);}home.append(links);
+    for(const [id,title,hint,key] of [['resume','Return','Back to the world','Esc'],['perks','Perks','Choose what keeps you alive','Tab'],['map','Map','Places found. Things heard.','M'],['weapons','Weapons','The marks you brought back',''],['ledger','What we were told','Vera’s ledger','']]){const b=button('',()=>id==='resume'?hud._resume():this.show(id),'home-choice'),text=el('span');text.append(el('strong','',title),el('small','',hint));b.append(text,el(key?'kbd':'span','',key||'→'));links.append(b);}home.append(links);
     const perks=page('perks','perks-layout');this.branches=el('div','perk-branches');for(const row of [...tree.querySelectorAll('.br')])this.branches.append(row);tree.append(this.branches);perks.append(tree);
     this.detail=el('aside','perk-detail');this.emblem=el('div','perk-emblem');this.eyebrow=el('div','detail-eyebrow');this.perkName=el('h2');this.description=el('div','perk-description');this.context=el('p','perk-context');const action=el('div','perk-action');this.buy=button('Learn ability',()=>this.purchase(),'primary-action');this.requirement=el('p','detail-requirement');this.requirement.setAttribute('role','status');action.append(this.buy,this.requirement);this.detail.append(this.emblem,this.eyebrow,this.perkName,this.description,this.context,action);perks.append(this.detail);
     const map=page('map','map-page');map.append(mapWrap);this.journal=el('aside','map-journal');map.append(this.journal);
+    const ledger=page('ledger','ledger-container');this.ledgerView=new LedgerView(this.ctx);ledger.append(this.ledgerView.element);
     const weapons=page('weapons','weapons-page');this.finishGrid=el('div','finish-grid');this.finishButtons={};for(const f of FINISHES){const b=button('',()=>{this.selectedFinish=f.id;this.refreshFinishes();this.renderWeapon();},'finish-tile');b.style.setProperty('--finish',HEX(f.colors.base));b.style.setProperty('--accent',HEX(f.colors.accent));b.append(el('strong','',f.name),el('small','',f.location));this.finishGrid.append(b);this.finishButtons[f.id]=b;}weapons.append(this.finishGrid);
     const stage=el('div','finish-stage');this.weaponTabs=el('div','weapon-tabs');this.weaponButtons={};for(const [id,name] of Object.entries(WEAPON_NAMES)){const b=button(name,()=>{this.weapon=id;this.renderWeapon();});this.weaponTabs.append(b);this.weaponButtons[id]=b;}stage.append(this.weaponTabs);this.preview=el('div','weapon-preview');this.preview.setAttribute('aria-label','Weapon finish preview');stage.append(this.preview);this.previewHint=el('p','preview-hint','Drag to rotate · The selected finish applies to every weapon.');stage.append(this.previewHint);
     this.preview.addEventListener('pointerdown',e=>{if(e.button!==0)return;this.preview.setPointerCapture(e.pointerId);this.dragX=e.clientX;});this.preview.addEventListener('pointermove',e=>{if(this.dragX===undefined)return;this.angle+=(e.clientX-this.dragX)*.009;this.dragX=e.clientX;this.renderWeapon();});const release=()=>{this.dragX=undefined;};this.preview.addEventListener('pointerup',release);this.preview.addEventListener('lostpointercapture',release);
@@ -70,12 +72,12 @@ export class PauseMenu {
   show(id,focus=true){
     this.page=this.pages[id]?id:'home';for(const [key,p] of Object.entries(this.pages))p.hidden=key!==this.page;
     for(const [key,b] of Object.entries(this.navButtons)){if(key===this.page)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}
-    this.title.textContent={home:'Paused',perks:'Perks',map:'Map',weapons:'Weapons',controls:'Controls'}[this.page];
+    this.title.textContent={home:'Paused',perks:'Perks',map:'Map',weapons:'Weapons',ledger:'WHAT WE WERE TOLD',controls:'Controls'}[this.page];
     this.hud.pauseEl?.setAttribute('data-page',this.page);this.refresh();
     if(this.page==='map')this.hud._drawMap();if(this.page==='weapons')this.renderWeapon();
     if(focus)this.navButtons[this.page].focus({preventScroll:true});
   }
-  refresh(){const p=this.ctx.systems.get('progress'),points=p?.points||0;this.homeStatus.textContent=`Level ${p?.level||1}   ·   ${p?.cash?.()||0} coins\n${points} skill ${points===1?'point':'points'} available`;this.homeStatus.style.whiteSpace='pre-line';this.selectPerk(this.selectedNode);if(this.page==='map')this.refreshJournal();if(this.page==='weapons')this.refreshFinishes();}
+  refresh(){const p=this.ctx.systems.get('progress'),points=p?.points||0;this.homeStatus.textContent=`Level ${p?.level||1}   ·   ${p?.cash?.()||0} coins\n${points} skill ${points===1?'point':'points'} available`;this.homeStatus.style.whiteSpace='pre-line';this.selectPerk(this.selectedNode);if(this.page==='map')this.refreshJournal();if(this.page==='weapons')this.refreshFinishes();if(this.page==='ledger')this.ledgerView.refresh();const unread=this.ctx.systems.get('lore-ledger')?.unreadCount()||0;this.navButtons.ledger.textContent='What we were told'+(unread?' · '+unread:'');}
   selectPerk(id){
     const n=NODES.find(n=>n.id===id)||NODES[0],b=BRANCHES.find(b=>b.id===n.branch),p=this.ctx.systems.get('progress'),owned=p?.ownedSet?.();this.selectedNode=n.id;
     for(const q of this.hud.nodeEls||[]){q.btn.dataset.selected=String(q.node.id===n.id);q.btn.setAttribute('aria-pressed',String(q.node.id===n.id));q.btn.setAttribute('aria-label',q.node.name+'. '+q.node.line);}
