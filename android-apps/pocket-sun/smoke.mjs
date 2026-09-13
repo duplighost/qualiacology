@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 const dir='android-test-results';
 fs.mkdirSync(dir,{recursive:true});
-const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000}).trim();
+const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000,maxBuffer:32*1024*1024}).trim();
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const app='com.qualiacology.pocketsun';
 const report={environment:'Android 16 / API 36 emulator; not a physical Pixel test',checks:[],snapshots:{},exceptions:[]};
 const check=(name,ok)=>{report.checks.push({name,passed:!!ok});fs.writeFileSync(dir+'/checks.json',JSON.stringify(report,null,2));assert.ok(ok,name);};
-const screenshot=name=>fs.writeFileSync(dir+'/'+name+'.png',execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));
+const screenshot=name=>fs.writeFileSync(dir+'/'+name+'.png',execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000,maxBuffer:16*1024*1024}));
 let socket;
 let sequence=0;
 const pending=new Map();
@@ -56,7 +56,7 @@ async function ready(){
   throw new Error('Game never became ready');
 }
 const state=()=>evaluate('window.__POCKET_SUN__.snapshot()');
-const resume=()=>evaluate('if(window.__POCKET_SUN__.snapshot().paused) document.querySelector("[aria-label=\"Resume Pocket Sun\"]")?.click()');
+const resume=()=>evaluate('if(window.__POCKET_SUN__.snapshot().paused) document.querySelector(".pause-screen")?.click()');
 try {
   adb('install','-r','pocket-sun-android/POCKET-SUN-Android-test.apk');
   adb('logcat','-c');
@@ -96,7 +96,7 @@ try {
   check('Background suspends audio contexts',background.audio.every(s=>s!=='running'));
   adb('shell','am','start','-n',app+'/.MainActivity');
   await delay(600);
-  check('Returning preserves original pause overlay',await evaluate('window.__POCKET_SUN__.snapshot().paused && !!document.querySelector("[aria-label=\"Resume Pocket Sun\"]")'));
+  check('Returning preserves original pause overlay',await evaluate('window.__POCKET_SUN__.snapshot().paused && !!document.querySelector(".pause-screen")'));
   screenshot('03-resume-overlay');
   adb('shell','input','tap','540','1200');
   await delay(400);
