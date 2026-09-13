@@ -232,6 +232,7 @@ export class InteriorHorror {
   }
 
   _stage(e) {
+    if (this._returning() || this._sys('progress')?.flag('interior-returned:'+e.def.id)) return;
     this.active = e; e.stage = 'waiting'; e.t = 0; e.dwell = 0; e.seen = 0; e.notSeen = 0; e.sounded = 0; e.rushed = false;
     const d = e.def, seats = d.seats;
     for (let i = 0; i < POOL; i++) {
@@ -272,6 +273,7 @@ export class InteriorHorror {
   }
 
   _isCleared(e) {
+    if (this._sys('progress')?.flag('interior-returned:'+e.def.id)) return true;
     const mask=(1<<(e.def.seats?.length||1))-1;
     return ((this._sys('progress')?.flag('interior-killed:'+e.def.id)||0)&mask)===mask;
   }
@@ -313,7 +315,7 @@ export class InteriorHorror {
   }
 
   raycast(origin, direction, maxT) {
-    if(!this.active)return null;
+    if(!this.active||this._returning())return null;
     _meshRay.set(origin,direction);_meshRay.near=0;_meshRay.far=maxT;
     let best=null;
     for(const a of this.actors){
@@ -327,7 +329,7 @@ export class InteriorHorror {
   }
 
   damage(a,amount,info={}) {
-    if(!a?.active||!a.alive)return{killed:false};
+    if(!a?.active||!a.alive||this._returning())return{killed:false};
     const e=this.active;a.hp-=Math.max(1,Number.isFinite(amount)?amount:1);this.stats.shots++;
     a.pos.set(a.x,a.y,a.z);
     if(a.hp<=0){
@@ -345,6 +347,7 @@ export class InteriorHorror {
   }
 
   _combat(dt,p,player) {
+    if (this._returning()) return;
     const e=this.active;
     for(const a of this.actors){
       if(!a.active||!a.alive)continue;
@@ -368,10 +371,38 @@ export class InteriorHorror {
     if(!this.actors.some(a=>a.active&&a.alive)){e.stage='remains';e.t=0;}
   }
 
+  _returning() { return !!(this.ctx.shared.lateBellFinal || this.ctx.shared.morningReturned); }
+
+  _homecoming(dt) {
+    const pr=this._sys('progress');
+    // A returned resident is a resolved encounter, not a kill: no XP, cash, corpse
+    // search, kill event or fabricated mask. This also covers rooms visited after dawn.
+    for(const row of this.events) if(!pr.flag('interior-returned:'+row.def.id)) {
+      pr.flag('interior-returned:'+row.def.id,true);row.spent=true;
+    }
+    this.ctx.shared.interiorHorror=false;
+    const e=this.active;if(!e)return;
+    if(e.stage!=='returning'){
+      e.stage='returning';e.t=0;
+      for(const a of this.actors)if(a.active&&a.alive){a.homeFold=a.fold;a.homeYaw=a.baseYaw;a.attackT=-1;a.rope.visible=false;}
+    }
+    e.t+=dt;
+    for(const a of this.actors)if(a.active&&a.alive){
+      a.px=a.x;a.py=a.y;a.pz=a.z;a.prevFold=a.fold;a.prevFace=a.face;
+      let turn=Math.PI/2-a.homeYaw;while(turn>Math.PI)turn-=Math.PI*2;while(turn<-Math.PI)turn+=Math.PI*2;
+      const rise=clamp01(e.t/2);a.baseYaw=a.homeYaw+turn*rise;a.face=0;a.fold=a.homeFold*(1-rise);a.y=a.floor;
+      // A few quiet eastward steps use the existing shoulder/knee collision probes.
+      if(e.t>2&&e.t<6)this._rush(a,{x:a.x+15,z:a.z},dt*.25);
+      a.homeSink=Math.max(0,(e.t-6)/3);a.pos.set(a.x,a.y-a.homeSink*3.2,a.z);
+    }
+    if(e.t>=9)this._finish(true);
+  }
+
   step(dt) {
     if (!(dt > 0) || !this.ctx.playing || this.ctx.paused) return;
     this.clock += dt; this.cooldown = Math.max(0, this.cooldown - dt);
     const player = this._sys('player'), p = player.pos;
+    if (this._returning()) { this._homecoming(dt); return; }
     if (!this.enabled || player.dead || this.ctx.shared.inCar || this._protected(p)) {
       if (this.active) { this.stats.protected++; this._finish(this.active.stage !== 'waiting'); }
       return;
@@ -387,6 +418,7 @@ export class InteriorHorror {
       let best = null, score = Infinity;
       for (const candidate of this.events) {
         if (candidate.spent) continue;
+        if (this._sys('progress').flag('interior-returned:'+candidate.def.id)) continue;
         if (this._sys('progress').flag('secured:' + candidate.def.site)) continue;
         const mask=(1<<(candidate.def.seats?.length||1))-1;
         if(((this._sys('progress').flag('interior-killed:'+candidate.def.id)||0)&mask)===mask)continue;
@@ -470,6 +502,7 @@ export class InteriorHorror {
       const turn = a.prevFace + (a.face - a.prevFace) * alpha;
       const t = this.clock + alpha / 60;
       a.root.position.set(a.px + (a.x - a.px) * alpha, a.py + (a.y - a.py) * alpha, a.pz + (a.z - a.pz) * alpha);
+      if(e.stage==='returning')a.root.position.y-=(a.homeSink||0)*3.2;
       a.root.scale.setScalar(a.scale); a.root.rotation.set(0,a.baseYaw,0);
       // A dead body falls all the way onto its side. The old folded standing pose was
       // indistinguishable from the living ambush pose, even after damage was repaired.

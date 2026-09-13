@@ -29,7 +29,7 @@
 // sky is doing without reaching in here.
 
 import { CFG } from '../config.js';
-import { TAU, clamp01, lerp } from '../engine/math.js';
+import { TAU, clamp01, lerp, smoothstep } from '../engine/math.js';
 
 const W = CFG.world.weather;
 
@@ -192,6 +192,15 @@ export class Weather {
 
   ready() { return true; }
 
+  /** The northern 'snow' is Moonmolt dust. Its absence persists with the actual boss save. */
+  snowfallAt(x, z) {
+    const pr = this.ctx.systems?.get('progress');
+    const dead = !!pr?.bossCleared?.('moth');
+    const north = dead ? smoothstep(-1900, -2350, z) : 0;
+    const dawn = this.shared.morningReturned ? 1 : clamp01(this.shared.trueDawn || 0);
+    return (1 - north) * (1 - dawn);
+  }
+
   step(dt) {
     if (!(dt > 0)) return;
 
@@ -273,6 +282,9 @@ export class Weather {
     // ROUND 22: the flash envelope this step (0 almost always) and how strong the storm is.
     s.lightning = this._flashK;
     s.storm = this.kind === 'storm' ? this.strength : 0;
+    s.moonmoltDead = !!this.ctx.systems?.get('progress')?.bossCleared?.('moth');
+    const pos = this.ctx.systems?.get('player')?.pos;
+    s.snowfall = this.snowfallAt(pos?.x || 0, pos?.z || 0);
   }
 
   /**
@@ -283,7 +295,8 @@ export class Weather {
   _drive() {
     const sys = this.ctx.systems;
     if (!sys) return;
-    const k = this.kind, s = this.strength;
+    const dawn = this.shared.morningReturned ? 1 : clamp01(this.shared.trueDawn || 0);
+    const k = this.kind, s = this.strength * (1 - dawn);
 
     const sky = sys.get('sky');
     if (sky) {

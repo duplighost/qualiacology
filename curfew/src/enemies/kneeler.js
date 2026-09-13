@@ -32,7 +32,8 @@
 //   kneel    1.4 s fold back down. Then dormant, hp kept.
 //   die      hp 900 gone: it folds forward over 1.4 s. `boss:killed {id, xp: 600}` and an
 //            enemy:killed-shaped payload so progression pays it.
-//   corpse   a landmark. It never sinks.
+//   corpse   a landmark until the final bell lets the county's dead leave.
+//   departing / returned  a seven-second fold into the earth, without a kill receipt.
 //
 // donor: Projects/qualiacology/fetch/src/enemies.js:18-22 (KIND.kneeler: h 4.4, chase 6.2,
 //   windup 2.2, strike 1.02, strikeRadius 1.48; the hit ladder) and :1787-1791 (the
@@ -135,6 +136,7 @@ const FAR_MAX = 20;          // road points 24-48 m from the claim that a candid
 
 function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 function lerp(a, b, t) { return a + (b - a) * t; }
+function smooth(t) { return t * t * (3 - 2 * t); }
 
 export class Kneeler {
   static id = 'kneeler';
@@ -154,7 +156,7 @@ export class Kneeler {
     const bus = ctx.bus;
     if (bus && bus.on) {
       const off = bus.on('noise', (p) => {
-        if (!p || !(p.radius >= K.noiseRef * K.noiseMin)) return;
+        if (this._morning() || !p || !(p.radius >= K.noiseRef * K.noiseMin)) return;
         for (let i = 0; i < this.all.length; i++) {
           const k = this.all[i];
           if (k.state !== 'dormant') continue;
@@ -171,6 +173,12 @@ export class Kneeler {
   }
 
   _sys(id) { return this.ctx.systems ? this.ctx.systems.get(id) : null; }
+
+  _morning() {
+    const s = this.ctx.shared;
+    return !!(s?.lateBellFinal || s?.morningReturned || s?.trueDawn > 0 ||
+      this._sys('progress')?.flag?.('morning:late-bell')?.rang);
+  }
 
   async init() {
     if (typeof window === 'undefined') return;   // node syntax checks build nothing
@@ -226,7 +234,7 @@ export class Kneeler {
   _record(i, d, rig) {
     return {
       id: i, placeId: d.id, place: d, species: 'kneeler', owner: 'pressure', def: DEF,
-      rig, alive: true, dead: false, state: 'dormant', stateT: 0, hp: K.hp,
+      rig, alive: true, dead: false, departing: false, state: 'dormant', stateT: 0, hp: K.hp,
       pos: new THREE.Vector3(), prevPos: new THREE.Vector3(), currPos: new THREE.Vector3(),
       yaw: 0, prevYaw: 0, currYaw: 0,
       post: { x: d.x, z: d.z, yaw: 0 }, postSettled: false, claimX: d.x, claimZ: d.z,
@@ -614,6 +622,7 @@ export class Kneeler {
   /** A stationary Kneeler is a SOLID the player cannot walk through, and NOT a
       shot-blocker: the zones own the bullets (MASK.SOLID only). */
   _seat(k) {
+    if (k.departing || this._morning()) return;
     const col = this._sys('collision');
     if (!col || typeof col.addCollider !== 'function') return;
     if (k.colOn && Math.abs(k.colX - k.pos.x) < 0.3 && Math.abs(k.colZ - k.pos.z) < 0.3) return;
@@ -661,7 +670,7 @@ export class Kneeler {
   }
 
   _stirUp(k, by) {
-    if (!k.alive || k.state !== 'dormant') return;
+    if (this._morning() || !k.alive || k.state !== 'dormant') return;
     k.stirBy = by;
     k.heard = false;
     k.wokeT = k.time;
@@ -680,6 +689,7 @@ export class Kneeler {
   }
 
   _kill(k, dmg, zone) {
+    if (this._morning() || k.departing || !k.alive) return;
     k.alive = false;
     k.dead = true;
     this._enter(k, 'die');
@@ -694,6 +704,34 @@ export class Kneeler {
     _evt.e = k; _evt.kind = 'kill'; _evt.xp = K.xp; _evt.dmg = dmg; _evt.zone = zone || k.lastZone || 'plate';
     _evt.x = k.pos.x; _evt.y = k.pos.y + K.height * 0.5; _evt.z = k.pos.z; _evt.rear = false; _evt.melee = false;
     this.ctx.bus.emit('enemy:killed', _evt);
+  }
+
+  _depart(k) {
+    if (k.departing) return;
+    k.departing = true;
+    k.alive = false;
+    k.departY = k.pos.y;
+    k.departStand = k.curr.stand;
+    k.departFold = k.curr.fold;
+    k.heard = false; k.committed = false; k.struck = true; k.lungeLeft = 0;
+    k.telegraphCharge = 0; k.flashT = 99; k.ventForce = 0; k.ventsOpen = false;
+    k.curr.sweep = 0; k.curr.swing = 0; k.curr.moveAmp = 0; k.curr.breath = 0; k.curr.vent = 0;
+    this._unseat(k);
+    this._enter(k, 'departing');
+    // A returned body is not a kill: no reward, death sound, noise or boss receipt.
+  }
+
+  _stepDeparture(k, dt) {
+    if (!k.departing) this._depart(k);
+    if (k.state === 'returned') return;
+    k.departT = (k.departT || 0) + dt;
+    const fold = smooth(clamp01(k.departT / 3));
+    k.curr.stand = k.departStand * (1 - fold);
+    k.curr.fold = lerp(k.departFold, 1, fold);
+    // It lets go of its standing shape, then settles fully into the ground.
+    k.pos.y = k.departY - (K.height + 1) * smooth(clamp01((k.departT - 3) / 4));
+    k.currPos.copy(k.pos); k.currYaw = k.yaw;
+    if (k.departT >= 7) { this._enter(k, 'returned'); k.rig.root.visible = false; }
   }
 
   /** The vents: open 1.1 s in every 4.5 s while it hunts. `ventForce` is the test
@@ -733,6 +771,8 @@ export class Kneeler {
       const pr = k.prev, cu = k.curr;
       pr.stand = cu.stand; pr.fold = cu.fold; pr.sweep = cu.sweep; pr.swing = cu.swing;
       pr.gait = cu.gait; pr.moveAmp = cu.moveAmp; pr.breath = cu.breath; pr.vent = cu.vent;
+
+      if (this._morning() || k.departing) { this._stepDeparture(k, dt); continue; }
 
       if (k.flashT < 99) k.flashT += dt;
 
@@ -1064,6 +1104,7 @@ export class Kneeler {
   }
 
   _beginSweep(k, dx, dz) {
+    if (this._morning() || k.departing || !k.alive) return;
     this._enter(k, 'sweep');
     k.committed = false; k.struck = false; k.lungeLeft = 0;
     k.side = this.rng.next() < 0.5 ? -1 : 1;
@@ -1083,6 +1124,7 @@ export class Kneeler {
   /** The arm comes across. 45 through the controller's own hurt(); the car is swept
       (a noise and the shake — car.js owns its own wear); a miss is as loud as a hit. */
   _land(k, p, inCar, car, px, py, pz, cx, cz) {
+    if (this._morning() || k.departing || !k.alive) return;
     const fx = this._sys('fx');
     if (inCar) {
       const d = Math.hypot(cx - k.pos.x, cz - k.pos.z);
@@ -1146,12 +1188,13 @@ export class Kneeler {
    * present() draws with, so a hit is where the pixels are.
    */
   raycast(origin, dir, maxT) {
-    if (!this._built) return null;
+    if (!this._built || this._morning()) return null;
     let bestT = maxT, found = null, foundZone = 'plate';
     const ox = origin.x, oy = origin.y, oz = origin.z;
     const dx = dir.x, dy = dir.y, dz = dir.z;
     for (let i = 0; i < this.all.length; i++) {
       const k = this.all[i];
+      if (k.departing) continue;
       // a corpse still takes the round (a decal and the light): nothing ghosts
       const bx = k.pos.x - ox, by = (k.pos.y + K.height * 0.45) - oy, bz = k.pos.z - oz;
       const bt = bx * dx + by * dy + bz * dz;
@@ -1221,7 +1264,7 @@ export class Kneeler {
    * 0.35 s on every hit. A dormant Kneeler that is shot RISES.
    */
   damage(k, amount, info) {
-    if (!k || !k.alive) return { killed: false, hpFrac: 0, species: 'kneeler' };
+    if (this._morning() || !k || !k.alive || k.departing) return { killed: false, hpFrac: 0, species: 'kneeler' };
     const zone = info && info.zone ? info.zone : 'plate';
     const dmg = Math.max(1, Math.round(amount));
     k.hp -= dmg;
@@ -1331,7 +1374,7 @@ export class Kneeler {
       const k = this.all[i];
       out.push({
         i, id: k.placeId, x: k.pos.x, y: k.pos.y, z: k.pos.z, yaw: k.yaw,
-        state: k.state, stateT: k.stateT, hp: k.hp, alive: k.alive,
+        state: k.state, stateT: k.stateT, hp: k.hp, alive: k.alive, departing: k.departing,
         stand: k.curr.stand, fold: k.curr.fold, sweep: k.curr.sweep, swing: k.curr.swing,
         ventsOpen: k.ventsOpen, ventT: k.ventT, dist: k.dist,
         post: { x: k.post.x, z: k.post.z, yaw: k.post.yaw, settled: k.postSettled, roadSight: k.roadSight, roadEyes: k.roadEyes, sightFinal: k.sightFinal },

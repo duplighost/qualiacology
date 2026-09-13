@@ -82,6 +82,11 @@ import * as holdfastLifeMod from './world/holdfast-life.js';
 import * as bossSitesMod from './world/boss-sites.js';
 import * as bossEncountersMod from './enemies/boss-encounters.js';
 import * as worldStoriesMod from './world/world-stories.js';
+import * as lateBellMod from './world/late-bell.js';
+import * as loreDeadMod from './world/lore-dead.js';
+import * as loreLookoutMod from './world/lore-lookout.js';
+import * as loreProcessionMod from './world/lore-procession.js';
+import * as loreLedgerMod from './lore/ledger.js';
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -138,6 +143,11 @@ const SYSTEMS = [
   ['scavenging', scavengingMod],
   ['holdfast-life', holdfastLifeMod],
   ['world-stories', worldStoriesMod],
+  ['lore-ledger', loreLedgerMod],
+  ['lore-lookout', loreLookoutMod],
+  ['lore-procession', loreProcessionMod],
+  ['lore-dead', loreDeadMod],
+  ['late-bell', lateBellMod],
   ['opening', openingMod],     // the station's authored grounds, calendar and first night
   ['signage', signageMod],     // ROUND 22: the promises — words in the world, painted on the opening's paper program
   ['audio', audioMod],         // late, so it can hear everything that happened this step
@@ -515,24 +525,36 @@ async function warm() {
   const camera = ctx.camera;
   if (!renderer || !scene || !camera) return;
 
+  const post = ctx.systems.get('post');
+  const previousTarget = renderer.getRenderTarget();
   _hidden.length = 0;
-  scene.traverse((o) => {
-    if (o.visible === false) { _hidden.push(o); o.visible = true; }
-  });
+  try {
+    scene.traverse((o) => {
+      if (o.visible === false) { _hidden.push(o); o.visible = true; }
+    });
 
-  // fx spawns one of everything at y = -400, viewmodel reveals its muzzle flash and compiles
-  // its own scene, post runs the whole composer chain once.
-  for (let i = 0; i < sysList.length; i++) {
-    const s = sysList[i];
-    if (typeof s.warmup === 'function') s.warmup();
+    // World and overlay shaders must link against the same HDR target used during play.
+    // Compiling to the screen first creates unused colour-space/tone-mapping variants;
+    // sky.warmup() already compiles the whole world, before post gets its own warmup.
+    renderer.setRenderTarget(post?.enabled ? post.hdrTarget() : null);
+
+    // fx spawns one of everything at y = -400, viewmodel reveals its muzzle flash and compiles
+    // its own scene, post runs the whole composer chain once.
+    for (let i = 0; i < sysList.length; i++) {
+      const s = sysList[i];
+      if (typeof s.warmup === 'function') s.warmup();
+    }
+
+    // The composer may have swapped buffers during its warm frame. Fetch its live target.
+    renderer.setRenderTarget(post?.enabled ? post.hdrTarget() : null);
+    // donor: vigil-handoff/vigil-enhanced/src/main.js:162 — keep the catch. compileAsync uses
+    // KHR_parallel_shader_compile where it exists and is a plain promise where it does not.
+    await renderer.compileAsync(scene, camera).catch(() => renderer.compile(scene, camera));
+  } finally {
+    for (let i = 0; i < _hidden.length; i++) _hidden[i].visible = false;
+    _hidden.length = 0;
+    renderer.setRenderTarget(previousTarget);
   }
-
-  // donor: vigil-handoff/vigil-enhanced/src/main.js:162 — keep the catch. compileAsync uses
-  // KHR_parallel_shader_compile where it exists and is a plain promise where it does not.
-  await renderer.compileAsync(scene, camera).catch(() => renderer.compile(scene, camera));
-
-  for (let i = 0; i < _hidden.length; i++) _hidden[i].visible = false;
-  _hidden.length = 0;
 
   // One real composited frame, so the post chain and the viewmodel overlay have linked too.
   renderFrame();

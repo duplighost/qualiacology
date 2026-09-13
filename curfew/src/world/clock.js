@@ -1,11 +1,10 @@
 // clock — the fourteen-minute lightless cycle the whole game is shaped around. Manifest #4.
 //
-// There is NEVER a day (DESIGN decision 3). The cycle is
+// The county repeats this night until the Lore Bible's Late Bell is rung. The cycle is
 //
 //     dusk 90 s  ->  deep night 480 s  ->  BLACK HOUR 180 s  ->  false dawn 90 s
 //
-// = 840 s, and then it starts again at dusk. False dawn is a look, not a lighting regime;
-// nothing here ever produces sun.
+// = 840 s. The final honest cycle stops at dawn instead of wrapping.
 //
 // What this file owns:
 //   * ctx.shared.phase  — 'dusk' | 'night' | 'black' | 'dawn'
@@ -130,6 +129,7 @@ export class Clock {
     this._announced = false;  // the first phase:changed is emitted on the first step
     this._paused = false;
     this._rate = 1;
+    this.finalNight = false;
 
     this._applyOverride();
   }
@@ -200,6 +200,8 @@ export class Clock {
    * the roster of the phase you lay down in, and Iron's once-a-night latch never re-armed.
    */
   advance(seconds) {
+    // Rest still heals during the last journey; it cannot sleep through the last night.
+    if (this.finalNight) return false;
     let remain = Math.max(0, +seconds || 0);
     if (!remain) return false;
     let guard = 0;
@@ -222,7 +224,18 @@ export class Clock {
     this._prevSkyT = this._currSkyT = this.skyT;
     this._prevRed = this._currRed = this.redness;
     this._appliedSkyT = -1;
+    this.ctx.bus.emit('clock:rest-advanced', { seconds: Math.max(0, +seconds || 0) });
     return true;
+  }
+
+  beginLastNight(elapsed = 0) {
+    this.finalNight = true;
+    this.cycleT = Math.max(0, Math.min(CYCLE_S, +elapsed || 0));
+    this._recompute();
+    this._prevSkyT = this._currSkyT = this.skyT;
+    this._prevRed = this._currRed = this.redness;
+    this._appliedSkyT = -1;
+    this._announced = false;
   }
 
   /** Live A/B only. rate 0 freezes the cycle where it stands. */
@@ -231,7 +244,8 @@ export class Clock {
   /* --------------------------------------------------------------------- derive -- */
 
   _recompute() {
-    if (this.cycleT >= CYCLE_S) {
+    if (this.finalNight) this.cycleT = Math.min(CYCLE_S, this.cycleT);
+    if (!this.finalNight && this.cycleT >= CYCLE_S) {
       const n = Math.floor(this.cycleT / CYCLE_S);
       this.cycle += n;
       this.cycleT -= n * CYCLE_S;
@@ -402,6 +416,7 @@ export class Clock {
       phase: this.phase,
       phaseT: +this.phaseT.toFixed(4),
       cycle: this.cycle,
+      finalNight: this.finalNight,
       cycleT: +this.cycleT.toFixed(2),
       cycleLength: CYCLE_S,
       skyT: +this.skyT.toFixed(4),

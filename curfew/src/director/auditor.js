@@ -1,4 +1,7 @@
-// auditor.js — THE UNSEEN THING. Built from Alex's own spec, verbatim where it is a rule:
+// County disturbances keep their existing scheduler. The Lore Bible's physical Auditor
+// is the seated ledger keeper exported below; it never borrows an enemy body or awards XP.
+export { CarriedLightAuditor, CARRIED_LIGHT_THRESHOLDS, carriedLightTier } from './hour-officers.js';
+// Earlier atmospheric design notes:
 // donor (spec, not code): donors/offseason/README.md:203-215 "The Wrongness Director" —
 // the unease budget W = base[day] + disruptionDebt * DEBT_MULT with base
 // [0,0,1,2,3,4,6,8,10]; JSON events with {cost, tags, family, escalatesTo, placementRules,
