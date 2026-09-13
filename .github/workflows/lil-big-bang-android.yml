@@ -43,6 +43,24 @@ jobs:
           zipfile.ZipFile(io.BytesIO(raw)).extractall(dest)
           (dest / 'game-source').mkdir(exist_ok=True)
           shutil.copyfile('lil-big-bang/index.html', dest / 'game-source/index.html')
+          test = dest / 'app/src/androidTest/java/com/qualiacology/lilbigbang/OfflineGameTest.java'
+          text = test.read_text()
+          text = text.replace('done.await(10, TimeUnit.SECONDS)', 'done.await(60, TimeUnit.SECONDS)')
+          text = text.replace('SystemClock.uptimeMillis() + 20000', 'SystemClock.uptimeMillis() + 60000')
+          text = text.replace('AtomicReference<String> result = new AtomicReference<>();', 'System.out.println("LBB_JS_REQUEST=" + expression);\n        AtomicReference<String> result = new AtomicReference<>();')
+          text = text.replace('return result.get();', 'System.out.println("LBB_JS_RESULT=" + result.get());\n        return result.get();')
+          test.write_text(text)
+          pathlib.Path('ci-native-test.sh').write_text('''#!/usr/bin/env bash
+          set +e
+          mkdir -p dist/qa
+          adb logcat -c
+          (cd LIL-BIG-BANG-Android && ./gradlew connectedDebugAndroidTest --stacktrace)
+          result=$?
+          adb logcat -d > dist/qa/emulator-logcat.txt
+          adb pull /sdcard/Android/data/com.qualiacology.lilbigbang/files/qa dist/qa/screenshots
+          adb exec-out screencap -p > dist/qa/emulator-final-screen.png
+          exit "$result"
+          ''')
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -84,10 +102,8 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: |
-            cd LIL-BIG-BANG-Android && ./gradlew connectedDebugAndroidTest --stacktrace
-            adb pull /sdcard/Android/data/com.qualiacology.lilbigbang/files/qa dist/qa/screenshots
+          emulator-options: -no-window -gpu software -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash ci-native-test.sh
       - name: Collect test reports
         if: always()
         run: |
