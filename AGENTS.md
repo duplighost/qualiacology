@@ -55,7 +55,7 @@ the one your task needs: `build/docs/quick-changes.md` (copy and catalog edits),
 | arc, thrown | `Projects\arc`, `Projects\thrown` | `node build-site-copy.mjs` there; never hand-edit the site copy |
 | curfew | `Projects\curfew` | `node build-site-copy.mjs` there; never hand-edit |
 | winterline | `Projects\winterline` | `node tools/build-site-copy.mjs` there; never hand-edit |
-| thurible | `Projects\thurible-3d` (not `thurible`, the 2D original) | build with `--production`, copy index.html, game.js, style.css, THIRD_PARTY_NOTICES.txt |
+| iron-psalm | `Projects\iron-psalm` | package source is in `source/`; `py -3 tools/build_website.py` rebuilds `publish/`, then `node build-site-copy.mjs` copies the runtime with the site shell |
 | kickmoon | `Projects\kick-ball-moonkick` (not `kick-ball`) | copy the `game/` runtime; keep the site's index.html shell |
 | pocket-sun | `Projects\pocket-sun` | `npm run build:site` then `npm run copy:site` there |
 | spaceboarding | `Projects\spaceboarding` | copy `assets src styles.css vendor`; keep the site's index.html shell |
