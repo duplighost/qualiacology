@@ -420,7 +420,6 @@ dependencies { implementation 'androidx.webkit:webkit:1.12.1' }
   <style name="PocketSunTheme" parent="android:style/Theme.Material.NoActionBar">
     <item name="android:fontFamily">sans</item>
     <item name="android:windowLightStatusBar">false</item>
-    <item name="android:windowLightNavigationBar">false</item>
     <item name="android:windowActionModeOverlay">true</item>
     <item name="android:windowBackground">@color/pocket_background</item>
     <item name="android:statusBarColor">@color/pocket_background</item>
