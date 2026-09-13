@@ -9,7 +9,8 @@ OUT = HERE / 'out'
 QA = OUT / 'qa'
 PACKAGE = 'com.qualiacology.pocketsun'
 COMPONENT = PACKAGE + '/.MainActivity'
-report = {'checks': [], 'environment': 'Android API 35 emulator; not a physical device'}
+report = {'checks': [], 'environment': 'Android API 35 emulator; not a physical device',
+          'audioLimit': 'AudioContext lifecycle is tested; audible output and physical haptics are not.'}
 ws = None
 sequence = 0
 
@@ -85,15 +86,25 @@ try:
     verify('Game uses the packaged local origin',evaluate('location.origin') == 'https://appassets.androidplatform.net')
     verify('Portrait viewport',evaluate('innerHeight > innerWidth'))
     verify('Visible foreground simulation is active',wait_for('!window.__POCKET_ANDROID_TEST__().suspended'))
+    # Observe the existing audio constructor without changing the game's audio graph.
+    evaluate('''(() => {
+      window.__qaAudioContexts = [];
+      const Base = window.AudioContext;
+      window.AudioContext = class extends Base {
+        constructor(...args) { super(...args); window.__qaAudioContexts.push(this); }
+      };
+    })()''')
     dims = evaluate('({width:innerWidth,height:innerHeight,dpr:devicePixelRatio})')
     report['viewport'] = dims
     x, y = int(dims['width']*.52), int(dims['height']*.55)
     command('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':x,'y':y,'id':1}]})
     verify('Touch reaches the unchanged hold control',wait_for('window.__POCKET_ANDROID_TEST__().pointerDown'))
+    verify('First touch starts the game AudioContext',wait_for('window.__qaAudioContexts.length > 0 && window.__qaAudioContexts.every(c => c.state === "running")'))
     time.sleep(.3)
     adb('shell','input','keyevent','3')
     time.sleep(.7)
     verify('Home suspends the game',evaluate('window.__POCKET_ANDROID_TEST__().suspended'))
+    verify('Home suspends the game AudioContext',wait_for('window.__qaAudioContexts.every(c => c.state !== "running")'))
     verify('Home releases a held finger',not evaluate('window.__POCKET_ANDROID_TEST__().pointerDown'))
     suspended_hash = evaluate('window.__POCKET_SUN__.stateHash()')
     time.sleep(.5)
@@ -101,6 +112,7 @@ try:
     command('Input.dispatchTouchEvent',{'type':'touchCancel','touchPoints':[]})
     start()
     verify('Returning to the app resumes the game',wait_for('!window.__POCKET_ANDROID_TEST__().suspended'))
+    verify('Returning to the app resumes the AudioContext',wait_for('window.__qaAudioContexts.every(c => c.state === "running")'))
     time.sleep(.5)
     verify('The resumed simulation moves again',suspended_hash != evaluate('window.__POCKET_SUN__.stateHash()'))
     adb('shell','input','keyevent','4')
@@ -117,12 +129,15 @@ try:
     time.sleep(.7)
     with (QA / 'portrait-android.png').open('wb') as f:
         subprocess.run(['adb','exec-out','screencap','-p'],stdout=f,check=True)
-    evaluate('localStorage.setItem("pocket-sun-best","24680")')
+    # Freeze the old run before injecting the persistence fixture.
+    evaluate('window.__pocketSetActive(false); localStorage.setItem("pocket-sun-best","24680")')
+    report['storageBeforeStop'] = evaluate('localStorage.getItem("pocket-sun-best")')
     time.sleep(.5)
     adb('shell','am','force-stop',PACKAGE)
     start()
     connect()
-    verify('Saved best score survives force-stop and relaunch',evaluate('localStorage.getItem("pocket-sun-best")') == '24680')
+    report['storageAfterRelaunch'] = evaluate('localStorage.getItem("pocket-sun-best")')
+    verify('Saved best score survives force-stop and relaunch',report['storageBeforeStop'] == '24680' and report['storageAfterRelaunch'] == '24680')
     verify('Relaunch remains in portrait',evaluate('innerHeight > innerWidth'))
     report['gameSnapshot'] = evaluate('window.__POCKET_SUN__.snapshot()')
     report['ok'] = True
