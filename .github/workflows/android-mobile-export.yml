@@ -1,0 +1,50 @@
+name: Android mobile conversion export
+on:
+  push:
+    branches: [android/mobile-selection-20260913]
+    paths: [.github/workflows/android-mobile-export.yml]
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Prepare source snapshot and Android build tools
+        run: |
+          set -eux
+          mkdir -p /tmp/mobile-export/site /tmp/mobile-export/tools
+          git rev-parse HEAD > /tmp/mobile-export/SOURCE_COMMIT.txt
+          for p in falling-open i-seent-it thurible lil-big-bang lead thrown wick pocket-sun no-moon glide rally rocket-shoes party-animal galaxy-sandbox games assets shared vendor; do
+            if [ -e "$p" ]; then cp -a "$p" /tmp/mobile-export/site/; fi
+          done
+          find /tmp/mobile-export/site -type f -printf '%P\t%s\n' > /tmp/mobile-export/SITE_FILES.tsv
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          cp "$ANDROID_HOME/platforms/android-35/android.jar" /tmp/mobile-export/tools/
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/mobile-export/tools/build-tools
+          python - <<'PY'
+          import pathlib, json, urllib.request, hashlib
+          root=pathlib.Path('/tmp/mobile-export/site'); out=[]
+          for slug in ['falling-open','i-seent-it','thurible','lil-big-bang','lead','thrown','wick','pocket-sun','no-moon','glide','rally','rocket-shoes','party-animal','galaxy-sandbox']:
+              p=root/slug/'index.html'
+              if not p.exists(): continue
+              item={'slug':slug,'repository_sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+              try:
+                  req=urllib.request.Request('https://qualiacology.com/'+slug+'/',headers={'User-Agent':'Qualiacology-Android-Build/1.0'})
+                  with urllib.request.urlopen(req,timeout=30) as r: live=r.read()
+                  item['live_sha256']=hashlib.sha256(live).hexdigest(); item['live_matches_repository']=item['repository_sha256']==item['live_sha256']
+                  item['live_bytes']=len(live)
+              except Exception as e:item['live_error']=str(e)
+              out.append(item)
+          pathlib.Path('/tmp/mobile-export/LIVE_VERIFICATION.json').write_text(json.dumps(out,indent=2))
+          print(json.dumps(out,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-mobile-sources-and-tools
+          path: /tmp/mobile-export
+          retention-days: 3
+          compression-level: 6
