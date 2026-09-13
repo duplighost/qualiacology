@@ -42,6 +42,7 @@ NATIVE_BOOT = r'''
       constructor(options) {
         super(options);
         contexts.add(this);
+        if (window.PocketSunAndroid && !window.PocketSunAndroid.requestSound()) this.suspend().catch(() => {});
         this.addEventListener('statechange', () => {
           if (!active && this.state === 'running') this.suspend().catch(() => {});
           if (this.state === 'closed') { contexts.delete(this); wasRunning.delete(this); }
@@ -142,7 +143,6 @@ import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.util.Log;
 import android.view.DisplayCutout;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -163,8 +163,8 @@ public final class MainActivity extends Activity {
     private static final String HOST = "appassets.androidplatform.net";
     private static final String HOME = "https://" + HOST + "/pocket-sun/index.html";
     private WebView web;
-    private boolean resumed = false, focused = false, ready = false, audioBlocked = false;
-    private boolean hasAudioFocus = false;
+    private volatile boolean resumed = false, focused = false, ready = false, audioBlocked = false;
+    private volatile boolean hasAudioFocus = false;
     private AudioManager audio;
     private AudioFocusRequest focusRequest;
     private Vibrator vibrator;
@@ -314,7 +314,7 @@ public final class MainActivity extends Activity {
         if (vibrator != null) vibrator.cancel();
         super.onDestroy();
     }
-    private final class NativeBridge {
+    public final class NativeBridge {
         @JavascriptInterface public void ready() {
             runOnUiThread(() -> { ready = true; sendActive(); Log.i("PocketSun", "GAME_READY"); });
         }
@@ -351,7 +351,7 @@ def prepare():
     shutil.copytree(WEB / 'dist/site', OUT / 'baseline', dirs_exist_ok=True)
     original = (WEB / 'app/page.tsx').read_text()
     modified = replace_once(original, '    const onVisibility = () => {', NATIVE_HOOK + '\n    const onVisibility = () => {')
-    modified = replace_once(modified, 'visibilitySuspended = document.hidden;', 'visibilitySuspended = document.hidden || nativeSuspended;\n      if (visibilitySuspended) releaseNativePointer();')
+    modified = replace_once(modified, '    const onVisibility = () => {\n      visibilitySuspended = document.hidden;', '    const onVisibility = () => {\n      visibilitySuspended = document.hidden || nativeSuspended;\n      if (visibilitySuspended) releaseNativePointer();')
     modified = replace_once(modified, '    document.body.dataset.gameReady = "true";', '    document.body.dataset.gameReady = "true";\n    window.dispatchEvent(new Event("pocket-game-ready"));')
     modified = replace_once(modified, '      sound.close();', '      window.removeEventListener("pocket-native-lifecycle", onNativeLifecycle);\n      window.removeEventListener("pocket-native-back", onNativeBack);\n      delete nativeWindow.__POCKET_ANDROID_TEST__;\n      sound.close();')
     (WEB / 'app/page.tsx').write_text(modified)
