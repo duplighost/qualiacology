@@ -80,17 +80,25 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          mkdir -p android-test-results
+          free -h > android-test-results/host-memory-before.txt
       - name: Test installed app offline on Android 16
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
           target: google_apis
           arch: x86_64
-          profile: pixel_7_pro
-          ram-size: 2048M
+          profile: pixel_7
+          ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-window -gpu swiftshader -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           script: node android-apps/pocket-sun/smoke.mjs
+      - name: Preserve host crash diagnostics
+        if: always()
+        run: |
+          mkdir -p android-test-results
+          sudo dmesg --ctime | tail -160 > android-test-results/host-kernel-tail.txt || true
+          free -h > android-test-results/host-memory-after.txt
       - name: Export emulator checks and screenshots
         if: always()
         uses: actions/upload-artifact@v4
