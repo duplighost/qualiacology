@@ -1,0 +1,7 @@
+[
+{"path":"curfew/src/lore/readables.js","old":"'avery-house':[-23,8.20,-8,0,true]","new":"'avery-house':[-25.66,8.075,-14.45,0,true]"},
+{"path":"curfew/src/lore/readables.js","old":"holdfast:[5.6,1.55,65.05,Math.PI,false]","new":"holdfast:[4.25,1.55,63.40,Math.PI,false]"},
+{"path":"curfew/src/lore/readables.js","old":"cathedral:[-4.1,.81,3,0,true]","new":"cathedral:[-3.10,.512,18,0,true]"},
+{"path":"curfew/src/lore/readables.js","old":"'choir-vault':[-5.5,8.3,-28,0,true]","new":"'choir-vault':[16,5.91,-24,0,true]"},
+{"path":"curfew/src/lore/readables.js","old":"'red-quarry':[12,9.65,-14,0,true]","new":"'red-quarry':[26,7.91,-30,0,true]"}
+]
