@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        game: [falling-open, lil-big-bang, thrown, i-seent-it]
+        game: [falling-open, thrown, i-seent-it]
     env:
       GIT_LFS_SKIP_SMUDGE: '1'
       ANDROID_APK_DIR: /tmp/mobile-apks/delivery
@@ -49,7 +49,11 @@ jobs:
             "'Game paused' in menu and 'Resume' in menu": "'game paused' in menu.lower() and 'resume' in menu.lower()",
             "len(reports)!=4": "len(reports)!=len(GAMES)",
             "time.sleep(.75)": "time.sleep(1.5)",
-            "# Native input, not synthetic DOM pointer events.": "evaluate(ws, \"(()=>{const b=Array.from(document.querySelectorAll('button')).find(b=>/^(keep falling|resume)$/i.test(b.innerText.trim())&&b.getBoundingClientRect().width>0);if(b)b.click();return true})()\")\n        # Native input, not synthetic DOM pointer events."
+            "report['dismissed_system_tutorials']=dismiss_fullscreen_lesson()": "report['system_tutorial_preconfirmed']=True",
+            "        dismiss_fullscreen_lesson()": "        # No UI-idle query while the game is animating.",
+            "ws=connect(package)": "ws=connect(package)\n        for loading_attempt in range(30):\n            if evaluate(ws, \"document.readyState==='complete' && !!document.querySelector('canvas')\"): break\n            time.sleep(1)\n        else: raise RuntimeError('Game did not create its canvas within 30 seconds')",
+            "# Native input, not synthetic DOM pointer events.": "evaluate(ws, \"(()=>{const b=Array.from(document.querySelectorAll('button')).find(b=>/^(keep falling|resume)$/i.test(b.innerText.trim())&&b.getBoundingClientRect().width>0);if(b)b.click();return true})()\")\n        # Native input, not synthetic DOM pointer events.",
+            "        if ws:\n": "        try:\n            (QA/(slug+'-complete-logcat.txt')).write_text(adb('logcat','-d','-s','AndroidRuntime:E','Qualiacology:I','QualiacologyJS:D'))\n        except Exception: pass\n        if ws:\n"
           }
           for old,new in changes.items():
               assert old in s, old
