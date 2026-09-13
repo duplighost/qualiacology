@@ -10,7 +10,7 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,16 +18,86 @@ jobs:
             lil-big-bang
             android/lil-big-bang
           sparse-checkout-cone-mode: true
-      - name: Export exact game source for Android preparation
-        run: |
-          mkdir -p android-source-snapshot
-          cp lil-big-bang/index.html android-source-snapshot/index.html
-          git rev-parse HEAD > android-source-snapshot/commit.txt
-          wc -l lil-big-bang/index.html
-          grep -nE '__LBB|visibilitychange|function pause|function resume|let paused|const paused|navigator.vibrate|function fit|devicePixelRatio' lil-big-bang/index.html | tail -65
-      - uses: actions/upload-artifact@v4
+      - name: Preserve transfer for integrity checking
+        uses: actions/upload-artifact@v4
         with:
-          name: lil-big-bang-source-snapshot
-          path: android-source-snapshot
+          name: android-project-transfer
+          path: android/lil-big-bang/project.zip.b64
           retention-days: 7
+      - name: Reconstruct verified Android project
+        shell: python
+        run: |
+          import base64, hashlib, json, pathlib, shutil, zipfile, io
+          root = pathlib.Path('android/lil-big-bang')
+          encoded = (root / 'project.zip.b64').read_text()
+          repairs = root / 'transfer-repairs.json'
+          if repairs.exists():
+              for old, new in json.loads(repairs.read_text()):
+                  assert encoded.count(old) == 1, 'Ambiguous transfer repair'
+                  encoded = encoded.replace(old, new, 1)
+          raw = base64.b64decode(encoded, validate=True)
+          expected = 'ee6339632321a4d0d47e3f3664fd7271f847183b8caf569923b0943e3d533457'
+          actual = hashlib.sha256(raw).hexdigest()
+          assert actual == expected, 'Transfer SHA256 mismatch: ' + actual
+          dest = pathlib.Path('LIL-BIG-BANG-Android')
+          zipfile.ZipFile(io.BytesIO(raw)).extractall(dest)
+          (dest / 'game-source').mkdir(exist_ok=True)
+          shutil.copyfile('lil-big-bang/index.html', dest / 'game-source/index.html')
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - uses: android-actions/setup-android@v3
+      - name: Prepare offline assets and Android SDK
+        run: |
+          python3 LIL-BIG-BANG-Android/prepare_assets.py
+          sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+          gradle -p LIL-BIG-BANG-Android wrapper --gradle-version 8.13
+      - name: Compile app and installed-app tests
+        run: |
+          cd LIL-BIG-BANG-Android
+          ./gradlew assembleDebug assembleDebugAndroidTest --stacktrace
+      - name: Verify APK and assemble deliverables
+        run: |
+          mkdir -p dist/qa
+          cp LIL-BIG-BANG-Android/app/build/outputs/apk/debug/app-debug.apk dist/LIL-BIG-BANG-Android.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs dist/LIL-BIG-BANG-Android.apk > dist/qa/apk-signature.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging dist/LIL-BIG-BANG-Android.apk > dist/qa/apk-badging.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions dist/LIL-BIG-BANG-Android.apk > dist/qa/apk-permissions.txt
+          cp LIL-BIG-BANG-Android/app/src/main/assets/build-info.json dist/qa/build-info.json
+          git rev-parse HEAD > dist/qa/build-commit.txt
+          zip -qr dist/LIL-BIG-BANG-Android-Source.zip LIL-BIG-BANG-Android -x '*/build/*' '*/.gradle/*' '*/local.properties' '*/.kotlin/*'
+          sha256sum dist/LIL-BIG-BANG-Android.apk dist/LIL-BIG-BANG-Android-Source.zip > dist/SHA256SUMS.txt
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test installed app on Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            cd LIL-BIG-BANG-Android && ./gradlew connectedDebugAndroidTest --stacktrace
+            adb pull /sdcard/Android/data/com.qualiacology.lilbigbang/files/qa dist/qa/screenshots
+      - name: Collect test reports
+        if: always()
+        run: |
+          mkdir -p dist/qa
+          if [ -d LIL-BIG-BANG-Android/app/build/reports/androidTests ]; then cp -r LIL-BIG-BANG-Android/app/build/reports/androidTests dist/qa/; fi
+          if [ -d LIL-BIG-BANG-Android/app/build/outputs/androidTest-results ]; then cp -r LIL-BIG-BANG-Android/app/build/outputs/androidTest-results dist/qa/; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lil-big-bang-android
+          path: dist
+          retention-days: 30
           if-no-files-found: error
