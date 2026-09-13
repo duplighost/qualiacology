@@ -1,0 +1,33 @@
+name: LIL BIG BANG Android
+on:
+  push:
+    branches: [android/lil-big-bang-20260913]
+    paths:
+      - '.github/workflows/lil-big-bang-android.yml'
+      - 'android/lil-big-bang/**'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            lil-big-bang
+            android/lil-big-bang
+          sparse-checkout-cone-mode: true
+      - name: Export exact game source for Android preparation
+        run: |
+          mkdir -p android-source-snapshot
+          cp lil-big-bang/index.html android-source-snapshot/index.html
+          git rev-parse HEAD > android-source-snapshot/commit.txt
+          wc -l lil-big-bang/index.html
+          grep -nE '__LBB|visibilitychange|function pause|function resume|let paused|const paused|navigator.vibrate|function fit|devicePixelRatio' lil-big-bang/index.html | tail -65
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lil-big-bang-source-snapshot
+          path: android-source-snapshot
+          retention-days: 7
+          if-no-files-found: error
