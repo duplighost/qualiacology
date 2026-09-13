@@ -1,0 +1,92 @@
+name: WWPM isolated lore verification
+on:
+  push:
+    branches: [wwpm-lore-bible-source-snapshot]
+    paths: [.github/workflows/wwpm-lore-verification.yml, wwpm-lore-review/**]
+permissions:
+  contents: read
+concurrency:
+  group: wwpm-lore-verification
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          path: review
+      - uses: actions/checkout@v4
+        with:
+          ref: 6b24bc735c2ecf5dca45dc79ce8bbafcf2147d7b
+          persist-credentials: false
+          path: source
+          sparse-checkout: curfew
+      - name: Prepare isolated review overlay
+        run: |
+          mkdir -p verification
+          python - <<'PY'
+          from pathlib import Path
+          import base64,gzip,json,hashlib
+          p=Path('review/wwpm-lore-review/overlay.b64')
+          if p.exists():
+              bundle=json.loads(gzip.decompress(base64.b64decode(p.read_text())))
+              for row in bundle['files']:
+                  rel=Path(row['path'])
+                  assert not rel.is_absolute() and '..' not in rel.parts
+                  target=Path('source')/rel
+                  if row.get('base_sha256'):
+                      assert hashlib.sha256(target.read_bytes()).hexdigest()==row['base_sha256'],str(rel)
+                  target.parent.mkdir(parents=True,exist_ok=True)
+                  target.write_text(row['content'])
+              Path('verification/overlay-manifest.json').write_text(json.dumps({'files':[r['path'] for r in bundle['files']]},indent=2))
+          PY
+      - name: Install browser test runtime
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Run real browser checks
+        run: |
+          python -m http.server 4173 --directory source --bind 127.0.0.1 >verification/server.log 2>&1 &
+          python - <<'PY'
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          import json,traceback
+          out=Path('verification')
+          with sync_playwright() as p:
+              browser=p.chromium.launch(headless=True,args=['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage'])
+              page=browser.new_page(viewport={'width':1440,'height':900})
+              page.set_default_timeout(240000)
+              errors=[]
+              page.on('pageerror',lambda e:errors.append(str(e)))
+              page.on('console',lambda e: errors.append('console: '+e.text) if e.type=='error' else None)
+              try:
+                  page.goto('http://127.0.0.1:4173/curfew/?test=1',wait_until='domcontentloaded')
+                  page.wait_for_function('window.__CURFEW?.ctx?.ready || window.__CURFEW?.ctx?.bootError')
+                  result=page.evaluate('({ready:window.__CURFEW.ctx.ready,bootError:window.__CURFEW.ctx.bootError,api:Object.keys(window.__CURFEW),state:window.__CURFEW.state()})')
+                  out.joinpath('boot.json').write_text(json.dumps(result,indent=2))
+                  assert result['ready'],'Boot failed'
+                  page.evaluate('window.__CURFEW.step(1/60,30)')
+                  page.evaluate('window.__CURFEW.settle(4)')
+                  page.screenshot(path=str(out/'opening.png'))
+                  world=page.evaluate('''() => {const c=window.__CURFEW.ctx;return {places:[...c.systems.get('places').nodes.values()].map(r=>({id:r.def.id,x:r.def.x,z:r.def.z,y:r.padY,yaw:r.yaw})),setpieces:c.systems.get('setpieces').state?.(),car:c.systems.get('car').state(),frames:window.__CURFEW.frameStats()}}''')
+                  out.joinpath('world.json').write_text(json.dumps(world,indent=2))
+                  review=Path('review/wwpm-lore-review/browser-checks.py')
+                  if review.exists():exec(compile(review.read_text(),str(review),'exec'),{'page':page,'out':out,'errors':errors})
+                  assert not errors,errors
+              except Exception:
+                  out.joinpath('exception.txt').write_text(traceback.format_exc())
+                  page.screenshot(path=str(out/'failure.png'))
+                  raise
+              finally:
+                  out.joinpath('browser-errors.json').write_text(json.dumps(errors,indent=2))
+                  browser.close()
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wwpm-lore-verification-${{ github.run_number }}
+          path: verification/
+          retention-days: 7
+          if-no-files-found: error
