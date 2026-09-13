@@ -2,7 +2,7 @@ name: WWPM isolated lore verification
 on:
   push:
     branches: [wwpm-lore-bible-source-snapshot]
-    paths: [.github/workflows/wwpm-lore-verification.yml, wwpm-lore-review/**]
+    paths: [.github/workflows/wwpm-lore-verification.yml, wwpm-lore-review/browser-checks.py, wwpm-lore-review/run.txt]
 permissions:
   contents: read
 concurrency:
@@ -28,19 +28,41 @@ jobs:
           mkdir -p verification
           python - <<'PY'
           from pathlib import Path
-          import base64,gzip,json,hashlib
-          p=Path('review/wwpm-lore-review/overlay.b64')
-          if p.exists():
-              bundle=json.loads(gzip.decompress(base64.b64decode(p.read_text())))
+          import base64,gzip,json,hashlib,subprocess,urllib.request,shutil
+          review=Path('review/wwpm-lore-review')
+          parts=sorted(review.glob('overlay-*.b64'))
+          if len(parts)==4:
+              bundle=json.loads(gzip.decompress(base64.b64decode(''.join(p.read_text() for p in parts))))
+              for rel,sha in bundle['base_hashes'].items():
+                  assert hashlib.sha256((Path('source')/rel).read_bytes()).hexdigest()==sha,rel
+              patch=Path('verification/overlay.patch')
+              patch.write_text(bundle['patch'])
+              subprocess.run(['git','apply','--check',str(patch.resolve())],cwd='source',check=True)
+              subprocess.run(['git','apply',str(patch.resolve())],cwd='source',check=True)
               for row in bundle['files']:
                   rel=Path(row['path'])
                   assert not rel.is_absolute() and '..' not in rel.parts
                   target=Path('source')/rel
-                  if row.get('base_sha256'):
-                      assert hashlib.sha256(target.read_bytes()).hexdigest()==row['base_sha256'],str(rel)
+                  assert not target.exists(),str(rel)
                   target.parent.mkdir(parents=True,exist_ok=True)
                   target.write_text(row['content'])
-              Path('verification/overlay-manifest.json').write_text(json.dumps({'files':[r['path'] for r in bundle['files']]},indent=2))
+              fixes=review/'fixes.json'
+              if fixes.exists():
+                  for f in json.loads(fixes.read_text()):
+                      target=Path('source')/f['path']
+                      s=target.read_text()
+                      assert s.count(f['old'])==f.get('count',1),f['path']
+                      target.write_text(s.replace(f['old'],f['new']))
+              manifest={}
+              for p in Path('source/curfew/src').rglob('*.js'):
+                  subprocess.run(['node','--check',str(p)],check=True)
+                  manifest[str(p.relative_to('source'))]=hashlib.sha256(p.read_bytes()).hexdigest()
+              Path('verification/source-sha256.json').write_text(json.dumps(manifest,indent=2))
+          url='https://gcdn.picsart.com/editing-temp/86dd96e1-5c80-4eb3-8650-1cc9b7977af8.mp3'
+          target=Path('source/curfew/assets/radio/cal-home.mp3')
+          urllib.request.urlretrieve(url,target)
+          assert target.stat().st_size>1000,'Empty Cal recording'
+          shutil.copy2(target,'verification/cal-home.mp3')
           PY
       - name: Install browser test runtime
         run: |
@@ -70,8 +92,6 @@ jobs:
                   page.evaluate('window.__CURFEW.step(1/60,30)')
                   page.evaluate('window.__CURFEW.settle(4)')
                   page.screenshot(path=str(out/'opening.png'))
-                  world=page.evaluate('''() => {const c=window.__CURFEW.ctx;return {places:[...c.systems.get('places').nodes.values()].map(r=>({id:r.def.id,x:r.def.x,z:r.def.z,y:r.padY,yaw:r.yaw})),setpieces:c.systems.get('setpieces').state?.(),car:c.systems.get('car').state(),frames:window.__CURFEW.frameStats()}}''')
-                  out.joinpath('world.json').write_text(json.dumps(world,indent=2))
                   review=Path('review/wwpm-lore-review/browser-checks.py')
                   if review.exists():exec(compile(review.read_text(),str(review),'exec'),{'page':page,'out':out,'errors':errors})
                   assert not errors,errors
