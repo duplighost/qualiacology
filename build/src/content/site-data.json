@@ -117,17 +117,17 @@
       "actionLabel": "Move the evidence"
     },
     {
-      "slug": "thurible",
-      "title": "THURIBLE",
-      "descriptor": "3D third-person action",
+      "slug": "iron-psalm",
+      "title": "IRON PSALM",
+      "descriptor": "Ball-and-chain prison escape",
       "group": "action",
       "featured": false,
-      "image": "/assets/games/thurible-card-clean.webp",
-      "alt": "A hooded thurifer at the centre of a candlelit cathedral floor, swinging a brass censer on a long chain through a burning orange arc, with armoured figures closing in out of the dark at the edges",
-      "summary": "Use the mouse to swing the weapon: circle to spin it around you, or flick it forward. The thurifer moves first and the censer arrives late, so the whole game is keeping a weight moving. Three candles on the altar are your health. Milo made this one too.",
-      "metaDescription": "THURIBLE is a full 3D third-person action game about swinging a censer on a chain around a dark cathedral: circle the mouse to spin it around you, or flick it forward.",
-      "controls": "The mouse is a spot on the floor and he runs to it · circle it to spin, flick it to dash · right drag or Q/E turn the camera · WASD moves the spot · Space dodges · Esc pauses · M mutes",
-      "actionLabel": "Swing it"
+      "image": "/assets/games/iron-psalm-card-v1.jpg",
+      "alt": "A prisoner in orange drags an iron ball and chain through a two-storey cell block, with guards and other prisoners ahead",
+      "summary": "The full ball-and-chain prison escape.",
+      "metaDescription": "IRON PSALM — the full ball-and-chain prison escape.",
+      "controls": "WASD move · hold left mouse and circle to swing · right drag or Q/E look · Space brake · R reel in · Shift evade · wheel distance · C centre · Esc pause",
+      "actionLabel": "Play IRON PSALM"
     },
     {
       "slug": "fetch",

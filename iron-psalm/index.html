@@ -1,0 +1,147 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<!-- Bundled Three.js r161
+The MIT License
+
+Copyright © 2010-2024 three.js authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+# Third-party notices — IRON PSALM / RECKONING
+
+## Renderer
+
+Three.js r161 and bundled GLTF/geometry helpers. Copyright Three.js authors,
+MIT license; the full notice is in THREE-LICENSE.txt and the standalone HTML.
+The engine and helpers are inherited from the user's supplied game packages.
+https://github.com/mrdoob/three.js/blob/r161/LICENSE
+https://threejs.org/
+
+## Character
+
+“Eric Rigged 001 — Rigged 3D Business Man” by Renderpeople, CC BY 4.0.
+The optimized rigged derivative and clothing mask are inherited from the user's
+IRON RIOT / IRON PSALM REFORGED files. Prior modifications include retargeted
+locomotion, recolored clothing, and added caps, patches, belts and shields.
+This revision removes the free-standing number patch and unused procedural body,
+prints the prisoner number on the deforming garment, attaches equipment to bones,
+and maps knockdown joints onto the visible scanned skeleton. The inherited ankle
+attachment is retained.
+The creator does not endorse this game. No new independent license retrieval
+was performed during this control/camera revision; supplied attribution is retained.
+
+Original creator publication:
+https://sketchfab.com/3d-models/eric-rigged-001-rigged-3d-business-man-a46bc9f67aaa415bb4f3241eef900e7f
+https://sketchfab.com/renderpeople
+https://creativecommons.org/licenses/by/4.0/
+
+See licenses/CC-BY-4.0.txt and the inherited licenses/CHARACTER-PROVENANCE.md.
+The character is embedded in assets/characters.js, not supplied as a new asset pack.
+
+## Locomotion
+
+Idle / Walk / Run are inherited Mixamo clips retargeted in the supplied derivative,
+with provenance from Three.js's Soldier example. Included only as game animation;
+not an independently redistributable animation library.
+https://github.com/mrdoob/three.js/blob/r180/examples/models/gltf/Soldier.glb
+https://threejs.org/examples/webgl_animation_skinning_blending.html
+https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html
+
+## Environment, reference and sound
+
+The prison geometry, procedural environment materials, sound synthesis and prior
+simulation are inherited from the supplied Iron Psalm / Reforged source. Its
+reports identify THURIBLE as a movement/feedback reference. The source reference
+is not redistributed here. This revision is based on Alex's feedback about
+camera cutaways and the lack of manual mouse control.
+
+All included screenshots are actual game-renderer output. None are generated
+concept art. The interface uses system fonts; no font files are distributed.
+
+
+## 0.5 material update
+Additional material derivatives recovered from the supplied Iron Riot source,
+not from commercial comparison games: ambientCG Bricks059, Plaster001 and
+Asphalt012 (CC0). Masonry saturation is reduced; maps are recompressed.
+The commercial reference images are not used as game assets.
+https://ambientcg.com/view?id=Bricks059
+https://ambientcg.com/view?id=Plaster001
+https://ambientcg.com/view?id=Asphalt012
+https://docs.ambientcg.com/license/
+
+Cast-concrete material: newly composited from the supplied ambientCG Plaster001
+and Asphalt012 color derivatives, with authored scratches and derived normals.
+It is a composite material, not a newly acquired photographic concrete scan.
+PavingStones138 was evaluated during development but is not in the playable
+texture payload. Earlier generated masonry is also not loaded by the 0.5 game.
+
+
+## 0.8 Reckoning changes
+The inherited licensed character is still the base of all human bodies. This
+revision adds bone-mounted padded equipment, rank details, procedural shield paint,
+rounded shield edges, clothing shading, secondary impact poses and two-bone
+climbing reach posing. These are modifications, not a newly acquired character
+cast, mocap library, or endorsement by the creator.
+
+The meadow color/normal/roughness material is an authored composite using the
+already supplied ambientCG Asphalt012 derivatives plus generated soil/moss coloring
+and leaf litter. Canonical JPEGs and the optional authoring script are included.
+It is not a newly acquired ground scan. No Poly Haven image was downloaded into or
+used by this release. No commercial-game image is a playable asset.
+ -->
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#172829"><meta name="description" content="IRON PSALM — a tactile, offline Three.js prison escape. Your sentence is your weapon."><title>IRON PSALM | Qualiacology</title><link rel="stylesheet" href="src/style.css"><link rel="icon" href="assets/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="application-name" content="Iron Psalm">
+<link rel="canonical" href="https://qualiacology.com/iron-psalm/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Qualiacology">
+<meta property="og:title" content="IRON PSALM | Qualiacology">
+<meta property="og:description" content="The full ball-and-chain prison escape.">
+<meta property="og:url" content="https://qualiacology.com/iron-psalm/">
+<meta property="og:image" content="https://qualiacology.com/assets/games/iron-psalm-card-v1.jpg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="IRON PSALM | Qualiacology">
+<meta name="twitter:description" content="The full ball-and-chain prison escape.">
+<meta name="twitter:image" content="https://qualiacology.com/assets/games/iron-psalm-card-v1.jpg">
+<style>
+.qualiacology-home{position:fixed;top:16px;right:20px;z-index:400;padding:9px 13px;border:1px solid #b9ad8766;border-radius:999px;background:#172829dc;color:#e2ddc7;text-decoration:none;font:600 11px/1.2 system-ui,sans-serif;letter-spacing:.08em}
+.qualiacology-home:hover,.qualiacology-home:focus-visible{color:#fff;border-color:#e2ddc7;outline:2px solid #e2ddc7;outline-offset:3px}
+body.playing .qualiacology-home{display:none}
+</style>
+</head><body>
+<a class="qualiacology-home" href="/">Qualiacology</a>
+<canvas tabindex="0" id="game" aria-label="Iron Psalm 3D game"></canvas>
+<div id="loading"><div class="wordmark">IRON PSALM</div><p>CASTING IRON · OPENING THE GALLERY</p><div class="rule"></div></div>
+<div id="error"><h2>The gallery could not open.</h2><p>This game needs a browser with hardware-accelerated WebGL 2. Open the HTML in a current desktop browser, rather than an attachment preview.</p><pre id="errorDetail"></pre></div>
+<section id="title"><div class="title-content"><div class="kicker">BLACKWATER / THE RECKONING</div><h1>IRON<br><span>PSALM</span></h1><p class="lede">They gave you a life sentence.<br>They should have kept the iron.</p><p class="description">Hold LEFT MOUSE and circle the faint guide.<br>Sweep the other way to reverse. Release to coast.<br>RIGHT MOUSE + drag looks. WASD moves.</p><button id="begin" class="begin">BREAK YOUR SENTENCE <span class="arrow">→</span></button><div><button id="continue" class="text-button">CONTINUE ESCAPE</button><button id="titleSettings" class="text-button">SETTINGS & CONTROLS</button></div></div><div class="chapter-mark">0317 / THE LONG SENTENCE</div><div class="title-bottom"><span id="deviceNote">KEYBOARD + MOUSE RECOMMENDED<br>FULL BROWSER GAME · NO INSTALLATION</span><span class="credit">A GAME FOR ALEX<br>FOUR ACTS / EIGHTEEN SECRETS</span></div></section>
+<div id="hud"><div class="top-left"><div id="zoneCode" class="zone-code">BLACKWATER PENITENTIARY / A</div><div id="zoneName" class="zone-name">THE LONG SENTENCE</div><div id="objective" class="objective">Break the north transfer gate.</div></div><div class="top-right"><div id="health" class="health"></div><div id="hudMeta" class="hud-meta">0317 · NO PAROLE</div></div><button id="pauseButton" aria-label="Pause game">Ⅱ</button><div id="boss"><div class="label">WARDEN / THE LAST WORD</div><div class="boss-track"><div class="boss-fill"></div></div></div><div id="combo"><div class="num">×2</div><div class="label">CONSECUTIVE IMPACTS</div><div class="streak"></div></div><div id="sector"><div class="small">BLACKWATER PENITENTIARY</div><div class="name"></div></div><div id="toast"></div><div id="save">CHECKPOINT SAVED</div><div id="waypoint">◇<small>EXIT</small></div><div id="help" class="bottom-help"><b>WASD</b> MOVE &nbsp; · &nbsp; <b>HOLD LEFT MOUSE + CIRCLE GUIDE</b> SWING &nbsp; · &nbsp; <b>RIGHT DRAG / Q E</b> LOOK<br><b>HOLD SPACE</b> BRAKE &nbsp; · &nbsp; <b>R</b> REEL IN &nbsp; · &nbsp; <b>SHIFT</b> EVADE &nbsp; · &nbsp; <b>WHEEL / C</b> DISTANCE / CENTRE &nbsp; · &nbsp; <b>ESC</b> PAUSE</div><div id="performance"></div></div>
+<div id="swingGuide" aria-hidden="true"><i></i></div><div id="reticle"></div><div id="touch"><div id="movePad" class="pad left" role="button" aria-label="Movement joystick"><div class="knob"></div><div class="tag">MOVE</div></div><div id="windPad" class="pad right" role="button" aria-label="Draw a circle or swipe to move the ball"><div class="knob"></div><div class="tag">DRAW SWING</div></div><button id="touchWhip" class="touch-action whip" aria-label="Whip the ball once; slide here from swing pad and release">WHIP</button><button id="touchReverse" class="touch-action reverse">BRAKE</button><button id="touchCameraCenter" class="touch-camera camera-centre" aria-label="Centre camera behind the prisoner">CENTRE</button><button id="touchDash" class="touch-action dash">EVADE</button></div>
+<div id="touchLookHint" aria-hidden="true">DRAG THE SCENE TO LOOK</div>
+<div id="panel" role="dialog" aria-modal="true"><div class="panel-card" id="panelCard"></div></div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/buffergeometryutils.global.js"></script>
+<script src="vendor/gltfloader.global.js"></script>
+<script src="assets/environment.js"></script>
+<script src="assets/characters.js"></script>
+<script src="dist/game.bundle.js"></script>
+</body></html>
