@@ -34,6 +34,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: '12266719'
+          packages: 'platform-tools'
+          log-accepted-android-sdk-licenses: false
       - name: Prepare current game and native project
         run: |
           python -m py_compile android-pocket-sun/build_android.py android-pocket-sun/emulator-test.py
@@ -107,6 +113,7 @@ jobs:
             android-pocket-sun/out/POCKET-SUN-Android-Source.zip
             android-pocket-sun/out/SHA256SUMS.txt
             android-pocket-sun/out/qa/
+            android-pocket-sun/out/PocketSunAndroid/app/build/reports/
       - name: Enforce test results
         if: always()
         env:
