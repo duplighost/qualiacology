@@ -1,0 +1,31 @@
+name: Android mobile browser verification
+on:
+  push:
+    branches: [android/mobile-selection-20260913]
+    paths: ['android-mobile/**', '.github/workflows/android-mobile-verify.yml']
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser testing tools
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Test six packaged games at two phone sizes each
+        run: python android-mobile/verify.py
+      - name: Retain actual results and screenshots even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-mobile-browser-evidence
+          path: /tmp/android-browser/evidence
+          retention-days: 14
