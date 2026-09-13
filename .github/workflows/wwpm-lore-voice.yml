@@ -1,0 +1,26 @@
+name: WWPM lore Cal voice asset
+on:
+  push:
+    branches: [wwpm-lore-bible-6b24bc7]
+    paths: [.github/workflows/wwpm-lore-voice.yml]
+permissions:
+  contents: read
+jobs:
+  voice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Fetch the one authored fictional dialogue asset
+        shell: bash
+        run: |
+          mkdir -p voice
+          curl --fail --location --proto '=https' --max-time 60 'https://gcdn.picsart.com/cloud-storage/bd40d9dc-72a7-4645-b42a-84b03501d75b.wav' -o voice/cal-lights.wav
+          test "$(wc -c < voice/cal-lights.wav)" -gt 1000
+          sha256sum voice/cal-lights.wav > voice/SHA256.txt
+      - name: Return the audio without deploying or modifying production
+        uses: actions/upload-artifact@v4
+        with:
+          name: WWPM-Cal-lights-voice
+          path: voice/
+          if-no-files-found: error
+          retention-days: 7
