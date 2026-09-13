@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,36 +62,17 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android-pocket-sun/out/POCKET-SUN-3.2.0-android.1.apk | tee android-pocket-sun/out/qa/apk-badging.txt
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions android-pocket-sun/out/POCKET-SUN-3.2.0-android.1.apk | tee android-pocket-sun/out/qa/apk-permissions.txt
           if grep -q 'android.permission.INTERNET' android-pocket-sun/out/qa/apk-permissions.txt; then echo 'Unexpected INTERNET permission'; exit 1; fi
-      - name: Enable emulator virtualization
+      - name: Package editable source
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          python -m pip install websocket-client==1.8.0
-      - name: Android installation and lifecycle tests
-        id: androidqa
-        continue-on-error: true
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          profile: pixel_7
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: python android-pocket-sun/emulator-test.py
-      - name: Package editable source and test results
-        if: always() && steps.apk.outcome == 'success'
-        run: |
-          python - <<'PY'
+          cat > android-pocket-sun/out/package_delivery.py <<'PY'
           from pathlib import Path
-          import hashlib, json, shutil, zipfile
-          out=Path('android-pocket-sun/out')
+          import hashlib, shutil, zipfile
+          out=Path(__file__).resolve().parent
           project=out/'PocketSunAndroid'
           (project/'qa').mkdir(exist_ok=True)
           if (out/'qa').exists(): shutil.copytree(out/'qa',project/'qa',dirs_exist_ok=True)
           for name in ['build_android.py','browser-test.cjs','emulator-test.py']:
-              shutil.copy2(Path('android-pocket-sun')/name,project/name)
+              shutil.copy2(out.parent/name,project/name)
           with zipfile.ZipFile(out/'POCKET-SUN-Android-Source.zip','w',zipfile.ZIP_DEFLATED) as z:
               for p in sorted(project.rglob('*')):
                   rel=p.relative_to(project)
@@ -102,6 +83,46 @@ jobs:
               hashes.append(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name)
           (out/'SHA256SUMS.txt').write_text('\n'.join(hashes)+'\n')
           PY
+          python android-pocket-sun/out/package_delivery.py
+      - name: Save installable package before emulator checks
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocket-sun-installable
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            android-pocket-sun/out/POCKET-SUN-3.2.0-android.1.apk
+            android-pocket-sun/out/POCKET-SUN-Android-Source.zip
+            android-pocket-sun/out/SHA256SUMS.txt
+            android-pocket-sun/out/qa/
+      - name: Enable emulator virtualization
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          python -m pip install websocket-client==1.8.0
+      - name: Android installation and lifecycle tests
+        id: androidqa
+        timeout-minutes: 8
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          ram-size: 2048M
+          emulator-boot-timeout: 180
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: timeout 180s python android-pocket-sun/emulator-test.py
+      - name: Include completed Android test evidence
+        if: always() && steps.apk.outcome == 'success'
+        run: |
+          if [ ! -f android-pocket-sun/out/qa/android-report.json ]; then
+            printf '%s\n' '{"ok":false,"checks":[],"environment":"Android API 35 emulator","error":"Emulator validation did not complete; see workflow logs. APK compilation and browser tests are separate results."}' > android-pocket-sun/out/qa/android-report.json
+          fi
+          python android-pocket-sun/out/package_delivery.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
