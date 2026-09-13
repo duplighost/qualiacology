@@ -18,17 +18,23 @@
    contexts.add(ctx);if(paused){resumeContexts.add(ctx);ctx.suspend().catch(()=>{});}return ctx;
   }});
  }
- addEventListener('pointerdown',e=>{if(e.isTrusted)contacts.set(e.pointerId,{target:e.target,x:e.clientX,y:e.clientY,type:e.pointerType});},true);
+ // A platform can deliver coalesced input after cancellation. Keep it outside
+ // both the tracker and the original game until the native Continue action.
+ // Synthetic cancellation events remain allowed through to clear game state.
+ for(const type of ['pointerdown','pointermove','pointerup','pointercancel','touchstart','touchmove','touchend','touchcancel','mousedown','mousemove','mouseup','click','keydown','keyup']){
+  addEventListener(type,e=>{if(paused&&e.isTrusted){if(e.cancelable)e.preventDefault();e.stopImmediatePropagation();}},{capture:true,passive:false});
+ }
+ addEventListener('pointerdown',e=>{if(e.isTrusted&&!paused)contacts.set(e.pointerId,{target:e.target,x:e.clientX,y:e.clientY,type:e.pointerType});},true);
  addEventListener('pointermove',e=>{if(contacts.has(e.pointerId)){const p=contacts.get(e.pointerId);p.x=e.clientX;p.y=e.clientY;}},true);
  for(const type of ['pointerup','pointercancel'])addEventListener(type,e=>contacts.delete(e.pointerId),true);
- for(const type of ['touchstart','touchmove'])addEventListener(type,e=>{if(e.isTrusted)for(const t of e.changedTouches)touches.set(t.identifier,t);},true);
+ for(const type of ['touchstart','touchmove'])addEventListener(type,e=>{if(e.isTrusted&&!paused)for(const t of e.changedTouches)touches.set(t.identifier,t);},true);
  for(const type of ['touchend','touchcancel'])addEventListener(type,e=>{for(const t of e.changedTouches)touches.delete(t.identifier);},true);
  addEventListener('keydown',e=>{if(e.isTrusted)keys.set(e.code,e.key);},true);addEventListener('keyup',e=>keys.delete(e.code),true);
  function clearInput(){
   // Touch-only games require the real target AND a nonempty changedTouches list.
   const touchGroups=new Map();for(const t of touches.values()){if(!touchGroups.has(t.target))touchGroups.set(t.target,[]);touchGroups.get(t.target).push(t);}touches.clear();
-  for(const [target,changed] of touchGroups){try{target.dispatchEvent(new TouchEvent('touchcancel',{bubbles:true,cancelable:true,touches:[],targetTouches:[],changedTouches:changed}));}catch(_){}}
-  for(const [id,p] of [...contacts]){try{p.target.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:id,pointerType:p.type,clientX:p.x,clientY:p.y,buttons:0}));if(p.target.hasPointerCapture?.(id))p.target.releasePointerCapture(id);}catch(_){}}
+  for(const [target,changed] of touchGroups){try{target.dispatchEvent(new TouchEvent('touchcancel',{bubbles:true,cancelable:true,touches:[],targetTouches:[],changedTouches:changed}));}catch(_){} }
+  for(const [id,p] of [...contacts]){try{p.target.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:id,pointerType:p.type,clientX:p.x,clientY:p.y,buttons:0}));if(p.target.hasPointerCapture?.(id))p.target.releasePointerCapture(id);}catch(_){} }
   contacts.clear();
   for(const [code,key] of keys)document.dispatchEvent(new KeyboardEvent('keyup',{bubbles:true,code,key}));keys.clear();
  }
@@ -41,17 +47,17 @@
   document.dispatchEvent(new CustomEvent('androidpause'));
  }
  function resume(){
-  if(!paused)return;offset+=realNow()-began;paused=false;
+  if(!paused)return;clearInput();offset+=realNow()-began;paused=false;
   for(const [id,e] of pending)arm(id,e);
   for(const ctx of resumeContexts)if(ctx.state!=='closed')ctx.resume().catch(()=>{});resumeContexts.clear();
   media.forEach(el=>{const p=el.play();if(p)p.catch(()=>{});});media=[];
   document.dispatchEvent(new CustomEvent('androidresume'));
  }
- window.__androidHost={pause,resume,get paused(){return paused;},get activeTouches(){return Math.max(contacts.size,touches.size);},get pendingFrames(){return pending.size;},get audioContexts(){return contexts.size;},get audioStates(){return [...contexts].map(c=>c.state);},version:'1.0.0'};
+ window.__androidHost={pause,resume,get paused(){return paused;},get activeTouches(){return Math.max(contacts.size,touches.size);},get pendingFrames(){return pending.size;},get audioContexts(){return contexts.size;},get audioStates(){return [...contexts].map(c=>c.state);},version:'1.0.1'};
  document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
- if(window.QualiacologyNative){try{Object.defineProperty(navigator,'vibrate',{value:p=>window.QualiacologyNative.vibrate(Math.max(1,Math.min(65,Number(Array.isArray(p)?p[0]:p)||1)))});}catch(_){}}
+ if(window.QualiacologyNative){try{Object.defineProperty(navigator,'vibrate',{value:p=>window.QualiacologyNative.vibrate(Math.max(1,Math.min(65,Number(Array.isArray(p)?p[0]:p)||1)))});}catch(_){} }
  // All assets are already in the APK. Never install a web cache over a new app version.
- if('serviceWorker' in navigator){try{const registration={active:null,waiting:null,installing:null,update:()=>Promise.resolve(),unregister:()=>Promise.resolve(true),addEventListener(){},removeEventListener(){}};Object.defineProperty(navigator,'serviceWorker',{value:{controller:null,ready:Promise.resolve(registration),register:()=>Promise.resolve(registration),getRegistrations:()=>Promise.resolve([]),getRegistration:()=>Promise.resolve(undefined),addEventListener(){},removeEventListener(){}},configurable:true});}catch(_){}}
+ if('serviceWorker' in navigator){try{const registration={active:null,waiting:null,installing:null,update:()=>Promise.resolve(),unregister:()=>Promise.resolve(true),addEventListener(){},removeEventListener(){}};Object.defineProperty(navigator,'serviceWorker',{value:{controller:null,ready:Promise.resolve(registration),register:()=>Promise.resolve(registration),getRegistrations:()=>Promise.resolve([]),getRegistration:()=>Promise.resolve(undefined),addEventListener(){},removeEventListener(){}},configurable:true});}catch(_){} }
  const style=document.createElement('style');style.textContent='html,body{overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}a[href="/"],a[href="/games/"],#q-home,.q-home,.q-site-home,.site-home-link{display:none!important}';document.head.appendChild(style);
  addEventListener('contextmenu',e=>e.preventDefault());
 })();
