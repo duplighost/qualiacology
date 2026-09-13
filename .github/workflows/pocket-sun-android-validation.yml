@@ -43,14 +43,14 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
-          emulator-build: 14472402
+          emulator-build: 15917651
           target: google_apis
           arch: x86_64
           profile: pixel_7
           ram-size: 4096M
           disable-animations: true
           emulator-boot-timeout: 240
-          emulator-options: -no-window -gpu swiftshader_indirect -feature -Vulkan -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-window -gpu lavapipe -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           script: node android-apps/pocket-sun/smoke.mjs
       - name: Preserve host diagnostics
         if: always()
@@ -62,7 +62,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: POCKET-SUN-Android-validation-pinned
+          name: POCKET-SUN-Android-validation-lavapipe
           retention-days: 30
           if-no-files-found: error
           path: android-test-results/
