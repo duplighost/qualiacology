@@ -1,0 +1,38 @@
+name: WWPM lore baseline snapshot
+
+on:
+  push:
+    branches: [wwpm-lore-bible-6b24bc7]
+    paths: [.github/workflows/wwpm-lore-snapshot.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the Lore Bible baseline only
+        uses: actions/checkout@v4
+        with:
+          ref: 6b24bc735c2ecf5dca45dc79ce8bbafcf2147d7b
+          sparse-checkout: curfew
+          persist-credentials: false
+      - name: Record exact source identity
+        shell: bash
+        run: |
+          git rev-parse HEAD > WWPM_BASE_COMMIT.txt
+          git ls-tree -r HEAD -- curfew > WWPM_BASE_BLOBS.txt
+          find curfew -type f -print0 | sort -z | xargs -0 sha256sum > WWPM_BASE_SHA256.txt
+      - name: Package the existing game without deploying or changing it
+        uses: actions/upload-artifact@v4
+        with:
+          name: WWPM-6b24bc7-source-snapshot
+          path: |
+            curfew/
+            WWPM_BASE_COMMIT.txt
+            WWPM_BASE_BLOBS.txt
+            WWPM_BASE_SHA256.txt
+          if-no-files-found: error
+          retention-days: 7
