@@ -25,6 +25,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
@@ -39,11 +40,15 @@ jobs:
           name: android-mobile-source-preview
           path: android-mobile-batch/out/source-preview.zip
           retention-days: 14
-      - name: Compile APKs and run Android lint
+      - name: Compile APKs
         id: compile
         run: |
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
-          gradle --no-daemon -p android-mobile-batch/out/MobileGamesAndroid assembleDebug lintDebug
+          gradle --no-daemon -p android-mobile-batch/out/MobileGamesAndroid assembleDebug
+      - name: Android lint
+        id: lint
+        continue-on-error: true
+        run: gradle --no-daemon -p android-mobile-batch/out/MobileGamesAndroid lintDebug
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -83,13 +88,16 @@ jobs:
           path: |
             android-mobile-batch/out/delivery/
             android-mobile-batch/out/qa/
+            android-mobile-batch/out/MobileGamesAndroid/*/build/reports/lint-results-debug.*
           if-no-files-found: warn
           retention-days: 30
-      - name: Require both smoke suites
+      - name: Require lint and both smoke suites
         if: always() && steps.compile.outcome == 'success'
         env:
+          LINT: ${{ steps.lint.outcome }}
           BROWSER: ${{ steps.browser.outcome }}
           ANDROID: ${{ steps.android.outcome }}
         run: |
+          test "$LINT" = success
           test "$BROWSER" = success
           test "$ANDROID" = success
