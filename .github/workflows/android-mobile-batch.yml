@@ -1,0 +1,95 @@
+name: Android mobile batch
+on:
+  push:
+    branches: ['android/mobile-batch-20260913']
+    paths: ['android-mobile-batch/**', '.github/workflows/android-mobile-batch.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-mobile-batch-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GIT_LFS_SKIP_SMUDGE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - name: Validate builder syntax
+        run: python -m py_compile android-mobile-batch/prepare.py android-mobile-batch/android-test.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Prepare offline game projects
+        run: |
+          python android-mobile-batch/prepare.py
+          gradle --no-daemon -p android-mobile-batch/out/MobileGamesAndroid wrapper
+          cd android-mobile-batch/out
+          zip -qr source-preview.zip MobileGamesAndroid
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-mobile-source-preview
+          path: android-mobile-batch/out/source-preview.zip
+          retention-days: 14
+      - name: Compile APKs and run Android lint
+        id: compile
+        run: |
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
+          gradle --no-daemon -p android-mobile-batch/out/MobileGamesAndroid assembleDebug lintDebug
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline browser touch checks
+        id: browser
+        continue-on-error: true
+        run: |
+          npm install --prefix /tmp/qualiacology-mobile-qa playwright@1.55.0
+          node android-mobile-batch/browser-test.cjs
+      - name: Prepare emulator support
+        run: |
+          python -m pip install websocket-client
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android emulator smoke tests
+        id: android
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-boot-timeout: 360
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: python android-mobile-batch/android-test.py
+      - name: Verify signatures and package source
+        if: always() && steps.compile.outcome == 'success'
+        run: python android-mobile-batch/prepare.py collect
+      - name: Upload APKs, source and test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qualiacology-mobile-apps
+          path: |
+            android-mobile-batch/out/delivery/
+            android-mobile-batch/out/qa/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Require both smoke suites
+        if: always() && steps.compile.outcome == 'success'
+        env:
+          BROWSER: ${{ steps.browser.outcome }}
+          ANDROID: ${{ steps.android.outcome }}
+        run: |
+          test "$BROWSER" = success
+          test "$ANDROID" = success
