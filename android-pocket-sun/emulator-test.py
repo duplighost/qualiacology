@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Exercise the compiled APK on an Android emulator through adb and WebView DevTools."""
-import json, os, subprocess, sys, time, urllib.request
+"""Exercise the compiled APK on Android; journal evidence even if DevTools stalls."""
+import json, signal, subprocess, sys, time, urllib.request
 from pathlib import Path
 import websocket
 
@@ -9,60 +9,94 @@ OUT = HERE / 'out'
 QA = OUT / 'qa'
 PACKAGE = 'com.qualiacology.pocketsun'
 COMPONENT = PACKAGE + '/.MainActivity'
-report = {'checks': [], 'environment': 'Android API 35 emulator; not a physical device',
-          'audioLimit': 'AudioContext lifecycle is tested; audible output and physical haptics are not.'}
+report = {'ok': False, 'checks': [], 'environment': 'Android API 35 emulator; not a physical device',
+          'audioLimit': 'Audible output and physical haptics are not assessed; AudioContext checks are listed individually.'}
 ws = None
 sequence = 0
 
 
-def adb(*args, check=True):
-    return subprocess.run(['adb', *map(str,args)], check=check, capture_output=True).stdout.decode(errors='replace').strip()
+def journal():
+    QA.mkdir(parents=True, exist_ok=True)
+    (QA / 'android-report.json').write_text(json.dumps(report, indent=2))
+
+
+def adb(*args, check=True, timeout=20):
+    return subprocess.run(['adb', *map(str,args)], check=check, capture_output=True,
+                          timeout=timeout).stdout.decode(errors='replace').strip()
+
+
+def screenshot(name):
+    result = subprocess.run(['adb','exec-out','screencap','-p'], check=True,
+                            capture_output=True, timeout=15)
+    if not result.stdout.startswith(b'\x89PNG\r\n\x1a\n'):
+        raise RuntimeError('Android screenshot was not a PNG')
+    (QA / name).write_bytes(result.stdout)
 
 
 def verify(label, condition):
     if not condition: raise AssertionError(label)
     report['checks'].append(label)
+    journal()
     print('PASS:',label,flush=True)
-
-
-def connect():
-    global ws
-    if ws:
-        try: ws.close()
-        except Exception: pass
-    for _ in range(80):
-        try:
-            pid = adb('shell','pidof','-s',PACKAGE).strip()
-            if not pid: raise RuntimeError('Process not ready')
-            adb('forward','tcp:9222','localabstract:webview_devtools_remote_' + pid)
-            with urllib.request.urlopen('http://127.0.0.1:9222/json', timeout=3) as r:
-                pages = json.load(r)
-            page = next(p for p in pages if 'appassets.androidplatform.net' in p.get('url',''))
-            ws = websocket.create_connection(page['webSocketDebuggerUrl'], suppress_origin=True, timeout=20)
-            if evaluate('document.body && document.body.dataset.gameReady') == 'true': return
-        except Exception: time.sleep(.5)
-    raise RuntimeError('The APK did not expose a ready game WebView')
 
 
 def command(method, params=None):
     global sequence
     sequence += 1
     msg_id = sequence
+    report['lastCommand'] = {'method':method,'params':params or {}}
+    journal()
+    print('CDP',msg_id,method,str(params)[:180],flush=True)
+    ws.settimeout(8)
     ws.send(json.dumps({'id':msg_id,'method':method,'params':params or {}}))
-    while True:
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        ws.settimeout(max(.1, deadline-time.monotonic()))
         response = json.loads(ws.recv())
         if response.get('id') == msg_id:
             if 'error' in response: raise RuntimeError(response['error'])
             return response.get('result',{})
+    raise TimeoutError('DevTools response deadline: ' + method)
 
 
 def evaluate(expression):
-    r = command('Runtime.evaluate',{'expression':expression,'returnByValue':True,'awaitPromise':True})
+    r = command('Runtime.evaluate',{'expression':expression,'returnByValue':True,'awaitPromise':False})
     if 'exceptionDetails' in r: raise RuntimeError(r['exceptionDetails'])
     return r.get('result',{}).get('value')
 
 
-def wait_for(expression, seconds=12):
+def close_socket():
+    global ws
+    if ws:
+        try: ws.close(timeout=1)
+        except Exception: pass
+        ws = None
+
+
+def connect():
+    global ws
+    close_socket()
+    deadline = time.monotonic() + 35
+    last_error = ''
+    while time.monotonic() < deadline:
+        try:
+            pid = adb('shell','pidof','-s',PACKAGE, timeout=5).strip()
+            if not pid: raise RuntimeError('Process not ready')
+            adb('forward','tcp:9222','localabstract:webview_devtools_remote_' + pid, timeout=5)
+            with urllib.request.urlopen('http://127.0.0.1:9222/json', timeout=3) as r:
+                pages = json.load(r)
+            page = next(p for p in pages if 'appassets.androidplatform.net' in p.get('url',''))
+            ws = websocket.create_connection(page['webSocketDebuggerUrl'], suppress_origin=True, timeout=8)
+            if evaluate('document.body && document.body.dataset.gameReady') == 'true': return
+            close_socket()
+        except Exception as e:
+            last_error = repr(e)
+            close_socket()
+        time.sleep(.3)
+    raise RuntimeError('No ready game WebView: ' + last_error)
+
+
+def wait_for(expression, seconds=10):
     end = time.monotonic() + seconds
     while time.monotonic() < end:
         if evaluate(expression): return True
@@ -74,19 +108,30 @@ def start():
     adb('shell','am','start','-W','-n',COMPONENT)
 
 
+def deadline_expired(signum, frame):
+    raise TimeoutError('Overall Android validation deadline expired')
+
+
+signal.signal(signal.SIGALRM, deadline_expired)
+signal.alarm(150)
 try:
-    QA.mkdir(parents=True,exist_ok=True)
+    journal()
     adb('logcat','-c')
+    # Lower only the emulator's physical pixel count; do not alter the game's quality settings.
+    adb('shell','wm','size','540x1200')
+    adb('shell','wm','density','210')
     adb('install','-r', OUT / 'POCKET-SUN-3.2.0-android.1.apk')
     adb('shell','svc','wifi','disable',check=False)
     adb('shell','svc','data','disable',check=False)
     start()
+    time.sleep(1)
+    screenshot('android-launch.png')
     connect()
     verify('APK launches the bundled game with network services disabled',evaluate('document.body.dataset.gameReady') == 'true')
+    screenshot('portrait-android.png')
     verify('Game uses the packaged local origin',evaluate('location.origin') == 'https://appassets.androidplatform.net')
     verify('Portrait viewport',evaluate('innerHeight > innerWidth'))
     verify('Visible foreground simulation is active',wait_for('!window.__POCKET_ANDROID_TEST__().suspended'))
-    # Observe the existing audio constructor without changing the game's audio graph.
     evaluate('''(() => {
       window.__qaAudioContexts = [];
       const Base = window.AudioContext;
@@ -127,9 +172,7 @@ try:
     time.sleep(.4)
     command('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
     time.sleep(.7)
-    with (QA / 'portrait-android.png').open('wb') as f:
-        subprocess.run(['adb','exec-out','screencap','-p'],stdout=f,check=True)
-    # Freeze the old run before injecting the persistence fixture.
+    screenshot('portrait-android-playing.png')
     evaluate('window.__pocketSetActive(false); localStorage.setItem("pocket-sun-best","24680")')
     report['storageBeforeStop'] = evaluate('localStorage.getItem("pocket-sun-best")')
     time.sleep(.5)
@@ -144,16 +187,19 @@ try:
 except Exception as e:
     report['ok'] = False
     report['error'] = repr(e)
-    raise
+    print('ANDROID CHECK FAILED:',repr(e),flush=True)
 finally:
-    if ws:
-        try: ws.close()
-        except Exception: pass
-    logs = adb('logcat','-d','-s','PocketSun:I','PocketSunJS:D','AndroidRuntime:E','chromium:E',check=False)
+    signal.alarm(0)
+    journal()
+    close_socket()
+    try:
+        logs = adb('logcat','-d','-s','PocketSun:I','PocketSunJS:D','AndroidRuntime:E','chromium:E',check=False, timeout=8)
+    except Exception as e:
+        logs = 'Log retrieval failed: ' + repr(e)
     (QA / 'android-logcat.txt').write_text(logs)
     if 'FATAL EXCEPTION' in logs:
         report['ok'] = False
         report['fatalException'] = True
-    (QA / 'android-report.json').write_text(json.dumps(report,indent=2))
-    print(json.dumps(report,indent=2))
+    journal()
+    print(json.dumps(report,indent=2),flush=True)
 if not report.get('ok'): sys.exit(1)
