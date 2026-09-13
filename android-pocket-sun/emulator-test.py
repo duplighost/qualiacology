@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the compiled APK on Android; journal evidence even if DevTools stalls."""
-import json, signal, subprocess, sys, time, urllib.request
+import json, re, signal, subprocess, sys, time, urllib.request
+import xml.etree.ElementTree as ET
 from pathlib import Path
 import websocket
 
@@ -31,6 +32,37 @@ def screenshot(name):
     if not result.stdout.startswith(b'\x89PNG\r\n\x1a\n'):
         raise RuntimeError('Android screenshot was not a PNG')
     (QA / name).write_bytes(result.stdout)
+
+
+def dismiss_system_dialogs():
+    # Only dismiss identified OS onboarding or Pixel Launcher errors. Never hide a game crash.
+    for attempt in range(3):
+        focus = adb('shell','dumpsys','window','windows',timeout=8)
+        focused_line = next((x for x in focus.splitlines() if 'mCurrentFocus=' in x), '')
+        report['windowFocus'] = focused_line
+        if PACKAGE in focused_line: return
+        try:
+            adb('shell','uiautomator','dump','/sdcard/pocket-qa-window.xml',timeout=8)
+            raw = adb('shell','cat','/sdcard/pocket-qa-window.xml',timeout=5)
+            (QA / ('system-dialog-' + str(attempt) + '.xml')).write_text(raw)
+            root = ET.fromstring(raw)
+            all_text = ' '.join(n.get('text','') for n in root.iter('node'))
+            target = None
+            for node in root.iter('node'):
+                text = node.get('text','').strip()
+                if 'Viewing full screen' in all_text and text.lower() == 'got it':
+                    target = node; break
+                if 'Pixel Launcher' in all_text and (text.lower() == 'close app' or node.get('resource-id','') == 'android:id/aerr_close'):
+                    target = node; break
+            if target is None: return
+            bounds = list(map(int,re.findall(r'\d+',target.get('bounds',''))))
+            if len(bounds) != 4: return
+            report.setdefault('systemDialogsDismissed',[]).append(all_text)
+            journal()
+            adb('shell','input','tap',(bounds[0]+bounds[2])//2,(bounds[1]+bounds[3])//2)
+            time.sleep(.4)
+        except (ET.ParseError, subprocess.TimeoutExpired):
+            return
 
 
 def verify(label, condition):
@@ -106,6 +138,8 @@ def wait_for(expression, seconds=10):
 
 def start():
     adb('shell','am','start','-W','-n',COMPONENT)
+    time.sleep(.5)
+    dismiss_system_dialogs()
 
 
 def deadline_expired(signum, frame):
@@ -120,11 +154,15 @@ try:
     # Lower only the emulator's physical pixel count; do not alter the game's quality settings.
     adb('shell','wm','size','540x1200')
     adb('shell','wm','density','210')
+    adb('shell','settings','put','secure','immersive_mode_confirmations','confirmed')
+    time.sleep(1)
+    dismiss_system_dialogs()
     adb('install','-r', OUT / 'POCKET-SUN-3.2.0-android.1.apk')
     adb('shell','svc','wifi','disable',check=False)
     adb('shell','svc','data','disable',check=False)
     start()
     time.sleep(1)
+    dismiss_system_dialogs()
     screenshot('android-launch.png')
     connect()
     verify('APK launches the bundled game with network services disabled',evaluate('document.body.dataset.gameReady') == 'true')
@@ -193,6 +231,7 @@ finally:
     journal()
     close_socket()
     try:
+        screenshot('android-final.png')
         logs = adb('logcat','-d','-s','PocketSun:I','PocketSunJS:D','AndroidRuntime:E','chromium:E',check=False, timeout=8)
     except Exception as e:
         logs = 'Log retrieval failed: ' + repr(e)
