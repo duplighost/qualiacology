@@ -2,13 +2,13 @@ name: Android mobile browser verification
 on:
   push:
     branches: [android/mobile-selection-20260913]
-    paths: ['android-mobile/**', '.github/workflows/android-mobile-verify.yml']
+    paths: ['android-mobile/**', 'android-mobile-smoke.py', '.github/workflows/android-mobile-verify.yml']
 permissions:
   contents: read
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,8 +20,8 @@ jobs:
         run: |
           python -m pip install playwright
           python -m playwright install --with-deps chromium
-      - name: Test six packaged games at two phone sizes each
-        run: python android-mobile/verify.py
+      - name: Bounded real-touch startup and storage checks
+        run: timeout --kill-after=15s 210s python -u android-mobile-smoke.py
       - name: Retain actual results and screenshots even on failure
         if: always()
         uses: actions/upload-artifact@v4
