@@ -42,9 +42,9 @@ export const CFG = {
     far: 900,
     exposure: 1.15,         // ACESFilmic
     shadow: {
-      size: 1024,           // moon cascade resolution
+      size: 2048,           // sharper branch, rail and boss silhouettes at desktop resolution
       distance: 70,         // casters only inside this radius [design §8]
-      torchSize: 512,
+      torchSize: 1024,
     },
     bloom: { strength: 0.22, radius: 0.5, threshold: 1.05 },  // [vigil post]
     grade: {

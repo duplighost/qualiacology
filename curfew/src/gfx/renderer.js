@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { CFG } from '../config.js';
 import { clamp } from '../engine/math.js';
+import {makeNightReflections} from './night-reflections.js';
 
 // Module-level scratch. The hot path allocates nothing.
 const _size = new THREE.Vector2();
@@ -101,6 +102,8 @@ export class Gfx {
     renderer.info.autoReset = false;
 
     const scene = new THREE.Scene();
+    this.reflections=makeNightReflections(renderer);
+    scene.environment=this.reflections.texture;
     // Placeholder background so the very first frame is night and not renderer grey.
     // sky.js owns the real background colour and the fog that is DERIVED from it (ROUND 16:
     // the fog is horizon * FOG_MUL now, not the same Color object — see gfx/sky.js FOG_MUL).
@@ -207,6 +210,7 @@ export class Gfx {
     window.removeEventListener('resize', this._onWindowResize);
     this._listeners.length = 0;
     if (this.renderer) this.renderer.dispose();
+    this.reflections?.dispose();
   }
 }
 

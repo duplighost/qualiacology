@@ -92,7 +92,7 @@ const TINT_CEIL = 1.14;
    ========================================================================== */
 
 // A constant cache key so every shell material in the game links exactly once.
-const SHELL_CACHE_KEY = 'curfew-body-shell-v2-pbr';
+const SHELL_CACHE_KEY = 'curfew-body-shell-v3-diffuse';
 
 // GLSL. No backtick appears anywhere inside these template literals, not even
 // in a comment (the project law). No identifier named flat, half or sat.
@@ -135,13 +135,14 @@ function shellCacheKey() { return SHELL_CACHE_KEY; }
  * separate a silhouette from the trees, not to make a neon toy.
  */
 export function makeShell(tintR, tintG, tintB) {
-  const m = new THREE.MeshStandardMaterial({
+  const {map,bumpMap,normalMap}=characterMaps('hide');
+  // Dry cloth and hide stay dark under a close torch; wet organs and metal use
+  // their own reflective materials. The authored bump and rim still define form.
+  const m = new THREE.MeshLambertMaterial({
     color: new THREE.Color(tintR, tintG, tintB),
     vertexColors: true,          // EVERY geometry fed to this MUST carry `color`
-    ...characterMaps('hide'),
+    map,bumpMap,...(normalMap?{normalMap}:{}),
     bumpScale: 0.013,
-    roughness: 1,
-    metalness: 0,
     emissive: 0x000000,
     fog: true,
   });

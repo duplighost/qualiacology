@@ -86,10 +86,10 @@ export const STATIONS = Object.freeze([
     id: 'wrong-turn', dial: '106.7', name: 'WRONG TURN', kind: 'music',
     parts: [
       { file: 'voice-2.wav', kind: 'voice' },
-      { file: 'wrong-turn-raid.mp3', kind: 'voice' },
       { buf: 'radio_carrier', kind: 'music' },
       { file: 'song-3.mp3', kind: 'music' },
       { file: 'song-4.mp3', kind: 'music' },
+      { file: 'wrong-turn-raid.mp3', kind: 'voice' },
     ],
   },
   // ROUND 22 lane G. Alex, 2026-09-10: "The NOAA weather-radio voice: Sunny. High of 78.
@@ -167,6 +167,17 @@ export class Radio {
     this._partEndsAt = 0;
     this._lockout = 0;
     this._built = false;
+    this._calClock = null; this._calSaveT = 0;
+    this._saveOff = A.ctx?.bus?.on?.('save:loaded', () => {
+      // A restored/new save owns its own broadcast. Never write the previous
+      // runtime's clock or terminal state into the newly loaded progress.
+      this._calClock=null;this._calSaveT=0;this._calOffAir=false;this._calFinalSource=null;
+      this._stopSource();this._partEndsAt=0;this._schedList=null;this._actualPart=null;
+      if(this._built&&this.A.actx)this._silenceStatic(this.A.actx.currentTime);
+      // LateBell restores shared dawn state on its next simulation step. Audio
+      // runs after it, so resume there instead of reading the previous dawn here.
+      this._resumeAfterLoad=!!(this.on&&this.loaded);
+    });
     this.out = null;
     this.gain = null;
     this._staticGain = null;
@@ -286,7 +297,13 @@ export class Radio {
     let total = 0;
     for (const s of sched) total += s.dur;
     if (!(total > 0)) return null;
-    let pos = ((t - this._epoch) % total + total) % total;
+    let pos;
+    if(STATIONS[i].id==='wrong-turn'&&sched.some(p=>p.file==='wrong-turn-raid.mp3')){
+      const pr=this.A.ctx?.systems?.get('progress');
+      if(pr?.flag('radio:cal-off-air'))return null;
+      pos=this._calClock??Math.max(0,Number(pr?.flag('radio:cal-clock'))||0);
+      if(pos>=total){this._endCal(t);return null;}
+    }else pos = ((t - this._epoch) % total + total) % total;
     for (let k = 0; k < sched.length; k++) {
       if (pos < sched[k].dur) return { part: sched[k], k, offset: pos, sched };
       pos -= sched[k].dur;
@@ -305,6 +322,7 @@ export class Radio {
 
   /** Got out. bed.js rule 5: the radio does not follow you into the county. */
   stop() {
+    const pr=this.A.ctx?.systems?.get('progress');if(pr&&this._calClock!==null){pr.flag('radio:cal-clock',this._calClock);pr.save?.flush();}
     this.on = false;
     this._partEndsAt = 0;
     this._stopSource();
@@ -333,6 +351,8 @@ export class Radio {
     if (!actx || !this._built) return;
     const T = actx.currentTime;
     const ctx=this.A.ctx;
+    if(this._resumeAfterLoad){this._resumeAfterLoad=false;if(this.on)this._play(false);}
+    this._advanceCal(dt,T);
     if(this._lastCalBroadcast(T))return;
     // the static skirt closing after a tune
     if (this._staticUntil > 0 && T >= this._staticUntil) {
@@ -344,6 +364,7 @@ export class Radio {
     if (this.on && this._src && this._partEndsAt > 0 && T >= this._partEndsAt) {
       const sched = this._schedList;
       if (sched && sched.length) {
+        if(this.station().id==='wrong-turn'&&this._actualPart==='wrong-turn-raid.mp3'){this._endCal(T);this._lastCalBroadcast(T);return;}
         const pr=ctx?.systems.get('progress'),reply=this._buf[CAL_REPLY.url];
         if(this.station().id==='wrong-turn'&&this._actualPart==='voice-2.wav'&&reply&&pr?.flag('story:xmas-power')&&pr.flag('story:road-card')&&!pr.flag('story:cal-lights-answer')){
           this._stopSource();pr.flag('story:cal-lights-answer',true);pr.save.flush();
@@ -369,10 +390,43 @@ export class Radio {
     this._staticGain.gain.cancelScheduledValues(T);this._staticGain.gain.setValueAtTime(0,T);
   }
 
+  _advanceCal(dt,T){
+    const pr=this.A.ctx?.systems?.get('progress');
+    this._loadCal();
+    if(!this.loaded||!pr||pr.flag('radio:cal-off-air'))return;
+    const sched=this._schedule(STATIONS.findIndex(s=>s.id==='wrong-turn'));
+    if(!sched.some(p=>p.file==='wrong-turn-raid.mp3'))return;
+    this._calClock+=Math.max(0,dt);this._calSaveT+=Math.max(0,dt);
+    const total=sched.reduce((n,p)=>n+p.dur,0);
+    if(total>0&&this._calClock>=total){this._endCal(T);return;}
+    if(this._calSaveT>=2){this._calSaveT=0;pr.flag('radio:cal-clock',this._calClock);}
+  }
+
+  _loadCal(){
+    const pr=this.A.ctx?.systems?.get('progress');if(this._calClock!==null||!pr)return;
+    const saved=pr.flag('radio:cal-clock');this._calClock=Math.max(0,Number(saved)||0);
+    // Before this one-shot scheduler existed, the ledger was the saved proof
+    // that Cal's raid had already been heard. New interrupted broadcasts carry
+    // a clock and resume normally; only the legacy recording is migrated.
+    if(saved===undefined&&pr.flag('lore:ledger')?.unlocked?.includes('wrong-turn')){
+      pr.flag('radio:cal-off-air',true);pr.flag('radio:cal-clock',0);pr.save?.flush();
+    }
+  }
+
+  _endCal(T){
+    const ctx=this.A.ctx,pr=ctx?.systems?.get('progress');
+    if(pr&&!pr.flag('radio:cal-off-air')){pr.flag('radio:cal-off-air',true);pr.flag('radio:cal-clock',this._calClock||0);pr.save?.flush();
+      // The station can die while the player is listening elsewhere. Only an
+      // actual tuned transmission is evidence that they heard the raid.
+      if(this.on&&this.station().id==='wrong-turn'&&this._actualPart==='wrong-turn-raid.mp3')ctx.bus?.emit('radio:raid',{station:'wrong-turn',heard:true});
+    }
+    if(this.station().id==='wrong-turn'){this._stopSource();this._partEndsAt=0;this._schedList=null;this._actualPart=null;this.gain.gain.cancelScheduledValues(T);this.gain.gain.setValueAtTime(0,T);this._silenceStatic(T);}
+  }
+
   _lastCalBroadcast(T) {
     const ctx=this.A.ctx,clock=ctx?.systems?.get('clock');
     const elapsed=Number(clock?.cycleT??ctx?.systems?.get('progress')?.flag('morning:late-bell')?.elapsed)||0;
-    const phase=this.station().id==='wrong-turn'?calFinalPhase(ctx?.shared,elapsed):'';
+    const phase=this.station().id==='wrong-turn'?(ctx?.systems?.get('progress')?.flag('radio:cal-off-air')?'off-air':calFinalPhase(ctx?.shared,elapsed)):'';
     if(!phase){this._calOffAir=false;this._calFinalSource=null;return false;}
     if(phase==='off-air'){
       const first=!this._calOffAir;this._calOffAir=true;
@@ -403,6 +457,7 @@ export class Radio {
     const actx = this.A && this.A.actx;
     if (!actx || !this._built) return;
     const T = actx.currentTime;
+    this._loadCal();
     this._stopSource();
     if(this._lastCalBroadcast(T))return;
 
@@ -421,6 +476,7 @@ export class Radio {
     // THE BROADCAST CLOCK. Where this station is right now, not where you left it: tuning
     // away and back lands you further into the record, exactly as a radio does.
     const now = this._atNow(this.index, T);
+    if(!now&&this._lastCalBroadcast(T))return;
     if (!now) {
       // dead air, or a station whose whole schedule failed to load. The carrier is still on.
       this.gain.gain.cancelScheduledValues(T);
@@ -449,6 +505,10 @@ export class Radio {
   _playPart(at, T, withStatic) {
     const actx = this.A.actx;
     const { part, k, offset, sched } = at;
+    if(this.station().id==='wrong-turn'&&sched.some(p=>p.file==='wrong-turn-raid.mp3')&&part.file!==CAL_REPLY.url){
+      this._calClock=sched.slice(0,k).reduce((n,p)=>n+p.dur,0)+offset;
+      this.A.ctx?.systems?.get('progress')?.flag('radio:cal-clock',this._calClock);
+    }
     this._actualPart=part.file;
     this.A.ctx?.bus.emit('radio:segment',{station:this.station().id,file:part.file,kind:part.kind,offset});
     const src = actx.createBufferSource();
@@ -478,6 +538,8 @@ export class Radio {
   }
 
   dispose() {
+    this._saveOff?.();this._saveOff=null;
+    const pr=this.A.ctx?.systems?.get('progress');if(pr&&this._calClock!==null){pr.flag('radio:cal-clock',this._calClock);pr.save?.flush();}
     this._stopSource();
     if (this._staticSrc) { try { this._staticSrc.stop(); } catch (e) { void e; } this._staticSrc = null; }
     this._built = false;

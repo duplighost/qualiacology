@@ -877,9 +877,10 @@ export class Signage {
       this._onMajor(st, 'curfew', CURFEW, -17.70, 2.0, -0.2, 0.9, 1.2, Math.PI * 0.5, { backD: 0.04, backCol: K_DARK });
       this._onMajor(st, 'almanac', ['SUNRISE'], -8.55, 1.055, 1.28, 0.46, 0.32, 0, { rx: -Math.PI * 0.5, backD: 0.03, backCol: [0.12, 0.08, 0.05] });
       // "A historical marker, official brown-and-gold: SITE OF THE LAST SUNRISE." On the
-      // verge past the station's own signs (they stand at local (21,23) and nearer).
+      // eastbound verge past the station's own signs and forecourt. The county lane
+      // now curves south through the empty field, so follow that departure here.
       if (roads) {
-        const wx = st.wx(40, 30), wz = st.wz(40, 30), info = roads.nearestRoadInfo(wx, wz, 40);
+        const wx = st.wx(60, -16), wz = st.wz(60, -16), info = roads.nearestRoadInfo(wx, wz, 40);
         if (info && info.hit) {
           const px = info.x, pz = info.z, tx = info.tx, tz = info.tz, W = info.width;
           const side = ((wx - px) * -tz + (wz - pz) * tx) > 0 ? 1 : -1;
