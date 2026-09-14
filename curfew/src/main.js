@@ -87,6 +87,8 @@ import * as loreDeadMod from './world/lore-dead.js';
 import * as loreLookoutMod from './world/lore-lookout.js';
 import * as loreProcessionMod from './world/lore-procession.js';
 import * as loreLedgerMod from './lore/ledger.js';
+import * as rewardFeedbackMod from './progression/reward-feedback.js';
+import * as firstLightMod from './world/first-light.js';
 
 /* ==========================================================================
    THE MANIFEST — construction order IS init order IS update order.
@@ -150,6 +152,8 @@ const SYSTEMS = [
   ['late-bell', lateBellMod],
   ['opening', openingMod],     // the station's authored grounds, calendar and first night
   ['signage', signageMod],     // ROUND 22: the promises — words in the world, painted on the opening's paper program
+  ['reward-feedback', rewardFeedbackMod],
+  ['first-light', firstLightMod],
   ['audio', audioMod],         // late, so it can hear everything that happened this step
   ['hud', hudMod],
   // -- presentation, last ---------------------------------------------------------------

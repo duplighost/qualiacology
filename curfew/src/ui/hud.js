@@ -344,6 +344,7 @@ const CONTROLS = [
   ['Hard sprint', 'Double-tap Shift'],
   ['Crouch and slide', 'Ctrl or C'],
   ['Jump / climb', 'Tap / hold Space'],
+  ['Climb down from an edge', 'Hold E'],
   // ALEX, first playtest: "I've made it to the car. i have no idea how to get into the car
   // lol." The door is KeyE and the horn is KeyH (engine/input.js:59-60, adopted from the
   // vehicle lane's shim) and NEITHER was on this card — the one surface in CURFEW where

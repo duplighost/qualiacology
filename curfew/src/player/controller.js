@@ -30,6 +30,7 @@
 import * as THREE from 'three';
 import { TAU, clamp, clamp01, lerp, damp, ease, Spring } from '../engine/math.js';
 import { CFG } from '../config.js';
+import { respawnPointAllowed, accessibleRespawnFallback } from './checkpoint-access.js';
 
 const P = CFG.player;
 
@@ -211,6 +212,9 @@ const SCALE_REACH = 1.42;
 const SCALE_LOSE_R = 1.65;
 const SCALE_STALL_S = 0.55;
 const SCALE_STALL_EPS = 0.05;   // m/s: under this the climb is not moving
+const DESCEND_HOLD_S = .18, DESCEND_REGRAB_S = .24;
+const DESCEND_PROBE_S = .2;
+const DESCEND_PROBE_Y = [-.12,.35,.85,1.45];
 // How far ABOVE the face's own top a scale may look for a landing when the top itself will
 // not take a body — a roof deck over an eave, a wall walk over a parapet. See _stepScale.
 const SCALE_ROOF_REACH = 2.60;
@@ -380,6 +384,9 @@ export class PlayerController {
     this.scaling=false;this.scaleBeat=0;this.scaleFace=null;
     this.climbCrouch = false;                               // only tuck under a genuinely low landing ceiling
     this.scaleStall = 0;                                    // ROUND 19: seconds a held-Space climb has got nowhere
+    this.scaleDescending = false; this.descendGrab = null; this.descendHold = 0;
+    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;
+    this._descentClock=0;this._descentOtherUseUntil=-Infinity;
     this.floorWasCollider = false;                          // last frame's floor was a collider top (the step-up smoothing gate)
 
     // ---- the ONE stride clock. Nothing else may keep a locomotion timer.
@@ -491,6 +498,12 @@ export class PlayerController {
   }
 
   init() {
+    this._descentPromptOff?.();
+    this._descentPromptOff=this.ctx.bus?.on?.('prompt',p=>{
+      if(!p?.kind||p.owner==='player-descent')return;
+      const label=p.label||(p.kind==='horn'?'H':'E');
+      if(String(label).toUpperCase()==='E')this._descentOtherUseUntil=this._descentClock+.12;
+    });
     const terr = this._terrain;
     // World owns the spawn; until it publishes one we start at the origin of the valley.
     const start = (terr && terr.playerStart) || this.ctx.spawn || null;
@@ -615,18 +628,19 @@ export class PlayerController {
 
   /**
    * Come back. Four seconds after the blow, at the nearest activated safe point: either a
-   * DISCOVERED lit major or a lookout the player has climbed. The latter is Alex's dropped
+   * DISCOVERED lit major with earned access, or a lookout the player has climbed. The latter is Alex's dropped
    * "could serve as a respawn point" half of the wilderness towers. Deer stands share the
    * climb reward, but wilds.lookouts() excludes them from this rule.
    *
    * A death that cannot end is worse than no death at all, so this always has an answer:
-   * the Filling Station starts found and claimed, and spawnX/Z remain the final fallback.
+   * the opening spawn remains available even before its lights have been powered.
    *
    * The dead flag is cleared and hp restored BEFORE the event, so every listener sees a
    * living player. Input was never taken away, so there is nothing to give back.
    */
   _respawn() {
-    let bx = this.spawnX, bz = this.spawnZ;
+    const fallback=accessibleRespawnFallback(this.ctx,this.spawnX,this.spawnZ);
+    let bx = fallback.x, bz = fallback.z;
     // The body does not travel during the four-second death beat today, but the recorded
     // killing point is the invariant this decision belongs to. Initialise with the spawn
     // fallback so a missing places lane cannot let a farther lookout make the answer worse.
@@ -642,7 +656,7 @@ export class PlayerController {
         const pl = l[i];
         // Discovered AND claimed. places.js turns a place's lamps on when you claim it, so
         // claimed IS lit; a place you have merely seen is a dark building.
-        if (!pl.found || !pl.claimed) continue;
+        if (!pl.found || !pl.claimed || !respawnPointAllowed(this.ctx,pl.x,pl.z,pl.id)) continue;
         dx = pl.x - fromX; dz = pl.z - fromZ;
         const d2 = dx * dx + dz * dz;
         if (d2 < bd2) { bd2 = d2; bx = pl.x; bz = pl.z; }
@@ -657,7 +671,7 @@ export class PlayerController {
       const l = wilds.lookouts();
       for (let i = 0; i < l.length; i++) {
         const tower = l[i];
-        if (!tower || !tower.climbed || !Number.isFinite(tower.x) || !Number.isFinite(tower.z)) continue;
+        if (!tower || !tower.climbed || !respawnPointAllowed(this.ctx,tower.x,tower.z)) continue;
         dx = tower.x - fromX; dz = tower.z - fromZ;
         const d2 = dx * dx + dz * dz;
         if (d2 < bd2) { bd2 = d2; bx = tower.x; bz = tower.z; }
@@ -689,11 +703,15 @@ export class PlayerController {
         const a = away + (i & 1 ? 1 : -1) * k * (TAU / RESPAWN_PROBES);
         const cx = ox + Math.cos(a) * ring;
         const cz = oz + Math.sin(a) * ring;
-        if (!col || !col.canOccupy || col.canOccupy(cx, cz, P.RADIUS, P.STAND_H)) {
+        if (respawnPointAllowed(this.ctx,cx,cz) && (!col || !col.canOccupy || col.canOccupy(cx, cz, P.RADIUS, P.STAND_H))) {
           bx = cx; bz = cz; break;
         }
       }
     }
+
+    // A saved claim or an outward safety probe must never place the body behind
+    // unopened gates, even when the associated site has not streamed in yet.
+    if(!respawnPointAllowed(this.ctx,bx,bz)){bx=fallback.x;bz=fallback.z;}
 
     this.dead = false;
     this.hp = this.hpMax;
@@ -744,6 +762,8 @@ export class PlayerController {
       this.jumpBuffered = -1;
       this.spaceClimbIntent = 0; this.climbQueued = false;
       this.climb = CLIMB_NONE;
+      this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.descendGrab=null;this.descendHold=0;
+      this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;
       this.grounded = true; this.sinceGround = 0;
       // Deliberately NOT _sync(): collapsing prev/curr here is the bug this door exists
       // to fix, not the fix.
@@ -782,6 +802,8 @@ export class PlayerController {
     this.tacSprinting = false; this.tacT = 0;
     this.spaceClimbIntent = 0; this.climbQueued = false;
     this.climb = CLIMB_NONE;
+    this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.descendGrab=null;this.descendHold=0;this.climbRefuse=false;
+    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;
     this.grounded = true; this.sinceGround = 0;
     this._sync();
   }
@@ -794,6 +816,8 @@ export class PlayerController {
     this.tacSprinting = false; this.tacT = 0; this.tacCooldown = 0;
     this.spaceClimbIntent = 0; this.climbQueued = false;
     this.bobPhase = 0;
+    this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.descendGrab=null;this.descendHold=0;this.climbRefuse=false;
+    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;
     this.init();
   }
 
@@ -807,6 +831,7 @@ export class PlayerController {
   // ---------------------------------------------------------------- the step
   step(dt) {
     if (!this._spawned) this.init();
+    this._descentClock+=dt;
 
     // Aim is the camera's only truth, and the body must move along THIS step's aim, not the
     // previous one. The camera sits after us in the manifest, so we pull its look forward;
@@ -912,6 +937,14 @@ export class PlayerController {
       : col.fits ? col.fits(this.pos.x, this.pos.z, this.pos.y, P.RADIUS, P.STAND_H)
       : col.canOccupy ? col.canOccupy(this.pos.x, this.pos.z, P.RADIUS, P.STAND_H)
       : true;
+
+    // E at a reachable edge re-grabs the outside face. Its downward intent gets
+    // first refusal over the automatic mantle, so the lip cannot pull us back up.
+    this._descentCue(dt);
+    if(this._stepDescent(dt)){
+      this._stepTail(dt,this._held('sprint'),this._held('crouch'));
+      return;
+    }
 
     // ---- sprint + tac-sprint ------------------------------------------------
     const wep = this._weapons;
@@ -1516,28 +1549,116 @@ export class PlayerController {
     return caught || flung;
   }
 
+  // Read-only: the prompt and the committed transfer use this same safety probe.
+  _descentCandidate() {
+    const col=this._collision;
+    if(!col?.climbFace||!col?.fits||!col?.climbPathClear)return null;
+    const ground=this._terrain?.heightAt(this.pos.x,this.pos.z)??this.pos.y;
+    if(!this.grounded||this.pos.y-ground<1.2||this.climb!==CLIMB_NONE||this.carried||this._held('crouch'))return null;
+    // Probe back towards the platform from just beyond an edge. This also finds
+    // the ladder behind the player after a pull-up, without rotating their camera.
+    let best=null,bestD2=Infinity;
+    for(let i=0;i<8;i++){
+      const a=this.yaw+(i===0?0:(i&1?1:-1)*Math.ceil(i/2)*Math.PI/4),dx=-Math.sin(a),dz=-Math.cos(a);
+      _rayO.x=this.pos.x+dx*(SCALE_REACH+.55);_rayO.y=this.pos.y-.18;_rayO.z=this.pos.z+dz*(SCALE_REACH+.55);
+      _rayD.x=-dx;_rayD.y=0;_rayD.z=-dz;
+      const hit=col.climbFace(_rayO,_rayD,SCALE_REACH+.65);
+      if(!hit||hit.top>this.pos.y+.12||hit.top<this.pos.y-2.5||hit.normal.x*dx+hit.normal.z*dz<.4)continue;
+      const face={x:hit.point.x,z:hit.point.z,nx:hit.normal.x,nz:hit.normal.z,top:hit.top};
+      if(Math.hypot(face.x-this.pos.x,face.z-this.pos.z)>SCALE_REACH)continue;
+      const x=face.x+face.nx*(P.RADIUS+.055),z=face.z+face.nz*(P.RADIUS+.055);
+      const carryY=Math.max(this.pos.y,face.top);
+      if(!col.fits(x,z,this.pos.y-.2,P.RADIUS,P.STAND_H)
+        ||!col.climbPathClear(this.pos.x,this.pos.z,this.pos.y,this.pos.x,this.pos.z,carryY,P.RADIUS,P.STAND_H)
+        ||!col.climbPathClear(this.pos.x,this.pos.z,carryY,x,z,carryY,P.RADIUS,P.STAND_H))continue;
+      const d2=(x-this.pos.x)**2+(z-this.pos.z)**2;
+      if(d2<bestD2){bestD2=d2;best={face,x,z,carryY};}
+    }
+    return best;
+  }
+
+  _descentCue(dt) {
+    this.descendProbeT-=dt;
+    const ground=this._terrain?.heightAt(this.pos.x,this.pos.z)??this.pos.y;
+    if(!this.grounded||this.pos.y-ground<1.2||this.climb!==CLIMB_NONE||this.scaling||this.carried||this._held('crouch')){
+      this.descendCandidate=null;this.descendProbeT=0;return;
+    }
+    if(this.descendProbeT<=0){
+      this.descendProbeT=DESCEND_PROBE_S;this.descendCandidate=this._descentCandidate();
+      this._descentProbeX=this.pos.x;this._descentProbeY=this.pos.y;this._descentProbeZ=this.pos.z;
+    }
+    // A cached edge cannot follow a teleport or a player walking away from it.
+    if(Math.hypot(this.pos.x-this._descentProbeX,this.pos.z-this._descentProbeZ)>.35||Math.abs(this.pos.y-this._descentProbeY)>.13)this.descendCandidate=null;
+    if(!this.descendCandidate||this._descentClock<=this._descentOtherUseUntil||this.descendUseBlocked)return;
+    const p=this._descentPrompt||(this._descentPrompt={kind:'hold',label:'E',rank:0,owner:'player-descent',detail:'CLIMB DOWN',subdetail:'HOLD E',unavailable:false});
+    // Keep the instruction in view after pulling up with the ladder behind us.
+    p.x=this.pos.x+_fwd.x*1.6;p.y=this.eyeY-.5;p.z=this.pos.z+_fwd.z*1.6;p.k=clamp01(this.descendHold/DESCEND_HOLD_S);
+    this.ctx.bus.emit('prompt',p);
+  }
+
+  _beginDescentGrab() {
+    if(this.scaling&&this.scaleFace){this.scaleDescending=true;this.climbRefuse=false;return true;}
+    const best=this._descentCandidate();
+    if(!best){this.descendCandidate=null;return false;}
+    this.descendCandidate=null;
+    this.scaleFace=best.face;this.scaleDescending=true;this.scaleStall=0;this.climbRefuse=false;
+    this.descendGrab={x0:this.pos.x,z0:this.pos.z,y0:this.pos.y,y:best.carryY,x:best.x,z:best.z,t:0};
+    this.vel.set(0,0,0);this.jumpBuffered=-1;this.spaceClimbIntent=0;this.holdChain=false;this.climbQueued=false;
+    this.ctx.bus.emit('player:climb',{kind:'descend',top:best.face.top,x:best.x,z:best.z});
+    return true;
+  }
+
+  _stepDescent(dt) {
+    if(!this._held('use'))this.descendUseBlocked=false;
+    if(!this.scaleDescending&&!this.descendGrab&&this._held('use')&&this._descentClock<=this._descentOtherUseUntil)this.descendUseBlocked=true;
+    if(!this._held('use')||this._held('crouch')||this.carried||this.descendUseBlocked){
+      this.descendHold=0;
+      if(this.scaleDescending||this.descendGrab){
+        this.scaleDescending=false;this.descendGrab=null;this.scaling=false;this.scaleFace=null;
+        this.mantleCooldown=.2;this.climbRefuse=!this.grounded;
+      }
+      return false;
+    }
+    this.descendHold+=dt;
+    if(this.climb!==CLIMB_NONE)return false;
+    if(!this.scaleDescending&&!this.descendGrab&&(this.descendHold<DESCEND_HOLD_S||(!this.descendCandidate&&!this.scaling)||!this._beginDescentGrab()))return false;
+    const g=this.descendGrab;
+    if(g){
+      g.t+=dt;const lift=g.y>g.y0+.001?.07:0,u=ease.inOutQuad(clamp01((g.t-lift)/(DESCEND_REGRAB_S-lift))),x=lerp(g.x0,g.x,u),z=lerp(g.z0,g.z,u),y=lift?lerp(g.y0,g.y,clamp01(g.t/lift)):g.y;
+      if(!this._collision.climbPathClear(this.pos.x,this.pos.z,this.pos.y,x,z,y,P.RADIUS,P.STAND_H)){
+        this.descendGrab=null;this.scaleDescending=false;this.scaling=false;this.scaleFace=null;this.climbRefuse=true;return false;
+      }
+      this.pos.set(x,y,z);this.vel.set(0,0,0);this.grounded=false;this.scaling=true;this.sinceGround=P.COYOTE+1;
+      if(g.t>=DESCEND_REGRAB_S)this.descendGrab=null;
+      return true;
+    }
+    return this._stepScale(dt,true);
+  }
+
   /** Hold Space against a building and aim along it. No camera turn or timed button
    * sequence is imposed; the same capsule clearance and pull-up own the entire route. */
-  _stepScale(dt) {
+  _stepScale(dt,descending=false) {
     const col=this._collision;
-    if(!col?.climbFace||!this._held('jump')||this._held('crouch')||this.carried||this.climbRefuse){
+    if(!col?.climbFace||!(descending?this._held('use'):this._held('jump'))||this._held('crouch')||this.carried||this.climbRefuse){
       if(this.scaling){this.scaling=false;this.scaleFace=null;this.mantleCooldown=.2;}
+      if(descending)this.scaleDescending=false;
       return false;
     }
     // ROUND 19: THREE PROBE HEIGHTS, not one. A single ray at chest height finds nothing
     // when the bottom of the wall is behind a bench or the top of it is a parapet you are
     // already level with; the shoulder and the knee catch both. collision.climbFace pierces
     // whatever is in FRONT of the face, this covers what is above and below the ray.
-    _rayD.x=_fwd.x;_rayD.y=0;_rayD.z=_fwd.z;
+    _rayD.x=descending&&this.scaleFace?-this.scaleFace.nx:_fwd.x;_rayD.y=0;_rayD.z=descending&&this.scaleFace?-this.scaleFace.nz:_fwd.z;
+    const probeY=descending?DESCEND_PROBE_Y:SCALE_PROBE_Y;
     let hit=null;
-    for(let k=0;k<SCALE_PROBE_Y.length&&!hit;k++){
-      _rayO.x=this.pos.x;_rayO.y=this.pos.y+SCALE_PROBE_Y[k];_rayO.z=this.pos.z;
+    for(let k=0;k<probeY.length&&!hit;k++){
+      _rayO.x=this.pos.x;_rayO.y=this.pos.y+probeY[k];_rayO.z=this.pos.z;
       hit=col.climbFace(_rayO,_rayD,SCALE_REACH);
     }
     if(!hit&&this.scaling&&this.scaleFace){
       _rayD.x=-this.scaleFace.nx;_rayD.z=-this.scaleFace.nz;
-      for(let k=0;k<SCALE_PROBE_Y.length&&!hit;k++){
-        _rayO.x=this.pos.x;_rayO.y=this.pos.y+SCALE_PROBE_Y[k];_rayO.z=this.pos.z;
+      for(let k=0;k<probeY.length&&!hit;k++){
+        _rayO.x=this.pos.x;_rayO.y=this.pos.y+probeY[k];_rayO.z=this.pos.z;
         hit=col.climbFace(_rayO,_rayD,SCALE_REACH);
       }
     }
@@ -1560,11 +1681,11 @@ export class PlayerController {
       // kept a face it had lost as long as its top was within 1.1 m, so a body that had
       // slid or been pushed off carried on "scaling" in mid air with nothing in front of
       // it. That is Alex's "Climbing on nothing".
-      this.scaling=false;this.scaleFace=null;this.scaleStall=0;return false;
+      this.scaling=false;this.scaleFace=null;this.scaleStall=0;if(descending)this.scaleDescending=false;return false;
     }
     const face=this.scaleFace,nx=face.nx,nz=face.nz,top=face.top;
     const wx=_wish.x,wz=_wish.z;_wish.set(-nx,0,-nz);
-    if(top-this.pos.y<2.05&&top>=this.pos.y-.05){
+    if(!descending&&top-this.pos.y<2.05&&top>=this.pos.y-.05){
       const lx=face.x-nx*(P.RADIUS+.18),lz=face.z-nz*(P.RADIUS+.18);
       let done=this._startPull(top,lx,lz,this.pos.x,this.pos.y,this.pos.z,.44,'pull');
       // ROUND 19: THE WALL TOP IS NOT ALWAYS THE LANDING.
@@ -1586,15 +1707,18 @@ export class PlayerController {
       }
       if(done){
         this.scaling=false;this.scaleFace=null;this.scaleStall=0;
+        if(descending)this.scaleDescending=false;
         _wish.set(wx,0,wz);this._stepClimb(dt,true);return true;
       }
     }
     _wish.set(wx,0,wz);
     const cam=this.ctx.systems.get('camera'),pitch=cam?.pitch||0;
-    const side=clamp(_fwd.x*nz-_fwd.z*nx,-.8,.8)+this.strafeAxis*.65;
+    const side=(descending?0:clamp(_fwd.x*nz-_fwd.z*nx,-.8,.8))+this.strafeAxis*.65;
     const x=face.x+nx*(P.RADIUS+.055)+nz*side*dt*1.8;
     const z=face.z+nz*(P.RADIUS+.055)-nx*side*dt*1.8;
-    const dy=dt*(pitch<-.55?-1.65:2.7),y=Math.min(top+.02,this.pos.y+dy);
+    const dy=dt*(descending||pitch<-.55?-1.65:2.7);
+    const support=descending?(col.supportHeight?.(x,z,this.pos.y,P.RADIUS,0)??this._terrain.heightAt(x,z)):-Infinity;
+    const y=Math.max(support,Math.min(top+.02,this.pos.y+dy));
     // ROUND 19: AND IF IT CANNOT MOVE, IT LETS GO.
     //
     // ALEX: "Some climbing walls with the right thing on them to climb you cannot even
@@ -1630,6 +1754,10 @@ export class PlayerController {
         this.mantleCooldown=.35;this.climbRefuse=true;
         return false;
       }
+    }
+    if(descending&&this.pos.y<=support+.015){
+      this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.scaleStall=0;this.vel.set(0,0,0);
+      this.grounded=true;this.sinceGround=0;this.mantleCooldown=.2;this.climbRefuse=false;return true;
     }
     this.scaling=true;this.vel.set(0,0,0);this.grounded=false;this.sinceGround=P.COYOTE+1;
     this.jumpBuffered=-1;this._endSlide();this.sprinting=this.tacSprinting=false;
@@ -2195,7 +2323,7 @@ export class PlayerController {
     };
   }
 
-  dispose() {}
+  dispose() {this._descentPromptOff?.();}
 }
 
 export default PlayerController;

@@ -54,6 +54,7 @@ import { groundDetail } from './terrain.js';
 // ROUND 18: the checkpoint straddles a road and has to be square to it. roads.js imports only
 // config and math, so there is no cycle.
 import { nearestRoadInfo } from './roads.js';
+import { STATION_PYLON } from './opening-layout.js';
 // ROUND 6: Blackthorn Manor is compiled from its own room tables in manor.js and handed
 // this file's kit vocabulary through a factory, so there is no import cycle.
 import { makeManorBuilder } from './manor.js';
@@ -1252,15 +1253,15 @@ export const BUILDERS = {
   // a canopy you can stand under, two pumps, a shop with a lit window, and the sign.
   station: {
     landmark(api) {
-      const k = kits();
-      // the sign pylon — the one thing at the Filling Station tall enough to be a read
-      k.solid.box(0.42, 9.4, 0.42, 6.6, api.padY + 4.7, -7.4, C.metal);
-      k.solid.box(3.4, 1.9, 0.30, 6.6, api.padY + 8.7, -7.4, C.plaster);
+      const k = kits(), {x,z}=STATION_PYLON;
+      // The pylon frames the yard edge, clear of the first view and departure.
+      k.solid.box(0.42, 9.4, 0.42, x, api.padY + 4.7, z, C.metal);
+      k.solid.box(3.4, 1.9, 0.30, x, api.padY + 8.7, z, C.plaster);
       // The sign face: a lit box behind a frame and a bar, not a white sticker on a pole.
-      k.glow.pane(3.0, 1.5, 6.6, api.padY + 8.7, -7.22, PANE_SIGN, 0, 0, 6, 5);
-      sash(k.solid, 3.0, 1.5, 6.6, api.padY + 8.7, -7.22, C.dark, 0, 0, 1, 2, 0.08, 0.10);
+      k.glow.pane(3.0, 1.5, x, api.padY + 8.7, z+.18, PANE_SIGN, 0, 0, 6, 5);
+      sash(k.solid, 3.0, 1.5, x, api.padY + 8.7, z+.18, C.dark, 0, 0, 1, 2, 0.08, 0.10);
       api.emit({
-        kind: 'circle', x: 6.6, z: -7.4, r: 0.42,
+        kind: 'circle', x, z, r: 0.42,
         y0: api.padY, y1: api.padY + 9.4, tag: 'metal',
       });
       return { solid: k.solid.build(), glow: k.glow.build(), moving: null, glowColour: GLOW.cold };

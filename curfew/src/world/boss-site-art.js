@@ -238,7 +238,17 @@ export function buildBossPlaceArt(owner,s,root){
   // Agricultural remains stay outside the approach and road crossing. Nothing
   // luminous advertises the ambush while the field is still sleeping.
   for(const side of[-1,1]){
-   for(let i=0;i<8;i++){const z=-35+i*9,x=side*49;if(roadDistance(s.x+x,s.z+z)<8)continue;pillar('timber',x,z,.16,1.6,WOOD);if(i<7&&roadDistance(s.x+x,s.z+z+4.5)>=8&&roadDistance(s.x+x,s.z+z+9)>=8)rod(wood,[x,1.15,z],[x,1.05,z+9],.055,WOOD);}
+   for(let i=0;i<8;i++){
+    const z=-35+i*9,x=side*49;if(roadDistance(s.x+x,s.z+z)<8)continue;
+    wood.open();wood.cyl(.145,.16,1.6,12,x,.8,z,WOOD);wood.close(x,z,.18,WOOD);
+    col?.addCollider({kind:'circle',x:s.x+x,z:s.z+z,r:.16,y0:s.y,y1:s.y+1.6,tag:'fence',authored:true},chunk);
+    if(i<7&&roadDistance(s.x+x,s.z+z+4.5)>=8&&roadDistance(s.x+x,s.z+z+9)>=8){
+     wood.open();
+     for(const h of[.56,1.13])wood.box(.11,.14,8.7,x,h,z+4.5,WOOD);
+     wood.close(x,z+4.5,4.4,WOOD);
+     col?.addCollider({kind:'obb',x:s.x+x,z:s.z+z+4.5,hx:.06,hz:4.35,y0:s.y+.49,y1:s.y+1.20,tag:'fence',standable:false,authored:true},chunk);
+    }
+   }
   }
   solid('metal',37,0,-15,4.6,2,3.4,RUST);metal.cyl(1.1,1.1,5.6,12,37,1,-14,IRON,0,0,Math.PI/2);
   for(let i=0;i<11;i++){metal.box(.10,.7,.18,32+i*.9,.5,-11,RUST);}

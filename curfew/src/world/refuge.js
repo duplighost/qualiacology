@@ -290,6 +290,7 @@ export class Refuge {
                                  // init(): it starts OPEN, because a shut door you did not
                                  // shut teaches nothing.
     this.doorTarget = 0;
+    this.doorBlocked = false;
     this.doorColliderOn = '';        // '' | 'shut' | 'ajar' | 'open'
     this.leverK = 0;             // 0 up .. 1 thrown
     this.throwT = -1;            // >= 0 while the 0.4 s swing runs
@@ -911,16 +912,7 @@ export class Refuge {
     this._leverCurr = this.leverK;
 
     // --- the door -----------------------------------------------------------
-    this._doorPrev = this._doorCurr;
-    if (this.doorK !== this.doorTarget) {
-      const d = dt / DOOR_SWING_S;
-      const was = this.doorK;
-      this.doorK = this.doorTarget > this.doorK ? Math.min(this.doorTarget, this.doorK + d)
-        : Math.max(this.doorTarget, this.doorK - d);
-      if (was < 1 && this.doorK >= 1) this._onShut(px, pz);
-      this._syncDoorCollider();
-    }
-    this._doorCurr = this.doorK;
+    this._stepDoor(dt,player);
 
     // --- the lamps coming up ------------------------------------------------
     if (this.power && this.powerK < 1) this.powerK = Math.min(1, this.powerK + dt / POWER_RAMP_S);
@@ -988,6 +980,38 @@ export class Refuge {
 
   /* ------------------------------------------------------------------ door -- */
 
+  _doorTouchesPlayer(k,player){
+    const p=player?.pos,d=this.anchors.door;if(!p)return false;
+    if(p.y>=this.padY+d.height||p.y+(player.bodyHeight||CFG.player.STAND_H)<=this.padY-.2)return false;
+    const a=this.yaw+(d.yaw||0)+d.open*(1-k),c=Math.cos(a),s=Math.sin(a);
+    const dx=p.x-this._wx(d.hingeX,d.hingeZ),dz=p.z-this._wz(d.hingeX,d.hingeZ);
+    const along=dx*c-dz*s,across=dx*s+dz*c;
+    const ex=along<0?-along:Math.max(0,along-d.width),ez=Math.max(0,Math.abs(across)-.09);
+    const radius=CFG.player.RADIUS+.025;
+    return ex*ex+ez*ez<radius*radius;
+  }
+
+  _stepDoor(dt,player){
+    this._doorPrev=this._doorCurr;this.doorBlocked=false;
+    if(this.doorK!==this.doorTarget){
+      const was=this.doorK,d=dt/DOOR_SWING_S;
+      const next=this.doorTarget>was?Math.min(this.doorTarget,was+d):Math.max(this.doorTarget,was-d);
+      // Check the moving tip every six centimetres. The leaf stops before it
+      // intersects the body and keeps its target, so stepping clear completes
+      // the same gesture without a second press or a forced player movement.
+      const steps=Math.max(1,Math.ceil(Math.abs(next-was)*Math.abs(this.anchors.door.open)*this.anchors.door.width/.06));
+      for(let i=1;i<=steps;i++){
+        const k=was+(next-was)*i/steps;
+        if(this._doorTouchesPlayer(k,player)){this.doorBlocked=true;break;}
+        this.doorK=k;
+      }
+      if(was<1&&this.doorK>=1)this._onShut(player.pos.x,player.pos.z);
+      if(was!==this.doorK)this._syncDoorCollider();
+    }
+    this._doorCurr=this.doorK;
+    if(this.doorBlocked)this._prompt('use',this.doorWX,this.doorWY+1.12,this.doorWZ,0,'STEP CLEAR OF THE DOOR',true);
+  }
+
   /** ROUND 13: one preallocated payload per unit for the hud's key glyph. */
   _prompt(kind, x, y, z, k, detail = '', unavailable = false) {
     const P = this._promptP || (this._promptP = { kind: '', x: 0, y: 0, z: 0, k: 0, label: 'E' });
@@ -1006,8 +1030,8 @@ export class Refuge {
   }
 
   /**
-   * ROUND 13: THE DOOR YOU WALK INTO SWINGS OPEN. Proximity and velocity, not physics: while
-   * the leaf swings it has no collider, so the capsule never moves it. The rule: the body's
+   * Walking into an ajar leaf opens it. The collider follows the visible leaf and
+   * a moving leaf pauses before touching the player. The nudge rule: the body's
    * centre within NUDGE_REACH of the leaf's segment and moving toward it faster than
    * NUDGE_SPEED, on a leaf at rest that is neither parked open nor shut. It only ever OPENS —
    * a shut door stays shut until E, or the safe room would open by leaning on it.
@@ -1225,6 +1249,7 @@ export class Refuge {
         this.resting = false;
         this.restPhase = '';
         this._usePrev = true;      // do not re-trigger on the key still being held
+        this.ctx.bus.emit('place:rested', {id:this.siteId,x:this.restAnchorX,y:this.restAnchorY,z:this.restAnchorZ});
       }
     }
     this._fadeCurr = this.fade;
@@ -1336,7 +1361,7 @@ export class Refuge {
       id: this.siteId, ready: this._ready, claimPowered: !!this.spec.claimPowered,
       power: this.power, powerK: +this.powerK.toFixed(3),
       lever: +this.leverK.toFixed(3), throwing: this.throwT >= 0,
-      door: +this.doorK.toFixed(3), doorTarget: this.doorTarget, collider: this.doorColliderOn,
+      door: +this.doorK.toFixed(3), doorTarget: this.doorTarget, doorBlocked:this.doorBlocked, collider: this.doorColliderOn,
       resting: this.resting, restPhase: this.restPhase, fade: +this.fade.toFixed(3),
       canRest: this._canRest(),
       renewal: this.renewal?.state() || null,

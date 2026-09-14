@@ -2,7 +2,6 @@ import {LORE_ENTRIES, LORE_BY_ID, LORE_SECTIONS, VIGIL_IDS} from './catalog.js';
 
 const SAVE_KEY='lore:ledger';
 const OFFICERS=new Set(['pale','pacer','auditor']);
-const SLEEP_ENTRIES=['carried-light','powering','refuges','nine-lights','bulbs','car'];
 const WILD_KIND={treehouse:'stand',pond:'water',stream:'water',barn:'farm',cabin:'camp',tent:'camp',ruin:'chapel'};
 const clean=(value,max=120)=>typeof value==='string'?value.slice(0,max):'';
 const noteKey=id=>'note:'+id;
@@ -33,7 +32,7 @@ export function unlocksForEvent(type,p={}){
   switch(type){
     case 'place:discovered': case 'map:discovered':
       return ['place:'+id,...(id==='holdfast'?['moon']:[])];
-    case 'dusk-to-dawn:relit': return ['road-lamps'];
+    case 'dusk-to-dawn:relit': return ['road-lamps','rule:bulbs'];
     case 'enemy:killed': return OFFICERS.has(species)?[]:['species:'+species];
     case 'lore:sighting': return OFFICERS.has(species)?['species:'+species]:[];
     case 'phase:warning': return ['watches'];
@@ -43,7 +42,12 @@ export function unlocksForEvent(type,p={}){
       if(!p.final)return [];
       return ['resident:'+id,...(VIGIL_IDS.includes(p.rumour)?['vigil:'+p.rumour]:[]),...(id==='teacher'?['meteors']:[])];
     case 'holdfast:address': return ['address:'+id,...(id==='upper-school'?['turbines']:[])];
-    case 'place:rest': return [...SLEEP_ENTRIES.map(id=>'rule:'+id),'turbines'];
+    case 'place:rest': return ['rule:refuges'];
+    case 'refuge:power': return p.on?['rule:powering']:[];
+    case 'xp:banked': return ['rule:carried-light'];
+    case 'car:entered': return ['rule:car'];
+    case 'refuge:puzzle': return ['rule:nine-lights'];
+    case 'reward:bundle': return [...(p.cash>0?['rule:coins']:[]),...(p.bulbs>0?['rule:bulbs']:[])];
     case 'loot:searched': return ['rule:coins'];
     case 'radio:raid': return p.station==='wrong-turn'&&p.heard===true?['wrong-turn']:[];
     case 'radio:segment': return p.station==='wrong-turn'&&p.file==='wrong-turn-raid.mp3'?['wrong-turn']:[];
@@ -61,7 +65,7 @@ export class LoreLedger {
   _sys(id){return this.ctx.systems.get(id);}
   async init(){
     this.restore();
-    for(const type of ['place:discovered','map:discovered','dusk-to-dawn:relit','enemy:killed','lore:sighting','phase:warning','map:rumour','boss:cleared','holdfast:conversation','holdfast:address','place:rest','loot:searched','radio:raid','radio:segment','story:read','sanctuary:found','sanctuary:claimed','sanctuary:lit','dealer:bought','lore:observed']){
+    for(const type of ['place:discovered','map:discovered','dusk-to-dawn:relit','enemy:killed','lore:sighting','phase:warning','map:rumour','boss:cleared','holdfast:conversation','holdfast:address','place:rest','refuge:power','xp:banked','car:entered','refuge:puzzle','reward:bundle','loot:searched','radio:raid','radio:segment','story:read','sanctuary:found','sanctuary:claimed','sanctuary:lit','dealer:bought','lore:observed']){
       this.off.push(this.ctx.bus.on(type,p=>this.record(type,p||{})));
     }
     this.off.push(this.ctx.bus.on('save:loaded',()=>this.restore()));

@@ -51,9 +51,11 @@ export class WorldStories {
  }
  _appendix(){
   const put=(siteId,x,y,z,yaw,lines,{w=2.1,h=.9,small=true,id}={})=>{const p=this._sitePoint(siteId,x,y,z,yaw);if(!p)return;const root=this._group('county-writing-'+(id||siteId),p.x,p.z);this._sign(root,{...p,w,h,lines,small});this.targets.push({id:'writing:'+(id||siteId+':'+this.targets.length),kind:'read',...p,title:'READ THE WRITING',siteId,text:lines.join('\n')});};
-  put('filling-station',-11.8,1.85,-3.17,Math.PI,['ASSEMBLY POINT 3 · AWAIT TRANSPORT','TRANSPORT DEPARTS AT FIRST LIGHT'],{w:2.4,h:.7,id:'assembly-3'});
+  // Both placards are fixed to solid masonry above the openings. A static
+  // notice across the door used to float in the passage when the leaf swung.
+  put('filling-station',-13.6,3.12,-3.25,Math.PI,['ASSEMBLY POINT 3 · AWAIT TRANSPORT','TRANSPORT DEPARTS AT FIRST LIGHT'],{w:2.4,h:.7,id:'assembly-3'});
   put('filling-station',-14.3,1.1,-3.17,Math.PI,['SERVICE 17 · RELIEF DRIVER','REPORT TO ASSEMBLY POINT 3','COLLECT WAITING PASSENGERS','TRANSPORT DEPARTS AT FIRST LIGHT'],{w:.72,h:.5,id:'relief-driver'});
-  put('filling-station',-9.5,2.5,-3.17,Math.PI,['COUNTY OF MERIDIAN · EST. 1841'],{w:2,h:.5,id:'county-seal'});
+  put('filling-station',-10.5,3.24,-3.25,Math.PI,['COUNTY OF MERIDIAN · EST. 1841'],{w:2,h:.5,id:'county-seal'});
   put('jackfield',0,2.15,6.28,0,['DO YOU REMEMBER MORNING'],{w:8,h:.9,id:'barn-morning'});
   put('holdfast',51,2.05,35,Math.PI/2,['MORNING IS SOMETHING WE TELL CHILDREN'],{w:3.8,h:.8,id:'school-erased'});
   put('avery-house',-4.5,1.55,6.1,Math.PI/2,['Gone for gas. Back by morning. Love you.'],{w:.62,h:.34,id:'fridge'});

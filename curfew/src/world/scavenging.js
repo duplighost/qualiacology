@@ -3,6 +3,7 @@ import {Kit} from './sites.js';
 import {MAJORS} from './placedata.js';
 import {skeleton} from './remains.js';
 import {OPENING} from './opening-layout.js';
+import {supplyChestGeometry} from './supply-chest.js';
 
 const WOOD=[.13,.085,.046],METAL=[.20,.135,.055],SOIL=[.065,.034,.019];
 
@@ -43,17 +44,9 @@ export class Scavenging {
   _sys(id){return this.ctx.systems.get(id);}
   init(){
     this.ctx.scene.add(this.root);this.mat=this._sys('wilds').matBody;
-    const wood=new Kit(),lid=new Kit(),inside=new Kit(),earth=new Kit();
-    // An actual hollow chest, with iron bands, a brass latch and things under its lid.
-    wood.box(1.10,.12,.76,0,.07,0,WOOD);
-    for(const z of [-.36,.36])wood.box(1.10,.56,.09,0,.34,z,WOOD);
-    for(const x of [-.51,.51])wood.box(.09,.56,.70,x,.34,0,WOOD);
-    for(const x of [-.34,.34])for(const z of [-.415,.415])wood.box(.075,.54,.035,x,.34,z,METAL);
-    wood.box(.14,.19,.065,0,.40,-.42,METAL);
-    lid.box(1.16,.10,.84,0,0,-.40,WOOD);
-    for(const x of [-.34,.34])lid.box(.075,.02,.86,x,.06,-.40,METAL);
-    inside.box(.58,.15,.35,-.13,.24,.03,[.10,.14,.14]);
-    for(let i=0;i<6;i++)inside.cyl(.040,.040,.09,8,.15+i%3*.10,.22+Math.floor(i/3)*.025,-.18,METAL);
+    const chest=supplyChestGeometry(),earth=new Kit();
+    this.seamMat=new THREE.MeshBasicMaterial({color:0xe6b353,transparent:true,opacity:.75,toneMapped:false});
+    this.seamGeo=new THREE.BoxGeometry(1.12,.022,.022);
     const soil=new THREE.CylinderGeometry(.55,1.05,.14,24,3),v=soil.attributes.position;
     for(let i=0;i<v.count;i++){
       const x=v.getX(i),z=v.getZ(i),a=Math.atan2(z,x),r=Math.hypot(x,z);
@@ -67,7 +60,7 @@ export class Scavenging {
     // Pale roots and a broken board distinguish disturbed soil from ordinary ground.
     earth.box(.62,.035,.055,-.13,.165,-.13,[.22,.17,.10],.5);
     earth.box(.31,.025,.04,.23,.15,.14,[.19,.14,.085],-.65);
-    this.geos={wood:wood.build(),lid:lid.build(),inside:inside.build(),earth:earth.build()};
+    this.geos={...chest,earth:earth.build()};
     const rng=this.ctx.rng.fork('buried-supplies');
     const add=(id,x,z,kind,bones=false)=>this.sites.push({id:'supply:'+id,x,z,kind,bones,seed:rng.next(),stage:0,node:null});
     for(const m of MAJORS.filter(m=>m.id!==OPENING.id))for(let i=0;i<3;i++){
@@ -80,6 +73,8 @@ export class Scavenging {
       add('opening:'+q.id,OPENING.x+q.x*cy+q.z*sy,OPENING.z-q.x*sy+q.z*cy,q.kind);
       Object.assign(this.sites.at(-1),{authored:true,noAmbush:true,deckY:q.y===undefined?null:station.padY+q.y,cash:q.cash,xp:q.xp});
     }
+    add('opening:first-light',-513,246,'crate');
+    Object.assign(this.sites.at(-1),{authored:true,noAmbush:true,cash:40,xp:30,ammo:8,bulbs:1});
     for(let i=0;i<wild.sites.length;i++){
       const w=wild.sites[i];if(w.kind==='travel-water')continue;
       const a=rng.next()*Math.PI*2,r=7+rng.next()*5;
@@ -134,7 +129,7 @@ export class Scavenging {
       const tries = s.grave ? 8 : (s.authored ? 1 : 20);
       for(let i=0;i<tries;i++){
         const a=i*2.399,r=i===0?0:(s.grave?0.55:1)+Math.sqrt(i)*(s.grave?0.5:1.2),x=ox+Math.cos(a)*r,z=oz+Math.sin(a)*r,y=s.deckY??terr.heightAt(x,z);
-        if(this._sys('roads').roadDistance(x,z)<3.4||y<.5||!col.fits(x,z,y+.03,s.authored?.59:.80,s.authored?1.0:1.7))continue;
+        if(this._sys('roads').roadDistance(x,z)<3.4||y<.5||!col.fits(x,z,y+.03,s.authored?.74:.86,s.authored?1.05:1.7))continue;
         if(!s.authored&&(Math.abs(y-terr.heightAt(x+1,z))>.32||Math.abs(y-terr.heightAt(x,z+1))>.32))continue;
         s.x=x;s.y=y+.04;s.z=z;found=true;break;
       }
@@ -144,9 +139,9 @@ export class Scavenging {
     s.stage=Number(pr.flag(s.id))||0;
     const root=new THREE.Group();root.position.set(s.x,s.y,s.z);root.name=s.id;
     const chest=new THREE.Group(),body=new THREE.Mesh(this.geos.wood,this.mat),lid=new THREE.Mesh(this.geos.lid,this.mat),contents=new THREE.Mesh(this.geos.inside,this.mat);
-    chest.add(body,contents,lid);lid.position.set(0,.65,.40);root.add(chest);
+    const seam=new THREE.Mesh(this.seamGeo,this.seamMat);seam.position.set(0,.652,-.49);chest.add(body,contents,lid,seam);lid.position.set(0,.66,.43);root.add(chest);
     const earth=new THREE.Mesh(this.geos.earth,this.mat);earth.visible=s.kind==='dig'&&s.stage<3;root.add(earth);
-    s.node={root,chest,body,lid,contents,earth,collider:-1,open:0};this.root.add(root);
+    s.node={root,chest,body,lid,contents,seam,earth,collider:-1,open:s.stage>=4?1:0};this.root.add(root);
     if(s.bones){
       const kit=new Kit(),rng=this.ctx.rng.fork(s.id+':bones');
       const api={scatteredBones:true,heightAt:(x,z)=>terr.heightAt(x,z)-s.y,wx:(x,z)=>s.x+x,wz:(x,z)=>s.z+z,
@@ -160,8 +155,9 @@ export class Scavenging {
     const n=s.node;if(!n)return;const buried=s.kind==='dig'&&s.stage<3,taken=s.stage>=4;
     n.earth.visible=buried;n.earth.scale.y=Math.max(.12,1-s.stage*.34);
     n.chest.visible=s.stage!==5&&(!buried||s.stage>=2);n.chest.position.y=buried?-.46:0;
-    n.contents.visible=!taken;n.lid.rotation.x=taken?-1.92:0;
-    if(!buried&&!taken&&n.collider<0)n.collider=this._sys('collision').addCollider({kind:'obb',x:s.x,z:s.z,halfX:.56,halfZ:.43,yaw:0,y0:s.y-.05,y1:s.y+.70,tag:'supply',breakable:22,standable:true},s.id);
+    n.contents.visible=!taken||n.open<.85;n.lid.rotation.x=n.open*1.92;n.seam.visible=!taken;
+    if(!buried&&!taken&&n.collider<0)n.collider=this._sys('collision').addCollider({kind:'obb',x:s.x,z:s.z,halfX:.71,halfZ:.50,yaw:0,y0:s.y-.05,y1:s.y+.93,tag:'supply',breakable:22,standable:true},s.id);
+    if(taken&&n.collider<0)n.collider=this._sys('collision').addCollider({kind:'obb',x:s.x,z:s.z,halfX:.71,halfZ:.50,yaw:0,y0:s.y-.05,y1:s.y+.66,tag:'strongbox-empty',standable:true},s.id);
   }
   _take(s){
     if(s.stage>=4||!s.node||s.kind==='dig'&&s.stage<3)return;
@@ -169,9 +165,10 @@ export class Scavenging {
     this._sys('collision').removeChunk(s.id);s.node.collider=-1;
     this._sys('fx')?.clearDecalsNear(s.x,s.y+.35,s.z,1.25);
     // ROUND 18: a buried cache is 22-40 now, not 4-9 — the same x4 the rest of the county took.
-    this._sys('progress').payCash(s.cash??(22+Math.floor(s.seed*19)),s.x,s.y+.4,s.z,'supplies');
-    this._sys('progress').award(s.xp??18,s.x,s.y+.4,s.z,'supplies');
-    this.ctx.bus.emit('pickup:ammo',{n:4+Math.floor(s.seed*5)});
+    const pr=this._sys('progress'),cash=pr.payCash(s.cash??(22+Math.floor(s.seed*19)),s.x,s.y+.4,s.z,'supplies'),xp=pr.award(s.xp??18,s.x,s.y+.4,s.z,'supplies');
+    const ammo=Math.max(0,this._sys('weapons')?.addReserve?.(s.ammo??(4+Math.floor(s.seed*5)))||0);
+    const lamps=this._sys('dusk-to-dawn'),beforeBulbs=lamps?.bulbs?.()||0;if(s.bulbs)lamps?.addBulb?.(s.bulbs);const bulbs=Math.max(0,(lamps?.bulbs?.()||0)-beforeBulbs);
+    this.ctx.bus.emit('reward:bundle',{title:'Supplies found',cash:cash||0,xp:xp||0,ammo,bulbs,detail:bulbs?'A spare bulb for a dark stretch of road.':'Added to your inventory.',x:s.x,y:s.y+.7,z:s.z});
     this._sys('audio')?.dread('branch',s.x,s.y+.3,s.z,.40);
     this._appearance(s);
   }
@@ -208,13 +205,14 @@ export class Scavenging {
       if(d<85&&!s.node&&budget>0&&(!s.retry||this.time>s.retry)){this._build(s);budget--;}
       if(d>165&&s.node){col.removeChunk(s.id);s.node.root.removeFromParent();s.node.boneGeo?.dispose();s.node=null;}
       if(!s.node)continue;
+      if(s.stage>=4&&s.node.open<1){s.node.open=Math.min(1,s.node.open+dt/.75);const u=s.node.open;s.node.lid.rotation.x=(u*u*(3-2*u))*1.92;s.node.contents.visible=u<.85;}
       if(s.node.collider>=0&&col.massOf(s.node.collider)<0)this._take(s);
-      if(s.stage>=4||d>near||Math.abs(p.pos.y-s.y)>1.5)continue;
+      if(s.stage>=4||this.ctx.shared.inCar||p.dead||d>near||Math.abs(p.pos.y-s.y)>1.5)continue;
       const dx=s.x-p.pos.x,dz=s.z-p.pos.z,dot=(dx*_dir.x+dz*_dir.z)/(d||1);
       if(dot<.60||!col.segmentClear(p.pos.x,p.eyeY,p.pos.z,s.x,s.y+.78,s.z))continue;
       target=s;near=d;
     }
-    if(target!==this.target){this.target=target;this.hold=0;}
+    if(target!==this.target){this.target=target;this.hold=0;if(use)this.release=true;}
     if(!target){this._stepHandOpen(dt,p,col,_dir,use);return;}
     const dig=target.kind==='dig'&&target.stage<3;
     this.ctx.bus.emit('prompt',{kind:dig?'dig':'hold',label:dig?'V':'E',rank:3,x:target.x,y:target.y+(dig?.3:.6),z:target.z,
@@ -291,5 +289,5 @@ export class Scavenging {
     }else this.boxHold=0;
   }
   state(){return{sites:this.sites.length,digs:this.sites.filter(s=>s.kind==='dig').length,resident:this.sites.filter(s=>s.node).map(s=>({id:s.id,kind:s.kind,x:s.x,y:s.y,z:s.z,stage:s.stage,seed:s.seed}))};}
-  dispose(){this.off?.();this.root.removeFromParent();for(const s of this.sites){this._sys('collision').removeChunk(s.id);s.node?.boneGeo?.dispose();}Object.values(this.geos).forEach(g=>g.dispose());}
+  dispose(){this.off?.();this.root.removeFromParent();for(const s of this.sites){this._sys('collision').removeChunk(s.id);s.node?.boneGeo?.dispose();}Object.values(this.geos).forEach(g=>g.dispose());this.seamGeo?.dispose();this.seamMat?.dispose();}
 }
