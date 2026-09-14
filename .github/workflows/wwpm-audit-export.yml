@@ -1,34 +1,44 @@
-name: WWPM pinned audit export
+name: WWPM native audit
 
 on:
   push:
     branches: [audit/wwpm-616f756-evidence-20260914]
-    paths: [.github/workflows/wwpm-audit-export.yml]
+    paths: [.github/workflows/wwpm-audit-export.yml, '.audit/wwpm/**']
 
 permissions:
   contents: read
 
 jobs:
-  export:
+  inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 616f75690c54ee37a53f603ecc6d7a0d1ca13b17
           persist-credentials: false
-      - name: Record exact source identity
+          fetch-depth: 2
+      - name: Prepare unchanged game and browser tools
         shell: bash
         run: |
-          mkdir -p audit-export
-          git rev-parse HEAD > audit-export/REVISION.txt
-          git ls-tree -r HEAD curfew > audit-export/GIT_TREE.txt
-          cp -R curfew audit-export/curfew
-          cp AGENTS.md audit-export/AGENTS.md
-          find audit-export/curfew -type f -print0 | sort -z | xargs -0 sha256sum > audit-export/SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
+          mkdir -p /tmp/wwpm-source audit-evidence
+          git archive HEAD curfew | tar -x -C /tmp/wwpm-source
+          git ls-tree -r HEAD curfew > audit-evidence/GIT_TREE.txt
+          python -m pip install --quiet playwright
+          if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null; then
+            python -m playwright install --with-deps chromium
+          fi
+      - name: Inspect current game
+        env:
+          WWPM_SOURCE: /tmp/wwpm-source
+        run: python .audit/wwpm/runtime_audit.py
+      - name: Package audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: wwpm-exact-616f756
-          path: audit-export/
+          name: wwpm-native-evidence-${{ github.run_number }}
+          path: |
+            audit-evidence/
+            .audit/wwpm/
+          include-hidden-files: true
           retention-days: 7
           if-no-files-found: error
