@@ -1,6 +1,7 @@
 // New destination ground, approach paths, environmental levers and the hidden Holdfast crypt.
 import * as THREE from 'three';
 import {Kit} from './sites.js';
+import {supplyChestGeometry} from './supply-chest.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {projectPlaceSurfaceUVs} from './place-surfaces.js';
 import {createWaterMaterial,prepareWaterGeometry} from './water-surface.js';
@@ -89,7 +90,10 @@ export class BossSites {
   // Three coherent arena levers. Their amber hearts visibly rupture and stay spent for this attempt.
   for(let i=0;i<3;i++){const a=(i+1)*TAU/3+.4,x=Math.cos(a)*23,z=Math.sin(a)*23;const g=new THREE.Group();g.position.set(x,0,z);const mat=new THREE.MeshStandardMaterial({color:s.skin.colors.accent,emissive:s.skin.colors.accent,emissiveIntensity:.45,roughness:.48,metalness:.15});const heart=new THREE.Mesh(new THREE.SphereGeometry(.72,16,12),mat);heart.scale.set(.8,1.25,.8);heart.position.y=1.55;g.add(heart);root.add(g);k.cyl(.65,.85,.48,12,x,.28,z,IRON);for(const side of[-1,1])rod(k,[x+side*.7,.2,z],[x+side*.55,2.5,z],.09,IRON);s.anchors.push({index:i,x:s.x+x,y:s.y+1.55,z:s.z+z,hp:36,spent:false,mesh:g,heart,mat,r:.85});}
   // A finite preparation cache sits at every approach, independent of currently owned weapons.
-  const supply={x:s.x+6,z:s.z+32,y:s.y+.6};k.box(2,.9,1.2,6,.5,32,[.12,.2,.17]);k.box(.25,.06,.9,6,1,32,[.5,.57,.44]);k.box(1.1,.06,.25,6,1.01,32,[.5,.57,.44]);s.supply=supply;
+  const supply={x:s.x+6,z:s.z+32,y:s.y+.7,open:0,hold:0,release:false,inRange:false};const chest=supplyChestGeometry(),coffer=new THREE.Group();coffer.position.set(6,.04,32);coffer.name='ammunition-coffer';
+  const body=new THREE.Mesh(chest.wood,this.materials.timber),lid=new THREE.Mesh(chest.lid,this.materials.timber),contents=new THREE.Mesh(chest.inside,this.materials.timber);lid.position.set(0,.66,.43);coffer.add(body,lid,contents);
+  const seam=new THREE.Mesh(new THREE.BoxGeometry(1.12,.022,.022),new THREE.MeshBasicMaterial({color:0xe6b353,transparent:true,opacity:.75,toneMapped:false}));seam.position.set(0,.652,-.49);coffer.add(seam);root.add(coffer);Object.assign(supply,{coffer,lid,contents,seam});s.supply=supply;
+  collision?.addCollider({kind:'obb',x:supply.x,z:supply.z,hx:.71,hz:.50,y0:s.y,y1:s.y+.97,tag:'strongbox',standable:true,authored:true},chunk);
   if(s.road?.hit){const dx=s.road.x-s.x,dz=s.road.z-s.z,dist=Math.hypot(dx,dz),angle=Math.atan2(dx,dz);const count=Math.ceil(dist/2.5);
    for(let i=0;i<count;i++){const t=i/count,x=dx*t,z=dz*t,y=heightAt(s.x+x,s.z+z)-s.y;k.box(5,.045,3,x,y+.065,z,[.085,.084,.08],angle);if(i%5===0){const side=(i%2?1:-1);k.cyl(.13,.19,2,8,x+Math.cos(angle)*side*3,y+1,z-Math.sin(angle)*side*3,TIMBER);glow.cyl(.10,.13,.18,8,x+Math.cos(angle)*side*3,y+2,z-Math.sin(angle)*side*3,[.36,.27,.15]);}}
    sign(root,s.location.toUpperCase()+'|KEEP CLEAR',dx,Math.max(2,heightAt(s.road.x,s.road.z)-s.y+2),dz,angle);
@@ -129,7 +133,7 @@ export class BossSites {
   else{p.teleport(h.x,h.z-1.4,incomingYaw);this.ctx.shared.locationOverride=null;}
   if(camera){camera.yaw=p.yaw;camera.pitch=pitch;}this.passageCooldown=1.4;this.ctx.bus.emit('boss:passage',{inside:enter});this.release=true;return true;
  }
- step(dt){if(!this.ctx.ready)return;this.time+=dt;const p=this._sys('player'),pr=this._sys('progress');if(!p?.pos||!pr)return;if(!this.loaded){for(const s of this.sites)s.supplyUsed=!!pr.flag('boss-supply:'+s.id);this.loaded=true;}
+ step(dt){if(!this.ctx.ready)return;this.time+=dt;const p=this._sys('player'),pr=this._sys('progress');if(!p?.pos||!pr)return;if(!this.loaded){for(const s of this.sites){s.supplyUsed=!!pr.flag('boss-supply:'+s.id);if(s.supply)s.supply.open=s.supplyUsed?1:0;}this.loaded=true;}
   for(const s of this.sites){
    if(s.id==='underkeep'&&s.glow)s.glow.visible=!pr.bossCleared('underkeep');
    if(s.orchard){s.uncurl=pr.bossCleared(s.id)?Math.min(1,(s.uncurl||0)+dt/4):0;for(const q of s.orchard)q.arm.rotation.z=q.side*(-.13+.26*s.uncurl);}
@@ -137,9 +141,9 @@ export class BossSites {
   if(this.nellsBowl)this.nellsBowl.visible=pr.bossCleared('underkeep')||this.ctx.shared.lateBellFinal||this.ctx.shared.phase!=='dusk';
   const use=this.ctx.input.held('use');if(!use)this.release=false;
   const atCrypt=Math.hypot(p.pos.x-CRYPT.x,p.pos.z-CRYPT.z)<65;if(atCrypt!==this.inside){this.inside=atCrypt;const hatch=this._hatch();this.ctx.shared.locationOverride=atCrypt?{x:hatch?.x||0,z:hatch?.z||0,name:'Beneath the Holdfast'}:null;}
-  for(const s of this.sites){const d=Math.hypot(p.pos.x-s.x,p.pos.z-s.z);s.art.visible=d<500;const encounter=this._sys('boss-encounters')?.all.find(k=>k.id===s.id);stepBossPlaceArt(s,encounter,!!pr.bossCleared(s.id),this.time,dt);if(s.eruption){const encounter=this._sys('boss-encounters')?.all.find(k=>k.id===s.id),awake=encounter&&encounter.state!=='dormant';s.eruption.visible=!!awake;for(const m of s.eruption.children){const u=Math.min(1,(encounter?.stateT||0)/1.5),fly=awake&&encounter.state==='rising'?Math.sin(u*Math.PI):0;m.position.y=.12+fly*(2+(m.id%4));m.position.x=m.userData.start.x*(1+fly);m.position.z=m.userData.start.z*(1+fly);m.rotation.x=fly*2;}}for(const a of s.anchors){a.mesh.visible=!a.spent;a.mat.emissiveIntensity=.32+Math.sin(this.time*2+a.index)*.10;}
+  for(const s of this.sites){const d=Math.hypot(p.pos.x-s.x,p.pos.z-s.z);s.art.visible=d<500;const encounter=this._sys('boss-encounters')?.all.find(k=>k.id===s.id);stepBossPlaceArt(s,encounter,!!pr.bossCleared(s.id),this.time,dt);if(s.eruption){const encounter=this._sys('boss-encounters')?.all.find(k=>k.id===s.id),awake=encounter&&encounter.state!=='dormant';s.eruption.visible=!!awake;for(const m of s.eruption.children){const u=Math.min(1,(encounter?.stateT||0)/1.5),fly=awake&&encounter.state==='rising'?Math.sin(u*Math.PI):0;m.position.y=.12+fly*(2+(m.id%4));m.position.x=m.userData.start.x*(1+fly);m.position.z=m.userData.start.z*(1+fly);m.rotation.x=fly*2;}}for(const a of s.anchors){const charge=a.spent?0:Math.max(0,Math.min(1,a.channeling||0)),pulse=Math.sin(this.time*(charge>0?21:2)+a.index);a.mesh.visible=!a.spent;a.mat.emissiveIntensity=.32+pulse*.10+charge*(2.2+pulse*.35);a.heart.scale.set(.8*(1+charge*.22),1.25*(1+charge*.12),.8*(1+charge*.22));a.heart.rotation.y=charge*Math.sin(this.time*5)*.18;}
    if(d<s.discoverR&&!pr.flag('boss-found:'+s.id)){pr.flag('boss-found:'+s.id,true);const pt=bossMapPoint(s);pr.learnRumour?.({id:s.id,name:s.location,x:pt.x,z:pt.z,kind:'boss',visited:true});this.ctx.bus.emit('boss:discovered',{id:s.id,name:s.location});}
-   const sd=Math.hypot(p.pos.x-s.supply.x,p.pos.z-s.supply.z);if(sd<2.8&&!s.supplyUsed&&!this.ctx.shared.inCar){this.ctx.bus.emit('prompt',{kind:'tap',label:'E',rank:7,x:s.supply.x,y:s.supply.y,z:s.supply.z,detail:'TAKE THE AMMUNITION',subdetail:'LEFT FOR WHOEVER CAME NEXT'});if(use&&!this.release){const weapons=this._sys('weapons');for(const id of ['revolver','bolt','shotgun','carbine'])weapons?.addReserveTo?.(id,id==='carbine'?90:id==='shotgun'?18:24);s.supplyUsed=true;pr.flag('boss-supply:'+s.id,true);this.release=true;this.ctx.bus.emit('pickup',{kind:'ammo',amount:1});}}
+   this._stepSupply(s,p,dt,use);
   }
   if(this.ctx.shared.inCar||p.dead)return;const h=this._hatch();const crypt=this.sites.find(s=>s.id==='underkeep');const target=this.inside?{x:3500,z:3540.3,y:crypt.y+2.9}:h;if(!target)return;const d=Math.hypot(p.pos.x-target.x,p.pos.z-target.z);
   this.passageCooldown=Math.max(0,(this.passageCooldown||0)-dt);
@@ -150,6 +154,24 @@ export class BossSites {
    const lx=(p.pos.x-h.x)*Math.cos(h.yaw)-(p.pos.z-h.z)*Math.sin(h.yaw),lz=(p.pos.x-h.x)*Math.sin(h.yaw)+(p.pos.z-h.z)*Math.cos(h.yaw);
    if(Math.abs(lx)<1.45&&lz<-2.2&&lz>-4.2&&p.pos.y<h.y-2.4&&this.passageCooldown<=0)this._transfer(true);
   }
+ }
+ _stepSupply(s,p,dt,use){
+  const q=s.supply;if(!q)return;
+  q.open=Math.min(1,q.open+(s.supplyUsed?dt/.75:0));const u=q.open;q.lid.rotation.x=u*u*(3-2*u)*1.92;q.contents.visible=!s.supplyUsed||u<.85;q.seam.visible=!s.supplyUsed;
+  if(!use)q.release=false;
+  const dx=q.x-p.pos.x,dz=q.z-p.pos.z,d=Math.hypot(dx,dz),camera=this._sys('camera'),col=this._sys('collision');
+  let eligible=d<2.8&&!s.supplyUsed&&!p.dead&&!this.ctx.shared.inCar&&Math.abs(p.pos.y-s.y)<2.2;
+  if(eligible){this.supplyAim||=new THREE.Vector3();camera?.aimDir?.(this.supplyAim);eligible=!!camera&&(dx*this.supplyAim.x+dz*this.supplyAim.z)/(d||1)>.60;
+   if(eligible){const eye=p.eyeY??p.pos.y+1.65,dy=q.y-eye,len=Math.hypot(dx,dy,dz),hit=col?.raycast?.({x:p.pos.x,y:eye,z:p.pos.z},{x:dx/len,y:dy/len,z:dz/len},len,1);if(hit?.hit&&hit.t<len-.9)eligible=false;}
+  }
+  if(!eligible){q.inRange=false;q.hold=0;return;}
+  if(!q.inRange){q.inRange=true;q.hold=0;if(use)q.release=true;}
+  this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:7,x:q.x,y:q.y,z:q.z,k:q.hold/.8,detail:'OPEN AMMUNITION',subdetail:'LEFT FOR WHOEVER CAME NEXT'});
+  if(!use||q.release){q.hold=0;return;}q.hold+=dt;if(q.hold<.8)return;
+  const weapons=this._sys('weapons');let ammo=0;for(const id of ['revolver','bolt','shotgun','carbine'])if(weapons?.owned?.includes(id))ammo+=Math.max(0,weapons.addReserveTo?.(id,id==='carbine'?90:id==='shotgun'?18:24)||0);
+  if(ammo===0){q.hold=0;q.release=true;this.ctx.bus.emit('prompt',{kind:'hold',label:'E',rank:7,x:q.x,y:q.y,z:q.z,k:0,detail:'AMMUNITION FULL',subdetail:'THE CACHE CAN WAIT'});return;}
+  s.supplyUsed=true;q.hold=0;q.release=true;this._sys('progress').flag('boss-supply:'+s.id,true);
+  this.ctx.bus.emit('reward:bundle',{title:'Ammunition found',cash:0,xp:0,ammo,bulbs:0,detail:ammo?'Added to your weapons.':'Your ammunition reserves are full.',x:q.x,y:q.y,z:q.z});
  }
  state(){return {inside:this.inside,sites:this.sites.map(s=>({id:s.id,x:s.x,y:s.y,z:s.z,visible:s.art?.visible,anchors:s.anchors.map(a=>({x:a.x,y:a.y,z:a.z,spent:a.spent})),supplyUsed:s.supplyUsed}))};}
  dispose(){this._sys('collision')?.removeChunk('boss-stair');this.passage?.traverse(o=>{o.geometry?.dispose();if(o.material&&!this.ownedMaterials.has(o.material)){o.material.map?.dispose();o.material.dispose();}});this.off?.();this.deathOff?.();for(const s of this.sites){this._sys('collision')?.removeChunk('boss-site:'+s.id);s.art.traverse(o=>{o.geometry?.dispose();if(o.material&&!this.ownedMaterials.has(o.material)){o.material.map?.dispose();o.material.dispose();}});}for(const m of this.ownedMaterials)m.dispose();for(const maps of Object.values(this.groundLibrary||{})){maps.map.dispose();maps.bump.dispose();}this.group.removeFromParent();this.ctx.shared.bossZones=[];this.ctx.shared.locationOverride=null;}

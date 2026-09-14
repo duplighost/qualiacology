@@ -64,6 +64,7 @@
  * would mean a destination's own colour changes as you walk around it. Authored wins.
  * ------------------------------------------------------------------ */
 import { STAGED_KINDS } from './staged.js';
+import { STATION_PYLON } from './opening-layout.js';
 import { SETPIECE_KINDS } from './setpieces.js';   // ROUND 22, lane H: the rationed set pieces
 
 export const REGION_TINT = Object.freeze({
@@ -157,7 +158,7 @@ export const MAJORS = Object.freeze([
     flat: null, flatId: 'filling-station',
     // Road-readable landmark contract. `existing` means the authored sign pylon already is
     // the arrival frame; every other major gets the same state-witness role from sites.js.
-    approach: { x: 6.6, z: -7.4, w: 3.4, h: 9.4, style: 'station', existing: true },
+    approach: { ...STATION_PYLON, w: 3.4, h: 9.4, style: 'station', existing: true },
     discoverR: 24, nearR: 80, horizon: false,
     claim: { how: 'none' },
     // xpFind was 0 while the hub was pre-found and could never pay for it. It is found by

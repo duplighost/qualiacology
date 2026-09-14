@@ -41,7 +41,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import CFG from '../config.js';
 import { clamp, clamp01, lerp, smoothstep, TAU, Rng } from '../engine/math.js';
-import { heightAt, slopeAt } from './terrain.js';
+import { heightAt, slopeAt, flats } from './terrain.js';
 import { roadDistance } from './roads.js';
 import { MAJORS, MAJOR_BY_ID } from './placedata.js';
 import { SITE_COLOURS as C, GLOW } from './sites.js';
@@ -72,7 +72,9 @@ const TRAVEL_WATER_SPECS = Object.freeze([
   { id: 'ford-blackwater', route: 'reservoir-road', nearX: -900, nearZ: -250, kind: 'ford' },
   { id: 'pool-station-cut', route: 'station-northwest', nearX: -900, nearZ: 457, kind: 'pool', side: 1 },
   { id: 'pool-witch-road', route: 'witch-road', nearX: -759, nearZ: -942, kind: 'pool', side: -1 },
-  { id: 'pool-works-cut', route: 'works-cut', nearX: -515, nearZ: 245, kind: 'pool', side: 1 },
+  // A smaller natural basin beyond the station yard; a full 26 m pool here
+  // climbed the bank, while the previous location submerged the forecourt.
+  { id: 'pool-works-cut', route: 'works-cut', nearX: -440, nearZ: 204, arc: 88, kind: 'pool', side: 1, rx: 9, rz: 5.5 },
   { id: 'pool-sawmill', route: 'sawmill-bends', nearX: 474, nearZ: 168, kind: 'pool', side: 1 },
 ]);
 const TRAVEL_POOL_RX = 13.0;
@@ -289,6 +291,24 @@ function travelPoolProfileAt(x, z, yaw, rx = TRAVEL_POOL_RX, rz = TRAVEL_POOL_RZ
   return { lo, hi, relief: hi - lo };
 }
 
+function travelPoolClear(roads,x,z,yaw,rx=TRAVEL_POOL_RX,rz=TRAVEL_POOL_RZ){
+  // A flat forecourt is not a basin. Keep the entire bank outside inhabited
+  // destination pads, including pads installed by the road system itself.
+  for(const m of MAJORS){
+    const pad=flats().find(f=>f.id===(m.flatId||m.id)),radius=m.flat?.r||pad?.r||40;
+    if(Math.hypot(x-m.x,z-m.z)<radius+rx*1.66)return false;
+  }
+  const cy=Math.cos(yaw),sy=Math.sin(yaw);
+  for(let ring=1;ring<=3;ring++)for(let i=0;i<48;i++){
+    const a=i/48*TAU,edge=(1+.075*Math.sin(a*3+.6)+.045*Math.sin(a*7-.4))*1.48*ring/3;
+    const lx=Math.cos(a)*rx*edge,lz=Math.sin(a)*rz*edge;
+    const wx=x+lx*cy+lz*sy,wz=z-lx*sy+lz*cy;
+    const road=roads.nearestRoadInfo(wx,wz,12);
+    if(road.hit&&road.dist<road.width*.5+.75)return false;
+  }
+  return true;
+}
+
 /**
  * Plan the water a road-following player actually meets. The route metadata and thinned
  * polylines are public roads-system contracts, so this survives a control-point edit without
@@ -301,7 +321,7 @@ export function planTravelWaters(roads) {
   const lines = roads.routePolylines();
   const out = [];
   for (let si = 0; si < TRAVEL_WATER_SPECS.length; si++) {
-    const spec = TRAVEL_WATER_SPECS[si];
+    const spec = TRAVEL_WATER_SPECS[si], poolRX=spec.rx||TRAVEL_POOL_RX, poolRZ=spec.rz||TRAVEL_POOL_RZ;
     const ri = roads.routes.findIndex((r) => r && r.id === spec.route);
     const line = ri >= 0 ? lines[ri] : null;
     if (!line || line.length < 3) continue;
@@ -311,7 +331,16 @@ export function planTravelWaters(roads) {
       const d2 = dx * dx + dz * dz;
       if (d2 < bestD2) { bestD2 = d2; pi = i; }
     }
-    const p = line[pi], a = line[pi - 1], b = line[pi + 1];
+    let p = line[pi], a = line[pi - 1], b = line[pi + 1];
+    if(Number.isFinite(spec.arc)){
+      let left=spec.arc;
+      for(let i=1;i<line.length;i++){
+        const aa=line[i-1],bb=line[i],length=Math.hypot(bb.x-aa.x,bb.z-aa.z);
+        if(length<.0001)continue;
+        if(left<=length){a=aa;b=bb;const t=left/length;p={x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t};break;}
+        left-=length;
+      }
+    }
     let tx = b.x - a.x, tz = b.z - a.z;
     const tl = Math.hypot(tx, tz) || 1;
     tx /= tl; tz /= tl;
@@ -326,12 +355,14 @@ export function planTravelWaters(roads) {
         for (let oi = 0; oi < TRAVEL_POOL_OFFSETS.length; oi++) {
           const off = TRAVEL_POOL_OFFSETS[oi];
           const qx = p.x + nx * off * side, qz = p.z + nz * off * side;
-          const q = travelPoolProfileAt(qx, qz, yaw);
+          if(!travelPoolClear(roads,qx,qz,yaw,poolRX,poolRZ))continue;
+          const q = travelPoolProfileAt(qx, qz, yaw, poolRX, poolRZ);
           // Relief dominates; distance only breaks near ties in favour of the visible shore.
           const qScore = q.relief + off * 0.004 + sidePass * 0.025;
           if (qScore < score) { score = qScore; x = qx; z = qz; profile = q; }
         }
       }
+      if(!profile)continue;
     }
     const y = heightAt(x, z);
     const rec = {
@@ -340,8 +371,9 @@ export function planTravelWaters(roads) {
       cx: Math.floor(x / W.cell), cz: Math.floor(z / W.cell),
       chunk: Math.floor(x / CHUNK) + '|' + Math.floor(z / CHUNK),
       rec: null, d2: Infinity,
-      clearRX: spec.kind === 'ford' ? TRAVEL_FORD_WIDTH * 0.5 + 4.5 : TRAVEL_POOL_RX + 7,
-      clearRZ: spec.kind === 'ford' ? TRAVEL_FORD_LEN * 0.5 + 3.5 : TRAVEL_POOL_RZ + 6,
+      clearRX: spec.kind === 'ford' ? TRAVEL_FORD_WIDTH * 0.5 + 4.5 : poolRX * 1.66,
+      clearRZ: spec.kind === 'ford' ? TRAVEL_FORD_LEN * 0.5 + 3.5 : poolRZ * 1.66,
+      poolRX, poolRZ,
       waterY: profile ? profile.hi + 0.045 : y + 0.085,
       waterFloorY: profile ? profile.lo : y,
       waterRelief: profile ? profile.relief : 0,
@@ -1384,7 +1416,7 @@ function streamSurface(k, api) {
 }
 
 /** A large level pool whose value bands describe depth before lighting or fog can. */
-function travelPoolSurface(k, level) {
+function travelPoolSurface(k, level, rx, rz) {
   const rings = 8, seg = 48;
   const nodes = [[0, 0]], indices = [];
   for (let ring = 1; ring <= rings; ring++) {
@@ -1392,8 +1424,8 @@ function travelPoolSurface(k, level) {
     for (let i = 0; i < seg; i++) {
       const a = i / seg * TAU;
       const edge = 1 + 0.075 * Math.sin(a * 3 + 0.6) + 0.045 * Math.sin(a * 7 - 0.4);
-      nodes.push([Math.cos(a) * TRAVEL_POOL_RX * t * edge,
-        Math.sin(a) * TRAVEL_POOL_RZ * t * edge, t, a]);
+      nodes.push([Math.cos(a) * rx * t * edge,
+        Math.sin(a) * rz * t * edge, t, a]);
     }
   }
   for (let i = 0; i < seg; i++) indices.push(0, 1 + i, 1 + (i + 1) % seg);
@@ -1430,8 +1462,8 @@ function travelPoolBank(k, api, level) {
     for (let i = 0; i < seg; i++) {
       const a = i / seg * TAU;
       const edge = 1 + 0.075 * Math.sin(a * 3 + 0.6) + 0.045 * Math.sin(a * 7 - 0.4);
-      const x = Math.cos(a) * TRAVEL_POOL_RX * scale * edge;
-      const z = Math.sin(a) * TRAVEL_POOL_RZ * scale * edge;
+      const x = Math.cos(a) * api.site.poolRX * scale * edge;
+      const z = Math.sin(a) * api.site.poolRZ * scale * edge;
       const gy = groundY(api, x, z);
       const y = ring === 0 ? level + 0.006
         : ring === 1 ? Math.max(level + 0.18, gy + 0.08)
@@ -1557,7 +1589,7 @@ function buildTravelWater(api) {
       glow.box(0.20, 0.12, 0.20, x, gy + 1.44, 0, TRAVEL_WATER_GLINT);
     }
   } else {
-    travelPoolSurface(water, site.waterY);
+    travelPoolSurface(water, site.waterY, site.poolRX, site.poolRZ);
     travelPoolBank(solid, api, site.waterY);
     // A broken dock reaches from the road-facing bank into every pool.
     const cy = Math.cos(site.yaw), sy = Math.sin(site.yaw);
@@ -1565,21 +1597,21 @@ function buildTravelWater(api) {
     const roadLZ = dx * sy + dz * cy;
     const toward = roadLZ < 0 ? -1 : 1;
     for (let i = 0; i < 8; i++) {
-      const z = toward * (TRAVEL_POOL_RZ + 1.2 - i * 0.82);
+      const z = toward * (site.poolRZ + 1.2 - i * 0.82);
       const gy = Math.max(site.waterY + 0.12, groundY(api, 0, z) + 0.10);
       solid.box(2.45, 0.10, 0.70, r.range(-0.10, 0.10), gy, z, TRAVEL_DOCK, r.range(-0.06, 0.06));
     }
     // Reeds, dead flooded trunks and a half-sunk skiff give three vertical scale cues.
     for (let i = 0; i < 34; i++) {
       const a = i / 34 * TAU + r.range(-0.09, 0.09), rr = r.range(0.92, 1.13);
-      const x = Math.cos(a) * TRAVEL_POOL_RX * rr;
-      const z = Math.sin(a) * TRAVEL_POOL_RZ * rr;
+      const x = Math.cos(a) * site.poolRX * rr;
+      const z = Math.sin(a) * site.poolRZ * rr;
       const gy = groundY(api, x, z);
       solid.strut(x, gy, z, x + r.range(-0.13, 0.13), gy + r.range(0.7, 1.65), z, 0.022, 4, REED);
     }
     for (let i = 0; i < 5; i++) {
-      const a = 0.4 + i * 1.22, x = Math.cos(a) * TRAVEL_POOL_RX * 0.70;
-      const z = Math.sin(a) * TRAVEL_POOL_RZ * 0.70;
+      const a = 0.4 + i * 1.22, x = Math.cos(a) * site.poolRX * 0.70;
+      const z = Math.sin(a) * site.poolRZ * 0.70;
       solid.strut(x, site.waterY - 0.25, z, x + r.range(-0.45, 0.45),
         site.waterY + r.range(2.1, 4.2), z + r.range(-0.35, 0.35), r.range(0.08, 0.16), 6, C.wood);
     }
@@ -2802,7 +2834,7 @@ export class Wilds {
       g.add(m);
     }
     if (waterGeo) {
-      prepareWaterGeometry(waterGeo, site, TRAVEL_POOL_RX, TRAVEL_POOL_RZ, POND_RX, POND_RZ);
+      prepareWaterGeometry(waterGeo, site, site.poolRX || TRAVEL_POOL_RX, site.poolRZ || TRAVEL_POOL_RZ, POND_RX, POND_RZ);
       const m = new THREE.Mesh(waterGeo, this.matWater);
       m.name = (site.kind === 'travel-water' ? 'travel-water-surface-' : 'wild-water-surface-') + site.id;
       m.userData.waterSurface = true;

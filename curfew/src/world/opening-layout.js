@@ -1,8 +1,9 @@
 // The station's small, authored exploration loop. Coordinates are relative to its pad.
+export const STATION_PYLON=Object.freeze({x:18,z:10});
 export const OPENING = Object.freeze({
   id:'filling-station', x:-520, z:240,
   tower:{x:16,z:-17,deck:12},
-  car:{x:13,z:11,heading:-2.49},
+  car:{route:'works-cut',distance:28},
   path:[[7,5],[9,-7],[9,-16],[9,-24],[17,-28],[26,-24],[29,-14],[28,-3],[21,4],[13,9]],
   trees:[[-36,-21,0,.94],[-32,-29,4,.85],[-23,-30,1,1.1],[-11,-29,0,.9],[-3,-33,4,1.15],
     [7,-35,1,1.2],[16,-36,0,1.05],[25,-32,4,.93],[33,-25,1,1.1],[36,-14,0,1.14],
@@ -20,3 +21,21 @@ export const OPENING = Object.freeze({
     {id:'old-fence',x:29,z:5,kind:'dig'},
   ],
 });
+
+// Departure furniture follows the road that is actually built. Sampling from the
+// station end also works for routes whose authored control points run toward it.
+export function openingRoadPoint(roads,routeId,distance){
+  const index=roads.routes.findIndex(r=>r.id===routeId),line=roads.routePolylines()[index];
+  if(!line||line.length<2)return null;
+  const first=line[0],last=line[line.length-1];
+  const reverse=Math.hypot(last.x-OPENING.x,last.z-OPENING.z)<Math.hypot(first.x-OPENING.x,first.z-OPENING.z);
+  let left=Math.max(0,distance);
+  for(let n=1;n<line.length;n++){
+    const a=line[reverse?line.length-n:n-1],b=line[reverse?line.length-n-1:n];
+    const dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);
+    if(length<.0001)continue;
+    if(left<=length||n===line.length-1){const t=Math.min(1,left/length);return{x:a.x+dx*t,z:a.z+dz*t,tx:dx/length,tz:dz/length,width:roads.routes[index].width};}
+    left-=length;
+  }
+  return null;
+}

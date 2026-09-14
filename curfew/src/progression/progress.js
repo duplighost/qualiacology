@@ -691,6 +691,8 @@ export class Progress {
     // docs/ROUND-7/HANDOFF-G.md — in one line: fire it ONCE on the frame the door latches,
     // never per step, and carry the DOOR's position, not the player's.
     on('door:shut', (p) => this._doorShut(p.x, p.z));
+    // A completed safe rest banks carried XP even during the proximity cooldown.
+    on('place:rested', () => this.bank('rest'));
 
     // ROUND 6: the pause no longer deals. The whole tree is on the card and a click buys a
     // node (ui/hud.js _buildPause); `draft()` is reached only by autoDraft and by tests.
@@ -844,7 +846,7 @@ export class Progress {
   /** Boss rewards are permanent, including the XP: a victory never becomes a corpse run. */
   bossCleared(id) { return this.save.data.bossesCleared.includes(id) || !!this.flag('boss:' + id); }
 
-  completeBoss({ id, name, finishId, xp = 0, cash = 0 } = {}) {
+  completeBoss({ id, name, finishId, xp = 0, cash = 0, x, y, z } = {}) {
     if (typeof id !== 'string' || !id || this.bossCleared(id)) return false;
     const d = this.save.data;
     d.bossesCleared.push(id); d.worldFlags['boss:' + id] = true;
@@ -852,11 +854,12 @@ export class Progress {
     const amount = Math.max(0, Math.round(Number(xp) || 0));
     d.xp += amount;
     this.save.mark(); this._checkLevel(); this._publish();
-    const x = this._playerAt(0), y = this._playerAt(1) + 1, z = this._playerAt(2);
+    x = Number.isFinite(x) ? x : this._playerAt(0);
+    y = Number.isFinite(y) ? y : this._playerAt(1) + 1;
+    z = Number.isFinite(z) ? z : this._playerAt(2);
     if (amount) this.ctx.bus.emit('xp:gained', {amount, x, y, z, reason:'boss', _own:true});
     this.payCash(cash, x, y, z, 'boss');
-    this._rewardAnswer(amount, x, y, z, 'boss');
-    this.ctx.bus.emit('boss:cleared', {id, name: name || id, xp:amount, cash, skin:finishId});
+    this.ctx.bus.emit('boss:cleared', {id, name: name || id, xp:amount, cash, skin:finishId, x, y, z});
     this.save.flush();
     return true;
   }
@@ -938,7 +941,7 @@ export class Progress {
 
   /** The same shape as _rewardAnswer, one tone up, so a coin sounds like a coin. */
   _cashAnswer(amount, x, y, z, reason) {
-    void reason;
+    if (reason === 'boss') return; // the complete boss receipt owns its ceremony
     const px = Number.isFinite(x) ? x : this._playerAt(0);
     const py = Number.isFinite(y) ? y : this._playerAt(1) + 0.55;
     const pz = Number.isFinite(z) ? z : this._playerAt(2);

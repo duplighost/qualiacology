@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {Kit} from './sites.js';
 import {projectPlaceSurfaceUVs} from './place-surfaces.js';
-import {OPENING as O} from './opening-layout.js';
+import {OPENING as O,openingRoadPoint} from './opening-layout.js';
 
 const WOOD=[.125,.084,.05], PALE=[.28,.23,.15], IRON=[.064,.075,.082], RUST=[.13,.065,.034];
 const SOIL=[.07,.064,.047], STONE=[.13,.14,.138], _q=new THREE.Quaternion(),_v=new THREE.Vector3();
@@ -134,18 +134,21 @@ function groundLoop(k,api,roads){
   for(const s of [-1,1])k.cyl(.30,.30,.025,11,lx+s*2.41,ly+.5,lz,PALE,0,0,Math.PI/2);
   // Low fence fragments frame pockets, with gaps at every path junction.
   for(const [x,z] of [[23,-29],[30,6],[35,-10],[-7,-27]]){
-    for(const dx of [-1.8,1.8])box(k,api,.15,1.15,.16,x+dx,ground(x+dx,z)+.575,z,WOOD);
+    for(const dx of [-1.8,1.8]){k.open();box(k,api,.15,1.15,.16,x+dx,ground(x+dx,z)+.575,z,WOOD,'fence');k.close(x+dx,z,.16,WOOD);}
+    k.open();
     for(const h of [.43,.87])k.box(3.7,.12,.09,x,ground(x,z)+h,z,WOOD);
-    api.emit({kind:'obb',x,z,halfX:1.9,halfZ:.1,yaw:0,y0:ground(x,z),y1:ground(x,z)+.94,tag:'wood',standable:true});
+    k.close(x,z,1.9,WOOD);
+    api.emit({kind:'obb',x,z,halfX:1.85,halfZ:.05,yaw:0,y0:ground(x,z)+.37,y1:ground(x,z)+.94,tag:'fence',standable:false});
   }
-  // The parking bay is in the first view, with a clear path to the road to Holdfast.
-  for(const x of [10.8,15.2])k.box(.075,.02,6,x,api.padY+.06,11,PALE);
-  for(let i=0;i<10;i++){
-    const x=16+i*1.2,z=17+i*1.5,g=ground(x,z);
-    if(roads.roadDistance(api.wx(x,z),api.wz(x,z))<3.5)continue;
-    for(const side of [-1,1]){
-      k.cyl(.72,.72,.025,8,x+side*2.8,g+.02,z,SOIL);
-      if(i%3===0){k.box(.1,.60,.1,x+side*2.8,g+.3,z,IRON);k.box(.12,.12,.12,x+side*2.8,g+.55,z,PALE);}
+  // Short edge marks lead from the pumps onto the live Holdfast departure.
+  // The old painted bay pointed across the grass after the road was rerouted.
+  const yaw=api.yaw||0,cy=Math.cos(yaw),sy=Math.sin(yaw);
+  for(let distance=8;distance<=35;distance+=3){
+    const p=openingRoadPoint(roads,O.car.route,distance);if(!p)continue;
+    for(const side of[-1,1]){
+      const wx=p.x-p.tz*side*(p.width*.5+.35),wz=p.z+p.tx*side*(p.width*.5+.35),dx=wx-O.x,dz=wz-O.z;
+      const x=dx*cy-dz*sy,z=dx*sy+dz*cy;
+      k.box(.09,.022,1.3,x,ground(x,z)+.055,z,PALE,Math.atan2(p.tx,p.tz)-yaw);
     }
   }
 }
@@ -165,7 +168,8 @@ export class Opening {
     this.materials.push(mat);const mesh=new THREE.Mesh(g,mat);mesh.castShadow=true;mesh.receiveShadow=true;this.root.add(mesh);
     this._trees();this._papers();this._room();this._lanterns();this._weather();
     if(this._sys('progress').flag('opening:night'))this.nightT=20;
-    const car=this._sys('car');car._park(api.wx(O.car.x,O.car.z),api.wz(O.car.x,O.car.z),.606,.795,true);
+    const car=this._sys('car'),departure=openingRoadPoint(this._sys('roads'),O.car.route,O.car.distance);
+    if(departure)car._park(departure.x,departure.z,departure.tx,departure.tz,true);
     this.off=[this.ctx.bus.on('phase:changed',p=>{if(p.phase==='night'&&p.prev==='dusk')this._night();}),
       this.ctx.bus.on('place:rest',p=>{if(p.id===O.id)this.pendingWake=true;})];
   }
@@ -263,16 +267,13 @@ export class Opening {
       c.font='bold 75px sans-serif';c.fillStyle='#b9ab84';c.textAlign='center';c.fillText('REST',w*.75,h*.64);
     },Math.PI/2);
     // Signs stand at actual outgoing road mouths, not invented compass directions.
-    const signs=[['HOLDFAST',21,23,-2.49],['RESERVOIR',-34,-23,.98],['COUNTY ROAD',-43,3,1.55],['NORTHWEST',-40,22,1.95]];
+    const signs=[['HOLDFAST','works-cut',43,-1],['RESERVOIR','reservoir-road',46,1],['COUNTY ROAD','spur-west',45,-1],['NORTHWEST','station-northwest',46,1]];
     const k=new Kit(),roads=this._sys('roads');this.signs=[];
-    for(const [label,lx,lz,yaw] of signs){
-      const wx=this.api.wx(lx,lz),wz=this.api.wz(lx,lz),road={...roads.nearestRoadInfo(wx,wz,20)};
-      let x=lx,z=lz;
-      if(road.hit){
-        const side=Math.sign((wx-road.x)*-road.tz+(wz-road.z)*road.tx)||1,offset=road.width*.5+2.1;
-        const dx=road.x-road.tz*side*offset-O.x,dz=road.z+road.tx*side*offset-O.z;
-        x=dx*Math.cos(this.yaw)-dz*Math.sin(this.yaw);z=dx*Math.sin(this.yaw)+dz*Math.cos(this.yaw);
-      }
+    for(const [label,route,distance,side] of signs){
+      const road=openingRoadPoint(roads,route,distance);if(!road)continue;
+      const offset=road.width*.5+2.3,dx=road.x-road.tz*side*offset-O.x,dz=road.z+road.tx*side*offset-O.z;
+      const x=dx*Math.cos(this.yaw)-dz*Math.sin(this.yaw),z=dx*Math.sin(this.yaw)+dz*Math.cos(this.yaw);
+      const yaw=Math.atan2(-road.tx,-road.tz)-this.yaw;
       const gy=this.api.heightAt(this.api.wx(x,z),this.api.wz(x,z));
       box(k,this.api,.14,2.2,.14,x,gy+1.1,z,IRON,'metal',false);
       this._paper('road-sign-'+label,x+Math.sin(yaw)*.12,gy+2.05,z+Math.cos(yaw)*.12,2.9,.59,(c,w,h)=>{
@@ -280,7 +281,7 @@ export class Opening {
         c.fillStyle='#000000';c.font='bold 64px sans-serif';c.textAlign='center';c.fillText(label,w*.45,h*.66);
         c.fillRect(w-81,52,16,h-83);c.beginPath();c.moveTo(w-73,23);c.lineTo(w-105,65);c.lineTo(w-41,65);c.fill();
       },yaw);
-      this.signs.push({label,x,z,y:gy,yaw,roadClearance:roads.roadDistance(this.api.wx(x,z),this.api.wz(x,z))-(road.width||0)*.5});
+      this.signs.push({label,route,x,z,y:gy,yaw,roadClearance:roads.roadDistance(this.api.wx(x,z),this.api.wz(x,z))-road.width*.5});
     }
     this._mesh(k.build(),this._sys('places').matBody,'opening-signposts');
   }

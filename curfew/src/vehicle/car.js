@@ -2534,14 +2534,15 @@ export class Car {
   _takeDown(wx, wz, wy, mass, tag) {
     let colour = null, top = wy;
     const sys = this.ctx.systems;
-    for (let s = 0; s < 2; s++) {
-      const owner = sys ? sys.get(s === 0 ? 'places' : 'wilds') : null;
-      const root = owner && owner.group ? owner.group : null;
+    for (let s = 0; s < 4; s++) {
+      const owner = sys ? sys.get(s === 0 ? 'places' : s === 1 ? 'wilds' : s === 2 ? 'boss-sites' : 'opening') : null;
+      const root = owner?.group || owner?.root;
       if (!root || !root.children) continue;
       for (let i = 0; i < root.children.length && !colour; i++) {
         const site = root.children[i];
         if (!site) continue;
-        const dx = site.position.x - wx, dz = site.position.z - wz;
+        site.getWorldPosition(_v);
+        const dx = _v.x - wx, dz = _v.z - wz;
         if (dx * dx + dz * dz > 3600) continue;          // 60 m: not this site
         site.traverse((o) => {
           if (colour) return;

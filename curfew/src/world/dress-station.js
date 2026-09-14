@@ -40,7 +40,7 @@
 //               interior          x -15.28..-5.72,  z -2.78..3.78
 //               doorway (-Z face) x -11.7..-9.3 at z -3.0, head at padY+3.1
 //               east end wall     x -5.72..-5.28,  z -3..4   <- THE BLANK WALL
-//   sign pylon  (6.6, -7.4);  crate stair (-10.9..-15.0, 4.95);  drums (-4.5..-3.8, 4.7..5.6)
+//   sign pylon  (18, 10);  crate stair (-10.9..-15.0, 4.95);  drums (-4.5..-3.8, 4.7..5.6)
 //   shop front  window (-13.6, -3.06), map board (-7.4, -3.29), bench (-7.4, -3.72),
 //               ice chest (-13.6, -3.72), bin (-6.4, -3.9), phone box (-17.0, -1.6)
 //   forecourt   pallets (2.6, -5.9) and (3.9, -5.5), air line (4.2, 0), tyres (4.3, 5.1)
@@ -52,6 +52,7 @@
 
 import * as THREE from 'three';
 import { C, kits, groundY, gableFloor, ON_APRON } from './sites.js';
+import { STATION_PYLON } from './opening-layout.js';
 
 /* ==========================================================================
    ANCHORS — the three places refuge.js needs, in the station's LOCAL frame.
@@ -507,7 +508,7 @@ function serviceBay(k, api) {
  * sheet and its mapped metal actually shows rust/grime as the player closes in.
  */
 function roadsideCrown(k, api) {
-  const x = 6.6, z = -7.4, y = api.padY;
+  const {x,z}=STATION_PYLON, y = api.padY;
   for (const sx of [-1, 1]) {
     k.box(0.20, 11.3, 0.20, x + sx * 1.36, y + 5.65, z + 0.08, C.rust, 0, 0, sx * 0.025);
     k.box(0.12, 3.2, 0.12, x + sx * 0.72, y + 9.55, z + 0.08, D.conduit, 0, 0, -sx * 0.52);
@@ -912,19 +913,19 @@ function shopInterior(k, api) {
     }
   }
 
-  // ---- the doorway lining: a frame, a threshold, and the panel over the leaf
+  // The frame follows the masonry opening at 2.62 m. No second low header or
+  // suspended panel crosses the doorway beneath it.
   {
     const d = ANCHORS.door;
     const zf = d.hingeZ;
-    k.box(2.86, 0.09, 0.30, d.midX, y + 2.52, zf, C.wood, 0);                 // the head
-    for (const s of [-1, 1]) k.box(0.11, 2.60, 0.30, d.midX + s * 1.24, y + 1.26, zf, C.wood, 0);  // jambs
-    k.box(2.60, 0.68, 0.32, d.midX, y + 2.84, zf, C.slate, 0);                // the panel above
+    k.box(2.86, 0.16, 0.30, d.midX, y + 2.70, zf, C.wood, 0);
+    for (const s of [-1, 1]) k.box(0.11, 2.62, 0.30, d.midX + s * 1.24, y + 1.31, zf, C.wood, 0);
     k.box(2.60, 0.05, 0.44, d.midX, y + 0.02, zf, C.slate, 0);                // the threshold
     // the bulkhead OUTSIDE the door. Its glass is refuge's; this is the housing and the hood.
     const bl = L.door;
     k.box(0.34, 0.24, 0.16, bl.x, y + bl.y, bl.z - 0.02, C.slate, 0);
     k.box(0.42, 0.05, 0.24, bl.x, y + bl.y + 0.15, bl.z - 0.04, D.conduit, 0);
-    k.box(0.045, 0.62, 0.045, bl.x + 0.30, y + bl.y - 0.20, bl.z + 0.06, D.conduit, 0);
+    k.box(0.045, 0.32, 0.045, bl.x + 0.30, y + bl.y + 0.05, bl.z + 0.06, D.conduit, 0);
   }
 }
 

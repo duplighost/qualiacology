@@ -235,6 +235,12 @@ export class DuskToDawn {
         if (rng.next() < BOOT_OUT_FRAC) poles[i].lit = false;
       }
     }
+    // A normal, deliberately dark lamp at the station departure teaches the same
+    // bulb verb used everywhere. Append it so existing saved pole indices survive.
+    const ox=-481.4,oz=228.0,road=roads.nearestRoadInfo(ox,oz,30),gy=terrain.heightAt(ox,oz);
+    const length=Math.hypot((road?.x||ox)-ox,(road?.z||oz)-oz)||1;
+    const ax=((road?.x||ox)-ox)/length,az=((road?.z||oz)-oz)/length;
+    poles.push({i:poles.length,x:ox,z:oz,gy,headY:gy+HEAD_Y,hx:ox+ax*ARM_M,hz:oz+az*ARM_M,ax,az,lit:false,flickerT:0,rippleT:-1,immune:true,opening:true,run:-1,v0:0,v1:0});
     for (let i = 0; i < poles.length; i++) {
       const p = poles[i];
       p.bootLit = p.lit;          // what the roll said; the save only records departures from it
