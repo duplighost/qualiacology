@@ -35,7 +35,8 @@ import { CFG } from '../config.js';
 import { Kit, C } from './sites.js';
 import { projectPlaceSurfaceUVs } from './place-surfaces.js';
 import { MAJORS } from './placedata.js';
-import { OPENING as O } from './opening-layout.js';
+import { OPENING as O, STATION_PYLON } from './opening-layout.js';
+import { mountSignBoard } from './sign-mount.js';
 
 const S = CFG.signage || {};
 const POSTER_EVERY = S.posterEveryM ?? 260;
@@ -616,12 +617,7 @@ export class Signage {
     const gy = this._ground(x, z);
     const r = this._sign({ style: 'poster', lines: ['REMAIN INDOORS', 'DAYLIGHT RESUMES', POSTER_STAGE[stage]], stage,
       x: x + Math.sin(faceYaw) * 0.045, y: gy + 1.45, z: z + Math.cos(faceYaw) * 0.045, w: 0.98, h: 0.70, yaw: faceYaw, backing: false });
-    r.mount = (k, col) => {
-      const cy = Math.cos(faceYaw), sy = Math.sin(faceYaw);
-      for (const s of [-1, 1]) k.cyl(0.05, 0.06, 1.9, 5, x + cy * 0.42 * s, gy + 0.95, z - sy * 0.42 * s, K_WOOD);
-      k.box(1.15, 0.85, 0.05, x, gy + 1.45, z, K_WOOD, faceYaw);
-      col({ kind: 'circle', x, z, r: 0.5, y0: gy - 0.2, y1: gy + 1.9, tag: 'wood' });
-    };
+    r.mount = (k,col) => mountSignBoard(k,{...r,groundY:(px,pz)=>this._ground(px,pz),postWidth:.10,postSpacing:.84,boardColor:K_WOOD},col);
     this._posts.push({ x, z, kind: 'poster', yaw: faceYaw });
     this.counts.posters[stage]++;
   }
@@ -629,12 +625,7 @@ export class Signage {
   _plywood(x, z, faceYaw) {
     const gy = this._ground(x, z);
     const r = this._sign({ style: 'plywood', lines: ['MORNING'], x: x + Math.sin(faceYaw) * 0.03, y: gy + 1.15, z: z + Math.cos(faceYaw) * 0.03, w: 1.2, h: 0.8, yaw: faceYaw, backing: false });
-    r.mount = (k, col) => {
-      const cy = Math.cos(faceYaw), sy = Math.sin(faceYaw);
-      for (const s of [-1, 1]) k.box(0.06, 1.7, 0.06, x + cy * 0.5 * s, gy + 0.85, z - sy * 0.5 * s, K_WOOD, faceYaw);
-      k.box(1.26, 0.86, 0.02, x, gy + 1.15, z, [0.14, 0.10, 0.06], faceYaw);
-      col({ kind: 'circle', x, z, r: 0.55, y0: gy - 0.2, y1: gy + 1.8, tag: 'wood' });
-    };
+    r.mount = (k,col) => mountSignBoard(k,{...r,groundY:(px,pz)=>this._ground(px,pz),postWidth:.06,postSpacing:1,boardColor:[.14,.10,.06]},col);
     this._posts.push({ x, z, kind: 'plywood', yaw: faceYaw });
     this.counts.plywood++;
   }
@@ -642,11 +633,7 @@ export class Signage {
   _mile(x, z, faceYaw, n) {
     const gy = this._ground(x, z), word = MILE_WORDS[n % MILE_WORDS.length];
     const r = this._sign({ style: 'mile', lines: [word], stage: n + 1, x: x + Math.sin(faceYaw) * 0.045, y: gy + 1.1, z: z + Math.cos(faceYaw) * 0.045, w: 0.32, h: 0.5, yaw: faceYaw, backing: false });
-    r.mount = (k, col) => {
-      k.box(0.08, 1.4, 0.08, x, gy + 0.7, z, K_METAL, faceYaw);
-      k.box(0.36, 0.54, 0.02, x, gy + 1.1, z + 0.0, K_GREEN, faceYaw);
-      col({ kind: 'circle', x, z, r: 0.1, y0: gy - 0.2, y1: gy + 1.4, tag: 'metal' });
-    };
+    r.mount = (k,col) => mountSignBoard(k,{...r,groundY:(px,pz)=>this._ground(px,pz),postWidth:.08,boardColor:K_GREEN,postColor:K_METAL,tag:'metal'},col);
     this._posts.push({ x, z, kind: 'mile', yaw: faceYaw });
     this.counts.mile++;
   }
@@ -654,13 +641,7 @@ export class Signage {
   _highway(x, z, faceYaw, lines, arrow, w = 3.2, h = 1.0, top = 2.4) {
     const gy = this._ground(x, z), y = gy + top - h * 0.5;
     const r = this._sign({ style: 'highway', lines, arrow, x: x + Math.sin(faceYaw) * 0.045, y, z: z + Math.cos(faceYaw) * 0.045, w, h, yaw: faceYaw, backing: false });
-    r.mount = (k, col) => {
-      const cy = Math.cos(faceYaw), sy = Math.sin(faceYaw), px = w * 0.5 - 0.35;
-      // posts behind the board, so they never stand proud of the lettering
-      for (const s of [-1, 1]) k.box(0.12, top, 0.12, x + cy * px * s - sy * 0.09, gy + top * 0.5, z - sy * px * s - cy * 0.09, K_METAL, faceYaw);
-      k.box(w + 0.04, h + 0.04, 0.05, x, y, z, K_GREEN, faceYaw);
-      col({ kind: 'obb', x, z, halfX: w * 0.5, halfZ: 0.14, yaw: faceYaw, y0: gy - 0.2, y1: gy + top, tag: 'metal' });
-    };
+    r.mount = (k,col) => mountSignBoard(k,{...r,groundY:(px,pz)=>this._ground(px,pz),postWidth:.12,postSpacing:w-.7,boardColor:K_GREEN,postColor:K_METAL,tag:'metal'},col);
     this._posts.push({ x, z, kind: 'highway', yaw: faceYaw });
     this.fixed.push({ id: 'highway:' + lines.join(' '), x: +x.toFixed(1), z: +z.toFixed(1), yaw: faceYaw });
     this.counts.fixed++;
@@ -873,7 +854,7 @@ export class Signage {
     // the verge, a curfew notice on the service bay, the almanac on the counter.
     const st = this._frame('filling-station');
     if (st) {
-      this._onMajor(st, 'open24', ['OPEN 24 HRS'], 6.6, 8.22, -7.15, 2.6, 0.42, 0, { backD: 0.03, backCol: K_DARK });
+      this._onMajor(st, 'open24', ['OPEN 24 HRS'], STATION_PYLON.x, 8.22, STATION_PYLON.z+.27, 2.6, 0.42, 0, { backD: 0.03, backCol: K_DARK });
       this._onMajor(st, 'curfew', CURFEW, -17.70, 2.0, -0.2, 0.9, 1.2, Math.PI * 0.5, { backD: 0.04, backCol: K_DARK });
       this._onMajor(st, 'almanac', ['SUNRISE'], -8.55, 1.055, 1.28, 0.46, 0.32, 0, { rx: -Math.PI * 0.5, backD: 0.03, backCol: [0.12, 0.08, 0.05] });
       // "A historical marker, official brown-and-gold: SITE OF THE LAST SUNRISE." On the
@@ -887,11 +868,9 @@ export class Signage {
           const vv = this._verge(px, pz, tx, tz, side, W, VERGE_EXTRA + 0.3), x = vv.x, z = vv.z, gy = this._ground(x, z);
           const yaw = Math.atan2(px - x, pz - z), nx = Math.sin(yaw), nz = Math.cos(yaw), w = 1.2, h = 1.0, top = 2.5, y = gy + top - h * 0.5;
           const r = this._sign({ style: 'marker', lines: ['SITE OF THE LAST SUNRISE', 'ERECTED NOVEMBER 1'], x: x + nx * 0.05, y, z: z + nz * 0.05, w, h, yaw, backing: false });
-          r.mount = (k, col) => {
-            k.box(0.12, top - h * 0.5, 0.12, x, gy + (top - h * 0.5) * 0.5, z, K_METAL, yaw);
-            k.box(w + 0.08, h + 0.08, 0.06, x, y, z, K_BROWN, yaw);
-            k.cone(0.16, 0.22, 4, x, gy + top + 0.1, z, K_BROWN, yaw);
-            col({ kind: 'circle', x, z, r: 0.14, y0: gy - 0.2, y1: gy + top, tag: 'metal' });
+          r.mount = (k,col) => {
+            mountSignBoard(k,{...r,groundY:(px,pz)=>this._ground(px,pz),postWidth:.12,boardColor:K_BROWN,postColor:K_METAL,tag:'metal'},col);
+            k.cone(.16,.22,4,x-nx*.04,gy+top+.1,z-nz*.04,K_BROWN,yaw);
           };
           this._posts.push({ x, z, kind: 'marker', yaw }); this.fixed.push({ id: 'station:marker', x: +x.toFixed(1), z: +z.toFixed(1), yaw: yaw }); this.counts.fixed++;
         } else this._note('no road by the station verge for the marker');
@@ -999,13 +978,13 @@ export class Signage {
     paintPrice(canvas.getContext('2d'), 256, 192, this._priceStage, mulberry(77 + this._priceStage));
     const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.NoColorSpace; tex.anisotropy = 4; this.textures.push(tex); this._priceTex = tex;
     const mat = places.matBody.clone(); mat.map = tex; mat.bumpScale = 0; mat.name = 'signage-price'; this.materials.push(mat);
-    const w = 1.8, h = 1.3, x = st.wx(6.6, -7.125), z = st.wz(6.6, -7.125), y = st.padY + 6.6;
+    const w = 1.8, h = 1.3, x = st.wx(STATION_PYLON.x, STATION_PYLON.z+.27), z = st.wz(STATION_PYLON.x, STATION_PYLON.z+.27), y = st.padY + 6.6;
     const g = new THREE.PlaneGeometry(w, h);
     g.setAttribute('color', new THREE.Float32BufferAttribute(Array(g.attributes.position.count * 3).fill(1), 3));
     g.rotateY(st.yaw); g.translate(x, y, z); this.geometries.push(g);
     const m = new THREE.Mesh(g, mat); m.name = 'signage-price'; m.receiveShadow = true; this.group.add(m); this.meshes.push(m);
     // its board, on the pylon post
-    const k = new Kit(); k.box(w + 0.06, h + 0.06, 0.06, st.wx(6.6, -7.16), y, st.wz(6.6, -7.16), K_DARK, st.yaw);
+    const k = new Kit(); k.box(w + 0.06, h + 0.06, 0.06, st.wx(STATION_PYLON.x, STATION_PYLON.z+.235), y, st.wz(STATION_PYLON.x, STATION_PYLON.z+.235), K_DARK, st.yaw);
     const mg = k.build(); projectPlaceSurfaceUVs(mg, 2.6); this.geometries.push(mg);
     const mm = new THREE.Mesh(mg, places.matBody); mm.name = 'signage-price-board'; mm.castShadow = true; mm.receiveShadow = true; this.group.add(mm); this.meshes.push(mm);
     const clock = this._sys('clock'); this._priceCycle = clock ? (clock.cycle | 0) : 0;

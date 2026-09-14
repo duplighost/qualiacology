@@ -202,7 +202,7 @@ export function buildCoachwork(spec){
     setCabinView(inside){glass.opacity=inside?.018:.19;},
     setRadioDial(t){radioNeedle.position.x=(clamp(t)*2-1)*.095;},
     setCondition(t,time=0){conditionNeedle.rotation.z=(1.17-1.34*clamp(t))*Math.PI-Math.PI/2;warning.visible=t<.45;warnMat.color.setHex(t<.2?0xff381e:0xe69b2c);warning.scale.setScalar(t<.2?.8+Math.sin(time*8.5)*.2:1);},
-    setMotion(speed,boost,boosting,time){speedNeedle.rotation.z=(1.17-1.34*clamp(Math.abs(speed)/42))*Math.PI-Math.PI/2;fittings.animate(boost,boosting,time);},
+    setMotion(speed,boost,boosting,time,shield=3){speedNeedle.rotation.z=(1.17-1.34*clamp(Math.abs(speed)/42))*Math.PI-Math.PI/2;fittings.animate(boost,boosting,time,shield);},
     setUpgrades(ids){fittings.setOwned(ids);surfaces.restored(ids.includes('kept'));if(ids.includes('kept'))setRepaired(true);},
     setDoor(t){door.rotation.y=-clamp(t)*openMax;},
     setCabin(level){warm.emissiveIntensity=.12+clamp(level)*.60;},

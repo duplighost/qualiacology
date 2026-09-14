@@ -2910,8 +2910,9 @@ export class Places {
         }
         const progress = this._sys('territory')?.status(d.id);
         if (progress && !progress.clear) {
+          this._sys('territory')?.track(d.id);
           this.ctx.bus.emit('prompt', { kind:'power', label:'E', x:fx.wx, y:fx.wy+1.48, z:fx.wz, k:0,
-            detail:'CLEAR THE PLACE', subdetail:progress.remaining+' REMAIN', unavailable:true, rank:2 });
+            detail:'CLEAR THE MARKED DEFENDERS', subdetail:progress.remaining+' REMAIN · DIAMONDS SHOW WHO COUNTS', unavailable:true, rank:2 });
           continue;
         }
         if (fd < candD) { candD = fd; cand = rec; }

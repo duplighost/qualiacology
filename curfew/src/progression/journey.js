@@ -1,4 +1,4 @@
-import {BOSSES} from '../world/boss-catalog.js';
+import {BOSSES,bossMapPoint} from '../world/boss-catalog.js';
 import {carriesMorning,readLastNight} from '../world/late-bell-state.js';
 
 // Read the real systems. This is a reminder, never a second progression/save owner.
@@ -24,7 +24,18 @@ export function journeyState(ctx){
   else{next='Find a bulb at a dealer or in the Holdfast.';target={x:0,z:90};}
  }
  else if(!flags['gate:holdfast']){next='Follow the road to the Holdfast.';target={x:0,z:90};}
- else if(marks===0)next='Ask the Holdfast residents about the Eleven.';
+ else {
+  const rumours=p?.rumours?.()||data.rumours||[];
+  const unfinished=BOSSES.filter(b=>!p?.bossCleared?.(b.id)&&!finishes.has(b.skin.id));
+  const known=unfinished.filter(b=>rumours.some(r=>r.id===b.id));
+  const list=known.length?known:unfinished;
+  const nextBoss=list.slice().sort((a,b)=>{const x=bossMapPoint(a),y=bossMapPoint(b),pos=player?.pos||{x:0,z:0};return Math.hypot(pos.x-x.x,pos.z-x.z)-Math.hypot(pos.x-y.x,pos.z-y.z);})[0];
+  if(nextBoss){target=bossMapPoint(nextBoss);if(nextBoss.id==='underkeep')target={x:45,z:-43};next='Find '+nextBoss.name+' · '+nextBoss.location+'.';}
+  else next='Ask the Holdfast residents about the Eleven.';
+ }
+ // Underground distance is measured to the local stair, never to a surface pin
+ // thousands of metres away in the room's separate rendering space.
+ if(get('boss-sites')?.inside){const kept=get('boss-encounters')?.all?.find(k=>k.id==='underkeep');if(kept?.alive){next='The Kept · Beneath the Holdfast.';target={x:kept.pos.x,z:kept.pos.z};}else{next='Return up the stair to the Holdfast.';target={x:3500,z:3540.3};}}
  const rows=[
   {icon:'◇',title:'Scavenge and fight',text:'Supplies and enemies give coins and XP.'},
   {icon:'☼',title:'Make a road home',text:'Coins buy bulbs, woodland light and equipment. Light holds ordinary threats back.'},

@@ -1,6 +1,7 @@
 // Small connected stories leave changes in the county, with ordinary E interaction.
 import * as THREE from 'three';
 import { Kit, C } from './sites.js';
+import { mountSignBoard } from './sign-mount.js';
 import { projectPlaceSurfaceUVs } from './place-surfaces.js';
 import { heightAt, addFlat } from './terrain.js';
 import { SINKHOLE, LOST_DRIVE } from './world-scars.js';
@@ -39,13 +40,14 @@ export class WorldStories {
   paintHandwriting(c,record.title,35,62,565,25,record.siteId);
   let lines=[];for(const paragraph of record.text.split('\n')){let line='';for(const word of paragraph.split(' ')){if((line+' '+word).length>49){lines.push(line);line=word;}else line+=(line?' ':'')+word;}lines.push(line);}
   const step=Math.min(37,630/Math.max(1,lines.length));lines.forEach((line,i)=>paintHandwriting(c,line,35,111+i*step,565,Math.min(25,step*.76),record.siteId));
-  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.NoColorSpace;const mat=this._sys('places').matBody.clone();mat.map=tex;mat.bumpScale=0;
-  const geo=new THREE.PlaneGeometry(record.w||.64,record.h||.77);geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count*3).fill(1),3));const mesh=new THREE.Mesh(geo,mat);mesh.position.set(p.x,p.y,p.z);mesh.rotation.set(record.mount==='desk'||record.mount==='surface'?-Math.PI/2:0,p.yaw,0);root.add(mesh);this.signs.push(mesh);
+  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.NoColorSpace;
+  const mat=new THREE.MeshLambertMaterial({map:tex,vertexColors:true,side:THREE.DoubleSide,dithering:true});
+  const geo=new THREE.PlaneGeometry(record.w||.64,record.h||.77);geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count*3).fill(1),3));const mesh=new THREE.Mesh(geo,mat);mesh.position.set(p.x,p.y,p.z);mesh.rotation.set(record.mount==='desk'||record.mount==='surface'?-Math.PI/2:0,p.yaw,0,'YXZ');root.add(mesh);this.signs.push(mesh);
  }
  _siteRecords(){
   for(const r of SITE_RECORDS){const p=this._sitePoint(r.siteId,r.x,r.y,r.z,r.yaw);if(!p)continue;const pad=this._sys('places').nodes.get(r.siteId).padY,ground=heightAt(p.x,p.z);if(r.ground)p.y+=ground-pad;const floor=r.ground?ground:pad+(r.floor||0),root=this._group('record-'+r.siteId,p.x,p.z),k=new Kit();
    if(r.mount==='desk'){k.box(.9,.08,1.05,p.x,p.y-.055,p.z,WOOD,p.yaw);for(const side of[-1,1]){const dx=side*.31*Math.cos(p.yaw),dz=-side*.31*Math.sin(p.yaw),h=p.y-floor-.1;k.box(.065,h,.065,p.x+dx,floor+h/2,p.z+dz,IRON);}}
-   if(r.mount==='board'){k.box(.76,.9,.045,p.x-Math.sin(p.yaw)*.03,p.y,p.z-Math.cos(p.yaw)*.03,WOOD,p.yaw);const h=p.y-floor;k.box(.065,h,.065,p.x,floor+h/2,p.z,IRON);}
+   if(r.mount==='board')this._board(k,{...p,w:r.w||.64,h:r.h||.77},floor);
    this._mesh(k,root);this._paper(root,p,r);this.targets.push({...r,...p,kind:'read',hand:SITE_HANDS[r.siteId],title:'READ · '+r.title});
   }
  }
@@ -53,15 +55,15 @@ export class WorldStories {
   const put=(siteId,x,y,z,yaw,lines,{w=2.1,h=.9,small=true,id}={})=>{const p=this._sitePoint(siteId,x,y,z,yaw);if(!p)return;const root=this._group('county-writing-'+(id||siteId),p.x,p.z);this._sign(root,{...p,w,h,lines,small});this.targets.push({id:'writing:'+(id||siteId+':'+this.targets.length),kind:'read',...p,title:'READ THE WRITING',siteId,text:lines.join('\n')});};
   // Both placards are fixed to solid masonry above the openings. A static
   // notice across the door used to float in the passage when the leaf swung.
-  put('filling-station',-13.6,3.12,-3.25,Math.PI,['ASSEMBLY POINT 3 · AWAIT TRANSPORT','TRANSPORT DEPARTS AT FIRST LIGHT'],{w:2.4,h:.7,id:'assembly-3'});
-  put('filling-station',-14.3,1.1,-3.17,Math.PI,['SERVICE 17 · RELIEF DRIVER','REPORT TO ASSEMBLY POINT 3','COLLECT WAITING PASSENGERS','TRANSPORT DEPARTS AT FIRST LIGHT'],{w:.72,h:.5,id:'relief-driver'});
+  put('filling-station',-13.6,3.32,-3.235,Math.PI,['ASSEMBLY POINT 3 · AWAIT TRANSPORT','TRANSPORT DEPARTS AT FIRST LIGHT'],{w:2.4,h:.42,id:'assembly-3'});
+  put('filling-station',-11.95,1.72,-3.235,Math.PI,['SERVICE 17 · RELIEF DRIVER','REPORT TO ASSEMBLY POINT 3','COLLECT WAITING PASSENGERS','TRANSPORT DEPARTS AT FIRST LIGHT'],{w:.36,h:.5,id:'relief-driver'});
   put('filling-station',-10.5,3.24,-3.25,Math.PI,['COUNTY OF MERIDIAN · EST. 1841'],{w:2,h:.5,id:'county-seal'});
-  put('jackfield',0,2.15,6.28,0,['DO YOU REMEMBER MORNING'],{w:8,h:.9,id:'barn-morning'});
-  put('holdfast',51,2.05,35,Math.PI/2,['MORNING IS SOMETHING WE TELL CHILDREN'],{w:3.8,h:.8,id:'school-erased'});
-  put('avery-house',-4.5,1.55,6.1,Math.PI/2,['Gone for gas. Back by morning. Love you.'],{w:.62,h:.34,id:'fridge'});
-  put('avery-house',-26.9,5.4,-11.04,0,["It’ll look better in the morning — Mom"],{w:.74,h:.32,id:'bedroom'});
-  put('avery-house',-13.5,5.4,-19.04,0,['still dark out'],{w:.6,h:.3,id:'mirror'});
-  put('black-rib',2.4,1.9,-12.3,Math.PI,['OPEN IT AGAIN'],{w:2,h:.7,id:'seventh-portal'});
+  put('jackfield',0,2.15,6.235,0,['DO YOU REMEMBER MORNING'],{w:8,h:.9,id:'barn-morning'});
+  put('holdfast',57.265,3.5,35,-Math.PI/2,['MORNING IS SOMETHING WE TELL CHILDREN'],{w:3.8,h:.8,id:'school-erased'});
+  put('avery-house',26.86,4.7,6.912,0,['Gone for gas. Back by morning. Love you.'],{w:.62,h:.34,id:'fridge'});
+  put('avery-house',-26.9,9.1,-15.857,0,["It’ll look better in the morning — Mom"],{w:.74,h:.32,id:'bedroom'});
+  put('avery-house',-2.143,8.9,-7,-Math.PI/2,['still dark out'],{w:.6,h:.3,id:'mirror'});
+  put('black-rib',11.1984,1.9,-16.1063,Math.PI+.108,['OPEN IT AGAIN'],{w:1.2,h:.7,id:'seventh-portal'});
   // Four contracts in stone: three repeated eastward promises, one deliberate reversal.
   const epitaphs=[['WE SHALL RISE','TO MEET IT'],['UNTIL THE MORNING'],['ASLEEP, AWAITING','THE DAWN'],['FACING THE OTHER WAY','ON PURPOSE']];
   for(let i=0;i<4;i++){const p=this._sitePoint('garden-of-rest',-19.6,0,-10+i*4.3);if(!p)continue;const y=heightAt(p.x,p.z),yaw=i===3?-Math.PI/2:Math.PI/2,root=this._group('morning-headstone-'+i,p.x,p.z),k=new Kit();k.box(.82,1.1,.20,p.x,y+.55,p.z,C.stone,yaw);k.box(1,.16,.46,p.x,y+.08,p.z,C.stone,yaw);this._mesh(k,root,this.materials.stone);this._sign(root,{x:p.x+Math.sin(yaw)*.108,y:y+.68,z:p.z+Math.cos(yaw)*.108,yaw,w:.75,h:.58,lines:epitaphs[i],small:true});}
@@ -71,10 +73,11 @@ export class WorldStories {
   {const x=2646-27,z=1305+38,y=heightAt(x,z),root=this._group('tully-abutment',x,z),k=new Kit();k.box(5.4,1.7,.8,x,y+.85,z,C.stone);this._mesh(k,root,this.materials.stone);this._sign(root,{x,y:y+1,z:z+.411,w:5,h:.72,lines:['BRING IT TO TULLY, HE’LL KEEP IT SAFE'],small:true});}
   // Only the first examples carry these carvings; the woods are not an essay.
   for(const kind of['culvert','blind']){const m=this._sys('places')?.minors.find(m=>m.kind===kind);if(!m)continue;const yaw=m.yaw||0,x=m.x+Math.sin(yaw)*1.2,z=m.z+Math.cos(yaw)*1.2,y=heightAt(x,z)+.45,root=this._group('carved-'+kind,x,z),k=new Kit();k.box(1.5,.55,.14,x,y,z,kind==='culvert'?C.stone:WOOD,yaw);this._mesh(k,root,kind==='culvert'?this.materials.stone:this.materials.timber);this._sign(root,{x:x+Math.sin(yaw)*.078,y,z:z+Math.cos(yaw)*.078,yaw,w:1.4,h:.4,lines:[kind==='culvert'?'EAST IS JUST A DIRECTION':'BLUE'],small:true});}
-  const mailbox=christmasPoint(-5.8,20,1.15),root=this._group('vale-mailbox',mailbox.x,mailbox.z),k=new Kit();k.box(.08,1.1,.08,mailbox.x,mailbox.y-.55,mailbox.z,WOOD);k.box(1.55,.68,.35,mailbox.x,mailbox.y,mailbox.z,IRON,XMAS.yaw);this._mesh(k,root);this._sign(root,{...mailbox,z:mailbox.z+.18,yaw:XMAS.yaw,w:1.48,h:.62,lines:['THE VALES · WELCOME',"SUPPER’S ON"],small:true});
+  const mailbox=christmasPoint(-5.8,20,1.15),root=this._group('vale-mailbox',mailbox.x,mailbox.z),k=new Kit();k.box(.08,1.1,.08,mailbox.x,mailbox.y-.55,mailbox.z,WOOD);k.box(1.55,.68,.35,mailbox.x,mailbox.y,mailbox.z,IRON,XMAS.yaw);this._mesh(k,root);this._sign(root,{...mailbox,x:mailbox.x+Math.sin(XMAS.yaw)*.184,z:mailbox.z+Math.cos(XMAS.yaw)*.184,yaw:XMAS.yaw,w:1.48,h:.62,lines:['THE VALES · WELCOME',"SUPPER’S ON"],small:true});
  }
  _group(name,x,z){const g=new THREE.Group();g.name=name;this.group.add(g);this.groups.push({g,x,z});return g;}
  _mesh(k,root,mat=this.material){if(!k.parts.length)return null;const geo=k.build();projectPlaceSurfaceUVs(geo,2.5);const m=new THREE.Mesh(geo,mat);m.receiveShadow=true;root.add(m);return m;}
+ _board(k,p,floor,chunk='story:records'){mountSignBoard(k,{...p,groundY:floor,boardColor:WOOD,postColor:IRON,postSpacing:p.w>2?p.w-.65:0},shape=>this._sys('collision')?.addCollider(shape,chunk));}
  _box(k,x,y,z,w,h,d,col=WOOD,yaw=0,chunk='story:xmas',solid=true){k.box(w,h,d,x,y,z,col,yaw);if(solid)this._sys('collision')?.addCollider({kind:'obb',x,z,halfX:w/2,halfZ:d/2,y0:y-h/2,y1:y+h/2,yaw,tag:'stone',standable:true,authored:true},chunk);}
  _sign(root,{x,y,z,yaw=0,w=2.4,h=1.4,lines=[],graffiti='',small=false}){
   if(typeof document==='undefined')return null;
@@ -87,7 +90,8 @@ export class WorldStories {
   if(lines[0]==='MORNING IS SOMETHING WE TELL CHILDREN'){c.fillStyle='#4a4535bb';c.fillRect(20,25,984,130);c.strokeStyle='#484432cc';c.lineWidth=16;for(let i=0;i<9;i++){c.beginPath();c.moveTo(55,50+i*12);c.lineTo(965,46+i*12);c.stroke();}}
   if(lines[0]==='YOU ARE HERE'){c.fillStyle='#a49c86';c.fillRect(40,145,944,315);c.strokeStyle='#535744';c.lineWidth=5;for(let i=0;i<5;i++){c.beginPath();c.moveTo(70+i*78,180);c.lineTo(130+i*66,260);c.lineTo(75+i*73,410);c.stroke();}c.fillStyle='#b6ad94';c.fillRect(512,145,472,315);c.fillStyle='#604132';c.beginPath();c.arc(495,310,11,0,Math.PI*2);c.fill();}
   if(graffiti){c.strokeStyle='#591f16';c.lineWidth=19;c.lineCap='round';c.beginPath();c.moveTo(63,165);c.lineTo(957,283);c.moveTo(79,296);c.lineTo(962,151);c.stroke();c.save();c.translate(512,418);c.rotate(-.065);c.font='italic bold 66px Georgia';c.fillStyle='#514027';c.fillText(graffiti,0,0,930);c.restore();}
-  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.NoColorSpace;const mat=this._sys('places').matBody.clone();mat.map=tex;mat.bumpScale=0;
+  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.NoColorSpace;
+  const mat=new THREE.MeshLambertMaterial({map:tex,vertexColors:true,side:THREE.DoubleSide,dithering:true});
   const geo=new THREE.PlaneGeometry(w,h);geo.setAttribute('color',new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count*3).fill(1),3));const mesh=new THREE.Mesh(geo,mat);mesh.position.set(x,y,z);mesh.rotation.y=yaw;root.add(mesh);this.signs.push(mesh);return mesh;
  }
  _christmas(){
@@ -103,9 +107,9 @@ export class WorldStories {
   // Actual feeder cable leaves the enclosure, follows the drive and ends in a tagged dead line.
   const pts=[[-6.7,11,.2],[-8.3,12,.06],[-8.8,17,.04],[-6.3,20,.045],[-5.4,25,.09]].map(([x,z,h])=>{const p=put(x,z,h);return[p.x,p.y,p.z];});cable(k,pts,.040,[.15,.079,.032]);
   box(-5.4,.3,25,.8,.6,.48,IRON);
-  const label=put(-6.2,11.1,1.35);this._sign(root,{...label,yaw:XMAS.yaw,w:.48,h:.26,lines:['SERVICE 17','LOCAL SUPPLY'],small:true});
+  const label=put(-6.2,11.438,.43);this._sign(root,{...label,yaw:XMAS.yaw,w:1.1,h:.43,lines:['SERVICE 17','LOCAL SUPPLY'],small:true});
   const notice=put(-7.9,12,1.5);this._sign(root,{...notice,yaw:XMAS.yaw,w:1.45,h:1.0,lines:['MRS VALE / CIRCUIT 17','Timer broken. Motor is sound.','Leave the coloured lights on.','They said our family could use this road.'],small:true});
-  box(-7.9,.75,12,.065,1.5,.065,IRON);
+  this._board(k,{...notice,yaw:XMAS.yaw,w:1.45,h:1.0},heightAt(notice.x,notice.z),'story:xmas');
   this.targets.push({id:'xmas-power',kind:'repair',...put(-6.2,11,1.05),title:'RECONNECT THE GENERATOR',hold:1.1,text:'The timer stops fighting the motor. Every house stays lit. Someone left two spare bulbs in the tool tray.',reward:160,cash:80});
   // A letter at the laid table turns the light display into a family waiting for somebody.
   const hyaw=Math.atan2(-11.5,-4.5),cx=Math.cos(hyaw),sx=Math.sin(hyaw),lp=put(-11.5+1.75*cx+.15*sx,-4.5-1.75*sx+.15*cx,.929);
@@ -151,14 +155,14 @@ export class WorldStories {
   for(let i=0;i<22;i++){const x=s.x-54+i*2.7,z=s.z-1.3+Math.sin(i*.4)*.6,y=heightAt(x,z);k.box(1.8,.09,.72,x,y+.075,z,WOOD,.16);}
   const approach={x:s.x+5,z:s.z+53};const ay=heightAt(approach.x,approach.z);
   this._sign(root,{x:approach.x+4,y:ay+1.9,z:approach.z,yaw:0,w:3.8,h:1.7,lines:['COUNTY SERVICE 17','ROAD OPEN','FOLLOW THE LIGHTS'],graffiti:'family below · lights on · do not use'});
-  for(const side of[-1,1])this._box(metal,approach.x+4+side*1.5,ay+.95,approach.z,.10,1.9,.10,IRON,0,chunk);
+  this._board(metal,{x:approach.x+4,y:ay+1.9,z:approach.z,yaw:0,w:3.8,h:1.7},ay,chunk);
   this.targets.push({id:'sinkhole-view',kind:'read',x:approach.x+4,y:ay+1.9,z:approach.z,title:'READ THE SCRATCHED NOTICE',text:'EVACUATION ROUTE 17 →\n\nThe arrow is scratched out. Under it: family below · lights on · do not use',rumour:true});
   this._mesh(k,root);this._mesh(plaster,root,this.materials.plaster);this._mesh(stone,root,this.materials.stone);this._mesh(metal,root,this.materials.metal);this.sinkhole={x:s.x,z:s.z,y:heightAt(s.x,s.z),house:{x:hx,y:hy,z:hz},approach};
  }
  _roadNotice(){
   const [x,z]=LOST_DRIVE[0],root=this._group('official-route-crossed-out',x,z),k=new Kit(),y=heightAt(x+5,z+2);
   this._sign(root,{x:x+5,y:y+2.0,z:z+2,yaw:.23,w:4.4,h:2.2,lines:['EVACUATION ROUTE 17 →','SERVICE 17 / ROAD OPEN','KEEP YOUR LIGHTS ON'],graffiti:'THEY KNEW'});
-  for(const side of[-1,1])this._box(k,x+5+side*1.7,y+1.1,z+2,.13,2.2,.13,IRON,0,'story:road-notice');
+  this._board(k,{x:x+5,y:y+2,z:z+2,yaw:.23,w:4.4,h:2.2},y,'story:road-notice');
   // A service reel and a severed orange lead repeat the cable at the houses.
   k.cyl(.6,.6,.85,20,x+2,y+.64,z-1,WOOD,0,Math.PI/2);cable(k,[[x+2,y+.3,z-1],[x-1,y+.06,z-3],[x-4,y+.06,z-7],[x-3,y+.07,z-13]],.037,[.15,.079,.032]);this._mesh(k,root);
  }
@@ -193,6 +197,6 @@ export class WorldStories {
  }
  present(alpha){this.bellAnswers?.present(alpha);const p=this._sys('player')?.pos;for(const a of this.groups)a.g.visible=!p||Math.hypot(p.x-a.x,p.z-a.z)<550;if(this.caption)this.caption.style.display=this.receipt>0&&!this.ctx.paused&&this.ctx.playing?'block':'none';}
  state(){return{power:!!this._sys('progress')?.flag('story:xmas-power'),generator:this.generator?{x:this.generator.x,y:this.generator.y,z:this.generator.z}:null,sinkhole:this.sinkhole,targets:this.targets.map(t=>({id:t.id,kind:t.kind,x:t.x,y:t.y,z:t.z})),target:this.target?.id||null};}
- dispose(){this.drownedMemory?.dispose();this.bellAnswers?.dispose();this.caption?.remove();this._sys('lights')?.release(this.lamp);for(const id of['story:xmas','story:sinkhole','story:road-notice'])this._sys('collision')?.removeChunk(id);this.group?.traverse(o=>{o.geometry?.dispose();});for(const s of this.signs){s.material.map.dispose();s.material.dispose();}this.switch?.material.dispose();for(const mat of Object.values(this.materials||{}))mat.dispose();this.group?.removeFromParent();}
+ dispose(){this.drownedMemory?.dispose();this.bellAnswers?.dispose();this.caption?.remove();this._sys('lights')?.release(this.lamp);for(const id of['story:xmas','story:sinkhole','story:road-notice','story:records'])this._sys('collision')?.removeChunk(id);this.group?.traverse(o=>{o.geometry?.dispose();});for(const s of this.signs){s.material.map.dispose();s.material.dispose();}this.switch?.material.dispose();for(const mat of Object.values(this.materials||{}))mat.dispose();this.group?.removeFromParent();}
 }
 export default WorldStories;

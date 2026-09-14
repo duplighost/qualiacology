@@ -6,6 +6,21 @@ export function buildCarFittings({root,box,cylinder,tube,sphere,collect,flush,su
   const {chrome,dark,rubber,paint,warm}=surfaces,groups={};
   const group=id=>{const g=new THREE.Group();g.name='car-upgrade-'+id;g.visible=false;groups[id]=g;root.add(g);return g;};
   const starter=group('hotwire');
+  const armour=group('armour');
+  for(const side of [-1,1]){
+    box(side*1.01,.90,.36,.075,.49,1.94,dark,0,0,0,armour);
+    box(side*1.057,1.14,.36,.026,.055,1.97,chrome,0,0,0,armour);
+    for(const z of [-.5,-.1,.3,.7,1.1])for(const y of [.73,1.08])sphere(side*1.061,y,z,.018,.018,.018,chrome,armour);
+    tube([[side*.94,.67,-1.52],[side*1.08,.62,-.7],[side*1.08,.62,1.33],[side*.92,.7,1.88]],.045,chrome,armour);
+  }
+  const ward=group('ward'),wardMat=new THREE.MeshStandardMaterial({color:0x183b48,emissive:0x59d4df,emissiveIntensity:.7,roughness:.28,metalness:.7});extraMaterials.push(wardMat);
+  for(const side of [-1,1]){
+    for(const z of [.16,.80])box(side*.52,2.12,z,.12,.18,.12,dark,0,0,0,ward);
+    box(side*.52,2.20,.48,.25,.10,.82,dark,0,0,0,ward);
+    for(let i=0;i<6;i++)collect(new THREE.TorusGeometry(.108,.018,8,20),chrome,side*.52,2.32,.18+i*.12,0,0,0,ward);
+    cylinder(side*.52,2.32,.48,.061,.81,wardMat,Math.PI/2,0,ward);
+    tube([[side*.52,2.2,.1],[side*.67,2.13,-.13],[side*.72,1.81,-.66]],.015,wardMat,ward);
+  }
   cylinder(-.105,1.327,-1.013,.023,.012,chrome,Math.PI/2,0,starter);
   cylinder(-.105,1.327,-1.002,.016,.007,warm,Math.PI/2,0,starter);
   tube([[-.32,1.17,-.91],[-.30,1.08,-.84],[-.12,1.10,-.86],[-.105,1.27,-1.0]],.008,rubber,starter);
@@ -53,6 +68,6 @@ export function buildCarFittings({root,box,cylinder,tube,sphere,collect,flush,su
   flush();
   return{
     setOwned(ids){for(const [id,g]of Object.entries(groups))g.visible=ids.includes(id);},
-    animate(charge,active,time=0){pips.forEach((p,i)=>{p.visible=charge>(i+.35)/8;});boostMat.color.setHex(active?0xb8f8ff:charge<.15?0xd68746:0x71cdda);flames.forEach((f,i)=>{f.visible=active;f.scale.y=.78+Math.sin(time*43+i)*.22;});},
+    animate(charge,active,time=0,shield=3){wardMat.emissiveIntensity=.06+Math.max(0,shield)/3*(.85+.1*Math.sin(time*2));pips.forEach((p,i)=>{p.visible=charge>(i+.35)/8;});boostMat.color.setHex(active?0xb8f8ff:charge<.15?0xd68746:0x71cdda);flames.forEach((f,i)=>{f.visible=active;f.scale.y=.78+Math.sin(time*43+i)*.22;});},
   };
 }

@@ -3495,8 +3495,8 @@ export const MINOR_BUILDERS = {
       C.paper[0] * (1 - 0.62 * age), C.paper[1] * (1 - 0.66 * age), C.paper[2] * (1 - 0.70 * age),
     ];
     k.solid.open();
-    k.solid.cyl(0.05, 0.06, 1.9, 5, -0.42, api.padY + 0.95, 0, C.wood);
-    k.solid.cyl(0.05, 0.06, 1.9, 5, 0.42, api.padY + 0.95, 0, C.wood);
+    k.solid.cyl(0.05, 0.06, 1.9, 5, -0.42, api.padY + 0.95, -.085, C.wood);
+    k.solid.cyl(0.05, 0.06, 1.9, 5, 0.42, api.padY + 0.95, -.085, C.wood);
     k.solid.box(1.15, 0.85, 0.05, 0, api.padY + 1.45, 0, C.wood);
     // ROUND 22 (lane D): the paper was on the -Z side at yaw PI, facing AWAY from the road
     // (places.js yaws a minor so local +Z faces the road). Now on +Z, and signage.js hangs

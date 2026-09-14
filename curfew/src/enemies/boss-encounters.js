@@ -1,10 +1,12 @@
 // Eleven encounters share damage geometry, with authored anatomy and attack timelines.
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {BOSSES} from '../world/boss-catalog.js';
+import {BOSSES,CRYPT_ROOM} from '../world/boss-catalog.js';
 import {buildBossRig,preloadBossSurface} from './boss-bodies.js';
+import {BOSS_PACE,buildCryptTraverse,sampleCryptTraverse,orientToSurface} from './boss-locomotion.js';
 const TAU=Math.PI*2,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const V=new THREE.Vector3(),N=new THREE.Vector3(0,1,0),ray=new THREE.Raycaster();
+const SURFACE_FORWARD=new THREE.Vector3(),SURFACE_POINT=new THREE.Vector3(),BODY_BOUNDS=new THREE.Box3();
 const hit={t:0,enemy:null,zone:'torso',point:new THREE.Vector3(),boss:true};
 export function distanceToSegment(x,z,ax,az,bx,bz){const dx=bx-ax,dz=bz-az,t=clamp(((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz||1),0,1);return Math.hypot(x-ax-dx*t,z-az-dz*t);}
 export function hazardContains(h,x,z,jump=0,time=0){
@@ -71,7 +73,7 @@ export class BossEncounters {
  async init(){const sites=this._sys('boss-sites');if(!sites)return;
   await preloadBossSurface();
   this.group=new THREE.Group();this.group.name='county-encounters';this.ctx.scene.add(this.group);
-  for(let i=0;i<BOSSES.length;i++){const def=BOSSES[i],site=sites.sites.find(s=>s.id===def.id),rig=buildBossRig(def);const k={id:def.id,index:i,def:{...def,radius:3,height:rig.anatomy.height},site,rig,encounter:true,species:'encounter',pos:new THREE.Vector3(def.x,site.y,def.z),home:new THREE.Vector3(def.x,site.y,def.z),hp:def.hp,alive:true,dead:false,state:'dormant',stateT:0,age:0,cycle:0,phase:1,weakOpen:false,stagger:0,away:0,dreadT:0,hitFlash:0,hazards:[],pressureHazards:[],pressureT:1.2,pressureCursor:0,comboLeft:0,pendingRupture:false,recoveryDuration:1.1,attack:'',yaw:0,windup:1.8,duration:1.6,hitCooldown:0,chargeStart:null,chargeEnd:null,scar:0,rover:null,gait:0,moveSpeed:0,recoil:0,turn:0,stalkT:0,climbedCycle:-1,ambushed:false};
+  for(let i=0;i<BOSSES.length;i++){const def=BOSSES[i],site=sites.sites.find(s=>s.id===def.id),rig=buildBossRig(def);const k={id:def.id,index:i,def:{...def,radius:3,height:rig.anatomy.height},site,rig,encounter:true,species:'encounter',pos:new THREE.Vector3(def.x,site.y,def.z),home:new THREE.Vector3(def.x,site.y,def.z),hp:def.hp,alive:true,dead:false,state:'dormant',stateT:0,age:0,cycle:0,phase:1,weakOpen:false,stagger:0,away:0,dreadT:0,hitFlash:0,hazards:[],pressureHazards:[],pressureT:1.2,pressureCursor:0,comboLeft:0,pendingRupture:false,recoveryDuration:1.1,attack:'',yaw:0,windup:1.8,duration:1.6,hitCooldown:0,chargeStart:null,chargeEnd:null,scar:0,rover:null,gait:0,moveSpeed:0,recoil:0,turn:0,stalkT:0,climbedCycle:-1,surfaceHop:0,surface:'floor',surfaceRoute:null,surfaceNormal:new THREE.Vector3(0,1,0),travelX:0,travelZ:0,ambushed:false};
    rig.root.position.copy(k.pos);rig.root.visible=false;this.group.add(rig.root);this.all.push(k);for(const anchor of site.anchors){anchor.enemy={id:def.id+':anchor:'+anchor.index,encounter:true,anchor:true,boss:k,record:anchor,pos:new THREE.Vector3(anchor.x,anchor.y,anchor.z),def:{radius:.85,height:2},alive:true};}
    this._seat(k);
   }
@@ -87,7 +89,12 @@ export class BossEncounters {
  _makeHUD(){if(typeof document==='undefined')return;const el=document.createElement('section');el.id='encounter-hud';el.setAttribute('aria-label','Boss encounter');el.style.cssText='position:fixed;top:7%;left:50%;transform:translateX(-50%);width:min(470px,55vw);pointer-events:none;text-align:center;color:#e8d9cf;z-index:32;opacity:0;transition:opacity .6s;font-family:Georgia,serif;text-shadow:0 2px 9px #000';el.innerHTML='<div class="encounter-name" style="font-size:21px;letter-spacing:.1em;margin-bottom:9px"></div><div style="height:4px;background:#19171dcc;box-shadow:0 0 0 1px #85766b55"><div class="encounter-health" style="height:100%;width:100%;background:linear-gradient(90deg,#796579,#cbb6a5);transition:width .18s"></div></div><div class="encounter-state" style="font:10px monospace;letter-spacing:.22em;margin-top:9px;color:#c6afb0"></div>';document.body.append(el);this.hud=el;this.nameEl=el.querySelector('.encounter-name');this.hpEl=el.querySelector('.encounter-health');this.stateEl=el.querySelector('.encounter-state');}
  ready(){return this.all.length===BOSSES.length;}
  _restore(){const pr=this._sys('progress');if(!pr)return;for(const k of this.all){const cleared=pr.bossCleared?.(k.id)||pr.flag('boss:'+k.id);if(cleared){k.hp=0;k.alive=false;k.dead=true;k.state='dead';k.stateT=10;k.scar=1;for(const a of k.site.anchors){a.spent=true;a.enemy.alive=false;}if(k.rover?.inUse)this._sys('lights')?.release?.(k.rover);k.rover=null;this._clearHazards(k);this._unseat(k);}else this._reset(k);}this.loaded=true;}
- _seat(k){const c=this._sys('collision');if(!c)return;this._unseat(k);k.collider=c.addCollider({kind:'circle',x:k.pos.x,z:k.pos.z,r:k.def.shape==='tree'?3:2.25,y0:k.pos.y,y1:k.pos.y+Math.min(8,k.rig.anatomy.height),mask:1,tag:'boss',climbable:false},'boss-body:'+k.id);}
+ _seat(k){const c=this._sys('collision');if(!c)return;this._unseat(k);
+  if(k.def.shape==='crypt'&&k.surfaceNormal&&k.surfaceNormal.y<.999){
+   BODY_BOUNDS.makeEmpty();for(const x of[-2.25,2.25])for(const y of[0,8])for(const z of[-2.25,2.25])BODY_BOUNDS.expandByPoint(SURFACE_POINT.set(x,y,z).applyQuaternion(k.rig.root.quaternion).add(k.pos));
+   const a=BODY_BOUNDS.min,b=BODY_BOUNDS.max;k.collider=c.addCollider({kind:'obb',x:(a.x+b.x)/2,z:(a.z+b.z)/2,hx:(b.x-a.x)/2,hz:(b.z-a.z)/2,y0:a.y,y1:b.y,mask:1,tag:'boss',climbable:false},'boss-body:'+k.id);
+  }else k.collider=c.addCollider({kind:'circle',x:k.pos.x,z:k.pos.z,r:k.def.shape==='tree'?3:2.25,y0:k.pos.y,y1:k.pos.y+Math.min(8,k.rig.anatomy.height),mask:1,tag:'boss',climbable:false},'boss-body:'+k.id);
+ }
  _unseat(k){if(k.collider!==undefined){this._sys('collision')?.removeChunk('boss-body:'+k.id);k.collider=undefined;}}
  _voice(k,kind='dread',gain=.6){const a=this._sys('audio');if(!a?.spec)return;const name=kind==='death'?'kn_death':kind==='open'?'kn_vent':makeVoice(a,k.index,kind);if(!a.has(name))return;const s=a.spec();s.bus='creatures';s.cls='threat';s.gain=gain;s.ref=kind==='dread'?55:24;s.maxDist=180;s.priority=1;s.rate=kind==='dread'?1:.74+k.index*.033;s.send=.5;s.propagate=false;a.playAt(name,k.pos.x,k.pos.y+4,k.pos.z,s);}
  _wake(k){if(!k.alive||k.state!=='dormant')return;k.state='rising';k.stateT=0;k.weakOpen=false;k.comboLeft=0;k.pressureT=1.25;if(k.def.ambush)this._ambush(k);this._voice(k,'dread',.85);this.ctx.bus.emit('boss:woke',{id:k.id,x:k.pos.x,z:k.pos.z,by:'arrival'});}
@@ -117,25 +124,37 @@ export class BossEncounters {
   if(blocked){k.moveSpeed=0;return false;}
   const x=k.pos.x+mx*distance,z=k.pos.z+mz*distance,homeD=Math.hypot(x-k.home.x,z-k.home.z),limit=k.def.shape==='sea'?13:k.def.ambush?43:28;
   if(homeD>limit){k.moveSpeed=0;return false;}
-  k.pos.x=x;k.pos.z=z;k.pos.y=k.site.y;k.rig.root.position.copy(k.pos);k.moveSpeed=distance/Math.max(dt,.001);k.gait+=distance;
+  k.pos.x=x;k.pos.z=z;k.pos.y=k.site.y;k.rig.root.position.copy(k.pos);k.moveSpeed=distance/Math.max(dt,.001);k.gait+=distance;k.travelX=mx;k.travelZ=mz;
   if(this._colliderTimer<=0)this._seat(k);return true;
  }
  _stalk(k,p,dt){
   const shape=k.def.shape,dx=p.pos.x-k.pos.x,dz=p.pos.z-k.pos.z,d=Math.hypot(dx,dz)||1;
-  const pace={crypt:5.1,burrow:7.6,lantern:7.2,antler:6.8,bell:4.2,furnace:3.1,mire:4,moth:6.4,choir:2.2,sea:2.2,tree:0}[shape]||0;
-  if(shape==='crypt'&&k.cycle>1&&k.cycle%3===0&&k.climbedCycle!==k.cycle){
-   const side=p.pos.x>k.home.x?1:-1,tx=k.home.x+side*26,tz=k.home.z-4;
-   if(Math.hypot(tx-k.pos.x,tz-k.pos.z)<1.4){k.state='climbing';k.stateT=0;k.climbedCycle=k.cycle;k.yaw=side*Math.PI/2;k.rig.root.rotation.y=k.yaw;k.moveSpeed=0;return;}
-   if(k.stateT<7){this._move(k,tx-k.pos.x,tz-k.pos.z,dt,pace*1.2);return;}
+  const pace=BOSS_PACE[shape]||0;
+  if(shape==='crypt'&&k.cycle>0&&k.climbedCycle!==k.cycle){
+   k.surfaceRoute=buildCryptTraverse(k.pos,k.home,k.surfaceHop||0,p.pos);k.surfaceNormal||=new THREE.Vector3(0,1,0);k.state='climbing';k.stateT=0;k.climbedCycle=k.cycle;k.moveSpeed=0;return;
   }
   const desired=shape==='crypt'?10:shape==='burrow'?11:shape==='moth'?19:shape==='sea'?18:14;
   const close=d>desired+2?1:d<desired-4?-.8:.15,orbit=(k.cycle%2?1:-1)*(shape==='moth'?1:.65);
-  this._move(k,dx/d*close-dz/d*orbit,dz/d*close+dx/d*orbit,dt,pace*(1+(k.phase-1)*.16));
+  const burst=.72+.48*Math.sin(k.stateT*11+k.index)**2;
+  this._move(k,dx/d*close-dz/d*orbit,dz/d*close+dx/d*orbit,dt,pace*burst*(1+(k.phase-1)*.16));
   if((k.stateT>(k.phase===1?.55:.35)&&d<desired+4)||k.stateT>(k.phase===1?1.5:1.1)||pace===0)this._beginAttack(k,p);
+ }
+ _surfaceFacing(k,p){
+  if(k.def.shape!=='crypt'||!k.surfaceNormal||k.surfaceNormal.y>.999)return false;
+  SURFACE_FORWARD.subVectors(p.pos,k.pos);orientToSurface(k.rig.root,k.surfaceNormal,SURFACE_FORWARD);return true;
+ }
+ _climb(k,p,dt){
+  const route=k.surfaceRoute;if(!route){k.state='stalking';k.stateT=0;return;}
+  const before=k.pos.clone(),done=sampleCryptTraverse(route,k.stateT,k.pos,k.surfaceNormal,SURFACE_FORWARD);
+  k.rig.root.position.copy(k.pos);orientToSurface(k.rig.root,k.surfaceNormal,SURFACE_FORWARD);
+  const travel=before.distanceTo(k.pos);k.moveSpeed=travel/Math.max(dt,.001);k.gait+=travel;k.travelX=0;k.travelZ=1;
+  // A surface route never deals contact damage. It ends in a planted warning pose.
+  this._seat(k);
+  if(done){k.surface=route.surface;k.surfaceHop=(k.surfaceHop||0)+1;k.surfaceRoute=null;k.moveSpeed=0;this._beginAttack(k,p);this._seat(k);}
  }
  _dropHazard(h){h.mesh.removeFromParent();h.mesh.geometry.dispose();h.material.dispose();for(const m of h.spikes||[]){m.removeFromParent();m.geometry.dispose();m.material.dispose();}if(h.lead){h.lead.removeFromParent();h.lead.geometry.dispose();h.lead.material.dispose();}}
  _clearHazards(k,all=true){for(const h of k.hazards)this._dropHazard(h);k.hazards.length=0;if(all){for(const h of k.pressureHazards||[])this._dropHazard(h);k.pressureHazards=[];for(const a of k.site.anchors||[])a.channeling=0;}}
- _reset(k){this._clearHazards(k);k.pos.copy(k.home);k.rig.root.position.copy(k.home);k.rig.body.rotation.set(0,0,0);k.hp=k.def.hp;k.alive=true;k.dead=false;k.state='dormant';k.stateT=0;k.cycle=0;k.phase=1;k.weakOpen=false;k.stagger=0;k.away=0;k.scar=0;k.moveSpeed=0;k.gait=0;k.recoil=0;k.climbedCycle=-1;k.comboLeft=0;k.pendingRupture=false;k.pressureT=1.25;k.pressureCursor=0;k.recoveryDuration=1.1;for(const a of k.site.anchors){a.spent=false;a.hp=36;a.channeling=0;a.enemy.alive=true;}this._seat(k);}
+ _reset(k){this._clearHazards(k);k.pos.copy(k.home);k.rig.root.position.copy(k.home);k.rig.body.rotation.set(0,0,0);k.rig.root.rotation.set(0,0,0);k.surface='floor';k.surfaceHop=0;k.surfaceRoute=null;k.surfaceNormal?.set(0,1,0);k.travelX=0;k.travelZ=0;k.hp=k.def.hp;k.alive=true;k.dead=false;k.state='dormant';k.stateT=0;k.cycle=0;k.phase=1;k.weakOpen=false;k.stagger=0;k.away=0;k.scar=0;k.moveSpeed=0;k.gait=0;k.recoil=0;k.climbedCycle=-1;k.comboLeft=0;k.pendingRupture=false;k.pressureT=1.25;k.pressureCursor=0;k.recoveryDuration=1.1;for(const a of k.site.anchors){a.spent=false;a.hp=36;a.channeling=0;a.enemy.alive=true;}this._seat(k);}
  _expose(k,reason='exhausted'){
   if(k.pendingRupture){reason='anchor';k.pendingRupture=false;}
   this._clearHazards(k,reason==='anchor');k.state='recover';k.stateT=0;k.weakOpen=true;k.comboLeft=0;
@@ -169,7 +188,7 @@ export class BossEncounters {
   if(!k.comboLeft){const remaining=(k.site.anchors||[]).filter(a=>!a.spent).length;const base=k.def.ambush||k.phase>1?3:2;k.comboLeft=remaining<2&&!k.pendingRupture?Math.max(1,base-1):base;}
   k.attack=k.def.attacks[k.cycle++%k.def.attacks.length];k.attackFamily='slam';k.moveSpeed=0;k.state='warning';k.stateT=0;k.weakOpen=false;
   const dx=p.pos.x-k.pos.x,dz=p.pos.z-k.pos.z,d=Math.hypot(dx,dz)||1,ux=dx/d,uz=dz/d,phase=k.phase;
-  k.yaw=Math.atan2(ux,uz);k.rig.root.rotation.y=k.yaw;k.windup=phase===1?1.85:1.6;k.duration=2.3;k.chargeStart=null;k.chargeEnd=null;
+  k.yaw=Math.atan2(ux,uz);if(!this._surfaceFacing(k,p))k.rig.root.rotation.set(0,k.yaw,0);k.windup=phase===1?1.85:1.6;k.duration=2.3;k.chargeStart=null;k.chargeEnd=null;
   const disc=(x,z,r=4,delay=0,life=1.25,damage=30)=>this._hazard(k,{kind:'disc',x,z,r,delay,life,damage});
   const line=(angle,length=40,width=2.3,delay=0,life=.65,extra={})=>this._hazard(k,{kind:'line',x:k.pos.x,z:k.pos.z,bx:k.pos.x+Math.sin(angle)*length,bz:k.pos.z+Math.cos(angle)*length,width,delay,life,damage:32,...extra});
   const wave=(delay=0,inward=false,speed=18,width=1.35)=>this._hazard(k,{kind:'ring',x:k.pos.x,z:k.pos.z,r:42,width,speed,inward,delay,life:42/speed,damage:27});
@@ -331,14 +350,12 @@ export class BossEncounters {
     if(k.stateT>settle&&k.stagger<=0&&!p.dead&&d<85){k.state='stalking';k.stateT=0;k.weakOpen=false;}
    }
    if(k.state==='stalking'&&!p.dead){k.weakOpen=false;this._stalk(k,p,dt);}
-   if(k.state==='climbing'){
-    k.weakOpen=false;k.pos.y=k.site.y+Math.sin(Math.min(1,k.stateT/3.4)*Math.PI)*3.6;k.rig.root.position.copy(k.pos);
-    if(k.stateT>3.4){k.pos.y=k.site.y;k.rig.root.position.copy(k.pos);this._seat(k);this._beginAttack(k,p);}
-   }
+   if(k.state==='climbing'){k.weakOpen=false;this._climb(k,p,dt);}
    if(k.state==='warning'||k.state==='striking')this._advanceAttack(k,p,dt);
    if(!['dormant','rising'].includes(k.state)&&d<85&&!p.dead)this._advancePressure(k,p,dt);
-   const face=(k.state==='dormant'||k.state==='recover'||k.state==='rising'||k.state==='stalking');if(face&&d<120){const desired=Math.atan2(p.pos.x-k.pos.x,p.pos.z-k.pos.z),delta=Math.atan2(Math.sin(desired-k.yaw),Math.cos(desired-k.yaw));k.turn=delta;k.yaw+=delta*Math.min(1,dt*(k.state==='stalking'?3.3:1.9));k.rig.root.rotation.y=k.yaw;}
-   k.rig.pose(k.age,k.weakOpen,k.state==='warning'?clamp(k.stateT/k.windup,0,1):0,0,{state:k.state,stateT:k.stateT,attack:k.attack,attackFamily:k.attackFamily,phase:k.phase,strike:k.stateT/k.duration,speed:k.moveSpeed,gait:k.gait,recoil:k.recoil,turn:k.turn});if(k.hitFlash>0)k.rig.membrane.emissiveIntensity=.65;
+   const face=(k.state==='dormant'||k.state==='recover'||k.state==='rising'||k.state==='stalking');if(face&&d<120){const travelling=k.state==='stalking'&&k.moveSpeed>0,desired=travelling?Math.atan2(k.travelX,k.travelZ):Math.atan2(p.pos.x-k.pos.x,p.pos.z-k.pos.z),delta=Math.atan2(Math.sin(desired-k.yaw),Math.cos(desired-k.yaw));k.turn=delta;k.yaw+=delta*Math.min(1,dt*(travelling?11:1.9));if(!this._surfaceFacing(k,p))k.rig.root.rotation.set(0,k.yaw,0);}
+   const onSurface=k.def.shape==='crypt',localX=k.state==='climbing'?0:(k.travelX||0)*Math.cos(k.yaw)-(k.travelZ||0)*Math.sin(k.yaw),localZ=k.state==='climbing'?1:(k.travelX||0)*Math.sin(k.yaw)+(k.travelZ||0)*Math.cos(k.yaw);
+   k.rig.pose(k.age,k.weakOpen,k.state==='warning'?clamp(k.stateT/k.windup,0,1):0,0,{state:k.state,stateT:k.stateT,attack:k.attack,attackFamily:k.attackFamily,phase:k.phase,strike:k.stateT/k.duration,speed:k.moveSpeed,gait:k.gait,recoil:k.recoil,turn:k.turn,travelX:localX,travelZ:localZ,surface:k.surface,contact:onSurface?{root:k.rig.root,home:k.home,room:CRYPT_ROOM}:null});if(k.hitFlash>0)k.rig.membrane.emissiveIntensity=.65;
    // One borrowed light paints the real creature and nearby ground. No extra renderer light slots.
    if(d<72&&k.state!=='dormant'){const lights=this._sys('lights');if(!k.rover?.inUse)k.rover=lights?.borrow?.('boss',k.pos.x,k.pos.y+5,k.pos.z+6,k.def.skin.colors.accent,13,0);if(k.rover){k.rover.x=k.pos.x;k.rover.y=k.pos.y+5;k.rover.z=k.pos.z+6;k.rover.peak=k.weakOpen?17:8;k.rover.distance=38;k.rover.decay=1.1;}}else if(k.rover?.inUse){this._sys('lights')?.release?.(k.rover);k.rover=null;}
   }
@@ -348,6 +365,6 @@ export class BossEncounters {
  }
  // Presentation still runs while simulation is paused; keep encounter UI out of menus.
  present(){if(!this.hud)return;const show=!!(this.active&&this.ctx.playing&&!this.ctx.paused&&!this._sys('player')?.dead);this.hud.hidden=!show;this.hud.style.opacity=show?'1':'0';}
- state(){return {active:this.active?.id||null,encounters:this.all.map(k=>({id:k.id,state:k.state,hp:k.hp,maxHp:k.def.hp,phase:k.phase,comboLeft:k.comboLeft,pendingRupture:!!k.pendingRupture,recoveryDuration:k.recoveryDuration,weakOpen:k.weakOpen,alive:k.alive,position:k.pos.toArray(),hazards:[...k.hazards,...(k.pressureHazards||[])].map(h=>({pressure:!!h.pressure,anchor:h.anchor,kind:h.kind,x:h.x,z:h.z,r:h.r,width:h.width,damage:h.damage,delay:h.delay,life:h.life,bodyOnly:!!h.bodyOnly})),anchors:k.site.anchors.filter(a=>!a.spent).length}))};}
+ state(){return {active:this.active?.id||null,encounters:this.all.map(k=>({id:k.id,state:k.state,hp:k.hp,maxHp:k.def.hp,phase:k.phase,comboLeft:k.comboLeft,pendingRupture:!!k.pendingRupture,recoveryDuration:k.recoveryDuration,surface:k.surface||'floor',moveSpeed:k.moveSpeed,weakOpen:k.weakOpen,alive:k.alive,position:k.pos.toArray(),hazards:[...k.hazards,...(k.pressureHazards||[])].map(h=>({pressure:!!h.pressure,anchor:h.anchor,kind:h.kind,x:h.x,z:h.z,r:h.r,width:h.width,damage:h.damage,delay:h.delay,life:h.life,bodyOnly:!!h.bodyOnly})),anchors:k.site.anchors.filter(a=>!a.spent).length}))};}
  dispose(){this.off?.();for(const k of this.all){this._clearHazards(k);this._unseat(k);k.rig.dispose();if(k.rover?.inUse)this._sys('lights')?.release?.(k.rover);}this.prime?.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});this.hud?.remove();this.group?.removeFromParent();this.ctx.shared.bossEncounter=null;}
 }

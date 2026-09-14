@@ -136,7 +136,7 @@ export class HoldfastLife {
     }
   }
   _walk(r,dt){
-    const e=r.e;if(!r.route||!e?.alive||!e.neutral)return;
+    const e=r.e;if(!e?.alive||!e.neutral)return;e.townWalk=0;if(!r.route)return;
     if(this.chat?.id===r.id || this.target===r.id){e.townWalk=0;return;}
     if(r.pause>0){r.pause-=dt;e.townWalk=0;return;}
     const q=r.route[r.waypoint],goal=this.world(q[0],q[1],(q[2]||0)+.035),dx=goal.x-e.stagedX,dz=goal.z-e.stagedZ,d=Math.hypot(dx,dz);
@@ -146,8 +146,9 @@ export class HoldfastLife {
     const col=this._sys('collision'),blocked=col.raycast(_from,_ray,.65,col.MASK.SOLID);
     if(blocked&&blocked.hit!==false){r.direction*=-1;r.waypoint=Math.max(0,Math.min(r.route.length-1,r.waypoint+r.direction));r.pause=1;e.townWalk=0;return;}
     const p=this._sys('player');if(Math.hypot(p.pos.x-e.pos.x,p.pos.z-e.pos.z)<1.4){e.townWalk=0;return;}
-    e.stagedYaw=faceYaw(e.stagedX,e.stagedZ,goal.x,goal.z);e.stagedX+=dx/d*Math.min(d,speed*dt);e.stagedZ+=dz/d*Math.min(d,speed*dt);e.townWalk=speed;
-    e.stagedY+=(goal.y-e.stagedY)*Math.min(1,speed*dt/Math.max(d,.01));
+    const distance=Math.min(d,speed*dt),yaw=faceYaw(e.stagedX,e.stagedZ,goal.x,goal.z),turn=Math.atan2(Math.sin(yaw-e.stagedYaw),Math.cos(yaw-e.stagedYaw));
+    e.stagedYaw+=turn*Math.min(1,dt*9);e.stagedX+=dx/d*distance;e.stagedZ+=dz/d*distance;e.townWalk=distance/Math.max(dt,.001);
+    e.stagedY+=(goal.y-e.stagedY)*Math.min(1,distance/Math.max(d,.01));
   }
   _sight(a,b,height=1.2){
     _from.set(a.x,a.y+height,a.z);_to.set(b.x,b.y+1.15,b.z);_ray.subVectors(_to,_from);const d=_ray.length();_ray.multiplyScalar(1/Math.max(.001,d));

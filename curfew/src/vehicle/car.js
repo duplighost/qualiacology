@@ -64,6 +64,7 @@ import { ACTIONS } from '../engine/input.js';
 import { MASK } from '../world/collision.js';
 import { MAJORS } from '../world/placedata.js';
 import { RearPresence } from './rear-presence.js';
+import { CarDistress } from './car-distress.js';
 import { buildCarBody, buildDebrisGeometry, DEBRIS_VERTS, WHEEL_OFFSETS, WHEEL_RADIUS, ROOF_Y, DOOR, DOOR_HINGE, FOOTPRINT } from './carbody.js';
 
 const K = CFG.car;
@@ -656,6 +657,7 @@ export class Car {
     if (!scene) throw new Error('car: ctx.scene missing (gfx must be manifest #1)');
     scene.add(this.body.root);
     this.rearPresence = new RearPresence(this.ctx);
+    this.distress = new CarDistress(this.ctx);
 
     // LISTEN, NEVER EMIT (integrator decision 3): player/controller.js owns player:died
     // and player:respawn and clears its own dead flag. This file only has to let go —
@@ -1377,6 +1379,9 @@ export class Car {
     this.prevDoorA = this.doorA; this.prevCabin = this.cabin;
 
     this.hitCooldown -= dt;
+    this.attackCooldown = Math.max(0, (this.attackCooldown || 0) - dt);
+    this.shieldDelay = Math.max(0, (this.shieldDelay || 0) - dt);
+    if (!this.shieldDelay && this.wear < .999 && this._progress?.perk('carWard',false)) this.shield = Math.min(3, (this.shield ?? 3) + dt / 4);
     this.spawnCooldown -= dt;
     // An owed dispatch expires. A car that was sent for you four deaths ago is not a beat.
     if (this.owed) {
@@ -1686,7 +1691,7 @@ export class Car {
     if (p && !p.dead && this.mode === 'idle' && this._reach() <= ENTER_RANGE && this.ctx.bus) {
       const o = this._doorPoint(this._doorOut || (this._doorOut = { x: 0, z: 0 }));
       _promptP.kind = 'use'; _promptP.label = 'E';
-      _promptP.detail = this.wear >= .999 ? 'GET IN · ENGINE DEAD' : 'GET IN';
+      _promptP.detail = this.wear >= .999 ? 'CAR DISABLED · REPAIR REQUIRED' : 'GET IN';
       _promptP.subdetail = this.wear >= .999 ? 'FIND A MECHANIC TO REPAIR' : '';
       _promptP.x = o.x; _promptP.y = this.y + 1.05; _promptP.z = o.z; _promptP.k = 0;
       this.ctx.bus.emit('prompt', _promptP);
@@ -1708,6 +1713,7 @@ export class Car {
   }
 
   _beginEnter() {
+    if (this.wear >= .999) { this._noise('car:handle-refuse', 6); return false; }
     const cam = this.ctx.camera;
     if (cam) {
       this.fromX = cam.position.x; this.fromY = cam.position.y; this.fromZ = cam.position.z;
@@ -2881,6 +2887,26 @@ export class Car {
 
   /* ------------------------------------------------------------------ wear -- */
 
+  absorbHit(amount) {
+    if (!this.exists || !this.ctx.shared.inCar || this.mode === 'thrown') return false;
+    if (!(amount > 0) || this.attackCooldown > 0 || this.mode === 'exiting') return true;
+    this.attackCooldown = .65; this.shieldDelay = 12;
+    const ward = this._progress?.perk('carWard', false);
+    this.shield ??= 3;
+    const blocked = ward && this.shield >= 1;
+    if (blocked) this.shield -= 1;
+    // Road wear protection is not armour. Enemy blows still damage a rebuilt engine.
+    const armour = this._progress?.perk('carImpact', 1) ?? 1;
+    if (!blocked) this.wear = clamp01(this.wear + amount / 180 * armour);
+    this._progress?.flag('car:wear', 1 + Math.round(this.wear * 1000000));
+    this._say('branch', blocked ? .20 : .42);
+    this.ctx.systems.get('fx')?.addTrauma?.(blocked ? .06 : .15);
+    this.distress?.hit(blocked);
+    this._emit('car:damaged', { condition: Math.round((1 - this.wear) * 100), shield: blocked });
+    this._syncEngineFailure();
+    return true;
+  }
+
   /** Failure is a state edge, so a held accelerator cannot repeat its sound or receipt. */
   _syncEngineFailure() {
     if (this.wear < .999) {
@@ -2892,13 +2918,18 @@ export class Car {
     this.engineOn = false; this.pedal = 0; this._throttle = 0;
     this._boostMul = 1; this._boostAccel = 1;
     if (this.boosting) { this.boosting = false; this._emit('car:nitro', { on: false, tank: this.boost }); }
-    if (!this._failureAnnounced && this.exists && (this.mode === 'driving' || this.mode === 'arriving')) {
+    if (!this._failureAnnounced && this.exists && (this.mode === 'driving' || this.mode === 'entering' || this.mode === 'arriving')) {
       this._failureAnnounced = true;
       this._soundFailure();
       this._noise('car:failed', 24);
       this._emit('car:failed', { x: this.x, y: this.y, z: this.z });
     }
-    // A failed autonomous arrival must still become an enterable, repairable parked car.
+    // A breakdown releases the passenger and leaves a repairable, locked-out car.
+    if (this.ctx.shared?.inCar && this.mode !== 'exiting') {
+      this._beginExit();
+      const player = this._player;
+      if (player) player.invuln = Math.max(player.invuln || 0, 2.5);
+    }
     if (this.mode === 'arriving' && Math.abs(this.speed) < .1) {
       this.mode = 'idle'; this.speed = 0; this._placeRoof();
     }
@@ -2945,7 +2976,7 @@ export class Car {
    * ever did.
    */
   _stepWear(dt) {
-    if (this.wear <= 0) return;
+    if (this.wear <= 0 || this.wear >= .999) return;
     const pr = this._progress;
     if (!pr || typeof pr.perk !== 'function') return;
     const perMin = pr.perk('wearMend', 0, !!this.engineOn);
@@ -3026,6 +3057,7 @@ export class Car {
   }
 
   repairFull(){
+    this.shield=3;this.shieldDelay=0;
     this.wear=0;this._wearLoaded=true;this._progress?.flag('car:wear',1);
     this._syncEngineFailure();
     this._progress?.flag('car:fully-repaired',1);this.body?.setRepaired(true);
@@ -3241,7 +3273,8 @@ export class Car {
     // be "on the cars dashboard and not on the hud", so this is the only place the number
     // is shown and the HUD line that used to print it is gone (ui/readouts.js).
     if (this.body.setCondition) this.body.setCondition(1 - clamp01(this.wear), (this.ctx.time && this.ctx.time.t) || 0);
-    this.body.setMotion?.(this.speed, this.boost, this.boosting, this.ctx.time?.t || 0);
+    this.distress?.update(this, this.ctx.time?.t || 0);
+    this.body.setMotion?.(this.speed, this.boost, this.boosting, this.ctx.time?.t || 0,this.shield??3);
     // ROUND 19: the glass. From the seat it is glass; from outside it is a haze. Driven
     // here, not on the door event, so a reload, a respawn or a teleport into the seat can
     // never leave the wash on. See carbody.js setCabinView.
@@ -3694,6 +3727,7 @@ export class Car {
       this._deb = null;
     }
     this._offGarage?.();
+    this.distress?.dispose();
     if (this.body) { this.body.dispose(); this.body = null; }
     if (this.ctx.shared) this.ctx.shared.inCar = false;
   }

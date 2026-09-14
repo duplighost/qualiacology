@@ -336,7 +336,8 @@ const CONTROLS = [
   ['Fire', 'Left mouse'],
   ['Aim', 'Right mouse'],
   ['Melee', 'V or middle mouse'],
-  ['Reload', 'R'],
+  ['Reload / raise weapon', 'Tap R'],
+  ['Lower weapon · run faster', 'Hold R'],
   // Round 5 lane F (the gun) adds a second weapon and Q swaps; round 6 lane D1 adds the
   // digits. Same round, same card.
   ['Swap weapon', 'Q or 1 / 2'],

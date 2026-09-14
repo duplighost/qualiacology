@@ -99,7 +99,7 @@ function crawlerArm(s,limbs,anchor,foot,side,index,size=1){
  }
  a.flush();b.flush();c.flush();joint.add(upper,lower,hand);s.root.add(joint);joint.userData.ik={anchor:new THREE.Vector3(...anchor),foot:new THREE.Vector3(...foot),side,index,upper,lower,hand};limbs.push(joint);
 }
-const IK_A=new THREE.Vector3(),IK_B=new THREE.Vector3(),IK_C=new THREE.Vector3(),IK_D=new THREE.Vector3(),IK_Q=new THREE.Quaternion();
+const IK_A=new THREE.Vector3(),IK_B=new THREE.Vector3(),IK_C=new THREE.Vector3(),IK_D=new THREE.Vector3(),IK_E=new THREE.Vector3(),IK_N=new THREE.Vector3(),IK_Q=new THREE.Quaternion();
 function walkerLeg(s,limbs,anchor,foot,side,index,size=1,hoof=false){
  const joint=new THREE.Group(),upper=new THREE.Group(),lower=new THREE.Group(),hand=new THREE.Group(),a=new Sculpt(upper),b=new Sculpt(lower),c=new Sculpt(hand);
  a.rod([[0,0,0],[side*.08,.5,0],[0,1,0]],.29*size,hoof?'iron':'flesh',.65);a.rod([[side*.19,.05,.10],[side*.20,.8,.12]],.10*size,'bone',.7);
@@ -110,15 +110,28 @@ function walkerLeg(s,limbs,anchor,foot,side,index,size=1,hoof=false){
 }
 function placeSegment(mesh,a,b){mesh.position.copy(a);IK_D.copy(b).sub(a);mesh.scale.y=IK_D.length();mesh.quaternion.setFromUnitVectors(UP,IK_D.normalize());}
 function poseCrawler(ik,t,motion,telegraph,dead){
- const gait=motion.gait||0,speed=Math.min(1,(motion.speed||0)/4),phase=gait*1.8+ik.index*Math.PI*.92;
- const cycle=Math.sin(phase),lift=Math.max(0,Math.cos(phase))*speed;
- IK_A.copy(ik.anchor);IK_C.copy(ik.foot);IK_C.z+=cycle*1.9*speed;IK_C.y+=lift*1.3;
+ const gait=motion.gait||0,speed=Math.min(1,(motion.speed||0)/3),stride=ik.walking?2.9:4.4;
+ const phase=((gait/stride+ik.index*.47)%1+1)%1,swing=phase<.35;
+ const u=swing?phase/.35:(phase-.35)/.65,step=swing?u*u*(3-2*u):1-u;
+ const reachLength=stride*.65,cycle=step*2-1,lift=(swing?Math.sin(u*Math.PI):0)*speed;
+ const directionX=motion.travelX||0,directionZ=motion.travelZ??1,halfStep=reachLength*.5;
+ IK_A.copy(ik.anchor);IK_C.copy(ik.foot);IK_C.x+=cycle*halfStep*directionX*speed;IK_C.z+=cycle*halfStep*directionZ*speed;IK_C.y+=lift*(ik.walking?.72:1.5);
  const front=ik.index<2,reach=['reach','hands','wall-grasp','furrow','earth-split','bridal-grasp'].includes(motion.attack);
  const strike=motion.state==='striking'?Math.sin(Math.min(1,motion.strike||0)*Math.PI):0;
  if(front&&reach){IK_C.y+=telegraph*3.4;IK_C.z+=telegraph*2.5+strike*6;IK_C.x*=1-telegraph*.3;}
  if(front&&motion.attack==='seize'&&motion.state==='rising'){const u=Math.min(1,(motion.stateT||0)/1.1);IK_C.y+=Math.sin(u*Math.PI)*8;IK_C.z+=Math.sin(u*Math.PI)*5;IK_C.x*=.55;}
  if(['slam','kneeling-supper','derailment','clapper-swing'].includes(motion.attack)||motion.attackFamily==='slam'){IK_C.y+=telegraph*(front?4:1.2);IK_C.z+=telegraph*(front?1.3:0);}
- if(motion.state==='climbing'){IK_C.x=ik.side*(front?.9:ik.index<4?1.1:1.5);IK_C.z=front?4.8:ik.index<4?4.7:3.8;IK_C.y=front?6.8:ik.index<4?3.8:.3;}
+ if(motion.contact&&motion.state==='climbing'){
+  const {root,home,room}=motion.contact,footLift=lift*1.5;
+  IK_C.x*=.60; // Fold the long hands through the bay between the crypt columns.
+  IK_E.copy(IK_C);IK_E.y-=footLift;IK_E.applyQuaternion(root.quaternion).add(root.position);
+  const floor=Math.abs(IK_E.y-home.y),ceiling=Math.abs(IK_E.y-home.y-room.ceiling),wall=Math.abs(Math.abs(IK_E.x-home.x)-room.halfWidth);
+  if(wall<floor&&wall<ceiling){const side=IK_E.x>home.x?1:-1;IK_E.x=home.x+side*room.halfWidth;IK_E.y=Math.max(home.y,Math.min(home.y+room.ceiling,IK_E.y));IK_N.set(-side,0,0);}
+  else if(ceiling<floor){IK_E.y=home.y+room.ceiling;IK_N.set(0,-1,0);}
+  else {IK_E.y=home.y;IK_N.set(0,1,0);}
+  IK_E.x=Math.max(home.x-room.halfWidth,Math.min(home.x+room.halfWidth,IK_E.x));IK_E.addScaledVector(IK_N,.10+footLift);
+  IK_C.copy(IK_E).sub(root.position).applyQuaternion(IK_Q.copy(root.quaternion).invert());
+ }
  if(dead){IK_C.x*=1.2;IK_C.z+=.8;IK_C.y=.12;}
  if(motion.body){IK_C.sub(motion.body.position).applyQuaternion(IK_Q.copy(motion.body.quaternion).invert());IK_C.y/=motion.body.scale.y;}
  IK_B.copy(IK_A).lerp(IK_C,.5);IK_B.x+=ik.side*(ik.walking?.35:1.1+telegraph*.5);IK_B.y+=ik.walking?0:1.0;IK_B.z+=ik.walking?1.45:-1.1;
@@ -376,8 +389,9 @@ export function buildBossRig(def){
    body.rotation.z=dead?Math.min(.45,dead*.15):Math.sin(mobile?gait*1.8:t*.5)*(mobile?.055*speed:.013);
    if(def.ambush&&!dead){body.position.y-=motion.state==='dormant'?10:(1-rise)*10;body.rotation.x+=(1-rise)*.45;}
    if(def.shape==='moth'&&!dead){body.position.y+=1.2+Math.sin(t*1.7)*.65;body.rotation.x+=speed*.16;}
-   if(motion.state==='climbing'&&!dead){body.position.y+=motion.climb||0;body.rotation.x=-.55;}
-   if(anatomy.head){anatomy.head.rotation.y=Math.sin(t*.7)*.07+(motion.turn||0)*.22;anatomy.head.rotation.x=-telegraph*.2+recoil*.33;anatomy.head.rotation.z=Math.sin(t*.83)*.08;}
+   if(motion.state==='climbing'&&!dead){body.position.y+=Math.sin(gait*4.1)*.10;body.rotation.x=-.08;body.rotation.z=Math.sin(gait*2.7)*.065;}
+   shadow.material.opacity=motion.state==='climbing'?.36:1;
+   if(anatomy.head){const twitch=def.shape==='crypt'&&speed>0?Math.sin(gait*3.1)*Math.sin(gait*1.17)*.16:0;anatomy.head.rotation.y=Math.sin(t*.7)*.07+(motion.turn||0)*.22+twitch;anatomy.head.rotation.x=-telegraph*.2+recoil*.33;anatomy.head.rotation.z=Math.sin(t*.83)*.08+twitch*.55;}
    if(anatomy.jaw){anatomy.jaw.rotation.x=.15+telegraph*.55+Math.sin(t*2.3)*.09;anatomy.jaw.rotation.z=Math.sin(t*1.7)*.07+recoil*.15;}
    const strike=motion.state==='striking'?Math.sin(Math.min(1,motion.strike||0)*Math.PI):0;
    if(anatomy.jaws)for(let j=0;j<anatomy.jaws.length;j++){const side=j?1:-1;anatomy.jaws[j].rotation.y=side*(.025+telegraph*.26+(open?.32:0)+strike*.18);anatomy.jaws[j].rotation.x=telegraph*.1+Math.sin(t*1.8+j)*.035;}
