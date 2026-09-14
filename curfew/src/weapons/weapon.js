@@ -154,6 +154,7 @@ const BEATS_EMPTY = [
 ];
 
 const MAXT = 300;                 // metres a shot is allowed to travel
+const LOWER_HOLD_S=.38, LOWER_IN_S=.26, LOWER_OUT_S=.24;
 
 /* -------------------------------------------------------------------------
    ROUND 5 (docs/NEXT.md item 3) — Alex: "This initial gun is very slow and it
@@ -227,6 +228,8 @@ export class Weapons {
     this._autoReload = false;      // true while the gun in the hands is empty with reserve (derived each step)
     this.grantCount = 0;
     this.swapCount = 0;
+    this.lowered=false;this.lowerT=0;this._reloadHold=0;this._reloadMode='';
+    this._lowerClock=0;this._shopLowerUntil=-Infinity;
 
     this.select('bolt');           // M0 ships with the bolt rifle selected
 
@@ -252,6 +255,11 @@ export class Weapons {
       ctx.bus.on('pickup:ammo', (p) => {
         const n = p ? Math.floor(+p.n) : 0;
         if (n > 0) { this.ammoPickups++; this.addReserve(n); }
+      });
+      ctx.bus.on('prompt',p=>{
+        // The existing shop/payment prompt owns low-ready; leaving it restores
+        // the player's chosen stance rather than overwriting that choice.
+        if((p?.label||'E')==='E'&&/\b(COINS|BUY|PAY|REPAIR)\b/.test((p.detail||'')+' '+(p.subdetail||'')))this._shopLowerUntil=this._lowerClock+.16;
       });
     }
 
@@ -286,6 +294,7 @@ export class Weapons {
       swayMul: 1, breathHeld: false, breathLeft: 0,
       // ROUND 5: the swap motion. swapT is 0..1 progress while swapping, else -1.
       swapping: false, swapT: -1,
+      lowered:false,lowerT:0,
     };
     // select() ran before vmState existed; publish the selected weapon now.
     this.vmState.weapon = this.def.id; this.vmState.mag = this.def.mag;
@@ -566,6 +575,7 @@ export class Weapons {
    */
   get wantsSprintCancel() {
     const i = this._input();
+    if(this.lowered||this.lowerT>0)return false;
     return i.fire || i.aim || this.buffered > 0
       || (!!this.reloading && !this.reloading.auto && !this._canParkReload());
   }
@@ -587,6 +597,38 @@ export class Weapons {
     return got;
   }
 
+  get travelReady(){return this.lowered&&this.lowerT>=.999&&!this.reloading&&!this.melee;}
+
+  _setLowered(on){
+    this.lowered=!!on;this.buffered=this.meleeBuffered=0;
+    if(on&&this.melee){this.melee=null;this._pulse('melee:end');}
+    if(on&&this.reloading)this._cancelReload(this._canParkReload());
+    this.ctx.bus.emit('weapon:stance',{lowered:this.lowered});
+  }
+
+  _stepLowering(dt,i,pressed,released,dead){
+    this._lowerClock+=dt;
+    if(pressed&&!dead){this._reloadHold=0;this._reloadMode=this.lowered?'raise':this.reloading?'active':'reload';this._reloadOwner=this.reloading;this._reloadAt=this.reloading?.t;}
+    if(i.reload&&this._reloadMode){
+      this._reloadHold+=dt;
+      if(this._reloadHold>=LOWER_HOLD_S&&this._reloadMode!=='spent'){
+        if(!this.lowered)this._setLowered(true);
+        this._reloadMode='spent';
+      }
+    }
+    let reloadTap=false;
+    if(released){
+      if(!dead&&this._reloadMode==='raise')this._setLowered(false);
+      else if(!dead&&this._reloadMode==='active'&&this.reloading===this._reloadOwner)this._activeReloadPress(this._reloadAt);
+      else reloadTap=!dead&&this._reloadMode==='reload';
+      this._reloadMode='';this._reloadOwner=null;this._reloadHold=0;
+    }
+    const shop=this._lowerClock<=this._shopLowerUntil&&!i.fire&&!i.aim&&!i.melee;
+    const target=this.lowered||shop;
+    this.lowerT=clamp01(this.lowerT+(target?dt/LOWER_IN_S:-dt/LOWER_OUT_S));
+    return reloadTap;
+  }
+
   // Perks recover a real cartridge into the current magazine; excess is never minted.
   recoverRound(n = 1) {
     const got = Math.max(0, Math.min(Math.floor(n), this.def.mag - this.ammo));
@@ -603,6 +645,7 @@ export class Weapons {
       autoReload: this._autoReload, grantCount: this.grantCount, swapCount: this.swapCount,
       rewardCount: this.rewardCount, ammoPickups: this.ammoPickups,
       blocksSprint: this.wantsSprintCancel,
+      lowered:this.lowered,lowerT:this.lowerT,travelReady:this.travelReady,
       adsT: this.adsT, spreadDeg: this._cone(), bloom: this.bloom,
       kickPitch: this.kickPitch, kickYaw: this.kickYaw,
       shotIndex: this.shotIndex, fireClock: this.fireClock,
@@ -817,11 +860,12 @@ export class Weapons {
    * there is no window and this is what it has always been: nothing. One attempt per
    * reload — a mashed button must not be a free retry, or the window is not a window.
    */
-  _activeReloadPress() {
+  _activeReloadPress(at) {
     const r = this.reloading;
     if (!r || r.activeFrom < 0 || r.activeUsed) return;
     r.activeUsed = true;
-    if (r.t >= r.activeFrom && r.t <= r.activeTo) {
+    const time=Number.isFinite(at)?at:r.t;
+    if (time >= r.activeFrom && time <= r.activeTo) {
       r.rate = r.activeMul;               // the REST of the reload runs faster
       this._emitReload('beat', 'active');
       const pu = this._pulse('reload:beat');
@@ -1110,6 +1154,7 @@ export class Weapons {
     const firePressed = i.fire && !pr.fire;
     const aimPressed = i.aim && !pr.aim;
     const reloadPressed = i.reload && !pr.reload;
+    const reloadReleased = !i.reload && pr.reload;
     const meleePressed = i.melee && !pr.melee;
     const swapPressed = i.swap && !pr.swap;
     const slot1Pressed = i.slot1 && !pr.slot1;
@@ -1119,6 +1164,8 @@ export class Weapons {
     pr.swap = i.swap; pr.slot1 = i.slot1; pr.slot2 = i.slot2;
 
     const dead = !!p.dead;
+    const reloadTap=this._stepLowering(dt,i,reloadPressed,reloadReleased,dead);
+    const weaponReady=!this.lowered&&this.lowerT<=.001&&!p.scaling&&!p.scaleDescending&&!p.climb;
 
     // ---- the swap (ROUND 5). Lower for half of SWAP_S, change guns at the bottom, raise.
     // The def is read AFTER this so the rest of the step sees the gun that is in the hands.
@@ -1160,7 +1207,7 @@ export class Weapons {
     // for 2.75 s (from 0.62 s to 3.35 s after the last shot, adsT to 0), every time the gun
     // emptied while aimed. An auto reload keeps the sight up through its non-cancelable
     // window; a reload the player pressed R for still lowers it, as it always has.
-    const wantAds = i.aim && !p.sprinting && !this.melee && !swapping
+    const wantAds = weaponReady&&i.aim && !p.sprinting && !this.melee && !swapping
       && !(this.reloading && !this.reloading.cancelable && !this.reloading.auto) && !dead;
     this.adsT = clamp01(this.adsT + (wantAds ? dt / CORE.adsIn : -dt / CORE.adsOut));
     this.fullyAdsFor = this.adsT >= 0.999 ? this.fullyAdsFor + dt : 0;
@@ -1171,14 +1218,15 @@ export class Weapons {
 
     // ---- input buffering. CORE.inputBuffer is why a pull 200 ms early still
     // lands on the cycle instead of being eaten.
-    if (firePressed) this.buffered = CORE.inputBuffer;
+    if(!weaponReady)this.buffered=this.meleeBuffered=0;
+    if (firePressed&&weaponReady) this.buffered = CORE.inputBuffer;
     else this.buffered = Math.max(0, this.buffered - dt);
-    if (meleePressed) this.meleeBuffered = CORE.inputBuffer;
+    if (meleePressed&&weaponReady) this.meleeBuffered = CORE.inputBuffer;
     else this.meleeBuffered = Math.max(0, this.meleeBuffered - dt);
 
     // ---- melee: one owner, the whole timeline here. Legal from sprint and
     // mid-reload — it is the answer to something already on top of you.
-    if (this.meleeBuffered > 0 && !this.melee && !dead && !swapping) {
+    if (this.meleeBuffered > 0 && !this.melee && !dead && !swapping&&weaponReady) {
       this.meleeBuffered = 0;
       this._startMelee();
     }
@@ -1224,12 +1272,9 @@ export class Weapons {
       }
     }
 
-    // ---- reload timeline
-    // A reload press DURING a reload is the active-reload attempt, not a restart:
-    // _startReload() already returned early on that press, so this costs nothing when the
-    // node is not owned.
-    if (reloadPressed && this.reloading) this._activeReloadPress();
-    else if (reloadPressed && !swapping) this._startReload();
+    // A tap reloads on release; holding the same key deliberately lowers instead.
+    // Active reloads retain the original press-time sample in _stepLowering.
+    if(reloadTap&&!swapping&&weaponReady)this._startReload();
 
     // ---- AUTO-RELOAD (ROUND 5, NEXT.md item 3). Alex: "it should automatically reload when
     // it gets to zero". DERIVED from the gun's own state every step, never armed by an edge.
@@ -1256,7 +1301,7 @@ export class Weapons {
     // a run, and a key-keyed rule would start-and-cancel every step for as long as it was held.
     this._autoReload = this.ammo === 0 && this.reserve > 0 && !this.reloading;
     if (this._autoReload && !this.melee && !p.sprinting && this.sprintOutTimer <= 0
-        && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar) {
+        && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar&&weaponReady&&!i.reload) {
       this._startReload(true);
     }
     if (this.reloading) {
@@ -1331,7 +1376,7 @@ export class Weapons {
     // stutters. The clock carries its remainder into fire()'s subT so the
     // muzzle flash and the tracer are placed where the shot actually was.
     const canFire = !this.reloading && !this.melee && this.sprintOutTimer <= 0
-      && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar;
+      && this.cycle <= 0 && !dead && !swapping && !ctx.shared?.inCar&&weaponReady;
     const wantFire = d.auto ? (i.fire || this.buffered > 0) : (this.buffered > 0);
     this.firing = false;
     if (wantFire && canFire && this.ammo > 0) {
@@ -1443,6 +1488,7 @@ export class Weapons {
     s.cycle = this.cycle; s.cycleLen = d.cycle; s.weapon = d.id;
     s.empty = this.ammo === 0;
     s.swapping = swapping; s.swapT = swapping ? this.swapT / SWAP_S : -1;
+    s.lowered=this.lowered;s.lowerT=this.lowerT;
     // The viewmodel multiplies its sway by this and needs to know nothing else. 1 = today.
     s.breathHeld = this.breathHeld;
     s.breathLeft = this.breathLeft === null ? 0 : this.breathLeft;

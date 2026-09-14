@@ -5,7 +5,7 @@ import {supplyChestGeometry} from './supply-chest.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {projectPlaceSurfaceUVs} from './place-surfaces.js';
 import {createWaterMaterial,prepareWaterGeometry} from './water-surface.js';
-import {BOSSES,CRYPT,bossMapPoint} from './boss-catalog.js';
+import {BOSSES,CRYPT,CRYPT_ROOM,bossMapPoint} from './boss-catalog.js';
 import {KEPT_STAIR} from './boss-passage.js';
 import {addFlat,heightAt} from './terrain.js';
 import {nearestRoadInfo} from './roads.js';
@@ -73,7 +73,9 @@ export class BossSites {
    for(const side of[-1,1])k.box(.2,.18,90,side*2,.13,0,IRON);for(let i=0;i<29;i++)k.box(5.8,.13,.8,0,.08,-42+i*3,TIMBER);for(const side of[-1,1]){box(side*28,-10,7,22,5,IRON);k.box(7.4,.22,22.4,side*28,5.1,-10,[.28,.3,.31]);}for(let i=0;i<8;i++){const a=i*TAU/8;rod(k,[Math.cos(a)*35,0,Math.sin(a)*35],[Math.cos(a)*34,4,Math.sin(a)*34],.22,BONE);}sign(root,'STAG CROSSING|THE TRACK IS NO LONGER THE ROUTE',0,3,39);
   }else if(s.shape==='crypt'){
    // Sealed separate room keeps the terrain collision contract intact while looking underground.
-   box(-43,0,4,90,15);box(43,0,4,90,15);box(0,-43,90,4,15);box(0,43,90,4,15);k.box(90,3,90,0,16,0,STONE);
+   const room=CRYPT_ROOM,outerX=(room.halfWidth+room.wallThickness)*2,outerZ=(room.halfDepth+room.wallThickness)*2;
+   for(const side of[-1,1]){box(side*(room.halfWidth+room.wallThickness/2),0,room.wallThickness,outerZ,room.wallHeight);box(0,side*(room.halfDepth+room.wallThickness/2),outerX,room.wallThickness,room.wallHeight);}
+   k.box(outerX,room.roofThickness,outerZ,0,room.ceiling+room.roofThickness/2,0,STONE);
    for(const side of[-1,1])for(let i=0;i<5;i++){const z=-30+i*13;box(side*31,z,3.5,3.5,14);if(side===-1){const arch=new THREE.TorusGeometry(31,.68,10,52,Math.PI);arch.scale(1,.24,1);arch.translate(0,7,z);k.push(arch,STONE);}glow.cyl(.14,.24,1,8,side*30,3,z,[.3,.38,.65]);}
    // A vestibule breaks the first view; bones face the return stair, food bowls face inward.
    box(-22,25,20,2.4,6);box(22,25,20,2.4,6);

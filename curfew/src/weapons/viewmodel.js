@@ -45,6 +45,7 @@ import {finishMaterial, setMaterialFinish} from './finishes.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TAU, DEG, clamp, clamp01, lerp, ease, Spring, Spring3, sway2 } from '../engine/math.js';
 import CFG from '../config.js';
+import {buildClimbingHand,climbingHandMaterials,placeClimbingHand} from './climbing-hands.js';
 
 // Small bevels carry a moving light edge on the stock, receiver and grip.
 function bevelBox(w,h,d) {
@@ -341,7 +342,7 @@ const C = {
   BOLTZ: 17, MAG_Y: 18, MAG_X: 19, MAG_RZ: 20,
   SWING: 21, LIFT: 22, RELOADW: 23, BOB: 24, MAGVIS: 25,
   SWAP: 26,                                   // ROUND 5: 0..1 how far the gun is lowered
-  N: 27,
+  LOWER:27,N:28,
 };
 
 /* ---------------- module scratch. present/step allocate nothing. ------- */
@@ -663,22 +664,10 @@ export class Viewmodel {
     for (let i=0;i<this._finishMats.length;i++) this._finishMats[i].userData.finishUniforms.uFinishStrength.value = i===2?.72:i===3?.48:1;
     // A visible alternating grip communicates the held-Space movement without a tutorial.
     this.climbHands=[];
-    const glove=matte.clone();glove.color.setHex(0x4c4940);this._grade(glove);this._mats.push(glove);
+    const handMaterials=climbingHandMaterials();
+    for(const mat of Object.values(handMaterials)){this._grade(mat);this._mats.push(mat);}
     for(const side of [-1,1]){
-      const parts=[];
-      const block=(w,h,d,x,y,z,rx=0,rz=0)=>{
-        const g=bevelBox(w,h,d);g.rotateX(rx);g.rotateZ(rz);g.translate(x,y,z);parts.push(g);
-      };
-      block(.082,.16,.075,0,-.16,.05,-.12);
-      block(.088,.11,.043,0,-.032,0);
-      for(let f=0;f<4;f++){
-        const x=(f-1.5)*.023,dy=(f===0||f===3)?-.009:0;
-        block(.018,.055,.022,x,.043+dy,-.005,-.10);
-        block(.018,.025,.038,x,.074+dy,-.018,.65);
-      }
-      block(.027,.066,.03,-side*.052,-.009,-.014,.1,-side*.55);
-      const g=mergeGeometries(parts);parts.forEach(g=>g.dispose());
-      const hand=new THREE.Mesh(g,glove);hand.scale.setScalar(.80);hand.visible=false;hand.userData.side=side;
+      const hand=buildClimbingHand(side,handMaterials);hand.visible=false;
       this.root.add(hand);this.climbHands.push(hand);
     }
     const add = (parent, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
@@ -1344,6 +1333,7 @@ export class Viewmodel {
     s[C.MAGVIS] = magVis;
     s[C.SWING] = swing; s[C.LIFT] = lift; s[C.RELOADW] = rw; s[C.BOB] = bobAmp;
     s[C.SWAP] = swapLower;
+    s[C.LOWER]=st.lowerT||0;
 
     this._stepBrass(dt, p, cam);
   }
@@ -1597,14 +1587,11 @@ export class Viewmodel {
     // root locked to the camera orientation: rotate-then-place
     this.root.position.set(0, 0, 0);
     this.root.quaternion.identity();
-    const gripping=p.scaling||p.climb!==0;
-    if(gripping){_v.y-=.48;_e.x+=.7;}
+    const gripping=p.scaling||p.scaleDescending||p.climb!==0;
+    _v.y-=.72*_S[C.LOWER];_e.x+=1.05*_S[C.LOWER];
+    this.gun.visible=!gripping&&_S[C.LOWER]<.999;
     for(const hand of this.climbHands){
-      hand.visible=gripping;
-      if(gripping){const side=hand.userData.side,beat=t*6.5+(side<0?Math.PI:0);
-        hand.position.set(side*(.26+.013*Math.cos(beat)),-.16+.08*Math.sin(beat),-.62+.025*Math.cos(beat));
-        hand.rotation.set(-.12+.12*Math.cos(beat),-side*.12,-side*.18);
-      }
+      hand.visible=gripping&&!!this.ctx.camera&&placeClimbingHand(hand,p,this.ctx.camera,this.camera);
     }
     this.gun.position.copy(_v);
     this.gun.rotation.copy(_e);
@@ -1760,6 +1747,7 @@ export class Viewmodel {
   dump() {
     return {
       weapon: this.curId, swap: this.currS[C.SWAP],
+      lowered:this.currS[C.LOWER],
       fov: this.camera.fov, adsT: this.currS[C.ADS],
       sight: this.sightScreenOffset(),
       boltZ: this.currS[C.BOLTZ],

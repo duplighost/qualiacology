@@ -33,9 +33,11 @@ export class FirstLight{
  }
  step(dt){
   if(!this.ctx.ready)return;const p=this._sys('player');if(!p?.pos)return;const near=Math.hypot(p.pos.x+520,p.pos.z-240)<105,state=journeyState(this.ctx),refuge=this._sys('refuge'),pr=this._sys('progress');this._board(state,!!refuge?.power);this.time+=dt;this.afterBoss=Math.max(0,(this.afterBoss||0)-dt);
-  this.root.visible=near;this.cue.hidden=this.ctx.paused||!this.ctx.playing||p.dead||(!near&&!this.afterBoss);
-  if(state.next!==this.last){this.last=state.next;this.cue.replaceChildren();const label=document.createElement('small');label.textContent=state.marks?'THE ELEVEN · '+state.marks+' / 11':'A WAY FORWARD';const text=document.createElement('span');text.textContent=state.next;this.cue.append(label,text);}
-  const target=state.target;this.marker.visible=near&&!!target;
+  const guidance=!pr.flag('guidance:hidden');this.root.visible=near;this.cue.hidden=this.ctx.paused||!this.ctx.playing||p.dead||!guidance||!!this._sys('boss-encounters')?.active?.alive;
+  const cueKey=state.next+':'+state.marks;
+  if(cueKey!==this.last){this.last=cueKey;this.cue.replaceChildren();const label=document.createElement('small');label.textContent=state.marks?'THE ELEVEN · '+state.marks+' / 11':'A WAY FORWARD';const text=document.createElement('span');text.textContent=state.next;this.bearing=document.createElement('small');this.bearing.style.marginTop='7px';this.cue.append(label,text,this.bearing);}
+  const target=state.target;this.marker.visible=guidance&&near&&!!target;
+  if(this.bearing){this.bearing.hidden=!target;if(target){this._look??=new THREE.Vector3();this.ctx.camera.getWorldDirection(this._look);const dx=target.x-p.pos.x,dz=target.z-p.pos.z,angle=Math.atan2(dx,dz)-Math.atan2(this._look.x,this._look.z),arrows=['↑','↗','→','↘','↓','↙','←','↖'];this.bearing.textContent=arrows[((Math.round(angle/(Math.PI/4))%8)+8)%8]+'  '+Math.round(Math.hypot(dx,dz))+' m';}}
   if(target){let y=this._sys('terrain').heightAt(target.x,target.z)+1.05;if(!refuge?.power&&pr.flag('supply:opening:first-light'))y=refuge.breakerWY;const lamp=this._sys('dusk-to-dawn').poles.find(q=>q.opening);if(lamp&&target.x===lamp.x)y=lamp.gy+1.5;this.marker.position.set(target.x,y+.065*Math.sin(this.time*2),target.z);this.marker.lookAt(this.ctx.camera.position);this.marker.material.opacity=.6+.18*Math.sin(this.time*2);}
  }
  dispose(){this.off.forEach(f=>f?.());this.root?.traverse(o=>{o.geometry?.dispose();if(o.material&&o.material!==this._sys('places').matBody)o.material.dispose();});this.root?.removeFromParent();this.texture?.dispose();this.cue?.remove();this.style?.remove();}

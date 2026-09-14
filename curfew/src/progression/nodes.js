@@ -67,6 +67,10 @@ export const HOOK_POINTS = Object.freeze([
     sig: '(radius, ctx, source) -> radius' },
   { name: 'hotwireS', kind: 'reduce', runner: 'car', base: 'CFG.car.hotwire',
     at: 'vehicle/car.js the hotwire timer', sig: '(seconds, ctx) -> seconds' },
+  { name: 'carImpact', kind: 'reduce', runner: 'car', base: '1',
+    at: 'vehicle/car.js absorbHit()', sig: '(multiplier, ctx) -> multiplier' },
+  { name: 'carWard', kind: 'reduce', runner: 'car', base: 'false',
+    at: 'vehicle/car.js absorbHit() and shield recharge', sig: '(enabled, ctx) -> enabled' },
   { name: 'ramClean', kind: 'reduce', runner: 'car', base: 'false',
     at: 'vehicle/car.js _ram()', sig: '(bool, ctx) -> bool' },
   // 2026-09-09, Alex: "one of the car upgrades should be like nitro. just a meter that lets

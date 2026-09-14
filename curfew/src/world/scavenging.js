@@ -44,23 +44,35 @@ export class Scavenging {
   _sys(id){return this.ctx.systems.get(id);}
   init(){
     this.ctx.scene.add(this.root);this.mat=this._sys('wilds').matBody;
-    const chest=supplyChestGeometry(),earth=new Kit();
+    const chest=supplyChestGeometry(),earth=new Kit(),marker=new Kit(),excavated=new Kit();
     this.seamMat=new THREE.MeshBasicMaterial({color:0xe6b353,transparent:true,opacity:.75,toneMapped:false});
     this.seamGeo=new THREE.BoxGeometry(1.12,.022,.022);
-    const soil=new THREE.CylinderGeometry(.55,1.05,.14,24,3),v=soil.attributes.position;
+    const soil=new THREE.CylinderGeometry(.65,1.05,.25,24,3),v=soil.attributes.position;
     for(let i=0;i<v.count;i++){
       const x=v.getX(i),z=v.getZ(i),a=Math.atan2(z,x),r=Math.hypot(x,z);
       const edge=1+.10*Math.sin(a*5)+.065*Math.cos(a*9);
-      v.setXYZ(i,x*edge,v.getY(i)+.07+.018*Math.sin(a*7)*Math.min(1,r),z*edge*.78);
+      v.setXYZ(i,x*edge,v.getY(i)+.125+.018*Math.sin(a*7)*Math.min(1,r),z*edge*.78);
     }
     soil.computeVertexNormals();earth.push(soil,SOIL);
     for(let i=0;i<18;i++){const a=i*2.399,r=.48+(i%4)*.16;
-      earth.box(.10,.025,.06,Math.cos(a)*r,.025,Math.sin(a)*r*.78,[.12,.067,.035],a);
+      earth.box(.16,.065,.11,Math.cos(a)*r,.043,Math.sin(a)*r*.78,[.16,.095,.048],a);
     }
-    // Pale roots and a broken board distinguish disturbed soil from ordinary ground.
-    earth.box(.62,.035,.055,-.13,.165,-.13,[.22,.17,.10],.5);
-    earth.box(.31,.025,.04,.23,.15,.14,[.19,.14,.085],-.65);
-    this.geos={...chest,earth:earth.build()};
+    // Fresh spade cuts, a partly exposed lid and a tied rag carry the same
+    // invitation at safe caches and ambush graves. The outcome never changes the art.
+    earth.box(.82,.055,.12,-.13,.27,-.13,[.25,.18,.095],.5);
+    earth.box(.48,.045,.08,.23,.245,.14,[.21,.14,.072],-.65);
+    marker.box(.055,.74,.065,-.68,.37,.29,[.20,.13,.065],.12,0,-.08);
+    marker.box(.095,.07,.105,-.65,.70,.29,[.25,.19,.11]);
+    const rag=new THREE.PlaneGeometry(.26,.32,4,5),rp=rag.attributes.position;
+    for(let i=0;i<rp.count;i++)rp.setXYZ(i,rp.getX(i),rp.getY(i),.022*Math.sin(rp.getX(i)*31+rp.getY(i)*19));
+    rag.computeVertexNormals();marker.at(rag,[.34,.28,.16],-.52,.53,.30,.3,0,-.12);
+    // A low upturned metal corner catches torchlight beside the split timber.
+    marker.box(.31,.025,.20,.28,.265,-.12,[.26,.20,.105],.4,.17,.12);
+    const spoil=new THREE.RingGeometry(.53,1.06,24,3);spoil.rotateX(-Math.PI/2);
+    const sp=spoil.attributes.position;for(let i=0;i<sp.count;i++){const x=sp.getX(i),z=sp.getZ(i),a=Math.atan2(z,x);sp.setXYZ(i,x*(1+.065*Math.sin(a*5)),.026+.035*Math.sin(a*9)**2,z*.78);}
+    spoil.computeVertexNormals();excavated.push(spoil,[.14,.073,.035]);
+    const hollow=new THREE.CircleGeometry(.56,24);hollow.rotateX(-Math.PI/2);hollow.scale(1,1,.78);hollow.translate(0,.025,0);excavated.push(hollow,[.025,.016,.009]);
+    this.geos={...chest,earth:earth.build(),digMarker:marker.build(),excavated:excavated.build()};
     const rng=this.ctx.rng.fork('buried-supplies');
     const add=(id,x,z,kind,bones=false)=>this.sites.push({id:'supply:'+id,x,z,kind,bones,seed:rng.next(),stage:0,node:null});
     for(const m of MAJORS.filter(m=>m.id!==OPENING.id))for(let i=0;i<3;i++){
@@ -141,7 +153,10 @@ export class Scavenging {
     const chest=new THREE.Group(),body=new THREE.Mesh(this.geos.wood,this.mat),lid=new THREE.Mesh(this.geos.lid,this.mat),contents=new THREE.Mesh(this.geos.inside,this.mat);
     const seam=new THREE.Mesh(this.seamGeo,this.seamMat);seam.position.set(0,.652,-.49);chest.add(body,contents,lid,seam);lid.position.set(0,.66,.43);root.add(chest);
     const earth=new THREE.Mesh(this.geos.earth,this.mat);earth.visible=s.kind==='dig'&&s.stage<3;root.add(earth);
-    s.node={root,chest,body,lid,contents,seam,earth,collider:-1,open:s.stage>=4?1:0};this.root.add(root);
+    const marker=s.kind==='dig'?new THREE.Mesh(this.geos.digMarker,this.mat):null,excavated=s.kind==='dig'?new THREE.Mesh(this.geos.excavated,this.mat):null;
+    if(marker){marker.name='dig-rag-and-exposed-lid';marker.castShadow=true;marker.receiveShadow=true;root.add(marker,excavated);}
+    earth.receiveShadow=true;
+    s.node={root,chest,body,lid,contents,seam,earth,marker,excavated,collider:-1,open:s.stage>=4?1:0};this.root.add(root);
     if(s.bones){
       const kit=new Kit(),rng=this.ctx.rng.fork(s.id+':bones');
       const api={scatteredBones:true,heightAt:(x,z)=>terr.heightAt(x,z)-s.y,wx:(x,z)=>s.x+x,wz:(x,z)=>s.z+z,
@@ -154,10 +169,11 @@ export class Scavenging {
   _appearance(s){
     const n=s.node;if(!n)return;const buried=s.kind==='dig'&&s.stage<3,taken=s.stage>=4;
     n.earth.visible=buried;n.earth.scale.y=Math.max(.12,1-s.stage*.34);
+    if(n.marker){n.marker.visible=buried;n.excavated.visible=!buried;}
     n.chest.visible=s.stage!==5&&(!buried||s.stage>=2);n.chest.position.y=buried?-.46:0;
     n.contents.visible=!taken||n.open<.85;n.lid.rotation.x=n.open*1.92;n.seam.visible=!taken;
     if(!buried&&!taken&&n.collider<0)n.collider=this._sys('collision').addCollider({kind:'obb',x:s.x,z:s.z,halfX:.71,halfZ:.50,yaw:0,y0:s.y-.05,y1:s.y+.93,tag:'supply',breakable:22,standable:true},s.id);
-    if(taken&&n.collider<0)n.collider=this._sys('collision').addCollider({kind:'obb',x:s.x,z:s.z,halfX:.71,halfZ:.50,yaw:0,y0:s.y-.05,y1:s.y+.66,tag:'strongbox-empty',standable:true},s.id);
+    if(taken&&s.stage!==5&&n.collider<0)n.collider=this._sys('collision').addCollider({kind:'obb',x:s.x,z:s.z,halfX:.71,halfZ:.50,yaw:0,y0:s.y-.05,y1:s.y+.66,tag:'strongbox-empty',standable:true},s.id);
   }
   _take(s){
     if(s.stage>=4||!s.node||s.kind==='dig'&&s.stage<3)return;

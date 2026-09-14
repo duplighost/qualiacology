@@ -386,7 +386,7 @@ export class PlayerController {
     this.scaleStall = 0;                                    // ROUND 19: seconds a held-Space climb has got nowhere
     this.scaleDescending = false; this.descendGrab = null; this.descendHold = 0;
     this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;
-    this._descentClock=0;this._descentOtherUseUntil=-Infinity;
+    this._descentClock=0;this._descentOtherUseUntil=-Infinity;this._descentTurn=null;
     this.floorWasCollider = false;                          // last frame's floor was a collider top (the step-up smoothing gate)
 
     // ---- the ONE stride clock. Nothing else may keep a locomotion timer.
@@ -557,6 +557,8 @@ export class PlayerController {
 
   // ---------------------------------------------------------------- verbs
   hurt(amount, fromDir) {
+    // The cabin takes the blow. Boss throws explicitly release the passenger first.
+    if (this.ctx.shared?.inCar && this.ctx.systems.get('car')?.absorbHit?.(amount, fromDir)) return;
     const refuge = this.ctx.systems.get('refuge');
     if (refuge && refuge.isResting && refuge.isResting()) return;
     if (refuge?.isProtected(this.pos.x,this.pos.y,this.pos.z)) return;
@@ -763,7 +765,7 @@ export class PlayerController {
       this.spaceClimbIntent = 0; this.climbQueued = false;
       this.climb = CLIMB_NONE;
       this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.descendGrab=null;this.descendHold=0;
-      this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;
+      this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;this._descentTurn=null;
       this.grounded = true; this.sinceGround = 0;
       // Deliberately NOT _sync(): collapsing prev/curr here is the bug this door exists
       // to fix, not the fix.
@@ -803,7 +805,7 @@ export class PlayerController {
     this.spaceClimbIntent = 0; this.climbQueued = false;
     this.climb = CLIMB_NONE;
     this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.descendGrab=null;this.descendHold=0;this.climbRefuse=false;
-    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;
+    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;this._descentTurn=null;
     this.grounded = true; this.sinceGround = 0;
     this._sync();
   }
@@ -817,7 +819,7 @@ export class PlayerController {
     this.spaceClimbIntent = 0; this.climbQueued = false;
     this.bobPhase = 0;
     this.scaling=false;this.scaleFace=null;this.scaleDescending=false;this.descendGrab=null;this.descendHold=0;this.climbRefuse=false;
-    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;
+    this.descendCandidate=null;this.descendProbeT=0;this.descendUseBlocked=false;this._descentTurn=null;
     this.init();
   }
 
@@ -1348,8 +1350,9 @@ export class PlayerController {
     // slide and the air cap are untouched, so a faster body still has a quiet gait and a
     // steady aim. Absent, it is exactly 1 and every number here is the one he played.
     const mul = this._stat('speedMul', 1);
-    if (this.tacSprinting) return P.tacSprint.speed * mul;
-    let cap = this.crouched ? P.CROUCH : this.sprinting ? P.SPRINT * mul : P.WALK * mul;
+    const travel=this._weapons?.travelReady?1.25:1;
+    if (this.tacSprinting) return P.tacSprint.speed * mul * travel;
+    let cap = this.crouched ? P.CROUCH : this.sprinting ? P.SPRINT * mul * travel : P.WALK * mul;
     if (adsT > 0.5) cap = this.crouched ? CROUCH_ADS : P.ADS_WALK;
     return cap;
   }
@@ -1602,6 +1605,8 @@ export class PlayerController {
     if(!best){this.descendCandidate=null;return false;}
     this.descendCandidate=null;
     this.scaleFace=best.face;this.scaleDescending=true;this.scaleStall=0;this.climbRefuse=false;
+    const camera=this._camera;
+    if(camera){let turn=Math.atan2(best.face.nx,best.face.nz)-camera.yaw;turn=Math.atan2(Math.sin(turn),Math.cos(turn));this._descentTurn={start:camera.yaw,turn,last:camera.yaw,t:0};}
     this.descendGrab={x0:this.pos.x,z0:this.pos.z,y0:this.pos.y,y:best.carryY,x:best.x,z:best.z,t:0};
     this.vel.set(0,0,0);this.jumpBuffered=-1;this.spaceClimbIntent=0;this.holdChain=false;this.climbQueued=false;
     this.ctx.bus.emit('player:climb',{kind:'descend',top:best.face.top,x:best.x,z:best.z});
@@ -1614,6 +1619,7 @@ export class PlayerController {
     if(!this._held('use')||this._held('crouch')||this.carried||this.descendUseBlocked){
       this.descendHold=0;
       if(this.scaleDescending||this.descendGrab){
+        this._descentTurn=null;
         this.scaleDescending=false;this.descendGrab=null;this.scaling=false;this.scaleFace=null;
         this.mantleCooldown=.2;this.climbRefuse=!this.grounded;
       }
@@ -1622,6 +1628,7 @@ export class PlayerController {
     this.descendHold+=dt;
     if(this.climb!==CLIMB_NONE)return false;
     if(!this.scaleDescending&&!this.descendGrab&&(this.descendHold<DESCEND_HOLD_S||(!this.descendCandidate&&!this.scaling)||!this._beginDescentGrab()))return false;
+    this._turnToDescentWall(dt);
     const g=this.descendGrab;
     if(g){
       g.t+=dt;const lift=g.y>g.y0+.001?.07:0,u=ease.inOutQuad(clamp01((g.t-lift)/(DESCEND_REGRAB_S-lift))),x=lerp(g.x0,g.x,u),z=lerp(g.z0,g.z,u),y=lift?lerp(g.y0,g.y,clamp01(g.t/lift)):g.y;
@@ -1633,6 +1640,17 @@ export class PlayerController {
       return true;
     }
     return this._stepScale(dt,true);
+  }
+
+  _turnToDescentWall(dt){
+    const turn=this._descentTurn,cam=this._camera;if(!turn||!cam)return;
+    // A re-grab turns the body to the surface once. Any fresh mouse-look wins;
+    // climbing never continuously locks the view to that wall.
+    const moved=Math.atan2(Math.sin(cam.yaw-turn.last),Math.cos(cam.yaw-turn.last));
+    if(Math.abs(moved)>.008){this._descentTurn=null;return;}
+    turn.t+=dt;const u=clamp01(turn.t/.38),k=u*u*(3-2*u);
+    cam.yaw=turn.start+turn.turn*k;turn.last=cam.yaw;this.yaw=cam.yaw;
+    if(u>=1)this._descentTurn=null;
   }
 
   /** Hold Space against a building and aim along it. No camera turn or timed button
@@ -1716,7 +1734,7 @@ export class PlayerController {
     const side=(descending?0:clamp(_fwd.x*nz-_fwd.z*nx,-.8,.8))+this.strafeAxis*.65;
     const x=face.x+nx*(P.RADIUS+.055)+nz*side*dt*1.8;
     const z=face.z+nz*(P.RADIUS+.055)-nx*side*dt*1.8;
-    const dy=dt*(descending||pitch<-.55?-1.65:2.7);
+    const dy=dt*(descending||pitch<-.55?-2.6:3.4);
     const support=descending?(col.supportHeight?.(x,z,this.pos.y,P.RADIUS,0)??this._terrain.heightAt(x,z)):-Infinity;
     const y=Math.max(support,Math.min(top+.02,this.pos.y+dy));
     // ROUND 19: AND IF IT CANNOT MOVE, IT LETS GO.
@@ -2147,6 +2165,9 @@ export class PlayerController {
     this.climbX1 = x1; this.climbY1 = y1; this.climbZ1 = z1;
     this.climbDirX = _wish.x; this.climbDirZ = _wish.z;
     this.climbTop = top;
+    _rayO.x=x0;_rayO.y=Math.min(top-.08,y0+P.EYE*.85);_rayO.z=z0;_rayD.x=_wish.x;_rayD.y=0;_rayD.z=_wish.z;
+    const surface=this._collision?.climbFace?.(_rayO,_rayD,Math.hypot(x1-x0,z1-z0)+P.RADIUS+.2);
+    this.climbSurface={x:surface?.point.x??x0+_wish.x*P.RADIUS,z:surface?.point.z??z0+_wish.z*P.RADIUS,nx:surface?.normal.x??-_wish.x,nz:surface?.normal.z??-_wish.z,top};
     this.climbSpeed = Math.hypot(this.vel.x, this.vel.z);
     if (this.climbCrouch && kind !== CLIMB_VAULT) this.crouchT = 1;
     this.vel.set(0, 0, 0);

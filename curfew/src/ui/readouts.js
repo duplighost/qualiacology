@@ -92,8 +92,9 @@ export class Readouts {
     else if(this.ctx.shared.sanctuary)goal='THE WOODS ARE LIT';
     else if(row?.id==='holdfast')goal=row.name+'\nINHABITED · TRADERS & SHELTER';
     else if(row){
+      if(row.remaining>0)territory.track(row.id);
       const hasRoom=refuge?._units?.some(u=>u.siteId===row.id);
-      goal=row.name+'\n'+(row.secured?(hasRoom?'SECURED · CLOSE THE REFUGE DOOR':'SECURED'):row.remaining>0?row.remaining+' REMAIN · CLEAR THE PLACE':'CLEAR · RESTORE POWER');
+      goal=row.name+'\n'+(row.secured?(hasRoom?'SECURED · CLOSE THE REFUGE DOOR':'SECURED'):row.remaining>0?row.remaining+' MARKED '+(row.remaining===1?'DEFENDER':'DEFENDERS')+' · ◇':'CLEAR · RESTORE POWER');
     }
     this.objective.style.whiteSpace='pre-line';this.text(this.objective,goal);this.objective.hidden=!goal;
     for(let i=this.receipts.length-1;i>=0;i--)if(time>this.receipts[i].until){this.receipts[i].el.remove();this.receipts.splice(i,1);}

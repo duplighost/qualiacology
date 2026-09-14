@@ -1706,11 +1706,16 @@ export class Enemies {
       else{e.wardenWorkT=Math.max(0,e.wardenWorkT-dt);e.state='approach';e.vel.set(0,0,0);e.moving=false;e.aim=.9;e.riseSquash=1;return;}
     }
     if (e.neutral) {
-      e.pos.set(e.stagedX, e.stagedY, e.stagedZ); e.vel.set(0, 0, 0);
+      // Authored residents move through staged coordinates, but presentation
+      // reads real velocity. Clearing it here made every walking limb stand still.
+      const dx=e.stagedX-e.pos.x,dy=e.stagedY-e.pos.y,dz=e.stagedZ-e.pos.z;
+      const distance=Math.hypot(dx,dz),moving=distance>.0001&&distance<2;
+      e.vel.set(moving?dx/Math.max(dt,.001):0,moving?dy/Math.max(dt,.001):0,moving?dz/Math.max(dt,.001):0);
+      e.pos.set(e.stagedX, e.stagedY, e.stagedZ);
       e.riseSquash = 1; e.state = 'approach'; e.aware = 0; e.alerted = false;
       e.aim=e.townAim||0;
-      e.yaw = e.stagedYaw; e.gait += (e.townWalk || 0) * dt * 2.6;
-      e.airborne = false; e.moving = (e.townWalk || 0) > .05;
+      e.yaw = e.stagedYaw;if(moving)e.gait+=distance*(e.def.human?4.6:2.6)/Math.max(.7,e.scale||1);
+      e.airborne = false; e.moving = moving;
       e.dist = Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z);
       return;
     }
@@ -3688,7 +3693,8 @@ export class Enemies {
 
       const anim = e.anim;
       anim.gait = gait;
-      anim.moveAmp = e.moving ? clamp01(Math.hypot(e.vel.x, e.vel.z) / Math.max(0.4, e.def.speed)) : 0;
+      const gaitSpeed=e.neutral&&e.def.human?1.05:Math.max(.4,e.def.speed);
+      anim.moveAmp = e.moving ? clamp01(Math.hypot(e.vel.x, e.vel.z) / gaitSpeed) : 0;
       anim.coil = e.state === 'windup' ? (e.telegraphCharge || 0) : 0;
       // ROUND 22: the runner's dash stretches the shell for as long as the line is held
       anim.swing = e.state === 'attack' && e.attackKind === 'strike'

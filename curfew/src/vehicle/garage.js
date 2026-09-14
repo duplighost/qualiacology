@@ -18,6 +18,16 @@ const WEAR_MEND = 0.9;
 
 export const UPGRADES = Object.freeze([
   {
+    id: 'armour', name: 'STEEL SHELL', price: 720,
+    line: 'Riveted body armour. Enemy hits cause half as much damage to the car.',
+    install: hooks => { hooks.on('carImpact', 'garage:armour', v => v * .5); },
+  },
+  {
+    id: 'ward', name: 'STORM WARD', price: 1250,
+    line: 'Roof coils absorb three hits. Recharges after twelve seconds without a hit.',
+    install: hooks => { hooks.on('carWard', 'garage:ward', () => true); },
+  },
+  {
     id: 'hotwire', name: 'HOTWIRE', price: 240,
     line: 'Starts in half a second. Illuminated starter fitted.',
     install: (hooks) => { hooks.on('hotwireS', 'garage:hotwire', () => HOTWIRE_S); },

@@ -15,6 +15,7 @@ export const BOSSES=Object.freeze([
  {...boss('fieldmaw','The Road Beneath','The Unplanted Field',-290,145,'burrow',skin('fieldmaw','Rupture',0x362923,0xd4a472,'cracks'),600,320,['maw-charge','earth-split','furrow'],'The buried machines guide its hands. Break them to stop the grasping ground. Its throat unfolds after the hunt.','There are no trees in the field before the Holdfast. We did not cut them down.'),hp:1050,radius:52,discoverR:45,ambush:true},
 ]);
 export const BOSS_BY_ID=Object.freeze(Object.fromEntries(BOSSES.map(b=>[b.id,b])));
+export const CRYPT_ROOM=Object.freeze({halfWidth:41,halfDepth:41,wallThickness:4,wallHeight:15,ceiling:14.5,roofThickness:3});
 export const CRYPT={x:3500,z:3500,entryX:3500,entryZ:3537,hatchX:45,hatchZ:-43};
 export function bossMapPoint(b){return b.id==='underkeep'?{x:0,z:0}:{x:b.x,z:b.z};}
 export function bossClearance(x,z,padding=0){return BOSSES.some(b=>Math.hypot(x-b.x,z-b.z)<b.radius+padding);}
