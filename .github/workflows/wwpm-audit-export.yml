@@ -1,13 +1,10 @@
-name: WWPM native audit
-
+name: WWPM targeted audit
 on:
   push:
     branches: [audit/wwpm-616f756-evidence-20260914]
-    paths: [.github/workflows/wwpm-audit-export.yml, '.audit/wwpm/**']
-
+    paths: [.github/workflows/wwpm-audit-export.yml]
 permissions:
   contents: read
-
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -27,18 +24,18 @@ jobs:
           if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null; then
             python -m playwright install --with-deps chromium
           fi
-      - name: Inspect current game
+      - name: Inspect ending, input and persistence
         env:
           WWPM_SOURCE: /tmp/wwpm-source
-        run: python .audit/wwpm/runtime_audit.py
+        run: python .audit/wwpm_deep.py
       - name: Package audit evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wwpm-native-evidence-${{ github.run_number }}
+          name: wwpm-deep-evidence-${{ github.run_number }}
           path: |
             audit-evidence/
-            .audit/wwpm/
+            .audit/wwpm_deep.py
           include-hidden-files: true
           retention-days: 7
           if-no-files-found: error
