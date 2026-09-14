@@ -1,0 +1,32 @@
+name: WWPM audit source snapshot
+on:
+  push:
+    branches: [audit/wwpm-snapshot-20260914]
+    paths: [.github/workflows/wwpm-audit-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 616f75690c54ee37a53f603ecc6d7a0d1ca13b17
+          sparse-checkout: curfew
+          persist-credentials: false
+      - name: Record immutable runtime hashes
+        run: |
+          mkdir -p audit-evidence
+          git rev-parse HEAD > audit-evidence/SOURCE_COMMIT.txt
+          find curfew -type f -print0 | sort -z | xargs -0 sha256sum > audit-evidence/SHA256SUMS.txt
+          printf 'Read-only snapshot for Alex requested WWPM audit. No game-source changes.\n' > audit-evidence/README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wwpm-616f756-runtime-and-hashes
+          path: |
+            curfew/
+            audit-evidence/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
