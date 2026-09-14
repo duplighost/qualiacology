@@ -47,6 +47,7 @@ import { sinkholeDepthAt } from './world-scars.js';
 import { SURFACE_RELIEF_GLSL } from './surface-relief.js';
 import { loadScannedSurface } from './scanned-materials.js';
 import { preloadPlaceSurfaceLibrary } from './place-surfaces.js';
+import {readableSurface} from '../art/surface-light.js';
 
 const CHUNK = CFG.world.CHUNK;                       // 64 m
 
@@ -382,7 +383,8 @@ export class Chunks {
     // figure, four files asserted four different ones, and none of them matched config.
     // One vertex-coloured Lambert covers all three terrain tiers; splitting it per tier,
     // as the PLAN's variant census allows for, would buy nothing and cost two programs.
-    this.matGround = new THREE.MeshLambertMaterial({
+    this.matGround = new THREE.MeshStandardMaterial({
+      roughness:.94,metalness:0,
       vertexColors: true,
       dithering: true,          // near-black gradients band badly on an 8-bit target
     });
@@ -393,6 +395,10 @@ export class Chunks {
     // a crash is a failure.
     this.groundTex = this._buildGroundDetail();
     if (this.groundTex) this._installGroundDetail(this.matGround, this.groundTex);
+    const groundCompile=this.matGround.onBeforeCompile;
+    readableSurface(this.matGround);const groundLightCompile=this.matGround.onBeforeCompile;
+    this.matGround.onBeforeCompile=shader=>{groundCompile(shader);groundLightCompile(shader);};
+    this.matGround.customProgramCacheKey=()=> 'curfew-ground-wet-relief-4';
     try {
       this.groundSurface = await loadScannedSurface('forest_ground_04', this.ctx.renderer);
       const scans = this.matGround.userData.groundUniforms;
@@ -1477,6 +1483,8 @@ export class Chunks {
         '#include <normal_fragment_maps>',
         '#include <normal_fragment_maps>\nnormal = countyReliefNormal(-vViewPosition, normal, gRelief * (1.0 - uWeather.x * 0.84));'
       );
+      shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',
+        '#include <roughnessmap_fragment>\nfloat soilWet=uWeather.y*(1.0-uWeather.x)*smoothstep(.35,.92,vGroundUp);\nroughnessFactor=mix(.94,.29,soilWet*(.55+.45*smoothstep(-.25,.4,gTerr)));');
 
       // A SELF-CHECK THAT SURVIVES THE SESSION. Both of these replacements are string
       // matches against three's own chunk names, and a silent miss is not a crash — it is a

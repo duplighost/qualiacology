@@ -244,7 +244,9 @@ const ROUTES_SRC = [
   {
     id: 'works-cut', kind: 'forest', secondary: true, closed: false, width: 3.90,
     pts: [
-      STATION_JUNCTION, [-400, 360], [-250, 300], [-120, 430], [30, 350],
+      // The drive from the filling station physically crosses the empty field.
+      // The Road Beneath erupts at close range; it never reaches 150 m off-road to take a car.
+      STATION_JUNCTION, [-408, 190], [-290, 145], [-120, 245], [30, 350],
       [113.08, 455.35], [128.46, 476.50, 5.0], [144.50, 492.28, -0.45],
       [161.62, 500.34], WORKS_JUNCTION, [440, 610], [490, 595], [515, 603],
       [542, 620], [575, 640], [600, 660], [650, 760], [790, 850],

@@ -205,8 +205,11 @@ export class HoldfastLife {
     if(r.id==='shrinekeeper'&&pr.bossCleared('underkeep'))lines=['I remembered how.','A wick. Oil. A clean glass. We can do that much ourselves.'];
     const i=r.line++%lines.length;this.chat={id:r.id,name:r.story[0],text:lines[i],until:this.time+Math.max(14,lines[i].length/15)};
     // Each rumour is spoken before being marked, including on repeat conversations.
-    if(i===lines.length-1)this._rumour(r);
-    this.ctx.bus.emit('holdfast:conversation',{id:r.id,name:r.story[0],text:lines[i],final:i===lines.length-1,rumour:r.story[2],privateHint});
+    if(i===lines.length-1){
+      if(privateHint){const d=this._sys('places').nodes.get('bell-tower')?.def;if(d){pr.learnRumour({id:'bell-tower',name:'The day bell · priory tower',x:d.x,z:d.z,kind:'place'});if(!this.ctx.shared.lateBellFinal)pr.setWaypoint({x:d.x,z:d.z,name:'The day bell · priory tower'});}}
+      else this._rumour(r);
+    }
+    this.ctx.bus.emit('holdfast:conversation',{id:r.id,name:r.story[0],text:lines[i],final:i===lines.length-1,rumour:privateHint?'bell-tower':r.story[2],privateHint});
     const e=r.e,p=this._sys('player');e.stagedYaw=faceYaw(e.pos.x,e.pos.z,p.pos.x,p.pos.z);
   }
   _offers(r){

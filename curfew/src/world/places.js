@@ -137,6 +137,14 @@ function _installPlaceSnow(mat, uni, cacheKey) {
         '  }',
         '}'].join('\n')
     );
+    if(mat.isMeshStandardMaterial){
+      // Rain pools unevenly on stone and timber. Relief controls the wet sheen;
+      // clothing keeps its diffuse response and snow dries the surface again.
+      shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',
+        '#include <roughnessmap_fragment>\nfloat countyWet=uWeather.y*(1.0-uWeather.x)*smoothstep(.08,.8,vWxUp);\nroughnessFactor=mix(roughnessFactor,.27,countyWet);');
+      shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',
+        '#include <color_fragment>\ndiffuseColor.rgb*=1.0-uWeather.y*(1.0-uWeather.x)*.13;');
+    }
     mat.userData.wxShaderPatched = {
       up: shader.vertexShader.indexOf('vWxUp = normalize') > -1,
       snow: shader.fragmentShader.indexOf('mix( diffuseColor.rgb, uSnowCol') > -1,
@@ -1165,7 +1173,8 @@ export class Places {
     this._built = true;
 
     this.surfaceTextures = createPlaceSurfaceLibrary();
-    this.matBody = new THREE.MeshLambertMaterial({
+    this.matBody = new THREE.MeshStandardMaterial({
+      roughness:.86,metalness:.025,
       vertexColors: true, dithering: true,
       map: this.surfaceTextures.plaster,
       // ROUND 15, item 14: a HEIGHT image, not the albedo. See place-surfaces.js.
@@ -1187,12 +1196,13 @@ export class Places {
     this.peopleTexture.wrapS=this.peopleTexture.wrapT=THREE.RepeatWrapping;
     this.peopleTexture.generateMipmaps=true; this.peopleTexture.minFilter=THREE.LinearMipmapLinearFilter;
     this.peopleTexture.magFilter=THREE.LinearFilter; this.peopleTexture.needsUpdate=true;
-    this.matPeople = this.matBody.clone();
+    this.matPeople = new THREE.MeshLambertMaterial({vertexColors:true,dithering:true,side:THREE.DoubleSide,shadowSide:THREE.FrontSide});
     this.matPeople.map=this.peopleTexture; this.matPeople.bumpMap=this.peopleTexture;
     this.matPeople.bumpScale=0.007;
     this.matPeople.name = 'place-people';
 
-    this.matLand = new THREE.MeshLambertMaterial({
+    this.matLand = new THREE.MeshStandardMaterial({
+      roughness:.9,metalness:.025,
       vertexColors: true, dithering: true, fog: false,
       map: this.surfaceTextures.plaster,
       bumpMap: this.surfaceTextures['plaster-bump'], bumpScale: 0.075,

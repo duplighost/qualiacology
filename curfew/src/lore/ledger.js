@@ -45,7 +45,7 @@ export function unlocksForEvent(type,p={}){
     case 'holdfast:address': return ['address:'+id,...(id==='upper-school'?['turbines']:[])];
     case 'place:rest': return [...SLEEP_ENTRIES.map(id=>'rule:'+id),'turbines'];
     case 'loot:searched': return ['rule:coins'];
-    case 'radio:raid': return ['wrong-turn'];
+    case 'radio:raid': return p.station==='wrong-turn'&&p.heard===true?['wrong-turn']:[];
     case 'radio:segment': return p.station==='wrong-turn'&&p.file==='wrong-turn-raid.mp3'?['wrong-turn']:[];
     case 'story:read': return [noteKey(id),...(id==='xmas-letter'?['service17']:[]),...(id==='sinkhole-view'?['house-below']:[])];
     case 'sanctuary:found': case 'sanctuary:claimed': case 'sanctuary:lit': return ['wild:sanctuary'];
@@ -104,6 +104,10 @@ export class LoreLedger {
     // A physical note's actual wording/hand wins over its static transcription. Kept
     // only after E was pressed; merely discovering its place never exposes the text.
     let changed=false;
+    if(type==='holdfast:conversation'&&p.final&&p.privateHint){
+      this._add(['resident:'+p.id],announce);
+      return this.record('story:read',{id:'day-bell-route',title:'The day bell',text:p.text},announce);
+    }
     if(type==='story:read'&&clean(p.id,180)&&clean(p.text,8000)){
       const id=noteKey(clean(p.id,160));
       if(Object.hasOwn(this.data.notes,id)||Object.keys(this.data.notes).length<256){

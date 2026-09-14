@@ -1,7 +1,7 @@
 // A bell, one final night, and an ordinary dawn. No camera or movement locks.
 import * as THREE from 'three';
 import { CFG } from '../config.js';
-import { canRingLateBell, readLastNight, trueDawnAt, LAST_NIGHT_S } from './late-bell-state.js';
+import { canRingLateBell, carriesMorning, readLastNight, trueDawnAt, LAST_NIGHT_S } from './late-bell-state.js';
 
 const SAVE_KEY = 'morning:late-bell';
 const KEPT_KEY = 'morning:kept-blackout';
@@ -15,7 +15,7 @@ const warm = new THREE.Color(0xffd19a);
 export class LateBell {
   static id = 'late-bell';
   constructor(ctx) {
-    this.ctx = ctx; this.last = null; this.loaded = false; this.saveT = 0;
+    this.ctx = ctx; this.last = null; this.loaded = false; this.routeLoaded = false; this.saveT = 0;
     this.answers = []; this.answerT = 0; this.blackout = 0; this.relight = 1;
     this.cryptFlash = 0; this.cryptRover = null; this.haleT = 0;
     this.title = null; this.titleT = 0; this.seatT = 0; this.returnArmed = false;
@@ -36,6 +36,7 @@ export class LateBell {
   _load() {
     const pr = this._sys('progress');
     if (!pr?.save?.data) return;
+    this.routeLoaded=false;
     this.last = readLastNight(pr.flag(SAVE_KEY));
     this.blackout = Math.max(0, Math.min(LAST_NIGHT_S, Number(pr.flag(KEPT_KEY)) || 0));
     this.relight = this.blackout > 0 ? 0 : 1;
@@ -61,6 +62,22 @@ export class LateBell {
     s.holdfastBlackout = this.blackout > 0;
     s.holdfastRelight = this.relight;
   }
+  _revealRoute() {
+    if(this.routeLoaded)return;
+    const pr=this._sys('progress'), places=this._sys('places');
+    if(!carriesMorning(pr?.save?.data?.finishes))return;
+    const bell=places?.nodes?.get('bell-tower')?.def;
+    if(!bell)return;
+    const kept=!!pr.flag('morning:route-kept'),missingNote=!this._sys('lore-ledger')?.has('note:day-bell-route');
+    const added=pr.learnRumour?.({id:bell.id||'bell-tower',name:'The day bell · priory tower',x:bell.x,z:bell.z,kind:'place'});
+    if(!kept||missingNote){
+      this.ctx.bus.emit('story:read',{id:'day-bell-route',title:'The day bell',text:'The day bell. The priory tower in the north pines. Ring it in the Black Hour with your car in the yard, where the bell can see it. Then drive east. All the way to Morning.'});
+    }
+    if(!kept&&!this.last&&!pr.waypoint?.())pr.setWaypoint?.({x:bell.x,z:bell.z,name:'The day bell · priory tower'});
+    if(!kept)pr.flag('morning:route-kept',true);
+    if(!kept||missingNote||added)pr.save?.flush();
+    this.routeLoaded=true;
+  }
   _ring(e) {
     if (!e || e.id !== 'bell-tower' || this.last) return false;
     const pr = this._sys('progress'), car = this._sys('car');
@@ -80,6 +97,8 @@ export class LateBell {
     this._sys('clock').beginLastNight();
     this._publish(); this._save(true);
     this.ctx.bus.emit('morning:bell', { x: e.x, z: e.z });
+    const morning=this._sys('places')?.nodes?.get('morning')?.def;
+    if(morning){pr.learnRumour?.({id:'morning',name:morning.name,x:morning.x,z:morning.z,kind:'place'});pr.setWaypoint?.({x:morning.x,z:morning.z,name:'Morning'});}
     this._sys('planetarium')?.setTrueMorning(0);
     return true;
   }
@@ -115,6 +134,7 @@ export class LateBell {
     if (!this.ctx.ready) return;
     if (!this.loaded) this._load();
     if (!this.loaded) return;
+    this._revealRoute();
     this._crypt(dt);
     if (this.blackout > 0) {
       this.blackout = Math.max(0, this.blackout - dt);

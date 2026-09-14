@@ -32,6 +32,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { CFG } from '../config.js';
+import {ContactDepthPass} from './contact-depth.js';
 
 const G = CFG.render.grade;
 
@@ -314,8 +315,14 @@ export class Post {
     this.target.texture.name = 'curfew.hdr';
 
     const composer = new EffectComposer(renderer, this.target);
+    for(const target of [composer.renderTarget1,composer.renderTarget2]){
+      target.depthTexture=new THREE.DepthTexture(w,h,THREE.UnsignedIntType);
+      target.depthTexture.name='county-world-depth';
+    }
     this.renderPass = new RenderPass(this.ctx.scene, this.ctx.camera);
     composer.addPass(this.renderPass);
+    this.contact=new ContactDepthPass(this.ctx);
+    composer.addPass(this.contact);
 
     // ART.md 1.8 — the gun joins the frame here, before bloom and before the grade.
     this.overlay = new OverlayPass(this.ctx);
@@ -446,6 +453,7 @@ export class Post {
     if (this.composer) this.composer.dispose();
     if (this.bloom) this.bloom.dispose();
     if (this.grade) this.grade.dispose();
+    if (this.contact) this.contact.dispose();
     if (this.target) this.target.dispose();
   }
 }
