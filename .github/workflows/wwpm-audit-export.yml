@@ -1,4 +1,4 @@
-name: WWPM isolated ending verification
+name: WWPM remaining coverage
 on:
   push:
     branches: [audit/wwpm-616f756-evidence-20260914]
@@ -23,19 +23,19 @@ jobs:
           if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null; then
             python -m playwright install --with-deps chromium
           fi
-      - name: Inspect isolated ending and inputs
+      - name: Inspect remaining cases
         env:
           WWPM_SOURCE: /tmp/wwpm-source
-        run: timeout --signal=INT --kill-after=30s 23m python .audit/wwpm_deep_clean.py
+        run: timeout --signal=INT --kill-after=30s 23m python .audit/wwpm_final.py
       - name: Package evidence even if a case fails
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wwpm-clean-evidence-${{ github.run_number }}
+          name: wwpm-final-evidence-${{ github.run_number }}
           path: |
             audit-evidence/
-            .audit/wwpm_deep.py
-            .audit/wwpm_deep_clean.py
+            .audit/wwpm_scenes.py
+            .audit/wwpm_final.py
           include-hidden-files: true
           retention-days: 7
           if-no-files-found: error
