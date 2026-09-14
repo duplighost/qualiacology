@@ -1,4 +1,4 @@
-name: WWPM targeted audit
+name: WWPM supplementary scenes
 on:
   push:
     branches: [audit/wwpm-616f756-evidence-20260914]
@@ -8,14 +8,13 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 28
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
           fetch-depth: 2
-      - name: Prepare unchanged game and browser tools
-        shell: bash
+      - name: Prepare unchanged game and native browser
         run: |
           mkdir -p /tmp/wwpm-source audit-evidence
           git archive HEAD curfew | tar -x -C /tmp/wwpm-source
@@ -24,18 +23,18 @@ jobs:
           if ! command -v google-chrome >/dev/null && ! command -v chromium >/dev/null; then
             python -m playwright install --with-deps chromium
           fi
-      - name: Inspect ending, input and persistence
+      - name: Inspect scenes
         env:
           WWPM_SOURCE: /tmp/wwpm-source
-        run: python .audit/wwpm_deep.py
-      - name: Package audit evidence
+        run: timeout --signal=INT --kill-after=30s 23m python .audit/wwpm_scenes.py
+      - name: Package evidence even if a case fails
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wwpm-deep-evidence-${{ github.run_number }}
+          name: wwpm-scenes-evidence-${{ github.run_number }}
           path: |
             audit-evidence/
-            .audit/wwpm_deep.py
+            .audit/wwpm_scenes.py
           include-hidden-files: true
           retention-days: 7
           if-no-files-found: error
