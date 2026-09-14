@@ -18,54 +18,46 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install isolated test browser
-        run: |
-          pip install playwright==1.55.0
-          python -m playwright install --with-deps chromium
-      - name: Exercise unchanged game over HTTP
+      - run: pip install playwright==1.55.0 && python -m playwright install --with-deps chromium
+      - name: Unmodified HTTP runtime checks
         run: |
           mkdir -p audit-evidence
           git rev-parse HEAD > audit-evidence/SOURCE_COMMIT.txt
           python - <<'PY'
-          import os, json, time, threading, http.server, socketserver, traceback
+          import json,time,threading,http.server,socketserver,traceback,math
           from pathlib import Path
           from playwright.sync_api import sync_playwright
-          out=Path('audit-evidence'); logs=[]; report={}; events=[]
+          out=Path('audit-evidence');logs=[];report={'fixture':'exact source and assets, ordinary HTTP, no transport rewrites'}
           class Handler(http.server.SimpleHTTPRequestHandler):
-              def log_message(self,*args): pass
-          server=socketserver.ThreadingTCPServer(('127.0.0.1',8765),Handler)
-          threading.Thread(target=server.serve_forever,daemon=True).start()
+              def log_message(self,*args):pass
+          server=socketserver.ThreadingTCPServer(('127.0.0.1',8765),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
           try:
               with sync_playwright() as pw:
-                  browser=pw.chromium.launch(headless=True,args=['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
-                  page=browser.new_page(viewport={'width':1280,'height':720})
-                  page.on('pageerror',lambda e:logs.append({'type':'error','text':str(e)}))
-                  page.on('console',lambda m:logs.append({'type':m.type,'text':m.text}) if m.type in ['warning','error'] else None)
-                  page.on('requestfailed',lambda r:logs.append({'type':'requestfailed','url':r.url,'failure':r.failure}))
-                  t=time.monotonic();page.goto('http://127.0.0.1:8765/curfew/?test=1',wait_until='domcontentloaded',timeout=60000)
-                  page.wait_for_function('window.__CURFEW?.ready || window.__CURFEW?.bootError',timeout=480000)
-                  report['bootWallSeconds']=time.monotonic()-t
-                  report['bootError']=page.evaluate('window.__CURFEW.bootError')
-                  if report['bootError']: raise RuntimeError(report['bootError'])
-                  page.evaluate('__CURFEW.noLock=true;__CURFEW.step(1/60,2);__CURFEW.render()')
-                  report['boot']=page.evaluate('({state:__CURFEW.state(),stats:__CURFEW.frameStats(),worker:__CURFEW.ctx.systems.get("chunks").workerNote,transport:location.href})')
-                  page.screenshot(path=str(out/'http-opening.png'))
-                  before=page.evaluate('__CURFEW.state()');page.keyboard.down('w');page.evaluate('__CURFEW.step(1/60,60)');page.keyboard.up('w');page.evaluate('__CURFEW.step(1/60,2)')
-                  report['keyboardMovement']={'before':before,'after':page.evaluate('__CURFEW.state()')}
-                  report['weaponBefore']=page.evaluate('__CURFEW.ctx.systems.get("weapons").state()')
-                  page.mouse.move(640,360);page.mouse.down();page.evaluate('__CURFEW.step(1/60,1)');page.mouse.up();page.evaluate('__CURFEW.step(1/60,90)')
-                  report['weaponAfterMouse']=page.evaluate('__CURFEW.ctx.systems.get("weapons").state()')
-                  page.keyboard.down('r');page.evaluate('__CURFEW.step(1/60,1)');page.keyboard.up('r');page.evaluate('__CURFEW.step(1/60,240)')
-                  report['weaponAfterReload']=page.evaluate('__CURFEW.ctx.systems.get("weapons").state()')
-                  report['saveBefore']=page.evaluate('()=>{let p=__CURFEW.ctx.systems.get("progress");p.payCash(17,0,0,0,"audit-fixture");p.flag("audit:roundtrip",12345);p.save.flush();return {cash:p.cash(),flag:p.flag("audit:roundtrip"),key:p.save.key}}')
-                  page.reload(wait_until='domcontentloaded');page.wait_for_function('window.__CURFEW?.ready || window.__CURFEW?.bootError',timeout=480000)
-                  report['reloadError']=page.evaluate('__CURFEW.bootError')
-                  report['saveAfter']=page.evaluate('()=>{let p=__CURFEW.ctx.systems.get("progress");return {cash:p.cash(),flag:p.flag("audit:roundtrip"),key:p.save.key}}')
-                  report['errors']=page.evaluate('__CURFEW.errors()');report['browser']=browser.version
-                  page.evaluate('__CURFEW.noLock=true;__CURFEW.render()');page.screenshot(path=str(out/'http-after-reload.png'))
-                  browser.close()
-          except Exception:
-              report['exception']=traceback.format_exc()
+                  b=pw.chromium.launch(headless=True,args=['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
+                  p=b.new_page(viewport={'width':1280,'height':720})
+                  p.on('pageerror',lambda e:logs.append({'type':'pageerror','text':str(e)}))
+                  p.on('requestfailed',lambda r:logs.append({'type':'requestfailed','url':r.url,'failure':r.failure}))
+                  p.on('console',lambda m:logs.append({'type':m.type,'text':m.text}) if m.type in ['error','warning'] else None)
+                  t=time.monotonic();p.goto('http://127.0.0.1:8765/curfew/?test=1',wait_until='domcontentloaded')
+                  p.wait_for_function('window.__CURFEW?.ready||window.__CURFEW?.bootError',timeout=480000);report['bootWallSeconds']=time.monotonic()-t
+                  report['bootError']=p.evaluate('__CURFEW.bootError')
+                  if report['bootError']:raise RuntimeError(report['bootError'])
+                  p.evaluate('__CURFEW.noLock=true;__CURFEW.step(1/60,2);__CURFEW.render()')
+                  report['boot']=p.evaluate('({state:__CURFEW.state(),stats:__CURFEW.frameStats(),worker:__CURFEW.ctx.systems.get("chunks").workerNote})')
+                  p.screenshot(path=str(out/'http-opening.png'))
+                  before=p.evaluate('__CURFEW.state()');p.keyboard.down('w');p.evaluate('__CURFEW.step(1/60,60)');p.keyboard.up('w');p.evaluate('__CURFEW.step(1/60,2)')
+                  report['keyboard']={'before':before,'after':p.evaluate('__CURFEW.state()')}
+                  report['weaponBefore']=p.evaluate('__CURFEW.weapons.dump()');p.mouse.move(640,360);p.mouse.down();p.evaluate('__CURFEW.step(1/60,1)');p.mouse.up();p.evaluate('__CURFEW.step(1/60,120)')
+                  report['weaponAfterMouse']=p.evaluate('__CURFEW.weapons.dump()');p.keyboard.down('r');p.evaluate('__CURFEW.step(1/60,1)');p.keyboard.up('r');p.evaluate('__CURFEW.step(1/60,240)');report['weaponAfterReload']=p.evaluate('__CURFEW.weapons.dump()')
+                  report['saveBefore']=p.evaluate('()=>{let q=__CURFEW.ctx.systems.get("progress");q.payCash(17,0,0,0,"audit-fixture");q.flag("audit:roundtrip",12345);q.save.flush();return {cash:q.cash(),flag:q.flag("audit:roundtrip"),key:q.save.key}}')
+                  p.reload(wait_until='domcontentloaded');p.wait_for_function('window.__CURFEW?.ready||window.__CURFEW?.bootError',timeout=480000)
+                  report['reloadError']=p.evaluate('__CURFEW.bootError');report['saveAfter']=p.evaluate('()=>{let q=__CURFEW.ctx.systems.get("progress");return {cash:q.cash(),flag:q.flag("audit:roundtrip"),key:q.save.key}}')
+                  p.evaluate('__CURFEW.noLock=true;__CURFEW.render()');p.screenshot(path=str(out/'http-after-reload.png'));report['errors']=p.evaluate('__CURFEW.errors()')
+                  p.goto('http://127.0.0.1:8765/curfew/?test=0',wait_until='domcontentloaded');p.wait_for_function('window.__CURFEW?.ready||window.__CURFEW?.bootError',timeout=480000)
+                  p.click('#enter');p.wait_for_timeout(1500);report['normalBeforePause']=p.evaluate('({t:__CURFEW.ctx.time.t,playing:__CURFEW.ctx.playing,locked:!!document.pointerLockElement,stats:__CURFEW.frameStats()})')
+                  p.evaluate('document.exitPointerLock()');p.wait_for_function('__CURFEW.ctx.paused',timeout=20000);t0=p.evaluate('__CURFEW.ctx.time.t');p.wait_for_timeout(1500);t1=p.evaluate('__CURFEW.ctx.time.t');report['pause']={'before':t0,'after':t1,'stopped':t0==t1};p.screenshot(path=str(out/'http-normal-paused.png'))
+                  report['normalErrors']=p.evaluate('__CURFEW.errors()');report['browser']=b.version;b.close()
+          except Exception:report['exception']=traceback.format_exc()
           finally:
               (out/'http-crosscheck.json').write_text(json.dumps(report,indent=2));(out/'http-browser-log.json').write_text(json.dumps(logs,indent=2));server.shutdown()
           PY
@@ -74,5 +66,5 @@ jobs:
         with:
           name: wwpm-616f756-http-browser-crosscheck
           path: audit-evidence/
-          if-no-files-found: error
           retention-days: 7
+          if-no-files-found: error
