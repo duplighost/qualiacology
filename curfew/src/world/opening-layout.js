@@ -14,7 +14,8 @@ export const OPENING = Object.freeze({
     [-5,32,0,1.14],[-17,29,4,1.1],[-31,22,1,.92],[-38,12,0,1],[-39,-3,4,.9],
     [28,-18,4,.72],[30,-6,0,.85],[6,-27,1,.80],[-3,-22,4,.72]],
   supplies:[
-    {id:'woodstore',x:2.6,z:-20.7,kind:'crate'},
+    // Leave the chest's 0.74 m placement radius clear of the back wall at z=-21.5.
+    {id:'woodstore',x:2.6,z:-20.5,kind:'crate'},
     {id:'tower-foot',x:19,z:-17,kind:'crate'},
     {id:'tower-top',x:18.5,z:-14.3,y:12.08,kind:'crate',cash:60,xp:60},
     {id:'fallen-log',x:29,z:-22,kind:'crate'},
