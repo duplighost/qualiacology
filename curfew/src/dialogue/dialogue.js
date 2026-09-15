@@ -320,6 +320,12 @@ export class Dialogue {
       queued: this.queue.length,
       visible: !!(this.el && this.el.style.display === 'block'),
       recordings: this._buffers.size,
+      // SECONDS LEFT ON THE LINE BEING SAID, or -1 when nothing is. A caller that has to act
+      // ON a line rather than AFTER it needs this: `dialogue:end` fires at dur + FADE_S, and
+      // for a line with a recording `dur` is already the audio plus 0.25 s of pad — so the
+      // event lands 0.6 s after the last sample. world/garage-opening.js puts the shutter up
+      // on the last WORD of the opening message, which is that 0.6 s earlier.
+      remaining: this.active ? Math.max(0, this.active.dur + FADE_S - this.active.t) : -1,
     };
   }
 

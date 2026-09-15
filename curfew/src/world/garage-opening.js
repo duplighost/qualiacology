@@ -39,6 +39,14 @@ const BAY_DIM = 6;       // after the shutter is up and the night is outside
 const T_TWO = 10.0;        // 2:00. The light at the mouth starts.
 const T_FAIL = 17.0;       // it goes out, and the hour goes with it
 const T_RADIO = 18.5;      // the pip, and the voice
+// THE MESSAGE'S OWN LENGTH DECIDES THE REST OF THE BEAT, so none of these is a guess at it.
+// SHUTTER_ON_LAST_WORD is dialogue.js's own tail — 0.25 s of pad after a recording plus a
+// 0.35 s fade — so the rise begins on the last word rather than 0.6 s after it.
+const SHUTTER_ON_LAST_WORD = 0.60;
+// The two recordings are 2.55 s and 15.14 s with about 0.76 s between them: 18.5 s of beat.
+// This is the dead-man's handle for a line that never reports itself finished, not a timing.
+const RADIO_MAX_S = 30;
+const RADIO_SILENT_S = 24;  // no dialogue system at all: hold six seconds, then open
 const CLOCK_FROM = { h: 1, m: 58, s: 0 };
 
 export class GarageOpening {
@@ -333,19 +341,31 @@ export class GarageOpening {
       this.ctx.bus.emit('garage:fell-back', {});
     }
 
-    /* --- 18.5 s. The pip, and the voice that knows her name. --- */
+    /* --- 18.5 s. The pip, the machine, and the voice that knows her name. --- */
     if (this.stage === 'failed' && t >= T_RADIO) {
       this.stage = 'radio';
       this._radioLit = true;
-      const said = this._sys('dialogue')?.say('radio.opening', { anchor: 'radio' });
-      this._radioT = said ? 0 : 6;          // no dialogue system: wait it out and open anyway
+      // ONE SAVED MESSAGE, then the message. dialogue/lines.js chains them with `next`, so
+      // this asks for the announcement and the tape follows it on its own.
+      const said = this._sys('dialogue')?.say('radio.answerphone', { anchor: 'radio' });
+      this._radioT = said ? 0 : RADIO_SILENT_S;   // no dialogue system: wait it out and open anyway
       this._offs.push(this.ctx.bus.on('dialogue:end', (e) => {
         if (e?.id === 'radio.opening' && this.stage === 'radio') this.stage = 'opening';
       }));
     }
     if (this.stage === 'radio') {
       this._radioT += dt;
-      if (this._radioT > 14) this.stage = 'opening';    // a line that never ends does not hold the door
+      // ALEX, 2026-09-15: "maybe The garage door should open on the last word of it."
+      //
+      // Not on dialogue:end, which is 0.6 s later — that event fires at dur + FADE_S and for
+      // a recorded line `dur` is already the audio plus 0.25 s of pad. The wav is trimmed to
+      // 0.16 s past its last word, so starting the rise with SHUTTER_ON_LAST_WORD left on the
+      // clock puts the shutter moving as she finishes speaking. The dialogue:end hook above
+      // stays as the backstop for a build with no recording, where there is no last word.
+      const say = this._sys('dialogue')?.state?.();
+      if (say && say.active === 'radio.opening' && say.remaining >= 0
+          && say.remaining <= SHUTTER_ON_LAST_WORD) this.stage = 'opening';
+      if (this._radioT > RADIO_MAX_S) this.stage = 'opening';  // a line that never ends does not hold the door
     }
 
     /* --- the shutter goes up, and the county is out there. --- */
