@@ -230,9 +230,12 @@ export class Gas {
     const h = car.heading || 0;
     const fwx = -Math.sin(h), fwz = -Math.cos(h);
     const rx = Math.cos(h), rz = -Math.sin(h);
-    this.capX = car.x + rx * CAP.x + fwx * CAP.z;
+    // Local +z is the REAR of the car (forward is -Z; car.js's moth lens maps local -2.16 to
+    // +fw*2.16), so the rear cap is MINUS the forward vector. With a plus, the cap was only
+    // targetable at the front quarter while the ring glowed at the back.
+    this.capX = car.x + rx * CAP.x - fwx * CAP.z;
     this.capY = car.y + CAP.y;
-    this.capZ = car.z + rz * CAP.x + fwz * CAP.z;
+    this.capZ = car.z + rz * CAP.x - fwz * CAP.z;
     // AND A POINT IN THE AIR BESIDE IT. The cap is ON the car's skin, so a sight line that
     // ends there ends inside the car's own collider and segmentClear always answers false —
     // MEASURED: dist 1.5 m, dot 1.0, clear false, and the cap was never targetable at all.
